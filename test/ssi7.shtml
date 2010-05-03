@@ -1,0 +1,6 @@
+
+<html><pre>
+ssi_begin
+<!--#include "embed.c" -->
+ssi_end
+</pre></html>

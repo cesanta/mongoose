@@ -1,0 +1,20 @@
+LIBRARY
+EXPORTS
+	mg_start
+	mg_stop
+	mg_get_option
+	mg_set_option
+	mg_set_uri_callback
+	mg_set_error_callback
+	mg_set_auth_callback
+	mg_set_ssl_password_callback
+	mg_set_log_callback
+	mg_write
+	mg_printf
+	mg_get_header
+	mg_authorize
+	mg_get_var
+	mg_free
+	mg_version
+	mg_show_usage_string
+	mg_modify_passwords_file
