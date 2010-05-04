@@ -204,7 +204,9 @@ const char *mg_get_header(const struct mg_connection *, const char *name);
  * failure, dst[0] == '\0'.
  *
  * Return:
- *  MG_SUCCESS, MG_NOT_FOUND or MG_BUFFER_TOO_SMALL
+ *  MG_SUCCESS    Variable value was successfully copied in the buffer.
+ *  MG_NOT_FOUND  Requested variable not found.
+ *  MG_BUFFER_TOO_SMALL  Destination buffer is too small to hold the value.
  */
 enum mg_error_t mg_get_var(const char *data, size_t data_len,
 		const char *var_name, char *buf, size_t buf_len);
@@ -216,10 +218,14 @@ enum mg_error_t mg_get_qsvar(const struct mg_request_info *,
  * Fetch value of certain cookie variable into the destination buffer.
  *
  * Destination buffer is guaranteed to be '\0' - terminated. In case of
- * failure, dst[0] == '\0'.
+ * failure, dst[0] == '\0'. Note that RFC allows many occurences of the same
+ * parameter. This function returns only first occurance.
  *
  * Return:
- *  MG_SUCCESS, MG_NOT_FOUND or MG_BUFFER_TOO_SMALL
+ *  MG_SUCCESS    Cookie parameter was successfully copied in the buffer.
+ *  MG_NOT_FOUND  Either "Cookie:" header is not present at all, or the
+ *                requested parameter is not found.
+ *  MG_BUFFER_TOO_SMALL  Destination buffer is too small to hold the value.
  */
 enum mg_error_t mg_get_cookie(const struct mg_connection *,
 		const char *cookie_name, char *buf, size_t buf_len);
