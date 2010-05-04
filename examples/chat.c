@@ -60,6 +60,22 @@ static long last_message_id;
 // Protects messages, sessions, last_message_id
 static pthread_rwlock_t rwlock = PTHREAD_RWLOCK_INITIALIZER;
 
+// Get session object for the connection. Caller must hold the lock.
+static struct session *get_session(const struct mg_connection *conn) {
+  int i;
+  char session_id[33];
+  time_t now = time(NULL);
+  mg_get_cookie(conn, "session", session_id, sizeof(session_id));
+  for (i = 0; i < MAX_SESSIONS; i++) {
+    if (sessions[i].expire != 0 &&
+        sessions[i].expire > now &&
+        strcmp(sessions[i].session_id, session_id) == 0) {
+      break;
+    }
+  }
+  return i == MAX_SESSIONS ? NULL : &sessions[i];
+}
+
 // Get a get of messages with IDs greater than last_id and transform them
 // into a JSON string. Return that string to the caller. The string is
 // dynamically allocated, caller must free it. If there are no messages,
@@ -136,6 +152,7 @@ static void ajax_get_messages(struct mg_connection *conn,
 static void ajax_send_message(struct mg_connection *conn,
     const struct mg_request_info *request_info) {
   struct message *message;
+  struct session *session;
   char text[sizeof(message->text) - 1];
   int is_jsonp;
 
@@ -150,8 +167,10 @@ static void ajax_send_message(struct mg_connection *conn,
     message = &messages[last_message_id %
       (sizeof(messages) / sizeof(messages[0]))];
     // TODO(lsm): JSON-encode all text strings
-    strncpy(message->text, text, sizeof(text));
-    strncpy(message->user, "joe", sizeof(message->user));
+    session = get_session(conn);
+    assert(session != NULL);
+    strlcpy(message->text, text, sizeof(text));
+    strlcpy(message->user, session->user, sizeof(message->user));
     message->timestamp = time(0);
     message->id = last_message_id++;
     pthread_rwlock_unlock(&rwlock);
@@ -259,31 +278,22 @@ static void authorize(struct mg_connection *conn,
 // Return 1 if request is authorized, 0 otherwise.
 static int is_authorized(const struct mg_connection *conn,
     const struct mg_request_info *request_info) {
-  char valid_id[33], received_id[33];
-  int i, authorized = 0;
+  struct session *session;
+  char valid_id[33];
+  int authorized = 0;
 
-  mg_get_cookie(conn, "session", received_id, sizeof(received_id));
-  if (received_id[0] != '\0') {
-    pthread_rwlock_rdlock(&rwlock);
-    for (i = 0; i < MAX_SESSIONS; i++) {
-      if (sessions[i].expire != 0 &&
-          sessions[i].expire > time(NULL) &&
-          strcmp(sessions[i].session_id, received_id) == 0) {
-        break;
-      }
+  pthread_rwlock_rdlock(&rwlock);
+  if ((session = get_session(conn)) != NULL) {
+    generate_session_id(valid_id, session->random, session->user, request_info);
+    if (strcmp(valid_id, session->session_id) == 0) {
+      session->expire = time(0) + SESSION_TTL;
+      authorized = 1;
     }
-    if (i < MAX_SESSIONS) {
-      generate_session_id(valid_id, sessions[i].random,
-          sessions[i].user, request_info);
-      if (strcmp(valid_id, received_id) == 0) {
-        sessions[i].expire = time(0) + SESSION_TTL;
-        authorized = 1;
-      }
-    }
-    pthread_rwlock_unlock(&rwlock);
   }
-  printf("session: %s, uri: %s, authorized: %s, cookie: %s\n",
-      received_id, request_info->uri, authorized ? "yes" : "no", mg_get_header(conn, "Cookie"));
+  // Printing while holding the lock is a bad idea.
+  printf("session: %s, uri: %s, authorized: %s\n",
+      session->session_id, request_info->uri, authorized ? "yes" : "no");
+  pthread_rwlock_unlock(&rwlock);
 
   return authorized;
 }
