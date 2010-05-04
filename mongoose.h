@@ -237,6 +237,17 @@ const char *mg_version(void);
 
 
 /*
+ * MD5 hash given strings.
+ * Buffer 'buf' must be 33 bytes long. Varargs is a NULL terminated list of
+ * asciiz strings. When function returns, buf will contain human-readable
+ * MD5 hash. Example:
+ *   char buf[33];
+ *   mg_md5(buf, "aa", "bb", NULL);
+ */
+void mg_md5(char *buf, ...);
+
+
+/*
  * Print command line usage string.
  */
 void mg_show_usage_string(FILE *fp);

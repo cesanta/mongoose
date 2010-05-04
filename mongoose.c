@@ -2120,7 +2120,7 @@ bin2str(char *to, const unsigned char *p, size_t len)
  * Return stringified MD5 hash for list of vectors.
  * buf must point to 33-bytes long buffer
  */
-static void
+void
 mg_md5(char *buf, ...)
 {
 	unsigned char	hash[16];
