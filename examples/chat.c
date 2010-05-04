@@ -21,6 +21,11 @@
 
 #include "mongoose.h"
 
+#define MAX_USER_LEN  20
+#define MAX_MESSAGE_LEN  100
+#define MAX_MESSAGES 5
+#define MAX_SESSIONS 2
+
 static const char *login_url = "/login.html";
 static const char *authorize_url = "/authorize";
 static const char *web_root = "./html";
@@ -37,13 +42,23 @@ static const char *ajax_reply_start =
 // the message is then originated from the server itself.
 struct message {
   long id;
-  char user[20];
-  char text[200];
+  char user[MAX_USER_LEN];
+  char text[MAX_MESSAGE_LEN];
   time_t utc_timestamp;
 };
 
-static struct message messages[5];  // Ringbuffer where messages are kept
+// Describes web session.
+struct session {
+  char session_id[33];
+  char authenticated_user[MAX_USER_LEN];
+  time_t expiration_timestamp_utc;
+};
+
+static struct message messages[MAX_MESSAGES];  // Ringbuffer for messages
+static struct session sessions[MAX_SESSIONS];  // Current sessions
 static long last_message_id;
+
+// Protects messages, sessions, last_message_id
 static pthread_rwlock_t rwlock = PTHREAD_RWLOCK_INITIALIZER;
 
 // Get a get of messages with IDs greater than last_id and transform them
@@ -208,9 +223,9 @@ static int must_authorize(const struct mg_request_info *request_info) {
       strcmp(request_info->uri, authorize_url) != 0);
 }
 
-static int process_request(struct mg_connection *conn,
+static enum mg_error_t process_request(struct mg_connection *conn,
     const struct mg_request_info *request_info) {
-  int processed = 1;
+  enum mg_error_t processed = MG_SUCCESS;
 
   if (must_authorize(request_info) &&
       !is_authorized(conn, request_info)) {
@@ -225,7 +240,7 @@ static int process_request(struct mg_connection *conn,
   } else {
     // No suitable handler found, mark as not processed. Mongoose will
     // try to serve the request.
-    processed = 0;
+    processed = MG_ERROR;
   }
 
   return processed;
