@@ -1,15 +1,13 @@
 /*
  * This file is part of the Mongoose project, http://code.google.com/p/mongoose
  * It implements an online chat server. For more details,
- * see the documentation on project page.
- * To start the server,
- *  a) type "make" in the directory where this file lives
- *  b) point your browser to http://127.0.0.1:8081
+ * see the documentation on the project web site.
+ * To test the application,
+ *  1. type "make" in the directory where this file lives
+ *  2. point your browser to http://127.0.0.1:8081
  *
  * NOTE(lsm): this file follows Google style, not BSD style as the rest of
  * Mongoose code.
- *
- * $Id: chat.c 513 2010-05-03 11:06:08Z valenok $
  */
 
 #include <stdio.h>
@@ -25,13 +23,13 @@
 #define MAX_MESSAGE_LEN  100
 #define MAX_MESSAGES 5
 #define MAX_SESSIONS 2
+#define SESSION_TTL 120
 
 static const char *login_url = "/login.html";
 static const char *authorize_url = "/authorize";
 static const char *web_root = "./html";
 static const char *http_ports = "8081,8082s";
 static const char *ssl_certificate = "ssl_cert.pem";
-
 static const char *ajax_reply_start =
   "HTTP/1.1 200 OK\r\n"
   "Cache: no-cache\r\n"
@@ -41,17 +39,18 @@ static const char *ajax_reply_start =
 // Describes single message sent to a chat. If user is empty (0 length),
 // the message is then originated from the server itself.
 struct message {
-  long id;
-  char user[MAX_USER_LEN];
-  char text[MAX_MESSAGE_LEN];
-  time_t utc_timestamp;
+  long id;                     // Message ID
+  char user[MAX_USER_LEN];     // User that have sent the message
+  char text[MAX_MESSAGE_LEN];  // Message text
+  time_t timestamp;            // Message timestamp, UTC
 };
 
 // Describes web session.
 struct session {
-  char session_id[33];
-  char authenticated_user[MAX_USER_LEN];
-  time_t expiration_timestamp_utc;
+  char session_id[33];      // Session ID, must be unique
+  char random[20];          // Random data used for extra user validation
+  char user[MAX_USER_LEN];  // Authenticated user
+  time_t expire;            // Expiration timestamp, UTC
 };
 
 static struct message messages[MAX_MESSAGES];  // Ringbuffer for messages
@@ -80,7 +79,7 @@ static char *messages_to_json(long last_id) {
   }
   for (; last_id < last_message_id; last_id++) {
     message = &messages[last_id % max_msgs];
-    if (message->utc_timestamp == 0) {
+    if (message->timestamp == 0) {
       break;
     }
     // buf is allocated on stack and hopefully is large enough to hold all
@@ -88,7 +87,7 @@ static char *messages_to_json(long last_id) {
     // messages are large. in this case asserts will trigger).
     len += snprintf(buf + len, sizeof(buf) - len,
         "{user: '%s', text: '%s', timestamp: %lu, id: %lu},",
-        message->user, message->text, message->utc_timestamp, message->id);
+        message->user, message->text, message->timestamp, message->id);
     assert(len > 0);
     assert((size_t) len < sizeof(buf));
   }
@@ -153,7 +152,7 @@ static void ajax_send_message(struct mg_connection *conn,
     // TODO(lsm): JSON-encode all text strings
     strncpy(message->text, text, sizeof(text));
     strncpy(message->user, "joe", sizeof(message->user));
-    message->utc_timestamp = time(0);
+    message->timestamp = time(0);
     message->id = last_message_id++;
     pthread_rwlock_unlock(&rwlock);
   }
@@ -169,43 +168,90 @@ static void ajax_send_message(struct mg_connection *conn,
 // we came from, so that after the authorization we could redirect back.
 static void redirect_to_login(struct mg_connection *conn,
     const struct mg_request_info *request_info) {
+  const char *host;
+
+  host = mg_get_header(conn, "Host");
   mg_printf(conn, "HTTP/1.1 302 Found\r\n"
-      "Set-Cookie: original_url=%s\r\n"
-      "Location: %s\r\n\r\n", request_info->uri, login_url);
+      "Set-Cookie: original_url=%s://%s%s\r\n"
+      "Location: %s\r\n\r\n",
+      request_info->is_ssl ? "https" : "http",
+      host ? host : "127.0.0.1",
+      request_info->uri,
+      login_url);
 }
 
 // Return 1 if username/password is allowed, 0 otherwise.
 static int check_password(const char *user, const char *password) {
   // In production environment we should ask an authentication system
   // to authenticate the user.
-  // Here however we do trivial check: if username == password, allow.
-  return (strcmp(user, password) == 0 ? 1 : 0);
+  // Here however we do trivial check that user and password are not empty
+  return (user[0] && password[0]);
+}
+
+// Allocate new session object
+static struct session *new_session(void) {
+  int i;
+  time_t now = time(NULL);
+  pthread_rwlock_wrlock(&rwlock);
+  for (i = 0; i < MAX_SESSIONS; i++) {
+    if (sessions[i].expire == 0 || sessions[i].expire < now) {
+      sessions[i].expire = time(0) + SESSION_TTL;
+      break;
+    }
+  }
+  pthread_rwlock_unlock(&rwlock);
+  return i == MAX_SESSIONS ? NULL : &sessions[i];
+}
+
+// Generate session ID. buf must be 33 bytes in size.
+static void generate_session_id(char *buf, const char *random,
+    const char *user, const struct mg_request_info *request_info) {
+  char remote_ip[20], remote_port[20];
+  snprintf(remote_ip, sizeof(remote_ip), "%ld", request_info->remote_ip);
+  snprintf(remote_port, sizeof(remote_port), "%d", request_info->remote_port);
+  mg_md5(buf, random, user, remote_port, remote_ip, NULL);
 }
 
 // A handler for the /authorize endpoint.
 // Login page form sends user name and password to this endpoint.
 static void authorize(struct mg_connection *conn,
     const struct mg_request_info *request_info) {
-  char user[20], password[20], original_url[200];
+  char user[MAX_USER_LEN], password[MAX_USER_LEN], original_url[200];
+  struct session *session;
 
   // Fetch user name and password.
   mg_get_qsvar(request_info, "user", user, sizeof(user));
   mg_get_qsvar(request_info, "password", password, sizeof(password));
   mg_get_cookie(conn, "original_url", original_url, sizeof(original_url));
 
-  if (user[0] && password[0] && check_password(user, password)) {
+  if (check_password(user, password) && (session = new_session()) != NULL) {
     // Authentication success:
     //   1. create new session
     //   2. set session ID token in the cookie
     //   3. remove original_url from the cookie - not needed anymore
     //   4. redirect client back to the original URL
-    // TODO(lsm): implement sessions.
+    //
+    // The most secure way is to stay HTTPS all the time. However, just to
+    // show the technique, we redirect to HTTP after the successful
+    // authentication. The danger of doing this is that session cookie can
+    // be stolen and an attacker may impersonate the user.
+    // Secure application must use HTTPS all the time.
+    strlcpy(session->user, user, sizeof(session->user));
+    snprintf(session->random, sizeof(session->random), "%d", rand());
+    generate_session_id(session->session_id, session->random,
+        session->user, request_info);
+    printf("New session, user: %s, id: %s, redirecting to %s\n",
+        session->user, session->session_id, original_url);
     mg_printf(conn, "HTTP/1.1 302 Found\r\n"
-        "Set-Cookie: sid=1234; max-age=2h; http-only\r\n"  // Set session ID
-        "Set-Cookie: original_url=/; max_age=0\r\n"  // Delete original_url
-        "Location: %s\r\n\r\n", original_url[0] == '\0' ? "/" : original_url);
+        "Set-Cookie: session=%s; max-age=3600; http-only\r\n"  // Session ID
+        "Set-Cookie: user=%s\r\n"  // Set user, needed by Javascript code
+        "Set-Cookie: original_url=/; max-age=0\r\n"  // Delete original_url
+        "Location: %s\r\n\r\n",
+        session->session_id,
+        session->user,
+        original_url[0] == '\0' ? "/" : original_url);
   } else {
-    // Authentication failure, redirect to login again.
+    // Authentication failure, redirect to login.
     redirect_to_login(conn, request_info);
   }
 }
@@ -213,8 +259,33 @@ static void authorize(struct mg_connection *conn,
 // Return 1 if request is authorized, 0 otherwise.
 static int is_authorized(const struct mg_connection *conn,
     const struct mg_request_info *request_info) {
-  // TODO(lsm): implement this part: fetch session ID from the cookie.
-  return 0;
+  char valid_id[33], received_id[33];
+  int i, authorized = 0;
+
+  mg_get_cookie(conn, "session", received_id, sizeof(received_id));
+  if (received_id[0] != '\0') {
+    pthread_rwlock_rdlock(&rwlock);
+    for (i = 0; i < MAX_SESSIONS; i++) {
+      if (sessions[i].expire != 0 &&
+          sessions[i].expire > time(NULL) &&
+          strcmp(sessions[i].session_id, received_id) == 0) {
+        break;
+      }
+    }
+    if (i < MAX_SESSIONS) {
+      generate_session_id(valid_id, sessions[i].random,
+          sessions[i].user, request_info);
+      if (strcmp(valid_id, received_id) == 0) {
+        sessions[i].expire = time(0) + SESSION_TTL;
+        authorized = 1;
+      }
+    }
+    pthread_rwlock_unlock(&rwlock);
+  }
+  printf("session: %s, uri: %s, authorized: %s, cookie: %s\n",
+      received_id, request_info->uri, authorized ? "yes" : "no", mg_get_header(conn, "Cookie"));
+
+  return authorized;
 }
 
 // Return 1 if authorization is required for requested URL, 0 otherwise.
@@ -246,18 +317,22 @@ static enum mg_error_t process_request(struct mg_connection *conn,
   return processed;
 }
 
-int main(int argc, char *argv[]) {
+int main(void) {
   struct mg_context	*ctx;
 
-  ctx = mg_start();
+  // Initialize random number generator. It will be used later on for
+  // the session identifier creation.
+  srand((unsigned) time(0));
 
+  // Start and setup Mongoose
+  ctx = mg_start();
   mg_set_option(ctx, "root", web_root);
   mg_set_option(ctx, "ssl_cert", ssl_certificate);  // Must be set before ports
   mg_set_option(ctx, "ports", http_ports);
   mg_set_option(ctx, "dir_list", "no");   // Disable directory listing
-
   mg_set_callback(ctx, MG_EVENT_NEW_REQUEST, &process_request);
 
+  // Wait until enter is pressed, then exit
   printf("Chat server started on ports %s, press enter to quit.\n", http_ports);
   getchar();
   mg_stop(ctx);
