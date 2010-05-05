@@ -15,6 +15,7 @@
 #include <assert.h>
 #include <string.h>
 #include <time.h>
+#include <stdarg.h>
 #include <pthread.h>
 
 #include "mongoose.h"
@@ -148,6 +149,15 @@ static void ajax_get_messages(struct mg_connection *conn,
   }
 }
 
+// Allocate new message. Caller must hold the lock.
+static struct message *new_message(void) {
+  static int size = sizeof(messages) / sizeof(messages[0]);
+  struct message *message = &messages[last_message_id % size];
+  message->id = last_message_id++;
+  message->timestamp = time(0);
+  return message;
+}
+
 // A handler for the /ajax/send_message endpoint.
 static void ajax_send_message(struct mg_connection *conn,
     const struct mg_request_info *request_info) {
@@ -164,15 +174,12 @@ static void ajax_send_message(struct mg_connection *conn,
     // We have a message to store. Write-lock the ringbuffer,
     // grab the next message and copy data into it.
     pthread_rwlock_wrlock(&rwlock);
-    message = &messages[last_message_id %
-      (sizeof(messages) / sizeof(messages[0]))];
+    message = new_message();
     // TODO(lsm): JSON-encode all text strings
     session = get_session(conn);
     assert(session != NULL);
     strlcpy(message->text, text, sizeof(text));
     strlcpy(message->user, session->user, sizeof(message->user));
-    message->timestamp = time(0);
-    message->id = last_message_id++;
     pthread_rwlock_unlock(&rwlock);
   }
 
@@ -231,6 +238,20 @@ static void generate_session_id(char *buf, const char *random,
   mg_md5(buf, random, user, remote_port, remote_ip, NULL);
 }
 
+static void send_server_message(const char *fmt, ...) {
+  va_list ap;
+  struct message *message;
+
+  pthread_rwlock_wrlock(&rwlock);
+  message = new_message();
+  message->user[0] = '\0';  // Empty user indicates server message
+  va_start(ap, fmt);
+  vsnprintf(message->text, sizeof(message->text), fmt, ap);
+  va_end(ap);
+
+  pthread_rwlock_unlock(&rwlock);
+}
+
 // A handler for the /authorize endpoint.
 // Login page form sends user name and password to this endpoint.
 static void authorize(struct mg_connection *conn,
@@ -259,8 +280,7 @@ static void authorize(struct mg_connection *conn,
     snprintf(session->random, sizeof(session->random), "%d", rand());
     generate_session_id(session->session_id, session->random,
         session->user, request_info);
-    printf("New session, user: %s, id: %s, redirecting to %s\n",
-        session->user, session->session_id, original_url);
+    send_server_message("<%s> joined", session->user);
     mg_printf(conn, "HTTP/1.1 302 Found\r\n"
         "Set-Cookie: session=%s; max-age=3600; http-only\r\n"  // Session ID
         "Set-Cookie: user=%s\r\n"  // Set user, needed by Javascript code
@@ -290,9 +310,6 @@ static int is_authorized(const struct mg_connection *conn,
       authorized = 1;
     }
   }
-  // Printing while holding the lock is a bad idea.
-  printf("session: %s, uri: %s, authorized: %s\n",
-      session->session_id, request_info->uri, authorized ? "yes" : "no");
   pthread_rwlock_unlock(&rwlock);
 
   return authorized;
