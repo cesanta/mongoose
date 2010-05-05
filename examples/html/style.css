@@ -13,6 +13,10 @@ body {
   float: left;
 }
 
+td {
+  text-align: left;
+}
+
 #motd {
   margin-left: 170px;
 }
@@ -85,7 +89,7 @@ body {
 
 .main {
   padding: 0.5em;
-  background: #e0ecff;
+  background: #f0fcff;
 }
 
 #menu {
