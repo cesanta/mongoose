@@ -6,6 +6,17 @@ body {
   font: 13px Arial; margin: 0.5em 1em;
 }
 
+#logo {
+  background: url('logo.png') no-repeat ;
+  width: 160px;
+  height: 40px;
+  float: left;
+}
+
+#motd {
+  margin-left: 170px;
+}
+
 .infobox {
   background: #eed;
   padding: 1px 1em;
