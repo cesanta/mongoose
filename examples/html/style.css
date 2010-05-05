@@ -64,6 +64,14 @@ body {
   margin-left: 0.5em;
 }
 
+.message-user-server {
+  color: purple;
+}
+
+.message-text-server {
+  font-style: italic;
+}
+
 .main {
   padding: 0.5em;
   background: #e0ecff;
