@@ -25,7 +25,10 @@
 
 #if defined(_WIN32)
 #define _CRT_SECURE_NO_WARNINGS	/* Disable deprecation warning in VS2005 */
-#endif /* _WIN32 */
+#else
+#define _XOPEN_SOURCE 600	/* Needed for pthread_rwlock on linux */
+#define _LARGEFILE_SOURCE	/* Enable 64-bit file offsets */
+#endif
 
 #ifndef _WIN32_WCE /* Some ANSI #includes are not available on Windows CE */
 #include <sys/types.h>

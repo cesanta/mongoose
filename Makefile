@@ -23,8 +23,7 @@ all:
 
 CFLAGS=		-W -Wall -std=c99 -pedantic -Os -fomit-frame-pointer $(COPT)
 MAC_SHARED=	-flat_namespace -bundle -undefined suppress
-LINFLAGS=	-D_POSIX_SOURCE -D_BSD_SOURCE -D_FILE_OFFSET_BITS=64 \
-		-D_LARGEFILE_SOURCE -ldl -lpthread $(CFLAGS)
+LINFLAGS=	-ldl -pthread $(CFLAGS)
 LIB=		_$(PROG).so
 
 linux:
@@ -32,17 +31,17 @@ linux:
 	$(CC) $(LINFLAGS) mongoose.c main.c -s -o $(PROG)
 
 bsd:
-	$(CC) $(CFLAGS) mongoose.c -shared -lpthread -s -fpic -fPIC -o $(LIB)
-	$(CC) $(CFLAGS) mongoose.c main.c -lpthread -s -o $(PROG)
+	$(CC) $(CFLAGS) mongoose.c -shared -pthread -s -fpic -fPIC -o $(LIB)
+	$(CC) $(CFLAGS) mongoose.c main.c -pthread -s -o $(PROG)
 
 mac:
-	$(CC) $(CFLAGS) $(MAC_SHARED) mongoose.c -lpthread -o $(LIB)
-	$(CC) $(CFLAGS) mongoose.c main.c -lpthread -o $(PROG)
+	$(CC) $(CFLAGS) $(MAC_SHARED) mongoose.c -pthread -o $(LIB)
+	$(CC) $(CFLAGS) mongoose.c main.c -pthread -o $(PROG)
 
 solaris:
-	gcc $(CFLAGS) mongoose.c -lpthread -lnsl \
+	gcc $(CFLAGS) mongoose.c -pthread -lnsl \
 		-lsocket -s -fpic -fPIC -shared -o $(LIB)
-	gcc $(CFLAGS) mongoose.c main.c -lpthread -lnsl -lsocket -s -o $(PROG)
+	gcc $(CFLAGS) mongoose.c main.c -pthread -lnsl -lsocket -s -o $(PROG)
 
 
 ##########################################################################
