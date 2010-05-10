@@ -158,6 +158,11 @@ static struct message *new_message(void) {
   return message;
 }
 
+static void my_strlcpy(char *dst, const char *src, size_t len) {
+  strncpy(dst, src, len);
+  dst[len - 1] = '\0';
+}
+
 // A handler for the /ajax/send_message endpoint.
 static void ajax_send_message(struct mg_connection *conn,
     const struct mg_request_info *request_info) {
@@ -178,8 +183,8 @@ static void ajax_send_message(struct mg_connection *conn,
     // TODO(lsm): JSON-encode all text strings
     session = get_session(conn);
     assert(session != NULL);
-    strlcpy(message->text, text, sizeof(text));
-    strlcpy(message->user, session->user, sizeof(message->user));
+    my_strlcpy(message->text, text, sizeof(text));
+    my_strlcpy(message->user, session->user, sizeof(message->user));
     pthread_rwlock_unlock(&rwlock);
   }
 
@@ -276,7 +281,7 @@ static void authorize(struct mg_connection *conn,
     // authentication. The danger of doing this is that session cookie can
     // be stolen and an attacker may impersonate the user.
     // Secure application must use HTTPS all the time.
-    strlcpy(session->user, user, sizeof(session->user));
+    my_strlcpy(session->user, user, sizeof(session->user));
     snprintf(session->random, sizeof(session->random), "%d", rand());
     generate_session_id(session->session_id, session->random,
         session->user, request_info);
