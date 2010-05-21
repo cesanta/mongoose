@@ -2690,6 +2690,12 @@ send_opened_file_stream(struct mg_connection *conn, FILE *fp, int64_t len)
 	}
 }
 
+static int
+parse_range_header(const char *header, int64_t *a, int64_t *b)
+{
+	return sscanf(header, "bytes=%" INT64_FMT "u-%" INT64_FMT "u", a, b);
+}
+
 /*
  * Send regular file contents.
  */
@@ -2719,8 +2725,7 @@ send_file(struct mg_connection *conn, const char *path, struct mgstat *stp)
 	/* If Range: header specified, act accordingly */
 	r1 = r2 = 0;
 	hdr = mg_get_header(conn, "Range");
-	if (hdr != NULL && (n = sscanf(hdr,
-	    "bytes=%" INT64_FMT "-%" INT64_FMT, &r1, &r2)) > 0) {
+	if (hdr != NULL && (n = parse_range_header(hdr, &r1, &r2)) > 0) {
 		conn->request_info.status_code = 206;
 		(void) fseeko(fp, (off_t) r1, SEEK_SET);
 		cl = n == 2 ? r2 - r1 + 1: cl - r1;
@@ -3304,15 +3309,14 @@ static void
 put_file(struct mg_connection *conn, const char *path)
 {
 	struct mgstat	st;
+	const char	*range;
+	int64_t		r1, r2;
 	FILE		*fp;
 	int		rc;
 
 	conn->request_info.status_code = mg_stat(path, &st) == 0 ? 200 : 201;
 
-	if (mg_get_header(conn, "Range")) {
-		send_error(conn, 501, "Not Implemented",
-		    "%s", "Range support for PUT requests is not implemented");
-	} else if ((rc = put_dir(path)) == 0) {
+	if ((rc = put_dir(path)) == 0) {
 		(void) mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n",
 		    conn->request_info.status_code);
 	} else if (rc == -1) {
@@ -3323,6 +3327,13 @@ put_file(struct mg_connection *conn, const char *path)
 		    "fopen(%s): %s", path, strerror(ERRNO));
 	} else {
 		set_close_on_exec(fileno(fp));
+		range = mg_get_header(conn, "Content-Range");
+		r1 = r2 = 0;
+		if (range != NULL && parse_range_header(range, &r1, &r2) > 0) {
+			conn->request_info.status_code = 206;
+			/* TODO(lsm): handle seek error */
+			(void) fseeko(fp, (off_t) r1, SEEK_SET);
+		}
 		if (handle_request_body(conn, fp))
 			(void) mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n",
 			    conn->request_info.status_code);
