@@ -269,6 +269,9 @@ struct ssl_func {
 #define SSL_CTX_set_default_passwd_cb(x,y) \
 	(* (void (*)(SSL_CTX *, mg_callback_t)) ssl_sw[13].ptr)((x),(y))
 #define SSL_CTX_free(x) (* (void (*)(SSL_CTX *)) ssl_sw[14].ptr)(x)
+#define ERR_get_error() (* (unsigned long (*)(void)) ssl_sw[15].ptr)()
+#define ERR_error_string(x, y) (* (char * (*)(unsigned long, char *)) ssl_sw[16].ptr)((x), (y))
+#define SSL_load_error_strings() (* (void (*)(void)) ssl_sw[17].ptr)()
 
 #define CRYPTO_num_locks() (* (int (*)(void)) crypto_sw[0].ptr)()
 #define CRYPTO_set_locking_callback(x)					\
@@ -299,6 +302,9 @@ static struct ssl_func	ssl_sw[] = {
 	{"SSL_CTX_use_certificate_file",NULL},
 	{"SSL_CTX_set_default_passwd_cb",NULL},
 	{"SSL_CTX_free",		NULL},
+	{"ERR_get_error",		NULL},
+	{"ERR_error_string",	NULL},
+	{"SSL_load_error_strings", NULL},
 	{NULL,				NULL}
 };
 
@@ -471,10 +477,30 @@ cry(struct mg_connection *conn, const char *fmt, ...)
 			(void) fprintf(fp, "%s", buf);
 			fputc('\n', fp);
 			funlockfile(fp);
-			(void) fclose(fp);
+//			(void) fclose(fp);
 		}
 	}
 	conn->request_info.log_message = NULL;
+}
+
+/*
+ * Print OpenSSL error messages, if any, to the error log.
+ */
+static void ssl_cry(struct mg_connection *conn, const char *fmt, ...) {
+	char buf[BUFSIZ];
+	va_list ap;
+
+	/* first just log the mongoose-level error message passed in via fmt, etc. */
+	va_start(ap, fmt);
+	(void) vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	cry(conn, buf);
+	
+	/* then loop through any unlogged OpenSSL errors */
+	unsigned long err;
+	while ((err = ERR_get_error()) != 0) {
+		cry(conn, "  OpenSSL: %s", ERR_error_string(err, NULL));
+	}
 }
 
 /*
@@ -3874,20 +3900,21 @@ set_ssl_option(struct mg_context *ctx, const char *pem)
 
 	/* Initialize SSL crap */
 	SSL_library_init();
+	SSL_load_error_strings();
 
 	if ((CTX = SSL_CTX_new(SSLv23_server_method())) == NULL)
-		cry(fc(ctx), "SSL_CTX_new error");
+		ssl_cry(fc(ctx), "SSL_CTX_new error");
 	else if (ctx->callbacks[MG_EVENT_SSL_PASSWORD] != NULL)
 		SSL_CTX_set_default_passwd_cb(CTX,
 				ctx->callbacks[MG_EVENT_SSL_PASSWORD]);
 
 	if (CTX != NULL && SSL_CTX_use_certificate_file(
 	    CTX, pem, SSL_FILETYPE_PEM) == 0) {
-		cry(fc(ctx), "%s: cannot open %s", __func__, pem);
+		ssl_cry(fc(ctx), "%s: cannot open %s", __func__, pem);
 		return (MG_ERROR);
 	} else if (CTX != NULL && SSL_CTX_use_PrivateKey_file(
 	    CTX, pem, SSL_FILETYPE_PEM) == 0) {
-		cry(fc(ctx), "%s: cannot open %s", NULL, pem);
+		ssl_cry(fc(ctx), "%s: cannot open %s", NULL, pem);
 		return (MG_ERROR);
 	}
 
@@ -3897,7 +3924,7 @@ set_ssl_option(struct mg_context *ctx, const char *pem)
 	 */
 	size = sizeof(pthread_mutex_t) * CRYPTO_num_locks();
 	if ((ssl_mutexes = (pthread_mutex_t *) malloc(size)) == NULL) {
-		cry(fc(ctx), "%s: cannot allocate mutexes", __func__);
+		ssl_cry(fc(ctx), "%s: cannot allocate mutexes", __func__);
 		return (MG_ERROR);
 	}
 
@@ -4363,12 +4390,12 @@ worker_thread(struct mg_context *ctx)
 
 		if (conn.client.is_ssl &&
 		    (conn.ssl = SSL_new(conn.ctx->ssl_ctx)) == NULL) {
-			cry(&conn, "%s: SSL_new: %d", __func__, ERRNO);
+			ssl_cry(&conn, "%s: SSL_new: %d", __func__, ERRNO);
 		} else if (conn.client.is_ssl &&
 		    SSL_set_fd(conn.ssl, conn.client.sock) != 1) {
-			cry(&conn, "%s: SSL_set_fd: %d", __func__, ERRNO);
+			ssl_cry(&conn, "%s: SSL_set_fd: %d", __func__, ERRNO);
 		} else if (conn.client.is_ssl && SSL_accept(conn.ssl) != 1) {
-			cry(&conn, "%s: SSL handshake error", __func__);
+			ssl_cry(&conn, "%s: SSL handshake error", __func__);
 		} else {
 			process_new_connection(&conn);
 		}
