@@ -477,7 +477,7 @@ cry(struct mg_connection *conn, const char *fmt, ...)
 			(void) fprintf(fp, "%s", buf);
 			fputc('\n', fp);
 			funlockfile(fp);
-//			(void) fclose(fp);
+			/* (void) fclose(fp); */
 		}
 	}
 	conn->request_info.log_message = NULL;
@@ -499,7 +499,7 @@ static void ssl_cry(struct mg_connection *conn, const char *fmt, ...) {
 	/* then loop through any unlogged OpenSSL errors */
 	unsigned long err;
 	while ((err = ERR_get_error()) != 0) {
-		cry(conn, "  OpenSSL: %s", ERR_error_string(err, NULL));
+		cry(conn, "    --> OpenSSL: %s", ERR_error_string(err, NULL));
 	}
 }
 
