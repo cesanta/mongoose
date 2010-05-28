@@ -477,7 +477,8 @@ cry(struct mg_connection *conn, const char *fmt, ...)
 			(void) fprintf(fp, "%s", buf);
 			fputc('\n', fp);
 			funlockfile(fp);
-			if (fp != stderr) fclose(fp);
+			if (fp != stderr)
+				fclose(fp);
 		}
 	}
 	conn->request_info.log_message = NULL;
@@ -488,16 +489,16 @@ cry(struct mg_connection *conn, const char *fmt, ...)
  */
 static void ssl_cry(struct mg_connection *conn, const char *fmt, ...) {
 	char buf[BUFSIZ];
+	unsigned long err;
 	va_list ap;
 
-	/* first just log the mongoose-level error message passed in via fmt, etc. */
+	/* Log Mongoose message */
 	va_start(ap, fmt);
 	(void) vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
 	cry(conn, buf);
 	
-	/* then loop through any unlogged OpenSSL errors */
-	unsigned long err;
+	/* Loop through any unlogged OpenSSL errors */
 	while ((err = ERR_get_error()) != 0) {
 		cry(conn, "    --> OpenSSL: %s", ERR_error_string(err, NULL));
 	}
