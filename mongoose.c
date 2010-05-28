@@ -477,7 +477,7 @@ cry(struct mg_connection *conn, const char *fmt, ...)
 			(void) fprintf(fp, "%s", buf);
 			fputc('\n', fp);
 			funlockfile(fp);
-			/* (void) fclose(fp); */
+			if (fp != stderr) fclose(fp);
 		}
 	}
 	conn->request_info.log_message = NULL;
