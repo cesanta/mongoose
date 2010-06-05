@@ -200,8 +200,6 @@ typedef int SOCKET;
 #define	CGI_ENVIRONMENT_SIZE	4096
 #define	MAX_CGI_ENVIR_VARS	64
 #define	MAX_REQUEST_SIZE	8192
-#define	MAX_LISTENING_SOCKETS	10
-#define	MAX_CALLBACKS		20
 #define	ARRAY_SIZE(array)	(sizeof(array) / sizeof(array[0]))
 #define	DEBUG_MGS_PREFIX	"*** Mongoose debug *** "
 
@@ -383,6 +381,7 @@ enum mg_option_index {
  * by the worker thread.
  */
 struct socket {
+	struct socket	*next;		/* Linkage			*/
 	SOCKET		sock;		/* Listening socket		*/
 	struct usa	lsa;		/* Local socket address		*/
 	struct usa	rsa;		/* Remote socket address	*/
@@ -396,8 +395,7 @@ struct mg_context {
 	int		stop_flag;	/* Should we stop event loop	*/
 	SSL_CTX		*ssl_ctx;	/* SSL context			*/
 
-	struct socket	listeners[MAX_LISTENING_SOCKETS];
-	int		num_listeners;
+	struct socket	*listening_sockets;
 	char		*options[NUM_OPTIONS];
 	mg_callback_t	callbacks[NUM_EVENTS];
 
@@ -3610,11 +3608,13 @@ analyze_request(struct mg_connection *conn)
 static void
 close_all_listening_sockets(struct mg_context *ctx)
 {
-	int	i;
-
-	for (i = 0; i < ctx->num_listeners; i++)
-		(void) closesocket(ctx->listeners[i].sock);
-	ctx->num_listeners = 0;
+	struct socket	*sp, *tmp;
+	for (sp = ctx->listening_sockets; sp != NULL; sp = tmp) {
+		tmp = sp->next;
+		(void) closesocket(sp->sock);
+		free(sp);
+	}
+	ctx->listening_sockets = NULL;
 }
 
 static enum mg_error_t
@@ -3626,15 +3626,12 @@ set_ports_option(struct mg_context *ctx, const char *list)
 	struct socket	*listener;
 
 	close_all_listening_sockets(ctx);
-	assert(ctx->num_listeners == 0);
 
 	while ((list = next_option(list, &vec, NULL)) != NULL) {
 
 		is_ssl	= vec.ptr[vec.len - 1] == 's' ? TRUE : FALSE;
-		listener = ctx->listeners + ctx->num_listeners;
 
-		if (ctx->num_listeners >=
-		    (int) (ARRAY_SIZE(ctx->listeners) - 1)) {
+		if ((listener = calloc(1, sizeof(*listener))) == NULL) {
 			cry(fc(ctx), "%s", "Too many listeninig sockets");
 			return (MG_ERROR);
 		} else if ((sock = mg_open_listening_port(ctx,
@@ -3649,7 +3646,8 @@ set_ports_option(struct mg_context *ctx, const char *list)
 		} else {
 			listener->sock = sock;
 			listener->is_ssl = is_ssl;
-			ctx->num_listeners++;
+			listener->next = ctx->listening_sockets;
+			ctx->listening_sockets = listener;
 		}
 	}
 
@@ -4484,7 +4482,8 @@ master_thread(struct mg_context *ctx)
 {
 	fd_set		read_set;
 	struct timeval	tv;
-	int		i, max_fd;
+	struct socket	*sp;
+	int		max_fd;
 
 	while (ctx->stop_flag == 0) {
 		FD_ZERO(&read_set);
@@ -4492,8 +4491,8 @@ master_thread(struct mg_context *ctx)
 
 		/* Add listening sockets to the read set */
 		(void) pthread_rwlock_rdlock(&ctx->rwlock);
-		for (i = 0; i < ctx->num_listeners; i++)
-			add_to_set(ctx->listeners[i].sock, &read_set, &max_fd);
+		for (sp = ctx->listening_sockets; sp != NULL; sp = sp->next)
+			add_to_set(sp->sock, &read_set, &max_fd);
 		(void) pthread_rwlock_unlock(&ctx->rwlock);
 
 		tv.tv_sec = 1;
@@ -4511,10 +4510,10 @@ master_thread(struct mg_context *ctx)
 #endif /* _WIN32 */
 		} else {
 			(void) pthread_rwlock_rdlock(&ctx->rwlock);
-			for (i = 0; i < ctx->num_listeners; i++)
-				if (FD_ISSET(ctx->listeners[i].sock, &read_set))
-					accept_new_connection(
-					    ctx->listeners + i, ctx);
+			for (sp = ctx->listening_sockets;
+					sp != NULL; sp = sp->next)
+				if (FD_ISSET(sp->sock, &read_set))
+					accept_new_connection(sp, ctx);
 			(void) pthread_rwlock_unlock(&ctx->rwlock);
 		}
 	}
