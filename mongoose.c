@@ -87,9 +87,11 @@ typedef long off_t;
 #define	STR(x)			STRX(x)
 #define	__func__		"line " STR(__LINE__)
 #define	strtoull(x, y, z)	strtoul(x, y, z)
+#define	strtoll(x, y, z)	strtol(x, y, z)
 #else
 #define	__func__		__FUNCTION__
 #define	strtoull(x, y, z)	_strtoui64(x, y, z)
+#define	strtoll(x, y, z)	_strtoi64(x, y, z)
 #endif /* _MSC_VER */
 
 #define	ERRNO			GetLastError()
@@ -99,7 +101,9 @@ typedef long off_t;
 #define	DIRSEP			'\\'
 #define	IS_DIRSEP_CHAR(c)	((c) == '/' || (c) == '\\')
 #define	O_NONBLOCK		0
+#if !defined(EWOULDBLOCK)
 #define	EWOULDBLOCK		WSAEWOULDBLOCK
+#endif /* !EWOULDBLOCK */
 #define	_POSIX_
 #define INT64_FMT		"I64d"
 
@@ -125,6 +129,7 @@ typedef long off_t;
 #endif /* !fileno MINGW #defines fileno */
 
 typedef HANDLE pthread_mutex_t;
+typedef HANDLE pthread_rwlock_t;
 typedef HANDLE pthread_cond_t;
 typedef DWORD pthread_t;
 #define pid_t HANDLE	/* MINGW typedefs pid_t to int. Using #define here. */
@@ -136,6 +141,14 @@ struct timespec {
 
 static int pthread_mutex_lock(pthread_mutex_t *);
 static int pthread_mutex_unlock(pthread_mutex_t *);
+static FILE *mg_fopen(const char *path, const char *mode);
+
+/* TODO(lsm): Implement these */
+#define pthread_rwlock_init pthread_mutex_init
+#define pthread_rwlock_destroy pthread_mutex_destroy
+#define pthread_rwlock_rdlock pthread_mutex_lock
+#define pthread_rwlock_wrlock pthread_mutex_lock
+#define pthread_rwlock_unlock pthread_mutex_unlock
 
 #if defined(HAVE_STDINT)
 #include <stdint.h>
@@ -1500,7 +1513,7 @@ url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
 		    isxdigit(* (unsigned char *) (src + i + 2))) {
 			a = tolower(* (unsigned char *) (src + i + 1));
 			b = tolower(* (unsigned char *) (src + i + 2));
-			dst[j] = ((HEXTOI(a) << 4) | HEXTOI(b)) & 0xff;
+			dst[j] = (char) ((HEXTOI(a) << 4) | HEXTOI(b));
 			i += 2;
 		} else if (is_form_url_encoded && src[i] == '+') {
 			dst[j] = ' ';
@@ -2931,7 +2944,6 @@ static bool_t
 is_not_modified(const struct mg_connection *conn, const struct mgstat *stp)
 {
 	const char *ims = mg_get_header(conn, "If-Modified-Since");
-	return FALSE;
 	return (ims != NULL && stp->mtime <= date_to_epoch(ims));
 }
 
@@ -3457,7 +3469,7 @@ send_ssi_file(struct mg_connection *conn, const char *path, FILE *fp,
 	while ((ch = fgetc(fp)) != EOF) {
 		if (in_ssi_tag && ch == '>') {
 			in_ssi_tag = FALSE;
-			buf[len++] = ch & 0xff;
+			buf[len++] = (char) ch;
 			buf[len] = '\0';
 			assert(len <= (int) sizeof(buf));
 			if (len < 6 || memcmp(buf, "<!--#", 5) != 0) {

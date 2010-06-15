@@ -48,21 +48,23 @@ solaris:
 ###            WINDOWS build: Using Visual Studio or Mingw
 ##########################################################################
 
-# Using Visual Studio Express
-# 1. Download and install Visual Studio Express 2008 to c:\msvc8
-# 2. Download and install Windows SDK to c:\sdk
-# 3. Go to c:\msvc8\vc\bin and start "VIsual Studio 2008 Command prompt"
-#    (or Itanium/amd64 command promt to build x64 version)
-# 4. In the command prompt, go to mongoose directory and do "nmake windows"
+# Using Visual Studio 6.0
+# Assuming that studio is installed in d:\vc6, change VC variable below to
+# the correct path on your system. Run "d:\vc6\bin\nmake windows"
 
+VC=		d:\vc2010\vc
+#VC=		d:\vc6
+SDK=		d:\sdk\v7.1
 #WINDBG=	/Zi /DDEBUG /Od /DDEBUG
-WINDBG=	/DNDEBUG /Os
-WINFLAGS=	/MT /TC /nologo /W4 $(WINDBG) 
+WINDBG=		/DNDEBUG /Os
+WINFLAGS=	/MT /TC /nologo /W4 $(WINDBG) /I $(VC)/include \
+		/I $(SDK)\include /link /incremental:no /libpath:$(VC)\lib \
+		/libpath:$(SDK)/lib ws2_32.lib
+
 windows:
-	cl $(WINFLAGS) mongoose.c /link /incremental:no /DLL \
-		/DEF:win32\dll.def /out:_$(PROG).dll ws2_32.lib
-	cl $(WINFLAGS) mongoose.c main.c /link /incremental:no \
-		/out:$(PROG).exe ws2_32.lib
+	$(VC)\bin\cl.exe mongoose.c $(WINFLAGS) \
+		/DLL /DEF:win32\dll.def /out:_$(PROG).dll
+	$(VC)\bin\cl.exe mongoose.c main.c $(WINFLAGS) /out:$(PROG).exe
 
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0
