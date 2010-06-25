@@ -59,13 +59,59 @@ struct mg_request_info {
 
 
 /*
- * Error codes for all functions that return 'int'.
+ * User-defined handler function. It must return MG_SUCCESS or MG_ERROR.
+ *
+ * If handler returns MG_SUCCESS, that means that handler has processed the
+ * request by sending appropriate HTTP reply to the client. Mongoose treats
+ * the request as served.
+ *
+ * If callback returns MG_ERROR, that means that callback has not processed
+ * the request. Handler must not send any data to the client in this case.
+ * Mongoose proceeds with request handling as if nothing happened.
+ *
+ * NOTE: ssl_password_handler must have the following prototype:
+ *      int (*)(char *, int, int, void *)
+ * Refer to OpenSSL documentation for more details.
  */
+
 enum mg_error_t {
 	MG_ERROR,
 	MG_SUCCESS,
 	MG_NOT_FOUND,
 	MG_BUFFER_TOO_SMALL
+};
+
+typedef enum mg_error_t (*mg_callback_t)(struct mg_connection *,
+		const struct mg_request_info *);
+
+/*
+ * This structure describes Mongoose configuration.
+ */
+struct mg_config {
+	char *document_root;
+	char *index_files;
+	char *ssl_certificate;
+	char *listening_ports;
+	char *cgi_extensions;
+	char *cgi_interpreter;
+	char *cgi_environment;
+	char *ssi_extensions;
+	char *auth_domain;
+	char *protect;
+	char *global_passwords_file;
+	char *put_delete_passwords_file;
+	char *access_log_file;
+	char *error_log_file;
+	char *acl;
+	char *uid;
+	char *mime_types;
+	char *enable_directory_listing;
+	char *num_threads;
+
+	mg_callback_t new_request_handler;
+	mg_callback_t http_error_handler;
+	mg_callback_t event_log_handler;
+	mg_callback_t ssl_password_handler;
 };
 
 
@@ -74,9 +120,9 @@ enum mg_error_t {
  *
  * This must be the first function called by the application.
  * It creates a serving thread, and returns a context structure that
- * can be used to alter the configuration, and stop the server.
+ * can be used to stop the server.
  */
-struct mg_context *mg_start(void);
+struct mg_context *mg_start(struct mg_config *);
 
 
 /*
@@ -87,32 +133,6 @@ struct mg_context *mg_start(void);
  * threads are stopped. Context pointer becomes invalid.
  */
 void mg_stop(struct mg_context *);
-
-
-/*
- * Get the current value of a particular option.
- *
- * Return:
- *  MG_SUCCESS, MG_NOT_FOUND, MG_BUFFER_TOO_SMALL
- */
-enum mg_error_t mg_get_option(struct mg_context *,
-		const char *option_name, char *buf, size_t buf_len);
-
-
-/*
- * Set a value for a particular option.
- *
- * Mongoose makes an internal copy of the option value string, which must be
- * valid nul-terminated ASCII or UTF-8 string. It is safe to change any option
- * at any time. The order of setting various options is also irrelevant with
- * one exception: if "ports" option contains SSL listening ports, a "ssl_cert"
- * option must be set BEFORE the "ports" option.
- *
- * Return:
- *  MG_ERROR, MG_SUCCESS, or MG_NOT_FOUND if option is unknown.
- */
-enum mg_error_t mg_set_option(struct mg_context *,
-		const char *name, const char *value);
 
 
 /*
@@ -131,36 +151,6 @@ enum mg_error_t mg_set_option(struct mg_context *,
  */
 enum mg_error_t mg_modify_passwords_file(struct mg_context *ctx, 
 		const char *file_name, const char *user, const char *password);
-
-
-/*
- * Attach a callback function to certain event.
- * Callback must return MG_SUCCESS or MG_ERROR.
- *
- * If callback returns MG_SUCCESS, that means that callback has processed the
- * request by sending appropriate HTTP reply to the client. Mongoose treats
- * the request as served.
- *
- * If callback returns MG_ERROR, that means that callback has not processed
- * the request. Callback must not send any data to client in this case.
- * Mongoose proceeds with request handling.
- *
- * NOTE: for MG_EVENT_SSL_PASSWORD event the callback must have
- * int (*)(char *, int, int, void *) prototype. Refer to OpenSSL documentation
- * for more details about the SSL password callback.
- */
-enum mg_event_t {
-	MG_EVENT_NEW_REQUEST,	/* New HTTP request has arrived		*/
-	MG_EVENT_HTTP_ERROR,	/* Mongoose is about to send HTTP error	*/
-	MG_EVENT_LOG,		/* Mongoose is about to log a message	*/
-	MG_EVENT_SSL_PASSWORD,	/* SSL certificate needs verification	*/
-	NUM_EVENTS
-};
-
-typedef enum mg_error_t (*mg_callback_t)(struct mg_connection *,
-		const struct mg_request_info *);
-
-void mg_set_callback(struct mg_context *, enum mg_event_t, mg_callback_t);
 
 
 /*
@@ -184,6 +174,7 @@ int mg_printf(struct mg_connection *, const char *fmt, ...);
  * Read data from the remote or local end.
  */
 int mg_read(struct mg_connection *, void *buf, size_t len);
+
 
 /*
  * Get the value of particular HTTP header.
@@ -246,11 +237,6 @@ const char *mg_version(void);
  */
 void mg_md5(char *buf, ...);
 
-
-/*
- * Print command line usage string.
- */
-void mg_show_usage_string(FILE *fp);
 
 #ifdef __cplusplus
 }

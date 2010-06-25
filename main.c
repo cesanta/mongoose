@@ -32,6 +32,7 @@
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
+#include <stddef.h>
 
 #include "mongoose.h"
 
@@ -71,16 +72,6 @@ signal_handler(int sig_num)
 }
 
 /*
- * Show usage string and exit.
- */
-static void
-show_usage_and_exit(void)
-{
-	mg_show_usage_string(stderr);
-	exit(EXIT_FAILURE);
-}
-
-/*
  * Edit the passwords file.
  */
 static int
@@ -88,18 +79,89 @@ mg_edit_passwords(const char *fname, const char *domain,
 		const char *user, const char *pass)
 {
 	struct mg_context	*ctx;
+	struct mg_config	config;
 	int			retval;
 
-	ctx = mg_start();
-	(void) mg_set_option(ctx, "auth_realm", domain);
+	memset(&config, 0, sizeof(config));
+	config.auth_domain = (char *) domain;
+	config.num_threads = "0";
+	config.listening_ports = "";
+	ctx = mg_start(&config);
 	retval = mg_modify_passwords_file(ctx, fname, user, pass);
 	mg_stop(ctx);
 
 	return (retval);
 }
 
+#define OFFSET(x) offsetof(struct mg_config, x)
+
+static struct option_descriptor {
+	const char *name;
+	const char *description;
+	size_t offset;
+} known_options[] = {
+	{"root", "\tWeb root directory", OFFSET(document_root)},
+	{"index_files",	"Index files", OFFSET(index_files)},
+	{"ssl_cert", "SSL certificate file", OFFSET(ssl_certificate)},
+	{"ports", "Listening ports", OFFSET(listening_ports)},
+	{"dir_list", "Directory listing", OFFSET(enable_directory_listing)},
+	{"protect", "URI to htpasswd mapping", OFFSET(protect)},
+	{"cgi_ext", "CGI extensions", OFFSET(cgi_extensions)},
+	{"cgi_interp", "CGI interpreter to use", OFFSET(cgi_interpreter)},
+	{"cgi_env", "Custom CGI enviroment variables", OFFSET(cgi_environment)},
+	{"ssi_ext", "SSI extensions", OFFSET(ssi_extensions)},
+	{"auth_realm", "Authentication domain name", OFFSET(auth_domain)},
+	{"auth_gpass", "Global passwords file", OFFSET(global_passwords_file)},
+	{"auth_PUT", "PUT,DELETE auth file", OFFSET(put_delete_passwords_file)},
+	{"uid", "\tRun as user", OFFSET(uid)},
+	{"access_log", "Access log file", OFFSET(access_log_file)},
+	{"error_log", "Error log file", OFFSET(error_log_file)},
+	{"acl", "\tAllow/deny IP addresses/subnets", OFFSET(acl)},
+	{"num_threads", "Threads to spawn", OFFSET(num_threads)},
+	{"mime_types", "Extra mime types to use", OFFSET(mime_types)},
+	{NULL, NULL, 0}
+};
+
 static void
-process_command_line_arguments(struct mg_context *ctx, char *argv[])
+show_usage_and_exit(const struct mg_config *config)
+{
+	const struct option_descriptor	*o;
+	const char			*value;
+
+	(void) fprintf(stderr,
+	    "Mongoose version %s (c) Sergey Lyubka\n"
+	    "usage: mongoose [options] [config_file]\n", mg_version());
+
+	fprintf(stderr, "  -A <htpasswd_file> <realm> <user> <passwd>\n");
+
+	for (o = known_options; o->name != NULL; o++) {
+		(void) fprintf(stderr, "  -%s\t%s", o->name, o->description);
+		value = * (char **) ((char *) config + o->offset);
+		if (value != NULL)
+			fprintf(stderr, " (default: \"%s\")", value);
+		fputc('\n', stderr);
+	}
+
+	exit(EXIT_FAILURE);
+}
+
+static void
+set_option(struct mg_config *config, const char *name, char *value)
+{
+	const struct option_descriptor *o;
+
+	for (o = known_options; o->name != NULL; o++)
+		if (strcmp(name, o->name) == 0) {
+			* (char **) ((char *) config + o->offset) = value;
+			break;
+		}
+
+	if (o->name == NULL)
+		show_usage_and_exit(config);
+}
+
+static void
+process_command_line_arguments(struct mg_config *config, char *argv[])
 {
 	const char	*config_file = CONFIG_FILE;
 	char		line[512], opt[512], *vals[100],
@@ -110,11 +172,11 @@ process_command_line_arguments(struct mg_context *ctx, char *argv[])
 	/* First find out, which config file to open */
 	for (i = 1; argv[i] != NULL && argv[i][0] == '-'; i += 2)
 		if (argv[i + 1] == NULL)
-			show_usage_and_exit();
+			show_usage_and_exit(config);
 
 	if (argv[i] != NULL && argv[i + 1] != NULL) {
 		/* More than one non-option arguments are given */
-		show_usage_and_exit();
+		show_usage_and_exit(config);
 	} else if (argv[i] != NULL) {
 		/* Just one non-option argument is given, this is config file */
 		config_file = argv[i];
@@ -140,7 +202,8 @@ process_command_line_arguments(struct mg_context *ctx, char *argv[])
 	(void) memset(vals, 0, sizeof(vals));
 
 	if (fp != NULL) {
-		(void) printf("Loading config file %s\n", config_file);
+		(void) printf("Loading config file %s, "
+		    "ignoring command line arguments\n", config_file);
 
 		/* Loop over the lines in config file */
 		while (fgets(line, sizeof(line), fp) != NULL) {
@@ -156,56 +219,67 @@ process_command_line_arguments(struct mg_context *ctx, char *argv[])
 				    config_file, (int) line_no);
 				exit(EXIT_FAILURE);
 			}
-			if (mg_set_option(ctx, opt, val) != 1)
-				exit(EXIT_FAILURE);
+			/* TODO(lsm): free this at some point */
+			p = malloc(strlen(val) + 1);
+			(void) strcpy(p, val);
+			set_option(config, opt, p);
 		}
 
 		(void) fclose(fp);
+	} else {
+		for (i = 1; argv[i] != NULL && argv[i][0] == '-'; i += 2)
+			set_option(config, &argv[i][1], argv[i + 1]);
 	}
-
-	/* Now pass through the command line options */
-	for (i = 1; argv[i] != NULL && argv[i][0] == '-'; i += 2)
-		if (mg_set_option(ctx, &argv[i][1], argv[i + 1]) != 1)
-			exit(EXIT_FAILURE);
 }
 
 int
 main(int argc, char *argv[])
 {
+	struct mg_config	config;
 	struct mg_context	*ctx;
-	char			ports[1024], web_root[1024];
 
+	/* Initialize configuration with default values */
+	(void) memset(&config, 0, sizeof(config));
+        config.document_root = ".";
+        config.enable_directory_listing = "yes";
+        config.auth_domain = "mydomain.com";
+        config.num_threads = "20";
+        config.index_files = "index.html,index.htm,index.cgi";
+        config.cgi_extensions = ".cgi,.pl,.php";
+        config.ssi_extensions = ".shtml,.shtm";
+	config.listening_ports = "8080";
+
+	/* Edit passwords file if -A option is specified */
 	if (argc > 1 && argv[1][0] == '-' && argv[1][1] == 'A') {
 		if (argc != 6)
-			show_usage_and_exit();
+			show_usage_and_exit(&config);
 		exit(mg_edit_passwords(argv[2], argv[3], argv[4], argv[5]) ==
 		    MG_SUCCESS ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
+	/* Show usage if -h or --help options are specified */
 	if (argc == 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")))
-		show_usage_and_exit();
+		show_usage_and_exit(&config);
 
+	/* Update config based on command line arguments */
+	process_command_line_arguments(&config, argv);
+
+	/* Setup signal handler: quit on Ctrl-C */
 #ifndef _WIN32
 	(void) signal(SIGCHLD, signal_handler);
 #endif /* _WIN32 */
 	(void) signal(SIGTERM, signal_handler);
 	(void) signal(SIGINT, signal_handler);
 
-	if ((ctx = mg_start()) == NULL) {
+	/* Start Mongoose */
+	if ((ctx = mg_start(&config)) == NULL) {
 		(void) printf("%s\n", "Cannot initialize Mongoose context");
 		exit(EXIT_FAILURE);
 	}
 
-	process_command_line_arguments(ctx, argv);
-	(void) mg_get_option(ctx, "ports", ports, sizeof(ports));
-	if (ports[0] == '\0' &&
-	    mg_set_option(ctx, "ports", "8080") != MG_SUCCESS)
-		exit(EXIT_FAILURE);
-
-	(void) mg_get_option(ctx, "ports", ports, sizeof(ports));
-	(void) mg_get_option(ctx, "root", web_root, sizeof(web_root));
-	(void) printf("Mongoose %s started on port(s) \"%s\", "
-	    "serving directory \"%s\"\n", mg_version(), ports, web_root);
+	(void) printf("Mongoose %s started on port(s) %s "
+	    "with web root [%s]\n",
+	    mg_version(), config.listening_ports, config.document_root);
 
 	fflush(stdout);
 	while (exit_flag == 0)

@@ -13,12 +13,11 @@ sub on_windows { $^O =~ /win32/i; }
 my $port = 23456;
 my $pid = undef;
 my $num_requests;
-my $root = 'test';
 my $dir_separator = on_windows() ? '\\' : '/';
 my $copy_cmd = on_windows() ? 'copy' : 'cp';
 my $test_dir_uri = "test_dir";
+my $root = 'test';
 my $test_dir = $root . $dir_separator. $test_dir_uri;
-my $alias = "/aliased=/etc/,/ta=$test_dir";
 my $config = 'mongoose.conf';
 my $exe = '.' . $dir_separator . 'mongoose';
 my $embed_exe = '.' . $dir_separator . 'embed';
@@ -89,6 +88,7 @@ sub o {
 # Spawn a server listening on specified port
 sub spawn {
   my ($cmdline) = @_;
+  print 'Executing: ', @_, "\n";
   if (on_windows()) {
     my @args = split /\s+/, $cmdline;
     my $executable = $args[0];
@@ -159,7 +159,7 @@ kill_spawned_child();
 my $cmd = "$exe -ports $port -access_log access.log -error_log debug.log ".
 "-cgi_env CGI_FOO=foo,CGI_BAR=bar,CGI_BAZ=baz " .
 "-mime_types .bar=foo/bar,.tar.gz=blah,.baz=foo " .
-"-root test -aliases $alias -admin_uri /hh";
+"-root $root,/aiased=/etc/,/ta=$test_dir";
 $cmd .= ' -cgi_interp perl' if on_windows();
 spawn($cmd);
 
