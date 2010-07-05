@@ -121,6 +121,7 @@ struct mg_config {
  * This must be the first function called by the application.
  * It creates a serving thread, and returns a context structure that
  * can be used to stop the server.
+ * After calling mg_start(), configuration data must not be changed.
  */
 struct mg_context *mg_start(struct mg_config *);
 

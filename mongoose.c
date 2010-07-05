@@ -4300,7 +4300,7 @@ mg_start(struct mg_config *config)
 
 	/*
 	 * NOTE(lsm): order is important here. SSL certificates must
-	 * be initialized before listening ports.
+	 * be initialized before listening ports. UID must be set last.
 	 */
 	if (set_ssl_option(ctx) == MG_ERROR ||
 	    set_ports_option(ctx) == MG_ERROR ||

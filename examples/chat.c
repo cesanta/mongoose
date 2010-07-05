@@ -350,19 +350,24 @@ static enum mg_error_t process_request(struct mg_connection *conn,
 }
 
 int main(void) {
-  struct mg_context	*ctx;
+  struct mg_context *ctx;
+  struct mg_config config;
 
   // Initialize random number generator. It will be used later on for
   // the session identifier creation.
   srand((unsigned) time(0));
 
-  // Start and setup Mongoose
-  ctx = mg_start();
-  mg_set_option(ctx, "root", web_root);
-  mg_set_option(ctx, "ssl_cert", ssl_certificate);  // Must be set before ports
-  mg_set_option(ctx, "ports", http_ports);
-  mg_set_option(ctx, "dir_list", "no");   // Disable directory listing
-  mg_set_callback(ctx, MG_EVENT_NEW_REQUEST, &process_request);
+  // Setup and start Mongoose
+  memset(&config, 0, sizeof(config));
+  config.document_root = web_root;
+  config.listening_ports = http_ports;
+  config.ssl_certificate = ssl_certificate;
+  config.index_files = "index.html";
+  config.new_request_handler = &process_request;
+  config.auth_domain = "";
+  config.num_threads = "5";
+  ctx = mg_start(&config);
+  assert(ctx != NULL);
 
   // Wait until enter is pressed, then exit
   printf("Chat server started on ports %s, press enter to quit.\n", http_ports);
