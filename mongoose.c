@@ -3576,7 +3576,7 @@ static bool_t get_socket(struct mg_context *ctx, struct socket *sp) {
   ctx->num_idle++;
   while (ctx->sq_head == ctx->sq_tail) {
     ts.tv_nsec = 0;
-    ts.tv_sec = time(NULL) + 10;
+    ts.tv_sec = time(NULL) + 5;
     if (pthread_cond_timedwait(&ctx->empty_cond, &ctx->mutex, &ts) != 0) {
       // Timeout! release the mutex and return
       (void) pthread_mutex_unlock(&ctx->mutex);
@@ -3615,7 +3615,7 @@ static void worker_thread(struct mg_context *ctx) {
 
   (void) memset(&conn, 0, sizeof(conn));
 
-  while (get_socket(ctx, &conn.client) == TRUE) {
+  while (ctx->stop_flag == 0 && get_socket(ctx, &conn.client) == TRUE) {
     conn.birth_time = time(NULL);
     conn.ctx = ctx;
 
