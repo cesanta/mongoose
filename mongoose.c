@@ -2410,9 +2410,7 @@ static bool_t parse_http_request(char *buf, struct mg_request_info *ri) {
 
   if (is_valid_http_method(ri->request_method) &&
       ri->uri[0] == '/' &&
-      strncmp(ri->http_version, "HTTP/", 5) == 0 &&
-      (strcmp(ri->http_version + 5, "1.0") == 0 ||
-       strcmp(ri->http_version + 5, "1.1") == 0)) {
+      strncmp(ri->http_version, "HTTP/", 5) == 0) {
     ri->http_version += 5;   /* Skip "HTTP/" */
     parse_http_headers(&buf, ri);
     status = MG_TRUE;
@@ -3498,17 +3496,23 @@ static void process_new_connection(struct mg_connection *conn) {
 
   // Nul-terminate the request cause parse_http_request() uses sscanf
   conn->buf[conn->request_len - 1] = '\0';
-  if (parse_http_request(conn->buf, ri)) {
+  if (!parse_http_request(conn->buf, ri)) {
+    // Do not put garbage in the access log, just send it back to the client
+    send_http_error(conn, 400, "Bad Request",
+        "Can not parse request: [%.*s]", conn->data_len, conn->buf);
+  } else if (strcmp(ri->http_version, "1.0") &&
+             strcmp(ri->http_version, "1.1")) {
+    // Request seems valid, but HTTP version is strange
+    send_http_error(conn, 505, "HTTP version not supported", "");
+    log_access(conn);
+  } else {
+    // Request is valid, handle it
     cl = get_header(ri, "Content-Length");
     conn->content_len = cl == NULL ? -1 : strtoll(cl, NULL, 10);
     conn->birth_time = time(NULL);
     handle_request(conn);
     log_access(conn);
     discard_current_request_from_buffer(conn);
-  } else {
-    // Do not put garbage in the access log, just send it back to the client
-    send_http_error(conn, 400, "Bad Request",
-        "Can not parse request: [%.*s]", conn->data_len, conn->buf);
   }
 }
 
