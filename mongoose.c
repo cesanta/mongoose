@@ -47,6 +47,10 @@
 #define _WIN32_WINNT 0x0400 // To make it link in VS2005
 #include <windows.h>
 
+#ifndef PATH_MAX 
+#define PATH_MAX MAX_PATH
+#endif
+
 #ifndef _WIN32_WCE
 #include <process.h>
 #include <direct.h>
@@ -55,9 +59,8 @@
 #include <winsock2.h>
 #define NO_CGI // WinCE has no pipes
 
-#define FILENAME_MAX MAX_PATH
-#define BUFSIZ  4096
 typedef long off_t;
+#define BUFSIZ  4096
 
 #define errno   GetLastError()
 #define strerror(x)  _ultoa(x, (char *) _alloca(sizeof(x) *3 ), 10)
@@ -146,7 +149,7 @@ typedef __int64   int64_t;
 
 // POSIX dirent interface
 struct dirent {
-  char d_name[FILENAME_MAX];
+  char d_name[PATH_MAX];
 };
 
 typedef struct DIR {
@@ -735,7 +738,7 @@ static void change_slashes_to_backslashes(char *path) {
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
 // wbuf and wbuf_len is a target buffer and its length.
 static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
-  char buf[FILENAME_MAX], *p;
+  char buf[PATH_MAX], *p;
 
   mg_strlcpy(buf, path, sizeof(buf));
   change_slashes_to_backslashes(buf);
@@ -833,8 +836,8 @@ static size_t strftime(char *dst, size_t dst_size, const char *fmt,
 #endif
 
 static int mg_rename(const char* oldname, const char* newname) {
-  wchar_t woldbuf[FILENAME_MAX];
-  wchar_t wnewbuf[FILENAME_MAX];
+  wchar_t woldbuf[PATH_MAX];
+  wchar_t wnewbuf[PATH_MAX];
 
   to_unicode(oldname, woldbuf, ARRAY_SIZE(woldbuf));
   to_unicode(newname, wnewbuf, ARRAY_SIZE(wnewbuf));
@@ -844,7 +847,7 @@ static int mg_rename(const char* oldname, const char* newname) {
 
 
 static FILE *mg_fopen(const char *path, const char *mode) {
-  wchar_t wbuf[FILENAME_MAX], wmode[20];
+  wchar_t wbuf[PATH_MAX], wmode[20];
 
   to_unicode(path, wbuf, ARRAY_SIZE(wbuf));
   MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, ARRAY_SIZE(wmode));
@@ -854,7 +857,7 @@ static FILE *mg_fopen(const char *path, const char *mode) {
 
 static int mg_stat(const char *path, struct mgstat *stp) {
   int ok = -1; // Error
-  wchar_t wbuf[FILENAME_MAX];
+  wchar_t wbuf[PATH_MAX];
   WIN32_FILE_ATTRIBUTE_DATA info;
 
   to_unicode(path, wbuf, ARRAY_SIZE(wbuf));
@@ -872,14 +875,14 @@ static int mg_stat(const char *path, struct mgstat *stp) {
 }
 
 static int mg_remove(const char *path) {
-  wchar_t wbuf[FILENAME_MAX];
+  wchar_t wbuf[PATH_MAX];
   to_unicode(path, wbuf, ARRAY_SIZE(wbuf));
   return DeleteFileW(wbuf) ? 0 : -1;
 }
 
 static int mg_mkdir(const char *path, int mode) {
-  char buf[FILENAME_MAX];
-  wchar_t wbuf[FILENAME_MAX];
+  char buf[PATH_MAX];
+  wchar_t wbuf[PATH_MAX];
 
   mode = 0; // Unused
   mg_strlcpy(buf, path, sizeof(buf));
@@ -893,7 +896,7 @@ static int mg_mkdir(const char *path, int mode) {
 // Implementation of POSIX opendir/closedir/readdir for Windows.
 static DIR * opendir(const char *name) {
   DIR *dir = NULL;
-  wchar_t wpath[FILENAME_MAX];
+  wchar_t wpath[PATH_MAX];
   DWORD attrs;
 
   if (name == NULL) {
@@ -975,7 +978,7 @@ static int start_thread(struct mg_context *ctx, mg_thread_func_t func,
 }
 
 static HANDLE dlopen(const char *dll_name, int flags) {
-  wchar_t wbuf[FILENAME_MAX];
+  wchar_t wbuf[PATH_MAX];
 
   flags = 0; // Unused
   to_unicode(dll_name, wbuf, ARRAY_SIZE(wbuf));
@@ -994,7 +997,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
                            char *envblk, char *envp[], int fd_stdin,
                            int fd_stdout, const char *dir) {
   HANDLE me;
-  char *p, *interp, cmdline[FILENAME_MAX], line[FILENAME_MAX];
+  char *p, *interp, cmdline[PATH_MAX], line[PATH_MAX];
   FILE *fp;
   STARTUPINFOA si;
   PROCESS_INFORMATION pi;
@@ -1867,7 +1870,7 @@ static bool_t check_password(const char *method, const char *ha1,
 // or search for .htpasswd in the requested directory.
 static FILE *open_auth_file(struct mg_connection *conn, const char *path) {
   struct mg_context *ctx = conn->ctx;
-  char name[FILENAME_MAX];
+  char name[PATH_MAX];
   const char *p, *e;
   struct mgstat st;
   FILE *fp;
@@ -1994,7 +1997,7 @@ static bool_t authorize(struct mg_connection *conn, FILE *fp) {
 static bool_t check_authorization(struct mg_connection *conn,
                                   const char *path) {
   FILE *fp;
-  char fname[FILENAME_MAX];
+  char fname[PATH_MAX];
   struct vec uri_vec, filename_vec;
   const char *list;
   bool_t authorized;
@@ -2056,7 +2059,7 @@ enum mg_error_t mg_modify_passwords_file(struct mg_context *ctx,
                                          const char *fname, const char *user,
                                          const char *pass) {
   int found;
-  char line[512], u[512], d[512], ha1[33], tmp[FILENAME_MAX];
+  char line[512], u[512], d[512], ha1[33], tmp[PATH_MAX];
   const char *domain;
   FILE *fp, *fp2;
 
@@ -2146,7 +2149,7 @@ static void url_encode(const char *src, char *dst, size_t dst_len) {
 }
 
 static void print_dir_entry(struct de *de) {
-  char size[64], mod[64], href[FILENAME_MAX];
+  char size[64], mod[64], href[PATH_MAX];
 
   if (de->st.is_directory) {
     (void) mg_snprintf(de->conn, size, sizeof(size), "%s", "[DIRECTORY]");
@@ -2209,7 +2212,7 @@ static void handle_directory_request(struct mg_connection *conn,
   struct dirent *dp;
   DIR *dirp;
   struct de *entries = NULL;
-  char path[FILENAME_MAX];
+  char path[PATH_MAX];
   int i, sort_direction, num_entries = 0, arr_size = 128;
 
   if ((dirp = opendir(dir)) == NULL) {
@@ -2717,7 +2720,7 @@ static void prepare_cgi_environment(struct mg_connection *conn,
 static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   int headers_len, data_len, i, fd_stdin[2], fd_stdout[2];
   const char *status;
-  char buf[MAX_REQUEST_SIZE], *pbuf, dir[FILENAME_MAX], *p;
+  char buf[MAX_REQUEST_SIZE], *pbuf, dir[PATH_MAX], *p;
   struct mg_request_info ri;
   struct cgi_env_block blk;
   FILE *in, *out;
@@ -2829,7 +2832,7 @@ done:
 // for given path. Return 0 if the path itself is a directory,
 // or -1 on error, 1 if OK.
 static int put_dir(const char *path) {
-  char buf[FILENAME_MAX];
+  char buf[PATH_MAX];
   const char *s, *p;
   struct mgstat st;
   size_t len;
@@ -2891,7 +2894,7 @@ static void send_ssi_file(struct mg_connection *, const char *, FILE *, int);
 
 static void do_ssi_include(struct mg_connection *conn, const char *ssi,
                            char *tag, int include_level) {
-  char file_name[BUFSIZ], path[FILENAME_MAX], *p;
+  char file_name[BUFSIZ], path[PATH_MAX], *p;
   struct vec root;
   bool_t is_ssi;
   FILE *fp;
@@ -3035,7 +3038,7 @@ static void handle_ssi_file_request(struct mg_connection *conn,
 // a directory, or call embedded function, etcetera.
 static void handle_request(struct mg_connection *conn) {
   struct mg_request_info *ri;
-  char path[FILENAME_MAX];
+  char path[PATH_MAX];
   int uri_len;
   struct mgstat st;
   mg_callback_t new_request_callback;
@@ -3399,7 +3402,7 @@ static enum mg_error_t set_acl_option(struct mg_context *ctx) {
 }
 
 static bool_t verify_document_root(struct mg_context *ctx, const char *root) {
-  char path[FILENAME_MAX], *p;
+  char path[PATH_MAX], *p;
   struct mgstat buf;
 
   if ((p = strchr(root, ',')) == NULL) {
@@ -3549,36 +3552,38 @@ static bool_t consume_socket(struct mg_context *ctx, struct socket *sp) {
 }
 
 static void worker_thread(struct mg_context *ctx) {
-  struct mg_connection conn;
+  struct mg_connection *conn;
+  
+  conn = calloc(1, sizeof(*conn));
+  assert(conn != NULL);
 
-  (void) memset(&conn, 0, sizeof(conn));
-
-  while (ctx->stop_flag == 0 && consume_socket(ctx, &conn.client)) {
-    conn.birth_time = time(NULL);
-    conn.ctx = ctx;
+  while (ctx->stop_flag == 0 && consume_socket(ctx, &conn->client)) {
+    conn->birth_time = time(NULL);
+    conn->ctx = ctx;
 
     // Fill in IP, port info early so even if SSL setup below fails,
     // error handler would have the corresponding info.
     // Thanks to Johannes Winkelmann for the patch.
-    conn.request_info.remote_port = ntohs(conn.client.rsa.u.sin.sin_port);
-    (void) memcpy(&conn.request_info.remote_ip,
-        &conn.client.rsa.u.sin.sin_addr.s_addr, 4);
-    conn.request_info.remote_ip = ntohl(conn.request_info.remote_ip);
-    conn.request_info.is_ssl = conn.client.is_ssl;
+    conn->request_info.remote_port = ntohs(conn->client.rsa.u.sin.sin_port);
+    memcpy(&conn->request_info.remote_ip,
+           &conn->client.rsa.u.sin.sin_addr.s_addr, 4);
+    conn->request_info.remote_ip = ntohl(conn->request_info.remote_ip);
+    conn->request_info.is_ssl = conn->client.is_ssl;
 
-    if (conn.client.is_ssl && (conn.ssl = SSL_new(conn.ctx->ssl_ctx)) == NULL) {
-      cry(&conn, "%s: SSL_new: %s", __func__, ssl_error());
-    } else if (conn.client.is_ssl &&
-        SSL_set_fd(conn.ssl, conn.client.sock) != 1) {
-      cry(&conn, "%s: SSL_set_fd: %s", __func__, ssl_error());
-    } else if (conn.client.is_ssl && SSL_accept(conn.ssl) != 1) {
-      cry(&conn, "%s: SSL handshake error: %s", __func__, ssl_error());
+    if (conn->client.is_ssl && (conn->ssl = SSL_new(ctx->ssl_ctx)) == NULL) {
+      cry(conn, "%s: SSL_new: %s", __func__, ssl_error());
+    } else if (conn->client.is_ssl &&
+               SSL_set_fd(conn->ssl, conn->client.sock) != 1) {
+      cry(conn, "%s: SSL_set_fd: %s", __func__, ssl_error());
+    } else if (conn->client.is_ssl && SSL_accept(conn->ssl) != 1) {
+      cry(conn, "%s: SSL handshake error: %s", __func__, ssl_error());
     } else {
-      process_new_connection(&conn);
+      process_new_connection(conn);
     }
 
-    close_connection(&conn);
+    close_connection(conn);
   }
+  free(conn);
 
   // Signal master that we're done with connection and exiting
   (void) pthread_mutex_lock(&ctx->mutex);
