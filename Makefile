@@ -28,12 +28,12 @@ LINFLAGS=	-ldl -pthread $(SSLFLAGS) $(CFLAGS)
 LIB=		_$(PROG).so
 
 linux:
-	$(CC) $(LINFLAGS) mongoose.c -shared -fPIC -fpic -s -o $(LIB)
-	$(CC) $(LINFLAGS) mongoose.c main.c -s -o $(PROG)
+	$(CC) $(LINFLAGS) mongoose.c -shared -fPIC -fpic -o $(LIB)
+	$(CC) $(LINFLAGS) mongoose.c main.c -o $(PROG)
 
 bsd:
-	$(CC) $(CFLAGS) mongoose.c -shared -pthread -s -fpic -fPIC -o $(LIB)
-	$(CC) $(CFLAGS) mongoose.c main.c -pthread -s $(SSLFLAGS) -o $(PROG)
+	$(CC) $(CFLAGS) mongoose.c -shared -pthread -fpic -fPIC -o $(LIB)
+	$(CC) $(CFLAGS) mongoose.c main.c -pthread $(SSLFLAGS) -o $(PROG)
 
 mac:
 	$(CC) $(CFLAGS) $(MAC_SHARED) mongoose.c -pthread $(SSLFLAGS) -o $(LIB)
@@ -41,9 +41,9 @@ mac:
 
 solaris:
 	gcc $(CFLAGS) mongoose.c -pthread -lnsl \
-		-lsocket $(SSLFLAGS) -s -fpic -fPIC -shared -o $(LIB)
+		-lsocket $(SSLFLAGS) -fpic -fPIC -shared -o $(LIB)
 	gcc $(CFLAGS) mongoose.c main.c -pthread -lnsl -lsocket $(SSLFLAGS) \
-		-s -o $(PROG)
+		-o $(PROG)
 
 
 ##########################################################################
