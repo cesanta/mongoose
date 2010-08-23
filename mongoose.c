@@ -645,19 +645,18 @@ static void send_http_error(struct mg_connection *conn, int status,
     if (status > 199 && status != 204 && status != 304) {
       len = mg_snprintf(conn, buf, sizeof(buf), "Error %d: %s", status, reason);
       cry(conn, "%s", buf);
+      buf[len++] = '\n';
 
       va_start(ap, fmt);
-      len += mg_vsnprintf(conn, buf + len, sizeof(buf) - len, fmt, ap);
+      mg_vsnprintf(conn, buf + len, sizeof(buf) - len, fmt, ap);
       va_end(ap);
-      conn->num_bytes_sent = len;
     }
 
-    (void) mg_printf(conn,
-        "HTTP/1.1 %d %s\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: %d\r\n"
-        "Connection: close\r\n"
-        "\r\n%s", status, reason, len, buf);
+    mg_printf(conn, "HTTP/1.1 %d %s\r\n"
+              "Content-Type: text/plain\r\n"
+              "Content-Length: %d\r\n"
+              "Connection: close\r\n\r\n", status, reason, len);
+    conn->num_bytes_sent += mg_printf(conn, "%s", buf);
   }
 }
 
@@ -3091,7 +3090,6 @@ static void handle_request(struct mg_connection *conn) {
       send_http_error(conn, 403, "Directory Listing Denied",
           "Directory listing denied");
     }
-#if !defined(NO_CGI)
   } else if (match_extension(path, conn->ctx->config->cgi_extensions)) {
     if (strcmp(ri->request_method, "POST") &&
         strcmp(ri->request_method, "GET")) {
@@ -3100,7 +3098,6 @@ static void handle_request(struct mg_connection *conn) {
     } else {
       handle_cgi_request(conn, path);
     }
-#endif /* NO_CGI */
   } else if (match_extension(path, conn->ctx->config->ssi_extensions)) {
     handle_ssi_file_request(conn, path);
   } else if (is_not_modified(conn, &st)) {
