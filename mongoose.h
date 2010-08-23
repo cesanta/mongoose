@@ -36,12 +36,10 @@ struct mg_request_info {
   char *uri;             // URL-decoded URI
   char *http_version;    // E.g. "1.0", "1.1"
   char *query_string;    // \0 - terminated
-  char *post_data;       // POST data buffer
   char *remote_user;     // Authenticated user
   char *log_message;     // Mongoose error log message
   long remote_ip;        // Client's IP address
   int remote_port;       // Client's port
-  int post_data_len;     // POST buffer length
   int status_code;       // HTTP status code
   int is_ssl;            // 1 if SSL-ed, 0 if not
   int num_headers;       // Number of headers
@@ -148,7 +146,7 @@ int mg_write(struct mg_connection *, const void *buf, size_t len);
 int mg_printf(struct mg_connection *, const char *fmt, ...);
 
 
-// Read data from the remote or local end.
+// Read data from the remote end, return number of bytes read.
 int mg_read(struct mg_connection *, void *buf, size_t len);
 
 
