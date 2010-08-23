@@ -76,7 +76,7 @@ sub req {
 # Send the request. Compare with the expected reply. Fail if no match
 sub o {
   my ($request, $expected_reply, $message, $num_logs) = @_;
-  print "==> Testing $message ... ";
+  print "==> $message ... ";
   my $reply = req($request, $num_logs);
   if ($reply =~ /$expected_reply/s) {
     print "OK\n";
