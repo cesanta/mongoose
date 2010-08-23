@@ -107,7 +107,7 @@ struct mg_config {
 // It creates a serving thread, and returns a context structure that
 // can be used to stop the server.
 // After calling mg_start(), configuration data must not be changed.
-struct mg_context *mg_start(struct mg_config *);
+struct mg_context *mg_start(const struct mg_config *);
 
 
 // Stop the web server.
