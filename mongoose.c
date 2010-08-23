@@ -66,7 +66,7 @@ typedef long off_t;
 #define strerror(x)  _ultoa(x, (char *) _alloca(sizeof(x) *3 ), 10)
 #endif // _WIN32_WCE
 
-#define EPOCH_DIFF 0x019DB1DED53E8000 // 116444736000000000 nsecs
+#define EPOCH_DIFF 0x019DB1DED53E8000ULL // 116444736000000000 nsecs
 #define RATE_DIFF 10000000 // 100 nsecs
 #define MAKEUQUAD(lo, hi) ((uint64_t)(((uint32_t)(lo)) | \
       ((uint64_t)((uint32_t)(hi))) << 32))
