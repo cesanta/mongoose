@@ -66,10 +66,10 @@ typedef long off_t;
 #define strerror(x)  _ultoa(x, (char *) _alloca(sizeof(x) *3 ), 10)
 #endif // _WIN32_WCE
 
-#define EPOCH_DIFF 0x019DB1DED53E8000ULL // 116444736000000000 nsecs
-#define RATE_DIFF 10000000 // 100 nsecs
 #define MAKEUQUAD(lo, hi) ((uint64_t)(((uint32_t)(lo)) | \
       ((uint64_t)((uint32_t)(hi))) << 32))
+#define RATE_DIFF 10000000 // 100 nsecs
+#define EPOCH_DIFF MAKEUQUAD(0xd53e8000, 0x019db1de)
 #define SYS2UNIX_TIME(lo, hi) \
   (time_t) ((MAKEUQUAD((lo), (hi)) - EPOCH_DIFF) / RATE_DIFF)
 
@@ -651,6 +651,10 @@ static int pthread_cond_signal(pthread_cond_t *cv) {
   return SetEvent(*cv) == 0 ? -1 : 0;
 }
 
+static int pthread_cond_broadcast(pthread_cond_t *cv) {
+  return PulseEvent(*cv) == 0 ? -1 : 0;
+}
+
 static int pthread_cond_destroy(pthread_cond_t *cv) {
   return CloseHandle(*cv) == 0 ? -1 : 0;
 }
@@ -804,7 +808,7 @@ static int mg_stat(const char *path, struct mgstat *stp) {
   if (GetFileAttributesExW(wbuf, GetFileExInfoStandard, &info) != 0) {
     stp->size = MAKEUQUAD(info.nFileSizeLow, info.nFileSizeHigh);
     stp->mtime = SYS2UNIX_TIME(info.ftLastWriteTime.dwLowDateTime,
-        info.ftLastWriteTime.dwHighDateTime);
+                               info.ftLastWriteTime.dwHighDateTime);
     stp->is_directory =
       info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
     ok = 0;  // Success
@@ -916,16 +920,17 @@ static int start_thread(struct mg_context *ctx, mg_thread_func_t func,
   return hThread == NULL ? -1 : 0;
 }
 
+#if 0
 static HANDLE dlopen(const char *dll_name, int flags) {
   wchar_t wbuf[PATH_MAX];
-
   flags = 0; // Unused
   to_unicode(dll_name, wbuf, ARRAY_SIZE(wbuf));
-
   return LoadLibraryW(wbuf);
 }
+#endif
 
 #if !defined(NO_CGI)
+#define SIGKILL 0
 static int kill(pid_t pid, int sig_num) {
   (void) TerminateProcess(pid, sig_num);
   (void) CloseHandle(pid);
@@ -958,7 +963,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
       &si.hStdOutput, 0, MG_TRUE, DUPLICATE_SAME_ACCESS);
 
   // If CGI file is a script, try to read the interpreter line
-  interp = conn->ctx->options[OPT_CGI_INTERPRETER];
+  interp = conn->ctx->config->cgi_interpreter;
   if (interp == NULL) {
     line[2] = '\0';
     (void) mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%c%s",
@@ -982,7 +987,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   }
 
   (void) mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%s%s",
-      interp, interp[0] == '\0' ? "" : " ", prog);
+                     interp, interp[0] == '\0' ? "" : " ", prog);
 
   (void) mg_snprintf(conn, line, sizeof(line), "%s", dir);
   change_slashes_to_backslashes(line);
@@ -2325,8 +2330,9 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
       conn->request_info.status_code, msg, date, lm, etag,
       mime_vec.len, mime_vec.ptr, cl, range);
 
-  if (strcmp(conn->request_info.request_method, "HEAD") != 0)
+  if (strcmp(conn->request_info.request_method, "HEAD") != 0) {
     send_file_data(conn, fp, cl);
+  }
   (void) fclose(fp);
 }
 

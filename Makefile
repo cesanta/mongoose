@@ -13,7 +13,6 @@ all:
 # -DNO_CGI		- disable CGI support (-5kb)
 # -DNO_SSL		- disable SSL functionality (-2kb)
 # -DCONFIG_FILE=\"file\" - use `file' as the default config file
-# -DNO_SSI		- disable SSI support (-4kb)
 # -DHAVE_STRTOUI64	- use system strtoui64() function for strtoull()
 
 
@@ -54,19 +53,20 @@ solaris:
 # Assuming that studio is installed in d:\vc6, change VC variable below to
 # the correct path on your system. Run "d:\vc6\bin\nmake windows"
 
-VC=		d:\vc2010\vc
-#VC=		d:\vc6
-SDK=		d:\sdk\v7.1
+VC=		q:\vc6
+OUT=		c:\out
 #WINDBG=	/Zi /DDEBUG /Od /DDEBUG
-WINDBG=		/DNDEBUG /Os
-WINFLAGS=	/MT /TC /nologo /W4 $(WINDBG) /I $(VC)/include \
-		/I $(SDK)\include /link /incremental:no /libpath:$(VC)\lib \
-		/libpath:$(SDK)/lib ws2_32.lib
+WINDBG=		/DNDEBUG #/Os
+CLFLAGS=	/MD /TC /nologo /W4 /c $(WINDBG) /I $(VC)/include
+LINKFLAGS=	/incremental:no /libpath:$(VC)\lib ws2_32.lib
 
 windows:
-	$(VC)\bin\cl.exe mongoose.c $(WINFLAGS) \
-		/DLL /DEF:win32\dll.def /out:_$(PROG).dll
-	$(VC)\bin\cl.exe mongoose.c main.c $(WINFLAGS) /out:$(PROG).exe
+	$(VC)\bin\cl main.c $(CLFLAGS) /Fo$(OUT)\main.obj
+	$(VC)\bin\cl mongoose.c $(CLFLAGS) /Fo$(OUT)\mongoose.obj
+	$(VC)\bin\link $(OUT)\mongoose.obj $(LINKFLAGS) \
+		/DLL /DEF:win32\dll.def /out:$(OUT)\_$(PROG).dll
+	$(VC)\bin\link $(OUT)\main.obj $(OUT)\mongoose.obj $(LINKFLAGS) \
+		/out:$(OUT)\$(PROG).exe
 
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0
