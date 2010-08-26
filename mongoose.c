@@ -90,6 +90,8 @@ typedef long off_t;
 
 #define ERRNO   GetLastError()
 #define NO_SOCKLEN_T
+#define SSL_LIB   "ssleay32.dll"
+#define CRYPTO_LIB  "libeay32.dll"
 #define DIRSEP '\\'
 #define IS_DIRSEP_CHAR(c) ((c) == '/' || (c) == '\\')
 #define O_NONBLOCK  0
@@ -172,6 +174,13 @@ typedef struct DIR {
 #include <dirent.h>
 #include <dlfcn.h>
 #include <pthread.h>
+#if defined(__MACH__)
+#define SSL_LIB   "libssl.dylib"
+#define CRYPTO_LIB  "libcrypto.dylib"
+#else
+#define SSL_LIB   "libssl.so"
+#define CRYPTO_LIB  "libcrypto.so"
+#endif
 #define DIRSEP   '/'
 #define IS_DIRSEP_CHAR(c) ((c) == '/')
 #define O_BINARY  0
@@ -230,27 +239,76 @@ typedef struct ssl_ctx_st SSL_CTX;
 #define SSL_FILETYPE_PEM 1
 #define CRYPTO_LOCK  1
 
-extern void SSL_free(SSL *);
-extern int SSL_accept(SSL *);
-extern int SSL_connect(SSL *);
-extern int SSL_read(SSL *, void *, int);
-extern int SSL_write(SSL *, const void *, int);
-extern int SSL_get_error(const SSL *, int);
-extern int SSL_set_fd(SSL *, int);
-extern SSL *SSL_new(SSL_CTX *);
-extern SSL_CTX *SSL_CTX_new(SSL_METHOD *);
-extern SSL_METHOD *SSLv23_server_method(void);
-extern int SSL_library_init(void);
-extern void SSL_load_error_strings(void);
-extern int SSL_CTX_use_PrivateKey_file(SSL_CTX *, const char *, int);
-extern int SSL_CTX_use_certificate_file(SSL_CTX *, const char *, int);
-extern void SSL_CTX_set_default_passwd_cb(SSL_CTX *, mg_callback_t);
-extern void SSL_CTX_free(SSL_CTX *);
-extern unsigned long ERR_get_error(void);
-extern char *ERR_error_string(unsigned long, char *);
-extern int CRYPTO_num_locks(void);
-extern void CRYPTO_set_locking_callback(void (*)(int, int, const char *, int));
-extern void CRYPTO_set_id_callback(unsigned long (*)(void));
+// Dynamically loaded SSL functionality
+struct ssl_func {
+  const char *name;   // SSL function name
+  void  (*ptr)(void); // Function pointer
+};
+
+#define SSL_free(x) (* (void (*)(SSL *)) ssl_sw[0].ptr)(x)
+#define SSL_accept(x) (* (int (*)(SSL *)) ssl_sw[1].ptr)(x)
+#define SSL_connect(x) (* (int (*)(SSL *)) ssl_sw[2].ptr)(x)
+#define SSL_read(x,y,z) (* (int (*)(SSL *, void *, int))   \
+    ssl_sw[3].ptr)((x),(y),(z))
+#define SSL_write(x,y,z) (* (int (*)(SSL *, const void *,int))  \
+    ssl_sw[4].ptr)((x), (y), (z))
+#define SSL_get_error(x,y)(* (int (*)(SSL *, int)) ssl_sw[5])((x), (y))
+#define SSL_set_fd(x,y) (* (int (*)(SSL *, SOCKET)) ssl_sw[6].ptr)((x), (y))
+#define SSL_new(x) (* (SSL * (*)(SSL_CTX *)) ssl_sw[7].ptr)(x)
+#define SSL_CTX_new(x) (* (SSL_CTX * (*)(SSL_METHOD *)) ssl_sw[8].ptr)(x)
+#define SSLv23_server_method() (* (SSL_METHOD * (*)(void)) ssl_sw[9].ptr)()
+#define SSL_library_init() (* (int (*)(void)) ssl_sw[10].ptr)()
+#define SSL_CTX_use_PrivateKey_file(x,y,z) (* (int (*)(SSL_CTX *, \
+        const char *, int)) ssl_sw[11].ptr)((x), (y), (z))
+#define SSL_CTX_use_certificate_file(x,y,z) (* (int (*)(SSL_CTX *, \
+        const char *, int)) ssl_sw[12].ptr)((x), (y), (z))
+#define SSL_CTX_set_default_passwd_cb(x,y) \
+  (* (void (*)(SSL_CTX *, mg_callback_t)) ssl_sw[13].ptr)((x),(y))
+#define SSL_CTX_free(x) (* (void (*)(SSL_CTX *)) ssl_sw[14].ptr)(x)
+#define ERR_get_error() (* (unsigned long (*)(void)) ssl_sw[15].ptr)()
+#define ERR_error_string(x, y) (* (char * (*)(unsigned long, char *)) ssl_sw[16].ptr)((x), (y))
+#define SSL_load_error_strings() (* (void (*)(void)) ssl_sw[17].ptr)()
+
+#define CRYPTO_num_locks() (* (int (*)(void)) crypto_sw[0].ptr)()
+#define CRYPTO_set_locking_callback(x)     \
+  (* (void (*)(void (*)(int, int, const char *, int))) \
+   crypto_sw[1].ptr)(x)
+#define CRYPTO_set_id_callback(x)     \
+  (* (void (*)(unsigned long (*)(void))) crypto_sw[2].ptr)(x)
+
+// set_ssl_option() function updates this array.
+// It loads SSL library dynamically and changes NULLs to the actual addresses
+// of respective functions. The macros above (like SSL_connect()) are really
+// just calling these functions indirectly via the pointer.
+static struct ssl_func ssl_sw[] = {
+  {"SSL_free",   NULL},
+  {"SSL_accept",   NULL},
+  {"SSL_connect",   NULL},
+  {"SSL_read",   NULL},
+  {"SSL_write",   NULL},
+  {"SSL_get_error",  NULL},
+  {"SSL_set_fd",   NULL},
+  {"SSL_new",   NULL},
+  {"SSL_CTX_new",   NULL},
+  {"SSLv23_server_method", NULL},
+  {"SSL_library_init",  NULL},
+  {"SSL_CTX_use_PrivateKey_file", NULL},
+  {"SSL_CTX_use_certificate_file",NULL},
+  {"SSL_CTX_set_default_passwd_cb",NULL},
+  {"SSL_CTX_free",  NULL},
+  {"ERR_get_error",  NULL},
+  {"ERR_error_string", NULL},
+  {"SSL_load_error_strings", NULL},
+  {NULL,    NULL}
+};
+
+// Similar array as ssl_sw. These functions could be located in different lib.
+static struct ssl_func crypto_sw[] = {
+  {"CRYPTO_num_locks",  NULL},
+  {"CRYPTO_set_locking_callback", NULL},
+  {"CRYPTO_set_id_callback", NULL},
+  {NULL,    NULL}
+};
 
 static const char *month_names[] = {
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -291,15 +349,15 @@ struct socket {
 };
 
 struct mg_context {
-  int stop_flag;             // Should we stop event loop
-  SSL_CTX *ssl_ctx;          // SSL context
+  int stop_flag;     // Should we stop event loop
+  SSL_CTX *ssl_ctx;  // SSL context
   const struct mg_config *config; // Mongoose configuration
 
   struct socket *listening_sockets;
 
-  int num_threads;           // Number of threads
-  pthread_mutex_t mutex;     // Protects (max|num)_threads
-  pthread_cond_t  cond;      // Condvar for tracking workers terminations
+  int num_threads;         // Number of threads
+  pthread_mutex_t mutex;   // Protects (max|num)_threads
+  pthread_cond_t  cond;    // Condvar for tracking workers terminations
 
   struct socket queue[20];   // Accepted sockets
   int sq_head;               // Head of the socket queue
@@ -371,6 +429,13 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
     }
   }
   conn->request_info.log_message = NULL;
+}
+
+// Return OpenSSL error message
+static const char *ssl_error(void) {
+  unsigned long err;
+  err = ERR_get_error();
+  return err == 0 ? "" : ERR_error_string(err, NULL);
 }
 
 // Return fake connection structure. Used for logging, if connection
@@ -920,14 +985,12 @@ static int start_thread(struct mg_context *ctx, mg_thread_func_t func,
   return hThread == NULL ? -1 : 0;
 }
 
-#if 0
 static HANDLE dlopen(const char *dll_name, int flags) {
   wchar_t wbuf[PATH_MAX];
   flags = 0; // Unused
   to_unicode(dll_name, wbuf, ARRAY_SIZE(wbuf));
   return LoadLibraryW(wbuf);
 }
-#endif
 
 #if !defined(NO_CGI)
 #define SIGKILL 0
@@ -1125,12 +1188,9 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
     /* How many bytes we send in this iteration */
     k = len - sent > INT_MAX ? INT_MAX : (int) (len - sent);
 
-#if !defined(NO_SSL)
     if (ssl != NULL) {
       n = SSL_write(ssl, buf + sent, k);
-    } else 
-#endif // !NO_SSL
-    if (fp != NULL) {
+    } else if (fp != NULL) {
       n = fwrite(buf + sent, 1, k, fp);
       if (ferror(fp))
         n = -1;
@@ -1152,12 +1212,9 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
 static int pull(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int len) {
   int nread;
 
-#if !defined(NO_SSL)
   if (ssl != NULL) {
     nread = SSL_read(ssl, buf, len);
-  } else
-#endif // !NO_SSL
-  if (fp != NULL) {
+  } else if (fp != NULL) {
     nread = fread(buf, 1, (size_t) len, fp);
     if (ferror(fp))
       nread = -1;
@@ -3251,17 +3308,51 @@ static unsigned long ssl_id_callback(void) {
   return (unsigned long) pthread_self();
 }
 
-// Return OpenSSL error message
-static const char *ssl_error(void) {
-  unsigned long err;
-  err = ERR_get_error();
-  return err == 0 ? "" : ERR_error_string(err, NULL);
+static bool_t load_dll(struct mg_context *ctx, const char *dll_name,
+                       struct ssl_func *sw) {
+  union {void *p; void (*fp)(void);} u;
+  void  *dll_handle;
+  struct ssl_func *fp;
+
+  if ((dll_handle = dlopen(dll_name, RTLD_LAZY)) == NULL) {
+    cry(fc(ctx), "%s: cannot load %s", __func__, dll_name);
+    return MG_FALSE;
+  }
+
+  for (fp = sw; fp->name != NULL; fp++) {
+#ifdef _WIN32
+    // GetProcAddress() returns pointer to function
+    u.fp = (void (*)(void)) dlsym(dll_handle, fp->name);
+#else
+    // dlsym() on UNIX returns void *. ISO C forbids casts of data pointers to
+    // function pointers. We need to use a union to make a cast.
+    u.p = dlsym(dll_handle, fp->name);
+#endif /* _WIN32 */
+    if (u.fp == NULL) {
+      cry(fc(ctx), "%s: cannot find %s", __func__, fp->name);
+      return MG_FALSE;
+    } else {
+      fp->ptr = u.fp;
+    }
+  }
+
+  return MG_TRUE;
 }
 
+// Dynamically load SSL library. Set up ctx->ssl_ctx pointer.
 static enum mg_error_t set_ssl_option(struct mg_context *ctx) {
   SSL_CTX *CTX;
   int i, size;
   const char *pem = ctx->config->ssl_certificate;
+
+  if (pem == NULL) {
+    return MG_SUCCESS;
+  }
+
+  if (load_dll(ctx, SSL_LIB, ssl_sw) == MG_FALSE ||
+      load_dll(ctx, CRYPTO_LIB, crypto_sw) == MG_FALSE) {
+    return MG_ERROR;
+  }
 
   // Initialize SSL crap
   SSL_library_init();
@@ -3269,15 +3360,16 @@ static enum mg_error_t set_ssl_option(struct mg_context *ctx) {
 
   if ((CTX = SSL_CTX_new(SSLv23_server_method())) == NULL) {
     cry(fc(ctx), "SSL_CTX_new error: %s", ssl_error());
-    return MG_ERROR;
   } else if (ctx->config->ssl_password_handler != NULL) {
     SSL_CTX_set_default_passwd_cb(CTX, ctx->config->ssl_password_handler);
   }
 
-  if (SSL_CTX_use_certificate_file(CTX, pem, SSL_FILETYPE_PEM) == 0) {
+  if (CTX != NULL && SSL_CTX_use_certificate_file(CTX, pem,
+        SSL_FILETYPE_PEM) == 0) {
     cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
     return MG_ERROR;
-  } else if (SSL_CTX_use_PrivateKey_file(CTX, pem, SSL_FILETYPE_PEM) == 0) {
+  } else if (CTX != NULL && SSL_CTX_use_PrivateKey_file(CTX, pem,
+        SSL_FILETYPE_PEM) == 0) {
     cry(fc(ctx), "%s: cannot open %s: %s", NULL, pem, ssl_error());
     return MG_ERROR;
   }
@@ -3365,12 +3457,10 @@ static void close_socket_gracefully(SOCKET sock) {
 }
 
 static void close_connection(struct mg_connection *conn) {
-#if !defined(NO_SSL)
   if (conn->ssl) {
     SSL_free(conn->ssl);
     conn->ssl = NULL;
   }
-#endif // !NO_SSL
 
   if (conn->client.sock != INVALID_SOCKET) {
     close_socket_gracefully(conn->client.sock);
@@ -3486,7 +3576,6 @@ static void worker_thread(struct mg_context *ctx) {
     conn->request_info.remote_ip = ntohl(conn->request_info.remote_ip);
     conn->request_info.is_ssl = conn->client.is_ssl;
 
-#if !defined(NO_SSL)
     if (conn->client.is_ssl && (conn->ssl = SSL_new(ctx->ssl_ctx)) == NULL) {
       cry(conn, "%s: SSL_new: %s", __func__, ssl_error());
     } else if (conn->client.is_ssl &&
@@ -3494,9 +3583,7 @@ static void worker_thread(struct mg_context *ctx) {
       cry(conn, "%s: SSL_set_fd: %s", __func__, ssl_error());
     } else if (conn->client.is_ssl && SSL_accept(conn->ssl) != 1) {
       cry(conn, "%s: SSL handshake error: %s", __func__, ssl_error());
-    } else
-#endif // !NO_SSL
-    {
+    } else {
       process_new_connection(conn);
     }
 
@@ -3604,12 +3691,10 @@ static void master_thread(struct mg_context *ctx) {
   }
   (void) pthread_mutex_unlock(&ctx->mutex);
 
-#if !defined(NO_SSL)
   // Deallocate SSL context
   if (ctx->ssl_ctx != NULL) {
     SSL_CTX_free(ctx->ssl_ctx);
   }
-#endif // !NO_SSL
 
   // All threads exited, no sync is needed. Destroy mutex and condvars
   (void) pthread_mutex_destroy(&ctx->mutex);
@@ -3667,11 +3752,9 @@ struct mg_context * mg_start(const struct mg_config *config) {
 
   // NOTE(lsm): order is important here. SSL certificates must
   // be initialized before listening ports. UID must be set last.
-  if (set_gpass_option(ctx) == MG_ERROR ||
-#if !defined(NO_SSL)
-      (config->ssl_certificate != NULL && set_ssl_option(ctx) == MG_ERROR) ||
-#endif // !NO_SSL
+  if (set_ssl_option(ctx) == MG_ERROR ||
       set_ports_option(ctx) == MG_ERROR ||
+      set_gpass_option(ctx) == MG_ERROR ||
 #if !defined(_WIN32)
       set_uid_option(ctx) == MG_ERROR ||
 #endif
