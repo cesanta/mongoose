@@ -44,6 +44,12 @@ import ctypes
 import os
 
 
+MG_ERROR = 0
+MG_SUCCESS = 1
+MG_NOT_FOUND = 2
+MG_BUFFER_TOO_SMALL = 3
+
+
 class mg_header(ctypes.Structure):
 	"""A wrapper for struct mg_header."""
 	_fields_ = [
@@ -59,14 +65,48 @@ class mg_request_info(ctypes.Structure):
 		('uri', ctypes.c_char_p),
 		('http_version', ctypes.c_char_p),
 		('query_string', ctypes.c_char_p),
-		('post_data', ctypes.c_char_p),
 		('remote_user', ctypes.c_char_p),
+		('log_message', ctypes.c_char_p),
 		('remote_ip', ctypes.c_long),
 		('remote_port', ctypes.c_int),
-		('post_data_len', ctypes.c_int),
 		('status_code', ctypes.c_int),
+		('is_ssl', ctypes.c_int),
 		('num_headers', ctypes.c_int),
 		('http_headers', mg_header * 64),
+	]
+
+
+mg_callback_t = ctypes.CFUNCTYPE(ctypes.c_int,
+				 ctypes.c_voidp,
+				 ctypes.POINTER(mg_request_info))
+
+
+class mg_config(ctypes.Structure):
+	"""A wrapper for struct mg_config."""
+	_fields_ = [
+		('document_root', ctypes.c_char_p),
+		('index_files', ctypes.c_char_p),
+		('ssl_certificate', ctypes.c_char_p),
+		('listening_ports', ctypes.c_char_p),
+		('cgi_extensions', ctypes.c_char_p),
+		('cgi_interpreter', ctypes.c_char_p),
+		('cgi_environment', ctypes.c_char_p),
+		('ssi_extensions', ctypes.c_char_p),
+		('auth_domain', ctypes.c_char_p),
+		('protect', ctypes.c_char_p),
+		('global_passwords_file', ctypes.c_char_p),
+		('put_delete_passwords_file', ctypes.c_char_p),
+		('access_log_file', ctypes.c_char_p),
+		('error_log_file', ctypes.c_char_p),
+		('acl', ctypes.c_char_p),
+		('uid', ctypes.c_char_p),
+		('mime_types', ctypes.c_char_p),
+		('enable_directory_listing', ctypes.c_char_p),
+		('num_threads', ctypes.c_char_p),
+		('new_request_handler', mg_callback_t),
+		('http_error_handler', mg_callback_t),
+		('event_log_handler', mg_callback_t),
+		('ssl_password_handler', mg_callback_t),
 	]
 
 
@@ -76,20 +116,22 @@ class Connection(object):
 
 	def __init__(self, mongoose, connection):
 		self.m = mongoose
-		self.conn = connection
+		self.conn = ctypes.c_voidp(connection)
 
 	def get_header(self, name):
 		val = self.m.dll.mg_get_header(self.conn, name)
 		return ctypes.c_char_p(val).value
 
-	def get_var(self, name):
-		var = None
-		pointer = self.m.dll.mg_get_var(self.conn, name)
-		if pointer:
-			# Make a copy and free() the returned pointer
-			var = '' + ctypes.c_char_p(pointer).value
-			self.m.dll.mg_free(pointer)
-		return var
+	def get_var(self, buf, buflen, name):
+		size = 1024
+		value = ctypes.create_string_buffer(size)
+		self.m.dll.mg_get_var.restype = ctypes.c_int
+		result = self.m.dll.mg_get_var(buf, buflen, name, value, size)
+		return result == MG_ERROR and None or value
+	
+	def get_qsvar(self, request_info, name):
+		qs = request_info.query_string
+		return qs and self.get_var(qs, len(qs), name) or None
 
 	def printf(self, fmt, *args):
 		val = self.m.dll.mg_printf(self.conn, fmt, *args)
@@ -103,75 +145,48 @@ class Connection(object):
 class Mongoose(object):
 	"""A wrapper class for Mongoose shared library."""
 
-	# Exceptions for __setattr__ and __getattr__: these attributes
-	# must not be treated as Mongoose options
-	_private = ('dll', 'ctx', 'version', 'callbacks')
-
 	def __init__(self, **kwargs):
 		dll_extension = os.name == 'nt' and 'dll' or 'so'
 		self.dll = ctypes.CDLL('_mongoose.%s' % dll_extension)
-		start = self.dll.mg_start
-		self.ctx = ctypes.c_voidp(self.dll.mg_start()).value
-		self.version = ctypes.c_char_p(self.dll.mg_version()).value
 		self.callbacks = []
-		for name, value in kwargs.iteritems():
-			self.__setattr__(name, value)
-
-	def __setattr__(self, name, value):
-		"""Set Mongoose option. Raises ValueError in option not set."""
-		if name in self._private:
-			object.__setattr__(self, name, value)
-		else:
-			code = self.dll.mg_set_option(self.ctx, name, value)
-			if code != 1:
-				raise ValueError('Cannot set option [%s] '
-						 'to [%s]' % (name, value))
-
-	def __getattr__(self, name):
-		"""Get Mongoose option."""
-		if name in self._private:
-			return object.__getattr__(self, name)
-		else:
-			val = self.dll.mg_get_option(self.ctx, name)
-			return ctypes.c_char_p(val).value
+		self.config = mg_config(num_threads='5',
+					enable_directory_listing='yes',
+					listening_ports='8080',
+					document_root='.',
+					auth_domain='mydomain.com')
+		for key, value in kwargs.iteritems():
+			if key in ('new_request_handler',
+				   'http_error_handler',
+				   'event_log_handler',
+				   'ssl_password_handler'):
+				cb = self.MakeHandler(value)
+				setattr(self.config, key, cb)
+			else:
+				setattr(self.config, key, str(value))
+		self.dll.mg_start.restype = ctypes.c_void_p
+		self.ctx = self.dll.mg_start(ctypes.byref(self.config))
 
 	def __del__(self):
 		"""Destructor, stop Mongoose instance."""
-		self.dll.mg_stop(self.ctx)
+		self.dll.mg_stop(ctypes.c_void_p(self.ctx))
 
-	def _make_c_callback(self, python_callback):
+	def MakeHandler(self, python_func):
 		"""Return C callback from given Python callback."""
 
 		# Create a closure that will be called by the  shared library.
-		def _cb(connection, request_info, user_data):
+		def func(connection, request_info):
 			# Wrap connection pointer into the connection
 			# object and call Python callback
 			conn = Connection(self, connection)
-			python_callback(conn, request_info.contents, user_data)
+			return python_func(conn, request_info.contents)
 
 		# Convert the closure into C callable object
-		c_callback = ctypes.CFUNCTYPE(ctypes.c_voidp, ctypes.c_voidp,
-			ctypes.POINTER(mg_request_info), ctypes.c_voidp)(_cb)
+		c_func = mg_callback_t(func)
+		c_func.restype = ctypes.c_int
 
 		# Store created callback in the list, so it is kept alive
 		# during context lifetime. Otherwise, python can garbage
 		# collect it, and C code will crash trying to call it.
-		self.callbacks.append(c_callback)
+		self.callbacks.append(c_func)
 
-		return c_callback
-
-	def set_uri_callback(self, uri_regex, python_callback, user_data):
-		self.dll.mg_set_uri_callback(self.ctx, uri_regex,
-			self._make_c_callback(python_callback), user_data)
-
-	def set_auth_callback(self, uri_regex, python_callback, user_data):
-		self.dll.mg_set_auth_callback(self.ctx, uri_regex,
-			self._make_c_callback(python_callback), user_data)
-
-	def set_error_callback(self, error_code, python_callback, user_data):
-		self.dll.mg_set_error_callback(self.ctx, error_code,
-			self._make_c_callback(python_callback), user_data)
-	
-	def set_log_callback(self, python_callback):
-		self.dll.mg_set_log_callback(self.ctx,
-			self._make_c_callback(python_callback))
+		return c_func
