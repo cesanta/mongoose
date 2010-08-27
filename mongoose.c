@@ -1226,7 +1226,52 @@ static int pull(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int len) {
 }
 
 int mg_read(struct mg_connection *conn, void *buf, size_t len) {
-  return pull(NULL, conn->client.sock, conn->ssl, (char *) buf, (int) len);
+  int n, buffered_data_len, nread;
+  const char *buffered_data;
+
+  assert(conn->content_len >= conn->consumed_content);
+  DEBUG_TRACE(("%p %zu %lld %lld", buf, len,
+               conn->content_len, conn->consumed_content));
+  nread = 0;
+  if (strcmp(conn->request_info.request_method, "POST") == 0 &&
+      conn->consumed_content < conn->content_len) {
+
+    // Adjust number of bytes to read.
+    int64_t to_read = conn->content_len - conn->consumed_content;
+    if (to_read < (int64_t) len) {
+      len = to_read;
+    }
+
+    // How many bytes of data we have buffered in the request buffer?
+    buffered_data = conn->buf + conn->request_len + conn->consumed_content;
+    buffered_data_len = conn->data_len - conn->request_len;
+    assert(buffered_data_len >= 0);
+
+    // Return buffered data back if we haven't done that yet.
+    if (conn->consumed_content < (int64_t) buffered_data_len) {
+      buffered_data_len -= conn->consumed_content;
+      if (len < (size_t) buffered_data_len) {
+        buffered_data_len = len;
+      }
+      memcpy(buf, buffered_data, buffered_data_len);
+      len -= buffered_data_len;
+      buf = (char *) buf + buffered_data_len;
+      conn->consumed_content += buffered_data_len;
+      nread = buffered_data_len;
+    }
+
+    // We have returned all buffered data. Read new data from the remote socket.
+    while (len > 0) {
+      n = pull(NULL, conn->client.sock, conn->ssl, (char *) buf, (int) len);
+      if (n <= 0) {
+        break;
+      }
+      conn->consumed_content += n;
+      nread += n;
+      len -= n;
+    }
+  }
+  return nread;
 }
 
 int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
@@ -2523,6 +2568,7 @@ static bool_t handle_request_body(struct mg_connection *conn, FILE *fp) {
   bool_t status = MG_FALSE;
 
   expect = mg_get_header(conn, "Expect");
+  assert(fp != NULL);
 
   if (conn->content_len == -1) {
     send_http_error(conn, 411, "Length Required", "");
@@ -2537,14 +2583,6 @@ static bool_t handle_request_body(struct mg_connection *conn, FILE *fp) {
     assert(data_len >= 0);
 
     if (conn->content_len <= (int64_t) data_len) {
-#if 0
-      TODO(lsm): sort out embedded mode.
-      ri->post_data_len = (int) content_len;
-#endif
-      // If fp is NULL, this is embedded mode, and we do not
-      // have to do anything: POST data is already there,
-      // no need to allocate a buffer and copy it in.
-      // If fp != NULL, we need to write the data.
       status = fp == NULL || (push(fp, INVALID_SOCKET, NULL, data,
             conn->content_len) == conn->content_len) ?  MG_TRUE : MG_FALSE;
     } else {
