@@ -122,16 +122,15 @@ class Connection(object):
 		val = self.m.dll.mg_get_header(self.conn, name)
 		return ctypes.c_char_p(val).value
 
-	def get_var(self, buf, buflen, name):
-		size = 1024
-		value = ctypes.create_string_buffer(size)
-		self.m.dll.mg_get_var.restype = ctypes.c_int
-		result = self.m.dll.mg_get_var(buf, buflen, name, value, size)
-		return result == MG_ERROR and None or value
+	def get_var(self, data, name):
+		size = len(data)
+		buf = ctypes.create_string_buffer(size)
+		n = self.m.dll.mg_get_var(data, size, name, buf, size)
+		return n == MG_SUCCESS and buf or None
 	
 	def get_qsvar(self, request_info, name):
 		qs = request_info.query_string
-		return qs and self.get_var(qs, len(qs), name) or None
+		return qs and self.get_var(qs, name) or None
 
 	def printf(self, fmt, *args):
 		val = self.m.dll.mg_printf(self.conn, fmt, *args)
@@ -140,6 +139,12 @@ class Connection(object):
 	def write(self, data):
 		val = self.m.dll.mg_write(self.conn, data, len(data))
 		return ctypes.c_int(val).value
+	
+	def read(self, size):
+		buf = ctypes.create_string_buffer(size)
+		n = self.m.dll.mg_read(self.conn, buf, size)
+		print size, buf, n
+		return n <= 0 and None or buf[:n]
 
 
 class Mongoose(object):
@@ -148,6 +153,17 @@ class Mongoose(object):
 	def __init__(self, **kwargs):
 		dll_extension = os.name == 'nt' and 'dll' or 'so'
 		self.dll = ctypes.CDLL('_mongoose.%s' % dll_extension)
+
+		self.dll.mg_start.restype = ctypes.c_void_p
+		self.dll.mg_modify_passwords_file.restype = ctypes.c_int
+		self.dll.mg_read.restype = ctypes.c_int
+		self.dll.mg_write.restype = ctypes.c_int
+		self.dll.mg_printf.restype = ctypes.c_int
+		self.dll.mg_get_header.restype = ctypes.c_char_p
+		self.dll.mg_get_var.restype = ctypes.c_int
+		self.dll.mg_get_qsvar.restype = ctypes.c_int
+		self.dll.mg_get_cookie.restype = ctypes.c_int
+
 		self.callbacks = []
 		self.config = mg_config(num_threads='5',
 					enable_directory_listing='yes',
@@ -163,7 +179,6 @@ class Mongoose(object):
 				setattr(self.config, key, cb)
 			else:
 				setattr(self.config, key, str(value))
-		self.dll.mg_start.restype = ctypes.c_void_p
 		self.ctx = self.dll.mg_start(ctypes.byref(self.config))
 
 	def __del__(self):
@@ -178,7 +193,8 @@ class Mongoose(object):
 			# Wrap connection pointer into the connection
 			# object and call Python callback
 			conn = Connection(self, connection)
-			return python_func(conn, request_info.contents)
+			status = python_func(conn, request_info.contents)
+			return status == MG_SUCCESS and MG_SUCCESS or MG_ERROR
 
 		# Convert the closure into C callable object
 		c_func = mg_callback_t(func)

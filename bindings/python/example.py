@@ -7,24 +7,37 @@
 import mongoose
 import sys
 
-# This function is a "/foo" URI handler: it will be called each time
-# HTTP request to http://this_machine:8080/foo made.
-# It displays some request information.
+# Handle /show and /form URIs.
 def uri_handler(conn, info):
-	if info.uri != '/foo':
+	if info.uri == '/show':
+		conn.printf('%s', 'HTTP/1.0 200 OK\r\n')
+		conn.printf('%s', 'Content-Type: text/plain\r\n\r\n')
+		conn.printf('%s %s\n', info.request_method, info.uri)
+		if info.request_method == 'POST':
+			content_len = conn.get_header('Content-Length')
+			post_data = conn.read(int(content_len))
+			my_var = conn.get_var(post_data, 'my_var')
+		else:
+			my_var = conn.get_qsvar(info, 'my_var')
+		conn.printf('my_var: %s\n', my_var or '<not set>')
+		conn.printf('HEADERS: \n')
+		for header in info.http_headers[:info.num_headers]:
+			conn.printf('  %s: %s\n', header.name, header.value)
+		return mongoose.MG_SUCCESS
+	elif info.uri == '/form':
+		conn.write('HTTP/1.0 200 OK\r\n'
+			   'Content-Type: text/html\r\n\r\n'
+			   'Use GET: <a href="/show?my_var=hello">link</a>'
+			   '<form action="/show" method="POST">'
+			   'Use POST: type text and submit: '
+			   '<input type="text" name="my_var"/>'
+			   '<input type="submit"/>'
+			   '</form>')
+		return mongoose.MG_SUCCESS
+	else:
 		return mongoose.MG_ERROR
-	conn.printf('%s', 'HTTP/1.0 200 OK\r\n')
-	conn.printf('%s', 'Content-Type: text/plain\r\n\r\n')
-	conn.printf('%s %s\n', info.request_method, info.uri)
-	conn.printf('my_var: %s\n',
-		    conn.get_qsvar(info, 'my_var') or '<not set>')
-	conn.printf('HEADERS: \n')
-	for header in info.http_headers[:info.num_headers]:
-		conn.printf('  %s: %s\n', header.name, header.value)
-	return mongoose.MG_SUCCESS
 
-# This function is 404 error handler: it is called each time requested
-# document is not found by the server.
+# Invoked each time HTTP error is triggered.
 def error_handler(conn, info):
 	conn.printf('%s', 'HTTP/1.0 200 OK\r\n')
 	conn.printf('%s', 'Content-Type: text/plain\r\n\r\n')
