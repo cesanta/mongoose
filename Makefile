@@ -47,9 +47,9 @@ solaris:
 ###            WINDOWS build: Using Visual Studio or Mingw
 ##########################################################################
 
-# Using Visual Studio 6.0
-# Assuming that studio is installed in d:\vc6, change VC variable below to
-# the correct path on your system. Run "d:\vc6\bin\nmake windows"
+# Using Visual Studio 6.0. To build Mongoose:
+#  o  Set VC variable below to where VS 6.0 is installed on your system
+#  o  Run "PATH_TO_VC6\bin\nmake windows"
 
 VC=	q:\vc6
 #DBG=	/Zi /DDEBUG /Od /DDEBUG
