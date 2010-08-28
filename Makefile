@@ -20,7 +20,7 @@ all:
 ###                 UNIX build: linux, bsd, mac, rtems
 ##########################################################################
 
-CFLAGS=		-W -Wall -std=c99 -pedantic -Os -fomit-frame-pointer $(COPT)
+CFLAGS=		-W -Wall -std=c99 -pedantic -O2 -fomit-frame-pointer $(COPT)
 MAC_SHARED=	-flat_namespace -bundle -undefined suppress
 LINFLAGS=	-ldl -pthread $(CFLAGS)
 LIB=		_$(PROG).so
@@ -51,20 +51,20 @@ solaris:
 # Assuming that studio is installed in d:\vc6, change VC variable below to
 # the correct path on your system. Run "d:\vc6\bin\nmake windows"
 
-VC=		q:\vc6
-OUT=		c:\out
-#WINDBG=	/Zi /DDEBUG /Od /DDEBUG
-WINDBG=		/DNDEBUG #/Os
-CLFLAGS=	/MD /TC /nologo /W4 /c $(WINDBG) /I $(VC)/include
-LINKFLAGS=	/incremental:no /libpath:$(VC)\lib ws2_32.lib
+VC=	q:\vc6
+#DBG=	/Zi /DDEBUG /Od /DDEBUG
+DBG=	/DNDEBUG /Os
+CL=	$(VC)\bin\cl.exe  /MD /TC /nologo /W4 /c $(DBG) /I $(VC)/include
+LINK=	$(VC)\bin\link.exe /incremental:no /libpath:$(VC)\lib ws2_32.lib
+OUT=	c:\out
+DLL=	$(OUT)\_$(PROG).dll
+EXE=	$(OUT)\$(PROG).exe
 
 windows:
-	$(VC)\bin\cl main.c $(CLFLAGS) /Fo$(OUT)\main.obj
-	$(VC)\bin\cl mongoose.c $(CLFLAGS) /Fo$(OUT)\mongoose.obj
-	$(VC)\bin\link $(OUT)\mongoose.obj $(LINKFLAGS) \
-		/DLL /DEF:win32\dll.def /out:$(OUT)\_$(PROG).dll
-	$(VC)\bin\link $(OUT)\main.obj $(OUT)\mongoose.obj $(LINKFLAGS) \
-		/out:$(OUT)\$(PROG).exe
+	$(CL) main.c /Fd$(OUT)\main.pdb /Fo$(OUT)\main.obj
+	$(CL) mongoose.c /Fd$(OUT)\mongoose.pdb /Fo$(OUT)\mongoose.obj
+	$(LINK) $(OUT)\mongoose.obj /DLL /DEF:win32\dll.def /out:$(DLL)
+	$(LINK) $(OUT)\main.obj $(OUT)\mongoose.obj /out:$(EXE)
 
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0
