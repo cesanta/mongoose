@@ -40,6 +40,12 @@ import ctypes
 import os
 
 
+NEW_REQUEST = 0
+HTTP_ERROR = 1
+EVENT_LOG = 2
+INIT_SSL = 3
+
+
 class mg_header(ctypes.Structure):
     """A wrapper for struct mg_header."""
     _fields_ = [
@@ -67,6 +73,7 @@ class mg_request_info(ctypes.Structure):
 
 
 mg_callback_t = ctypes.CFUNCTYPE(ctypes.c_void_p,
+                                 ctypes.c_int,
                                  ctypes.c_void_p,
                                  ctypes.POINTER(mg_request_info))
 
@@ -87,7 +94,7 @@ class Connection(object):
         size = len(data)
         buf = ctypes.create_string_buffer(size)
         n = self.m.dll.mg_get_var(data, size, name, buf, size)
-        return n == MG_SUCCESS and buf or None
+        return n >= 0 and buf or None
     
     def printf(self, fmt, *args):
         val = self.m.dll.mg_printf(self.conn, fmt, *args)
@@ -100,7 +107,6 @@ class Connection(object):
     def read(self, size):
         buf = ctypes.create_string_buffer(size)
         n = self.m.dll.mg_read(self.conn, buf, size)
-        print size, buf, n
         return n <= 0 and None or buf[:n]
 
 
@@ -123,30 +129,27 @@ class Mongoose(object):
 
         if callback:
             # Create a closure that will be called by the  shared library.
-            def func(connection, request_info):
+            def func(event, connection, request_info):
                 # Wrap connection pointer into the connection
                 # object and call Python callback
                 conn = Connection(self, connection)
-                if python_func(conn, request_info.contents):
-                    return 'non-null-pointer'
-                else:
-                    return ctypes.c_void_p(0)
+                return callback(event, conn, request_info.contents) and 1 or 0
 
             # Convert the closure into C callable object
             self.callback = mg_callback_t(func)
-            self.callback.restype = ctypes.c_void_p
+            self.callback.restype = ctypes.c_char_p
         else:
             self.callback = ctypes.c_void_p(0)
 
         args = [y for x in kwargs.items() for y in x] + [None]
         options = (ctypes.c_char_p * len(args))(*args)
 
-#       self.ctx = self.dll.mg_start(self.callback, options)
-        self.ctx = self.dll.mg_start(ctypes.c_void_p(0), options)
+        ret = self.dll.mg_start(self.callback, options)
+        self.ctx = ctypes.c_void_p(ret)
 
     def __del__(self):
         """Destructor, stop Mongoose instance."""
-        self.dll.mg_stop(ctypes.c_void_p(self.ctx))
+        self.dll.mg_stop(self.ctx)
 
     def get_option(self, name):
         return self.dll.mg_get_option(self.ctx, name)
