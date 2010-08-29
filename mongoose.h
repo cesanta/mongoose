@@ -29,8 +29,7 @@ struct mg_context;     // Handle for the HTTP service itself
 struct mg_connection;  // Handle for the individual connection
 
 
-// This structure contains full information about the HTTP request.
-// It is passed to the user-specified callback function as a parameter.
+// This structure contains information about the HTTP request.
 struct mg_request_info {
   char *request_method;  // "GET", "POST", etc
   char *uri;             // URL-decoded URI
@@ -40,7 +39,7 @@ struct mg_request_info {
   char *log_message;     // Mongoose error log message
   long remote_ip;        // Client's IP address
   int remote_port;       // Client's port
-  int status_code;       // HTTP status code
+  int status_code;       // HTTP reply status code
   int is_ssl;            // 1 if SSL-ed, 0 if not
   int num_headers;       // Number of headers
   struct mg_header {
@@ -49,65 +48,57 @@ struct mg_request_info {
   } http_headers[64];    // Maximum 64 headers
 };
 
-// User-defined handler function. It must return MG_SUCCESS or MG_ERROR.
-//
-// If handler returns MG_SUCCESS, that means that handler has processed the
-// request by sending appropriate HTTP reply to the client. Mongoose treats
-// the request as served.
-//
-// If callback returns MG_ERROR, that means that callback has not processed
-// the request. Handler must not send any data to the client in this case.
-// Mongoose proceeds with request handling as if nothing happened.
-//
-// NOTE: ssl_password_handler must have the following prototype:
-//      int (*)(char *, int, int, void *)
-// Refer to OpenSSL documentation for more details.
-enum mg_error_t {
-  MG_ERROR,
-  MG_SUCCESS,
-  MG_NOT_FOUND,
-  MG_BUFFER_TOO_SMALL
+// Various events on which user-defined function is called by Mongoose.
+enum mg_event {
+  MG_NEW_REQUEST,   // New HTTP request has arrived from the client
+  MG_HTTP_ERROR,    // HTTP error must be returned to the client
+  MG_EVENT_LOG,     // Mongoose logs an event, request_info.log_message
+  MG_INIT_SSL,      // Mongoose initializes SSL. Instead of mg_connection *,
+                    // SSL context is passed to the callback function.
 };
 
-typedef enum mg_error_t (*mg_callback_t)(struct mg_connection *,
-    const struct mg_request_info *);
-
-// This structure describes Mongoose configuration.
-struct mg_config {
-  char *document_root;
-  char *index_files;
-  char *ssl_certificate;
-  char *listening_ports;
-  char *cgi_extensions;
-  char *cgi_interpreter;
-  char *cgi_environment;
-  char *ssi_extensions;
-  char *auth_domain;
-  char *protect;
-  char *global_passwords_file;
-  char *put_delete_passwords_file;
-  char *access_log_file;
-  char *error_log_file;
-  char *acl;
-  char *uid;
-  char *mime_types;
-  char *enable_directory_listing;
-  char *num_threads;
-
-  mg_callback_t new_request_handler;
-  mg_callback_t http_error_handler;
-  mg_callback_t event_log_handler;
-  mg_callback_t ssl_password_handler;
-};
-
-
-// Start the web server.
+// Prototype for the user-defined function. Mongoose calls this function
+// on every event mentioned above.
 //
-// This must be the first function called by the application.
-// It creates a serving thread, and returns a context structure that
-// can be used to stop the server.
-// After calling mg_start(), configuration data must not be changed.
-struct mg_context *mg_start(const struct mg_config *);
+// Parameters:
+//   event: which event has been triggered.
+//   conn: opaque connection handler. Could be used to read, write data to the
+//         client, etc. See functions below that accept "mg_connection *".
+//   request_info: Information about HTTP request.
+//
+// Return:
+//   If handler returns non-NULL, that means that handler has processed the
+//   request by sending appropriate HTTP reply to the client. Mongoose treats
+//   the request as served.
+//   If callback returns NULL, that means that callback has not processed
+//   the request. Handler must not send any data to the client in this case.
+//   Mongoose proceeds with request handling as if nothing happened.
+typedef void * (*mg_callback_t)(enum mg_event event,
+                                struct mg_connection *conn,
+                                struct mg_request_info *request_info);
+  
+
+// Start web server.
+//
+// Parameters:
+//   callback: user defined event handling function or NULL.
+//   options: NULL terminated list of option_name, option_value pairs that
+//            specify Mongoose configuration parameters.
+//
+// Example:
+//   const char *options[] = {
+//     "document_root", "/var/www",
+//     "listening_ports", "80,443s",
+//     NULL
+//   };
+//   struct mg_context *ctx = mg_start(&my_func, options);
+//
+// Please refer to http://code.google.com/p/mongoose/wiki/MongooseManual
+// for the list of valid option and their possible values.
+//
+// Return:
+//   web server context, or NULL on error.
+struct mg_context *mg_start(mg_callback_t callback, const char **options);
 
 
 // Stop the web server.
@@ -116,6 +107,19 @@ struct mg_context *mg_start(const struct mg_config *);
 // release all associated resources. This function blocks until all Mongoose
 // threads are stopped. Context pointer becomes invalid.
 void mg_stop(struct mg_context *);
+
+
+// Get the value of particular configuration parameter.
+// The value returned is read-only. Mongoose does not allow changing
+// configuration at run time.
+// If given parameter name is not valid, NULL is returned. For valid
+// names, return value is guaranteed to be non-NULL. If parameter is not
+// set, zero-length string is returned.
+const char *mg_get_option(const struct mg_context *ctx, const char *name);
+
+
+// Return array of valid configuration options.
+const char **mg_get_valid_option_names(void);
 
 
 // Add, edit or delete the entry in the passwords file.
@@ -129,9 +133,9 @@ void mg_stop(struct mg_context *);
 // If password is NULL, entry is deleted.
 //
 // Return:
-//  MG_ERROR, MG_SUCCESS
-enum mg_error_t mg_modify_passwords_file(struct mg_context *ctx, 
-    const char *file_name, const char *user, const char *password);
+//   1 on success, 0 on error.
+int mg_modify_passwords_file(struct mg_context *ctx, 
+    const char *passwords_file_name, const char *user, const char *password);
 
 // Send data to the client.
 int mg_write(struct mg_connection *, const void *buf, size_t len);
@@ -160,32 +164,35 @@ const char *mg_get_header(const struct mg_connection *, const char *name);
 
 // Get a value of particular form variable.
 //
-// Either request_info->query_string or read POST data can be scanned.
-// mg_get_qsvar() is convenience method to get variable from the query string.
-// Destination buffer is guaranteed to be '\0' - terminated. In case of
-// failure, dst[0] == '\0'.
+// Parameters:
+//   data: pointer to form-uri-encoded buffer. This could be either POST data,
+//         or request_info.query_string.
+//   data_len: length of the encoded data.
+//   var_name: variable name to decode from the buffer
+//   buf: destination buffer for the decoded variable
+//   buf_len: length of the destination buffer
 //
 // Return:
-//  MG_SUCCESS    Variable value was successfully copied in the buffer.
-//  MG_NOT_FOUND  Requested variable not found.
-//  MG_BUFFER_TOO_SMALL  Destination buffer is too small to hold the value.
-enum mg_error_t mg_get_var(const char *data, size_t data_len,
-    const char *var_name, char *buf, size_t buf_len);
-enum mg_error_t mg_get_qsvar(const struct mg_request_info *,
+//   On success, length of the decoded variable.
+//   On error, -1 (variable not found, or destination buffer is too small).
+//
+// Destination buffer is guaranteed to be '\0' - terminated. In case of
+// failure, dst[0] == '\0'.
+int mg_get_var(const char *data, size_t data_len,
     const char *var_name, char *buf, size_t buf_len);
 
 // Fetch value of certain cookie variable into the destination buffer.
 //
 // Destination buffer is guaranteed to be '\0' - terminated. In case of
-// failure, dst[0] == '\0'. Note that RFC allows many occurences of the same
-// parameter. This function returns only first occurance.
+// failure, dst[0] == '\0'. Note that RFC allows many occurrences of the same
+// parameter. This function returns only first occurrence.
 //
 // Return:
-//  MG_SUCCESS    Cookie parameter was successfully copied in the buffer.
-//  MG_NOT_FOUND  Either "Cookie:" header is not present at all, or the
-//                requested parameter is not found.
-//  MG_BUFFER_TOO_SMALL  Destination buffer is too small to hold the value.
-enum mg_error_t mg_get_cookie(const struct mg_connection *,
+//   On success, value length.
+//   On error, -1 (either "Cookie:" header is not present at all, or the
+//   requested parameter is not found, or destination buffer is too small
+//   to hold the value).
+int mg_get_cookie(const struct mg_connection *,
     const char *cookie_name, char *buf, size_t buf_len);
 
 

@@ -1,85 +1,92 @@
-/*
- * Copyright (c) 2004-2009 Sergey Lyubka
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *
- * $Id: embed.c 471 2009-08-30 14:30:21Z valenok $
- * Unit test for the mongoose web server. Tests embedded API.
- */
+// Copyright (c) 2004-2009 Sergey Lyubka
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Unit test for the mongoose web server. Tests embedded API.
 
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 #include "mongoose.h"
 
 #if !defined(LISTENING_PORT)
 #define LISTENING_PORT	"23456"
-#endif /* !LISTENING_PORT */
+#endif
 
 static const char *standard_reply =	"HTTP/1.1 200 OK\r\n"
-					"Content-Type: text/plain\r\n"
-					"Connection: close\r\n\r\n";
+  "Content-Type: text/plain\r\n"
+  "Connection: close\r\n\r\n";
 
-static void
-test_get_var(struct mg_connection *conn, const struct mg_request_info *ri,
-		void *user_data)
-{
-	char *value;
+static void test_get_var(struct mg_connection *conn,
+                         const struct mg_request_info *ri) {
+	char *var, *buf;
+  size_t buf_len;
+  const char *cl;
+  int var_len;
 
 	mg_printf(conn, "%s", standard_reply);
 
-	value = mg_get_var(conn, "my_var");
-	if (value != NULL) {
-		mg_printf(conn, "Value: [%s]\n", value);
-		mg_printf(conn, "Value size: [%u]\n", (unsigned) strlen(value));
-		free(value);
-	}
+  buf_len = 0;
+  var = buf = NULL;
+  cl = mg_get_header(conn, "Content-Length");
+  mg_printf(conn, "cl: %p\n", cl);
+  if (!strcmp(ri->request_method, "POST") && cl != NULL) {
+    buf_len = atoi(cl);
+    buf = malloc(buf_len);
+    mg_read(conn, buf, buf_len);
+  } else if (ri->query_string != NULL) {
+    buf_len = strlen(ri->query_string);
+    buf = malloc(buf_len + 1);
+    strcpy(buf, ri->query_string);
+  }
+  var = malloc(buf_len + 1);
+	var_len = mg_get_var(buf, buf_len, "my_var", var, buf_len + 1);
+  mg_printf(conn, "Value: [%s]\n", var);
+  mg_printf(conn, "Value size: [%d]\n", var_len);
+  free(buf);
+  free(var);
 }
 
-static void
-test_get_header(struct mg_connection *conn, const struct mg_request_info *ri,
-		void *user_data)
-{
+static void test_get_header(struct mg_connection *conn,
+                            const struct mg_request_info *ri) {
 	const char *value;
+  int	i;
 
 	mg_printf(conn, "%s", standard_reply);
-
-	{
-		int	i;
-		printf("HTTP headers: %d\n", ri->num_headers);
-		for (i = 0; i < ri->num_headers; i++)
-			printf("[%s]: [%s]\n",
-					ri->http_headers[i].name,
-					ri->http_headers[i].value);
-	}
-
+  printf("HTTP headers: %d\n", ri->num_headers);
+  for (i = 0; i < ri->num_headers; i++) {
+    printf("[%s]: [%s]\n", ri->http_headers[i].name, ri->http_headers[i].value);
+  }
 
 	value = mg_get_header(conn, "Host");
-	if (value != NULL)
+	if (value != NULL) {
 		mg_printf(conn, "Value: [%s]", value);
+  }
 }
 
-static void
-test_get_ri(struct mg_connection *conn, const struct mg_request_info *ri,
-		void *user_data)
-{
+static void test_get_request_info(struct mg_connection *conn,
+                                  const struct mg_request_info *ri) {
 	int	i;
 
 	mg_printf(conn, "%s", standard_reply);
@@ -88,110 +95,79 @@ test_get_ri(struct mg_connection *conn, const struct mg_request_info *ri,
 	mg_printf(conn, "URI: [%s]\n", ri->uri);
 	mg_printf(conn, "HTTP version: [%s]\n", ri->http_version);
 
-	for (i = 0; i < ri->num_headers; i++)
+	for (i = 0; i < ri->num_headers; i++) {
 		mg_printf(conn, "HTTP header [%s]: [%s]\n",
 			 ri->http_headers[i].name,
 			 ri->http_headers[i].value);
-
+  }
 
 	mg_printf(conn, "Query string: [%s]\n",
 			ri->query_string ? ri->query_string: "");
-	mg_printf(conn, "POST data: [%.*s]\n",
-			ri->post_data_len, ri->post_data);
 	mg_printf(conn, "Remote IP: [%lu]\n", ri->remote_ip);
 	mg_printf(conn, "Remote port: [%d]\n", ri->remote_port);
 	mg_printf(conn, "Remote user: [%s]\n",
 			ri->remote_user ? ri->remote_user : "");
 }
 
-static void
-test_error(struct mg_connection *conn, const struct mg_request_info *ri,
-		void *user_data)
-{
-	const char *value;
-
+static void test_error(struct mg_connection *conn,
+                       const struct mg_request_info *ri) {
 	mg_printf(conn, "HTTP/1.1 %d XX\r\n"
 		"Conntection: close\r\n\r\n", ri->status_code);
 	mg_printf(conn, "Error: [%d]", ri->status_code);
 }
 
-static void
-test_user_data(struct mg_connection *conn, const struct mg_request_info *ri,
-		void *user_data)
-{
-	const char *value;
+static void test_post(struct mg_connection *conn,
+                      const struct mg_request_info *ri) {
+  const char *cl;
+  char *buf;
+  int len;
 
 	mg_printf(conn, "%s", standard_reply);
-	mg_printf(conn, "User data: [%d]", * (int *) user_data);
+  if (strcmp(ri->request_method, "POST") == 0 &&
+      (cl = mg_get_header(conn, "Content-Length")) != NULL) {
+    len = atoi(cl);
+    if ((buf = malloc(len)) != NULL) {
+      mg_write(conn, buf, len);
+      free(buf);
+    }
+  }
 }
 
-static void
-test_protect(struct mg_connection *conn, const struct mg_request_info *ri,
-		void *user_data)
-{
-	const char	*allowed_user = * (char **) user_data;
-	const char	*remote_user = ri->remote_user;
-	int		allowed;
+static const struct test_config {
+  enum mg_event event;
+  const char *uri;
+  void (*func)(struct mg_connection *, const struct mg_request_info *);
+} test_config[] = {
+  {MG_NEW_REQUEST, "/test_get_header", &test_get_header},
+  {MG_NEW_REQUEST, "/test_get_var", &test_get_var},
+  {MG_NEW_REQUEST, "/test_get_request_info", &test_get_request_info},
+  {MG_NEW_REQUEST, "/test_post", &test_post},
+  {MG_HTTP_ERROR, "", &test_error},
+  {0, NULL, NULL}
+};
 
-	allowed = remote_user != NULL && !strcmp(allowed_user, remote_user);
+static void *callback(enum mg_event event,
+                      struct mg_connection *conn,
+                      struct mg_request_info *request_info) {
+  int i;
 
-	* (long *) user_data = allowed ? 1 : 0;
+  for (i = 0; test_config[i].uri != NULL; i++) {
+    if (event == test_config[i].event &&
+        (event == MG_HTTP_ERROR ||
+         !strcmp(request_info->uri, test_config[i].uri))) {
+      test_config[i].func(conn, request_info);
+      return "processed";
+    }
+  }
+
+  return NULL;
 }
 
-static void
-test_post(struct mg_connection *conn, const struct mg_request_info *ri,
-		void *user_data)
-{
-	mg_printf(conn, "%s", standard_reply);
-	mg_write(conn, ri->post_data, ri->post_data_len);
-}
-
-static void
-test_put(struct mg_connection *conn, const struct mg_request_info *ri,
-		void *user_data)
-{
-	mg_printf(conn, "%s", standard_reply);
-	mg_write(conn, ri->post_data, ri->post_data_len);
-}
-
-static void
-test_remove_callback(struct mg_connection *conn,
-		const struct mg_request_info *ri, void *user_data)
-{
-	struct mg_context	*ctx = (struct mg_context *) user_data;
-	const char		*uri_regex = "/foo/*";
-
-	mg_printf(conn, "%sRemoving callbacks bound to [%s]",
-			standard_reply, uri_regex);
-
-	/* Un-bind bound callback */
-	mg_set_uri_callback(ctx, uri_regex, NULL, NULL);
-}
-
-int main(void)
-{
-	int			user_data = 1234;
+int main(void) {
 	struct mg_context	*ctx;
+  const char *options[] = {"listening_ports", LISTENING_PORT, NULL};
 
-	ctx = mg_start();
-	mg_set_option(ctx, "ports", LISTENING_PORT);
-
-	mg_set_uri_callback(ctx, "/test_get_header", &test_get_header, NULL);
-	mg_set_uri_callback(ctx, "/test_get_var", &test_get_var, NULL);
-	mg_set_uri_callback(ctx, "/test_get_request_info", &test_get_ri, NULL);
-	mg_set_uri_callback(ctx, "/foo/*", &test_get_ri, NULL);
-	mg_set_uri_callback(ctx, "/test_user_data",
-			&test_user_data, &user_data);
-	mg_set_uri_callback(ctx, "/p", &test_post, NULL);
-	mg_set_uri_callback(ctx, "/put", &test_put, NULL);
-	mg_set_uri_callback(ctx, "/test_remove_callback",
-			&test_remove_callback, ctx);
-
-	mg_set_error_callback(ctx, 404, &test_error, NULL);
-	mg_set_error_callback(ctx, 0, &test_error, NULL);
-
-	mg_set_auth_callback(ctx, "/foo/secret", &test_protect, (void *) "joe");
-
-	for (;;)
-		(void) getchar();
+	ctx = mg_start(callback, options);
+  pause();
+  return 0;
 }

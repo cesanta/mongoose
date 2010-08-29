@@ -146,7 +146,7 @@ if (scalar(@ARGV) > 0 and $ARGV[0] eq 'embedded') {
 }
 
 # Make sure we load config file if no options are given
-write_file($config, "ports 12345\naccess_log access.log\n");
+write_file($config, "listening_ports 12345\naccess_log_file access.log\n");
 spawn($exe);
 my $saved_port = $port;
 $port = 12345;
@@ -156,11 +156,13 @@ unlink $config;
 kill_spawned_child();
 
 # Spawn the server on port $port
-my $cmd = "$exe -ports $port -access_log access.log -error_log debug.log ".
-"-cgi_env CGI_FOO=foo,CGI_BAR=bar,CGI_BAZ=baz " .
-"-mime_types .bar=foo/bar,.tar.gz=blah,.baz=foo " .
-"-root $root,/aiased=/etc/,/ta=$test_dir";
-$cmd .= ' -cgi_interp perl' if on_windows();
+my $cmd = "$exe -listening_ports $port -access_log_file access.log ".
+"-error_log_file debug.log ".
+"-cgi_environment CGI_FOO=foo,CGI_BAR=bar,CGI_BAZ=baz " .
+"-extra_mime_types .bar=foo/bar,.tar.gz=blah,.baz=foo " .
+'-put_delete_passwords_file test/passfile ' .
+"-document_root $root,/aiased=/etc/,/ta=$test_dir";
+$cmd .= ' -cgi_interpreter perl' if on_windows();
 spawn($cmd);
 
 # Try to overflow: Send very long request
@@ -349,15 +351,12 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   $content =~ /^b:a:\w+$/gs or fail("Bad content of the passwd file");
   unlink $path;
 
-  kill_spawned_child();
   do_PUT_test();
-  #do_embedded_test();
+  kill_spawned_child();
+  do_embedded_test();
 }
 
 sub do_PUT_test {
-  $cmd .= ' -auth_PUT test/passfile';
-  spawn($cmd);
-
   my $auth_header = "Authorization: Digest  username=guest, ".
   "realm=mydomain.com, nonce=1145872809, uri=/put.txt, ".
   "response=896327350763836180c61d87578037d9, qop=auth, ".
@@ -379,16 +378,14 @@ sub do_PUT_test {
   o("PUT /put.txt HTTP/1.0\nExpect: 100-continue\nContent-Length: 4\n".
     "$auth_header\nabcd",
     "HTTP/1.1 100 Continue.+HTTP/1.1 200", 'PUT 100-Continue');
-  kill_spawned_child();
 }
 
 sub do_embedded_test {
-  my $cmd = "cc -o $embed_exe $root/embed.c mongoose.c -I. ".
-  "-DNO_SSL -lpthread -DLISTENING_PORT=\\\"$port\\\"";
+  my $cmd = "cc -W -Wall -o $embed_exe $root/embed.c mongoose.c -I. ".
+  "-pthread -DLISTENING_PORT=\\\"$port\\\"";
   if (on_windows()) {
     $cmd = "cl $root/embed.c mongoose.c /I. /nologo ".
-    "/DNO_SSL /DLISTENING_PORT=\\\"$port\\\" ".
-    "/link /out:$embed_exe.exe ws2_32.lib ";
+    "/DLISTENING_PORT=\\\"$port\\\" /link /out:$embed_exe.exe ws2_32.lib ";
   }
   print $cmd, "\n";
   system($cmd) == 0 or fail("Cannot compile embedded unit test");
@@ -415,42 +412,30 @@ sub do_embedded_test {
 
   # + in form data MUST be decoded to space
   o("POST /test_get_var HTTP/1.0\nContent-Length: 10\n\n".
-    "my_var=b+c", 'Value: \[b c\]', 'mg_get_var 7', 0);
+    "my_var=b+c", 'Value: \[b c\]', 'mg_get_var 9', 0);
 
   # Test that big POSTed vars are not truncated
   my $my_var = 'x' x 64000;
   o("POST /test_get_var HTTP/1.0\nContent-Length: 64007\n\n".
-    "my_var=$my_var", 'Value size: \[64000\]', 'mg_get_var 8', 0);
-
-  # Test PUT
-  o("PUT /put HTTP/1.0\nContent-Length: 3\n\nabc",
-    '\nabc$', 'put callback', 0);
+    "my_var=$my_var", 'Value size: \[64000\]', 'mg_get_var 10', 0);
 
   o("POST /test_get_request_info?xx=yy HTTP/1.0\nFoo: bar\n".
     "Content-Length: 3\n\na=b",
     'Method: \[POST\].URI: \[/test_get_request_info\].'.
     'HTTP version: \[1.0\].HTTP header \[Foo\]: \[bar\].'.
     'HTTP header \[Content-Length\]: \[3\].'.
-    'Query string: \[xx=yy\].POST data: \[a=b\].'.
+    'Query string: \[xx=yy\].'.
     'Remote IP: \[\d+\].Remote port: \[\d+\].'.
     'Remote user: \[\]'
     , 'request_info', 0);
   o("GET /not_exist HTTP/1.0\n\n", 'Error: \[404\]', '404 handler', 0);
   o("bad request\n\n", 'Error: \[400\]', '* error handler', 0);
-  o("GET /test_user_data HTTP/1.0\n\n",
-    'User data: \[1234\]', 'user data in callback', 0);
 #	o("GET /foo/secret HTTP/1.0\n\n",
 #		'401 Unauthorized', 'mg_protect_uri', 0);
 #	o("GET /foo/secret HTTP/1.0\nAuthorization: Digest username=bill\n\n",
 #		'401 Unauthorized', 'mg_protect_uri (bill)', 0);
 #	o("GET /foo/secret HTTP/1.0\nAuthorization: Digest username=joe\n\n",
 #		'200 OK', 'mg_protect_uri (joe)', 0);
-
-  # Test un-binding the URI
-  o("GET /foo/bar HTTP/1.0\n\n", 'HTTP/1.1 200 OK', '/foo bound', 0);
-  o("GET /test_remove_callback HTTP/1.0\n\n",
-    'Removing callbacks', 'Callback removal', 0);
-  o("GET /foo/bar HTTP/1.0\n\n", 'HTTP/1.1 404', '/foo unbound', 0);
 
   kill_spawned_child();
 }
