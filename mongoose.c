@@ -1176,7 +1176,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
     } else if (dup2(fd_stdout, 1) == -1) {
       cry(conn, "%s: dup2(%d, 1): %s", __func__, fd_stdout, strerror(ERRNO));
     } else {
-      //(void) dup2(fd_stdout, 2);
+      (void) dup2(fd_stdout, 2);
       (void) close(fd_stdin);
       (void) close(fd_stdout);
 
@@ -3827,6 +3827,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, const char **options) {
       free(ctx->config[i]);
     }
     ctx->config[i] = mg_strdup(value);
+    DEBUG_TRACE(("[%s] -> [%s]", name, value));
   }
 
   if (!verify_document_root(ctx)) {
