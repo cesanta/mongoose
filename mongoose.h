@@ -75,7 +75,7 @@ enum mg_event {
 //   Mongoose proceeds with request handling as if nothing happened.
 typedef void * (*mg_callback_t)(enum mg_event event,
                                 struct mg_connection *conn,
-                                struct mg_request_info *request_info);
+                                const struct mg_request_info *request_info);
   
 
 // Start web server.

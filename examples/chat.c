@@ -26,11 +26,8 @@
 #define MAX_SESSIONS 2
 #define SESSION_TTL 120
 
-static const char *login_url = "/login.html";
 static const char *authorize_url = "/authorize";
-static const char *web_root = "./html";
-static const char *http_ports = "8081,8082s";
-static const char *ssl_certificate = "ssl_cert.pem";
+static const char *login_url = "/login.html";
 static const char *ajax_reply_start =
   "HTTP/1.1 200 OK\r\n"
   "Cache: no-cache\r\n"
@@ -77,6 +74,12 @@ static struct session *get_session(const struct mg_connection *conn) {
   return i == MAX_SESSIONS ? NULL : &sessions[i];
 }
 
+static void get_qsvar(const struct mg_request_info *request_info,
+                      const char *name, char *dst, size_t dst_len) {
+  const char *qs = request_info->query_string;
+  mg_get_var(qs, strlen(qs == NULL ? "" : qs), name, dst, dst_len);
+}
+
 // Get a get of messages with IDs greater than last_id and transform them
 // into a JSON string. Return that string to the caller. The string is
 // dynamically allocated, caller must free it. If there are no messages,
@@ -117,10 +120,10 @@ static char *messages_to_json(long last_id) {
 // Return 1 in this case, or 0 if "callback" is not specified.
 // Wrap an output in Javascript function call.
 static int handle_jsonp(struct mg_connection *conn,
-    const struct mg_request_info *request_info) {
+                        const struct mg_request_info *request_info) {
   char cb[64];
 
-  mg_get_qsvar(request_info, "callback", cb, sizeof(cb));
+  get_qsvar(request_info, "callback", cb, sizeof(cb));
   if (cb[0] != '\0') {
     mg_printf(conn, "%s(", cb);
   }
@@ -131,14 +134,14 @@ static int handle_jsonp(struct mg_connection *conn,
 // A handler for the /ajax/get_messages endpoint.
 // Return a list of messages with ID greater than requested.
 static void ajax_get_messages(struct mg_connection *conn,
-    const struct mg_request_info *request_info) {
+                              const struct mg_request_info *request_info) {
   char last_id[32], *json;
   int is_jsonp;
 
   mg_printf(conn, "%s", ajax_reply_start);
   is_jsonp = handle_jsonp(conn, request_info);
 
-  mg_get_qsvar(request_info, "last_id", last_id, sizeof(last_id));
+  get_qsvar(request_info, "last_id", last_id, sizeof(last_id));
   if ((json = messages_to_json(strtoul(last_id, NULL, 10))) != NULL) {
     mg_printf(conn, "[%s]", json);
     free(json);
@@ -165,7 +168,7 @@ static void my_strlcpy(char *dst, const char *src, size_t len) {
 
 // A handler for the /ajax/send_message endpoint.
 static void ajax_send_message(struct mg_connection *conn,
-    const struct mg_request_info *request_info) {
+                              const struct mg_request_info *request_info) {
   struct message *message;
   struct session *session;
   char text[sizeof(message->text) - 1];
@@ -174,7 +177,7 @@ static void ajax_send_message(struct mg_connection *conn,
   mg_printf(conn, "%s", ajax_reply_start);
   is_jsonp = handle_jsonp(conn, request_info);
 
-  (void) mg_get_qsvar(request_info, "text", text, sizeof(text));
+  get_qsvar(request_info, "text", text, sizeof(text));
   if (text[0] != '\0') {
     // We have a message to store. Write-lock the ringbuffer,
     // grab the next message and copy data into it.
@@ -198,7 +201,7 @@ static void ajax_send_message(struct mg_connection *conn,
 // Redirect user to the login form. In the cookie, store the original URL
 // we came from, so that after the authorization we could redirect back.
 static void redirect_to_login(struct mg_connection *conn,
-    const struct mg_request_info *request_info) {
+                              const struct mg_request_info *request_info) {
   const char *host;
 
   host = mg_get_header(conn, "Host");
@@ -260,13 +263,13 @@ static void send_server_message(const char *fmt, ...) {
 // A handler for the /authorize endpoint.
 // Login page form sends user name and password to this endpoint.
 static void authorize(struct mg_connection *conn,
-    const struct mg_request_info *request_info) {
+                      const struct mg_request_info *request_info) {
   char user[MAX_USER_LEN], password[MAX_USER_LEN], original_url[200];
   struct session *session;
 
   // Fetch user name and password.
-  mg_get_qsvar(request_info, "user", user, sizeof(user));
-  mg_get_qsvar(request_info, "password", password, sizeof(password));
+  get_qsvar(request_info, "user", user, sizeof(user));
+  get_qsvar(request_info, "password", password, sizeof(password));
   mg_get_cookie(conn, "original_url", original_url, sizeof(original_url));
 
   if (check_password(user, password) && (session = new_session()) != NULL) {
@@ -284,7 +287,7 @@ static void authorize(struct mg_connection *conn,
     my_strlcpy(session->user, user, sizeof(session->user));
     snprintf(session->random, sizeof(session->random), "%d", rand());
     generate_session_id(session->session_id, session->random,
-        session->user, request_info);
+                        session->user, request_info);
     send_server_message("<%s> joined", session->user);
     mg_printf(conn, "HTTP/1.1 302 Found\r\n"
         "Set-Cookie: session=%s; max-age=3600; http-only\r\n"  // Session ID
@@ -302,7 +305,7 @@ static void authorize(struct mg_connection *conn,
 
 // Return 1 if request is authorized, 0 otherwise.
 static int is_authorized(const struct mg_connection *conn,
-    const struct mg_request_info *request_info) {
+                         const struct mg_request_info *request_info) {
   struct session *session;
   char valid_id[33];
   int authorized = 0;
@@ -315,6 +318,7 @@ static int is_authorized(const struct mg_connection *conn,
       authorized = 1;
     }
   }
+  printf("session: %p\n", session);
   pthread_rwlock_unlock(&rwlock);
 
   return authorized;
@@ -323,54 +327,57 @@ static int is_authorized(const struct mg_connection *conn,
 // Return 1 if authorization is required for requested URL, 0 otherwise.
 static int must_authorize(const struct mg_request_info *request_info) {
   return (strcmp(request_info->uri, login_url) != 0 &&
-      strcmp(request_info->uri, authorize_url) != 0);
+          strcmp(request_info->uri, authorize_url) != 0);
 }
 
-static enum mg_error_t process_request(struct mg_connection *conn,
-    const struct mg_request_info *request_info) {
-  enum mg_error_t processed = MG_SUCCESS;
+static void *event_handler(enum mg_event event,
+                           struct mg_connection *conn,
+                           const struct mg_request_info *request_info) {
+  void *processed = "yes";
 
-  if (must_authorize(request_info) &&
-      !is_authorized(conn, request_info)) {
-    // If user is not authorized, redirect to the login form.
-    redirect_to_login(conn, request_info);
-  } else if (strcmp(request_info->uri, authorize_url) == 0) {
-    authorize(conn, request_info);
-  } else if (strcmp(request_info->uri, "/ajax/get_messages") == 0) {
-    ajax_get_messages(conn, request_info);
-  } else if (strcmp(request_info->uri, "/ajax/send_message") == 0) {
-    ajax_send_message(conn, request_info);
+  if (event == MG_NEW_REQUEST) {
+    if (must_authorize(request_info) && !is_authorized(conn, request_info)) {
+      redirect_to_login(conn, request_info);
+    } else if (strcmp(request_info->uri, authorize_url) == 0) {
+      authorize(conn, request_info);
+    } else if (strcmp(request_info->uri, "/ajax/get_messages") == 0) {
+      ajax_get_messages(conn, request_info);
+    } else if (strcmp(request_info->uri, "/ajax/send_message") == 0) {
+      ajax_send_message(conn, request_info);
+    } else {
+      // No suitable handler found, mark as not processed. Mongoose will
+      // try to serve the request.
+      processed = NULL;
+    }
   } else {
-    // No suitable handler found, mark as not processed. Mongoose will
-    // try to serve the request.
-    processed = MG_ERROR;
+    processed = NULL;
   }
 
   return processed;
 }
 
+static const char *options[] = {
+  "document_root", "html",
+  "listening_ports", "8081,8082s",
+  "ssl_certificate", "ssl_cert.pem",
+  "num_threads", "5",
+  NULL
+};
+
 int main(void) {
   struct mg_context *ctx;
-  struct mg_config config;
 
   // Initialize random number generator. It will be used later on for
   // the session identifier creation.
   srand((unsigned) time(0));
 
   // Setup and start Mongoose
-  memset(&config, 0, sizeof(config));
-  config.document_root = web_root;
-  config.listening_ports = http_ports;
-  config.ssl_certificate = ssl_certificate;
-  config.index_files = "index.html";
-  config.new_request_handler = &process_request;
-  config.auth_domain = "";
-  config.num_threads = "5";
-  ctx = mg_start(&config);
+  ctx = mg_start(&event_handler, options);
   assert(ctx != NULL);
 
   // Wait until enter is pressed, then exit
-  printf("Chat server started on ports %s, press enter to quit.\n", http_ports);
+  printf("Chat server started on ports %s, press enter to quit.\n",
+         mg_get_option(ctx, "listening_ports"));
   getchar();
   mg_stop(ctx);
   printf("%s\n", "Chat server stopped.");
