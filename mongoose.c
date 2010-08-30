@@ -3196,8 +3196,7 @@ static int set_ports_option(struct mg_context *ctx) {
       success = 0;
     } else if (is_ssl && ctx->ssl_ctx == NULL) {
       (void) closesocket(sock);
-      cry(fc(ctx), "cannot add SSL socket, please specify "
-          "-ssl_cert option BEFORE -ports option");
+      cry(fc(ctx), "Cannot add SSL socket, is -ssl_cert option set?");
       success = 0;
     } else {
       listener->sock = sock;
