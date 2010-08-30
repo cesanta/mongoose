@@ -81,8 +81,8 @@ mingw:
 ##########################################################################
 
 man:
-	cat mongoose.1 | tbl | groff -man -Tascii | col -b > mongoose.1.txt
-	cat mongoose.1 | tbl | groff -man -Tascii | less
+	groff -man -T ascii mongoose.1 | col -b > mongoose.txt
+	groff -man -T ascii mongoose.1 | less
 
 # "TEST=unit make test" - perform unit test only
 # "TEST=embedded" - test embedded API by building and testing test/embed.c
@@ -92,7 +92,7 @@ do_test:
 	perl test/test.pl $(TEST)
 
 release: clean
-	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`.tgz ; cd .. && tar --exclude \*.svn --exclude \*.swp --exclude \*.nfs\* --exclude win32 -czf x mongoose && mv x mongoose/$$F
+	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`.tgz ; cd .. && tar --exclude \*.hg --exclude \*.svn --exclude \*.swp --exclude \*.nfs\* --exclude win32 -czf x mongoose && mv x mongoose/$$F
 
 clean:
-	rm -rf *.o *.core $(PROG) *.obj $(PROG).1.txt *.dSYM *.tgz
+	rm -rf *.o *.core $(PROG) *.obj $(PROG).txt *.dSYM *.tgz
