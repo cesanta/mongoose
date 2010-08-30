@@ -1172,7 +1172,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
     if (chdir(dir) != 0) {
       cry(conn, "%s: chdir(%s): %s", __func__, dir, strerror(ERRNO));
     } else if (dup2(fd_stdin, 0) == -1) {
-      cry(conn, "%s: dup2(%d, 1): %s", __func__, fd_stdin, strerror(ERRNO));
+      cry(conn, "%s: dup2(%d, 0): %s", __func__, fd_stdin, strerror(ERRNO));
     } else if (dup2(fd_stdout, 1) == -1) {
       cry(conn, "%s: dup2(%d, 1): %s", __func__, fd_stdout, strerror(ERRNO));
     } else {
