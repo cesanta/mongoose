@@ -122,7 +122,7 @@ static void verify_document_root(const char *root) {
     path = buf;
   }
 
-  if (stat(path, &st) != 0) {
+  if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
     fprintf(stderr, "Invalid root directory: \"%s\"\n", root);
     exit(EXIT_FAILURE);
   }
@@ -139,7 +139,7 @@ static char *sdup(const char *str) {
 static void set_option(char **options, const char *name, const char *value) {
   int i;
 
-  if (!strcmp(name, "document_root")) {
+  if (!strcmp(name, "document_root") || !(strcmp(name, "r"))) {
     verify_document_root(value);
   }
 
@@ -159,46 +159,30 @@ static void set_option(char **options, const char *name, const char *value) {
 }
 
 static void process_command_line_arguments(char *argv[], char **options) {
-  const char	*config_file = CONFIG_FILE;
-  char line[512], opt[512], *vals[100], val[512], path[FILENAME_MAX], *p;
-  FILE *fp;
+  const char	*config_file = NULL;
+  char line[512], opt[512], val[512], path[PATH_MAX], *p;
+  FILE *fp = NULL;
   size_t i, line_no = 0;
 
-  /* First find out, which config file to open */
-  for (i = 1; argv[i] != NULL && argv[i][0] == '-'; i += 2)
-    if (argv[i + 1] == NULL)
-      show_usage_and_exit();
-
-  if (argv[i] != NULL && argv[i + 1] != NULL) {
-    /* More than one non-option arguments are given */
-    show_usage_and_exit();
-  } else if (argv[i] != NULL) {
-    /* Just one non-option argument is given, this is config file */
-    config_file = argv[i];
-  } else {
-    /* No config file specified. Look for one where binary lives */
+  /* Should we use a config file ? */
+  if (argv[1] != NULL && argv[2] == NULL) {
+    config_file = argv[1];
+  } else if (argv[1] == NULL) {
+    /* No command line flags specified. Look where binary lives */
     if ((p = strrchr(argv[0], DIRSEP)) != 0) {
       snprintf(path, sizeof(path), "%.*s%s",
-               (int) (p - argv[0]) + 1, argv[0], config_file);
-      config_file = path;
+               (int) (p - argv[0]) + 1, argv[0], CONFIG_FILE);
     }
   }
-
-  fp = fopen(config_file, "r");
-
   /* If config file was set in command line and open failed, exit */
-  if (fp == NULL && argv[i] != NULL) {
+  if (config_file != NULL && (fp = fopen(config_file, "r")) == NULL) {
     fprintf(stderr, "cannot open config file %s: %s\n",
             config_file, strerror(errno));
     exit(EXIT_FAILURE);
   }
 
-  /* Reset temporary value holders */
-  (void) memset(vals, 0, sizeof(vals));
-
   if (fp != NULL) {
-    printf("Loading config file %s, ignoring command line arguments\n",
-           config_file);
+    fprintf(stderr, "Loading config file %s\n", config_file);
 
     /* Loop over the lines in config file */
     while (fgets(line, sizeof(line), fp) != NULL) {
@@ -219,8 +203,12 @@ static void process_command_line_arguments(char *argv[], char **options) {
 
     (void) fclose(fp);
   } else {
-    for (i = 1; argv[i] != NULL && argv[i][0] == '-'; i += 2)
+    for (i = 1; argv[i] != NULL; i += 2) {
+      if (argv[i][0] != '-' || argv[i + 1] == NULL || argv[i + 1][0] == '-') {
+        show_usage_and_exit();
+      }
       set_option(options, &argv[i][1], argv[i + 1]);
+    }
   }
 }
 
