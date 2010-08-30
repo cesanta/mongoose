@@ -3619,7 +3619,8 @@ static void worker_thread(struct mg_context *ctx) {
                SSL_set_fd(conn->ssl, conn->client.sock) != 1) {
       cry(conn, "%s: SSL_set_fd: %s", __func__, ssl_error());
     } else if (conn->client.is_ssl && SSL_accept(conn->ssl) != 1) {
-      cry(conn, "%s: SSL handshake error: %s", __func__, ssl_error());
+      // This is very noisy, disabling
+      // cry(conn, "%s: SSL handshake error: %s", __func__, ssl_error());
     } else {
       process_new_connection(conn);
     }
