@@ -7,8 +7,9 @@ EXPORTS
 	mg_printf
 	mg_get_header
 	mg_get_var
-	mg_get_qsvar
 	mg_get_cookie
+	mg_get_option
+	mg_get_valid_option_names
 	mg_version
 	mg_modify_passwords_file
 	mg_md5

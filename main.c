@@ -40,6 +40,8 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <winsvc.h>
+#define PATH_MAX MAX_PATH
+#define S_ISDIR(x) ((x) & _S_IFDIR)
 #define DIRSEP			'\\'
 #define	snprintf		_snprintf
 #if !defined(__LCC__)

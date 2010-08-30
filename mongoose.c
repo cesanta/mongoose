@@ -1066,7 +1066,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
       &si.hStdOutput, 0, TRUE, DUPLICATE_SAME_ACCESS);
 
   // If CGI file is a script, try to read the interpreter line
-  interp = conn->ctx->config->cgi_interpreter;
+  interp = conn->ctx->config[CGI_INTERPRETER];
   if (interp == NULL) {
     line[2] = '\0';
     (void) mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%c%s",
