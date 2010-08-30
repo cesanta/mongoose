@@ -3459,24 +3459,6 @@ static int set_acl_option(struct mg_context *ctx) {
   return check_acl(ctx, &fake);
 }
 
-static int verify_document_root(struct mg_context *ctx) {
-  char path[PATH_MAX], *p;
-  struct mgstat buf;
-  const char *root = ctx->config[DOCUMENT_ROOT];
-
-  if ((p = strchr(root, ',')) == NULL) {
-    mg_strlcpy(path, root, sizeof(path));
-  } else {
-    mg_strlcpy(path, root, p - root + 1);
-  }
-
-  if (mg_stat(path, &buf) != 0) {
-    cry(fc(ctx), "Invalid root directory: \"%s\"", root);
-    return 0;
-  }
-  return 1;
-}
-
 static void reset_per_request_attributes(struct mg_connection *conn) {
   if (conn->request_info.remote_user != NULL) {
     free((void *) conn->request_info.remote_user);
@@ -3828,11 +3810,6 @@ struct mg_context *mg_start(mg_callback_t user_callback, const char **options) {
     }
     ctx->config[i] = mg_strdup(value);
     DEBUG_TRACE(("[%s] -> [%s]", name, value));
-  }
-
-  if (!verify_document_root(ctx)) {
-    free_context(ctx);
-    return NULL;
   }
 
   // NOTE(lsm): order is important here. SSL certificates must

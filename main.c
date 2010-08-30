@@ -26,6 +26,7 @@
 #define _CRT_SECURE_NO_WARNINGS	/* Disable deprecation warning in VS2005 */
 #endif /* _WIN32 */
 
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -117,6 +118,23 @@ static void show_usage_and_exit(void) {
   exit(EXIT_FAILURE);
 }
 
+static void verify_document_root(const char *root) {
+  const char *p, *path;
+  char buf[PATH_MAX];
+  struct stat st;
+
+  path = root;
+  if ((p = strchr(root, ',')) != NULL && (size_t) (p - root) < sizeof(buf)) {
+    strncpy(buf, root, p - root);
+    path = buf;
+  }
+
+  if (stat(path, &st) != 0) {
+    fprintf(stderr, "Invalid root directory: \"%s\"\n", root);
+    exit(EXIT_FAILURE);
+  }
+}
+
 static char *sdup(const char *str) {
   char *p;
   if ((p = malloc(strlen(str) + 1)) != NULL) {
@@ -127,6 +145,10 @@ static char *sdup(const char *str) {
 
 static void set_option(char **options, const char *name, const char *value) {
   int i;
+
+  if (!strcmp(name, "document_root")) {
+    verify_document_root(value);
+  }
 
   for (i = 0; i < MAX_OPTIONS - 3; i++) {
     if (options[i] == NULL) {
