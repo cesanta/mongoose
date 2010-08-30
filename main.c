@@ -91,29 +91,22 @@ static int mg_edit_passwords(const char *fname, const char *domain,
 
 static void show_usage_and_exit(void) {
   const char **names;
-  int i, len;
+  int i;
 
   fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka\n", mg_version());
   fprintf(stderr, "Usage:\n");
   fprintf(stderr, "  mongoose -A <htpasswd_file> <realm> <user> <passwd>\n");
   fprintf(stderr, "  mongoose <config_file>\n");
   fprintf(stderr, "  mongoose [-option value ...]\n");
-  fprintf(stderr, "OPTIONS:\n  ");
+  fprintf(stderr, "OPTIONS:\n");
 
   names = mg_get_valid_option_names();
-  len = 2;
-  for (i = 0; names[i] != NULL; i++) {
-    len += strlen(names[i]) + 1;
-    if (len >= 80) {
-      len = strlen(names[i]) + 3;
-      fprintf(stderr, "%s", "\n  ");
-    }
-    fprintf(stderr, "%s%c", names[i], names[i + 1] == NULL ? '\n' : ',');
+  for (i = 0; names[i] != NULL; i += 2) {
+    fprintf(stderr, "  -%s %s\n", names[i], names[i + 1]);
   }
   fprintf(stderr, "See  http://code.google.com/p/mongoose/wiki/MongooseManual"
           " for more details.\n");
-  fprintf(stderr, "Example:\n  mongoose -listening_ports 80,443s "
-          "-enable_directory_listing no\n");
+  fprintf(stderr, "Example:\n  mongoose -s cert.pem -p 80,443s -d no\n");
 
   exit(EXIT_FAILURE);
 }

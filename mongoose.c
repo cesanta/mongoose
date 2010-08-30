@@ -352,17 +352,19 @@ enum {
   CGI_INTERPRETER, CGI_ENVIRONMENT, SSI_EXTENSIONS, AUTHENTICATION_DOMAIN,
   URI_PROTECTION, GLOBAL_PASSWORDS_FILE, PUT_DELETE_PASSWORDS_FILE,
   ACCESS_LOG_FILE, ERROR_LOG_FILE, ACCESS_CONTROL_LIST, RUN_AS_USER,
-  EXTRA_MIME_TYPES, ENABLE_DIRECTORY_LISTING, ENABLE_KEEP_ALIVE, NUM_THREADS,
+  EXTRA_MIME_TYPES, ENABLE_DIRECTORY_LISTING, NUM_THREADS,
   NUM_OPTIONS
 };
 
+// There are two entries for each option: a short and a long version.
 static const char *option_names[] = {
-  "document_root", "listening_ports", "index_files", "ssl_certificate",
-  "cgi_extensions", "cgi_interpreter", "cgi_environment", "ssi_extensions",
-  "authentication_domain", "protect_uri", "global_passwords_file",
-  "put_delete_passwords_file", "access_log_file", "error_log_file",
-  "access_control_list", "run_as_user", "extra_mime_types",
-  "enable_directory_listing", "enable_keep_alive", "num_threads",
+  "r", "document_root", "p", "listening_ports", "i", "index_files",
+  "s", "ssl_certificate", "C", "cgi_extensions", "I", "cgi_interpreter",
+  "E", "cgi_environment", "S", "ssi_extensions", "R", "authentication_domain",
+  "P", "protect_uri", "g", "global_passwords_file",
+  "G", "put_delete_passwords_file", "a", "access_log_file",
+  "e", "error_log_file", "l", "access_control_list", "u", "run_as_user",
+  "m", "extra_mime_types", "d", "enable_directory_listing", "t", "num_threads",
   NULL
 };
 
@@ -410,9 +412,10 @@ static void *call_user(struct mg_connection *conn, enum mg_event event) {
 
 static int get_option_index(const char *name) {
   int i;
-  for (i = 0; option_names[i] != NULL; i++) {
-    if (strcmp(option_names[i], name) == 0) {
-      return i;
+  for (i = 0; option_names[i] != NULL; i += 2) {
+    if (strcmp(option_names[i], name) == 0 ||
+        strcmp(option_names[i + 1], name) == 0) {
+      return i / 2;
     }
   }
   return -1;
@@ -3788,7 +3791,6 @@ struct mg_context *mg_start(mg_callback_t user_callback, const char **options) {
   ctx->config[DOCUMENT_ROOT] = mg_strdup(".");
   ctx->config[LISTENING_PORTS] = mg_strdup("8080");
   ctx->config[ENABLE_DIRECTORY_LISTING] = mg_strdup("yes");
-  ctx->config[ENABLE_KEEP_ALIVE] = mg_strdup("no");
   ctx->config[AUTHENTICATION_DOMAIN] = mg_strdup("mydomain.com");
   ctx->config[INDEX_FILES] = mg_strdup("index.html,index.htm,index.cgi");
   ctx->config[CGI_EXTENSIONS] = mg_strdup(".cgi,.pl,.php");
