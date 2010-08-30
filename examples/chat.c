@@ -202,16 +202,10 @@ static void ajax_send_message(struct mg_connection *conn,
 // we came from, so that after the authorization we could redirect back.
 static void redirect_to_login(struct mg_connection *conn,
                               const struct mg_request_info *request_info) {
-  const char *host;
-
-  host = mg_get_header(conn, "Host");
   mg_printf(conn, "HTTP/1.1 302 Found\r\n"
-      "Set-Cookie: original_url=%s://%s%s\r\n"
+      "Set-Cookie: original_url=%s\r\n"
       "Location: %s\r\n\r\n",
-      request_info->is_ssl ? "https" : "http",
-      host ? host : "127.0.0.1",
-      request_info->uri,
-      login_url);
+      request_info->uri, login_url);
 }
 
 // Return 1 if username/password is allowed, 0 otherwise.
@@ -238,12 +232,11 @@ static struct session *new_session(void) {
 }
 
 // Generate session ID. buf must be 33 bytes in size.
+// Note that it is easy to steal session cookies by sniffing traffic.
+// This is why all communication must be SSL-ed.
 static void generate_session_id(char *buf, const char *random,
-    const char *user, const struct mg_request_info *request_info) {
-  char remote_ip[20], remote_port[20];
-  snprintf(remote_ip, sizeof(remote_ip), "%ld", request_info->remote_ip);
-  snprintf(remote_port, sizeof(remote_port), "%d", request_info->remote_port);
-  mg_md5(buf, random, user, remote_port, remote_ip, NULL);
+                                const char *user) {
+  mg_md5(buf, random, user, NULL);
 }
 
 static void send_server_message(const char *fmt, ...) {
@@ -264,13 +257,12 @@ static void send_server_message(const char *fmt, ...) {
 // Login page form sends user name and password to this endpoint.
 static void authorize(struct mg_connection *conn,
                       const struct mg_request_info *request_info) {
-  char user[MAX_USER_LEN], password[MAX_USER_LEN], original_url[200];
+  char user[MAX_USER_LEN], password[MAX_USER_LEN];
   struct session *session;
 
   // Fetch user name and password.
   get_qsvar(request_info, "user", user, sizeof(user));
   get_qsvar(request_info, "password", password, sizeof(password));
-  mg_get_cookie(conn, "original_url", original_url, sizeof(original_url));
 
   if (check_password(user, password) && (session = new_session()) != NULL) {
     // Authentication success:
@@ -286,17 +278,14 @@ static void authorize(struct mg_connection *conn,
     // Secure application must use HTTPS all the time.
     my_strlcpy(session->user, user, sizeof(session->user));
     snprintf(session->random, sizeof(session->random), "%d", rand());
-    generate_session_id(session->session_id, session->random,
-                        session->user, request_info);
+    generate_session_id(session->session_id, session->random, session->user);
     send_server_message("<%s> joined", session->user);
     mg_printf(conn, "HTTP/1.1 302 Found\r\n"
         "Set-Cookie: session=%s; max-age=3600; http-only\r\n"  // Session ID
         "Set-Cookie: user=%s\r\n"  // Set user, needed by Javascript code
         "Set-Cookie: original_url=/; max-age=0\r\n"  // Delete original_url
-        "Location: %s\r\n\r\n",
-        session->session_id,
-        session->user,
-        original_url[0] == '\0' ? "/" : original_url);
+        "Location: /\r\n\r\n",
+        session->session_id, session->user);
   } else {
     // Authentication failure, redirect to login.
     redirect_to_login(conn, request_info);
@@ -310,24 +299,35 @@ static int is_authorized(const struct mg_connection *conn,
   char valid_id[33];
   int authorized = 0;
 
+  // Always authorize accesses to login page and to authorize URI
+  if (!strcmp(request_info->uri, login_url) ||
+      !strcmp(request_info->uri, authorize_url)) {
+    return 1;
+  }
+
   pthread_rwlock_rdlock(&rwlock);
   if ((session = get_session(conn)) != NULL) {
-    generate_session_id(valid_id, session->random, session->user, request_info);
+    generate_session_id(valid_id, session->random, session->user);
     if (strcmp(valid_id, session->session_id) == 0) {
       session->expire = time(0) + SESSION_TTL;
       authorized = 1;
     }
   }
-  printf("session: %p\n", session);
   pthread_rwlock_unlock(&rwlock);
 
   return authorized;
 }
 
-// Return 1 if authorization is required for requested URL, 0 otherwise.
-static int must_authorize(const struct mg_request_info *request_info) {
-  return (strcmp(request_info->uri, login_url) != 0 &&
-          strcmp(request_info->uri, authorize_url) != 0);
+static void redirect_to_ssl(struct mg_connection *conn,
+                            const struct mg_request_info *request_info) {
+  const char *p, *host = mg_get_header(conn, "Host");
+  if (host != NULL && (p = strchr(host, ':')) != NULL) {
+    mg_printf(conn, "HTTP/1.1 302 Found\r\n"
+              "Location: https://%.*s:8082/%s:8082\r\n\r\n",
+              p - host, host, request_info->uri);
+  } else {
+    mg_printf(conn, "%s", "HTTP/1.1 500 Error\r\n\r\nHost: header is not set");
+  }
 }
 
 static void *event_handler(enum mg_event event,
@@ -336,7 +336,9 @@ static void *event_handler(enum mg_event event,
   void *processed = "yes";
 
   if (event == MG_NEW_REQUEST) {
-    if (must_authorize(request_info) && !is_authorized(conn, request_info)) {
+    if (!request_info->is_ssl) {
+      redirect_to_ssl(conn, request_info);
+    } else if (!is_authorized(conn, request_info)) {
       redirect_to_login(conn, request_info);
     } else if (strcmp(request_info->uri, authorize_url) == 0) {
       authorize(conn, request_info);
