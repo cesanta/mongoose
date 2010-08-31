@@ -348,35 +348,35 @@ struct socket {
 };
 
 enum {
-  DOCUMENT_ROOT, LISTENING_PORTS, INDEX_FILES, SSL_CERTIFICATE, CGI_EXTENSIONS,
-  CGI_INTERPRETER, CGI_ENVIRONMENT, SSI_EXTENSIONS, AUTHENTICATION_DOMAIN,
-  URI_PROTECTION, GLOBAL_PASSWORDS_FILE, PUT_DELETE_PASSWORDS_FILE,
-  ACCESS_LOG_FILE, ERROR_LOG_FILE, ACCESS_CONTROL_LIST, RUN_AS_USER,
-  EXTRA_MIME_TYPES, ENABLE_DIRECTORY_LISTING, ENABLE_KEEP_ALIVE, NUM_THREADS,
+  CGI_EXTENSIONS, CGI_ENVIRONMENT, PUT_DELETE_PASSWORDS_FILE, CGI_INTERPRETER,
+  PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS, ACCESS_LOG_FILE,
+  ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE, GLOBAL_PASSWORDS_FILE, INDEX_FILES,
+  ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST, EXTRA_MIME_TYPES, LISTENING_PORTS,
+  DOCUMENT_ROOT, SSL_CERTIFICATE, NUM_THREADS, RUN_AS_USER,
   NUM_OPTIONS
 };
 
 static const char *config_options[] = {
-  "r", "document_root",  ".",
-  "p", "listening_ports", "8080",
-  "i", "index_files", "index.html,index.htm,index.cgi",
-  "s", "ssl_certificate", NULL,
   "C", "cgi_extensions", ".cgi,.pl,.php",
-  "I", "cgi_interpreter", NULL,
   "E", "cgi_environment", NULL,
-  "S", "ssi_extensions", ".shtml,.shtm",
-  "R", "authentication_domain", "mydomain.com",
-  "P", "protect_uri", NULL,
-  "g", "global_passwords_file", NULL,
   "G", "put_delete_passwords_file", NULL,
+  "I", "cgi_interpreter", NULL,
+  "P", "protect_uri", NULL,
+  "R", "authentication_domain", "mydomain.com",
+  "S", "ssi_extensions", ".shtml,.shtm",
   "a", "access_log_file", NULL,
-  "e", "error_log_file", NULL,
-  "l", "access_control_list", NULL,
-  "u", "run_as_user", NULL,
-  "m", "extra_mime_types", NULL,
   "d", "enable_directory_listing", "yes",
+  "e", "error_log_file", NULL,
+  "g", "global_passwords_file", NULL,
+  "i", "index_files", "index.html,index.htm,index.cgi",
   "k", "enable_keep_alive", "no",
+  "l", "access_control_list", NULL,
+  "m", "extra_mime_types", NULL,
+  "p", "listening_ports", "8080",
+  "r", "document_root",  ".",
+  "s", "ssl_certificate", NULL,
   "t", "num_threads", "10",
+  "u", "run_as_user", NULL,
   NULL
 };
 
@@ -2106,7 +2106,7 @@ static int check_authorization(struct mg_connection *conn, const char *path) {
   fp = NULL;
   authorized = 1;
 
-  list = conn->ctx->config[URI_PROTECTION];
+  list = conn->ctx->config[PROTECT_URI];
   while ((list = next_option(list, &uri_vec, &filename_vec)) != NULL) {
     if (!memcmp(conn->request_info.uri, uri_vec.ptr, uri_vec.len)) {
       (void) mg_snprintf(conn, fname, sizeof(fname), "%.*s",
