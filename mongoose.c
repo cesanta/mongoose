@@ -3853,9 +3853,11 @@ struct mg_context *mg_start(mg_callback_t user_callback, const char **options) {
 
   // NOTE(lsm): order is important here. SSL certificates must
   // be initialized before listening ports. UID must be set last.
-  if (!set_ssl_option(ctx) ||
+  if (!set_gpass_option(ctx) ||
+#if !defined(NO_SSL)
+      !set_ssl_option(ctx) ||
+#endif
       !set_ports_option(ctx) ||
-      !set_gpass_option(ctx) ||
 #if !defined(_WIN32)
       !set_uid_option(ctx) ||
 #endif

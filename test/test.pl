@@ -385,9 +385,9 @@ sub do_PUT_test {
 
 sub do_embedded_test {
   my $cmd = "cc -W -Wall -o $embed_exe $root/embed.c mongoose.c -I. ".
-  "-pthread -DLISTENING_PORT=\\\"$port\\\"";
+  "-pthread -DNO_SSL -DLISTENING_PORT=\\\"$port\\\"";
   if (on_windows()) {
-    $cmd = "cl $root/embed.c mongoose.c /I. /nologo ".
+    $cmd = "cl $root/embed.c mongoose.c /I. /nologo /DNO_SSL ".
     "/DLISTENING_PORT=\\\"$port\\\" /link /out:$embed_exe.exe ws2_32.lib ";
   }
   print $cmd, "\n";
