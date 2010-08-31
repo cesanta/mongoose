@@ -267,6 +267,8 @@ struct ssl_func {
 #define ERR_get_error() (* (unsigned long (*)(void)) ssl_sw[15].ptr)()
 #define ERR_error_string(x, y) (* (char * (*)(unsigned long, char *)) ssl_sw[16].ptr)((x), (y))
 #define SSL_load_error_strings() (* (void (*)(void)) ssl_sw[17].ptr)()
+#define SSL_CTX_use_certificate_chain_file(x,y,z) \
+  (* (int (*)(SSL_CTX *, const char *, int)) ssl_sw[18].ptr)((x), (y), (z))
 
 #define CRYPTO_num_locks() (* (int (*)(void)) crypto_sw[0].ptr)()
 #define CRYPTO_set_locking_callback(x)     \
@@ -298,6 +300,7 @@ static struct ssl_func ssl_sw[] = {
   {"ERR_get_error",  NULL},
   {"ERR_error_string", NULL},
   {"SSL_load_error_strings", NULL},
+  {"SSL_CTX_use_certificate_chain_file", NULL},
   {NULL,    NULL}
 };
 
@@ -350,7 +353,8 @@ struct socket {
 enum {
   CGI_EXTENSIONS, CGI_ENVIRONMENT, PUT_DELETE_PASSWORDS_FILE, CGI_INTERPRETER,
   PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS, ACCESS_LOG_FILE,
-  ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE, GLOBAL_PASSWORDS_FILE, INDEX_FILES,
+  SSL_CHAIN_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
+  GLOBAL_PASSWORDS_FILE, INDEX_FILES,
   ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST, EXTRA_MIME_TYPES, LISTENING_PORTS,
   DOCUMENT_ROOT, SSL_CERTIFICATE, NUM_THREADS, RUN_AS_USER,
   NUM_OPTIONS
@@ -365,6 +369,7 @@ static const char *config_options[] = {
   "R", "authentication_domain", "mydomain.com",
   "S", "ssi_extensions", ".shtml,.shtm",
   "a", "access_log_file", NULL,
+  "c", "ssl_chain_file", NULL,
   "d", "enable_directory_listing", "yes",
   "e", "error_log_file", NULL,
   "g", "global_passwords_file", NULL,
@@ -3431,6 +3436,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   SSL_CTX *CTX;
   int i, size;
   const char *pem = ctx->config[SSL_CERTIFICATE];
+  const char *chain = ctx->config[SSL_CHAIN_FILE];
 
   if (pem == NULL) {
     return 1;
@@ -3458,6 +3464,12 @@ static int set_ssl_option(struct mg_context *ctx) {
   } else if (CTX != NULL && SSL_CTX_use_PrivateKey_file(CTX, pem,
         SSL_FILETYPE_PEM) == 0) {
     cry(fc(ctx), "%s: cannot open %s: %s", NULL, pem, ssl_error());
+    return 0;
+  }
+
+  if (CTX != NULL && chain != NULL &&
+      SSL_CTX_use_certificate_chain_file(CTX, chain, SSL_FILETYPE_PEM) == 0) {
+    cry(fc(ctx), "%s: cannot open %s: %s", NULL, chain, ssl_error());
     return 0;
   }
 
