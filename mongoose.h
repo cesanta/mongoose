@@ -118,8 +118,9 @@ void mg_stop(struct mg_context *);
 const char *mg_get_option(const struct mg_context *ctx, const char *name);
 
 
-// Return array of valid configuration options. For each option, a short
-// version and a long version is returned. Array is NULL terminated.
+// Return array of strings that represent valid configuration options.
+// For each option, a short name, long name, and default value is returned.
+// Array is NULL terminated.
 const char **mg_get_valid_option_names(void);
 
 

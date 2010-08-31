@@ -352,19 +352,31 @@ enum {
   CGI_INTERPRETER, CGI_ENVIRONMENT, SSI_EXTENSIONS, AUTHENTICATION_DOMAIN,
   URI_PROTECTION, GLOBAL_PASSWORDS_FILE, PUT_DELETE_PASSWORDS_FILE,
   ACCESS_LOG_FILE, ERROR_LOG_FILE, ACCESS_CONTROL_LIST, RUN_AS_USER,
-  EXTRA_MIME_TYPES, ENABLE_DIRECTORY_LISTING, NUM_THREADS,
+  EXTRA_MIME_TYPES, ENABLE_DIRECTORY_LISTING, ENABLE_KEEP_ALIVE, NUM_THREADS,
   NUM_OPTIONS
 };
 
-// There are two entries for each option: a short and a long version.
-static const char *option_names[] = {
-  "r", "document_root", "p", "listening_ports", "i", "index_files",
-  "s", "ssl_certificate", "C", "cgi_extensions", "I", "cgi_interpreter",
-  "E", "cgi_environment", "S", "ssi_extensions", "R", "authentication_domain",
-  "P", "protect_uri", "g", "global_passwords_file",
-  "G", "put_delete_passwords_file", "a", "access_log_file",
-  "e", "error_log_file", "l", "access_control_list", "u", "run_as_user",
-  "m", "extra_mime_types", "d", "enable_directory_listing", "t", "num_threads",
+static const char *config_options[] = {
+  "r", "document_root",  ".",
+  "p", "listening_ports", "8080",
+  "i", "index_files", "index.html,index.htm,index.cgi",
+  "s", "ssl_certificate", NULL,
+  "C", "cgi_extensions", ".cgi,.pl,.php",
+  "I", "cgi_interpreter", NULL,
+  "E", "cgi_environment", NULL,
+  "S", "ssi_extensions", ".shtml,.shtm",
+  "R", "authentication_domain", "mydomain.com",
+  "P", "protect_uri", NULL,
+  "g", "global_passwords_file", NULL,
+  "G", "put_delete_passwords_file", NULL,
+  "a", "access_log_file", NULL,
+  "e", "error_log_file", NULL,
+  "l", "access_control_list", NULL,
+  "u", "run_as_user", NULL,
+  "m", "extra_mime_types", NULL,
+  "d", "enable_directory_listing", "yes",
+  "k", "enable_keep_alive", "no",
+  "t", "num_threads", "10",
   NULL
 };
 
@@ -402,7 +414,7 @@ struct mg_connection {
 };
 
 const char **mg_get_valid_option_names(void) {
-  return option_names;
+  return config_options;
 }
 
 static void *call_user(struct mg_connection *conn, enum mg_event event) {
@@ -412,10 +424,11 @@ static void *call_user(struct mg_connection *conn, enum mg_event event) {
 
 static int get_option_index(const char *name) {
   int i;
-  for (i = 0; option_names[i] != NULL; i += 2) {
-    if (strcmp(option_names[i], name) == 0 ||
-        strcmp(option_names[i + 1], name) == 0) {
-      return i / 2;
+#define ENTRIES_PER_OPTION 3
+  for (i = 0; config_options[i] != NULL; i += ENTRIES_PER_OPTION) {
+    if (strcmp(config_options[i], name) == 0 ||
+        strcmp(config_options[i + 1], name) == 0) {
+      return i / ENTRIES_PER_OPTION;
     }
   }
   return -1;
@@ -448,7 +461,7 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
   // same way string option can.
   conn->request_info.log_message = buf;
   if (call_user(conn, MG_EVENT_LOG) == NULL) {
-    fp = conn->ctx->config[ERROR_LOG_FILE] == NULL ? stderr :
+    fp = conn->ctx->config[ERROR_LOG_FILE] == NULL ? NULL :
       mg_fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
 
     if (fp != NULL) {
@@ -673,6 +686,17 @@ static int match_extension(const char *path, const char *ext_list) {
 }
 #endif // !NO_CGI
 
+// HTTP 1.1 assumes keep alive if "Connection:" header is not set
+static int should_keep_alive(const struct mg_connection *conn) {
+  const char *header = mg_get_header(conn, "Connection");
+  return (header == NULL && !strcmp(conn->request_info.http_version, "1.1")) ||
+      (header != NULL && !strcmp(header, "keep-alive"));
+}
+
+static const char *suggest_connection_header(const struct mg_connection *conn) {
+  return should_keep_alive(conn) ? "keep-alive" : "close";
+}
+
 static void send_http_error(struct mg_connection *conn, int status,
                             const char *reason, const char *fmt, ...) {
   char buf[BUFSIZ];
@@ -700,7 +724,8 @@ static void send_http_error(struct mg_connection *conn, int status,
     mg_printf(conn, "HTTP/1.1 %d %s\r\n"
               "Content-Type: text/plain\r\n"
               "Content-Length: %d\r\n"
-              "Connection: close\r\n\r\n", status, reason, len);
+              "Connection: %s\r\n\r\n", status, reason, len,
+              suggest_connection_header(conn));
     conn->num_bytes_sent += mg_printf(conn, "%s", buf);
   }
 }
@@ -1266,8 +1291,8 @@ static int pull(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int len) {
 }
 
 int mg_read(struct mg_connection *conn, void *buf, size_t len) {
-  int n, buffered_data_len, nread;
-  const char *buffered_data;
+  int n, buffered_len, nread;
+  const char *buffered;
 
   assert(conn->content_len >= conn->consumed_content);
   DEBUG_TRACE(("%p %zu %lld %lld", buf, len,
@@ -1283,21 +1308,21 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
     }
 
     // How many bytes of data we have buffered in the request buffer?
-    buffered_data = conn->buf + conn->request_len + conn->consumed_content;
-    buffered_data_len = conn->data_len - conn->request_len;
-    assert(buffered_data_len >= 0);
+    buffered = conn->buf + conn->request_len;
+    buffered_len = conn->data_len - conn->request_len;
+    assert(buffered_len >= 0);
 
     // Return buffered data back if we haven't done that yet.
-    if (conn->consumed_content < (int64_t) buffered_data_len) {
-      buffered_data_len -= conn->consumed_content;
-      if (len < (size_t) buffered_data_len) {
-        buffered_data_len = len;
+    if (conn->consumed_content < (int64_t) buffered_len) {
+      buffered_len -= conn->consumed_content;
+      if (len < (size_t) buffered_len) {
+        buffered_len = len;
       }
-      memcpy(buf, buffered_data, buffered_data_len);
-      len -= buffered_data_len;
-      buf = (char *) buf + buffered_data_len;
-      conn->consumed_content += buffered_data_len;
-      nread = buffered_data_len;
+      memcpy(buf, buffered, buffered_len);
+      len -= buffered_len;
+      buf = (char *) buf + buffered_len;
+      conn->consumed_content += buffered_len;
+      nread = buffered_len;
     }
 
     // We have returned all buffered data. Read new data from the remote socket.
@@ -2449,11 +2474,11 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
       "Etag: \"%s\"\r\n"
       "Content-Type: %.*s\r\n"
       "Content-Length: %" INT64_FMT "\r\n"
-      "Connection: close\r\n"
+      "Connection: %s\r\n"
       "Accept-Ranges: bytes\r\n"
       "%s\r\n",
       conn->request_info.status_code, msg, date, lm, etag,
-      mime_vec.len, mime_vec.ptr, cl, range);
+      mime_vec.len, mime_vec.ptr, cl, suggest_connection_header(conn), range);
 
   if (strcmp(conn->request_info.request_method, "HEAD") != 0) {
     send_file_data(conn, fp, cl);
@@ -2486,6 +2511,11 @@ static int is_valid_http_method(const char *method) {
 // Parse HTTP request, fill in mg_request_info structure.
 static int parse_http_request(char *buf, struct mg_request_info *ri) {
   int status = 0;
+
+  // RFC says that all initial whitespaces should be ingored
+  while (*buf != '\0' && isspace(* (unsigned char *) buf)) {
+    buf++;
+  }
 
   ri->request_method = skip(&buf, " ");
   ri->uri = skip(&buf, " ");
@@ -2580,10 +2610,9 @@ static int is_not_modified(const struct mg_connection *conn,
 }
 
 static int handle_request_body(struct mg_connection *conn, FILE *fp) {
-  const char *expect, *data;
+  const char *expect, *buffered;
   char buf[BUFSIZ];
-  int to_read, nread, data_len;
-  int success = 0;
+  int to_read, nread, buffered_len, success = 0;
 
   expect = mg_get_header(conn, "Expect");
   assert(fp != NULL);
@@ -2596,31 +2625,34 @@ static int handle_request_body(struct mg_connection *conn, FILE *fp) {
     if (expect != NULL) {
       (void) mg_printf(conn, "%s", "HTTP/1.1 100 Continue\r\n\r\n");
     }
-    data = conn->buf + conn->request_len;
-    data_len = conn->data_len - conn->request_len;
-    assert(data_len >= 0);
 
-    if (conn->content_len <= (int64_t) data_len) {
-      success = push(fp, INVALID_SOCKET, NULL, data,
-                     conn->content_len) == conn->content_len;
-    } else {
-      push(fp, INVALID_SOCKET, NULL, data, (int64_t) data_len);
-      conn->consumed_content += data_len;
+    buffered = conn->buf + conn->request_len;
+    buffered_len = conn->data_len - conn->request_len;
+    assert(buffered_len >= 0);
+    assert(conn->consumed_content == 0);
 
-      while (conn->consumed_content < conn->content_len) {
-        to_read = sizeof(buf);
-        if ((int64_t) to_read > conn->content_len - conn->consumed_content) {
-          to_read = (int) (conn->content_len - conn->consumed_content);
-        }
-        nread = pull(NULL, conn->client.sock, conn->ssl, buf, to_read);
-        if (nread <= 0 || push(fp, INVALID_SOCKET, NULL, buf, nread) != nread) {
-          break;
-        }
-        conn->consumed_content += nread;
+    if (buffered_len > 0) {
+      if ((int64_t) buffered_len > conn->content_len) {
+        buffered_len = conn->content_len;
       }
-      if (conn->consumed_content == conn->content_len) {
-        success = 1;
+      push(fp, INVALID_SOCKET, NULL, buffered, (int64_t) buffered_len);
+      conn->consumed_content += buffered_len;
+    }
+
+    while (conn->consumed_content < conn->content_len) {
+      to_read = sizeof(buf);
+      if ((int64_t) to_read > conn->content_len - conn->consumed_content) {
+        to_read = (int) (conn->content_len - conn->consumed_content);
       }
+      nread = pull(NULL, conn->client.sock, conn->ssl, buf, to_read);
+      if (nread <= 0 || push(fp, INVALID_SOCKET, NULL, buf, nread) != nread) {
+        break;
+      }
+      conn->consumed_content += nread;
+    }
+
+    if (conn->consumed_content == conn->content_len) {
+      success = 1;
     }
 
     // Each error code path in this function must send an error
@@ -3088,8 +3120,9 @@ static void handle_ssi_file_request(struct mg_connection *conn,
                     strerror(ERRNO));
   } else {
     set_close_on_exec(fileno(fp));
-    (void) mg_printf(conn, "%s", "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/html\r\nConnection: close\r\n\r\n");
+    mg_printf(conn, "HTTP/1.1 200 OK\r\n"
+              "Content-Type: text/html\r\nConnection: %s\r\n\r\n",
+              suggest_connection_header(conn));
     send_ssi_file(conn, path, fp, 0);
     (void) fclose(fp);
   }
@@ -3505,17 +3538,19 @@ static void close_connection(struct mg_connection *conn) {
 }
 
 static void discard_current_request_from_buffer(struct mg_connection *conn) {
-  int over_len, body_len;
+  char *buffered;
+  int buffered_len, body_len;
 
-  over_len = conn->data_len - conn->request_len;
-  assert(over_len >= 0);
+  buffered = conn->buf + conn->request_len;
+  buffered_len = conn->data_len - conn->request_len;
+  assert(buffered_len >= 0);
 
   if (conn->content_len == -1) {
     body_len = 0;
-  } else if (conn->content_len < (int64_t) over_len) {
+  } else if (conn->content_len < (int64_t) buffered_len) {
     body_len = (int) conn->content_len;
   } else {
-    body_len = over_len;
+    body_len = buffered_len;
   }
 
   conn->data_len -= conn->request_len + body_len;
@@ -3524,40 +3559,45 @@ static void discard_current_request_from_buffer(struct mg_connection *conn) {
 
 static void process_new_connection(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
+  int keep_alive_enabled;
   const char *cl;
 
-  reset_per_request_attributes(conn);
+  keep_alive_enabled = !strcmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes");
 
-  // If next request is not pipelined, read it in
-  if ((conn->request_len = get_request_len(conn->buf, conn->data_len)) == 0) {
-    conn->request_len = read_request(NULL, conn->client.sock, conn->ssl,
-        conn->buf, sizeof(conn->buf), &conn->data_len);
-  }
-  assert(conn->data_len >= conn->request_len);
-  if (conn->request_len <= 0) {
-    return;  // Remote end closed the connection
-  }
+  do {
+    reset_per_request_attributes(conn);
 
-  // Nul-terminate the request cause parse_http_request() uses sscanf
-  conn->buf[conn->request_len - 1] = '\0';
-  if (!parse_http_request(conn->buf, ri)) {
-    // Do not put garbage in the access log, just send it back to the client
-    send_http_error(conn, 400, "Bad Request",
-        "Cannot parse HTTP request: [%.*s]", conn->data_len, conn->buf);
-  } else if (strcmp(ri->http_version, "1.0") &&
-             strcmp(ri->http_version, "1.1")) {
-    // Request seems valid, but HTTP version is strange
-    send_http_error(conn, 505, "HTTP version not supported", "");
-    log_access(conn);
-  } else {
-    // Request is valid, handle it
-    cl = get_header(ri, "Content-Length");
-    conn->content_len = cl == NULL ? -1 : strtoll(cl, NULL, 10);
-    conn->birth_time = time(NULL);
-    handle_request(conn);
-    log_access(conn);
-    discard_current_request_from_buffer(conn);
-  }
+    // If next request is not pipelined, read it in
+    if ((conn->request_len = get_request_len(conn->buf, conn->data_len)) == 0) {
+      conn->request_len = read_request(NULL, conn->client.sock, conn->ssl,
+          conn->buf, sizeof(conn->buf), &conn->data_len);
+    }
+    assert(conn->data_len >= conn->request_len);
+    if (conn->request_len <= 0) {
+      return;  // Remote end closed the connection
+    }
+
+    // Nul-terminate the request cause parse_http_request() uses sscanf
+    conn->buf[conn->request_len - 1] = '\0';
+    if (!parse_http_request(conn->buf, ri)) {
+      // Do not put garbage in the access log, just send it back to the client
+      send_http_error(conn, 400, "Bad Request",
+          "Cannot parse HTTP request: [%.*s]", conn->data_len, conn->buf);
+    } else if (strcmp(ri->http_version, "1.0") &&
+               strcmp(ri->http_version, "1.1")) {
+      // Request seems valid, but HTTP version is strange
+      send_http_error(conn, 505, "HTTP version not supported", "");
+      log_access(conn);
+    } else {
+      // Request is valid, handle it
+      cl = get_header(ri, "Content-Length");
+      conn->content_len = cl == NULL ? -1 : strtoll(cl, NULL, 10);
+      conn->birth_time = time(NULL);
+      handle_request(conn);
+      log_access(conn);
+      discard_current_request_from_buffer(conn);
+    }
+  } while (keep_alive_enabled && should_keep_alive(conn));
 }
 
 // Worker threads take accepted socket from the queue
@@ -3788,15 +3828,6 @@ struct mg_context *mg_start(mg_callback_t user_callback, const char **options) {
   ctx = calloc(1, sizeof(*ctx));
   ctx->user_callback = user_callback;
 
-  ctx->config[DOCUMENT_ROOT] = mg_strdup(".");
-  ctx->config[LISTENING_PORTS] = mg_strdup("8080");
-  ctx->config[ENABLE_DIRECTORY_LISTING] = mg_strdup("yes");
-  ctx->config[AUTHENTICATION_DOMAIN] = mg_strdup("mydomain.com");
-  ctx->config[INDEX_FILES] = mg_strdup("index.html,index.htm,index.cgi");
-  ctx->config[CGI_EXTENSIONS] = mg_strdup(".cgi,.pl,.php");
-  ctx->config[SSI_EXTENSIONS] = mg_strdup(".shtml,.shtm");
-  ctx->config[NUM_THREADS] = mg_strdup("10");
-
   while ((name = *options++) != NULL) {
     if ((i = get_option_index(name)) == -1) {
       cry(fc(ctx), "Invalid option: %s", name);
@@ -3807,11 +3838,17 @@ struct mg_context *mg_start(mg_callback_t user_callback, const char **options) {
       free_context(ctx);
       return NULL;
     }
-    if (ctx->config[i] != NULL) {
-      free(ctx->config[i]);
-    }
     ctx->config[i] = mg_strdup(value);
     DEBUG_TRACE(("[%s] -> [%s]", name, value));
+  }
+
+  // Set default value if needed
+  for (i = 0; config_options[i * 3] != NULL; i++) {
+    if (ctx->config[i] == NULL && config_options[i * 3 + 2] != NULL) {
+      ctx->config[i] = mg_strdup(config_options[i * 3 + 2]);
+      DEBUG_TRACE(("Setting default: [%s] -> [%s]",
+                   config_options[i * 3 + 1], config_options[i * 3 + 2]));
+    }
   }
 
   // NOTE(lsm): order is important here. SSL certificates must

@@ -57,7 +57,7 @@
 static int exit_flag;	                /* Program termination flag	*/
 
 #if !defined(CONFIG_FILE)
-#define	CONFIG_FILE		"mongoose.conf"
+#define	CONFIG_FILE "mongoose.conf"
 #endif /* !CONFIG_FILE */
 
 #define MAX_OPTIONS 40
@@ -103,8 +103,9 @@ static void show_usage_and_exit(void) {
   fprintf(stderr, "OPTIONS:\n");
 
   names = mg_get_valid_option_names();
-  for (i = 0; names[i] != NULL; i += 2) {
-    fprintf(stderr, "  -%s %s\n", names[i], names[i + 1]);
+  for (i = 0; names[i] != NULL; i += 3) {
+    fprintf(stderr, "  -%s %s (default: \"%s\")\n",
+            names[i], names[i + 1], names[i + 2] == NULL ? "" : names[i + 2]);
   }
   fprintf(stderr, "See  http://code.google.com/p/mongoose/wiki/MongooseManual"
           " for more details.\n");
@@ -164,6 +165,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
   const char	*config_file = NULL;
   char line[512], opt[512], val[512], path[PATH_MAX], *p;
   FILE *fp = NULL;
+  struct stat st;
   size_t i, line_no = 0;
 
   /* Should we use a config file ? */
@@ -174,6 +176,9 @@ static void process_command_line_arguments(char *argv[], char **options) {
     if ((p = strrchr(argv[0], DIRSEP)) != 0) {
       snprintf(path, sizeof(path), "%.*s%s",
                (int) (p - argv[0]) + 1, argv[0], CONFIG_FILE);
+    }
+    if (stat(path, &st) == 0) {
+      config_file = path;
     }
   }
   /* If config file was set in command line and open failed, exit */
