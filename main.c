@@ -161,7 +161,7 @@ static void set_option(char **options, const char *name, const char *value) {
 
 static void process_command_line_arguments(char *argv[], char **options) {
   const char	*config_file = NULL;
-  char line[512], opt[512], val[512], path[PATH_MAX], *p;
+  char line[512], opt[512], val[512], path[PATH_MAX];
   FILE *fp = NULL;
   struct stat st;
   size_t i, line_no = 0;
@@ -170,11 +170,11 @@ static void process_command_line_arguments(char *argv[], char **options) {
   if (argv[1] != NULL && argv[2] == NULL) {
     config_file = argv[1];
   } else if (argv[1] == NULL) {
-    /* No command line flags specified. Look where binary lives */
-    if ((p = strrchr(argv[0], DIRSEP)) != 0) {
-      snprintf(path, sizeof(path), "%.*s%s",
-               (int) (p - argv[0]) + 1, argv[0], CONFIG_FILE);
-    }
+    // No command line flags specified. Look where binary lives
+    // TODO(lsm): do proper error handling here
+    getcwd(path, sizeof(path));
+    snprintf(path + strlen(path), sizeof(path) - strlen(path), "%c%s",
+             DIRSEP, CONFIG_FILE);
     if (stat(path, &st) == 0) {
       config_file = path;
     }
