@@ -2,7 +2,7 @@
 !define MENUDIR "Mongoose web server"
 !define	SVC "Mongoose ${VERSION}"
 
-OutFile mongoose-${VERSION}.install.exe
+OutFile c:\mongoose-${VERSION}.install.exe
 Name "Mongoose ${VERSION}"
 InstallDir C:\mongoose-${VERSION}
 
@@ -30,7 +30,6 @@ Section "SSL files"
   File ssl_cert.pem
 
   # Following lines add full path to the certificate file in the mongoose.conf
-  # The -ssl_cert option must go before -ports option.
   FileOpen $0 mongoose.conf a
   FileRead $0 $1
   FileRead $0 $1
@@ -38,7 +37,7 @@ Section "SSL files"
   FileRead $0 $1
   FileRead $0 $1
   FileRead $0 $1
-  FileWrite $0 "ssl_cert	$INSTDIR\ssl_cert.pem"
+  FileWrite $0 "ssl_certificate $INSTDIR\ssl_cert.pem"
   FileClose $0
 SectionEnd
 
