@@ -51,20 +51,17 @@ solaris:
 #  o  Set VC variable below to where VS 6.0 is installed on your system
 #  o  Run "PATH_TO_VC6\bin\nmake windows"
 
-VC=	q:\vc6
+VC=	z:
 #DBG=	/Zi /DDEBUG /Od /DDEBUG
 DBG=	/DNDEBUG /Os
-CL=	$(VC)\bin\cl.exe  /MD /TC /nologo /W4 /c $(DBG) /I $(VC)/include
-LINK=	$(VC)\bin\link.exe /incremental:no /libpath:$(VC)\lib ws2_32.lib
-OUT=	c:\out
-DLL=	$(OUT)\_$(PROG).dll
-EXE=	$(OUT)\$(PROG).exe
+SSL=	y:\release\cyassl.lib crypt32.lib advapi32.lib
+CL=	cl /MD /TC /nologo $(DBG) /DNO_SSL_DL /I $(VC)\include
+LINK=	/link /incremental:no /libpath:$(VC)\lib ws2_32.lib $(SSL)
 
 windows:
-	$(CL) main.c /Fd$(OUT)\main.pdb /Fo$(OUT)\main.obj
-	$(CL) mongoose.c /Fd$(OUT)\mongoose.pdb /Fo$(OUT)\mongoose.obj
-	$(LINK) $(OUT)\mongoose.obj /DLL /DEF:win32\dll.def /out:$(DLL)
-	$(LINK) $(OUT)\main.obj $(OUT)\mongoose.obj /out:$(EXE)
+	$(CL) main.c mongoose.c $(LINK) /DLL /DEF:win32\dll.def \
+		/out:_$(PROG).dll
+	$(CL) main.c mongoose.c $(LINK) /out:$(PROG).exe
 
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0

@@ -2,7 +2,7 @@
 !define MENUDIR "Mongoose web server"
 !define	SVC "Mongoose ${VERSION}"
 
-OutFile c:\mongoose-${VERSION}.install.exe
+OutFile mongoose-${VERSION}.install.exe
 Name "Mongoose ${VERSION}"
 InstallDir C:\mongoose-${VERSION}
 
@@ -25,8 +25,7 @@ Section "Mongoose files (required)"
 SectionEnd
 
 Section "SSL files"
-  File ssleay32.dll
-  File libeay32.dll
+  SectionIn RO
   File ssl_cert.pem
 
   # Following lines add full path to the certificate file in the mongoose.conf
