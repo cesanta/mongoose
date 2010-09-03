@@ -258,7 +258,7 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  printf("Mongoose %s started on port(s) %s with web root [%s]\n",
+  printf("Mongoose %s web server started on port(s) %s with web root [%s]\n",
          mg_version(), mg_get_option(ctx, "listening_ports"),
          mg_get_option(ctx, "document_root"));
 
