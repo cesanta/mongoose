@@ -238,6 +238,30 @@ typedef struct ssl_ctx_st SSL_CTX;
 #define SSL_FILETYPE_PEM 1
 #define CRYPTO_LOCK  1
 
+#if defined(NO_SSL_DL)
+extern void SSL_free(SSL *);
+extern int SSL_accept(SSL *);
+extern int SSL_connect(SSL *);
+extern int SSL_read(SSL *, void *, int);
+extern int SSL_write(SSL *, const void *, int);
+extern int SSL_get_error(const SSL *, int);
+extern int SSL_set_fd(SSL *, int);
+extern SSL *SSL_new(SSL_CTX *);
+extern SSL_CTX *SSL_CTX_new(SSL_METHOD *);
+extern SSL_METHOD *SSLv23_server_method(void);
+extern int SSL_library_init(void);
+extern void SSL_load_error_strings(void);
+extern int SSL_CTX_use_PrivateKey_file(SSL_CTX *, const char *, int);
+extern int SSL_CTX_use_certificate_file(SSL_CTX *, const char *, int);
+extern int SSL_CTX_use_certificate_chain_file(SSL_CTX *, const char *, int);
+extern void SSL_CTX_set_default_passwd_cb(SSL_CTX *, mg_callback_t);
+extern void SSL_CTX_free(SSL_CTX *);
+extern unsigned long ERR_get_error(void);
+extern char *ERR_error_string(unsigned long, char *);
+extern int CRYPTO_num_locks(void);
+extern void CRYPTO_set_locking_callback(void (*)(int, int, const char *, int));
+extern void CRYPTO_set_id_callback(unsigned long (*)(void));
+#else
 // Dynamically loaded SSL functionality
 struct ssl_func {
   const char *name;   // SSL function name
@@ -264,11 +288,9 @@ struct ssl_func {
 #define SSL_CTX_set_default_passwd_cb(x,y) \
   (* (void (*)(SSL_CTX *, mg_callback_t)) ssl_sw[13].ptr)((x),(y))
 #define SSL_CTX_free(x) (* (void (*)(SSL_CTX *)) ssl_sw[14].ptr)(x)
-#define ERR_get_error() (* (unsigned long (*)(void)) ssl_sw[15].ptr)()
-#define ERR_error_string(x, y) (* (char * (*)(unsigned long, char *)) ssl_sw[16].ptr)((x), (y))
-#define SSL_load_error_strings() (* (void (*)(void)) ssl_sw[17].ptr)()
+#define SSL_load_error_strings() (* (void (*)(void)) ssl_sw[15].ptr)()
 #define SSL_CTX_use_certificate_chain_file(x,y,z) \
-  (* (int (*)(SSL_CTX *, const char *, int)) ssl_sw[18].ptr)((x), (y), (z))
+  (* (int (*)(SSL_CTX *, const char *, int)) ssl_sw[16].ptr)((x), (y), (z))
 
 #define CRYPTO_num_locks() (* (int (*)(void)) crypto_sw[0].ptr)()
 #define CRYPTO_set_locking_callback(x)     \
@@ -276,6 +298,9 @@ struct ssl_func {
    crypto_sw[1].ptr)(x)
 #define CRYPTO_set_id_callback(x)     \
   (* (void (*)(unsigned long (*)(void))) crypto_sw[2].ptr)(x)
+#define ERR_get_error() (* (unsigned long (*)(void)) ssl_sw[3].ptr)()
+#define ERR_error_string(x, y) (* (char * (*)(unsigned long, char *)) \
+  ssl_sw[4].ptr)((x), (y))
 
 // set_ssl_option() function updates this array.
 // It loads SSL library dynamically and changes NULLs to the actual addresses
@@ -297,8 +322,6 @@ static struct ssl_func ssl_sw[] = {
   {"SSL_CTX_use_certificate_file",NULL},
   {"SSL_CTX_set_default_passwd_cb",NULL},
   {"SSL_CTX_free",  NULL},
-  {"ERR_get_error",  NULL},
-  {"ERR_error_string", NULL},
   {"SSL_load_error_strings", NULL},
   {"SSL_CTX_use_certificate_chain_file", NULL},
   {NULL,    NULL}
@@ -309,8 +332,11 @@ static struct ssl_func crypto_sw[] = {
   {"CRYPTO_num_locks",  NULL},
   {"CRYPTO_set_locking_callback", NULL},
   {"CRYPTO_set_id_callback", NULL},
+  {"ERR_get_error",  NULL},
+  {"ERR_error_string", NULL},
   {NULL,    NULL}
 };
+#endif // NO_SSL_DL
 
 static const char *month_names[] = {
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -3400,6 +3426,7 @@ static unsigned long ssl_id_callback(void) {
   return (unsigned long) pthread_self();
 }
 
+#if !defined(NO_SSL_DL)
 static int load_dll(struct mg_context *ctx, const char *dll_name,
                     struct ssl_func *sw) {
   union {void *p; void (*fp)(void);} u;
@@ -3421,7 +3448,7 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
     u.p = dlsym(dll_handle, fp->name);
 #endif /* _WIN32 */
     if (u.fp == NULL) {
-      cry(fc(ctx), "%s: cannot find %s", __func__, fp->name);
+      cry(fc(ctx), "%s: %s: cannot find %s", __func__, dll_name, fp->name);
       return 0;
     } else {
       fp->ptr = u.fp;
@@ -3430,6 +3457,7 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
 
   return 1;
 }
+#endif // NO_SSL_DL
 
 // Dynamically load SSL library. Set up ctx->ssl_ctx pointer.
 static int set_ssl_option(struct mg_context *ctx) {
@@ -3442,10 +3470,12 @@ static int set_ssl_option(struct mg_context *ctx) {
     return 1;
   }
 
+#if !defined(NO_SSL_DL)
   if (!load_dll(ctx, SSL_LIB, ssl_sw) ||
       !load_dll(ctx, CRYPTO_LIB, crypto_sw)) {
     return 0;
   }
+#endif // NO_SSL_DL
 
   // Initialize SSL crap
   SSL_library_init();
