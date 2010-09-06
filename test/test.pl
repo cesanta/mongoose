@@ -161,6 +161,7 @@ my $cmd = "$exe -listening_ports $port -access_log_file access.log ".
 "-cgi_environment CGI_FOO=foo,CGI_BAR=bar,CGI_BAZ=baz " .
 "-extra_mime_types .bar=foo/bar,.tar.gz=blah,.baz=foo " .
 '-put_delete_passwords_file test/passfile ' .
+'-access_control_list -0.0.0.0/0,+127.0.0.1 ' .
 "-document_root $root,/aiased=/etc/,/ta=$test_dir";
 $cmd .= ' -cgi_interpreter perl' if on_windows();
 spawn($cmd);
