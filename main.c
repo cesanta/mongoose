@@ -32,6 +32,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <stddef.h>
+#include <stdarg.h>
 
 #include "mongoose.h"
 
@@ -40,25 +41,26 @@
 #include <winsvc.h>
 #define PATH_MAX MAX_PATH
 #define S_ISDIR(x) ((x) & _S_IFDIR)
-#define DIRSEP			'\\'
-#define	snprintf		_snprintf
-#if !defined(__LCC__)
-#define	strdup(x)		_strdup(x)
-#endif /* !MINGW */
-#define	sleep(x)		Sleep((x) * 1000)
+#define DIRSEP '\\'
+#define	snprintf _snprintf
+#define	vsnprintf _vsnprintf
+#define	sleep(x) Sleep((x) * 1000)
 #else
 #include <sys/wait.h>
-#include <unistd.h>		/* For pause() */
+#include <unistd.h>
 #define DIRSEP '/'
-#endif /* _WIN32 */
+#endif // _WIN32
 
-static int exit_flag;	                /* Program termination flag	*/
+#define MAX_OPTIONS 40
+
+static int exit_flag;
+static char *options[MAX_OPTIONS];
+static char server_name[40];
+static struct mg_context *ctx;
 
 #if !defined(CONFIG_FILE)
 #define	CONFIG_FILE "mongoose.conf"
 #endif /* !CONFIG_FILE */
-
-#define MAX_OPTIONS 40
 
 static void signal_handler(int sig_num) {
 #if !defined(_WIN32)
@@ -70,6 +72,23 @@ static void signal_handler(int sig_num) {
   {
     exit_flag = sig_num;
   }
+}
+
+static void die(const char *fmt, ...) {
+  va_list ap;
+  char msg[200];
+
+  va_start(ap, fmt);
+  vsnprintf(msg, sizeof(msg), fmt, ap);
+  va_end(ap);
+
+#if defined(_WIN32)
+  MessageBox(NULL, msg, "Error", MB_OK);
+#else
+  fprintf(stderr, "%s\n", msg);
+#endif
+
+  exit(EXIT_FAILURE);
 }
 
 /*
@@ -108,7 +127,6 @@ static void show_usage_and_exit(void) {
   fprintf(stderr, "See  http://code.google.com/p/mongoose/wiki/MongooseManual"
           " for more details.\n");
   fprintf(stderr, "Example:\n  mongoose -s cert.pem -p 80,443s -d no\n");
-
   exit(EXIT_FAILURE);
 }
 
@@ -124,8 +142,7 @@ static void verify_document_root(const char *root) {
   }
 
   if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-    fprintf(stderr, "Invalid root directory: \"%s\"\n", root);
-    exit(EXIT_FAILURE);
+    die("Invalid root directory: \"%s\"", root);
   }
 }
 
@@ -154,8 +171,7 @@ static void set_option(char **options, const char *name, const char *value) {
   }
 
   if (i == MAX_OPTIONS - 3) {
-    fprintf(stderr, "%s\n", "Too many options specified");
-    exit(EXIT_FAILURE);
+    die("%s", "Too many options specified");
   }
 }
 
@@ -181,9 +197,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
   }
   /* If config file was set in command line and open failed, exit */
   if (config_file != NULL && (fp = fopen(config_file, "r")) == NULL) {
-    fprintf(stderr, "cannot open config file %s: %s\n",
-            config_file, strerror(errno));
-    exit(EXIT_FAILURE);
+    die("Cannot open config file %s: %s", config_file, strerror(errno));
   }
 
   if (fp != NULL) {
@@ -199,9 +213,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
         continue;
 
       if (sscanf(line, "%s %[^\r\n#]", opt, val) != 2) {
-        fprintf(stderr, "%s: line %d is invalid\n",
-                config_file, (int) line_no);
-        exit(EXIT_FAILURE);
+        die("%s: line %d is invalid", config_file, (int) line_no);
       }
       set_option(options, opt, val);
     }
@@ -209,7 +221,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
     (void) fclose(fp);
   } else {
     for (i = 1; argv[i] != NULL; i += 2) {
-      if (argv[i][0] != '-' || argv[i + 1] == NULL || argv[i + 1][0] == '-') {
+      if (argv[i][0] != '-' || argv[i + 1] == NULL) {
         show_usage_and_exit();
       }
       set_option(options, &argv[i][1], argv[i + 1]);
@@ -217,10 +229,11 @@ static void process_command_line_arguments(char *argv[], char **options) {
   }
 }
 
-int main(int argc, char *argv[]) {
-  struct mg_context	*ctx;
-  char *options[MAX_OPTIONS];
+static void start_mongoose(int argc, char *argv[]) {
   int i;
+
+  snprintf(server_name, sizeof(server_name),
+           "Mongoose %s web server", mg_version());
 
   /* Edit passwords file if -A option is specified */
   if (argc > 1 && argv[1][0] == '-' && argv[1][1] == 'A') {
@@ -237,7 +250,6 @@ int main(int argc, char *argv[]) {
   }
 
   /* Update config based on command line arguments */
-  options[0] = NULL;
   process_command_line_arguments(argv, options);
 
   /* Setup signal handler: quit on Ctrl-C */
@@ -254,19 +266,134 @@ int main(int argc, char *argv[]) {
   }
 
   if (ctx == NULL) {
-    (void) printf("%s\n", "Cannot initialize Mongoose context");
-    exit(EXIT_FAILURE);
+    die("%s", "Failed to start Mongoose. Maybe some options are "
+        "assigned bad values?\nTry to run with '-e error_log.txt' "
+        "and check error_log.txt for more information.");
+  }
+}
+
+#ifdef _WIN32
+static SERVICE_STATUS ss;
+static SERVICE_STATUS_HANDLE hStatus;
+
+static void WINAPI ControlHandler(DWORD code) {
+  if (code == SERVICE_CONTROL_STOP || code == SERVICE_CONTROL_SHUTDOWN) {
+    ss.dwWin32ExitCode = 0;
+    ss.dwCurrentState = SERVICE_STOPPED;
+  }
+  SetServiceStatus(hStatus, &ss);
+}
+
+static void WINAPI ServiceMain(void) {
+  ss.dwServiceType = SERVICE_WIN32;
+  ss.dwCurrentState = SERVICE_RUNNING;
+  ss.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
+
+  hStatus = RegisterServiceCtrlHandler(server_name, ControlHandler);
+  SetServiceStatus(hStatus, &ss);
+
+  //Sleep(3000);
+  while (ss.dwCurrentState == SERVICE_RUNNING) {
+    Sleep(1000);
+  }
+  mg_stop(ctx);
+
+  ss.dwCurrentState = SERVICE_STOPPED;
+  ss.dwWin32ExitCode = (DWORD) -1;
+  SetServiceStatus(hStatus, &ss);
+}
+
+static void try_to_run_as_nt_service(void) {
+  static SERVICE_TABLE_ENTRY service_table[] = {
+    {server_name, (LPSERVICE_MAIN_FUNCTION) ServiceMain},
+    {NULL, NULL}
+  };
+
+  if (StartServiceCtrlDispatcher(service_table)) {
+    exit(EXIT_SUCCESS);
+  }
+}
+
+#define	ID_TRAYICON	100
+#define	ID_QUIT		101
+static NOTIFYICONDATA	ni;
+
+static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
+                                   LPARAM lParam) {
+  POINT	pt;
+  HMENU	hMenu; 	 
+
+  switch (msg) {
+
+    case WM_COMMAND:
+      switch (LOWORD(wParam)) {
+        case ID_QUIT:
+          exit(EXIT_SUCCESS);
+          break;
+      }
+      break;
+
+    case WM_USER:
+      switch (lParam) {
+        case WM_RBUTTONUP:
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDBLCLK:
+          hMenu = CreatePopupMenu();
+          AppendMenu(hMenu, 0, ID_QUIT, "Exit");
+          GetCursorPos(&pt);
+          TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, hWnd, NULL);
+          DestroyMenu(hMenu);
+          break;
+      }
+      break;
   }
 
-  printf("Mongoose %s web server started on port(s) %s with web root [%s]\n",
-         mg_version(), mg_get_option(ctx, "listening_ports"),
-         mg_get_option(ctx, "document_root"));
+  return DefWindowProc(hWnd, msg, wParam, lParam);
+}
 
-  fflush(stdout);
+int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
+  WNDCLASS cls;
+  HWND hWnd;
+  MSG msg;
+
+  // Win32 runtime must prepare __argc and __argv for us
+  start_mongoose(__argc, __argv);
+  try_to_run_as_nt_service();
+
+  memset(&cls, 0, sizeof(cls));
+  cls.lpfnWndProc = (WNDPROC) WindowProc; 
+  cls.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+  cls.lpszClassName = server_name;
+
+  RegisterClass(&cls);
+  hWnd = CreateWindow(cls.lpszClassName, server_name, WS_OVERLAPPEDWINDOW,
+                      0, 0, 0, 0, NULL, NULL, NULL, NULL);
+  ShowWindow(hWnd, SW_HIDE);
+
+  ni.cbSize = sizeof(ni);
+  ni.uID = ID_TRAYICON;
+  ni.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+  ni.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+  ni.hWnd = hWnd;
+  snprintf(ni.szTip, sizeof(ni.szTip), "%s", server_name);
+  ni.uCallbackMessage = WM_USER;
+  Shell_NotifyIcon(NIM_ADD, &ni);
+
+  while (GetMessage(&msg, hWnd, 0, 0)) { 
+    TranslateMessage(&msg); 
+    DispatchMessage(&msg); 
+  }
+}
+#endif /* _WIN32 */
+
+int main(int argc, char *argv[]) {
+  start_mongoose(argc, argv);
+  printf("%s started on port(s) %s with web root [%s]\n",
+         server_name, mg_get_option(ctx, "listening_ports"),
+         mg_get_option(ctx, "document_root"));
   while (exit_flag == 0) {
     sleep(1);
   }
-
   printf("Exiting on signal %d, waiting for all threads to finish...",
          exit_flag);
   fflush(stdout);
