@@ -3351,18 +3351,18 @@ static int check_acl(struct mg_context *ctx, const struct usa *usa) {
 
     if (sscanf(vec.ptr, "%c%d.%d.%d.%d%n", &flag, &a, &b, &c, &d, &n) != 5) {
       cry(fc(ctx), "%s: subnet must be [+|-]x.x.x.x[/x]", __func__);
-      return 0;
+      return -1;
     } else if (flag != '+' && flag != '-') {
       cry(fc(ctx), "%s: flag must be + or -: [%s]", __func__, vec.ptr);
-      return 0;
+      return -1;
     } else if (!isbyte(a)||!isbyte(b)||!isbyte(c)||!isbyte(d)) {
       cry(fc(ctx), "%s: bad ip address: [%s]", __func__, vec.ptr);
-      return 0;
+      return -1;
     } else if (sscanf(vec.ptr + n, "/%d", &mask) == 0) {
       // Do nothing, no mask specified
     } else if (mask < 0 || mask > 32) {
       cry(fc(ctx), "%s: bad subnet mask: %d [%s]", __func__, n, vec.ptr);
-      return 0;
+      return -1;
     }
 
     acl_subnet = (a << 24) | (b << 16) | (c << 8) | d;
@@ -3533,7 +3533,7 @@ static int set_gpass_option(struct mg_context *ctx) {
 
 static int set_acl_option(struct mg_context *ctx) {
   struct usa fake;
-  return check_acl(ctx, &fake);
+  return check_acl(ctx, &fake) != -1;
 }
 
 static void reset_per_request_attributes(struct mg_connection *conn) {
