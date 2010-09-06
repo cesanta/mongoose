@@ -1559,8 +1559,11 @@ static SOCKET mg_open_listening_port(struct mg_context *ctx, const char *str,
   usa->u.sin.sin_port  = htons((uint16_t) port);
 
   if ((sock = socket(PF_INET, SOCK_STREAM, 6)) != INVALID_SOCKET &&
+#if !defined(_WIN32)
+      // On windows, SO_REUSEADDR is recommended only for broadcast UDP sockets
       setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
         (char *) &on, sizeof(on)) == 0 &&
+#endif // !_WIN32
       bind(sock, &usa->u.sa, usa->len) == 0 &&
       listen(sock, 20) == 0) {
     // Success
