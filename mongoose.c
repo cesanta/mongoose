@@ -101,6 +101,7 @@ typedef long off_t;
 #define _POSIX_
 #define INT64_FMT  "I64d"
 
+#define WINCDECL __cdecl
 #define SHUT_WR 1
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
@@ -193,6 +194,7 @@ typedef struct DIR {
 #define INVALID_SOCKET (-1)
 #define INT64_FMT PRId64
 typedef int SOCKET;
+#define WINCDECL
 
 #endif // End of Windows and UNIX specific includes
 
@@ -253,7 +255,7 @@ extern int SSL_library_init(void);
 extern void SSL_load_error_strings(void);
 extern int SSL_CTX_use_PrivateKey_file(SSL_CTX *, const char *, int);
 extern int SSL_CTX_use_certificate_file(SSL_CTX *, const char *, int);
-extern int SSL_CTX_use_certificate_chain_file(SSL_CTX *, const char *, int);
+extern int SSL_CTX_use_certificate_chain_file(SSL_CTX *, const char *);
 extern void SSL_CTX_set_default_passwd_cb(SSL_CTX *, mg_callback_t);
 extern void SSL_CTX_free(SSL_CTX *);
 extern unsigned long ERR_get_error(void);
@@ -289,8 +291,8 @@ struct ssl_func {
   (* (void (*)(SSL_CTX *, mg_callback_t)) ssl_sw[13].ptr)((x),(y))
 #define SSL_CTX_free(x) (* (void (*)(SSL_CTX *)) ssl_sw[14].ptr)(x)
 #define SSL_load_error_strings() (* (void (*)(void)) ssl_sw[15].ptr)()
-#define SSL_CTX_use_certificate_chain_file(x,y,z) \
-  (* (int (*)(SSL_CTX *, const char *, int)) ssl_sw[16].ptr)((x), (y), (z))
+#define SSL_CTX_use_certificate_chain_file(x,y) \
+  (* (int (*)(SSL_CTX *, const char *)) ssl_sw[16].ptr)((x), (y))
 
 #define CRYPTO_num_locks() (* (int (*)(void)) crypto_sw[0].ptr)()
 #define CRYPTO_set_locking_callback(x)     \
@@ -1335,7 +1337,7 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
     // Adjust number of bytes to read.
     int64_t to_read = conn->content_len - conn->consumed_content;
     if (to_read < (int64_t) len) {
-      len = to_read;
+      len = (int) to_read;
     }
 
     // How many bytes of data we have buffered in the request buffer?
@@ -1345,7 +1347,7 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
 
     // Return buffered data back if we haven't done that yet.
     if (conn->consumed_content < (int64_t) buffered_len) {
-      buffered_len -= conn->consumed_content;
+      buffered_len -= (int) conn->consumed_content;
       if (len < (size_t) buffered_len) {
         buffered_len = len;
       }
@@ -2315,7 +2317,9 @@ static void print_dir_entry(struct de *de) {
 
 // This function is called from send_directory() and used for
 // sorting directory entries by size, or name, or modification time.
-static int compare_dir_entries(const void *p1, const void *p2) {
+// On windows, __cdecl specification is needed in case if project is built
+// with __stdcall convention. qsort always requires __cdels callback.
+static int WINCDECL compare_dir_entries(const void *p1, const void *p2) {
   const struct de *a = (struct de *) p1, *b = (struct de *) p2;
   const char *query_string = a->conn->request_info.query_string;
   int cmp_result = 0;
@@ -2667,7 +2671,7 @@ static int handle_request_body(struct mg_connection *conn, FILE *fp) {
 
     if (buffered_len > 0) {
       if ((int64_t) buffered_len > conn->content_len) {
-        buffered_len = conn->content_len;
+        buffered_len = (int) conn->content_len;
       }
       push(fp, INVALID_SOCKET, NULL, buffered, (int64_t) buffered_len);
       conn->consumed_content += buffered_len;
@@ -3501,7 +3505,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   }
 
   if (CTX != NULL && chain != NULL &&
-      SSL_CTX_use_certificate_chain_file(CTX, chain, SSL_FILETYPE_PEM) == 0) {
+      SSL_CTX_use_certificate_chain_file(CTX, chain) == 0) {
     cry(fc(ctx), "%s: cannot open %s: %s", NULL, chain, ssl_error());
     return 0;
   }
