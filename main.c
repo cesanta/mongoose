@@ -388,7 +388,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
 }
 #endif /* _WIN32 */
 
-int main(int argc, char *argv[]) {
+int WINCDECL main(int argc, char *argv[]) {
   start_mongoose(argc, argv);
   printf("%s started on port(s) %s with web root [%s]\n",
          server_name, mg_get_option(ctx, "listening_ports"),
