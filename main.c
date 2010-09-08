@@ -187,7 +187,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
   /* Should we use a config file ? */
   if (argv[1] != NULL && argv[2] == NULL) {
     config_file = argv[1];
-  } else if (argv[1] == NULL && (p = strchr(argv[0], DIRSEP)) == NULL) {
+  } else if (argv[1] == NULL && (p = strrchr(argv[0], DIRSEP)) == NULL) {
     // No command line flags specified. Look where binary lives
     config_file = CONFIG_FILE;
   } else if (argv[1] == NULL) {
