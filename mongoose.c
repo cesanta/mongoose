@@ -169,6 +169,7 @@ typedef struct DIR {
 #include <sys/time.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <netdb.h>
 
 #include <pwd.h>
 #include <unistd.h>
@@ -270,39 +271,35 @@ struct ssl_func {
   void  (*ptr)(void); // Function pointer
 };
 
-#define SSL_free(x) (* (void (*)(SSL *)) ssl_sw[0].ptr)(x)
-#define SSL_accept(x) (* (int (*)(SSL *)) ssl_sw[1].ptr)(x)
-#define SSL_connect(x) (* (int (*)(SSL *)) ssl_sw[2].ptr)(x)
-#define SSL_read(x,y,z) (* (int (*)(SSL *, void *, int))   \
-    ssl_sw[3].ptr)((x),(y),(z))
-#define SSL_write(x,y,z) (* (int (*)(SSL *, const void *,int))  \
-    ssl_sw[4].ptr)((x), (y), (z))
-#define SSL_get_error(x,y)(* (int (*)(SSL *, int)) ssl_sw[5])((x), (y))
-#define SSL_set_fd(x,y) (* (int (*)(SSL *, SOCKET)) ssl_sw[6].ptr)((x), (y))
-#define SSL_new(x) (* (SSL * (*)(SSL_CTX *)) ssl_sw[7].ptr)(x)
-#define SSL_CTX_new(x) (* (SSL_CTX * (*)(SSL_METHOD *)) ssl_sw[8].ptr)(x)
-#define SSLv23_server_method() (* (SSL_METHOD * (*)(void)) ssl_sw[9].ptr)()
-#define SSL_library_init() (* (int (*)(void)) ssl_sw[10].ptr)()
-#define SSL_CTX_use_PrivateKey_file(x,y,z) (* (int (*)(SSL_CTX *, \
-        const char *, int)) ssl_sw[11].ptr)((x), (y), (z))
-#define SSL_CTX_use_certificate_file(x,y,z) (* (int (*)(SSL_CTX *, \
-        const char *, int)) ssl_sw[12].ptr)((x), (y), (z))
-#define SSL_CTX_set_default_passwd_cb(x,y) \
-  (* (void (*)(SSL_CTX *, mg_callback_t)) ssl_sw[13].ptr)((x),(y))
-#define SSL_CTX_free(x) (* (void (*)(SSL_CTX *)) ssl_sw[14].ptr)(x)
-#define SSL_load_error_strings() (* (void (*)(void)) ssl_sw[15].ptr)()
-#define SSL_CTX_use_certificate_chain_file(x,y) \
-  (* (int (*)(SSL_CTX *, const char *)) ssl_sw[16].ptr)((x), (y))
+#define SSL_free (* (void (*)(SSL *)) ssl_sw[0].ptr)
+#define SSL_accept (* (int (*)(SSL *)) ssl_sw[1].ptr)
+#define SSL_connect (* (int (*)(SSL *)) ssl_sw[2].ptr)
+#define SSL_read (* (int (*)(SSL *, void *, int)) ssl_sw[3].ptr)
+#define SSL_write (* (int (*)(SSL *, const void *,int)) ssl_sw[4].ptr)
+#define SSL_get_error (* (int (*)(SSL *, int)) ssl_sw[5])
+#define SSL_set_fd (* (int (*)(SSL *, SOCKET)) ssl_sw[6].ptr)
+#define SSL_new (* (SSL * (*)(SSL_CTX *)) ssl_sw[7].ptr)
+#define SSL_CTX_new (* (SSL_CTX * (*)(SSL_METHOD *)) ssl_sw[8].ptr)
+#define SSLv23_server_method (* (SSL_METHOD * (*)(void)) ssl_sw[9].ptr)
+#define SSL_library_init (* (int (*)(void)) ssl_sw[10].ptr)
+#define SSL_CTX_use_PrivateKey_file (* (int (*)(SSL_CTX *, \
+        const char *, int)) ssl_sw[11].ptr)
+#define SSL_CTX_use_certificate_file (* (int (*)(SSL_CTX *, \
+        const char *, int)) ssl_sw[12].ptr)
+#define SSL_CTX_set_default_passwd_cb \
+  (* (void (*)(SSL_CTX *, mg_callback_t)) ssl_sw[13].ptr)
+#define SSL_CTX_free (* (void (*)(SSL_CTX *)) ssl_sw[14].ptr)
+#define SSL_load_error_strings (* (void (*)(void)) ssl_sw[15].ptr)
+#define SSL_CTX_use_certificate_chain_file \
+  (* (int (*)(SSL_CTX *, const char *)) ssl_sw[16].ptr)
 
-#define CRYPTO_num_locks() (* (int (*)(void)) crypto_sw[0].ptr)()
-#define CRYPTO_set_locking_callback(x)     \
-  (* (void (*)(void (*)(int, int, const char *, int))) \
-   crypto_sw[1].ptr)(x)
-#define CRYPTO_set_id_callback(x)     \
-  (* (void (*)(unsigned long (*)(void))) crypto_sw[2].ptr)(x)
-#define ERR_get_error() (* (unsigned long (*)(void)) ssl_sw[3].ptr)()
-#define ERR_error_string(x, y) (* (char * (*)(unsigned long, char *)) \
-  ssl_sw[4].ptr)((x), (y))
+#define CRYPTO_num_locks (* (int (*)(void)) crypto_sw[0].ptr)
+#define CRYPTO_set_locking_callback \
+  (* (void (*)(void (*)(int, int, const char *, int))) crypto_sw[1].ptr)
+#define CRYPTO_set_id_callback \
+  (* (void (*)(unsigned long (*)(void))) crypto_sw[2].ptr)
+#define ERR_get_error (* (unsigned long (*)(void)) ssl_sw[3].ptr)
+#define ERR_error_string (* (char * (*)(unsigned long, char *)) ssl_sw[4].ptr)
 
 // set_ssl_option() function updates this array.
 // It loads SSL library dynamically and changes NULLs to the actual addresses
@@ -412,6 +409,7 @@ static const char *config_options[] = {
   "u", "run_as_user", NULL,
   NULL
 };
+#define ENTRIES_PER_CONFIG_OPTION 3
 
 struct mg_context {
   int stop_flag;                // Should we stop event loop
@@ -457,11 +455,11 @@ static void *call_user(struct mg_connection *conn, enum mg_event event) {
 
 static int get_option_index(const char *name) {
   int i;
-#define ENTRIES_PER_OPTION 3
-  for (i = 0; config_options[i] != NULL; i += ENTRIES_PER_OPTION) {
+
+  for (i = 0; config_options[i] != NULL; i += ENTRIES_PER_CONFIG_OPTION) {
     if (strcmp(config_options[i], name) == 0 ||
         strcmp(config_options[i + 1], name) == 0) {
-      return i / ENTRIES_PER_OPTION;
+      return i / ENTRIES_PER_CONFIG_OPTION;
     }
   }
   return -1;
@@ -1496,7 +1494,7 @@ int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
 }
 
 // Mongoose allows to specify multiple directories to serve,
-// like /var/www,/~bob:/home/bob. That means that root directory depends on URI.
+// like /var/www,/~bob=/home/bob. That means that root directory depends on URI.
 // This function returns root dir for given URI.
 static int get_document_root(const struct mg_connection *conn,
                              struct vec *document_root) {
@@ -1533,6 +1531,48 @@ static void convert_uri_to_file_name(struct mg_connection *conn,
 #endif /* _WIN32 */
 
   DEBUG_TRACE(("[%s] -> [%s]", uri, buf));
+}
+
+static int sslize(struct mg_connection *conn, int (*func)(SSL *)) {
+  return (conn->ssl = SSL_new(conn->ctx->ssl_ctx)) != NULL &&
+    SSL_set_fd(conn->ssl, conn->client.sock) == 1 &&
+    func(conn->ssl) == 1;
+}
+
+struct mg_connection *mg_connect(struct mg_connection *conn,
+                                 const char *host, int port, int use_ssl) {
+  struct mg_connection *newconn = NULL;
+  struct sockaddr_in sin;
+  struct hostent *he;
+  int sock;
+
+  if (conn->ctx->ssl_ctx == NULL && use_ssl) {
+    cry(conn, "%s: SSL is not initialized", __func__);
+  } else if ((he = gethostbyname(host)) == NULL) {
+    cry(conn, "%s: gethostbyname(%s): %s", __func__, host, strerror(ERRNO));
+  } else if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
+    cry(conn, "%s: socket: %s", __func__, strerror(ERRNO));
+  } else {
+    sin.sin_family = AF_INET;
+    sin.sin_port = htons(port);
+    sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
+    if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) != 0) {
+      cry(conn, "%s: connect(%s:%d): %s", __func__, host, port,
+          strerror(ERRNO));
+      closesocket(sock);
+    } else if ((newconn = calloc(1, sizeof(*newconn))) == NULL) {
+      cry(conn, "%s: calloc: %s", __func__, strerror(ERRNO));
+      closesocket(sock);
+    } else {
+      newconn->client.sock = sock;
+      newconn->client.rsa.u.sin = sin;
+      if (use_ssl) {
+        sslize(newconn, SSL_connect);
+      }
+    }
+  }
+
+  return newconn;
 }
 
 // Setup listening socket on given address, return socket.
@@ -2183,7 +2223,6 @@ static int is_authorized_for_put(struct mg_connection *conn) {
   fp = conn->ctx->config[PUT_DELETE_PASSWORDS_FILE] == NULL ? NULL :
     mg_fopen(conn->ctx->config[PUT_DELETE_PASSWORDS_FILE], "r");
 
-
   if (fp != NULL) {
     ret = authorize(conn, fp);
     (void) fclose(fp);
@@ -2265,8 +2304,8 @@ struct de {
 };
 
 static void url_encode(const char *src, char *dst, size_t dst_len) {
-  const char *dont_escape = "._-$,;~()";
-  const char *hex = "0123456789abcdef";
+  static const char *dont_escape = "._-$,;~()";
+  static const char *hex = "0123456789abcdef";
   const char *end = dst + dst_len - 1;
 
   for (; *src != '\0' && dst < end; src++, dst++) {
@@ -3702,15 +3741,8 @@ static void worker_thread(struct mg_context *ctx) {
     conn->request_info.remote_ip = ntohl(conn->request_info.remote_ip);
     conn->request_info.is_ssl = conn->client.is_ssl;
 
-    if (conn->client.is_ssl && (conn->ssl = SSL_new(ctx->ssl_ctx)) == NULL) {
-      cry(conn, "%s: SSL_new: %s", __func__, ssl_error());
-    } else if (conn->client.is_ssl &&
-               SSL_set_fd(conn->ssl, conn->client.sock) != 1) {
-      cry(conn, "%s: SSL_set_fd: %s", __func__, ssl_error());
-    } else if (conn->client.is_ssl && SSL_accept(conn->ssl) != 1) {
-      // This is very noisy, disabling
-      // cry(conn, "%s: SSL handshake error: %s", __func__, ssl_error());
-    } else {
+    if (!conn->client.is_ssl ||
+        (conn->client.is_ssl && sslize(conn, SSL_accept))) {
       process_new_connection(conn);
     }
 
@@ -3864,7 +3896,7 @@ void mg_stop(struct mg_context *ctx) {
 
 struct mg_context *mg_start(mg_callback_t user_callback, const char **options) {
   struct mg_context *ctx;
-  const char *name, *value;
+  const char *name, *value, *default_value;
   int i;
 
 #if defined(_WIN32)
@@ -3892,11 +3924,13 @@ struct mg_context *mg_start(mg_callback_t user_callback, const char **options) {
   }
 
   // Set default value if needed
-  for (i = 0; config_options[i * 3] != NULL; i++) {
-    if (ctx->config[i] == NULL && config_options[i * 3 + 2] != NULL) {
-      ctx->config[i] = mg_strdup(config_options[i * 3 + 2]);
+  for (i = 0; config_options[i * ENTRIES_PER_CONFIG_OPTION] != NULL; i++) {
+    default_value = config_options[i * ENTRIES_PER_CONFIG_OPTION + 2];
+    if (ctx->config[i] == NULL && default_value != NULL) {
+      ctx->config[i] = mg_strdup(default_value);
       DEBUG_TRACE(("Setting default: [%s] -> [%s]",
-                   config_options[i * 3 + 1], config_options[i * 3 + 2]));
+                   config_options[i * ENTRIES_PER_CONFIG_OPTION + 1],
+                   default_value));
     }
   }
 
