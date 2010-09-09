@@ -373,6 +373,7 @@ struct socket {
   struct usa lsa;       // Local socket address
   struct usa rsa;       // Remote socket address
   int is_ssl;           // Is socket SSL-ed
+  int is_proxy;
 };
 
 enum {
@@ -1554,7 +1555,7 @@ struct mg_connection *mg_connect(struct mg_connection *conn,
     cry(conn, "%s: socket: %s", __func__, strerror(ERRNO));
   } else {
     sin.sin_family = AF_INET;
-    sin.sin_port = htons(port);
+    sin.sin_port = htons((uint16_t) port);
     sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
     if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) != 0) {
       cry(conn, "%s: connect(%s:%d): %s", __func__, host, port,
@@ -1573,52 +1574,6 @@ struct mg_connection *mg_connect(struct mg_connection *conn,
   }
 
   return newconn;
-}
-
-// Setup listening socket on given address, return socket.
-// Address format: [local_ip_address:]port_number
-static SOCKET mg_open_listening_port(struct mg_context *ctx, const char *str,
-                                     struct usa *usa) {
-  SOCKET sock;
-  int on = 1, a, b, c, d, port;
-
-  // MacOS needs that. If we do not zero it, bind() will fail.
-  (void) memset(usa, 0, sizeof(*usa));
-
-  if (sscanf(str, "%d.%d.%d.%d:%d", &a, &b, &c, &d, &port) == 5) {
-    // IP address to bind to is specified
-    usa->u.sin.sin_addr.s_addr =
-      htonl((a << 24) | (b << 16) | (c << 8) | d);
-  } else if (sscanf(str, "%d", &port) == 1) {
-    // Only port number is specified. Bind to all addresses
-    usa->u.sin.sin_addr.s_addr = htonl(INADDR_ANY);
-  } else {
-    return INVALID_SOCKET;
-  }
-
-  usa->len   = sizeof(usa->u.sin);
-  usa->u.sin.sin_family  = AF_INET;
-  usa->u.sin.sin_port  = htons((uint16_t) port);
-
-  if ((sock = socket(PF_INET, SOCK_STREAM, 6)) != INVALID_SOCKET &&
-#if !defined(_WIN32)
-      // On windows, SO_REUSEADDR is recommended only for broadcast UDP sockets
-      setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
-        (char *) &on, sizeof(on)) == 0 &&
-#endif // !_WIN32
-      bind(sock, &usa->u.sa, usa->len) == 0 &&
-      listen(sock, 20) == 0) {
-    // Success
-    set_close_on_exec(sock);
-  } else {
-    // Error
-    cry(fc(ctx), "%s(%d): %s", __func__, port, strerror(ERRNO));
-    if (sock != INVALID_SOCKET)
-      (void) closesocket(sock);
-    sock = INVALID_SOCKET;
-  }
-
-  return sock;
 }
 
 // Check whether full request is buffered. Return:
@@ -3287,30 +3242,78 @@ static void close_all_listening_sockets(struct mg_context *ctx) {
   }
 }
 
+// Valid listening port specification is: [ip_address:]port[s[p]]
+// Examples: 80, 443s, 127.0.0.1:3128p, 1.2.3.4:8080sp
+static int parse_port_string(const struct vec *vec, struct socket *so) {
+  struct usa *usa = &so->lsa;
+  int a, b, c, d, port, len;
+
+  // MacOS needs that. If we do not zero it, subsequent bind() will fail.
+  memset(so, 0, sizeof(*so));
+
+  if (sscanf(vec->ptr, "%d.%d.%d.%d:%d%n", &a, &b, &c, &d, &port, &len) == 5) {
+    // IP address to bind to is specified
+    usa->u.sin.sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
+  } else if (sscanf(vec->ptr, "%d%n", &port, &len) == 1) {
+    // Only port number is specified. Bind to all addresses
+    usa->u.sin.sin_addr.s_addr = htonl(INADDR_ANY);
+  } else {
+    return 0;
+  }
+
+  assert(len > 0 && len <= (int) vec->len);
+  so->is_ssl = vec->ptr[len] == 's';
+  so->is_proxy = vec->ptr[len] == 'p' ||
+    (vec->ptr[len] == 's' && vec->ptr[len + 1] == 'p');
+
+  if (vec->ptr[len + so->is_ssl + so->is_proxy] != '\0' &&
+      vec->ptr[len + so->is_ssl + so->is_proxy] != ',') {
+    return 0;
+  }
+
+  usa->len = sizeof(usa->u.sin);
+  usa->u.sin.sin_family = AF_INET;
+  usa->u.sin.sin_port = htons((uint16_t) port);
+
+  return 1;
+}
+
 static int set_ports_option(struct mg_context *ctx) {
-  SOCKET sock;
   const char *list = ctx->config[LISTENING_PORTS];
-  int is_ssl, success = 1;
+  int reuseaddr = 1, success = 1;
+  SOCKET sock;
   struct vec vec;
-  struct socket *listener;
+  struct socket so, *listener;
 
   while (success && (list = next_option(list, &vec, NULL)) != NULL) {
-    is_ssl = vec.ptr[vec.len - 1] == 's';
-
-    if ((listener = calloc(1, sizeof(*listener))) == NULL) {
-      cry(fc(ctx), "%s", "Too many listeninig sockets");
+    if (!parse_port_string(&vec, &so)) {
+      cry(fc(ctx), "%s: %.*s: invalid port spec. Expecting list of: %s",
+          __func__, vec.len, vec.ptr, "[IP_ADDRESS:]PORT[s[p]]");
       success = 0;
-    } else if ((sock = mg_open_listening_port(ctx,
-            vec.ptr, &listener->lsa)) == INVALID_SOCKET) {
-      cry(fc(ctx), "cannot bind to %.*s", vec.len, vec.ptr);
-      success = 0;
-    } else if (is_ssl && ctx->ssl_ctx == NULL) {
-      (void) closesocket(sock);
+    } else if (so.is_ssl && ctx->ssl_ctx == NULL) {
       cry(fc(ctx), "Cannot add SSL socket, is -ssl_cert option set?");
       success = 0;
+    } else if ((sock = socket(PF_INET, SOCK_STREAM, 6)) == INVALID_SOCKET ||
+#if !defined(_WIN32)
+               // On Windows, SO_REUSEADDR is recommended only for
+               // broadcast UDP sockets
+               setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuseaddr,
+                          sizeof(reuseaddr)) != 0 ||
+#endif // !_WIN32
+               bind(sock, &so.lsa.u.sa, so.lsa.len) != 0 ||
+               listen(sock, 20) != 0) {
+      closesocket(sock);
+      cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
+          vec.len, vec.ptr, strerror(ERRNO));
+      success = 0;
+    } else if ((listener = calloc(1, sizeof(*listener))) == NULL) {
+      closesocket(sock);
+      cry(fc(ctx), "%s: %s", __func__, strerror(ERRNO));
+      success = 0;
     } else {
+      *listener = so;
       listener->sock = sock;
-      listener->is_ssl = is_ssl;
+      set_close_on_exec(listener->sock);
       listener->next = ctx->listening_sockets;
       ctx->listening_sockets = listener;
     }
