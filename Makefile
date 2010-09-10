@@ -55,10 +55,10 @@ VC=	z:
 CYA=	y:
 #DBG=	/Zi /DDEBUG /Od
 DBG=	/DNDEBUG /O1
-CL=	cl /MD /TC /nologo $(DBG) /Gz /W3 # /DNO_SSL_DL
-GUILIB=	advapi32.lib user32.lib shell32.lib
+CL=	cl /MD /TC /nologo $(DBG) /Gz /W3 /DNO_SSL_DL
+GUILIB=	user32.lib shell32.lib
 LINK=	/link /incremental:no /libpath:$(VC)\lib /subsystem:windows \
-	ws2_32.lib  # cyassl.lib crypt32.lib
+	ws2_32.lib advapi32.lib cyassl.lib 
 
 CYAFL=	/c /I $(CYA)\ctaocrypt\include /I $(CYA)\include /D_LIB
 
