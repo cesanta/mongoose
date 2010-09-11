@@ -205,7 +205,6 @@ typedef int SOCKET;
 #define PASSWORDS_FILE_NAME ".htpasswd"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
-#define MAX_REQUEST_SIZE 8192
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
 
 #if defined(DEBUG)
@@ -383,7 +382,8 @@ enum {
   PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS, ACCESS_LOG_FILE,
   SSL_CHAIN_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
   GLOBAL_PASSWORDS_FILE, INDEX_FILES,
-  ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST, EXTRA_MIME_TYPES, LISTENING_PORTS,
+  ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST, MAX_REQUEST_SIZE,
+  EXTRA_MIME_TYPES, LISTENING_PORTS,
   DOCUMENT_ROOT, SSL_CERTIFICATE, NUM_THREADS, RUN_AS_USER,
   NUM_OPTIONS
 };
@@ -404,6 +404,7 @@ static const char *config_options[] = {
   "i", "index_files", "index.html,index.htm,index.cgi",
   "k", "enable_keep_alive", "no",
   "l", "access_control_list", NULL,
+  "M", "max_request_size", "16384",
   "m", "extra_mime_types", NULL,
   "p", "listening_ports", "8080",
   "r", "document_root",  ".",
@@ -443,7 +444,8 @@ struct mg_connection {
   int64_t num_bytes_sent;     // Total bytes sent to client
   int64_t content_len;        // Content-Length header value
   int64_t consumed_content;   // How many bytes of content is already read
-  char buf[MAX_REQUEST_SIZE]; // Buffer for received data
+  char *buf;                  // Buffer for received data
+  int buf_size;               // Buffer size
   int request_len;            // Size of the request + headers in a buffer
   int data_len;               // Total size of data in a buffer
 };
@@ -1384,7 +1386,7 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
 }
 
 int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
-  char buf[MAX_REQUEST_SIZE];
+  char buf[BUFSIZ];
   int len;
   va_list ap;
 
@@ -2110,7 +2112,7 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
 // Authorize against the opened passwords file. Return 1 if authorized.
 static int authorize(struct mg_connection *conn, FILE *fp) {
   struct ah ah;
-  char line[256], f_user[256], ha1[256], f_domain[256], buf[MAX_REQUEST_SIZE];
+  char line[256], f_user[256], ha1[256], f_domain[256], buf[BUFSIZ];
 
   if (!parse_auth_header(conn, buf, sizeof(buf), &ah)) {
     return 0;
@@ -2852,7 +2854,7 @@ static void prepare_cgi_environment(struct mg_connection *conn,
 static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   int headers_len, data_len, i, fd_stdin[2], fd_stdout[2];
   const char *status;
-  char buf[MAX_REQUEST_SIZE], *pbuf, dir[PATH_MAX], *p;
+  char buf[BUFSIZ], *pbuf, dir[PATH_MAX], *p;
   struct mg_request_info ri;
   struct cgi_env_block blk;
   FILE *in, *out;
@@ -3740,10 +3742,10 @@ static void process_new_connection(struct mg_connection *conn) {
     // If next request is not pipelined, read it in
     if ((conn->request_len = get_request_len(conn->buf, conn->data_len)) == 0) {
       conn->request_len = read_request(NULL, conn->client.sock, conn->ssl,
-          conn->buf, sizeof(conn->buf), &conn->data_len);
+          conn->buf, conn->buf_size, &conn->data_len);
     }
     assert(conn->data_len >= conn->request_len);
-    if (conn->request_len == 0 && conn->data_len == sizeof(conn->buf)) {
+    if (conn->request_len == 0 && conn->data_len == conn->buf_size) {
       send_http_error(conn, 413, "Request Too Large", "");
       return;
     } if (conn->request_len <= 0) {
@@ -3815,8 +3817,11 @@ static int consume_socket(struct mg_context *ctx, struct socket *sp) {
 
 static void worker_thread(struct mg_context *ctx) {
   struct mg_connection *conn;
-  
-  conn = calloc(1, sizeof(*conn));
+  int buf_size = atoi(ctx->config[MAX_REQUEST_SIZE]);
+
+  conn = calloc(1, sizeof(*conn) + buf_size);
+  conn->buf_size = buf_size;
+  conn->buf = (char *) (conn + 1);
   assert(conn != NULL);
 
   while (ctx->stop_flag == 0 && consume_socket(ctx, &conn->client)) {
