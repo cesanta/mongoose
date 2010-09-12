@@ -17,9 +17,9 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
- 
+
 #if defined(_WIN32)
-#define _CRT_SECURE_NO_WARNINGS	// Disable deprecation warning in VS2005
+#define _CRT_SECURE_NO_WARNINGS  // Disable deprecation warning in VS2005
 #else
 #define _XOPEN_SOURCE 600  // For PATH_MAX on linux
 #endif
@@ -42,9 +42,9 @@
 #define PATH_MAX MAX_PATH
 #define S_ISDIR(x) ((x) & _S_IFDIR)
 #define DIRSEP '\\'
-#define	snprintf _snprintf
-#define	vsnprintf _vsnprintf
-#define	sleep(x) Sleep((x) * 1000)
+#define snprintf _snprintf
+#define vsnprintf _vsnprintf
+#define sleep(x) Sleep((x) * 1000)
 #define WINCDECL __cdecl
 #else
 #include <sys/wait.h>
@@ -58,10 +58,11 @@
 static int exit_flag;
 static char *options[MAX_OPTIONS];
 static char server_name[40];
+static char *config_file;
 static struct mg_context *ctx;
 
 #if !defined(CONFIG_FILE)
-#define	CONFIG_FILE "mongoose.conf"
+#define CONFIG_FILE "mongoose.conf"
 #endif /* !CONFIG_FILE */
 
 static void WINCDECL signal_handler(int sig_num) {
@@ -98,7 +99,7 @@ static void die(const char *fmt, ...) {
  */
 static int mg_edit_passwords(const char *fname, const char *domain,
                              const char *user, const char *pass) {
-  struct mg_context	*ctx;
+  struct mg_context *ctx;
   const char *options[] = {"authentication_domain", NULL, NULL};
   int success;
 
@@ -178,27 +179,26 @@ static void set_option(char **options, const char *name, const char *value) {
 }
 
 static void process_command_line_arguments(char *argv[], char **options) {
-  const char	*config_file = NULL;
   char line[512], opt[512], val[512], path[PATH_MAX], *p;
   FILE *fp = NULL;
-  struct stat st;
   size_t i, line_no = 0;
 
   /* Should we use a config file ? */
   if (argv[1] != NULL && argv[2] == NULL) {
     config_file = argv[1];
-  } else if (argv[1] == NULL && (p = strrchr(argv[0], DIRSEP)) == NULL) {
+  } else if ((p = strrchr(argv[0], DIRSEP)) == NULL) {
     // No command line flags specified. Look where binary lives
     config_file = CONFIG_FILE;
-  } else if (argv[1] == NULL) {
+  } else {
     snprintf(path, sizeof(path), "%.*s%c%s",
              (int) (p - argv[0]), argv[0], DIRSEP, CONFIG_FILE);
-    if (stat(path, &st) == 0) {
-      config_file = path;
-    }
+    config_file = path;
   }
+
+  fp = fopen(config_file, "r");
+
   /* If config file was set in command line and open failed, exit */
-  if (config_file != NULL && (fp = fopen(config_file, "r")) == NULL) {
+  if (argv[1] != NULL && argv[2] == NULL && fp == NULL) {
     die("Cannot open config file %s: %s", config_file, strerror(errno));
   }
 
@@ -231,11 +231,13 @@ static void process_command_line_arguments(char *argv[], char **options) {
   }
 }
 
+static void init_server_name(void) {
+  snprintf(server_name, sizeof(server_name), "Mongoose web server v.%s",
+           mg_version());
+}
+
 static void start_mongoose(int argc, char *argv[]) {
   int i;
-
-  snprintf(server_name, sizeof(server_name),
-           "Mongoose %s web server", mg_version());
 
   /* Edit passwords file if -A option is specified */
   if (argc > 1 && argv[1][0] == '-' && argv[1][1] == 'A') {
@@ -294,7 +296,6 @@ static void WINAPI ServiceMain(void) {
   hStatus = RegisterServiceCtrlHandler(server_name, ControlHandler);
   SetServiceStatus(hStatus, &ss);
 
-  //Sleep(3000);
   while (ss.dwCurrentState == SERVICE_RUNNING) {
     Sleep(1000);
   }
@@ -305,43 +306,89 @@ static void WINAPI ServiceMain(void) {
   SetServiceStatus(hStatus, &ss);
 }
 
-static void try_to_run_as_nt_service(void) {
+#define ID_TRAYICON 100
+#define ID_QUIT 101
+#define ID_EDIT_CONFIG 102
+#define ID_SEPARATOR 103
+#define ID_INSTALL_SERVICE 104
+#define ID_REMOVE_SERVICE 105
+#define ID_ICON 200
+static NOTIFYICONDATA TrayIcon;
+
+static void edit_config_file(void) {
+  const char **names, *value;
+  FILE *fp;
+  int i;
+  char cmd[200];
+
+  // Create config file if it is not present yet
+  if ((fp = fopen(config_file, "r")) != NULL) {
+    fclose(fp);
+  } else if ((fp = fopen(config_file, "a+")) != NULL) {
+    fprintf(fp,
+            "# Mongoose web server configuration file.\n"
+            "# Lines starting with '#' and empty lines are ignored.\n"
+            "# For detailed description of every option, visit\n"
+            "# http://code.google.com/p/mongoose/wiki/MongooseManual\n\n");
+    names = mg_get_valid_option_names();
+    for (i = 0; names[i] != NULL; i += 3) {
+      value = mg_get_option(ctx, names[i]);
+      fprintf(fp, "# %s %s\n", names[i + 1], *value ? value : "<value>");
+    }
+    fclose(fp);
+  }
+
+  snprintf(cmd, sizeof(cmd), "notepad.exe %s", config_file);
+  WinExec(cmd, SW_SHOW);
+}
+
+static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
+                                   LPARAM lParam) {
   static SERVICE_TABLE_ENTRY service_table[] = {
     {server_name, (LPSERVICE_MAIN_FUNCTION) ServiceMain},
     {NULL, NULL}
   };
-
-  if (StartServiceCtrlDispatcher(service_table)) {
-    exit(EXIT_SUCCESS);
-  }
-}
-
-#define	ID_TRAYICON	100
-#define	ID_QUIT		101
-static NOTIFYICONDATA	ni;
-
-static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
-                                   LPARAM lParam) {
-  POINT	pt;
-  HMENU	hMenu; 	 
+  POINT pt;
+  HMENU hMenu;
 
   switch (msg) {
-
+    case WM_CREATE:
+      // Win32 runtime must prepare __argc and __argv for us
+      start_mongoose(__argc, __argv);
+      // TODO(lsm): figure out why this executes long time
+      if (StartServiceCtrlDispatcher(service_table)) {
+        exit(EXIT_SUCCESS);
+      }
+      break;
     case WM_COMMAND:
       switch (LOWORD(wParam)) {
         case ID_QUIT:
-          exit(EXIT_SUCCESS);
+          mg_stop(ctx);
+          Shell_NotifyIcon(NIM_DELETE, &TrayIcon);
+          PostQuitMessage(0);
+          break;
+        case ID_EDIT_CONFIG:
+          edit_config_file();
           break;
       }
       break;
-
     case WM_USER:
       switch (lParam) {
         case WM_RBUTTONUP:
         case WM_LBUTTONUP:
         case WM_LBUTTONDBLCLK:
           hMenu = CreatePopupMenu();
-          AppendMenu(hMenu, 0, ID_QUIT, "Exit");
+          AppendMenu(hMenu, MF_STRING | MF_GRAYED, ID_SEPARATOR, server_name);
+          AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
+#if 0
+          AppendMenu(hMenu, MF_STRING | MF_GRAYED, ID_SEPARATOR,
+                     "NT service: not installed");
+          AppendMenu(hMenu, MF_STRING, ID_INSTALL_SERVICE, "Install");
+          AppendMenu(hMenu, MF_STRING, ID_REMOVE_SERVICE, "Deinstall");
+          AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
+#endif
+          AppendMenu(hMenu, MF_STRING, ID_EDIT_CONFIG, "Edit config file");
+          AppendMenu(hMenu, MF_STRING, ID_QUIT, "Exit");
           GetCursorPos(&pt);
           TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, hWnd, NULL);
           DestroyMenu(hMenu);
@@ -358,12 +405,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
   HWND hWnd;
   MSG msg;
 
-  // Win32 runtime must prepare __argc and __argv for us
-  start_mongoose(__argc, __argv);
-  try_to_run_as_nt_service();
-
+  init_server_name();
   memset(&cls, 0, sizeof(cls));
-  cls.lpfnWndProc = (WNDPROC) WindowProc; 
+  cls.lpfnWndProc = (WNDPROC) WindowProc;
   cls.hIcon = LoadIcon(NULL, IDI_APPLICATION);
   cls.lpszClassName = server_name;
 
@@ -372,23 +416,24 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
                       0, 0, 0, 0, NULL, NULL, NULL, NULL);
   ShowWindow(hWnd, SW_HIDE);
 
-  ni.cbSize = sizeof(ni);
-  ni.uID = ID_TRAYICON;
-  ni.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
-  ni.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-  ni.hWnd = hWnd;
-  snprintf(ni.szTip, sizeof(ni.szTip), "%s", server_name);
-  ni.uCallbackMessage = WM_USER;
-  Shell_NotifyIcon(NIM_ADD, &ni);
+  TrayIcon.cbSize = sizeof(TrayIcon);
+  TrayIcon.uID = ID_TRAYICON;
+  TrayIcon.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+  TrayIcon.hIcon = LoadImage(GetModuleHandle(NULL), MAKEINTRESOURCE(ID_ICON),
+                             IMAGE_ICON, 16, 16, 0);
+  TrayIcon.hWnd = hWnd;
+  snprintf(TrayIcon.szTip, sizeof(TrayIcon.szTip), "%s", server_name);
+  TrayIcon.uCallbackMessage = WM_USER;
+  Shell_NotifyIcon(NIM_ADD, &TrayIcon);
 
-  while (GetMessage(&msg, hWnd, 0, 0)) { 
-    TranslateMessage(&msg); 
-    DispatchMessage(&msg); 
+  while (GetMessage(&msg, hWnd, 0, 0)) {
+    TranslateMessage(&msg);
+    DispatchMessage(&msg);
   }
 }
-#endif /* _WIN32 */
-
-int WINCDECL main(int argc, char *argv[]) {
+#else
+int main(int argc, char *argv[]) {
+  init_server_name();
   start_mongoose(argc, argv);
   printf("%s started on port(s) %s with web root [%s]\n",
          server_name, mg_get_option(ctx, "listening_ports"),
@@ -404,3 +449,4 @@ int WINCDECL main(int argc, char *argv[]) {
 
   return EXIT_SUCCESS;
 }
+#endif /* _WIN32 */
