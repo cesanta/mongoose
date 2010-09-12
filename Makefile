@@ -58,7 +58,7 @@ DBG=	/DNDEBUG /O1
 CL=	cl /MD /TC /nologo $(DBG) /Gz /W3 /DNO_SSL_DL
 GUILIB=	user32.lib shell32.lib
 LINK=	/link /incremental:no /libpath:$(VC)\lib /subsystem:windows \
-	ws2_32.lib advapi32.lib cyassl.lib 
+	ws2_32.lib advapi32.lib cyassl.lib
 
 CYAFL=	/c /I $(CYA)\ctaocrypt\include /I $(CYA)\include /D_LIB
 
@@ -92,8 +92,10 @@ cyassl:
 	lib *.obj /out:cyassl.lib
 
 windows:
+	rc win32\res.rc
+	$(CL) main.c mongoose.c /GA $(LINK) win32\res.res \
+		$(GUILIB) /out:$(PROG).exe
 	$(CL) mongoose.c /GD $(LINK) /DLL /DEF:win32\dll.def /out:_$(PROG).dll
-	$(CL) main.c mongoose.c /GA $(LINK) $(GUILIB) /out:$(PROG).exe
 
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0
