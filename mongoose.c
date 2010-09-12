@@ -3960,6 +3960,9 @@ static void free_context(struct mg_context *ctx) {
   if (ctx->ssl_ctx != NULL) {
     SSL_CTX_free(ctx->ssl_ctx);
   }
+  if (ssl_mutexes != NULL) {
+    free(ssl_mutexes);
+  }
 
   // Deallocate context itself
   free(ctx);
