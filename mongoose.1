@@ -65,6 +65,8 @@ Use
 as a CGI interpreter for all CGI scripts regardless script extension.
 Default: "". Mongoose decides which interpreter to use by looking at
 the first line of a CGI script.
+.It Fl M Ar max_request_size
+Maximum HTTP request size in bytes. Default: "16384"
 .It Fl P Ar protect_uri
 Comma separated list of URI=PATH pairs, specifying that given URIs
 must be protected with respected password files. Default: ""
