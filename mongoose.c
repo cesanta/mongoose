@@ -125,7 +125,7 @@ typedef long off_t;
 #endif // !fileno MINGW #defines fileno
 
 typedef HANDLE pthread_mutex_t;
-typedef HANDLE pthread_cond_t;
+typedef struct {HANDLE signal, broadcast;} pthread_cond_t;
 typedef DWORD pthread_t;
 #define pid_t HANDLE // MINGW typedefs pid_t to int. Using #define here.
 
@@ -791,42 +791,30 @@ static int pthread_mutex_unlock(pthread_mutex_t *mutex) {
 
 static int pthread_cond_init(pthread_cond_t *cv, const void *unused) {
   unused = NULL;
-  *cv = CreateEvent(NULL, FALSE, FALSE, NULL);
-  return *cv == NULL ? -1 : 0;
-}
-
-static int pthread_cond_timedwait(pthread_cond_t *cv, pthread_mutex_t *mutex,
-                                  const struct timespec *ts) {
-  DWORD status;
-  DWORD msec = INFINITE;
-  time_t now;
-
-  if (ts != NULL) {
-    now = time(NULL);
-    msec = 1000 * (now > ts->tv_sec ? 0 : ts->tv_sec - now);
-  }
-
-  (void) ReleaseMutex(*mutex);
-  status = WaitForSingleObject(*cv, msec);
-  (void) WaitForSingleObject(*mutex, INFINITE);
-
-  return status == WAIT_OBJECT_0 ? 0 : -1;
+  cv->signal = CreateEvent(NULL, FALSE, FALSE, NULL);
+  cv->broadcast = CreateEvent(NULL, TRUE, FALSE, NULL);
+  return cv->signal != NULL && cv->broadcast != NULL ? 0 : -1;
 }
 
 static int pthread_cond_wait(pthread_cond_t *cv, pthread_mutex_t *mutex) {
-  return pthread_cond_timedwait(cv, mutex, NULL);
+  HANDLE handles[] = {cv->signal, cv->broadcast};
+  ReleaseMutex(*mutex);
+  WaitForMultipleObjects(2, handles, FALSE, INFINITE);
+  return ReleaseMutex(*mutex) == 0 ? -1 : 0;
 }
 
 static int pthread_cond_signal(pthread_cond_t *cv) {
-  return SetEvent(*cv) == 0 ? -1 : 0;
+  return SetEvent(cv->signal) == 0 ? -1 : 0;
 }
 
 static int pthread_cond_broadcast(pthread_cond_t *cv) {
-  return PulseEvent(*cv) == 0 ? -1 : 0;
+  // Implementation with PulseEvent() has race condition, see
+  // http://www.cs.wustl.edu/~schmidt/win32-cv-1.html
+  return PulseEvent(cv->broadcast) == 0 ? -1 : 0;
 }
 
 static int pthread_cond_destroy(pthread_cond_t *cv) {
-  return CloseHandle(*cv) == 0 ? -1 : 0;
+  return CloseHandle(cv->signal) && CloseHandle(cv->broadcast) ? 0 : -1;
 }
 
 static pthread_t pthread_self(void) {
