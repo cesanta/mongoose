@@ -56,10 +56,9 @@
 #define MAX_OPTIONS 40
 
 static int exit_flag;
-static char *options[MAX_OPTIONS];
-static char server_name[40];
-static char *config_file;
-static struct mg_context *ctx;
+static char server_name[40];   // Set by init_server_name()
+static char *config_file;      // Set by process_command_line_arguments()
+static struct mg_context *ctx; // Set by start_mongoose()
 
 #if !defined(CONFIG_FILE)
 #define CONFIG_FILE "mongoose.conf"
@@ -183,7 +182,9 @@ static void process_command_line_arguments(char *argv[], char **options) {
   FILE *fp = NULL;
   size_t i, line_no = 0;
 
-  /* Should we use a config file ? */
+  options[0] = NULL;
+
+  // Should we use a config file ?
   if (argv[1] != NULL && argv[2] == NULL) {
     config_file = argv[1];
   } else if ((p = strrchr(argv[0], DIRSEP)) == NULL) {
@@ -197,20 +198,21 @@ static void process_command_line_arguments(char *argv[], char **options) {
 
   fp = fopen(config_file, "r");
 
-  /* If config file was set in command line and open failed, exit */
+  // If config file was set in command line and open failed, exit
   if (argv[1] != NULL && argv[2] == NULL && fp == NULL) {
     die("Cannot open config file %s: %s", config_file, strerror(errno));
   }
 
+  // Load config file settings first
   if (fp != NULL) {
     fprintf(stderr, "Loading config file %s\n", config_file);
 
-    /* Loop over the lines in config file */
+    // Loop over the lines in config file
     while (fgets(line, sizeof(line), fp) != NULL) {
 
       line_no++;
 
-      /* Ignore empty lines and comments */
+      // Ignore empty lines and comments
       if (line[0] == '#' || line[0] == '\n')
         continue;
 
@@ -221,13 +223,14 @@ static void process_command_line_arguments(char *argv[], char **options) {
     }
 
     (void) fclose(fp);
-  } else {
-    for (i = 1; argv[i] != NULL; i += 2) {
-      if (argv[i][0] != '-' || argv[i + 1] == NULL) {
-        show_usage_and_exit();
-      }
-      set_option(options, &argv[i][1], argv[i + 1]);
+  }
+
+  // Now handle command line flags. They override config file settings.
+  for (i = 1; argv[i] != NULL; i += 2) {
+    if (argv[i][0] != '-' || argv[i + 1] == NULL) {
+      show_usage_and_exit();
     }
+    set_option(options, &argv[i][1], argv[i + 1]);
   }
 }
 
@@ -237,6 +240,7 @@ static void init_server_name(void) {
 }
 
 static void start_mongoose(int argc, char *argv[]) {
+  char *options[MAX_OPTIONS];
   int i;
 
   /* Edit passwords file if -A option is specified */
@@ -342,12 +346,60 @@ static void edit_config_file(void) {
   WinExec(cmd, SW_SHOW);
 }
 
+static void show_error(void) {
+  char buf[256];
+  FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                NULL, GetLastError(),
+                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                buf, sizeof(buf), NULL);
+  MessageBox(NULL, buf, "Error", MB_OK);
+}
+
+static int manage_service(int action) {
+  static const char *service_name = "Mongoose";
+  SC_HANDLE hSCM = NULL, hService = NULL;
+  char path[PATH_MAX];
+  int success = 1;
+
+  if ((hSCM = OpenSCManager(NULL, NULL, action == ID_INSTALL_SERVICE ?
+                            GENERIC_WRITE : GENERIC_READ)) == NULL) {
+    success = 0;
+    show_error();
+  } else if (action == ID_INSTALL_SERVICE) {
+    GetModuleFileName(NULL, path, sizeof(path));
+    hService = CreateService(hSCM, service_name, service_name,
+                             SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS,
+                             SERVICE_AUTO_START, SERVICE_ERROR_NORMAL,
+                             path, NULL, NULL, NULL, NULL, NULL);
+    if (hService) {
+      ChangeServiceConfig2(hService, SERVICE_CONFIG_DESCRIPTION, server_name);
+    } else {
+      show_error();
+    }
+  } else if (action == ID_REMOVE_SERVICE) {
+    if ((hService = OpenService(hSCM, service_name, DELETE)) == NULL ||
+        !DeleteService(hService)) {
+      show_error();
+    }
+  } else if ((hService = OpenService(hSCM, service_name,
+                                     SERVICE_QUERY_STATUS)) == NULL) {
+    success = 0;
+  }
+
+  //CloseServiceHandle(hService);
+  //CloseServiceHandle(hSCM);
+
+  return success;
+}
+
 static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
                                    LPARAM lParam) {
   static SERVICE_TABLE_ENTRY service_table[] = {
     {server_name, (LPSERVICE_MAIN_FUNCTION) ServiceMain},
     {NULL, NULL}
   };
+  int service_installed;
+  char buf[200];
   POINT pt;
   HMENU hMenu;
 
@@ -370,6 +422,10 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
         case ID_EDIT_CONFIG:
           edit_config_file();
           break;
+        case ID_INSTALL_SERVICE:
+        case ID_REMOVE_SERVICE:
+          manage_service(LOWORD(wParam));
+          break;
       }
       break;
     case WM_USER:
@@ -380,13 +436,15 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
           hMenu = CreatePopupMenu();
           AppendMenu(hMenu, MF_STRING | MF_GRAYED, ID_SEPARATOR, server_name);
           AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
-#if 0
-          AppendMenu(hMenu, MF_STRING | MF_GRAYED, ID_SEPARATOR,
-                     "NT service: not installed");
-          AppendMenu(hMenu, MF_STRING, ID_INSTALL_SERVICE, "Install");
-          AppendMenu(hMenu, MF_STRING, ID_REMOVE_SERVICE, "Deinstall");
+          service_installed = manage_service(0);
+          snprintf(buf, sizeof(buf), "NT service: %s installed",
+                   service_installed ? "" : "not");
+          AppendMenu(hMenu, MF_STRING | MF_GRAYED, ID_SEPARATOR, buf);
+          AppendMenu(hMenu, MF_STRING | (service_installed ? MF_GRAYED : 0),
+                     ID_INSTALL_SERVICE, "Install");
+          AppendMenu(hMenu, MF_STRING | (!service_installed ? MF_GRAYED : 0),
+                     ID_REMOVE_SERVICE, "Deinstall");
           AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
-#endif
           AppendMenu(hMenu, MF_STRING, ID_EDIT_CONFIG, "Edit config file");
           AppendMenu(hMenu, MF_STRING, ID_QUIT, "Exit");
           GetCursorPos(&pt);

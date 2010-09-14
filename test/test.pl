@@ -146,8 +146,8 @@ if (scalar(@ARGV) > 0 and $ARGV[0] eq 'embedded') {
 }
 
 # Make sure we load config file if no options are given
-write_file($config, "listening_ports 12345\naccess_log_file access.log\n");
-spawn($exe);
+write_file($config, "listening_ports 12345\n");
+spawn("$exe -a access.log");
 my $saved_port = $port;
 $port = 12345;
 o("GET /test/hello.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'Loading config file');
