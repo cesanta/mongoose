@@ -3999,7 +3999,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, const char **options) {
   ctx = calloc(1, sizeof(*ctx));
   ctx->user_callback = user_callback;
 
-  while ((name = *options++) != NULL) {
+  while (options && (name = *options++) != NULL) {
     if ((i = get_option_index(name)) == -1) {
       cry(fc(ctx), "Invalid option: %s", name);
       free_context(ctx);
