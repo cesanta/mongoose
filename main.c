@@ -447,7 +447,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
           AppendMenu(hMenu, MF_STRING, ID_EDIT_CONFIG, "Edit config file");
           AppendMenu(hMenu, MF_STRING, ID_QUIT, "Exit");
           GetCursorPos(&pt);
+          SetForegroundWindow(hWnd);
           TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, hWnd, NULL);
+          PostMessage(hWnd, WM_NULL, 0, 0);
           DestroyMenu(hMenu);
           break;
       }
