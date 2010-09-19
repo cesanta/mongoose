@@ -1528,7 +1528,7 @@ static void convert_uri_to_file_name(struct mg_connection *conn,
   change_slashes_to_backslashes(buf);
 #endif /* _WIN32 */
 
-  DEBUG_TRACE(("[%s] -> [%s]", uri, buf));
+  DEBUG_TRACE(("[%s] -> [%s], [%.*s]", uri, buf, (int) vec.len, vec.ptr));
 }
 
 static int sslize(struct mg_connection *conn, int (*func)(SSL *)) {
@@ -2743,18 +2743,13 @@ static char *addenv(struct cgi_env_block *block, const char *fmt, ...) {
 static void prepare_cgi_environment(struct mg_connection *conn,
                                     const char *prog,
                                     struct cgi_env_block *blk) {
-  const char *s, *script_filename, *slash;
+  const char *s, *slash;
   struct vec var_vec, root;
   char *p;
   int  i;
 
   blk->len = blk->nvars = 0;
   blk->conn = conn;
-
-  // SCRIPT_FILENAME
-  script_filename = prog;
-  if ((s = strrchr(prog, '/')) != NULL)
-    script_filename = s + 1;
 
   get_document_root(conn, &root);
 
@@ -2773,10 +2768,13 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   addenv(blk, "REMOTE_PORT=%d", conn->request_info.remote_port);
   addenv(blk, "REQUEST_URI=%s", conn->request_info.uri);
 
+  // SCRIPT_NAME
+  assert(conn->request_info.uri[0] == '/');
   slash = strrchr(conn->request_info.uri, '/');
-  addenv(blk, "SCRIPT_NAME=%.*s%s",
-      (slash - conn->request_info.uri) + 1, conn->request_info.uri,
-      script_filename);
+  if ((s = strrchr(prog, '/')) == NULL)
+    s = prog;
+  addenv(blk, "SCRIPT_NAME=%.*s%s", slash - conn->request_info.uri,
+         conn->request_info.uri, s);
 
   addenv(blk, "SCRIPT_FILENAME=%s", prog);
   addenv(blk, "PATH_TRANSLATED=%s", prog);
