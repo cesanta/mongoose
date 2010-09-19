@@ -56,9 +56,9 @@
 #define MAX_OPTIONS 40
 
 static int exit_flag;
-static char server_name[40];   // Set by init_server_name()
-static char *config_file;      // Set by process_command_line_arguments()
-static struct mg_context *ctx; // Set by start_mongoose()
+static char server_name[40];        // Set by init_server_name()
+static char config_file[PATH_MAX];  // Set by process_command_line_arguments()
+static struct mg_context *ctx;      // Set by start_mongoose()
 
 #if !defined(CONFIG_FILE)
 #define CONFIG_FILE "mongoose.conf"
@@ -178,7 +178,7 @@ static void set_option(char **options, const char *name, const char *value) {
 }
 
 static void process_command_line_arguments(char *argv[], char **options) {
-  char line[512], opt[512], val[512], path[PATH_MAX], *p;
+  char line[512], opt[512], val[512], *p;
   FILE *fp = NULL;
   size_t i, line_no = 0;
 
@@ -186,14 +186,13 @@ static void process_command_line_arguments(char *argv[], char **options) {
 
   // Should we use a config file ?
   if (argv[1] != NULL && argv[2] == NULL) {
-    config_file = argv[1];
+    snprintf(config_file, sizeof(config_file), "%s", argv[1]);
   } else if ((p = strrchr(argv[0], DIRSEP)) == NULL) {
     // No command line flags specified. Look where binary lives
-    config_file = CONFIG_FILE;
+    snprintf(config_file, sizeof(config_file), "%s", CONFIG_FILE);
   } else {
-    snprintf(path, sizeof(path), "%.*s%c%s",
+    snprintf(config_file, sizeof(config_file), "%.*s%c%s",
              (int) (p - argv[0]), argv[0], DIRSEP, CONFIG_FILE);
-    config_file = path;
   }
 
   fp = fopen(config_file, "r");
