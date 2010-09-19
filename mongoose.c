@@ -210,8 +210,9 @@ typedef int SOCKET;
 #if defined(DEBUG)
 #define DEBUG_TRACE(x) do { \
   flockfile(stdout); \
-  printf("*** [%lu] thread %p: %s: ", \
-         (unsigned long) time(NULL), (void *) pthread_self(), __func__); \
+  printf("*** %lu.%p.%s.%d: ", \
+         (unsigned long) time(NULL), (void *) pthread_self(), \
+         __func__, __LINE__); \
   printf x; \
   putchar('\n'); \
   fflush(stdout); \
@@ -743,7 +744,6 @@ static void send_http_error(struct mg_connection *conn, int status,
   va_list ap;
   int len;
 
-  DEBUG_TRACE(("%d %s", status, reason));
   conn->request_info.status_code = status;
 
   if (call_user(conn, MG_HTTP_ERROR) == NULL) {
@@ -757,9 +757,10 @@ static void send_http_error(struct mg_connection *conn, int status,
       buf[len++] = '\n';
 
       va_start(ap, fmt);
-      mg_vsnprintf(conn, buf + len, sizeof(buf) - len, fmt, ap);
+      len += mg_vsnprintf(conn, buf + len, sizeof(buf) - len, fmt, ap);
       va_end(ap);
     }
+    DEBUG_TRACE(("[%s]", buf));
 
     mg_printf(conn, "HTTP/1.1 %d %s\r\n"
               "Content-Type: text/plain\r\n"
@@ -2777,7 +2778,7 @@ static void prepare_cgi_environment(struct mg_connection *conn,
       (slash - conn->request_info.uri) + 1, conn->request_info.uri,
       script_filename);
 
-  addenv(blk, "SCRIPT_FILENAME=%s", script_filename);
+  addenv(blk, "SCRIPT_FILENAME=%s", prog);
   addenv(blk, "PATH_TRANSLATED=%s", prog);
   addenv(blk, "HTTPS=%s", conn->ssl == NULL ? "off" : "on");
 
@@ -2898,8 +2899,8 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
       buf, sizeof(buf), &data_len);
   if (headers_len <= 0) {
     send_http_error(conn, 500, http_500_error,
-        "CGI program sent malformed HTTP headers: [%.*s]",
-        data_len, buf);
+                    "CGI program sent malformed HTTP headers: [%.*s]",
+                    data_len, buf);
     goto done;
   }
   pbuf = buf;
