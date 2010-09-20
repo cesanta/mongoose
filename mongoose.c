@@ -1098,7 +1098,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
                            char *envblk, char *envp[], int fd_stdin,
                            int fd_stdout, const char *dir) {
   HANDLE me;
-  char *p, *interp, cmdline[PATH_MAX], line[PATH_MAX];
+  char *p, *interp, cmdline[PATH_MAX], buf[PATH_MAX];
   FILE *fp;
   STARTUPINFOA si;
   PROCESS_INFORMATION pi;
@@ -1122,36 +1122,29 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   // If CGI file is a script, try to read the interpreter line
   interp = conn->ctx->config[CGI_INTERPRETER];
   if (interp == NULL) {
-    line[2] = '\0';
-    (void) mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%c%s",
-        dir, DIRSEP, prog);
+    buf[2] = '\0';
     if ((fp = fopen(cmdline, "r")) != NULL) {
-      (void) fgets(line, sizeof(line), fp);
-      if (memcmp(line, "#!", 2) != 0)
-        line[2] = '\0';
-      // Trim whitespaces from interpreter name
-      for (p = &line[strlen(line) - 1]; p > line &&
-          isspace(*p); p--) {
-        *p = '\0';
+      (void) fgets(buf, sizeof(buf), fp);
+      if (buf[0] != '#' || buf[1] != '!') {
+        // First line does not start with "#!". Do not set interpreter.
+        buf[2] = '\0';
+      } else {
+        // Trim whitespaces in interpreter name
+        for (p = &buf[strlen(buf) - 1]; p > buf && isspace(*p); p--) {
+          *p = '\0';
+        }
       }
       (void) fclose(fp);
     }
-    interp = line + 2;
+    interp = buf + 2;
   }
 
-  if ((p = (char *) strrchr(prog, '/')) != NULL) {
-    prog = p + 1;
-  }
-
-  (void) mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%s%s",
-                     interp, interp[0] == '\0' ? "" : " ", prog);
-
-  (void) mg_snprintf(conn, line, sizeof(line), "%s", dir);
-  change_slashes_to_backslashes(line);
+  (void) mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%s%s%c%s",
+                     interp, interp[0] == '\0' ? "" : " ", dir, DIRSEP, prog);
 
   DEBUG_TRACE(("Running [%s]", cmdline));
   if (CreateProcessA(NULL, cmdline, NULL, NULL, TRUE,
-        CREATE_NEW_PROCESS_GROUP, envblk, line, &si, &pi) == 0) {
+        CREATE_NEW_PROCESS_GROUP, envblk, dir, &si, &pi) == 0) {
     cry(conn, "%s: CreateProcess(%s): %d",
         __func__, cmdline, ERRNO);
     pi.hProcess = (pid_t) -1;
@@ -2849,10 +2842,15 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
 
   prepare_cgi_environment(conn, prog, &blk);
 
-  // CGI must be executed in its own directory
+  // CGI must be executed in its own directory. 'dir' must point to the
+  // directory containing executable program, 'p' must point to the
+  // executable program name relative to 'dir'.
   (void) mg_snprintf(conn, dir, sizeof(dir), "%s", prog);
   if ((p = strrchr(dir, DIRSEP)) != NULL) {
     *p++ = '\0';
+  } else {
+    dir[0] = '.', dir[1] = '\0';
+    p = (char *) prog;
   }
 
   pid = (pid_t) -1;
