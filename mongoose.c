@@ -2832,7 +2832,7 @@ static void prepare_cgi_environment(struct mg_connection *conn,
 }
 
 static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
-  int headers_len, data_len, i, exit_status, fd_stdin[2], fd_stdout[2];
+  int headers_len, data_len, i, fd_stdin[2], fd_stdout[2];
   const char *status;
   char buf[BUFSIZ], *pbuf, dir[PATH_MAX], *p;
   struct mg_request_info ri;
@@ -2926,7 +2926,7 @@ done:
   if (pid != (pid_t) -1) {
     kill(pid, SIGKILL);
 #if !defined(_WIN32)
-    do {} while (waitpid(-1, &exit_status, WNOHANG) > 0);
+    do {} while (waitpid(-1, &i, WNOHANG) > 0);
 #endif
   }
   if (fd_stdin[0] != -1) {
