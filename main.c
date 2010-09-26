@@ -65,15 +65,7 @@ static struct mg_context *ctx;      // Set by start_mongoose()
 #endif /* !CONFIG_FILE */
 
 static void WINCDECL signal_handler(int sig_num) {
-#if !defined(_WIN32)
-  if (sig_num == SIGCHLD) {
-    do {
-    } while (waitpid(-1, &sig_num, WNOHANG) > 0);
-  } else
-#endif /* !_WIN32 */
-  {
-    exit_flag = sig_num;
-  }
+  exit_flag = sig_num;
 }
 
 static void die(const char *fmt, ...) {
@@ -260,9 +252,6 @@ static void start_mongoose(int argc, char *argv[]) {
   process_command_line_arguments(argv, options);
 
   /* Setup signal handler: quit on Ctrl-C */
-#ifndef _WIN32
-  signal(SIGCHLD, signal_handler);
-#endif /* _WIN32 */
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
 
