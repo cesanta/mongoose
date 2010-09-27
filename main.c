@@ -271,6 +271,7 @@ static void start_mongoose(int argc, char *argv[]) {
 #ifdef _WIN32
 static SERVICE_STATUS ss;
 static SERVICE_STATUS_HANDLE hStatus;
+static const char *service_magic_argument = "--";
 
 static void WINAPI ControlHandler(DWORD code) {
   if (code == SERVICE_CONTROL_STOP || code == SERVICE_CONTROL_SHUTDOWN) {
@@ -346,7 +347,8 @@ static void show_error(void) {
 static int manage_service(int action) {
   static const char *service_name = "Mongoose";
   SC_HANDLE hSCM = NULL, hService = NULL;
-  char path[PATH_MAX];
+  SERVICE_DESCRIPTION descr = {server_name};
+  char path[PATH_MAX + 20];  // Path to executable plus magic argument
   int success = 1;
 
   if ((hSCM = OpenSCManager(NULL, NULL, action == ID_INSTALL_SERVICE ?
@@ -355,12 +357,14 @@ static int manage_service(int action) {
     show_error();
   } else if (action == ID_INSTALL_SERVICE) {
     GetModuleFileName(NULL, path, sizeof(path));
+    strncat(path, " ", sizeof(path));
+    strncat(path, service_magic_argument, sizeof(path));
     hService = CreateService(hSCM, service_name, service_name,
                              SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS,
                              SERVICE_AUTO_START, SERVICE_ERROR_NORMAL,
                              path, NULL, NULL, NULL, NULL, NULL);
     if (hService) {
-      ChangeServiceConfig2(hService, SERVICE_CONFIG_DESCRIPTION, server_name);
+      ChangeServiceConfig2(hService, SERVICE_CONFIG_DESCRIPTION, &descr);
     } else {
       show_error();
     }
@@ -374,8 +378,8 @@ static int manage_service(int action) {
     success = 0;
   }
 
-  //CloseServiceHandle(hService);
-  //CloseServiceHandle(hSCM);
+  CloseServiceHandle(hService);
+  CloseServiceHandle(hSCM);
 
   return success;
 }
@@ -387,17 +391,19 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
     {NULL, NULL}
   };
   int service_installed;
-  char buf[200];
+  char buf[200], *service_argv[] = {__argv[0], NULL};
   POINT pt;
   HMENU hMenu;
 
   switch (msg) {
     case WM_CREATE:
-      // Win32 runtime must prepare __argc and __argv for us
-      start_mongoose(__argc, __argv);
-      // TODO(lsm): figure out why this executes long time
-      if (StartServiceCtrlDispatcher(service_table)) {
+      if (__argv[1] != NULL &&
+          !strcmp(__argv[1], service_magic_argument)) {
+        start_mongoose(1, service_argv);
+        StartServiceCtrlDispatcher(service_table);
         exit(EXIT_SUCCESS);
+      } else {
+        start_mongoose(__argc, __argv);
       }
       break;
     case WM_COMMAND:
