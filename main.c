@@ -95,7 +95,7 @@ static int mg_edit_passwords(const char *fname, const char *domain,
   int success;
 
   options[1] = domain;
-  ctx = mg_start(NULL, options);
+  ctx = mg_start(NULL, NULL, options);
   success = mg_modify_passwords_file(ctx, fname, user, pass);
   mg_stop(ctx);
 
@@ -256,7 +256,7 @@ static void start_mongoose(int argc, char *argv[]) {
   signal(SIGINT, signal_handler);
 
   /* Start Mongoose */
-  ctx = mg_start(NULL, (const char **) options);
+  ctx = mg_start(NULL, NULL, (const char **) options);
   for (i = 0; options[i] != NULL; i++) {
     free(options[i]);
   }

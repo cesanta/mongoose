@@ -201,7 +201,7 @@ typedef int SOCKET;
 
 #include "mongoose.h"
 
-#define MONGOOSE_VERSION "2.12"
+#define MONGOOSE_VERSION "3.0"
 #define PASSWORDS_FILE_NAME ".htpasswd"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
@@ -421,6 +421,7 @@ struct mg_context {
   SSL_CTX *ssl_ctx;             // SSL context
   char *config[NUM_OPTIONS];    // Mongoose configuration parameters
   mg_callback_t user_callback;  // User-defined callback function
+  void *user_data;              // User-defined data
 
   struct socket *listening_sockets;
 
@@ -456,6 +457,7 @@ const char **mg_get_valid_option_names(void) {
 }
 
 static void *call_user(struct mg_connection *conn, enum mg_event event) {
+  conn->request_info.user_data = conn->ctx->user_data;
   return conn->ctx->user_callback == NULL ? NULL :
     conn->ctx->user_callback(event, conn, &conn->request_info);
 }
@@ -3984,7 +3986,8 @@ void mg_stop(struct mg_context *ctx) {
 #endif // _WIN32
 }
 
-struct mg_context *mg_start(mg_callback_t user_callback, const char **options) {
+struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
+                            const char **options) {
   struct mg_context *ctx;
   const char *name, *value, *default_value;
   int i;
@@ -3998,6 +4001,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, const char **options) {
   // TODO(lsm): do proper error handling here.
   ctx = calloc(1, sizeof(*ctx));
   ctx->user_callback = user_callback;
+  ctx->user_data = user_data;
 
   while (options && (name = *options++) != NULL) {
     if ((i = get_option_index(name)) == -1) {

@@ -144,7 +144,7 @@ class Mongoose(object):
         args = [y for x in kwargs.items() for y in x] + [None]
         options = (ctypes.c_char_p * len(args))(*args)
 
-        ret = self.dll.mg_start(self.callback, options)
+        ret = self.dll.mg_start(self.callback, 0, options)
         self.ctx = ctypes.c_void_p(ret)
 
     def __del__(self):

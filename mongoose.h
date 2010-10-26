@@ -31,6 +31,7 @@ struct mg_connection;  // Handle for the individual connection
 
 // This structure contains information about the HTTP request.
 struct mg_request_info {
+  void *user_data;       // User-defined pointer passed to mg_start()
   char *request_method;  // "GET", "POST", etc
   char *uri;             // URL-decoded URI
   char *http_version;    // E.g. "1.0", "1.1"
@@ -76,7 +77,7 @@ enum mg_event {
 typedef void * (*mg_callback_t)(enum mg_event event,
                                 struct mg_connection *conn,
                                 const struct mg_request_info *request_info);
-  
+
 
 // Start web server.
 //
@@ -98,7 +99,8 @@ typedef void * (*mg_callback_t)(enum mg_event event,
 //
 // Return:
 //   web server context, or NULL on error.
-struct mg_context *mg_start(mg_callback_t callback, const char **options);
+struct mg_context *mg_start(mg_callback_t callback, void *user_data,
+                            const char **options);
 
 
 // Stop the web server.
