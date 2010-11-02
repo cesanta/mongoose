@@ -1332,7 +1332,7 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
     }
 
     // How many bytes of data we have buffered in the request buffer?
-    buffered = conn->buf + conn->request_len;
+    buffered = conn->buf + conn->request_len + conn->consumed_content;
     buffered_len = conn->data_len - conn->request_len;
     assert(buffered_len >= 0);
 
