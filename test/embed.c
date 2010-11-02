@@ -54,7 +54,13 @@ static void test_get_var(struct mg_connection *conn,
   if (!strcmp(ri->request_method, "POST") && cl != NULL) {
     buf_len = atoi(cl);
     buf = malloc(buf_len);
-    mg_read(conn, buf, buf_len);
+    /* Read in two pieces, to test continuation */
+    if (buf_len > 2) {
+      mg_read(conn, buf, 2);
+      mg_read(conn, buf + 2, buf_len - 2);
+    } else {
+      mg_read(conn, buf, buf_len);
+    }
   } else if (ri->query_string != NULL) {
     buf_len = strlen(ri->query_string);
     buf = malloc(buf_len + 1);
