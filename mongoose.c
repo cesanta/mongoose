@@ -163,7 +163,6 @@ typedef struct DIR {
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/select.h>
-#include <sys/mman.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
@@ -174,7 +173,9 @@ typedef struct DIR {
 #include <pwd.h>
 #include <unistd.h>
 #include <dirent.h>
+#if !defined(NO_SSL_DL) && !defined(NO_SSL)
 #include <dlfcn.h>
+#endif
 #include <pthread.h>
 #if defined(__MACH__)
 #define SSL_LIB   "libssl.dylib"
@@ -3063,6 +3064,7 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
   }
 }
 
+#if !defined(NO_POPEN)
 static void do_ssi_exec(struct mg_connection *conn, char *tag) {
   char cmd[BUFSIZ];
   FILE *fp;
@@ -3076,6 +3078,7 @@ static void do_ssi_exec(struct mg_connection *conn, char *tag) {
     (void) pclose(fp);
   }
 }
+#endif // !NO_POPEN
 
 static void send_ssi_file(struct mg_connection *conn, const char *path,
                           FILE *fp, int include_level) {
@@ -3102,8 +3105,10 @@ static void send_ssi_file(struct mg_connection *conn, const char *path,
       } else {
         if (!memcmp(buf + 5, "include", 7)) {
           do_ssi_include(conn, path, buf + 12, include_level);
+#if !defined(NO_POPEN)
         } else if (!memcmp(buf + 5, "exec", 4)) {
           do_ssi_exec(conn, buf + 9);
+#endif // !NO_POPEN
         } else {
           cry(conn, "%s: unknown SSI " "command: \"%s\"", path, buf);
         }
