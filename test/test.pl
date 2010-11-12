@@ -50,7 +50,7 @@ sub get_num_of_log_entries {
 
 # Send the request to the 127.0.0.1:$port and return the reply
 sub req {
-  my ($request, $inc) = @_;
+  my ($request, $inc, $timeout) = @_;
   my $sock = IO::Socket::INET->new(Proto=>"tcp",
     PeerAddr=>'127.0.0.1', PeerPort=>$port);
   fail("Cannot connect: $!") unless $sock;
@@ -59,8 +59,14 @@ sub req {
     last unless print $sock $byte;
     select undef, undef, undef, .001 if length($request) < 256;
   }
-  my @lines = <$sock>;
-  my $out = join '', @lines;
+  my $out = '';
+  eval {
+    alarm $timeout if $timeout;
+    foreach (<$sock>) {
+      $out .= $_;
+    }
+    alarm 0;
+  };
   close $sock;
 
   $num_requests += defined($inc) ? $inc : 1;
@@ -129,6 +135,7 @@ sub kill_spawned_child {
 
 unlink @files_to_delete;
 $SIG{PIPE} = 'IGNORE';
+$SIG{ALRM} = sub { die "timeout\n" };
 #local $| =1;
 
 # Make sure we export only symbols that start with "mg_", and keep local
@@ -217,6 +224,9 @@ o("GET /ta/x/ HTTP/1.0\n\n", "SCRIPT_NAME=/ta/x/index.cgi",
 #o("GET /hello.txt HTTP/1.1\n\n   GET /hello.txt HTTP/1.0\n\n",
 #  'HTTP/1.1 200.+keep-alive.+HTTP/1.1 200.+close',
 #  'Request pipelining', 2);
+
+fail('Slow CGI output forward ') unless
+  req("GET /timeout.cgi HTTP/1.0\r\n\r\n", 1, 1) =~ /Some data/gs;
 
 my $mime_types = {
   html => 'text/html',
