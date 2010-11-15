@@ -1305,7 +1305,10 @@ static int pull(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int len) {
   if (ssl != NULL) {
     nread = SSL_read(ssl, buf, len);
   } else if (fp != NULL) {
-    nread = fread(buf, 1, (size_t) len, fp);
+    // Use read() instead of fread(), because if we're reading from the CGI
+    // pipe, fread() may block until IO buffer is filled up. We cannot afford
+    // to block and must pass all read bytes immediately to the client.
+    nread = read(fileno(fp), buf, (size_t) len);
     if (ferror(fp))
       nread = -1;
   } else {

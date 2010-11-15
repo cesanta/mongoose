@@ -59,13 +59,11 @@ sub req {
     last unless print $sock $byte;
     select undef, undef, undef, .001 if length($request) < 256;
   }
-  my $out = '';
+  my ($out, $buf) = ('', '');
   eval {
     alarm $timeout if $timeout;
-    foreach (<$sock>) {
-      $out .= $_;
-    }
-    alarm 0;
+    $out .= $buf while (sysread($sock, $buf, 1024) > 0);
+    alarm 0 if $timeout;
   };
   close $sock;
 
@@ -182,6 +180,14 @@ o("GET /hello.txt HTTP/1.0\n\n", 'Content-Length: 17\s',
 o("GET /%68%65%6c%6c%6f%2e%74%78%74 HTTP/1.0\n\n",
   'HTTP/1.1 200 OK', 'URL-decoding');
 
+# Break CGI reading after 1 second. We must get full output.
+# Since CGI script does sleep, we sleep as well and increase request count
+# manually.
+fail('Slow CGI output forward ') unless
+  req("GET /timeout.cgi HTTP/1.0\r\n\r\n", 0, 1) =~ /Some data/s;
+sleep 3;
+$num_requests++;
+
 # '+' in URI must not be URL-decoded to space
 write_file("$root/a+.txt", '');
 o("GET /a+.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'URL-decoding, + in URI');
@@ -224,9 +230,6 @@ o("GET /ta/x/ HTTP/1.0\n\n", "SCRIPT_NAME=/ta/x/index.cgi",
 #o("GET /hello.txt HTTP/1.1\n\n   GET /hello.txt HTTP/1.0\n\n",
 #  'HTTP/1.1 200.+keep-alive.+HTTP/1.1 200.+close',
 #  'Request pipelining', 2);
-
-fail('Slow CGI output forward ') unless
-  req("GET /timeout.cgi HTTP/1.0\r\n\r\n", 1, 1) =~ /Some data/gs;
 
 my $mime_types = {
   html => 'text/html',
