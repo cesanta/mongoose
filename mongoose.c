@@ -181,8 +181,12 @@ typedef struct DIR {
 #define SSL_LIB   "libssl.dylib"
 #define CRYPTO_LIB  "libcrypto.dylib"
 #else
+#if !defined(SSL_LIB)
 #define SSL_LIB   "libssl.so"
+#endif
+#if !defined(CRYPTO_LIB)
 #define CRYPTO_LIB  "libcrypto.so"
+#endif
 #endif
 #define DIRSEP   '/'
 #define IS_DIRSEP_CHAR(c) ((c) == '/')

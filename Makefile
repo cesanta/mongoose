@@ -14,6 +14,8 @@ all:
 # -DNO_SSL		- disable SSL functionality (-2kb)
 # -DCONFIG_FILE=\"file\" - use `file' as the default config file
 # -DHAVE_STRTOUI64	- use system strtoui64() function for strtoull()
+# -DSSL_LIB=\"libssl.so.<version>\" - use system versioned SSL shared object
+# -DCRYPTO_LIB=\"libcrypto.so.<version>\" - use system versioned CRYPTO so
 
 
 ##########################################################################
