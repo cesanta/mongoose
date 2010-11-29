@@ -2057,7 +2057,7 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
   // Parse authorization header
   for (;;) {
     name = skip(&s, "=");
-    value = skip(&s, " ");
+    value = skip(&s, ", ");  // IE uses commas, FF uses spaces
 
     // Handle commas: Digest username="a", realm="b", ...
     if (value[strlen(value) - 1] == ',') {
