@@ -3912,8 +3912,8 @@ static void master_thread(struct mg_context *ctx) {
       add_to_set(sp->sock, &read_set, &max_fd);
     }
 
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
+    tv.tv_sec = 0;
+    tv.tv_usec = 200 * 1000;
 
     if (select(max_fd + 1, &read_set, NULL, NULL, &tv) < 0) {
 #ifdef _WIN32
