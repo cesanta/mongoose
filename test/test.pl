@@ -50,7 +50,7 @@ sub get_num_of_log_entries {
 
 # Send the request to the 127.0.0.1:$port and return the reply
 sub req {
-  my ($request, $inc) = @_;
+  my ($request, $inc, $timeout) = @_;
   my $sock = IO::Socket::INET->new(Proto=>"tcp",
     PeerAddr=>'127.0.0.1', PeerPort=>$port);
   fail("Cannot connect: $!") unless $sock;
@@ -59,8 +59,12 @@ sub req {
     last unless print $sock $byte;
     select undef, undef, undef, .001 if length($request) < 256;
   }
-  my @lines = <$sock>;
-  my $out = join '', @lines;
+  my ($out, $buf) = ('', '');
+  eval {
+    alarm $timeout if $timeout;
+    $out .= $buf while (sysread($sock, $buf, 1024) > 0);
+    alarm 0 if $timeout;
+  };
   close $sock;
 
   $num_requests += defined($inc) ? $inc : 1;
@@ -129,6 +133,7 @@ sub kill_spawned_child {
 
 unlink @files_to_delete;
 $SIG{PIPE} = 'IGNORE';
+$SIG{ALRM} = sub { die "timeout\n" };
 #local $| =1;
 
 # Make sure we export only symbols that start with "mg_", and keep local
@@ -174,6 +179,14 @@ o("GET /hello.txt HTTP/1.0\n\n", 'Content-Length: 17\s',
   'GET regular file Content-Length');
 o("GET /%68%65%6c%6c%6f%2e%74%78%74 HTTP/1.0\n\n",
   'HTTP/1.1 200 OK', 'URL-decoding');
+
+# Break CGI reading after 1 second. We must get full output.
+# Since CGI script does sleep, we sleep as well and increase request count
+# manually.
+fail('Slow CGI output forward ') unless
+  req("GET /timeout.cgi HTTP/1.0\r\n\r\n", 0, 1) =~ /Some data/s;
+sleep 3;
+$num_requests++;
 
 # '+' in URI must not be URL-decoded to space
 write_file("$root/a+.txt", '');

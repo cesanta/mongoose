@@ -14,13 +14,15 @@ all:
 # -DNO_SSL		- disable SSL functionality (-2kb)
 # -DCONFIG_FILE=\"file\" - use `file' as the default config file
 # -DHAVE_STRTOUI64	- use system strtoui64() function for strtoull()
+# -DSSL_LIB=\"libssl.so.<version>\" - use system versioned SSL shared object
+# -DCRYPTO_LIB=\"libcrypto.so.<version>\" - use system versioned CRYPTO so
 
 
 ##########################################################################
 ###                 UNIX build: linux, bsd, mac, rtems
 ##########################################################################
 
-CFLAGS=		-W -Wall -std=c99 -pedantic -O2 -fomit-frame-pointer $(COPT)
+CFLAGS=		-W -Wall -std=c99 -pedantic -O2 $(COPT)
 MAC_SHARED=	-flat_namespace -bundle -undefined suppress
 LINFLAGS=	-ldl -pthread $(CFLAGS)
 LIB=		_$(PROG).so
@@ -126,7 +128,7 @@ do_test:
 	perl test/test.pl $(TEST)
 
 release: clean
-	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`.tgz ; cd .. && tar --exclude \*.hg --exclude \*.svn --exclude \*.swp --exclude \*.nfs\* --exclude win32 -czf x mongoose && mv x mongoose/$$F
+	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`.tgz ; cd .. && tar --exclude \*.hg --exclude \*.svn --exclude \*.swp --exclude \*.nfs\* -czf x mongoose && mv x mongoose/$$F
 
 clean:
 	rm -rf *.o *.core $(PROG) *.obj $(PROG).txt *.dSYM *.tgz

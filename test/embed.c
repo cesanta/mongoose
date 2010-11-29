@@ -31,39 +31,45 @@
 #include "mongoose.h"
 
 #if !defined(LISTENING_PORT)
-#define LISTENING_PORT	"23456"
+#define LISTENING_PORT "23456"
 #endif
 
-static const char *standard_reply =	"HTTP/1.1 200 OK\r\n"
+static const char *standard_reply = "HTTP/1.1 200 OK\r\n"
   "Content-Type: text/plain\r\n"
   "Connection: close\r\n\r\n";
 
 static void test_get_var(struct mg_connection *conn,
                          const struct mg_request_info *ri) {
-	char *var, *buf;
+  char *var, *buf;
   size_t buf_len;
   const char *cl;
   int var_len;
 
-	mg_printf(conn, "%s", standard_reply);
+  mg_printf(conn, "%s", standard_reply);
 
   buf_len = 0;
   var = buf = NULL;
   cl = mg_get_header(conn, "Content-Length");
   mg_printf(conn, "cl: %p\n", cl);
-  printf("reqeust method = %s\n", ri->request_method);
-  if ((!strcmp(ri->request_method, "POST") || !strcmp(ri->request_method, "PUT"))
+  if ((!strcmp(ri->request_method, "POST") ||
+       !strcmp(ri->request_method, "PUT"))
       && cl != NULL) {
     buf_len = atoi(cl);
     buf = malloc(buf_len);
-    mg_read(conn, buf, buf_len);
+    /* Read in two pieces, to test continuation */
+    if (buf_len > 2) {
+      mg_read(conn, buf, 2);
+      mg_read(conn, buf + 2, buf_len - 2);
+    } else {
+      mg_read(conn, buf, buf_len);
+    }
   } else if (ri->query_string != NULL) {
     buf_len = strlen(ri->query_string);
     buf = malloc(buf_len + 1);
     strcpy(buf, ri->query_string);
   }
   var = malloc(buf_len + 1);
-	var_len = mg_get_var(buf, buf_len, "my_var", var, buf_len + 1);
+  var_len = mg_get_var(buf, buf_len, "my_var", var, buf_len + 1);
   mg_printf(conn, "Value: [%s]\n", var);
   mg_printf(conn, "Value size: [%d]\n", var_len);
   free(buf);
@@ -72,50 +78,50 @@ static void test_get_var(struct mg_connection *conn,
 
 static void test_get_header(struct mg_connection *conn,
                             const struct mg_request_info *ri) {
-	const char *value;
-  int	i;
+  const char *value;
+  int i;
 
-	mg_printf(conn, "%s", standard_reply);
+  mg_printf(conn, "%s", standard_reply);
   printf("HTTP headers: %d\n", ri->num_headers);
   for (i = 0; i < ri->num_headers; i++) {
     printf("[%s]: [%s]\n", ri->http_headers[i].name, ri->http_headers[i].value);
   }
 
-	value = mg_get_header(conn, "Host");
-	if (value != NULL) {
-		mg_printf(conn, "Value: [%s]", value);
+  value = mg_get_header(conn, "Host");
+  if (value != NULL) {
+    mg_printf(conn, "Value: [%s]", value);
   }
 }
 
 static void test_get_request_info(struct mg_connection *conn,
                                   const struct mg_request_info *ri) {
-	int	i;
+  int i;
 
-	mg_printf(conn, "%s", standard_reply);
+  mg_printf(conn, "%s", standard_reply);
 
-	mg_printf(conn, "Method: [%s]\n", ri->request_method);
-	mg_printf(conn, "URI: [%s]\n", ri->uri);
-	mg_printf(conn, "HTTP version: [%s]\n", ri->http_version);
+  mg_printf(conn, "Method: [%s]\n", ri->request_method);
+  mg_printf(conn, "URI: [%s]\n", ri->uri);
+  mg_printf(conn, "HTTP version: [%s]\n", ri->http_version);
 
-	for (i = 0; i < ri->num_headers; i++) {
-		mg_printf(conn, "HTTP header [%s]: [%s]\n",
-			 ri->http_headers[i].name,
-			 ri->http_headers[i].value);
+  for (i = 0; i < ri->num_headers; i++) {
+    mg_printf(conn, "HTTP header [%s]: [%s]\n",
+              ri->http_headers[i].name,
+              ri->http_headers[i].value);
   }
 
-	mg_printf(conn, "Query string: [%s]\n",
-			ri->query_string ? ri->query_string: "");
-	mg_printf(conn, "Remote IP: [%lu]\n", ri->remote_ip);
-	mg_printf(conn, "Remote port: [%d]\n", ri->remote_port);
-	mg_printf(conn, "Remote user: [%s]\n",
-			ri->remote_user ? ri->remote_user : "");
+  mg_printf(conn, "Query string: [%s]\n",
+            ri->query_string ? ri->query_string: "");
+  mg_printf(conn, "Remote IP: [%lu]\n", ri->remote_ip);
+  mg_printf(conn, "Remote port: [%d]\n", ri->remote_port);
+  mg_printf(conn, "Remote user: [%s]\n",
+            ri->remote_user ? ri->remote_user : "");
 }
 
 static void test_error(struct mg_connection *conn,
                        const struct mg_request_info *ri) {
-	mg_printf(conn, "HTTP/1.1 %d XX\r\n"
-		"Conntection: close\r\n\r\n", ri->status_code);
-	mg_printf(conn, "Error: [%d]", ri->status_code);
+  mg_printf(conn, "HTTP/1.1 %d XX\r\n"
+            "Conntection: close\r\n\r\n", ri->status_code);
+  mg_printf(conn, "Error: [%d]", ri->status_code);
 }
 
 static void test_post(struct mg_connection *conn,
@@ -124,7 +130,7 @@ static void test_post(struct mg_connection *conn,
   char *buf;
   int len;
 
-	mg_printf(conn, "%s", standard_reply);
+  mg_printf(conn, "%s", standard_reply);
   if (strcmp(ri->request_method, "POST") == 0 &&
       (cl = mg_get_header(conn, "Content-Length")) != NULL) {
     len = atoi(cl);
@@ -166,10 +172,10 @@ static void *callback(enum mg_event event,
 }
 
 int main(void) {
-	struct mg_context	*ctx;
+  struct mg_context *ctx;
   const char *options[] = {"listening_ports", LISTENING_PORT, NULL};
 
-	ctx = mg_start(callback, NULL, options);
+  ctx = mg_start(callback, NULL, options);
   pause();
   return 0;
 }
