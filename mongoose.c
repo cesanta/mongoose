@@ -3730,6 +3730,12 @@ static void handle_proxy_request(struct mg_connection *conn) {
   }
 }
 
+static int is_valid_uri(const char *uri) {
+  // Conform to http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1.2
+  // URI can be an asterisk (*) or should start with slash.
+  return (uri[0] == '/' || (uri[0] == '*' && uri[1] == '\0'));
+}
+
 static void process_new_connection(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
   int keep_alive_enabled;
@@ -3756,7 +3762,7 @@ static void process_new_connection(struct mg_connection *conn) {
     // Nul-terminate the request cause parse_http_request() uses sscanf
     conn->buf[conn->request_len - 1] = '\0';
     if (!parse_http_request(conn->buf, ri) ||
-        (!conn->client.is_proxy && ri->uri[0] != '/')) {
+        (!conn->client.is_proxy && !is_valid_uri(ri->uri))) {
       // Do not put garbage in the access log, just send it back to the client
       send_http_error(conn, 400, "Bad Request",
           "Cannot parse HTTP request: [%.*s]", conn->data_len, conn->buf);

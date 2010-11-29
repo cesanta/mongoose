@@ -231,6 +231,8 @@ o("GET /ta/x/ HTTP/1.0\n\n", "SCRIPT_NAME=/ta/x/index.cgi",
 #  'HTTP/1.1 200.+keep-alive.+HTTP/1.1 200.+close',
 #  'Request pipelining', 2);
 
+o("GET * HTTP/1.0\n\n", "^HTTP/1.1 404", '* URI');
+
 my $mime_types = {
   html => 'text/html',
   htm => 'text/html',
