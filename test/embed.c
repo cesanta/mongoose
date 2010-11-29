@@ -51,7 +51,9 @@ static void test_get_var(struct mg_connection *conn,
   var = buf = NULL;
   cl = mg_get_header(conn, "Content-Length");
   mg_printf(conn, "cl: %p\n", cl);
-  if (!strcmp(ri->request_method, "POST") && cl != NULL) {
+  printf("reqeust method = %s\n", ri->request_method);
+  if ((!strcmp(ri->request_method, "POST") || !strcmp(ri->request_method, "PUT"))
+      && cl != NULL) {
     buf_len = atoi(cl);
     buf = malloc(buf_len);
     mg_read(conn, buf, buf_len);

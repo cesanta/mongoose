@@ -1322,8 +1322,7 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
   DEBUG_TRACE(("%p %zu %lld %lld", buf, len,
                conn->content_len, conn->consumed_content));
   nread = 0;
-  if (strcmp(conn->request_info.request_method, "POST") == 0 &&
-      conn->consumed_content < conn->content_len) {
+  if (conn->consumed_content < conn->content_len) {
 
     // Adjust number of bytes to read.
     int64_t to_read = conn->content_len - conn->consumed_content;

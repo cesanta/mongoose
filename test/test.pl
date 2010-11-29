@@ -425,6 +425,10 @@ sub do_embedded_test {
   o("POST /test_get_var HTTP/1.0\nContent-Length: 64007\n\n".
     "my_var=$my_var", 'Value size: \[64000\]', 'mg_get_var 10', 0);
 
+  # Other methods should also work
+  o("PUT /test_get_var HTTP/1.0\nContent-Length: 10\n\n".
+    "my_var=foo", 'Value: \[foo\]', 'mg_get_var 11', 0);
+
   o("POST /test_get_request_info?xx=yy HTTP/1.0\nFoo: bar\n".
     "Content-Length: 3\n\na=b",
     'Method: \[POST\].URI: \[/test_get_request_info\].'.
