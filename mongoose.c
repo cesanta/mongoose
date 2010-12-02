@@ -1983,6 +1983,12 @@ static int check_password(const char *method, const char *ha1, const char *uri,
                           const char *qop, const char *response) {
   char ha2[32 + 1], expected_response[32 + 1];
 
+  // Some of the parameters may be NULL
+  if (method == NULL || nonce == NULL || nc == NULL || cnonce == NULL || 
+      qop == NULL || response == NULL) {
+    return 0;
+  }
+
   // NOTE(lsm): due to a bug in MSIE, we do not compare the URI
   // TODO(lsm): check for authentication timeout
   if (// strcmp(dig->uri, c->ouri) != 0 ||
@@ -2095,6 +2101,8 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
   // CGI needs it as REMOTE_USER
   if (ah->user != NULL) {
     conn->request_info.remote_user = mg_strdup(ah->user);
+  } else {
+    return 0;
   }
 
   return 1;
