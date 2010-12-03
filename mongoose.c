@@ -639,23 +639,55 @@ static int mg_snprintf(struct mg_connection *conn, char *buf, size_t buflen,
 }
 
 // Skip the characters until one of the delimiters characters found.
-// 0-terminate resulting word. Skip the rest of the delimiters if any.
+// 0-terminate resulting word. Skip the delimiter and following whitespaces if any.
 // Advance pointer to buffer to the next word. Return found 0-terminated word.
-static char *skip(char **buf, const char *delimiters) {
-  char *p, *begin_word, *end_word, *end_delimiters;
+// Delimiters can be quoted with quotechar.
+static char *skip_quoted(char **buf, const char *delimiters, const char *whitespace, char quotechar) {
+  char *p, *begin_word, *end_word, *end_whitespace;
 
   begin_word = *buf;
   end_word = begin_word + strcspn(begin_word, delimiters);
-  end_delimiters = end_word + strspn(end_word, delimiters);
 
-  for (p = end_word; p < end_delimiters; p++) {
-    *p = '\0';
+  /* Check for quotechar */
+  if (end_word > begin_word) {
+    p = end_word - 1;
+    while (*p == quotechar) {
+      /* If there is anything beyond end_word, copy it */
+      if (*end_word == '\0') {
+        *p = '\0';
+        break;
+      } else {
+        size_t end_off = strcspn(end_word + 1, delimiters);
+        memmove (p, end_word, end_off + 1);
+        p += end_off; /* p must correspond to end_word - 1 */
+        end_word += end_off + 1;
+      }
+    }
+    for (p++; p < end_word; p++) {
+      *p = '\0';
+    }
   }
 
-  *buf = end_delimiters;
+  if (*end_word == '\0') {
+    *buf = end_word;
+  } else {
+    end_whitespace = end_word + 1 + strspn(end_word + 1, whitespace);
+
+    for (p = end_word; p < end_whitespace; p++) {
+      *p = '\0';
+    }
+
+    *buf = end_whitespace;
+  }
 
   return begin_word;
 }
+
+// Simplified version of skip_quoted without quote char and whitespace == delimiters
+static char *skip(char **buf, const char *delimiters) {
+  return skip_quoted(buf, delimiters, delimiters, 0);
+}
+
 
 // Return HTTP header value, or NULL if not found.
 static const char *get_header(const struct mg_request_info *ri,
@@ -2058,26 +2090,26 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
   s = buf;
   (void) memset(ah, 0, sizeof(*ah));
 
-  // Gobble initial spaces
-  while (isspace(* (unsigned char *) s)) {
-    s++;
-  }
-
   // Parse authorization header
   for (;;) {
-    name = skip(&s, "=");
-    value = skip(&s, ", ");  // IE uses commas, FF uses spaces
-
-    // Handle commas: Digest username="a", realm="b", ...
-    if (value[strlen(value) - 1] == ',') {
-      value[strlen(value) - 1] = '\0';
+    // Gobble initial spaces
+    while (isspace(* (unsigned char *) s)) {
+      s++;
     }
-
-    // Trim double quotes around values
-    if (*value == '"') {
-      value++;
-      value[strlen(value) - 1] = '\0';
-    } else if (*value == '\0') {
+    name = skip_quoted(&s, "=", " ", 0);
+    /* Value is either quote-delimited, or ends at first comma or space. */
+    if (s[0] == '\"') {
+      s++;
+      value = skip_quoted(&s, "\"", " ", '\\');
+      if (s[0] == ',') {
+        s++;
+      }
+    }
+    else
+    {
+      value = skip_quoted(&s, ", ", " ", 0);  // IE uses commas, FF uses spaces
+    }
+    if (*name == '\0') {
       break;
     }
 
@@ -2532,7 +2564,7 @@ static void parse_http_headers(char **buf, struct mg_request_info *ri) {
   int i;
 
   for (i = 0; i < (int) ARRAY_SIZE(ri->http_headers); i++) {
-    ri->http_headers[i].name = skip(buf, ": ");
+    ri->http_headers[i].name = skip_quoted(buf, ":", " ", 0);
     ri->http_headers[i].value = skip(buf, "\r\n");
     if (ri->http_headers[i].name[0] == '\0')
       break;
