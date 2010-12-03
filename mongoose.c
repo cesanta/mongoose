@@ -3227,10 +3227,10 @@ static void handle_request(struct mg_connection *conn) {
   convert_uri_to_file_name(conn, ri->uri, path, sizeof(path));
 
   DEBUG_TRACE(("%s", ri->uri));
-  if (call_user(conn, MG_NEW_REQUEST) != NULL) {
-    // Do nothing, callback has served the request
-  } else if (!check_authorization(conn, path)) {
+  if (!check_authorization(conn, path)) {
     send_authorization_request(conn);
+  } else if (call_user(conn, MG_NEW_REQUEST) != NULL) {
+    // Do nothing, callback has served the request
   } else if (strstr(path, PASSWORDS_FILE_NAME)) {
     // Do not allow to view passwords files
     send_http_error(conn, 403, "Forbidden", "Access Forbidden");
