@@ -183,8 +183,11 @@ o("GET /%68%65%6c%6c%6f%2e%74%78%74 HTTP/1.0\n\n",
 # Break CGI reading after 1 second. We must get full output.
 # Since CGI script does sleep, we sleep as well and increase request count
 # manually.
-fail('Slow CGI output forward ') unless
-  req("GET /timeout.cgi HTTP/1.0\r\n\r\n", 0, 1) =~ /Some data/s;
+my $slow_cgi_reply;
+print "==> Slow CGI output ... ";
+fail('Slow CGI output forward reply=', $slow_cgi_reply) unless
+  ($slow_cgi_reply = req("GET /timeout.cgi HTTP/1.0\r\n\r\n", 0, 1)) =~ /Some data/s;
+print "OK\n";
 sleep 3;
 $num_requests++;
 

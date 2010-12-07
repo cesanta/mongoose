@@ -1,7 +1,8 @@
 #!/usr/bin/env perl
 
 # Make stdout unbuffered
-$| = 1;
+use FileHandle;
+STDOUT->autoflush(1);
 
 # This script outputs some content, then sleeps for 5 seconds, then exits.
 # Web server should return the content immediately after it is sent,
