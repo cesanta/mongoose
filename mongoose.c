@@ -422,7 +422,7 @@ static const char *config_options[] = {
 #define ENTRIES_PER_CONFIG_OPTION 3
 
 struct mg_context {
-  int stop_flag;                // Should we stop event loop
+  volatile int stop_flag;       // Should we stop event loop
   SSL_CTX *ssl_ctx;             // SSL context
   char *config[NUM_OPTIONS];    // Mongoose configuration parameters
   mg_callback_t user_callback;  // User-defined callback function
@@ -430,13 +430,13 @@ struct mg_context {
 
   struct socket *listening_sockets;
 
-  int num_threads;           // Number of threads
+  volatile int num_threads;  // Number of threads
   pthread_mutex_t mutex;     // Protects (max|num)_threads
   pthread_cond_t  cond;      // Condvar for tracking workers terminations
 
   struct socket queue[20];   // Accepted sockets
-  int sq_head;               // Head of the socket queue
-  int sq_tail;               // Tail of the socket queue
+  volatile int sq_head;      // Head of the socket queue
+  volatile int sq_tail;      // Tail of the socket queue
   pthread_cond_t sq_full;    // Singaled when socket is produced
   pthread_cond_t sq_empty;   // Signaled when socket is consumed
 };
