@@ -131,12 +131,13 @@ static void verify_document_root(const char *root) {
 
   path = root;
   if ((p = strchr(root, ',')) != NULL && (size_t) (p - root) < sizeof(buf)) {
-    strncpy(buf, root, p - root);
+    memcpy(buf, root, p - root);
+    buf[p - root] = '\0';
     path = buf;
   }
 
   if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-    die("Invalid root directory: \"%s\"", root);
+    die("Invalid root directory: [%s]: %s", root, strerror(errno));
   }
 }
 
