@@ -138,8 +138,10 @@ const char **mg_get_valid_option_names(void);
 //
 // Return:
 //   1 on success, 0 on error.
-int mg_modify_passwords_file(struct mg_context *ctx, 
-    const char *passwords_file_name, const char *user, const char *password);
+int mg_modify_passwords_file(const char *passwords_file_name,
+                             const char *domain,
+                             const char *user,
+                             const char *password);
 
 // Send data to the client.
 int mg_write(struct mg_connection *, const void *buf, size_t len);

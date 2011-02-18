@@ -85,23 +85,6 @@ static void die(const char *fmt, ...) {
   exit(EXIT_FAILURE);
 }
 
-/*
- * Edit the passwords file.
- */
-static int mg_edit_passwords(const char *fname, const char *domain,
-                             const char *user, const char *pass) {
-  struct mg_context *ctx;
-  const char *options[] = {"authentication_domain", NULL, NULL};
-  int success;
-
-  options[1] = domain;
-  ctx = mg_start(NULL, NULL, options);
-  success = mg_modify_passwords_file(ctx, fname, user, pass);
-  mg_stop(ctx);
-
-  return success;
-}
-
 static void show_usage_and_exit(void) {
   const char **names;
   int i;
@@ -240,7 +223,7 @@ static void start_mongoose(int argc, char *argv[]) {
     if (argc != 6) {
       show_usage_and_exit();
     }
-    exit(mg_edit_passwords(argv[2], argv[3], argv[4], argv[5]) ?
+    exit(mg_modify_passwords_file(argv[2], argv[3], argv[4], argv[5]) ?
          EXIT_SUCCESS : EXIT_FAILURE);
   }
 

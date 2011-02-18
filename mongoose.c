@@ -2226,16 +2226,14 @@ static int is_authorized_for_put(struct mg_connection *conn) {
   return ret;
 }
 
-int mg_modify_passwords_file(struct mg_context *ctx, const char *fname,
+int mg_modify_passwords_file(const char *fname, const char *domain,
                              const char *user, const char *pass) {
   int found;
   char line[512], u[512], d[512], ha1[33], tmp[PATH_MAX];
-  const char *domain;
   FILE *fp, *fp2;
 
   found = 0;
   fp = fp2 = NULL;
-  domain = ctx->config[AUTHENTICATION_DOMAIN];
 
   // Regard empty password as no password - remove user record.
   if (pass[0] == '\0') {
@@ -2251,10 +2249,9 @@ int mg_modify_passwords_file(struct mg_context *ctx, const char *fname,
 
   // Open the given file and temporary file
   if ((fp = mg_fopen(fname, "r")) == NULL) {
-    cry(fc(ctx), "Cannot open %s: %s", fname, strerror(errno));
     return 0;
   } else if ((fp2 = mg_fopen(tmp, "w+")) == NULL) {
-    cry(fc(ctx), "Cannot open %s: %s", tmp, strerror(errno));
+    fclose(fp);
     return 0;
   }
 
