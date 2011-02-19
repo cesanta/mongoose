@@ -683,7 +683,8 @@ static char *skip_quoted(char **buf, const char *delimiters, const char *whitesp
   return begin_word;
 }
 
-// Simplified version of skip_quoted without quote char and whitespace == delimiters
+// Simplified version of skip_quoted without quote char
+// and whitespace == delimiters
 static char *skip(char **buf, const char *delimiters) {
   return skip_quoted(buf, delimiters, delimiters, 0);
 }
@@ -2016,7 +2017,7 @@ static int check_password(const char *method, const char *ha1, const char *uri,
   char ha2[32 + 1], expected_response[32 + 1];
 
   // Some of the parameters may be NULL
-  if (method == NULL || nonce == NULL || nc == NULL || cnonce == NULL || 
+  if (method == NULL || nonce == NULL || nc == NULL || cnonce == NULL ||
       qop == NULL || response == NULL) {
     return 0;
   }
@@ -2104,9 +2105,7 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
       if (s[0] == ',') {
         s++;
       }
-    }
-    else
-    {
+    } else {
       value = skip_quoted(&s, ", ", " ", 0);  // IE uses commas, FF uses spaces
     }
     if (*name == '\0') {
