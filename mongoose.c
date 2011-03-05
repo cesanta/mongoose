@@ -3574,7 +3574,8 @@ static int set_ssl_option(struct mg_context *ctx) {
   if ((CTX = SSL_CTX_new(SSLv23_server_method())) == NULL) {
     cry(fc(ctx), "SSL_CTX_new error: %s", ssl_error());
   } else if (ctx->user_callback != NULL) {
-    ctx->user_callback(MG_INIT_SSL, (struct mg_connection *) CTX, NULL);
+    ctx->user_callback(MG_INIT_SSL, (struct mg_connection *) CTX,
+                       ctx->user_data);
   }
 
   if (CTX != NULL && SSL_CTX_use_certificate_file(CTX, pem,
