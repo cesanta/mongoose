@@ -283,7 +283,7 @@ struct ssl_func {
 #define SSL_connect (* (int (*)(SSL *)) ssl_sw[2].ptr)
 #define SSL_read (* (int (*)(SSL *, void *, int)) ssl_sw[3].ptr)
 #define SSL_write (* (int (*)(SSL *, const void *,int)) ssl_sw[4].ptr)
-#define SSL_get_error (* (int (*)(SSL *, int)) ssl_sw[5])
+#define SSL_get_error (* (int (*)(SSL *, int)) ssl_sw[5].ptr)
 #define SSL_set_fd (* (int (*)(SSL *, SOCKET)) ssl_sw[6].ptr)
 #define SSL_new (* (SSL * (*)(SSL_CTX *)) ssl_sw[7].ptr)
 #define SSL_CTX_new (* (SSL_CTX * (*)(SSL_METHOD *)) ssl_sw[8].ptr)
@@ -305,8 +305,8 @@ struct ssl_func {
   (* (void (*)(void (*)(int, int, const char *, int))) crypto_sw[1].ptr)
 #define CRYPTO_set_id_callback \
   (* (void (*)(unsigned long (*)(void))) crypto_sw[2].ptr)
-#define ERR_get_error (* (unsigned long (*)(void)) ssl_sw[3].ptr)
-#define ERR_error_string (* (char * (*)(unsigned long, char *)) ssl_sw[4].ptr)
+#define ERR_get_error (* (unsigned long (*)(void)) crypto_sw[3].ptr)
+#define ERR_error_string (* (char * (*)(unsigned long,char *)) crypto_sw[4].ptr)
 
 // set_ssl_option() function updates this array.
 // It loads SSL library dynamically and changes NULLs to the actual addresses
