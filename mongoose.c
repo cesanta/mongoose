@@ -3551,6 +3551,7 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
 
 // Dynamically load SSL library. Set up ctx->ssl_ctx pointer.
 static int set_ssl_option(struct mg_context *ctx) {
+  struct mg_request_info request_info;
   SSL_CTX *CTX;
   int i, size;
   const char *pem = ctx->config[SSL_CERTIFICATE];
@@ -3574,8 +3575,10 @@ static int set_ssl_option(struct mg_context *ctx) {
   if ((CTX = SSL_CTX_new(SSLv23_server_method())) == NULL) {
     cry(fc(ctx), "SSL_CTX_new error: %s", ssl_error());
   } else if (ctx->user_callback != NULL) {
+    memset(&request_info, 0, sizeof(request_info));
+    request_info.user_data = ctx->user_data;
     ctx->user_callback(MG_INIT_SSL, (struct mg_connection *) CTX,
-                       ctx->user_data);
+                       &request_info);
   }
 
   if (CTX != NULL && SSL_CTX_use_certificate_file(CTX, pem,
