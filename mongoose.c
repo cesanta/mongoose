@@ -3703,28 +3703,24 @@ static void discard_current_request_from_buffer(struct mg_connection *conn) {
   }
 
   conn->data_len -= conn->request_len + body_len;
-  memmove(conn->buf, conn->buf + conn->request_len + body_len, (size_t)conn->data_len);
+  memmove(conn->buf, conn->buf + conn->request_len + body_len,
+          (size_t) conn->data_len);
 }
 
 static int parse_url(const char *url, char *host, int *port) {
   int len;
 
-  if (url == NULL) {
-    return 0;
-  };
-
-  if (!strncmp(url, "http://", 7)) {
-    url += 7;
-  }
-
-  if (sscanf(url, "%1024[^:]:%d/%n", host, port, &len) == 2) {
+  if (sscanf(url, "%*[htps]://%1024[^:]:%d%n", host, port, &len) == 2 ||
+      sscanf(url, "%1024[^:]:%d%n", host, port, &len) == 2) {
+  } else if (sscanf(url, "%*[htps]://%1024[^/]%n", host, &len) == 1) {
+    *port = 80;
   } else {
-    sscanf(url, "%1024[^/]/%n", host, &len);
+    sscanf(url, "%1024[^/]%n", host, &len);
     *port = 80;
   }
   DEBUG_TRACE(("Host:%s, port:%d", host, *port));
 
-  return len > 0 && url[len - 1] == '/' ? len - 1 : len;
+  return len;
 }
 
 static void handle_proxy_request(struct mg_connection *conn) {
@@ -3734,7 +3730,7 @@ static void handle_proxy_request(struct mg_connection *conn) {
 
   DEBUG_TRACE(("URL: %s", ri->uri));
   if (conn->request_info.uri[0] == '/' ||
-      (len = parse_url(ri->uri, host, &port)) == 0) {
+      (ri->uri == NULL || (len = parse_url(ri->uri, host, &port))) == 0) {
     return;
   }
 
