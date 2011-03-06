@@ -25,6 +25,12 @@
 #define _LARGEFILE_SOURCE // Enable 64-bit file offsets
 #endif
 
+#if defined(__SYMBIAN32__)
+#define NO_SSL // SSL is not supported
+#define NO_CGI // CGI is not supported
+#define PATH_MAX FILENAME_MAX
+#endif // __SYMBIAN32__
+
 #ifndef _WIN32_WCE // Some ANSI #includes are not available on Windows CE
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -43,7 +49,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#if defined(_WIN32)  // Windows specific #includes and #defines
+#if defined(_WIN32) && !defined(__SYMBIAN32__) // Windows specific
 #define _WIN32_WINNT 0x0400 // To make it link in VS2005
 #include <windows.h>
 
@@ -190,7 +196,9 @@ typedef struct DIR {
 #endif
 #define DIRSEP   '/'
 #define IS_DIRSEP_CHAR(c) ((c) == '/')
+#ifndef O_BINARY
 #define O_BINARY  0
+#endif // O_BINARY
 #define closesocket(a) close(a)
 #define mg_fopen(x, y) fopen(x, y)
 #define mg_mkdir(x, y) mkdir(x, y)
@@ -811,7 +819,7 @@ static void send_http_error(struct mg_connection *conn, int status,
   }
 }
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__SYMBIAN32__)
 static int pthread_mutex_init(pthread_mutex_t *mutex, void *unused) {
   unused = NULL;
   *mutex = CreateMutex(NULL, FALSE, NULL);
@@ -1559,7 +1567,7 @@ static void convert_uri_to_file_name(struct mg_connection *conn,
   match_len = get_document_root(conn, &vec);
   mg_snprintf(conn, buf, buf_len, "%.*s%s", vec.len, vec.ptr, uri + match_len);
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__SYMBIAN32__)
   change_slashes_to_backslashes(buf);
 #endif /* _WIN32 */
 
@@ -4038,7 +4046,7 @@ void mg_stop(struct mg_context *ctx) {
   }
   free_context(ctx);
 
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(__SYMBIAN32__)
   (void) WSACleanup();
 #endif // _WIN32
 }
@@ -4049,7 +4057,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
   const char *name, *value, *default_value;
   int i;
 
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(__SYMBIAN32__)
   WSADATA data;
   WSAStartup(MAKEWORD(2,2), &data);
 #endif // _WIN32
@@ -4100,7 +4108,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
     return NULL;
   }
 
-#if !defined(_WIN32)
+#if !defined(_WIN32) && !defined(__SYMBIAN32__)
   // Ignore SIGPIPE signal, so if browser cancels the request, it
   // won't kill the whole process.
   (void) signal(SIGPIPE, SIG_IGN);
