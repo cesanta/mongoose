@@ -92,7 +92,7 @@ typedef void * (*mg_callback_t)(enum mg_event event,
 //     "listening_ports", "80,443s",
 //     NULL
 //   };
-//   struct mg_context *ctx = mg_start(&my_func, options);
+//   struct mg_context *ctx = mg_start(&my_func, NULL, options);
 //
 // Please refer to http://code.google.com/p/mongoose/wiki/MongooseManual
 // for the list of valid option and their possible values.
