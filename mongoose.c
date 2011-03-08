@@ -1367,7 +1367,8 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
   int n, buffered_len, nread;
   const char *buffered;
 
-  assert(conn->content_len >= conn->consumed_content);
+  assert((conn->content_len == -1 && conn->consumed_content == 0) ||
+         conn->consumed_content <= conn->content_len);
   DEBUG_TRACE(("%p %zu %lld %lld", buf, len,
                conn->content_len, conn->consumed_content));
   nread = 0;
