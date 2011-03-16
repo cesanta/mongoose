@@ -57,6 +57,7 @@ class mg_header(ctypes.Structure):
 class mg_request_info(ctypes.Structure):
     """A wrapper for struct mg_request_info."""
     _fields_ = [
+        ('user_data', ctypes.c_char_p),
         ('request_method', ctypes.c_char_p),
         ('uri', ctypes.c_char_p),
         ('http_version', ctypes.c_char_p),
@@ -91,11 +92,11 @@ class Connection(object):
         return ctypes.c_char_p(val).value
 
     def get_var(self, data, name):
-        size = len(data)
+        size = data and len(data) or 0
         buf = ctypes.create_string_buffer(size)
         n = self.m.dll.mg_get_var(data, size, name, buf, size)
         return n >= 0 and buf or None
-    
+
     def printf(self, fmt, *args):
         val = self.m.dll.mg_printf(self.conn, fmt, *args)
         return ctypes.c_int(val).value
