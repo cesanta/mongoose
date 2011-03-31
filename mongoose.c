@@ -2421,6 +2421,7 @@ static void handle_directory_request(struct mg_connection *conn,
     }
 
     if (entries == NULL) {
+      closedir(dirp);
       send_http_error(conn, 500, "Cannot open directory",
           "%s", "Error: cannot allocate memory");
       return;
