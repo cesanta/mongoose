@@ -126,7 +126,7 @@ static void verify_document_root(const char *root) {
 
 static char *sdup(const char *str) {
   char *p;
-  if ((p = malloc(strlen(str) + 1)) != NULL) {
+  if ((p = (char *) malloc(strlen(str) + 1)) != NULL) {
     strcpy(p, str);
   }
   return p;

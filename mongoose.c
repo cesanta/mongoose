@@ -23,6 +23,7 @@
 #else
 #define _XOPEN_SOURCE 600 // For flockfile() on Linux
 #define _LARGEFILE_SOURCE // Enable 64-bit file offsets
+#define __STDC_FORMAT_MACROS // <inttypes.h> wants this for C++
 #endif
 
 #if defined(__SYMBIAN32__)
@@ -743,7 +744,7 @@ static const char *next_option(const char *list, struct vec *val,
        * so that val points to "x", and eq_val points to "y".
        */
       eq_val->len = 0;
-      eq_val->ptr = memchr(val->ptr, '=', val->len);
+      eq_val->ptr = (const char *) memchr(val->ptr, '=', val->len);
       if (eq_val->ptr != NULL) {
         eq_val->ptr++;  /* Skip over '=' character */
         eq_val->len = val->ptr + val->len - eq_val->ptr;
@@ -1602,7 +1603,8 @@ static struct mg_connection *mg_connect(struct mg_connection *conn,
       cry(conn, "%s: connect(%s:%d): %s", __func__, host, port,
           strerror(ERRNO));
       closesocket(sock);
-    } else if ((newconn = calloc(1, sizeof(*newconn))) == NULL) {
+    } else if ((newconn = (struct mg_connection *)
+                calloc(1, sizeof(*newconn))) == NULL) {
       cry(conn, "%s: calloc: %s", __func__, strerror(ERRNO));
       closesocket(sock);
     } else {
@@ -3357,7 +3359,8 @@ static int set_ports_option(struct mg_context *ctx) {
       cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
           vec.len, vec.ptr, strerror(ERRNO));
       success = 0;
-    } else if ((listener = calloc(1, sizeof(*listener))) == NULL) {
+    } else if ((listener = (struct socket *)
+                calloc(1, sizeof(*listener))) == NULL) {
       closesocket(sock);
       cry(fc(ctx), "%s: %s", __func__, strerror(ERRNO));
       success = 0;
@@ -3872,7 +3875,7 @@ static void worker_thread(struct mg_context *ctx) {
   struct mg_connection *conn;
   int buf_size = atoi(ctx->config[MAX_REQUEST_SIZE]);
 
-  conn = calloc(1, sizeof(*conn) + buf_size);
+  conn = (struct mg_connection *) calloc(1, sizeof(*conn) + buf_size);
   conn->buf_size = buf_size;
   conn->buf = (char *) (conn + 1);
   assert(conn != NULL);
@@ -4062,7 +4065,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
 
   // Allocate context and initialize reasonable general case defaults.
   // TODO(lsm): do proper error handling here.
-  ctx = calloc(1, sizeof(*ctx));
+  ctx = (struct mg_context *) calloc(1, sizeof(*ctx));
   ctx->user_callback = user_callback;
   ctx->user_data = user_data;
 
