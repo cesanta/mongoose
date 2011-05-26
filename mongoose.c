@@ -3333,7 +3333,7 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
 
 static int set_ports_option(struct mg_context *ctx) {
   const char *list = ctx->config[LISTENING_PORTS];
-  int reuseaddr = 1, success = 1;
+  int on = 1, success = 1;
   SOCKET sock;
   struct vec vec;
   struct socket so, *listener;
@@ -3350,9 +3350,17 @@ static int set_ports_option(struct mg_context *ctx) {
 #if !defined(_WIN32)
                // On Windows, SO_REUSEADDR is recommended only for
                // broadcast UDP sockets
-               setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuseaddr,
-                          sizeof(reuseaddr)) != 0 ||
+               setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on,
+                          sizeof(on)) != 0 ||
 #endif // !_WIN32
+               // Set TCP keep-alive. This needed because if HTTP-level
+               // keep-alive is enabled, and client resets the connection,
+               // server won't get TCP FIN or RST and will keep the connection
+               // open forever. With TCP keep-alive, next keep-alive
+               // handshake will figure out that the client is down and
+               // will close the server end.
+               setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &on,
+                          sizeof(on)) != 0 ||
                bind(sock, &so.lsa.u.sa, so.lsa.len) != 0 ||
                listen(sock, 20) != 0) {
       closesocket(sock);
