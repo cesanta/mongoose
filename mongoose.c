@@ -3353,12 +3353,13 @@ static int set_ports_option(struct mg_context *ctx) {
                setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on,
                           sizeof(on)) != 0 ||
 #endif // !_WIN32
-               // Set TCP keep-alive. This needed because if HTTP-level
+               // Set TCP keep-alive. This is needed because if HTTP-level
                // keep-alive is enabled, and client resets the connection,
                // server won't get TCP FIN or RST and will keep the connection
                // open forever. With TCP keep-alive, next keep-alive
                // handshake will figure out that the client is down and
                // will close the server end.
+               // Thanks to Igor Klopov who suggested the patch.
                setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &on,
                           sizeof(on)) != 0 ||
                bind(sock, &so.lsa.u.sa, so.lsa.len) != 0 ||
