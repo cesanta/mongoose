@@ -158,6 +158,11 @@ int mg_write(struct mg_connection *, const void *buf, size_t len);
 int mg_printf(struct mg_connection *, const char *fmt, ...);
 
 
+// Send contents of the entire file together with HTTP headers.
+// Return 1 on success, 0 on error (e.g. file does not exist).
+void mg_send_file(struct mg_connection *conn, const char *path);
+
+
 // Read data from the remote end, return number of bytes read.
 int mg_read(struct mg_connection *, void *buf, size_t len);
 

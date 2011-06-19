@@ -2567,6 +2567,16 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
   (void) fclose(fp);
 }
 
+void mg_send_file(struct mg_connection *conn, const char *path) {
+  struct mgstat st;
+  if (mg_stat(path, &st) == 0) {
+    handle_file_request(conn, path, &st);
+  } else {
+    send_http_error(conn, 404, "Not Found", "%s", "File not found");
+  }
+}
+
+
 // Parse HTTP headers from the given buffer, advance buffer to the point
 // where parsing stopped.
 static void parse_http_headers(char **buf, struct mg_request_info *ri) {
