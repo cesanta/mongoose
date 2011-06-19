@@ -110,6 +110,9 @@ class Connection(object):
         n = self.m.dll.mg_read(self.conn, buf, size)
         return n <= 0 and None or buf[:n]
 
+    def send_file(self, path):
+        self.m.dll.mg_send_file(self.conn, path)
+
 
 class Mongoose(object):
     """A wrapper class for Mongoose shared library."""

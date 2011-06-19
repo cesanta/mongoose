@@ -39,6 +39,9 @@ def EventHandler(event, conn, info):
                '<input type="submit"/>'
                '</form>')
         return True
+    elif event == mongoose.NEW_REQUEST and info.uri == '/secret':
+        conn.send_file('/etc/passwd')
+        return True
     else:
         return False
 
