@@ -150,18 +150,17 @@ if (scalar(@ARGV) > 0 and $ARGV[0] eq 'embedded') {
   exit 0;
 }
 
-# Make sure we load config file if no options are given
-write_file($config, "listening_ports 12345\n");
-spawn("$exe -a access.log");
-my $saved_port = $port;
-$port = 12345;
+# Make sure we load config file if no options are given.
+# Command line options override config files settings
+write_file($config, "access_log_file access.log\nlistening_ports 12345\n");
+spawn("$exe -p $port");
 o("GET /test/hello.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'Loading config file');
-$port = $saved_port;
 unlink $config;
 kill_spawned_child();
 
 # Spawn the server on port $port
-my $cmd = "$exe -listening_ports $port -access_log_file access.log ".
+write_file($config, "");
+my $cmd = "$exe $config -listening_ports $port -access_log_file access.log ".
 "-error_log_file debug.log ".
 "-cgi_environment CGI_FOO=foo,CGI_BAR=bar,CGI_BAZ=baz " .
 "-extra_mime_types .bar=foo/bar,.tar.gz=blah,.baz=foo " .

@@ -156,13 +156,14 @@ static void set_option(char **options, const char *name, const char *value) {
 static void process_command_line_arguments(char *argv[], char **options) {
   char line[512], opt[512], val[512], *p;
   FILE *fp = NULL;
-  size_t i, line_no = 0;
+  size_t i, cmd_line_opts_start = 1, line_no = 0;
 
   options[0] = NULL;
 
   // Should we use a config file ?
-  if (argv[1] != NULL && argv[2] == NULL) {
+  if (argv[1] != NULL && argv[1][0] != '-') {
     snprintf(config_file, sizeof(config_file), "%s", argv[1]);
+    cmd_line_opts_start = 2;
   } else if ((p = strrchr(argv[0], DIRSEP)) == NULL) {
     // No command line flags specified. Look where binary lives
     snprintf(config_file, sizeof(config_file), "%s", CONFIG_FILE);
@@ -173,8 +174,8 @@ static void process_command_line_arguments(char *argv[], char **options) {
 
   fp = fopen(config_file, "r");
 
-  // If config file was set in command line and open failed, exit
-  if (argv[1] != NULL && argv[2] == NULL && fp == NULL) {
+  // If config file was set in command line and open failed, die
+  if (cmd_line_opts_start == 2 && fp == NULL) {
     die("Cannot open config file %s: %s", config_file, strerror(errno));
   }
 
@@ -201,7 +202,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
   }
 
   // Now handle command line flags. They override config file settings.
-  for (i = 1; argv[i] != NULL; i += 2) {
+  for (i = cmd_line_opts_start; argv[i] != NULL; i += 2) {
     if (argv[i][0] != '-' || argv[i + 1] == NULL) {
       show_usage_and_exit();
     }
@@ -218,8 +219,8 @@ static void start_mongoose(int argc, char *argv[]) {
   char *options[MAX_OPTIONS];
   int i;
 
-  /* Edit passwords file if -A option is specified */
-  if (argc > 1 && argv[1][0] == '-' && argv[1][1] == 'A') {
+  // Edit passwords file if -A option is specified
+  if (argc > 1 && !strcmp(argv[1], "-A")) {
     if (argc != 6) {
       show_usage_and_exit();
     }
@@ -227,7 +228,7 @@ static void start_mongoose(int argc, char *argv[]) {
          EXIT_SUCCESS : EXIT_FAILURE);
   }
 
-  /* Show usage if -h or --help options are specified */
+  // Show usage if -h or --help options are specified
   if (argc == 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
     show_usage_and_exit();
   }
