@@ -2993,9 +2993,6 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
 done:
   if (pid != (pid_t) -1) {
     kill(pid, SIGKILL);
-#if !defined(_WIN32)
-    do {} while (waitpid(-1, &i, WNOHANG) > 0);
-#endif
   }
   if (fd_stdin[0] != -1) {
     (void) close(fd_stdin[0]);
@@ -4133,6 +4130,8 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
   // Ignore SIGPIPE signal, so if browser cancels the request, it
   // won't kill the whole process.
   (void) signal(SIGPIPE, SIG_IGN);
+  // Also ignoring SIGCHLD to let the OS to reap zombies properly.
+  (void) signal(SIGCHLD, SIG_IGN);
 #endif // !_WIN32
 
   (void) pthread_mutex_init(&ctx->mutex, NULL);

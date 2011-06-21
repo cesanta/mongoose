@@ -88,6 +88,11 @@ typedef void * (*mg_callback_t)(enum mg_event event,
 //   options: NULL terminated list of option_name, option_value pairs that
 //            specify Mongoose configuration parameters.
 //
+// Side-effects: on UNIX, ignores SIGCHLD and SIGPIPE signals. If custom
+//    processing is required for these, signal handlers must be set up
+//    after calling mg_start().
+//
+//
 // Example:
 //   const char *options[] = {
 //     "document_root", "/var/www",
