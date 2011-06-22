@@ -1172,6 +1172,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   interp = conn->ctx->config[CGI_INTERPRETER];
   if (interp == NULL) {
     buf[2] = '\0';
+    mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%c%s", dir, DIRSEP, prog);
     if ((fp = fopen(cmdline, "r")) != NULL) {
       (void) fgets(buf, sizeof(buf), fp);
       if (buf[0] != '#' || buf[1] != '!') {
