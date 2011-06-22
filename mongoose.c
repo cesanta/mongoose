@@ -2247,7 +2247,7 @@ int mg_modify_passwords_file(const char *fname, const char *domain,
   fp = fp2 = NULL;
 
   // Regard empty password as no password - remove user record.
-  if (pass[0] == '\0') {
+  if (pass != NULL && pass[0] == '\0') {
     pass = NULL;
   }
 
