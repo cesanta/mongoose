@@ -3647,6 +3647,18 @@ static int set_ssl_option(struct mg_context *ctx) {
 
   return 1;
 }
+
+static void uninitialize_ssl(struct mg_context *ctx) {
+  int i;
+  if (ctx->ssl_ctx != NULL) {
+    CRYPTO_set_locking_callback(NULL);
+    for (i = 0; i < CRYPTO_num_locks(); i++) {
+      pthread_mutex_destroy(&ssl_mutexes[i]);
+    }
+    CRYPTO_set_locking_callback(NULL);
+    CRYPTO_set_id_callback(NULL);
+  }
+}
 #endif // !NO_SSL
 
 static int set_gpass_option(struct mg_context *ctx) {
@@ -4025,6 +4037,10 @@ static void master_thread(struct mg_context *ctx) {
   (void) pthread_cond_destroy(&ctx->cond);
   (void) pthread_cond_destroy(&ctx->sq_empty);
   (void) pthread_cond_destroy(&ctx->sq_full);
+
+#if !defined(NO_SSL)
+  uninitialize_ssl(ctx);
+#endif
 
   // Signal mg_stop() that we're done
   ctx->stop_flag = 2;
