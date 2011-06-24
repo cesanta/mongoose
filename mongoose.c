@@ -3691,7 +3691,14 @@ static void reset_per_request_attributes(struct mg_connection *conn) {
 
 static void close_socket_gracefully(SOCKET sock) {
   char buf[BUFSIZ];
+  struct linger linger;
   int n;
+
+  // Set linger option to avoid socket hanging out after close. This prevent
+  // ephemeral port exhaust problem under high QPS.
+  linger.l_onoff = 1;
+  linger.l_linger = 1;
+  setsockopt(sock, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
 
   // Send FIN to the client
   (void) shutdown(sock, SHUT_WR);
