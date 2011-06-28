@@ -3771,8 +3771,9 @@ static void handle_proxy_request(struct mg_connection *conn) {
   int port, is_ssl, len, i, n;
 
   DEBUG_TRACE(("URL: %s", ri->uri));
-  if (conn->request_info.uri[0] == '/' ||
-      (ri->uri == NULL || (len = parse_url(ri->uri, host, &port))) == 0) {
+  if (ri->uri == NULL ||
+      ri->uri[0] == '/' ||
+      (len = parse_url(ri->uri, host, &port)) == 0) {
     return;
   }
 
