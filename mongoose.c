@@ -3872,7 +3872,8 @@ static void process_new_connection(struct mg_connection *conn) {
       discard_current_request_from_buffer(conn);
     }
     // conn->peer is not NULL only for SSL-ed proxy connections
-  } while (conn->peer || (keep_alive_enabled && should_keep_alive(conn)));
+  } while (conn->ctx->stop_flag == 0 &&
+           (conn->peer || (keep_alive_enabled && should_keep_alive(conn))));
 }
 
 // Worker threads take accepted socket from the queue
