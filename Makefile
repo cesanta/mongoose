@@ -68,7 +68,8 @@ LINK=	/link /incremental:no /libpath:$(VC)\lib /subsystem:windows \
 CYAFL = /c /I $(CYA)/include -I $(CYA)/include/openssl \
         /I $(CYA)/ctaocrypt/include /D _LIB /D OPENSSL_EXTRA
 
-CYASRC= $(CYA)/src/cyassl_int.c \
+CYASRC= \
+	$(CYA)/src/cyassl_int.c \
 	$(CYA)/src/cyassl_io.c \
 	$(CYA)/src/keys.c \
 	$(CYA)/src/tls.c \
@@ -102,8 +103,6 @@ CYASRC= $(CYA)/src/cyassl_int.c \
 cyassl:
 	$(CL) $(CYASRC) $(CYAFL) $(DEF)
 	lib *.obj /out:cyassl.lib
-#	$(CL) $(CYA)/src/ssl.c $(CYA)/ctaocrypt/src/coding.c \
-#		$(CYAFL) $(DEF)
 
 windows:
 	rc win32\res.rc
