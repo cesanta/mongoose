@@ -979,6 +979,11 @@ static struct tm *localtime(const time_t *ptime, struct tm *ptm) {
   return ptm;
 }
 
+static struct tm *gmtime(const time_t *ptime, struct tm *ptm) {
+  // FIXME(lsm): fix this.
+  return localtime(ptime, ptm);
+}
+
 static size_t strftime(char *dst, size_t dst_size, const char *fmt,
                        const struct tm *tm) {
   (void) snprintf(dst, dst_size, "implement strftime() for WinCE");
@@ -2543,9 +2548,10 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
     msg = "Partial Content";
   }
 
-  // Prepare Etag, Date, Last-Modified headers
-  (void) strftime(date, sizeof(date), fmt, localtime(&curtime));
-  (void) strftime(lm, sizeof(lm), fmt, localtime(&stp->mtime));
+  // Prepare Etag, Date, Last-Modified headers. Must be in UTC, according to
+  // http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.3
+  (void) strftime(date, sizeof(date), fmt, gmtime(&curtime));
+  (void) strftime(lm, sizeof(lm), fmt, gmtime(&stp->mtime));
   (void) mg_snprintf(conn, etag, sizeof(etag), "%lx.%lx",
       (unsigned long) stp->mtime, (unsigned long) stp->size);
 
