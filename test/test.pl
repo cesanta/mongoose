@@ -24,8 +24,8 @@ my $embed_exe = '.' . $dir_separator . 'embed';
 my $unit_test_exe = '.' . $dir_separator . 'unit_test';
 my $exit_code = 0;
 
-my @files_to_delete = ('debug.log', 'access.log', $config, "$root/put.txt",
-  "$root/a+.txt", "$root/.htpasswd", "$root/binary_file",
+my @files_to_delete = ('debug.log', 'access.log', $config, "$root/a/put.txt",
+  "$root/a+.txt", "$root/.htpasswd", "$root/binary_file", "$root/a",
   $embed_exe, $unit_test_exe);
 
 END {
@@ -395,20 +395,20 @@ sub do_PUT_test {
   "response=896327350763836180c61d87578037d9, qop=auth, ".
   "nc=00000002, cnonce=53eddd3be4e26a98\n";
 
-  o("PUT /put.txt HTTP/1.0\nContent-Length: 7\n$auth_header\n1234567",
+  o("PUT /a/put.txt HTTP/1.0\nContent-Length: 7\n$auth_header\n1234567",
     "HTTP/1.1 201 OK", 'PUT file, status 201');
   fail("PUT content mismatch")
-  unless read_file("$root/put.txt") eq '1234567';
-  o("PUT /put.txt HTTP/1.0\nContent-Length: 4\n$auth_header\nabcd",
+  unless read_file("$root/a/put.txt") eq '1234567';
+  o("PUT /a/put.txt HTTP/1.0\nContent-Length: 4\n$auth_header\nabcd",
     "HTTP/1.1 200 OK", 'PUT file, status 200');
   fail("PUT content mismatch")
-  unless read_file("$root/put.txt") eq 'abcd';
-  o("PUT /put.txt HTTP/1.0\n$auth_header\nabcd",
+  unless read_file("$root/a/put.txt") eq 'abcd';
+  o("PUT /a/put.txt HTTP/1.0\n$auth_header\nabcd",
     "HTTP/1.1 411 Length Required", 'PUT 411 error');
-  o("PUT /put.txt HTTP/1.0\nExpect: blah\nContent-Length: 1\n".
+  o("PUT /a/put.txt HTTP/1.0\nExpect: blah\nContent-Length: 1\n".
     "$auth_header\nabcd",
     "HTTP/1.1 417 Expectation Failed", 'PUT 417 error');
-  o("PUT /put.txt HTTP/1.0\nExpect: 100-continue\nContent-Length: 4\n".
+  o("PUT /a/put.txt HTTP/1.0\nExpect: 100-continue\nContent-Length: 4\n".
     "$auth_header\nabcd",
     "HTTP/1.1 100 Continue.+HTTP/1.1 200", 'PUT 100-Continue');
 }

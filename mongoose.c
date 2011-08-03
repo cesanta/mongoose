@@ -3029,26 +3029,31 @@ static int put_dir(const char *path) {
   char buf[PATH_MAX];
   const char *s, *p;
   struct mgstat st;
-  size_t len;
+  int len, res = 1;
 
-  for (s = p = path + 2; (p = strchr(s, '/')) != NULL; s = ++p) {
+  for (s = p = path + 2; (p = strchr(s, DIRSEP)) != NULL; s = ++p) {
     len = p - path;
-    assert(len < sizeof(buf));
-    (void) memcpy(buf, path, len);
+    if (len >= (int) sizeof(buf)) {
+      res = -1;
+      break;
+    }
+    memcpy(buf, path, len);
     buf[len] = '\0';
 
     // Try to create intermediate directory
+    DEBUG_TRACE(("mkdir(%s)", buf));
     if (mg_stat(buf, &st) == -1 && mg_mkdir(buf, 0755) != 0) {
-      return -1;
+      res = -1;
+      break;
     }
 
     // Is path itself a directory?
     if (p[1] == '\0') {
-      return 0;
+      res = 0;
     }
   }
 
-  return 1;
+  return res;
 }
 
 static void put_file(struct mg_connection *conn, const char *path) {
@@ -3245,7 +3250,7 @@ static void handle_request(struct mg_connection *conn) {
     * conn->request_info.query_string++ = '\0';
   }
   uri_len = strlen(ri->uri);
-  (void) url_decode(ri->uri, (size_t)uri_len, ri->uri, (size_t)(uri_len + 1), 0);
+  url_decode(ri->uri, (size_t)uri_len, ri->uri, (size_t)(uri_len + 1), 0);
   remove_double_dots_and_double_slashes(ri->uri);
   convert_uri_to_file_name(conn, ri->uri, path, sizeof(path));
 
