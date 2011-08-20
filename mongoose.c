@@ -2601,7 +2601,8 @@ static void parse_http_headers(char **buf, struct mg_request_info *ri) {
 static int is_valid_http_method(const char *method) {
   return !strcmp(method, "GET") || !strcmp(method, "POST") ||
     !strcmp(method, "HEAD") || !strcmp(method, "CONNECT") ||
-    !strcmp(method, "PUT") || !strcmp(method, "DELETE");
+    !strcmp(method, "PUT") || !strcmp(method, "DELETE") ||
+    !strcmp(method, "OPTIONS");
 }
 
 // Parse HTTP request, fill in mg_request_info structure.
@@ -3236,6 +3237,15 @@ static void handle_ssi_file_request(struct mg_connection *conn,
   }
 }
 
+static void send_options(struct mg_connection *conn) {
+  conn->request_info.status_code = 200;
+
+  (void) mg_printf(conn,
+      "HTTP/1.1 200 OK\r\n"
+      "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, OPTIONS\r\n\r\n");
+}
+
+
 // This is the heart of the Mongoose's logic.
 // This function is called when the request is read, parsed and validated,
 // and Mongoose must decide what action to take: serve a file, or
@@ -3259,6 +3269,8 @@ static void handle_request(struct mg_connection *conn) {
     send_authorization_request(conn);
   } else if (call_user(conn, MG_NEW_REQUEST) != NULL) {
     // Do nothing, callback has served the request
+  } else if (!strcmp(ri->request_method, "OPTIONS")) {
+    send_options(conn);
   } else if (strstr(path, PASSWORDS_FILE_NAME)) {
     // Do not allow to view passwords files
     send_http_error(conn, 403, "Forbidden", "Access Forbidden");
