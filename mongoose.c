@@ -2403,7 +2403,7 @@ static void handle_directory_request(struct mg_connection *conn,
 
   if ((dirp = opendir(dir)) == NULL) {
     send_http_error(conn, 500, "Cannot open directory",
-        "Error: opendir(%s): %s", path, strerror(ERRNO));
+        "Error: opendir(%s): %s", dir, strerror(ERRNO));
     return;
   }
 
