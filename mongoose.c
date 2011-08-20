@@ -2602,7 +2602,7 @@ static int is_valid_http_method(const char *method) {
   return !strcmp(method, "GET") || !strcmp(method, "POST") ||
     !strcmp(method, "HEAD") || !strcmp(method, "CONNECT") ||
     !strcmp(method, "PUT") || !strcmp(method, "DELETE") ||
-    !strcmp(method, "OPTIONS");
+    !strcmp(method, "OPTIONS") || !strcmp(method, "PROPFIND");
 }
 
 // Parse HTTP request, fill in mg_request_info structure.
@@ -3242,9 +3242,49 @@ static void send_options(struct mg_connection *conn) {
 
   (void) mg_printf(conn,
       "HTTP/1.1 200 OK\r\n"
-      "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, OPTIONS\r\n\r\n");
+      "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, OPTIONS\r\n"
+      "DAV: 1\r\n\r\n");
 }
 
+// Writes PROPFIND properties for a collection element
+static void print_props(struct mg_connection *conn, const char* uri, struct mgstat* st) {
+  char mod[64];
+
+  (void) strftime(mod, sizeof(mod), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&st->mtime));
+
+  conn->num_bytes_sent += mg_printf(conn,
+      "<d:response>"
+       "<d:href>%s</d:href>"
+       "<d:propstat>"
+        "<d:prop>"
+         "<d:resourcetype>%s</d:resourcetype>"
+         "<d:getcontentlength>%" INT64_FMT "</d:getcontentlength>"
+         "<d:getlastmodified>%s</d:getlastmodified>"
+        "</d:prop>"
+        "<d:status>HTTP/1.1 200 OK</d:status>"
+       "</d:propstat>"
+      "</d:response>",
+      uri,
+      st->is_directory ? "<d:collection/>" : "",
+      st->size,
+      mod);
+}
+
+static void handle_propfind(struct mg_connection *conn, const char* path, struct mgstat* st) {
+  conn->request_info.status_code = 200;
+  (void) mg_printf(conn,
+       "HTTP/1.1 207 Multi-Status\r\n"
+       "Connection: close\r\n"
+       "Content-Type: text/xml; charset=utf-8\r\n\r\n");
+
+  conn->num_bytes_sent += mg_printf(conn,
+      "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+      "<d:multistatus xmlns:d='DAV:'>");
+
+  print_props(conn, conn->request_info.uri, st);
+
+  conn->num_bytes_sent += mg_printf(conn, "</d:multistatus>");
+}
 
 // This is the heart of the Mongoose's logic.
 // This function is called when the request is read, parsed and validated,
@@ -3296,6 +3336,8 @@ static void handle_request(struct mg_connection *conn) {
     (void) mg_printf(conn,
         "HTTP/1.1 301 Moved Permanently\r\n"
         "Location: %s/\r\n\r\n", ri->uri);
+  } else if (!strcmp(ri->request_method, "PROPFIND")) {
+    handle_propfind(conn, path, &st);
   } else if (st.is_directory &&
              !substitute_index_file(conn, path, sizeof(path), &st)) {
     if (!mg_strcasecmp(conn->ctx->config[ENABLE_DIRECTORY_LISTING], "yes")) {
