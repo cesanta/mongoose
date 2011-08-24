@@ -2393,65 +2393,87 @@ static int WINCDECL compare_dir_entries(const void *p1, const void *p2) {
   return query_string[1] == 'd' ? -cmp_result : cmp_result;
 }
 
-static void handle_directory_request(struct mg_connection *conn,
-                                     const char *dir) {
+static int scan_directory(struct mg_connection *conn, const char *dir,
+                          void *data, void (*cb)(struct de *, void *)) {
+  char path[PATH_MAX];
   struct dirent *dp;
   DIR *dirp;
-  struct de *entries = NULL;
-  char path[PATH_MAX];
-  int i, sort_direction, num_entries = 0, arr_size = 128;
+  struct de de;
 
   if ((dirp = opendir(dir)) == NULL) {
+    return 0;
+  } else {
+    de.conn = conn;
+
+    while ((dp = readdir(dirp)) != NULL) {
+      // Do not show current dir and passwords file
+      if (!strcmp(dp->d_name, ".") ||
+          !strcmp(dp->d_name, "..") ||
+          !strcmp(dp->d_name, PASSWORDS_FILE_NAME))
+        continue;
+
+      mg_snprintf(conn, path, sizeof(path), "%s%c%s", dir, DIRSEP, dp->d_name);
+
+      // If we don't memset stat structure to zero, mtime will have
+      // garbage and strftime() will segfault later on in
+      // print_dir_entry(). memset is required only if mg_stat()
+      // fails. For more details, see
+      // http://code.google.com/p/mongoose/issues/detail?id=79
+      if (mg_stat(path, &de.st) != 0) {
+        memset(&de.st, 0, sizeof(de.st));
+      }
+      de.file_name = dp->d_name;
+
+      cb(&de, data);
+    }
+    (void) closedir(dirp);
+  }
+  return 1;
+}
+
+struct dir_scan_data {
+  struct de *entries;
+  int num_entries;
+  int arr_size;
+};
+
+static void dir_scan_callback(struct de *de, void *data) {
+  struct dir_scan_data *dsd = (struct dir_scan_data *) data;
+
+  if (dsd->entries == NULL || dsd->num_entries >= dsd->arr_size) {
+    dsd->arr_size *= 2;
+    dsd->entries = (struct de *) realloc(dsd->entries, dsd->arr_size *
+                                         sizeof(dsd->entries[0]));
+  }
+  if (dsd->entries == NULL) {
+    // TODO(lsm): propagate an error to the caller
+    dsd->num_entries = 0;
+  } else {
+    dsd->entries[dsd->num_entries].file_name = mg_strdup(de->file_name);
+    dsd->entries[dsd->num_entries].st = de->st;
+    dsd->entries[dsd->num_entries].conn = de->conn;
+    dsd->num_entries++;
+  }
+}
+
+static void handle_directory_request(struct mg_connection *conn,
+                                     const char *dir) {
+  int i, sort_direction;
+  struct dir_scan_data data = { NULL, 0, 128 };
+
+  if (!scan_directory(conn, dir, &data, dir_scan_callback)) {
     send_http_error(conn, 500, "Cannot open directory",
-        "Error: opendir(%s): %s", dir, strerror(ERRNO));
+                    "Error: opendir(%s): %s", dir, strerror(ERRNO));
     return;
   }
-
-  (void) mg_printf(conn, "%s",
-      "HTTP/1.1 200 OK\r\n"
-      "Connection: close\r\n"
-      "Content-Type: text/html; charset=utf-8\r\n\r\n");
 
   sort_direction = conn->request_info.query_string != NULL &&
     conn->request_info.query_string[1] == 'd' ? 'a' : 'd';
 
-  while ((dp = readdir(dirp)) != NULL) {
-
-    // Do not show current dir and passwords file
-    if (!strcmp(dp->d_name, ".") ||
-        !strcmp(dp->d_name, "..") ||
-        !strcmp(dp->d_name, PASSWORDS_FILE_NAME))
-      continue;
-
-    if (entries == NULL || num_entries >= arr_size) {
-      arr_size *= 2;
-      entries = (struct de *) realloc(entries,
-          arr_size * sizeof(entries[0]));
-    }
-
-    if (entries == NULL) {
-      closedir(dirp);
-      send_http_error(conn, 500, "Cannot open directory",
-          "%s", "Error: cannot allocate memory");
-      return;
-    }
-
-    mg_snprintf(conn, path, sizeof(path), "%s%c%s", dir, DIRSEP, dp->d_name);
-
-    // If we don't memset stat structure to zero, mtime will have
-    // garbage and strftime() will segfault later on in
-    // print_dir_entry(). memset is required only if mg_stat()
-    // fails. For more details, see
-    // http://code.google.com/p/mongoose/issues/detail?id=79
-    if (mg_stat(path, &entries[num_entries].st) != 0) {
-      memset(&entries[num_entries].st, 0, sizeof(entries[num_entries].st));
-    }
-
-    entries[num_entries].conn = conn;
-    entries[num_entries].file_name = mg_strdup(dp->d_name);
-    num_entries++;
-  }
-  (void) closedir(dirp);
+  mg_printf(conn, "%s",
+            "HTTP/1.1 200 OK\r\n"
+            "Connection: close\r\n"
+            "Content-Type: text/html; charset=utf-8\r\n\r\n");
 
   conn->num_bytes_sent += mg_printf(conn,
       "<html><head><title>Index of %s</title>"
@@ -2471,12 +2493,13 @@ static void handle_directory_request(struct mg_connection *conn,
       conn->request_info.uri, "..", "Parent directory", "-", "-");
 
   // Sort and print directory entries
-  qsort(entries, (size_t)num_entries, sizeof(entries[0]), compare_dir_entries);
-  for (i = 0; i < num_entries; i++) {
-    print_dir_entry(&entries[i]);
-    free(entries[i].file_name);
+  qsort(data.entries, (size_t) data.num_entries, sizeof(data.entries[0]),
+        compare_dir_entries);
+  for (i = 0; i < data.num_entries; i++) {
+    print_dir_entry(&data.entries[i]);
+    free(data.entries[i].file_name);
   }
-  free(entries);
+  free(data.entries);
 
   conn->num_bytes_sent += mg_printf(conn, "%s", "</table></body></html>");
   conn->request_info.status_code = 200;
@@ -2511,10 +2534,14 @@ static int parse_range_header(const char *header, int64_t *a, int64_t *b) {
   return sscanf(header, "bytes=%" INT64_FMT "-%" INT64_FMT, a, b);
 }
 
+static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
+  strftime(buf, buf_len, "%a, %d %b %Y %H:%M:%S GMT", gmtime(t));
+}
+
 static void handle_file_request(struct mg_connection *conn, const char *path,
                                 struct mgstat *stp) {
   char date[64], lm[64], etag[64], range[64];
-  const char *fmt = "%a, %d %b %Y %H:%M:%S %Z", *msg = "OK", *hdr;
+  const char *msg = "OK", *hdr;
   time_t curtime = time(NULL);
   int64_t cl, r1, r2;
   struct vec mime_vec;
@@ -2550,8 +2577,8 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
 
   // Prepare Etag, Date, Last-Modified headers. Must be in UTC, according to
   // http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.3
-  (void) strftime(date, sizeof(date), fmt, gmtime(&curtime));
-  (void) strftime(lm, sizeof(lm), fmt, gmtime(&stp->mtime));
+  gmt_time_string(date, sizeof(date), &curtime);
+  gmt_time_string(lm, sizeof(lm), &stp->mtime);
   (void) mg_snprintf(conn, etag, sizeof(etag), "%lx.%lx",
       (unsigned long) stp->mtime, (unsigned long) stp->size);
 
@@ -3247,11 +3274,10 @@ static void send_options(struct mg_connection *conn) {
 }
 
 // Writes PROPFIND properties for a collection element
-static void print_props(struct mg_connection *conn, const char* uri, struct mgstat* st) {
-  char mod[64];
-
-  (void) strftime(mod, sizeof(mod), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&st->mtime));
-
+static void print_props(struct mg_connection *conn, const char* uri,
+                        struct mgstat* st) {
+  char mtime[64];
+  gmt_time_string(mtime, sizeof(mtime), &st->mtime);
   conn->num_bytes_sent += mg_printf(conn,
       "<d:response>"
        "<d:href>%s</d:href>"
@@ -3263,27 +3289,45 @@ static void print_props(struct mg_connection *conn, const char* uri, struct mgst
         "</d:prop>"
         "<d:status>HTTP/1.1 200 OK</d:status>"
        "</d:propstat>"
-      "</d:response>",
+      "</d:response>\n",
       uri,
       st->is_directory ? "<d:collection/>" : "",
       st->size,
-      mod);
+      mtime);
 }
 
-static void handle_propfind(struct mg_connection *conn, const char* path, struct mgstat* st) {
-  conn->request_info.status_code = 200;
-  (void) mg_printf(conn,
-       "HTTP/1.1 207 Multi-Status\r\n"
-       "Connection: close\r\n"
-       "Content-Type: text/xml; charset=utf-8\r\n\r\n");
+static void print_dav_dir_entry(struct de *de, void *data) {
+  char href[PATH_MAX];
+  struct mg_connection *conn = (struct mg_connection *) data;
+  mg_snprintf(conn, href, sizeof(href), "%s%s",
+              conn->request_info.uri, de->file_name);
+  print_props(conn, href, &de->st);
+}
+
+static void handle_propfind(struct mg_connection *conn, const char* path,
+                            struct mgstat* st) {
+  const char *depth = mg_get_header(conn, "Depth");
+
+  conn->request_info.status_code = 207;
+  mg_printf(conn, "HTTP/1.1 207 Multi-Status\r\n"
+            "Connection: close\r\n"
+            "Content-Type: text/xml; charset=utf-8\r\n\r\n");
 
   conn->num_bytes_sent += mg_printf(conn,
       "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-      "<d:multistatus xmlns:d='DAV:'>");
+      "<d:multistatus xmlns:d='DAV:'>\n");
 
+  // Print properties for the requested resource itself
   print_props(conn, conn->request_info.uri, st);
 
-  conn->num_bytes_sent += mg_printf(conn, "</d:multistatus>");
+  // If it is a directory, print directory entries too if Depth is not 0
+  if (st->is_directory &&
+      !mg_strcasecmp(conn->ctx->config[ENABLE_DIRECTORY_LISTING], "yes") &&
+      (depth == NULL || strcmp(depth, "0") != 0)) {
+    scan_directory(conn, path, conn, &print_dav_dir_entry);
+  }
+
+  conn->num_bytes_sent += mg_printf(conn, "%s\n", "</d:multistatus>");
 }
 
 // This is the heart of the Mongoose's logic.
