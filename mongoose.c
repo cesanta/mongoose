@@ -889,7 +889,7 @@ static void change_slashes_to_backslashes(char *path) {
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
 // wbuf and wbuf_len is a target buffer and its length.
 static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
-  char buf[PATH_MAX], *p;
+  char buf[PATH_MAX], buf2[PATH_MAX], *p;
 
   mg_strlcpy(buf, path, sizeof(buf));
   change_slashes_to_backslashes(buf);
@@ -911,10 +911,17 @@ static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
       *p == 0x2b ||               // No '+'
       (*p & ~0x7f)) {             // And generally no non-ascii chars
     (void) fprintf(stderr, "Rejecting suspicious path: [%s]", buf);
-    buf[0] = '\0';
+    wbuf[0] = L'\0';
+  } else {
+    // Convert to Unicode and back. If doubly-converted string does not
+    // match the original, something is fishy, reject.
+    MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
+    WideCharToMultiByte(CP_UTF8, 0, wbuf, (int) wbuf_len, buf2, sizeof(buf2),
+                        NULL, NULL);
+    if (strcmp(buf, buf2) != 0) {
+      wbuf[0] = L'\0';
+    }
   }
-
-  (void) MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
 }
 
 #if defined(_WIN32_WCE)
