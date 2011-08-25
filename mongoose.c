@@ -657,18 +657,18 @@ static char *skip_quoted(char **buf, const char *delimiters, const char *whitesp
   begin_word = *buf;
   end_word = begin_word + strcspn(begin_word, delimiters);
 
-  /* Check for quotechar */
+  // Check for quotechar
   if (end_word > begin_word) {
     p = end_word - 1;
     while (*p == quotechar) {
-      /* If there is anything beyond end_word, copy it */
+      // If there is anything beyond end_word, copy it
       if (*end_word == '\0') {
         *p = '\0';
         break;
       } else {
         size_t end_off = strcspn(end_word + 1, delimiters);
         memmove (p, end_word, end_off + 1);
-        p += end_off; /* p must correspond to end_word - 1 */
+        p += end_off; // p must correspond to end_word - 1
         end_word += end_off + 1;
       }
     }
@@ -724,29 +724,27 @@ const char *mg_get_header(const struct mg_connection *conn, const char *name) {
 static const char *next_option(const char *list, struct vec *val,
                                struct vec *eq_val) {
   if (list == NULL || *list == '\0') {
-    /* End of the list */
+    // End of the list
     list = NULL;
   } else {
     val->ptr = list;
     if ((list = strchr(val->ptr, ',')) != NULL) {
-      /* Comma found. Store length and shift the list ptr */
+      // Comma found. Store length and shift the list ptr
       val->len = list - val->ptr;
       list++;
     } else {
-      /* This value is the last one */
+      // This value is the last one
       list = val->ptr + strlen(val->ptr);
       val->len = list - val->ptr;
     }
 
     if (eq_val != NULL) {
-      /*
-       * Value has form "x=y", adjust pointers and lengths
-       * so that val points to "x", and eq_val points to "y".
-       */
+      // Value has form "x=y", adjust pointers and lengths
+      // so that val points to "x", and eq_val points to "y".
       eq_val->len = 0;
       eq_val->ptr = (const char *) memchr(val->ptr, '=', val->len);
       if (eq_val->ptr != NULL) {
-        eq_val->ptr++;  /* Skip over '=' character */
+        eq_val->ptr++;  // Skip over '=' character
         eq_val->len = val->ptr + val->len - eq_val->ptr;
         val->len = (eq_val->ptr - val->ptr) - 1;
       }
@@ -797,7 +795,7 @@ static void send_http_error(struct mg_connection *conn, int status,
     buf[0] = '\0';
     len = 0;
 
-    /* Errors 1xx, 204 and 304 MUST NOT send a body */
+    // Errors 1xx, 204 and 304 MUST NOT send a body
     if (status > 199 && status != 204 && status != 304) {
       len = mg_snprintf(conn, buf, sizeof(buf), "Error %d: %s", status, reason);
       cry(conn, "%s", buf);
@@ -1219,7 +1217,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
 
   return (pid_t) pi.hProcess;
 }
-#endif /* !NO_CGI */
+#endif // !NO_CGI
 
 static int set_non_blocking_mode(SOCKET sock) {
   unsigned long on = 1;
@@ -1332,7 +1330,7 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
   sent = 0;
   while (sent < len) {
 
-    /* How many bytes we send in this iteration */
+    // How many bytes we send in this iteration
     k = len - sent > INT_MAX ? INT_MAX : (int) (len - sent);
 
     if (ssl != NULL) {
@@ -1468,7 +1466,7 @@ static size_t url_decode(const char *src, size_t src_len, char *dst,
     }
   }
 
-  dst[j] = '\0'; /* Null-terminate the destination */
+  dst[j] = '\0'; // Null-terminate the destination
 
   return j;
 }
@@ -1582,7 +1580,7 @@ static void convert_uri_to_file_name(struct mg_connection *conn,
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
   change_slashes_to_backslashes(buf);
-#endif /* _WIN32 */
+#endif // _WIN32
 
   DEBUG_TRACE(("[%s] -> [%s], [%.*s]", uri, buf, (int) vec.len, vec.ptr));
 }
@@ -2122,7 +2120,7 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
       s++;
     }
     name = skip_quoted(&s, "=", " ", 0);
-    /* Value is either quote-delimited, or ends at first comma or space. */
+    // Value is either quote-delimited, or ends at first comma or space.
     if (s[0] == '\"') {
       s++;
       value = skip_quoted(&s, "\"", " ", '\\');
@@ -2654,7 +2652,7 @@ static int parse_http_request(char *buf, struct mg_request_info *ri) {
 
   if (is_valid_http_method(ri->request_method) &&
       strncmp(ri->http_version, "HTTP/", 5) == 0) {
-    ri->http_version += 5;   /* Skip "HTTP/" */
+    ri->http_version += 5;   // Skip "HTTP/"
     parse_http_headers(&buf, ri);
     status = 1;
   }
@@ -2903,7 +2901,7 @@ static void prepare_cgi_environment(struct mg_connection *conn,
 #else
   if ((s = getenv("LD_LIBRARY_PATH")) != NULL)
     addenv(blk, "LD_LIBRARY_PATH=%s", s);
-#endif /* _WIN32 */
+#endif // _WIN32
 
   if ((s = getenv("PERLLIB")) != NULL)
     addenv(blk, "PERLLIB=%s", s);
@@ -3685,7 +3683,7 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
     // dlsym() on UNIX returns void *. ISO C forbids casts of data pointers to
     // function pointers. We need to use a union to make a cast.
     u.p = dlsym(dll_handle, fp->name);
-#endif /* _WIN32 */
+#endif // _WIN32
     if (u.fp == NULL) {
       cry(fc(ctx), "%s: %s: cannot find %s", __func__, dll_name, fp->name);
       return 0;
