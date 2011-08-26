@@ -937,24 +937,6 @@ static time_t time(time_t *ptime) {
   return t;
 }
 
-static time_t mktime(struct tm *ptm) {
-  SYSTEMTIME st;
-  FILETIME ft, lft;
-
-  st.wYear = ptm->tm_year + 1900;
-  st.wMonth = ptm->tm_mon + 1;
-  st.wDay = ptm->tm_mday;
-  st.wHour = ptm->tm_hour;
-  st.wMinute = ptm->tm_min;
-  st.wSecond = ptm->tm_sec;
-  st.wMilliseconds = 0;
-
-  SystemTimeToFileTime(&st, &ft);
-  LocalFileTimeToFileTime(&ft, &lft);
-  return (time_t) ((MAKEUQUAD(lft.dwLowDateTime, lft.dwHighDateTime) -
-                    EPOCH_DIFF) / RATE_DIFF);
-}
-
 static struct tm *localtime(const time_t *ptime, struct tm *ptm) {
   int64_t t = ((int64_t) *ptime) * RATE_DIFF + EPOCH_DIFF;
   FILETIME ft, lft;
@@ -1653,7 +1635,7 @@ static int get_request_len(const char *buf, int buflen) {
 }
 
 // Convert month to the month number. Return -1 on error, or month number
-static int month_number_to_month_name(const char *s) {
+static int get_month_index(const char *s) {
   size_t i;
 
   for (i = 0; i < ARRAY_SIZE(month_names); i++)
@@ -1663,45 +1645,32 @@ static int month_number_to_month_name(const char *s) {
   return -1;
 }
 
-// Parse date-time string, and return the corresponding time_t value
-static time_t parse_date_string(const char *s) {
-  time_t current_time;
-  struct tm tm, *tmp;
-  char mon[32];
-  int sec, min, hour, mday, month, year;
+// Parse UTC date-time string, and return the corresponding time_t value.
+static time_t parse_date_string(const char *datetime) {
+  static const unsigned short days_before_month[] = {
+    0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
+  };
+  char month_str[32];
+  int second, minute, hour, day, month, year, leap_days, days;
+  time_t result = (time_t) 0;
 
-  (void) memset(&tm, 0, sizeof(tm));
-  sec = min = hour = mday = month = year = 0;
-
-  if (((sscanf(s, "%d/%3s/%d %d:%d:%d",
-            &mday, mon, &year, &hour, &min, &sec) == 6) ||
-        (sscanf(s, "%d %3s %d %d:%d:%d",
-                &mday, mon, &year, &hour, &min, &sec) == 6) ||
-        (sscanf(s, "%*3s, %d %3s %d %d:%d:%d",
-                &mday, mon, &year, &hour, &min, &sec) == 6) ||
-        (sscanf(s, "%d-%3s-%d %d:%d:%d",
-                &mday, mon, &year, &hour, &min, &sec) == 6)) &&
-      (month = month_number_to_month_name(mon)) != -1) {
-    tm.tm_mday = mday;
-    tm.tm_mon = month;
-    tm.tm_year = year;
-    tm.tm_hour = hour;
-    tm.tm_min = min;
-    tm.tm_sec = sec;
+  if (((sscanf(datetime, "%d/%3s/%d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6) ||
+       (sscanf(datetime, "%d %3s %d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6) ||
+       (sscanf(datetime, "%*3s, %d %3s %d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6) ||
+       (sscanf(datetime, "%d-%3s-%d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6)) &&
+      year > 1970 &&
+      (month = get_month_index(month_str)) != -1) {
+    year -= 1970;
+    leap_days = year / 4 - year / 100 + year / 400;
+    days = year * 365 + days_before_month[month] + (day - 1) + leap_days;
+    result = days * 24 * 3600 + hour * 3600 + minute * 60 + second;
   }
 
-  if (tm.tm_year > 1900) {
-    tm.tm_year -= 1900;
-  } else if (tm.tm_year < 70) {
-    tm.tm_year += 100;
-  }
-
-  // Set Daylight Saving Time field
-  current_time = time(NULL);
-  tmp = localtime(&current_time);
-  tm.tm_isdst = tmp->tm_isdst;
-
-  return mktime(&tm);
+  return result;
 }
 
 // Protect against directory disclosure attack by removing '..',
