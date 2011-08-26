@@ -221,6 +221,12 @@ typedef int SOCKET;
 #define MAX_CGI_ENVIR_VARS 64
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
 
+#ifdef _WIN32
+static pthread_t pthread_self(void) {
+  return GetCurrentThreadId();
+}
+#endif // _WIN32
+
 #if defined(DEBUG)
 #define DEBUG_TRACE(x) do { \
   flockfile(stdout); \
@@ -863,10 +869,6 @@ static int pthread_cond_destroy(pthread_cond_t *cv) {
   return CloseHandle(cv->signal) && CloseHandle(cv->broadcast) ? 0 : -1;
 }
 
-static pthread_t pthread_self(void) {
-  return GetCurrentThreadId();
-}
-
 // For Windows, change all slashes to backslashes in path names.
 static void change_slashes_to_backslashes(char *path) {
   int i;
@@ -1104,18 +1106,8 @@ struct dirent * readdir(DIR *dir) {
 
 #define set_close_on_exec(fd) // No FD_CLOEXEC on Windows
 
-static int start_thread(struct mg_context *ctx, mg_thread_func_t func,
-                        void *param) {
-  HANDLE hThread;
-  ctx = NULL; // Unused
-
-  hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, param, 0,
-                         NULL);
-  if (hThread != NULL) {
-    (void) CloseHandle(hThread);
-  }
-
-  return hThread == NULL ? -1 : 0;
+static int start_thread(struct mg_context *ctx, mg_thread_func_t f, void *p) {
+  return _beginthread((void (__cdecl *)(void *)) f, 0, p) == -1L ? -1 : 0;
 }
 
 static HANDLE dlopen(const char *dll_name, int flags) {
@@ -3454,7 +3446,7 @@ static int set_ports_option(struct mg_context *ctx) {
                // handshake will figure out that the client is down and
                // will close the server end.
                // Thanks to Igor Klopov who suggested the patch.
-               setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &on,
+               setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *) &on,
                           sizeof(on)) != 0 ||
                bind(sock, &so.lsa.u.sa, so.lsa.len) != 0 ||
                listen(sock, 100) != 0) {
@@ -3783,7 +3775,7 @@ static void close_socket_gracefully(SOCKET sock) {
   // ephemeral port exhaust problem under high QPS.
   linger.l_onoff = 1;
   linger.l_linger = 1;
-  setsockopt(sock, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
+  setsockopt(sock, SOL_SOCKET, SO_LINGER, (void *) &linger, sizeof(linger));
 
   // Send FIN to the client
   (void) shutdown(sock, SHUT_WR);
