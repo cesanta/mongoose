@@ -211,7 +211,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
 }
 
 static void init_server_name(void) {
-  snprintf(server_name, sizeof(server_name), "Mongoose web server v.%s",
+  snprintf(server_name, sizeof(server_name), "Mongoose web server v. %s",
            mg_version());
 }
 
