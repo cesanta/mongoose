@@ -1,4 +1,4 @@
-// Copyright (c) 2004-2010 Sergey Lyubka
+// Copyright (c) 2004-2011 Sergey Lyubka
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -196,7 +196,7 @@ const char *mg_get_header(const struct mg_connection *, const char *name);
 // Destination buffer is guaranteed to be '\0' - terminated. In case of
 // failure, dst[0] == '\0'.
 int mg_get_var(const char *data, size_t data_len,
-    const char *var_name, char *buf, size_t buf_len);
+               const char *var_name, char *buf, size_t buf_len);
 
 // Fetch value of certain cookie variable into the destination buffer.
 //
@@ -206,11 +206,11 @@ int mg_get_var(const char *data, size_t data_len,
 //
 // Return:
 //   On success, value length.
-//   On error, -1 (either "Cookie:" header is not present at all, or the
+//   On error, 0 (either "Cookie:" header is not present at all, or the
 //   requested parameter is not found, or destination buffer is too small
 //   to hold the value).
 int mg_get_cookie(const struct mg_connection *,
-    const char *cookie_name, char *buf, size_t buf_len);
+                  const char *cookie_name, char *buf, size_t buf_len);
 
 
 // Return Mongoose version.
