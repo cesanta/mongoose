@@ -420,9 +420,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
                    service_installed ? "" : "not");
           AppendMenu(hMenu, MF_STRING | MF_GRAYED, ID_SEPARATOR, buf);
           AppendMenu(hMenu, MF_STRING | (service_installed ? MF_GRAYED : 0),
-                     ID_INSTALL_SERVICE, "Install");
+                     ID_INSTALL_SERVICE, "Install service");
           AppendMenu(hMenu, MF_STRING | (!service_installed ? MF_GRAYED : 0),
-                     ID_REMOVE_SERVICE, "Deinstall");
+                     ID_REMOVE_SERVICE, "Deinstall service");
           AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
           AppendMenu(hMenu, MF_STRING, ID_EDIT_CONFIG, "Edit config file");
           AppendMenu(hMenu, MF_STRING, ID_QUIT, "Exit");
