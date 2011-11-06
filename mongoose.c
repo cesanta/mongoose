@@ -2974,8 +2974,13 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   parse_http_headers(&pbuf, &ri);
 
   // Make up and send the status line
-  status = get_header(&ri, "Status");
-  conn->request_info.status_code = status == NULL ? 200 : atoi(status);
+  if ((status = get_header(&ri, "Status")) != NULL) {
+    conn->request_info.status_code = atoi(status);
+  } else if (get_header(&ri, "Location") != NULL) {
+    conn->request_info.status_code = 302;
+  } else {
+    conn->request_info.status_code = 200;
+  }
   (void) mg_printf(conn, "HTTP/1.1 %d OK\r\n", conn->request_info.status_code);
 
   // Send headers
