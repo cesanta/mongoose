@@ -405,7 +405,7 @@ enum {
   GLOBAL_PASSWORDS_FILE, INDEX_FILES,
   ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST, MAX_REQUEST_SIZE,
   EXTRA_MIME_TYPES, LISTENING_PORTS,
-  DOCUMENT_ROOT, SSL_CERTIFICATE, NUM_THREADS, RUN_AS_USER,
+  DOCUMENT_ROOT, SSL_CERTIFICATE, NUM_THREADS, RUN_AS_USER, REWRITE,
   NUM_OPTIONS
 };
 
@@ -432,6 +432,7 @@ static const char *config_options[] = {
   "s", "ssl_certificate", NULL,
   "t", "num_threads", "10",
   "u", "run_as_user", NULL,
+  "w", "rewrite", NULL,
   NULL
 };
 #define ENTRIES_PER_CONFIG_OPTION 3
@@ -1544,14 +1545,58 @@ static int get_document_root(const struct mg_connection *conn,
   return len_of_matched_uri;
 }
 
+static int match_prefix(const char *pattern, int pattern_len, const char *str) {
+  const char *or_str;
+  int i, j, len, res;
+
+  if ((or_str = memchr(pattern, '|', pattern_len)) != NULL) {
+    res = match_prefix(or_str + 1, (pattern + pattern_len) - (or_str + 1), str);
+    return res > 0 ? res : match_prefix(pattern, or_str - pattern, str);
+  }
+
+  i = j = res = 0;
+  for (; i < pattern_len; i++, j++) {
+    if (pattern[i] == '?' && str[j] != '\0') {
+      continue;
+    } else if (pattern[i] == '*') {
+      i++;
+      if (pattern[i] == '*') {
+        i++;
+        len = strlen(str + j);
+      } else {
+        len = strcspn(str + j, "/");
+      }
+      if (i == pattern_len) {
+        return j + len;
+      }
+      do {
+        res = match_prefix(pattern + i, pattern_len - i, str + j + len);
+      } while (res == 0 && len-- > 0);
+      return res == 0 ? 0 : j + res + len;
+    } else if (pattern[i] != str[j]) {
+      return 0;
+    }
+  }
+  return j;
+}
+
 static void convert_uri_to_file_name(struct mg_connection *conn,
                                      const char *uri, char *buf,
                                      size_t buf_len) {
-  struct vec vec;
+  struct vec vec, a, b;
+  const char *rewrite;
   int match_len;
 
   match_len = get_document_root(conn, &vec);
   mg_snprintf(conn, buf, buf_len, "%.*s%s", vec.len, vec.ptr, uri + match_len);
+
+  rewrite = conn->ctx->config[REWRITE];
+  while ((rewrite = next_option(rewrite, &a, &b)) != NULL) {
+    if ((match_len = match_prefix(a.ptr, a.len, uri)) > 0) {
+      mg_snprintf(conn, buf, buf_len, "%.*s%s", b.len, b.ptr, uri + match_len);
+      break;
+    }
+  }
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
   change_slashes_to_backslashes(buf);
