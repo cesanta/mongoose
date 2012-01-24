@@ -160,7 +160,11 @@ int mg_write(struct mg_connection *, const void *buf, size_t len);
 // Note that mg_printf() uses internal buffer of size IO_BUF_SIZE
 // (8 Kb by default) as temporary message storage for formatting. Do not
 // print data that is bigger than that, otherwise it will be truncated.
-int mg_printf(struct mg_connection *, const char *fmt, ...);
+int mg_printf(struct mg_connection *, const char *fmt, ...)
+#ifdef __GNUC__
+__attribute__((format(printf, 2, 3)))
+#endif
+;
 
 
 // Send contents of the entire file together with HTTP headers.

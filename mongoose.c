@@ -2570,8 +2570,8 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
       "Connection: %s\r\n"
       "Accept-Ranges: bytes\r\n"
       "%s\r\n",
-      conn->request_info.status_code, msg, date, lm, etag,
-      mime_vec.len, mime_vec.ptr, cl, suggest_connection_header(conn), range);
+      conn->request_info.status_code, msg, date, lm, etag, (int) mime_vec.len,
+      mime_vec.ptr, cl, suggest_connection_header(conn), range);
 
   if (strcmp(conn->request_info.request_method, "HEAD") != 0) {
     send_file_data(conn, fp, cl);
