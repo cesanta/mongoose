@@ -29,8 +29,22 @@ mongoose listen on HTTP port 80 and HTTPS port 443, one should start it as:
 .Pp
 Unlike other web servers,
 .Nm
-does not expect CGI scripts to be put in a special directory. CGI scripts can
-be anywhere. CGI (and SSI) files are recognized by the file extension.
+does not require CGI scripts be put in a special directory. CGI scripts can
+be anywhere. CGI (and SSI) files are recognized by the file name pattern.
+.Nm
+uses shell-like glob patterns with the following syntax:
+.Bl -tag -compact -width indent
+.It **
+Matches everything
+.It *
+Matches everything but slash character, '/'
+.It ?
+Matches any character
+.It |
+Matches if pattern on the left side or the right side matches. Pattern on the
+left side is matched first
+.El
+All other characters in the pattern match themselves.
 .Pp
 If no arguments are given,
 .Nm
@@ -48,9 +62,11 @@ Add/edit user's password in the passwords file. Deleting users can be done
 with any text editor. Functionality is similar to Apache's
 .Ic htdigest
 utility.
-.It Fl C Ar cgi_extensions
-Comma-separated list of CGI extensions.  All files having these extensions
-are treated as CGI scripts. Default: ".cgi,.pl,.php"
+.It Fl C Ar cgi_pattern
+All files that fully match cgi_pattern are treated as CGI.
+Default pattern allows CGI files be
+anywhere. To restrict CGIs to certain directory, use e.g. "-C /cgi-bin/**.cgi".
+Default: "**.cgi|**.pl|**.php"
 .It Fl E Ar cgi_environment
 Extra environment variables to be passed to the CGI script in addition to
 standard ones. The list must be comma-separated list of X=Y pairs, like this:
@@ -62,8 +78,8 @@ DELETE methods are used. Default: ""
 Use
 .Ar cgi_interpreter
 as a CGI interpreter for all CGI scripts regardless script extension.
-Default: "". Mongoose decides which interpreter to use by looking at
-the first line of a CGI script.
+Mongoose decides which interpreter to use by looking at
+the first line of a CGI script.  Default: "".
 .It Fl M Ar max_request_size
 Maximum HTTP request size in bytes. Default: "16384"
 .It Fl P Ar protect_uri
@@ -71,10 +87,10 @@ Comma separated list of URI=PATH pairs, specifying that given URIs
 must be protected with respected password files. Default: ""
 .It Fl R Ar authentication_domain
 Authorization realm. Default: "mydomain.com"
-.It Fl S Ar ssi_extensions
-Comma separated list of SSI extensions. Unknown SSI directives are silently
-ignored. Currently, two SSI directives supported, "include" and "exec".
-Default: "shtml,shtm"
+.It Fl S Ar ssi_pattern
+All files that fully match ssi_pattern are treated as SSI.
+Unknown SSI directives are silently ignored. Currently, two SSI directives
+are supported, "include" and "exec".  Default: "**.shtml|**.shtm"
 .It Fl a Ar access_log_file
 Access log file. Default: "", no logging is done.
 .It Fl d Ar enable_directory_listing
@@ -109,17 +125,21 @@ prepended to the port number. For example, to bind to a loopback interface
 on port 80 and to all interfaces on HTTPS port 443, use
 "mongoose -p 127.0.0.1:80,443s". Default: "8080"
 .It Fl r Ar document_root
-Location of the WWW root directory. A comma separated list of
-URI_PREFIX=DIRECTORY
-pairs could be appended to it, allowing Mongoose to serve from multiple
-directories. For example, "mongoose -p /var/www,/config=/etc,/garbage=/tmp".
-Default: "."
+Location of the WWW root directory. Default: "."
 .It Fl s Ar ssl_certificate
 Location of SSL certificate file. Default: ""
 .It Fl t Ar num_threads
 Number of worker threads to start. Default: "10"
 .It Fl u Ar run_as_user
 Switch to given user's credentials after startup. Default: ""
+.It Fl w Ar url_rewrite_patterns
+Comma-separated list of URL rewrites in the form of
+"pattern=substitution,..." If the "pattern" matches some prefix
+of the requested URL, then matched prefix gets substituted with "substitution".
+For example, "-w /config=/etc,**.doc|**.rtf=/cgi-bin/handle_doc.cgi"
+will serve all URLs that start with "/config" from the "/etc" directory, and
+call handle_doc.cgi script for .doc and .rtf file requests.
+Default: ""
 .El
 .Pp
 .Sh EMBEDDING
@@ -131,13 +151,14 @@ for details.
 .Pp
 .Sh EXAMPLES
 .Bl -tag -width indent
-.It Nm Fl r Ar /var/www,/aa=/tmp,/bb=/etc Fl s Ar /etc/cert.pem Fl p Ar 8080,8043s
-Start listening on port 8080 for HTTP, and 8043 for HTTPS connections.
-Use /etc/cert.pem as SSL certificate file. Web root is /var/www. In addition,
-map directory /tmp to URI /aa, directory /etc to URI /bb.
+.It Nm Fl r Ar /var/www Fl s Ar /etc/cert.pem Fl p Ar 8080,8043s
+Start serving files from /var/www. Listen on port 8080 for HTTP, and 8043
+for HTTPS connections.  Use /etc/cert.pem as SSL certificate file.
 .It Nm Fl l Ar -0.0.0.0/0,+10.0.0.0/8,+1.2.3.4
 Deny connections from everywhere, allow only IP address 1.2.3.4 and
 all IP addresses from 10.0.0.0/8 subnet to connect.
+.It Nm Fl w Ar **=/my/script.cgi
+Invoke /my/script.cgi for every incoming request, regardless of the URL.
 .El
 .Pp
 .Sh COPYRIGHT

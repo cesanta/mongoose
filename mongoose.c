@@ -410,13 +410,13 @@ enum {
 };
 
 static const char *config_options[] = {
-  "C", "cgi_extensions", ".cgi,.pl,.php",
+  "C", "cgi_pattern", "**.cgi|**.pl|**.php",
   "E", "cgi_environment", NULL,
   "G", "put_delete_passwords_file", NULL,
   "I", "cgi_interpreter", NULL,
   "P", "protect_uri", NULL,
   "R", "authentication_domain", "mydomain.com",
-  "S", "ssi_extensions", ".shtml,.shtm",
+  "S", "ssi_pattern", "**.shtml|**.shtm",
   "a", "access_log_file", NULL,
   "c", "ssl_chain_file", NULL,
   "d", "enable_directory_listing", "yes",
@@ -432,7 +432,7 @@ static const char *config_options[] = {
   "s", "ssl_certificate", NULL,
   "t", "num_threads", "10",
   "u", "run_as_user", NULL,
-  "w", "rewrite", NULL,
+  "w", "url_rewrite_patterns", NULL,
   NULL
 };
 #define ENTRIES_PER_CONFIG_OPTION 3
@@ -761,19 +761,44 @@ static const char *next_option(const char *list, struct vec *val,
   return list;
 }
 
-static int match_extension(const char *path, const char *ext_list) {
-  struct vec ext_vec;
-  size_t path_len;
+static int match_prefix(const char *pattern, int pattern_len, const char *str) {
+  const char *or_str;
+  int i, j, len, res;
 
-  path_len = strlen(path);
+  if ((or_str = memchr(pattern, '|', pattern_len)) != NULL) {
+    res = match_prefix(pattern, or_str - pattern, str);
+    return res > 0 ? res :
+        match_prefix(or_str + 1, (pattern + pattern_len) - (or_str + 1), str);
+  }
 
-  while ((ext_list = next_option(ext_list, &ext_vec, NULL)) != NULL)
-    if (ext_vec.len < path_len &&
-        mg_strncasecmp(path + path_len - ext_vec.len,
-          ext_vec.ptr, ext_vec.len) == 0)
-      return 1;
+  i = j = res = 0;
+  for (; i < pattern_len; i++, j++) {
+    if (pattern[i] == '?' && str[j] != '\0') {
+      continue;
+    } else if (pattern[i] == '*') {
+      i++;
+      if (pattern[i] == '*') {
+        i++;
+        len = strlen(str + j);
+      } else {
+        len = strcspn(str + j, "/");
+      }
+      if (i == pattern_len) {
+        return j + len;
+      }
+      do {
+        res = match_prefix(pattern + i, pattern_len - i, str + j + len);
+      } while (res == 0 && len-- > 0);
+      return res == 0 ? 0 : j + res + len;
+    } else if (pattern[i] != str[j]) {
+      return 0;
+    }
+  }
+  return j;
+}
 
-  return 0;
+static int full_match(const char *path, const char *pattern) {
+  return match_prefix(pattern, strlen(pattern), path) == (int) strlen(path);
 }
 
 // HTTP 1.1 assumes keep alive if "Connection:" header is not set
@@ -1521,74 +1546,15 @@ int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
   return len;
 }
 
-// Mongoose allows to specify multiple directories to serve,
-// like /var/www,/~bob=/home/bob. That means that root directory depends on URI.
-// This function returns root dir for given URI.
-static int get_document_root(const struct mg_connection *conn,
-                             struct vec *document_root) {
-  const char *root, *uri;
-  int len_of_matched_uri;
-  struct vec uri_vec, path_vec;
-
-  uri = conn->request_info.uri;
-  len_of_matched_uri = 0;
-  root = next_option(conn->ctx->config[DOCUMENT_ROOT], document_root, NULL);
-
-  while ((root = next_option(root, &uri_vec, &path_vec)) != NULL) {
-    if (memcmp(uri, uri_vec.ptr, uri_vec.len) == 0) {
-      *document_root = path_vec;
-      len_of_matched_uri = uri_vec.len;
-      break;
-    }
-  }
-
-  return len_of_matched_uri;
-}
-
-static int match_prefix(const char *pattern, int pattern_len, const char *str) {
-  const char *or_str;
-  int i, j, len, res;
-
-  if ((or_str = memchr(pattern, '|', pattern_len)) != NULL) {
-    res = match_prefix(or_str + 1, (pattern + pattern_len) - (or_str + 1), str);
-    return res > 0 ? res : match_prefix(pattern, or_str - pattern, str);
-  }
-
-  i = j = res = 0;
-  for (; i < pattern_len; i++, j++) {
-    if (pattern[i] == '?' && str[j] != '\0') {
-      continue;
-    } else if (pattern[i] == '*') {
-      i++;
-      if (pattern[i] == '*') {
-        i++;
-        len = strlen(str + j);
-      } else {
-        len = strcspn(str + j, "/");
-      }
-      if (i == pattern_len) {
-        return j + len;
-      }
-      do {
-        res = match_prefix(pattern + i, pattern_len - i, str + j + len);
-      } while (res == 0 && len-- > 0);
-      return res == 0 ? 0 : j + res + len;
-    } else if (pattern[i] != str[j]) {
-      return 0;
-    }
-  }
-  return j;
-}
-
 static void convert_uri_to_file_name(struct mg_connection *conn,
                                      const char *uri, char *buf,
                                      size_t buf_len) {
-  struct vec vec, a, b;
+  struct vec a, b;
   const char *rewrite;
   int match_len;
 
-  match_len = get_document_root(conn, &vec);
-  mg_snprintf(conn, buf, buf_len, "%.*s%s", vec.len, vec.ptr, uri + match_len);
+  mg_snprintf(conn, buf, buf_len, "%s%s", conn->ctx->config[DOCUMENT_ROOT],
+              uri);
 
   rewrite = conn->ctx->config[REWRITE];
   while ((rewrite = next_option(rewrite, &a, &b)) != NULL) {
@@ -2852,18 +2818,16 @@ static void prepare_cgi_environment(struct mg_connection *conn,
                                     const char *prog,
                                     struct cgi_env_block *blk) {
   const char *s, *slash;
-  struct vec var_vec, root;
+  struct vec var_vec;
   char *p;
   int  i;
 
   blk->len = blk->nvars = 0;
   blk->conn = conn;
 
-  get_document_root(conn, &root);
-
   addenv(blk, "SERVER_NAME=%s", conn->ctx->config[AUTHENTICATION_DOMAIN]);
-  addenv(blk, "SERVER_ROOT=%.*s", root.len, root.ptr);
-  addenv(blk, "DOCUMENT_ROOT=%.*s", root.len, root.ptr);
+  addenv(blk, "SERVER_ROOT=%s", conn->ctx->config[DOCUMENT_ROOT]);
+  addenv(blk, "DOCUMENT_ROOT=%s", conn->ctx->config[DOCUMENT_ROOT]);
 
   // Prepare the environment block
   addenv(blk, "%s", "GATEWAY_INTERFACE=CGI/1.1");
@@ -3139,18 +3103,15 @@ static void send_ssi_file(struct mg_connection *, const char *, FILE *, int);
 static void do_ssi_include(struct mg_connection *conn, const char *ssi,
                            char *tag, int include_level) {
   char file_name[BUFSIZ], path[PATH_MAX], *p;
-  struct vec root;
   int is_ssi;
   FILE *fp;
-
-  get_document_root(conn, &root);
 
   // sscanf() is safe here, since send_ssi_file() also uses buffer
   // of size BUFSIZ to get the tag. So strlen(tag) is always < BUFSIZ.
   if (sscanf(tag, " virtual=\"%[^\"]\"", file_name) == 1) {
     // File name is relative to the webserver root
-    (void) mg_snprintf(conn, path, sizeof(path), "%.*s%c%s",
-        root.len, root.ptr, DIRSEP, file_name);
+    (void) mg_snprintf(conn, path, sizeof(path), "%s%c%s",
+        conn->ctx->config[DOCUMENT_ROOT], DIRSEP, file_name);
   } else if (sscanf(tag, " file=\"%[^\"]\"", file_name) == 1) {
     // File name is relative to the webserver working directory
     // or it is absolute system path
@@ -3173,7 +3134,7 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
         tag, path, strerror(ERRNO));
   } else {
     set_close_on_exec(fileno(fp));
-    is_ssi = match_extension(path, conn->ctx->config[SSI_EXTENSIONS]);
+    is_ssi = full_match(path, conn->ctx->config[SSI_EXTENSIONS]);
     if (is_ssi) {
       send_ssi_file(conn, path, fp, include_level + 1);
     } else {
@@ -3408,7 +3369,7 @@ static void handle_request(struct mg_connection *conn) {
           "Directory listing denied");
     }
 #if !defined(NO_CGI)
-  } else if (match_extension(path, conn->ctx->config[CGI_EXTENSIONS])) {
+  } else if (full_match(path, conn->ctx->config[CGI_EXTENSIONS])) {
     if (strcmp(ri->request_method, "POST") &&
         strcmp(ri->request_method, "GET")) {
       send_http_error(conn, 501, "Not Implemented",
@@ -3417,7 +3378,7 @@ static void handle_request(struct mg_connection *conn) {
       handle_cgi_request(conn, path);
     }
 #endif // !NO_CGI
-  } else if (match_extension(path, conn->ctx->config[SSI_EXTENSIONS])) {
+  } else if (full_match(path, conn->ctx->config[SSI_EXTENSIONS])) {
     handle_ssi_file_request(conn, path);
   } else if (is_not_modified(conn, &st)) {
     send_http_error(conn, 304, "Not Modified", "");

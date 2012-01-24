@@ -150,6 +150,11 @@ if (scalar(@ARGV) > 0 and $ARGV[0] eq 'embedded') {
   exit 0;
 }
 
+if (scalar(@ARGV) > 0 and $ARGV[0] eq 'unit') {
+  do_unit_test();
+  exit 0;
+}
+
 # Make sure we load config file if no options are given.
 # Command line options override config files settings
 write_file($config, "access_log_file access.log\nlistening_ports 12345\n");
@@ -166,7 +171,7 @@ my $cmd = "$exe $config -listening_ports $port -access_log_file access.log ".
 "-extra_mime_types .bar=foo/bar,.tar.gz=blah,.baz=foo " .
 '-put_delete_passwords_file test/passfile ' .
 '-access_control_list -0.0.0.0/0,+127.0.0.1 ' .
-"-document_root $root,/aiased=/etc/,/ta=$test_dir";
+"-document_root $root -url_rewrite_patterns /aiased=/etc/,/ta=$test_dir";
 $cmd .= ' -cgi_interpreter perl' if on_windows();
 spawn($cmd);
 
@@ -386,6 +391,7 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
 
   do_PUT_test();
   kill_spawned_child();
+  do_unit_test();
   do_embedded_test();
 }
 
@@ -413,6 +419,18 @@ sub do_PUT_test {
   o("PUT /a/put.txt HTTP/1.0\nExpect: 100-continue\nContent-Length: 4\n".
     "$auth_header\nabcd",
     "HTTP/1.1 100 Continue.+HTTP/1.1 200", 'PUT 100-Continue');
+}
+
+sub do_unit_test {
+  my $cmd = "cc -W -Wall -o $unit_test_exe $root/unit_test.c -I. ".
+  "-pthread -DNO_SSL ";
+  if (on_windows()) {
+    $cmd = "cl $root/embed.c mongoose.c /I. /nologo /DNO_SSL ".
+    "/DLISTENING_PORT=\\\"$port\\\" /link /out:$embed_exe.exe ws2_32.lib ";
+  }
+  print $cmd, "\n";
+  system($cmd) == 0 or fail("Cannot compile unit test");
+  system($unit_test_exe) == 0 or fail("Unit test failed!");
 }
 
 sub do_embedded_test {
