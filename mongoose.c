@@ -410,13 +410,13 @@ enum {
 };
 
 static const char *config_options[] = {
-  "C", "cgi_pattern", "**.cgi|**.pl|**.php",
+  "C", "cgi_pattern", "**.cgi$|**.pl$|**.php$",
   "E", "cgi_environment", NULL,
   "G", "put_delete_passwords_file", NULL,
   "I", "cgi_interpreter", NULL,
   "P", "protect_uri", NULL,
   "R", "authentication_domain", "mydomain.com",
-  "S", "ssi_pattern", "**.shtml|**.shtm",
+  "S", "ssi_pattern", "**.shtml$|**.shtm$",
   "a", "access_log_file", NULL,
   "c", "ssl_chain_file", NULL,
   "d", "enable_directory_listing", "yes",
@@ -771,10 +771,13 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
         match_prefix(or_str + 1, (pattern + pattern_len) - (or_str + 1), str);
   }
 
-  i = j = res = 0;
+  i = j = 0;
+  res = -1;
   for (; i < pattern_len; i++, j++) {
     if (pattern[i] == '?' && str[j] != '\0') {
       continue;
+    } else if (pattern[i] == '$') {
+      return str[j] == '\0' ? j : -1;
     } else if (pattern[i] == '*') {
       i++;
       if (pattern[i] == '*') {
@@ -788,10 +791,10 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
       }
       do {
         res = match_prefix(pattern + i, pattern_len - i, str + j + len);
-      } while (res == 0 && len-- > 0);
-      return res == 0 ? 0 : j + res + len;
+      } while (res == -1 && len-- > 0);
+      return res == -1 ? -1 : j + res + len;
     } else if (pattern[i] != str[j]) {
-      return 0;
+      return -1;
     }
   }
   return j;

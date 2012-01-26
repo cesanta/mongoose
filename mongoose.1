@@ -40,6 +40,8 @@ Matches everything
 Matches everything but slash character, '/'
 .It ?
 Matches any character
+.It $
+Matches the end of the string
 .It |
 Matches if pattern on the left side or the right side matches. Pattern on the
 left side is matched first
@@ -66,7 +68,7 @@ utility.
 All files that fully match cgi_pattern are treated as CGI.
 Default pattern allows CGI files be
 anywhere. To restrict CGIs to certain directory, use e.g. "-C /cgi-bin/**.cgi".
-Default: "**.cgi|**.pl|**.php"
+Default: "**.cgi$|**.pl$|**.php$"
 .It Fl E Ar cgi_environment
 Extra environment variables to be passed to the CGI script in addition to
 standard ones. The list must be comma-separated list of X=Y pairs, like this:
@@ -90,7 +92,7 @@ Authorization realm. Default: "mydomain.com"
 .It Fl S Ar ssi_pattern
 All files that fully match ssi_pattern are treated as SSI.
 Unknown SSI directives are silently ignored. Currently, two SSI directives
-are supported, "include" and "exec".  Default: "**.shtml|**.shtm"
+are supported, "include" and "exec".  Default: "**.shtml$|**.shtm$"
 .It Fl a Ar access_log_file
 Access log file. Default: "", no logging is done.
 .It Fl d Ar enable_directory_listing
