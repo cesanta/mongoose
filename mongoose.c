@@ -800,10 +800,6 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
   return j;
 }
 
-static int full_match(const char *path, const char *pattern) {
-  return match_prefix(pattern, strlen(pattern), path) == (int) strlen(path);
-}
-
 // HTTP 1.1 assumes keep alive if "Connection:" header is not set
 // This function must tolerate situations when connection info is not
 // set up, for example if request parsing failed.
@@ -3106,7 +3102,6 @@ static void send_ssi_file(struct mg_connection *, const char *, FILE *, int);
 static void do_ssi_include(struct mg_connection *conn, const char *ssi,
                            char *tag, int include_level) {
   char file_name[BUFSIZ], path[PATH_MAX], *p;
-  int is_ssi;
   FILE *fp;
 
   // sscanf() is safe here, since send_ssi_file() also uses buffer
@@ -3137,8 +3132,8 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
         tag, path, strerror(ERRNO));
   } else {
     set_close_on_exec(fileno(fp));
-    is_ssi = full_match(path, conn->ctx->config[SSI_EXTENSIONS]);
-    if (is_ssi) {
+    if (match_prefix(conn->ctx->config[SSI_EXTENSIONS],
+                     strlen(conn->ctx->config[SSI_EXTENSIONS]), path) > 0) {
       send_ssi_file(conn, path, fp, include_level + 1);
     } else {
       send_file_data(conn, fp, INT64_MAX);
@@ -3372,16 +3367,20 @@ static void handle_request(struct mg_connection *conn) {
           "Directory listing denied");
     }
 #if !defined(NO_CGI)
-  } else if (full_match(path, conn->ctx->config[CGI_EXTENSIONS])) {
+  } else if (match_prefix(conn->ctx->config[CGI_EXTENSIONS],
+                          strlen(conn->ctx->config[CGI_EXTENSIONS]),
+                          path) > 0) {
     if (strcmp(ri->request_method, "POST") &&
         strcmp(ri->request_method, "GET")) {
       send_http_error(conn, 501, "Not Implemented",
-          "Method %s is not implemented", ri->request_method);
+                      "Method %s is not implemented", ri->request_method);
     } else {
       handle_cgi_request(conn, path);
     }
 #endif // !NO_CGI
-  } else if (full_match(path, conn->ctx->config[SSI_EXTENSIONS])) {
+  } else if (match_prefix(conn->ctx->config[SSI_EXTENSIONS],
+                          strlen(conn->ctx->config[SSI_EXTENSIONS]),
+                          path) > 0) {
     handle_ssi_file_request(conn, path);
   } else if (is_not_modified(conn, &st)) {
     send_http_error(conn, 304, "Not Modified", "");
