@@ -26,7 +26,7 @@ my $exit_code = 0;
 
 my @files_to_delete = ('debug.log', 'access.log', $config, "$root/a/put.txt",
   "$root/a+.txt", "$root/.htpasswd", "$root/binary_file", "$root/a",
-  $embed_exe, $unit_test_exe);
+  "$root/myperl", $embed_exe, $unit_test_exe);
 
 END {
   unlink @files_to_delete;
@@ -164,14 +164,16 @@ unlink $config;
 kill_spawned_child();
 
 # Spawn the server on port $port
-write_file($config, "");
-my $cmd = "$exe $config -listening_ports $port -access_log_file access.log ".
-"-error_log_file debug.log ".
-"-cgi_environment CGI_FOO=foo,CGI_BAR=bar,CGI_BAZ=baz " .
-"-extra_mime_types .bar=foo/bar,.tar.gz=blah,.baz=foo " .
-'-put_delete_passwords_file test/passfile ' .
-'-access_control_list -0.0.0.0/0,+127.0.0.1 ' .
-"-document_root $root -url_rewrite_patterns /aiased=/etc/,/ta=$test_dir";
+my $cmd = "$exe ".
+  "-listening_ports $port ".
+  "-access_log_file access.log ".
+  "-error_log_file debug.log ".
+  "-cgi_environment CGI_FOO=foo,CGI_BAR=bar,CGI_BAZ=baz " .
+  "-extra_mime_types .bar=foo/bar,.tar.gz=blah,.baz=foo " .
+  '-put_delete_passwords_file test/passfile ' .
+  '-access_control_list -0.0.0.0/0,+127.0.0.1 ' .
+  "-document_root $root ".
+  "-url_rewrite_patterns /aiased=/etc/,/ta=$test_dir";
 $cmd .= ' -cgi_interpreter perl' if on_windows();
 spawn($cmd);
 
@@ -227,7 +229,7 @@ o("GET /not-exist HTTP/1.0\r\n\n", 'HTTP/1.1 404', 'Not existent file');
 mkdir $test_dir . $dir_separator . 'x';
 my $path = $test_dir . $dir_separator . 'x' . $dir_separator . 'index.cgi';
 write_file($path, read_file($root . $dir_separator . 'env.cgi'));
-chmod 0755, $path;
+chmod(0755, $path);
 o("GET /$test_dir_uri/x/ HTTP/1.0\n\n", "Content-Type: text/html\r\n\r\n",
   'index.cgi execution');
 o("GET /$test_dir_uri/x/ HTTP/1.0\n\n",
@@ -235,6 +237,14 @@ o("GET /$test_dir_uri/x/ HTTP/1.0\n\n",
 o("GET /ta/x/ HTTP/1.0\n\n", "SCRIPT_NAME=/ta/x/index.cgi",
   'Aliases SCRIPT_NAME');
 o("GET /hello.txt HTTP/1.1\n\n", 'Connection: close', 'No keep-alive');
+
+$path = $test_dir . $dir_separator . 'x' . $dir_separator . 'a.cgi';
+system("ln -s `which perl` $root/myperl") == 0 or fail("Can't symlink perl");
+write_file($path, "#!../../myperl\n" .
+           "print \"Content-Type: text/plain\\n\\nhi\";");
+chmod(0755, $path);
+o("GET /$test_dir_uri/x/a.cgi HTTP/1.0\n\n", "hi", 'Relative CGI interp path');
+
 #o("GET /hello.txt HTTP/1.1\n\n   GET /hello.txt HTTP/1.0\n\n",
 #  'HTTP/1.1 200.+keep-alive.+HTTP/1.1 200.+close',
 #  'Request pipelining', 2);
@@ -327,7 +337,7 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   unlink "$root/.htpasswd";
 
   o("GET /env.cgi HTTP/1.0\n\r\n", 'HTTP/1.1 200 OK', 'GET CGI file');
-  o("GET /redirect.cgi HTTP/1.0\n\n", 'HTTP/1.1 302', 'Redirect');
+  #o("GET /redirect.cgi HTTP/1.0\n\n", 'HTTP/1.1 302', 'Redirect');
   o("GET /sh.cgi HTTP/1.0\n\r\n", 'shell script CGI',
     'GET sh CGI file') unless on_windows();
   o("GET /env.cgi?var=HELLO HTTP/1.0\n\n", 'QUERY_STRING=var=HELLO',
