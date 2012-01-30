@@ -21,9 +21,9 @@
 #if defined(_WIN32)
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005
 #else
-#define _XOPEN_SOURCE 600 // For flockfile() on Linux
-#define _LARGEFILE_SOURCE // Enable 64-bit file offsets
-#define __STDC_FORMAT_MACROS // <inttypes.h> wants this for C++
+#define _XOPEN_SOURCE 600     // For flockfile() on Linux
+#define _LARGEFILE_SOURCE     // Enable 64-bit file offsets
+#define __STDC_FORMAT_MACROS  // <inttypes.h> wants this for C++
 #endif
 
 #if defined(__SYMBIAN32__)
@@ -1424,8 +1424,8 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
 }
 
 int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
-  return (int) push(NULL, conn->client.sock, conn->ssl,
-      (const char *) buf, (int64_t) len);
+  return (int) push(NULL, conn->client.sock, conn->ssl, (const char *) buf,
+                    (int64_t) len);
 }
 
 int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
@@ -3875,7 +3875,7 @@ static void handle_proxy_request(struct mg_connection *conn) {
     }
     conn->peer->client.is_ssl = is_ssl;
   }
-  
+
   // Forward client's request to the target
   mg_printf(conn->peer, "%s %s HTTP/%s\r\n", ri->request_method, ri->uri + len,
             ri->http_version);
@@ -3911,7 +3911,7 @@ static void handle_proxy_request(struct mg_connection *conn) {
 static int is_valid_uri(const char *uri) {
   // Conform to http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1.2
   // URI can be an asterisk (*) or should start with slash.
-  return (uri[0] == '/' || (uri[0] == '*' && uri[1] == '\0'));
+  return uri[0] == '/' || (uri[0] == '*' && uri[1] == '\0');
 }
 
 static void process_new_connection(struct mg_connection *conn) {
