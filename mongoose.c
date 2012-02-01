@@ -366,12 +366,12 @@ static const char *month_names[] = {
 
 // Unified socket address. For IPv6 support, add IPv6 address structure
 // in the union u.
-struct usa {
-  socklen_t len;
-  union {
-    struct sockaddr sa;
-    struct sockaddr_in sin;
-  } u;
+union usa {
+  struct sockaddr sa;
+  struct sockaddr_in sin;
+#if !defined(NO_IPV6)
+  struct sockaddr_in6 sin6;
+#endif
 };
 
 // Describes a string (chunk of memory).
@@ -392,8 +392,8 @@ struct mgstat {
 struct socket {
   struct socket *next;  // Linkage
   SOCKET sock;          // Listening socket
-  struct usa lsa;       // Local socket address
-  struct usa rsa;       // Remote socket address
+  union usa lsa;        // Local socket address
+  union usa rsa;        // Remote socket address
   int is_ssl;           // Is socket SSL-ed
   int is_proxy;
 };
@@ -506,9 +506,22 @@ const char *mg_get_option(const struct mg_context *ctx, const char *name) {
   }
 }
 
+static void sockaddr_to_string(char *buf, size_t len,
+                                     const union usa *usa) {
+  buf[0] = '\0';
+#if !defined(NO_IPV6)
+  inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
+            (void *) &usa->sin.sin_addr :
+            (void *) &usa->sin6.sin6_addr, buf, len);
+#else
+  // TODO(lsm): inet_ntoa is not thread safe, use inet_pton instead
+  strncpy(buf, inet_ntoa(usa->sin.sin_addr), len);
+#endif
+}
+
 // Print error message to the opened error log stream.
 static void cry(struct mg_connection *conn, const char *fmt, ...) {
-  char buf[BUFSIZ];
+  char buf[BUFSIZ], src_addr[20];
   va_list ap;
   FILE *fp;
   time_t timestamp;
@@ -529,15 +542,13 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
       flockfile(fp);
       timestamp = time(NULL);
 
-      (void) fprintf(fp,
-          "[%010lu] [error] [client %s] ",
-          (unsigned long) timestamp,
-          inet_ntoa(conn->client.rsa.u.sin.sin_addr));
+      sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
+      fprintf(fp, "[%010lu] [error] [client %s] ", (unsigned long) timestamp,
+              src_addr);
 
       if (conn->request_info.request_method != NULL) {
-        (void) fprintf(fp, "%s %s: ",
-            conn->request_info.request_method,
-            conn->request_info.uri);
+        fprintf(fp, "%s %s: ", conn->request_info.request_method,
+                conn->request_info.uri);
       }
 
       (void) fprintf(fp, "%s", buf);
@@ -1603,7 +1614,7 @@ static struct mg_connection *mg_connect(struct mg_connection *conn,
       closesocket(sock);
     } else {
       newconn->client.sock = sock;
-      newconn->client.rsa.u.sin = sin;
+      newconn->client.rsa.sin = sin;
       if (use_ssl) {
         sslize(newconn, SSL_connect);
       }
@@ -2818,11 +2829,12 @@ static void prepare_cgi_environment(struct mg_connection *conn,
                                     struct cgi_env_block *blk) {
   const char *s, *slash;
   struct vec var_vec;
-  char *p;
+  char *p, src_addr[20];
   int  i;
 
   blk->len = blk->nvars = 0;
   blk->conn = conn;
+  sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
 
   addenv(blk, "SERVER_NAME=%s", conn->ctx->config[AUTHENTICATION_DOMAIN]);
   addenv(blk, "SERVER_ROOT=%s", conn->ctx->config[DOCUMENT_ROOT]);
@@ -2832,10 +2844,12 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   addenv(blk, "%s", "GATEWAY_INTERFACE=CGI/1.1");
   addenv(blk, "%s", "SERVER_PROTOCOL=HTTP/1.1");
   addenv(blk, "%s", "REDIRECT_STATUS=200"); // For PHP
-  addenv(blk, "SERVER_PORT=%d", ntohs(conn->client.lsa.u.sin.sin_port));
+
+  // TODO(lsm): fix this for IPv6 case
+  addenv(blk, "SERVER_PORT=%d", ntohs(conn->client.lsa.sin.sin_port));
+
   addenv(blk, "REQUEST_METHOD=%s", conn->request_info.request_method);
-  addenv(blk, "REMOTE_ADDR=%s",
-      inet_ntoa(conn->client.rsa.u.sin.sin_addr));
+  addenv(blk, "REMOTE_ADDR=%s", src_addr);
   addenv(blk, "REMOTE_PORT=%d", conn->request_info.remote_port);
   addenv(blk, "REQUEST_URI=%s", conn->request_info.uri);
 
@@ -3398,35 +3412,35 @@ static void close_all_listening_sockets(struct mg_context *ctx) {
   }
 }
 
-// Valid listening port specification is: [ip_address:]port[s|p]
-// Examples: 80, 443s, 127.0.0.1:3128p, 1.2.3.4:8080sp
+// Valid listening port specification is: [ip_address:]port[s]
+// Examples: 80, 443s, 127.0.0.1:3128,1.2.3.4:8080s
+// TODO(lsm): add parsing of the IPv6 address
 static int parse_port_string(const struct vec *vec, struct socket *so) {
-  struct usa *usa = &so->lsa;
   int a, b, c, d, port, len;
 
   // MacOS needs that. If we do not zero it, subsequent bind() will fail.
+  // Also, all-zeroes in the socket address means binding to all addresses
+  // for both IPv4 and IPv6 (INADDR_ANY and IN6ADDR_ANY_INIT).
   memset(so, 0, sizeof(*so));
 
   if (sscanf(vec->ptr, "%d.%d.%d.%d:%d%n", &a, &b, &c, &d, &port, &len) == 5) {
-    // IP address to bind to is specified
-    usa->u.sin.sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
-  } else if (sscanf(vec->ptr, "%d%n", &port, &len) == 1) {
-    // Only port number is specified. Bind to all addresses
-    usa->u.sin.sin_addr.s_addr = htonl(INADDR_ANY);
-  } else {
-    return 0;
-  }
-  assert(len > 0 && len <= (int) vec->len);
-
-  if (strchr("sp,", vec->ptr[len]) == NULL) {
+    // Bind to a specific IPv4 address
+    so->lsa.sin.sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
+  } else if (sscanf(vec->ptr, "%d%n", &port, &len) != 1 ||
+             len <= 0 ||
+             len > (int) vec->len ||
+             (vec->ptr[len] && vec->ptr[len] != 's' && vec->ptr[len] != ',')) {
     return 0;
   }
 
   so->is_ssl = vec->ptr[len] == 's';
-  so->is_proxy = vec->ptr[len] == 'p';
-  usa->len = sizeof(usa->u.sin);
-  usa->u.sin.sin_family = AF_INET;
-  usa->u.sin.sin_port = htons((uint16_t) port);
+#if !defined(NO_IPV6)
+  so->lsa.sin6.sin6_family = AF_INET6;
+  so->lsa.sin6.sin6_port = htons((uint16_t) port);
+#else
+  so->lsa.sin.sin_family = AF_INET;
+  so->lsa.sin.sin_port = htons((uint16_t) port);
+#endif
 
   return 1;
 }
@@ -3446,7 +3460,8 @@ static int set_ports_option(struct mg_context *ctx) {
     } else if (so.is_ssl && ctx->ssl_ctx == NULL) {
       cry(fc(ctx), "Cannot add SSL socket, is -ssl_certificate option set?");
       success = 0;
-    } else if ((sock = socket(PF_INET, SOCK_STREAM, 6)) == INVALID_SOCKET ||
+    } else if ((sock = socket(so.lsa.sa.sa_family, SOCK_STREAM, 6)) ==
+               INVALID_SOCKET ||
 #if !defined(_WIN32)
                // On Windows, SO_REUSEADDR is recommended only for
                // broadcast UDP sockets
@@ -3462,7 +3477,7 @@ static int set_ports_option(struct mg_context *ctx) {
                // Thanks to Igor Klopov who suggested the patch.
                setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *) &on,
                           sizeof(on)) != 0 ||
-               bind(sock, &so.lsa.u.sa, so.lsa.len) != 0 ||
+               bind(sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
                listen(sock, 100) != 0) {
       closesocket(sock);
       cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
@@ -3503,7 +3518,7 @@ static void log_header(const struct mg_connection *conn, const char *header,
 static void log_access(const struct mg_connection *conn) {
   const struct mg_request_info *ri;
   FILE *fp;
-  char date[64];
+  char date[64], src_addr[20];
 
   fp = conn->ctx->config[ACCESS_LOG_FILE] == NULL ?  NULL :
     mg_fopen(conn->ctx->config[ACCESS_LOG_FILE], "a+");
@@ -3511,29 +3526,25 @@ static void log_access(const struct mg_connection *conn) {
   if (fp == NULL)
     return;
 
-  (void) strftime(date, sizeof(date), "%d/%b/%Y:%H:%M:%S %z",
-      localtime(&conn->birth_time));
+  strftime(date, sizeof(date), "%d/%b/%Y:%H:%M:%S %z",
+           localtime(&conn->birth_time));
 
   ri = &conn->request_info;
-
   flockfile(fp);
 
-  (void) fprintf(fp,
-      "%s - %s [%s] \"%s %s HTTP/%s\" %d %" INT64_FMT,
-      inet_ntoa(conn->client.rsa.u.sin.sin_addr),
-      ri->remote_user == NULL ? "-" : ri->remote_user,
-      date,
-      ri->request_method ? ri->request_method : "-",
-      ri->uri ? ri->uri : "-",
-      ri->http_version,
-      conn->request_info.status_code, conn->num_bytes_sent);
+  sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
+  fprintf(fp, "%s - %s [%s] \"%s %s HTTP/%s\" %d %" INT64_FMT,
+          src_addr, ri->remote_user == NULL ? "-" : ri->remote_user, date,
+          ri->request_method ? ri->request_method : "-",
+          ri->uri ? ri->uri : "-", ri->http_version,
+          conn->request_info.status_code, conn->num_bytes_sent);
   log_header(conn, "Referer", fp);
   log_header(conn, "User-Agent", fp);
-  (void) fputc('\n', fp);
-  (void) fflush(fp);
+  fputc('\n', fp);
+  fflush(fp);
 
   funlockfile(fp);
-  (void) fclose(fp);
+  fclose(fp);
 }
 
 static int isbyte(int n) {
@@ -3542,7 +3553,7 @@ static int isbyte(int n) {
 
 // Verify given socket address against the ACL.
 // Return -1 if ACL is malformed, 0 if address is disallowed, 1 if allowed.
-static int check_acl(struct mg_context *ctx, const struct usa *usa) {
+static int check_acl(struct mg_context *ctx, const union usa *usa) {
   int a, b, c, d, n, mask, allowed;
   char flag;
   uint32_t acl_subnet, acl_mask, remote_ip;
@@ -3553,7 +3564,7 @@ static int check_acl(struct mg_context *ctx, const struct usa *usa) {
     return 1;
   }
 
-  (void) memcpy(&remote_ip, &usa->u.sin.sin_addr, sizeof(remote_ip));
+  (void) memcpy(&remote_ip, &usa->sin.sin_addr, sizeof(remote_ip));
 
   // If any ACL is set, deny by default
   allowed = '-';
@@ -3760,7 +3771,7 @@ static int set_gpass_option(struct mg_context *ctx) {
 }
 
 static int set_acl_option(struct mg_context *ctx) {
-  struct usa fake;
+  union usa fake;
   return check_acl(ctx, &fake) != -1;
 }
 
@@ -4015,9 +4026,10 @@ static void worker_thread(struct mg_context *ctx) {
     // Fill in IP, port info early so even if SSL setup below fails,
     // error handler would have the corresponding info.
     // Thanks to Johannes Winkelmann for the patch.
-    conn->request_info.remote_port = ntohs(conn->client.rsa.u.sin.sin_port);
+    // TODO(lsm): Fix IPv6 case
+    conn->request_info.remote_port = ntohs(conn->client.rsa.sin.sin_port);
     memcpy(&conn->request_info.remote_ip,
-           &conn->client.rsa.u.sin.sin_addr.s_addr, 4);
+           &conn->client.rsa.sin.sin_addr.s_addr, 4);
     conn->request_info.remote_ip = ntohl(conn->request_info.remote_ip);
     conn->request_info.is_ssl = conn->client.is_ssl;
 
@@ -4064,11 +4076,13 @@ static void produce_socket(struct mg_context *ctx, const struct socket *sp) {
 static void accept_new_connection(const struct socket *listener,
                                   struct mg_context *ctx) {
   struct socket accepted;
+  char src_addr[20];
+  socklen_t len;
   int allowed;
 
-  accepted.rsa.len = sizeof(accepted.rsa.u.sin);
+  len = sizeof(accepted.rsa);
   accepted.lsa = listener->lsa;
-  accepted.sock = accept(listener->sock, &accepted.rsa.u.sa, &accepted.rsa.len);
+  accepted.sock = accept(listener->sock, &accepted.rsa.sa, &len);
   if (accepted.sock != INVALID_SOCKET) {
     allowed = check_acl(ctx, &accepted.rsa);
     if (allowed) {
@@ -4078,8 +4092,8 @@ static void accept_new_connection(const struct socket *listener,
       accepted.is_proxy = listener->is_proxy;
       produce_socket(ctx, &accepted);
     } else {
-      cry(fc(ctx), "%s: %s is not allowed to connect",
-          __func__, inet_ntoa(accepted.rsa.u.sin.sin_addr));
+      sockaddr_to_string(src_addr, sizeof(src_addr), &accepted.rsa);
+      cry(fc(ctx), "%s: %s is not allowed to connect", __func__, src_addr);
       (void) closesocket(accepted.sock);
     }
   }
