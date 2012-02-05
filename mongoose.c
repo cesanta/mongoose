@@ -369,7 +369,7 @@ static const char *month_names[] = {
 union usa {
   struct sockaddr sa;
   struct sockaddr_in sin;
-#if !defined(NO_IPV6)
+#if defined(USE_IPV6)
   struct sockaddr_in6 sin6;
 #endif
 };
@@ -509,13 +509,12 @@ const char *mg_get_option(const struct mg_context *ctx, const char *name) {
 static void sockaddr_to_string(char *buf, size_t len,
                                      const union usa *usa) {
   buf[0] = '\0';
-#if !defined(NO_IPV6)
+#if defined(USE_IPV6)
   inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
             (void *) &usa->sin.sin_addr :
             (void *) &usa->sin6.sin6_addr, buf, len);
 #else
-  // TODO(lsm): inet_ntoa is not thread safe, use inet_pton instead
-  strncpy(buf, inet_ntoa(usa->sin.sin_addr), len);
+  inet_ntop(usa->sa.sa_family, (void *) &usa->sin.sin_addr, buf, len);
 #endif
 }
 
@@ -3434,7 +3433,7 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
   }
 
   so->is_ssl = vec->ptr[len] == 's';
-#if !defined(NO_IPV6)
+#if defined(USE_IPV6)
   so->lsa.sin6.sin6_family = AF_INET6;
   so->lsa.sin6.sin6_port = htons((uint16_t) port);
 #else
