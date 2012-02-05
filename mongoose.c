@@ -513,6 +513,9 @@ static void sockaddr_to_string(char *buf, size_t len,
   inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
             (void *) &usa->sin.sin_addr :
             (void *) &usa->sin6.sin6_addr, buf, len);
+#elif defined(_WIN32)
+  // Only Windoze Vista (and newer) have inet_ntop()
+  strncpy(buf, inet_ntoa(usa->sin.sin_addr), len);
 #else
   inet_ntop(usa->sa.sa_family, (void *) &usa->sin.sin_addr, buf, len);
 #endif
@@ -2877,10 +2880,15 @@ static void prepare_cgi_environment(struct mg_connection *conn,
     addenv(blk, "PATH=%s", s);
 
 #if defined(_WIN32)
-  if ((s = getenv("COMSPEC")) != NULL)
+  if ((s = getenv("COMSPEC")) != NULL) {
     addenv(blk, "COMSPEC=%s", s);
-  if ((s = getenv("SYSTEMROOT")) != NULL)
+  }
+  if ((s = getenv("SYSTEMROOT")) != NULL) {
     addenv(blk, "SYSTEMROOT=%s", s);
+  }
+  if ((s = getenv("SystemDrive")) != NULL) {
+    addenv(blk, "SystemDrive=%s", s);
+  }
 #else
   if ((s = getenv("LD_LIBRARY_PATH")) != NULL)
     addenv(blk, "LD_LIBRARY_PATH=%s", s);
