@@ -201,7 +201,7 @@ $num_requests++;
 write_file("$root/a+.txt", '');
 o("GET /a+.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'URL-decoding, + in URI');
 
-#o("GET /hh HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'GET admin URI');
+o("GET /%5c/a.txt HTTP/1.0\n\n", 'blah', 'GET dir backslash');
 
 # Test HTTP version parsing
 o("GET / HTTPX/1.0\r\n\r\n", '400 Bad Request', 'Bad HTTP Version', 0);
@@ -213,7 +213,8 @@ o("GET / HTTP/02.0\r\n\r\n", '505 HTTP version not supported',
 # File with leading single dot
 o("GET /.leading.dot.txt HTTP/1.0\n\n", 'abc123', 'Leading dot 1');
 o("GET /...leading.dot.txt HTTP/1.0\n\n", 'abc123', 'Leading dot 2');
-o("GET /../\\\\/.//...leading.dot.txt HTTP/1.0\n\n", 'abc123', 'Leading dot 3');
+o("GET /../\\\\/.//...leading.dot.txt HTTP/1.0\n\n", 'abc123', 'Leading dot 3')
+  if on_windows();
 o("GET .. HTTP/1.0\n\n", '400 Bad Request', 'Leading dot 4', 0);
 
 mkdir $test_dir unless -d $test_dir;

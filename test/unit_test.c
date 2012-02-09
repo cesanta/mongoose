@@ -1,6 +1,6 @@
 #include "mongoose.c"
 
-int main(void) {
+static void test_match_prefix(void) {
   assert(match_prefix("/a/", 3, "/a/b/c") == 3);
   assert(match_prefix("/a/", 3, "/ab/c") == -1);
   assert(match_prefix("/*/", 3, "/ab/c") == 4);
@@ -25,6 +25,35 @@ int main(void) {
   assert(match_prefix("**.a$|**.b$", 11, "/a/b.b/") == -1);
   assert(match_prefix("**.a$|**.b$", 11, "/a/b.b") == 6);
   assert(match_prefix("**.a$|**.b$", 11, "/a/b.a") == 6);
+}
 
+static void test_remove_double_dots() {
+  struct { char before[20], after[20]; } data[] = {
+    {"////a", "/a"},
+    {"/.....", "/."},
+    {"/......", "/"},
+    {"...", "..."},
+    {"/...///", "/./"},
+    {"/a...///", "/a.../"},
+    {"/.x", "/.x"},
+#if defined(_WIN32)
+    {"/\\", "/"},
+#else
+    {"/\\", "/\\"},
+#endif
+    {"/a\\", "/a\\"},
+  };
+  size_t i;
+
+  for (i = 0; i < ARRAY_SIZE(data); i++) {
+    //printf("[%s] -> [%s]\n", data[i].before, data[i].after);
+    remove_double_dots_and_double_slashes(data[i].before);
+    assert(strcmp(data[i].before, data[i].after) == 0);
+  }
+}
+
+int main(void) {
+  test_match_prefix();
+  test_remove_double_dots();
   return 0;
 }
