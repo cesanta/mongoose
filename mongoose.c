@@ -1696,9 +1696,9 @@ static void remove_double_dots_and_double_slashes(char *s) {
 
   while (*s != '\0') {
     *p++ = *s++;
-    if (s[-1] == '/' || s[-1] == DIRSEP) {
+    if (IS_DIRSEP_CHAR(s[-1])) {
       // Skip all following slashes and backslashes
-      while (*s == '/' || *s == DIRSEP) {
+      while (IS_DIRSEP_CHAR(s[0])) {
         s++;
       }
 
