@@ -395,7 +395,6 @@ struct socket {
   union usa lsa;        // Local socket address
   union usa rsa;        // Remote socket address
   int is_ssl;           // Is socket SSL-ed
-  int is_proxy;
 };
 
 enum {
@@ -458,7 +457,6 @@ struct mg_context {
 };
 
 struct mg_connection {
-  struct mg_connection *peer; // Remote target in proxy mode
   struct mg_request_info request_info;
   struct mg_context *ctx;
   SSL *ssl;                   // SSL descriptor
@@ -1587,43 +1585,6 @@ static int sslize(struct mg_connection *conn, int (*func)(SSL *)) {
   return (conn->ssl = SSL_new(conn->ctx->ssl_ctx)) != NULL &&
     SSL_set_fd(conn->ssl, conn->client.sock) == 1 &&
     func(conn->ssl) == 1;
-}
-
-static struct mg_connection *mg_connect(struct mg_connection *conn,
-                                 const char *host, int port, int use_ssl) {
-  struct mg_connection *newconn = NULL;
-  struct sockaddr_in sin;
-  struct hostent *he;
-  int sock;
-
-  if (conn->ctx->ssl_ctx == NULL && use_ssl) {
-    cry(conn, "%s: SSL is not initialized", __func__);
-  } else if ((he = gethostbyname(host)) == NULL) {
-    cry(conn, "%s: gethostbyname(%s): %s", __func__, host, strerror(ERRNO));
-  } else if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-    cry(conn, "%s: socket: %s", __func__, strerror(ERRNO));
-  } else {
-    sin.sin_family = AF_INET;
-    sin.sin_port = htons((uint16_t) port);
-    sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
-    if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) != 0) {
-      cry(conn, "%s: connect(%s:%d): %s", __func__, host, port,
-          strerror(ERRNO));
-      closesocket(sock);
-    } else if ((newconn = (struct mg_connection *)
-                calloc(1, sizeof(*newconn))) == NULL) {
-      cry(conn, "%s: calloc: %s", __func__, strerror(ERRNO));
-      closesocket(sock);
-    } else {
-      newconn->client.sock = sock;
-      newconn->client.rsa.sin = sin;
-      if (use_ssl) {
-        sslize(newconn, SSL_connect);
-      }
-    }
-  }
-
-  return newconn;
 }
 
 // Check whether full request is buffered. Return:
@@ -3858,74 +3819,6 @@ static void discard_current_request_from_buffer(struct mg_connection *conn) {
           (size_t) conn->data_len);
 }
 
-static int parse_url(const char *url, char *host, int *port) {
-  int len;
-
-  if (sscanf(url, "%*[htps]://%1024[^:]:%d%n", host, port, &len) == 2 ||
-      sscanf(url, "%1024[^:]:%d%n", host, port, &len) == 2) {
-  } else if (sscanf(url, "%*[htps]://%1024[^/]%n", host, &len) == 1) {
-    *port = 80;
-  } else {
-    sscanf(url, "%1024[^/]%n", host, &len);
-    *port = 80;
-  }
-  DEBUG_TRACE(("Host:%s, port:%d", host, *port));
-
-  return len;
-}
-
-static void handle_proxy_request(struct mg_connection *conn) {
-  struct mg_request_info *ri = &conn->request_info;
-  char host[1025], buf[BUFSIZ];
-  int port, is_ssl, len, i, n;
-
-  DEBUG_TRACE(("URL: %s", ri->uri));
-  if (ri->uri == NULL ||
-      ri->uri[0] == '/' ||
-      (len = parse_url(ri->uri, host, &port)) == 0) {
-    return;
-  }
-
-  if (conn->peer == NULL) {
-    is_ssl = !strcmp(ri->request_method, "CONNECT");
-    if ((conn->peer = mg_connect(conn, host, port, is_ssl)) == NULL) {
-      return;
-    }
-    conn->peer->client.is_ssl = is_ssl;
-  }
-
-  // Forward client's request to the target
-  mg_printf(conn->peer, "%s %s HTTP/%s\r\n", ri->request_method, ri->uri + len,
-            ri->http_version);
-
-  // And also all headers. TODO(lsm): anonymize!
-  for (i = 0; i < ri->num_headers; i++) {
-    mg_printf(conn->peer, "%s: %s\r\n", ri->http_headers[i].name,
-              ri->http_headers[i].value);
-  }
-  // End of headers, final newline
-  mg_write(conn->peer, "\r\n", 2);
-
-  // Read and forward body data if any
-  if (!strcmp(ri->request_method, "POST")) {
-    forward_body_data(conn, NULL, conn->peer->client.sock, conn->peer->ssl);
-  }
-
-  // Read data from the target and forward it to the client
-  while ((n = pull(NULL, conn->peer->client.sock, conn->peer->ssl,
-                   buf, sizeof(buf))) > 0) {
-    if (mg_write(conn, buf, (size_t)n) != n) {
-      break;
-    }
-  }
-
-  if (!conn->peer->client.is_ssl) {
-    close_connection(conn->peer);
-    free(conn->peer);
-    conn->peer = NULL;
-  }
-}
-
 static int is_valid_uri(const char *uri) {
   // Conform to http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1.2
   // URI can be an asterisk (*) or should start with slash.
@@ -3957,8 +3850,7 @@ static void process_new_connection(struct mg_connection *conn) {
 
     // Nul-terminate the request cause parse_http_request() uses sscanf
     conn->buf[conn->request_len - 1] = '\0';
-    if (!parse_http_request(conn->buf, ri) ||
-        (!conn->client.is_proxy && !is_valid_uri(ri->uri))) {
+    if (!parse_http_request(conn->buf, ri) || !is_valid_uri(ri->uri)) {
       // Do not put garbage in the access log, just send it back to the client
       send_http_error(conn, 400, "Bad Request",
           "Cannot parse HTTP request: [%.*s]", conn->data_len, conn->buf);
@@ -3972,17 +3864,13 @@ static void process_new_connection(struct mg_connection *conn) {
       cl = get_header(ri, "Content-Length");
       conn->content_len = cl == NULL ? -1 : strtoll(cl, NULL, 10);
       conn->birth_time = time(NULL);
-      if (conn->client.is_proxy) {
-        handle_proxy_request(conn);
-      } else {
-        handle_request(conn);
-      }
+      handle_request(conn);
       log_access(conn);
       discard_current_request_from_buffer(conn);
     }
-    // conn->peer is not NULL only for SSL-ed proxy connections
   } while (conn->ctx->stop_flag == 0 &&
-           (conn->peer || (keep_alive_enabled && should_keep_alive(conn))));
+           keep_alive_enabled &&
+           should_keep_alive(conn));
 }
 
 // Worker threads take accepted socket from the queue
@@ -4096,7 +3984,6 @@ static void accept_new_connection(const struct socket *listener,
       // Put accepted socket structure into the queue
       DEBUG_TRACE(("accepted socket %d", accepted.sock));
       accepted.is_ssl = listener->is_ssl;
-      accepted.is_proxy = listener->is_proxy;
       produce_socket(ctx, &accepted);
     } else {
       sockaddr_to_string(src_addr, sizeof(src_addr), &accepted.rsa);
