@@ -466,6 +466,7 @@ struct mg_connection {
   int64_t content_len;        // Content-Length header value
   int64_t consumed_content;   // How many bytes of content is already read
   char *buf;                  // Buffer for received data
+  char *path_info;            // PATH_INFO part of the URL
   int buf_size;               // Buffer size
   int request_len;            // Size of the request + headers in a buffer
   int data_len;               // Total size of data in a buffer
@@ -1556,13 +1557,15 @@ int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
   return len;
 }
 
-static void convert_uri_to_file_name(struct mg_connection *conn,
-                                     const char *uri, char *buf,
-                                     size_t buf_len) {
+static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
+                                    size_t buf_len, struct mgstat *st) {
   struct vec a, b;
-  const char *rewrite;
-  int match_len;
+  const char *rewrite, *uri = conn->request_info.uri;
+  char *p;
+  int match_len, stat_result;
 
+  buf_len--;  // This is because memmove() for PATH_INFO may shift part
+              // of the path one byte on the right.
   mg_snprintf(conn, buf, buf_len, "%s%s", conn->ctx->config[DOCUMENT_ROOT],
               uri);
 
@@ -1575,10 +1578,32 @@ static void convert_uri_to_file_name(struct mg_connection *conn,
   }
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
-  change_slashes_to_backslashes(buf);
+  //change_slashes_to_backslashes(buf);
 #endif // _WIN32
 
   DEBUG_TRACE(("[%s] -> [%s], [%.*s]", uri, buf, (int) vec.len, vec.ptr));
+
+  if ((stat_result = mg_stat(buf, st)) != 0) {
+    // Support PATH_INFO for CGI scripts.
+    for (p = buf + strlen(buf); p > buf + 1; p--) {
+      if (*p == '/') {
+        *p = '\0';
+        if (match_prefix(conn->ctx->config[CGI_EXTENSIONS],
+                         strlen(conn->ctx->config[CGI_EXTENSIONS]), buf) > 0 &&
+            (stat_result = mg_stat(buf, st)) == 0) {
+          conn->path_info = p + 1;
+          memmove(p + 2, p + 1, strlen(p + 1));
+          p[1] = '/';
+          break;
+        } else {
+          *p = '/';
+          stat_result = -1;
+        }
+      }
+    }
+  }
+
+  return stat_result;
 }
 
 static int sslize(struct mg_connection *conn, int (*func)(SSL *)) {
@@ -2840,6 +2865,10 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   if ((s = getenv("PATH")) != NULL)
     addenv(blk, "PATH=%s", s);
 
+  if (conn->path_info != NULL) {
+    addenv(blk, "PATH_INFO=%s", conn->path_info);
+  }
+
 #if defined(_WIN32)
   if ((s = getenv("COMSPEC")) != NULL) {
     addenv(blk, "COMSPEC=%s", s);
@@ -3295,7 +3324,7 @@ static void handle_propfind(struct mg_connection *conn, const char* path,
 static void handle_request(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
   char path[PATH_MAX];
-  int uri_len;
+  int stat_result, uri_len;
   struct mgstat st;
 
   if ((conn->request_info.query_string = strchr(ri->uri, '?')) != NULL) {
@@ -3304,7 +3333,7 @@ static void handle_request(struct mg_connection *conn) {
   uri_len = strlen(ri->uri);
   url_decode(ri->uri, (size_t)uri_len, ri->uri, (size_t)(uri_len + 1), 0);
   remove_double_dots_and_double_slashes(ri->uri);
-  convert_uri_to_file_name(conn, ri->uri, path, sizeof(path));
+  stat_result = convert_uri_to_file_name(conn, path, sizeof(path), &st);
 
   DEBUG_TRACE(("%s", ri->uri));
   if (!check_authorization(conn, path)) {
@@ -3332,7 +3361,7 @@ static void handle_request(struct mg_connection *conn) {
       send_http_error(conn, 500, http_500_error, "remove(%s): %s", path,
                       strerror(ERRNO));
     }
-  } else if (mg_stat(path, &st) != 0) {
+  } else if (stat_result != 0) {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
   } else if (st.is_directory && ri->uri[uri_len - 1] != '/') {
     (void) mg_printf(conn,
@@ -3750,7 +3779,8 @@ static void reset_per_request_attributes(struct mg_connection *conn) {
   if (ri->remote_user != NULL) {
     free((void *) ri->remote_user);
   }
-  ri->remote_user = ri->request_method = ri->uri = ri->http_version = NULL;
+  ri->remote_user = ri->request_method = ri->uri = ri->http_version =
+    conn->path_info = NULL;
   ri->num_headers = 0;
   ri->status_code = -1;
 
