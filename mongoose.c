@@ -4029,13 +4029,15 @@ static void master_thread(struct mg_context *ctx) {
   struct socket *sp;
   int max_fd;
 
-#if defined(ISSUE_317)
   // Increase priority of the master thread
+#if defined(_WIN32)
+  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+#endif
+  
+#if defined(ISSUE_317)
   struct sched_param sched_param;
-  int policy;
-  pthread_getschedparam(pthread_self(), &policy, &sched_param);
-  sched_param.sched_priority = sched_get_priority_max(policy);
-  pthread_setschedparam(pthread_self(), policy, &sched_param);
+  sched_param.sched_priority = sched_get_priority_max(SCHED_RR);
+  pthread_setschedparam(pthread_self(), SCHED_RR, &sched_param);
 #endif
 
   while (ctx->stop_flag == 0) {
