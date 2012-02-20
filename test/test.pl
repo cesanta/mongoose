@@ -364,6 +364,7 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   o("GET /env.cgi HTTP/1.0\n\r\n", '\nCGI_FOO=foo\n', '-cgi_env 1');
   o("GET /env.cgi HTTP/1.0\n\r\n", '\nCGI_BAR=bar\n', '-cgi_env 2');
   o("GET /env.cgi HTTP/1.0\n\r\n", '\nCGI_BAZ=baz\n', '-cgi_env 3');
+  o("GET /env.cgi/a/b HTTP/1.0\n\r\n", 'PATH_INFO=/a/b\n', 'PATH_INFO');
 
   # Check that CGI's current directory is set to script's directory
   my $copy_cmd = on_windows() ? 'copy' : 'cp';
