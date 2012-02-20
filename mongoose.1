@@ -140,8 +140,9 @@ Comma-separated list of URL rewrites in the form of
 of the requested URL, then matched prefix gets substituted with "substitution".
 For example, "-w /config=/etc,**.doc|**.rtf=/cgi-bin/handle_doc.cgi"
 will serve all URLs that start with "/config" from the "/etc" directory, and
-call handle_doc.cgi script for .doc and .rtf file requests.
-Default: ""
+call handle_doc.cgi script for .doc and .rtf file requests. If some pattern
+matches, no further matching/substitution is performed
+(first matching pattern wins). Default: ""
 .El
 .Pp
 .Sh EMBEDDING
