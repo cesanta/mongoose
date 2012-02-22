@@ -1581,8 +1581,6 @@ static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
   //change_slashes_to_backslashes(buf);
 #endif // _WIN32
 
-  DEBUG_TRACE(("[%s] -> [%s], [%.*s]", uri, buf, (int) vec.len, vec.ptr));
-
   if ((stat_result = mg_stat(buf, st)) != 0) {
     // Support PATH_INFO for CGI scripts.
     for (p = buf + strlen(buf); p > buf + 1; p--) {
