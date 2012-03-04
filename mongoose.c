@@ -124,8 +124,8 @@ typedef long off_t;
 #define fdopen(x, y) _fdopen((x), (y))
 #define write(x, y, z) _write((x), (y), (unsigned) z)
 #define read(x, y, z) _read((x), (y), (unsigned) z)
-#define flockfile(x) (void) 0
-#define funlockfile(x) (void) 0
+#define flockfile(x) EnterCriticalSection(&global_log_file_lock)
+#define funlockfile(x) LeaveCriticalSection(&global_log_file_lock)
 
 #if !defined(fileno)
 #define fileno(x) _fileno(x)
@@ -222,6 +222,7 @@ typedef int SOCKET;
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
 
 #ifdef _WIN32
+static CRITICAL_SECTION global_log_file_lock;
 static pthread_t pthread_self(void) {
   return GetCurrentThreadId();
 }
@@ -467,6 +468,7 @@ struct mg_connection {
   int64_t consumed_content;   // How many bytes of content is already read
   char *buf;                  // Buffer for received data
   char *path_info;            // PATH_INFO part of the URL
+  int must_close;             // 1 if connection must be closed
   int buf_size;               // Buffer size
   int request_len;            // Size of the request + headers in a buffer
   int data_len;               // Total size of data in a buffer
@@ -818,7 +820,9 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
 static int should_keep_alive(const struct mg_connection *conn) {
   const char *http_version = conn->request_info.http_version;
   const char *header = mg_get_header(conn, "Connection");
-  return (!mg_strcasecmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes") &&
+  return (!conn->must_close &&
+          !conn->request_info.status_code != 401 &&
+          !mg_strcasecmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes") &&
           (header == NULL && http_version && !strcmp(http_version, "1.1"))) ||
           (header != NULL && !mg_strcasecmp(header, "keep-alive"));
 }
@@ -951,6 +955,7 @@ static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
   } else {
     // Convert to Unicode and back. If doubly-converted string does not
     // match the original, something is fishy, reject.
+    memset(wbuf, 0, wbuf_len * sizeof(wchar_t));
     MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
     WideCharToMultiByte(CP_UTF8, 0, wbuf, (int) wbuf_len, buf2, sizeof(buf2),
                         NULL, NULL);
@@ -1348,11 +1353,11 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
     if (ssl != NULL) {
       n = SSL_write(ssl, buf + sent, k);
     } else if (fp != NULL) {
-      n = fwrite(buf + sent, 1, (size_t)k, fp);
+      n = fwrite(buf + sent, 1, (size_t) k, fp);
       if (ferror(fp))
         n = -1;
     } else {
-      n = send(sock, buf + sent, (size_t)k, 0);
+      n = send(sock, buf + sent, (size_t) k, 0);
     }
 
     if (n < 0)
@@ -2920,7 +2925,7 @@ static void prepare_cgi_environment(struct mg_connection *conn,
 
 static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   int headers_len, data_len, i, fd_stdin[2], fd_stdout[2];
-  const char *status;
+  const char *status, *status_text;
   char buf[BUFSIZ], *pbuf, dir[PATH_MAX], *p;
   struct mg_request_info ri;
   struct cgi_env_block blk;
@@ -2991,14 +2996,24 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   parse_http_headers(&pbuf, &ri);
 
   // Make up and send the status line
+  status_text = "OK";
   if ((status = get_header(&ri, "Status")) != NULL) {
     conn->request_info.status_code = atoi(status);
+    status_text = status;
+    while (isdigit(* (unsigned char *) status_text) || *status_text == ' ') {
+      status_text++;
+    }
   } else if (get_header(&ri, "Location") != NULL) {
     conn->request_info.status_code = 302;
   } else {
     conn->request_info.status_code = 200;
   }
-  (void) mg_printf(conn, "HTTP/1.1 %d OK\r\n", conn->request_info.status_code);
+  if (get_header(&ri, "Connection") != NULL &&
+      !mg_strcasecmp(get_header(&ri, "Connection"), "keep-alive")) {
+    conn->must_close = 1;
+  }
+  (void) mg_printf(conn, "HTTP/1.1 %d %s\r\n", conn->request_info.status_code,
+                   status_text);
 
   // Send headers
   for (i = 0; i < ri.num_headers; i++) {
@@ -3240,6 +3255,7 @@ static void handle_ssi_file_request(struct mg_connection *conn,
     send_http_error(conn, 500, http_500_error, "fopen(%s): %s", path,
                     strerror(ERRNO));
   } else {
+    conn->must_close = 1;
     set_close_on_exec(fileno(fp));
     mg_printf(conn, "HTTP/1.1 200 OK\r\n"
               "Content-Type: text/html\r\nConnection: %s\r\n\r\n",
@@ -3774,9 +3790,6 @@ static void reset_per_request_attributes(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
 
   // Reset request info attributes. DO NOT TOUCH is_ssl, remote_ip, remote_port
-  if (ri->remote_user != NULL) {
-    free((void *) ri->remote_user);
-  }
   ri->remote_user = ri->request_method = ri->uri = ri->http_version =
     conn->path_info = NULL;
   ri->num_headers = 0;
@@ -3785,6 +3798,7 @@ static void reset_per_request_attributes(struct mg_connection *conn) {
   conn->num_bytes_sent = conn->consumed_content = 0;
   conn->content_len = -1;
   conn->request_len = conn->data_len = 0;
+  conn->must_close = 0;
 }
 
 static void close_socket_gracefully(SOCKET sock) {
@@ -3895,6 +3909,9 @@ static void process_new_connection(struct mg_connection *conn) {
       handle_request(conn);
       log_access(conn);
       discard_current_request_from_buffer(conn);
+    }
+    if (ri->remote_user != NULL) {
+      free((void *) ri->remote_user);
     }
   } while (conn->ctx->stop_flag == 0 &&
            keep_alive_enabled &&
@@ -4142,6 +4159,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
   WSADATA data;
   WSAStartup(MAKEWORD(2,2), &data);
+  InitializeCriticalSection(&global_log_file_lock);
 #endif // _WIN32
 
   // Allocate context and initialize reasonable general case defaults.
