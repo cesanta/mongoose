@@ -1174,16 +1174,12 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   HANDLE me;
   char *p, *interp, cmdline[PATH_MAX], buf[PATH_MAX];
   FILE *fp;
-  STARTUPINFOA si;
-  PROCESS_INFORMATION pi;
+  STARTUPINFOA si = { sizeof(si); };
+  PROCESS_INFORMATION pi = {};
 
   envp = NULL; // Unused
 
-  (void) memset(&si, 0, sizeof(si));
-  (void) memset(&pi, 0, sizeof(pi));
-
   // TODO(lsm): redirect CGI errors to the error log file
-  si.cb  = sizeof(si);
   si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
   si.wShowWindow = SW_HIDE;
 
