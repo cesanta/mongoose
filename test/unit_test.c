@@ -21,6 +21,8 @@ static void test_match_prefix(void) {
   assert(match_prefix("$", 1, "x") == -1);
   assert(match_prefix("*$", 2, "x") == 1);
   assert(match_prefix("/$", 2, "/") == 1);
+  assert(match_prefix("**/$", 4, "/a/b/c") == -1);
+  assert(match_prefix("**/$", 4, "/a/b/") == 5);
   assert(match_prefix("*", 1, "/hello/") == 0);
   assert(match_prefix("**.a$|**.b$", 11, "/a/b.b/") == -1);
   assert(match_prefix("**.a$|**.b$", 11, "/a/b.b") == 6);
