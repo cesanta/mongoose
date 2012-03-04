@@ -338,7 +338,8 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   unlink "$root/.htpasswd";
 
   o("GET /env.cgi HTTP/1.0\n\r\n", 'HTTP/1.1 200 OK', 'GET CGI file');
-  #o("GET /redirect.cgi HTTP/1.0\n\n", 'HTTP/1.1 302', 'Redirect');
+  o("GET /bad2.cgi HTTP/1.0\n\n", "HTTP/1.1 123 Please pass me to the client\r",
+    'CGI Status code text');
   o("GET /sh.cgi HTTP/1.0\n\r\n", 'shell script CGI',
     'GET sh CGI file') unless on_windows();
   o("GET /env.cgi?var=HELLO HTTP/1.0\n\n", 'QUERY_STRING=var=HELLO',
