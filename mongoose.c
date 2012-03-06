@@ -24,6 +24,7 @@
 #define _XOPEN_SOURCE 600     // For flockfile() on Linux
 #define _LARGEFILE_SOURCE     // Enable 64-bit file offsets
 #define __STDC_FORMAT_MACROS  // <inttypes.h> wants this for C++
+#define __STDC_LIMIT_MACROS   // C++ wants that for INT64_MAX
 #endif
 
 #if defined(__SYMBIAN32__)
@@ -779,7 +780,7 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
   const char *or_str;
   int i, j, len, res;
 
-  if ((or_str = memchr(pattern, '|', pattern_len)) != NULL) {
+  if ((or_str = (const char *) memchr(pattern, '|', pattern_len)) != NULL) {
     res = match_prefix(pattern, or_str - pattern, str);
     return res > 0 ? res :
         match_prefix(or_str + 1, (pattern + pattern_len) - (or_str + 1), str);
