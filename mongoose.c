@@ -4181,6 +4181,9 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
       free_context(ctx);
       return NULL;
     }
+    if (ctx->config[i] != NULL) {
+      cry(fc(ctx), "%s: duplicate option", name);
+    }
     ctx->config[i] = mg_strdup(value);
     DEBUG_TRACE(("[%s] -> [%s]", name, value));
   }
