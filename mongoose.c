@@ -3910,6 +3910,7 @@ static void process_new_connection(struct mg_connection *conn) {
       conn->content_len = cl == NULL ? -1 : strtoll(cl, NULL, 10);
       conn->birth_time = time(NULL);
       handle_request(conn);
+      call_user(conn, MG_REQUEST_COMPLETE);
       log_access(conn);
       discard_current_request_from_buffer(conn);
     }
