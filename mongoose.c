@@ -2683,7 +2683,7 @@ static int substitute_index_file(struct mg_connection *conn, char *path,
   while ((list = next_option(list, &filename_vec, NULL)) != NULL) {
 
     // Ignore too long entries that may overflow path buffer
-    if (filename_vec.len > path_len - n)
+    if (filename_vec.len > path_len - (n + 2))
       continue;
 
     // Prepare full path to the index file
