@@ -3307,6 +3307,7 @@ static void handle_propfind(struct mg_connection *conn, const char* path,
                             struct mgstat* st) {
   const char *depth = mg_get_header(conn, "Depth");
 
+  conn->must_close = 1;
   conn->request_info.status_code = 207;
   mg_printf(conn, "HTTP/1.1 207 Multi-Status\r\n"
             "Connection: close\r\n"
