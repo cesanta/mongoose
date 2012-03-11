@@ -1175,8 +1175,8 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   HANDLE me;
   char *p, *interp, cmdline[PATH_MAX], buf[PATH_MAX];
   FILE *fp;
-  STARTUPINFOA si = { sizeof(si); };
-  PROCESS_INFORMATION pi = {};
+  STARTUPINFOA si = { sizeof(si) };
+  PROCESS_INFORMATION pi = { 0 };
 
   envp = NULL; // Unused
 
