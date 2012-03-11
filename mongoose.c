@@ -249,6 +249,10 @@ static pthread_t pthread_self(void) {
 typedef int socklen_t;
 #endif // NO_SOCKLEN_T
 
+#if !defined(MSG_NOSIGNAL)
+#define MSG_NOSIGNAL 0
+#endif
+
 typedef void * (*mg_thread_func_t)(void *);
 
 static const char *http_500_error = "Internal Server Error";
@@ -1354,7 +1358,7 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
       if (ferror(fp))
         n = -1;
     } else {
-      n = send(sock, buf + sent, (size_t) k, 0);
+      n = send(sock, buf + sent, (size_t) k, MSG_NOSIGNAL);
     }
 
     if (n < 0)
