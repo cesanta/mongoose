@@ -3956,9 +3956,12 @@ static void worker_thread(struct mg_context *ctx) {
   int buf_size = atoi(ctx->config[MAX_REQUEST_SIZE]);
 
   conn = (struct mg_connection *) calloc(1, sizeof(*conn) + buf_size);
+  if (conn == NULL) {
+    cry(fc(ctx), "%s", "Cannot create new connection struct, OOM");
+    return;
+  }
   conn->buf_size = buf_size;
   conn->buf = (char *) (conn + 1);
-  assert(conn != NULL);
 
   // Call consume_socket() even when ctx->stop_flag > 0, to let it signal
   // sq_empty condvar to wake up the master waiting in produce_socket()
