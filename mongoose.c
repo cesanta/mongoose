@@ -113,7 +113,7 @@ typedef long off_t;
 #define SHUT_WR 1
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
-#define sleep(x) Sleep((x) * 1000)
+#define mg_sleep(x) Sleep(x)
 
 #define pipe(x) _pipe(x, BUFSIZ, _O_BINARY)
 #define popen(x, y) _popen(x, y)
@@ -206,6 +206,7 @@ typedef struct DIR {
 #define mg_mkdir(x, y) mkdir(x, y)
 #define mg_remove(x) remove(x)
 #define mg_rename(x, y) rename(x, y)
+#define mg_sleep(x) usleep((x) * 1000)
 #define ERRNO errno
 #define INVALID_SOCKET (-1)
 #define INT64_FMT PRId64
@@ -4079,7 +4080,7 @@ static void master_thread(struct mg_context *ctx) {
       // On windows, if read_set and write_set are empty,
       // select() returns "Invalid parameter" error
       // (at least on my Windows XP Pro). So in this case, we sleep here.
-      sleep(1);
+      mg_sleep(1000);
 #endif // _WIN32
     } else {
       for (sp = ctx->listening_sockets; sp != NULL; sp = sp->next) {
@@ -4148,7 +4149,7 @@ void mg_stop(struct mg_context *ctx) {
 
   // Wait until mg_fini() stops
   while (ctx->stop_flag != 2) {
-    (void) sleep(0);
+    mg_sleep(10);
   }
   free_context(ctx);
 
