@@ -1596,8 +1596,13 @@ static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
         if (match_prefix(conn->ctx->config[CGI_EXTENSIONS],
                          strlen(conn->ctx->config[CGI_EXTENSIONS]), buf) > 0 &&
             (stat_result = mg_stat(buf, st)) == 0) {
+          // Shift PATH_INFO block one character right, e.g.
+          //  "/x.cgi/foo/bar\x00" => "/x.cgi\x00/foo/bar\x00"
+          // conn->path_info is pointing to the local variable "path" declared
+          // in handle_request(), so PATH_INFO not valid after
+          // handle_request returns.
           conn->path_info = p + 1;
-          memmove(p + 2, p + 1, strlen(p + 1));
+          memmove(p + 2, p + 1, strlen(p + 1) + 1);  // +1 is for trailing \0
           p[1] = '/';
           break;
         } else {
