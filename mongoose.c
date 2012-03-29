@@ -65,6 +65,7 @@
 #include <io.h>
 #else // _WIN32_WCE
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #define NO_CGI // WinCE has no pipes
 
 typedef long off_t;
