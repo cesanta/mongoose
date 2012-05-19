@@ -3858,7 +3858,8 @@ static void discard_current_request_from_buffer(struct mg_connection *conn) {
   buffered_len = conn->data_len - conn->request_len;
   assert(buffered_len >= 0);
 
-  if (conn->content_len == -1) {
+  if (conn->content_len <= 0) {
+    // Protect from negative Content-Length, too
     body_len = 0;
   } else if (conn->content_len < (int64_t) buffered_len) {
     body_len = (int) conn->content_len;

@@ -181,6 +181,8 @@ spawn($cmd);
 req('POST ' . '/..' x 100 . 'ABCD' x 3000 . "\n\n", 0); # don't log this one
 
 o("GET /hello.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'GET regular file');
+o("GET /hello.txt HTTP/1.0\nContent-Length: -2147483648\n\n",
+  'HTTP/1.1 200 OK', 'Negative content length');
 o("GET /hello.txt HTTP/1.0\n\n", 'Content-Length: 17\s',
   'GET regular file Content-Length');
 o("GET /%68%65%6c%6c%6f%2e%74%78%74 HTTP/1.0\n\n",
