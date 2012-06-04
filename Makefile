@@ -26,7 +26,7 @@ CFLAGS = -W -Wall -std=c99 -pedantic -O2 $(COPT)
 MAC_SHARED = -flat_namespace -bundle -undefined suppress
 LINFLAGS = -ldl -pthread $(CFLAGS)
 LIB = _$(PROG).so
-CC = g++
+#CC = g++
 
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
