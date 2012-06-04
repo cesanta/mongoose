@@ -827,7 +827,7 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
 static int should_keep_alive(const struct mg_connection *conn) {
   const char *http_version = conn->request_info.http_version;
   const char *header = mg_get_header(conn, "Connection");
-  if (conn->must_close == 1 ||
+  if (conn->must_close ||
       conn->request_info.status_code == 401 ||
       mg_strcasecmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes") != 0 ||
       (header != NULL && mg_strcasecmp(header, "keep-alive") != 0) ||
