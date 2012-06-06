@@ -357,6 +357,7 @@ static struct ssl_func ssl_sw[] = {
 };
 
 // Similar array as ssl_sw. These functions could be located in different lib.
+#if !defined(NO_SSL)
 static struct ssl_func crypto_sw[] = {
   {"CRYPTO_num_locks",  NULL},
   {"CRYPTO_set_locking_callback", NULL},
@@ -365,6 +366,7 @@ static struct ssl_func crypto_sw[] = {
   {"ERR_error_string", NULL},
   {NULL,    NULL}
 };
+#endif // NO_SSL
 #endif // NO_SSL_DL
 
 static const char *month_names[] = {
@@ -570,13 +572,6 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
     }
   }
   conn->request_info.log_message = NULL;
-}
-
-// Return OpenSSL error message
-static const char *ssl_error(void) {
-  unsigned long err;
-  err = ERR_get_error();
-  return err == 0 ? "" : ERR_error_string(err, NULL);
 }
 
 // Return fake connection structure. Used for logging, if connection
@@ -3656,6 +3651,13 @@ static int set_uid_option(struct mg_context *ctx) {
 
 #if !defined(NO_SSL)
 static pthread_mutex_t *ssl_mutexes;
+
+// Return OpenSSL error message
+static const char *ssl_error(void) {
+  unsigned long err;
+  err = ERR_get_error();
+  return err == 0 ? "" : ERR_error_string(err, NULL);
+}
 
 static void ssl_locking_callback(int mode, int mutex_num, const char *file,
                                  int line) {
