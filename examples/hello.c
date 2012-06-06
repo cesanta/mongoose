@@ -6,15 +6,17 @@ static void *callback(enum mg_event event,
                       struct mg_connection *conn,
                       const struct mg_request_info *request_info) {
   if (event == MG_NEW_REQUEST) {
-    const char *content = "hello from mongoose!";
+    char content[1024];
+    int content_length = snprintf(content, sizeof(content),
+                                  "Hello from mongoose! Remote port: %d",
+                                  request_info->remote_port);
     mg_printf(conn,
               "HTTP/1.1 200 OK\r\n"
               "Content-Type: text/plain\r\n"
               "Content-Length: %d\r\n"        // Always set Content-Length
               "\r\n"
               "%s",
-              strlen(content),
-              content);
+              content_length, content);
     // Mark as processed
     return "";
   } else {
