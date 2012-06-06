@@ -32,7 +32,7 @@ static void test_should_keep_alive(void) {
   assert(should_keep_alive(&conn) == 1);
 
   conn.request_info.status_code = 401;
-  //assert(should_keep_alive(&conn) == 0);
+  assert(should_keep_alive(&conn) == 0);
 
   conn.request_info.status_code = 200;
   conn.must_close = 1;
