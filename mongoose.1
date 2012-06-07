@@ -138,11 +138,11 @@ Switch to given user's credentials after startup. Default: ""
 Comma-separated list of URL rewrites in the form of
 "pattern=substitution,..." If the "pattern" matches some prefix
 of the requested URL, then matched prefix gets substituted with "substitution".
-For example, "-w /config=/etc,**.doc|**.rtf=/cgi-bin/handle_doc.cgi"
+For example, "-w /config=/etc,**.doc|**.rtf=/path/to/cgi-bin/handle_doc.cgi"
 will serve all URLs that start with "/config" from the "/etc" directory, and
 call handle_doc.cgi script for .doc and .rtf file requests. If some pattern
 matches, no further matching/substitution is performed
-(first matching pattern wins). Default: ""
+(first matching pattern wins). Use full paths in substitutions. Default: ""
 .El
 .Pp
 .Sh EMBEDDING
@@ -160,8 +160,8 @@ for HTTPS connections.  Use /etc/cert.pem as SSL certificate file.
 .It Nm Fl l Ar -0.0.0.0/0,+10.0.0.0/8,+1.2.3.4
 Deny connections from everywhere, allow only IP address 1.2.3.4 and
 all IP addresses from 10.0.0.0/8 subnet to connect.
-.It Nm Fl w Ar **=/my/script.cgi
-Invoke /my/script.cgi for every incoming request, regardless of the URL.
+.It Nm Fl w Ar **=/usr/bin/script.cgi
+Invoke /usr/bin/script.cgi for every incoming request, regardless of the URL.
 .El
 .Pp
 .Sh COPYRIGHT
