@@ -2648,18 +2648,15 @@ static int parse_http_request(char *buf, struct mg_request_info *ri) {
 // Upon every read operation, increase nread by the number of bytes read.
 static int read_request(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int bufsiz,
                         int *nread) {
-  int n, request_len;
+  int request_len, n = 0;
 
-  request_len = 0;
-  while (*nread < bufsiz && request_len == 0) {
-    n = pull(fp, sock, ssl, buf + *nread, bufsiz - *nread);
-    if (n <= 0) {
-      break;
-    } else {
+  do {
+    request_len = get_request_len(buf, *nread);
+    if (request_len == 0 &&
+        (n = pull(fp, sock, ssl, buf + *nread, bufsiz - *nread)) > 0) {
       *nread += n;
-      request_len = get_request_len(buf, *nread);
     }
-  }
+  } while (*nread < bufsiz && request_len == 0 && n > 0);
 
   return request_len;
 }
@@ -2991,7 +2988,7 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   // HTTP headers.
   data_len = 0;
   headers_len = read_request(out, INVALID_SOCKET, NULL,
-      buf, sizeof(buf), &data_len);
+                             buf, sizeof(buf), &data_len);
   if (headers_len <= 0) {
     send_http_error(conn, 500, http_500_error,
                     "CGI program sent malformed HTTP headers: [%.*s]",
@@ -3892,12 +3889,9 @@ static void process_new_connection(struct mg_connection *conn) {
 
   do {
     reset_per_request_attributes(conn);
-
-    // If next request is not pipelined, read it in
-    if ((conn->request_len = get_request_len(conn->buf, conn->data_len)) == 0) {
-      conn->request_len = read_request(NULL, conn->client.sock, conn->ssl,
-          conn->buf, conn->buf_size, &conn->data_len);
-    }
+    conn->request_len = read_request(NULL, conn->client.sock, conn->ssl,
+                                     conn->buf, conn->buf_size,
+                                     &conn->data_len);
     assert(conn->data_len >= conn->request_len);
     if (conn->request_len == 0 && conn->data_len == conn->buf_size) {
       send_http_error(conn, 413, "Request Too Large", "");
