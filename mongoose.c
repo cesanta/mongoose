@@ -674,7 +674,8 @@ static int mg_snprintf(struct mg_connection *conn, char *buf, size_t buflen,
 // 0-terminate resulting word. Skip the delimiter and following whitespaces if any.
 // Advance pointer to buffer to the next word. Return found 0-terminated word.
 // Delimiters can be quoted with quotechar.
-static char *skip_quoted(char **buf, const char *delimiters, const char *whitespace, char quotechar) {
+static char *skip_quoted(char **buf, const char *delimiters,
+                         const char *whitespace, char quotechar) {
   char *p, *begin_word, *end_word, *end_whitespace;
 
   begin_word = *buf;
@@ -2619,6 +2620,8 @@ static int is_valid_http_method(const char *method) {
 }
 
 // Parse HTTP request, fill in mg_request_info structure.
+// This function modifies the buffer with HTTP request by nul-terminating
+// HTTP request components, header names and header values.
 static int parse_http_request(char *buf, struct mg_request_info *ri) {
   int status = 0;
 
