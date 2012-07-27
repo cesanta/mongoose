@@ -339,6 +339,11 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   o("GET /hello.txt HTTP/1.0\nAuthorization: $auth_header\n\n", 'HTTP/1.1 200 OK', 'GET regular file with auth');
   unlink "$root/.htpasswd";
 
+  my $x = 'x=' . 'A' x (200 * 1024);
+  my $len = length($x);
+  o("POST /env.cgi HTTP/1.0\r\nContent-Length: $len\r\n\r\n$x",
+    '^HTTP/1.1 200 OK', 'Long POST');
+
   o("GET /env.cgi HTTP/1.0\n\r\n", 'HTTP/1.1 200 OK', 'GET CGI file');
   o("GET /bad2.cgi HTTP/1.0\n\n", "HTTP/1.1 123 Please pass me to the client\r",
     'CGI Status code text');

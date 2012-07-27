@@ -21,8 +21,6 @@ foreach my $key (sort keys %in) {
 
 print "\n";
 
-#sleep 10;
-
 print 'CURRENT_DIR=' . getcwd() . "\n";
 print "</pre>\n";
 
@@ -43,8 +41,6 @@ my $stuff = <<EOP ;
 </form>
 EOP
 
-system('some shit');
-
-#print STDERR "fuck!!!\n\n";
+#system('some shit');
 
 print $stuff;
