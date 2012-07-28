@@ -2626,7 +2626,7 @@ static int parse_http_message(char *buf, int len, struct mg_request_info *ri) {
   int request_length = get_request_len(buf, len);
   if (request_length > 0) {
     // Reset attributes. DO NOT TOUCH is_ssl, remote_ip, remote_port
-    ri->remote_user = ri->request_method = ri->uri = ri->http_version;
+    ri->remote_user = ri->request_method = ri->uri = ri->http_version = NULL;
     ri->num_headers = 0;
     ri->status_code = -1;
 
