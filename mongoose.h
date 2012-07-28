@@ -238,6 +238,12 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
                struct mg_request_info *request_info);
 
 
+// Convenience function -- create detached thread.
+// Return: 0 on success, non-0 on error.
+typedef void * (*mg_thread_func_t)(void *);
+int mg_start_thread(mg_thread_func_t f, void *p);
+
+
 // Return Mongoose version.
 const char *mg_version(void);
 

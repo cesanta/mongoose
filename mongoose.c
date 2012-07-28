@@ -255,8 +255,6 @@ typedef int socklen_t;
 #define MSG_NOSIGNAL 0
 #endif
 
-typedef void * (*mg_thread_func_t)(void *);
-
 static const char *http_500_error = "Internal Server Error";
 
 // Snatched from OpenSSL includes. I put the prototypes here to be independent
@@ -1155,7 +1153,7 @@ static struct dirent *readdir(DIR *dir) {
 
 #define set_close_on_exec(fd) // No FD_CLOEXEC on Windows
 
-static int start_thread(struct mg_context *ctx, mg_thread_func_t f, void *p) {
+int mg_start_thread(mg_thread_func_t f, void *p) {
   return _beginthread((void (__cdecl *)(void *)) f, 0, p) == -1L ? -1 : 0;
 }
 
@@ -1264,22 +1262,16 @@ static void set_close_on_exec(int fd) {
   (void) fcntl(fd, F_SETFD, FD_CLOEXEC);
 }
 
-static int start_thread(struct mg_context *ctx, mg_thread_func_t func,
-                        void *param) {
+int mg_start_thread(mg_thread_func_t func, void *param) {
   pthread_t thread_id;
   pthread_attr_t attr;
-  int retval;
 
   (void) pthread_attr_init(&attr);
   (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
   // TODO(lsm): figure out why mongoose dies on Linux if next line is enabled
   // (void) pthread_attr_setstacksize(&attr, sizeof(struct mg_connection) * 5);
 
-  if ((retval = pthread_create(&thread_id, &attr, func, param)) != 0) {
-    cry(fc(ctx), "%s: %s", __func__, strerror(retval));
-  }
-
-  return retval;
+  return pthread_create(&thread_id, &attr, func, param);
 }
 
 #ifndef NO_CGI
@@ -4333,11 +4325,11 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
   (void) pthread_cond_init(&ctx->sq_full, NULL);
 
   // Start master (listening) thread
-  start_thread(ctx, (mg_thread_func_t) master_thread, ctx);
+  mg_start_thread((mg_thread_func_t) master_thread, ctx);
 
   // Start worker threads
   for (i = 0; i < atoi(ctx->config[NUM_THREADS]); i++) {
-    if (start_thread(ctx, (mg_thread_func_t) worker_thread, ctx) != 0) {
+    if (mg_start_thread((mg_thread_func_t) worker_thread, ctx) != 0) {
       cry(fc(ctx), "Cannot start worker thread: %d", ERRNO);
     } else {
       ctx->num_threads++;
