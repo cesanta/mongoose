@@ -85,7 +85,8 @@ sub o {
   if ($reply =~ /$expected_reply/s) {
     print "OK\n";
   } else {
-    fail("Requested: [$request]\nExpected: [$expected_reply], got: [$reply]");
+#fail("Requested: [$request]\nExpected: [$expected_reply], got: [$reply]");
+    fail("Expected: [$expected_reply], got: [$reply]");
   }
 }
 
@@ -176,6 +177,11 @@ my $cmd = "$exe ".
   "-url_rewrite_patterns /aiased=/etc/,/ta=$test_dir";
 $cmd .= ' -cgi_interpreter perl' if on_windows();
 spawn($cmd);
+
+  my $x = 'x=' . 'A' x (200 * 1024);
+  my $len = length($x);
+  o("POST /env.cgi HTTP/1.0\r\nContent-Length: $len\r\n\r\n$x",
+    '^HTTP/1.1 200 OK', 'Long POST');
 
 # Try to overflow: Send very long request
 req('POST ' . '/..' x 100 . 'ABCD' x 3000 . "\n\n", 0); # don't log this one
@@ -339,10 +345,6 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   o("GET /hello.txt HTTP/1.0\nAuthorization: $auth_header\n\n", 'HTTP/1.1 200 OK', 'GET regular file with auth');
   unlink "$root/.htpasswd";
 
-  my $x = 'x=' . 'A' x (200 * 1024);
-  my $len = length($x);
-  o("POST /env.cgi HTTP/1.0\r\nContent-Length: $len\r\n\r\n$x",
-    '^HTTP/1.1 200 OK', 'Long POST');
 
   o("GET /env.cgi HTTP/1.0\n\r\n", 'HTTP/1.1 200 OK', 'GET CGI file');
   o("GET /bad2.cgi HTTP/1.0\n\n", "HTTP/1.1 123 Please pass me to the client\r",
@@ -443,7 +445,7 @@ sub do_PUT_test {
 }
 
 sub do_unit_test {
-  my $cmd = "cc -W -Wall -o $unit_test_exe $root/unit_test.c -I. ".
+  my $cmd = "cc -g -W -Wall -o $unit_test_exe $root/unit_test.c -I. ".
     "-pthread -DNO_SSL ";
   if (on_windows()) {
     $cmd = "cl $root/embed.c mongoose.c /I. /nologo /DNO_SSL ".
