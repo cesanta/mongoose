@@ -226,6 +226,10 @@ struct mg_connection *mg_connect(struct mg_context *ctx,
                                  const char *host, int port, int use_ssl);
 
 
+// Close the connection opened by mg_connect().
+void mg_close_connection(struct mg_connection *conn);
+
+
 // Download given URL to a given file.
 //   url: URL to download
 //   path: file name where to save the data
