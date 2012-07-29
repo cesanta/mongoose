@@ -155,6 +155,7 @@ static void test_mg_fetch(void) {
   struct mg_context *ctx;
   struct mg_request_info ri;
   const char *tmp_file = "temporary_file_name_for_unit_test.txt";
+  struct mgstat st;
   FILE *fp;
 
   ASSERT((ctx = mg_start(event_handler, NULL, options)) != NULL);
@@ -182,6 +183,14 @@ static void test_mg_fetch(void) {
   fseek(fp, 0, SEEK_SET);
   ASSERT(fread(buf2, 1, length, fp) == (size_t) length);
   ASSERT(memcmp(buf2, fetch_data, length) == 0);
+  fclose(fp);
+
+  // Fetch big file, mongoose.c
+  ASSERT((fp = mg_fetch(ctx, "http://localhost:33796/mongoose.c",
+                        tmp_file, buf, sizeof(buf), &ri)) != NULL);
+  ASSERT(mg_stat("mongoose.c", &st) == 0);
+  ASSERT(st.size == ftell(fp));
+  ASSERT(!strcmp(ri.request_method, "HTTP/1.1"));
 
   remove(tmp_file);
   mg_stop(ctx);

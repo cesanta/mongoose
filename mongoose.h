@@ -236,9 +236,10 @@ void mg_close_connection(struct mg_connection *conn);
 //   request_info: pointer to a structure that will hold parsed reply headers
 //   buf, bul_len: a buffer for the reply headers
 // Return:
-//   On success, opened file stream to the downloaded contents. The stream
-//   is positioned to the end of the file.
 //   On error, NULL
+//   On success, opened file stream to the downloaded contents. The stream
+//   is positioned to the end of the file. It is a user responsibility
+//   to fclose() opened file stream.
 FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
                char *buf, size_t buf_len, struct mg_request_info *request_info);
 

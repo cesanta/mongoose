@@ -3921,7 +3921,7 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
                             !strcmp(proto, "https"))) == NULL) {
     cry(fc(ctx), "%s: mg_connect(%s): %s", __func__, url, strerror(ERRNO));
   } else {
-    mg_printf(newconn, "GET /%s HTTP/1.0\r\n\r\n", url + n);
+    mg_printf(newconn, "GET /%s HTTP/1.0\r\nHost: %s\r\n\r\n", url + n, host);
     data_length = 0;
     req_length = read_request(NULL, newconn->client.sock,
                               newconn->ssl, buf, buf_len, &data_length);
@@ -3932,16 +3932,18 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
     } else if ((fp = fopen(path, "w+b")) == NULL) {
       cry(fc(ctx), "%s: fopen(%s): %s", __func__, path, strerror(ERRNO));
     } else {
-      data_length -= req_length;
       // Write chunk of data that may be in the user's buffer
+      data_length -= req_length;
       if (data_length > 0 &&
         fwrite(buf + req_length, 1, data_length, fp) != (size_t) data_length) {
         cry(fc(ctx), "%s: fwrite(%s): %s", __func__, path, strerror(ERRNO));
         fclose(fp);
         fp = NULL;
       }
-      // Read the rest of the response and write it to the file
-      while (fp && (data_length = mg_read(newconn, buf2, sizeof(buf2))) > 0) {
+      // Read the rest of the response and write it to the file. Do not use
+      // mg_read() cause we didn't set newconn->content_len properly.
+      while (fp && (data_length = pull(NULL, newconn->client.sock, newconn->ssl,
+                                       buf2, sizeof(buf2))) > 0) {
         if (fwrite(buf2, 1, data_length, fp) != (size_t) data_length) {
           cry(fc(ctx), "%s: fwrite(%s): %s", __func__, path, strerror(ERRNO));
           fclose(fp);
