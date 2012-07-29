@@ -150,7 +150,7 @@ static void test_mg_fetch(void) {
     "listening_ports", "33796",
     NULL,
   };
-  char buf[1000];
+  char buf[2000], buf2[2000];
   int length;
   struct mg_context *ctx;
   struct mg_request_info ri;
@@ -160,26 +160,28 @@ static void test_mg_fetch(void) {
   ASSERT((ctx = mg_start(event_handler, NULL, options)) != NULL);
 
   // Failed fetch, pass invalid URL
-  ASSERT(mg_fetch(ctx, "localhost", tmp_file, &ri) == NULL);
-  ASSERT(mg_fetch(ctx, "localhost:33796", tmp_file, &ri) == NULL);
-  ASSERT(mg_fetch(ctx, "http://$$$.$$$", tmp_file, &ri) == NULL);
+  ASSERT(mg_fetch(ctx, "localhost", tmp_file, buf, sizeof(buf), &ri) == NULL);
+  ASSERT(mg_fetch(ctx, "localhost:33796", tmp_file,
+                  buf, sizeof(buf), &ri) == NULL);
+  ASSERT(mg_fetch(ctx, "http://$$$.$$$", tmp_file,
+                  buf, sizeof(buf), &ri) == NULL);
 
   // Failed fetch, pass invalid file name
   ASSERT(mg_fetch(ctx, "http://localhost:33796/data",
-                  "/this/file/must/not/exist/ever", &ri) == NULL);
+                  "/this/file/must/not/exist/ever",
+                  buf, sizeof(buf), &ri) == NULL);
 
   // Successful fetch
   ASSERT((fp = mg_fetch(ctx, "http://localhost:33796/data",
-                        tmp_file, &ri)) != NULL);
+                        tmp_file, buf, sizeof(buf), &ri)) != NULL);
   ASSERT(ri.num_headers == 2);
-  printf("%s: [%s]\n", __func__, ri.request_method);
   ASSERT(!strcmp(ri.request_method, "HTTP/1.1"));
   ASSERT(!strcmp(ri.uri, "200"));
   ASSERT(!strcmp(ri.http_version, "OK"));
   ASSERT((length = ftell(fp)) == (int) strlen(fetch_data));
   fseek(fp, 0, SEEK_SET);
-  ASSERT(fread(buf, 1, length, fp) == (size_t) length);
-  ASSERT(memcmp(buf, fetch_data, length) == 0);
+  ASSERT(fread(buf2, 1, length, fp) == (size_t) length);
+  ASSERT(memcmp(buf2, fetch_data, length) == 0);
 
   remove(tmp_file);
   mg_stop(ctx);

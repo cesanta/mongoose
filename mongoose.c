@@ -3903,10 +3903,10 @@ struct mg_connection *mg_connect(struct mg_context *ctx,
 }
 
 FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
-               struct mg_request_info *ri) {
+               char *buf, size_t buf_len, struct mg_request_info *ri) {
   struct mg_connection *newconn;
   int n, req_length, data_length, port;
-  char host[1025], proto[10], buf[16384];
+  char host[1025], proto[10], buf2[BUFSIZ];
   FILE *fp = NULL;
 
   if (sscanf(url, "%9[htps]://%1024[^:]:%d/%n", proto, host, &port, &n) == 3) {
@@ -3924,7 +3924,7 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
     mg_printf(newconn, "GET /%s HTTP/1.0\r\n\r\n", url + n);
     data_length = 0;
     req_length = read_request(NULL, newconn->client.sock,
-                              newconn->ssl, buf, sizeof(buf), &data_length);
+                              newconn->ssl, buf, buf_len, &data_length);
     if (req_length <= 0) {
       cry(fc(ctx), "%s(%s): invalid HTTP reply", __func__, url);
     } else if (parse_http_response(buf, req_length, ri) <= 0) {
@@ -3933,23 +3933,28 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
       cry(fc(ctx), "%s: fopen(%s): %s", __func__, path, strerror(ERRNO));
     } else {
       data_length -= req_length;
-      memmove(buf, buf + req_length, data_length);
-      do {
-        if (fwrite(buf, 1, data_length, fp) != (size_t) data_length) {
+      // Write chunk of data that may be in the user's buffer
+      if (data_length > 0 &&
+        fwrite(buf + req_length, 1, data_length, fp) != (size_t) data_length) {
+        cry(fc(ctx), "%s: fwrite(%s): %s", __func__, path, strerror(ERRNO));
+        fclose(fp);
+        fp = NULL;
+      }
+      // Read the rest of the response and write it to the file
+      while (fp && (data_length = mg_read(newconn, buf2, sizeof(buf2))) > 0) {
+        if (fwrite(buf2, 1, data_length, fp) != (size_t) data_length) {
+          cry(fc(ctx), "%s: fwrite(%s): %s", __func__, path, strerror(ERRNO));
           fclose(fp);
           fp = NULL;
           break;
         }
-        data_length = mg_read(newconn, buf, sizeof(buf));
-      } while (data_length > 0);
+      }
     }
     mg_close_connection(newconn);
   }
 
   return fp;
 }
-
-
 
 static void discard_current_request_from_buffer(struct mg_connection *conn) {
   char *buffered;
