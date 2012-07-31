@@ -588,7 +588,7 @@ const char *mg_version(void) {
   return MONGOOSE_VERSION;
 }
 
-void mg_strlcpy(register char *dst, register const char *src, size_t n) {
+static void mg_strlcpy(register char *dst, register const char *src, size_t n) {
   for (; *src != '\0' && n > 1; n--) {
     *dst++ = *src++;
   }
@@ -599,7 +599,7 @@ static int lowercase(const char *s) {
   return tolower(* (const unsigned char *) s);
 }
 
-int mg_strncasecmp(const char *s1, const char *s2, size_t len) {
+static int mg_strncasecmp(const char *s1, const char *s2, size_t len) {
   int diff = 0;
 
   if (len > 0)
@@ -610,7 +610,7 @@ int mg_strncasecmp(const char *s1, const char *s2, size_t len) {
   return diff;
 }
 
-int mg_strcasecmp(const char *s1, const char *s2) {
+static int mg_strcasecmp(const char *s1, const char *s2) {
   int diff;
 
   do {
@@ -620,7 +620,7 @@ int mg_strcasecmp(const char *s1, const char *s2) {
   return diff;
 }
 
-char * mg_strndup(const char *ptr, size_t len) {
+static char * mg_strndup(const char *ptr, size_t len) {
   char *p;
 
   if ((p = (char *) malloc(len + 1)) != NULL) {
@@ -630,7 +630,7 @@ char * mg_strndup(const char *ptr, size_t len) {
   return p;
 }
 
-char * mg_strdup(const char *str) {
+static char * mg_strdup(const char *str) {
   return mg_strndup(str, strlen(str));
 }
 

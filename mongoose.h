@@ -255,14 +255,6 @@ int mg_start_thread(mg_thread_func_t f, void *p);
 const char *mg_get_builtin_mime_type(const char *file_name);
 
 
-// Platform independent string utility functions.
-void mg_strlcpy(char *dst, const char *src, size_t n);
-int mg_strncasecmp(const char *s1, const char *s2, size_t len);
-int mg_strcasecmp(const char *s1, const char *s2);
-char *mg_strndup(const char *ptr, size_t len);
-char *mg_strdup(const char *str);
-
-
 // Return Mongoose version.
 const char *mg_version(void);
 
