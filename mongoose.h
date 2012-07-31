@@ -250,6 +250,11 @@ typedef void * (*mg_thread_func_t)(void *);
 int mg_start_thread(mg_thread_func_t f, void *p);
 
 
+// Return builtin mime type for the given file name.
+// For unrecognized extensions, "text/plain" is returned.
+const char *mg_get_builtin_mime_type(const char *file_name);
+
+
 // Platform independent string utility functions.
 void mg_strlcpy(char *dst, const char *src, size_t n);
 int mg_strncasecmp(const char *s1, const char *s2, size_t len);
