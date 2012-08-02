@@ -122,7 +122,7 @@ typedef long off_t;
 #define close(x) _close(x)
 #define dlsym(x,y) GetProcAddress((HINSTANCE) (x), (y))
 #define RTLD_LAZY  0
-#define fseeko(x, y, z) fseek((x), (y), (z))
+#define fseeko(x, y, z) _lseeki64(_fileno(x), (y), (z))
 #define fdopen(x, y) _fdopen((x), (y))
 #define write(x, y, z) _write((x), (y), (unsigned) z)
 #define read(x, y, z) _read((x), (y), (unsigned) z)
@@ -2554,7 +2554,7 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
   hdr = mg_get_header(conn, "Range");
   if (hdr != NULL && (n = parse_range_header(hdr, &r1, &r2)) > 0) {
     conn->request_info.status_code = 206;
-    (void) fseeko(fp, (off_t) r1, SEEK_SET);
+    (void) fseeko(fp, r1, SEEK_SET);
     cl = n == 2 ? r2 - r1 + 1: cl - r1;
     (void) mg_snprintf(conn, range, sizeof(range),
         "Content-Range: bytes "
@@ -3138,7 +3138,7 @@ static void put_file(struct mg_connection *conn, const char *path) {
     if (range != NULL && parse_range_header(range, &r1, &r2) > 0) {
       conn->request_info.status_code = 206;
       // TODO(lsm): handle seek error
-      (void) fseeko(fp, (off_t) r1, SEEK_SET);
+      (void) fseeko(fp, r1, SEEK_SET);
     }
     if (forward_body_data(conn, fp, INVALID_SOCKET, NULL))
       (void) mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n",
