@@ -1303,7 +1303,6 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
       (void) close(fd_stdin);
       (void) close(fd_stdout);
 
-      // Execute CGI program. No need to lock: new process
       interp = conn->ctx->config[CGI_INTERPRETER];
       if (interp == NULL) {
         (void) execle(prog, prog, NULL, envp);
@@ -1728,6 +1727,7 @@ static const struct {
   {".m3u", 4, "audio/x-mpegurl"},
   {".ram", 4, "audio/x-pn-realaudio"},
   {".xml", 4, "text/xml"},
+  {".json",  5, "text/json"},
   {".xslt", 5, "application/xml"},
   {".ra",  3, "audio/x-pn-realaudio"},
   {".doc", 4, "application/msword"},
@@ -3003,6 +3003,9 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
       !forward_body_data(conn, in, INVALID_SOCKET, NULL)) {
     goto done;
   }
+  // Close so child gets an EOF.
+  fclose(in);
+  in = NULL;
 
   // Now read CGI reply into a buffer. We need to set correct
   // status code, thus we need to see all HTTP headers first.
