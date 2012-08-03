@@ -73,10 +73,7 @@ class mg_request_info(ctypes.Structure):
   ]
 
 
-mg_callback_t = ctypes.CFUNCTYPE(ctypes.c_void_p,
-                 ctypes.c_int,
-                 ctypes.c_void_p,
-                 ctypes.POINTER(mg_request_info))
+mg_callback_t = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
 
 
 class Connection(object):
@@ -86,6 +83,7 @@ class Connection(object):
   def __init__(self, mongoose, connection):
     self.m = mongoose
     self.conn = ctypes.c_void_p(connection)
+    self.info = self.m.dll.mg_get_request_info(self.conn).contents
 
   def get_header(self, name):
     val = self.m.dll.mg_get_header(self.conn, name)
@@ -132,14 +130,15 @@ class Mongoose(object):
     self.dll.mg_get_var.restype = ctypes.c_int
     self.dll.mg_get_cookie.restype = ctypes.c_int
     self.dll.mg_get_option.restype = ctypes.c_char_p
+    self.dll.mg_get_request_info.restype = ctypes.POINTER(mg_request_info)
 
     if callback:
       # Create a closure that will be called by the  shared library.
-      def func(event, connection, request_info):
+      def func(event, connection):
         # Wrap connection pointer into the connection
         # object and call Python callback
         conn = Connection(self, connection)
-        return callback(event, conn, request_info.contents) and 1 or 0
+        return callback(event, conn) and 1 or 0
 
       # Convert the closure into C callable object
       self.callback = mg_callback_t(func)

@@ -129,8 +129,8 @@ static void test_remove_double_dots() {
 
 static const char *fetch_data = "hello world!\n";
 static void *event_handler(enum mg_event event,
-                           struct mg_connection *conn,
-                           const struct mg_request_info *request_info) {
+                           struct mg_connection *conn) {
+  const struct mg_request_info *request_info = mg_get_request_info(conn);
   if (event == MG_NEW_REQUEST && !strcmp(request_info->uri, "/data")) {
     mg_printf(conn, "HTTP/1.1 200 OK\r\n"
               "Content-Length: %d\r\n"

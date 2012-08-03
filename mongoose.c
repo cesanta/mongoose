@@ -492,7 +492,7 @@ const char **mg_get_valid_option_names(void) {
 static void *call_user(struct mg_connection *conn, enum mg_event event) {
   conn->request_info.user_data = conn->ctx->user_data;
   return conn->ctx->user_callback == NULL ? NULL :
-    conn->ctx->user_callback(event, conn, &conn->request_info);
+    conn->ctx->user_callback(event, conn);
 }
 
 static int get_option_index(const char *name) {
@@ -586,6 +586,10 @@ static struct mg_connection *fc(struct mg_context *ctx) {
 
 const char *mg_version(void) {
   return MONGOOSE_VERSION;
+}
+
+const struct mg_request_info *mg_get_request_info(struct mg_connection *conn) {
+  return &conn->request_info;
 }
 
 static void mg_strlcpy(register char *dst, register const char *src, size_t n) {
@@ -3758,8 +3762,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   } else if (ctx->user_callback != NULL) {
     memset(&request_info, 0, sizeof(request_info));
     request_info.user_data = ctx->user_data;
-    ctx->user_callback(MG_INIT_SSL, (struct mg_connection *) ctx->ssl_ctx,
-                       &request_info);
+    ctx->user_callback(MG_INIT_SSL, (struct mg_connection *) ctx->ssl_ctx);
   }
 
   if (ctx->ssl_ctx != NULL && pem != NULL &&

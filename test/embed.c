@@ -155,8 +155,8 @@ static const struct test_config {
 };
 
 static void *callback(enum mg_event event,
-                      struct mg_connection *conn,
-                      const struct mg_request_info *request_info) {
+                      struct mg_connection *conn) {
+  const struct mg_request_info *request_info = mg_get_request_info(conn);
   int i;
 
   for (i = 0; test_config[i].uri != NULL; i++) {

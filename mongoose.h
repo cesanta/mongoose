@@ -68,7 +68,6 @@ enum mg_event {
 //   event: which event has been triggered.
 //   conn: opaque connection handler. Could be used to read, write data to the
 //         client, etc. See functions below that have "mg_connection *" arg.
-//   request_info: Information about HTTP request.
 //
 // Return:
 //   If handler returns non-NULL, that means that handler has processed the
@@ -78,8 +77,7 @@ enum mg_event {
 //   the request. Handler must not send any data to the client in this case.
 //   Mongoose proceeds with request handling as if nothing happened.
 typedef void * (*mg_callback_t)(enum mg_event event,
-                                struct mg_connection *conn,
-                                const struct mg_request_info *request_info);
+                                struct mg_connection *conn);
 
 
 // Start web server.
@@ -150,6 +148,12 @@ int mg_modify_passwords_file(const char *passwords_file_name,
                              const char *domain,
                              const char *user,
                              const char *password);
+
+
+// Return mg_request_info structure associated with the request.
+// Always succeeds.
+const struct mg_request_info *mg_get_request_info(struct mg_connection *);
+
 
 // Send data to the client.
 int mg_write(struct mg_connection *, const void *buf, size_t len);
