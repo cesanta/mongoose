@@ -326,8 +326,8 @@ static void redirect_to_ssl(struct mg_connection *conn,
 }
 
 static void *event_handler(enum mg_event event,
-                           struct mg_connection *conn,
-                           const struct mg_request_info *request_info) {
+                           struct mg_connection *conn) {
+  const struct mg_request_info *request_info = mg_get_request_info(conn);
   void *processed = "yes";
 
   if (event == MG_NEW_REQUEST) {
