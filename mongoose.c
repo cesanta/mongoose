@@ -3772,12 +3772,12 @@ static int set_ssl_option(struct mg_context *ctx) {
   }
   if (ctx->ssl_ctx != NULL && pem != NULL &&
       SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0) {
-    cry(fc(ctx), "%s: cannot open %s: %s", NULL, pem, ssl_error());
+    cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
     return 0;
   }
   if (ctx->ssl_ctx != NULL && chain != NULL &&
       SSL_CTX_use_certificate_chain_file(ctx->ssl_ctx, chain) == 0) {
-    cry(fc(ctx), "%s: cannot open %s: %s", NULL, chain, ssl_error());
+    cry(fc(ctx), "%s: cannot open %s: %s", __func__, chain, ssl_error());
     return 0;
   }
 
