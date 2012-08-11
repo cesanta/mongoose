@@ -216,6 +216,14 @@ static void init_server_name(void) {
            mg_version());
 }
 
+static void *mongoose_callback(enum mg_event ev, struct mg_connection *conn) {
+  if (ev == MG_EVENT_LOG) {
+    printf("%s\n", mg_get_request_info(conn)->log_message);
+  }
+
+  return NULL;
+}
+
 static void start_mongoose(int argc, char *argv[]) {
   char *options[MAX_OPTIONS];
   int i;
@@ -242,15 +250,13 @@ static void start_mongoose(int argc, char *argv[]) {
   signal(SIGINT, signal_handler);
 
   /* Start Mongoose */
-  ctx = mg_start(NULL, NULL, (const char **) options);
+  ctx = mg_start(&mongoose_callback, NULL, (const char **) options);
   for (i = 0; options[i] != NULL; i++) {
     free(options[i]);
   }
 
   if (ctx == NULL) {
-    die("%s", "Failed to start Mongoose. Maybe some options are "
-        "assigned bad values?\nTry to run with '-e error_log.txt' "
-        "and check error_log.txt for more information.");
+    die("%s", "Failed to start Mongoose.");
   }
 }
 
