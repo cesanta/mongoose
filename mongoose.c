@@ -408,14 +408,15 @@ struct socket {
   int is_ssl;           // Is socket SSL-ed
 };
 
+// NOTE(lsm): this enum shoulds be in sync with the config_options below.
 enum {
   CGI_EXTENSIONS, CGI_ENVIRONMENT, PUT_DELETE_PASSWORDS_FILE, CGI_INTERPRETER,
   PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS, ACCESS_LOG_FILE,
   SSL_CHAIN_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
   GLOBAL_PASSWORDS_FILE, INDEX_FILES,
   ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST, MAX_REQUEST_SIZE,
-  EXTRA_MIME_TYPES, LISTENING_PORTS,
-  DOCUMENT_ROOT, SSL_CERTIFICATE, NUM_THREADS, RUN_AS_USER, REWRITE,
+  EXTRA_MIME_TYPES, LISTENING_PORTS, DOCUMENT_ROOT, SSL_CERTIFICATE,
+  NUM_THREADS, RUN_AS_USER, REWRITE, HIDE_FILES,
   NUM_OPTIONS
 };
 
@@ -443,6 +444,7 @@ static const char *config_options[] = {
   "t", "num_threads", "10",
   "u", "run_as_user", NULL,
   "w", "url_rewrite_patterns", NULL,
+  "x", "hide_files_patterns", NULL,
   NULL
 };
 #define ENTRIES_PER_CONFIG_OPTION 3
@@ -858,7 +860,6 @@ static void send_http_error(struct mg_connection *conn, int status,
     // Errors 1xx, 204 and 304 MUST NOT send a body
     if (status > 199 && status != 204 && status != 304) {
       len = mg_snprintf(conn, buf, sizeof(buf), "Error %d: %s", status, reason);
-      cry(conn, "%s", buf);
       buf[len++] = '\n';
 
       va_start(ap, fmt);
@@ -2385,6 +2386,13 @@ static int WINCDECL compare_dir_entries(const void *p1, const void *p2) {
   return query_string[1] == 'd' ? -cmp_result : cmp_result;
 }
 
+static int must_hide_file(struct mg_connection *conn, const char *path) {
+  const char *pw_pattern = "**" PASSWORDS_FILE_NAME "$";
+  const char *pattern = conn->ctx->config[HIDE_FILES];
+  return match_prefix(pw_pattern, strlen(pw_pattern), path) > 0 ||
+    (pattern != NULL && match_prefix(pattern, strlen(pattern), path) > 0);
+}
+
 static int scan_directory(struct mg_connection *conn, const char *dir,
                           void *data, void (*cb)(struct de *, void *)) {
   char path[PATH_MAX];
@@ -2398,11 +2406,12 @@ static int scan_directory(struct mg_connection *conn, const char *dir,
     de.conn = conn;
 
     while ((dp = readdir(dirp)) != NULL) {
-      // Do not show current dir and passwords file
+      // Do not show current dir and hidden files
       if (!strcmp(dp->d_name, ".") ||
           !strcmp(dp->d_name, "..") ||
-          !strcmp(dp->d_name, PASSWORDS_FILE_NAME))
+          must_hide_file(conn, dp->d_name)) {
         continue;
+      }
 
       mg_snprintf(conn, path, sizeof(path), "%s%c%s", dir, DIRSEP, dp->d_name);
 
@@ -3399,9 +3408,6 @@ static void handle_request(struct mg_connection *conn) {
     // Do nothing, callback has served the request
   } else if (!strcmp(ri->request_method, "OPTIONS")) {
     send_options(conn);
-  } else if (strstr(path, PASSWORDS_FILE_NAME)) {
-    // Do not allow to view passwords files
-    send_http_error(conn, 403, "Forbidden", "Access Forbidden");
   } else if (conn->ctx->config[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, "Not Found", "Not Found");
   } else if ((!strcmp(ri->request_method, "PUT") ||
@@ -3418,12 +3424,11 @@ static void handle_request(struct mg_connection *conn) {
       send_http_error(conn, 500, http_500_error, "remove(%s): %s", path,
                       strerror(ERRNO));
     }
-  } else if (stat_result != 0) {
+  } else if (stat_result != 0 || must_hide_file(conn, path)) {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
   } else if (st.is_directory && ri->uri[uri_len - 1] != '/') {
-    (void) mg_printf(conn,
-        "HTTP/1.1 301 Moved Permanently\r\n"
-        "Location: %s/\r\n\r\n", ri->uri);
+    (void) mg_printf(conn, "HTTP/1.1 301 Moved Permanently\r\n"
+                     "Location: %s/\r\n\r\n", ri->uri);
   } else if (!strcmp(ri->request_method, "PROPFIND")) {
     handle_propfind(conn, path, &st);
   } else if (st.is_directory &&
@@ -4322,7 +4327,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
       return NULL;
     }
     if (ctx->config[i] != NULL) {
-      cry(fc(ctx), "%s: duplicate option", name);
+      cry(fc(ctx), "warning: %s: duplicate option", name);
     }
     ctx->config[i] = mg_strdup(value);
     DEBUG_TRACE(("[%s] -> [%s]", name, value));
