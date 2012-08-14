@@ -2531,6 +2531,12 @@ static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
   strftime(buf, buf_len, "%a, %d %b %Y %H:%M:%S GMT", gmtime(t));
 }
 
+static void construct_etag(char *buf, size_t buf_len,
+                           const struct mgstat *stp) {
+  snprintf(buf, buf_len, "\"%lx.%" INT64_FMT "\"",
+           (unsigned long) stp->mtime, stp->size);
+}
+
 static void handle_file_request(struct mg_connection *conn, const char *path,
                                 struct mgstat *stp) {
   char date[64], lm[64], etag[64], range[64];
@@ -2572,14 +2578,13 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
   // http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.3
   gmt_time_string(date, sizeof(date), &curtime);
   gmt_time_string(lm, sizeof(lm), &stp->mtime);
-  (void) mg_snprintf(conn, etag, sizeof(etag), "%lx.%lx",
-      (unsigned long) stp->mtime, (unsigned long) stp->size);
+  construct_etag(etag, sizeof(etag), stp);
 
   (void) mg_printf(conn,
       "HTTP/1.1 %d %s\r\n"
       "Date: %s\r\n"
       "Last-Modified: %s\r\n"
-      "Etag: \"%s\"\r\n"
+      "Etag: %s\r\n"
       "Content-Type: %.*s\r\n"
       "Content-Length: %" INT64_FMT "\r\n"
       "Connection: %s\r\n"
@@ -2737,8 +2742,12 @@ static int substitute_index_file(struct mg_connection *conn, char *path,
 // Return True if we should reply 304 Not Modified.
 static int is_not_modified(const struct mg_connection *conn,
                            const struct mgstat *stp) {
+  char etag[40];
   const char *ims = mg_get_header(conn, "If-Modified-Since");
-  return ims != NULL && stp->mtime <= parse_date_string(ims);
+  const char *inm = mg_get_header(conn, "If-None-Match");
+  construct_etag(etag, sizeof(etag), stp);
+  return (inm != NULL && !mg_strcasecmp(etag, inm)) ||
+    (ims != NULL && stp->mtime <= parse_date_string(ims));
 }
 
 static int forward_body_data(struct mg_connection *conn, FILE *fp,
