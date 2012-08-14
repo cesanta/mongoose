@@ -90,19 +90,20 @@ static void show_usage_and_exit(void) {
   const char **names;
   int i;
 
-  fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka\n", mg_version());
+  fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka, built %s\n",
+          mg_version(), __DATE__);
   fprintf(stderr, "Usage:\n");
   fprintf(stderr, "  mongoose -A <htpasswd_file> <realm> <user> <passwd>\n");
   fprintf(stderr, "  mongoose <config_file>\n");
   fprintf(stderr, "  mongoose [-option value ...]\n");
-  fprintf(stderr, "OPTIONS:\n");
+  fprintf(stderr, "\nOPTIONS:\n");
 
   names = mg_get_valid_option_names();
   for (i = 0; names[i] != NULL; i += 3) {
     fprintf(stderr, "  -%s %s (default: \"%s\")\n",
             names[i], names[i + 1], names[i + 2] == NULL ? "" : names[i + 2]);
   }
-  fprintf(stderr, "See  http://code.google.com/p/mongoose/wiki/MongooseManual"
+  fprintf(stderr, "\nSee  http://code.google.com/p/mongoose/wiki/MongooseManual"
           " for more details.\n");
   fprintf(stderr, "Example:\n  mongoose -s cert.pem -p 80,443s -d no\n");
   exit(EXIT_FAILURE);
