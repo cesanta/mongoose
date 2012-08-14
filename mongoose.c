@@ -69,7 +69,6 @@
 #define NO_CGI // WinCE has no pipes
 
 typedef long off_t;
-#define BUFSIZ  4096
 
 #define errno   GetLastError()
 #define strerror(x)  _ultoa(x, (char *) _alloca(sizeof(x) *3 ), 10)
@@ -116,7 +115,7 @@ typedef long off_t;
 #define vsnprintf _vsnprintf
 #define mg_sleep(x) Sleep(x)
 
-#define pipe(x) _pipe(x, BUFSIZ, _O_BINARY)
+#define pipe(x) _pipe(x, MG_BUF_LEN, _O_BINARY)
 #define popen(x, y) _popen(x, y)
 #define pclose(x) _pclose(x)
 #define close(x) _close(x)
@@ -222,6 +221,7 @@ typedef int SOCKET;
 #define PASSWORDS_FILE_NAME ".htpasswd"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
+#define MG_BUF_LEN 8192
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
 
 #ifdef _WIN32
@@ -535,7 +535,7 @@ static void sockaddr_to_string(char *buf, size_t len,
 
 // Print error message to the opened error log stream.
 static void cry(struct mg_connection *conn, const char *fmt, ...) {
-  char buf[BUFSIZ], src_addr[20];
+  char buf[MG_BUF_LEN], src_addr[20];
   va_list ap;
   FILE *fp;
   time_t timestamp;
@@ -845,7 +845,7 @@ static const char *suggest_connection_header(const struct mg_connection *conn) {
 
 static void send_http_error(struct mg_connection *conn, int status,
                             const char *reason, const char *fmt, ...) {
-  char buf[BUFSIZ];
+  char buf[MG_BUF_LEN];
   va_list ap;
   int len;
 
@@ -1447,7 +1447,7 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
 }
 
 int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
-  char buf[BUFSIZ];
+  char buf[MG_BUF_LEN];
   int len;
   va_list ap;
 
@@ -2151,7 +2151,7 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
 // Authorize against the opened passwords file. Return 1 if authorized.
 static int authorize(struct mg_connection *conn, FILE *fp) {
   struct ah ah;
-  char line[256], f_user[256], ha1[256], f_domain[256], buf[BUFSIZ];
+  char line[256], f_user[256], ha1[256], f_domain[256], buf[MG_BUF_LEN];
 
   if (!parse_auth_header(conn, buf, sizeof(buf), &ah)) {
     return 0;
@@ -2500,7 +2500,7 @@ static void handle_directory_request(struct mg_connection *conn,
 
 // Send len bytes from the opened file to the client.
 static void send_file_data(struct mg_connection *conn, FILE *fp, int64_t len) {
-  char buf[BUFSIZ];
+  char buf[MG_BUF_LEN];
   int to_read, num_read, num_written;
 
   while (len > 0) {
@@ -2753,7 +2753,7 @@ static int is_not_modified(const struct mg_connection *conn,
 static int forward_body_data(struct mg_connection *conn, FILE *fp,
                              SOCKET sock, SSL *ssl) {
   const char *expect, *buffered;
-  char buf[BUFSIZ];
+  char buf[MG_BUF_LEN];
   int to_read, nread, buffered_len, success = 0;
 
   expect = mg_get_header(conn, "Expect");
@@ -3167,11 +3167,11 @@ static void send_ssi_file(struct mg_connection *, const char *, FILE *, int);
 
 static void do_ssi_include(struct mg_connection *conn, const char *ssi,
                            char *tag, int include_level) {
-  char file_name[BUFSIZ], path[PATH_MAX], *p;
+  char file_name[MG_BUF_LEN], path[PATH_MAX], *p;
   FILE *fp;
 
   // sscanf() is safe here, since send_ssi_file() also uses buffer
-  // of size BUFSIZ to get the tag. So strlen(tag) is always < BUFSIZ.
+  // of size MG_BUF_LEN to get the tag. So strlen(tag) is always < MG_BUF_LEN.
   if (sscanf(tag, " virtual=\"%[^\"]\"", file_name) == 1) {
     // File name is relative to the webserver root
     (void) mg_snprintf(conn, path, sizeof(path), "%s%c%s",
@@ -3210,7 +3210,7 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
 
 #if !defined(NO_POPEN)
 static void do_ssi_exec(struct mg_connection *conn, char *tag) {
-  char cmd[BUFSIZ];
+  char cmd[MG_BUF_LEN];
   FILE *fp;
 
   if (sscanf(tag, " \"%[^\"]\"", cmd) != 1) {
@@ -3226,7 +3226,7 @@ static void do_ssi_exec(struct mg_connection *conn, char *tag) {
 
 static void send_ssi_file(struct mg_connection *conn, const char *path,
                           FILE *fp, int include_level) {
-  char buf[BUFSIZ];
+  char buf[MG_BUF_LEN];
   int ch, len, in_ssi_tag;
 
   if (include_level > 10) {
@@ -3841,7 +3841,7 @@ static void reset_per_request_attributes(struct mg_connection *conn) {
 }
 
 static void close_socket_gracefully(SOCKET sock) {
-  char buf[BUFSIZ];
+  char buf[MG_BUF_LEN];
   struct linger linger;
   int n;
 
@@ -3927,7 +3927,7 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
                char *buf, size_t buf_len, struct mg_request_info *ri) {
   struct mg_connection *newconn;
   int n, req_length, data_length, port;
-  char host[1025], proto[10], buf2[BUFSIZ];
+  char host[1025], proto[10], buf2[MG_BUF_LEN];
   FILE *fp = NULL;
 
   if (sscanf(url, "%9[htps]://%1024[^:]:%d/%n", proto, host, &port, &n) == 3) {
