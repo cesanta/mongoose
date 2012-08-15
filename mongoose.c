@@ -411,10 +411,9 @@ struct socket {
 // NOTE(lsm): this enum shoulds be in sync with the config_options below.
 enum {
   CGI_EXTENSIONS, CGI_ENVIRONMENT, PUT_DELETE_PASSWORDS_FILE, CGI_INTERPRETER,
-  PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS, ACCESS_LOG_FILE,
-  SSL_CHAIN_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
-  GLOBAL_PASSWORDS_FILE, INDEX_FILES,
-  ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST, MAX_REQUEST_SIZE,
+  MAX_REQUEST_SIZE, PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS,
+  ACCESS_LOG_FILE, SSL_CHAIN_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
+  GLOBAL_PASSWORDS_FILE, INDEX_FILES, ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST,
   EXTRA_MIME_TYPES, LISTENING_PORTS, DOCUMENT_ROOT, SSL_CERTIFICATE,
   NUM_THREADS, RUN_AS_USER, REWRITE, HIDE_FILES,
   NUM_OPTIONS
@@ -425,6 +424,7 @@ static const char *config_options[] = {
   "E", "cgi_environment", NULL,
   "G", "put_delete_passwords_file", NULL,
   "I", "cgi_interpreter", NULL,
+  "M", "max_request_size", "16384",
   "P", "protect_uri", NULL,
   "R", "authentication_domain", "mydomain.com",
   "S", "ssi_pattern", "**.shtml$|**.shtm$",
@@ -436,7 +436,6 @@ static const char *config_options[] = {
   "i", "index_files", "index.html,index.htm,index.cgi,index.shtml,index.php",
   "k", "enable_keep_alive", "no",
   "l", "access_control_list", NULL,
-  "M", "max_request_size", "16384",
   "m", "extra_mime_types", NULL,
   "p", "listening_ports", "8080",
   "r", "document_root",  ".",
