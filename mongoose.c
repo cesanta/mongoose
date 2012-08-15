@@ -1372,11 +1372,11 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
 
 // Read from IO channel - opened file descriptor, socket, or SSL descriptor.
 // Return number of bytes read.
-static int pull(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int len) {
+static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
   int nread;
 
-  if (ssl != NULL) {
-    nread = SSL_read(ssl, buf, len);
+  if (conn->ssl != NULL) {
+    nread = SSL_read(conn->ssl, buf, len);
   } else if (fp != NULL) {
     // Use read() instead of fread(), because if we're reading from the CGI
     // pipe, fread() may block until IO buffer is filled up. We cannot afford
@@ -1385,7 +1385,7 @@ static int pull(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int len) {
     if (ferror(fp))
       nread = -1;
   } else {
-    nread = recv(sock, buf, (size_t) len, 0);
+    nread = recv(conn->client.sock, buf, (size_t) len, 0);
   }
 
   return nread;
@@ -1428,7 +1428,7 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
 
     // We have returned all buffered data. Read new data from the remote socket.
     while (len > 0) {
-      n = pull(NULL, conn->client.sock, conn->ssl, (char *) buf, (int) len);
+      n = pull(NULL, conn, (char *) buf, (int) len);
       if (n <= 0) {
         break;
       }
@@ -2685,14 +2685,14 @@ static int parse_http_response(char *buf, int len, struct mg_request_info *ri) {
 // buffer (which marks the end of HTTP request). Buffer buf may already
 // have some data. The length of the data is stored in nread.
 // Upon every read operation, increase nread by the number of bytes read.
-static int read_request(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int bufsiz,
-                        int *nread) {
+static int read_request(FILE *fp, struct mg_connection *conn,
+                        char *buf, int bufsiz, int *nread) {
   int request_len, n = 0;
 
   do {
     request_len = get_request_len(buf, *nread);
     if (request_len == 0 &&
-        (n = pull(fp, sock, ssl, buf + *nread, bufsiz - *nread)) > 0) {
+        (n = pull(fp, conn, buf + *nread, bufsiz - *nread)) > 0) {
       *nread += n;
     }
   } while (*nread <= bufsiz && request_len == 0 && n > 0);
@@ -2794,7 +2794,7 @@ static int forward_body_data(struct mg_connection *conn, FILE *fp,
       if ((int64_t) to_read > conn->content_len - conn->consumed_content) {
         to_read = (int) (conn->content_len - conn->consumed_content);
       }
-      nread = pull(NULL, conn->client.sock, conn->ssl, buf, to_read);
+      nread = pull(NULL, conn, buf, to_read);
       if (nread <= 0 || push(fp, sock, ssl, buf, nread) != nread) {
         break;
       }
@@ -3033,8 +3033,10 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   // Do not send anything back to client, until we buffer in all
   // HTTP headers.
   data_len = 0;
-  headers_len = read_request(out, INVALID_SOCKET, NULL,
-                             buf, sizeof(buf), &data_len);
+  struct mg_connection fake;
+  fake.client.sock = INVALID_SOCKET;
+  fake.ssl = NULL;
+  headers_len = read_request(out, &fake, buf, sizeof(buf), &data_len);
   if (headers_len <= 0) {
     send_http_error(conn, 500, http_500_error,
                     "CGI program sent malformed HTTP headers: [%.*s]",
@@ -3844,10 +3846,10 @@ static void reset_per_request_attributes(struct mg_connection *conn) {
   conn->must_close = 0;
 }
 
-static void close_socket_gracefully(SOCKET sock) {
+static void close_socket_gracefully(struct mg_connection *conn) {
   char buf[MG_BUF_LEN];
   struct linger linger;
-  int n;
+  int n, sock = conn->client.sock;
 
   // Set linger option to avoid socket hanging out after close. This prevent
   // ephemeral port exhaust problem under high QPS.
@@ -3865,7 +3867,7 @@ static void close_socket_gracefully(SOCKET sock) {
   // when server decide to close the connection; then when client
   // does recv() it gets no data back.
   do {
-    n = pull(NULL, sock, NULL, buf, sizeof(buf));
+    n = pull(NULL, conn, buf, sizeof(buf));
   } while (n > 0);
 
   // Now we know that our FIN is ACK-ed, safe to close
@@ -3879,7 +3881,7 @@ static void close_connection(struct mg_connection *conn) {
   }
 
   if (conn->client.sock != INVALID_SOCKET) {
-    close_socket_gracefully(conn->client.sock);
+    close_socket_gracefully(conn);
   }
 }
 
@@ -3948,8 +3950,7 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
   } else {
     mg_printf(newconn, "GET /%s HTTP/1.0\r\nHost: %s\r\n\r\n", url + n, host);
     data_length = 0;
-    req_length = read_request(NULL, newconn->client.sock,
-                              newconn->ssl, buf, buf_len, &data_length);
+    req_length = read_request(NULL, newconn, buf, buf_len, &data_length);
     if (req_length <= 0) {
       cry(fc(ctx), "%s(%s): invalid HTTP reply", __func__, url);
     } else if (parse_http_response(buf, req_length, ri) <= 0) {
@@ -3967,8 +3968,7 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
       }
       // Read the rest of the response and write it to the file. Do not use
       // mg_read() cause we didn't set newconn->content_len properly.
-      while (fp && (data_length = pull(NULL, newconn->client.sock, newconn->ssl,
-                                       buf2, sizeof(buf2))) > 0) {
+      while (fp && (data_length = pull(0, newconn, buf2, sizeof(buf2))) > 0) {
         if (fwrite(buf2, 1, data_length, fp) != (size_t) data_length) {
           cry(fc(ctx), "%s: fwrite(%s): %s", __func__, path, strerror(ERRNO));
           fclose(fp);
@@ -4020,8 +4020,7 @@ static void process_new_connection(struct mg_connection *conn) {
 
   do {
     reset_per_request_attributes(conn);
-    conn->request_len = read_request(NULL, conn->client.sock, conn->ssl,
-                                     conn->buf, conn->buf_size,
+    conn->request_len = read_request(NULL, conn, conn->buf, conn->buf_size,
                                      &conn->data_len);
     assert(conn->data_len >= conn->request_len);
     if (conn->request_len == 0 && conn->data_len == conn->buf_size) {
