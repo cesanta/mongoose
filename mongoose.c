@@ -250,6 +250,7 @@ static pthread_t pthread_self(void) {
 #ifdef NO_SOCKLEN_T
 typedef int socklen_t;
 #endif // NO_SOCKLEN_T
+#define _DARWIN_UNLIMITED_SELECT
 
 #if !defined(MSG_NOSIGNAL)
 #define MSG_NOSIGNAL 0
@@ -1370,25 +1371,47 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
   return sent;
 }
 
+// This function is needed to prevent Mongoose to be stuck in a blocking
+// socket read when user requested exit. To do that, we sleep in select
+// with a timeout, and when returned, check the context for the stop flag.
+// If it is set, we return 0, and this means that we must not continue
+// reading, must give up and close the connection and exit serving thread.
+static int wait_until_socket_is_readable(struct mg_connection *conn) {
+  int result;
+  struct timeval tv;
+  fd_set set;
+  
+  do {
+    tv.tv_sec = 0;
+    tv.tv_usec = 300 * 1000;
+    FD_ZERO(&set);
+    FD_SET(conn->client.sock, &set);
+    result = select(conn->client.sock + 1, &set, NULL, NULL, &tv);
+  } while ((result == 0 || (result < 0 && ERRNO == EINTR)) &&
+           conn->ctx->stop_flag == 0);
+
+  return conn->ctx->stop_flag || result < 0 ? 0 : 1;
+}
+
 // Read from IO channel - opened file descriptor, socket, or SSL descriptor.
 // Return number of bytes read.
 static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
   int nread;
 
-  if (conn->ssl != NULL) {
-    nread = SSL_read(conn->ssl, buf, len);
-  } else if (fp != NULL) {
+  if (fp != NULL) {
     // Use read() instead of fread(), because if we're reading from the CGI
     // pipe, fread() may block until IO buffer is filled up. We cannot afford
     // to block and must pass all read bytes immediately to the client.
     nread = read(fileno(fp), buf, (size_t) len);
-    if (ferror(fp))
-      nread = -1;
+  } else if (!wait_until_socket_is_readable(conn)) {
+    nread = -1;
+  } else if (conn->ssl != NULL) {
+    nread = SSL_read(conn->ssl, buf, len);
   } else {
     nread = recv(conn->client.sock, buf, (size_t) len, 0);
   }
 
-  return nread;
+  return conn->ctx->stop_flag ? -1 : nread;
 }
 
 int mg_read(struct mg_connection *conn, void *buf, size_t len) {
@@ -2697,7 +2720,7 @@ static int read_request(FILE *fp, struct mg_connection *conn,
     }
   } while (*nread <= bufsiz && request_len == 0 && n > 0);
 
-  return request_len;
+  return n < 0 ? -1 : request_len;
 }
 
 // For given directory path, substitute it to valid index file.
@@ -3033,10 +3056,7 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   // Do not send anything back to client, until we buffer in all
   // HTTP headers.
   data_len = 0;
-  struct mg_connection fake;
-  fake.client.sock = INVALID_SOCKET;
-  fake.ssl = NULL;
-  headers_len = read_request(out, &fake, buf, sizeof(buf), &data_len);
+  headers_len = read_request(out, fc(conn->ctx), buf, sizeof(buf), &data_len);
   if (headers_len <= 0) {
     send_http_error(conn, 500, http_500_error,
                     "CGI program sent malformed HTTP headers: [%.*s]",
