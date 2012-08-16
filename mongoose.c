@@ -4042,7 +4042,7 @@ static void process_new_connection(struct mg_connection *conn) {
     reset_per_request_attributes(conn);
     conn->request_len = read_request(NULL, conn, conn->buf, conn->buf_size,
                                      &conn->data_len);
-    assert(conn->data_len >= conn->request_len);
+    assert(conn->request_len < 0 || conn->data_len >= conn->request_len);
     if (conn->request_len == 0 && conn->data_len == conn->buf_size) {
       send_http_error(conn, 413, "Request Too Large", "");
       return;
