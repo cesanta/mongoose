@@ -440,6 +440,11 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
           PostMessage(hWnd, WM_NULL, 0, 0);
           DestroyMenu(hMenu);
           break;
+        case WM_CLOSE:
+          mg_stop(ctx);
+          Shell_NotifyIcon(NIM_DELETE, &TrayIcon);
+          PostQuitMessage(0);
+          return 0;  // We've just sent our own quit message, with proper hwnd.
       }
       break;
   }
@@ -473,10 +478,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
   TrayIcon.uCallbackMessage = WM_USER;
   Shell_NotifyIcon(NIM_ADD, &TrayIcon);
 
-  while (GetMessage(&msg, hWnd, 0, 0)) {
+  while (GetMessage(&msg, hWnd, 0, 0) > 0) {
     TranslateMessage(&msg);
     DispatchMessage(&msg);
   }
+
+  return msg.wParam;
 }
 #else
 int main(int argc, char *argv[]) {
