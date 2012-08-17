@@ -481,6 +481,8 @@ struct mg_connection {
   int64_t consumed_content;   // How many bytes of content is already read
   char *buf;                  // Buffer for received data
   char *path_info;            // PATH_INFO part of the URL
+  char *body;                 // Pointer to not-read yet buffered body data
+  char *next_request;         // Pointer to the buffered next request
   int must_close;             // 1 if connection must be closed
   int buf_size;               // Buffer size
   int request_len;            // Size of the request + headers in a buffer
@@ -1416,12 +1418,10 @@ static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
 
 int mg_read(struct mg_connection *conn, void *buf, size_t len) {
   int n, buffered_len, nread;
-  const char *buffered;
 
-  assert((conn->content_len == -1 && conn->consumed_content == 0) ||
-         conn->consumed_content <= conn->content_len);
-  DEBUG_TRACE(("%p %lu %lld %lld", buf, (unsigned long) len,
-               conn->content_len, conn->consumed_content));
+  assert(conn->next_request != NULL &&
+         conn->body != NULL &&
+         conn->next_request >= conn->body);
   nread = 0;
   if (conn->consumed_content < conn->content_len) {
 
@@ -1431,22 +1431,18 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
       len = (int) to_read;
     }
 
-    // How many bytes of data we have buffered in the request buffer?
-    buffered = conn->buf + conn->request_len + conn->consumed_content;
-    buffered_len = conn->data_len - conn->request_len;
-    assert(buffered_len >= 0);
-
-    // Return buffered data back if we haven't done that yet.
-    if (conn->consumed_content < (int64_t) buffered_len) {
-      buffered_len -= (int) conn->consumed_content;
+    // Return buffered data
+    buffered_len = conn->next_request - conn->body;
+    if (buffered_len > 0) {
       if (len < (size_t) buffered_len) {
         buffered_len = len;
       }
-      memcpy(buf, buffered, (size_t)buffered_len);
+      memcpy(buf, conn->body, (size_t) buffered_len);
       len -= buffered_len;
-      buf = (char *) buf + buffered_len;
+      conn->body += buffered_len;
       conn->consumed_content += buffered_len;
-      nread = buffered_len;
+      nread += buffered_len;
+      buf = (char *) buf + buffered_len;
     }
 
     // We have returned all buffered data. Read new data from the remote socket.
@@ -2783,7 +2779,7 @@ static int is_not_modified(const struct mg_connection *conn,
 
 static int forward_body_data(struct mg_connection *conn, FILE *fp,
                              SOCKET sock, SSL *ssl) {
-  const char *expect, *buffered;
+  const char *expect;
   char buf[MG_BUF_LEN];
   int to_read, nread, buffered_len, success = 0;
 
@@ -2799,8 +2795,7 @@ static int forward_body_data(struct mg_connection *conn, FILE *fp,
       (void) mg_printf(conn, "%s", "HTTP/1.1 100 Continue\r\n\r\n");
     }
 
-    buffered = conn->buf + conn->request_len;
-    buffered_len = conn->data_len - conn->request_len;
+    buffered_len = conn->next_request - conn->body;
     assert(buffered_len >= 0);
     assert(conn->consumed_content == 0);
 
@@ -2808,8 +2803,9 @@ static int forward_body_data(struct mg_connection *conn, FILE *fp,
       if ((int64_t) buffered_len > conn->content_len) {
         buffered_len = (int) conn->content_len;
       }
-      push(fp, sock, ssl, buffered, (int64_t) buffered_len);
+      push(fp, sock, ssl, conn->body, (int64_t) buffered_len);
       conn->consumed_content += buffered_len;
+      conn->body += buffered_len;
     }
 
     while (conn->consumed_content < conn->content_len) {
@@ -3859,7 +3855,7 @@ static int set_acl_option(struct mg_context *ctx) {
 }
 
 static void reset_per_request_attributes(struct mg_connection *conn) {
-  conn->path_info = NULL;
+  conn->path_info = conn->body = conn->next_request = NULL;
   conn->num_bytes_sent = conn->consumed_content = 0;
   conn->content_len = -1;
   conn->request_len = conn->data_len = 0;
@@ -4003,28 +3999,6 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
   return fp;
 }
 
-static void discard_current_request_from_buffer(struct mg_connection *conn) {
-  char *buffered;
-  int buffered_len, body_len;
-
-  buffered = conn->buf + conn->request_len;
-  buffered_len = conn->data_len - conn->request_len;
-  assert(buffered_len >= 0);
-
-  if (conn->content_len <= 0) {
-    // Protect from negative Content-Length, too
-    body_len = 0;
-  } else if (conn->content_len < (int64_t) buffered_len) {
-    body_len = (int) conn->content_len;
-  } else {
-    body_len = buffered_len;
-  }
-
-  conn->data_len -= conn->request_len + body_len;
-  memmove(conn->buf, conn->buf + conn->request_len + body_len,
-          (size_t) conn->data_len);
-}
-
 static int is_valid_uri(const char *uri) {
   // Conform to http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1.2
   // URI can be an asterisk (*) or should start with slash.
@@ -4033,7 +4007,7 @@ static int is_valid_uri(const char *uri) {
 
 static void process_new_connection(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
-  int keep_alive_enabled;
+  int keep_alive_enabled, buffered_len;
   const char *cl;
 
   keep_alive_enabled = !strcmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes");
@@ -4049,12 +4023,14 @@ static void process_new_connection(struct mg_connection *conn) {
     } if (conn->request_len <= 0) {
       return;  // Remote end closed the connection
     }
+    conn->body = conn->next_request = conn->buf + conn->request_len;
 
     if (parse_http_request(conn->buf, conn->buf_size, ri) <= 0 ||
         !is_valid_uri(ri->uri)) {
       // Do not put garbage in the access log, just send it back to the client
       send_http_error(conn, 400, "Bad Request",
           "Cannot parse HTTP request: [%.*s]", conn->data_len, conn->buf);
+      conn->must_close = 1;
     } else if (strcmp(ri->http_version, "1.0") &&
                strcmp(ri->http_version, "1.1")) {
       // Request seems valid, but HTTP version is strange
@@ -4064,15 +4040,31 @@ static void process_new_connection(struct mg_connection *conn) {
       // Request is valid, handle it
       cl = get_header(ri, "Content-Length");
       conn->content_len = cl == NULL ? -1 : strtoll(cl, NULL, 10);
+
+      // Set pointer to the next buffered request
+      buffered_len = conn->data_len - conn->request_len;
+      assert(buffered_len >= 0);
+      if (conn->content_len <= 0) {
+      } else if (conn->content_len < (int64_t) buffered_len) {
+        conn->next_request += conn->content_len;
+      } else {
+        conn->next_request += buffered_len;
+      }
+
       conn->birth_time = time(NULL);
       handle_request(conn);
       call_user(conn, MG_REQUEST_COMPLETE);
       log_access(conn);
-      discard_current_request_from_buffer(conn);
     }
     if (ri->remote_user != NULL) {
       free((void *) ri->remote_user);
     }
+
+    // Discard all buffered data for this request
+    assert(conn->next_request >= conn->buf);
+    assert(conn->data_len >= conn->next_request - conn->buf);
+    conn->data_len -= conn->next_request - conn->buf;
+    memmove(conn->buf, conn->next_request, (size_t) conn->data_len);
   } while (conn->ctx->stop_flag == 0 &&
            keep_alive_enabled &&
            should_keep_alive(conn));
