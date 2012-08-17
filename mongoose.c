@@ -2714,6 +2714,8 @@ static int read_request(FILE *fp, struct mg_connection *conn,
         (n = pull(fp, conn, buf + *nread, bufsiz - *nread)) > 0) {
       *nread += n;
     }
+    // *nread <= bufsiz check is crucial. If client fills up the whole buffer
+    // in one go, we still need to make an iteration and calculate request_len
   } while (*nread <= bufsiz && request_len == 0 && n > 0);
 
   return n < 0 ? -1 : request_len;
