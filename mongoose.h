@@ -19,10 +19,30 @@
 // THE SOFTWARE.
 
 #ifndef MONGOOSE_HEADER_INCLUDED
-#define  MONGOOSE_HEADER_INCLUDED
+#define MONGOOSE_HEADER_INCLUDED
 
 #include <stdio.h>
 #include <stddef.h>
+
+
+// --- this sort of thing is why I have a mongoose_sys_porting.h ---
+// --- that way, everyone can use it, uncluding mongoose embedders == users --
+
+// See also: http://stackoverflow.com/questions/2354784/attribute-formatprintf-1-2-for-msvc/6849629#6849629
+#undef FORMAT_STRING
+#if _MSC_VER >= 1400
+# include <sal.h>
+# if _MSC_VER > 1400
+#  define FORMAT_STRING(p) _Printf_format_string_ p
+# else
+# define FORMAT_STRING(p) __format_string p
+# endif /* FORMAT_STRING */
+#else
+# define FORMAT_STRING(p) p
+#endif /* _MSC_VER */
+
+// --- end of portability snippet 1 ---
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,11 +75,11 @@ struct mg_request_info {
 // Various events on which user-defined function is called by Mongoose.
 enum mg_event {
   MG_NEW_REQUEST,   // New HTTP request has arrived from the client
+  MG_REQUEST_COMPLETE,  // Mongoose has finished handling the request
   MG_HTTP_ERROR,    // HTTP error must be returned to the client
   MG_EVENT_LOG,     // Mongoose logs an event, request_info.log_message
   MG_INIT_SSL,      // Mongoose initializes SSL. Instead of mg_connection *,
                     // SSL context is passed to the callback function.
-  MG_REQUEST_COMPLETE  // Mongoose has finished handling the request
 };
 
 // Prototype for the user-defined function. Mongoose calls this function
@@ -127,10 +147,14 @@ void mg_stop(struct mg_context *);
 const char *mg_get_option(const struct mg_context *ctx, const char *name);
 
 
-// Return array of strings that represent valid configuration options.
-// For each option, a short name, long name, and default value is returned.
+// Return array of strings that represent all mongoose configuration options.
+// For each option, a short name, long name, and default value is returned
+// (i.e. a total of MG_ENTRIES_PER_CONFIG_OPTION elements per entry).
+//
 // Array is NULL terminated.
 const char **mg_get_valid_option_names(void);
+
+#define MG_ENTRIES_PER_CONFIG_OPTION 3
 
 
 // Add, edit or delete the entry in the passwords file.
@@ -153,10 +177,13 @@ int mg_modify_passwords_file(const char *passwords_file_name,
 
 // Return mg_request_info structure associated with the request.
 // Always succeeds.
-const struct mg_request_info *mg_get_request_info(const struct mg_connection *);
+const struct mg_request_info *mg_get_request_info(const struct mg_connection *conn);
 
 
 // Send data to the client.
+//
+// Return the number of bytes written; 0 when the connection has been closed.
+// Return -1 on error.
 int mg_write(struct mg_connection *, const void *buf, size_t len);
 
 
@@ -166,9 +193,9 @@ int mg_write(struct mg_connection *, const void *buf, size_t len);
 // Note that mg_printf() uses internal buffer of size IO_BUF_SIZE
 // (8 Kb by default) as temporary message storage for formatting. Do not
 // print data that is bigger than that, otherwise it will be truncated.
-int mg_printf(struct mg_connection *, const char *fmt, ...)
+int mg_printf(struct mg_connection *, FORMAT_STRING(const char *fmt), ...)
 #ifdef __GNUC__
-__attribute__((format(printf, 2, 3)))
+    __attribute__((format(printf, 2, 3)))
 #endif
 ;
 
@@ -192,19 +219,20 @@ const char *mg_get_header(const struct mg_connection *, const char *name);
 // Get a value of particular form variable.
 //
 // Parameters:
-//   data: pointer to form-uri-encoded buffer. This could be either POST data,
-//         or request_info.query_string.
-//   data_len: length of the encoded data.
-//   var_name: variable name to decode from the buffer
-//   buf: destination buffer for the decoded variable
-//   buf_len: length of the destination buffer
+//   data:      pointer to form-uri-encoded buffer. This could be either
+//              POST data, or request_info.query_string.
+//   data_len:  length of the encoded data.
+//   var_name:  variable name to decode from the buffer
+//   buf:       destination buffer for the decoded variable
+//   buf_len:   length of the destination buffer
 //
 // Return:
 //   On success, length of the decoded variable.
 //   On error, -1 (variable not found, or destination buffer is too small).
+//   On error, -2 (destination buffer NULL or zero length).
 //
-// Destination buffer is guaranteed to be '\0' - terminated. In case of
-// failure, dst[0] == '\0'.
+// Destination buffer is guaranteed to be '\0'-terminated whenever possible.
+// In case of failure, dst[0] == '\0'.
 int mg_get_var(const char *data, size_t data_len,
                const char *var_name, char *buf, size_t buf_len);
 
@@ -216,7 +244,7 @@ int mg_get_var(const char *data, size_t data_len,
 //
 // Return:
 //   On success, value length.
-//   On error, 0 (either "Cookie:" header is not present at all, or the
+//   On error, -1 (either "Cookie:" header is not present at all, or the
 //   requested parameter is not found, or destination buffer is too small
 //   to hold the value).
 int mg_get_cookie(const struct mg_connection *,
@@ -243,8 +271,8 @@ void mg_close_connection(struct mg_connection *conn);
 // Return:
 //   On error, NULL
 //   On success, opened file stream to the downloaded contents. The stream
-//   is positioned to the end of the file. It is a user responsibility
-//   to fclose() opened file stream.
+//   is positioned at the end of the file. It is the user's responsibility
+//   to fclose() the opened file stream.
 FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
                char *buf, size_t buf_len, struct mg_request_info *request_info);
 
@@ -266,7 +294,7 @@ const char *mg_version(void);
 
 // MD5 hash given strings.
 // Buffer 'buf' must be 33 bytes long. Varargs is a NULL terminated list of
-// asciiz strings. When function returns, buf will contain human-readable
+// ASCIIz strings. When function returns, buf will contain human-readable
 // MD5 hash. Example:
 //   char buf[33];
 //   mg_md5(buf, "aa", "bb", NULL);
