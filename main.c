@@ -279,11 +279,11 @@ static void WINAPI ServiceMain(void) {
   ss.dwCurrentState = SERVICE_RUNNING;
   ss.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
 
-  hStatus = RegisterServiceCtrlHandler(server_name, ControlHandler);
+  hStatus = RegisterServiceCtrlHandlerA(server_name, ControlHandler);
   SetServiceStatus(hStatus, &ss);
 
   while (ss.dwCurrentState == SERVICE_RUNNING) {
-    Sleep(1000);
+    mg_sleep(1000);
   }
   mg_stop(ctx);
 
@@ -299,7 +299,7 @@ static void WINAPI ServiceMain(void) {
 #define ID_INSTALL_SERVICE 104
 #define ID_REMOVE_SERVICE 105
 #define ID_ICON 200
-static NOTIFYICONDATA TrayIcon;
+static NOTIFYICONDATAA TrayIcon;
 
 static void edit_config_file(void) {
   const char **names, *value;
@@ -330,17 +330,17 @@ static void edit_config_file(void) {
 
 static void show_error(void) {
   char buf[256];
-  FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+  FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                 NULL, GetLastError(),
                 MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                 buf, sizeof(buf), NULL);
-  MessageBox(NULL, buf, "Error", MB_OK);
+  MessageBoxA(NULL, buf, "Error", MB_OK);
 }
 
 static int manage_service(int action) {
   static const char *service_name = "Mongoose";
   SC_HANDLE hSCM = NULL, hService = NULL;
-  SERVICE_DESCRIPTION descr = {server_name};
+  SERVICE_DESCRIPTIONA descr = {server_name};
   char path[PATH_MAX + 20];  // Path to executable plus magic argument
   int success = 1;
 
@@ -349,10 +349,10 @@ static int manage_service(int action) {
     success = 0;
     show_error();
   } else if (action == ID_INSTALL_SERVICE) {
-    GetModuleFileName(NULL, path, sizeof(path));
+    GetModuleFileNameA(NULL, path, sizeof(path));
     strncat(path, " ", sizeof(path));
     strncat(path, service_magic_argument, sizeof(path));
-    hService = CreateService(hSCM, service_name, service_name,
+    hService = CreateServiceA(hSCM, service_name, service_name,
                              SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS,
                              SERVICE_AUTO_START, SERVICE_ERROR_NORMAL,
                              path, NULL, NULL, NULL, NULL, NULL);
@@ -362,11 +362,11 @@ static int manage_service(int action) {
       show_error();
     }
   } else if (action == ID_REMOVE_SERVICE) {
-    if ((hService = OpenService(hSCM, service_name, DELETE)) == NULL ||
+    if ((hService = OpenServiceA(hSCM, service_name, DELETE)) == NULL ||
         !DeleteService(hService)) {
       show_error();
     }
-  } else if ((hService = OpenService(hSCM, service_name,
+  } else if ((hService = OpenServiceA(hSCM, service_name,
                                      SERVICE_QUERY_STATUS)) == NULL) {
     success = 0;
   }
@@ -379,8 +379,8 @@ static int manage_service(int action) {
 
 static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
                                    LPARAM lParam) {
-  static SERVICE_TABLE_ENTRY service_table[] = {
-    {server_name, (LPSERVICE_MAIN_FUNCTION) ServiceMain},
+  static SERVICE_TABLE_ENTRYA service_table[] = {
+    {server_name, (LPSERVICE_MAIN_FUNCTIONA) ServiceMain},
     {NULL, NULL}
   };
   int service_installed;
@@ -393,7 +393,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
       if (__argv[1] != NULL &&
           !strcmp(__argv[1], service_magic_argument)) {
         start_mongoose(1, service_argv);
-        StartServiceCtrlDispatcher(service_table);
+        StartServiceCtrlDispatcherA(service_table);
         exit(EXIT_SUCCESS);
       } else {
         start_mongoose(__argc, __argv);
@@ -403,8 +403,8 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
       switch (LOWORD(wParam)) {
         case ID_QUIT:
           mg_stop(ctx);
-          Shell_NotifyIcon(NIM_DELETE, &TrayIcon);
-          PostQuitMessage(0);
+          Shell_NotifyIconA(NIM_DELETE, &TrayIcon);
+          PostQuitMessage(EXIT_SUCCESS);
           break;
         case ID_EDIT_CONFIG:
           edit_config_file();
@@ -421,19 +421,19 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
         case WM_LBUTTONUP:
         case WM_LBUTTONDBLCLK:
           hMenu = CreatePopupMenu();
-          AppendMenu(hMenu, MF_STRING | MF_GRAYED, ID_SEPARATOR, server_name);
-          AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
+          AppendMenuA(hMenu, MF_STRING | MF_GRAYED, ID_SEPARATOR, server_name);
+          AppendMenuA(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
           service_installed = manage_service(0);
           snprintf(buf, sizeof(buf), "NT service: %s installed",
                    service_installed ? "" : "not");
-          AppendMenu(hMenu, MF_STRING | MF_GRAYED, ID_SEPARATOR, buf);
-          AppendMenu(hMenu, MF_STRING | (service_installed ? MF_GRAYED : 0),
+          AppendMenuA(hMenu, MF_STRING | MF_GRAYED, ID_SEPARATOR, buf);
+          AppendMenuA(hMenu, MF_STRING | (service_installed ? MF_GRAYED : 0),
                      ID_INSTALL_SERVICE, "Install service");
-          AppendMenu(hMenu, MF_STRING | (!service_installed ? MF_GRAYED : 0),
+          AppendMenuA(hMenu, MF_STRING | (!service_installed ? MF_GRAYED : 0),
                      ID_REMOVE_SERVICE, "Deinstall service");
-          AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
-          AppendMenu(hMenu, MF_STRING, ID_EDIT_CONFIG, "Edit config file");
-          AppendMenu(hMenu, MF_STRING, ID_QUIT, "Exit");
+          AppendMenuA(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
+          AppendMenuA(hMenu, MF_STRING, ID_EDIT_CONFIG, "Edit config file");
+          AppendMenuA(hMenu, MF_STRING, ID_QUIT, "Exit");
           GetCursorPos(&pt);
           SetForegroundWindow(hWnd);
           TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, hWnd, NULL);
@@ -444,8 +444,8 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
       break;
     case WM_CLOSE:
       mg_stop(ctx);
-      Shell_NotifyIcon(NIM_DELETE, &TrayIcon);
-      PostQuitMessage(0);
+      Shell_NotifyIconA(NIM_DELETE, &TrayIcon);
+      PostQuitMessage(EXIT_SUCCESS);
       return 0;  // We've just sent our own quit message, with proper hwnd.
   }
 
@@ -453,7 +453,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
 }
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
-  WNDCLASS cls;
+  WNDCLASSA cls;
   HWND hWnd;
   MSG msg;
 
@@ -463,8 +463,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
   cls.hIcon = LoadIcon(NULL, IDI_APPLICATION);
   cls.lpszClassName = server_name;
 
-  RegisterClass(&cls);
-  hWnd = CreateWindow(cls.lpszClassName, server_name, WS_OVERLAPPEDWINDOW,
+  RegisterClassA(&cls);
+  hWnd = CreateWindowA(cls.lpszClassName, server_name, WS_OVERLAPPEDWINDOW,
                       0, 0, 0, 0, NULL, NULL, NULL, NULL);
   ShowWindow(hWnd, SW_HIDE);
 
@@ -476,13 +476,14 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
   TrayIcon.hWnd = hWnd;
   snprintf(TrayIcon.szTip, sizeof(TrayIcon.szTip), "%s", server_name);
   TrayIcon.uCallbackMessage = WM_USER;
-  Shell_NotifyIcon(NIM_ADD, &TrayIcon);
+  Shell_NotifyIconA(NIM_ADD, &TrayIcon);
 
   while (GetMessage(&msg, hWnd, 0, 0) > 0) {
     TranslateMessage(&msg);
     DispatchMessage(&msg);
   }
 
+  // return the WM_QUIT value:
   return msg.wParam;
 }
 #else
@@ -492,14 +493,14 @@ int main(int argc, char *argv[]) {
   printf("%s started on port(s) %s with web root [%s]\n",
          server_name, mg_get_option(ctx, "listening_ports"),
          mg_get_option(ctx, "document_root"));
-  while (exit_flag == 0) {
-    sleep(1);
+  while (exit_flag == 0 && !mg_get_stop_flag(ctx)) {
+    mg_sleep(100);
   }
-  printf("Exiting on signal %d, waiting for all threads to finish...",
-         exit_flag);
+  printf("Exiting on signal %d/%d, waiting for all threads to finish...",
+        exit_flag, mg_get_stop_flag(ctx));
   fflush(stdout);
   mg_stop(ctx);
-  printf("%s", " done.\n");
+  printf(" done.\n");
 
   return EXIT_SUCCESS;
 }

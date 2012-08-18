@@ -1383,7 +1383,7 @@ static int wait_until_socket_is_readable(struct mg_connection *conn) {
   int result;
   struct timeval tv;
   fd_set set;
-  
+
   do {
     tv.tv_sec = 0;
     tv.tv_usec = 300 * 1000;
@@ -4206,7 +4206,7 @@ static void master_thread(struct mg_context *ctx) {
 #if defined(_WIN32)
   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 #endif
-  
+
 #if defined(ISSUE_317)
   struct sched_param sched_param;
   sched_param.sched_priority = sched_get_priority_max(SCHED_RR);
@@ -4399,3 +4399,12 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
 
   return ctx;
 }
+
+int mg_get_stop_flag(struct mg_context *ctx) {
+  return ctx && ctx->stop_flag;
+}
+
+void mg_signal_stop(struct mg_context *ctx) {
+  ctx->stop_flag = 1;
+}
+
