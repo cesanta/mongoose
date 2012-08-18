@@ -1,4 +1,4 @@
-// Copyright (c) 2004-2011 Sergey Lyubka
+// Copyright (c) 2004-2012 Sergey Lyubka
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -151,7 +151,7 @@ static void set_option(char **options, const char *name, const char *value) {
   }
 
   if (i == MAX_OPTIONS - 3) {
-    die("%s", "Too many options specified");
+    die("Too many options specified");
   }
 }
 
@@ -203,7 +203,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
     (void) fclose(fp);
   }
 
-  // Now handle command line flags. They override config file settings.
+  // Now handle command line flags. They override config file / default settings.
   for (i = cmd_line_opts_start; argv[i] != NULL; i += 2) {
     if (argv[i][0] != '-' || argv[i + 1] == NULL) {
       show_usage_and_exit();
@@ -257,7 +257,9 @@ static void start_mongoose(int argc, char *argv[]) {
   }
 
   if (ctx == NULL) {
-    die("%s", "Failed to start Mongoose.");
+    die("Failed to start Mongoose. Maybe some options are "
+        "assigned bad values?\nTry to run with '-e error_log.txt' "
+        "and check error_log.txt for more information.");
   }
 }
 
@@ -283,7 +285,7 @@ static void WINAPI ServiceMain(void) {
   SetServiceStatus(hStatus, &ss);
 
   while (ss.dwCurrentState == SERVICE_RUNNING) {
-    Sleep(1000);
+    mg_sleep(1000);
   }
   mg_stop(ctx);
 
@@ -483,6 +485,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
     DispatchMessage(&msg);
   }
 
+  // return the WM_QUIT value:
   return msg.wParam;
 }
 #else
@@ -493,14 +496,15 @@ int main(int argc, char *argv[]) {
          server_name, mg_get_option(ctx, "listening_ports"),
          mg_get_option(ctx, "document_root"));
   while (exit_flag == 0) {
-    sleep(1);
+    mg_sleep(100);
   }
   printf("Exiting on signal %d, waiting for all threads to finish...",
          exit_flag);
   fflush(stdout);
   mg_stop(ctx);
-  printf("%s", " done.\n");
+  printf(" done.\n");
 
   return EXIT_SUCCESS;
 }
 #endif /* _WIN32 */
+

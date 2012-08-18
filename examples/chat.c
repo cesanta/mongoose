@@ -75,7 +75,7 @@ static void get_qsvar(const struct mg_request_info *request_info,
   mg_get_var(qs, strlen(qs == NULL ? "" : qs), name, dst, dst_len);
 }
 
-// Get a get of messages with IDs greater than last_id and transform them
+// Get a set of messages with IDs greater than last_id and transform them
 // into a JSON string. Return that string to the caller. The string is
 // dynamically allocated, caller must free it. If there are no messages,
 // NULL is returned.
@@ -122,7 +122,7 @@ static int handle_jsonp(struct mg_connection *conn,
   if (cb[0] != '\0') {
     mg_printf(conn, "%s(", cb);
   }
- 
+
   return cb[0] == '\0' ? 0 : 1;
 }
 
@@ -143,7 +143,7 @@ static void ajax_get_messages(struct mg_connection *conn,
   }
 
   if (is_jsonp) {
-    mg_printf(conn, "%s", ")");
+    mg_printf(conn, ")");
   }
 }
 
@@ -186,10 +186,10 @@ static void ajax_send_message(struct mg_connection *conn,
     pthread_rwlock_unlock(&rwlock);
   }
 
-  mg_printf(conn, "%s", text[0] == '\0' ? "false" : "true");
+  mg_printf(conn, text[0] == '\0' ? "false" : "true");
 
   if (is_jsonp) {
-    mg_printf(conn, "%s", ")");
+    mg_printf(conn, ")");
   }
 }
 
@@ -370,7 +370,8 @@ int main(void) {
 
   // Setup and start Mongoose
   ctx = mg_start(&event_handler, NULL, options);
-  assert(ctx != NULL);
+  if (!ctx)
+    exit(EXIT_FAILURE);
 
   // Wait until enter is pressed, then exit
   printf("Chat server started on ports %s, press enter to quit.\n",
