@@ -1,4 +1,4 @@
-// Copyright (c) 2004-2011 Sergey Lyubka
+// Copyright (c) 2004-2012 Sergey Lyubka
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -1383,7 +1383,7 @@ static int wait_until_socket_is_readable(struct mg_connection *conn) {
   int result;
   struct timeval tv;
   fd_set set;
-  
+
   do {
     tv.tv_sec = 0;
     tv.tv_usec = 300 * 1000;
@@ -1649,12 +1649,12 @@ static int get_request_len(const char *buf, int buflen) {
   const char *s, *e;
   int len = 0;
 
-  DEBUG_TRACE(("buf: %p, len: %d", buf, buflen));
   for (s = buf, e = s + buflen - 1; len <= 0 && s < e; s++)
     // Control characters are not allowed but >=128 is.
     if (!isprint(* (const unsigned char *) s) && *s != '\r' &&
         *s != '\n' && * (const unsigned char *) s < 128) {
       len = -1;
+      break; // [i_a] abort scan as soon as one malformed character is found; don't let subsequent \r\n\r\n win us over anyhow
     } else if (s[0] == '\n' && s[1] == '\n') {
       len = (int) (s - buf) + 2;
     } else if (s[0] == '\n' && &s[1] < e &&
@@ -2707,19 +2707,22 @@ static int parse_http_response(char *buf, int len, struct mg_request_info *ri) {
 // Upon every read operation, increase nread by the number of bytes read.
 static int read_request(FILE *fp, struct mg_connection *conn,
                         char *buf, int bufsiz, int *nread) {
-  int request_len, n = 0;
+  int request_len, n = 1;
 
-  do {
-    request_len = get_request_len(buf, *nread);
-    if (request_len == 0 &&
-        (n = pull(fp, conn, buf + *nread, bufsiz - *nread)) > 0) {
+  request_len = get_request_len(buf, *nread);
+  while (*nread < bufsiz && request_len == 0 && n > 0) {
+    n = pull(fp, conn, buf + *nread, bufsiz - *nread);
+    if (n > 0) {
       *nread += n;
+      request_len = get_request_len(buf, *nread);
     }
-    // *nread <= bufsiz check is crucial. If client fills up the whole buffer
-    // in one go, we still need to make an iteration and calculate request_len
-  } while (*nread <= bufsiz && request_len == 0 && n > 0);
+  }
 
-  return n < 0 ? -1 : request_len;
+  if (n < 0) {
+    // recv() error -> propagate error; do not process a b0rked-with-very-high-probability request
+    return -1;
+  }
+  return request_len;
 }
 
 // For given directory path, substitute it to valid index file.
@@ -4206,7 +4209,7 @@ static void master_thread(struct mg_context *ctx) {
 #if defined(_WIN32)
   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 #endif
-  
+
 #if defined(ISSUE_317)
   struct sched_param sched_param;
   sched_param.sched_priority = sched_get_priority_max(SCHED_RR);
