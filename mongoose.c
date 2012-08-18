@@ -592,7 +592,8 @@ const char *mg_version(void) {
   return MONGOOSE_VERSION;
 }
 
-const struct mg_request_info *mg_get_request_info(struct mg_connection *conn) {
+const struct mg_request_info *
+mg_get_request_info(const struct mg_connection *conn) {
   return &conn->request_info;
 }
 

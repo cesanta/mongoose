@@ -153,7 +153,7 @@ int mg_modify_passwords_file(const char *passwords_file_name,
 
 // Return mg_request_info structure associated with the request.
 // Always succeeds.
-const struct mg_request_info *mg_get_request_info(struct mg_connection *);
+const struct mg_request_info *mg_get_request_info(const struct mg_connection *);
 
 
 // Send data to the client.
