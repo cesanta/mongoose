@@ -4402,3 +4402,12 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
 
   return ctx;
 }
+
+int mg_get_stop_flag(struct mg_context *ctx) {
+  return ctx && ctx->stop_flag;
+}
+
+void mg_signal_stop(struct mg_context *ctx) {
+  ctx->stop_flag = 1;
+}
+

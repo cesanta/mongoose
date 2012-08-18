@@ -273,6 +273,19 @@ const char *mg_version(void);
 void mg_md5(char *buf, ...);
 
 
+
+
+
+// Return the current 'stop_flag' state value for the given thread context.
+//
+// When this is non-zero, it means the mongoose server is terminating and all threads it has created
+// should be / are already terminating.
+int mg_get_stop_flag(struct mg_context *ctx);
+
+// Indicate that the application should shut down (probably due to a fatal failure?)
+void mg_signal_stop(struct mg_context *ctx);
+
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
