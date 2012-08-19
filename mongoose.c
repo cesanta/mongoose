@@ -1467,15 +1467,38 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
 }
 
 int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
-  char buf[MG_BUF_LEN];
+  char mem[MG_BUF_LEN], *buf = mem;
   int len;
   va_list ap;
 
+  // Print in a local buffer first, hoping that it is large enough to
+  // hold the whole message
   va_start(ap, fmt);
-  len = mg_vsnprintf(conn, buf, sizeof(buf), fmt, ap);
+  len = vsnprintf(mem, sizeof(mem), fmt, ap);
   va_end(ap);
 
-  return mg_write(conn, buf, (size_t)len);
+  if (len <= 0) {
+    // vsnprintf() error, give up
+    len = -1;
+    cry(conn, "%s(%s, ...): vsnprintf() error", __func__, fmt);
+  } else if (len > (int) sizeof(mem) && (buf = malloc(len + 1)) != NULL) {
+    // Local buffer is not large enough, allocate big buffer on heap
+    va_start(ap, fmt);
+    vsnprintf(buf, len + 1, fmt, ap);
+    va_end(ap);
+    len = mg_write(conn, buf, (size_t) len);
+    free(buf);
+  } else if (len > (int) sizeof(mem)) {
+    // Failed to allocate large enough buffer, give up
+    cry(conn, "%s(%s, ...): Can't allocate %d bytes, not printing anything",
+        __func__, fmt, len);
+    len = -1;
+  } else {
+    // Copy to the local buffer succeeded
+    len = mg_write(conn, buf, (size_t) len);
+  }
+
+  return len;
 }
 
 // URL-decode input buffer into destination buffer.

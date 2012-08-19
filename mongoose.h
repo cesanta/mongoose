@@ -163,14 +163,29 @@ int mg_write(struct mg_connection *, const void *buf, size_t len);
 // Send data to the browser using printf() semantics.
 //
 // Works exactly like mg_write(), but allows to do message formatting.
-// Note that mg_printf() uses internal buffer of size IO_BUF_SIZE
-// (8 Kb by default) as temporary message storage for formatting. Do not
-// print data that is bigger than that, otherwise it will be truncated.
-int mg_printf(struct mg_connection *, const char *fmt, ...)
-#ifdef __GNUC__
-__attribute__((format(printf, 2, 3)))
+// Below are the macros for enabling compiler-specific checks for
+// printf-like arguments.
+
+#undef PRINTF_FORMAT_STRING
+#if _MSC_VER >= 1400
+#include <sal.h>
+#if _MSC_VER > 1400
+#define PRINTF_FORMAT_STRING(s) _Printf_format_string_ s
+#else
+#define PRINTF_FORMAT_STRING(s) __format_string s
 #endif
-;
+#else
+#define PRINTF_FORMAT_STRING(s) s
+#endif
+
+#ifdef __GNUC__
+#define PRINTF_ARGS(x, y) __attribute__((format(printf, x, y)))
+#else
+#define PRINTF_ARGS(x, y)
+#endif
+
+int mg_printf(struct mg_connection *,
+              PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
 
 
 // Send contents of the entire file together with HTTP headers.
