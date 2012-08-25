@@ -2581,16 +2581,19 @@ static void send_file_data(struct mg_connection *conn, FILE *fp, int64_t len) {
   while (len > 0) {
     // Calculate how much to read from the file in the buffer
     to_read = sizeof(buf);
-    if ((int64_t) to_read > len)
+    if ((int64_t) to_read > len) {
       to_read = (int) len;
+    }
 
     // Read from file, exit the loop on error
-    if ((num_read = fread(buf, 1, (size_t)to_read, fp)) == 0)
+    if ((num_read = fread(buf, 1, (size_t)to_read, fp)) <= 0) {
       break;
+    }
 
     // Send read bytes to the client, exit the loop on error
-    if ((num_written = mg_write(conn, buf, (size_t)num_read)) != num_read)
+    if ((num_written = mg_write(conn, buf, (size_t)num_read)) != num_read) {
       break;
+    }
 
     // Both read and were successful, adjust counters
     conn->num_bytes_sent += num_written;
