@@ -54,12 +54,12 @@ struct mg_request_info {
 
 // Various events on which user-defined function is called by Mongoose.
 enum mg_event {
-  MG_NEW_REQUEST,   // New HTTP request has arrived from the client
-  MG_HTTP_ERROR,    // HTTP error must be returned to the client
-  MG_EVENT_LOG,     // Mongoose logs an event, request_info.log_message
-  MG_INIT_SSL,      // Mongoose initializes SSL. Instead of mg_connection *,
-                    // SSL context is passed to the callback function.
-  MG_REQUEST_COMPLETE  // Mongoose has finished handling the request
+  MG_NEW_REQUEST,       // New HTTP request has arrived from the client
+  MG_REQUEST_COMPLETE,  // Mongoose has finished handling the request
+  MG_HTTP_ERROR,        // HTTP error must be returned to the client
+  MG_EVENT_LOG,         // Mongoose logs an event, request_info.log_message
+  MG_INIT_SSL           // Mongoose initializes SSL. Instead of mg_connection *,
+                        // SSL context is passed to the callback function.
 };
 
 // Prototype for the user-defined function. Mongoose calls this function
@@ -157,6 +157,10 @@ const struct mg_request_info *mg_get_request_info(const struct mg_connection *);
 
 
 // Send data to the client.
+// Return:
+//  0   when the connection has been closed
+//  -1  on error
+//  number of bytes written on success
 int mg_write(struct mg_connection *, const void *buf, size_t len);
 
 
@@ -216,10 +220,12 @@ const char *mg_get_header(const struct mg_connection *, const char *name);
 //
 // Return:
 //   On success, length of the decoded variable.
-//   On error, -1 (variable not found, or destination buffer is too small).
+//   On error:
+//      -1 (variable not found, or destination buffer is too small).
+//      -2 (destination buffer is NULL or zero length).
 //
-// Destination buffer is guaranteed to be '\0' - terminated. In case of
-// failure, dst[0] == '\0'.
+// Destination buffer is guaranteed to be '\0' - terminated if it is not
+// NULL or zero length. In case of failure, dst[0] == '\0'.
 int mg_get_var(const char *data, size_t data_len,
                const char *var_name, char *buf, size_t buf_len);
 
@@ -231,7 +237,7 @@ int mg_get_var(const char *data, size_t data_len,
 //
 // Return:
 //   On success, value length.
-//   On error, 0 (either "Cookie:" header is not present at all, or the
+//   On error, -1 (either "Cookie:" header is not present at all, or the
 //   requested parameter is not found, or destination buffer is too small
 //   to hold the value).
 int mg_get_cookie(const struct mg_connection *,
@@ -258,8 +264,8 @@ void mg_close_connection(struct mg_connection *conn);
 // Return:
 //   On error, NULL
 //   On success, opened file stream to the downloaded contents. The stream
-//   is positioned to the end of the file. It is a user responsibility
-//   to fclose() opened file stream.
+//   is positioned to the end of the file. It is the user's responsibility
+//   to fclose() the opened file stream.
 FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
                char *buf, size_t buf_len, struct mg_request_info *request_info);
 
@@ -281,11 +287,11 @@ const char *mg_version(void);
 
 // MD5 hash given strings.
 // Buffer 'buf' must be 33 bytes long. Varargs is a NULL terminated list of
-// asciiz strings. When function returns, buf will contain human-readable
+// ASCIIz strings. When function returns, buf will contain human-readable
 // MD5 hash. Example:
 //   char buf[33];
 //   mg_md5(buf, "aa", "bb", NULL);
-void mg_md5(char *buf, ...);
+void mg_md5(char buf[33], ...);
 
 
 #ifdef __cplusplus

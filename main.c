@@ -203,7 +203,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
     (void) fclose(fp);
   }
 
-  // Now handle command line flags. They override config file settings.
+  // Handle command line flags. They override config file and default settings.
   for (i = cmd_line_opts_start; argv[i] != NULL; i += 2) {
     if (argv[i][0] != '-' || argv[i + 1] == NULL) {
       show_usage_and_exit();
@@ -483,6 +483,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
     DispatchMessage(&msg);
   }
 
+  // Return the WM_QUIT value.
   return msg.wParam;
 }
 #else

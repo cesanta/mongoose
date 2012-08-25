@@ -22,8 +22,8 @@ all:
 ###                 UNIX build: linux, bsd, mac, rtems
 ##########################################################################
 
-GCC_WARNS   = -W -Wall -pedantic -Wno-missing-field-initializers \
-              -Wno-unused-parameter -Wno-format-zero-length -Wno-missing-braces
+GCC_WARNS   = -W -Wall -pedantic
+#  -Wno-missing-field-initializers  -Wno-unused-parameter -Wno-format-zero-length -Wno-missing-braces
 CFLAGS      = -W -Wall -std=c99 -O2 $(GCC_WARNS) $(COPT)
 MAC_SHARED  = -flat_namespace -bundle -undefined suppress
 LINFLAGS    = -ldl -pthread $(CFLAGS)
