@@ -4136,35 +4136,36 @@ static void worker_thread(struct mg_context *ctx) {
   conn = (struct mg_connection *) calloc(1, sizeof(*conn) + buf_size);
   if (conn == NULL) {
     cry(fc(ctx), "%s", "Cannot create new connection struct, OOM");
-    return;
-  }
-  conn->buf_size = buf_size;
-  conn->buf = (char *) (conn + 1);
+  } else {
+    conn->buf_size = buf_size;
+    conn->buf = (char *) (conn + 1);
 
-  // Call consume_socket() even when ctx->stop_flag > 0, to let it signal
-  // sq_empty condvar to wake up the master waiting in produce_socket()
-  while (consume_socket(ctx, &conn->client)) {
-    conn->birth_time = time(NULL);
-    conn->ctx = ctx;
+    // Call consume_socket() even when ctx->stop_flag > 0, to let it signal
+    // sq_empty condvar to wake up the master waiting in produce_socket()
+    while (consume_socket(ctx, &conn->client)) {
+      conn->birth_time = time(NULL);
+      conn->ctx = ctx;
 
-    // Fill in IP, port info early so even if SSL setup below fails,
-    // error handler would have the corresponding info.
-    // Thanks to Johannes Winkelmann for the patch.
-    // TODO(lsm): Fix IPv6 case
-    conn->request_info.remote_port = ntohs(conn->client.rsa.sin.sin_port);
-    memcpy(&conn->request_info.remote_ip,
-           &conn->client.rsa.sin.sin_addr.s_addr, 4);
-    conn->request_info.remote_ip = ntohl(conn->request_info.remote_ip);
-    conn->request_info.is_ssl = conn->client.is_ssl;
+      // Fill in IP, port info early so even if SSL setup below fails,
+      // error handler would have the corresponding info.
+      // Thanks to Johannes Winkelmann for the patch.
+      // TODO(lsm): Fix IPv6 case
+      conn->request_info.remote_port = ntohs(conn->client.rsa.sin.sin_port);
+      memcpy(&conn->request_info.remote_ip,
+             &conn->client.rsa.sin.sin_addr.s_addr, 4);
+      conn->request_info.remote_ip = ntohl(conn->request_info.remote_ip);
+      conn->request_info.is_ssl = conn->client.is_ssl;
 
-    if (!conn->client.is_ssl ||
-        (conn->client.is_ssl && sslize(conn, conn->ctx->ssl_ctx, SSL_accept))) {
-      process_new_connection(conn);
+      if (!conn->client.is_ssl ||
+          (conn->client.is_ssl &&
+           sslize(conn, conn->ctx->ssl_ctx, SSL_accept))) {
+        process_new_connection(conn);
+      }
+
+      close_connection(conn);
     }
-
-    close_connection(conn);
+    free(conn);
   }
-  free(conn);
 
   // Signal master that we're done with connection and exiting
   (void) pthread_mutex_lock(&ctx->mutex);
