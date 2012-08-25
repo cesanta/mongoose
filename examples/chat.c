@@ -122,7 +122,7 @@ static int handle_jsonp(struct mg_connection *conn,
   if (cb[0] != '\0') {
     mg_printf(conn, "%s(", cb);
   }
- 
+
   return cb[0] == '\0' ? 0 : 1;
 }
 
@@ -369,8 +369,10 @@ int main(void) {
   srand((unsigned) time(0));
 
   // Setup and start Mongoose
-  ctx = mg_start(&event_handler, NULL, options);
-  assert(ctx != NULL);
+  if ((ctx = mg_start(&event_handler, NULL, options)) == NULL) {
+    printf("%s\n", "Cannot start chat server, fatal exit");
+    exit(EXIT_FAILURE);
+  }
 
   // Wait until enter is pressed, then exit
   printf("Chat server started on ports %s, press enter to quit.\n",
