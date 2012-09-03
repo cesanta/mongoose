@@ -3981,7 +3981,7 @@ struct mg_connection *mg_connect(struct mg_context *ctx,
   struct hostent *he;
   int sock;
 
-  if (ctx->client_ssl_ctx == NULL && use_ssl) {
+  if (use_ssl && (ctx == NULL || ctx->client_ssl_ctx == NULL)) {
     cry(fc(ctx), "%s: SSL is not initialized", __func__);
   } else if ((he = gethostbyname(host)) == NULL) {
     cry(fc(ctx), "%s: gethostbyname(%s): %s", __func__, host, strerror(ERRNO));
