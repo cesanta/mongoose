@@ -586,9 +586,10 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
 
 // Return fake connection structure. Used for logging, if connection
 // is not applicable at the moment of logging.
-static struct mg_connection *fc(struct mg_context *ctx) {
+static struct mg_connection *fc(void) {
+  static struct mg_context fake_context;
   static struct mg_connection fake_connection;
-  fake_connection.ctx = ctx;
+  fake_connection.ctx = &fake_context;
   return &fake_connection;
 }
 
@@ -2127,7 +2128,7 @@ static FILE *open_auth_file(struct mg_connection *conn, const char *path) {
     // Use global passwords file
     fp =  mg_fopen(ctx->config[GLOBAL_PASSWORDS_FILE], "r");
     if (fp == NULL)
-      cry(fc(ctx), "fopen(%s): %s",
+      cry(fc(), "fopen(%s): %s",
           ctx->config[GLOBAL_PASSWORDS_FILE], strerror(ERRNO));
   } else if (!mg_stat(path, &st) && st.is_directory) {
     (void) mg_snprintf(conn, name, sizeof(name), "%s%c%s",
@@ -3117,7 +3118,7 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   // Do not send anything back to client, until we buffer in all
   // HTTP headers.
   data_len = 0;
-  headers_len = read_request(out, fc(conn->ctx), buf, sizeof(buf), &data_len);
+  headers_len = read_request(out, fc(), buf, sizeof(buf), &data_len);
   if (headers_len <= 0) {
     send_http_error(conn, 500, http_500_error,
                     "CGI program sent malformed or too big (>%u bytes) "
@@ -3596,12 +3597,12 @@ static int set_ports_option(struct mg_context *ctx) {
 
   while (success && (list = next_option(list, &vec, NULL)) != NULL) {
     if (!parse_port_string(&vec, &so)) {
-      cry(fc(ctx), "%s: %.*s: invalid port spec. Expecting list of: %s",
+      cry(fc(), "%s: %.*s: invalid port spec. Expecting list of: %s",
           __func__, (int) vec.len, vec.ptr, "[IP_ADDRESS:]PORT[s|p]");
       success = 0;
     } else if (so.is_ssl &&
                (ctx->ssl_ctx == NULL || ctx->config[SSL_CERTIFICATE] == NULL)) {
-      cry(fc(ctx), "Cannot add SSL socket, is -ssl_certificate option set?");
+      cry(fc(), "Cannot add SSL socket, is -ssl_certificate option set?");
       success = 0;
     } else if ((sock = socket(so.lsa.sa.sa_family, SOCK_STREAM, 6)) ==
                INVALID_SOCKET ||
@@ -3623,14 +3624,14 @@ static int set_ports_option(struct mg_context *ctx) {
                bind(sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
                listen(sock, SOMAXCONN) != 0) {
       closesocket(sock);
-      cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
+      cry(fc(), "%s: cannot bind to %.*s: %s", __func__,
           vec.len, vec.ptr, strerror(ERRNO));
       success = 0;
     } else if ((listener = (struct socket *)
                 calloc(1, sizeof(*listener))) == NULL) {
       // NOTE(lsm): order is important: call cry before closesocket(),
       // cause closesocket() alters the errno.
-      cry(fc(ctx), "%s: %s", __func__, strerror(ERRNO));
+      cry(fc(), "%s: %s", __func__, strerror(ERRNO));
       closesocket(sock);
       success = 0;
     } else {
@@ -3718,18 +3719,18 @@ static int check_acl(struct mg_context *ctx, const union usa *usa) {
     mask = 32;
 
     if (sscanf(vec.ptr, "%c%d.%d.%d.%d%n", &flag, &a, &b, &c, &d, &n) != 5) {
-      cry(fc(ctx), "%s: subnet must be [+|-]x.x.x.x[/x]", __func__);
+      cry(fc(), "%s: subnet must be [+|-]x.x.x.x[/x]", __func__);
       return -1;
     } else if (flag != '+' && flag != '-') {
-      cry(fc(ctx), "%s: flag must be + or -: [%s]", __func__, vec.ptr);
+      cry(fc(), "%s: flag must be + or -: [%s]", __func__, vec.ptr);
       return -1;
     } else if (!isbyte(a)||!isbyte(b)||!isbyte(c)||!isbyte(d)) {
-      cry(fc(ctx), "%s: bad ip address: [%s]", __func__, vec.ptr);
+      cry(fc(), "%s: bad ip address: [%s]", __func__, vec.ptr);
       return -1;
     } else if (sscanf(vec.ptr + n, "/%d", &mask) == 0) {
       // Do nothing, no mask specified
     } else if (mask < 0 || mask > 32) {
-      cry(fc(ctx), "%s: bad subnet mask: %d [%s]", __func__, n, vec.ptr);
+      cry(fc(), "%s: bad subnet mask: %d [%s]", __func__, n, vec.ptr);
       return -1;
     }
 
@@ -3761,11 +3762,11 @@ static int set_uid_option(struct mg_context *ctx) {
     success = 1;
   } else {
     if ((pw = getpwnam(uid)) == NULL) {
-      cry(fc(ctx), "%s: unknown user [%s]", __func__, uid);
+      cry(fc(), "%s: unknown user [%s]", __func__, uid);
     } else if (setgid(pw->pw_gid) == -1) {
-      cry(fc(ctx), "%s: setgid(%s): %s", __func__, uid, strerror(errno));
+      cry(fc(), "%s: setgid(%s): %s", __func__, uid, strerror(errno));
     } else if (setuid(pw->pw_uid) == -1) {
-      cry(fc(ctx), "%s: setuid(%s): %s", __func__, uid, strerror(errno));
+      cry(fc(), "%s: setuid(%s): %s", __func__, uid, strerror(errno));
     } else {
       success = 1;
     }
@@ -3802,14 +3803,13 @@ static unsigned long ssl_id_callback(void) {
 }
 
 #if !defined(NO_SSL_DL)
-static int load_dll(struct mg_context *ctx, const char *dll_name,
-                    struct ssl_func *sw) {
+static int load_dll(const char *dll_name, struct ssl_func *sw) {
   union {void *p; void (*fp)(void);} u;
   void  *dll_handle;
   struct ssl_func *fp;
 
   if ((dll_handle = dlopen(dll_name, RTLD_LAZY)) == NULL) {
-    cry(fc(ctx), "%s: cannot load %s", __func__, dll_name);
+    cry(fc(), "%s: cannot load %s", __func__, dll_name);
     return 0;
   }
 
@@ -3823,7 +3823,7 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
     u.p = dlsym(dll_handle, fp->name);
 #endif // _WIN32
     if (u.fp == NULL) {
-      cry(fc(ctx), "%s: %s: cannot find %s", __func__, dll_name, fp->name);
+      cry(fc(), "%s: %s: cannot find %s", __func__, dll_name, fp->name);
       return 0;
     } else {
       fp->ptr = u.fp;
@@ -3842,8 +3842,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   const char *chain = ctx->config[SSL_CHAIN_FILE];
 
 #if !defined(NO_SSL_DL)
-  if (!load_dll(ctx, SSL_LIB, ssl_sw) ||
-      !load_dll(ctx, CRYPTO_LIB, crypto_sw)) {
+  if (!load_dll(SSL_LIB, ssl_sw) || !load_dll(CRYPTO_LIB, crypto_sw)) {
     return 0;
   }
 #endif // NO_SSL_DL
@@ -3853,11 +3852,11 @@ static int set_ssl_option(struct mg_context *ctx) {
   SSL_load_error_strings();
 
   if ((ctx->client_ssl_ctx = SSL_CTX_new(SSLv23_client_method())) == NULL) {
-    cry(fc(ctx), "SSL_CTX_new error: %s", ssl_error());
+    cry(fc(), "SSL_CTX_new error: %s", ssl_error());
   }
 
   if ((ctx->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
-    cry(fc(ctx), "SSL_CTX_new error: %s", ssl_error());
+    cry(fc(), "SSL_CTX_new error: %s", ssl_error());
   } else if (ctx->user_callback != NULL) {
     memset(&request_info, 0, sizeof(request_info));
     request_info.user_data = ctx->user_data;
@@ -3866,17 +3865,17 @@ static int set_ssl_option(struct mg_context *ctx) {
 
   if (ctx->ssl_ctx != NULL && pem != NULL &&
       SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0) {
-    cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
+    cry(fc(), "%s: cannot open %s: %s", __func__, pem, ssl_error());
     return 0;
   }
   if (ctx->ssl_ctx != NULL && pem != NULL &&
       SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0) {
-    cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
+    cry(fc(), "%s: cannot open %s: %s", __func__, pem, ssl_error());
     return 0;
   }
   if (ctx->ssl_ctx != NULL && chain != NULL &&
       SSL_CTX_use_certificate_chain_file(ctx->ssl_ctx, chain) == 0) {
-    cry(fc(ctx), "%s: cannot open %s: %s", __func__, chain, ssl_error());
+    cry(fc(), "%s: cannot open %s: %s", __func__, chain, ssl_error());
     return 0;
   }
 
@@ -3884,7 +3883,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   // http://www.openssl.org/support/faq.html#PROG1
   size = sizeof(pthread_mutex_t) * CRYPTO_num_locks();
   if ((ssl_mutexes = (pthread_mutex_t *) malloc((size_t)size)) == NULL) {
-    cry(fc(ctx), "%s: cannot allocate mutexes: %s", __func__, ssl_error());
+    cry(fc(), "%s: cannot allocate mutexes: %s", __func__, ssl_error());
     return 0;
   }
 
@@ -3982,22 +3981,22 @@ struct mg_connection *mg_connect(struct mg_context *ctx,
   int sock;
 
   if (use_ssl && (ctx == NULL || ctx->client_ssl_ctx == NULL)) {
-    cry(fc(ctx), "%s: SSL is not initialized", __func__);
+    cry(fc(), "%s: SSL is not initialized", __func__);
   } else if ((he = gethostbyname(host)) == NULL) {
-    cry(fc(ctx), "%s: gethostbyname(%s): %s", __func__, host, strerror(ERRNO));
+    cry(fc(), "%s: gethostbyname(%s): %s", __func__, host, strerror(ERRNO));
   } else if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-    cry(fc(ctx), "%s: socket: %s", __func__, strerror(ERRNO));
+    cry(fc(), "%s: socket: %s", __func__, strerror(ERRNO));
   } else {
     sin.sin_family = AF_INET;
     sin.sin_port = htons((uint16_t) port);
     sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
     if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) != 0) {
-      cry(fc(ctx), "%s: connect(%s:%d): %s", __func__, host, port,
+      cry(fc(), "%s: connect(%s:%d): %s", __func__, host, port,
           strerror(ERRNO));
       closesocket(sock);
     } else if ((newconn = (struct mg_connection *)
                 calloc(1, sizeof(*newconn))) == NULL) {
-      cry(fc(ctx), "%s: calloc: %s", __func__, strerror(ERRNO));
+      cry(fc(), "%s: calloc: %s", __func__, strerror(ERRNO));
       closesocket(sock);
     } else {
       newconn->ctx = ctx;
@@ -4024,29 +4023,29 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
   } else if (sscanf(url, "%9[htps]://%1024[^/]/%n", proto, host, &n) == 2) {
     port = mg_strcasecmp(proto, "https") == 0 ? 443 : 80;
   } else {
-    cry(fc(ctx), "%s: invalid URL: [%s]", __func__, url);
+    cry(fc(), "%s: invalid URL: [%s]", __func__, url);
     return NULL;
   }
 
   if ((newconn = mg_connect(ctx, host, port,
                             !strcmp(proto, "https"))) == NULL) {
-    cry(fc(ctx), "%s: mg_connect(%s): %s", __func__, url, strerror(ERRNO));
+    cry(fc(), "%s: mg_connect(%s): %s", __func__, url, strerror(ERRNO));
   } else {
     mg_printf(newconn, "GET /%s HTTP/1.0\r\nHost: %s\r\n\r\n", url + n, host);
     data_length = 0;
     req_length = read_request(NULL, newconn, buf, buf_len, &data_length);
     if (req_length <= 0) {
-      cry(fc(ctx), "%s(%s): invalid HTTP reply", __func__, url);
+      cry(fc(), "%s(%s): invalid HTTP reply", __func__, url);
     } else if (parse_http_response(buf, req_length, ri) <= 0) {
-      cry(fc(ctx), "%s(%s): cannot parse HTTP headers", __func__, url);
+      cry(fc(), "%s(%s): cannot parse HTTP headers", __func__, url);
     } else if ((fp = fopen(path, "w+b")) == NULL) {
-      cry(fc(ctx), "%s: fopen(%s): %s", __func__, path, strerror(ERRNO));
+      cry(fc(), "%s: fopen(%s): %s", __func__, path, strerror(ERRNO));
     } else {
       // Write chunk of data that may be in the user's buffer
       data_length -= req_length;
       if (data_length > 0 &&
         fwrite(buf + req_length, 1, data_length, fp) != (size_t) data_length) {
-        cry(fc(ctx), "%s: fwrite(%s): %s", __func__, path, strerror(ERRNO));
+        cry(fc(), "%s: fwrite(%s): %s", __func__, path, strerror(ERRNO));
         fclose(fp);
         fp = NULL;
       }
@@ -4054,7 +4053,7 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
       // mg_read() cause we didn't set newconn->content_len properly.
       while (fp && (data_length = pull(0, newconn, buf2, sizeof(buf2))) > 0) {
         if (fwrite(buf2, 1, data_length, fp) != (size_t) data_length) {
-          cry(fc(ctx), "%s: fwrite(%s): %s", __func__, path, strerror(ERRNO));
+          cry(fc(), "%s: fwrite(%s): %s", __func__, path, strerror(ERRNO));
           fclose(fp);
           fp = NULL;
           break;
@@ -4174,7 +4173,7 @@ static void worker_thread(struct mg_context *ctx) {
 
   conn = (struct mg_connection *) calloc(1, sizeof(*conn) + buf_size);
   if (conn == NULL) {
-    cry(fc(ctx), "%s", "Cannot create new connection struct, OOM");
+    cry(fc(), "%s", "Cannot create new connection struct, OOM");
   } else {
     conn->buf_size = buf_size;
     conn->buf = (char *) (conn + 1);
@@ -4256,7 +4255,7 @@ static void accept_new_connection(const struct socket *listener,
       produce_socket(ctx, &accepted);
     } else {
       sockaddr_to_string(src_addr, sizeof(src_addr), &accepted.rsa);
-      cry(fc(ctx), "%s: %s is not allowed to connect", __func__, src_addr);
+      cry(fc(), "%s: %s is not allowed to connect", __func__, src_addr);
       (void) closesocket(accepted.sock);
     }
   }
@@ -4400,16 +4399,16 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
 
   while (options && (name = *options++) != NULL) {
     if ((i = get_option_index(name)) == -1) {
-      cry(fc(ctx), "Invalid option: %s", name);
+      cry(fc(), "Invalid option: %s", name);
       free_context(ctx);
       return NULL;
     } else if ((value = *options++) == NULL) {
-      cry(fc(ctx), "%s: option value cannot be NULL", name);
+      cry(fc(), "%s: option value cannot be NULL", name);
       free_context(ctx);
       return NULL;
     }
     if (ctx->config[i] != NULL) {
-      cry(fc(ctx), "warning: %s: duplicate option", name);
+      cry(fc(), "warning: %s: duplicate option", name);
     }
     ctx->config[i] = mg_strdup(value);
     DEBUG_TRACE(("[%s] -> [%s]", name, value));
@@ -4460,7 +4459,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
   // Start worker threads
   for (i = 0; i < atoi(ctx->config[NUM_THREADS]); i++) {
     if (mg_start_thread((mg_thread_func_t) worker_thread, ctx) != 0) {
-      cry(fc(ctx), "Cannot start worker thread: %d", ERRNO);
+      cry(fc(), "Cannot start worker thread: %d", ERRNO);
     } else {
       ctx->num_threads++;
     }
