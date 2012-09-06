@@ -4429,7 +4429,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
   // be initialized before listening ports. UID must be set last.
   if (!set_gpass_option(ctx) ||
 #if !defined(NO_SSL)
-      !set_ssl_option(ctx) ||
+      (ctx->config[SSL_CERTIFICATE] != NULL && !set_ssl_option(ctx)) ||
 #endif
       !set_ports_option(ctx) ||
 #if !defined(_WIN32)
