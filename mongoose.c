@@ -293,6 +293,7 @@ extern int SSL_CTX_use_certificate_file(SSL_CTX *, const char *, int);
 extern int SSL_CTX_use_certificate_chain_file(SSL_CTX *, const char *);
 extern void SSL_CTX_set_default_passwd_cb(SSL_CTX *, mg_callback_t);
 extern void SSL_CTX_free(SSL_CTX *);
+extern int SSL_CTX_set_cipher_list(SSL_CTX *ctx, const char *str);
 extern unsigned long ERR_get_error(void);
 extern char *ERR_error_string(unsigned long, char *);
 extern int CRYPTO_num_locks(void);
@@ -327,6 +328,8 @@ struct ssl_func {
 #define SSL_CTX_use_certificate_chain_file \
   (* (int (*)(SSL_CTX *, const char *)) ssl_sw[16].ptr)
 #define SSLv23_client_method (* (SSL_METHOD * (*)(void)) ssl_sw[17].ptr)
+#define SSL_CTX_set_cipher_list \
+  (* (int (*)(SSL_CTX *, const char *)) ssl_sw[18].ptr)
 
 #define CRYPTO_num_locks (* (int (*)(void)) crypto_sw[0].ptr)
 #define CRYPTO_set_locking_callback \
@@ -359,6 +362,7 @@ static struct ssl_func ssl_sw[] = {
   {"SSL_load_error_strings", NULL},
   {"SSL_CTX_use_certificate_chain_file", NULL},
   {"SSLv23_client_method", NULL},
+  {"SSL_CTX_set_cipher_list", NULL},
   {NULL,    NULL}
 };
 
@@ -420,7 +424,7 @@ enum {
   ACCESS_LOG_FILE, SSL_CHAIN_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
   GLOBAL_PASSWORDS_FILE, INDEX_FILES, ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST,
   EXTRA_MIME_TYPES, LISTENING_PORTS, DOCUMENT_ROOT, SSL_CERTIFICATE,
-  NUM_THREADS, RUN_AS_USER, REWRITE, HIDE_FILES,
+  NUM_THREADS, RUN_AS_USER, REWRITE, HIDE_FILES, SSL_CIPHERS,
   NUM_OPTIONS
 };
 
@@ -449,6 +453,7 @@ static const char *config_options[] = {
   "u", "run_as_user", NULL,
   "w", "url_rewrite_patterns", NULL,
   "x", "hide_files_patterns", NULL,
+  "H", "ssl_ciphers", NULL,
   NULL
 };
 #define ENTRIES_PER_CONFIG_OPTION 3
@@ -3840,6 +3845,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   int i, size;
   const char *pem = ctx->config[SSL_CERTIFICATE];
   const char *chain = ctx->config[SSL_CHAIN_FILE];
+  const char *ciphers = ctx->config[SSL_CIPHERS];
 
 #if !defined(NO_SSL_DL)
   if (!load_dll(ctx, SSL_LIB, ssl_sw) ||
@@ -3877,6 +3883,11 @@ static int set_ssl_option(struct mg_context *ctx) {
   if (ctx->ssl_ctx != NULL && chain != NULL &&
       SSL_CTX_use_certificate_chain_file(ctx->ssl_ctx, chain) == 0) {
     cry(fc(ctx), "%s: cannot open %s: %s", __func__, chain, ssl_error());
+    return 0;
+  }
+  if (ctx->ssl_ctx != NULL && ciphers != NULL &&
+      SSL_CTX_set_cipher_list(ctx->ssl_ctx, ciphers) == 0){
+    cry(fc(ctx), "%s: unable to set cipher list %s: %s", NULL, ciphers, ssl_error());
     return 0;
   }
 
