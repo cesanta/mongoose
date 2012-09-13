@@ -24,7 +24,7 @@ all:
 
 GCC_WARNS   = -W -Wall -pedantic
 #  -Wno-missing-field-initializers  -Wno-unused-parameter -Wno-format-zero-length -Wno-missing-braces
-CFLAGS      = -W -Wall -std=c99 -O2 $(GCC_WARNS) $(COPT)
+CFLAGS      = -std=c99 -O2 $(GCC_WARNS) $(COPT)
 MAC_SHARED  = -flat_namespace -bundle -undefined suppress
 LINFLAGS    = -ldl -pthread $(CFLAGS)
 LIB         = _$(PROG).so
@@ -116,8 +116,8 @@ windows:
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0 -ggdb
 MINGWDBG= -DNDEBUG -Os
-MINGWOPT=   -std=c99 -mthreads -Wl,--subsystem,console $(MINGWDBG) -DHAVE_STDINT $(GCC_WARNINGS) $(COPT)
-#MINGWOPT=  -std=c99 -mthreads -Wl,--subsystem,windows $(MINGWDBG) -DHAVE_STDINT $(GCC_WARNINGS) $(COPT)
+MINGWOPT=  -W -Wall -mthreads -Wl,--subsystem,console $(MINGWDBG) -DHAVE_STDINT $(GCC_WARNINGS) $(COPT)
+#MINGWOPT= -W -Wall -mthreads -Wl,--subsystem,windows $(MINGWDBG) -DHAVE_STDINT $(GCC_WARNINGS) $(COPT)
 mingw:
 	windres win32\res.rc win32\res.o
 	$(CC) $(MINGWOPT) mongoose.c -lws2_32 \
@@ -142,10 +142,6 @@ tests:
 
 release: clean
 	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`.tgz ; cd .. && tar -czf x mongoose/{LICENSE,Makefile,bindings,examples,test,win32,mongoose.c,mongoose.h,mongoose.1,main.c} && mv x mongoose/$$F
-
-mongoose.c: mongoose.h
-main.c: mongoose.h
-.PHONY: mongoose.c main.c
 
 clean:
 	rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz $(PROG).exe *.dll *.lib
