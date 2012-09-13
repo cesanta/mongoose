@@ -1492,7 +1492,9 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   len = vsnprintf(mem, sizeof(mem), fmt, ap);
   va_end(ap);
 
-  if (len <= 0) {
+  if (len == 0) {
+    // Do nothing. mg_printf(conn, "%s", "") was called.
+  } else if (len < 0) {
     // vsnprintf() error, give up
     len = -1;
     cry(conn, "%s(%s, ...): vsnprintf() error", __func__, fmt);
