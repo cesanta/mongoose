@@ -215,8 +215,6 @@ $num_requests++;
 write_file("$root/a+.txt", '');
 o("GET /a+.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'URL-decoding, + in URI');
 
-o("GET /%5c/a.txt HTTP/1.0\n\n", 'blah', 'GET dir backslash');
-
 # Test HTTP version parsing
 o("GET / HTTPX/1.0\r\n\r\n", '400 Bad Request', 'Bad HTTP Version', 0);
 o("GET / HTTP/x.1\r\n\r\n", '505 HTTP', 'Bad HTTP maj Version');
