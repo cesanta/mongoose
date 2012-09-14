@@ -27,6 +27,10 @@
 #define __STDC_LIMIT_MACROS   // C++ wants that for INT64_MAX
 #endif
 
+#ifdef WIN32_LEAN_AND_MEAN
+#undef WIN32_LEAN_AND_MEAN    // Disable WIN32_LEAN_AND_MEAN, if necessary
+#endif
+
 #if defined(__SYMBIAN32__)
 #define NO_SSL // SSL is not supported
 #define NO_CGI // CGI is not supported
@@ -231,6 +235,10 @@ static pthread_t pthread_self(void) {
 }
 #endif // _WIN32
 
+#ifdef DEBUG_TRACE
+#undef DEBUG_TRACE
+#define DEBUG_TRACE(x)
+#else
 #if defined(DEBUG)
 #define DEBUG_TRACE(x) do { \
   flockfile(stdout); \
@@ -245,6 +253,7 @@ static pthread_t pthread_self(void) {
 #else
 #define DEBUG_TRACE(x)
 #endif // DEBUG
+#endif // DEBUG_TRACE
 
 // Darwin prior to 7.0 and Win32 do not have socklen_t
 #ifdef NO_SOCKLEN_T
