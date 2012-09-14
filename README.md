@@ -13,7 +13,8 @@ Features
 - CGI, SSL, SSI, Digest (MD5) authorization, resumed download, aliases
 - IP-based ACL, Windows service, GET, POST, HEAD, PUT, DELETE methods
 - Small footprint: executable size is 40 kB on Linux 2.6 i386 system
-- Embeddable with [simple and clean API](https://github.com/valenok/mongoose/blob/master/mongoose.h). Source is in single .c file to make things easy. Minimalistic embedding example is in [hello.c](https://github.com/valenok/mongoose/blob/master/examples/hello.c).
+- Embeddable with [simple and clean API](https://github.com/valenok/mongoose/blob/master/mongoose.h). Source is in single .c file to make things easy.
+- Examples: [hello.c](https://github.com/valenok/mongoose/blob/master/examples/hello.c), [post.c](https://github.com/valenok/mongoose/blob/master/examples/post.c), [upload.c](https://github.com/valenok/mongoose/blob/master/examples/upload.c)
 - Python and C# bindings
 
 
