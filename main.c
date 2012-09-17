@@ -222,6 +222,8 @@ static void *mongoose_callback(enum mg_event ev, struct mg_connection *conn) {
     printf("%s\n", mg_get_log_message(conn));
   }
 
+  // Returning NULL marks request as not handled, signalling mongoose to
+  // proceed with handling it.
   return NULL;
 }
 
