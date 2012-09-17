@@ -497,10 +497,12 @@ struct mg_connection {
   char *path_info;            // PATH_INFO part of the URL
   char *body;                 // Pointer to not-read yet buffered body data
   char *next_request;         // Pointer to the buffered next request
+  char *log_message;          // Placeholder for the mongoose error log message
   int must_close;             // 1 if connection must be closed
   int buf_size;               // Buffer size
   int request_len;            // Size of the request + headers in a buffer
   int data_len;               // Total size of data in a buffer
+  int status_code;            // HTTP reply status code, e.g. 200
 };
 
 const char **mg_get_valid_option_names(void) {
@@ -508,9 +510,20 @@ const char **mg_get_valid_option_names(void) {
 }
 
 static void *call_user(struct mg_connection *conn, enum mg_event event) {
-  conn->request_info.user_data = conn->ctx->user_data;
-  return conn->ctx->user_callback == NULL ? NULL :
-    conn->ctx->user_callback(event, conn);
+  return conn == NULL || conn->ctx == NULL || conn->ctx->user_callback == NULL ?
+    NULL : conn->ctx->user_callback(event, conn);
+}
+
+void *mg_get_user_data(struct mg_connection *conn) {
+  return conn != NULL && conn->ctx != NULL ? conn->ctx->user_data : NULL;
+}
+
+const char *mg_get_log_message(const struct mg_connection *conn) {
+  return conn == NULL ? NULL : conn->log_message;
+}
+
+int mg_get_reply_status_code(const struct mg_connection *conn) {
+  return conn == NULL ? -1 : conn->status_code;
 }
 
 static int get_option_index(const char *name) {
@@ -565,7 +578,7 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
   // Do not lock when getting the callback value, here and below.
   // I suppose this is fine, since function cannot disappear in the
   // same way string option can.
-  conn->request_info.log_message = buf;
+  conn->log_message = buf;
   if (call_user(conn, MG_EVENT_LOG) == NULL) {
     fp = conn->ctx->config[ERROR_LOG_FILE] == NULL ? NULL :
       mg_fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
@@ -591,7 +604,7 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
       }
     }
   }
-  conn->request_info.log_message = NULL;
+  conn->log_message = NULL;
 }
 
 // Return fake connection structure. Used for logging, if connection
@@ -849,7 +862,7 @@ static int should_keep_alive(const struct mg_connection *conn) {
   const char *http_version = conn->request_info.http_version;
   const char *header = mg_get_header(conn, "Connection");
   if (conn->must_close ||
-      conn->request_info.status_code == 401 ||
+      conn->status_code == 401 ||
       mg_strcasecmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes") != 0 ||
       (header != NULL && mg_strcasecmp(header, "keep-alive") != 0) ||
       (header == NULL && http_version && strcmp(http_version, "1.1"))) {
@@ -873,7 +886,7 @@ static void send_http_error(struct mg_connection *conn, int status,
   va_list ap;
   int len;
 
-  conn->request_info.status_code = status;
+  conn->status_code = status;
 
   if (call_user(conn, MG_HTTP_ERROR) == NULL) {
     buf[0] = '\0';
@@ -2289,7 +2302,7 @@ static int check_authorization(struct mg_connection *conn, const char *path) {
 }
 
 static void send_authorization_request(struct mg_connection *conn) {
-  conn->request_info.status_code = 401;
+  conn->status_code = 401;
   (void) mg_printf(conn,
       "HTTP/1.1 401 Unauthorized\r\n"
       "Content-Length: 0\r\n"
@@ -2582,7 +2595,7 @@ static void handle_directory_request(struct mg_connection *conn,
   free(data.entries);
 
   conn->num_bytes_sent += mg_printf(conn, "%s", "</table></body></html>");
-  conn->request_info.status_code = 200;
+  conn->status_code = 200;
 }
 
 // Send len bytes from the opened file to the client.
@@ -2639,7 +2652,7 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
 
   get_mime_type(conn->ctx, path, &mime_vec);
   cl = stp->size;
-  conn->request_info.status_code = 200;
+  conn->status_code = 200;
   range[0] = '\0';
 
   if ((fp = mg_fopen(path, "rb")) == NULL) {
@@ -2653,7 +2666,7 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
   r1 = r2 = 0;
   hdr = mg_get_header(conn, "Range");
   if (hdr != NULL && (n = parse_range_header(hdr, &r1, &r2)) > 0) {
-    conn->request_info.status_code = 206;
+    conn->status_code = 206;
     (void) fseeko(fp, r1, SEEK_SET);
     cl = n == 2 ? r2 - r1 + 1: cl - r1;
     (void) mg_snprintf(conn, range, sizeof(range),
@@ -2680,7 +2693,7 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
       "Connection: %s\r\n"
       "Accept-Ranges: bytes\r\n"
       "%s\r\n",
-      conn->request_info.status_code, msg, date, lm, etag, (int) mime_vec.len,
+      conn->status_code, msg, date, lm, etag, (int) mime_vec.len,
       mime_vec.ptr, cl, suggest_connection_header(conn), range);
 
   if (strcmp(conn->request_info.request_method, "HEAD") != 0) {
@@ -2729,7 +2742,6 @@ static int parse_http_message(char *buf, int len, struct mg_request_info *ri) {
     // Reset attributes. DO NOT TOUCH is_ssl, remote_ip, remote_port
     ri->remote_user = ri->request_method = ri->uri = ri->http_version = NULL;
     ri->num_headers = 0;
-    ri->status_code = -1;
 
     buf[request_length - 1] = '\0';
 
@@ -3144,21 +3156,21 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   // Make up and send the status line
   status_text = "OK";
   if ((status = get_header(&ri, "Status")) != NULL) {
-    conn->request_info.status_code = atoi(status);
+    conn->status_code = atoi(status);
     status_text = status;
     while (isdigit(* (unsigned char *) status_text) || *status_text == ' ') {
       status_text++;
     }
   } else if (get_header(&ri, "Location") != NULL) {
-    conn->request_info.status_code = 302;
+    conn->status_code = 302;
   } else {
-    conn->request_info.status_code = 200;
+    conn->status_code = 200;
   }
   if (get_header(&ri, "Connection") != NULL &&
       !mg_strcasecmp(get_header(&ri, "Connection"), "keep-alive")) {
     conn->must_close = 1;
   }
-  (void) mg_printf(conn, "HTTP/1.1 %d %s\r\n", conn->request_info.status_code,
+  (void) mg_printf(conn, "HTTP/1.1 %d %s\r\n", conn->status_code,
                    status_text);
 
   // Send headers
@@ -3241,10 +3253,10 @@ static void put_file(struct mg_connection *conn, const char *path) {
   FILE *fp;
   int rc;
 
-  conn->request_info.status_code = mg_stat(path, &st) == 0 ? 200 : 201;
+  conn->status_code = mg_stat(path, &st) == 0 ? 200 : 201;
 
   if ((rc = put_dir(path)) == 0) {
-    mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->request_info.status_code);
+    mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->status_code);
   } else if (rc == -1) {
     send_http_error(conn, 500, http_500_error,
         "put_dir(%s): %s", path, strerror(ERRNO));
@@ -3256,13 +3268,13 @@ static void put_file(struct mg_connection *conn, const char *path) {
     range = mg_get_header(conn, "Content-Range");
     r1 = r2 = 0;
     if (range != NULL && parse_range_header(range, &r1, &r2) > 0) {
-      conn->request_info.status_code = 206;
+      conn->status_code = 206;
       // TODO(lsm): handle seek error
       (void) fseeko(fp, r1, SEEK_SET);
     }
-    if (forward_body_data(conn, fp, INVALID_SOCKET, NULL))
-      (void) mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n",
-          conn->request_info.status_code);
+    if (forward_body_data(conn, fp, INVALID_SOCKET, NULL)) {
+      (void) mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->status_code);
+    }
     (void) fclose(fp);
   }
 }
@@ -3412,7 +3424,7 @@ static void handle_ssi_file_request(struct mg_connection *conn,
 }
 
 static void send_options(struct mg_connection *conn) {
-  conn->request_info.status_code = 200;
+  conn->status_code = 200;
 
   (void) mg_printf(conn,
       "HTTP/1.1 200 OK\r\n"
@@ -3456,7 +3468,7 @@ static void handle_propfind(struct mg_connection *conn, const char* path,
   const char *depth = mg_get_header(conn, "Depth");
 
   conn->must_close = 1;
-  conn->request_info.status_code = 207;
+  conn->status_code = 207;
   mg_printf(conn, "HTTP/1.1 207 Multi-Status\r\n"
             "Connection: close\r\n"
             "Content-Type: text/xml; charset=utf-8\r\n\r\n");
@@ -3694,7 +3706,7 @@ static void log_access(const struct mg_connection *conn) {
           src_addr, ri->remote_user == NULL ? "-" : ri->remote_user, date,
           ri->request_method ? ri->request_method : "-",
           ri->uri ? ri->uri : "-", ri->http_version,
-          conn->request_info.status_code, conn->num_bytes_sent);
+          conn->status_code, conn->num_bytes_sent);
   log_header(conn, "Referer", fp);
   log_header(conn, "User-Agent", fp);
   fputc('\n', fp);
@@ -3848,7 +3860,6 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
 
 // Dynamically load SSL library. Set up ctx->ssl_ctx pointer.
 static int set_ssl_option(struct mg_context *ctx) {
-  static struct mg_request_info fake_request_info;
   int i, size;
   const char *pem = ctx->config[SSL_CERTIFICATE];
 
@@ -3873,7 +3884,6 @@ static int set_ssl_option(struct mg_context *ctx) {
   }
   
   if (ctx->user_callback != NULL) {
-    fake_request_info.user_data = ctx->user_data;
     ctx->user_callback(MG_INIT_SSL, (struct mg_connection *) ctx->ssl_ctx);
   }
 
@@ -3928,11 +3938,12 @@ static int set_acl_option(struct mg_context *ctx) {
 }
 
 static void reset_per_request_attributes(struct mg_connection *conn) {
-  conn->path_info = conn->body = conn->next_request = NULL;
+  conn->path_info = conn->body = conn->next_request = conn->log_message = NULL;
   conn->num_bytes_sent = conn->consumed_content = 0;
   conn->content_len = -1;
   conn->request_len = conn->data_len = 0;
   conn->must_close = 0;
+  conn->status_code = -1;
 }
 
 static void close_socket_gracefully(struct mg_connection *conn) {

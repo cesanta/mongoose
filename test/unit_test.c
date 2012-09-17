@@ -64,10 +64,10 @@ static void test_should_keep_alive(void) {
   parse_http_request(req4, sizeof(req4), &conn.request_info);
   ASSERT(should_keep_alive(&conn) == 1);
 
-  conn.request_info.status_code = 401;
+  conn.status_code = 401;
   ASSERT(should_keep_alive(&conn) == 0);
 
-  conn.request_info.status_code = 200;
+  conn.status_code = 200;
   conn.must_close = 1;
   ASSERT(should_keep_alive(&conn) == 0);
 }
@@ -138,7 +138,7 @@ static void *event_handler(enum mg_event event,
               "%s", (int) strlen(fetch_data), fetch_data);
     return "";
   } else if (event == MG_EVENT_LOG) {
-    printf("%s\n", request_info->log_message);
+    printf("%s\n", mg_get_log_message(conn));
   }
   
   return NULL;

@@ -34,16 +34,13 @@ struct mg_connection;  // Handle for the individual connection
 
 // This structure contains information about the HTTP request.
 struct mg_request_info {
-  void *user_data;       // User-defined pointer passed to mg_start()
   char *request_method;  // "GET", "POST", etc
   char *uri;             // URL-decoded URI
   char *http_version;    // E.g. "1.0", "1.1"
   char *query_string;    // URL part after '?' (not including '?') or NULL
   char *remote_user;     // Authenticated user, or NULL if no auth used
-  char *log_message;     // Mongoose error log message, MG_EVENT_LOG only
   long remote_ip;        // Client's IP address
   int remote_port;       // Client's port
-  int status_code;       // HTTP reply status code, e.g. 200
   int is_ssl;            // 1 if SSL-ed, 0 if not
   int num_headers;       // Number of headers
   struct mg_header {
@@ -151,9 +148,12 @@ int mg_modify_passwords_file(const char *passwords_file_name,
                              const char *password);
 
 
-// Return mg_request_info structure associated with the request.
-// Always succeeds.
+// Return information associated with the request.
+// These functions always succeed.
 const struct mg_request_info *mg_get_request_info(const struct mg_connection *);
+void *mg_get_user_data(struct mg_connection *);
+const char *mg_get_log_message(const struct mg_connection *);
+int mg_get_reply_status_code(const struct mg_connection *);
 
 
 // Send data to the client.

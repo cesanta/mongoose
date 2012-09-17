@@ -219,7 +219,7 @@ static void init_server_name(void) {
 
 static void *mongoose_callback(enum mg_event ev, struct mg_connection *conn) {
   if (ev == MG_EVENT_LOG) {
-    printf("%s\n", mg_get_request_info(conn)->log_message);
+    printf("%s\n", mg_get_log_message(conn));
   }
 
   return NULL;
