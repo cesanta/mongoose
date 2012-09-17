@@ -526,6 +526,10 @@ int mg_get_reply_status_code(const struct mg_connection *conn) {
   return conn == NULL ? -1 : conn->status_code;
 }
 
+void *mg_get_ssl_context(const struct mg_connection *conn) {
+  return conn == NULL || conn->ctx == NULL ? NULL : conn->ctx->ssl_ctx;
+}
+
 static int get_option_index(const char *name) {
   int i;
 
@@ -3883,17 +3887,18 @@ static int set_ssl_option(struct mg_context *ctx) {
     return 0;
   }
   
-  if (ctx->user_callback != NULL) {
-    ctx->user_callback(MG_INIT_SSL, (struct mg_connection *) ctx->ssl_ctx);
-  }
-
-  if (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0 ||
-      SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0) {
+  // If user callback returned non-NULL, that means that user callback has
+  // set up certificate itself. In this case, skip sertificate setting.
+  if (call_user(fc(ctx), MG_INIT_SSL) == NULL && pem != NULL &&
+      (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0 ||
+       SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0)) {
     cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
     return 0;
   }
 
-  (void) SSL_CTX_use_certificate_chain_file(ctx->ssl_ctx, pem);
+  if (pem != NULL) {
+    (void) SSL_CTX_use_certificate_chain_file(ctx->ssl_ctx, pem);
+  }
 
   // Initialize locking callbacks, needed for thread safety.
   // http://www.openssl.org/support/faq.html#PROG1
@@ -4445,7 +4450,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
   // be initialized before listening ports. UID must be set last.
   if (!set_gpass_option(ctx) ||
 #if !defined(NO_SSL)
-      (ctx->config[SSL_CERTIFICATE] != NULL && !set_ssl_option(ctx)) ||
+      !set_ssl_option(ctx) ||
 #endif
       !set_ports_option(ctx) ||
 #if !defined(_WIN32)

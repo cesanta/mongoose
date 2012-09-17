@@ -154,6 +154,7 @@ const struct mg_request_info *mg_get_request_info(const struct mg_connection *);
 void *mg_get_user_data(struct mg_connection *);
 const char *mg_get_log_message(const struct mg_connection *);
 int mg_get_reply_status_code(const struct mg_connection *);
+void *mg_get_ssl_context(const struct mg_connection *);
 
 
 // Send data to the client.
