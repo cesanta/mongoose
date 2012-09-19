@@ -49,15 +49,22 @@ struct mg_request_info {
   } http_headers[64];    // Maximum 64 headers
 };
 
+
 // Various events on which user-defined function is called by Mongoose.
 enum mg_event {
   MG_NEW_REQUEST,       // New HTTP request has arrived from the client
   MG_REQUEST_COMPLETE,  // Mongoose has finished handling the request
   MG_HTTP_ERROR,        // HTTP error must be returned to the client
   MG_EVENT_LOG,         // Mongoose logs an event, request_info.log_message
-  MG_INIT_SSL           // Mongoose initializes SSL. Instead of mg_connection *,
-                        // SSL context is passed to the callback function.
+  MG_INIT_SSL,          // SSL initialization, sent before certificate setup
+  MG_WEBSOCKET_CONNECT, // Sent on HTTP connect, before websocket handshake.
+                        // If user callback returns NULL, then mongoose proceeds
+                        // with handshake, otherwise it closes the connection.
+  MG_WEBSOCKET_READY,   // Handshake has been successfully completed.
+  MG_WEBSOCKET_MESSAGE, // Incoming message from the client
+  MG_WEBSOCKET_CLOSE,   // Client has sent FIN frame
 };
+
 
 // Prototype for the user-defined function. Mongoose calls this function
 // on every MG_* event.
@@ -74,8 +81,7 @@ enum mg_event {
 //   If handler returns NULL, that means that handler has not processed
 //   the request. Handler must not send any data to the client in this case.
 //   Mongoose proceeds with request handling as if nothing happened.
-typedef void * (*mg_callback_t)(enum mg_event event,
-                                struct mg_connection *conn);
+typedef void *(*mg_callback_t)(enum mg_event event, struct mg_connection *conn);
 
 
 // Start web server.

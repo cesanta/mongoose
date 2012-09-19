@@ -196,7 +196,21 @@ static void test_mg_fetch(void) {
   mg_stop(ctx);
 }
 
+static void test_base64_encode(void) {
+  const char *in[] = {"a", "ab", "abc", "abcd", NULL};
+  const char *out[] = {"YQ==", "YWI=", "YWJj", "YWJjZA=="};
+  char buf[100];
+  int i;
+
+  for (i = 0; in[i] != NULL; i++) {
+    base64_encode((unsigned char *) in[i], strlen(in[i]), buf);
+    printf("[%s] [%s]\n", out[i], buf);
+    ASSERT(!strcmp(buf, out[i]));
+  }
+}
+
 int main(void) {
+  test_base64_encode();
   test_match_prefix();
   test_remove_double_dots();
   test_should_keep_alive();
