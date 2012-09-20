@@ -4381,8 +4381,8 @@ static void process_new_connection(struct mg_connection *conn) {
 
     // Discard all buffered data for this request
     discard_len = conn->content_len >= 0 &&
-      conn->request_len + conn->content_len < conn->data_len ?
-      conn->request_len + conn->content_len : conn->data_len;
+      conn->request_len + conn->content_len < (int64_t) conn->data_len ?
+      (int) (conn->request_len + conn->content_len) : conn->data_len;
     memmove(conn->buf, conn->buf + discard_len, conn->data_len - discard_len);
     conn->data_len -= discard_len;
     assert(conn->data_len >= 0);
