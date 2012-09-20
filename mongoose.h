@@ -34,16 +34,13 @@ struct mg_connection;  // Handle for the individual connection
 
 // This structure contains information about the HTTP request.
 struct mg_request_info {
-  void *user_data;       // User-defined pointer passed to mg_start()
   char *request_method;  // "GET", "POST", etc
   char *uri;             // URL-decoded URI
   char *http_version;    // E.g. "1.0", "1.1"
   char *query_string;    // URL part after '?' (not including '?') or NULL
   char *remote_user;     // Authenticated user, or NULL if no auth used
-  char *log_message;     // Mongoose error log message, MG_EVENT_LOG only
   long remote_ip;        // Client's IP address
   int remote_port;       // Client's port
-  int status_code;       // HTTP reply status code, e.g. 200
   int is_ssl;            // 1 if SSL-ed, 0 if not
   int num_headers;       // Number of headers
   struct mg_header {
@@ -52,15 +49,22 @@ struct mg_request_info {
   } http_headers[64];    // Maximum 64 headers
 };
 
+
 // Various events on which user-defined function is called by Mongoose.
 enum mg_event {
   MG_NEW_REQUEST,       // New HTTP request has arrived from the client
   MG_REQUEST_COMPLETE,  // Mongoose has finished handling the request
   MG_HTTP_ERROR,        // HTTP error must be returned to the client
   MG_EVENT_LOG,         // Mongoose logs an event, request_info.log_message
-  MG_INIT_SSL           // Mongoose initializes SSL. Instead of mg_connection *,
-                        // SSL context is passed to the callback function.
+  MG_INIT_SSL,          // SSL initialization, sent before certificate setup
+  MG_WEBSOCKET_CONNECT, // Sent on HTTP connect, before websocket handshake.
+                        // If user callback returns NULL, then mongoose proceeds
+                        // with handshake, otherwise it closes the connection.
+  MG_WEBSOCKET_READY,   // Handshake has been successfully completed.
+  MG_WEBSOCKET_MESSAGE, // Incoming message from the client
+  MG_WEBSOCKET_CLOSE,   // Client has sent FIN frame
 };
+
 
 // Prototype for the user-defined function. Mongoose calls this function
 // on every MG_* event.
@@ -77,8 +81,7 @@ enum mg_event {
 //   If handler returns NULL, that means that handler has not processed
 //   the request. Handler must not send any data to the client in this case.
 //   Mongoose proceeds with request handling as if nothing happened.
-typedef void * (*mg_callback_t)(enum mg_event event,
-                                struct mg_connection *conn);
+typedef void *(*mg_callback_t)(enum mg_event event, struct mg_connection *conn);
 
 
 // Start web server.
@@ -151,9 +154,13 @@ int mg_modify_passwords_file(const char *passwords_file_name,
                              const char *password);
 
 
-// Return mg_request_info structure associated with the request.
-// Always succeeds.
+// Return information associated with the request.
+// These functions always succeed.
 const struct mg_request_info *mg_get_request_info(const struct mg_connection *);
+void *mg_get_user_data(struct mg_connection *);
+const char *mg_get_log_message(const struct mg_connection *);
+int mg_get_reply_status_code(const struct mg_connection *);
+void *mg_get_ssl_context(const struct mg_connection *);
 
 
 // Send data to the client.

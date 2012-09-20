@@ -1,0 +1,34 @@
+<!DOCTYPE html>  
+<meta charset="utf-8" />  
+<title>WebSocket Test</title>  
+<script language="javascript" type="text/javascript">
+  var writeToScreen = function(message) {
+    var div = document.createElement('div');
+    div.innerHTML = message;
+    document.getElementById('output').appendChild(div);
+  };
+  window.onload = function() {
+    var url = 'ws://' + window.location.host + '/foo';
+    websocket = new WebSocket(url);
+    websocket.onopen = function(ev) {
+      writeToScreen('CONNECTED');
+      var message = 'Не всё подчиняется разуму. Но всё подчиняется упорству. ';
+      writeToScreen('SENT: ' + message);
+      websocket.send(message);
+    };
+    websocket.onclose = function(ev) {
+      writeToScreen('DISCONNECTED');
+    };
+    websocket.onmessage = function(ev) {
+      writeToScreen('<span style="color: blue;">RESPONSE: ' + ev.data +
+                    ' </span>');
+      websocket.close();
+    };
+    websocket.onerror = function(ev) {
+      writeToScreen('<span style="color: red; ">ERROR: </span> ' + ev.data);
+    };
+  };
+</script>  
+<h2>WebSocket Test</h2>  
+<div id="output"></div>  
+</html>

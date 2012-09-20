@@ -64,10 +64,10 @@ static void test_should_keep_alive(void) {
   parse_http_request(req4, sizeof(req4), &conn.request_info);
   ASSERT(should_keep_alive(&conn) == 1);
 
-  conn.request_info.status_code = 401;
+  conn.status_code = 401;
   ASSERT(should_keep_alive(&conn) == 0);
 
-  conn.request_info.status_code = 200;
+  conn.status_code = 200;
   conn.must_close = 1;
   ASSERT(should_keep_alive(&conn) == 0);
 }
@@ -138,7 +138,7 @@ static void *event_handler(enum mg_event event,
               "%s", (int) strlen(fetch_data), fetch_data);
     return "";
   } else if (event == MG_EVENT_LOG) {
-    printf("%s\n", request_info->log_message);
+    printf("%s\n", mg_get_log_message(conn));
   }
   
   return NULL;
@@ -196,7 +196,21 @@ static void test_mg_fetch(void) {
   mg_stop(ctx);
 }
 
+static void test_base64_encode(void) {
+  const char *in[] = {"a", "ab", "abc", "abcd", NULL};
+  const char *out[] = {"YQ==", "YWI=", "YWJj", "YWJjZA=="};
+  char buf[100];
+  int i;
+
+  for (i = 0; in[i] != NULL; i++) {
+    base64_encode((unsigned char *) in[i], strlen(in[i]), buf);
+    printf("[%s] [%s]\n", out[i], buf);
+    ASSERT(!strcmp(buf, out[i]));
+  }
+}
+
 int main(void) {
+  test_base64_encode();
   test_match_prefix();
   test_remove_double_dots();
   test_should_keep_alive();
