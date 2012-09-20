@@ -3133,9 +3133,11 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
       !forward_body_data(conn, in, INVALID_SOCKET, NULL)) {
     goto done;
   }
+
   // Close so child gets an EOF.
   fclose(in);
   in = NULL;
+  fd_stdin[1] = -1;
 
   // Now read CGI reply into a buffer. We need to set correct
   // status code, thus we need to see all HTTP headers first.
