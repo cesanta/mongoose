@@ -106,8 +106,6 @@ typedef long off_t;
 #define NO_SOCKLEN_T
 #define SSL_LIB   "ssleay32.dll"
 #define CRYPTO_LIB  "libeay32.dll"
-#define DIRSEP '\\'
-#define IS_DIRSEP_CHAR(c) ((c) == '/' || (c) == '\\')
 #define O_NONBLOCK  0
 #if !defined(EWOULDBLOCK)
 #define EWOULDBLOCK  WSAEWOULDBLOCK
@@ -202,8 +200,6 @@ typedef struct DIR {
 #define CRYPTO_LIB  "libcrypto.so"
 #endif
 #endif
-#define DIRSEP   '/'
-#define IS_DIRSEP_CHAR(c) ((c) == '/')
 #ifndef O_BINARY
 #define O_BINARY  0
 #endif // O_BINARY
@@ -1243,7 +1239,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   interp = conn->ctx->config[CGI_INTERPRETER];
   if (interp == NULL) {
     buf[2] = '\0';
-    mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%c%s", dir, DIRSEP, prog);
+    mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%c%s", dir, '/', prog);
     if ((fp = fopen(cmdline, "r")) != NULL) {
       (void) fgets(buf, sizeof(buf), fp);
       if (buf[0] != '#' || buf[1] != '!') {
@@ -1261,7 +1257,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   }
 
   (void) mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%s%s%c%s",
-                     interp, interp[0] == '\0' ? "" : " ", dir, DIRSEP, prog);
+                     interp, interp[0] == '\0' ? "" : " ", dir, '\\', prog);
 
   DEBUG_TRACE(("Running [%s]", cmdline));
   if (CreateProcessA(NULL, cmdline, NULL, NULL, TRUE,
@@ -1674,10 +1670,6 @@ static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
     }
   }
 
-#if defined(_WIN32) && !defined(__SYMBIAN32__)
-  //change_slashes_to_backslashes(buf);
-#endif // _WIN32
-
   if ((stat_result = mg_stat(buf, st)) != 0) {
     // Support PATH_INFO for CGI scripts.
     for (p = buf + strlen(buf); p > buf + 1; p--) {
@@ -1782,15 +1774,16 @@ static void remove_double_dots_and_double_slashes(char *s) {
 
   while (*s != '\0') {
     *p++ = *s++;
-    if (IS_DIRSEP_CHAR(s[-1])) {
-      // Skip all following slashes and backslashes
-      while (IS_DIRSEP_CHAR(s[0])) {
-        s++;
-      }
-
-      // Skip all double-dots
-      while (*s == '.' && s[1] == '.') {
-        s += 2;
+    if (s[-1] == '/' || s[-1] == '\\') {
+      // Skip all following slashes, backslashes and double-dots
+      while (s[0] != '\0') {
+        if (s[0] == '/' || s[0] == '\\') {
+          s++;
+        } else if (s[0] == '.' && s[1] == '.') {
+          s += 2;
+        } else {
+          break;
+        }
       }
     }
   }
@@ -2155,15 +2148,15 @@ static FILE *open_auth_file(struct mg_connection *conn, const char *path) {
           ctx->config[GLOBAL_PASSWORDS_FILE], strerror(ERRNO));
   } else if (!mg_stat(path, &st) && st.is_directory) {
     (void) mg_snprintf(conn, name, sizeof(name), "%s%c%s",
-        path, DIRSEP, PASSWORDS_FILE_NAME);
+        path, '/', PASSWORDS_FILE_NAME);
     fp = mg_fopen(name, "r");
   } else {
      // Try to find .htpasswd in requested directory.
     for (p = path, e = p + strlen(p) - 1; e > p; e--)
-      if (IS_DIRSEP_CHAR(*e))
+      if (e[0] == '/')
         break;
     (void) mg_snprintf(conn, name, sizeof(name), "%.*s%c%s",
-        (int) (e - p), p, DIRSEP, PASSWORDS_FILE_NAME);
+        (int) (e - p), p, '/', PASSWORDS_FILE_NAME);
     fp = mg_fopen(name, "r");
   }
 
@@ -2503,7 +2496,7 @@ static int scan_directory(struct mg_connection *conn, const char *dir,
         continue;
       }
 
-      mg_snprintf(conn, path, sizeof(path), "%s%c%s", dir, DIRSEP, dp->d_name);
+      mg_snprintf(conn, path, sizeof(path), "%s%c%s", dir, '/', dp->d_name);
 
       // If we don't memset stat structure to zero, mtime will have
       // garbage and strftime() will segfault later on in
@@ -2812,10 +2805,10 @@ static int substitute_index_file(struct mg_connection *conn, char *path,
   // The 'path' given to us points to the directory. Remove all trailing
   // directory separator characters from the end of the path, and
   // then append single directory separator character.
-  while (n > 0 && IS_DIRSEP_CHAR(path[n - 1])) {
+  while (n > 0 && path[n - 1] == '/') {
     n--;
   }
-  path[n] = DIRSEP;
+  path[n] = '/';
 
   // Traverse index files list. For each entry, append it to the given
   // path and see if the file exists. If it exists, break the loop
@@ -3090,7 +3083,7 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   // directory containing executable program, 'p' must point to the
   // executable program name relative to 'dir'.
   (void) mg_snprintf(conn, dir, sizeof(dir), "%s", prog);
-  if ((p = strrchr(dir, DIRSEP)) != NULL) {
+  if ((p = strrchr(dir, '/')) != NULL) {
     *p++ = '\0';
   } else {
     dir[0] = '.', dir[1] = '\0';
@@ -3224,7 +3217,7 @@ static int put_dir(const char *path) {
   struct mgstat st;
   int len, res = 1;
 
-  for (s = p = path + 2; (p = strchr(s, DIRSEP)) != NULL; s = ++p) {
+  for (s = p = path + 2; (p = strchr(s, '/')) != NULL; s = ++p) {
     len = p - path;
     if (len >= (int) sizeof(buf)) {
       res = -1;
@@ -3294,7 +3287,7 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
   if (sscanf(tag, " virtual=\"%[^\"]\"", file_name) == 1) {
     // File name is relative to the webserver root
     (void) mg_snprintf(conn, path, sizeof(path), "%s%c%s",
-        conn->ctx->config[DOCUMENT_ROOT], DIRSEP, file_name);
+        conn->ctx->config[DOCUMENT_ROOT], '/', file_name);
   } else if (sscanf(tag, " file=\"%[^\"]\"", file_name) == 1) {
     // File name is relative to the webserver working directory
     // or it is absolute system path
@@ -3302,7 +3295,7 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
   } else if (sscanf(tag, " \"%[^\"]\"", file_name) == 1) {
     // File name is relative to the currect document
     (void) mg_snprintf(conn, path, sizeof(path), "%s", ssi);
-    if ((p = strrchr(path, DIRSEP)) != NULL) {
+    if ((p = strrchr(path, '/')) != NULL) {
       p[1] = '\0';
     }
     (void) mg_snprintf(conn, path + strlen(path),

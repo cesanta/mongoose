@@ -112,17 +112,14 @@ static void test_remove_double_dots() {
     {"/...///", "/./"},
     {"/a...///", "/a.../"},
     {"/.x", "/.x"},
-#if defined(_WIN32)
     {"/\\", "/"},
-#else
-    {"/\\", "/\\"},
-#endif
     {"/a\\", "/a\\"},
+    {"/a\\\\...", "/a\\."},
   };
   size_t i;
 
   for (i = 0; i < ARRAY_SIZE(data); i++) {
-    //printf("[%s] -> [%s]\n", data[i].before, data[i].after);
+    printf("[%s] -> [%s]\n", data[i].before, data[i].after);
     remove_double_dots_and_double_slashes(data[i].before);
     ASSERT(strcmp(data[i].before, data[i].after) == 0);
   }
