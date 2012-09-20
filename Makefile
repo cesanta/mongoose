@@ -67,7 +67,7 @@ DBG   = /DNDEBUG /O1
 CL    = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 /DNO_SSL_DL \
         /I$(MSVC)/include
 GUILIB= user32.lib shell32.lib
-LINK  = /link /incremental:no /libpath:$(MSVC)/lib \
+LINK  = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
         /subsystem:windows ws2_32.lib advapi32.lib cyassl.lib
 CYAFL = /c /I $(CYA)/include -I $(CYA)/include/openssl /I$(MSVC)/INCLUDE \
         /I $(CYA)/ctaocrypt/include /D _LIB /D OPENSSL_EXTRA
