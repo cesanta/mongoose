@@ -10,7 +10,8 @@ Features
 --------
 
 - Crossplatform - works on Windows, MacOS and most flavors of UNIX
-- CGI, SSL, SSI, Digest (MD5) authorization, resumed download, aliases
+- CGI, SSL, SSI, Digest (MD5) authorization, Websockets, WEbDAV support
+- Resumed download, URL rewrite support
 - IP-based ACL, Windows service, GET, POST, HEAD, PUT, DELETE methods
 - Small footprint: executable size is 40 kB on Linux 2.6 i386 system
 - Embeddable with [simple and clean API](https://github.com/valenok/mongoose/blob/master/mongoose.h). Source is in single .c file to make things easy.
