@@ -1519,7 +1519,7 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
     // vsnprintf() error, give up
     len = -1;
     cry(conn, "%s(%s, ...): vsnprintf() error", __func__, fmt);
-  } else if (len > (int) sizeof(mem) && (buf = malloc(len + 1)) != NULL) {
+  } else if (len > (int) sizeof(mem) && (buf = (char *) malloc(len + 1)) != NULL) {
     // Local buffer is not large enough, allocate big buffer on heap
     va_start(ap, fmt);
     vsnprintf(buf, len + 1, fmt, ap);
@@ -3887,7 +3887,7 @@ static int set_ports_option(struct mg_context *ctx) {
                // handshake will figure out that the client is down and
                // will close the server end.
                // Thanks to Igor Klopov who suggested the patch.
-               setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *) &on,
+               setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char *) &on,
                           sizeof(on)) != 0 ||
                bind(sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
                listen(sock, SOMAXCONN) != 0) {
@@ -4199,7 +4199,7 @@ static void close_socket_gracefully(struct mg_connection *conn) {
   // ephemeral port exhaust problem under high QPS.
   linger.l_onoff = 1;
   linger.l_linger = 1;
-  setsockopt(sock, SOL_SOCKET, SO_LINGER, (void *) &linger, sizeof(linger));
+  setsockopt(sock, SOL_SOCKET, SO_LINGER, (char *) &linger, sizeof(linger));
 
   // Send FIN to the client
   (void) shutdown(sock, SHUT_WR);
