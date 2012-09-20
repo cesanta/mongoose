@@ -495,8 +495,6 @@ struct mg_connection {
   int64_t consumed_content;   // How many bytes of content have been read
   char *buf;                  // Buffer for received data
   char *path_info;            // PATH_INFO part of the URL
-  char *body;                 // Pointer to not-read yet buffered body data
-  char *next_request;         // Pointer to the buffered next request
   char *log_message;          // Placeholder for the mongoose error log message
   int must_close;             // 1 if connection must be closed
   int buf_size;               // Buffer size
@@ -1456,13 +1454,10 @@ static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
 
 int mg_read(struct mg_connection *conn, void *buf, size_t len) {
   int n, buffered_len, nread;
+  const char *body;
 
-  assert(conn->next_request != NULL &&
-         conn->body != NULL &&
-         conn->next_request >= conn->body);
   nread = 0;
   if (conn->consumed_content < conn->content_len) {
-
     // Adjust number of bytes to read.
     int64_t to_read = conn->content_len - conn->consumed_content;
     if (to_read < (int64_t) len) {
@@ -1470,14 +1465,14 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
     }
 
     // Return buffered data
-    buffered_len = conn->next_request - conn->body;
+    body = conn->buf + conn->request_len + conn->consumed_content;
+    buffered_len = &conn->buf[conn->data_len] - body;
     if (buffered_len > 0) {
       if (len < (size_t) buffered_len) {
         buffered_len = (int) len;
       }
-      memcpy(buf, conn->body, (size_t) buffered_len);
+      memcpy(buf, body, (size_t) buffered_len);
       len -= buffered_len;
-      conn->body += buffered_len;
       conn->consumed_content += buffered_len;
       nread += buffered_len;
       buf = (char *) buf + buffered_len;
@@ -2863,7 +2858,7 @@ static int is_not_modified(const struct mg_connection *conn,
 
 static int forward_body_data(struct mg_connection *conn, FILE *fp,
                              SOCKET sock, SSL *ssl) {
-  const char *expect;
+  const char *expect, *body;
   char buf[MG_BUF_LEN];
   int to_read, nread, buffered_len, success = 0;
 
@@ -2879,7 +2874,8 @@ static int forward_body_data(struct mg_connection *conn, FILE *fp,
       (void) mg_printf(conn, "%s", "HTTP/1.1 100 Continue\r\n\r\n");
     }
 
-    buffered_len = conn->next_request - conn->body;
+    body = conn->buf + conn->request_len + conn->consumed_content;
+    buffered_len = &conn->buf[conn->data_len] - body;
     assert(buffered_len >= 0);
     assert(conn->consumed_content == 0);
 
@@ -2887,9 +2883,8 @@ static int forward_body_data(struct mg_connection *conn, FILE *fp,
       if ((int64_t) buffered_len > conn->content_len) {
         buffered_len = (int) conn->content_len;
       }
-      push(fp, sock, ssl, conn->body, (int64_t) buffered_len);
+      push(fp, sock, ssl, body, (int64_t) buffered_len);
       conn->consumed_content += buffered_len;
-      conn->body += buffered_len;
     }
 
     nread = 0;
@@ -3663,8 +3658,8 @@ static void send_websocket_handshake(struct mg_connection *conn) {
 }
 
 static void read_websocket(struct mg_connection *conn) {
-  unsigned char *mask, *buf = (unsigned char *) conn->body;
-  int n, len, mask_len, body_len;
+  unsigned char *mask, *buf = (unsigned char *) conn->buf + conn->request_len;
+  int n, len, mask_len, body_len, discard_len;
 
   for (;;) {
     if ((body_len = conn->data_len - conn->request_len) >= 2) {
@@ -3685,10 +3680,13 @@ static void read_websocket(struct mg_connection *conn) {
     }
 
     if (conn->content_len > 0) {
-      conn->next_request = conn->buf + conn->data_len;
       if (call_user(conn, MG_WEBSOCKET_MESSAGE) != NULL) {
         break;  // Callback signalled to exit
       }
+      discard_len = conn->content_len > body_len ? body_len : conn->content_len;
+      memmove(buf, buf + discard_len, conn->data_len - discard_len);
+      conn->data_len -= discard_len;
+      conn->content_len = conn->consumed_content = 0;
     } else {
       if (wait_until_socket_is_readable(conn) == 0) {
         break;
@@ -4184,12 +4182,10 @@ static int set_acl_option(struct mg_context *ctx) {
 }
 
 static void reset_per_request_attributes(struct mg_connection *conn) {
-  conn->path_info = conn->body = conn->next_request = conn->log_message = NULL;
+  conn->path_info = conn->log_message = NULL;
   conn->num_bytes_sent = conn->consumed_content = 0;
-  conn->content_len = -1;
-  conn->request_len = conn->data_len = 0;
-  conn->must_close = 0;
   conn->status_code = -1;
+  conn->must_close = conn->request_len = 0;
 }
 
 static void close_socket_gracefully(struct mg_connection *conn) {
@@ -4337,7 +4333,7 @@ static int is_valid_uri(const char *uri) {
 
 static void process_new_connection(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
-  int keep_alive_enabled, buffered_len;
+  int keep_alive_enabled, discard_len;
   const char *cl;
 
   keep_alive_enabled = !strcmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes");
@@ -4353,8 +4349,6 @@ static void process_new_connection(struct mg_connection *conn) {
     } if (conn->request_len <= 0) {
       return;  // Remote end closed the connection
     }
-    conn->body = conn->next_request = conn->buf + conn->request_len;
-
     if (parse_http_request(conn->buf, conn->buf_size, ri) <= 0 ||
         !is_valid_uri(ri->uri)) {
       // Do not put garbage in the access log, just send it back to the client
@@ -4368,19 +4362,14 @@ static void process_new_connection(struct mg_connection *conn) {
       log_access(conn);
     } else {
       // Request is valid, handle it
-      cl = get_header(ri, "Content-Length");
-      conn->content_len = cl == NULL ? -1 : strtoll(cl, NULL, 10);
-
-      // Set pointer to the next buffered request
-      buffered_len = conn->data_len - conn->request_len;
-      assert(buffered_len >= 0);
-      if (conn->content_len <= 0) {
-      } else if (conn->content_len < (int64_t) buffered_len) {
-        conn->next_request += conn->content_len;
+      if ((cl = get_header(ri, "Content-Length")) != NULL) {
+        conn->content_len = strtoll(cl, NULL, 10);
+      } else if (!mg_strcasecmp(ri->request_method, "POST") ||
+                 !mg_strcasecmp(ri->request_method, "PUT")) {
+        conn->content_len = -1;
       } else {
-        conn->next_request += buffered_len;
+        conn->content_len = 0;
       }
-
       conn->birth_time = time(NULL);
       handle_request(conn);
       call_user(conn, MG_REQUEST_COMPLETE);
@@ -4391,12 +4380,17 @@ static void process_new_connection(struct mg_connection *conn) {
     }
 
     // Discard all buffered data for this request
-    assert(conn->next_request >= conn->buf);
-    assert(conn->data_len >= conn->next_request - conn->buf);
-    conn->data_len -= conn->next_request - conn->buf;
-    memmove(conn->buf, conn->next_request, (size_t) conn->data_len);
+    discard_len = conn->content_len >= 0 &&
+      conn->request_len + conn->content_len < conn->data_len ?
+      conn->request_len + conn->content_len : conn->data_len;
+    memmove(conn->buf, conn->buf + discard_len, conn->data_len - discard_len);
+    conn->data_len -= discard_len;
+    assert(conn->data_len >= 0);
+    assert(conn->data_len <= conn->buf_size);
+
   } while (conn->ctx->stop_flag == 0 &&
            keep_alive_enabled &&
+           conn->content_len >= 0 &&
            should_keep_alive(conn));
 }
 

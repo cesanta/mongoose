@@ -1,3 +1,4 @@
+#define USE_WEBSOCKET
 #include "mongoose.c"
 
 #define FATAL(str, line) do {                     \
