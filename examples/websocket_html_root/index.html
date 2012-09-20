@@ -3,10 +3,6 @@
 <title>WebSocket Test</title>  
 <script language="javascript" type="text/javascript">
 
-  // This javascript code creates a websocket to the URI "/foo",
-  // sends a message to it, waits for the reply, and sends an "exit" message.
-  // Server must terminate the conversation after receiving "exit" message.
-
   var writeToScreen = function(message) {
     var div = document.createElement('div');
     div.innerHTML = message;
@@ -34,6 +30,15 @@
     };
   };
 </script>  
-<h2>WebSocket Test</h2>  
+<style> div {font: small Verdana; } </style>
+<h2>Mongoose WebSocket Test</h2>  
+
+  <div style="width: 400px; color: #aaa; padding: 1em; ">
+  This page code creates websocket to the URI "/foo",
+  sends a message to it, waits for the reply, then sends an "exit" message.
+  Server must echo all messages back, and terminate the conversation after
+  receiving the "exit" message.
+  </div>
+
 <div id="output"></div>  
 </html>
