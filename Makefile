@@ -57,18 +57,19 @@ solaris:
 ##########################################################################
 
 # Using Visual Studio 6.0. To build Mongoose:
-#  o  Set VC variable below to where VS 6.0 is installed on your system
+#  o  Set MSVC variable below to where VS 6.0 is installed on your system
 #  o  Run "PATH_TO_VC6\bin\nmake windows"
 
-VC    = z:
-CYA   = y:
+MSVC  = e:/vc6
+CYA   = e:/cyassl-2.0.0rc2
 #DBG  = /Zi /DDEBUG /Od
 DBG   = /DNDEBUG /O1
-CL    = cl /MD /TC /nologo $(DBG) /Gz /W3 /DNO_SSL_DL
+CL    = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 /DNO_SSL_DL \
+        /I$(MSVC)/include
 GUILIB= user32.lib shell32.lib
-LINK  = /link /incremental:no /libpath:$(VC)\lib /subsystem:windows \
-        ws2_32.lib advapi32.lib cyassl.lib
-CYAFL = /c /I $(CYA)/include -I $(CYA)/include/openssl \
+LINK  = /link /incremental:no /libpath:$(MSVC)/lib \
+        /subsystem:windows ws2_32.lib advapi32.lib cyassl.lib
+CYAFL = /c /I $(CYA)/include -I $(CYA)/include/openssl /I$(MSVC)/INCLUDE \
         /I $(CYA)/ctaocrypt/include /D _LIB /D OPENSSL_EXTRA
 
 CYASRC= \
@@ -103,12 +104,12 @@ CYASRC= \
 	$(CYA)/ctaocrypt/src/sha512.c \
 	$(CYA)/ctaocrypt/src/tfm.c
 
-cyassl:
+cyassl.lib:
 	$(CL) $(CYASRC) $(CYAFL) $(DEF)
-	lib *.obj /out:cyassl.lib
+	$(MSVC)/bin/lib *.obj /out:$@
 
-windows:
-	rc win32\res.rc
+windows: cyassl.lib
+	$(MSVC)/bin/rc win32\res.rc
 	$(CL) /I win32 main.c mongoose.c /GA $(LINK) win32\res.res \
 		$(GUILIB) /out:$(PROG).exe
 	$(CL) mongoose.c /GD $(LINK) /DLL /DEF:win32\dll.def /out:_$(PROG).dll
