@@ -4101,7 +4101,12 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
 // Dynamically load SSL library. Set up ctx->ssl_ctx pointer.
 static int set_ssl_option(struct mg_context *ctx) {
   int i, size;
-  const char *pem = ctx->config[SSL_CERTIFICATE];
+  const char *pem;
+  
+  // If PEM file is not specified, skip SSL initialization.
+  if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL) {
+    return 1;
+  }
 
 #if !defined(NO_SSL_DL)
   if (!load_dll(ctx, SSL_LIB, ssl_sw) ||
@@ -4125,7 +4130,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
-  if (call_user(fc(ctx), MG_INIT_SSL) == NULL && pem != NULL &&
+  if (call_user(fc(ctx), MG_INIT_SSL) == NULL &&
       (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0 ||
        SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0)) {
     cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
