@@ -60,6 +60,8 @@
 #if defined(_WIN32) && !defined(__SYMBIAN32__) // Windows specific
 #define _WIN32_WINNT 0x0400 // To make it link in VS2005
 #include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX MAX_PATH
@@ -70,8 +72,6 @@
 #include <direct.h>
 #include <io.h>
 #else // _WIN32_WCE
-#include <winsock2.h>
-#include <ws2tcpip.h>
 #define NO_CGI // WinCE has no pipes
 
 typedef long off_t;
