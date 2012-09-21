@@ -1742,6 +1742,10 @@ static int get_month_index(const char *s) {
   return -1;
 }
 
+static int num_leap_years(int year) {
+  return year / 4 - year / 100 + year / 400;
+}
+
 // Parse UTC date-time string, and return the corresponding time_t value.
 static time_t parse_date_string(const char *datetime) {
   static const unsigned short days_before_month[] = {
@@ -1761,8 +1765,8 @@ static time_t parse_date_string(const char *datetime) {
                &day, month_str, &year, &hour, &minute, &second) == 6)) &&
       year > 1970 &&
       (month = get_month_index(month_str)) != -1) {
+    leap_days = num_leap_years(year) - num_leap_years(1970);
     year -= 1970;
-    leap_days = year / 4 - year / 100 + year / 400;
     days = year * 365 + days_before_month[month] + (day - 1) + leap_days;
     result = days * 24 * 3600 + hour * 3600 + minute * 60 + second;
   }
