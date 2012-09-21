@@ -3710,6 +3710,7 @@ static void handle_websocket_request(struct mg_connection *conn) {
     send_websocket_handshake(conn);
     call_user(conn, MG_WEBSOCKET_READY);
     read_websocket(conn);
+    call_user(conn, MG_WEBSOCKET_CLOSE);
   }
 }
 

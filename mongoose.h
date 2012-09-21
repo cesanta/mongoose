@@ -62,7 +62,7 @@ enum mg_event {
                         // with handshake, otherwise it closes the connection.
   MG_WEBSOCKET_READY,   // Handshake has been successfully completed.
   MG_WEBSOCKET_MESSAGE, // Incoming message from the client
-  MG_WEBSOCKET_CLOSE,   // Client has sent FIN frame
+  MG_WEBSOCKET_CLOSE,   // Client has closed the connection
 };
 
 
