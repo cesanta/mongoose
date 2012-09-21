@@ -171,6 +171,9 @@ typedef struct DIR {
   struct dirent  result;
 } DIR;
 
+// Mark required libraries
+#pragma comment(lib, "Ws2_32.lib")
+
 #else    // UNIX  specific
 #include <sys/wait.h>
 #include <sys/socket.h>
