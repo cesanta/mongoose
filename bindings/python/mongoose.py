@@ -40,10 +40,15 @@ import ctypes
 import os
 
 
-NEW_REQUEST = 0
-HTTP_ERROR = 1
-EVENT_LOG = 2
-INIT_SSL = 3
+NEW_REQUEST       = 0
+REQUEST_COMPLETE  = 1
+HTTP_ERROR        = 2
+EVENT_LOG         = 3
+INIT_SSL          = 4
+WEBSOCKET_CONNECT = 5
+WEBSOCKET_READY   = 6
+WEBSOCKET_MESSAGE = 7
+WEBSOCKET_CLOSE   = 8
 
 
 class mg_header(ctypes.Structure):
@@ -57,16 +62,13 @@ class mg_header(ctypes.Structure):
 class mg_request_info(ctypes.Structure):
   """A wrapper for struct mg_request_info."""
   _fields_ = [
-    ('user_data', ctypes.c_char_p),
     ('request_method', ctypes.c_char_p),
     ('uri', ctypes.c_char_p),
     ('http_version', ctypes.c_char_p),
     ('query_string', ctypes.c_char_p),
     ('remote_user', ctypes.c_char_p),
-    ('log_message', ctypes.c_char_p),
     ('remote_ip', ctypes.c_long),
     ('remote_port', ctypes.c_int),
-    ('status_code', ctypes.c_int),
     ('is_ssl', ctypes.c_int),
     ('num_headers', ctypes.c_int),
     ('http_headers', mg_header * 64),
@@ -84,6 +86,10 @@ class Connection(object):
     self.m = mongoose
     self.conn = ctypes.c_void_p(connection)
     self.info = self.m.dll.mg_get_request_info(self.conn).contents
+    self.user_data = self.m.dll.mg_get_user_data(self.conn)
+    self.log_message = self.m.dll.mg_get_log_message(self.conn)
+    self.reply_status_code = self.m.dll.mg_get_reply_status_code(self.conn)
+    self.ssl_context = self.m.dll.mg_get_ssl_context(self.conn)
 
   def get_header(self, name):
     val = self.m.dll.mg_get_header(self.conn, name)
@@ -131,6 +137,10 @@ class Mongoose(object):
     self.dll.mg_get_cookie.restype = ctypes.c_int
     self.dll.mg_get_option.restype = ctypes.c_char_p
     self.dll.mg_get_request_info.restype = ctypes.POINTER(mg_request_info)
+    self.dll.mg_get_user_data.restype = ctypes.c_void_p
+    self.dll.mg_get_reply_status_code.restype = ctypes.c_int
+    self.dll.mg_get_log_message.restype = ctypes.c_char_p
+    self.dll.mg_get_ssl_context.restype = ctypes.c_void_p
 
     if callback:
       # Create a closure that will be called by the  shared library.
