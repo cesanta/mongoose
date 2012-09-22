@@ -266,6 +266,10 @@ typedef int socklen_t;
 #define SOMAXCONN 100
 #endif
 
+#if !defined(PATH_MAX)
+#define PATH_MAX 4096
+#endif
+
 static const char *http_500_error = "Internal Server Error";
 
 // Snatched from OpenSSL includes. I put the prototypes here to be independent
