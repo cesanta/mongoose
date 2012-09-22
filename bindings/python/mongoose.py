@@ -123,9 +123,9 @@ class Mongoose(object):
 
   def __init__(self, callback, **kwargs):
     if os.name == 'nt':
-      self.dll = ctypes.WinDLL('_mongoose.dll')
+      self.dll = ctypes.WinDLL('mongoose.dll')
     else:
-      self.dll = ctypes.CDLL('_mongoose.so')
+      self.dll = ctypes.CDLL('libmongoose.so')
 
     self.dll.mg_start.restype = ctypes.c_void_p
     self.dll.mg_modify_passwords_file.restype = ctypes.c_int

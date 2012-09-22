@@ -27,14 +27,14 @@ GCC_WARNS   = -W -Wall -pedantic
 CFLAGS      = -std=c99 -O2 $(GCC_WARNS) $(COPT)
 MAC_SHARED  = -flat_namespace -bundle -undefined suppress
 LINFLAGS    = -ldl -pthread $(CFLAGS)
-LIB         = _$(PROG).so
+LIB         = lib$(PROG).so$(MONGOOSE_LIB_SUFFIX)
 
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
 # "-Wl,--as-needed" turned on by default  in cc command.
 # Also, this is turned in many other distros in static linkage builds.
 linux:
-	$(CC) mongoose.c -shared -fPIC -fpic -o $(LIB) $(LINFLAGS)
+	$(CC) mongoose.c -shared -fPIC -fpic -o $(LIB) -Wl,-soname,$(LIB) $(LINFLAGS)
 	$(CC) mongoose.c main.c -o $(PROG) $(LINFLAGS)
 
 bsd:
@@ -121,7 +121,7 @@ MINGWOPT=  -W -Wall -mthreads -Wl,--subsystem,console $(MINGWDBG) -DHAVE_STDINT 
 mingw:
 	windres win32\res.rc win32\res.o
 	$(CC) $(MINGWOPT) mongoose.c -lws2_32 \
-		-shared -Wl,--out-implib=$(PROG).lib -o _$(PROG).dll
+		-shared -Wl,--out-implib=$(PROG).lib -o $(PROG).dll
 	$(CC) $(MINGWOPT) -Iwin32 mongoose.c main.c win32\res.o -lws2_32 -ladvapi32 \
 		-o $(PROG).exe
 
