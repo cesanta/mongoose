@@ -33,6 +33,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdarg.h>
+#include <ctype.h>
 
 #include "mongoose.h"
 
@@ -191,7 +192,8 @@ static void process_command_line_arguments(char *argv[], char **options) {
       line_no++;
 
       // Ignore empty lines and comments
-      if (line[0] == '#' || line[0] == '\n')
+	  for (i = 0; isspace(* (unsigned char *) &line[i]); ) i++;
+      if (line[i] == '#' || line[i] == '\0')
         continue;
 
       if (sscanf(line, "%s %[^\r\n#]", opt, val) != 2) {
