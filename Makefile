@@ -111,7 +111,7 @@ windows: cyassl.lib
 	$(MSVC)/bin/rc win32\res.rc
 	$(CL) /I win32 main.c mongoose.c /GA $(LINK) win32\res.res \
 		$(GUILIB) /out:$(PROG).exe
-	$(CL) mongoose.c /GD $(LINK) /DLL /DEF:win32\dll.def /out:_$(PROG).dll
+	$(CL) mongoose.c /GD $(LINK) /DLL /DEF:win32\dll.def /out:$(PROG).dll
 
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0 -ggdb
