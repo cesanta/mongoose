@@ -900,7 +900,6 @@ static void send_http_error(struct mg_connection *conn, int status,
     DEBUG_TRACE(("[%s]", buf));
 
     mg_printf(conn, "HTTP/1.1 %d %s\r\n"
-              "Content-Type: text/plain\r\n"
               "Content-Length: %d\r\n"
               "Connection: %s\r\n\r\n", status, reason, len,
               suggest_connection_header(conn));
