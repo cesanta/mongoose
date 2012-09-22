@@ -207,6 +207,26 @@ static void test_base64_encode(void) {
   }
 }
 
+static void test_mg_get_var(void) {
+  static const char *post[] = {"a=1&&b=2&d&=&c=3%20&e=", NULL};
+  char buf[20];
+  
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "a", buf, sizeof(buf)) == 1);
+  ASSERT(buf[0] == '1' && buf[1] == '\0');
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "b", buf, sizeof(buf)) == 1);
+  ASSERT(buf[0] == '2' && buf[1] == '\0');
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "c", buf, sizeof(buf)) == 2);  
+  ASSERT(buf[0] == '3' && buf[1] == ' ' && buf[2] == '\0');
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "e", buf, sizeof(buf)) == 0);
+  ASSERT(buf[0] == '\0');
+
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "d", buf, sizeof(buf)) == -1);  
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "c", buf, 2) == -1);  
+
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "x", NULL, 10) == -2);
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "x", buf, 0) == -2);
+}
+
 int main(void) {
   test_base64_encode();
   test_match_prefix();
@@ -214,5 +234,6 @@ int main(void) {
   test_should_keep_alive();
   test_parse_http_request();
   test_mg_fetch();
+  test_mg_get_var();
   return 0;
 }
