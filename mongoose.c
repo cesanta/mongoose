@@ -1216,7 +1216,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
                            char *envblk, char *envp[], int fd_stdin,
                            int fd_stdout, const char *dir) {
   HANDLE me;
-  char *p, *interp, cmdline[PATH_MAX], buf[PATH_MAX];
+  char *p, *interp, full_interp[PATH_MAX], cmdline[PATH_MAX], buf[PATH_MAX];
   FILE *fp;
   STARTUPINFOA si = { sizeof(si) };
   PROCESS_INFORMATION pi = { 0 };
@@ -1228,34 +1228,40 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   si.wShowWindow = SW_HIDE;
 
   me = GetCurrentProcess();
-  (void) DuplicateHandle(me, (HANDLE) _get_osfhandle(fd_stdin), me,
-      &si.hStdInput, 0, TRUE, DUPLICATE_SAME_ACCESS);
-  (void) DuplicateHandle(me, (HANDLE) _get_osfhandle(fd_stdout), me,
-      &si.hStdOutput, 0, TRUE, DUPLICATE_SAME_ACCESS);
+  DuplicateHandle(me, (HANDLE) _get_osfhandle(fd_stdin), me,
+                  &si.hStdInput, 0, TRUE, DUPLICATE_SAME_ACCESS);
+  DuplicateHandle(me, (HANDLE) _get_osfhandle(fd_stdout), me,
+                  &si.hStdOutput, 0, TRUE, DUPLICATE_SAME_ACCESS);
 
   // If CGI file is a script, try to read the interpreter line
   interp = conn->ctx->config[CGI_INTERPRETER];
   if (interp == NULL) {
-    buf[2] = '\0';
-    mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%c%s", dir, '/', prog);
-    if ((fp = fopen(cmdline, "r")) != NULL) {
-      (void) fgets(buf, sizeof(buf), fp);
-      if (buf[0] != '#' || buf[1] != '!') {
-        // First line does not start with "#!". Do not set interpreter.
-        buf[2] = '\0';
-      } else {
-        // Trim whitespace in interpreter name
-        for (p = &buf[strlen(buf) - 1]; p > buf && isspace(*p); p--) {
-          *p = '\0';
-        }
-      }
-      (void) fclose(fp);
+    buf[0] = buf[2] = '\0';
+
+    // Read the first line of the script into the buffer
+    snprintf(cmdline, sizeof(cmdline), "%s%c%s", dir, '/', prog);
+    if ((fp = mg_fopen(cmdline, "r")) != NULL) {
+      fgets(buf, sizeof(buf), fp);
+      fclose(fp);
+      buf[sizeof(buf) - 1] = '\0';
+    }
+
+    if (buf[0] == '#' && buf[1] == '!') {
+      // Trim whitespace in interpreter name
+      for (p = buf + 2; *p != '\0' && isspace(* (unsigned char *) p); )
+        p++;
+      *p = '\0';
     }
     interp = buf + 2;
   }
 
-  (void) mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%s%s%c%s",
-                     interp, interp[0] == '\0' ? "" : " ", dir, '\\', prog);
+  if (interp[0] != '\0') {
+    GetFullPathName(interp, sizeof(full_interp), full_interp, NULL);
+    interp = full_interp;
+  }
+
+  mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%s%s",
+              interp, interp[0] == '\0' ? "" : " ", prog);
 
   DEBUG_TRACE(("Running [%s]", cmdline));
   if (CreateProcessA(NULL, cmdline, NULL, NULL, TRUE,
@@ -3872,12 +3878,10 @@ static int set_ports_option(struct mg_context *ctx) {
       success = 0;
     } else if ((sock = socket(so.lsa.sa.sa_family, SOCK_STREAM, 6)) ==
                INVALID_SOCKET ||
-#if !defined(_WIN32)
                // On Windows, SO_REUSEADDR is recommended only for
                // broadcast UDP sockets
-               setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on,
+               setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const char *) &on,
                           sizeof(on)) != 0 ||
-#endif // !_WIN32
                // Set TCP keep-alive. This is needed because if HTTP-level
                // keep-alive is enabled, and client resets the connection,
                // server won't get TCP FIN or RST and will keep the connection
