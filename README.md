@@ -13,6 +13,8 @@ Features
 - CGI, SSL, SSI, Digest (MD5) authorization, Websocket, WEbDAV support
 - Resumed download, URL rewrite support
 - IP-based ACL, Windows service, GET, POST, HEAD, PUT, DELETE methods
+- Excluding files from serving by URI pattern
+- Download speed limit based on client subnet or URI pattern
 - Small footprint: executable size is 40 kB on Linux 2.6 i386 system
 - Embeddable with simple and clean API ([mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h)). The source is in single [mongoose.c](https://github.com/valenok/mongoose/blob/master/mongoose.c) file to make things easy.
 - Embedding examples: [hello.c](https://github.com/valenok/mongoose/blob/master/examples/hello.c), [post.c](https://github.com/valenok/mongoose/blob/master/examples/post.c), [upload.c](https://github.com/valenok/mongoose/blob/master/examples/upload.c), [websocket.c](https://github.com/valenok/mongoose/blob/master/examples/websocket.c)
