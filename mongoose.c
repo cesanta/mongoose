@@ -4696,6 +4696,7 @@ static void free_context(struct mg_context *ctx) {
 #ifndef NO_SSL
   if (ssl_mutexes != NULL) {
     free(ssl_mutexes);
+    ssl_mutexes = NULL;
   }
 #endif // !NO_SSL
 
