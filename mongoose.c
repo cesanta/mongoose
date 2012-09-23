@@ -3830,6 +3830,10 @@ static int set_throttle(const char *spec, uint32_t remote_ip, const char *uri) {
   return throttle;
 }
 
+static uint32_t get_remote_ip(const struct mg_connection *conn) {
+  return ntohl(* (uint32_t *) &conn->client.rsa.sin.sin_addr);
+}
+
 // This is the heart of the Mongoose's logic.
 // This function is called when the request is read, parsed and validated,
 // and Mongoose must decide what action to take: serve a file, or
@@ -3848,9 +3852,7 @@ static void handle_request(struct mg_connection *conn) {
   remove_double_dots_and_double_slashes(ri->uri);
   stat_result = convert_uri_to_file_name(conn, path, sizeof(path), &st);
   conn->throttle = set_throttle(conn->ctx->config[THROTTLE],
-                                ntohl(* (uint32_t *)
-                                      &conn->client.rsa.sin.sin_addr),
-                                ri->uri);
+                                get_remote_ip(conn), ri->uri);
 
   DEBUG_TRACE(("%s", ri->uri));
   if (!check_authorization(conn, path)) {
@@ -4064,30 +4066,24 @@ static void log_access(const struct mg_connection *conn) {
 
 // Verify given socket address against the ACL.
 // Return -1 if ACL is malformed, 0 if address is disallowed, 1 if allowed.
-static int check_acl(struct mg_context *ctx, const union usa *usa) {
+static int check_acl(struct mg_context *ctx, uint32_t remote_ip) {
   int allowed, flag;
-  uint32_t acl_subnet, acl_mask, remote_ip;
+  uint32_t net, mask;
   struct vec vec;
   const char *list = ctx->config[ACCESS_CONTROL_LIST];
 
-  if (list == NULL) {
-    return 1;
-  }
-
-  (void) memcpy(&remote_ip, &usa->sin.sin_addr, sizeof(remote_ip));
-
   // If any ACL is set, deny by default
-  allowed = '-';
+  allowed = list == NULL ? '+' : '-';
 
   while ((list = next_option(list, &vec, NULL)) != NULL) {
     flag = vec.ptr[0];
-    if (flag != '+' && flag != '-' &&
-        parse_net(&vec.ptr[1], &acl_subnet, &acl_mask) == 0) {
+    if ((flag != '+' && flag != '-') ||
+        parse_net(&vec.ptr[1], &net, &mask) == 0) {
       cry(fc(ctx), "%s: subnet must be [+|-]x.x.x.x[/x]", __func__);
       return -1;
     }
 
-    if (acl_subnet == (ntohl(remote_ip) & acl_mask)) {
+    if (net == (remote_ip & mask)) {
       allowed = flag;
     }
   }
@@ -4266,8 +4262,7 @@ static int set_gpass_option(struct mg_context *ctx) {
 }
 
 static int set_acl_option(struct mg_context *ctx) {
-  union usa fake;
-  return check_acl(ctx, &fake) != -1;
+  return check_acl(ctx, (uint32_t) 0x7f000001UL) != -1;
 }
 
 static void reset_per_request_attributes(struct mg_connection *conn) {
@@ -4592,7 +4587,7 @@ static void accept_new_connection(const struct socket *listener,
   accepted.lsa = listener->lsa;
   accepted.sock = accept(listener->sock, &accepted.rsa.sa, &len);
   if (accepted.sock != INVALID_SOCKET) {
-    allowed = check_acl(ctx, &accepted.rsa);
+    allowed = check_acl(ctx, ntohl(* (uint32_t *) &accepted.rsa.sin.sin_addr));
     if (allowed) {
       // Put accepted socket structure into the queue
       DEBUG_TRACE(("accepted socket %d", accepted.sock));
