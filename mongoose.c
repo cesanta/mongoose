@@ -564,6 +564,9 @@ static void sockaddr_to_string(char *buf, size_t len,
 #endif
 }
 
+static void cry(struct mg_connection *conn,
+                PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
+
 // Print error message to the opened error log stream.
 static void cry(struct mg_connection *conn, const char *fmt, ...) {
   char buf[MG_BUF_LEN], src_addr[20];
@@ -695,6 +698,10 @@ static int mg_vsnprintf(struct mg_connection *conn, char *buf, size_t buflen,
 
   return n;
 }
+
+static int mg_snprintf(struct mg_connection *conn, char *buf, size_t buflen,
+                       PRINTF_FORMAT_STRING(const char *fmt), ...)
+  PRINTF_ARGS(4, 5);
 
 static int mg_snprintf(struct mg_connection *conn, char *buf, size_t buflen,
                        const char *fmt, ...) {
@@ -887,7 +894,6 @@ static void send_http_error(struct mg_connection *conn, int status,
   int len;
 
   conn->status_code = status;
-
   if (call_user(conn, MG_HTTP_ERROR) == NULL) {
     buf[0] = '\0';
     len = 0;
@@ -1672,7 +1678,8 @@ static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
   rewrite = conn->ctx->config[REWRITE];
   while ((rewrite = next_option(rewrite, &a, &b)) != NULL) {
     if ((match_len = match_prefix(a.ptr, a.len, uri)) > 0) {
-      mg_snprintf(conn, buf, buf_len, "%.*s%s", b.len, b.ptr, uri + match_len);
+      mg_snprintf(conn, buf, buf_len, "%.*s%s", (int) b.len, b.ptr,
+                  uri + match_len);
       break;
     }
   }
@@ -2283,8 +2290,8 @@ static int check_authorization(struct mg_connection *conn, const char *path) {
   list = conn->ctx->config[PROTECT_URI];
   while ((list = next_option(list, &uri_vec, &filename_vec)) != NULL) {
     if (!memcmp(conn->request_info.uri, uri_vec.ptr, uri_vec.len)) {
-      (void) mg_snprintf(conn, fname, sizeof(fname), "%.*s",
-          filename_vec.len, filename_vec.ptr);
+      mg_snprintf(conn, fname, sizeof(fname), "%.*s",
+                  (int) filename_vec.len, filename_vec.ptr);
       if ((fp = mg_fopen(fname, "r")) == NULL) {
         cry(conn, "%s: cannot open %s: %s", __func__, fname, strerror(errno));
       }
@@ -3898,7 +3905,7 @@ static int set_ports_option(struct mg_context *ctx) {
                listen(sock, SOMAXCONN) != 0) {
       closesocket(sock);
       cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
-          vec.len, vec.ptr, strerror(ERRNO));
+          (int) vec.len, vec.ptr, strerror(ERRNO));
       success = 0;
     } else if ((listener = (struct socket *)
                 calloc(1, sizeof(*listener))) == NULL) {
