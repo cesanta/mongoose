@@ -2437,10 +2437,10 @@ static void print_dir_entry(struct de *de) {
     if (de->st.size < 1024) {
       (void) mg_snprintf(de->conn, size, sizeof(size),
           "%lu", (unsigned long) de->st.size);
-    } else if (de->st.size < 1024 * 1024) {
+    } else if (de->st.size < 0x100000) {
       (void) mg_snprintf(de->conn, size, sizeof(size),
           "%.1fk", (double) de->st.size / 1024.0);
-    } else if (de->st.size < 1024 * 1024 * 1024) {
+    } else if (de->st.size < 0x40000000) {
       (void) mg_snprintf(de->conn, size, sizeof(size),
           "%.1fM", (double) de->st.size / 1048576);
     } else {
@@ -4014,7 +4014,8 @@ static int check_acl(struct mg_context *ctx, const union usa *usa) {
       return -1;
     }
 
-    acl_subnet = (a << 24) | (b << 16) | (c << 8) | d;
+    acl_subnet = ((uint32_t) a << 24) | ((uint32_t) b << 16) |
+      ((uint32_t) c << 8) | d;
     acl_mask = mask ? 0xffffffffU << (32 - mask) : 0;
 
     if (acl_subnet == (ntohl(remote_ip) & acl_mask)) {
