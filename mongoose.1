@@ -91,6 +91,18 @@ Authorization realm. Default: "mydomain.com"
 All files that fully match ssi_pattern are treated as SSI.
 Unknown SSI directives are silently ignored. Currently, two SSI directives
 are supported, "include" and "exec".  Default: "**.shtml$|**.shtm$"
+.It Fl T Ar throttle
+Limit download speed for clients.
+.Ar throttle
+is a comma-separated list of key=value pairs, where
+key could be a '*' character (limit for all connections), a subnet in form
+x.x.x.x/mask (limit for a given subnet, for example 10.0.0.0/8), or an
+URI prefix pattern (limit for the set of URIs, for example /foo/**). The value
+is a floating-point number of bytes per second, optionally followed by a
+`k' or `m' character, meaning kilobytes and megabytes respectively. A limit
+of 0 means unlimited rate. The last matching rule wins. For example,
+"*=1k,10.0.0.0/8" means limit everybody to 1 kilobyte per second, but give
+people from 10/8 subnet unlimited speed. Default: ""
 .It Fl a Ar access_log_file
 Access log file. Default: "", no logging is done.
 .It Fl d Ar enable_directory_listing
