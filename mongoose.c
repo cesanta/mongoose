@@ -3778,8 +3778,8 @@ static int is_websocket_request(const struct mg_connection *conn) {
 
   return host != NULL && upgrade != NULL && connection != NULL &&
     key != NULL && version != NULL &&
-    !mg_strcasecmp(upgrade, "websocket") &&
-    !mg_strcasecmp(connection, "Upgrade");
+    strstr(upgrade, "websocket") != NULL &&
+    strstr(connection, "Upgrade") != NULL;
 }
 #endif // !USE_WEBSOCKET
 
