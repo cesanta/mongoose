@@ -3726,7 +3726,7 @@ static void read_websocket(struct mg_connection *conn) {
         mask = buf + 4;
       } else if (body_len >= 10) {
         conn->content_len = 2 + mask_len +
-          ((uint64_t) htonl(* (uint32_t *) &buf[2])) << 32 |
+          (((uint64_t) htonl(* (uint32_t *) &buf[2])) << 32) |
           htonl(* (uint32_t *) &buf[6]);
         mask = buf + 10;
       }
@@ -3736,7 +3736,8 @@ static void read_websocket(struct mg_connection *conn) {
       if (call_user(conn, MG_WEBSOCKET_MESSAGE) != NULL) {
         break;  // Callback signalled to exit
       }
-      discard_len = conn->content_len > body_len ? body_len : conn->content_len;
+      discard_len = conn->content_len > body_len ?
+          body_len : (int) conn->content_len;
       memmove(buf, buf + discard_len, conn->data_len - discard_len);
       conn->data_len -= discard_len;
       conn->content_len = conn->consumed_content = 0;
