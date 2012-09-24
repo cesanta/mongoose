@@ -3,7 +3,7 @@ Overview
 
 Mongoose is easy to use web server. It also can be used as embedded web server library to provide web interface to applications.  
 
-Mongoose executable does not depend on any external library or configuration. If it is copied to any directory and launched from there, it starts to serve that directory on port 8080 (so to access files, go to http://localhost:8080). If some additional config is required - for example, different listening port or IP-based access control, then a mongoose.conf file with respective options can be created in the same directory where executable lives. This makes Mongoose perfect for all sorts of demos, quick tests, file sharing, and Web programming.
+Mongoose executable does not depend on any external library or configuration. If it is copied to any directory and launched from there, it starts to serve that directory on port 8080 (so to access files, go to http://localhost:8080). If some additional config is required - for example, different listening port or IP-based access control, that can be done via command line flags or configuration file, which should be created in the same directory where mongoose itself lives. This makes Mongoose perfect for all sorts of demos, quick tests, file sharing, and Web programming.
 
 
 Features
