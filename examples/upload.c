@@ -5,8 +5,18 @@
 #include <string.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#include <windows.h>
+#include <io.h>
+#define strtoll strtol
+typedef __int64 int64_t;
+#define O_CLOEXEC 0
+#define O_EXLOCK 0
+#else 
 #include <inttypes.h>
 #include <unistd.h>
+#endif // !_WIN32
+
 #include "mongoose.h"
 
 // Make sure that form has enctype="multipart/form-data" attribute
@@ -25,7 +35,7 @@ static void handle_file_upload(struct mg_connection *conn) {
   char post_data[16 * 1024], path[999], file_name[1024], mime_type[100],
        buf[BUFSIZ], *eop, *s, *p;
   FILE *fp;
-  long long int cl, written;
+  int64_t cl, written;
   int fd, n, post_data_len;
 
   // Figure out total content length. Return if it is not present or invalid.
@@ -87,7 +97,7 @@ static void handle_file_upload(struct mg_connection *conn) {
     (void) fwrite(p, 1, n, fp);
     written = n;
     while (written < cl &&
-           (n = mg_read(conn, buf, cl - written > (long long) sizeof(buf) ?
+           (n = mg_read(conn, buf, cl - written > (int64_t) sizeof(buf) ?
                         sizeof(buf) : cl - written)) > 0) {
       (void) fwrite(buf, 1, n, fp);
       written += n;
