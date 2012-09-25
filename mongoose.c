@@ -1530,7 +1530,7 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
       conn->last_throttle_bytes += total;
       while (total < (int64_t) len && conn->ctx->stop_flag == 0) {
         allowed = conn->throttle > (int64_t) len - total ?
-          len - total : conn->throttle;
+          (int64_t) len - total : conn->throttle;
         if ((n = push(NULL, conn->client.sock, conn->ssl, (const char *) buf,
                       (int64_t) allowed)) != allowed) {
           break;
