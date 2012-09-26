@@ -1255,7 +1255,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   // If CGI file is a script, try to read the interpreter line
   interp = conn->ctx->config[CGI_INTERPRETER];
   if (interp == NULL) {
-    buf[0] = buf[2] = '\0';
+    buf[0] = buf[1] = '\0';
 
     // Read the first line of the script into the buffer
     snprintf(cmdline, sizeof(cmdline), "%s%c%s", dir, '/', prog);
@@ -1270,6 +1270,8 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
       for (p = buf + 2; *p != '\0' && isspace(* (unsigned char *) p); )
         p++;
       *p = '\0';
+    } else {
+      buf[2] = '\0';
     }
     interp = buf + 2;
   }
