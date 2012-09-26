@@ -31,7 +31,7 @@ static void test_parse_http_request() {
   ASSERT(strcmp(ri.http_headers[2].name, "baz\r\n\r") == 0);
   ASSERT(strcmp(ri.http_headers[2].value, "") == 0);
 
-  // TODO(lsm): add more tests. 
+  // TODO(lsm): add more tests.
 }
 
 static void test_should_keep_alive(void) {
@@ -210,18 +210,18 @@ static void test_base64_encode(void) {
 static void test_mg_get_var(void) {
   static const char *post[] = {"a=1&&b=2&d&=&c=3%20&e=", NULL};
   char buf[20];
-  
+
   ASSERT(mg_get_var(post[0], strlen(post[0]), "a", buf, sizeof(buf)) == 1);
   ASSERT(buf[0] == '1' && buf[1] == '\0');
   ASSERT(mg_get_var(post[0], strlen(post[0]), "b", buf, sizeof(buf)) == 1);
   ASSERT(buf[0] == '2' && buf[1] == '\0');
-  ASSERT(mg_get_var(post[0], strlen(post[0]), "c", buf, sizeof(buf)) == 2);  
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "c", buf, sizeof(buf)) == 2);
   ASSERT(buf[0] == '3' && buf[1] == ' ' && buf[2] == '\0');
   ASSERT(mg_get_var(post[0], strlen(post[0]), "e", buf, sizeof(buf)) == 0);
   ASSERT(buf[0] == '\0');
 
-  ASSERT(mg_get_var(post[0], strlen(post[0]), "d", buf, sizeof(buf)) == -1);  
-  ASSERT(mg_get_var(post[0], strlen(post[0]), "c", buf, 2) == -1);  
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "d", buf, sizeof(buf)) == -1);
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "c", buf, 2) == -1);
 
   ASSERT(mg_get_var(post[0], strlen(post[0]), "x", NULL, 10) == -2);
   ASSERT(mg_get_var(post[0], strlen(post[0]), "x", buf, 0) == -2);
@@ -255,6 +255,54 @@ static void test_next_option(void) {
   }
 }
 
+#ifdef USE_LUA
+static void check_lua_expr(lua_State *L, const char *expr, const char *value) {
+  const char *v, *var_name = "myVar";
+  char buf[100];
+
+  snprintf(buf, sizeof(buf), "%s = %s", var_name, expr);
+  luaL_dostring(L, buf);
+  lua_getglobal(L, var_name);
+  v = lua_tostring(L, -1);
+  printf("%s: %s: [%s] [%s]\n", __func__, expr, v == NULL ? "null" : v, value);
+  ASSERT((value == NULL && v == NULL) ||
+         (value != NULL && v != NULL && !strcmp(value, v)));
+}
+
+static void test_lua(void) {
+  static struct mg_connection conn;
+  static struct mg_context ctx;
+
+  char http_request[] = "POST /foo/bar HTTP/1.1\r\n"
+      "Content-Length: 12\r\n"
+      "Connection: close\r\n\r\nhello world!";
+  const char *page = "<? print('hi') ?>";
+  lua_State *L = luaL_newstate();
+
+  conn.ctx = &ctx;
+  conn.buf = http_request;
+  conn.buf_size = conn.data_len = strlen(http_request);
+  conn.request_len = parse_http_request(conn.buf, conn.data_len,
+                                        &conn.request_info);
+  conn.content_len = conn.data_len - conn.request_len;
+
+  prepare_lua_environment(&conn, L);
+  ASSERT(lua_gettop(L) == 0);
+
+  check_lua_expr(L, "'hi'", "hi");
+  check_lua_expr(L, "request_info.request_method", "POST");
+  check_lua_expr(L, "request_info.uri", "/foo/bar");
+  check_lua_expr(L, "request_info.num_headers", "2");
+  check_lua_expr(L, "request_info.remote_ip", "0");
+  check_lua_expr(L, "request_info.http_headers['Content-Length']", "12");
+  check_lua_expr(L, "request_info.http_headers['Connection']", "close");
+  luaL_dostring(L, "post = read()");
+  check_lua_expr(L, "# post", "12");
+  check_lua_expr(L, "post", "hello world!");
+  lua_close(L);
+}
+#endif
+
 int main(void) {
   test_base64_encode();
   test_match_prefix();
@@ -265,5 +313,8 @@ int main(void) {
   test_mg_get_var();
   test_set_throttle();
   test_next_option();
+#ifdef USE_LUA
+  test_lua();
+#endif
   return 0;
 }

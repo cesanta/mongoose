@@ -22,8 +22,11 @@ all:
 ###                 UNIX build: linux, bsd, mac, rtems
 ##########################################################################
 
+# Add $(LUA_FLAGS) to CFLAGS below if you want to build with Lua
+LUA         = lua-5.2.1/src
+LUA_FLAGS   = -DUSE_LUA -I$(LUA) -L$(LUA) -llua -lm
+
 GCC_WARNS   = -W -Wall -pedantic
-#  -Wno-missing-field-initializers  -Wno-unused-parameter -Wno-format-zero-length -Wno-missing-braces
 CFLAGS      = -std=c99 -O2 $(GCC_WARNS) $(COPT)
 MAC_SHARED  = -flat_namespace -bundle -undefined suppress
 LINFLAGS    = -ldl -pthread $(CFLAGS)
@@ -64,14 +67,26 @@ CYA   = e:/cyassl-2.0.0rc2
 #DBG  = /Zi /DDEBUG /Od
 DBG   = /DNDEBUG /O1
 CL    = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 /DNO_SSL_DL \
-        /I$(MSVC)/include
+        /I$(MSVC)/include /DUSE_LUA /I$(LUA)
 GUILIB= user32.lib shell32.lib
 LINK  = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
-        /subsystem:windows ws2_32.lib advapi32.lib cyassl.lib
+        /subsystem:windows ws2_32.lib advapi32.lib cyassl.lib lua.lib
 CYAFL = /c /I $(CYA)/include -I $(CYA)/include/openssl /I$(MSVC)/INCLUDE \
         /I $(CYA)/ctaocrypt/include /D _LIB /D OPENSSL_EXTRA
 
-CYASRC= \
+LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
+              $(LUA)/ldebug.c $(LUA)/ldo.c $(LUA)/ldump.c \
+              $(LUA)/lfunc.c $(LUA)/lgc.c $(LUA)/llex.c \
+              $(LUA)/lmem.c $(LUA)/lobject.c $(LUA)/lopcodes.c \
+              $(LUA)/lparser.c $(LUA)/lstate.c $(LUA)/lstring.c \
+              $(LUA)/ltable.c $(LUA)/ltm.c $(LUA)/lundump.c \
+              $(LUA)/lvm.c $(LUA)/lzio.c $(LUA)/lauxlib.c \
+              $(LUA)/lbaselib.c $(LUA)/lbitlib.c $(LUA)/lcorolib.c \
+              $(LUA)/ldblib.c $(LUA)/liolib.c $(LUA)/lmathlib.c \
+              $(LUA)/loslib.c $(LUA)/lstrlib.c $(LUA)/ltablib.c \
+              $(LUA)/loadlib.c $(LUA)/linit.c
+
+CYA_SOURCES = \
 	$(CYA)/src/cyassl_int.c \
 	$(CYA)/src/cyassl_io.c \
 	$(CYA)/src/keys.c \
@@ -104,10 +119,14 @@ CYASRC= \
 	$(CYA)/ctaocrypt/src/tfm.c
 
 cyassl.lib:
-	$(CL) $(CYASRC) $(CYAFL) $(DEF)
-	$(MSVC)/bin/lib *.obj /out:$@
+	$(CL) /Fo$(CYA)/ $(CYA_SOURCES) $(CYAFL) $(DEF)
+	$(MSVC)/bin/lib $(CYA)/*.obj /out:$@
 
-windows: cyassl.lib
+lua.lib:
+	$(CL) /c /Fo$(LUA)/ $(LUA_SOURCES)
+	$(MSVC)/bin/lib $(LUA_SOURCES:%.c=%.obj) /out:$@
+
+windows: cyassl.lib lua.lib
 	$(MSVC)/bin/rc win32\res.rc
 	$(CL) /I win32 main.c mongoose.c /GA $(LINK) win32\res.res \
 		$(GUILIB) /out:$(PROG).exe
