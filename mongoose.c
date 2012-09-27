@@ -500,7 +500,6 @@ struct mg_connection {
   int64_t consumed_content;   // How many bytes of content have been read
   char *buf;                  // Buffer for received data
   char *path_info;            // PATH_INFO part of the URL
-  char *log_message;          // Placeholder for the mongoose error log message
   int must_close;             // 1 if connection must be closed
   int buf_size;               // Buffer size
   int request_len;            // Size of the request + headers in a buffer
@@ -518,22 +517,6 @@ const char **mg_get_valid_option_names(void) {
 static void *call_user(struct mg_connection *conn, enum mg_event event) {
   return conn == NULL || conn->ctx == NULL || conn->ctx->user_callback == NULL ?
     NULL : conn->ctx->user_callback(event, conn);
-}
-
-void *mg_get_user_data(struct mg_connection *conn) {
-  return conn != NULL && conn->ctx != NULL ? conn->ctx->user_data : NULL;
-}
-
-const char *mg_get_log_message(const struct mg_connection *conn) {
-  return conn == NULL ? NULL : conn->log_message;
-}
-
-int mg_get_reply_status_code(const struct mg_connection *conn) {
-  return conn == NULL ? -1 : conn->status_code;
-}
-
-void *mg_get_ssl_context(const struct mg_connection *conn) {
-  return conn == NULL || conn->ctx == NULL ? NULL : conn->ctx->ssl_ctx;
 }
 
 static int get_option_index(const char *name) {
@@ -591,7 +574,7 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
   // Do not lock when getting the callback value, here and below.
   // I suppose this is fine, since function cannot disappear in the
   // same way string option can.
-  conn->log_message = buf;
+  conn->request_info.ev_data = buf;
   if (call_user(conn, MG_EVENT_LOG) == NULL) {
     fp = conn->ctx == NULL || conn->ctx->config[ERROR_LOG_FILE] == NULL ? NULL :
       mg_fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
@@ -617,7 +600,7 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
       }
     }
   }
-  conn->log_message = NULL;
+  conn->request_info.ev_data = NULL;
 }
 
 // Return fake connection structure. Used for logging, if connection
@@ -903,6 +886,7 @@ static void send_http_error(struct mg_connection *conn, int status,
   int len;
 
   conn->status_code = status;
+  conn->request_info.ev_data = (void *) status;
   if (call_user(conn, MG_HTTP_ERROR) == NULL) {
     buf[0] = '\0';
     len = 0;
@@ -4342,6 +4326,7 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
 
 // Dynamically load SSL library. Set up ctx->ssl_ctx pointer.
 static int set_ssl_option(struct mg_context *ctx) {
+  struct mg_connection *conn;
   int i, size;
   const char *pem;
  
@@ -4372,7 +4357,9 @@ static int set_ssl_option(struct mg_context *ctx) {
  
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
-  if (call_user(fc(ctx), MG_INIT_SSL) == NULL &&
+  conn = fc(ctx);
+  conn->request_info.ev_data = ctx->ssl_ctx;
+  if (call_user(conn, MG_INIT_SSL) == NULL &&
       (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0 ||
        SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0)) {
     cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
@@ -4425,7 +4412,7 @@ static int set_acl_option(struct mg_context *ctx) {
 }
 
 static void reset_per_request_attributes(struct mg_connection *conn) {
-  conn->path_info = conn->log_message = NULL;
+  conn->path_info = conn->request_info.ev_data = NULL;
   conn->num_bytes_sent = conn->consumed_content = 0;
   conn->status_code = -1;
   conn->must_close = conn->request_len = conn->throttle = 0;

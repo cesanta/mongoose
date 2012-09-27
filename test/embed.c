@@ -119,10 +119,10 @@ static void test_get_request_info(struct mg_connection *conn,
 
 static void test_error(struct mg_connection *conn,
                        const struct mg_request_info *ri) {
-  (void) ri;
+  int status = (int) ri->ev_data;
   mg_printf(conn, "HTTP/1.1 %d XX\r\n"
-            "Conntection: close\r\n\r\n", mg_get_reply_status_code(conn));
-  mg_printf(conn, "Error: [%d]", mg_get_reply_status_code(conn));
+            "Conntection: close\r\n\r\n", status);
+  mg_printf(conn, "Error: [%d]", status);
 }
 
 static void test_post(struct mg_connection *conn,

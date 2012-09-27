@@ -136,9 +136,9 @@ static void *event_handler(enum mg_event event,
               "%s", (int) strlen(fetch_data), fetch_data);
     return "";
   } else if (event == MG_EVENT_LOG) {
-    printf("%s\n", mg_get_log_message(conn));
+    printf("%s\n", (const char *) mg_get_request_info(conn)->ev_data);
   }
-  
+
   return NULL;
 }
 
