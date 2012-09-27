@@ -12,10 +12,11 @@ all:
 # -DDEBUG                 - build debug version (very noisy) (+7kb)
 # -DNO_CGI                - disable CGI support (-5kb)
 # -DNO_SSL                - disable SSL functionality (-2kb)
+# -DNO_SSL_DL             - link against system libssl library (-1kb)
 # -DCONFIG_FILE=\"file\"  - use `file' as the default config file
-# -DHAVE_STRTOUI64        - use system strtoui64() function for strtoull()
 # -DSSL_LIB=\"libssl.so.<version>\"   - use system versioned SSL shared object
 # -DCRYPTO_LIB=\"libcrypto.so.<version>\" - use system versioned CRYPTO so
+# -DUSE_LUA               - embed Lua in Mongoose (+100kb)
 
 
 ##########################################################################
