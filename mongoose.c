@@ -3969,7 +3969,7 @@ static void handle_lsp_request(struct mg_connection *conn, const char *path,
 
   if ((fp = fopen(path, "r")) == NULL) {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
-  } else if ((p = mmap(NULL, st->size, PROT_READ, 0,
+  } else if ((p = mmap(NULL, st->size, PROT_READ, MAP_PRIVATE,
                        fileno(fp), 0)) == MAP_FAILED) {
     send_http_error(conn, 500, http_500_error, "%s", "x");
   } else if ((L = luaL_newstate()) == NULL) {
@@ -4343,7 +4343,7 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
 static int set_ssl_option(struct mg_context *ctx) {
   int i, size;
   const char *pem;
-  
+ 
   // If PEM file is not specified, skip SSL initialization.
   if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL) {
     return 1;
@@ -4368,7 +4368,7 @@ static int set_ssl_option(struct mg_context *ctx) {
     cry(fc(ctx), "SSL_CTX_new (server) error: %s", ssl_error());
     return 0;
   }
-  
+ 
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
   if (call_user(fc(ctx), MG_INIT_SSL) == NULL &&
