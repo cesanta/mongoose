@@ -85,38 +85,23 @@ LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
               $(LUA)/ldblib.c $(LUA)/liolib.c $(LUA)/lmathlib.c \
               $(LUA)/loslib.c $(LUA)/lstrlib.c $(LUA)/ltablib.c \
               $(LUA)/loadlib.c $(LUA)/linit.c
+LUA_OBJECTS = $(LUA_SOURCES:%.c=%.o)
 
-CYA_SOURCES = \
-	$(CYA)/src/cyassl_int.c \
-	$(CYA)/src/cyassl_io.c \
-	$(CYA)/src/keys.c \
-	$(CYA)/src/tls.c \
-	$(CYA)/src/ssl.c \
-	$(CYA)/ctaocrypt/src/aes.c \
-	$(CYA)/ctaocrypt/src/arc4.c \
-	$(CYA)/ctaocrypt/src/asn.c \
-	$(CYA)/ctaocrypt/src/coding.c \
-	$(CYA)/ctaocrypt/src/ctc_asm.c \
-	$(CYA)/ctaocrypt/src/ctc_misc.c \
-	$(CYA)/ctaocrypt/src/cyassl_memory.c \
-	$(CYA)/ctaocrypt/src/des3.c \
-	$(CYA)/ctaocrypt/src/dh.c \
-	$(CYA)/ctaocrypt/src/dsa.c \
-	$(CYA)/ctaocrypt/src/ecc.c \
-	$(CYA)/ctaocrypt/src/hc128.c \
-	$(CYA)/ctaocrypt/src/hmac.c \
-	$(CYA)/ctaocrypt/src/integer.c \
-	$(CYA)/ctaocrypt/src/md4.c \
-	$(CYA)/ctaocrypt/src/md5.c \
-	$(CYA)/ctaocrypt/src/pwdbased.c \
-	$(CYA)/ctaocrypt/src/rabbit.c \
-	$(CYA)/ctaocrypt/src/random.c \
-	$(CYA)/ctaocrypt/src/ripemd.c \
-	$(CYA)/ctaocrypt/src/rsa.c \
-	$(CYA)/ctaocrypt/src/sha.c \
-	$(CYA)/ctaocrypt/src/sha256.c \
-	$(CYA)/ctaocrypt/src/sha512.c \
-	$(CYA)/ctaocrypt/src/tfm.c
+CYA_SOURCES = $(CYA)/src/cyassl_int.c $(CYA)/src/cyassl_io.c \
+              $(CYA)/src/keys.c $(CYA)/src/tls.c $(CYA)/src/ssl.c \
+              $(CYA)/ctaocrypt/src/aes.c $(CYA)/ctaocrypt/src/arc4.c \
+              $(CYA)/ctaocrypt/src/asn.c $(CYA)/ctaocrypt/src/coding.c \
+              $(CYA)/ctaocrypt/src/ctc_asm.c $(CYA)/ctaocrypt/src/ctc_misc.c \
+              $(CYA)/ctaocrypt/src/cyassl_memory.c $(CYA)/ctaocrypt/src/des3.c \
+              $(CYA)/ctaocrypt/src/dh.c $(CYA)/ctaocrypt/src/dsa.c \
+              $(CYA)/ctaocrypt/src/ecc.c $(CYA)/ctaocrypt/src/hc128.c \
+              $(CYA)/ctaocrypt/src/hmac.c $(CYA)/ctaocrypt/src/integer.c \
+              $(CYA)/ctaocrypt/src/md4.c $(CYA)/ctaocrypt/src/md5.c \
+              $(CYA)/ctaocrypt/src/pwdbased.c $(CYA)/ctaocrypt/src/rabbit.c \
+              $(CYA)/ctaocrypt/src/random.c $(CYA)/ctaocrypt/src/ripemd.c \
+              $(CYA)/ctaocrypt/src/rsa.c $(CYA)/ctaocrypt/src/sha.c \
+              $(CYA)/ctaocrypt/src/sha256.c $(CYA)/ctaocrypt/src/sha512.c \
+              $(CYA)/ctaocrypt/src/tfm.c
 
 cyassl.lib:
 	$(CL) /Fo$(CYA)/ $(CYA_SOURCES) $(CYAFL) $(DEF)
