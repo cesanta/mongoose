@@ -3969,7 +3969,7 @@ static void handle_lsp_request(struct mg_connection *conn, const char *path,
 
   if ((fp = fopen(path, "r")) == NULL) {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
-  } else if ((p = mmap(NULL, st->size, PROT_READ, MAP_FILE|MAP_PRIVATE,
+  } else if ((p = mmap(NULL, st->size, PROT_READ, MAP_PRIVATE,
                        fileno(fp), 0)) == MAP_FAILED) {
     send_http_error(conn, 500, http_500_error, "%s", "x");
   } else if ((L = luaL_newstate()) == NULL) {
