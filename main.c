@@ -221,7 +221,7 @@ static void init_server_name(void) {
 
 static void *mongoose_callback(enum mg_event ev, struct mg_connection *conn) {
   if (ev == MG_EVENT_LOG) {
-    printf("%s\n", mg_get_log_message(conn));
+    printf("%s\n", (const char *) mg_get_request_info(conn)->ev_data);
   }
 
   // Returning NULL marks request as not handled, signalling mongoose to

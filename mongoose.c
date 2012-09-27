@@ -632,8 +632,7 @@ const char *mg_version(void) {
   return MONGOOSE_VERSION;
 }
 
-const struct mg_request_info *
-mg_get_request_info(const struct mg_connection *conn) {
+struct mg_request_info *mg_get_request_info(struct mg_connection *conn) {
   return &conn->request_info;
 }
 
@@ -4000,11 +3999,12 @@ static void handle_request(struct mg_connection *conn) {
   struct mgstat st;
 
   if ((conn->request_info.query_string = strchr(ri->uri, '?')) != NULL) {
-    *conn->request_info.query_string++ = '\0';
+    * ((char *) conn->request_info.query_string++) = '\0';
   }
   uri_len = (int) strlen(ri->uri);
-  url_decode(ri->uri, (size_t)uri_len, ri->uri, (size_t)(uri_len + 1), 0);
-  remove_double_dots_and_double_slashes(ri->uri);
+  url_decode(ri->uri, (size_t)uri_len, (char *) ri->uri,
+             (size_t) (uri_len + 1), 0);
+  remove_double_dots_and_double_slashes((char *) ri->uri);
   stat_result = convert_uri_to_file_name(conn, path, sizeof(path), &st);
   conn->throttle = set_throttle(conn->ctx->config[THROTTLE],
                                 get_remote_ip(conn), ri->uri);

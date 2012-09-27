@@ -34,35 +34,74 @@ struct mg_connection;  // Handle for the individual connection
 
 // This structure contains information about the HTTP request.
 struct mg_request_info {
-  char *request_method;  // "GET", "POST", etc
-  char *uri;             // URL-decoded URI
-  char *http_version;    // E.g. "1.0", "1.1"
-  char *query_string;    // URL part after '?' (not including '?') or NULL
-  char *remote_user;     // Authenticated user, or NULL if no auth used
-  long remote_ip;        // Client's IP address
-  int remote_port;       // Client's port
-  int is_ssl;            // 1 if SSL-ed, 0 if not
-  int num_headers;       // Number of headers
+  const char *request_method; // "GET", "POST", etc
+  const char *uri;            // URL-decoded URI
+  const char *http_version;   // E.g. "1.0", "1.1"
+  const char *query_string;   // URL part after '?', not including '?', or NULL
+  const char *remote_user;    // Authenticated user, or NULL if no auth used
+  long remote_ip;             // Client's IP address
+  int remote_port;            // Client's port
+  int is_ssl;                 // 1 if SSL-ed, 0 if not
+  int num_headers;            // Number of headers
   struct mg_header {
-    char *name;          // HTTP header name
-    char *value;         // HTTP header value
-  } http_headers[64];    // Maximum 64 headers
+    const char *name;         // HTTP header name
+    const char *value;        // HTTP header value
+  } http_headers[64];         // Maximum 64 headers
+  void *user_data;            // User data pointer passed to the mg_start()
+  void *ev_data;              // Event-specific data pointer
 };
 
 
-// Various events on which user-defined function is called by Mongoose.
+// Various events on which user-defined callback function is called by Mongoose.
 enum mg_event {
-  MG_NEW_REQUEST,       // New HTTP request has arrived from the client
-  MG_REQUEST_COMPLETE,  // Mongoose has finished handling the request
-  MG_HTTP_ERROR,        // HTTP error must be returned to the client
-  MG_EVENT_LOG,         // Mongoose logs an event, request_info.log_message
-  MG_INIT_SSL,          // SSL initialization, sent before certificate setup
-  MG_WEBSOCKET_CONNECT, // Sent on HTTP connect, before websocket handshake.
-                        // If user callback returns NULL, then mongoose proceeds
-                        // with handshake, otherwise it closes the connection.
-  MG_WEBSOCKET_READY,   // Handshake has been successfully completed.
-  MG_WEBSOCKET_MESSAGE, // Incoming message from the client
-  MG_WEBSOCKET_CLOSE,   // Client has closed the connection
+  // New HTTP request has arrived from the client.
+  // If callback returns non-NULL, Mongoose stops handling current request.
+  // ev_data contains NULL.
+  MG_NEW_REQUEST,
+
+  // Mongoose has finished handling the request.
+  // Callback return value is ignored.
+  // ev_data contains NULL.
+  MG_REQUEST_COMPLETE,
+
+  // HTTP error must be returned to the client.
+  // If callback returns non-NULL, Mongoose stops handling error.
+  // ev_data contains HTTP error code:
+  //  int http_reply_status_code = (int) request_info->ev_data;
+  MG_HTTP_ERROR,
+
+  // Mongoose logs a message.
+  // If callback returns non-NULL, Mongoose stops handling that event.
+  // ev_data contains a message to be logged:
+  //   const char *log_message = request_info->ev_data;
+  MG_EVENT_LOG,
+
+  // SSL initialization, sent before certificate setup.
+  // If callback returns non-NULL, Mongoose does not set up certificates.
+  // ev_data contains server's OpenSSL context:
+  //   SSL_CTX *ssl_context = request_info->ev_data;
+  MG_INIT_SSL,
+
+  // Sent on HTTP connect, before websocket handshake.
+  // If user callback returns NULL, then mongoose proceeds
+  // with handshake, otherwise it closes the connection.
+  // ev_data contains NULL.
+  MG_WEBSOCKET_CONNECT,
+
+  // Handshake has been successfully completed.
+  // Callback's return value is ignored.
+  // ev_data contains NULL.
+  MG_WEBSOCKET_READY,
+
+  // Incoming message from the client, data could be read with mg_read().
+  // If user callback returns non-NULL, mongoose closes the websocket.
+  // ev_data contains NULL.
+  MG_WEBSOCKET_MESSAGE,
+
+  // Client has closed the connection.
+  // Callback's return value is ignored.
+  // ev_data contains NULL.
+  MG_WEBSOCKET_CLOSE,
 };
 
 
@@ -155,12 +194,7 @@ int mg_modify_passwords_file(const char *passwords_file_name,
 
 
 // Return information associated with the request.
-// These functions always succeed.
-const struct mg_request_info *mg_get_request_info(const struct mg_connection *);
-void *mg_get_user_data(struct mg_connection *);
-const char *mg_get_log_message(const struct mg_connection *);
-int mg_get_reply_status_code(const struct mg_connection *);
-void *mg_get_ssl_context(const struct mg_connection *);
+struct mg_request_info *mg_get_request_info(struct mg_connection *);
 
 
 // Send data to the client.

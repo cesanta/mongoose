@@ -72,6 +72,8 @@ class mg_request_info(ctypes.Structure):
     ('is_ssl', ctypes.c_int),
     ('num_headers', ctypes.c_int),
     ('http_headers', mg_header * 64),
+    ('user_data', ctypes.c_void_p),
+    ('ev_data', ctypes.c_void_p),
   ]
 
 
@@ -86,10 +88,6 @@ class Connection(object):
     self.m = mongoose
     self.conn = ctypes.c_void_p(connection)
     self.info = self.m.dll.mg_get_request_info(self.conn).contents
-    self.user_data = self.m.dll.mg_get_user_data(self.conn)
-    self.log_message = self.m.dll.mg_get_log_message(self.conn)
-    self.reply_status_code = self.m.dll.mg_get_reply_status_code(self.conn)
-    self.ssl_context = self.m.dll.mg_get_ssl_context(self.conn)
 
   def get_header(self, name):
     val = self.m.dll.mg_get_header(self.conn, name)
