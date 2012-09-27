@@ -3856,6 +3856,7 @@ static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
 }
 #define munmap(x, y)  UnmapViewOfFile(x)
 #define MAP_FAILED NULL
+#define MAP_PRIVATE 0
 #define PROT_READ 0
 #else
 #include <sys/mman.h>
