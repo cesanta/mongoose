@@ -2295,10 +2295,8 @@ static int authorize(struct mg_connection *conn, FILE *fp) {
 
     if (!strcmp(ah.user, f_user) &&
         !strcmp(conn->ctx->config[AUTHENTICATION_DOMAIN], f_domain))
-      return check_password(
-            conn->request_info.request_method,
-            ha1, ah.uri, ah.nonce, ah.nc, ah.cnonce, ah.qop,
-            ah.response);
+      return check_password(conn->request_info.request_method, ha1, ah.uri,
+                            ah.nonce, ah.nc, ah.cnonce, ah.qop, ah.response);
   }
 
   return 0;
@@ -4329,7 +4327,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   struct mg_connection *conn;
   int i, size;
   const char *pem;
- 
+
   // If PEM file is not specified, skip SSL initialization.
   if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL) {
     return 1;
@@ -4354,7 +4352,7 @@ static int set_ssl_option(struct mg_context *ctx) {
     cry(fc(ctx), "SSL_CTX_new (server) error: %s", ssl_error());
     return 0;
   }
- 
+
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
   conn = fc(ctx);
