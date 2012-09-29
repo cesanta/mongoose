@@ -7,6 +7,8 @@
 } while (0)
 #define ASSERT(expr) do { if (!(expr)) FATAL(#expr, __LINE__); } while (0)
 
+#define UNUSED_PORT "33796"
+
 static void test_parse_http_request() {
   struct mg_request_info ri;
   char req1[] = "GET / HTTP/1.1\r\n\r\n";
@@ -126,15 +128,24 @@ static void test_remove_double_dots() {
 }
 
 static const char *fetch_data = "hello world!\n";
-static void *event_handler(enum mg_event event,
-                           struct mg_connection *conn) {
+static const char *inmemory_file_data = "hi there";
+static void *event_handler(enum mg_event event, struct mg_connection *conn) {
   const struct mg_request_info *request_info = mg_get_request_info(conn);
+
   if (event == MG_NEW_REQUEST && !strcmp(request_info->uri, "/data")) {
     mg_printf(conn, "HTTP/1.1 200 OK\r\n"
               "Content-Length: %d\r\n"
               "Content-Type: text/plain\r\n\r\n"
               "%s", (int) strlen(fetch_data), fetch_data);
     return "";
+  } else if (event == MG_OPEN_FILE) {
+    const char *path = request_info->ev_data;
+    printf("%s: [%s]\n", __func__, path);
+    if (strcmp(path, "./blah") == 0) {
+      mg_get_request_info(conn)->ev_data =
+        (void *) (int) strlen(inmemory_file_data);
+      return (void *) inmemory_file_data;
+    }
   } else if (event == MG_EVENT_LOG) {
     printf("%s\n", (const char *) mg_get_request_info(conn)->ev_data);
   }
@@ -145,33 +156,33 @@ static void *event_handler(enum mg_event event,
 static void test_mg_fetch(void) {
   static const char *options[] = {
     "document_root", ".",
-    "listening_ports", "33796",
+    "listening_ports", UNUSED_PORT,
     NULL,
   };
   char buf[2000], buf2[2000];
-  int length;
+  int n, length;
   struct mg_context *ctx;
   struct mg_request_info ri;
   const char *tmp_file = "temporary_file_name_for_unit_test.txt";
-  struct mgstat st;
+  struct file file;
   FILE *fp;
 
   ASSERT((ctx = mg_start(event_handler, NULL, options)) != NULL);
 
   // Failed fetch, pass invalid URL
   ASSERT(mg_fetch(ctx, "localhost", tmp_file, buf, sizeof(buf), &ri) == NULL);
-  ASSERT(mg_fetch(ctx, "localhost:33796", tmp_file,
+  ASSERT(mg_fetch(ctx, "localhost:" UNUSED_PORT, tmp_file,
                   buf, sizeof(buf), &ri) == NULL);
   ASSERT(mg_fetch(ctx, "http://$$$.$$$", tmp_file,
                   buf, sizeof(buf), &ri) == NULL);
 
   // Failed fetch, pass invalid file name
-  ASSERT(mg_fetch(ctx, "http://localhost:33796/data",
+  ASSERT(mg_fetch(ctx, "http://localhost:" UNUSED_PORT "/data",
                   "/this/file/must/not/exist/ever",
                   buf, sizeof(buf), &ri) == NULL);
 
   // Successful fetch
-  ASSERT((fp = mg_fetch(ctx, "http://localhost:33796/data",
+  ASSERT((fp = mg_fetch(ctx, "http://localhost:" UNUSED_PORT "/data",
                         tmp_file, buf, sizeof(buf), &ri)) != NULL);
   ASSERT(ri.num_headers == 2);
   ASSERT(!strcmp(ri.request_method, "HTTP/1.1"));
@@ -184,11 +195,30 @@ static void test_mg_fetch(void) {
   fclose(fp);
 
   // Fetch big file, mongoose.c
-  ASSERT((fp = mg_fetch(ctx, "http://localhost:33796/mongoose.c",
+  ASSERT((fp = mg_fetch(ctx, "http://localhost:" UNUSED_PORT "/mongoose.c",
                         tmp_file, buf, sizeof(buf), &ri)) != NULL);
-  ASSERT(mg_stat("mongoose.c", &st) == 0);
-  ASSERT(st.size == ftell(fp));
+  ASSERT(mg_stat(fc(ctx), "mongoose.c", &file));
+  ASSERT(file.size == ftell(fp));
   ASSERT(!strcmp(ri.request_method, "HTTP/1.1"));
+
+  // Fetch nonexistent file, /blah
+  ASSERT((fp = mg_fetch(ctx, "http://localhost:" UNUSED_PORT "/boo",
+                        tmp_file, buf, sizeof(buf), &ri)) != NULL);
+  ASSERT(!mg_strcasecmp(ri.uri, "404"));
+  fclose(fp);
+
+  // Fetch existing inmemory file
+  ASSERT((fp = mg_fetch(ctx, "http://localhost:" UNUSED_PORT "/blah",
+                        tmp_file, buf, sizeof(buf), &ri)) != NULL);
+  ASSERT(!mg_strcasecmp(ri.uri, "200"));
+  n = ftell(fp);
+  fseek(fp, 0, SEEK_SET);
+  printf("%s %d %d [%.*s]\n", __func__, n, (int) feof(fp), n, buf2);
+  n = fread(buf2, 1, n, fp);
+  printf("%s %d %d [%.*s]\n", __func__, n, (int) feof(fp), n, buf2);
+  ASSERT((size_t) ftell(fp) == (size_t) strlen(inmemory_file_data));
+  ASSERT(!memcmp(inmemory_file_data, buf2, ftell(fp)));
+  fclose(fp);
 
   remove(tmp_file);
   mg_stop(ctx);

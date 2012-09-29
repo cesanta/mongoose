@@ -224,6 +224,12 @@ static void *mongoose_callback(enum mg_event ev, struct mg_connection *conn) {
     printf("%s\n", (const char *) mg_get_request_info(conn)->ev_data);
   }
 
+  if (ev == MG_OPEN_FILE &&
+      !memcmp(mg_get_request_info(conn)->ev_data, "./x", 3)) {
+    mg_get_request_info(conn)->ev_data = (void *) (int) 5;
+    return "hello";
+  }
+
   // Returning NULL marks request as not handled, signalling mongoose to
   // proceed with handling it.
   return NULL;

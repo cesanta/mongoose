@@ -82,6 +82,21 @@ enum mg_event {
   //   SSL_CTX *ssl_context = request_info->ev_data;
   MG_INIT_SSL,
 
+  // Mongoose tries to open file.
+  // If callback returns non-NULL, Mongoose will not try to open it, but
+  // will use the returned value as a pointer to the file data. This allows
+  // for example to serve files from memory.
+  // ev_data contains file path, including document root path.
+  // Upon return, ev_data should return file size,  which should be an int.
+  //
+  //   const char *file_name = request_info->ev_data;
+  //   if (strcmp(file_name, "foo.txt") == 0) {
+  //     request_info->ev_data = (void *) (int) 4;
+  //     return "data";
+  //   }
+  //   return NULL;
+  MG_OPEN_FILE,
+
   // Sent on HTTP connect, before websocket handshake.
   // If user callback returns NULL, then mongoose proceeds
   // with handshake, otherwise it closes the connection.

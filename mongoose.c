@@ -20,7 +20,7 @@
 
 #if defined(_WIN32)
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005
-#else 
+#else
 #ifdef __linux__
 #define _XOPEN_SOURCE 600     // For flockfile() on Linux
 #endif
@@ -144,7 +144,6 @@ typedef DWORD pthread_t;
 
 static int pthread_mutex_lock(pthread_mutex_t *);
 static int pthread_mutex_unlock(pthread_mutex_t *);
-static FILE *mg_fopen(const char *path, const char *mode);
 
 #if defined(HAVE_STDINT)
 #include <stdint.h>
@@ -203,7 +202,6 @@ typedef struct DIR {
 #define O_BINARY  0
 #endif // O_BINARY
 #define closesocket(a) close(a)
-#define mg_fopen(x, y) fopen(x, y)
 #define mg_mkdir(x, y) mkdir(x, y)
 #define mg_remove(x) remove(x)
 #define mg_rename(x, y) rename(x, y)
@@ -412,12 +410,14 @@ struct vec {
   size_t len;
 };
 
-// Structure used by mg_stat() function. Uses 64 bit file length.
-struct mgstat {
-  int is_directory;  // Directory marker
-  int64_t size;      // File size
-  time_t mtime;      // Modification time
+struct file {
+  int is_directory;
+  time_t modification_time;
+  int64_t size;
+  FILE *fp;
+  const char *membuf;   // Non-NULL if file data is in memory
 };
+#define STRUCT_FILE_INITIALIZER {0, 0, 0, NULL, NULL}
 
 // Describes listening socket, or socket which was accept()-ed by the master
 // thread and queued for future handling by the worker thread.
@@ -519,6 +519,41 @@ static void *call_user(struct mg_connection *conn, enum mg_event event) {
     NULL : conn->ctx->user_callback(event, conn);
 }
 
+static int is_file_in_memory(struct mg_connection *conn, const char *path,
+                             struct file *filep) {
+  conn->request_info.ev_data = (void *) path;
+  if ((filep->membuf = call_user(conn, MG_OPEN_FILE)) != NULL) {
+    filep->size = (int) conn->request_info.ev_data;
+  }
+  return filep->membuf != NULL;
+}
+
+static int is_file_opened(const struct file *filep) {
+  return filep->membuf != NULL || filep->fp != NULL;
+}
+
+static int mg_fopen(struct mg_connection *conn, const char *path,
+                    const char *mode, struct file *filep) {
+  if (!is_file_in_memory(conn, path, filep)) {
+#ifdef _WIN32
+    wchar_t wbuf[PATH_MAX], wmode[20];
+    to_unicode(path, wbuf, ARRAY_SIZE(wbuf));
+    MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, ARRAY_SIZE(wmode));
+    filep->fp = _wfopen(wbuf, wmode);
+#else
+    filep->fp = fopen(path, mode);
+#endif
+  }
+
+  return is_file_opened(filep);
+}
+
+static void mg_fclose(struct file *filep) {
+  if (filep != NULL && filep->fp != NULL) {
+    fclose(filep->fp);
+  }
+}
+
 static int get_option_index(const char *name) {
   int i;
 
@@ -577,7 +612,7 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
   conn->request_info.ev_data = buf;
   if (call_user(conn, MG_EVENT_LOG) == NULL) {
     fp = conn->ctx == NULL || conn->ctx->config[ERROR_LOG_FILE] == NULL ? NULL :
-      mg_fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
+      fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
 
     if (fp != NULL) {
       flockfile(fp);
@@ -592,12 +627,10 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
                 conn->request_info.uri);
       }
 
-      (void) fprintf(fp, "%s", buf);
+      fprintf(fp, "%s", buf);
       fputc('\n', fp);
       funlockfile(fp);
-      if (fp != stderr) {
-        fclose(fp);
-      }
+      fclose(fp);
     }
   }
   conn->request_info.ev_data = NULL;
@@ -1077,33 +1110,23 @@ static int mg_rename(const char* oldname, const char* newname) {
   return MoveFileW(woldbuf, wnewbuf) ? 0 : -1;
 }
 
-
-static FILE *mg_fopen(const char *path, const char *mode) {
-  wchar_t wbuf[PATH_MAX], wmode[20];
-
-  to_unicode(path, wbuf, ARRAY_SIZE(wbuf));
-  MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, ARRAY_SIZE(wmode));
-
-  return _wfopen(wbuf, wmode);
-}
-
-static int mg_stat(const char *path, struct mgstat *stp) {
-  int ok = -1; // Error
+static int mg_stat(struct mg_connection *conn, const char *path,
+                   struct file *filep) {
   wchar_t wbuf[PATH_MAX];
   WIN32_FILE_ATTRIBUTE_DATA info;
 
-  to_unicode(path, wbuf, ARRAY_SIZE(wbuf));
-
-  if (GetFileAttributesExW(wbuf, GetFileExInfoStandard, &info) != 0) {
-    stp->size = MAKEUQUAD(info.nFileSizeLow, info.nFileSizeHigh);
-    stp->mtime = SYS2UNIX_TIME(info.ftLastWriteTime.dwLowDateTime,
-                               info.ftLastWriteTime.dwHighDateTime);
-    stp->is_directory =
-      info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
-    ok = 0;  // Success
+  if (!is_file_in_memory(conn, path, filep)) {
+    to_unicode(path, wbuf, ARRAY_SIZE(wbuf));
+    if (GetFileAttributesExW(wbuf, GetFileExInfoStandard, &info) != 0) {
+      filep->size = MAKEUQUAD(info.nFileSizeLow, info.nFileSizeHigh);
+      filep->modification_time = SYS2UNIX_TIME(
+          info.ftLastWriteTime.dwLowDateTime,
+          info.ftLastWriteTime.dwHighDateTime);
+      filep->is_directory = info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+    }
   }
 
-  return ok;
+  return filep->membuf != NULL || filep->modification_time != 0;
 }
 
 static int mg_remove(const char *path) {
@@ -1193,7 +1216,7 @@ static struct dirent *readdir(DIR *dir) {
   return result;
 }
 
-#define set_close_on_exec(fd) // No FD_CLOEXEC on Windows
+#define set_close_on_exec(x) // No FD_CLOEXEC on Windows
 
 int mg_start_thread(mg_thread_func_t f, void *p) {
   return _beginthread((void (__cdecl *)(void *)) f, 0, p) == -1L ? -1 : 0;
@@ -1293,24 +1316,21 @@ static int set_non_blocking_mode(SOCKET sock) {
 }
 
 #else
-static int mg_stat(const char *path, struct mgstat *stp) {
+static int mg_stat(struct mg_connection *conn, const char *path,
+                   struct file *filep) {
   struct stat st;
-  int ok;
 
-  if (stat(path, &st) == 0) {
-    ok = 0;
-    stp->size = st.st_size;
-    stp->mtime = st.st_mtime;
-    stp->is_directory = S_ISDIR(st.st_mode);
-  } else {
-    ok = -1;
+  if (!is_file_in_memory(conn, path, filep) && !stat(path, &st)) {
+    filep->size = st.st_size;
+    filep->modification_time = st.st_mtime;
+    filep->is_directory = S_ISDIR(st.st_mode);
   }
 
-  return ok;
+  return filep->membuf != NULL || filep->modification_time != (time_t) 0;
 }
 
 static void set_close_on_exec(int fd) {
-  (void) fcntl(fd, F_SETFD, FD_CLOEXEC);
+  fcntl(fd, F_SETFD, FD_CLOEXEC);
 }
 
 int mg_start_thread(mg_thread_func_t func, void *param) {
@@ -1691,35 +1711,35 @@ int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
   return len;
 }
 
-static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
-                                    size_t buf_len, struct mgstat *st) {
+static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
+                                     size_t buf_len, struct file *filep) {
   struct vec a, b;
   const char *rewrite, *uri = conn->request_info.uri;
   char *p;
-  int match_len, stat_result;
+  int match_len;
 
-  buf_len--;  // This is because memmove() for PATH_INFO may shift part
-              // of the path one byte on the right.
-  mg_snprintf(conn, buf, buf_len, "%s%s", conn->ctx->config[DOCUMENT_ROOT],
+  // Using buf_len - 1 because memmove() for PATH_INFO may shift part
+  // of the path one byte on the right.
+  mg_snprintf(conn, buf, buf_len - 1, "%s%s", conn->ctx->config[DOCUMENT_ROOT],
               uri);
 
   rewrite = conn->ctx->config[REWRITE];
   while ((rewrite = next_option(rewrite, &a, &b)) != NULL) {
     if ((match_len = match_prefix(a.ptr, a.len, uri)) > 0) {
-      mg_snprintf(conn, buf, buf_len, "%.*s%s", (int) b.len, b.ptr,
+      mg_snprintf(conn, buf, buf_len - 1, "%.*s%s", (int) b.len, b.ptr,
                   uri + match_len);
       break;
     }
   }
 
-  if ((stat_result = mg_stat(buf, st)) != 0) {
+  if (!mg_stat(conn, buf, filep)) {
     // Support PATH_INFO for CGI scripts.
     for (p = buf + strlen(buf); p > buf + 1; p--) {
       if (*p == '/') {
         *p = '\0';
         if (match_prefix(conn->ctx->config[CGI_EXTENSIONS],
                          strlen(conn->ctx->config[CGI_EXTENSIONS]), buf) > 0 &&
-            (stat_result = mg_stat(buf, st)) == 0) {
+            mg_stat(conn, buf, filep)) {
           // Shift PATH_INFO block one character right, e.g.
           //  "/x.cgi/foo/bar\x00" => "/x.cgi\x00/foo/bar\x00"
           // conn->path_info is pointing to the local variable "path" declared
@@ -1731,13 +1751,10 @@ static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
           break;
         } else {
           *p = '/';
-          stat_result = -1;
         }
       }
     }
   }
-
-  return stat_result;
 }
 
 static int sslize(struct mg_connection *conn, SSL_CTX *s, int (*func)(SSL *)) {
@@ -2179,34 +2196,29 @@ static int check_password(const char *method, const char *ha1, const char *uri,
 
 // Use the global passwords file, if specified by auth_gpass option,
 // or search for .htpasswd in the requested directory.
-static FILE *open_auth_file(struct mg_connection *conn, const char *path) {
-  struct mg_context *ctx = conn->ctx;
+static void open_auth_file(struct mg_connection *conn, const char *path,
+                           struct file *filep) {
   char name[PATH_MAX];
-  const char *p, *e;
-  struct mgstat st;
-  FILE *fp;
+  const char *p, *e, *gpass = conn->ctx->config[GLOBAL_PASSWORDS_FILE];
 
-  if (ctx->config[GLOBAL_PASSWORDS_FILE] != NULL) {
+  if (gpass != NULL) {
     // Use global passwords file
-    fp =  mg_fopen(ctx->config[GLOBAL_PASSWORDS_FILE], "r");
-    if (fp == NULL)
-      cry(fc(ctx), "fopen(%s): %s",
-          ctx->config[GLOBAL_PASSWORDS_FILE], strerror(ERRNO));
-  } else if (!mg_stat(path, &st) && st.is_directory) {
-    (void) mg_snprintf(conn, name, sizeof(name), "%s%c%s",
-        path, '/', PASSWORDS_FILE_NAME);
-    fp = mg_fopen(name, "r");
+    if (!mg_fopen(conn, gpass, "r", filep)) {
+      cry(conn, "fopen(%s): %s", gpass, strerror(ERRNO));
+    }
+  } else if (mg_stat(conn, path, filep) && filep->is_directory) {
+    mg_snprintf(conn, name, sizeof(name), "%s%c%s",
+                path, '/', PASSWORDS_FILE_NAME);
+    mg_fopen(conn, name, "r", filep);
   } else {
      // Try to find .htpasswd in requested directory.
     for (p = path, e = p + strlen(p) - 1; e > p; e--)
       if (e[0] == '/')
         break;
-    (void) mg_snprintf(conn, name, sizeof(name), "%.*s%c%s",
-        (int) (e - p), p, '/', PASSWORDS_FILE_NAME);
-    fp = mg_fopen(name, "r");
+    mg_snprintf(conn, name, sizeof(name), "%.*s%c%s",
+                (int) (e - p), p, '/', PASSWORDS_FILE_NAME);
+    mg_fopen(conn, name, "r", filep);
   }
-
-  return fp;
 }
 
 // Parsed Authorization header
@@ -2278,17 +2290,36 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
   return 1;
 }
 
+static char *mg_fgets(char *buf, size_t size, struct file *filep, char **p) {
+  char *eof;
+  size_t len;
+
+  if (filep->membuf != NULL && *p != NULL) {
+    eof = memchr(*p, '\n', &filep->membuf[filep->size] - *p);
+    len = (size_t) (eof - *p) > size - 1 ? size - 1 : (size_t) (eof - *p);
+    memcpy(buf, *p, len);
+    buf[len] = '\0';
+    *p = eof;
+    return eof;
+  } else if (filep->fp != NULL) {
+    return fgets(buf, size, filep->fp);
+  } else {
+    return NULL;
+  }
+}
+
 // Authorize against the opened passwords file. Return 1 if authorized.
-static int authorize(struct mg_connection *conn, FILE *fp) {
+static int authorize(struct mg_connection *conn, struct file *filep) {
   struct ah ah;
-  char line[256], f_user[256], ha1[256], f_domain[256], buf[MG_BUF_LEN];
+  char line[256], f_user[256], ha1[256], f_domain[256], buf[MG_BUF_LEN], *p;
 
   if (!parse_auth_header(conn, buf, sizeof(buf), &ah)) {
     return 0;
   }
 
   // Loop over passwords file
-  while (fgets(line, sizeof(line), fp) != NULL) {
+  p = (char *) filep->membuf;
+  while (mg_fgets(line, sizeof(line), filep, &p) != NULL) {
     if (sscanf(line, "%[^:]:%[^:]:%s", f_user, f_domain, ha1) != 3) {
       continue;
     }
@@ -2304,34 +2335,31 @@ static int authorize(struct mg_connection *conn, FILE *fp) {
 
 // Return 1 if request is authorised, 0 otherwise.
 static int check_authorization(struct mg_connection *conn, const char *path) {
-  FILE *fp;
   char fname[PATH_MAX];
   struct vec uri_vec, filename_vec;
   const char *list;
-  int authorized;
-
-  fp = NULL;
-  authorized = 1;
+  struct file file = STRUCT_FILE_INITIALIZER;
+  int authorized = 1;
 
   list = conn->ctx->config[PROTECT_URI];
   while ((list = next_option(list, &uri_vec, &filename_vec)) != NULL) {
     if (!memcmp(conn->request_info.uri, uri_vec.ptr, uri_vec.len)) {
       mg_snprintf(conn, fname, sizeof(fname), "%.*s",
                   (int) filename_vec.len, filename_vec.ptr);
-      if ((fp = mg_fopen(fname, "r")) == NULL) {
+      if (!mg_fopen(conn, fname, "r", &file)) {
         cry(conn, "%s: cannot open %s: %s", __func__, fname, strerror(errno));
       }
       break;
     }
   }
 
-  if (fp == NULL) {
-    fp = open_auth_file(conn, path);
+  if (!is_file_opened(&file)) {
+    open_auth_file(conn, path, &file);
   }
 
-  if (fp != NULL) {
-    authorized = authorize(conn, fp);
-    (void) fclose(fp);
+  if (is_file_opened(&file)) {
+    authorized = authorize(conn, &file);
+    mg_fclose(&file);
   }
 
   return authorized;
@@ -2339,25 +2367,23 @@ static int check_authorization(struct mg_connection *conn, const char *path) {
 
 static void send_authorization_request(struct mg_connection *conn) {
   conn->status_code = 401;
-  (void) mg_printf(conn,
-      "HTTP/1.1 401 Unauthorized\r\n"
-      "Content-Length: 0\r\n"
-      "WWW-Authenticate: Digest qop=\"auth\", "
-      "realm=\"%s\", nonce=\"%lu\"\r\n\r\n",
-      conn->ctx->config[AUTHENTICATION_DOMAIN],
-      (unsigned long) time(NULL));
+  mg_printf(conn,
+            "HTTP/1.1 401 Unauthorized\r\n"
+            "Content-Length: 0\r\n"
+            "WWW-Authenticate: Digest qop=\"auth\", "
+            "realm=\"%s\", nonce=\"%lu\"\r\n\r\n",
+            conn->ctx->config[AUTHENTICATION_DOMAIN],
+            (unsigned long) time(NULL));
 }
 
 static int is_authorized_for_put(struct mg_connection *conn) {
-  FILE *fp;
+  struct file file = STRUCT_FILE_INITIALIZER;
+  const char *passfile = conn->ctx->config[PUT_DELETE_PASSWORDS_FILE];
   int ret = 0;
 
-  fp = conn->ctx->config[PUT_DELETE_PASSWORDS_FILE] == NULL ? NULL :
-    mg_fopen(conn->ctx->config[PUT_DELETE_PASSWORDS_FILE], "r");
-
-  if (fp != NULL) {
-    ret = authorize(conn, fp);
-    (void) fclose(fp);
+  if (passfile != NULL && mg_fopen(conn, passfile, "r", &file)) {
+    ret = authorize(conn, &file);
+    mg_fclose(&file);
   }
 
   return ret;
@@ -2380,14 +2406,14 @@ int mg_modify_passwords_file(const char *fname, const char *domain,
   (void) snprintf(tmp, sizeof(tmp), "%s.tmp", fname);
 
   // Create the file if does not exist
-  if ((fp = mg_fopen(fname, "a+")) != NULL) {
+  if ((fp = fopen(fname, "a+")) != NULL) {
     (void) fclose(fp);
   }
 
   // Open the given file and temporary file
-  if ((fp = mg_fopen(fname, "r")) == NULL) {
+  if ((fp = fopen(fname, "r")) == NULL) {
     return 0;
-  } else if ((fp2 = mg_fopen(tmp, "w+")) == NULL) {
+  } else if ((fp2 = fopen(tmp, "w+")) == NULL) {
     fclose(fp);
     return 0;
   }
@@ -2405,23 +2431,23 @@ int mg_modify_passwords_file(const char *fname, const char *domain,
         fprintf(fp2, "%s:%s:%s\n", user, domain, ha1);
       }
     } else {
-      (void) fprintf(fp2, "%s", line);
+      fprintf(fp2, "%s", line);
     }
   }
 
   // If new user, just add it
   if (!found && pass != NULL) {
     mg_md5(ha1, user, ":", domain, ":", pass, NULL);
-    (void) fprintf(fp2, "%s:%s:%s\n", user, domain, ha1);
+    fprintf(fp2, "%s:%s:%s\n", user, domain, ha1);
   }
 
   // Close files
-  (void) fclose(fp);
-  (void) fclose(fp2);
+  fclose(fp);
+  fclose(fp2);
 
   // Put the temp file in place of real file
-  (void) mg_remove(fname);
-  (void) mg_rename(tmp, fname);
+  remove(fname);
+  rename(tmp, fname);
 
   return 1;
 }
@@ -2429,7 +2455,7 @@ int mg_modify_passwords_file(const char *fname, const char *domain,
 struct de {
   struct mg_connection *conn;
   char *file_name;
-  struct mgstat st;
+  struct file file;
 };
 
 static void url_encode(const char *src, char *dst, size_t dst_len) {
@@ -2455,32 +2481,32 @@ static void url_encode(const char *src, char *dst, size_t dst_len) {
 static void print_dir_entry(struct de *de) {
   char size[64], mod[64], href[PATH_MAX];
 
-  if (de->st.is_directory) {
-    (void) mg_snprintf(de->conn, size, sizeof(size), "%s", "[DIRECTORY]");
+  if (de->file.is_directory) {
+    mg_snprintf(de->conn, size, sizeof(size), "%s", "[DIRECTORY]");
   } else {
      // We use (signed) cast below because MSVC 6 compiler cannot
      // convert unsigned __int64 to double. Sigh.
-    if (de->st.size < 1024) {
-      (void) mg_snprintf(de->conn, size, sizeof(size),
-          "%lu", (unsigned long) de->st.size);
-    } else if (de->st.size < 0x100000) {
-      (void) mg_snprintf(de->conn, size, sizeof(size),
-          "%.1fk", (double) de->st.size / 1024.0);
-    } else if (de->st.size < 0x40000000) {
-      (void) mg_snprintf(de->conn, size, sizeof(size),
-          "%.1fM", (double) de->st.size / 1048576);
+    if (de->file.size < 1024) {
+      mg_snprintf(de->conn, size, sizeof(size), "%d", (int) de->file.size);
+    } else if (de->file.size < 0x100000) {
+      mg_snprintf(de->conn, size, sizeof(size),
+                  "%.1fk", (double) de->file.size / 1024.0);
+    } else if (de->file.size < 0x40000000) {
+      mg_snprintf(de->conn, size, sizeof(size),
+                  "%.1fM", (double) de->file.size / 1048576);
     } else {
-      (void) mg_snprintf(de->conn, size, sizeof(size),
-          "%.1fG", (double) de->st.size / 1073741824);
+      mg_snprintf(de->conn, size, sizeof(size),
+                  "%.1fG", (double) de->file.size / 1073741824);
     }
   }
-  (void) strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&de->st.mtime));
+  strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M",
+           localtime(&de->file.modification_time));
   url_encode(de->file_name, href, sizeof(href));
   de->conn->num_bytes_sent += mg_printf(de->conn,
       "<tr><td><a href=\"%s%s%s\">%s%s</a></td>"
       "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
-      de->conn->request_info.uri, href, de->st.is_directory ? "/" : "",
-      de->file_name, de->st.is_directory ? "/" : "", mod, size);
+      de->conn->request_info.uri, href, de->file.is_directory ? "/" : "",
+      de->file_name, de->file.is_directory ? "/" : "", mod, size);
 }
 
 // This function is called from send_directory() and used for
@@ -2496,18 +2522,18 @@ static int WINCDECL compare_dir_entries(const void *p1, const void *p2) {
     query_string = "na";
   }
 
-  if (a->st.is_directory && !b->st.is_directory) {
+  if (a->file.is_directory && !b->file.is_directory) {
     return -1;  // Always put directories on top
-  } else if (!a->st.is_directory && b->st.is_directory) {
+  } else if (!a->file.is_directory && b->file.is_directory) {
     return 1;   // Always put directories on top
   } else if (*query_string == 'n') {
     cmp_result = strcmp(a->file_name, b->file_name);
   } else if (*query_string == 's') {
-    cmp_result = a->st.size == b->st.size ? 0 :
-      a->st.size > b->st.size ? 1 : -1;
+    cmp_result = a->file.size == b->file.size ? 0 :
+      a->file.size > b->file.size ? 1 : -1;
   } else if (*query_string == 'd') {
-    cmp_result = a->st.mtime == b->st.mtime ? 0 :
-      a->st.mtime > b->st.mtime ? 1 : -1;
+    cmp_result = a->file.modification_time == b->file.modification_time ? 0 :
+      a->file.modification_time > b->file.modification_time ? 1 : -1;
   }
 
   return query_string[1] == 'd' ? -cmp_result : cmp_result;
@@ -2547,11 +2573,10 @@ static int scan_directory(struct mg_connection *conn, const char *dir,
       // print_dir_entry(). memset is required only if mg_stat()
       // fails. For more details, see
       // http://code.google.com/p/mongoose/issues/detail?id=79
-      if (mg_stat(path, &de.st) != 0) {
-        memset(&de.st, 0, sizeof(de.st));
-      }
-      de.file_name = dp->d_name;
+      // mg_stat will memset the whole struct file with zeroes.
+      mg_stat(conn, path, &de.file);
 
+      de.file_name = dp->d_name;
       cb(&de, data);
     }
     (void) closedir(dirp);
@@ -2578,7 +2603,7 @@ static void dir_scan_callback(struct de *de, void *data) {
     dsd->num_entries = 0;
   } else {
     dsd->entries[dsd->num_entries].file_name = mg_strdup(de->file_name);
-    dsd->entries[dsd->num_entries].st = de->st;
+    dsd->entries[dsd->num_entries].file = de->file;
     dsd->entries[dsd->num_entries].conn = de->conn;
     dsd->num_entries++;
   }
@@ -2635,30 +2660,39 @@ static void handle_directory_request(struct mg_connection *conn,
 }
 
 // Send len bytes from the opened file to the client.
-static void send_file_data(struct mg_connection *conn, FILE *fp, int64_t len) {
+static void send_file_data(struct mg_connection *conn, struct file *filep,
+                           int64_t offset, int64_t len) {
   char buf[MG_BUF_LEN];
   int to_read, num_read, num_written;
 
-  while (len > 0) {
-    // Calculate how much to read from the file in the buffer
-    to_read = sizeof(buf);
-    if ((int64_t) to_read > len) {
-      to_read = (int) len;
+  if (len > 0 && filep->membuf != NULL && filep->size > 0) {
+    if (len > filep->size - offset) {
+      len = filep->size - offset;
     }
+    mg_write(conn, filep->membuf + offset, len);
+  } else if (len > 0 && filep->fp != NULL) {
+    fseeko(filep->fp, offset, SEEK_SET);
+    while (len > 0) {
+      // Calculate how much to read from the file in the buffer
+      to_read = sizeof(buf);
+      if ((int64_t) to_read > len) {
+        to_read = (int) len;
+      }
 
-    // Read from file, exit the loop on error
-    if ((num_read = fread(buf, 1, (size_t)to_read, fp)) <= 0) {
-      break;
+      // Read from file, exit the loop on error
+      if ((num_read = fread(buf, 1, (size_t) to_read, filep->fp)) <= 0) {
+        break;
+      }
+
+      // Send read bytes to the client, exit the loop on error
+      if ((num_written = mg_write(conn, buf, (size_t) num_read)) != num_read) {
+        break;
+      }
+
+      // Both read and were successful, adjust counters
+      conn->num_bytes_sent += num_written;
+      len -= num_written;
     }
-
-    // Send read bytes to the client, exit the loop on error
-    if ((num_written = mg_write(conn, buf, (size_t)num_read)) != num_read) {
-      break;
-    }
-
-    // Both read and were successful, adjust counters
-    conn->num_bytes_sent += num_written;
-    len -= num_written;
   }
 }
 
@@ -2671,53 +2705,58 @@ static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
 }
 
 static void construct_etag(char *buf, size_t buf_len,
-                           const struct mgstat *stp) {
+                           const struct file *filep) {
   snprintf(buf, buf_len, "\"%lx.%" INT64_FMT "\"",
-           (unsigned long) stp->mtime, stp->size);
+           (unsigned long) filep->modification_time, filep->size);
+}
+
+static void fclose_on_exec(struct file *filep) {
+  if (filep != NULL && filep->fp != NULL) {
+    fcntl(fileno(filep->fp), F_SETFD, FD_CLOEXEC);
+  }
 }
 
 static void handle_file_request(struct mg_connection *conn, const char *path,
-                                struct mgstat *stp) {
+                                struct file *filep) {
   char date[64], lm[64], etag[64], range[64];
   const char *msg = "OK", *hdr;
   time_t curtime = time(NULL);
   int64_t cl, r1, r2;
   struct vec mime_vec;
-  FILE *fp;
   int n;
 
   get_mime_type(conn->ctx, path, &mime_vec);
-  cl = stp->size;
+  cl = filep->size;
   conn->status_code = 200;
   range[0] = '\0';
 
-  if ((fp = mg_fopen(path, "rb")) == NULL) {
+  if (!mg_fopen(conn, path, "rb", filep)) {
     send_http_error(conn, 500, http_500_error,
         "fopen(%s): %s", path, strerror(ERRNO));
     return;
   }
-  set_close_on_exec(fileno(fp));
+  fclose_on_exec(filep);
 
   // If Range: header specified, act accordingly
   r1 = r2 = 0;
   hdr = mg_get_header(conn, "Range");
-  if (hdr != NULL && (n = parse_range_header(hdr, &r1, &r2)) > 0) {
+  if (hdr != NULL && (n = parse_range_header(hdr, &r1, &r2)) > 0 &&
+      r1 >= 0 && r2 > 0) {
     conn->status_code = 206;
-    (void) fseeko(fp, r1, SEEK_SET);
-    cl = n == 2 ? r2 - r1 + 1: cl - r1;
-    (void) mg_snprintf(conn, range, sizeof(range),
-        "Content-Range: bytes "
-        "%" INT64_FMT "-%"
-        INT64_FMT "/%" INT64_FMT "\r\n",
-        r1, r1 + cl - 1, stp->size);
+    cl = n == 2 ? (r2 > cl ? cl : r2) - r1 + 1: cl - r1;
+    mg_snprintf(conn, range, sizeof(range),
+                "Content-Range: bytes "
+                "%" INT64_FMT "-%"
+                INT64_FMT "/%" INT64_FMT "\r\n",
+                r1, r1 + cl - 1, filep->size);
     msg = "Partial Content";
   }
 
   // Prepare Etag, Date, Last-Modified headers. Must be in UTC, according to
   // http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.3
   gmt_time_string(date, sizeof(date), &curtime);
-  gmt_time_string(lm, sizeof(lm), &stp->mtime);
-  construct_etag(etag, sizeof(etag), stp);
+  gmt_time_string(lm, sizeof(lm), &filep->modification_time);
+  construct_etag(etag, sizeof(etag), filep);
 
   (void) mg_printf(conn,
       "HTTP/1.1 %d %s\r\n"
@@ -2733,15 +2772,15 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
       mime_vec.ptr, cl, suggest_connection_header(conn), range);
 
   if (strcmp(conn->request_info.request_method, "HEAD") != 0) {
-    send_file_data(conn, fp, cl);
+    send_file_data(conn, filep, r1, cl);
   }
-  (void) fclose(fp);
+  mg_fclose(filep);
 }
 
 void mg_send_file(struct mg_connection *conn, const char *path) {
-  struct mgstat st;
-  if (mg_stat(path, &st) == 0) {
-    handle_file_request(conn, path, &st);
+  struct file file;
+  if (mg_stat(conn, path, &file)) {
+    handle_file_request(conn, path, &file);
   } else {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
   }
@@ -2839,9 +2878,9 @@ static int read_request(FILE *fp, struct mg_connection *conn,
 // Return 0 if index file has been found, -1 if not found.
 // If the file is found, it's stats is returned in stp.
 static int substitute_index_file(struct mg_connection *conn, char *path,
-                                 size_t path_len, struct mgstat *stp) {
+                                 size_t path_len, struct file *filep) {
   const char *list = conn->ctx->config[INDEX_FILES];
-  struct mgstat st;
+  struct file file = STRUCT_FILE_INITIALIZER;
   struct vec filename_vec;
   size_t n = strlen(path);
   int found = 0;
@@ -2863,12 +2902,12 @@ static int substitute_index_file(struct mg_connection *conn, char *path,
       continue;
 
     // Prepare full path to the index file
-    (void) mg_strlcpy(path + n + 1, filename_vec.ptr, filename_vec.len + 1);
+    mg_strlcpy(path + n + 1, filename_vec.ptr, filename_vec.len + 1);
 
     // Does it exist?
-    if (mg_stat(path, &st) == 0) {
+    if (mg_stat(conn, path, &file)) {
       // Yes it does, break the loop
-      *stp = st;
+      *filep = file;
       found = 1;
       break;
     }
@@ -2884,13 +2923,13 @@ static int substitute_index_file(struct mg_connection *conn, char *path,
 
 // Return True if we should reply 304 Not Modified.
 static int is_not_modified(const struct mg_connection *conn,
-                           const struct mgstat *stp) {
+                           const struct file *filep) {
   char etag[64];
   const char *ims = mg_get_header(conn, "If-Modified-Since");
   const char *inm = mg_get_header(conn, "If-None-Match");
-  construct_etag(etag, sizeof(etag), stp);
+  construct_etag(etag, sizeof(etag), filep);
   return (inm != NULL && !mg_strcasecmp(etag, inm)) ||
-    (ims != NULL && stp->mtime <= parse_date_string(ims));
+    (ims != NULL && filep->modification_time <= parse_date_string(ims));
 }
 
 static int forward_body_data(struct mg_connection *conn, FILE *fp,
@@ -3119,6 +3158,7 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   struct mg_request_info ri;
   struct cgi_env_block blk;
   FILE *in, *out;
+  struct file fout = STRUCT_FILE_INITIALIZER;
   pid_t pid;
 
   prepare_cgi_environment(conn, prog, &blk);
@@ -3164,6 +3204,7 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
 
   setbuf(in, NULL);
   setbuf(out, NULL);
+  fout.fp = out;
 
   // Send POST data to the CGI process if needed
   if (!strcmp(conn->request_info.request_method, "POST") &&
@@ -3218,36 +3259,36 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
     mg_printf(conn, "%s: %s\r\n",
               ri.http_headers[i].name, ri.http_headers[i].value);
   }
-  (void) mg_write(conn, "\r\n", 2);
+  mg_write(conn, "\r\n", 2);
 
   // Send chunk of data that may have been read after the headers
   conn->num_bytes_sent += mg_write(conn, buf + headers_len,
                                    (size_t)(data_len - headers_len));
 
   // Read the rest of CGI output and send to the client
-  send_file_data(conn, out, INT64_MAX);
+  send_file_data(conn, &fout, 0, INT64_MAX);
 
 done:
   if (pid != (pid_t) -1) {
     kill(pid, SIGKILL);
   }
   if (fd_stdin[0] != -1) {
-    (void) close(fd_stdin[0]);
+    close(fd_stdin[0]);
   }
   if (fd_stdout[1] != -1) {
-    (void) close(fd_stdout[1]);
+    close(fd_stdout[1]);
   }
 
   if (in != NULL) {
-    (void) fclose(in);
+    fclose(in);
   } else if (fd_stdin[1] != -1) {
-    (void) close(fd_stdin[1]);
+    close(fd_stdin[1]);
   }
 
   if (out != NULL) {
-    (void) fclose(out);
+    fclose(out);
   } else if (fd_stdout[0] != -1) {
-    (void) close(fd_stdout[0]);
+    close(fd_stdout[0]);
   }
 }
 #endif // !NO_CGI
@@ -3255,10 +3296,10 @@ done:
 // For a given PUT path, create all intermediate subdirectories
 // for given path. Return 0 if the path itself is a directory,
 // or -1 on error, 1 if OK.
-static int put_dir(const char *path) {
+static int put_dir(struct mg_connection *conn, const char *path) {
   char buf[PATH_MAX];
   const char *s, *p;
-  struct mgstat st;
+  struct file file;
   int len, res = 1;
 
   for (s = p = path + 2; (p = strchr(s, '/')) != NULL; s = ++p) {
@@ -3272,7 +3313,7 @@ static int put_dir(const char *path) {
 
     // Try to create intermediate directory
     DEBUG_TRACE(("mkdir(%s)", buf));
-    if (mg_stat(buf, &st) == -1 && mg_mkdir(buf, 0755) != 0) {
+    if (!mg_stat(conn, buf, &file) && mg_mkdir(buf, 0755) != 0) {
       res = -1;
       break;
     }
@@ -3287,44 +3328,44 @@ static int put_dir(const char *path) {
 }
 
 static void put_file(struct mg_connection *conn, const char *path) {
-  struct mgstat st;
+  struct file file;
   const char *range;
   int64_t r1, r2;
-  FILE *fp;
   int rc;
 
-  conn->status_code = mg_stat(path, &st) == 0 ? 200 : 201;
+  conn->status_code = mg_stat(conn, path, &file) ? 200 : 201;
 
-  if ((rc = put_dir(path)) == 0) {
+  if ((rc = put_dir(conn, path)) == 0) {
     mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->status_code);
   } else if (rc == -1) {
     send_http_error(conn, 500, http_500_error,
-        "put_dir(%s): %s", path, strerror(ERRNO));
-  } else if ((fp = mg_fopen(path, "wb+")) == NULL) {
+                    "put_dir(%s): %s", path, strerror(ERRNO));
+  } else if (!mg_fopen(conn, path, "wb+", &file) || file.fp == NULL) {
+    mg_fclose(&file);
     send_http_error(conn, 500, http_500_error,
-        "fopen(%s): %s", path, strerror(ERRNO));
+                    "fopen(%s): %s", path, strerror(ERRNO));
   } else {
-    set_close_on_exec(fileno(fp));
+    fclose_on_exec(&file);
     range = mg_get_header(conn, "Content-Range");
     r1 = r2 = 0;
     if (range != NULL && parse_range_header(range, &r1, &r2) > 0) {
       conn->status_code = 206;
-      // TODO(lsm): handle seek error
-      (void) fseeko(fp, r1, SEEK_SET);
+      fseeko(file.fp, r1, SEEK_SET);
     }
-    if (forward_body_data(conn, fp, INVALID_SOCKET, NULL)) {
-      (void) mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->status_code);
+    if (forward_body_data(conn, file.fp, INVALID_SOCKET, NULL)) {
+      mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->status_code);
     }
-    (void) fclose(fp);
+    mg_fclose(&file);
   }
 }
 
-static void send_ssi_file(struct mg_connection *, const char *, FILE *, int);
+static void send_ssi_file(struct mg_connection *, const char *,
+                          struct file *, int);
 
 static void do_ssi_include(struct mg_connection *conn, const char *ssi,
                            char *tag, int include_level) {
   char file_name[MG_BUF_LEN], path[PATH_MAX], *p;
-  FILE *fp;
+  struct file file;
 
   // sscanf() is safe here, since send_ssi_file() also uses buffer
   // of size MG_BUF_LEN to get the tag. So strlen(tag) is always < MG_BUF_LEN.
@@ -3349,51 +3390,59 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
     return;
   }
 
-  if ((fp = mg_fopen(path, "rb")) == NULL) {
+  if (!mg_fopen(conn, path, "rb", &file)) {
     cry(conn, "Cannot open SSI #include: [%s]: fopen(%s): %s",
         tag, path, strerror(ERRNO));
   } else {
-    set_close_on_exec(fileno(fp));
+    fclose_on_exec(&file);
     if (match_prefix(conn->ctx->config[SSI_EXTENSIONS],
                      strlen(conn->ctx->config[SSI_EXTENSIONS]), path) > 0) {
-      send_ssi_file(conn, path, fp, include_level + 1);
+      send_ssi_file(conn, path, &file, include_level + 1);
     } else {
-      send_file_data(conn, fp, INT64_MAX);
+      send_file_data(conn, &file, 0, INT64_MAX);
     }
-    (void) fclose(fp);
+    mg_fclose(&file);
   }
 }
 
 #if !defined(NO_POPEN)
 static void do_ssi_exec(struct mg_connection *conn, char *tag) {
   char cmd[MG_BUF_LEN];
-  FILE *fp;
+  struct file file = STRUCT_FILE_INITIALIZER;
 
   if (sscanf(tag, " \"%[^\"]\"", cmd) != 1) {
     cry(conn, "Bad SSI #exec: [%s]", tag);
-  } else if ((fp = popen(cmd, "r")) == NULL) {
+  } else if ((file.fp = popen(cmd, "r")) == NULL) {
     cry(conn, "Cannot SSI #exec: [%s]: %s", cmd, strerror(ERRNO));
   } else {
-    send_file_data(conn, fp, INT64_MAX);
-    (void) pclose(fp);
+    send_file_data(conn, &file, 0, INT64_MAX);
+    pclose(file.fp);
   }
 }
 #endif // !NO_POPEN
 
+static int mg_fgetc(struct file *filep, int offset) {
+  if (filep->membuf != NULL && offset >=0 && offset < filep->size) {
+    return ((unsigned char *) filep->membuf)[offset];
+  } else if (filep->fp != NULL) {
+    return fgetc(filep->fp);
+  } else {
+    return EOF;
+  }
+}
+
 static void send_ssi_file(struct mg_connection *conn, const char *path,
-                          FILE *fp, int include_level) {
+                          struct file *filep, int include_level) {
   char buf[MG_BUF_LEN];
-  int ch, len, in_ssi_tag;
+  int ch, offset, len, in_ssi_tag;
 
   if (include_level > 10) {
     cry(conn, "SSI #include level is too deep (%s)", path);
     return;
   }
 
-  in_ssi_tag = 0;
-  len = 0;
-
-  while ((ch = fgetc(fp)) != EOF) {
+  in_ssi_tag = len = offset = 0;
+  while ((ch = mg_fgetc(filep, offset)) != EOF) {
     if (in_ssi_tag && ch == '>') {
       in_ssi_tag = 0;
       buf[len++] = (char) ch;
@@ -3401,7 +3450,7 @@ static void send_ssi_file(struct mg_connection *conn, const char *path,
       assert(len <= (int) sizeof(buf));
       if (len < 6 || memcmp(buf, "<!--#", 5) != 0) {
         // Not an SSI tag, pass it
-        (void) mg_write(conn, buf, (size_t)len);
+        (void) mg_write(conn, buf, (size_t) len);
       } else {
         if (!memcmp(buf + 5, "include", 7)) {
           do_ssi_include(conn, path, buf + 12, include_level);
@@ -3426,14 +3475,14 @@ static void send_ssi_file(struct mg_connection *conn, const char *path,
     } else if (ch == '<') {
       in_ssi_tag = 1;
       if (len > 0) {
-        (void) mg_write(conn, buf, (size_t)len);
+        mg_write(conn, buf, (size_t) len);
       }
       len = 0;
       buf[len++] = ch & 0xff;
     } else {
       buf[len++] = ch & 0xff;
       if (len == (int) sizeof(buf)) {
-        (void) mg_write(conn, buf, (size_t)len);
+        mg_write(conn, buf, (size_t) len);
         len = 0;
       }
     }
@@ -3441,42 +3490,41 @@ static void send_ssi_file(struct mg_connection *conn, const char *path,
 
   // Send the rest of buffered data
   if (len > 0) {
-    (void) mg_write(conn, buf, (size_t)len);
+    mg_write(conn, buf, (size_t) len);
   }
 }
 
 static void handle_ssi_file_request(struct mg_connection *conn,
                                     const char *path) {
-  FILE *fp;
+  struct file file;
 
-  if ((fp = mg_fopen(path, "rb")) == NULL) {
+  if (!mg_fopen(conn, path, "rb", &file)) {
     send_http_error(conn, 500, http_500_error, "fopen(%s): %s", path,
                     strerror(ERRNO));
   } else {
     conn->must_close = 1;
-    set_close_on_exec(fileno(fp));
+    fclose_on_exec(&file);
     mg_printf(conn, "HTTP/1.1 200 OK\r\n"
               "Content-Type: text/html\r\nConnection: %s\r\n\r\n",
               suggest_connection_header(conn));
-    send_ssi_file(conn, path, fp, 0);
-    (void) fclose(fp);
+    send_ssi_file(conn, path, &file, 0);
+    mg_fclose(&file);
   }
 }
 
 static void send_options(struct mg_connection *conn) {
   conn->status_code = 200;
 
-  (void) mg_printf(conn,
-      "HTTP/1.1 200 OK\r\n"
-      "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, OPTIONS\r\n"
-      "DAV: 1\r\n\r\n");
+  mg_printf(conn, "%s", "HTTP/1.1 200 OK\r\n"
+            "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, OPTIONS\r\n"
+            "DAV: 1\r\n\r\n");
 }
 
 // Writes PROPFIND properties for a collection element
 static void print_props(struct mg_connection *conn, const char* uri,
-                        struct mgstat* st) {
+                        struct file *filep) {
   char mtime[64];
-  gmt_time_string(mtime, sizeof(mtime), &st->mtime);
+  gmt_time_string(mtime, sizeof(mtime), &filep->modification_time);
   conn->num_bytes_sent += mg_printf(conn,
       "<d:response>"
        "<d:href>%s</d:href>"
@@ -3490,8 +3538,8 @@ static void print_props(struct mg_connection *conn, const char* uri,
        "</d:propstat>"
       "</d:response>\n",
       uri,
-      st->is_directory ? "<d:collection/>" : "",
-      st->size,
+      filep->is_directory ? "<d:collection/>" : "",
+      filep->size,
       mtime);
 }
 
@@ -3500,11 +3548,11 @@ static void print_dav_dir_entry(struct de *de, void *data) {
   struct mg_connection *conn = (struct mg_connection *) data;
   mg_snprintf(conn, href, sizeof(href), "%s%s",
               conn->request_info.uri, de->file_name);
-  print_props(conn, href, &de->st);
+  print_props(conn, href, &de->file);
 }
 
-static void handle_propfind(struct mg_connection *conn, const char* path,
-                            struct mgstat* st) {
+static void handle_propfind(struct mg_connection *conn, const char *path,
+                            struct file *filep) {
   const char *depth = mg_get_header(conn, "Depth");
 
   conn->must_close = 1;
@@ -3518,10 +3566,10 @@ static void handle_propfind(struct mg_connection *conn, const char* path,
       "<d:multistatus xmlns:d='DAV:'>\n");
 
   // Print properties for the requested resource itself
-  print_props(conn, conn->request_info.uri, st);
+  print_props(conn, conn->request_info.uri, filep);
 
   // If it is a directory, print directory entries too if Depth is not 0
-  if (st->is_directory &&
+  if (filep->is_directory &&
       !mg_strcasecmp(conn->ctx->config[ENABLE_DIRECTORY_LISTING], "yes") &&
       (depth == NULL || strcmp(depth, "0") != 0)) {
     scan_directory(conn, path, conn, &print_dav_dir_entry);
@@ -3977,8 +4025,8 @@ static void handle_lsp_request(struct mg_connection *conn, const char *path,
 static void handle_request(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
   char path[PATH_MAX];
-  int stat_result, uri_len;
-  struct mgstat st;
+  int uri_len;
+  struct file file = STRUCT_FILE_INITIALIZER;
 
   if ((conn->request_info.query_string = strchr(ri->uri, '?')) != NULL) {
     * ((char *) conn->request_info.query_string++) = '\0';
@@ -3987,7 +4035,7 @@ static void handle_request(struct mg_connection *conn) {
   url_decode(ri->uri, (size_t)uri_len, (char *) ri->uri,
              (size_t) (uri_len + 1), 0);
   remove_double_dots_and_double_slashes((char *) ri->uri);
-  stat_result = convert_uri_to_file_name(conn, path, sizeof(path), &st);
+  convert_uri_to_file_name(conn, path, sizeof(path), &file);
   conn->throttle = set_throttle(conn->ctx->config[THROTTLE],
                                 get_remote_ip(conn), ri->uri);
 
@@ -4018,15 +4066,16 @@ static void handle_request(struct mg_connection *conn) {
       send_http_error(conn, 500, http_500_error, "remove(%s): %s", path,
                       strerror(ERRNO));
     }
-  } else if (stat_result != 0 || must_hide_file(conn, path)) {
+  } else if ((file.membuf == NULL && file.modification_time == (time_t) 0) ||
+             must_hide_file(conn, path)) {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
-  } else if (st.is_directory && ri->uri[uri_len - 1] != '/') {
-    (void) mg_printf(conn, "HTTP/1.1 301 Moved Permanently\r\n"
-                     "Location: %s/\r\n\r\n", ri->uri);
+  } else if (file.is_directory && ri->uri[uri_len - 1] != '/') {
+    mg_printf(conn, "HTTP/1.1 301 Moved Permanently\r\n"
+              "Location: %s/\r\n\r\n", ri->uri);
   } else if (!strcmp(ri->request_method, "PROPFIND")) {
-    handle_propfind(conn, path, &st);
-  } else if (st.is_directory &&
-             !substitute_index_file(conn, path, sizeof(path), &st)) {
+    handle_propfind(conn, path, &file);
+  } else if (file.is_directory &&
+             !substitute_index_file(conn, path, sizeof(path), &file)) {
     if (!mg_strcasecmp(conn->ctx->config[ENABLE_DIRECTORY_LISTING], "yes")) {
       handle_directory_request(conn, path);
     } else {
@@ -4053,10 +4102,10 @@ static void handle_request(struct mg_connection *conn) {
                           strlen(conn->ctx->config[SSI_EXTENSIONS]),
                           path) > 0) {
     handle_ssi_file_request(conn, path);
-  } else if (is_not_modified(conn, &st)) {
+  } else if (is_not_modified(conn, &file)) {
     send_http_error(conn, 304, "Not Modified", "%s", "");
   } else {
-    handle_file_request(conn, path, &st);
+    handle_file_request(conn, path, &file);
   }
 }
 
@@ -4179,7 +4228,7 @@ static void log_access(const struct mg_connection *conn) {
   char date[64], src_addr[20];
 
   fp = conn->ctx->config[ACCESS_LOG_FILE] == NULL ?  NULL :
-    mg_fopen(conn->ctx->config[ACCESS_LOG_FILE], "a+");
+    fopen(conn->ctx->config[ACCESS_LOG_FILE], "a+");
 
   if (fp == NULL)
     return;
@@ -4400,9 +4449,9 @@ static void uninitialize_ssl(struct mg_context *ctx) {
 #endif // !NO_SSL
 
 static int set_gpass_option(struct mg_context *ctx) {
-  struct mgstat mgstat;
+  struct file file;
   const char *path = ctx->config[GLOBAL_PASSWORDS_FILE];
-  return path == NULL || mg_stat(path, &mgstat) == 0;
+  return path == NULL || !mg_stat(fc(ctx), path, &file);
 }
 
 static int set_acl_option(struct mg_context *ctx) {
