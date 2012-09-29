@@ -180,6 +180,9 @@ my $cmd = "$exe ".
 $cmd .= ' -cgi_interpreter perl' if on_windows();
 spawn($cmd);
 
+o("GET /hello.txt HTTP/1.1\nConnection: close\nRange: bytes=3-50\r\n\r\n",
+  'Content-Length: 15\s', 'Range past the file end');
+
 o("GET /hello.txt HTTP/1.1\n\n   GET /hello.txt HTTP/1.0\n\n",
   'HTTP/1.1 200.+keep-alive.+HTTP/1.1 200.+close',
   'Request pipelining', 2);
