@@ -145,6 +145,9 @@ typedef DWORD pthread_t;
 static int pthread_mutex_lock(pthread_mutex_t *);
 static int pthread_mutex_unlock(pthread_mutex_t *);
 
+static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len);
+static char *mg_fgets(char *buf, size_t size, struct file *filep, char **p);
+
 #if defined(HAVE_STDINT)
 #include <stdint.h>
 #else
@@ -1242,7 +1245,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
                            int fd_stdout, const char *dir) {
   HANDLE me;
   char *p, *interp, full_interp[PATH_MAX], cmdline[PATH_MAX], buf[PATH_MAX];
-  FILE *fp;
+  struct file file;
   STARTUPINFOA si = { sizeof(si) };
   PROCESS_INFORMATION pi = { 0 };
 
@@ -1265,9 +1268,10 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
 
     // Read the first line of the script into the buffer
     snprintf(cmdline, sizeof(cmdline), "%s%c%s", dir, '/', prog);
-    if ((fp = mg_fopen(cmdline, "r")) != NULL) {
-      fgets(buf, sizeof(buf), fp);
-      fclose(fp);
+    if (mg_fopen(conn, cmdline, "r", &file)) {
+      p = (char *) file.membuf;
+      mg_fgets(buf, sizeof(buf), &file, &p);
+      mg_fclose(&file);
       buf[sizeof(buf) - 1] = '\0';
     }
 
@@ -2669,7 +2673,7 @@ static void send_file_data(struct mg_connection *conn, struct file *filep,
     if (len > filep->size - offset) {
       len = filep->size - offset;
     }
-    mg_write(conn, filep->membuf + offset, len);
+    mg_write(conn, filep->membuf + offset, (size_t) len);
   } else if (len > 0 && filep->fp != NULL) {
     fseeko(filep->fp, offset, SEEK_SET);
     while (len > 0) {
@@ -2712,7 +2716,9 @@ static void construct_etag(char *buf, size_t buf_len,
 
 static void fclose_on_exec(struct file *filep) {
   if (filep != NULL && filep->fp != NULL) {
+#ifndef _WIN32
     fcntl(fileno(filep->fp), F_SETFD, FD_CLOEXEC);
+#endif
   }
 }
 
@@ -3992,15 +3998,16 @@ static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
 }
 
 static void handle_lsp_request(struct mg_connection *conn, const char *path,
-                               const struct mgstat *st) {
+                               struct file *filep) {
   void *p = NULL;
   FILE *fp = NULL;
   lua_State *L = NULL;
 
-  if ((fp = fopen(path, "r")) == NULL) {
+  if (!mg_fopen(conn, path, "r", filep)) {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
-  } else if ((p = mmap(NULL, st->size, PROT_READ, MAP_PRIVATE,
-                       fileno(fp), 0)) == MAP_FAILED) {
+  } else if (filep->membuf == NULL &&
+             (p = mmap(NULL, filep->size, PROT_READ, MAP_PRIVATE,
+                       fileno(filep->fp), 0)) == MAP_FAILED) {
     send_http_error(conn, 500, http_500_error, "%s", "x");
   } else if ((L = luaL_newstate()) == NULL) {
     send_http_error(conn, 500, http_500_error, "%s", "y");
@@ -4008,7 +4015,7 @@ static void handle_lsp_request(struct mg_connection *conn, const char *path,
     mg_printf(conn, "%s", "HTTP/1.1 200 OK\r\n"
               "Content-Type: text/html\r\nConnection: close\r\n\r\n");
     prepare_lua_environment(conn, L);
-    lsp(conn, p, st->size, L);
+    lsp(conn, filep->membuf == NULL ? p : filep->membuf, filep->size, L);
   }
 
   if (L) lua_close(L);
@@ -4084,7 +4091,7 @@ static void handle_request(struct mg_connection *conn) {
     }
 #ifdef USE_LUA
   } else if (match_prefix("**.lsp$", 7, path) > 0) {
-    handle_lsp_request(conn, path, &st);
+    handle_lsp_request(conn, path, &file);
 #endif
 #if !defined(NO_CGI)
   } else if (match_prefix(conn->ctx->config[CGI_EXTENSIONS],
