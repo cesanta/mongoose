@@ -67,7 +67,7 @@ enum mg_event {
   // HTTP error must be returned to the client.
   // If callback returns non-NULL, Mongoose stops handling error.
   // ev_data contains HTTP error code:
-  //  int http_reply_status_code = (int) request_info->ev_data;
+  //  int http_reply_status_code = (long) request_info->ev_data;
   MG_HTTP_ERROR,
 
   // Mongoose logs a message.

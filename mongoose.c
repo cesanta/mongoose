@@ -526,7 +526,7 @@ static int is_file_in_memory(struct mg_connection *conn, const char *path,
                              struct file *filep) {
   conn->request_info.ev_data = (void *) path;
   if ((filep->membuf = call_user(conn, MG_OPEN_FILE)) != NULL) {
-    filep->size = (int) conn->request_info.ev_data;
+    filep->size = (int) (long) conn->request_info.ev_data;
   }
   return filep->membuf != NULL;
 }
@@ -922,7 +922,7 @@ static void send_http_error(struct mg_connection *conn, int status,
   int len;
 
   conn->status_code = status;
-  conn->request_info.ev_data = (void *) status;
+  conn->request_info.ev_data = (void *) (long) status;
   if (call_user(conn, MG_HTTP_ERROR) == NULL) {
     buf[0] = '\0';
     len = 0;
