@@ -23,7 +23,8 @@ all:
 ###                 UNIX build: linux, bsd, mac, rtems
 ##########################################################################
 
-# Add $(LUA_FLAGS) to CFLAGS below if you want to build with Lua
+# To build with Lua, download and unzip Lua 5.2.1 source code into the
+# mongoose directory, and then add $(LUA_FLAGS) to CFLAGS below
 LUA         = lua-5.2.1/src
 LUA_FLAGS   = -DUSE_LUA -I$(LUA) -L$(LUA) -llua -lm
 
