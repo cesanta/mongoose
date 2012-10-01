@@ -87,11 +87,11 @@ enum mg_event {
   // will use the returned value as a pointer to the file data. This allows
   // for example to serve files from memory.
   // ev_data contains file path, including document root path.
-  // Upon return, ev_data should return file size,  which should be an int.
+  // Upon return, ev_data should return file size,  which should be a long int.
   //
   //   const char *file_name = request_info->ev_data;
   //   if (strcmp(file_name, "foo.txt") == 0) {
-  //     request_info->ev_data = (void *) (int) 4;
+  //     request_info->ev_data = (void *) (long) 4;
   //     return "data";
   //   }
   //   return NULL;

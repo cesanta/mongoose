@@ -526,7 +526,7 @@ static int is_file_in_memory(struct mg_connection *conn, const char *path,
                              struct file *filep) {
   conn->request_info.ev_data = (void *) path;
   if ((filep->membuf = call_user(conn, MG_OPEN_FILE)) != NULL) {
-    filep->size = (int) (long) conn->request_info.ev_data;
+    filep->size = (long) conn->request_info.ev_data;
   }
   return filep->membuf != NULL;
 }
