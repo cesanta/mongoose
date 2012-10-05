@@ -518,6 +518,9 @@ const char **mg_get_valid_option_names(void) {
 }
 
 static void *call_user(struct mg_connection *conn, enum mg_event event) {
+  if (conn != NULL && conn->ctx != NULL) {
+    conn->request_info.user_data = conn->ctx->user_data;
+  }
   return conn == NULL || conn->ctx == NULL || conn->ctx->user_callback == NULL ?
     NULL : conn->ctx->user_callback(event, conn);
 }

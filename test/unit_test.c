@@ -333,6 +333,22 @@ static void test_lua(void) {
 }
 #endif
 
+static void *user_data_tester(enum mg_event event, struct mg_connection *conn) {
+  struct mg_request_info *ri = mg_get_request_info(conn);
+  ASSERT(ri->user_data == (void *) 123);
+  ASSERT(event == MG_NEW_REQUEST);
+  return NULL;
+}
+
+static void test_user_data(void) {
+  static const char *options[] = {"listening_ports", UNUSED_PORT, NULL};
+  struct mg_context *ctx;
+
+  ASSERT((ctx = mg_start(user_data_tester, (void *) 123, options)) != NULL);
+  ASSERT(ctx->user_data == (void *) 123);
+  call_user(fc(ctx), MG_NEW_REQUEST);
+}
+
 int main(void) {
   test_base64_encode();
   test_match_prefix();
@@ -343,6 +359,7 @@ int main(void) {
   test_mg_get_var();
   test_set_throttle();
   test_next_option();
+  test_user_data();
 #ifdef USE_LUA
   test_lua();
 #endif
