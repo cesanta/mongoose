@@ -349,6 +349,13 @@ static void test_user_data(void) {
   call_user(fc(ctx), MG_NEW_REQUEST);
 }
 
+static void test_mg_stat(void) {
+  static struct mg_context ctx;
+  struct file file;
+  memset(&file, 'A', sizeof(file));
+  ASSERT(!mg_stat(fc(&ctx), " does not exist ", &file));
+}
+
 int main(void) {
   test_base64_encode();
   test_match_prefix();
@@ -360,6 +367,7 @@ int main(void) {
   test_set_throttle();
   test_next_option();
   test_user_data();
+  test_mg_stat();
 #ifdef USE_LUA
   test_lua();
 #endif

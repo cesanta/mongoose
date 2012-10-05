@@ -1331,6 +1331,8 @@ static int mg_stat(struct mg_connection *conn, const char *path,
     filep->size = st.st_size;
     filep->modification_time = st.st_mtime;
     filep->is_directory = S_ISDIR(st.st_mode);
+  } else {
+    filep->modification_time = (time_t) 0;
   }
 
   return filep->membuf != NULL || filep->modification_time != (time_t) 0;
@@ -4461,7 +4463,11 @@ static void uninitialize_ssl(struct mg_context *ctx) {
 static int set_gpass_option(struct mg_context *ctx) {
   struct file file;
   const char *path = ctx->config[GLOBAL_PASSWORDS_FILE];
-  return path == NULL || !mg_stat(fc(ctx), path, &file);
+  if (path != NULL && !mg_stat(fc(ctx), path, &file)) {
+    cry(fc(ctx), "Cannot open %s: %s", path, strerror(ERRNO));
+    return 0;
+  }
+  return 1;
 }
 
 static int set_acl_option(struct mg_context *ctx) {
