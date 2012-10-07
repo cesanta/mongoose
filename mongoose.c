@@ -4005,7 +4005,6 @@ static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
 static void handle_lsp_request(struct mg_connection *conn, const char *path,
                                struct file *filep) {
   void *p = NULL;
-  FILE *fp = NULL;
   lua_State *L = NULL;
 
   if (!mg_fopen(conn, path, "r", filep)) {
@@ -4020,13 +4019,14 @@ static void handle_lsp_request(struct mg_connection *conn, const char *path,
     mg_printf(conn, "%s", "HTTP/1.1 200 OK\r\n"
               "Content-Type: text/html\r\nConnection: close\r\n\r\n");
     prepare_lua_environment(conn, L);
+    conn->request_info.ev_data = L;
+    call_user(conn, MG_INIT_LUA);
     lsp(conn, filep->membuf == NULL ? p : filep->membuf, filep->size, L);
   }
 
   if (L) lua_close(L);
-  if (p) munmap(p, st->size);
-  if (fp) fclose(fp);
-
+  if (p) munmap(p, filep->size);
+  mg_fclose(filep);
 }
 #endif // USE_LUA
 

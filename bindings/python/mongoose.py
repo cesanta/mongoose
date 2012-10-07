@@ -49,6 +49,8 @@ WEBSOCKET_CONNECT = 5
 WEBSOCKET_READY   = 6
 WEBSOCKET_MESSAGE = 7
 WEBSOCKET_CLOSE   = 8
+OPEN_FILE         = 9
+INIT_LUA          = 10
 
 
 class mg_header(ctypes.Structure):
