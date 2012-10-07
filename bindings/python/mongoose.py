@@ -135,10 +135,6 @@ class Mongoose(object):
     self.dll.mg_get_cookie.restype = ctypes.c_int
     self.dll.mg_get_option.restype = ctypes.c_char_p
     self.dll.mg_get_request_info.restype = ctypes.POINTER(mg_request_info)
-    self.dll.mg_get_user_data.restype = ctypes.c_void_p
-    self.dll.mg_get_reply_status_code.restype = ctypes.c_int
-    self.dll.mg_get_log_message.restype = ctypes.c_char_p
-    self.dll.mg_get_ssl_context.restype = ctypes.c_void_p
 
     if callback:
       # Create a closure that will be called by the  shared library.

@@ -11,24 +11,24 @@ import sys
 def EventHandler(event, conn):
     info = conn.info
     if event == mongoose.HTTP_ERROR:
-        conn.printf('%s', 'HTTP/1.0 200 OK\r\n')
-        conn.printf('%s', 'Content-Type: text/plain\r\n\r\n')
-        conn.printf('HTTP error: %d\n', conn.reply_status_code)
+        conn.write('HTTP/1.0 200 OK\r\n')
+        conn.write('Content-Type: text/plain\r\n\r\n')
         return True
     elif event == mongoose.NEW_REQUEST and info.uri == '/show':
-        conn.printf('%s', 'HTTP/1.0 200 OK\r\n')
-        conn.printf('%s', 'Content-Type: text/plain\r\n\r\n')
-        conn.printf('%s %s\n', info.request_method, info.uri)
+        conn.write('HTTP/1.0 200 OK\r\n')
+        conn.write('Content-Type: text/plain\r\n\r\n')
+        conn.write('[%s] [%s] [%s]\n' % (info.request_method, info.uri,
+          info.query_string))
         if info.request_method == 'POST':
             content_len = conn.get_header('Content-Length')
             post_data = conn.read(int(content_len))
             my_var = conn.get_var(post_data, 'my_var')
         else:
             my_var = conn.get_var(info.query_string, 'my_var')
-        conn.printf('my_var: %s\n', my_var or '<not set>')
-        conn.printf('HEADERS: \n')
+        conn.write('my_var: %s\n' % (my_var or '<not set>'))
+        conn.write('HEADERS: \n')
         for header in info.http_headers[:info.num_headers]:
-            conn.printf('  %s: %s\n', header.name, header.value)
+            conn.write('  %s: %s\n' % (header.name, header.value))
         return True
     elif event == mongoose.NEW_REQUEST and info.uri == '/form':
         conn.write('HTTP/1.0 200 OK\r\n'
