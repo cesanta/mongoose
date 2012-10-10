@@ -1893,6 +1893,7 @@ static const struct {
   {".xml", 4, "text/xml"},
   {".json",  5, "text/json"},
   {".xslt", 5, "application/xml"},
+  {".xsl", 4, "application/xml"},
   {".ra",  3, "audio/x-pn-realaudio"},
   {".doc", 4, "application/msword"},
   {".exe", 4, "application/octet-stream"},
