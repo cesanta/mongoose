@@ -1243,6 +1243,13 @@ static int kill(pid_t pid, int sig_num) {
   return 0;
 }
 
+static void trim_trailing_whitespaces(char *s) {
+  char *e = s + strlen(s) - 1;
+  while (e > s && isspace(* (unsigned char *) e)) {
+    *e-- = '\0';
+  }
+}
+
 static pid_t spawn_process(struct mg_connection *conn, const char *prog,
                            char *envblk, char *envp[], int fd_stdin,
                            int fd_stdout, const char *dir) {
@@ -1279,10 +1286,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
     }
 
     if (buf[0] == '#' && buf[1] == '!') {
-      // Trim whitespace in interpreter name
-      for (p = buf + 2; *p != '\0' && isspace(* (unsigned char *) p); )
-        p++;
-      *p = '\0';
+      trim_trailing_whitespaces(buf + 2);
     } else {
       buf[2] = '\0';
     }
