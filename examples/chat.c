@@ -346,6 +346,9 @@ static void *event_handler(enum mg_event event,
       // try to serve the request.
       processed = NULL;
     }
+  } else if (event == MG_EVENT_LOG) {
+    printf("%s\n", (const char *) mg_get_request_info(conn)->ev_data);
+    processed = NULL;
   } else {
     processed = NULL;
   }
