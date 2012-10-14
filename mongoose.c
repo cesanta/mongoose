@@ -29,8 +29,10 @@
 #define __STDC_LIMIT_MACROS   // C++ wants that for INT64_MAX
 #endif
 
+// Disable WIN32_LEAN_AND_MEAN.
+// This makes windows.h always include winsock2.h
 #ifdef WIN32_LEAN_AND_MEAN
-#undef WIN32_LEAN_AND_MEAN    // Disable WIN32_LEAN_AND_MEAN, if necessary
+#undef WIN32_LEAN_AND_MEAN
 #endif
 
 #if defined(__SYMBIAN32__)
@@ -59,9 +61,7 @@
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__) // Windows specific
 #define _WIN32_WINNT 0x0400 // To make it link in VS2005
-#include <winsock2.h>
 #include <windows.h>
-#include <ws2tcpip.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX MAX_PATH
