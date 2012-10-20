@@ -511,7 +511,6 @@ struct mg_connection {
   int throttle;               // Throttling, bytes/sec. <= 0 means no throttle
   time_t last_throttle_time;  // Last time throttled data was sent
   int64_t last_throttle_bytes;// Bytes sent this second
-  int is_closing;             // Flag indicating connection is being torn down
 };
 
 const char **mg_get_valid_option_names(void) {
@@ -1479,7 +1478,7 @@ static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
     // pipe, fread() may block until IO buffer is filled up. We cannot afford
     // to block and must pass all read bytes immediately to the client.
     nread = read(fileno(fp), buf, (size_t) len);
-  } else if (!conn->is_closing && !wait_until_socket_is_readable(conn)) {
+  } else if (!conn->must_close && !wait_until_socket_is_readable(conn)) {
     nread = -1;
   } else if (conn->ssl != NULL) {
     nread = SSL_read(conn->ssl, buf, len);
@@ -4516,7 +4515,7 @@ static void close_socket_gracefully(struct mg_connection *conn) {
 }
 
 static void close_connection(struct mg_connection *conn) {
-  conn->is_closing = 1;
+  conn->must_close = 1;
 
   if (conn->ssl) {
     SSL_free(conn->ssl);
