@@ -1478,7 +1478,7 @@ static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
     // pipe, fread() may block until IO buffer is filled up. We cannot afford
     // to block and must pass all read bytes immediately to the client.
     nread = read(fileno(fp), buf, (size_t) len);
-  } else if (!wait_until_socket_is_readable(conn)) {
+  } else if (!conn->must_close && !wait_until_socket_is_readable(conn)) {
     nread = -1;
   } else if (conn->ssl != NULL) {
     nread = SSL_read(conn->ssl, buf, len);
@@ -4515,6 +4515,8 @@ static void close_socket_gracefully(struct mg_connection *conn) {
 }
 
 static void close_connection(struct mg_connection *conn) {
+  conn->must_close = 1;
+
   if (conn->ssl) {
     SSL_free(conn->ssl);
     conn->ssl = NULL;
