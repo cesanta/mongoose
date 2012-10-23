@@ -4100,7 +4100,7 @@ static void handle_request(struct mg_connection *conn) {
           "Directory listing denied");
     }
 #ifdef USE_LUA
-  } else if (match_prefix("**.lsp$", 7, path) > 0) {
+  } else if (match_prefix("**.lp$", 6, path) > 0) {
     handle_lsp_request(conn, path, &file);
 #endif
 #if !defined(NO_CGI)
