@@ -3198,18 +3198,21 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
     send_http_error(conn, 500, http_500_error,
         "Cannot create CGI pipe: %s", strerror(ERRNO));
     goto done;
-  } else if ((pid = spawn_process(conn, p, blk.buf, blk.vars,
-          fd_stdin[0], fd_stdout[1], dir)) == (pid_t) -1) {
-    send_http_error(conn, 500, http_500_error,
-        "Cannot spawn CGI process [%s]: %s", prog, strerror(ERRNO));
-    goto done;
   }
 
+  pid = spawn_process(conn, p, blk.buf, blk.vars, fd_stdin[0], fd_stdout[1],
+                      dir);
   // spawn_process() must close those!
   // If we don't mark them as closed, close() attempt before
   // return from this function throws an exception on Windows.
   // Windows does not like when closed descriptor is closed again.
   fd_stdin[0] = fd_stdout[1] = -1;
+
+  if (pid == (pid_t) -1) {
+    send_http_error(conn, 500, http_500_error,
+        "Cannot spawn CGI process [%s]: %s", prog, strerror(ERRNO));
+    goto done;
+  }
 
   if ((in = fdopen(fd_stdin[1], "wb")) == NULL ||
       (out = fdopen(fd_stdout[0], "rb")) == NULL) {
