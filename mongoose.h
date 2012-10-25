@@ -116,6 +116,11 @@ enum mg_event {
   //     return "data";
   //   }
   //   return NULL;
+  //
+  // Note that this even is sent multiple times during one request. Each
+  // time mongoose tries to open or stat the file, this event is sent, e.g.
+  // for opening .htpasswd file, stat-ting requested file, opening requested
+  // file, etc.
   MG_OPEN_FILE,
 
   // Mongoose initializes Lua server page. Sent only if Lua support is enabled.
