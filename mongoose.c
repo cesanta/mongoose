@@ -30,6 +30,7 @@
 #endif
 
 #if defined (_MSC_VER)
+#pragma warning (disable : 4127)    // conditional expression is constant: introduced by FD_SET(..)
 #pragma warning (disable : 4204)    // non-constant aggregate initializer: issued due to missing C99 support
 #endif
 
