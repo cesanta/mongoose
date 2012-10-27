@@ -29,6 +29,10 @@
 #define __STDC_LIMIT_MACROS   // C++ wants that for INT64_MAX
 #endif
 
+#if defined (_MSC_VER)
+#pragma warning (disable : 4204)    // non-constant aggregate initializer: issued due to missing C99 support
+#endif
+
 // Disable WIN32_LEAN_AND_MEAN.
 // This makes windows.h always include winsock2.h
 #ifdef WIN32_LEAN_AND_MEAN
