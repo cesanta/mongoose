@@ -146,6 +146,8 @@ static int pthread_mutex_lock(pthread_mutex_t *);
 static int pthread_mutex_unlock(pthread_mutex_t *);
 
 static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len);
+
+struct file;
 static char *mg_fgets(char *buf, size_t size, struct file *filep, char **p);
 
 #if defined(HAVE_STDINT)
