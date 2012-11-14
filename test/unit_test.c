@@ -238,7 +238,11 @@ static void test_base64_encode(void) {
 }
 
 static void test_mg_get_var(void) {
-  static const char *post[] = {"a=1&&b=2&d&=&c=3%20&e=", NULL};
+  static const char *post[] = {
+    "a=1&&b=2&d&=&c=3%20&e=",
+    "q=&st=2012%2F11%2F13+17%3A05&et=&team_id=",
+    NULL
+  };
   char buf[20];
 
   ASSERT(mg_get_var(post[0], strlen(post[0]), "a", buf, sizeof(buf)) == 1);
@@ -255,6 +259,8 @@ static void test_mg_get_var(void) {
 
   ASSERT(mg_get_var(post[0], strlen(post[0]), "x", NULL, 10) == -2);
   ASSERT(mg_get_var(post[0], strlen(post[0]), "x", buf, 0) == -2);
+  ASSERT(mg_get_var(post[1], strlen(post[1]), "st", buf, 16) == -1);
+  ASSERT(mg_get_var(post[1], strlen(post[1]), "st", buf, 17) == 16);
 }
 
 static void test_set_throttle(void) {

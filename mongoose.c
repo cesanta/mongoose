@@ -1614,10 +1614,9 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
 // form-url-encoded data differs from URI encoding in a way that it
 // uses '+' as character for space, see RFC 1866 section 8.2.1
 // http://ftp.ics.uci.edu/pub/ietf/html/rfc1866.txt
-static size_t url_decode(const char *src, size_t src_len, char *dst,
-                         size_t dst_len, int is_form_url_encoded) {
-  size_t i, j;
-  int a, b;
+static int url_decode(const char *src, int src_len, char *dst,
+                      int dst_len, int is_form_url_encoded) {
+  int i, j, a, b;
 #define HEXTOI(x) (isdigit(x) ? x - '0' : x - 'W')
 
   for (i = j = 0; i < src_len && j < dst_len - 1; i++, j++) {
@@ -1637,7 +1636,7 @@ static size_t url_decode(const char *src, size_t src_len, char *dst,
 
   dst[j] = '\0'; // Null-terminate the destination
 
-  return j;
+  return i >= src_len ? j : -1;
 }
 
 // Scan given buffer and fetch the value of the given variable.
@@ -1679,9 +1678,7 @@ int mg_get_var(const char *buf, size_t buf_len, const char *name,
         assert(s >= p);
 
         // Decode variable into destination buffer
-        if ((size_t) (s - p) < dst_len) {
-          len = (int) url_decode(p, (size_t)(s - p), dst, dst_len, 1);
-        }
+        len = url_decode(p, (size_t)(s - p), dst, dst_len, 1);
         break;
       }
     }
@@ -4052,8 +4049,7 @@ static void handle_request(struct mg_connection *conn) {
     * ((char *) conn->request_info.query_string++) = '\0';
   }
   uri_len = (int) strlen(ri->uri);
-  url_decode(ri->uri, (size_t)uri_len, (char *) ri->uri,
-             (size_t) (uri_len + 1), 0);
+  url_decode(ri->uri, uri_len, (char *) ri->uri, uri_len + 1, 0);
   remove_double_dots_and_double_slashes((char *) ri->uri);
   convert_uri_to_file_name(conn, path, sizeof(path), &file);
   conn->throttle = set_throttle(conn->ctx->config[THROTTLE],
