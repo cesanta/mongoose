@@ -17,6 +17,7 @@ CLFLAGS = /MD /TC /nologo $(DBG) /W3 /DNO_SSL \
         /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
 
 windows:
+	$(CL) upload.c ../mongoose.c $(CLFLAGS)
 	$(CL) hello.c ../mongoose.c $(CLFLAGS)
 	$(CL) upload.c ../mongoose.c $(CLFLAGS)
 	$(CL) post.c ../mongoose.c $(CLFLAGS)

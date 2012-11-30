@@ -12,9 +12,12 @@
 typedef __int64 int64_t;
 #define O_CLOEXEC 0
 #define O_EXLOCK 0
-#else 
+#else
 #include <inttypes.h>
 #include <unistd.h>
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
 #endif // !_WIN32
 
 #include "mongoose.h"
@@ -27,7 +30,7 @@ static const char *html_form =
   "<input type=\"file\" name=\"file\" /> <br/>"
   "<input type=\"submit\" value=\"Upload\" />"
   "</form></body></html>";
- 
+
 static const char *HTTP_500 = "HTTP/1.0 500 Server Error\r\n\r\n";
 
 static void handle_file_upload(struct mg_connection *conn) {
@@ -82,7 +85,7 @@ static void handle_file_upload(struct mg_connection *conn) {
     mg_printf(conn, "%s%s", HTTP_500, "Can't get file name");
   } else if (cl <= 0) {
     mg_printf(conn, "%s%s", HTTP_500, "Empty file");
-  } else if ((fd = open(path, O_CREAT | O_TRUNC |
+  } else if ((fd = open(path, O_CREAT | O_TRUNC | O_BINARY |
                         O_WRONLY | O_EXLOCK | O_CLOEXEC)) < 0) {
     // We're opening the file with exclusive lock held. This guarantee us that
     // there is no other thread can save into the same file simultaneously.
