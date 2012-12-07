@@ -127,6 +127,11 @@ enum mg_event {
   // Callback's return value is ignored.
   // ev_data contains lua_State pointer.
   MG_INIT_LUA,
+
+  // Mongoose has uploaded file to a temporary directory.
+  // Callback's return value is ignored.
+  // ev_data contains NUL-terminated file name.
+  MG_UPLOAD,
 };
 
 
@@ -334,6 +339,12 @@ void mg_close_connection(struct mg_connection *conn);
 //   to fclose() the opened file stream.
 FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
                char *buf, size_t buf_len, struct mg_request_info *request_info);
+
+
+// File upload functionality. Each uploaded file gets saved into a temporary
+// file and MG_UPLOAD event is sent.
+// Return number of uploaded files.
+int mg_upload(struct mg_connection *conn, const char *destination_dir);
 
 
 // Convenience function -- create detached thread.

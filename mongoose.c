@@ -747,7 +747,7 @@ static int mg_snprintf(struct mg_connection *conn, char *buf, size_t buflen,
 }
 
 // Skip the characters until one of the delimiters characters found.
-// 0-terminate resulting word. Skip the delimiter and following whitespaces if any.
+// 0-terminate resulting word. Skip the delimiter and following whitespaces.
 // Advance pointer to buffer to the next word. Return found 0-terminated word.
 // Delimiters can be quoted with quotechar.
 static char *skip_quoted(char **buf, const char *delimiters,
@@ -4034,6 +4034,113 @@ static void handle_lsp_request(struct mg_connection *conn, const char *path,
   mg_fclose(filep);
 }
 #endif // USE_LUA
+
+int mg_upload(struct mg_connection *conn, const char *destination_dir) {
+  const char *content_type_header, *boundary_start;
+  char buf[8192], path[PATH_MAX], fname[1024], boundary[100], *s;
+  FILE *fp;
+  int bl, n, i, j, headers_len, boundary_len, len = 0, num_uploaded_files = 0;
+
+  // Request looks like this:
+  //
+  // POST /upload HTTP/1.1
+  // Host: 127.0.0.1:8080
+  // Content-Length: 244894
+  // Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryRVr
+  //
+  // ------WebKitFormBoundaryRVr
+  // Content-Disposition: form-data; name="file"; filename="accum.png"
+  // Content-Type: image/png
+  //
+  //  <89>PNG
+  //  <PNG DATA>
+  // ------WebKitFormBoundaryRVr
+
+  // Extract boundary string from the Content-Type header
+  if ((content_type_header = mg_get_header(conn, "Content-Type")) == NULL ||
+      (boundary_start = strstr(content_type_header, "boundary=")) == NULL ||
+      (sscanf(boundary_start, "boundary=\"%99[^\"]\"", boundary) == 0 &&
+       sscanf(boundary_start, "boundary=%99s", boundary) == 0) ||
+      boundary[0] == '\0') {
+    return num_uploaded_files;
+  }
+
+  boundary_len = strlen(boundary);
+  bl = boundary_len + 4;  // \r\n--<boundary>
+  for (;;) {
+    // Pull in headers
+    assert(len >= 0 && len <= (int) sizeof(buf));
+    while ((n = mg_read(conn, buf + len, sizeof(buf) - len)) > 0) {
+      len += n;
+    }
+    if ((headers_len = get_request_len(buf, len)) <= 0) {
+      break;
+    }
+
+    // Fetch file name.
+    fname[0] = '\0';
+    for (i = j = 0; i < headers_len; i++) {
+      if (buf[i] == '\r' && buf[i + 1] == '\n') {
+        buf[i] = buf[i + 1] = '\0';
+        // TODO(lsm): don't expect filename to be the 3rd field,
+        // parse the header properly instead.
+        sscanf(&buf[j], "Content-Disposition: %*s %*s filename=\"%1023[^\"]",
+               fname);
+        j = i + 2;
+      }
+    }
+
+    // Give up if the headers are not what we expect
+    if (fname[0] == '\0') {
+      break;
+    }
+
+    // Move data to the beginning of the buffer
+    assert(len >= headers_len);
+    memmove(buf, &buf[headers_len], len - headers_len);
+    len -= headers_len;
+
+    // We open the file with exclusive lock held. This guarantee us
+    // there is no other thread can save into the same file simultaneously.
+    fp = NULL;
+    // Construct destination file name. Do not allow paths to have slashes.
+    if ((s = strrchr(fname, '/')) == NULL) {
+      s = fname;
+    }
+    // Open file in binary mode with exclusive lock set
+    snprintf(path, sizeof(path), "%s/%s", destination_dir, s);
+    if ((fp = fopen(path, "wbx")) == NULL) {
+      break;
+    }
+
+    // Read POST data, write into file until boundary is found.
+    n = 0;
+    do {
+      len += n;
+      for (i = 0; i < len - bl; i++) {
+        if (!memcmp(&buf[i], "\r\n--", 4) &&
+            !memcmp(&buf[i + 4], boundary, boundary_len)) {
+          // Found boundary, that's the end of file data.
+          (void) fwrite(buf, 1, i, fp);
+          num_uploaded_files++;
+          conn->request_info.ev_data = (void *) path;
+          call_user(conn, MG_UPLOAD);
+          memmove(buf, &buf[i + bl], len - (i + bl));
+          len -= i + bl;
+          break;
+        }
+      }
+      if (len > bl) {
+        fwrite(buf, 1, len - bl, fp);
+        memmove(buf, &buf[len - bl], len - bl);
+        len = bl;
+      }
+    } while ((n = mg_read(conn, buf + len, sizeof(buf) - len)) > 0);
+    fclose(fp);
+  }
+
+  return num_uploaded_files;
+}
 
 // This is the heart of the Mongoose's logic.
 // This function is called when the request is read, parsed and validated,
