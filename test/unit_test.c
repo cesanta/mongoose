@@ -362,6 +362,24 @@ static void test_mg_stat(void) {
   ASSERT(!mg_stat(fc(&ctx), " does not exist ", &file));
 }
 
+static void test_skip_quoted(void) {
+  char x[] = "a=1, b=2  c='hi \' there'", *s = x, *p;
+
+  p = skip_quoted(&s, ", ", ", ", 0);
+  ASSERT(p != NULL && !strcmp(p, "a=1"));
+
+  p = skip_quoted(&s, ", ", ", ", 0);
+  ASSERT(p != NULL && !strcmp(p, "b=2"));
+
+  // TODO(lsm): fix this
+#if 0
+  p = skip_quoted(&s, "'", ", ", '\\');
+  p = skip_quoted(&s, "'", ", ", '\\');
+  printf("[%s]\n", p);
+  ASSERT(p != NULL && !strcmp(p, "hi ' there"));
+#endif
+}
+
 int main(void) {
   test_base64_encode();
   test_match_prefix();
@@ -377,5 +395,6 @@ int main(void) {
 #ifdef USE_LUA
   test_lua();
 #endif
+  test_skip_quoted();
   return 0;
 }
