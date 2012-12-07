@@ -4744,6 +4744,9 @@ static void process_new_connection(struct mg_connection *conn) {
 
   keep_alive_enabled = !strcmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes");
 
+  // Important: on new connection, reset the receiving buffer. Credit goes
+  // to crule42.
+  conn->data_len = 0;
   do {
     reset_per_request_attributes(conn);
     conn->request_len = read_request(NULL, conn, conn->buf, conn->buf_size,
