@@ -29,6 +29,11 @@
 #define __STDC_LIMIT_MACROS   // C++ wants that for INT64_MAX
 #endif
 
+#if defined (_MSC_VER)
+#pragma warning (disable : 4127)    // conditional expression is constant: introduced by FD_SET(..)
+#pragma warning (disable : 4204)    // non-constant aggregate initializer: issued due to missing C99 support
+#endif
+
 // Disable WIN32_LEAN_AND_MEAN.
 // This makes windows.h always include winsock2.h
 #ifdef WIN32_LEAN_AND_MEAN
@@ -146,6 +151,8 @@ static int pthread_mutex_lock(pthread_mutex_t *);
 static int pthread_mutex_unlock(pthread_mutex_t *);
 
 static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len);
+
+struct file;
 static char *mg_fgets(char *buf, size_t size, struct file *filep, char **p);
 
 #if defined(HAVE_STDINT)
@@ -5075,6 +5082,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
     }
     if (ctx->config[i] != NULL) {
       cry(fc(ctx), "warning: %s: duplicate option", name);
+      free(ctx->config[i]);
     }
     ctx->config[i] = mg_strdup(value);
     DEBUG_TRACE(("[%s] -> [%s]", name, value));
