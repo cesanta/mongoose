@@ -17,22 +17,21 @@ typedef __int64 int64_t;
 
 #include "mongoose.h"
 
-// Make sure that form has enctype="multipart/form-data" attribute
-static const char *html_form =
-  "<html><body>Upload example."
-  "<form method=\"POST\" action=\"/handle_post_request\" "
-  "  enctype=\"multipart/form-data\">"
-  "<input type=\"file\" name=\"file\" /> <br/>"
-  "<input type=\"submit\" value=\"Upload\" />"
-  "</form></body></html>";
-
 static void *callback(enum mg_event event, struct mg_connection *conn) {
   if (event == MG_NEW_REQUEST) {
     if (!strcmp(mg_get_request_info(conn)->uri, "/handle_post_request")) {
       mg_printf(conn, "%s", "HTTP/1.0 200 OK\r\n\r\n");
       mg_upload(conn, "/tmp");
     } else {
-      // Show HTML form.
+      // Show HTML form. Make sure it has enctype="multipart/form-data" attr.
+      static const char *html_form =
+        "<html><body>Upload example."
+        "<form method=\"POST\" action=\"/handle_post_request\" "
+        "  enctype=\"multipart/form-data\">"
+        "<input type=\"file\" name=\"file\" /> <br/>"
+        "<input type=\"submit\" value=\"Upload\" />"
+        "</form></body></html>";
+
       mg_printf(conn, "HTTP/1.0 200 OK\r\n"
                 "Content-Length: %d\r\n"
                 "Content-Type: text/html\r\n\r\n%s",
