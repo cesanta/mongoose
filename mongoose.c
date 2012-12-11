@@ -910,7 +910,7 @@ static int should_keep_alive(const struct mg_connection *conn) {
       conn->status_code == 401 ||
       mg_strcasecmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes") != 0 ||
       (header != NULL && mg_strcasecmp(header, "keep-alive") != 0) ||
-      (header == NULL && http_version && strcmp(http_version, "1.1"))) {
+      (header == NULL && http_version && strncmp(http_version, "1.1", 3))) {
     return 0;
   }
   return 1;
