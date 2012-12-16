@@ -286,19 +286,19 @@ const char *mg_get_header(const struct mg_connection *, const char *name);
 //         or request_info.query_string.
 //   data_len: length of the encoded data.
 //   var_name: variable name to decode from the buffer
-//   buf: destination buffer for the decoded variable
-//   buf_len: length of the destination buffer
+//   dst: destination buffer for the decoded variable
+//   dst_len: length of the destination buffer
 //
 // Return:
 //   On success, length of the decoded variable.
 //   On error:
-//      -1 (variable not found, or destination buffer is too small).
-//      -2 (destination buffer is NULL or zero length).
+//      -1 (variable not found).
+//      -2 (destination buffer is NULL, zero length or too small to hold the decoded variable).
 //
 // Destination buffer is guaranteed to be '\0' - terminated if it is not
-// NULL or zero length. In case of failure, dst[0] == '\0'.
+// NULL or zero length.
 int mg_get_var(const char *data, size_t data_len,
-               const char *var_name, char *buf, size_t buf_len);
+               const char *var_name, char *dst, size_t dst_len);
 
 // Fetch value of certain cookie variable into the destination buffer.
 //
