@@ -1646,13 +1646,7 @@ static int url_decode(const char *src, int src_len, char *dst,
   return i >= src_len ? j : -1;
 }
 
-// Scan given buffer and fetch the value of the given variable.
-// It can be specified in query string, or in the POST data.
-// Return -1 if the variable not found, or length of the URL-decoded value
-// stored in dst. The dst buffer is guaranteed to be NUL-terminated if it
-// is not NULL or zero-length. If dst is NULL or zero-length, then
-// -2 is returned.
-int mg_get_var(const char *buf, size_t buf_len, const char *name,
+int mg_get_var(const char *data, size_t data_len, const char *name,
                char *dst, size_t dst_len) {
   const char *p, *e, *s;
   size_t name_len;
@@ -1660,18 +1654,18 @@ int mg_get_var(const char *buf, size_t buf_len, const char *name,
 
   if (dst == NULL || dst_len == 0) {
     len = -2;
-  } else if (buf == NULL || name == NULL || buf_len == 0) {
+  } else if (data == NULL || name == NULL || data_len == 0) {
     len = -1;
     dst[0] = '\0';
   } else {
     name_len = strlen(name);
-    e = buf + buf_len;
+    e = data + data_len;
     len = -1;
     dst[0] = '\0';
 
-    // buf is "var1=val1&var2=val2...". Find variable first
-    for (p = buf; p + name_len < e; p++) {
-      if ((p == buf || p[-1] == '&') && p[name_len] == '=' &&
+    // data is "var1=val1&var2=val2...". Find variable first
+    for (p = data; p + name_len < e; p++) {
+      if ((p == data || p[-1] == '&') && p[name_len] == '=' &&
           !mg_strncasecmp(name, p, name_len)) {
 
         // Point p to variable value
@@ -1686,6 +1680,11 @@ int mg_get_var(const char *buf, size_t buf_len, const char *name,
 
         // Decode variable into destination buffer
         len = url_decode(p, (size_t)(s - p), dst, dst_len, 1);
+        
+        // Redirect error code from -1 to -2 (destination buffer too small).
+        if (len == -1) {
+          len = -2;
+        }
         break;
       }
     }
