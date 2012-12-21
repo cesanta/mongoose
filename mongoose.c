@@ -306,6 +306,7 @@ extern int SSL_read(SSL *, void *, int);
 extern int SSL_write(SSL *, const void *, int);
 extern int SSL_get_error(const SSL *, int);
 extern int SSL_set_fd(SSL *, int);
+extern int SSL_pending(SSL *);
 extern SSL *SSL_new(SSL_CTX *);
 extern SSL_CTX *SSL_CTX_new(SSL_METHOD *);
 extern SSL_METHOD *SSLv23_server_method(void);
@@ -351,6 +352,7 @@ struct ssl_func {
 #define SSL_CTX_use_certificate_chain_file \
   (* (int (*)(SSL_CTX *, const char *)) ssl_sw[16].ptr)
 #define SSLv23_client_method (* (SSL_METHOD * (*)(void)) ssl_sw[17].ptr)
+#define SSL_pending (* (int (*)(SSL *)) ssl_sw[18].ptr)
 
 #define CRYPTO_num_locks (* (int (*)(void)) crypto_sw[0].ptr)
 #define CRYPTO_set_locking_callback \
@@ -383,6 +385,7 @@ static struct ssl_func ssl_sw[] = {
   {"SSL_load_error_strings", NULL},
   {"SSL_CTX_use_certificate_chain_file", NULL},
   {"SSLv23_client_method", NULL},
+  {"SSL_pending", NULL},
   {NULL,    NULL}
 };
 
@@ -1469,6 +1472,9 @@ static int wait_until_socket_is_readable(struct mg_connection *conn) {
     FD_ZERO(&set);
     FD_SET(conn->client.sock, &set);
     result = select(conn->client.sock + 1, &set, NULL, NULL, &tv);
+    if(result == 0 && conn->ssl != NULL) {
+        result = SSL_pending(conn->ssl);
+    }
   } while ((result == 0 || (result < 0 && ERRNO == EINTR)) &&
            conn->ctx->stop_flag == 0);
 
