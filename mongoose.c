@@ -1264,7 +1264,8 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
                            char *envblk, char *envp[], int fd_stdin,
                            int fd_stdout, const char *dir) {
   HANDLE me;
-  char *p, *interp, full_interp[PATH_MAX], cmdline[PATH_MAX], buf[PATH_MAX];
+  char *p, *interp, full_interp[PATH_MAX], full_dir[PATH_MAX],
+       cmdline[PATH_MAX], buf[PATH_MAX];
   struct file file;
   STARTUPINFOA si = { sizeof(si) };
   PROCESS_INFORMATION pi = { 0 };
@@ -1307,13 +1308,14 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
     GetFullPathName(interp, sizeof(full_interp), full_interp, NULL);
     interp = full_interp;
   }
+  GetFullPathName(dir, sizeof(full_dir), full_dir, NULL);
 
-  mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%s%s",
-              interp, interp[0] == '\0' ? "" : " ", prog);
+  mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%s%s\\%s",
+              interp, interp[0] == '\0' ? "" : " ", full_dir, prog);
 
   DEBUG_TRACE(("Running [%s]", cmdline));
   if (CreateProcessA(NULL, cmdline, NULL, NULL, TRUE,
-        CREATE_NEW_PROCESS_GROUP, envblk, dir, &si, &pi) == 0) {
+        CREATE_NEW_PROCESS_GROUP, envblk, NULL, &si, &pi) == 0) {
     cry(conn, "%s: CreateProcess(%s): %d",
         __func__, cmdline, ERRNO);
     pi.hProcess = (pid_t) -1;
