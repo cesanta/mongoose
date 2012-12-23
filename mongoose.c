@@ -1706,32 +1706,37 @@ int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
   const char *s, *p, *end;
   int name_len, len = -1;
 
-  dst[0] = '\0';
-  if ((s = mg_get_header(conn, "Cookie")) == NULL) {
-    return -1;
-  }
+  if (dst == NULL || dst_size == 0) {
+      len = -2;
+  } else if (cookie_name == NULL || (s = mg_get_header(conn, "Cookie")) == NULL) {
+      len = -1;
+      dst[0] = '\0';
+  } else {
+    name_len = (int) strlen(cookie_name);
+    end = s + strlen(s);
+    dst[0] = '\0';
 
-  name_len = (int) strlen(cookie_name);
-  end = s + strlen(s);
-
-  for (; (s = strstr(s, cookie_name)) != NULL; s += name_len)
-    if (s[name_len] == '=') {
-      s += name_len + 1;
-      if ((p = strchr(s, ' ')) == NULL)
-        p = end;
-      if (p[-1] == ';')
-        p--;
-      if (*s == '"' && p[-1] == '"' && p > s + 1) {
-        s++;
-        p--;
+    for (; (s = strstr(s, cookie_name)) != NULL; s += name_len) {
+      if (s[name_len] == '=') {
+        s += name_len + 1;
+        if ((p = strchr(s, ' ')) == NULL)
+          p = end;
+        if (p[-1] == ';')
+          p--;
+        if (*s == '"' && p[-1] == '"' && p > s + 1) {
+          s++;
+          p--;
+        }
+        if ((size_t) (p - s) < dst_size) {
+          len = p - s;
+          mg_strlcpy(dst, s, (size_t) len + 1);
+        } else {
+          len = -2;
+        }
+        break;
       }
-      if ((size_t) (p - s) < dst_size) {
-        len = p - s;
-        mg_strlcpy(dst, s, (size_t) len + 1);
-      }
-      break;
     }
-
+  }
   return len;
 }
 
