@@ -4759,10 +4759,11 @@ static int is_valid_uri(const char *uri) {
 
 static void process_new_connection(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
-  int keep_alive_enabled, discard_len;
+  int keep_alive_enabled, keep_alive, discard_len;
   const char *cl;
 
   keep_alive_enabled = !strcmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes");
+  keep_alive = 0;
 
   // Important: on new connection, reset the receiving buffer. Credit goes
   // to crule42.
@@ -4808,6 +4809,12 @@ static void process_new_connection(struct mg_connection *conn) {
       free((void *) ri->remote_user);
     }
 
+    // NOTE(lsm): order is important here. should_keep_alive() call
+    // is using parsed request, which will be invalid after memmove's below.
+    // Therefore, memorize should_keep_alive() result now for later use
+    // in loop exit condition.
+    keep_alive = should_keep_alive(conn);
+
     // Discard all buffered data for this request
     discard_len = conn->content_len >= 0 &&
       conn->request_len + conn->content_len < (int64_t) conn->data_len ?
@@ -4820,7 +4827,7 @@ static void process_new_connection(struct mg_connection *conn) {
   } while (conn->ctx->stop_flag == 0 &&
            keep_alive_enabled &&
            conn->content_len >= 0 &&
-           should_keep_alive(conn));
+           keep_alive);
 }
 
 // Worker threads take accepted socket from the queue
