@@ -1391,16 +1391,9 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
       (void) close(fd_stdout);
       // restore the signals for child processes
       (void) signal(SIGCHLD, SIG_DFL);
-      (void) signal(SIGHUP, SIG_DFL);
-      (void) signal(SIGPIPE, SIG_DFL);
 
       interp = conn->ctx->config[CGI_INTERPRETER];
       if (interp == NULL) {
-        // restore the signals for child processes
-        (void) signal(SIGCHLD, SIG_DFL);
-        (void) signal(SIGHUP, SIG_DFL);
-        (void) signal(SIGPIPE, SIG_DFL);
-
         (void) execle(prog, prog, NULL, envp);
         cry(conn, "%s: execle(%s): %s", __func__, prog, strerror(ERRNO));
       } else {
