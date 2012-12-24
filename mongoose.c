@@ -1985,19 +1985,18 @@ typedef struct MD5Context {
   unsigned char in[64];
 } MD5_CTX;
 
-#if defined(__BYTE_ORDER) && (__BYTE_ORDER == 1234)
-#define byteReverse(buf, len) // Do nothing
-#else
 static void byteReverse(unsigned char *buf, unsigned longs) {
+  static const int endianess_check = 1;
   uint32_t t;
-  do {
-    t = (uint32_t) ((unsigned) buf[3] << 8 | buf[2]) << 16 |
-      ((unsigned) buf[1] << 8 | buf[0]);
-    *(uint32_t *) buf = t;
-    buf += 4;
-  } while (--longs);
+  if (((char *) &endianess_check)[0] == 1) {
+    do {
+      t = (uint32_t) ((unsigned) buf[3] << 8 | buf[2]) << 16 |
+        ((unsigned) buf[1] << 8 | buf[0]);
+      * (uint32_t *) buf = t;
+      buf += 4;
+    } while (--longs);
+  }
 }
-#endif
 
 #define F1(x, y, z) (z ^ (x & (y ^ z)))
 #define F2(x, y, z) F1(z, x, y)
@@ -3622,18 +3621,23 @@ static void handle_propfind(struct mg_connection *conn, const char *path,
 #if defined(__sun)
 #include "solarisfixes.h"
 #endif
+
+union char64long16 { unsigned char c[64]; uint32_t l[16]; };
+
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
-#if BYTE_ORDER == LITTLE_ENDIAN
-#define blk0(i) (block->l[i] = (rol(block->l[i],24)&0xFF00FF00) \
-    |(rol(block->l[i],8)&0x00FF00FF))
-#elif BYTE_ORDER == BIG_ENDIAN
-#define blk0(i) block->l[i]
-#else
-#error "Endianness not defined!"
-#endif
+
+static uint32_t blk0(union char64long16 *block, int i) {
+  static const int endianess_check = 1;
+  if (((char *) &endianess_check)[0] == 1) {
+    block->l[i] = (rol(block->l[i], 24) & 0xFF00FF00) |
+      (rol(block->l[i], 8) & 0x00FF00FF);
+  }
+  return block->l[i];
+}
+
 #define blk(i) (block->l[i&15] = rol(block->l[(i+13)&15]^block->l[(i+8)&15] \
     ^block->l[(i+2)&15]^block->l[i&15],1))
-#define R0(v,w,x,y,z,i) z+=((w&(x^y))^y)+blk0(i)+0x5A827999+rol(v,5);w=rol(w,30);
+#define R0(v,w,x,y,z,i) z+=((w&(x^y))^y)+blk0(block, i)+0x5A827999+rol(v,5);w=rol(w,30);
 #define R1(v,w,x,y,z,i) z+=((w&(x^y))^y)+blk(i)+0x5A827999+rol(v,5);w=rol(w,30);
 #define R2(v,w,x,y,z,i) z+=(w^x^y)+blk(i)+0x6ED9EBA1+rol(v,5);w=rol(w,30);
 #define R3(v,w,x,y,z,i) z+=(((w|x)&y)|(w&x))+blk(i)+0x8F1BBCDC+rol(v,5);w=rol(w,30);
@@ -3647,9 +3651,8 @@ typedef struct {
 
 static void SHA1Transform(uint32_t state[5], const unsigned char buffer[64]) {
   uint32_t a, b, c, d, e;
-  typedef union { unsigned char c[64]; uint32_t l[16]; } CHAR64LONG16;
+  union char64long16 block[1];
 
-  CHAR64LONG16 block[1];
   memcpy(block, buffer, 64);
   a = state[0];
   b = state[1];
