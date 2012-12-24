@@ -255,11 +255,11 @@ static void test_mg_get_var(void) {
   ASSERT(buf[0] == '\0');
 
   ASSERT(mg_get_var(post[0], strlen(post[0]), "d", buf, sizeof(buf)) == -1);
-  ASSERT(mg_get_var(post[0], strlen(post[0]), "c", buf, 2) == -1);
+  ASSERT(mg_get_var(post[0], strlen(post[0]), "c", buf, 2) == -2);
 
   ASSERT(mg_get_var(post[0], strlen(post[0]), "x", NULL, 10) == -2);
   ASSERT(mg_get_var(post[0], strlen(post[0]), "x", buf, 0) == -2);
-  ASSERT(mg_get_var(post[1], strlen(post[1]), "st", buf, 16) == -1);
+  ASSERT(mg_get_var(post[1], strlen(post[1]), "st", buf, 16) == -2);
   ASSERT(mg_get_var(post[1], strlen(post[1]), "st", buf, 17) == 16);
 }
 
