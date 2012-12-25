@@ -1305,10 +1305,10 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   }
 
   if (interp[0] != '\0') {
-    GetFullPathName(interp, sizeof(full_interp), full_interp, NULL);
+    GetFullPathNameA(interp, sizeof(full_interp), full_interp, NULL);
     interp = full_interp;
   }
-  GetFullPathName(dir, sizeof(full_dir), full_dir, NULL);
+  GetFullPathNameA(dir, sizeof(full_dir), full_dir, NULL);
 
   mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%s%s\\%s",
               interp, interp[0] == '\0' ? "" : " ", full_dir, prog);
