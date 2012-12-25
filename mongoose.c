@@ -3803,10 +3803,10 @@ static void read_websocket(struct mg_connection *conn) {
         conn->content_len = 2 + mask_len + len;
         mask = buf + 2;
       } else if (len == 126 && body_len >= 4) {
-        conn->content_len = 2 + mask_len + ((((int) buf[2]) << 8) + buf[3]);
+        conn->content_len = 4 + mask_len + ((((int) buf[2]) << 8) + buf[3]);
         mask = buf + 4;
       } else if (body_len >= 10) {
-        conn->content_len = 2 + mask_len +
+        conn->content_len = 10 + mask_len +
           (((uint64_t) htonl(* (uint32_t *) &buf[2])) << 32) |
           htonl(* (uint32_t *) &buf[6]);
         mask = buf + 10;
