@@ -4171,6 +4171,11 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
   return num_uploaded_files;
 }
 
+static int is_put_or_delete_request(const struct mg_connection *conn) {
+  const char *s = conn->request_info.request_method;
+  return s != NULL && (!strcmp(s, "PUT") || !strcmp(s, "DELETE"));
+}
+
 // This is the heart of the Mongoose's logic.
 // This function is called when the request is read, parsed and validated,
 // and Mongoose must decide what action to take: serve a file, or
@@ -4192,7 +4197,7 @@ static void handle_request(struct mg_connection *conn) {
                                 get_remote_ip(conn), ri->uri);
 
   DEBUG_TRACE(("%s", ri->uri));
-  if (!check_authorization(conn, path)) {
+  if (!is_put_or_delete_request(conn) && !check_authorization(conn, path)) {
     send_authorization_request(conn);
 #if defined(USE_WEBSOCKET)
   } else if (is_websocket_request(conn)) {
@@ -4204,10 +4209,9 @@ static void handle_request(struct mg_connection *conn) {
     send_options(conn);
   } else if (conn->ctx->config[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, "Not Found", "Not Found");
-  } else if ((!strcmp(ri->request_method, "PUT") ||
-        !strcmp(ri->request_method, "DELETE")) &&
-      (conn->ctx->config[PUT_DELETE_PASSWORDS_FILE] == NULL ||
-       is_authorized_for_put(conn) != 1)) {
+  } else if (is_put_or_delete_request(conn) &&
+             (conn->ctx->config[PUT_DELETE_PASSWORDS_FILE] == NULL ||
+              is_authorized_for_put(conn) != 1)) {
     send_authorization_request(conn);
   } else if (!strcmp(ri->request_method, "PUT")) {
     put_file(conn, path);
