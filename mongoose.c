@@ -1395,6 +1395,12 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
       (void) close(fd_stdin);
       (void) close(fd_stdout);
 
+      // After exec, all signal handlers are restored to their default values,
+      // with one exception of SIGCHLD. According to POSIX.1-2001 and Linux's
+      // implementation, SIGCHLD's handler will leave unchanged after exec
+      // if it was set to be ignored. Restore it to default action.
+      signal(SIGCHLD, SIG_DFL);
+
       interp = conn->ctx->config[CGI_INTERPRETER];
       if (interp == NULL) {
         (void) execle(prog, prog, NULL, envp);
