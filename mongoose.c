@@ -231,7 +231,7 @@ typedef int SOCKET;
 #include <lauxlib.h>
 #endif
 
-#define MONGOOSE_VERSION "3.4"
+#define MONGOOSE_VERSION "3.5"
 #define PASSWORDS_FILE_NAME ".htpasswd"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
