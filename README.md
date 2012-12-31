@@ -39,4 +39,4 @@ Keep Sergey happy
 -----------------
 
 I have a [books wishlist](http://amzn.com/w/1OC2ZCPTQYIEP?sort=priority) on Amazon. If you feel brave, you can buy me a book!
-Many thanks to all who already did so: T.Barmann, D.Hughes, J.C.Sloan and 4 others. Appreciated, guys, you keep my brains going!
+Many thanks to all who already did so: T.Barmann, D.Hughes, J.C.Sloan, R.Romeo and 4 others. Appreciated, guys, you keep my brains going!
