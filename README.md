@@ -2,7 +2,7 @@ Project Mission
 ---------------
 
 Project mission is to provide the community with simple and functional
-web server library and web server built on top of that library.
+web server library and web server executable built on top of that library.
 
 
 The target audience are application or device developers looking to implement
