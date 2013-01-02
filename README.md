@@ -3,7 +3,7 @@ Project Mission
 
 Project mission is to provide simple, functional, embeddable web server to
 make it easy for application and device developers to implement web interface for their
-application and devices, and to offer a simple development platform to the web developers.
+application and devices, and to offer a simple development environment.
 
 Overview
 --------
