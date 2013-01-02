@@ -31,11 +31,12 @@ Questions can be asked at
 Keep Sergey happy
 -----------------
 
-Since 2004, Mongoose is being constantly improved by me, Sergey Lyubka. My other software
-I give to the community for free is [Super Light Regular Expression library](http://code.google.com/p/slre).
+Since 2004, Mongoose is being constantly improved by me, Sergey Lyubka, a software engineer
+from Galway, Ireland. My other software I give to the community for free is
+[Super Light Regular Expression library](http://code.google.com/p/slre).
 
 
 If you feel grateful for the stuff I've done, you can buy me a book from my
-[Amazon wishlist](http://amzn.com/w/1OC2ZCPTQYIEP?sort=priority)! Many thanks to all who
+[Amazon wishlist](http://amzn.com/w/1OC2ZCPTQYIEP?sort=priority). Many thanks to all who
 already did so: T.Barmann, D.Hughes, J.C.Sloan, R.Romeo and 4 others.
 Appreciated guys, you keep my brains going!
