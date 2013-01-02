@@ -1,10 +1,9 @@
 Project Mission
 ---------------
 
-Project mission is to provide a simple and functional web server library
-and web server executable built on top of that library, to
-make it easy for application/device developers to implement web interface for their
-application/devices, and to offer a simple development platform to the web developers.
+Project mission is to provide simple, functional, embeddable web server to
+make it easy for application and device developers to implement web interface for their
+application and devices, and to offer a simple development platform to the web developers.
 
 Overview
 --------
