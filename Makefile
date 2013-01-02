@@ -114,10 +114,10 @@ lua.lib:
 	$(MSVC)/bin/lib $(LUA_SOURCES:%.c=%.obj) /out:$@
 
 windows: cyassl.lib lua.lib
-	$(MSVC)/bin/rc win32\res.rc
-	$(CL) /I win32 main.c mongoose.c /GA $(LINK) win32\res.res \
+	$(MSVC)/bin/rc build\res.rc
+	$(CL) /Ibuild main.c mongoose.c /GA $(LINK) build\res.res \
 		$(GUILIB) /out:$(PROG).exe
-	$(CL) mongoose.c /GD $(LINK) /DLL /DEF:win32\dll.def /out:$(PROG).dll
+	$(CL) mongoose.c /GD $(LINK) /DLL /DEF:build\dll.def /out:$(PROG).dll
 
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0 -ggdb
@@ -125,22 +125,22 @@ MINGWDBG= -DNDEBUG -Os
 MINGWOPT=  -W -Wall -mthreads -Wl,--subsystem,console $(MINGWDBG) -DHAVE_STDINT $(GCC_WARNINGS) $(COPT)
 #MINGWOPT= -W -Wall -mthreads -Wl,--subsystem,windows $(MINGWDBG) -DHAVE_STDINT $(GCC_WARNINGS) $(COPT)
 mingw:
-	windres win32\res.rc win32\res.o
+	windres build\res.rc build\res.o
 	$(CC) $(MINGWOPT) mongoose.c -lws2_32 \
 		-shared -Wl,--out-implib=$(PROG).lib -o $(PROG).dll
-	$(CC) $(MINGWOPT) -Iwin32 mongoose.c main.c win32\res.o -lws2_32 -ladvapi32 \
-		-o $(PROG).exe
+	$(CC) $(MINGWOPT) -build mongoose.c main.c build\res.o \
+	-lws2_32 -ladvapi32 -o $(PROG).exe
 
 # Build for Windows under Cygwin
 #CYGWINDBG= -DDEBUG -O0 -ggdb
 CYGWINDBG= -DNDEBUG -Os
 CYGWINOPT=  -W -Wall -mthreads -Wl,--subsystem,console $(CYGWINDBG) -DHAVE_STDINT $(GCC_WARNINGS) $(COPT)
 cygwin:
-	windres ./win32/res.rc ./win32/res.o
+	windres ./build/res.rc ./build/res.o
 	$(CC) $(CYGWINOPT) mongoose.c -lws2_32 \
 		-shared -Wl,--out-implib=$(PROG).lib -o $(PROG).dll
-	$(CC) $(CYGWINOPT) -Iwin32 mongoose.c main.c ./win32/res.o -lws2_32 \
-  -ladvapi32 -o $(PROG).exe
+	$(CC) $(CYGWINOPT) -Ibuild mongoose.c main.c ./build/res.o \
+	-lws2_32 -ladvapi32 -o $(PROG).exe
 
 ##########################################################################
 ###            Manuals, cleanup, test, release
@@ -157,7 +157,7 @@ tests:
 	perl test/test.pl $(TEST)
 
 release: clean
-	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`.tgz ; cd .. && tar -czf x mongoose/{LICENSE,Makefile,bindings,examples,test,win32,mongoose.c,mongoose.h,mongoose.1,main.c} && mv x mongoose/$$F
+	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`.tgz ; cd .. && tar -czf x mongoose/{LICENSE,Makefile,bindings,examples,test,build,mongoose.c,mongoose.h,mongoose.1} && mv x mongoose/$$F
 
 clean:
-	rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz $(PROG).exe *.dll *.lib win32/res.o
+	rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz $(PROG).exe *.dll *.lib build/res.o build/res.RES
