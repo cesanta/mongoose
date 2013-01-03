@@ -28,10 +28,7 @@ all:
 LUA         = lua-5.2.1/src
 LUA_FLAGS   = -DUSE_LUA -I$(LUA) -L$(LUA) -llua -lm
 
-GCC_WARNS   = -W -Wall -pedantic
-CFLAGS      = -std=c99 -O2 $(GCC_WARNS) $(COPT)
-MAC_SHARED  = -flat_namespace -bundle -undefined suppress
-LINFLAGS    = -ldl -pthread $(CFLAGS)
+CFLAGS      = -std=c99 -O2 -W -Wall -pedantic $(COPT)
 LIB         = lib$(PROG).so$(MONGOOSE_LIB_SUFFIX)
 
 # Make sure that the compiler flags come last in the compilation string.
@@ -39,20 +36,20 @@ LIB         = lib$(PROG).so$(MONGOOSE_LIB_SUFFIX)
 # "-Wl,--as-needed" turned on by default  in cc command.
 # Also, this is turned in many other distros in static linkage builds.
 linux:
-	$(CC) mongoose.c -shared -fPIC -fpic -o $(LIB) -Wl,-soname,$(LIB) $(LINFLAGS)
-	$(CC) mongoose.c main.c -o $(PROG) $(LINFLAGS)
+	$(CC) mongoose.c -shared -fPIC -fpic -o $(LIB) -Wl,-soname,$(LIB) -ldl -pthread $(CFLAGS)
+	$(CC) mongoose.c main.c -o $(PROG) -ldl -pthread $(CFLAGS)
 
 bsd:
 	$(CC) mongoose.c -shared -pthread -fpic -fPIC -o $(LIB) $(CFLAGS)
 	$(CC) mongoose.c main.c -pthread -o $(PROG) $(CFLAGS)
 
 mac:
-	$(CC) mongoose.c -pthread -o $(LIB) $(MAC_SHARED) $(CFLAGS)
-	$(CC) mongoose.c main.c -pthread -o $(PROG) $(CFLAGS)
+	$(CC) mongoose.c -pthread -o $(LIB) -flat_namespace -bundle -undefined suppress $(CFLAGS)
+	$(CC) mongoose.c main.c -DUSE_COCOA -pthread $(CFLAGS) -framework Cocoa -ObjC -arch i386 -arch x86_64 -o $(PROG)
+	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/$(PROG).app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 $(PROG) $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create $(PROG)_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
 
 solaris:
-	$(CC) mongoose.c -pthread -lnsl \
-		-lsocket -fpic -fPIC -shared -o $(LIB) $(CFLAGS)
+	$(CC) mongoose.c -pthread -lnsl -lsocket -fpic -fPIC -shared -o $(LIB) $(CFLAGS)
 	$(CC) mongoose.c main.c -pthread -lnsl -lsocket -o $(PROG) $(CFLAGS)
 
 

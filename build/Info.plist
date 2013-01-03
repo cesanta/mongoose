@@ -2,7 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleIconFile</key> <string>mongoose_16x16.png</string>
-	<key>LSUIElement</key> <true/>
+	<key>CFBundleExecutable</key>
+	<string>mongoose</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleTypeRole</key>
+	<string>None</string>
+	<key>CFBundleIconFiles</key>
+	<array>
+		<string>mongoose_16x16.png</string>
+	</array>
+	<key>LSUIElement</key>
+	<true/>
 </dict>
 </plist>
