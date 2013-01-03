@@ -22,7 +22,7 @@ simplicity by carefully selected list of features:
 - 130 kilobytes Windows executable with all of the above and no dependencies
 - Simple and clean embedding API ([mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h)). The source is in single [mongoose.c](https://github.com/valenok/mongoose/blob/master/mongoose.c) file to make things easy.
 - Embedding examples: [hello.c](https://github.com/valenok/mongoose/blob/master/examples/hello.c), [post.c](https://github.com/valenok/mongoose/blob/master/examples/post.c), [upload.c](https://github.com/valenok/mongoose/blob/master/examples/upload.c), [websocket.c](https://github.com/valenok/mongoose/blob/master/examples/websocket.c)
-- Extensive documentation in form of [User Manual](UserManual)
+- Extensive documentation in form of [User Manual](https://github.com/valenok/mongoose/blob/master/UserManual.md)
 
 Questions can be asked at
 [mongoose-users@google.com](http://groups.google.com/group/mongoose-users) mailing list.
