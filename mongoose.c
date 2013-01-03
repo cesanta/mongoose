@@ -1984,6 +1984,11 @@ static void get_mime_type(struct mg_context *ctx, const char *path,
   vec->len = strlen(vec->ptr);
 }
 
+static int is_big_endian(void) {
+  static const int n = 1;
+  return ((char *) &n)[0] == 0;
+}
+
 #ifndef HAVE_MD5
 typedef struct MD5Context {
   uint32_t buf[4];
@@ -1992,9 +1997,10 @@ typedef struct MD5Context {
 } MD5_CTX;
 
 static void byteReverse(unsigned char *buf, unsigned longs) {
-  static const int endianess_check = 1;
   uint32_t t;
-  if (((char *) &endianess_check)[0] == 1) {
+
+  // Forrest: MD5 expect LITTLE_ENDIAN, swap if BIG_ENDIAN
+  if (is_big_endian()) {
     do {
       t = (uint32_t) ((unsigned) buf[3] << 8 | buf[2]) << 16 |
         ((unsigned) buf[1] << 8 | buf[0]);
@@ -3633,8 +3639,8 @@ union char64long16 { unsigned char c[64]; uint32_t l[16]; };
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
 
 static uint32_t blk0(union char64long16 *block, int i) {
-  static const int endianess_check = 1;
-  if (((char *) &endianess_check)[0] == 1) {
+  // Forrest: SHA expect BIG_ENDIAN, swap if LITTLE_ENDIAN
+  if (!is_big_endian()) {
     block->l[i] = (rol(block->l[i], 24) & 0xFF00FF00) |
       (rol(block->l[i], 8) & 0x00FF00FF);
   }
