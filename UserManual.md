@@ -49,7 +49,7 @@ Usage Examples
   [http://localhost:8080](http://localhost:8080) in any browser.
 - How to start mongoose at UNIX startup time in daemon mode, serving
   directory `/var/www`: put this line in the system startup script,
-  `nohup /path/to/mongoose -listening_ports 80 -document_root /var/www`
+  `/path/to/mongoose -listening_ports 80 -document_root /var/www &`
 
 Command Line Options
 --------------------
