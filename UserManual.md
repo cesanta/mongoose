@@ -16,12 +16,13 @@ with `#`, are ignored. Here is the example of `mongoose.conf` file:
     # mongoose.conf file
     document_root c:\www
     listening_ports 8080,8043s
-    ssh_certificate c:\mongoose\ssl_cert.pem
-
+    ssl_certificate c:\mongoose\ssl_cert.pem
 
 Usage Examples
 --------------
-- How to share a Windows folder  
+- How to share a Windows folder. Copy mongoose executable to a folder and
+  double-click the executable. The folder should be accessible via
+  [http://localhost:8080](http://localhost:8080) in any browser.
 
 Command Line Options
 --------------------
