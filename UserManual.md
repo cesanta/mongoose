@@ -39,6 +39,7 @@ document root, because command line options take priority over
 configuration file.
 
 Mongoose can also be used to modify `.htpasswd` passwords file:
+
     mongoose -A <htpasswd_file> <realm> <user> <passwd>
 
 Usage Examples
