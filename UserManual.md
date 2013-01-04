@@ -1,8 +1,26 @@
 Overview
 --------
 
+Mongoose is small and easy to use web server. It is self-contained, and does
+not require any external software to run. Mongoose can be configured via
+command line options, or via configuration file. If no command line
+options are given, mongoose searches for a configuration file
+called "mongoose.conf" in the same directory where mongoose binary is
+located.
+
+Configuration file is a sequence of lines, each line containing
+command line option name and it's value. Lines beginning with '#'
+and empty lines are ignored. Here is 
+
+    # mongoose.conf file
+    document_root c:\www
+    listening_ports 8080,8043s
+    ssh_certificate c:\mongoose\ssl_cert.pem
+
+
 Usage Examples
 --------------
+- How to share a Windows folder  
 
 Command Line Options
 --------------------
