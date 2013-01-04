@@ -3,14 +3,15 @@ Overview
 
 Mongoose is small and easy to use web server. It is self-contained, and does
 not require any external software to run. Mongoose can be configured via
-command line options, or via configuration file. If no command line
+command line options, or via configuration file, or it can be run with no
+configuration at all, thanks to the reasonable defaults. If no command line
 options are given, mongoose searches for a configuration file
 called "mongoose.conf" in the same directory where mongoose binary is
-located.
+located, and uses it if it is present.
 
 Configuration file is a sequence of lines, each line containing
-command line option name and it's value. Lines beginning with '#'
-and empty lines are ignored. Here is 
+command line option name and it's value. Empty lines, and lines beginning
+with `#`, are ignored. Here is the example of `mongoose.conf` file:
 
     # mongoose.conf file
     document_root c:\www
