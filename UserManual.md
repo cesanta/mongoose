@@ -1,3 +1,6 @@
+
+**NOTE: THIS MANUAL IS WORK IN PROGRESS**
+
 Overview
 --------
 
