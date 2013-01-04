@@ -2,15 +2,26 @@ Overview
 --------
 
 Mongoose is small and easy to use web server. It is self-contained, and does
-not require any external software to run. Mongoose can be configured via
-command line options, or via configuration file, or it can be run with no
-configuration at all, thanks to the reasonable defaults. If no command line
-options are given, mongoose searches for a configuration file
-called "mongoose.conf" in the same directory where mongoose binary is
-located, and uses it if it is present.
+not require any external software to run.
 
+On Windows, mongoose iconifies itself to the system tray icon when started.
+Right-click on the icon pops up a menu, where it is possible to stop
+mongoose, or configure it, or install it as Windows service.
+
+On UNIX and Mac, mongoose is a command line utility. Running `mongoose` in
+terminal, optionally followed by configuration parameters
+(`mongoose [OPTIONS]`) or configuration file name
+(`mongoose [config_file_name]`) starts the
+web server. Mongoose does not detach from terminal. Pressing `Ctrl-C` keys
+would stop the server.
+
+When started, mongoose first searches for the configuration file.
+If configuration file is specified explicitly in the command line, i.e.
+`mongoose path_to_config_file`, then specified configuration file is used.
+Otherwise, mongoose would search for file `mongoose.conf` in the same directory
+where binary is located, and use it.
 Configuration file is a sequence of lines, each line containing
-command line option name and it's value. Empty lines, and lines beginning
+command line argument name and it's value. Empty lines, and lines beginning
 with `#`, are ignored. Here is the example of `mongoose.conf` file:
 
     # mongoose.conf file
@@ -18,11 +29,27 @@ with `#`, are ignored. Here is the example of `mongoose.conf` file:
     listening_ports 8080,8043s
     ssl_certificate c:\mongoose\ssl_cert.pem
 
+When configuration file is processed, mongoose process command line arguments,
+if they are specified. Command line arguments therefore can override
+configuration file settings. Command line arguments must start with `-`.
+For example, if `mongoose.conf` has line
+`document_root /var/www`, and mongoose has been started as
+`mongoose -document_root /etc`, then `/etc` directory will be served as
+document root, because command line options take priority over
+configuration file.
+
+Mongoose can also be used to modify `.htpasswd` passwords file:
+    mongoose -A <htpasswd_file> <realm> <user> <passwd>
+
 Usage Examples
 --------------
-- How to share a Windows folder. Copy mongoose executable to a folder and
+
+- How to share a Windows folder: copy mongoose executable to a folder and
   double-click the executable. The folder should be accessible via
   [http://localhost:8080](http://localhost:8080) in any browser.
+- How to start mongoose at UNIX startup time in daemon mode, serving
+  directory `/var/www`: put this line in the system startup script,
+  `nohup /path/to/mongoose -listening_ports 80 -document_root /var/www`
 
 Command Line Options
 --------------------
