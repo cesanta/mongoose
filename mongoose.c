@@ -1,4 +1,4 @@
-// Copyright (c) 2004-2012 Sergey Lyubka
+// Copyright (c) 2004-2013 Sergey Lyubka
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,8 +30,10 @@
 #endif
 
 #if defined (_MSC_VER)
-#pragma warning (disable : 4127)    // conditional expression is constant: introduced by FD_SET(..)
-#pragma warning (disable : 4204)    // non-constant aggregate initializer: issued due to missing C99 support
+// conditional expression is constant: introduced by FD_SET(..)
+#pragma warning (disable : 4127)
+// non-constant aggregate initializer: issued due to missing C99 support
+#pragma warning (disable : 4204)
 #endif
 
 // Disable WIN32_LEAN_AND_MEAN.
@@ -149,9 +151,7 @@ typedef DWORD pthread_t;
 
 static int pthread_mutex_lock(pthread_mutex_t *);
 static int pthread_mutex_unlock(pthread_mutex_t *);
-
 static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len);
-
 struct file;
 static char *mg_fgets(char *buf, size_t size, struct file *filep, char **p);
 
@@ -231,7 +231,7 @@ typedef int SOCKET;
 #include <lauxlib.h>
 #endif
 
-#define MONGOOSE_VERSION "3.5"
+#define MONGOOSE_VERSION "3.6"
 #define PASSWORDS_FILE_NAME ".htpasswd"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
