@@ -371,6 +371,15 @@ const char *mg_version(void);
 void mg_md5(char buf[33], ...);
 
 
+struct mg_socket;
+struct mg_socket* mg_socket_create();
+void mg_ref_thread(struct mg_context *ctx);
+void mg_unref_thread(struct mg_context *ctx);
+int mg_consume_socket(struct mg_context *ctx, struct mg_socket *sp);
+struct mg_connection *mg_connection_create(struct mg_context *ctx, struct mg_socket *sp);
+void mg_connection_process(struct mg_context *ctx, struct mg_connection *conn);
+
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
