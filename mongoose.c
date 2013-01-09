@@ -1693,7 +1693,7 @@ int mg_get_var(const char *data, size_t data_len, const char *name,
 
         // Decode variable into destination buffer
         len = url_decode(p, (size_t)(s - p), dst, dst_len, 1);
-        
+
         // Redirect error code from -1 to -2 (destination buffer too small).
         if (len == -1) {
           len = -2;
@@ -4632,9 +4632,12 @@ static void reset_per_request_attributes(struct mg_connection *conn) {
 }
 
 static void close_socket_gracefully(struct mg_connection *conn) {
+#if defined(_WIN32)
   char buf[MG_BUF_LEN];
+  int n;
+#endif
   struct linger linger;
-  int n, sock = conn->client.sock;
+  int sock = conn->client.sock;
 
   // Set linger option to avoid socket hanging out after close. This prevent
   // ephemeral port exhaust problem under high QPS.
@@ -4646,6 +4649,7 @@ static void close_socket_gracefully(struct mg_connection *conn) {
   (void) shutdown(sock, SHUT_WR);
   set_non_blocking_mode(sock);
 
+#if defined(_WIN32)
   // Read and discard pending incoming data. If we do not do that and close the
   // socket, the data in the send buffer may be discarded. This
   // behaviour is seen on Windows, when client keeps sending data
@@ -4654,6 +4658,7 @@ static void close_socket_gracefully(struct mg_connection *conn) {
   do {
     n = pull(NULL, conn, buf, sizeof(buf));
   } while (n > 0);
+#endif
 
   // Now we know that our FIN is ACK-ed, safe to close
   (void) closesocket(sock);
