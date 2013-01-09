@@ -1032,31 +1032,14 @@ static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
   // Point p to the end of the file name
   p = buf + strlen(buf) - 1;
 
-  // Trim trailing backslash character
-  while (p > buf && *p == '\\' && p[-1] != ':') {
-    *p-- = '\0';
-  }
-
-   // Protect from CGI code disclosure.
-   // This is very nasty hole. Windows happily opens files with
-   // some garbage in the end of file name. So fopen("a.cgi    ", "r")
-   // actually opens "a.cgi", and does not return an error!
-  if (*p == 0x20 ||               // No space at the end
-      (*p == 0x2e && p > buf) ||  // No '.' but allow '.' as full path
-      *p == 0x2b ||               // No '+'
-      (*p & ~0x7f)) {             // And generally no non-ASCII chars
-    (void) fprintf(stderr, "Rejecting suspicious path: [%s]", buf);
+  // Convert to Unicode and back. If doubly-converted string does not
+  // match the original, something is fishy, reject.
+  memset(wbuf, 0, wbuf_len * sizeof(wchar_t));
+  MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
+  WideCharToMultiByte(CP_UTF8, 0, wbuf, (int) wbuf_len, buf2, sizeof(buf2),
+                      NULL, NULL);
+  if (strcmp(buf, buf2) != 0) {
     wbuf[0] = L'\0';
-  } else {
-    // Convert to Unicode and back. If doubly-converted string does not
-    // match the original, something is fishy, reject.
-    memset(wbuf, 0, wbuf_len * sizeof(wchar_t));
-    MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
-    WideCharToMultiByte(CP_UTF8, 0, wbuf, (int) wbuf_len, buf2, sizeof(buf2),
-                        NULL, NULL);
-    if (strcmp(buf, buf2) != 0) {
-      wbuf[0] = L'\0';
-    }
   }
 }
 
@@ -1126,6 +1109,16 @@ static int mg_rename(const char* oldname, const char* newname) {
   return MoveFileW(woldbuf, wnewbuf) ? 0 : -1;
 }
 
+// Windows happily opens files with some garbage at the end of file name.
+// For example, fopen("a.cgi    ", "r") on Windows successfully opens
+// "a.cgi", despite one would expect an error back.
+// This function returns non-0 if path ends with some garbage.
+static int path_cannot_disclose_cgi(const char *path) {
+  static const char *allowed_last_characters = "_-";
+  int last = path[strlen(path) - 1];
+  return isalnum(last) || strchr(allowed_last_characters, last) != NULL;
+}
+
 static int mg_stat(struct mg_connection *conn, const char *path,
                    struct file *filep) {
   wchar_t wbuf[PATH_MAX];
@@ -1139,6 +1132,12 @@ static int mg_stat(struct mg_connection *conn, const char *path,
           info.ftLastWriteTime.dwLowDateTime,
           info.ftLastWriteTime.dwHighDateTime);
       filep->is_directory = info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+      // If file name is fishy, reset the file structure and return error.
+      // Note it is important to reset, not just return the error, cause
+      // functions like is_file_opened() check the struct.
+      if (!filep->is_directory && !path_cannot_disclose_cgi(path)) {
+        memset(filep, 0, sizeof(*filep));
+      }
     }
   }
 
