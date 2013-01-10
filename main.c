@@ -416,7 +416,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
           mg_stop(ctx);
           Shell_NotifyIcon(NIM_DELETE, &TrayIcon);
           PostQuitMessage(0);
-          break;
+          return 0;
         case ID_EDIT_CONFIG:
           edit_config_file();
           break;
