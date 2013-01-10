@@ -4885,50 +4885,75 @@ static int consume_socket(struct mg_context *ctx, struct socket *sp) {
   return !ctx->stop_flag;
 }
 
-static void worker_thread(struct mg_context *ctx) {
-  struct mg_connection *conn;
+void mg_ref_thread(struct mg_context *ctx) {
+  (void) pthread_mutex_lock(&ctx->mutex);
+  ctx->num_threads++;
+  (void) pthread_mutex_unlock(&ctx->mutex);
+}
 
-  conn = (struct mg_connection *) calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE);
-  if (conn == NULL) {
-    cry(fc(ctx), "%s", "Cannot create new connection struct, OOM");
-  } else {
-    conn->buf_size = MAX_REQUEST_SIZE;
-    conn->buf = (char *) (conn + 1);
-
-    // Call consume_socket() even when ctx->stop_flag > 0, to let it signal
-    // sq_empty condvar to wake up the master waiting in produce_socket()
-    while (consume_socket(ctx, &conn->client)) {
-      conn->birth_time = time(NULL);
-      conn->ctx = ctx;
-
-      // Fill in IP, port info early so even if SSL setup below fails,
-      // error handler would have the corresponding info.
-      // Thanks to Johannes Winkelmann for the patch.
-      // TODO(lsm): Fix IPv6 case
-      conn->request_info.remote_port = ntohs(conn->client.rsa.sin.sin_port);
-      memcpy(&conn->request_info.remote_ip,
-             &conn->client.rsa.sin.sin_addr.s_addr, 4);
-      conn->request_info.remote_ip = ntohl(conn->request_info.remote_ip);
-      conn->request_info.is_ssl = conn->client.is_ssl;
-
-      if (!conn->client.is_ssl ||
-          (conn->client.is_ssl &&
-           sslize(conn, conn->ctx->ssl_ctx, SSL_accept))) {
-        process_new_connection(conn);
-      }
-
-      close_connection(conn);
-    }
-    free(conn);
-  }
-
-  // Signal master that we're done with connection and exiting
+void mg_unref_thread(struct mg_context *ctx) {
   (void) pthread_mutex_lock(&ctx->mutex);
   ctx->num_threads--;
   (void) pthread_cond_signal(&ctx->cond);
   assert(ctx->num_threads >= 0);
   (void) pthread_mutex_unlock(&ctx->mutex);
+}
 
+struct mg_socket* mg_socket_create() {
+  return calloc(1, sizeof(struct socket));
+}
+
+int mg_consume_socket(struct mg_context *ctx, struct mg_socket *sp) {
+  // Call consume_socket() even when ctx->stop_flag > 0, to let it signal
+  // sq_empty condvar to wake up the master waiting in produce_socket()
+  return consume_socket(ctx, (struct socket *)sp);
+}
+
+struct mg_connection *mg_connection_create(struct mg_context *ctx, struct mg_socket *sp) {
+  struct mg_connection *conn;
+  conn = (struct mg_connection *) calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE);
+  if (conn == NULL) {
+      return NULL;
+  }
+  conn->buf_size = MAX_REQUEST_SIZE;
+  conn->buf = (char *) (conn + 1);
+  if (sp) {
+      conn->client = *(struct socket *)sp;
+  }
+  return conn;
+}
+
+void mg_connection_process(struct mg_context *ctx, struct mg_connection *conn) {
+  conn->birth_time = time(NULL);
+  conn->ctx = ctx;
+  // Fill in IP, port info early so even if SSL setup below fails,
+  // error handler would have the corresponding info.
+  // Thanks to Johannes Winkelmann for the patch.
+  // TODO(lsm): Fix IPv6 case
+  conn->request_info.remote_port = ntohs(conn->client.rsa.sin.sin_port);
+  memcpy(&conn->request_info.remote_ip,
+         &conn->client.rsa.sin.sin_addr.s_addr, 4);
+  conn->request_info.remote_ip = ntohl(conn->request_info.remote_ip);
+  conn->request_info.is_ssl = conn->client.is_ssl;
+
+  if (!conn->client.is_ssl ||
+      (conn->client.is_ssl &&
+      sslize(conn, conn->ctx->ssl_ctx, SSL_accept))) {
+    process_new_connection(conn);
+  }
+  close_connection(conn);
+}
+
+static void worker_thread(struct mg_context *ctx) {
+  struct mg_connection *conn = mg_connection_create(ctx, 0);
+  if (conn == NULL) {
+    cry(fc(ctx), "%s", "Cannot create new connection struct, OOM");
+    return;
+  }
+  while (consume_socket(ctx, &conn->client))
+      mg_connection_process(ctx, conn);
+  free(conn);
+  mg_unref_thread(ctx);
   DEBUG_TRACE(("exiting"));
 }
 
