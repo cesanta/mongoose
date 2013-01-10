@@ -110,6 +110,33 @@ static void show_usage_and_exit(void) {
   exit(EXIT_FAILURE);
 }
 
+#if defined(_WIN32) || defined(USE_COCOA)
+static void create_config_file(const char *path) {
+  const char **names, *value;
+  FILE *fp;
+  int i;
+
+  // Create config file if it is not present yet
+  if ((fp = fopen(path, "r")) != NULL) {
+    fclose(fp);
+  } else if ((fp = fopen(path, "a+")) != NULL) {
+    fprintf(fp, "%s",
+            "# Mongoose web server configuration file.\n"
+            "# For detailed description of every option, visit\n"
+            "# https://github.com/valenok/mongoose/blob/master/UserManual.md\n"
+            "# Lines starting with '#' and empty lines are ignored.\n"
+            "# To make a change, remove leading '#', modify option's value,\n"
+            "# save this file and then restart Mongoose.\n\n");
+    names = mg_get_valid_option_names();
+    for (i = 0; names[i] != NULL; i += 3) {
+      value = mg_get_option(ctx, names[i]);
+      fprintf(fp, "# %s %s\n", names[i + 1], *value ? value : "<value>");
+    }
+    fclose(fp);
+  }
+}
+#endif
+
 static void verify_document_root(const char *root) {
   const char *p, *path;
   char buf[PATH_MAX];
@@ -306,28 +333,8 @@ static void WINAPI ServiceMain(void) {
 static NOTIFYICONDATA TrayIcon;
 
 static void edit_config_file(void) {
-  const char **names, *value;
-  FILE *fp;
-  int i;
   char cmd[200];
-
-  // Create config file if it is not present yet
-  if ((fp = fopen(config_file, "r")) != NULL) {
-    fclose(fp);
-  } else if ((fp = fopen(config_file, "a+")) != NULL) {
-    fprintf(fp,
-            "# Mongoose web server configuration file.\n"
-            "# Lines starting with '#' and empty lines are ignored.\n"
-            "# For detailed description of every option, visit\n"
-            "# http://code.google.com/p/mongoose/wiki/MongooseManual\n\n");
-    names = mg_get_valid_option_names();
-    for (i = 0; names[i] != NULL; i += 3) {
-      value = mg_get_option(ctx, names[i]);
-      fprintf(fp, "# %s %s\n", names[i + 1], *value ? value : "<value>");
-    }
-    fclose(fp);
-  }
-
+  create_config_file(config_file);
   snprintf(cmd, sizeof(cmd), "notepad.exe %s", config_file);
   WinExec(cmd, SW_SHOW);
 }
@@ -499,14 +506,16 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
 @end
 
 @implementation Mongoose
-- (void) openBrowser { 
+- (void) openBrowser {
   [[NSWorkspace sharedWorkspace]
     openURL:[NSURL URLWithString:
       [NSString stringWithUTF8String:"http://www.yahoo.com"]]];
 }
-- (void) editConfig { 
+- (void) editConfig {
+  create_config_file(config_file);
   [[NSWorkspace sharedWorkspace]
-    openFile:@"mongoose.conf" withApplication:@"TextEdit"];
+    openFile:[NSString stringWithUTF8String:config_file]
+    withApplication:@"TextEdit"];
 }
 - (void)shutDown{
   [NSApp terminate:nil];
