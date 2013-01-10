@@ -4826,6 +4826,7 @@ static void process_new_connection(struct mg_connection *conn) {
       }
       conn->birth_time = time(NULL);
       handle_request(conn);
+      conn->request_info.ev_data = (void *) conn->status_code;
       call_user(conn, MG_REQUEST_COMPLETE);
       log_access(conn);
     }

@@ -47,7 +47,7 @@ struct mg_request_info {
     const char *name;         // HTTP header name
     const char *value;        // HTTP header value
   } http_headers[64];         // Maximum 64 headers
-  void *user_data;            // User data pointer passed to the mg_start()
+  void *user_data;            // User data pointer passed to mg_start()
   void *ev_data;              // Event-specific data pointer
 };
 
@@ -61,7 +61,8 @@ enum mg_event {
 
   // Mongoose has finished handling the request.
   // Callback return value is ignored.
-  // ev_data contains NULL.
+  // ev_data contains integer HTTP status code:
+  //  int http_reply_status_code = (long) request_info->ev_data;
   MG_REQUEST_COMPLETE,
 
   // HTTP error must be returned to the client.
