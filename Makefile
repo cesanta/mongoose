@@ -46,7 +46,7 @@ bsd:
 mac:
 	$(CC) mongoose.c -pthread -o $(LIB) -flat_namespace -bundle -undefined suppress $(CFLAGS)
 	$(CC) mongoose.c main.c -DUSE_COCOA -pthread $(CFLAGS) -framework Cocoa -ObjC -arch i386 -arch x86_64 -o $(PROG)
-	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/$(PROG).app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 $(PROG) $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create $(PROG)_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
+	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 $(PROG) $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create $(PROG)_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
 
 solaris:
 	$(CC) mongoose.c -pthread -lnsl -lsocket -fpic -fPIC -shared -o $(LIB) $(CFLAGS)
