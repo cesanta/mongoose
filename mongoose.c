@@ -4885,7 +4885,8 @@ static int consume_socket(struct mg_context *ctx, struct socket *sp) {
   return !ctx->stop_flag;
 }
 
-static void worker_thread(struct mg_context *ctx) {
+static void *worker_thread(void *thread_func_param) {
+  struct mg_context *ctx = thread_func_param;
   struct mg_connection *conn;
 
   conn = (struct mg_connection *) calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE);
@@ -4930,6 +4931,7 @@ static void worker_thread(struct mg_context *ctx) {
   (void) pthread_mutex_unlock(&ctx->mutex);
 
   DEBUG_TRACE(("exiting"));
+  return NULL;
 }
 
 // Master thread adds accepted socket to a queue
@@ -4978,7 +4980,8 @@ static void accept_new_connection(const struct socket *listener,
   }
 }
 
-static void master_thread(struct mg_context *ctx) {
+static void *master_thread(void *thread_func_param) {
+  struct mg_context *ctx = thread_func_param;
   fd_set read_set;
   struct timeval tv;
   struct socket *sp;
@@ -5052,6 +5055,7 @@ static void master_thread(struct mg_context *ctx) {
   // WARNING: This must be the very last thing this
   // thread does, as ctx becomes invalid after this line.
   ctx->stop_flag = 2;
+  return NULL;
 }
 
 static void free_context(struct mg_context *ctx) {
@@ -5173,11 +5177,11 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
   (void) pthread_cond_init(&ctx->sq_full, NULL);
 
   // Start master (listening) thread
-  mg_start_thread((mg_thread_func_t) master_thread, ctx);
+  mg_start_thread(master_thread, ctx);
 
   // Start worker threads
   for (i = 0; i < atoi(ctx->config[NUM_THREADS]); i++) {
-    if (mg_start_thread((mg_thread_func_t) worker_thread, ctx) != 0) {
+    if (mg_start_thread(worker_thread, ctx) != 0) {
       cry(fc(ctx), "Cannot start worker thread: %d", ERRNO);
     } else {
       ctx->num_threads++;
