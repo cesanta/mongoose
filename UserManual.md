@@ -52,11 +52,15 @@ Usage Examples
   double-click the executable. The folder should be accessible via
   [http://localhost:8080](http://localhost:8080) in any browser.
 - How to start mongoose at UNIX startup time in daemon mode, serving
-  directory `/var/www`: put this line in the system startup script,
+  directory `/var/www`: put this line in the system startup script:
   `/path/to/mongoose -listening_ports 80 -document_root /var/www &`
 
 Command Line Options
 --------------------
+-A <htpasswd_file> <domain_name> <user_name> <password>
+    Add/edit user's password in the passwords file. Deleting users
+    can be done with any text editor. Functionality is similar to
+    Apache's `htdigest` utility.
 
 Common Problems
 ---------------
