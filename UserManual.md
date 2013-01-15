@@ -57,7 +57,8 @@ Usage Examples
 
 Command Line Options
 --------------------
--A <htpasswd_file> <domain_name> <user_name> <password>
+`-A <htpasswd_file> <domain_name> <user_name> <password>`
+
     Add/edit user's password in the passwords file. Deleting users
     can be done with any text editor. Functionality is similar to
     Apache's `htdigest` utility.
