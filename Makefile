@@ -36,20 +36,19 @@ LIB         = lib$(PROG).so$(MONGOOSE_LIB_SUFFIX)
 # "-Wl,--as-needed" turned on by default  in cc command.
 # Also, this is turned in many other distros in static linkage builds.
 linux:
-	$(CC) mongoose.c -shared -fPIC -fpic -o $(LIB) -Wl,-soname,$(LIB) -ldl -pthread $(CFLAGS)
 	$(CC) mongoose.c main.c -o $(PROG) -ldl -pthread $(CFLAGS)
 
 bsd:
-	$(CC) mongoose.c -shared -pthread -fpic -fPIC -o $(LIB) $(CFLAGS)
 	$(CC) mongoose.c main.c -pthread -o $(PROG) $(CFLAGS)
 
 mac:
-	$(CC) mongoose.c -pthread -o $(LIB) -flat_namespace -bundle -undefined suppress $(CFLAGS)
-	$(CC) mongoose.c main.c -DUSE_COCOA -pthread $(CFLAGS) -framework Cocoa -ObjC -arch i386 -arch x86_64 -o $(PROG)
-	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 $(PROG) $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create $(PROG)_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
+	$(CC) mongoose.c main.c -pthread $(CFLAGS) -o $(PROG)
+
+cocoa:
+	$(CC) mongoose.c main.c -DUSE_COCOA -pthread $(CFLAGS) -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
+	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 Mongoose $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create Mongoose_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
 
 solaris:
-	$(CC) mongoose.c -pthread -lnsl -lsocket -fpic -fPIC -shared -o $(LIB) $(CFLAGS)
 	$(CC) mongoose.c main.c -pthread -lnsl -lsocket -o $(PROG) $(CFLAGS)
 
 
@@ -114,7 +113,7 @@ windows: cyassl.lib lua.lib
 	$(MSVC)/bin/rc build\res.rc
 	$(CL) /Ibuild main.c mongoose.c /GA $(LINK) build\res.res \
 		$(GUILIB) /out:$(PROG).exe
-	$(CL) mongoose.c /GD $(LINK) /DLL /DEF:build\dll.def /out:$(PROG).dll
+#	$(CL) mongoose.c /GD $(LINK) /DLL /DEF:build\dll.def /out:$(PROG).dll
 
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0 -ggdb
