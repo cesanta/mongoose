@@ -133,7 +133,30 @@ enum mg_event {
   // Callback's return value is ignored.
   // ev_data contains NUL-terminated file name.
   MG_UPLOAD,
+
+  // Does the user want to handle authorization via callback?
+  // Return MG_AUTH_INTERNAL to handle authorization internally with .htpasswd files,
+  // Return MG_AUTH_CALLBACK to confirm the URL will be authorized via callback
+  // Return MG_AUTH_BYPASS to say the URL does not need authorization at all.
+  // MG_AUTH_BYPASS will also ignore the .htpasswd files.
+  // ev_data contains the URL to be authorized
+  MG_REQUIRES_AUTH,
+
+  // Need the ha1 hash of specified user. This event only is called if you
+  // return MG_AUTH_CALLBACK on the MG_REQUIRES_AUTH evet.
+  // Return the MD5 has of user:domain:password, or NULL if user is not
+  // authorized. The domain used in the hash must match the domain in the
+  // options array.
+  // ev_data contains the user name found in the Authenticate request header
+  MG_GET_AUTH_HASH,
 };
+
+// When the MG_REQUIRES_AUTH event is received, the user callback function
+// should return on of these values. 
+#define MG_AUTH_INTERNAL  ((void*)0)
+#define MG_AUTH_CALLBACK  ((void*)1)
+#define MG_AUTH_BYPASS    ((void*)2)
+#define MG_AUTH_DENY      ((void*)3)
 
 
 // Prototype for the user-defined function. Mongoose calls this function
@@ -377,3 +400,4 @@ void mg_md5(char buf[33], ...);
 #endif // __cplusplus
 
 #endif // MONGOOSE_HEADER_INCLUDED
+
