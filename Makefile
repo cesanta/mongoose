@@ -66,7 +66,7 @@ CYA   = e:/cyassl-2.0.0rc2
 DBG   = /DNDEBUG /O1
 CL    = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 /DNO_SSL_DL \
         /I$(MSVC)/include /DUSE_LUA /I$(LUA)
-GUILIB= user32.lib shell32.lib
+GUILIB= user32.lib shell32.lib comdlg32.lib
 LINK  = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
         /subsystem:windows ws2_32.lib advapi32.lib cyassl.lib lua.lib
 CYAFL = /c /I $(CYA)/include -I $(CYA)/include/openssl /I$(MSVC)/INCLUDE \
