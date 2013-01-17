@@ -448,7 +448,8 @@ struct socket {
   SOCKET sock;          // Listening socket
   union usa lsa;        // Local socket address
   union usa rsa;        // Remote socket address
-  int is_ssl;           // Is socket SSL-ed
+  unsigned is_ssl:1;    // Is port SSL-ed
+  unsigned ssl_redir:1; // Is port supposed to redirect everything to SSL port
 };
 
 // NOTE(lsm): this enum shoulds be in sync with the config_options below.
@@ -4331,11 +4332,13 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
   } else if (sscanf(vec->ptr, "%d%n", &port, &len) != 1 ||
              len <= 0 ||
              len > (int) vec->len ||
-             (vec->ptr[len] && vec->ptr[len] != 's' && vec->ptr[len] != ',')) {
+             (vec->ptr[len] && vec->ptr[len] != 's' &&
+              vec->ptr[len] != 'r' && vec->ptr[len] != ',')) {
     return 0;
   }
 
   so->is_ssl = vec->ptr[len] == 's';
+  so->ssl_redir = vec->ptr[len] == 'r';
 #if defined(USE_IPV6)
   so->lsa.sin6.sin6_family = AF_INET6;
   so->lsa.sin6.sin6_port = htons((uint16_t) port);
