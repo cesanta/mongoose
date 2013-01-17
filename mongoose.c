@@ -465,7 +465,7 @@ enum {
 static const char *config_options[] = {
   "C", "cgi_pattern", "**.cgi$|**.pl$|**.php$",
   "E", "cgi_environment", NULL,
-  "G", "put_delete_passwords_file", NULL,
+  "G", "put_delete_auth_file", NULL,
   "I", "cgi_interpreter", NULL,
   "P", "protect_uri", NULL,
   "R", "authentication_domain", "mydomain.com",
@@ -474,7 +474,7 @@ static const char *config_options[] = {
   "a", "access_log_file", NULL,
   "d", "enable_directory_listing", "yes",
   "e", "error_log_file", NULL,
-  "g", "global_passwords_file", NULL,
+  "g", "global_auth_file", NULL,
   "i", "index_files", "index.html,index.htm,index.cgi,index.shtml,index.php",
   "k", "enable_keep_alive", "no",
   "l", "access_control_list", NULL,
