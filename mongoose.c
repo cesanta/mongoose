@@ -1169,7 +1169,7 @@ static int mg_mkdir(const char *path, int mode) {
   mg_strlcpy(buf, path, sizeof(buf));
   change_slashes_to_backslashes(buf);
 
-  (void) MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, sizeof(wbuf));
+  (void) MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, ARRAY_SIZE(wbuf));
 
   return CreateDirectoryW(wbuf, NULL) ? 0 : -1;
 }
