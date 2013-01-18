@@ -124,8 +124,8 @@ mingw:
 	windres build\res.rc build\res.o
 	$(CC) $(MINGWOPT) mongoose.c -lws2_32 \
 		-shared -Wl,--out-implib=$(PROG).lib -o $(PROG).dll
-	$(CC) $(MINGWOPT) -build mongoose.c main.c build\res.o \
-	-lws2_32 -ladvapi32 -o $(PROG).exe
+	$(CC) $(MINGWOPT) mongoose.c main.c build\res.o \
+	-lws2_32 -ladvapi32 -lcomdlg32 -o $(PROG).exe
 
 # Build for Windows under Cygwin
 #CYGWINDBG= -DDEBUG -O0 -ggdb
