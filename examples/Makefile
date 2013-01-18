@@ -25,4 +25,4 @@ windows:
 	$(CL) /DUSE_WEBSOCKET websocket.c ../mongoose.c $(CLFLAGS)
 
 clean:
-	rm -rf hello hello.exe upload upload.exe post post.exe websocket websocket.exe chat chat.exe *.dSYM *.obj
+	rm -rf hello upload post websocket chat *.exe *.dSYM *.obj
