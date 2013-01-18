@@ -120,6 +120,24 @@ static const char *config_file_top_comment =
 "# To make a change, remove leading '#', modify option's value,\n"
 "# save this file and then restart Mongoose.\n\n";
 
+static const char *get_url_to_first_open_port(const struct mg_context *ctx) {
+  static char url[100];
+  const char *open_ports = mg_get_option(ctx, "listening_ports");
+  int a, b, c, d, port, n;
+
+  if (sscanf(open_ports, "%d.%d.%d.%d:%d%n", &a, &b, &c, &d, &port, &n) == 5) {
+    snprintf(url, sizeof(url), "%s://%d.%d.%d.%d:%d",
+             open_ports[n] == 's' ? "https" : "http", a, b, c, d, port);
+  } else if (sscanf(open_ports, "%d%n", &port, &n) == 1) {
+    snprintf(url, sizeof(url), "%s://localhost:%d",
+             open_ports[n] == 's' ? "https" : "http", port);
+  } else {
+    snprintf(url, sizeof(url), "%s", "http://localhost:8080");
+  }
+
+  return url;
+}
+
 static void create_config_file(const char *path) {
   const char **names, *value;
   FILE *fp;
@@ -299,9 +317,18 @@ static void start_mongoose(int argc, char *argv[]) {
 
 #ifdef _WIN32
 enum {
-  ID_TRAYICON = 100, ID_QUIT, ID_SETTINGS, ID_SEPARATOR, ID_INSTALL_SERVICE,
-  ID_REMOVE_SERVICE, ID_STATIC, ID_GROUP, ID_SAVE, ID_TIMER, ID_RESET_DEFAULTS,
-  ID_STATUS, ID_CONTROLS = 200, ID_FILE_BUTTONS_DELTA = 1000
+  ID_ICON = 100, ID_QUIT, ID_SETTINGS, ID_SEPARATOR, ID_INSTALL_SERVICE,
+  ID_REMOVE_SERVICE, ID_STATIC, ID_GROUP, ID_SAVE, ID_RESET_DEFAULTS,
+  ID_STATUS, ID_CONNECT,
+
+  // All dynamically created text boxes for options have IDs starting from
+  // ID_CONTROLS, incremented by one.
+  ID_CONTROLS = 200,
+
+  // Text boxes for files have "..." buttons to open file browser. These
+  // buttons have IDs that are ID_FILE_BUTTONS_DELTA higher than associated
+  // text box ID.
+  ID_FILE_BUTTONS_DELTA = 1000
 };
 static HICON hIcon;
 static SERVICE_STATUS ss;
@@ -405,7 +432,6 @@ static BOOL CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP) {
 
   switch (msg) {
     case WM_CLOSE:
-      KillTimer(hDlg, ID_TIMER);
       DestroyWindow(hDlg);
       break;
 
@@ -688,6 +714,11 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
         case ID_REMOVE_SERVICE:
           manage_service(LOWORD(wParam));
           break;
+        case ID_CONNECT:
+          printf("[%s]\n", get_url_to_first_open_port(ctx));
+          ShellExecute(NULL, "open", get_url_to_first_open_port(ctx),
+                       NULL, NULL, SW_SHOW);
+          break;
       }
       break;
     case WM_USER:
@@ -707,7 +738,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
           AppendMenu(hMenu, MF_STRING | (!service_installed ? MF_GRAYED : 0),
                      ID_REMOVE_SERVICE, "Deinstall service");
           AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
-          AppendMenu(hMenu, MF_STRING, ID_SETTINGS, "Settings");
+          AppendMenu(hMenu, MF_STRING, ID_CONNECT, "Start browser");
+          AppendMenu(hMenu, MF_STRING, ID_SETTINGS, "Edit Settings");
+          AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
           AppendMenu(hMenu, MF_STRING, ID_QUIT, "Exit");
           GetCursorPos(&pt);
           SetForegroundWindow(hWnd);
@@ -744,10 +777,10 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
   ShowWindow(hWnd, SW_HIDE);
 
   TrayIcon.cbSize = sizeof(TrayIcon);
-  TrayIcon.uID = ID_TRAYICON;
+  TrayIcon.uID = ID_ICON;
   TrayIcon.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
   TrayIcon.hIcon = hIcon = LoadImage(GetModuleHandle(NULL),
-                                     MAKEINTRESOURCE(ID_TRAYICON),
+                                     MAKEINTRESOURCE(ID_ICON),
                                      IMAGE_ICON, 16, 16, 0);
   TrayIcon.hWnd = hWnd;
   snprintf(TrayIcon.szTip, sizeof(TrayIcon.szTip), "%s", server_name);
