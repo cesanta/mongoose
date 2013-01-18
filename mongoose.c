@@ -486,7 +486,7 @@ struct mg_context {
   SSL_CTX *ssl_ctx;             // SSL context
   SSL_CTX *client_ssl_ctx;      // Client SSL context
   char *config[NUM_OPTIONS];    // Mongoose configuration parameters
-  mg_callback_t user_callback;  // User-defined callback function
+  struct mg_callbacks callbacks;       // User-defined callback struct
   void *user_data;              // User-defined data
 
   struct socket *listening_sockets;
@@ -523,25 +523,26 @@ struct mg_connection {
   int64_t last_throttle_bytes;// Bytes sent this second
 };
 
+#define MG_NEW_REQUEST(conn) (*conn->ctx->callbacks.new_request)(conn)
+#define MG_REQUEST_COMPLETE(conn,code) (*conn->ctx->callbacks.request_complete)(conn,code)
+#define MG_HTTP_ERROR(conn,code) (*conn->ctx->callbacks.http_error)(conn,code)
+#define MG_EVENT_LOG(conn,msg) (*conn->ctx->callbacks.event_log)(conn,msg)
+#define MG_INIT_SSL(ctx) (*ctx->callbacks.init_ssl)(ctx->ssl_ctx)
+#define MG_WEBSOCKET_CONNECT(conn) (*conn->ctx->callbacks.websocket_connect)(conn)
+#define MG_WEBSOCKET_READY(conn) (*conn->ctx->callbacks.websocket_ready)(conn)
+#define MG_WEBSOCKET_MESSAGE(conn) (*conn->ctx->callbacks.websocket_message)(conn)
+#define MG_WEBSOCKET_CLOSE(conn) (*conn->ctx->callbacks.websocket_close)(conn)
+#define MG_OPEN_FILE(conn,path,size) (*conn->ctx->callbacks.open_file)(conn, path, size)
+#define MG_INIT_LUA(conn,lstate) (*conn->ctx->callbacks.init_lua)(conn, lstate)
+#define MG_UPLOAD(conn,path) (*conn->ctx->callbacks.upload)(conn, path)
+
 const char **mg_get_valid_option_names(void) {
   return config_options;
 }
 
-static void *call_user(struct mg_connection *conn, enum mg_event event) {
-  if (conn != NULL && conn->ctx != NULL) {
-    conn->request_info.user_data = conn->ctx->user_data;
-  }
-  return conn == NULL || conn->ctx == NULL || conn->ctx->user_callback == NULL ?
-    NULL : conn->ctx->user_callback(event, conn);
-}
-
 static int is_file_in_memory(struct mg_connection *conn, const char *path,
                              struct file *filep) {
-  conn->request_info.ev_data = (void *) path;
-  if ((filep->membuf = call_user(conn, MG_OPEN_FILE)) != NULL) {
-    filep->size = (long) conn->request_info.ev_data;
-  }
-  return filep->membuf != NULL;
+  return (filep->membuf = MG_OPEN_FILE(conn, path, &filep->size)) != NULL;
 }
 
 static int is_file_opened(const struct file *filep) {
@@ -625,8 +626,7 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
   // Do not lock when getting the callback value, here and below.
   // I suppose this is fine, since function cannot disappear in the
   // same way string option can.
-  conn->request_info.ev_data = buf;
-  if (call_user(conn, MG_EVENT_LOG) == NULL) {
+  if (MG_EVENT_LOG(conn,buf) == 0) {
     fp = conn->ctx == NULL || conn->ctx->config[ERROR_LOG_FILE] == NULL ? NULL :
       fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
 
@@ -935,8 +935,7 @@ static void send_http_error(struct mg_connection *conn, int status,
   int len;
 
   conn->status_code = status;
-  conn->request_info.ev_data = (void *) (long) status;
-  if (call_user(conn, MG_HTTP_ERROR) == NULL) {
+  if (MG_HTTP_ERROR(conn, status) == 0) {
     buf[0] = '\0';
     len = 0;
 
@@ -3819,7 +3818,7 @@ static void read_websocket(struct mg_connection *conn) {
     }
 
     if (conn->content_len > 0) {
-      if (call_user(conn, MG_WEBSOCKET_MESSAGE) != NULL) {
+      if (MG_WEBSOCKET_MESSAGE(conn)) != NULL) {
         break;  // Callback signalled to exit
       }
       discard_len = conn->content_len > body_len ?
@@ -3844,13 +3843,13 @@ static void read_websocket(struct mg_connection *conn) {
 static void handle_websocket_request(struct mg_connection *conn) {
   if (strcmp(mg_get_header(conn, "Sec-WebSocket-Version"), "13") != 0) {
     send_http_error(conn, 426, "Upgrade Required", "%s", "Upgrade Required");
-  } else if (call_user(conn, MG_WEBSOCKET_CONNECT) != NULL) {
+  } else if (MG_WEBSOCKET_CONNECT(conn)) != NULL) {
     // Callback has returned non-NULL, do not proceed with handshake
   } else {
     send_websocket_handshake(conn);
-    call_user(conn, MG_WEBSOCKET_READY);
+    MG_WEBSOCKET_READY(conn);
     read_websocket(conn);
-    call_user(conn, MG_WEBSOCKET_CLOSE);
+    MG_WEBSOCKET_CLOSE(conn);
   }
 }
 
@@ -4058,8 +4057,7 @@ static void handle_lsp_request(struct mg_connection *conn, const char *path,
     mg_printf(conn, "%s", "HTTP/1.1 200 OK\r\n"
               "Content-Type: text/html\r\nConnection: close\r\n\r\n");
     prepare_lua_environment(conn, L);
-    conn->request_info.ev_data = L;
-    call_user(conn, MG_INIT_LUA);
+    MG_INIT_LUA(conn,L)
     lsp(conn, filep->membuf == NULL ? p : filep->membuf, filep->size, L);
   }
 
@@ -4157,8 +4155,7 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
           // Found boundary, that's the end of file data.
           (void) fwrite(buf, 1, i, fp);
           num_uploaded_files++;
-          conn->request_info.ev_data = (void *) path;
-          call_user(conn, MG_UPLOAD);
+          MG_UPLOAD(conn, path);
           memmove(buf, &buf[i + bl], len - (i + bl));
           len -= i + bl;
           break;
@@ -4208,7 +4205,7 @@ static void handle_request(struct mg_connection *conn) {
   } else if (is_websocket_request(conn)) {
     handle_websocket_request(conn);
 #endif
-  } else if (call_user(conn, MG_NEW_REQUEST) != NULL) {
+  } else if (MG_NEW_REQUEST(conn) != 0) {
     // Do nothing, callback has served the request
   } else if (!strcmp(ri->request_method, "OPTIONS")) {
     send_options(conn);
@@ -4566,9 +4563,7 @@ static int set_ssl_option(struct mg_context *ctx) {
 
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
-  conn = fc(ctx);
-  conn->request_info.ev_data = ctx->ssl_ctx;
-  if (call_user(conn, MG_INIT_SSL) == NULL &&
+  if (MG_INIT_SSL(ctx) == 0 &&
       (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0 ||
        SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, SSL_FILETYPE_PEM) == 0)) {
     cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
@@ -4826,8 +4821,7 @@ static void process_new_connection(struct mg_connection *conn) {
       }
       conn->birth_time = time(NULL);
       handle_request(conn);
-      conn->request_info.ev_data = (void *) conn->status_code;
-      call_user(conn, MG_REQUEST_COMPLETE);
+      MG_REQUEST_COMPLETE(conn, conn->status_code);
       log_access(conn);
     }
     if (ri->remote_user != NULL) {
@@ -5095,7 +5089,21 @@ void mg_stop(struct mg_context *ctx) {
 #endif // _WIN32
 }
 
-struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
+static int dummy_new_request(struct mg_connection *conn) { return 0; }
+static void dummy_request_complete(struct mg_connection *conn, int status) {}
+static int dummy_http_error(struct mg_connection *conn, int status) { return 0; }
+static int dummy_event_log(struct mg_connection *conn, const char *msg) { return 0; }
+static int dummy_init_ssl(SSL_CTX *ssl_context) { return 0; }
+static int dummy_websocket_connect(struct mg_connection *conn) { return 0; }
+static void dummy_websocket_ready(struct mg_connection *conn) {}
+static int dummy_websocket_message(struct mg_connection *conn) {}
+static void dummy_websocket_close(struct mg_connection *conn) {}
+static const char *dummy_open_file(struct mg_connection *conn,
+                   const char *filename, long long *data_len) { return NULL;}
+static void dummy_init_lua(struct mg_connection *conn, struct lua_State *L) {}
+static void dummy_upload(struct mg_connection *conn, const char *filename) {}
+
+struct mg_context *mg_start(struct mg_callbacks *callbacks, void *user_data,
                             const char **options) {
   struct mg_context *ctx;
   const char *name, *value, *default_value;
@@ -5112,8 +5120,20 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
   if ((ctx = (struct mg_context *) calloc(1, sizeof(*ctx))) == NULL) {
     return NULL;
   }
-  ctx->user_callback = user_callback;
   ctx->user_data = user_data;
+  ctx->callbacks = *callbacks;
+  ctx->callbacks.new_request = callbacks->new_request ? callbacks->new_request : dummy_new_request;
+  ctx->callbacks.request_complete = callbacks->request_complete ? callbacks->request_complete : dummy_request_complete;
+  ctx->callbacks.http_error = callbacks->http_error ? callbacks->http_error : dummy_http_error;
+  ctx->callbacks.event_log = callbacks->event_log ? callbacks->event_log : dummy_event_log;
+  ctx->callbacks.init_ssl = callbacks->init_ssl ? callbacks->init_ssl : dummy_init_ssl;
+  ctx->callbacks.websocket_connect = callbacks->websocket_connect ? callbacks->websocket_connect : dummy_websocket_connect;
+  ctx->callbacks.websocket_ready = callbacks->websocket_ready ? callbacks->websocket_ready : dummy_websocket_ready;
+  ctx->callbacks.websocket_message = callbacks->websocket_message ? callbacks->websocket_message : dummy_websocket_message;
+  ctx->callbacks.websocket_close = callbacks->websocket_close ? callbacks->websocket_close : dummy_websocket_close;
+  ctx->callbacks.open_file = callbacks->open_file ? callbacks->open_file : dummy_open_file;
+  ctx->callbacks.init_lua = callbacks->init_lua ? callbacks->init_lua : dummy_init_lua;
+  ctx->callbacks.upload = callbacks->upload ? callbacks->upload : dummy_upload;
 
   while (options && (name = *options++) != NULL) {
     if ((i = get_option_index(name)) == -1) {
