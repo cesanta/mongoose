@@ -2243,34 +2243,6 @@ void mg_md5(char buf[33], ...) {
   bin2str(buf, hash, sizeof(hash));
 }
 
-// Check the user's password, return 1 if OK
-static int check_password(const char *method, const char *ha1, const char *uri,
-                          const char *nonce, const char *nc, const char *cnonce,
-                          const char *qop, const char *response) {
-  char ha2[32 + 1], expected_response[32 + 1];
-
-  // Some of the parameters may be NULL
-  if (method == NULL || nonce == NULL || nc == NULL || cnonce == NULL ||
-      qop == NULL || response == NULL) {
-    return 0;
-  }
-
-  // NOTE(lsm): due to a bug in MSIE, we do not compare the URI
-  // TODO(lsm): check for authentication timeout
-  if (// strcmp(dig->uri, c->ouri) != 0 ||
-      strlen(response) != 32
-      // || now - strtoul(dig->nonce, NULL, 10) > 3600
-      ) {
-    return 0;
-  }
-
-  mg_md5(ha2, method, ":", uri, NULL);
-  mg_md5(expected_response, ha1, ":", nonce, ":", nc,
-      ":", cnonce, ":", qop, ":", ha2, NULL);
-
-  return mg_strcasecmp(response, expected_response) == 0;
-}
-
 // Use the global passwords file, if specified by auth_gpass option,
 // or search for .htpasswd in the requested directory.
 static void open_auth_file(struct mg_connection *conn, const char *path,
@@ -2302,6 +2274,32 @@ static void open_auth_file(struct mg_connection *conn, const char *path,
 struct ah {
   char *user, *uri, *cnonce, *response, *qop, *nc, *nonce;
 };
+
+// Check the user's password, return 1 if OK
+static int check_password(const char *method, const char *ha1, struct ah *ah) {
+  char ha2[32 + 1], expected_response[32 + 1];
+
+  // Some of the parameters may be NULL
+  if (ah == NULL || method == NULL || ah->nonce == NULL || ah->nc == NULL ||
+      ah->cnonce == NULL || ah->qop == NULL || ah->response == NULL) {
+    return 0;
+  }
+
+  // NOTE(lsm): due to a bug in MSIE, we do not compare the URI
+  // TODO(lsm): check for authentication timeout
+  if (// strcmp(dig->uri, c->ouri) != 0 ||
+      strlen(ah->response) != 32
+      // || now - strtoul(dig->nonce, NULL, 10) > 3600
+      ) {
+    return 0;
+  }
+
+  mg_md5(ha2, method, ":", ah->uri, NULL);
+  mg_md5(expected_response, ha1, ":", ah->nonce, ":", ah->nc,
+      ":", ah->cnonce, ":", ah->qop, ":", ha2, NULL);
+
+  return mg_strcasecmp(ah->response, expected_response) == 0;
+}
 
 // Return 1 on success. Always initializes the ah structure.
 static int parse_auth_header(struct mg_connection *conn, char *buf,
@@ -2403,11 +2401,23 @@ static int authorize(struct mg_connection *conn, struct file *filep) {
 
     if (!strcmp(ah.user, f_user) &&
         !strcmp(conn->ctx->config[AUTHENTICATION_DOMAIN], f_domain))
-      return check_password(conn->request_info.request_method, ha1, ah.uri,
-                            ah.nonce, ah.nc, ah.cnonce, ah.qop, ah.response);
+      return check_password(conn->request_info.request_method, ha1, &ah);
   }
 
   return 0;
+}
+
+static int authorize_via_callback(struct mg_connection *conn) {
+  struct ah ah;
+  char buf[MG_BUF_LEN], *ha1;
+
+  if (!parse_auth_header(conn, buf, sizeof(buf), &ah)) {
+    return 0;
+  }
+  conn->request_info.ev_data = ah.user;
+  ha1 = call_user(conn, MG_GET_AUTH_HASH);
+
+  return check_password(conn->request_info.request_method, ha1, &ah);
 }
 
 // Return 1 if request is authorised, 0 otherwise.
@@ -2417,6 +2427,7 @@ static int check_authorization(struct mg_connection *conn, const char *path) {
   const char *list;
   struct file file = STRUCT_FILE_INITIALIZER;
   int authorized = 1;
+  void *callback_auth;
 
   list = conn->ctx->config[PROTECT_URI];
   while ((list = next_option(list, &uri_vec, &filename_vec)) != NULL) {
@@ -2431,7 +2442,15 @@ static int check_authorization(struct mg_connection *conn, const char *path) {
   }
 
   if (!is_file_opened(&file)) {
-    open_auth_file(conn, path, &file);
+    if ((callback_auth = call_user(conn, MG_REQUIRES_AUTH)) == MG_AUTH_CALLBACK) {
+      return authorize_via_callback(conn);
+    } else if (callback_auth == MG_AUTH_BYPASS) {
+      return 1;
+    } else if (callback_auth == MG_AUTH_DENY) {
+      return -1;
+    } else {
+      open_auth_file(conn, path, &file);
+    }
   }
 
   if (is_file_opened(&file)) {
@@ -4224,7 +4243,7 @@ static int is_put_or_delete_request(const struct mg_connection *conn) {
 static void handle_request(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
   char path[PATH_MAX];
-  int uri_len;
+  int uri_len, temp;
   struct file file = STRUCT_FILE_INITIALIZER;
 
   if ((conn->request_info.query_string = strchr(ri->uri, '?')) != NULL) {
@@ -4238,8 +4257,12 @@ static void handle_request(struct mg_connection *conn) {
                                 get_remote_ip(conn), ri->uri);
 
   DEBUG_TRACE(("%s", ri->uri));
-  if (!is_put_or_delete_request(conn) && !check_authorization(conn, path)) {
-    send_authorization_request(conn);
+  if (!is_put_or_delete_request(conn) && 
+      (temp = check_authorization(conn, path)) != 1) {
+    if (temp == -1) 
+      send_http_error(conn, 403, "Access Denied", "Access Denied");
+    else
+      send_authorization_request(conn);
 #if defined(USE_WEBSOCKET)
   } else if (is_websocket_request(conn)) {
     handle_websocket_request(conn);
@@ -5201,3 +5224,4 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
 
   return ctx;
 }
+
