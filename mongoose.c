@@ -501,6 +501,7 @@ struct mg_context {
 
   struct socket *listening_sockets;
   int num_listening_sockets;
+  int ssl_listener;          // Index of the first SSL listening socket, or -1
 
   volatile int num_threads;  // Number of threads
   pthread_mutex_t mutex;     // Protects (max|num)_threads
@@ -4223,7 +4224,7 @@ static int is_put_or_delete_request(const struct mg_connection *conn) {
 // a directory, or call embedded function, etcetera.
 static void handle_request(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
-  char path[PATH_MAX];
+  char path[PATH_MAX], local_ip[40];
   int uri_len;
   struct file file = STRUCT_FILE_INITIALIZER;
 
@@ -4238,7 +4239,14 @@ static void handle_request(struct mg_connection *conn) {
                                 get_remote_ip(conn), ri->uri);
 
   DEBUG_TRACE(("%s", ri->uri));
-  if (!is_put_or_delete_request(conn) && !check_authorization(conn, path)) {
+  if (!conn->client.is_ssl && conn->client.ssl_redir &&
+      conn->ctx->ssl_listener > -1) {
+    sockaddr_to_string(local_ip, sizeof(local_ip), &conn->client.lsa);
+    mg_printf(conn, "HTTP/1.1 302 Found\r\nLocation: https://%s:%d%s\r\n\r\n",
+              local_ip, (int) ntohs(conn->ctx->listening_sockets[conn->ctx->
+                                    ssl_listener].lsa.sin.sin_port), ri->uri);
+  } else if (!is_put_or_delete_request(conn) &&
+             !check_authorization(conn, path)) {
     send_authorization_request(conn);
 #if defined(USE_WEBSOCKET)
   } else if (is_websocket_request(conn)) {
@@ -4356,6 +4364,7 @@ static int set_ports_option(struct mg_context *ctx) {
   struct vec vec;
   struct socket so;
 
+  ctx->ssl_listener = -1;
   while (success && (list = next_option(list, &vec, NULL)) != NULL) {
     if (!parse_port_string(&vec, &so)) {
       cry(fc(ctx), "%s: %.*s: invalid port spec. Expecting list of: %s",
@@ -4393,6 +4402,9 @@ static int set_ports_option(struct mg_context *ctx) {
                                        (ctx->num_listening_sockets + 1) *
                                        sizeof(ctx->listening_sockets[0]));
       ctx->listening_sockets[ctx->num_listening_sockets] = so;
+      if (ctx->ssl_listener == -1 && so.is_ssl) {
+        ctx->ssl_listener = ctx->num_listening_sockets;
+      }
       ctx->num_listening_sockets++;
     }
   }
@@ -4987,7 +4999,6 @@ static void accept_new_connection(const struct socket *listener,
   int allowed;
 
   len = sizeof(accepted.rsa);
-  accepted.lsa = listener->lsa;
   accepted.sock = accept(listener->sock, &accepted.rsa.sa, &len);
   if (accepted.sock != INVALID_SOCKET) {
     allowed = check_acl(ctx, ntohl(* (uint32_t *) &accepted.rsa.sin.sin_addr));
@@ -4995,6 +5006,8 @@ static void accept_new_connection(const struct socket *listener,
       // Put accepted socket structure into the queue
       DEBUG_TRACE(("accepted socket %d", accepted.sock));
       accepted.is_ssl = listener->is_ssl;
+      accepted.ssl_redir = listener->ssl_redir;
+      getsockname(accepted.sock, &accepted.lsa.sa, &len);
       produce_socket(ctx, &accepted);
     } else {
       sockaddr_to_string(src_addr, sizeof(src_addr), &accepted.rsa);
