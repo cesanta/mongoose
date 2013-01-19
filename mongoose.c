@@ -501,7 +501,6 @@ struct mg_context {
 
   struct socket *listening_sockets;
   int num_listening_sockets;
-  int ssl_listener;          // Index of the first SSL listening socket, or -1
 
   volatile int num_threads;  // Number of threads
   pthread_mutex_t mutex;     // Protects (max|num)_threads
@@ -4218,6 +4217,14 @@ static int is_put_or_delete_request(const struct mg_connection *conn) {
   return s != NULL && (!strcmp(s, "PUT") || !strcmp(s, "DELETE"));
 }
 
+static int get_first_ssl_listener_index(const struct mg_context *ctx) {
+  int i, index = -1;
+  for (i = 0; i < ctx->num_listening_sockets; i++) {
+    index = ctx->listening_sockets[i].is_ssl ? i : -1;
+  }
+  return index;
+}
+
 // This is the heart of the Mongoose's logic.
 // This function is called when the request is read, parsed and validated,
 // and Mongoose must decide what action to take: serve a file, or
@@ -4225,7 +4232,7 @@ static int is_put_or_delete_request(const struct mg_connection *conn) {
 static void handle_request(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
   char path[PATH_MAX], local_ip[40];
-  int uri_len;
+  int uri_len, ssl_index;
   struct file file = STRUCT_FILE_INITIALIZER;
 
   if ((conn->request_info.query_string = strchr(ri->uri, '?')) != NULL) {
@@ -4240,11 +4247,11 @@ static void handle_request(struct mg_connection *conn) {
 
   DEBUG_TRACE(("%s", ri->uri));
   if (!conn->client.is_ssl && conn->client.ssl_redir &&
-      conn->ctx->ssl_listener > -1) {
+      (ssl_index = get_first_ssl_listener_index(conn->ctx)) > -1) {
     sockaddr_to_string(local_ip, sizeof(local_ip), &conn->client.lsa);
     mg_printf(conn, "HTTP/1.1 302 Found\r\nLocation: https://%s:%d%s\r\n\r\n",
-              local_ip, (int) ntohs(conn->ctx->listening_sockets[conn->ctx->
-                                    ssl_listener].lsa.sin.sin_port), ri->uri);
+              local_ip, (int) ntohs(conn->ctx->listening_sockets[
+                                    ssl_index].lsa.sin.sin_port), ri->uri);
   } else if (!is_put_or_delete_request(conn) &&
              !check_authorization(conn, path)) {
     send_authorization_request(conn);
@@ -4364,7 +4371,6 @@ static int set_ports_option(struct mg_context *ctx) {
   struct vec vec;
   struct socket so;
 
-  ctx->ssl_listener = -1;
   while (success && (list = next_option(list, &vec, NULL)) != NULL) {
     if (!parse_port_string(&vec, &so)) {
       cry(fc(ctx), "%s: %.*s: invalid port spec. Expecting list of: %s",
@@ -4402,9 +4408,6 @@ static int set_ports_option(struct mg_context *ctx) {
                                        (ctx->num_listening_sockets + 1) *
                                        sizeof(ctx->listening_sockets[0]));
       ctx->listening_sockets[ctx->num_listening_sockets] = so;
-      if (ctx->ssl_listener == -1 && so.is_ssl) {
-        ctx->ssl_listener = ctx->num_listening_sockets;
-      }
       ctx->num_listening_sockets++;
     }
   }
