@@ -4225,13 +4225,28 @@ static int get_first_ssl_listener_index(const struct mg_context *ctx) {
   return index;
 }
 
+static void redirect_to_https_port(struct mg_connection *conn, int ssl_index) {
+  char host[1025];
+  const char *host_header;
+
+  if ((host_header = mg_get_header(conn, "Host")) == NULL ||
+      sscanf(host_header, "%1024[^:]", host) == 0) {
+    // Cannot get host from the Host: header. Fallback to our IP address.
+    sockaddr_to_string(host, sizeof(host), &conn->client.lsa);
+  }
+
+  mg_printf(conn, "HTTP/1.1 302 Found\r\nLocation: https://%s:%d%s\r\n\r\n",
+            host, (int) ntohs(conn->ctx->listening_sockets[ssl_index].
+                              lsa.sin.sin_port), conn->request_info.uri);
+}
+
 // This is the heart of the Mongoose's logic.
 // This function is called when the request is read, parsed and validated,
 // and Mongoose must decide what action to take: serve a file, or
 // a directory, or call embedded function, etcetera.
 static void handle_request(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
-  char path[PATH_MAX], local_ip[40];
+  char path[PATH_MAX];
   int uri_len, ssl_index;
   struct file file = STRUCT_FILE_INITIALIZER;
 
@@ -4248,10 +4263,7 @@ static void handle_request(struct mg_connection *conn) {
   DEBUG_TRACE(("%s", ri->uri));
   if (!conn->client.is_ssl && conn->client.ssl_redir &&
       (ssl_index = get_first_ssl_listener_index(conn->ctx)) > -1) {
-    sockaddr_to_string(local_ip, sizeof(local_ip), &conn->client.lsa);
-    mg_printf(conn, "HTTP/1.1 302 Found\r\nLocation: https://%s:%d%s\r\n\r\n",
-              local_ip, (int) ntohs(conn->ctx->listening_sockets[
-                                    ssl_index].lsa.sin.sin_port), ri->uri);
+    redirect_to_https_port(conn, ssl_index);
   } else if (!is_put_or_delete_request(conn) &&
              !check_authorization(conn, path)) {
     send_authorization_request(conn);
