@@ -105,9 +105,6 @@ static void show_usage_and_exit(void) {
     fprintf(stderr, "  -%s %s (default: \"%s\")\n",
             names[i], names[i + 1], names[i + 2] == NULL ? "" : names[i + 2]);
   }
-  fprintf(stderr, "\nSee  http://code.google.com/p/mongoose/wiki/MongooseManual"
-          " for more details.\n");
-  fprintf(stderr, "Example:\n  mongoose -s cert.pem -p 80,443s -d no\n");
   exit(EXIT_FAILURE);
 }
 
