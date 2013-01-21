@@ -1,3 +1,25 @@
+// Copyright (c) 2004-2013 Sergey Lyubka
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Unit test for the mongoose web server. Tests embedded API.
+
 #define USE_WEBSOCKET
 #include "mongoose.c"
 
@@ -7,7 +29,7 @@
 } while (0)
 #define ASSERT(expr) do { if (!(expr)) FATAL(#expr, __LINE__); } while (0)
 
-#define UNUSED_PORT "33796"
+#define LISTENING_ADDR "127.0.0.1:56789"
 
 static void test_parse_http_request() {
   struct mg_request_info ri;
@@ -156,7 +178,7 @@ static void *event_handler(enum mg_event event, struct mg_connection *conn) {
 static void test_mg_fetch(void) {
   static const char *options[] = {
     "document_root", ".",
-    "listening_ports", UNUSED_PORT,
+    "listening_ports", LISTENING_ADDR,
     NULL,
   };
   char buf[2000], buf2[2000];
@@ -171,18 +193,18 @@ static void test_mg_fetch(void) {
 
   // Failed fetch, pass invalid URL
   ASSERT(mg_fetch(ctx, "localhost", tmp_file, buf, sizeof(buf), &ri) == NULL);
-  ASSERT(mg_fetch(ctx, "localhost:" UNUSED_PORT, tmp_file,
+  ASSERT(mg_fetch(ctx, LISTENING_ADDR, tmp_file,
                   buf, sizeof(buf), &ri) == NULL);
   ASSERT(mg_fetch(ctx, "http://$$$.$$$", tmp_file,
                   buf, sizeof(buf), &ri) == NULL);
 
   // Failed fetch, pass invalid file name
-  ASSERT(mg_fetch(ctx, "http://localhost:" UNUSED_PORT "/data",
+  ASSERT(mg_fetch(ctx, "http://" LISTENING_ADDR "/data",
                   "/this/file/must/not/exist/ever",
                   buf, sizeof(buf), &ri) == NULL);
 
   // Successful fetch
-  ASSERT((fp = mg_fetch(ctx, "http://localhost:" UNUSED_PORT "/data",
+  ASSERT((fp = mg_fetch(ctx, "http://" LISTENING_ADDR "/data",
                         tmp_file, buf, sizeof(buf), &ri)) != NULL);
   ASSERT(ri.num_headers == 2);
   ASSERT(!strcmp(ri.request_method, "HTTP/1.1"));
@@ -195,20 +217,20 @@ static void test_mg_fetch(void) {
   fclose(fp);
 
   // Fetch big file, mongoose.c
-  ASSERT((fp = mg_fetch(ctx, "http://localhost:" UNUSED_PORT "/mongoose.c",
+  ASSERT((fp = mg_fetch(ctx, "http://" LISTENING_ADDR "/mongoose.c",
                         tmp_file, buf, sizeof(buf), &ri)) != NULL);
   ASSERT(mg_stat(fc(ctx), "mongoose.c", &file));
   ASSERT(file.size == ftell(fp));
   ASSERT(!strcmp(ri.request_method, "HTTP/1.1"));
 
   // Fetch nonexistent file, /blah
-  ASSERT((fp = mg_fetch(ctx, "http://localhost:" UNUSED_PORT "/boo",
+  ASSERT((fp = mg_fetch(ctx, "http://" LISTENING_ADDR "/boo",
                         tmp_file, buf, sizeof(buf), &ri)) != NULL);
   ASSERT(!mg_strcasecmp(ri.uri, "404"));
   fclose(fp);
 
   // Fetch existing inmemory file
-  ASSERT((fp = mg_fetch(ctx, "http://localhost:" UNUSED_PORT "/blah",
+  ASSERT((fp = mg_fetch(ctx, "http://" LISTENING_ADDR "/blah",
                         tmp_file, buf, sizeof(buf), &ri)) != NULL);
   ASSERT(!mg_strcasecmp(ri.uri, "200"));
   n = ftell(fp);
@@ -347,12 +369,13 @@ static void *user_data_tester(enum mg_event event, struct mg_connection *conn) {
 }
 
 static void test_user_data(void) {
-  static const char *options[] = {"listening_ports", UNUSED_PORT, NULL};
+  static const char *options[] = {"listening_ports", LISTENING_ADDR, NULL};
   struct mg_context *ctx;
 
   ASSERT((ctx = mg_start(user_data_tester, (void *) 123, options)) != NULL);
   ASSERT(ctx->user_data == (void *) 123);
   call_user(fc(ctx), MG_NEW_REQUEST);
+  mg_stop(ctx);
 }
 
 static void test_mg_stat(void) {
@@ -380,7 +403,7 @@ static void test_skip_quoted(void) {
 #endif
 }
 
-int main(void) {
+int __cdecl main(void) {
   test_base64_encode();
   test_match_prefix();
   test_remove_double_dots();
