@@ -28,7 +28,7 @@ all:
 LUA         = lua-5.2.1/src
 LUA_FLAGS   = -DUSE_LUA -I$(LUA) -L$(LUA) -llua -lm
 
-CFLAGS      = -std=c99 -O2 -W -Wall -pedantic $(COPT)
+CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread $(COPT)
 LIB         = lib$(PROG).so$(MONGOOSE_LIB_SUFFIX)
 
 # Make sure that the compiler flags come last in the compilation string.
@@ -36,20 +36,18 @@ LIB         = lib$(PROG).so$(MONGOOSE_LIB_SUFFIX)
 # "-Wl,--as-needed" turned on by default  in cc command.
 # Also, this is turned in many other distros in static linkage builds.
 linux:
-	$(CC) mongoose.c main.c -o $(PROG) -ldl -pthread $(CFLAGS)
+	$(CC) mongoose.c main.c -o $(PROG) -ldl $(CFLAGS)
 
+mac: bsd
 bsd:
-	$(CC) mongoose.c main.c -pthread -o $(PROG) $(CFLAGS)
-
-mac:
-	$(CC) mongoose.c main.c -pthread $(CFLAGS) -o $(PROG)
-
-cocoa:
-	$(CC) mongoose.c main.c -DUSE_COCOA -pthread $(CFLAGS) -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
-	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 Mongoose $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create Mongoose_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
+	$(CC) mongoose.c main.c -o $(PROG) $(CFLAGS)
 
 solaris:
-	$(CC) mongoose.c main.c -pthread -lnsl -lsocket -o $(PROG) $(CFLAGS)
+	$(CC) mongoose.c main.c -lnsl -lsocket -o $(PROG) $(CFLAGS)
+
+cocoa:
+	$(CC) mongoose.c main.c -DUSE_COCOA $(CFLAGS) -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
+	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 Mongoose $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create Mongoose_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
 
 
 ##########################################################################
