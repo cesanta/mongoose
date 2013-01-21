@@ -4191,7 +4191,8 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
         if (!memcmp(&buf[i], "\r\n--", 4) &&
             !memcmp(&buf[i + 4], boundary, boundary_len)) {
           // Found boundary, that's the end of file data.
-          (void) fwrite(buf, 1, i, fp);
+          fwrite(buf, 1, i, fp);
+          fflush(fp);
           num_uploaded_files++;
           conn->request_info.ev_data = (void *) path;
           call_user(conn, MG_UPLOAD);
