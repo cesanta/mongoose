@@ -804,7 +804,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
 - (void) openBrowser {
   [[NSWorkspace sharedWorkspace]
     openURL:[NSURL URLWithString:
-      [NSString stringWithUTF8String:"http://www.yahoo.com"]]];
+      [NSString stringWithUTF8String:get_url_to_first_open_port(ctx)]]];
 }
 - (void) editConfig {
   create_config_file(config_file);
