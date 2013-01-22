@@ -49,6 +49,9 @@ cocoa:
 	$(CC) mongoose.c main.c -DUSE_COCOA $(CFLAGS) -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
 	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 Mongoose $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create Mongoose_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
 
+unix_unit_test:
+	$(CC) -I. test/unit_test.c -o unit_test $(CFLAGS)
+	./unit_test
 
 ##########################################################################
 ###            WINDOWS build: Using Visual Studio or Mingw
@@ -63,10 +66,10 @@ CYA   = e:/cyassl-2.0.0rc2
 #DBG  = /Zi /DDEBUG /Od
 DBG   = /DNDEBUG /O1
 CL    = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 /DNO_SSL_DL \
-        /I$(MSVC)/include /DUSE_LUA /I$(LUA)
-GUILIB= user32.lib shell32.lib comdlg32.lib
-LINK  = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
-        /subsystem:windows ws2_32.lib advapi32.lib cyassl.lib lua.lib
+        /I$(MSVC)/include /DUSE_LUA /I$(LUA) /I. /GA
+MSLIB = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
+        user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib \
+        cyassl.lib lua.lib
 CYAFL = /c /I $(CYA)/include -I $(CYA)/include/openssl /I$(MSVC)/INCLUDE \
         /I $(CYA)/ctaocrypt/include /D _LIB /D OPENSSL_EXTRA
 
@@ -107,10 +110,14 @@ lua.lib:
 	$(CL) /c /Fo$(LUA)/ $(LUA_SOURCES)
 	$(MSVC)/bin/lib $(LUA_SOURCES:%.c=%.obj) /out:$@
 
+windows_unit_test: cyassl.lib lua.lib
+	$(CL) test/unit_test.c $(MSLIB) /out:unit_test.exe
+	./unit_test.exe
+
 windows: cyassl.lib lua.lib
 	$(MSVC)/bin/rc build\res.rc
-	$(CL) /Ibuild main.c mongoose.c /GA $(LINK) build\res.res \
-		$(GUILIB) /out:$(PROG).exe
+	$(CL) main.c mongoose.c $(MSLIB) build\res.res \
+	/out:$(PROG).exe /subsystem:windows
 #	$(CL) mongoose.c /GD $(LINK) /DLL /DEF:build\dll.def /out:$(PROG).dll
 
 # Build for Windows under MinGW
