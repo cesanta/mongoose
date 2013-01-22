@@ -456,15 +456,8 @@ sub do_PUT_test {
 }
 
 sub do_unit_test {
-  my $cmd = "cc -g -W -Wall -o $unit_test_exe $root/unit_test.c -I. ".
-    "-pthread -DNO_SSL ";
-  if (on_windows()) {
-    $cmd = "cl $root/embed.c mongoose.c /I. /nologo /DNO_SSL ".
-    "/DLISTENING_PORT=\\\"$port\\\" /link /out:$embed_exe.exe ws2_32.lib ";
-  }
-  print $cmd, "\n";
-  system($cmd) == 0 or fail("Cannot compile unit test");
-  system($unit_test_exe) == 0 or fail("Unit test failed!");
+  my $target = on_windows() ? 'windows_unit_test' : 'unix_unit_test';
+  system("make $target") == 0 or fail("Unit test failed!");
 }
 
 sub do_embedded_test {
