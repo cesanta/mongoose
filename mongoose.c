@@ -4262,7 +4262,9 @@ static void handle_request(struct mg_connection *conn) {
                                 get_remote_ip(conn), ri->uri);
 
   DEBUG_TRACE(("%s", ri->uri));
-  if (!conn->client.is_ssl && conn->client.ssl_redir &&
+  if (call_user(conn, MG_NEW_REQUEST) != NULL) {
+    // Do nothing, callback has served the request
+  } else if (!conn->client.is_ssl && conn->client.ssl_redir &&
       (ssl_index = get_first_ssl_listener_index(conn->ctx)) > -1) {
     redirect_to_https_port(conn, ssl_index);
   } else if (!is_put_or_delete_request(conn) &&
@@ -4272,8 +4274,6 @@ static void handle_request(struct mg_connection *conn) {
   } else if (is_websocket_request(conn)) {
     handle_websocket_request(conn);
 #endif
-  } else if (call_user(conn, MG_NEW_REQUEST) != NULL) {
-    // Do nothing, callback has served the request
   } else if (!strcmp(ri->request_method, "OPTIONS")) {
     send_options(conn);
   } else if (conn->ctx->config[DOCUMENT_ROOT] == NULL) {
