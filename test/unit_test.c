@@ -175,12 +175,19 @@ static void *event_handler(enum mg_event event, struct mg_connection *conn) {
   return NULL;
 }
 
+static const char *OPTIONS[] = {
+  "document_root", ".",
+  "listening_ports", LISTENING_ADDR,
+  NULL,
+};
+
+static void test_mg_upload(void) {
+  struct mg_context *ctx;
+  ASSERT((ctx = mg_start(event_handler, NULL, OPTIONS)) != NULL);
+  mg_stop(ctx);
+}
+
 static void test_mg_fetch(void) {
-  static const char *options[] = {
-    "document_root", ".",
-    "listening_ports", LISTENING_ADDR,
-    NULL,
-  };
   char buf[2000], buf2[2000];
   int n, length;
   struct mg_context *ctx;
@@ -189,7 +196,7 @@ static void test_mg_fetch(void) {
   struct file file;
   FILE *fp;
 
-  ASSERT((ctx = mg_start(event_handler, NULL, options)) != NULL);
+  ASSERT((ctx = mg_start(event_handler, NULL, OPTIONS)) != NULL);
 
   // Failed fetch, pass invalid URL
   ASSERT(mg_fetch(ctx, "localhost", tmp_file, buf, sizeof(buf), &ri) == NULL);
@@ -369,10 +376,9 @@ static void *user_data_tester(enum mg_event event, struct mg_connection *conn) {
 }
 
 static void test_user_data(void) {
-  static const char *options[] = {"listening_ports", LISTENING_ADDR, NULL};
   struct mg_context *ctx;
 
-  ASSERT((ctx = mg_start(user_data_tester, (void *) 123, options)) != NULL);
+  ASSERT((ctx = mg_start(user_data_tester, (void *) 123, OPTIONS)) != NULL);
   ASSERT(ctx->user_data == (void *) 123);
   call_user(fc(ctx), MG_NEW_REQUEST);
   mg_stop(ctx);
@@ -380,8 +386,7 @@ static void test_user_data(void) {
 
 static void test_mg_stat(void) {
   static struct mg_context ctx;
-  struct file file;
-  memset(&file, 'A', sizeof(file));
+  struct file file = STRUCT_FILE_INITIALIZER;
   ASSERT(!mg_stat(fc(&ctx), " does not exist ", &file));
 }
 
@@ -415,6 +420,7 @@ int __cdecl main(void) {
   test_next_option();
   test_user_data();
   test_mg_stat();
+  test_mg_upload();
 #ifdef USE_LUA
   test_lua();
 #endif
