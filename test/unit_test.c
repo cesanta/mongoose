@@ -21,6 +21,7 @@
 // Unit test for the mongoose web server. Tests embedded API.
 
 #define USE_WEBSOCKET
+#define USE_LUA
 #include "mongoose.c"
 
 #define FATAL(str, line) do {                     \
@@ -29,24 +30,35 @@
 } while (0)
 #define ASSERT(expr) do { if (!(expr)) FATAL(#expr, __LINE__); } while (0)
 
-#define LISTENING_ADDR "127.0.0.1:56789"
+#define HTTP_PORT "56789"
+#define HTTPS_PORT "56790"
+#define LISTENING_ADDR "127.0.0.1:" HTTP_PORT "r,127.0.0.1:" HTTPS_PORT "s"
 
-static void test_parse_http_request() {
+static void test_parse_http_message() {
   struct mg_request_info ri;
   char req1[] = "GET / HTTP/1.1\r\n\r\n";
   char req2[] = "BLAH / HTTP/1.1\r\n\r\n";
   char req3[] = "GET / HTTP/1.1\r\nBah\r\n";
   char req4[] = "GET / HTTP/1.1\r\nA: foo bar\r\nB: bar\r\nbaz\r\n\r\n";
+  char req5[] = "GET / HTTP/1.1\r\n\r\n";
+  char req6[] = "G";
+  char req7[] = " blah ";
+  char req8[] = " HTTP/1.1 200 OK \n\n";
 
-  ASSERT(parse_http_request(req1, sizeof(req1), &ri) == sizeof(req1) - 1);
+  ASSERT(parse_http_message(req1, sizeof(req1), &ri) == sizeof(req1) - 1);
   ASSERT(strcmp(ri.http_version, "1.1") == 0);
   ASSERT(ri.num_headers == 0);
 
-  ASSERT(parse_http_request(req2, sizeof(req2), &ri) == -1);
-  ASSERT(parse_http_request(req3, sizeof(req3), &ri) == -1);
+  ASSERT(parse_http_message(req2, sizeof(req2), &ri) == -1);
+  ASSERT(parse_http_message(req3, sizeof(req3), &ri) == 0);
+  ASSERT(parse_http_message(req6, sizeof(req6), &ri) == 0);
+  ASSERT(parse_http_message(req7, sizeof(req7), &ri) == 0);
+  ASSERT(parse_http_message("", 0, &ri) == 0);
+  ASSERT(parse_http_message(req8, sizeof(req8), &ri) == sizeof(req8) - 1);
 
   // TODO(lsm): Fix this. Header value may span multiple lines.
-  ASSERT(parse_http_request(req4, sizeof(req4), &ri) == sizeof(req4) - 1);
+  ASSERT(parse_http_message(req4, sizeof(req4), &ri) == sizeof(req4) - 1);
+  ASSERT(strcmp(ri.http_version, "1.1") == 0);
   ASSERT(ri.num_headers == 3);
   ASSERT(strcmp(ri.http_headers[0].name, "A") == 0);
   ASSERT(strcmp(ri.http_headers[0].value, "foo bar") == 0);
@@ -55,7 +67,9 @@ static void test_parse_http_request() {
   ASSERT(strcmp(ri.http_headers[2].name, "baz\r\n\r") == 0);
   ASSERT(strcmp(ri.http_headers[2].value, "") == 0);
 
-  // TODO(lsm): add more tests.
+  ASSERT(parse_http_message(req5, sizeof(req5), &ri) == sizeof(req5) - 1);
+  ASSERT(strcmp(ri.request_method, "GET") == 0);
+  ASSERT(strcmp(ri.http_version, "1.1") == 0);
 }
 
 static void test_should_keep_alive(void) {
@@ -68,7 +82,8 @@ static void test_should_keep_alive(void) {
 
   memset(&conn, 0, sizeof(conn));
   conn.ctx = &ctx;
-  parse_http_request(req1, sizeof(req1), &conn.request_info);
+  ASSERT(parse_http_message(req1, sizeof(req1), &conn.request_info) ==
+         sizeof(req1) - 1);
 
   ctx.config[ENABLE_KEEP_ALIVE] = "no";
   ASSERT(should_keep_alive(&conn) == 0);
@@ -80,13 +95,13 @@ static void test_should_keep_alive(void) {
   ASSERT(should_keep_alive(&conn) == 0);
 
   conn.must_close = 0;
-  parse_http_request(req2, sizeof(req2), &conn.request_info);
+  parse_http_message(req2, sizeof(req2), &conn.request_info);
   ASSERT(should_keep_alive(&conn) == 0);
 
-  parse_http_request(req3, sizeof(req3), &conn.request_info);
+  parse_http_message(req3, sizeof(req3), &conn.request_info);
   ASSERT(should_keep_alive(&conn) == 0);
 
-  parse_http_request(req4, sizeof(req4), &conn.request_info);
+  parse_http_message(req4, sizeof(req4), &conn.request_info);
   ASSERT(should_keep_alive(&conn) == 1);
 
   conn.status_code = 401;
@@ -143,7 +158,9 @@ static void test_remove_double_dots() {
   size_t i;
 
   for (i = 0; i < ARRAY_SIZE(data); i++) {
+#if 0
     printf("[%s] -> [%s]\n", data[i].before, data[i].after);
+#endif
     remove_double_dots_and_double_slashes(data[i].before);
     ASSERT(strcmp(data[i].before, data[i].after) == 0);
   }
@@ -162,14 +179,12 @@ static void *event_handler(enum mg_event event, struct mg_connection *conn) {
     return "";
   } else if (event == MG_OPEN_FILE) {
     const char *path = request_info->ev_data;
-    printf("%s: [%s]\n", __func__, path);
     if (strcmp(path, "./blah") == 0) {
       mg_get_request_info(conn)->ev_data =
         (void *) (int) strlen(inmemory_file_data);
       return (void *) inmemory_file_data;
     }
   } else if (event == MG_EVENT_LOG) {
-    printf("%s\n", (const char *) mg_get_request_info(conn)->ev_data);
   }
 
   return NULL;
@@ -178,6 +193,7 @@ static void *event_handler(enum mg_event event, struct mg_connection *conn) {
 static const char *OPTIONS[] = {
   "document_root", ".",
   "listening_ports", LISTENING_ADDR,
+  "ssl_certificate", "build/ssl_cert.pem",
   NULL,
 };
 
@@ -187,69 +203,87 @@ static void test_mg_upload(void) {
   mg_stop(ctx);
 }
 
-static void test_mg_fetch(void) {
-  char buf[2000], buf2[2000];
-  int n, length;
-  struct mg_context *ctx;
-  struct mg_request_info ri;
-  const char *tmp_file = "temporary_file_name_for_unit_test.txt";
-  struct file file;
+static char *read_file(const char *path, int *size) {
   FILE *fp;
+  struct stat st;
+  char *data = NULL;
+  if ((fp = fopen(path, "r")) != NULL && !fstat(fileno(fp), &st)) {
+    *size = st.st_size;
+    ASSERT((data = malloc(*size)) != NULL);
+    ASSERT(fread(data, 1, *size, fp) == (size_t) *size);
+    fclose(fp);
+  }
+  return data;
+}
+
+static char *read_conn(struct mg_connection *conn, int *size) {
+  char buf[100], *data = NULL;
+  int len;
+  *size = 0;
+  while ((len = mg_read(conn, buf, sizeof(buf))) > 0) {
+    *size += len;
+    ASSERT((data = realloc(data, *size)) != NULL);
+    memcpy(data + *size - len, buf, len);
+  }
+  return data;
+}
+
+static void test_mg_download(void) {
+  char *p1, *p2, ebuf[100];
+  int len1, len2, port = atoi(HTTPS_PORT);
+  struct mg_connection *conn;
+  struct mg_context *ctx;
 
   ASSERT((ctx = mg_start(event_handler, NULL, OPTIONS)) != NULL);
 
-  // Failed fetch, pass invalid URL
-  ASSERT(mg_fetch(ctx, "localhost", tmp_file, buf, sizeof(buf), &ri) == NULL);
-  ASSERT(mg_fetch(ctx, LISTENING_ADDR, tmp_file,
-                  buf, sizeof(buf), &ri) == NULL);
-  ASSERT(mg_fetch(ctx, "http://$$$.$$$", tmp_file,
-                  buf, sizeof(buf), &ri) == NULL);
+  ASSERT(mg_download(NULL, port, 0, ebuf, sizeof(ebuf), "") == NULL);
+  ASSERT(mg_download("localhost", 0, 0, ebuf, sizeof(ebuf), "") == NULL);
+  ASSERT(mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "") == NULL);
 
-  // Failed fetch, pass invalid file name
-  ASSERT(mg_fetch(ctx, "http://" LISTENING_ADDR "/data",
-                  "/this/file/must/not/exist/ever",
-                  buf, sizeof(buf), &ri) == NULL);
+  // Fetch nonexistent file, should see 404
+  ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
+                             "GET /gimbec HTTP/1.0\r\n\r\n")) != NULL);
+  ASSERT(strcmp(conn->request_info.uri, "404") == 0);
+  mg_close_connection(conn);
 
-  // Successful fetch
-  ASSERT((fp = mg_fetch(ctx, "http://" LISTENING_ADDR "/data",
-                        tmp_file, buf, sizeof(buf), &ri)) != NULL);
-  ASSERT(ri.num_headers == 2);
-  ASSERT(!strcmp(ri.request_method, "HTTP/1.1"));
-  ASSERT(!strcmp(ri.uri, "200"));
-  ASSERT(!strcmp(ri.http_version, "OK"));
-  ASSERT((length = ftell(fp)) == (int) strlen(fetch_data));
-  fseek(fp, 0, SEEK_SET);
-  ASSERT(fread(buf2, 1, length, fp) == (size_t) length);
-  ASSERT(memcmp(buf2, fetch_data, length) == 0);
-  fclose(fp);
+  // Fetch mongoose.c, should succeed
+  ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
+                             "GET /mongoose.c HTTP/1.0\r\n\r\n")) != NULL);
+  ASSERT(!strcmp(conn->request_info.uri, "200"));
+  ASSERT((p1 = read_conn(conn, &len1)) != NULL);
+  ASSERT((p2 = read_file("mongoose.c", &len2)) != NULL);
+  ASSERT(len1 == len2);
+  ASSERT(memcmp(p1, p2, len1) == 0);
+  free(p1), free(p2);
+  mg_close_connection(conn);
 
-  // Fetch big file, mongoose.c
-  ASSERT((fp = mg_fetch(ctx, "http://" LISTENING_ADDR "/mongoose.c",
-                        tmp_file, buf, sizeof(buf), &ri)) != NULL);
-  ASSERT(mg_stat(fc(ctx), "mongoose.c", &file));
-  ASSERT(file.size == ftell(fp));
-  ASSERT(!strcmp(ri.request_method, "HTTP/1.1"));
+  // Fetch in-memory file, should succeed.
+  ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
+                             "GET /blah HTTP/1.1\r\n\r\n")) != NULL);
+  ASSERT((p1 = read_conn(conn, &len1)) != NULL);
+  ASSERT(len1 == (int) strlen(inmemory_file_data));
+  ASSERT(memcmp(p1, inmemory_file_data, len1) == 0);
+  free(p1);
+  mg_close_connection(conn);
 
-  // Fetch nonexistent file, /blah
-  ASSERT((fp = mg_fetch(ctx, "http://" LISTENING_ADDR "/boo",
-                        tmp_file, buf, sizeof(buf), &ri)) != NULL);
-  ASSERT(!mg_strcasecmp(ri.uri, "404"));
-  fclose(fp);
+  // Test SSL redirect, IP address
+  ASSERT((conn = mg_download("localhost", atoi(HTTP_PORT), 0,
+                             ebuf, sizeof(ebuf), "%s",
+                             "GET /foo HTTP/1.1\r\n\r\n")) != NULL);
+  ASSERT(strcmp(conn->request_info.uri, "302") == 0);
+  ASSERT(strcmp(mg_get_header(conn, "Location"),
+                "https://127.0.0.1:" HTTPS_PORT "/foo") == 0);
+  mg_close_connection(conn);
 
-  // Fetch existing inmemory file
-  ASSERT((fp = mg_fetch(ctx, "http://" LISTENING_ADDR "/blah",
-                        tmp_file, buf, sizeof(buf), &ri)) != NULL);
-  ASSERT(!mg_strcasecmp(ri.uri, "200"));
-  n = ftell(fp);
-  fseek(fp, 0, SEEK_SET);
-  printf("%s %d %d [%.*s]\n", __func__, n, (int) feof(fp), n, buf2);
-  n = fread(buf2, 1, n, fp);
-  printf("%s %d %d [%.*s]\n", __func__, n, (int) feof(fp), n, buf2);
-  ASSERT((size_t) ftell(fp) == (size_t) strlen(inmemory_file_data));
-  ASSERT(!memcmp(inmemory_file_data, buf2, ftell(fp)));
-  fclose(fp);
+  // Test SSL redirect, Host:
+  ASSERT((conn = mg_download("localhost", atoi(HTTP_PORT), 0,
+                             ebuf, sizeof(ebuf), "%s",
+                             "GET /foo HTTP/1.1\r\nHost: a.b:77\n\n")) != NULL);
+  ASSERT(strcmp(conn->request_info.uri, "302") == 0);
+  ASSERT(strcmp(mg_get_header(conn, "Location"),
+                "https://a.b:" HTTPS_PORT "/foo") == 0);
+  mg_close_connection(conn);
 
-  remove(tmp_file);
   mg_stop(ctx);
 }
 
@@ -261,7 +295,6 @@ static void test_base64_encode(void) {
 
   for (i = 0; in[i] != NULL; i++) {
     base64_encode((unsigned char *) in[i], strlen(in[i]), buf);
-    printf("[%s] [%s]\n", out[i], buf);
     ASSERT(!strcmp(buf, out[i]));
   }
 }
@@ -329,7 +362,9 @@ static void check_lua_expr(lua_State *L, const char *expr, const char *value) {
   luaL_dostring(L, buf);
   lua_getglobal(L, var_name);
   v = lua_tostring(L, -1);
+#if 0
   printf("%s: %s: [%s] [%s]\n", __func__, expr, v == NULL ? "null" : v, value);
+#endif
   ASSERT((value == NULL && v == NULL) ||
          (value != NULL && v != NULL && !strcmp(value, v)));
 }
@@ -341,13 +376,12 @@ static void test_lua(void) {
   char http_request[] = "POST /foo/bar HTTP/1.1\r\n"
       "Content-Length: 12\r\n"
       "Connection: close\r\n\r\nhello world!";
-  const char *page = "<? print('hi') ?>";
   lua_State *L = luaL_newstate();
 
   conn.ctx = &ctx;
   conn.buf = http_request;
   conn.buf_size = conn.data_len = strlen(http_request);
-  conn.request_len = parse_http_request(conn.buf, conn.data_len,
+  conn.request_len = parse_http_message(conn.buf, conn.data_len,
                                         &conn.request_info);
   conn.content_len = conn.data_len - conn.request_len;
 
@@ -371,7 +405,7 @@ static void test_lua(void) {
 static void *user_data_tester(enum mg_event event, struct mg_connection *conn) {
   struct mg_request_info *ri = mg_get_request_info(conn);
   ASSERT(ri->user_data == (void *) 123);
-  ASSERT(event == MG_NEW_REQUEST);
+  ASSERT(event == MG_NEW_REQUEST || event == MG_INIT_SSL);
   return NULL;
 }
 
@@ -413,8 +447,8 @@ int __cdecl main(void) {
   test_match_prefix();
   test_remove_double_dots();
   test_should_keep_alive();
-  test_parse_http_request();
-  test_mg_fetch();
+  test_parse_http_message();
+  test_mg_download();
   test_mg_get_var();
   test_set_throttle();
   test_next_option();
@@ -425,5 +459,6 @@ int __cdecl main(void) {
   test_lua();
 #endif
   test_skip_quoted();
+  printf("%s\n", "PASSED");
   return 0;
 }

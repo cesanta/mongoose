@@ -167,7 +167,7 @@ kill_spawned_child();
 
 # Spawn the server on port $port
 my $cmd = "$exe ".
-  "-listening_ports $port ".
+  "-listening_ports 127.0.0.1:$port ".
   "-access_log_file access.log ".
   "-error_log_file debug.log ".
   "-cgi_environment CGI_FOO=foo,CGI_BAR=bar,CGI_BAZ=baz " .
@@ -220,11 +220,10 @@ write_file("$root/a+.txt", '');
 o("GET /a+.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'URL-decoding, + in URI');
 
 # Test HTTP version parsing
-o("GET / HTTPX/1.0\r\n\r\n", '400 Bad Request', 'Bad HTTP Version', 0);
-o("GET / HTTP/x.1\r\n\r\n", '505 HTTP', 'Bad HTTP maj Version');
-o("GET / HTTP/1.1z\r\n\r\n", '505 HTTP', 'Bad HTTP min Version');
-o("GET / HTTP/02.0\r\n\r\n", '505 HTTP version not supported',
-  'HTTP Version >1.1');
+o("GET / HTTPX/1.0\r\n\r\n", '^HTTP/1.1 500', 'Bad HTTP Version', 0);
+o("GET / HTTP/x.1\r\n\r\n", '^HTTP/1.1 505', 'Bad HTTP maj Version', 0);
+o("GET / HTTP/1.1z\r\n\r\n", '^HTTP/1.1 505', 'Bad HTTP min Version', 0);
+o("GET / HTTP/02.0\r\n\r\n", '^HTTP/1.1 505', 'HTTP Version >1.1', 0);
 
 # File with leading single dot
 o("GET /.leading.dot.txt HTTP/1.0\n\n", 'abc123', 'Leading dot 1');
@@ -463,7 +462,7 @@ sub do_unit_test {
 
 sub do_embedded_test {
   my $cmd = "cc -W -Wall -o $embed_exe $root/embed.c mongoose.c -I. ".
-  "-pthread -DNO_SSL -DLISTENING_PORT=\\\"$port\\\"";
+  "-pthread -DNO_SSL -DLISTENING_PORT=\\\"127.0.0.1:$port\\\"";
   if (on_windows()) {
     $cmd = "cl $root/embed.c mongoose.c /I. /nologo /DNO_SSL ".
     "/DLISTENING_PORT=\\\"$port\\\" /link /out:$embed_exe.exe ws2_32.lib ";
@@ -514,7 +513,7 @@ sub do_embedded_test {
     'Remote user: \[\]'
     , 'request_info', 0);
   o("GET /not_exist HTTP/1.0\n\n", 'Error: \[404\]', '404 handler', 0);
-  o("bad request\n\n", 'Error: \[400\]', '* error handler', 0);
+  o("bad request\n\n", 'Error: \[500\]', '* error handler', 0);
 #	o("GET /foo/secret HTTP/1.0\n\n",
 #		'401 Unauthorized', 'mg_protect_uri', 0);
 #	o("GET /foo/secret HTTP/1.0\nAuthorization: Digest username=bill\n\n",

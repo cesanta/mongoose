@@ -236,12 +236,6 @@ struct mg_request_info *mg_get_request_info(struct mg_connection *);
 int mg_write(struct mg_connection *, const void *buf, size_t len);
 
 
-// Send data to the browser using printf() semantics.
-//
-// Works exactly like mg_write(), but allows to do message formatting.
-// Below are the macros for enabling compiler-specific checks for
-// printf-like arguments.
-
 #undef PRINTF_FORMAT_STRING
 #if _MSC_VER >= 1400
 #include <sal.h>
@@ -260,6 +254,11 @@ int mg_write(struct mg_connection *, const void *buf, size_t len);
 #define PRINTF_ARGS(x, y)
 #endif
 
+// Send data to the browser using printf() semantics.
+//
+// Works exactly like mg_write(), but allows to do message formatting.
+// Below are the macros for enabling compiler-specific checks for
+// printf-like arguments.
 int mg_printf(struct mg_connection *,
               PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
 
@@ -316,30 +315,27 @@ int mg_get_cookie(const struct mg_connection *,
                   const char *cookie_name, char *buf, size_t buf_len);
 
 
-// Connect to the remote web server.
+// Download data from the remote web server.
+//   host: host name to connect to, e.g. "foo.com", or "10.12.40.1".
+//   port: port number, e.g. 80.
+//   use_ssl: wether to use SSL connection.
+//   error_buffer, error_buffer_size: error message placeholder.
+//   request_fmt,...: HTTP request.
 // Return:
-//   On success, valid pointer to the new connection
-//   On error, NULL
-struct mg_connection *mg_connect(struct mg_context *ctx,
-                                 const char *host, int port, int use_ssl);
+//   On success, valid pointer to the new connection, suitable for mg_read().
+//   On error, NULL.
+// Example:
+//   char ebuf[100];
+//   struct mg_connection *conn;
+//   conn = mg_download("google.com", 80, 0, ebuf, sizeof(ebuf),
+//                      "%s", "GET / HTTP/1.0\r\n\r\nHost: google.com\r\n\r\n");
+struct mg_connection *mg_download(const char *host, int port, int use_ssl,
+                                  char *error_buffer, size_t error_buffer_size,
+                                  const char *request_fmt, ...);
 
 
-// Close the connection opened by mg_connect().
+// Close the connection opened by mg_download().
 void mg_close_connection(struct mg_connection *conn);
-
-
-// Download given URL to a given file.
-//   url: URL to download
-//   path: file name where to save the data
-//   request_info: pointer to a structure that will hold parsed reply headers
-//   buf, bul_len: a buffer for the reply headers
-// Return:
-//   On error, NULL
-//   On success, opened file stream to the downloaded contents. The stream
-//   is positioned to the end of the file. It is the user's responsibility
-//   to fclose() the opened file stream.
-FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
-               char *buf, size_t buf_len, struct mg_request_info *request_info);
 
 
 // File upload functionality. Each uploaded file gets saved into a temporary

@@ -1627,16 +1627,13 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
   return (int) total;
 }
 
-int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
+int mg_vprintf(struct mg_connection *conn, const char *fmt, va_list ap) {
   char mem[MG_BUF_LEN], *buf = mem;
   int len;
-  va_list ap;
 
   // Print in a local buffer first, hoping that it is large enough to
   // hold the whole message
-  va_start(ap, fmt);
   len = vsnprintf(mem, sizeof(mem), fmt, ap);
-  va_end(ap);
 
   if (len == 0) {
     // Do nothing. mg_printf(conn, "%s", "") was called.
@@ -1647,9 +1644,7 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   } else if (len > (int) sizeof(mem) &&
              (buf = (char *) malloc(len + 1)) != NULL) {
     // Local buffer is not large enough, allocate big buffer on heap
-    va_start(ap, fmt);
     vsnprintf(buf, len + 1, fmt, ap);
-    va_end(ap);
     len = mg_write(conn, buf, (size_t) len);
     free(buf);
   } else if (len > (int) sizeof(mem)) {
@@ -1663,6 +1658,12 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   }
 
   return len;
+}
+
+int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  return mg_vprintf(conn, fmt, ap);
 }
 
 // URL-decode input buffer into destination buffer.
@@ -2811,7 +2812,7 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
 
   if (!mg_fopen(conn, path, "rb", filep)) {
     send_http_error(conn, 500, http_500_error,
-        "fopen(%s): %s", path, strerror(ERRNO));
+                    "fopen(%s): %s", path, strerror(ERRNO));
     return;
   }
   fclose_on_exec(filep);
@@ -2891,7 +2892,7 @@ static int is_valid_http_method(const char *method) {
 // This function modifies the buffer by NUL-terminating
 // HTTP request components, header names and header values.
 static int parse_http_message(char *buf, int len, struct mg_request_info *ri) {
-  int request_length = get_request_len(buf, len);
+  int is_request, request_length = get_request_len(buf, len);
   if (request_length > 0) {
     // Reset attributes. DO NOT TOUCH is_ssl, remote_ip, remote_port
     ri->remote_user = ri->request_method = ri->uri = ri->http_version = NULL;
@@ -2906,26 +2907,18 @@ static int parse_http_message(char *buf, int len, struct mg_request_info *ri) {
     ri->request_method = skip(&buf, " ");
     ri->uri = skip(&buf, " ");
     ri->http_version = skip(&buf, "\r\n");
-    parse_http_headers(&buf, ri);
+    if (((is_request = is_valid_http_method(ri->request_method)) &&
+         memcmp(ri->http_version, "HTTP/", 5) != 0) ||
+        (!is_request && memcmp(ri->request_method, "HTTP/", 5)) != 0) {
+      request_length = -1;
+    } else {
+      if (is_request) {
+        ri->http_version += 5;
+      }
+      parse_http_headers(&buf, ri);
+    }
   }
   return request_length;
-}
-
-static int parse_http_request(char *buf, int len, struct mg_request_info *ri) {
-  int result = parse_http_message(buf, len, ri);
-  if (result > 0 &&
-      is_valid_http_method(ri->request_method) &&
-      !strncmp(ri->http_version, "HTTP/", 5)) {
-    ri->http_version += 5;   // Skip "HTTP/"
-  } else {
-    result = -1;
-  }
-  return result;
-}
-
-static int parse_http_response(char *buf, int len, struct mg_request_info *ri) {
-  int result = parse_http_message(buf, len, ri);
-  return result > 0 && !strncmp(ri->request_method, "HTTP/", 5) ? result : -1;
 }
 
 // Keep reading the input (either opened file descriptor fd, or socket sock,
@@ -4734,74 +4727,109 @@ void mg_close_connection(struct mg_connection *conn) {
   free(conn);
 }
 
-struct mg_connection *mg_connect(struct mg_context *ctx,
-                                 const char *host, int port, int use_ssl) {
-  struct mg_connection *newconn = NULL;
+struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
+                                 char *ebuf, size_t ebuf_len) {
+  static struct mg_context fake_ctx;
+  struct mg_connection *conn = NULL;
   struct sockaddr_in sin;
   struct hostent *he;
+  SSL_CTX *ssl = NULL;
   int sock;
 
-  if (use_ssl && (ctx == NULL || ctx->client_ssl_ctx == NULL)) {
-    cry(fc(ctx), "%s: SSL is not initialized", __func__);
+  if (host == NULL) {
+    snprintf(ebuf, ebuf_len, "%s", "NULL host");
+  } else if (use_ssl && SSLv23_client_method == NULL) {
+    snprintf(ebuf, ebuf_len, "%s", "SSL is not initialized");
+#ifndef NO_SSL
+  } else if (use_ssl && (ssl = SSL_CTX_new(SSLv23_client_method())) == NULL) {
+    snprintf(ebuf, ebuf_len, "SSL_CTX_new: %s", ssl_error());
+#endif // NO_SSL
   } else if ((he = gethostbyname(host)) == NULL) {
-    cry(fc(ctx), "%s: gethostbyname(%s): %s", __func__, host, strerror(ERRNO));
+    snprintf(ebuf, ebuf_len, "gethostbyname(%s): %s", host, strerror(ERRNO));
   } else if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-    cry(fc(ctx), "%s: socket: %s", __func__, strerror(ERRNO));
+    snprintf(ebuf, ebuf_len, "socket(): %s", strerror(ERRNO));
   } else {
     sin.sin_family = AF_INET;
     sin.sin_port = htons((uint16_t) port);
     sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
     if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) != 0) {
-      cry(fc(ctx), "%s: connect(%s:%d): %s", __func__, host, port,
-          strerror(ERRNO));
+      snprintf(ebuf, ebuf_len, "connect(%s:%d): %s",
+               host, port, strerror(ERRNO));
       closesocket(sock);
-    } else if ((newconn = (struct mg_connection *)
-                calloc(1, sizeof(*newconn))) == NULL) {
-      cry(fc(ctx), "%s: calloc: %s", __func__, strerror(ERRNO));
+    } else if ((conn = (struct mg_connection *)
+                calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE)) == NULL) {
+      snprintf(ebuf, ebuf_len, "calloc(): %s", strerror(ERRNO));
       closesocket(sock);
     } else {
-      newconn->ctx = ctx;
-      newconn->client.sock = sock;
-      newconn->client.rsa.sin = sin;
-      newconn->client.is_ssl = use_ssl;
+      conn->buf_size = MAX_REQUEST_SIZE;
+      conn->buf = (char *) (conn + 1);
+      conn->ctx = &fake_ctx;
+      conn->client.sock = sock;
+      conn->client.rsa.sin = sin;
+      conn->client.is_ssl = use_ssl;
       if (use_ssl) {
-        sslize(newconn, ctx->client_ssl_ctx, SSL_connect);
+        sslize(conn, ssl, SSL_connect);
       }
     }
   }
-
-  return newconn;
-}
-
-FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
-               char *buf, size_t buf_len, struct mg_request_info *ri) {
-  struct mg_connection *newconn;
-  int n, req_length, data_length, port;
-  char host[1025], proto[10], buf2[MG_BUF_LEN];
-  FILE *fp = NULL;
-
-  if (sscanf(url, "%9[htps]://%1024[^:]:%d/%n", proto, host, &port, &n) == 3) {
-  } else if (sscanf(url, "%9[htps]://%1024[^/]/%n", proto, host, &n) == 2) {
-    port = mg_strcasecmp(proto, "https") == 0 ? 443 : 80;
-  } else {
-    cry(fc(ctx), "%s: invalid URL: [%s]", __func__, url);
-    return NULL;
+  if (ssl != NULL) {
+    SSL_CTX_free(ssl);
   }
 
-  if ((newconn = mg_connect(ctx, host, port,
-                            !strcmp(proto, "https"))) == NULL) {
-    cry(fc(ctx), "%s: mg_connect(%s): %s", __func__, url, strerror(ERRNO));
+  return conn;
+}
+
+static int is_valid_uri(const char *uri) {
+  // Conform to http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1.2
+  // URI can be an asterisk (*) or should start with slash.
+  return uri[0] == '/' || (uri[0] == '*' && uri[1] == '\0');
+}
+
+static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
+  const char *cl;
+
+  ebuf[0] = '\0';
+  reset_per_request_attributes(conn);
+  conn->request_len = read_request(NULL, conn, conn->buf, conn->buf_size,
+                                   &conn->data_len);
+  assert(conn->request_len < 0 || conn->data_len >= conn->request_len);
+
+  if (conn->request_len == 0 && conn->data_len == conn->buf_size) {
+    snprintf(ebuf, ebuf_len, "%s", "Request Too Large");
+  } if (conn->request_len <= 0) {
+    snprintf(ebuf, ebuf_len, "%s", "Client closed connection");
+  } else if (parse_http_message(conn->buf, conn->buf_size,
+                                &conn->request_info) <= 0) {
+    snprintf(ebuf, ebuf_len, "Bad request: [%.*s]", conn->data_len, conn->buf);
   } else {
-    mg_printf(newconn, "GET /%s HTTP/1.0\r\nHost: %s\r\n\r\n", url + n, host);
-    data_length = 0;
-    req_length = read_request(NULL, newconn, buf, buf_len, &data_length);
-    if (req_length <= 0) {
-      cry(fc(ctx), "%s(%s): invalid HTTP reply", __func__, url);
-    } else if (parse_http_response(buf, req_length, ri) <= 0) {
-      cry(fc(ctx), "%s(%s): cannot parse HTTP headers", __func__, url);
-    } else if ((fp = fopen(path, "w+b")) == NULL) {
-      cry(fc(ctx), "%s: fopen(%s): %s", __func__, path, strerror(ERRNO));
+    // Request is valid
+    if ((cl = get_header(&conn->request_info, "Content-Length")) != NULL) {
+      conn->content_len = strtoll(cl, NULL, 10);
+    } else if (!mg_strcasecmp(conn->request_info.request_method, "POST") ||
+               !mg_strcasecmp(conn->request_info.request_method, "PUT")) {
+      conn->content_len = -1;
     } else {
+      conn->content_len = 0;
+    }
+    conn->birth_time = time(NULL);
+  }
+  return ebuf[0] == '\0';
+}
+
+struct mg_connection *mg_download(const char *host, int port, int use_ssl,
+                                  char *ebuf, size_t ebuf_len,
+                                  const char *fmt, ...) {
+  struct mg_connection *conn;
+  va_list ap;
+
+  va_start(ap, fmt);
+  ebuf[0] = '\0';
+  if ((conn = mg_connect(host, port, use_ssl, ebuf, ebuf_len)) == NULL) {
+  } else if (mg_vprintf(conn, fmt, ap) <= 0) {
+    snprintf(ebuf, ebuf_len, "%s", "Error sending request");
+  } else if (!getreq(conn, ebuf, ebuf_len)) {
+  } else {
+#if 0
       // Write chunk of data that may be in the user's buffer
       data_length -= req_length;
       if (data_length > 0 &&
@@ -4811,8 +4839,8 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
         fp = NULL;
       }
       // Read the rest of the response and write it to the file. Do not use
-      // mg_read() cause we didn't set newconn->content_len properly.
-      while (fp && (data_length = pull(0, newconn, buf2, sizeof(buf2))) > 0) {
+      // mg_read() cause we didn't set conn->content_len properly.
+      while (fp && (data_length = pull(0, conn, buf2, sizeof(buf2))) > 0) {
         if (fwrite(buf2, 1, data_length, fp) != (size_t) data_length) {
           cry(fc(ctx), "%s: fwrite(%s): %s", __func__, path, strerror(ERRNO));
           fclose(fp);
@@ -4820,23 +4848,20 @@ FILE *mg_fetch(struct mg_context *ctx, const char *url, const char *path,
           break;
         }
       }
-    }
-    mg_close_connection(newconn);
+#endif
+  }
+  if (ebuf[0] != '\0' && conn != NULL) {
+    mg_close_connection(conn);
+    conn = NULL;
   }
 
-  return fp;
-}
-
-static int is_valid_uri(const char *uri) {
-  // Conform to http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1.2
-  // URI can be an asterisk (*) or should start with slash.
-  return uri[0] == '/' || (uri[0] == '*' && uri[1] == '\0');
+  return conn;
 }
 
 static void process_new_connection(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
   int keep_alive_enabled, keep_alive, discard_len;
-  const char *cl;
+  char ebuf[100];
 
   keep_alive_enabled = !strcmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes");
   keep_alive = 0;
@@ -4845,38 +4870,18 @@ static void process_new_connection(struct mg_connection *conn) {
   // to crule42.
   conn->data_len = 0;
   do {
-    reset_per_request_attributes(conn);
-    conn->request_len = read_request(NULL, conn, conn->buf, conn->buf_size,
-                                     &conn->data_len);
-    assert(conn->request_len < 0 || conn->data_len >= conn->request_len);
-    if (conn->request_len == 0 && conn->data_len == conn->buf_size) {
-      send_http_error(conn, 413, "Request Too Large", "%s", "");
-      return;
-    } if (conn->request_len <= 0) {
-      return;  // Remote end closed the connection
-    }
-    if (parse_http_request(conn->buf, conn->buf_size, ri) <= 0 ||
-        !is_valid_uri(ri->uri)) {
-      // Do not put garbage in the access log, just send it back to the client
-      send_http_error(conn, 400, "Bad Request",
-          "Cannot parse HTTP request: [%.*s]", conn->data_len, conn->buf);
-      conn->must_close = 1;
+    if (!getreq(conn, ebuf, sizeof(ebuf))) {
+      send_http_error(conn, 500, "Server Error", "%s", ebuf);
+    } else if (!is_valid_uri(conn->request_info.uri)) {
+      snprintf(ebuf, sizeof(ebuf), "Invalid URI: [%s]", ri->uri);
+      send_http_error(conn, 400, "Bad Request", "%s", ebuf);
     } else if (strcmp(ri->http_version, "1.0") &&
                strcmp(ri->http_version, "1.1")) {
-      // Request seems valid, but HTTP version is strange
-      send_http_error(conn, 505, "HTTP version not supported", "%s", "");
-      log_access(conn);
-    } else {
-      // Request is valid, handle it
-      if ((cl = get_header(ri, "Content-Length")) != NULL) {
-        conn->content_len = strtoll(cl, NULL, 10);
-      } else if (!mg_strcasecmp(ri->request_method, "POST") ||
-                 !mg_strcasecmp(ri->request_method, "PUT")) {
-        conn->content_len = -1;
-      } else {
-        conn->content_len = 0;
-      }
-      conn->birth_time = time(NULL);
+      snprintf(ebuf, sizeof(ebuf), "Bad HTTP version: [%s]", ri->http_version);
+      send_http_error(conn, 505, "Bad HTTP version", "%s", ebuf);
+    }
+
+    if (ebuf[0] == '\0') {
       handle_request(conn);
       conn->request_info.ev_data = (void *) (long) conn->status_code;
       call_user(conn, MG_REQUEST_COMPLETE);
