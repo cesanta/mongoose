@@ -24,7 +24,7 @@ simplicity by carefully selected list of features:
 - Small footprint: executable size is 50 kB on Linux 2.6 i386 system
 - 130 kilobytes Windows executable with all of the above and no dependencies
 - Simple and clean embedding API,
-  [mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h)).
+  [mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h).
   The source is in single
   [mongoose.c](https://github.com/valenok/mongoose/blob/master/mongoose.c) file
   to make things easy
