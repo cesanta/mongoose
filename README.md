@@ -33,8 +33,8 @@ simplicity by carefully selected list of features:
   [post.c](https://github.com/valenok/mongoose/blob/master/examples/post.c),
   [upload.c](https://github.com/valenok/mongoose/blob/master/examples/upload.c),
   [websocket.c](https://github.com/valenok/mongoose/blob/master/examples/websocket.c)
-- `mg_download()` HTTP client functionality for embedded usage, capable to
-  send arbitrary HTTP or HTTPS requests
+- HTTP client functionality for embedded usage, capable of
+  sending arbitrary HTTP/HTTPS requests
 - Extensive documentation in form of
   [User Manual](https://github.com/valenok/mongoose/blob/master/UserManual.md)
 
