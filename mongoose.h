@@ -331,7 +331,8 @@ int mg_get_cookie(const struct mg_connection *,
 //                      "%s", "GET / HTTP/1.0\r\nHost: google.com\r\n\r\n");
 struct mg_connection *mg_download(const char *host, int port, int use_ssl,
                                   char *error_buffer, size_t error_buffer_size,
-                                  const char *request_fmt, ...);
+                                  PRINTF_FORMAT_STRING(const char *request_fmt),
+                                  ...) PRINTF_ARGS(6, 7);
 
 
 // Close the connection opened by mg_download().
