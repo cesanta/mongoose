@@ -328,7 +328,7 @@ int mg_get_cookie(const struct mg_connection *,
 //   char ebuf[100];
 //   struct mg_connection *conn;
 //   conn = mg_download("google.com", 80, 0, ebuf, sizeof(ebuf),
-//                      "%s", "GET / HTTP/1.0\r\n\r\nHost: google.com\r\n\r\n");
+//                      "%s", "GET / HTTP/1.0\r\nHost: google.com\r\n\r\n");
 struct mg_connection *mg_download(const char *host, int port, int use_ssl,
                                   char *error_buffer, size_t error_buffer_size,
                                   const char *request_fmt, ...);
