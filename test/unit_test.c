@@ -32,7 +32,15 @@
 
 #define HTTP_PORT "56789"
 #define HTTPS_PORT "56790"
-#define LISTENING_ADDR "127.0.0.1:" HTTP_PORT "r,127.0.0.1:" HTTPS_PORT "s"
+#define HTTP_PORT2 "56791"
+#define LISTENING_ADDR          \
+  "127.0.0.1:" HTTP_PORT "r"    \
+  ",127.0.0.1:" HTTPS_PORT "s"  \
+  ",127.0.0.1:" HTTP_PORT2
+
+#ifndef _WIN32
+#define __cdecl
+#endif
 
 static void test_parse_http_message() {
   struct mg_request_info ri;
@@ -158,16 +166,29 @@ static void test_remove_double_dots() {
   size_t i;
 
   for (i = 0; i < ARRAY_SIZE(data); i++) {
-#if 0
-    printf("[%s] -> [%s]\n", data[i].before, data[i].after);
-#endif
     remove_double_dots_and_double_slashes(data[i].before);
     ASSERT(strcmp(data[i].before, data[i].after) == 0);
   }
 }
 
+static char *read_file(const char *path, int *size) {
+  FILE *fp;
+  struct stat st;
+  char *data = NULL;
+  if ((fp = fopen(path, "rb")) != NULL && !fstat(fileno(fp), &st)) {
+    *size = (int) st.st_size;
+    ASSERT((data = malloc(*size)) != NULL);
+    ASSERT(fread(data, 1, *size, fp) == (size_t) *size);
+    fclose(fp);
+  }
+  return data;
+}
+
 static const char *fetch_data = "hello world!\n";
 static const char *inmemory_file_data = "hi there";
+static const char *upload_filename = "upload_test.txt";
+static const char *upload_ok_message = "upload successful";
+
 static void *event_handler(enum mg_event event, struct mg_connection *conn) {
   const struct mg_request_info *request_info = mg_get_request_info(conn);
 
@@ -177,14 +198,30 @@ static void *event_handler(enum mg_event event, struct mg_connection *conn) {
               "Content-Type: text/plain\r\n\r\n"
               "%s", (int) strlen(fetch_data), fetch_data);
     return "";
+  } else if (event == MG_NEW_REQUEST && !strcmp(request_info->uri, "/upload")) {
+    ASSERT(mg_upload(conn, ".") == 1);
   } else if (event == MG_OPEN_FILE) {
     const char *path = request_info->ev_data;
     if (strcmp(path, "./blah") == 0) {
       mg_get_request_info(conn)->ev_data =
-        (void *) (int) strlen(inmemory_file_data);
+        (void *) (long) strlen(inmemory_file_data);
       return (void *) inmemory_file_data;
     }
   } else if (event == MG_EVENT_LOG) {
+  } else if (event == MG_UPLOAD) {
+    char *p1, *p2;
+    int len1, len2;
+
+    ASSERT(!strcmp((char *) request_info->ev_data, "./upload_test.txt"));
+    ASSERT((p1 = read_file("mongoose.c", &len1)) != NULL);
+    ASSERT((p2 = read_file(upload_filename, &len2)) != NULL);
+    ASSERT(len1 == len2);
+    ASSERT(memcmp(p1, p2, len1) == 0);
+    free(p1), free(p2);
+    remove(upload_filename);
+
+    mg_printf(conn, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n\r\n%s",
+              (int) strlen(upload_ok_message), upload_ok_message);
   }
 
   return NULL;
@@ -196,25 +233,6 @@ static const char *OPTIONS[] = {
   "ssl_certificate", "build/ssl_cert.pem",
   NULL,
 };
-
-static void test_mg_upload(void) {
-  struct mg_context *ctx;
-  ASSERT((ctx = mg_start(event_handler, NULL, OPTIONS)) != NULL);
-  mg_stop(ctx);
-}
-
-static char *read_file(const char *path, int *size) {
-  FILE *fp;
-  struct stat st;
-  char *data = NULL;
-  if ((fp = fopen(path, "r")) != NULL && !fstat(fileno(fp), &st)) {
-    *size = st.st_size;
-    ASSERT((data = malloc(*size)) != NULL);
-    ASSERT(fread(data, 1, *size, fp) == (size_t) *size);
-    fclose(fp);
-  }
-  return data;
-}
 
 static char *read_conn(struct mg_connection *conn, int *size) {
   char buf[100], *data = NULL;
@@ -236,14 +254,19 @@ static void test_mg_download(void) {
 
   ASSERT((ctx = mg_start(event_handler, NULL, OPTIONS)) != NULL);
 
-  ASSERT(mg_download(NULL, port, 0, ebuf, sizeof(ebuf), "") == NULL);
-  ASSERT(mg_download("localhost", 0, 0, ebuf, sizeof(ebuf), "") == NULL);
-  ASSERT(mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "") == NULL);
+  ASSERT(mg_download(NULL, port, 0, ebuf, sizeof(ebuf), "%s", "") == NULL);
+  ASSERT(mg_download("localhost", 0, 0, ebuf, sizeof(ebuf), "%s", "") == NULL);
+  ASSERT(mg_download("localhost", port, 1, ebuf, sizeof(ebuf),
+                     "%s", "") == NULL);
 
   // Fetch nonexistent file, should see 404
   ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
                              "GET /gimbec HTTP/1.0\r\n\r\n")) != NULL);
   ASSERT(strcmp(conn->request_info.uri, "404") == 0);
+  mg_close_connection(conn);
+
+  ASSERT((conn = mg_download("google.com", 443, 1, ebuf, sizeof(ebuf), "%s",
+                             "GET / HTTP/1.0\r\n\r\n")) != NULL);
   mg_close_connection(conn);
 
   // Fetch mongoose.c, should succeed
@@ -284,6 +307,46 @@ static void test_mg_download(void) {
                 "https://a.b:" HTTPS_PORT "/foo") == 0);
   mg_close_connection(conn);
 
+  mg_stop(ctx);
+}
+
+static int alloc_printf(char **buf, size_t size, char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  return alloc_vprintf(buf, size, fmt, ap);
+}
+
+static void test_mg_upload(void) {
+  static const char *boundary = "OOO___MY_BOUNDARY___OOO";
+  struct mg_context *ctx;
+  struct mg_connection *conn;
+  char ebuf[100], buf[20], *file_data, *post_data = NULL;
+  int file_len, post_data_len;
+
+  ASSERT((ctx = mg_start(event_handler, NULL, OPTIONS)) != NULL);
+  ASSERT((file_data = read_file("mongoose.c", &file_len)) != NULL);
+  post_data_len = alloc_printf(&post_data, 0,
+                                       "--%s\r\n"
+                                       "Content-Disposition: form-data; "
+                                       "name=\"file\"; "
+                                       "filename=\"%s\"\r\n\r\n"
+                                       "%.*s\r\n"
+                                       "--%s\r\n",
+                                       boundary, upload_filename,
+                                       file_len, file_data, boundary);
+  ASSERT(post_data_len > 0);
+  ASSERT((conn = mg_download("localhost", atoi(HTTPS_PORT), 1,
+                             ebuf, sizeof(ebuf),
+                             "POST /upload HTTP/1.1\r\n"
+                             "Content-Length: %d\r\n"
+                             "Content-Type: multipart/form-data; "
+                             "boundary=%s\r\n\r\n"
+                             "%.*s", post_data_len, boundary,
+                             post_data_len, post_data)) != NULL);
+  free(file_data), free(post_data);
+  ASSERT(mg_read(conn, buf, sizeof(buf)) == (int) strlen(upload_ok_message));
+  ASSERT(memcmp(buf, upload_ok_message, strlen(upload_ok_message)) == 0);
+  mg_close_connection(conn);
   mg_stop(ctx);
 }
 
@@ -359,12 +422,9 @@ static void check_lua_expr(lua_State *L, const char *expr, const char *value) {
   char buf[100];
 
   snprintf(buf, sizeof(buf), "%s = %s", var_name, expr);
-  luaL_dostring(L, buf);
+  (void) luaL_dostring(L, buf);
   lua_getglobal(L, var_name);
   v = lua_tostring(L, -1);
-#if 0
-  printf("%s: %s: [%s] [%s]\n", __func__, expr, v == NULL ? "null" : v, value);
-#endif
   ASSERT((value == NULL && v == NULL) ||
          (value != NULL && v != NULL && !strcmp(value, v)));
 }
@@ -395,7 +455,7 @@ static void test_lua(void) {
   check_lua_expr(L, "request_info.remote_ip", "0");
   check_lua_expr(L, "request_info.http_headers['Content-Length']", "12");
   check_lua_expr(L, "request_info.http_headers['Connection']", "close");
-  luaL_dostring(L, "post = read()");
+  (void) luaL_dostring(L, "post = read()");
   check_lua_expr(L, "# post", "12");
   check_lua_expr(L, "post", "hello world!");
   lua_close(L);
@@ -442,7 +502,22 @@ static void test_skip_quoted(void) {
 #endif
 }
 
+static void test_alloc_vprintf(void) {
+  char buf[MG_BUF_LEN], *p = buf;
+
+  ASSERT(alloc_printf(&p, sizeof(buf), "%s", "hi") == 2);
+  ASSERT(p == buf);
+  ASSERT(alloc_printf(&p, sizeof(buf), "%s", "") == 0);
+  ASSERT(alloc_printf(&p, sizeof(buf), "") == 0);
+
+  // Pass small buffer, make sure alloc_printf allocates
+  ASSERT(alloc_printf(&p, 1, "%s", "hello") == 5);
+  ASSERT(p != buf);
+  free(p);
+}
+
 int __cdecl main(void) {
+  test_alloc_vprintf();
   test_base64_encode();
   test_match_prefix();
   test_remove_double_dots();
@@ -454,11 +529,12 @@ int __cdecl main(void) {
   test_next_option();
   test_user_data();
   test_mg_stat();
+  test_skip_quoted();
   test_mg_upload();
 #ifdef USE_LUA
   test_lua();
 #endif
-  test_skip_quoted();
+
   printf("%s\n", "PASSED");
   return 0;
 }
