@@ -1276,7 +1276,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   HANDLE me;
   char *p, *interp, full_interp[PATH_MAX], full_dir[PATH_MAX],
        cmdline[PATH_MAX], buf[PATH_MAX];
-  struct file file;
+  struct file file = STRUCT_FILE_INITIALIZER;
   STARTUPINFOA si = { sizeof(si) };
   PROCESS_INFORMATION pi = { 0 };
 
@@ -2839,7 +2839,7 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
 }
 
 void mg_send_file(struct mg_connection *conn, const char *path) {
-  struct file file;
+  struct file file = STRUCT_FILE_INITIALIZER;
   if (mg_stat(conn, path, &file)) {
     handle_file_request(conn, path, &file);
   } else {
@@ -3355,7 +3355,7 @@ done:
 static int put_dir(struct mg_connection *conn, const char *path) {
   char buf[PATH_MAX];
   const char *s, *p;
-  struct file file;
+  struct file file = STRUCT_FILE_INITIALIZER;
   int len, res = 1;
 
   for (s = p = path + 2; (p = strchr(s, '/')) != NULL; s = ++p) {
@@ -3384,7 +3384,7 @@ static int put_dir(struct mg_connection *conn, const char *path) {
 }
 
 static void put_file(struct mg_connection *conn, const char *path) {
-  struct file file;
+  struct file file = STRUCT_FILE_INITIALIZER;
   const char *range;
   int64_t r1, r2;
   int rc;
@@ -3421,7 +3421,7 @@ static void send_ssi_file(struct mg_connection *, const char *,
 static void do_ssi_include(struct mg_connection *conn, const char *ssi,
                            char *tag, int include_level) {
   char file_name[MG_BUF_LEN], path[PATH_MAX], *p;
-  struct file file;
+  struct file file = STRUCT_FILE_INITIALIZER;
 
   // sscanf() is safe here, since send_ssi_file() also uses buffer
   // of size MG_BUF_LEN to get the tag. So strlen(tag) is always < MG_BUF_LEN.
@@ -3552,7 +3552,7 @@ static void send_ssi_file(struct mg_connection *conn, const char *path,
 
 static void handle_ssi_file_request(struct mg_connection *conn,
                                     const char *path) {
-  struct file file;
+  struct file file = STRUCT_FILE_INITIALIZER;
 
   if (!mg_fopen(conn, path, "rb", &file)) {
     send_http_error(conn, 500, http_500_error, "fopen(%s): %s", path,
@@ -4628,7 +4628,7 @@ static void uninitialize_ssl(struct mg_context *ctx) {
 #endif // !NO_SSL
 
 static int set_gpass_option(struct mg_context *ctx) {
-  struct file file;
+  struct file file = STRUCT_FILE_INITIALIZER;
   const char *path = ctx->config[GLOBAL_PASSWORDS_FILE];
   if (path != NULL && !mg_stat(fc(ctx), path, &file)) {
     cry(fc(ctx), "Cannot open %s: %s", path, strerror(ERRNO));
