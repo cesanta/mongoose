@@ -1455,9 +1455,12 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
     // How many bytes we send in this iteration
     k = len - sent > INT_MAX ? INT_MAX : (int) (len - sent);
 
+#ifndef NO_SSL
     if (ssl != NULL) {
       n = SSL_write(ssl, buf + sent, k);
-    } else if (fp != NULL) {
+    } else
+#endif
+      if (fp != NULL) {
       n = (int) fwrite(buf + sent, 1, (size_t) k, fp);
       if (ferror(fp))
         n = -1;
@@ -1487,9 +1490,11 @@ static int wait_until_socket_is_readable(struct mg_connection *conn) {
     pfd.fd = conn->client.sock;
     pfd.events = POLLIN;
     result = poll(&pfd, 1, 200);
+#ifndef NO_SSL
     if (result == 0 && conn->ssl != NULL) {
       result = SSL_pending(conn->ssl);
     }
+#endif
   } while ((result == 0 || (result < 0 && ERRNO == EINTR)) &&
            conn->ctx->stop_flag == 0);
 
@@ -1508,8 +1513,10 @@ static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
     nread = read(fileno(fp), buf, (size_t) len);
   } else if (!conn->must_close && !wait_until_socket_is_readable(conn)) {
     nread = -1;
+#ifndef NO_SSL
   } else if (conn->ssl != NULL) {
     nread = SSL_read(conn->ssl, buf, len);
+#endif
   } else {
     nread = recv(conn->client.sock, buf, (size_t) len, 0);
   }
@@ -1809,12 +1816,6 @@ static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
   }
 }
 
-static int sslize(struct mg_connection *conn, SSL_CTX *s, int (*func)(SSL *)) {
-  return (conn->ssl = SSL_new(s)) != NULL &&
-    SSL_set_fd(conn->ssl, conn->client.sock) == 1 &&
-    func(conn->ssl) == 1;
-}
-
 // Check whether full request is buffered. Return:
 //   -1  if request is malformed
 //    0  if request is not yet fully buffered
@@ -1828,7 +1829,8 @@ static int get_request_len(const char *buf, int buflen) {
     if (!isprint(* (const unsigned char *) s) && *s != '\r' &&
         *s != '\n' && * (const unsigned char *) s < 128) {
       len = -1;
-      break; // [i_a] abort scan as soon as one malformed character is found; don't let subsequent \r\n\r\n win us over anyhow
+      break;  // [i_a] abort scan as soon as one malformed character is found;
+              // don't let subsequent \r\n\r\n win us over anyhow
     } else if (s[0] == '\n' && s[1] == '\n') {
       len = (int) (s - buf) + 2;
     } else if (s[0] == '\n' && &s[1] < e &&
@@ -4500,6 +4502,12 @@ static int set_uid_option(struct mg_context *ctx) {
 #if !defined(NO_SSL)
 static pthread_mutex_t *ssl_mutexes;
 
+static int sslize(struct mg_connection *conn, SSL_CTX *s, int (*func)(SSL *)) {
+  return (conn->ssl = SSL_new(s)) != NULL &&
+    SSL_set_fd(conn->ssl, conn->client.sock) == 1 &&
+    func(conn->ssl) == 1;
+}
+
 // Return OpenSSL error message
 static const char *ssl_error(void) {
   unsigned long err;
@@ -4686,16 +4694,20 @@ static void close_connection(struct mg_connection *conn) {
   if (conn->client.sock != INVALID_SOCKET) {
     close_socket_gracefully(conn);
   }
+#ifndef NO_SSL
   // Must be done AFTER socket is closed
   if (conn->ssl != NULL) {
     SSL_free(conn->ssl);
   }
+#endif
 }
 
 void mg_close_connection(struct mg_connection *conn) {
+#ifndef NO_SSL
   if (conn->client_ssl_ctx != NULL) {
     SSL_CTX_free((SSL_CTX *) conn->client_ssl_ctx);
   }
+#endif
   close_connection(conn);
   free(conn);
 }
@@ -4743,12 +4755,14 @@ struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
       conn->client.sock = sock;
       conn->client.rsa.sin = sin;
       conn->client.is_ssl = use_ssl;
+#ifndef NO_SSL
       if (use_ssl) {
         // SSL_CTX_set_verify call is needed to switch off server certificate
         // checking, which is off by default in OpenSSL and on in yaSSL.
         SSL_CTX_set_verify(conn->client_ssl_ctx, 0, 0);
         sslize(conn, conn->client_ssl_ctx, SSL_connect);
       }
+#endif
     }
   }
 
@@ -4925,9 +4939,11 @@ static void *worker_thread(void *thread_func_param) {
       conn->request_info.remote_ip = ntohl(conn->request_info.remote_ip);
       conn->request_info.is_ssl = conn->client.is_ssl;
 
-      if (!conn->client.is_ssl ||
-          (conn->client.is_ssl &&
-           sslize(conn, conn->ctx->ssl_ctx, SSL_accept))) {
+      if (!conn->client.is_ssl
+#ifndef NO_SSL
+          || sslize(conn, conn->ctx->ssl_ctx, SSL_accept)
+#endif
+         ) {
         process_new_connection(conn);
       }
 
@@ -5068,11 +5084,11 @@ static void free_context(struct mg_context *ctx) {
       free(ctx->config[i]);
   }
 
+#ifndef NO_SSL
   // Deallocate SSL context
   if (ctx->ssl_ctx != NULL) {
     SSL_CTX_free(ctx->ssl_ctx);
   }
-#ifndef NO_SSL
   if (ssl_mutexes != NULL) {
     free(ssl_mutexes);
     ssl_mutexes = NULL;
