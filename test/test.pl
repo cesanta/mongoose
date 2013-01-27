@@ -456,7 +456,7 @@ sub do_PUT_test {
 }
 
 sub do_unit_test {
-  my $target = on_windows() ? 'windows_unit_test' : 'unix_unit_test';
+  my $target = on_windows() ? 'w' : 'u';
   system("make $target") == 0 or fail("Unit test failed!");
 }
 
