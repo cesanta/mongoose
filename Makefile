@@ -40,8 +40,8 @@ LUA_OBJECTS = $(LUA_SOURCES:%.c=%.o)
 #  Set MSVC variable below to where VS 6.0 is installed on your system
 #  Run "PATH_TO_VC6\bin\nmake windows"
 MSVC        = e:/vc6
-DBG         = /Zi /Od
-#DBG         = /DNDEBUG /O1
+#DBG         = /Zi /Od
+DBG         = /DNDEBUG /O1
 CL          = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 /DNO_SSL_DL \
               /I$(MSVC)/include /I$(LUA) /I. /I$(YASSL) /I$(YASSL)/cyassl /GA
 MSLIB       = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
@@ -49,8 +49,7 @@ MSLIB       = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
               cyassl.lib lua.lib
 
 # Stock windows binary builds with Lua and YASSL library.
-YASSL       = e:/cyassl-2.4.6
-#YASSL       = ~/stuff/cyassl-2.4.6
+YASSL       = ../cyassl-2.4.6
 YASSL_FLAGS = -I $(YASSL) -I $(YASSL)/cyassl \
               -D _LIB -D OPENSSL_EXTRA -D HAVE_ERRNO_H \
               -D HAVE_GETHOSTBYNAME -D HAVE_INET_NTOA -D HAVE_LIMITS_H \
