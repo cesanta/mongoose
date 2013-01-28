@@ -4386,7 +4386,7 @@ static int set_ports_option(struct mg_context *ctx) {
       success = 0;
     } else if ((so.sock = socket(so.lsa.sa.sa_family, SOCK_STREAM, 6)) ==
                INVALID_SOCKET ||
-               set_timeout(ctx, sock) ||
+               set_timeout(ctx, so.sock) ||
                // On Windows, SO_REUSEADDR is recommended only for
                // broadcast UDP sockets
                setsockopt(so.sock, SOL_SOCKET, SO_REUSEADDR, (const char *) &on,
