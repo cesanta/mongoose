@@ -432,7 +432,7 @@ enum {
   ACCESS_LOG_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
   GLOBAL_PASSWORDS_FILE, INDEX_FILES, ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST,
   EXTRA_MIME_TYPES, LISTENING_PORTS, DOCUMENT_ROOT, SSL_CERTIFICATE,
-  NUM_THREADS, RUN_AS_USER, REWRITE, HIDE_FILES,
+  NUM_THREADS, RUN_AS_USER, REWRITE, HIDE_FILES, REQUEST_TIMEOUT,
   NUM_OPTIONS
 };
 
@@ -460,6 +460,7 @@ static const char *config_options[] = {
   "u", "run_as_user", NULL,
   "w", "url_rewrite_patterns", NULL,
   "x", "hide_files_patterns", NULL,
+  "z", "request_timeout", NULL,
   NULL
 };
 #define ENTRIES_PER_CONFIG_OPTION 3
@@ -4351,6 +4352,23 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
   return 1;
 }
 
+static int set_timeout(struct mg_context *ctx, SOCKET sock) {
+#ifndef _WIN32
+    struct timeval timeout;
+    if( !ctx->config[REQUEST_TIMEOUT] )
+        return 0;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = atoi(ctx->config[REQUEST_TIMEOUT]) * 1000;
+#else
+    DWORD timeout;
+    if( !ctx->config[REQUEST_TIMEOUT] )
+        return 0;
+    timeout = atoi(ctx->config[REQUEST_TIMEOUT]);
+#endif
+    return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (void *)&timeout, sizeof(timeout))
+        || setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (void *)&timeout, sizeof(timeout));
+}
+
 static int set_ports_option(struct mg_context *ctx) {
   const char *list = ctx->config[LISTENING_PORTS];
   int on = 1, success = 1;
@@ -4368,6 +4386,7 @@ static int set_ports_option(struct mg_context *ctx) {
       success = 0;
     } else if ((so.sock = socket(so.lsa.sa.sa_family, SOCK_STREAM, 6)) ==
                INVALID_SOCKET ||
+               set_timeout(ctx, sock) ||
                // On Windows, SO_REUSEADDR is recommended only for
                // broadcast UDP sockets
                setsockopt(so.sock, SOL_SOCKET, SO_REUSEADDR, (const char *) &on,
