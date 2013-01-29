@@ -100,7 +100,7 @@ typedef long off_t;
 #if defined(_MSC_VER) && _MSC_VER < 1300
 #define STRX(x) #x
 #define STR(x) STRX(x)
-#define __func__ "line " STR(__LINE__)
+#define __func__ __FILE__ ":" STR(__LINE__)
 #define strtoull(x, y, z) strtoul(x, y, z)
 #define strtoll(x, y, z) strtol(x, y, z)
 #else
@@ -460,7 +460,7 @@ static const char *config_options[] = {
   "u", "run_as_user", NULL,
   "w", "url_rewrite_patterns", NULL,
   "x", "hide_files_patterns", NULL,
-  "z", "request_timeout", NULL,
+  "z", "request_timeout_ms", "30000",
   NULL
 };
 #define ENTRIES_PER_CONFIG_OPTION 3
@@ -1478,30 +1478,6 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
   return sent;
 }
 
-// This function is needed to prevent Mongoose to be stuck in a blocking
-// socket read when user requested exit. To do that, we sleep in select
-// with a timeout, and when returned, check the context for the stop flag.
-// If it is set, we return 0, and this means that we must not continue
-// reading, must give up and close the connection and exit serving thread.
-static int wait_until_socket_is_readable(struct mg_connection *conn) {
-  int result;
-  struct pollfd pfd;
-
-  do {
-    pfd.fd = conn->client.sock;
-    pfd.events = POLLIN;
-    result = poll(&pfd, 1, 200);
-#ifndef NO_SSL
-    if (result == 0 && conn->ssl != NULL) {
-      result = SSL_pending(conn->ssl);
-    }
-#endif
-  } while ((result == 0 || (result < 0 && ERRNO == EINTR)) &&
-           conn->ctx->stop_flag == 0);
-
-  return conn->ctx->stop_flag || result < 0 ? 0 : 1;
-}
-
 // Read from IO channel - opened file descriptor, socket, or SSL descriptor.
 // Return negative value on error, or number of bytes read on success.
 static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
@@ -1512,8 +1488,6 @@ static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
     // pipe, fread() may block until IO buffer is filled up. We cannot afford
     // to block and must pass all read bytes immediately to the client.
     nread = read(fileno(fp), buf, (size_t) len);
-  } else if (!conn->must_close && !wait_until_socket_is_readable(conn)) {
-    nread = -1;
 #ifndef NO_SSL
   } else if (conn->ssl != NULL) {
     nread = SSL_read(conn->ssl, buf, len);
@@ -2912,22 +2886,16 @@ static int parse_http_message(char *buf, int len, struct mg_request_info *ri) {
 // Upon every read operation, increase nread by the number of bytes read.
 static int read_request(FILE *fp, struct mg_connection *conn,
                         char *buf, int bufsiz, int *nread) {
-  int request_len, n = 1;
+  int request_len, n = 0;
 
   request_len = get_request_len(buf, *nread);
-  while (*nread < bufsiz && request_len == 0 && n > 0) {
-    n = pull(fp, conn, buf + *nread, bufsiz - *nread);
-    if (n > 0) {
-      *nread += n;
-      request_len = get_request_len(buf, *nread);
-    }
+  while (*nread < bufsiz && request_len == 0 &&
+         (n = pull(fp, conn, buf + *nread, bufsiz - *nread)) > 0) {
+    *nread += n;
+    request_len = get_request_len(buf, *nread);
   }
 
-  if (n < 0) {
-    // recv() error -> propagate error; do not process a b0rked-with-very-high-probability request
-    return -1;
-  }
-  return request_len;
+  return request_len <= 0 && n <= 0 ? -1 : request_len;
 }
 
 // For given directory path, substitute it to valid index file.
@@ -3838,9 +3806,6 @@ static void read_websocket(struct mg_connection *conn) {
       conn->data_len -= discard_len;
       conn->content_len = conn->consumed_content = 0;
     } else {
-      if (wait_until_socket_is_readable(conn) == 0) {
-        break;
-      }
       n = pull(NULL, conn, conn->buf + conn->data_len,
                conn->buf_size - conn->data_len);
       if (n <= 0) {
@@ -4352,23 +4317,6 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
   return 1;
 }
 
-static int set_timeout(struct mg_context *ctx, SOCKET sock) {
-#ifndef _WIN32
-    struct timeval timeout;
-    if( !ctx->config[REQUEST_TIMEOUT] )
-        return 0;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = atoi(ctx->config[REQUEST_TIMEOUT]) * 1000;
-#else
-    DWORD timeout;
-    if( !ctx->config[REQUEST_TIMEOUT] )
-        return 0;
-    timeout = atoi(ctx->config[REQUEST_TIMEOUT]);
-#endif
-    return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (void *)&timeout, sizeof(timeout))
-        || setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (void *)&timeout, sizeof(timeout));
-}
-
 static int set_ports_option(struct mg_context *ctx) {
   const char *list = ctx->config[LISTENING_PORTS];
   int on = 1, success = 1;
@@ -4380,31 +4328,20 @@ static int set_ports_option(struct mg_context *ctx) {
       cry(fc(ctx), "%s: %.*s: invalid port spec. Expecting list of: %s",
           __func__, (int) vec.len, vec.ptr, "[IP_ADDRESS:]PORT[s|p]");
       success = 0;
-    } else if (so.is_ssl &&
-               (ctx->ssl_ctx == NULL || ctx->config[SSL_CERTIFICATE] == NULL)) {
+    } else if (so.is_ssl && ctx->ssl_ctx == NULL) {
       cry(fc(ctx), "Cannot add SSL socket, is -ssl_certificate option set?");
       success = 0;
     } else if ((so.sock = socket(so.lsa.sa.sa_family, SOCK_STREAM, 6)) ==
                INVALID_SOCKET ||
-               set_timeout(ctx, so.sock) ||
                // On Windows, SO_REUSEADDR is recommended only for
                // broadcast UDP sockets
-               setsockopt(so.sock, SOL_SOCKET, SO_REUSEADDR, (const char *) &on,
-                          sizeof(on)) != 0 ||
-               // Set TCP keep-alive. This is needed because if HTTP-level
-               // keep-alive is enabled, and client resets the connection,
-               // server won't get TCP FIN or RST and will keep the connection
-               // open forever. With TCP keep-alive, next keep-alive
-               // handshake will figure out that the client is down and
-               // will close the server end.
-               // Thanks to Igor Klopov who suggested the patch.
-               setsockopt(so.sock, SOL_SOCKET, SO_KEEPALIVE, (char *) &on,
-                          sizeof(on)) != 0 ||
+               setsockopt(so.sock, SOL_SOCKET, SO_REUSEADDR,
+                          (void *) &on, sizeof(on)) != 0 ||
                bind(so.sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
                listen(so.sock, SOMAXCONN) != 0) {
-      closesocket(so.sock);
       cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
           (int) vec.len, vec.ptr, strerror(ERRNO));
+      closesocket(so.sock);
       success = 0;
     } else {
       set_close_on_exec(so.sock);
@@ -5003,29 +4940,45 @@ static void produce_socket(struct mg_context *ctx, const struct socket *sp) {
   (void) pthread_mutex_unlock(&ctx->mutex);
 }
 
+static int set_sock_timeout(SOCKET sock, int milliseconds) {
+#ifdef _WIN32
+  DWORD t = milliseconds;
+#else
+  struct timeval t;
+  t.tv_sec = milliseconds / 1000;
+  t.tv_usec = (milliseconds * 1000) % 1000000;
+#endif
+  return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (void *) &t, sizeof(t)) ||
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (void *) &t, sizeof(t));
+}
+
 static void accept_new_connection(const struct socket *listener,
                                   struct mg_context *ctx) {
-  struct socket accepted;
+  struct socket so;
   char src_addr[20];
-  socklen_t len;
-  int allowed;
+  socklen_t len = sizeof(so.rsa);
+  int on = 1;
 
-  len = sizeof(accepted.rsa);
-  accepted.sock = accept(listener->sock, &accepted.rsa.sa, &len);
-  if (accepted.sock != INVALID_SOCKET) {
-    allowed = check_acl(ctx, ntohl(* (uint32_t *) &accepted.rsa.sin.sin_addr));
-    if (allowed) {
-      // Put accepted socket structure into the queue
-      DEBUG_TRACE(("accepted socket %d", accepted.sock));
-      accepted.is_ssl = listener->is_ssl;
-      accepted.ssl_redir = listener->ssl_redir;
-      getsockname(accepted.sock, &accepted.lsa.sa, &len);
-      produce_socket(ctx, &accepted);
-    } else {
-      sockaddr_to_string(src_addr, sizeof(src_addr), &accepted.rsa);
-      cry(fc(ctx), "%s: %s is not allowed to connect", __func__, src_addr);
-      (void) closesocket(accepted.sock);
-    }
+  if ((so.sock = accept(listener->sock, &so.rsa.sa, &len)) == INVALID_SOCKET) {
+  } else if (!check_acl(ctx, ntohl(* (uint32_t *) &so.rsa.sin.sin_addr))) {
+    sockaddr_to_string(src_addr, sizeof(src_addr), &so.rsa);
+    cry(fc(ctx), "%s: %s is not allowed to connect", __func__, src_addr);
+    closesocket(so.sock);
+  } else {
+    // Put so socket structure into the queue
+    DEBUG_TRACE(("Accepted socket %d", (int) so.sock));
+    so.is_ssl = listener->is_ssl;
+    so.ssl_redir = listener->ssl_redir;
+    getsockname(so.sock, &so.lsa.sa, &len);
+    // Set TCP keep-alive. This is needed because if HTTP-level keep-alive
+    // is enabled, and client resets the connection, server won't get
+    // TCP FIN or RST and will keep the connection open forever. With TCP
+    // keep-alive, next keep-alive handshake will figure out that the client
+    // is down and will close the server end.
+    // Thanks to Igor Klopov who suggested the patch.
+    setsockopt(so.sock, SOL_SOCKET, SO_KEEPALIVE, (void *) &on, sizeof(on));
+    set_sock_timeout(so.sock, atoi(ctx->config[REQUEST_TIMEOUT]));
+    produce_socket(ctx, &so);
   }
 }
 
