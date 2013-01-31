@@ -516,6 +516,28 @@ static void test_alloc_vprintf(void) {
   free(p);
 }
 
+static void test_request_replies(void) {
+  char ebuf[100];
+  int i, port = atoi(HTTPS_PORT);
+  struct mg_connection *conn;
+  struct mg_context *ctx;
+  static struct { const char *request, *reply_regex; } tests[] = {
+    {
+      "GET test/hello.txt HTTP/1.0\r\nRange: bytes=3-5\r\n\r\n",
+      "^HTTP/1.1 206 Partial Content"
+    },
+    {NULL, NULL},
+  };
+
+  ASSERT((ctx = mg_start(event_handler, NULL, OPTIONS)) != NULL);
+  for (i = 0; tests[i].request != NULL; i++) {
+    ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
+                               tests[i].request)) != NULL);
+    mg_close_connection(conn);
+  }
+  mg_stop(ctx);
+}
+
 int __cdecl main(void) {
   test_alloc_vprintf();
   test_base64_encode();
@@ -531,6 +553,7 @@ int __cdecl main(void) {
   test_mg_stat();
   test_skip_quoted();
   test_mg_upload();
+  test_request_replies();
 #ifdef USE_LUA
   test_lua();
 #endif
