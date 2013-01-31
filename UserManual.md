@@ -1,8 +1,7 @@
 
 **NOTE: THIS MANUAL IS WORK IN PROGRESS**
 
-Overview
---------
+## Overview
 
 Mongoose is small and easy to use web server. It is self-contained, and does
 not require any external software to run.
@@ -45,8 +44,7 @@ Mongoose can also be used to modify `.htpasswd` passwords file:
 
     mongoose -A <htpasswd_file> <realm> <user> <passwd>
 
-Usage Examples
---------------
+## Usage Examples
 
 - How to share a Windows folder: copy mongoose executable to a folder and
   double-click the executable. The folder should be accessible via
@@ -59,8 +57,7 @@ Usage Examples
 - How to serve user home directories using URL rewrite:
   `mongoose -url_rewrite_patterns /~joe/=/home/joe/,/~bill=/home/bill/`
 
-Command Line Options
---------------------
+## Command Line Options
 ```
 
      -A htpasswd_file domain_name user_name password
@@ -190,14 +187,23 @@ Command Line Options
 
 ```
 
-Common Problems
+## Common Problems
 ---------------
+- PHP doesn't work - getting empty page, or 'File not found' error. The
+  reason for that is wrong paths to the interpreter. Remember that with PHP,
+  correct interpreter is `php-cgi.exe` (`php-cgi` on UNIX). Solution: specify
+  full path to the PHP interpreter, e.g.
+  `mongoose -cgi_interpreter /full/path/to/php-cgi`
 
-Embedding
----------
+## Embedding
+Embedding Mongoose is easy. Somewhere in the application code, `mg_start()`
+function must be called. That starts the web server in a separate thread.
+When it is not needed anymore, `mg_stop()` must be called.  Application code
+can pass configuration options to `mg_start()`, and also specify callback
+functions that Mongoose should call at certain events.
+[hello.c](http://a.c) provides a minimalistic example.
 
-Other Resources
----------------
+## Other Resources
 - Presentation made by Arnout Vandecappelle at FOSDEM 2011 on 2011-02-06
   in Brussels, Belgium, called
   "Creating secure web based user interfaces for Embedded Devices"
