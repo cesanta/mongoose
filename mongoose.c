@@ -3987,6 +3987,9 @@ static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
   int i;
 
   luaL_openlibs(L);
+#ifdef USE_LUA_SQLITE3
+  luaopen_lsqlite3(L);
+#endif
 
   // Register "print" function which calls mg_write()
   lua_pushlightuserdata(L, conn);

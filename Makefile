@@ -20,9 +20,8 @@ PROG        = mongoose
 CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread $(COPT)
 
 # To build with Lua, download and unzip Lua 5.2.1 source code into the
-# mongoose directory, and then add $(LUA_FLAGS) to CFLAGS below
+# mongoose directory, and then add $(LUA_SOURCES) to CFLAGS
 LUA         = lua-5.2.1/src
-LUA_FLAGS   = -I$(LUA) -L$(LUA) -llua -lm
 LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
               $(LUA)/ldebug.c $(LUA)/ldo.c $(LUA)/ldump.c \
               $(LUA)/lfunc.c $(LUA)/lgc.c $(LUA)/llex.c \
@@ -39,14 +38,13 @@ LUA_OBJECTS = $(LUA_SOURCES:%.c=%.o)
 # Using Visual Studio 6.0. To build Mongoose:
 #  Set MSVC variable below to where VS 6.0 is installed on your system
 #  Run "PATH_TO_VC6\bin\nmake windows"
-MSVC        = e:/vc6
+MSVC        = ../vc6
 #DBG         = /Zi /Od
 DBG         = /DNDEBUG /O1
-CL          = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 /DNO_SSL_DL \
+CL          = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 \
               /I$(MSVC)/include /I$(LUA) /I. /I$(YASSL) /I$(YASSL)/cyassl /GA
 MSLIB       = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
-              user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib \
-              cyassl.lib lua.lib
+              user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
 
 # Stock windows binary builds with Lua and YASSL library.
 YASSL       = ../cyassl-2.4.6
@@ -88,7 +86,8 @@ bsd:
 	$(CC) mongoose.c main.c -o $(PROG) $(CFLAGS)
 
 bsd_yassl:
-	$(CC) mongoose.c main.c -o $(PROG) $(CFLAGS) $(YASSL_SOURCES) $(YASSL_FLAGS) -DNO_SSL_DL
+	$(CC) mongoose.c main.c -o $(PROG) $(CFLAGS) $(YASSL_SOURCES) \
+          $(YASSL_FLAGS) -DNO_SSL_DL
 
 solaris:
 	$(CC) mongoose.c main.c -lnsl -lsocket -o $(PROG) $(CFLAGS)
@@ -97,26 +96,24 @@ cocoa:
 	$(CC) mongoose.c main.c -DUSE_COCOA $(CFLAGS) -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
 	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 Mongoose $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create Mongoose_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
 
-u: $(LUA_OBJECTS)
-	$(CC) test/unit_test.c -o unit_test -I. $(LUA_FLAGS) $(CFLAGS) -g -O0
+u:
+	$(CC) test/unit_test.c -o unit_test -I. -I$(LUA) $(LUA_SOURCES) \
+          $(CFLAGS) -g -O0
 	./unit_test
 
-cyassl.lib:
-	$(CL) /c /Fo$(YASSL)/ $(YASSL_SOURCES) $(YASSL_FLAGS) $(DEF)
-	$(MSVC)/bin/lib $(YASSL)/*.obj /out:$@
-
-lua.lib:
-	$(CL) /c /Fo$(LUA)/ $(LUA_SOURCES)
-	$(MSVC)/bin/lib $(LUA_SOURCES:%.c=%.obj) /out:$@
-
-w: cyassl.lib lua.lib
-	$(CL) test/unit_test.c $(MSLIB) /out:unit_test.exe
+w:
+	$(CL) test/unit_test.c $(LUA_SOURCES) $(YASSL_SOURCES) $(YASSL_FLAGS) \
+          $(MSLIB) /out:unit_test.exe
 	./unit_test.exe
 
-windows: cyassl.lib lua.lib
+windows:
 	$(MSVC)/bin/rc build\res.rc
-	$(CL) main.c mongoose.c /DUSE_LUA $(MSLIB) build\res.res \
-	/out:$(PROG).exe /subsystem:windows
+	$(CL) main.c mongoose.c \
+          $(MSLIB) build\res.res /out:$(PROG)_1.exe /subsystem:windows
+	$(CL) main.c mongoose.c build/lsqlite3.c build/sqlite3.c \
+          $(YASSL_SOURCES) $(YASSL_FLAGS) /DNO_SSL_DL \
+          $(LUA_SOURCES) /DUSE_LUA /DUSE_LUA_SQLITE3 /DLUA_COMPAT_ALL \
+          $(MSLIB) build\res.res /out:$(PROG).exe /subsystem:windows
 
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0 -ggdb
