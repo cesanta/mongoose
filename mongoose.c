@@ -4033,8 +4033,7 @@ static void handle_lsp_request(struct mg_connection *conn, const char *path,
   } else if ((L = luaL_newstate()) == NULL) {
     send_http_error(conn, 500, http_500_error, "%s", "y");
   } else {
-    mg_printf(conn, "%s", "HTTP/1.1 200 OK\r\n"
-              "Content-Type: text/html\r\nConnection: close\r\n\r\n");
+    // We're not sending HTTP headers here, Lua page must do it.
     prepare_lua_environment(conn, L);
     conn->request_info.ev_data = L;
     call_user(conn, MG_INIT_LUA);
