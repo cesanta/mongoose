@@ -52,6 +52,24 @@ struct mg_request_info {
 };
 
 
+// This structure needs to be passed to mg_start(), to let mongoose know
+// which callbacks to invoke. For detailed description, see
+// https://github.com/valenok/mongoose/blob/master/UserManual.md
+struct mg_callbacks {
+  int  (*request_start)(struct mg_connection *);
+  void (*request_done)(struct mg_connection *, int reply_status_code);
+  int  (*log_message)(struct mg_connection *, const char *message);
+  int  (*init_ssl)(void *ssl_context);
+  void (*websocket_connect)(struct mg_connection *);
+  void (*websocket_ready)(struct mg_connection *);
+  int  (*websocket_data)(struct mg_connection *);
+  void (*websocket_close)(struct mg_connection *);
+  void (*open_file)(struct mg_connection *, char **data, size_t *data_len);
+  void (*init_lua)(struct mg_connection *, void *lua_context);
+  void (*upload)(struct mg_connection *, const char *file_name);
+};
+
+
 // Various events on which user-defined callback function is called by Mongoose.
 enum mg_event {
   // New HTTP request has arrived from the client.
@@ -323,7 +341,7 @@ int mg_get_cookie(const struct mg_connection *,
 //   request_fmt,...: HTTP request.
 // Return:
 //   On success, valid pointer to the new connection, suitable for mg_read().
-//   On error, NULL.
+//   On error, NULL. error_buffer contains error message.
 // Example:
 //   char ebuf[100];
 //   struct mg_connection *conn;
