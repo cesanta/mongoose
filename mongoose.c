@@ -466,11 +466,11 @@ static const char *config_options[] = {
 #define ENTRIES_PER_CONFIG_OPTION 3
 
 struct mg_context {
-  volatile int stop_flag;       // Should we stop event loop
-  SSL_CTX *ssl_ctx;             // SSL context
-  char *config[NUM_OPTIONS];    // Mongoose configuration parameters
-  mg_callback_t user_callback;  // User-defined callback function
-  void *user_data;              // User-defined data
+  volatile int stop_flag;         // Should we stop event loop
+  SSL_CTX *ssl_ctx;               // SSL context
+  char *config[NUM_OPTIONS];      // Mongoose configuration parameters
+  struct mg_callbacks callbacks;  // User-defined callback function
+  void *user_data;                // User-defined data
 
   struct socket *listening_sockets;
   int num_listening_sockets;
@@ -512,20 +512,12 @@ const char **mg_get_valid_option_names(void) {
   return config_options;
 }
 
-static void *call_user(struct mg_connection *conn, enum mg_event event) {
-  if (conn != NULL && conn->ctx != NULL) {
-    conn->request_info.user_data = conn->ctx->user_data;
-  }
-  return conn == NULL || conn->ctx == NULL || conn->ctx->user_callback == NULL ?
-    NULL : conn->ctx->user_callback(event, conn);
-}
-
 static int is_file_in_memory(struct mg_connection *conn, const char *path,
                              struct file *filep) {
-  conn->request_info.ev_data = (void *) path;
-  if ((filep->membuf = call_user(conn, MG_OPEN_FILE)) != NULL) {
-    filep->size = (long) conn->request_info.ev_data;
-  }
+  size_t size = 0;
+  filep->membuf = conn->ctx->callbacks.open_file == NULL ? NULL :
+    conn->ctx->callbacks.open_file(conn, path, &size);
+  filep->size = size;
   return filep->membuf != NULL;
 }
 
@@ -610,8 +602,8 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
   // Do not lock when getting the callback value, here and below.
   // I suppose this is fine, since function cannot disappear in the
   // same way string option can.
-  conn->request_info.ev_data = buf;
-  if (call_user(conn, MG_EVENT_LOG) == NULL) {
+  if (conn->ctx->callbacks.log_message == NULL ||
+      conn->ctx->callbacks.log_message(conn, buf) == 0) {
     fp = conn->ctx == NULL || conn->ctx->config[ERROR_LOG_FILE] == NULL ? NULL :
       fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
 
@@ -634,7 +626,6 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
       fclose(fp);
     }
   }
-  conn->request_info.ev_data = NULL;
 }
 
 // Return fake connection structure. Used for logging, if connection
@@ -917,31 +908,27 @@ static void send_http_error(struct mg_connection *conn, int status,
                             const char *reason, const char *fmt, ...) {
   char buf[MG_BUF_LEN];
   va_list ap;
-  int len;
+  int len = 0;
 
   conn->status_code = status;
-  conn->request_info.ev_data = (void *) (long) status;
-  if (call_user(conn, MG_HTTP_ERROR) == NULL) {
-    buf[0] = '\0';
-    len = 0;
+  buf[0] = '\0';
 
-    // Errors 1xx, 204 and 304 MUST NOT send a body
-    if (status > 199 && status != 204 && status != 304) {
-      len = mg_snprintf(conn, buf, sizeof(buf), "Error %d: %s", status, reason);
-      buf[len++] = '\n';
+  // Errors 1xx, 204 and 304 MUST NOT send a body
+  if (status > 199 && status != 204 && status != 304) {
+    len = mg_snprintf(conn, buf, sizeof(buf), "Error %d: %s", status, reason);
+    buf[len++] = '\n';
 
-      va_start(ap, fmt);
-      len += mg_vsnprintf(conn, buf + len, sizeof(buf) - len, fmt, ap);
-      va_end(ap);
-    }
-    DEBUG_TRACE(("[%s]", buf));
-
-    mg_printf(conn, "HTTP/1.1 %d %s\r\n"
-              "Content-Length: %d\r\n"
-              "Connection: %s\r\n\r\n", status, reason, len,
-              suggest_connection_header(conn));
-    conn->num_bytes_sent += mg_printf(conn, "%s", buf);
+    va_start(ap, fmt);
+    len += mg_vsnprintf(conn, buf + len, sizeof(buf) - len, fmt, ap);
+    va_end(ap);
   }
+  DEBUG_TRACE(("[%s]", buf));
+
+  mg_printf(conn, "HTTP/1.1 %d %s\r\n"
+            "Content-Length: %d\r\n"
+            "Connection: %s\r\n\r\n", status, reason, len,
+            suggest_connection_header(conn));
+  conn->num_bytes_sent += mg_printf(conn, "%s", buf);
 }
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
@@ -2609,7 +2596,7 @@ static int scan_directory(struct mg_connection *conn, const char *dir,
       // print_dir_entry(). memset is required only if mg_stat()
       // fails. For more details, see
       // http://code.google.com/p/mongoose/issues/detail?id=79
-      // mg_stat will memset the whole struct file with zeroes.
+      memset(&de.file, 0, sizeof(de.file));
       mg_stat(conn, path, &de.file);
 
       de.file_name = dp->d_name;
@@ -3797,7 +3784,8 @@ static void read_websocket(struct mg_connection *conn) {
     }
 
     if (conn->content_len > 0) {
-      if (call_user(conn, MG_WEBSOCKET_MESSAGE) != NULL) {
+      if (conn->ctx->callbacks.websocket_data != NULL &&
+          conn->ctx->callbacks.websocket_data(conn) == 0) {
         break;  // Callback signalled to exit
       }
       discard_len = conn->content_len > body_len ?
@@ -3819,13 +3807,15 @@ static void read_websocket(struct mg_connection *conn) {
 static void handle_websocket_request(struct mg_connection *conn) {
   if (strcmp(mg_get_header(conn, "Sec-WebSocket-Version"), "13") != 0) {
     send_http_error(conn, 426, "Upgrade Required", "%s", "Upgrade Required");
-  } else if (call_user(conn, MG_WEBSOCKET_CONNECT) != NULL) {
-    // Callback has returned non-NULL, do not proceed with handshake
+  } else if (conn->ctx->callbacks.websocket_connect != NULL &&
+             conn->ctx->callbacks.websocket_connect(conn) != 0) {
+    // Callback has returned non-zero, do not proceed with handshake
   } else {
     send_websocket_handshake(conn);
-    call_user(conn, MG_WEBSOCKET_READY);
+    if (conn->ctx->callbacks.websocket_ready != NULL) {
+      conn->ctx->callbacks.websocket_ready(conn);
+    }
     read_websocket(conn);
-    call_user(conn, MG_WEBSOCKET_CLOSE);
   }
 }
 
@@ -4035,8 +4025,9 @@ static void handle_lsp_request(struct mg_connection *conn, const char *path,
   } else {
     // We're not sending HTTP headers here, Lua page must do it.
     prepare_lua_environment(conn, L);
-    conn->request_info.ev_data = L;
-    call_user(conn, MG_INIT_LUA);
+    if (conn->ctx->callbacks.init_lua != NULL) {
+      conn->ctx->callbacks.init_lua(conn, L);
+    }
     lsp(conn, filep->membuf == NULL ? p : filep->membuf, filep->size, L);
   }
 
@@ -4135,8 +4126,9 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
           fwrite(buf, 1, i, fp);
           fflush(fp);
           num_uploaded_files++;
-          conn->request_info.ev_data = (void *) path;
-          call_user(conn, MG_UPLOAD);
+          if (conn->ctx->callbacks.upload != NULL) {
+            conn->ctx->callbacks.upload(conn, path);
+          }
           memmove(buf, &buf[i + bl], len - (i + bl));
           len -= i + bl;
           break;
@@ -4203,7 +4195,8 @@ static void handle_request(struct mg_connection *conn) {
                                 get_remote_ip(conn), ri->uri);
 
   DEBUG_TRACE(("%s", ri->uri));
-  if (call_user(conn, MG_NEW_REQUEST) != NULL) {
+  if (conn->ctx->callbacks.begin_request != NULL &&
+      conn->ctx->callbacks.begin_request(conn)) {
     // Do nothing, callback has served the request
   } else if (!conn->client.is_ssl && conn->client.ssl_redir &&
       (ssl_index = get_first_ssl_listener_index(conn->ctx)) > -1) {
@@ -4550,8 +4543,8 @@ static int set_ssl_option(struct mg_context *ctx) {
 
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
-  fc(ctx)->request_info.ev_data = ctx->ssl_ctx;
-  if (call_user(fc(ctx), MG_INIT_SSL) == NULL &&
+  if ((ctx->callbacks.init_ssl == NULL ||
+       !ctx->callbacks.init_ssl(ctx->ssl_ctx)) &&
       (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, 1) == 0 ||
        SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, 1) == 0)) {
     cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
@@ -4608,7 +4601,7 @@ static int set_acl_option(struct mg_context *ctx) {
 }
 
 static void reset_per_request_attributes(struct mg_connection *conn) {
-  conn->path_info = conn->request_info.ev_data = NULL;
+  conn->path_info = NULL;
   conn->num_bytes_sent = conn->consumed_content = 0;
   conn->status_code = -1;
   conn->must_close = conn->request_len = conn->throttle = 0;
@@ -4811,8 +4804,9 @@ static void process_new_connection(struct mg_connection *conn) {
 
     if (ebuf[0] == '\0') {
       handle_request(conn);
-      conn->request_info.ev_data = (void *) (long) conn->status_code;
-      call_user(conn, MG_REQUEST_COMPLETE);
+      if (conn->ctx->callbacks.end_request != NULL) {
+        conn->ctx->callbacks.end_request(conn, conn->status_code);
+      }
       log_access(conn);
     }
     if (ri->remote_user != NULL) {
@@ -5087,7 +5081,8 @@ void mg_stop(struct mg_context *ctx) {
 #endif // _WIN32
 }
 
-struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
+struct mg_context *mg_start(const struct mg_callbacks *callbacks,
+                            void *user_data,
                             const char **options) {
   struct mg_context *ctx;
   const char *name, *value, *default_value;
@@ -5104,7 +5099,7 @@ struct mg_context *mg_start(mg_callback_t user_callback, void *user_data,
   if ((ctx = (struct mg_context *) calloc(1, sizeof(*ctx))) == NULL) {
     return NULL;
   }
-  ctx->user_callback = user_callback;
+  ctx->callbacks = *callbacks;
   ctx->user_data = user_data;
 
   while (options && (name = *options++) != NULL) {

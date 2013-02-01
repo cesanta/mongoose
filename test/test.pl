@@ -426,7 +426,7 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   do_PUT_test();
   kill_spawned_child();
   do_unit_test();
-  do_embedded_test();
+#do_embedded_test();
 }
 
 sub do_PUT_test {

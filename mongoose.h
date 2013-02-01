@@ -42,13 +42,13 @@ struct mg_request_info {
   long remote_ip;             // Client's IP address
   int remote_port;            // Client's port
   int is_ssl;                 // 1 if SSL-ed, 0 if not
-  int num_headers;            // Number of headers
+  void *user_data;            // User data pointer passed to mg_start()
+
+  int num_headers;            // Number of HTTP headers
   struct mg_header {
     const char *name;         // HTTP header name
     const char *value;        // HTTP header value
   } http_headers[64];         // Maximum 64 headers
-  void *user_data;            // User data pointer passed to mg_start()
-  void *ev_data;              // Event-specific data pointer
 };
 
 
@@ -56,126 +56,23 @@ struct mg_request_info {
 // which callbacks to invoke. For detailed description, see
 // https://github.com/valenok/mongoose/blob/master/UserManual.md
 struct mg_callbacks {
-  int  (*request_start)(struct mg_connection *);
-  void (*request_done)(struct mg_connection *, int reply_status_code);
-  int  (*log_message)(struct mg_connection *, const char *message);
+  int  (*begin_request)(struct mg_connection *);
+  void (*end_request)(const struct mg_connection *, int reply_status_code);
+  int  (*log_message)(const struct mg_connection *, const char *message);
   int  (*init_ssl)(void *ssl_context);
-  void (*websocket_connect)(struct mg_connection *);
+  int (*websocket_connect)(const struct mg_connection *);
   void (*websocket_ready)(struct mg_connection *);
   int  (*websocket_data)(struct mg_connection *);
-  void (*websocket_close)(struct mg_connection *);
-  void (*open_file)(struct mg_connection *, char **data, size_t *data_len);
+  const char * (*open_file)(const struct mg_connection *,
+                             const char *path, size_t *data_len);
   void (*init_lua)(struct mg_connection *, void *lua_context);
   void (*upload)(struct mg_connection *, const char *file_name);
 };
 
-
-// Various events on which user-defined callback function is called by Mongoose.
-enum mg_event {
-  // New HTTP request has arrived from the client.
-  // If callback returns non-NULL, Mongoose stops handling current request.
-  // ev_data contains NULL.
-  MG_NEW_REQUEST,
-
-  // Mongoose has finished handling the request.
-  // Callback return value is ignored.
-  // ev_data contains integer HTTP status code:
-  //  int http_reply_status_code = (long) request_info->ev_data;
-  MG_REQUEST_COMPLETE,
-
-  // HTTP error must be returned to the client.
-  // If callback returns non-NULL, Mongoose stops handling error.
-  // ev_data contains HTTP error code:
-  //  int http_reply_status_code = (long) request_info->ev_data;
-  MG_HTTP_ERROR,
-
-  // Mongoose logs a message.
-  // If callback returns non-NULL, Mongoose stops handling that event.
-  // ev_data contains a message to be logged:
-  //   const char *log_message = request_info->ev_data;
-  MG_EVENT_LOG,
-
-  // SSL initialization, sent before certificate setup.
-  // If callback returns non-NULL, Mongoose does not set up certificates.
-  // ev_data contains server's OpenSSL context:
-  //   SSL_CTX *ssl_context = request_info->ev_data;
-  MG_INIT_SSL,
-
-  // Sent on HTTP connect, before websocket handshake.
-  // If user callback returns NULL, then mongoose proceeds
-  // with handshake, otherwise it closes the connection.
-  // ev_data contains NULL.
-  MG_WEBSOCKET_CONNECT,
-
-  // Handshake has been successfully completed.
-  // Callback's return value is ignored.
-  // ev_data contains NULL.
-  MG_WEBSOCKET_READY,
-
-  // Incoming message from the client, data could be read with mg_read().
-  // If user callback returns non-NULL, mongoose closes the websocket.
-  // ev_data contains NULL.
-  MG_WEBSOCKET_MESSAGE,
-
-  // Client has closed the connection.
-  // Callback's return value is ignored.
-  // ev_data contains NULL.
-  MG_WEBSOCKET_CLOSE,
-
-  // Mongoose tries to open file.
-  // If callback returns non-NULL, Mongoose will not try to open it, but
-  // will use the returned value as a pointer to the file data. This allows
-  // for example to serve files from memory.
-  // ev_data contains file path, including document root path.
-  // Upon return, ev_data should return file size,  which should be a long int.
-  //
-  //   const char *file_name = request_info->ev_data;
-  //   if (strcmp(file_name, "foo.txt") == 0) {
-  //     request_info->ev_data = (void *) (long) 4;
-  //     return "data";
-  //   }
-  //   return NULL;
-  //
-  // Note that this even is sent multiple times during one request. Each
-  // time mongoose tries to open or stat the file, this event is sent, e.g.
-  // for opening .htpasswd file, stat-ting requested file, opening requested
-  // file, etc.
-  MG_OPEN_FILE,
-
-  // Mongoose initializes Lua server page. Sent only if Lua support is enabled.
-  // Callback's return value is ignored.
-  // ev_data contains lua_State pointer.
-  MG_INIT_LUA,
-
-  // Mongoose has uploaded file to a temporary directory.
-  // Callback's return value is ignored.
-  // ev_data contains NUL-terminated file name.
-  MG_UPLOAD,
-};
-
-
-// Prototype for the user-defined function. Mongoose calls this function
-// on every MG_* event.
-//
-// Parameters:
-//   event: which event has been triggered.
-//   conn: opaque connection handler. Could be used to read, write data to the
-//         client, etc. See functions below that have "mg_connection *" arg.
-//
-// Return:
-//   If handler returns non-NULL, that means that handler has processed the
-//   request by sending appropriate HTTP reply to the client. Mongoose treats
-//   the request as served.
-//   If handler returns NULL, that means that handler has not processed
-//   the request. Handler must not send any data to the client in this case.
-//   Mongoose proceeds with request handling as if nothing happened.
-typedef void *(*mg_callback_t)(enum mg_event event, struct mg_connection *conn);
-
-
 // Start web server.
 //
 // Parameters:
-//   callback: user defined event handling function or NULL.
+//   callbacks: mg_callbacks structure with user-defined callbacks.
 //   options: NULL terminated list of option_name, option_value pairs that
 //            specify Mongoose configuration parameters.
 //
@@ -197,8 +94,9 @@ typedef void *(*mg_callback_t)(enum mg_event event, struct mg_connection *conn);
 //
 // Return:
 //   web server context, or NULL on error.
-struct mg_context *mg_start(mg_callback_t callback, void *user_data,
-                            const char **options);
+struct mg_context *mg_start(const struct mg_callbacks *callbacks,
+                            void *user_data,
+                            const char **configuration_options);
 
 
 // Stop the web server.

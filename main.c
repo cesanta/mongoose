@@ -266,17 +266,14 @@ static void init_server_name(void) {
            mg_version());
 }
 
-static void *mongoose_callback(enum mg_event ev, struct mg_connection *conn) {
-  if (ev == MG_EVENT_LOG) {
-    printf("%s\n", (const char *) mg_get_request_info(conn)->ev_data);
-  }
-
-  // Returning NULL marks request as not handled, signalling mongoose to
-  // proceed with handling it.
-  return NULL;
+static int log_message(const struct mg_connection *conn, const char *message) {
+  (void) conn;
+  printf("%s\n", message);
+  return 0;
 }
 
 static void start_mongoose(int argc, char *argv[]) {
+  struct mg_callbacks callbacks;
   char *options[MAX_OPTIONS];
   int i;
 
@@ -302,7 +299,9 @@ static void start_mongoose(int argc, char *argv[]) {
   signal(SIGINT, signal_handler);
 
   /* Start Mongoose */
-  ctx = mg_start(&mongoose_callback, NULL, (const char **) options);
+  memset(&callbacks, 0, sizeof(callbacks));
+  callbacks.log_message = &log_message;
+  ctx = mg_start(&callbacks, NULL, (const char **) options);
   for (i = 0; options[i] != NULL; i++) {
     free(options[i]);
   }

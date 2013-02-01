@@ -189,43 +189,60 @@ static const char *inmemory_file_data = "hi there";
 static const char *upload_filename = "upload_test.txt";
 static const char *upload_ok_message = "upload successful";
 
-static void *event_handler(enum mg_event event, struct mg_connection *conn) {
-  const struct mg_request_info *request_info = mg_get_request_info(conn);
+static const char *open_file_cb(const struct mg_connection *conn,
+                                const char *path, size_t *size) {
+  (void) conn;
+  if (!strcmp(path, "./blah")) {
+    *size = strlen(inmemory_file_data);
+    return inmemory_file_data;
+  }
+  return NULL;
+}
 
-  if (event == MG_NEW_REQUEST && !strcmp(request_info->uri, "/data")) {
+static void upload_cb(struct mg_connection *conn, const char *path) {
+  char *p1, *p2;
+  int len1, len2;
+
+  ASSERT(!strcmp(path, "./upload_test.txt"));
+  ASSERT((p1 = read_file("mongoose.c", &len1)) != NULL);
+  ASSERT((p2 = read_file(path, &len2)) != NULL);
+  ASSERT(len1 == len2);
+  ASSERT(memcmp(p1, p2, len1) == 0);
+  free(p1), free(p2);
+  remove(upload_filename);
+
+  mg_printf(conn, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n\r\n%s",
+            (int) strlen(upload_ok_message), upload_ok_message);
+}
+
+static int begin_request_handler_cb(struct mg_connection *conn) {
+  const struct mg_request_info *ri = mg_get_request_info(conn);
+
+  if (!strcmp(ri->uri, "/data")) {
     mg_printf(conn, "HTTP/1.1 200 OK\r\n"
               "Content-Length: %d\r\n"
               "Content-Type: text/plain\r\n\r\n"
               "%s", (int) strlen(fetch_data), fetch_data);
-    return "";
-  } else if (event == MG_NEW_REQUEST && !strcmp(request_info->uri, "/upload")) {
-    ASSERT(mg_upload(conn, ".") == 1);
-  } else if (event == MG_OPEN_FILE) {
-    const char *path = request_info->ev_data;
-    if (strcmp(path, "./blah") == 0) {
-      mg_get_request_info(conn)->ev_data =
-        (void *) (long) strlen(inmemory_file_data);
-      return (void *) inmemory_file_data;
-    }
-  } else if (event == MG_EVENT_LOG) {
-  } else if (event == MG_UPLOAD) {
-    char *p1, *p2;
-    int len1, len2;
-
-    ASSERT(!strcmp((char *) request_info->ev_data, "./upload_test.txt"));
-    ASSERT((p1 = read_file("mongoose.c", &len1)) != NULL);
-    ASSERT((p2 = read_file(upload_filename, &len2)) != NULL);
-    ASSERT(len1 == len2);
-    ASSERT(memcmp(p1, p2, len1) == 0);
-    free(p1), free(p2);
-    remove(upload_filename);
-
-    mg_printf(conn, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n\r\n%s",
-              (int) strlen(upload_ok_message), upload_ok_message);
+    return 1;
   }
 
-  return NULL;
+  if (!strcmp(ri->uri, "/upload")) {
+    ASSERT(mg_upload(conn, ".") == 1);
+  }
+
+  return 0;
 }
+
+static int log_message_cb(const struct mg_connection *conn, const char *msg) {
+  (void) conn;
+  printf("%s\n", msg);
+  return 0;
+}
+
+static const struct mg_callbacks CALLBACKS = {
+  &begin_request_handler_cb, NULL, &log_message_cb, NULL, NULL, NULL, NULL,
+  &open_file_cb, NULL, &upload_cb
+};
 
 static const char *OPTIONS[] = {
   "document_root", ".",
@@ -252,7 +269,7 @@ static void test_mg_download(void) {
   struct mg_connection *conn;
   struct mg_context *ctx;
 
-  ASSERT((ctx = mg_start(event_handler, NULL, OPTIONS)) != NULL);
+  ASSERT((ctx = mg_start(&CALLBACKS, NULL, OPTIONS)) != NULL);
 
   ASSERT(mg_download(NULL, port, 0, ebuf, sizeof(ebuf), "%s", "") == NULL);
   ASSERT(mg_download("localhost", 0, 0, ebuf, sizeof(ebuf), "%s", "") == NULL);
@@ -323,7 +340,7 @@ static void test_mg_upload(void) {
   char ebuf[100], buf[20], *file_data, *post_data = NULL;
   int file_len, post_data_len;
 
-  ASSERT((ctx = mg_start(event_handler, NULL, OPTIONS)) != NULL);
+  ASSERT((ctx = mg_start(&CALLBACKS, NULL, OPTIONS)) != NULL);
   ASSERT((file_data = read_file("mongoose.c", &file_len)) != NULL);
   post_data_len = alloc_printf(&post_data, 0,
                                        "--%s\r\n"
@@ -462,22 +479,6 @@ static void test_lua(void) {
 }
 #endif
 
-static void *user_data_tester(enum mg_event event, struct mg_connection *conn) {
-  struct mg_request_info *ri = mg_get_request_info(conn);
-  ASSERT(ri->user_data == (void *) 123);
-  ASSERT(event == MG_NEW_REQUEST || event == MG_INIT_SSL);
-  return NULL;
-}
-
-static void test_user_data(void) {
-  struct mg_context *ctx;
-
-  ASSERT((ctx = mg_start(user_data_tester, (void *) 123, OPTIONS)) != NULL);
-  ASSERT(ctx->user_data == (void *) 123);
-  call_user(fc(ctx), MG_NEW_REQUEST);
-  mg_stop(ctx);
-}
-
 static void test_mg_stat(void) {
   static struct mg_context ctx;
   struct file file = STRUCT_FILE_INITIALIZER;
@@ -529,7 +530,7 @@ static void test_request_replies(void) {
     {NULL, NULL},
   };
 
-  ASSERT((ctx = mg_start(event_handler, NULL, OPTIONS)) != NULL);
+  ASSERT((ctx = mg_start(&CALLBACKS, NULL, OPTIONS)) != NULL);
   for (i = 0; tests[i].request != NULL; i++) {
     ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
                                tests[i].request)) != NULL);
@@ -549,7 +550,6 @@ int __cdecl main(void) {
   test_mg_get_var();
   test_set_throttle();
   test_next_option();
-  test_user_data();
   test_mg_stat();
   test_skip_quoted();
   test_mg_upload();
