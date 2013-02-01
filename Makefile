@@ -102,7 +102,8 @@ u:
 	./unit_test
 
 w:
-	$(CL) test/unit_test.c $(LUA_SOURCES) $(YASSL_SOURCES) $(YASSL_FLAGS) \
+	$(CL) test/unit_test.c $(LUA_SOURCES) \
+          $(YASSL_SOURCES) $(YASSL_FLAGS) /DNO_SSL_DL \
           $(MSLIB) /out:unit_test.exe
 	./unit_test.exe
 
