@@ -86,14 +86,20 @@ bsd:
 	$(CC) mongoose.c main.c -o $(PROG) $(CFLAGS)
 
 bsd_yassl:
-	$(CC) mongoose.c main.c -o $(PROG) $(CFLAGS) $(YASSL_SOURCES) \
-          $(YASSL_FLAGS) -DNO_SSL_DL
+	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c -o $(PROG) \
+          $(CFLAGS) -I$(LUA) -Ibuild \
+          $(YASSL_SOURCES) $(YASSL_FLAGS) -DNO_SSL_DL \
+          $(LUA_SOURCES) -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL
 
 solaris:
 	$(CC) mongoose.c main.c -lnsl -lsocket -o $(PROG) $(CFLAGS)
 
 cocoa:
-	$(CC) mongoose.c main.c -DUSE_COCOA $(CFLAGS) -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
+	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c \
+          -DUSE_COCOA $(CFLAGS) -I$(LUA) -Ibuild \
+          $(YASSL_SOURCES) $(YASSL_FLAGS) -DNO_SSL_DL \
+          $(LUA_SOURCES) -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL \
+          -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
 	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 Mongoose $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create Mongoose_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
 
 u:
@@ -109,8 +115,6 @@ w:
 
 windows:
 	$(MSVC)/bin/rc build\res.rc
-	$(CL) main.c mongoose.c \
-          $(MSLIB) build\res.res /out:$(PROG)_1.exe /subsystem:windows
 	$(CL) main.c mongoose.c build/lsqlite3.c build/sqlite3.c \
           $(YASSL_SOURCES) $(YASSL_FLAGS) /DNO_SSL_DL \
           $(LUA_SOURCES) /DUSE_LUA /DUSE_LUA_SQLITE3 /DLUA_COMPAT_ALL \
@@ -141,8 +145,12 @@ cygwin:
 tests:
 	perl test/test.pl $(TEST)
 
-release: clean
+tarball: clean
 	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`.tgz ; cd .. && tar -czf x mongoose/{LICENSE,Makefile,examples,test,build,*.[ch],*.md} && mv x mongoose/$$F
+
+release: tarball cocoa
+	wine make windows
+	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; upx mongoose.exe; cp mongoose.exe mongoose-$$V.exe; cp mongoose.exe mongoose_php_bundle/; zip -r mongoose_php_bundle_$$V.zip mongoose_php_bundle/
 
 clean:
 	cd examples && $(MAKE) clean
