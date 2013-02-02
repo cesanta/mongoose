@@ -515,9 +515,12 @@ const char **mg_get_valid_option_names(void) {
 static int is_file_in_memory(struct mg_connection *conn, const char *path,
                              struct file *filep) {
   size_t size = 0;
-  filep->membuf = conn->ctx->callbacks.open_file == NULL ? NULL :
-    conn->ctx->callbacks.open_file(conn, path, &size);
-  filep->size = size;
+  if ((filep->membuf = conn->ctx->callbacks.open_file == NULL ? NULL :
+       conn->ctx->callbacks.open_file(conn, path, &size)) != NULL) {
+    // NOTE: override filep->size only on success. Otherwise, it might break
+    // constructs like if (!mg_stat() || !mg_fopen()) ...
+    filep->size = size;
+  }
   return filep->membuf != NULL;
 }
 
@@ -4014,14 +4017,15 @@ static void handle_lsp_request(struct mg_connection *conn, const char *path,
   void *p = NULL;
   lua_State *L = NULL;
 
-  if (!mg_fopen(conn, path, "r", filep)) {
+  if (!mg_stat(conn, path, filep) || !mg_fopen(conn, path, "r", filep)) {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
   } else if (filep->membuf == NULL &&
-             (p = mmap(NULL, filep->size, PROT_READ, MAP_PRIVATE,
+             (p = mmap(NULL, (size_t) filep->size, PROT_READ, MAP_PRIVATE,
                        fileno(filep->fp), 0)) == MAP_FAILED) {
-    send_http_error(conn, 500, http_500_error, "%s", "x");
+    send_http_error(conn, 500, http_500_error, "mmap(%s, %zu, %d): %s", path,
+                    (size_t) filep->size, fileno(filep->fp), strerror(errno));
   } else if ((L = luaL_newstate()) == NULL) {
-    send_http_error(conn, 500, http_500_error, "%s", "y");
+    send_http_error(conn, 500, http_500_error, "%s", "luaL_newstate failed");
   } else {
     // We're not sending HTTP headers here, Lua page must do it.
     prepare_lua_environment(conn, L);
