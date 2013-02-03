@@ -146,11 +146,6 @@ if ($^O =~ /darwin|bsd|linux/) {
   }
 }
 
-if (scalar(@ARGV) > 0 and $ARGV[0] eq 'embedded') {
-  do_embedded_test();
-  exit 0;
-}
-
 if (scalar(@ARGV) > 0 and $ARGV[0] eq 'unit') {
   do_unit_test();
   exit 0;
@@ -426,7 +421,6 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   do_PUT_test();
   kill_spawned_child();
   do_unit_test();
-#do_embedded_test();
 }
 
 sub do_PUT_test {
@@ -458,70 +452,6 @@ sub do_PUT_test {
 sub do_unit_test {
   my $target = on_windows() ? 'w' : 'u';
   system("make $target") == 0 or fail("Unit test failed!");
-}
-
-sub do_embedded_test {
-  my $cmd = "cc -W -Wall -o $embed_exe $root/embed.c mongoose.c -I. ".
-  "-pthread -DNO_SSL -DLISTENING_PORT=\\\"127.0.0.1:$port\\\"";
-  if (on_windows()) {
-    $cmd = "cl $root/embed.c mongoose.c /I. /nologo /DNO_SSL ".
-    "/DLISTENING_PORT=\\\"$port\\\" /link /out:$embed_exe.exe ws2_32.lib ";
-  }
-  print $cmd, "\n";
-  system($cmd) == 0 or fail("Cannot compile embedded unit test");
-
-  spawn("./$embed_exe");
-  o("GET /test_get_header HTTP/1.0\nHost: blah\n\n",
-    'Value: \[blah\]', 'mg_get_header', 0);
-  o("GET /test_get_var?a=b&my_var=foo&c=d HTTP/1.0\n\n",
-    'Value: \[foo\]', 'mg_get_var 1', 0);
-  o("GET /test_get_var?my_var=foo&c=d HTTP/1.0\n\n",
-    'Value: \[foo\]', 'mg_get_var 2', 0);
-  o("GET /test_get_var?a=b&my_var=foo HTTP/1.0\n\n",
-    'Value: \[foo\]', 'mg_get_var 3', 0);
-  o("POST /test_get_var HTTP/1.0\nContent-Length: 10\n\n".
-    "my_var=foo", 'Value: \[foo\]', 'mg_get_var 4', 0);
-  o("POST /test_get_var HTTP/1.0\nContent-Length: 18\n\n".
-    "a=b&my_var=foo&c=d", 'Value: \[foo\]', 'mg_get_var 5', 0);
-  o("POST /test_get_var HTTP/1.0\nContent-Length: 14\n\n".
-    "a=b&my_var=foo", 'Value: \[foo\]', 'mg_get_var 6', 0);
-  o("GET /test_get_var?a=one%2btwo&my_var=foo& HTTP/1.0\n\n",
-    'Value: \[foo\]', 'mg_get_var 7', 0);
-  o("GET /test_get_var?my_var=one%2btwo&b=two%2b HTTP/1.0\n\n",
-    'Value: \[one\+two\]', 'mg_get_var 8', 0);
-
-  # + in form data MUST be decoded to space
-  o("POST /test_get_var HTTP/1.0\nContent-Length: 10\n\n".
-    "my_var=b+c", 'Value: \[b c\]', 'mg_get_var 9', 0);
-
-  # Test that big POSTed vars are not truncated
-  my $my_var = 'x' x 64000;
-  o("POST /test_get_var HTTP/1.0\nContent-Length: 64007\n\n".
-    "my_var=$my_var", 'Value size: \[64000\]', 'mg_get_var 10', 0);
-
-  # Other methods should also work
-  o("PUT /test_get_var HTTP/1.0\nContent-Length: 10\n\n".
-    "my_var=foo", 'Value: \[foo\]', 'mg_get_var 11', 0);
-
-  o("POST /test_get_request_info?xx=yy HTTP/1.0\nFoo: bar\n".
-    "Content-Length: 3\n\na=b",
-    'Method: \[POST\].URI: \[/test_get_request_info\].'.
-    'HTTP version: \[1.0\].HTTP header \[Foo\]: \[bar\].'.
-    'HTTP header \[Content-Length\]: \[3\].'.
-    'Query string: \[xx=yy\].'.
-    'Remote IP: \[\d+\].Remote port: \[\d+\].'.
-    'Remote user: \[\]'
-    , 'request_info', 0);
-  o("GET /not_exist HTTP/1.0\n\n", 'Error: \[404\]', '404 handler', 0);
-  o("bad request\n\n", 'Error: \[500\]', '* error handler', 0);
-#	o("GET /foo/secret HTTP/1.0\n\n",
-#		'401 Unauthorized', 'mg_protect_uri', 0);
-#	o("GET /foo/secret HTTP/1.0\nAuthorization: Digest username=bill\n\n",
-#		'401 Unauthorized', 'mg_protect_uri (bill)', 0);
-#	o("GET /foo/secret HTTP/1.0\nAuthorization: Digest username=joe\n\n",
-#		'200 OK', 'mg_protect_uri (joe)', 0);
-
-  kill_spawned_child();
 }
 
 print "SUCCESS! All tests passed.\n";
