@@ -4878,12 +4878,13 @@ static void *worker_thread(void *thread_func_param) {
   } else {
     conn->buf_size = MAX_REQUEST_SIZE;
     conn->buf = (char *) (conn + 1);
+    conn->ctx = ctx;
+    conn->request_info.user_data = ctx->user_data;
 
     // Call consume_socket() even when ctx->stop_flag > 0, to let it signal
     // sq_empty condvar to wake up the master waiting in produce_socket()
     while (consume_socket(ctx, &conn->client)) {
       conn->birth_time = time(NULL);
-      conn->ctx = ctx;
 
       // Fill in IP, port info early so even if SSL setup below fails,
       // error handler would have the corresponding info.

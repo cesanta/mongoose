@@ -539,6 +539,28 @@ static void test_request_replies(void) {
   mg_stop(ctx);
 }
 
+static int user_data_callback(struct mg_connection *conn) {
+  ASSERT(mg_get_request_info(conn)->user_data == (void *) 123);
+  mg_printf(conn, "HTTP/1.0 200 OK\r\n\r\nhi");
+  return 1;
+}
+
+static void test_user_data(void) {
+  char ebuf[100];
+  struct mg_callbacks callbacks;
+  struct mg_connection *conn;
+  struct mg_context *ctx;
+
+  memset(&callbacks, 0, sizeof(callbacks));
+  callbacks.begin_request = user_data_callback;
+  ASSERT((ctx = mg_start(&callbacks, (void *) 123, OPTIONS)) != NULL);
+  ASSERT((conn = mg_download("localhost", atoi(HTTPS_PORT), 1,
+                             ebuf, sizeof(ebuf),
+                             "%s", "GET / HTTP/1.0\r\n\r\n")) != NULL);
+  mg_close_connection(conn);
+  mg_stop(ctx);
+}
+
 int __cdecl main(void) {
   test_alloc_vprintf();
   test_base64_encode();
@@ -554,6 +576,7 @@ int __cdecl main(void) {
   test_skip_quoted();
   test_mg_upload();
   test_request_replies();
+  test_user_data();
 #ifdef USE_LUA
   test_lua();
 #endif
