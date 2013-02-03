@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#define USE_WEBSOCKET
+
 #if defined(_WIN32)
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005
 #else
@@ -4199,7 +4201,13 @@ static void handle_request(struct mg_connection *conn) {
                                 get_remote_ip(conn), ri->uri);
 
   DEBUG_TRACE(("%s", ri->uri));
-  if (conn->ctx->callbacks.begin_request != NULL &&
+  if(0)
+  {
+#if defined(USE_WEBSOCKET)
+  } else if (is_websocket_request(conn)) {
+    handle_websocket_request(conn);
+#endif
+  } else if (conn->ctx->callbacks.begin_request != NULL &&
       conn->ctx->callbacks.begin_request(conn)) {
     // Do nothing, callback has served the request
   } else if (!conn->client.is_ssl && conn->client.ssl_redir &&
@@ -4208,10 +4216,6 @@ static void handle_request(struct mg_connection *conn) {
   } else if (!is_put_or_delete_request(conn) &&
              !check_authorization(conn, path)) {
     send_authorization_request(conn);
-#if defined(USE_WEBSOCKET)
-  } else if (is_websocket_request(conn)) {
-    handle_websocket_request(conn);
-#endif
   } else if (!strcmp(ri->request_method, "OPTIONS")) {
     send_options(conn);
   } else if (conn->ctx->config[DOCUMENT_ROOT] == NULL) {
