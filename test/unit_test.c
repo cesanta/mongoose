@@ -539,24 +539,39 @@ static void test_request_replies(void) {
   mg_stop(ctx);
 }
 
-static int user_data_callback(struct mg_connection *conn) {
-  ASSERT(mg_get_request_info(conn)->user_data == (void *) 123);
-  mg_printf(conn, "HTTP/1.0 200 OK\r\n\r\nhi");
+static int api_callback(struct mg_connection *conn) {
+  struct mg_request_info *ri = mg_get_request_info(conn);
+  char post_data[100] = "";
+
+  ASSERT(ri->user_data == (void *) 123);
+  ASSERT(ri->num_headers == 2);
+  ASSERT(strcmp(mg_get_header(conn, "host"), "blah.com") == 0);
+  ASSERT(mg_read(conn, post_data, sizeof(post_data)) == 3);
+  ASSERT(memcmp(post_data, "b=1", 3) == 0);
+  ASSERT(ri->query_string != NULL);
+  ASSERT(ri->remote_ip > 0);
+  ASSERT(ri->remote_port > 0);
+  ASSERT(strcmp(ri->http_version, "1.0") == 0);
+
+  mg_printf(conn, "HTTP/1.0 200 OK\r\n\r\n");
   return 1;
 }
 
-static void test_user_data(void) {
+static void test_api_calls(void) {
   char ebuf[100];
   struct mg_callbacks callbacks;
   struct mg_connection *conn;
   struct mg_context *ctx;
+  static const char *request = "POST /?a=%20&b=&c=xx HTTP/1.0\r\n"
+    "Host:  blah.com\n"     // More spaces before
+    "content-length: 3\r\n" // Lower case header name
+    "\r\nb=123456";         // Content size > content-length, test for mg_read()
 
   memset(&callbacks, 0, sizeof(callbacks));
-  callbacks.begin_request = user_data_callback;
+  callbacks.begin_request = api_callback;
   ASSERT((ctx = mg_start(&callbacks, (void *) 123, OPTIONS)) != NULL);
   ASSERT((conn = mg_download("localhost", atoi(HTTPS_PORT), 1,
-                             ebuf, sizeof(ebuf),
-                             "%s", "GET / HTTP/1.0\r\n\r\n")) != NULL);
+                             ebuf, sizeof(ebuf), "%s", request)) != NULL);
   mg_close_connection(conn);
   mg_stop(ctx);
 }
@@ -576,7 +591,7 @@ int __cdecl main(void) {
   test_skip_quoted();
   test_mg_upload();
   test_request_replies();
-  test_user_data();
+  test_api_calls();
 #ifdef USE_LUA
   test_lua();
 #endif
