@@ -48,7 +48,7 @@ Keep Sergey happy
 
 I am Sergey Lyubka, a software engineer from Galway, Ireland. I started
 working on Mongoose in 2004, and since then continuously improving it,
-investing thousands of hours of work. My other project I give to the
+investing thousands of hours of work. My other project I'm contributing to the
 community for free is
 [Super Light Regular Expression library](http://code.google.com/p/slre).
 
@@ -56,9 +56,12 @@ community for free is
 If you feel grateful for the stuff I've done, you can buy me a book from my
 [Amazon wishlist](http://amzn.com/w/1OC2ZCPTQYIEP?sort=priority). Many thanks
 to all who already did so: T.Barmann, D.Hughes, J.C.Sloan, R.Romeo,
-L.E.Spencer, S.Kotay, and 6 others. Appreciated guys, you keep my brains going!
+L.E.Spencer, S.Kotay, B.Fjukstad and 6 others.
+Appreciated guys, you keep my brains going!
 
 Cash is also appreciated indeed. Press
 [<img src="http://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif">](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DGZ2FMP95TAL6)
-button to donate. Donation progress so far:
+button to donate. Donation progress: 4/1000 &euro;
+(thanks to O.M.Vilhunen, C.Radik)
+
 ![Progress](http://chart.googleapis.com/chart?chxr=0,0,1000&chxt=x&chbh=30,0,0&chs=300x35&cht=bhs&chco=90c0f0&chd=s:B)
