@@ -57,14 +57,8 @@ Mongoose can also be used to modify `.htpasswd` passwords file:
 - How to serve user home directories using URL rewrite:
   `mongoose -url_rewrite_patterns /~joe/=/home/joe/,/~bill=/home/bill/`
 
-## Command Line Options
+## Configuration Options
 ```
-
-     -A htpasswd_file domain_name user_name password
-         Add/edit user's password in the passwords file. Deleting users
-         can be done with any text editor. Functionality is similar to
-         Apache's htdigest utility.
-
      -C cgi_pattern
          All files that fully match cgi_pattern are treated as CGI.
          Default pattern allows CGI files be anywhere. To restrict CGIs to
@@ -202,6 +196,14 @@ When it is not needed anymore, `mg_stop()` must be called.  Application code
 can pass configuration options to `mg_start()`, and also specify callback
 functions that Mongoose should call at certain events.
 [hello.c](http://a.c) provides a minimalistic example.
+
+Common pattern is to implement `begin_request` callback, and serve static files
+from memory, and/or construct dynamic replies on the fly. Here is
+my [embed.c](https://gist.github.com/valenok/4714740) gist
+that shows how to easily any data can be embedded
+directly into the executable. If such data needs to be encrypted, then
+encrypted database or encryption dongles would be a better choice.
+
 
 ## Other Resources
 - Presentation made by Arnout Vandecappelle at FOSDEM 2011 on 2011-02-06
