@@ -252,12 +252,18 @@ static void process_command_line_arguments(char *argv[], char **options) {
     (void) fclose(fp);
   }
 
-  // Handle command line flags. They override config file and default settings.
-  for (i = cmd_line_opts_start; argv[i] != NULL; i += 2) {
-    if (argv[i][0] != '-' || argv[i + 1] == NULL) {
-      show_usage_and_exit();
+  // If we're under MacOS and started by launchd, then the second
+  // argument is process serial number, -psn_.....
+  // In this case, don't process arguments at all.
+  if (argv[1] == NULL || memcmp(argv[1], "-psn_", 5) != 0) {
+    // Handle command line flags.
+    // They override config file and default settings.
+    for (i = cmd_line_opts_start; argv[i] != NULL; i += 2) {
+      if (argv[i][0] != '-' || argv[i + 1] == NULL) {
+        show_usage_and_exit();
+      }
+      set_option(options, &argv[i][1], argv[i + 1]);
     }
-    set_option(options, &argv[i][1], argv[i + 1]);
   }
 }
 
