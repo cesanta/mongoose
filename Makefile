@@ -94,6 +94,9 @@ bsd_yassl:
 solaris:
 	$(CC) mongoose.c main.c -lnsl -lsocket -o $(PROG) $(CFLAGS)
 
+# For codesign to work in non-interactive mode, unlock login keychain:
+# security unlock ~/Library/Keychains/login.keychain
+# See e.g. http://lists.apple.com/archives/apple-cdsa/2008/Jan/msg00027.html
 cocoa:
 	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c \
           -DUSE_COCOA $(CFLAGS) -I$(LUA) -Ibuild \
