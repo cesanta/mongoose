@@ -1,13 +1,11 @@
-Project Mission
----------------
+# Project Mission
 
 Project mission is to provide simple, functional, embeddable web server to
 make it easy for application and device developers to implement web interface
 for their application and devices, and to offer a simple web development
 environment.
 
-Overview
---------
+# Overview
 
 To accomplish it's mission, Mongoose keeps balance on functionality and
 simplicity by carefully selected list of features:
@@ -42,15 +40,13 @@ Questions can be asked at
 mailing list.
 
 
-Keep Sergey happy
------------------
+# Keep Sergey happy
 
 I am Sergey Lyubka, a software engineer from Galway, Ireland. I started
 working on Mongoose in 2004, and since then continuously improving it,
 investing thousands of hours of work. My other project I'm contributing to the
 community for free is
 [Super Light Regular Expression library](http://code.google.com/p/slre).
-
 
 If you feel grateful for the stuff I've done, you can buy me a book from my
 [Amazon wishlist](http://amzn.com/w/1OC2ZCPTQYIEP?sort=priority). Many thanks
