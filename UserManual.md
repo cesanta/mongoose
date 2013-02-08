@@ -43,6 +43,19 @@ document root, because command line options take priority over
 configuration file. Configuration options section below provide a good
 overview of Mongoose features.
 
+Note that configuration options on the command line must start with `-`,
+but their names are the same as in the config file. All option names are
+listed in the next section. Thus, the following two setups are equivalent:
+
+    # Using command line arguments
+    $ mongoose -listening_ports 1234 -document_root /var/www
+
+    # Using config file
+    $ cat mongoose.conf
+    listening_ports 1234
+    document_root /var/www
+    $ mongoose
+
 Mongoose can also be used to modify `.htpasswd` passwords file:
 
     mongoose -A <htpasswd_file> <realm> <user> <passwd>
@@ -114,14 +127,33 @@ Authorization realm used in `.htpasswd` authorization.
 
 ### ssi_pattern `**.shtml$|**.shtm$`
 All files that match `ssi_pattern` are treated as SSI.
-Unknown SSI directives are silently ignored. Currently, two SSI
+
+Server Side Includes (SSI) is a simple interpreted server-side scripting
+language which is most commonly used to include the contents of a file into
+a web page. It can be useful when it is desirable to include a common piece
+of code throughout a website, for example, headers and footers.
+
+In order for a webpage to recognize an SSI-enabled HTML file, the filename
+should end with a special extension, by default the extension should be
+either `.shtml` or `.shtm`.
+
+Unknown SSI directives are silently ignored by mongoose. Currently, two SSI
 directives are supported, `<!--#include ...>` and
-`<!--#exec command>`. Note that `<!--#include ...>` directive supports
+`<!--#exec "command">`. Note that `<!--#include ...>` directive supports
 three path specifications:
 
     <!--#include virtual="path">  Path is relative to web server root
     <!--#include file="path">     Path is relative to web server working dir
     <!--#include "path">          Path is relative to current document
+
+The `include` directive may be used to include the contents of a file or the
+result of running a CGI script. The `exec` directive is used to execute a
+command on a server, and show command's output. Example:
+
+    <!--#exec "ls -l" -->
+
+For more information on Server Side Includes, take a look at the Wikipedia:
+[Server Side Includes](http://en.wikipedia.org/wiki/Server_Side_Includes)
 
 ### throttle
 Limit download speed for clients.  `throttle` is a comma-separated
@@ -164,14 +196,21 @@ Comma-separated list of files to be treated as directory index
 files.
 
 ### access\_control\_list
-Access Control List (ACL) is a comma separated list
-of IP subnets, each subnet is prepended by `-` or `+` sign. Plus
-means allow, minus means deny. If subnet mask is omitted, like
-`-1.2.3.4`, then it means a single IP address. Mask may vary from 0
-to 32 inclusive. On each request, full list is traversed, and
-last match wins. Default setting is to allow all accesses. Examples:
+An Access Control List (ACL) allows restrictions to be put on the list of IP
+addresses which have access to the web server. In the case of the Mongoose
+web server, the ACL is a comma separated list of IP subnets, where each
+subnet is prepended by either a `-` or a `+` sign. A plus sign means allow,
+where a minus sign means deny. If a subnet mask is omitted, such as `-1.2.3.4`,
+this means to deny only that single IP address.
+
+Subnet masks may vary from 0 to 32, inclusive. The default setting is to allow
+all accesses. On each request the full list is traversed, and
+the last match wins. Examples:
 
     -0.0.0.0/0,+192.168/16    deny all acccesses, only allow 192.168/16 subnet
+
+To learn more about subnet masks, see the
+[Wikipedia page on Subnetwork](http://en.wikipedia.org/wiki/Subnetwork)
 
 ### extra\_mime\_types
 Extra mime types to recognize, in form `extension1=type1,exten-
@@ -236,7 +275,9 @@ Or, to imitate user home directories support, do:
 ### hide\_files\_patterns
 A pattern for the files to hide. Files that match the pattern will not
 show up in directory listing and return `404 Not Found` if requested. Pattern
-must be for a file name only, not including directory name.
+must be for a file name only, not including directory name. Example:
+
+    mongoose -hide_files_patterns secret.txt|even_more_secret.txt
 
 # Common Problems
 - PHP doesn't work - getting empty page, or 'File not found' error. The
@@ -244,6 +285,13 @@ must be for a file name only, not including directory name.
   correct interpreter is `php-cgi.exe` (`php-cgi` on UNIX). Solution: specify
   full path to the PHP interpreter, e.g.:
     `mongoose -cgi_interpreter /full/path/to/php-cgi`
+
+- Mongoose fails to start. If Mongoose exits immediately when run, this
+  usually indicates a syntax error in the configuration file
+  (named `mongoose.conf` by default) or the command-line arguments.
+  Syntax checking is omitted from Mongoose to keep its size low. However,
+  the Manual should be of help. Note: the syntax changes from time to time,
+  so updating the config file might be necessary after executable update.
 
 # Embedding
 Embedding Mongoose is easy. Somewhere in the application code, `mg_start()`
@@ -260,6 +308,47 @@ my [embed.c](https://gist.github.com/valenok/4714740) gist
 that shows how to easily any data can be embedded
 directly into the executable. If such data needs to be encrypted, then
 encrypted database or encryption dongles would be a better choice.
+
+# Build on Android
+
+This is a small guide to help you run mongoose on Android. Currently it is
+tested on the HTC Wildfire. If you have managed to run it on other devices
+as well, please comment or drop an email in the mailing list.
+Note : You dont need root access to run mongoose on Android.
+
+- Download the source from the Downloads page.
+- Download the Android NDK from here
+- Make a folder (e.g. mongoose) and inside that make a folder named "jni".
+- Add `mongoose.h`, `mongoose.c` and `main.c` from the source to the jni folder.
+- Make a new file in the jni folder named "Android.mk".
+  This is the make file for ndk-build.
+
+Android.mk:
+
+    LOCAL_PATH := $(call my-dir)
+    include $(CLEAR_VARS)
+    LOCAL_MODULE    := mongoose
+    LOCAL_SRC_FILES := main.c mongoose.c
+    include $(BUILD_EXECUTABLE)
+
+- Run `./ndk-build -C /path/to/mongoose/`.
+  This should generate mongoose/lib/armeabi/mongoose
+- Using the adb tool, push the generated mongoose binary to `/data/local`
+  folder on device.
+- From adb shell, navigate to `/data/local` and execute `./mongoose`.
+- To test if the server is running fine, visit your web-browser and
+  navigate to `http://127.0.0.1:8080` You should see the `Index of /` page.
+
+![screenshot](https://a248.e.akamai.net/camo.github.com/b88428bf009a2b6141000937ab684e04cc8586af/687474703a2f2f692e696d6775722e636f6d2f62676f6b702e706e67)
+
+
+Notes:
+- jni stands for Java Native Interface. Read up on Android NDK if you want
+  to know how to interact with the native C functions of mongoose in Android
+  Java applications.
+- Download android-sdk for the adb tool.
+- TODO: A Java application that interacts with the native binary or a
+  shared library.
 
 
 # Other Resources
