@@ -456,7 +456,7 @@ static const char *config_options[] = {
   "p", "listening_ports", "8080",
   "r", "document_root",  ".",
   "s", "ssl_certificate", NULL,
-  "t", "num_threads", "20",
+  "t", "num_threads", "50",
   "u", "run_as_user", NULL,
   "w", "url_rewrite_patterns", NULL,
   "x", "hide_files_patterns", NULL,
