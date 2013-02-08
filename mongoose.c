@@ -2882,6 +2882,7 @@ static int read_request(FILE *fp, struct mg_connection *conn,
   while (*nread < bufsiz && request_len == 0 &&
          (n = pull(fp, conn, buf + *nread, bufsiz - *nread)) > 0) {
     *nread += n;
+    assert(*nread <= bufsiz);
     request_len = get_request_len(buf, *nread);
   }
 
@@ -4821,21 +4822,19 @@ static void process_new_connection(struct mg_connection *conn) {
     // is using parsed request, which will be invalid after memmove's below.
     // Therefore, memorize should_keep_alive() result now for later use
     // in loop exit condition.
-    keep_alive = should_keep_alive(conn);
+    keep_alive = conn->ctx->stop_flag == 0 && keep_alive_enabled &&
+      conn->content_len >= 0 && should_keep_alive(conn);
 
     // Discard all buffered data for this request
-    discard_len = conn->content_len >= 0 &&
+    discard_len = conn->content_len >= 0 && conn->request_len > 0 &&
       conn->request_len + conn->content_len < (int64_t) conn->data_len ?
       (int) (conn->request_len + conn->content_len) : conn->data_len;
+    assert(discard_len >= 0);
     memmove(conn->buf, conn->buf + discard_len, conn->data_len - discard_len);
     conn->data_len -= discard_len;
     assert(conn->data_len >= 0);
     assert(conn->data_len <= conn->buf_size);
-
-  } while (conn->ctx->stop_flag == 0 &&
-           keep_alive_enabled &&
-           conn->content_len >= 0 &&
-           keep_alive);
+  } while (keep_alive);
 }
 
 // Worker threads take accepted socket from the queue
