@@ -1,14 +1,15 @@
-
-**NOTE: THIS MANUAL IS WORK IN PROGRESS**
-
-## Overview
+# Overview
 
 Mongoose is small and easy to use web server. It is self-contained, and does
 not require any external software to run.
 
 On Windows, mongoose iconifies itself to the system tray icon when started.
 Right-click on the icon pops up a menu, where it is possible to stop
-mongoose, or configure it, or install it as Windows service.
+mongoose, or configure it, or install it as Windows service. The easiest way
+to share a folder on Windows is to copy `mongoose.exe` to a folder,
+double-click the exe, and launch a browser at
+[http://localhost:8080](http://localhost:8080). Note that 'localhost' should
+be changed to a machine's name if a folder is accessed from other computer.
 
 On UNIX and Mac, mongoose is a command line utility. Running `mongoose` in
 terminal, optionally followed by configuration parameters
@@ -21,12 +22,13 @@ When started, mongoose first searches for the configuration file.
 If configuration file is specified explicitly in the command line, i.e.
 `mongoose path_to_config_file`, then specified configuration file is used.
 Otherwise, mongoose would search for file `mongoose.conf` in the same directory
-where binary is located, and use it.
+where binary is located, and use it. Configuration file can be absent.
+
+
 Configuration file is a sequence of lines, each line containing
 command line argument name and it's value. Empty lines, and lines beginning
 with `#`, are ignored. Here is the example of `mongoose.conf` file:
 
-    # mongoose.conf file
     document_root c:\www
     listening_ports 8080,8043s
     ssl_certificate c:\mongoose\ssl_cert.pem
@@ -38,164 +40,219 @@ For example, if `mongoose.conf` has line
 `document_root /var/www`, and mongoose has been started as
 `mongoose -document_root /etc`, then `/etc` directory will be served as
 document root, because command line options take priority over
-configuration file.
+configuration file. Configuration options section below provide a good
+overview of Mongoose features.
 
 Mongoose can also be used to modify `.htpasswd` passwords file:
 
     mongoose -A <htpasswd_file> <realm> <user> <passwd>
 
-## Usage Examples
+Unlike other web servers, mongoose does not require CGI scripts be located in
+a special directory. CGI scripts can be anywhere. CGI (and SSI) files are
+recognized by the file name pattern. Mongoose uses shell-like glob
+patterns. Pattern match starts at the beginning of the string, so essentially
+patterns are prefix patterns. Syntax is as follows:
 
-- How to share a Windows folder: copy mongoose executable to a folder and
-  double-click the executable. The folder should be accessible via
-  [http://localhost:8080](http://localhost:8080) in any browser.
+     **      Matches everything
+     *       Matches everything but slash character, '/'
+     ?       Matches any character
+     $       Matches the end of the string
+     |       Matches if pattern on the left side or the right side matches.
 
-- How to start mongoose at UNIX startup time in daemon mode, serving
-  directory `/var/www`: put this line in the system startup script:
-  `/path/to/mongoose -listening_ports 80 -document_root /var/www &`
+All other characters in the pattern match themselves. Examples:
 
-- How to serve user home directories using URL rewrite:
-  `mongoose -url_rewrite_patterns /~joe/=/home/joe/,/~bill=/home/bill/`
+    **.cgi$      Any string that ends with .cgi
+    /foo         Any string that begins with /foo
+    **a$|**b$    Any string that ends with a or b
 
-## Configuration Options
-```
-     -C cgi_pattern
-         All files that fully match cgi_pattern are treated as CGI.
-         Default pattern allows CGI files be anywhere. To restrict CGIs to
-         certain directory, use e.g. "-C /cgi-bin/**.cgi".  Default:
-         "**.cgi$|**.pl$|**.php$"
+# Configuration Options
 
-     -E cgi_environment
-         Extra environment variables to be passed to the CGI script in
-         addition to standard ones. The list must be comma-separated list
-         of X=Y pairs, like this: "VARIABLE1=VALUE1,VARIABLE2=VALUE2".
-         Default: ""
+Below is a list of configuration options Mongoose understands. Every option
+is followed by it's default value. If default value is not present, then
+it is empty.
 
-     -G put_delete_passwords_file
-         PUT and DELETE passwords file. This must be specified if PUT or
-         DELETE methods are used. Default: ""
+### cgi_pattern `**.cgi$|**.pl$|**.php$`
+All files that match `cgi_pattern` are treated as CGI files. Default pattern
+allows CGI files be anywhere. To restrict CGIs to a certain directory,
+use `/path/to/cgi-bin/**.cgi` as pattern. Note that full file path is
+matched against the pattern, not the URI.
 
-     -I cgi_interpreter
-         Use cgi_interpreter as a CGI interpreter for all CGI scripts
-         regardless script extension.  Mongoose decides which interpreter
-         to use by looking at the first line of a CGI script.  Default:
-         "".
+### cgi_environment
+Extra environment variables to be passed to the CGI script in
+addition to standard ones. The list must be comma-separated list
+of name=value pairs, like this: `VARIABLE1=VALUE1,VARIABLE2=VALUE2`.
 
-     -P protect_uri
-         Comma separated list of URI=PATH pairs, specifying that given
-         URIs must be protected with respected password files. Default: ""
+### put\_delete\_passwords_file
+Passwords file for PUT and DELETE requests. Without it, PUT and DELETE requests
+will fail.
 
-     -R authentication_domain
-         Authorization realm. Default: "mydomain.com"
+### cgi_interpreter
+Path to an executable to use as CGI interpreter for __all__ CGI scripts
+regardless script extension. If this option is not set (which is a default),
+Mongoose looks at first line of a CGI script,
+[shebang line](http://en.wikipedia.org/wiki/Shebang_(Unix)), for an interpreter.
 
-     -S ssi_pattern
-         All files that fully match ssi_pattern are treated as SSI.
-         Unknown SSI directives are silently ignored. Currently, two SSI
-         directives are supported, "include" and "exec".  Default:
-         "**.shtml$|**.shtm$"
+For example, if both PHP and perl CGIs are used, then
+`#!/path/to/php-cgi.exe` and `#!/path/to/perl.exe` must be first lines of the
+respective CGI scripts. Note that paths should be either full file paths,
+or file paths relative to the current working directory of mongoose server.
+If mongoose is started by mouse double-click on Windows, current working
+directory is a directory where mongoose executable is located.
 
-     -T throttle
-         Limit download speed for clients.  throttle is a comma-separated
-         list of key=value pairs, where key could be a '*' character
-         (limit for all connections), a subnet in form x.x.x.x/mask (limit
-         for a given subnet, for example 10.0.0.0/8), or an URI prefix
-         pattern (limit for the set of URIs, for example /foo/**). The
-         value is a floating-point number of bytes per second, optionally
-         followed by a `k' or `m' character, meaning kilobytes and
-         megabytes respectively. A limit of 0 means unlimited rate. The
-         last matching rule wins. For example, "*=1k,10.0.0.0/8" means
-         limit everybody to 1 kilobyte per second, but give people from
-         10/8 subnet unlimited speed. Default: ""
+If all CGIs use the same interpreter, for example they are all PHP, then
+`cgi_interpreter` can be set to the path to `php-cgi.exe` executable and
+shebang line in the CGI scripts can be omitted.
+Note that PHP scripts must use `php-cgi.exe` executable, not `php.exe`.
 
-     -a access_log_file
-         Access log file. Default: "", no logging is done.
+### protect_uri
+Comma separated list of URI=PATH pairs, specifying that given
+URIs must be protected with respected password files. Paths must be full
+file paths.
 
-     -d enable_directory_listing
-         Enable/disable directory listing. Default: "yes"
+### authentication_domain `mydomain.com`
+Authorization realm used in `.htpasswd` authorization.
 
-     -e error_log_file
-         Error log file. Default: "", no errors are logged.
+### ssi_pattern `**.shtml$|**.shtm$`
+All files that match `ssi_pattern` are treated as SSI.
+Unknown SSI directives are silently ignored. Currently, two SSI
+directives are supported, `<!--#include ...>` and
+`<!--#exec command>`. Note that `<!--#include ...>` directive supports
+three path specifications:
 
-     -g global_passwords_file
-         Location of a global passwords file. If set, per-directory
-         .htpasswd files are ignored, and all requests must be authorised
-         against that file.  Default: ""
+    <!--#include virtual="path">  Path is relative to web server root
+    <!--#include file="path">     Path is relative to web server working dir
+    <!--#include "path">          Path is relative to current document
 
-     -i index_files
-         Comma-separated list of files to be treated as directory index
-         files.  Default: "index.html,index.htm,index.cgi"
+### throttle
+Limit download speed for clients.  `throttle` is a comma-separated
+list of key=value pairs, where key could be:
 
-     -l access_control_list
-         Specify access control list (ACL). ACL is a comma separated list
-         of IP subnets, each subnet is prepended by '-' or '+' sign. Plus
-         means allow, minus means deny. If subnet mask is omitted, like
-         "-1.2.3.4", then it means single IP address. Mask may vary from 0
-         to 32 inclusive. On each request, full list is traversed, and
-         last match wins. Default setting is to allow all. For example, to
-         allow only 192.168/16 subnet to connect, run "mongoose
-         -0.0.0.0/0,+192.168/16".  Default: ""
+    *                   limit speed for all connections
+    x.x.x.x/mask        limit speed for specified subnet
+    uri_prefix_pattern  limit speed for given URIs
 
-     -m extra_mime_types
-         Extra mime types to recognize, in form "extension1=type1,exten-
-         sion2=type2,...". Extension must include dot.  Example: "mongoose
-         -m .cpp=plain/text,.java=plain/text". Default: ""
+The value is a floating-point number of bytes per second, optionally
+followed by a `k` or `m` character, meaning kilobytes and
+megabytes respectively. A limit of 0 means unlimited rate. The
+last matching rule wins. Examples:
 
-     -p listening_ports
-         Comma-separated list of ports to listen on. If the port is SSL, a
-         letter 's' must be appeneded, for example, "-p 80,443s" will open
-         port 80 and port 443, and connections on port 443 will be SSL-ed.
-         It is possible to specify an IP address to bind to. In this case,
-         an IP address and a colon must be prepended to the port number.
-         For example, to bind to a loopback interface on port 80 and to
-         all interfaces on HTTPS port 443, use "mongoose -p
-         127.0.0.1:80,443s". Default: "8080"
+    *=1k,10.0.0.0/8=0   limit all accesses to 1 kilobyte per second,
+                        but give connections from 10.0.0.0/8 subnet
+                        unlimited speed
 
-     -r document_root
-         Location of the WWW root directory. Default: "."
+    /downloads/=5k      limit accesses to all URIs in `/downloads/` to
+                        5 kilobytes per secods. All other accesses are unlimited
 
-     -s ssl_certificate
-         Location of SSL certificate file. Default: ""
+### access\_log\_file
+Path to a file for access logs. Either full path, or relative to current
+working directory. If absent (default), then accesses are not logged.
 
-     -t num_threads
-         Number of worker threads to start. Default: "10"
+### error\_log\_file
+Path to a file for error logs. Either full path, or relative to current
+working directory. If absent (default), then errors are not logged.
 
-     -u run_as_user
-         Switch to given user's credentials after startup. Default: ""
+### enable\_directory\_listing `yes`
+Enable directory listing, either `yes` or `no`.
 
-     -w url_rewrite_patterns
-         Comma-separated list of URL rewrites in the form of "pattern=sub-
-         stitution,..." If the "pattern" matches some prefix of the
-         requested URL, then matched prefix gets substituted with "substi-
-         tution".  For example, "-w /con-
-         fig=/etc,**.doc|**.rtf=/path/to/cgi-bin/handle_doc.cgi" will
-         serve all URLs that start with "/config" from the "/etc" direc-
-         tory, and call handle_doc.cgi script for .doc and .rtf file
-         requests. If some pattern matches, no further matching/substitu-
-         tion is performed (first matching pattern wins). Use full paths
-         in substitutions. Default: ""
+### global\_passwords\_file
+Path to a global passwords file, either full path or relative to the current
+working directory. If set, per-directory `.htpasswd` files are ignored,
+and all requests are authorised against that file.
 
-     -x hide_files_patterns
-         A prefix pattern for the files to hide. Files that match the pat-
-         tern will not show up in directory listing and return 404 Not
-         Found if requested. Default: ""
+### index_files `index.html,index.htm,index.cgi,index.shtml,index.php`
+Comma-separated list of files to be treated as directory index
+files.
 
-```
+### access\_control\_list
+Access Control List (ACL) is a comma separated list
+of IP subnets, each subnet is prepended by `-` or `+` sign. Plus
+means allow, minus means deny. If subnet mask is omitted, like
+`-1.2.3.4`, then it means a single IP address. Mask may vary from 0
+to 32 inclusive. On each request, full list is traversed, and
+last match wins. Default setting is to allow all accesses. Examples:
 
-## Common Problems
----------------
+    -0.0.0.0/0,+192.168/16    deny all acccesses, only allow 192.168/16 subnet
+
+### extra\_mime\_types
+Extra mime types to recognize, in form `extension1=type1,exten-
+sion2=type2,...`. Extension must include dot.  Example:
+`.cpp=plain/text,.java=plain/text`
+
+### listening_ports `8080`
+Comma-separated list of ports to listen on. If the port is SSL, a
+letter `s` must be appeneded, for example, `80,443s` will open
+port 80 and port 443, and connections on port 443 will be SSL-ed.
+For non-SSL ports, it is allowed to append letter `r`, meaning 'redirect'.
+Redirect ports will redirect all their traffic to the first configured
+SSL port. For example, if `listening_ports` is `80r,443s`, then all
+HTTP traffic coming at port 80 will be redirected to HTTPS port 443.
+
+It is possible to specify an IP address to bind to. In this case,
+an IP address and a colon must be prepended to the port number.
+For example, to bind to a loopback interface on port 80 and to
+all interfaces on HTTPS port 443, use `127.0.0.1:80,443s`.
+
+### document_root `.`
+A directory to serve. By default, currect directory is served. Current
+directory is commonly referenced as dot (`.`).
+
+### ssl_certificate
+Path to SSL certificate file. This option is only required when at least one
+of the `listening_ports` is SSL.
+
+### num_threads `50`
+Number of worker threads. Mongoose handles each incoming connection in a
+separate thread. Therefore, the value of this option is effectively a number
+of concurrent HTTP connections Mongoose can handle.
+
+### run\_as\_user
+Switch to given user credentials after startup. Usually, this option is
+required when mongoose needs to bind on privileged port on UNIX. To do
+that, mongoose needs to be started as root. But running as root is a bad idea,
+therefore this option can be used to drop privileges. Example:
+
+    mongoose -listening_ports 80 -run_as_user nobody
+
+### url\_rewrite\_patterns
+Comma-separated list of URL rewrites in the form of
+`uri_pattern=file_or_directory_path`. When Mongoose receives the request,
+it constructs the file name to show by combining `document_root` and the URI.
+However, if the rewrite option is used and `uri_pattern` matches the
+requested URI, then `document_root` is ignored. Insted,
+`file_or_directory_path` is used, which should be a full path name or
+a path relative to the web server's current working directory. Note that
+`uri_pattern`, as all mongoose patterns, is a prefix pattern.
+
+This makes it possible to serve many directories outside from `document_root`,
+redirect all requests to scripts, and do other tricky things. For example,
+to redirect all accesses to `.doc` files to a special script, do:
+
+    mongoose -url_rewrite_patterns **.doc$=/path/to/cgi-bin/handle_doc.cgi
+
+Or, to imitate user home directories support, do:
+
+    mongoose -url_rewrite_patterns /~joe/=/home/joe/,/~bill=/home/bill/
+
+### hide\_files\_patterns
+A pattern for the files to hide. Files that match the pattern will not
+show up in directory listing and return `404 Not Found` if requested. Pattern
+must be for a file name only, not including directory name.
+
+# Common Problems
 - PHP doesn't work - getting empty page, or 'File not found' error. The
   reason for that is wrong paths to the interpreter. Remember that with PHP,
   correct interpreter is `php-cgi.exe` (`php-cgi` on UNIX). Solution: specify
-  full path to the PHP interpreter, e.g.
-  `mongoose -cgi_interpreter /full/path/to/php-cgi`
+  full path to the PHP interpreter, e.g.:
+    `mongoose -cgi_interpreter /full/path/to/php-cgi`
 
-## Embedding
+# Embedding
 Embedding Mongoose is easy. Somewhere in the application code, `mg_start()`
 function must be called. That starts the web server in a separate thread.
 When it is not needed anymore, `mg_stop()` must be called.  Application code
 can pass configuration options to `mg_start()`, and also specify callback
 functions that Mongoose should call at certain events.
-[hello.c](http://a.c) provides a minimalistic example.
+[hello.c](https://github.com/valenok/mongoose/blob/master/examples/hello.c)
+provides a minimalistic example.
 
 Common pattern is to implement `begin_request` callback, and serve static files
 from memory, and/or construct dynamic replies on the fly. Here is
@@ -205,7 +262,7 @@ directly into the executable. If such data needs to be encrypted, then
 encrypted database or encryption dongles would be a better choice.
 
 
-## Other Resources
+# Other Resources
 - Presentation made by Arnout Vandecappelle at FOSDEM 2011 on 2011-02-06
   in Brussels, Belgium, called
   "Creating secure web based user interfaces for Embedded Devices"
