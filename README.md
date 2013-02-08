@@ -57,10 +57,8 @@ If you feel grateful for the stuff I've done, you can buy me a book from my
 [Amazon wishlist](http://amzn.com/w/1OC2ZCPTQYIEP?sort=priority). Many thanks
 to all who already did so: T.Barmann, D.Hughes, J.C.Sloan, R.Romeo,
 L.E.Spencer, S.Kotay, B.Fjukstad and 6 others.
-Appreciated guys, you keep my brains going!
-
-Cash is also appreciated indeed. Press
-[<img src="http://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif">](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DGZ2FMP95TAL6)
+Appreciated guys, you keep my brains going! Cash is also appreciated indeed.
+Press [<img src="http://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif">](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DGZ2FMP95TAL6)
 button to donate. Donation progress: 24/1000 &euro;
 (thanks to O.M.Vilhunen, C.Radik, G.Woodcock, M.Szczepkowski)
 
