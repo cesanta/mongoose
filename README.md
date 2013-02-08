@@ -35,8 +35,7 @@ simplicity by carefully selected list of features:
   [websocket.c](https://github.com/valenok/mongoose/blob/master/examples/websocket.c)
 - HTTP client functionality for embedded usage, capable of
   sending arbitrary HTTP/HTTPS requests
-- Extensive documentation in form of
-  [User Manual](https://github.com/valenok/mongoose/blob/master/UserManual.md)
+- [User Manual](https://github.com/valenok/mongoose/blob/master/UserManual.md)
 
 Questions can be asked at
 [mongoose-users@google.com](http://groups.google.com/group/mongoose-users)
