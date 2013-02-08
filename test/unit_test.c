@@ -247,6 +247,7 @@ static const struct mg_callbacks CALLBACKS = {
 static const char *OPTIONS[] = {
   "document_root", ".",
   "listening_ports", LISTENING_ADDR,
+  "enable_keep_alive", "yes",
   "ssl_certificate", "build/ssl_cert.pem",
   NULL,
 };
