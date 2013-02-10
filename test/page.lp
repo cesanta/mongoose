@@ -1,40 +1,52 @@
-<html>
-  <p>Prime numbers from 0 to 100, calculated by Lua:</p>
- <?
+<?
+  -- Lua server pages have full control over the output, including HTTP
+  -- headers they send to the client. Send HTTP headers:
+  print('HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n')
+?><html><body>
 
-    function is_prime(n)
-      if n <= 0 then return false end
-      if n <= 2 then return true end
-      if (n % 2 == 0) then return false end
-      for i = 3, n / 2, 2 do
-        if (n % i == 0) then return false end
-      end
-      return true
-    end
+<p>This is an example Lua server page served by
+<a href="http://code.google.com/p/mongoose">Mongoose web server</a>.
+Mongoose has Lua, Sqlite, and other functionality built in the binary.
+This example page stores the request in the Sqlite database, and shows
+all requests done previously.</p>
 
-    for i = 1, 100 do
-      if is_prime(i) then print('<span>' .. i .. '</span>&nbsp;') end
-    end
+<pre>
+<?
+  -- Open database
+  local db = sqlite3.open('requests.db')
 
- ?>
+  -- Setup a trace callback, to show SQL statements we'll be executing.
+  -- db:trace(function(data, sql) print('Executing: ' .. sql .. '\n') end, nil)
 
- <p>Reading POST data from Lua (click submit):</p>
- <form method="POST"><input type="text" name="t1"/><input type="submit"></form>
+  -- Create a table if it is not created already
+  db:exec([[
+    CREATE TABLE IF NOT EXISTS requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp NOT NULL,
+      method NOT NULL,
+      uri NOT NULL,
+      user_agent
+    );
+  ]])
 
- <pre>
-   POST data: [<?  post_data = read() print(post_data) ?>]
-   request method: [<? print(request_info.request_method) ?>]
-   IP/port: [<? print(request_info.remote_ip, ':', request_info.remote_port) ?>]
-   URI: [<? print(request_info.uri) ?>]
-   HTTP version [<? print(request_info.http_version) ?>]
-   HEADERS:
-   <? 
-     for name, value in pairs(request_info.http_headers) do
-       print(name, ':', value, '\n')
-     end
-   ?>
-     
- </pre>
+  -- Add entry about this request
+  local stmt = db:prepare(
+    'INSERT INTO requests VALUES(NULL, datetime("now"), ?, ?, ?);');
+  stmt:bind_values(request_info.request_method, request_info.uri,
+                   request_info.http_headers['User-Agent'])
+  stmt:step()
+  stmt:finalize()
 
+  -- Show all previous records
+  print('Previous requests:\n')
+  stmt = db:prepare('SELECT * FROM requests ORDER BY id DESC;')
+  while stmt:step() == sqlite3.ROW do
+    local v = stmt:get_values()
+    print(v[1] .. ' ' .. v[2] .. ' ' .. v[3] .. ' '
+          .. v[4] .. ' ' .. v[5] .. '\n')
+  end
 
-</html>
+  -- Close database
+  db:close()
+?>
+</pre></body></html>
