@@ -1703,10 +1703,11 @@ int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
   int name_len, len = -1;
 
   if (dst == NULL || dst_size == 0) {
-      len = -2;
-  } else if (cookie_name == NULL || (s = mg_get_header(conn, "Cookie")) == NULL) {
-      len = -1;
-      dst[0] = '\0';
+    len = -2;
+  } else if (cookie_name == NULL ||
+             (s = mg_get_header(conn, "Cookie")) == NULL) {
+    len = -1;
+    dst[0] = '\0';
   } else {
     name_len = (int) strlen(cookie_name);
     end = s + strlen(s);
@@ -4201,15 +4202,15 @@ static void handle_request(struct mg_connection *conn) {
                                 get_remote_ip(conn), ri->uri);
 
   DEBUG_TRACE(("%s", ri->uri));
-  if (conn->ctx->callbacks.begin_request != NULL &&
-      conn->ctx->callbacks.begin_request(conn)) {
-    // Do nothing, callback has served the request
-  } else if (!conn->client.is_ssl && conn->client.ssl_redir &&
+  if (!conn->client.is_ssl && conn->client.ssl_redir &&
       (ssl_index = get_first_ssl_listener_index(conn->ctx)) > -1) {
     redirect_to_https_port(conn, ssl_index);
   } else if (!is_put_or_delete_request(conn) &&
              !check_authorization(conn, path)) {
     send_authorization_request(conn);
+  } else if (conn->ctx->callbacks.begin_request != NULL &&
+      conn->ctx->callbacks.begin_request(conn)) {
+    // Do nothing, callback has served the request
 #if defined(USE_WEBSOCKET)
   } else if (is_websocket_request(conn)) {
     handle_websocket_request(conn);
