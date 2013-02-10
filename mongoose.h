@@ -67,6 +67,7 @@ struct mg_callbacks {
                              const char *path, size_t *data_len);
   void (*init_lua)(struct mg_connection *, void *lua_context);
   void (*upload)(struct mg_connection *, const char *file_name);
+  int  (*http_error)(struct mg_connection *, int status);
 };
 
 // Start web server.
