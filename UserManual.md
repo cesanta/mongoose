@@ -294,11 +294,49 @@ must be for a file name only, not including directory name. Example:
   so updating the config file might be necessary after executable update.
 
 # Embedding
-Embedding Mongoose is easy. Somewhere in the application code, `mg_start()`
-function must be called. That starts the web server in a separate thread.
-When it is not needed anymore, `mg_stop()` must be called.  Application code
-can pass configuration options to `mg_start()`, and also specify callback
-functions that Mongoose should call at certain events.
+Embedding Mongoose is easy. Copy
+[mongoose.c](https://github.com/valenok/mongoose/blob/master/mongoose.c) and
+[mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h)
+to your application's source tree and include them in the build. For
+example, your application's code lives in C++ file `my_app.cpp`, then on UNIX
+this command embeds Mongoose:
+
+    $ ls
+    my_app.cpp mongoose.c mongoose.h
+    $ g++ my_app.cc mongoose.c -o my_app
+
+Somewhere in the application code, call `mg_start()` to start the server.
+Pass configuration options and event handlers to `mg_start()`.
+Mongoose then calls handlers when certain events happen.
+For example, when new request arrives, Mongoose calls `begin_request`
+handler function to let user handle the request. In the handler, user code
+can get all information about the request -- parsed headers, etcetera.
+
+Mongoose API is logically divided in three categories: server setup/shutdown
+functions, functions to be used by user-written event handlers, and
+convenience utility functions.
+
+### Starting and stopping embedded web server
+To start the embedded web server, call `mg_start()`. To stop it, call
+`mg_stop()`.
+
+    // This structure needs to be passed to mg_start(), to let mongoose know
+    // which callbacks to invoke. For detailed description, see
+    // https://github.com/valenok/mongoose/blob/master/UserManual.md
+    struct mg_callbacks {
+      int  (*begin_request)(struct mg_connection *);
+      void (*end_request)(const struct mg_connection *, int reply_status_code);
+      int  (*log_message)(const struct mg_connection *, const char *message);
+      int  (*init_ssl)(void *ssl_context);
+      int (*websocket_connect)(const struct mg_connection *);
+      void (*websocket_ready)(struct mg_connection *);
+      int  (*websocket_data)(struct mg_connection *);
+      const char * (*open_file)(const struct mg_connection *,
+                                 const char *path, size_t *data_len);
+      void (*init_lua)(struct mg_connection *, void *lua_context);
+      void (*upload)(struct mg_connection *, const char *file_name);
+    };
+
 [hello.c](https://github.com/valenok/mongoose/blob/master/examples/hello.c)
 provides a minimalistic example.
 
