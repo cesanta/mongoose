@@ -148,10 +148,11 @@ struct mg_request_info *mg_get_request_info(struct mg_connection *);
 // Return:
 //  0   when the connection has been closed
 //  -1  on error
-//  number of bytes written on success
+//  >0  number of bytes written on success
 int mg_write(struct mg_connection *, const void *buf, size_t len);
 
 
+// Macros for enabling compiler-specific checks for printf-like arguments.
 #undef PRINTF_FORMAT_STRING
 #if _MSC_VER >= 1400
 #include <sal.h>
@@ -170,11 +171,9 @@ int mg_write(struct mg_connection *, const void *buf, size_t len);
 #define PRINTF_ARGS(x, y)
 #endif
 
-// Send data to the browser using printf() semantics.
+// Send data to the client using printf() semantics.
 //
 // Works exactly like mg_write(), but allows to do message formatting.
-// Below are the macros for enabling compiler-specific checks for
-// printf-like arguments.
 int mg_printf(struct mg_connection *,
               PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
 
@@ -209,7 +208,8 @@ const char *mg_get_header(const struct mg_connection *, const char *name);
 //   On success, length of the decoded variable.
 //   On error:
 //      -1 (variable not found).
-//      -2 (destination buffer is NULL, zero length or too small to hold the decoded variable).
+//      -2 (destination buffer is NULL, zero length or too small to hold the
+//          decoded variable).
 //
 // Destination buffer is guaranteed to be '\0' - terminated if it is not
 // NULL or zero length.
@@ -225,8 +225,10 @@ int mg_get_var(const char *data, size_t data_len,
 // Return:
 //   On success, value length.
 //   On error:
-//      -1 (either "Cookie:" header is not present at all or the requested parameter is not found).
-//      -2 (destination buffer is NULL, zero length or too small to hold the value).
+//      -1 (either "Cookie:" header is not present at all or the requested
+//          parameter is not found).
+//      -2 (destination buffer is NULL, zero length or too small to hold the
+//          value).
 int mg_get_cookie(const struct mg_connection *,
                   const char *cookie_name, char *buf, size_t buf_len);
 
