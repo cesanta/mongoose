@@ -74,6 +74,10 @@ YASSL_SOURCES = \
 all:
 	@echo "make (linux|bsd|solaris|mac|windows|mingw|cygwin)"
 
+# To build with lua, make sure you have Lua unpacked into lua-5.2.1 directory
+linux_lua:
+	$(CC) mongoose.c main.c $(LUA_SOURCES) -DUSE_LUA -I$(LUA) -o $(PROG) -ldl $(CFLAGS)
+
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
 # "-Wl,--as-needed" turned on by default  in cc command.
