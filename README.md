@@ -51,11 +51,11 @@ community for free is
 If you feel grateful for the stuff I've done, you can buy me a book from my
 [Amazon wishlist](http://amzn.com/w/1OC2ZCPTQYIEP?sort=priority). Many thanks
 to all who already did so: T.Barmann, D.Hughes, J.C.Sloan, R.Romeo,
-L.E.Spencer, S.Kotay and 7 others.
+L.E.Spencer, S.Kotay, R.M.Shorter and 7 others.
 Appreciated guys, you keep my brains going! Cash is also welcome indeed.
 Press [<img src="http://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif">](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DGZ2FMP95TAL6)
-button to donate. Donation progress: 39/1000 &euro;
+button to donate. Donation progress: 139/1000 &euro;
 (thanks to O.M.Vilhunen, C.Radik, G.Woodcock, M.Szczepkowski,
-Eternal Lands Development Team)
+Eternal Lands Development Team, T.Tollet)
 
-![Progress](http://chart.googleapis.com/chart?chxr=0,0,1000&chxt=x&chbh=30,0,0&chs=300x35&cht=bhs&chco=90c0f0&chd=t:3.9)
+![Progress](http://chart.googleapis.com/chart?chxr=0,0,1000&chxt=x&chbh=30,0,0&chs=300x35&cht=bhs&chco=90c0f0&chd=t:13.9)
