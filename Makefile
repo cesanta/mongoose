@@ -162,4 +162,6 @@ release: tarball cocoa
 clean:
 	cd examples && $(MAKE) clean
 	rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz \
-	$(PROG).exe *.dll *.lib build/res.o build/res.RES *.dSYM
+	$(PROG).exe *.dll *.lib build/res.o build/res.RES *.dSYM *.zip *.pdb \
+	*.exe *.dmg
+
