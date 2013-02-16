@@ -589,7 +589,17 @@ static void test_url_decode(void) {
   ASSERT(strcmp(buf, "a ") == 0);
 }
 
+static void test_mg_strcasestr(void) {
+  static const char *big1 = "abcdef";
+  ASSERT(mg_strcasestr("Y", "X") == NULL);
+  ASSERT(mg_strcasestr("Y", "y") != NULL);
+  ASSERT(mg_strcasestr(big1, "X") == NULL);
+  ASSERT(mg_strcasestr(big1, "CD") == big1 + 2);
+  ASSERT(mg_strcasestr("aa", "AAB") == NULL);
+}
+
 int __cdecl main(void) {
+  test_mg_strcasestr();
   test_alloc_vprintf();
   test_base64_encode();
   test_match_prefix();

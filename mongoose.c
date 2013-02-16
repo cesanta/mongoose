@@ -694,6 +694,18 @@ static char * mg_strdup(const char *str) {
   return mg_strndup(str, strlen(str));
 }
 
+static const char *mg_strcasestr(const char *big, const char *small) {
+  int i, big_len = strlen(big), small_len = strlen(small);
+
+  for (i = 0; i <= big_len - small_len; i++) {
+    if (mg_strncasecmp(big + i, small, small_len) == 0) {
+      return big + i;
+    }
+  }
+
+  return NULL;
+}
+
 // Like snprintf(), but never returns negative value, or a value
 // that is larger than a supplied buffer.
 // Thanks to Adam Zeldis to pointing snprintf()-caused vulnerability
@@ -1716,7 +1728,7 @@ int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
     end = s + strlen(s);
     dst[0] = '\0';
 
-    for (; (s = strstr(s, cookie_name)) != NULL; s += name_len) {
+    for (; (s = mg_strcasestr(s, cookie_name)) != NULL; s += name_len) {
       if (s[name_len] == '=') {
         s += name_len + 1;
         if ((p = strchr(s, ' ')) == NULL)
@@ -3839,8 +3851,8 @@ static int is_websocket_request(const struct mg_connection *conn) {
 
   return host != NULL && upgrade != NULL && connection != NULL &&
     key != NULL && version != NULL &&
-    strstr(upgrade, "websocket") != NULL &&
-    strstr(connection, "Upgrade") != NULL;
+    mg_strcasestr(upgrade, "websocket") != NULL &&
+    mg_strcasestr(connection, "Upgrade") != NULL;
 }
 #endif // !USE_WEBSOCKET
 
@@ -4070,7 +4082,8 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
 
   // Extract boundary string from the Content-Type header
   if ((content_type_header = mg_get_header(conn, "Content-Type")) == NULL ||
-      (boundary_start = strstr(content_type_header, "boundary=")) == NULL ||
+      (boundary_start = mg_strcasestr(content_type_header,
+                                      "boundary=")) == NULL ||
       (sscanf(boundary_start, "boundary=\"%99[^\"]\"", boundary) == 0 &&
        sscanf(boundary_start, "boundary=%99s", boundary) == 0) ||
       boundary[0] == '\0') {
