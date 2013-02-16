@@ -583,10 +583,21 @@ static void test_url_decode(void) {
   ASSERT(url_decode("foo", 3, buf, 3, 0) == -1);  // No space for terminating \0
   ASSERT(url_decode("foo", 3, buf, 4, 0) == 3);
   ASSERT(strcmp(buf, "foo") == 0);
+
   ASSERT(url_decode("a+", 2, buf, sizeof(buf), 0) == 2);
   ASSERT(strcmp(buf, "a+") == 0);
+
   ASSERT(url_decode("a+", 2, buf, sizeof(buf), 1) == 2);
   ASSERT(strcmp(buf, "a ") == 0);
+
+  ASSERT(url_decode("%61", 1, buf, sizeof(buf), 1) == 1);
+  ASSERT(strcmp(buf, "%") == 0);
+
+  ASSERT(url_decode("%61", 2, buf, sizeof(buf), 1) == 2);
+  ASSERT(strcmp(buf, "%6") == 0);
+
+  ASSERT(url_decode("%61", 3, buf, sizeof(buf), 1) == 1);
+  ASSERT(strcmp(buf, "a") == 0);
 }
 
 static void test_mg_strcasestr(void) {
