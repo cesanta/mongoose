@@ -3915,7 +3915,6 @@ static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
   HANDLE fh = (HANDLE) _get_osfhandle(fd);
   HANDLE mh = CreateFileMapping(fh, 0, PAGE_READONLY, 0, 0, 0);
   void *p = MapViewOfFile(mh, FILE_MAP_READ, 0, 0, (size_t) len);
-  CloseHandle(fh);
   CloseHandle(mh);
   return p;
 }
