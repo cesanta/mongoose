@@ -241,7 +241,7 @@ static int log_message_cb(const struct mg_connection *conn, const char *msg) {
 
 static const struct mg_callbacks CALLBACKS = {
   &begin_request_handler_cb, NULL, &log_message_cb, NULL, NULL, NULL, NULL,
-  &open_file_cb, NULL, &upload_cb
+  &open_file_cb, NULL, &upload_cb, NULL
 };
 
 static const char *OPTIONS[] = {
@@ -577,6 +577,18 @@ static void test_api_calls(void) {
   mg_stop(ctx);
 }
 
+static void test_url_decode(void) {
+  char buf[100];
+
+  ASSERT(url_decode("foo", 3, buf, 3, 0) == -1);  // No space for terminating \0
+  ASSERT(url_decode("foo", 3, buf, 4, 0) == 3);
+  ASSERT(strcmp(buf, "foo") == 0);
+  ASSERT(url_decode("a+", 2, buf, sizeof(buf), 0) == 2);
+  ASSERT(strcmp(buf, "a+") == 0);
+  ASSERT(url_decode("a+", 2, buf, sizeof(buf), 1) == 2);
+  ASSERT(strcmp(buf, "a ") == 0);
+}
+
 int __cdecl main(void) {
   test_alloc_vprintf();
   test_base64_encode();
@@ -593,6 +605,7 @@ int __cdecl main(void) {
   test_mg_upload();
   test_request_replies();
   test_api_calls();
+  test_url_decode();
 #ifdef USE_LUA
   test_lua();
 #endif
