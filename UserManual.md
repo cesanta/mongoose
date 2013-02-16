@@ -335,6 +335,7 @@ To start the embedded web server, call `mg_start()`. To stop it, call
                                  const char *path, size_t *data_len);
       void (*init_lua)(struct mg_connection *, void *lua_context);
       void (*upload)(struct mg_connection *, const char *file_name);
+      int  (*http_error)(struct mg_connection *, int status);
     };
 
 [hello.c](https://github.com/valenok/mongoose/blob/master/examples/hello.c)
