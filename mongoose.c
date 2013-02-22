@@ -694,12 +694,12 @@ static char * mg_strdup(const char *str) {
   return mg_strndup(str, strlen(str));
 }
 
-static const char *mg_strcasestr(const char *big, const char *small) {
-  int i, big_len = strlen(big), small_len = strlen(small);
+static const char *mg_strcasestr(const char *big_str, const char *small_str) {
+  int i, big_len = strlen(big_str), small_len = strlen(small_str);
 
   for (i = 0; i <= big_len - small_len; i++) {
-    if (mg_strncasecmp(big + i, small, small_len) == 0) {
-      return big + i;
+    if (mg_strncasecmp(big_str + i, small_str, small_len) == 0) {
+      return big_str + i;
     }
   }
 
