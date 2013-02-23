@@ -41,8 +41,15 @@
 #include <windows.h>
 #include <winsvc.h>
 #include <shlobj.h>
+
+#ifndef PATH_MAX
 #define PATH_MAX MAX_PATH
+#endif
+
+#ifndef S_ISDIR
 #define S_ISDIR(x) ((x) & _S_IFDIR)
+#endif
+
 #define DIRSEP '\\'
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
