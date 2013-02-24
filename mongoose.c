@@ -139,7 +139,10 @@ typedef long off_t;
 #define flockfile(x) EnterCriticalSection(&global_log_file_lock)
 #define funlockfile(x) LeaveCriticalSection(&global_log_file_lock)
 #define sleep(x) Sleep((x) * 1000)
+
+#if !defined(va_copy)
 #define va_copy(x, y) x = y
+#endif // !va_copy MINGW #defines va_copy
 
 #if !defined(fileno)
 #define fileno(x) _fileno(x)
