@@ -1018,13 +1018,10 @@ static void change_slashes_to_backslashes(char *path) {
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
 // wbuf and wbuf_len is a target buffer and its length.
 static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
-  char buf[PATH_MAX], buf2[PATH_MAX], *p;
+  char buf[PATH_MAX], buf2[PATH_MAX];
 
   mg_strlcpy(buf, path, sizeof(buf));
   change_slashes_to_backslashes(buf);
-
-  // Point p to the end of the file name
-  p = buf + strlen(buf) - 1;
 
   // Convert to Unicode and back. If doubly-converted string does not
   // match the original, something is fishy, reject.
