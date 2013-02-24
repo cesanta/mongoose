@@ -5192,7 +5192,7 @@ struct mg_context *mg_start(const struct mg_callbacks *callbacks,
   // Start worker threads
   for (i = 0; i < atoi(ctx->config[NUM_THREADS]); i++) {
     if (mg_start_thread(worker_thread, ctx) != 0) {
-      cry(fc(ctx), "Cannot start worker thread: %ld", ERRNO);
+      cry(fc(ctx), "Cannot start worker thread: %ld", (long) ERRNO);
     } else {
       ctx->num_threads++;
     }
