@@ -4693,7 +4693,7 @@ struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
   struct mg_connection *conn = NULL;
   struct sockaddr_in sin;
   struct hostent *he;
-  int sock;
+  SOCKET sock;
 
   if (host == NULL) {
     snprintf(ebuf, ebuf_len, "%s", "NULL host");
