@@ -697,6 +697,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
   char buf[200], *service_argv[] = {__argv[0], NULL};
   POINT pt;
   HMENU hMenu;
+  static UINT s_uTaskbarRestart; // for taskbar creation
 
   switch (msg) {
     case WM_CREATE:
@@ -707,6 +708,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
         exit(EXIT_SUCCESS);
       } else {
         start_mongoose(__argc, __argv);
+        s_uTaskbarRestart = RegisterWindowMessage(TEXT("TaskbarCreated"));
       }
       break;
     case WM_COMMAND:
@@ -764,6 +766,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
       Shell_NotifyIcon(NIM_DELETE, &TrayIcon);
       PostQuitMessage(0);
       return 0;  // We've just sent our own quit message, with proper hwnd.
+    default:
+      if (msg==s_uTaskbarRestart)
+          Shell_NotifyIcon(NIM_ADD, &TrayIcon);
   }
 
   return DefWindowProc(hWnd, msg, wParam, lParam);
