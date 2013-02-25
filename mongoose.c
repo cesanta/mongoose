@@ -2786,7 +2786,7 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
   r1 = r2 = 0;
   hdr = mg_get_header(conn, "Range");
   if (hdr != NULL && (n = parse_range_header(hdr, &r1, &r2)) > 0 &&
-      r1 >= 0 && r2 > 0) {
+      r1 >= 0 && r2 >= 0) {
     conn->status_code = 206;
     cl = n == 2 ? (r2 > cl ? cl : r2) - r1 + 1: cl - r1;
     mg_snprintf(conn, range, sizeof(range),
