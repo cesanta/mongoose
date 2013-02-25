@@ -139,7 +139,10 @@ typedef long off_t;
 #define flockfile(x) EnterCriticalSection(&global_log_file_lock)
 #define funlockfile(x) LeaveCriticalSection(&global_log_file_lock)
 #define sleep(x) Sleep((x) * 1000)
+
+#if !defined(va_copy)
 #define va_copy(x, y) x = y
+#endif // !va_copy MINGW #defines va_copy
 
 #if !defined(fileno)
 #define fileno(x) _fileno(x)
@@ -1015,13 +1018,10 @@ static void change_slashes_to_backslashes(char *path) {
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
 // wbuf and wbuf_len is a target buffer and its length.
 static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
-  char buf[PATH_MAX], buf2[PATH_MAX], *p;
+  char buf[PATH_MAX], buf2[PATH_MAX];
 
   mg_strlcpy(buf, path, sizeof(buf));
   change_slashes_to_backslashes(buf);
-
-  // Point p to the end of the file name
-  p = buf + strlen(buf) - 1;
 
   // Convert to Unicode and back. If doubly-converted string does not
   // match the original, something is fishy, reject.
@@ -1333,7 +1333,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   DEBUG_TRACE(("Running [%s]", cmdline));
   if (CreateProcessA(NULL, cmdline, NULL, NULL, TRUE,
         CREATE_NEW_PROCESS_GROUP, envblk, NULL, &si, &pi) == 0) {
-    cry(conn, "%s: CreateProcess(%s): %d",
+    cry(conn, "%s: CreateProcess(%s): %ld",
         __func__, cmdline, ERRNO);
     pi.hProcess = (pid_t) -1;
   }
@@ -4835,7 +4835,7 @@ struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
   struct mg_connection *conn = NULL;
   struct sockaddr_in sin;
   struct hostent *he;
-  int sock;
+  SOCKET sock;
 
   if (host == NULL) {
     snprintf(ebuf, ebuf_len, "%s", "NULL host");
@@ -5334,7 +5334,7 @@ struct mg_context *mg_start(const struct mg_callbacks *callbacks,
   // Start worker threads
   for (i = 0; i < atoi(ctx->config[NUM_THREADS]); i++) {
     if (mg_start_thread(worker_thread, ctx) != 0) {
-      cry(fc(ctx), "Cannot start worker thread: %d", ERRNO);
+      cry(fc(ctx), "Cannot start worker thread: %ld", (long) ERRNO);
     } else {
       ctx->num_threads++;
     }
