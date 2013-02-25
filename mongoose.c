@@ -4336,33 +4336,122 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
   return 1;
 }
 
+#ifdef __linux__
+static int get_sd_socket(struct mg_context *ctx) {
+  int fd = -1;
+  struct stat buf;
+  int type;
+  int mask;
+  const char* env;
+
+  env = getenv("LISTEN_FDS");
+  if (!env || strcmp(env, "1") != 0)
+    goto fail;
+  unsetenv("LISTEN_FDS");
+
+  env = getenv("LISTEN_PID");
+  if (!env) {
+    cry(fc(ctx), "Socket passing error: LISTEN_FDS not found.");
+    goto fail;
+  }
+  if ((pid_t) strtoul(env, NULL, 10) != getpid()) {
+    cry(fc(ctx), "Socket passing error: LISTEN_FDS present but "
+                 "LISTEN_PID (%s) doesn't match pid (%u)", env, getpid());
+    goto fail;
+  }
+  unsetenv("LISTEN_PID");
+  unsetenv("LISTEN_FDS");
+
+  /* LISTEN_FDS and LISTEN_PID are fine: the socket passing is enabled */
+  fd = 3;
+
+  if (fstat(fd, &buf) != 0) {
+    cry(fc(ctx), "Socket passing error: fstating the passed file descriptor "
+                 "failed: %s", strerror(errno));
+    goto fail;
+  }
+
+  if (!S_ISSOCK(buf.st_mode)) {
+    cry(fc(ctx), "Socket passing error: File descriptor 3 passed in is "
+                 "not a socket");
+    goto fail;
+  }
+
+  socklen_t len = sizeof(type);
+  if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &type, &len) < 0) {
+    cry(fc(ctx), "Socket passing error: getsockopt failed: %s", strerror(errno));
+    goto fail;
+  }
+
+  if (len != sizeof(type)) {
+    cry(fc(ctx), "Socket passing error: Bizzare: getsockopt failed to "
+                 "fill provided buffer");
+    goto fail;
+  }
+
+  if (type != SOCK_STREAM) {
+    cry(fc(ctx), "Socket passing error: socket is not a STREAM socket failed");
+    goto fail;
+  }
+
+  mask = fcntl(fd, F_GETFL, 0);
+  if (mask < 0 || fcntl(fd, F_SETFL, mask | O_NONBLOCK) < 0) {
+    cry(fc(ctx), "Failed to set socket in non-blocking mode");
+    errno = EBADF;
+    goto fail;
+  }
+
+  return fd;
+fail:
+  if ( fd != -1 ){
+    close(fd);
+  }
+  return -1;
+}
+#else
+static int get_sd_socket(struct mg_context *ctx) {
+  cry(fc(ctx), "Error receiving listening socket: systemd-style socket "
+               "passing support only available on Linux");
+  return -1;
+}
+#endif
+
 static int set_ports_option(struct mg_context *ctx) {
   const char *list = ctx->config[LISTENING_PORTS];
   int on = 1, success = 1;
   struct vec vec;
-  struct socket so;
+  struct socket so = {0};
 
   while (success && (list = next_option(list, &vec, NULL)) != NULL) {
-    if (!parse_port_string(&vec, &so)) {
-      cry(fc(ctx), "%s: %.*s: invalid port spec. Expecting list of: %s",
-          __func__, (int) vec.len, vec.ptr, "[IP_ADDRESS:]PORT[s|p]");
-      success = 0;
-    } else if (so.is_ssl && ctx->ssl_ctx == NULL) {
-      cry(fc(ctx), "Cannot add SSL socket, is -ssl_certificate option set?");
-      success = 0;
-    } else if ((so.sock = socket(so.lsa.sa.sa_family, SOCK_STREAM, 6)) ==
-               INVALID_SOCKET ||
-               // On Windows, SO_REUSEADDR is recommended only for
-               // broadcast UDP sockets
-               setsockopt(so.sock, SOL_SOCKET, SO_REUSEADDR,
-                          (void *) &on, sizeof(on)) != 0 ||
-               bind(so.sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
-               listen(so.sock, SOMAXCONN) != 0) {
-      cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
-          (int) vec.len, vec.ptr, strerror(ERRNO));
-      closesocket(so.sock);
-      success = 0;
-    } else {
+    if (vec.len == 7 && strncmp(vec.ptr, "systemd", 7) == 0) {
+      so.sock = get_sd_socket(ctx);
+      if (so.sock == -1) {
+        success = 0;
+      }
+    }
+    else {
+      if (!parse_port_string(&vec, &so)) {
+        cry(fc(ctx), "%s: %.*s: invalid port spec. Expecting list of: %s",
+            __func__, (int) vec.len, vec.ptr, "[IP_ADDRESS:]PORT[s|p]");
+        success = 0;
+      } else if (so.is_ssl && ctx->ssl_ctx == NULL) {
+        cry(fc(ctx), "Cannot add SSL socket, is -ssl_certificate option set?");
+        success = 0;
+      } else if ((so.sock = socket(so.lsa.sa.sa_family, SOCK_STREAM, 6)) ==
+                 INVALID_SOCKET ||
+                 // On Windows, SO_REUSEADDR is recommended only for
+                 // broadcast UDP sockets
+                 setsockopt(so.sock, SOL_SOCKET, SO_REUSEADDR,
+                            (void *) &on, sizeof(on)) != 0 ||
+                 bind(so.sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
+                 listen(so.sock, SOMAXCONN) != 0) {
+        cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
+            (int) vec.len, vec.ptr, strerror(ERRNO));
+        closesocket(so.sock);
+        success = 0;
+      }
+    }
+    if (success) {
       set_close_on_exec(so.sock);
       // TODO: handle realloc failure
       ctx->listening_sockets = realloc(ctx->listening_sockets,
