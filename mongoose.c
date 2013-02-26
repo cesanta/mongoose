@@ -3934,14 +3934,12 @@ static int handle_lsp_request(struct mg_connection *, const char *,
 static int lsp_mg_error(lua_State *L) {
   struct mg_connection *conn = lua_touserdata(L, lua_upvalueindex(1));
   int top = lua_gettop(L);
-  if (top > 1) lua_settop(L, 1);
   if (top < 1) lua_pushstring(L, "unknown error");
   // Get mg.onerror.
   lua_getglobal(L, "mg");
   lua_getfield(L, -1, "onerror");
   // If mg.onerror is nil, silently stop processing chunks.
   if (lua_isnil(L, -1)) {
-    lua_settop(L, 0);
     lua_pushinteger(L, 1);
     return 1;
   }
@@ -3951,13 +3949,10 @@ static int lsp_mg_error(lua_State *L) {
   if (lua_pcall(L, 1, 1, 0)) {
     // If mg.onerror fails, cry the error message and stop processing chunks.
     cry(conn, "mg.onerror failed: %s", lua_tostring(L, -1));
-    lua_settop(L, 0);
     lua_pushinteger(L, 1);
     return 1;
   }
   // Return the return value from mg.onerror. Non-0 = stop processing chunks.
-  lua_replace(L, 1);
-  lua_settop(L, 1);
   return 1;
 }
 
