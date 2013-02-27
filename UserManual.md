@@ -323,6 +323,11 @@ It is easy to do things like redirects, for example:
 
     <? print('HTTP/1.0 302 Found\r\nLocation: http://google.com\r\n\r\n') ?>
 
+To serve Lua Page, mongoose creates Lua context. That context is used for
+all Lua blocks within the page. That means, all Lua blocks on the same page
+share the same context. If one block defines a variable, for example, that
+variable is visible in the block that follows.
+
 # Common Problems
 - PHP doesn't work - getting empty page, or 'File not found' error. The
   reason for that is wrong paths to the interpreter. Remember that with PHP,
