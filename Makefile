@@ -76,7 +76,7 @@ all:
 
 # To build with lua, make sure you have Lua unpacked into lua-5.2.1 directory
 linux_lua:
-	$(CC) mongoose.c main.c $(LUA_SOURCES) -DUSE_LUA -I$(LUA) -o $(PROG) -ldl $(CFLAGS)
+	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c $(LUA_SOURCES) -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL -I$(LUA) -o $(PROG) -ldl $(CFLAGS)
 
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
