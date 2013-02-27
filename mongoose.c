@@ -3979,7 +3979,6 @@ static int lsp(struct mg_connection *conn, const char *path,
         if (p[j] == '\n') ++lualines;
         if (p[j] == '?' && p[j + 1] == '>') {
           mg_write(conn, p + pos, i - pos);
-	        //lua_settop(L, 0);
           lua_pushlightuserdata(L, conn);
           lua_pushcclosure(L, lsp_mg_error, 1);
           snprintf (chunkname, sizeof(chunkname), "@%s+%i", path, lines);
