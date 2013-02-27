@@ -307,8 +307,9 @@ like request method, all headers, etcetera. Please refer to
 `struct mg_request_info` definition in
 [mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h)
 to see what kind of information is present in `request_info` object. Also,
-[page.lp](https://github.com/valenok/mongoose/blob/master/test/page.lp)
-contains some example code that uses `request_info`.
+[page.lp](https://github.com/valenok/mongoose/blob/master/test/page.lp) and
+[prime_numbers.lp]()https://github.com/valenok/mongoose/blob/master/examples/lua/prime_numbers.lp
+contains some example code that uses `request_info` and other functions(form submitting for example).
 
 
 One substantial difference of mongoose's Lua Pages and PHP is that Mongoose
@@ -322,6 +323,11 @@ every Lua Page must be a Lua block that outputs HTTP headers**, like this:
 It is easy to do things like redirects, for example:
 
     <? print('HTTP/1.0 302 Found\r\nLocation: http://google.com\r\n\r\n') ?>
+
+To serve Lua Page, mongoose creates Lua context. That context is used for
+all Lua blocks within the page. That means, all Lua blocks on the same page
+share the same context. If one block defines a variable, for example, that
+variable is visible in the block that follows.
 
 # Common Problems
 - PHP doesn't work - getting empty page, or 'File not found' error. The
