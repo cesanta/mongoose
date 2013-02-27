@@ -308,7 +308,7 @@ like request method, all headers, etcetera. Please refer to
 [mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h)
 to see what kind of information is present in `request_info` object. Also,
 [page.lp](https://github.com/valenok/mongoose/blob/master/test/page.lp) and
-[prime_numbers.lp]()https://github.com/valenok/mongoose/blob/master/examples/lua/prime_numbers.lp
+[prime_numbers.lp](https://github.com/valenok/mongoose/blob/master/examples/lua/prime_numbers.lp)
 contains some example code that uses `request_info` and other functions(form submitting for example).
 
 
