@@ -279,6 +279,56 @@ must be for a file name only, not including directory name. Example:
 
     mongoose -hide_files_patterns secret.txt|even_more_secret.txt
 
+# Lua Server Pages
+Pre-built Windows and Mac mongoose binaries have built-in Lua Server Pages
+support. That means it is possible to write PHP-like scripts with mongoose,
+using Lua programming language instead of PHP. Lua is known
+for it's speed and small size. Mongoose uses Lua version 5.2.1, the
+documentation for it can be found at
+[Lua 5.2 reference manual](http://www.lua.org/manual/5.2/).
+
+To create a Lua Page, make sure a file has `.lp` extension. For example,
+let's say it is going to be `my_page.lp`. The contents of the file, just like
+with PHP, is HTML with embedded Lua code. Lua code must be enclosed in
+`<?  ?>` blocks, and can appear anywhere on the page. For example, to
+print current weekday name, one can write:
+
+    <p>
+      <span>Today is:</span>
+      <? print(os.date("%A")) ?>
+    </p>
+
+Note that this example uses function `print()`, which prints data to the
+web page. Using function `print()` is the way to generate web content from
+inside Lua code. In addition to `print()`, all standard library functions
+are accessible from the Lua code (please check reference manual for details),
+and also information about the request is available in `request_info` object,
+like request method, all headers, etcetera. Please refer to
+`struct mg_request_info` definition in
+[mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h)
+to see what kind of information is present in `request_info` object. Also,
+[page.lp](https://github.com/valenok/mongoose/blob/master/test/page.lp) and
+[prime_numbers.lp](https://github.com/valenok/mongoose/blob/master/examples/lua/prime_numbers.lp)
+contains some example code that uses `request_info` and other functions(form submitting for example).
+
+
+One substantial difference of mongoose's Lua Pages and PHP is that Mongoose
+expects Lua page to output HTTP headers. Therefore, **at the very beginning of
+every Lua Page must be a Lua block that outputs HTTP headers**, like this:
+
+    <? print('HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n') ?>
+    <html><body>
+      ... the rest of the web page ...
+
+It is easy to do things like redirects, for example:
+
+    <? print('HTTP/1.0 302 Found\r\nLocation: http://google.com\r\n\r\n') ?>
+
+To serve Lua Page, mongoose creates Lua context. That context is used for
+all Lua blocks within the page. That means, all Lua blocks on the same page
+share the same context. If one block defines a variable, for example, that
+variable is visible in the block that follows.
+
 # Common Problems
 - PHP doesn't work - getting empty page, or 'File not found' error. The
   reason for that is wrong paths to the interpreter. Remember that with PHP,
