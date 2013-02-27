@@ -326,8 +326,19 @@ It is easy to do things like redirects, for example:
 
 To serve Lua Page, mongoose creates Lua context. That context is used for
 all Lua blocks within the page. That means, all Lua blocks on the same page
-share the same context. If one block defines a variable, for example, that
-variable is visible in the block that follows.
+share the same context. If one block defines a global variable, for example,
+that variable is visible in the block that follows. Note that blocks share 
+*context*, not *scope*, so local variables won't be visible to other blocks.
+
+Mongoose provides Lua pages with a global table `mg`, which includes:
+- `mg.cry(message)`: Cries a string argument. Used to log errors.
+- `mg.include(uri)`: Includes another Lua page.
+- `mg.onerror(msg)`: Error handler. By default, it references the same function as `mg.cry`.
+    - Setting `mg.onerror` to a custom handler function is equivalent to calling `set_exception_handler` in PHP.
+    - It's up to `mg.onerror` to display or log errors, equivalent to `log_errors` and `display_errors` PHP settings.
+    - If `mg.onerror` returns non-zero, Mongoose will stop processing Lua blocks.
+    - If `mg.onerror` is set to `nil` when an error occurs, Mongoose will silently stop processing Lua blocks.
+- `mg.redirect(uri)`: Performs an internal redirect. Useful for passing control to a CGI script.
 
 # Common Problems
 - PHP doesn't work - getting empty page, or 'File not found' error. The
