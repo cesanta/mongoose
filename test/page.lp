@@ -10,14 +10,7 @@
 Mongoose has Lua, Sqlite, and other functionality built in the binary.
 This example page stores the request in the Sqlite database, and shows
 all requests done previously.</p>
-
-  <p> Today is <? print(os.date("%A")) ?>
-  <p> HTTP headers: <br>
-   <?
-     for name, value in pairs(request_info.http_headers) do
-       print(name, ' : ', value, '<br>')
-     end
-   ?>
+<p> Today is <? print(os.date("%A")) ?>
 
 <pre>
 <?
