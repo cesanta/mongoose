@@ -4705,7 +4705,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
   if ((ctx->callbacks.init_ssl == NULL ||
-       !ctx->callbacks.init_ssl(ctx->ssl_ctx)) &&
+       !ctx->callbacks.init_ssl(ctx->ssl_ctx, ctx->user_data)) &&
       (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, 1) == 0 ||
        SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, 1) == 0)) {
     cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
