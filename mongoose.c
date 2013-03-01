@@ -4954,6 +4954,7 @@ static void process_new_connection(struct mg_connection *conn) {
   do {
     if (!getreq(conn, ebuf, sizeof(ebuf))) {
       send_http_error(conn, 500, "Server Error", "%s", ebuf);
+      conn->must_close = 1;
     } else if (!is_valid_uri(conn->request_info.uri)) {
       snprintf(ebuf, sizeof(ebuf), "Invalid URI: [%s]", ri->uri);
       send_http_error(conn, 400, "Bad Request", "%s", ebuf);
