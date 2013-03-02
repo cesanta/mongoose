@@ -439,6 +439,54 @@ Notes:
 - TODO: A Java application that interacts with the native binary or a
   shared library.
 
+# Mongoose internals
+
+Mongoose is multithreaded web server. `mg_start()` function allocates
+web server context (`struct mg_context`), which holds all information
+about the web server instance:
+
+- configuration options. Note that mongoose makes internal copies of
+  passed options.
+- SSL context, if any
+- user-defined callbacks
+- opened listening sockets
+- a queue for accepted sockets
+- mutexes and condition variables for inter-thread synchronization
+
+When `mg_start()` returns, all initiazation is quaranteed to be complete
+(e.g. listening ports are opened, SSL is initialized). `mg_start()` starts
+two threads: a master thread, that accepts new connections, and several
+worker threads, that process accepted connections. The number of worker threads
+is configurable via `num_threads` configuration option. That number puts a
+limit on number of simultaneous requests that can be handled by mongoose.
+
+When master thread accepts new connection, accepted socket (described by
+`struct socket`) it placed into the accepted sockets queue,
+which has size of 20 (see [code](https://github.com/valenok/mongoose/blob/3892e0199e6ca9613b160535d9d107ede09daa43/mongoose.c#L486)). Any idle worker thread
+can grab accepted sockets from that queue. If all worker threads are busy
+mongoose can accept and queue 20 more TCP connections, filling the queue.
+In the attempt to queue next accepted connection, master thread will block
+until there is space in a queue. When master thread is blocked on a
+full queue, TCP layer in OS can also queue incoming connection.
+The number is limited by the `listen()` call parameter on listening socket,
+which is `SOMAXCONN` in case of Mongoose, and depends on a platform.
+
+Worker threads are running in an infinite loop, which in simplified form
+look something like this:
+
+    static void *worker_thread() {
+      while (consume_socket()) {
+        process_new_connection();
+      }
+    }
+
+Function `consume_socket()` gets new accepted socket from the mongoose socket
+queue, atomically removing it from the queue. If the queue is empty,
+`consume_socket()` blocks and waits until new sockets are placed in a queue
+by the master thread. `process_new_connection()` actually processes the
+connection, i.e. reads the request, parses it, and performs appropriate action
+depending on a parsed request.
+
 
 # Other Resources
 - Presentation made by Arnout Vandecappelle at FOSDEM 2011 on 2011-02-06
