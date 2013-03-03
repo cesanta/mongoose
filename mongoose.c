@@ -67,6 +67,7 @@
 #include <stdio.h>
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__) // Windows specific
+#undef _WIN32_WINNT
 #define _WIN32_WINNT 0x0400 // To make it link in VS2005
 #include <windows.h>
 
@@ -127,8 +128,12 @@ typedef long off_t;
 #define mg_sleep(x) Sleep(x)
 
 #define pipe(x) _pipe(x, MG_BUF_LEN, _O_BINARY)
+#ifndef popen
 #define popen(x, y) _popen(x, y)
+#endif
+#ifndef pclose
 #define pclose(x) _pclose(x)
+#endif
 #define close(x) _close(x)
 #define dlsym(x,y) GetProcAddress((HINSTANCE) (x), (y))
 #define RTLD_LAZY  0
@@ -191,7 +196,9 @@ struct pollfd {
 
 
 // Mark required libraries
+#ifdef _MSC_VER
 #pragma comment(lib, "Ws2_32.lib")
+#endif
 
 #else    // UNIX  specific
 #include <sys/wait.h>
@@ -259,6 +266,8 @@ static pthread_t pthread_self(void) {
   return GetCurrentThreadId();
 }
 #endif // _WIN32
+
+#define UNUSED(x) (void)(x)
 
 #ifdef DEBUG_TRACE
 #undef DEBUG_TRACE
@@ -955,7 +964,7 @@ static void send_http_error(struct mg_connection *conn, int status,
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
 static int pthread_mutex_init(pthread_mutex_t *mutex, void *unused) {
-  unused = NULL;
+  UNUSED(unused);
   *mutex = CreateMutex(NULL, FALSE, NULL);
   return *mutex == NULL ? -1 : 0;
 }
@@ -973,7 +982,7 @@ static int pthread_mutex_unlock(pthread_mutex_t *mutex) {
 }
 
 static int pthread_cond_init(pthread_cond_t *cv, const void *unused) {
-  unused = NULL;
+  UNUSED(unused);
   cv->signal = CreateEvent(NULL, FALSE, FALSE, NULL);
   cv->broadcast = CreateEvent(NULL, TRUE, FALSE, NULL);
   return cv->signal != NULL && cv->broadcast != NULL ? 0 : -1;
@@ -1090,16 +1099,6 @@ static size_t strftime(char *dst, size_t dst_size, const char *fmt,
 }
 #endif
 
-static int mg_rename(const char* oldname, const char* newname) {
-  wchar_t woldbuf[PATH_MAX];
-  wchar_t wnewbuf[PATH_MAX];
-
-  to_unicode(oldname, woldbuf, ARRAY_SIZE(woldbuf));
-  to_unicode(newname, wnewbuf, ARRAY_SIZE(wnewbuf));
-
-  return MoveFileW(woldbuf, wnewbuf) ? 0 : -1;
-}
-
 // Windows happily opens files with some garbage at the end of file name.
 // For example, fopen("a.cgi    ", "r") on Windows successfully opens
 // "a.cgi", despite one would expect an error back.
@@ -1145,7 +1144,7 @@ static int mg_mkdir(const char *path, int mode) {
   char buf[PATH_MAX];
   wchar_t wbuf[PATH_MAX];
 
-  mode = 0; // Unused
+  UNUSED(mode);
   mg_strlcpy(buf, path, sizeof(buf));
   change_slashes_to_backslashes(buf);
 
@@ -1252,12 +1251,12 @@ static int poll(struct pollfd *pfd, int n, int milliseconds) {
 #define set_close_on_exec(x) // No FD_CLOEXEC on Windows
 
 int mg_start_thread(mg_thread_func_t f, void *p) {
-  return _beginthread((void (__cdecl *)(void *)) f, 0, p) == -1L ? -1 : 0;
+  return (long)_beginthread((void (__cdecl *)(void *)) f, 0, p) == -1L ? -1 : 0;
 }
 
 static HANDLE dlopen(const char *dll_name, int flags) {
   wchar_t wbuf[PATH_MAX];
-  flags = 0; // Unused
+  UNUSED(flags);
   to_unicode(dll_name, wbuf, ARRAY_SIZE(wbuf));
   return LoadLibraryW(wbuf);
 }
@@ -1284,10 +1283,12 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   char *p, *interp, full_interp[PATH_MAX], full_dir[PATH_MAX],
        cmdline[PATH_MAX], buf[PATH_MAX];
   struct file file = STRUCT_FILE_INITIALIZER;
-  STARTUPINFOA si = { sizeof(si) };
+  STARTUPINFOA si;
+  memset(&si, 0, sizeof(si));
+  si.cb = sizeof(si);
   PROCESS_INFORMATION pi = { 0 };
 
-  envp = NULL; // Unused
+  UNUSED(envp);
 
   // TODO(lsm): redirect CGI errors to the error log file
   si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
@@ -2168,8 +2169,9 @@ static void MD5Final(unsigned char digest[16], MD5_CTX *ctx) {
   }
   byteReverse(ctx->in, 14);
 
-  ((uint32_t *) ctx->in)[14] = ctx->bits[0];
-  ((uint32_t *) ctx->in)[15] = ctx->bits[1];
+  uint32_t *a = (uint32_t *)ctx->in;
+  a[14] = ctx->bits[0];
+  a[15] = ctx->bits[1];
 
   MD5Transform(ctx->buf, (uint32_t *) ctx->in);
   byteReverse((unsigned char *) ctx->buf, 4);
