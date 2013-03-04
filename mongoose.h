@@ -59,7 +59,7 @@ struct mg_callbacks {
   int  (*begin_request)(struct mg_connection *);
   void (*end_request)(const struct mg_connection *, int reply_status_code);
   int  (*log_message)(const struct mg_connection *, const char *message);
-  int  (*init_ssl)(void *ssl_context);
+  int  (*init_ssl)(void *ssl_context, void *user_data);
   int (*websocket_connect)(const struct mg_connection *);
   void (*websocket_ready)(struct mg_connection *);
   int  (*websocket_data)(struct mg_connection *);
