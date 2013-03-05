@@ -67,8 +67,14 @@
 #include <stdio.h>
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__) // Windows specific
+#if !defined(USE_IPV6)
 #define _WIN32_WINNT 0x0400 // To make it link in VS2005
+#endif //USE_IPV6
+#define  _WINSOCKAPI_
 #include <windows.h>
+#include <winsock2.h>
+#include <ws2ipdef.h>
+#include "ws2def.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX MAX_PATH
@@ -578,16 +584,22 @@ const char *mg_get_option(const struct mg_context *ctx, const char *name) {
 static void sockaddr_to_string(char *buf, size_t len,
                                      const union usa *usa) {
   buf[0] = '\0';
-#if defined(USE_IPV6)
-  inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
-            (void *) &usa->sin.sin_addr :
-            (void *) &usa->sin6.sin6_addr, buf, len);
-#elif defined(_WIN32)
+#if defined(_WIN32)
+#if !defined(USE_IPV6)
   // Only Windoze Vista (and newer) have inet_ntop()
   strncpy(buf, inet_ntoa(usa->sin.sin_addr), len);
 #else
+  WSAAddressToString ((LPSOCKADDR )&usa->sin6, sizeof(usa->sin6), NULL, buf, (LPDWORD)&len );
+#endif //USE_IPV6
+#else  //WIN32
+#if !defined(USE_IPV6)
   inet_ntop(usa->sa.sa_family, (void *) &usa->sin.sin_addr, buf, len);
-#endif
+#else
+  inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
+     (void *) &usa->sin.sin_addr :
+     (void *) &usa->sin6.sin6_addr, buf, len);
+#endif //USE_IPV6
+#endif //WIN32
 }
 
 static void cry(struct mg_connection *conn,
@@ -4473,7 +4485,7 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
 
 static int set_ports_option(struct mg_context *ctx) {
   const char *list = ctx->config[LISTENING_PORTS];
-  int on = 1, success = 1;
+  int on = 1, success = 1, off = 0;
   struct vec vec;
   struct socket so;
 
@@ -4491,6 +4503,9 @@ static int set_ports_option(struct mg_context *ctx) {
                // broadcast UDP sockets
                setsockopt(so.sock, SOL_SOCKET, SO_REUSEADDR,
                           (void *) &on, sizeof(on)) != 0 ||
+#if defined (USE_IPV6)
+               setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&off, sizeof(off)) != 0 ||
+#endif
                bind(so.sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
                listen(so.sock, SOMAXCONN) != 0) {
       cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
