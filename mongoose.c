@@ -4909,7 +4909,11 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
       conn->content_len = strtoll(cl, NULL, 10);
     } else if (!mg_strcasecmp(conn->request_info.request_method, "POST") ||
                !mg_strcasecmp(conn->request_info.request_method, "PUT")) {
-      conn->content_len = -1;
+      if(conn->data_len > 0) {
+      	conn->content_len = conn->data_len - conn->request_len;
+      } else {
+      	conn->content_len = -1;
+      }
     } else {
       conn->content_len = 0;
     }
