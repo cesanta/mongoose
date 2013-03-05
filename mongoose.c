@@ -4474,6 +4474,9 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
 static int set_ports_option(struct mg_context *ctx) {
   const char *list = ctx->config[LISTENING_PORTS];
   int on = 1, success = 1;
+#if defined(USE_IPV6)
+  int off = 0;
+#endif
   struct vec vec;
   struct socket so;
 
@@ -4491,6 +4494,10 @@ static int set_ports_option(struct mg_context *ctx) {
                // broadcast UDP sockets
                setsockopt(so.sock, SOL_SOCKET, SO_REUSEADDR,
                           (void *) &on, sizeof(on)) != 0 ||
+#if defined(USE_IPV6)
+               setsockopt(so.sock, IPPROTO_IPV6, IPV6_V6ONLY, (void *) &off,
+                          sizeof(off)) != 0 ||
+#endif
                bind(so.sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
                listen(so.sock, SOMAXCONN) != 0) {
       cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
