@@ -431,7 +431,8 @@ struct socket {
 // NOTE(lsm): this enum shoulds be in sync with the config_options below.
 enum {
   CGI_EXTENSIONS, CGI_ENVIRONMENT, PUT_DELETE_PASSWORDS_FILE, CGI_INTERPRETER,
-  PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS, THROTTLE,
+  PROTECT_URI, GET_SERVER_NAME_FROM_HEADERS, AUTHENTICATION_DOMAIN,
+  SSI_EXTENSIONS, THROTTLE,
   ACCESS_LOG_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
   GLOBAL_PASSWORDS_FILE, INDEX_FILES, ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST,
   EXTRA_MIME_TYPES, LISTENING_PORTS, DOCUMENT_ROOT, SSL_CERTIFICATE,
@@ -445,6 +446,7 @@ static const char *config_options[] = {
   "G", "put_delete_auth_file", NULL,
   "I", "cgi_interpreter", NULL,
   "P", "protect_uri", NULL,
+  "N", "get_server_name_from_headers", "no",
   "R", "authentication_domain", "mydomain.com",
   "S", "ssi_pattern", "**.shtml$|**.shtm$",
   "T", "throttle", NULL,
@@ -3087,7 +3089,11 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   blk->conn = conn;
   sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
 
-  addenv(blk, "SERVER_NAME=%s", conn->ctx->config[AUTHENTICATION_DOMAIN]);
+  if ( mg_strcasecmp(conn->ctx->config[GET_SERVER_NAME_FROM_HEADERS], "yes") == 0 ) {
+    s = mg_get_header(conn, "Host");
+    addenv(blk, "SERVER_NAME=%s", s);
+  } else 
+    addenv(blk, "SERVER_NAME=%s", conn->ctx->config[AUTHENTICATION_DOMAIN]);
   addenv(blk, "SERVER_ROOT=%s", conn->ctx->config[DOCUMENT_ROOT]);
   addenv(blk, "DOCUMENT_ROOT=%s", conn->ctx->config[DOCUMENT_ROOT]);
 
