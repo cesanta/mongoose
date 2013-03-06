@@ -99,18 +99,18 @@ static void show_usage_and_exit(void) {
   const char **names;
   int i;
 
-  fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka, built %s\n",
+  fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka, built on %s\n",
           mg_version(), __DATE__);
   fprintf(stderr, "Usage:\n");
   fprintf(stderr, "  mongoose -A <htpasswd_file> <realm> <user> <passwd>\n");
-  fprintf(stderr, "  mongoose <config_file>\n");
+  fprintf(stderr, "  mongoose [config_file]\n");
   fprintf(stderr, "  mongoose [-option value ...]\n");
   fprintf(stderr, "\nOPTIONS:\n");
 
   names = mg_get_valid_option_names();
-  for (i = 0; names[i] != NULL; i += 3) {
-    fprintf(stderr, "  -%s %s (default: \"%s\")\n",
-            names[i], names[i + 1], names[i + 2] == NULL ? "" : names[i + 2]);
+  for (i = 0; names[i] != NULL; i += 2) {
+    fprintf(stderr, "  -%s %s\n",
+            names[i], names[i + 1] == NULL ? "<empty>" : names[i + 1]);
   }
   exit(EXIT_FAILURE);
 }
@@ -153,9 +153,9 @@ static void create_config_file(const char *path) {
   } else if ((fp = fopen(path, "a+")) != NULL) {
     fprintf(fp, "%s", config_file_top_comment);
     names = mg_get_valid_option_names();
-    for (i = 0; names[i] != NULL; i += 3) {
-      value = mg_get_option(ctx, names[i]);
-      fprintf(fp, "# %s %s\n", names[i + 1], *value ? value : "<value>");
+    for (i = 0; names[i * 2] != NULL; i++) {
+      value = mg_get_option(ctx, names[i * 2]);
+      fprintf(fp, "# %s %s\n", names[i * 2], value ? value : "<value>");
     }
     fclose(fp);
   }
@@ -417,16 +417,16 @@ static void save_config(HWND hDlg, FILE *fp) {
 
   fprintf(fp, "%s", config_file_top_comment);
   options = mg_get_valid_option_names();
-  for (i = 0; options[i] != NULL; i += 3) {
-    name = options[i + 1];
-    id = ID_CONTROLS + i / 3;
+  for (i = 0; options[i * 2] != NULL; i++) {
+    name = options[i * 2];
+    id = ID_CONTROLS + i;
     if (is_boolean_option(name)) {
       snprintf(value, sizeof(value), "%s",
                IsDlgButtonChecked(hDlg, id) ? "yes" : "no");
     } else {
       GetDlgItemText(hDlg, id, value, sizeof(value));
     }
-    default_value = options[i + 2] == NULL ? "" : options[i + 2];
+    default_value = options[i * 2 + 1] == NULL ? "" : options[i * 2 + 1];
     // If value is the same as default, skip it
     if (strcmp(value, default_value) != 0) {
       fprintf(fp, "%s %s\n", name, value);
@@ -457,23 +457,23 @@ static BOOL CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP) {
           EnableWindow(GetDlgItem(hDlg, ID_SAVE), TRUE);
           break;
         case ID_RESET_DEFAULTS:
-          for (i = 0; options[i] != NULL; i += 3) {
-            name = options[i + 1];
-            value = options[i + 2] == NULL ? "" : options[i + 2];
+          for (i = 0; options[i * 2] != NULL; i++) {
+            name = options[i * 2];
+            value = options[i * 2 + 1] == NULL ? "" : options[i * 2 + 1];
             if (is_boolean_option(name)) {
-              CheckDlgButton(hDlg, ID_CONTROLS + i / 3, !strcmp(value, "yes") ?
+              CheckDlgButton(hDlg, ID_CONTROLS + i, !strcmp(value, "yes") ?
                              BST_CHECKED : BST_UNCHECKED);
             } else {
-              SetWindowText(GetDlgItem(hDlg, ID_CONTROLS + i / 3), value);
+              SetWindowText(GetDlgItem(hDlg, ID_CONTROLS + i), value);
             }
           }
           break;
       }
 
-      for (i = 0; options[i] != NULL; i += 3) {
-        name = options[i + 1];
+      for (i = 0; options[i * 2] != NULL; i++) {
+        name = options[i * 2];
         if ((is_filename_option(name) || is_directory_option(name)) &&
-            LOWORD(wParam) == ID_CONTROLS + i / 3 + ID_FILE_BUTTONS_DELTA) {
+            LOWORD(wParam) == ID_CONTROLS + i + ID_FILE_BUTTONS_DELTA) {
           OPENFILENAME of;
           BROWSEINFO bi;
           char path[PATH_MAX] = "";
@@ -498,7 +498,7 @@ static BOOL CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP) {
           }
 
           if (path[0] != '\0') {
-            SetWindowText(GetDlgItem(hDlg, ID_CONTROLS + i / 3), path);
+            SetWindowText(GetDlgItem(hDlg, ID_CONTROLS + i), path);
           }
         }
       }
@@ -510,14 +510,14 @@ static BOOL CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP) {
       SendMessage(hDlg, WM_SETICON,(WPARAM) ICON_BIG, (LPARAM) hIcon);
       SetWindowText(hDlg, "Mongoose settings");
       SetFocus(GetDlgItem(hDlg, ID_SAVE));
-      for (i = 0; options[i] != NULL; i += 3) {
-        name = options[i + 1];
+      for (i = 0; options[i * 2] != NULL; i++) {
+        name = options[i * 2];
         value = mg_get_option(ctx, name);
         if (is_boolean_option(name)) {
-          CheckDlgButton(hDlg, ID_CONTROLS + i / 3, !strcmp(value, "yes") ?
+          CheckDlgButton(hDlg, ID_CONTROLS + i, !strcmp(value, "yes") ?
                          BST_CHECKED : BST_UNCHECKED);
         } else {
-          SetDlgItemText(hDlg, ID_CONTROLS + i / 3, value == NULL ? "" : value);
+          SetDlgItemText(hDlg, ID_CONTROLS + i, value == NULL ? "" : value);
         }
       }
       break;
@@ -594,8 +594,8 @@ static void show_settings_dialog() {
   p = mem + sizeof(dialog_header);
 
   option_names = mg_get_valid_option_names();
-  for (i = 0; option_names[i] != NULL; i += 3) {
-    long_option_name = option_names[i + 1];
+  for (i = 0; option_names[i * 2] != NULL; i++) {
+    long_option_name = option_names[i * 2];
     style = WS_CHILD | WS_VISIBLE | WS_TABSTOP;
     x = 10 + (WIDTH / 2) * (nelems % 2);
     y = (nelems/2 + 1) * HEIGHT + 5;
@@ -613,7 +613,7 @@ static void show_settings_dialog() {
       width -= 20;
       cl = 0x81;
       add_control(&p, dia, 0x80,
-                  ID_CONTROLS + (i / 3) + ID_FILE_BUTTONS_DELTA,
+                  ID_CONTROLS + i + ID_FILE_BUTTONS_DELTA,
                   WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
                   (WORD) (x + width + LABEL_WIDTH + 5),
                   y, 15, 12, "...");
@@ -623,7 +623,7 @@ static void show_settings_dialog() {
     }
     add_control(&p, dia, 0x82, ID_STATIC, WS_VISIBLE | WS_CHILD,
                 x, y, LABEL_WIDTH, HEIGHT, long_option_name);
-    add_control(&p, dia, cl, ID_CONTROLS + (i / 3), style,
+    add_control(&p, dia, cl, ID_CONTROLS + i, style,
                 (WORD) (x + LABEL_WIDTH), y, width, 12, "");
     nelems++;
   }

@@ -440,34 +440,33 @@ enum {
 };
 
 static const char *config_options[] = {
-  "C", "cgi_pattern", "**.cgi$|**.pl$|**.php$",
-  "E", "cgi_environment", NULL,
-  "G", "put_delete_auth_file", NULL,
-  "I", "cgi_interpreter", NULL,
-  "P", "protect_uri", NULL,
-  "R", "authentication_domain", "mydomain.com",
-  "S", "ssi_pattern", "**.shtml$|**.shtm$",
-  "T", "throttle", NULL,
-  "a", "access_log_file", NULL,
-  "d", "enable_directory_listing", "yes",
-  "e", "error_log_file", NULL,
-  "g", "global_auth_file", NULL,
-  "i", "index_files",
-        "index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
-  "k", "enable_keep_alive", "no",
-  "l", "access_control_list", NULL,
-  "m", "extra_mime_types", NULL,
-  "p", "listening_ports", "8080",
-  "r", "document_root",  ".",
-  "s", "ssl_certificate", NULL,
-  "t", "num_threads", "50",
-  "u", "run_as_user", NULL,
-  "w", "url_rewrite_patterns", NULL,
-  "x", "hide_files_patterns", NULL,
-  "z", "request_timeout_ms", "30000",
+  "cgi_pattern", "**.cgi$|**.pl$|**.php$",
+  "cgi_environment", NULL,
+  "put_delete_auth_file", NULL,
+  "cgi_interpreter", NULL,
+  "protect_uri", NULL,
+  "authentication_domain", "mydomain.com",
+  "ssi_pattern", "**.shtml$|**.shtm$",
+  "throttle", NULL,
+  "access_log_file", NULL,
+  "enable_directory_listing", "yes",
+  "error_log_file", NULL,
+  "global_auth_file", NULL,
+  "index_files",
+    "index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
+  "enable_keep_alive", "no",
+  "access_control_list", NULL,
+  "extra_mime_types", NULL,
+  "listening_ports", "8080",
+  "document_root",  ".",
+  "ssl_certificate", NULL,
+  "num_threads", "50",
+  "run_as_user", NULL,
+  "url_rewrite_patterns", NULL,
+  "hide_files_patterns", NULL,
+  "request_timeout_ms", "30000",
   NULL
 };
-#define ENTRIES_PER_CONFIG_OPTION 3
 
 struct mg_context {
   volatile int stop_flag;         // Should we stop event loop
@@ -557,10 +556,9 @@ static void mg_fclose(struct file *filep) {
 static int get_option_index(const char *name) {
   int i;
 
-  for (i = 0; config_options[i] != NULL; i += ENTRIES_PER_CONFIG_OPTION) {
-    if (strcmp(config_options[i], name) == 0 ||
-        strcmp(config_options[i + 1], name) == 0) {
-      return i / ENTRIES_PER_CONFIG_OPTION;
+  for (i = 0; config_options[i * 2] != NULL; i++) {
+    if (strcmp(config_options[i * 2], name) == 0) {
+      return i;
     }
   }
   return -1;
@@ -4475,6 +4473,9 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
 static int set_ports_option(struct mg_context *ctx) {
   const char *list = ctx->config[LISTENING_PORTS];
   int on = 1, success = 1;
+#if defined(USE_IPV6)
+  int off = 0;
+#endif
   struct vec vec;
   struct socket so;
 
@@ -4492,6 +4493,10 @@ static int set_ports_option(struct mg_context *ctx) {
                // broadcast UDP sockets
                setsockopt(so.sock, SOL_SOCKET, SO_REUSEADDR,
                           (void *) &on, sizeof(on)) != 0 ||
+#if defined(USE_IPV6)
+               setsockopt(so.sock, IPPROTO_IPV6, IPV6_V6ONLY, (void *) &off,
+                          sizeof(off)) != 0 ||
+#endif
                bind(so.sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
                listen(so.sock, SOMAXCONN) != 0) {
       cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
@@ -5284,13 +5289,10 @@ struct mg_context *mg_start(const struct mg_callbacks *callbacks,
   }
 
   // Set default value if needed
-  for (i = 0; config_options[i * ENTRIES_PER_CONFIG_OPTION] != NULL; i++) {
-    default_value = config_options[i * ENTRIES_PER_CONFIG_OPTION + 2];
+  for (i = 0; config_options[i * 2] != NULL; i++) {
+    default_value = config_options[i * 2 + 1];
     if (ctx->config[i] == NULL && default_value != NULL) {
       ctx->config[i] = mg_strdup(default_value);
-      DEBUG_TRACE(("Setting default: [%s] -> [%s]",
-                   config_options[i * ENTRIES_PER_CONFIG_OPTION + 1],
-                   default_value));
     }
   }
 
