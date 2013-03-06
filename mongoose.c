@@ -4005,6 +4005,39 @@ static void lsp_abort(lua_State *L) {
   lua_error(L);
 }
 
+// Call mg_write or buffer output.
+static int lsp_write(lua_State *L, struct mg_connection *conn, 
+                      const void *buf, size_t len) { 
+  int top = lua_gettop(L), last_index;
+  lua_getglobal(L, "mg");
+  lua_getfield(L, -1, "buffers");
+  // If mg.buffers is not a table, use mg_write
+  if (!lua_istable(L, -1)) {
+    lua_settop(L, top);
+    return mg_write(conn, buf, len);
+  }
+  // If mg.buffers is empty, use mg_write
+  lua_len(L, -1);
+  last_index = lua_tointeger(L, -1);
+  lua_pop(L, 1);
+  if (!last_index) {
+    lua_settop(L, top);
+    return mg_write(conn, buf, len);
+  }
+  // If mg.buffers last item is not a string, use mg_write
+  lua_rawgeti(L, -1, last_index);
+  if (!lua_isstring(L, -1)) {
+    lua_settop(L, top);
+    return mg_write(conn, buf, len);
+  }
+  // Concatenate output to the last item in mg.buffers
+  lua_pushlstring(L, buf, len);
+  lua_concat(L, 2);
+  lua_rawseti(L, -2, last_index);
+  lua_settop(L, top);
+  return -1;
+}
+
 static int lsp(struct mg_connection *conn, const char *path,
                 const char *p, int64_t len, lua_State *L) {
   int i, j, result, pos = 0, lines = 1, lualines = 0; 
@@ -4016,7 +4049,7 @@ static int lsp(struct mg_connection *conn, const char *path,
       for (j = i + 1; j < len ; j++) {
         if (p[j] == '\n') ++lualines;
         if (p[j] == '?' && p[j + 1] == '>') {
-          mg_write(conn, p + pos, i - pos);
+          lsp_write(L, conn, p + pos, i - pos);
           lua_pushlightuserdata(L, conn);
           lua_pushcclosure(L, lsp_mg_error, 1);
           snprintf (chunkname, sizeof(chunkname), "@%s+%i", path, lines);
@@ -4042,7 +4075,7 @@ static int lsp(struct mg_connection *conn, const char *path,
   }
 
   if (i > pos) {
-    mg_write(conn, p + pos, i - pos);
+    lsp_write(L, conn, p + pos, i - pos);
   }
   
   return 0;
@@ -4058,12 +4091,13 @@ static int lsp_mg_print(lua_State *L) {
   for (i = 1; i <= num_args; i++) {
     if (lua_isstring(L, i)) {
       str = lua_tolstring(L, i, &size);
-      mg_write(conn, str, size);
+      lsp_write(L, conn, str, size);
     }
   }
 
   return 0;
 }
+
 
 static int lsp_mg_read(lua_State *L) {
   struct mg_connection *conn = lua_touserdata(L, lua_upvalueindex(1));
@@ -4134,7 +4168,7 @@ static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
   { extern int luaopen_lsqlite3(lua_State *); luaopen_lsqlite3(L); }
 #endif
 
-  // Register "print" function which calls mg_write()
+  // Register "print" function which calls mg_write via lsp_write
   lua_pushlightuserdata(L, conn);
   lua_pushcclosure(L, lsp_mg_print, 1);
   lua_setglobal(L, "print");
@@ -4146,6 +4180,7 @@ static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
   
   // Register mg module
   lua_newtable(L);
+  lua_pushstring(L, "buffers"); lua_newtable(L); lua_rawset(L, -3);
   reg_function(L, "cry", lsp_mod_cry, conn);
   reg_function(L, "include", lsp_mod_include, conn);
   reg_function(L, "onerror", lsp_mod_cry, conn);
