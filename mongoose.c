@@ -67,6 +67,7 @@
 #include <stdio.h>
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__) // Windows specific
+#undef _WIN32_WINNT
 #define _WIN32_WINNT 0x0400 // To make it link in VS2005
 #include <windows.h>
 
@@ -127,8 +128,12 @@ typedef long off_t;
 #define mg_sleep(x) Sleep(x)
 
 #define pipe(x) _pipe(x, MG_BUF_LEN, _O_BINARY)
+#ifndef popen
 #define popen(x, y) _popen(x, y)
+#endif
+#ifndef pclose
 #define pclose(x) _pclose(x)
+#endif
 #define close(x) _close(x)
 #define dlsym(x,y) GetProcAddress((HINSTANCE) (x), (y))
 #define RTLD_LAZY  0
@@ -191,7 +196,9 @@ struct pollfd {
 
 
 // Mark required libraries
+#ifdef _MSC_VER
 #pragma comment(lib, "Ws2_32.lib")
+#endif
 
 #else    // UNIX  specific
 #include <sys/wait.h>
@@ -2142,6 +2149,7 @@ static void MD5Update(MD5_CTX *ctx, unsigned char const *buf, unsigned len) {
 static void MD5Final(unsigned char digest[16], MD5_CTX *ctx) {
   unsigned count;
   unsigned char *p;
+  uint32_t *a;
 
   count = (ctx->bits[0] >> 3) & 0x3F;
 
@@ -2158,8 +2166,9 @@ static void MD5Final(unsigned char digest[16], MD5_CTX *ctx) {
   }
   byteReverse(ctx->in, 14);
 
-  ((uint32_t *) ctx->in)[14] = ctx->bits[0];
-  ((uint32_t *) ctx->in)[15] = ctx->bits[1];
+  a = (uint32_t *)ctx->in;
+  a[14] = ctx->bits[0];
+  a[15] = ctx->bits[1];
 
   MD5Transform(ctx->buf, (uint32_t *) ctx->in);
   byteReverse((unsigned char *) ctx->buf, 4);
