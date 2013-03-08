@@ -228,7 +228,6 @@ struct pollfd {
 #define closesocket(a) close(a)
 #define mg_mkdir(x, y) mkdir(x, y)
 #define mg_remove(x) remove(x)
-#define mg_rename(x, y) rename(x, y)
 #define mg_sleep(x) usleep((x) * 1000)
 #define ERRNO errno
 #define INVALID_SOCKET (-1)
@@ -953,7 +952,7 @@ static void send_http_error(struct mg_connection *conn, int status,
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
 static int pthread_mutex_init(pthread_mutex_t *mutex, void *unused) {
-  unused = NULL;
+  (void) unused;
   *mutex = CreateMutex(NULL, FALSE, NULL);
   return *mutex == NULL ? -1 : 0;
 }
@@ -971,7 +970,7 @@ static int pthread_mutex_unlock(pthread_mutex_t *mutex) {
 }
 
 static int pthread_cond_init(pthread_cond_t *cv, const void *unused) {
-  unused = NULL;
+  (void) unused;
   cv->signal = CreateEvent(NULL, FALSE, FALSE, NULL);
   cv->broadcast = CreateEvent(NULL, TRUE, FALSE, NULL);
   return cv->signal != NULL && cv->broadcast != NULL ? 0 : -1;
@@ -1088,16 +1087,6 @@ static size_t strftime(char *dst, size_t dst_size, const char *fmt,
 }
 #endif
 
-static int mg_rename(const char* oldname, const char* newname) {
-  wchar_t woldbuf[PATH_MAX];
-  wchar_t wnewbuf[PATH_MAX];
-
-  to_unicode(oldname, woldbuf, ARRAY_SIZE(woldbuf));
-  to_unicode(newname, wnewbuf, ARRAY_SIZE(wnewbuf));
-
-  return MoveFileW(woldbuf, wnewbuf) ? 0 : -1;
-}
-
 // Windows happily opens files with some garbage at the end of file name.
 // For example, fopen("a.cgi    ", "r") on Windows successfully opens
 // "a.cgi", despite one would expect an error back.
@@ -1143,7 +1132,7 @@ static int mg_mkdir(const char *path, int mode) {
   char buf[PATH_MAX];
   wchar_t wbuf[PATH_MAX];
 
-  mode = 0; // Unused
+  (void) mode;
   mg_strlcpy(buf, path, sizeof(buf));
   change_slashes_to_backslashes(buf);
 
@@ -1250,12 +1239,12 @@ static int poll(struct pollfd *pfd, int n, int milliseconds) {
 #define set_close_on_exec(x) // No FD_CLOEXEC on Windows
 
 int mg_start_thread(mg_thread_func_t f, void *p) {
-  return _beginthread((void (__cdecl *)(void *)) f, 0, p) == -1L ? -1 : 0;
+  return (long)_beginthread((void (__cdecl *)(void *)) f, 0, p) == -1L ? -1 : 0;
 }
 
 static HANDLE dlopen(const char *dll_name, int flags) {
   wchar_t wbuf[PATH_MAX];
-  flags = 0; // Unused
+  (void) flags;
   to_unicode(dll_name, wbuf, ARRAY_SIZE(wbuf));
   return LoadLibraryW(wbuf);
 }
@@ -1282,10 +1271,13 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   char *p, *interp, full_interp[PATH_MAX], full_dir[PATH_MAX],
        cmdline[PATH_MAX], buf[PATH_MAX];
   struct file file = STRUCT_FILE_INITIALIZER;
-  STARTUPINFOA si = { sizeof(si) };
+  STARTUPINFOA si;
   PROCESS_INFORMATION pi = { 0 };
 
-  envp = NULL; // Unused
+  (void) envp;
+
+  memset(&si, 0, sizeof(si));
+  si.cb = sizeof(si);
 
   // TODO(lsm): redirect CGI errors to the error log file
   si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
