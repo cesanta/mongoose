@@ -235,7 +235,6 @@ struct pollfd {
 #define closesocket(a) close(a)
 #define mg_mkdir(x, y) mkdir(x, y)
 #define mg_remove(x) remove(x)
-#define mg_rename(x, y) rename(x, y)
 #define mg_sleep(x) usleep((x) * 1000)
 #define ERRNO errno
 #define INVALID_SOCKET (-1)
@@ -266,8 +265,6 @@ static pthread_t pthread_self(void) {
   return GetCurrentThreadId();
 }
 #endif // _WIN32
-
-#define UNUSED(x) (void)(x)
 
 #ifdef DEBUG_TRACE
 #undef DEBUG_TRACE
@@ -449,34 +446,33 @@ enum {
 };
 
 static const char *config_options[] = {
-  "C", "cgi_pattern", "**.cgi$|**.pl$|**.php$",
-  "E", "cgi_environment", NULL,
-  "G", "put_delete_auth_file", NULL,
-  "I", "cgi_interpreter", NULL,
-  "P", "protect_uri", NULL,
-  "R", "authentication_domain", "mydomain.com",
-  "S", "ssi_pattern", "**.shtml$|**.shtm$",
-  "T", "throttle", NULL,
-  "a", "access_log_file", NULL,
-  "d", "enable_directory_listing", "yes",
-  "e", "error_log_file", NULL,
-  "g", "global_auth_file", NULL,
-  "i", "index_files",
-        "index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
-  "k", "enable_keep_alive", "no",
-  "l", "access_control_list", NULL,
-  "m", "extra_mime_types", NULL,
-  "p", "listening_ports", "8080",
-  "r", "document_root",  ".",
-  "s", "ssl_certificate", NULL,
-  "t", "num_threads", "50",
-  "u", "run_as_user", NULL,
-  "w", "url_rewrite_patterns", NULL,
-  "x", "hide_files_patterns", NULL,
-  "z", "request_timeout_ms", "30000",
+  "cgi_pattern", "**.cgi$|**.pl$|**.php$",
+  "cgi_environment", NULL,
+  "put_delete_auth_file", NULL,
+  "cgi_interpreter", NULL,
+  "protect_uri", NULL,
+  "authentication_domain", "mydomain.com",
+  "ssi_pattern", "**.shtml$|**.shtm$",
+  "throttle", NULL,
+  "access_log_file", NULL,
+  "enable_directory_listing", "yes",
+  "error_log_file", NULL,
+  "global_auth_file", NULL,
+  "index_files",
+    "index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
+  "enable_keep_alive", "no",
+  "access_control_list", NULL,
+  "extra_mime_types", NULL,
+  "listening_ports", "8080",
+  "document_root",  ".",
+  "ssl_certificate", NULL,
+  "num_threads", "50",
+  "run_as_user", NULL,
+  "url_rewrite_patterns", NULL,
+  "hide_files_patterns", NULL,
+  "request_timeout_ms", "30000",
   NULL
 };
-#define ENTRIES_PER_CONFIG_OPTION 3
 
 struct mg_context {
   volatile int stop_flag;         // Should we stop event loop
@@ -566,10 +562,9 @@ static void mg_fclose(struct file *filep) {
 static int get_option_index(const char *name) {
   int i;
 
-  for (i = 0; config_options[i] != NULL; i += ENTRIES_PER_CONFIG_OPTION) {
-    if (strcmp(config_options[i], name) == 0 ||
-        strcmp(config_options[i + 1], name) == 0) {
-      return i / ENTRIES_PER_CONFIG_OPTION;
+  for (i = 0; config_options[i * 2] != NULL; i++) {
+    if (strcmp(config_options[i * 2], name) == 0) {
+      return i;
     }
   }
   return -1;
@@ -964,7 +959,7 @@ static void send_http_error(struct mg_connection *conn, int status,
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
 static int pthread_mutex_init(pthread_mutex_t *mutex, void *unused) {
-  UNUSED(unused);
+  (void) unused;
   *mutex = CreateMutex(NULL, FALSE, NULL);
   return *mutex == NULL ? -1 : 0;
 }
@@ -982,7 +977,7 @@ static int pthread_mutex_unlock(pthread_mutex_t *mutex) {
 }
 
 static int pthread_cond_init(pthread_cond_t *cv, const void *unused) {
-  UNUSED(unused);
+  (void) unused;
   cv->signal = CreateEvent(NULL, FALSE, FALSE, NULL);
   cv->broadcast = CreateEvent(NULL, TRUE, FALSE, NULL);
   return cv->signal != NULL && cv->broadcast != NULL ? 0 : -1;
@@ -1144,7 +1139,7 @@ static int mg_mkdir(const char *path, int mode) {
   char buf[PATH_MAX];
   wchar_t wbuf[PATH_MAX];
 
-  UNUSED(mode);
+  (void) mode;
   mg_strlcpy(buf, path, sizeof(buf));
   change_slashes_to_backslashes(buf);
 
@@ -1256,7 +1251,7 @@ int mg_start_thread(mg_thread_func_t f, void *p) {
 
 static HANDLE dlopen(const char *dll_name, int flags) {
   wchar_t wbuf[PATH_MAX];
-  UNUSED(flags);
+  (void) flags;
   to_unicode(dll_name, wbuf, ARRAY_SIZE(wbuf));
   return LoadLibraryW(wbuf);
 }
@@ -1284,11 +1279,12 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
        cmdline[PATH_MAX], buf[PATH_MAX];
   struct file file = STRUCT_FILE_INITIALIZER;
   STARTUPINFOA si;
-  memset(&si, 0, sizeof(si));
-  si.cb = sizeof(si);
   PROCESS_INFORMATION pi = { 0 };
 
-  UNUSED(envp);
+  (void) envp;
+
+  memset(&si, 0, sizeof(si));
+  si.cb = sizeof(si);
 
   // TODO(lsm): redirect CGI errors to the error log file
   si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
@@ -4478,6 +4474,9 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
 static int set_ports_option(struct mg_context *ctx) {
   const char *list = ctx->config[LISTENING_PORTS];
   int on = 1, success = 1;
+#if defined(USE_IPV6)
+  int off = 0;
+#endif
   struct vec vec;
   struct socket so;
 
@@ -4495,6 +4494,10 @@ static int set_ports_option(struct mg_context *ctx) {
                // broadcast UDP sockets
                setsockopt(so.sock, SOL_SOCKET, SO_REUSEADDR,
                           (void *) &on, sizeof(on)) != 0 ||
+#if defined(USE_IPV6)
+               setsockopt(so.sock, IPPROTO_IPV6, IPV6_V6ONLY, (void *) &off,
+                          sizeof(off)) != 0 ||
+#endif
                bind(so.sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
                listen(so.sock, SOMAXCONN) != 0) {
       cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
@@ -4900,7 +4903,7 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
 
   if (conn->request_len == 0 && conn->data_len == conn->buf_size) {
     snprintf(ebuf, ebuf_len, "%s", "Request Too Large");
-  } if (conn->request_len <= 0) {
+  } else if (conn->request_len <= 0) {
     snprintf(ebuf, ebuf_len, "%s", "Client closed connection");
   } else if (parse_http_message(conn->buf, conn->buf_size,
                                 &conn->request_info) <= 0) {
@@ -4956,6 +4959,7 @@ static void process_new_connection(struct mg_connection *conn) {
   do {
     if (!getreq(conn, ebuf, sizeof(ebuf))) {
       send_http_error(conn, 500, "Server Error", "%s", ebuf);
+      conn->must_close = 1;
     } else if (!is_valid_uri(conn->request_info.uri)) {
       snprintf(ebuf, sizeof(ebuf), "Invalid URI: [%s]", ri->uri);
       send_http_error(conn, 400, "Bad Request", "%s", ebuf);
@@ -5287,13 +5291,10 @@ struct mg_context *mg_start(const struct mg_callbacks *callbacks,
   }
 
   // Set default value if needed
-  for (i = 0; config_options[i * ENTRIES_PER_CONFIG_OPTION] != NULL; i++) {
-    default_value = config_options[i * ENTRIES_PER_CONFIG_OPTION + 2];
+  for (i = 0; config_options[i * 2] != NULL; i++) {
+    default_value = config_options[i * 2 + 1];
     if (ctx->config[i] == NULL && default_value != NULL) {
       ctx->config[i] = mg_strdup(default_value);
-      DEBUG_TRACE(("Setting default: [%s] -> [%s]",
-                   config_options[i * ENTRIES_PER_CONFIG_OPTION + 1],
-                   default_value));
     }
   }
 

@@ -488,6 +488,14 @@ by the master thread. `process_new_connection()` actually processes the
 connection, i.e. reads the request, parses it, and performs appropriate action
 depending on a parsed request.
 
+Master thread uses `poll()` and `accept()` to accept new connections on
+listening sockets. `poll()` is used to avoid `FD_SETSIZE` limitation of
+`select()`. Since there are only a few listening sockets, there is no reason
+to use hi-performance alternatives like `epoll()` or `kqueue()`. Worker
+threads use blocking IO on accepted sockets for reading and writing data.
+All accepted sockets have `SO_RCVTIMEO` and `SO_SNDTIMEO` socket options set
+(controlled by `request_timeout_ms` mongoose option, 30 seconds default) which
+specify read/write timeout on client connection.
 
 # Other Resources
 - Presentation made by Arnout Vandecappelle at FOSDEM 2011 on 2011-02-06
