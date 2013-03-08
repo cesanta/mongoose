@@ -101,12 +101,14 @@ solaris:
 # For codesign to work in non-interactive mode, unlock login keychain:
 # security unlock ~/Library/Keychains/login.keychain
 # See e.g. http://lists.apple.com/archives/apple-cdsa/2008/Jan/msg00027.html
-cocoa:
+Mongoose: mongoose.c main.c
 	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c \
           -DUSE_COCOA $(CFLAGS) -I$(LUA) -Ibuild \
           $(YASSL_SOURCES) $(YASSL_FLAGS) -DNO_SSL_DL \
           $(LUA_SOURCES) -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL \
           -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
+
+cocoa: Mongoose
 	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 Mongoose $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create Mongoose_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
 
 u:
