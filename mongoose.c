@@ -3786,37 +3786,76 @@ static void send_websocket_handshake(struct mg_connection *conn) {
 
 static void read_websocket(struct mg_connection *conn) {
   unsigned char *buf = (unsigned char *) conn->buf + conn->request_len;
-  int n, len, mask_len, body_len, discard_len;
+  int n;
+  size_t i, len, mask_len, data_len, header_len, body_len;
+  char mem[4 * 1024], *data;
 
+  assert(conn->content_len == 0);
   for (;;) {
+    header_len = 0;
     if ((body_len = conn->data_len - conn->request_len) >= 2) {
       len = buf[1] & 127;
       mask_len = buf[1] & 128 ? 4 : 0;
-      if (len < 126) {
-        conn->content_len = 2 + mask_len + len;
-      } else if (len == 126 && body_len >= 4) {
-        conn->content_len = 4 + mask_len + ((((int) buf[2]) << 8) + buf[3]);
-      } else if (body_len >= 10) {
-        conn->content_len = 10 + mask_len +
-          (((uint64_t) htonl(* (uint32_t *) &buf[2])) << 32) +
+      if (len < 126 && body_len >= mask_len) {
+        data_len = len;
+        header_len = 2 + mask_len;
+      } else if (len == 126 && body_len >= 4 + mask_len) {
+        header_len = 4 + mask_len;
+        data_len = ((((int) buf[2]) << 8) + buf[3]);
+      } else if (body_len >= 10 + mask_len) {
+        header_len = 10 + mask_len;
+        data_len = (((uint64_t) htonl(* (uint32_t *) &buf[2])) << 32) +
           htonl(* (uint32_t *) &buf[6]);
       }
     }
 
-    if (conn->content_len > 0) {
-      if (conn->ctx->callbacks.websocket_data != NULL &&
-          conn->ctx->callbacks.websocket_data(conn) == 0) {
-        break;  // Callback signalled to exit
+    if (header_len > 0) {
+      // Allocate space to hold websocket payload
+      data = mem;
+      if (data_len > sizeof(mem) && (data = malloc(data_len)) == NULL) {
+        // Allocation failed, exit the loop and then close the connection
+        // TODO: notify user about the failure
+        break;
       }
-      discard_len = conn->content_len > body_len ?
-          body_len : (int) conn->content_len;
-      memmove(buf, buf + discard_len, conn->data_len - discard_len);
-      conn->data_len -= discard_len;
-      conn->content_len = conn->consumed_content = 0;
+
+      // Read frame payload into the allocated buffer.
+      assert(body_len >= header_len);
+      if (data_len + header_len > body_len) {
+        len = body_len - header_len;
+        memcpy(data, buf + header_len, len);
+        // TODO: handle pull error
+        pull(NULL, conn, data + len, data_len - len);
+        conn->data_len = 0;
+      } else {
+        len = data_len + header_len;
+        memcpy(data, buf + header_len, data_len);
+        memmove(buf, buf + len, body_len - len);
+        conn->data_len -= len;
+      }
+
+      // Apply mask if necessary
+      if (mask_len > 0) {
+        for (i = 0; i < data_len; i++) {
+          data[i] ^= buf[header_len - mask_len + (i % 4)];
+        }
+      }
+
+      // Exit the loop if callback signalled to exit,
+      // or "connection close" opcode received.
+      if ((conn->ctx->callbacks.websocket_data != NULL &&
+          !conn->ctx->callbacks.websocket_data(conn, buf[0], data, data_len)) ||
+          (buf[0] & 0xf) == 8) {  // Opcode == 8, connection close
+        break;
+      }
+
+      if (data != mem) {
+        free(data);
+      }
+      // Not breaking the loop, process next websocket frame.
     } else {
-      n = pull(NULL, conn, conn->buf + conn->data_len,
-               conn->buf_size - conn->data_len);
-      if (n <= 0) {
+      // Buffering websocket request
+      if ((n = pull(NULL, conn, conn->buf + conn->data_len,
+                    conn->buf_size - conn->data_len)) <= 0) {
         break;
       }
       conn->data_len += n;

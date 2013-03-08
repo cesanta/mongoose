@@ -62,7 +62,8 @@ struct mg_callbacks {
   int  (*init_ssl)(void *ssl_context, void *user_data);
   int (*websocket_connect)(const struct mg_connection *);
   void (*websocket_ready)(struct mg_connection *);
-  int  (*websocket_data)(struct mg_connection *);
+  int  (*websocket_data)(struct mg_connection *, int flags,
+                         char *data, size_t data_len);
   const char * (*open_file)(const struct mg_connection *,
                              const char *path, size_t *data_len);
   void (*init_lua)(struct mg_connection *, void *lua_context);
@@ -90,7 +91,7 @@ struct mg_callbacks {
 //   };
 //   struct mg_context *ctx = mg_start(&my_func, NULL, options);
 //
-// Please refer to http://code.google.com/p/mongoose/wiki/MongooseManual
+// Refer to https://github.com/valenok/mongoose/blob/master/UserManual.md
 // for the list of valid option and their possible values.
 //
 // Return:
