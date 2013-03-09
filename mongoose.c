@@ -3966,7 +3966,7 @@ static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
 
 static void handle_request(struct mg_connection *);
 
-static int handle_lsp_request(struct mg_connection *, const char *, 
+static int handle_lsp_request(struct mg_connection *, const char *,
                                struct file *, struct lua_State *);
 
 static int lsp_mg_error(lua_State *L) {
@@ -4006,10 +4006,10 @@ static void lsp_abort(lua_State *L) {
 }
 
 static int lsp(struct mg_connection *conn, const char *path,
-                const char *p, int64_t len, lua_State *L) {
-  int i, j, result, pos = 0, lines = 1, lualines = 0; 
+               const char *p, int64_t len, lua_State *L) {
+  int i, j, result, pos = 0, lines = 1, lualines = 0;
   char chunkname [MG_BUF_LEN];
-          
+
   for (i = 0; i < len; i++) {
     if (p[i] == '\n') ++lines;
     if (p[i] == '<' && p[i + 1] == '?') {
@@ -4025,7 +4025,7 @@ static int lsp(struct mg_connection *conn, const char *path,
             result = lua_tointeger(L, -1);
             if (result) return result;
           } else {
-            lua_pcall(L, 0, 0, 1);  
+            lua_pcall(L, 0, 0, 1);
             result = lua_tointeger(L, -1);
             if (result) return result;
           }
@@ -4044,7 +4044,7 @@ static int lsp(struct mg_connection *conn, const char *path,
   if (i > pos) {
     mg_write(conn, p + pos, i - pos);
   }
-  
+
   return 0;
 }
 
@@ -4088,14 +4088,14 @@ static int lsp_mod_include(lua_State *L) {
   return 0;
 }
 
-// mg.cry: Log an error. Default value for mg.onerror. 
+// mg.cry: Log an error. Default value for mg.onerror.
 static int lsp_mod_cry(lua_State *L){
   struct mg_connection *conn = lua_touserdata(L, lua_upvalueindex(1));
   cry(conn, "%s", lua_tostring(L, -1));
   return 0;
 }
 
-// mg.redirect: Redirect the request (internally). 
+// mg.redirect: Redirect the request (internally).
 static int lsp_mod_redirect(lua_State *L) {
   struct mg_connection *conn = lua_touserdata(L, lua_upvalueindex(1));
   conn->request_info.uri = lua_tostring(L, -1);
@@ -4116,7 +4116,7 @@ static void reg_int(struct lua_State *L, const char *name, int val) {
   lua_rawset(L, -3);
 }
 
-static void reg_function(struct lua_State *L, const char *name, 
+static void reg_function(struct lua_State *L, const char *name,
                          lua_CFunction func, struct mg_connection *conn) {
   lua_pushstring(L, name);
   lua_pushlightuserdata(L, conn);
@@ -4143,7 +4143,7 @@ static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
   lua_pushlightuserdata(L, conn);
   lua_pushcclosure(L, lsp_mg_read, 1);
   lua_setglobal(L, "read");
-  
+
   // Register mg module
   lua_newtable(L);
   reg_function(L, "cry", lsp_mod_cry, conn);
@@ -4152,7 +4152,7 @@ static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
   reg_function(L, "redirect", lsp_mod_redirect, conn);
   reg_string(L, "version", MONGOOSE_VERSION);
   lua_setglobal(L, "mg");
-  
+
   // Export request_info
   lua_newtable(L);
   reg_string(L, "request_method", ri->request_method);
@@ -4184,7 +4184,7 @@ static void send_lua_error(struct lua_State *L, const char *fmt, ...) {
   va_start(ap, fmt);
   len += vsnprintf(buf + len, sizeof(buf) - len, fmt, ap);
   va_end(ap);
-  
+
   lua_pushstring(L, buf);
   lua_error(L);
 }
@@ -4221,7 +4221,7 @@ static int handle_lsp_request(struct mg_connection *conn, const char *path,
         conn->ctx->callbacks.init_lua(conn, L);
       }
     }
-    error = lsp(conn, path, filep->membuf == NULL ? p : filep->membuf, 
+    error = lsp(conn, path, filep->membuf == NULL ? p : filep->membuf,
                 filep->size, L);
   }
 
