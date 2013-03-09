@@ -84,12 +84,44 @@ struct mg_callbacks {
   void (*websocket_ready)(struct mg_connection *);
 
   // Called when data frame has been received from the client.
+  // Parameters:
+  //    bits: first byte of the websocket frame, see websocket RFC at
+  //          http://tools.ietf.org/html/rfc6455, section 5.2
+  //    data, data_len: payload, with mask (if any) already applied.
+  // Return value:
+  //    0:     keep this websocket connection opened.
+  //    non-0: close this websocket connection.
   int  (*websocket_data)(struct mg_connection *, int bits,
                          char *data, size_t data_len);
+
+  // Called when mongoose tries to open a file. Used to intercept file open
+  // calls, and serve file data from memory instead.
+  // Parameters:
+  //    path:     Full path to the file to open.
+  //    data_len: Placeholder for the file size, if file is served from memory.
+  // Return value:
+  //    NULL: do not serve file from memory, proceed with normal file open.
+  //    non-NULL: pointer to the file contents in memory. data_len must be
+  //              initilized with the size of the memory block.
   const char * (*open_file)(const struct mg_connection *,
                              const char *path, size_t *data_len);
+
+  // Called when mongoose is about to serve Lua server page (.lp file), if
+  // Lua support is enabled.
+  // Parameters:
+  //   lua_context: "lua_State *" pointer.
   void (*init_lua)(struct mg_connection *, void *lua_context);
+
+  // Called when mongoose has uploaded a file to a temporary directory as a
+  // result of mg_upload() call.
+  // Parameters:
+  //    file_file: full path name to the uploaded file.
   void (*upload)(struct mg_connection *, const char *file_name);
+
+  // Called when mongoose is about to send HTTP error to the client.
+  // Implementing this callback allows to create custom error pages.
+  // Parameters:
+  //   status: HTTP error status code.
   int  (*http_error)(struct mg_connection *, int status);
 };
 
