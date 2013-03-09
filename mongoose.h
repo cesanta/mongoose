@@ -56,13 +56,35 @@ struct mg_request_info {
 // which callbacks to invoke. For detailed description, see
 // https://github.com/valenok/mongoose/blob/master/UserManual.md
 struct mg_callbacks {
+  // Called when mongoose has received new HTTP request.
+  // If callback returns non-zero,
+  // callback must process the request by sending valid HTTP headers and body,
+  // and mongoose will not do any further processing.
+  // If callback returns 0, mongoose processes the request itself. In this case,
+  // callback must not send any data to the client.
   int  (*begin_request)(struct mg_connection *);
+
+  // Called when mongoose has finished processing request.
   void (*end_request)(const struct mg_connection *, int reply_status_code);
+
+  // Called when mongoose is about to log a message. If callback returns
+  // non-zero, mongoose does not log anything.
   int  (*log_message)(const struct mg_connection *, const char *message);
+
+  // Called when mongoose initializes SSL library.
   int  (*init_ssl)(void *ssl_context, void *user_data);
+
+  // Called when websocket request is received, before websocket handshake.
+  // If callback returns 0, mongoose proceeds with handshake, otherwise
+  // cinnection is closed immediately.
   int (*websocket_connect)(const struct mg_connection *);
+
+  // Called when websocket handshake is successfully completed, and
+  // connection is ready for data exchange.
   void (*websocket_ready)(struct mg_connection *);
-  int  (*websocket_data)(struct mg_connection *, int flags,
+
+  // Called when data frame has been received from the client.
+  int  (*websocket_data)(struct mg_connection *, int bits,
                          char *data, size_t data_len);
   const char * (*open_file)(const struct mg_connection *,
                              const char *path, size_t *data_len);
