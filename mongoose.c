@@ -4022,13 +4022,11 @@ static int lsp(struct mg_connection *conn, const char *path,
           snprintf (chunkname, sizeof(chunkname), "@%s+%i", path, lines);
           if (luaL_loadbuffer(L, p + (i + 2), j - (i + 2), chunkname)) {
             lua_pcall(L, 1, 1, 0);
-            result = lua_tointeger(L, -1);
-            if (result) return result;
           } else {
-            lua_pcall(L, 0, 0, 1);
-            result = lua_tointeger(L, -1);
-            if (result) return result;
+            lua_pcall(L, 0, 0, -2);
           }
+          result = lua_tointeger(L, -1);
+          if (result) return result;
           pos = j + 2;
           i = pos - 1;
           break;
