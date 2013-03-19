@@ -186,10 +186,17 @@ working directory. If absent (default), then errors are not logged.
 ### enable\_directory\_listing `yes`
 Enable directory listing, either `yes` or `no`.
 
-### global\_passwords\_file
+### global\_auth\_file
 Path to a global passwords file, either full path or relative to the current
 working directory. If set, per-directory `.htpasswd` files are ignored,
 and all requests are authorised against that file.
+
+The file has to include the realm set through `authentication_domain` and the password in digest format:
+
+    user:realm:digest
+    test:test.com:ce0220efc2dd2fad6185e1f1af5a4327
+
+(e.g. use [this generator](http://www.askapache.com/online-tools/htpasswd-generator))
 
 ### index_files `index.html,index.htm,index.cgi,index.shtml,index.php`
 Comma-separated list of files to be treated as directory index

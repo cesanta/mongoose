@@ -5017,6 +5017,7 @@ static void process_new_connection(struct mg_connection *conn) {
     }
     if (ri->remote_user != NULL) {
       free((void *) ri->remote_user);
+      ri->remote_user = NULL; // when having connections with and without auth would cause double free and then crash
     }
 
     // NOTE(lsm): order is important here. should_keep_alive() call
