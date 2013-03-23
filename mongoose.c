@@ -515,6 +515,7 @@ struct mg_connection {
   int throttle;               // Throttling, bytes/sec. <= 0 means no throttle
   time_t last_throttle_time;  // Last time throttled data was sent
   int64_t last_throttle_bytes;// Bytes sent this second
+  int keep_alive;             // != 0 when kept alive
 };
 
 const char **mg_get_valid_option_names(void) {
@@ -2972,7 +2973,7 @@ static int forward_body_data(struct mg_connection *conn, FILE *fp,
   expect = mg_get_header(conn, "Expect");
   assert(fp != NULL);
 
-  if (conn->content_len == -1) {
+  if (conn->content_len < 0) { // at least needs to be 0
     send_http_error(conn, 411, "Length Required", "%s", "");
   } else if (expect != NULL && mg_strcasecmp(expect, "100-continue")) {
     send_http_error(conn, 417, "Expectation Failed", "%s", "");
@@ -4590,11 +4591,12 @@ static void log_access(const struct mg_connection *conn) {
   flockfile(fp);
 
   sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
-  fprintf(fp, "%s - %s [%s] \"%s %s HTTP/%s\" %d %" INT64_FMT,
+  fprintf(fp, "%s - %s [%s] \"%s %s HTTP/%s\" %d %" INT64_FMT " %d",
           src_addr, ri->remote_user == NULL ? "-" : ri->remote_user, date,
           ri->request_method ? ri->request_method : "-",
           ri->uri ? ri->uri : "-", ri->http_version,
-          conn->status_code, conn->num_bytes_sent);
+          conn->status_code, conn->num_bytes_sent,
+          conn->keep_alive);
   log_header(conn, "Referer", fp);
   log_header(conn, "User-Agent", fp);
   fputc('\n', fp);
@@ -4940,9 +4942,9 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
                                    &conn->data_len);
   assert(conn->request_len < 0 || conn->data_len >= conn->request_len);
 
-  if (conn->request_len == 0 && conn->data_len == conn->buf_size) {
+  if (conn->request_len <= 0 && conn->data_len >= conn->buf_size) { // errors and larger then buffer
     snprintf(ebuf, ebuf_len, "%s", "Request Too Large");
-  } else if (conn->request_len <= 0) {
+  } else if (conn->request_len <= 0) { // connection closed and not kept alive
     snprintf(ebuf, ebuf_len, "%s", "Client closed connection");
   } else if (parse_http_message(conn->buf, conn->buf_size,
                                 &conn->request_info) <= 0) {
@@ -4986,57 +4988,85 @@ struct mg_connection *mg_download(const char *host, int port, int use_ssl,
 
 static void process_new_connection(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
-  int keep_alive_enabled, keep_alive, discard_len;
+  int keep_alive_enabled, discard_len;
   char ebuf[100];
 
   keep_alive_enabled = !strcmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes");
-  keep_alive = 0;
 
   // Important: on new connection, reset the receiving buffer. Credit goes
   // to crule42.
   conn->data_len = 0;
+
+  // first assume keep alive option value, later use header info / connection state
+  conn->keep_alive = keep_alive_enabled; 
   do {
+    // try to read data
     if (!getreq(conn, ebuf, sizeof(ebuf))) {
       send_http_error(conn, 500, "Server Error", "%s", ebuf);
       conn->must_close = 1;
-    } else if (!is_valid_uri(conn->request_info.uri)) {
-      snprintf(ebuf, sizeof(ebuf), "Invalid URI: [%s]", ri->uri);
-      send_http_error(conn, 400, "Bad Request", "%s", ebuf);
-    } else if (strcmp(ri->http_version, "1.0") &&
-               strcmp(ri->http_version, "1.1")) {
-      snprintf(ebuf, sizeof(ebuf), "Bad HTTP version: [%s]", ri->http_version);
-      send_http_error(conn, 505, "Bad HTTP version", "%s", ebuf);
     }
-
-    if (ebuf[0] == '\0') {
-      handle_request(conn);
-      if (conn->ctx->callbacks.end_request != NULL) {
-        conn->ctx->callbacks.end_request(conn, conn->status_code);
+    
+    // no new data but connection should be kept alive
+    if (conn->keep_alive && conn->request_len <= 0) {
+      conn->keep_alive = should_keep_alive(conn);
+      
+      // so we don't cause high cpu usage
+      if (conn->keep_alive) {
+        mg_sleep(10);
       }
-      log_access(conn);
+    // new data arrived
+    } else {
+      if (ebuf[0] == '\0')
+      {
+        if (!is_valid_uri(conn->request_info.uri)) {
+          snprintf(ebuf, sizeof(ebuf), "Invalid URI: [%s]", ri->uri);
+          send_http_error(conn, 400, "Bad Request", "%s", ebuf);
+        } else if (strcmp(ri->http_version, "1.0") &&
+                   strcmp(ri->http_version, "1.1")) {
+          snprintf(ebuf, sizeof(ebuf), "Bad HTTP version: [%s]", ri->http_version);
+          send_http_error(conn, 505, "Bad HTTP version", "%s", ebuf);
+        }
+      }
+
+      if (ebuf[0] == '\0')
+      {
+        handle_request(conn);
+        if (conn->ctx->callbacks.end_request != NULL) {
+          conn->ctx->callbacks.end_request(conn, conn->status_code);
+        }
+      }
+
+      // NOTE(lsm): order is important here. should_keep_alive() call
+      // is using parsed request, which will be invalid after memmove's below.
+      // Therefore, memorize should_keep_alive() result now for later use
+      // in loop exit condition.
+      conn->keep_alive = should_keep_alive(conn);
+
+      // order for accesslog important for current keep alive info
+      if (ebuf[0] == '\0')
+      {
+        log_access(conn);
+      }
+
+      // Discard all buffered data for this request
+      discard_len = conn->content_len >= 0 && conn->request_len > 0 &&
+        conn->request_len + conn->content_len < (int64_t) conn->data_len ?
+        (int) (conn->request_len + conn->content_len) : conn->data_len;
+
+      // only move something when something is to be discarded
+      if(discard_len > 0) {
+        memmove(conn->buf, conn->buf + discard_len, conn->data_len - discard_len);
+        conn->data_len -= discard_len;
+      }
+      assert(conn->data_len >= 0);
+      assert(conn->data_len <= conn->buf_size);
     }
+
     if (ri->remote_user != NULL) {
-      free((void *) ri->remote_user);
-      ri->remote_user = NULL; // when having connections with and without auth would cause double free and then crash
+        free((void *) ri->remote_user);
+        ri->remote_user = NULL; // when having connections with and without auth would cause double free and then crash
     }
-
-    // NOTE(lsm): order is important here. should_keep_alive() call
-    // is using parsed request, which will be invalid after memmove's below.
-    // Therefore, memorize should_keep_alive() result now for later use
-    // in loop exit condition.
-    keep_alive = conn->ctx->stop_flag == 0 && keep_alive_enabled &&
-      conn->content_len >= 0 && should_keep_alive(conn);
-
-    // Discard all buffered data for this request
-    discard_len = conn->content_len >= 0 && conn->request_len > 0 &&
-      conn->request_len + conn->content_len < (int64_t) conn->data_len ?
-      (int) (conn->request_len + conn->content_len) : conn->data_len;
-    assert(discard_len >= 0);
-    memmove(conn->buf, conn->buf + discard_len, conn->data_len - discard_len);
-    conn->data_len -= discard_len;
-    assert(conn->data_len >= 0);
-    assert(conn->data_len <= conn->buf_size);
-  } while (keep_alive);
+  } while (conn->keep_alive);
 }
 
 // Worker threads take accepted socket from the queue

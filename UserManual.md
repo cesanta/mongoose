@@ -285,6 +285,16 @@ show up in directory listing and return `404 Not Found` if requested. Pattern
 must be for a file name only, not including directory name. Example:
 
     mongoose -hide_files_patterns secret.txt|even_more_secret.txt
+    
+### enable\_keep\_alive `no`
+Enable connection keep alive, either `yes` or `no`.
+
+Allows the clients to request that the connection should be kept-alive for
+later requests.
+
+For this to work when using request handlers it's important to add the correct
+Content-Length HTTP header for each request. If this is forgotten the client
+will time out.
 
 # Lua Server Pages
 Pre-built Windows and Mac mongoose binaries have built-in Lua Server Pages
