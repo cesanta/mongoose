@@ -1610,7 +1610,7 @@ int mg_websocket_write(struct mg_connection* conn, int opcode, const char* data,
     } else {
         // 64-bit length field
         copy[1] = 127;
-        *(uint32_t*)(copy + 2) = htonl(dataLen >> 32);
+        *(uint32_t*)(copy + 2) = htonl((uint64_t)dataLen >> 32);
         *(uint32_t*)(copy + 6) = htonl(dataLen & 0xFFFFFFFF);
         memcpy(copy + 10, data, dataLen);
         copyLen = 10 + dataLen;
@@ -1621,7 +1621,7 @@ int mg_websocket_write(struct mg_connection* conn, int opcode, const char* data,
         // http://stackoverflow.com/questions/1981372/are-parallel-calls-to-send-recv-on-the-same-socket-valid
         // but mongoose's mg_printf/mg_write is not (because of the loop in push(), although that is only
         // a problem if the packet is large or outgoing buffer is full).
-        (void) mg_lock(conn);
+        mg_lock(conn);
         retval = mg_write(conn, copy, copyLen);
         mg_unlock(conn);
     }
@@ -3917,10 +3917,6 @@ static void handle_websocket_request(struct mg_connection *conn) {
   } else {
     send_websocket_handshake(conn);
 
-    // Allocate a mutex for this connection to allow communication both
-    // within the request handler and from elsewhere in the application
-    if (conn->mutex == NULL) { (void) pthread_mutex_init(&conn->mutex, NULL); }
-
     if (conn->ctx->callbacks.websocket_ready != NULL) {
       conn->ctx->callbacks.websocket_ready(conn);
     }
@@ -4896,7 +4892,7 @@ static void close_socket_gracefully(struct mg_connection *conn) {
 }
 
 static void close_connection(struct mg_connection *conn) {
-  if (conn->mutex != NULL) { (void) pthread_mutex_lock(&conn->mutex); }
+  (void) pthread_mutex_lock(&conn->mutex);
 
   // Notify the application that the connection is closing.  Websocket applications
   // need to know this so that they will not try to send data to closed connections
@@ -4916,11 +4912,7 @@ static void close_connection(struct mg_connection *conn) {
   }
 #endif
 
-  if (conn->mutex != NULL) { 
-    (void) pthread_mutex_unlock(&conn->mutex); 
-    (void) pthread_mutex_destroy(&conn->mutex);
-    conn->mutex = NULL;
-  }
+  (void) pthread_mutex_unlock(&conn->mutex); 
 }
 
 void mg_close_connection(struct mg_connection *conn) {
@@ -4929,22 +4921,17 @@ void mg_close_connection(struct mg_connection *conn) {
     SSL_CTX_free((SSL_CTX *) conn->client_ssl_ctx);
   }
 #endif
-  if (conn->mutex != NULL) { (void) pthread_mutex_destroy(&conn->mutex); }
   close_connection(conn);
+  (void) pthread_mutex_destroy(&conn->mutex);
   free(conn);
 }
 
-int mg_lock(struct mg_connection* conn) {
-  if (conn->mutex != NULL) { 
-    (void) pthread_mutex_lock(&conn->mutex); 
-    return 0;
-  } else {
-    return 1;
-  }
+void mg_lock(struct mg_connection* conn) {
+  (void) pthread_mutex_lock(&conn->mutex); 
 }
 
 void mg_unlock(struct mg_connection* conn) {
-  if (conn->mutex != NULL) { (void) pthread_mutex_unlock(&conn->mutex); }
+  (void) pthread_mutex_unlock(&conn->mutex);
 }
 
 struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
@@ -4990,6 +4977,9 @@ struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
       conn->client.sock = sock;
       conn->client.rsa.sin = sin;
       conn->client.is_ssl = use_ssl;
+      // Allocate a mutex for this connection to allow communication both
+      // within the request handler and from elsewhere in the application
+      (void) pthread_mutex_init(&conn->mutex, NULL);
 #ifndef NO_SSL
       if (use_ssl) {
         // SSL_CTX_set_verify call is needed to switch off server certificate
@@ -5160,6 +5150,9 @@ static void *worker_thread(void *thread_func_param) {
     conn->buf = (char *) (conn + 1);
     conn->ctx = ctx;
     conn->request_info.user_data = ctx->user_data;
+    // Allocate a mutex for this connection to allow communication both
+    // within the request handler and from elsewhere in the application
+    (void) pthread_mutex_init(&conn->mutex, NULL);
 
     // Call consume_socket() even when ctx->stop_flag > 0, to let it signal
     // sq_empty condvar to wake up the master waiting in produce_socket()

@@ -234,11 +234,10 @@ int mg_write(struct mg_connection *, const void *buf, size_t len);
 int mg_websocket_write(struct mg_connection* conn, int opcode, const char* data, size_t dataLen);
 
 
-// Blocks until unique access is obtained to this connection. For use with websockets only.
-// Returns zero for a websocket connection that is successfully locked, and non-zero for
-// a non-websocket connection.  Invoke this before mg_write or mg_printf when communicating
-// with a websocket.
-int mg_lock(struct mg_connection* conn);
+// Blocks until unique access is obtained to this connection. Intended for use with websockets only.
+// Invoke this before mg_write or mg_printf when communicating with a websocket if your code has
+// server-initiated communication as well as communication in direct response to a message.
+void mg_lock(struct mg_connection* conn);
 void mg_unlock(struct mg_connection* conn);
 
 
