@@ -1589,23 +1589,31 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
 }
 
 int mg_websocket_write(struct mg_connection* conn, int opcode, const char* data, size_t dataLen) {
-    unsigned char* copy = (unsigned char*)malloc(dataLen + 4);
+    unsigned char* copy = (unsigned char*)malloc(dataLen + 10);
     size_t copyLen = 0;
     int retval = -1;
 
-    assert(dataLen <= 0xFFFF);// "Messages larger than 2^16 bytes are not supported in this implementation."
     copy[0] = 0x80 + (opcode & 0xF);
 
     // Frame format: http://tools.ietf.org/html/rfc6455#section-5.2
     if (dataLen < 126) {
+        // inline 7-bit length field
         copy[1] = dataLen;
         memcpy(copy + 2, data, dataLen);
         copyLen = 2 + dataLen;
     } else if (dataLen <= 0xFFFF) {
+        // 16-bit length field
         copy[1] = 126;
-        *(unsigned short*)(copy + 2) = htons(dataLen);
+        *(uint16_t*)(copy + 2) = htons(dataLen);
         memcpy(copy + 4, data, dataLen);
         copyLen = 4 + dataLen;
+    } else {
+        // 64-bit length field
+        copy[1] = 127;
+        *(uint32_t*)(copy + 2) = htonl(dataLen >> 32);
+        *(uint32_t*)(copy + 6) = htonl(dataLen & 0xFFFFFFFF);
+        memcpy(copy + 10, data, dataLen);
+        copyLen = 10 + dataLen;
     }
 
     if (copyLen > 0) {

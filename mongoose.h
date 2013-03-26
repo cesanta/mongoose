@@ -221,6 +221,16 @@ int mg_write(struct mg_connection *, const void *buf, size_t len);
 //  0   when the connection has been closed
 //  -1  on error
 //  >0  number of bytes written on success
+//
+// opcodes are (from http://tools.ietf.org/html/rfc6455): 
+//  0x0   continuation
+//  0x1   text
+//  0x2   binary
+//  0x3-7 reserved
+//  0x8   connection close
+//  0x9   ping
+//  0xA   pong
+//  0xB-F reserved
 int mg_websocket_write(struct mg_connection* conn, int opcode, const char* data, size_t dataLen);
 
 
