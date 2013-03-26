@@ -94,6 +94,11 @@ struct mg_callbacks {
   int  (*websocket_data)(struct mg_connection *, int bits,
                          char *data, size_t data_len);
 
+  // Called when mongoose is closing a connection.  The per-context mutex is locked when this
+  // is invoked.  This is primarily useful for noting when a websocket is closing and removing it
+  // from any application-maintained list of clients.
+  void (*connection_close)(struct mg_connection *);
+
   // Called when mongoose tries to open a file. Used to intercept file open
   // calls, and serve file data from memory instead.
   // Parameters:
@@ -206,6 +211,25 @@ struct mg_request_info *mg_get_request_info(struct mg_connection *);
 //  -1  on error
 //  >0  number of bytes written on success
 int mg_write(struct mg_connection *, const void *buf, size_t len);
+
+
+// Send data to a websocket client wrapped in a websocket frame.  Uses mg_lock to ensure
+// that the transmission is not interrupted, i.e., when the application is proactively
+// communicating and responding to a request simultaneously.
+//
+// Return:
+//  0   when the connection has been closed
+//  -1  on error
+//  >0  number of bytes written on success
+int mg_websocket_write(struct mg_connection* conn, int opcode, const char* data, size_t dataLen);
+
+
+// Blocks until unique access is obtained to this connection. For use with websockets only.
+// Returns zero for a websocket connection that is successfully locked, and non-zero for
+// a non-websocket connection.  Invoke this before mg_write or mg_printf when communicating
+// with a websocket.
+int mg_lock(struct mg_connection* conn);
+void mg_unlock(struct mg_connection* conn);
 
 
 // Macros for enabling compiler-specific checks for printf-like arguments.

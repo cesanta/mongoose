@@ -19,7 +19,9 @@
 // THE SOFTWARE.
 
 #if defined(_WIN32)
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005
+#endif
 #else
 #ifdef __linux__
 #define _XOPEN_SOURCE 600     // For flockfile() on Linux
@@ -515,6 +517,7 @@ struct mg_connection {
   int throttle;               // Throttling, bytes/sec. <= 0 means no throttle
   time_t last_throttle_time;  // Last time throttled data was sent
   int64_t last_throttle_bytes;// Bytes sent this second
+  pthread_mutex_t mutex;      // Used by mg_lock/mg_unlock to ensure atomic transmissions for websockets
 };
 
 const char **mg_get_valid_option_names(void) {
@@ -1583,6 +1586,40 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
                  (int64_t) len);
   }
   return (int) total;
+}
+
+int mg_websocket_write(struct mg_connection* conn, int opcode, const char* data, size_t dataLen) {
+    unsigned char* copy = (unsigned char*)malloc(dataLen + 4);
+    size_t copyLen = 0;
+    int retval = -1;
+
+    assert(dataLen <= 0xFFFF);// "Messages larger than 2^16 bytes are not supported in this implementation."
+    copy[0] = 0x80 + (opcode & 0xF);
+
+    // Frame format: http://tools.ietf.org/html/rfc6455#section-5.2
+    if (dataLen < 126) {
+        copy[1] = dataLen;
+        memcpy(copy + 2, data, dataLen);
+        copyLen = 2 + dataLen;
+    } else if (dataLen <= 0xFFFF) {
+        copy[1] = 126;
+        *(unsigned short*)(copy + 2) = htons(dataLen);
+        memcpy(copy + 4, data, dataLen);
+        copyLen = 4 + dataLen;
+    }
+
+    if (copyLen > 0) {
+        // Note that POSIX/Winsock's send() is threadsafe
+        // http://stackoverflow.com/questions/1981372/are-parallel-calls-to-send-recv-on-the-same-socket-valid
+        // but mongoose's mg_printf/mg_write is not (because of the loop in push(), although that is only
+        // a problem if the packet is large or outgoing buffer is full).
+        (void) mg_lock(conn);
+        retval = mg_write(conn, copy, copyLen);
+        mg_unlock(conn);
+    }
+
+    free(copy);
+    return retval;
 }
 
 // Print message to buffer. If buffer is large enough to hold the message,
@@ -3871,6 +3908,11 @@ static void handle_websocket_request(struct mg_connection *conn) {
     // Callback has returned non-zero, do not proceed with handshake
   } else {
     send_websocket_handshake(conn);
+
+    // Allocate a mutex for this connection to allow communication both
+    // within the request handler and from elsewhere in the application
+    if (conn->mutex == NULL) { (void) pthread_mutex_init(&conn->mutex, NULL); }
+
     if (conn->ctx->callbacks.websocket_ready != NULL) {
       conn->ctx->callbacks.websocket_ready(conn);
     }
@@ -4846,6 +4888,15 @@ static void close_socket_gracefully(struct mg_connection *conn) {
 }
 
 static void close_connection(struct mg_connection *conn) {
+  if (conn->mutex != NULL) { (void) pthread_mutex_lock(&conn->mutex); }
+
+  // Notify the application that the connection is closing.  Websocket applications
+  // need to know this so that they will not try to send data to closed connections
+  // (especially important because individual connection objects are reused).
+  if (conn->ctx->callbacks.connection_close != NULL) {
+      conn->ctx->callbacks.connection_close(conn);
+  }
+
   conn->must_close = 1;
   if (conn->client.sock != INVALID_SOCKET) {
     close_socket_gracefully(conn);
@@ -4856,6 +4907,12 @@ static void close_connection(struct mg_connection *conn) {
     SSL_free(conn->ssl);
   }
 #endif
+
+  if (conn->mutex != NULL) { 
+    (void) pthread_mutex_unlock(&conn->mutex); 
+    (void) pthread_mutex_destroy(&conn->mutex);
+    conn->mutex = NULL;
+  }
 }
 
 void mg_close_connection(struct mg_connection *conn) {
@@ -4864,8 +4921,22 @@ void mg_close_connection(struct mg_connection *conn) {
     SSL_CTX_free((SSL_CTX *) conn->client_ssl_ctx);
   }
 #endif
+  if (conn->mutex != NULL) { (void) pthread_mutex_destroy(&conn->mutex); }
   close_connection(conn);
   free(conn);
+}
+
+int mg_lock(struct mg_connection* conn) {
+  if (conn->mutex != NULL) { 
+    (void) pthread_mutex_lock(&conn->mutex); 
+    return 0;
+  } else {
+    return 1;
+  }
+}
+
+void mg_unlock(struct mg_connection* conn) {
+  if (conn->mutex != NULL) { (void) pthread_mutex_unlock(&conn->mutex); }
 }
 
 struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
