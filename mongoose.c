@@ -19,7 +19,9 @@
 // THE SOFTWARE.
 
 #if defined(_WIN32)
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005
+#endif
 #else
 #ifdef __linux__
 #define _XOPEN_SOURCE 600     // For flockfile() on Linux
@@ -515,6 +517,7 @@ struct mg_connection {
   int throttle;               // Throttling, bytes/sec. <= 0 means no throttle
   time_t last_throttle_time;  // Last time throttled data was sent
   int64_t last_throttle_bytes;// Bytes sent this second
+  pthread_mutex_t mutex;      // Used by mg_lock/mg_unlock to ensure atomic transmissions for websockets
 };
 
 const char **mg_get_valid_option_names(void) {
@@ -1583,6 +1586,48 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
                  (int64_t) len);
   }
   return (int) total;
+}
+
+int mg_websocket_write(struct mg_connection* conn, int opcode, const char* data, size_t dataLen) {
+    unsigned char* copy = (unsigned char*)malloc(dataLen + 10);
+    size_t copyLen = 0;
+    int retval = -1;
+
+    copy[0] = 0x80 + (opcode & 0xF);
+
+    // Frame format: http://tools.ietf.org/html/rfc6455#section-5.2
+    if (dataLen < 126) {
+        // inline 7-bit length field
+        copy[1] = dataLen;
+        memcpy(copy + 2, data, dataLen);
+        copyLen = 2 + dataLen;
+    } else if (dataLen <= 0xFFFF) {
+        // 16-bit length field
+        copy[1] = 126;
+        *(uint16_t*)(copy + 2) = htons(dataLen);
+        memcpy(copy + 4, data, dataLen);
+        copyLen = 4 + dataLen;
+    } else {
+        // 64-bit length field
+        copy[1] = 127;
+        *(uint32_t*)(copy + 2) = htonl((uint64_t)dataLen >> 32);
+        *(uint32_t*)(copy + 6) = htonl(dataLen & 0xFFFFFFFF);
+        memcpy(copy + 10, data, dataLen);
+        copyLen = 10 + dataLen;
+    }
+
+    if (copyLen > 0) {
+        // Note that POSIX/Winsock's send() is threadsafe
+        // http://stackoverflow.com/questions/1981372/are-parallel-calls-to-send-recv-on-the-same-socket-valid
+        // but mongoose's mg_printf/mg_write is not (because of the loop in push(), although that is only
+        // a problem if the packet is large or outgoing buffer is full).
+        mg_lock(conn);
+        retval = mg_write(conn, copy, copyLen);
+        mg_unlock(conn);
+    }
+
+    free(copy);
+    return retval;
 }
 
 // Print message to buffer. If buffer is large enough to hold the message,
@@ -3871,6 +3916,7 @@ static void handle_websocket_request(struct mg_connection *conn) {
     // Callback has returned non-zero, do not proceed with handshake
   } else {
     send_websocket_handshake(conn);
+
     if (conn->ctx->callbacks.websocket_ready != NULL) {
       conn->ctx->callbacks.websocket_ready(conn);
     }
@@ -4846,6 +4892,15 @@ static void close_socket_gracefully(struct mg_connection *conn) {
 }
 
 static void close_connection(struct mg_connection *conn) {
+  (void) pthread_mutex_lock(&conn->mutex);
+
+  // Notify the application that the connection is closing.  Websocket applications
+  // need to know this so that they will not try to send data to closed connections
+  // (especially important because individual connection objects are reused).
+  if (conn->ctx->callbacks.connection_close != NULL) {
+      conn->ctx->callbacks.connection_close(conn);
+  }
+
   conn->must_close = 1;
   if (conn->client.sock != INVALID_SOCKET) {
     close_socket_gracefully(conn);
@@ -4856,6 +4911,8 @@ static void close_connection(struct mg_connection *conn) {
     SSL_free(conn->ssl);
   }
 #endif
+
+  (void) pthread_mutex_unlock(&conn->mutex); 
 }
 
 void mg_close_connection(struct mg_connection *conn) {
@@ -4865,7 +4922,16 @@ void mg_close_connection(struct mg_connection *conn) {
   }
 #endif
   close_connection(conn);
+  (void) pthread_mutex_destroy(&conn->mutex);
   free(conn);
+}
+
+void mg_lock(struct mg_connection* conn) {
+  (void) pthread_mutex_lock(&conn->mutex); 
+}
+
+void mg_unlock(struct mg_connection* conn) {
+  (void) pthread_mutex_unlock(&conn->mutex);
 }
 
 struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
@@ -4911,6 +4977,9 @@ struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
       conn->client.sock = sock;
       conn->client.rsa.sin = sin;
       conn->client.is_ssl = use_ssl;
+      // Allocate a mutex for this connection to allow communication both
+      // within the request handler and from elsewhere in the application
+      (void) pthread_mutex_init(&conn->mutex, NULL);
 #ifndef NO_SSL
       if (use_ssl) {
         // SSL_CTX_set_verify call is needed to switch off server certificate
@@ -5081,6 +5150,9 @@ static void *worker_thread(void *thread_func_param) {
     conn->buf = (char *) (conn + 1);
     conn->ctx = ctx;
     conn->request_info.user_data = ctx->user_data;
+    // Allocate a mutex for this connection to allow communication both
+    // within the request handler and from elsewhere in the application
+    (void) pthread_mutex_init(&conn->mutex, NULL);
 
     // Call consume_socket() even when ctx->stop_flag > 0, to let it signal
     // sq_empty condvar to wake up the master waiting in produce_socket()
