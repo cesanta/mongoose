@@ -340,7 +340,7 @@ const char *mg_version(void);
 // MD5 hash. Example:
 //   char buf[33];
 //   mg_md5(buf, "aa", "bb", NULL);
-void mg_md5(char buf[33], ...);
+char *mg_md5(char buf[33], ...);
 
 
 #ifdef __cplusplus

@@ -2190,7 +2190,7 @@ static void bin2str(char *to, const unsigned char *p, size_t len) {
 }
 
 // Return stringified MD5 hash for list of strings. Buffer must be 33 bytes.
-void mg_md5(char buf[33], ...) {
+char *mg_md5(char buf[33], ...) {
   unsigned char hash[16];
   const char *p;
   va_list ap;
@@ -2206,6 +2206,7 @@ void mg_md5(char buf[33], ...) {
 
   MD5Final(hash, &ctx);
   bin2str(buf, hash, sizeof(hash));
+  return buf;
 }
 
 // Check the user's password, return 1 if OK
