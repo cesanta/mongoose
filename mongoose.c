@@ -3829,12 +3829,30 @@ static void send_websocket_handshake(struct mg_connection *conn) {
             "Sec-WebSocket-Accept: ", b64_sha, "\r\n\r\n");
 }
 
+
 static void read_websocket(struct mg_connection *conn) {
+  // Pointer to the beginning of the portion of the incoming websocket message queue.
+  // The original websocket upgrade request is never removed, so the queue begins after it.
   unsigned char *buf = (unsigned char *) conn->buf + conn->request_len;
   int n;
+
+  // body_len is the length of the entire queue in bytes
+  // len is the length of the current message
+  // data_len is the length of the current message's data payload
+  // header_len is the length of the current message's header
   size_t i, len, mask_len, data_len, header_len, body_len;
+
+  // "The masking key is a 32-bit value chosen at random by the client."
+  // http://tools.ietf.org/html/draft-ietf-hybi-thewebsocketprotocol-17#section-5
+  unsigned char mask[4];
+
+  // data points to the place where the message is stored when passed to the websocket_data
+  // callback.  This is either mem on the stack, or a dynamically allocated buffer if it is
+  // too large.
   char mem[4 * 1024], *data;
 
+  // Loop continuously, reading messages from the socket, invoking the callback,
+  // and waiting repeatedly until an error occurs.
   assert(conn->content_len == 0);
   for (;;) {
     header_len = 0;
@@ -3849,8 +3867,8 @@ static void read_websocket(struct mg_connection *conn) {
         data_len = ((((int) buf[2]) << 8) + buf[3]);
       } else if (body_len >= 10 + mask_len) {
         header_len = 10 + mask_len;
-        data_len = (((uint64_t) htonl(* (uint32_t *) &buf[2])) << 32) +
-          htonl(* (uint32_t *) &buf[6]);
+        data_len = (((uint64_t) ntohl(* (uint32_t *) &buf[2])) << 32) +
+          ntohl(* (uint32_t *) &buf[6]);
       }
     }
 
@@ -3863,25 +3881,37 @@ static void read_websocket(struct mg_connection *conn) {
         break;
       }
 
-      // Read frame payload into the allocated buffer.
+      // Copy the mask before we shift the queue and destroy it
+      *(uint32_t*)mask = *(uint32_t*)(buf + header_len - mask_len);
+
+      // Read frame payload from the first message in the queue into data and
+      // advance the queue by moving the memory in place.
       assert(body_len >= header_len);
       if (data_len + header_len > body_len) {
+        // Overflow case
         len = body_len - header_len;
         memcpy(data, buf + header_len, len);
         // TODO: handle pull error
         pull(NULL, conn, data + len, data_len - len);
         conn->data_len = 0;
       } else {
+        // Length of the message being read at the front of the queue
         len = data_len + header_len;
+
+        // Copy the data payload into the data pointer for the callback
         memcpy(data, buf + header_len, data_len);
+
+        // Move the queue forward len bytes
         memmove(buf, buf + len, body_len - len);
+
+        // Mark the queue as advanced
         conn->data_len -= len;
       }
 
       // Apply mask if necessary
       if (mask_len > 0) {
-        for (i = 0; i < data_len; i++) {
-          data[i] ^= buf[header_len - mask_len + (i % 4)];
+        for (i = 0; i < data_len; ++i) {
+          data[i] ^= mask[i & 3];
         }
       }
 
@@ -3898,9 +3928,10 @@ static void read_websocket(struct mg_connection *conn) {
       }
       // Not breaking the loop, process next websocket frame.
     } else {
-      // Buffering websocket request
+      // Read from the socket into the next available location in the message queue.
       if ((n = pull(NULL, conn, conn->buf + conn->data_len,
                     conn->buf_size - conn->data_len)) <= 0) {
+        // Error, no bytes read
         break;
       }
       conn->data_len += n;
