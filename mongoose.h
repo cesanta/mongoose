@@ -195,10 +195,16 @@ int mg_modify_passwords_file(const char *passwords_file_name,
                              const char *user,
                              const char *password);
 
-
 // Return information associated with the request.
 struct mg_request_info *mg_get_request_info(struct mg_connection *);
 
+// Attach new socket handle to connection
+// return old socket handle, 
+int mg_set_sock_handle(struct mg_connection * conn, int new_socket_handle);
+
+// Get socket handle in own of caller and invalidate for current connection
+// return underlying socket handle
+int mg_get_sock_in_own(struct mg_connection * conn);
 
 // Send data to the client.
 // Return:
