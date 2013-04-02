@@ -54,10 +54,10 @@ to all who already did so: T.Barmann, D.Hughes, J.C.Sloan, R.Romeo,
 L.E.Spencer, S.Kotay, R.M.Shorter, W.Mar, J.Wilander and 7 others.
 Appreciated guys, you keep my brains going! Cash is also welcome indeed.
 Press [<img src="http://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif">](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DGZ2FMP95TAL6)
-button to donate. Donation progress: 335/1000 &euro;
+button to donate. Donation progress: 345/1000 &euro;
 (thanks to O.M.Vilhunen, C.Radik, G.Woodcock, M.Szczepkowski,
 Eternal Lands Dev Team, T.Tollet, C.Tangerino, G.Karsai, A.Bourgett,
 C.Blakemore, D.Fonaryov, T.Andrle, O.IJsselmuiden, R.Womack, M.Tomlinson,
-A.Slåttå, L.Farrell, J.D.P.Ballestero)
+A.Slåttå, L.Farrell, J.D.P.Ballestero, V.Albaev)
 
-![Progress](http://chart.googleapis.com/chart?chxr=0,0,1000&chxt=x&chbh=30,0,0&chs=300x35&cht=bhs&chco=90c0f0&chd=t:33.5)
+![Progress](http://chart.googleapis.com/chart?chxr=0,0,1000&chxt=x&chbh=30,0,0&chs=300x35&cht=bhs&chco=90c0f0&chd=t:34.5)
