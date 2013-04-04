@@ -239,6 +239,11 @@ void mg_send_file(struct mg_connection *conn, const char *path);
 
 
 // Read data from the remote end, return number of bytes read.
+//
+// Return:
+//   0   when the connection has been closed
+//   <0  on error
+//   >0  number of bytes read on success
 int mg_read(struct mg_connection *, void *buf, size_t len);
 
 
