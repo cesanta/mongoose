@@ -1453,6 +1453,7 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
   int64_t sent;
   int n, k;
 
+  (void) ssl;  // Get rid of warning
   sent = 0;
   while (sent < len) {
 
