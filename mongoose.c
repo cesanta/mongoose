@@ -1709,23 +1709,22 @@ int mg_get_var(const char *data, size_t data_len, const char *name,
   return len;
 }
 
-int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
+int mg_get_cookie(const char *cookie_header, const char *var_name,
                   char *dst, size_t dst_size) {
   const char *s, *p, *end;
   int name_len, len = -1;
 
   if (dst == NULL || dst_size == 0) {
     len = -2;
-  } else if (cookie_name == NULL ||
-             (s = mg_get_header(conn, "Cookie")) == NULL) {
+  } else if (var_name == NULL || (s = cookie_header) == NULL) {
     len = -1;
     dst[0] = '\0';
   } else {
-    name_len = (int) strlen(cookie_name);
+    name_len = (int) strlen(var_name);
     end = s + strlen(s);
     dst[0] = '\0';
 
-    for (; (s = mg_strcasestr(s, cookie_name)) != NULL; s += name_len) {
+    for (; (s = mg_strcasestr(s, var_name)) != NULL; s += name_len) {
       if (s[name_len] == '=') {
         s += name_len + 1;
         if ((p = strchr(s, ' ')) == NULL)
@@ -1740,7 +1739,7 @@ int mg_get_cookie(const struct mg_connection *conn, const char *cookie_name,
           len = p - s;
           mg_strlcpy(dst, s, (size_t) len + 1);
         } else {
-          len = -2;
+          len = -3;
         }
         break;
       }

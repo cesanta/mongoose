@@ -609,6 +609,22 @@ static void test_mg_strcasestr(void) {
   ASSERT(mg_strcasestr("aa", "AAB") == NULL);
 }
 
+static void test_mg_get_cookie(void) {
+  char buf[20];
+
+  ASSERT(mg_get_cookie("", "foo", NULL, sizeof(buf)) == -2);
+  ASSERT(mg_get_cookie("", "foo", buf, 0) == -2);
+  ASSERT(mg_get_cookie("", "foo", buf, sizeof(buf)) == -1);
+  ASSERT(mg_get_cookie("", NULL, buf, sizeof(buf)) == -1);
+  ASSERT(mg_get_cookie("a=1; b=2; c; d", "a", buf, sizeof(buf)) == 1);
+  ASSERT(strcmp(buf, "1") == 0);
+  ASSERT(mg_get_cookie("a=1; b=2; c; d", "b", buf, sizeof(buf)) == 1);
+  ASSERT(strcmp(buf, "2") == 0);
+  ASSERT(mg_get_cookie("a=1; b=123", "b", buf, sizeof(buf)) == 3);
+  ASSERT(strcmp(buf, "123") == 0);
+  ASSERT(mg_get_cookie("a=1; b=2; c; d", "c", buf, sizeof(buf)) == -1);
+}
+
 int __cdecl main(void) {
   test_mg_strcasestr();
   test_alloc_vprintf();
@@ -627,6 +643,7 @@ int __cdecl main(void) {
   test_request_replies();
   test_api_calls();
   test_url_decode();
+  test_mg_get_cookie();
 #ifdef USE_LUA
   test_lua();
 #endif

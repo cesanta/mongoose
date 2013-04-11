@@ -285,8 +285,8 @@ int mg_get_var(const char *data, size_t data_len,
 //          parameter is not found).
 //      -2 (destination buffer is NULL, zero length or too small to hold the
 //          value).
-int mg_get_cookie(const struct mg_connection *,
-                  const char *cookie_name, char *buf, size_t buf_len);
+int mg_get_cookie(const char *cookie, const char *var_name,
+                  char *buf, size_t buf_len);
 
 
 // Download data from the remote web server.
