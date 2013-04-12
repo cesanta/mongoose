@@ -1503,6 +1503,17 @@ static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
   return conn->ctx->stop_flag ? -1 : nread;
 }
 
+static int pull_full(FILE *fp, struct mg_connection *conn, char *buf, int len) {
+  int n, nread = 0;
+
+  while(nread < len) {
+    n = pull(fp, conn, buf+nread, len-nread);
+    if(n<0) return n;
+    nread += n;
+  }
+  return nread;
+}
+
 int mg_read(struct mg_connection *conn, void *buf, size_t len) {
   int n, buffered_len, nread;
   const char *body;
@@ -3825,8 +3836,8 @@ static void read_websocket(struct mg_connection *conn) {
         len = body_len - header_len;
         memcpy(data, buf + header_len, len);
         // TODO: handle pull error
-        pull(NULL, conn, data + len, data_len - len);
-        conn->data_len = 0;
+        pull_full(NULL, conn, data + len, data_len - len);
+        conn->data_len = conn->request_len;
       } else {
         len = data_len + header_len;
         memcpy(data, buf + header_len, data_len);
