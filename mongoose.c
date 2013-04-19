@@ -1589,44 +1589,40 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
 }
 
 int mg_websocket_write(struct mg_connection* conn, int opcode, const char* data, size_t dataLen) {
-    unsigned char* copy = (unsigned char*)malloc(dataLen + 10);
-    size_t copyLen = 0;
+    unsigned char header[10];
+    size_t headerLen = 1;
+
     int retval = -1;
 
-    copy[0] = 0x80 + (opcode & 0xF);
+    header[0] = 0x80 + (opcode & 0xF);
 
     // Frame format: http://tools.ietf.org/html/rfc6455#section-5.2
     if (dataLen < 126) {
         // inline 7-bit length field
-        copy[1] = dataLen;
-        memcpy(copy + 2, data, dataLen);
-        copyLen = 2 + dataLen;
+        header[1] = dataLen;
+        headerLen = 2;
     } else if (dataLen <= 0xFFFF) {
         // 16-bit length field
-        copy[1] = 126;
-        *(uint16_t*)(copy + 2) = htons(dataLen);
-        memcpy(copy + 4, data, dataLen);
-        copyLen = 4 + dataLen;
+        header[1] = 126;
+        *(uint16_t*)(header + 2) = htons(dataLen);
+        headerLen = 4;
     } else {
         // 64-bit length field
-        copy[1] = 127;
-        *(uint32_t*)(copy + 2) = htonl((uint64_t)dataLen >> 32);
-        *(uint32_t*)(copy + 6) = htonl(dataLen & 0xFFFFFFFF);
-        memcpy(copy + 10, data, dataLen);
-        copyLen = 10 + dataLen;
+        header[1] = 127;
+        *(uint32_t*)(header + 2) = htonl((uint64_t)dataLen >> 32);
+        *(uint32_t*)(header + 6) = htonl(dataLen & 0xFFFFFFFF);
+        headerLen = 10;
     }
 
-    if (copyLen > 0) {
-        // Note that POSIX/Winsock's send() is threadsafe
-        // http://stackoverflow.com/questions/1981372/are-parallel-calls-to-send-recv-on-the-same-socket-valid
-        // but mongoose's mg_printf/mg_write is not (because of the loop in push(), although that is only
-        // a problem if the packet is large or outgoing buffer is full).
-        mg_lock(conn);
-        retval = mg_write(conn, copy, copyLen);
-        mg_unlock(conn);
-    }
+    // Note that POSIX/Winsock's send() is threadsafe
+    // http://stackoverflow.com/questions/1981372/are-parallel-calls-to-send-recv-on-the-same-socket-valid
+    // but mongoose's mg_printf/mg_write is not (because of the loop in push(), although that is only
+    // a problem if the packet is large or outgoing buffer is full).
+    (void) mg_lock(conn);
+    retval = mg_write(conn, header, headerLen);
+    retval = mg_write(conn, data, dataLen);
+    mg_unlock(conn);
 
-    free(copy);
     return retval;
 }
 
@@ -3882,7 +3878,11 @@ static void read_websocket(struct mg_connection *conn) {
       }
 
       // Copy the mask before we shift the queue and destroy it
-      *(uint32_t*)mask = *(uint32_t*)(buf + header_len - mask_len);
+      if (mask_len > 0) {
+        *(uint32_t*)mask = *(uint32_t*)(buf + header_len - mask_len);
+      } else {
+        *(uint32_t*)mask = 0;
+      }
 
       // Read frame payload from the first message in the queue into data and
       // advance the queue by moving the memory in place.
