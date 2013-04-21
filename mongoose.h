@@ -239,6 +239,11 @@ void mg_send_file(struct mg_connection *conn, const char *path);
 
 
 // Read data from the remote end, return number of bytes read.
+//
+// Return:
+//   0   when the connection has been closed
+//   <0  on error
+//   >0  number of bytes read on success
 int mg_read(struct mg_connection *, void *buf, size_t len);
 
 
@@ -342,6 +347,10 @@ const char *mg_version(void);
 //   mg_md5(buf, "aa", "bb", NULL);
 char *mg_md5(char buf[33], ...);
 
+// Convenience functions
+void mg_url_encode(const char *src, char *dst, size_t dst_len);
+int mg_url_decode(const char *src, int src_len, char *dst,
+                      int dst_len, int is_form_url_encoded);
 
 #ifdef __cplusplus
 }

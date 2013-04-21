@@ -515,6 +515,7 @@ struct mg_connection {
   int throttle;               // Throttling, bytes/sec. <= 0 means no throttle
   time_t last_throttle_time;  // Last time throttled data was sent
   int64_t last_throttle_bytes;// Bytes sent this second
+  int outbound;
 };
 
 const char **mg_get_valid_option_names(void) {
@@ -1663,6 +1664,11 @@ static int url_decode(const char *src, int src_len, char *dst,
   return i >= src_len ? j : -1;
 }
 
+int mg_url_decode(const char *src, int src_len, char *dst,
+                      int dst_len, int is_form_url_encoded) {
+  return url_decode(src, src_len, dst, dst_len, is_form_url_encoded);
+}
+
 int mg_get_var(const char *data, size_t data_len, const char *name,
                char *dst, size_t dst_len) {
   const char *p, *e, *s;
@@ -2519,6 +2525,10 @@ static void url_encode(const char *src, char *dst, size_t dst_len) {
   }
 
   *dst = '\0';
+}
+
+void mg_url_encode(const char *src, char *dst, size_t dst_len) {
+  url_encode(src, dst, dst_len);
 }
 
 static void print_dir_entry(struct de *de) {
@@ -4906,6 +4916,7 @@ struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
       conn = NULL;
 #endif // NO_SSL
     } else {
+      conn->outbound = 1;
       conn->buf_size = MAX_REQUEST_SIZE;
       conn->buf = (char *) (conn + 1);
       conn->ctx = &fake_ctx;
@@ -4952,6 +4963,8 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
     // Request is valid
     if ((cl = get_header(&conn->request_info, "Content-Length")) != NULL) {
       conn->content_len = strtoll(cl, NULL, 10);
+    } else if (conn->outbound) {
+      conn->content_len = INT64_MAX;
     } else if (!mg_strcasecmp(conn->request_info.request_method, "POST") ||
                !mg_strcasecmp(conn->request_info.request_method, "PUT")) {
       conn->content_len = -1;
