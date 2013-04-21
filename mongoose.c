@@ -1664,6 +1664,11 @@ static int url_decode(const char *src, int src_len, char *dst,
   return i >= src_len ? j : -1;
 }
 
+int mg_url_decode(const char *src, int src_len, char *dst,
+                      int dst_len, int is_form_url_encoded) {
+  return url_decode(src, src_len, dst, dst_len, is_form_url_encoded);
+}
+
 int mg_get_var(const char *data, size_t data_len, const char *name,
                char *dst, size_t dst_len) {
   const char *p, *e, *s;
@@ -2520,6 +2525,10 @@ static void url_encode(const char *src, char *dst, size_t dst_len) {
   }
 
   *dst = '\0';
+}
+
+void mg_url_encode(const char *src, char *dst, size_t dst_len) {
+  url_encode(src, dst, dst_len);
 }
 
 static void print_dir_entry(struct de *de) {

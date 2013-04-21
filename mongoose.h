@@ -347,6 +347,10 @@ const char *mg_version(void);
 //   mg_md5(buf, "aa", "bb", NULL);
 char *mg_md5(char buf[33], ...);
 
+// Convenience functions
+void mg_url_encode(const char *src, char *dst, size_t dst_len);
+int mg_url_decode(const char *src, int src_len, char *dst,
+                      int dst_len, int is_form_url_encoded);
 
 #ifdef __cplusplus
 }
