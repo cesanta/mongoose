@@ -4237,7 +4237,8 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
   const char *content_type_header, *boundary_start;
   char buf[MG_BUF_LEN], path[PATH_MAX], fname[1024], boundary[100], *s;
   FILE *fp;
-  int bl, n, i, j, headers_len, boundary_len, len = 0, num_uploaded_files = 0;
+  int bl, n, i, j, headers_len, boundary_len, eof,
+      len = 0, num_uploaded_files = 0;
 
   // Request looks like this:
   //
@@ -4313,7 +4314,7 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
     }
 
     // Read POST data, write into file until boundary is found.
-    n = 0;
+    eof = n = 0;
     do {
       len += n;
       for (i = 0; i < len - bl; i++) {
@@ -4321,23 +4322,25 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
             !memcmp(&buf[i + 4], boundary, boundary_len)) {
           // Found boundary, that's the end of file data.
           fwrite(buf, 1, i, fp);
-          fflush(fp);
-          num_uploaded_files++;
-          if (conn->ctx->callbacks.upload != NULL) {
-            conn->ctx->callbacks.upload(conn, path);
-          }
+          eof = 1;
           memmove(buf, &buf[i + bl], len - (i + bl));
           len -= i + bl;
           break;
         }
       }
-      if (len > bl) {
+      if (!eof && len > bl) {
         fwrite(buf, 1, len - bl, fp);
         memmove(buf, &buf[len - bl], bl);
         len = bl;
       }
-    } while ((n = mg_read(conn, buf + len, sizeof(buf) - len)) > 0);
+    } while (!eof && (n = mg_read(conn, buf + len, sizeof(buf) - len)) > 0);
     fclose(fp);
+    if (eof) {
+      num_uploaded_files++;
+      if (conn->ctx->callbacks.upload != NULL) {
+        conn->ctx->callbacks.upload(conn, path);
+      }
+    }
   }
 
   return num_uploaded_files;
