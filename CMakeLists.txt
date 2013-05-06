@@ -5,9 +5,16 @@ find_package (Threads)
 option (EXAMPLES
     "Compile examples" OFF)
 
+option (WESOCKET
+    "Enables websocket" ON)
+
 set (SOURCES
     mongoose.c
     )
+
+if (WEBSOCKET)
+    add_definitions("-DUSE_WEBSOCKET")
+endif (WEBSOCKET)
 
 # Adding dl
 set (EXTRA_LIBS ${EXTRA_LIBS} dl)
@@ -37,4 +44,7 @@ if (EXAMPLES)
 
     add_executable (chat examples/chat.c)
     target_link_libraries (chat _mongoose)
+    
+    add_executable (websocket examples/websocket.c)
+    target_link_libraries (websocket _mongoose)
 endif (EXAMPLES)
