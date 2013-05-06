@@ -1,4 +1,4 @@
-// Copyright (c) 2004-2011 Sergey Lyubka
+// Copyright (c) 2004-2013 Sergey Lyubka
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -33,14 +33,23 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdarg.h>
+#include <ctype.h>
 
 #include "mongoose.h"
 
 #ifdef _WIN32
 #include <windows.h>
 #include <winsvc.h>
+#include <shlobj.h>
+
+#ifndef PATH_MAX
 #define PATH_MAX MAX_PATH
+#endif
+
+#ifndef S_ISDIR
 #define S_ISDIR(x) ((x) & _S_IFDIR)
+#endif
+
 #define DIRSEP '\\'
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
@@ -90,24 +99,68 @@ static void show_usage_and_exit(void) {
   const char **names;
   int i;
 
-  fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka, built %s\n",
+  fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka, built on %s\n",
           mg_version(), __DATE__);
   fprintf(stderr, "Usage:\n");
   fprintf(stderr, "  mongoose -A <htpasswd_file> <realm> <user> <passwd>\n");
-  fprintf(stderr, "  mongoose <config_file>\n");
+  fprintf(stderr, "  mongoose [config_file]\n");
   fprintf(stderr, "  mongoose [-option value ...]\n");
   fprintf(stderr, "\nOPTIONS:\n");
 
   names = mg_get_valid_option_names();
-  for (i = 0; names[i] != NULL; i += 3) {
-    fprintf(stderr, "  -%s %s (default: \"%s\")\n",
-            names[i], names[i + 1], names[i + 2] == NULL ? "" : names[i + 2]);
+  for (i = 0; names[i] != NULL; i += 2) {
+    fprintf(stderr, "  -%s %s\n",
+            names[i], names[i + 1] == NULL ? "<empty>" : names[i + 1]);
   }
-  fprintf(stderr, "\nSee  http://code.google.com/p/mongoose/wiki/MongooseManual"
-          " for more details.\n");
-  fprintf(stderr, "Example:\n  mongoose -s cert.pem -p 80,443s -d no\n");
   exit(EXIT_FAILURE);
 }
+
+#if defined(_WIN32) || defined(USE_COCOA)
+static const char *config_file_top_comment =
+"# Mongoose web server configuration file.\n"
+"# For detailed description of every option, visit\n"
+"# https://github.com/valenok/mongoose/blob/master/UserManual.md\n"
+"# Lines starting with '#' and empty lines are ignored.\n"
+"# To make a change, remove leading '#', modify option's value,\n"
+"# save this file and then restart Mongoose.\n\n";
+
+static const char *get_url_to_first_open_port(const struct mg_context *ctx) {
+  static char url[100];
+  const char *open_ports = mg_get_option(ctx, "listening_ports");
+  int a, b, c, d, port, n;
+
+  if (sscanf(open_ports, "%d.%d.%d.%d:%d%n", &a, &b, &c, &d, &port, &n) == 5) {
+    snprintf(url, sizeof(url), "%s://%d.%d.%d.%d:%d",
+             open_ports[n] == 's' ? "https" : "http", a, b, c, d, port);
+  } else if (sscanf(open_ports, "%d%n", &port, &n) == 1) {
+    snprintf(url, sizeof(url), "%s://localhost:%d",
+             open_ports[n] == 's' ? "https" : "http", port);
+  } else {
+    snprintf(url, sizeof(url), "%s", "http://localhost:8080");
+  }
+
+  return url;
+}
+
+static void create_config_file(const char *path) {
+  const char **names, *value;
+  FILE *fp;
+  int i;
+
+  // Create config file if it is not present yet
+  if ((fp = fopen(path, "r")) != NULL) {
+    fclose(fp);
+  } else if ((fp = fopen(path, "a+")) != NULL) {
+    fprintf(fp, "%s", config_file_top_comment);
+    names = mg_get_valid_option_names();
+    for (i = 0; names[i * 2] != NULL; i++) {
+      value = mg_get_option(ctx, names[i * 2]);
+      fprintf(fp, "# %s %s\n", names[i * 2], value ? value : "<value>");
+    }
+    fclose(fp);
+  }
+}
+#endif
 
 static void verify_document_root(const char *root) {
   const char *p, *path;
@@ -187,28 +240,37 @@ static void process_command_line_arguments(char *argv[], char **options) {
 
     // Loop over the lines in config file
     while (fgets(line, sizeof(line), fp) != NULL) {
-
       line_no++;
 
       // Ignore empty lines and comments
-      if (line[0] == '#' || line[0] == '\n')
+      for (i = 0; isspace(* (unsigned char *) &line[i]); ) i++;
+      if (line[i] == '#' || line[i] == '\0') {
         continue;
+      }
 
       if (sscanf(line, "%s %[^\r\n#]", opt, val) != 2) {
-        die("%s: line %d is invalid", config_file, (int) line_no);
+        printf("%s: line %d is invalid, ignoring it:\n %s",
+               config_file, (int) line_no, line);
+      } else {
+        set_option(options, opt, val);
       }
-      set_option(options, opt, val);
     }
 
     (void) fclose(fp);
   }
 
-  // Handle command line flags. They override config file and default settings.
-  for (i = cmd_line_opts_start; argv[i] != NULL; i += 2) {
-    if (argv[i][0] != '-' || argv[i + 1] == NULL) {
-      show_usage_and_exit();
+  // If we're under MacOS and started by launchd, then the second
+  // argument is process serial number, -psn_.....
+  // In this case, don't process arguments at all.
+  if (argv[1] == NULL || memcmp(argv[1], "-psn_", 5) != 0) {
+    // Handle command line flags.
+    // They override config file and default settings.
+    for (i = cmd_line_opts_start; argv[i] != NULL; i += 2) {
+      if (argv[i][0] != '-' || argv[i + 1] == NULL) {
+        show_usage_and_exit();
+      }
+      set_option(options, &argv[i][1], argv[i + 1]);
     }
-    set_option(options, &argv[i][1], argv[i + 1]);
   }
 }
 
@@ -217,15 +279,14 @@ static void init_server_name(void) {
            mg_version());
 }
 
-static void *mongoose_callback(enum mg_event ev, struct mg_connection *conn) {
-  if (ev == MG_EVENT_LOG) {
-    printf("%s\n", mg_get_request_info(conn)->log_message);
-  }
-
-  return NULL;
+static int log_message(const struct mg_connection *conn, const char *message) {
+  (void) conn;
+  printf("%s\n", message);
+  return 0;
 }
 
 static void start_mongoose(int argc, char *argv[]) {
+  struct mg_callbacks callbacks;
   char *options[MAX_OPTIONS];
   int i;
 
@@ -251,7 +312,9 @@ static void start_mongoose(int argc, char *argv[]) {
   signal(SIGINT, signal_handler);
 
   /* Start Mongoose */
-  ctx = mg_start(&mongoose_callback, NULL, (const char **) options);
+  memset(&callbacks, 0, sizeof(callbacks));
+  callbacks.log_message = &log_message;
+  ctx = mg_start(&callbacks, NULL, (const char **) options);
   for (i = 0; options[i] != NULL; i++) {
     free(options[i]);
   }
@@ -262,9 +325,25 @@ static void start_mongoose(int argc, char *argv[]) {
 }
 
 #ifdef _WIN32
+enum {
+  ID_ICON = 100, ID_QUIT, ID_SETTINGS, ID_SEPARATOR, ID_INSTALL_SERVICE,
+  ID_REMOVE_SERVICE, ID_STATIC, ID_GROUP, ID_SAVE, ID_RESET_DEFAULTS,
+  ID_STATUS, ID_CONNECT,
+
+  // All dynamically created text boxes for options have IDs starting from
+  // ID_CONTROLS, incremented by one.
+  ID_CONTROLS = 200,
+
+  // Text boxes for files have "..." buttons to open file browser. These
+  // buttons have IDs that are ID_FILE_BUTTONS_DELTA higher than associated
+  // text box ID.
+  ID_FILE_BUTTONS_DELTA = 1000
+};
+static HICON hIcon;
 static SERVICE_STATUS ss;
 static SERVICE_STATUS_HANDLE hStatus;
 static const char *service_magic_argument = "--";
+static NOTIFYICONDATA TrayIcon;
 
 static void WINAPI ControlHandler(DWORD code) {
   if (code == SERVICE_CONTROL_STOP || code == SERVICE_CONTROL_SHUTDOWN) {
@@ -292,41 +371,6 @@ static void WINAPI ServiceMain(void) {
   SetServiceStatus(hStatus, &ss);
 }
 
-#define ID_TRAYICON 100
-#define ID_QUIT 101
-#define ID_EDIT_CONFIG 102
-#define ID_SEPARATOR 103
-#define ID_INSTALL_SERVICE 104
-#define ID_REMOVE_SERVICE 105
-#define ID_ICON 200
-static NOTIFYICONDATA TrayIcon;
-
-static void edit_config_file(void) {
-  const char **names, *value;
-  FILE *fp;
-  int i;
-  char cmd[200];
-
-  // Create config file if it is not present yet
-  if ((fp = fopen(config_file, "r")) != NULL) {
-    fclose(fp);
-  } else if ((fp = fopen(config_file, "a+")) != NULL) {
-    fprintf(fp,
-            "# Mongoose web server configuration file.\n"
-            "# Lines starting with '#' and empty lines are ignored.\n"
-            "# For detailed description of every option, visit\n"
-            "# http://code.google.com/p/mongoose/wiki/MongooseManual\n\n");
-    names = mg_get_valid_option_names();
-    for (i = 0; names[i] != NULL; i += 3) {
-      value = mg_get_option(ctx, names[i]);
-      fprintf(fp, "# %s %s\n", names[i + 1], *value ? value : "<value>");
-    }
-    fclose(fp);
-  }
-
-  snprintf(cmd, sizeof(cmd), "notepad.exe %s", config_file);
-  WinExec(cmd, SW_SHOW);
-}
 
 static void show_error(void) {
   char buf[256];
@@ -335,6 +379,272 @@ static void show_error(void) {
                 MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                 buf, sizeof(buf), NULL);
   MessageBox(NULL, buf, "Error", MB_OK);
+}
+
+static void *align(void *ptr, DWORD alig) {
+  ULONG ul = (ULONG) ptr;
+  ul += alig;
+  ul &= ~alig;
+  return ((void *) ul);
+}
+
+static int is_boolean_option(const char *option_name) {
+  return !strcmp(option_name, "enable_directory_listing") ||
+    !strcmp(option_name, "enable_keep_alive");
+}
+
+static int is_filename_option(const char *option_name) {
+  return !strcmp(option_name, "cgi_interpreter") ||
+    !strcmp(option_name, "global_auth_file") ||
+    !strcmp(option_name, "put_delete_auth_file") ||
+    !strcmp(option_name, "access_log_file") ||
+    !strcmp(option_name, "error_log_file") ||
+    !strcmp(option_name, "ssl_certificate");
+}
+
+static int is_directory_option(const char *option_name) {
+  return !strcmp(option_name, "document_root");
+}
+
+static int is_numeric_options(const char *option_name) {
+  return !strcmp(option_name, "num_threads");
+}
+
+static void save_config(HWND hDlg, FILE *fp) {
+  char value[2000];
+  const char **options, *name, *default_value;
+  int i, id;
+
+  fprintf(fp, "%s", config_file_top_comment);
+  options = mg_get_valid_option_names();
+  for (i = 0; options[i * 2] != NULL; i++) {
+    name = options[i * 2];
+    id = ID_CONTROLS + i;
+    if (is_boolean_option(name)) {
+      snprintf(value, sizeof(value), "%s",
+               IsDlgButtonChecked(hDlg, id) ? "yes" : "no");
+    } else {
+      GetDlgItemText(hDlg, id, value, sizeof(value));
+    }
+    default_value = options[i * 2 + 1] == NULL ? "" : options[i * 2 + 1];
+    // If value is the same as default, skip it
+    if (strcmp(value, default_value) != 0) {
+      fprintf(fp, "%s %s\n", name, value);
+    }
+  }
+}
+
+static BOOL CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP) {
+  FILE *fp;
+  int i;
+  const char *name, *value, **options = mg_get_valid_option_names();
+
+  switch (msg) {
+    case WM_CLOSE:
+      DestroyWindow(hDlg);
+      break;
+
+    case WM_COMMAND:
+      switch (LOWORD(wParam)) {
+        case ID_SAVE:
+          EnableWindow(GetDlgItem(hDlg, ID_SAVE), FALSE);
+          if ((fp = fopen(config_file, "w+")) != NULL) {
+            save_config(hDlg, fp);
+            fclose(fp);
+            mg_stop(ctx);
+            start_mongoose(__argc, __argv);
+          }
+          EnableWindow(GetDlgItem(hDlg, ID_SAVE), TRUE);
+          break;
+        case ID_RESET_DEFAULTS:
+          for (i = 0; options[i * 2] != NULL; i++) {
+            name = options[i * 2];
+            value = options[i * 2 + 1] == NULL ? "" : options[i * 2 + 1];
+            if (is_boolean_option(name)) {
+              CheckDlgButton(hDlg, ID_CONTROLS + i, !strcmp(value, "yes") ?
+                             BST_CHECKED : BST_UNCHECKED);
+            } else {
+              SetWindowText(GetDlgItem(hDlg, ID_CONTROLS + i), value);
+            }
+          }
+          break;
+      }
+
+      for (i = 0; options[i * 2] != NULL; i++) {
+        name = options[i * 2];
+        if ((is_filename_option(name) || is_directory_option(name)) &&
+            LOWORD(wParam) == ID_CONTROLS + i + ID_FILE_BUTTONS_DELTA) {
+          OPENFILENAME of;
+          BROWSEINFO bi;
+          char path[PATH_MAX] = "";
+
+          memset(&of, 0, sizeof(of));
+          of.lStructSize = sizeof(of);
+          of.hwndOwner = (HWND) hDlg;
+          of.lpstrFile = path;
+          of.nMaxFile = sizeof(path);
+          of.lpstrInitialDir = mg_get_option(ctx, "document_root");
+          of.Flags = OFN_CREATEPROMPT | OFN_NOCHANGEDIR;
+
+          memset(&bi, 0, sizeof(bi));
+          bi.hwndOwner = (HWND) hDlg;
+          bi.lpszTitle = "Choose WWW root directory:";
+          bi.ulFlags = BIF_RETURNONLYFSDIRS;
+
+          if (is_directory_option(name)) {
+            SHGetPathFromIDList(SHBrowseForFolder(&bi), path);
+          } else {
+            GetOpenFileName(&of);
+          }
+
+          if (path[0] != '\0') {
+            SetWindowText(GetDlgItem(hDlg, ID_CONTROLS + i), path);
+          }
+        }
+      }
+
+      break;
+
+    case WM_INITDIALOG:
+      SendMessage(hDlg, WM_SETICON,(WPARAM) ICON_SMALL, (LPARAM) hIcon);
+      SendMessage(hDlg, WM_SETICON,(WPARAM) ICON_BIG, (LPARAM) hIcon);
+      SetWindowText(hDlg, "Mongoose settings");
+      SetFocus(GetDlgItem(hDlg, ID_SAVE));
+      for (i = 0; options[i * 2] != NULL; i++) {
+        name = options[i * 2];
+        value = mg_get_option(ctx, name);
+        if (is_boolean_option(name)) {
+          CheckDlgButton(hDlg, ID_CONTROLS + i, !strcmp(value, "yes") ?
+                         BST_CHECKED : BST_UNCHECKED);
+        } else {
+          SetDlgItemText(hDlg, ID_CONTROLS + i, value == NULL ? "" : value);
+        }
+      }
+      break;
+    default:
+      break;
+  }
+
+  return FALSE;
+}
+
+static void add_control(unsigned char **mem, DLGTEMPLATE *dia, WORD type,
+                        DWORD id, DWORD style, WORD x, WORD y,
+                        WORD cx, WORD cy, const char *caption) {
+  DLGITEMTEMPLATE *tp;
+  LPWORD p;
+
+  dia->cdit++;
+
+  *mem = align(*mem, 3);
+  tp = (DLGITEMTEMPLATE *) *mem;
+
+  tp->id = (WORD)id;
+  tp->style = style;
+  tp->dwExtendedStyle = 0;
+  tp->x = x;
+  tp->y = y;
+  tp->cx = cx;
+  tp->cy = cy;
+
+  p = align(*mem + sizeof(*tp), 1);
+  *p++ = 0xffff;
+  *p++ = type;
+
+  while (*caption != '\0') {
+    *p++ = (WCHAR) *caption++;
+  }
+  *p++ = 0;
+  p = align(p, 1);
+
+  *p++ = 0;
+  *mem = (unsigned char *) p;
+}
+
+static void show_settings_dialog() {
+#define HEIGHT 15
+#define WIDTH 400
+#define LABEL_WIDTH 80
+
+  unsigned char mem[4096], *p;
+  const char **option_names, *long_option_name;
+  DWORD style;
+  DLGTEMPLATE *dia = (DLGTEMPLATE *) mem;
+  WORD i, cl, x, y, width, nelems = 0;
+  static int guard;
+
+  static struct {
+    DLGTEMPLATE template; // 18 bytes
+    WORD menu, class;
+    wchar_t caption[1];
+    WORD fontsiz;
+    wchar_t fontface[7];
+  } dialog_header = {{WS_CAPTION | WS_POPUP | WS_SYSMENU | WS_VISIBLE |
+    DS_SETFONT | WS_DLGFRAME, WS_EX_TOOLWINDOW, 0, 200, 200, WIDTH, 0},
+    0, 0, L"", 8, L"Tahoma"};
+
+  if (guard == 0) {
+    guard++;
+  } else {
+    return;
+  }
+
+  (void) memset(mem, 0, sizeof(mem));
+  (void) memcpy(mem, &dialog_header, sizeof(dialog_header));
+  p = mem + sizeof(dialog_header);
+
+  option_names = mg_get_valid_option_names();
+  for (i = 0; option_names[i * 2] != NULL; i++) {
+    long_option_name = option_names[i * 2];
+    style = WS_CHILD | WS_VISIBLE | WS_TABSTOP;
+    x = 10 + (WIDTH / 2) * (nelems % 2);
+    y = (nelems/2 + 1) * HEIGHT + 5;
+    width = WIDTH / 2 - 20 - LABEL_WIDTH;
+    if (is_numeric_options(long_option_name)) {
+      style |= ES_NUMBER;
+      cl = 0x81;
+      style |= WS_BORDER | ES_AUTOHSCROLL;
+    } else if (is_boolean_option(long_option_name)) {
+      cl = 0x80;
+      style |= BS_AUTOCHECKBOX;
+    } else if (is_filename_option(long_option_name) ||
+               is_directory_option(long_option_name)) {
+      style |= WS_BORDER | ES_AUTOHSCROLL;
+      width -= 20;
+      cl = 0x81;
+      add_control(&p, dia, 0x80,
+                  ID_CONTROLS + i + ID_FILE_BUTTONS_DELTA,
+                  WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+                  (WORD) (x + width + LABEL_WIDTH + 5),
+                  y, 15, 12, "...");
+    } else {
+      cl = 0x81;
+      style |= WS_BORDER | ES_AUTOHSCROLL;
+    }
+    add_control(&p, dia, 0x82, ID_STATIC, WS_VISIBLE | WS_CHILD,
+                x, y, LABEL_WIDTH, HEIGHT, long_option_name);
+    add_control(&p, dia, cl, ID_CONTROLS + i, style,
+                (WORD) (x + LABEL_WIDTH), y, width, 12, "");
+    nelems++;
+  }
+
+  y = (WORD) (((nelems + 1) / 2 + 1) * HEIGHT + 5);
+  add_control(&p, dia, 0x80, ID_GROUP, WS_CHILD | WS_VISIBLE |
+              BS_GROUPBOX, 5, 5, WIDTH - 10, y, " Settings ");
+  y += 10;
+  add_control(&p, dia, 0x80, ID_SAVE,
+              WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+              WIDTH - 70, y, 65, 12, "Save Settings");
+  add_control(&p, dia, 0x80, ID_RESET_DEFAULTS,
+              WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+              WIDTH - 140, y, 65, 12, "Reset to defaults");
+  add_control(&p, dia, 0x82, ID_STATIC,
+              WS_CHILD | WS_VISIBLE | WS_DISABLED,
+              5, y, 180, 12, server_name);
+
+  dia->cy = ((nelems + 1) / 2 + 1) * HEIGHT + 30;
+  DialogBoxIndirectParam(NULL, dia, NULL, DlgProc, (LPARAM) NULL);
+  guard--;
 }
 
 static int manage_service(int action) {
@@ -387,6 +697,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
   char buf[200], *service_argv[] = {__argv[0], NULL};
   POINT pt;
   HMENU hMenu;
+  static UINT s_uTaskbarRestart; // for taskbar creation
 
   switch (msg) {
     case WM_CREATE:
@@ -397,6 +708,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
         exit(EXIT_SUCCESS);
       } else {
         start_mongoose(__argc, __argv);
+        s_uTaskbarRestart = RegisterWindowMessage(TEXT("TaskbarCreated"));
       }
       break;
     case WM_COMMAND:
@@ -405,13 +717,18 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
           mg_stop(ctx);
           Shell_NotifyIcon(NIM_DELETE, &TrayIcon);
           PostQuitMessage(0);
-          break;
-        case ID_EDIT_CONFIG:
-          edit_config_file();
+          return 0;
+        case ID_SETTINGS:
+          show_settings_dialog();
           break;
         case ID_INSTALL_SERVICE:
         case ID_REMOVE_SERVICE:
           manage_service(LOWORD(wParam));
+          break;
+        case ID_CONNECT:
+          printf("[%s]\n", get_url_to_first_open_port(ctx));
+          ShellExecute(NULL, "open", get_url_to_first_open_port(ctx),
+                       NULL, NULL, SW_SHOW);
           break;
       }
       break;
@@ -432,7 +749,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
           AppendMenu(hMenu, MF_STRING | (!service_installed ? MF_GRAYED : 0),
                      ID_REMOVE_SERVICE, "Deinstall service");
           AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
-          AppendMenu(hMenu, MF_STRING, ID_EDIT_CONFIG, "Edit config file");
+          AppendMenu(hMenu, MF_STRING, ID_CONNECT, "Start browser");
+          AppendMenu(hMenu, MF_STRING, ID_SETTINGS, "Edit Settings");
+          AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
           AppendMenu(hMenu, MF_STRING, ID_QUIT, "Exit");
           GetCursorPos(&pt);
           SetForegroundWindow(hWnd);
@@ -447,6 +766,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
       Shell_NotifyIcon(NIM_DELETE, &TrayIcon);
       PostQuitMessage(0);
       return 0;  // We've just sent our own quit message, with proper hwnd.
+    default:
+      if (msg==s_uTaskbarRestart)
+        Shell_NotifyIcon(NIM_ADD, &TrayIcon);
   }
 
   return DefWindowProc(hWnd, msg, wParam, lParam);
@@ -469,10 +791,11 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
   ShowWindow(hWnd, SW_HIDE);
 
   TrayIcon.cbSize = sizeof(TrayIcon);
-  TrayIcon.uID = ID_TRAYICON;
+  TrayIcon.uID = ID_ICON;
   TrayIcon.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
-  TrayIcon.hIcon = LoadImage(GetModuleHandle(NULL), MAKEINTRESOURCE(ID_ICON),
-                             IMAGE_ICON, 16, 16, 0);
+  TrayIcon.hIcon = hIcon = LoadImage(GetModuleHandle(NULL),
+                                     MAKEINTRESOURCE(ID_ICON),
+                                     IMAGE_ICON, 16, 16, 0);
   TrayIcon.hWnd = hWnd;
   snprintf(TrayIcon.szTip, sizeof(TrayIcon.szTip), "%s", server_name);
   TrayIcon.uCallbackMessage = WM_USER;
@@ -485,6 +808,89 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
 
   // Return the WM_QUIT value.
   return msg.wParam;
+}
+#elif defined(USE_COCOA)
+#import <Cocoa/Cocoa.h>
+
+@interface Mongoose : NSObject<NSApplicationDelegate>
+- (void) openBrowser;
+- (void) shutDown;
+@end
+
+@implementation Mongoose
+- (void) openBrowser {
+  [[NSWorkspace sharedWorkspace]
+    openURL:[NSURL URLWithString:
+      [NSString stringWithUTF8String:get_url_to_first_open_port(ctx)]]];
+}
+- (void) editConfig {
+  create_config_file(config_file);
+  [[NSWorkspace sharedWorkspace]
+    openFile:[NSString stringWithUTF8String:config_file]
+    withApplication:@"TextEdit"];
+}
+- (void)shutDown{
+  [NSApp terminate:nil];
+}
+@end
+
+int main(int argc, char *argv[]) {
+  init_server_name();
+  start_mongoose(argc, argv);
+
+  [NSAutoreleasePool new];
+  [NSApplication sharedApplication];
+
+  // Add delegate to process menu item actions
+  Mongoose *myDelegate = [[Mongoose alloc] autorelease];
+  [NSApp setDelegate: myDelegate];
+
+  // Run this app as agent
+  ProcessSerialNumber psn = { 0, kCurrentProcess };
+  TransformProcessType(&psn, kProcessTransformToBackgroundApplication);
+  SetFrontProcess(&psn);
+
+  // Add status bar menu
+  id menu = [[NSMenu new] autorelease];
+
+  // Add version menu item
+  [menu addItem:[[[NSMenuItem alloc]
+    //initWithTitle:[NSString stringWithFormat:@"%s", server_name]
+    initWithTitle:[NSString stringWithUTF8String:server_name]
+    action:@selector(noexist) keyEquivalent:@""] autorelease]];
+
+  // Add configuration menu item
+  [menu addItem:[[[NSMenuItem alloc]
+    initWithTitle:@"Edit configuration"
+    action:@selector(editConfig) keyEquivalent:@""] autorelease]];
+
+  // Add connect menu item
+  [menu addItem:[[[NSMenuItem alloc]
+    initWithTitle:@"Open web root in a browser"
+    action:@selector(openBrowser) keyEquivalent:@""] autorelease]];
+
+  // Separator
+  [menu addItem:[NSMenuItem separatorItem]];
+
+  // Add quit menu item
+  [menu addItem:[[[NSMenuItem alloc]
+    initWithTitle:@"Quit"
+    action:@selector(shutDown) keyEquivalent:@"q"] autorelease]];
+
+  // Attach menu to the status bar
+  id item = [[[NSStatusBar systemStatusBar]
+    statusItemWithLength:NSVariableStatusItemLength] retain];
+  [item setHighlightMode:YES];
+  [item setImage:[NSImage imageNamed:@"mongoose_22x22.png"]];
+  [item setMenu:menu];
+
+  // Run the app
+  [NSApp activateIgnoringOtherApps:YES];
+  [NSApp run];
+
+  mg_stop(ctx);
+
+  return EXIT_SUCCESS;
 }
 #else
 int main(int argc, char *argv[]) {

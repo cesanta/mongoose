@@ -16,6 +16,11 @@ chat.normalizeText = function(text) {
 };
 
 chat.refresh = function(data) {
+
+  if (data === undefined) {
+    return;
+  }
+  
   $.each(data, function(index, entry) {
     var row = $('<div>').addClass('message-row').appendTo('#mml');
     var timestamp = (new Date(entry.timestamp * 1000)).toLocaleTimeString();
@@ -42,7 +47,7 @@ chat.refresh = function(data) {
   }
 };
 
-chat.getMessages = function() {
+chat.getMessages = function(enter_loop) {
   $.ajax({
     dataType: 'jsonp',
     url: chat.backendUrl + '/ajax/get_messages',
@@ -51,7 +56,9 @@ chat.getMessages = function() {
     error: function() {
     },
   });
-  window.setTimeout(chat.getMessages, chat.getMessagesIntervalMs);
+  if (enter_loop) {
+    window.setTimeout('chat.getMessages(true)', chat.getMessagesIntervalMs);
+  }
 };
 
 chat.handleMenuItemClick = function(ev) {
@@ -81,7 +88,7 @@ chat.handleMessageInput = function(ev) {
     success: function(ev) {
       input.value = '';
       input.disabled = false;
-      chat.getMessages();
+      chat.getMessages(false);
     },
     error: function(ev) {
       chat.showError('Error sending message');
@@ -93,7 +100,7 @@ chat.handleMessageInput = function(ev) {
 $(document).ready(function() {
   $('.menu-item').click(chat.handleMenuItemClick);
   $('.message-input').keypress(chat.handleMessageInput);
-  chat.getMessages();
+  chat.getMessages(true);
 });
 
 // vim:ts=2:sw=2:et
