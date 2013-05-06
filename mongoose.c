@@ -3142,6 +3142,12 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   if ((s = getenv("SystemDrive")) != NULL) {
     addenv(blk, "SystemDrive=%s", s);
   }
+  if ((s = getenv("ProgramFiles")) != NULL) {
+    addenv(blk, "ProgramFiles=%s", s);
+  }
+  if ((s = getenv("ProgramFiles(x86)")) != NULL) {
+    addenv(blk, "ProgramFiles(x86)=%s", s);
+  }
 #else
   if ((s = getenv("LD_LIBRARY_PATH")) != NULL)
     addenv(blk, "LD_LIBRARY_PATH=%s", s);
