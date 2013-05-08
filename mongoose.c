@@ -1635,13 +1635,8 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   return mg_vprintf(conn, fmt, ap);
 }
 
-// URL-decode input buffer into destination buffer.
-// 0-terminate the destination buffer. Return the length of decoded data.
-// form-url-encoded data differs from URI encoding in a way that it
-// uses '+' as character for space, see RFC 1866 section 8.2.1
-// http://ftp.ics.uci.edu/pub/ietf/html/rfc1866.txt
-static int url_decode(const char *src, int src_len, char *dst,
-                      int dst_len, int is_form_url_encoded) {
+int mg_url_decode(const char *src, int src_len, char *dst,
+                  int dst_len, int is_form_url_encoded) {
   int i, j, a, b;
 #define HEXTOI(x) (isdigit(x) ? x - '0' : x - 'W')
 
@@ -1698,7 +1693,7 @@ int mg_get_var(const char *data, size_t data_len, const char *name,
         assert(s >= p);
 
         // Decode variable into destination buffer
-        len = url_decode(p, (size_t)(s - p), dst, dst_len, 1);
+        len = mg_url_decode(p, (size_t)(s - p), dst, dst_len, 1);
 
         // Redirect error code from -1 to -2 (destination buffer too small).
         if (len == -1) {
@@ -4396,7 +4391,7 @@ static void handle_request(struct mg_connection *conn) {
     * ((char *) conn->request_info.query_string++) = '\0';
   }
   uri_len = (int) strlen(ri->uri);
-  url_decode(ri->uri, uri_len, (char *) ri->uri, uri_len + 1, 0);
+  mg_url_decode(ri->uri, uri_len, (char *) ri->uri, uri_len + 1, 0);
   remove_double_dots_and_double_slashes((char *) ri->uri);
   convert_uri_to_file_name(conn, path, sizeof(path), &file);
   conn->throttle = set_throttle(conn->ctx->config[THROTTLE],

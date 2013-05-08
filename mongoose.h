@@ -333,6 +333,14 @@ const char *mg_get_builtin_mime_type(const char *file_name);
 // Return Mongoose version.
 const char *mg_version(void);
 
+// URL-decode input buffer into destination buffer.
+// 0-terminate the destination buffer.
+// form-url-encoded data differs from URI encoding in a way that it
+// uses '+' as character for space, see RFC 1866 section 8.2.1
+// http://ftp.ics.uci.edu/pub/ietf/html/rfc1866.txt
+// Return: length of the decoded data, or -1 if dst buffer is too small.
+int mg_url_decode(const char *src, int src_len, char *dst,
+                  int dst_len, int is_form_url_encoded);
 
 // MD5 hash given strings.
 // Buffer 'buf' must be 33 bytes long. Varargs is a NULL terminated list of
