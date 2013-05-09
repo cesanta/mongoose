@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <signal.h>
 #include <mongoose/Server.h>
 #include <mongoose/WebController.h>
 
@@ -53,9 +54,21 @@ class MyController : public WebController
         }
 };
 
+volatile static bool running = true;
+
+void handle_signal(int sig)
+{
+    if (running) {
+        cout << "Exiting..." << endl;
+        running = false;
+    }
+}
+
 int main()
 {
     srand(time(NULL));
+
+    signal(SIGINT, handle_signal);
 
     MyController myController;
     Server server(8080);
@@ -63,7 +76,11 @@ int main()
 
     server.start();
 
-    while(1) {
+    while (running) {
         sleep(1);
     }
+
+    server.stop();
+    
+    return EXIT_SUCCESS;
 }

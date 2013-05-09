@@ -41,7 +41,7 @@ namespace Mongoose
     {
         mutex.lock();
         if (hasValue(key)) {
-            string value = values[value];
+            string value = values[key];
             mutex.unlock();
 
             return value;

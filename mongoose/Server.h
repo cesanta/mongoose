@@ -25,7 +25,7 @@ namespace Mongoose
              * @param string documentRoot the root that should be used for static files
              */
             Server(int port = 80, string documentRoot = "www");
-            ~Server();
+            virtual ~Server();
 
             /**
              * Runs the Mongoose server
