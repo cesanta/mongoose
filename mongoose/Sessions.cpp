@@ -38,9 +38,13 @@ namespace Mongoose
     Session &Sessions::get(Request &request, Response &response)
     { 
         string id = getId(request, response);
-        Session &session = sessions[id];
+        Session *session;
+        
+        mutex.lock();
+        session = &sessions[id];
+        mutex.unlock();
 
-        return session;
+        return *session;
     }
 
     void Sessions::garbageCollect(int oldAge)
@@ -49,6 +53,7 @@ namespace Mongoose
         map<string, Session>::iterator it;
         vector<string>::iterator vit;
 
+        mutex.lock();
         for (it=sessions.begin(); it!=sessions.end(); it++) {
             string name = (*it).first;
             Session &session = (*it).second;
@@ -61,5 +66,6 @@ namespace Mongoose
         for (vit=deleteList.begin(); vit!=deleteList.end(); vit++) {
             sessions.erase(*vit);
         }
+        mutex.unlock();
     }
 };

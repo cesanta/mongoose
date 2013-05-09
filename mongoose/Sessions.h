@@ -4,6 +4,7 @@
 #include "Request.h"
 #include "Container.h"
 #include "Session.h"
+#include "Mutex.h"
 
 using namespace std;
 
@@ -49,6 +50,7 @@ namespace Mongoose
         protected:
             map<string, Session> sessions;
             string key;
+            Mutex mutex;
     };
 };
 

@@ -23,6 +23,7 @@ if (CPP_BINDING)
     set (SOURCES
         ${SOURCES}
         ${MONGOOSE_CPP}/Controller.cpp
+        ${MONGOOSE_CPP}/Mutex.cpp
         ${MONGOOSE_CPP}/Request.cpp
         ${MONGOOSE_CPP}/Response.cpp
         ${MONGOOSE_CPP}/Server.cpp

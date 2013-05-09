@@ -5,6 +5,7 @@
 #include "Response.h"
 #include "Controller.h"
 #include "Sessions.h"
+#include "Mutex.h"
 
 using namespace std;
 
@@ -23,6 +24,7 @@ namespace Mongoose
             Sessions sessions;
             int gcDivisor;
             int counter;
+            Mutex mutex;
     };
 };
 

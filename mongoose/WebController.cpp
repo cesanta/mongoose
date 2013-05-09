@@ -10,12 +10,14 @@ namespace Mongoose
 
     void WebController::preProcess(Request &request, Response &response)
     {
+        mutex.lock();
         counter++;
 
         if (counter > gcDivisor) {
             counter = 0;
             sessions.garbageCollect();
         }
+        mutex.unlock();
 
         Session session = sessions.get(request, response);
         session.ping();
