@@ -61,11 +61,21 @@ namespace Mongoose
              */
             Response *beginRequest(Request &request);
 
+            /**
+             * Sets a mongoose extra option
+             *
+             * @param string the name of the option
+             * @param string the value of the option
+             */
+            void setOption(string key, string value);
+
         protected:
+            map<string, string> extraOptions;
             string documentRoot;
             int port;
             struct mg_callbacks callbacks;
             struct mg_context *ctx;
+            const char **options;
 
             vector<Controller *> controllers;
     };

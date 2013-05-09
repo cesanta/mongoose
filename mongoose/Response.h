@@ -64,6 +64,11 @@ namespace Mongoose
              */
             virtual void setCookie(string key, string value);
 
+            /**
+             * Sets the response code
+             */
+            virtual void setCode(int code);
+
         protected:
             int code;
             map<string, string> headers;

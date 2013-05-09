@@ -55,4 +55,9 @@ namespace Mongoose
 
         setHeader("Set-cookie", definition.str());
     }
+
+    void Response::setCode(int code_)
+    {
+        code = code_;
+    }
 };

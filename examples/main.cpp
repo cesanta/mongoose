@@ -40,15 +40,30 @@ class MyController : public WebController
                 *response << "Session value set to: " << session.get("try");
             }
         }
+
+        void forbid(Request &request, StreamResponse *response)
+        {
+            response->setCode(HTTP_FORBIDDEN);
+            *response << "403 forbidden demo";
+        }
  
         Response *process(Request &request)
         {
             StreamResponse *response = NULL;
 
+            // Hello demo
+            MG_GET("/", hello);
+            MG_GET("/hello", hello);
+
+            // Form demo
             MG_GET("/form", form);
             MG_POST("/form", formPost);
-            MG_GET("/hello", hello);
+
+            // Session demo
             MG_GET("/session", session);
+
+            // 403 demo
+            MG_GET("/403", forbid);
 
             return response;
         }
@@ -73,6 +88,7 @@ int main()
     MyController myController;
     Server server(8080);
     server.registerController(&myController);
+    server.setOption("enable_directory_listing", "false");
 
     server.start();
 
