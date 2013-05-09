@@ -16,10 +16,11 @@ using namespace std;
  */
 namespace Mongoose
 {
-    class Response : public ostringstream
+    class Response 
     {
         public:
             Response();
+            virtual ~Response();
 
             /**
              * Test if the given header is present
@@ -28,7 +29,7 @@ namespace Mongoose
              *
              * @return bool true if the header is set
              */
-            bool hasHeader(string key);
+            virtual bool hasHeader(string key);
 
             /**
              * Sets the header
@@ -37,7 +38,7 @@ namespace Mongoose
              *
              * @param value the header value
              */
-            void setHeader(string key, string value);
+            virtual void setHeader(string key, string value);
 
             /**
              * Get the data of the response, this will contain headers and
@@ -45,7 +46,14 @@ namespace Mongoose
              *
              * @return string the response data
              */
-            string getData();
+            virtual string getData();
+
+            /**
+             * Gets the response body
+             *
+             * @return string the response body
+             */
+            virtual string getBody()=0;
 
             /**
              * Sets the cookie, note that you can only define one cookie by request
@@ -54,7 +62,7 @@ namespace Mongoose
              * @param string the key of the cookie
              * @param string value the cookie value
              */
-            void setCookie(string key, string value);
+            virtual void setCookie(string key, string value);
 
         protected:
             int code;

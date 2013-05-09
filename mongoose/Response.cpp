@@ -5,9 +5,13 @@ using namespace std;
 
 namespace Mongoose
 {
-    Response::Response() : ostringstream(), code(HTTP_OK)
+    Response::Response() : code(HTTP_OK)
     {
     };
+            
+    Response::~Response()
+    {
+    }
             
     void Response::setHeader(string key, string value)
     {
@@ -21,7 +25,7 @@ namespace Mongoose
 
     string Response::getData()
     {
-        string body = this->str();
+        string body = getBody();
         ostringstream data;
 
         data << "HTTP/1.0 " << code << "\r\n";

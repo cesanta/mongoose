@@ -1,5 +1,6 @@
 #include <iostream>
 #include "Controller.h"
+#include "StreamResponse.h"
 
 using namespace std;
 
@@ -14,18 +15,18 @@ namespace Mongoose
         return NULL;
     }
             
-    void Controller::preProcess(Request &request, Response &response)
+    void Controller::preProcess(Request &request, Response *response)
     {
     }
             
-    void Controller::postProcess(Request &request, Response &response)
+    void Controller::postProcess(Request &request, Response *response)
     {
     }
             
-    Response *Controller::createResponse(Request &request)
+    StreamResponse *Controller::createResponse(Request &request)
     {
-        Response *response = new Response;
-        preProcess(request, *response);
+        StreamResponse *response = new StreamResponse();
+        preProcess(request, response);
 
         return response;
     }
@@ -35,7 +36,7 @@ namespace Mongoose
         Response *response = process(request);
 
         if (response != NULL) {
-            postProcess(request, *response);
+            postProcess(request, response);
         }
 
         return response;

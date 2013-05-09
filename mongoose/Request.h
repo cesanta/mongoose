@@ -5,7 +5,6 @@
 #include <sstream>
 #include <mongoose.h>
 #include "Response.h"
-#include "Container.h"
 
 using namespace std;
 
@@ -14,7 +13,7 @@ using namespace std;
  */
 namespace Mongoose
 {
-    class Request : public Container
+    class Request
     {
         public:
             Request(struct mg_connection *connection);

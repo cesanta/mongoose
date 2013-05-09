@@ -1,7 +1,7 @@
 #ifndef _MONGOOSE_SESSION_H
 #define _MONGOOSE_SESSION_H
 
-#include "Container.h"
+#include <map>
 #include "Mutex.h"
 
 using namespace std;
@@ -11,7 +11,7 @@ using namespace std;
  */ 
 namespace Mongoose
 {
-    class Session : public Container
+    class Session
     {
         public:
             Session();

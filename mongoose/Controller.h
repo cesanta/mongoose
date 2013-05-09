@@ -3,7 +3,7 @@
 
 #include <iostream>
 #include "Request.h"
-#include "Response.h"
+#include "StreamResponse.h"
 
 using namespace std;
 
@@ -19,13 +19,13 @@ using namespace std;
 #define MG_GET(url, method) \
     if (request.getMethod() == "GET" && request.getUrl() == url) { \
         response = createResponse(request); \
-        method (request, *response); \
+        method (request, response); \
     } 
 
 #define MG_POST(url, method) \
     if (request.getMethod() == "POST" && request.getUrl() == url) { \
         response = createResponse(request); \
-        method (request, *response); \
+        method (request, response); \
     } 
 
 /**
@@ -47,7 +47,7 @@ namespace Mongoose
              * @param Request the request
              * @param Response the response
              */
-            virtual void preProcess(Request &request, Response &response);
+            virtual void preProcess(Request &request, Response *response);
 
             /**
              * Called to process a request
@@ -65,7 +65,7 @@ namespace Mongoose
              * @param Request the request
              * @param Response the response
              */
-            virtual void postProcess(Request &request, Response &response);
+            virtual void postProcess(Request &request, Response *response);
 
             /**
              * Handle a request, this will try to match the request, if this
@@ -83,7 +83,7 @@ namespace Mongoose
              *
              * @return the created response
              */
-            virtual Response *createResponse(Request &request);
+            virtual StreamResponse *createResponse(Request &request);
     };
 };
 
