@@ -23,9 +23,12 @@ if (CPP_BINDING)
     set (SOURCES
         ${SOURCES}
         ${MONGOOSE_CPP}/Controller.cpp
-        ${MONGOOSE_CPP}/Server.cpp
         ${MONGOOSE_CPP}/Request.cpp
         ${MONGOOSE_CPP}/Response.cpp
+        ${MONGOOSE_CPP}/Server.cpp
+        ${MONGOOSE_CPP}/Session.cpp
+        ${MONGOOSE_CPP}/Sessions.cpp
+        ${MONGOOSE_CPP}/WebController.cpp
         )
 
     include_directories ("${MONGOOSE_CPP}")

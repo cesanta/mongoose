@@ -1,24 +1,37 @@
 #include <stdlib.h>
 #include <mongoose/Server.h>
-#include <mongoose/Controller.h>
+#include <mongoose/WebController.h>
 
-class MyController : public Mongoose::Controller
+using namespace std;
+using namespace Mongoose;
+
+class MyController : public WebController
 {
     public: 
-        void hello(Mongoose::Request &request, Mongoose::Response &response)
+        void hello(Request &request, Response &response)
         {
-            response << "Hello world!" << endl;
+            response << "Hello " << request.get("name", "anonymous you") << endl;
         }
 
-        void preProcess(Mongoose::Request &request, Mongoose::Response &response)
+        void form(Request &request, Response &response)
         {
-            response.setHeader("Content-type", "text/html");
+            response << "<form method=\"POST\">" << endl;
+            response << "<input type=\"text\" name=\"test\" /><br >" << endl;
+            response << "<input type=\"submit\" value=\"Envoyer\" />" << endl;
+            response << "</form>" << endl;
+        }
+
+        void formPost(Request &request, Response &response)
+        {
+            response << "Test=" << request.get("test", "(unknown)");
         }
  
-        Mongoose::Response *process(Mongoose::Request &request)
+        Response *process(Request &request)
         {
-            Mongoose::Response *response = NULL;
+            Response *response = NULL;
 
+            MG_GET("/form", form);
+            MG_POST("/form", formPost);
             MG_GET("/hello", hello);
 
             return response;
@@ -28,7 +41,7 @@ class MyController : public Mongoose::Controller
 int main()
 {
     MyController myController;
-    Mongoose::Server server(8080);
+    Server server(8080);
     server.registerController(&myController);
 
     server.start();

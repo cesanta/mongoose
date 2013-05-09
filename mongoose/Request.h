@@ -5,22 +5,29 @@
 #include <sstream>
 #include <mongoose.h>
 #include "Response.h"
+#include "Container.h"
 
 using namespace std;
 
 namespace Mongoose
 {
-    class Request
+    class Request : public Container
     {
         public:
             Request(struct mg_connection *connection);
 
             void writeResponse(Response *response);
 
+            bool hasValue(string key);
+            string get(string key, string fallback = "");
+
             string getUrl();
             string getMethod();
+    
+            bool readVariable(const char *data, string key, string &output);
 
         protected:
+            string data;
             string method;
             string url;
             struct mg_connection *connection;
