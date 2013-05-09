@@ -8,9 +8,28 @@ option (EXAMPLES
 option (WESOCKET
     "Enables websocket" ON)
 
+option (CPP_BINDING
+    "Enables C++ binding" ON)
+
 set (SOURCES
     mongoose.c
     )
+
+set (MONGOOSE_CPP "${PROJECT_SOURCE_DIR}/mongoose")
+
+include_directories ("${PROJECT_SOURCE_DIR}")
+
+if (CPP_BINDING)
+    set (SOURCES
+        ${SOURCES}
+        ${MONGOOSE_CPP}/Controller.cpp
+        ${MONGOOSE_CPP}/Server.cpp
+        ${MONGOOSE_CPP}/Request.cpp
+        ${MONGOOSE_CPP}/Response.cpp
+        )
+
+    include_directories ("${MONGOOSE_CPP}")
+endif (CPP_BINDING)
 
 if (WEBSOCKET)
     add_definitions("-DUSE_WEBSOCKET")
@@ -32,8 +51,6 @@ target_link_libraries (_mongoose ${EXTRA_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 add_executable (main main.c)
 target_link_libraries (main _mongoose)
 
-include_directories ("${PROJECT_SOURCE_DIR}")
-
 # Compiling tests
 if (EXAMPLES)
     add_executable (hello examples/hello.c)
@@ -47,4 +64,7 @@ if (EXAMPLES)
     
     add_executable (websocket examples/websocket.c)
     target_link_libraries (websocket _mongoose)
+    
+    add_executable (cpp examples/main.cpp)
+    target_link_libraries (cpp  _mongoose)
 endif (EXAMPLES)
