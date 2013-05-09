@@ -25,6 +25,20 @@ class MyController : public WebController
         {
             response << "Test=" << request.get("test", "(unknown)");
         }
+
+        void session(Request &request, Response &response)
+        {
+            Session &session = getSession(request, response);
+
+            if (session.hasValue("try")) {
+                response << "Session value: " << session.get("try");
+            } else {
+                ostringstream val;
+                val << time(NULL);
+                session.setValue("try", val.str());
+                response << "Session value set to: " << session.get("try");
+            }
+        }
  
         Response *process(Request &request)
         {
@@ -33,6 +47,7 @@ class MyController : public WebController
             MG_GET("/form", form);
             MG_POST("/form", formPost);
             MG_GET("/hello", hello);
+            MG_GET("/session", session);
 
             return response;
         }
@@ -40,6 +55,8 @@ class MyController : public WebController
 
 int main()
 {
+    srand(time(NULL));
+
     MyController myController;
     Server server(8080);
     server.registerController(&myController);

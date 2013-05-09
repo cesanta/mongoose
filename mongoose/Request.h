@@ -21,6 +21,9 @@ namespace Mongoose
             bool hasValue(string key);
             string get(string key, string fallback = "");
 
+            bool hasCookie(string key);
+            string getCookie(string key, string fallback = "");
+
             string getUrl();
             string getMethod();
     

@@ -1,5 +1,6 @@
 #include <string.h>
 #include <iostream>
+#include <mongoose.h>
 #include "Request.h"
 
 using namespace std;
@@ -76,12 +77,13 @@ namespace Mongoose
 
             if (ret == -2) {
                 size *= 2;
-                delete buffer;
+                delete[] buffer;
                 buffer = new char[size];
             }
         } while (ret == -2);
 
         output = string(buffer);
+        delete[] buffer;
 
         return true;
     }
@@ -104,5 +106,63 @@ namespace Mongoose
         }
 
         return fallback;
+    }
+            
+    bool Request::hasCookie(string key)
+    {
+        int i;
+        char dummy[10];
+
+        for (i=0; i<request->num_headers; i++) {
+            struct mg_request_info::mg_header *header = &request->http_headers[i];
+            
+            if (strcmp(header->name, "Cookie") == 0) {
+                if (mg_get_cookie(header->value, key.c_str(), dummy, sizeof(dummy)) != -1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    string Request::getCookie(string key, string fallback)
+    {
+        string output;
+        int i;
+        int size = 1024;
+        int ret;
+        char *buffer = new char[size];
+        char dummy[10];
+        const char *place = NULL;
+        
+        for (i=0; i<request->num_headers; i++) {
+            struct mg_request_info::mg_header *header = &request->http_headers[i];
+            
+            if (strcmp(header->name, "Cookie") == 0) {
+                if (mg_get_cookie(header->value, key.c_str(), dummy, sizeof(dummy)) != -1) {
+                    place = header->value;
+                }
+            }
+        }
+
+        if (place == NULL) {
+            return fallback;
+        }
+
+        do {
+            ret = mg_get_cookie(place, key.c_str(), buffer, size);
+
+            if (ret == -2) {
+                size *= 2;
+                delete[] buffer;
+                buffer = new char[size];
+            }
+        } while (ret == -2);
+
+        output = string(buffer);
+        delete[] buffer;
+
+        return output;
     }
 };

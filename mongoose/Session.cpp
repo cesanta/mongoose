@@ -1,3 +1,4 @@
+#include <time.h>
 #include <iostream>
 #include "Session.h"
 
@@ -5,6 +6,16 @@ using namespace std;
 
 namespace Mongoose
 {
+    Session::Session()
+    {
+        ping();
+    }
+
+    void Session::ping()
+    {
+        date = time(NULL);
+    }
+
     void Session::setValue(string key, string value)
     {
         values[key] = value;
@@ -22,5 +33,10 @@ namespace Mongoose
         } else {
             return fallback;
         }
+    }
+
+    int Session::getAge()
+    {
+        return time(NULL)-date;
     }
 };
