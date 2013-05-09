@@ -41,7 +41,7 @@ namespace Mongoose
         mg_write(connection, data.c_str(), data.size());
     }
 
-    bool Request::hasValue(string key)
+    bool Request::hasVariable(string key)
     {
         const char *dataField;
         char dummy[10];

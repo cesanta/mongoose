@@ -26,10 +26,7 @@ namespace Mongoose
                 newCookie << charset[rand()%CHARSET_SIZE];
             }
 
-            ostringstream definition;
-            definition << key << "=" << newCookie.str() << "; path=/";
-
-            response.setHeader("Set-cookie", definition.str());
+            response.setCookie(key, newCookie.str());
 
             return newCookie.str();
         }

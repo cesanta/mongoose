@@ -13,12 +13,23 @@ namespace Mongoose
 
     void Session::ping()
     {
+        mutex.lock();
         date = time(NULL);
+        mutex.unlock();
     }
 
     void Session::setValue(string key, string value)
     {
+        mutex.lock();
         values[key] = value;
+        mutex.unlock();
+    }
+
+    void Session::unsetValue(string key)
+    {
+        mutex.lock();
+        values.erase(key);
+        mutex.unlock();
     }
 
     bool Session::hasValue(string key)
@@ -28,9 +39,14 @@ namespace Mongoose
 
     string Session::get(string key, string fallback)
     {
+        mutex.lock();
         if (hasValue(key)) {
-            return values[key];
+            string value = values[value];
+            mutex.unlock();
+
+            return value;
         } else {
+            mutex.unlock();
             return fallback;
         }
     }

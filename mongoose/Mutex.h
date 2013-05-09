@@ -3,16 +3,25 @@
 
 #include <pthread.h>
 
+/**
+ * A mutex allow thread-safe operations
+ */
 namespace Mongoose
 {
-    class Condition;
-
     class Mutex
     {
         public:
             Mutex();
             virtual ~Mutex();
+
+            /**
+             * Locks the mutex
+             */
             virtual void lock();
+
+            /**
+             * Unlock the mutex
+             */
             virtual void unlock();
 
         protected:
