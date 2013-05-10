@@ -1377,13 +1377,17 @@ static void set_close_on_exec(int fd) {
 int mg_start_thread(mg_thread_func_t func, void *param) {
   pthread_t thread_id;
   pthread_attr_t attr;
+  int result;
 
   (void) pthread_attr_init(&attr);
   (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
   // TODO(lsm): figure out why mongoose dies on Linux if next line is enabled
   // (void) pthread_attr_setstacksize(&attr, sizeof(struct mg_connection) * 5);
 
-  return pthread_create(&thread_id, &attr, func, param);
+  result = pthread_create(&thread_id, &attr, func, param);
+  pthread_attr_destroy(&attr);
+
+  return result;
 }
 
 #ifndef NO_CGI
@@ -2630,13 +2634,22 @@ struct dir_scan_data {
   int arr_size;
 };
 
+// Behaves like realloc(), but frees original pointer on failure
+static void *realloc2(void *ptr, size_t size) {
+  void *new_ptr = realloc(ptr, size);
+  if (new_ptr == NULL) {
+    free(ptr);
+  }
+  return new_ptr;
+}
+
 static void dir_scan_callback(struct de *de, void *data) {
   struct dir_scan_data *dsd = (struct dir_scan_data *) data;
 
   if (dsd->entries == NULL || dsd->num_entries >= dsd->arr_size) {
     dsd->arr_size *= 2;
-    dsd->entries = (struct de *) realloc(dsd->entries, dsd->arr_size *
-                                         sizeof(dsd->entries[0]));
+    dsd->entries = (struct de *) realloc2(dsd->entries, dsd->arr_size *
+                                          sizeof(dsd->entries[0]));
   }
   if (dsd->entries == NULL) {
     // TODO(lsm): propagate an error to the caller
@@ -3790,12 +3803,12 @@ static void send_websocket_handshake(struct mg_connection *conn) {
 
 static void read_websocket(struct mg_connection *conn) {
   unsigned char *buf = (unsigned char *) conn->buf + conn->request_len;
-  int n;
+  int n, stop = 0;
   size_t i, len, mask_len, data_len, header_len, body_len;
   char mem[4 * 1024], *data;
 
   assert(conn->content_len == 0);
-  for (;;) {
+  while (!stop) {
     header_len = 0;
     if ((body_len = conn->data_len - conn->request_len) >= 2) {
       len = buf[1] & 127;
@@ -3849,7 +3862,7 @@ static void read_websocket(struct mg_connection *conn) {
       if ((conn->ctx->callbacks.websocket_data != NULL &&
           !conn->ctx->callbacks.websocket_data(conn, buf[0], data, data_len)) ||
           (buf[0] & 0xf) == 8) {  // Opcode == 8, connection close
-        break;
+        stop = 1;
       }
 
       if (data != mem) {
@@ -3868,7 +3881,8 @@ static void read_websocket(struct mg_connection *conn) {
 }
 
 static void handle_websocket_request(struct mg_connection *conn) {
-  if (strcmp(mg_get_header(conn, "Sec-WebSocket-Version"), "13") != 0) {
+  const char *version = mg_get_header(conn, "Sec-WebSocket-Version");
+  if (version == NULL || strcmp(version, "13") != 0) {
     send_http_error(conn, 426, "Upgrade Required", "%s", "Upgrade Required");
   } else if (conn->ctx->callbacks.websocket_connect != NULL &&
              conn->ctx->callbacks.websocket_connect(conn) != 0) {
@@ -4552,12 +4566,13 @@ static int set_ports_option(struct mg_context *ctx) {
       success = 0;
     } else {
       set_close_on_exec(so.sock);
-      // TODO: handle realloc failure
-      ctx->listening_sockets = realloc(ctx->listening_sockets,
-                                       (ctx->num_listening_sockets + 1) *
-                                       sizeof(ctx->listening_sockets[0]));
-      ctx->listening_sockets[ctx->num_listening_sockets] = so;
-      ctx->num_listening_sockets++;
+      ctx->listening_sockets = realloc2(ctx->listening_sockets,
+                                        (ctx->num_listening_sockets + 1) *
+                                        sizeof(ctx->listening_sockets[0]));
+      if (ctx->listening_sockets != NULL) {
+        ctx->listening_sockets[ctx->num_listening_sockets] = so;
+        ctx->num_listening_sockets++;
+      }
     }
   }
 
@@ -5208,7 +5223,7 @@ static void *master_thread(void *thread_func_param) {
 #endif
 
   pfd = calloc(ctx->num_listening_sockets, sizeof(pfd[0]));
-  while (ctx->stop_flag == 0) {
+  while (pfd != NULL && ctx->stop_flag == 0) {
     for (i = 0; i < ctx->num_listening_sockets; i++) {
       pfd[i].fd = ctx->listening_sockets[i].sock;
       pfd[i].events = POLLIN;
