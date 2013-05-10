@@ -1377,13 +1377,16 @@ static void set_close_on_exec(int fd) {
 int mg_start_thread(mg_thread_func_t func, void *param) {
   pthread_t thread_id;
   pthread_attr_t attr;
+  int status;
 
   (void) pthread_attr_init(&attr);
   (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
   // TODO(lsm): figure out why mongoose dies on Linux if next line is enabled
   // (void) pthread_attr_setstacksize(&attr, sizeof(struct mg_connection) * 5);
 
-  return pthread_create(&thread_id, &attr, func, param);
+  status = pthread_create(&thread_id, &attr, func, param);
+  (void) pthread_attr_destroy(&attr);
+  return status;
 }
 
 #ifndef NO_CGI
@@ -2634,9 +2637,14 @@ static void dir_scan_callback(struct de *de, void *data) {
   struct dir_scan_data *dsd = (struct dir_scan_data *) data;
 
   if (dsd->entries == NULL || dsd->num_entries >= dsd->arr_size) {
+    struct de *check;
     dsd->arr_size *= 2;
-    dsd->entries = (struct de *) realloc(dsd->entries, dsd->arr_size *
-                                         sizeof(dsd->entries[0]));
+    check = (struct de *) realloc(dsd->entries, dsd->arr_size *
+                                  sizeof(dsd->entries[0]));
+    if (!check) {
+      free(dsd->entries); // don't leak if realloc fails
+    }
+    dsd->entries = check;
   }
   if (dsd->entries == NULL) {
     // TODO(lsm): propagate an error to the caller
@@ -2705,6 +2713,12 @@ static void send_file_data(struct mg_connection *conn, struct file *filep,
   char buf[MG_BUF_LEN];
   int to_read, num_read, num_written;
 
+  // len and filep->size are only used if they are positive, check offset
+  if (offset < 0 ) {
+    offset = 0;
+  } else if (offset > filep->size) {
+    offset = filep->size;
+  }
   if (len > 0 && filep->membuf != NULL && filep->size > 0) {
     if (len > filep->size - offset) {
       len = filep->size - offset;
@@ -3793,6 +3807,7 @@ static void read_websocket(struct mg_connection *conn) {
   int n;
   size_t i, len, mask_len, data_len, header_len, body_len;
   char mem[4 * 1024], *data;
+  int breaking_loop;
 
   assert(conn->content_len == 0);
   for (;;) {
@@ -3846,14 +3861,19 @@ static void read_websocket(struct mg_connection *conn) {
 
       // Exit the loop if callback signalled to exit,
       // or "connection close" opcode received.
+      breaking_loop = 0;
       if ((conn->ctx->callbacks.websocket_data != NULL &&
           !conn->ctx->callbacks.websocket_data(conn, buf[0], data, data_len)) ||
           (buf[0] & 0xf) == 8) {  // Opcode == 8, connection close
-        break;
+        // need to free data allocation before breaking the loop
+        breaking_loop = 1;
       }
 
       if (data != mem) {
         free(data);
+      }
+      if (breaking_loop) {
+        break;
       }
       // Not breaking the loop, process next websocket frame.
     } else {
@@ -3868,7 +3888,14 @@ static void read_websocket(struct mg_connection *conn) {
 }
 
 static void handle_websocket_request(struct mg_connection *conn) {
-  if (strcmp(mg_get_header(conn, "Sec-WebSocket-Version"), "13") != 0) {
+  char empty = '\0';
+  const char *header;
+  
+  header = mg_get_header(conn, "Sec-WebSocket-Version");
+  if (!header) {
+    header = &empty; // mg_get_header returned NULL
+  }
+  if (strcmp(header, "13") != 0) {
     send_http_error(conn, 426, "Upgrade Required", "%s", "Upgrade Required");
   } else if (conn->ctx->callbacks.websocket_connect != NULL &&
              conn->ctx->callbacks.websocket_connect(conn) != 0) {
@@ -4551,13 +4578,20 @@ static int set_ports_option(struct mg_context *ctx) {
       closesocket(so.sock);
       success = 0;
     } else {
+      void *check;
       set_close_on_exec(so.sock);
-      // TODO: handle realloc failure
-      ctx->listening_sockets = realloc(ctx->listening_sockets,
-                                       (ctx->num_listening_sockets + 1) *
-                                       sizeof(ctx->listening_sockets[0]));
-      ctx->listening_sockets[ctx->num_listening_sockets] = so;
-      ctx->num_listening_sockets++;
+      check = realloc(ctx->listening_sockets,
+                      (ctx->num_listening_sockets + 1) *
+                      sizeof(ctx->listening_sockets[0]));
+      if (check) {
+        ctx->listening_sockets = check;
+        ctx->listening_sockets[ctx->num_listening_sockets] = so;
+        ctx->num_listening_sockets++;
+      } else {
+        cry(fc(ctx), "Cannot record listening socket");
+        closesocket(so.sock);
+        success = 0;
+      }
     }
   }
 
@@ -5208,7 +5242,8 @@ static void *master_thread(void *thread_func_param) {
 #endif
 
   pfd = calloc(ctx->num_listening_sockets, sizeof(pfd[0]));
-  while (ctx->stop_flag == 0) {
+  assert(pfd);
+  while (pfd && ctx->stop_flag == 0) {
     for (i = 0; i < ctx->num_listening_sockets; i++) {
       pfd[i].fd = ctx->listening_sockets[i].sock;
       pfd[i].events = POLLIN;
@@ -5304,6 +5339,7 @@ struct mg_context *mg_start(const struct mg_callbacks *callbacks,
   struct mg_context *ctx;
   const char *name, *value, *default_value;
   int i;
+  int num_workers;
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
   WSADATA data;
@@ -5377,7 +5413,14 @@ struct mg_context *mg_start(const struct mg_callbacks *callbacks,
   mg_start_thread(master_thread, ctx);
 
   // Start worker threads
-  for (i = 0; i < atoi(ctx->config[NUM_THREADS]); i++) {
+  num_workers = atoi(ctx->config[NUM_THREADS]);
+  // cleanse value (if necessary)
+  if (num_workers < 1 ) {
+      num_workers = 1;
+  } else if (num_workers > 64) {
+      num_workers = 64;
+  }
+  for (i = 0; i < num_workers; i++) {
     if (mg_start_thread(worker_thread, ctx) != 0) {
       cry(fc(ctx), "Cannot start worker thread: %ld", (long) ERRNO);
     } else {
