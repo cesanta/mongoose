@@ -4576,6 +4576,7 @@ static int set_ports_option(struct mg_context *ctx) {
     } else if ((ptr = realloc(ctx->listening_sockets,
                               (ctx->num_listening_sockets + 1) *
                               sizeof(ctx->listening_sockets[0]))) == NULL) {
+      closesocket(so.sock);
       success = 0;
     } else {
       set_close_on_exec(so.sock);
