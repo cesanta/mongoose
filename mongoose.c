@@ -1945,6 +1945,7 @@ static const struct {
   {".asf", 4, "video/x-ms-asf"},
   {".avi", 4, "video/x-msvideo"},
   {".bmp", 4, "image/bmp"},
+  {".ttf", 4, "application/x-font-ttf"},
   {NULL,  0, NULL}
 };
 
