@@ -56,9 +56,10 @@ static pthread_rwlock_t rwlock = PTHREAD_RWLOCK_INITIALIZER;
 // Get session object for the connection. Caller must hold the lock.
 static struct session *get_session(const struct mg_connection *conn) {
   int i;
+  const char *cookie = mg_get_header(conn, "Cookie");
   char session_id[33];
   time_t now = time(NULL);
-  mg_get_cookie(conn, "session", session_id, sizeof(session_id));
+  mg_get_cookie(cookie, "session", session_id, sizeof(session_id));
   for (i = 0; i < MAX_SESSIONS; i++) {
     if (sessions[i].expire != 0 &&
         sessions[i].expire > now &&
