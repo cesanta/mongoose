@@ -4547,7 +4547,7 @@ static int set_ports_option(struct mg_context *ctx) {
   int off = 0;
 #endif
   struct vec vec;
-  struct socket so;
+  struct socket so, *ptr;
 
   while (success && (list = next_option(list, &vec, NULL)) != NULL) {
     if (!parse_port_string(&vec, &so)) {
@@ -4573,15 +4573,15 @@ static int set_ports_option(struct mg_context *ctx) {
           (int) vec.len, vec.ptr, strerror(ERRNO));
       closesocket(so.sock);
       success = 0;
+    } else if ((ptr = realloc(ctx->listening_sockets,
+                              (ctx->num_listening_sockets + 1) *
+                              sizeof(ctx->listening_sockets[0]))) == NULL) {
+      success = 0;
     } else {
       set_close_on_exec(so.sock);
-      ctx->listening_sockets = realloc2(ctx->listening_sockets,
-                                        (ctx->num_listening_sockets + 1) *
-                                        sizeof(ctx->listening_sockets[0]));
-      if (ctx->listening_sockets != NULL) {
-        ctx->listening_sockets[ctx->num_listening_sockets] = so;
-        ctx->num_listening_sockets++;
-      }
+      ctx->listening_sockets = ptr;
+      ctx->listening_sockets[ctx->num_listening_sockets] = so;
+      ctx->num_listening_sockets++;
     }
   }
 
