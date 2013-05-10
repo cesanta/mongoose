@@ -1509,6 +1509,26 @@ static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
   return conn->ctx->stop_flag ? -1 : nread;
 }
 
+static int pull_all(FILE *fp, struct mg_connection *conn, char *buf, int len) {
+  int n, nread = 0;
+
+  while (len > 0) {
+    n = pull(fp, conn, buf + nread, len);
+    if (n < 0) {
+      nread = n;  // Propagate the error
+      break;
+    } else if (n == 0) {
+      break;  // No more data to read
+    } else {
+      conn->consumed_content += n;
+      nread += n;
+      len -= n;
+    }
+  }
+
+  return nread;
+}
+
 int mg_read(struct mg_connection *conn, void *buf, size_t len) {
   int n, buffered_len, nread;
   const char *body;
@@ -1536,20 +1556,8 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
     }
 
     // We have returned all buffered data. Read new data from the remote socket.
-    while (len > 0) {
-      n = pull(NULL, conn, (char *) buf, (int) len);
-      if (n < 0) {
-        nread = n;  // Propagate the error
-        break;
-      } else if (n == 0) {
-        break;  // No more data to read
-      } else {
-        buf = (char *) buf + n;
-        conn->consumed_content += n;
-        nread += n;
-        len -= n;
-      }
-    }
+    n = pull_all(NULL, conn, (char *) buf, (int) len);
+    nread = n >= 0 ? nread + n : n;
   }
   return nread;
 }
@@ -3841,8 +3849,8 @@ static void read_websocket(struct mg_connection *conn) {
         len = body_len - header_len;
         memcpy(data, buf + header_len, len);
         // TODO: handle pull error
-        pull(NULL, conn, data + len, data_len - len);
-        conn->data_len = 0;
+        pull_all(NULL, conn, data + len, data_len - len);
+        conn->data_len = conn->request_len;
       } else {
         len = data_len + header_len;
         memcpy(data, buf + header_len, data_len);
