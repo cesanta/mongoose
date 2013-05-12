@@ -12,7 +12,7 @@ option (CPP_BINDING
     "Enables C++ binding" ON)
 
 option (HAS_JSONCPP
-    "Enables JsonCpp" ON)
+    "Enables JsonCpp" OFF)
 
 set (SOURCES
     mongoose.c
