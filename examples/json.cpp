@@ -24,6 +24,9 @@ class MyController : public JsonController
         {
             JsonResponse *response = NULL;
 
+            // Example of prefix, putting all the urls into "/api"
+            setPrefix("/api");
+
             // Hello demo
             MG_GET("/", hello);
             MG_GET("/hello", hello);

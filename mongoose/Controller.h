@@ -17,13 +17,13 @@ using namespace std;
  * GET method and its url is "/hello"
  */
 #define MG_GET(url, method) \
-    if (request.getMethod() == "GET" && request.getUrl() == url) { \
+    if (request.getMethod() == "GET" && request.getUrl() == prefix+url) { \
         response = createResponse(request); \
         method (request, *response); \
     } 
 
 #define MG_POST(url, method) \
-    if (request.getMethod() == "POST" && request.getUrl() == url) { \
+    if (request.getMethod() == "POST" && request.getUrl() == prefix+url) { \
         response = createResponse(request); \
         method (request, *response); \
     } 
@@ -84,6 +84,16 @@ namespace Mongoose
              * @return the created response
              */
             StreamResponse *createResponse(Request &request);
+
+            /**
+             * Sets the controller prefix, for instance "/api"
+             *
+             * @param string the prefix of all urls for this controller
+             */
+            void setPrefix(string prefix);
+
+        protected:
+            string prefix;
     };
 };
 

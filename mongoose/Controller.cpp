@@ -6,7 +6,7 @@ using namespace std;
 
 namespace Mongoose
 {
-    Controller::Controller()
+    Controller::Controller() : prefix("")
     {
     }
 
@@ -40,5 +40,10 @@ namespace Mongoose
         }
 
         return response;
+    }
+
+    void Controller::setPrefix(string prefix_)
+    {
+        prefix = prefix_;
     }
 };
