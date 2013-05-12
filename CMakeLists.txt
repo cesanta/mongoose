@@ -25,6 +25,7 @@ include_directories ("${PROJECT_SOURCE_DIR}")
 if (CPP_BINDING)
     set (SOURCES
         ${SOURCES}
+        ${MONGOOSE_CPP}/Utils.cpp
         ${MONGOOSE_CPP}/Controller.cpp
         ${MONGOOSE_CPP}/Mutex.cpp
         ${MONGOOSE_CPP}/Request.cpp

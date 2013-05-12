@@ -7,6 +7,7 @@
 #include "Sessions.h"
 #include "Mutex.h"
 #include "StreamResponse.h"
+#include "Utils.h"
 
 using namespace std;
 
@@ -15,7 +16,7 @@ using namespace std;
  */
 namespace Mongoose
 {
-    class WebController : public Controller
+    class WebController : public Controller, public Utils
     {
         public:
             /**
