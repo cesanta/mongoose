@@ -24,7 +24,7 @@ class MyController : public WebController
 
         void formPost(Request &request, StreamResponse &response)
         {
-            response << "Test=" << request.get("test", "(unknown)");
+            response << "Test=" << htmlEntities(request.get("test", "(unknown)"));
         }
 
         void session(Request &request, StreamResponse &response)
