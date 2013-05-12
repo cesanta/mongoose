@@ -14,7 +14,7 @@ namespace Mongoose
     {
     }
 
-    string Sessions::getId(Request &request, Response *response)
+    string Sessions::getId(Request &request, Response &response)
     {
         if (request.hasCookie(key)) {
             return request.getCookie(key);
@@ -26,13 +26,13 @@ namespace Mongoose
                 newCookie << charset[rand()%CHARSET_SIZE];
             }
 
-            response->setCookie(key, newCookie.str());
+            response.setCookie(key, newCookie.str());
 
             return newCookie.str();
         }
     }
 
-    Session &Sessions::get(Request &request, Response *response)
+    Session &Sessions::get(Request &request, Response &response)
     { 
         string id = getId(request, response);
         Session *session;

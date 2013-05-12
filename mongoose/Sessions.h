@@ -27,7 +27,7 @@ namespace Mongoose
              *
              * @return string the session ID for this request
              */
-            string getId(Request &request, Response *response);
+            string getId(Request &request, Response &response);
 
             /**
              * Gets the session for a certain request
@@ -37,7 +37,7 @@ namespace Mongoose
              *
              * @return Session the session corresponding
              */
-            Session &get(Request &request, Response *response);
+            Session &get(Request &request, Response &response);
 
             /**
              * Remove all the sessions older than age

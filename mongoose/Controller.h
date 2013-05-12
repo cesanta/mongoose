@@ -19,13 +19,13 @@ using namespace std;
 #define MG_GET(url, method) \
     if (request.getMethod() == "GET" && request.getUrl() == url) { \
         response = createResponse(request); \
-        method (request, response); \
+        method (request, *response); \
     } 
 
 #define MG_POST(url, method) \
     if (request.getMethod() == "POST" && request.getUrl() == url) { \
         response = createResponse(request); \
-        method (request, response); \
+        method (request, *response); \
     } 
 
 /**
@@ -83,7 +83,7 @@ namespace Mongoose
              *
              * @return the created response
              */
-            virtual StreamResponse *createResponse(Request &request);
+            StreamResponse *createResponse(Request &request);
     };
 };
 

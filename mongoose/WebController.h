@@ -32,7 +32,7 @@ namespace Mongoose
              *
              * @return Session the session for the request/response
              */
-            Session &getSession(Request &request, Response *response);
+            Session &getSession(Request &request, Response &response);
 
             /**
              * Pre process the request, this will set the content type to text/html
@@ -41,7 +41,7 @@ namespace Mongoose
              * @param Request the request
              * @param Response the response
              */
-            void preProcess(Request &request, Response *response);
+            void preProcess(Request &request, Response &response);
 
         protected:
             Sessions sessions;

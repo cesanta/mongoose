@@ -8,7 +8,7 @@ namespace Mongoose
     {
     }
 
-    void WebController::preProcess(Request &request, Response *response)
+    void WebController::preProcess(Request &request, Response &response)
     {
         mutex.lock();
         counter++;
@@ -21,10 +21,10 @@ namespace Mongoose
 
         Session session = sessions.get(request, response);
         session.ping();
-        response->setHeader("Content-type", "text/html");
+        response.setHeader("Content-type", "text/html");
     }
 
-    Session &WebController::getSession(Request &request, Response *response)
+    Session &WebController::getSession(Request &request, Response &response)
     {
         return sessions.get(request, response);
     }

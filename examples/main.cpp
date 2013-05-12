@@ -9,42 +9,42 @@ using namespace Mongoose;
 class MyController : public WebController
 {
     public: 
-        void hello(Request &request, StreamResponse *response)
+        void hello(Request &request, StreamResponse &response)
         {
-            *response << "Hello " << request.get("name", "anonymous you") << endl;
+            response << "Hello " << request.get("name", "anonymous you") << endl;
         }
 
-        void form(Request &request, StreamResponse *response)
+        void form(Request &request, StreamResponse &response)
         {
-            *response << "<form method=\"POST\">" << endl;
-            *response << "<input type=\"text\" name=\"test\" /><br >" << endl;
-            *response << "<input type=\"submit\" value=\"Envoyer\" />" << endl;
-            *response << "</form>" << endl;
+            response << "<form method=\"POST\">" << endl;
+            response << "<input type=\"text\" name=\"test\" /><br >" << endl;
+            response << "<input type=\"submit\" value=\"Envoyer\" />" << endl;
+            response << "</form>" << endl;
         }
 
-        void formPost(Request &request, StreamResponse *response)
+        void formPost(Request &request, StreamResponse &response)
         {
-            *response << "Test=" << request.get("test", "(unknown)");
+            response << "Test=" << request.get("test", "(unknown)");
         }
 
-        void session(Request &request, StreamResponse *response)
+        void session(Request &request, StreamResponse &response)
         {
             Session &session = getSession(request, response);
 
             if (session.hasValue("try")) {
-                *response << "Session value: " << session.get("try");
+                response << "Session value: " << session.get("try");
             } else {
                 ostringstream val;
                 val << time(NULL);
                 session.setValue("try", val.str());
-                *response << "Session value set to: " << session.get("try");
+                response << "Session value set to: " << session.get("try");
             }
         }
 
-        void forbid(Request &request, StreamResponse *response)
+        void forbid(Request &request, StreamResponse &response)
         {
-            response->setCode(HTTP_FORBIDDEN);
-            *response << "403 forbidden demo";
+            response.setCode(HTTP_FORBIDDEN);
+            response << "403 forbidden demo";
         }
  
         Response *process(Request &request)
