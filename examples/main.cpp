@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <mongoose/Server.h>
+#include <mongoose/RequestHandler.h>
 #include <mongoose/WebController.h>
 
 using namespace std;
@@ -46,26 +47,22 @@ class MyController : public WebController
             response.setCode(HTTP_FORBIDDEN);
             response << "403 forbidden demo";
         }
- 
-        Response *process(Request &request)
-        {
-            StreamResponse *response = NULL;
 
+        void setup()
+        {
             // Hello demo
-            MG_GET("/", hello);
-            MG_GET("/hello", hello);
+            addRoute("GET", "/hello", MyController, hello);
+            addRoute("GET", "/", MyController, hello);
 
             // Form demo
-            MG_GET("/form", form);
-            MG_POST("/form", formPost);
+            addRoute("GET", "/form", MyController, form);
+            addRoute("POST", "/form", MyController, formPost);
 
             // Session demo
-            MG_GET("/session", session);
+            addRoute("GET", "/session", MyController, session);
 
             // 403 demo
-            MG_GET("/403", forbid);
-
-            return response;
+            addRoute("GET", "/403", MyController, forbid);
         }
 };
 
@@ -89,8 +86,10 @@ int main()
     Server server(8080);
     server.registerController(&myController);
     server.setOption("enable_directory_listing", "false");
-
     server.start();
+    
+    cout << "Server started, routes:" << endl;
+    myController.dumpRoutes();
 
     while (running) {
         sleep(1);

@@ -1,32 +1,19 @@
 #ifndef _MONGOOSE_CONTROLLER_H
 #define _MONGOOSE_CONTROLLER_H
 
+#include <map>
 #include <iostream>
 #include "Request.h"
+#include "RequestHandler.h"
 #include "StreamResponse.h"
 
 using namespace std;
 
-/**
- * Those macros can be used to do some tests ont he request and route it to
- * the appropriate controller method, for instance, put in your process :
- *
- * MG_GET("/hello", hello)
- *
- * Will call hello() with request and a new response if the request is using the
- * GET method and its url is "/hello"
- */
-#define MG_GET(url, method) \
-    if (request.getMethod() == "GET" && request.getUrl() == prefix+url) { \
-        response = createResponse(request); \
-        method (request, *response); \
-    } 
+#define addRoute(httpMethod, url, controllerType, method) \
+    registerRoute(httpMethod, url, new RequestHandler<controllerType, StreamResponse>(this, &controllerType::method ));
 
-#define MG_POST(url, method) \
-    if (request.getMethod() == "POST" && request.getUrl() == prefix+url) { \
-        response = createResponse(request); \
-        method (request, *response); \
-    } 
+#define addRouteResponse(httpMethod, url, controllerType, method, responseType) \
+    registerRoute(httpMethod, url, new RequestHandler<controllerType, responseType>(this, &controllerType::method ));
 
 /**
  * A controller is a module that respond to requests
@@ -40,6 +27,7 @@ namespace Mongoose
     {
         public:
             Controller();
+            virtual ~Controller();
 
             /**
              * Called before a request is processed
@@ -79,21 +67,33 @@ namespace Mongoose
             virtual Response *handleRequest(Request &request);
 
             /**
-             * Creates a new response and pre process it
-             *
-             * @return the created response
-             */
-            StreamResponse *createResponse(Request &request);
-
-            /**
              * Sets the controller prefix, for instance "/api"
              *
              * @param string the prefix of all urls for this controller
              */
             void setPrefix(string prefix);
 
+            /**
+             * Registers a route to the controller
+             *
+             * @param string the route path
+             * @param RequestHandlerBase the request handler for this route
+             */
+            virtual void registerRoute(string httpMethod, string route, RequestHandlerBase *handler);
+
+            /**
+             * Initializes the route and settings
+             */
+            virtual void setup();
+
+            /**
+             * Dump all routes
+             */
+            void dumpRoutes();
+
         protected:
             string prefix;
+            map<string, RequestHandlerBase*> routes;
     };
 };
 

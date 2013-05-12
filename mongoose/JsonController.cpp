@@ -15,13 +15,5 @@ namespace Mongoose
         // RFC 4627
         // Json content type is application/json
         response.setHeader("Content-type", "application/json");
-    }
-            
-    JsonResponse *JsonController::createResponse(Request &request)
-    {
-        JsonResponse *response = new JsonResponse();
-        preProcess(request, *response);
-
-        return response;
-    }
+    }            
 };

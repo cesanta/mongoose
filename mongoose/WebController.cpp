@@ -4,7 +4,7 @@
 namespace Mongoose
 {        
     WebController::WebController(int gcDivisor_) :
-        gcDivisor(gcDivisor_), counter(0)
+        gcDivisor(gcDivisor_), counter(0), Controller()
     {
     }
 

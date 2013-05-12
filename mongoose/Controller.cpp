@@ -10,9 +10,31 @@ namespace Mongoose
     {
     }
 
+    void Controller::setup()
+    {
+    }
+    
+    Controller::~Controller()
+    {
+        map<string, RequestHandlerBase *>::iterator it;
+
+        for (it=routes.begin(); it!=routes.end(); it++) {
+            delete (*it).second;
+        }
+
+        routes.clear();
+    }
+
     Response *Controller::process(Request &request)
     {
-        return NULL;
+        Response *response = NULL;
+        string key = request.getMethod() + ":" + request.getUrl();
+
+        if (routes.find(key) != routes.end()) {
+            response = routes[key]->process(request);
+        }
+
+        return response;
     }
             
     void Controller::preProcess(Request &request, Response *response)
@@ -21,14 +43,6 @@ namespace Mongoose
             
     void Controller::postProcess(Request &request, Response *response)
     {
-    }
-            
-    StreamResponse *Controller::createResponse(Request &request)
-    {
-        StreamResponse *response = new StreamResponse();
-        preProcess(request, response);
-
-        return response;
     }
 
     Response *Controller::handleRequest(Request &request)
@@ -45,5 +59,21 @@ namespace Mongoose
     void Controller::setPrefix(string prefix_)
     {
         prefix = prefix_;
+    }
+            
+    void Controller::registerRoute(string httpMethod, string route, RequestHandlerBase *handler)
+    {
+        string key = httpMethod + ":" + prefix + route;
+        routes[key] = handler;
+    }
+
+    void Controller::dumpRoutes()
+    {
+        map<string, RequestHandlerBase *>::iterator it;
+
+        for (it=routes.begin(); it!=routes.end(); it++) {
+            cout << (*it).first << endl;
+        }
+
     }
 };

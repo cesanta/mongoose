@@ -70,6 +70,7 @@ namespace Mongoose
 
     void Server::registerController(Controller *controller)
     {
+        controller->setup();
         controllers.push_back(controller);
     }
 

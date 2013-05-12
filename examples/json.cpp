@@ -20,18 +20,14 @@ class MyController : public JsonController
             response["timestamp"] = (int)time(NULL);
         }
  
-        Response *process(Request &request)
+        void setup()
         {
-            JsonResponse *response = NULL;
-
             // Example of prefix, putting all the urls into "/api"
             setPrefix("/api");
 
             // Hello demo
-            MG_GET("/", hello);
-            MG_GET("/hello", hello);
-
-            return response;
+            addRouteResponse("GET", "/", MyController, hello, JsonResponse);
+            addRouteResponse("GET", "/hello", MyController, hello, JsonResponse);
         }
 };
 
@@ -55,8 +51,10 @@ int main()
     Server server(8080);
     server.registerController(&myController);
     server.setOption("enable_directory_listing", "false");
-
     server.start();
+
+    cout << "Server started, routes:" << endl;
+    myController.dumpRoutes();
 
     while (running) {
         sleep(1);

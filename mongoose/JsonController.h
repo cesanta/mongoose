@@ -30,13 +30,6 @@ namespace Mongoose
              * @param Response the response
              */
             void preProcess(Request &request, Response &response);
-
-            /**
-             * Creates a new response and pre process it
-             *
-             * @return the created response
-             */
-            virtual JsonResponse *createResponse(Request &request);
     };
 };
 
