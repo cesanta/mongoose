@@ -2727,6 +2727,9 @@ static void send_file_data(struct mg_connection *conn, struct file *filep,
   char buf[MG_BUF_LEN];
   int to_read, num_read, num_written;
 
+  // Sanity check the offset
+  offset = offset < 0 ? 0 : offset > filep->size ? filep->size : offset;
+
   if (len > 0 && filep->membuf != NULL && filep->size > 0) {
     if (len > filep->size - offset) {
       len = filep->size - offset;
