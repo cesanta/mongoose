@@ -86,6 +86,9 @@ if (EXAMPLES)
     target_link_libraries (websocket _mongoose)
 
     if (CPP_BINDING)
+        add_executable (helloworld examples/helloworld.cpp)
+        target_link_libraries (helloworld  _mongoose)
+
         add_executable (cpp examples/main.cpp)
         target_link_libraries (cpp  _mongoose)
 

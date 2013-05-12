@@ -13,6 +13,52 @@ API.
 - Session system to store data about an user using cookies and garbage collect cleaning
 - Simple access to GET & POST requests
 
+# Hello world
+
+Here is an example, this will serve the static files from `www/` directory (which
+is the default setting) and the `/hello` page will be answered by a controller which
+will display the GET `name` variable, for instance `/hello?name=bob` will display
+the string "Hello bob". Default parameter value, if not provided, will be
+"... waht's your name ?". This is the `helloworld` program build in the examples:
+
+```c++
+#include <stdlib.h>
+#include <signal.h>
+#include <mongoose/Server.h>
+#include <mongoose/WebController.h>
+
+using namespace std;
+using namespace Mongoose;
+
+class MyController : public WebController
+{
+    public: 
+        void hello(Request &request, StreamResponse &response)
+        {
+            response << "Hello " << request.get("name", "... what's your name ?") << endl;
+        }
+
+        void setup()
+        {
+            addRoute("GET", "/hello", MyController, hello);
+        }
+};
+
+
+int main()
+{
+    MyController myController;
+    Server server(8080);
+    server.registerController(&myController);
+
+    server.start(); 
+
+    while (1) {
+        sleep(10);
+    }
+}
+```
+
 # Building examples
 
 You can build examples using CMake:

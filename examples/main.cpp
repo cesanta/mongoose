@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <mongoose/Server.h>
-#include <mongoose/RequestHandler.h>
 #include <mongoose/WebController.h>
 
 using namespace std;
@@ -12,7 +11,7 @@ class MyController : public WebController
     public: 
         void hello(Request &request, StreamResponse &response)
         {
-            response << "Hello " << request.get("name", "anonymous you") << endl;
+            response << "Hello " << request.get("name", "... what's your name ?") << endl;
         }
 
         void form(Request &request, StreamResponse &response)
