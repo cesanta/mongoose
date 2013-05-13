@@ -6,6 +6,10 @@
 using namespace std;
 using namespace Mongoose;
 
+/**
+ * The handlers below are written in C to do the binding of the C mongoose with
+ * the C++ API
+ */
 static int begin_request_handler(struct mg_connection *conn)
 {
     const struct mg_request_info *request_info = mg_get_request_info(conn);
@@ -15,6 +19,28 @@ static int begin_request_handler(struct mg_connection *conn)
         return server->_beginRequest(conn);
     }
 }
+
+#ifdef USE_WEBSOCKET
+static void websocket_ready_handler(struct mg_connection *conn)
+{
+    const struct mg_request_info *request_info = mg_get_request_info(conn);
+    Server *server = (Server *)request_info->user_data;
+
+    if (server != NULL) {
+        server->_webSocketReady(conn);
+    }
+}
+
+static int websocket_data_handler(struct mg_connection *conn, int flags, char *data, size_t data_len)
+{
+    const struct mg_request_info *request_info = mg_get_request_info(conn);
+    Server *server = (Server *)request_info->user_data;
+
+    if (server != NULL) {
+        return server->_webSocketData(conn, flags, data, data_len);
+    }
+}
+#endif
 
 namespace Mongoose
 {
@@ -27,6 +53,24 @@ namespace Mongoose
         portOss << port;
         optionsMap["listening_ports"] = portOss.str();
         optionsMap["document_root"] = documentRoot;
+    }
+
+    Server::~Server()
+    {
+#ifdef USE_WEBSOCKET
+        map<struct mg_connection *, WebSocket *>::iterator it;
+
+        for (it=websockets.begin(); it!=websockets.end(); it++) {
+            WebSocket *websocket = (*it).second;
+
+            if (websocket != NULL) {
+                websocket->close();
+                delete websocket;
+            }
+        }
+#endif
+
+        stop();
     }
 
     void Server::start()
@@ -47,6 +91,10 @@ namespace Mongoose
             options[2*pos] = NULL;
 
             callbacks.begin_request = begin_request_handler;
+#ifdef USE_WEBSOCKET
+            callbacks.websocket_ready = websocket_ready_handler;
+            callbacks.websocket_data = websocket_data_handler;
+#endif
 
             mg_start(&callbacks, (void *)this, options);
         } else {
@@ -69,9 +117,50 @@ namespace Mongoose
 
     void Server::registerController(Controller *controller)
     {
+        controller->setServer(this);
         controller->setup();
         controllers.push_back(controller);
     }
+
+#ifdef USE_WEBSOCKET
+    void Server::_webSocketReady(struct mg_connection *conn)
+    {
+        if (websockets.find(conn) != websockets.end()) {
+            websockets[conn]->close();
+            delete websockets[conn];
+        }
+
+        WebSocket *websocket = new WebSocket(conn);
+        websockets[conn] = websocket;
+
+        vector<Controller *>::iterator it;
+        for (it=controllers.begin(); it!=controllers.end(); it++) {
+            (*it)->webSocketReady(websocket);
+        }
+    }
+
+    int Server::_webSocketData(struct mg_connection *conn, int flags, char *data, size_t data_len)
+    {
+        if (websockets.find(conn) != websockets.end()) {
+            WebSocket *websocket = websockets[conn];
+
+            string contents(data, data_len);
+            websocket->appendData(contents);
+
+            if (flags & WEBSOCKET_FIN) {
+                string fullPacket = websocket->flushData();
+                vector<Controller *>::iterator it;
+                for (it=controllers.begin(); it!=controllers.end(); it++) {
+                    (*it)->webSocketData(websocket, fullPacket);
+                }
+            }
+
+            return websocket->isClosed() ? 0 : -1;
+        } else {
+            return 0;
+        }
+    }
+#endif
 
     int Server::_beginRequest(struct mg_connection *conn)
     {
@@ -102,11 +191,6 @@ namespace Mongoose
         }
 
         return NULL;
-    }
-
-    Server::~Server()
-    {
-        stop();
     }
 
     void Server::setOption(string key, string value)

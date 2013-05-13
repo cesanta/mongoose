@@ -6,6 +6,7 @@
 #include "Request.h"
 #include "RequestHandler.h"
 #include "StreamResponse.h"
+#include "WebSocket.h"
 
 using namespace std;
 
@@ -23,11 +24,20 @@ using namespace std;
  */
 namespace Mongoose
 {
+    class Server;
+
     class Controller
     {
         public:
             Controller();
             virtual ~Controller();
+
+            /**
+             * Sets the reference to the server hosting this controller
+             *
+             * @param Server the hosting server
+             */
+            virtual void setServer(Server *server);
 
             /**
              * Called before a request is processed
@@ -73,6 +83,23 @@ namespace Mongoose
              */
             void setPrefix(string prefix);
 
+#ifdef USE_WEBSOCKET
+            /**
+             * Called when a new websocket connection is ready
+             *
+             * @param WebSocket the instance of the connection 
+             */
+            virtual void webSocketReady(WebSocket *websocket);
+
+            /**
+             * Called when data arrive in a websocket connection
+             *
+             * @param WebSocket the instance of the connection 
+             * @param string the data arriving
+             */
+            virtual void webSocketData(WebSocket *websocket, string data);
+#endif
+
             /**
              * Registers a route to the controller
              *
@@ -92,6 +119,7 @@ namespace Mongoose
             void dumpRoutes();
 
         protected:
+            Server *server;
             string prefix;
             map<string, RequestHandlerBase*> routes;
     };

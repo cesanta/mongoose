@@ -5,7 +5,7 @@ find_package (Threads)
 option (EXAMPLES
     "Compile examples" OFF)
 
-option (WESOCKET
+option (WEBSOCKET
     "Enables websocket" ON)
 
 option (CPP_BINDING
@@ -44,6 +44,13 @@ if (CPP_BINDING)
             ${MONGOOSE_CPP}/JsonController.cpp
             )
     endif (HAS_JSONCPP)
+
+    if (WEBSOCKET)
+        set (SOURCES
+            ${SOURCES}
+            ${MONGOOSE_CPP}/WebSocket.cpp
+            )
+    endif (WEBSOCKET)
 
     include_directories ("${MONGOOSE_CPP}")
 endif (CPP_BINDING)
@@ -97,5 +104,10 @@ if (EXAMPLES)
             add_executable (json examples/json.cpp)
             target_link_libraries (json  _mongoose)
         endif (HAS_JSONCPP)
+
+        if (WEBSOCKET)
+            add_executable (cpp_websocket examples/websocket.cpp)
+            target_link_libraries (cpp_websocket  _mongoose)
+        endif (WEBSOCKET)
     endif (CPP_BINDING)
 endif (EXAMPLES)

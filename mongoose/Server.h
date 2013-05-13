@@ -7,6 +7,9 @@
 #include "Request.h"
 #include "Response.h"
 #include "Controller.h"
+#ifdef USE_WEBSOCKET
+#include "WebSocket.h"
+#endif
 
 using namespace std;
 
@@ -51,6 +54,27 @@ namespace Mongoose
              */
             int _beginRequest(struct mg_connection *conn);
 
+#ifdef USE_WEBSOCKET
+            /**
+             * Handles a web socket connection
+             *
+             * @param struct mg_connection* the mongoose connection with the client
+             */
+            void _webSocketReady(struct mg_connection *conn);
+
+            /**
+             * Handles web sockets data
+             *
+             * @param struct mg_connection* the mongoose connection
+             * @param int flags the data flags
+             * @param char* the data
+             * @param size the data size
+             *
+             * @return int if we have to keep the connection opened
+             */
+            int _webSocketData(struct mg_connection *conn, int flags, char *data, size_t data_len);
+#endif
+
             /**
              * Process the request by controllers
              *
@@ -74,6 +98,10 @@ namespace Mongoose
             struct mg_callbacks callbacks;
             struct mg_context *ctx;
             const char **options;
+
+#ifdef USE_WEBSOCKET
+            map<struct mg_connection *, WebSocket*> websockets;
+#endif
 
             vector<Controller *> controllers;
     };

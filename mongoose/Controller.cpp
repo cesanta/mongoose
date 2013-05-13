@@ -6,13 +6,29 @@ using namespace std;
 
 namespace Mongoose
 {
-    Controller::Controller() : prefix("")
+    Controller::Controller() 
+        : prefix(""), server(NULL)
     {
     }
 
     void Controller::setup()
     {
     }
+
+    void Controller::setServer(Server *server_)
+    {
+        server = server_;
+    }
+
+#ifdef USE_WEBSOCKET
+    void Controller::webSocketReady(WebSocket *websocket)
+    {
+    }
+
+    void Controller::webSocketData(WebSocket *websocket, string data)
+    {
+    }
+#endif
     
     Controller::~Controller()
     {
