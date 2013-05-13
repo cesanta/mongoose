@@ -12,6 +12,7 @@ API.
 - Possibility of enabling JsonCPP to create a json compliant web application
 - Session system to store data about an user using cookies and garbage collect cleaning
 - Simple access to GET & POST requests
+- Websockets support
 
 # Hello world
 
@@ -75,6 +76,12 @@ HTTP response code
 
 You can also enable Json example using the `-DHAS_JSONCPP=ON` option when cmake'ing,
 this will build the `json` executable
+
+Websockets are also supported and will be compiled if the `-DWEBSOCKET=ON` option is
+set with cmake (which is the default). `websocket.cpp` will be compiled to the
+`cpp_websocket` executable which let you see an example. Note that references to the
+`WebSocket*` clients can be keeped to dispatch data to them, which can be really
+useful to push data to some clients.
 
 # Development
 
