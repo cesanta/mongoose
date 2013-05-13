@@ -18,34 +18,33 @@ static int begin_request_handler(struct mg_connection *conn)
 
 namespace Mongoose
 {
-    Server::Server(int port_, string documentRoot_) : 
-        ctx(NULL), port(port_), documentRoot(documentRoot_), options(NULL)
+    Server::Server(int port, string documentRoot) : 
+        ctx(NULL), options(NULL)
     {
         memset(&callbacks, 0, sizeof(callbacks));
+
+        ostringstream portOss;
+        portOss << port;
+        optionsMap["listening_ports"] = portOss.str();
+        optionsMap["document_root"] = documentRoot;
     }
 
     void Server::start()
     {
         if (ctx == NULL) {
-            char buffer[128];
-            sprintf(buffer, "%d", port);
-            size_t size = extraOptions.size()*2+4+1;
+            size_t size = optionsMap.size()*2+1;
 
             options = new const char*[size];
-            options[0] = "listening_ports";
-            options[1] = buffer;
-            options[2] = "document_root";
-            options[3] = documentRoot.c_str();
 
             int pos = 0;
             map<string, string>::iterator it;
-            for (it=extraOptions.begin(); it!=extraOptions.end(); it++) {
-                options[4+2*pos] = (*it).first.c_str();
-                options[4+2*pos+1] = (*it).second.c_str();
+            for (it=optionsMap.begin(); it!=optionsMap.end(); it++) {
+                options[2*pos] = (*it).first.c_str();
+                options[2*pos+1] = (*it).second.c_str();
                 pos++;
             }
 
-            options[4+2*pos] = NULL;
+            options[2*pos] = NULL;
 
             callbacks.begin_request = begin_request_handler;
 
@@ -112,6 +111,6 @@ namespace Mongoose
 
     void Server::setOption(string key, string value)
     {
-        extraOptions[key] = value;
+        optionsMap[key] = value;
     }
 };

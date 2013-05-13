@@ -70,9 +70,7 @@ namespace Mongoose
             void setOption(string key, string value);
 
         protected:
-            map<string, string> extraOptions;
-            string documentRoot;
-            int port;
+            map<string, string> optionsMap;
             struct mg_callbacks callbacks;
             struct mg_context *ctx;
             const char **options;
