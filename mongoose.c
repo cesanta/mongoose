@@ -187,7 +187,7 @@ typedef struct DIR {
   struct dirent  result;
 } DIR;
 
-#ifndef HAS_POLL
+#ifndef HAVE_POLL
 struct pollfd {
   int fd;
   short events;
@@ -1222,8 +1222,7 @@ static struct dirent *readdir(DIR *dir) {
 static int poll(struct pollfd *pfd, int n, int milliseconds) {
   struct timeval tv;
   fd_set set;
-  int i, result;
-  int maxfd = 0;
+  int i, result, maxfd = 0;
 
   tv.tv_sec = milliseconds / 1000;
   tv.tv_usec = (milliseconds % 1000) * 1000;
@@ -1238,7 +1237,7 @@ static int poll(struct pollfd *pfd, int n, int milliseconds) {
     }
   }
 
-  if ((result = select(maxfd+1, &set, NULL, NULL, &tv)) > 0) {
+  if ((result = select(maxfd + 1, &set, NULL, NULL, &tv)) > 0) {
     for (i = 0; i < n; i++) {
       if (FD_ISSET(pfd[i].fd, &set)) {
         pfd[i].revents = POLLIN;
