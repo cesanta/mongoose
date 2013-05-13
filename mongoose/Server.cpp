@@ -155,7 +155,12 @@ namespace Mongoose
                 }
             }
 
-            return websocket->isClosed() ? 0 : -1;
+            if (websocket->isClosed()) {
+                websockets.erase(conn);
+                return 0;
+            } else {
+                return -1;
+            }
         } else {
             return 0;
         }
