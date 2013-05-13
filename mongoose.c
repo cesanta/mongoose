@@ -4039,6 +4039,62 @@ static void lsp_abort(lua_State *L) {
   lua_error(L);
 }
 
+// Maximum nesting depth for Lua page output buffers.
+#define LSP_OB_MAX_DEPTH 16
+
+// Lua page output buffers.
+struct mg_lsp_ob {
+  int depth;
+  luaL_Buffer buffer[LSP_OB_MAX_DEPTH];
+};
+
+// Get or create output buffers associated with a Lua state.
+static struct mg_lsp_ob *lsp_get_ob(lua_State *L) {
+  struct mg_lsp_ob *ob;
+  int top = lua_gettop(L);
+  lua_pushstring(L, "mg_lsp_ob");
+  lua_rawget(L, LUA_REGISTRYINDEX);
+  ob = lua_touserdata(L, -1);
+  if (ob == NULL) {
+    ob = malloc(sizeof(*ob)); // freed at end of handle_lsp_request
+    ob->depth = 0;
+    lua_pushstring(L, "mg_lsp_ob");
+    lua_pushlightuserdata(L, ob);
+    lua_rawset(L, LUA_REGISTRYINDEX);
+  }
+  lua_settop(L, top);
+  return ob;
+}
+
+// Call mg_write or send data to output buffer.
+static int lsp_write(lua_State *L, struct mg_connection *conn, 
+                      const void *buf, size_t len) {
+  struct mg_lsp_ob *ob = lsp_get_ob(L);
+  if (ob->depth < 1) return mg_write(conn, buf, len);
+  luaL_Buffer *buffer = &ob->buffer[ob->depth - 1];
+  luaL_addlstring(buffer, buf, len);
+  return -1;
+}
+
+// ob.push - Start output buffering / add a new buffer.
+// Returns the number of active output buffers, or nil on failure.
+static int lsp_ob_push(lua_State *L) {
+  struct mg_lsp_ob *ob = lsp_get_ob(L);
+  if (ob->depth >= LSP_OB_MAX_DEPTH) return 0;
+  luaL_buffinit(L, &ob->buffer[ob->depth++]);
+  lua_pushinteger(L, ob->depth);
+  return 1;
+}
+
+// ob.pop - Stop output buffering / remove top buffer.
+// Returns the string contents of the top buffer, or nil on failure.
+static int lsp_ob_pop(lua_State *L) {
+  struct mg_lsp_ob *ob = lsp_get_ob(L);
+  if (ob->depth < 1) return 0;
+  luaL_pushresult(&ob->buffer[--ob->depth]);
+  return 1;
+}
+
 static int lsp(struct mg_connection *conn, const char *path,
                const char *p, int64_t len, lua_State *L) {
   int i, j, result, pos = 0, lines = 1, lualines = 0;
@@ -4050,7 +4106,7 @@ static int lsp(struct mg_connection *conn, const char *path,
       for (j = i + 1; j < len ; j++) {
         if (p[j] == '\n') ++lualines;
         if (p[j] == '?' && p[j + 1] == '>') {
-          mg_write(conn, p + pos, i - pos);
+          lsp_write(L, conn, p + pos, i - pos);
           lua_pushlightuserdata(L, conn);
           lua_pushcclosure(L, lsp_mg_error, 1);
           snprintf (chunkname, sizeof(chunkname), "@%s+%i", path, lines);
@@ -4076,7 +4132,7 @@ static int lsp(struct mg_connection *conn, const char *path,
   }
 
   if (i > pos) {
-    mg_write(conn, p + pos, i - pos);
+    lsp_write(L, conn, p + pos, i - pos);
   }
 
   return 0;
@@ -4092,7 +4148,7 @@ static int lsp_mg_print(lua_State *L) {
   for (i = 1; i <= num_args; i++) {
     if (lua_isstring(L, i)) {
       str = lua_tolstring(L, i, &size);
-      mg_write(conn, str, size);
+      lsp_write(L, conn, str, size);
     }
   }
 
@@ -4168,7 +4224,7 @@ static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
   { extern int luaopen_lsqlite3(lua_State *); luaopen_lsqlite3(L); }
 #endif
 
-  // Register "print" function which calls mg_write()
+  // Register "print" function which calls mg_write via lsp_write
   lua_pushlightuserdata(L, conn);
   lua_pushcclosure(L, lsp_mg_print, 1);
   lua_setglobal(L, "print");
@@ -4186,6 +4242,12 @@ static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
   reg_function(L, "redirect", lsp_mod_redirect, conn);
   reg_string(L, "version", MONGOOSE_VERSION);
   lua_setglobal(L, "mg");
+
+  // Register ob (output buffering) module
+  lua_newtable(L);
+  reg_function(L, "pop", lsp_ob_pop, conn);
+  reg_function(L, "push", lsp_ob_push, conn);
+  lua_setglobal(L, "ob");
 
   // Export request_info
   lua_newtable(L);
@@ -4259,7 +4321,10 @@ static int handle_lsp_request(struct mg_connection *conn, const char *path,
                 filep->size, L);
   }
 
-  if (L && ls == NULL) lua_close(L);
+  if (L && ls == NULL) {
+    free(lsp_get_ob(L));
+    lua_close(L);
+  }
   if (p) munmap(p, filep->size);
   mg_fclose(filep);
   return error;
