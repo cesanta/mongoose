@@ -33,7 +33,6 @@ LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
               $(LUA)/ldblib.c $(LUA)/liolib.c $(LUA)/lmathlib.c \
               $(LUA)/loslib.c $(LUA)/lstrlib.c $(LUA)/ltablib.c \
               $(LUA)/loadlib.c $(LUA)/linit.c
-LUA_OBJECTS = $(LUA_SOURCES:%.c=%.o)
 
 # Using Visual Studio 6.0. To build Mongoose:
 #  Set MSVC variable below to where VS 6.0 is installed on your system
@@ -165,5 +164,5 @@ clean:
 	cd examples && $(MAKE) clean
 	rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz \
 	$(PROG).exe *.dll *.lib build/res.o build/res.RES *.dSYM *.zip *.pdb \
-	*.exe *.dmg
+	*.exe *.dmg $(LUA_SOURCES:%.c=%.obj) $(YASSL_SOURCES:%.c=%.obj)
 
