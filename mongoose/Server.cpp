@@ -52,6 +52,7 @@ namespace Mongoose
         portOss << port;
         optionsMap["listening_ports"] = portOss.str();
         optionsMap["document_root"] = string(documentRoot);
+        optionsMap["enable_keep_alive"] = "yes";
     }
 
     Server::~Server()
