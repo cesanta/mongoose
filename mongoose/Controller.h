@@ -83,7 +83,6 @@ namespace Mongoose
              */
             void setPrefix(string prefix);
 
-#ifdef USE_WEBSOCKET
             /**
              * Called when a new websocket connection is ready
              *
@@ -98,7 +97,6 @@ namespace Mongoose
              * @param string the data arriving
              */
             virtual void webSocketData(WebSocket *websocket, string data);
-#endif
 
             /**
              * Registers a route to the controller

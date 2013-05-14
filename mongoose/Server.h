@@ -7,10 +7,8 @@
 #include "Request.h"
 #include "Response.h"
 #include "Controller.h"
-#ifdef USE_WEBSOCKET
 #include "WebSocket.h"
 #include "WebSockets.h"
-#endif
 
 using namespace std;
 
@@ -28,7 +26,7 @@ namespace Mongoose
              * @param int the number of the port to listen to
              * @param string documentRoot the root that should be used for static files
              */
-            Server(int port = 80, string documentRoot = "www");
+            Server(int port = 80, const char *documentRoot = "www");
             virtual ~Server();
 
             /**
@@ -55,7 +53,6 @@ namespace Mongoose
              */
             int _beginRequest(struct mg_connection *conn);
 
-#ifdef USE_WEBSOCKET
             /**
              * Handles a web socket connection
              *
@@ -74,7 +71,6 @@ namespace Mongoose
              * @return int if we have to keep the connection opened
              */
             int _webSocketData(struct mg_connection *conn, int flags, char *data, size_t data_len);
-#endif
 
             /**
              * Process the request by controllers
@@ -107,9 +103,7 @@ namespace Mongoose
             struct mg_context *ctx;
             const char **options;
 
-#ifdef USE_WEBSOCKET
             WebSockets websockets;
-#endif
 
             vector<Controller *> controllers;
     };

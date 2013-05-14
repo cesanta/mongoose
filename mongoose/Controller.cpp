@@ -20,7 +20,6 @@ namespace Mongoose
         server = server_;
     }
 
-#ifdef USE_WEBSOCKET
     void Controller::webSocketReady(WebSocket *websocket)
     {
     }
@@ -28,7 +27,6 @@ namespace Mongoose
     void Controller::webSocketData(WebSocket *websocket, string data)
     {
     }
-#endif
     
     Controller::~Controller()
     {

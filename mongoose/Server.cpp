@@ -20,7 +20,6 @@ static int begin_request_handler(struct mg_connection *conn)
     }
 }
 
-#ifdef USE_WEBSOCKET
 static void websocket_ready_handler(struct mg_connection *conn)
 {
     const struct mg_request_info *request_info = mg_get_request_info(conn);
@@ -40,11 +39,10 @@ static int websocket_data_handler(struct mg_connection *conn, int flags, char *d
         return server->_webSocketData(conn, flags, data, data_len);
     }
 }
-#endif
 
 namespace Mongoose
 {
-    Server::Server(int port, string documentRoot) : 
+    Server::Server(int port, const char *documentRoot) : 
         ctx(NULL), options(NULL), websockets(true)
     {
         memset(&callbacks, 0, sizeof(callbacks));
@@ -52,7 +50,7 @@ namespace Mongoose
         ostringstream portOss;
         portOss << port;
         optionsMap["listening_ports"] = portOss.str();
-        optionsMap["document_root"] = documentRoot;
+        optionsMap["document_root"] = string(documentRoot);
     }
 
     Server::~Server()
@@ -110,7 +108,6 @@ namespace Mongoose
         controllers.push_back(controller);
     }
 
-#ifdef USE_WEBSOCKET
     void Server::_webSocketReady(struct mg_connection *conn)
     {
         WebSocket *websocket = new WebSocket(conn);
@@ -149,7 +146,6 @@ namespace Mongoose
             return 0;
         }
     }
-#endif
 
     int Server::_beginRequest(struct mg_connection *conn)
     {
