@@ -1,9 +1,11 @@
 #ifndef _MONGOOSE_WEBSOCKET_H
 #define _MONGOOSE_WEBSOCKET_H
 
+#include <vector>
 #include <iostream>
 #include <mongoose.h>
 #include "Request.h"
+#include "Mutex.h"
 
 using namespace std;
 
@@ -12,6 +14,8 @@ using namespace std;
 
 namespace Mongoose
 {
+    class WebSockets;
+
     class WebSocket
     {
         public:
@@ -57,11 +61,38 @@ namespace Mongoose
              */
             string flushData();
 
+            /**
+             * Gets the internal mg connection
+             *
+             * @return struct mg_connection* the connection
+             */
+            struct mg_connection *getConnection();
+
+            /**
+             * Adding this websocket in a container
+             *
+             * @param WebSockets* the container
+             */
+            void addContainer(WebSockets *websockets);
+
+            /**
+             * Removing this websocket from a container
+             */
+            void removeContainer(WebSockets *websockets);
+
+            /**
+             * Notify all the containers that the websocket is now closed and unusable
+             */
+            void notifyContainers();
+
         protected:
+            Mutex mutex;
             string data;
             Request request;
             struct mg_connection *connection;
             bool closed;
+
+            vector<WebSockets *> containers;
     };
 };
 

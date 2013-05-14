@@ -57,18 +57,6 @@ namespace Mongoose
 
     Server::~Server()
     {
-#ifdef USE_WEBSOCKET
-        map<struct mg_connection *, WebSocket *>::iterator it;
-
-        for (it=websockets.begin(); it!=websockets.end(); it++) {
-            WebSocket *websocket = (*it).second;
-
-            if (websocket != NULL) {
-                websocket->close();
-                delete websocket;
-            }
-        }
-#endif
 
         stop();
     }
@@ -125,13 +113,9 @@ namespace Mongoose
 #ifdef USE_WEBSOCKET
     void Server::_webSocketReady(struct mg_connection *conn)
     {
-        if (websockets.find(conn) != websockets.end()) {
-            websockets[conn]->close();
-            delete websockets[conn];
-        }
-
         WebSocket *websocket = new WebSocket(conn);
-        websockets[conn] = websocket;
+        websockets.add(websocket);
+        websockets.clean();
 
         vector<Controller *>::iterator it;
         for (it=controllers.begin(); it!=controllers.end(); it++) {
@@ -141,9 +125,9 @@ namespace Mongoose
 
     int Server::_webSocketData(struct mg_connection *conn, int flags, char *data, size_t data_len)
     {
-        if (websockets.find(conn) != websockets.end()) {
-            WebSocket *websocket = websockets[conn];
+        WebSocket *websocket = websockets.getWebSocket(conn);
 
+        if (websocket != NULL) {
             string contents(data, data_len);
             websocket->appendData(contents);
 
@@ -156,7 +140,7 @@ namespace Mongoose
             }
 
             if (websocket->isClosed()) {
-                websockets.erase(conn);
+                websockets.remove(websocket);
                 return 0;
             } else {
                 return -1;

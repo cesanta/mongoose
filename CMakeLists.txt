@@ -49,6 +49,7 @@ if (CPP_BINDING)
         set (SOURCES
             ${SOURCES}
             ${MONGOOSE_CPP}/WebSocket.cpp
+            ${MONGOOSE_CPP}/WebSockets.cpp
             )
     endif (WEBSOCKET)
 

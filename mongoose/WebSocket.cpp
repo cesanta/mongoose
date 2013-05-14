@@ -1,6 +1,7 @@
 #include <iostream>
 #include <sstream>
 #include "WebSocket.h"
+#include "WebSockets.h"
 
 using namespace std;
 
@@ -35,6 +36,7 @@ namespace Mongoose
             return;
         }
 
+        mutex.lock();
         int remaining = data.size();
         int chunk = 0;
 
@@ -57,6 +59,15 @@ namespace Mongoose
                 closed = true;
             }
         }
+        mutex.unlock();
+    }
+
+    void WebSocket::notifyContainers()
+    {
+        vector<WebSockets *>::iterator it;
+        for (it=containers.begin(); it!=containers.end(); it++) {
+            (*it)->remove(this);
+        }
     }
 
     void WebSocket::close()
@@ -70,6 +81,32 @@ namespace Mongoose
     bool WebSocket::isClosed()
     {
         return closed;
+    }
+
+    void WebSocket::addContainer(WebSockets *websockets)
+    {
+        mutex.lock();
+        containers.push_back(websockets);
+        mutex.unlock();
+    }
+
+    void WebSocket::removeContainer(WebSockets *websockets)
+    {
+        mutex.lock();
+        vector<WebSockets *>::iterator it;
+
+        for (it=containers.begin(); it!=containers.end(); it++) {
+            if (*it == websockets) {
+                containers.erase(it);
+                break;
+            }
+        }
+        mutex.unlock();
+    }
+
+    struct mg_connection *WebSocket::getConnection()
+    {
+        return connection;
     }
 };
 

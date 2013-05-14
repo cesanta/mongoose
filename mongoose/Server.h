@@ -9,6 +9,7 @@
 #include "Controller.h"
 #ifdef USE_WEBSOCKET
 #include "WebSocket.h"
+#include "WebSockets.h"
 #endif
 
 using namespace std;
@@ -100,11 +101,7 @@ namespace Mongoose
             const char **options;
 
 #ifdef USE_WEBSOCKET
-            /**
-             * Web sockets connections are keeped in a map that is internally used to fetch
-             * the instance of the WebSocket wrapper
-             */
-            map<struct mg_connection *, WebSocket*> websockets;
+            WebSockets websockets;
 #endif
 
             vector<Controller *> controllers;
