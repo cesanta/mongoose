@@ -65,17 +65,17 @@ namespace Mongoose
     void WebSocket::notifyContainers()
     {
         vector<WebSockets *>::iterator it;
+
+        mutex.lock();
         for (it=containers.begin(); it!=containers.end(); it++) {
             (*it)->remove(this);
         }
+        mutex.unlock();
     }
 
     void WebSocket::close()
     {
-        if (!closed) {
-            mg_close_connection(connection);
-            closed = true;
-        }
+        closed = true;
     }
 
     bool WebSocket::isClosed()

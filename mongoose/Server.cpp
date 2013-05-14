@@ -186,4 +186,9 @@ namespace Mongoose
     {
         optionsMap[key] = value;
     }
+            
+    WebSockets &Server::getWebSockets()
+    {
+        return websockets;
+    }
 };

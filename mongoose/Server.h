@@ -94,6 +94,13 @@ namespace Mongoose
              */
             void setOption(string key, string value);
 
+            /**
+             * Returns the WebSockets container
+             *
+             * @return WebSockets the web sockets container
+             */
+            WebSockets &getWebSockets();
+
         protected:
             map<string, string> optionsMap;
             struct mg_callbacks callbacks;
