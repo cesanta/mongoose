@@ -45,7 +45,7 @@ static int websocket_data_handler(struct mg_connection *conn, int flags, char *d
 namespace Mongoose
 {
     Server::Server(int port, string documentRoot) : 
-        ctx(NULL), options(NULL)
+        ctx(NULL), options(NULL), websockets(true)
     {
         memset(&callbacks, 0, sizeof(callbacks));
 

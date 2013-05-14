@@ -103,12 +103,11 @@ namespace Mongoose
                 toDelete.push_back((*it).second);
             }
         }
-        mutex.unlock();
 
         vector<WebSocket *>::iterator vit;
-
         for (vit=toDelete.begin(); vit!=toDelete.end(); vit++) {
-            remove(*vit);
+            remove(*vit, false);
         }
+        mutex.unlock();
     }
 };
