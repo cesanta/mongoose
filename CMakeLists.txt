@@ -14,6 +14,9 @@ option (CPP_BINDING
 option (HAS_JSONCPP
     "Enables JsonCpp" OFF)
 
+option (ENABLE_STATS
+    "Enable server statistics" ON)
+
 set (SOURCES
     mongoose.c
     )
@@ -21,6 +24,10 @@ set (SOURCES
 set (MONGOOSE_CPP "${PROJECT_SOURCE_DIR}/mongoose")
 
 include_directories ("${PROJECT_SOURCE_DIR}")
+
+if (ENABLE_STATS)
+    add_definitions("-DENABLE_STATS")
+endif (ENABLE_STATS)
 
 if (CPP_BINDING)
     set (SOURCES

@@ -91,7 +91,8 @@ int main()
     myController.dumpRoutes();
 
     while (running) {
-        sleep(1);
+        sleep(10);
+        server.printStats();
     }
 
     server.stop();

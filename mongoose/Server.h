@@ -9,6 +9,7 @@
 #include "Controller.h"
 #include "WebSocket.h"
 #include "WebSockets.h"
+#include "Mutex.h"
 
 using namespace std;
 
@@ -97,7 +98,13 @@ namespace Mongoose
              */
             WebSockets &getWebSockets();
 
+            /**
+             * Print statistics
+             */
+            void printStats();
+
         protected:
+            Mutex mutex;
             map<string, string> optionsMap;
             struct mg_callbacks callbacks;
             struct mg_context *ctx;
@@ -106,6 +113,10 @@ namespace Mongoose
             WebSockets websockets;
 
             vector<Controller *> controllers;
+
+            // Statistics
+            int requests;
+            int startTime;
     };
 };
 

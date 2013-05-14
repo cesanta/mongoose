@@ -42,8 +42,9 @@ static int websocket_data_handler(struct mg_connection *conn, int flags, char *d
 
 namespace Mongoose
 {
-    Server::Server(int port, const char *documentRoot) : 
-        ctx(NULL), options(NULL), websockets(true)
+    Server::Server(int port, const char *documentRoot)
+        : ctx(NULL), options(NULL), websockets(true)
+
     {
         memset(&callbacks, 0, sizeof(callbacks));
 
@@ -55,13 +56,16 @@ namespace Mongoose
 
     Server::~Server()
     {
-
         stop();
     }
 
     void Server::start()
     {
         if (ctx == NULL) {
+#ifdef ENABLE_STATS
+            requests = 0;
+            startTime = time(NULL);
+#endif
             size_t size = optionsMap.size()*2+1;
 
             options = new const char*[size];
@@ -165,6 +169,10 @@ namespace Mongoose
     {
         Response *response;
         vector<Controller *>::iterator it;
+        
+        mutex.lock();
+        requests++;
+        mutex.unlock();
 
         for (it=controllers.begin(); it!=controllers.end(); it++) {
             Controller *controller = *it;
@@ -186,5 +194,14 @@ namespace Mongoose
     WebSockets &Server::getWebSockets()
     {
         return websockets;
+    }
+
+    void Server::printStats()
+    {
+        int delta = time(NULL)-startTime;
+
+        if (delta) {
+            cout << "Requests: " << requests << ", Requests/s: " << (requests*1.0/delta) << endl;
+        }
     }
 };
