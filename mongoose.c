@@ -4888,11 +4888,13 @@ static void close_connection(struct mg_connection *conn) {
   conn->must_close = 1;
   if (conn->client.sock != INVALID_SOCKET) {
     close_socket_gracefully(conn);
+    conn->client.sock = INVALID_SOCKET;
   }
 #ifndef NO_SSL
   // Must be done AFTER socket is closed
   if (conn->ssl != NULL) {
     SSL_free(conn->ssl);
+    conn->ssl = NULL;
   }
 #endif
 }
