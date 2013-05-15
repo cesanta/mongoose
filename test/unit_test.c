@@ -467,13 +467,13 @@ static void test_lua(void) {
   ASSERT(lua_gettop(L) == 0);
 
   check_lua_expr(L, "'hi'", "hi");
-  check_lua_expr(L, "request_info.request_method", "POST");
-  check_lua_expr(L, "request_info.uri", "/foo/bar");
-  check_lua_expr(L, "request_info.num_headers", "2");
-  check_lua_expr(L, "request_info.remote_ip", "0");
-  check_lua_expr(L, "request_info.http_headers['Content-Length']", "12");
-  check_lua_expr(L, "request_info.http_headers['Connection']", "close");
-  (void) luaL_dostring(L, "post = read()");
+  check_lua_expr(L, "mg.request_info.request_method", "POST");
+  check_lua_expr(L, "mg.request_info.uri", "/foo/bar");
+  check_lua_expr(L, "mg.request_info.num_headers", "2");
+  check_lua_expr(L, "mg.request_info.remote_ip", "0");
+  check_lua_expr(L, "mg.request_info.http_headers['Content-Length']", "12");
+  check_lua_expr(L, "mg.request_info.http_headers['Connection']", "close");
+  (void) luaL_dostring(L, "post = mg.read()");
   check_lua_expr(L, "# post", "12");
   check_lua_expr(L, "post", "hello world!");
   lua_close(L);
