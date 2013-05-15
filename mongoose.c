@@ -2257,13 +2257,16 @@ static void open_auth_file(struct mg_connection *conn, const char *path,
                            struct file *filep) {
   char name[PATH_MAX];
   const char *p, *e, *gpass = conn->ctx->config[GLOBAL_PASSWORDS_FILE];
+  struct file file = STRUCT_FILE_INITIALIZER;
 
   if (gpass != NULL) {
     // Use global passwords file
     if (!mg_fopen(conn, gpass, "r", filep)) {
       cry(conn, "fopen(%s): %s", gpass, strerror(ERRNO));
     }
-  } else if (mg_stat(conn, path, filep) && filep->is_directory) {
+    // Important: using local struct file to test path for is_directory flag.
+    // If filep is used, mg_stat() makes it appear as if auth file was opened.
+  } else if (mg_stat(conn, path, &file) && file.is_directory) {
     mg_snprintf(conn, name, sizeof(name), "%s%c%s",
                 path, '/', PASSWORDS_FILE_NAME);
     mg_fopen(conn, name, "r", filep);
