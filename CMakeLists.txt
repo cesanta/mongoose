@@ -94,6 +94,10 @@ target_link_libraries (main _mongoose)
         
 # Compiling tests
 if (EXAMPLES)
+    if (HAS_JSONCPP)
+        add_subdirectory("${JSONCPP_DIR}" jsoncpp)
+    endif (HAS_JSONCPP)
+
     add_executable (hello examples/hello.c)
     target_link_libraries (hello _mongoose)
 
@@ -114,8 +118,8 @@ if (EXAMPLES)
         target_link_libraries (cpp  _mongoose)
 
         if (HAS_JSONCPP)
-            add_executable (json examples/json.cpp)
-            target_link_libraries (json  _mongoose)
+            add_executable (json_api examples/json.cpp)
+            target_link_libraries (json_api  _mongoose)
         endif (HAS_JSONCPP)
 
         if (WEBSOCKET)
