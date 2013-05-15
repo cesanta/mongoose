@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <mongoose/Server.h>
-#include <mongoose/JsonController.h>
+#include <mongoose/WebController.h>
 
 using namespace std;
 using namespace Mongoose;
