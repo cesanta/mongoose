@@ -17,6 +17,9 @@ option (HAS_JSONCPP
 option (ENABLE_STATS
     "Enable server statistics" ON)
 
+set (JSONCPP_DIR "${PROJECT_SOURCE_DIR}/../jsoncpp"
+    CACHE STRING "Json C++ directory")
+
 set (SOURCES
     mongoose.c
     )
@@ -50,6 +53,8 @@ if (CPP_BINDING)
             ${MONGOOSE_CPP}/JsonResponse.cpp
             ${MONGOOSE_CPP}/JsonController.cpp
             )
+
+        include_directories ("${JSONCPP_DIR}/include/")
     endif (HAS_JSONCPP)
 
     if (WEBSOCKET)
@@ -80,7 +85,7 @@ add_library (_mongoose ${SOURCES})
 target_link_libraries (_mongoose ${EXTRA_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 
 if (HAS_JSONCPP)
-    target_link_libraries (_mongoose jsoncpp)
+    target_link_libraries (_mongoose json)
 endif (HAS_JSONCPP)
 
 # Compiling executable
