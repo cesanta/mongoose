@@ -2,6 +2,9 @@ cmake_minimum_required (VERSION 2.6)
 project (mongoose)
 find_package (Threads)
 
+option (MAIN
+    "Compile the main" OFF)
+
 option (EXAMPLES
     "Compile examples" OFF)
 
@@ -88,16 +91,20 @@ if (HAS_JSONCPP)
     target_link_libraries (_mongoose json)
 endif (HAS_JSONCPP)
 
+if (EXAMPLES OR MAIN)
+    if (HAS_JSONCPP)
+      add_subdirectory("${JSONCPP_DIR}" jsoncpp)
+    endif (HAS_JSONCPP)
+endif ()
+
 # Compiling executable
-add_executable (main main.c)
-target_link_libraries (main _mongoose)
+if (MAIN)
+    add_executable (main main.c)
+    target_link_libraries (main _mongoose)
+endif (MAIN)
         
 # Compiling tests
 if (EXAMPLES)
-    if (HAS_JSONCPP)
-        add_subdirectory("${JSONCPP_DIR}" jsoncpp)
-    endif (HAS_JSONCPP)
-
     add_executable (hello examples/hello.c)
     target_link_libraries (hello _mongoose)
 
