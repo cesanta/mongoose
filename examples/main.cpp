@@ -48,6 +48,11 @@ class MyController : public WebController
             response << "403 forbidden demo";
         }
 
+        void exception(Request &request, StreamResponse &response)
+        {
+            throw string("Exception example");
+        }
+
         void setup()
         {
             // Hello demo
@@ -60,6 +65,9 @@ class MyController : public WebController
 
             // Session demo
             addRoute("GET", "/session", MyController, session);
+
+            // Exception example
+            addRoute("GET", "/exception", MyController, exception);
 
             // 403 demo
             addRoute("GET", "/403", MyController, forbid);

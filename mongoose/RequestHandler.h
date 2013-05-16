@@ -3,7 +3,6 @@
 
 #include "Request.h"
 #include "Response.h"
-#include "StreamResponse.h"
 
 namespace Mongoose
 {
@@ -32,17 +31,9 @@ namespace Mongoose
                     controller->preProcess(request, *response);
                     (controller->*function)(request, *response);
                 } catch (string exception) {
-                    delete response;
-                    StreamResponse *errorResponse = new StreamResponse;
-                    errorResponse->setCode(HTTP_SERVER_ERROR);
-                    *errorResponse << "Server internal error: " << exception;
-                    return errorResponse;
+                    return controller->serverInternalError(exception);
                 } catch (...) {
-                    delete response;
-                    StreamResponse *errorResponse = new StreamResponse;
-                    errorResponse->setCode(HTTP_SERVER_ERROR);
-                    *errorResponse << "Unknown server internal error";
-                    return errorResponse;
+                    return controller->serverInternalError("Unknown error");
                 }
 
                 return response;

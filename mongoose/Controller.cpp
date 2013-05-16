@@ -90,4 +90,14 @@ namespace Mongoose
         }
 
     }
+
+    Response *Controller::serverInternalError(string message)
+    {
+        StreamResponse *response = new StreamResponse;
+
+        response->setCode(HTTP_SERVER_ERROR);
+        *response << "[500] Server internal error: " << message;
+
+        return response;
+    }
 };

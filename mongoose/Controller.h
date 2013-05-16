@@ -116,6 +116,15 @@ namespace Mongoose
              */
             void dumpRoutes();
 
+            /**
+             * Called when an exception occur during the rendering
+             *
+             * @param string the error message
+             *
+             * @return response a response to send, 404 will occur if NULL
+             */
+            virtual Response *serverInternalError(string message);
+
         protected:
             Server *server;
             string prefix;
