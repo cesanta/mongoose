@@ -100,7 +100,11 @@ int main()
     myController.dumpRoutes();
 
     while (running) {
+#ifdef WIN32
+		Sleep(10000);
+#else
         sleep(10);
+#endif
         server.printStats();
     }
 

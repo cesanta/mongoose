@@ -19,7 +19,7 @@ namespace Mongoose
         }
         mutex.unlock();
 
-        Session session = sessions.get(request, response);
+        Session &session = sessions.get(request, response);
         session.ping();
         response.setHeader("Content-type", "text/html");
     }

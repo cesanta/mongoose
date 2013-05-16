@@ -5,7 +5,7 @@ using namespace std;
 
 namespace Mongoose
 {
-    Response::Response() : code(HTTP_OK)
+    Response::Response() : code(HTTP_OK), headers()
     {
     };
             

@@ -17,9 +17,10 @@ namespace Mongoose
 
         // Downloading POST data
         ostringstream postData;
+		int n;
         char post[1024];
-        while (mg_read(connection, post, sizeof(post))) {
-            postData << post;
+        while (n = mg_read(connection, post, sizeof(post))) {
+			postData.write(post, n);
         }
         data = postData.str();
     }

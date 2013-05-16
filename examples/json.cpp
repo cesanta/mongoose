@@ -58,7 +58,11 @@ int main()
     myController.dumpRoutes();
 
     while (running) {
-        sleep(1);
+#ifdef WIN32
+		Sleep(10000);
+#else
+        sleep(10);
+#endif
     }
 
     server.stop();

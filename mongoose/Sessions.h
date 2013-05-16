@@ -16,6 +16,7 @@ namespace Mongoose
     {
         public:
             Sessions(string key = "sessid");
+			virtual ~Sessions();
 
             /**
              * Gets the session ID of a certain request,
@@ -47,7 +48,7 @@ namespace Mongoose
             void garbageCollect(int oldAge = 3600);
 
         protected:
-            map<string, Session> sessions;
+            map<string, Session*> sessions;
             string key;
             Mutex mutex;
     };

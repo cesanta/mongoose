@@ -76,7 +76,9 @@ if (WEBSOCKET)
 endif (WEBSOCKET)
 
 # Adding dl
-set (EXTRA_LIBS ${EXTRA_LIBS} dl)
+if (NOT WIN32)
+    set (EXTRA_LIBS ${EXTRA_LIBS} dl)
+endif (NOT WIN32)
 
 # Adding sockets for Win32
 if (WIN32)

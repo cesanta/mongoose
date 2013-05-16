@@ -47,15 +47,14 @@ namespace Mongoose
         if (routes.find(key) != routes.end()) {
             response = routes[key]->process(request);
         }
-
         return response;
     }
             
-    void Controller::preProcess(Request &request, Response *response)
+    void Controller::preProcess(Request &request, Response &response)
     {
     }
             
-    void Controller::postProcess(Request &request, Response *response)
+    void Controller::postProcess(Request &request, Response &response)
     {
     }
 
@@ -64,7 +63,7 @@ namespace Mongoose
         Response *response = process(request);
 
         if (response != NULL) {
-            postProcess(request, response);
+            postProcess(request, *response);
         }
 
         return response;

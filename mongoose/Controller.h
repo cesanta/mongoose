@@ -45,7 +45,7 @@ namespace Mongoose
              * @param Request the request
              * @param Response the response
              */
-            virtual void preProcess(Request &request, Response *response);
+            virtual void preProcess(Request &request, Response &response);
 
             /**
              * Called to process a request
@@ -63,7 +63,7 @@ namespace Mongoose
              * @param Request the request
              * @param Response the response
              */
-            virtual void postProcess(Request &request, Response *response);
+            virtual void postProcess(Request &request, Response &response);
 
             /**
              * Handle a request, this will try to match the request, if this

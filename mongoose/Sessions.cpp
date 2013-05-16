@@ -10,9 +10,17 @@ static char charset[] = "abcdeghijklmnpqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234
 
 namespace Mongoose
 {
-    Sessions::Sessions(string key_) : key(key_)
+    Sessions::Sessions(string key_) : key(key_), sessions()
     {
     }
+	
+	Sessions::~Sessions()
+	{
+		map<string, Session *>::iterator it;
+		for (it=sessions.begin(); it!=sessions.end(); it++) {
+			delete (*it).second;
+		}
+	}
 
     string Sessions::getId(Request &request, Response &response)
     {
@@ -35,10 +43,15 @@ namespace Mongoose
     Session &Sessions::get(Request &request, Response &response)
     { 
         string id = getId(request, response);
-        Session *session;
+		Session *session = NULL;
         
         mutex.lock();
-        session = &sessions[id];
+		if (sessions.find(id) != sessions.end()) {
+			session = sessions[id];
+		} else {
+			session = new Session();
+			sessions[id] = session;
+		}
         mutex.unlock();
 
         return *session;
@@ -47,15 +60,16 @@ namespace Mongoose
     void Sessions::garbageCollect(int oldAge)
     {
         vector<string> deleteList;
-        map<string, Session>::iterator it;
+        map<string, Session*>::iterator it;
         vector<string>::iterator vit;
 
         mutex.lock();
         for (it=sessions.begin(); it!=sessions.end(); it++) {
             string name = (*it).first;
-            Session &session = (*it).second;
+            Session *session = (*it).second;
 
-            if (session.getAge() > oldAge) {
+            if (session->getAge() > oldAge) {
+				delete session;
                 deleteList.push_back(name);
             }
         }
