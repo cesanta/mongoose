@@ -1,4 +1,5 @@
 #include <sstream>
+#include <json/json.h>
 #include "JsonResponse.h"
 
 using namespace std;
@@ -7,9 +8,8 @@ namespace Mongoose
 {
     string JsonResponse::getBody()
     {
-        ostringstream data;
-        data << *this;
+        Json::FastWriter writer;
 
-        return data.str();
+        return writer.write(*this);
     }
 };
