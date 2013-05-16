@@ -8,8 +8,18 @@ using namespace std;
 namespace Mongoose
 {
     WebSocket::WebSocket(struct mg_connection *connection_)
-        : connection(connection_), closed(false), request(connection_), data("")
+        : connection(connection_), closed(false), request(connection_), data(""), id(-1)
     {
+    }
+
+    void WebSocket::setId(int id_)
+    {
+        id = id_;
+    }
+
+    int WebSocket::getId()
+    {
+        return id;
     }
 
     void WebSocket::appendData(string data_)

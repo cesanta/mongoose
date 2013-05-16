@@ -14,6 +14,10 @@ class MyController : public WebController
         {
             cout << "Opening new websocket on " << websocket->getRequest().getUrl() << endl;
             websocket->send("server ready");
+        
+            ostringstream oss;
+            oss << "Your id is: " << websocket->getId();
+            websocket->send(oss.str());
         }
 
         void webSocketData(WebSocket *websocket, string data)

@@ -60,11 +60,21 @@ namespace Mongoose
              * @param WebSocket* the websocket object
              */
             void remove(WebSocket *websocket, bool lock = true);
+    
+            /**
+             * Gets the websockets having the id 
+             *
+             * @param int id
+             */
+            WebSocket *getWebSocket(int id);
 
         protected:
             Mutex mutex;
             map<struct mg_connection*, WebSocket*> websockets;
+            map<int, WebSocket*> websocketsById;
             bool responsible;
+
+            int id;
     };
 };
 

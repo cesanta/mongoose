@@ -85,7 +85,22 @@ namespace Mongoose
              */
             void notifyContainers();
 
+            /**
+             * Sets the identifier of this websocket
+             *
+             * @param int the websocket identifier
+             */
+            void setId(int id_);
+
+            /**
+             * Gets the websocket identifier
+             *
+             * @return int the identifier of this websocket
+             */
+            int getId();
+
         protected:
+            int id;
             Mutex mutex;
             string data;
             Request request;

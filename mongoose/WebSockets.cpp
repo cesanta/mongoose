@@ -5,7 +5,7 @@
 namespace Mongoose
 {
     WebSockets::WebSockets(bool responsible_)
-        : responsible(responsible_)
+        : responsible(responsible_), id(0)
     {
     }
 
@@ -34,6 +34,13 @@ namespace Mongoose
             return;
         }
 
+        if (responsible) {
+            mutex.lock();
+            int newId = id++;
+            mutex.unlock();
+            websocket->setId(newId);
+        }
+
         struct mg_connection *connection = websocket->getConnection();
 
         mutex.lock();
@@ -41,8 +48,18 @@ namespace Mongoose
             remove(websockets[connection], false);
         }
 
+        websocketsById[websocket->getId()] = websocket;
         websockets[connection] = websocket;
         mutex.unlock();
+    }
+
+    WebSocket *WebSockets::getWebSocket(int id)
+    {
+        if (websocketsById.find(id) != websocketsById.end()) {
+            return websocketsById[id];
+        }
+
+        return NULL;
     }
 
     void WebSockets::sendAll(string data)
@@ -71,6 +88,7 @@ namespace Mongoose
         if (websockets.find(connection) != websockets.end()) {
             websocket->removeContainer(this);
             websockets.erase(connection);
+            websocketsById.erase(websocket->getId());
 
             if (responsible) {
                 websocket->close();
