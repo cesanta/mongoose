@@ -36,11 +36,13 @@ namespace Mongoose
                     StreamResponse *errorResponse = new StreamResponse;
                     errorResponse->setCode(HTTP_SERVER_ERROR);
                     *errorResponse << "Server internal error: " << exception;
+                    return errorResponse;
                 } catch (...) {
                     delete response;
                     StreamResponse *errorResponse = new StreamResponse;
                     errorResponse->setCode(HTTP_SERVER_ERROR);
                     *errorResponse << "Unknown server internal error";
+                    return errorResponse;
                 }
 
                 return response;
