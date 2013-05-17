@@ -161,7 +161,7 @@ static void reg_function(struct lua_State *L, const char *name,
   lua_rawset(L, -3);
 }
 
-static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
+void mg_prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
   const struct mg_request_info *ri = mg_get_request_info(conn);
   extern void luaL_openlibs(lua_State *);
   int i;
@@ -170,6 +170,8 @@ static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
 #ifdef USE_LUA_SQLITE3
   { extern int luaopen_lsqlite3(lua_State *); luaopen_lsqlite3(L); }
 #endif
+
+  if (conn == NULL) return;
 
   // Register mg module
   lua_newtable(L);
@@ -243,7 +245,7 @@ static int handle_lsp_request(struct mg_connection *conn, const char *path,
   } else {
     // We're not sending HTTP headers here, Lua page must do it.
     if (ls == NULL) {
-      prepare_lua_environment(conn, L);
+      mg_prepare_lua_environment(conn, L);
       if (conn->ctx->callbacks.init_lua != NULL) {
         conn->ctx->callbacks.init_lua(conn, L);
       }
