@@ -1939,6 +1939,7 @@ static const struct {
   {".mpg", 4, "video/mpeg"},
   {".webm", 5, "video/webm"},
   {".mpeg", 5, "video/mpeg"},
+  {".mov", 4, "video/quicktime"},
   {".mp4", 4, "video/mp4"},
   {".m4v", 4, "video/x-m4v"},
   {".asf", 4, "video/x-ms-asf"},
