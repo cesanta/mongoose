@@ -89,8 +89,8 @@ struct mg_callbacks {
   //          http://tools.ietf.org/html/rfc6455, section 5.2
   //    data, data_len: payload, with mask (if any) already applied.
   // Return value:
-  //    0:     keep this websocket connection opened.
-  //    non-0: close this websocket connection.
+  //    non-0: keep this websocket connection opened.
+  //    0:     close this websocket connection.
   int  (*websocket_data)(struct mg_connection *, int bits,
                          char *data, size_t data_len);
 
