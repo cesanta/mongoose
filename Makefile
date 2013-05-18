@@ -22,6 +22,7 @@ CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread $(COPT)
 # To build with Lua, download and unzip Lua 5.2.1 source code into the
 # mongoose directory, and then add $(LUA_SOURCES) to CFLAGS
 LUA         = lua-5.2.1/src
+LUA_FLAGS   = -I$(LUA) -DLUA_COMPAT_ALL
 LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
               $(LUA)/ldebug.c $(LUA)/ldo.c $(LUA)/ldump.c \
               $(LUA)/lfunc.c $(LUA)/lgc.c $(LUA)/llex.c \
@@ -33,17 +34,6 @@ LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
               $(LUA)/ldblib.c $(LUA)/liolib.c $(LUA)/lmathlib.c \
               $(LUA)/loslib.c $(LUA)/lstrlib.c $(LUA)/ltablib.c \
               $(LUA)/loadlib.c $(LUA)/linit.c
-
-# Using Visual Studio 6.0. To build Mongoose:
-#  Set MSVC variable below to where VS 6.0 is installed on your system
-#  Run "PATH_TO_VC6\bin\nmake windows"
-MSVC        = ../vc6
-#DBG         = /Zi /Od
-DBG         = /DNDEBUG /O1
-CL          = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 \
-              /I$(MSVC)/include /I$(LUA) /I. /I$(YASSL) /I$(YASSL)/cyassl /GA
-MSLIB       = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
-              user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
 
 # Stock windows binary builds with Lua and YASSL library.
 YASSL       = ../cyassl-2.4.6
@@ -70,8 +60,31 @@ YASSL_SOURCES = \
   $(YASSL)/ctaocrypt/src/ecc.c $(YASSL)/src/ocsp.c $(YASSL)/src/crl.c \
   $(YASSL)/ctaocrypt/src/hc128.c $(YASSL)/ctaocrypt/src/memory.c
 
+ALL_SOURCES = main.c mongoose.c build/sqlite3.c build/lsqlite3.c \
+              $(LUA_SOURCES) $(YASSL_SOURCES)
+ALL_OBJECTS = $(ALL_SOURCES:%.c=%.o)
+ALL_WINOBJS = $(ALL_SOURCES:%.c=%.obj)
+
+FLAGS = -DNO_SSL_DL -DUSE_LUA -DUSE_LUA_SQLITE3 $(YASSL_FLAGS) $(LUA_FLAGS)
+
+# Using Visual Studio 6.0. To build Mongoose:
+#  Set MSVC variable below to where VS 6.0 is installed on your system
+#  Run "PATH_TO_VC6\bin\nmake windows"
+MSVC = ../vc6
+#DBG = /Zi /Od
+DBG  = /DNDEBUG /O1
+CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 /GA /I$(MSVC)/include
+LINK = $(MSVC)/bin/link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
+       user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
+
 all:
 	@echo "make (linux|bsd|solaris|mac|windows|mingw|cygwin)"
+
+%.obj: %.c
+	$(CL) /c $(FLAGS) /Fo$@ $<
+
+%.o: %.c
+	$(CC) -o $@ $< -c $(FLAGS) $(CFLAGS)
 
 # To build with lua, make sure you have Lua unpacked into lua-5.2.1 directory
 linux_lua:
@@ -88,11 +101,8 @@ mac: bsd
 bsd:
 	$(CC) mongoose.c main.c -o $(PROG) $(CFLAGS)
 
-bsd_yassl:
-	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c -o $(PROG) \
-          $(CFLAGS) -I$(LUA) -Ibuild \
-          $(YASSL_SOURCES) $(YASSL_FLAGS) -DNO_SSL_DL \
-          $(LUA_SOURCES) -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL
+bsd_lua: $(ALL_OBJECTS)
+	$(CC) $(ALL_OBJECTS) -o $@
 
 solaris:
 	$(CC) mongoose.c main.c -lnsl -lsocket -o $(PROG) $(CFLAGS)
@@ -121,12 +131,9 @@ w:
           $(MSLIB) /out:unit_test.exe
 	./unit_test.exe
 
-windows:
-	$(MSVC)/bin/rc build\res.rc
-	$(CL) main.c mongoose.c build/lsqlite3.c build/sqlite3.c \
-          $(YASSL_SOURCES) $(YASSL_FLAGS) /DNO_SSL_DL \
-          $(LUA_SOURCES) /DUSE_LUA /DUSE_LUA_SQLITE3 /DLUA_COMPAT_ALL \
-          $(MSLIB) build\res.res /out:$(PROG).exe /subsystem:windows
+windows: $(ALL_WINOBJS)
+	$(MSVC)/bin/rc build/res.rc
+	$(LINK) /nologo $(ALL_WINOBJS) build/res.res /out:$(PROG).exe
 
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0 -ggdb
@@ -164,5 +171,5 @@ clean:
 	cd examples && $(MAKE) clean
 	rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz \
 	$(PROG).exe *.dll *.lib build/res.o build/res.RES *.dSYM *.zip *.pdb \
-	*.exe *.dmg $(LUA_SOURCES:%.c=%.obj) $(YASSL_SOURCES:%.c=%.obj)
+	*.exe *.dmg $(ALL_OBJECTS) $(ALL_WINOBJS)
 
