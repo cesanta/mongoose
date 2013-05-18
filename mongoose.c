@@ -3818,9 +3818,9 @@ static void send_websocket_handshake(struct mg_connection *conn) {
 
 static void read_websocket(struct mg_connection *conn) {
   unsigned char *buf = (unsigned char *) conn->buf + conn->request_len;
-  int n, stop = 0;
+  int bits, n, stop = 0;
   size_t i, len, mask_len, data_len, header_len, body_len;
-  char mem[4 * 1024], *data;
+  char mem[4 * 1024], mask[4], *data;
 
   assert(conn->content_len == 0);
   while (!stop) {
@@ -3841,6 +3841,14 @@ static void read_websocket(struct mg_connection *conn) {
       }
     }
 
+    // Data layout is as follows:
+    //  conn->buf               buf
+    //     v                     v              frame1           | frame2
+    //     |---------------------|----------------|--------------|-------
+    //     |                     |<--header_len-->|<--data_len-->|
+    //     |<-conn->request_len->|<-----body_len----------->|
+    //     |<-------------------conn->data_len------------->|
+
     if (header_len > 0) {
       // Allocate space to hold websocket payload
       data = mem;
@@ -3849,6 +3857,10 @@ static void read_websocket(struct mg_connection *conn) {
         // TODO: notify user about the failure
         break;
       }
+
+      // Save mask and bits, otherwise it may be clobbered by memmove below
+      bits = buf[0];
+      memcpy(mask, buf + header_len - mask_len, mask_len);
 
       // Read frame payload into the allocated buffer.
       assert(body_len >= header_len);
@@ -3868,15 +3880,15 @@ static void read_websocket(struct mg_connection *conn) {
       // Apply mask if necessary
       if (mask_len > 0) {
         for (i = 0; i < data_len; i++) {
-          data[i] ^= buf[header_len - mask_len + (i % 4)];
+          data[i] ^= mask[i % 4];
         }
       }
 
       // Exit the loop if callback signalled to exit,
       // or "connection close" opcode received.
       if ((conn->ctx->callbacks.websocket_data != NULL &&
-          !conn->ctx->callbacks.websocket_data(conn, buf[0], data, data_len)) ||
-          (buf[0] & 0xf) == 8) {  // Opcode == 8, connection close
+          !conn->ctx->callbacks.websocket_data(conn, bits, data, data_len)) ||
+          (bits & 0xf) == 8) {  // Opcode == 8, connection close
         stop = 1;
       }
 
