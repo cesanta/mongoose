@@ -2548,7 +2548,7 @@ static int conn2(const char *host, int port, int use_ssl,
 
 
 
-static void url_encode(const char *src, char *dst, size_t dst_len) {
+void mg_url_encode(const char *src, char *dst, size_t dst_len) {
   static const char *dont_escape = "._-$,;~()";
   static const char *hex = "0123456789abcdef";
   const char *end = dst + dst_len - 1;
@@ -2591,7 +2591,7 @@ static void print_dir_entry(struct de *de) {
   }
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M",
            localtime(&de->file.modification_time));
-  url_encode(de->file_name, href, sizeof(href));
+  mg_url_encode(de->file_name, href, sizeof(href));
   de->conn->num_bytes_sent += mg_printf(de->conn,
       "<tr><td><a href=\"%s%s%s\">%s%s</a></td>"
       "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
