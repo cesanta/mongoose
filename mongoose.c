@@ -341,6 +341,7 @@ struct ssl_func {
 #define SSLv23_client_method (* (SSL_METHOD * (*)(void)) ssl_sw[17].ptr)
 #define SSL_pending (* (int (*)(SSL *)) ssl_sw[18].ptr)
 #define SSL_CTX_set_verify (* (void (*)(SSL_CTX *, int, int)) ssl_sw[19].ptr)
+#define SSL_shutdown (* (int (*)(SSL *)) ssl_sw[20].ptr)
 
 #define CRYPTO_num_locks (* (int (*)(void)) crypto_sw[0].ptr)
 #define CRYPTO_set_locking_callback \
@@ -375,6 +376,7 @@ static struct ssl_func ssl_sw[] = {
   {"SSLv23_client_method", NULL},
   {"SSL_pending", NULL},
   {"SSL_CTX_set_verify", NULL},
+  {"SSL_shutdown",   NULL},
   {NULL,    NULL}
 };
 
@@ -4646,17 +4648,20 @@ static void close_socket_gracefully(struct mg_connection *conn) {
 
 static void close_connection(struct mg_connection *conn) {
   conn->must_close = 1;
-  if (conn->client.sock != INVALID_SOCKET) {
-    close_socket_gracefully(conn);
-    conn->client.sock = INVALID_SOCKET;
-  }
+
 #ifndef NO_SSL
-  // Must be done AFTER socket is closed
   if (conn->ssl != NULL) {
+    // Run SSL_shutdown twice to ensure completly close SSL connection
+    SSL_shutdown(conn->ssl);
+    SSL_shutdown(conn->ssl);
     SSL_free(conn->ssl);
     conn->ssl = NULL;
   }
 #endif
+  if (conn->client.sock != INVALID_SOCKET) {
+    close_socket_gracefully(conn);
+    conn->client.sock = INVALID_SOCKET;
+  }
 }
 
 void mg_close_connection(struct mg_connection *conn) {
