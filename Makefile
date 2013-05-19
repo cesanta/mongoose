@@ -107,6 +107,12 @@ bsd_lua: $(ALL_OBJECTS)
 solaris:
 	$(CC) mongoose.c main.c -lnsl -lsocket -o $(PROG) $(CFLAGS)
 
+lib$(PROG).a: $(ALL_OBJECTS)
+	ar cr $@ $(ALL_OBJECTS)
+
+$(PROG).lib: $(ALL_WINOBJS)
+	$(MSVC)/bin/lib /out:$@ $(ALL_WINOBJS)
+
 # For codesign to work in non-interactive mode, unlock login keychain:
 # security unlock ~/Library/Keychains/login.keychain
 # See e.g. http://lists.apple.com/archives/apple-cdsa/2008/Jan/msg00027.html
@@ -120,12 +126,12 @@ Mongoose: mongoose.c main.c
 cocoa: Mongoose
 	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 build/mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 build/Info.plist $$DIR/Contents/ && install -m 755 Mongoose $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create Mongoose_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
 
-u:
+un:
 	$(CC) test/unit_test.c -o unit_test -I. -I$(LUA) $(LUA_SOURCES) \
           $(CFLAGS) -g -O0
 	./unit_test
 
-w:
+wi:
 	$(CL) test/unit_test.c $(LUA_SOURCES) \
           $(YASSL_SOURCES) $(YASSL_FLAGS) /DNO_SSL_DL \
           $(MSLIB) /out:unit_test.exe
@@ -172,4 +178,3 @@ clean:
 	rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz \
 	$(PROG).exe *.dll *.lib build/res.o build/res.RES *.dSYM *.zip *.pdb \
 	*.exe *.dmg $(ALL_OBJECTS) $(ALL_WINOBJS)
-
