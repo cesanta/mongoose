@@ -18,10 +18,111 @@ static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
 #include <sys/mman.h>
 #endif
 
-static void handle_request(struct mg_connection *);
+static const char *LUASOCKET = "luasocket";
 
+// Forward declarations
+static void handle_request(struct mg_connection *);
 static int handle_lsp_request(struct mg_connection *, const char *,
                               struct file *, struct lua_State *);
+
+static void reg_string(struct lua_State *L, const char *name, const char *val) {
+  lua_pushstring(L, name);
+  lua_pushstring(L, val);
+  lua_rawset(L, -3);
+}
+
+static void reg_int(struct lua_State *L, const char *name, int val) {
+  lua_pushstring(L, name);
+  lua_pushinteger(L, val);
+  lua_rawset(L, -3);
+}
+
+static void reg_function(struct lua_State *L, const char *name,
+                         lua_CFunction func, struct mg_connection *conn) {
+  lua_pushstring(L, name);
+  lua_pushlightuserdata(L, conn);
+  lua_pushcclosure(L, func, 1);
+  lua_rawset(L, -3);
+}
+
+static int lsp_sock_close(lua_State *L) {
+  if (lua_gettop(L) > 0 && lua_istable(L, -1)) {
+    lua_getfield(L, -1, "sock");
+    closesocket((SOCKET) lua_tonumber(L, -1));
+  } else {
+    return luaL_error(L, "invalid :close() call");
+  }
+  return 1;
+}
+
+static int lsp_sock_recv(lua_State *L) {
+  char buf[2000];
+  int n;
+
+  if (lua_gettop(L) > 0 && lua_istable(L, -1)) {
+    lua_getfield(L, -1, "sock");
+    n = recv((SOCKET) lua_tonumber(L, -1), buf, sizeof(buf), 0);
+    if (n <= 0) {
+      lua_pushnil(L);
+    } else {
+      lua_pushlstring(L, buf, n);
+    }
+  } else {
+    return luaL_error(L, "invalid :close() call");
+  }
+  return 1;
+}
+
+static int lsp_sock_send(lua_State *L) {
+  const char *buf;
+  size_t len, sent = 0;
+  int n, sock;
+
+  if (lua_gettop(L) > 1 && lua_istable(L, -2) && lua_isstring(L, -1)) {
+    buf = lua_tolstring(L, -1, &len);
+    lua_getfield(L, -2, "sock");
+    sock = lua_tonumber(L, -1);
+    while (sent < len) {
+      if ((n = send(sock, buf + sent, len - sent, 0)) <= 0) {
+        break;
+      }
+      sent += n;
+    }
+    lua_pushnumber(L, n);
+  } else {
+    return luaL_error(L, "invalid :close() call");
+  }
+  return 1;
+}
+
+static const struct luaL_Reg luasocket_methods[] = {
+  {"close", lsp_sock_close},
+  {"send", lsp_sock_send},
+  {"recv", lsp_sock_recv},
+  {NULL, NULL}
+};
+
+static int lsp_connect(lua_State *L) {
+  char ebuf[100];
+  SOCKET sock;
+
+  if (lua_isstring(L, -3) && lua_isnumber(L, -2) && lua_isnumber(L, -1)) {
+    sock = conn2(lua_tostring(L, -3), lua_tonumber(L, -2), lua_tonumber(L, -1),
+                 ebuf, sizeof(ebuf));
+    if (sock == INVALID_SOCKET) {
+      return luaL_error(L, ebuf);
+    } else {
+      lua_newtable(L);
+      reg_int(L, "sock", sock);
+      reg_string(L, "host", lua_tostring(L, -4));
+      luaL_getmetatable(L, LUASOCKET);
+      lua_setmetatable(L, -2);
+    }
+  } else {
+    return luaL_error(L, "connect(host,port,is_ssl): invalid parameter given.");
+  }
+  return 1;
+}
 
 static int lsp_error(lua_State *L) {
   lua_getglobal(L, "mg");
@@ -141,26 +242,6 @@ static int lsp_redirect(lua_State *L) {
   return 0;
 }
 
-static void reg_string(struct lua_State *L, const char *name, const char *val) {
-  lua_pushstring(L, name);
-  lua_pushstring(L, val);
-  lua_rawset(L, -3);
-}
-
-static void reg_int(struct lua_State *L, const char *name, int val) {
-  lua_pushstring(L, name);
-  lua_pushinteger(L, val);
-  lua_rawset(L, -3);
-}
-
-static void reg_function(struct lua_State *L, const char *name,
-                         lua_CFunction func, struct mg_connection *conn) {
-  lua_pushstring(L, name);
-  lua_pushlightuserdata(L, conn);
-  lua_pushcclosure(L, func, 1);
-  lua_rawset(L, -3);
-}
-
 void mg_prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
   const struct mg_request_info *ri = mg_get_request_info(conn);
   extern void luaL_openlibs(lua_State *);
@@ -170,6 +251,13 @@ void mg_prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
 #ifdef USE_LUA_SQLITE3
   { extern int luaopen_lsqlite3(lua_State *); luaopen_lsqlite3(L); }
 #endif
+
+  luaL_newmetatable(L, LUASOCKET);
+  lua_pushliteral(L, "__index");
+  luaL_newlib(L, luasocket_methods);
+  lua_rawset(L, -3);
+  lua_pop(L, 1);
+  lua_register(L, "connect", lsp_connect);
 
   if (conn == NULL) return;
 

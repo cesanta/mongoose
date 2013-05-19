@@ -514,6 +514,13 @@ struct mg_connection {
   int64_t last_throttle_bytes;// Bytes sent this second
 };
 
+// Directory entry
+struct de {
+  struct mg_connection *conn;
+  char *file_name;
+  struct file file;
+};
+
 const char **mg_get_valid_option_names(void) {
   return config_options;
 }
@@ -2508,11 +2515,36 @@ int mg_modify_passwords_file(const char *fname, const char *domain,
   return 1;
 }
 
-struct de {
-  struct mg_connection *conn;
-  char *file_name;
-  struct file file;
-};
+static int conn2(const char *host, int port, int use_ssl,
+                 char *ebuf, size_t ebuf_len) {
+  struct sockaddr_in sin;
+  struct hostent *he;
+  SOCKET sock = INVALID_SOCKET;
+
+  if (host == NULL) {
+    snprintf(ebuf, ebuf_len, "%s", "NULL host");
+  } else if (use_ssl && SSLv23_client_method == NULL) {
+    snprintf(ebuf, ebuf_len, "%s", "SSL is not initialized");
+    // TODO(lsm): use something threadsafe instead of gethostbyname()
+  } else if ((he = gethostbyname(host)) == NULL) {
+    snprintf(ebuf, ebuf_len, "gethostbyname(%s): %s", host, strerror(ERRNO));
+  } else if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
+    snprintf(ebuf, ebuf_len, "socket(): %s", strerror(ERRNO));
+  } else {
+    sin.sin_family = AF_INET;
+    sin.sin_port = htons((uint16_t) port);
+    sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
+    if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) != 0) {
+      snprintf(ebuf, ebuf_len, "connect(%s:%d): %s",
+               host, port, strerror(ERRNO));
+      closesocket(sock);
+      sock = INVALID_SOCKET;
+    }
+  }
+  return sock;
+}
+
+
 
 static void url_encode(const char *src, char *dst, size_t dst_len) {
   static const char *dont_escape = "._-$,;~()";
@@ -4641,54 +4673,37 @@ struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
                                  char *ebuf, size_t ebuf_len) {
   static struct mg_context fake_ctx;
   struct mg_connection *conn = NULL;
-  struct sockaddr_in sin;
-  struct hostent *he;
   SOCKET sock;
 
-  if (host == NULL) {
-    snprintf(ebuf, ebuf_len, "%s", "NULL host");
-  } else if (use_ssl && SSLv23_client_method == NULL) {
-    snprintf(ebuf, ebuf_len, "%s", "SSL is not initialized");
-  } else if ((he = gethostbyname(host)) == NULL) {
-    snprintf(ebuf, ebuf_len, "gethostbyname(%s): %s", host, strerror(ERRNO));
-  } else if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-    snprintf(ebuf, ebuf_len, "socket(): %s", strerror(ERRNO));
-  } else {
-    sin.sin_family = AF_INET;
-    sin.sin_port = htons((uint16_t) port);
-    sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
-    if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) != 0) {
-      snprintf(ebuf, ebuf_len, "connect(%s:%d): %s",
-               host, port, strerror(ERRNO));
-      closesocket(sock);
-    } else if ((conn = (struct mg_connection *)
-                calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE)) == NULL) {
-      snprintf(ebuf, ebuf_len, "calloc(): %s", strerror(ERRNO));
-      closesocket(sock);
+  if ((sock = conn2(host, port, use_ssl, ebuf, ebuf_len)) == INVALID_SOCKET) {
+  } else if ((conn = (struct mg_connection *)
+              calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE)) == NULL) {
+    snprintf(ebuf, ebuf_len, "calloc(): %s", strerror(ERRNO));
+    closesocket(sock);
 #ifndef NO_SSL
-    } else if (use_ssl && (conn->client_ssl_ctx =
-                           SSL_CTX_new(SSLv23_client_method())) == NULL) {
-      snprintf(ebuf, ebuf_len, "SSL_CTX_new error");
-      closesocket(sock);
-      free(conn);
-      conn = NULL;
+  } else if (use_ssl && (conn->client_ssl_ctx =
+                         SSL_CTX_new(SSLv23_client_method())) == NULL) {
+    snprintf(ebuf, ebuf_len, "SSL_CTX_new error");
+    closesocket(sock);
+    free(conn);
+    conn = NULL;
 #endif // NO_SSL
-    } else {
-      conn->buf_size = MAX_REQUEST_SIZE;
-      conn->buf = (char *) (conn + 1);
-      conn->ctx = &fake_ctx;
-      conn->client.sock = sock;
-      conn->client.rsa.sin = sin;
-      conn->client.is_ssl = use_ssl;
+  } else {
+    socklen_t len;
+    conn->buf_size = MAX_REQUEST_SIZE;
+    conn->buf = (char *) (conn + 1);
+    conn->ctx = &fake_ctx;
+    conn->client.sock = sock;
+    getsockname(sock, &conn->client.rsa.sa, &len);
+    conn->client.is_ssl = use_ssl;
 #ifndef NO_SSL
-      if (use_ssl) {
-        // SSL_CTX_set_verify call is needed to switch off server certificate
-        // checking, which is off by default in OpenSSL and on in yaSSL.
-        SSL_CTX_set_verify(conn->client_ssl_ctx, 0, 0);
-        sslize(conn, conn->client_ssl_ctx, SSL_connect);
-      }
-#endif
+    if (use_ssl) {
+      // SSL_CTX_set_verify call is needed to switch off server certificate
+      // checking, which is off by default in OpenSSL and on in yaSSL.
+      SSL_CTX_set_verify(conn->client_ssl_ctx, 0, 0);
+      sslize(conn, conn->client_ssl_ctx, SSL_connect);
     }
+#endif
   }
 
   return conn;
