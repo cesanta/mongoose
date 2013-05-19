@@ -81,7 +81,7 @@ static int lsp_sock_send(lua_State *L) {
   if (lua_gettop(L) > 1 && lua_istable(L, -2) && lua_isstring(L, -1)) {
     buf = lua_tolstring(L, -1, &len);
     lua_getfield(L, -2, "sock");
-    sock = lua_tonumber(L, -1);
+    sock = (int) lua_tonumber(L, -1);
     while (sent < len) {
       if ((n = send(sock, buf + sent, len - sent, 0)) <= 0) {
         break;
@@ -107,8 +107,8 @@ static int lsp_connect(lua_State *L) {
   SOCKET sock;
 
   if (lua_isstring(L, -3) && lua_isnumber(L, -2) && lua_isnumber(L, -1)) {
-    sock = conn2(lua_tostring(L, -3), lua_tonumber(L, -2), lua_tonumber(L, -1),
-                 ebuf, sizeof(ebuf));
+    sock = conn2(lua_tostring(L, -3), (int) lua_tonumber(L, -2),
+                 (int) lua_tonumber(L, -1), ebuf, sizeof(ebuf));
     if (sock == INVALID_SOCKET) {
       return luaL_error(L, ebuf);
     } else {
