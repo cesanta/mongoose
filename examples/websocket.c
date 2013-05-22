@@ -7,6 +7,20 @@
 
 static void websocket_ready_handler(struct mg_connection *conn) {
   unsigned char buf[40];
+  // HEADER section
+  // A example to negoticate Protocol
+  // const char *prot = mg_get_header(conn, "Sec-WebSocket-Protocol");
+  // if (prot){
+  //    char *p = NULL;
+  //    snprintf(buf, sizeof(buf), "%s", prot);
+  //    if ((p = strrchr(buf, ',')) != NULL) {
+  //      *p = '\0';
+  //    }
+  //    mg_printf(conn, "Sec-WebSocket-Protocol: %s\r\n", buf);
+  // }
+  // End of HEADER section
+  mg_printf(conn, "\r\n");
+  // Start of CONTENT section
   buf[0] = 0x81;
   buf[1] = snprintf((char *) buf + 2, sizeof(buf) - 2, "%s", "server ready");
   mg_write(conn, buf, 2 + buf[1]);
