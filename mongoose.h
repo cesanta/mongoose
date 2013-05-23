@@ -80,7 +80,7 @@ struct mg_callbacks {
   int (*websocket_connect)(const struct mg_connection *);
 
   // Called when websocket handshake is successfully completed, and
-  // connection is ready for data exchange.
+  // connection is ready for both HEADER update and data exchange.
   void (*websocket_ready)(struct mg_connection *);
 
   // Called when data frame has been received from the client.

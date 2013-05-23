@@ -3847,7 +3847,7 @@ static void send_websocket_handshake(struct mg_connection *conn) {
             "HTTP/1.1 101 Switching Protocols\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: ", b64_sha, "\r\n\r\n");
+            "Sec-WebSocket-Accept: ", b64_sha, "\r\n");
 }
 
 static void read_websocket(struct mg_connection *conn) {
@@ -3952,6 +3952,8 @@ static void handle_websocket_request(struct mg_connection *conn) {
     send_websocket_handshake(conn);
     if (conn->ctx->callbacks.websocket_ready != NULL) {
       conn->ctx->callbacks.websocket_ready(conn);
+    } else {
+      mg_printf(conn, "\r\n");
     }
     read_websocket(conn);
   }
