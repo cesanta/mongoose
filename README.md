@@ -14,7 +14,7 @@ simplicity by carefully selected list of features:
   [MIT license](http://en.wikipedia.org/wiki/MIT_License)
 - Works on Windows, Mac, UNIX, iPhone, Android, and many other platforms
 - Support for CGI, SSL, SSI, Digest (MD5) authorization, Websocket, WEbDAV
-- Lua server pages (PHP-like functionality using Lua), see
+- Lua server pages with Sqlite, see
   [page.lp](https://github.com/valenok/mongoose/blob/master/test/page.lp)
 - Resumed download, URL rewrite, IP-based ACL, Windows service
 - Excluding files from serving by URI pattern (file blacklist)
