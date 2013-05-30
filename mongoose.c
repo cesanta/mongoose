@@ -4291,6 +4291,8 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
   } else if (sscanf(vec->ptr, "%d%n", &port, &len) != 1 ||
              len <= 0 ||
              len > (int) vec->len ||
+             port < 1 ||
+             port > 65535 ||
              (vec->ptr[len] && vec->ptr[len] != 's' &&
               vec->ptr[len] != 'r' && vec->ptr[len] != ',')) {
     return 0;
