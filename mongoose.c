@@ -420,8 +420,11 @@ struct file {
   int64_t size;
   FILE *fp;
   const char *membuf;   // Non-NULL if file data is in memory
+  // set to 1 if the content is gzipped
+  // in which case we need a content-encoding: gzip header
+  int gzipped;
 };
-#define STRUCT_FILE_INITIALIZER {0, 0, 0, NULL, NULL}
+#define STRUCT_FILE_INITIALIZER {0, 0, 0, NULL, NULL, 0}
 
 // Describes listening socket, or socket which was accept()-ed by the master
 // thread and queued for future handling by the worker thread.
@@ -1772,6 +1775,8 @@ static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
   const char *rewrite, *uri = conn->request_info.uri;
   char *p;
   int match_len;
+  char gz_path[PATH_MAX];
+  char const* accept_encoding;
 
   // Using buf_len - 1 because memmove() for PATH_INFO may shift part
   // of the path one byte on the right.
@@ -1787,26 +1792,42 @@ static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
     }
   }
 
-  if (!mg_stat(conn, buf, filep)) {
-    // Support PATH_INFO for CGI scripts.
-    for (p = buf + strlen(buf); p > buf + 1; p--) {
-      if (*p == '/') {
-        *p = '\0';
-        if (match_prefix(conn->ctx->config[CGI_EXTENSIONS],
-                         strlen(conn->ctx->config[CGI_EXTENSIONS]), buf) > 0 &&
-            mg_stat(conn, buf, filep)) {
-          // Shift PATH_INFO block one character right, e.g.
-          //  "/x.cgi/foo/bar\x00" => "/x.cgi\x00/foo/bar\x00"
-          // conn->path_info is pointing to the local variable "path" declared
-          // in handle_request(), so PATH_INFO is not valid after
-          // handle_request returns.
-          conn->path_info = p + 1;
-          memmove(p + 2, p + 1, strlen(p + 1) + 1);  // +1 is for trailing \0
-          p[1] = '/';
-          break;
-        } else {
-          *p = '/';
-        }
+  if (mg_stat(conn, buf, filep)) return;
+
+  // if we can't find the actual file, look for the file
+  // with the same name but a .gz extension. If we find it,
+  // use that and set the gzipped flag in the file struct
+  // to indicate that the response need to have the content-
+  // encoding: gzip header
+  // we can only do this if the browser declares support
+  if ((accept_encoding = mg_get_header(conn, "Accept-Encoding")) != NULL) {
+    if (strstr(accept_encoding,"gzip") != NULL) {
+      snprintf(gz_path, sizeof(gz_path), "%s.gz", buf);
+      if (mg_stat(conn, gz_path, filep)) {
+        filep->gzipped = 1;
+        return;
+      }
+    }
+  }
+
+  // Support PATH_INFO for CGI scripts.
+  for (p = buf + strlen(buf); p > buf + 1; p--) {
+    if (*p == '/') {
+      *p = '\0';
+      if (match_prefix(conn->ctx->config[CGI_EXTENSIONS],
+                       strlen(conn->ctx->config[CGI_EXTENSIONS]), buf) > 0 &&
+          mg_stat(conn, buf, filep)) {
+        // Shift PATH_INFO block one character right, e.g.
+        //  "/x.cgi/foo/bar\x00" => "/x.cgi\x00/foo/bar\x00"
+        // conn->path_info is pointing to the local variable "path" declared
+        // in handle_request(), so PATH_INFO is not valid after
+        // handle_request returns.
+        conn->path_info = p + 1;
+        memmove(p + 2, p + 1, strlen(p + 1) + 1);  // +1 is for trailing \0
+        p[1] = '/';
+        break;
+      } else {
+        *p = '/';
       }
     }
   }
@@ -2828,17 +2849,29 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
   int64_t cl, r1, r2;
   struct vec mime_vec;
   int n;
+  char gz_path[PATH_MAX];
+  char const* encoding = "";
 
   get_mime_type(conn->ctx, path, &mime_vec);
   cl = filep->size;
   conn->status_code = 200;
   range[0] = '\0';
 
+  // if this file is in fact a pre-gzipped file, rewrite its filename
+  // it's important to rewrite the filename after resolving
+  // the mime type from it, to preserve the actual file's type
+  if (filep->gzipped) {
+    snprintf(gz_path, sizeof(gz_path), "%s.gz", path);
+    path = gz_path;
+    encoding = "Content-Encoding: gzip\r\n";
+  }
+
   if (!mg_fopen(conn, path, "rb", filep)) {
     send_http_error(conn, 500, http_500_error,
                     "fopen(%s): %s", path, strerror(ERRNO));
     return;
   }
+
   fclose_on_exec(filep);
 
   // If Range: header specified, act accordingly
@@ -2846,6 +2879,12 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
   hdr = mg_get_header(conn, "Range");
   if (hdr != NULL && (n = parse_range_header(hdr, &r1, &r2)) > 0 &&
       r1 >= 0 && r2 >= 0) {
+    // actually, range requests don't play well with a pre-gzipped
+    // file (since the range is specified in the uncmpressed space)
+    if (filep->gzipped) {
+      send_http_error(conn, 501, "Not Implemented", "range requests in gzipped files are not supported");
+      return;
+    }
     conn->status_code = 206;
     cl = n == 2 ? (r2 > cl ? cl : r2) - r1 + 1: cl - r1;
     mg_snprintf(conn, range, sizeof(range),
@@ -2871,9 +2910,9 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
       "Content-Length: %" INT64_FMT "\r\n"
       "Connection: %s\r\n"
       "Accept-Ranges: bytes\r\n"
-      "%s\r\n",
+      "%s%s\r\n",
       conn->status_code, msg, date, lm, etag, (int) mime_vec.len,
-      mime_vec.ptr, cl, suggest_connection_header(conn), range);
+      mime_vec.ptr, cl, suggest_connection_header(conn), range, encoding);
 
   if (strcmp(conn->request_info.request_method, "HEAD") != 0) {
     send_file_data(conn, filep, r1, cl);
