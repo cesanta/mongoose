@@ -463,7 +463,9 @@ static const char *config_options[] = {
   "access_log_file", NULL,
   "enable_directory_listing", "yes",
   "error_log_file", NULL,
+#ifndef _WIN32
   "enable_syslog", "no",
+#endif
   "global_auth_file", NULL,
   "index_files",
     "index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
