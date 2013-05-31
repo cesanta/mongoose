@@ -220,6 +220,7 @@ struct pollfd {
 #include <dlfcn.h>
 #endif
 #include <pthread.h>
+#include <syslog.h>
 #if defined(__MACH__)
 #define SSL_LIB   "libssl.dylib"
 #define CRYPTO_LIB  "libcrypto.dylib"
@@ -441,6 +442,9 @@ enum {
   CGI_EXTENSIONS, CGI_ENVIRONMENT, PUT_DELETE_PASSWORDS_FILE, CGI_INTERPRETER,
   PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS, THROTTLE,
   ACCESS_LOG_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
+#ifndef _WIN32
+  ENABLE_SYSLOG,
+#endif
   GLOBAL_PASSWORDS_FILE, INDEX_FILES, ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST,
   EXTRA_MIME_TYPES, LISTENING_PORTS, DOCUMENT_ROOT, SSL_CERTIFICATE,
   NUM_THREADS, RUN_AS_USER, REWRITE, HIDE_FILES, REQUEST_TIMEOUT,
@@ -459,6 +463,7 @@ static const char *config_options[] = {
   "access_log_file", NULL,
   "enable_directory_listing", "yes",
   "error_log_file", NULL,
+  "enable_syslog", "no",
   "global_auth_file", NULL,
   "index_files",
     "index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
@@ -605,6 +610,8 @@ static void sockaddr_to_string(char *buf, size_t len,
 #endif
 }
 
+static int mg_strcasecmp(const char *s1, const char *s2);
+
 static void cry(struct mg_connection *conn,
                 PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
 
@@ -624,6 +631,20 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
   // same way string option can.
   if (conn->ctx->callbacks.log_message == NULL ||
       conn->ctx->callbacks.log_message(conn, buf) == 0) {
+    src_addr[0] = '\0';
+#ifndef _WIN32
+    if (conn->ctx != NULL &&
+        mg_strcasecmp(conn->ctx->config[ENABLE_SYSLOG], "yes") == 0) {
+      sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
+      if (conn->request_info.request_method == NULL)
+        syslog(LOG_ERR, "[error] [client %s] %s", src_addr, buf);
+      else
+        syslog(LOG_ERR, "[error] [client %s] %s %s: %s", src_addr,
+               conn->request_info.request_method, conn->request_info.uri,
+               buf);
+    }
+#endif
+
     fp = conn->ctx == NULL || conn->ctx->config[ERROR_LOG_FILE] == NULL ? NULL :
       fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
 
@@ -631,7 +652,8 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
       flockfile(fp);
       timestamp = time(NULL);
 
-      sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
+      if (src_addr[0] == '\0')
+        sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
       fprintf(fp, "[%010lu] [error] [client %s] ", (unsigned long) timestamp,
               src_addr);
 
@@ -4415,9 +4437,26 @@ static void log_header(const struct mg_connection *conn, const char *header,
 }
 
 static void log_access(const struct mg_connection *conn) {
-  const struct mg_request_info *ri;
+  const struct mg_request_info *ri = NULL;
   FILE *fp;
   char date[64], src_addr[20];
+#ifndef _WIN32
+  const char *ref, *user;
+
+  if (mg_strcasecmp(conn->ctx->config[ENABLE_SYSLOG], "yes") == 0) {
+    ri = &conn->request_info;
+    sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
+    ref = mg_get_header(conn, "Referer");
+    user = mg_get_header(conn, "User-Agent");
+    syslog(LOG_NOTICE,
+           "%s - %s \"%s %s HTTP/%s\" %d %" INT64_FMT " \"%s\" \"%s\"",
+           src_addr, ri->remote_user == NULL ? "-" : ri->remote_user,
+           ri->request_method != NULL ? ri->request_method : "-",
+           ri->uri != NULL ? ri->uri : "-", ri->http_version,
+           conn->status_code, conn->num_bytes_sent,
+           ref != NULL ? ref : "-", user != NULL ? user : "-");
+  }
+#endif
 
   fp = conn->ctx->config[ACCESS_LOG_FILE] == NULL ?  NULL :
     fopen(conn->ctx->config[ACCESS_LOG_FILE], "a+");
@@ -4428,10 +4467,12 @@ static void log_access(const struct mg_connection *conn) {
   strftime(date, sizeof(date), "%d/%b/%Y:%H:%M:%S %z",
            localtime(&conn->birth_time));
 
-  ri = &conn->request_info;
+  if (ri == NULL) {
+    ri = &conn->request_info;
+    sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
+  }
   flockfile(fp);
 
-  sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
   fprintf(fp, "%s - %s [%s] \"%s %s HTTP/%s\" %d %" INT64_FMT,
           src_addr, ri->remote_user == NULL ? "-" : ri->remote_user, date,
           ri->request_method ? ri->request_method : "-",

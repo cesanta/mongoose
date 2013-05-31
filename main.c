@@ -58,6 +58,7 @@
 #else
 #include <sys/wait.h>
 #include <unistd.h>
+#include <syslog.h>
 #define DIRSEP '/'
 #define WINCDECL
 #endif // _WIN32
@@ -894,19 +895,38 @@ int main(int argc, char *argv[]) {
 }
 #else
 int main(int argc, char *argv[]) {
+  const char *enable_syslog;
+
   init_server_name();
   start_mongoose(argc, argv);
-  printf("%s started on port(s) %s with web root [%s]\n",
-         server_name, mg_get_option(ctx, "listening_ports"),
-         mg_get_option(ctx, "document_root"));
+  enable_syslog = mg_get_option(ctx, "enable_syslog");
+  if (!strcmp(enable_syslog, "yes")) {
+    openlog("Mongoose", LOG_CONS | LOG_PID, LOG_DAEMON);
+    syslog(LOG_NOTICE, "%s started on port(s) %s with web root [%s]",
+           server_name, mg_get_option(ctx, "listening_ports"),
+           mg_get_option(ctx, "document_root"));
+  } else {
+    printf("%s started on port(s) %s with web root [%s]\n",
+           server_name, mg_get_option(ctx, "listening_ports"),
+           mg_get_option(ctx, "document_root"));
+  }
   while (exit_flag == 0) {
     sleep(1);
   }
-  printf("Exiting on signal %d, waiting for all threads to finish...",
-         exit_flag);
-  fflush(stdout);
-  mg_stop(ctx);
-  printf("%s", " done.\n");
+  if (!strcmp(enable_syslog, "yes")) {
+    syslog(LOG_NOTICE,
+           "Exiting on signal %d, waiting for all threads to finish...",
+           exit_flag);
+    mg_stop(ctx);
+    syslog(LOG_NOTICE, "Stop");
+    closelog();
+  } else {
+    printf("Exiting on signal %d, waiting for all threads to finish...",
+           exit_flag);
+    fflush(stdout);
+    mg_stop(ctx);
+    printf("%s", " done.\n");
+  }
 
   return EXIT_SUCCESS;
 }
