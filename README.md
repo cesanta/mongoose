@@ -35,7 +35,8 @@ simplicity by carefully selected list of features:
   sending arbitrary HTTP/HTTPS requests
 - [User Manual](https://github.com/valenok/mongoose/blob/master/UserManual.md)
 
-Continuous build status: https://api.travis-ci.org/valenok/mongoose.png
+Continuous build status: ![build status](https://api.travis-ci.org/valenok/mongoose.png)
+
 Questions can be asked at
 [mongoose-users@google.com](http://groups.google.com/group/mongoose-users)
 mailing list.
