@@ -244,7 +244,9 @@ directory is commonly referenced as dot (`.`).
 
 ### ssl_certificate
 Path to SSL certificate file. This option is only required when at least one
-of the `listening_ports` is SSL.
+of the `listening_ports` is SSL. The file must be in PEM format,
+and it must have both private key and certificate, see for example
+[ssl_cert.pem](https://github.com/valenok/mongoose/blob/master/build/ssl_cert.pem)
 
 ### num_threads `50`
 Number of worker threads. Mongoose handles each incoming connection in a
