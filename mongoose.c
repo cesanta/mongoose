@@ -2695,6 +2695,50 @@ static int scan_directory(struct mg_connection *conn, const char *dir,
   return 1;
 }
 
+static int remove_directory(struct mg_connection *conn, const char *dir) {
+  char path[PATH_MAX];
+  struct dirent *dp;
+  DIR *dirp;
+  struct de de;
+
+  if ((dirp = opendir(dir)) == NULL) {
+    return 0;
+  } else {
+    de.conn = conn;
+
+    while ((dp = readdir(dirp)) != NULL) {
+      // Do not show current dir (but show hidden files as they will also be removed)
+      if (!strcmp(dp->d_name, ".") ||
+          !strcmp(dp->d_name, "..")) {
+        continue;
+      }
+
+      mg_snprintf(conn, path, sizeof(path), "%s%c%s", dir, '/', dp->d_name);
+
+      // If we don't memset stat structure to zero, mtime will have
+      // garbage and strftime() will segfault later on in
+      // print_dir_entry(). memset is required only if mg_stat()
+      // fails. For more details, see
+      // http://code.google.com/p/mongoose/issues/detail?id=79
+      memset(&de.file, 0, sizeof(de.file));
+      mg_stat(conn, path, &de.file);
+      if(de.file.modification_time) {
+          if(de.file.is_directory) {
+              remove_directory(conn, path);
+          } else {
+              mg_remove(path);
+          }
+      }
+
+    }
+    (void) closedir(dirp);
+
+    rmdir(dir);
+  }
+
+  return 1;
+}
+
 struct dir_scan_data {
   struct de *entries;
   int num_entries;
@@ -2948,7 +2992,9 @@ static int is_valid_http_method(const char *method) {
   return !strcmp(method, "GET") || !strcmp(method, "POST") ||
     !strcmp(method, "HEAD") || !strcmp(method, "CONNECT") ||
     !strcmp(method, "PUT") || !strcmp(method, "DELETE") ||
-    !strcmp(method, "OPTIONS") || !strcmp(method, "PROPFIND");
+    !strcmp(method, "OPTIONS") || !strcmp(method, "PROPFIND")
+    || !strcmp(method, "MKCOL")
+          ;
 }
 
 // Parse HTTP request, fill in mg_request_info structure.
@@ -3466,6 +3512,46 @@ static int put_dir(struct mg_connection *conn, const char *path) {
   return res;
 }
 
+static void mkcol(struct mg_connection *conn, const char *path) {
+  int rc, body_len;
+  struct de de;
+  memset(&de.file, 0, sizeof(de.file));
+  mg_stat(conn, path, &de.file);
+
+  if(de.file.modification_time) {
+      send_http_error(conn, 405, "Method Not Allowed",
+                      "mkcol(%s): %s", path, strerror(ERRNO));
+      return;
+  }
+
+  body_len = conn->data_len - conn->request_len;
+  if(body_len > 0) {
+      send_http_error(conn, 415, "Unsupported media type",
+                      "mkcol(%s): %s", path, strerror(ERRNO));
+      return;
+  }
+
+  rc = mg_mkdir(path, 0755);
+
+  if (rc == 0) {
+    conn->status_code = 201;
+    mg_printf(conn, "HTTP/1.1 %d Created\r\n\r\n", conn->status_code);
+  } else if (rc == -1) {
+      if(errno == EEXIST)
+        send_http_error(conn, 405, "Method Not Allowed",
+                      "mkcol(%s): %s", path, strerror(ERRNO));
+      else if(errno == EACCES)
+          send_http_error(conn, 403, "Forbidden",
+                        "mkcol(%s): %s", path, strerror(ERRNO));
+      else if(errno == ENOENT)
+          send_http_error(conn, 409, "Conflict",
+                        "mkcol(%s): %s", path, strerror(ERRNO));
+      else
+          send_http_error(conn, 500, http_500_error,
+                          "fopen(%s): %s", path, strerror(ERRNO));
+  }
+}
+
 static void put_file(struct mg_connection *conn, const char *path) {
   struct file file = STRUCT_FILE_INITIALIZER;
   const char *range;
@@ -3655,7 +3741,7 @@ static void send_options(struct mg_connection *conn) {
   conn->status_code = 200;
 
   mg_printf(conn, "%s", "HTTP/1.1 200 OK\r\n"
-            "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, OPTIONS\r\n"
+            "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, OPTIONS, PROPFIND, MKCOL\r\n"
             "DAV: 1\r\n\r\n");
 }
 
@@ -3684,10 +3770,12 @@ static void print_props(struct mg_connection *conn, const char* uri,
 
 static void print_dav_dir_entry(struct de *de, void *data) {
   char href[PATH_MAX];
+  char href_encoded[PATH_MAX];
   struct mg_connection *conn = (struct mg_connection *) data;
   mg_snprintf(conn, href, sizeof(href), "%s%s",
               conn->request_info.uri, de->file_name);
-  print_props(conn, href, &de->file);
+  mg_url_encode(href, href_encoded, PATH_MAX-1);
+  print_props(conn, href_encoded, &de->file);
 }
 
 static void handle_propfind(struct mg_connection *conn, const char *path,
@@ -4182,7 +4270,7 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
 
 static int is_put_or_delete_request(const struct mg_connection *conn) {
   const char *s = conn->request_info.request_method;
-  return s != NULL && (!strcmp(s, "PUT") || !strcmp(s, "DELETE"));
+  return s != NULL && (!strcmp(s, "PUT") || !strcmp(s, "DELETE") || !strcmp(s, "MKCOL"));
 }
 
 static int get_first_ssl_listener_index(const struct mg_context *ctx) {
@@ -4249,18 +4337,34 @@ static void handle_request(struct mg_connection *conn) {
   } else if (conn->ctx->config[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, "Not Found", "Not Found");
   } else if (is_put_or_delete_request(conn) &&
-             (conn->ctx->config[PUT_DELETE_PASSWORDS_FILE] == NULL ||
-              is_authorized_for_put(conn) != 1)) {
+             (is_authorized_for_put(conn) != 1)) {
     send_authorization_request(conn);
   } else if (!strcmp(ri->request_method, "PUT")) {
     put_file(conn, path);
+  } else if (!strcmp(ri->request_method, "MKCOL")) {
+    mkcol(conn, path);
   } else if (!strcmp(ri->request_method, "DELETE")) {
-    if (mg_remove(path) == 0) {
-      send_http_error(conn, 200, "OK", "%s", "");
-    } else {
-      send_http_error(conn, 500, http_500_error, "remove(%s): %s", path,
-                      strerror(ERRNO));
-    }
+      struct de de;
+      memset(&de.file, 0, sizeof(de.file));
+      if(!mg_stat(conn, path, &de.file)) {
+          send_http_error(conn, 404, "Not Found", "%s", "File not found");
+      } else {
+          if(de.file.modification_time) {
+              if(de.file.is_directory) {
+                  remove_directory(conn, path);
+                  send_http_error(conn, 204, "No Content", "%s", "");
+              } else if (mg_remove(path) == 0) {
+                  send_http_error(conn, 204, "No Content", "%s", "");
+              } else {
+                  send_http_error(conn, 423, "Locked", "remove(%s): %s", path,
+                          strerror(ERRNO));
+              }
+          }
+          else {
+              send_http_error(conn, 500, http_500_error, "remove(%s): %s", path,
+                    strerror(ERRNO));
+          }
+      }
   } else if ((file.membuf == NULL && file.modification_time == (time_t) 0) ||
              must_hide_file(conn, path)) {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
