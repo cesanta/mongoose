@@ -89,8 +89,8 @@ struct mg_callbacks {
   //          http://tools.ietf.org/html/rfc6455, section 5.2
   //    data, data_len: payload, with mask (if any) already applied.
   // Return value:
-  //    0:     keep this websocket connection opened.
-  //    non-0: close this websocket connection.
+  //    non-0: keep this websocket connection opened.
+  //    0:     close this websocket connection.
   int  (*websocket_data)(struct mg_connection *, int bits,
                          char *data, size_t data_len);
 
@@ -239,6 +239,10 @@ void mg_send_file(struct mg_connection *conn, const char *path);
 
 
 // Read data from the remote end, return number of bytes read.
+// Return:
+//   0     connection has been closed by peer. No more data could be read.
+//   < 0   read error. No more data could be read from the connection.
+//   > 0   number of bytes read into the buffer.
 int mg_read(struct mg_connection *, void *buf, size_t len);
 
 
@@ -333,6 +337,14 @@ const char *mg_get_builtin_mime_type(const char *file_name);
 // Return Mongoose version.
 const char *mg_version(void);
 
+// URL-decode input buffer into destination buffer.
+// 0-terminate the destination buffer.
+// form-url-encoded data differs from URI encoding in a way that it
+// uses '+' as character for space, see RFC 1866 section 8.2.1
+// http://ftp.ics.uci.edu/pub/ietf/html/rfc1866.txt
+// Return: length of the decoded data, or -1 if dst buffer is too small.
+int mg_url_decode(const char *src, int src_len, char *dst,
+                  int dst_len, int is_form_url_encoded);
 
 // MD5 hash given strings.
 // Buffer 'buf' must be 33 bytes long. Varargs is a NULL terminated list of

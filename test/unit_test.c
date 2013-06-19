@@ -463,17 +463,17 @@ static void test_lua(void) {
                                         &conn.request_info);
   conn.content_len = conn.data_len - conn.request_len;
 
-  prepare_lua_environment(&conn, L);
+  mg_prepare_lua_environment(&conn, L);
   ASSERT(lua_gettop(L) == 0);
 
   check_lua_expr(L, "'hi'", "hi");
-  check_lua_expr(L, "request_info.request_method", "POST");
-  check_lua_expr(L, "request_info.uri", "/foo/bar");
-  check_lua_expr(L, "request_info.num_headers", "2");
-  check_lua_expr(L, "request_info.remote_ip", "0");
-  check_lua_expr(L, "request_info.http_headers['Content-Length']", "12");
-  check_lua_expr(L, "request_info.http_headers['Connection']", "close");
-  (void) luaL_dostring(L, "post = read()");
+  check_lua_expr(L, "mg.request_info.request_method", "POST");
+  check_lua_expr(L, "mg.request_info.uri", "/foo/bar");
+  check_lua_expr(L, "mg.request_info.num_headers", "2");
+  check_lua_expr(L, "mg.request_info.remote_ip", "0");
+  check_lua_expr(L, "mg.request_info.http_headers['Content-Length']", "12");
+  check_lua_expr(L, "mg.request_info.http_headers['Connection']", "close");
+  (void) luaL_dostring(L, "post = mg.read()");
   check_lua_expr(L, "# post", "12");
   check_lua_expr(L, "post", "hello world!");
   lua_close(L);
@@ -580,23 +580,23 @@ static void test_api_calls(void) {
 static void test_url_decode(void) {
   char buf[100];
 
-  ASSERT(url_decode("foo", 3, buf, 3, 0) == -1);  // No space for terminating \0
-  ASSERT(url_decode("foo", 3, buf, 4, 0) == 3);
+  ASSERT(mg_url_decode("foo", 3, buf, 3, 0) == -1);  // No space for \0
+  ASSERT(mg_url_decode("foo", 3, buf, 4, 0) == 3);
   ASSERT(strcmp(buf, "foo") == 0);
 
-  ASSERT(url_decode("a+", 2, buf, sizeof(buf), 0) == 2);
+  ASSERT(mg_url_decode("a+", 2, buf, sizeof(buf), 0) == 2);
   ASSERT(strcmp(buf, "a+") == 0);
 
-  ASSERT(url_decode("a+", 2, buf, sizeof(buf), 1) == 2);
+  ASSERT(mg_url_decode("a+", 2, buf, sizeof(buf), 1) == 2);
   ASSERT(strcmp(buf, "a ") == 0);
 
-  ASSERT(url_decode("%61", 1, buf, sizeof(buf), 1) == 1);
+  ASSERT(mg_url_decode("%61", 1, buf, sizeof(buf), 1) == 1);
   ASSERT(strcmp(buf, "%") == 0);
 
-  ASSERT(url_decode("%61", 2, buf, sizeof(buf), 1) == 2);
+  ASSERT(mg_url_decode("%61", 2, buf, sizeof(buf), 1) == 2);
   ASSERT(strcmp(buf, "%6") == 0);
 
-  ASSERT(url_decode("%61", 3, buf, sizeof(buf), 1) == 1);
+  ASSERT(mg_url_decode("%61", 3, buf, sizeof(buf), 1) == 1);
   ASSERT(strcmp(buf, "a") == 0);
 }
 
