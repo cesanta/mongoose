@@ -7,7 +7,7 @@ using namespace std;
 namespace Mongoose
 {
     JsonResponse::JsonResponse()
-        : humanReadable(false);
+        : humanReadable(false)
     {
     }
 
