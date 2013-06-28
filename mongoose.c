@@ -4226,10 +4226,9 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
     // there is no other thread can save into the same file simultaneously.
     fp = NULL;
     // Construct destination file name. Do not allow paths to have slashes.
-    if ((s = strrchr(fname, '/')) == NULL) {
-        if ((s = strrchr(fname, '\\')) == NULL) {
+    if ((s = strrchr(fname, '/')) == NULL && 
+		(s = strrchr(fname, '\\')) == NULL) {
             s = fname;
-        }
     }
     
     // Open file in binary mode. TODO: set an exclusive lock.
