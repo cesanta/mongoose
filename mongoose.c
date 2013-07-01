@@ -4895,10 +4895,6 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
                !mg_strcasecmp(conn->request_info.request_method, "PUT")) {
       conn->content_len = -1;
     } else {
-      // Content-Length is not set. Set content_len to maximum possible
-      // value, instructing mg_read() to read data until socket is closed.
-      // Message boundary is not known in this case, therefore this
-      // connection must be closed after
       conn->content_len = 0;
     }
     conn->birth_time = time(NULL);
