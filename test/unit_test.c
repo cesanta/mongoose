@@ -220,9 +220,9 @@ static int begin_request_handler_cb(struct mg_connection *conn) {
 
   if (!strcmp(ri->uri, "/data")) {
     mg_printf(conn, "HTTP/1.1 200 OK\r\n"
-              "Content-Length: %d\r\n"
               "Content-Type: text/plain\r\n\r\n"
-              "%s", (int) strlen(fetch_data), fetch_data);
+              "%s", fetch_data);
+    close_connection(conn);
     return 1;
   }
 
@@ -298,12 +298,22 @@ static void test_mg_download(void) {
   free(p1), free(p2);
   mg_close_connection(conn);
 
+
   // Fetch in-memory file, should succeed.
   ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
                              "GET /blah HTTP/1.1\r\n\r\n")) != NULL);
   ASSERT((p1 = read_conn(conn, &len1)) != NULL);
   ASSERT(len1 == (int) strlen(inmemory_file_data));
   ASSERT(memcmp(p1, inmemory_file_data, len1) == 0);
+  free(p1);
+  mg_close_connection(conn);
+
+  // Fetch in-memory data with no Content-Length, should succeed.
+  ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
+                             "GET /data HTTP/1.1\r\n\r\n")) != NULL);
+  ASSERT((p1 = read_conn(conn, &len1)) != NULL);
+  ASSERT(len1 == (int) strlen(fetch_data));
+  ASSERT(memcmp(p1, fetch_data, len1) == 0);
   free(p1);
   mg_close_connection(conn);
 

@@ -1544,6 +1544,12 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
   int n, buffered_len, nread;
   const char *body;
 
+  // If Content-Length is not set, read until socket is closed
+  if (conn->consumed_content == 0 && conn->content_len == 0) {
+    conn->content_len = INT64_MAX;
+    conn->must_close = 1;
+  }
+
   nread = 0;
   if (conn->consumed_content < conn->content_len) {
     // Adjust number of bytes to read.
@@ -4889,6 +4895,10 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
                !mg_strcasecmp(conn->request_info.request_method, "PUT")) {
       conn->content_len = -1;
     } else {
+      // Content-Length is not set. Set content_len to maximum possible
+      // value, instructing mg_read() to read data until socket is closed.
+      // Message boundary is not known in this case, therefore this
+      // connection must be closed after
       conn->content_len = 0;
     }
     conn->birth_time = time(NULL);
@@ -4951,7 +4961,9 @@ static void process_new_connection(struct mg_connection *conn) {
     }
     if (ri->remote_user != NULL) {
       free((void *) ri->remote_user);
-      ri->remote_user = NULL; // when having connections with and without auth would cause double free and then crash
+      // Important! When having connections with and without auth
+      // would cause double free and then crash
+      ri->remote_user = NULL;
     }
 
     // NOTE(lsm): order is important here. should_keep_alive() call
