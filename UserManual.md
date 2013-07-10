@@ -357,6 +357,10 @@ variable is visible in the block that follows.
   the Manual should be of help. Note: the syntax changes from time to time,
   so updating the config file might be necessary after executable update.
 
+- Embedding with OpenSSL on Windows might fail because of calling convention.
+  To force Mongoose to use `__stdcall` convention, add `/Gz` compilation
+  flag in Visual Studio compiler.
+
 # Embedding
 Embedding Mongoose is easy. Copy
 [mongoose.c](https://github.com/valenok/mongoose/blob/master/mongoose.c) and
