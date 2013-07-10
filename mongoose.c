@@ -289,6 +289,8 @@ typedef int socklen_t;
 #endif // NO_SOCKLEN_T
 #define _DARWIN_UNLIMITED_SELECT
 
+#define IP_ADDR_STR_LEN 50  // IPv6 hex string is 46 chars
+
 #if !defined(MSG_NOSIGNAL)
 #define MSG_NOSIGNAL 0
 #endif
@@ -610,7 +612,7 @@ static void cry(struct mg_connection *conn,
 
 // Print error message to the opened error log stream.
 static void cry(struct mg_connection *conn, const char *fmt, ...) {
-  char buf[MG_BUF_LEN], src_addr[20];
+  char buf[MG_BUF_LEN], src_addr[IP_ADDR_STR_LEN];
   va_list ap;
   FILE *fp;
   time_t timestamp;
@@ -3230,7 +3232,7 @@ static void prepare_cgi_environment(struct mg_connection *conn,
                                     struct cgi_env_block *blk) {
   const char *s, *slash;
   struct vec var_vec;
-  char *p, src_addr[20];
+  char *p, src_addr[IP_ADDR_STR_LEN];
   int  i;
 
   blk->len = blk->nvars = 0;
@@ -4529,7 +4531,7 @@ static void log_header(const struct mg_connection *conn, const char *header,
 static void log_access(const struct mg_connection *conn) {
   const struct mg_request_info *ri;
   FILE *fp;
-  char date[64], src_addr[20];
+  char date[64], src_addr[IP_ADDR_STR_LEN];
 
   fp = conn->ctx->config[ACCESS_LOG_FILE] == NULL ?  NULL :
     fopen(conn->ctx->config[ACCESS_LOG_FILE], "a+");
@@ -5101,7 +5103,7 @@ static int set_sock_timeout(SOCKET sock, int milliseconds) {
 static void accept_new_connection(const struct socket *listener,
                                   struct mg_context *ctx) {
   struct socket so;
-  char src_addr[20];
+  char src_addr[IP_ADDR_STR_LEN];
   socklen_t len = sizeof(so.rsa);
   int on = 1;
 
