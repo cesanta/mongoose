@@ -95,7 +95,7 @@ Extra environment variables to be passed to the CGI script in
 addition to standard ones. The list must be comma-separated list
 of name=value pairs, like this: `VARIABLE1=VALUE1,VARIABLE2=VALUE2`.
 
-### put\_delete\_passwords_file
+### put\_delete\_auth\_file
 Passwords file for PUT and DELETE requests. Without it, PUT and DELETE requests
 will fail.
 
