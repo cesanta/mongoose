@@ -34,6 +34,7 @@ LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
               $(LUA)/ldblib.c $(LUA)/liolib.c $(LUA)/lmathlib.c \
               $(LUA)/loslib.c $(LUA)/lstrlib.c $(LUA)/ltablib.c \
               $(LUA)/loadlib.c $(LUA)/linit.c
+LUA_WINOBJS = $(LUA_SOURCES:%.c=%.obj)
 
 # Stock windows binary builds with Lua and YASSL library.
 YASSL       = ../cyassl-2.4.6
@@ -86,6 +87,10 @@ all:
 %.o: %.c
 	$(CC) -o $@ $< -c $(FLAGS) $(CFLAGS)
 
+# Lua library for Windows
+lua.lib: $(LUA_WINOBJS)
+	$(MSVC)/bin/lib /out:$@ $(LUA_WINOBJS)
+
 # To build with lua, make sure you have Lua unpacked into lua-5.2.1 directory
 linux_lua:
 	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c $(LUA_SOURCES) -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL -I$(LUA) -o $(PROG) -ldl $(CFLAGS)
@@ -132,9 +137,9 @@ un:
 	./unit_test
 
 wi:
-	$(CL) test/unit_test.c $(LUA_SOURCES) \
-          $(YASSL_SOURCES) $(YASSL_FLAGS) /DNO_SSL_DL \
-          $(MSLIB) /out:unit_test.exe
+	$(CL) test/unit_test.c $(LUA_SOURCES) $(LUA_FLAGS) \
+          $(YASSL_SOURCES) $(YASSL_FLAGS) /I. /DNO_SSL_DL \
+          /link /libpath:$(MSVC)/lib advapi32.lib /out:unit_test.exe
 	./unit_test.exe
 
 windows: $(ALL_WINOBJS)
