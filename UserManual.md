@@ -424,7 +424,8 @@ as well, please comment or drop an email in the mailing list.
 Note : You dont need root access to run mongoose on Android.
 
 - Download the source from the Downloads page.
-- Download the Android NDK from here
+- Download the Android NDK from
+  [here](http://developer.android.com/tools/sdk/ndk/index.html)
 - Make a folder (e.g. mongoose) and inside that make a folder named "jni".
 - Add `mongoose.h`, `mongoose.c` and `main.c` from the source to the jni folder.
 - Make a new file in the jni folder named "Android.mk".
