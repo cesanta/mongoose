@@ -1424,7 +1424,8 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
     } else if (dup2(fd_stdout, 1) == -1) {
       cry(conn, "%s: dup2(%d, 1): %s", __func__, fd_stdout, strerror(ERRNO));
     } else {
-      (void) dup2(fd_stdout, 2);
+      // Not redirecting stderr to stdout, to avoid output being littered
+      // with the error messages.
       (void) close(fd_stdin);
       (void) close(fd_stdout);
 
