@@ -62,7 +62,7 @@
 #define WINCDECL
 #endif // _WIN32
 
-#define MAX_OPTIONS 40
+#define MAX_OPTIONS 100
 #define MAX_CONF_FILE_LINE_SIZE (8 * 1024)
 
 static int exit_flag;
