@@ -4090,6 +4090,48 @@ static void read_websocket(struct mg_connection *conn) {
   }
 }
 
+int mg_websocket_write(struct mg_connection* conn, int opcode,
+                       const char *data, size_t data_len) {
+    unsigned char *copy;
+    size_t copy_len = 0;
+    int retval = -1;
+
+    if ((copy = (unsigned char *) malloc(data_len + 10)) == NULL) {
+      return -1;
+    }
+
+    copy[0] = 0x80 + (opcode & 0x0f);
+
+    // Frame format: http://tools.ietf.org/html/rfc6455#section-5.2
+    if (data_len < 126) {
+      // Inline 7-bit length field
+      copy[1] = data_len;
+      memcpy(copy + 2, data, data_len);
+      copy_len = 2 + data_len;
+    } else if (data_len <= 0xFFFF) {
+      // 16-bit length field
+      copy[1] = 126;
+      * (uint16_t *) (copy + 2) = htons(data_len);
+      memcpy(copy + 4, data, data_len);
+      copy_len = 4 + data_len;
+    } else {
+      // 64-bit length field
+      copy[1] = 127;
+      * (uint32_t *) (copy + 2) = htonl((uint64_t) data_len >> 32);
+      * (uint32_t *) (copy + 6) = htonl(data_len & 0xffffffff);
+      memcpy(copy + 10, data, data_len);
+      copy_len = 10 + data_len;
+    }
+
+    // Not thread safe
+    if (copy_len > 0) {
+      retval = mg_write(conn, copy, copy_len);
+    }
+    free(copy);
+
+    return retval;
+}
+
 static void handle_websocket_request(struct mg_connection *conn) {
   const char *version = mg_get_header(conn, "Sec-WebSocket-Version");
   if (version == NULL || strcmp(version, "13") != 0) {
