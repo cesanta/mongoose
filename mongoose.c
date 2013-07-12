@@ -3987,14 +3987,27 @@ static void send_websocket_handshake(struct mg_connection *conn) {
 }
 
 static void read_websocket(struct mg_connection *conn) {
+  // Pointer to the beginning of the portion of the incoming websocket message
+  // queue. The original websocket upgrade request is never removed,
+  // so the queue begins after it.
   unsigned char *buf = (unsigned char *) conn->buf + conn->request_len;
   int bits, n, stop = 0;
   size_t i, len, mask_len, data_len, header_len, body_len;
+  // data points to the place where the message is stored when passed to the
+  // websocket_data callback. This is either mem on the stack,
+  // or a dynamically allocated buffer if it is too large.
   char mem[4 * 1024], mask[4], *data;
 
   assert(conn->content_len == 0);
+
+  // Loop continuously, reading messages from the socket, invoking the callback,
+  // and waiting repeatedly until an error occurs.
   while (!stop) {
     header_len = 0;
+    // body_len is the length of the entire queue in bytes
+    // len is the length of the current message
+    // data_len is the length of the current message's data payload
+    // header_len is the length of the current message's header
     if ((body_len = conn->data_len - conn->request_len) >= 2) {
       len = buf[1] & 127;
       mask_len = buf[1] & 128 ? 4 : 0;
