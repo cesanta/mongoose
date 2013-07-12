@@ -123,7 +123,7 @@ $(PROG).lib: $(ALL_WINOBJS)
 # See e.g. http://lists.apple.com/archives/apple-cdsa/2008/Jan/msg00027.html
 Mongoose: mongoose.c main.c
 	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c \
-          -DUSE_COCOA $(CFLAGS) -I$(LUA) -Ibuild \
+          -DUSE_COCOA $(CFLAGS) -I$(LUA) -Ibuild -mmacosx-version-min=10.4 \
           $(YASSL_SOURCES) $(YASSL_FLAGS) -DNO_SSL_DL \
           $(LUA_SOURCES) -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL \
           -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
