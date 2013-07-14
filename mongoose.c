@@ -104,8 +104,8 @@ typedef long off_t;
 #define STRX(x) #x
 #define STR(x) STRX(x)
 #define __func__ __FILE__ ":" STR(__LINE__)
-#define strtoull(x, y, z) strtoul(x, y, z)
-#define strtoll(x, y, z) strtol(x, y, z)
+#define strtoull(x, y, z) (unsigned __int64) _atoi64(x)
+#define strtoll(x, y, z) _atoi64(x)
 #else
 #define __func__  __FUNCTION__
 #define strtoull(x, y, z) _strtoui64(x, y, z)

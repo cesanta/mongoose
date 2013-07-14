@@ -635,6 +635,13 @@ static void test_mg_get_cookie(void) {
   ASSERT(mg_get_cookie("a=1; b=2; c; d", "c", buf, sizeof(buf)) == -1);
 }
 
+static void test_strtoll(void) {
+  ASSERT(strtoll("0", NULL, 10) == 0);
+  ASSERT(strtoll("123", NULL, 10) == 123);
+  ASSERT(strtoll("-34", NULL, 10) == -34);
+  ASSERT(strtoll("3566626116", NULL, 10) == 3566626116);
+}
+
 int __cdecl main(void) {
   test_mg_strcasestr();
   test_alloc_vprintf();
@@ -654,6 +661,7 @@ int __cdecl main(void) {
   test_api_calls();
   test_url_decode();
   test_mg_get_cookie();
+  test_strtoll();
 #ifdef USE_LUA
   test_lua();
 #endif
