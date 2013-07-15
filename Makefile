@@ -95,8 +95,8 @@ lua.lib: $(LUA_WINOBJS)
 	$(MSVC)/bin/lib /out:$@ $(LUA_WINOBJS)
 
 # To build with lua, make sure you have Lua unpacked into lua-5.2.1 directory
-linux_lua:
-	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c $(LUA_SOURCES) -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL -I$(LUA) -o $(PROG) -ldl $(CFLAGS)
+linux_lua: $(ALL_OBJECTS)
+	$(CC) $(ALL_OBJECTS) -o $(PROG) -ldl
 
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
@@ -126,9 +126,8 @@ $(PROG).lib: $(ALL_WINOBJS)
 # See e.g. http://lists.apple.com/archives/apple-cdsa/2008/Jan/msg00027.html
 Mongoose: mongoose.c main.c
 	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c \
-          -DUSE_COCOA $(CFLAGS) -I$(LUA) -Ibuild -mmacosx-version-min=10.4 \
-          $(YASSL_SOURCES) $(YASSL_FLAGS) -DNO_SSL_DL \
-          $(LUA_SOURCES) -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL \
+          -DUSE_COCOA $(CFLAGS) $(FLAGS) -mmacosx-version-min=10.4 \
+          $(YASSL_SOURCES) $(LUA_SOURCES) \
           -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
 
 cocoa: Mongoose
