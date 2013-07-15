@@ -17,7 +17,7 @@
 # -DUSE_LUA               - embed Lua in Mongoose (+100kb)
 
 PROG        = mongoose
-CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread $(COPT)
+CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread
 
 # To build with Lua, download and unzip Lua 5.2.1 source code into the
 # mongoose directory, and then add $(LUA_SOURCES) to CFLAGS
@@ -66,7 +66,10 @@ ALL_SOURCES = main.c mongoose.c build/sqlite3.c build/lsqlite3.c \
 ALL_OBJECTS = $(ALL_SOURCES:%.c=%.o)
 ALL_WINOBJS = $(ALL_SOURCES:%.c=%.obj)
 
-FLAGS = -DNO_SSL_DL -DUSE_LUA -DUSE_LUA_SQLITE3 $(YASSL_FLAGS) $(LUA_FLAGS)
+SQLITE_FLAGS = -DTHREADSAFE=1 -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS
+MONGOOSE_FLAGS = -DNO_SSL_DL -DUSE_LUA -DUSE_LUA_SQLITE3 $(COPT)
+
+FLAGS = $(MONGOOSE_FLAGS) $(SQLITE_FLAGS) $(YASSL_FLAGS) $(LUA_FLAGS)
 
 # Using Visual Studio 6.0. To build Mongoose:
 #  Set MSVC variable below to where VS 6.0 is installed on your system
