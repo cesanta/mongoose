@@ -77,7 +77,7 @@ FLAGS = $(MONGOOSE_FLAGS) $(SQLITE_FLAGS) $(YASSL_FLAGS) $(LUA_FLAGS)
 MSVC = ../vc6
 #DBG = /Zi /Od
 DBG  = /DNDEBUG /O1
-CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 /GA /I$(MSVC)/include
+CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /GA /I$(MSVC)/include
 LINK = $(MSVC)/bin/link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
        user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
 
