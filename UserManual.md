@@ -186,6 +186,16 @@ working directory. If absent (default), then errors are not logged.
 ### enable\_directory\_listing `yes`
 Enable directory listing, either `yes` or `no`.
 
+### enable\_keep\_alive `no`
+Enable connection keep alive, either `yes` or `no`.
+
+Experimental feature. Allows clients to reuse TCP connection for
+subsequent HTTP requests, which improves performance.
+For this to work when using request handlers it's important to add the correct
+Content-Length HTTP header for each request. If this is forgotten the client
+will time out.
+
+
 ### global\_auth\_file
 Path to a global passwords file, either full path or relative to the current
 working directory. If set, per-directory `.htpasswd` files are ignored,
