@@ -1258,7 +1258,9 @@ static int poll(struct pollfd *pfd, int n, int milliseconds) {
 }
 #endif // HAVE_POLL
 
-#define set_close_on_exec(x) // No FD_CLOEXEC on Windows
+static void set_close_on_exec(SOCKET sock) {
+  (void) SetHandleInformation((HANDLE) sock, HANDLE_FLAG_INHERIT, 0);
+}
 
 int mg_start_thread(mg_thread_func_t f, void *p) {
   return (long)_beginthread((void (__cdecl *)(void *)) f, 0, p) == -1L ? -1 : 0;
@@ -2563,6 +2565,7 @@ static int conn2(const char *host, int port, int use_ssl,
   } else if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
     snprintf(ebuf, ebuf_len, "socket(): %s", strerror(ERRNO));
   } else {
+    set_close_on_exec(sock);
     sin.sin_family = AF_INET;
     sin.sin_port = htons((uint16_t) port);
     sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
@@ -4549,8 +4552,8 @@ static int set_ports_option(struct mg_context *ctx) {
 #endif
                bind(so.sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
                listen(so.sock, SOMAXCONN) != 0) {
-      cry(fc(ctx), "%s: cannot bind to %.*s: %s", __func__,
-          (int) vec.len, vec.ptr, strerror(ERRNO));
+      cry(fc(ctx), "%s: cannot bind to %.*s: %d", __func__,
+          (int) vec.len, vec.ptr, ERRNO);
       closesocket(so.sock);
       success = 0;
     } else if ((ptr = realloc(ctx->listening_sockets,
@@ -5170,6 +5173,7 @@ static void accept_new_connection(const struct socket *listener,
   } else {
     // Put so socket structure into the queue
     DEBUG_TRACE(("Accepted socket %d", (int) so.sock));
+    set_close_on_exec(so.sock);
     so.is_ssl = listener->is_ssl;
     so.ssl_redir = listener->ssl_redir;
     getsockname(so.sock, &so.lsa.sa, &len);
