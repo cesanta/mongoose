@@ -4223,7 +4223,7 @@ static uint32_t get_remote_ip(const struct mg_connection *conn) {
 #include "mod_lua.c"
 #endif // USE_LUA
 
-int mg_upload(struct mg_connection *conn, const char *destination_dir) {
+int mg_upload(struct mg_connection *conn, const char *destination_dir, void *user_data) {
   const char *content_type_header, *boundary_start;
   char buf[MG_BUF_LEN], path[PATH_MAX], fname[1024], boundary[100], *s;
   FILE *fp;
@@ -4330,7 +4330,7 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
     if (eof) {
       num_uploaded_files++;
       if (conn->ctx->callbacks.upload != NULL) {
-        conn->ctx->callbacks.upload(conn, path);
+        conn->ctx->callbacks.upload(conn, path, user_data);
       }
     }
   }
