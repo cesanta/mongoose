@@ -248,7 +248,7 @@ typedef int SOCKET;
 
 #include "mongoose.h"
 
-#define MONGOOSE_VERSION "3.8"
+#define MONGOOSE_VERSION "3.9"
 #define PASSWORDS_FILE_NAME ".htpasswd"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
