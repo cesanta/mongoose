@@ -24,7 +24,13 @@ Content-Type: text/html
  <form method="POST" ><input type="text" name="t1"/><input type="submit"></form>
 
  <pre>
-   POST data: [<?  mg.write(mg.read())?>]
+   POST data: [<?
+      local post_data = ''
+      if mg.request_info.request_method == 'POST' then
+        post_data = mg.read()
+      end
+      mg.write(post_data)
+    ?>]
    request method: [<? mg.write(mg.request_info.request_method) ?>]
    IP/port: [<? mg.write(mg.request_info.remote_ip, ':',
                          mg.request_info.remote_port) ?>]
