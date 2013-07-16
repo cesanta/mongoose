@@ -1528,7 +1528,7 @@ static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
 static int pull_all(FILE *fp, struct mg_connection *conn, char *buf, int len) {
   int n, nread = 0;
 
-  while (len > 0) {
+  while (len > 0 && conn->ctx->stop_flag == 0) {
     n = pull(fp, conn, buf + nread, len);
     if (n < 0) {
       nread = n;  // Propagate the error
@@ -3052,7 +3052,8 @@ static int read_request(FILE *fp, struct mg_connection *conn,
   int request_len, n = 0;
 
   request_len = get_request_len(buf, *nread);
-  while (*nread < bufsiz && request_len == 0 &&
+  while (conn->ctx->stop_flag == 0 &&
+         *nread < bufsiz && request_len == 0 &&
          (n = pull(fp, conn, buf + *nread, bufsiz - *nread)) > 0) {
     *nread += n;
     assert(*nread <= bufsiz);
