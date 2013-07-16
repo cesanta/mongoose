@@ -340,6 +340,23 @@ Mongoose exports the following to the Lua server page:
     mg.version        -- a string that holds Mongoose version
     mg.request_info   -- a table with request information
 
+    -- Connect to the remote TCP server. This function is an implementation
+    -- of simple socket interface. It returns a socket object with three
+    -- methods: send, recv, close, which are synchronous (blocking).
+    -- connect() throws an exception on connection error.
+    connect(host, port, use_ssl)
+
+    -- Example of using connect() interface:
+    local host = 'code.google.com'  -- IP address or domain name
+    local ok, sock = pcall(connect, host, 80, 1)
+    if ok then
+      sock:send('GET /p/mongoose/ HTTP/1.0\r\n' ..
+                'Host: ' .. host .. '\r\n\r\n')
+      local reply = sock:recv()
+      sock:close()
+      -- reply now contains the web page https://code.google.com/p/mongoose
+    end
+
 
 **IMPORTANT: Mongoose does not send HTTP headers for Lua pages. Therefore,
 every Lua Page must begin with HTTP reply line and headers**, like this:
