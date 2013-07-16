@@ -208,7 +208,7 @@ static int lsp_read(lua_State *L) {
   char buf[1024];
   int len = mg_read(conn, buf, sizeof(buf));
 
-  if (!len) return 0;
+  if (len <= 0) return 0;
   lua_pushlstring(L, buf, len);
 
   return 1;
