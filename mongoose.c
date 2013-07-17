@@ -1341,7 +1341,7 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   }
   GetFullPathNameA(dir, sizeof(full_dir), full_dir, NULL);
 
-  mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%s%s\\%s",
+  mg_snprintf(conn, cmdline, sizeof(cmdline), "%s%s\"%s\\%s\"",
               interp, interp[0] == '\0' ? "" : " ", full_dir, prog);
 
   DEBUG_TRACE(("Running [%s]", cmdline));
