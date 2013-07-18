@@ -43,6 +43,7 @@ struct mg_request_info {
   int remote_port;            // Client's port
   int is_ssl;                 // 1 if SSL-ed, 0 if not
   void *user_data;            // User data pointer passed to mg_start()
+  void *conn_data;            // Connection-specific user data
 
   int num_headers;            // Number of HTTP headers
   struct mg_header {
