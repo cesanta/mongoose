@@ -189,7 +189,7 @@ typedef struct DIR {
 
 #ifndef HAVE_POLL
 struct pollfd {
-  int fd;
+  SOCKET fd;
   short events;
   short revents;
 };
@@ -2549,8 +2549,8 @@ int mg_modify_passwords_file(const char *fname, const char *domain,
   return 1;
 }
 
-static int conn2(const char *host, int port, int use_ssl,
-                 char *ebuf, size_t ebuf_len) {
+static SOCKET conn2(const char *host, int port, int use_ssl,
+                    char *ebuf, size_t ebuf_len) {
   struct sockaddr_in sin;
   struct hostent *he;
   SOCKET sock = INVALID_SOCKET;
