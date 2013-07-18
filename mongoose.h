@@ -117,7 +117,7 @@ struct mg_callbacks {
   // result of mg_upload() call.
   // Parameters:
   //    file_file: full path name to the uploaded file.
-  void (*upload)(struct mg_connection *, const char *file_name);
+  void (*upload)(struct mg_connection *, const char *file_name, void *user_data);
 
   // Called when mongoose is about to send HTTP error to the client.
   // Implementing this callback allows to create custom error pages.
@@ -343,7 +343,7 @@ void mg_close_connection(struct mg_connection *conn);
 // File upload functionality. Each uploaded file gets saved into a temporary
 // file and MG_UPLOAD event is sent.
 // Return number of uploaded files.
-int mg_upload(struct mg_connection *conn, const char *destination_dir);
+int mg_upload(struct mg_connection *conn, const char *destination_dir, void *user_data);
 
 
 // Convenience function -- create detached thread.
