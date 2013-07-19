@@ -4741,8 +4741,10 @@ static int set_ssl_option(struct mg_context *ctx) {
   int i, size;
   const char *pem;
 
-  // If PEM file is not specified, skip SSL initialization.
-  if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL) {
+  // If PEM file is not specified and the init_ssl callback
+  // is not specified, skip SSL initialization.
+  if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL &&
+      ctx->callbacks.init_ssl == NULL) {
     return 1;
   }
 
