@@ -3611,11 +3611,12 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
     // File name is relative to the webserver root
     (void) mg_snprintf(conn, path, sizeof(path), "%s%c%s",
         conn->ctx->config[DOCUMENT_ROOT], '/', file_name);
-  } else if (sscanf(tag, " file=\"%[^\"]\"", file_name) == 1) {
+  } else if (sscanf(tag, " abspath=\"%[^\"]\"", file_name) == 1) {
     // File name is relative to the webserver working directory
     // or it is absolute system path
     (void) mg_snprintf(conn, path, sizeof(path), "%s", file_name);
-  } else if (sscanf(tag, " \"%[^\"]\"", file_name) == 1) {
+  } else if (sscanf(tag, " file=\"%[^\"]\"", file_name) == 1 ||
+             sscanf(tag, " \"%[^\"]\"", file_name) == 1) {
     // File name is relative to the currect document
     (void) mg_snprintf(conn, path, sizeof(path), "%s", ssi);
     if ((p = strrchr(path, '/')) != NULL) {

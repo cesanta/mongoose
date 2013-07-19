@@ -143,8 +143,10 @@ directives are supported, `<!--#include ...>` and
 three path specifications:
 
     <!--#include virtual="path">  Path is relative to web server root
-    <!--#include file="path">     Path is relative to web server working dir
-    <!--#include "path">          Path is relative to current document
+    <!--#include abspath="path">  Path is absolute or relative to
+                                  web server working dir
+    <!--#include file="path">,    Path is relative to current document
+    <!--#include "path">
 
 The `include` directive may be used to include the contents of a file or the
 result of running a CGI script. The `exec` directive is used to execute a

@@ -403,7 +403,7 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   my $abs_path = on_windows() ? 'ssi6.shtml' : 'ssi5.shtml';
   my $word = on_windows() ? 'boot loader' : 'root';
   o("GET /$abs_path HTTP/1.0\n\n",
-    "ssi_begin.+$word.+ssi_end", 'SSI #include file= (absolute)');
+    "ssi_begin.+$word.+ssi_end", 'SSI #include abspath');
   o("GET /ssi7.shtml HTTP/1.0\n\n",
     'ssi_begin.+Unit test.+ssi_end', 'SSI #include "..."');
   o("GET /ssi8.shtml HTTP/1.0\n\n",
