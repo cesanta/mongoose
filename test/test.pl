@@ -4,6 +4,7 @@
 
 use IO::Socket;
 use File::Path;
+use Cwd;
 use strict;
 use warnings;
 #use diagnostics;
@@ -243,8 +244,10 @@ write_file($path, read_file($root . $dir_separator . 'env.cgi'));
 chmod(0755, $path);
 o("GET /$test_dir_uri/x/ HTTP/1.0\n\n", "Content-Type: text/html\r\n\r\n",
   'index.cgi execution');
+
+my $cwd = getcwd();
 o("GET /$test_dir_uri/x/ HTTP/1.0\n\n",
-  "SCRIPT_FILENAME=test/test_dir/x/index.cgi", 'SCRIPT_FILENAME');
+  "SCRIPT_FILENAME=$cwd/test/test_dir/x/index.cgi", 'SCRIPT_FILENAME');
 o("GET /ta/x/ HTTP/1.0\n\n", "SCRIPT_NAME=/ta/x/index.cgi",
   'Aliases SCRIPT_NAME');
 o("GET /hello.txt HTTP/1.1\nConnection: close\n\n", 'Connection: close',
