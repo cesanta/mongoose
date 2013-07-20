@@ -17,7 +17,7 @@
 # -DUSE_LUA               - embed Lua in Mongoose (+100kb)
 
 PROG        = mongoose
-CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread
+CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe $(COPT)
 
 # To build with Lua, download and unzip Lua 5.2.1 source code into the
 # mongoose directory, and then add $(LUA_SOURCES) to CFLAGS
