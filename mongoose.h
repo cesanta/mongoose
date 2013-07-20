@@ -174,7 +174,8 @@ const char *mg_get_option(const struct mg_context *ctx, const char *name);
 
 
 // Return array of strings that represent valid configuration options.
-// For each option, a short name, long name, and default value is returned.
+// For each option, option name and default value is returned, i.e. the
+// number of entries in the array equals to number_of_options x 2.
 // Array is NULL terminated.
 const char **mg_get_valid_option_names(void);
 
