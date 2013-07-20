@@ -2219,7 +2219,6 @@ static void MD5Final(unsigned char digest[16], MD5_CTX *ctx) {
   byteReverse(ctx->in, 14);
 
   a = (uint32_t *)ctx->in;
-
   a[14] = ctx->bits[0];
   a[15] = ctx->bits[1];
 
