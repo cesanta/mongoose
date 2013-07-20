@@ -6,54 +6,22 @@
 #include "mongoose.h"
 
 static void websocket_ready_handler(struct mg_connection *conn) {
-  unsigned char buf[40];
-  buf[0] = 0x81;
-  buf[1] = snprintf((char *) buf + 2, sizeof(buf) - 2, "%s", "server ready");
-  mg_write(conn, buf, 2 + buf[1]);
+  static const char *message = "server ready";
+  mg_websocket_write(conn, WEBSOCKET_OPCODE_TEXT, message, strlen(message));
 }
 
-static int websocket_data_handler(struct mg_connection *conn) {
-  unsigned char buf[200], reply[200];
-  int n, i, mask_len, xor, msg_len, len;
+// Arguments:
+//   flags: first byte of websocket frame, see websocket RFC,
+//          http://tools.ietf.org/html/rfc6455, section 5.2
+//   data, data_len: payload data. Mask, if any, is already applied.
+static int websocket_data_handler(struct mg_connection *conn, int flags,
+                                  char *data, size_t data_len) {
+  (void) flags; // Unused
+  mg_websocket_write(conn, WEBSOCKET_OPCODE_TEXT, data, data_len);
 
-  // Read message from the client.
-  // Accept only small (<126 bytes) messages.
-  len = 0;
-  msg_len = mask_len = 0;
-  for (;;) {
-    if ((n = mg_read(conn, buf + len, sizeof(buf) - len)) <= 0) {
-      return 0;  // Read error, close websocket
-    }
-    len += n;
-    if (len >= 2) {
-      msg_len = buf[1] & 127;
-      mask_len = (buf[1] & 128) ? 4 : 0;
-      if (msg_len > 125) {
-        return 0; // Message is too long, close websocket
-      }
-      // If we've buffered the whole message, exit the loop
-      if (len >= 2 + mask_len + msg_len) {
-        break;
-      }
-    }
-  }
-
-  // Prepare frame
-  reply[0] = 0x81;  // text, FIN set
-  reply[1] = msg_len;
-
-  // Copy message from request to reply, applying the mask if required.
-  for (i = 0; i < msg_len; i++) {
-    xor = mask_len == 0 ? 0 : buf[2 + (i % 4)];
-    reply[i + 2] = buf[i + 2 + mask_len] ^ xor;
-  }
-
-  // Echo the message back to the client
-  mg_write(conn, reply, 2 + msg_len);
-
-  // Returnint zero means stoping websocket conversation.
+  // Returning zero means stoping websocket conversation.
   // Close the conversation if client has sent us "exit" string.
-  return memcmp(reply + 2, "exit", 4);
+  return memcmp(data, "exit", 4);
 }
 
 int main(void) {

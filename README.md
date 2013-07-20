@@ -14,7 +14,7 @@ simplicity by carefully selected list of features:
   [MIT license](http://en.wikipedia.org/wiki/MIT_License)
 - Works on Windows, Mac, UNIX, iPhone, Android, and many other platforms
 - Support for CGI, SSL, SSI, Digest (MD5) authorization, Websocket, WEbDAV
-- Lua server pages (PHP-like functionality using Lua), see
+- Lua server pages with Sqlite, see
   [page.lp](https://github.com/valenok/mongoose/blob/master/test/page.lp)
 - Resumed download, URL rewrite, IP-based ACL, Windows service
 - Excluding files from serving by URI pattern (file blacklist)
@@ -35,6 +35,8 @@ simplicity by carefully selected list of features:
   sending arbitrary HTTP/HTTPS requests
 - [User Manual](https://github.com/valenok/mongoose/blob/master/UserManual.md)
 
+Continuous build status: ![build status](https://api.travis-ci.org/valenok/mongoose.png)
+
 Questions can be asked at
 [mongoose-users@google.com](http://groups.google.com/group/mongoose-users)
 mailing list.
@@ -51,12 +53,16 @@ community for free is
 If you feel grateful for the stuff I've done, you can buy me a book from my
 [Amazon wishlist](http://amzn.com/w/1OC2ZCPTQYIEP?sort=priority). Many thanks
 to all who already did so: T.Barmann, D.Hughes, J.C.Sloan, R.Romeo,
-L.E.Spencer, S.Kotay, R.M.Shorter, W.Mar, J.Wilander and 7 others.
+L.E.Spencer, S.Kotay, R.M.Shorter, W.Mar, J.Wilander, Santa from Memphis,
+S.Davies and 8 others.
 Appreciated guys, you keep my brains going! Cash is also welcome indeed.
 Press [<img src="http://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif">](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DGZ2FMP95TAL6)
-button to donate. Donation progress: 280/1000 &euro;
+button to donate. Donation progress: 710/1000 &euro;
 (thanks to O.M.Vilhunen, C.Radik, G.Woodcock, M.Szczepkowski,
 Eternal Lands Dev Team, T.Tollet, C.Tangerino, G.Karsai, A.Bourgett,
-C.Blakemore, D.Fonaryov, T.Andrle, O.IJsselmuiden, R.Womack)
+C.Blakemore, D.Fonaryov, T.Andrle, O.IJsselmuiden, R.Womack, M.Tomlinson,
+A.Slåttå, L.Farrell, J.D.P.Ballestero, V.Albaev, B.Harker, T.Scheffel, H.Klein,
+R.Merit, T.Bennett, H.Solis, A.Zincenko, M.S., S.Krul, K.Cooke, S.McCallum,
+F.Morenius)
 
-![Progress](http://chart.googleapis.com/chart?chxr=0,0,1000&chxt=x&chbh=30,0,0&chs=300x35&cht=bhs&chco=90c0f0&chd=t:28)
+![Progress](http://chart.googleapis.com/chart?chxr=0,0,1000&chxt=x&chbh=30,0,0&chs=300x35&cht=bhs&chco=90c0f0&chd=t:71.0)

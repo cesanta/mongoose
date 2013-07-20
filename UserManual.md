@@ -95,7 +95,7 @@ Extra environment variables to be passed to the CGI script in
 addition to standard ones. The list must be comma-separated list
 of name=value pairs, like this: `VARIABLE1=VALUE1,VARIABLE2=VALUE2`.
 
-### put\_delete\_passwords_file
+### put\_delete\_auth\_file
 Passwords file for PUT and DELETE requests. Without it, PUT and DELETE requests
 will fail.
 
@@ -143,8 +143,10 @@ directives are supported, `<!--#include ...>` and
 three path specifications:
 
     <!--#include virtual="path">  Path is relative to web server root
-    <!--#include file="path">     Path is relative to web server working dir
-    <!--#include "path">          Path is relative to current document
+    <!--#include abspath="path">  Path is absolute or relative to
+                                  web server working dir
+    <!--#include file="path">,    Path is relative to current document
+    <!--#include "path">
 
 The `include` directive may be used to include the contents of a file or the
 result of running a CGI script. The `exec` directive is used to execute a
@@ -186,10 +188,27 @@ working directory. If absent (default), then errors are not logged.
 ### enable\_directory\_listing `yes`
 Enable directory listing, either `yes` or `no`.
 
-### global\_passwords\_file
+### enable\_keep\_alive `no`
+Enable connection keep alive, either `yes` or `no`.
+
+Experimental feature. Allows clients to reuse TCP connection for
+subsequent HTTP requests, which improves performance.
+For this to work when using request handlers it's important to add the correct
+Content-Length HTTP header for each request. If this is forgotten the client
+will time out.
+
+
+### global\_auth\_file
 Path to a global passwords file, either full path or relative to the current
 working directory. If set, per-directory `.htpasswd` files are ignored,
 and all requests are authorised against that file.
+
+The file has to include the realm set through `authentication_domain` and the password in digest format:
+
+    user:realm:digest
+    test:test.com:ce0220efc2dd2fad6185e1f1af5a4327
+
+(e.g. use [this generator](http://www.askapache.com/online-tools/htpasswd-generator))
 
 ### index_files `index.html,index.htm,index.cgi,index.shtml,index.php`
 Comma-separated list of files to be treated as directory index
@@ -237,7 +256,9 @@ directory is commonly referenced as dot (`.`).
 
 ### ssl_certificate
 Path to SSL certificate file. This option is only required when at least one
-of the `listening_ports` is SSL.
+of the `listening_ports` is SSL. The file must be in PEM format,
+and it must have both private key and certificate, see for example
+[ssl_cert.pem](https://github.com/valenok/mongoose/blob/master/build/ssl_cert.pem)
 
 ### num_threads `50`
 Number of worker threads. Mongoose handles each incoming connection in a
@@ -295,34 +316,56 @@ print current weekday name, one can write:
 
     <p>
       <span>Today is:</span>
-      <? print(os.date("%A")) ?>
+      <? mg.write(os.date("%A")) ?>
     </p>
 
-Note that this example uses function `print()`, which prints data to the
-web page. Using function `print()` is the way to generate web content from
-inside Lua code. In addition to `print()`, all standard library functions
+Note that this example uses function `mg.write()`, which prints data to the
+web page. Using function `mg.write()` is the way to generate web content from
+inside Lua code. In addition to `mg.write()`, all standard library functions
 are accessible from the Lua code (please check reference manual for details),
-and also information about the request is available in `request_info` object,
+and also information about the request is available in `mg.request_info` object,
 like request method, all headers, etcetera. Please refer to
 `struct mg_request_info` definition in
 [mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h)
-to see what kind of information is present in `request_info` object. Also,
+to see what kind of information is present in `mg.request_info` object. Also,
 [page.lp](https://github.com/valenok/mongoose/blob/master/test/page.lp) and
 [prime_numbers.lp](https://github.com/valenok/mongoose/blob/master/examples/lua/prime_numbers.lp)
 contains some example code that uses `request_info` and other functions(form submitting for example).
 
+Mongoose exports the following to the Lua server page:
 
-One substantial difference of mongoose's Lua Pages and PHP is that Mongoose
-expects Lua page to output HTTP headers. Therefore, **at the very beginning of
-every Lua Page must be a Lua block that outputs HTTP headers**, like this:
+    mg.read()         -- reads a chunk from POST data, returns it as a string
+    mg.write(str)     -- writes string to the client
+    mg.include(path)  -- sources another Lua file
+    mg.redirect(uri)  -- internal redirect to a given URI
+    mg.onerror(msg)   -- error handler, can be overridden
+    mg.version        -- a string that holds Mongoose version
+    mg.request_info   -- a table with request information
+
+    -- Connect to the remote TCP server. This function is an implementation
+    -- of simple socket interface. It returns a socket object with three
+    -- methods: send, recv, close, which are synchronous (blocking).
+    -- connect() throws an exception on connection error.
+    connect(host, port, use_ssl)
+
+    -- Example of using connect() interface:
+    local host = 'code.google.com'  -- IP address or domain name
+    local ok, sock = pcall(connect, host, 80, 1)
+    if ok then
+      sock:send('GET /p/mongoose/ HTTP/1.0\r\n' ..
+                'Host: ' .. host .. '\r\n\r\n')
+      local reply = sock:recv()
+      sock:close()
+      -- reply now contains the web page https://code.google.com/p/mongoose
+    end
+
+
+**IMPORTANT: Mongoose does not send HTTP headers for Lua pages. Therefore,
+every Lua Page must begin with HTTP reply line and headers**, like this:
 
     <? print('HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n') ?>
     <html><body>
       ... the rest of the web page ...
-
-It is easy to do things like redirects, for example:
-
-    <? print('HTTP/1.0 302 Found\r\nLocation: http://google.com\r\n\r\n') ?>
 
 To serve Lua Page, mongoose creates Lua context. That context is used for
 all Lua blocks within the page. That means, all Lua blocks on the same page
@@ -342,6 +385,10 @@ variable is visible in the block that follows.
   Syntax checking is omitted from Mongoose to keep its size low. However,
   the Manual should be of help. Note: the syntax changes from time to time,
   so updating the config file might be necessary after executable update.
+
+- Embedding with OpenSSL on Windows might fail because of calling convention.
+  To force Mongoose to use `__stdcall` convention, add `/Gz` compilation
+  flag in Visual Studio compiler.
 
 # Embedding
 Embedding Mongoose is easy. Copy
@@ -406,7 +453,8 @@ as well, please comment or drop an email in the mailing list.
 Note : You dont need root access to run mongoose on Android.
 
 - Download the source from the Downloads page.
-- Download the Android NDK from here
+- Download the Android NDK from
+  [here](http://developer.android.com/tools/sdk/ndk/index.html)
 - Make a folder (e.g. mongoose) and inside that make a folder named "jni".
 - Add `mongoose.h`, `mongoose.c` and `main.c` from the source to the jni folder.
 - Make a new file in the jni folder named "Android.mk".

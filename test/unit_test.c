@@ -220,9 +220,9 @@ static int begin_request_handler_cb(struct mg_connection *conn) {
 
   if (!strcmp(ri->uri, "/data")) {
     mg_printf(conn, "HTTP/1.1 200 OK\r\n"
-              "Content-Length: %d\r\n"
               "Content-Type: text/plain\r\n\r\n"
-              "%s", (int) strlen(fetch_data), fetch_data);
+              "%s", fetch_data);
+    close_connection(conn);
     return 1;
   }
 
@@ -298,12 +298,22 @@ static void test_mg_download(void) {
   free(p1), free(p2);
   mg_close_connection(conn);
 
+
   // Fetch in-memory file, should succeed.
   ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
                              "GET /blah HTTP/1.1\r\n\r\n")) != NULL);
   ASSERT((p1 = read_conn(conn, &len1)) != NULL);
   ASSERT(len1 == (int) strlen(inmemory_file_data));
   ASSERT(memcmp(p1, inmemory_file_data, len1) == 0);
+  free(p1);
+  mg_close_connection(conn);
+
+  // Fetch in-memory data with no Content-Length, should succeed.
+  ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
+                             "GET /data HTTP/1.1\r\n\r\n")) != NULL);
+  ASSERT((p1 = read_conn(conn, &len1)) != NULL);
+  ASSERT(len1 == (int) strlen(fetch_data));
+  ASSERT(memcmp(p1, fetch_data, len1) == 0);
   free(p1);
   mg_close_connection(conn);
 
@@ -463,17 +473,17 @@ static void test_lua(void) {
                                         &conn.request_info);
   conn.content_len = conn.data_len - conn.request_len;
 
-  prepare_lua_environment(&conn, L);
+  mg_prepare_lua_environment(&conn, L);
   ASSERT(lua_gettop(L) == 0);
 
   check_lua_expr(L, "'hi'", "hi");
-  check_lua_expr(L, "request_info.request_method", "POST");
-  check_lua_expr(L, "request_info.uri", "/foo/bar");
-  check_lua_expr(L, "request_info.num_headers", "2");
-  check_lua_expr(L, "request_info.remote_ip", "0");
-  check_lua_expr(L, "request_info.http_headers['Content-Length']", "12");
-  check_lua_expr(L, "request_info.http_headers['Connection']", "close");
-  (void) luaL_dostring(L, "post = read()");
+  check_lua_expr(L, "mg.request_info.request_method", "POST");
+  check_lua_expr(L, "mg.request_info.uri", "/foo/bar");
+  check_lua_expr(L, "mg.request_info.num_headers", "2");
+  check_lua_expr(L, "mg.request_info.remote_ip", "0");
+  check_lua_expr(L, "mg.request_info.http_headers['Content-Length']", "12");
+  check_lua_expr(L, "mg.request_info.http_headers['Connection']", "close");
+  (void) luaL_dostring(L, "post = mg.read()");
   check_lua_expr(L, "# post", "12");
   check_lua_expr(L, "post", "hello world!");
   lua_close(L);
@@ -580,23 +590,23 @@ static void test_api_calls(void) {
 static void test_url_decode(void) {
   char buf[100];
 
-  ASSERT(url_decode("foo", 3, buf, 3, 0) == -1);  // No space for terminating \0
-  ASSERT(url_decode("foo", 3, buf, 4, 0) == 3);
+  ASSERT(mg_url_decode("foo", 3, buf, 3, 0) == -1);  // No space for \0
+  ASSERT(mg_url_decode("foo", 3, buf, 4, 0) == 3);
   ASSERT(strcmp(buf, "foo") == 0);
 
-  ASSERT(url_decode("a+", 2, buf, sizeof(buf), 0) == 2);
+  ASSERT(mg_url_decode("a+", 2, buf, sizeof(buf), 0) == 2);
   ASSERT(strcmp(buf, "a+") == 0);
 
-  ASSERT(url_decode("a+", 2, buf, sizeof(buf), 1) == 2);
+  ASSERT(mg_url_decode("a+", 2, buf, sizeof(buf), 1) == 2);
   ASSERT(strcmp(buf, "a ") == 0);
 
-  ASSERT(url_decode("%61", 1, buf, sizeof(buf), 1) == 1);
+  ASSERT(mg_url_decode("%61", 1, buf, sizeof(buf), 1) == 1);
   ASSERT(strcmp(buf, "%") == 0);
 
-  ASSERT(url_decode("%61", 2, buf, sizeof(buf), 1) == 2);
+  ASSERT(mg_url_decode("%61", 2, buf, sizeof(buf), 1) == 2);
   ASSERT(strcmp(buf, "%6") == 0);
 
-  ASSERT(url_decode("%61", 3, buf, sizeof(buf), 1) == 1);
+  ASSERT(mg_url_decode("%61", 3, buf, sizeof(buf), 1) == 1);
   ASSERT(strcmp(buf, "a") == 0);
 }
 
@@ -607,6 +617,29 @@ static void test_mg_strcasestr(void) {
   ASSERT(mg_strcasestr(big1, "X") == NULL);
   ASSERT(mg_strcasestr(big1, "CD") == big1 + 2);
   ASSERT(mg_strcasestr("aa", "AAB") == NULL);
+}
+
+static void test_mg_get_cookie(void) {
+  char buf[20];
+
+  ASSERT(mg_get_cookie("", "foo", NULL, sizeof(buf)) == -2);
+  ASSERT(mg_get_cookie("", "foo", buf, 0) == -2);
+  ASSERT(mg_get_cookie("", "foo", buf, sizeof(buf)) == -1);
+  ASSERT(mg_get_cookie("", NULL, buf, sizeof(buf)) == -1);
+  ASSERT(mg_get_cookie("a=1; b=2; c; d", "a", buf, sizeof(buf)) == 1);
+  ASSERT(strcmp(buf, "1") == 0);
+  ASSERT(mg_get_cookie("a=1; b=2; c; d", "b", buf, sizeof(buf)) == 1);
+  ASSERT(strcmp(buf, "2") == 0);
+  ASSERT(mg_get_cookie("a=1; b=123", "b", buf, sizeof(buf)) == 3);
+  ASSERT(strcmp(buf, "123") == 0);
+  ASSERT(mg_get_cookie("a=1; b=2; c; d", "c", buf, sizeof(buf)) == -1);
+}
+
+static void test_strtoll(void) {
+  ASSERT(strtoll("0", NULL, 10) == 0);
+  ASSERT(strtoll("123", NULL, 10) == 123);
+  ASSERT(strtoll("-34", NULL, 10) == -34);
+  ASSERT(strtoll("3566626116", NULL, 10) == 3566626116);
 }
 
 int __cdecl main(void) {
@@ -627,6 +660,8 @@ int __cdecl main(void) {
   test_request_replies();
   test_api_calls();
   test_url_decode();
+  test_mg_get_cookie();
+  test_strtoll();
 #ifdef USE_LUA
   test_lua();
 #endif

@@ -55,14 +55,16 @@
 #define vsnprintf _vsnprintf
 #define sleep(x) Sleep((x) * 1000)
 #define WINCDECL __cdecl
+#define abs_path(rel, abs, abs_size) _fullpath((abs), (rel), (abs_size))
 #else
 #include <sys/wait.h>
 #include <unistd.h>
 #define DIRSEP '/'
 #define WINCDECL
+#define abs_path(rel, abs, abs_size) realpath((rel), (abs))
 #endif // _WIN32
 
-#define MAX_OPTIONS 40
+#define MAX_OPTIONS 100
 #define MAX_CONF_FILE_LINE_SIZE (8 * 1024)
 
 static int exit_flag;
@@ -190,15 +192,15 @@ static char *sdup(const char *str) {
 static void set_option(char **options, const char *name, const char *value) {
   int i;
 
-  if (!strcmp(name, "document_root") || !(strcmp(name, "r"))) {
-    verify_document_root(value);
-  }
-
   for (i = 0; i < MAX_OPTIONS - 3; i++) {
     if (options[i] == NULL) {
       options[i] = sdup(name);
       options[i + 1] = sdup(value);
       options[i + 2] = NULL;
+      break;
+    } else if (!strcmp(options[i], name)) {
+      free(options[i + 1]);
+      options[i + 1] = sdup(value);
       break;
     }
   }
@@ -212,8 +214,6 @@ static void process_command_line_arguments(char *argv[], char **options) {
   char line[MAX_CONF_FILE_LINE_SIZE], opt[sizeof(line)], val[sizeof(line)], *p;
   FILE *fp = NULL;
   size_t i, cmd_line_opts_start = 1, line_no = 0;
-
-  options[0] = NULL;
 
   // Should we use a config file ?
   if (argv[1] != NULL && argv[1][0] != '-') {
@@ -285,6 +285,54 @@ static int log_message(const struct mg_connection *conn, const char *message) {
   return 0;
 }
 
+static int is_path_absolute(const char *path) {
+#ifdef _WIN32
+  return path != NULL &&
+    ((path[0] == '\\' && path[1] == '\\') ||  // UNC path, e.g. \\server\dir
+     (isalpha(path[0]) && path[1] == ':' && path[2] == '\\'));  // E.g. X:\dir
+#else
+  return path != NULL && path[0] == '/';
+#endif
+}
+
+static void set_absolute_document_root(char *options[],
+                                       const char *path_to_mongoose_exe) {
+  char path[PATH_MAX], abs[PATH_MAX];
+  const char *p;
+  int i;
+
+  // Check whether document root is already set
+  for (i = 0; options[i] != NULL; i++)
+    if (!strcmp(options[i], "document_root"))
+      break;
+
+  // If document root is already set and it is an absolute path,
+  // leave it as it is -- it's already absolute.
+  if (options[i] == NULL || !is_path_absolute(options[i + 1])) {
+    // Not absolute. Use the directory where mongoose executable lives
+    // be the relative directory for everything.
+    // Extract mongoose executable directory into path.
+    if ((p = strrchr(path_to_mongoose_exe, DIRSEP)) == NULL) {
+      getcwd(path, sizeof(path));
+    } else {
+      snprintf(path, sizeof(path), "%.*s", (int) (p - path_to_mongoose_exe),
+               path_to_mongoose_exe);
+    }
+
+    // If document_root option is specified, it is relative.
+    // Append it to the mongoose's directory
+    if (options[i] != NULL && options[i + 1] != NULL) {
+      strncat(path, "/", sizeof(path) - 1);
+      strncat(path, options[i + 1], sizeof(path) - 1);
+    }
+
+    // Absolutize the path, and set the option
+    abs_path(path, abs, sizeof(abs));
+    verify_document_root(abs);
+    set_option(options, "document_root", abs);
+  }
+}
+
 static void start_mongoose(int argc, char *argv[]) {
   struct mg_callbacks callbacks;
   char *options[MAX_OPTIONS];
@@ -304,14 +352,20 @@ static void start_mongoose(int argc, char *argv[]) {
     show_usage_and_exit();
   }
 
-  /* Update config based on command line arguments */
+  options[0] = NULL;
+
+  // Update config based on command line arguments
   process_command_line_arguments(argv, options);
 
-  /* Setup signal handler: quit on Ctrl-C */
+  // Make sure we have absolute path in document_root, see discussion at
+  // https://github.com/valenok/mongoose/issues/181
+  set_absolute_document_root(options, argv[0]);
+
+  // Setup signal handler: quit on Ctrl-C
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
 
-  /* Start Mongoose */
+  // Start Mongoose
   memset(&callbacks, 0, sizeof(callbacks));
   callbacks.log_message = &log_message;
   ctx = mg_start(&callbacks, NULL, (const char **) options);
