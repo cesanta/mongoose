@@ -445,7 +445,7 @@ enum {
   ACCESS_LOG_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
   GLOBAL_PASSWORDS_FILE, INDEX_FILES, ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST,
   EXTRA_MIME_TYPES, LISTENING_PORTS, DOCUMENT_ROOT, SSL_CERTIFICATE,
-  NUM_THREADS, RUN_AS_USER, REWRITE, HIDE_FILES, REQUEST_TIMEOUT,
+  NUM_THREADS, RUN_AS_USER, REWRITE, HIDE_FILES, REQUEST_TIMEOUT, STACK_SIZE,
   NUM_OPTIONS
 };
 
@@ -475,6 +475,7 @@ static const char *config_options[] = {
   "url_rewrite_patterns", NULL,
   "hide_files_patterns", NULL,
   "request_timeout_ms", "30000",
+  "stack_size", "32000",
   NULL
 };
 
@@ -1390,15 +1391,14 @@ static void set_close_on_exec(int fd) {
   fcntl(fd, F_SETFD, FD_CLOEXEC);
 }
 
-int mg_start_thread(mg_thread_func_t func, void *param) {
+int mg_start_thread(mg_thread_func_t func, void *param, size_t stack_size) {
   pthread_t thread_id;
   pthread_attr_t attr;
   int result;
 
   (void) pthread_attr_init(&attr);
   (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-  // TODO(lsm): figure out why mongoose dies on Linux if next line is enabled
-  // (void) pthread_attr_setstacksize(&attr, sizeof(struct mg_connection) * 5);
+  (void) pthread_attr_setstacksize(&attr, stack_size);
 
   result = pthread_create(&thread_id, &attr, func, param);
   pthread_attr_destroy(&attr);
@@ -5306,6 +5306,7 @@ struct mg_context *mg_start(const struct mg_callbacks *callbacks,
                             const char **options) {
   struct mg_context *ctx;
   const char *name, *value, *default_value;
+  size_t stack_size;
   int i;
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
@@ -5376,12 +5377,17 @@ struct mg_context *mg_start(const struct mg_callbacks *callbacks,
   (void) pthread_cond_init(&ctx->sq_empty, NULL);
   (void) pthread_cond_init(&ctx->sq_full, NULL);
 
+  stack_size = atoi(ctx->config[STACK_SIZE]);
+  if (PTHREAD_STACK_MIN > stack_size) {
+      stack_size = PTHREAD_STACK_MIN;
+  }
+
   // Start master (listening) thread
-  mg_start_thread(master_thread, ctx);
+  mg_start_thread(master_thread, ctx, stack_size);
 
   // Start worker threads
   for (i = 0; i < atoi(ctx->config[NUM_THREADS]); i++) {
-    if (mg_start_thread(worker_thread, ctx) != 0) {
+    if (mg_start_thread(worker_thread, ctx, stack_size) != 0) {
       cry(fc(ctx), "Cannot start worker thread: %ld", (long) ERRNO);
     } else {
       ctx->num_threads++;
