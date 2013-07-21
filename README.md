@@ -17,7 +17,7 @@ simplicity by carefully selected list of features:
 - Lua server pages with Sqlite, see
   [page.lp](https://github.com/valenok/mongoose/blob/master/test/page.lp)
   -- that provides ready to go, powerful web development platform in
-  one single-click-and-it-runs executable!
+  one single-click-and-it-runs executable
 - Resumed download, URL rewrite, IP-based ACL, Windows service
 - Excluding files from serving by URI pattern (file blacklist)
 - Download speed limit based on client subnet or URI pattern
@@ -37,32 +37,21 @@ simplicity by carefully selected list of features:
   sending arbitrary HTTP/HTTPS requests
 - [User Manual](https://github.com/valenok/mongoose/blob/master/UserManual.md)
 
+Note that Windows and MacOS binaries have following 3rd party software
+compiled in:
+  <a href="http://wolfssl.com">WolfSSL lightweight SSL library</a>,
+  <a href="http://sqlite.org">SQLite embedded database</a>,
+  <a href="http://lua.org">Lua embedded scripting engine</a>.
+
 Questions can be asked at
 [mongoose-users@google.com](http://groups.google.com/group/mongoose-users)
 mailing list.
 
 
-# Keep Sergey happy
+# Author
 
 I am Sergey Lyubka, a software engineer from Galway, Ireland. I started
 working on Mongoose in 2004, and since then continuously improve it,
 investing thousands of hours of work. My other project I'm contributing to the
 community for free is
 [Super Light Regular Expression library](http://code.google.com/p/slre).
-
-If you feel grateful for the stuff I've done, you can buy me a book from my
-[Amazon wishlist](http://amzn.com/w/1OC2ZCPTQYIEP?sort=priority). Many thanks
-to all who already did so: T.Barmann, D.Hughes, J.C.Sloan, R.Romeo,
-L.E.Spencer, S.Kotay, R.M.Shorter, W.Mar, J.Wilander, Santa from Memphis,
-S.Davies and 8 others.
-Appreciated guys, you keep my brains going! Cash is also welcome indeed.
-Press [<img src="http://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif">](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DGZ2FMP95TAL6)
-button to donate. Donation progress: 710/1000 &euro;
-(thanks to O.M.Vilhunen, C.Radik, G.Woodcock, M.Szczepkowski,
-Eternal Lands Dev Team, T.Tollet, C.Tangerino, G.Karsai, A.Bourgett,
-C.Blakemore, D.Fonaryov, T.Andrle, O.IJsselmuiden, R.Womack, M.Tomlinson,
-A.Slåttå, L.Farrell, J.D.P.Ballestero, V.Albaev, B.Harker, T.Scheffel, H.Klein,
-R.Merit, T.Bennett, H.Solis, A.Zincenko, M.S., S.Krul, K.Cooke, S.McCallum,
-F.Morenius)
-
-![Progress](http://chart.googleapis.com/chart?chxr=0,0,1000&chxt=x&chbh=30,0,0&chs=300x35&cht=bhs&chco=90c0f0&chd=t:71.0)
