@@ -17,24 +17,20 @@ simplicity by carefully selected list of features:
 - Lua server pages with Sqlite, see
   [page.lp](https://github.com/valenok/mongoose/blob/master/test/page.lp)
   -- that provides ready to go, powerful web development platform in
-  one single-click-and-it-runs executable
+  one single-click-and-it-runs executable with **no dependencies**
 - Resumed download, URL rewrite, IP-based ACL, Windows service
 - Excluding files from serving by URI pattern (file blacklist)
 - Download speed limit based on client subnet or URI pattern
-- Small footprint: executable size is 50 kB on Linux 2.6 i386 system
-- 130 kilobytes Windows executable with all of the above and no dependencies
 - Simple and clean embedding API,
   [mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h).
   The source is in single
   [mongoose.c](https://github.com/valenok/mongoose/blob/master/mongoose.c) file
-  to make things easy
-- Embedding examples:
+  to make things easy. Embedding examples:
   [hello.c](https://github.com/valenok/mongoose/blob/master/examples/hello.c),
   [post.c](https://github.com/valenok/mongoose/blob/master/examples/post.c),
   [upload.c](https://github.com/valenok/mongoose/blob/master/examples/upload.c),
   [websocket.c](https://github.com/valenok/mongoose/blob/master/examples/websocket.c)
-- HTTP client functionality for embedded usage, capable of
-  sending arbitrary HTTP/HTTPS requests
+- HTTP client capable of sending arbitrary HTTP/HTTPS requests
 - [User Manual](https://github.com/valenok/mongoose/blob/master/UserManual.md)
 
 Note that Windows and MacOS binaries have following 3rd party software
