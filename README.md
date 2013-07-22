@@ -1,13 +1,10 @@
 # Project Mission
 
-Project mission is to provide simple, functional, embeddable web server to
-make it easy for application and device developers to implement web interface
-for their application and devices, and to offer a simple web development
-environment.
+Project mission is to provide easy to use, powerful, embeddable web server.
 
 # Overview
 
-To accomplish it's mission, Mongoose keeps balance on functionality and
+Mongoose keeps the balance between functionality and
 simplicity by carefully selected list of features:
 
 - Liberal, commercial-friendly
