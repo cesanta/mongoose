@@ -164,23 +164,6 @@ static void create_config_file(const char *path) {
 }
 #endif
 
-static void verify_document_root(const char *root) {
-  const char *p, *path;
-  char buf[PATH_MAX];
-  struct stat st;
-
-  path = root;
-  if ((p = strchr(root, ',')) != NULL && (size_t) (p - root) < sizeof(buf)) {
-    memcpy(buf, root, p - root);
-    buf[p - root] = '\0';
-    path = buf;
-  }
-
-  if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-    die("Invalid root directory: [%s]: %s", root, strerror(errno));
-  }
-}
-
 static char *sdup(const char *str) {
   char *p;
   if ((p = (char *) malloc(strlen(str) + 1)) != NULL) {
@@ -295,20 +278,40 @@ static int is_path_absolute(const char *path) {
 #endif
 }
 
-static void set_absolute_document_root(char *options[],
-                                       const char *path_to_mongoose_exe) {
-  char path[PATH_MAX], abs[PATH_MAX];
-  const char *p;
+static char *get_option(char **options, const char *option_name) {
   int i;
 
-  // Check whether document root is already set
   for (i = 0; options[i] != NULL; i++)
-    if (!strcmp(options[i], "document_root"))
-      break;
+    if (!strcmp(options[i], option_name))
+      return options[i + 1];
 
-  // If document root is already set and it is an absolute path,
+  return NULL;
+}
+
+static void verify_existence(char **options, const char *option_name,
+                             int must_be_dir) {
+  struct stat st;
+  const char *path = get_option(options, option_name);
+
+  if (path != NULL && (stat(path, &st) != 0 ||
+                       ((S_ISDIR(st.st_mode) ? 1 : 0) != must_be_dir))) {
+    die("Invalid path for %s: [%s]: (%s). Make sure that path is either "
+        "absolute, or it is relative to mongoose executable.",
+        option_name, path, strerror(errno));
+  }
+}
+
+static void set_absolute_path(char *options[], const char *option_name,
+                              const char *path_to_mongoose_exe) {
+  char path[PATH_MAX], abs[PATH_MAX], *option_value;
+  const char *p;
+
+  // Check whether option is already set
+  option_value = get_option(options, option_name);
+
+  // If option is already set and it is an absolute path,
   // leave it as it is -- it's already absolute.
-  if (options[i] == NULL || !is_path_absolute(options[i + 1])) {
+  if (option_value != NULL && !is_path_absolute(option_value)) {
     // Not absolute. Use the directory where mongoose executable lives
     // be the relative directory for everything.
     // Extract mongoose executable directory into path.
@@ -319,17 +322,12 @@ static void set_absolute_document_root(char *options[],
                path_to_mongoose_exe);
     }
 
-    // If document_root option is specified, it is relative.
-    // Append it to the mongoose's directory
-    if (options[i] != NULL && options[i + 1] != NULL) {
-      strncat(path, "/", sizeof(path) - 1);
-      strncat(path, options[i + 1], sizeof(path) - 1);
-    }
+    strncat(path, "/", sizeof(path) - 1);
+    strncat(path, option_value, sizeof(path) - 1);
 
     // Absolutize the path, and set the option
     abs_path(path, abs, sizeof(abs));
-    verify_document_root(abs);
-    set_option(options, "document_root", abs);
+    set_option(options, option_name, abs);
   }
 }
 
@@ -353,13 +351,25 @@ static void start_mongoose(int argc, char *argv[]) {
   }
 
   options[0] = NULL;
+  set_option(options, "document_root", ".");
 
   // Update config based on command line arguments
   process_command_line_arguments(argv, options);
 
-  // Make sure we have absolute path in document_root, see discussion at
+  // Make sure we have absolute paths for files and directories
   // https://github.com/valenok/mongoose/issues/181
-  set_absolute_document_root(options, argv[0]);
+  set_absolute_path(options, "document_root", argv[0]);
+  set_absolute_path(options, "put_delete_auth_file", argv[0]);
+  set_absolute_path(options, "cgi_interpreter", argv[0]);
+  set_absolute_path(options, "access_log_file", argv[0]);
+  set_absolute_path(options, "error_log_file", argv[0]);
+  set_absolute_path(options, "global_auth_file", argv[0]);
+  set_absolute_path(options, "ssl_certificate", argv[0]);
+
+  // Make extra verification for certain options
+  verify_existence(options, "document_root", 1);
+  verify_existence(options, "cgi_interpreter", 0);
+  verify_existence(options, "ssl_certificate", 0);
 
   // Setup signal handler: quit on Ctrl-C
   signal(SIGTERM, signal_handler);

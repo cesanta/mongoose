@@ -468,7 +468,7 @@ static const char *config_options[] = {
   "access_control_list", NULL,
   "extra_mime_types", NULL,
   "listening_ports", "8080",
-  "document_root",  ".",
+  "document_root",  NULL,
   "ssl_certificate", NULL,
   "num_threads", "50",
   "run_as_user", NULL,
