@@ -350,7 +350,7 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir);
 // Convenience function -- create detached thread.
 // Return: 0 on success, non-0 on error.
 typedef void * (*mg_thread_func_t)(void *);
-int mg_start_thread(mg_thread_func_t f, void *p);
+int mg_start_thread(mg_thread_func_t f, void *p, size_t stack_size);
 
 
 // Return builtin mime type for the given file name.
