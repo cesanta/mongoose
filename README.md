@@ -13,13 +13,12 @@ simplicity by carefully selected list of features:
 - Liberal, commercial-friendly
   [MIT license](http://en.wikipedia.org/wiki/MIT_License)
 - Works on Windows, Mac, UNIX, iPhone, Android, and many other platforms
-- Support for CGI, SSL, SSI, Digest (MD5) authorization, Websocket, WEbDAV
 - Scripting and database support (Lua Server Pages + Sqlite, see
   [page.lp](https://github.com/valenok/mongoose/blob/master/test/page.lp) ),
   which provides ready to go, powerful web development platform in
   one single-click executable with **no dependencies**: forget LAMP!
-- Resumed download, URL rewrite, IP-based ACL, Windows service
-- Excluding files from serving by URI pattern (file blacklist)
+- Support for CGI, SSL, SSI, Digest (MD5) authorization, Websocket, WEbDAV
+- Resumed download, URL rewrite, file blacklist, IP-based ACL, Windows service
 - Download speed limit based on client subnet or URI pattern
 - Simple and clean embedding API,
   [mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h).
