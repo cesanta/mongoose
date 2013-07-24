@@ -4917,7 +4917,7 @@ struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
     conn = NULL;
 #endif // NO_SSL
   } else {
-    socklen_t len;
+    socklen_t len = sizeof(struct sockaddr);
     conn->buf_size = MAX_REQUEST_SIZE;
     conn->buf = (char *) (conn + 1);
     conn->ctx = &fake_ctx;
