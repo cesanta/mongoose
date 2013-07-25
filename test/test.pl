@@ -171,7 +171,7 @@ my $cmd = "$mongoose_exe ".
   '-put_delete_auth_file test/passfile ' .
   '-access_control_list -0.0.0.0/0,+127.0.0.1 ' .
   "-document_root $root ".
-  "-hide_files_patterns **exploit.pl ".
+  "-hide_files_patterns **exploit.PL ".
   "-enable_keep_alive yes ".
   "-url_rewrite_patterns /aiased=/etc/,/ta=$test_dir";
 $cmd .= ' -cgi_interpreter perl' if on_windows();

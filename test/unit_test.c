@@ -154,7 +154,8 @@ static void test_match_prefix(void) {
   ASSERT(match_prefix("*", 1, "/hello/") == 0);
   ASSERT(match_prefix("**.a$|**.b$", 11, "/a/b.b/") == -1);
   ASSERT(match_prefix("**.a$|**.b$", 11, "/a/b.b") == 6);
-  ASSERT(match_prefix("**.a$|**.b$", 11, "/a/b.a") == 6);
+  ASSERT(match_prefix("**.a$|**.b$", 11, "/a/B.A") == 6);
+  ASSERT(match_prefix("**o$", 4, "HELLO") == 5);
 }
 
 static void test_remove_double_dots() {

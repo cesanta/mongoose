@@ -874,6 +874,7 @@ static const char *next_option(const char *list, struct vec *val,
   return list;
 }
 
+// Perform case-insensitive match of string against pattern
 static int match_prefix(const char *pattern, int pattern_len, const char *str) {
   const char *or_str;
   int i, j, len, res;
@@ -906,7 +907,7 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
         res = match_prefix(pattern + i, pattern_len - i, str + j + len);
       } while (res == -1 && len-- > 0);
       return res == -1 ? -1 : j + res + len;
-    } else if (pattern[i] != str[j]) {
+    } else if (lowercase(&pattern[i]) != lowercase(&str[j])) {
       return -1;
     }
   }
