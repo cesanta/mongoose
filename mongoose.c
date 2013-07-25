@@ -146,6 +146,7 @@ typedef long off_t;
 #define flockfile(x) EnterCriticalSection(&global_log_file_lock)
 #define funlockfile(x) LeaveCriticalSection(&global_log_file_lock)
 #define sleep(x) Sleep((x) * 1000)
+#define rmdir(x) _rmdir(x)
 
 #if !defined(va_copy)
 #define va_copy(x, y) x = y
@@ -1788,7 +1789,8 @@ int mg_get_cookie(const char *cookie_header, const char *var_name,
 static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
                                      size_t buf_len, struct file *filep) {
   struct vec a, b;
-  const char *rewrite, *uri = conn->request_info.uri;
+  const char *rewrite, *uri = conn->request_info.uri,
+        *root = conn->ctx->config[DOCUMENT_ROOT];
   char *p;
   int match_len;
   char gz_path[PATH_MAX];
@@ -1796,8 +1798,10 @@ static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
 
   // Using buf_len - 1 because memmove() for PATH_INFO may shift part
   // of the path one byte on the right.
-  mg_snprintf(conn, buf, buf_len - 1, "%s%s", conn->ctx->config[DOCUMENT_ROOT],
-              uri);
+  // If document_root is NULL, leave the file empty.
+  mg_snprintf(conn, buf, buf_len - 1, "%s%s",
+              root == NULL ? "" : root,
+              root == NULL ? "" : uri);
 
   rewrite = conn->ctx->config[REWRITE];
   while ((rewrite = next_option(rewrite, &a, &b)) != NULL) {
