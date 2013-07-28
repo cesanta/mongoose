@@ -308,6 +308,7 @@ static const char *http_500_error = "Internal Server Error";
 
 #if defined(NO_SSL_DL)
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 #else
 // SSL loaded dynamically from DLL.
 // I put the prototypes here to be independent from OpenSSL source installation.
