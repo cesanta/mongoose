@@ -22,6 +22,14 @@
 
 #define USE_WEBSOCKET
 #define USE_LUA
+
+#ifndef _WIN32
+#define __cdecl
+#define USE_IPV6
+#endif
+
+// USE_* definitions must be made before #include "mongoose.c" !
+
 #include "mongoose.c"
 
 static int s_total_tests = 0;
@@ -44,10 +52,6 @@ static int s_failed_tests = 0;
   "127.0.0.1:" HTTP_PORT "r"    \
   ",127.0.0.1:" HTTPS_PORT "s"  \
   ",127.0.0.1:" HTTP_PORT2
-
-#ifndef _WIN32
-#define __cdecl
-#endif
 
 static void test_parse_http_message() {
   struct mg_request_info ri;
@@ -719,7 +723,37 @@ static void test_strtoll(void) {
   ASSERT(strtoll("3566626116", NULL, 10) == 3566626116);
 }
 
+static void test_parse_port_string(void) {
+  static const char *valid[] = {
+    "1", "1s", "1r", "1.2.3.4:1", "1.2.3.4:1s", "1.2.3.4:1r",
+#if defined(USE_IPV6)
+    "[::1]:123", "[3ffe:2a00:100:7031::1]:900",
+#endif
+    NULL
+  };
+  static const char *invalid[] = {
+    "0", "99999", "1k", "1.2.3", "1.2.3.4:", "1.2.3.4:2p",
+    NULL
+  };
+  struct socket so;
+  struct vec vec;
+  int i;
+
+  for (i = 0; valid[i] != NULL; i++) {
+    vec.ptr = valid[i];
+    vec.len = strlen(vec.ptr);
+    ASSERT(parse_port_string(&vec, &so) != 0);
+  }
+
+  for (i = 0; invalid[i] != NULL; i++) {
+    vec.ptr = invalid[i];
+    vec.len = strlen(vec.ptr);
+    ASSERT(parse_port_string(&vec, &so) == 0);
+  }
+}
+
 int __cdecl main(void) {
+  test_parse_port_string();
   test_mg_strcasestr();
   test_alloc_vprintf();
   test_base64_encode();

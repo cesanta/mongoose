@@ -4499,41 +4499,50 @@ static void close_all_listening_sockets(struct mg_context *ctx) {
   free(ctx->listening_sockets);
 }
 
+static int is_valid_port(unsigned int port) {
+  return port > 0 && port < 0xffff;
+}
+
 // Valid listening port specification is: [ip_address:]port[s]
 // Examples: 80, 443s, 127.0.0.1:3128, 1.2.3.4:8080s
 // TODO(lsm): add parsing of the IPv6 address
 static int parse_port_string(const struct vec *vec, struct socket *so) {
-  int a, b, c, d, port, len;
+  unsigned int a, b, c, d, ch, len, port;
+#if defined(USE_IPV6)
+  char buf[100];
+#endif
 
   // MacOS needs that. If we do not zero it, subsequent bind() will fail.
   // Also, all-zeroes in the socket address means binding to all addresses
   // for both IPv4 and IPv6 (INADDR_ANY and IN6ADDR_ANY_INIT).
   memset(so, 0, sizeof(*so));
+  so->lsa.sin.sin_family = AF_INET;
 
-  if (sscanf(vec->ptr, "%d.%d.%d.%d:%d%n", &a, &b, &c, &d, &port, &len) == 5) {
-    // Bind to a specific IPv4 address
+  if (sscanf(vec->ptr, "%u.%u.%u.%u:%u%n", &a, &b, &c, &d, &port, &len) == 5) {
+    // Bind to a specific IPv4 address, e.g. 192.168.1.5:8080
     so->lsa.sin.sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
-  } else if (sscanf(vec->ptr, "%d%n", &port, &len) != 1 ||
-             len <= 0 ||
-             len > (int) vec->len ||
-             port < 1 ||
-             port > 65535 ||
-             (vec->ptr[len] && vec->ptr[len] != 's' &&
-              vec->ptr[len] != 'r' && vec->ptr[len] != ',')) {
-    return 0;
+    so->lsa.sin.sin_port = htons((uint16_t) port);
+#if defined(USE_IPV6)
+  } else if (sscanf(vec->ptr, "[%49[^]]]:%d%n", buf, &port, &len) == 2 &&
+             inet_pton(AF_INET6, buf, &so->lsa.sin6.sin6_addr)) {
+    // IPv6 address, e.g. [3ffe:2a00:100:7031::1]:8080
+    so->lsa.sin6.sin6_family = AF_INET6;
+    so->lsa.sin6.sin6_port = htons((uint16_t) port);
+#endif
+  } else if (sscanf(vec->ptr, "%u%n", &port, &len) == 1) {
+    // If only port is specified, bind to IPv4, INADDR_ANY
+    so->lsa.sin.sin_port = htons((uint16_t) port);
+  } else {
+    port = len = 0;   // Parsing failure. Make port invalid.
   }
 
-  so->is_ssl = vec->ptr[len] == 's';
-  so->ssl_redir = vec->ptr[len] == 'r';
-#if defined(USE_IPV6)
-  so->lsa.sin6.sin6_family = AF_INET6;
-  so->lsa.sin6.sin6_port = htons((uint16_t) port);
-#else
-  so->lsa.sin.sin_family = AF_INET;
-  so->lsa.sin.sin_port = htons((uint16_t) port);
-#endif
+  ch = vec->ptr[len];  // Next character after the port number
+  so->is_ssl = ch == 's';
+  so->ssl_redir = ch == 'r';
 
-  return 1;
+  // Make sure the port is valid and vector ends with 's', 'r' or ','
+  return is_valid_port(port) &&
+    (ch == '\0' || ch == 's' || ch == 'r' || ch == ',');
 }
 
 static int set_ports_option(struct mg_context *ctx) {
@@ -4548,7 +4557,7 @@ static int set_ports_option(struct mg_context *ctx) {
   while (success && (list = next_option(list, &vec, NULL)) != NULL) {
     if (!parse_port_string(&vec, &so)) {
       cry(fc(ctx), "%s: %.*s: invalid port spec. Expecting list of: %s",
-          __func__, (int) vec.len, vec.ptr, "[IP_ADDRESS:]PORT[s|p]");
+          __func__, (int) vec.len, vec.ptr, "[IP_ADDRESS:]PORT[s|r]");
       success = 0;
     } else if (so.is_ssl && ctx->ssl_ctx == NULL) {
       cry(fc(ctx), "Cannot add SSL socket, is -ssl_certificate option set?");
@@ -4560,10 +4569,12 @@ static int set_ports_option(struct mg_context *ctx) {
                setsockopt(so.sock, SOL_SOCKET, SO_REUSEADDR,
                           (void *) &on, sizeof(on)) != 0 ||
 #if defined(USE_IPV6)
-               setsockopt(so.sock, IPPROTO_IPV6, IPV6_V6ONLY, (void *) &off,
-                          sizeof(off)) != 0 ||
+               (so.lsa.sa.sa_family == AF_INET6 &&
+                setsockopt(so.sock, IPPROTO_IPV6, IPV6_V6ONLY, (void *) &off,
+                           sizeof(off)) != 0) ||
 #endif
-               bind(so.sock, &so.lsa.sa, sizeof(so.lsa)) != 0 ||
+               bind(so.sock, &so.lsa.sa, so.lsa.sa.sa_family == AF_INET ?
+                    sizeof(so.lsa.sin) : sizeof(so.lsa)) != 0 ||
                listen(so.sock, SOMAXCONN) != 0) {
       cry(fc(ctx), "%s: cannot bind to %.*s: %d", __func__,
           (int) vec.len, vec.ptr, ERRNO);
