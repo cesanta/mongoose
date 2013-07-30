@@ -17,10 +17,13 @@ namespace Mongoose
 
         // Downloading POST data
         ostringstream postData;
-		int n;
-        char post[1024];
-        while (n = mg_read(connection, post, sizeof(post))) {
-			postData.write(post, n);
+
+        if (method == "POST") {
+            int n;
+            char post[1024];
+            while (n = mg_read(connection, post, sizeof(post))) {
+                postData.write(post, n);
+            }
         }
         data = postData.str();
     }
@@ -108,7 +111,7 @@ namespace Mongoose
 
         return fallback;
     }
-            
+
     bool Request::hasCookie(string key)
     {
         int i;
@@ -116,7 +119,7 @@ namespace Mongoose
 
         for (i=0; i<request->num_headers; i++) {
             struct mg_request_info::mg_header *header = &request->http_headers[i];
-            
+
             if (strcmp(header->name, "Cookie") == 0) {
                 if (mg_get_cookie(header->value, key.c_str(), dummy, sizeof(dummy)) != -1) {
                     return true;
@@ -136,10 +139,10 @@ namespace Mongoose
         char *buffer = new char[size];
         char dummy[10];
         const char *place = NULL;
-        
+
         for (i=0; i<request->num_headers; i++) {
             struct mg_request_info::mg_header *header = &request->http_headers[i];
-            
+
             if (strcmp(header->name, "Cookie") == 0) {
                 if (mg_get_cookie(header->value, key.c_str(), dummy, sizeof(dummy)) != -1) {
                     place = header->value;

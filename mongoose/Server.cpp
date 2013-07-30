@@ -170,7 +170,7 @@ namespace Mongoose
     {
         Response *response;
         vector<Controller *>::iterator it;
-        
+ 
         mutex.lock();
         requests++;
         mutex.unlock();
