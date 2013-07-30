@@ -4577,8 +4577,8 @@ static int set_ports_option(struct mg_context *ctx) {
                bind(so.sock, &so.lsa.sa, so.lsa.sa.sa_family == AF_INET ?
                     sizeof(so.lsa.sin) : sizeof(so.lsa)) != 0 ||
                listen(so.sock, SOMAXCONN) != 0) {
-      cry(fc(ctx), "%s: cannot bind to %.*s: %d", __func__,
-          (int) vec.len, vec.ptr, ERRNO);
+      cry(fc(ctx), "%s: cannot bind to %.*s: %d (%s)", __func__,
+          (int) vec.len, vec.ptr, ERRNO, strerror(errno));
       closesocket(so.sock);
       success = 0;
     } else if ((ptr = realloc(ctx->listening_sockets,
