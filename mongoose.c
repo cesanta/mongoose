@@ -2402,7 +2402,7 @@ static char *mg_fgets(char *buf, size_t size, struct file *filep, char **p) {
   size_t len;
 
   if (filep->membuf != NULL && *p != NULL) {
-    eof = memchr(*p, '\n', &filep->membuf[filep->size] - *p);
+    eof = (char *) memchr(*p, '\n', &filep->membuf[filep->size] - *p);
     len = (size_t) (eof - *p) > size - 1 ? size - 1 : (size_t) (eof - *p);
     memcpy(buf, *p, len);
     buf[len] = '\0';
@@ -4524,6 +4524,7 @@ static int parse_port_string(const struct vec *vec, struct socket *so) {
     so->lsa.sin.sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
     so->lsa.sin.sin_port = htons((uint16_t) port);
 #if defined(USE_IPV6)
+
   } else if (sscanf(vec->ptr, "[%49[^]]]:%d%n", buf, &port, &len) == 2 &&
              inet_pton(AF_INET6, buf, &so->lsa.sin6.sin6_addr)) {
     // IPv6 address, e.g. [3ffe:2a00:100:7031::1]:8080
@@ -4581,7 +4582,7 @@ static int set_ports_option(struct mg_context *ctx) {
           (int) vec.len, vec.ptr, ERRNO, strerror(errno));
       closesocket(so.sock);
       success = 0;
-    } else if ((ptr = realloc(ctx->listening_sockets,
+    } else if ((ptr = (struct socket *) realloc(ctx->listening_sockets,
                               (ctx->num_listening_sockets + 1) *
                               sizeof(ctx->listening_sockets[0]))) == NULL) {
       closesocket(so.sock);
@@ -5101,7 +5102,7 @@ static int consume_socket(struct mg_context *ctx, struct socket *sp) {
 }
 
 static void *worker_thread(void *thread_func_param) {
-  struct mg_context *ctx = thread_func_param;
+  struct mg_context *ctx = (struct mg_context *) thread_func_param;
   struct mg_connection *conn;
 
   conn = (struct mg_connection *) calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE);
@@ -5217,7 +5218,7 @@ static void accept_new_connection(const struct socket *listener,
 }
 
 static void *master_thread(void *thread_func_param) {
-  struct mg_context *ctx = thread_func_param;
+  struct mg_context *ctx = (struct mg_context *) thread_func_param;
   struct pollfd *pfd;
   int i;
 
@@ -5232,7 +5233,7 @@ static void *master_thread(void *thread_func_param) {
   pthread_setschedparam(pthread_self(), SCHED_RR, &sched_param);
 #endif
 
-  pfd = calloc(ctx->num_listening_sockets, sizeof(pfd[0]));
+  pfd = (struct pollfd *) calloc(ctx->num_listening_sockets, sizeof(pfd[0]));
   while (pfd != NULL && ctx->stop_flag == 0) {
     for (i = 0; i < ctx->num_listening_sockets; i++) {
       pfd[i].fd = ctx->listening_sockets[i].sock;
