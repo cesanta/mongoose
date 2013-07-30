@@ -55,14 +55,16 @@
 #define vsnprintf _vsnprintf
 #define sleep(x) Sleep((x) * 1000)
 #define WINCDECL __cdecl
+#define abs_path(rel, abs, abs_size) _fullpath((abs), (rel), (abs_size))
 #else
 #include <sys/wait.h>
 #include <unistd.h>
 #define DIRSEP '/'
 #define WINCDECL
+#define abs_path(rel, abs, abs_size) realpath((rel), (abs))
 #endif // _WIN32
 
-#define MAX_OPTIONS 40
+#define MAX_OPTIONS 100
 #define MAX_CONF_FILE_LINE_SIZE (8 * 1024)
 
 static int exit_flag;
@@ -162,23 +164,6 @@ static void create_config_file(const char *path) {
 }
 #endif
 
-static void verify_document_root(const char *root) {
-  const char *p, *path;
-  char buf[PATH_MAX];
-  struct stat st;
-
-  path = root;
-  if ((p = strchr(root, ',')) != NULL && (size_t) (p - root) < sizeof(buf)) {
-    memcpy(buf, root, p - root);
-    buf[p - root] = '\0';
-    path = buf;
-  }
-
-  if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-    die("Invalid root directory: [%s]: %s", root, strerror(errno));
-  }
-}
-
 static char *sdup(const char *str) {
   char *p;
   if ((p = (char *) malloc(strlen(str) + 1)) != NULL) {
@@ -190,15 +175,15 @@ static char *sdup(const char *str) {
 static void set_option(char **options, const char *name, const char *value) {
   int i;
 
-  if (!strcmp(name, "document_root") || !(strcmp(name, "r"))) {
-    verify_document_root(value);
-  }
-
   for (i = 0; i < MAX_OPTIONS - 3; i++) {
     if (options[i] == NULL) {
       options[i] = sdup(name);
       options[i + 1] = sdup(value);
       options[i + 2] = NULL;
+      break;
+    } else if (!strcmp(options[i], name)) {
+      free(options[i + 1]);
+      options[i + 1] = sdup(value);
       break;
     }
   }
@@ -212,8 +197,6 @@ static void process_command_line_arguments(char *argv[], char **options) {
   char line[MAX_CONF_FILE_LINE_SIZE], opt[sizeof(line)], val[sizeof(line)], *p;
   FILE *fp = NULL;
   size_t i, cmd_line_opts_start = 1, line_no = 0;
-
-  options[0] = NULL;
 
   // Should we use a config file ?
   if (argv[1] != NULL && argv[1][0] != '-') {
@@ -275,7 +258,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
 }
 
 static void init_server_name(void) {
-  snprintf(server_name, sizeof(server_name), "Mongoose web server v. %s",
+  snprintf(server_name, sizeof(server_name), "Mongoose web server v.%s",
            mg_version());
 }
 
@@ -283,6 +266,69 @@ static int log_message(const struct mg_connection *conn, const char *message) {
   (void) conn;
   printf("%s\n", message);
   return 0;
+}
+
+static int is_path_absolute(const char *path) {
+#ifdef _WIN32
+  return path != NULL &&
+    ((path[0] == '\\' && path[1] == '\\') ||  // UNC path, e.g. \\server\dir
+     (isalpha(path[0]) && path[1] == ':' && path[2] == '\\'));  // E.g. X:\dir
+#else
+  return path != NULL && path[0] == '/';
+#endif
+}
+
+static char *get_option(char **options, const char *option_name) {
+  int i;
+
+  for (i = 0; options[i] != NULL; i++)
+    if (!strcmp(options[i], option_name))
+      return options[i + 1];
+
+  return NULL;
+}
+
+static void verify_existence(char **options, const char *option_name,
+                             int must_be_dir) {
+  struct stat st;
+  const char *path = get_option(options, option_name);
+
+  if (path != NULL && (stat(path, &st) != 0 ||
+                       ((S_ISDIR(st.st_mode) ? 1 : 0) != must_be_dir))) {
+    die("Invalid path for %s: [%s]: (%s). Make sure that path is either "
+        "absolute, or it is relative to mongoose executable.",
+        option_name, path, strerror(errno));
+  }
+}
+
+static void set_absolute_path(char *options[], const char *option_name,
+                              const char *path_to_mongoose_exe) {
+  char path[PATH_MAX], abs[PATH_MAX], *option_value;
+  const char *p;
+
+  // Check whether option is already set
+  option_value = get_option(options, option_name);
+
+  // If option is already set and it is an absolute path,
+  // leave it as it is -- it's already absolute.
+  if (option_value != NULL && !is_path_absolute(option_value)) {
+    // Not absolute. Use the directory where mongoose executable lives
+    // be the relative directory for everything.
+    // Extract mongoose executable directory into path.
+    if ((p = strrchr(path_to_mongoose_exe, DIRSEP)) == NULL) {
+      getcwd(path, sizeof(path));
+    } else {
+      snprintf(path, sizeof(path), "%.*s", (int) (p - path_to_mongoose_exe),
+               path_to_mongoose_exe);
+    }
+
+    strncat(path, "/", sizeof(path) - 1);
+    strncat(path, option_value, sizeof(path) - 1);
+
+    // Absolutize the path, and set the option
+    abs_path(path, abs, sizeof(abs));
+    set_option(options, option_name, abs);
+  }
 }
 
 static void start_mongoose(int argc, char *argv[]) {
@@ -304,14 +350,32 @@ static void start_mongoose(int argc, char *argv[]) {
     show_usage_and_exit();
   }
 
-  /* Update config based on command line arguments */
+  options[0] = NULL;
+  set_option(options, "document_root", ".");
+
+  // Update config based on command line arguments
   process_command_line_arguments(argv, options);
 
-  /* Setup signal handler: quit on Ctrl-C */
+  // Make sure we have absolute paths for files and directories
+  // https://github.com/valenok/mongoose/issues/181
+  set_absolute_path(options, "document_root", argv[0]);
+  set_absolute_path(options, "put_delete_auth_file", argv[0]);
+  set_absolute_path(options, "cgi_interpreter", argv[0]);
+  set_absolute_path(options, "access_log_file", argv[0]);
+  set_absolute_path(options, "error_log_file", argv[0]);
+  set_absolute_path(options, "global_auth_file", argv[0]);
+  set_absolute_path(options, "ssl_certificate", argv[0]);
+
+  // Make extra verification for certain options
+  verify_existence(options, "document_root", 1);
+  verify_existence(options, "cgi_interpreter", 0);
+  verify_existence(options, "ssl_certificate", 0);
+
+  // Setup signal handler: quit on Ctrl-C
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
 
-  /* Start Mongoose */
+  // Start Mongoose
   memset(&callbacks, 0, sizeof(callbacks));
   callbacks.log_message = &log_message;
   ctx = mg_start(&callbacks, NULL, (const char **) options);

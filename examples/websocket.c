@@ -6,10 +6,8 @@
 #include "mongoose.h"
 
 static void websocket_ready_handler(struct mg_connection *conn) {
-  unsigned char buf[40];
-  buf[0] = 0x81;
-  buf[1] = snprintf((char *) buf + 2, sizeof(buf) - 2, "%s", "server ready");
-  mg_write(conn, buf, 2 + buf[1]);
+  static const char *message = "server ready";
+  mg_websocket_write(conn, WEBSOCKET_OPCODE_TEXT, message, strlen(message));
 }
 
 // Arguments:
@@ -18,33 +16,12 @@ static void websocket_ready_handler(struct mg_connection *conn) {
 //   data, data_len: payload data. Mask, if any, is already applied.
 static int websocket_data_handler(struct mg_connection *conn, int flags,
                                   char *data, size_t data_len) {
-  unsigned char reply[200];
-  size_t i;
-
-  (void) flags;
-
-  printf("rcv: [%.*s]\n", (int) data_len, data);
-
-  // Truncate echoed message, to simplify output code.
-  if (data_len > 125) {
-    data_len = 125;
-  }
-
-  // Prepare frame
-  reply[0] = 0x81;  // text, FIN set
-  reply[1] = data_len;
-
-  // Copy message from request to reply, applying the mask if required.
-  for (i = 0; i < data_len; i++) {
-    reply[i + 2] = data[i];
-  }
-
-  // Echo the message back to the client
-  mg_write(conn, reply, 2 + data_len);
+  (void) flags; // Unused
+  mg_websocket_write(conn, WEBSOCKET_OPCODE_TEXT, data, data_len);
 
   // Returning zero means stoping websocket conversation.
   // Close the conversation if client has sent us "exit" string.
-  return memcmp(reply + 2, "exit", 4);
+  return memcmp(data, "exit", 4);
 }
 
 int main(void) {

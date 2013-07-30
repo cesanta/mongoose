@@ -17,7 +17,7 @@
 # -DUSE_LUA               - embed Lua in Mongoose (+100kb)
 
 PROG        = mongoose
-CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread $(COPT)
+CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe $(COPT)
 
 # To build with Lua, download and unzip Lua 5.2.1 source code into the
 # mongoose directory, and then add $(LUA_SOURCES) to CFLAGS
@@ -34,6 +34,7 @@ LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
               $(LUA)/ldblib.c $(LUA)/liolib.c $(LUA)/lmathlib.c \
               $(LUA)/loslib.c $(LUA)/lstrlib.c $(LUA)/ltablib.c \
               $(LUA)/loadlib.c $(LUA)/linit.c
+LUA_WINOBJS = $(LUA_SOURCES:%.c=%.obj)
 
 # Stock windows binary builds with Lua and YASSL library.
 YASSL       = ../cyassl-2.4.6
@@ -65,7 +66,10 @@ ALL_SOURCES = main.c mongoose.c build/sqlite3.c build/lsqlite3.c \
 ALL_OBJECTS = $(ALL_SOURCES:%.c=%.o)
 ALL_WINOBJS = $(ALL_SOURCES:%.c=%.obj)
 
-FLAGS = -DNO_SSL_DL -DUSE_LUA -DUSE_LUA_SQLITE3 $(YASSL_FLAGS) $(LUA_FLAGS)
+SQLITE_FLAGS = -DTHREADSAFE=1 -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS
+MONGOOSE_FLAGS = -DNO_SSL_DL -DUSE_LUA -DUSE_LUA_SQLITE3 $(COPT)
+
+FLAGS = $(MONGOOSE_FLAGS) $(SQLITE_FLAGS) $(YASSL_FLAGS) $(LUA_FLAGS)
 
 # Using Visual Studio 6.0. To build Mongoose:
 #  Set MSVC variable below to where VS 6.0 is installed on your system
@@ -73,7 +77,7 @@ FLAGS = -DNO_SSL_DL -DUSE_LUA -DUSE_LUA_SQLITE3 $(YASSL_FLAGS) $(LUA_FLAGS)
 MSVC = ../vc6
 #DBG = /Zi /Od
 DBG  = /DNDEBUG /O1
-CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /Gz /W3 /GA /I$(MSVC)/include
+CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /GA /I$(MSVC)/include
 LINK = $(MSVC)/bin/link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
        user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
 
@@ -86,9 +90,13 @@ all:
 %.o: %.c
 	$(CC) -o $@ $< -c $(FLAGS) $(CFLAGS)
 
+# Lua library for Windows
+lua.lib: $(LUA_WINOBJS)
+	$(MSVC)/bin/lib /out:$@ $(LUA_WINOBJS)
+
 # To build with lua, make sure you have Lua unpacked into lua-5.2.1 directory
-linux_lua:
-	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c $(LUA_SOURCES) -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL -I$(LUA) -o $(PROG) -ldl $(CFLAGS)
+linux_lua: $(ALL_OBJECTS)
+	$(CC) $(ALL_OBJECTS) -o $(PROG) -ldl
 
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
@@ -118,9 +126,8 @@ $(PROG).lib: $(ALL_WINOBJS)
 # See e.g. http://lists.apple.com/archives/apple-cdsa/2008/Jan/msg00027.html
 Mongoose: mongoose.c main.c
 	$(CC) mongoose.c main.c build/lsqlite3.c build/sqlite3.c \
-          -DUSE_COCOA $(CFLAGS) -I$(LUA) -Ibuild \
-          $(YASSL_SOURCES) $(YASSL_FLAGS) -DNO_SSL_DL \
-          $(LUA_SOURCES) -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL \
+          -DUSE_COCOA $(CFLAGS) $(FLAGS) -mmacosx-version-min=10.4 \
+          $(YASSL_SOURCES) $(LUA_SOURCES) \
           -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
 
 cocoa: Mongoose
@@ -132,9 +139,9 @@ un:
 	./unit_test
 
 wi:
-	$(CL) test/unit_test.c $(LUA_SOURCES) \
-          $(YASSL_SOURCES) $(YASSL_FLAGS) /DNO_SSL_DL \
-          $(MSLIB) /out:unit_test.exe
+	$(CL) test/unit_test.c $(LUA_SOURCES) $(LUA_FLAGS) \
+          $(YASSL_SOURCES) $(YASSL_FLAGS) /I. /DNO_SSL_DL \
+          /link /libpath:$(MSVC)/lib advapi32.lib /out:unit_test.exe
 	./unit_test.exe
 
 windows: $(ALL_WINOBJS)

@@ -4,6 +4,7 @@
 
 use IO::Socket;
 use File::Path;
+use Cwd;
 use strict;
 use warnings;
 #use diagnostics;
@@ -19,9 +20,10 @@ my $test_dir_uri = "test_dir";
 my $root = 'test';
 my $test_dir = $root . $dir_separator. $test_dir_uri;
 my $config = 'mongoose.conf';
-my $exe = '.' . $dir_separator . 'mongoose';
-my $embed_exe = '.' . $dir_separator . 'embed';
-my $unit_test_exe = '.' . $dir_separator . 'unit_test';
+my $exe_ext = on_windows() ? '.exe' : '';
+my $mongoose_exe = '.' . $dir_separator . 'mongoose' . $exe_ext;
+my $embed_exe = '.' . $dir_separator . 'embed' . $exe_ext;
+my $unit_test_exe = '.' . $dir_separator . 'unit_test' . $exe_ext;
 my $exit_code = 0;
 
 my @files_to_delete = ('debug.log', 'access.log', $config, "$root/a/put.txt",
@@ -51,9 +53,9 @@ sub get_num_of_log_entries {
 # Send the request to the 127.0.0.1:$port and return the reply
 sub req {
   my ($request, $inc, $timeout) = @_;
-  my $sock = IO::Socket::INET->new(Proto=>"tcp",
-    PeerAddr=>'127.0.0.1', PeerPort=>$port);
-  fail("Cannot connect: $!") unless $sock;
+  my $sock = IO::Socket::INET->new(Proto => 6,
+    PeerAddr => '127.0.0.1', PeerPort => $port);
+  fail("Cannot connect to http://127.0.0.1:$port : $!") unless $sock;
   $sock->autoflush(1);
   foreach my $byte (split //, $request) {
     last unless print $sock $byte;
@@ -97,7 +99,6 @@ sub spawn {
   if (on_windows()) {
     my @args = split /\s+/, $cmdline;
     my $executable = $args[0];
-    $executable .= '.exe';
     Win32::Spawn($executable, $cmdline, $pid);
     die "Cannot spawn @_: $!" unless $pid;
   } else {
@@ -155,13 +156,13 @@ if (scalar(@ARGV) > 0 and $ARGV[0] eq 'unit') {
 # Command line options override config files settings
 write_file($config, "access_log_file access.log\n" .
            "listening_ports 127.0.0.1:12345\n");
-spawn("$exe -listening_ports 127.0.0.1:$port");
+spawn("$mongoose_exe -listening_ports 127.0.0.1:$port");
 o("GET /test/hello.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'Loading config file');
 unlink $config;
 kill_spawned_child();
 
 # Spawn the server on port $port
-my $cmd = "$exe ".
+my $cmd = "$mongoose_exe ".
   "-listening_ports 127.0.0.1:$port ".
   "-access_log_file access.log ".
   "-error_log_file debug.log ".
@@ -170,7 +171,7 @@ my $cmd = "$exe ".
   '-put_delete_auth_file test/passfile ' .
   '-access_control_list -0.0.0.0/0,+127.0.0.1 ' .
   "-document_root $root ".
-  "-hide_files_patterns **exploit.pl ".
+  "-hide_files_patterns **exploit.PL ".
   "-enable_keep_alive yes ".
   "-url_rewrite_patterns /aiased=/etc/,/ta=$test_dir";
 $cmd .= ' -cgi_interpreter perl' if on_windows();
@@ -243,8 +244,10 @@ write_file($path, read_file($root . $dir_separator . 'env.cgi'));
 chmod(0755, $path);
 o("GET /$test_dir_uri/x/ HTTP/1.0\n\n", "Content-Type: text/html\r\n\r\n",
   'index.cgi execution');
+
+my $cwd = getcwd();
 o("GET /$test_dir_uri/x/ HTTP/1.0\n\n",
-  "SCRIPT_FILENAME=test/test_dir/x/index.cgi", 'SCRIPT_FILENAME');
+  "SCRIPT_FILENAME=$cwd/test/test_dir/x/index.cgi", 'SCRIPT_FILENAME');
 o("GET /ta/x/ HTTP/1.0\n\n", "SCRIPT_NAME=/ta/x/index.cgi",
   'Aliases SCRIPT_NAME');
 o("GET /hello.txt HTTP/1.1\nConnection: close\n\n", 'Connection: close',
@@ -352,6 +355,8 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   unlink "$root/.htpasswd";
 
 
+  o("GET /dir%20with%20spaces/hello.cgi HTTP/1.0\n\r\n",
+      'HTTP/1.1 200 OK.+hello', 'CGI script with spaces in path');
   o("GET /env.cgi HTTP/1.0\n\r\n", 'HTTP/1.1 200 OK', 'GET CGI file');
   o("GET /bad2.cgi HTTP/1.0\n\n", "HTTP/1.1 123 Please pass me to the client\r",
     'CGI Status code text');
@@ -401,7 +406,7 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   my $abs_path = on_windows() ? 'ssi6.shtml' : 'ssi5.shtml';
   my $word = on_windows() ? 'boot loader' : 'root';
   o("GET /$abs_path HTTP/1.0\n\n",
-    "ssi_begin.+$word.+ssi_end", 'SSI #include file= (absolute)');
+    "ssi_begin.+$word.+ssi_end", 'SSI #include abspath');
   o("GET /ssi7.shtml HTTP/1.0\n\n",
     'ssi_begin.+Unit test.+ssi_end', 'SSI #include "..."');
   o("GET /ssi8.shtml HTTP/1.0\n\n",
@@ -410,9 +415,9 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   # Manipulate the passwords file
   my $path = 'test_htpasswd';
   unlink $path;
-  system("$exe -A $path a b c") == 0
+  system("$mongoose_exe -A $path a b c") == 0
     or fail("Cannot add user in a passwd file");
-  system("$exe -A $path a b c2") == 0
+  system("$mongoose_exe -A $path a b c2") == 0
     or fail("Cannot edit user in a passwd file");
   my $content = read_file($path);
   $content =~ /^b:a:\w+$/gs or fail("Bad content of the passwd file");

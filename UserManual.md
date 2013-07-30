@@ -95,7 +95,7 @@ Extra environment variables to be passed to the CGI script in
 addition to standard ones. The list must be comma-separated list
 of name=value pairs, like this: `VARIABLE1=VALUE1,VARIABLE2=VALUE2`.
 
-### put\_delete\_passwords_file
+### put\_delete\_auth\_file
 Passwords file for PUT and DELETE requests. Without it, PUT and DELETE requests
 will fail.
 
@@ -143,8 +143,10 @@ directives are supported, `<!--#include ...>` and
 three path specifications:
 
     <!--#include virtual="path">  Path is relative to web server root
-    <!--#include file="path">     Path is relative to web server working dir
-    <!--#include "path">          Path is relative to current document
+    <!--#include abspath="path">  Path is absolute or relative to
+                                  web server working dir
+    <!--#include file="path">,    Path is relative to current document
+    <!--#include "path">
 
 The `include` directive may be used to include the contents of a file or the
 result of running a CGI script. The `exec` directive is used to execute a
@@ -185,6 +187,16 @@ working directory. If absent (default), then errors are not logged.
 
 ### enable\_directory\_listing `yes`
 Enable directory listing, either `yes` or `no`.
+
+### enable\_keep\_alive `no`
+Enable connection keep alive, either `yes` or `no`.
+
+Experimental feature. Allows clients to reuse TCP connection for
+subsequent HTTP requests, which improves performance.
+For this to work when using request handlers it's important to add the correct
+Content-Length HTTP header for each request. If this is forgotten the client
+will time out.
+
 
 ### global\_auth\_file
 Path to a global passwords file, either full path or relative to the current
@@ -330,6 +342,23 @@ Mongoose exports the following to the Lua server page:
     mg.version        -- a string that holds Mongoose version
     mg.request_info   -- a table with request information
 
+    -- Connect to the remote TCP server. This function is an implementation
+    -- of simple socket interface. It returns a socket object with three
+    -- methods: send, recv, close, which are synchronous (blocking).
+    -- connect() throws an exception on connection error.
+    connect(host, port, use_ssl)
+
+    -- Example of using connect() interface:
+    local host = 'code.google.com'  -- IP address or domain name
+    local ok, sock = pcall(connect, host, 80, 1)
+    if ok then
+      sock:send('GET /p/mongoose/ HTTP/1.0\r\n' ..
+                'Host: ' .. host .. '\r\n\r\n')
+      local reply = sock:recv()
+      sock:close()
+      -- reply now contains the web page https://code.google.com/p/mongoose
+    end
+
 
 **IMPORTANT: Mongoose does not send HTTP headers for Lua pages. Therefore,
 every Lua Page must begin with HTTP reply line and headers**, like this:
@@ -356,6 +385,10 @@ variable is visible in the block that follows.
   Syntax checking is omitted from Mongoose to keep its size low. However,
   the Manual should be of help. Note: the syntax changes from time to time,
   so updating the config file might be necessary after executable update.
+
+- Embedding with OpenSSL on Windows might fail because of calling convention.
+  To force Mongoose to use `__stdcall` convention, add `/Gz` compilation
+  flag in Visual Studio compiler.
 
 # Embedding
 Embedding Mongoose is easy. Copy
@@ -420,24 +453,11 @@ as well, please comment or drop an email in the mailing list.
 Note : You dont need root access to run mongoose on Android.
 
 - Download the source from the Downloads page.
-- Download the Android NDK from here
-- Make a folder (e.g. mongoose) and inside that make a folder named "jni".
-- Add `mongoose.h`, `mongoose.c` and `main.c` from the source to the jni folder.
-- Make a new file in the jni folder named "Android.mk".
-  This is the make file for ndk-build.
-
-Android.mk:
-
-    LOCAL_PATH := $(call my-dir)
-    include $(CLEAR_VARS)
-    LOCAL_MODULE    := mongoose
-    LOCAL_SRC_FILES := main.c mongoose.c
-    include $(BUILD_EXECUTABLE)
-
-- Run `./ndk-build -C /path/to/mongoose/`.
-  This should generate mongoose/lib/armeabi/mongoose
-- Using the adb tool, push the generated mongoose binary to `/data/local`
-  folder on device.
+- Download the Android NDK from [http://developer.android.com/tools/sdk/ndk/index.html](http://developer.android.com/tools/sdk/ndk/index.html)
+- Run `/path-to-ndk/ndk-build -C /path-to-mongoose/build`
+  That should generate mongoose/lib/armeabi/mongoose
+- Using the adb tool (you need to have Android SDK installed for that),
+  push the generated mongoose binary to `/data/local` folder on device.
 - From adb shell, navigate to `/data/local` and execute `./mongoose`.
 - To test if the server is running fine, visit your web-browser and
   navigate to `http://127.0.0.1:8080` You should see the `Index of /` page.
@@ -446,10 +466,10 @@ Android.mk:
 
 
 Notes:
-- jni stands for Java Native Interface. Read up on Android NDK if you want
+
+- `jni` stands for Java Native Interface. Read up on Android NDK if you want
   to know how to interact with the native C functions of mongoose in Android
   Java applications.
-- Download android-sdk for the adb tool.
 - TODO: A Java application that interacts with the native binary or a
   shared library.
 
