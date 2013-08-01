@@ -39,6 +39,8 @@ Questions can be asked at
 [mongoose-users@google.com](http://groups.google.com/group/mongoose-users)
 mailing list.
 
+[![&nbsp;](https://cruel-carlota.pagodabox.com/2a613890c1f4b60e5919a9c1dd3caca2 "githalytics.com")](http://githalytics.com/valenok/mongoose)
+
 
 # Author
 
