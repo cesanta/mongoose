@@ -1629,6 +1629,24 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
   return (int) total;
 }
 
+// Alternative alloc_vprintf() for non-compliant C runtimes
+static int alloc_vprintf2(char **buf, const char *fmt, va_list ap) {
+  va_list ap_copy;
+  int size = MG_BUF_LEN;
+  int len = -1;
+
+  *buf = NULL;
+  while (len == -1) {
+    if (*buf) free(*buf);
+    *buf = malloc(size *= 4);
+    if (!*buf) break;
+    va_copy(ap_copy, ap);
+    len = vsnprintf(*buf, size, fmt, ap_copy);
+  }
+
+  return len;
+}
+
 // Print message to buffer. If buffer is large enough to hold the message,
 // return buffer. If buffer is to small, allocate large enough buffer on heap,
 // and return allocated buffer.
@@ -1644,7 +1662,12 @@ static int alloc_vprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   va_copy(ap_copy, ap);
   len = vsnprintf(NULL, 0, fmt, ap_copy);
 
-  if (len > (int) size &&
+  if (len < 0) {
+    // C runtime is not standard compliant, vsnprintf() returned -1.
+    // Switch to alternative code path that uses incremental allocations.
+    va_copy(ap_copy, ap);
+    len = alloc_vprintf2(buf, fmt, ap);
+  } else if (len > (int) size &&
       (size = len + 1) > 0 &&
       (*buf = (char *) malloc(size)) == NULL) {
     len = -1;  // Allocation failed, mark failure
