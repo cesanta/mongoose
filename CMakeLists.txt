@@ -107,14 +107,16 @@ endif (MAIN)
         
 # Compiling tests
 if (EXAMPLES)
-    add_executable (hello examples/hello.c)
-    target_link_libraries (hello _mongoose)
-
     add_executable (post examples/post.c)
     target_link_libraries (post _mongoose)
 
-    add_executable (chat examples/chat.c)
-    target_link_libraries (chat _mongoose)
+	if (NOT WIN32)
+	    add_executable (hello examples/hello.c)
+		target_link_libraries (hello _mongoose)
+	
+		add_executable (chat examples/chat.c)
+		target_link_libraries (chat _mongoose)
+	endif (NOT WIN32)
     
     add_executable (websocket examples/websocket.c)
     target_link_libraries (websocket _mongoose)

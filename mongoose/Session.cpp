@@ -1,5 +1,6 @@
 #include <time.h>
 #include <iostream>
+#include <string>
 #include "Session.h"
 
 using namespace std;

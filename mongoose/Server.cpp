@@ -1,10 +1,28 @@
+#ifndef _MSC_VER
 #include <unistd.h>
+#else 
+#include <time.h>
+#include <sys/types.h>
+#include <sys/timeb.h>
+#endif
+#include <string>
 #include <string.h>
 #include <iostream>
 #include "Server.h"
 
 using namespace std;
 using namespace Mongoose;
+
+static int getTime()
+{
+#ifdef _MSC_VER
+	time_t ltime;
+	time(&ltime);
+	return ltime;
+#else
+	return time(NULL);
+#endif
+}
 
 /**
  * The handlers below are written in C to do the binding of the C mongoose with
@@ -65,7 +83,7 @@ namespace Mongoose
         if (ctx == NULL) {
 #ifdef ENABLE_STATS
             requests = 0;
-            startTime = time(NULL);
+            startTime = getTime();
 #endif
             size_t size = optionsMap.size()*2+1;
 
@@ -199,7 +217,7 @@ namespace Mongoose
 
     void Server::printStats()
     {
-        int delta = time(NULL)-startTime;
+        int delta = getTime()-startTime;
 
         if (delta) {
             cout << "Requests: " << requests << ", Requests/s: " << (requests*1.0/delta) << endl;

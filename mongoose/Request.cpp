@@ -1,4 +1,5 @@
 #include <string.h>
+#include <string>
 #include <iostream>
 #include <mongoose.h>
 #include "Request.h"

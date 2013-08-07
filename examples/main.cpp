@@ -1,5 +1,9 @@
+#ifndef _MSC_VER
 #include <unistd.h>
 #include <stdlib.h>
+#else
+#include <time.h>
+#endif
 #include <signal.h>
 #include <mongoose/Server.h>
 #include <mongoose/WebController.h>
@@ -86,7 +90,15 @@ void handle_signal(int sig)
 
 int main()
 {
-    srand(time(NULL));
+	int t;
+#ifdef _MSC_VER
+    time_t ltime;
+	time(&ltime);
+	t = ltime;
+#else
+	t = time(NULL);
+#endif
+	srand(t);
 
     signal(SIGINT, handle_signal);
 
