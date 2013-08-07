@@ -1293,8 +1293,8 @@ static void trim_trailing_whitespaces(char *s) {
 }
 
 static pid_t spawn_process(struct mg_connection *conn, const char *prog,
-                           char *envblk, char *envp[], int fd_stdin,
-                           int fd_stdout, const char *dir) {
+                           char *envblk, char *envp[], int fdin,
+                           int fdout, const char *dir) {
   HANDLE me;
   char *p, *interp, full_interp[PATH_MAX], full_dir[PATH_MAX],
        cmdline[PATH_MAX], buf[PATH_MAX];
@@ -1312,9 +1312,9 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
   si.wShowWindow = SW_HIDE;
 
   me = GetCurrentProcess();
-  DuplicateHandle(me, (HANDLE) _get_osfhandle(fd_stdin), me,
+  DuplicateHandle(me, (HANDLE) _get_osfhandle(fdin), me,
                   &si.hStdInput, 0, TRUE, DUPLICATE_SAME_ACCESS);
-  DuplicateHandle(me, (HANDLE) _get_osfhandle(fd_stdout), me,
+  DuplicateHandle(me, (HANDLE) _get_osfhandle(fdout), me,
                   &si.hStdOutput, 0, TRUE, DUPLICATE_SAME_ACCESS);
 
   // If CGI file is a script, try to read the interpreter line
@@ -1355,10 +1355,6 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
         __func__, cmdline, ERRNO);
     pi.hProcess = (pid_t) -1;
   }
-
-  // Always close these to prevent handle leakage.
-  (void) close(fd_stdin);
-  (void) close(fd_stdout);
 
   (void) CloseHandle(si.hStdOutput);
   (void) CloseHandle(si.hStdInput);
@@ -1414,8 +1410,8 @@ int mg_start_thread(mg_thread_func_t func, void *param) {
 
 #ifndef NO_CGI
 static pid_t spawn_process(struct mg_connection *conn, const char *prog,
-                           char *envblk, char *envp[], int fd_stdin,
-                           int fd_stdout, const char *dir) {
+                           char *envblk, char *envp[], int fdin,
+                           int fdout, const char *dir) {
   pid_t pid;
   const char *interp;
 
@@ -1428,15 +1424,15 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
     // Child
     if (chdir(dir) != 0) {
       cry(conn, "%s: chdir(%s): %s", __func__, dir, strerror(ERRNO));
-    } else if (dup2(fd_stdin, 0) == -1) {
-      cry(conn, "%s: dup2(%d, 0): %s", __func__, fd_stdin, strerror(ERRNO));
-    } else if (dup2(fd_stdout, 1) == -1) {
-      cry(conn, "%s: dup2(%d, 1): %s", __func__, fd_stdout, strerror(ERRNO));
+    } else if (dup2(fdin, 0) == -1) {
+      cry(conn, "%s: dup2(%d, 0): %s", __func__, fdin, strerror(ERRNO));
+    } else if (dup2(fdout, 1) == -1) {
+      cry(conn, "%s: dup2(%d, 1): %s", __func__, fdout, strerror(ERRNO));
     } else {
       // Not redirecting stderr to stdout, to avoid output being littered
       // with the error messages.
-      (void) close(fd_stdin);
-      (void) close(fd_stdout);
+      (void) close(fdin);
+      (void) close(fdout);
 
       // After exec, all signal handlers are restored to their default values,
       // with one exception of SIGCHLD. According to POSIX.1-2001 and Linux's
@@ -1456,10 +1452,6 @@ static pid_t spawn_process(struct mg_connection *conn, const char *prog,
     }
     exit(EXIT_FAILURE);
   }
-
-  // Parent. Close stdio descriptors
-  (void) close(fd_stdin);
-  (void) close(fd_stdout);
 
   return pid;
 }
@@ -1629,6 +1621,24 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
   return (int) total;
 }
 
+// Alternative alloc_vprintf() for non-compliant C runtimes
+static int alloc_vprintf2(char **buf, const char *fmt, va_list ap) {
+  va_list ap_copy;
+  int size = MG_BUF_LEN;
+  int len = -1;
+
+  *buf = NULL;
+  while (len == -1) {
+    if (*buf) free(*buf);
+    *buf = malloc(size *= 4);
+    if (!*buf) break;
+    va_copy(ap_copy, ap);
+    len = vsnprintf(*buf, size, fmt, ap_copy);
+  }
+
+  return len;
+}
+
 // Print message to buffer. If buffer is large enough to hold the message,
 // return buffer. If buffer is to small, allocate large enough buffer on heap,
 // and return allocated buffer.
@@ -1644,7 +1654,12 @@ static int alloc_vprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   va_copy(ap_copy, ap);
   len = vsnprintf(NULL, 0, fmt, ap_copy);
 
-  if (len > (int) size &&
+  if (len < 0) {
+    // C runtime is not standard compliant, vsnprintf() returned -1.
+    // Switch to alternative code path that uses incremental allocations.
+    va_copy(ap_copy, ap);
+    len = alloc_vprintf2(buf, fmt, ap);
+  } else if (len > (int) size &&
       (size = len + 1) > 0 &&
       (*buf = (char *) malloc(size)) == NULL) {
     len = -1;  // Allocation failed, mark failure
@@ -3357,14 +3372,14 @@ static void prepare_cgi_environment(struct mg_connection *conn,
 }
 
 static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
-  int headers_len, data_len, i, fd_stdin[2], fd_stdout[2];
+  int headers_len, data_len, i, fdin[2], fdout[2];
   const char *status, *status_text;
   char buf[16384], *pbuf, dir[PATH_MAX], *p;
   struct mg_request_info ri;
   struct cgi_env_block blk;
-  FILE *in, *out;
+  FILE *in = NULL, *out = NULL;
   struct file fout = STRUCT_FILE_INITIALIZER;
-  pid_t pid;
+  pid_t pid = (pid_t) -1;
 
   prepare_cgi_environment(conn, prog, &blk);
 
@@ -3379,32 +3394,36 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
     p = (char *) prog;
   }
 
-  pid = (pid_t) -1;
-  fd_stdin[0] = fd_stdin[1] = fd_stdout[0] = fd_stdout[1] = -1;
-  in = out = NULL;
-
-  if (pipe(fd_stdin) != 0 || pipe(fd_stdout) != 0) {
+  if (pipe(fdin) != 0 || pipe(fdout) != 0) {
     send_http_error(conn, 500, http_500_error,
         "Cannot create CGI pipe: %s", strerror(ERRNO));
     goto done;
   }
 
-  pid = spawn_process(conn, p, blk.buf, blk.vars, fd_stdin[0], fd_stdout[1],
-                      dir);
-  // spawn_process() must close those!
-  // If we don't mark them as closed, close() attempt before
-  // return from this function throws an exception on Windows.
-  // Windows does not like when closed descriptor is closed again.
-  fd_stdin[0] = fd_stdout[1] = -1;
-
+  pid = spawn_process(conn, p, blk.buf, blk.vars, fdin[0], fdout[1], dir);
   if (pid == (pid_t) -1) {
     send_http_error(conn, 500, http_500_error,
         "Cannot spawn CGI process [%s]: %s", prog, strerror(ERRNO));
     goto done;
   }
 
-  if ((in = fdopen(fd_stdin[1], "wb")) == NULL ||
-      (out = fdopen(fd_stdout[0], "rb")) == NULL) {
+  // Make sure child closes all pipe descriptors. It must dup them to 0,1
+  set_close_on_exec(fdin[0]);
+  set_close_on_exec(fdin[1]);
+  set_close_on_exec(fdout[0]);
+  set_close_on_exec(fdout[1]);
+
+  // Parent closes only one side of the pipes.
+  // If we don't mark them as closed, close() attempt before
+  // return from this function throws an exception on Windows.
+  // Windows does not like when closed descriptor is closed again.
+  (void) close(fdin[0]);
+  (void) close(fdout[1]);
+  fdin[0] = fdout[1] = -1;
+
+
+  if ((in = fdopen(fdin[1], "wb")) == NULL ||
+      (out = fdopen(fdout[0], "rb")) == NULL) {
     send_http_error(conn, 500, http_500_error,
         "fopen: %s", strerror(ERRNO));
     goto done;
@@ -3423,7 +3442,7 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   // Close so child gets an EOF.
   fclose(in);
   in = NULL;
-  fd_stdin[1] = -1;
+  fdin[1] = -1;
 
   // Now read CGI reply into a buffer. We need to set correct
   // status code, thus we need to see all HTTP headers first.
@@ -3480,23 +3499,23 @@ done:
   if (pid != (pid_t) -1) {
     kill(pid, SIGKILL);
   }
-  if (fd_stdin[0] != -1) {
-    close(fd_stdin[0]);
+  if (fdin[0] != -1) {
+    close(fdin[0]);
   }
-  if (fd_stdout[1] != -1) {
-    close(fd_stdout[1]);
+  if (fdout[1] != -1) {
+    close(fdout[1]);
   }
 
   if (in != NULL) {
     fclose(in);
-  } else if (fd_stdin[1] != -1) {
-    close(fd_stdin[1]);
+  } else if (fdin[1] != -1) {
+    close(fdin[1]);
   }
 
   if (out != NULL) {
     fclose(out);
-  } else if (fd_stdout[0] != -1) {
-    close(fd_stdout[0]);
+  } else if (fdout[0] != -1) {
+    close(fdout[0]);
   }
 }
 #endif // !NO_CGI
@@ -4578,8 +4597,8 @@ static int set_ports_option(struct mg_context *ctx) {
                bind(so.sock, &so.lsa.sa, so.lsa.sa.sa_family == AF_INET ?
                     sizeof(so.lsa.sin) : sizeof(so.lsa)) != 0 ||
                listen(so.sock, SOMAXCONN) != 0) {
-      cry(fc(ctx), "%s: cannot bind to %.*s: %d", __func__,
-          (int) vec.len, vec.ptr, ERRNO);
+      cry(fc(ctx), "%s: cannot bind to %.*s: %d (%s)", __func__,
+          (int) vec.len, vec.ptr, ERRNO, strerror(errno));
       closesocket(so.sock);
       success = 0;
     } else if ((ptr = (struct socket *) realloc(ctx->listening_sockets,

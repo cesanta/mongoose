@@ -273,6 +273,12 @@ therefore this option can be used to drop privileges. Example:
 
     mongoose -listening_ports 80 -run_as_user nobody
 
+### request\_timeout\_ms `30000`
+Timeout for network read and network write operations, in milliseconds.
+If client intends to keep long-running connection, either increase this value
+or use keep-alive messages.
+
+
 ### url\_rewrite\_patterns
 Comma-separated list of URL rewrites in the form of
 `uri_pattern=file_or_directory_path`. When Mongoose receives the request,
