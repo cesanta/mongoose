@@ -36,6 +36,10 @@ LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
               $(LUA)/loadlib.c $(LUA)/linit.c
 LUA_WINOBJS = $(LUA_SOURCES:%.c=%.obj)
 
+ifneq ($(OS), Windows_NT)
+  LUA_FLAGS += -DLUA_USE_DLOPEN
+endif
+
 # Stock windows binary builds with Lua and YASSL library.
 YASSL       = ../cyassl-2.4.6
 YASSL_FLAGS = -I $(YASSL) -I $(YASSL)/cyassl \
@@ -97,6 +101,8 @@ lua.lib: $(LUA_WINOBJS)
 # To build with lua, make sure you have Lua unpacked into lua-5.2.1 directory
 linux_lua: $(ALL_OBJECTS)
 	$(CC) $(ALL_OBJECTS) -o $(PROG) -ldl
+
+mongoose.o: mod_lua.c
 
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
