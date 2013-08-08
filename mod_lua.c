@@ -242,7 +242,7 @@ static int lsp_redirect(lua_State *L) {
   return 0;
 }
 
-void mg_prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
+static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
   const struct mg_request_info *ri = mg_get_request_info(conn);
   extern void luaL_openlibs(lua_State *);
   int i;
@@ -296,6 +296,36 @@ void mg_prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
                 "debug.traceback(e, 1)) end");
 }
 
+static int lua_error_handler(lua_State *L) {
+  lua_getglobal(L, "mg");
+  if (!lua_isnil(L, -1)) {
+    luaL_dostring(L, "mg.write(debug.traceback())");
+  } else {
+    printf("Lua error: [%s]\n", lua_isstring(L, -2) ?
+            lua_tostring(L, -2) : "unknown error");
+    luaL_dostring(L, "print(debug.traceback())");
+  }
+
+  return 0;
+}
+
+void mg_exec_lua_script(struct mg_connection *conn, const char *path,
+                        const char *buf, int buf_size) {
+  lua_State *L;
+
+  if (path != NULL && (L = luaL_newstate()) != NULL) {
+    prepare_lua_environment(conn, L);
+    lua_pushcclosure(L, &lua_error_handler, 0);
+    if (buf != NULL) {
+      luaL_loadbuffer(L, buf, buf_size, path);
+    } else {
+      luaL_loadfile(L, path);
+    }
+    lua_pcall(L, 0, 0, -2);
+    lua_close(L);
+  }
+}
+
 static void lsp_send_err(struct mg_connection *conn, struct lua_State *L,
                          const char *fmt, ...) {
   char buf[MG_BUF_LEN];
@@ -333,7 +363,7 @@ static int handle_lsp_request(struct mg_connection *conn, const char *path,
   } else {
     // We're not sending HTTP headers here, Lua page must do it.
     if (ls == NULL) {
-      mg_prepare_lua_environment(conn, L);
+      prepare_lua_environment(conn, L);
       if (conn->ctx->callbacks.init_lua != NULL) {
         conn->ctx->callbacks.init_lua(conn, L);
       }

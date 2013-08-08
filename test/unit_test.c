@@ -554,7 +554,7 @@ static void test_lua(void) {
                                         &conn.request_info);
   conn.content_len = conn.data_len - conn.request_len;
 
-  mg_prepare_lua_environment(&conn, L);
+  prepare_lua_environment(&conn, L);
   ASSERT(lua_gettop(L) == 0);
 
   check_lua_expr(L, "'hi'", "hi");
