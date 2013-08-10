@@ -21,7 +21,7 @@ class MyController : public WebController
 
         void form(Request &request, StreamResponse &response)
         {
-            response << "<form method=\"POST\">" << endl;
+            response << "<form method=\"post\">" << endl;
             response << "<input type=\"text\" name=\"test\" /><br >" << endl;
             response << "<input type=\"submit\" value=\"Envoyer\" />" << endl;
             response << "</form>" << endl;
@@ -57,6 +57,28 @@ class MyController : public WebController
             throw string("Exception example");
         }
 
+        void uploadForm(Request &request, StreamResponse &response)
+        {
+            response << "<h1>File upload demo (don't forget to create a tmp/ directory)</h1>";
+            response << "<form enctype=\"multipart/form-data\" method=\"post\">";
+            response << "Choose a file to upload: <input name=\"file\" type=\"file\" /><br />";
+            response << "<input type=\"submit\" value=\"Upload File\" />";
+            response << "</form>";
+        }
+
+        void upload(Request &request, StreamResponse &response)
+        {
+            // Handling uploads to tmp/ directory
+            request.upload("tmp/");
+
+            // Iterate through all the uploaded files
+            vector<UploadFile>::iterator it = request.uploadFiles.begin();
+            for (; it != request.uploadFiles.end(); it++) {
+                UploadFile file = *it;
+                response << "Uploaded file: " << file.getName() << endl;
+            }
+        }
+
         void setup()
         {
             // Hello demo
@@ -75,6 +97,10 @@ class MyController : public WebController
 
             // 403 demo
             addRoute("GET", "/403", MyController, forbid);
+
+            // File upload demo
+            addRoute("GET", "/upload", MyController, uploadForm);
+            addRoute("POST", "/upload", MyController, upload);
         }
 };
 

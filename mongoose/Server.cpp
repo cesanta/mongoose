@@ -38,6 +38,16 @@ static int begin_request_handler(struct mg_connection *conn)
     }
 }
 
+static void upload_handler(struct mg_connection *conn, const char *file_name)
+{
+    const struct mg_request_info *request_info = mg_get_request_info(conn);
+    Server *server = (Server *)request_info->user_data;
+
+    if (server != NULL) {
+        server->_upload(conn, file_name);
+    }
+}
+
 static void websocket_ready_handler(struct mg_connection *conn)
 {
     const struct mg_request_info *request_info = mg_get_request_info(conn);
@@ -100,6 +110,7 @@ namespace Mongoose
             options[2*pos] = NULL;
 
             callbacks.begin_request = begin_request_handler;
+            callbacks.upload = upload_handler;
 #ifdef USE_WEBSOCKET
             callbacks.websocket_ready = websocket_ready_handler;
             callbacks.websocket_data = websocket_data_handler;
@@ -169,11 +180,20 @@ namespace Mongoose
             return 0;
         }
     }
-
+            
     int Server::_beginRequest(struct mg_connection *conn)
     {
         Request request(conn);
+
+        mutex.lock();
+        currentRequests[conn] = &request;
+        mutex.unlock();
+
         Response *response = beginRequest(request);
+        
+        mutex.lock();
+        currentRequests.erase(conn);
+        mutex.unlock();
 
         if (response == NULL) {
             return 0;
@@ -181,6 +201,16 @@ namespace Mongoose
             request.writeResponse(response);
             delete response;
             return 1;
+        }
+    }
+    
+    void Server::_upload(struct mg_connection *conn, const char *fileName)
+    {
+        map<struct mg_connection*, Request*>::iterator it = currentRequests.find(conn);
+
+        if (it != currentRequests.end()) {
+            Request *request = (*it).second;
+            request->uploadFiles.push_back(UploadFile(string(fileName)));
         }
     }
 

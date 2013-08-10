@@ -47,6 +47,7 @@ if (CPP_BINDING)
         ${MONGOOSE_CPP}/Session.cpp
         ${MONGOOSE_CPP}/Sessions.cpp
         ${MONGOOSE_CPP}/StreamResponse.cpp
+        ${MONGOOSE_CPP}/UploadFile.cpp
         ${MONGOOSE_CPP}/WebController.cpp
         )
 

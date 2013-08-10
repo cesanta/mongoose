@@ -3,7 +3,9 @@
 
 #include <iostream>
 #include <sstream>
+#include <vector>
 #include <mongoose.h>
+#include "UploadFile.h"
 #include "Response.h"
 
 using namespace std;
@@ -63,10 +65,22 @@ namespace Mongoose
              */
             string getCookie(string key, string fallback = "");
 
+            /**
+             * Handle uploads to the target directory
+             *
+             * @param string the target directory
+             */
+            void upload(string targetDirectory);
+
             string getUrl();
             string getMethod();
 
             bool readVariable(const char *data, string key, string &output);
+
+            /**
+             * Files uploaded in this request
+             */
+            vector<UploadFile> uploadFiles;
 
         protected:
             string data;

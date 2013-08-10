@@ -18,8 +18,8 @@ namespace Mongoose
 
         // Downloading POST data
         ostringstream postData;
-
-        if (method == "POST") {
+        const char * content_type = mg_get_header(connection, "Content-Type");
+        if (content_type!= NULL && strcmp(content_type, "application/x-www-form-urlencoded") == 0) {
             int n;
             char post[1024];
             while (n = mg_read(connection, post, sizeof(post))) {
@@ -169,5 +169,10 @@ namespace Mongoose
         delete[] buffer;
 
         return output;
+    }
+            
+    void Request::upload(string targetDirectory)
+    {
+        mg_upload(connection, targetDirectory.c_str());
     }
 };
