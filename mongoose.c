@@ -2418,10 +2418,13 @@ static char *mg_fgets(char *buf, size_t size, struct file *filep, char **p) {
 
   if (filep->membuf != NULL && *p != NULL) {
     eof = (char *) memchr(*p, '\n', &filep->membuf[filep->size] - *p);
-    len = (size_t) (eof - *p) > size - 1 ? size - 1 : (size_t) (eof - *p);
-    memcpy(buf, *p, len);
-    buf[len] = '\0';
-    *p = eof;
+    if (eof != NULL) {
+      eof += 1; // Include \n
+      len = (size_t) (eof - *p) > size - 1 ? size - 1 : (size_t) (eof - *p);
+      memcpy(buf, *p, len);
+      buf[len] = '\0';
+      *p = eof;
+    }
     return eof;
   } else if (filep->fp != NULL) {
     return fgets(buf, size, filep->fp);
