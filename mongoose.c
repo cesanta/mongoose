@@ -2415,17 +2415,21 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
 static char *mg_fgets(char *buf, size_t size, struct file *filep, char **p) {
   char *eof;
   size_t len;
+  char *memend;
 
   if (filep->membuf != NULL && *p != NULL) {
-    eof = (char *) memchr(*p, '\n', &filep->membuf[filep->size] - *p);
+    memend = (char *) &filep->membuf[filep->size];
+    eof = (char *) memchr(*p, '\n', memend - *p); // Search for \n from p till the end of stream
     if (eof != NULL) {
       eof += 1; // Include \n
-      len = (size_t) (eof - *p) > size - 1 ? size - 1 : (size_t) (eof - *p);
-      memcpy(buf, *p, len);
-      buf[len] = '\0';
-      *p = eof;
+    } else {
+      eof = memend; // Copy remaining data
     }
-    return eof;
+    len = (size_t) (eof - *p) > size - 1 ? size - 1 : (size_t) (eof - *p);  
+    memcpy(buf, *p, len);
+    buf[len] = '\0';
+    *p += len;
+    return len ? eof : NULL;
   } else if (filep->fp != NULL) {
     return fgets(buf, size, filep->fp);
   } else {
