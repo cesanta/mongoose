@@ -297,29 +297,44 @@ static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
 }
 
 static int lua_error_handler(lua_State *L) {
+  const char *error_msg =  lua_isstring(L, -1) ?  lua_tostring(L, -1) : "?\n";
+
   lua_getglobal(L, "mg");
   if (!lua_isnil(L, -1)) {
-    luaL_dostring(L, "mg.write(debug.traceback())");
+    lua_getfield(L, -1, "write");   // call mg.write()
+    lua_pushstring(L, error_msg);
+    lua_pushliteral(L, "\n");
+    lua_call(L, 2, 0);
+    luaL_dostring(L, "mg.write(debug.traceback(), '\\n')");
   } else {
-    printf("Lua error: [%s]\n", lua_isstring(L, -2) ?
-            lua_tostring(L, -2) : "unknown error");
-    luaL_dostring(L, "print(debug.traceback())");
+    printf("Lua error: [%s]\n", error_msg);
+    luaL_dostring(L, "print(debug.traceback(), '\\n')");
   }
+  // TODO(lsm): leave the stack balanced
 
   return 0;
 }
 
 void mg_exec_lua_script(struct mg_connection *conn, const char *path,
-                        const char *buf, int buf_size) {
+                        const void **exports) {
+  int i;
   lua_State *L;
 
   if (path != NULL && (L = luaL_newstate()) != NULL) {
     prepare_lua_environment(conn, L);
     lua_pushcclosure(L, &lua_error_handler, 0);
-    if (buf != NULL) {
-      luaL_loadbuffer(L, buf, buf_size, path);
-    } else {
-      luaL_loadfile(L, path);
+
+    lua_pushglobaltable(L);
+    if (exports != NULL) {
+      for (i = 0; exports[i] != NULL && exports[i + 1] != NULL; i += 2) {
+        lua_pushstring(L, exports[i]);
+        lua_pushcclosure(L, (lua_CFunction) exports[i + 1], 0);
+        lua_rawset(L, -3);
+      }
+    }
+
+    if (luaL_loadfile(L, path) != 0) {
+      lua_error_handler(L);
     }
     lua_pcall(L, 0, 0, -2);
     lua_close(L);
