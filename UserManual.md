@@ -103,7 +103,7 @@ will fail.
 Path to an executable to use as CGI interpreter for __all__ CGI scripts
 regardless script extension. If this option is not set (which is a default),
 Mongoose looks at first line of a CGI script,
-[shebang line](http://en.wikipedia.org/wiki/Shebang_(Unix)), for an interpreter.
+[shebang line](http://en.wikipedia.org/wiki/Shebang_(Unix\)), for an interpreter.
 
 For example, if both PHP and perl CGIs are used, then
 `#!/path/to/php-cgi.exe` and `#!/path/to/perl.exe` must be first lines of the
