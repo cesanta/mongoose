@@ -3279,6 +3279,7 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   addenv(blk, "SERVER_NAME=%s", conn->ctx->config[AUTHENTICATION_DOMAIN]);
   addenv(blk, "SERVER_ROOT=%s", conn->ctx->config[DOCUMENT_ROOT]);
   addenv(blk, "DOCUMENT_ROOT=%s", conn->ctx->config[DOCUMENT_ROOT]);
+  addenv(blk, "SERVER_SOFTWARE=%s/%s", "Mongoose", mg_version());
 
   // Prepare the environment block
   addenv(blk, "%s", "GATEWAY_INTERFACE=CGI/1.1");
