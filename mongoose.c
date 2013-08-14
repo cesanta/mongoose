@@ -2415,14 +2415,21 @@ static int parse_auth_header(struct mg_connection *conn, char *buf,
 static char *mg_fgets(char *buf, size_t size, struct file *filep, char **p) {
   char *eof;
   size_t len;
+  char *memend;
 
   if (filep->membuf != NULL && *p != NULL) {
-    eof = (char *) memchr(*p, '\n', &filep->membuf[filep->size] - *p);
-    len = (size_t) (eof - *p) > size - 1 ? size - 1 : (size_t) (eof - *p);
+    memend = (char *) &filep->membuf[filep->size];
+    eof = (char *) memchr(*p, '\n', memend - *p); // Search for \n from p till the end of stream
+    if (eof != NULL) {
+      eof += 1; // Include \n
+    } else {
+      eof = memend; // Copy remaining data
+    }
+    len = (size_t) (eof - *p) > size - 1 ? size - 1 : (size_t) (eof - *p);  
     memcpy(buf, *p, len);
     buf[len] = '\0';
-    *p = eof;
-    return eof;
+    *p += len;
+    return len ? eof : NULL;
   } else if (filep->fp != NULL) {
     return fgets(buf, size, filep->fp);
   } else {
@@ -3272,6 +3279,7 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   addenv(blk, "SERVER_NAME=%s", conn->ctx->config[AUTHENTICATION_DOMAIN]);
   addenv(blk, "SERVER_ROOT=%s", conn->ctx->config[DOCUMENT_ROOT]);
   addenv(blk, "DOCUMENT_ROOT=%s", conn->ctx->config[DOCUMENT_ROOT]);
+  addenv(blk, "SERVER_SOFTWARE=%s/%s", "Mongoose", mg_version());
 
   // Prepare the environment block
   addenv(blk, "%s", "GATEWAY_INTERFACE=CGI/1.1");
