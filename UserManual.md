@@ -401,12 +401,12 @@ Embedding Mongoose is easy. Copy
 [mongoose.c](https://github.com/valenok/mongoose/blob/master/mongoose.c) and
 [mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h)
 to your application's source tree and include them in the build. For
-example, your application's code lives in C++ file `my_app.cpp`, then on UNIX
+example, your application's code lives in C file `my_app.c`, then on UNIX
 this command embeds Mongoose:
 
     $ ls
-    my_app.cpp mongoose.c mongoose.h
-    $ g++ my_app.cc mongoose.c -o my_app
+    my_app.c mongoose.c mongoose.h
+    $ gcc my_app.c mongoose.c -o my_app -ldl -pthread
 
 Somewhere in the application code, call `mg_start()` to start the server.
 Pass configuration options and event handlers to `mg_start()`.
