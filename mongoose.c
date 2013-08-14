@@ -3630,9 +3630,11 @@ static void put_file(struct mg_connection *conn, const char *path) {
       conn->status_code = 206;
       fseeko(file.fp, r1, SEEK_SET);
     }
-    if (forward_body_data(conn, file.fp, INVALID_SOCKET, NULL)) {
-      mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->status_code);
+    if (!forward_body_data(conn, file.fp, INVALID_SOCKET, NULL)) {
+      conn->status_code = 500;
     }
+    mg_printf(conn, "HTTP/1.1 %d OK\r\nContent-Length: 0\r\n\r\n",
+              conn->status_code);
     mg_fclose(&file);
   }
 }
