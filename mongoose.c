@@ -304,6 +304,11 @@ typedef int socklen_t;
 #define PATH_MAX 4096
 #endif
 
+// Size of the accepted socket queue
+#if !defined(MGSQLEN)
+#define MGSQLEN 20
+#endif
+
 static const char *http_500_error = "Internal Server Error";
 
 #if defined(NO_SSL_DL)
@@ -494,7 +499,7 @@ struct mg_context {
   pthread_mutex_t mutex;     // Protects (max|num)_threads
   pthread_cond_t  cond;      // Condvar for tracking workers terminations
 
-  struct socket queue[20];   // Accepted sockets
+  struct socket queue[MGSQLEN];   // Accepted sockets
   volatile int sq_head;      // Head of the socket queue
   volatile int sq_tail;      // Tail of the socket queue
   pthread_cond_t sq_full;    // Signaled when socket is produced
