@@ -63,6 +63,10 @@ static void test_parse_http_message() {
   char req6[] = "G";
   char req7[] = " blah ";
   char req8[] = " HTTP/1.1 200 OK \n\n";
+  char req9[] = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n";
+
+  ASSERT(parse_http_message(req9, sizeof(req9), &ri) == sizeof(req9) - 1);
+  ASSERT(ri.num_headers == 1);
 
   ASSERT(parse_http_message(req1, sizeof(req1), &ri) == sizeof(req1) - 1);
   ASSERT(strcmp(ri.http_version, "1.1") == 0);

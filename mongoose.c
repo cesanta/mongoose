@@ -3070,7 +3070,7 @@ static int parse_http_message(char *buf, int len, struct mg_request_info *ri) {
     // "GET / HTTP/1.0 ...." or  "HTTP/1.0 200 OK ..."
     is_request = is_valid_http_method(ri->request_method);
     if ((is_request && memcmp(ri->http_version, "HTTP/", 5) != 0) ||
-        (!is_request && memcmp(ri->request_method, "HTTP/", 5)) != 0) {
+        (!is_request && memcmp(ri->request_method, "HTTP/", 5) != 0)) {
       request_length = -1;
     } else {
       if (is_request) {
