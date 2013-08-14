@@ -406,7 +406,7 @@ this command embeds Mongoose:
 
     $ ls
     my_app.cpp mongoose.c mongoose.h
-    $ g++ my_app.cc mongoose.c -o my_app
+    $ gcc my_app.cpp mongoose.c -o my_app -lstdc++ -ldl -pthread
 
 Somewhere in the application code, call `mg_start()` to start the server.
 Pass configuration options and event handlers to `mg_start()`.
