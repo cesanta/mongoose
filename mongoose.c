@@ -306,7 +306,7 @@ typedef int socklen_t;
 #define MGSQLEN 20
 #endif
 
-// Extra HTTP headers to send in every reply
+// Extra HTTP headers to send in every static file reply
 #if !defined(EXTRA_HTTP_HEADERS)
 #define EXTRA_HTTP_HEADERS ""
 #endif
@@ -2977,7 +2977,8 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
     // actually, range requests don't play well with a pre-gzipped
     // file (since the range is specified in the uncmpressed space)
     if (filep->gzipped) {
-      send_http_error(conn, 501, "Not Implemented", "range requests in gzipped files are not supported");
+      send_http_error(conn, 501, "Not Implemented",
+                      "range requests in gzipped files are not supported");
       return;
     }
     conn->status_code = 206;
@@ -3005,9 +3006,10 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
       "Content-Length: %" INT64_FMT "\r\n"
       "Connection: %s\r\n"
       "Accept-Ranges: bytes\r\n"
-      "%s%s\r\n",
+      "%s%s%s\r\n",
       conn->status_code, msg, date, lm, etag, (int) mime_vec.len,
-      mime_vec.ptr, cl, suggest_connection_header(conn), range, encoding);
+      mime_vec.ptr, cl, suggest_connection_header(conn), range, encoding,
+      EXTRA_HTTP_HEADERS);
 
   if (strcmp(conn->request_info.request_method, "HEAD") != 0) {
     send_file_data(conn, filep, r1, cl);
