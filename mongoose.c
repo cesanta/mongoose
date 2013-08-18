@@ -4277,7 +4277,7 @@ static uint32_t get_remote_ip(const struct mg_connection *conn) {
 }
 
 #ifdef USE_LUA
-#include "mod_lua.c"
+#include "build/mod_lua.c"
 #endif // USE_LUA
 
 int mg_upload(struct mg_connection *conn, const char *destination_dir) {
