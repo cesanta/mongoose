@@ -3788,6 +3788,7 @@ static void send_ssi_file(struct mg_connection *conn, const char *path,
 static void handle_ssi_file_request(struct mg_connection *conn,
                                     const char *path) {
   struct file file = STRUCT_FILE_INITIALIZER;
+  struct vec mime_vec;
 
   if (!mg_fopen(conn, path, "rb", &file)) {
     send_http_error(conn, 500, http_500_error, "fopen(%s): %s", path,
@@ -3795,9 +3796,11 @@ static void handle_ssi_file_request(struct mg_connection *conn,
   } else {
     conn->must_close = 1;
     fclose_on_exec(&file);
+    get_mime_type(conn->ctx, path, &mime_vec);
     mg_printf(conn, "HTTP/1.1 200 OK\r\n"
-              "Content-Type: text/html\r\nConnection: %s\r\n\r\n",
-              suggest_connection_header(conn));
+              "Content-Type: %.*s\r\n"
+              "Connection: close\r\n\r\n",
+              (int) mime_vec.len, mime_vec.ptr);
     send_ssi_file(conn, path, &file, 0);
     mg_fclose(&file);
   }
