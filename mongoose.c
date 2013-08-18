@@ -2426,13 +2426,14 @@ static char *mg_fgets(char *buf, size_t size, struct file *filep, char **p) {
 
   if (filep->membuf != NULL && *p != NULL) {
     memend = (char *) &filep->membuf[filep->size];
-    eof = (char *) memchr(*p, '\n', memend - *p); // Search for \n from p till the end of stream
+    // Search for \n from p till the end of stream
+    eof = (char *) memchr(*p, '\n', memend - *p);
     if (eof != NULL) {
       eof += 1; // Include \n
     } else {
       eof = memend; // Copy remaining data
     }
-    len = (size_t) (eof - *p) > size - 1 ? size - 1 : (size_t) (eof - *p);  
+    len = (size_t) (eof - *p) > size - 1 ? size - 1 : (size_t) (eof - *p);
     memcpy(buf, *p, len);
     buf[len] = '\0';
     *p += len;
@@ -2758,7 +2759,7 @@ static int remove_directory(struct mg_connection *conn, const char *dir) {
     de.conn = conn;
 
     while ((dp = readdir(dirp)) != NULL) {
-      // Do not show current dir (but show hidden files as they will also be removed)
+      // Do not show current dir, but show hidden files
       if (!strcmp(dp->d_name, ".") ||
           !strcmp(dp->d_name, "..")) {
         continue;
@@ -3806,7 +3807,8 @@ static void send_options(struct mg_connection *conn) {
   conn->status_code = 200;
 
   mg_printf(conn, "%s", "HTTP/1.1 200 OK\r\n"
-            "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, OPTIONS, PROPFIND, MKCOL\r\n"
+            "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, "
+            "OPTIONS, PROPFIND, MKCOL\r\n"
             "DAV: 1\r\n\r\n");
 }
 
