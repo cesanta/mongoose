@@ -1590,6 +1590,19 @@ int mg_read(struct mg_connection *conn, void *buf, size_t len) {
   return nread;
 }
 
+int mg_set_sock_handle(struct mg_connection * conn, int new_sock_handle) {
+    int old_sock_handle = conn->client.sock; 
+    conn->client.sock = new_sock_handle;
+    return old_sock_handle;
+}
+
+int mg_get_sock_in_own(struct mg_connection * conn) {
+    int sock_handle = conn->client.sock;
+    conn->must_close = 1;
+    conn->client.sock = INVALID_SOCKET;
+    return sock_handle;
+}
+
 int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
   time_t now;
   int64_t n, total, allowed;
