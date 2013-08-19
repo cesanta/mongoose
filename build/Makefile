@@ -1,6 +1,9 @@
 # This Makefile is part of Mongoose web server project,
 # https://github.com/valenok/mongoose
 #
+# This Makefile is GNU make compatible. You can get GNU Make from
+# http://gnuwin32.sourceforge.net/packages/make.htm
+#
 # Example custom build:
 # COPT="-g -O0 -DNO_SSL_DL -DUSE_LUA -llua -lcrypto -lssl" make linux
 #
