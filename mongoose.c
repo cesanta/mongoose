@@ -955,27 +955,24 @@ static void send_http_error(struct mg_connection *conn, int status,
   int len = 0;
 
   conn->status_code = status;
-  if (conn->ctx->callbacks.http_error == NULL ||
-      conn->ctx->callbacks.http_error(conn, status)) {
-    buf[0] = '\0';
+  buf[0] = '\0';
 
-    // Errors 1xx, 204 and 304 MUST NOT send a body
-    if (status > 199 && status != 204 && status != 304) {
-      len = mg_snprintf(conn, buf, sizeof(buf), "Error %d: %s", status, reason);
-      buf[len++] = '\n';
+  // Errors 1xx, 204 and 304 MUST NOT send a body
+  if (status > 199 && status != 204 && status != 304) {
+    len = mg_snprintf(conn, buf, sizeof(buf), "Error %d: %s", status, reason);
+    buf[len++] = '\n';
 
-      va_start(ap, fmt);
-      len += mg_vsnprintf(conn, buf + len, sizeof(buf) - len, fmt, ap);
-      va_end(ap);
-    }
-    DEBUG_TRACE(("[%s]", buf));
-
-    mg_printf(conn, "HTTP/1.1 %d %s\r\n"
-              "Content-Length: %d\r\n"
-              "Connection: %s\r\n\r\n", status, reason, len,
-              suggest_connection_header(conn));
-    conn->num_bytes_sent += mg_printf(conn, "%s", buf);
+    va_start(ap, fmt);
+    len += mg_vsnprintf(conn, buf + len, sizeof(buf) - len, fmt, ap);
+    va_end(ap);
   }
+  DEBUG_TRACE(("[%s]", buf));
+
+  mg_printf(conn, "HTTP/1.1 %d %s\r\n"
+            "Content-Length: %d\r\n"
+            "Connection: %s\r\n\r\n", status, reason, len,
+            suggest_connection_header(conn));
+  conn->num_bytes_sent += mg_printf(conn, "%s", buf);
 }
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
@@ -1628,24 +1625,6 @@ int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
   return (int) total;
 }
 
-// Alternative alloc_vprintf() for non-compliant C runtimes
-static int alloc_vprintf2(char **buf, const char *fmt, va_list ap) {
-  va_list ap_copy;
-  int size = MG_BUF_LEN;
-  int len = -1;
-
-  *buf = NULL;
-  while (len == -1) {
-    if (*buf) free(*buf);
-    *buf = malloc(size *= 4);
-    if (!*buf) break;
-    va_copy(ap_copy, ap);
-    len = vsnprintf(*buf, size, fmt, ap_copy);
-  }
-
-  return len;
-}
-
 // Print message to buffer. If buffer is large enough to hold the message,
 // return buffer. If buffer is to small, allocate large enough buffer on heap,
 // and return allocated buffer.
@@ -1661,12 +1640,7 @@ static int alloc_vprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   va_copy(ap_copy, ap);
   len = vsnprintf(NULL, 0, fmt, ap_copy);
 
-  if (len < 0) {
-    // C runtime is not standard compliant, vsnprintf() returned -1.
-    // Switch to alternative code path that uses incremental allocations.
-    va_copy(ap_copy, ap);
-    len = alloc_vprintf2(buf, fmt, ap);
-  } else if (len > (int) size &&
+  if (len > (int) size &&
       (size = len + 1) > 0 &&
       (*buf = (char *) malloc(size)) == NULL) {
     len = -1;  // Allocation failed, mark failure

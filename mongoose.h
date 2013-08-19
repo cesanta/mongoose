@@ -120,7 +120,6 @@ struct mg_callbacks {
   // Implementing this callback allows to create custom error pages.
   // Parameters:
   //   status: HTTP error status code.
-  int  (*http_error)(struct mg_connection *, int status);
 };
 
 // Start web server.
