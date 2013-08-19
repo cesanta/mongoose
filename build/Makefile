@@ -22,7 +22,7 @@ CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe -I.. $(COPT)
 # To build with Lua, download and unzip Lua 5.2.1 source code into the
 # mongoose directory, and then add $(LUA_SOURCES) to CFLAGS
 LUA         = ../lua-5.2.1/src
-LUA_FLAGS   = -I$(LUA) -DLUA_COMPAT_ALL
+LUA_FLAGS   = -DLUA_COMPAT_ALL  -I$(LUA)
 LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
               $(LUA)/ldebug.c $(LUA)/ldo.c $(LUA)/ldump.c \
               $(LUA)/lfunc.c $(LUA)/lgc.c $(LUA)/llex.c \
@@ -34,11 +34,29 @@ LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
               $(LUA)/ldblib.c $(LUA)/liolib.c $(LUA)/lmathlib.c \
               $(LUA)/loslib.c $(LUA)/lstrlib.c $(LUA)/ltablib.c \
               $(LUA)/loadlib.c $(LUA)/linit.c
+LUA_HEADERS = $(LUA)/llimits.h $(LUA)/lobject.h $(LUA)/lapi.h $(LUA)/lzio.h \
+              $(LUA)/ldo.h $(LUA)/ltm.h $(LUA)/lstate.h $(LUA)/lgc.h \
+              $(LUA)/lvm.h $(LUA)/ltable.h $(LUA)/lstring.h $(LUA)/lfunc.h \
+              $(LUA)/lundump.h $(LUA)/ldebug.h $(LUA)/lopcodes.h $(LUA)/llex.h \
+              $(LUA)/lparser.h $(LUA)/lcode.h $(LUA)/lmem.h $(LUA)/lctype.h
 LUA_WINOBJS = $(LUA_SOURCES:%.c=%.obj)
 
 ifneq ($(OS), Windows_NT)
   LUA_FLAGS += -DLUA_USE_DLOPEN
 endif
+
+lua_5.2.1.c: lua_5.2.1.h
+	(echo '#define LUA_CORE' ; \
+         echo '#define LUA_LIB' ; \
+         echo '#define lobject_c' ; \
+         echo '#define lua_c' ; \
+         echo '#define ltable_c' ; \
+         echo '#include "lua_5.2.1.h"' ; \
+         cat $(LUA_HEADERS) $(LUA_SOURCES) | sed '/^#include "/d') > $@
+
+lua_5.2.1.h:
+	cat $(LUA)/luaconf.h $(LUA)/lua.h $(LUA)/lauxlib.h $(LUA)/lualib.h | \
+         sed '/^#include "/d' > $@
 
 # Stock windows binary builds with Lua and YASSL library.
 YASSL       = ../../cyassl-2.4.6
@@ -65,8 +83,8 @@ YASSL_SOURCES = \
   $(YASSL)/ctaocrypt/src/ecc.c $(YASSL)/src/ocsp.c $(YASSL)/src/crl.c \
   $(YASSL)/ctaocrypt/src/hc128.c $(YASSL)/ctaocrypt/src/memory.c
 
-ALL_SOURCES = ../mongoose.c main.c sqlite3.c lsqlite3.c \
-              $(LUA_SOURCES) $(YASSL_SOURCES)
+ALL_SOURCES = ../mongoose.c main.c sqlite3.c lsqlite3.c lua_5.2.1.c \
+              $(YASSL_SOURCES)
 ALL_OBJECTS = $(ALL_SOURCES:%.c=%.o)
 ALL_WINOBJS = $(ALL_SOURCES:%.c=%.obj)
 

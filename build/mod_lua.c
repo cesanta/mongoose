@@ -1,5 +1,4 @@
-#include <lua.h>
-#include <lauxlib.h>
+#include "lua_5.2.1.h"
 
 #ifdef _WIN32
 static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
