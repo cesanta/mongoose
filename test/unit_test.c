@@ -223,7 +223,7 @@ static void upload_cb(struct mg_connection *conn, const char *path) {
 
   if (atoi(ri->query_string) == 1) {
     ASSERT(!strcmp(path, "./upload_test.txt"));
-    ASSERT((p1 = read_file("mongoose.c", &len1)) != NULL);
+    ASSERT((p1 = read_file("main.c", &len1)) != NULL);
     ASSERT((p2 = read_file(path, &len2)) != NULL);
     ASSERT(len1 == len2);
     ASSERT(memcmp(p1, p2, len1) == 0);
@@ -231,14 +231,14 @@ static void upload_cb(struct mg_connection *conn, const char *path) {
     remove(upload_filename);
   } else if (atoi(ri->query_string) == 2) {
     if (!strcmp(path, "./upload_test.txt")) {
-      ASSERT((p1 = read_file("mongoose.h", &len1)) != NULL);
+      ASSERT((p1 = read_file("lua_5.2.1.h", &len1)) != NULL);
       ASSERT((p2 = read_file(path, &len2)) != NULL);
       ASSERT(len1 == len2);
       ASSERT(memcmp(p1, p2, len1) == 0);
       free(p1), free(p2);
       remove(upload_filename);
     } else if (!strcmp(path, "./upload_test2.txt")) {
-      ASSERT((p1 = read_file("README.md", &len1)) != NULL);
+      ASSERT((p1 = read_file("mod_lua.c", &len1)) != NULL);
       ASSERT((p2 = read_file(path, &len2)) != NULL);
       ASSERT(len1 == len2);
       ASSERT(memcmp(p1, p2, len1) == 0);
@@ -282,14 +282,14 @@ static int log_message_cb(const struct mg_connection *conn, const char *msg) {
 
 static const struct mg_callbacks CALLBACKS = {
   &begin_request_handler_cb, NULL, &log_message_cb, NULL, NULL, NULL, NULL,
-  &open_file_cb, NULL, &upload_cb, NULL
+  &open_file_cb, NULL, &upload_cb
 };
 
 static const char *OPTIONS[] = {
   "document_root", ".",
   "listening_ports", LISTENING_ADDR,
   "enable_keep_alive", "yes",
-  "ssl_certificate", "build/ssl_cert.pem",
+  "ssl_certificate", "ssl_cert.pem",
   NULL,
 };
 
@@ -328,12 +328,12 @@ static void test_mg_download(void) {
                              "GET / HTTP/1.0\r\n\r\n")) != NULL);
   mg_close_connection(conn);
 
-  // Fetch mongoose.c, should succeed
+  // Fetch main.c, should succeed
   ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
-                             "GET /mongoose.c HTTP/1.0\r\n\r\n")) != NULL);
+                             "GET /main.c HTTP/1.0\r\n\r\n")) != NULL);
   ASSERT(!strcmp(conn->request_info.uri, "200"));
   ASSERT((p1 = read_conn(conn, &len1)) != NULL);
-  ASSERT((p2 = read_file("mongoose.c", &len2)) != NULL);
+  ASSERT((p2 = read_file("main.c", &len2)) != NULL);
   ASSERT(len1 == len2);
   ASSERT(memcmp(p1, p2, len1) == 0);
   free(p1), free(p2);
@@ -395,7 +395,7 @@ static void test_mg_upload(void) {
   ASSERT((ctx = mg_start(&CALLBACKS, NULL, OPTIONS)) != NULL);
 
   // Upload one file
-  ASSERT((file_data = read_file("mongoose.c", &file_len)) != NULL);
+  ASSERT((file_data = read_file("main.c", &file_len)) != NULL);
   post_data = NULL;
   post_data_len = alloc_printf(&post_data, 0,
                                        "--%s\r\n"
@@ -421,8 +421,8 @@ static void test_mg_upload(void) {
   mg_close_connection(conn);
 
   // Upload two files
-  ASSERT((file_data = read_file("mongoose.h", &file_len)) != NULL);
-  ASSERT((file2_data = read_file("README.md", &file2_len)) != NULL);
+  ASSERT((file_data = read_file("lua_5.2.1.h", &file_len)) != NULL);
+  ASSERT((file2_data = read_file("mod_lua.c", &file2_len)) != NULL);
   post_data = NULL;
   post_data_len = alloc_printf(&post_data, 0,
                                // First file
