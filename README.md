@@ -34,7 +34,7 @@ compiled in:
   <a href="http://lua.org">Lua embedded scripting engine</a>.
 
 Questions can be asked at
-[mongoose-users@google.com](http://groups.google.com/group/mongoose-users)
+[mongoose-users@googlegroups.com](http://groups.google.com/group/mongoose-users)
 mailing list.
 
 [![&nbsp;](https://cruel-carlota.pagodabox.com/2a613890c1f4b60e5919a9c1dd3caca2 "githalytics.com")](http://githalytics.com/valenok/mongoose)
@@ -48,5 +48,5 @@ license for free, or under the terms of standard commercial license provided
 by [Cesanta Software](http://cesanta.com).
 
 [Super Light Regular Expression library](https://github.com/cesanta/slre) is
-another project developed by the same developer, under the same philosophy
+another project by Cesanta Software, developed with the same philosophy
 of functionality and simplicity.
