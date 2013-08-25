@@ -5126,7 +5126,7 @@ static void *worker_thread(void *thread_func_param) {
   struct mg_connection *conn;
 
   if (ctx != NULL && ctx->callbacks.thread_setup != NULL)
-    ctx->callbacks.thread_setup (1);
+    ctx->callbacks.thread_setup (1, ctx->user_data);
 
   conn = (struct mg_connection *) calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE);
   if (conn == NULL) {
@@ -5175,7 +5175,7 @@ static void *worker_thread(void *thread_func_param) {
   DEBUG_TRACE(("exiting"));
 
   if (ctx->callbacks.thread_teardown != NULL)
-    ctx->callbacks.thread_teardown (1);
+    ctx->callbacks.thread_teardown (1, ctx->user_data);
 
   return NULL;
 }
@@ -5261,7 +5261,7 @@ static void *master_thread(void *thread_func_param) {
 #endif
 
   if (ctx != NULL && ctx->callbacks.thread_setup != NULL)
-    ctx->callbacks.thread_setup (0);
+    ctx->callbacks.thread_setup (0, ctx->user_data);
 
   pfd = (struct pollfd *) calloc(ctx->num_listening_sockets, sizeof(pfd[0]));
   while (pfd != NULL && ctx->stop_flag == 0) {
@@ -5310,7 +5310,7 @@ static void *master_thread(void *thread_func_param) {
   DEBUG_TRACE(("exiting"));
 
   if (ctx->callbacks.thread_teardown != NULL)
-    ctx->callbacks.thread_teardown (0);
+    ctx->callbacks.thread_teardown (0, ctx->user_data);
 
   // Signal mg_stop() that we're done.
   // WARNING: This must be the very last thing this
