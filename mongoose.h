@@ -120,6 +120,25 @@ struct mg_callbacks {
   // Implementing this callback allows to create custom error pages.
   // Parameters:
   //   status: HTTP error status code.
+
+
+  // Called when mongoose has created a thread. The user can use this to do
+  // any per-thread initialization required. This callback is called IN THE
+  // CONTEXT OF THE NEW THREAD. This is the first thing that each thread does,
+  // unless this is NULL.
+  // Parameters:
+  //    is_worker_thread: is 0 for the master thread and 1 for worker thread(s)
+  //    user_data: the same pointer passed to "mg_start"
+  void (*thread_setup)(int is_worker_thread, void * user_data);
+
+  // Called when mongoose is about to destroy a thread. The user can use this
+  // to do any per-thread tear-down required. This callback is called IN THE
+  // CONTEXT OF THE THREAD. This is the last this each thread does, unless
+  // this is set to NULL.
+  // Parameters:
+  //    is_worker_thread: is 0 for the master thread and 1 for worker thread(s)
+  //    user_data: the same pointer passed to "mg_start"
+  void (*thread_teardown)(int is_worker_thread, void * user_data);
 };
 
 // Start web server.
