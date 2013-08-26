@@ -1,5 +1,5 @@
 CFLAGS  = -W -Wall -I.. -pthread -g -pipe $(COPT)
-DLL_FLAGS = -DLUA_COMPAT_ALL -I../lua-5.2.1/src
+DLL_FLAGS = -DLUA_COMPAT_ALL -I../build
 
 ifeq ($(OS),Windows_NT)
 else
@@ -16,25 +16,25 @@ else
   endif
 endif
 
-all: hello upload post websocket chat lua_dll
+all: hello upload post websocket chat
 
 hello:
-	$(CC) $(CFLAGS) hello.c ../mongoose.c  -o $@
+	$(CC) hello.c ../mongoose.c  -o $@ $(CFLAGS)
 
 upload:
-	$(CC) $(CFLAGS) upload.c ../mongoose.c -o $@
+	$(CC) upload.c ../mongoose.c -o $@ $(CFLAGS)
 
 post:
-	$(CC) $(CFLAGS) post.c ../mongoose.c -o $@
+	$(CC) post.c ../mongoose.c -o $@ $(CFLAGS)
 
 websocket:
-	$(CC) $(CFLAGS) -DUSE_WEBSOCKET websocket.c ../mongoose.c -o $@
+	$(CC) -DUSE_WEBSOCKET websocket.c ../mongoose.c -o $@ $(CFLAGS)
 
 chat:
-	$(CC) $(CFLAGS) chat.c ../mongoose.c -o $@
+	$(CC) chat.c ../mongoose.c -o $@ $(CFLAGS)
 
 lua_dll:
-	$(CC) $(CFLAGS) $(DLL_FLAGS) lua_dll.c -o $@.so
+	$(CC) lua_dll.c ../build/lua_5.2.1.c -o $@.so $(CFLAGS) $(DLL_FLAGS)
 
 
 MSVC    = ../../vc6
