@@ -40,7 +40,7 @@ struct mg_request_info {
   int remote_port;            // Client's port
   int is_ssl;                 // 1 if SSL-ed, 0 if not
   void *user_data;            // User data pointer passed to mg_start()
-  void *conn_data;            // Connection-specific user data
+  void *conn_data;            // Connection-specific, per-thread user data.
 
   int num_headers;            // Number of HTTP headers
   struct mg_header {
@@ -116,10 +116,23 @@ struct mg_callbacks {
   //    file_file: full path name to the uploaded file.
   void (*upload)(struct mg_connection *, const char *file_name);
 
-  // Called when mongoose is about to send HTTP error to the client.
-  // Implementing this callback allows to create custom error pages.
+  // Called at the beginning of mongoose's thread execution in the context of
+  // that thread. To be used to perform any extra per-thread initialization.
   // Parameters:
-  //   status: HTTP error status code.
+  //  user_data: pointer passed to mg_start
+  //  conn_data: per-connection, i.e. per-thread pointer. Can be used to
+  //             store per-thread data, for example, database connection
+  //             handles. Persistent between connections handled by the
+  //             same thread.
+  //             NOTE: this parameter is NULL for master thread, and non-NULL
+  //             for worker threads.
+  void (*thread_start)(void *user_data, void **conn_data);
+
+  // Called when mongoose's thread is about to terminate.
+  // Same as thread_setup() callback, but called when thread is about to be
+  // destroyed. Used to cleanup the state initialized by thread_setup().
+  // Parameters: see thread_start().
+  void (*thread_stop)(void *user_data, void **conn_data);
 };
 
 // Start web server.
