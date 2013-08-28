@@ -5125,9 +5125,6 @@ static void *worker_thread(void *thread_func_param) {
   struct mg_context *ctx = (struct mg_context *) thread_func_param;
   struct mg_connection *conn;
 
-  if (ctx != NULL && ctx->callbacks.thread_setup != NULL)
-    ctx->callbacks.thread_setup (1, ctx->user_data);
-
   conn = (struct mg_connection *) calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE);
   if (conn == NULL) {
     cry(fc(ctx), "%s", "Cannot create new connection struct, OOM");
@@ -5136,6 +5133,11 @@ static void *worker_thread(void *thread_func_param) {
     conn->buf = (char *) (conn + 1);
     conn->ctx = ctx;
     conn->request_info.user_data = ctx->user_data;
+
+    if (ctx->callbacks.thread_start != NULL) {
+      ctx->callbacks.thread_start(&conn->request_info.user_data,
+                                  &conn->request_info.conn_data);
+    }
 
     // Call consume_socket() even when ctx->stop_flag > 0, to let it signal
     // sq_empty condvar to wake up the master waiting in produce_socket()
@@ -5163,6 +5165,11 @@ static void *worker_thread(void *thread_func_param) {
       close_connection(conn);
     }
     free(conn);
+
+    if (ctx->callbacks.thread_stop != NULL) {
+      ctx->callbacks.thread_stop(&conn->request_info.user_data,
+                                     &conn->request_info.conn_data);
+    }
   }
 
   // Signal master that we're done with connection and exiting
@@ -5173,9 +5180,6 @@ static void *worker_thread(void *thread_func_param) {
   (void) pthread_mutex_unlock(&ctx->mutex);
 
   DEBUG_TRACE(("exiting"));
-
-  if (ctx->callbacks.thread_teardown != NULL)
-    ctx->callbacks.thread_teardown (1, ctx->user_data);
 
   return NULL;
 }
@@ -5260,8 +5264,9 @@ static void *master_thread(void *thread_func_param) {
   pthread_setschedparam(pthread_self(), SCHED_RR, &sched_param);
 #endif
 
-  if (ctx != NULL && ctx->callbacks.thread_setup != NULL)
-    ctx->callbacks.thread_setup (0, ctx->user_data);
+  if (ctx->callbacks.thread_start != NULL) {
+    ctx->callbacks.thread_start(&ctx->user_data, NULL);
+  }
 
   pfd = (struct pollfd *) calloc(ctx->num_listening_sockets, sizeof(pfd[0]));
   while (pfd != NULL && ctx->stop_flag == 0) {
@@ -5309,8 +5314,9 @@ static void *master_thread(void *thread_func_param) {
 #endif
   DEBUG_TRACE(("exiting"));
 
-  if (ctx->callbacks.thread_teardown != NULL)
-    ctx->callbacks.thread_teardown (0, ctx->user_data);
+  if (ctx->callbacks.thread_stop != NULL) {
+    ctx->callbacks.thread_stop(&ctx->user_data, NULL);
+  }
 
   // Signal mg_stop() that we're done.
   // WARNING: This must be the very last thing this

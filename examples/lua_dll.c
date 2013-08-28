@@ -1,7 +1,5 @@
 #include <stdio.h>
-
-#include "lua.h"
-#include "lauxlib.h"
+#include "lua-5.2.1.h"
 
 static int smile(lua_State *L) {
   (void) L;  // Unused
