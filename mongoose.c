@@ -5164,12 +5164,11 @@ static void *worker_thread(void *thread_func_param) {
 
       close_connection(conn);
     }
-    free(conn);
-
     if (ctx->callbacks.thread_stop != NULL) {
       ctx->callbacks.thread_stop(&conn->request_info.user_data,
-                                     &conn->request_info.conn_data);
+                                 &conn->request_info.conn_data);
     }
+    free(conn);
   }
 
   // Signal master that we're done with connection and exiting
