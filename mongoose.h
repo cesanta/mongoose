@@ -129,7 +129,7 @@ struct mg_callbacks {
   void (*thread_start)(void *user_data, void **conn_data);
 
   // Called when mongoose's thread is about to terminate.
-  // Same as thread_setup() callback, but called when thread is about to be
+  // Same as thread_start() callback, but called when thread is about to be
   // destroyed. Used to cleanup the state initialized by thread_setup().
   // Parameters: see thread_start().
   void (*thread_stop)(void *user_data, void **conn_data);

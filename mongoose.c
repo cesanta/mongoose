@@ -5135,7 +5135,7 @@ static void *worker_thread(void *thread_func_param) {
     conn->request_info.user_data = ctx->user_data;
 
     if (ctx->callbacks.thread_start != NULL) {
-      ctx->callbacks.thread_start(&conn->request_info.user_data,
+      ctx->callbacks.thread_start(conn->request_info.user_data,
                                   &conn->request_info.conn_data);
     }
 
@@ -5164,12 +5164,13 @@ static void *worker_thread(void *thread_func_param) {
 
       close_connection(conn);
     }
-    free(conn);
-
+    
     if (ctx->callbacks.thread_stop != NULL) {
-      ctx->callbacks.thread_stop(&conn->request_info.user_data,
+      ctx->callbacks.thread_stop(conn->request_info.user_data,
                                      &conn->request_info.conn_data);
     }
+    
+    free(conn);
   }
 
   // Signal master that we're done with connection and exiting
@@ -5180,6 +5181,7 @@ static void *worker_thread(void *thread_func_param) {
   (void) pthread_mutex_unlock(&ctx->mutex);
 
   DEBUG_TRACE(("exiting"));
+
   return NULL;
 }
 
@@ -5264,7 +5266,7 @@ static void *master_thread(void *thread_func_param) {
 #endif
 
   if (ctx->callbacks.thread_start != NULL) {
-    ctx->callbacks.thread_start(&ctx->user_data, NULL);
+    ctx->callbacks.thread_start(ctx->user_data, NULL);
   }
 
   pfd = (struct pollfd *) calloc(ctx->num_listening_sockets, sizeof(pfd[0]));
@@ -5314,7 +5316,7 @@ static void *master_thread(void *thread_func_param) {
   DEBUG_TRACE(("exiting"));
 
   if (ctx->callbacks.thread_stop != NULL) {
-    ctx->callbacks.thread_stop(&ctx->user_data, NULL);
+    ctx->callbacks.thread_stop(ctx->user_data, NULL);
   }
 
   // Signal mg_stop() that we're done.
