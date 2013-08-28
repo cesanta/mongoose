@@ -2,17 +2,6 @@
 
 Project mission is to provide easy to use, powerful, embeddable web server.
 
-# Fork Notes
-
-This is the exact same original Mongoose project, with the following additions
-and modifications:
-
-- **Thread Setup/Teardown Callbacks**: since Mongoose creates threads internally,
-mechanisms are added to receive callbacks whenever a new thread is created or is
-about to be destroyed. 
-These mechanisms are available through `thread_setup` and `thread_teardown`
-members of the `mg_callbacks` struct.
- 
 # Downloads
 
 Sources, binaries and bundles are available for download at
