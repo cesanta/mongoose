@@ -140,8 +140,10 @@ typedef long off_t;
 #define fdopen(x, y) _fdopen((x), (y))
 #define write(x, y, z) _write((x), (y), (unsigned) z)
 #define read(x, y, z) _read((x), (y), (unsigned) z)
-#define flockfile(x) EnterCriticalSection(&global_log_file_lock)
-#define funlockfile(x) LeaveCriticalSection(&global_log_file_lock)
+#define flockfile(x) LockFileEx((HANDLE) _get_osfhandle(_fileno(x)), \
+  LOCKFILE_FAIL_IMMEDIATELY | LOCKFILE_EXCLUSIVE_LOCK, 0, 0, 0, NULL)
+#define funlockfile(x) UnlockFileEx((HANDLE) _get_osfhandle(_fileno(x)), \
+                                                            0, 0, 0, NULL)
 #define sleep(x) Sleep((x) * 1000)
 #define rmdir(x) _rmdir(x)
 
@@ -255,7 +257,6 @@ typedef int SOCKET;
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
 
 #ifdef _WIN32
-static CRITICAL_SECTION global_log_file_lock;
 static pthread_t pthread_self(void) {
   return GetCurrentThreadId();
 }
@@ -5371,7 +5372,6 @@ struct mg_context *mg_start(const struct mg_callbacks *callbacks,
 #if defined(_WIN32) && !defined(__SYMBIAN32__)
   WSADATA data;
   WSAStartup(MAKEWORD(2,2), &data);
-  InitializeCriticalSection(&global_log_file_lock);
 #endif // _WIN32
 
   // Allocate context and initialize reasonable general case defaults.
