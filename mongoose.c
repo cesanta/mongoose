@@ -1674,6 +1674,24 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   return mg_vprintf(conn, fmt, ap);
 }
 
+int mg_chunked_printf(struct mg_connection *conn, const char *fmt, ...)
+{
+  char mem[MG_BUF_LEN], *buf = mem;
+  int len;
+
+  va_list ap;
+  va_start(ap, fmt);
+  if ((len = alloc_vprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
+    len = mg_printf(conn, "%X\r\n%s\r\n", len, buf);
+  }
+
+  if (buf != mem && buf != NULL) {
+    free(buf);
+  }
+
+  return len;
+}
+
 int mg_url_decode(const char *src, int src_len, char *dst,
                   int dst_len, int is_form_url_encoded) {
   int i, j, a, b;
@@ -2641,7 +2659,7 @@ static void print_dir_entry(struct de *de) {
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M",
            localtime(&de->file.modification_time));
   mg_url_encode(de->file_name, href, sizeof(href));
-  de->conn->num_bytes_sent += mg_printf(de->conn,
+  de->conn->num_bytes_sent += mg_chunked_printf(de->conn,
       "<tr><td><a href=\"%s%s%s\">%s%s</a></td>"
       "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
       de->conn->request_info.uri, href, de->file.is_directory ? "/" : "",
@@ -2818,10 +2836,10 @@ static void handle_directory_request(struct mg_connection *conn,
   conn->must_close = 1;
   mg_printf(conn, "%s",
             "HTTP/1.1 200 OK\r\n"
-            "Connection: close\r\n"
+            "Transfer-Encoding: Chunked\r\n"
             "Content-Type: text/html; charset=utf-8\r\n\r\n");
 
-  conn->num_bytes_sent += mg_printf(conn,
+  conn->num_bytes_sent += mg_chunked_printf(conn,
       "<html><head><title>Index of %s</title>"
       "<style>th {text-align: left;}</style></head>"
       "<body><h1>Index of %s</h1><pre><table cellpadding=\"0\">"
@@ -2833,7 +2851,7 @@ static void handle_directory_request(struct mg_connection *conn,
       sort_direction, sort_direction, sort_direction);
 
   // Print first entry - link to a parent directory
-  conn->num_bytes_sent += mg_printf(conn,
+  conn->num_bytes_sent += mg_chunked_printf(conn,
       "<tr><td><a href=\"%s%s\">%s</a></td>"
       "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
       conn->request_info.uri, "..", "Parent directory", "-", "-");
@@ -2847,7 +2865,8 @@ static void handle_directory_request(struct mg_connection *conn,
   }
   free(data.entries);
 
-  conn->num_bytes_sent += mg_printf(conn, "%s", "</table></body></html>");
+  conn->num_bytes_sent += mg_chunked_printf(conn, "%s", "</table></body></html>");
+  conn->num_bytes_sent += mg_write(conn, "0\r\n\r\n", 5);
   conn->status_code = 200;
 }
 
