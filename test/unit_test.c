@@ -282,7 +282,7 @@ static int log_message_cb(const struct mg_connection *conn, const char *msg) {
 
 static const struct mg_callbacks CALLBACKS = {
   &begin_request_handler_cb, NULL, &log_message_cb, NULL, NULL, NULL, NULL,
-  &open_file_cb, NULL, &upload_cb
+  &open_file_cb, NULL, &upload_cb, NULL, NULL
 };
 
 static const char *OPTIONS[] = {
