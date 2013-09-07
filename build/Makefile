@@ -25,7 +25,7 @@ CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe -I.. $(COPT)
 # To build with Lua, download and unzip Lua 5.2.1 source code into the
 # mongoose directory, and then add $(LUA_SOURCES) to CFLAGS
 LUA         = ../lua-5.2.1/src
-LUA_FLAGS   = -DLUA_COMPAT_ALL  -I$(LUA)
+LUA_FLAGS   = -DLUA_COMPAT_ALL
 LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
               $(LUA)/ldebug.c $(LUA)/ldo.c $(LUA)/ldump.c \
               $(LUA)/lfunc.c $(LUA)/lgc.c $(LUA)/llex.c \
