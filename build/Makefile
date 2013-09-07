@@ -103,8 +103,9 @@ MSVC = ../../vc6
 #DBG = /Zi /Od
 DBG  = /DNDEBUG /O1
 CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /GA /I$(MSVC)/include
-LINK = $(MSVC)/bin/link /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
-       user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
+LINK_FLAGS = /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
+            user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
+LINK = $(MSVC)/bin/link $(LINK_FLAGS)
 
 all:
 	@echo "make (linux|bsd|solaris|mac|windows|mingw|cygwin)"
@@ -173,6 +174,11 @@ windows: $(ALL_WINOBJS)
 	$(MSVC)/bin/rc res.rc
 	$(LINK) /nologo $(ALL_WINOBJS) res.res /out:$(PROG).exe
 
+windows_tiny: $(ALL_SOURCES)
+	$(MSVC)/bin/rc res.rc
+	$(CL) /nologo ../mongoose.c main.c /I.. \
+          /link $(LINK_FLAGS) res.res /out:$(PROG)-tiny.exe
+
 # Build for Windows under MinGW
 #MINGWDBG= -DDEBUG -O0 -ggdb
 MINGWDBG= -DNDEBUG -Os
@@ -199,11 +205,11 @@ tests:
 	perl ../test/test.pl $(TEST)
 
 tarball: clean
-	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' ../mongoose.c`.tgz ; cd ../.. && tar -czf x mongoose/{LICENSE,examples,test,build,*.[ch],*.md} && mv x mongoose/$$F
+	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' ../mongoose.c`.tgz ; cd ../.. && tar -czf x mongoose/{LICENSE,*.[ch]} && mv x mongoose/build/$$F
 
 release: tarball cocoa
-	wine make windows
-	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' ../mongoose.c`; upx mongoose.exe; cp mongoose.exe mongoose-$$V.exe; cp mongoose.exe mongoose_php_bundle/; zip -r mongoose_php_bundle_$$V.zip mongoose_php_bundle/
+	wine make windows windows_tiny
+	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' ../mongoose.c`; upx mongoose.exe; upx mongoose-tiny.exe ; cp mongoose.exe mongoose-$$V.exe; cp mongoose-tiny.exe mongoose-tiny-$$V.exe; cp mongoose.exe mongoose_php_bundle/; zip -r mongoose-php-$$V.zip mongoose_php_bundle/
 
 clean:
 	cd ../examples && $(MAKE) clean
