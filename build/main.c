@@ -375,6 +375,11 @@ static void start_mongoose(int argc, char *argv[]) {
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
 
+#if !defined(_WIN32)
+  // Also ignoring SIGCHLD to let the OS to reap zombies properly.
+  (void) signal(SIGCHLD, SIG_IGN);
+#endif
+
   // Start Mongoose
   memset(&callbacks, 0, sizeof(callbacks));
   callbacks.log_message = &log_message;

@@ -142,10 +142,12 @@ struct mg_callbacks {
 //   options: NULL terminated list of option_name, option_value pairs that
 //            specify Mongoose configuration parameters.
 //
-// Side-effects: on UNIX, ignores SIGCHLD and SIGPIPE signals. If custom
-//    processing is required for these, signal handlers must be set up
+// Side-effects: on UNIX, ignores SIGPIPE signals. If custom
+//    processing is required SIGPIPE, signal handler must be set up
 //    after calling mg_start().
 //
+// Important: Mongoose does not install SIGCHLD handler. If CGI is used,
+// SIGCHLD handler must be set up to reap CGI zombie processes.
 //
 // Example:
 //   const char *options[] = {
