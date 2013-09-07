@@ -1849,7 +1849,7 @@ static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
   }
 
   // Support PATH_INFO for CGI scripts.
-  for (p = buf + strlen(buf); p > buf + 1; p--) {
+  for (p = buf + strlen(root == NULL ? "" : root); *p != '\0'; p++) {
     if (*p == '/') {
       *p = '\0';
       if (match_prefix(conn->ctx->config[CGI_EXTENSIONS],
@@ -3276,6 +3276,7 @@ static char *addenv(struct cgi_env_block *block, const char *fmt, ...) {
 static void prepare_cgi_environment(struct mg_connection *conn,
                                     const char *prog,
                                     struct cgi_env_block *blk) {
+  const struct mg_request_info *ri = &conn->request_info;
   const char *s, *slash;
   struct vec var_vec;
   char *p, src_addr[IP_ADDR_STR_LEN];
@@ -3298,18 +3299,25 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   // TODO(lsm): fix this for IPv6 case
   addenv(blk, "SERVER_PORT=%d", ntohs(conn->client.lsa.sin.sin_port));
 
-  addenv(blk, "REQUEST_METHOD=%s", conn->request_info.request_method);
+  addenv(blk, "REQUEST_METHOD=%s", ri->request_method);
   addenv(blk, "REMOTE_ADDR=%s", src_addr);
-  addenv(blk, "REMOTE_PORT=%d", conn->request_info.remote_port);
-  addenv(blk, "REQUEST_URI=%s", conn->request_info.uri);
+  addenv(blk, "REMOTE_PORT=%d", ri->remote_port);
+  addenv(blk, "REQUEST_URI=%s%s%s", ri->uri,
+         ri->query_string == NULL ? "" : "?",
+         ri->query_string == NULL ? "" : ri->query_string);
 
   // SCRIPT_NAME
-  assert(conn->request_info.uri[0] == '/');
-  slash = strrchr(conn->request_info.uri, '/');
-  if ((s = strrchr(prog, '/')) == NULL)
-    s = prog;
-  addenv(blk, "SCRIPT_NAME=%.*s%s", (int) (slash - conn->request_info.uri),
-         conn->request_info.uri, s);
+  if (conn->path_info != NULL) {
+    addenv(blk, "SCRIPT_NAME=%.*s",
+           (int) (strlen(ri->uri) - strlen(conn->path_info)), ri->uri);
+    addenv(blk, "PATH_INFO=%s", conn->path_info);
+  } else {
+    s = strrchr(prog, '/');
+    slash = strrchr(ri->uri, '/');
+    addenv(blk, "SCRIPT_NAME=%.*s%s",
+           slash == NULL ? 0 : (int) (slash - ri->uri), ri->uri,
+           s == NULL ? prog : s);
+  }
 
   addenv(blk, "SCRIPT_FILENAME=%s", prog);
   addenv(blk, "PATH_TRANSLATED=%s", prog);
@@ -3318,18 +3326,15 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   if ((s = mg_get_header(conn, "Content-Type")) != NULL)
     addenv(blk, "CONTENT_TYPE=%s", s);
 
-  if (conn->request_info.query_string != NULL)
-    addenv(blk, "QUERY_STRING=%s", conn->request_info.query_string);
+  if (ri->query_string != NULL) {
+    addenv(blk, "QUERY_STRING=%s", ri->query_string);
+  }
 
   if ((s = mg_get_header(conn, "Content-Length")) != NULL)
     addenv(blk, "CONTENT_LENGTH=%s", s);
 
   if ((s = getenv("PATH")) != NULL)
     addenv(blk, "PATH=%s", s);
-
-  if (conn->path_info != NULL) {
-    addenv(blk, "PATH_INFO=%s", conn->path_info);
-  }
 
 #if defined(_WIN32)
   if ((s = getenv("COMSPEC")) != NULL) {
@@ -3355,16 +3360,15 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   if ((s = getenv("PERLLIB")) != NULL)
     addenv(blk, "PERLLIB=%s", s);
 
-  if (conn->request_info.remote_user != NULL) {
-    addenv(blk, "REMOTE_USER=%s", conn->request_info.remote_user);
+  if (ri->remote_user != NULL) {
+    addenv(blk, "REMOTE_USER=%s", ri->remote_user);
     addenv(blk, "%s", "AUTH_TYPE=Digest");
   }
 
   // Add all headers as HTTP_* variables
-  for (i = 0; i < conn->request_info.num_headers; i++) {
+  for (i = 0; i < ri->num_headers; i++) {
     p = addenv(blk, "HTTP_%s=%s",
-        conn->request_info.http_headers[i].name,
-        conn->request_info.http_headers[i].value);
+        ri->http_headers[i].name, ri->http_headers[i].value);
 
     // Convert variable name into uppercase, and change - to _
     for (; *p != '=' && *p != '\0'; p++) {

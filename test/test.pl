@@ -375,8 +375,6 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
     'HTTP_MY_HDR=abc', 'HTTP_* env');
   o("GET /env.cgi HTTP/1.0\n\r\nSOME_TRAILING_DATA_HERE",
     'HTTP/1.1 200 OK', 'GET CGI with trailing data');
-#  o("GET /env.cgi/foo/bar?a=b HTTP/1.0\n\n",
-#    'SCRIPT_NAME=/env.cgi\s', 'SCRIPT_NAME for CGI with PATH_INFO');
 
   o("GET /env.cgi%20 HTTP/1.0\n\r\n",
     'HTTP/1.1 404', 'CGI Win32 code disclosure (%20)');
@@ -392,6 +390,8 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   o("GET /env.cgi HTTP/1.0\n\r\n", '\nCGI_BAZ=baz\n', '-cgi_env 3');
   o("GET /env.cgi/a/b/98 HTTP/1.0\n\r\n", 'PATH_INFO=/a/b/98\n', 'PATH_INFO');
   o("GET /env.cgi/a/b/9 HTTP/1.0\n\r\n", 'PATH_INFO=/a/b/9\n', 'PATH_INFO');
+  o("GET /env.cgi/foo/bar?a=b HTTP/1.0\n\n",
+    'SCRIPT_NAME=/env.cgi\s', 'SCRIPT_NAME for CGI with PATH_INFO');
 
   # Check that CGI's current directory is set to script's directory
   my $copy_cmd = on_windows() ? 'copy' : 'cp';
