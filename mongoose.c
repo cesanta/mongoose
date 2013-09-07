@@ -142,10 +142,8 @@ typedef long off_t;
 #define fdopen(x, y) _fdopen((x), (y))
 #define write(x, y, z) _write((x), (y), (unsigned) z)
 #define read(x, y, z) _read((x), (y), (unsigned) z)
-#define flockfile(x) LockFileEx((HANDLE) _get_osfhandle(_fileno(x)), \
-  LOCKFILE_FAIL_IMMEDIATELY | LOCKFILE_EXCLUSIVE_LOCK, 0, 0, 0, NULL)
-#define funlockfile(x) UnlockFileEx((HANDLE) _get_osfhandle(_fileno(x)), \
-                                                            0, 0, 0, NULL)
+#define flockfile(x)
+#define funlockfile(x)
 #define sleep(x) Sleep((x) * 1000)
 #define rmdir(x) _rmdir(x)
 
