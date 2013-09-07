@@ -77,7 +77,15 @@ static struct mg_context *ctx;      // Set by start_mongoose()
 #endif /* !CONFIG_FILE */
 
 static void WINCDECL signal_handler(int sig_num) {
-  exit_flag = sig_num;
+#if !defined(_WIN32)
+  // Do not do the trick with ignoring SIGCHLD, cause not all OSes (e.g. QNX)
+  // reap zombies if SIGCHLD is ignored. On QNX, for example, waitpid()
+  // fails if SIGCHLD is ignored, making system() non-functional.
+  if (sig_num == SIGCHLD) {
+    do {} while (waitpid(-1, &sig_num, WNOHANG) > 0);
+  } else
+#endif
+  { exit_flag = sig_num; }
 }
 
 static void die(const char *fmt, ...) {
@@ -374,11 +382,6 @@ static void start_mongoose(int argc, char *argv[]) {
   // Setup signal handler: quit on Ctrl-C
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
-
-#if !defined(_WIN32)
-  // Also ignoring SIGCHLD to let the OS to reap zombies properly.
-  (void) signal(SIGCHLD, SIG_IGN);
-#endif
 
   // Start Mongoose
   memset(&callbacks, 0, sizeof(callbacks));
