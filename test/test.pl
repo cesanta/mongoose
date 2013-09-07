@@ -4,6 +4,7 @@
 
 use IO::Socket;
 use File::Path;
+use File::Basename;
 use Cwd;
 use strict;
 use warnings;
@@ -17,8 +18,10 @@ my $num_requests;
 my $dir_separator = on_windows() ? '\\' : '/';
 my $copy_cmd = on_windows() ? 'copy' : 'cp';
 my $test_dir_uri = "test_dir";
-my $root = 'test';
-my $test_dir = $root . $dir_separator. $test_dir_uri;
+my $root = '../test';
+my $abs_root = Cwd::abs_path(dirname($0) . $dir_separator . $root);
+my $test_dir = $abs_root . $dir_separator. $test_dir_uri;
+#print "$test_dir\n"; exit 0;
 my $config = 'mongoose.conf';
 my $exe_ext = on_windows() ? '.exe' : '';
 my $mongoose_exe = '.' . $dir_separator . 'mongoose' . $exe_ext;
@@ -155,9 +158,10 @@ if (scalar(@ARGV) > 0 and $ARGV[0] eq 'unit') {
 # Make sure we load config file if no options are given.
 # Command line options override config files settings
 write_file($config, "access_log_file access.log\n" .
+           "document_root $root\n" .
            "listening_ports 127.0.0.1:12345\n");
 spawn("$mongoose_exe -listening_ports 127.0.0.1:$port");
-o("GET /test/hello.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'Loading config file');
+o("GET /hello.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'Loading config file');
 unlink $config;
 kill_spawned_child();
 
@@ -168,7 +172,7 @@ my $cmd = "$mongoose_exe ".
   "-error_log_file debug.log ".
   "-cgi_environment CGI_FOO=foo,CGI_BAR=bar,CGI_BAZ=baz " .
   "-extra_mime_types .bar=foo/bar,.tar.gz=blah,.baz=foo " .
-  '-put_delete_auth_file test/passfile ' .
+  "-put_delete_auth_file $abs_root/passfile " .
   '-access_control_list -0.0.0.0/0,+127.0.0.1 ' .
   "-document_root $root ".
   "-hide_files_patterns **exploit.PL ".
@@ -245,9 +249,8 @@ chmod(0755, $path);
 o("GET /$test_dir_uri/x/ HTTP/1.0\n\n", "Content-Type: text/html\r\n\r\n",
   'index.cgi execution');
 
-my $cwd = getcwd();
 o("GET /$test_dir_uri/x/ HTTP/1.0\n\n",
-  "SCRIPT_FILENAME=$cwd/test/test_dir/x/index.cgi", 'SCRIPT_FILENAME');
+  "SCRIPT_FILENAME=$test_dir/x/index.cgi", 'SCRIPT_FILENAME');
 o("GET /ta/x/ HTTP/1.0\n\n", "SCRIPT_NAME=/ta/x/index.cgi",
   'Aliases SCRIPT_NAME');
 o("GET /hello.txt HTTP/1.1\nConnection: close\n\n", 'Connection: close',
@@ -372,6 +375,8 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
     'HTTP_MY_HDR=abc', 'HTTP_* env');
   o("GET /env.cgi HTTP/1.0\n\r\nSOME_TRAILING_DATA_HERE",
     'HTTP/1.1 200 OK', 'GET CGI with trailing data');
+#  o("GET /env.cgi/foo/bar?a=b HTTP/1.0\n\n",
+#    'SCRIPT_NAME=/env.cgi\s', 'SCRIPT_NAME for CGI with PATH_INFO');
 
   o("GET /env.cgi%20 HTTP/1.0\n\r\n",
     'HTTP/1.1 404', 'CGI Win32 code disclosure (%20)');
