@@ -5,7 +5,7 @@ Project mission is to provide easy to use, powerful, embeddable web server.
 # Downloads
 
 Sources, binaries and bundles are available for download at
-[mongoose downloads](https://code.google.com/p/mongoose/downloads/list).
+[mongoose downloads](http://cesanta.com/downloads.html).
 
 # Overview
 
