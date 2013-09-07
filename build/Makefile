@@ -158,7 +158,7 @@ Mongoose: ../mongoose.c main.c
           -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
 
 cocoa: Mongoose
-	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' ../mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 Info.plist $$DIR/Contents/ && install -m 755 Mongoose $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create Mongoose_$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
+	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' ../mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 Info.plist $$DIR/Contents/ && install -m 755 Mongoose $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create Mongoose-$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
 
 un:
 	$(CC) ../test/unit_test.c -o unit_test lua_5.2.1.c $(CFLAGS) -g -O0
