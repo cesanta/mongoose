@@ -5,7 +5,7 @@
 # http://gnuwin32.sourceforge.net/packages/make.htm
 #
 # Example custom build:
-# COPT="-g -O0 -DNO_SSL_DL -DUSE_LUA -llua -lcrypto -lssl" make linux
+# CFLAGS_EXTRA="-g -O0 -DNO_SSL_DL -DUSE_LUA -llua -lcrypto -lssl" make linux
 #
 # Flags are:
 # -DHAVE_MD5              - use system md5 library (-2kb)
@@ -19,82 +19,19 @@
 # -DCRYPTO_LIB=\"libcrypto.so.<version>\" - use system versioned CRYPTO so
 # -DUSE_LUA               - embed Lua in Mongoose (+100kb)
 
-PROG        = mongoose
-CFLAGS      = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe -I.. $(COPT)
+PROG = mongoose
+EXE_SUFFIX =
+CFLAGS = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe -I.. $(CFLAGS_EXTRA)
+VERSION = $(shell perl -lne \
+            'print $$1 if /define\s+MONGOOSE_VERSION\s+"(\S+)"/' ../mongoose.c)
 
-# To build with Lua, download and unzip Lua 5.2.1 source code into the
-# mongoose directory, and then add $(LUA_SOURCES) to CFLAGS
-LUA         = ../lua-5.2.1/src
-LUA_FLAGS   = -DLUA_COMPAT_ALL
-LUA_SOURCES = $(LUA)/lapi.c $(LUA)/lcode.c $(LUA)/lctype.c \
-              $(LUA)/ldebug.c $(LUA)/ldo.c $(LUA)/ldump.c \
-              $(LUA)/lfunc.c $(LUA)/lgc.c $(LUA)/llex.c \
-              $(LUA)/lmem.c $(LUA)/lobject.c $(LUA)/lopcodes.c \
-              $(LUA)/lparser.c $(LUA)/lstate.c $(LUA)/lstring.c \
-              $(LUA)/ltable.c $(LUA)/ltm.c $(LUA)/lundump.c \
-              $(LUA)/lvm.c $(LUA)/lzio.c $(LUA)/lauxlib.c \
-              $(LUA)/lbaselib.c $(LUA)/lbitlib.c $(LUA)/lcorolib.c \
-              $(LUA)/ldblib.c $(LUA)/liolib.c $(LUA)/lmathlib.c \
-              $(LUA)/loslib.c $(LUA)/lstrlib.c $(LUA)/ltablib.c \
-              $(LUA)/loadlib.c $(LUA)/linit.c
-LUA_HEADERS = $(LUA)/llimits.h $(LUA)/lobject.h $(LUA)/lapi.h $(LUA)/lzio.h \
-              $(LUA)/ldo.h $(LUA)/ltm.h $(LUA)/lstate.h $(LUA)/lgc.h \
-              $(LUA)/lvm.h $(LUA)/ltable.h $(LUA)/lstring.h $(LUA)/lfunc.h \
-              $(LUA)/lundump.h $(LUA)/ldebug.h $(LUA)/lopcodes.h $(LUA)/llex.h \
-              $(LUA)/lparser.h $(LUA)/lcode.h $(LUA)/lmem.h $(LUA)/lctype.h
-LUA_WINOBJS = $(LUA_SOURCES:%.c=%.obj)
+TINY_SOURCES = ../mongoose.c main.c
+LUA_SOURCES = $(TINY_SOURCES) sqlite3.c lsqlite3.c lua_5.2.1.c
 
-ifneq ($(OS), Windows_NT)
-  LUA_FLAGS += -DLUA_USE_DLOPEN
-endif
-
-lua_5.2.1.c: lua_5.2.1.h
-	(echo '#define LUA_CORE' ; \
-         echo '#define LUA_LIB' ; \
-         echo '#define lobject_c' ; \
-         echo '#define lua_c' ; \
-         echo '#define ltable_c' ; \
-         echo '#include "lua_5.2.1.h"' ; \
-         cat $(LUA_HEADERS) $(LUA_SOURCES) | sed '/^#include "/d') > $@
-
-lua_5.2.1.h:
-	cat $(LUA)/luaconf.h $(LUA)/lua.h $(LUA)/lauxlib.h $(LUA)/lualib.h | \
-         sed '/^#include "/d' > $@
-
-# Stock windows binary builds with Lua and YASSL library.
-YASSL       = ../../cyassl-2.4.6
-YASSL_FLAGS = -I $(YASSL) -I $(YASSL)/cyassl \
-              -D _LIB -D OPENSSL_EXTRA -D HAVE_ERRNO_H \
-              -D HAVE_GETHOSTBYNAME -D HAVE_INET_NTOA -D HAVE_LIMITS_H \
-              -D HAVE_MEMSET -D HAVE_SOCKET -D HAVE_STDDEF_H -D HAVE_STDLIB_H \
-              -D HAVE_STRING_H -D HAVE_SYS_STAT_H -D HAVE_SYS_TYPES_H
-YASSL_SOURCES = \
-  $(YASSL)/src/internal.c $(YASSL)/src/io.c $(YASSL)/src/keys.c \
-  $(YASSL)/src/ssl.c $(YASSL)/src/tls.c $(YASSL)/ctaocrypt/src/hmac.c \
-  $(YASSL)/ctaocrypt/src/random.c $(YASSL)/ctaocrypt/src/sha.c \
-  $(YASSL)/ctaocrypt/src/sha256.c $(YASSL)/ctaocrypt/src/logging.c \
-  $(YASSL)/ctaocrypt/src/error.c $(YASSL)/ctaocrypt/src/rsa.c \
-  $(YASSL)/ctaocrypt/src/des3.c $(YASSL)/ctaocrypt/src/asn.c \
-  $(YASSL)/ctaocrypt/src/coding.c $(YASSL)/ctaocrypt/src/arc4.c \
-  $(YASSL)/ctaocrypt/src/md4.c $(YASSL)/ctaocrypt/src/md5.c \
-  $(YASSL)/ctaocrypt/src/dh.c $(YASSL)/ctaocrypt/src/dsa.c \
-  $(YASSL)/ctaocrypt/src/pwdbased.c $(YASSL)/ctaocrypt/src/aes.c \
-  $(YASSL)/ctaocrypt/src/md2.c $(YASSL)/ctaocrypt/src/ripemd.c \
-  $(YASSL)/ctaocrypt/src/sha512.c $(YASSL)/src/sniffer.c \
-  $(YASSL)/ctaocrypt/src/rabbit.c $(YASSL)/ctaocrypt/src/misc.c \
-  $(YASSL)/ctaocrypt/src/tfm.c $(YASSL)/ctaocrypt/src/integer.c \
-  $(YASSL)/ctaocrypt/src/ecc.c $(YASSL)/src/ocsp.c $(YASSL)/src/crl.c \
-  $(YASSL)/ctaocrypt/src/hc128.c $(YASSL)/ctaocrypt/src/memory.c
-
-ALL_SOURCES = ../mongoose.c main.c sqlite3.c lsqlite3.c lua_5.2.1.c \
-              $(YASSL_SOURCES)
-ALL_OBJECTS = $(ALL_SOURCES:%.c=%.o)
-ALL_WINOBJS = $(ALL_SOURCES:%.c=%.obj)
-
-SQLITE_FLAGS = -DTHREADSAFE=1 -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS
-MONGOOSE_FLAGS = -DNO_SSL_DL -DUSE_LUA -DUSE_LUA_SQLITE3 -I.. $(COPT)
-
-FLAGS = $(MONGOOSE_FLAGS) $(SQLITE_FLAGS) $(YASSL_FLAGS) $(LUA_FLAGS)
+SQLITE_FLAGS = -DTHREADSAFE=1 -DSQLITE_ENABLE_FTS3 \
+               -DSQLITE_ENABLE_FTS3_PARENTHESIS
+LUA_FLAGS = -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL
+LUA_SQLITE_FLAGS = $(SQLITE_FLAGS) $(LUA_FLAGS)
 
 # Using Visual Studio 6.0. To build Mongoose:
 #  Set MSVC variable below to where VS 6.0 is installed on your system
@@ -102,117 +39,97 @@ FLAGS = $(MONGOOSE_FLAGS) $(SQLITE_FLAGS) $(YASSL_FLAGS) $(LUA_FLAGS)
 MSVC = ../../vc6
 #DBG = /Zi /Od
 DBG  = /DNDEBUG /O1
-CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /GA /I$(MSVC)/include
+CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /GA /I$(MSVC)/include /I..
 LINK_FLAGS = /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
             user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
 LINK = $(MSVC)/bin/link $(LINK_FLAGS)
 
+ifeq ($(OS), Windows_NT)
+  EXE_SUFFIX = .exe
+else
+  UNAME_S := $(shell uname -s)
+  ifeq ($(UNAME_S), Linux)
+    CFLAGS += -ldl -lm
+  endif
+endif
+
 all:
-	@echo "make (linux|bsd|solaris|mac|windows|mingw|cygwin)"
+	@echo "make (unix|windows|macos)"
 
-%.obj: %.c
-	$(CL) /c $(FLAGS) /Fo$@ $<
+mongoose.c: mod_lua.c
 
-%.o: %.c
-	$(CC) -o $@ $< -c $(FLAGS) $(CFLAGS)
-
-# Lua library for Windows
-lua.lib: $(LUA_WINOBJS)
-	$(MSVC)/bin/lib /out:$@ $(LUA_WINOBJS)
-
-# To build with lua, make sure you have Lua unpacked into lua-5.2.1 directory
-linux_lua: $(ALL_OBJECTS)
-	$(CC) $(ALL_OBJECTS) -o $(PROG) -ldl
-
-mongoose.o: mod_lua.c
+unix_unit_test: $(LUA_SOURCES) Makefile
+	$(CC) ../test/unit_test.c lua_5.2.1.c -o $@ $(CFLAGS) -g -O0
+	./$@
 
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
 # "-Wl,--as-needed" turned on by default  in cc command.
 # Also, this is turned in many other distros in static linkage builds.
-linux:
-	$(CC) ../mongoose.c main.c -o $(PROG) -ldl $(CFLAGS)
+$(PROG): $(TINY_SOURCES)
+	$(CC) $(TINY_SOURCES) -o $@ $(CFLAGS)
 
-mac: bsd
-bsd:
-	$(CC) ../mongoose.c main.c -o $(PROG) $(CFLAGS)
+$(PROG)-lua: $(LUA_SOURCES)
+	$(CC) $(LUA_SOURCES) -o $@ $(LUA_SQLITE_FLAGS) $(CFLAGS)
 
-bsd_lua: $(ALL_OBJECTS)
-	$(CC) $(ALL_OBJECTS) -o $@
+unix: unix_unit_test $(PROG) $(PROG)-lua
 
-solaris:
-	$(CC) ../mongoose.c main.c -lnsl -lsocket -o $(PROG) $(CFLAGS)
+# Windows build
+$(PROG).exe: $(LUA_SOURCES)
+	$(MSVC)/bin/rc res.rc
+	$(CL) $(LUA_SOURCES) $(LUA_SQLITE_FLAGS) /link $(LINK_FLAGS) res.res /out:$@
 
-lib$(PROG).a: $(ALL_OBJECTS)
-	ar cr $@ $(ALL_OBJECTS)
+$(PROG)-tiny.exe: $(TINY_SOURCES)
+	$(MSVC)/bin/rc res.rc
+	$(CL) $(TINY_SOURCES) /link $(LINK_FLAGS) res.res /out:$@
 
-$(PROG).lib: $(ALL_WINOBJS)
-	$(MSVC)/bin/lib /out:$@ $(ALL_WINOBJS)
+# This is broken now due to SSL exclusion
+windows_unit_test.exe: $(LUA_SOURCES) Makefile
+	$(CL) ../test/unit_test.c lua_5.2.1.c -DLUA_COMPAT_ALL \
+          /link /libpath:$(MSVC)/lib advapi32.lib /out:$@
+	./$@
 
+windows: $(PROG).exe $(PROG)-tiny.exe
+
+# MacOS build with Cocoa GUI
 # For codesign to work in non-interactive mode, unlock login keychain:
 # security unlock ~/Library/Keychains/login.keychain
 # See e.g. http://lists.apple.com/archives/apple-cdsa/2008/Jan/msg00027.html
-Mongoose: ../mongoose.c main.c
-	$(CC) $(ALL_SOURCES) \
-          -DUSE_COCOA $(CFLAGS) $(FLAGS) -mmacosx-version-min=10.4 \
-          -framework Cocoa -ObjC -arch i386 -arch x86_64 -o Mongoose
-
-cocoa: Mongoose
-	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' ../mongoose.c`; DIR=dmg/Mongoose.app && rm -rf $$DIR && mkdir -p $$DIR/Contents/{MacOS,Resources} && install -m 644 mongoose_*.png $$DIR/Contents/Resources/ && install -m 644 Info.plist $$DIR/Contents/ && install -m 755 Mongoose $$DIR/Contents/MacOS/ && ln -fs /Applications dmg/ ; hdiutil create Mongoose-$$V.dmg -volname "Mongoose $$V" -srcfolder dmg -ov #; rm -rf dmg
-
-un:
-	$(CC) ../test/unit_test.c -o unit_test lua_5.2.1.c $(CFLAGS) -g -O0
-	./unit_test
-
-wi:
-	$(CL) test/unit_test.c $(LUA_SOURCES) $(LUA_FLAGS) \
-          $(YASSL_SOURCES) $(YASSL_FLAGS) /I. /DNO_SSL_DL \
-          /link /libpath:$(MSVC)/lib advapi32.lib /out:unit_test.exe
-	./unit_test.exe
-
-windows: $(ALL_WINOBJS)
-	$(MSVC)/bin/rc res.rc
-	$(LINK) /nologo $(ALL_WINOBJS) res.res /out:$(PROG).exe
-
-windows_tiny: $(ALL_SOURCES)
-	$(MSVC)/bin/rc res.rc
-	$(CL) /nologo ../mongoose.c main.c /I.. \
-          /link $(LINK_FLAGS) res.res /out:$(PROG)-tiny.exe
-
-# Build for Windows under MinGW
-#MINGWDBG= -DDEBUG -O0 -ggdb
-MINGWDBG= -DNDEBUG -Os
-MINGWOPT=  -W -Wall -mthreads -Wl,--subsystem,console $(MINGWDBG) -DHAVE_STDINT $(GCC_WARNINGS) $(COPT)
-mingw:
-	windres res.rc res.o
-	$(CC) $(MINGWOPT) ../mongoose.c -lws2_32 \
-		-shared -Wl,--out-implib=$(PROG).lib -o $(PROG).dll
-	$(CC) $(MINGWOPT) ../mongoose.c main.c res.o \
-	-lws2_32 -ladvapi32 -lcomdlg32 -o $(PROG).exe
-
-# Build for Windows under Cygwin
-#CYGWINDBG= -DDEBUG -O0 -ggdb
-CYGWINDBG= -DNDEBUG -Os
-CYGWINOPT=  -W -Wall -mthreads -Wl,--subsystem,console $(CYGWINDBG) -DHAVE_STDINT $(GCC_WARNINGS) $(COPT)
-cygwin:
-	windres res.rc res.o
-	$(CC) $(CYGWINOPT) ../mongoose.c -lws2_32 \
-		-shared -Wl,--out-implib=$(PROG).lib -o $(PROG).dll
-	$(CC) $(CYGWINOPT) -I.. ../mongoose.c main.c res.o \
-	-lws2_32 -ladvapi32 -o $(PROG).exe
+macos: $(LUA_SOURCES)
+	DIR=dmg/Mongoose.app
+	rm -rf dmg
+	mkdir -p dmg/Mongoose.app/Contents/{MacOS,Resources}
+	install -m 644 mongoose_*.png dmg/Mongoose.app/Contents/Resources/
+	install -m 644 Info.plist dmg/Mongoose.app/Contents/
+	$(CC) $(LUA_SOURCES) \
+  -DUSE_COCOA $(CFLAGS) $(LUA_SQLITE_FLAGS) -mmacosx-version-min=10.4 \
+  -framework Cocoa -ObjC -arch i386 -arch x86_64 \
+  -o dmg/Mongoose.app/MacOS/Mongoose
+	ln -fs /Applications dmg/
+	hdiutil create Mongoose-$(VERSION).dmg -volname "Mongoose $(VERSION)" \
+  -srcfolder dmg -ov
+	#rm -rf dmg
 
 tests:
 	perl ../test/test.pl $(TEST)
 
 tarball: clean
-	F=mongoose-`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' ../mongoose.c`.tgz ; cd ../.. && tar -czf x mongoose/{LICENSE,*.[ch]} && mv x mongoose/build/$$F
+	rm -rf mongoose-$(VERSION)
+	mkdir mongoose-$(VERSION)
+	install -m 644 ../{LICENSE,*.[ch]} mongoose-$(VERSION)
+	tar -czf mongoose-$(VERSION).tgz mongoose-$(VERSION)
 
-release: tarball cocoa
-	wine make windows windows_tiny
-	V=`perl -lne '/define\s+MONGOOSE_VERSION\s+"(\S+)"/ and print $$1' ../mongoose.c`; upx mongoose.exe; upx mongoose-tiny.exe ; cp mongoose.exe mongoose-$$V.exe; cp mongoose-tiny.exe mongoose-tiny-$$V.exe; cp mongoose.exe mongoose_php_bundle/; zip -r mongoose-php-$$V.zip mongoose_php_bundle/
+release: tarball macos
+	wine make windows
+	upx mongoose.exe
+	upx mongoose-tiny.exe
+	cp mongoose.exe mongoose-$(VERSION).exe
+	cp mongoose-tiny.exe mongoose-tiny-$(VERSION).exe
+	cp mongoose.exe mongoose_php_bundle/
+	zip -r mongoose-php-$(VERSION).zip mongoose_php_bundle/
 
 clean:
 	cd ../examples && $(MAKE) clean
 	rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz \
 	$(PROG).exe *.dll *.lib res.o res.RES *.dSYM *.zip *.pdb \
-	*.exe *dmg* $(ALL_OBJECTS) $(ALL_WINOBJS)
+	*.exe *dmg* $(PROG)-* unix_unit_test
