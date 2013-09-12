@@ -344,10 +344,9 @@ static void lsp_send_err(struct mg_connection *conn, struct lua_State *L,
                          const char *fmt, ...) {
   char buf[MG_BUF_LEN];
   va_list ap;
-  int len;
 
   va_start(ap, fmt);
-  len = vsnprintf(buf, sizeof(buf), fmt, ap);
+  vsnprintf(buf, sizeof(buf), fmt, ap);
   va_end(ap);
 
   if (L == NULL) {

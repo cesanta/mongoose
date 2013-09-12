@@ -4552,7 +4552,8 @@ static int is_valid_port(unsigned int port) {
 // Examples: 80, 443s, 127.0.0.1:3128, 1.2.3.4:8080s
 // TODO(lsm): add parsing of the IPv6 address
 static int parse_port_string(const struct vec *vec, struct socket *so) {
-  unsigned int a, b, c, d, ch, len, port;
+  unsigned int a, b, c, d, ch, port;
+  int len;
 #if defined(USE_IPV6)
   char buf[100];
 #endif
