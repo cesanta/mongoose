@@ -44,6 +44,24 @@ mailing list.
 
 [![&nbsp;](https://cruel-carlota.pagodabox.com/2a613890c1f4b60e5919a9c1dd3caca2 "githalytics.com")](http://githalytics.com/valenok/mongoose)
 
+# Acknowledgements
+
+Author is grateful to the following people who made their contribution:
+
+Arnout Vandecappelle, Benoît Amiaux, Boris Pek, Cody Hanson, Colin Leitner,
+Daniel Oaks, Eric Bakan, Erik Oomen, Filipp Kovalev, Ger Hobbelt,
+Hendrik Polczynski, Igor Okulist, Jay, Joe Mucchiello, John Safranek,
+José Miguel Gonçalves, Shueng Chuan, Katerina Blinova, Konstantin Sorokin,
+Marin Atanasov, Matt Healy, Mitch Hendrickson, Nigel Stewart, Pavel Khlebovich,
+Sebastian Reinhard, Stefan Doehla, abadc0de, nullable.type,
+T.Barmann, D.Hughes, J.C.Sloan, R.Romeo, L.E.Spencer, S.Kotay, R.M.Shorter,
+W.Mar, J.Wilander, Santa from Memphis, S.Davies, C.Beck,
+O.M.Vilhunen, C.Radik, G.Woodcock, M.Szczepkowski,
+Eternal Lands Dev Team, T.Tollet, C.Tangerino, G.Karsai, A.Bourgett,
+C.Blakemore, D.Fonaryov, T.Andrle, O.IJsselmuiden, R.Womack, M.Tomlinson,
+A.Slåttå, L.Farrell, J.D.P.Ballestero, V.Albaev, B.Harker, T.Scheffel, H.Klein,
+R.Merit, T.Bennett, H.Solis, A.Zincenko, M.S., S.Krul, K.Cooke, S.McCallum,
+F.Morenius, and 10 others.
 
 # License
 
