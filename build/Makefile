@@ -104,7 +104,7 @@ macos: $(LUA_SOURCES)
 	$(CC) $(LUA_SOURCES) \
   -DUSE_COCOA $(CFLAGS) $(LUA_SQLITE_FLAGS) -mmacosx-version-min=10.4 \
   -framework Cocoa -ObjC -arch i386 -arch x86_64 \
-  -o dmg/Mongoose.app/MacOS/Mongoose
+  -o dmg/Mongoose.app/Contents/MacOS/Mongoose
 	ln -fs /Applications dmg/
 	hdiutil create Mongoose-$(VERSION).dmg -volname "Mongoose $(VERSION)" \
   -srcfolder dmg -ov
