@@ -1041,7 +1041,7 @@ static void change_slashes_to_backslashes(char *path) {
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
 // wbuf and wbuf_len is a target buffer and its length.
 static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
-  char buf[PATH_MAX], buf2[PATH_MAX];
+  char buf[PATH_MAX * 2], buf2[PATH_MAX * 2];
 
   mg_strlcpy(buf, path, sizeof(buf));
   change_slashes_to_backslashes(buf);
@@ -1125,11 +1125,11 @@ static int path_cannot_disclose_cgi(const char *path) {
 
 static int mg_stat(struct mg_connection *conn, const char *path,
                    struct file *filep) {
-  wchar_t wbuf[PATH_MAX];
+  wchar_t wbuf[PATH_MAX] = L"\\\\?\\";
   WIN32_FILE_ATTRIBUTE_DATA info;
 
   if (!is_file_in_memory(conn, path, filep)) {
-    to_unicode(path, wbuf, ARRAY_SIZE(wbuf));
+    to_unicode(path, wbuf + 4, ARRAY_SIZE(wbuf) - 4);
     if (GetFileAttributesExW(wbuf, GetFileExInfoStandard, &info) != 0) {
       filep->size = MAKEUQUAD(info.nFileSizeLow, info.nFileSizeHigh);
       filep->modification_time = SYS2UNIX_TIME(
@@ -1673,8 +1673,7 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   return mg_vprintf(conn, fmt, ap);
 }
 
-int mg_chunked_printf(struct mg_connection *conn, const char *fmt, ...)
-{
+static int mg_chunked_printf(struct mg_connection *conn, const char *fmt, ...) {
   char mem[MG_BUF_LEN], *buf = mem;
   int len;
 
@@ -2634,8 +2633,9 @@ void mg_url_encode(const char *src, char *dst, size_t dst_len) {
   *dst = '\0';
 }
 
-static void print_dir_entry(struct de *de) {
-  char size[64], mod[64], href[PATH_MAX];
+static void print_dir_entry(const struct de *de) {
+  char size[64], mod[64], href[PATH_MAX * 3];
+  const char *slash = de->file.is_directory ? "/" : "";
 
   if (de->file.is_directory) {
     mg_snprintf(de->conn, size, sizeof(size), "%s", "[DIRECTORY]");
@@ -2661,8 +2661,7 @@ static void print_dir_entry(struct de *de) {
   de->conn->num_bytes_sent += mg_chunked_printf(de->conn,
       "<tr><td><a href=\"%s%s%s\">%s%s</a></td>"
       "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
-      de->conn->request_info.uri, href, de->file.is_directory ? "/" : "",
-      de->file_name, de->file.is_directory ? "/" : "", mod, size);
+      de->conn->request_info.uri, href, slash, de->file_name, slash, mod, size);
 }
 
 // This function is called from send_directory() and used for
@@ -2864,7 +2863,8 @@ static void handle_directory_request(struct mg_connection *conn,
   }
   free(data.entries);
 
-  conn->num_bytes_sent += mg_chunked_printf(conn, "%s", "</table></body></html>");
+  conn->num_bytes_sent += mg_chunked_printf(conn, "%s",
+                                            "</table></body></html>");
   conn->num_bytes_sent += mg_write(conn, "0\r\n\r\n", 5);
   conn->status_code = 200;
 }
