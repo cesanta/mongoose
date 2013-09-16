@@ -14,23 +14,23 @@ simplicity by carefully selected list of features:
 
 - Works on Windows, Mac, UNIX, iPhone, Android, and many other platforms
 - Scripting and database support (Lua Server Pages + Sqlite, see
-  [page.lp](https://github.com/valenok/mongoose/blob/master/test/page.lp) ),
+  [page.lp](https://github.com/cesanta/mongoose/blob/master/test/page.lp) ),
   which provides ready to go, powerful web development platform in
   one single-click executable with **no dependencies**: forget LAMP!
 - Support for CGI, SSL, SSI, Digest (MD5) authorization, Websocket, WEbDAV
 - Resumed download, URL rewrite, file blacklist, IP-based ACL, Windows service
 - Download speed limit based on client subnet or URI pattern
 - Simple and clean embedding API,
-  [mongoose.h](https://github.com/valenok/mongoose/blob/master/mongoose.h).
+  [mongoose.h](https://github.com/cesanta/mongoose/blob/master/mongoose.h).
   The source is in single
-  [mongoose.c](https://github.com/valenok/mongoose/blob/master/mongoose.c) file
+  [mongoose.c](https://github.com/cesanta/mongoose/blob/master/mongoose.c) file
   to make things easy. Embedding examples:
-  [hello.c](https://github.com/valenok/mongoose/blob/master/examples/hello.c),
-  [post.c](https://github.com/valenok/mongoose/blob/master/examples/post.c),
-  [upload.c](https://github.com/valenok/mongoose/blob/master/examples/upload.c),
-  [websocket.c](https://github.com/valenok/mongoose/blob/master/examples/websocket.c)
+  [hello.c](https://github.com/cesanta/mongoose/blob/master/examples/hello.c),
+  [post.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c),
+  [upload.c](https://github.com/cesanta/mongoose/blob/master/examples/upload.c),
+  [websocket.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c)
 - HTTP client capable of sending arbitrary HTTP/HTTPS requests
-- [User Manual](https://github.com/valenok/mongoose/blob/master/docs/UserManual.md)
+- [User Manual](https://github.com/cesanta/mongoose/blob/master/docs/UserManual.md)
 
 Note that Windows and MacOS binaries have following 3rd party software
 compiled in:
@@ -42,7 +42,7 @@ Questions can be asked at
 [mongoose-users@googlegroups.com](http://groups.google.com/group/mongoose-users)
 mailing list.
 
-[![&nbsp;](https://cruel-carlota.pagodabox.com/2a613890c1f4b60e5919a9c1dd3caca2 "githalytics.com")](http://githalytics.com/valenok/mongoose)
+[![&nbsp;](https://cruel-carlota.pagodabox.com/2a613890c1f4b60e5919a9c1dd3caca2 "githalytics.com")](http://githalytics.com/cesanta/mongoose)
 
 # Acknowledgements
 
