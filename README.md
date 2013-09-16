@@ -30,7 +30,7 @@ simplicity by carefully selected list of features:
   [upload.c](https://github.com/valenok/mongoose/blob/master/examples/upload.c),
   [websocket.c](https://github.com/valenok/mongoose/blob/master/examples/websocket.c)
 - HTTP client capable of sending arbitrary HTTP/HTTPS requests
-- [User Manual](https://github.com/valenok/mongoose/blob/master/UserManual.md)
+- [User Manual](https://github.com/valenok/mongoose/blob/master/docs/UserManual.md)
 
 Note that Windows and MacOS binaries have following 3rd party software
 compiled in:
