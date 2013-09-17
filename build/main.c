@@ -39,6 +39,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <direct.h>  // For getcwd
 #include <winsvc.h>
 #include <shlobj.h>
 
