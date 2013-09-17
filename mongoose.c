@@ -1383,6 +1383,13 @@ static int mg_stat(struct mg_connection *conn, const char *path,
     filep->size = st.st_size;
     filep->modification_time = st.st_mtime;
     filep->is_directory = S_ISDIR(st.st_mode);
+
+    // See https://github.com/cesanta/mongoose/issues/109
+    // Some filesystems report modification time as 0. Artificially
+    // bump it up to mark mg_stat() success.
+    if (filep->modification_time == (time_t) 0) {
+      filep->modification_time = (time_t) 1;
+    }
   } else {
     filep->modification_time = (time_t) 0;
   }
