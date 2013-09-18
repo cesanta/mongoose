@@ -5,7 +5,7 @@ tested on the HTC Wildfire. If you have managed to run it on other devices
 as well, please comment or drop an email in the mailing list.
 Note : You dont need root access to run mongoose on Android.
 
-- Download the source from the Downloads page.
+- Clone Mongoose Git repo
 - Download the Android NDK from [http://developer.android.com/tools/sdk/ndk/index.html](http://developer.android.com/tools/sdk/ndk/index.html)
 - Run `/path-to-ndk/ndk-build -C /path-to-mongoose/build`
   That should generate mongoose/lib/armeabi/mongoose
