@@ -954,7 +954,7 @@ int main(int argc, char *argv[]) {
   id item = [[[NSStatusBar systemStatusBar]
     statusItemWithLength:NSVariableStatusItemLength] retain];
   [item setHighlightMode:YES];
-  [item setImage:[NSImage imageNamed:@"mongoose_22x22.png"]];
+  [item setImage:[NSImage imageNamed:@"mongoose_22x22"]];
   [item setMenu:menu];
 
   // Run the app
