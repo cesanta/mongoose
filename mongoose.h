@@ -51,8 +51,7 @@ struct mg_request_info {
 
 
 // This structure needs to be passed to mg_start(), to let mongoose know
-// which callbacks to invoke. For detailed description, see
-// https://github.com/cesanta/mongoose/blob/master/docs/UserManual.md
+// which callbacks to invoke.
 struct mg_callbacks {
   // Called when mongoose has received new HTTP request.
   // If callback returns non-zero,
@@ -156,9 +155,6 @@ struct mg_callbacks {
 //     NULL
 //   };
 //   struct mg_context *ctx = mg_start(&my_func, NULL, options);
-//
-// Refer to https://github.com/cesanta/mongoose/blob/master/docs/UserManual.md
-// for the list of valid option and their possible values.
 //
 // Return:
 //   web server context, or NULL on error.
