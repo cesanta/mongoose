@@ -3357,6 +3357,9 @@ static void prepare_cgi_environment(struct mg_connection *conn,
   if ((s = getenv("ProgramFiles(x86)")) != NULL) {
     addenv(blk, "ProgramFiles(x86)=%s", s);
   }
+  if ((s = getenv("CommonProgramFiles(x86)")) != NULL) {
+    addenv(blk, "CommonProgramFiles(x86)=%s", s);
+  }
 #else
   if ((s = getenv("LD_LIBRARY_PATH")) != NULL)
     addenv(blk, "LD_LIBRARY_PATH=%s", s);
