@@ -2,10 +2,12 @@
 
 Project mission is to provide easy to use, powerful, embeddable web server.
 
-# Downloads
+# Downloads & Docs
 
 Sources, binaries and bundles are available for download at
-[mongoose downloads](http://cesanta.com/downloads.html).
+[http://cesanta.com/downloads.html](http://cesanta.com/downloads.html).
+User documentation is available at
+[http://cesanta.com/docs.html](http://cesanta.com/docs.html).
 
 # Overview
 
@@ -30,7 +32,6 @@ simplicity by carefully selected list of features:
   [upload.c](https://github.com/cesanta/mongoose/blob/master/examples/upload.c),
   [websocket.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c)
 - HTTP client capable of sending arbitrary HTTP/HTTPS requests
-- [User documentaion](http://cesanta.com/docs.html)
 
 Note that Windows and MacOS binaries have following 3rd party software
 compiled in:
