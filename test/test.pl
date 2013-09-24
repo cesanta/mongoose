@@ -150,11 +150,6 @@ if ($^O =~ /darwin|bsd|linux/) {
   }
 }
 
-if (scalar(@ARGV) > 0 and $ARGV[0] eq 'unit') {
-  do_unit_test();
-  exit 0;
-}
-
 # Make sure we load config file if no options are given.
 # Command line options override config files settings
 write_file($config, "access_log_file access.log\n" .
@@ -181,9 +176,10 @@ my $cmd = "$mongoose_exe ".
 $cmd .= ' -cgi_interpreter perl' if on_windows();
 spawn($cmd);
 
+o("GET /dir%20with%20spaces/桌面/ HTTP/1.0\r\n\r\n", 'куку!',
+  'Non-ascii chars in path');
 o("GET /hello.txt HTTP/1.1\nConnection: close\nRange: bytes=3-50\r\n\r\n",
   'Content-Length: 15\s', 'Range past the file end');
-
 o("GET /hello.txt HTTP/1.1\n\n   GET /hello.txt HTTP/1.0\n\n",
   'HTTP/1.1 200.+keep-alive.+HTTP/1.1 200.+close',
   'Request pipelining', 2);
@@ -430,7 +426,6 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
 
   do_PUT_test();
   kill_spawned_child();
-  do_unit_test();
 }
 
 sub do_PUT_test {
@@ -457,11 +452,6 @@ sub do_PUT_test {
   o("PUT /a/put.txt HTTP/1.0\nExpect: 100-continue\nContent-Length: 4\n".
     "$auth_header\nabcd",
     "HTTP/1.1 100 Continue.+HTTP/1.1 200", 'PUT 100-Continue');
-}
-
-sub do_unit_test {
-  my $target = on_windows() ? 'wi' : 'un';
-  system("make $target") == 0 or fail("Unit test failed!");
 }
 
 print "SUCCESS! All tests passed.\n";
