@@ -56,7 +56,7 @@ endif
 all:
 	@echo "make (unix|windows|macos)"
 
-mongoose.c: mod_lua.c
+mongoose.c: mod_lua.c mongoose.h Makefile
 
 unix_unit_test: $(LUA_SOURCES) Makefile
 	$(CC) ../test/unit_test.c lua_5.2.1.c -o $@ $(CFLAGS) -g -O0
