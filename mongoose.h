@@ -50,124 +50,26 @@ struct mg_request_info {
 };
 
 
-// This structure needs to be passed to mg_start(), to let mongoose know
-// which callbacks to invoke.
 struct mg_callbacks {
-  // Called when mongoose has received new HTTP request.
-  // If callback returns non-zero,
-  // callback must process the request by sending valid HTTP headers and body,
-  // and mongoose will not do any further processing.
-  // If callback returns 0, mongoose processes the request itself. In this case,
-  // callback must not send any data to the client.
   int  (*begin_request)(struct mg_connection *);
-
-  // Called when mongoose has finished processing request.
   void (*end_request)(const struct mg_connection *, int reply_status_code);
-
-  // Called when mongoose is about to log a message. If callback returns
-  // non-zero, mongoose does not log anything.
   int  (*log_message)(const struct mg_connection *, const char *message);
-
-  // Called when mongoose initializes SSL library.
   int  (*init_ssl)(void *ssl_context, void *user_data);
-
-  // Called when websocket request is received, before websocket handshake.
-  // If callback returns 0, mongoose proceeds with handshake, otherwise
-  // cinnection is closed immediately.
   int (*websocket_connect)(const struct mg_connection *);
-
-  // Called when websocket handshake is successfully completed, and
-  // connection is ready for data exchange.
   void (*websocket_ready)(struct mg_connection *);
-
-  // Called when data frame has been received from the client.
-  // Parameters:
-  //    bits: first byte of the websocket frame, see websocket RFC at
-  //          http://tools.ietf.org/html/rfc6455, section 5.2
-  //    data, data_len: payload, with mask (if any) already applied.
-  // Return value:
-  //    non-0: keep this websocket connection opened.
-  //    0:     close this websocket connection.
   int  (*websocket_data)(struct mg_connection *, int bits,
                          char *data, size_t data_len);
-
-  // Called when mongoose tries to open a file. Used to intercept file open
-  // calls, and serve file data from memory instead.
-  // Parameters:
-  //    path:     Full path to the file to open.
-  //    data_len: Placeholder for the file size, if file is served from memory.
-  // Return value:
-  //    NULL: do not serve file from memory, proceed with normal file open.
-  //    non-NULL: pointer to the file contents in memory. data_len must be
-  //              initilized with the size of the memory block.
   const char * (*open_file)(const struct mg_connection *,
                              const char *path, size_t *data_len);
-
-  // Called when mongoose is about to serve Lua server page (.lp file), if
-  // Lua support is enabled.
-  // Parameters:
-  //   lua_context: "lua_State *" pointer.
   void (*init_lua)(struct mg_connection *, void *lua_context);
-
-  // Called when mongoose has uploaded a file to a temporary directory as a
-  // result of mg_upload() call.
-  // Parameters:
-  //    file_file: full path name to the uploaded file.
   void (*upload)(struct mg_connection *, const char *file_name);
-
-  // Called at the beginning of mongoose's thread execution in the context of
-  // that thread. To be used to perform any extra per-thread initialization.
-  // Parameters:
-  //  user_data: pointer passed to mg_start
-  //  conn_data: per-connection, i.e. per-thread pointer. Can be used to
-  //             store per-thread data, for example, database connection
-  //             handles. Persistent between connections handled by the
-  //             same thread.
-  //             NOTE: this parameter is NULL for master thread, and non-NULL
-  //             for worker threads.
   void (*thread_start)(void *user_data, void **conn_data);
-
-  // Called when mongoose's thread is about to terminate.
-  // Same as thread_start() callback, but called when thread is about to be
-  // destroyed. Used to cleanup the state initialized by thread_start().
-  // Parameters: see thread_start().
   void (*thread_stop)(void *user_data, void **conn_data);
 };
 
-// Start web server.
-//
-// Parameters:
-//   callbacks: mg_callbacks structure with user-defined callbacks.
-//   options: NULL terminated list of option_name, option_value pairs that
-//            specify Mongoose configuration parameters.
-//
-// Side-effects: on UNIX, ignores SIGPIPE signals. If custom
-//    processing is required SIGPIPE, signal handler must be set up
-//    after calling mg_start().
-//
-// Important: Mongoose does not install SIGCHLD handler. If CGI is used,
-// SIGCHLD handler must be set up to reap CGI zombie processes.
-//
-// Example:
-//   const char *options[] = {
-//     "document_root", "/var/www",
-//     "listening_ports", "80,443s",
-//     NULL
-//   };
-//   struct mg_context *ctx = mg_start(&my_func, NULL, options);
-//
-// Return:
-//   web server context, or NULL on error.
 struct mg_context *mg_start(const struct mg_callbacks *callbacks,
                             void *user_data,
                             const char **configuration_options);
-
-
-// Stop the web server.
-//
-// Must be called last, when an application wants to stop the web server and
-// release all associated resources. This function blocks until all Mongoose
-// threads are stopped. Context pointer becomes invalid.
 void mg_stop(struct mg_context *);
 
 
