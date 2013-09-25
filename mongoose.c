@@ -3824,14 +3824,13 @@ static void handle_ssi_file_request(struct mg_connection *conn,
   }
 }
 
-static void send_options(struct mg_connection *conn) {
-  conn->status_code = 200;
+static void handle_options_request(struct mg_connection *conn) {
+  static const char reply[] = "HTTP/1.1 200 OK\r\n"
+    "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, OPTIONS, PROPFIND, MKCOL\r\n"
+    "DAV: 1\r\n\r\n";
 
-  mg_printf(conn, "%s", "HTTP/1.1 200 OK\r\n"
-            "Content-Length: 0\r\n"
-            "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, "
-            "OPTIONS, PROPFIND, MKCOL\r\n"
-            "DAV: 1\r\n\r\n");
+  conn->status_code = 200;
+  mg_write(conn, reply, sizeof(reply) - 1);
 }
 
 // Writes PROPFIND properties for a collection element
@@ -4502,7 +4501,7 @@ static void handle_request(struct mg_connection *conn) {
     handle_websocket_request(conn);
 #endif
   } else if (!strcmp(ri->request_method, "OPTIONS")) {
-    send_options(conn);
+    handle_options_request(conn);
   } else if (conn->ctx->config[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, "Not Found", "Not Found");
   } else if (is_put_or_delete_request(conn) &&
