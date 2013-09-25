@@ -667,6 +667,8 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
 static struct mg_connection *fc(struct mg_context *ctx) {
   static struct mg_connection fake_connection;
   fake_connection.ctx = ctx;
+  // See https://github.com/cesanta/mongoose/issues/236
+  fake_connection.request_info.user_data = ctx->user_data;
   return &fake_connection;
 }
 
