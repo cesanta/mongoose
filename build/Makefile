@@ -58,7 +58,7 @@ all:
 
 mongoose.c: mod_lua.c mongoose.h Makefile
 
-unix_unit_test: $(LUA_SOURCES) Makefile
+unix_unit_test: $(LUA_SOURCES) Makefile ../test/unit_test.c
 	$(CC) ../test/unit_test.c lua_5.2.1.c -o $@ $(CFLAGS) -g -O0
 	./$@
 
