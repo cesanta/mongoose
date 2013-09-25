@@ -1812,8 +1812,9 @@ int mg_get_cookie(const char *cookie_header, const char *var_name,
   return len;
 }
 
-static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
-                                     size_t buf_len, struct file *filep) {
+// Return 1 if real file has been found, 0 otherwise
+static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
+                                    size_t buf_len, struct file *filep) {
   struct vec a, b;
   const char *rewrite, *uri = conn->request_info.uri,
         *root = conn->ctx->config[DOCUMENT_ROOT];
@@ -1822,12 +1823,15 @@ static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
   char gz_path[PATH_MAX];
   char const* accept_encoding;
 
+  // No filesystem access
+  if (root == NULL) {
+    return 0;
+  }
+
   // Using buf_len - 1 because memmove() for PATH_INFO may shift part
   // of the path one byte on the right.
   // If document_root is NULL, leave the file empty.
-  mg_snprintf(conn, buf, buf_len - 1, "%s%s",
-              root == NULL ? "" : root,
-              root == NULL ? "" : uri);
+  mg_snprintf(conn, buf, buf_len - 1, "%s%s", root, uri);
 
   rewrite = conn->ctx->config[REWRITE];
   while ((rewrite = next_option(rewrite, &a, &b)) != NULL) {
@@ -1838,7 +1842,7 @@ static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
     }
   }
 
-  if (mg_stat(conn, buf, filep)) return;
+  if (mg_stat(conn, buf, filep)) return 1;
 
   // if we can't find the actual file, look for the file
   // with the same name but a .gz extension. If we find it,
@@ -1851,7 +1855,7 @@ static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
       snprintf(gz_path, sizeof(gz_path), "%s.gz", buf);
       if (mg_stat(conn, gz_path, filep)) {
         filep->gzipped = 1;
-        return;
+        return 1;
       }
     }
   }
@@ -1871,12 +1875,14 @@ static void convert_uri_to_file_name(struct mg_connection *conn, char *buf,
         conn->path_info = p + 1;
         memmove(p + 2, p + 1, strlen(p + 1) + 1);  // +1 is for trailing \0
         p[1] = '/';
-        break;
+        return 1;
       } else {
         *p = '/';
       }
     }
   }
+
+  return 0;
 }
 
 // Check whether full request is buffered. Return:
@@ -3822,6 +3828,7 @@ static void send_options(struct mg_connection *conn) {
   conn->status_code = 200;
 
   mg_printf(conn, "%s", "HTTP/1.1 200 OK\r\n"
+            "Content-Length: 0\r\n"
             "Allow: GET, POST, HEAD, CONNECT, PUT, DELETE, "
             "OPTIONS, PROPFIND, MKCOL\r\n"
             "DAV: 1\r\n\r\n");
@@ -4437,6 +4444,26 @@ static void redirect_to_https_port(struct mg_connection *conn, int ssl_index) {
                               lsa.sin.sin_port), conn->request_info.uri);
 }
 
+static void handle_delete_request(struct mg_connection *conn,
+                                  const char *path) {
+  struct file file = STRUCT_FILE_INITIALIZER;
+
+  if (!mg_stat(conn, path, &file)) {
+    send_http_error(conn, 404, "Not Found", "%s", "File not found");
+  } else if (!file.modification_time) {
+    send_http_error(conn, 500, http_500_error, "remove(%s): %s", path,
+                    strerror(ERRNO));
+  } else if (file.is_directory) {
+    remove_directory(conn, path);
+    send_http_error(conn, 204, "No Content", "%s", "");
+  } else if (mg_remove(path) == 0) {
+    send_http_error(conn, 204, "No Content", "%s", "");
+  } else {
+    send_http_error(conn, 423, "Locked", "remove(%s): %s", path,
+                    strerror(ERRNO));
+  }
+}
+
 // This is the heart of the Mongoose's logic.
 // This function is called when the request is read, parsed and validated,
 // and Mongoose must decide what action to take: serve a file, or
@@ -4453,9 +4480,10 @@ static void handle_request(struct mg_connection *conn) {
   uri_len = (int) strlen(ri->uri);
   mg_url_decode(ri->uri, uri_len, (char *) ri->uri, uri_len + 1, 0);
   remove_double_dots_and_double_slashes((char *) ri->uri);
-  convert_uri_to_file_name(conn, path, sizeof(path), &file);
   conn->throttle = set_throttle(conn->ctx->config[THROTTLE],
                                 get_remote_ip(conn), ri->uri);
+  path[0] = '\0';
+  convert_uri_to_file_name(conn, path, sizeof(path), &file);
 
   DEBUG_TRACE(("%s", ri->uri));
   // Perform redirect and auth checks before calling begin_request() handler.
@@ -4485,27 +4513,7 @@ static void handle_request(struct mg_connection *conn) {
   } else if (!strcmp(ri->request_method, "MKCOL")) {
     mkcol(conn, path);
   } else if (!strcmp(ri->request_method, "DELETE")) {
-      struct de de;
-      memset(&de.file, 0, sizeof(de.file));
-      if(!mg_stat(conn, path, &de.file)) {
-          send_http_error(conn, 404, "Not Found", "%s", "File not found");
-      } else {
-          if(de.file.modification_time) {
-              if(de.file.is_directory) {
-                  remove_directory(conn, path);
-                  send_http_error(conn, 204, "No Content", "%s", "");
-              } else if (mg_remove(path) == 0) {
-                  send_http_error(conn, 204, "No Content", "%s", "");
-              } else {
-                  send_http_error(conn, 423, "Locked", "remove(%s): %s", path,
-                          strerror(ERRNO));
-              }
-          }
-          else {
-              send_http_error(conn, 500, http_500_error, "remove(%s): %s", path,
-                    strerror(ERRNO));
-          }
-      }
+    handle_delete_request(conn, path);
   } else if ((file.membuf == NULL && file.modification_time == (time_t) 0) ||
              must_hide_file(conn, path)) {
     send_http_error(conn, 404, "Not Found", "%s", "File not found");
