@@ -16,6 +16,8 @@
 // license, as set out in <http://cesanta.com/products.html>.
 
 #if defined(_WIN32)
+#undef _UNICODE
+#define _MBCS
 #if !defined(_CRT_SECURE_NO_WARNINGS)
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005
 #endif
@@ -4138,7 +4140,7 @@ static void read_websocket(struct mg_connection *conn) {
 
       // Exit the loop if callback signalled to exit,
       // or "connection close" opcode received.
-      if ((bits & WEBSOCKET_OPCODE_CONNECTION_CLOSE) ||
+      if (((bits & 0x0f) == WEBSOCKET_OPCODE_CONNECTION_CLOSE) ||
           (conn->ctx->callbacks.websocket_data != NULL &&
            !conn->ctx->callbacks.websocket_data(conn, bits, data, data_len))) {
         stop = 1;
