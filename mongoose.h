@@ -59,9 +59,6 @@ struct mg_callbacks {
   void (*websocket_ready)(struct mg_connection *);
   int  (*websocket_data)(struct mg_connection *, int bits,
                          char *data, size_t data_len);
-  const char * (*open_file)(const struct mg_connection *,
-                             const char *path, size_t *data_len);
-  void (*init_lua)(struct mg_connection *, void *lua_context);
   void (*upload)(struct mg_connection *, const char *file_name);
   void (*thread_start)(void *user_data, void **conn_data);
   void (*thread_stop)(void *user_data, void **conn_data);

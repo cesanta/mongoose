@@ -201,20 +201,9 @@ static char *read_file(const char *path, int *size) {
 }
 
 static const char *fetch_data = "hello world!\n";
-static const char *inmemory_file_data = "hi there";
 static const char *upload_filename = "upload_test.txt";
 static const char *upload_filename2 = "upload_test2.txt";
 static const char *upload_ok_message = "upload successful";
-
-static const char *open_file_cb(const struct mg_connection *conn,
-                                const char *path, size_t *size) {
-  (void) conn;
-  if (!strcmp(path, "./blah")) {
-    *size = strlen(inmemory_file_data);
-    return inmemory_file_data;
-  }
-  return NULL;
-}
 
 static void upload_cb(struct mg_connection *conn, const char *path) {
   const struct mg_request_info *ri = mg_get_request_info(conn);
@@ -282,7 +271,7 @@ static int log_message_cb(const struct mg_connection *conn, const char *msg) {
 
 static const struct mg_callbacks CALLBACKS = {
   &begin_request_handler_cb, NULL, &log_message_cb, NULL, NULL, NULL, NULL,
-  &open_file_cb, NULL, &upload_cb, NULL, NULL
+  &upload_cb, NULL, NULL
 };
 
 static const char *OPTIONS[] = {
@@ -337,25 +326,6 @@ static void test_mg_download(void) {
   ASSERT(len1 == len2);
   ASSERT(memcmp(p1, p2, len1) == 0);
   free(p1), free(p2);
-  mg_close_connection(conn);
-
-
-  // Fetch in-memory file, should succeed.
-  ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
-                             "GET /blah HTTP/1.1\r\n\r\n")) != NULL);
-  ASSERT((p1 = read_conn(conn, &len1)) != NULL);
-  ASSERT(len1 == (int) strlen(inmemory_file_data));
-  ASSERT(memcmp(p1, inmemory_file_data, len1) == 0);
-  free(p1);
-  mg_close_connection(conn);
-
-  // Fetch in-memory data with no Content-Length, should succeed.
-  ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
-                             "GET /data HTTP/1.1\r\n\r\n")) != NULL);
-  ASSERT((p1 = read_conn(conn, &len1)) != NULL);
-  ASSERT(len1 == (int) strlen(fetch_data));
-  ASSERT(memcmp(p1, fetch_data, len1) == 0);
-  free(p1);
   mg_close_connection(conn);
 
   // Test SSL redirect, IP address
@@ -576,9 +546,8 @@ static void test_lua(void) {
 #endif
 
 static void test_mg_stat(void) {
-  static struct mg_context ctx;
   struct file file = STRUCT_FILE_INITIALIZER;
-  ASSERT(!mg_stat(fc(&ctx), " does not exist ", &file));
+  ASSERT(!mg_stat(" does not exist ", &file));
 }
 
 static void test_skip_quoted(void) {
