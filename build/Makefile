@@ -84,7 +84,7 @@ $(PROG)-tiny.exe: $(TINY_SOURCES)
 	$(CL) $(TINY_SOURCES) /link $(LINK_FLAGS) res.res /out:$@
 
 $(PROG).dll: $(TINY_SOURCES) Makefile
-	$(CL) ../mongoose.c /GD /Gd /link $(LINK_FLAGS) /DLL /DEF:dll.def /out:$@
+	$(CL) ../mongoose.c /Gz /link $(LINK_FLAGS) /DLL /DEF:dll.def /out:$@
 
 # This is broken now due to SSL exclusion
 windows_unit_test.exe: $(LUA_SOURCES) Makefile
