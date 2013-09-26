@@ -49,6 +49,17 @@ struct mg_request_info {
   } http_headers[64];         // Maximum 64 headers
 };
 
+enum mg_event {
+  MG_REQUEST_BEGIN,
+  MG_REQUEST_END,
+  MG_HTTP_ERROR,
+  MG_EVENT_LOG,
+  MG_THREAD_BEGIN,
+  MG_THREAD_END
+};
+typedef int (*mg_callback_t)(enum mg_event event,
+                             struct mg_connection *conn,
+                             void *data);
 
 struct mg_callbacks {
   int  (*begin_request)(struct mg_connection *);

@@ -491,6 +491,7 @@ struct mg_context {
   SSL_CTX *ssl_ctx;               // SSL context
   char *config[NUM_OPTIONS];      // Mongoose configuration parameters
   struct mg_callbacks callbacks;  // User-defined callback function
+  mg_callback_t user_callback;    // User-defined callback function
   void *user_data;                // User-defined data
 
   struct socket *listening_sockets;
@@ -538,6 +539,14 @@ struct de {
 
 const char **mg_get_valid_option_names(void) {
   return config_options;
+}
+
+static int call_user(enum mg_event ev, struct mg_connection *conn, void *p) {
+  if (conn != NULL && conn->ctx != NULL) {
+    conn->request_info.user_data = conn->ctx->user_data;
+  }
+  return conn == NULL || conn->ctx == NULL || conn->ctx->user_callback == NULL ?
+    0 : conn->ctx->user_callback(ev, conn, p);
 }
 
 static FILE *mg_fopen(const char *path, const char *mode) {
