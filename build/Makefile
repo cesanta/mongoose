@@ -39,7 +39,7 @@ LUA_SQLITE_FLAGS = $(SQLITE_FLAGS) $(LUA_FLAGS)
 MSVC = ../../vc6
 #DBG = /Zi /Od
 DBG  = /DNDEBUG /O1
-CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /GA /I$(MSVC)/include /I..
+CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /I$(MSVC)/include /I..
 LINK_FLAGS = /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
             user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
 LINK = $(MSVC)/bin/link $(LINK_FLAGS)
@@ -82,6 +82,9 @@ $(PROG).exe: $(LUA_SOURCES)
 $(PROG)-tiny.exe: $(TINY_SOURCES)
 	$(MSVC)/bin/rc res.rc
 	$(CL) $(TINY_SOURCES) /link $(LINK_FLAGS) res.res /out:$@
+
+$(PROG).dll: $(TINY_SOURCES) Makefile
+	$(CL) ../mongoose.c /GD /Gd /link $(LINK_FLAGS) /DLL /DEF:dll.def /out:$@
 
 # This is broken now due to SSL exclusion
 windows_unit_test.exe: $(LUA_SOURCES) Makefile
