@@ -75,7 +75,7 @@ This will build you the `cpp` program with examples of GET, POST (form), session
 HTTP response code
 
 You can also enable Json example using the `-DHAS_JSONCPP=ON` option when cmake'ing,
-this will build the `json` executable
+this will build the `json` executable. You also have to specify the `JSONCPP_DIR` that is the [JsonCpp](http://jsoncpp.sourceforge.net/) installation directory.
 
 Websockets are also supported and will be compiled if the `-DWEBSOCKET=ON` option is
 set with cmake (which is the default). `websocket.cpp` will be compiled to the
