@@ -1,22 +1,19 @@
-// Copyright (c) 2004-2012 Sergey Lyubka
+// Copyright (c) 2004-2013 Sergey Lyubka <valenok@gmail.com>
+// Copyright (c) 2013 Cesanta Software Limited
+// All rights reserved
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// This library is dual-licensed: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 2 as
+// published by the Free Software Foundation. For the terms of this
+// license, see <http://www.gnu.org/licenses/>.
 //
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
+// You are free to use this library under the terms of the GNU General
+// Public License, but WITHOUT ANY WARRANTY; without even the implied
+// warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
+// Alternatively, you can license this library under a commercial
+// license, as set out in <http://cesanta.com/products.html>.
 
 #ifndef MONGOOSE_HEADER_INCLUDED
 #define  MONGOOSE_HEADER_INCLUDED
@@ -43,7 +40,7 @@ struct mg_request_info {
   int remote_port;            // Client's port
   int is_ssl;                 // 1 if SSL-ed, 0 if not
   void *user_data;            // User data pointer passed to mg_start()
-  void *conn_data;            // Connection-specific user data
+  void *conn_data;            // Connection-specific, per-thread user data.
 
   int num_headers;            // Number of HTTP headers
   struct mg_header {
@@ -52,115 +49,35 @@ struct mg_request_info {
   } http_headers[64];         // Maximum 64 headers
 };
 
+enum mg_event {
+  MG_REQUEST_BEGIN,
+  MG_REQUEST_END,
+  MG_HTTP_ERROR,
+  MG_EVENT_LOG,
+  MG_THREAD_BEGIN,
+  MG_THREAD_END
+};
+typedef int (*mg_callback_t)(enum mg_event event,
+                             struct mg_connection *conn,
+                             void *data);
 
-// This structure needs to be passed to mg_start(), to let mongoose know
-// which callbacks to invoke. For detailed description, see
-// https://github.com/valenok/mongoose/blob/master/UserManual.md
 struct mg_callbacks {
-  // Called when mongoose has received new HTTP request.
-  // If callback returns non-zero,
-  // callback must process the request by sending valid HTTP headers and body,
-  // and mongoose will not do any further processing.
-  // If callback returns 0, mongoose processes the request itself. In this case,
-  // callback must not send any data to the client.
   int  (*begin_request)(struct mg_connection *);
-
-  // Called when mongoose has finished processing request.
   void (*end_request)(const struct mg_connection *, int reply_status_code);
-
-  // Called when mongoose is about to log a message. If callback returns
-  // non-zero, mongoose does not log anything.
   int  (*log_message)(const struct mg_connection *, const char *message);
-
-  // Called when mongoose initializes SSL library.
   int  (*init_ssl)(void *ssl_context, void *user_data);
-
-  // Called when websocket request is received, before websocket handshake.
-  // If callback returns 0, mongoose proceeds with handshake, otherwise
-  // cinnection is closed immediately.
   int (*websocket_connect)(const struct mg_connection *);
-
-  // Called when websocket handshake is successfully completed, and
-  // connection is ready for data exchange.
   void (*websocket_ready)(struct mg_connection *);
-
-  // Called when data frame has been received from the client.
-  // Parameters:
-  //    bits: first byte of the websocket frame, see websocket RFC at
-  //          http://tools.ietf.org/html/rfc6455, section 5.2
-  //    data, data_len: payload, with mask (if any) already applied.
-  // Return value:
-  //    non-0: keep this websocket connection opened.
-  //    0:     close this websocket connection.
   int  (*websocket_data)(struct mg_connection *, int bits,
                          char *data, size_t data_len);
-
-  // Called when mongoose tries to open a file. Used to intercept file open
-  // calls, and serve file data from memory instead.
-  // Parameters:
-  //    path:     Full path to the file to open.
-  //    data_len: Placeholder for the file size, if file is served from memory.
-  // Return value:
-  //    NULL: do not serve file from memory, proceed with normal file open.
-  //    non-NULL: pointer to the file contents in memory. data_len must be
-  //              initilized with the size of the memory block.
-  const char * (*open_file)(const struct mg_connection *,
-                             const char *path, size_t *data_len);
-
-  // Called when mongoose is about to serve Lua server page (.lp file), if
-  // Lua support is enabled.
-  // Parameters:
-  //   lua_context: "lua_State *" pointer.
-  void (*init_lua)(struct mg_connection *, void *lua_context);
-
-  // Called when mongoose has uploaded a file to a temporary directory as a
-  // result of mg_upload() call.
-  // Parameters:
-  //    file_file: full path name to the uploaded file.
   void (*upload)(struct mg_connection *, const char *file_name);
-
-  // Called when mongoose is about to send HTTP error to the client.
-  // Implementing this callback allows to create custom error pages.
-  // Parameters:
-  //   status: HTTP error status code.
-  int  (*http_error)(struct mg_connection *, int status);
+  void (*thread_start)(void *user_data, void **conn_data);
+  void (*thread_stop)(void *user_data, void **conn_data);
 };
 
-// Start web server.
-//
-// Parameters:
-//   callbacks: mg_callbacks structure with user-defined callbacks.
-//   options: NULL terminated list of option_name, option_value pairs that
-//            specify Mongoose configuration parameters.
-//
-// Side-effects: on UNIX, ignores SIGCHLD and SIGPIPE signals. If custom
-//    processing is required for these, signal handlers must be set up
-//    after calling mg_start().
-//
-//
-// Example:
-//   const char *options[] = {
-//     "document_root", "/var/www",
-//     "listening_ports", "80,443s",
-//     NULL
-//   };
-//   struct mg_context *ctx = mg_start(&my_func, NULL, options);
-//
-// Refer to https://github.com/valenok/mongoose/blob/master/UserManual.md
-// for the list of valid option and their possible values.
-//
-// Return:
-//   web server context, or NULL on error.
 struct mg_context *mg_start(const struct mg_callbacks *callbacks,
                             void *user_data,
                             const char **configuration_options);
-
-
-// Stop the web server.
-//
-// Must be called last, when an application wants to stop the web server and
-// release all associated resources. This function blocks until all Mongoose
-// threads are stopped. Context pointer becomes invalid.
 void mg_stop(struct mg_context *);
 
 
@@ -234,9 +151,9 @@ enum {
 
 // Macros for enabling compiler-specific checks for printf-like arguments.
 #undef PRINTF_FORMAT_STRING
-#if _MSC_VER >= 1400
+#if defined(_MSC_VER) && _MSC_VER >= 1400
 #include <sal.h>
-#if _MSC_VER > 1400
+#if defined(_MSC_VER) && _MSC_VER > 1400
 #define PRINTF_FORMAT_STRING(s) _Printf_format_string_ s
 #else
 #define PRINTF_FORMAT_STRING(s) __format_string s

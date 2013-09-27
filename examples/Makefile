@@ -1,28 +1,56 @@
-CFLAGS=	-W -Wall -I.. -pthread -g
+CFLAGS  = -W -Wall -I.. -pthread -g -pipe $(COPT)
+DLL_FLAGS = -DLUA_COMPAT_ALL -I../build
 
-all:
-	OS=`uname`; \
-	  test "$$OS" = Linux && LIBS="-ldl" ; \
-	  $(CC) $(CFLAGS) hello.c ../mongoose.c  $$LIBS $(ADD) -o hello;
-	  $(CC) $(CFLAGS) upload.c ../mongoose.c  $$LIBS $(ADD) -o upload;
-	  $(CC) $(CFLAGS) post.c ../mongoose.c  $$LIBS $(ADD) -o post;
-	  $(CC) $(CFLAGS) -DUSE_WEBSOCKET websocket.c ../mongoose.c  $$LIBS $(ADD) -o websocket;
-	  $(CC) $(CFLAGS) chat.c ../mongoose.c  $$LIBS $(ADD) -o chat
+ifeq ($(OS),Windows_NT)
+else
+  UNAME_S := $(shell uname -s)
+  DLL_FLAGS += -shared
+
+  ifeq ($(UNAME_S),Linux)
+    CFLAGS += -ldl
+  endif
+
+  ifeq ($(UNAME_S),Darwin)
+    #  DLL_FLAGS += -bundle -undefined dynamic_lookup -dynamiclib
+    DLL_FLAGS += -flat_namespace -undefined suppress -dynamiclib
+  endif
+endif
+
+all: hello upload post websocket chat
+
+hello:
+	$(CC) hello.c ../mongoose.c  -o $@ $(CFLAGS)
+
+upload:
+	$(CC) upload.c ../mongoose.c -o $@ $(CFLAGS)
+
+post:
+	$(CC) post.c ../mongoose.c -o $@ $(CFLAGS)
+
+websocket:
+	$(CC) -DUSE_WEBSOCKET websocket.c ../mongoose.c -o $@ $(CFLAGS)
+
+chat:
+	$(CC) chat.c ../mongoose.c -o $@ $(CFLAGS)
+
+lua_dll:
+	$(CC) lua_dll.c ../build/lua_5.2.1.c -o $@.so $(CFLAGS) $(DLL_FLAGS)
 
 
-MSVC    = e:/vc6
+MSVC    = ../../vc6
 CL      = $(MSVC)/bin/cl
 CLFLAGS = /MD /TC /nologo $(DBG) /W3 /DNO_SSL \
-        /I$(MSVC)/include /I.. /Dsnprintf=_snprintf \
-        /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
+        /I$(MSVC)/include /I.. /Dsnprintf=_snprintf
+LFLAGS  = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
 
 windows:
-	$(CL) upload.c ../mongoose.c $(CLFLAGS)
-	$(CL) hello.c ../mongoose.c $(CLFLAGS)
-	$(CL) upload.c ../mongoose.c $(CLFLAGS)
-	$(CL) post.c ../mongoose.c $(CLFLAGS)
-	$(CL) post.c ../mongoose.c $(CLFLAGS)
-	$(CL) /DUSE_WEBSOCKET websocket.c ../mongoose.c $(CLFLAGS)
+	$(CL) upload.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
+	$(CL) hello.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
+	$(CL) upload.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
+	$(CL) post.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
+	$(CL) post.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
+	$(CL) /DUSE_WEBSOCKET websocket.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
+#$(CL) lua_dll.c $(CLFLAGS) $(DLL_FLAGS) /DLL $(LFLAGS) /SUBSYSTEM:WINDOWS /ENTRY:luaopen_lua_dll /EXPORT:luaopen_lua_dll /out:lua_dll.dll
 
 clean:
-	rm -rf hello upload post websocket chat *.exe *.dSYM *.obj
+	rm -rf hello upload post websocket chat *.exe *.dSYM *.obj .*o
