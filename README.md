@@ -67,7 +67,7 @@ You can build examples using CMake:
 ```
 mkdir builddir
 cd builddir
-cmake ..
+cmake -DEXAMPLES=ON ..
 make
 ```
 
