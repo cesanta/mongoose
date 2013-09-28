@@ -271,9 +271,10 @@ static void init_server_name(void) {
            mg_version());
 }
 
-static int log_message(const struct mg_connection *conn, const char *message) {
-  (void) conn;
-  printf("%s\n", message);
+static int event_handler(struct mg_event *event) {
+  if (event->type == MG_EVENT_LOG) {
+    printf("%s\n", (const char *) event->event_param);
+  }
   return 0;
 }
 
@@ -341,7 +342,6 @@ static void set_absolute_path(char *options[], const char *option_name,
 }
 
 static void start_mongoose(int argc, char *argv[]) {
-  struct mg_callbacks callbacks;
   char *options[MAX_OPTIONS];
   int i;
 
@@ -385,9 +385,7 @@ static void start_mongoose(int argc, char *argv[]) {
   signal(SIGINT, signal_handler);
 
   // Start Mongoose
-  memset(&callbacks, 0, sizeof(callbacks));
-  callbacks.log_message = &log_message;
-  ctx = mg_start(&callbacks, NULL, (const char **) options);
+  ctx = mg_start((const char **) options, event_handler, NULL);
   for (i = 0; options[i] != NULL; i++) {
     free(options[i]);
   }

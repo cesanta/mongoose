@@ -345,7 +345,7 @@ struct ssl_func {
 #define SSL_CTX_use_certificate_file (* (int (*)(SSL_CTX *, \
         const char *, int)) ssl_sw[12].ptr)
 #define SSL_CTX_set_default_passwd_cb \
-  (* (void (*)(SSL_CTX *, mg_callback_t)) ssl_sw[13].ptr)
+  (* (void (*)(SSL_CTX *, mg_event_handler_t)) ssl_sw[13].ptr)
 #define SSL_CTX_free (* (void (*)(SSL_CTX *)) ssl_sw[14].ptr)
 #define SSL_load_error_strings (* (void (*)(void)) ssl_sw[15].ptr)
 #define SSL_CTX_use_certificate_chain_file \
@@ -490,8 +490,7 @@ struct mg_context {
   volatile int stop_flag;         // Should we stop event loop
   SSL_CTX *ssl_ctx;               // SSL context
   char *config[NUM_OPTIONS];      // Mongoose configuration parameters
-  struct mg_callbacks callbacks;  // User-defined callback function
-  mg_callback_t user_callback;    // User-defined callback function
+  mg_event_handler_t event_handler;  // User-defined callback function
   void *user_data;                // User-defined data
 
   struct socket *listening_sockets;
@@ -510,6 +509,7 @@ struct mg_context {
 
 struct mg_connection {
   struct mg_request_info request_info;
+  struct mg_event event;
   struct mg_context *ctx;
   SSL *ssl;                   // SSL descriptor
   SSL_CTX *client_ssl_ctx;    // SSL context for client connections
@@ -517,7 +517,7 @@ struct mg_connection {
   time_t birth_time;          // Time when request was received
   int64_t num_bytes_sent;     // Total bytes sent to client
   int64_t content_len;        // Content-Length header value
-  int64_t consumed_content;   // How many bytes of content have been read
+  int64_t num_bytes_read;     // Bytes read from a remote socket
   char *buf;                  // Buffer for received data
   char *path_info;            // PATH_INFO part of the URL
   int must_close;             // 1 if connection must be closed
@@ -537,16 +537,25 @@ struct de {
   struct file file;
 };
 
+// Return number of bytes left to read for this connection
+static int64_t left_to_read(const struct mg_connection *conn) {
+  return conn->content_len + conn->request_len - conn->num_bytes_read;
+}
+
 const char **mg_get_valid_option_names(void) {
   return config_options;
 }
 
-static int call_user(enum mg_event ev, struct mg_connection *conn, void *p) {
+static int call_user(int type, struct mg_connection *conn, void *p) {
   if (conn != NULL && conn->ctx != NULL) {
-    conn->request_info.user_data = conn->ctx->user_data;
+    conn->event.user_data = conn->ctx->user_data;
+    conn->event.type = type;
+    conn->event.event_param = p;
+    conn->event.request_info = &conn->request_info;
+    conn->event.conn = conn;
   }
-  return conn == NULL || conn->ctx == NULL || conn->ctx->user_callback == NULL ?
-    0 : conn->ctx->user_callback(ev, conn, p);
+  return conn == NULL || conn->ctx == NULL || conn->ctx->event_handler == NULL ?
+    0 : conn->ctx->event_handler(&conn->event);
 }
 
 static FILE *mg_fopen(const char *path, const char *mode) {
@@ -614,8 +623,7 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
   // Do not lock when getting the callback value, here and below.
   // I suppose this is fine, since function cannot disappear in the
   // same way string option can.
-  if (conn->ctx->callbacks.log_message == NULL ||
-      conn->ctx->callbacks.log_message(conn, buf) == 0) {
+  if (call_user(MG_EVENT_LOG, conn, buf) == 0) {
     fp = conn->ctx == NULL || conn->ctx->config[ERROR_LOG_FILE] == NULL ? NULL :
       fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
 
@@ -646,7 +654,7 @@ static struct mg_connection *fc(struct mg_context *ctx) {
   static struct mg_connection fake_connection;
   fake_connection.ctx = ctx;
   // See https://github.com/cesanta/mongoose/issues/236
-  fake_connection.request_info.user_data = ctx->user_data;
+  fake_connection.event.user_data = ctx->user_data;
   return &fake_connection;
 }
 
@@ -1497,6 +1505,7 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
 static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
   int nread;
 
+  if (len <= 0) return 0;
   if (fp != NULL) {
     // Use read() instead of fread(), because if we're reading from the CGI
     // pipe, fread() may block until IO buffer is filled up. We cannot afford
@@ -1508,6 +1517,9 @@ static int pull(FILE *fp, struct mg_connection *conn, char *buf, int len) {
 #endif
   } else {
     nread = recv(conn->client.sock, buf, (size_t) len, 0);
+  }
+  if (nread > 0) {
+    conn->num_bytes_read += nread;
   }
 
   return conn->ctx->stop_flag ? -1 : nread;
@@ -1524,7 +1536,6 @@ static int pull_all(FILE *fp, struct mg_connection *conn, char *buf, int len) {
     } else if (n == 0) {
       break;  // No more data to read
     } else {
-      conn->consumed_content += n;
       nread += n;
       len -= n;
     }
@@ -1533,46 +1544,48 @@ static int pull_all(FILE *fp, struct mg_connection *conn, char *buf, int len) {
   return nread;
 }
 
-int mg_read(struct mg_connection *conn, void *buf, size_t len) {
-  int n, buffered_len, nread;
-  const char *body;
+int mg_read(struct mg_connection *conn, void *buf, int len) {
+  int n, buffered_len, nread = 0;
+  int64_t left;
 
   // If Content-Length is not set, read until socket is closed
-  if (conn->consumed_content == 0 && conn->content_len == 0) {
+  if (conn->content_len <= 0) {
     conn->content_len = INT64_MAX;
     conn->must_close = 1;
   }
 
-  nread = 0;
-  if (conn->consumed_content < conn->content_len) {
-    // Adjust number of bytes to read.
-    int64_t to_read = conn->content_len - conn->consumed_content;
-    if (to_read < (int64_t) len) {
-      len = (size_t) to_read;
-    }
+  // conn->buf           body
+  //    |=================|==========|===============|
+  //    |<--request_len-->|                          |
+  //    |<-----------data_len------->|      conn->buf + conn->buf_size
 
-    // Return buffered data
-    body = conn->buf + conn->request_len + conn->consumed_content;
-    buffered_len = &conn->buf[conn->data_len] - body;
-    if (buffered_len > 0) {
-      if (len < (size_t) buffered_len) {
-        buffered_len = (int) len;
-      }
-      memcpy(buf, body, (size_t) buffered_len);
-      len -= buffered_len;
-      conn->consumed_content += buffered_len;
-      nread += buffered_len;
-      buf = (char *) buf + buffered_len;
-    }
+  // First, check for data buffered in conn->buf by read_request().
+  if (len > 0 && (buffered_len = conn->data_len - conn->request_len) > 0) {
+    char *body = conn->buf + conn->request_len;
+    if (buffered_len > len) buffered_len = len;
+    if (buffered_len > conn->content_len) buffered_len = conn->content_len;
 
-    // We have returned all buffered data. Read new data from the remote socket.
-    n = pull_all(NULL, conn, (char *) buf, (int) len);
+    memcpy(buf, body, (size_t) buffered_len);
+    memmove(body, body + buffered_len,
+            &conn->buf[conn->data_len] - &body[buffered_len]);
+    len -= buffered_len;
+    conn->data_len -= buffered_len;
+    nread += buffered_len;
+  }
+
+  // Read data from the socket.
+  if (len > 0 && (left = left_to_read(conn)) > 0) {
+    if (left < len) {
+      len = (int) left;
+    }
+    n = pull_all(NULL, conn, (char *) buf + nread, (int) len);
     nread = n >= 0 ? nread + n : n;
   }
+
   return nread;
 }
 
-int mg_write(struct mg_connection *conn, const void *buf, size_t len) {
+int mg_write(struct mg_connection *conn, const void *buf, int len) {
   time_t now;
   int64_t n, total, allowed;
 
@@ -1864,25 +1877,25 @@ static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
 //   -1  if request is malformed
 //    0  if request is not yet fully buffered
 //   >0  actual request length, including last \r\n\r\n
-static int get_request_len(const char *buf, int buflen) {
-  const char *s, *e;
-  int len = 0;
+static int get_request_len(const char *buf, int buf_len) {
+  int i;
 
-  for (s = buf, e = s + buflen - 1; len <= 0 && s < e; s++)
+  for (i = 0; i < buf_len; i++) {
     // Control characters are not allowed but >=128 is.
-    if (!isprint(* (const unsigned char *) s) && *s != '\r' &&
-        *s != '\n' && * (const unsigned char *) s < 128) {
-      len = -1;
-      break;  // [i_a] abort scan as soon as one malformed character is found;
-              // don't let subsequent \r\n\r\n win us over anyhow
-    } else if (s[0] == '\n' && s[1] == '\n') {
-      len = (int) (s - buf) + 2;
-    } else if (s[0] == '\n' && &s[1] < e &&
-        s[1] == '\r' && s[2] == '\n') {
-      len = (int) (s - buf) + 3;
+    // Abort scan as soon as one malformed character is found;
+    // don't let subsequent \r\n\r\n win us over anyhow
+    if (!isprint(* (const unsigned char *) &buf[i]) && buf[i] != '\r' &&
+        buf[i] != '\n' && * (const unsigned char *) &buf[i] < 128) {
+      return -1;
+    } else if (buf[i] == '\n' && i + 1 < buf_len && buf[i + 1] == '\n') {
+      return i + 2;
+    } else if (buf[i] == '\n' && i + 2 < buf_len && buf[i + 1] == '\r' &&
+               buf[i + 2] == '\n') {
+      return i + 3;
     }
+  }
 
-  return len;
+  return 0;
 }
 
 // Convert month to the month number. Return -1 on error, or month number
@@ -2840,7 +2853,7 @@ static void handle_directory_request(struct mg_connection *conn,
 static void send_file_data(struct mg_connection *conn, FILE *fp,
                            int64_t offset, int64_t len) {
   char buf[MG_BUF_LEN];
-  int to_read, num_read, num_written;
+  int num_read, num_written, to_read;
 
   // If offset is beyond file boundaries, don't send anything
   if (offset > 0 && fseeko(fp, offset, SEEK_SET) != 0) {
@@ -3054,7 +3067,8 @@ static int read_request(FILE *fp, struct mg_connection *conn,
 
   request_len = get_request_len(buf, *nread);
   while (conn->ctx->stop_flag == 0 &&
-         *nread < bufsiz && request_len == 0 &&
+         *nread < bufsiz &&
+         request_len == 0 &&
          (n = pull(fp, conn, buf + *nread, bufsiz - *nread)) > 0) {
     *nread += n;
     assert(*nread <= bufsiz);
@@ -3126,7 +3140,8 @@ static int forward_body_data(struct mg_connection *conn, FILE *fp,
                              SOCKET sock, SSL *ssl) {
   const char *expect, *body;
   char buf[MG_BUF_LEN];
-  int to_read, nread, buffered_len, success = 0;
+  int nread, buffered_len, success = 0;
+  int64_t left;
 
   expect = mg_get_header(conn, "Expect");
   assert(fp != NULL);
@@ -3140,33 +3155,32 @@ static int forward_body_data(struct mg_connection *conn, FILE *fp,
       (void) mg_printf(conn, "%s", "HTTP/1.1 100 Continue\r\n\r\n");
     }
 
-    body = conn->buf + conn->request_len + conn->consumed_content;
-    buffered_len = &conn->buf[conn->data_len] - body;
+    buffered_len = conn->data_len - conn->request_len;
+    body = conn->buf + conn->request_len;
     assert(buffered_len >= 0);
-    assert(conn->consumed_content == 0);
 
     if (buffered_len > 0) {
       if ((int64_t) buffered_len > conn->content_len) {
         buffered_len = (int) conn->content_len;
       }
       push(fp, sock, ssl, body, (int64_t) buffered_len);
-      conn->consumed_content += buffered_len;
+      memmove((char *) body, body + buffered_len, buffered_len);
+      conn->data_len -= buffered_len;
     }
 
     nread = 0;
-    while (conn->consumed_content < conn->content_len) {
-      to_read = sizeof(buf);
-      if ((int64_t) to_read > conn->content_len - conn->consumed_content) {
-        to_read = (int) (conn->content_len - conn->consumed_content);
+    while (conn->num_bytes_read < conn->content_len + conn->request_len) {
+      left = left_to_read(conn);
+      if (left > (int64_t) sizeof(buf)) {
+        left = sizeof(buf);
       }
-      nread = pull(NULL, conn, buf, to_read);
+      nread = pull(NULL, conn, buf, left);
       if (nread <= 0 || push(fp, sock, ssl, buf, nread) != nread) {
         break;
       }
-      conn->consumed_content += nread;
     }
 
-    if (conn->consumed_content == conn->content_len) {
+    if (left_to_read(conn) == 0) {
       success = nread >= 0;
     }
 
@@ -3980,7 +3994,7 @@ static void base64_encode(const unsigned char *src, int src_len, char *dst) {
   dst[j++] = '\0';
 }
 
-static void send_websocket_handshake(struct mg_connection *conn) {
+void mg_websocket_handshake(struct mg_connection *conn) {
   static const char *magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
   char buf[100], sha[20], b64_sha[sizeof(sha) * 2];
   SHA1_CTX sha_ctx;
@@ -3998,17 +4012,14 @@ static void send_websocket_handshake(struct mg_connection *conn) {
             "Sec-WebSocket-Accept: ", b64_sha, "\r\n\r\n");
 }
 
-static void read_websocket(struct mg_connection *conn) {
+int mg_websocket_read(struct mg_connection *conn, int *bits, char **data) {
   // Pointer to the beginning of the portion of the incoming websocket message
   // queue. The original websocket upgrade request is never removed,
   // so the queue begins after it.
   unsigned char *buf = (unsigned char *) conn->buf + conn->request_len;
-  int bits, n, stop = 0;
+  int n, stop = 0;
   size_t i, len, mask_len, data_len, header_len, body_len;
-  // data points to the place where the message is stored when passed to the
-  // websocket_data callback. This is either mem on the stack,
-  // or a dynamically allocated buffer if it is too large.
-  char mem[4 * 1024], mask[4], *data;
+  char mask[4];
 
   assert(conn->content_len == 0);
 
@@ -4046,28 +4057,28 @@ static void read_websocket(struct mg_connection *conn) {
 
     if (header_len > 0) {
       // Allocate space to hold websocket payload
-      data = mem;
-      if (data_len > sizeof(mem) && (data = malloc(data_len)) == NULL) {
+      if ((*data = malloc(data_len)) == NULL) {
         // Allocation failed, exit the loop and then close the connection
         // TODO: notify user about the failure
+        data_len = 0;
         break;
       }
 
       // Save mask and bits, otherwise it may be clobbered by memmove below
-      bits = buf[0];
+      *bits = buf[0];
       memcpy(mask, buf + header_len - mask_len, mask_len);
 
       // Read frame payload into the allocated buffer.
       assert(body_len >= header_len);
       if (data_len + header_len > body_len) {
         len = body_len - header_len;
-        memcpy(data, buf + header_len, len);
+        memcpy(*data, buf + header_len, len);
         // TODO: handle pull error
-        pull_all(NULL, conn, data + len, data_len - len);
+        pull_all(NULL, conn, *data + len, data_len - len);
         conn->data_len = conn->request_len;
       } else {
         len = data_len + header_len;
-        memcpy(data, buf + header_len, data_len);
+        memcpy(*data, buf + header_len, data_len);
         memmove(buf, buf + len, body_len - len);
         conn->data_len -= len;
       }
@@ -4075,21 +4086,17 @@ static void read_websocket(struct mg_connection *conn) {
       // Apply mask if necessary
       if (mask_len > 0) {
         for (i = 0; i < data_len; i++) {
-          data[i] ^= mask[i % 4];
+          (*data)[i] ^= mask[i % 4];
         }
       }
 
       // Exit the loop if callback signalled to exit,
       // or "connection close" opcode received.
-      if (((bits & 0x0f) == WEBSOCKET_OPCODE_CONNECTION_CLOSE) ||
-          (conn->ctx->callbacks.websocket_data != NULL &&
-           !conn->ctx->callbacks.websocket_data(conn, bits, data, data_len))) {
+      if ((*bits & 0x0f) == WEBSOCKET_OPCODE_CONNECTION_CLOSE) {
+        return data_len;
         stop = 1;
       }
 
-      if (data != mem) {
-        free(data);
-      }
       // Not breaking the loop, process next websocket frame.
     } else {
       // Buffering websocket request
@@ -4100,6 +4107,8 @@ static void read_websocket(struct mg_connection *conn) {
       conn->data_len += n;
     }
   }
+
+  return 0;
 }
 
 int mg_websocket_write(struct mg_connection* conn, int opcode,
@@ -4142,37 +4151,6 @@ int mg_websocket_write(struct mg_connection* conn, int opcode,
     free(copy);
 
     return retval;
-}
-
-static void handle_websocket_request(struct mg_connection *conn) {
-  const char *version = mg_get_header(conn, "Sec-WebSocket-Version");
-  if (version == NULL || strcmp(version, "13") != 0) {
-    send_http_error(conn, 426, "Upgrade Required", "%s", "Upgrade Required");
-  } else if (conn->ctx->callbacks.websocket_connect != NULL &&
-             conn->ctx->callbacks.websocket_connect(conn) != 0) {
-    // Callback has returned non-zero, do not proceed with handshake
-  } else {
-    send_websocket_handshake(conn);
-    if (conn->ctx->callbacks.websocket_ready != NULL) {
-      conn->ctx->callbacks.websocket_ready(conn);
-    }
-    read_websocket(conn);
-  }
-}
-
-static int is_websocket_request(const struct mg_connection *conn) {
-  const char *host, *upgrade, *connection, *version, *key;
-
-  host = mg_get_header(conn, "Host");
-  upgrade = mg_get_header(conn, "Upgrade");
-  connection = mg_get_header(conn, "Connection");
-  key = mg_get_header(conn, "Sec-WebSocket-Key");
-  version = mg_get_header(conn, "Sec-WebSocket-Version");
-
-  return host != NULL && upgrade != NULL && connection != NULL &&
-    key != NULL && version != NULL &&
-    mg_strcasestr(upgrade, "websocket") != NULL &&
-    mg_strcasestr(connection, "Upgrade") != NULL;
 }
 #endif // !USE_WEBSOCKET
 
@@ -4231,12 +4209,12 @@ static uint32_t get_remote_ip(const struct mg_connection *conn) {
 #include "build/mod_lua.c"
 #endif // USE_LUA
 
-int mg_upload(struct mg_connection *conn, const char *destination_dir) {
+FILE *mg_upload(struct mg_connection *conn, const char *destination_dir,
+                char *path, int path_len) {
   const char *content_type_header, *boundary_start;
-  char buf[MG_BUF_LEN], path[PATH_MAX], fname[1024], boundary[100], *s;
+  char *buf, fname[1024], boundary[100], *s;
+  int bl, n, i, j, headers_len, boundary_len, eof, buf_len, to_read, len = 0;
   FILE *fp;
-  int bl, n, i, j, headers_len, boundary_len, eof,
-      len = 0, num_uploaded_files = 0;
 
   // Request looks like this:
   //
@@ -4260,15 +4238,31 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
       (sscanf(boundary_start, "boundary=\"%99[^\"]\"", boundary) == 0 &&
        sscanf(boundary_start, "boundary=%99s", boundary) == 0) ||
       boundary[0] == '\0') {
-    return num_uploaded_files;
+    return NULL;
   }
 
   boundary_len = strlen(boundary);
   bl = boundary_len + 4;  // \r\n--<boundary>
+
+  //                     buf
+  // conn->buf            |<--------- buf_len ------>|
+  //    |=================|==========|===============|
+  //    |<--request_len-->|<--len--->|               |
+  //    |<-----------data_len------->|      conn->buf + conn->buf_size
+
+  buf = conn->buf + conn->request_len;
+  buf_len = conn->buf_size - conn->request_len;
+  len = conn->data_len - conn->request_len;
+
   for (;;) {
     // Pull in headers
-    assert(len >= 0 && len <= (int) sizeof(buf));
-    while ((n = mg_read(conn, buf + len, sizeof(buf) - len)) > 0) {
+    assert(len >= 0 && len <= buf_len);
+    to_read = buf_len - len;
+    if (to_read > left_to_read(conn)) {
+      to_read = left_to_read(conn);
+    }
+    while (len < buf_len &&
+           (n = pull(NULL, conn, buf + len, to_read)) > 0) {
       len += n;
     }
     if ((headers_len = get_request_len(buf, len)) <= 0) {
@@ -4297,10 +4291,12 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
     assert(len >= headers_len);
     memmove(buf, &buf[headers_len], len - headers_len);
     len -= headers_len;
+    conn->data_len = conn->request_len + len;
 
     // We open the file with exclusive lock held. This guarantee us
     // there is no other thread can save into the same file simultaneously.
     fp = NULL;
+
     // Construct destination file name. Do not allow paths to have slashes.
     if ((s = strrchr(fname, '/')) == NULL &&
         (s = strrchr(fname, '\\')) == NULL) {
@@ -4308,7 +4304,7 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
     }
 
     // Open file in binary mode. TODO: set an exclusive lock.
-    snprintf(path, sizeof(path), "%s/%s", destination_dir, s);
+    snprintf(path, path_len, "%s/%s", destination_dir, s);
     if ((fp = fopen(path, "wb")) == NULL) {
       break;
     }
@@ -4333,17 +4329,22 @@ int mg_upload(struct mg_connection *conn, const char *destination_dir) {
         memmove(buf, &buf[len - bl], bl);
         len = bl;
       }
-    } while (!eof && (n = mg_read(conn, buf + len, sizeof(buf) - len)) > 0);
-    fclose(fp);
-    if (eof) {
-      num_uploaded_files++;
-      if (conn->ctx->callbacks.upload != NULL) {
-        conn->ctx->callbacks.upload(conn, path);
+      to_read = buf_len - len;
+      if (to_read > left_to_read(conn)) {
+        to_read = left_to_read(conn);
       }
+    } while (!eof && (n = pull(NULL, conn, buf + len, to_read)) > 0);
+    conn->data_len = conn->request_len + len;
+
+    if (eof) {
+      rewind(fp);
+      return fp;
+    } else {
+      fclose(fp);
     }
   }
 
-  return num_uploaded_files;
+  return NULL;
 }
 
 static int is_put_or_delete_request(const struct mg_connection *conn) {
@@ -4417,7 +4418,6 @@ static void handle_request(struct mg_connection *conn) {
   path[0] = '\0';
   convert_uri_to_file_name(conn, path, sizeof(path), &file);
 
-  DEBUG_TRACE(("%s", ri->uri));
   // Perform redirect and auth checks before calling begin_request() handler.
   // Otherwise, begin_request() would need to perform auth checks and redirects.
   if (!conn->client.is_ssl && conn->client.ssl_redir &&
@@ -4426,13 +4426,8 @@ static void handle_request(struct mg_connection *conn) {
   } else if (!is_put_or_delete_request(conn) &&
              !check_authorization(conn, path)) {
     send_authorization_request(conn);
-  } else if (conn->ctx->callbacks.begin_request != NULL &&
-      conn->ctx->callbacks.begin_request(conn)) {
+  } else if (call_user(MG_REQUEST_BEGIN, conn, (void *) ri->uri) == 1) {
     // Do nothing, callback has served the request
-#if defined(USE_WEBSOCKET)
-  } else if (is_websocket_request(conn)) {
-    handle_websocket_request(conn);
-#endif
   } else if (!strcmp(ri->request_method, "OPTIONS")) {
     handle_options_request(conn);
   } else if (conn->ctx->config[DOCUMENT_ROOT] == NULL) {
@@ -4767,8 +4762,9 @@ static int set_ssl_option(struct mg_context *ctx) {
 
   // If PEM file is not specified and the init_ssl callback
   // is not specified, skip SSL initialization.
-  if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL &&
-      ctx->callbacks.init_ssl == NULL) {
+  if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL) {
+    //  MG_INIT_SSL
+    //  ctx->callbacks.init_ssl == NULL) {
     return 1;
   }
 
@@ -4790,10 +4786,9 @@ static int set_ssl_option(struct mg_context *ctx) {
 
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
-  if ((ctx->callbacks.init_ssl == NULL ||
-       !ctx->callbacks.init_ssl(ctx->ssl_ctx, ctx->user_data)) &&
-      (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, 1) == 0 ||
-       SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, 1) == 0)) {
+  // MG_INIT_SSL
+  if (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, 1) == 0 ||
+      SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, 1) == 0) {
     cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
     return 0;
   }
@@ -4849,7 +4844,7 @@ static int set_acl_option(struct mg_context *ctx) {
 
 static void reset_per_request_attributes(struct mg_connection *conn) {
   conn->path_info = NULL;
-  conn->num_bytes_sent = conn->consumed_content = 0;
+  conn->num_bytes_sent = conn->num_bytes_read = 0;
   conn->status_code = -1;
   conn->must_close = conn->request_len = conn->throttle = 0;
 }
@@ -5039,9 +5034,7 @@ static void process_new_connection(struct mg_connection *conn) {
 
     if (ebuf[0] == '\0') {
       handle_request(conn);
-      if (conn->ctx->callbacks.end_request != NULL) {
-        conn->ctx->callbacks.end_request(conn, conn->status_code);
-      }
+      call_user(MG_REQUEST_END, conn, (void *) conn->status_code);
       log_access(conn);
     }
     if (ri->remote_user != NULL) {
@@ -5111,12 +5104,9 @@ static void *worker_thread(void *thread_func_param) {
     conn->buf_size = MAX_REQUEST_SIZE;
     conn->buf = (char *) (conn + 1);
     conn->ctx = ctx;
-    conn->request_info.user_data = ctx->user_data;
+    conn->event.user_data = ctx->user_data;
 
-    if (ctx->callbacks.thread_start != NULL) {
-      ctx->callbacks.thread_start(&conn->request_info.user_data,
-                                  &conn->request_info.conn_data);
-    }
+    call_user(MG_THREAD_BEGIN, conn, NULL);
 
     // Call consume_socket() even when ctx->stop_flag > 0, to let it signal
     // sq_empty condvar to wake up the master waiting in produce_socket()
@@ -5143,10 +5133,7 @@ static void *worker_thread(void *thread_func_param) {
 
       close_connection(conn);
     }
-    if (ctx->callbacks.thread_stop != NULL) {
-      ctx->callbacks.thread_stop(&conn->request_info.user_data,
-                                 &conn->request_info.conn_data);
-    }
+    call_user(MG_THREAD_END, conn, NULL);
     free(conn);
   }
 
@@ -5241,9 +5228,7 @@ static void *master_thread(void *thread_func_param) {
   pthread_setschedparam(pthread_self(), SCHED_RR, &sched_param);
 #endif
 
-  if (ctx->callbacks.thread_start != NULL) {
-    ctx->callbacks.thread_start(&ctx->user_data, NULL);
-  }
+  call_user(MG_THREAD_BEGIN, fc(ctx), NULL);
 
   pfd = (struct pollfd *) calloc(ctx->num_listening_sockets, sizeof(pfd[0]));
   while (pfd != NULL && ctx->stop_flag == 0) {
@@ -5291,9 +5276,7 @@ static void *master_thread(void *thread_func_param) {
 #endif
   DEBUG_TRACE(("exiting"));
 
-  if (ctx->callbacks.thread_stop != NULL) {
-    ctx->callbacks.thread_stop(&ctx->user_data, NULL);
-  }
+  call_user(MG_THREAD_END, fc(ctx), NULL);
 
   // Signal mg_stop() that we're done.
   // WARNING: This must be the very last thing this
@@ -5340,9 +5323,9 @@ void mg_stop(struct mg_context *ctx) {
 #endif // _WIN32
 }
 
-struct mg_context *mg_start(const struct mg_callbacks *callbacks,
-                            void *user_data,
-                            const char **options) {
+struct mg_context *mg_start(const char **options,
+                            mg_event_handler_t func,
+                            void *user_data) {
   struct mg_context *ctx;
   const char *name, *value, *default_value;
   int i;
@@ -5357,7 +5340,7 @@ struct mg_context *mg_start(const struct mg_callbacks *callbacks,
   if ((ctx = (struct mg_context *) calloc(1, sizeof(*ctx))) == NULL) {
     return NULL;
   }
-  ctx->callbacks = *callbacks;
+  ctx->event_handler = func;
   ctx->user_data = user_data;
 
   while (options && (name = *options++) != NULL) {

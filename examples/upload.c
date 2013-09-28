@@ -3,57 +3,48 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <fcntl.h>
-#include <stdlib.h>
-#ifdef _WIN32
-#include <windows.h>
-#include <io.h>
-#define strtoll strtol
-typedef __int64 int64_t;
-#else
-#include <inttypes.h>
-#include <unistd.h>
-#endif // !_WIN32
-
 #include "mongoose.h"
 
-static int begin_request_handler(struct mg_connection *conn) {
-  if (!strcmp(mg_get_request_info(conn)->uri, "/handle_post_request")) {
-    mg_printf(conn, "%s", "HTTP/1.0 200 OK\r\n\r\n");
-    mg_upload(conn, "/tmp");
-  } else {
-    // Show HTML form. Make sure it has enctype="multipart/form-data" attr.
-    static const char *html_form =
-      "<html><body>Upload example."
-      "<form method=\"POST\" action=\"/handle_post_request\" "
-      "  enctype=\"multipart/form-data\">"
-      "<input type=\"file\" name=\"file\" /> <br/>"
-      "<input type=\"submit\" value=\"Upload\" />"
-      "</form></body></html>";
+static int event_handler(struct mg_event *event) {
 
-    mg_printf(conn, "HTTP/1.0 200 OK\r\n"
-              "Content-Length: %d\r\n"
-              "Content-Type: text/html\r\n\r\n%s",
-              (int) strlen(html_form), html_form);
+  if (event->type == MG_REQUEST_BEGIN) {
+    if (!strcmp(event->request_info->uri, "/handle_post_request")) {
+      char path[200];
+      FILE *fp = mg_upload(event->conn, "/tmp", path, sizeof(path));
+      if (fp != NULL) {
+        fclose(fp);
+        mg_printf(event->conn, "HTTP/1.0 200 OK\r\n\r\nSaved: [%s]", path);
+      } else {
+        mg_printf(event->conn, "%s", "HTTP/1.0 200 OK\r\n\r\nNo files sent");
+      }
+    } else {
+      // Show HTML form. Make sure it has enctype="multipart/form-data" attr.
+      static const char *html_form =
+        "<html><body>Upload example."
+        "<form method=\"POST\" action=\"/handle_post_request\" "
+        "  enctype=\"multipart/form-data\">"
+        "<input type=\"file\" name=\"file\" /> <br/>"
+        "<input type=\"submit\" value=\"Upload\" />"
+        "</form></body></html>";
+
+      mg_printf(event->conn, "HTTP/1.0 200 OK\r\n"
+          "Content-Length: %d\r\n"
+          "Content-Type: text/html\r\n\r\n%s",
+          (int) strlen(html_form), html_form);
+    }
+
+    // Mark request as processed
+    return 1;
   }
 
-  // Mark request as processed
+  // All other events left unprocessed
   return 1;
-}
-
-static void upload_handler(struct mg_connection *conn, const char *path) {
-  mg_printf(conn, "Saved [%s]", path);
 }
 
 int main(void) {
   struct mg_context *ctx;
   const char *options[] = {"listening_ports", "8080", NULL};
-  struct mg_callbacks callbacks;
-
-  memset(&callbacks, 0, sizeof(callbacks));
-  callbacks.begin_request = begin_request_handler;
-  callbacks.upload = upload_handler;
-  ctx = mg_start(&callbacks, NULL, options);
+  ctx = mg_start(options, event_handler, NULL);
   getchar();  // Wait until user hits "enter"
   mg_stop(ctx);
 
