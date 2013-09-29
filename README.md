@@ -65,7 +65,7 @@ F.Morenius, and 10 others.
 # License
 
 Mongoose is dual-licensed. It is available under the terms of
-[GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html) license
+[GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 license for free, or under the terms of standard commercial license provided
 by [Cesanta Software](http://cesanta.com).
 
