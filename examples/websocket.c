@@ -19,7 +19,7 @@ static int event_handler(struct mg_event *event) {
       } else {
         static const char *server_ready_message = "server ready";
         char *data;
-        int bits, len;
+        int bits, len, must_exit = 0;
 
         // Handshake, and send initial server message
         mg_websocket_handshake(event->conn);
@@ -27,17 +27,21 @@ static int event_handler(struct mg_event *event) {
                            server_ready_message, strlen(server_ready_message));
 
         // Read messages sent by client. Echo them back.
-        while ((len = mg_websocket_read(event->conn, &bits, &data)) > 0) {
+        while (must_exit == 0 &&
+               (len = mg_websocket_read(event->conn, &bits, &data)) > 0) {
+
           printf("got message: [%.*s]\n", len, data);
           mg_websocket_write(event->conn, WEBSOCKET_OPCODE_TEXT, data, len);
-          free(data); // It's our responsibility to free allocated message
 
           // If the message is "exit", close the connection, exit the loop
           if (memcmp(data, "exit", 4) == 0) {
             mg_websocket_write(event->conn,
                                WEBSOCKET_OPCODE_CONNECTION_CLOSE, "", 0);
-            break;
+            must_exit = 1;
           }
+
+          // It's our responsibility to free allocated message
+          free(data);
         }
       }
       return 1;
