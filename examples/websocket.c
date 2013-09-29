@@ -28,9 +28,11 @@ static int event_handler(struct mg_event *event) {
         while ((len = mg_websocket_read(event->conn, &bits, &data)) > 0) {
           // Echo message back to the client
           mg_websocket_write(event->conn, WEBSOCKET_OPCODE_TEXT, data, len);
+          printf("got message: [%.*s]\n", len, data);
           if (memcmp(data, "exit", 4) == 0) {
             mg_websocket_write(event->conn,
                                WEBSOCKET_OPCODE_CONNECTION_CLOSE, "", 0);
+            free(data);
             break;
           }
         }

@@ -4090,14 +4090,7 @@ int mg_websocket_read(struct mg_connection *conn, int *bits, char **data) {
         }
       }
 
-      // Exit the loop if callback signalled to exit,
-      // or "connection close" opcode received.
-      if ((*bits & 0x0f) == WEBSOCKET_OPCODE_CONNECTION_CLOSE) {
-        return data_len;
-        stop = 1;
-      }
-
-      // Not breaking the loop, process next websocket frame.
+      return data_len;
     } else {
       // Buffering websocket request
       if ((n = pull(NULL, conn, conn->buf + conn->data_len,
