@@ -357,6 +357,7 @@ struct ssl_func {
 #define ERR_get_error (* (unsigned long (*)(void)) crypto_sw[3].ptr)
 #define ERR_error_string (* (char * (*)(unsigned long,char *)) crypto_sw[4].ptr)
 
+
 // set_ssl_option() function updates this array.
 // It loads SSL library dynamically and changes NULLs to the actual addresses
 // of respective functions. The macros above (like SSL_connect()) are really
@@ -3172,7 +3173,7 @@ static int forward_body_data(struct mg_connection *conn, FILE *fp,
       if (left > (int64_t) sizeof(buf)) {
         left = sizeof(buf);
       }
-      nread = pull(NULL, conn, buf, left);
+      nread = pull(NULL, conn, buf, (int) left);
       if (nread <= 0 || push(fp, sock, ssl, buf, nread) != nread) {
         break;
       }
@@ -4250,7 +4251,7 @@ FILE *mg_upload(struct mg_connection *conn, const char *destination_dir,
     assert(len >= 0 && len <= buf_len);
     to_read = buf_len - len;
     if (to_read > left_to_read(conn)) {
-      to_read = left_to_read(conn);
+      to_read = (int) left_to_read(conn);
     }
     while (len < buf_len &&
            (n = pull(NULL, conn, buf + len, to_read)) > 0) {
@@ -4322,7 +4323,7 @@ FILE *mg_upload(struct mg_connection *conn, const char *destination_dir,
       }
       to_read = buf_len - len;
       if (to_read > left_to_read(conn)) {
-        to_read = left_to_read(conn);
+        to_read = (int) left_to_read(conn);
       }
     } while (!eof && (n = pull(NULL, conn, buf + len, to_read)) > 0);
     conn->data_len = conn->request_len + len;
