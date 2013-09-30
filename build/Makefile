@@ -24,7 +24,9 @@ EXE_SUFFIX =
 CFLAGS = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe -I.. $(CFLAGS_EXTRA)
 VERSION = $(shell perl -lne \
             'print $$1 if /define\s+MONGOOSE_VERSION\s+"(\S+)"/' ../mongoose.c)
-SOURCES = src/internal.h src/string.c src/mongoose.c
+
+# The order in which files are listed is important
+SOURCES = src/internal.h src/string.c src/parse_date.c src/mongoose.c
 
 TINY_SOURCES = ../mongoose.c main.c
 LUA_SOURCES = $(TINY_SOURCES) sqlite3.c lsqlite3.c lua_5.2.1.c
