@@ -751,6 +751,7 @@ static time_t parse_date_string(const char *datetime) {
   return result;
 }
 
+// This array must be in sync with enum in internal.h
 static const char *config_options[] = {
   "cgi_pattern", "**.cgi$|**.pl$|**.php$",
   "cgi_environment", NULL,
@@ -780,13 +781,35 @@ static const char *config_options[] = {
   NULL
 };
 
+const char **mg_get_valid_option_names(void) {
+  return config_options;
+}
+
+static int get_option_index(const char *name) {
+  int i;
+
+  for (i = 0; config_options[i * 2] != NULL; i++) {
+    if (strcmp(config_options[i * 2], name) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+const char *mg_get_option(const struct mg_context *ctx, const char *name) {
+  int i;
+  if ((i = get_option_index(name)) == -1) {
+    return NULL;
+  } else if (ctx->config[i] == NULL) {
+    return "";
+  } else {
+    return ctx->config[i];
+  }
+}
+
 // Return number of bytes left to read for this connection
 static int64_t left_to_read(const struct mg_connection *conn) {
   return conn->content_len + conn->request_len - conn->num_bytes_read;
-}
-
-const char **mg_get_valid_option_names(void) {
-  return config_options;
 }
 
 static int call_user(int type, struct mg_connection *conn, void *p) {
@@ -810,28 +833,6 @@ static FILE *mg_fopen(const char *path, const char *mode) {
 #else
   return fopen(path, mode);
 #endif
-}
-
-static int get_option_index(const char *name) {
-  int i;
-
-  for (i = 0; config_options[i * 2] != NULL; i++) {
-    if (strcmp(config_options[i * 2], name) == 0) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-const char *mg_get_option(const struct mg_context *ctx, const char *name) {
-  int i;
-  if ((i = get_option_index(name)) == -1) {
-    return NULL;
-  } else if (ctx->config[i] == NULL) {
-    return "";
-  } else {
-    return ctx->config[i];
-  }
 }
 
 static void sockaddr_to_string(char *buf, size_t len,

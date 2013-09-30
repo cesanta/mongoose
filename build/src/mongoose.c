@@ -1,41 +1,8 @@
 #include "internal.h"
 
-static const char *config_options[] = {
-  "cgi_pattern", "**.cgi$|**.pl$|**.php$",
-  "cgi_environment", NULL,
-  "put_delete_auth_file", NULL,
-  "cgi_interpreter", NULL,
-  "protect_uri", NULL,
-  "authentication_domain", "mydomain.com",
-  "ssi_pattern", "**.shtml$|**.shtm$",
-  "throttle", NULL,
-  "access_log_file", NULL,
-  "enable_directory_listing", "yes",
-  "error_log_file", NULL,
-  "global_auth_file", NULL,
-  "index_files",
-    "index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
-  "enable_keep_alive", "no",
-  "access_control_list", NULL,
-  "extra_mime_types", NULL,
-  "listening_ports", "8080",
-  "document_root",  NULL,
-  "ssl_certificate", NULL,
-  "num_threads", "50",
-  "run_as_user", NULL,
-  "url_rewrite_patterns", NULL,
-  "hide_files_patterns", NULL,
-  "request_timeout_ms", "30000",
-  NULL
-};
-
 // Return number of bytes left to read for this connection
 static int64_t left_to_read(const struct mg_connection *conn) {
   return conn->content_len + conn->request_len - conn->num_bytes_read;
-}
-
-const char **mg_get_valid_option_names(void) {
-  return config_options;
 }
 
 static int call_user(int type, struct mg_connection *conn, void *p) {
@@ -59,28 +26,6 @@ static FILE *mg_fopen(const char *path, const char *mode) {
 #else
   return fopen(path, mode);
 #endif
-}
-
-static int get_option_index(const char *name) {
-  int i;
-
-  for (i = 0; config_options[i * 2] != NULL; i++) {
-    if (strcmp(config_options[i * 2], name) == 0) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-const char *mg_get_option(const struct mg_context *ctx, const char *name) {
-  int i;
-  if ((i = get_option_index(name)) == -1) {
-    return NULL;
-  } else if (ctx->config[i] == NULL) {
-    return "";
-  } else {
-    return ctx->config[i];
-  }
 }
 
 static void sockaddr_to_string(char *buf, size_t len,
