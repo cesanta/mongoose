@@ -159,10 +159,6 @@ const char *mg_version(void) {
   return MONGOOSE_VERSION;
 }
 
-struct mg_request_info *mg_get_request_info(struct mg_connection *conn) {
-  return &conn->request_info;
-}
-
 static void mg_strlcpy(register char *dst, register const char *src, size_t n) {
   for (; *src != '\0' && n > 1; n--) {
     *dst++ = *src++;

@@ -242,7 +242,7 @@ static int lsp_redirect(lua_State *L) {
 }
 
 static void prepare_lua_environment(struct mg_connection *conn, lua_State *L) {
-  const struct mg_request_info *ri = mg_get_request_info(conn);
+  const struct mg_request_info *ri = &conn->request_info;
   extern void luaL_openlibs(lua_State *);
   int i;
 
