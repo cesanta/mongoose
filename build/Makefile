@@ -57,7 +57,7 @@ endif
 all:
 	@echo "make (unix|windows|macos)"
 
-../mongoose.c: mod_lua.c ../mongoose.h Makefile $(SOURCES)
+../mongoose.c: mod_lua.c ../mongoose.h Makefile src/internal.h $(SOURCES)
 	cat src/internal.h src/mongoose.c | sed '/#include "internal.h"/d' > $@
 
 unix_unit_test: $(LUA_SOURCES) Makefile ../test/unit_test.c

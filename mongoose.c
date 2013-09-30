@@ -323,6 +323,8 @@ struct ssl_func {
   void  (*ptr)(void); // Function pointer
 };
 
+static struct ssl_func ssl_sw[];
+
 #define SSL_free (* (void (*)(SSL *)) ssl_sw[0].ptr)
 #define SSL_accept (* (int (*)(SSL *)) ssl_sw[1].ptr)
 #define SSL_connect (* (int (*)(SSL *)) ssl_sw[2].ptr)
@@ -356,54 +358,7 @@ struct ssl_func {
   (* (void (*)(unsigned long (*)(void))) crypto_sw[2].ptr)
 #define ERR_get_error (* (unsigned long (*)(void)) crypto_sw[3].ptr)
 #define ERR_error_string (* (char * (*)(unsigned long,char *)) crypto_sw[4].ptr)
-
-
-// set_ssl_option() function updates this array.
-// It loads SSL library dynamically and changes NULLs to the actual addresses
-// of respective functions. The macros above (like SSL_connect()) are really
-// just calling these functions indirectly via the pointer.
-static struct ssl_func ssl_sw[] = {
-  {"SSL_free",   NULL},
-  {"SSL_accept",   NULL},
-  {"SSL_connect",   NULL},
-  {"SSL_read",   NULL},
-  {"SSL_write",   NULL},
-  {"SSL_get_error",  NULL},
-  {"SSL_set_fd",   NULL},
-  {"SSL_new",   NULL},
-  {"SSL_CTX_new",   NULL},
-  {"SSLv23_server_method", NULL},
-  {"SSL_library_init",  NULL},
-  {"SSL_CTX_use_PrivateKey_file", NULL},
-  {"SSL_CTX_use_certificate_file",NULL},
-  {"SSL_CTX_set_default_passwd_cb",NULL},
-  {"SSL_CTX_free",  NULL},
-  {"SSL_load_error_strings", NULL},
-  {"SSL_CTX_use_certificate_chain_file", NULL},
-  {"SSLv23_client_method", NULL},
-  {"SSL_pending", NULL},
-  {"SSL_CTX_set_verify", NULL},
-  {"SSL_shutdown",   NULL},
-  {NULL,    NULL}
-};
-
-// Similar array as ssl_sw. These functions could be located in different lib.
-#if !defined(NO_SSL)
-static struct ssl_func crypto_sw[] = {
-  {"CRYPTO_num_locks",  NULL},
-  {"CRYPTO_set_locking_callback", NULL},
-  {"CRYPTO_set_id_callback", NULL},
-  {"ERR_get_error",  NULL},
-  {"ERR_error_string", NULL},
-  {NULL,    NULL}
-};
-#endif // NO_SSL
 #endif // NO_SSL_DL
-
-static const char *month_names[] = {
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
 
 // Unified socket address. For IPv6 support, add IPv6 address structure
 // in the union u.
@@ -441,7 +396,7 @@ struct socket {
   unsigned ssl_redir:1; // Is port supposed to redirect everything to SSL port
 };
 
-// NOTE(lsm): this enum shoulds be in sync with the config_options below.
+// NOTE(lsm): this enum shoulds be in sync with the config_options.
 enum {
   CGI_EXTENSIONS, CGI_ENVIRONMENT, PUT_DELETE_PASSWORDS_FILE, CGI_INTERPRETER,
   PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS, THROTTLE,
@@ -450,35 +405,6 @@ enum {
   EXTRA_MIME_TYPES, LISTENING_PORTS, DOCUMENT_ROOT, SSL_CERTIFICATE,
   NUM_THREADS, RUN_AS_USER, REWRITE, HIDE_FILES, REQUEST_TIMEOUT,
   NUM_OPTIONS
-};
-
-static const char *config_options[] = {
-  "cgi_pattern", "**.cgi$|**.pl$|**.php$",
-  "cgi_environment", NULL,
-  "put_delete_auth_file", NULL,
-  "cgi_interpreter", NULL,
-  "protect_uri", NULL,
-  "authentication_domain", "mydomain.com",
-  "ssi_pattern", "**.shtml$|**.shtm$",
-  "throttle", NULL,
-  "access_log_file", NULL,
-  "enable_directory_listing", "yes",
-  "error_log_file", NULL,
-  "global_auth_file", NULL,
-  "index_files",
-    "index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
-  "enable_keep_alive", "no",
-  "access_control_list", NULL,
-  "extra_mime_types", NULL,
-  "listening_ports", "8080",
-  "document_root",  NULL,
-  "ssl_certificate", NULL,
-  "num_threads", "50",
-  "run_as_user", NULL,
-  "url_rewrite_patterns", NULL,
-  "hide_files_patterns", NULL,
-  "request_timeout_ms", "30000",
-  NULL
 };
 
 struct mg_context {
@@ -530,6 +456,41 @@ struct de {
   struct mg_connection *conn;
   char *file_name;
   struct file file;
+};
+
+
+static const char *month_names[] = {
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+
+static const char *config_options[] = {
+  "cgi_pattern", "**.cgi$|**.pl$|**.php$",
+  "cgi_environment", NULL,
+  "put_delete_auth_file", NULL,
+  "cgi_interpreter", NULL,
+  "protect_uri", NULL,
+  "authentication_domain", "mydomain.com",
+  "ssi_pattern", "**.shtml$|**.shtm$",
+  "throttle", NULL,
+  "access_log_file", NULL,
+  "enable_directory_listing", "yes",
+  "error_log_file", NULL,
+  "global_auth_file", NULL,
+  "index_files",
+    "index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
+  "enable_keep_alive", "no",
+  "access_control_list", NULL,
+  "extra_mime_types", NULL,
+  "listening_ports", "8080",
+  "document_root",  NULL,
+  "ssl_certificate", NULL,
+  "num_threads", "50",
+  "run_as_user", NULL,
+  "url_rewrite_patterns", NULL,
+  "hide_files_patterns", NULL,
+  "request_timeout_ms", "30000",
+  NULL
 };
 
 // Return number of bytes left to read for this connection
@@ -1477,12 +1438,9 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
     // How many bytes we send in this iteration
     k = len - sent > INT_MAX ? INT_MAX : (int) (len - sent);
 
-#ifndef NO_SSL
     if (ssl != NULL) {
       n = SSL_write(ssl, buf + sent, k);
-    } else
-#endif
-      if (fp != NULL) {
+    } else if (fp != NULL) {
       n = (int) fwrite(buf + sent, 1, (size_t) k, fp);
       if (ferror(fp))
         n = -1;
@@ -4683,6 +4641,45 @@ static int set_uid_option(struct mg_context *ctx) {
 #endif // !_WIN32
 
 #if !defined(NO_SSL)
+// set_ssl_option() function updates this array.
+// It loads SSL library dynamically and changes NULLs to the actual addresses
+// of respective functions. The macros above (like SSL_connect()) are really
+// just calling these functions indirectly via the pointer.
+static struct ssl_func ssl_sw[] = {
+  {"SSL_free",   NULL},
+  {"SSL_accept",   NULL},
+  {"SSL_connect",   NULL},
+  {"SSL_read",   NULL},
+  {"SSL_write",   NULL},
+  {"SSL_get_error",  NULL},
+  {"SSL_set_fd",   NULL},
+  {"SSL_new",   NULL},
+  {"SSL_CTX_new",   NULL},
+  {"SSLv23_server_method", NULL},
+  {"SSL_library_init",  NULL},
+  {"SSL_CTX_use_PrivateKey_file", NULL},
+  {"SSL_CTX_use_certificate_file",NULL},
+  {"SSL_CTX_set_default_passwd_cb",NULL},
+  {"SSL_CTX_free",  NULL},
+  {"SSL_load_error_strings", NULL},
+  {"SSL_CTX_use_certificate_chain_file", NULL},
+  {"SSLv23_client_method", NULL},
+  {"SSL_pending", NULL},
+  {"SSL_CTX_set_verify", NULL},
+  {"SSL_shutdown",   NULL},
+  {NULL,    NULL}
+};
+
+// Similar array as ssl_sw. These functions could be located in different lib.
+static struct ssl_func crypto_sw[] = {
+  {"CRYPTO_num_locks",  NULL},
+  {"CRYPTO_set_locking_callback", NULL},
+  {"CRYPTO_set_id_callback", NULL},
+  {"ERR_get_error",  NULL},
+  {"ERR_error_string", NULL},
+  {NULL,    NULL}
+};
+
 static pthread_mutex_t *ssl_mutexes;
 
 static int sslize(struct mg_connection *conn, SSL_CTX *s, int (*func)(SSL *)) {

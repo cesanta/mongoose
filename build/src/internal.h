@@ -323,6 +323,8 @@ struct ssl_func {
   void  (*ptr)(void); // Function pointer
 };
 
+static struct ssl_func ssl_sw[];
+
 #define SSL_free (* (void (*)(SSL *)) ssl_sw[0].ptr)
 #define SSL_accept (* (int (*)(SSL *)) ssl_sw[1].ptr)
 #define SSL_connect (* (int (*)(SSL *)) ssl_sw[2].ptr)
@@ -356,4 +358,103 @@ struct ssl_func {
   (* (void (*)(unsigned long (*)(void))) crypto_sw[2].ptr)
 #define ERR_get_error (* (unsigned long (*)(void)) crypto_sw[3].ptr)
 #define ERR_error_string (* (char * (*)(unsigned long,char *)) crypto_sw[4].ptr)
+#endif // NO_SSL_DL
+
+// Unified socket address. For IPv6 support, add IPv6 address structure
+// in the union u.
+union usa {
+  struct sockaddr sa;
+  struct sockaddr_in sin;
+#if defined(USE_IPV6)
+  struct sockaddr_in6 sin6;
+#endif
+};
+
+// Describes a string (chunk of memory).
+struct vec {
+  const char *ptr;
+  size_t len;
+};
+
+struct file {
+  int is_directory;
+  time_t modification_time;
+  int64_t size;
+  // set to 1 if the content is gzipped
+  // in which case we need a content-encoding: gzip header
+  int gzipped;
+};
+#define STRUCT_FILE_INITIALIZER { 0, 0, 0, 0 }
+
+// Describes listening socket, or socket which was accept()-ed by the master
+// thread and queued for future handling by the worker thread.
+struct socket {
+  SOCKET sock;          // Listening socket
+  union usa lsa;        // Local socket address
+  union usa rsa;        // Remote socket address
+  unsigned is_ssl:1;    // Is port SSL-ed
+  unsigned ssl_redir:1; // Is port supposed to redirect everything to SSL port
+};
+
+// NOTE(lsm): this enum shoulds be in sync with the config_options.
+enum {
+  CGI_EXTENSIONS, CGI_ENVIRONMENT, PUT_DELETE_PASSWORDS_FILE, CGI_INTERPRETER,
+  PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS, THROTTLE,
+  ACCESS_LOG_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
+  GLOBAL_PASSWORDS_FILE, INDEX_FILES, ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST,
+  EXTRA_MIME_TYPES, LISTENING_PORTS, DOCUMENT_ROOT, SSL_CERTIFICATE,
+  NUM_THREADS, RUN_AS_USER, REWRITE, HIDE_FILES, REQUEST_TIMEOUT,
+  NUM_OPTIONS
+};
+
+struct mg_context {
+  volatile int stop_flag;         // Should we stop event loop
+  SSL_CTX *ssl_ctx;               // SSL context
+  char *config[NUM_OPTIONS];      // Mongoose configuration parameters
+  mg_event_handler_t event_handler;  // User-defined callback function
+  void *user_data;                // User-defined data
+
+  struct socket *listening_sockets;
+  int num_listening_sockets;
+
+  volatile int num_threads;  // Number of threads
+  pthread_mutex_t mutex;     // Protects (max|num)_threads
+  pthread_cond_t  cond;      // Condvar for tracking workers terminations
+
+  struct socket queue[MGSQLEN];   // Accepted sockets
+  volatile int sq_head;      // Head of the socket queue
+  volatile int sq_tail;      // Tail of the socket queue
+  pthread_cond_t sq_full;    // Signaled when socket is produced
+  pthread_cond_t sq_empty;   // Signaled when socket is consumed
+};
+
+struct mg_connection {
+  struct mg_request_info request_info;
+  struct mg_event event;
+  struct mg_context *ctx;
+  SSL *ssl;                   // SSL descriptor
+  SSL_CTX *client_ssl_ctx;    // SSL context for client connections
+  struct socket client;       // Connected client
+  time_t birth_time;          // Time when request was received
+  int64_t num_bytes_sent;     // Total bytes sent to client
+  int64_t content_len;        // Content-Length header value
+  int64_t num_bytes_read;     // Bytes read from a remote socket
+  char *buf;                  // Buffer for received data
+  char *path_info;            // PATH_INFO part of the URL
+  int must_close;             // 1 if connection must be closed
+  int buf_size;               // Buffer size
+  int request_len;            // Size of the request + headers in a buffer
+  int data_len;               // Total size of data in a buffer
+  int status_code;            // HTTP reply status code, e.g. 200
+  int throttle;               // Throttling, bytes/sec. <= 0 means no throttle
+  time_t last_throttle_time;  // Last time throttled data was sent
+  int64_t last_throttle_bytes;// Bytes sent this second
+};
+
+// Directory entry
+struct de {
+  struct mg_connection *conn;
+  char *file_name;
+  struct file file;
+};
 
