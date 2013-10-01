@@ -458,3 +458,5 @@ struct de {
   struct file file;
 };
 
+static FILE *mg_fopen(const char *path, const char *mode);
+static int mg_stat(const char *path, struct file *filep);
