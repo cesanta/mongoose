@@ -3643,9 +3643,16 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
     snprintf(ebuf, ebuf_len, "Bad request: [%.*s]", conn->data_len, conn->buf);
   } else {
     // Request is valid. Set content_len attribute by parsing Content-Length
-    // If Content-Length is absent, instruct mg_read() to read from the socket
-    // until socket is closed.
+    // If Content-Length is absent, set content_len to 0 if request is GET,
+    // and set it to INT64_MAX otherwise. Setting to INT64_MAX instructs
+    // mg_read() to read from the socket until socket is closed.
+    // The reason for treating GET and POST/PUT differently is that libraries
+    // like jquery do not set Content-Length in GET requests, and we don't
+    // want mg_read() to hang waiting until socket is timed out.
     conn->content_len = INT64_MAX;
+    if (!mg_strcasecmp(conn->request_info.request_method, "GET")) {
+      conn->content_len = 0;
+    }
     if ((cl = get_header(&conn->request_info, "Content-Length")) != NULL) {
       conn->content_len = strtoll(cl, NULL, 10);
     }
