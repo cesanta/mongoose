@@ -1,5 +1,6 @@
-#include "lua_5.2.1.h"
+#include "internal.h"
 
+#ifdef USE_LUA
 #ifdef _WIN32
 static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
                   int offset) {
@@ -20,7 +21,6 @@ static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
 static const char *LUASOCKET = "luasocket";
 
 // Forward declarations
-static void handle_request(struct mg_connection *);
 static int handle_lsp_request(struct mg_connection *, const char *,
                               struct file *, struct lua_State *);
 
@@ -387,3 +387,4 @@ static int handle_lsp_request(struct mg_connection *conn, const char *path,
 
   return error;
 }
+#endif // USE_LUA

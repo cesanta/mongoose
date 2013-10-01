@@ -222,7 +222,7 @@ static int event_handler(struct mg_event *event) {
 
     if (!strcmp(ri->uri, "/upload")) {
       test_upload(event->conn, "lua_5.2.1.h", "./f1.txt");
-      test_upload(event->conn, "mod_lua.c", "./f2.txt");
+      test_upload(event->conn, "lsqlite3.c", "./f2.txt");
       ASSERT(mg_upload(event->conn, ".", NULL, 0) == NULL);
 
       mg_printf(event->conn, "HTTP/1.0 200 OK\r\n"
@@ -330,7 +330,7 @@ static void test_mg_upload(void) {
 
   // Upload two files
   ASSERT((file_data = read_file("lua_5.2.1.h", &file_len)) != NULL);
-  ASSERT((file2_data = read_file("mod_lua.c", &file2_len)) != NULL);
+  ASSERT((file2_data = read_file("lsqlite3.c", &file2_len)) != NULL);
   post_data = NULL;
   post_data_len = alloc_printf(&post_data, 0,
                                // First file

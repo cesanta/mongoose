@@ -460,3 +460,9 @@ struct de {
 
 static FILE *mg_fopen(const char *path, const char *mode);
 static int mg_stat(const char *path, struct file *filep);
+
+#ifdef USE_LUA
+#include "lua_5.2.1.h"
+static int handle_lsp_request(struct mg_connection *, const char *,
+                              struct file *, struct lua_State *);
+#endif

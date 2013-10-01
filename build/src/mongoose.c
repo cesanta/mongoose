@@ -2842,10 +2842,6 @@ static uint32_t get_remote_ip(const struct mg_connection *conn) {
   return ntohl(* (uint32_t *) &conn->client.rsa.sin.sin_addr);
 }
 
-#ifdef USE_LUA
-#include "build/mod_lua.c"
-#endif // USE_LUA
-
 FILE *mg_upload(struct mg_connection *conn, const char *destination_dir,
                 char *path, int path_len) {
   const char *content_type_header, *boundary_start;
