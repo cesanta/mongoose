@@ -3649,6 +3649,7 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
     // The reason for treating GET and POST/PUT differently is that libraries
     // like jquery do not set Content-Length in GET requests, and we don't
     // want mg_read() to hang waiting until socket is timed out.
+    // See https://github.com/cesanta/mongoose/pull/121 for more.
     conn->content_len = INT64_MAX;
     if (!mg_strcasecmp(conn->request_info.request_method, "GET")) {
       conn->content_len = 0;
