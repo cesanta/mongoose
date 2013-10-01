@@ -2045,10 +2045,8 @@ int mg_read(struct mg_connection *conn, void *buf, int len) {
   int n, buffered_len, nread = 0;
   int64_t left;
 
-  // If Content-Length is not set, read until socket is closed
   if (conn->content_len <= 0) {
-    conn->content_len = INT64_MAX;
-    conn->must_close = 1;
+    return 0;
   }
 
   // conn->buf           body
@@ -3101,7 +3099,7 @@ static int forward_body_data(struct mg_connection *conn, FILE *fp,
   expect = mg_get_header(conn, "Expect");
   assert(fp != NULL);
 
-  if (conn->content_len == -1) {
+  if (conn->content_len == INT64_MAX) {
     send_http_error(conn, 411, "Length Required", "%s", "");
   } else if (expect != NULL && mg_strcasecmp(expect, "100-continue")) {
     send_http_error(conn, 417, "Expectation Failed", "%s", "");
@@ -4955,14 +4953,12 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
                                 &conn->request_info) <= 0) {
     snprintf(ebuf, ebuf_len, "Bad request: [%.*s]", conn->data_len, conn->buf);
   } else {
-    // Request is valid
+    // Request is valid. Set content_len attribute by parsing Content-Length
+    // By default, in the absence of Content-Length, instruct mg_read()
+    // to read from the socket until the socket is closed.
+    conn->content_len = INT64_MAX;
     if ((cl = get_header(&conn->request_info, "Content-Length")) != NULL) {
       conn->content_len = strtoll(cl, NULL, 10);
-    } else if (!mg_strcasecmp(conn->request_info.request_method, "POST") ||
-               !mg_strcasecmp(conn->request_info.request_method, "PUT")) {
-      conn->content_len = -1;
-    } else {
-      conn->content_len = 0;
     }
     conn->birth_time = time(NULL);
   }

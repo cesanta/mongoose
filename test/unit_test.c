@@ -220,6 +220,15 @@ static int event_handler(struct mg_event *event) {
       return 1;
     }
 
+    if (!strcmp(ri->uri, "/zerolen")) {
+      char buf[100];
+      mg_printf(event->conn, "%s",
+                "HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nok");
+      printf("[%d]\n", mg_read(event->conn, buf, sizeof(buf)));
+      ASSERT(mg_read(event->conn, buf, sizeof(buf)) == 0);
+      return 1;
+    }
+
     if (!strcmp(ri->uri, "/upload")) {
       test_upload(event->conn, "lua_5.2.1.h", "./f1.txt");
       test_upload(event->conn, "lsqlite3.c", "./f2.txt");
@@ -281,6 +290,16 @@ static void test_mg_download(void) {
                              "GET / HTTP/1.0\r\n\r\n")) != NULL);
   mg_close_connection(conn);
 
+  // POST with "Content-Length: 0", must not block
+  ASSERT((conn = mg_download("localhost", atoi(HTTPS_PORT), 1,
+                             ebuf, sizeof(ebuf), "%s",
+                             "POST /zerolen HTTP/1.1\r\n"
+                             "Content-Lengh: 0\r\n\r\n    ")) != NULL);
+  ASSERT((p1 = read_conn(conn, &len1)) != NULL);
+  ASSERT(len1 = 2);
+  ASSERT(memcmp(p1, "ok", 2) == 0);
+  mg_close_connection(conn);
+
   // Fetch main.c, should succeed
   ASSERT((conn = mg_download("localhost", port, 1, ebuf, sizeof(ebuf), "%s",
                              "GET /main.c HTTP/1.0\r\n\r\n")) != NULL);
@@ -333,27 +352,16 @@ static void test_mg_upload(void) {
   ASSERT((file2_data = read_file("lsqlite3.c", &file2_len)) != NULL);
   post_data = NULL;
   post_data_len = alloc_printf(&post_data, 0,
-                               // First file
-                               "--%s\r\n"
-                               "Content-Disposition: form-data; "
-                               "name=\"file\"; "
-                               "filename=\"%s\"\r\n\r\n"
-                               "%.*s\r\n"
-
-                               // Second file
-                               "--%s\r\n"
-                               "Content-Disposition: form-data; "
-                               "name=\"file\"; "
-                               "filename=\"%s\"\r\n\r\n"
-                               "%.*s\r\n"
-
-                               // Final boundary
-                               "--%s--\r\n",
-                               boundary, "f1.txt",
-                               file_len, file_data,
-                               boundary, "f2.txt",
-                               file2_len, file2_data,
-                               boundary);
+      // First file
+      "--%s\r\n" "Content-Disposition: form-data; " "name=\"file\"; "
+      "filename=\"%s\"\r\n\r\n" "%.*s\r\n"
+      // Second file
+      "--%s\r\n" "Content-Disposition: form-data; " "name=\"file\"; "
+      "filename=\"%s\"\r\n\r\n" "%.*s\r\n"
+      // Final boundary
+      "--%s--\r\n",
+      boundary, "f1.txt", file_len, file_data, boundary, "f2.txt",
+      file2_len, file2_data, boundary);
   ASSERT(post_data_len > 0);
   ASSERT((conn = mg_download("localhost", atoi(HTTPS_PORT), 1,
                              ebuf, sizeof(ebuf),
