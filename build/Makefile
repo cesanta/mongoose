@@ -27,7 +27,8 @@ VERSION = $(shell perl -lne \
 
 # The order in which files are listed is important
 SOURCES = src/internal.h src/string.c src/parse_date.c src/options.c \
-          src/crypto.c src/auth.c src/mongoose.c src/lua.c
+          src/crypto.c src/auth.c src/win32.c src/unix.c src/mongoose.c \
+          src/lua.c
 
 TINY_SOURCES = ../mongoose.c main.c
 LUA_SOURCES = $(TINY_SOURCES) sqlite3.c lsqlite3.c lua_5.2.1.c

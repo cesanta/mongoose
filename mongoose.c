@@ -323,7 +323,7 @@ struct ssl_func {
   void  (*ptr)(void); // Function pointer
 };
 
-static struct ssl_func ssl_sw[];
+static struct ssl_func ssl_sw[30];
 
 #define SSL_free (* (void (*)(SSL *)) ssl_sw[0].ptr)
 #define SSL_accept (* (int (*)(SSL *)) ssl_sw[1].ptr)
@@ -460,6 +460,11 @@ struct de {
 
 static FILE *mg_fopen(const char *path, const char *mode);
 static int mg_stat(const char *path, struct file *filep);
+static void send_http_error(struct mg_connection *, int, const char *,
+                            PRINTF_FORMAT_STRING(const char *fmt), ...)
+                            PRINTF_ARGS(4, 5);
+static void cry(struct mg_connection *conn,
+                PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
 
 #ifdef USE_LUA
 #include "lua_5.2.1.h"
@@ -1311,158 +1316,7 @@ int mg_modify_passwords_file(const char *fname, const char *domain,
   return 1;
 }
 
-// Return number of bytes left to read for this connection
-static int64_t left_to_read(const struct mg_connection *conn) {
-  return conn->content_len + conn->request_len - conn->num_bytes_read;
-}
-
-static int call_user(int type, struct mg_connection *conn, void *p) {
-  if (conn != NULL && conn->ctx != NULL) {
-    conn->event.user_data = conn->ctx->user_data;
-    conn->event.type = type;
-    conn->event.event_param = p;
-    conn->event.request_info = &conn->request_info;
-    conn->event.conn = conn;
-  }
-  return conn == NULL || conn->ctx == NULL || conn->ctx->event_handler == NULL ?
-    0 : conn->ctx->event_handler(&conn->event);
-}
-
-static FILE *mg_fopen(const char *path, const char *mode) {
-#ifdef _WIN32
-  wchar_t wbuf[PATH_MAX], wmode[20];
-  to_unicode(path, wbuf, ARRAY_SIZE(wbuf));
-  MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, ARRAY_SIZE(wmode));
-  return _wfopen(wbuf, wmode);
-#else
-  return fopen(path, mode);
-#endif
-}
-
-static void sockaddr_to_string(char *buf, size_t len,
-                                     const union usa *usa) {
-  buf[0] = '\0';
-#if defined(USE_IPV6)
-  inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
-            (void *) &usa->sin.sin_addr :
-            (void *) &usa->sin6.sin6_addr, buf, len);
-#elif defined(_WIN32)
-  // Only Windoze Vista (and newer) have inet_ntop()
-  strncpy(buf, inet_ntoa(usa->sin.sin_addr), len);
-#else
-  inet_ntop(usa->sa.sa_family, (void *) &usa->sin.sin_addr, buf, len);
-#endif
-}
-
-static void cry(struct mg_connection *conn,
-                PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
-
-// Print error message to the opened error log stream.
-static void cry(struct mg_connection *conn, const char *fmt, ...) {
-  char buf[MG_BUF_LEN], src_addr[IP_ADDR_STR_LEN];
-  va_list ap;
-  FILE *fp;
-  time_t timestamp;
-
-  va_start(ap, fmt);
-  (void) vsnprintf(buf, sizeof(buf), fmt, ap);
-  va_end(ap);
-
-  // Do not lock when getting the callback value, here and below.
-  // I suppose this is fine, since function cannot disappear in the
-  // same way string option can.
-  if (call_user(MG_EVENT_LOG, conn, buf) == 0) {
-    fp = conn->ctx == NULL || conn->ctx->config[ERROR_LOG_FILE] == NULL ? NULL :
-      fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
-
-    if (fp != NULL) {
-      flockfile(fp);
-      timestamp = time(NULL);
-
-      sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
-      fprintf(fp, "[%010lu] [error] [client %s] ", (unsigned long) timestamp,
-              src_addr);
-
-      if (conn->request_info.request_method != NULL) {
-        fprintf(fp, "%s %s: ", conn->request_info.request_method,
-                conn->request_info.uri);
-      }
-
-      fprintf(fp, "%s", buf);
-      fputc('\n', fp);
-      funlockfile(fp);
-      fclose(fp);
-    }
-  }
-}
-
-// Return fake connection structure. Used for logging, if connection
-// is not applicable at the moment of logging.
-static struct mg_connection *fc(struct mg_context *ctx) {
-  static struct mg_connection fake_connection;
-  fake_connection.ctx = ctx;
-  // See https://github.com/cesanta/mongoose/issues/236
-  fake_connection.event.user_data = ctx->user_data;
-  return &fake_connection;
-}
-
-const char *mg_version(void) {
-  return MONGOOSE_VERSION;
-}
-
-// HTTP 1.1 assumes keep alive if "Connection:" header is not set
-// This function must tolerate situations when connection info is not
-// set up, for example if request parsing failed.
-static int should_keep_alive(const struct mg_connection *conn) {
-  const char *http_version = conn->request_info.http_version;
-  const char *header = mg_get_header(conn, "Connection");
-  if (conn->must_close ||
-      conn->status_code == 401 ||
-      mg_strcasecmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes") != 0 ||
-      (header != NULL && mg_strcasecmp(header, "keep-alive") != 0) ||
-      (header == NULL && http_version && strcmp(http_version, "1.1"))) {
-    return 0;
-  }
-  return 1;
-}
-
-static const char *suggest_connection_header(const struct mg_connection *conn) {
-  return should_keep_alive(conn) ? "keep-alive" : "close";
-}
-
-static void send_http_error(struct mg_connection *, int, const char *,
-                            PRINTF_FORMAT_STRING(const char *fmt), ...)
-  PRINTF_ARGS(4, 5);
-
-
-static void send_http_error(struct mg_connection *conn, int status,
-                            const char *reason, const char *fmt, ...) {
-  char buf[MG_BUF_LEN];
-  va_list ap;
-  int len = 0;
-
-  conn->status_code = status;
-  buf[0] = '\0';
-
-  // Errors 1xx, 204 and 304 MUST NOT send a body
-  if (status > 199 && status != 204 && status != 304) {
-    len = mg_snprintf(buf, sizeof(buf), "Error %d: %s", status, reason);
-    buf[len++] = '\n';
-
-    va_start(ap, fmt);
-    len += mg_vsnprintf(buf + len, sizeof(buf) - len, fmt, ap);
-    va_end(ap);
-  }
-  DEBUG_TRACE(("[%s]", buf));
-
-  mg_printf(conn, "HTTP/1.1 %d %s\r\n"
-            "Content-Length: %d\r\n"
-            "Connection: %s\r\n\r\n", status, reason, len,
-            suggest_connection_header(conn));
-  conn->num_bytes_sent += mg_printf(conn, "%s", buf);
-}
-
-#if defined(_WIN32) && !defined(__SYMBIAN32__)
+#if defined(_WIN32)
 static pthread_t pthread_self(void) {
   return GetCurrentThreadId();
 }
@@ -1860,8 +1714,9 @@ static int set_non_blocking_mode(SOCKET sock) {
   unsigned long on = 1;
   return ioctlsocket(sock, FIONBIO, &on);
 }
+#endif
 
-#else
+#if !defined(_WIN32)
 static int mg_stat(const char *path, struct file *filep) {
   struct stat st;
 
@@ -1963,6 +1818,150 @@ static int set_non_blocking_mode(SOCKET sock) {
   return 0;
 }
 #endif // _WIN32
+
+
+// Return number of bytes left to read for this connection
+static int64_t left_to_read(const struct mg_connection *conn) {
+  return conn->content_len + conn->request_len - conn->num_bytes_read;
+}
+
+static int call_user(int type, struct mg_connection *conn, void *p) {
+  if (conn != NULL && conn->ctx != NULL) {
+    conn->event.user_data = conn->ctx->user_data;
+    conn->event.type = type;
+    conn->event.event_param = p;
+    conn->event.request_info = &conn->request_info;
+    conn->event.conn = conn;
+  }
+  return conn == NULL || conn->ctx == NULL || conn->ctx->event_handler == NULL ?
+    0 : conn->ctx->event_handler(&conn->event);
+}
+
+static FILE *mg_fopen(const char *path, const char *mode) {
+#ifdef _WIN32
+  wchar_t wbuf[PATH_MAX], wmode[20];
+  to_unicode(path, wbuf, ARRAY_SIZE(wbuf));
+  MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, ARRAY_SIZE(wmode));
+  return _wfopen(wbuf, wmode);
+#else
+  return fopen(path, mode);
+#endif
+}
+
+static void sockaddr_to_string(char *buf, size_t len,
+                                     const union usa *usa) {
+  buf[0] = '\0';
+#if defined(USE_IPV6)
+  inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
+            (void *) &usa->sin.sin_addr :
+            (void *) &usa->sin6.sin6_addr, buf, len);
+#elif defined(_WIN32)
+  // Only Windoze Vista (and newer) have inet_ntop()
+  strncpy(buf, inet_ntoa(usa->sin.sin_addr), len);
+#else
+  inet_ntop(usa->sa.sa_family, (void *) &usa->sin.sin_addr, buf, len);
+#endif
+}
+
+// Print error message to the opened error log stream.
+static void cry(struct mg_connection *conn, const char *fmt, ...) {
+  char buf[MG_BUF_LEN], src_addr[IP_ADDR_STR_LEN];
+  va_list ap;
+  FILE *fp;
+  time_t timestamp;
+
+  va_start(ap, fmt);
+  (void) vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+
+  // Do not lock when getting the callback value, here and below.
+  // I suppose this is fine, since function cannot disappear in the
+  // same way string option can.
+  if (call_user(MG_EVENT_LOG, conn, buf) == 0) {
+    fp = conn->ctx == NULL || conn->ctx->config[ERROR_LOG_FILE] == NULL ? NULL :
+      fopen(conn->ctx->config[ERROR_LOG_FILE], "a+");
+
+    if (fp != NULL) {
+      flockfile(fp);
+      timestamp = time(NULL);
+
+      sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
+      fprintf(fp, "[%010lu] [error] [client %s] ", (unsigned long) timestamp,
+              src_addr);
+
+      if (conn->request_info.request_method != NULL) {
+        fprintf(fp, "%s %s: ", conn->request_info.request_method,
+                conn->request_info.uri);
+      }
+
+      fprintf(fp, "%s", buf);
+      fputc('\n', fp);
+      funlockfile(fp);
+      fclose(fp);
+    }
+  }
+}
+
+// Return fake connection structure. Used for logging, if connection
+// is not applicable at the moment of logging.
+static struct mg_connection *fc(struct mg_context *ctx) {
+  static struct mg_connection fake_connection;
+  fake_connection.ctx = ctx;
+  // See https://github.com/cesanta/mongoose/issues/236
+  fake_connection.event.user_data = ctx->user_data;
+  return &fake_connection;
+}
+
+const char *mg_version(void) {
+  return MONGOOSE_VERSION;
+}
+
+// HTTP 1.1 assumes keep alive if "Connection:" header is not set
+// This function must tolerate situations when connection info is not
+// set up, for example if request parsing failed.
+static int should_keep_alive(const struct mg_connection *conn) {
+  const char *http_version = conn->request_info.http_version;
+  const char *header = mg_get_header(conn, "Connection");
+  if (conn->must_close ||
+      conn->status_code == 401 ||
+      mg_strcasecmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes") != 0 ||
+      (header != NULL && mg_strcasecmp(header, "keep-alive") != 0) ||
+      (header == NULL && http_version && strcmp(http_version, "1.1"))) {
+    return 0;
+  }
+  return 1;
+}
+
+static const char *suggest_connection_header(const struct mg_connection *conn) {
+  return should_keep_alive(conn) ? "keep-alive" : "close";
+}
+
+static void send_http_error(struct mg_connection *conn, int status,
+                            const char *reason, const char *fmt, ...) {
+  char buf[MG_BUF_LEN];
+  va_list ap;
+  int len = 0;
+
+  conn->status_code = status;
+  buf[0] = '\0';
+
+  // Errors 1xx, 204 and 304 MUST NOT send a body
+  if (status > 199 && status != 204 && status != 304) {
+    len = mg_snprintf(buf, sizeof(buf), "Error %d: %s", status, reason);
+    buf[len++] = '\n';
+
+    va_start(ap, fmt);
+    len += mg_vsnprintf(buf + len, sizeof(buf) - len, fmt, ap);
+    va_end(ap);
+  }
+  DEBUG_TRACE(("[%s]", buf));
+
+  mg_printf(conn, "HTTP/1.1 %d %s\r\n"
+            "Content-Length: %d\r\n"
+            "Connection: %s\r\n\r\n", status, reason, len,
+            suggest_connection_header(conn));
+  conn->num_bytes_sent += mg_printf(conn, "%s", buf);
+}
 
 // Write data to the IO channel - opened file descriptor, socket or SSL
 // descriptor. Return number of bytes written.

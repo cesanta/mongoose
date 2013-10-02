@@ -323,7 +323,7 @@ struct ssl_func {
   void  (*ptr)(void); // Function pointer
 };
 
-static struct ssl_func ssl_sw[];
+static struct ssl_func ssl_sw[30];
 
 #define SSL_free (* (void (*)(SSL *)) ssl_sw[0].ptr)
 #define SSL_accept (* (int (*)(SSL *)) ssl_sw[1].ptr)
@@ -460,6 +460,11 @@ struct de {
 
 static FILE *mg_fopen(const char *path, const char *mode);
 static int mg_stat(const char *path, struct file *filep);
+static void send_http_error(struct mg_connection *, int, const char *,
+                            PRINTF_FORMAT_STRING(const char *fmt), ...)
+                            PRINTF_ARGS(4, 5);
+static void cry(struct mg_connection *conn,
+                PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
 
 #ifdef USE_LUA
 #include "lua_5.2.1.h"
