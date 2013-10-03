@@ -62,12 +62,13 @@ A.Slåttå, L.Farrell, J.D.P.Ballestero, V.Albaev, B.Harker, T.Scheffel, H.Klein
 R.Merit, T.Bennett, H.Solis, A.Zincenko, M.S., S.Krul, K.Cooke, S.McCallum,
 F.Morenius, and 10 others.
 
-# License
+# Licensing
 
-Mongoose is dual-licensed. It is available under the terms of
-[GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
-license for free, or under the terms of standard commercial license provided
-by [Cesanta Software](http://cesanta.com).
+Mongoose is free, and licensed under the terms of
+[GNU GPLv.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
+license. For businesses there is an option to buy non-restrictive,
+royalty-free license and professional support from
+[Cesanta Software](http://cesanta.com/products.html).
 
 [Super Light Regular Expression library](https://github.com/cesanta/slre) is
 another project by Cesanta Software, developed with the same philosophy
