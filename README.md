@@ -64,7 +64,7 @@ F.Morenius, and 10 others.
 
 # Licensing
 
-Mongoose is free, and licensed under the terms of
+Mongoose is licensed under the terms of
 [GNU GPLv.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 license. For businesses there is an option to buy non-restrictive,
 royalty-free license and professional support from
