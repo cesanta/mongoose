@@ -26,9 +26,10 @@ VERSION = $(shell perl -lne \
             'print $$1 if /define\s+MONGOOSE_VERSION\s+"(\S+)"/' ../mongoose.c)
 
 # The order in which files are listed is important
-SOURCES = src/internal.h src/string.c src/parse_date.c src/options.c \
-          src/crypto.c src/auth.c src/win32.c src/unix.c src/mongoose.c \
-          src/lua.c
+SOURCES = src/internal.h src/util.c src/string.c src/parse_date.c \
+          src/options.c src/crypto.c src/auth.c src/win32.c src/unix.c \
+          src/mg_printf.c src/ssl.c src/http_client.c \
+          src/mongoose.c src/lua.c
 
 TINY_SOURCES = ../mongoose.c main.c
 LUA_SOURCES = $(TINY_SOURCES) sqlite3.c lsqlite3.c lua_5.2.1.c

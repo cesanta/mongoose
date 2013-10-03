@@ -465,12 +465,23 @@ static void send_http_error(struct mg_connection *, int, const char *,
                             PRINTF_ARGS(4, 5);
 static void cry(struct mg_connection *conn,
                 PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
+static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len);
 
 #ifdef USE_LUA
 #include "lua_5.2.1.h"
 static int handle_lsp_request(struct mg_connection *, const char *,
                               struct file *, struct lua_State *);
 #endif
+
+// Return fake connection structure. Used for logging, if connection
+// is not applicable at the moment of logging.
+static struct mg_connection *fc(struct mg_context *ctx) {
+  static struct mg_connection fake_connection;
+  fake_connection.ctx = ctx;
+  // See https://github.com/cesanta/mongoose/issues/236
+  fake_connection.event.user_data = ctx->user_data;
+  return &fake_connection;
+}
 
 static void mg_strlcpy(register char *dst, register const char *src, size_t n) {
   for (; *src != '\0' && n > 1; n--) {
@@ -1820,6 +1831,342 @@ static int set_non_blocking_mode(SOCKET sock) {
 #endif // _WIN32
 
 
+// Print message to buffer. If buffer is large enough to hold the message,
+// return buffer. If buffer is to small, allocate large enough buffer on heap,
+// and return allocated buffer.
+static int alloc_vprintf(char **buf, size_t size, const char *fmt, va_list ap) {
+  va_list ap_copy;
+  int len;
+
+  // Windows is not standard-compliant, and vsnprintf() returns -1 if
+  // buffer is too small. Also, older versions of msvcrt.dll do not have
+  // _vscprintf().  However, if size is 0, vsnprintf() behaves correctly.
+  // Therefore, we make two passes: on first pass, get required message length.
+  // On second pass, actually print the message.
+  va_copy(ap_copy, ap);
+  len = vsnprintf(NULL, 0, fmt, ap_copy);
+
+  if (len > (int) size &&
+      (size = len + 1) > 0 &&
+      (*buf = (char *) malloc(size)) == NULL) {
+    len = -1;  // Allocation failed, mark failure
+  } else {
+    va_copy(ap_copy, ap);
+    vsnprintf(*buf, size, fmt, ap_copy);
+  }
+
+  return len;
+}
+
+int mg_vprintf(struct mg_connection *conn, const char *fmt, va_list ap) {
+  char mem[MG_BUF_LEN], *buf = mem;
+  int len;
+
+  if ((len = alloc_vprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
+    len = mg_write(conn, buf, (size_t) len);
+  }
+  if (buf != mem && buf != NULL) {
+    free(buf);
+  }
+
+  return len;
+}
+
+int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  return mg_vprintf(conn, fmt, ap);
+}
+
+static int mg_chunked_printf(struct mg_connection *conn, const char *fmt, ...) {
+  char mem[MG_BUF_LEN], *buf = mem;
+  int len;
+
+  va_list ap;
+  va_start(ap, fmt);
+  if ((len = alloc_vprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
+    len = mg_printf(conn, "%X\r\n%s\r\n", len, buf);
+  }
+
+  if (buf != mem && buf != NULL) {
+    free(buf);
+  }
+
+  return len;
+}
+
+
+
+#if !defined(NO_SSL)
+// set_ssl_option() function updates this array.
+// It loads SSL library dynamically and changes NULLs to the actual addresses
+// of respective functions. The macros above (like SSL_connect()) are really
+// just calling these functions indirectly via the pointer.
+static struct ssl_func ssl_sw[] = {
+  {"SSL_free",   NULL},
+  {"SSL_accept",   NULL},
+  {"SSL_connect",   NULL},
+  {"SSL_read",   NULL},
+  {"SSL_write",   NULL},
+  {"SSL_get_error",  NULL},
+  {"SSL_set_fd",   NULL},
+  {"SSL_new",   NULL},
+  {"SSL_CTX_new",   NULL},
+  {"SSLv23_server_method", NULL},
+  {"SSL_library_init",  NULL},
+  {"SSL_CTX_use_PrivateKey_file", NULL},
+  {"SSL_CTX_use_certificate_file",NULL},
+  {"SSL_CTX_set_default_passwd_cb",NULL},
+  {"SSL_CTX_free",  NULL},
+  {"SSL_load_error_strings", NULL},
+  {"SSL_CTX_use_certificate_chain_file", NULL},
+  {"SSLv23_client_method", NULL},
+  {"SSL_pending", NULL},
+  {"SSL_CTX_set_verify", NULL},
+  {"SSL_shutdown",   NULL},
+  {NULL,    NULL}
+};
+
+// Similar array as ssl_sw. These functions could be located in different lib.
+static struct ssl_func crypto_sw[] = {
+  {"CRYPTO_num_locks",  NULL},
+  {"CRYPTO_set_locking_callback", NULL},
+  {"CRYPTO_set_id_callback", NULL},
+  {"ERR_get_error",  NULL},
+  {"ERR_error_string", NULL},
+  {NULL,    NULL}
+};
+
+static pthread_mutex_t *ssl_mutexes;
+
+static int sslize(struct mg_connection *conn, SSL_CTX *s, int (*func)(SSL *)) {
+  return (conn->ssl = SSL_new(s)) != NULL &&
+    SSL_set_fd(conn->ssl, conn->client.sock) == 1 &&
+    func(conn->ssl) == 1;
+}
+
+// Return OpenSSL error message
+static const char *ssl_error(void) {
+  unsigned long err;
+  err = ERR_get_error();
+  return err == 0 ? "" : ERR_error_string(err, NULL);
+}
+
+static void ssl_locking_callback(int mode, int mutex_num, const char *file,
+                                 int line) {
+  (void) line;
+  (void) file;
+
+  if (mode & 1) {  // 1 is CRYPTO_LOCK
+    (void) pthread_mutex_lock(&ssl_mutexes[mutex_num]);
+  } else {
+    (void) pthread_mutex_unlock(&ssl_mutexes[mutex_num]);
+  }
+}
+
+static unsigned long ssl_id_callback(void) {
+  return (unsigned long) pthread_self();
+}
+
+#if !defined(NO_SSL_DL)
+static int load_dll(struct mg_context *ctx, const char *dll_name,
+                    struct ssl_func *sw) {
+  union {void *p; void (*fp)(void);} u;
+  void  *dll_handle;
+  struct ssl_func *fp;
+
+  if ((dll_handle = dlopen(dll_name, RTLD_LAZY)) == NULL) {
+    cry(fc(ctx), "%s: cannot load %s", __func__, dll_name);
+    return 0;
+  }
+
+  for (fp = sw; fp->name != NULL; fp++) {
+#ifdef _WIN32
+    // GetProcAddress() returns pointer to function
+    u.fp = (void (*)(void)) dlsym(dll_handle, fp->name);
+#else
+    // dlsym() on UNIX returns void *. ISO C forbids casts of data pointers to
+    // function pointers. We need to use a union to make a cast.
+    u.p = dlsym(dll_handle, fp->name);
+#endif // _WIN32
+    if (u.fp == NULL) {
+      cry(fc(ctx), "%s: %s: cannot find %s", __func__, dll_name, fp->name);
+      return 0;
+    } else {
+      fp->ptr = u.fp;
+    }
+  }
+
+  return 1;
+}
+#endif // NO_SSL_DL
+
+// Dynamically load SSL library. Set up ctx->ssl_ctx pointer.
+static int set_ssl_option(struct mg_context *ctx) {
+  int i, size;
+  const char *pem;
+
+  // If PEM file is not specified and the init_ssl callback
+  // is not specified, skip SSL initialization.
+  if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL) {
+    //  MG_INIT_SSL
+    //  ctx->callbacks.init_ssl == NULL) {
+    return 1;
+  }
+
+#if !defined(NO_SSL_DL)
+  if (!load_dll(ctx, SSL_LIB, ssl_sw) ||
+      !load_dll(ctx, CRYPTO_LIB, crypto_sw)) {
+    return 0;
+  }
+#endif // NO_SSL_DL
+
+  // Initialize SSL library
+  SSL_library_init();
+  SSL_load_error_strings();
+
+  if ((ctx->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
+    cry(fc(ctx), "SSL_CTX_new (server) error: %s", ssl_error());
+    return 0;
+  }
+
+  // If user callback returned non-NULL, that means that user callback has
+  // set up certificate itself. In this case, skip sertificate setting.
+  // MG_INIT_SSL
+  if (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, 1) == 0 ||
+      SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, 1) == 0) {
+    cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
+    return 0;
+  }
+
+  if (pem != NULL) {
+    (void) SSL_CTX_use_certificate_chain_file(ctx->ssl_ctx, pem);
+  }
+
+  // Initialize locking callbacks, needed for thread safety.
+  // http://www.openssl.org/support/faq.html#PROG1
+  size = sizeof(pthread_mutex_t) * CRYPTO_num_locks();
+  if ((ssl_mutexes = (pthread_mutex_t *) malloc((size_t)size)) == NULL) {
+    cry(fc(ctx), "%s: cannot allocate mutexes: %s", __func__, ssl_error());
+    return 0;
+  }
+
+  for (i = 0; i < CRYPTO_num_locks(); i++) {
+    pthread_mutex_init(&ssl_mutexes[i], NULL);
+  }
+
+  CRYPTO_set_locking_callback(&ssl_locking_callback);
+  CRYPTO_set_id_callback(&ssl_id_callback);
+
+  return 1;
+}
+
+static void uninitialize_ssl(struct mg_context *ctx) {
+  int i;
+  if (ctx->ssl_ctx != NULL) {
+    CRYPTO_set_locking_callback(NULL);
+    for (i = 0; i < CRYPTO_num_locks(); i++) {
+      pthread_mutex_destroy(&ssl_mutexes[i]);
+    }
+    CRYPTO_set_locking_callback(NULL);
+    CRYPTO_set_id_callback(NULL);
+  }
+}
+#endif // !NO_SSL
+
+
+static SOCKET conn2(const char *host, int port, int use_ssl,
+                    char *ebuf, size_t ebuf_len) {
+  struct sockaddr_in sin;
+  struct hostent *he;
+  SOCKET sock = INVALID_SOCKET;
+
+  if (host == NULL) {
+    snprintf(ebuf, ebuf_len, "%s", "NULL host");
+  } else if (use_ssl && SSLv23_client_method == NULL) {
+    snprintf(ebuf, ebuf_len, "%s", "SSL is not initialized");
+    // TODO(lsm): use something threadsafe instead of gethostbyname()
+  } else if ((he = gethostbyname(host)) == NULL) {
+    snprintf(ebuf, ebuf_len, "gethostbyname(%s): %s", host, strerror(ERRNO));
+  } else if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
+    snprintf(ebuf, ebuf_len, "socket(): %s", strerror(ERRNO));
+  } else {
+    set_close_on_exec(sock);
+    sin.sin_family = AF_INET;
+    sin.sin_port = htons((uint16_t) port);
+    sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
+    if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) != 0) {
+      snprintf(ebuf, ebuf_len, "connect(%s:%d): %s",
+               host, port, strerror(ERRNO));
+      closesocket(sock);
+      sock = INVALID_SOCKET;
+    }
+  }
+  return sock;
+}
+
+struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
+                                 char *ebuf, size_t ebuf_len) {
+  static struct mg_context fake_ctx;
+  struct mg_connection *conn = NULL;
+  SOCKET sock;
+
+  if ((sock = conn2(host, port, use_ssl, ebuf, ebuf_len)) == INVALID_SOCKET) {
+  } else if ((conn = (struct mg_connection *)
+              calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE)) == NULL) {
+    snprintf(ebuf, ebuf_len, "calloc(): %s", strerror(ERRNO));
+    closesocket(sock);
+#ifndef NO_SSL
+  } else if (use_ssl && (conn->client_ssl_ctx =
+                         SSL_CTX_new(SSLv23_client_method())) == NULL) {
+    snprintf(ebuf, ebuf_len, "SSL_CTX_new error");
+    closesocket(sock);
+    free(conn);
+    conn = NULL;
+#endif // NO_SSL
+  } else {
+    socklen_t len = sizeof(struct sockaddr);
+    conn->buf_size = MAX_REQUEST_SIZE;
+    conn->buf = (char *) (conn + 1);
+    conn->ctx = &fake_ctx;
+    conn->client.sock = sock;
+    getsockname(sock, &conn->client.rsa.sa, &len);
+    conn->client.is_ssl = use_ssl;
+#ifndef NO_SSL
+    if (use_ssl) {
+      // SSL_CTX_set_verify call is needed to switch off server certificate
+      // checking, which is off by default in OpenSSL and on in yaSSL.
+      SSL_CTX_set_verify(conn->client_ssl_ctx, 0, 0);
+      sslize(conn, conn->client_ssl_ctx, SSL_connect);
+    }
+#endif
+  }
+
+  return conn;
+}
+
+struct mg_connection *mg_download(const char *host, int port, int use_ssl,
+                                  char *ebuf, size_t ebuf_len,
+                                  const char *fmt, ...) {
+  struct mg_connection *conn;
+  va_list ap;
+
+  va_start(ap, fmt);
+  ebuf[0] = '\0';
+  if ((conn = mg_connect(host, port, use_ssl, ebuf, ebuf_len)) == NULL) {
+  } else if (mg_vprintf(conn, fmt, ap) <= 0) {
+    snprintf(ebuf, ebuf_len, "%s", "Error sending request");
+  } else {
+    getreq(conn, ebuf, ebuf_len);
+  }
+  if (ebuf[0] != '\0' && conn != NULL) {
+    mg_close_connection(conn);
+    conn = NULL;
+  }
+
+  return conn;
+}
+
 // Return number of bytes left to read for this connection
 static int64_t left_to_read(const struct mg_connection *conn) {
   return conn->content_len + conn->request_len - conn->num_bytes_read;
@@ -1900,16 +2247,6 @@ static void cry(struct mg_connection *conn, const char *fmt, ...) {
       fclose(fp);
     }
   }
-}
-
-// Return fake connection structure. Used for logging, if connection
-// is not applicable at the moment of logging.
-static struct mg_connection *fc(struct mg_context *ctx) {
-  static struct mg_connection fake_connection;
-  fake_connection.ctx = ctx;
-  // See https://github.com/cesanta/mongoose/issues/236
-  fake_connection.event.user_data = ctx->user_data;
-  return &fake_connection;
 }
 
 const char *mg_version(void) {
@@ -2115,70 +2452,6 @@ int mg_write(struct mg_connection *conn, const void *buf, int len) {
                  (int64_t) len);
   }
   return (int) total;
-}
-
-// Print message to buffer. If buffer is large enough to hold the message,
-// return buffer. If buffer is to small, allocate large enough buffer on heap,
-// and return allocated buffer.
-static int alloc_vprintf(char **buf, size_t size, const char *fmt, va_list ap) {
-  va_list ap_copy;
-  int len;
-
-  // Windows is not standard-compliant, and vsnprintf() returns -1 if
-  // buffer is too small. Also, older versions of msvcrt.dll do not have
-  // _vscprintf().  However, if size is 0, vsnprintf() behaves correctly.
-  // Therefore, we make two passes: on first pass, get required message length.
-  // On second pass, actually print the message.
-  va_copy(ap_copy, ap);
-  len = vsnprintf(NULL, 0, fmt, ap_copy);
-
-  if (len > (int) size &&
-      (size = len + 1) > 0 &&
-      (*buf = (char *) malloc(size)) == NULL) {
-    len = -1;  // Allocation failed, mark failure
-  } else {
-    va_copy(ap_copy, ap);
-    vsnprintf(*buf, size, fmt, ap_copy);
-  }
-
-  return len;
-}
-
-int mg_vprintf(struct mg_connection *conn, const char *fmt, va_list ap) {
-  char mem[MG_BUF_LEN], *buf = mem;
-  int len;
-
-  if ((len = alloc_vprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
-    len = mg_write(conn, buf, (size_t) len);
-  }
-  if (buf != mem && buf != NULL) {
-    free(buf);
-  }
-
-  return len;
-}
-
-int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  return mg_vprintf(conn, fmt, ap);
-}
-
-static int mg_chunked_printf(struct mg_connection *conn, const char *fmt, ...) {
-  char mem[MG_BUF_LEN], *buf = mem;
-  int len;
-
-  va_list ap;
-  va_start(ap, fmt);
-  if ((len = alloc_vprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
-    len = mg_printf(conn, "%X\r\n%s\r\n", len, buf);
-  }
-
-  if (buf != mem && buf != NULL) {
-    free(buf);
-  }
-
-  return len;
 }
 
 int mg_url_decode(const char *src, int src_len, char *dst,
@@ -2512,38 +2785,6 @@ static void get_mime_type(struct mg_context *ctx, const char *path,
   vec->ptr = mg_get_builtin_mime_type(path);
   vec->len = strlen(vec->ptr);
 }
-
-static SOCKET conn2(const char *host, int port, int use_ssl,
-                    char *ebuf, size_t ebuf_len) {
-  struct sockaddr_in sin;
-  struct hostent *he;
-  SOCKET sock = INVALID_SOCKET;
-
-  if (host == NULL) {
-    snprintf(ebuf, ebuf_len, "%s", "NULL host");
-  } else if (use_ssl && SSLv23_client_method == NULL) {
-    snprintf(ebuf, ebuf_len, "%s", "SSL is not initialized");
-    // TODO(lsm): use something threadsafe instead of gethostbyname()
-  } else if ((he = gethostbyname(host)) == NULL) {
-    snprintf(ebuf, ebuf_len, "gethostbyname(%s): %s", host, strerror(ERRNO));
-  } else if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-    snprintf(ebuf, ebuf_len, "socket(): %s", strerror(ERRNO));
-  } else {
-    set_close_on_exec(sock);
-    sin.sin_family = AF_INET;
-    sin.sin_port = htons((uint16_t) port);
-    sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
-    if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) != 0) {
-      snprintf(ebuf, ebuf_len, "connect(%s:%d): %s",
-               host, port, strerror(ERRNO));
-      closesocket(sock);
-      sock = INVALID_SOCKET;
-    }
-  }
-  return sock;
-}
-
-
 
 void mg_url_encode(const char *src, char *dst, size_t dst_len) {
   static const char *dont_escape = "._-$,;~()";
@@ -4631,183 +4872,6 @@ static int set_uid_option(struct mg_context *ctx) {
 }
 #endif // !_WIN32
 
-#if !defined(NO_SSL)
-// set_ssl_option() function updates this array.
-// It loads SSL library dynamically and changes NULLs to the actual addresses
-// of respective functions. The macros above (like SSL_connect()) are really
-// just calling these functions indirectly via the pointer.
-static struct ssl_func ssl_sw[] = {
-  {"SSL_free",   NULL},
-  {"SSL_accept",   NULL},
-  {"SSL_connect",   NULL},
-  {"SSL_read",   NULL},
-  {"SSL_write",   NULL},
-  {"SSL_get_error",  NULL},
-  {"SSL_set_fd",   NULL},
-  {"SSL_new",   NULL},
-  {"SSL_CTX_new",   NULL},
-  {"SSLv23_server_method", NULL},
-  {"SSL_library_init",  NULL},
-  {"SSL_CTX_use_PrivateKey_file", NULL},
-  {"SSL_CTX_use_certificate_file",NULL},
-  {"SSL_CTX_set_default_passwd_cb",NULL},
-  {"SSL_CTX_free",  NULL},
-  {"SSL_load_error_strings", NULL},
-  {"SSL_CTX_use_certificate_chain_file", NULL},
-  {"SSLv23_client_method", NULL},
-  {"SSL_pending", NULL},
-  {"SSL_CTX_set_verify", NULL},
-  {"SSL_shutdown",   NULL},
-  {NULL,    NULL}
-};
-
-// Similar array as ssl_sw. These functions could be located in different lib.
-static struct ssl_func crypto_sw[] = {
-  {"CRYPTO_num_locks",  NULL},
-  {"CRYPTO_set_locking_callback", NULL},
-  {"CRYPTO_set_id_callback", NULL},
-  {"ERR_get_error",  NULL},
-  {"ERR_error_string", NULL},
-  {NULL,    NULL}
-};
-
-static pthread_mutex_t *ssl_mutexes;
-
-static int sslize(struct mg_connection *conn, SSL_CTX *s, int (*func)(SSL *)) {
-  return (conn->ssl = SSL_new(s)) != NULL &&
-    SSL_set_fd(conn->ssl, conn->client.sock) == 1 &&
-    func(conn->ssl) == 1;
-}
-
-// Return OpenSSL error message
-static const char *ssl_error(void) {
-  unsigned long err;
-  err = ERR_get_error();
-  return err == 0 ? "" : ERR_error_string(err, NULL);
-}
-
-static void ssl_locking_callback(int mode, int mutex_num, const char *file,
-                                 int line) {
-  (void) line;
-  (void) file;
-
-  if (mode & 1) {  // 1 is CRYPTO_LOCK
-    (void) pthread_mutex_lock(&ssl_mutexes[mutex_num]);
-  } else {
-    (void) pthread_mutex_unlock(&ssl_mutexes[mutex_num]);
-  }
-}
-
-static unsigned long ssl_id_callback(void) {
-  return (unsigned long) pthread_self();
-}
-
-#if !defined(NO_SSL_DL)
-static int load_dll(struct mg_context *ctx, const char *dll_name,
-                    struct ssl_func *sw) {
-  union {void *p; void (*fp)(void);} u;
-  void  *dll_handle;
-  struct ssl_func *fp;
-
-  if ((dll_handle = dlopen(dll_name, RTLD_LAZY)) == NULL) {
-    cry(fc(ctx), "%s: cannot load %s", __func__, dll_name);
-    return 0;
-  }
-
-  for (fp = sw; fp->name != NULL; fp++) {
-#ifdef _WIN32
-    // GetProcAddress() returns pointer to function
-    u.fp = (void (*)(void)) dlsym(dll_handle, fp->name);
-#else
-    // dlsym() on UNIX returns void *. ISO C forbids casts of data pointers to
-    // function pointers. We need to use a union to make a cast.
-    u.p = dlsym(dll_handle, fp->name);
-#endif // _WIN32
-    if (u.fp == NULL) {
-      cry(fc(ctx), "%s: %s: cannot find %s", __func__, dll_name, fp->name);
-      return 0;
-    } else {
-      fp->ptr = u.fp;
-    }
-  }
-
-  return 1;
-}
-#endif // NO_SSL_DL
-
-// Dynamically load SSL library. Set up ctx->ssl_ctx pointer.
-static int set_ssl_option(struct mg_context *ctx) {
-  int i, size;
-  const char *pem;
-
-  // If PEM file is not specified and the init_ssl callback
-  // is not specified, skip SSL initialization.
-  if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL) {
-    //  MG_INIT_SSL
-    //  ctx->callbacks.init_ssl == NULL) {
-    return 1;
-  }
-
-#if !defined(NO_SSL_DL)
-  if (!load_dll(ctx, SSL_LIB, ssl_sw) ||
-      !load_dll(ctx, CRYPTO_LIB, crypto_sw)) {
-    return 0;
-  }
-#endif // NO_SSL_DL
-
-  // Initialize SSL library
-  SSL_library_init();
-  SSL_load_error_strings();
-
-  if ((ctx->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
-    cry(fc(ctx), "SSL_CTX_new (server) error: %s", ssl_error());
-    return 0;
-  }
-
-  // If user callback returned non-NULL, that means that user callback has
-  // set up certificate itself. In this case, skip sertificate setting.
-  // MG_INIT_SSL
-  if (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, 1) == 0 ||
-      SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, 1) == 0) {
-    cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
-    return 0;
-  }
-
-  if (pem != NULL) {
-    (void) SSL_CTX_use_certificate_chain_file(ctx->ssl_ctx, pem);
-  }
-
-  // Initialize locking callbacks, needed for thread safety.
-  // http://www.openssl.org/support/faq.html#PROG1
-  size = sizeof(pthread_mutex_t) * CRYPTO_num_locks();
-  if ((ssl_mutexes = (pthread_mutex_t *) malloc((size_t)size)) == NULL) {
-    cry(fc(ctx), "%s: cannot allocate mutexes: %s", __func__, ssl_error());
-    return 0;
-  }
-
-  for (i = 0; i < CRYPTO_num_locks(); i++) {
-    pthread_mutex_init(&ssl_mutexes[i], NULL);
-  }
-
-  CRYPTO_set_locking_callback(&ssl_locking_callback);
-  CRYPTO_set_id_callback(&ssl_id_callback);
-
-  return 1;
-}
-
-static void uninitialize_ssl(struct mg_context *ctx) {
-  int i;
-  if (ctx->ssl_ctx != NULL) {
-    CRYPTO_set_locking_callback(NULL);
-    for (i = 0; i < CRYPTO_num_locks(); i++) {
-      pthread_mutex_destroy(&ssl_mutexes[i]);
-    }
-    CRYPTO_set_locking_callback(NULL);
-    CRYPTO_set_id_callback(NULL);
-  }
-}
-#endif // !NO_SSL
-
 static int set_gpass_option(struct mg_context *ctx) {
   struct file file = STRUCT_FILE_INITIALIZER;
   const char *path = ctx->config[GLOBAL_PASSWORDS_FILE];
@@ -4889,46 +4953,6 @@ void mg_close_connection(struct mg_connection *conn) {
   free(conn);
 }
 
-struct mg_connection *mg_connect(const char *host, int port, int use_ssl,
-                                 char *ebuf, size_t ebuf_len) {
-  static struct mg_context fake_ctx;
-  struct mg_connection *conn = NULL;
-  SOCKET sock;
-
-  if ((sock = conn2(host, port, use_ssl, ebuf, ebuf_len)) == INVALID_SOCKET) {
-  } else if ((conn = (struct mg_connection *)
-              calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE)) == NULL) {
-    snprintf(ebuf, ebuf_len, "calloc(): %s", strerror(ERRNO));
-    closesocket(sock);
-#ifndef NO_SSL
-  } else if (use_ssl && (conn->client_ssl_ctx =
-                         SSL_CTX_new(SSLv23_client_method())) == NULL) {
-    snprintf(ebuf, ebuf_len, "SSL_CTX_new error");
-    closesocket(sock);
-    free(conn);
-    conn = NULL;
-#endif // NO_SSL
-  } else {
-    socklen_t len = sizeof(struct sockaddr);
-    conn->buf_size = MAX_REQUEST_SIZE;
-    conn->buf = (char *) (conn + 1);
-    conn->ctx = &fake_ctx;
-    conn->client.sock = sock;
-    getsockname(sock, &conn->client.rsa.sa, &len);
-    conn->client.is_ssl = use_ssl;
-#ifndef NO_SSL
-    if (use_ssl) {
-      // SSL_CTX_set_verify call is needed to switch off server certificate
-      // checking, which is off by default in OpenSSL and on in yaSSL.
-      SSL_CTX_set_verify(conn->client_ssl_ctx, 0, 0);
-      sslize(conn, conn->client_ssl_ctx, SSL_connect);
-    }
-#endif
-  }
-
-  return conn;
-}
-
 static int is_valid_uri(const char *uri) {
   // Conform to http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1.2
   // URI can be an asterisk (*) or should start with slash.
@@ -4970,28 +4994,6 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
     conn->birth_time = time(NULL);
   }
   return ebuf[0] == '\0';
-}
-
-struct mg_connection *mg_download(const char *host, int port, int use_ssl,
-                                  char *ebuf, size_t ebuf_len,
-                                  const char *fmt, ...) {
-  struct mg_connection *conn;
-  va_list ap;
-
-  va_start(ap, fmt);
-  ebuf[0] = '\0';
-  if ((conn = mg_connect(host, port, use_ssl, ebuf, ebuf_len)) == NULL) {
-  } else if (mg_vprintf(conn, fmt, ap) <= 0) {
-    snprintf(ebuf, ebuf_len, "%s", "Error sending request");
-  } else {
-    getreq(conn, ebuf, ebuf_len);
-  }
-  if (ebuf[0] != '\0' && conn != NULL) {
-    mg_close_connection(conn);
-    conn = NULL;
-  }
-
-  return conn;
 }
 
 static void process_new_connection(struct mg_connection *conn) {
