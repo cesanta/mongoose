@@ -414,32 +414,29 @@ static HICON hIcon;
 static SERVICE_STATUS ss;
 static SERVICE_STATUS_HANDLE hStatus;
 static const char *service_magic_argument = "--";
+static const char *service_name = "Mongoose";
 static NOTIFYICONDATA TrayIcon;
 
 static void WINAPI ControlHandler(DWORD code) {
+  ss.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
+  ss.dwServiceType = SERVICE_WIN32;
+  ss.dwWin32ExitCode = NO_ERROR;
+  ss.dwCurrentState = SERVICE_RUNNING;
+
   if (code == SERVICE_CONTROL_STOP || code == SERVICE_CONTROL_SHUTDOWN) {
-    ss.dwWin32ExitCode = 0;
     ss.dwCurrentState = SERVICE_STOPPED;
   }
   SetServiceStatus(hStatus, &ss);
 }
 
 static void WINAPI ServiceMain(void) {
-  ss.dwServiceType = SERVICE_WIN32;
-  ss.dwCurrentState = SERVICE_RUNNING;
-  ss.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
-
-  hStatus = RegisterServiceCtrlHandler(server_name, ControlHandler);
-  SetServiceStatus(hStatus, &ss);
+  hStatus = RegisterServiceCtrlHandler(service_name, ControlHandler);
+  ControlHandler(SERVICE_CONTROL_INTERROGATE);
 
   while (ss.dwCurrentState == SERVICE_RUNNING) {
     Sleep(1000);
   }
   mg_stop(ctx);
-
-  ss.dwCurrentState = SERVICE_STOPPED;
-  ss.dwWin32ExitCode = (DWORD) -1;
-  SetServiceStatus(hStatus, &ss);
 }
 
 
@@ -719,7 +716,6 @@ static void show_settings_dialog() {
 }
 
 static int manage_service(int action) {
-  static const char *service_name = "Mongoose";
   SC_HANDLE hSCM = NULL, hService = NULL;
   SERVICE_DESCRIPTION descr = {server_name};
   char path[PATH_MAX + 20];  // Path to executable plus magic argument
