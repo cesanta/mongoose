@@ -66,7 +66,7 @@ F.Morenius, and 10 others.
 
 Mongoose is licensed under the terms of
 [GNU GPLv.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
-license. For businesses there is an option to buy non-restrictive,
+license. Businesses have an option to get a non-restrictive,
 royalty-free license and professional support from
 [Cesanta Software](http://cesanta.com/products.html).
 
