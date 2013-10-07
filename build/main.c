@@ -86,7 +86,6 @@ static void WINCDECL signal_handler(int sig_num) {
   // reap zombies if SIGCHLD is ignored. On QNX, for example, waitpid()
   // fails if SIGCHLD is ignored, making system() non-functional.
   if (sig_num == SIGCHLD) {
-    printf("dssfdsfds\n");
     do {} while (waitpid(-1, &sig_num, WNOHANG) > 0);
   } else
 #endif
