@@ -126,11 +126,13 @@ static void send_http_error(struct mg_connection *conn, int status,
   }
   DEBUG_TRACE(("[%s]", buf));
 
-  mg_printf(conn, "HTTP/1.1 %d %s\r\n"
-            "Content-Length: %d\r\n"
-            "Connection: %s\r\n\r\n", status, reason, len,
-            suggest_connection_header(conn));
-  conn->num_bytes_sent += mg_printf(conn, "%s", buf);
+  if (call_user(MG_HTTP_ERROR, conn, (void *) (long) status) == 0) {
+    mg_printf(conn, "HTTP/1.1 %d %s\r\n"
+              "Content-Length: %d\r\n"
+              "Connection: %s\r\n\r\n", status, reason, len,
+              suggest_connection_header(conn));
+    conn->num_bytes_sent += mg_printf(conn, "%s", buf);
+  }
 }
 
 // Write data to the IO channel - opened file descriptor, socket or SSL
