@@ -72,10 +72,10 @@ unix_unit_test: $(LUA_SOURCES) Makefile ../test/unit_test.c
 # If not so, this can break some on some Linux distros which use
 # "-Wl,--as-needed" turned on by default  in cc command.
 # Also, this is turned in many other distros in static linkage builds.
-$(PROG): $(TINY_SOURCES) unix_unit_test
+$(PROG): $(TINY_SOURCES)
 	$(CC) $(TINY_SOURCES) -o $@ $(CFLAGS)
 
-$(PROG)-lua: $(LUA_SOURCES) unix_unit_test
+$(PROG)-lua: $(LUA_SOURCES)
 	$(CC) $(LUA_SOURCES) -o $@ $(LUA_SQLITE_FLAGS) $(CFLAGS)
 
 unix: $(PROG) $(PROG)-lua
