@@ -10,6 +10,7 @@ API.
   as a backend
 - Easy-to-use controllers sytem to build an application with modules
 - Possibility of enabling JsonCPP to create a json compliant web application
+- URL dispatcher using regex matches
 - Session system to store data about an user using cookies and garbage collect cleaning
 - Simple access to GET & POST requests
 - Websockets support
