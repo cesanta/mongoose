@@ -39,6 +39,17 @@ namespace Mongoose
         return method;
     }
 
+    smatch Request::getMatches()
+    {
+        return matches;
+    }
+
+    bool Request::match(string pattern)
+    {
+        key = method + ":" + url;
+        return regex_match(key, matches, regex(pattern));
+    }
+
     void Request::writeResponse(Response *response)
     {
         string data = response->getData();

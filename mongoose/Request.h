@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include <regex>
 #include <mongoose.h>
 #include "UploadFile.h"
 #include "Response.h"
@@ -74,6 +75,8 @@ namespace Mongoose
 
             string getUrl();
             string getMethod();
+            smatch getMatches();
+            bool match(string pattern);
 
             bool readVariable(const char *data, string key, string &output);
 
@@ -86,6 +89,8 @@ namespace Mongoose
             string data;
             string method;
             string url;
+            string key;
+            smatch matches;
             struct mg_connection *connection;
             struct mg_request_info *request;
     };
