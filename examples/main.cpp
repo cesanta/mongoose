@@ -79,6 +79,14 @@ class MyController : public WebController
             }
         }
 
+        void matcher(Request &request, StreamResponse &response)
+        {
+            response << "Matches:<br/>";
+            smatch matches = request.getMatches();
+            for (unsigned i=0; i<matches.size(); ++i)
+                response << i << " : " << matches[i] << "<br/>";
+        }
+
         void setup()
         {
             // Hello demo
@@ -101,6 +109,10 @@ class MyController : public WebController
             // File upload demo
             addRoute("GET", "/upload", MyController, uploadForm);
             addRoute("POST", "/upload", MyController, upload);
+
+            // Url regex matches. For example: /matcher/MyString and /matcher/MyOtherString/1234
+            addRoute("GET", "/matcher/([a-zA-Z]+)/?", MyController, matcher);
+            addRoute("GET", "/matcher/([a-zA-Z]+)/([0-9]+)/?", MyController, matcher);
         }
 };
 
