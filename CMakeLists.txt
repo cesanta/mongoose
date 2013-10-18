@@ -20,6 +20,9 @@ option (HAS_JSONCPP
 option (ENABLE_STATS
     "Enable server statistics" ON)
 
+option (ENABLE_REGEX_URL
+    "Enable url regex matching dispatcher" OFF)
+
 set (JSONCPP_DIR "${PROJECT_SOURCE_DIR}/../jsoncpp"
     CACHE STRING "Json C++ directory")
 
@@ -34,6 +37,11 @@ include_directories ("${PROJECT_SOURCE_DIR}")
 if (ENABLE_STATS)
     add_definitions("-DENABLE_STATS")
 endif (ENABLE_STATS)
+
+if (ENABLE_REGEX_URL)
+    add_definitions("-DENABLE_REGEX_URL")
+    SET (CMAKE_CXX_FLAGS "-std=c++11")
+endif (ENABLE_REGEX_URL)
 
 if (CPP_BINDING)
     set (SOURCES

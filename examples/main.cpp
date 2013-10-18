@@ -79,6 +79,16 @@ class MyController : public WebController
             }
         }
 
+#ifdef ENABLE_REGEX_URL
+        void matcher(Request &request, StreamResponse &response)
+        {
+            response << "Matches:<br/>";
+            smatch matches = request.getMatches();
+            for (unsigned i=0; i<matches.size(); ++i)
+                response << i << " : " << matches[i] << "<br/>";
+        }
+#endif
+
         void setup()
         {
             // Hello demo
@@ -101,6 +111,12 @@ class MyController : public WebController
             // File upload demo
             addRoute("GET", "/upload", MyController, uploadForm);
             addRoute("POST", "/upload", MyController, upload);
+
+#ifdef ENABLE_REGEX_URL
+            // Url regex matches. For example: /matcher/MyString and /matcher/MyOtherString/1234
+            addRoute("GET", "/matcher/([a-zA-Z]+)/?", MyController, matcher);
+            addRoute("GET", "/matcher/([a-zA-Z]+)/([0-9]+)/?", MyController, matcher);
+#endif
         }
 };
 
@@ -132,6 +148,7 @@ int main()
     Server server(8080);
     server.registerController(&myController);
     server.setOption("enable_directory_listing", "false");
+    server.setOption("ssl_certificate", "ssl_cert.pem");
     server.start();
     
     cout << "Server started, routes:" << endl;
