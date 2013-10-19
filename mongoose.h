@@ -72,21 +72,7 @@ void mg_stop(struct mg_context *);
 
 void mg_websocket_handshake(struct mg_connection *);
 int mg_websocket_read(struct mg_connection *, int *bits, char **data);
-
-
-// Get the value of particular configuration parameter.
-// The value returned is read-only. Mongoose does not allow changing
-// configuration at run time.
-// If given parameter name is not valid, NULL is returned. For valid
-// names, return value is guaranteed to be non-NULL. If parameter is not
-// set, zero-length string is returned.
 const char *mg_get_option(const struct mg_context *ctx, const char *name);
-
-
-// Return array of strings that represent valid configuration options.
-// For each option, option name and default value is returned, i.e. the
-// number of entries in the array equals to number_of_options x 2.
-// Array is NULL terminated.
 const char **mg_get_valid_option_names(void);
 
 

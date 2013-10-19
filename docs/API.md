@@ -129,6 +129,24 @@ initialization. Return value is ignored by Mongoose.
 Called when Mongoose is about to terminate a thread. Used to clean up
 the state initialized by `MG_THREAD_BEGIN` handling. Return value is ignored.
 
+## mg\_get\_option()
+
+    const char *mg_get_option(const struct mg_context *ctx, const char *name);
+
+Get the value of particular configuration parameter.  The value returned is
+read-only. Mongoose does not allow changing configuration at run time.  If
+given parameter name is not valid, NULL is returned. For valid names, return
+value is guaranteed to be non-NULL. If parameter is not set, zero-length string
+is returned.
+
+## mg\_get\_valid\_option\_names()
+
+    const char **mg_get_valid_option_names(void);
+
+Return array of strings that represent valid configuration options.  For each
+option, option name and default value is returned, i.e. the number of entries
+in the array equals to number_of_options x 2.  Array is NULL terminated.
+
 
 ## Embedding Examples
 
