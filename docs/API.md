@@ -33,7 +33,6 @@ Here is a list of well-commented embedding examples:
 
 # API Reference
 
-## mg\_start()
     struct mg_context *mg_start(const char **configuration_options
                                 int (*event_handler_func)(struct mg_event *),
                                 void *user_data);
@@ -57,8 +56,6 @@ used to handle incoming requests.
  Important: Mongoose does not install `SIGCHLD` handler. If CGI is used,
  `SIGCHLD` handler must be set up to reap CGI zombie processes.
 
-
-## mg\_stop()
 
     void mg_stop(struct mg_context *);
 
@@ -129,8 +126,6 @@ initialization. Return value is ignored by Mongoose.
 Called when Mongoose is about to terminate a thread. Used to clean up
 the state initialized by `MG_THREAD_BEGIN` handling. Return value is ignored.
 
-## mg\_get\_option()
-
     const char *mg_get_option(const struct mg_context *ctx, const char *name);
 
 Get the value of particular configuration parameter.  The value returned is
@@ -139,13 +134,35 @@ given parameter name is not valid, NULL is returned. For valid names, return
 value is guaranteed to be non-NULL. If parameter is not set, zero-length string
 is returned.
 
-## mg\_get\_valid\_option\_names()
-
     const char **mg_get_valid_option_names(void);
 
 Return array of strings that represent valid configuration options.  For each
 option, option name and default value is returned, i.e. the number of entries
 in the array equals to number_of_options x 2.  Array is NULL terminated.
+
+
+    int mg_modify_passwords_file(const char *passwords_file_name,
+                                 const char *domain,
+                                 const char *user,
+                                 const char *password);
+
+Add, edit or delete the entry in the passwords file.  
+This function allows an application to manipulate .htpasswd files on the
+fly by adding, deleting and changing user records. This is one of the
+several ways of implementing authentication on the server side. For another,
+cookie-based way please refer to the examples/chat.c in the source tree.  
+If password is not NULL, entry is added (or modified if already exists).
+If password is NULL, entry is deleted.  
+Return: 1 on success, 0 on error.
+
+
+    int mg_write(struct mg_connection *, const void *buf, int len);
+
+Send data to the client. This function attempts to send all requested data,
+unlike `write()` standard library call, which might send only a portion of
+requested data.  
+Return: number of bytes written to the client. If return value is less then
+`len`, client has closed the connection.
 
 
 ## Embedding Examples

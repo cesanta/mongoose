@@ -72,32 +72,13 @@ void mg_stop(struct mg_context *);
 
 void mg_websocket_handshake(struct mg_connection *);
 int mg_websocket_read(struct mg_connection *, int *bits, char **data);
+
 const char *mg_get_option(const struct mg_context *ctx, const char *name);
 const char **mg_get_valid_option_names(void);
-
-
-// Add, edit or delete the entry in the passwords file.
-//
-// This function allows an application to manipulate .htpasswd files on the
-// fly by adding, deleting and changing user records. This is one of the
-// several ways of implementing authentication on the server side. For another,
-// cookie-based way please refer to the examples/chat.c in the source tree.
-//
-// If password is not NULL, entry is added (or modified if already exists).
-// If password is NULL, entry is deleted.
-//
-// Return:
-//   1 on success, 0 on error.
 int mg_modify_passwords_file(const char *passwords_file_name,
                              const char *domain,
                              const char *user,
                              const char *password);
-
-// Send data to the client.
-// Return:
-//  0   when the connection has been closed
-//  -1  on error
-//  >0  number of bytes written on success
 int mg_write(struct mg_connection *, const void *buf, int len);
 
 
