@@ -473,6 +473,59 @@ static int handle_lsp_request(struct mg_connection *, const char *,
                               struct file *, struct lua_State *);
 #endif
 
+// last internal error
+static enum mg_error last_error = MG_ERROR_NONE;
+
+// Return last encountered error. Only mg_start produces such errors at the moment.
+enum mg_error mg_get_last_error()
+{
+  enum mg_error error = last_error;
+  last_error = MG_ERROR_NONE;
+  return error;
+}
+
+// Returns description of error code.
+const char *mg_get_error_string(enum mg_error error_code)
+{
+  static char buf[4];
+  switch (error_code)
+  {
+#ifndef NO_ERROR_DESC
+  case MG_ERROR_NONE:
+    return "MG_ERROR_NONE";
+  case MG_START_INVALID_OPTION:
+    return "MG_START_INVALID_OPTION (some invalid option was provided)";
+  case MG_START_OPTION_IS_NULL:
+    return "MG_START_OPTION_IS_NULL (option value was NULL)";
+  case MG_START_GLOBAL_PASSWORDS_OPTION_ERROR:
+    return "MG_START_GLOBAL_PASSWORDS_OPTION_ERROR (failed to load global passwords file or directory)";
+  case MG_START_SSL_PEM_FILE_NOT_FOUND:
+    return "MG_START_SSL_PEM_FILE_NOT_FOUND";
+  case MG_START_SSL_LIBS_NOT_FOUND:
+    return "MG_START_SSL_LIBS_NOT_FOUND (failed to load CRYPTO_LIB or SSL_LIB (names are OS dependent))";
+  case MG_START_SSL_FAILED_CREATE_CONTEXT:
+    return "MG_START_SSL_FAILED_CREATE_CONTEXT";
+  case MG_START_SSL_INVALID_CERTIFICATE_FILE:
+    return "MG_START_SSL_INVALID_CERTIFICATE_FILE (failed loading certificate)|";
+  case MG_START_SSL_INVALID_PRIVATE_KEY_FILE:
+    return "MG_START_SSL_INVALID_PRIVATE_KEY_FILE (failed loading private key)";
+  case MG_START_SSL_MUTEXES_ALLOC_ERROR:
+    return "MG_START_SSL_MUTEXES_ALLOC_ERROR (not enough memory to allocate synchro-mutexes)";
+  case MG_START_LISTENING_PORTS_INVALID:
+    return "MG_START_LISTENING_PORTS_INVALID (invalid format of listening_ports option)";
+  case MG_START_LISTENING_PORTS_SSL_ERROR:
+    return "MG_START_LISTENING_PORTS_SSL_ERROR (error when trying to start listening to SSL port)";
+  case MG_START_LISTENING_PORTS_CANNOT_BIND:
+    return "MG_START_LISTENING_PORTS_CANNOT_BIND (failed to bind to one of specified ports)";
+  case MG_START_LISTENING_PORTS_LISTENER_ALLOC_ERROR: 
+    return "MG_START_LISTENING_PORTS_LISTENER_ALLOC_ERROR (not enough memory to initialize listener)";
+#endif NO_ERROR_DESC
+  default:
+    sprintf(buf, "%d", error_code);
+    return buf;
+  }
+}
+
 // Return fake connection structure. Used for logging, if connection
 // is not applicable at the moment of logging.
 static struct mg_connection *fc(struct mg_context *ctx) {
@@ -2011,12 +2064,14 @@ static int set_ssl_option(struct mg_context *ctx) {
   if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL) {
     //  MG_INIT_SSL
     //  ctx->callbacks.init_ssl == NULL) {
+	last_error = MG_START_SSL_PEM_FILE_NOT_FOUND;
     return 1;
   }
 
 #if !defined(NO_SSL_DL)
   if (!load_dll(ctx, SSL_LIB, ssl_sw) ||
       !load_dll(ctx, CRYPTO_LIB, crypto_sw)) {
+	last_error = MG_START_SSL_LIBS_NOT_FOUND;
     return 0;
   }
 #endif // NO_SSL_DL
@@ -2027,15 +2082,21 @@ static int set_ssl_option(struct mg_context *ctx) {
 
   if ((ctx->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
     cry(fc(ctx), "SSL_CTX_new (server) error: %s", ssl_error());
+	last_error = MG_START_SSL_FAILED_CREATE_CONTEXT;
     return 0;
   }
 
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
   // MG_INIT_SSL
-  if (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, 1) == 0 ||
-      SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, 1) == 0) {
+  if (SSL_CTX_use_certificate_file(ctx->ssl_ctx, pem, 1) == 0) {
+	cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
+	last_error = MG_START_SSL_INVALID_CERTIFICATE_FILE;
+	return 0;
+  }
+  if (SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, pem, 1) == 0) {
     cry(fc(ctx), "%s: cannot open %s: %s", __func__, pem, ssl_error());
+	last_error = MG_START_SSL_INVALID_PRIVATE_KEY_FILE;
     return 0;
   }
 
@@ -2048,6 +2109,7 @@ static int set_ssl_option(struct mg_context *ctx) {
   size = sizeof(pthread_mutex_t) * CRYPTO_num_locks();
   if ((ssl_mutexes = (pthread_mutex_t *) malloc((size_t)size)) == NULL) {
     cry(fc(ctx), "%s: cannot allocate mutexes: %s", __func__, ssl_error());
+	last_error = MG_START_SSL_MUTEXES_ALLOC_ERROR;
     return 0;
   }
 
@@ -4738,9 +4800,11 @@ static int set_ports_option(struct mg_context *ctx) {
     if (!parse_port_string(&vec, &so)) {
       cry(fc(ctx), "%s: %.*s: invalid port spec. Expecting list of: %s",
           __func__, (int) vec.len, vec.ptr, "[IP_ADDRESS:]PORT[s|r]");
+      last_error = MG_START_LISTENING_PORTS_INVALID;
       success = 0;
     } else if (so.is_ssl && ctx->ssl_ctx == NULL) {
       cry(fc(ctx), "Cannot add SSL socket, is -ssl_certificate option set?");
+      last_error = MG_START_LISTENING_PORTS_SSL_ERROR;
       success = 0;
     } else if ((so.sock = socket(so.lsa.sa.sa_family, SOCK_STREAM, 6)) ==
                INVALID_SOCKET ||
@@ -4758,11 +4822,13 @@ static int set_ports_option(struct mg_context *ctx) {
                listen(so.sock, SOMAXCONN) != 0) {
       cry(fc(ctx), "%s: cannot bind to %.*s: %d (%s)", __func__,
           (int) vec.len, vec.ptr, ERRNO, strerror(errno));
+      last_error = MG_START_LISTENING_PORTS_CANNOT_BIND;
       closesocket(so.sock);
       success = 0;
     } else if ((ptr = (struct socket *) realloc(ctx->listening_sockets,
                               (ctx->num_listening_sockets + 1) *
                               sizeof(ctx->listening_sockets[0]))) == NULL) {
+      last_error = MG_START_LISTENING_PORTS_LISTENER_ALLOC_ERROR;
       closesocket(so.sock);
       success = 0;
     } else {
@@ -4879,6 +4945,7 @@ static int set_gpass_option(struct mg_context *ctx) {
   const char *path = ctx->config[GLOBAL_PASSWORDS_FILE];
   if (path != NULL && !mg_stat(path, &file)) {
     cry(fc(ctx), "Cannot open %s: %s", path, strerror(ERRNO));
+    last_error = MG_START_GLOBAL_PASSWORDS_OPTION_ERROR;
     return 0;
   }
   return 1;
@@ -5336,10 +5403,12 @@ struct mg_context *mg_start(const char **options,
   while (options && (name = *options++) != NULL) {
     if ((i = get_option_index(name)) == -1) {
       cry(fc(ctx), "Invalid option: %s", name);
+      last_error = MG_START_INVALID_OPTION;
       free_context(ctx);
       return NULL;
     } else if ((value = *options++) == NULL) {
       cry(fc(ctx), "%s: option value cannot be NULL", name);
+      last_error = MG_START_OPTION_IS_NULL;
       free_context(ctx);
       return NULL;
     }
@@ -5371,6 +5440,7 @@ struct mg_context *mg_start(const char **options,
 #endif
       !set_acl_option(ctx)) {
     free_context(ctx);
+    // do not set last_error here, set_xxx_option functions should take care of it.
     return NULL;
   }
 

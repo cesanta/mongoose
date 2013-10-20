@@ -73,6 +73,47 @@ void mg_stop(struct mg_context *);
 void mg_websocket_handshake(struct mg_connection *);
 int mg_websocket_read(struct mg_connection *, int *bits, char **data);
 
+
+// Various errors that could happen. Purpose is to extend error reporting.
+enum mg_error {
+  MG_ERROR_NONE,
+  
+  // errors after mg_start
+  MG_START_INVALID_OPTION,            // some invalid option was provided
+  MG_START_OPTION_IS_NULL,            // option value was NULL
+  MG_START_GLOBAL_PASSWORDS_OPTION_ERROR,     // failed to load global passwords file or directory
+  MG_START_SSL_PEM_FILE_NOT_FOUND, // PEM file is not specified
+  MG_START_SSL_LIBS_NOT_FOUND, // failed to load CRYPTO_LIB or SSL_LIB (names are OS dependent)
+  MG_START_SSL_FAILED_CREATE_CONTEXT, // failed to create ssl context
+  MG_START_SSL_INVALID_CERTIFICATE_FILE, // failed loading certificate
+  MG_START_SSL_INVALID_PRIVATE_KEY_FILE, // failed loading private key
+  MG_START_SSL_MUTEXES_ALLOC_ERROR, // not enough memory to allocate synchro-mutexes
+  MG_START_LISTENING_PORTS_INVALID,       // invalid format of listening_ports option
+  MG_START_LISTENING_PORTS_SSL_ERROR,       // error when trying to start listening to SSL port
+  MG_START_LISTENING_PORTS_CANNOT_BIND,     // failed to bind to one of specified ports
+  MG_START_LISTENING_PORTS_LISTENER_ALLOC_ERROR,  // not enough memory to initialize listener
+};
+
+// Returns description of error code.
+const char *mg_get_error_string(enum mg_error error_code);
+
+// Retrieve detailed error code after some of mg_ functions fail.
+//
+// Resets last error code afterwards.
+// Only mg_start produces such errors at the moment.
+//
+// Return:
+//   If there was no error or function that failed doesn't support extended error reporting
+//   MG_ERROR_NONE is returned. Otherwise you get last error code.
+enum mg_error mg_get_last_error();
+
+
+// Get the value of particular configuration parameter.
+// The value returned is read-only. Mongoose does not allow changing
+// configuration at run time.
+// If given parameter name is not valid, NULL is returned. For valid
+// names, return value is guaranteed to be non-NULL. If parameter is not
+// set, zero-length string is returned.
 const char *mg_get_option(const struct mg_context *ctx, const char *name);
 const char **mg_get_valid_option_names(void);
 int mg_modify_passwords_file(const char *passwords_file_name,
