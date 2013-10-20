@@ -148,7 +148,6 @@ int main()
     Server server(8080);
     server.registerController(&myController);
     server.setOption("enable_directory_listing", "false");
-    server.setOption("ssl_certificate", "ssl_cert.pem");
     server.start();
     
     cout << "Server started, routes:" << endl;
