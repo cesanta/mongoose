@@ -3565,13 +3565,14 @@ static void prepare_cgi_environment(struct mg_connection *conn,
 }
 
 static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
-  int headers_len, data_len, i, fdin[2], fdout[2];
+  int headers_len, data_len, i, fdin[2] = {-1, -1}, fdout[2] = {-1, -1};
   const char *status, *status_text;
   char buf[16384], *pbuf, dir[PATH_MAX], *p;
   struct mg_request_info ri;
   struct cgi_env_block blk;
   FILE *in = NULL, *out = NULL;
   pid_t pid = (pid_t) -1;
+  memset (&ri, 0, sizeof(ri));
 
   prepare_cgi_environment(conn, prog, &blk);
 
