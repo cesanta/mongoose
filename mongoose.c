@@ -323,8 +323,6 @@ struct ssl_func {
   void  (*ptr)(void); // Function pointer
 };
 
-static struct ssl_func ssl_sw[30];
-
 #define SSL_free (* (void (*)(SSL *)) ssl_sw[0].ptr)
 #define SSL_accept (* (int (*)(SSL *)) ssl_sw[1].ptr)
 #define SSL_connect (* (int (*)(SSL *)) ssl_sw[2].ptr)
@@ -5024,7 +5022,7 @@ static void process_new_connection(struct mg_connection *conn) {
 
     if (ebuf[0] == '\0') {
       handle_request(conn);
-      call_user(MG_REQUEST_END, conn, (void *) conn->status_code);
+      call_user(MG_REQUEST_END, conn, (void *)(intptr_t)conn->status_code);
       log_access(conn);
     }
     if (ri->remote_user != NULL) {
