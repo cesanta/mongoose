@@ -465,7 +465,7 @@ static void send_http_error(struct mg_connection *, int, const char *,
                             PRINTF_ARGS(4, 5);
 static void cry(struct mg_connection *conn,
                 PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
-static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len);
+static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len, int *should_respond_out);
 
 #ifdef USE_LUA
 #include "lua_5.2.1.h"
@@ -2157,7 +2157,7 @@ struct mg_connection *mg_download(const char *host, int port, int use_ssl,
   } else if (mg_vprintf(conn, fmt, ap) <= 0) {
     snprintf(ebuf, ebuf_len, "%s", "Error sending request");
   } else {
-    getreq(conn, ebuf, ebuf_len);
+    getreq(conn, ebuf, ebuf_len, NULL);
   }
   if (ebuf[0] != '\0' && conn != NULL) {
     mg_close_connection(conn);
@@ -4961,8 +4961,12 @@ static int is_valid_uri(const char *uri) {
   return uri[0] == '/' || (uri[0] == '*' && uri[1] == '\0');
 }
 
-static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
+static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len, int *should_respond_out) {
   const char *cl;
+
+  /* By default assume we should respond */
+  if (should_respond_out)
+    *should_respond_out = 1;
 
   ebuf[0] = '\0';
   reset_per_request_attributes(conn);
@@ -4973,6 +4977,11 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
   if (conn->request_len == 0 && conn->data_len == conn->buf_size) {
     snprintf(ebuf, ebuf_len, "%s", "Request Too Large");
   } else if (conn->request_len <= 0) {
+    /* We might be timing out, or the client has closed the connection on the
+     * other side. Either way, there's no point sending a response to this,
+     * because no one is listening. */
+    if (should_respond_out)
+      *should_respond_out = 0;
     snprintf(ebuf, ebuf_len, "%s", "Client closed connection");
   } else if (parse_http_message(conn->buf, conn->buf_size,
                                 &conn->request_info) <= 0) {
@@ -5010,8 +5019,10 @@ static void process_new_connection(struct mg_connection *conn) {
   // to crule42.
   conn->data_len = 0;
   do {
-    if (!getreq(conn, ebuf, sizeof(ebuf))) {
-      send_http_error(conn, 500, "Server Error", "%s", ebuf);
+    int should_respond;
+    if (!getreq(conn, ebuf, sizeof(ebuf), &should_respond)) {
+      if (should_respond)
+        send_http_error(conn, 500, "Server Error", "%s", ebuf);
       conn->must_close = 1;
     } else if (!is_valid_uri(conn->request_info.uri)) {
       snprintf(ebuf, sizeof(ebuf), "Invalid URI: [%s]", ri->uri);
