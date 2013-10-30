@@ -5022,7 +5022,7 @@ static void process_new_connection(struct mg_connection *conn) {
 
     if (ebuf[0] == '\0') {
       handle_request(conn);
-      call_user(MG_REQUEST_END, conn, (void *) conn->status_code);
+      call_user(MG_REQUEST_END, conn, (void *)(intptr_t)conn->status_code);
       log_access(conn);
     }
     if (ri->remote_user != NULL) {
