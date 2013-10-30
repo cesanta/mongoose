@@ -323,8 +323,6 @@ struct ssl_func {
   void  (*ptr)(void); // Function pointer
 };
 
-static struct ssl_func ssl_sw[30];
-
 #define SSL_free (* (void (*)(SSL *)) ssl_sw[0].ptr)
 #define SSL_accept (* (int (*)(SSL *)) ssl_sw[1].ptr)
 #define SSL_connect (* (int (*)(SSL *)) ssl_sw[2].ptr)
