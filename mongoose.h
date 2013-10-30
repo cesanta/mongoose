@@ -72,28 +72,9 @@ void mg_stop(struct mg_context *);
 
 void mg_websocket_handshake(struct mg_connection *);
 int mg_websocket_read(struct mg_connection *, int *bits, char **data);
-
-const char *mg_get_option(const struct mg_context *ctx, const char *name);
-const char **mg_get_valid_option_names(void);
-int mg_modify_passwords_file(const char *passwords_file_name,
-                             const char *domain,
-                             const char *user,
-                             const char *password);
-int mg_write(struct mg_connection *, const void *buf, int len);
-
-
-// Send data to a websocket client wrapped in a websocket frame.
-// It is unsafe to read/write to this connection from another thread.
-// This function is available when mongoose is compiled with -DUSE_WEBSOCKET
-//
-// Return:
-//  0   when the connection has been closed
-//  -1  on error
-//  >0  number of bytes written on success
 int mg_websocket_write(struct mg_connection* conn, int opcode,
                        const char *data, size_t data_len);
-
-// Opcodes, from http://tools.ietf.org/html/rfc6455
+// Websocket opcodes, from http://tools.ietf.org/html/rfc6455
 enum {
   WEBSOCKET_OPCODE_CONTINUATION = 0x0,
   WEBSOCKET_OPCODE_TEXT = 0x1,
@@ -103,6 +84,13 @@ enum {
   WEBSOCKET_OPCODE_PONG = 0xa
 };
 
+const char *mg_get_option(const struct mg_context *ctx, const char *name);
+const char **mg_get_valid_option_names(void);
+int mg_modify_passwords_file(const char *passwords_file_name,
+                             const char *domain,
+                             const char *user,
+                             const char *password);
+int mg_write(struct mg_connection *, const void *buf, int len);
 
 // Macros for enabling compiler-specific checks for printf-like arguments.
 #undef PRINTF_FORMAT_STRING

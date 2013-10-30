@@ -158,11 +158,22 @@ Return: 1 on success, 0 on error.
 
     int mg_write(struct mg_connection *, const void *buf, int len);
 
-Send data to the client. This function attempts to send all requested data,
-unlike `write()` standard library call, which might send only a portion of
-requested data.  
+Send data to the client. This function guarantees to send all requested data.
+If more then one thread is writing to the connection, writes must be
+serialized by e.g. using mutex.  
 Return: number of bytes written to the client. If return value is less then
-`len`, client has closed the connection.
+`len`, it is a failure, meaning that client has closed the connection.
+
+
+    int mg_websocket_write(struct mg_connection* conn, int opcode,
+                           const char *data, size_t data_len);
+
+Send data to a websocket client. If more then one thread is writing to the
+connection, writes must be serialized by e.g. using mutex. This function
+guarantees to send all data (semantic is similar to `mg_write()`).
+This function is available when mongoose is compiled with `-DUSE_WEBSOCKET`.  
+Return: number of bytes written to the client. If return value is less then
+`data_len`, it is a failure, meaning that client has closed the connection.
 
 
 ## Embedding Examples
