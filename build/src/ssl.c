@@ -176,4 +176,3 @@ static void uninitialize_ssl(struct mg_context *ctx) {
   }
 }
 #endif // !NO_SSL
-

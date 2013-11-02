@@ -2072,18 +2072,21 @@ static void uninitialize_ssl(struct mg_context *ctx) {
 }
 #endif // !NO_SSL
 
-
 static SOCKET conn2(const char *host, int port, int use_ssl,
                     char *ebuf, size_t ebuf_len) {
   struct sockaddr_in sin;
-  struct hostent *he;
+  struct hostent *he = NULL;
   SOCKET sock = INVALID_SOCKET;
+
+  (void) use_ssl; // Prevent warning for -DNO_SSL case
 
   if (host == NULL) {
     snprintf(ebuf, ebuf_len, "%s", "NULL host");
+#ifndef NO_SSL
   } else if (use_ssl && SSLv23_client_method == NULL) {
     snprintf(ebuf, ebuf_len, "%s", "SSL is not initialized");
     // TODO(lsm): use something threadsafe instead of gethostbyname()
+#endif
   } else if ((he = gethostbyname(host)) == NULL) {
     snprintf(ebuf, ebuf_len, "gethostbyname(%s): %s", host, strerror(ERRNO));
   } else if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
@@ -2314,9 +2317,12 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
     // How many bytes we send in this iteration
     k = len - sent > INT_MAX ? INT_MAX : (int) (len - sent);
 
+#if !defined(NO_SSL)
     if (ssl != NULL) {
       n = SSL_write(ssl, buf + sent, k);
-    } else if (fp != NULL) {
+    } else
+#endif
+    if (fp != NULL) {
       n = (int) fwrite(buf + sent, 1, (size_t) k, fp);
       if (ferror(fp))
         n = -1;
