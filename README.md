@@ -14,7 +14,7 @@ User documentation is available at
 Mongoose keeps the balance between functionality and
 simplicity by carefully selected list of features:
 
-- Works on Windows, Mac, UNIX, iPhone, Android, and many other platforms
+- Works on Windows, Mac, UNIX/Linux, iPhone, Android, and many other platforms
 - Scripting and database support (Lua Server Pages + Sqlite, see
   [page.lp](https://github.com/cesanta/mongoose/blob/master/test/page.lp) ),
   which provides ready to go, powerful web development platform in
