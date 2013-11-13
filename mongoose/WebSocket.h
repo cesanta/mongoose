@@ -9,8 +9,7 @@
 
 using namespace std;
 
-#define WEBSOCKET_TEXT 0x01
-#define WEBSOCKET_FIN  0x80
+#define WEBSOCKET_FIN 0x80
 
 namespace Mongoose
 {
@@ -26,7 +25,7 @@ namespace Mongoose
              *
              * @param string the data to send
              */
-            void send(string data);
+            void send(string data, int opcode = WEBSOCKET_OPCODE_TEXT);
 
             /**
              * Returns the connection request
