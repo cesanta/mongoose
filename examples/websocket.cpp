@@ -32,7 +32,7 @@ class MyController : public WebController
 
             if (data == "exit") {
                 cout << "Client exiting" << endl;
-               websocket->close();
+                websocket->close();
             }
         }
 };

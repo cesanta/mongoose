@@ -19,7 +19,7 @@ namespace Mongoose
     class WebSocket
     {
         public:
-            WebSocket(struct mg_connection *connection_);
+            WebSocket(struct mg_connection *connection_, const struct mg_request_info *request_);
 
             /**
              * Sends data through the web socket

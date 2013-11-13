@@ -25,8 +25,8 @@
 extern "C" {
 #endif // __cplusplus
 
-struct mg_context;     // Handle for the HTTP service itself
-struct mg_connection;  // Handle for the individual connection
+struct mg_context;     // Web server instance
+struct mg_connection;  // HTTP request descriptor
 
 
 // This structure contains information about the HTTP request.
@@ -39,8 +39,6 @@ struct mg_request_info {
   long remote_ip;             // Client's IP address
   int remote_port;            // Client's port
   int is_ssl;                 // 1 if SSL-ed, 0 if not
-  void *user_data;            // User data pointer passed to mg_start()
-  void *conn_data;            // Connection-specific, per-thread user data.
 
   int num_headers;            // Number of HTTP headers
   struct mg_header {
@@ -49,96 +47,34 @@ struct mg_request_info {
   } http_headers[64];         // Maximum 64 headers
 };
 
-enum mg_event {
-  MG_REQUEST_BEGIN,
-  MG_REQUEST_END,
-  MG_HTTP_ERROR,
-  MG_EVENT_LOG,
-  MG_THREAD_BEGIN,
-  MG_THREAD_END
-};
-typedef int (*mg_callback_t)(enum mg_event event,
-                             struct mg_connection *conn,
-                             void *data);
+struct mg_event {
+  int type;                   // Event type, possible types are defined below
+#define MG_REQUEST_BEGIN  1   // event_param: NULL
+#define MG_REQUEST_END    2   // event_param: NULL
+#define MG_HTTP_ERROR     3   // event_param: int status_code
+#define MG_EVENT_LOG      4   // event_param: const char *message
+#define MG_THREAD_BEGIN   5   // event_param: NULL
+#define MG_THREAD_END     6   // event_param: NULL
 
-struct mg_callbacks {
-  int  (*begin_request)(struct mg_connection *);
-  void (*end_request)(const struct mg_connection *, int reply_status_code);
-  int  (*log_message)(const struct mg_connection *, const char *message);
-  int  (*init_ssl)(void *ssl_context, void *user_data);
-  int (*websocket_connect)(const struct mg_connection *);
-  void (*websocket_ready)(struct mg_connection *);
-  int  (*websocket_data)(struct mg_connection *, int bits,
-                         char *data, size_t data_len);
-  void (*upload)(struct mg_connection *, const char *file_name);
-  void (*thread_start)(void *user_data, void **conn_data);
-  void (*thread_stop)(void *user_data, void **conn_data);
+  void *user_data;            // User data pointer passed to mg_start()
+  void *conn_data;            // Connection-specific, per-thread user data.
+  void *event_param;          // Event-specific parameter
+
+  struct mg_connection *conn;
+  struct mg_request_info *request_info;
 };
 
-struct mg_context *mg_start(const struct mg_callbacks *callbacks,
-                            void *user_data,
-                            const char **configuration_options);
+typedef int (*mg_event_handler_t)(struct mg_event *event);
+
+struct mg_context *mg_start(const char **configuration_options,
+                            mg_event_handler_t func, void *user_data);
 void mg_stop(struct mg_context *);
 
-
-// Get the value of particular configuration parameter.
-// The value returned is read-only. Mongoose does not allow changing
-// configuration at run time.
-// If given parameter name is not valid, NULL is returned. For valid
-// names, return value is guaranteed to be non-NULL. If parameter is not
-// set, zero-length string is returned.
-const char *mg_get_option(const struct mg_context *ctx, const char *name);
-
-
-// Return array of strings that represent valid configuration options.
-// For each option, option name and default value is returned, i.e. the
-// number of entries in the array equals to number_of_options x 2.
-// Array is NULL terminated.
-const char **mg_get_valid_option_names(void);
-
-
-// Add, edit or delete the entry in the passwords file.
-//
-// This function allows an application to manipulate .htpasswd files on the
-// fly by adding, deleting and changing user records. This is one of the
-// several ways of implementing authentication on the server side. For another,
-// cookie-based way please refer to the examples/chat.c in the source tree.
-//
-// If password is not NULL, entry is added (or modified if already exists).
-// If password is NULL, entry is deleted.
-//
-// Return:
-//   1 on success, 0 on error.
-int mg_modify_passwords_file(const char *passwords_file_name,
-                             const char *domain,
-                             const char *user,
-                             const char *password);
-
-
-// Return information associated with the request.
-struct mg_request_info *mg_get_request_info(struct mg_connection *);
-
-
-// Send data to the client.
-// Return:
-//  0   when the connection has been closed
-//  -1  on error
-//  >0  number of bytes written on success
-int mg_write(struct mg_connection *, const void *buf, size_t len);
-
-
-// Send data to a websocket client wrapped in a websocket frame.
-// It is unsafe to read/write to this connection from another thread.
-// This function is available when mongoose is compiled with -DUSE_WEBSOCKET
-//
-// Return:
-//  0   when the connection has been closed
-//  -1  on error
-//  >0  number of bytes written on success
+void mg_websocket_handshake(struct mg_connection *);
+int mg_websocket_read(struct mg_connection *, int *bits, char **data);
 int mg_websocket_write(struct mg_connection* conn, int opcode,
                        const char *data, size_t data_len);
-
-// Opcodes, from http://tools.ietf.org/html/rfc6455
+// Websocket opcodes, from http://tools.ietf.org/html/rfc6455
 enum {
   WEBSOCKET_OPCODE_CONTINUATION = 0x0,
   WEBSOCKET_OPCODE_TEXT = 0x1,
@@ -148,6 +84,13 @@ enum {
   WEBSOCKET_OPCODE_PONG = 0xa
 };
 
+const char *mg_get_option(const struct mg_context *ctx, const char *name);
+const char **mg_get_valid_option_names(void);
+int mg_modify_passwords_file(const char *passwords_file_name,
+                             const char *domain,
+                             const char *user,
+                             const char *password);
+int mg_write(struct mg_connection *, const void *buf, int len);
 
 // Macros for enabling compiler-specific checks for printf-like arguments.
 #undef PRINTF_FORMAT_STRING
@@ -184,7 +127,7 @@ void mg_send_file(struct mg_connection *conn, const char *path);
 //   0     connection has been closed by peer. No more data could be read.
 //   < 0   read error. No more data could be read from the connection.
 //   > 0   number of bytes read into the buffer.
-int mg_read(struct mg_connection *, void *buf, size_t len);
+int mg_read(struct mg_connection *, void *buf, int len);
 
 
 // Get the value of particular HTTP header.
@@ -258,10 +201,13 @@ struct mg_connection *mg_download(const char *host, int port, int use_ssl,
 void mg_close_connection(struct mg_connection *conn);
 
 
-// File upload functionality. Each uploaded file gets saved into a temporary
-// file and MG_UPLOAD event is sent.
-// Return number of uploaded files.
-int mg_upload(struct mg_connection *conn, const char *destination_dir);
+// Read multipart-form-data POST buffer, save uploaded files into
+// destination directory, and return path to the saved filed.
+// This function can be called multiple times for the same connection,
+// if more then one file is uploaded.
+// Return: path to the uploaded file, or NULL if there are no more files.
+FILE *mg_upload(struct mg_connection *conn, const char *destination_dir,
+                char *path, int path_len);
 
 
 // Convenience function -- create detached thread.

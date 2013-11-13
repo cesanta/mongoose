@@ -52,7 +52,7 @@ namespace Mongoose
              *
              * @param struct mg_connection* the mongoose connection
              */
-            int _beginRequest(struct mg_connection *conn);
+            int _beginRequest(struct mg_connection *conn, const struct mg_request_info *request_info);
 
             /**
              * Internally used to process a file upload
@@ -67,7 +67,7 @@ namespace Mongoose
              *
              * @param struct mg_connection* the mongoose connection with the client
              */
-            void _webSocketReady(struct mg_connection *conn);
+            void _webSocketReady(struct mg_connection *conn, const struct mg_request_info *request);
 
             /**
              * Handles web sockets data
@@ -115,7 +115,6 @@ namespace Mongoose
             Mutex mutex;
             map<string, string> optionsMap;
             map<struct mg_connection*, Request *> currentRequests;
-            struct mg_callbacks callbacks;
             struct mg_context *ctx;
             const char **options;
 

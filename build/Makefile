@@ -21,9 +21,15 @@
 
 PROG = mongoose
 EXE_SUFFIX =
-CFLAGS = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe -I.. $(CFLAGS_EXTRA)
+CFLAGS = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe -I. -I.. $(CFLAGS_EXTRA)
 VERSION = $(shell perl -lne \
             'print $$1 if /define\s+MONGOOSE_VERSION\s+"(\S+)"/' ../mongoose.c)
+
+# The order in which files are listed is important
+SOURCES = src/internal.h src/util.c src/string.c src/parse_date.c \
+          src/options.c src/crypto.c src/auth.c src/win32.c src/unix.c \
+          src/mg_printf.c src/ssl.c src/http_client.c \
+          src/mongoose.c src/lua.c
 
 TINY_SOURCES = ../mongoose.c main.c
 LUA_SOURCES = $(TINY_SOURCES) sqlite3.c lsqlite3.c lua_5.2.1.c
@@ -56,20 +62,20 @@ endif
 all:
 	@echo "make (unix|windows|macos)"
 
-mongoose.c: mod_lua.c mongoose.h Makefile
+../mongoose.c: ../mongoose.h Makefile $(SOURCES)
+	cat $(SOURCES) | sed '/#include "internal.h"/d' > $@
 
 unix_unit_test: $(LUA_SOURCES) Makefile ../test/unit_test.c
-	$(CC) ../test/unit_test.c lua_5.2.1.c -o $@ $(CFLAGS) -g -O0
-	./$@
+	$(CC) ../test/unit_test.c lua_5.2.1.c $(CFLAGS) -g -O0 -o t && ./t
 
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
 # "-Wl,--as-needed" turned on by default  in cc command.
 # Also, this is turned in many other distros in static linkage builds.
-$(PROG): $(TINY_SOURCES) unix_unit_test
+$(PROG): $(TINY_SOURCES)
 	$(CC) $(TINY_SOURCES) -o $@ $(CFLAGS)
 
-$(PROG)-lua: $(LUA_SOURCES) unix_unit_test
+$(PROG)-lua: $(LUA_SOURCES)
 	$(CC) $(LUA_SOURCES) -o $@ $(LUA_SQLITE_FLAGS) $(CFLAGS)
 
 unix: $(PROG) $(PROG)-lua

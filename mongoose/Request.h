@@ -21,7 +21,7 @@ namespace Mongoose
     class Request
     {
         public:
-            Request(struct mg_connection *connection);
+            Request(struct mg_connection *connection, const struct mg_request_info *request);
 
             /**
              * Sends a given response to the client
@@ -72,6 +72,7 @@ namespace Mongoose
              * Handle uploads to the target directory
              *
              * @param string the target directory
+             * @param path the posted file path
              */
             void upload(string targetDirectory);
 
@@ -97,7 +98,7 @@ namespace Mongoose
             smatch matches;
 #endif
             struct mg_connection *connection;
-            struct mg_request_info *request;
+            const struct mg_request_info *request;
     };
 };
 

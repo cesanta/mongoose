@@ -326,9 +326,12 @@ static void redirect_to_ssl(struct mg_connection *conn,
   }
 }
 
-static int begin_request_handler(struct mg_connection *conn) {
-  const struct mg_request_info *request_info = mg_get_request_info(conn);
-  int processed = 1;
+static int event_handler(struct mg_event *event) {
+  struct mg_request_info *request_info = event->request_info;
+  struct mg_connection *conn = event->conn;
+  int result = 1;
+
+  if (event->type != MG_REQUEST_BEGIN) return 0;
 
   if (!request_info->is_ssl) {
     redirect_to_ssl(conn, request_info);
@@ -343,9 +346,10 @@ static int begin_request_handler(struct mg_connection *conn) {
   } else {
     // No suitable handler found, mark as not processed. Mongoose will
     // try to serve the request.
-    processed = 0;
+    result = 0;
   }
-  return processed;
+
+  return result;
 }
 
 static const char *options[] = {
@@ -357,7 +361,6 @@ static const char *options[] = {
 };
 
 int main(void) {
-  struct mg_callbacks callbacks;
   struct mg_context *ctx;
 
   // Initialize random number generator. It will be used later on for
@@ -365,9 +368,7 @@ int main(void) {
   srand((unsigned) time(0));
 
   // Setup and start Mongoose
-  memset(&callbacks, 0, sizeof(callbacks));
-  callbacks.begin_request = begin_request_handler;
-  if ((ctx = mg_start(&callbacks, NULL, options)) == NULL) {
+  if ((ctx = mg_start(options, event_handler, NULL)) == NULL) {
     printf("%s\n", "Cannot start chat server, fatal exit");
     exit(EXIT_FAILURE);
   }

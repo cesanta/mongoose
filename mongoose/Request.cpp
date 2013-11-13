@@ -8,11 +8,10 @@ using namespace std;
 
 namespace Mongoose
 {
-    Request::Request(struct mg_connection *connection_) : 
-        connection(connection_)
+    Request::Request(struct mg_connection *connection_, const struct mg_request_info *request_) : 
+        connection(connection_),
+        request(request_)
     {
-        request = mg_get_request_info(connection);
-
         url = string(request->uri);
         method = string(request->request_method);
 
@@ -132,7 +131,7 @@ namespace Mongoose
         char dummy[10];
 
         for (i=0; i<request->num_headers; i++) {
-            struct mg_request_info::mg_header *header = &request->http_headers[i];
+            const struct mg_request_info::mg_header *header = &request->http_headers[i];
 
             if (strcmp(header->name, "Cookie") == 0) {
                 if (mg_get_cookie(header->value, key.c_str(), dummy, sizeof(dummy)) != -1) {
@@ -155,7 +154,7 @@ namespace Mongoose
         const char *place = NULL;
 
         for (i=0; i<request->num_headers; i++) {
-            struct mg_request_info::mg_header *header = &request->http_headers[i];
+            const struct mg_request_info::mg_header *header = &request->http_headers[i];
 
             if (strcmp(header->name, "Cookie") == 0) {
                 if (mg_get_cookie(header->value, key.c_str(), dummy, sizeof(dummy)) != -1) {
@@ -186,6 +185,10 @@ namespace Mongoose
             
     void Request::upload(string targetDirectory)
     {
-        mg_upload(connection, targetDirectory.c_str());
+        char path[1024];
+
+        if (mg_upload(connection, targetDirectory.c_str(), path, sizeof(path)) != NULL) {
+            uploadFiles.push_back(string(path));
+        }
     }
 };
