@@ -37,8 +37,6 @@ static int event_handler(struct mg_event *event)
             const struct mg_request_info *request_info = event->request_info;
             struct mg_connection *conn = event->conn;
 
-            cout << request_info->uri << endl;
-
 #ifdef USE_WEBSOCKET
             const char *version_header = mg_get_header(event->conn, "Sec-WebSocket-Version");
             if (version_header != NULL) {
