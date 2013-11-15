@@ -1,6 +1,6 @@
 
 <html><pre>
 ssi_begin
-<!--#include "embed.c" -->
+<!--#include "unit_test.c" -->
 ssi_end
 </pre></html>

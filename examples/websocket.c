@@ -3,63 +3,63 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "mongoose.h"
 
-static void websocket_ready_handler(struct mg_connection *conn) {
-  unsigned char buf[40];
-  buf[0] = 0x81;
-  buf[1] = snprintf((char *) buf + 2, sizeof(buf) - 2, "%s", "server ready");
-  mg_write(conn, buf, 2 + buf[1]);
-}
+static int event_handler(struct mg_event *event) {
 
-// Arguments:
-//   flags: first byte of websocket frame, see websocket RFC,
-//          http://tools.ietf.org/html/rfc6455, section 5.2
-//   data, data_len: payload data. Mask, if any, is already applied.
-static int websocket_data_handler(struct mg_connection *conn, int flags,
-                                  char *data, size_t data_len) {
-  unsigned char reply[200];
-  size_t i;
+  if (event->type == MG_REQUEST_BEGIN) {
+    const char *version_header = mg_get_header(event->conn,
+                                               "Sec-WebSocket-Version");
 
-  (void) flags;
+    if (version_header != NULL) {
+      // Websocket request, process it
+      if (strcmp(version_header, "13") != 0) {
+        mg_printf(event->conn, "%s", "HTTP/1.1 426 Upgrade Required\r\n\r\n");
+      } else {
+        static const char *server_ready_message = "server ready";
+        char *data;
+        int bits, len, must_exit = 0;
 
-  printf("rcv: [%.*s]\n", (int) data_len, data);
+        // Handshake, and send initial server message
+        mg_websocket_handshake(event->conn);
+        mg_websocket_write(event->conn, WEBSOCKET_OPCODE_TEXT,
+                           server_ready_message, strlen(server_ready_message));
 
-  // Truncate echoed message, to simplify output code.
-  if (data_len > 125) {
-    data_len = 125;
+        // Read messages sent by client. Echo them back.
+        while (must_exit == 0 &&
+               (len = mg_websocket_read(event->conn, &bits, &data)) > 0) {
+
+          printf("got message: [%.*s]\n", len, data);
+          mg_websocket_write(event->conn, WEBSOCKET_OPCODE_TEXT, data, len);
+
+          // If the message is "exit", close the connection, exit the loop
+          if (memcmp(data, "exit", 4) == 0) {
+            mg_websocket_write(event->conn,
+                               WEBSOCKET_OPCODE_CONNECTION_CLOSE, "", 0);
+            must_exit = 1;
+          }
+
+          // It's our responsibility to free allocated message
+          free(data);
+        }
+      }
+      return 1;
+    }
   }
 
-  // Prepare frame
-  reply[0] = 0x81;  // text, FIN set
-  reply[1] = data_len;
-
-  // Copy message from request to reply, applying the mask if required.
-  for (i = 0; i < data_len; i++) {
-    reply[i + 2] = data[i];
-  }
-
-  // Echo the message back to the client
-  mg_write(conn, reply, 2 + data_len);
-
-  // Returning zero means stoping websocket conversation.
-  // Close the conversation if client has sent us "exit" string.
-  return memcmp(reply + 2, "exit", 4);
+  return 0;
 }
 
 int main(void) {
   struct mg_context *ctx;
-  struct mg_callbacks callbacks;
   const char *options[] = {
     "listening_ports", "8080",
     "document_root", "websocket_html_root",
     NULL
   };
 
-  memset(&callbacks, 0, sizeof(callbacks));
-  callbacks.websocket_ready = websocket_ready_handler;
-  callbacks.websocket_data = websocket_data_handler;
-  ctx = mg_start(&callbacks, NULL, options);
+  ctx = mg_start(options, &event_handler, NULL);
   getchar();  // Wait until user hits "enter"
   mg_stop(ctx);
 

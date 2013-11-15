@@ -1,4 +1,11 @@
+#ifndef _MSC_VER
 #include <unistd.h>
+#else 
+#include <time.h>
+#include <sys/types.h>
+#include <sys/timeb.h>
+#endif
+#include <string>
 #include <string.h>
 #include <iostream>
 #include "Server.h"
@@ -6,38 +13,60 @@
 using namespace std;
 using namespace Mongoose;
 
+static int getTime()
+{
+#ifdef _MSC_VER
+    time_t ltime;
+    time(&ltime);
+    return ltime;
+#else
+    return time(NULL);
+#endif
+}
+
 /**
  * The handlers below are written in C to do the binding of the C mongoose with
  * the C++ API
  */
-static int begin_request_handler(struct mg_connection *conn)
+static int event_handler(struct mg_event *event)
 {
-    const struct mg_request_info *request_info = mg_get_request_info(conn);
-    Server *server = (Server *)request_info->user_data;
+    if (event->type == MG_REQUEST_BEGIN) {
+        Server *server = (Server *)event->user_data;
 
-    if (server != NULL) {
-        return server->_beginRequest(conn);
+        if (server != NULL) {
+            const struct mg_request_info *request_info = event->request_info;
+            struct mg_connection *conn = event->conn;
+
+#ifdef USE_WEBSOCKET
+            const char *version_header = mg_get_header(event->conn, "Sec-WebSocket-Version");
+            if (version_header != NULL) {
+                // Websocket request, process it
+                if (strcmp(version_header, "13") != 0) {
+                    mg_printf(event->conn, "%s", "HTTP/1.1 426 Upgrade Required\r\n\r\n");
+                } else {
+                    char *data;
+                    int bits, len;
+
+                    // Handshake
+                    mg_websocket_handshake(event->conn);
+                    server->_webSocketReady(conn, request_info);
+
+                    while ((len = mg_websocket_read(conn, &bits, &data)) > 0) {
+                        server->_webSocketData(conn, bits, data, len);
+                        delete data;
+                    }
+
+                }
+
+                return 1;
+            }
+#endif
+        
+            return server->_beginRequest(conn, request_info);
+        }
     }
-}
 
-static void websocket_ready_handler(struct mg_connection *conn)
-{
-    const struct mg_request_info *request_info = mg_get_request_info(conn);
-    Server *server = (Server *)request_info->user_data;
-
-    if (server != NULL) {
-        server->_webSocketReady(conn);
-    }
-}
-
-static int websocket_data_handler(struct mg_connection *conn, int flags, char *data, size_t data_len)
-{
-    const struct mg_request_info *request_info = mg_get_request_info(conn);
-    Server *server = (Server *)request_info->user_data;
-
-    if (server != NULL) {
-        return server->_webSocketData(conn, flags, data, data_len);
-    }
+    return 0;
 }
 
 namespace Mongoose
@@ -46,8 +75,6 @@ namespace Mongoose
         : ctx(NULL), options(NULL), websockets(true)
 
     {
-        memset(&callbacks, 0, sizeof(callbacks));
-
         ostringstream portOss;
         portOss << port;
         optionsMap["listening_ports"] = portOss.str();
@@ -65,7 +92,7 @@ namespace Mongoose
         if (ctx == NULL) {
 #ifdef ENABLE_STATS
             requests = 0;
-            startTime = time(NULL);
+            startTime = getTime();
 #endif
             size_t size = optionsMap.size()*2+1;
 
@@ -80,14 +107,7 @@ namespace Mongoose
             }
 
             options[2*pos] = NULL;
-
-            callbacks.begin_request = begin_request_handler;
-#ifdef USE_WEBSOCKET
-            callbacks.websocket_ready = websocket_ready_handler;
-            callbacks.websocket_data = websocket_data_handler;
-#endif
-
-            mg_start(&callbacks, (void *)this, options);
+            mg_start(options, event_handler, (void *)this);
         } else {
             throw string("Server is already running");
         }
@@ -113,9 +133,9 @@ namespace Mongoose
         controllers.push_back(controller);
     }
 
-    void Server::_webSocketReady(struct mg_connection *conn)
+    void Server::_webSocketReady(struct mg_connection *conn, const struct mg_request_info *request)
     {
-        WebSocket *websocket = new WebSocket(conn);
+        WebSocket *websocket = new WebSocket(conn, request);
         websockets.add(websocket);
         websockets.clean();
 
@@ -152,10 +172,19 @@ namespace Mongoose
         }
     }
 
-    int Server::_beginRequest(struct mg_connection *conn)
+    int Server::_beginRequest(struct mg_connection *conn, const struct mg_request_info *request_info)
     {
-        Request request(conn);
+        Request request(conn, request_info);
+
+        mutex.lock();
+        currentRequests[conn] = &request;
+        mutex.unlock();
+
         Response *response = beginRequest(request);
+
+        mutex.lock();
+        currentRequests.erase(conn);
+        mutex.unlock();
 
         if (response == NULL) {
             return 0;
@@ -170,7 +199,7 @@ namespace Mongoose
     {
         Response *response;
         vector<Controller *>::iterator it;
-        
+
         mutex.lock();
         requests++;
         mutex.unlock();
@@ -191,7 +220,7 @@ namespace Mongoose
     {
         optionsMap[key] = value;
     }
-            
+
     WebSockets &Server::getWebSockets()
     {
         return websockets;
@@ -199,7 +228,7 @@ namespace Mongoose
 
     void Server::printStats()
     {
-        int delta = time(NULL)-startTime;
+        int delta = getTime()-startTime;
 
         if (delta) {
             cout << "Requests: " << requests << ", Requests/s: " << (requests*1.0/delta) << endl;

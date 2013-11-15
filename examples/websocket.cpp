@@ -1,4 +1,9 @@
+#ifdef _MSC_VER
+#include <windows.h>
+#include <time.h>
+#else
 #include <unistd.h>
+#endif
 #include <stdlib.h>
 #include <signal.h>
 #include <mongoose/Server.h>
@@ -27,7 +32,7 @@ class MyController : public WebController
 
             if (data == "exit") {
                 cout << "Client exiting" << endl;
-               websocket->close();
+                websocket->close();
             }
         }
 };
@@ -44,7 +49,15 @@ void handle_signal(int sig)
 
 int main()
 {
-    srand(time(NULL));
+	int t;
+#ifdef _MSC_VER
+    time_t ltime;
+	time(&ltime);
+	t = ltime;
+#else
+	t = time(NULL);
+#endif
+	srand(t);
 
     signal(SIGINT, handle_signal);
 

@@ -3,7 +3,12 @@
 
 #include <iostream>
 #include <sstream>
+#include <vector>
+#ifdef ENABLE_REGEX_URL
+    #include <regex>
+#endif
 #include <mongoose.h>
+#include "UploadFile.h"
 #include "Response.h"
 
 using namespace std;
@@ -16,7 +21,7 @@ namespace Mongoose
     class Request
     {
         public:
-            Request(struct mg_connection *connection);
+            Request(struct mg_connection *connection, const struct mg_request_info *request);
 
             /**
              * Sends a given response to the client
@@ -63,17 +68,37 @@ namespace Mongoose
              */
             string getCookie(string key, string fallback = "");
 
+            /**
+             * Handle uploads to the target directory
+             *
+             * @param string the target directory
+             * @param path the posted file path
+             */
+            void upload(string targetDirectory);
+
             string getUrl();
             string getMethod();
-
+#ifdef ENABLE_REGEX_URL
+            smatch getMatches();
+            bool match(string pattern);
+#endif
             bool readVariable(const char *data, string key, string &output);
+
+            /**
+             * Files uploaded in this request
+             */
+            vector<UploadFile> uploadFiles;
 
         protected:
             string data;
             string method;
             string url;
+#ifdef ENABLE_REGEX_URL
+            string key;
+            smatch matches;
+#endif
             struct mg_connection *connection;
-            struct mg_request_info *request;
+            const struct mg_request_info *request;
     };
 };
 

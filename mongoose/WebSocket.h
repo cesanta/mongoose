@@ -9,8 +9,7 @@
 
 using namespace std;
 
-#define WEBSOCKET_TEXT 0x01
-#define WEBSOCKET_FIN  0x80
+#define WEBSOCKET_FIN 0x80
 
 namespace Mongoose
 {
@@ -19,14 +18,14 @@ namespace Mongoose
     class WebSocket
     {
         public:
-            WebSocket(struct mg_connection *connection_);
+            WebSocket(struct mg_connection *connection_, const struct mg_request_info *request_);
 
             /**
              * Sends data through the web socket
              *
              * @param string the data to send
              */
-            void send(string data);
+            void send(string data, int opcode = WEBSOCKET_OPCODE_TEXT);
 
             /**
              * Returns the connection request

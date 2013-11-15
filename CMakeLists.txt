@@ -20,6 +20,9 @@ option (HAS_JSONCPP
 option (ENABLE_STATS
     "Enable server statistics" ON)
 
+option (ENABLE_REGEX_URL
+    "Enable url regex matching dispatcher" OFF)
+
 set (JSONCPP_DIR "${PROJECT_SOURCE_DIR}/../jsoncpp"
     CACHE STRING "Json C++ directory")
 
@@ -35,6 +38,11 @@ if (ENABLE_STATS)
     add_definitions("-DENABLE_STATS")
 endif (ENABLE_STATS)
 
+if (ENABLE_REGEX_URL)
+    add_definitions("-DENABLE_REGEX_URL")
+    SET (CMAKE_CXX_FLAGS "-std=c++11")
+endif (ENABLE_REGEX_URL)
+
 if (CPP_BINDING)
     set (SOURCES
         ${SOURCES}
@@ -47,6 +55,7 @@ if (CPP_BINDING)
         ${MONGOOSE_CPP}/Session.cpp
         ${MONGOOSE_CPP}/Sessions.cpp
         ${MONGOOSE_CPP}/StreamResponse.cpp
+        ${MONGOOSE_CPP}/UploadFile.cpp
         ${MONGOOSE_CPP}/WebController.cpp
         )
 
@@ -107,14 +116,16 @@ endif (MAIN)
         
 # Compiling tests
 if (EXAMPLES)
-    add_executable (hello examples/hello.c)
-    target_link_libraries (hello _mongoose)
-
     add_executable (post examples/post.c)
     target_link_libraries (post _mongoose)
 
-    add_executable (chat examples/chat.c)
-    target_link_libraries (chat _mongoose)
+	if (NOT WIN32)
+	    add_executable (hello examples/hello.c)
+		target_link_libraries (hello _mongoose)
+	
+		add_executable (chat examples/chat.c)
+		target_link_libraries (chat _mongoose)
+	endif (NOT WIN32)
     
     add_executable (websocket examples/websocket.c)
     target_link_libraries (websocket _mongoose)

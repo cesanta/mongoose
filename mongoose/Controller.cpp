@@ -42,11 +42,21 @@ namespace Mongoose
     Response *Controller::process(Request &request)
     {
         Response *response = NULL;
-        string key = request.getMethod() + ":" + request.getUrl();
 
+#ifdef ENABLE_REGEX_URL
+        map<string, RequestHandlerBase *>::iterator it;
+        for (it=routes.begin(); it!=routes.end(); it++) {
+            if (request.match(it->first)){
+              response = it->second->process(request);
+              break;
+            }
+        }
+#else
+        string key = request.getMethod() + ":" + request.getUrl();
         if (routes.find(key) != routes.end()) {
             response = routes[key]->process(request);
         }
+#endif        
         return response;
     }
             

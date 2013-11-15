@@ -10,6 +10,7 @@ API.
   as a backend
 - Easy-to-use controllers sytem to build an application with modules
 - Possibility of enabling JsonCPP to create a json compliant web application
+- URL dispatcher using regex matches (C++11)
 - Session system to store data about an user using cookies and garbage collect cleaning
 - Simple access to GET & POST requests
 - Websockets support
@@ -67,7 +68,7 @@ You can build examples using CMake:
 ```
 mkdir builddir
 cd builddir
-cmake ..
+cmake -DEXAMPLES=ON ..
 make
 ```
 
@@ -75,13 +76,16 @@ This will build you the `cpp` program with examples of GET, POST (form), session
 HTTP response code
 
 You can also enable Json example using the `-DHAS_JSONCPP=ON` option when cmake'ing,
-this will build the `json` executable
+this will build the `json` executable. You also have to specify the `JSONCPP_DIR` that is the [JsonCpp](http://jsoncpp.sourceforge.net/) installation directory.
 
 Websockets are also supported and will be compiled if the `-DWEBSOCKET=ON` option is
 set with cmake (which is the default). `websocket.cpp` will be compiled to the
 `cpp_websocket` executable which let you see an example. Note that references to the
 `WebSocket*` clients can be keeped to dispatch data to them, which can be really
 useful to push data to some clients.
+
+To enable url regex matching dispatcher use `-DENABLE_REGEX_URL=ON` option.
+Note that this depends on C++11.
 
 # Development
 

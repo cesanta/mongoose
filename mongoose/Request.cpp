@@ -1,4 +1,5 @@
 #include <string.h>
+#include <string>
 #include <iostream>
 #include <mongoose.h>
 #include "Request.h"
@@ -7,20 +8,22 @@ using namespace std;
 
 namespace Mongoose
 {
-    Request::Request(struct mg_connection *connection_) : 
-        connection(connection_)
+    Request::Request(struct mg_connection *connection_, const struct mg_request_info *request_) : 
+        connection(connection_),
+        request(request_)
     {
-        request = mg_get_request_info(connection);
-
         url = string(request->uri);
         method = string(request->request_method);
 
         // Downloading POST data
         ostringstream postData;
-		int n;
-        char post[1024];
-        while (n = mg_read(connection, post, sizeof(post))) {
-			postData.write(post, n);
+        const char * content_type = mg_get_header(connection, "Content-Type");
+        if (content_type!= NULL && strcmp(content_type, "application/x-www-form-urlencoded") == 0) {
+            int n;
+            char post[1024];
+            while (n = mg_read(connection, post, sizeof(post))) {
+                postData.write(post, n);
+            }
         }
         data = postData.str();
     }
@@ -34,6 +37,19 @@ namespace Mongoose
     {
         return method;
     }
+
+#ifdef ENABLE_REGEX_URL
+    smatch Request::getMatches()
+    {
+        return matches;
+    }
+
+    bool Request::match(string pattern)
+    {
+        key = method + ":" + url;
+        return regex_match(key, matches, regex(pattern));
+    }
+#endif
 
     void Request::writeResponse(Response *response)
     {
@@ -108,15 +124,15 @@ namespace Mongoose
 
         return fallback;
     }
-            
+
     bool Request::hasCookie(string key)
     {
         int i;
         char dummy[10];
 
         for (i=0; i<request->num_headers; i++) {
-            struct mg_request_info::mg_header *header = &request->http_headers[i];
-            
+            const struct mg_request_info::mg_header *header = &request->http_headers[i];
+
             if (strcmp(header->name, "Cookie") == 0) {
                 if (mg_get_cookie(header->value, key.c_str(), dummy, sizeof(dummy)) != -1) {
                     return true;
@@ -136,10 +152,10 @@ namespace Mongoose
         char *buffer = new char[size];
         char dummy[10];
         const char *place = NULL;
-        
+
         for (i=0; i<request->num_headers; i++) {
-            struct mg_request_info::mg_header *header = &request->http_headers[i];
-            
+            const struct mg_request_info::mg_header *header = &request->http_headers[i];
+
             if (strcmp(header->name, "Cookie") == 0) {
                 if (mg_get_cookie(header->value, key.c_str(), dummy, sizeof(dummy)) != -1) {
                     place = header->value;
@@ -165,5 +181,14 @@ namespace Mongoose
         delete[] buffer;
 
         return output;
+    }
+            
+    void Request::upload(string targetDirectory)
+    {
+        char path[1024];
+
+        if (mg_upload(connection, targetDirectory.c_str(), path, sizeof(path)) != NULL) {
+            uploadFiles.push_back(string(path));
+        }
     }
 };

@@ -1,22 +1,19 @@
-// Copyright (c) 2004-2012 Sergey Lyubka
+// Copyright (c) 2004-2013 Sergey Lyubka <valenok@gmail.com>
+// Copyright (c) 2013 Cesanta Software Limited
+// All rights reserved
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// This library is dual-licensed: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 2 as
+// published by the Free Software Foundation. For the terms of this
+// license, see <http://www.gnu.org/licenses/>.
 //
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
+// You are free to use this library under the terms of the GNU General
+// Public License, but WITHOUT ANY WARRANTY; without even the implied
+// warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
+// Alternatively, you can license this library under a commercial
+// license, as set out in <http://cesanta.com/products.html>.
 
 #ifndef MONGOOSE_HEADER_INCLUDED
 #define  MONGOOSE_HEADER_INCLUDED
@@ -28,8 +25,8 @@
 extern "C" {
 #endif // __cplusplus
 
-struct mg_context;     // Handle for the HTTP service itself
-struct mg_connection;  // Handle for the individual connection
+struct mg_context;     // Web server instance
+struct mg_connection;  // HTTP request descriptor
 
 
 // This structure contains information about the HTTP request.
@@ -42,7 +39,6 @@ struct mg_request_info {
   long remote_ip;             // Client's IP address
   int remote_port;            // Client's port
   int is_ssl;                 // 1 if SSL-ed, 0 if not
-  void *user_data;            // User data pointer passed to mg_start()
 
   int num_headers;            // Number of HTTP headers
   struct mg_header {
@@ -51,168 +47,56 @@ struct mg_request_info {
   } http_headers[64];         // Maximum 64 headers
 };
 
+struct mg_event {
+  int type;                   // Event type, possible types are defined below
+#define MG_REQUEST_BEGIN  1   // event_param: NULL
+#define MG_REQUEST_END    2   // event_param: NULL
+#define MG_HTTP_ERROR     3   // event_param: int status_code
+#define MG_EVENT_LOG      4   // event_param: const char *message
+#define MG_THREAD_BEGIN   5   // event_param: NULL
+#define MG_THREAD_END     6   // event_param: NULL
 
-// This structure needs to be passed to mg_start(), to let mongoose know
-// which callbacks to invoke. For detailed description, see
-// https://github.com/valenok/mongoose/blob/master/UserManual.md
-struct mg_callbacks {
-  // Called when mongoose has received new HTTP request.
-  // If callback returns non-zero,
-  // callback must process the request by sending valid HTTP headers and body,
-  // and mongoose will not do any further processing.
-  // If callback returns 0, mongoose processes the request itself. In this case,
-  // callback must not send any data to the client.
-  int  (*begin_request)(struct mg_connection *);
+  void *user_data;            // User data pointer passed to mg_start()
+  void *conn_data;            // Connection-specific, per-thread user data.
+  void *event_param;          // Event-specific parameter
 
-  // Called when mongoose has finished processing request.
-  void (*end_request)(const struct mg_connection *, int reply_status_code);
-
-  // Called when mongoose is about to log a message. If callback returns
-  // non-zero, mongoose does not log anything.
-  int  (*log_message)(const struct mg_connection *, const char *message);
-
-  // Called when mongoose initializes SSL library.
-  int  (*init_ssl)(void *ssl_context, void *user_data);
-
-  // Called when websocket request is received, before websocket handshake.
-  // If callback returns 0, mongoose proceeds with handshake, otherwise
-  // cinnection is closed immediately.
-  int (*websocket_connect)(const struct mg_connection *);
-
-  // Called when websocket handshake is successfully completed, and
-  // connection is ready for data exchange.
-  void (*websocket_ready)(struct mg_connection *);
-
-  // Called when data frame has been received from the client.
-  // Parameters:
-  //    bits: first byte of the websocket frame, see websocket RFC at
-  //          http://tools.ietf.org/html/rfc6455, section 5.2
-  //    data, data_len: payload, with mask (if any) already applied.
-  // Return value:
-  //    non-0: keep this websocket connection opened.
-  //    0:     close this websocket connection.
-  int  (*websocket_data)(struct mg_connection *, int bits,
-                         char *data, size_t data_len);
-
-  // Called when mongoose tries to open a file. Used to intercept file open
-  // calls, and serve file data from memory instead.
-  // Parameters:
-  //    path:     Full path to the file to open.
-  //    data_len: Placeholder for the file size, if file is served from memory.
-  // Return value:
-  //    NULL: do not serve file from memory, proceed with normal file open.
-  //    non-NULL: pointer to the file contents in memory. data_len must be
-  //              initilized with the size of the memory block.
-  const char * (*open_file)(const struct mg_connection *,
-                             const char *path, size_t *data_len);
-
-  // Called when mongoose is about to serve Lua server page (.lp file), if
-  // Lua support is enabled.
-  // Parameters:
-  //   lua_context: "lua_State *" pointer.
-  void (*init_lua)(struct mg_connection *, void *lua_context);
-
-  // Called when mongoose has uploaded a file to a temporary directory as a
-  // result of mg_upload() call.
-  // Parameters:
-  //    file_file: full path name to the uploaded file.
-  void (*upload)(struct mg_connection *, const char *file_name);
-
-  // Called when mongoose is about to send HTTP error to the client.
-  // Implementing this callback allows to create custom error pages.
-  // Parameters:
-  //   status: HTTP error status code.
-  int  (*http_error)(struct mg_connection *, int status);
+  struct mg_connection *conn;
+  struct mg_request_info *request_info;
 };
 
-// Start web server.
-//
-// Parameters:
-//   callbacks: mg_callbacks structure with user-defined callbacks.
-//   options: NULL terminated list of option_name, option_value pairs that
-//            specify Mongoose configuration parameters.
-//
-// Side-effects: on UNIX, ignores SIGCHLD and SIGPIPE signals. If custom
-//    processing is required for these, signal handlers must be set up
-//    after calling mg_start().
-//
-//
-// Example:
-//   const char *options[] = {
-//     "document_root", "/var/www",
-//     "listening_ports", "80,443s",
-//     NULL
-//   };
-//   struct mg_context *ctx = mg_start(&my_func, NULL, options);
-//
-// Refer to https://github.com/valenok/mongoose/blob/master/UserManual.md
-// for the list of valid option and their possible values.
-//
-// Return:
-//   web server context, or NULL on error.
-struct mg_context *mg_start(const struct mg_callbacks *callbacks,
-                            void *user_data,
-                            const char **configuration_options);
+typedef int (*mg_event_handler_t)(struct mg_event *event);
 
-
-// Stop the web server.
-//
-// Must be called last, when an application wants to stop the web server and
-// release all associated resources. This function blocks until all Mongoose
-// threads are stopped. Context pointer becomes invalid.
+struct mg_context *mg_start(const char **configuration_options,
+                            mg_event_handler_t func, void *user_data);
 void mg_stop(struct mg_context *);
 
+void mg_websocket_handshake(struct mg_connection *);
+int mg_websocket_read(struct mg_connection *, int *bits, char **data);
+int mg_websocket_write(struct mg_connection* conn, int opcode,
+                       const char *data, size_t data_len);
+// Websocket opcodes, from http://tools.ietf.org/html/rfc6455
+enum {
+  WEBSOCKET_OPCODE_CONTINUATION = 0x0,
+  WEBSOCKET_OPCODE_TEXT = 0x1,
+  WEBSOCKET_OPCODE_BINARY = 0x2,
+  WEBSOCKET_OPCODE_CONNECTION_CLOSE = 0x8,
+  WEBSOCKET_OPCODE_PING = 0x9,
+  WEBSOCKET_OPCODE_PONG = 0xa
+};
 
-// Get the value of particular configuration parameter.
-// The value returned is read-only. Mongoose does not allow changing
-// configuration at run time.
-// If given parameter name is not valid, NULL is returned. For valid
-// names, return value is guaranteed to be non-NULL. If parameter is not
-// set, zero-length string is returned.
 const char *mg_get_option(const struct mg_context *ctx, const char *name);
-
-
-// Return array of strings that represent valid configuration options.
-// For each option, a short name, long name, and default value is returned.
-// Array is NULL terminated.
 const char **mg_get_valid_option_names(void);
-
-
-// Add, edit or delete the entry in the passwords file.
-//
-// This function allows an application to manipulate .htpasswd files on the
-// fly by adding, deleting and changing user records. This is one of the
-// several ways of implementing authentication on the server side. For another,
-// cookie-based way please refer to the examples/chat.c in the source tree.
-//
-// If password is not NULL, entry is added (or modified if already exists).
-// If password is NULL, entry is deleted.
-//
-// Return:
-//   1 on success, 0 on error.
 int mg_modify_passwords_file(const char *passwords_file_name,
                              const char *domain,
                              const char *user,
                              const char *password);
-
-
-// Return information associated with the request.
-struct mg_request_info *mg_get_request_info(struct mg_connection *);
-
-
-// Send data to the client.
-// Return:
-//  0   when the connection has been closed
-//  -1  on error
-//  >0  number of bytes written on success
-int mg_write(struct mg_connection *, const void *buf, size_t len);
-
+int mg_write(struct mg_connection *, const void *buf, int len);
 
 // Macros for enabling compiler-specific checks for printf-like arguments.
 #undef PRINTF_FORMAT_STRING
-#if _MSC_VER >= 1400
+#if defined(_MSC_VER) && _MSC_VER >= 1400
 #include <sal.h>
-#if _MSC_VER > 1400
+#if defined(_MSC_VER) && _MSC_VER > 1400
 #define PRINTF_FORMAT_STRING(s) _Printf_format_string_ s
 #else
 #define PRINTF_FORMAT_STRING(s) __format_string s
@@ -243,7 +127,7 @@ void mg_send_file(struct mg_connection *conn, const char *path);
 //   0     connection has been closed by peer. No more data could be read.
 //   < 0   read error. No more data could be read from the connection.
 //   > 0   number of bytes read into the buffer.
-int mg_read(struct mg_connection *, void *buf, size_t len);
+int mg_read(struct mg_connection *, void *buf, int len);
 
 
 // Get the value of particular HTTP header.
@@ -317,10 +201,13 @@ struct mg_connection *mg_download(const char *host, int port, int use_ssl,
 void mg_close_connection(struct mg_connection *conn);
 
 
-// File upload functionality. Each uploaded file gets saved into a temporary
-// file and MG_UPLOAD event is sent.
-// Return number of uploaded files.
-int mg_upload(struct mg_connection *conn, const char *destination_dir);
+// Read multipart-form-data POST buffer, save uploaded files into
+// destination directory, and return path to the saved filed.
+// This function can be called multiple times for the same connection,
+// if more then one file is uploaded.
+// Return: path to the uploaded file, or NULL if there are no more files.
+FILE *mg_upload(struct mg_connection *conn, const char *destination_dir,
+                char *path, int path_len);
 
 
 // Convenience function -- create detached thread.

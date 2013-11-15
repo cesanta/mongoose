@@ -7,8 +7,8 @@ using namespace std;
 
 namespace Mongoose
 {
-    WebSocket::WebSocket(struct mg_connection *connection_)
-        : connection(connection_), closed(false), request(connection_), data(""), id(-1)
+    WebSocket::WebSocket(struct mg_connection *connection_, const struct mg_request_info *request_)
+        : connection(connection_), closed(false), request(connection_, request_), data(""), id(-1)
     {
     }
 
@@ -40,34 +40,15 @@ namespace Mongoose
         return request;
     }
 
-    void WebSocket::send(string data)
+    void WebSocket::send(string data, int opcode)
     {
         if (isClosed()) {
             return;
         }
 
         mutex.lock();
-        int remaining = data.size();
-        int chunk = 0;
-
-        while (!isClosed() && remaining > 0) {
-            ostringstream packetOss;
-            string part = data.substr(chunk*255, min(remaining, 255));;
-            chunk++;
-            remaining -= 255;
-            
-            if (remaining > 0) {
-                packetOss << (char)0x01;
-            } else {
-                packetOss << (char)0x81;
-            }
-
-            packetOss << (unsigned char)part.size() << part;
-
-            string packet = packetOss.str();
-            if (mg_write(connection, packet.c_str(), packet.size()) <= 0) {
-                closed = true;
-            }
+        if (!mg_websocket_write(connection, opcode, data.c_str(), data.size())) {
+            closed = true;
         }
         mutex.unlock();
     }
@@ -85,6 +66,9 @@ namespace Mongoose
 
     void WebSocket::close()
     {
+        if (!closed) {
+            mg_close_connection(connection);
+        }
         closed = true;
     }
 

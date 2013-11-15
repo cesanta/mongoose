@@ -5,12 +5,7 @@
   <key>CFBundleExecutable</key> <string>Mongoose</string>
   <key>CFBundlePackageType</key> <string>APPL</string>
   <key>CFBundleTypeRole</key> <string>None</string>
-  <key>CFBundleIconFiles</key> <array>
-    <string>mongoose_16x16.png</string>
-    <string>mongoose_22x22.png</string>
-    <string>mongoose_32x32.png</string>
-    <string>mongoose_64x64.png</string>
-  </array>
+  <key>CFBundleIconFile</key> <string>mongoose.icns</string>
   <key>LSUIElement</key> <true/>
   <key>RunAtLoad</key> <true/>
   <key>Label</key> <string>com.kolkin.mongoose</string>

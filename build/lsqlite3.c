@@ -31,9 +31,7 @@
 #include <assert.h>
 
 #define LUA_LIB
-#include "lua.h"
-#include "lauxlib.h"
-
+#include "lua_5.2.1.h"
 #include "sqlite3.h"
 
 /* compile time features */

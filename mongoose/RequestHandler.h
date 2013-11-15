@@ -3,6 +3,7 @@
 
 #include "Request.h"
 #include "Response.h"
+#include <string>
 
 namespace Mongoose
 {
