@@ -90,4 +90,7 @@ will be merged as often as possible from the original mongoose project.
 
 # License
 
-This project is under MIT license, like the original project it's based on
+The mongoose binding (`mongoose/` folder) is under MIT license
+
+However, the original mongoose project license is different, have a look to the
+`LICENSE` file for more information.
