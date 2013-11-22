@@ -187,13 +187,15 @@ typedef struct DIR {
   struct dirent  result;
 } DIR;
 
-#ifndef HAVE_POLL
 struct pollfd {
   SOCKET fd;
   short events;
   short revents;
 };
 #define POLLIN 1
+
+#ifdef HAVE_POLL
+#define poll(x, y, z)  WSAPoll((x), (y), (z))
 #endif
 
 
