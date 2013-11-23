@@ -766,6 +766,31 @@ void mg_url_encode(const char *src, char *dst, size_t dst_len) {
   *dst = '\0';
 }
 
+// Check whether full request is buffered. Return:
+//   -1  if request is malformed
+//    0  if request is not yet fully buffered
+//   >0  actual request length, including last \r\n\r\n
+static int get_request_len(const char *buf, int buf_len) {
+  int i;
+
+  for (i = 0; i < buf_len; i++) {
+    // Control characters are not allowed but >=128 is.
+    // Abort scan as soon as one malformed character is found;
+    // don't let subsequent \r\n\r\n win us over anyhow
+    if (!isprint(* (const unsigned char *) &buf[i]) && buf[i] != '\r' &&
+        buf[i] != '\n' && * (const unsigned char *) &buf[i] < 128) {
+      return -1;
+    } else if (buf[i] == '\n' && i + 1 < buf_len && buf[i + 1] == '\n') {
+      return i + 2;
+    } else if (buf[i] == '\n' && i + 2 < buf_len && buf[i + 1] == '\r' &&
+               buf[i + 2] == '\n') {
+      return i + 3;
+    }
+  }
+
+  return 0;
+}
+
 static const char *month_names[] = {
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
@@ -2983,31 +3008,6 @@ static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
       } else {
         *p = '/';
       }
-    }
-  }
-
-  return 0;
-}
-
-// Check whether full request is buffered. Return:
-//   -1  if request is malformed
-//    0  if request is not yet fully buffered
-//   >0  actual request length, including last \r\n\r\n
-static int get_request_len(const char *buf, int buf_len) {
-  int i;
-
-  for (i = 0; i < buf_len; i++) {
-    // Control characters are not allowed but >=128 is.
-    // Abort scan as soon as one malformed character is found;
-    // don't let subsequent \r\n\r\n win us over anyhow
-    if (!isprint(* (const unsigned char *) &buf[i]) && buf[i] != '\r' &&
-        buf[i] != '\n' && * (const unsigned char *) &buf[i] < 128) {
-      return -1;
-    } else if (buf[i] == '\n' && i + 1 < buf_len && buf[i + 1] == '\n') {
-      return i + 2;
-    } else if (buf[i] == '\n' && i + 2 < buf_len && buf[i + 1] == '\r' &&
-               buf[i + 2] == '\n') {
-      return i + 3;
     }
   }
 
