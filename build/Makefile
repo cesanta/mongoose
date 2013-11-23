@@ -47,7 +47,7 @@ LUA_SQLITE_FLAGS = $(SQLITE_FLAGS) $(LUA_FLAGS) -DUSE_LUA_SQLITE3
 MSVC = ../../vc6
 #DBG = /Zi /Od
 DBG  = /DNDEBUG /O1
-CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /I$(MSVC)/include /I..
+CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /I$(MSVC)/include /I.. /I.
 LINK_FLAGS = /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
             user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
 LINK = $(MSVC)/bin/link $(LINK_FLAGS)
@@ -86,9 +86,9 @@ $(PROG)-lua-sqlite: $(LUA_SQLITE_SOURCES)
 unix: $(PROG) $(PROG)-lua
 
 # Windows build
-$(PROG).exe: $(LUA_SOURCES)
+$(PROG).exe: $(LUA_SQLITE_SOURCES)
 	$(MSVC)/bin/rc res.rc
-	$(CL) $(LUA_SOURCES) $(LUA_SQLITE_FLAGS) /link $(LINK_FLAGS) res.res /out:$@
+	$(CL) $(LUA_SQLITE_SOURCES) $(LUA_SQLITE_FLAGS) /link $(LINK_FLAGS) res.res /out:$@
 
 $(PROG)-tiny.exe: $(TINY_SOURCES)
 	$(MSVC)/bin/rc res.rc
