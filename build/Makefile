@@ -33,12 +33,13 @@ SOURCES = src/internal.h src/util.c src/string.c src/parse_date.c \
           src/upload.c src/mongoose.c src/lua.c
 
 TINY_SOURCES = ../mongoose.c main.c
-LUA_SOURCES = $(TINY_SOURCES) sqlite3.c lsqlite3.c lua_5.2.1.c
+LUA_SOURCES = $(TINY_SOURCES) lua_5.2.1.c
+LUA_SQLITE_SOURCES = $(LUA_SOURCES) sqlite3.c lsqlite3.c
 
 SQLITE_FLAGS = -DTHREADSAFE=1 -DSQLITE_ENABLE_FTS3 \
                -DSQLITE_ENABLE_FTS3_PARENTHESIS
-LUA_FLAGS = -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL
-LUA_SQLITE_FLAGS = $(SQLITE_FLAGS) $(LUA_FLAGS)
+LUA_FLAGS = -DUSE_LUA
+LUA_SQLITE_FLAGS = $(SQLITE_FLAGS) $(LUA_FLAGS) -DUSE_LUA_SQLITE3
 
 # Using Visual Studio 6.0. To build Mongoose:
 #  Set MSVC variable below to where VS 6.0 is installed on your system
@@ -77,7 +78,10 @@ $(PROG): $(TINY_SOURCES)
 	$(CC) $(TINY_SOURCES) -o $@ $(CFLAGS)
 
 $(PROG)-lua: $(LUA_SOURCES)
-	$(CC) $(LUA_SOURCES) -o $@ $(LUA_SQLITE_FLAGS) $(CFLAGS)
+	$(CC) $(LUA_SOURCES) -o $@ $(LUA_FLAGS) $(CFLAGS)
+
+$(PROG)-lua-sqlite: $(LUA_SQLITE_SOURCES)
+	$(CC) $(LUA_SQLITE_SOURCES) -o $@ $(LUA_SQLITE_FLAGS) $(CFLAGS)
 
 unix: $(PROG) $(PROG)-lua
 
