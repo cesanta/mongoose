@@ -974,7 +974,6 @@ static const char *config_options[] = {
   "protect_uri", NULL,
   "authentication_domain", "mydomain.com",
   "ssi_pattern", "**.shtml$|**.shtm$",
-  "throttle", NULL,
   "access_log_file", NULL,
   "enable_directory_listing", "yes",
   "error_log_file", NULL,
