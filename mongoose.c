@@ -2957,8 +2957,8 @@ int mg_read(struct mg_connection *conn, void *buf, int len) {
 }
 
 int mg_write(struct mg_connection *conn, const void *buf, int len) {
-  return push(NULL, conn->client.sock, conn->ssl, (const char *) buf,
-                 (int64_t) len);
+  return (int) push(NULL, conn->client.sock, conn->ssl, (const char *) buf,
+                    (int64_t) len);
 }
 
 // Keep reading the input (either opened file descriptor fd, or socket sock,
