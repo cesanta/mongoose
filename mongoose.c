@@ -480,6 +480,22 @@ static struct mg_connection *fc(struct mg_context *ctx) {
   return &fake_connection;
 }
 
+static void sockaddr_to_string(char *buf, size_t len,
+                                     const union usa *usa) {
+  buf[0] = '\0';
+#if defined(USE_IPV6)
+  inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
+            (void *) &usa->sin.sin_addr :
+            (void *) &usa->sin6.sin6_addr, buf, len);
+#elif defined(_WIN32)
+  // Only Windoze Vista (and newer) have inet_ntop()
+  strncpy(buf, inet_ntoa(usa->sin.sin_addr), len);
+#else
+  inet_ntop(usa->sa.sa_family, (void *) &usa->sin.sin_addr, buf, len);
+#endif
+}
+
+
 static void mg_strlcpy(register char *dst, register const char *src, size_t n) {
   for (; *src != '\0' && n > 1; n--) {
     *dst++ = *src++;
@@ -2594,6 +2610,49 @@ static void handle_directory_request(struct mg_connection *conn,
 }
 
 
+static void log_header(const struct mg_connection *conn, const char *header,
+                       FILE *fp) {
+  const char *header_value;
+
+  if ((header_value = mg_get_header(conn, header)) == NULL) {
+    (void) fprintf(fp, "%s", " -");
+  } else {
+    (void) fprintf(fp, " \"%s\"", header_value);
+  }
+}
+
+static void log_access(const struct mg_connection *conn) {
+  const struct mg_request_info *ri;
+  FILE *fp;
+  char date[64], src_addr[IP_ADDR_STR_LEN];
+
+  fp = conn->ctx->config[ACCESS_LOG_FILE] == NULL ?  NULL :
+    fopen(conn->ctx->config[ACCESS_LOG_FILE], "a+");
+
+  if (fp == NULL)
+    return;
+
+  strftime(date, sizeof(date), "%d/%b/%Y:%H:%M:%S %z",
+           localtime(&conn->birth_time));
+
+  ri = &conn->request_info;
+  flockfile(fp);
+
+  sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
+  fprintf(fp, "%s - %s [%s] \"%s %s HTTP/%s\" %d %" INT64_FMT,
+          src_addr, ri->remote_user == NULL ? "-" : ri->remote_user, date,
+          ri->request_method ? ri->request_method : "-",
+          ri->uri ? ri->uri : "-", ri->http_version,
+          conn->status_code, conn->num_bytes_sent);
+  log_header(conn, "Referer", fp);
+  log_header(conn, "User-Agent", fp);
+  fputc('\n', fp);
+  fflush(fp);
+
+  funlockfile(fp);
+  fclose(fp);
+}
+
 // Return number of bytes left to read for this connection
 static int64_t left_to_read(const struct mg_connection *conn) {
   return conn->content_len + conn->request_len - conn->num_bytes_read;
@@ -2619,21 +2678,6 @@ static FILE *mg_fopen(const char *path, const char *mode) {
   return _wfopen(wbuf, wmode);
 #else
   return fopen(path, mode);
-#endif
-}
-
-static void sockaddr_to_string(char *buf, size_t len,
-                                     const union usa *usa) {
-  buf[0] = '\0';
-#if defined(USE_IPV6)
-  inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
-            (void *) &usa->sin.sin_addr :
-            (void *) &usa->sin6.sin6_addr, buf, len);
-#elif defined(_WIN32)
-  // Only Windoze Vista (and newer) have inet_ntop()
-  strncpy(buf, inet_ntoa(usa->sin.sin_addr), len);
-#else
-  inet_ntop(usa->sa.sa_family, (void *) &usa->sin.sin_addr, buf, len);
 #endif
 }
 
@@ -4714,49 +4758,6 @@ static int set_ports_option(struct mg_context *ctx) {
   }
 
   return success;
-}
-
-static void log_header(const struct mg_connection *conn, const char *header,
-                       FILE *fp) {
-  const char *header_value;
-
-  if ((header_value = mg_get_header(conn, header)) == NULL) {
-    (void) fprintf(fp, "%s", " -");
-  } else {
-    (void) fprintf(fp, " \"%s\"", header_value);
-  }
-}
-
-static void log_access(const struct mg_connection *conn) {
-  const struct mg_request_info *ri;
-  FILE *fp;
-  char date[64], src_addr[IP_ADDR_STR_LEN];
-
-  fp = conn->ctx->config[ACCESS_LOG_FILE] == NULL ?  NULL :
-    fopen(conn->ctx->config[ACCESS_LOG_FILE], "a+");
-
-  if (fp == NULL)
-    return;
-
-  strftime(date, sizeof(date), "%d/%b/%Y:%H:%M:%S %z",
-           localtime(&conn->birth_time));
-
-  ri = &conn->request_info;
-  flockfile(fp);
-
-  sockaddr_to_string(src_addr, sizeof(src_addr), &conn->client.rsa);
-  fprintf(fp, "%s - %s [%s] \"%s %s HTTP/%s\" %d %" INT64_FMT,
-          src_addr, ri->remote_user == NULL ? "-" : ri->remote_user, date,
-          ri->request_method ? ri->request_method : "-",
-          ri->uri ? ri->uri : "-", ri->http_version,
-          conn->status_code, conn->num_bytes_sent);
-  log_header(conn, "Referer", fp);
-  log_header(conn, "User-Agent", fp);
-  fputc('\n', fp);
-  fflush(fp);
-
-  funlockfile(fp);
-  fclose(fp);
 }
 
 // Verify given socket address against the ACL.
