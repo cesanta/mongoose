@@ -503,29 +503,6 @@ static int get_request_len(const char *buf, int buf_len) {
   return 0;
 }
 
-// Protect against directory disclosure attack by removing '..',
-// excessive '/' and '\' characters
-static void remove_double_dots_and_double_slashes(char *s) {
-  char *p = s;
-
-  while (*s != '\0') {
-    *p++ = *s++;
-    if (s[-1] == '/' || s[-1] == '\\') {
-      // Skip all following slashes, backslashes and double-dots
-      while (s[0] != '\0') {
-        if (s[0] == '/' || s[0] == '\\') {
-          s++;
-        } else if (s[0] == '.' && s[1] == '.') {
-          s += 2;
-        } else {
-          break;
-        }
-      }
-    }
-  }
-  *p = '\0';
-}
-
 static const struct {
   const char *extension;
   size_t ext_len;
