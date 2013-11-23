@@ -399,7 +399,7 @@ struct socket {
 // NOTE(lsm): this enum shoulds be in sync with the config_options.
 enum {
   CGI_EXTENSIONS, CGI_ENVIRONMENT, PUT_DELETE_PASSWORDS_FILE, CGI_INTERPRETER,
-  PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS, THROTTLE,
+  PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS,
   ACCESS_LOG_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
   GLOBAL_PASSWORDS_FILE, INDEX_FILES, ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST,
   EXTRA_MIME_TYPES, LISTENING_PORTS, DOCUMENT_ROOT, SSL_CERTIFICATE,
@@ -446,9 +446,6 @@ struct mg_connection {
   int request_len;            // Size of the request + headers in a buffer
   int data_len;               // Total size of data in a buffer
   int status_code;            // HTTP reply status code, e.g. 200
-  int throttle;               // Throttling, bytes/sec. <= 0 means no throttle
-  time_t last_throttle_time;  // Last time throttled data was sent
-  int64_t last_throttle_bytes;// Bytes sent this second
 };
 
 // Directory entry
