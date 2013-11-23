@@ -374,3 +374,50 @@ int mg_get_cookie(const char *cookie_header, const char *var_name,
   }
   return len;
 }
+
+int mg_get_var(const char *data, size_t data_len, const char *name,
+               char *dst, size_t dst_len) {
+  const char *p, *e, *s;
+  size_t name_len;
+  int len;
+
+  if (dst == NULL || dst_len == 0) {
+    len = -2;
+  } else if (data == NULL || name == NULL || data_len == 0) {
+    len = -1;
+    dst[0] = '\0';
+  } else {
+    name_len = strlen(name);
+    e = data + data_len;
+    len = -1;
+    dst[0] = '\0';
+
+    // data is "var1=val1&var2=val2...". Find variable first
+    for (p = data; p + name_len < e; p++) {
+      if ((p == data || p[-1] == '&') && p[name_len] == '=' &&
+          !mg_strncasecmp(name, p, name_len)) {
+
+        // Point p to variable value
+        p += name_len + 1;
+
+        // Point s to the end of the value
+        s = (const char *) memchr(p, '&', (size_t)(e - p));
+        if (s == NULL) {
+          s = e;
+        }
+        assert(s >= p);
+
+        // Decode variable into destination buffer
+        len = mg_url_decode(p, (size_t)(s - p), dst, dst_len, 1);
+
+        // Redirect error code from -1 to -2 (destination buffer too small).
+        if (len == -1) {
+          len = -2;
+        }
+        break;
+      }
+    }
+  }
+
+  return len;
+}

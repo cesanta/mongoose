@@ -236,3 +236,36 @@ static void handle_directory_request(struct mg_connection *conn,
   conn->status_code = 200;
 }
 
+// For a given PUT path, create all intermediate subdirectories
+// for given path. Return 0 if the path itself is a directory,
+// or -1 on error, 1 if OK.
+static int put_dir(const char *path) {
+  char buf[PATH_MAX];
+  const char *s, *p;
+  struct file file = STRUCT_FILE_INITIALIZER;
+  int len, res = 1;
+
+  for (s = p = path + 2; (p = strchr(s, '/')) != NULL; s = ++p) {
+    len = p - path;
+    if (len >= (int) sizeof(buf)) {
+      res = -1;
+      break;
+    }
+    memcpy(buf, path, len);
+    buf[len] = '\0';
+
+    // Try to create intermediate directory
+    DEBUG_TRACE(("mkdir(%s)", buf));
+    if (!mg_stat(buf, &file) && mg_mkdir(buf, 0755) != 0) {
+      res = -1;
+      break;
+    }
+
+    // Is path itself a directory?
+    if (p[1] == '\0') {
+      res = 0;
+    }
+  }
+
+  return res;
+}
