@@ -495,7 +495,6 @@ static void sockaddr_to_string(char *buf, size_t len,
 #endif
 }
 
-
 static void mg_strlcpy(register char *dst, register const char *src, size_t n) {
   for (; *src != '\0' && n > 1; n--) {
     *dst++ = *src++;
@@ -830,6 +829,45 @@ static int get_request_len(const char *buf, int buf_len) {
   }
 
   return 0;
+}
+
+int mg_get_cookie(const char *cookie_header, const char *var_name,
+                  char *dst, size_t dst_size) {
+  const char *s, *p, *end;
+  int name_len, len = -1;
+
+  if (dst == NULL || dst_size == 0) {
+    len = -2;
+  } else if (var_name == NULL || (s = cookie_header) == NULL) {
+    len = -1;
+    dst[0] = '\0';
+  } else {
+    name_len = (int) strlen(var_name);
+    end = s + strlen(s);
+    dst[0] = '\0';
+
+    for (; (s = mg_strcasestr(s, var_name)) != NULL; s += name_len) {
+      if (s[name_len] == '=') {
+        s += name_len + 1;
+        if ((p = strchr(s, ' ')) == NULL)
+          p = end;
+        if (p[-1] == ';')
+          p--;
+        if (*s == '"' && p[-1] == '"' && p > s + 1) {
+          s++;
+          p--;
+        }
+        if ((size_t) (p - s) < dst_size) {
+          len = p - s;
+          mg_strlcpy(dst, s, (size_t) len + 1);
+        } else {
+          len = -3;
+        }
+        break;
+      }
+    }
+  }
+  return len;
 }
 
 static const char *month_names[] = {
@@ -2941,45 +2979,6 @@ int mg_get_var(const char *data, size_t data_len, const char *name,
     }
   }
 
-  return len;
-}
-
-int mg_get_cookie(const char *cookie_header, const char *var_name,
-                  char *dst, size_t dst_size) {
-  const char *s, *p, *end;
-  int name_len, len = -1;
-
-  if (dst == NULL || dst_size == 0) {
-    len = -2;
-  } else if (var_name == NULL || (s = cookie_header) == NULL) {
-    len = -1;
-    dst[0] = '\0';
-  } else {
-    name_len = (int) strlen(var_name);
-    end = s + strlen(s);
-    dst[0] = '\0';
-
-    for (; (s = mg_strcasestr(s, var_name)) != NULL; s += name_len) {
-      if (s[name_len] == '=') {
-        s += name_len + 1;
-        if ((p = strchr(s, ' ')) == NULL)
-          p = end;
-        if (p[-1] == ';')
-          p--;
-        if (*s == '"' && p[-1] == '"' && p > s + 1) {
-          s++;
-          p--;
-        }
-        if ((size_t) (p - s) < dst_size) {
-          len = p - s;
-          mg_strlcpy(dst, s, (size_t) len + 1);
-        } else {
-          len = -3;
-        }
-        break;
-      }
-    }
-  }
   return len;
 }
 
