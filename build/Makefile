@@ -30,7 +30,7 @@ SOURCES = src/internal.h src/util.c src/string.c src/parse_date.c \
           src/options.c src/crypto.c src/auth.c src/win32.c src/unix.c \
           src/mg_printf.c src/ssl.c src/http_client.c src/mime.c \
           src/directory.c src/log.c src/parse_http.c src/io.c src/cgi.c \
-          src/upload.c src/websocket.c src/mongoose.c src/lua.c
+          src/upload.c src/websocket.c src/webdav.c src/mongoose.c src/lua.c
 
 TINY_SOURCES = ../mongoose.c main.c
 LUA_SOURCES = $(TINY_SOURCES) lua_5.2.1.c

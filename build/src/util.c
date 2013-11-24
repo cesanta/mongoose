@@ -24,3 +24,7 @@ static void sockaddr_to_string(char *buf, size_t len,
   inet_ntop(usa->sa.sa_family, (void *) &usa->sin.sin_addr, buf, len);
 #endif
 }
+
+static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
+  strftime(buf, buf_len, "%a, %d %b %Y %H:%M:%S GMT", gmtime(t));
+}
