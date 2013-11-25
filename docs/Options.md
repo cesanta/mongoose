@@ -18,7 +18,7 @@ of name=value pairs, like this: `VARIABLE1=VALUE1,VARIABLE2=VALUE2`.
 Passwords file for PUT and DELETE requests. Without it, PUT and DELETE requests
 will fail. The format of the passwords file is the same as `.htpasswd` file
 used for Digest authentication. It can be created and managed by means
-of `mongoose -A ...` command.
+of `mongoose -A` command.
 
 ### cgi_interpreter
 Path to an executable to use as CGI interpreter for __all__ CGI scripts
