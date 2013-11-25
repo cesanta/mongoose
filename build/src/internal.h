@@ -45,12 +45,6 @@
 #undef WIN32_LEAN_AND_MEAN
 #endif
 
-#if defined(__SYMBIAN32__)
-#define NO_SSL // SSL is not supported
-#define NO_CGI // CGI is not supported
-#define PATH_MAX FILENAME_MAX
-#endif // __SYMBIAN32__
-
 #ifndef _WIN32_WCE // Some ANSI #includes are not available on Windows CE
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -69,7 +63,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#if defined(_WIN32) && !defined(__SYMBIAN32__) // Windows specific
+#if defined(_WIN32) // Windows specific
 #undef _WIN32_WINNT
 #define _WIN32_WINNT 0x0400 // To make it link in VS2005
 #include <windows.h>
@@ -250,7 +244,7 @@ typedef int SOCKET;
 
 #include "mongoose.h"
 
-#define MONGOOSE_VERSION "4.2"
+#define MONGOOSE_VERSION "5.0"
 #define PASSWORDS_FILE_NAME ".htpasswd"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
