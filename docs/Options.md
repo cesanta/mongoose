@@ -16,7 +16,7 @@ of name=value pairs, like this: `VARIABLE1=VALUE1,VARIABLE2=VALUE2`.
 
 ### put\_delete\_auth\_file
 Passwords file for PUT and DELETE requests. Without it, PUT and DELETE requests
-will fail. The format of the passwords file is the same as `.htpasswd` file
+will fail. The format of the passwords file is the same as for `.htpasswd` file
 used for Digest authentication. It can be created and managed by means
 of `mongoose -A` command.
 
