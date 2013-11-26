@@ -822,7 +822,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
           AppendMenu(hMenu, MF_STRING | (!service_installed ? MF_GRAYED : 0),
                      ID_REMOVE_SERVICE, "Deinstall service");
           AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
-          AppendMenu(hMenu, MF_STRING, ID_CONNECT, "Start browser");
+          snprintf(buf, sizeof(buf), "Start browser on port %s",
+                   mg_get_option(ctx, "listening_ports"));
+          AppendMenu(hMenu, MF_STRING, ID_CONNECT, buf);
           AppendMenu(hMenu, MF_STRING, ID_SETTINGS, "Edit Settings");
           AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
           AppendMenu(hMenu, MF_STRING, ID_QUIT, "Exit");
