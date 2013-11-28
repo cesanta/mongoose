@@ -37,6 +37,8 @@
 #undef WIN32_LEAN_AND_MEAN
 #endif
 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +48,7 @@
 #include <errno.h>
 #include <time.h>
 #include <ctype.h>
+#include <stdarg.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -58,7 +61,11 @@ typedef unsigned __int64 uint64_t;
 typedef __int64   int64_t;
 #pragma comment(lib, "ws2_32.lib")
 #define snprintf _snprintf
+#define vsnprintf _vsnprintf
 #define INT64_FMT  "I64d"
+#ifndef va_copy
+#define va_copy(x,y) x = y
+#endif // MINGW #defines va_copy
 #else
 #include <inttypes.h>
 #include <unistd.h>
@@ -90,6 +97,10 @@ struct linked_list_link { struct linked_list_link *prev, *next; };
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
 #define MAX_REQUEST_SIZE 16384
 #define IOBUF_SIZE 8192
+#define MAX_PATH_SIZE 8192
+#define DBG(x) do { printf("%s:%d: ", __FILE__, __LINE__); \
+  printf x; putchar('\n'); fflush(stdout); } while(0)
+//#define DBG(x)
 
 union socket_address {
   struct sockaddr sa;
@@ -101,7 +112,7 @@ union socket_address {
 
 struct vec {
   const char *ptr;
-  size_t len;
+  int len;
 };
 
 // NOTE(lsm): this enum shoulds be in sync with the config_options.
@@ -124,8 +135,8 @@ struct mg_server {
 
 struct iobuf {
   char *buf;    // Buffer that holds the data
-  int size;   // Buffer size
-  int len;    // Number of bytes currently in a buffer
+  int size;     // Buffer size
+  int len;      // Number of bytes currently in a buffer
 };
 
 union endpoint {
@@ -142,10 +153,11 @@ struct mg_connection {
   struct iobuf local_iobuf;
   struct iobuf remote_iobuf;
   union endpoint endpoint;
-  enum { EP_NONE, EP_FILE, EP_SOCKET, EP_SSL } endpoint_type;
-  enum { CONN_CLOSE = 1 } flags;
+  enum { EP_NONE, EP_FILE, EP_DIR, EP_CGI, EP_SSL } endpoint_type;
+  enum { CONN_CLOSE = 1, CONN_SPOOL_DONE = 2 } flags;
   time_t expire_time;
   struct mg_request_info request_info;
+  char *path_info;
   int request_len;
 };
 
@@ -298,7 +310,7 @@ static pid_t start_process(char *cmd, char *env[], char *dir, sock_t sock) {
   si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
   closesocket(sock);
 
-  printf("Starting commad: [%s]\n", cmd);
+  DBG(("Starting commad: [%s]", cmd));
   CreateProcess(NULL, cmd, NULL, NULL, TRUE,
                 CREATE_NEW_PROCESS_GROUP, (void *) env, dir, &si, &pi);
 
@@ -431,6 +443,7 @@ static struct mg_connection *accept_new_connection(struct mg_server *server) {
     // Put so socket structure into the queue
     set_close_on_exec(sock);
     set_non_blocking_mode(sock);
+    conn->server = server;
     conn->client_sock = sock;
     conn->csa = sa;
     conn->local_iobuf.buf = (char *) conn + sizeof(*conn);
@@ -438,14 +451,14 @@ static struct mg_connection *accept_new_connection(struct mg_server *server) {
     conn->remote_iobuf.buf = calloc(1, IOBUF_SIZE);
     conn->remote_iobuf.size = IOBUF_SIZE;
     LINKED_LIST_ADD_TO_FRONT(&server->active_connections, &conn->link);
-    printf("added conn %p\n", conn);
+    DBG(("added conn %p", conn));
   }
 
   return conn;
 }
 
 static void close_conn(struct mg_connection *conn) {
-  printf("closing %p\n", conn);
+  DBG(("closing %p", conn));
   LINKED_LIST_REMOVE(&conn->link);
   closesocket(conn->client_sock);
   free(conn->remote_iobuf.buf);
@@ -498,9 +511,9 @@ static char *skip(char **buf, const char *delimiters) {
 // Parse HTTP headers from the given buffer, advance buffer to the point
 // where parsing stopped.
 static void parse_http_headers(char **buf, struct mg_request_info *ri) {
-  int i;
+  size_t i;
 
-  for (i = 0; i < (int) ARRAY_SIZE(ri->http_headers); i++) {
+  for (i = 0; i < ARRAY_SIZE(ri->http_headers); i++) {
     ri->http_headers[i].name = skip(buf, ": ");
     ri->http_headers[i].value = skip(buf, "\r\n");
     if (ri->http_headers[i].name[0] == '\0')
@@ -557,15 +570,236 @@ static int parse_range_header(const char *header, int64_t *a, int64_t *b) {
   return sscanf(header, "bytes=%" INT64_FMT "-%" INT64_FMT, a, b);
 }
 
+static int lowercase(const char *s) {
+  return tolower(* (const unsigned char *) s);
+}
+
+// Perform case-insensitive match of string against pattern
+static int match_prefix(const char *pattern, int pattern_len, const char *str) {
+  const char *or_str;
+  int i, j, len, res;
+
+  if ((or_str = (const char *) memchr(pattern, '|', pattern_len)) != NULL) {
+    res = match_prefix(pattern, or_str - pattern, str);
+    return res > 0 ? res :
+        match_prefix(or_str + 1, (pattern + pattern_len) - (or_str + 1), str);
+  }
+
+  i = j = 0;
+  res = -1;
+  for (; i < pattern_len; i++, j++) {
+    if (pattern[i] == '?' && str[j] != '\0') {
+      continue;
+    } else if (pattern[i] == '$') {
+      return str[j] == '\0' ? j : -1;
+    } else if (pattern[i] == '*') {
+      i++;
+      if (pattern[i] == '*') {
+        i++;
+        len = (int) strlen(str + j);
+      } else {
+        len = (int) strcspn(str + j, "/");
+      }
+      if (i == pattern_len) {
+        return j + len;
+      }
+      do {
+        res = match_prefix(pattern + i, pattern_len - i, str + j + len);
+      } while (res == -1 && len-- > 0);
+      return res == -1 ? -1 : j + res + len;
+    } else if (lowercase(&pattern[i]) != lowercase(&str[j])) {
+      return -1;
+    }
+  }
+  return j;
+}
+
+// Protect against directory disclosure attack by removing '..',
+// excessive '/' and '\' characters
+static void remove_double_dots_and_double_slashes(char *s) {
+  char *p = s;
+
+  while (*s != '\0') {
+    *p++ = *s++;
+    if (s[-1] == '/' || s[-1] == '\\') {
+      // Skip all following slashes, backslashes and double-dots
+      while (s[0] != '\0') {
+        if (s[0] == '/' || s[0] == '\\') { s++; }
+        else if (s[0] == '.' && s[1] == '.') { s += 2; }
+        else { break; }
+      }
+    }
+  }
+  *p = '\0';
+}
+
+int mg_url_decode(const char *src, int src_len, char *dst,
+                  int dst_len, int is_form_url_encoded) {
+  int i, j, a, b;
+#define HEXTOI(x) (isdigit(x) ? x - '0' : x - 'W')
+
+  for (i = j = 0; i < src_len && j < dst_len - 1; i++, j++) {
+    if (src[i] == '%' && i < src_len - 2 &&
+        isxdigit(* (const unsigned char *) (src + i + 1)) &&
+        isxdigit(* (const unsigned char *) (src + i + 2))) {
+      a = tolower(* (const unsigned char *) (src + i + 1));
+      b = tolower(* (const unsigned char *) (src + i + 2));
+      dst[j] = (char) ((HEXTOI(a) << 4) | HEXTOI(b));
+      i += 2;
+    } else if (is_form_url_encoded && src[i] == '+') {
+      dst[j] = ' ';
+    } else {
+      dst[j] = src[i];
+    }
+  }
+
+  dst[j] = '\0'; // Null-terminate the destination
+
+  return i >= src_len ? j : -1;
+}
+
+// Return 1 if real file has been found, 0 otherwise
+static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
+                                    size_t buf_len, struct stat *st) {
+  struct vec a, b;
+  const char *rewrites = conn->server->config_options[URL_REWRITES],
+        *root = conn->server->config_options[DOCUMENT_ROOT],
+        *cgi_pat = conn->server->config_options[CGI_PATTERN],
+        *uri = conn->request_info.uri;
+  char *p;
+  int match_len;
+
+  // No filesystem access
+  if (root == NULL) return 0;
+
+  // Handle URL rewrites
+  snprintf(buf, buf_len, "%s%s", root, uri);
+  while ((rewrites = next_option(rewrites, &a, &b)) != NULL) {
+    if ((match_len = match_prefix(a.ptr, a.len, uri)) > 0) {
+      snprintf(buf, buf_len, "%.*s%s", (int) b.len, b.ptr, uri + match_len);
+      break;
+    }
+  }
+
+  if (stat(buf, st) == 0) return 1;
+
+  // Support PATH_INFO for CGI scripts.
+  for (p = buf + strlen(root); *p != '\0'; p++) {
+    if (*p == '/') {
+      *p = '\0';
+      if (match_prefix(cgi_pat, strlen(cgi_pat), buf) > 0 && !stat(buf, st)) {
+        *p = '/';
+        conn->path_info = mg_strdup(p);
+        break;
+      }
+      *p = '/';
+    }
+  }
+
+  return 0;
+}
+
+static int spool(struct iobuf *io, const void *buf, int len) {
+  char *ptr = io->buf;
+
+  if (len <= 0) {
+  } else if (len < io->size - io->len ||
+             (ptr = realloc(io->buf, io->len + len - io->size)) != NULL) {
+    io->buf = ptr;
+    memcpy(io->buf + io->len, buf, len);
+    io->len += len;
+  } else {
+    len = 0;
+  }
+  return len;
+}
+
+static int vspool(struct iobuf *io, const char *fmt, va_list ap) {
+  char *ptr = io->buf;
+  va_list ap_copy;
+  int len;
+
+  va_copy(ap_copy, ap);
+  len = vsnprintf(NULL, 0, fmt, ap_copy);
+  DBG(("len = %d", len));
+
+  if (len <= 0) {
+  } else if (len < io->size - io->len ||
+             (ptr = realloc(io->buf, io->len + len + 1 - io->size)) != NULL) {
+    io->buf = ptr;
+    vsnprintf(io->buf + io->len, len + 1, fmt, ap);
+    io->len += len;
+  } else {
+    len = 0;
+  }
+
+  return len;
+}
+
+static int fmtspool(struct iobuf *io, const char *fmt, ...) {
+  va_list ap;
+  int ret;
+  va_start(ap, fmt);
+  ret = vspool(io, fmt, ap);
+  va_end(ap);
+  return ret;
+}
+
+static int is_error(int n) {
+  return n == 0 || (n < 0 && errno != EINTR && errno != EAGAIN);
+}
+
+static void write_to_client(struct mg_connection *conn) {
+  struct iobuf *io = &conn->remote_iobuf;
+  int n = send(conn->client_sock, io->buf, io->len, 0);
+
+  DBG(("Written %d of %d(%d): [%.*s]", n, io->len, io->size, 0, io->buf));
+
+  if (is_error(n)) {
+    conn->flags |= CONN_CLOSE;
+  } else if (n > 0) {
+    memmove(io->buf, io->buf + n, io->len - n);
+    io->len -= n;
+  }
+  if (io->len == 0 && conn->flags & CONN_SPOOL_DONE) {
+    conn->flags |= CONN_CLOSE;
+  }
+}
+
+static void open_local_endpoint(struct mg_connection *conn) {
+  struct mg_request_info *ri = &conn->request_info;
+  char path[MAX_PATH_SIZE] = {'\0'};
+  struct stat st;
+  int uri_len, exists = 0;
+
+  if ((conn->request_info.query_string = strchr(ri->uri, '?')) != NULL) {
+    * ((char *) conn->request_info.query_string++) = '\0';
+  }
+  uri_len = (int) strlen(ri->uri);
+  mg_url_decode(ri->uri, uri_len, (char *) ri->uri, uri_len + 1, 0);
+  remove_double_dots_and_double_slashes((char *) ri->uri);
+  exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
+
+  if (exists && (conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
+    fmtspool(&conn->remote_iobuf, "HTTP/1.0 200 OK\r\n"
+             "Content-Length: %" INT64_FMT "\r\n" "\r\n",
+             (int64_t) st.st_size);
+    conn->endpoint_type = EP_FILE;
+  } else {
+    fmtspool(&conn->remote_iobuf, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
+    conn->flags |= CONN_SPOOL_DONE;
+  }
+}
+
 static void read_from_client(struct mg_connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
   int n = recv(conn->client_sock, io->buf + io->len, io->size - io->len, 0);
 
-  printf("read %d bytes\n", n);
+  DBG(("Read: %d [%.*s]", n, n, io->buf + io->len));
   assert(io->len >= 0);
   assert(io->len <= io->size);
 
-  if (n == 0 || (n < 0 && (errno == EINTR || errno == EAGAIN))) {
+  if (is_error(n)) {
     conn->flags |= CONN_CLOSE;
   } else if (n > 0) {
     io->len += n;
@@ -576,8 +810,8 @@ static void read_from_client(struct mg_connection *conn) {
     if (conn->request_len < 0 ||
         (conn->request_len == 0 || io->len >= io->size)) {
       conn->flags |= CONN_CLOSE;
-    } else if (conn->request_len > 0) {
-      printf("%.*s", (int) io->len, io->buf);
+    } else if (conn->endpoint_type == EP_NONE) {
+      open_local_endpoint(conn);
     }
   }
 }
@@ -586,6 +820,34 @@ void add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   FD_SET(sock, set);
   if (sock > *max_fd) {
     *max_fd = sock;
+  }
+}
+
+static int io_space(const struct iobuf *io) {
+  return io->size - io->len;
+}
+
+static void transfer_file_data(struct mg_connection *conn) {
+  struct iobuf *io = &conn->remote_iobuf, *iol = &conn->local_iobuf;
+  int n = read(conn->endpoint.fd, io->buf + io->len, io->size - io->len);
+  //DBG(("%s: %d", __func__, n));
+  if (is_error(n)) {
+    close(conn->endpoint.fd);
+    conn->endpoint.fd = 0;
+    conn->endpoint_type = EP_NONE;
+    memmove(iol->buf, iol->buf + conn->request_len,
+            iol->len - conn->request_len);
+    iol->len -= conn->request_len;
+    conn->request_len = 0;
+    if (iol->len <= 0) {
+      conn->flags |= io->len > 0 ? CONN_SPOOL_DONE : CONN_CLOSE;
+    } else {
+      DBG(("%s", "more req!"));
+    }
+    //DBG(("%s: %s", __func__, "YEEEEEE"));
+    //conn->flags |= io->len > 0 ? CONN_SPOOL_DONE : CONN_CLOSE;
+  } else if (n > 0) {
+    io->len += n;
   }
 }
 
@@ -604,23 +866,38 @@ void mg_poll_server(struct mg_server *server, unsigned int milliseconds) {
   LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
     conn = LINKED_LIST_ENTRY(lp, struct mg_connection, link);
     add_to_set(conn->client_sock, &read_set, &max_fd);
+    if (conn->endpoint_type == EP_FILE && io_space(&conn->remote_iobuf) > 0) {
+      transfer_file_data(conn);
+      // read can return 0, meaning EOF. Need to signal the writer to close.
+      add_to_set(conn->client_sock, &write_set, &max_fd);
+    }
+    if (conn->remote_iobuf.len > 0) {
+      add_to_set(conn->client_sock, &write_set, &max_fd);
+    }
   }
 
   tv.tv_sec = milliseconds / 1000;
   tv.tv_usec = (milliseconds % 1000) * 1000;
 
   if (select(max_fd + 1, &read_set, &write_set, NULL, &tv) > 0) {
+    // Accept new connections
     if (FD_ISSET(server->listening_sock, &read_set)) {
       while ((conn = accept_new_connection(server)) != NULL) {
         conn->expire_time = expire_time;
       }
     }
 
+    // Read/write from clients
     LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
       conn = LINKED_LIST_ENTRY(lp, struct mg_connection, link);
       if (FD_ISSET(conn->client_sock, &read_set)) {
         conn->expire_time = expire_time;
         read_from_client(conn);
+      }
+      if (FD_ISSET(conn->client_sock, &write_set)) {
+        assert(conn->remote_iobuf.len >= 0);
+        conn->expire_time = expire_time;
+        write_to_client(conn);
       }
     }
   }
@@ -676,7 +953,7 @@ struct mg_server *mg_create_server(const char *opts[], mg_event_handler_t func,
         free(server->config_options[i]);
       }
       server->config_options[i] = mg_strdup(value);
-      printf("[%s] -> [%s]\n", name, value);
+      DBG(("[%s] -> [%s]", name, value));
     }
   }
 
@@ -699,33 +976,11 @@ struct mg_server *mg_create_server(const char *opts[], mg_event_handler_t func,
 }
 
 int main(int argc, char *argv[]) {
-  const char *options[] = {"listening_port", "8080", NULL};
+  const char *options[] = {"document_root", ".", "listening_port", "8080", 0};
   struct mg_server *server = mg_create_server(options, NULL, NULL);
   for (;;) {
     mg_poll_server(server, 1000);
   }
   mg_destroy_server(&server);
-
-#if 0
-  char buf[1000];
-  int fds[2];
-  struct iobuf loc, rem;
-
-  mg_socketpair(fds);
-  if (!start_process(argv[1], NULL, NULL, fds[1])) {
-    printf("start_process() failed\n");
-  }
-
-  init_iobuf(&rem, buf, sizeof(buf), IO_FILE, (void *) fileno(stdout));
-  init_iobuf(&loc, NULL, 0, IO_SOCKET, (void *) fds[0]);
-
-  while ((rem.len = read_from_iobuf(&loc, rem.buf, rem.size)) > 0) {
-    write_to_iobuf(&rem);
-  }
-
-  close_iobuf(&rem);
-  close_iobuf(&loc);
-#endif
-
   return 0;
 }
