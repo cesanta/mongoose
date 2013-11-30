@@ -971,6 +971,8 @@ void mg_destroy_server(struct mg_server **server) {
 
   if (server != NULL && *server != NULL) {
     closesocket((*server)->listening_sock);
+    closesocket((*server)->ctl[0]);
+    closesocket((*server)->ctl[1]);
     LINKED_LIST_FOREACH(&(*server)->active_connections, lp, tmp) {
       conn = LINKED_LIST_ENTRY(lp, struct mg_connection, link);
       LINKED_LIST_REMOVE(&conn->link);
