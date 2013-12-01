@@ -72,6 +72,7 @@ typedef __int64   int64_t;
 #else
 #include <inttypes.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -152,6 +153,7 @@ union endpoint {
 struct mg_connection {
   struct linked_list_link link;   // Linkage to server->active_connections
   struct mg_server *server;
+  struct mg_event event;
   sock_t client_sock;         // Connected client
   union socket_address csa;   // Client's socket address
   struct iobuf local_iobuf;
@@ -208,6 +210,41 @@ const char *mg_get_option2(const struct mg_server *srv, const char *name) {
   int i = get_option_index(name);
   return i == -1 ? NULL : srv->config_options[i] == NULL ? "" :
     srv->config_options[i];
+}
+
+int mg_start_thread(mg_thread_func_t f, void *p) {
+#ifdef _WIN32
+  return (long)_beginthread((void (__cdecl *)(void *)) f, 0, p) == -1L ? -1 : 0;
+#else
+  pthread_t thread_id;
+  pthread_attr_t attr;
+  int result;
+
+  (void) pthread_attr_init(&attr);
+  (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+#if USE_STACK_SIZE > 1
+  // Compile-time option to control stack size, e.g. -DUSE_STACK_SIZE=16384
+  (void) pthread_attr_setstacksize(&attr, USE_STACK_SIZE);
+#endif
+
+  result = pthread_create(&thread_id, &attr, f, p);
+  pthread_attr_destroy(&attr);
+
+  return result;
+#endif
+}
+
+static int call_user(int event_type, struct mg_connection *conn, void *p) {
+  if (conn != NULL && conn->server != NULL) {
+    conn->event.user_data = conn->server->user_data;
+    conn->event.type = event_type;
+    conn->event.event_param = p;
+    conn->event.request_info = &conn->request_info;
+    conn->event.conn = conn;
+  }
+  return !conn || !conn->server || !conn->server->event_handler ? 0 :
+    conn->server->event_handler(&conn->event);
 }
 
 static void set_close_on_exec(int fd) {
@@ -570,10 +607,6 @@ static int parse_http_message(char *buf, int len, struct mg_request_info *ri) {
   return request_len;
 }
 
-static int parse_range_header(const char *header, int64_t *a, int64_t *b) {
-  return sscanf(header, "bytes=%" INT64_FMT "-%" INT64_FMT, a, b);
-}
-
 static int lowercase(const char *s) {
   return tolower(* (const unsigned char *) s);
 }
@@ -718,6 +751,7 @@ static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
   return 0;
 }
 
+#if 0
 static int spool(struct iobuf *io, const void *buf, int len) {
   char *ptr = io->buf;
 
@@ -732,6 +766,7 @@ static int spool(struct iobuf *io, const void *buf, int len) {
   }
   return len;
 }
+#endif
 
 static int vspool(struct iobuf *io, const char *fmt, va_list ap) {
   char *ptr = io->buf;
@@ -796,6 +831,12 @@ static void open_local_endpoint(struct mg_connection *conn) {
   uri_len = (int) strlen(ri->uri);
   mg_url_decode(ri->uri, uri_len, (char *) ri->uri, uri_len + 1, 0);
   remove_double_dots_and_double_slashes((char *) ri->uri);
+
+  if (call_user(MG_REQUEST_BEGIN, conn, NULL) != 0) {
+    conn->flags |= CONN_SPOOL_DONE;
+    return;
+  }
+
   exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
 
   if (exists && (conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
@@ -1032,9 +1073,17 @@ struct mg_server *mg_create_server(const char *opts[], mg_event_handler_t func,
   return server;
 }
 
+static int event_handler(struct mg_event *ev) {
+  fmtspool(&ev->conn->remote_iobuf, "%s", "HTTP/1.0 200 OK\r\n\r\n:-)\n");
+  return 1;
+}
+
 int main(int argc, char *argv[]) {
   const char *options[] = {"document_root", ".", "listening_port", "8080", 0};
-  struct mg_server *server = mg_create_server(options, NULL, NULL);
+  struct mg_server *server = mg_create_server(options, event_handler, NULL);
+
+  (void) argc; (void) argv;
+
   for (;;) {
     mg_poll_server(server, 1000);
   }
