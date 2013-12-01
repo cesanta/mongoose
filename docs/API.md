@@ -176,6 +176,27 @@ Return: number of bytes written to the client. If return value is less then
 `data_len`, it is a failure, meaning that client has closed the connection.
 
 
+    int mg_printf(struct mg_connection *, const char *fmt, ...);
+
+Send data to the client using printf() semantics.
+Works exactly like mg_write(), but allows to do message formatting.
+
+    void mg_send_file(struct mg_connection *conn, const char *path);
+
+Send contents of the entire file together with HTTP headers.
+
+    int mg_read(struct mg_connection *, void *buf, int len);
+
+Read data from the remote end, return number of bytes read.
+If remote side has closed the connection, return value is less or equal to 0.
+
+    const char *mg_get_header(const struct mg_connection *, const char *name);
+
+Get the value of particular HTTP header. This is a helper function.
+It traverses http_headers array, and if the header is present in the array,
+returns its value. If it is not present, NULL is returned.
+
+
 ## Embedding Examples
 
 The common pattern is to handle `MG_REQUEST_BEGIN` and serve static files

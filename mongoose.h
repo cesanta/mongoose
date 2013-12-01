@@ -47,6 +47,7 @@ struct mg_request_info {
   } http_headers[64];         // Maximum 64 headers
 };
 
+// This structure is passed to the user's  event handler function.
 struct mg_event {
   int type;                   // Event type, possible types are defined below
 #define MG_REQUEST_BEGIN  1   // event_param: NULL
@@ -111,30 +112,10 @@ int mg_write(struct mg_connection *, const void *buf, int len);
 #define PRINTF_ARGS(x, y)
 #endif
 
-// Send data to the client using printf() semantics.
-//
-// Works exactly like mg_write(), but allows to do message formatting.
 int mg_printf(struct mg_connection *,
               PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
-
-
-// Send contents of the entire file together with HTTP headers.
 void mg_send_file(struct mg_connection *conn, const char *path);
-
-
-// Read data from the remote end, return number of bytes read.
-// Return:
-//   0     connection has been closed by peer. No more data could be read.
-//   < 0   read error. No more data could be read from the connection.
-//   > 0   number of bytes read into the buffer.
 int mg_read(struct mg_connection *, void *buf, int len);
-
-
-// Get the value of particular HTTP header.
-//
-// This is a helper function. It traverses request_info->http_headers array,
-// and if the header is present in the array, returns its value. If it is
-// not present, NULL is returned.
 const char *mg_get_header(const struct mg_connection *, const char *name);
 
 

@@ -28,16 +28,18 @@ VERSION = $(shell perl -lne \
 # The order in which files are listed is important
 SOURCES = src/internal.h src/util.c src/string.c src/parse_date.c \
           src/options.c src/crypto.c src/auth.c src/win32.c src/unix.c \
-          src/mg_printf.c src/ssl.c src/http_client.c \
-          src/mongoose.c src/lua.c
+          src/mg_printf.c src/ssl.c src/http_client.c src/mime.c \
+          src/directory.c src/log.c src/parse_http.c src/io.c src/cgi.c \
+          src/upload.c src/websocket.c src/webdav.c src/mongoose.c src/lua.c
 
 TINY_SOURCES = ../mongoose.c main.c
-LUA_SOURCES = $(TINY_SOURCES) sqlite3.c lsqlite3.c lua_5.2.1.c
+LUA_SOURCES = $(TINY_SOURCES) lua_5.2.1.c
+LUA_SQLITE_SOURCES = $(LUA_SOURCES) sqlite3.c lsqlite3.c
 
 SQLITE_FLAGS = -DTHREADSAFE=1 -DSQLITE_ENABLE_FTS3 \
                -DSQLITE_ENABLE_FTS3_PARENTHESIS
-LUA_FLAGS = -DUSE_LUA -DUSE_LUA_SQLITE3 -DLUA_COMPAT_ALL
-LUA_SQLITE_FLAGS = $(SQLITE_FLAGS) $(LUA_FLAGS)
+LUA_FLAGS = -DUSE_LUA
+LUA_SQLITE_FLAGS = $(SQLITE_FLAGS) $(LUA_FLAGS) -DUSE_LUA_SQLITE3
 
 # Using Visual Studio 6.0. To build Mongoose:
 #  Set MSVC variable below to where VS 6.0 is installed on your system
@@ -45,7 +47,7 @@ LUA_SQLITE_FLAGS = $(SQLITE_FLAGS) $(LUA_FLAGS)
 MSVC = ../../vc6
 #DBG = /Zi /Od
 DBG  = /DNDEBUG /O1
-CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /I$(MSVC)/include /I..
+CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /I$(MSVC)/include /I.. /I.
 LINK_FLAGS = /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
             user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
 LINK = $(MSVC)/bin/link $(LINK_FLAGS)
@@ -76,14 +78,17 @@ $(PROG): $(TINY_SOURCES)
 	$(CC) $(TINY_SOURCES) -o $@ $(CFLAGS)
 
 $(PROG)-lua: $(LUA_SOURCES)
-	$(CC) $(LUA_SOURCES) -o $@ $(LUA_SQLITE_FLAGS) $(CFLAGS)
+	$(CC) $(LUA_SOURCES) -o $@ $(LUA_FLAGS) $(CFLAGS)
+
+$(PROG)-lua-sqlite: $(LUA_SQLITE_SOURCES)
+	$(CC) $(LUA_SQLITE_SOURCES) -o $@ $(LUA_SQLITE_FLAGS) $(CFLAGS)
 
 unix: $(PROG) $(PROG)-lua
 
 # Windows build
-$(PROG).exe: $(LUA_SOURCES)
+$(PROG).exe: $(LUA_SQLITE_SOURCES)
 	$(MSVC)/bin/rc res.rc
-	$(CL) $(LUA_SOURCES) $(LUA_SQLITE_FLAGS) /link $(LINK_FLAGS) res.res /out:$@
+	$(CL) $(LUA_SQLITE_SOURCES) $(LUA_SQLITE_FLAGS) /link $(LINK_FLAGS) res.res /out:$@
 
 $(PROG)-tiny.exe: $(TINY_SOURCES)
 	$(MSVC)/bin/rc res.rc

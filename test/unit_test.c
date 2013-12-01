@@ -416,19 +416,6 @@ static void test_mg_get_var(void) {
   ASSERT(mg_get_var(post[1], strlen(post[1]), "st", buf, 17) == 16);
 }
 
-static void test_set_throttle(void) {
-  ASSERT(set_throttle(NULL, 0x0a000001, "/") == 0);
-  ASSERT(set_throttle("10.0.0.0/8=20", 0x0a000001, "/") == 20);
-  ASSERT(set_throttle("10.0.0.0/8=0.5k", 0x0a000001, "/") == 512);
-  ASSERT(set_throttle("10.0.0.0/8=17m", 0x0a000001, "/") == 1048576 * 17);
-  ASSERT(set_throttle("10.0.0.0/8=1x", 0x0a000001, "/") == 0);
-  ASSERT(set_throttle("10.0.0.0/8=5,0.0.0.0/0=10", 0x0a000001, "/") == 10);
-  ASSERT(set_throttle("10.0.0.0/8=5,/foo/**=7", 0x0a000001, "/index") == 5);
-  ASSERT(set_throttle("10.0.0.0/8=5,/foo/**=7", 0x0a000001, "/foo/x") == 7);
-  ASSERT(set_throttle("10.0.0.0/8=5,/foo/**=7", 0x0b000001, "/foxo/x") == 0);
-  ASSERT(set_throttle("10.0.0.0/8=5,*=1", 0x0b000001, "/foxo/x") == 1);
-}
-
 static void test_next_option(void) {
   const char *p, *list = "x/8,/y**=1;2k,z";
   struct vec a, b;
@@ -684,7 +671,6 @@ int __cdecl main(void) {
   test_should_keep_alive();
   test_mg_download();
   test_mg_get_var();
-  test_set_throttle();
   test_next_option();
   test_mg_stat();
   test_skip_quoted();

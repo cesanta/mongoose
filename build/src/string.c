@@ -243,3 +243,181 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
   return j;
 }
 
+// Protect against directory disclosure attack by removing '..',
+// excessive '/' and '\' characters
+static void remove_double_dots_and_double_slashes(char *s) {
+  char *p = s;
+
+  while (*s != '\0') {
+    *p++ = *s++;
+    if (s[-1] == '/' || s[-1] == '\\') {
+      // Skip all following slashes, backslashes and double-dots
+      while (s[0] != '\0') {
+        if (s[0] == '/' || s[0] == '\\') {
+          s++;
+        } else if (s[0] == '.' && s[1] == '.') {
+          s += 2;
+        } else {
+          break;
+        }
+      }
+    }
+  }
+  *p = '\0';
+}
+
+void mg_url_encode(const char *src, char *dst, size_t dst_len) {
+  static const char *dont_escape = "._-$,;~()";
+  static const char *hex = "0123456789abcdef";
+  const char *end = dst + dst_len - 1;
+
+  for (; *src != '\0' && dst < end; src++, dst++) {
+    if (isalnum(*(const unsigned char *) src) ||
+        strchr(dont_escape, * (const unsigned char *) src) != NULL) {
+      *dst = *src;
+    } else if (dst + 2 < end) {
+      dst[0] = '%';
+      dst[1] = hex[(* (const unsigned char *) src) >> 4];
+      dst[2] = hex[(* (const unsigned char *) src) & 0xf];
+      dst += 2;
+    }
+  }
+
+  *dst = '\0';
+}
+
+int mg_url_decode(const char *src, int src_len, char *dst,
+                  int dst_len, int is_form_url_encoded) {
+  int i, j, a, b;
+#define HEXTOI(x) (isdigit(x) ? x - '0' : x - 'W')
+
+  for (i = j = 0; i < src_len && j < dst_len - 1; i++, j++) {
+    if (src[i] == '%' && i < src_len - 2 &&
+        isxdigit(* (const unsigned char *) (src + i + 1)) &&
+        isxdigit(* (const unsigned char *) (src + i + 2))) {
+      a = tolower(* (const unsigned char *) (src + i + 1));
+      b = tolower(* (const unsigned char *) (src + i + 2));
+      dst[j] = (char) ((HEXTOI(a) << 4) | HEXTOI(b));
+      i += 2;
+    } else if (is_form_url_encoded && src[i] == '+') {
+      dst[j] = ' ';
+    } else {
+      dst[j] = src[i];
+    }
+  }
+
+  dst[j] = '\0'; // Null-terminate the destination
+
+  return i >= src_len ? j : -1;
+}
+
+// Check whether full request is buffered. Return:
+//   -1  if request is malformed
+//    0  if request is not yet fully buffered
+//   >0  actual request length, including last \r\n\r\n
+static int get_request_len(const char *buf, int buf_len) {
+  int i;
+
+  for (i = 0; i < buf_len; i++) {
+    // Control characters are not allowed but >=128 is.
+    // Abort scan as soon as one malformed character is found;
+    // don't let subsequent \r\n\r\n win us over anyhow
+    if (!isprint(* (const unsigned char *) &buf[i]) && buf[i] != '\r' &&
+        buf[i] != '\n' && * (const unsigned char *) &buf[i] < 128) {
+      return -1;
+    } else if (buf[i] == '\n' && i + 1 < buf_len && buf[i + 1] == '\n') {
+      return i + 2;
+    } else if (buf[i] == '\n' && i + 2 < buf_len && buf[i + 1] == '\r' &&
+               buf[i + 2] == '\n') {
+      return i + 3;
+    }
+  }
+
+  return 0;
+}
+
+int mg_get_cookie(const char *cookie_header, const char *var_name,
+                  char *dst, size_t dst_size) {
+  const char *s, *p, *end;
+  int name_len, len = -1;
+
+  if (dst == NULL || dst_size == 0) {
+    len = -2;
+  } else if (var_name == NULL || (s = cookie_header) == NULL) {
+    len = -1;
+    dst[0] = '\0';
+  } else {
+    name_len = (int) strlen(var_name);
+    end = s + strlen(s);
+    dst[0] = '\0';
+
+    for (; (s = mg_strcasestr(s, var_name)) != NULL; s += name_len) {
+      if (s[name_len] == '=') {
+        s += name_len + 1;
+        if ((p = strchr(s, ' ')) == NULL)
+          p = end;
+        if (p[-1] == ';')
+          p--;
+        if (*s == '"' && p[-1] == '"' && p > s + 1) {
+          s++;
+          p--;
+        }
+        if ((size_t) (p - s) < dst_size) {
+          len = p - s;
+          mg_strlcpy(dst, s, (size_t) len + 1);
+        } else {
+          len = -3;
+        }
+        break;
+      }
+    }
+  }
+  return len;
+}
+
+int mg_get_var(const char *data, size_t data_len, const char *name,
+               char *dst, size_t dst_len) {
+  const char *p, *e, *s;
+  size_t name_len;
+  int len;
+
+  if (dst == NULL || dst_len == 0) {
+    len = -2;
+  } else if (data == NULL || name == NULL || data_len == 0) {
+    len = -1;
+    dst[0] = '\0';
+  } else {
+    name_len = strlen(name);
+    e = data + data_len;
+    len = -1;
+    dst[0] = '\0';
+
+    // data is "var1=val1&var2=val2...". Find variable first
+    for (p = data; p + name_len < e; p++) {
+      if ((p == data || p[-1] == '&') && p[name_len] == '=' &&
+          !mg_strncasecmp(name, p, name_len)) {
+
+        // Point p to variable value
+        p += name_len + 1;
+
+        // Point s to the end of the value
+        s = (const char *) memchr(p, '&', (size_t)(e - p));
+        if (s == NULL) {
+          s = e;
+        }
+        assert(s >= p);
+
+        // Decode variable into destination buffer
+        len = mg_url_decode(p, (size_t)(s - p), dst, dst_len, 1);
+
+        // Redirect error code from -1 to -2 (destination buffer too small).
+        if (len == -1) {
+          len = -2;
+        }
+        break;
+      }
+    }
+  }
+
+  return len;
+}

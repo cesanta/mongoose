@@ -45,12 +45,6 @@
 #undef WIN32_LEAN_AND_MEAN
 #endif
 
-#if defined(__SYMBIAN32__)
-#define NO_SSL // SSL is not supported
-#define NO_CGI // CGI is not supported
-#define PATH_MAX FILENAME_MAX
-#endif // __SYMBIAN32__
-
 #ifndef _WIN32_WCE // Some ANSI #includes are not available on Windows CE
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -69,7 +63,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#if defined(_WIN32) && !defined(__SYMBIAN32__) // Windows specific
+#if defined(_WIN32) // Windows specific
 #undef _WIN32_WINNT
 #define _WIN32_WINNT 0x0400 // To make it link in VS2005
 #include <windows.h>
@@ -187,13 +181,15 @@ typedef struct DIR {
   struct dirent  result;
 } DIR;
 
-#ifndef HAVE_POLL
 struct pollfd {
   SOCKET fd;
   short events;
   short revents;
 };
 #define POLLIN 1
+
+#ifdef HAVE_POLL
+#define poll(x, y, z)  WSAPoll((x), (y), (z))
 #endif
 
 
@@ -248,7 +244,7 @@ typedef int SOCKET;
 
 #include "mongoose.h"
 
-#define MONGOOSE_VERSION "4.2"
+#define MONGOOSE_VERSION "5.0"
 #define PASSWORDS_FILE_NAME ".htpasswd"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
@@ -397,7 +393,7 @@ struct socket {
 // NOTE(lsm): this enum shoulds be in sync with the config_options.
 enum {
   CGI_EXTENSIONS, CGI_ENVIRONMENT, PUT_DELETE_PASSWORDS_FILE, CGI_INTERPRETER,
-  PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS, THROTTLE,
+  PROTECT_URI, AUTHENTICATION_DOMAIN, SSI_EXTENSIONS,
   ACCESS_LOG_FILE, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
   GLOBAL_PASSWORDS_FILE, INDEX_FILES, ENABLE_KEEP_ALIVE, ACCESS_CONTROL_LIST,
   EXTRA_MIME_TYPES, LISTENING_PORTS, DOCUMENT_ROOT, SSL_CERTIFICATE,
@@ -444,9 +440,6 @@ struct mg_connection {
   int request_len;            // Size of the request + headers in a buffer
   int data_len;               // Total size of data in a buffer
   int status_code;            // HTTP reply status code, e.g. 200
-  int throttle;               // Throttling, bytes/sec. <= 0 means no throttle
-  time_t last_throttle_time;  // Last time throttled data was sent
-  int64_t last_throttle_bytes;// Bytes sent this second
 };
 
 // Directory entry
