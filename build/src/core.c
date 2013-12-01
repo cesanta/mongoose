@@ -113,6 +113,11 @@ struct linked_list_link { struct linked_list_link *prev, *next; };
 #define IOBUF_SIZE 8192
 #define MAX_PATH_SIZE 8192
 
+// Extra HTTP headers to send in every static file reply
+#if !defined(EXTRA_HTTP_HEADERS)
+#define EXTRA_HTTP_HEADERS ""
+#endif
+
 #ifdef ENABLE_DBG
 #define DBG(x) do { printf("%s::%s() ", __FILE__, __func__); \
   printf x; putchar('\n'); fflush(stdout); } while(0)
@@ -177,11 +182,12 @@ struct mg_connection {
   struct iobuf remote_iobuf;
   union endpoint endpoint;
   enum endpoint_type endpoint_type;
-  int flags;
   time_t expire_time;
   struct mg_request_info request_info;
   char *path_info;
   int request_len;
+  int flags;
+  int status_code;
   mutex_t mutex;   // Guards concurrent mg_write() and mg_printf() calls
 };
 
@@ -635,6 +641,27 @@ static int lowercase(const char *s) {
   return tolower(* (const unsigned char *) s);
 }
 
+static int mg_strcasecmp(const char *s1, const char *s2) {
+  int diff;
+
+  do {
+    diff = lowercase(s1++) - lowercase(s2++);
+  } while (diff == 0 && s1[-1] != '\0');
+
+  return diff;
+}
+
+static int mg_strncasecmp(const char *s1, const char *s2, size_t len) {
+  int diff = 0;
+
+  if (len > 0)
+    do {
+      diff = lowercase(s1++) - lowercase(s2++);
+    } while (diff == 0 && s1[-1] != '\0' && --len > 0);
+
+  return diff;
+}
+
 // Perform case-insensitive match of string against pattern
 static int match_prefix(const char *pattern, int pattern_len, const char *str) {
   const char *or_str;
@@ -724,7 +751,7 @@ static const char *get_header(const struct mg_request_info *ri, const char *s) {
   int i;
 
   for (i = 0; i < ri->num_headers; i++)
-    if (!strcmp(s, ri->http_headers[i].name))
+    if (!mg_strcasecmp(s, ri->http_headers[i].name))
       return ri->http_headers[i].value;
 
   return NULL;
@@ -854,6 +881,172 @@ static void write_to_client(struct mg_connection *conn) {
   }
 }
 
+static const struct {
+  const char *extension;
+  size_t ext_len;
+  const char *mime_type;
+} builtin_mime_types[] = {
+  {".html", 5, "text/html"},
+  {".htm", 4, "text/html"},
+  {".shtm", 5, "text/html"},
+  {".shtml", 6, "text/html"},
+  {".css", 4, "text/css"},
+  {".js",  3, "application/x-javascript"},
+  {".ico", 4, "image/x-icon"},
+  {".gif", 4, "image/gif"},
+  {".jpg", 4, "image/jpeg"},
+  {".jpeg", 5, "image/jpeg"},
+  {".png", 4, "image/png"},
+  {".svg", 4, "image/svg+xml"},
+  {".txt", 4, "text/plain"},
+  {".torrent", 8, "application/x-bittorrent"},
+  {".wav", 4, "audio/x-wav"},
+  {".mp3", 4, "audio/x-mp3"},
+  {".mid", 4, "audio/mid"},
+  {".m3u", 4, "audio/x-mpegurl"},
+  {".ogg", 4, "application/ogg"},
+  {".ram", 4, "audio/x-pn-realaudio"},
+  {".xml", 4, "text/xml"},
+  {".json",  5, "text/json"},
+  {".xslt", 5, "application/xml"},
+  {".xsl", 4, "application/xml"},
+  {".ra",  3, "audio/x-pn-realaudio"},
+  {".doc", 4, "application/msword"},
+  {".exe", 4, "application/octet-stream"},
+  {".zip", 4, "application/x-zip-compressed"},
+  {".xls", 4, "application/excel"},
+  {".tgz", 4, "application/x-tar-gz"},
+  {".tar", 4, "application/x-tar"},
+  {".gz",  3, "application/x-gunzip"},
+  {".arj", 4, "application/x-arj-compressed"},
+  {".rar", 4, "application/x-arj-compressed"},
+  {".rtf", 4, "application/rtf"},
+  {".pdf", 4, "application/pdf"},
+  {".swf", 4, "application/x-shockwave-flash"},
+  {".mpg", 4, "video/mpeg"},
+  {".webm", 5, "video/webm"},
+  {".mpeg", 5, "video/mpeg"},
+  {".mov", 4, "video/quicktime"},
+  {".mp4", 4, "video/mp4"},
+  {".m4v", 4, "video/x-m4v"},
+  {".asf", 4, "video/x-ms-asf"},
+  {".avi", 4, "video/x-msvideo"},
+  {".bmp", 4, "image/bmp"},
+  {".ttf", 4, "application/x-font-ttf"},
+  {NULL,  0, NULL}
+};
+
+const char *mg_get_builtin_mime_type(const char *path) {
+  const char *ext;
+  size_t i, path_len;
+
+  path_len = strlen(path);
+
+  for (i = 0; builtin_mime_types[i].extension != NULL; i++) {
+    ext = path + (path_len - builtin_mime_types[i].ext_len);
+    if (path_len > builtin_mime_types[i].ext_len &&
+        mg_strcasecmp(ext, builtin_mime_types[i].extension) == 0) {
+      return builtin_mime_types[i].mime_type;
+    }
+  }
+
+  return "text/plain";
+}
+
+// Look at the "path" extension and figure what mime type it has.
+// Store mime type in the vector.
+static void get_mime_type(const struct mg_server *server, const char *path,
+                          struct vec *vec) {
+  struct vec ext_vec, mime_vec;
+  const char *list, *ext;
+  size_t path_len;
+
+  path_len = strlen(path);
+
+  // Scan user-defined mime types first, in case user wants to
+  // override default mime types.
+  list = server->config_options[EXTRA_MIME_TYPES];
+  while ((list = next_option(list, &ext_vec, &mime_vec)) != NULL) {
+    // ext now points to the path suffix
+    ext = path + path_len - ext_vec.len;
+    if (mg_strncasecmp(ext, ext_vec.ptr, ext_vec.len) == 0) {
+      *vec = mime_vec;
+      return;
+    }
+  }
+
+  vec->ptr = mg_get_builtin_mime_type(path);
+  vec->len = strlen(vec->ptr);
+}
+
+static int parse_range_header(const char *header, int64_t *a, int64_t *b) {
+  return sscanf(header, "bytes=%" INT64_FMT "-%" INT64_FMT, a, b);
+}
+
+static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
+  strftime(buf, buf_len, "%a, %d %b %Y %H:%M:%S GMT", gmtime(t));
+}
+
+static void construct_etag(char *buf, size_t buf_len, const struct stat *st) {
+  snprintf(buf, buf_len, "\"%lx.%" INT64_FMT "\"",
+           (unsigned long) st->st_mtime, (int64_t) st->st_size);
+}
+
+static void open_file_endpoint(struct mg_connection *conn, const char *path,
+                               struct stat *st) {
+  char date[64], lm[64], etag[64], range[64];
+  const char *msg = "OK", *hdr;
+  time_t curtime = time(NULL);
+  int64_t cl, r1, r2;
+  struct vec mime_vec;
+  int n;
+
+  conn->endpoint_type = EP_FILE;
+  set_close_on_exec(conn->endpoint.fd);
+  conn->status_code = 200;
+
+  get_mime_type(conn->server, path, &mime_vec);
+  cl = st->st_size;
+  range[0] = '\0';
+
+  // If Range: header specified, act accordingly
+  r1 = r2 = 0;
+  hdr = mg_get_header(conn, "Range");
+  if (hdr != NULL && (n = parse_range_header(hdr, &r1, &r2)) > 0 &&
+      r1 >= 0 && r2 >= 0) {
+    conn->status_code = 206;
+    cl = n == 2 ? (r2 > cl ? cl : r2) - r1 + 1: cl - r1;
+    snprintf(range, sizeof(range), "Content-Range: bytes "
+             "%" INT64_FMT "-%" INT64_FMT "/%" INT64_FMT "\r\n",
+             r1, r1 + cl - 1, (int64_t) st->st_size);
+    msg = "Partial Content";
+    lseek(conn->endpoint.fd, r1, SEEK_SET);
+  }
+
+  // Prepare Etag, Date, Last-Modified headers. Must be in UTC, according to
+  // http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.3
+  gmt_time_string(date, sizeof(date), &curtime);
+  gmt_time_string(lm, sizeof(lm), &st->st_mtime);
+  construct_etag(etag, sizeof(etag), st);
+
+  mg_printf(conn,
+            "HTTP/1.1 %d %s\r\n"
+            "Date: %s\r\n"
+            "Last-Modified: %s\r\n"
+            "Etag: %s\r\n"
+            "Content-Type: %.*s\r\n"
+            "Content-Length: %" INT64_FMT "\r\n"
+            "Connection: %s\r\n"
+            "Accept-Ranges: bytes\r\n"
+            "%s%s\r\n",
+            conn->status_code, msg, date, lm, etag, (int) mime_vec.len,
+            mime_vec.ptr, cl, "keep-alive", range, EXTRA_HTTP_HEADERS);
+
+  if (!strcmp(conn->request_info.request_method, "HEAD")) {
+    lseek(conn->endpoint.fd, 0, SEEK_END);
+  }
+}
+
 static void open_local_endpoint(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
   char path[MAX_PATH_SIZE] = {'\0'};
@@ -875,10 +1068,7 @@ static void open_local_endpoint(struct mg_connection *conn) {
   exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
 
   if (exists && (conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
-    mg_printf(conn, "HTTP/1.0 200 OK\r\n"
-              "Content-Length: %" INT64_FMT "\r\n" "\r\n",
-              (int64_t) st.st_size);
-    conn->endpoint_type = EP_FILE;
+    open_file_endpoint(conn, path, &st);
   } else {
     mg_printf(conn, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
     conn->flags |= CONN_SPOOL_DONE;
@@ -892,7 +1082,7 @@ static int io_space(const struct iobuf *io) {
 static void process_request(struct mg_connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
 
-  DBG(("parse_http_message(%d [%.*s])", io->len, io->len, io->buf));
+  //DBG(("parse_http_message(%d [%.*s])", io->len, io->len, io->buf));
   if (conn->request_len == 0) {
     conn->request_len = parse_http_message(io->buf, io->len,
                                            &conn->request_info);
@@ -912,7 +1102,7 @@ static void read_from_client(struct mg_connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
   int n = recv(conn->client_sock, io->buf + io->len, io->size - io->len, 0);
 
-  DBG(("Read: %d [%.*s]", n, n, io->buf + io->len));
+  //DBG(("Read: %d [%.*s]", n, n, io->buf + io->len));
   assert(io->len >= 0);
   assert(io->len <= io->size);
 
@@ -936,6 +1126,8 @@ static int should_keep_alive(const struct mg_connection *conn) {
 static void close_local_endpoint(struct mg_connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
   int keep_alive = should_keep_alive(conn);  // Must be done before memmove!
+
+  call_user(MG_REQUEST_END, conn, (void *) (long) conn->status_code);
 
   // Close file descriptor
   switch (conn->endpoint_type) {
@@ -1118,8 +1310,12 @@ struct mg_server *mg_create_server(const char *opts[], mg_event_handler_t func,
 // End of library, start of the application code
 
 static int event_handler(struct mg_event *ev) {
-  mg_printf(ev->conn, "%s", "HTTP/1.0 200 OK\r\n\r\n:-)\n");
-  return 1;
+  if (ev->type == MG_REQUEST_BEGIN &&
+      !strcmp(ev->request_info->uri, "/x")) {
+    mg_printf(ev->conn, "%s", "HTTP/1.0 200 OK\r\n\r\n:-)\n");
+    return 1;
+  }
+  return 0;
 }
 
 int main(void) {
