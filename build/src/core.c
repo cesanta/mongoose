@@ -150,6 +150,9 @@ union endpoint {
   void *ssl;    // SSL descriptor
 };
 
+enum endpoint_type { EP_NONE, EP_FILE, EP_DIR, EP_CGI, EP_SSL };
+enum connection_flags { CONN_CLOSE = 1, CONN_SPOOL_DONE = 2 };
+
 struct mg_connection {
   struct linked_list_link link;   // Linkage to server->active_connections
   struct mg_server *server;
@@ -159,8 +162,8 @@ struct mg_connection {
   struct iobuf local_iobuf;
   struct iobuf remote_iobuf;
   union endpoint endpoint;
-  enum { EP_NONE, EP_FILE, EP_DIR, EP_CGI, EP_SSL } endpoint_type;
-  enum { CONN_CLOSE = 1, CONN_SPOOL_DONE = 2 } flags;
+  enum endpoint_type endpoint_type;
+  int flags;
   time_t expire_time;
   struct mg_request_info request_info;
   char *path_info;
@@ -381,7 +384,7 @@ static sock_t open_listening_socket(union socket_address *sa) {
 }
 
 static char *mg_strdup(const char *str) {
-  char *copy = malloc(strlen(str) + 1);
+  char *copy = (char *) malloc(strlen(str) + 1);
   if (copy != NULL) {
     strcpy(copy, str);
   }
@@ -478,7 +481,8 @@ static struct mg_connection *accept_new_connection(struct mg_server *server) {
   } else if (!check_acl(server->config_options[ACCESS_CONTROL_LIST],
                         ntohl(* (uint32_t *) &sa.sin.sin_addr))) {
     closesocket(sock);
-  } else if ((conn = calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE)) == NULL) {
+  } else if ((conn = (struct mg_connection *)
+              calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE)) == NULL) {
     closesocket(sock);
   } else {
     // Put so socket structure into the queue
@@ -489,7 +493,7 @@ static struct mg_connection *accept_new_connection(struct mg_server *server) {
     conn->csa = sa;
     conn->local_iobuf.buf = (char *) conn + sizeof(*conn);
     conn->local_iobuf.size = MAX_REQUEST_SIZE;
-    conn->remote_iobuf.buf = calloc(1, IOBUF_SIZE);
+    conn->remote_iobuf.buf = (char *) calloc(1, IOBUF_SIZE);
     conn->remote_iobuf.size = IOBUF_SIZE;
     LINKED_LIST_ADD_TO_FRONT(&server->active_connections, &conn->link);
     DBG(("added conn %p", conn));
@@ -778,7 +782,8 @@ static int vspool(struct iobuf *io, const char *fmt, va_list ap) {
 
   if (len <= 0) {
   } else if (len < io->size - io->len ||
-             (ptr = realloc(io->buf, io->len + len + 1 - io->size)) != NULL) {
+             (ptr = (char *) realloc(io->buf, io->len + len + 1 - io->size))
+             != NULL) {
     io->buf = ptr;
     vsnprintf(io->buf + io->len, len + 1, fmt, ap);
     io->len += len;
@@ -1026,7 +1031,7 @@ void mg_destroy_server(struct mg_server **server) {
 
 struct mg_server *mg_create_server(const char *opts[], mg_event_handler_t func,
                                    void *user_data) {
-  struct mg_server *server = calloc(1, sizeof(*server));
+  struct mg_server *server = (struct mg_server *) calloc(1, sizeof(*server));
   const char *name, *value;
   char error_msg[100] = {'\0'};
   int i;
