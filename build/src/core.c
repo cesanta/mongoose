@@ -1078,11 +1078,9 @@ static int event_handler(struct mg_event *ev) {
   return 1;
 }
 
-int main(int argc, char *argv[]) {
+int main(void) {
   const char *options[] = {"document_root", ".", "listening_port", "8080", 0};
   struct mg_server *server = mg_create_server(options, event_handler, NULL);
-
-  (void) argc; (void) argv;
 
   for (;;) {
     mg_poll_server(server, 1000);
