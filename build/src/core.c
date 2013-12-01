@@ -755,7 +755,6 @@ static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
   return 0;
 }
 
-#if 0
 static int spool(struct iobuf *io, const void *buf, int len) {
   char *ptr = io->buf;
 
@@ -770,7 +769,6 @@ static int spool(struct iobuf *io, const void *buf, int len) {
   }
   return len;
 }
-#endif
 
 static int vspool(struct iobuf *io, const char *fmt, va_list ap) {
   char *ptr = io->buf;
@@ -794,13 +792,17 @@ static int vspool(struct iobuf *io, const char *fmt, va_list ap) {
   return len;
 }
 
-static int fmtspool(struct iobuf *io, const char *fmt, ...) {
+int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   va_list ap;
   int ret;
   va_start(ap, fmt);
-  ret = vspool(io, fmt, ap);
+  ret = vspool(&conn->remote_iobuf, fmt, ap);
   va_end(ap);
   return ret;
+}
+
+int mg_write(struct mg_connection *conn, const void *buf, int len) {
+  return spool(&conn->remote_iobuf, buf, len);
 }
 
 static int is_error(int n) {
@@ -845,12 +847,12 @@ static void open_local_endpoint(struct mg_connection *conn) {
   exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
 
   if (exists && (conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
-    fmtspool(&conn->remote_iobuf, "HTTP/1.0 200 OK\r\n"
-             "Content-Length: %" INT64_FMT "\r\n" "\r\n",
-             (int64_t) st.st_size);
+    mg_printf(conn, "HTTP/1.0 200 OK\r\n"
+              "Content-Length: %" INT64_FMT "\r\n" "\r\n",
+              (int64_t) st.st_size);
     conn->endpoint_type = EP_FILE;
   } else {
-    fmtspool(&conn->remote_iobuf, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
+    mg_printf(conn, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
     conn->flags |= CONN_SPOOL_DONE;
   }
 }
@@ -1079,7 +1081,7 @@ struct mg_server *mg_create_server(const char *opts[], mg_event_handler_t func,
 }
 
 static int event_handler(struct mg_event *ev) {
-  fmtspool(&ev->conn->remote_iobuf, "%s", "HTTP/1.0 200 OK\r\n\r\n:-)\n");
+  mg_printf(ev->conn, "%s", "HTTP/1.0 200 OK\r\n\r\n:-)\n");
   return 1;
 }
 
