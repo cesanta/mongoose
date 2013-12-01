@@ -68,6 +68,7 @@ typedef CRITICAL_SECTION mutex_t;
 #define mutex_destroy(x) DeleteCriticalSection(x)
 #define mutex_lock(x) EnterCriticalSection(x)
 #define mutex_unlock(x) LeaveCriticalSection(x)
+#define S_ISDIR(x) ((x) & _S_IFDIR)
 #ifndef va_copy
 #define va_copy(x,y) x = y
 #endif // MINGW #defines va_copy
@@ -1052,7 +1053,7 @@ static void open_local_endpoint(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
   char path[MAX_PATH_SIZE] = {'\0'};
   struct stat st;
-  int uri_len, exists = 0;
+  int uri_len, exists = 0, is_directory = 0;
 
   if ((conn->request_info.query_string = strchr(ri->uri, '?')) != NULL) {
     * ((char *) conn->request_info.query_string++) = '\0';
@@ -1067,8 +1068,19 @@ static void open_local_endpoint(struct mg_connection *conn) {
   }
 
   exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
+  is_directory = S_ISDIR(st.st_mode);
 
-  if (exists && (conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
+  if (!exists) {
+    mg_printf(conn, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
+    conn->flags |= CONN_SPOOL_DONE;
+  } else if (is_directory && ri->uri[uri_len - 1] != '/') {
+    mg_printf(conn, "HTTP/1.1 301 Moved Permanently\r\n"
+              "Location: %s/\r\n\r\n", ri->uri);
+    conn->flags |= CONN_SPOOL_DONE;
+  } else if (is_directory) {
+    mg_printf(conn, "%s", "HTTP/1.0 403 Directory Listing Denied\r\n\r\n");
+    conn->flags |= CONN_SPOOL_DONE;
+  } else if ((conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
     open_file_endpoint(conn, path, &st);
   } else {
     mg_printf(conn, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
@@ -1126,7 +1138,7 @@ static int should_keep_alive(const struct mg_connection *conn) {
 
 static void close_local_endpoint(struct mg_connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
-  int keep_alive = should_keep_alive(conn);  // Must be done before memmove!
+  int keep_alive = should_keep_alive(conn);  // Must be done before memmove
 
   call_user(MG_REQUEST_END, conn, (void *) (long) conn->status_code);
 
@@ -1144,10 +1156,8 @@ static void close_local_endpoint(struct mg_connection *conn) {
   conn->request_len = 0;
 
   if (keep_alive) {
-    DBG(("keep alive!"));
-    process_request(conn);  // Can call us recursively!
+    process_request(conn);  // Can call us recursively if pipelining is used
   } else {
-    DBG(("closing!"));
     conn->flags |= conn->remote_iobuf.len == 0 ? CONN_CLOSE : CONN_SPOOL_DONE;
   }
 }
