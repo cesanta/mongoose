@@ -69,6 +69,7 @@ typedef CRITICAL_SECTION mutex_t;
 #define mutex_lock(x) EnterCriticalSection(x)
 #define mutex_unlock(x) LeaveCriticalSection(x)
 #define S_ISDIR(x) ((x) & _S_IFDIR)
+#define sleep(x) Sleep((x) * 1000)
 #ifndef va_copy
 #define va_copy(x,y) x = y
 #endif // MINGW #defines va_copy
@@ -93,7 +94,8 @@ typedef pthread_mutex_t mutex_t;
 #define INT64_FMT PRId64
 #endif
 
-#include "mongoose.h"
+//#include "mongoose.h"
+#include "core.h"
 
 struct linked_list_link { struct linked_list_link *prev, *next; };
 #define LINKED_LIST_INIT(N)  ((N)->next = (N)->prev = (N))
@@ -139,6 +141,12 @@ struct vec {
   int len;
 };
 
+struct uri_handler {
+  struct linked_list_link link;
+  char *uri;
+  mg_uri_handler_t handler;
+};
+
 // NOTE(lsm): this enum shoulds be in sync with the config_options.
 enum {
   ACCESS_CONTROL_LIST, ACCESS_LOG_FILE, AUTH_DOMAIN, CGI_INTERPRETER,
@@ -152,9 +160,9 @@ struct mg_server {
   sock_t listening_sock;
   union socket_address lsa;   // Listening socket address
   struct linked_list_link active_connections;
+  struct linked_list_link uri_handlers;
   char *config_options[NUM_OPTIONS];
-  mg_event_handler_t event_handler;
-  void *user_data;
+  void *server_data;
   sock_t ctl[2];  // Control socketpair. Used to wake up from select() call
 };
 
@@ -170,13 +178,13 @@ union endpoint {
   void *ssl;    // SSL descriptor
 };
 
-enum endpoint_type { EP_NONE, EP_FILE, EP_DIR, EP_CGI, EP_SSL };
+enum endpoint_type { EP_NONE, EP_FILE, EP_DIR, EP_CGI, EP_SSL, EP_USER };
 enum connection_flags { CONN_CLOSE = 1, CONN_SPOOL_DONE = 2 };
 
-struct mg_connection {
+struct connection {
+  struct mg_connection mg_conn;   // XXX: Must be first
   struct linked_list_link link;   // Linkage to server->active_connections
   struct mg_server *server;
-  struct mg_event event;      // NOTE(lsm): this has conn_data attribute
   sock_t client_sock;         // Connected client
   union socket_address csa;   // Client's socket address
   struct iobuf local_iobuf;
@@ -184,7 +192,6 @@ struct mg_connection {
   union endpoint endpoint;
   enum endpoint_type endpoint_type;
   time_t expire_time;
-  struct mg_request_info request_info;
   char *path_info;
   int request_len;
   int flags;
@@ -206,7 +213,7 @@ static const char *static_config_options[] = {
   "hide_files_patterns", NULL,
   "idle_timeout_ms", "30000",
   "index_files","index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
-  "listening_port", "8080",
+  "listening_port", NULL,
   "num_threads", "50",
   "put_delete_auth_file", NULL,
   "run_as_user", NULL,
@@ -287,13 +294,13 @@ static int get_option_index(const char *name) {
   return -1;
 }
 
-const char *mg_get_option2(const struct mg_server *srv, const char *name) {
+const char *mg_get_option(const struct mg_server *srv, const char *name) {
   int i = get_option_index(name);
   return i == -1 ? NULL : srv->config_options[i] == NULL ? "" :
     srv->config_options[i];
 }
 
-int mg_start_thread(mg_thread_func_t f, void *p) {
+int mg_start_thread(void *(*f)(void *), void *p) {
 #ifdef _WIN32
   return (long)_beginthread((void (__cdecl *)(void *)) f, 0, p) == -1L ? -1 : 0;
 #else
@@ -316,6 +323,7 @@ int mg_start_thread(mg_thread_func_t f, void *p) {
 #endif
 }
 
+#if 0
 static int call_user(int event_type, struct mg_connection *conn, void *p) {
   if (conn != NULL && conn->server != NULL) {
     conn->event.user_data = conn->server->user_data;
@@ -327,6 +335,7 @@ static int call_user(int event_type, struct mg_connection *conn, void *p) {
   return !conn || !conn->server || !conn->server->event_handler ? 0 :
     conn->server->event_handler(&conn->event);
 }
+#endif
 
 static void set_close_on_exec(int fd) {
 #ifdef _WIN32
@@ -547,11 +556,11 @@ static int check_acl(const char *acl, uint32_t remote_ip) {
   return allowed == '+';
 }
 
-static struct mg_connection *accept_new_connection(struct mg_server *server) {
+static struct connection *accept_new_connection(struct mg_server *server) {
   union socket_address sa;
   socklen_t len = sizeof(sa);
   sock_t sock = INVALID_SOCKET;
-  struct mg_connection *conn = NULL;
+  struct connection *conn = NULL;
 
   if ((sock = accept(server->listening_sock, &sa.sa, &len)) == INVALID_SOCKET) {
 #if 0
@@ -562,7 +571,7 @@ static struct mg_connection *accept_new_connection(struct mg_server *server) {
   } else if (!check_acl(server->config_options[ACCESS_CONTROL_LIST],
                         ntohl(* (uint32_t *) &sa.sin.sin_addr))) {
     closesocket(sock);
-  } else if ((conn = (struct mg_connection *)
+  } else if ((conn = (struct connection *)
               calloc(1, sizeof(*conn) + MAX_REQUEST_SIZE)) == NULL) {
     closesocket(sock);
   } else {
@@ -584,7 +593,7 @@ static struct mg_connection *accept_new_connection(struct mg_server *server) {
   return conn;
 }
 
-static void close_conn(struct mg_connection *conn) {
+static void close_conn(struct connection *conn) {
   DBG(("closing %p", conn));
   LINKED_LIST_REMOVE(&conn->link);
   closesocket(conn->client_sock);
@@ -638,7 +647,7 @@ static char *skip(char **buf, const char *delimiters) {
 
 // Parse HTTP headers from the given buffer, advance buffer to the point
 // where parsing stopped.
-static void parse_http_headers(char **buf, struct mg_request_info *ri) {
+static void parse_http_headers(char **buf, struct mg_connection *ri) {
   size_t i;
 
   for (i = 0; i < ARRAY_SIZE(ri->http_headers); i++) {
@@ -658,16 +667,15 @@ static int is_valid_http_method(const char *method) {
     || !strcmp(method, "MKCOL");
 }
 
-// Parse HTTP request, fill in mg_request_info structure.
+// Parse HTTP request, fill in mg_request structure.
 // This function modifies the buffer by NUL-terminating
 // HTTP request components, header names and header values.
-static int parse_http_message(char *buf, int len, struct mg_request_info *ri) {
+static int parse_http_message(char *buf, int len, struct mg_connection *ri) {
   int is_request, request_len = get_request_len((unsigned char *) buf, len);
   if (request_len > 0) {
     // Reset attributes. DO NOT TOUCH is_ssl, remote_ip, remote_port
-    ri->remote_user = ri->request_method = ri->uri = ri->http_version = NULL;
+    ri->request_method = ri->uri = ri->http_version = NULL;
     ri->num_headers = 0;
-
     buf[request_len - 1] = '\0';
 
     // RFC says that all initial whitespaces should be ingored
@@ -804,7 +812,7 @@ int mg_url_decode(const char *src, int src_len, char *dst,
 }
 
 // Return HTTP header value, or NULL if not found.
-static const char *get_header(const struct mg_request_info *ri, const char *s) {
+const char *mg_get_header(const struct mg_connection *ri, const char *s) {
   int i;
 
   for (i = 0; i < ri->num_headers; i++)
@@ -814,18 +822,14 @@ static const char *get_header(const struct mg_request_info *ri, const char *s) {
   return NULL;
 }
 
-const char *mg_get_header(const struct mg_connection *conn, const char *name) {
-  return get_header(&conn->request_info, name);
-}
-
 // Return 1 if real file has been found, 0 otherwise
-static int convert_uri_to_file_name(struct mg_connection *conn, char *buf,
+static int convert_uri_to_file_name(struct connection *conn, char *buf,
                                     size_t buf_len, struct stat *st) {
   struct vec a, b;
   const char *rewrites = conn->server->config_options[URL_REWRITES],
         *root = conn->server->config_options[DOCUMENT_ROOT],
         *cgi_pat = conn->server->config_options[CGI_PATTERN],
-        *uri = conn->request_info.uri;
+        *uri = conn->mg_conn.uri;
   char *p;
   int match_len;
 
@@ -896,7 +900,8 @@ static int vspool(struct iobuf *io, const char *fmt, va_list ap) {
   return len;
 }
 
-int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
+int mg_printf(struct mg_connection *c, const char *fmt, ...) {
+  struct connection *conn = (struct connection *) c;
   va_list ap;
   int ret;
   va_start(ap, fmt);
@@ -908,7 +913,8 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   return ret;
 }
 
-int mg_write(struct mg_connection *conn, const void *buf, int len) {
+int mg_write(struct mg_connection *c, const void *buf, int len) {
+  struct connection *conn = (struct connection *) c;
   int ret;
   mutex_lock(&conn->mutex);
   ret = spool(&conn->remote_iobuf, buf, len);
@@ -921,7 +927,7 @@ static int is_error(int n) {
   return n == 0 || (n < 0 && errno != EINTR && errno != EAGAIN);
 }
 
-static void write_to_client(struct mg_connection *conn) {
+static void write_to_client(struct connection *conn) {
   struct iobuf *io = &conn->remote_iobuf;
   int n = send(conn->client_sock, io->buf, io->len, 0);
 
@@ -938,7 +944,7 @@ static void write_to_client(struct mg_connection *conn) {
   }
 }
 
-const char *mg_get_builtin_mime_type(const char *path) {
+const char *mg_get_mime_type(const char *path) {
   const char *ext;
   size_t i, path_len;
 
@@ -977,7 +983,7 @@ static void get_mime_type(const struct mg_server *server, const char *path,
     }
   }
 
-  vec->ptr = mg_get_builtin_mime_type(path);
+  vec->ptr = mg_get_mime_type(path);
   vec->len = strlen(vec->ptr);
 }
 
@@ -994,7 +1000,7 @@ static void construct_etag(char *buf, size_t buf_len, const struct stat *st) {
            (unsigned long) st->st_mtime, (int64_t) st->st_size);
 }
 
-static void open_file_endpoint(struct mg_connection *conn, const char *path,
+static void open_file_endpoint(struct connection *conn, const char *path,
                                struct stat *st) {
   char date[64], lm[64], etag[64], range[64];
   const char *msg = "OK", *hdr;
@@ -1013,7 +1019,7 @@ static void open_file_endpoint(struct mg_connection *conn, const char *path,
 
   // If Range: header specified, act accordingly
   r1 = r2 = 0;
-  hdr = mg_get_header(conn, "Range");
+  hdr = mg_get_header(&conn->mg_conn, "Range");
   if (hdr != NULL && (n = parse_range_header(hdr, &r1, &r2)) > 0 &&
       r1 >= 0 && r2 >= 0) {
     conn->status_code = 206;
@@ -1031,7 +1037,7 @@ static void open_file_endpoint(struct mg_connection *conn, const char *path,
   gmt_time_string(lm, sizeof(lm), &st->st_mtime);
   construct_etag(etag, sizeof(etag), st);
 
-  mg_printf(conn,
+  mg_printf(&conn->mg_conn,
             "HTTP/1.1 %d %s\r\n"
             "Date: %s\r\n"
             "Last-Modified: %s\r\n"
@@ -1044,46 +1050,67 @@ static void open_file_endpoint(struct mg_connection *conn, const char *path,
             conn->status_code, msg, date, lm, etag, (int) mime_vec.len,
             mime_vec.ptr, cl, "keep-alive", range, EXTRA_HTTP_HEADERS);
 
-  if (!strcmp(conn->request_info.request_method, "HEAD")) {
+  if (!strcmp(conn->mg_conn.request_method, "HEAD")) {
     lseek(conn->endpoint.fd, 0, SEEK_END);
   }
 }
 
-static void open_local_endpoint(struct mg_connection *conn) {
-  struct mg_request_info *ri = &conn->request_info;
+static struct uri_handler *find_uri_handler(struct mg_server *server,
+                                            const char *uri) {
+  struct linked_list_link *lp, *tmp;
+  struct uri_handler *uh;
+
+  LINKED_LIST_FOREACH(&server->uri_handlers, lp, tmp) {
+    uh = LINKED_LIST_ENTRY(lp, struct uri_handler, link);
+    if (!strcmp(uh->uri, uri)) return uh;
+  }
+
+  return NULL;
+}
+
+static void open_local_endpoint(struct connection *conn) {
   char path[MAX_PATH_SIZE] = {'\0'};
   struct stat st;
   int uri_len, exists = 0, is_directory = 0;
+  struct uri_handler *uh;
 
-  if ((conn->request_info.query_string = strchr(ri->uri, '?')) != NULL) {
-    * ((char *) conn->request_info.query_string++) = '\0';
+  if ((conn->mg_conn.query_string = strchr(conn->mg_conn.uri, '?')) != NULL) {
+    * ((char *) conn->mg_conn.query_string++) = '\0';
   }
-  uri_len = (int) strlen(ri->uri);
-  mg_url_decode(ri->uri, uri_len, (char *) ri->uri, uri_len + 1, 0);
-  remove_double_dots_and_double_slashes((char *) ri->uri);
+  uri_len = (int) strlen(conn->mg_conn.uri);
+  mg_url_decode(conn->mg_conn.uri, uri_len, (char *) conn->mg_conn.uri,
+                uri_len + 1, 0);
+  remove_double_dots_and_double_slashes((char *) conn->mg_conn.uri);
 
+#if 0
   if (call_user(MG_REQUEST_BEGIN, conn, NULL) != 0) {
     conn->flags |= CONN_SPOOL_DONE;
     return;
+  }
+#endif
+
+  if ((uh = find_uri_handler(conn->server, conn->mg_conn.uri)) != NULL) {
+    conn->endpoint_type = EP_USER;
   }
 
   exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
   is_directory = S_ISDIR(st.st_mode);
 
   if (!exists) {
-    mg_printf(conn, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
+    mg_printf(&conn->mg_conn, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
     conn->flags |= CONN_SPOOL_DONE;
-  } else if (is_directory && ri->uri[uri_len - 1] != '/') {
-    mg_printf(conn, "HTTP/1.1 301 Moved Permanently\r\n"
-              "Location: %s/\r\n\r\n", ri->uri);
+  } else if (is_directory && conn->mg_conn.uri[uri_len - 1] != '/') {
+    mg_printf(&conn->mg_conn, "HTTP/1.1 301 Moved Permanently\r\n"
+              "Location: %s/\r\n\r\n", conn->mg_conn.uri);
     conn->flags |= CONN_SPOOL_DONE;
   } else if (is_directory) {
-    mg_printf(conn, "%s", "HTTP/1.0 403 Directory Listing Denied\r\n\r\n");
+    mg_printf(&conn->mg_conn, "%s",
+              "HTTP/1.0 403 Directory Listing Denied\r\n\r\n");
     conn->flags |= CONN_SPOOL_DONE;
   } else if ((conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
     open_file_endpoint(conn, path, &st);
   } else {
-    mg_printf(conn, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
+    mg_printf(&conn->mg_conn, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
     conn->flags |= CONN_SPOOL_DONE;
   }
 }
@@ -1092,13 +1119,12 @@ static int io_space(const struct iobuf *io) {
   return io->size - io->len;
 }
 
-static void process_request(struct mg_connection *conn) {
+static void process_request(struct connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
 
   //DBG(("parse_http_message(%d [%.*s])", io->len, io->len, io->buf));
   if (conn->request_len == 0) {
-    conn->request_len = parse_http_message(io->buf, io->len,
-                                           &conn->request_info);
+    conn->request_len = parse_http_message(io->buf, io->len, &conn->mg_conn);
   }
   DBG(("parse_http_message() -> %d", conn->request_len));
 
@@ -1111,7 +1137,7 @@ static void process_request(struct mg_connection *conn) {
   }
 }
 
-static void read_from_client(struct mg_connection *conn) {
+static void read_from_client(struct connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
   int n = recv(conn->client_sock, io->buf + io->len, io->size - io->len, 0);
 
@@ -1127,20 +1153,18 @@ static void read_from_client(struct mg_connection *conn) {
   }
 }
 
-static int should_keep_alive(const struct mg_connection *conn) {
-  const char *method = conn->request_info.request_method;
-  const char *http_version = conn->request_info.http_version;
-  const char *header = mg_get_header(conn, "Connection");
+static int should_keep_alive(const struct connection *conn) {
+  const char *method = conn->mg_conn.request_method;
+  const char *http_version = conn->mg_conn.http_version;
+  const char *header = mg_get_header(&conn->mg_conn, "Connection");
   return method != NULL && !strcmp(method, "GET") &&
     ((header != NULL && !strcmp(header, "keep-alive")) ||
      (header == NULL && http_version && !strcmp(http_version, "1.1")));
 }
 
-static void close_local_endpoint(struct mg_connection *conn) {
+static void close_local_endpoint(struct connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
   int keep_alive = should_keep_alive(conn);  // Must be done before memmove
-
-  call_user(MG_REQUEST_END, conn, (void *) (long) conn->status_code);
 
   // Close file descriptor
   switch (conn->endpoint_type) {
@@ -1162,7 +1186,7 @@ static void close_local_endpoint(struct mg_connection *conn) {
   }
 }
 
-static void transfer_file_data(struct mg_connection *conn) {
+static void transfer_file_data(struct connection *conn) {
   struct iobuf *io = &conn->remote_iobuf;
   int n, rem_space = io_space(io);
 
@@ -1183,14 +1207,16 @@ void add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   }
 }
 
-void mg_poll_server(struct mg_server *server, unsigned int milliseconds) {
+void mg_poll_server(struct mg_server *server, int milliseconds) {
   struct linked_list_link *lp, *tmp;
-  struct mg_connection *conn;
+  struct connection *conn;
   struct timeval tv;
   fd_set read_set, write_set;
   sock_t max_fd = -1;
   time_t current_time = time(NULL), expire_time = current_time +
     atoi(server->config_options[IDLE_TIMEOUT_MS]) / 1000;
+
+  if (server->listening_sock == INVALID_SOCKET) return;
 
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
@@ -1198,7 +1224,7 @@ void mg_poll_server(struct mg_server *server, unsigned int milliseconds) {
   add_to_set(server->ctl[0], &read_set, &max_fd);
 
   LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
-    conn = LINKED_LIST_ENTRY(lp, struct mg_connection, link);
+    conn = LINKED_LIST_ENTRY(lp, struct connection, link);
     add_to_set(conn->client_sock, &read_set, &max_fd);
     if (conn->endpoint_type == EP_FILE) {
       transfer_file_data(conn);
@@ -1230,7 +1256,7 @@ void mg_poll_server(struct mg_server *server, unsigned int milliseconds) {
 
     // Read/write from clients
     LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
-      conn = LINKED_LIST_ENTRY(lp, struct mg_connection, link);
+      conn = LINKED_LIST_ENTRY(lp, struct connection, link);
       if (FD_ISSET(conn->client_sock, &read_set)) {
         conn->expire_time = expire_time;
         read_from_client(conn);
@@ -1244,7 +1270,7 @@ void mg_poll_server(struct mg_server *server, unsigned int milliseconds) {
 
   // Close expired connections and those that need to be closed
   LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
-    conn = LINKED_LIST_ENTRY(lp, struct mg_connection, link);
+    conn = LINKED_LIST_ENTRY(lp, struct connection, link);
     if (conn->flags & CONN_CLOSE || current_time > conn->expire_time) {
       close_conn(conn);
     }
@@ -1253,27 +1279,85 @@ void mg_poll_server(struct mg_server *server, unsigned int milliseconds) {
 
 void mg_destroy_server(struct mg_server **server) {
   struct linked_list_link *lp, *tmp;
-  struct mg_connection *conn;
 
   if (server != NULL && *server != NULL) {
     closesocket((*server)->listening_sock);
     closesocket((*server)->ctl[0]);
     closesocket((*server)->ctl[1]);
     LINKED_LIST_FOREACH(&(*server)->active_connections, lp, tmp) {
-      conn = LINKED_LIST_ENTRY(lp, struct mg_connection, link);
-      LINKED_LIST_REMOVE(&conn->link);
-      free(conn);
+      free(LINKED_LIST_ENTRY(lp, struct connection, link));
+    }
+    LINKED_LIST_FOREACH(&(*server)->uri_handlers, lp, tmp) {
+      free(LINKED_LIST_ENTRY(lp, struct uri_handler, link));
     }
     free(*server);
     *server = NULL;
   }
 }
 
-struct mg_server *mg_create_server(const char *opts[], mg_event_handler_t func,
-                                   void *user_data) {
+// Apply function to all active connections. Return number of active
+// connections. Function could be NULL.
+static int mg_iterate_over_connections(struct mg_server *server,
+                                void (*func)(struct mg_connection *, void *),
+                                void *param) {
+  struct linked_list_link *lp, *tmp;
+  struct connection *conn;
+  int num_connections = 0;
+
+  LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
+    num_connections++;
+    conn = LINKED_LIST_ENTRY(lp, struct connection, link);
+    if (conn->endpoint_type == EP_USER && func != NULL) {
+      func((struct mg_connection *) conn, param);
+    }
+  }
+
+  return num_connections;
+}
+
+void mg_add_uri_handler(struct mg_server *server, const char *uri,
+                        mg_uri_handler_t handler) {
+  struct uri_handler *p = (struct uri_handler *) malloc(sizeof(*p));
+  if (p != NULL) {
+    LINKED_LIST_ADD_TO_FRONT(&server->uri_handlers, &p->link);
+    p->uri = mg_strdup(uri);
+    p->handler = handler;
+  }
+}
+
+const char *mg_set_option(struct mg_server *server, const char *name,
+                          const char *value) {
+  int ind = get_option_index(name);
+  const char *error_msg = NULL;
+
+  if (ind < 0) {
+    error_msg = "No such option";
+  } else {
+    if (server->config_options[ind] != NULL) {
+      free(server->config_options[ind]);
+    }
+    server->config_options[ind] = mg_strdup(value);
+
+    if (ind == LISTENING_PORT) {
+      if (server->listening_sock != INVALID_SOCKET) {
+        closesocket(server->listening_sock);
+      }
+      parse_port_string(server->config_options[LISTENING_PORT], &server->lsa);
+      server->listening_sock = open_listening_socket(&server->lsa);
+      if (server->listening_sock == INVALID_SOCKET) {
+        error_msg = "Cannot bind to port";
+      } else {
+        set_non_blocking_mode(server->listening_sock);
+      }
+    }
+  }
+
+  return error_msg;
+}
+
+struct mg_server *mg_create_server(void *server_data) {
   struct mg_server *server = (struct mg_server *) calloc(1, sizeof(*server));
-  const char *name, *value;
-  char error_msg[100] = {'\0'};
+  const char *value;
   int i;
 
 #ifdef _WIN32
@@ -1281,11 +1365,13 @@ struct mg_server *mg_create_server(const char *opts[], mg_event_handler_t func,
   WSAStartup(MAKEWORD(2, 2), &data);
 #endif
 
-  server->event_handler = func;
-  server->user_data = user_data;
   LINKED_LIST_INIT(&server->active_connections);
+  LINKED_LIST_INIT(&server->uri_handlers);
   mg_socketpair(server->ctl);
+  server->server_data = server_data;
+  server->listening_sock = INVALID_SOCKET;
 
+#if 0
   while (opts != NULL && (name = *opts++) != NULL) {
     if ((i = get_option_index(name)) == -1) {
       snprintf(error_msg, sizeof(error_msg), "Invalid option: [%s]", name);
@@ -1299,20 +1385,14 @@ struct mg_server *mg_create_server(const char *opts[], mg_event_handler_t func,
       DBG(("[%s] -> [%s]", name, value));
     }
   }
+#endif
 
-  // Set default values
+  // Set default options values
   for (i = 0; static_config_options[i * 2] != NULL; i++) {
     value = static_config_options[i * 2 + 1];
     if (server->config_options[i] == NULL && value != NULL) {
       server->config_options[i] = mg_strdup(value);
     }
-  }
-  parse_port_string(server->config_options[LISTENING_PORT], &server->lsa);
-  server->listening_sock = open_listening_socket(&server->lsa);
-  set_non_blocking_mode(server->listening_sock);
-
-  if (error_msg[0] != '\0') {
-    mg_destroy_server(&server);
   }
 
   return server;
@@ -1320,22 +1400,41 @@ struct mg_server *mg_create_server(const char *opts[], mg_event_handler_t func,
 
 // End of library, start of the application code
 
-static int event_handler(struct mg_event *ev) {
-  if (ev->type == MG_REQUEST_BEGIN &&
-      !strcmp(ev->request_info->uri, "/x")) {
-    mg_printf(ev->conn, "%s", "HTTP/1.0 200 OK\r\n\r\n:-)\n");
-    return 1;
-  }
-  return 0;
+static void iterate_callback(struct mg_connection *c, void *param) {
+  mg_write(c, "%d", * (int *) param);
 }
 
-int main(void) {
-  const char *options[] = {"document_root", ".", "listening_port", "8080", 0};
-  struct mg_server *server = mg_create_server(options, event_handler, NULL);
+static void *timer_thread(void *param) {
+  struct mg_server *server = (struct mg_server *) param;
+  int i;
 
+  for (i = 0; i < 1000; i++) {
+    sleep(1);
+    mg_iterate_over_connections(server, iterate_callback, &i);
+  }
+
+  return NULL;
+}
+
+static int websocket_handler(struct mg_connection *conn) {
+  mg_printf(conn, "%s", "HTTP/1.0 200 OK\r\n\r\n:-)\n");
+  return 1;
+}
+
+
+int main(void) {
+  struct mg_server *server = mg_create_server(NULL);
+
+  mg_set_option(server, "listening_port", "8080");
+  mg_set_option(server, "document_root", ".");
+  mg_add_uri_handler(server, "/ws", websocket_handler);
+  mg_start_thread(timer_thread, server);
+
+  printf("Started on port %s\n", mg_get_option(server, "listening_port"));
   for (;;) {
     mg_poll_server(server, 1000);
   }
+
   mg_destroy_server(&server);
   return 0;
 }
