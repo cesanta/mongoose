@@ -1174,6 +1174,13 @@ static int substitute_index_file(struct connection *conn, char *path,
   return found;
 }
 
+static void send_http_error(struct connection *conn, const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vspool(&conn->remote_iobuf, fmt, ap);
+  va_end(ap);
+  conn->flags |= CONN_SPOOL_DONE;
+}
 
 static void open_local_endpoint(struct connection *conn) {
   char path[MAX_PATH_SIZE] = {'\0'};
@@ -1197,25 +1204,21 @@ static void open_local_endpoint(struct connection *conn) {
   is_directory = S_ISDIR(st.st_mode);
 
   if (!exists) {
-    mg_printf(&conn->mg_conn, "%s", "HTTP/1.1 404 Not Found\r\n\r\n");
-    conn->flags |= CONN_SPOOL_DONE;
+    send_http_error(conn, "%s", "HTTP/1.1 404 Not Found\r\n\r\n");
   } else if (is_directory && conn->mg_conn.uri[uri_len - 1] != '/') {
-    mg_printf(&conn->mg_conn, "HTTP/1.1 301 Moved Permanently\r\n"
-              "Location: %s/\r\n\r\n", conn->mg_conn.uri);
-    conn->flags |= CONN_SPOOL_DONE;
+    send_http_error(conn, "HTTP/1.1 301 Moved Permanently\r\n"
+                    "Location: %s/\r\n\r\n", conn->mg_conn.uri);
   } else if (is_directory &&
              !substitute_index_file(conn, path, sizeof(path), &st)) {
-    mg_printf(&conn->mg_conn, "%s",
-              "HTTP/1.1 403 Directory Listing Denied\r\n\r\n");
-    conn->flags |= CONN_SPOOL_DONE;
+    send_http_error(conn, "%s", "HTTP/1.1 403 Listing Denied\r\n\r\n");
+  } else if (match_prefix("**.lua$", 6, path) > 0) {
+    send_http_error(conn, "%s", "HTTP/1.1 200 :-)\r\n\r\n");
   } else if (is_not_modified(conn, &st)) {
-    mg_printf(&conn->mg_conn, "%s", "HTTP/1.1 304 Not Modified\r\n\r\n");
-    conn->flags |= CONN_SPOOL_DONE;
+    send_http_error(conn, "%s", "HTTP/1.1 304 Not Modified\r\n\r\n");
   } else if ((conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
     open_file_endpoint(conn, path, &st);
   } else {
-    mg_printf(&conn->mg_conn, "%s", "HTTP/1.1 404 Not Found\r\n\r\n");
-    conn->flags |= CONN_SPOOL_DONE;
+    send_http_error(conn, "%s", "HTTP/1.1 404 Not Found\r\n\r\n");
   }
 }
 
