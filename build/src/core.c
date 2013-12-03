@@ -278,6 +278,10 @@ static const struct {
   {NULL,  0, NULL}
 };
 
+static const char *static_month_names[] = {
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
 
 const char **mg_get_valid_option_names(void) {
   return static_config_options;
@@ -1051,8 +1055,64 @@ static void open_file_endpoint(struct connection *conn, const char *path,
             mime_vec.ptr, cl, "keep-alive", range, EXTRA_HTTP_HEADERS);
 
   if (!strcmp(conn->mg_conn.request_method, "HEAD")) {
-    lseek(conn->endpoint.fd, 0, SEEK_END);
+    conn->flags |= CONN_SPOOL_DONE;
+    close(conn->endpoint.fd);
+    conn->endpoint_type = EP_NONE;
   }
+}
+
+// Convert month to the month number. Return -1 on error, or month number
+static int get_month_index(const char *s) {
+  int i;
+
+  for (i = 0; i < (int) ARRAY_SIZE(static_month_names); i++)
+    if (!strcmp(s, static_month_names[i]))
+      return i;
+
+  return -1;
+}
+
+static int num_leap_years(int year) {
+  return year / 4 - year / 100 + year / 400;
+}
+
+// Parse UTC date-time string, and return the corresponding time_t value.
+static time_t parse_date_string(const char *datetime) {
+  static const unsigned short days_before_month[] = {
+    0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
+  };
+  char month_str[32];
+  int second, minute, hour, day, month, year, leap_days, days;
+  time_t result = (time_t) 0;
+
+  if (((sscanf(datetime, "%d/%3s/%d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6) ||
+       (sscanf(datetime, "%d %3s %d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6) ||
+       (sscanf(datetime, "%*3s, %d %3s %d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6) ||
+       (sscanf(datetime, "%d-%3s-%d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6)) &&
+      year > 1970 &&
+      (month = get_month_index(month_str)) != -1) {
+    leap_days = num_leap_years(year) - num_leap_years(1970);
+    year -= 1970;
+    days = year * 365 + days_before_month[month] + (day - 1) + leap_days;
+    result = days * 24 * 3600 + hour * 3600 + minute * 60 + second;
+  }
+
+  return result;
+}
+
+// Return True if we should reply 304 Not Modified.
+static int is_not_modified(const struct connection *conn,
+                           const struct stat *stp) {
+  char etag[64];
+  const char *ims = mg_get_header(&conn->mg_conn, "If-Modified-Since");
+  const char *inm = mg_get_header(&conn->mg_conn, "If-None-Match");
+  construct_etag(etag, sizeof(etag), stp);
+  return (inm != NULL && !mg_strcasecmp(etag, inm)) ||
+    (ims != NULL && stp->st_mtime <= parse_date_string(ims));
 }
 
 static struct uri_handler *find_uri_handler(struct mg_server *server,
@@ -1068,6 +1128,53 @@ static struct uri_handler *find_uri_handler(struct mg_server *server,
   return NULL;
 }
 
+// For given directory path, substitute it to valid index file.
+// Return 0 if index file has been found, -1 if not found.
+// If the file is found, it's stats is returned in stp.
+static int substitute_index_file(struct connection *conn, char *path,
+                                 size_t path_len, struct stat *stp) {
+  const char *list = conn->server->config_options[INDEX_FILES];
+  struct stat st;
+  struct vec filename_vec;
+  size_t n = strlen(path), found = 0;
+
+  // The 'path' given to us points to the directory. Remove all trailing
+  // directory separator characters from the end of the path, and
+  // then append single directory separator character.
+  while (n > 0 && path[n - 1] == '/') {
+    n--;
+  }
+  path[n] = '/';
+
+  // Traverse index files list. For each entry, append it to the given
+  // path and see if the file exists. If it exists, break the loop
+  while ((list = next_option(list, &filename_vec, NULL)) != NULL) {
+
+    // Ignore too long entries that may overflow path buffer
+    if (filename_vec.len > (int) (path_len - (n + 2)))
+      continue;
+
+    // Prepare full path to the index file
+    strncpy(path + n + 1, filename_vec.ptr, filename_vec.len + 1);
+
+    // Does it exist?
+    if (!stat(path, &st)) {
+      // Yes it does, break the loop
+      *stp = st;
+      found = 1;
+      break;
+    }
+  }
+
+  // If no index file exists, restore directory path
+  if (!found) {
+    path[n] = '\0';
+  }
+
+  return found;
+}
+
+
 static void open_local_endpoint(struct connection *conn) {
   char path[MAX_PATH_SIZE] = {'\0'};
   struct stat st;
@@ -1082,13 +1189,6 @@ static void open_local_endpoint(struct connection *conn) {
                 uri_len + 1, 0);
   remove_double_dots_and_double_slashes((char *) conn->mg_conn.uri);
 
-#if 0
-  if (call_user(MG_REQUEST_BEGIN, conn, NULL) != 0) {
-    conn->flags |= CONN_SPOOL_DONE;
-    return;
-  }
-#endif
-
   if ((uh = find_uri_handler(conn->server, conn->mg_conn.uri)) != NULL) {
     conn->endpoint_type = EP_USER;
   }
@@ -1097,20 +1197,24 @@ static void open_local_endpoint(struct connection *conn) {
   is_directory = S_ISDIR(st.st_mode);
 
   if (!exists) {
-    mg_printf(&conn->mg_conn, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
+    mg_printf(&conn->mg_conn, "%s", "HTTP/1.1 404 Not Found\r\n\r\n");
     conn->flags |= CONN_SPOOL_DONE;
   } else if (is_directory && conn->mg_conn.uri[uri_len - 1] != '/') {
     mg_printf(&conn->mg_conn, "HTTP/1.1 301 Moved Permanently\r\n"
               "Location: %s/\r\n\r\n", conn->mg_conn.uri);
     conn->flags |= CONN_SPOOL_DONE;
-  } else if (is_directory) {
+  } else if (is_directory &&
+             !substitute_index_file(conn, path, sizeof(path), &st)) {
     mg_printf(&conn->mg_conn, "%s",
-              "HTTP/1.0 403 Directory Listing Denied\r\n\r\n");
+              "HTTP/1.1 403 Directory Listing Denied\r\n\r\n");
+    conn->flags |= CONN_SPOOL_DONE;
+  } else if (is_not_modified(conn, &st)) {
+    mg_printf(&conn->mg_conn, "%s", "HTTP/1.1 304 Not Modified\r\n\r\n");
     conn->flags |= CONN_SPOOL_DONE;
   } else if ((conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
     open_file_endpoint(conn, path, &st);
   } else {
-    mg_printf(&conn->mg_conn, "%s", "HTTP/1.0 404 Not Found\r\n\r\n");
+    mg_printf(&conn->mg_conn, "%s", "HTTP/1.1 404 Not Found\r\n\r\n");
     conn->flags |= CONN_SPOOL_DONE;
   }
 }
