@@ -15,26 +15,20 @@
 // Alternatively, you can license this library under a commercial
 // license, as set out in <http://cesanta.com/products.html>.
 
-#ifdef _WIN32
-#undef _UNICODE
-#define _MBCS
+#undef _UNICODE                 // Use multibyte encoding on Windows
+#define _MBCS                   // Use multibyte encoding on Windows
+#define _INTEGRAL_MAX_BITS 64   // Enable _stati64() on Windows
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005+
-#else
-#define _XOPEN_SOURCE 600     // For flockfile() on Linux
-#define __STDC_FORMAT_MACROS  // <inttypes.h> wants this for C++
-#define __STDC_LIMIT_MACROS   // C++ wants that for INT64_MAX
-#define _LARGEFILE_SOURCE     // Enable fseeko() and ftello() functions
-#define _FILE_OFFSET_BITS 64  // Enable 64-bit file offsets
-#endif
+#undef WIN32_LEAN_AND_MEAN      // Let windows.h always include winsock2.h
+#define _XOPEN_SOURCE 600       // For flockfile() on Linux
+#define __STDC_FORMAT_MACROS    // <inttypes.h> wants this for C++
+#define __STDC_LIMIT_MACROS     // C++ wants that for INT64_MAX
+#define _LARGEFILE_SOURCE       // Enable fseeko() and ftello() functions
+#define _FILE_OFFSET_BITS 64    // Enable 64-bit file offsets
 
 #ifdef _MSC_VER
 #pragma warning (disable : 4127)  // FD_SET() emits warning, disable it
 #pragma warning (disable : 4204)  // missing c99 support
-#endif
-
-// Disable WIN32_LEAN_AND_MEAN. This makes windows.h always include winsock2.h
-#ifdef WIN32_LEAN_AND_MEAN
-#undef WIN32_LEAN_AND_MEAN
 #endif
 
 #include <sys/types.h>
@@ -60,6 +54,7 @@ typedef unsigned short  uint16_t;
 typedef unsigned __int64 uint64_t;
 typedef __int64   int64_t;
 typedef CRITICAL_SECTION mutex_t;
+typedef struct _stati64 file_stat_t;
 #pragma comment(lib, "ws2_32.lib")
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
@@ -70,6 +65,7 @@ typedef CRITICAL_SECTION mutex_t;
 #define mutex_unlock(x) LeaveCriticalSection(x)
 #define S_ISDIR(x) ((x) & _S_IFDIR)
 #define sleep(x) Sleep((x) * 1000)
+#define stat(x, y) _stati64((x), (y))
 #ifndef va_copy
 #define va_copy(x,y) x = y
 #endif // MINGW #defines va_copy
@@ -86,6 +82,7 @@ typedef CRITICAL_SECTION mutex_t;
 #define closesocket(x) close(x)
 typedef int sock_t;
 typedef pthread_mutex_t mutex_t;
+typedef struct stat file_stat_t;
 #define mutex_init(x) pthread_mutex_init(x, NULL)
 #define mutex_destroy(x) pthread_mutex_destroy(x)
 #define mutex_lock(x) pthread_mutex_lock(x)
@@ -174,7 +171,6 @@ struct iobuf {
 
 union endpoint {
   int fd;       // Opened regular local file
-  sock_t sock;  // CGI socket
   void *ssl;    // SSL descriptor
 };
 
@@ -828,7 +824,7 @@ const char *mg_get_header(const struct mg_connection *ri, const char *s) {
 
 // Return 1 if real file has been found, 0 otherwise
 static int convert_uri_to_file_name(struct connection *conn, char *buf,
-                                    size_t buf_len, struct stat *st) {
+                                    size_t buf_len, file_stat_t *st) {
   struct vec a, b;
   const char *rewrites = conn->server->config_options[URL_REWRITES],
         *root = conn->server->config_options[DOCUMENT_ROOT],
@@ -999,13 +995,13 @@ static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
   strftime(buf, buf_len, "%a, %d %b %Y %H:%M:%S GMT", gmtime(t));
 }
 
-static void construct_etag(char *buf, size_t buf_len, const struct stat *st) {
+static void construct_etag(char *buf, size_t buf_len, const file_stat_t *st) {
   snprintf(buf, buf_len, "\"%lx.%" INT64_FMT "\"",
            (unsigned long) st->st_mtime, (int64_t) st->st_size);
 }
 
 static void open_file_endpoint(struct connection *conn, const char *path,
-                               struct stat *st) {
+                               file_stat_t *st) {
   char date[64], lm[64], etag[64], range[64];
   const char *msg = "OK", *hdr;
   time_t curtime = time(NULL);
@@ -1106,7 +1102,7 @@ static time_t parse_date_string(const char *datetime) {
 
 // Return True if we should reply 304 Not Modified.
 static int is_not_modified(const struct connection *conn,
-                           const struct stat *stp) {
+                           const file_stat_t *stp) {
   char etag[64];
   const char *ims = mg_get_header(&conn->mg_conn, "If-Modified-Since");
   const char *inm = mg_get_header(&conn->mg_conn, "If-None-Match");
@@ -1132,9 +1128,9 @@ static struct uri_handler *find_uri_handler(struct mg_server *server,
 // Return 0 if index file has been found, -1 if not found.
 // If the file is found, it's stats is returned in stp.
 static int substitute_index_file(struct connection *conn, char *path,
-                                 size_t path_len, struct stat *stp) {
+                                 size_t path_len, file_stat_t *stp) {
   const char *list = conn->server->config_options[INDEX_FILES];
-  struct stat st;
+  file_stat_t st;
   struct vec filename_vec;
   size_t n = strlen(path), found = 0;
 
@@ -1184,7 +1180,7 @@ static void send_http_error(struct connection *conn, const char *fmt, ...) {
 
 static void open_local_endpoint(struct connection *conn) {
   char path[MAX_PATH_SIZE] = {'\0'};
-  struct stat st;
+  file_stat_t st;
   int uri_len, exists = 0, is_directory = 0;
   struct uri_handler *uh;
 
@@ -1211,8 +1207,10 @@ static void open_local_endpoint(struct connection *conn) {
   } else if (is_directory &&
              !substitute_index_file(conn, path, sizeof(path), &st)) {
     send_http_error(conn, "%s", "HTTP/1.1 403 Listing Denied\r\n\r\n");
+#ifdef USE_LUA
   } else if (match_prefix("**.lua$", 6, path) > 0) {
     send_http_error(conn, "%s", "HTTP/1.1 200 :-)\r\n\r\n");
+#endif
   } else if (is_not_modified(conn, &st)) {
     send_http_error(conn, "%s", "HTTP/1.1 304 Not Modified\r\n\r\n");
   } else if ((conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
