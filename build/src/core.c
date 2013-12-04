@@ -112,6 +112,7 @@ struct linked_list_link { struct linked_list_link *prev, *next; };
 #define MAX_REQUEST_SIZE 16384
 #define IOBUF_SIZE 8192
 #define MAX_PATH_SIZE 8192
+#define LUA_SCRIPT_PATTERN "mg_*.lua$"
 
 // Extra HTTP headers to send in every static file reply
 #if !defined(EXTRA_HTTP_HEADERS)
@@ -153,48 +154,6 @@ enum {
   SSL_CERTIFICATE, SSI_PATTERN, URL_REWRITES, NUM_OPTIONS
 };
 
-struct mg_server {
-  sock_t listening_sock;
-  union socket_address lsa;   // Listening socket address
-  struct linked_list_link active_connections;
-  struct linked_list_link uri_handlers;
-  char *config_options[NUM_OPTIONS];
-  void *server_data;
-  sock_t ctl[2];  // Control socketpair. Used to wake up from select() call
-};
-
-struct iobuf {
-  char *buf;    // Buffer that holds the data
-  int size;     // Buffer size
-  int len;      // Number of bytes currently in a buffer
-};
-
-union endpoint {
-  int fd;       // Opened regular local file
-  void *ssl;    // SSL descriptor
-};
-
-enum endpoint_type { EP_NONE, EP_FILE, EP_DIR, EP_CGI, EP_SSL, EP_USER };
-enum connection_flags { CONN_CLOSE = 1, CONN_SPOOL_DONE = 2 };
-
-struct connection {
-  struct mg_connection mg_conn;   // XXX: Must be first
-  struct linked_list_link link;   // Linkage to server->active_connections
-  struct mg_server *server;
-  sock_t client_sock;         // Connected client
-  union socket_address csa;   // Client's socket address
-  struct iobuf local_iobuf;
-  struct iobuf remote_iobuf;
-  union endpoint endpoint;
-  enum endpoint_type endpoint_type;
-  time_t expire_time;
-  char *path_info;
-  int request_len;
-  int flags;
-  int status_code;
-  mutex_t mutex;   // Guards concurrent mg_write() and mg_printf() calls
-};
-
 static const char *static_config_options[] = {
   "access_control_list", NULL,
   "access_log_file", NULL,
@@ -218,6 +177,50 @@ static const char *static_config_options[] = {
   "url_rewrites", NULL,
   NULL
 };
+
+struct mg_server {
+  sock_t listening_sock;
+  union socket_address lsa;   // Listening socket address
+  struct linked_list_link active_connections;
+  struct linked_list_link uri_handlers;
+  char *config_options[NUM_OPTIONS];
+  void *server_data;
+  sock_t ctl[2];  // Control socketpair. Used to wake up from select() call
+};
+
+struct iobuf {
+  char *buf;    // Buffer that holds the data
+  int size;     // Buffer size
+  int len;      // Number of bytes currently in a buffer
+};
+
+union endpoint {
+  int fd;       // Opened regular local file
+  void *ssl;    // SSL descriptor
+};
+
+enum endpoint_type { EP_NONE, EP_FILE, EP_USER };
+enum connection_flags { CONN_CLOSE = 1, CONN_SPOOL_DONE = 2 };
+
+struct connection {
+  struct mg_connection mg_conn;   // XXX: Must be first
+  struct linked_list_link link;   // Linkage to server->active_connections
+  struct mg_server *server;
+  sock_t client_sock;             // Connected client
+  union socket_address csa;       // Client's socket address
+  struct iobuf local_iobuf;
+  struct iobuf remote_iobuf;
+  union endpoint endpoint;
+  enum endpoint_type endpoint_type;
+  time_t expire_time;
+  char *path_info;
+  int request_len;
+  int flags;
+  int status_code;
+  mutex_t mutex;   // Guards concurrent mg_write() calls
+};
+
+static void close_local_endpoint(struct connection *conn);
 
 static const struct {
   const char *extension;
@@ -864,14 +867,19 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
 }
 
 static int spool(struct iobuf *io, const void *buf, int len) {
-  char *p = io->buf;
+  char *p = NULL;
+  int new_len = io->len + len;
 
+  DBG(("%d %d %d", len, io->len, io->size));
   if (len <= 0) {
-  } else if (len < io->size - io->len ||
-             (p = (char *) realloc(io->buf, io->len + len - io->size)) != 0) {
-    io->buf = p;
+  } else if (new_len < io->size) {
     memcpy(io->buf + io->len, buf, len);
     io->len += len;
+  } else if ((p = (char *) realloc(io->buf, new_len * 2)) != NULL) {
+    io->buf = p;
+    memcpy(io->buf + io->len, buf, len);
+    io->len = new_len;
+    io->size = new_len * 2;
   } else {
     len = 0;
   }
@@ -1178,6 +1186,10 @@ static void send_http_error(struct connection *conn, const char *fmt, ...) {
   conn->flags |= CONN_SPOOL_DONE;
 }
 
+static void exec_lua_script(struct connection *conn, const char *path) {
+  send_http_error(conn, "%s", "HTTP/1.1 501 Not Implemented\r\n\r\n");
+}
+
 static void open_local_endpoint(struct connection *conn) {
   char path[MAX_PATH_SIZE] = {'\0'};
   file_stat_t st;
@@ -1207,10 +1219,9 @@ static void open_local_endpoint(struct connection *conn) {
   } else if (is_directory &&
              !substitute_index_file(conn, path, sizeof(path), &st)) {
     send_http_error(conn, "%s", "HTTP/1.1 403 Listing Denied\r\n\r\n");
-#ifdef USE_LUA
-  } else if (match_prefix("**.lua$", 6, path) > 0) {
-    send_http_error(conn, "%s", "HTTP/1.1 200 :-)\r\n\r\n");
-#endif
+  } else if (match_prefix(LUA_SCRIPT_PATTERN, 6, path) > 0) {
+    exec_lua_script(conn, path);
+    conn->flags |= CONN_SPOOL_DONE;
   } else if (is_not_modified(conn, &st)) {
     send_http_error(conn, "%s", "HTTP/1.1 304 Not Modified\r\n\r\n");
   } else if ((conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
@@ -1274,7 +1285,8 @@ static void close_local_endpoint(struct connection *conn) {
   // Close file descriptor
   switch (conn->endpoint_type) {
     case EP_FILE: close(conn->endpoint.fd); break;
-    default: assert(1); break;
+    case EP_NONE: break;
+    default: assert(0); break;
   }
 
   // Get rid of that request from the buffer. NOTE: order is important here

@@ -56,8 +56,10 @@ void mg_destroy_server(struct mg_server **);
 const char *mg_set_option(struct mg_server *, const char *opt, const char *val);
 void mg_poll_server(struct mg_server *, int milliseconds);
 void mg_add_uri_handler(struct mg_server *, const char *uri, mg_uri_handler_t);
+#if 0
 void mg_set_error_handler(struct mg_server *, mg_error_handler_t);
 void mg_set_log_handler(struct mg_server*, int (*)(struct mg_connection*, int));
+#endif
 const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
 
@@ -70,6 +72,8 @@ int mg_websocket_write(struct mg_connection* conn, int opcode,
 // Connection management functions
 int mg_write(struct mg_connection *, const void *buf, int len);
 int mg_printf(struct mg_connection *, const char *fmt, ...);
+
+#if 0
 void mg_send_file(struct mg_connection *, const char *path);
 int mg_read(struct mg_connection *, void *buf, int len);
 const char *mg_get_header(const struct mg_connection *, const char *name);
@@ -81,6 +85,7 @@ const char *mg_get_mime_type(const char *file_name);
 
 // Utility functions
 int mg_start_thread(void *(*func)(void *), void *param);
+#endif
 
 #ifdef __cplusplus
 }
