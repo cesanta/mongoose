@@ -3,7 +3,7 @@
 FILE *mg_upload(struct mg_connection *conn, const char *destination_dir,
                 char *path, int path_len) {
   const char *content_type_header, *boundary_start;
-  char *buf, fname[1024], boundary[100], *s;
+  char *buf, fname[1024], boundary[100], *s, *p;
   int bl, n, i, j, headers_len, boundary_len, eof, buf_len, to_read, len = 0;
   FILE *fp;
 
@@ -89,10 +89,9 @@ FILE *mg_upload(struct mg_connection *conn, const char *destination_dir,
     fp = NULL;
 
     // Construct destination file name. Do not allow paths to have slashes.
-    if ((s = strrchr(fname, '/')) == NULL &&
-        (s = strrchr(fname, '\\')) == NULL) {
-      s = fname;
-    }
+    s = fname;
+    if ((p = strrchr(fname, '/')) != NULL && p > s) s = p;
+    if ((p = strrchr(fname, '\\')) != NULL && p > s) s = p;
 
     // Open file in binary mode. TODO: set an exclusive lock.
     snprintf(path, path_len, "%s/%s", destination_dir, s);
