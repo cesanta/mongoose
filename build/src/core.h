@@ -47,25 +47,23 @@ struct mg_connection {
   int content_len;            // content length
 
   int is_websocket;           // Connection is a websocket connection
+  int status_code;            // HTTP status code for HTTP error handler
   unsigned char wsbits;       // First byte of the websocket frame
   void *server_param;         // Parameter passed to mg_add_uri_handler()
   void *connection_param;     // Placeholder for connection-specific data
 };
 
 struct mg_server; // Opaque structure describing server instance
-typedef int (*mg_uri_handler_t)(struct mg_connection *);
-typedef int (*mg_error_handler_t)(struct mg_connection *, int http_error_code);
+typedef int (*mg_handler_t)(struct mg_connection *);
 
 // Server management functions
 struct mg_server *mg_create_server(void *server_param);
 void mg_destroy_server(struct mg_server **);
 const char *mg_set_option(struct mg_server *, const char *opt, const char *val);
 void mg_poll_server(struct mg_server *, int milliseconds);
-void mg_add_uri_handler(struct mg_server *, const char *uri, mg_uri_handler_t);
-#if 0
-void mg_set_error_handler(struct mg_server *, mg_error_handler_t);
-void mg_set_log_handler(struct mg_server*, int (*)(struct mg_connection*, int));
-#endif
+void mg_add_uri_handler(struct mg_server *, const char *uri, mg_handler_t);
+void mg_set_error_handler(struct mg_server *, mg_handler_t);
+void mg_set_log_handler(struct mg_server*, mg_handler_t);
 const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
 
@@ -73,16 +71,10 @@ const char *mg_get_option(const struct mg_server *server, const char *name);
 int mg_write(struct mg_connection *, const void *buf, int len);
 const char *mg_get_header(const struct mg_connection *, const char *name);
 const char *mg_get_mime_type(const char *file_name);
-
-#if 0
-int mg_printf(struct mg_connection *, const char *fmt, ...);
-void mg_send_file(struct mg_connection *, const char *path);
-int mg_read(struct mg_connection *, void *buf, int len);
-int mg_get_var(const char *data, size_t data_len,
+int mg_get_var(const struct mg_connection *conn,
                const char *var_name, char *dst, size_t dst_len);
 int mg_get_cookie(const char *cookie, const char *var_name,
                   char *buf, size_t buf_len);
-#endif
 
 // Utility functions
 int mg_start_thread(void *(*func)(void *), void *param);

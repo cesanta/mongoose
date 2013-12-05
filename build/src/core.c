@@ -148,7 +148,7 @@ struct vec {
 struct uri_handler {
   struct linked_list_link link;
   char *uri;
-  mg_uri_handler_t handler;
+  mg_handler_t handler;
 };
 
 // NOTE(lsm): this enum shoulds be in sync with the config_options.
@@ -1942,7 +1942,7 @@ static int mg_iterate_over_connections(struct mg_server *server,
 }
 
 void mg_add_uri_handler(struct mg_server *server, const char *uri,
-                        mg_uri_handler_t handler) {
+                        mg_handler_t handler) {
   struct uri_handler *p = (struct uri_handler *) malloc(sizeof(*p));
   if (p != NULL) {
     LINKED_LIST_ADD_TO_FRONT(&server->uri_handlers, &p->link);
