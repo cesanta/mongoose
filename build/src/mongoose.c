@@ -145,6 +145,10 @@ static void send_http_error(struct mg_connection *conn, int status,
               suggest_connection_header(conn));
     conn->num_bytes_sent += mg_printf(conn, "%s", buf);
   }
+
+  if (status >= 500) {
+    conn->must_close = 1;
+  }
 }
 
 // Return 1 if real file has been found, 0 otherwise
