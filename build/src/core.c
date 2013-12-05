@@ -1206,13 +1206,12 @@ static void send_continue_if_expected(struct connection *conn) {
 static void process_request(struct connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
 
-  //DBG(("parse_http_message(%d [%.*s])", io->len, io->len, io->buf));
   if (conn->request_len == 0 &&
       (conn->request_len = get_request_len((unsigned char  *) io->buf,
                                            io->len)) > 0) {
     // If request is buffered in, remove it from the iobuf. This is because
     // iobuf could be reallocated, and pointers in parsed request could
-    // become ivalid.
+    // become invalid.
     conn->request = (char *) malloc(conn->request_len);
     memcpy(conn->request, io->buf, conn->request_len);
     memmove(io->buf, io->buf + conn->request_len, io->len - conn->request_len);
@@ -1477,7 +1476,9 @@ struct mg_server *mg_create_server(void *server_data) {
 
 static void iterate_callback(struct mg_connection *c, void *param) {
   if (c->connection_param != NULL) {
-    mg_write(c, "%d", * (int *) param);
+    char buf[20];
+    int len = snprintf(buf, sizeof(buf), "%d", * (int *) param);
+    mg_write(c, buf, len);
   }
 }
 
