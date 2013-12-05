@@ -57,6 +57,7 @@ ifeq ($(OS), Windows_NT)
 else
   UNAME_S := $(shell uname -s)
   ifeq ($(UNAME_S), Linux)
+    CC = gcc
     CFLAGS += -ldl -lm
   endif
 endif
