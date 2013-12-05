@@ -449,7 +449,7 @@ static void send_http_error(struct mg_connection *, int, const char *,
                             PRINTF_ARGS(4, 5);
 static void cry(struct mg_connection *conn,
                 PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
-static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len);
+static const char *getreq(struct mg_connection *conn);
 
 #ifdef USE_LUA
 #include "lua_5.2.1.h"
@@ -2304,17 +2304,17 @@ struct mg_connection *mg_download(const char *host, int port, int use_ssl,
                                   char *ebuf, size_t ebuf_len,
                                   const char *fmt, ...) {
   struct mg_connection *conn;
+  const char *msg = NULL;
   va_list ap;
 
   va_start(ap, fmt);
-  ebuf[0] = '\0';
   if ((conn = mg_connect(host, port, use_ssl, ebuf, ebuf_len)) == NULL) {
   } else if (mg_vprintf(conn, fmt, ap) <= 0) {
     snprintf(ebuf, ebuf_len, "%s", "Error sending request");
   } else {
-    getreq(conn, ebuf, ebuf_len);
+    msg = getreq(conn);
   }
-  if (ebuf[0] != '\0' && conn != NULL) {
+  if (msg != NULL && conn != NULL) {
     mg_close_connection(conn);
     conn = NULL;
   }
@@ -4894,22 +4894,24 @@ static int is_valid_uri(const char *uri) {
   return uri[0] == '/' || (uri[0] == '*' && uri[1] == '\0');
 }
 
-static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
-  const char *cl;
+static const char *getreq(struct mg_connection *conn) {
+  const char *cl, *ret = NULL;
 
-  ebuf[0] = '\0';
   reset_per_request_attributes(conn);
   conn->request_len = read_request(NULL, conn, conn->buf, conn->buf_size,
                                    &conn->data_len);
   assert(conn->request_len < 0 || conn->data_len >= conn->request_len);
 
   if (conn->request_len == 0 && conn->data_len == conn->buf_size) {
-    snprintf(ebuf, ebuf_len, "%s", "Request Too Large");
+    conn->status_code = 413;
+    ret = "Request Entity Too Large";
   } else if (conn->request_len <= 0) {
-    snprintf(ebuf, ebuf_len, "%s", "Client closed connection");
+    conn->status_code = 0;
+    ret = "Client closed connection";
   } else if (parse_http_message(conn->buf, conn->buf_size,
                                 &conn->request_info) <= 0) {
-    snprintf(ebuf, ebuf_len, "Bad request: [%.*s]", conn->data_len, conn->buf);
+    conn->status_code = 400;
+    ret = "Bad Request";
   } else {
     // Request is valid. Set content_len attribute by parsing Content-Length
     // If Content-Length is absent, set content_len to 0 if request is GET,
@@ -4928,13 +4930,14 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
     }
     conn->birth_time = time(NULL);
   }
-  return ebuf[0] == '\0';
+
+  return ret;
 }
 
 static void process_new_connection(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
   int keep_alive_enabled, keep_alive, discard_len;
-  char ebuf[100];
+  const char *msg = NULL;
 
   keep_alive_enabled = !strcmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes");
   keep_alive = 0;
@@ -4943,19 +4946,24 @@ static void process_new_connection(struct mg_connection *conn) {
   // to crule42.
   conn->data_len = 0;
   do {
-    if (!getreq(conn, ebuf, sizeof(ebuf))) {
-      send_http_error(conn, 500, "Server Error", "%s", ebuf);
+    if ((msg = getreq(conn)) != NULL) {
       conn->must_close = 1;
     } else if (!is_valid_uri(conn->request_info.uri)) {
-      snprintf(ebuf, sizeof(ebuf), "Invalid URI: [%s]", ri->uri);
-      send_http_error(conn, 400, "Bad Request", "%s", ebuf);
+      msg = "Bad Request";
+      conn->status_code = 400;
     } else if (strcmp(ri->http_version, "1.0") &&
                strcmp(ri->http_version, "1.1")) {
-      snprintf(ebuf, sizeof(ebuf), "Bad HTTP version: [%s]", ri->http_version);
-      send_http_error(conn, 505, "Bad HTTP version", "%s", ebuf);
+      msg = "Bad HTTP Version";
+      conn->status_code = 505;
     }
 
-    if (ebuf[0] == '\0') {
+    if (msg != NULL) {
+      // Do not send anything to the client on timeout
+      // see https://github.com/cesanta/mongoose/issues/261
+      if (conn->status_code > 0) {
+        send_http_error(conn, conn->status_code, msg, "%s", "");
+      }
+    } else {
       handle_request(conn);
       call_user(MG_REQUEST_END, conn, (void *) (long) conn->status_code);
       log_access(conn);

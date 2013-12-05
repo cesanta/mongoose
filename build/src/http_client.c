@@ -78,17 +78,17 @@ struct mg_connection *mg_download(const char *host, int port, int use_ssl,
                                   char *ebuf, size_t ebuf_len,
                                   const char *fmt, ...) {
   struct mg_connection *conn;
+  const char *msg = NULL;
   va_list ap;
 
   va_start(ap, fmt);
-  ebuf[0] = '\0';
   if ((conn = mg_connect(host, port, use_ssl, ebuf, ebuf_len)) == NULL) {
   } else if (mg_vprintf(conn, fmt, ap) <= 0) {
     snprintf(ebuf, ebuf_len, "%s", "Error sending request");
   } else {
-    getreq(conn, ebuf, ebuf_len);
+    msg = getreq(conn);
   }
-  if (ebuf[0] != '\0' && conn != NULL) {
+  if (msg != NULL && conn != NULL) {
     mg_close_connection(conn);
     conn = NULL;
   }

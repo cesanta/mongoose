@@ -449,7 +449,7 @@ static void send_http_error(struct mg_connection *, int, const char *,
                             PRINTF_ARGS(4, 5);
 static void cry(struct mg_connection *conn,
                 PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
-static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len);
+static const char *getreq(struct mg_connection *conn);
 
 #ifdef USE_LUA
 #include "lua_5.2.1.h"
