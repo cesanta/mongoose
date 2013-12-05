@@ -33,14 +33,18 @@ struct mg_connection {
   const char *uri;            // URL-decoded URI
   const char *http_version;   // E.g. "1.0", "1.1"
   const char *query_string;   // URL part after '?', not including '?', or NULL
+
   long remote_ip;             // Client's IP address
   int remote_port;            // Client's port
-  int is_ssl;                 // 1 if SSL-ed, 0 if not
+
   int num_headers;            // Number of HTTP headers
   struct mg_header {
     const char *name;         // HTTP header name
     const char *value;        // HTTP header value
   } http_headers[64];         // Maximum 64 headers
+
+  char *content;              // POST (or websocket message) data, or NULL
+  int content_len;            // content length
 
   void *server_param;         // Parameter passed to mg_add_uri_handler()
   void *connection_param;     // Placeholder for connection-specific data
@@ -64,16 +68,16 @@ const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
 
 // Websocket functions
-void mg_websocket_handshake(struct mg_connection *);
-int mg_websocket_read(struct mg_connection *, int *bits, char **data);
-int mg_websocket_write(struct mg_connection* conn, int opcode,
-                       const char *data, size_t data_len);
+//void mg_websocket_handshake(struct mg_connection *);
+//int mg_websocket_read(struct mg_connection *, int *bits, char **data);
+//int mg_websocket_write(struct mg_connection* conn, int opcode,
+//                       const char *data, size_t data_len);
 
 // Connection management functions
 int mg_write(struct mg_connection *, const void *buf, int len);
-int mg_printf(struct mg_connection *, const char *fmt, ...);
 
 #if 0
+int mg_printf(struct mg_connection *, const char *fmt, ...);
 void mg_send_file(struct mg_connection *, const char *path);
 int mg_read(struct mg_connection *, void *buf, int len);
 const char *mg_get_header(const struct mg_connection *, const char *name);
