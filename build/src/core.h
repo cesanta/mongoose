@@ -34,19 +34,20 @@ struct mg_connection {
   const char *http_version;   // E.g. "1.0", "1.1"
   const char *query_string;   // URL part after '?', not including '?', or NULL
 
-  long remote_ip;             // Client's IP address
+  char remote_ip[48];         // Max IPv6 string length is 45 characters
   int remote_port;            // Client's port
 
   int num_headers;            // Number of HTTP headers
   struct mg_header {
     const char *name;         // HTTP header name
     const char *value;        // HTTP header value
-  } http_headers[64];         // Maximum 64 headers
+  } http_headers[30];
 
   char *content;              // POST (or websocket message) data, or NULL
   int content_len;            // content length
 
   int is_websocket;           // Connection is a websocket connection
+  unsigned char wsbits;       // First byte of the websocket frame
   void *server_param;         // Parameter passed to mg_add_uri_handler()
   void *connection_param;     // Placeholder for connection-specific data
 };
@@ -68,29 +69,23 @@ void mg_set_log_handler(struct mg_server*, int (*)(struct mg_connection*, int));
 const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
 
-// Websocket functions
-//void mg_websocket_handshake(struct mg_connection *);
-//int mg_websocket_read(struct mg_connection *, int *bits, char **data);
-//int mg_websocket_write(struct mg_connection* conn, int opcode,
-//                       const char *data, size_t data_len);
-
 // Connection management functions
 int mg_write(struct mg_connection *, const void *buf, int len);
+const char *mg_get_header(const struct mg_connection *, const char *name);
+const char *mg_get_mime_type(const char *file_name);
 
 #if 0
 int mg_printf(struct mg_connection *, const char *fmt, ...);
 void mg_send_file(struct mg_connection *, const char *path);
 int mg_read(struct mg_connection *, void *buf, int len);
-const char *mg_get_header(const struct mg_connection *, const char *name);
 int mg_get_var(const char *data, size_t data_len,
                const char *var_name, char *dst, size_t dst_len);
 int mg_get_cookie(const char *cookie, const char *var_name,
                   char *buf, size_t buf_len);
-const char *mg_get_mime_type(const char *file_name);
+#endif
 
 // Utility functions
 int mg_start_thread(void *(*func)(void *), void *param);
-#endif
 
 #ifdef __cplusplus
 }

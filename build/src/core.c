@@ -115,6 +115,10 @@ struct linked_list_link { struct linked_list_link *prev, *next; };
 #define IOBUF_SIZE 8192
 #define MAX_PATH_SIZE 8192
 #define LUA_SCRIPT_PATTERN "mg_*.lua$"
+#define CGI_ENVIRONMENT_SIZE 4096
+#define MAX_CGI_ENVIR_VARS 64
+#define ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
+#define MONGOOSE_VERSION "5.0"
 
 // Extra HTTP headers to send in every static file reply
 #if !defined(EXTRA_HTTP_HEADERS)
@@ -198,12 +202,13 @@ struct iobuf {
 
 union endpoint {
   int fd;                   // Opened regular local file
+  sock_t cgi_sock;          // CGI socket
   void *ssl;                // SSL descriptor
   struct uri_handler *uh;   // URI handler user function
 };
 
-enum endpoint_type { EP_NONE, EP_FILE, EP_USER };
-enum connection_flags { CONN_CLOSE = 1, CONN_SPOOL_DONE = 2 };
+enum endpoint_type { EP_NONE, EP_FILE, EP_CGI, EP_USER };
+enum connection_flags { CONN_CLOSE = 1, CONN_SPOOL_DONE = 2, CONN_SSL = 4 };
 
 struct connection {
   struct mg_connection mg_conn;   // XXX: Must be first
@@ -417,8 +422,10 @@ static int mg_socketpair(sock_t sp[2]) {
   return ret;
 }
 
+#ifndef NO_CGI
 #ifdef _WIN32
-static pid_t start_process(char *cmd, char *env[], char *dir, sock_t sock) {
+static pid_t start_process(const char *interp, const char *cmd, const char *env,
+                           const char *envp[], const char *dir, sock_t sock) {
   STARTUPINFOA si = {0};
   PROCESS_INFORMATION pi = {0};
   HANDLE hs = (HANDLE) sock, me = GetCurrentProcess();
@@ -433,7 +440,7 @@ static pid_t start_process(char *cmd, char *env[], char *dir, sock_t sock) {
   closesocket(sock);
 
   DBG(("Starting commad: [%s]", cmd));
-  CreateProcess(NULL, cmd, NULL, NULL, TRUE,
+  CreateProcess(NULL, (char *) cmd, NULL, NULL, TRUE,
                 CREATE_NEW_PROCESS_GROUP, (void *) env, dir, &si, &pi);
 
   CloseHandle(si.hStdOutput);
@@ -443,7 +450,221 @@ static pid_t start_process(char *cmd, char *env[], char *dir, sock_t sock) {
   return (pid_t) pi.hProcess;
 }
 #else
+static pid_t start_process(const char *interp, const char *cmd, const char *env,
+                           const char *envp[], const char *dir, sock_t sock) {
+  pid_t pid = fork();
+  (void) env;
+
+  if (pid == 0) {
+    chdir(dir);
+    dup2(sock, 0);
+    dup2(sock, 1);
+    closesocket(sock);
+
+    // After exec, all signal handlers are restored to their default values,
+    // with one exception of SIGCHLD. According to POSIX.1-2001 and Linux's
+    // implementation, SIGCHLD's handler will leave unchanged after exec
+    // if it was set to be ignored. Restore it to default action.
+    signal(SIGCHLD, SIG_DFL);
+
+    if (interp == NULL) {
+      execle(cmd, cmd, NULL, envp);
+    } else {
+      execle(interp, interp, cmd, NULL, envp);
+    }
+    exit(EXIT_FAILURE);  // exec call failed
+  }
+
+  return pid;
+}
 #endif
+
+// This structure helps to create an environment for the spawned CGI program.
+// Environment is an array of "VARIABLE=VALUE\0" ASCIIZ strings,
+// last element must be NULL.
+// However, on Windows there is a requirement that all these VARIABLE=VALUE\0
+// strings must reside in a contiguous buffer. The end of the buffer is
+// marked by two '\0' characters.
+// We satisfy both worlds: we create an envp array (which is vars), all
+// entries are actually pointers inside buf.
+struct cgi_env_block {
+  struct mg_connection *conn;
+  char buf[CGI_ENVIRONMENT_SIZE];       // Environment buffer
+  const char *vars[MAX_CGI_ENVIR_VARS]; // char *envp[]
+  int len;                              // Space taken
+  int nvars;                            // Number of variables in envp[]
+};
+
+// Append VARIABLE=VALUE\0 string to the buffer, and add a respective
+// pointer into the vars array.
+static char *addenv(struct cgi_env_block *block, const char *fmt, ...) {
+  int n, space;
+  char *added;
+  va_list ap;
+
+  // Calculate how much space is left in the buffer
+  space = sizeof(block->buf) - block->len - 2;
+  assert(space >= 0);
+
+  // Make a pointer to the free space int the buffer
+  added = block->buf + block->len;
+
+  // Copy VARIABLE=VALUE\0 string into the free space
+  va_start(ap, fmt);
+  n = vsnprintf(added, (size_t) space, fmt, ap);
+  va_end(ap);
+
+  // Make sure we do not overflow buffer and the envp array
+  if (n > 0 && n + 1 < space &&
+      block->nvars < (int) ARRAY_SIZE(block->vars) - 2) {
+    // Append a pointer to the added string into the envp array
+    block->vars[block->nvars++] = added;
+    // Bump up used length counter. Include \0 terminator
+    block->len += n + 1;
+  }
+
+  return added;
+}
+
+static void prepare_cgi_environment(struct connection *conn,
+                                    const char *prog,
+                                    struct cgi_env_block *blk) {
+  struct mg_connection *ri = &conn->mg_conn;
+  const char *s, *slash;
+  char *p, **opts = conn->server->config_options;
+  int  i;
+
+  blk->len = blk->nvars = 0;
+  blk->conn = ri;
+
+  addenv(blk, "SERVER_NAME=%s", opts[AUTH_DOMAIN]);
+  addenv(blk, "SERVER_ROOT=%s", opts[DOCUMENT_ROOT]);
+  addenv(blk, "DOCUMENT_ROOT=%s", opts[DOCUMENT_ROOT]);
+  addenv(blk, "SERVER_SOFTWARE=%s/%s", "Mongoose", MONGOOSE_VERSION);
+
+  // Prepare the environment block
+  addenv(blk, "%s", "GATEWAY_INTERFACE=CGI/1.1");
+  addenv(blk, "%s", "SERVER_PROTOCOL=HTTP/1.1");
+  addenv(blk, "%s", "REDIRECT_STATUS=200"); // For PHP
+
+  // TODO(lsm): fix this for IPv6 case
+  addenv(blk, "SERVER_PORT=%d", ri->remote_port);
+
+  addenv(blk, "REQUEST_METHOD=%s", ri->request_method);
+  addenv(blk, "REMOTE_ADDR=%s", ri->remote_ip);
+  addenv(blk, "REMOTE_PORT=%d", ri->remote_port);
+  addenv(blk, "REQUEST_URI=%s%s%s", ri->uri,
+         ri->query_string == NULL ? "" : "?",
+         ri->query_string == NULL ? "" : ri->query_string);
+
+  // SCRIPT_NAME
+  if (conn->path_info != NULL) {
+    addenv(blk, "SCRIPT_NAME=%.*s",
+           (int) (strlen(ri->uri) - strlen(conn->path_info)), ri->uri);
+    addenv(blk, "PATH_INFO=%s", conn->path_info);
+  } else {
+    s = strrchr(prog, '/');
+    slash = strrchr(ri->uri, '/');
+    addenv(blk, "SCRIPT_NAME=%.*s%s",
+           slash == NULL ? 0 : (int) (slash - ri->uri), ri->uri,
+           s == NULL ? prog : s);
+  }
+
+  addenv(blk, "SCRIPT_FILENAME=%s", prog);
+  addenv(blk, "PATH_TRANSLATED=%s", prog);
+  addenv(blk, "HTTPS=%s", conn->flags & CONN_SSL ? "on" : "off");
+
+  if ((s = mg_get_header(ri, "Content-Type")) != NULL)
+    addenv(blk, "CONTENT_TYPE=%s", s);
+
+  if (ri->query_string != NULL) {
+    addenv(blk, "QUERY_STRING=%s", ri->query_string);
+  }
+
+  if ((s = mg_get_header(ri, "Content-Length")) != NULL)
+    addenv(blk, "CONTENT_LENGTH=%s", s);
+
+  if ((s = getenv("PATH")) != NULL)
+    addenv(blk, "PATH=%s", s);
+
+#if defined(_WIN32)
+  if ((s = getenv("COMSPEC")) != NULL) {
+    addenv(blk, "COMSPEC=%s", s);
+  }
+  if ((s = getenv("SYSTEMROOT")) != NULL) {
+    addenv(blk, "SYSTEMROOT=%s", s);
+  }
+  if ((s = getenv("SystemDrive")) != NULL) {
+    addenv(blk, "SystemDrive=%s", s);
+  }
+  if ((s = getenv("ProgramFiles")) != NULL) {
+    addenv(blk, "ProgramFiles=%s", s);
+  }
+  if ((s = getenv("ProgramFiles(x86)")) != NULL) {
+    addenv(blk, "ProgramFiles(x86)=%s", s);
+  }
+  if ((s = getenv("CommonProgramFiles(x86)")) != NULL) {
+    addenv(blk, "CommonProgramFiles(x86)=%s", s);
+  }
+#else
+  if ((s = getenv("LD_LIBRARY_PATH")) != NULL)
+    addenv(blk, "LD_LIBRARY_PATH=%s", s);
+#endif // _WIN32
+
+  if ((s = getenv("PERLLIB")) != NULL)
+    addenv(blk, "PERLLIB=%s", s);
+
+  if ((s = getenv(ENV_EXPORT_TO_CGI)) != NULL)
+    addenv(blk, "%s=%s", ENV_EXPORT_TO_CGI, s);
+
+  // Add all headers as HTTP_* variables
+  for (i = 0; i < ri->num_headers; i++) {
+    p = addenv(blk, "HTTP_%s=%s",
+        ri->http_headers[i].name, ri->http_headers[i].value);
+
+    // Convert variable name into uppercase, and change - to _
+    for (; *p != '=' && *p != '\0'; p++) {
+      if (*p == '-')
+        *p = '_';
+      *p = (char) toupper(* (unsigned char *) p);
+    }
+  }
+
+  blk->vars[blk->nvars++] = NULL;
+  blk->buf[blk->len++] = '\0';
+
+  assert(blk->nvars < (int) ARRAY_SIZE(blk->vars));
+  assert(blk->len > 0);
+  assert(blk->len < (int) sizeof(blk->buf));
+}
+
+static void open_cgi_endpoint(struct connection *conn, const char *prog) {
+  struct cgi_env_block blk;
+  char dir[MAX_PATH_SIZE], *p = NULL;
+  sock_t fds[2];
+
+  prepare_cgi_environment(conn, prog, &blk);
+  // CGI must be executed in its own directory. 'dir' must point to the
+  // directory containing executable program, 'p' must point to the
+  // executable program name relative to 'dir'.
+  snprintf(dir, sizeof(dir), "%s", prog);
+  if ((p = strrchr(dir, '/')) != NULL) {
+    *p++ = '\0';
+  } else {
+    dir[0] = '.', dir[1] = '\0';
+    p = (char *) prog;
+  }
+
+  mg_socketpair(fds);
+  start_process(conn->server->config_options[CGI_INTERPRETER],
+                prog, blk.buf, blk.vars, dir, fds[1]);
+
+  conn->endpoint_type = EP_CGI;
+  conn->endpoint.cgi_sock = fds[0];
+  closesocket(fds[1]);
+}
+
+#endif  // !NO_CGI
 
 // 'sa' must be an initialized address to bind to
 static sock_t open_listening_socket(union socket_address *sa) {
@@ -1095,6 +1316,7 @@ static int deliver_websocket_frame(struct connection *conn) {
   if (buffered) {
     conn->mg_conn.content_len = data_len;
     conn->mg_conn.content = buf + header_len;
+    conn->mg_conn.wsbits = buf[0];
 
     // Apply mask if necessary
     if (mask_len > 0) {
@@ -1113,100 +1335,6 @@ static int deliver_websocket_frame(struct connection *conn) {
 
   return buffered;
 }
-
-#if 0
-int mg_websocket_read(struct mg_connection *conn, int *bits, char **data) {
-  // Pointer to the beginning of the portion of the incoming websocket message
-  // queue. The original websocket upgrade request is never removed,
-  // so the queue begins after it.
-  unsigned char *buf = (unsigned char *) conn->buf + conn->request_len;
-  int n, stop = 0;
-  size_t i, len, mask_len, data_len, header_len, body_len;
-  char mask[4];
-
-  assert(conn->content_len == 0);
-
-  // Loop continuously, reading messages from the socket, invoking the callback,
-  // and waiting repeatedly until an error occurs.
-  while (!stop) {
-    header_len = 0;
-    // body_len is the length of the entire queue in bytes
-    // len is the length of the current message
-    // data_len is the length of the current message's data payload
-    // header_len is the length of the current message's header
-    if ((body_len = conn->data_len - conn->request_len) >= 2) {
-      len = buf[1] & 127;
-      mask_len = buf[1] & 128 ? 4 : 0;
-      if (len < 126 && body_len >= mask_len) {
-        data_len = len;
-        header_len = 2 + mask_len;
-      } else if (len == 126 && body_len >= 4 + mask_len) {
-        header_len = 4 + mask_len;
-        data_len = ((((int) buf[2]) << 8) + buf[3]);
-      } else if (body_len >= 10 + mask_len) {
-        header_len = 10 + mask_len;
-        data_len = (((uint64_t) htonl(* (uint32_t *) &buf[2])) << 32) +
-          htonl(* (uint32_t *) &buf[6]);
-      }
-    }
-
-    // Data layout is as follows:
-    //  conn->buf               buf
-    //     v                     v              frame1           | frame2
-    //     |---------------------|----------------|--------------|-------
-    //     |                     |<--header_len-->|<--data_len-->|
-    //     |<-conn->request_len->|<-----body_len----------->|
-    //     |<-------------------conn->data_len------------->|
-
-    if (header_len > 0) {
-      // Allocate space to hold websocket payload
-      if ((*data = malloc(data_len)) == NULL) {
-        // Allocation failed, exit the loop and then close the connection
-        // TODO: notify user about the failure
-        data_len = 0;
-        break;
-      }
-
-      // Save mask and bits, otherwise it may be clobbered by memmove below
-      *bits = buf[0];
-      memcpy(mask, buf + header_len - mask_len, mask_len);
-
-      // Read frame payload into the allocated buffer.
-      assert(body_len >= header_len);
-      if (data_len + header_len > body_len) {
-        len = body_len - header_len;
-        memcpy(*data, buf + header_len, len);
-        // TODO: handle pull error
-        pull_all(NULL, conn, *data + len, data_len - len);
-        conn->data_len = conn->request_len;
-      } else {
-        len = data_len + header_len;
-        memcpy(*data, buf + header_len, data_len);
-        memmove(buf, buf + len, body_len - len);
-        conn->data_len -= len;
-      }
-
-      // Apply mask if necessary
-      if (mask_len > 0) {
-        for (i = 0; i < data_len; i++) {
-          (*data)[i] ^= mask[i % 4];
-        }
-      }
-
-      return data_len;
-    } else {
-      // Buffering websocket request
-      if ((n = pull(NULL, conn, conn->buf + conn->data_len,
-                    conn->buf_size - conn->data_len)) <= 0) {
-        break;
-      }
-      conn->data_len += n;
-    }
-  }
-
-  return 0;
-}
-#endif
 
 int mg_websocket_write(struct mg_connection* conn, int opcode,
                        const char *data, size_t data_len) {
@@ -1229,14 +1357,14 @@ int mg_websocket_write(struct mg_connection* conn, int opcode,
     } else if (data_len <= 0xFFFF) {
       // 16-bit length field
       copy[1] = 126;
-      * (uint16_t *) (copy + 2) = htons(data_len);
+      * (uint16_t *) (copy + 2) = (uint16_t) htons((uint16_t) data_len);
       memcpy(copy + 4, data, data_len);
       copy_len = 4 + data_len;
     } else {
       // 64-bit length field
       copy[1] = 127;
-      * (uint32_t *) (copy + 2) = htonl((uint64_t) data_len >> 32);
-      * (uint32_t *) (copy + 6) = htonl(data_len & 0xffffffff);
+      * (uint32_t *) (copy + 2) = (uint32_t) htonl(data_len >> 32);
+      * (uint32_t *) (copy + 6) = (uint32_t) htonl(data_len & 0xffffffff);
       memcpy(copy + 10, data, data_len);
       copy_len = 10 + data_len;
     }
@@ -1248,11 +1376,14 @@ int mg_websocket_write(struct mg_connection* conn, int opcode,
 
     return retval;
 }
-#else
-static void send_websocket_handshake(struct mg_connection *conn,
-                                     const char *key) {
-  (void) key;
-  send_http_error(conn, "%s", "HTTP/1.1 501 Not Implemented\r\n\r\n");
+
+static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
+  const char *ver = mg_get_header(conn, "Sec-WebSocket-Version"),
+        *key = mg_get_header(conn, "Sec-WebSocket-Key");
+  if (ver != NULL && key != NULL) {
+    conn->is_websocket = 1;
+    send_websocket_handshake(conn, key);
+  }
 }
 #endif // !USE_WEBSOCKET
 
@@ -1521,9 +1652,12 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   struct mg_connection *c = &conn->mg_conn;
 
   c->content = loc->buf;
+#ifdef USE_WEBSOCKET
   if (conn->mg_conn.is_websocket) {
     do { } while (deliver_websocket_frame(conn));
-  } else if (loc->len >= c->content_len) {
+  } else
+#endif
+    if (loc->len >= c->content_len) {
     conn->endpoint.uh->handler(c);
     close_local_endpoint(conn);
   }
@@ -1534,6 +1668,7 @@ static void open_local_endpoint(struct connection *conn) {
   file_stat_t st;
   int exists = 0, is_directory = 0;
   const char *cl_hdr = mg_get_header(&conn->mg_conn, "Content-Length");
+  const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
 
   conn->mg_conn.content_len = cl_hdr == NULL ? 0 : to64(cl_hdr);
 
@@ -1556,6 +1691,18 @@ static void open_local_endpoint(struct connection *conn) {
   } else if (match_prefix(LUA_SCRIPT_PATTERN, 6, path) > 0) {
     send_http_error(conn, "%s", "HTTP/1.1 501 Not Implemented\r\n\r\n");
     conn->flags |= CONN_SPOOL_DONE;
+  } else if (match_prefix(cgi_pat, strlen(cgi_pat), path) > 0) {
+    if (strcmp(conn->mg_conn.request_method, "POST") &&
+        strcmp(conn->mg_conn.request_method, "HEAD") &&
+        strcmp(conn->mg_conn.request_method, "GET")) {
+      send_http_error(conn, "%s", "HTTP/1.1 501 Not Implemented\r\n\r\n");
+    } else {
+#if !defined(NO_CGI)
+      open_cgi_endpoint(conn, path);
+#else
+      send_http_error(conn, "%s", "HTTP/1.1 501 Not Implemented\r\n\r\n");
+#endif // !NO_CGI
+    }
   } else if (is_not_modified(conn, &st)) {
     send_http_error(conn, "%s", "HTTP/1.1 304 Not Modified\r\n\r\n");
   } else if ((conn->endpoint.fd = open(path, O_RDONLY)) != -1) {
@@ -1571,15 +1718,6 @@ static void send_continue_if_expected(struct connection *conn) {
 
   if (expect_hdr != NULL) {
     spool(&conn->remote_iobuf, expect_response, sizeof(expect_response) - 1);
-  }
-}
-
-static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
-  const char *ver = mg_get_header(conn, "Sec-WebSocket-Version"),
-        *key = mg_get_header(conn, "Sec-WebSocket-Key");
-  if (ver != NULL && key != NULL) {
-    conn->is_websocket = 1;
-    send_websocket_handshake(conn, key);
   }
 }
 
@@ -1606,7 +1744,9 @@ static void process_request(struct connection *conn) {
     // Invalid request, or request is too big: close the connection
     conn->flags |= CONN_CLOSE;
   } else if (conn->request_len > 0 && conn->endpoint_type == EP_NONE) {
+#ifdef USE_WEBSOCKET
     send_websocket_handshake_if_requested(&conn->mg_conn);
+#endif
     send_continue_if_expected(conn);
     open_local_endpoint(conn);
   } else if (conn->endpoint_type == EP_USER) {
@@ -1626,6 +1766,18 @@ static void read_from_client(struct connection *conn) {
   }
 }
 
+static void read_from_cgi(struct connection *conn) {
+  char buf[IOBUF_SIZE];
+  int n = recv(conn->endpoint.cgi_sock, buf, sizeof(buf), 0);
+
+  DBG(("-> %d", n));
+  if (is_error(n)) {
+    close_local_endpoint(conn);
+  } else if (n > 0) {
+    spool(&conn->remote_iobuf, buf, n);
+  }
+}
+
 static int should_keep_alive(const struct connection *conn) {
   const char *method = conn->mg_conn.request_method;
   const char *http_version = conn->mg_conn.http_version;
@@ -1636,16 +1788,13 @@ static int should_keep_alive(const struct connection *conn) {
 }
 
 static void close_local_endpoint(struct connection *conn) {
-  int keep_alive = should_keep_alive(conn);  // Must be done before free()
+  // Must be done before free()
+  int keep_alive = should_keep_alive(conn) && conn->endpoint_type == EP_FILE;
 
-  //DBG(("Closing for conn %p", conn));
-
-  // Close file descriptor
   switch (conn->endpoint_type) {
     case EP_FILE: close(conn->endpoint.fd); break;
-    case EP_USER: break;
-    case EP_NONE: break;
-    default: assert(0); break;
+    case EP_CGI: closesocket(conn->endpoint.cgi_sock); break;
+    default: break;
   }
 
   conn->endpoint_type = EP_NONE;
@@ -1699,6 +1848,8 @@ void mg_poll_server(struct mg_server *server, int milliseconds) {
     add_to_set(conn->client_sock, &read_set, &max_fd);
     if (conn->endpoint_type == EP_FILE) {
       transfer_file_data(conn);
+    } else if (conn->endpoint_type == EP_CGI) {
+      add_to_set(conn->endpoint.cgi_sock, &read_set, &max_fd);
     }
     if (conn->remote_iobuf.len > 0) {
       add_to_set(conn->client_sock, &write_set, &max_fd);
@@ -1731,6 +1882,10 @@ void mg_poll_server(struct mg_server *server, int milliseconds) {
       if (FD_ISSET(conn->client_sock, &read_set)) {
         conn->expire_time = expire_time;
         read_from_client(conn);
+      }
+      if (conn->endpoint_type == EP_CGI &&
+          FD_ISSET(conn->endpoint.cgi_sock, &read_set)) {
+        read_from_cgi(conn);
       }
       if (FD_ISSET(conn->client_sock, &write_set)) {
         conn->expire_time = expire_time;
@@ -1893,11 +2048,11 @@ static int handler(struct mg_connection *conn) {
   return conn->content_len == 4 && !memcmp(conn->content, "exit", 4);
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
   struct mg_server *server = mg_create_server(NULL);
 
   mg_set_option(server, "listening_port", "8080");
-  mg_set_option(server, "document_root", ".");
+  mg_set_option(server, "document_root", argc > 1 ? argv[1] : ".");
   mg_add_uri_handler(server, "/ws", handler);
   mg_start_thread(timer_thread, server);
 
