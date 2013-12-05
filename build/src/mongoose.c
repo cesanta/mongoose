@@ -12,6 +12,38 @@ static int call_user(int type, struct mg_connection *conn, void *p) {
     0 : conn->ctx->event_handler(&conn->event);
 }
 
+static int mg_socketpair(sock_t sp[2]) {
+  struct sockaddr_in sa;
+  sock_t sock, ret = -1;
+  socklen_t len = sizeof(sa);
+
+  sp[0] = sp[1] = INVALID_SOCKET;
+
+  (void) memset(&sa, 0, sizeof(sa));
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons(0);
+  sa.sin_addr.s_addr = htonl(0x7f000001);
+
+  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
+      !bind(sock, (struct sockaddr *) &sa, len) &&
+      !listen(sock, 1) &&
+      !getsockname(sock, (struct sockaddr *) &sa, &len) &&
+      (sp[0] = socket(AF_INET, SOCK_STREAM, 6)) != -1 &&
+      !connect(sp[0], (struct sockaddr *) &sa, len) &&
+      (sp[1] = accept(sock,(struct sockaddr *) &sa, &len)) != INVALID_SOCKET) {
+    set_close_on_exec(sp[0]);
+    set_close_on_exec(sp[1]);
+    ret = 0;
+  } else {
+    if (sp[0] != INVALID_SOCKET) closesocket(sp[0]);
+    if (sp[1] != INVALID_SOCKET) closesocket(sp[1]);
+    sp[0] = sp[1] = INVALID_SOCKET;
+  }
+  closesocket(sock);
+
+  return ret;
+}
+
 static FILE *mg_fopen(const char *path, const char *mode) {
 #ifdef _WIN32
   wchar_t wbuf[PATH_MAX], wmode[20];
@@ -1081,31 +1113,7 @@ static void process_new_connection(struct mg_connection *conn) {
 
 // Worker threads take accepted socket from the queue
 static int consume_socket(struct mg_context *ctx, struct socket *sp) {
-  (void) pthread_mutex_lock(&ctx->mutex);
-  DEBUG_TRACE(("going idle"));
-
-  // If the queue is empty, wait. We're idle at this point.
-  while (ctx->sq_head == ctx->sq_tail && ctx->stop_flag == 0) {
-    pthread_cond_wait(&ctx->sq_full, &ctx->mutex);
-  }
-
-  // If we're stopping, sq_head may be equal to sq_tail.
-  if (ctx->sq_head > ctx->sq_tail) {
-    // Copy socket from the queue and increment tail
-    *sp = ctx->queue[ctx->sq_tail % ARRAY_SIZE(ctx->queue)];
-    ctx->sq_tail++;
-    DEBUG_TRACE(("grabbed socket %d, going busy", sp->sock));
-
-    // Wrap pointers if needed
-    while (ctx->sq_tail > (int) ARRAY_SIZE(ctx->queue)) {
-      ctx->sq_tail -= ARRAY_SIZE(ctx->queue);
-      ctx->sq_head -= ARRAY_SIZE(ctx->queue);
-    }
-  }
-
-  (void) pthread_cond_signal(&ctx->sq_empty);
-  (void) pthread_mutex_unlock(&ctx->mutex);
-
+  recv(ctx->ctl[1], (void *) sp, sizeof(*sp), 0);
   return !ctx->stop_flag;
 }
 
@@ -1154,11 +1162,7 @@ static void *worker_thread(void *thread_func_param) {
   }
 
   // Signal master that we're done with connection and exiting
-  (void) pthread_mutex_lock(&ctx->mutex);
-  ctx->num_threads--;
-  (void) pthread_cond_signal(&ctx->cond);
-  assert(ctx->num_threads >= 0);
-  (void) pthread_mutex_unlock(&ctx->mutex);
+  send(ctx->ctl[1], "x", 1, 0);
 
   DEBUG_TRACE(("exiting"));
   return NULL;
@@ -1166,23 +1170,7 @@ static void *worker_thread(void *thread_func_param) {
 
 // Master thread adds accepted socket to a queue
 static void produce_socket(struct mg_context *ctx, const struct socket *sp) {
-  (void) pthread_mutex_lock(&ctx->mutex);
-
-  // If the queue is full, wait
-  while (ctx->stop_flag == 0 &&
-         ctx->sq_head - ctx->sq_tail >= (int) ARRAY_SIZE(ctx->queue)) {
-    (void) pthread_cond_wait(&ctx->sq_empty, &ctx->mutex);
-  }
-
-  if (ctx->sq_head - ctx->sq_tail < (int) ARRAY_SIZE(ctx->queue)) {
-    // Copy socket to the queue and increment head
-    ctx->queue[ctx->sq_head % ARRAY_SIZE(ctx->queue)] = *sp;
-    ctx->sq_head++;
-    DEBUG_TRACE(("queued socket %d", sp->sock));
-  }
-
-  (void) pthread_cond_signal(&ctx->sq_full);
-  (void) pthread_mutex_unlock(&ctx->mutex);
+  send(ctx->ctl[0], (void *) sp, sizeof(*sp), 0);
 }
 
 static int set_sock_timeout(SOCKET sock, int milliseconds) {
@@ -1272,20 +1260,16 @@ static void *master_thread(void *thread_func_param) {
   close_all_listening_sockets(ctx);
 
   // Wakeup workers that are waiting for connections to handle.
-  pthread_cond_broadcast(&ctx->sq_full);
+  for (i = 0; i < ctx->num_threads; i++) {
+    struct socket dummy;
+    send(ctx->ctl[0], (void *) &dummy, sizeof(dummy), 0);
+  }
 
   // Wait until all threads finish
-  (void) pthread_mutex_lock(&ctx->mutex);
-  while (ctx->num_threads > 0) {
-    (void) pthread_cond_wait(&ctx->cond, &ctx->mutex);
+  for (i = 0; i < ctx->num_threads; i++) {
+    char ch;
+    recv(ctx->ctl[0], &ch, 1, 0);
   }
-  (void) pthread_mutex_unlock(&ctx->mutex);
-
-  // All threads exited, no sync is needed. Destroy mutex and condvars
-  (void) pthread_mutex_destroy(&ctx->mutex);
-  (void) pthread_cond_destroy(&ctx->cond);
-  (void) pthread_cond_destroy(&ctx->sq_empty);
-  (void) pthread_cond_destroy(&ctx->sq_full);
 
 #if !defined(NO_SSL)
   uninitialize_ssl(ctx);
@@ -1406,10 +1390,7 @@ struct mg_context *mg_start(const char **options,
   (void) signal(SIGPIPE, SIG_IGN);
 #endif // !_WIN32
 
-  (void) pthread_mutex_init(&ctx->mutex, NULL);
-  (void) pthread_cond_init(&ctx->cond, NULL);
-  (void) pthread_cond_init(&ctx->sq_empty, NULL);
-  (void) pthread_cond_init(&ctx->sq_full, NULL);
+  mg_socketpair(ctx->ctl);
 
   // Start master (listening) thread
   mg_start_thread(master_thread, ctx);

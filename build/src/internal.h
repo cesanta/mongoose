@@ -152,7 +152,6 @@ typedef long off_t;
 #endif // !fileno MINGW #defines fileno
 
 typedef HANDLE pthread_mutex_t;
-typedef struct {HANDLE signal, broadcast;} pthread_cond_t;
 typedef DWORD pthread_t;
 #define pid_t HANDLE // MINGW typedefs pid_t to int. Using #define here.
 
@@ -251,6 +250,8 @@ typedef int SOCKET;
 #define MG_BUF_LEN 8192
 #define MAX_REQUEST_SIZE 16384
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
+
+typedef SOCKET sock_t;
 
 #ifdef DEBUG_TRACE
 #undef DEBUG_TRACE
@@ -407,19 +408,11 @@ struct mg_context {
   char *config[NUM_OPTIONS];      // Mongoose configuration parameters
   mg_event_handler_t event_handler;  // User-defined callback function
   void *user_data;                // User-defined data
-
   struct socket *listening_sockets;
   int num_listening_sockets;
+  int num_threads;    // Number of threads
+  sock_t ctl[2];     // Socket pair for inter-thread communication
 
-  volatile int num_threads;  // Number of threads
-  pthread_mutex_t mutex;     // Protects (max|num)_threads
-  pthread_cond_t  cond;      // Condvar for tracking workers terminations
-
-  struct socket queue[MGSQLEN];   // Accepted sockets
-  volatile int sq_head;      // Head of the socket queue
-  volatile int sq_tail;      // Tail of the socket queue
-  pthread_cond_t sq_full;    // Signaled when socket is produced
-  pthread_cond_t sq_empty;   // Signaled when socket is consumed
 };
 
 struct mg_connection {
