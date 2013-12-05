@@ -46,6 +46,7 @@ struct mg_connection {
   char *content;              // POST (or websocket message) data, or NULL
   int content_len;            // content length
 
+  int is_websocket;           // Connection is a websocket connection
   void *server_param;         // Parameter passed to mg_add_uri_handler()
   void *connection_param;     // Placeholder for connection-specific data
 };
