@@ -81,6 +81,7 @@ int mg_get_var(const struct mg_connection *conn,
                const char *var_name, char *dst, size_t dst_len);
 int mg_get_cookie(const char *cookie, const char *var_name,
                   char *buf, size_t buf_len);
+int mg_parse_header(const char *hdr, const char *var_name, char *buf, size_t);
 
 // Utility functions
 int mg_start_thread(void *(*func)(void *), void *param);

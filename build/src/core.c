@@ -78,6 +78,7 @@ typedef struct _stati64 file_stat_t;
 #include <dirent.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <arpa/inet.h>  // For inet_pton() when USE_IPV6 is defined
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -766,7 +767,8 @@ static void close_conn(struct connection *conn) {
 //   -1  if request is malformed
 //    0  if request is not yet fully buffered
 //   >0  actual request length, including last \r\n\r\n
-static int get_request_len(const unsigned char *buf, int buf_len) {
+static int get_request_len(const char *s, int buf_len) {
+  const unsigned char *buf = (unsigned char *) s;
   int i;
 
   for (i = 0; i < buf_len; i++) {
@@ -874,6 +876,7 @@ static int is_valid_http_method(const char *method) {
 // Parse HTTP request, fill in mg_request structure.
 // This function modifies the buffer by NUL-terminating
 // HTTP request components, header names and header values.
+// Note that len must point to the last \n of HTTP headers.
 static int parse_http_message(char *buf, int len, struct mg_connection *ri) {
   int is_request, n;
 
@@ -1890,6 +1893,460 @@ static void send_options(struct connection *conn) {
   conn->flags |= CONN_SPOOL_DONE;
 }
 
+static int mg_printf(struct connection *conn, const char *fmt, ...) {
+  char buf[IOBUF_SIZE];
+  va_list ap;
+  int len;
+
+  va_start(ap, fmt);
+  len = vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+
+  return spool(&conn->remote_iobuf, buf, len);
+}
+
+#ifndef NO_AUTH
+static void send_authorization_request(struct connection *conn) {
+  conn->mg_conn.status_code = 401;
+  mg_printf(conn,
+            "HTTP/1.1 401 Unauthorized\r\n"
+            "Content-Length: 0\r\n"
+            "WWW-Authenticate: Digest qop=\"auth\", "
+            "realm=\"%s\", nonce=\"%lu\"\r\n\r\n",
+            conn->server->config_options[AUTH_DOMAIN],
+            (unsigned long) time(NULL));
+}
+
+// Use the global passwords file, if specified by auth_gpass option,
+// or search for .htpasswd in the requested directory.
+static FILE *open_auth_file(struct connection *conn, const char *path) {
+  char name[MAX_PATH_SIZE];
+  const char *p, *gpass = conn->server->config_options[GLOBAL_AUTH_FILE];
+  file_stat_t st;
+  FILE *fp = NULL;
+
+  if (gpass != NULL) {
+    // Use global passwords file
+    fp = fopen(gpass, "r");
+  } else if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
+    snprintf(name, sizeof(name), "%s%c%s", path, '/', PASSWORDS_FILE_NAME);
+    fp = fopen(name, "r");
+  } else {
+    // Try to find .htpasswd in requested directory.
+    if ((p = strrchr(path, '/')) == NULL) p = path;
+    snprintf(name, sizeof(name), "%.*s%c%s",
+             (int) (p - path), path, '/', PASSWORDS_FILE_NAME);
+    fp = fopen(name, "r");
+  }
+
+  return fp;
+}
+
+#ifndef HAVE_MD5
+typedef struct MD5Context {
+  uint32_t buf[4];
+  uint32_t bits[2];
+  unsigned char in[64];
+} MD5_CTX;
+
+static void byteReverse(unsigned char *buf, unsigned longs) {
+  uint32_t t;
+
+  // Forrest: MD5 expect LITTLE_ENDIAN, swap if BIG_ENDIAN
+  if (is_big_endian()) {
+    do {
+      t = (uint32_t) ((unsigned) buf[3] << 8 | buf[2]) << 16 |
+        ((unsigned) buf[1] << 8 | buf[0]);
+      * (uint32_t *) buf = t;
+      buf += 4;
+    } while (--longs);
+  }
+}
+
+#define F1(x, y, z) (z ^ (x & (y ^ z)))
+#define F2(x, y, z) F1(z, x, y)
+#define F3(x, y, z) (x ^ y ^ z)
+#define F4(x, y, z) (y ^ (x | ~z))
+
+#define MD5STEP(f, w, x, y, z, data, s) \
+  ( w += f(x, y, z) + data,  w = w<<s | w>>(32-s),  w += x )
+
+// Start MD5 accumulation.  Set bit count to 0 and buffer to mysterious
+// initialization constants.
+static void MD5Init(MD5_CTX *ctx) {
+  ctx->buf[0] = 0x67452301;
+  ctx->buf[1] = 0xefcdab89;
+  ctx->buf[2] = 0x98badcfe;
+  ctx->buf[3] = 0x10325476;
+
+  ctx->bits[0] = 0;
+  ctx->bits[1] = 0;
+}
+
+static void MD5Transform(uint32_t buf[4], uint32_t const in[16]) {
+  register uint32_t a, b, c, d;
+
+  a = buf[0];
+  b = buf[1];
+  c = buf[2];
+  d = buf[3];
+
+  MD5STEP(F1, a, b, c, d, in[0] + 0xd76aa478, 7);
+  MD5STEP(F1, d, a, b, c, in[1] + 0xe8c7b756, 12);
+  MD5STEP(F1, c, d, a, b, in[2] + 0x242070db, 17);
+  MD5STEP(F1, b, c, d, a, in[3] + 0xc1bdceee, 22);
+  MD5STEP(F1, a, b, c, d, in[4] + 0xf57c0faf, 7);
+  MD5STEP(F1, d, a, b, c, in[5] + 0x4787c62a, 12);
+  MD5STEP(F1, c, d, a, b, in[6] + 0xa8304613, 17);
+  MD5STEP(F1, b, c, d, a, in[7] + 0xfd469501, 22);
+  MD5STEP(F1, a, b, c, d, in[8] + 0x698098d8, 7);
+  MD5STEP(F1, d, a, b, c, in[9] + 0x8b44f7af, 12);
+  MD5STEP(F1, c, d, a, b, in[10] + 0xffff5bb1, 17);
+  MD5STEP(F1, b, c, d, a, in[11] + 0x895cd7be, 22);
+  MD5STEP(F1, a, b, c, d, in[12] + 0x6b901122, 7);
+  MD5STEP(F1, d, a, b, c, in[13] + 0xfd987193, 12);
+  MD5STEP(F1, c, d, a, b, in[14] + 0xa679438e, 17);
+  MD5STEP(F1, b, c, d, a, in[15] + 0x49b40821, 22);
+
+  MD5STEP(F2, a, b, c, d, in[1] + 0xf61e2562, 5);
+  MD5STEP(F2, d, a, b, c, in[6] + 0xc040b340, 9);
+  MD5STEP(F2, c, d, a, b, in[11] + 0x265e5a51, 14);
+  MD5STEP(F2, b, c, d, a, in[0] + 0xe9b6c7aa, 20);
+  MD5STEP(F2, a, b, c, d, in[5] + 0xd62f105d, 5);
+  MD5STEP(F2, d, a, b, c, in[10] + 0x02441453, 9);
+  MD5STEP(F2, c, d, a, b, in[15] + 0xd8a1e681, 14);
+  MD5STEP(F2, b, c, d, a, in[4] + 0xe7d3fbc8, 20);
+  MD5STEP(F2, a, b, c, d, in[9] + 0x21e1cde6, 5);
+  MD5STEP(F2, d, a, b, c, in[14] + 0xc33707d6, 9);
+  MD5STEP(F2, c, d, a, b, in[3] + 0xf4d50d87, 14);
+  MD5STEP(F2, b, c, d, a, in[8] + 0x455a14ed, 20);
+  MD5STEP(F2, a, b, c, d, in[13] + 0xa9e3e905, 5);
+  MD5STEP(F2, d, a, b, c, in[2] + 0xfcefa3f8, 9);
+  MD5STEP(F2, c, d, a, b, in[7] + 0x676f02d9, 14);
+  MD5STEP(F2, b, c, d, a, in[12] + 0x8d2a4c8a, 20);
+
+  MD5STEP(F3, a, b, c, d, in[5] + 0xfffa3942, 4);
+  MD5STEP(F3, d, a, b, c, in[8] + 0x8771f681, 11);
+  MD5STEP(F3, c, d, a, b, in[11] + 0x6d9d6122, 16);
+  MD5STEP(F3, b, c, d, a, in[14] + 0xfde5380c, 23);
+  MD5STEP(F3, a, b, c, d, in[1] + 0xa4beea44, 4);
+  MD5STEP(F3, d, a, b, c, in[4] + 0x4bdecfa9, 11);
+  MD5STEP(F3, c, d, a, b, in[7] + 0xf6bb4b60, 16);
+  MD5STEP(F3, b, c, d, a, in[10] + 0xbebfbc70, 23);
+  MD5STEP(F3, a, b, c, d, in[13] + 0x289b7ec6, 4);
+  MD5STEP(F3, d, a, b, c, in[0] + 0xeaa127fa, 11);
+  MD5STEP(F3, c, d, a, b, in[3] + 0xd4ef3085, 16);
+  MD5STEP(F3, b, c, d, a, in[6] + 0x04881d05, 23);
+  MD5STEP(F3, a, b, c, d, in[9] + 0xd9d4d039, 4);
+  MD5STEP(F3, d, a, b, c, in[12] + 0xe6db99e5, 11);
+  MD5STEP(F3, c, d, a, b, in[15] + 0x1fa27cf8, 16);
+  MD5STEP(F3, b, c, d, a, in[2] + 0xc4ac5665, 23);
+
+  MD5STEP(F4, a, b, c, d, in[0] + 0xf4292244, 6);
+  MD5STEP(F4, d, a, b, c, in[7] + 0x432aff97, 10);
+  MD5STEP(F4, c, d, a, b, in[14] + 0xab9423a7, 15);
+  MD5STEP(F4, b, c, d, a, in[5] + 0xfc93a039, 21);
+  MD5STEP(F4, a, b, c, d, in[12] + 0x655b59c3, 6);
+  MD5STEP(F4, d, a, b, c, in[3] + 0x8f0ccc92, 10);
+  MD5STEP(F4, c, d, a, b, in[10] + 0xffeff47d, 15);
+  MD5STEP(F4, b, c, d, a, in[1] + 0x85845dd1, 21);
+  MD5STEP(F4, a, b, c, d, in[8] + 0x6fa87e4f, 6);
+  MD5STEP(F4, d, a, b, c, in[15] + 0xfe2ce6e0, 10);
+  MD5STEP(F4, c, d, a, b, in[6] + 0xa3014314, 15);
+  MD5STEP(F4, b, c, d, a, in[13] + 0x4e0811a1, 21);
+  MD5STEP(F4, a, b, c, d, in[4] + 0xf7537e82, 6);
+  MD5STEP(F4, d, a, b, c, in[11] + 0xbd3af235, 10);
+  MD5STEP(F4, c, d, a, b, in[2] + 0x2ad7d2bb, 15);
+  MD5STEP(F4, b, c, d, a, in[9] + 0xeb86d391, 21);
+
+  buf[0] += a;
+  buf[1] += b;
+  buf[2] += c;
+  buf[3] += d;
+}
+
+static void MD5Update(MD5_CTX *ctx, unsigned char const *buf, unsigned len) {
+  uint32_t t;
+
+  t = ctx->bits[0];
+  if ((ctx->bits[0] = t + ((uint32_t) len << 3)) < t)
+    ctx->bits[1]++;
+  ctx->bits[1] += len >> 29;
+
+  t = (t >> 3) & 0x3f;
+
+  if (t) {
+    unsigned char *p = (unsigned char *) ctx->in + t;
+
+    t = 64 - t;
+    if (len < t) {
+      memcpy(p, buf, len);
+      return;
+    }
+    memcpy(p, buf, t);
+    byteReverse(ctx->in, 16);
+    MD5Transform(ctx->buf, (uint32_t *) ctx->in);
+    buf += t;
+    len -= t;
+  }
+
+  while (len >= 64) {
+    memcpy(ctx->in, buf, 64);
+    byteReverse(ctx->in, 16);
+    MD5Transform(ctx->buf, (uint32_t *) ctx->in);
+    buf += 64;
+    len -= 64;
+  }
+
+  memcpy(ctx->in, buf, len);
+}
+
+static void MD5Final(unsigned char digest[16], MD5_CTX *ctx) {
+  unsigned count;
+  unsigned char *p;
+  uint32_t *a;
+
+  count = (ctx->bits[0] >> 3) & 0x3F;
+
+  p = ctx->in + count;
+  *p++ = 0x80;
+  count = 64 - 1 - count;
+  if (count < 8) {
+    memset(p, 0, count);
+    byteReverse(ctx->in, 16);
+    MD5Transform(ctx->buf, (uint32_t *) ctx->in);
+    memset(ctx->in, 0, 56);
+  } else {
+    memset(p, 0, count - 8);
+  }
+  byteReverse(ctx->in, 14);
+
+  a = (uint32_t *)ctx->in;
+  a[14] = ctx->bits[0];
+  a[15] = ctx->bits[1];
+
+  MD5Transform(ctx->buf, (uint32_t *) ctx->in);
+  byteReverse((unsigned char *) ctx->buf, 4);
+  memcpy(digest, ctx->buf, 16);
+  memset((char *) ctx, 0, sizeof(*ctx));
+}
+#endif // !HAVE_MD5
+
+
+
+// Stringify binary data. Output buffer must be twice as big as input,
+// because each byte takes 2 bytes in string representation
+static void bin2str(char *to, const unsigned char *p, size_t len) {
+  static const char *hex = "0123456789abcdef";
+
+  for (; len--; p++) {
+    *to++ = hex[p[0] >> 4];
+    *to++ = hex[p[0] & 0x0f];
+  }
+  *to = '\0';
+}
+
+// Return stringified MD5 hash for list of strings. Buffer must be 33 bytes.
+char *mg_md5(char buf[33], ...) {
+  unsigned char hash[16];
+  const char *p;
+  va_list ap;
+  MD5_CTX ctx;
+
+  MD5Init(&ctx);
+
+  va_start(ap, buf);
+  while ((p = va_arg(ap, const char *)) != NULL) {
+    MD5Update(&ctx, (const unsigned char *) p, (unsigned) strlen(p));
+  }
+  va_end(ap);
+
+  MD5Final(hash, &ctx);
+  bin2str(buf, hash, sizeof(hash));
+  return buf;
+}
+
+// Check the user's password, return 1 if OK
+static int check_password(const char *method, const char *ha1, const char *uri,
+                          const char *nonce, const char *nc, const char *cnonce,
+                          const char *qop, const char *response) {
+  char ha2[32 + 1], expected_response[32 + 1];
+
+  // Some of the parameters may be NULL
+  if (method == NULL || nonce == NULL || nc == NULL || cnonce == NULL ||
+      qop == NULL || response == NULL) {
+    return 0;
+  }
+
+  // NOTE(lsm): due to a bug in MSIE, we do not compare the URI
+  // TODO(lsm): check for authentication timeout
+  if (// strcmp(dig->uri, c->ouri) != 0 ||
+      strlen(response) != 32
+      // || now - strtoul(dig->nonce, NULL, 10) > 3600
+      ) {
+    return 0;
+  }
+
+  mg_md5(ha2, method, ":", uri, NULL);
+  mg_md5(expected_response, ha1, ":", nonce, ":", nc,
+      ":", cnonce, ":", qop, ":", ha2, NULL);
+
+  return mg_strcasecmp(response, expected_response) == 0;
+}
+
+
+// Authorize against the opened passwords file. Return 1 if authorized.
+static int authorize(struct connection *conn, FILE *fp) {
+  const char *hdr = mg_get_header(&conn->mg_conn, "Authorization");
+  char line[256], f_user[256], ha1[256], f_domain[256], user[100], uri[100],
+       cnonce[100], resp[100], qop[100], nc[100], nonce[100];
+
+  if (hdr == NULL || mg_strncasecmp(hdr, "Digest ", 7) != 0) return 0;
+  if (!mg_parse_header(hdr, "username", user, sizeof(user))) return 0;
+  if (!mg_parse_header(hdr, "cnonce", cnonce, sizeof(cnonce))) return 0;
+  if (!mg_parse_header(hdr, "response", resp, sizeof(resp))) return 0;
+  if (!mg_parse_header(hdr, "uri", uri, sizeof(uri))) return 0;
+  if (!mg_parse_header(hdr, "qop", qop, sizeof(qop))) return 0;
+  if (!mg_parse_header(hdr, "nc", nc, sizeof(nc))) return 0;
+  if (!mg_parse_header(hdr, "nonce", nonce, sizeof(nonce))) return 0;
+
+  while (fgets(line, sizeof(line), fp) != NULL) {
+    if (sscanf(line, "%[^:]:%[^:]:%s", f_user, f_domain, ha1) == 3 &&
+        !strcmp(user, f_user) &&
+        !strcmp(conn->server->config_options[AUTH_DOMAIN], f_domain))
+      return check_password(conn->mg_conn.request_method, ha1, uri,
+                            nonce, nc, cnonce, qop, resp);
+  }
+  return 0;
+}
+
+
+// Return 1 if request is authorised, 0 otherwise.
+static int is_authorized(struct connection *conn, const char *path) {
+  FILE *fp;
+  int authorized = 1;
+
+  if ((fp = open_auth_file(conn, path)) != NULL) {
+    authorized = authorize(conn, fp);
+    fclose(fp);
+  }
+
+  return authorized;
+}
+
+static int is_authorized_for_put(struct connection *conn) {
+  const char *auth_file = conn->server->config_options[PUT_DELETE_AUTH_FILE];
+  FILE *fp;
+  int authorized = 0;
+
+  if (auth_file != NULL && (fp = fopen(auth_file, "r")) != NULL) {
+    authorized = authorize(conn, fp);
+    fclose(fp);
+  }
+
+  return authorized;
+}
+
+static int is_put_or_delete_request(const struct connection *conn) {
+  const char *s = conn->mg_conn.request_method;
+  return s && (!strcmp(s, "PUT") || !strcmp(s, "DELETE") ||
+               !strcmp(s, "MKCOL"));
+}
+#endif // NO_AUTH
+
+#if 0
+// Parsed Authorization header
+struct ah { char *user, *uri, *cnonce, *response, *qop, *nc, *nonce; };
+
+// Return 1 on success. Always initializes the ah structure.
+static int parse_auth_header(struct mg_connection *conn, char *buf,
+                             size_t buf_size, struct ah *ah) {
+  char *name, *value, *s;
+  const char *auth_header;
+
+  memset(ah, 0, sizeof(*ah));
+  if ((auth_header = mg_get_header(conn, "Authorization")) == NULL ||
+      mg_strncasecmp(auth_header, "Digest ", 7) != 0) {
+    return 0;
+  }
+
+  // Make modifiable copy of the auth header
+  strncpy(buf, auth_header + 7, buf_size);
+  s = buf;
+
+  // Parse authorization header
+  for (;;) {
+    // Gobble initial spaces
+    while (isspace(* (unsigned char *) s)) {
+      s++;
+    }
+    name = skip_quoted(&s, "=", " ", 0);
+    // Value is either quote-delimited, or ends at first comma or space.
+    if (s[0] == '\"') {
+      s++;
+      value = skip_quoted(&s, "\"", " ", '\\');
+      if (s[0] == ',') {
+        s++;
+      }
+    } else {
+      value = skip_quoted(&s, ", ", " ", 0);  // IE uses commas, FF uses spaces
+    }
+    if (*name == '\0') {
+      break;
+    }
+
+    if (!strcmp(name, "username")) {
+      ah->user = value;
+    } else if (!strcmp(name, "cnonce")) {
+      ah->cnonce = value;
+    } else if (!strcmp(name, "response")) {
+      ah->response = value;
+    } else if (!strcmp(name, "uri")) {
+      ah->uri = value;
+    } else if (!strcmp(name, "qop")) {
+      ah->qop = value;
+    } else if (!strcmp(name, "nc")) {
+      ah->nc = value;
+    } else if (!strcmp(name, "nonce")) {
+      ah->nonce = value;
+    }
+  }
+
+  // CGI needs it as REMOTE_USER
+  if (ah->user != NULL) {
+    conn->request_info.remote_user = mg_strdup(ah->user);
+  } else {
+    return 0;
+  }
+
+  return 1;
+}
+#endif
+
+
+int mg_parse_header(const char *str, const char *var_name, char *buf,
+                    size_t buf_size) {
+  int ch = ' ', len = 0, n = strlen(var_name);
+  const char *p, *s = str == NULL ? NULL : strstr(str, var_name);
+
+  if (s != NULL && s[n] == '=' && s[n + 1] != '\0') {
+    s += n + 1;
+    if (*s == '"' || *s == '\'') {
+      ch = *s++;
+    }
+    if (*s != '\0' && (((p = strchr(s, ch)) != NULL &&
+                        (size_t) (p - s) < buf_size) ||
+                       (p == NULL && ch == ' ' && strlen(s) < buf_size &&
+                        (p = s + strlen(s)) != NULL))) {
+      len = p - s;
+      memcpy(buf, s, len);
+      buf[len] = '\0';
+    }
+  }
+
+  return len;
+}
+
 static void open_local_endpoint(struct connection *conn) {
   char path[MAX_PATH_SIZE] = {'\0'};
   file_stat_t st;
@@ -1916,6 +2373,11 @@ static void open_local_endpoint(struct connection *conn) {
     send_options(conn);
   } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, "%s", "HTTP/1.1 404 Not Found\r\n\r\n");
+#ifndef NO_AUTH
+  } else if ((!is_put_or_delete_request(conn) && !is_authorized(conn, path)) ||
+             (is_put_or_delete_request(conn) && !is_authorized_for_put(conn))) {
+    send_authorization_request(conn);
+#endif
 #ifndef NO_DAV
   } else if (!strcmp(conn->mg_conn.request_method, "PROPFIND")) {
     propfind(conn, path, &st);
@@ -1970,8 +2432,7 @@ static void process_request(struct connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
 
   if (conn->request_len == 0 &&
-      (conn->request_len = get_request_len((unsigned char  *) io->buf,
-                                           io->len)) > 0) {
+      (conn->request_len = get_request_len(io->buf, io->len)) > 0) {
     // If request is buffered in, remove it from the iobuf. This is because
     // iobuf could be reallocated, and pointers in parsed request could
     // become invalid.
@@ -2023,10 +2484,10 @@ static void read_from_cgi(struct connection *conn) {
   }
 }
 
-static int should_keep_alive(const struct connection *conn) {
-  const char *method = conn->mg_conn.request_method;
-  const char *http_version = conn->mg_conn.http_version;
-  const char *header = mg_get_header(&conn->mg_conn, "Connection");
+static int should_keep_alive(const struct mg_connection *conn) {
+  const char *method = conn->request_method;
+  const char *http_version = conn->http_version;
+  const char *header = mg_get_header(conn, "Connection");
   return method != NULL && !strcmp(method, "GET") &&
     ((header != NULL && !strcmp(header, "keep-alive")) ||
      (header == NULL && http_version && !strcmp(http_version, "1.1")));
@@ -2034,7 +2495,8 @@ static int should_keep_alive(const struct connection *conn) {
 
 static void close_local_endpoint(struct connection *conn) {
   // Must be done before free()
-  int keep_alive = should_keep_alive(conn) && conn->endpoint_type == EP_FILE;
+  int keep_alive = should_keep_alive(&conn->mg_conn) &&
+    conn->endpoint_type == EP_FILE;
 
   switch (conn->endpoint_type) {
     case EP_FILE: close(conn->endpoint.fd); break;
@@ -2226,7 +2688,8 @@ static void set_default_option_values(char **opts) {
 // Valid listening port spec is: [ip_address:]port, e.g. "80", "127.0.0.1:3128"
 static int parse_port_string(const char *str, union socket_address *sa) {
   unsigned int a, b, c, d, port;
-#if defined(USE_IPV6)
+  int len = 0;
+#ifdef USE_IPV6
   char buf[100];
 #endif
 
@@ -2236,25 +2699,25 @@ static int parse_port_string(const char *str, union socket_address *sa) {
   memset(sa, 0, sizeof(*sa));
   sa->sin.sin_family = AF_INET;
 
-  if (sscanf(str, "%u.%u.%u.%u:%u", &a, &b, &c, &d, &port) == 5) {
+  if (sscanf(str, "%u.%u.%u.%u:%u%n", &a, &b, &c, &d, &port, &len) == 5) {
     // Bind to a specific IPv4 address, e.g. 192.168.1.5:8080
     sa->sin.sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
     sa->sin.sin_port = htons((uint16_t) port);
 #if defined(USE_IPV6)
   } else if (sscanf(str, "[%49[^]]]:%d%n", buf, &port, &len) == 2 &&
-             inet_pton(AF_INET6, buf, &so->lsa.sin6.sin6_addr)) {
+             inet_pton(AF_INET6, buf, &sa->sin6.sin6_addr)) {
     // IPv6 address, e.g. [3ffe:2a00:100:7031::1]:8080
-    so->lsa.sin6.sin6_family = AF_INET6;
-    so->lsa.sin6.sin6_port = htons((uint16_t) port);
+    sa->sin6.sin6_family = AF_INET6;
+    sa->sin6.sin6_port = htons((uint16_t) port);
 #endif
-  } else if (sscanf(str, "%u", &port) == 1) {
+  } else if (sscanf(str, "%u%n", &port, &len) == 1) {
     // If only port is specified, bind to IPv4, INADDR_ANY
     sa->sin.sin_port = htons((uint16_t) port);
   } else {
     port = 0;   // Parsing failure. Make port invalid.
   }
 
-  return port > 0 && port < 0xffff;
+  return port > 0 && port < 0xffff && str[len] == '\0';
 }
 
 const char *mg_set_option(struct mg_server *server, const char *name,
@@ -2288,7 +2751,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
 }
 
 const char *mg_get_option(const struct mg_server *server, const char *name) {
-  const char *const *opts = server->config_options;
+  const char **opts = (const char **) server->config_options;
   int i = get_option_index(name);
   return i == -1 ? NULL : opts[i] == NULL ? "" : opts[i];
 }
