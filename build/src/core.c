@@ -75,6 +75,7 @@ typedef struct _stati64 file_stat_t;
 #endif
 #else
 #include <inttypes.h>
+#include <dirent.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <netinet/in.h>
@@ -91,6 +92,7 @@ typedef struct stat file_stat_t;
 #define INVALID_SOCKET ((sock_t) -1)
 #define INT64_FMT PRId64
 #define to64(x) strtoll(x, NULL, 10)
+#define __cdecl
 #endif
 
 #include "core.h"
@@ -117,6 +119,7 @@ struct linked_list_link { struct linked_list_link *prev, *next; };
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
 #define ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
+#define PASSWORDS_FILE_NAME ".htpasswd"
 #define MONGOOSE_VERSION "5.0"
 
 // Extra HTTP headers to send in every static file reply
@@ -125,8 +128,8 @@ struct linked_list_link { struct linked_list_link *prev, *next; };
 #endif
 
 #ifdef ENABLE_DBG
-#define DBG(x) do { printf("%s::%s ", __FILE__, __func__); \
-  printf x; putchar('\n'); fflush(stdout); } while(0)
+#define DBG(x) do { printf("%-20s ", __func__); printf x; putchar('\n'); \
+  fflush(stdout); } while(0)
 #else
 #define DBG(x)
 #endif
@@ -1056,8 +1059,7 @@ int mg_write(struct mg_connection *c, const void *buf, int len) {
   return ret;
 }
 
-#if defined(USE_WEBSOCKET)
-
+#ifndef NO_WEBSOCKET
 static int is_big_endian(void) {
   static const int n = 1;
   return ((char *) &n)[0] == 0;
@@ -1331,7 +1333,7 @@ static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
     send_websocket_handshake(conn, key);
   }
 }
-#endif // !USE_WEBSOCKET
+#endif // !NO_WEBSOCKET
 
 static int is_error(int n) {
   return n == 0 || (n < 0 && errno != EINTR && errno != EAGAIN);
@@ -1598,7 +1600,7 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   struct mg_connection *c = &conn->mg_conn;
 
   c->content = loc->buf;
-#ifdef USE_WEBSOCKET
+#ifndef NO_WEBSOCKET
   if (conn->mg_conn.is_websocket) {
     do { } while (deliver_websocket_frame(conn));
   } else
@@ -1609,12 +1611,200 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   }
 }
 
+#ifndef NO_DIRECTORY_LISTING
+struct dir_entry {
+  struct mg_connection *conn;
+  char *file_name;
+  file_stat_t st;
+};
+
+static void mg_url_encode(const char *src, char *dst, size_t dst_len) {
+  static const char *dont_escape = "._-$,;~()";
+  static const char *hex = "0123456789abcdef";
+  const char *end = dst + dst_len - 1;
+
+  for (; *src != '\0' && dst < end; src++, dst++) {
+    if (isalnum(*(const unsigned char *) src) ||
+        strchr(dont_escape, * (const unsigned char *) src) != NULL) {
+      *dst = *src;
+    } else if (dst + 2 < end) {
+      dst[0] = '%';
+      dst[1] = hex[(* (const unsigned char *) src) >> 4];
+      dst[2] = hex[(* (const unsigned char *) src) & 0xf];
+      dst += 2;
+    }
+  }
+
+  *dst = '\0';
+}
+
+static int mg_write_chunked(struct connection *conn, const char *buf, int len) {
+  char chunk_size[50];
+  int n = snprintf(chunk_size, sizeof(chunk_size), "%X\r\n", len);
+
+  n = spool(&conn->remote_iobuf, chunk_size, n);
+  n += spool(&conn->remote_iobuf, buf, len);
+  n += spool(&conn->remote_iobuf, "\r\n", 2);
+
+  return n;
+}
+
+
+static void print_dir_entry(const struct dir_entry *de) {
+  char size[64], mod[64], href[MAX_PATH_SIZE * 3], chunk[MAX_PATH_SIZE * 4];
+  int64_t fsize = de->st.st_size;
+  int is_dir = S_ISDIR(de->st.st_mtime), n;
+  const char *slash = is_dir ? "/" : "";
+
+  if (is_dir) {
+    snprintf(size, sizeof(size), "%s", "[DIRECTORY]");
+  } else {
+     // We use (signed) cast below because MSVC 6 compiler cannot
+     // convert unsigned __int64 to double.
+    if (fsize < 1024) {
+      snprintf(size, sizeof(size), "%d", (int) fsize);
+    } else if (fsize < 0x100000) {
+      snprintf(size, sizeof(size), "%.1fk", (double) fsize / 1024.0);
+    } else if (fsize < 0x40000000) {
+      snprintf(size, sizeof(size), "%.1fM", (double) fsize / 1048576);
+    } else {
+      snprintf(size, sizeof(size), "%.1fG", (double) fsize / 1073741824);
+    }
+  }
+  strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&de->st.st_mtime));
+  mg_url_encode(de->file_name, href, sizeof(href));
+  n = snprintf(chunk, sizeof(chunk), "<tr><td><a href=\"%s%s%s\">%s%s</a></td>"
+           "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
+           de->conn->uri, href, slash, de->file_name, slash, mod, size);
+  mg_write_chunked((struct connection *) de->conn, chunk, n);
+}
+
+static int must_hide_file(struct connection *conn, const char *path) {
+  const char *pw_pattern = "**" PASSWORDS_FILE_NAME "$";
+  const char *pattern = conn->server->config_options[HIDE_FILES_PATTERN];
+  return match_prefix(pw_pattern, strlen(pw_pattern), path) > 0 ||
+    (pattern != NULL && match_prefix(pattern, strlen(pattern), path) > 0);
+}
+
+static int scan_directory(struct connection *conn, DIR *dirp, const char *dir,
+                          struct dir_entry **arr) {
+  char path[MAX_PATH_SIZE];
+  struct dir_entry *p;
+  struct dirent *dp;
+  int arr_size = 0, arr_ind = 0;
+
+  while ((dp = readdir(dirp)) != NULL) {
+    // Do not show current dir and hidden files
+    if (!strcmp(dp->d_name, ".") ||
+        !strcmp(dp->d_name, "..") ||
+        must_hide_file(conn, dp->d_name)) {
+      continue;
+    }
+    snprintf(path, sizeof(path), "%s%c%s", dir, '/', dp->d_name);
+
+    // Resize the array if nesessary
+    if (arr_ind >= arr_size - 1) {
+      if ((p = (struct dir_entry *)
+           realloc(*arr, (100 + arr_size) * sizeof(**arr))) != NULL) {
+        // Memset struct to zero, otherwize st_mtime will have garbage which
+        // can make strftime() segfault, see
+        // http://code.google.com/p/mongoose/issues/detail?id=79
+        memset(p + arr_size, 0, sizeof(**arr) * arr_size);
+
+        *arr = p;
+        arr_size += 100;
+      }
+    }
+
+    if (arr_ind < arr_size) {
+      (*arr)[arr_ind].conn = &conn->mg_conn;
+      (*arr)[arr_ind].file_name = strdup(dp->d_name);
+      stat(path, &(*arr)[arr_ind].st);
+      arr_ind++;
+    }
+  }
+
+  return arr_ind;
+}
+
+// Sort directory entries by size, or name, or modification time.
+// On windows, __cdecl specification is needed in case if project is built
+// with __stdcall convention. qsort always requires __cdels callback.
+static int __cdecl compare_dir_entries(const void *p1, const void *p2) {
+  const struct dir_entry *a = (const struct dir_entry *) p1,
+        *b = (const struct dir_entry *) p2;
+  const char *qs = a->conn->query_string ? a->conn->query_string : "na";
+  int cmp_result = 0;
+
+  if (S_ISDIR(a->st.st_mtime) && !S_ISDIR(b->st.st_mtime)) {
+    return -1;  // Always put directories on top
+  } else if (!S_ISDIR(a->st.st_mtime) && S_ISDIR(b->st.st_mtime)) {
+    return 1;   // Always put directories on top
+  } else if (*qs == 'n') {
+    cmp_result = strcmp(a->file_name, b->file_name);
+  } else if (*qs == 's') {
+    cmp_result = a->st.st_size == b->st.st_size ? 0 :
+      a->st.st_size > b->st.st_size ? 1 : -1;
+  } else if (*qs == 'd') {
+    cmp_result = a->st.st_mtime == b->st.st_mtime ? 0 :
+      a->st.st_mtime > b->st.st_mtime ? 1 : -1;
+  }
+
+  return qs[1] == 'd' ? -cmp_result : cmp_result;
+}
+
+static void send_directory_listing(struct connection *conn, const char *dir) {
+  char buf[2000];
+  struct dir_entry *arr = NULL;
+  DIR *dirp = opendir(dir);
+  int i, num_entries, sort_direction = conn->mg_conn.query_string != NULL &&
+    conn->mg_conn.query_string[1] == 'd' ? 'a' : 'd';
+
+  if (dirp == NULL) {
+    send_http_error(conn, "%s", "HTTP/1.1 500 Cannot open directory\r\n\r\n");
+    return;
+  }
+
+  snprintf(buf, sizeof(buf), "%s",
+           "HTTP/1.1 200 OK\r\n"
+           "Transfer-Encoding: Chunked\r\n"
+           "Content-Type: text/html; charset=utf-8\r\n\r\n");
+  spool(&conn->remote_iobuf, buf, strlen(buf));
+
+  snprintf(buf, sizeof(buf),
+      "<html><head><title>Index of %s</title>"
+      "<style>th {text-align: left;}</style></head>"
+      "<body><h1>Index of %s</h1><pre><table cellpadding=\"0\">"
+      "<tr><th><a href=\"?n%c\">Name</a></th>"
+      "<th><a href=\"?d%c\">Modified</a></th>"
+      "<th><a href=\"?s%c\">Size</a></th></tr>"
+      "<tr><td colspan=\"3\"><hr></td></tr>",
+      conn->mg_conn.uri, conn->mg_conn.uri,
+      sort_direction, sort_direction, sort_direction);
+  mg_write_chunked(conn, buf, strlen(buf));
+
+  num_entries = scan_directory(conn, dirp, dir, &arr);
+  closedir(dirp);
+
+  qsort(arr, num_entries, sizeof(arr[0]), compare_dir_entries);
+  for (i = 0; i < num_entries; i++) {
+    print_dir_entry(&arr[i]);
+    free(arr[i].file_name);
+  }
+  free(arr);
+
+  mg_write_chunked(conn, "", 0);  // Write final zero-length chunk
+  conn->flags |= CONN_SPOOL_DONE;
+}
+#endif  // NO_DIRECTORY_LISTING
+
 static void open_local_endpoint(struct connection *conn) {
   char path[MAX_PATH_SIZE] = {'\0'};
   file_stat_t st;
   int exists = 0, is_directory = 0;
   const char *cl_hdr = mg_get_header(&conn->mg_conn, "Content-Length");
   const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
+  const char *dir_lst = conn->server->config_options[ENABLE_DIRECTORY_LISTING];
 
   conn->mg_conn.content_len = cl_hdr == NULL ? 0 : to64(cl_hdr);
 
@@ -1633,7 +1823,15 @@ static void open_local_endpoint(struct connection *conn) {
   if (!exists) {
     send_http_error(conn, "%s", "HTTP/1.1 404 Not Found\r\n\r\n");
   } else if (is_directory && !find_index_file(conn, path, sizeof(path), &st)) {
-    send_http_error(conn, "%s", "HTTP/1.1 403 Listing Denied\r\n\r\n");
+    if (!mg_strcasecmp(dir_lst, "yes")) {
+#ifndef NO_DIRECTORY_LISTING
+      send_directory_listing(conn, path);
+#else
+      send_http_error(conn, "%s", "HTTP/1.1 501 Not Implemented\r\n\r\n");
+#endif
+    } else {
+      send_http_error(conn, "%s", "HTTP/1.1 403 Listing Denied\r\n\r\n");
+    }
   } else if (match_prefix(LUA_SCRIPT_PATTERN, 6, path) > 0) {
     send_http_error(conn, "%s", "HTTP/1.1 501 Not Implemented\r\n\r\n");
     conn->flags |= CONN_SPOOL_DONE;
@@ -1690,7 +1888,7 @@ static void process_request(struct connection *conn) {
     // Invalid request, or request is too big: close the connection
     conn->flags |= CONN_CLOSE;
   } else if (conn->request_len > 0 && conn->endpoint_type == EP_NONE) {
-#ifdef USE_WEBSOCKET
+#ifndef NO_WEBSOCKET
     send_websocket_handshake_if_requested(&conn->mg_conn);
 #endif
     send_continue_if_expected(conn);
