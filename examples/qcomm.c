@@ -1,3 +1,7 @@
+#include <unistd.h>
+#include <string.h>
+#include "core.h"
+
 static void iterate_callback(struct mg_connection *c, void *param) {
   if (c->is_websocket) {
     char buf[20];
@@ -32,7 +36,6 @@ static int handler(struct mg_connection *conn) {
 
   mg_websocket_write(conn, 1, conn->content, conn->content_len);
 
-  DBG(("WS msg len: %d", conn->content_len));
   return conn->content_len == 4 && !memcmp(conn->content, "exit", 4);
 }
 
