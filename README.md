@@ -21,7 +21,6 @@ simplicity by carefully selected list of features:
   one single-click executable with **no dependencies**: forget LAMP!
 - Support for CGI, SSL, SSI, Digest (MD5) authorization, Websocket, WEbDAV
 - Resumed download, URL rewrite, file blacklist, IP-based ACL, Windows service
-- Download speed limit based on client subnet or URI pattern
 - Simple and clean embedding API,
   [mongoose.h](https://github.com/cesanta/mongoose/blob/master/mongoose.h).
   The source is in single
