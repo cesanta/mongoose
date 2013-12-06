@@ -153,6 +153,13 @@ struct uri_handler {
   mg_handler_t handler;
 };
 
+// For directory listing and WevDAV support
+struct dir_entry {
+  struct connection *conn;
+  char *file_name;
+  file_stat_t st;
+};
+
 // NOTE(lsm): this enum shoulds be in sync with the config_options.
 enum {
   ACCESS_CONTROL_LIST, ACCESS_LOG_FILE, AUTH_DOMAIN, CGI_INTERPRETER,
@@ -1611,12 +1618,58 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   }
 }
 
-#ifndef NO_DIRECTORY_LISTING
-struct dir_entry {
-  struct mg_connection *conn;
-  char *file_name;
-  file_stat_t st;
-};
+#if !defined(NO_DIRECTORY_LISTING) || !defined(NO_DAV)
+static int must_hide_file(struct connection *conn, const char *path) {
+  const char *pw_pattern = "**" PASSWORDS_FILE_NAME "$";
+  const char *pattern = conn->server->config_options[HIDE_FILES_PATTERN];
+  return match_prefix(pw_pattern, strlen(pw_pattern), path) > 0 ||
+    (pattern != NULL && match_prefix(pattern, strlen(pattern), path) > 0);
+}
+
+static int scan_directory(struct connection *conn, const char *dir,
+                          struct dir_entry **arr) {
+  char path[MAX_PATH_SIZE];
+  struct dir_entry *p;
+  struct dirent *dp;
+  int arr_size = 0, arr_ind = 0;
+  DIR *dirp;
+
+  if ((dirp = (opendir(dir))) == NULL) return 0;
+
+  while ((dp = readdir(dirp)) != NULL) {
+    // Do not show current dir and hidden files
+    if (!strcmp(dp->d_name, ".") ||
+        !strcmp(dp->d_name, "..") ||
+        must_hide_file(conn, dp->d_name)) {
+      continue;
+    }
+    snprintf(path, sizeof(path), "%s%c%s", dir, '/', dp->d_name);
+
+    // Resize the array if nesessary
+    if (arr_ind >= arr_size - 1) {
+      if ((p = (struct dir_entry *)
+           realloc(*arr, (100 + arr_size) * sizeof(**arr))) != NULL) {
+        // Memset struct to zero, otherwize st_mtime will have garbage which
+        // can make strftime() segfault, see
+        // http://code.google.com/p/mongoose/issues/detail?id=79
+        memset(p + arr_size, 0, sizeof(**arr) * arr_size);
+
+        *arr = p;
+        arr_size += 100;
+      }
+    }
+
+    if (arr_ind < arr_size) {
+      (*arr)[arr_ind].conn = conn;
+      (*arr)[arr_ind].file_name = strdup(dp->d_name);
+      stat(path, &(*arr)[arr_ind].st);
+      arr_ind++;
+    }
+  }
+  closedir(dirp);
+
+  return arr_ind;
+}
 
 static void mg_url_encode(const char *src, char *dst, size_t dst_len) {
   static const char *dont_escape = "._-$,;~()";
@@ -1637,7 +1690,9 @@ static void mg_url_encode(const char *src, char *dst, size_t dst_len) {
 
   *dst = '\0';
 }
+#endif  // !NO_DIRECTORY_LISTING || !NO_DAV
 
+#ifndef NO_DIRECTORY_LISTING
 static int mg_write_chunked(struct connection *conn, const char *buf, int len) {
   char chunk_size[50];
   int n = snprintf(chunk_size, sizeof(chunk_size), "%X\r\n", len);
@@ -1675,56 +1730,8 @@ static void print_dir_entry(const struct dir_entry *de) {
   mg_url_encode(de->file_name, href, sizeof(href));
   n = snprintf(chunk, sizeof(chunk), "<tr><td><a href=\"%s%s%s\">%s%s</a></td>"
            "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
-           de->conn->uri, href, slash, de->file_name, slash, mod, size);
+           de->conn->mg_conn.uri, href, slash, de->file_name, slash, mod, size);
   mg_write_chunked((struct connection *) de->conn, chunk, n);
-}
-
-static int must_hide_file(struct connection *conn, const char *path) {
-  const char *pw_pattern = "**" PASSWORDS_FILE_NAME "$";
-  const char *pattern = conn->server->config_options[HIDE_FILES_PATTERN];
-  return match_prefix(pw_pattern, strlen(pw_pattern), path) > 0 ||
-    (pattern != NULL && match_prefix(pattern, strlen(pattern), path) > 0);
-}
-
-static int scan_directory(struct connection *conn, DIR *dirp, const char *dir,
-                          struct dir_entry **arr) {
-  char path[MAX_PATH_SIZE];
-  struct dir_entry *p;
-  struct dirent *dp;
-  int arr_size = 0, arr_ind = 0;
-
-  while ((dp = readdir(dirp)) != NULL) {
-    // Do not show current dir and hidden files
-    if (!strcmp(dp->d_name, ".") ||
-        !strcmp(dp->d_name, "..") ||
-        must_hide_file(conn, dp->d_name)) {
-      continue;
-    }
-    snprintf(path, sizeof(path), "%s%c%s", dir, '/', dp->d_name);
-
-    // Resize the array if nesessary
-    if (arr_ind >= arr_size - 1) {
-      if ((p = (struct dir_entry *)
-           realloc(*arr, (100 + arr_size) * sizeof(**arr))) != NULL) {
-        // Memset struct to zero, otherwize st_mtime will have garbage which
-        // can make strftime() segfault, see
-        // http://code.google.com/p/mongoose/issues/detail?id=79
-        memset(p + arr_size, 0, sizeof(**arr) * arr_size);
-
-        *arr = p;
-        arr_size += 100;
-      }
-    }
-
-    if (arr_ind < arr_size) {
-      (*arr)[arr_ind].conn = &conn->mg_conn;
-      (*arr)[arr_ind].file_name = strdup(dp->d_name);
-      stat(path, &(*arr)[arr_ind].st);
-      arr_ind++;
-    }
-  }
-
-  return arr_ind;
 }
 
 // Sort directory entries by size, or name, or modification time.
@@ -1733,7 +1740,8 @@ static int scan_directory(struct connection *conn, DIR *dirp, const char *dir,
 static int __cdecl compare_dir_entries(const void *p1, const void *p2) {
   const struct dir_entry *a = (const struct dir_entry *) p1,
         *b = (const struct dir_entry *) p2;
-  const char *qs = a->conn->query_string ? a->conn->query_string : "na";
+  const char *qs = a->conn->mg_conn.query_string ?
+    a->conn->mg_conn.query_string : "na";
   int cmp_result = 0;
 
   if (S_ISDIR(a->st.st_mtime) && !S_ISDIR(b->st.st_mtime)) {
@@ -1756,14 +1764,8 @@ static int __cdecl compare_dir_entries(const void *p1, const void *p2) {
 static void send_directory_listing(struct connection *conn, const char *dir) {
   char buf[2000];
   struct dir_entry *arr = NULL;
-  DIR *dirp = opendir(dir);
   int i, num_entries, sort_direction = conn->mg_conn.query_string != NULL &&
     conn->mg_conn.query_string[1] == 'd' ? 'a' : 'd';
-
-  if (dirp == NULL) {
-    send_http_error(conn, "%s", "HTTP/1.1 500 Cannot open directory\r\n\r\n");
-    return;
-  }
 
   snprintf(buf, sizeof(buf), "%s",
            "HTTP/1.1 200 OK\r\n"
@@ -1783,9 +1785,7 @@ static void send_directory_listing(struct connection *conn, const char *dir) {
       sort_direction, sort_direction, sort_direction);
   mg_write_chunked(conn, buf, strlen(buf));
 
-  num_entries = scan_directory(conn, dirp, dir, &arr);
-  closedir(dirp);
-
+  num_entries = scan_directory(conn, dir, &arr);
   qsort(arr, num_entries, sizeof(arr[0]), compare_dir_entries);
   for (i = 0; i < num_entries; i++) {
     print_dir_entry(&arr[i]);
@@ -1797,6 +1797,98 @@ static void send_directory_listing(struct connection *conn, const char *dir) {
   conn->flags |= CONN_SPOOL_DONE;
 }
 #endif  // NO_DIRECTORY_LISTING
+
+#ifndef NO_DAV
+static void print_props(struct connection *conn, const char *uri,
+                        file_stat_t *stp) {
+  char mtime[64], buf[MAX_PATH_SIZE];
+
+  gmt_time_string(mtime, sizeof(mtime), &stp->st_mtime);
+  snprintf(buf, sizeof(buf),
+      "<d:response>"
+       "<d:href>%s</d:href>"
+       "<d:propstat>"
+        "<d:prop>"
+         "<d:resourcetype>%s</d:resourcetype>"
+         "<d:getcontentlength>%" INT64_FMT "</d:getcontentlength>"
+         "<d:getlastmodified>%s</d:getlastmodified>"
+        "</d:prop>"
+        "<d:status>HTTP/1.1 200 OK</d:status>"
+       "</d:propstat>"
+      "</d:response>\n",
+      uri, S_ISDIR(stp->st_mode) ? "<d:collection/>" : "",
+      (int64_t) stp->st_size, mtime);
+  spool(&conn->remote_iobuf, buf, strlen(buf));
+}
+
+static void propfind(struct connection *conn, const char *path,
+                     file_stat_t *stp) {
+  static const char header[] = "HTTP/1.1 207 Multi-Status\r\n"
+    "Connection: close\r\n"
+    "Content-Type: text/xml; charset=utf-8\r\n\r\n"
+    "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+    "<d:multistatus xmlns:d='DAV:'>\n";
+  static const char footer[] = "</d:multistatus>";
+  const char *depth = mg_get_header(&conn->mg_conn, "Depth"),
+        *list_dir = conn->server->config_options[ENABLE_DIRECTORY_LISTING];
+
+  conn->mg_conn.status_code = 207;
+  spool(&conn->remote_iobuf, header, sizeof(header) - 1);
+
+  // Print properties for the requested resource itself
+  print_props(conn, conn->mg_conn.uri, stp);
+
+  // If it is a directory, print directory entries too if Depth is not 0
+  if (S_ISDIR(stp->st_mode) && !mg_strcasecmp(list_dir, "yes") &&
+      (depth == NULL || strcmp(depth, "0") != 0)) {
+    struct dir_entry *arr = NULL;
+    int i, num_entries = scan_directory(conn, path, &arr);
+
+    for (i = 0; i < num_entries; i++) {
+      char buf[MAX_PATH_SIZE], buf2[sizeof(buf) * 3];
+      struct dir_entry *de = &arr[i];
+
+      snprintf(buf, sizeof(buf), "%s%s", de->conn->mg_conn.uri, de->file_name);
+      mg_url_encode(buf, buf2, sizeof(buf2) - 1);
+      print_props(conn, buf2, &de->st);
+    }
+  }
+
+  spool(&conn->remote_iobuf, footer, sizeof(footer) - 1);
+  conn->flags |= CONN_SPOOL_DONE;
+}
+
+static void mkcol(struct connection *conn, const char *path) {
+  static const char err_201[] = "HTTP/1.1 201 Created\r\n\r\n";
+  static const char err_403[] = "HTTP/1.1 403 Forbidden\r\n\r\n";
+  static const char err_405[] = "HTTP/1.1 405 Method Not Allowed\r\n\r\n";
+  static const char err_409[] = "HTTP/1.1 409 Conflict\r\n\r\n";
+  static const char err_415[] = "HTTP/1.1 415 Unsupported Media Type\r\n\r\n";
+  static const char err_500[] = "HTTP/1.1 500 Server Error\r\n\r\n";
+
+  if (conn->mg_conn.content_len > 0) {
+    spool(&conn->remote_iobuf, err_415, sizeof(err_415) - 1);
+  } else if (!mkdir(path, 0755)) {
+    spool(&conn->remote_iobuf, err_201, sizeof(err_201) - 1);
+  } else if (errno == EEXIST) {
+    spool(&conn->remote_iobuf, err_405, sizeof(err_405) - 1);
+  } else if (errno == EACCES) {
+    spool(&conn->remote_iobuf, err_403, sizeof(err_403) - 1);
+  } else if (errno == ENOENT) {
+    spool(&conn->remote_iobuf, err_409, sizeof(err_409) - 1);
+  } else {
+    spool(&conn->remote_iobuf, err_500, sizeof(err_500) - 1);
+  }
+  conn->flags |= CONN_SPOOL_DONE;
+}
+#endif //  NO_DAV
+
+static void send_options(struct connection *conn) {
+  static const char reply[] = "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, "
+    "CONNECT, PUT, DELETE, OPTIONS, PROPFIND, MKCOL\r\nDAV: 1\r\n\r\n";
+  spool(&conn->remote_iobuf, reply, sizeof(reply) - 1);
+  conn->flags |= CONN_SPOOL_DONE;
+}
 
 static void open_local_endpoint(struct connection *conn) {
   char path[MAX_PATH_SIZE] = {'\0'};
@@ -1820,7 +1912,17 @@ static void open_local_endpoint(struct connection *conn) {
   exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
   is_directory = S_ISDIR(st.st_mode);
 
-  if (!exists) {
+  if (!strcmp(conn->mg_conn.request_method, "OPTIONS")) {
+    send_options(conn);
+  } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
+    send_http_error(conn, "%s", "HTTP/1.1 404 Not Found\r\n\r\n");
+#ifndef NO_DAV
+  } else if (!strcmp(conn->mg_conn.request_method, "PROPFIND")) {
+    propfind(conn, path, &st);
+  } else if (!strcmp(conn->mg_conn.request_method, "MKCOL")) {
+    mkcol(conn, path);
+#endif
+  } else if (!exists) {
     send_http_error(conn, "%s", "HTTP/1.1 404 Not Found\r\n\r\n");
   } else if (is_directory && !find_index_file(conn, path, sizeof(path), &st)) {
     if (!mg_strcasecmp(dir_lst, "yes")) {
@@ -1834,7 +1936,6 @@ static void open_local_endpoint(struct connection *conn) {
     }
   } else if (match_prefix(LUA_SCRIPT_PATTERN, 6, path) > 0) {
     send_http_error(conn, "%s", "HTTP/1.1 501 Not Implemented\r\n\r\n");
-    conn->flags |= CONN_SPOOL_DONE;
   } else if (match_prefix(cgi_pat, strlen(cgi_pat), path) > 0) {
     if (strcmp(conn->mg_conn.request_method, "POST") &&
         strcmp(conn->mg_conn.request_method, "HEAD") &&
