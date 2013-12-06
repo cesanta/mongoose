@@ -66,9 +66,15 @@ void mg_set_error_handler(struct mg_server *, mg_handler_t);
 void mg_set_log_handler(struct mg_server*, mg_handler_t);
 const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
+int mg_iterate_over_connections(struct mg_server *,
+                                void (*func)(struct mg_connection *, void *),
+                                void *param);
 
 // Connection management functions
 int mg_write(struct mg_connection *, const void *buf, int len);
+int mg_websocket_write(struct mg_connection *, int opcode,
+                       const char *data, size_t data_len);
+
 const char *mg_get_header(const struct mg_connection *, const char *name);
 const char *mg_get_mime_type(const char *file_name);
 int mg_get_var(const struct mg_connection *conn,
