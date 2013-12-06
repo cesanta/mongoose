@@ -93,7 +93,6 @@ typedef struct stat file_stat_t;
 #define to64(x) strtoll(x, NULL, 10)
 #endif
 
-//#include "mongoose.h"
 #include "core.h"
 
 struct linked_list_link { struct linked_list_link *prev, *next; };
@@ -160,30 +159,6 @@ enum {
   SSL_CERTIFICATE, SSI_PATTERN, URL_REWRITES, NUM_OPTIONS
 };
 
-static const char *static_config_options[] = {
-  "access_control_list", NULL,
-  "access_log_file", NULL,
-  "auth_domain", "mydomain.com",
-  "cgi_interpreter", NULL,
-  "cgi_pattern", "**.cgi$|**.pl$|**.php$",
-  "document_root",  NULL,
-  "enable_directory_listing", "yes",
-  "error_log_file", NULL,
-  "extra_mime_types", NULL,
-  "global_auth_file", NULL,
-  "hide_files_patterns", NULL,
-  "idle_timeout_ms", "30000",
-  "index_files","index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
-  "listening_port", NULL,
-  "num_threads", "50",
-  "put_delete_auth_file", NULL,
-  "run_as_user", NULL,
-  "ssl_certificate", NULL,
-  "ssi_pattern", "**.shtml$|**.shtm$",
-  "url_rewrites", NULL,
-  NULL
-};
-
 struct mg_server {
   sock_t listening_sock;
   union socket_address lsa;   // Listening socket address
@@ -194,12 +169,14 @@ struct mg_server {
   sock_t ctl[2];  // Control socketpair. Used to wake up from select() call
 };
 
+// Expandable IO buffer
 struct iobuf {
   char *buf;    // Buffer that holds the data
   int size;     // Buffer size
   int len;      // Number of bytes currently in a buffer
 };
 
+// Local endpoint representation
 union endpoint {
   int fd;                   // Opened regular local file
   sock_t cgi_sock;          // CGI socket
@@ -284,31 +261,34 @@ static const struct {
   {NULL,  0, NULL}
 };
 
+static const char *static_config_options[] = {
+  "access_control_list", NULL,
+  "access_log_file", NULL,
+  "auth_domain", "mydomain.com",
+  "cgi_interpreter", NULL,
+  "cgi_pattern", "**.cgi$|**.pl$|**.php$",
+  "document_root",  NULL,
+  "enable_directory_listing", "yes",
+  "error_log_file", NULL,
+  "extra_mime_types", NULL,
+  "global_auth_file", NULL,
+  "hide_files_patterns", NULL,
+  "idle_timeout_ms", "30000",
+  "index_files","index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
+  "listening_port", NULL,
+  "num_threads", "50",
+  "put_delete_auth_file", NULL,
+  "run_as_user", NULL,
+  "ssl_certificate", NULL,
+  "ssi_pattern", "**.shtml$|**.shtm$",
+  "url_rewrites", NULL,
+  NULL
+};
+
 static const char *static_month_names[] = {
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
-
-const char **mg_get_valid_option_names(void) {
-  return static_config_options;
-}
-
-static int get_option_index(const char *name) {
-  int i;
-
-  for (i = 0; static_config_options[i * 2] != NULL; i++) {
-    if (strcmp(static_config_options[i * 2], name) == 0) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-const char *mg_get_option(const struct mg_server *srv, const char *name) {
-  int i = get_option_index(name);
-  return i == -1 ? NULL : srv->config_options[i] == NULL ? "" :
-    srv->config_options[i];
-}
 
 int mg_start_thread(void *(*f)(void *), void *p) {
 #ifdef _WIN32
@@ -477,7 +457,7 @@ static pid_t start_process(const char *interp, const char *cmd, const char *env,
 
   return pid;
 }
-#endif
+#endif  // _WIN32
 
 // This structure helps to create an environment for the spawned CGI program.
 // Environment is an array of "VARIABLE=VALUE\0" ASCIIZ strings,
@@ -688,40 +668,6 @@ static char *mg_strdup(const char *str) {
     strcpy(copy, str);
   }
   return copy;
-}
-
-// Valid listening port spec is: [ip_address:]port, e.g. "80", "127.0.0.1:3128"
-static int parse_port_string(const char *str, union socket_address *sa) {
-  unsigned int a, b, c, d, port;
-#if defined(USE_IPV6)
-  char buf[100];
-#endif
-
-  // MacOS needs that. If we do not zero it, subsequent bind() will fail.
-  // Also, all-zeroes in the socket address means binding to all addresses
-  // for both IPv4 and IPv6 (INADDR_ANY and IN6ADDR_ANY_INIT).
-  memset(sa, 0, sizeof(*sa));
-  sa->sin.sin_family = AF_INET;
-
-  if (sscanf(str, "%u.%u.%u.%u:%u", &a, &b, &c, &d, &port) == 5) {
-    // Bind to a specific IPv4 address, e.g. 192.168.1.5:8080
-    sa->sin.sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
-    sa->sin.sin_port = htons((uint16_t) port);
-#if defined(USE_IPV6)
-  } else if (sscanf(str, "[%49[^]]]:%d%n", buf, &port, &len) == 2 &&
-             inet_pton(AF_INET6, buf, &so->lsa.sin6.sin6_addr)) {
-    // IPv6 address, e.g. [3ffe:2a00:100:7031::1]:8080
-    so->lsa.sin6.sin6_family = AF_INET6;
-    so->lsa.sin6.sin6_port = htons((uint16_t) port);
-#endif
-  } else if (sscanf(str, "%u", &port) == 1) {
-    // If only port is specified, bind to IPv4, INADDR_ANY
-    sa->sin.sin_port = htons((uint16_t) port);
-  } else {
-    port = 0;   // Parsing failure. Make port invalid.
-  }
-
-  return port > 0 && port < 0xffff;
 }
 
 static int isbyte(int n) {
@@ -1923,7 +1869,7 @@ void mg_destroy_server(struct mg_server **server) {
 
 // Apply function to all active connections. Return number of active
 // connections. Function could be NULL.
-static int mg_iterate_over_connections(struct mg_server *server,
+int mg_iterate_over_connections(struct mg_server *server,
                                 void (*func)(struct mg_connection *, void *),
                                 void *param) {
   struct linked_list_link *lp, *tmp;
@@ -1949,6 +1895,67 @@ void mg_add_uri_handler(struct mg_server *server, const char *uri,
     p->uri = mg_strdup(uri);
     p->handler = handler;
   }
+}
+
+const char **mg_get_valid_option_names(void) {
+  return static_config_options;
+}
+
+static int get_option_index(const char *name) {
+  int i;
+
+  for (i = 0; static_config_options[i * 2] != NULL; i++) {
+    if (strcmp(static_config_options[i * 2], name) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static void set_default_option_values(char **opts) {
+  const char *value, **all_opts = mg_get_valid_option_names();
+  int i;
+
+  for (i = 0; all_opts[i * 2] != NULL; i++) {
+    value = all_opts[i * 2 + 1];
+    if (opts[i] == NULL && value != NULL) {
+      opts[i] = mg_strdup(value);
+    }
+  }
+}
+
+// Valid listening port spec is: [ip_address:]port, e.g. "80", "127.0.0.1:3128"
+static int parse_port_string(const char *str, union socket_address *sa) {
+  unsigned int a, b, c, d, port;
+#if defined(USE_IPV6)
+  char buf[100];
+#endif
+
+  // MacOS needs that. If we do not zero it, subsequent bind() will fail.
+  // Also, all-zeroes in the socket address means binding to all addresses
+  // for both IPv4 and IPv6 (INADDR_ANY and IN6ADDR_ANY_INIT).
+  memset(sa, 0, sizeof(*sa));
+  sa->sin.sin_family = AF_INET;
+
+  if (sscanf(str, "%u.%u.%u.%u:%u", &a, &b, &c, &d, &port) == 5) {
+    // Bind to a specific IPv4 address, e.g. 192.168.1.5:8080
+    sa->sin.sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
+    sa->sin.sin_port = htons((uint16_t) port);
+#if defined(USE_IPV6)
+  } else if (sscanf(str, "[%49[^]]]:%d%n", buf, &port, &len) == 2 &&
+             inet_pton(AF_INET6, buf, &so->lsa.sin6.sin6_addr)) {
+    // IPv6 address, e.g. [3ffe:2a00:100:7031::1]:8080
+    so->lsa.sin6.sin6_family = AF_INET6;
+    so->lsa.sin6.sin6_port = htons((uint16_t) port);
+#endif
+  } else if (sscanf(str, "%u", &port) == 1) {
+    // If only port is specified, bind to IPv4, INADDR_ANY
+    sa->sin.sin_port = htons((uint16_t) port);
+  } else {
+    port = 0;   // Parsing failure. Make port invalid.
+  }
+
+  return port > 0 && port < 0xffff;
 }
 
 const char *mg_set_option(struct mg_server *server, const char *name,
@@ -1981,10 +1988,14 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   return error_msg;
 }
 
+const char *mg_get_option(const struct mg_server *server, const char *name) {
+  const char *const *opts = server->config_options;
+  int i = get_option_index(name);
+  return i == -1 ? NULL : opts[i] == NULL ? "" : opts[i];
+}
+
 struct mg_server *mg_create_server(void *server_data) {
   struct mg_server *server = (struct mg_server *) calloc(1, sizeof(*server));
-  const char *value;
-  int i;
 
 #ifdef _WIN32
   WSADATA data;
@@ -1996,71 +2007,7 @@ struct mg_server *mg_create_server(void *server_data) {
   mg_socketpair(server->ctl);
   server->server_data = server_data;
   server->listening_sock = INVALID_SOCKET;
-
-  // Set default options values
-  for (i = 0; static_config_options[i * 2] != NULL; i++) {
-    value = static_config_options[i * 2 + 1];
-    if (server->config_options[i] == NULL && value != NULL) {
-      server->config_options[i] = mg_strdup(value);
-    }
-  }
+  set_default_option_values(server->config_options);
 
   return server;
-}
-
-// End of library, start of the application code
-
-static void iterate_callback(struct mg_connection *c, void *param) {
-  if (c->is_websocket) {
-    char buf[20];
-    int len = snprintf(buf, sizeof(buf), "%d", * (int *) param);
-    mg_websocket_write(c, 1, buf, len);
-  }
-}
-
-// This thread sends heartbeats to all websocket connections with 1s interval.
-// The heartbeat message is simply an iteration counter.
-static void *timer_thread(void *param) {
-  struct mg_server *server = (struct mg_server *) param;
-  int i;
-
-  for (i = 0; i < 9999999; i++) {
-    sleep(1);
-    mg_iterate_over_connections(server, iterate_callback, &i);
-  }
-
-  return NULL;
-}
-
-// This handler is called for each incoming websocket frame, one or more
-// times for connection lifetime.
-static int handler(struct mg_connection *conn) {
-  static const char oops[] = "HTTP/1.0 200 OK\r\n\r\nwebsocket data expected\n";
-
-  if (!conn->is_websocket) {
-    mg_write(conn, oops, sizeof(oops) - 1);
-    return 1;
-  }
-
-  mg_websocket_write(conn, 1, conn->content, conn->content_len);
-
-  DBG(("WS msg len: %d", conn->content_len));
-  return conn->content_len == 4 && !memcmp(conn->content, "exit", 4);
-}
-
-int main(int argc, char *argv[]) {
-  struct mg_server *server = mg_create_server(NULL);
-
-  mg_set_option(server, "listening_port", "8080");
-  mg_set_option(server, "document_root", argc > 1 ? argv[1] : ".");
-  mg_add_uri_handler(server, "/ws", handler);
-  mg_start_thread(timer_thread, server);
-
-  printf("Started on port %s\n", mg_get_option(server, "listening_port"));
-  for (;;) {
-    mg_poll_server(server, 3000);
-  }
-
-  mg_destroy_server(&server);
-  return 0;
 }
