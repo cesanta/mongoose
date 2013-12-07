@@ -67,11 +67,11 @@ all:
 ../mongoose.c: ../mongoose.h Makefile $(SOURCES)
 	cat $(SOURCES) | sed '/#include "internal.h"/d' > $@
 
-unix_unit_test: $(LUA_SOURCES) Makefile ../test/unit_test.c
-	$(CC) ../test/unit_test.c lua_5.2.1.c $(CFLAGS) -g -O0 -o t && ./t
+unix_unit_test: $(LUA_SOURCES) Makefile ./test/unit_test.c
+	$(CC) ./test/unit_test.c lua_5.2.1.c $(CFLAGS) -g -O0 -o t && ./t
 
-core_unit_test: Makefile ../test/unit_test.c
-	$(CC) ../test/unit_test.c $(CFLAGS) -g -O0 -o t && ./t
+core_unit_test: Makefile ./test/unit_test.c
+	$(CC) ./test/unit_test.c $(CFLAGS) -g -O0 -o t && ./t
 
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
@@ -102,7 +102,7 @@ $(PROG).dll: $(TINY_SOURCES) Makefile
 
 # This is broken now due to SSL exclusion
 windows_unit_test.exe: $(LUA_SOURCES) Makefile
-	$(CL) ../test/unit_test.c lua_5.2.1.c -DLUA_COMPAT_ALL \
+	$(CL) ./test/unit_test.c lua_5.2.1.c -DLUA_COMPAT_ALL \
           /link /libpath:$(MSVC)/lib advapi32.lib /out:$@
 	./$@
 
@@ -128,7 +128,7 @@ macos: $(LUA_SOURCES)
 	#rm -rf dmg
 
 tests:
-	perl ../test/test.pl $(TEST)
+	perl ./test/test.pl $(TEST)
 
 tarball: clean
 	rm -rf mongoose-$(VERSION)
