@@ -5377,7 +5377,7 @@ static int lsp_sock_send(lua_State *L) {
       }
       sent += n;
     }
-    lua_pushnumber(L, n);
+    lua_pushnumber(L, sent);
   } else {
     return luaL_error(L, "invalid :close() call");
   }
