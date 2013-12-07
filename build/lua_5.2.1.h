@@ -8,9 +8,10 @@
 #ifndef lconfig_h
 #define lconfig_h
 
+#define _XOPEN_SOURCE 600  // Makes it compile under linux
+
 #include <limits.h>
 #include <stddef.h>
-
 
 /*
 ** ==================================================================
