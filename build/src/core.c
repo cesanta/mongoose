@@ -2658,6 +2658,63 @@ void mg_add_uri_handler(struct mg_server *server, const char *uri,
   }
 }
 
+static int get_var(const char *data, size_t data_len, const char *name,
+                   char *dst, size_t dst_len) {
+  const char *p, *e, *s;
+  size_t name_len;
+  int len;
+
+  if (dst == NULL || dst_len == 0) {
+    len = -2;
+  } else if (data == NULL || name == NULL || data_len == 0) {
+    len = -1;
+    dst[0] = '\0';
+  } else {
+    name_len = strlen(name);
+    e = data + data_len;
+    len = -1;
+    dst[0] = '\0';
+
+    // data is "var1=val1&var2=val2...". Find variable first
+    for (p = data; p + name_len < e; p++) {
+      if ((p == data || p[-1] == '&') && p[name_len] == '=' &&
+          !mg_strncasecmp(name, p, name_len)) {
+
+        // Point p to variable value
+        p += name_len + 1;
+
+        // Point s to the end of the value
+        s = (const char *) memchr(p, '&', (size_t)(e - p));
+        if (s == NULL) {
+          s = e;
+        }
+        assert(s >= p);
+
+        // Decode variable into destination buffer
+        len = mg_url_decode(p, (size_t)(s - p), dst, dst_len, 1);
+
+        // Redirect error code from -1 to -2 (destination buffer too small).
+        if (len == -1) {
+          len = -2;
+        }
+        break;
+      }
+    }
+  }
+
+  return len;
+}
+
+int mg_get_var(const struct mg_connection *conn, const char *name,
+               char *dst, size_t dst_len) {
+  int len = get_var(conn->query_string, conn->query_string == NULL ? 0 :
+                    strlen(conn->query_string), name, dst, dst_len);
+  if (len < 0) {
+    len = get_var(conn->content, conn->content_len, name, dst, dst_len);
+  }
+  return len;
+}
+
 const char **mg_get_valid_option_names(void) {
   return static_config_options;
 }
