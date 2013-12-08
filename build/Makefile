@@ -64,8 +64,8 @@ endif
 all:
 	@echo "make (unix|windows|macos)"
 
-../mongoose.c: ../mongoose.h Makefile $(SOURCES)
-	cat $(SOURCES) | sed '/#include "internal.h"/d' > $@
+#../mongoose.c: ../mongoose.h Makefile $(SOURCES)
+#	cat $(SOURCES) | sed '/#include "internal.h"/d' > $@
 
 unix_unit_test: $(LUA_SOURCES) Makefile ./test/unit_test.c
 	$(CC) ./test/unit_test.c lua_5.2.1.c $(CFLAGS) -g -O0 -o t && ./t
