@@ -127,7 +127,7 @@ struct linked_list_link { struct linked_list_link *prev, *next; };
 #define MAX_REQUEST_SIZE 16384
 #define IOBUF_SIZE 8192
 #define MAX_PATH_SIZE 8192
-#define LUA_SCRIPT_PATTERN "mg_*.lua$"
+#define LUA_SCRIPT_PATTERN "**.mg.lua$"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
 #define ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
@@ -2600,7 +2600,135 @@ int mg_parse_header(const char *str, const char *var_name, char *buf,
   return len;
 }
 
+#ifdef USE_LUA
+#include "lua_5.2.1.h"
+
+static void reg_string(struct lua_State *L, const char *name, const char *val) {
+  lua_pushstring(L, name);
+  lua_pushstring(L, val);
+  lua_rawset(L, -3);
+}
+
+static void reg_int(struct lua_State *L, const char *name, int val) {
+  lua_pushstring(L, name);
+  lua_pushinteger(L, val);
+  lua_rawset(L, -3);
+}
+
+static void reg_function(struct lua_State *L, const char *name,
+                         lua_CFunction func, struct mg_connection *conn) {
+  lua_pushstring(L, name);
+  lua_pushlightuserdata(L, conn);
+  lua_pushcclosure(L, func, 1);
+  lua_rawset(L, -3);
+}
+
+static int lua_write(lua_State *L) {
+  int i, num_args;
+  const char *str;
+  size_t size;
+  struct mg_connection *conn = lua_touserdata(L, lua_upvalueindex(1));
+
+  num_args = lua_gettop(L);
+  for (i = 1; i <= num_args; i++) {
+    if (lua_isstring(L, i)) {
+      str = lua_tolstring(L, i, &size);
+      mg_write(conn, str, size);
+    }
+  }
+
+  return 0;
+}
+
+static void prepare_lua_environment(struct mg_connection *ri, lua_State *L) {
+  extern void luaL_openlibs(lua_State *);
+  int i;
+
+  luaL_openlibs(L);
+#ifdef USE_LUA_SQLITE3
+  { extern int luaopen_lsqlite3(lua_State *); luaopen_lsqlite3(L); }
+#endif
+
+#if 0
+  luaL_newmetatable(L, static_luasocket_module_name);
+  lua_pushliteral(L, "__index");
+  luaL_newlib(L, luasocket_methods);
+  lua_rawset(L, -3);
+  lua_pop(L, 1);
+  lua_register(L, "connect", lsp_connect);
+#endif
+
+  if (ri == NULL) return;
+
+  // Register mg module
+  lua_newtable(L);
+  reg_function(L, "write", lua_write, ri);
+
+  // Export request_info
+  lua_pushstring(L, "request_info");
+  lua_newtable(L);
+  reg_string(L, "request_method", ri->request_method);
+  reg_string(L, "uri", ri->uri);
+  reg_string(L, "http_version", ri->http_version);
+  reg_string(L, "query_string", ri->query_string);
+  reg_string(L, "remote_ip", ri->remote_ip);
+  reg_int(L, "remote_port", ri->remote_port);
+  reg_int(L, "num_headers", ri->num_headers);
+  lua_pushstring(L, "http_headers");
+  lua_newtable(L);
+  for (i = 0; i < ri->num_headers; i++) {
+    reg_string(L, ri->http_headers[i].name, ri->http_headers[i].value);
+  }
+  lua_rawset(L, -3);
+  lua_rawset(L, -3);
+
+  lua_setglobal(L, "mg");
+
+  // Register default mg.onerror function
+  luaL_dostring(L, "mg.onerror = function(e) mg.write('\\nLua error:\\n', "
+                "debug.traceback(e, 1)) end");
+}
+
+static int lua_error_handler(lua_State *L) {
+  const char *error_msg =  lua_isstring(L, -1) ?  lua_tostring(L, -1) : "?\n";
+
+  lua_getglobal(L, "mg");
+  if (!lua_isnil(L, -1)) {
+    lua_getfield(L, -1, "write");   // call mg.write()
+    lua_pushstring(L, error_msg);
+    lua_pushliteral(L, "\n");
+    lua_call(L, 2, 0);
+    luaL_dostring(L, "mg.write(debug.traceback(), '\\n')");
+  } else {
+    printf("Lua error: [%s]\n", error_msg);
+    luaL_dostring(L, "print(debug.traceback(), '\\n')");
+  }
+  // TODO(lsm): leave the stack balanced
+
+  return 0;
+}
+
+static void handle_lua_request(struct connection *conn, const char *path) {
+  lua_State *L;
+
+  if (path != NULL && (L = luaL_newstate()) != NULL) {
+    prepare_lua_environment(&conn->mg_conn, L);
+    lua_pushcclosure(L, &lua_error_handler, 0);
+
+    lua_pushglobaltable(L);
+
+    if (luaL_loadfile(L, path) != 0) {
+      lua_error_handler(L);
+    }
+    lua_pcall(L, 0, 0, -2);
+    lua_close(L);
+  }
+  close_local_endpoint(conn);
+}
+#endif // USE_LUA
+
 static void open_local_endpoint(struct connection *conn) {
+  static const char lua_pat[] = LUA_SCRIPT_PATTERN;
   char path[MAX_PATH_SIZE] = {'\0'};
   file_stat_t st;
   int exists = 0, is_directory = 0;
@@ -2656,8 +2784,12 @@ static void open_local_endpoint(struct connection *conn) {
     } else {
       send_http_error(conn, 403);
     }
-  } else if (match_prefix(LUA_SCRIPT_PATTERN, 6, path) > 0) {
-    send_http_error(conn, 5010);
+  } else if (match_prefix(lua_pat, sizeof(lua_pat) - 1, path) > 0) {
+#ifdef USE_LUA
+    handle_lua_request(conn, path);
+#else
+    send_http_error(conn, 501);
+#endif
   } else if (match_prefix(cgi_pat, strlen(cgi_pat), path) > 0) {
     if (strcmp(conn->mg_conn.request_method, "POST") &&
         strcmp(conn->mg_conn.request_method, "HEAD") &&
@@ -2872,13 +3004,11 @@ static void transfer_file_data(struct connection *conn) {
   int n = read(conn->endpoint.fd, buf,
                conn->cl < (int64_t) sizeof(buf) ? (int) conn->cl : sizeof(buf));
 
-    DBG(("AAAA %d %d", (int) n, (int) conn->cl));
   if (is_error(n)) {
     close_local_endpoint(conn);
   } else if (n > 0) {
     conn->cl -= n;
     spool(&conn->remote_iobuf, buf, n);
-    DBG(("XXX %d", (int) conn->cl));
     if (conn->cl <= 0) {
       close_local_endpoint(conn);
     }
