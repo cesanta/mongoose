@@ -8,7 +8,7 @@
 #endif
 
 // USE_* definitions must be made before #include "mongoose.c" !
-#include "src/core.c"
+#include "../mongoose.c"
 
 #define FAIL(str, line) do {                    \
   printf("Fail on line %d: [%s]\n", line, str); \
@@ -28,6 +28,7 @@
 
 static int static_num_tests = 0;
 
+#if 0
 // Connects to host:port, and sends formatted request to it. Returns
 // malloc-ed reply and reply length, or NULL on error. Reply contains
 // everything including headers, not just the message body.
@@ -85,8 +86,7 @@ static char *read_file(const char *path, int *size) {
   }
   return data;
 }
-
-
+#endif
 
 static const char *test_parse_http_message() {
   struct mg_connection ri;
@@ -270,10 +270,11 @@ static const char *test_url_decode(void) {
 }
 
 static const char *test_to64(void) {
-  ASSERT(strtoll("0", NULL, 10) == 0);
-  ASSERT(strtoll("123", NULL, 10) == 123);
-  ASSERT(strtoll("-34", NULL, 10) == -34);
-  ASSERT(strtoll("3566626116", NULL, 10) == 3566626116);
+  ASSERT(to64("0") == 0);
+  ASSERT(to64("") == 0);
+  ASSERT(to64("123") == 123);
+  ASSERT(to64("-34") == -34);
+  ASSERT(to64("3566626116") == 3566626116);
   return NULL;
 }
 
@@ -317,7 +318,8 @@ static const char *test_base64_encode(void) {
 }
 
 static const char *test_mg_parse_header(void) {
-  const char *str = "xx yy, ert=234 ii zz='aa bb', gf=\"xx d=1234";
+  const char *str = "xx=1 kl yy, ert=234 kl=123, "
+    "ii=\"12\\\"34\" zz='aa bb', gf=\"xx d=1234";
   char buf[10];
   ASSERT(mg_parse_header(str, "yy", buf, sizeof(buf)) == 0);
   ASSERT(mg_parse_header(str, "ert", buf, sizeof(buf)) == 3);
@@ -330,6 +332,15 @@ static const char *test_mg_parse_header(void) {
   ASSERT(strcmp(buf, "aa bb") == 0);
   ASSERT(mg_parse_header(str, "d", buf, sizeof(buf)) == 4);
   ASSERT(strcmp(buf, "1234") == 0);
+  buf[0] = 'x';
+  ASSERT(mg_parse_header(str, "MMM", buf, sizeof(buf)) == 0);
+  ASSERT(buf[0] == '\0');
+  ASSERT(mg_parse_header(str, "kl", buf, sizeof(buf)) == 3);
+  ASSERT(strcmp(buf, "123") == 0);
+  ASSERT(mg_parse_header(str, "xx", buf, sizeof(buf)) == 1);
+  ASSERT(strcmp(buf, "1") == 0);
+  ASSERT(mg_parse_header(str, "ii", buf, sizeof(buf)) == 5);
+  ASSERT(strcmp(buf, "12\"34") == 0);
   return NULL;
 }
 
@@ -349,6 +360,7 @@ static const char *test_next_option(void) {
   return NULL;
 }
 
+#if 0
 static int cb1(struct mg_connection *conn) {
   assert(conn != NULL);
   assert(conn->server_param != NULL);
@@ -358,7 +370,7 @@ static int cb1(struct mg_connection *conn) {
 }
 
 static const char *test_requests(struct mg_server *server) {
-  static const char *fname = "mongoose.c";
+  static const char *fname = "main.c";
   int reply_len, file_len;
   char *reply, *file_data;
   file_stat_t st;
@@ -387,6 +399,7 @@ static const char *test_server(void) {
   ASSERT(server == NULL);
   return NULL;
 }
+#endif
 
 static const char *run_all_tests(void) {
   RUN_TEST(test_should_keep_alive);
@@ -400,7 +413,7 @@ static const char *run_all_tests(void) {
   RUN_TEST(test_mg_parse_header);
   RUN_TEST(test_get_var);
   RUN_TEST(test_next_option);
-  RUN_TEST(test_server);
+  //RUN_TEST(test_server);
   return NULL;
 }
 

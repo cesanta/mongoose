@@ -55,13 +55,13 @@
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #define sleep(x) Sleep((x) * 1000)
-#define WINCDECL __cdecl
 #define abs_path(rel, abs, abs_size) _fullpath((abs), (rel), (abs_size))
+#define SIGCHLD 0
 #else
 #include <sys/wait.h>
 #include <unistd.h>
 #define DIRSEP '/'
-#define WINCDECL
+#define __cdecl
 #define abs_path(rel, abs, abs_size) realpath((rel), (abs))
 #endif // _WIN32
 
@@ -71,13 +71,13 @@
 static int exit_flag;
 static char server_name[40];        // Set by init_server_name()
 static char config_file[PATH_MAX];  // Set by process_command_line_arguments()
-static struct mg_context *ctx;      // Set by start_mongoose()
+static struct mg_server *server;    // Set by start_mongoose()
 
 #if !defined(CONFIG_FILE)
 #define CONFIG_FILE "mongoose.conf"
 #endif /* !CONFIG_FILE */
 
-static void WINCDECL signal_handler(int sig_num) {
+static void __cdecl signal_handler(int sig_num) {
   // Reinstantiate signal handler
   signal(sig_num, signal_handler);
 
@@ -91,6 +91,10 @@ static void WINCDECL signal_handler(int sig_num) {
 #endif
   { exit_flag = sig_num; }
 }
+
+#ifdef NO_GUI
+#undef _WIN32
+#endif
 
 static void die(const char *fmt, ...) {
   va_list ap;
@@ -114,7 +118,7 @@ static void show_usage_and_exit(void) {
   int i;
 
   fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka, built on %s\n",
-          mg_version(), __DATE__);
+          MONGOOSE_VERSION, __DATE__);
   fprintf(stderr, "Usage:\n");
   fprintf(stderr, "  mongoose -A <htpasswd_file> <realm> <user> <passwd>\n");
   fprintf(stderr, "  mongoose [config_file]\n");
@@ -138,20 +142,14 @@ static const char *config_file_top_comment =
 "# To make a change, remove leading '#', modify option's value,\n"
 "# save this file and then restart Mongoose.\n\n";
 
-static const char *get_url_to_first_open_port(const struct mg_context *ctx) {
+static const char *get_url_to_first_open_port(const struct mg_server *server) {
   static char url[100];
-  const char *open_ports = mg_get_option(ctx, "listening_ports");
-  int a, b, c, d, port, n;
+  const char *s = mg_get_option(server, "listening_port");
+  const char *cert = mg_get_option(server, "ssl_certificate");
 
-  if (sscanf(open_ports, "%d.%d.%d.%d:%d%n", &a, &b, &c, &d, &port, &n) == 5) {
-    snprintf(url, sizeof(url), "%s://%d.%d.%d.%d:%d",
-             open_ports[n] == 's' ? "https" : "http", a, b, c, d, port);
-  } else if (sscanf(open_ports, "%d%n", &port, &n) == 1) {
-    snprintf(url, sizeof(url), "%s://localhost:%d",
-             open_ports[n] == 's' ? "https" : "http", port);
-  } else {
-    snprintf(url, sizeof(url), "%s", "http://localhost:8080");
-  }
+  snprintf(url, sizeof(url), "%s://%s%s",
+           cert == NULL ? "http" : "https",
+           s == NULL || strchr(s, ':') == NULL ? "127.0.0.1:" : "", s);
 
   return url;
 }
@@ -168,7 +166,7 @@ static void create_config_file(const char *path) {
     fprintf(fp, "%s", config_file_top_comment);
     names = mg_get_valid_option_names();
     for (i = 0; names[i * 2] != NULL; i++) {
-      value = mg_get_option(ctx, names[i * 2]);
+      value = mg_get_option(server, names[i * 2]);
       fprintf(fp, "# %s %s\n", names[i * 2], value ? value : "<value>");
     }
     fclose(fp);
@@ -251,7 +249,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
       }
     }
 
-    (void) fclose(fp);
+    fclose(fp);
   }
 
   // If we're under MacOS and started by launchd, then the second
@@ -271,14 +269,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
 
 static void init_server_name(void) {
   snprintf(server_name, sizeof(server_name), "Mongoose web server v.%s",
-           mg_version());
-}
-
-static int event_handler(struct mg_event *event) {
-  if (event->type == MG_EVENT_LOG) {
-    printf("%s\n", (const char *) event->event_param);
-  }
-  return 0;
+           MONGOOSE_VERSION);
 }
 
 static int is_path_absolute(const char *path) {
@@ -344,16 +335,83 @@ static void set_absolute_path(char *options[], const char *option_name,
   }
 }
 
+int modify_passwords_file(const char *fname, const char *domain,
+                          const char *user, const char *pass) {
+  int found;
+  char line[512], u[512], d[512], ha1[33], tmp[PATH_MAX];
+  FILE *fp, *fp2;
+
+  found = 0;
+  fp = fp2 = NULL;
+
+  // Regard empty password as no password - remove user record.
+  if (pass != NULL && pass[0] == '\0') {
+    pass = NULL;
+  }
+
+  (void) snprintf(tmp, sizeof(tmp), "%s.tmp", fname);
+
+  // Create the file if does not exist
+  if ((fp = fopen(fname, "a+")) != NULL) {
+    fclose(fp);
+  }
+
+  // Open the given file and temporary file
+  if ((fp = fopen(fname, "r")) == NULL) {
+    return 0;
+  } else if ((fp2 = fopen(tmp, "w+")) == NULL) {
+    fclose(fp);
+    return 0;
+  }
+
+  // Copy the stuff to temporary file
+  while (fgets(line, sizeof(line), fp) != NULL) {
+    if (sscanf(line, "%[^:]:%[^:]:%*s", u, d) != 2) {
+      continue;
+    }
+
+    if (!strcmp(u, user) && !strcmp(d, domain)) {
+      found++;
+      if (pass != NULL) {
+        mg_md5(ha1, user, ":", domain, ":", pass, NULL);
+        fprintf(fp2, "%s:%s:%s\n", user, domain, ha1);
+      }
+    } else {
+      fprintf(fp2, "%s", line);
+    }
+  }
+
+  // If new user, just add it
+  if (!found && pass != NULL) {
+    mg_md5(ha1, user, ":", domain, ":", pass, NULL);
+    fprintf(fp2, "%s:%s:%s\n", user, domain, ha1);
+  }
+
+  // Close files
+  fclose(fp);
+  fclose(fp2);
+
+  // Put the temp file in place of real file
+  remove(fname);
+  rename(tmp, fname);
+
+  return 1;
+}
+
 static void start_mongoose(int argc, char *argv[]) {
   char *options[MAX_OPTIONS];
   int i;
+
+  if ((server = mg_create_server(NULL)) == NULL) {
+    die("%s", "Failed to start Mongoose.");
+  }
 
   // Edit passwords file if -A option is specified
   if (argc > 1 && !strcmp(argv[1], "-A")) {
     if (argc != 6) {
       show_usage_and_exit();
     }
-    exit(mg_modify_passwords_file(argv[2], argv[3], argv[4], argv[5]) ?
+    exit(modify_passwords_file(argv[2], argv[3], argv[4], argv[5]) ?
          EXIT_SUCCESS : EXIT_FAILURE);
   }
 
@@ -364,6 +422,7 @@ static void start_mongoose(int argc, char *argv[]) {
 
   options[0] = NULL;
   set_option(options, "document_root", ".");
+  set_option(options, "listening_port", "8080");
 
   // Update config based on command line arguments
   process_command_line_arguments(argv, options);
@@ -383,23 +442,30 @@ static void start_mongoose(int argc, char *argv[]) {
   verify_existence(options, "cgi_interpreter", 0);
   verify_existence(options, "ssl_certificate", 0);
 
+  for (i = 0; options[i] != NULL; i += 2) {
+    const char *msg = mg_set_option(server, options[i], options[i + 1]);
+    if (msg != NULL) die("Failed to set option [%s]: %s", options[i], msg);
+    free(options[i]);
+    free(options[i + 1]);
+  }
+
   // Setup signal handler: quit on Ctrl-C
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
 #ifndef _WIN32
   signal(SIGCHLD, signal_handler);
 #endif
-
-  // Start Mongoose
-  ctx = mg_start((const char **) options, event_handler, NULL);
-  for (i = 0; options[i] != NULL; i++) {
-    free(options[i]);
-  }
-
-  if (ctx == NULL) {
-    die("%s", "Failed to start Mongoose.");
-  }
 }
+
+#if defined(_WIN32) || defined(USE_COCOA)
+static void *serving_thread_func(void *param) {
+  struct mg_server *srv = (struct mg_server *) param;
+  while (exit_flag == 0) {
+    mg_poll_server(srv, 1000);
+  }
+  return NULL;
+}
+#endif
 
 #ifdef _WIN32
 enum {
@@ -417,6 +483,7 @@ enum {
   ID_FILE_BUTTONS_DELTA = 1000
 };
 static HICON hIcon;
+static HANDLE hThread;  // Serving thread
 static SERVICE_STATUS ss;
 static SERVICE_STATUS_HANDLE hStatus;
 static const char *service_magic_argument = "--";
@@ -442,9 +509,8 @@ static void WINAPI ServiceMain(void) {
   while (ss.dwCurrentState == SERVICE_RUNNING) {
     Sleep(1000);
   }
-  mg_stop(ctx);
+  mg_destroy_server(&server);
 }
-
 
 static void show_error(void) {
   char buf[256];
@@ -525,8 +591,10 @@ static BOOL CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP) {
           if ((fp = fopen(config_file, "w+")) != NULL) {
             save_config(hDlg, fp);
             fclose(fp);
-            mg_stop(ctx);
+            TerminateThread(hThread, 0);
+            mg_destroy_server(&server);
             start_mongoose(__argc, __argv);
+            mg_start_thread(serving_thread_func, server);
           }
           EnableWindow(GetDlgItem(hDlg, ID_SAVE), TRUE);
           break;
@@ -557,7 +625,7 @@ static BOOL CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP) {
           of.hwndOwner = (HWND) hDlg;
           of.lpstrFile = path;
           of.nMaxFile = sizeof(path);
-          of.lpstrInitialDir = mg_get_option(ctx, "document_root");
+          of.lpstrInitialDir = mg_get_option(server, "document_root");
           of.Flags = OFN_CREATEPROMPT | OFN_NOCHANGEDIR;
 
           memset(&bi, 0, sizeof(bi));
@@ -586,7 +654,7 @@ static BOOL CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP) {
       SetFocus(GetDlgItem(hDlg, ID_SAVE));
       for (i = 0; options[i * 2] != NULL; i++) {
         name = options[i * 2];
-        value = mg_get_option(ctx, name);
+        value = mg_get_option(server, name);
         if (is_boolean_option(name)) {
           CheckDlgButton(hDlg, ID_CONTROLS + i, !strcmp(value, "yes") ?
                          BST_CHECKED : BST_UNCHECKED);
@@ -777,17 +845,20 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
       if (__argv[1] != NULL &&
           !strcmp(__argv[1], service_magic_argument)) {
         start_mongoose(1, service_argv);
+        hThread = mg_start_thread(serving_thread_func, server);
         StartServiceCtrlDispatcher(service_table);
         exit(EXIT_SUCCESS);
       } else {
         start_mongoose(__argc, __argv);
+        hThread = mg_start_thread(serving_thread_func, server);
         s_uTaskbarRestart = RegisterWindowMessage(TEXT("TaskbarCreated"));
       }
       break;
     case WM_COMMAND:
       switch (LOWORD(wParam)) {
         case ID_QUIT:
-          mg_stop(ctx);
+          TerminateThread(hThread, 0);
+          mg_destroy_server(&server);
           Shell_NotifyIcon(NIM_DELETE, &TrayIcon);
           PostQuitMessage(0);
           return 0;
@@ -799,8 +870,8 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
           manage_service(LOWORD(wParam));
           break;
         case ID_CONNECT:
-          printf("[%s]\n", get_url_to_first_open_port(ctx));
-          ShellExecute(NULL, "open", get_url_to_first_open_port(ctx),
+          printf("[%s]\n", get_url_to_first_open_port(server));
+          ShellExecute(NULL, "open", get_url_to_first_open_port(server),
                        NULL, NULL, SW_SHOW);
           break;
       }
@@ -823,7 +894,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
                      ID_REMOVE_SERVICE, "Deinstall service");
           AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
           snprintf(buf, sizeof(buf), "Start browser on port %s",
-                   mg_get_option(ctx, "listening_ports"));
+                   mg_get_option(server, "listening_port"));
           AppendMenu(hMenu, MF_STRING, ID_CONNECT, buf);
           AppendMenu(hMenu, MF_STRING, ID_SETTINGS, "Edit Settings");
           AppendMenu(hMenu, MF_SEPARATOR, ID_SEPARATOR, "");
@@ -837,7 +908,8 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
       }
       break;
     case WM_CLOSE:
-      mg_stop(ctx);
+      TerminateThread(hThread, 0);
+      mg_destroy_server(&server);
       Shell_NotifyIcon(NIM_DELETE, &TrayIcon);
       PostQuitMessage(0);
       return 0;  // We've just sent our own quit message, with proper hwnd.
@@ -896,7 +968,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
 - (void) openBrowser {
   [[NSWorkspace sharedWorkspace]
     openURL:[NSURL URLWithString:
-      [NSString stringWithUTF8String:get_url_to_first_open_port(ctx)]]];
+      [NSString stringWithUTF8String:get_url_to_first_open_port(server)]]];
 }
 - (void) editConfig {
   create_config_file(config_file);
@@ -912,6 +984,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
 int main(int argc, char *argv[]) {
   init_server_name();
   start_mongoose(argc, argv);
+  mg_start_thread(serving_thread_func, server);
 
   [NSAutoreleasePool new];
   [NSApplication sharedApplication];
@@ -963,7 +1036,7 @@ int main(int argc, char *argv[]) {
   [NSApp activateIgnoringOtherApps:YES];
   [NSApp run];
 
-  mg_stop(ctx);
+  mg_destroy_server(&server);
 
   return EXIT_SUCCESS;
 }
@@ -971,17 +1044,17 @@ int main(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
   init_server_name();
   start_mongoose(argc, argv);
-  printf("%s started on port(s) %s with web root [%s]\n",
-         server_name, mg_get_option(ctx, "listening_ports"),
-         mg_get_option(ctx, "document_root"));
+  printf("%s serving [%s] on port %s\n",
+         server_name, mg_get_option(server, "document_root"),
+         mg_get_option(server, "listening_port"));
+  fflush(stdout);  // Needed, Windows terminals might not be line-buffered
   while (exit_flag == 0) {
-    sleep(1);
+    mg_poll_server(server, 1000);
   }
-  printf("Exiting on signal %d, waiting for all threads to finish...",
-         exit_flag);
+  printf("Exiting on signal %d ...", exit_flag);
   fflush(stdout);
-  mg_stop(ctx);
-  printf("%s", " done.\n");
+  mg_destroy_server(&server);
+  printf("%s\n", " done.");
 
   return EXIT_SUCCESS;
 }
