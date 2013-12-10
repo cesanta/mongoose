@@ -2627,7 +2627,8 @@ static int lua_write(lua_State *L) {
   int i, num_args;
   const char *str;
   size_t size;
-  struct mg_connection *conn = lua_touserdata(L, lua_upvalueindex(1));
+  struct mg_connection *conn = (struct mg_connection *)
+    lua_touserdata(L, lua_upvalueindex(1));
 
   num_args = lua_gettop(L);
   for (i = 1; i <= num_args; i++) {
