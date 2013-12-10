@@ -6,13 +6,39 @@ Embedding Mongoose is done in two steps:
     [mongoose.c](https://raw.github.com/cesanta/mongoose/master/mongoose.c) and
     [mongoose.h](https://raw.github.com/cesanta/mongoose/master/mongoose.h)
     to your application's source tree and include these two files in the build.
-   2. Somewhere in the application code, call `mg_start()` to start the server.
-    Pass configuration options and event handlers to `mg_start()`. Call
-    `mg_stop()` when server needs to be stopped.
+   2. Somewhere in the application code, call `mg_create_server()` to create
+    a server, configure it with `mg_set_option()` and loop with
+    `mg_poll_server()` until done. Call `mg_destroy_server()` to cleanup.
 
-Mongoose calls event handlers when certain events happen.
-For example, when new request arrives, Mongoose calls `begin_request`
-handler to let user handle the request. In the handler, user code
+Here's minimal application, suppose it is in the `minimal.c` file:
+
+    #include "mongoose.h"
+    int main(void) {
+      struct mg_server *server = mg_create_server(NULL);
+      mg_set_option(server, "document_root", ".");
+      mg_set_option(server, "listening_port", "8080");
+      for (;;) mg_poll_server(server, 1000);  // Infinite loop, Ctrl-C to stop
+      mg_destroy_server(&server);
+      return 0;
+    }
+
+To compile it, put `mongoose.c`, `mongoose.h` and `minimal.c` into one
+folder, then run the following UNIX command:
+
+    cc minimal.c mongoose.c -o my_program
+
+If you're on Windows, run this in a Visual Studio shell:
+
+    cl minimal.c mongoose.c /TC /MD
+
+Mongoose can call user-defined functions when certain URIs are requested.
+These functions are _called uri handlers_.  `mg_add_uri_handler()` registers
+an URI handler, and there is no restriction on the number of URI handlers.
+Also, mongoose can call a user-defined function when it is about to send
+HTTP error back to client. HTTP error handler function can be registered
+with `mg_set_http_error_handler()`.
+
+In a handler function, user code
 can get all information about the request -- parsed headers, etcetera.
 Here is a list of well-commented embedding examples:
 
