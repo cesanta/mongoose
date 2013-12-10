@@ -22,7 +22,7 @@ Important: Mongoose does not install `SIGCHLD` handler. If CGI is used,
     void mg_destroy_server(struct mg_server **server);
 
 Deallocates web server instance, closes all pending connections, and makes
-a server pointer a NULL pointer.
+server pointer a NULL pointer.
 
     const char mg_set_option(struct mg_server *server, const char *name,
                              const char *value);
@@ -30,16 +30,17 @@ a server pointer a NULL pointer.
 Sets a particular server option. Please refer to a separate documentation page
 that lists all available option names. Note that at least one option,
 `listening_port`, must be specified. To serve static files, `document_root`
-needs to be specified too. If `document_root` option is left unset, Mongoose
+must be specified too. If `document_root` option is left unset, Mongoose
 will not access filesystem at all. This function returns NULL if option was
 set successfully, otherwise it returns human-readable error string. It is
 allowed to call `mg_set_option()` by the same thread that does
-`mg_poll_server()` (an IO thread).
+`mg_poll_server()` (an IO thread) and change server configuration while it
+is serving, in between `mg_poll_server()` calls.
 
     void mg_poll_server(struct mg_server *server, int milliseconds);
 
-This function performs one iteration of IO loop. Mongoose iterates over all
-active connections, and performs a `select()` syscall on all sockets, sleeping
+This function performs one iteration of IO loop by iterating over all
+active connections, performing `select()` syscall on all sockets, and sleeping
 for `milliseconds` number of milliseconds. When `select()` returns, Mongoose
 does an IO for each socket that has data to be sent or received. Application
 code must call `mg_poll_server()` in a loop. It is an error to have more then
@@ -64,8 +65,10 @@ with sending HTTP error to the client. Otherwise, mongoose does nothing.
 
     const char **mg_get_valid_option_names(void);
 
-Returns a NULL-terminated array of option names and their default values,
-so two entries per option.
+Returns a NULL-terminated array of option names and their default values.
+There are two entries per option in an array: an option name followed by a
+default value. A default value could be NULL. A NULL name indicates an end
+of the array.
 
     const char *mg_get_option(const struct mg_server *server, const char *name);
 
