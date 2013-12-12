@@ -316,9 +316,8 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
 #ifdef _WIN32
   return (void *) _beginthread((void (__cdecl *)(void *)) f, 0, p);
 #else
-  pthread_t thread_id;
+  pthread_t thread_id = (pthread_t) 0;
   pthread_attr_t attr;
-  int result;
 
   (void) pthread_attr_init(&attr);
   (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
@@ -328,7 +327,7 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
   (void) pthread_attr_setstacksize(&attr, USE_STACK_SIZE);
 #endif
 
-  result = pthread_create(&thread_id, &attr, f, p);
+  pthread_create(&thread_id, &attr, f, p);
   pthread_attr_destroy(&attr);
 
   return (void *) thread_id;
@@ -785,7 +784,13 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
     p = (char *) prog;
   }
 
-  mg_socketpair(fds);
+  // Try to create socketpair in a loop until success. mg_socketpair()
+  // can be interrupted by a signal and fail.
+  // TODO(lsm): use sigaction to restart interrupted syscall
+  do {
+    mg_socketpair(fds);
+  } while (fds[0] < 0);
+
   if (start_process(conn->server->config_options[CGI_INTERPRETER],
                     prog, blk.buf, blk.vars, dir, fds[1]) > 0) {
     conn->endpoint_type = EP_CGI;
@@ -3310,6 +3315,10 @@ struct mg_server *mg_create_server(void *server_data) {
 #ifdef _WIN32
   WSADATA data;
   WSAStartup(MAKEWORD(2, 2), &data);
+#else
+  // Ignore SIGPIPE signal, so if browser cancels the request, it
+  // won't kill the whole process.
+  signal(SIGPIPE, SIG_IGN);
 #endif
 
   LINKED_LIST_INIT(&server->active_connections);
