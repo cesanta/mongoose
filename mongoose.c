@@ -84,11 +84,12 @@ typedef struct _stati64 file_stat_t;
 #define __func__ __FILE__ ":" STR(__LINE__)
 #endif
 #else
-#include <inttypes.h>
 #include <dirent.h>
-#include <unistd.h>
+#include <inttypes.h>
 #include <pthread.h>
+#include <pwd.h>
 #include <signal.h>
+#include <unistd.h>
 #include <arpa/inet.h>  // For inet_pton() when USE_IPV6 is defined
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -3298,6 +3299,17 @@ const char *mg_set_option(struct mg_server *server, const char *name,
       } else {
         set_non_blocking_mode(server->listening_sock);
       }
+    } else if (ind == RUN_AS_USER) {
+#ifndef _WIN32
+      struct passwd *pw;
+      if ((pw = getpwnam(value)) == NULL) {
+        error_msg = "Unknown user";
+      } else if (setgid(pw->pw_gid) != 0) {
+        error_msg = "setgid() failed";
+      } else if (setuid(pw->pw_uid) != 0) {
+        error_msg = "setuid() failed";
+      }
+#endif
     }
   }
 
