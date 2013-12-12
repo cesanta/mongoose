@@ -88,6 +88,7 @@ typedef struct _stati64 file_stat_t;
 #include <dirent.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
 #include <arpa/inet.h>  // For inet_pton() when USE_IPV6 is defined
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -3008,7 +3009,7 @@ static void close_local_endpoint(struct connection *conn) {
 static void transfer_file_data(struct connection *conn) {
   char buf[IOBUF_SIZE];
   int n = read(conn->endpoint.fd, buf,
-               conn->cl < (int64_t) sizeof(buf) ? (int) conn->cl : sizeof(buf));
+               conn->cl < (int64_t) sizeof(buf) ? conn->cl : (int) sizeof(buf));
 
   if (is_error(n)) {
     close_local_endpoint(conn);
