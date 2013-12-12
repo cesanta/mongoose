@@ -15,6 +15,10 @@ options that can be modified by `mg_set_option()`.
     as `user_param`, to let the callback get the pointer to the C++
     object.
 
+Side-effect: on UNIX, `mg_create_server()` ignores SIGPIPE signals. If custom
+processing is required SIGPIPE, signal handler must be set up after
+calling `mg_create_server()`.
+
 Important: Mongoose does not install `SIGCHLD` handler. If CGI is used,
 `SIGCHLD` handler must be set up to reap CGI zombie processes.
 
