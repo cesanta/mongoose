@@ -78,6 +78,8 @@ namespace Mongoose
 
             string getUrl();
             string getMethod();
+            string getData();
+
 #ifdef ENABLE_REGEX_URL
             smatch getMatches();
             bool match(string pattern);
@@ -90,15 +92,25 @@ namespace Mongoose
             vector<UploadFile> uploadFiles;
 
         protected:
-            string data;
             string method;
             string url;
+            string data;
 #ifdef ENABLE_REGEX_URL
             string key;
             smatch matches;
 #endif
             struct mg_connection *connection;
             const struct mg_request_info *request;
+
+            /**
+             * Determine if the incoming request content type is form URL encoded.
+             */
+            bool isFormURLEncodedContentType(mg_connection *connection);
+
+            /**
+             * Determine if the incoming request content type is JSON.
+             */
+            bool isJsonContentType(mg_connection *connection);
     };
 };
 
