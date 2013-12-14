@@ -78,6 +78,8 @@ namespace Mongoose
 
             string getUrl();
             string getMethod();
+            string getData();
+
 #ifdef ENABLE_REGEX_URL
             smatch getMatches();
             bool match(string pattern);
@@ -90,9 +92,9 @@ namespace Mongoose
             vector<UploadFile> uploadFiles;
 
         protected:
-            string data;
             string method;
             string url;
+            string data;
 #ifdef ENABLE_REGEX_URL
             string key;
             smatch matches;

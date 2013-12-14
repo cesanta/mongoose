@@ -17,8 +17,7 @@ namespace Mongoose
 
         // Downloading POST data
         ostringstream postData;
-        const char * content_type = mg_get_header(connection, "Content-Type");
-        if (content_type!= NULL && strcmp(content_type, "application/x-www-form-urlencoded") == 0) {
+        if (mg_get_header(connection, "Content-Type") != NULL) {
             int n;
             char post[1024];
             while (n = mg_read(connection, post, sizeof(post))) {
@@ -36,6 +35,11 @@ namespace Mongoose
     string Request::getMethod()
     {
         return method;
+    }
+
+    string Request::getData()
+    {
+        return data;
     }
 
 #ifdef ENABLE_REGEX_URL
@@ -104,6 +108,7 @@ namespace Mongoose
 
         return true;
     }
+
 
     string Request::get(string key, string fallback)
     {
