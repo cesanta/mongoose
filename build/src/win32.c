@@ -23,34 +23,6 @@ static int pthread_mutex_unlock(pthread_mutex_t *mutex) {
   return ReleaseMutex(*mutex) == 0 ? -1 : 0;
 }
 
-static int pthread_cond_init(pthread_cond_t *cv, const void *unused) {
-  (void) unused;
-  cv->signal = CreateEvent(NULL, FALSE, FALSE, NULL);
-  cv->broadcast = CreateEvent(NULL, TRUE, FALSE, NULL);
-  return cv->signal != NULL && cv->broadcast != NULL ? 0 : -1;
-}
-
-static int pthread_cond_wait(pthread_cond_t *cv, pthread_mutex_t *mutex) {
-  HANDLE handles[] = {cv->signal, cv->broadcast};
-  ReleaseMutex(*mutex);
-  WaitForMultipleObjects(2, handles, FALSE, INFINITE);
-  return WaitForSingleObject(*mutex, INFINITE) == WAIT_OBJECT_0? 0 : -1;
-}
-
-static int pthread_cond_signal(pthread_cond_t *cv) {
-  return SetEvent(cv->signal) == 0 ? -1 : 0;
-}
-
-static int pthread_cond_broadcast(pthread_cond_t *cv) {
-  // Implementation with PulseEvent() has race condition, see
-  // http://www.cs.wustl.edu/~schmidt/win32-cv-1.html
-  return PulseEvent(cv->broadcast) == 0 ? -1 : 0;
-}
-
-static int pthread_cond_destroy(pthread_cond_t *cv) {
-  return CloseHandle(cv->signal) && CloseHandle(cv->broadcast) ? 0 : -1;
-}
-
 // For Windows, change all slashes to backslashes in path names.
 static void change_slashes_to_backslashes(char *path) {
   int i;

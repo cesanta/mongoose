@@ -152,7 +152,6 @@ typedef long off_t;
 #endif // !fileno MINGW #defines fileno
 
 typedef HANDLE pthread_mutex_t;
-typedef struct {HANDLE signal, broadcast;} pthread_cond_t;
 typedef DWORD pthread_t;
 #define pid_t HANDLE // MINGW typedefs pid_t to int. Using #define here.
 
@@ -251,6 +250,8 @@ typedef int SOCKET;
 #define MG_BUF_LEN 8192
 #define MAX_REQUEST_SIZE 16384
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
+
+typedef SOCKET sock_t;
 
 #ifdef DEBUG_TRACE
 #undef DEBUG_TRACE
@@ -407,19 +408,11 @@ struct mg_context {
   char *config[NUM_OPTIONS];      // Mongoose configuration parameters
   mg_event_handler_t event_handler;  // User-defined callback function
   void *user_data;                // User-defined data
-
   struct socket *listening_sockets;
   int num_listening_sockets;
+  int num_threads;    // Number of threads
+  sock_t ctl[2];     // Socket pair for inter-thread communication
 
-  volatile int num_threads;  // Number of threads
-  pthread_mutex_t mutex;     // Protects (max|num)_threads
-  pthread_cond_t  cond;      // Condvar for tracking workers terminations
-
-  struct socket queue[MGSQLEN];   // Accepted sockets
-  volatile int sq_head;      // Head of the socket queue
-  volatile int sq_tail;      // Tail of the socket queue
-  pthread_cond_t sq_full;    // Signaled when socket is produced
-  pthread_cond_t sq_empty;   // Signaled when socket is consumed
 };
 
 struct mg_connection {
@@ -456,7 +449,7 @@ static void send_http_error(struct mg_connection *, int, const char *,
                             PRINTF_ARGS(4, 5);
 static void cry(struct mg_connection *conn,
                 PRINTF_FORMAT_STRING(const char *fmt), ...) PRINTF_ARGS(2, 3);
-static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len);
+static const char *getreq(struct mg_connection *conn);
 
 #ifdef USE_LUA
 #include "lua_5.2.1.h"
@@ -1537,34 +1530,6 @@ static int pthread_mutex_unlock(pthread_mutex_t *mutex) {
   return ReleaseMutex(*mutex) == 0 ? -1 : 0;
 }
 
-static int pthread_cond_init(pthread_cond_t *cv, const void *unused) {
-  (void) unused;
-  cv->signal = CreateEvent(NULL, FALSE, FALSE, NULL);
-  cv->broadcast = CreateEvent(NULL, TRUE, FALSE, NULL);
-  return cv->signal != NULL && cv->broadcast != NULL ? 0 : -1;
-}
-
-static int pthread_cond_wait(pthread_cond_t *cv, pthread_mutex_t *mutex) {
-  HANDLE handles[] = {cv->signal, cv->broadcast};
-  ReleaseMutex(*mutex);
-  WaitForMultipleObjects(2, handles, FALSE, INFINITE);
-  return WaitForSingleObject(*mutex, INFINITE) == WAIT_OBJECT_0? 0 : -1;
-}
-
-static int pthread_cond_signal(pthread_cond_t *cv) {
-  return SetEvent(cv->signal) == 0 ? -1 : 0;
-}
-
-static int pthread_cond_broadcast(pthread_cond_t *cv) {
-  // Implementation with PulseEvent() has race condition, see
-  // http://www.cs.wustl.edu/~schmidt/win32-cv-1.html
-  return PulseEvent(cv->broadcast) == 0 ? -1 : 0;
-}
-
-static int pthread_cond_destroy(pthread_cond_t *cv) {
-  return CloseHandle(cv->signal) && CloseHandle(cv->broadcast) ? 0 : -1;
-}
-
 // For Windows, change all slashes to backslashes in path names.
 static void change_slashes_to_backslashes(char *path) {
   int i;
@@ -2339,17 +2304,17 @@ struct mg_connection *mg_download(const char *host, int port, int use_ssl,
                                   char *ebuf, size_t ebuf_len,
                                   const char *fmt, ...) {
   struct mg_connection *conn;
+  const char *msg = NULL;
   va_list ap;
 
   va_start(ap, fmt);
-  ebuf[0] = '\0';
   if ((conn = mg_connect(host, port, use_ssl, ebuf, ebuf_len)) == NULL) {
   } else if (mg_vprintf(conn, fmt, ap) <= 0) {
     snprintf(ebuf, ebuf_len, "%s", "Error sending request");
   } else {
-    getreq(conn, ebuf, ebuf_len);
+    msg = getreq(conn);
   }
-  if (ebuf[0] != '\0' && conn != NULL) {
+  if (msg != NULL && conn != NULL) {
     mg_close_connection(conn);
     conn = NULL;
   }
@@ -3402,7 +3367,7 @@ done:
 FILE *mg_upload(struct mg_connection *conn, const char *destination_dir,
                 char *path, int path_len) {
   const char *content_type_header, *boundary_start;
-  char *buf, fname[1024], boundary[100], *s;
+  char *buf, fname[1024], boundary[100], *s, *p;
   int bl, n, i, j, headers_len, boundary_len, eof, buf_len, to_read, len = 0;
   FILE *fp;
 
@@ -3488,10 +3453,9 @@ FILE *mg_upload(struct mg_connection *conn, const char *destination_dir,
     fp = NULL;
 
     // Construct destination file name. Do not allow paths to have slashes.
-    if ((s = strrchr(fname, '/')) == NULL &&
-        (s = strrchr(fname, '\\')) == NULL) {
-      s = fname;
-    }
+    s = fname;
+    if ((p = strrchr(fname, '/')) != NULL && p > s) s = p;
+    if ((p = strrchr(fname, '\\')) != NULL && p > s) s = p;
 
     // Open file in binary mode. TODO: set an exclusive lock.
     snprintf(path, path_len, "%s/%s", destination_dir, s);
@@ -3919,6 +3883,38 @@ static int call_user(int type, struct mg_connection *conn, void *p) {
     0 : conn->ctx->event_handler(&conn->event);
 }
 
+static int mg_socketpair(sock_t sp[2]) {
+  struct sockaddr_in sa;
+  sock_t sock, ret = -1;
+  socklen_t len = sizeof(sa);
+
+  sp[0] = sp[1] = INVALID_SOCKET;
+
+  (void) memset(&sa, 0, sizeof(sa));
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons(0);
+  sa.sin_addr.s_addr = htonl(0x7f000001);
+
+  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
+      !bind(sock, (struct sockaddr *) &sa, len) &&
+      !listen(sock, 1) &&
+      !getsockname(sock, (struct sockaddr *) &sa, &len) &&
+      (sp[0] = socket(AF_INET, SOCK_STREAM, 6)) != -1 &&
+      !connect(sp[0], (struct sockaddr *) &sa, len) &&
+      (sp[1] = accept(sock,(struct sockaddr *) &sa, &len)) != INVALID_SOCKET) {
+    set_close_on_exec(sp[0]);
+    set_close_on_exec(sp[1]);
+    ret = 0;
+  } else {
+    if (sp[0] != INVALID_SOCKET) closesocket(sp[0]);
+    if (sp[1] != INVALID_SOCKET) closesocket(sp[1]);
+    sp[0] = sp[1] = INVALID_SOCKET;
+  }
+  closesocket(sock);
+
+  return ret;
+}
+
 static FILE *mg_fopen(const char *path, const char *mode) {
 #ifdef _WIN32
   wchar_t wbuf[PATH_MAX], wmode[20];
@@ -4019,6 +4015,10 @@ static void send_http_error(struct mg_connection *conn, int status,
               "Connection: %s\r\n\r\n", status, reason, len,
               suggest_connection_header(conn));
     conn->num_bytes_sent += mg_printf(conn, "%s", buf);
+  }
+
+  if (status >= 500) {
+    conn->must_close = 1;
   }
 }
 
@@ -4894,22 +4894,24 @@ static int is_valid_uri(const char *uri) {
   return uri[0] == '/' || (uri[0] == '*' && uri[1] == '\0');
 }
 
-static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
-  const char *cl;
+static const char *getreq(struct mg_connection *conn) {
+  const char *cl, *ret = NULL;
 
-  ebuf[0] = '\0';
   reset_per_request_attributes(conn);
   conn->request_len = read_request(NULL, conn, conn->buf, conn->buf_size,
                                    &conn->data_len);
   assert(conn->request_len < 0 || conn->data_len >= conn->request_len);
 
   if (conn->request_len == 0 && conn->data_len == conn->buf_size) {
-    snprintf(ebuf, ebuf_len, "%s", "Request Too Large");
+    conn->status_code = 413;
+    ret = "Request Entity Too Large";
   } else if (conn->request_len <= 0) {
-    snprintf(ebuf, ebuf_len, "%s", "Client closed connection");
+    conn->status_code = 0;
+    ret = "Client closed connection";
   } else if (parse_http_message(conn->buf, conn->buf_size,
                                 &conn->request_info) <= 0) {
-    snprintf(ebuf, ebuf_len, "Bad request: [%.*s]", conn->data_len, conn->buf);
+    conn->status_code = 400;
+    ret = "Bad Request";
   } else {
     // Request is valid. Set content_len attribute by parsing Content-Length
     // If Content-Length is absent, set content_len to 0 if request is GET,
@@ -4928,13 +4930,14 @@ static int getreq(struct mg_connection *conn, char *ebuf, size_t ebuf_len) {
     }
     conn->birth_time = time(NULL);
   }
-  return ebuf[0] == '\0';
+
+  return ret;
 }
 
 static void process_new_connection(struct mg_connection *conn) {
   struct mg_request_info *ri = &conn->request_info;
   int keep_alive_enabled, keep_alive, discard_len;
-  char ebuf[100];
+  const char *msg = NULL;
 
   keep_alive_enabled = !strcmp(conn->ctx->config[ENABLE_KEEP_ALIVE], "yes");
   keep_alive = 0;
@@ -4943,19 +4946,24 @@ static void process_new_connection(struct mg_connection *conn) {
   // to crule42.
   conn->data_len = 0;
   do {
-    if (!getreq(conn, ebuf, sizeof(ebuf))) {
-      send_http_error(conn, 500, "Server Error", "%s", ebuf);
+    if ((msg = getreq(conn)) != NULL) {
       conn->must_close = 1;
     } else if (!is_valid_uri(conn->request_info.uri)) {
-      snprintf(ebuf, sizeof(ebuf), "Invalid URI: [%s]", ri->uri);
-      send_http_error(conn, 400, "Bad Request", "%s", ebuf);
+      msg = "Bad Request";
+      conn->status_code = 400;
     } else if (strcmp(ri->http_version, "1.0") &&
                strcmp(ri->http_version, "1.1")) {
-      snprintf(ebuf, sizeof(ebuf), "Bad HTTP version: [%s]", ri->http_version);
-      send_http_error(conn, 505, "Bad HTTP version", "%s", ebuf);
+      msg = "Bad HTTP Version";
+      conn->status_code = 505;
     }
 
-    if (ebuf[0] == '\0') {
+    if (msg != NULL) {
+      // Do not send anything to the client on timeout
+      // see https://github.com/cesanta/mongoose/issues/261
+      if (conn->status_code > 0) {
+        send_http_error(conn, conn->status_code, msg, "%s", "");
+      }
+    } else {
       handle_request(conn);
       call_user(MG_REQUEST_END, conn, (void *) (long) conn->status_code);
       log_access(conn);
@@ -4988,31 +4996,7 @@ static void process_new_connection(struct mg_connection *conn) {
 
 // Worker threads take accepted socket from the queue
 static int consume_socket(struct mg_context *ctx, struct socket *sp) {
-  (void) pthread_mutex_lock(&ctx->mutex);
-  DEBUG_TRACE(("going idle"));
-
-  // If the queue is empty, wait. We're idle at this point.
-  while (ctx->sq_head == ctx->sq_tail && ctx->stop_flag == 0) {
-    pthread_cond_wait(&ctx->sq_full, &ctx->mutex);
-  }
-
-  // If we're stopping, sq_head may be equal to sq_tail.
-  if (ctx->sq_head > ctx->sq_tail) {
-    // Copy socket from the queue and increment tail
-    *sp = ctx->queue[ctx->sq_tail % ARRAY_SIZE(ctx->queue)];
-    ctx->sq_tail++;
-    DEBUG_TRACE(("grabbed socket %d, going busy", sp->sock));
-
-    // Wrap pointers if needed
-    while (ctx->sq_tail > (int) ARRAY_SIZE(ctx->queue)) {
-      ctx->sq_tail -= ARRAY_SIZE(ctx->queue);
-      ctx->sq_head -= ARRAY_SIZE(ctx->queue);
-    }
-  }
-
-  (void) pthread_cond_signal(&ctx->sq_empty);
-  (void) pthread_mutex_unlock(&ctx->mutex);
-
+  recv(ctx->ctl[1], (void *) sp, sizeof(*sp), 0);
   return !ctx->stop_flag;
 }
 
@@ -5061,11 +5045,7 @@ static void *worker_thread(void *thread_func_param) {
   }
 
   // Signal master that we're done with connection and exiting
-  (void) pthread_mutex_lock(&ctx->mutex);
-  ctx->num_threads--;
-  (void) pthread_cond_signal(&ctx->cond);
-  assert(ctx->num_threads >= 0);
-  (void) pthread_mutex_unlock(&ctx->mutex);
+  send(ctx->ctl[1], "x", 1, 0);
 
   DEBUG_TRACE(("exiting"));
   return NULL;
@@ -5073,23 +5053,7 @@ static void *worker_thread(void *thread_func_param) {
 
 // Master thread adds accepted socket to a queue
 static void produce_socket(struct mg_context *ctx, const struct socket *sp) {
-  (void) pthread_mutex_lock(&ctx->mutex);
-
-  // If the queue is full, wait
-  while (ctx->stop_flag == 0 &&
-         ctx->sq_head - ctx->sq_tail >= (int) ARRAY_SIZE(ctx->queue)) {
-    (void) pthread_cond_wait(&ctx->sq_empty, &ctx->mutex);
-  }
-
-  if (ctx->sq_head - ctx->sq_tail < (int) ARRAY_SIZE(ctx->queue)) {
-    // Copy socket to the queue and increment head
-    ctx->queue[ctx->sq_head % ARRAY_SIZE(ctx->queue)] = *sp;
-    ctx->sq_head++;
-    DEBUG_TRACE(("queued socket %d", sp->sock));
-  }
-
-  (void) pthread_cond_signal(&ctx->sq_full);
-  (void) pthread_mutex_unlock(&ctx->mutex);
+  send(ctx->ctl[0], (void *) sp, sizeof(*sp), 0);
 }
 
 static int set_sock_timeout(SOCKET sock, int milliseconds) {
@@ -5179,20 +5143,16 @@ static void *master_thread(void *thread_func_param) {
   close_all_listening_sockets(ctx);
 
   // Wakeup workers that are waiting for connections to handle.
-  pthread_cond_broadcast(&ctx->sq_full);
+  for (i = 0; i < ctx->num_threads; i++) {
+    struct socket dummy;
+    send(ctx->ctl[0], (void *) &dummy, sizeof(dummy), 0);
+  }
 
   // Wait until all threads finish
-  (void) pthread_mutex_lock(&ctx->mutex);
-  while (ctx->num_threads > 0) {
-    (void) pthread_cond_wait(&ctx->cond, &ctx->mutex);
+  for (i = 0; i < ctx->num_threads; i++) {
+    char ch;
+    recv(ctx->ctl[0], &ch, 1, 0);
   }
-  (void) pthread_mutex_unlock(&ctx->mutex);
-
-  // All threads exited, no sync is needed. Destroy mutex and condvars
-  (void) pthread_mutex_destroy(&ctx->mutex);
-  (void) pthread_cond_destroy(&ctx->cond);
-  (void) pthread_cond_destroy(&ctx->sq_empty);
-  (void) pthread_cond_destroy(&ctx->sq_full);
 
 #if !defined(NO_SSL)
   uninitialize_ssl(ctx);
@@ -5313,10 +5273,7 @@ struct mg_context *mg_start(const char **options,
   (void) signal(SIGPIPE, SIG_IGN);
 #endif // !_WIN32
 
-  (void) pthread_mutex_init(&ctx->mutex, NULL);
-  (void) pthread_cond_init(&ctx->cond, NULL);
-  (void) pthread_cond_init(&ctx->sq_empty, NULL);
-  (void) pthread_cond_init(&ctx->sq_full, NULL);
+  mg_socketpair(ctx->ctl);
 
   // Start master (listening) thread
   mg_start_thread(master_thread, ctx);
@@ -5420,7 +5377,7 @@ static int lsp_sock_send(lua_State *L) {
       }
       sent += n;
     }
-    lua_pushnumber(L, n);
+    lua_pushnumber(L, sent);
   } else {
     return luaL_error(L, "invalid :close() call");
   }

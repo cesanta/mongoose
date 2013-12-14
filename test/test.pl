@@ -217,7 +217,7 @@ write_file("$root/a+.txt", '');
 o("GET /a+.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'URL-decoding, + in URI');
 
 # Test HTTP version parsing
-o("GET / HTTPX/1.0\r\n\r\n", '^HTTP/1.1 500', 'Bad HTTP Version', 0);
+o("GET / HTTPX/1.0\r\n\r\n", '^HTTP/1.1 400', 'Bad HTTP Version', 0);
 o("GET / HTTP/x.1\r\n\r\n", '^HTTP/1.1 505', 'Bad HTTP maj Version', 0);
 o("GET / HTTP/1.1z\r\n\r\n", '^HTTP/1.1 505', 'Bad HTTP min Version', 0);
 o("GET / HTTP/02.0\r\n\r\n", '^HTTP/1.1 505', 'HTTP Version >1.1', 0);
