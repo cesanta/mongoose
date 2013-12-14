@@ -101,16 +101,6 @@ namespace Mongoose
 #endif
             struct mg_connection *connection;
             const struct mg_request_info *request;
-
-            /**
-             * Determine if the incoming request content type is form URL encoded.
-             */
-            bool isFormURLEncodedContentType(mg_connection *connection);
-
-            /**
-             * Determine if the incoming request content type is JSON.
-             */
-            bool isJsonContentType(mg_connection *connection);
     };
 };
 

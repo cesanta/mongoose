@@ -17,7 +17,7 @@ namespace Mongoose
 
         // Downloading POST data
         ostringstream postData;
-        if ((isFormURLEncodedContentType(connection) || isJsonContentType(connection)) ) {
+        if (mg_get_header(connection, "Content-Type") != NULL) {
             int n;
             char post[1024];
             while (n = mg_read(connection, post, sizeof(post))) {
@@ -107,20 +107,6 @@ namespace Mongoose
         delete[] buffer;
 
         return true;
-    }
-
-
-    bool Request::isFormURLEncodedContentType(mg_connection *connection)
-    {
-        const char * content_type = mg_get_header(connection, "Content-Type");
-        return (content_type != NULL && strcmp(content_type, "application/x-www-form-urlencoded") == 0);
-    }
-
-
-    bool Request::isJsonContentType(mg_connection *connection)
-    {
-        const char * content_type = mg_get_header(connection, "Content-Type");
-        return (content_type != NULL && strcmp(content_type, "application/json") == 0);
     }
 
 
