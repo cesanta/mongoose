@@ -1858,9 +1858,10 @@ static int scan_directory(struct connection *conn, const char *dir,
   char path[MAX_PATH_SIZE];
   struct dir_entry *p;
   struct dirent *dp;
-  int arr_size = 0, arr_ind = 0;
+  int arr_size = 0, arr_ind = 0, inc = 100;
   DIR *dirp;
 
+  *arr = NULL;
   if ((dirp = (opendir(dir))) == NULL) return 0;
 
   while ((dp = readdir(dirp)) != NULL) {
@@ -1873,16 +1874,16 @@ static int scan_directory(struct connection *conn, const char *dir,
     mg_snprintf(path, sizeof(path), "%s%c%s", dir, '/', dp->d_name);
 
     // Resize the array if nesessary
-    if (arr_ind >= arr_size - 1) {
+    if (arr_ind >= arr_size) {
       if ((p = (struct dir_entry *)
-           realloc(*arr, (100 + arr_size) * sizeof(**arr))) != NULL) {
-        // Memset struct to zero, otherwize st_mtime will have garbage which
+           realloc(*arr, (inc + arr_size) * sizeof(**arr))) != NULL) {
+        // Memset new chunk to zero, otherwize st_mtime will have garbage which
         // can make strftime() segfault, see
         // http://code.google.com/p/mongoose/issues/detail?id=79
-        memset(p + arr_size, 0, sizeof(**arr) * arr_size);
+        memset(p + arr_size, 0, sizeof(**arr) * inc);
 
         *arr = p;
-        arr_size += 100;
+        arr_size += inc;
       }
     }
 
