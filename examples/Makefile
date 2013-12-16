@@ -16,25 +16,14 @@ else
   endif
 endif
 
-all: hello upload post websocket chat
+all:
+	$(CC) hello.c ../mongoose.c  -o hello $(CFLAGS)
 
-hello:
-	$(CC) hello.c ../mongoose.c  -o $@ $(CFLAGS)
-
-upload:
-	$(CC) upload.c ../mongoose.c -o $@ $(CFLAGS)
-
-post:
-	$(CC) post.c ../mongoose.c -o $@ $(CFLAGS)
-
-websocket:
-	$(CC) -DUSE_WEBSOCKET websocket.c ../mongoose.c -o $@ $(CFLAGS)
-
-chat:
-	$(CC) chat.c ../mongoose.c -o $@ $(CFLAGS)
-
-lua_dll:
-	$(CC) lua_dll.c ../build/lua_5.2.1.c -o $@.so $(CFLAGS) $(DLL_FLAGS)
+#	$(CC) upload.c ../mongoose.c -o upload $(CFLAGS)
+#	$(CC) post.c ../mongoose.c -o post $(CFLAGS)
+#	$(CC) -DUSE_WEBSOCKET websocket.c ../mongoose.c -o $@ $(CFLAGS)
+#	$(CC) chat.c ../mongoose.c -o chat $(CFLAGS)
+#	$(CC) lua_dll.c ../build/lua_5.2.1.c -o $@.so $(CFLAGS) $(DLL_FLAGS)
 
 
 MSVC    = ../../vc6
