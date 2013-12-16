@@ -25,12 +25,7 @@ simplicity by carefully selected list of features:
   [mongoose.h](https://github.com/cesanta/mongoose/blob/master/mongoose.h).
   The source is in single
   [mongoose.c](https://github.com/cesanta/mongoose/blob/master/mongoose.c) file
-  to make things easy. Embedding examples:
-  [hello.c](https://github.com/cesanta/mongoose/blob/master/examples/hello.c),
-  [post.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c),
-  [upload.c](https://github.com/cesanta/mongoose/blob/master/examples/upload.c),
-  [websocket.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c)
-- HTTP client capable of sending arbitrary HTTP/HTTPS requests
+  to make things easy.
 
 Note that Windows and MacOS binaries have following 3rd party software
 compiled in:
