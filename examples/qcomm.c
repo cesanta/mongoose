@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <string.h>
-#include "core.h"
+
+#include "mongoose.h"
 
 static void iterate_callback(struct mg_connection *c, void *param) {
   if (c->is_websocket) {
@@ -17,7 +18,7 @@ static void *timer_thread(void *param) {
   int i;
 
   for (i = 0; i < 9999999; i++) {
-    sleep(1);
+    sleep(10);
     mg_iterate_over_connections(server, iterate_callback, &i);
   }
 
