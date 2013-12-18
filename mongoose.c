@@ -134,7 +134,10 @@ struct linked_list_link { struct linked_list_link *prev, *next; };
 #define MAX_CGI_ENVIR_VARS 64
 #define ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
 #define PASSWORDS_FILE_NAME ".htpasswd"
+
+#ifndef WEBSOCKET_PING_INTERVAL_SECONDS
 #define WEBSOCKET_PING_INTERVAL_SECONDS 5
+#endif
 
 // Extra HTTP headers to send in every static file reply
 #if !defined(EXTRA_HTTP_HEADERS)
