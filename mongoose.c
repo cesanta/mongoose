@@ -134,6 +134,7 @@ struct linked_list_link { struct linked_list_link *prev, *next; };
 #define MAX_CGI_ENVIR_VARS 64
 #define ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
 #define PASSWORDS_FILE_NAME ".htpasswd"
+#define WEBSOCKET_PING_INTERVAL_SECONDS 5
 
 // Extra HTTP headers to send in every static file reply
 #if !defined(EXTRA_HTTP_HEADERS)
@@ -220,7 +221,7 @@ struct connection {
   union endpoint endpoint;
   enum endpoint_type endpoint_type;
   time_t birth_time;
-  time_t expire_time;
+  time_t last_activity_time;
   char *path_info;
   char *request;
   int64_t num_bytes_sent; // Total number of bytes sent
@@ -432,6 +433,7 @@ static void send_http_error(struct connection *conn, int code) {
   switch (code) {
     case 201: message = "Created";                  break;
     case 204: message = "No Content";               break;
+    case 304: message = "Not Modified";             break;
     case 400: message = "Bad Request";              break;
     case 403: message = "Forbidden";                break;
     case 404: message = "Not Found";                break;
@@ -1474,6 +1476,14 @@ static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
     send_websocket_handshake(conn, key);
   }
 }
+
+static void ping_idle_websocket_connection(struct connection *conn, time_t t) {
+  if (t - conn->last_activity_time > WEBSOCKET_PING_INTERVAL_SECONDS) {
+    mg_websocket_write(&conn->mg_conn, 0x9, "", 0);
+  }
+}
+#else
+#define ping_idle_websocket_connection(conn, t)
 #endif // !NO_WEBSOCKET
 
 static int is_error(int n) {
@@ -3037,7 +3047,7 @@ void mg_poll_server(struct mg_server *server, int milliseconds) {
   struct timeval tv;
   fd_set read_set, write_set;
   sock_t max_fd = -1;
-  time_t current_time = time(NULL), expire_time = current_time +
+  time_t current_time = time(NULL), expire_time = current_time -
     atoi(server->config_options[IDLE_TIMEOUT_MS]) / 1000;
 
   if (server->listening_sock == INVALID_SOCKET) return;
@@ -3076,8 +3086,7 @@ void mg_poll_server(struct mg_server *server, int milliseconds) {
     // Accept new connections
     if (FD_ISSET(server->listening_sock, &read_set)) {
       while ((conn = accept_new_connection(server)) != NULL) {
-        conn->birth_time = current_time;
-        conn->expire_time = expire_time;
+        conn->birth_time = conn->last_activity_time = current_time;
       }
     }
 
@@ -3085,7 +3094,7 @@ void mg_poll_server(struct mg_server *server, int milliseconds) {
     LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
       conn = LINKED_LIST_ENTRY(lp, struct connection, link);
       if (FD_ISSET(conn->client_sock, &read_set)) {
-        conn->expire_time = expire_time;
+        conn->last_activity_time = current_time;
         read_from_client(conn);
       }
       if (conn->endpoint_type == EP_CGI &&
@@ -3093,7 +3102,7 @@ void mg_poll_server(struct mg_server *server, int milliseconds) {
         read_from_cgi(conn);
       }
       if (FD_ISSET(conn->client_sock, &write_set)) {
-        conn->expire_time = expire_time;
+        conn->last_activity_time = current_time;
         write_to_client(conn);
       }
     }
@@ -3102,7 +3111,8 @@ void mg_poll_server(struct mg_server *server, int milliseconds) {
   // Close expired connections and those that need to be closed
   LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
     conn = LINKED_LIST_ENTRY(lp, struct connection, link);
-    if (conn->flags & CONN_CLOSE || current_time > conn->expire_time) {
+    ping_idle_websocket_connection(conn, current_time);
+    if (conn->flags & CONN_CLOSE || conn->last_activity_time < expire_time) {
       close_conn(conn);
     }
   }
