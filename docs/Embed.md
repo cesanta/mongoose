@@ -78,6 +78,7 @@ Mongoose source code contains a well-commented example code, listed below:
    * [hello.c](https://github.com/cesanta/mongoose/blob/master/examples/hello.c)
    shows how to handle form input, file upload, websocket communication, get
    cookie values.
+
    <!--
    * [chat](https://github.com/cesanta/mongoose/blob/master/examples/chat)
    implements basic online chat functionality using Lua scripting capabilities
