@@ -170,7 +170,7 @@ my $cmd = "$mongoose_exe ".
   "-access_log_file access.log ".
   "-error_log_file debug.log ".
   "-extra_mime_types .bar=foo/bar,.tar.gz=blah,.baz=foo " .
-  "-put_delete_auth_file $abs_root/passfile " .
+  "-dav_auth_file $abs_root/passfile " .
   '-access_control_list -0.0.0.0/0,+127.0.0.1 ' .
   "-document_root $root ".
   "-hide_files_patterns **exploit.PL ".
