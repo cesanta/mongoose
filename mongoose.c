@@ -1384,7 +1384,8 @@ static void send_websocket_handshake(struct mg_connection *conn,
 }
 
 static int deliver_websocket_frame(struct connection *conn) {
-  char *buf = conn->local_iobuf.buf;
+  // Having buf unsigned char * is important, as it is used below in arithmetic
+  unsigned char *buf = (unsigned char *) conn->local_iobuf.buf;
   int i, len, buf_len = conn->local_iobuf.len, frame_len = 0,
       mask_len = 0, header_len = 0, data_len = 0, buffered = 0;
 
@@ -1409,7 +1410,7 @@ static int deliver_websocket_frame(struct connection *conn) {
 
   if (buffered) {
     conn->mg_conn.content_len = data_len;
-    conn->mg_conn.content = buf + header_len;
+    conn->mg_conn.content = (char *) buf + header_len;
     conn->mg_conn.wsbits = buf[0];
 
     // Apply mask if necessary
