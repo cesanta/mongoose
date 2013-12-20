@@ -79,26 +79,6 @@ command on a server, and show command's output. Example:
 For more information on Server Side Includes, take a look at the Wikipedia:
 [Server Side Includes](http://en.wikipedia.org/wiki/Server_Side_Includes)
 
-### throttle
-Limit download speed for clients.  `throttle` is a comma-separated
-list of key=value pairs, where key could be:
-
-    *                   limit speed for all connections
-    x.x.x.x/mask        limit speed for specified subnet
-    uri_prefix_pattern  limit speed for given URIs
-
-The value is a floating-point number of bytes per second, optionally
-followed by a `k` or `m` character, meaning kilobytes and
-megabytes respectively. A limit of 0 means unlimited rate. The
-last matching rule wins. Examples:
-
-    *=1k,10.0.0.0/8=0   limit all accesses to 1 kilobyte per second,
-                        but give connections from 10.0.0.0/8 subnet
-                        unlimited speed
-
-    /downloads/=5k      limit accesses to all URIs in `/downloads/` to
-                        5 kilobytes per secods. All other accesses are unlimited
-
 ### access\_log\_file
 Path to a file for access logs. Either full path, or relative to current
 working directory. If absent (default), then accesses are not logged.
