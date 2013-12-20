@@ -28,7 +28,6 @@
 
 static int static_num_tests = 0;
 
-#if 0
 // Connects to host:port, and sends formatted request to it. Returns
 // malloc-ed reply and reply length, or NULL on error. Reply contains
 // everything including headers, not just the message body.
@@ -39,8 +38,8 @@ static char *wget(const char *host, int port, int *len, const char *fmt, ...) {
   struct hostent *he = NULL;
   va_list ap;
 
-  if (host != NULL ||
-      (he = gethostbyname(host)) != NULL ||
+  if (host != NULL &&
+      (he = gethostbyname(host)) != NULL &&
       (sock = socket(PF_INET, SOCK_STREAM, 0)) != -1) {
     sin.sin_family = AF_INET;
     sin.sin_port = htons((uint16_t) port);
@@ -57,7 +56,7 @@ static char *wget(const char *host, int port, int *len, const char *fmt, ...) {
       if (request_len == 0) {
         *len = 0;
         while ((n = recv(sock, buf, sizeof(buf), 0)) > 0) {
-          if (*len + n < reply_size) {
+          if (*len + n > reply_size) {
             reply = realloc(reply, reply_size + sizeof(buf)); // Leak possible
             reply_size += sizeof(buf);
           }
@@ -86,7 +85,6 @@ static char *read_file(const char *path, int *size) {
   }
   return data;
 }
-#endif
 
 static const char *test_parse_http_message() {
   struct mg_connection ri;
@@ -360,16 +358,19 @@ static const char *test_next_option(void) {
   return NULL;
 }
 
-#if 0
 static int cb1(struct mg_connection *conn) {
-  assert(conn != NULL);
-  assert(conn->server_param != NULL);
-  assert(conn->connection_param == NULL);
-  assert(strcmp((char *) conn->server_param, "foo") == 0);
+  char buf[100];
+
+  // We're not sending HTTP headers here, to make testing easier
+  snprintf(buf, sizeof(buf), "%s %s",
+           conn->server_param == NULL ? "?" : (char *) conn->server_param,
+           conn->connection_param == NULL ? "?" : "!");
+  mg_write(conn, buf, strlen(buf));
+
   return 1;
 }
 
-static const char *test_requests(struct mg_server *server) {
+static const char *test_regular_file(void) {
   static const char *fname = "main.c";
   int reply_len, file_len;
   char *reply, *file_data;
@@ -381,25 +382,57 @@ static const char *test_requests(struct mg_server *server) {
   ASSERT((file_data = read_file(fname, &file_len)) != NULL);
   ASSERT(file_len == st.st_size);
 
-  mg_poll_server(server, 0);
+  reply = wget("127.0.0.1", atoi(HTTP_PORT), &reply_len,
+               "GET /%s.c HTTP/1.0\r\n\r\n", fname);
+  ASSERT(reply != NULL);
+  ASSERT(reply_len > 0);
+  // TODO(lsm): test headers and content
+
+  free(reply);
+  free(file_data);
+
+  return NULL;
+}
+
+static const char *test_server_param(void) {
+  int reply_len;
+  char *reply;
+
+  reply = wget("127.0.0.1", atoi(HTTP_PORT), &reply_len, "%s",
+               "GET /cb1 HTTP/1.0\r\n\r\n");
+  ASSERT(reply != NULL);
+  ASSERT(reply_len == 5);
+  ASSERT(memcmp(reply, "foo ?", 5) == 0);  // cb1() does not send HTTP headers
+  printf("%d [%.*s]\n", reply_len, reply_len, reply);
+  free(reply);
+
+  return NULL;
+}
+
+static void *server_thread(void *param) {
+  int i;
+  for (i = 0; i < 10; i++) mg_poll_server((struct mg_server *) param, 1);
   return NULL;
 }
 
 static const char *test_server(void) {
   struct mg_server *server = mg_create_server("foo");
+
   ASSERT(server != NULL);
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
-  ASSERT(mg_set_option(server, "document_root", "..") == NULL);
+  ASSERT(mg_set_option(server, "document_root", ".") == NULL);
   mg_add_uri_handler(server, "/cb1", cb1);
-  do {
-    const char *msg = test_requests(server);
-    if (msg) return msg;
-  } while (0);
+  mg_start_thread(server_thread, server);
+  RUN_TEST(test_regular_file);
+  RUN_TEST(test_server_param);
+
+  // TODO(lsm): come up with a better way of thread sync
+  sleep(1);
+
   mg_destroy_server(&server);
   ASSERT(server == NULL);
   return NULL;
 }
-#endif
 
 static const char *run_all_tests(void) {
   RUN_TEST(test_should_keep_alive);
@@ -413,7 +446,7 @@ static const char *run_all_tests(void) {
   RUN_TEST(test_mg_parse_header);
   RUN_TEST(test_get_var);
   RUN_TEST(test_next_option);
-  //RUN_TEST(test_server);
+  RUN_TEST(test_server);
   return NULL;
 }
 

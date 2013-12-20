@@ -1746,6 +1746,10 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   struct iobuf *loc = &conn->local_iobuf;
   struct mg_connection *c = &conn->mg_conn;
 
+  // Header parsing does memset() on the whole mg_connection, nullifying
+  // connection_param and server_param. Set them just before calling back.
+  c->server_param = conn->server->server_data;
+
   c->content = loc->buf;
 #ifndef NO_WEBSOCKET
   if (conn->mg_conn.is_websocket) {
