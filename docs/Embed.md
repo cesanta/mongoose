@@ -77,8 +77,8 @@ Below is the list of compilation flags that enable or disable certain
 features. By default, some features are enabled, and could be disabled
 by setting appropriate `NO_*` flag. Features that are disabled by default
 could be enabled by setting appropriate `USE_*` flag. Bare bones Mongoose
-is quite small, about 30 kilobytes compiled x86 code. Each feature adds
-couple of kilobytes to the executable size, and some runtime penalty.
+is quite small, about 30 kilobytes of compiled x86 code. Each feature adds
+a couple of kilobytes to the executable size, and also has some runtime penalty.
 
     -DNO_AUTH         Disable MD5 authorization support
     -DNO_CGI          Disable CGI support
