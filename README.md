@@ -64,6 +64,7 @@ license. Businesses have an option to get a non-restrictive,
 royalty-free license and professional support from
 [Cesanta Software](http://cesanta.com/products.html).
 
-[Super Light Regular Expression library](https://github.com/cesanta/slre) is
-another project by Cesanta Software, developed with the same philosophy
+[Super Light Regular Expression library](https://github.com/cesanta/slre),
+[Super Light DNS Resolver](https://github.com/cesanta/sldr)
+are other projects by Cesanta Software, developed with the same philosophy
 of functionality and simplicity.
