@@ -3118,7 +3118,7 @@ void add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   }
 }
 
-void mg_poll_server(struct mg_server *server, int milliseconds) {
+unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
   struct ll *lp, *tmp;
   struct connection *conn;
   struct timeval tv;
@@ -3127,7 +3127,7 @@ void mg_poll_server(struct mg_server *server, int milliseconds) {
   time_t current_time = time(NULL), expire_time = current_time -
     atoi(server->config_options[IDLE_TIMEOUT_MS]) / 1000;
 
-  if (server->listening_sock == INVALID_SOCKET) return;
+  if (server->listening_sock == INVALID_SOCKET) return 0;
 
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
@@ -3193,6 +3193,8 @@ void mg_poll_server(struct mg_server *server, int milliseconds) {
       close_conn(conn);
     }
   }
+
+  return (unsigned int) current_time;
 }
 
 void mg_destroy_server(struct mg_server **server) {
@@ -3418,6 +3420,17 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   }
 
   return error_msg;
+}
+
+void mg_set_listening_socket(struct mg_server *server, int sock) {
+  if (server->listening_sock != INVALID_SOCKET) {
+    closesocket(server->listening_sock);
+  }
+  server->listening_sock = sock;
+}
+
+int mg_get_listening_socket(struct mg_server *server) {
+  return server->listening_sock;
 }
 
 const char *mg_get_option(const struct mg_server *server, const char *name) {

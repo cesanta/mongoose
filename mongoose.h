@@ -62,11 +62,13 @@ typedef int (*mg_handler_t)(struct mg_connection *);
 struct mg_server *mg_create_server(void *server_param);
 void mg_destroy_server(struct mg_server **);
 const char *mg_set_option(struct mg_server *, const char *opt, const char *val);
-void mg_poll_server(struct mg_server *, int milliseconds);
+unsigned int mg_poll_server(struct mg_server *, int milliseconds);
 void mg_add_uri_handler(struct mg_server *, const char *uri, mg_handler_t);
 void mg_set_http_error_handler(struct mg_server *, mg_handler_t);
 const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
+void mg_set_listening_socket(struct mg_server *, int sock);
+int mg_get_listening_socket(struct mg_server *);
 int mg_iterate_over_connections(struct mg_server *,
                                 void (*func)(struct mg_connection *, void *),
                                 void *param);
