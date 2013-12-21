@@ -109,6 +109,12 @@ typedef struct stat file_stat_t;
 #define O_BINARY 0
 #endif
 
+#ifdef USE_SSL
+// Following define gets rid of openssl deprecation messages
+#define MAC_OS_X_VERSION_MIN_REQUIRED MAC_OS_X_VERSION_10_6
+#include <openssl/ssl.h>
+#endif
+
 #include "mongoose.h"
 
 struct linked_list_link { struct linked_list_link *prev, *next; };
@@ -182,8 +188,8 @@ enum {
   ACCESS_CONTROL_LIST, ACCESS_LOG_FILE, AUTH_DOMAIN, CGI_INTERPRETER,
   CGI_PATTERN, DOCUMENT_ROOT, ENABLE_DIRECTORY_LISTING, ERROR_LOG_FILE,
   EXTRA_MIME_TYPES, GLOBAL_AUTH_FILE, HIDE_FILES_PATTERN, IDLE_TIMEOUT_MS,
-  INDEX_FILES, LISTENING_PORT, DAV_AUTH_FILE, RUN_AS_USER,
-  SSL_CERTIFICATE, URL_REWRITES, NUM_OPTIONS
+  INDEX_FILES, LISTENING_PORT, DAV_AUTH_FILE,
+  RUN_AS_USER, SSL_CERTIFICATE, URL_REWRITES, NUM_OPTIONS
 };
 
 struct mg_server {
@@ -193,7 +199,8 @@ struct mg_server {
   struct linked_list_link uri_handlers;
   char *config_options[NUM_OPTIONS];
   void *server_data;
-  sock_t ctl[2];  // Control socketpair. Used to wake up from select() call
+  void *ssl_ctx;    // SSL context
+  sock_t ctl[2];    // Control socketpair. Used to wake up from select() call
 };
 
 // Expandable IO buffer
@@ -212,7 +219,9 @@ union endpoint {
 };
 
 enum endpoint_type { EP_NONE, EP_FILE, EP_CGI, EP_USER, EP_PUT };
-enum connection_flags { CONN_CLOSE = 1, CONN_SPOOL_DONE = 2, CONN_SSL = 4 };
+enum connection_flags {
+  CONN_CLOSE = 1, CONN_SPOOL_DONE = 2, CONN_SSL_HANDS_SHAKEN = 4
+};
 
 struct connection {
   struct mg_connection mg_conn;   // XXX: Must be first
@@ -232,6 +241,7 @@ struct connection {
   int request_len;  // Request length, including last \r\n after last header
   int flags;        // CONN_* flags: CONN_CLOSE, CONN_SPOOL_DONE, etc
   mutex_t mutex;    // Guards concurrent mg_write() calls
+  void *ssl;        // SSL descriptor
 };
 
 static void close_local_endpoint(struct connection *conn);
@@ -726,7 +736,7 @@ static void prepare_cgi_environment(struct connection *conn,
 
   addenv(blk, "SCRIPT_FILENAME=%s", prog);
   addenv(blk, "PATH_TRANSLATED=%s", prog);
-  addenv(blk, "HTTPS=%s", conn->flags & CONN_SSL ? "on" : "off");
+  addenv(blk, "HTTPS=%s", conn->ssl != NULL ? "on" : "off");
 
   if ((s = mg_get_header(ri, "Content-Type")) != NULL)
     addenv(blk, "CONTENT_TYPE=%s", s);
@@ -892,6 +902,15 @@ static struct connection *accept_new_connection(struct mg_server *server) {
     closesocket(sock);
   } else if ((conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
     closesocket(sock);
+#ifdef USE_SSL
+  } else if (server->ssl_ctx != NULL &&
+             ((conn->ssl = SSL_new(server->ssl_ctx)) == NULL ||
+              SSL_set_fd(conn->ssl, sock) != 1)) {
+    DBG(("SSL error"));
+    closesocket(sock);
+    free(conn);
+    conn = NULL;
+#endif
   } else {
     set_close_on_exec(sock);
     set_non_blocking_mode(sock);
@@ -913,6 +932,9 @@ static void close_conn(struct connection *conn) {
   free(conn->path_info);
   free(conn->remote_iobuf.buf);
   free(conn->local_iobuf.buf);
+#ifdef USE_SSL
+  if (conn->ssl != NULL) SSL_free(conn->ssl);
+#endif
   mutex_destroy(&conn->mutex);
   free(conn);
 }
@@ -1494,7 +1516,12 @@ static int is_error(int n) {
 
 static void write_to_client(struct connection *conn) {
   struct iobuf *io = &conn->remote_iobuf;
-  int n = send(conn->client_sock, io->buf, io->len, 0);
+  int n = conn->ssl == NULL ? send(conn->client_sock, io->buf, io->len, 0) :
+#ifdef USE_SSL
+    SSL_write(conn->ssl, io->buf, io->len);
+#else
+  0;
+#endif
 
   DBG(("Written %d of %d(%d): [%.*s ...]", n, io->len, io->size, 40, io->buf));
 
@@ -2914,7 +2941,21 @@ static void process_request(struct connection *conn) {
 
 static void read_from_client(struct connection *conn) {
   char buf[IOBUF_SIZE];
-  int n = recv(conn->client_sock, buf, sizeof(buf), 0);
+  int n = 0;
+  if (conn->ssl != NULL) {
+#ifdef USE_SSL
+    if (conn->flags & CONN_SSL_HANDS_SHAKEN) {
+      n = SSL_read(conn->ssl, buf, sizeof(buf));
+    } else {
+      if (SSL_accept(conn->ssl) == 1) {
+        conn->flags |= CONN_SSL_HANDS_SHAKEN;
+      }
+      return;
+    }
+#endif
+  } else {
+    n = recv(conn->client_sock, buf, sizeof(buf), 0);
+  }
 
   if (is_error(n)) {
     conn->flags |= CONN_CLOSE;
@@ -3167,6 +3208,9 @@ void mg_destroy_server(struct mg_server **server) {
     LINKED_LIST_FOREACH(&(*server)->uri_handlers, lp, tmp) {
       free(LINKED_LIST_ENTRY(lp, struct uri_handler, link));
     }
+#ifdef USE_SSL
+    if ((*server)->ssl_ctx != NULL) SSL_CTX_free((*server)->ssl_ctx);
+#endif
     free(*server);
     *server = NULL;
   }
@@ -3357,6 +3401,19 @@ const char *mg_set_option(struct mg_server *server, const char *name,
         error_msg = "setuid() failed";
       }
 #endif
+    } else if (ind == SSL_CERTIFICATE) {
+#ifdef USE_SSL
+      SSL_library_init();
+      //SSL_load_error_strings();
+      if ((server->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
+        error_msg = "SSL_CTX_new() failed";
+      } else if (SSL_CTX_use_certificate_file(server->ssl_ctx, value, 1) == 0 ||
+                 SSL_CTX_use_PrivateKey_file(server->ssl_ctx, value, 1) == 0) {
+        error_msg = "Cannot load PEM file";
+      } else {
+        SSL_CTX_use_certificate_chain_file(server->ssl_ctx, value);
+      }
+#endif
     }
   }
 
@@ -3383,7 +3440,13 @@ struct mg_server *mg_create_server(void *server_data) {
 
   LINKED_LIST_INIT(&server->active_connections);
   LINKED_LIST_INIT(&server->uri_handlers);
-  do { mg_socketpair(server->ctl); } while (server->ctl[0] < 0);
+
+  // Create control socket pair. Do it in a loop to protect from
+  // interrupted syscalls in mg_socketpair().
+  do {
+    mg_socketpair(server->ctl);
+  } while (server->ctl[0] < 0);
+
   server->server_data = server_data;
   server->listening_sock = INVALID_SOCKET;
   set_default_option_values(server->config_options);
