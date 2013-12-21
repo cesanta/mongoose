@@ -11,20 +11,6 @@ static void iterate_callback(struct mg_connection *c, void *param) {
   }
 }
 
-// This thread sends heartbeats to all websocket connections with 1s interval.
-// The heartbeat message is simply an iteration counter.
-static void *timer_thread(void *param) {
-  struct mg_server *server = (struct mg_server *) param;
-  int i;
-
-  for (i = 0; i < 9999999; i++) {
-    sleep(10);
-    mg_iterate_over_connections(server, iterate_callback, &i);
-  }
-
-  return NULL;
-}
-
 // This handler is called for each incoming websocket frame, one or more
 // times for connection lifetime.
 static int handler(struct mg_connection *conn) {
@@ -42,15 +28,19 @@ static int handler(struct mg_connection *conn) {
 
 int main(int argc, char *argv[]) {
   struct mg_server *server = mg_create_server(NULL);
+  unsigned int current_timer = 0, last_timer = 0;
 
   mg_set_option(server, "listening_port", "8080");
   mg_set_option(server, "document_root", argc > 1 ? argv[1] : ".");
   mg_add_uri_handler(server, "/ws", handler);
-  mg_start_thread(timer_thread, server);
 
   printf("Started on port %s\n", mg_get_option(server, "listening_port"));
   for (;;) {
-    mg_poll_server(server, 3000);
+    current_timer = mg_poll_server(server, 1);
+    if (current_timer - last_timer > 4) {
+      last_timer = current_timer;
+      mg_iterate_over_connections(server, iterate_callback, &current_timer);
+    }
   }
 
   mg_destroy_server(&server);
