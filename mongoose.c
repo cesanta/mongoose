@@ -117,9 +117,9 @@ typedef struct stat file_stat_t;
 
 #include "mongoose.h"
 
-struct linked_list_link { struct linked_list_link *prev, *next; };
+struct ll { struct ll *prev, *next; };
 #define LINKED_LIST_INIT(N)  ((N)->next = (N)->prev = (N))
-#define LINKED_LIST_DECLARE_AND_INIT(H)  struct linked_list_link H = { &H, &H }
+#define LINKED_LIST_DECLARE_AND_INIT(H)  struct ll H = { &H, &H }
 #define LINKED_LIST_ENTRY(P,T,N)  ((T *)((char *)(P) - offsetof(T, N)))
 #define LINKED_LIST_IS_EMPTY(N)  ((N)->next == (N))
 #define LINKED_LIST_FOREACH(H,N,T) \
@@ -171,7 +171,7 @@ struct vec {
 };
 
 struct uri_handler {
-  struct linked_list_link link;
+  struct ll link;
   char *uri;
   mg_handler_t handler;
 };
@@ -195,8 +195,8 @@ enum {
 struct mg_server {
   sock_t listening_sock;
   union socket_address lsa;   // Listening socket address
-  struct linked_list_link active_connections;
-  struct linked_list_link uri_handlers;
+  struct ll active_connections;
+  struct ll uri_handlers;
   char *config_options[NUM_OPTIONS];
   void *server_data;
   void *ssl_ctx;    // SSL context
@@ -225,7 +225,7 @@ enum connection_flags {
 
 struct connection {
   struct mg_connection mg_conn;   // XXX: Must be first
-  struct linked_list_link link;   // Linkage to server->active_connections
+  struct ll link;                 // Linkage to server->active_connections
   struct mg_server *server;
   sock_t client_sock;             // Connected client
   struct iobuf local_iobuf;
@@ -1709,7 +1709,7 @@ static int is_not_modified(const struct connection *conn,
 
 static struct uri_handler *find_uri_handler(struct mg_server *server,
                                             const char *uri) {
-  struct linked_list_link *lp, *tmp;
+  struct ll *lp, *tmp;
   struct uri_handler *uh;
 
   LINKED_LIST_FOREACH(&server->uri_handlers, lp, tmp) {
@@ -3119,7 +3119,7 @@ void add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
 }
 
 void mg_poll_server(struct mg_server *server, int milliseconds) {
-  struct linked_list_link *lp, *tmp;
+  struct ll *lp, *tmp;
   struct connection *conn;
   struct timeval tv;
   fd_set read_set, write_set;
@@ -3196,7 +3196,7 @@ void mg_poll_server(struct mg_server *server, int milliseconds) {
 }
 
 void mg_destroy_server(struct mg_server **server) {
-  struct linked_list_link *lp, *tmp;
+  struct ll *lp, *tmp;
 
   if (server != NULL && *server != NULL) {
     closesocket((*server)->listening_sock);
@@ -3221,7 +3221,7 @@ void mg_destroy_server(struct mg_server **server) {
 int mg_iterate_over_connections(struct mg_server *server,
                                 void (*func)(struct mg_connection *, void *),
                                 void *param) {
-  struct linked_list_link *lp, *tmp;
+  struct ll *lp, *tmp;
   struct connection *conn;
   int num_connections = 0;
 
