@@ -73,6 +73,25 @@ the reply line with status code `HTTP/1.0 200 OK`, HTTP headers which are
 empty in our example, and message body `Hello world!\n`. Note that reply
 line is ended with `\r\n`, and HTTP headers are also ended with `\r\n`.
 
+Below is the list of compilation flags that enable or disable certain
+features. By default, some features are enabled, and could be disabled
+by setting appropriate `NO_*` flag. Features that are disabled by default
+could be enabled by setting appropriate `USE_*` flag. Bare bones Mongoose
+is quite small, about 30 kilobytes compiled x86 code. Each feature adds
+couple of kilobytes to the executable size, and some runtime penalty.
+
+    -DNO_AUTH         Disable MD5 authorization support
+    -DNO_CGI          Disable CGI support
+    -DNO_DAV          Disable WebDAV support (PUT, DELETE, MKCOL, PROPFIND)
+    -DNO_DIRECTORY_LISTING  Disable directory listing
+    -DNO_LOGGING      Disable access/error logging
+    -DNO_WEBSOCKET    Disable WebSocket support
+
+    -DUSE_IPV6        Enable IPv6 support
+    -DUSE_LUA         Enable Lua scripting
+    -DUSE_LUA_SQLITE3 Enable sqlite3 binding for Lua
+    -DUSE_SSL         Enable SSL
+
 Mongoose source code contains a well-commented example code, listed below:
 
    * [hello.c](https://github.com/cesanta/mongoose/blob/master/examples/hello.c)
