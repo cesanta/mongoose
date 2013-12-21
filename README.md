@@ -19,7 +19,7 @@ simplicity by carefully selected list of features:
   [page.lp](https://github.com/cesanta/mongoose/blob/master/test/page.lp) ),
   which provides ready to go, powerful web development platform in
   one single-click executable with **no dependencies**: forget LAMP!
-- Support for CGI, SSL, SSI, Digest (MD5) authorization, Websocket, WEbDAV
+- Support for CGI, SSL, Digest (MD5) authorization, Websocket, WEbDAV
 - Resumed download, URL rewrite, file blacklist, IP-based ACL, Windows service
 - Simple and clean embedding API,
   [mongoose.h](https://github.com/cesanta/mongoose/blob/master/mongoose.h).
