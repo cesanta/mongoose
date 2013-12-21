@@ -3355,7 +3355,7 @@ struct mg_server *mg_create_server(void *server_data) {
 
   LINKED_LIST_INIT(&server->active_connections);
   LINKED_LIST_INIT(&server->uri_handlers);
-  mg_socketpair(server->ctl);
+  do { mg_socketpair(server->ctl); } while (server->ctl[0] < 0);
   server->server_data = server_data;
   server->listening_sock = INVALID_SOCKET;
   set_default_option_values(server->config_options);
