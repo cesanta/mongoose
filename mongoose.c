@@ -774,7 +774,6 @@ static void prepare_cgi_environment(struct connection *conn,
 }
 
 static void open_cgi_endpoint(struct connection *conn, const char *prog) {
-  static const char ok_200[] = "HTTP/1.1 200 OK\r\n";
   struct cgi_env_block blk;
   char dir[MAX_PATH_SIZE], *p = NULL;
   sock_t fds[2];
@@ -802,7 +801,6 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
                     prog, blk.buf, blk.vars, dir, fds[1]) > 0) {
     conn->endpoint_type = EP_CGI;
     conn->endpoint.cgi_sock = fds[0];
-    spool(&conn->remote_iobuf, ok_200, sizeof(ok_200) - 1);
   } else {
     closesocket(fds[0]);
     send_http_error(conn, 500);
@@ -2928,12 +2926,42 @@ static void read_from_client(struct connection *conn) {
 
 static void read_from_cgi(struct connection *conn) {
   char buf[IOBUF_SIZE];
-  int n = recv(conn->endpoint.cgi_sock, buf, sizeof(buf), 0);
+  int len, n = recv(conn->endpoint.cgi_sock, buf, sizeof(buf), 0);
 
   DBG(("-> %d", n));
   if (is_error(n)) {
     close_local_endpoint(conn);
   } else if (n > 0) {
+    if (conn->num_bytes_sent == 0 && conn->remote_iobuf.len == 0) {
+      // Parse CGI headers, and modify the reply line if needed
+      if ((len = get_request_len(buf, n)) > 0) {
+        char *s = buf, *status = NULL, buf2[sizeof(buf)];
+        struct mg_connection c;
+        int i, k;
+
+        memset(&c, 0, sizeof(c));
+        buf[len - 1] = '\0';
+        parse_http_headers(&s, &c);
+        if (mg_get_header(&c, "Location") != NULL) {
+          status = "302 Moved";
+        } else if ((status = (char *) mg_get_header(&c, "Status")) == NULL) {
+          status = "200 OK";
+        }
+        k = mg_snprintf(buf2, sizeof(buf2), "HTTP/1.1 %s\r\n", status);
+        spool(&conn->remote_iobuf, buf2, k);
+        for (i = 0; i < c.num_headers; i++) {
+          k = mg_snprintf(buf2, sizeof(buf2), "%s: %s\r\n",
+                          c.http_headers[i].name, c.http_headers[i].value);
+          spool(&conn->remote_iobuf, buf2, k);
+        }
+        spool(&conn->remote_iobuf, "\r\n", 2);
+        memmove(buf, buf + len, n - len);
+        n -= len;
+      } else {
+        static const char ok_200[] = "HTTP/1.1 200 OK\r\n";
+        spool(&conn->remote_iobuf, ok_200, sizeof(ok_200) - 1);
+      }
+    }
     spool(&conn->remote_iobuf, buf, n);
   }
 }

@@ -362,8 +362,8 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   o("GET /dir%20with%20spaces/hello.cgi HTTP/1.0\n\r\n",
       'HTTP/1.1 200 OK.+hello', 'CGI script with spaces in path');
   o("GET /env.cgi HTTP/1.0\n\r\n", 'HTTP/1.1 200 OK', 'GET CGI file');
-#  o("GET /bad2.cgi HTTP/1.0\n\n", "HTTP/1.1 123 Please pass me to the client\r",
-#    'CGI Status code text');
+  o("GET /bad2.cgi HTTP/1.0\n\n", "HTTP/1.1 302 Please pass me to the client\r",
+    'CGI Status code text');
   o("GET /sh.cgi HTTP/1.0\n\r\n", 'shell script CGI',
     'GET sh CGI file') unless on_windows();
   o("GET /env.cgi?var=HELLO HTTP/1.0\n\n", 'QUERY_STRING=var=HELLO',
