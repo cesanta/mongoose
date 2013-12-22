@@ -3,17 +3,24 @@
     struct mg_server *mg_create_server(void *server_param);
 
 Creates web server instance. Returns opaque instance pointer, or NULL if
-there is not enough memory. Note that this function doesn't make the
-server instance to serve. Serving is done by `mg_poll_server()` function.
-Web server instance has a list of active connections, initially empty,
-and a list of URI handlers, initially empty, a list of configuration
-options that can be modified by `mg_set_option()`.
+there is not enough memory. `server_param`: Could be any pointer, or NULL.
+This pointer will be passed
+to the callback functions as `struct mg_connection::server_param` field.
+A common use case is to pass `this` pointer of the C++ wrapper class
+as `user_param`, to let the callback get the pointer to the C++
+object.
 
-  `user_param`: Could be any pointer, or NULL. This pointer will be passed
-    to callback functions as `struct mg_connection::server_param` field.
-    A common use case is to pass `this` pointer of the C++ wrapper class
-    as `user_param`, to let the callback get the pointer to the C++
-    object.
+Note that this function doesn't make the
+server instance to serve. Serving is done by `mg_poll_server()` function.
+Mongoose has single-threaded, event-driven, asynchronous, non-blocking core.
+When server instance is created, it contains an information about
+the configuration and the state of each connection.
+Server instance is capable on listening on only one port. After creation,
+`struct mg_server` has a list
+of active connections, initially empty. It has a list of URI handlers,
+initially empty, and configuration parameters. Configuration can be
+altered by `mg_set_option()`, and new URI handlers could be added by
+`mg_add_uri_handler()`.
 
 Side-effect: on UNIX, `mg_create_server()` ignores SIGPIPE signals. If custom
 processing is required SIGPIPE, signal handler must be set up after
@@ -59,6 +66,23 @@ Adds an URI handler. If Mongoose gets a request and request's URI starts
 with `uri`, then specified handler is called to serve the request. Thus, an
 `uri` is a match prefix. For example, if `uri` is "/", then all requests will
 be routed to the handler, because all URIs start with `/` character.
+
+When mongoose buffers in HTTP request and successfully parses it, it calls
+appropriate URI handler immediately for GET requests. For POST requests,
+Mongoose delays the call until the whole POST request is buffered in memory.
+POST data is available to the callback as `struct mg_connection::content`,
+and POST data length is in `struct mg_connection::content_len`.
+
+Note that websocket connections are treated the same way. Mongoose buffers
+websocket frame in memory, and calls URI handler when frame is fully
+buffered. Frame data is available `struct mg_connection::content`, and
+data length is in `struct mg_connection::content_len`, i.e. very similar to
+the POST request. `struct mg_connection::is_websocket` flag indicates
+whether the request is websocket or not. Also, for websocket requests,
+there is `struct mg_connection::wsbits` field which contains first byte
+of the websocket frame which URI handler can examine. Note that to
+reply to the websocket client, `mg_websocket_write()` should be used.
+To reply to the plain HTTP client, `mg_write()` should be used.
 
     void mg_set_http_error_handler(struct mg_server *, mg_handler_t);
 
