@@ -23,13 +23,11 @@ Here's a minimal application `app.c` that embeds mongoose:
     }
 
 To compile it, put `mongoose.c`, `mongoose.h` and `minimal.c` into one
-folder, then run the following UNIX command:
+folder, start terminal on UNIX or Visual Studio command line prompt on Windows,
+and run the following command:
 
-    cc app.c mongoose.c -o app
-
-If you're on Windows, run this in a Visual Studio shell:
-
-    cl app.c mongoose.c /TC /MD
+    cc app.c mongoose.c -o app    # on Unix
+    cl app.c mongoose.c /TC /MD   # on Windows
 
 When run, this simple application opens port 8080 and serves static files,
 CGI files and lists directory content in the current working directory.
