@@ -35,10 +35,8 @@ LFLAGS  = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
 
 windows:
 	$(CL) hello.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
+	$(CL) post.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 #	$(CL) upload.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
-#	$(CL) upload.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
-#	$(CL) post.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
-#	$(CL) post.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 #	$(CL) /DUSE_WEBSOCKET websocket.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 #$(CL) lua_dll.c $(CLFLAGS) $(DLL_FLAGS) /DLL $(LFLAGS) /SUBSYSTEM:WINDOWS /ENTRY:luaopen_lua_dll /EXPORT:luaopen_lua_dll /out:lua_dll.dll
 
