@@ -1714,7 +1714,7 @@ static struct uri_handler *find_uri_handler(struct mg_server *server,
 
   LINKED_LIST_FOREACH(&server->uri_handlers, lp, tmp) {
     uh = LINKED_LIST_ENTRY(lp, struct uri_handler, link);
-    if (!strcmp(uh->uri, uri)) return uh;
+    if (!strncmp(uh->uri, uri, strlen(uh->uri))) return uh;
   }
 
   return NULL;
