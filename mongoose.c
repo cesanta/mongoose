@@ -1478,7 +1478,8 @@ int mg_websocket_write(struct mg_connection* conn, int opcode,
     } else {
       // 64-bit length field
       copy[1] = 127;
-      * (uint32_t *) (copy + 2) = (uint32_t) htonl((uint64_t) data_len >> 32);
+      * (uint32_t *) (copy + 2) = (uint32_t)
+        htonl((uint32_t) ((uint64_t) data_len >> 32));
       * (uint32_t *) (copy + 6) = (uint32_t) htonl(data_len & 0xffffffff);
       memcpy(copy + 10, data, data_len);
       copy_len = 10 + data_len;
@@ -3097,8 +3098,8 @@ static void close_local_endpoint(struct connection *conn) {
 
 static void transfer_file_data(struct connection *conn) {
   char buf[IOBUF_SIZE];
-  int n = read(conn->endpoint.fd, buf,
-               conn->cl < (int64_t) sizeof(buf) ? conn->cl : (int) sizeof(buf));
+  int n = read(conn->endpoint.fd, buf, conn->cl < (int64_t) sizeof(buf) ?
+               (int) conn->cl : (int) sizeof(buf));
 
   if (is_error(n)) {
     close_local_endpoint(conn);
