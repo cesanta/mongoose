@@ -19,9 +19,9 @@ endif
 all:
 	$(CC) hello.c ../mongoose.c  -o hello $(CFLAGS)
 	$(CC) qcomm.c ../mongoose.c  -o qcomm $(CFLAGS)
+	$(CC) post.c ../mongoose.c -o post $(CFLAGS)
 
 #	$(CC) upload.c ../mongoose.c -o upload $(CFLAGS)
-#	$(CC) post.c ../mongoose.c -o post $(CFLAGS)
 #	$(CC) -DUSE_WEBSOCKET websocket.c ../mongoose.c -o $@ $(CFLAGS)
 #	$(CC) chat.c ../mongoose.c -o chat $(CFLAGS)
 #	$(CC) lua_dll.c ../build/lua_5.2.1.c -o $@.so $(CFLAGS) $(DLL_FLAGS)
