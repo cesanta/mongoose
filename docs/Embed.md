@@ -2,7 +2,7 @@
 
 Embedding Mongoose is done in two steps:
 
-   1. Copy
+   1. Download and copy two files:
     [mongoose.c](https://raw.github.com/cesanta/mongoose/master/mongoose.c) and
     [mongoose.h](https://raw.github.com/cesanta/mongoose/master/mongoose.h)
     to your application's source tree and include these two files in the build.
