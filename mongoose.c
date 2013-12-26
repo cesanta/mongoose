@@ -475,7 +475,7 @@ static void send_http_error(struct connection *conn, int code) {
   close_local_endpoint(conn);  // This will write to the log file
 }
 
-static void mg_printf(struct connection *conn, const char *fmt, ...) {
+static void mg_fmt(struct connection *conn, const char *fmt, ...) {
   char buf[IOBUF_SIZE];
   va_list ap;
   int len;
@@ -486,6 +486,53 @@ static void mg_printf(struct connection *conn, const char *fmt, ...) {
 
   spool(&conn->remote_iobuf, buf, len);
   close_local_endpoint(conn);  // Log the request
+}
+
+// Print message to buffer. If buffer is large enough to hold the message,
+// return buffer. If buffer is to small, allocate large enough buffer on heap,
+// and return allocated buffer.
+static int alloc_vprintf(char **buf, size_t size, const char *fmt, va_list ap) {
+  va_list ap_copy;
+  int len;
+
+  // Windows is not standard-compliant, and vsnprintf() returns -1 if
+  // buffer is too small. Also, older versions of msvcrt.dll do not have
+  // _vscprintf().  However, if size is 0, vsnprintf() behaves correctly.
+  // Therefore, we make two passes: on first pass, get required message length.
+  // On second pass, actually print the message.
+  va_copy(ap_copy, ap);
+  len = vsnprintf(NULL, 0, fmt, ap_copy);
+
+  if (len > (int) size &&
+      (size = len + 1) > 0 &&
+      (*buf = (char *) malloc(size)) == NULL) {
+    len = -1;  // Allocation failed, mark failure
+  } else {
+    va_copy(ap_copy, ap);
+    vsnprintf(*buf, size, fmt, ap_copy);
+  }
+
+  return len;
+}
+
+int mg_vprintf(struct mg_connection *conn, const char *fmt, va_list ap) {
+  char mem[IOBUF_SIZE], *buf = mem;
+  int len;
+
+  if ((len = alloc_vprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
+    len = mg_write(conn, buf, (size_t) len);
+  }
+  if (buf != mem && buf != NULL) {
+    free(buf);
+  }
+
+  return len;
+}
+
+int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  return mg_vprintf(conn, fmt, ap);
 }
 
 // A helper function for traversing a comma separated list of values.
@@ -2232,7 +2279,7 @@ static void handle_put(struct connection *conn, const char *path) {
 
   conn->mg_conn.status_code = !stat(path, &st) ? 200 : 201;
   if ((rc = put_dir(path)) == 0) {
-    mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->mg_conn.status_code);
+    mg_fmt(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->mg_conn.status_code);
   } else if (rc == -1) {
     send_http_error(conn, 500);
   } else if (cl_hdr == NULL) {
@@ -2282,12 +2329,12 @@ static void send_options(struct connection *conn) {
 #ifndef NO_AUTH
 static void send_authorization_request(struct connection *conn) {
   conn->mg_conn.status_code = 401;
-  mg_printf(conn,
-            "HTTP/1.1 401 Unauthorized\r\n"
-            "WWW-Authenticate: Digest qop=\"auth\", "
-            "realm=\"%s\", nonce=\"%lu\"\r\n\r\n",
-            conn->server->config_options[AUTH_DOMAIN],
-            (unsigned long) time(NULL));
+  mg_fmt(conn,
+         "HTTP/1.1 401 Unauthorized\r\n"
+         "WWW-Authenticate: Digest qop=\"auth\", "
+         "realm=\"%s\", nonce=\"%lu\"\r\n\r\n",
+         conn->server->config_options[AUTH_DOMAIN],
+         (unsigned long) time(NULL));
 }
 
 // Use the global passwords file, if specified by auth_gpass option,
@@ -2921,8 +2968,8 @@ static void open_local_endpoint(struct connection *conn) {
     send_http_error(conn, 404);
   } else if (is_directory &&
              conn->mg_conn.uri[strlen(conn->mg_conn.uri) - 1] != '/') {
-    mg_printf(conn, "HTTP/1.1 301 Moved Permanently\r\n"
-              "Location: %s/\r\n\r\n", conn->mg_conn.uri);
+    mg_fmt(conn, "HTTP/1.1 301 Moved Permanently\r\n"
+           "Location: %s/\r\n\r\n", conn->mg_conn.uri);
   } else if (is_directory && !find_index_file(conn, path, sizeof(path), &st)) {
     if (!mg_strcasecmp(dir_lst, "yes")) {
 #ifndef NO_DIRECTORY_LISTING

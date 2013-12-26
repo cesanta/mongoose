@@ -77,6 +77,7 @@ int mg_iterate_over_connections(struct mg_server *,
 int mg_write(struct mg_connection *, const void *buf, int len);
 int mg_websocket_write(struct mg_connection *, int opcode,
                        const char *data, size_t data_len);
+int mg_printf(struct mg_connection *conn, const char *fmt, ...);
 
 const char *mg_get_header(const struct mg_connection *, const char *name);
 const char *mg_get_mime_type(const char *file_name);
