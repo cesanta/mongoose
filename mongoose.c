@@ -3120,7 +3120,8 @@ static void read_from_cgi(struct connection *conn) {
     if (conn->num_bytes_sent == 0 && conn->remote_iobuf.len == 0) {
       // Parse CGI headers, and modify the reply line if needed
       if ((len = get_request_len(buf, n)) > 0) {
-        char *s = buf, *status = NULL, buf2[sizeof(buf)];
+        const char *status = NULL;
+        char *s = buf, buf2[sizeof(buf)];
         struct mg_connection c;
         int i, k;
 
