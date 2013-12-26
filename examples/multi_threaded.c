@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include "mongoose.h"
 
+// Start a browser and hit refresh couple of times. The replies will
+// come from both server instances.
 static int request_handler(struct mg_connection *conn) {
   mg_printf(conn, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n"
             "This is a reply from server instance # %s",
