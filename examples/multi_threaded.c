@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include "mongoose.h"
 
 // Start a browser and hit refresh couple of times. The replies will
