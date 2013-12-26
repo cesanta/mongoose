@@ -449,6 +449,14 @@ static void start_mongoose(int argc, char *argv[]) {
     free(options[i + 1]);
   }
 
+  // Add an ability to pass listening socket to mongoose
+  {
+    const char *env = getenv("MONGOOSE_LISTENING_SOCKET");
+    if (env != NULL && atoi(env) > 0 ) {
+      mg_set_listening_socket(server, atoi(env));
+    }
+  }
+
   // Setup signal handler: quit on Ctrl-C
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
