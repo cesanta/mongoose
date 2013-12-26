@@ -27,8 +27,10 @@ simplicity by carefully selected list of features:
   [mongoose.c](https://github.com/cesanta/mongoose/blob/master/mongoose.c) file
   to make things easy.
 - Extremely lightweight, has a core of under 40kB and tiny runtime footprint
+- Asyncronouns, non-blocking core supporting single- or multi-threaded usage
 - On the market since 2004, stable, mature and tested,
-  has thousands of man-hours invested in continuous improvement and refinement
+  has dozens of thousands of man-hours invested in continuous improvement
+  and refinement
 
 Note that Windows and MacOS binaries have following 3rd party software
 compiled in:
