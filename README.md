@@ -26,6 +26,9 @@ simplicity by carefully selected list of features:
   The source is in single
   [mongoose.c](https://github.com/cesanta/mongoose/blob/master/mongoose.c) file
   to make things easy.
+- Extremely lightweight, has a core of under 40kB and tiny runtime footprint
+- On the market since 2004, stable, mature and tested,
+  has thousands of man-hours invested in continuous improvement and refinement
 
 Note that Windows and MacOS binaries have following 3rd party software
 compiled in:
@@ -58,11 +61,11 @@ F.Morenius, and 10 others.
 
 # Licensing
 
-Mongoose is licensed under the terms of
-[GNU GPLv.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
-license. Businesses have an option to get a non-restrictive,
-royalty-free license and professional support from
-[Cesanta Software](http://cesanta.com/products.html).
+Mongoose is released under
+[GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
+Businesses have an option to get non-restrictive, royalty-free commercial
+license and professional support from
+[Cesanta Software](http://cesanta.com).
 
 [Super Light Regular Expression library](https://github.com/cesanta/slre),
 [Super Light DNS Resolver](https://github.com/cesanta/sldr)
