@@ -3,34 +3,13 @@
 #
 # This Makefile is GNU make compatible. You can get GNU Make from
 # http://gnuwin32.sourceforge.net/packages/make.htm
-#
-# Example custom build:
-# CFLAGS_EXTRA="-g -O0 -DNO_SSL_DL -DUSE_LUA -llua -lcrypto -lssl" make linux
-#
-# Flags are:
-# -DHAVE_MD5              - use system md5 library (-2kb)
-# -DNDEBUG                - strip off all debug code (-5kb)
-# -DDEBUG                 - build debug version (very noisy) (+7kb)
-# -DNO_CGI                - disable CGI support (-5kb)
-# -DNO_SSL                - disable SSL functionality (-2kb)
-# -DNO_SSL_DL             - link against system libssl library (-1kb)
-# -DCONFIG_FILE=\"file\"  - use `file' as the default config file
-# -DSSL_LIB=\"libssl.so.<version>\"   - use system versioned SSL shared object
-# -DCRYPTO_LIB=\"libcrypto.so.<version>\" - use system versioned CRYPTO so
-# -DUSE_LUA               - embed Lua in Mongoose (+100kb)
 
 PROG = mongoose
 EXE_SUFFIX =
 CFLAGS = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe -I. -I.. $(CFLAGS_EXTRA)
 VERSION = $(shell perl -lne \
-            'print $$1 if /define\s+MONGOOSE_VERSION\s+"(\S+)"/' ../mongoose.c)
-
-# The order in which files are listed is important
-SOURCES = src/internal.h src/util.c src/string.c src/parse_date.c \
-          src/options.c src/crypto.c src/auth.c src/win32.c src/unix.c \
-          src/mg_printf.c src/ssl.c src/http_client.c src/mime.c \
-          src/directory.c src/log.c src/parse_http.c src/io.c src/cgi.c \
-          src/upload.c src/websocket.c src/webdav.c src/mongoose.c src/lua.c
+            'print $$1 if /define\s+MONGOOSE_VERSION\s+"(\S+)"/' ../mongoose.h)
+VDIR = mongoose-$(VERSION)
 
 TINY_SOURCES = ../mongoose.c main.c
 LUA_SOURCES = $(TINY_SOURCES) lua_5.2.1.c
@@ -61,17 +40,7 @@ else
   endif
 endif
 
-all:
-	@echo "make (unix|windows|macos)"
-
-#../mongoose.c: ../mongoose.h Makefile $(SOURCES)
-#	cat $(SOURCES) | sed '/#include "internal.h"/d' > $@
-
-unix_unit_test: $(LUA_SOURCES) Makefile ./test/unit_test.c
-	$(CC) ./test/unit_test.c lua_5.2.1.c $(CFLAGS) -g -O0 -o t && ./t
-
-core_unit_test: Makefile ./test/unit_test.c
-	$(CC) ./test/unit_test.c $(CFLAGS) -g -O0 -o t && ./t
+all: mongoose$(EXE_SUFFIX)
 
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
@@ -86,14 +55,15 @@ $(PROG)-lua: $(LUA_SOURCES)
 $(PROG)-lua-sqlite: $(LUA_SQLITE_SOURCES)
 	$(CC) $(LUA_SQLITE_SOURCES) -o $@ $(LUA_SQLITE_FLAGS) $(CFLAGS)
 
-unix: $(PROG) $(PROG)-lua
+unix_unit_test: $(LUA_SOURCES) Makefile ./test/unit_test.c
+	$(CC) ./test/unit_test.c lua_5.2.1.c $(CFLAGS) -g -O0 -o t && ./t
 
 # Windows build
-$(PROG).exe: $(LUA_SQLITE_SOURCES)
+$(PROG)-lua-sqlite.exe: $(LUA_SQLITE_SOURCES)
 	$(MSVC)/bin/rc res.rc
 	$(CL) $(LUA_SQLITE_SOURCES) $(LUA_SQLITE_FLAGS) /link $(LINK_FLAGS) res.res /out:$@
 
-$(PROG)-tiny.exe: $(TINY_SOURCES)
+$(PROG).exe: $(TINY_SOURCES)
 	$(MSVC)/bin/rc res.rc
 	$(CL) $(TINY_SOURCES) /link $(LINK_FLAGS) res.res /out:$@
 
@@ -105,8 +75,6 @@ windows_unit_test.exe: ../mongoose.c Makefile
 	$(CL) ./test/unit_test.c lua_5.2.1.c  \
           /link /libpath:$(MSVC)/lib advapi32.lib /out:$@
 	./$@
-
-windows: $(PROG).exe $(PROG)-tiny.exe
 
 # MacOS build with Cocoa GUI
 # For codesign to work in non-interactive mode, unlock login keychain:
@@ -131,10 +99,12 @@ tests:
 	perl ./test/test.pl $(TEST)
 
 tarball: clean
-	rm -rf mongoose-$(VERSION)
-	mkdir mongoose-$(VERSION)
-	install -m 644 ../{LICENSE,*.[ch]} mongoose-$(VERSION)
-	tar -czf mongoose-$(VERSION).tgz mongoose-$(VERSION)
+	rm -rf $(VDIR)
+	install -d $(VDIR) $(VDIR)/docs $(VDIR)/examples
+	install -m 644 ../{LICENSE,README.md,mongoose.[ch]} $(VDIR)
+	install -m 644 ../docs/*.md $(VDIR)/docs
+	install -m 644 ../examples/{Makefile,*.c} $(VDIR)/examples
+	tar -czf $(VDIR).tgz $(VDIR)
 
 release: tarball macos
 	wine make windows
