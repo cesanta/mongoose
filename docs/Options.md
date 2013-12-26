@@ -162,11 +162,6 @@ of the `listening_ports` is SSL. The file must be in PEM format,
 and it must have both private key and certificate, see for example
 [ssl_cert.pem](https://github.com/cesanta/mongoose/blob/master/build/ssl_cert.pem)
 
-### num_threads `50`
-Number of worker threads. Mongoose handles each incoming connection in a
-separate thread. Therefore, the value of this option is effectively a number
-of concurrent HTTP connections Mongoose can handle.
-
 ### run\_as\_user
 Switch to given user credentials after startup. Usually, this option is
 required when mongoose needs to bind on privileged port on UNIX. To do
