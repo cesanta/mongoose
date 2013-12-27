@@ -15,22 +15,21 @@ Mongoose keeps the balance between functionality and
 simplicity by carefully selected list of features:
 
 - Works on Windows, Mac, UNIX/Linux, iPhone, Android, and many other platforms
+- CGI, SSL, Digest auth, Websocket, WEbDAV
+- Resumed download, URL rewrite, file blacklist, IP-based ACL, Windows service
 - Scripting and database support (Lua Server Pages + Sqlite, see
   [page.lp](https://github.com/cesanta/mongoose/blob/master/test/page.lp) ),
   which provides ready to go, powerful web development platform in
-  one single-click executable with **no dependencies**: forget LAMP!
-- Support for CGI, SSL, Digest (MD5) authorization, Websocket, WEbDAV
-- Resumed download, URL rewrite, file blacklist, IP-based ACL, Windows service
-- Simple and clean embedding API,
-  [mongoose.h](https://github.com/cesanta/mongoose/blob/master/mongoose.h).
+  one single-click executable with no dependencies
+- Simple and clean
+  [embedding API](https://github.com/cesanta/mongoose/blob/master/mongoose.h).
   The source is in single
   [mongoose.c](https://github.com/cesanta/mongoose/blob/master/mongoose.c) file
-  to make things easy.
+  to make embedding easy.
 - Extremely lightweight, has a core of under 40kB and tiny runtime footprint
 - Asyncronouns, non-blocking core supporting single- or multi-threaded usage
 - On the market since 2004, stable, mature and tested,
-  has dozens of thousands of man-hours invested in continuous improvement
-  and refinement
+  has man-years invested in continuous improvement and refinement
 
 Note that Windows and MacOS binaries have following 3rd party software
 compiled in:
