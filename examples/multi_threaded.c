@@ -17,8 +17,8 @@ static void *serve(void *server) {
 int main(void) {
   struct mg_server *server1, *server2;
 
-  server1 = mg_create_server("1");
-  server2 = mg_create_server("2");
+  server1 = mg_create_server((void *) "1");
+  server2 = mg_create_server((void *) "2");
 
   mg_add_uri_handler(server1, "/", request_handler);
   mg_add_uri_handler(server2, "/", request_handler);
