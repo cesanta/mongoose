@@ -852,7 +852,7 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   // TODO(lsm): use sigaction to restart interrupted syscall
   do {
     mg_socketpair(fds);
-  } while (fds[0] < 0);
+  } while (fds[0] == INVALID_SOCKET);
 
   if (start_process(conn->server->config_options[CGI_INTERPRETER],
                     prog, blk.buf, blk.vars, dir, fds[1]) > 0) {
@@ -3603,7 +3603,7 @@ struct mg_server *mg_create_server(void *server_data) {
   // interrupted syscalls in mg_socketpair().
   do {
     mg_socketpair(server->ctl);
-  } while (server->ctl[0] < 0);
+  } while (server->ctl[0] == INVALID_SOCKET);
 
   server->server_data = server_data;
   server->listening_sock = INVALID_SOCKET;
