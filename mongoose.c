@@ -935,6 +935,23 @@ static int check_acl(const char *acl, uint32_t remote_ip) {
   return allowed == '+';
 }
 
+static void sockaddr_to_string(char *buf, size_t len,
+                               const union socket_address *usa) {
+  buf[0] = '\0';
+#if defined(USE_IPV6)
+  inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
+            (void *) &usa->sin.sin_addr :
+            (void *) &usa->sin6.sin6_addr, buf, len);
+#elif defined(_WIN32)
+  // Only Windoze Vista (and newer) have inet_ntop()
+  strncpy(buf, inet_ntoa(usa->sin.sin_addr), len);
+#else
+  inet_ntop(usa->sa.sa_family, (void *) &usa->sin.sin_addr, buf, len);
+#endif
+}
+
+
+
 static struct connection *accept_new_connection(struct mg_server *server) {
   union socket_address sa;
   socklen_t len = sizeof(sa);
@@ -963,6 +980,10 @@ static struct connection *accept_new_connection(struct mg_server *server) {
     set_non_blocking_mode(sock);
     conn->server = server;
     conn->client_sock = sock;
+    sockaddr_to_string(conn->mg_conn.remote_ip,
+                       sizeof(conn->mg_conn.remote_ip), &sa);
+    conn->mg_conn.remote_port = ntohs(sa.sin.sin_port);
+    conn->mg_conn.server_param = server->server_data;
     mutex_init(&conn->mutex);
     LINKED_LIST_ADD_TO_FRONT(&server->active_connections, &conn->link);
     DBG(("added conn %p", conn));
@@ -1103,7 +1124,11 @@ static int is_valid_http_method(const char *method) {
 static int parse_http_message(char *buf, int len, struct mg_connection *ri) {
   int is_request, n;
 
-  memset(ri, 0, sizeof(*ri));
+  // Reset the connection. Make sure that we don't touch fields that are
+  // set elsewhere: remote_ip, remote_port, server_param
+  ri->request_method = ri->uri = ri->http_version = ri->query_string = NULL;
+  ri->num_headers = ri->status_code = ri->is_websocket = ri->content_len = 0;
+
   buf[len - 1] = '\0';
 
   // RFC says that all initial whitespaces should be ingored
@@ -1821,10 +1846,6 @@ static int find_index_file(struct connection *conn, char *path,
 static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   struct iobuf *loc = &conn->local_iobuf;
   struct mg_connection *c = &conn->mg_conn;
-
-  // Header parsing does memset() on the whole mg_connection, nullifying
-  // connection_param and server_param. Set them just before calling back.
-  c->server_param = conn->server->server_data;
 
   c->content = loc->buf;
 #ifndef NO_WEBSOCKET
@@ -3164,21 +3185,6 @@ static void log_header(const struct mg_connection *conn, const char *header,
   } else {
     (void) fprintf(fp, " \"%s\"", header_value);
   }
-}
-
-static void sockaddr_to_string(char *buf, size_t len,
-                               const union socket_address *usa) {
-  buf[0] = '\0';
-#if defined(USE_IPV6)
-  inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
-            (void *) &usa->sin.sin_addr :
-            (void *) &usa->sin6.sin6_addr, buf, len);
-#elif defined(_WIN32)
-  // Only Windoze Vista (and newer) have inet_ntop()
-  strncpy(buf, inet_ntoa(usa->sin.sin_addr), len);
-#else
-  inet_ntop(usa->sa.sa_family, (void *) &usa->sin.sin_addr, buf, len);
-#endif
 }
 
 static void log_access(const struct connection *conn, const char *path) {

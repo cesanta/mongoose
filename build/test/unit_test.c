@@ -359,14 +359,10 @@ static const char *test_next_option(void) {
 }
 
 static int cb1(struct mg_connection *conn) {
-  char buf[100];
-
   // We're not sending HTTP headers here, to make testing easier
-  snprintf(buf, sizeof(buf), "%s %s",
+  mg_printf(conn, "%s %s %s",
            conn->server_param == NULL ? "?" : (char *) conn->server_param,
-           conn->connection_param == NULL ? "?" : "!");
-  mg_write(conn, buf, strlen(buf));
-
+           conn->connection_param == NULL ? "?" : "!", conn->remote_ip);
   return 1;
 }
 
@@ -401,9 +397,10 @@ static const char *test_server_param(void) {
   reply = wget("127.0.0.1", atoi(HTTP_PORT), &reply_len, "%s",
                "GET /cb1 HTTP/1.0\r\n\r\n");
   ASSERT(reply != NULL);
-  ASSERT(reply_len == 5);
-  ASSERT(memcmp(reply, "foo ?", 5) == 0);  // cb1() does not send HTTP headers
-  printf("%d [%.*s]\n", reply_len, reply_len, reply);
+  ASSERT(reply_len == 15);
+  // cb1() does not send HTTP headers
+  ASSERT(memcmp(reply, "foo ? 127.0.0.1", 5) == 0);
+  //printf("%d [%.*s]\n", reply_len, reply_len, reply);
   free(reply);
 
   return NULL;
