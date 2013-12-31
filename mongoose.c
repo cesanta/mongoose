@@ -950,8 +950,6 @@ static void sockaddr_to_string(char *buf, size_t len,
 #endif
 }
 
-
-
 static struct connection *accept_new_connection(struct mg_server *server) {
   union socket_address sa;
   socklen_t len = sizeof(sa);

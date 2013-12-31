@@ -27,7 +27,8 @@ int main(void) {
   mg_set_option(server1, "listening_port", "8080");
   mg_set_listening_socket(server2, mg_get_listening_socket(server1));
 
-  // server1 goes to separate thread, server 2 runs in main thread
+  // server1 goes to separate thread, server 2 runs in main thread.
+  // IMPORTANT: NEVER LET DIFFERENT THREADS HANDLE THE SAME SERVER.
   mg_start_thread(serve, server1);
   serve(server2);
 
