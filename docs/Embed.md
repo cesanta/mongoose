@@ -85,10 +85,12 @@ a couple of kilobytes to the executable size, and also has some runtime penalty.
     -DNO_LOGGING      Disable access/error logging
     -DNO_WEBSOCKET    Disable WebSocket support
 
-    -DUSE_IPV6        Enable IPv6 support
-    -DUSE_LUA         Enable Lua scripting
-    -DUSE_LUA_SQLITE3 Enable sqlite3 binding for Lua
-    -DUSE_SSL         Enable SSL
+    -DUSE_IPV6          Enable IPv6 support
+    -DUSE_LUA           Enable Lua scripting
+    -DUSE_LUA_SQLITE3   Enable sqlite3 binding for Lua
+    -DUSE_SSL           Enable SSL
+    -DUSE_POST_SIZE_LIMIT=X     POST requests larger than X will be rejected
+    -DUSE_EXTRA_HTTP_HEADERS=X  Append X to the HTTP headers for static files
 
 Mongoose source code contains a well-commented example code, listed below:
 
