@@ -141,13 +141,17 @@ struct ll { struct ll *prev, *next; };
 #define ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
 #define PASSWORDS_FILE_NAME ".htpasswd"
 
-#ifndef WEBSOCKET_PING_INTERVAL_SECONDS
-#define WEBSOCKET_PING_INTERVAL_SECONDS 5
+#ifndef USE_WEBSOCKET_PING_INTERVAL
+#define USE_WEBSOCKET_PING_INTERVAL 5
 #endif
 
 // Extra HTTP headers to send in every static file reply
-#if !defined(EXTRA_HTTP_HEADERS)
-#define EXTRA_HTTP_HEADERS ""
+#if !defined(USE_EXTRA_HTTP_HEADERS)
+#define USE_EXTRA_HTTP_HEADERS ""
+#endif
+
+#ifndef USE_POST_SIZE_LIMIT
+#define USE_POST_SIZE_LIMIT 0
 #endif
 
 #ifdef ENABLE_DBG
@@ -759,7 +763,7 @@ static void prepare_cgi_environment(struct connection *conn,
   addenv(blk, "%s", "REDIRECT_STATUS=200"); // For PHP
 
   // TODO(lsm): fix this for IPv6 case
-  addenv(blk, "SERVER_PORT=%d", ri->remote_port);
+  //addenv(blk, "SERVER_PORT=%d", ri->remote_port);
 
   addenv(blk, "REQUEST_METHOD=%s", ri->request_method);
   addenv(blk, "REMOTE_ADDR=%s", ri->remote_ip);
@@ -1575,7 +1579,7 @@ static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
 }
 
 static void ping_idle_websocket_connection(struct connection *conn, time_t t) {
-  if (t - conn->last_activity_time > WEBSOCKET_PING_INTERVAL_SECONDS) {
+  if (t - conn->last_activity_time > USE_WEBSOCKET_PING_INTERVAL) {
     mg_websocket_write(&conn->mg_conn, 0x9, "", 0);
   }
 }
@@ -1716,7 +1720,7 @@ static void open_file_endpoint(struct connection *conn, const char *path,
                   conn->mg_conn.status_code, msg, date, lm, etag,
                   (int) mime_vec.len, mime_vec.ptr, conn->cl,
                   suggest_connection_header(&conn->mg_conn),
-                  range, EXTRA_HTTP_HEADERS);
+                  range, USE_EXTRA_HTTP_HEADERS);
   spool(&conn->remote_iobuf, headers, n);
 
   if (!strcmp(conn->mg_conn.request_method, "HEAD")) {
@@ -2960,6 +2964,15 @@ static void open_local_endpoint(struct connection *conn) {
   if (conn->endpoint.uh != NULL) {
     conn->endpoint_type = EP_USER;
     conn->mg_conn.content = conn->local_iobuf.buf;
+#if USE_POST_SIZE_LIMIT > 1
+    {
+      const char *cl = mg_get_header(&conn->mg_conn, "Content-Length");
+      if (!strcmp(conn->mg_conn.request_method, "POST") &&
+          (cl == NULL || to64(cl) > USE_POST_SIZE_LIMIT)) {
+        send_http_error(conn, 500);
+      }
+    }
+#endif
     return;
   }
 
