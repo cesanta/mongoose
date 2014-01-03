@@ -17,8 +17,7 @@ simplicity by carefully selected list of features:
 - Works on Windows, Mac, UNIX/Linux, iPhone, Android, and many other platforms
 - CGI, SSL, Digest auth, Websocket, WEbDAV
 - Resumed download, URL rewrite, file blacklist, IP-based ACL, Windows service
-- Scripting and database support (Lua Server Pages + Sqlite, see
-  [page.lp](https://github.com/cesanta/mongoose/blob/master/test/page.lp) ),
+- Scripting and database support (Lua Server Pages + Sqlite, see [page.lp](https://github.com/cesanta/mongoose/blob/master/build/test/page.lp) ),
   which provides ready to go, powerful web development platform in
   one single-click executable with no dependencies
 - Simple and clean
