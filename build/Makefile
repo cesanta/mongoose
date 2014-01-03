@@ -80,13 +80,13 @@ windows_unit_test.exe: ../mongoose.c Makefile
 # For codesign to work in non-interactive mode, unlock login keychain:
 # security unlock ~/Library/Keychains/login.keychain
 # See e.g. http://lists.apple.com/archives/apple-cdsa/2008/Jan/msg00027.html
-macos: $(LUA_SOURCES)
+macos: $(LUA_SQLITE_SOURCES)
 	DIR=dmg/Mongoose.app
 	rm -rf dmg
 	mkdir -p dmg/Mongoose.app/Contents/{MacOS,Resources}
 	install -m 644 *.icns *.png dmg/Mongoose.app/Contents/Resources/
 	install -m 644 Info.plist dmg/Mongoose.app/Contents/
-	$(CC) $(LUA_SOURCES) \
+	$(CC) $(LUA_SQLITE_SOURCES) \
   -DUSE_COCOA $(CFLAGS) $(LUA_SQLITE_FLAGS) -mmacosx-version-min=10.4 \
   -framework Cocoa -ObjC -arch i386 -arch x86_64 \
   -o dmg/Mongoose.app/Contents/MacOS/Mongoose
