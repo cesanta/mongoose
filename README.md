@@ -5,9 +5,9 @@ Project mission is to provide easy to use, powerful, embeddable web server.
 # Downloads & Docs
 
 Sources, binaries and bundles are available for download at
-[http://cesanta.com/#downloads](http://cesanta.com/#downloads).
+[http://cesanta.com/#downloads](http://cesanta.com/#downloads).  
 User documentation is available at
-[http://cesanta.com/#docs,Usage.md](http://cesanta.com/#docs).
+[http://cesanta.com/#docs](http://cesanta.com/#docs,Usage.md).
 
 # Overview
 
