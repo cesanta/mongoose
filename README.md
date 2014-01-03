@@ -68,6 +68,7 @@ Businesses have an option to get non-restrictive, royalty-free commercial
 license and professional support from
 [Cesanta Software](http://cesanta.com).
 
+[Frozen JSON parser](https://github.com/cesanta/frozen),
 [Super Light Regular Expression library](https://github.com/cesanta/slre),
 [Super Light DNS Resolver](https://github.com/cesanta/sldr)
 are other projects by Cesanta Software, developed with the same philosophy
