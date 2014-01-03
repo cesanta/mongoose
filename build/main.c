@@ -449,6 +449,10 @@ static void start_mongoose(int argc, char *argv[]) {
     free(options[i + 1]);
   }
 
+  // Change current working directory to document root. This way,
+  // scripts can use relative paths.
+  chdir(mg_get_option(server, "document_root"));
+
   // Add an ability to pass listening socket to mongoose
   {
     const char *env = getenv("MONGOOSE_LISTENING_SOCKET");

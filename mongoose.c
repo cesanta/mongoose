@@ -2048,7 +2048,6 @@ static int mg_write_chunked(struct connection *conn, const char *buf, int len) {
   return n;
 }
 
-
 static void print_dir_entry(const struct dir_entry *de) {
   char size[64], mod[64], href[MAX_PATH_SIZE * 3], chunk[MAX_PATH_SIZE * 4];
   int64_t fsize = de->st.st_size;
