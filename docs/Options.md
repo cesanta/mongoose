@@ -1,121 +1,5 @@
 # Mongoose Configuration Options
 
-Every option is followed by it's default value.
-If default value is not present, then it is empty.
-
-### cgi_pattern `**.cgi$|**.pl$|**.php$`
-All files that match `cgi_pattern` are treated as CGI files. Default pattern
-allows CGI files be anywhere. To restrict CGIs to a certain directory,
-use `/path/to/cgi-bin/**.cgi` as pattern. Note that full file path is
-matched against the pattern, not the URI.
-
-### cgi_environment
-Extra environment variables to be passed to the CGI script in
-addition to standard ones. The list must be comma-separated list
-of name=value pairs, like this: `VARIABLE1=VALUE1,VARIABLE2=VALUE2`.
-
-### dav\_auth\_file
-Passwords file for PUT and DELETE requests. Without it, PUT and DELETE requests
-will fail. The format of the passwords file is the same as for `.htpasswd` file
-used for Digest authentication. It can be created and managed by means
-of `mongoose -A` command.
-
-### cgi_interpreter
-Path to an executable to use as CGI interpreter for __all__ CGI scripts
-regardless script extension. If this option is not set (which is a default),
-Mongoose looks at first line of a CGI script,
-[shebang line](http://en.wikipedia.org/wiki/Shebang_(Unix\)),
-for an interpreter.
-
-For example, if both PHP and perl CGIs are used, then
-`#!/path/to/php-cgi.exe` and `#!/path/to/perl.exe` must be first lines of the
-respective CGI scripts. Note that paths should be either full file paths,
-or file paths relative to the current working directory of mongoose server.
-If mongoose is started by mouse double-click on Windows, current working
-directory is a directory where mongoose executable is located.
-
-If all CGIs use the same interpreter, for example they are all PHP, then
-`cgi_interpreter` can be set to the path to `php-cgi.exe` executable and
-shebang line in the CGI scripts can be omitted.
-Note that PHP scripts must use `php-cgi.exe` executable, not `php.exe`.
-
-### protect_uri
-Comma separated list of URI=PATH pairs, specifying that given
-URIs must be protected with respected password files. Paths must be full
-file paths.
-
-### authentication_domain `mydomain.com`
-Authorization realm used in `.htpasswd` authorization.
-
-### ssi_pattern `**.shtml$|**.shtm$`
-All files that match `ssi_pattern` are treated as SSI.
-
-Server Side Includes (SSI) is a simple interpreted server-side scripting
-language which is most commonly used to include the contents of a file into
-a web page. It can be useful when it is desirable to include a common piece
-of code throughout a website, for example, headers and footers.
-
-In order for a webpage to recognize an SSI-enabled HTML file, the filename
-should end with a special extension, by default the extension should be
-either `.shtml` or `.shtm`.
-
-Unknown SSI directives are silently ignored by mongoose. Currently, two SSI
-directives are supported, `<!--#include ...>` and
-`<!--#exec "command">`. Note that `<!--#include ...>` directive supports
-three path specifications:
-
-    <!--#include virtual="path">  Path is relative to web server root
-    <!--#include abspath="path">  Path is absolute or relative to
-                                  web server working dir
-    <!--#include file="path">,    Path is relative to current document
-    <!--#include "path">
-
-The `include` directive may be used to include the contents of a file or the
-result of running a CGI script. The `exec` directive is used to execute a
-command on a server, and show command's output. Example:
-
-    <!--#exec "ls -l" -->
-
-For more information on Server Side Includes, take a look at the Wikipedia:
-[Server Side Includes](http://en.wikipedia.org/wiki/Server_Side_Includes)
-
-### access\_log\_file
-Path to a file for access logs. Either full path, or relative to current
-working directory. If absent (default), then accesses are not logged.
-
-### error\_log\_file
-Path to a file for error logs. Either full path, or relative to current
-working directory. If absent (default), then errors are not logged.
-
-### enable\_directory\_listing `yes`
-Enable directory listing, either `yes` or `no`.
-
-### enable\_keep\_alive `no`
-Enable connection keep alive, either `yes` or `no`.
-
-Experimental feature. Allows clients to reuse TCP connection for
-subsequent HTTP requests, which improves performance.
-For this to work when using request handlers it's important to add the correct
-Content-Length HTTP header for each request. If this is forgotten the client
-will time out.
-
-
-### global\_auth\_file
-Path to a global passwords file, either full path or relative to the current
-working directory. If set, per-directory `.htpasswd` files are ignored,
-and all requests are authorised against that file.
-
-The file has to include the realm set through `authentication_domain` and the password in digest format:
-
-    user:realm:digest
-    test:test.com:ce0220efc2dd2fad6185e1f1af5a4327
-
-(e.g. use [this generator](http://www.askapache.com/online-tools/htpasswd-generator))
-
-### index_files `index.html,index.htm,index.cgi,index.shtml,index.php`
-Comma-separated list of files to be treated as directory index
-files.
-
 ### access\_control\_list
 An Access Control List (ACL) allows restrictions to be put on the list of IP
 addresses which have access to the web server. In the case of the Mongoose
@@ -133,48 +17,102 @@ the last match wins. Examples:
 To learn more about subnet masks, see the
 [Wikipedia page on Subnetwork](http://en.wikipedia.org/wiki/Subnetwork)
 
+Default: not set, all accesses are allowed.
+
+### access\_log\_file
+Path to a file for access logs. Either full path, or relative to the
+mongoose executable. Default: not set, no query logging is done.
+
+### auth_domain
+Authorization realm used in `.htpasswd` authorization. Default: `mydomain.com`
+
+### cgi_interpreter
+Path to an executable to use as CGI interpreter for __all__ CGI scripts
+regardless script extension.
+for an interpreter. Default: not set, Mongoose looks at
+[shebang line](http://en.wikipedia.org/wiki/Shebang_(Unix\).
+
+For example, if both PHP and perl CGIs are used, then
+`#!/path/to/php-cgi.exe` and `#!/path/to/perl.exe` must be first lines of the
+respective CGI scripts. Note that paths should be either full file paths,
+or file paths relative to the directory where mongoose server is located.
+
+If all CGIs use the same interpreter, for example they are all PHP, then
+`cgi_interpreter` option can be set to the path to `php-cgi.exe` executable and
+shebang line in the CGI scripts can be omitted.
+Note that PHP scripts must use `php-cgi.exe` executable, not `php.exe`.
+
+### cgi_pattern
+All files that match `cgi_pattern` are treated as CGI files. Default pattern
+allows CGI files be anywhere. To restrict CGIs to a certain directory,
+use `/path/to/cgi-bin/**.cgi` as pattern. Note that full file path is
+matched against the pattern, not the URI. Note: if `MONGOOSE_CGI` environment
+variable is set, then Mongoose passes it to the CGI script.
+
+Default: `**.cgi$|**.pl$|**.php$`
+
+### dav\_auth\_file
+Authentication file for WebDAV mutation requests: `PUT`, `DELETE`, `MKCOL`.
+The format of that file is the same as for the `.htpasswd` file
+used for digest authentication. It can be created and managed by
+`mongoose -A` command. Default: not set, WebDAV mutations are disallowed.
+
+### document_root
+A directory to serve. Default: current working directory.
+
+### enable\_directory\_listing
+Enable directory listing, either `yes` or `no`. Default: `yes`.
+
+### error\_log\_file
+Path to a file for error logs. Either full path, or relative to the
+mongoose executable. Default: not set, no errors are logged.
+
 ### extra\_mime\_types
-Extra mime types to recognize, in form `extension1=type1,exten-
-sion2=type2,...`. Extension must include dot.  Example:
-`.cpp=plain/text,.java=plain/text`
+Extra mime types to recognize, in form `extension1=type1,extension2=type2,...`.
+Extension must include dot.  Example:
+`mongoose -extra_mime_types .cpp=plain/text,.java=plain/text`. Default: not set.
 
-### listening_ports `8080`
-Comma-separated list of ports to listen on. If the port is SSL, a
-letter `s` must be appeneded, for example, `80,443s` will open
-port 80 and port 443, and connections on port 443 will be SSL-ed.
-For non-SSL ports, it is allowed to append letter `r`, meaning 'redirect'.
-Redirect ports will redirect all their traffic to the first configured
-SSL port. For example, if `listening_ports` is `80r,443s`, then all
-HTTP traffic coming at port 80 will be redirected to HTTPS port 443.
 
-It is possible to specify an IP address to bind to. In this case,
-an IP address and a colon must be prepended to the port number.
-For example, to bind to a loopback interface on port 80 and to
-all interfaces on HTTPS port 443, use `127.0.0.1:80,443s`.
+### global\_auth\_file
+Path to a global passwords file, either full path or relative to the mongoose
+executable. If set, per-directory `.htpasswd` files are ignored,
+and all requests are authorised against that file. Use `mongoose -A` to
+manage passwords, or third party utilities like
+[htpasswd-generator](http://www.askapache.com/online-tools/htpasswd-generator).
+Default: not set, per-directory `.htpasswd` files are respected.
 
-### document_root `.`
-A directory to serve. By default, currect directory is served. Current
-directory is commonly referenced as dot (`.`).
+### hide\_files\_patterns
+A pattern for the files to hide. Files that match the pattern will not
+show up in directory listing and return `404 Not Found` if requested. Pattern
+must be for a file name only, not including directory name, e.g.
+`mongoose -hide_files_patterns secret.txt|even_more_secret.txt`. Default:
+not set.
+
+### idle\_timeout\_ms
+Timeout for idle connections. Default: 30000 (30 seconds)
+
+### index_files
+Comma-separated list of files to be treated as directory index
+files. Default: `index.html,index.htm,index.cgi,index.shtml,index.php`
 
 ### ssl_certificate
-Path to SSL certificate file. This option is only required when at least one
-of the `listening_ports` is SSL. The file must be in PEM format,
+Path to SSL certificate file. The file must be in PEM format,
 and it must have both private key and certificate, see for example
-[ssl_cert.pem](https://github.com/cesanta/mongoose/blob/master/build/ssl_cert.pem)
+[ssl_cert.pem](https://github.com/cesanta/mongoose/blob/master/build/ssl_cert.pem). If this option is set, then Mongoose serves SSL connections on
+`listening_port`. Default: not set.
+
+### listening_port
+Port to listen on. Port could be prepended by the specific IP address to bind
+to, e.g. `mongoose -listening_port 127.0.0.1:8080`. Otherwise Mongoose
+will bind to all addresses.  Default: 8080.
 
 ### run\_as\_user
-Switch to given user credentials after startup. Usually, this option is
-required when mongoose needs to bind on privileged port on UNIX. To do
-that, mongoose needs to be started as root. But running as root is a bad idea,
-therefore this option can be used to drop privileges. Example:
+Switch to given user credentials after startup. UNIX-only. This option is
+required when mongoose needs to bind on privileged port on UNIX, e.g.
 
-    mongoose -listening_ports 80 -run_as_user nobody
+    $ sudo mongoose -listening_ports 80 -run_as_user nobody
 
-### request\_timeout\_ms `30000`
-Timeout for network read and network write operations, in milliseconds.
-If client intends to keep long-running connection, either increase this value
-or use keep-alive messages.
-
+Default: not set.
 
 ### url\_rewrite\_patterns
 Comma-separated list of URL rewrites in the form of
@@ -196,11 +134,4 @@ Or, to imitate user home directories support, do:
 
     mongoose -url_rewrite_patterns /~joe/=/home/joe/,/~bill=/home/bill/
 
-### hide\_files\_patterns
-A pattern for the files to hide. Files that match the pattern will not
-show up in directory listing and return `404 Not Found` if requested. Pattern
-must be for a file name only, not including directory name. Example:
-
-    mongoose -hide_files_patterns secret.txt|even_more_secret.txt
-
-
+Default: not set.
