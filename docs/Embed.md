@@ -2,10 +2,10 @@
 
 Embedding Mongoose is done in two steps:
 
-   1. Download and copy two files:
+   1. Copy
     [mongoose.c](https://raw.github.com/cesanta/mongoose/master/mongoose.c) and
     [mongoose.h](https://raw.github.com/cesanta/mongoose/master/mongoose.h)
-    to your application's source tree and include these two files in the build.
+    to your application's source tree and include them in the build.
    2. Somewhere in the application code, call `mg_create_server()` to create
     a server, configure it with `mg_set_option()` and loop with
     `mg_poll_server()` until done. Call `mg_destroy_server()` to cleanup.
@@ -51,8 +51,8 @@ http://127.0.0.1:8080/hello will say hello, and here's the code:
     #include "mongoose.h"
 
     static int handle_hello(struct mg_connection *conn) {
-      static const char *reply = "HTTP/1.0 200 OK\r\n\r\nHello world!\n";
-      mg_write(conn, reply, strlen(reply));
+      static const char *reply = "Hello world!\n";
+      mg_write_data(conn, reply, strlen(reply));
       return 1;
     }
 
@@ -65,11 +65,6 @@ http://127.0.0.1:8080/hello will say hello, and here's the code:
       mg_destroy_server(&server);
       return 0;
     }
-
-Note that URI handler must output valid HTTP response, which includes
-the reply line with status code `HTTP/1.0 200 OK`, HTTP headers which are
-empty in our example, and message body `Hello world!\n`. Note that reply
-line is ended with `\r\n`, and HTTP headers are also ended with `\r\n`.
 
 Below is the list of compilation flags that enable or disable certain
 features. By default, some features are enabled, and could be disabled
@@ -95,5 +90,6 @@ a couple of kilobytes to the executable size, and also has some runtime penalty.
 Mongoose source code contains a well-commented example code, listed below:
 
    * [hello.c](https://github.com/cesanta/mongoose/blob/master/examples/hello.c)
-   shows how to handle form input, file upload, websocket communication, get
-   cookie values.
+   is a minimalisting hello world example
+   * [post.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
+   shows how to handle form input
