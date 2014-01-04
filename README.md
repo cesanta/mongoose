@@ -1,48 +1,34 @@
-# Project Mission
+# Mongoose Web Server
 
-Project mission is to provide easy to use, powerful, embeddable web server.
+Mongoose easy to use, powerful, embeddable web server. Quick links:
+   * [Downloads](http://cesanta.com/#downloads)
+   * [Documentation](http://cesanta.com/#docs,Usage.md)
+   * [Mailing list](http://groups.google.com/group/mongoose-users)
 
-# Downloads & Docs
-
-Sources, binaries and bundles are available for download at
-[http://cesanta.com/#downloads](http://cesanta.com/#downloads).  
-User documentation is available at
-[http://cesanta.com/#docs](http://cesanta.com/#docs,Usage.md).
-
-# Overview
-
-Mongoose keeps the balance between functionality and
-simplicity by carefully selected list of features:
+# Features
 
 - Works on Windows, Mac, UNIX/Linux, iPhone, Android, and many other platforms
-- CGI, SSL, Digest auth, Websocket, WEbDAV
-- Resumed download, URL rewrite, file blacklist, IP-based ACL, Windows service
-- Scripting and database support (Lua Server Pages + Sqlite, see [page.lp](https://github.com/cesanta/mongoose/blob/master/build/test/page.lp) ),
+- CGI, SSL, Digest auth, Websocket, WEbDAV, Resumed download, URL rewrite, file blacklist, IP-based ACL, Windows service
+- Scripting and database support ([Lua](http://lua.org) +
+[Sqlite](http://sqlite.org), see
+[page.lp](https://github.com/cesanta/mongoose/blob/master/build/test/page.lp) ),
   which provides ready to go, powerful web development platform in
   one single-click executable with no dependencies
 - Simple and clean
   [embedding API](https://github.com/cesanta/mongoose/blob/master/mongoose.h).
   The source is in single
   [mongoose.c](https://github.com/cesanta/mongoose/blob/master/mongoose.c) file
-  to make embedding easy.
+  to make embedding easy
 - Extremely lightweight, has a core of under 40kB and tiny runtime footprint
 - Asyncronouns, non-blocking core supporting single- or multi-threaded usage
 - On the market since 2004, stable, mature and tested,
-  has man-years invested in continuous improvement and refinement
-
-Note that Windows and MacOS binaries have following 3rd party software
-compiled in:
-  <a href="http://wolfssl.com">WolfSSL lightweight SSL library</a>,
-  <a href="http://sqlite.org">SQLite embedded database</a>,
-  <a href="http://lua.org">Lua embedded scripting engine</a>.
-
-Questions can be asked at
-[mongoose-users@googlegroups.com](http://groups.google.com/group/mongoose-users)
-mailing list.
+  has several man-years invested in continuous improvement and refinement
+- Professional support and consultancy available from
+[Cesanta Software](http://cesanta.com), developer of Mongoose
 
 # Acknowledgements
 
-Author is grateful to the following people who made their contribution:
+Mongoose made better thanks to the contribution of following people:
 
 Arnout Vandecappelle, Benoît Amiaux, Boris Pek, Cody Hanson, Colin Leitner,
 Daniel Oaks, Eric Bakan, Erik Oomen, Filipp Kovalev, Ger Hobbelt,
