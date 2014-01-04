@@ -91,6 +91,7 @@ typedef struct _stati64 file_stat_t;
 #include <pwd.h>
 #include <signal.h>
 #include <unistd.h>
+#include <netdb.h>
 #include <arpa/inet.h>  // For inet_pton() when USE_IPV6 is defined
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -2718,7 +2719,6 @@ int mg_parse_header(const char *str, const char *var_name, char *buf,
 }
 
 #ifdef USE_LUA
-#include <netdb.h>
 #include "lua_5.2.1.h"
 
 static void reg_string(struct lua_State *L, const char *name, const char *val) {
