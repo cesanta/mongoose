@@ -124,13 +124,8 @@ context of the IO thread.
     void mg_printf_data(struct mg_connection *, const char *format, ...);
 
 These functions are used to construct a response to the client. HTTP response
-consists of three parts:
-
-   * a status line
-   * zero or more HTTP headers
-   * response body
-
-Mongoose provides functions for all three parts:
+consists of three parts: a status line, zero or more HTTP headers,
+a response body.  Mongoose provides functions for all three parts:
    * `mg_send_status()` is used to create status line. This function can be
       called zero or once. If `mg_send_status()` is not called, then Mongoose
       will send status 200 (success) implicitly.
@@ -140,6 +135,8 @@ Mongoose provides functions for all three parts:
      client. Note that Mongoose adds `Transfer-Encoding: chunked` header
      implicitly, and sends data in chunks. Therefore, it is not necessary to
      set `Content-Length` header.
+
+<!-- -->
 
     int mg_websocket_write(struct mg_connection* conn, int opcode,
                            const char *data, size_t data_len);
