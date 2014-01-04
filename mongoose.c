@@ -227,7 +227,8 @@ union endpoint {
 
 enum endpoint_type { EP_NONE, EP_FILE, EP_CGI, EP_USER, EP_PUT };
 enum connection_flags {
-  CONN_CLOSE = 1, CONN_SPOOL_DONE = 2, CONN_SSL_HANDS_SHAKEN = 4
+  CONN_CLOSE = 1, CONN_SPOOL_DONE = 2, CONN_SSL_HANDS_SHAKEN = 4,
+  CONN_HEADERS_SENT = 8
 };
 
 struct connection {
@@ -445,27 +446,31 @@ static int mg_snprintf(char *buf, size_t buflen, const char *fmt, ...) {
   return n;
 }
 
+static const char *status_code_to_str(int status_code) {
+  switch (status_code) {
+    case 200: return "OK";
+    case 201: return "Created";
+    case 204: return "No Content";
+    case 304: return "Not Modified";
+    case 400: return "Bad Request";
+    case 403: return "Forbidden";
+    case 404: return "Not Found";
+    case 405: return "Method Not Allowed";
+    case 409: return "Conflict";
+    case 411: return "Length Required";
+    case 413: return "Request Entity Too Large";
+    case 415: return "Unsupported Media Type";
+    case 423: return "Locked";
+    case 500: return "Server Error";
+    case 501: return "Not Implemented";
+    default:  return "Server Error";
+  }
+}
+
 static void send_http_error(struct connection *conn, int code) {
-  const char *message;
+  const char *message = status_code_to_str(code);
   char headers[200], body[200];
   int body_len, headers_len;
-
-  switch (code) {
-    case 201: message = "Created";                  break;
-    case 204: message = "No Content";               break;
-    case 304: message = "Not Modified";             break;
-    case 400: message = "Bad Request";              break;
-    case 403: message = "Forbidden";                break;
-    case 404: message = "Not Found";                break;
-    case 405: message = "Method Not Allowed";       break;
-    case 409: message = "Conflict";                 break;
-    case 411: message = "Length Required";          break;
-    case 413: message = "Request Entity Too Large"; break;
-    case 415: message = "Unsupported Media Type";   break;
-    case 423: message = "Locked";                   break;
-    case 501: message = "Not Implemented";          break;
-    default:  message = "Server Error";             break;
-  }
 
   conn->mg_conn.status_code = code;
   body_len = mg_snprintf(body, sizeof(body), "%d %s\n", code, message);
@@ -522,12 +527,25 @@ static int alloc_vprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   return len;
 }
 
-int mg_vprintf(struct mg_connection *conn, const char *fmt, va_list ap) {
+static void write_chunk(struct connection *conn, const char *buf, int len) {
+  char chunk_size[50];
+  int n = mg_snprintf(chunk_size, sizeof(chunk_size), "%X\r\n", len);
+  spool(&conn->remote_iobuf, chunk_size, n);
+  spool(&conn->remote_iobuf, buf, len);
+  spool(&conn->remote_iobuf, "\r\n", 2);
+}
+
+int mg_vprintf(struct mg_connection *conn, const char *fmt, va_list ap,
+               int chunked) {
   char mem[IOBUF_SIZE], *buf = mem;
   int len;
 
   if ((len = alloc_vprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
-    len = mg_write(conn, buf, (size_t) len);
+    if (chunked) {
+      write_chunk((struct connection *) conn, buf, len);
+    } else {
+      len = mg_write(conn, buf, (size_t) len);
+    }
   }
   if (buf != mem && buf != NULL) {
     free(buf);
@@ -537,9 +555,12 @@ int mg_vprintf(struct mg_connection *conn, const char *fmt, va_list ap) {
 }
 
 int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
+  int len;
   va_list ap;
   va_start(ap, fmt);
-  return mg_vprintf(conn, fmt, ap);
+  len = mg_vprintf(conn, fmt, ap, 0);
+  va_end(ap);
+  return len;
 }
 
 // A helper function for traversing a comma separated list of values.
@@ -1292,6 +1313,45 @@ int mg_write(struct mg_connection *c, const void *buf, int len) {
   return spool(&((struct connection *) c)->remote_iobuf, buf, len);
 }
 
+void mg_send_status(struct mg_connection *c, int status) {
+  if (c->status_code == 0) {
+    c->status_code = status;
+    mg_printf(c, "HTTP/1.1 %d %s\r\n", status, status_code_to_str(status));
+  }
+}
+
+void mg_send_header(struct mg_connection *c, const char *name, const char *v) {
+  if (c->status_code == 0) {
+    c->status_code = 200;
+    mg_printf(c, "HTTP/1.1 %d %s\r\n", 200, status_code_to_str(200));
+  }
+  mg_printf(c, "%s: %s\r\n", name, v);
+}
+
+static void terminate_headers(struct mg_connection *c) {
+  struct connection *conn = (struct connection *) c;
+  if (!(conn->flags & CONN_HEADERS_SENT)) {
+    mg_send_header(c, "Transfer-Encoding", "chunked");
+    mg_write(c, "\r\n", 2);
+    conn->flags |= CONN_HEADERS_SENT;
+  }
+}
+
+void mg_send_data(struct mg_connection *c, const void *data, int data_len) {
+  terminate_headers(c);
+  write_chunk((struct connection *) c, data, data_len);
+}
+
+void mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
+  va_list ap;
+
+  terminate_headers(c);
+
+  va_start(ap, fmt);
+  mg_vprintf(c, fmt, ap, 1);
+  va_end(ap);
+}
+
 #if !defined(NO_WEBSOCKET) || !defined(NO_AUTH)
 static int is_big_endian(void) {
   static const int n = 1;
@@ -1852,6 +1912,9 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
 #endif
     if (loc->len >= c->content_len) {
     conn->endpoint.uh->handler(c);
+    if (conn->flags & CONN_HEADERS_SENT) {
+      write_chunk(conn, "", 0);  // Write final zero-length chunk
+    }
     close_local_endpoint(conn);
   }
 }
@@ -2032,16 +2095,6 @@ static void mg_url_encode(const char *src, char *dst, size_t dst_len) {
 #endif  // !NO_DIRECTORY_LISTING || !NO_DAV
 
 #ifndef NO_DIRECTORY_LISTING
-static int mg_write_chunked(struct connection *conn, const char *buf, int len) {
-  char chunk_size[50];
-  int n = mg_snprintf(chunk_size, sizeof(chunk_size), "%X\r\n", len);
-
-  n = spool(&conn->remote_iobuf, chunk_size, n);
-  n += spool(&conn->remote_iobuf, buf, len);
-  n += spool(&conn->remote_iobuf, "\r\n", 2);
-
-  return n;
-}
 
 static void print_dir_entry(const struct dir_entry *de) {
   char size[64], mod[64], href[MAX_PATH_SIZE * 3], chunk[MAX_PATH_SIZE * 4];
@@ -2071,7 +2124,7 @@ static void print_dir_entry(const struct dir_entry *de) {
                   "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
                   de->conn->mg_conn.uri, href, slash, de->file_name, slash,
                   mod, size);
-  mg_write_chunked((struct connection *) de->conn, chunk, n);
+  write_chunk((struct connection *) de->conn, chunk, n);
 }
 
 // Sort directory entries by size, or name, or modification time.
@@ -2124,7 +2177,7 @@ static void send_directory_listing(struct connection *conn, const char *dir) {
               "<tr><td colspan=\"3\"><hr></td></tr>",
               conn->mg_conn.uri, conn->mg_conn.uri,
               sort_direction, sort_direction, sort_direction);
-  mg_write_chunked(conn, buf, strlen(buf));
+  write_chunk(conn, buf, strlen(buf));
 
   num_entries = scan_directory(conn, dir, &arr);
   qsort(arr, num_entries, sizeof(arr[0]), compare_dir_entries);
@@ -2134,7 +2187,7 @@ static void send_directory_listing(struct connection *conn, const char *dir) {
   }
   free(arr);
 
-  mg_write_chunked(conn, "", 0);  // Write final zero-length chunk
+  write_chunk(conn, "", 0);  // Write final zero-length chunk
   close_local_endpoint(conn);
 }
 #endif  // NO_DIRECTORY_LISTING
@@ -3226,7 +3279,7 @@ static void log_access(const struct connection *conn, const char *path) {
 static void close_local_endpoint(struct connection *conn) {
   // Must be done before free()
   int keep_alive = should_keep_alive(&conn->mg_conn) &&
-    conn->endpoint_type == EP_FILE;
+    (conn->endpoint_type == EP_FILE || conn->endpoint_type == EP_USER);
 
   switch (conn->endpoint_type) {
     case EP_FILE: close(conn->endpoint.fd); break;

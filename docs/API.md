@@ -112,16 +112,34 @@ is returned.
 
 This is an interface primarily designed to push arbitrary data to websocket
 connections at any time. This function could be called from any thread. When
-it returns, an IO thread called `func()` on each active websocket connection,
-passing `param` as an extra parameter. It is allowed to call `mg_write()` or
-`mg_websocket_write()` within a callback, cause these write functions are
-thread-safe.
+it returns, an IO thread called `func()` on each active connection,
+passing `param` as an extra parameter. It is allowed to call `mg_send_data()` or
+`mg_websocket_write()` within a callback, cause `func` is executed in the
+context of the IO thread.
 
-    int mg_write(struct mg_connection *, const void *buf, int len);
+    void mg_send_status(struct mg_connection *, int status_code);
+    void mg_send_header(struct mg_connection *, const char *name,
+                        const char *value);
+    void mg_send_data(struct mg_connection *, const void *data, int data_len);
+    void mg_printf_data(struct mg_connection *, const char *format, ...);
 
-Send data to the client. This function is thread-safe. This function appends
-given buffer to a send queue of a given connection. It may return 0 if
-there is not enough memory, in which case the data will not be sent.
+These functions are used to construct a response to the client. HTTP response
+consists of three parts:
+
+   * a status line
+   * zero or more HTTP headers
+   * response body
+
+Mongoose provides functions for all three parts:
+   * `mg_send_status()` is used to create status line. This function can be
+      called zero or once. If `mg_send_status()` is not called, then Mongoose
+      will send status 200 (success) implicitly.
+   * `mg_send_header()` adds HTTP header to the response. This function could
+      be called zero or more times.
+   * `mg_send_data()` and `mg_printf_data()` are used to send data to the
+     client. Note that Mongoose adds `Transfer-Encoding: chunked` header
+     implicitly, and sends data in chunks. Therefore, it is not necessary to
+     set `Content-Length` header.
 
     int mg_websocket_write(struct mg_connection* conn, int opcode,
                            const char *data, size_t data_len);
