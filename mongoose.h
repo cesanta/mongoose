@@ -69,9 +69,9 @@ const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
 void mg_set_listening_socket(struct mg_server *, int sock);
 int mg_get_listening_socket(struct mg_server *);
-int mg_iterate_over_connections(struct mg_server *,
-                                void (*func)(struct mg_connection *, void *),
-                                void *param);
+void mg_iterate_over_connections(struct mg_server *,
+                                 void (*func)(struct mg_connection *, void *),
+                                 void *param);
 
 // Connection management functions
 int mg_write(struct mg_connection *, const void *buf, int len);
