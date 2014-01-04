@@ -10,11 +10,8 @@ this means to deny only that single IP address.
 
 Subnet masks may vary from 0 to 32, inclusive. The default setting is to allow
 all accesses. On each request the full list is traversed, and
-the last match wins. Examples:
-
-    -0.0.0.0/0,+192.168/16    deny all acccesses, only allow 192.168/16 subnet
-
-To learn more about subnet masks, see the
+the last match wins. Example: `$ mongoose -access_control_list -0.0.0.0/0,+192.168/16` to deny all acccesses except from 192.168/16 subnet. To learn
+more about subnet masks, see the
 [Wikipedia page on Subnetwork](http://en.wikipedia.org/wiki/Subnetwork)
 
 Default: not set, all accesses are allowed.
