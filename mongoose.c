@@ -1900,6 +1900,10 @@ static int find_index_file(struct connection *conn, char *path,
   return found;
 }
 
+static void write_terminating_chunk(struct connection *conn) {
+  mg_write(&conn->mg_conn, "0\r\n\r\n", 5);
+}
+
 static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   struct iobuf *loc = &conn->local_iobuf;
   struct mg_connection *c = &conn->mg_conn;
@@ -1913,7 +1917,7 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
     if (loc->len >= c->content_len) {
     conn->endpoint.uh->handler(c);
     if (conn->flags & CONN_HEADERS_SENT) {
-      write_chunk(conn, "", 0);  // Write final zero-length chunk
+      write_terminating_chunk(conn);
     }
     close_local_endpoint(conn);
   }
@@ -2187,7 +2191,7 @@ static void send_directory_listing(struct connection *conn, const char *dir) {
   }
   free(arr);
 
-  write_chunk(conn, "", 0);  // Write final zero-length chunk
+  write_terminating_chunk(conn);
   close_local_endpoint(conn);
 }
 #endif  // NO_DIRECTORY_LISTING
@@ -3294,6 +3298,7 @@ static void close_local_endpoint(struct connection *conn) {
 #endif
 
   conn->endpoint_type = EP_NONE;
+  conn->flags = 0;
   conn->cl = conn->num_bytes_sent = conn->request_len = 0;
   free(conn->request);
   conn->request = NULL;
