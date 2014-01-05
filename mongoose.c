@@ -115,7 +115,25 @@ typedef struct stat file_stat_t;
 #ifdef USE_SSL
 // Following define gets rid of openssl deprecation messages
 #define MAC_OS_X_VERSION_MIN_REQUIRED MAC_OS_X_VERSION_10_6
-#include <openssl/ssl.h>
+
+typedef struct ssl_ctx_st SSL_CTX;
+typedef struct ssl_st SSL;
+typedef struct ssl_method_st SSL_METHOD;
+
+extern void SSL_free(SSL *);
+extern int SSL_accept(SSL *);
+extern int SSL_connect(SSL *);
+extern int SSL_read(SSL *, void *, int);
+extern int SSL_write(SSL *, const void *, int);
+extern int SSL_set_fd(SSL *, int);
+extern SSL *SSL_new(SSL_CTX *);
+extern SSL_CTX *SSL_CTX_new(SSL_METHOD *);
+extern SSL_METHOD *SSLv23_server_method(void);
+extern int SSL_library_init(void);
+extern int SSL_CTX_use_PrivateKey_file(SSL_CTX *, const char *, int);
+extern int SSL_CTX_use_certificate_file(SSL_CTX *, const char *, int);
+extern int SSL_CTX_use_certificate_chain_file(SSL_CTX *, const char *);
+extern void SSL_CTX_free(SSL_CTX *);
 #endif
 
 #include "mongoose.h"
@@ -3620,7 +3638,6 @@ const char *mg_set_option(struct mg_server *server, const char *name,
     } else if (ind == SSL_CERTIFICATE) {
 #ifdef USE_SSL
       SSL_library_init();
-      //SSL_load_error_strings();
       if ((server->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
         error_msg = "SSL_CTX_new() failed";
       } else if (SSL_CTX_use_certificate_file(server->ssl_ctx, value, 1) == 0 ||
