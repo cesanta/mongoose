@@ -155,7 +155,7 @@ release: tarball macos
 	upx mongoose-lua-sqlite-ssl.exe
 	cp mongoose.exe mongoose-$(VERSION).exe
 	cp mongoose-lua-sqlite-ssl.exe mongoose-lua-sqlite-ssl-$(VERSION).exe
-	cp mongoose.exe mongoose_php_bundle/
+	cp mongoose-lua-sqlite-ssl.exe mongoose_php_bundle/mongoose.exe
 	zip -r mongoose-php-$(VERSION).zip mongoose_php_bundle/
 
 clean:
