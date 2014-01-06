@@ -3324,22 +3324,17 @@ static void log_header(const struct mg_connection *conn, const char *header,
 static void log_access(const struct connection *conn, const char *path) {
   const struct mg_connection *c = &conn->mg_conn;
   FILE *fp = (path == NULL) ?  NULL : fopen(path, "a+");
-  char date[64], src_addr[100], user[100];
-  union socket_address sa;
-  socklen_t len = sizeof(sa);
+  char date[64], user[100];
 
   if (fp == NULL) return;
-
   strftime(date, sizeof(date), "%d/%b/%Y:%H:%M:%S %z",
            localtime(&conn->birth_time));
 
   flockfile(fp);
-  getsockname(conn->client_sock, &sa.sa, &len);
   mg_parse_header(mg_get_header(&conn->mg_conn, "Authorization"), "username",
                   user, sizeof(user));
-  sockaddr_to_string(src_addr, sizeof(src_addr), &sa);
   fprintf(fp, "%s - %s [%s] \"%s %s HTTP/%s\" %d %" INT64_FMT,
-          src_addr, user[0] == '\0' ? "-" : user, date,
+          c->remote_ip, user[0] == '\0' ? "-" : user, date,
           c->request_method ? c->request_method : "-",
           c->uri ? c->uri : "-", c->http_version,
           c->status_code, conn->num_bytes_sent);
