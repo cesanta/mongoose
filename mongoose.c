@@ -212,7 +212,7 @@ struct dir_entry {
 enum {
   ACCESS_CONTROL_LIST, ACCESS_LOG_FILE, AUTH_DOMAIN, CGI_INTERPRETER,
   CGI_PATTERN, DAV_AUTH_FILE, DOCUMENT_ROOT, ENABLE_DIRECTORY_LISTING,
-  ERROR_LOG_FILE, EXTRA_MIME_TYPES, GLOBAL_AUTH_FILE, HIDE_FILES_PATTERN,
+  EXTRA_MIME_TYPES, GLOBAL_AUTH_FILE, HIDE_FILES_PATTERN,
   IDLE_TIMEOUT_MS, INDEX_FILES, LISTENING_PORT,
 #ifndef _WIN32
   RUN_AS_USER,
@@ -341,7 +341,6 @@ static const char *static_config_options[] = {
   "dav_auth_file", NULL,
   "document_root",  NULL,
   "enable_directory_listing", "yes",
-  "error_log_file", NULL,
   "extra_mime_types", NULL,
   "global_auth_file", NULL,
   "hide_files_patterns", NULL,
