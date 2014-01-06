@@ -116,6 +116,9 @@ typedef struct stat file_stat_t;
 // Following define gets rid of openssl deprecation messages
 #define MAC_OS_X_VERSION_MIN_REQUIRED MAC_OS_X_VERSION_10_6
 
+#ifdef USE_CYASSL
+#include <openssl/ssl.h>
+#else
 typedef struct ssl_ctx_st SSL_CTX;
 typedef struct ssl_st SSL;
 typedef struct ssl_method_st SSL_METHOD;
@@ -134,6 +137,7 @@ extern int SSL_CTX_use_PrivateKey_file(SSL_CTX *, const char *, int);
 extern int SSL_CTX_use_certificate_file(SSL_CTX *, const char *, int);
 extern int SSL_CTX_use_certificate_chain_file(SSL_CTX *, const char *);
 extern void SSL_CTX_free(SSL_CTX *);
+#endif
 #endif
 
 #include "mongoose.h"

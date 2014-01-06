@@ -11,10 +11,35 @@ VERSION = $(shell perl -lne \
             'print $$1 if /define\s+MONGOOSE_VERSION\s+"(\S+)"/' ../mongoose.h)
 VDIR = mongoose-$(VERSION)
 
+# Stock windows binary builds with Lua and YASSL library.
+YASSL       = ../../cyassl-2.4.6
+YASSL_FLAGS = -I $(YASSL) -I $(YASSL)/cyassl \
+              -D _LIB -D OPENSSL_EXTRA -D HAVE_ERRNO_H \
+              -D HAVE_GETHOSTBYNAME -D HAVE_INET_NTOA -D HAVE_LIMITS_H \
+              -D HAVE_MEMSET -D HAVE_SOCKET -D HAVE_STDDEF_H -D HAVE_STDLIB_H \
+              -D HAVE_STRING_H -D HAVE_SYS_STAT_H -D HAVE_SYS_TYPES_H
+YASSL_SOURCES = \
+  $(YASSL)/src/internal.c $(YASSL)/src/io.c $(YASSL)/src/keys.c \
+  $(YASSL)/src/ssl.c $(YASSL)/src/tls.c $(YASSL)/ctaocrypt/src/hmac.c \
+  $(YASSL)/ctaocrypt/src/random.c $(YASSL)/ctaocrypt/src/sha.c \
+  $(YASSL)/ctaocrypt/src/sha256.c $(YASSL)/ctaocrypt/src/logging.c \
+  $(YASSL)/ctaocrypt/src/error.c $(YASSL)/ctaocrypt/src/rsa.c \
+  $(YASSL)/ctaocrypt/src/des3.c $(YASSL)/ctaocrypt/src/asn.c \
+  $(YASSL)/ctaocrypt/src/coding.c $(YASSL)/ctaocrypt/src/arc4.c \
+  $(YASSL)/ctaocrypt/src/md4.c $(YASSL)/ctaocrypt/src/md5.c \
+  $(YASSL)/ctaocrypt/src/dh.c $(YASSL)/ctaocrypt/src/dsa.c \
+  $(YASSL)/ctaocrypt/src/pwdbased.c $(YASSL)/ctaocrypt/src/aes.c \
+  $(YASSL)/ctaocrypt/src/md2.c $(YASSL)/ctaocrypt/src/ripemd.c \
+  $(YASSL)/ctaocrypt/src/sha512.c $(YASSL)/src/sniffer.c \
+  $(YASSL)/ctaocrypt/src/rabbit.c $(YASSL)/ctaocrypt/src/misc.c \
+  $(YASSL)/ctaocrypt/src/tfm.c $(YASSL)/ctaocrypt/src/integer.c \
+  $(YASSL)/ctaocrypt/src/ecc.c $(YASSL)/src/ocsp.c $(YASSL)/src/crl.c \
+  $(YASSL)/ctaocrypt/src/hc128.c $(YASSL)/ctaocrypt/src/memory.c
+
 TINY_SOURCES = ../mongoose.c main.c
 LUA_SOURCES = $(TINY_SOURCES) lua_5.2.1.c
 LUA_SQLITE_SOURCES = $(LUA_SOURCES) sqlite3.c lsqlite3.c
-BIG_SOURCES = $(TINY_SOURCES) lua_5.2.1.c sqlite3.c lsqlite3.c
+BIG_SOURCES = $(TINY_SOURCES) lua_5.2.1.c sqlite3.c lsqlite3.c $(YASSL_SOURCES)
 
 SQLITE_FLAGS = -DTHREADSAFE=1 -DSQLITE_ENABLE_FTS3 \
                -DSQLITE_ENABLE_FTS3_PARENTHESIS
@@ -22,7 +47,7 @@ LUA_FLAGS = -DUSE_LUA
 LUA_SQLITE_FLAGS = $(SQLITE_FLAGS) $(LUA_FLAGS) -DUSE_LUA_SQLITE3
 BIG_FLAGS = -DTHREADSAFE=1 -DSQLITE_ENABLE_FTS3 \
 	    -DSQLITE_ENABLE_FTS3_PARENTHESIS \
-	    -DUSE_LUA -DUSE_LUA_SQLITE3
+	    -DUSE_LUA -DUSE_LUA_SQLITE3 -DUSE_SSL -DUSE_CYASSL $(YASSL_FLAGS)
 
 # Using Visual Studio 6.0. To build Mongoose:
 #  Set MSVC variable below to where VS 6.0 is installed on your system
@@ -59,6 +84,9 @@ $(PROG)-lua: $(TINY_SOURCES) $(LUA_SOURCES)
 $(PROG)-lua-sqlite: $(LUA_SQLITE_SOURCES)
 	$(CC) $(LUA_SQLITE_SOURCES) -o $@ $(LUA_SQLITE_FLAGS) $(CFLAGS)
 
+$(PROG)-lua-sqlite-ssl: $(BIG_SOURCES)
+	$(CC) $(BIG_SOURCES) -o $@ $(BIG_FLAGS) $(CFLAGS)
+
 $(PROG)-big: $(BIG_SOURCES)
 	$(CC) $(BIG_SOURCES) -o $@ $(CFLAGS) $(BIG_FLAGS)
 
@@ -69,6 +97,10 @@ unix_unit_test: $(LUA_SOURCES) Makefile ./test/unit_test.c
 $(PROG)-lua-sqlite.exe: $(LUA_SQLITE_SOURCES)
 	$(MSVC)/bin/rc res.rc
 	$(CL) $(LUA_SQLITE_SOURCES) $(LUA_SQLITE_FLAGS) /link $(LINK_FLAGS) res.res /out:$@
+
+$(PROG)-lua-sqlite-ssl.exe: $(BIG_SOURCES)
+	$(MSVC)/bin/rc res.rc
+	$(CL) $(BIG_SOURCES) $(BIG_FLAGS) /link $(LINK_FLAGS) res.res /out:$@
 
 $(PROG)-lua.exe: $(LUA_SOURCES)
 	$(MSVC)/bin/rc res.rc
@@ -91,14 +123,14 @@ windows_unit_test.exe: ../mongoose.c Makefile
 # For codesign to work in non-interactive mode, unlock login keychain:
 # security unlock ~/Library/Keychains/login.keychain
 # See e.g. http://lists.apple.com/archives/apple-cdsa/2008/Jan/msg00027.html
-macos: $(LUA_SQLITE_SOURCES)
+macos: $(BIG_SOURCES)
 	DIR=dmg/Mongoose.app
 	rm -rf dmg
 	mkdir -p dmg/Mongoose.app/Contents/{MacOS,Resources}
 	install -m 644 *.icns *.png dmg/Mongoose.app/Contents/Resources/
 	install -m 644 Info.plist dmg/Mongoose.app/Contents/
-	$(CC) $(LUA_SQLITE_SOURCES) \
-  -DUSE_COCOA $(CFLAGS) $(LUA_SQLITE_FLAGS) -mmacosx-version-min=10.4 \
+	$(CC) $(BIG_SOURCES) \
+  -DUSE_COCOA $(CFLAGS) $(BIG_FLAGS) -mmacosx-version-min=10.4 \
   -framework Cocoa -ObjC -arch i386 -arch x86_64 \
   -o dmg/Mongoose.app/Contents/MacOS/Mongoose
 	ln -fs /Applications dmg/
@@ -118,9 +150,11 @@ tarball: clean
 	tar -czf $(VDIR).tgz $(VDIR)
 
 release: tarball macos
-	wine make
+	wine make mongoose.exe mongoose-lua-sqlite-ssl.exe
 	upx mongoose.exe
+	upx mongoose-lua-sqlite-ssl.exe
 	cp mongoose.exe mongoose-$(VERSION).exe
+	cp mongoose-lua-sqlite-ssl.exe mongoose-lua-sqlite-ssl-$(VERSION).exe
 	cp mongoose.exe mongoose_php_bundle/
 	zip -r mongoose-php-$(VERSION).zip mongoose_php_bundle/
 
