@@ -1,7 +1,11 @@
 HTTP/1.0 200 OK
 Content-Type: text/html
 
-<html><body>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+</head>
+<body>
 
 
 <p>This is an example Lua server page served by
@@ -22,6 +26,7 @@ all requests done previously.</p>
   -- db:trace(function(data, sql) mg.write('Executing: ', sql: '\n') end, nil)
 
   -- Create a table if it is not created already
+  db:exec('PRAGMA encoding="UTF-8"; ')
   db:exec([[
     CREATE TABLE IF NOT EXISTS requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,4 +59,9 @@ all requests done previously.</p>
   -- Close database
   db:close()
 ?>
-</pre></body></html>
+</pre>
+
+This is an example on how to include files a-la SSI:
+<pre><? mg.write(io.open('dll.def'):read('*all')) ?></pre>
+
+</body></html>

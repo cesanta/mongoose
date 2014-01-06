@@ -156,7 +156,7 @@ struct ll { struct ll *prev, *next; };
 #define MAX_REQUEST_SIZE 16384
 #define IOBUF_SIZE 8192
 #define MAX_PATH_SIZE 8192
-#define LUA_SCRIPT_PATTERN "**.mg.lua$"
+#define LUA_SCRIPT_PATTERN "**.lp$"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
 #define ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
@@ -2802,6 +2802,23 @@ int mg_parse_header(const char *str, const char *var_name, char *buf,
 #ifdef USE_LUA
 #include "lua_5.2.1.h"
 
+#ifdef _WIN32
+static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
+                  int offset) {
+  HANDLE fh = (HANDLE) _get_osfhandle(fd);
+  HANDLE mh = CreateFileMapping(fh, 0, PAGE_READONLY, 0, 0, 0);
+  void *p = MapViewOfFile(mh, FILE_MAP_READ, 0, 0, (size_t) len);
+  CloseHandle(mh);
+  return p;
+}
+#define munmap(x, y)  UnmapViewOfFile(x)
+#define MAP_FAILED NULL
+#define MAP_PRIVATE 0
+#define PROT_READ 0
+#else
+#include <sys/mman.h>
+#endif
+
 static void reg_string(struct lua_State *L, const char *name, const char *val) {
   lua_pushstring(L, name);
   lua_pushstring(L, val);
@@ -3003,22 +3020,50 @@ static int lua_error_handler(lua_State *L) {
   return 0;
 }
 
-static void handle_lua_request(struct connection *conn, const char *path) {
-  lua_State *L;
+static void lsp(struct connection *conn, const char *p, int len, lua_State *L) {
+  int i, j, pos = 0;
 
-  if (path != NULL && (L = luaL_newstate()) != NULL) {
+  for (i = 0; i < len; i++) {
+    if (p[i] == '<' && p[i + 1] == '?') {
+      for (j = i + 1; j < len ; j++) {
+        if (p[j] == '?' && p[j + 1] == '>') {
+          mg_write(&conn->mg_conn, p + pos, i - pos);
+          if (luaL_loadbuffer(L, p + (i + 2), j - (i + 2), "") == LUA_OK) {
+            lua_pcall(L, 0, LUA_MULTRET, 0);
+          }
+          pos = j + 2;
+          i = pos - 1;
+          break;
+        }
+      }
+    }
+  }
+  if (i > pos) mg_write(&conn->mg_conn, p + pos, i - pos);
+}
+
+static void handle_lsp_request(struct connection *conn, const char *path,
+                               file_stat_t *st) {
+  void *p = NULL;
+  lua_State *L = NULL;
+  FILE *fp = NULL;
+
+  if ((fp = fopen(path, "r")) == NULL ||
+      (p = mmap(NULL, st->st_size, PROT_READ, MAP_PRIVATE,
+                fileno(fp), 0)) == MAP_FAILED ||
+      (L = luaL_newstate()) == NULL) {
+    send_http_error(conn, 500);
+  } else {
+    // We're not sending HTTP headers here, Lua page must do it.
     prepare_lua_environment(&conn->mg_conn, L);
     lua_pushcclosure(L, &lua_error_handler, 0);
-
     lua_pushglobaltable(L);
-
-    if (luaL_loadfile(L, path) != 0) {
-      lua_error_handler(L);
-    }
-    lua_pcall(L, 0, 0, -2);
-    lua_close(L);
+    lsp(conn, p, st->st_size, L);
+    close_local_endpoint(conn);
   }
-  close_local_endpoint(conn);
+
+  if (L != NULL) lua_close(L);
+  if (p != NULL) munmap(p, st->st_size);
+  if (fp != NULL) fclose(fp);
 }
 #endif // USE_LUA
 
@@ -3090,7 +3135,7 @@ static void open_local_endpoint(struct connection *conn) {
     }
   } else if (match_prefix(lua_pat, sizeof(lua_pat) - 1, path) > 0) {
 #ifdef USE_LUA
-    handle_lua_request(conn, path);
+    handle_lsp_request(conn, path, &st);
 #else
     send_http_error(conn, 501);
 #endif
