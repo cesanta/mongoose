@@ -346,7 +346,7 @@ static const char *static_config_options[] = {
   "global_auth_file", NULL,
   "hide_files_patterns", NULL,
   "idle_timeout_ms", "30000",
-  "index_files","index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
+  "index_files","index.html,index.htm,index.cgi,index.php,index.lp",
   "listening_port", NULL,
 #ifndef _WIN32
   "run_as_user", NULL,
