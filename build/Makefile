@@ -70,6 +70,10 @@ $(PROG)-lua-sqlite.exe: $(LUA_SQLITE_SOURCES)
 	$(MSVC)/bin/rc res.rc
 	$(CL) $(LUA_SQLITE_SOURCES) $(LUA_SQLITE_FLAGS) /link $(LINK_FLAGS) res.res /out:$@
 
+$(PROG)-lua.exe: $(LUA_SOURCES)
+	$(MSVC)/bin/rc res.rc
+	$(CL) $(LUA_SOURCES) $(LUA_FLAGS) /link $(LINK_FLAGS) res.res /out:$@
+
 $(PROG).exe: $(TINY_SOURCES)
 	$(MSVC)/bin/rc res.rc
 	$(CL) $(TINY_SOURCES) /link $(LINK_FLAGS) res.res /out:$@
