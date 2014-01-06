@@ -14,11 +14,15 @@ VDIR = mongoose-$(VERSION)
 TINY_SOURCES = ../mongoose.c main.c
 LUA_SOURCES = $(TINY_SOURCES) lua_5.2.1.c
 LUA_SQLITE_SOURCES = $(LUA_SOURCES) sqlite3.c lsqlite3.c
+BIG_SOURCES = $(TINY_SOURCES) lua_5.2.1.c sqlite3.c lsqlite3.c
 
 SQLITE_FLAGS = -DTHREADSAFE=1 -DSQLITE_ENABLE_FTS3 \
                -DSQLITE_ENABLE_FTS3_PARENTHESIS
 LUA_FLAGS = -DUSE_LUA
 LUA_SQLITE_FLAGS = $(SQLITE_FLAGS) $(LUA_FLAGS) -DUSE_LUA_SQLITE3
+BIG_FLAGS = -DTHREADSAFE=1 -DSQLITE_ENABLE_FTS3 \
+	    -DSQLITE_ENABLE_FTS3_PARENTHESIS \
+	    -DUSE_LUA -DUSE_LUA_SQLITE3
 
 # Using Visual Studio 6.0. To build Mongoose:
 #  Set MSVC variable below to where VS 6.0 is installed on your system
@@ -49,11 +53,14 @@ all: mongoose$(EXE_SUFFIX)
 $(PROG): $(TINY_SOURCES)
 	$(CC) $(TINY_SOURCES) -o $@ $(CFLAGS)
 
-$(PROG)-lua: $(LUA_SOURCES)
+$(PROG)-lua: $(TINY_SOURCES) $(LUA_SOURCES)
 	$(CC) $(LUA_SOURCES) -o $@ $(LUA_FLAGS) $(CFLAGS)
 
 $(PROG)-lua-sqlite: $(LUA_SQLITE_SOURCES)
 	$(CC) $(LUA_SQLITE_SOURCES) -o $@ $(LUA_SQLITE_FLAGS) $(CFLAGS)
+
+$(PROG)-big: $(BIG_SOURCES)
+	$(CC) $(BIG_SOURCES) -o $@ $(CFLAGS) $(BIG_FLAGS)
 
 unix_unit_test: $(LUA_SOURCES) Makefile ./test/unit_test.c
 	$(CC) ./test/unit_test.c lua_5.2.1.c $(CFLAGS) -g -O0 -o t && ./t
@@ -107,11 +114,9 @@ tarball: clean
 	tar -czf $(VDIR).tgz $(VDIR)
 
 release: tarball macos
-	wine make windows
+	wine make
 	upx mongoose.exe
-	upx mongoose-tiny.exe
 	cp mongoose.exe mongoose-$(VERSION).exe
-	cp mongoose-tiny.exe mongoose-tiny-$(VERSION).exe
 	cp mongoose.exe mongoose_php_bundle/
 	zip -r mongoose-php-$(VERSION).zip mongoose_php_bundle/
 
