@@ -213,7 +213,10 @@ enum {
   ACCESS_CONTROL_LIST, ACCESS_LOG_FILE, AUTH_DOMAIN, CGI_INTERPRETER,
   CGI_PATTERN, DAV_AUTH_FILE, DOCUMENT_ROOT, ENABLE_DIRECTORY_LISTING,
   ERROR_LOG_FILE, EXTRA_MIME_TYPES, GLOBAL_AUTH_FILE, HIDE_FILES_PATTERN,
-  IDLE_TIMEOUT_MS, INDEX_FILES, LISTENING_PORT, RUN_AS_USER, SSL_CERTIFICATE,
+  IDLE_TIMEOUT_MS, INDEX_FILES, LISTENING_PORT, RUN_AS_USER,
+#ifdef USE_SSL
+  SSL_CERTIFICATE,
+#endif
   URL_REWRITES, NUM_OPTIONS
 };
 
@@ -266,7 +269,6 @@ struct connection {
   int64_t cl;             // Reply content length, for Range support
   int request_len;  // Request length, including last \r\n after last header
   int flags;        // CONN_* flags: CONN_CLOSE, CONN_SPOOL_DONE, etc
-  mutex_t mutex;    // Guards concurrent mg_write() calls
   void *ssl;        // SSL descriptor
 };
 
@@ -344,7 +346,9 @@ static const char *static_config_options[] = {
   "index_files","index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
   "listening_port", NULL,
   "run_as_user", NULL,
+#ifdef USE_SSL
   "ssl_certificate", NULL,
+#endif
   "url_rewrites", NULL,
   NULL
 };
@@ -1028,7 +1032,6 @@ static struct connection *accept_new_connection(struct mg_server *server) {
                        sizeof(conn->mg_conn.remote_ip), &sa);
     conn->mg_conn.remote_port = ntohs(sa.sin.sin_port);
     conn->mg_conn.server_param = server->server_data;
-    mutex_init(&conn->mutex);
     LINKED_LIST_ADD_TO_FRONT(&server->active_connections, &conn->link);
     DBG(("added conn %p", conn));
   }
@@ -1047,7 +1050,6 @@ static void close_conn(struct connection *conn) {
 #ifdef USE_SSL
   if (conn->ssl != NULL) SSL_free(conn->ssl);
 #endif
-  mutex_destroy(&conn->mutex);
   free(conn);
 }
 
@@ -3635,8 +3637,8 @@ const char *mg_set_option(struct mg_server *server, const char *name,
         error_msg = "setuid() failed";
       }
 #endif
-    } else if (ind == SSL_CERTIFICATE) {
 #ifdef USE_SSL
+    } else if (ind == SSL_CERTIFICATE) {
       SSL_library_init();
       if ((server->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
         error_msg = "SSL_CTX_new() failed";
