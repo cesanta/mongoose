@@ -213,7 +213,10 @@ enum {
   ACCESS_CONTROL_LIST, ACCESS_LOG_FILE, AUTH_DOMAIN, CGI_INTERPRETER,
   CGI_PATTERN, DAV_AUTH_FILE, DOCUMENT_ROOT, ENABLE_DIRECTORY_LISTING,
   ERROR_LOG_FILE, EXTRA_MIME_TYPES, GLOBAL_AUTH_FILE, HIDE_FILES_PATTERN,
-  IDLE_TIMEOUT_MS, INDEX_FILES, LISTENING_PORT, RUN_AS_USER,
+  IDLE_TIMEOUT_MS, INDEX_FILES, LISTENING_PORT,
+#ifndef _WIN32
+  RUN_AS_USER,
+#endif
 #ifdef USE_SSL
   SSL_CERTIFICATE,
 #endif
@@ -345,7 +348,9 @@ static const char *static_config_options[] = {
   "idle_timeout_ms", "30000",
   "index_files","index.html,index.htm,index.cgi,index.shtml,index.php,index.lp",
   "listening_port", NULL,
+#ifndef _WIN32
   "run_as_user", NULL,
+#endif
 #ifdef USE_SSL
   "ssl_certificate", NULL,
 #endif
@@ -3626,8 +3631,8 @@ const char *mg_set_option(struct mg_server *server, const char *name,
       } else {
         set_non_blocking_mode(server->listening_sock);
       }
-    } else if (ind == RUN_AS_USER) {
 #ifndef _WIN32
+    } else if (ind == RUN_AS_USER) {
       struct passwd *pw;
       if ((pw = getpwnam(value)) == NULL) {
         error_msg = "Unknown user";
