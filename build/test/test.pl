@@ -168,7 +168,6 @@ kill_spawned_child();
 my $cmd = "$mongoose_exe ".
   "-listening_port 127.0.0.1:$port ".
   "-access_log_file access.log ".
-  "-error_log_file debug.log ".
   "-extra_mime_types .bar=foo/bar,.tar.gz=blah,.baz=foo " .
   "-dav_auth_file $abs_root/passfile " .
   '-access_control_list -0.0.0.0/0,+127.0.0.1 ' .
