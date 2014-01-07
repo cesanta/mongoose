@@ -51,8 +51,8 @@ is serving, in between `mg_poll_server()` calls.
     void mg_poll_server(struct mg_server *server, int milliseconds);
 
 This function performs one iteration of IO loop by iterating over all
-active connections, performing `select()` syscall on all sockets, and sleeping
-for `milliseconds` number of milliseconds. When `select()` returns, Mongoose
+active connections, performing `select()` syscall on all sockets with a timeout
+of `milliseconds` number of milliseconds. When `select()` returns, Mongoose
 does an IO for each socket that has data to be sent or received. Application
 code must call `mg_poll_server()` in a loop. It is an error to have more then
 one thread calling `mg_poll_server()`, `mg_set_option()` or any other function
