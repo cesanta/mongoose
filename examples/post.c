@@ -21,19 +21,17 @@ static int handler(struct mg_connection *conn) {
 
     // Send reply to the client, showing submitted form values.
     // POST data is in conn->content, data length is in conn->content_len
-    mg_printf(conn, "HTTP/1.0 200 OK\r\n"
-             "Content-Type: text/plain\r\n\r\n"
-             "Submitted data: [%.*s]\n"
-             "Submitted data length: %d bytes\n"
-             "input_1: [%s]\n"
-             "input_2: [%s]\n",
-             conn->content_len, conn->content, conn->content_len, var1, var2);
+    mg_send_header(conn, "Content-Type", "text/plain");
+    mg_printf_data(conn,
+                   "Submitted data: [%.*s]\n"
+                   "Submitted data length: %d bytes\n"
+                   "input_1: [%s]\n"
+                   "input_2: [%s]\n",
+                   conn->content_len, conn->content,
+                   conn->content_len, var1, var2);
   } else {
     // Show HTML form.
-    mg_printf(conn, "HTTP/1.1 200 OK\r\n"
-             "Content-Length: %d\r\n"
-             "Content-Type: text/html\r\n\r\n%s",
-             (int) strlen(html_form), html_form);
+    mg_send_data(conn, html_form, strlen(html_form));
   }
 
   return 1;
