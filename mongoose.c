@@ -3397,13 +3397,12 @@ static void transfer_file_data(struct connection *conn) {
 static void execute_iteration(struct mg_server *server) {
   struct ll *lp, *tmp;
   struct connection *conn;
-  void *msg[2];
+  union { void (*f)(struct mg_connection *, void *); void *p; } msg[2];
 
   recv(server->ctl[1], (void *) msg, sizeof(msg), 0);
   LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
     conn = LINKED_LIST_ENTRY(lp, struct connection, link);
-    ((void (*)(struct mg_connection *, void *)) msg[0])
-     ((struct mg_connection *) conn, msg[1]);
+    msg[0].f(&conn->mg_conn, msg[1].p);
   }
 }
 
@@ -3516,7 +3515,9 @@ void mg_iterate_over_connections(struct mg_server *server,
                                  void (*func)(struct mg_connection *, void *),
                                  void *param) {
   // Send closure (function + parameter) to the IO thread to execute
-  void *msg[2] = { (void *) func, param };
+  union { void (*f)(struct mg_connection *, void *); void *p; } msg[2];
+  msg[0].f = func;
+  msg[1].p = param;
   send(server->ctl[0], (void *) msg, sizeof(msg), 0);
 }
 
