@@ -3,10 +3,10 @@
 // Start a browser and hit refresh couple of times. The replies will
 // come from both server instances.
 static int request_handler(struct mg_connection *conn) {
-  mg_printf(conn, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n"
-            "This is a reply from server instance # %s",
-            (char *) conn->server_param);
-  return 1;
+  mg_send_header(conn, "Content-Type", "text/plain");
+  mg_printf_data(conn, "This is a reply from server instance # %s",
+                 (char *) conn->server_param);
+  return 0;
 }
 
 static void *serve(void *server) {
@@ -30,7 +30,8 @@ int main(void) {
   // server1 goes to separate thread, server 2 runs in main thread.
   // IMPORTANT: NEVER LET DIFFERENT THREADS HANDLE THE SAME SERVER.
   mg_start_thread(serve, server1);
-  serve(server2);
+  mg_start_thread(serve, server2);
+  getchar();
 
   return 0;
 }
