@@ -16,8 +16,8 @@ that take `struct mg_server *` parameter. Mongoose does not
 mutex-protect `struct mg_server *`, therefore the best practice is
 to call server management functions from the same thread (an IO thread).
 On a multi-core systems, many server instances can be created, sharing the
-same listening socket and managed by a separate thread (see [example](https://github.com/cesanta/mongoose/blob/master/examples/multi_threaded.c)).
-
+same listening socket and managed by separate threads (see [multi_threaded.c](https://github.com/cesanta/mongoose/blob/master/examples/multi_threaded.c))
+example.
 
 It is an error to pass and store `struct mg_connection *` pointers for
 later use to send data. The reason is that they can be invalidated by the
