@@ -2899,12 +2899,10 @@ static int lsp_sock_send(lua_State *L) {
     lua_getfield(L, -2, "sock");
     sock = (int) lua_tonumber(L, -1);
     while (sent < len) {
-      if ((n = send(sock, buf + sent, len - sent, 0)) <= 0) {
-        break;
-      }
+      if ((n = send(sock, buf + sent, len - sent, 0)) <= 0) break;
       sent += n;
     }
-    lua_pushnumber(L, n);
+    lua_pushnumber(L, sent);
   } else {
     return luaL_error(L, "invalid :close() call");
   }
@@ -3001,8 +2999,8 @@ static void prepare_lua_environment(struct mg_connection *ri, lua_State *L) {
   lua_setglobal(L, "mg");
 
   // Register default mg.onerror function
-  luaL_dostring(L, "mg.onerror = function(e) mg.write('\\nLua error:\\n', "
-                "debug.traceback(e, 1)) end");
+  (void) luaL_dostring(L, "mg.onerror = function(e) mg.write('\\nLua "
+                       "error:\\n', debug.traceback(e, 1)) end");
 }
 
 static int lua_error_handler(lua_State *L) {
@@ -3014,10 +3012,10 @@ static int lua_error_handler(lua_State *L) {
     lua_pushstring(L, error_msg);
     lua_pushliteral(L, "\n");
     lua_call(L, 2, 0);
-    luaL_dostring(L, "mg.write(debug.traceback(), '\\n')");
+    (void) luaL_dostring(L, "mg.write(debug.traceback(), '\\n')");
   } else {
     printf("Lua error: [%s]\n", error_msg);
-    luaL_dostring(L, "print(debug.traceback(), '\\n')");
+    (void) luaL_dostring(L, "print(debug.traceback(), '\\n')");
   }
   // TODO(lsm): leave the stack balanced
 
