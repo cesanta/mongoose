@@ -63,6 +63,7 @@ LINK = $(MSVC)/bin/link $(LINK_FLAGS)
 ifeq ($(OS), Windows_NT)
   EXE_SUFFIX = .exe
 else
+  CFLAGS += -Wno-empty-translation-unit
   UNAME_S := $(shell uname -s)
   ifeq ($(UNAME_S), Linux)
     CFLAGS += -ldl -lm
