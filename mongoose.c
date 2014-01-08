@@ -697,10 +697,10 @@ static pid_t start_process(char *interp, const char *cmd, const char *env,
   }
 
   if (interp != NULL) {
-    GetFullPathNameA(interp, sizeof(buf), buf, NULL);
+    GetFullPathName(interp, sizeof(buf), buf, NULL);
     interp = buf;
   }
-  GetFullPathNameA(dir, sizeof(full_dir), full_dir, NULL);
+  GetFullPathName(dir, sizeof(full_dir), full_dir, NULL);
   mg_snprintf(cmdline, sizeof(cmdline), "%s%s\"%s\"",
               interp ? interp : "", interp ? " " : "", cmd);
 
