@@ -3467,7 +3467,9 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
   // Close expired connections and those that need to be closed
   LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
     conn = LINKED_LIST_ENTRY(lp, struct connection, link);
-    ping_idle_websocket_connection(conn, current_time);
+    if (conn->mg_conn.is_websocket) {
+      ping_idle_websocket_connection(conn, current_time);
+    }
     if (conn->flags & CONN_CLOSE || conn->last_activity_time < expire_time) {
       close_conn(conn);
     }
