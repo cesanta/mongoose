@@ -15,6 +15,7 @@
 // Alternatively, you can license this library under a commercial
 // license, as set out in <http://cesanta.com/products.html>.
 
+#undef UNICODE                  // Use ANSI WinAPI functions
 #undef _UNICODE                 // Use multibyte encoding on Windows
 #define _MBCS                   // Use multibyte encoding on Windows
 #define _INTEGRAL_MAX_BITS 64   // Enable _stati64() on Windows
@@ -696,10 +697,10 @@ static pid_t start_process(char *interp, const char *cmd, const char *env,
   }
 
   if (interp != NULL) {
-    GetFullPathNameA(interp, sizeof(buf), buf, NULL);
+    GetFullPathName(interp, sizeof(buf), buf, NULL);
     interp = buf;
   }
-  GetFullPathNameA(dir, sizeof(full_dir), full_dir, NULL);
+  GetFullPathName(dir, sizeof(full_dir), full_dir, NULL);
   mg_snprintf(cmdline, sizeof(cmdline), "%s%s\"%s\"",
               interp ? interp : "", interp ? " " : "", cmd);
 
