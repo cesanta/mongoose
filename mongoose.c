@@ -2348,35 +2348,21 @@ static int put_dir(const char *path) {
   char buf[MAX_PATH_SIZE];
   const char *s, *p;
   file_stat_t st;
-  int len, res = 1;
 
-  for (s = p = path + 2; (p = strchr(s, '/')) != NULL; s = ++p) {
-    len = p - path;
-    if (len >= (int) sizeof(buf)) {
-      res = -1;
-      break;
-    }
-    mg_strlcpy(buf, path, len);
-    memcpy(buf, path, len);
-
-    // Try to create intermediate directory
-    if (stat(buf, &st) != 0 && mkdir(buf, 0755) != 0) {
-      res = -1;
-      break;
-    }
-
-    // Is path itself a directory?
-    if (p[1] == '\0') {
-      res = 0;
-    }
+  // Create intermediate directories if they do not exist
+  for (s = p = path + 1; (p = strchr(s, '/')) != NULL; s = ++p) {
+    if (p - path >= (int) sizeof(buf)) return -1; // Buffer overflow
+    memcpy(buf, path, p - path);
+    buf[p - path] = '\0';
+    if (stat(buf, &st) != 0 && mkdir(buf, 0755) != 0) return -1;
+    if (p[1] == '\0') return 0;  // Path is a directory itself
   }
 
-  return res;
+  return 1;
 }
 
 static void handle_put(struct connection *conn, const char *path) {
   file_stat_t st;
-  char buf[100];
   const char *range, *cl_hdr = mg_get_header(&conn->mg_conn, "Content-Length");
   int64_t r1, r2;
   int rc;
@@ -2403,9 +2389,8 @@ static void handle_put(struct connection *conn, const char *path) {
       lseek(conn->endpoint.fd, r1, SEEK_SET);
       conn->cl = r2 > r1 ? r2 - r1 + 1: conn->cl - r1;
     }
-    mg_snprintf(buf, sizeof(buf), "HTTP/1.1 %d OK\r\nContent-Length: 0\r\n\r\n",
-                conn->mg_conn.status_code);
-    spool(&conn->remote_iobuf, buf, strlen(buf));
+    mg_printf(&conn->mg_conn, "HTTP/1.1 %d OK\r\nContent-Length: 0\r\n\r\n",
+              conn->mg_conn.status_code);
   }
 }
 
