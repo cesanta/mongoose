@@ -498,13 +498,21 @@ static const char *status_code_to_str(int status_code) {
   }
 }
 
-static void send_http_error(struct connection *conn, int code) {
+static void send_http_error(struct connection *conn, int code,
+                            const char *fmt, ...) {
   const char *message = status_code_to_str(code);
   char headers[200], body[200];
+  va_list ap;
   int body_len, headers_len;
 
   conn->mg_conn.status_code = code;
   body_len = mg_snprintf(body, sizeof(body), "%d %s\n", code, message);
+  if (fmt != NULL) {
+    body[body_len++] = '\n';
+    va_start(ap, fmt);
+    body_len += mg_snprintf(body + body_len, sizeof(body) - body_len, fmt, ap);
+    va_end(ap);
+  }
   if (code >= 300 && code <= 399) {
     // 3xx errors do not have body
     body_len = 0;
@@ -906,7 +914,7 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
     conn->endpoint.cgi_sock = fds[0];
   } else {
     closesocket(fds[0]);
-    send_http_error(conn, 500);
+    send_http_error(conn, 500, "start_process(%s) failed", prog);
   }
 
   closesocket(fds[1]);
@@ -1036,7 +1044,7 @@ static struct connection *accept_new_connection(struct mg_server *server) {
 }
 
 static void close_conn(struct connection *conn) {
-  DBG(("closing %p %d %d", conn, conn->flags, conn->endpoint_type));
+  DBG(("%p %d %d", conn, conn->flags, conn->endpoint_type));
   LINKED_LIST_REMOVE(&conn->link);
   closesocket(conn->client_sock);
   free(conn->request);            // It's OK to free(NULL), ditto below
@@ -1671,7 +1679,8 @@ static void write_to_client(struct connection *conn) {
   0;
 #endif
 
-  DBG(("Written %d of %d(%d): [%.*s ...]", n, io->len, io->size, 40, io->buf));
+  DBG(("%p Written %d of %d(%d): [%.*s ...]",
+       conn, n, io->len, io->size, 40, io->buf));
 
   if (is_error(n)) {
     conn->flags |= CONN_CLOSE;
@@ -2287,7 +2296,7 @@ static void handle_mkcol(struct connection *conn, const char *path) {
   } else if (errno == ENOENT) {
     status_code = 409;
   }
-  send_http_error(conn, status_code);
+  send_http_error(conn, status_code, NULL);
 }
 
 static int remove_directory(const char *dir) {
@@ -2318,14 +2327,14 @@ static void handle_delete(struct connection *conn, const char *path) {
   file_stat_t st;
 
   if (!stat(path, &st)) {
-    send_http_error(conn, 404);
+    send_http_error(conn, 404, NULL);
   } else if (S_ISDIR(st.st_mode)) {
     remove_directory(path);
-    send_http_error(conn, 204);
+    send_http_error(conn, 204, NULL);
   } else if (!remove(path) == 0) {
-    send_http_error(conn, 204);
+    send_http_error(conn, 204, NULL);
   } else {
-    send_http_error(conn, 423);
+    send_http_error(conn, 423, NULL);
   }
 }
 
@@ -2361,12 +2370,12 @@ static void handle_put(struct connection *conn, const char *path) {
               conn->mg_conn.status_code);
     close_local_endpoint(conn);
   } else if (rc == -1) {
-    send_http_error(conn, 500);
+    send_http_error(conn, 500, "put_dir: %s", strerror(errno));
   } else if (cl_hdr == NULL) {
-    send_http_error(conn, 411);
+    send_http_error(conn, 411, NULL);
   } else if ((conn->endpoint.fd =
               open(path, O_RDWR | O_CREAT | O_TRUNC, 0644)) < 0) {
-    send_http_error(conn, 500);
+    send_http_error(conn, 500, "open(%s): %s", path, strerror(errno));
   } else {
     DBG(("PUT [%s] %d", path, conn->local_iobuf.len));
     conn->endpoint_type = EP_PUT;
@@ -3029,7 +3038,7 @@ static void handle_lsp_request(struct connection *conn, const char *path,
       (p = mmap(NULL, st->st_size, PROT_READ, MAP_PRIVATE,
                 fileno(fp), 0)) == MAP_FAILED ||
       (L = luaL_newstate()) == NULL) {
-    send_http_error(conn, 500);
+    send_http_error(conn, 500, "mmap(%s): %s", path, strerror(errno));
   } else {
     // We're not sending HTTP headers here, Lua page must do it.
     prepare_lua_environment(&conn->mg_conn, L);
@@ -3066,7 +3075,8 @@ static void open_local_endpoint(struct connection *conn) {
       const char *cl = mg_get_header(&conn->mg_conn, "Content-Length");
       if (!strcmp(conn->mg_conn.request_method, "POST") &&
           (cl == NULL || to64(cl) > USE_POST_SIZE_LIMIT)) {
-        send_http_error(conn, 500);
+        send_http_error(conn, 500, "POST size > %zu",
+                        (size_t) USE_POST_SIZE_LIMIT);
       }
     }
 #endif
@@ -3079,7 +3089,7 @@ static void open_local_endpoint(struct connection *conn) {
   if (!strcmp(conn->mg_conn.request_method, "OPTIONS")) {
     send_options(conn);
   } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
-    send_http_error(conn, 404);
+    send_http_error(conn, 404, NULL);
 #ifndef NO_AUTH
   } else if ((!is_dangerous_dav_request(conn) && !is_authorized(conn, path)) ||
              (is_dangerous_dav_request(conn) && !is_authorized_for_dav(conn))) {
@@ -3096,7 +3106,7 @@ static void open_local_endpoint(struct connection *conn) {
     handle_put(conn, path);
 #endif
   } else if (!exists || must_hide_file(conn, path)) {
-    send_http_error(conn, 404);
+    send_http_error(conn, 404, NULL);
   } else if (is_directory &&
              conn->mg_conn.uri[strlen(conn->mg_conn.uri) - 1] != '/') {
     conn->mg_conn.status_code = 301;
@@ -3108,37 +3118,37 @@ static void open_local_endpoint(struct connection *conn) {
 #ifndef NO_DIRECTORY_LISTING
       send_directory_listing(conn, path);
 #else
-      send_http_error(conn, 501);
+      send_http_error(conn, 501, NULL);
 #endif
     } else {
-      send_http_error(conn, 403);
+      send_http_error(conn, 403, NULL);
     }
   } else if (match_prefix(lua_pat, sizeof(lua_pat) - 1, path) > 0) {
 #ifdef USE_LUA
     handle_lsp_request(conn, path, &st);
 #else
-    send_http_error(conn, 501);
+    send_http_error(conn, 501, NULL);
 #endif
   } else if (match_prefix(cgi_pat, strlen(cgi_pat), path) > 0) {
     if (strcmp(conn->mg_conn.request_method, "POST") &&
         strcmp(conn->mg_conn.request_method, "HEAD") &&
         strcmp(conn->mg_conn.request_method, "GET")) {
-      send_http_error(conn, 501);
+      send_http_error(conn, 501, NULL);
     } else {
 #if !defined(NO_CGI)
       open_cgi_endpoint(conn, path);
 #else
-      send_http_error(conn, 501);
+      send_http_error(conn, 501, NULL);
 #endif // !NO_CGI
     }
   } else if (is_not_modified(conn, &st)) {
-    send_http_error(conn, 304);
+    send_http_error(conn, 304, NULL);
   } else if ((conn->endpoint.fd = open(path, O_RDONLY | O_BINARY)) != -1) {
     // O_BINARY is required for Windows, otherwise in default text mode
     // two bytes \r\n will be read as one.
     open_file_endpoint(conn, path, &st);
   } else {
-    send_http_error(conn, 404);
+    send_http_error(conn, 404, NULL);
   }
 }
 
@@ -3176,23 +3186,23 @@ static void process_request(struct connection *conn) {
     // become invalid.
     conn->request = (char *) malloc(conn->request_len);
     memcpy(conn->request, io->buf, conn->request_len);
-    DBG(("==> [%.*s]", conn->request_len, conn->request));
+    DBG(("%p ==> [%.*s]", conn, conn->request_len, conn->request));
     memmove(io->buf, io->buf + conn->request_len, io->len - conn->request_len);
     io->len -= conn->request_len;
     conn->request_len = parse_http_message(conn->request, conn->request_len,
                                            &conn->mg_conn);
   }
 
-  DBG(("%d %d", conn->request_len, io->len));
+  DBG(("%p %d %d", conn, conn->request_len, io->len));
   if (conn->request_len < 0 ||
       (conn->request_len > 0 && !is_valid_uri(conn->mg_conn.uri))) {
-    send_http_error(conn, 400);
+    send_http_error(conn, 400, NULL);
   } else if (conn->request_len == 0 && io->len > MAX_REQUEST_SIZE) {
-    send_http_error(conn, 413);
+    send_http_error(conn, 413, NULL);
   } else if (conn->request_len > 0 &&
              strcmp(conn->mg_conn.http_version, "1.0") != 0 &&
              strcmp(conn->mg_conn.http_version, "1.1") != 0) {
-    send_http_error(conn, 505);
+    send_http_error(conn, 505, NULL);
   } else if (conn->request_len > 0 && conn->endpoint_type == EP_NONE) {
 #ifndef NO_WEBSOCKET
     send_websocket_handshake_if_requested(&conn->mg_conn);
@@ -3234,6 +3244,7 @@ static void read_from_client(struct connection *conn) {
     n = recv(conn->client_sock, buf, sizeof(buf), 0);
   }
 
+  DBG(("%p %d", conn, n));
   if (is_error(n)) {
     conn->flags |= CONN_CLOSE;
   } else if (n > 0) {
@@ -3246,7 +3257,7 @@ static void read_from_cgi(struct connection *conn) {
   char buf[IOBUF_SIZE];
   int len, n = recv(conn->endpoint.cgi_sock, buf, sizeof(buf), 0);
 
-  DBG(("-> %d", n));
+  DBG(("%p %d", conn, n));
   if (is_error(n)) {
     close_local_endpoint(conn);
   } else if (n > 0) {
