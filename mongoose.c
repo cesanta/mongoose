@@ -712,6 +712,7 @@ static pid_t start_process(char *interp, const char *cmd, const char *env,
 #else
 static pid_t start_process(const char *interp, const char *cmd, const char *env,
                            const char *envp[], const char *dir, sock_t sock) {
+  char buf[500];
   pid_t pid = fork();
   (void) env;
 
@@ -732,6 +733,10 @@ static pid_t start_process(const char *interp, const char *cmd, const char *env,
     } else {
       execle(interp, interp, cmd, NULL, envp);
     }
+    snprintf(buf, sizeof(buf), "Status: 500\r\n\r\n"
+             "500 Server Error: %s%s%s: %s", interp == NULL ? "" : interp,
+             interp == NULL ? "" : " ", cmd, strerror(errno));
+    send(1, buf, strlen(buf), 0);
     exit(EXIT_FAILURE);  // exec call failed
   }
 
