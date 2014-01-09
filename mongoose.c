@@ -427,6 +427,45 @@ static void mg_strlcpy(register char *dst, register const char *src, size_t n) {
   *dst = '\0';
 }
 
+// A helper function for traversing a comma separated list of values.
+// It returns a list pointer shifted to the next value, or NULL if the end
+// of the list found.
+// Value is stored in val vector. If value has form "x=y", then eq_val
+// vector is initialized to point to the "y" part, and val vector length
+// is adjusted to point only to "x".
+static const char *next_option(const char *list, struct vec *val,
+                               struct vec *eq_val) {
+  if (list == NULL || *list == '\0') {
+    // End of the list
+    list = NULL;
+  } else {
+    val->ptr = list;
+    if ((list = strchr(val->ptr, ',')) != NULL) {
+      // Comma found. Store length and shift the list ptr
+      val->len = list - val->ptr;
+      list++;
+    } else {
+      // This value is the last one
+      list = val->ptr + strlen(val->ptr);
+      val->len = list - val->ptr;
+    }
+
+    if (eq_val != NULL) {
+      // Value has form "x=y", adjust pointers and lengths
+      // so that val points to "x", and eq_val points to "y".
+      eq_val->len = 0;
+      eq_val->ptr = (const char *) memchr(val->ptr, '=', val->len);
+      if (eq_val->ptr != NULL) {
+        eq_val->ptr++;  // Skip over '=' character
+        eq_val->len = val->ptr + val->len - eq_val->ptr;
+        val->len = (eq_val->ptr - val->ptr) - 1;
+      }
+    }
+  }
+
+  return list;
+}
+
 static int spool(struct iobuf *io, const void *buf, int len) {
   static const double mult = 1.2;
   char *p = NULL;
@@ -587,45 +626,6 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   len = mg_vprintf(conn, fmt, ap, 0);
   va_end(ap);
   return len;
-}
-
-// A helper function for traversing a comma separated list of values.
-// It returns a list pointer shifted to the next value, or NULL if the end
-// of the list found.
-// Value is stored in val vector. If value has form "x=y", then eq_val
-// vector is initialized to point to the "y" part, and val vector length
-// is adjusted to point only to "x".
-static const char *next_option(const char *list, struct vec *val,
-                               struct vec *eq_val) {
-  if (list == NULL || *list == '\0') {
-    // End of the list
-    list = NULL;
-  } else {
-    val->ptr = list;
-    if ((list = strchr(val->ptr, ',')) != NULL) {
-      // Comma found. Store length and shift the list ptr
-      val->len = list - val->ptr;
-      list++;
-    } else {
-      // This value is the last one
-      list = val->ptr + strlen(val->ptr);
-      val->len = list - val->ptr;
-    }
-
-    if (eq_val != NULL) {
-      // Value has form "x=y", adjust pointers and lengths
-      // so that val points to "x", and eq_val points to "y".
-      eq_val->len = 0;
-      eq_val->ptr = (const char *) memchr(val->ptr, '=', val->len);
-      if (eq_val->ptr != NULL) {
-        eq_val->ptr++;  // Skip over '=' character
-        eq_val->len = val->ptr + val->len - eq_val->ptr;
-        val->len = (eq_val->ptr - val->ptr) - 1;
-      }
-    }
-  }
-
-  return list;
 }
 
 static int mg_socketpair(sock_t sp[2]) {
