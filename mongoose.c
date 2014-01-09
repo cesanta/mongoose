@@ -540,9 +540,24 @@ static const char *status_code_to_str(int status_code) {
 static void send_http_error(struct connection *conn, int code,
                             const char *fmt, ...) {
   const char *message = status_code_to_str(code);
+  const char *rewrites = conn->server->config_options[URL_REWRITES];
   char headers[200], body[200];
+  struct vec a, b;
   va_list ap;
-  int body_len, headers_len;
+  int body_len, headers_len, match_code;
+
+  // Handle error code rewrites
+  while ((rewrites = next_option(rewrites, &a, &b)) != NULL) {
+    if ((match_code = atoi(a.ptr)) > 0 && match_code == code) {
+      conn->mg_conn.status_code = 302;
+      mg_printf(&conn->mg_conn, "HTTP/1.1 %d Moved\r\n"
+                "Location: %.*s?code=%d&orig_uri=%s\r\n\r\n",
+                conn->mg_conn.status_code, b.len, b.ptr, code,
+                conn->mg_conn.uri);
+      close_local_endpoint(conn);
+      return;
+    }
+  }
 
   conn->mg_conn.status_code = code;
   body_len = mg_snprintf(body, sizeof(body), "%d %s\n", code, message);
