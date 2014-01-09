@@ -111,7 +111,7 @@ required when mongoose needs to bind on privileged port on UNIX, e.g.
 
 Default: not set.
 
-### url\_rewrite\_patterns
+### url\_rewrites
 Comma-separated list of URL rewrites in the form of
 `uri_pattern=file_or_directory_path`. When Mongoose receives the request,
 it constructs the file name to show by combining `document_root` and the URI.
@@ -119,16 +119,22 @@ However, if the rewrite option is used and `uri_pattern` matches the
 requested URI, then `document_root` is ignored. Insted,
 `file_or_directory_path` is used, which should be a full path name or
 a path relative to the web server's current working directory. Note that
-`uri_pattern`, as all mongoose patterns, is a prefix pattern.
+`uri_pattern`, as all mongoose patterns, is a prefix pattern. If `uri_patters`
+is a number, then it is treated as HTTP error code, and `file_or_directory_path`
+should be an URI to redirect to. Mongoose will issue `302` temporary redirect
+to the specified URI, appending two parameters:
+`?code=<http_error_code&orig_uri=<original_uri>`.
 
 This makes it possible to serve many directories outside from `document_root`,
-redirect all requests to scripts, and do other tricky things. For example,
-to redirect all accesses to `.doc` files to a special script, do:
+redirect all requests to scripts, and do other tricky things. Examples:
 
-    mongoose -url_rewrite_patterns **.doc$=/path/to/cgi-bin/handle_doc.cgi
+    # Redirect all accesses to `.doc` files to a special script
+    mongoose -url_rewrites **.doc$=/path/to/cgi-bin/handle_doc.cgi
 
-Or, to imitate user home directories support, do:
+    # Implement user home directories support
+    mongoose -url_rewrites /~joe/=/home/joe/,/~bill=/home/bill/
 
-    mongoose -url_rewrite_patterns /~joe/=/home/joe/,/~bill=/home/bill/
+    # Redirect 404 errors to a specific error page
+    mongoose -url_rewrites 404=/cgi-bin/error.cgi
 
 Default: not set.
