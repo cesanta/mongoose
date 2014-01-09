@@ -516,6 +516,63 @@ static int mg_snprintf(char *buf, size_t buflen, const char *fmt, ...) {
   return n;
 }
 
+// Check whether full request is buffered. Return:
+//   -1  if request is malformed
+//    0  if request is not yet fully buffered
+//   >0  actual request length, including last \r\n\r\n
+static int get_request_len(const char *s, int buf_len) {
+  const unsigned char *buf = (unsigned char *) s;
+  int i;
+
+  for (i = 0; i < buf_len; i++) {
+    // Control characters are not allowed but >=128 are.
+    // Abort scan as soon as one malformed character is found.
+    if (!isprint(buf[i]) && buf[i] != '\r' && buf[i] != '\n' && buf[i] < 128) {
+      return -1;
+    } else if (buf[i] == '\n' && i + 1 < buf_len && buf[i + 1] == '\n') {
+      return i + 2;
+    } else if (buf[i] == '\n' && i + 2 < buf_len && buf[i + 1] == '\r' &&
+               buf[i + 2] == '\n') {
+      return i + 3;
+    }
+  }
+
+  return 0;
+}
+
+// Skip the characters until one of the delimiters characters found.
+// 0-terminate resulting word. Skip the rest of the delimiters if any.
+// Advance pointer to buffer to the next word. Return found 0-terminated word.
+static char *skip(char **buf, const char *delimiters) {
+  char *p, *begin_word, *end_word, *end_delimiters;
+
+  begin_word = *buf;
+  end_word = begin_word + strcspn(begin_word, delimiters);
+  end_delimiters = end_word + strspn(end_word, delimiters);
+
+  for (p = end_word; p < end_delimiters; p++) {
+    *p = '\0';
+  }
+
+  *buf = end_delimiters;
+
+  return begin_word;
+}
+
+// Parse HTTP headers from the given buffer, advance buffer to the point
+// where parsing stopped.
+static void parse_http_headers(char **buf, struct mg_connection *ri) {
+  size_t i;
+
+  for (i = 0; i < ARRAY_SIZE(ri->http_headers); i++) {
+    ri->http_headers[i].name = skip(buf, ": ");
+    ri->http_headers[i].value = skip(buf, "\r\n");
+    if (ri->http_headers[i].name[0] == '\0')
+      break;
+    ri->num_headers = i + 1;
+  }
+}
+
 static const char *status_code_to_str(int status_code) {
   switch (status_code) {
     case 200: return "OK";
@@ -675,6 +732,10 @@ static int mg_socketpair(sock_t sp[2]) {
   closesocket(sock);
 
   return ret;
+}
+
+static int is_error(int n) {
+  return n == 0 || (n < 0 && errno != EINTR && errno != EAGAIN);
 }
 
 #ifndef NO_CGI
@@ -941,6 +1002,58 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
 
   closesocket(fds[1]);
 }
+
+static void read_from_cgi(struct connection *conn) {
+  char buf[IOBUF_SIZE];
+  int len, n = recv(conn->endpoint.cgi_sock, buf, sizeof(buf), 0);
+
+  DBG(("%p %d", conn, n));
+  if (is_error(n)) {
+    close_local_endpoint(conn);
+  } else if (n > 0) {
+    if (conn->num_bytes_sent == 0 && conn->remote_iobuf.len == 0) {
+      // Parse CGI headers, and modify the reply line if needed
+      if ((len = get_request_len(buf, n)) > 0) {
+        const char *status = NULL;
+        char *s = buf, buf2[sizeof(buf)];
+        struct mg_connection c;
+        int i, k;
+
+        memset(&c, 0, sizeof(c));
+        buf[len - 1] = '\0';
+        parse_http_headers(&s, &c);
+        if (mg_get_header(&c, "Location") != NULL) {
+          status = "302 Moved";
+        } else if ((status = (char *) mg_get_header(&c, "Status")) == NULL) {
+          status = "200 OK";
+        }
+        k = mg_snprintf(buf2, sizeof(buf2), "HTTP/1.1 %s\r\n", status);
+        spool(&conn->remote_iobuf, buf2, k);
+        for (i = 0; i < c.num_headers; i++) {
+          k = mg_snprintf(buf2, sizeof(buf2), "%s: %s\r\n",
+                          c.http_headers[i].name, c.http_headers[i].value);
+          spool(&conn->remote_iobuf, buf2, k);
+        }
+        spool(&conn->remote_iobuf, "\r\n", 2);
+        memmove(buf, buf + len, n - len);
+        n -= len;
+      } else {
+        static const char ok_200[] = "HTTP/1.1 200 OK\r\n";
+        spool(&conn->remote_iobuf, ok_200, sizeof(ok_200) - 1);
+      }
+    }
+    spool(&conn->remote_iobuf, buf, n);
+  }
+}
+
+static void forward_post_data(struct connection *conn) {
+  struct iobuf *io = &conn->local_iobuf;
+  int n = send(conn->endpoint.cgi_sock, io->buf, io->len, 0);
+  if (n > 0) {
+    memmove(io->buf, io->buf + n, io->len - n);
+    io->len -= n;
+  }
+}
 #endif  // !NO_CGI
 
 // 'sa' must be an initialized address to bind to
@@ -1079,50 +1192,6 @@ static void close_conn(struct connection *conn) {
   free(conn);
 }
 
-// Check whether full request is buffered. Return:
-//   -1  if request is malformed
-//    0  if request is not yet fully buffered
-//   >0  actual request length, including last \r\n\r\n
-static int get_request_len(const char *s, int buf_len) {
-  const unsigned char *buf = (unsigned char *) s;
-  int i;
-
-  for (i = 0; i < buf_len; i++) {
-    // Control characters are not allowed but >=128 are.
-    // Abort scan as soon as one malformed character is found.
-    if (!isprint(buf[i]) && buf[i] != '\r' && buf[i] != '\n' && buf[i] < 128) {
-      return -1;
-    } else if (buf[i] == '\n' && i + 1 < buf_len && buf[i + 1] == '\n') {
-      return i + 2;
-    } else if (buf[i] == '\n' && i + 2 < buf_len && buf[i + 1] == '\r' &&
-               buf[i + 2] == '\n') {
-      return i + 3;
-    }
-  }
-
-  return 0;
-}
-
-
-// Skip the characters until one of the delimiters characters found.
-// 0-terminate resulting word. Skip the rest of the delimiters if any.
-// Advance pointer to buffer to the next word. Return found 0-terminated word.
-static char *skip(char **buf, const char *delimiters) {
-  char *p, *begin_word, *end_word, *end_delimiters;
-
-  begin_word = *buf;
-  end_word = begin_word + strcspn(begin_word, delimiters);
-  end_delimiters = end_word + strspn(end_word, delimiters);
-
-  for (p = end_word; p < end_delimiters; p++) {
-    *p = '\0';
-  }
-
-  *buf = end_delimiters;
-
-  return begin_word;
-}
-
 // Protect against directory disclosure attack by removing '..',
 // excessive '/' and '\' characters
 static void remove_double_dots_and_double_slashes(char *s) {
@@ -1165,20 +1234,6 @@ int mg_url_decode(const char *src, int src_len, char *dst,
   dst[j] = '\0'; // Null-terminate the destination
 
   return i >= src_len ? j : -1;
-}
-
-// Parse HTTP headers from the given buffer, advance buffer to the point
-// where parsing stopped.
-static void parse_http_headers(char **buf, struct mg_connection *ri) {
-  size_t i;
-
-  for (i = 0; i < ARRAY_SIZE(ri->http_headers); i++) {
-    ri->http_headers[i].name = skip(buf, ": ");
-    ri->http_headers[i].value = skip(buf, "\r\n");
-    if (ri->http_headers[i].name[0] == '\0')
-      break;
-    ri->num_headers = i + 1;
-  }
 }
 
 static int is_valid_http_method(const char *method) {
@@ -1687,10 +1742,6 @@ static void ping_idle_websocket_connection(struct connection *conn, time_t t) {
 #else
 #define ping_idle_websocket_connection(conn, t)
 #endif // !NO_WEBSOCKET
-
-static int is_error(int n) {
-  return n == 0 || (n < 0 && errno != EINTR && errno != EAGAIN);
-}
 
 static void write_to_client(struct connection *conn) {
   struct iobuf *io = &conn->remote_iobuf;
@@ -3183,15 +3234,6 @@ static void send_continue_if_expected(struct connection *conn) {
   }
 }
 
-static void forward_post_data(struct connection *conn) {
-  struct iobuf *io = &conn->local_iobuf;
-  int n = send(conn->endpoint.cgi_sock, io->buf, io->len, 0);
-  if (n > 0) {
-    memmove(io->buf, io->buf + n, io->len - n);
-    io->len -= n;
-  }
-}
-
 static int is_valid_uri(const char *uri) {
   // Conform to http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1.2
   // URI can be an asterisk (*) or should start with slash.
@@ -3272,49 +3314,6 @@ static void read_from_client(struct connection *conn) {
   } else if (n > 0) {
     spool(&conn->local_iobuf, buf, n);
     process_request(conn);
-  }
-}
-
-static void read_from_cgi(struct connection *conn) {
-  char buf[IOBUF_SIZE];
-  int len, n = recv(conn->endpoint.cgi_sock, buf, sizeof(buf), 0);
-
-  DBG(("%p %d", conn, n));
-  if (is_error(n)) {
-    close_local_endpoint(conn);
-  } else if (n > 0) {
-    if (conn->num_bytes_sent == 0 && conn->remote_iobuf.len == 0) {
-      // Parse CGI headers, and modify the reply line if needed
-      if ((len = get_request_len(buf, n)) > 0) {
-        const char *status = NULL;
-        char *s = buf, buf2[sizeof(buf)];
-        struct mg_connection c;
-        int i, k;
-
-        memset(&c, 0, sizeof(c));
-        buf[len - 1] = '\0';
-        parse_http_headers(&s, &c);
-        if (mg_get_header(&c, "Location") != NULL) {
-          status = "302 Moved";
-        } else if ((status = (char *) mg_get_header(&c, "Status")) == NULL) {
-          status = "200 OK";
-        }
-        k = mg_snprintf(buf2, sizeof(buf2), "HTTP/1.1 %s\r\n", status);
-        spool(&conn->remote_iobuf, buf2, k);
-        for (i = 0; i < c.num_headers; i++) {
-          k = mg_snprintf(buf2, sizeof(buf2), "%s: %s\r\n",
-                          c.http_headers[i].name, c.http_headers[i].value);
-          spool(&conn->remote_iobuf, buf2, k);
-        }
-        spool(&conn->remote_iobuf, "\r\n", 2);
-        memmove(buf, buf + len, n - len);
-        n -= len;
-      } else {
-        static const char ok_200[] = "HTTP/1.1 200 OK\r\n";
-        spool(&conn->remote_iobuf, ok_200, sizeof(ok_200) - 1);
-      }
-    }
-    spool(&conn->remote_iobuf, buf, n);
   }
 }
 
@@ -3475,10 +3474,12 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
         conn->last_activity_time = current_time;
         read_from_client(conn);
       }
+#ifndef NO_CGI
       if (conn->endpoint_type == EP_CGI &&
           FD_ISSET(conn->endpoint.cgi_sock, &read_set)) {
         read_from_cgi(conn);
       }
+#endif
       if (FD_ISSET(conn->client_sock, &write_set)) {
         conn->last_activity_time = current_time;
         write_to_client(conn);
