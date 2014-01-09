@@ -518,19 +518,6 @@ static void send_http_error(struct connection *conn, int code) {
   close_local_endpoint(conn);  // This will write to the log file
 }
 
-static void mg_fmt(struct connection *conn, const char *fmt, ...) {
-  char buf[IOBUF_SIZE];
-  va_list ap;
-  int len;
-
-  va_start(ap, fmt);
-  len = vsnprintf(buf, sizeof(buf), fmt, ap);
-  va_end(ap);
-
-  spool(&conn->remote_iobuf, buf, len);
-  close_local_endpoint(conn);  // Log the request
-}
-
 // Print message to buffer. If buffer is large enough to hold the message,
 // return buffer. If buffer is to small, allocate large enough buffer on heap,
 // and return allocated buffer.
@@ -2370,7 +2357,9 @@ static void handle_put(struct connection *conn, const char *path) {
 
   conn->mg_conn.status_code = !stat(path, &st) ? 200 : 201;
   if ((rc = put_dir(path)) == 0) {
-    mg_fmt(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->mg_conn.status_code);
+    mg_printf(&conn->mg_conn, "HTTP/1.1 %d OK\r\n\r\n",
+              conn->mg_conn.status_code);
+    close_local_endpoint(conn);
   } else if (rc == -1) {
     send_http_error(conn, 500);
   } else if (cl_hdr == NULL) {
@@ -2419,12 +2408,13 @@ static void send_options(struct connection *conn) {
 #ifndef NO_AUTH
 static void send_authorization_request(struct connection *conn) {
   conn->mg_conn.status_code = 401;
-  mg_fmt(conn,
-         "HTTP/1.1 401 Unauthorized\r\n"
-         "WWW-Authenticate: Digest qop=\"auth\", "
-         "realm=\"%s\", nonce=\"%lu\"\r\n\r\n",
-         conn->server->config_options[AUTH_DOMAIN],
-         (unsigned long) time(NULL));
+  mg_printf(&conn->mg_conn,
+            "HTTP/1.1 401 Unauthorized\r\n"
+            "WWW-Authenticate: Digest qop=\"auth\", "
+            "realm=\"%s\", nonce=\"%lu\"\r\n\r\n",
+            conn->server->config_options[AUTH_DOMAIN],
+            (unsigned long) time(NULL));
+  close_local_endpoint(conn);
 }
 
 // Use the global passwords file, if specified by auth_gpass option,
@@ -3109,8 +3099,10 @@ static void open_local_endpoint(struct connection *conn) {
     send_http_error(conn, 404);
   } else if (is_directory &&
              conn->mg_conn.uri[strlen(conn->mg_conn.uri) - 1] != '/') {
-    mg_fmt(conn, "HTTP/1.1 301 Moved Permanently\r\n"
-           "Location: %s/\r\n\r\n", conn->mg_conn.uri);
+    conn->mg_conn.status_code = 301;
+    mg_printf(&conn->mg_conn, "HTTP/1.1 301 Moved Permanently\r\n"
+              "Location: %s/\r\n\r\n", conn->mg_conn.uri);
+    close_local_endpoint(conn);
   } else if (is_directory && !find_index_file(conn, path, sizeof(path), &st)) {
     if (!mg_strcasecmp(dir_lst, "yes")) {
 #ifndef NO_DIRECTORY_LISTING
