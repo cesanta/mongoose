@@ -51,7 +51,7 @@
 #include <io.h>         // For _lseeki64
 #include <direct.h>     // For _mkdir
 typedef int socklen_t;
-typedef int pid_t;
+typedef HANDLE pid_t;
 typedef SOCKET sock_t;
 typedef unsigned char uint8_t;
 typedef unsigned int uint32_t;
@@ -259,7 +259,7 @@ union endpoint {
 enum endpoint_type { EP_NONE, EP_FILE, EP_CGI, EP_USER, EP_PUT };
 enum connection_flags {
   CONN_CLOSE = 1, CONN_SPOOL_DONE = 2, CONN_SSL_HANDS_SHAKEN = 4,
-  CONN_HEADERS_SENT = 8
+  CONN_HEADERS_SENT = 8, CONN_BUFFER = 16
 };
 
 struct connection {
@@ -395,10 +395,14 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
 // wbuf and wbuf_len is a target buffer and its length.
 static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
-  char buf[MAX_PATH_SIZE * 2], buf2[MAX_PATH_SIZE * 2];
+  char buf[MAX_PATH_SIZE * 2], buf2[MAX_PATH_SIZE * 2], *p;
 
   strncpy(buf, path, sizeof(buf));
   buf[sizeof(buf) - 1] = '\0';
+
+  // Trim trailing slashes
+  p = buf + strlen(buf) - 1;
+  while (p > buf && p[0] == '\\' || p[0] == '/') *p-- = '\0';
   //change_slashes_to_backslashes(buf);
 
   // Convert to Unicode and back. If doubly-converted string does not
@@ -415,6 +419,7 @@ static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
 static int mg_stat(const char *path, file_stat_t *st) {
   wchar_t wpath[MAX_PATH_SIZE];
   to_unicode(path, wpath, ARRAY_SIZE(wpath));
+  DBG(("[%ls] -> %d", wpath, _wstati64(wpath, st)));
   return _wstati64(wpath, st);
 }
 
@@ -783,22 +788,87 @@ static int is_error(int n) {
 
 #ifndef NO_CGI
 #ifdef _WIN32
+struct threadparam {
+  sock_t s;
+  HANDLE hPipe;
+};
+
+static int wait_until_ready(sock_t sock, int for_read) {
+  fd_set set;
+  FD_ZERO(&set);
+  FD_SET(sock, &set);
+  select(sock + 1, for_read ? &set : 0, for_read ? 0 : &set, 0, 0);
+  return 1;
+}
+
+static void *push_to_stdin(void *arg) {
+  struct threadparam *tp = arg;
+  int n, sent, stop = 0;
+  DWORD k;
+  char buf[IOBUF_SIZE];
+
+  while (!stop && wait_until_ready(tp->s, 1) &&
+         (n = recv(tp->s, buf, sizeof(buf), 0)) > 0) {
+    if (n == -1 && GetLastError() == WSAEWOULDBLOCK) continue;
+    for (sent = 0; !stop && sent < n; sent += k) {
+      if (!WriteFile(tp->hPipe, buf + sent, n - sent, &k, 0)) stop = 1;
+    }
+  }
+  DBG(("%s", "FORWARED EVERYTHING TO CGI"));
+  CloseHandle(tp->hPipe);
+  free(tp);
+  _endthread();
+  return NULL;
+}
+
+static void *pull_from_stdout(void *arg) {
+  struct threadparam *tp = arg;
+  int k, stop = 0;
+  DWORD n, sent;
+  char buf[IOBUF_SIZE];
+
+  while (!stop && ReadFile(tp->hPipe, buf, sizeof(buf), &n, NULL)) {
+    for (sent = 0; !stop && sent < n; sent += k) {
+      if (wait_until_ready(tp->s, 0) &&
+          (k = send(tp->s, buf + sent, n - sent, 0)) <= 0) stop = 1;
+    }
+  }
+  DBG(("%s", "EOF FROM CGI"));
+  CloseHandle(tp->hPipe);
+  shutdown(tp->s, 2);  // Without this, IO thread may get truncated data
+  closesocket(tp->s);
+  free(tp);
+  _endthread();
+  return NULL;
+}
+
+static void spawn_stdio_thread(int sock, HANDLE hPipe, void *(*func)(void *)) {
+  struct threadparam *tp = malloc(sizeof(*tp));
+  if (tp != NULL) {
+    tp->s = sock;
+    tp->hPipe = hPipe;
+    mg_start_thread(func, tp);
+  }
+}
+
 static pid_t start_process(char *interp, const char *cmd, const char *env,
                            const char *envp[], const char *dir, sock_t sock) {
   STARTUPINFOA si = {0};
   PROCESS_INFORMATION pi = {0};
-  HANDLE hs = (HANDLE) sock, me = GetCurrentProcess();
+  HANDLE a[2], b[2], me = GetCurrentProcess();
   char cmdline[MAX_PATH_SIZE], full_dir[MAX_PATH_SIZE], buf[MAX_PATH_SIZE], *p;
+  DWORD flags = DUPLICATE_CLOSE_SOURCE | DUPLICATE_SAME_ACCESS;
   FILE *fp;
 
   si.cb = sizeof(si);
   si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
   si.wShowWindow = SW_HIDE;
-
-  DuplicateHandle(me, hs, me, &si.hStdInput, 0, TRUE, DUPLICATE_SAME_ACCESS);
-  DuplicateHandle(me, hs, me, &si.hStdOutput, 0, TRUE, DUPLICATE_SAME_ACCESS);
   si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-  closesocket(sock);
+
+  CreatePipe(&a[0], &a[1], NULL, 0);
+  CreatePipe(&b[0], &b[1], NULL, 0);
+  DuplicateHandle(me, a[0], me, &si.hStdInput, 0, TRUE, flags);
+  DuplicateHandle(me, b[1], me, &si.hStdOutput, 0, TRUE, flags);
 
   if (interp == NULL && (fp = fopen(cmd, "r")) != NULL) {
     buf[0] = buf[1] = '\0';
@@ -820,15 +890,25 @@ static pid_t start_process(char *interp, const char *cmd, const char *env,
   mg_snprintf(cmdline, sizeof(cmdline), "%s%s\"%s\"",
               interp ? interp : "", interp ? " " : "", cmd);
 
-  DBG(("Starting commad: [%s]", cmdline));
-  CreateProcess(NULL, cmdline, NULL, NULL, TRUE,
-                CREATE_NEW_PROCESS_GROUP, (void *) env, full_dir, &si, &pi);
+  if (CreateProcess(NULL, cmdline, NULL, NULL, TRUE, CREATE_NEW_PROCESS_GROUP,
+                    (void *) env, full_dir, &si, &pi) != 0) {
+    spawn_stdio_thread(sock, a[1], push_to_stdin);
+    spawn_stdio_thread(sock, b[0], pull_from_stdout);
+  } else {
+    CloseHandle(a[1]);
+    CloseHandle(b[0]);
+    closesocket(sock);
+  }
+  DBG(("CGI command: [%s] -> %p", cmdline, pi.hProcess));
 
   CloseHandle(si.hStdOutput);
   CloseHandle(si.hStdInput);
+  CloseHandle(a[0]);
+  CloseHandle(b[1]);
   CloseHandle(pi.hThread);
+  CloseHandle(pi.hProcess);
 
-  return (pid_t) pi.hProcess;
+  return pi.hProcess;
 }
 #else
 static pid_t start_process(const char *interp, const char *cmd, const char *env,
@@ -1010,6 +1090,8 @@ static void prepare_cgi_environment(struct connection *conn,
   assert(blk->len < (int) sizeof(blk->buf));
 }
 
+static const char cgi_status[] = "HTTP/1.1 XXX OK\r\n";
+
 static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   struct cgi_env_block blk;
   char dir[MAX_PATH_SIZE], *p = NULL;
@@ -1038,54 +1120,48 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
                     prog, blk.buf, blk.vars, dir, fds[1]) > 0) {
     conn->endpoint_type = EP_CGI;
     conn->endpoint.cgi_sock = fds[0];
+    spool(&conn->remote_iobuf, cgi_status, sizeof(cgi_status) - 1);
+    conn->flags |= CONN_BUFFER;
   } else {
     closesocket(fds[0]);
     send_http_error(conn, 500, "start_process(%s) failed", prog);
   }
 
-  closesocket(fds[1]);
+#ifndef _WIN32
+  closesocket(fds[1]);  // On Windows, CGI stdio thread closes that socket
+#endif
 }
 
 static void read_from_cgi(struct connection *conn) {
-  char buf[IOBUF_SIZE];
-  int len, n = recv(conn->endpoint.cgi_sock, buf, sizeof(buf), 0);
+  struct iobuf *io = &conn->remote_iobuf;
+  char buf[IOBUF_SIZE], buf2[sizeof(buf)], *s = buf2;
+  const char *status = "500";
+  struct mg_connection c;
+  int len, s_len = sizeof(cgi_status) - 1,
+      n = recv(conn->endpoint.cgi_sock, buf, sizeof(buf), 0);
 
   DBG(("%p %d", conn, n));
   if (is_error(n)) {
     close_local_endpoint(conn);
   } else if (n > 0) {
-    if (conn->num_bytes_sent == 0 && conn->remote_iobuf.len == 0) {
-      // Parse CGI headers, and modify the reply line if needed
-      if ((len = get_request_len(buf, n)) > 0) {
-        const char *status = NULL;
-        char *s = buf, buf2[sizeof(buf)];
-        struct mg_connection c;
-        int i, k;
-
+    spool(&conn->remote_iobuf, buf, n);
+    if (conn->flags & CONN_BUFFER) {
+      len = get_request_len(io->buf + s_len, io->len - s_len);
+      if (len == 0) return;
+      if (len > 0) {
         memset(&c, 0, sizeof(c));
-        buf[len - 1] = '\0';
+        memcpy(buf2, io->buf + s_len, len);
+        buf2[len - 1] = '\0';
         parse_http_headers(&s, &c);
         if (mg_get_header(&c, "Location") != NULL) {
-          status = "302 Moved";
+          status = "302";
         } else if ((status = (char *) mg_get_header(&c, "Status")) == NULL) {
-          status = "200 OK";
+          status = "200";
         }
-        k = mg_snprintf(buf2, sizeof(buf2), "HTTP/1.1 %s\r\n", status);
-        spool(&conn->remote_iobuf, buf2, k);
-        for (i = 0; i < c.num_headers; i++) {
-          k = mg_snprintf(buf2, sizeof(buf2), "%s: %s\r\n",
-                          c.http_headers[i].name, c.http_headers[i].value);
-          spool(&conn->remote_iobuf, buf2, k);
-        }
-        spool(&conn->remote_iobuf, "\r\n", 2);
-        memmove(buf, buf + len, n - len);
-        n -= len;
-      } else {
-        static const char ok_200[] = "HTTP/1.1 200 OK\r\n";
-        spool(&conn->remote_iobuf, ok_200, sizeof(ok_200) - 1);
       }
+      memcpy(io->buf + 9, status, 3);
+      conn->flags &= ~CONN_BUFFER;
     }
-    spool(&conn->remote_iobuf, buf, n);
   }
 }
 
@@ -3475,7 +3551,7 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
     } else if (conn->endpoint_type == EP_CGI) {
       add_to_set(conn->endpoint.cgi_sock, &read_set, &max_fd);
     }
-    if (conn->remote_iobuf.len > 0) {
+    if (conn->remote_iobuf.len > 0 && !(conn->flags & CONN_BUFFER)) {
       add_to_set(conn->client_sock, &write_set, &max_fd);
     } else if (conn->flags & CONN_CLOSE) {
       close_conn(conn);
@@ -3510,7 +3586,8 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
         read_from_cgi(conn);
       }
 #endif
-      if (FD_ISSET(conn->client_sock, &write_set)) {
+      if (FD_ISSET(conn->client_sock, &write_set) &&
+          !(conn->flags & CONN_BUFFER)) {
         conn->last_activity_time = current_time;
         write_to_client(conn);
       }
