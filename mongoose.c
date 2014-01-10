@@ -3613,6 +3613,7 @@ void mg_destroy_server(struct mg_server **server) {
   struct ll *lp, *tmp;
 
   if (server != NULL && *server != NULL) {
+    // Do one last poll, see https://github.com/cesanta/mongoose/issues/286
     mg_poll_server(*server, 0);
     closesocket((*server)->listening_sock);
     closesocket((*server)->ctl[0]);
