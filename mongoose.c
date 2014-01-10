@@ -126,20 +126,20 @@ typedef struct ssl_ctx_st SSL_CTX;
 typedef struct ssl_st SSL;
 typedef struct ssl_method_st SSL_METHOD;
 
-extern void SSL_free(SSL *);
-extern int SSL_accept(SSL *);
-extern int SSL_connect(SSL *);
-extern int SSL_read(SSL *, void *, int);
-extern int SSL_write(SSL *, const void *, int);
-extern int SSL_set_fd(SSL *, int);
-extern SSL *SSL_new(SSL_CTX *);
-extern SSL_CTX *SSL_CTX_new(SSL_METHOD *);
-extern SSL_METHOD *SSLv23_server_method(void);
-extern int SSL_library_init(void);
-extern int SSL_CTX_use_PrivateKey_file(SSL_CTX *, const char *, int);
-extern int SSL_CTX_use_certificate_file(SSL_CTX *, const char *, int);
-extern int SSL_CTX_use_certificate_chain_file(SSL_CTX *, const char *);
-extern void SSL_CTX_free(SSL_CTX *);
+extern void __cdecl SSL_free(SSL *);
+extern int __cdecl SSL_accept(SSL *);
+extern int __cdecl SSL_connect(SSL *);
+extern int __cdecl SSL_read(SSL *, void *, int);
+extern int __cdecl SSL_write(SSL *, const void *, int);
+extern int __cdecl SSL_set_fd(SSL *, int);
+extern SSL * __cdecl SSL_new(SSL_CTX *);
+extern SSL_CTX * __cdecl SSL_CTX_new(SSL_METHOD *);
+extern SSL_METHOD * __cdecl SSLv23_server_method(void);
+extern int __cdecl SSL_library_init(void);
+extern int __cdecl SSL_CTX_use_PrivateKey_file(SSL_CTX *, const char *, int);
+extern int __cdecl SSL_CTX_use_certificate_file(SSL_CTX *, const char *, int);
+extern int __cdecl SSL_CTX_use_certificate_chain_file(SSL_CTX *, const char *);
+extern void __cdecl SSL_CTX_free(SSL_CTX *);
 #endif
 #endif
 
