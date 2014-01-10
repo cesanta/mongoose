@@ -460,7 +460,7 @@ static int should_keep_alive(const struct mg_connection *conn) {
   const char *http_version = conn->http_version;
   const char *header = mg_get_header(conn, "Connection");
   return method != NULL && !strcmp(method, "GET") &&
-    ((header != NULL && !strcmp(header, "keep-alive")) ||
+    ((header != NULL && !mg_strcasecmp(header, "keep-alive")) ||
      (header == NULL && http_version && !strcmp(http_version, "1.1")));
 }
 
