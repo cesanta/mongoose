@@ -455,26 +455,6 @@ static void set_non_blocking_mode(sock_t sock) {
 #endif
 }
 
-static int should_keep_alive(const struct mg_connection *conn) {
-  const char *method = conn->request_method;
-  const char *http_version = conn->http_version;
-  const char *header = mg_get_header(conn, "Connection");
-  return method != NULL && !strcmp(method, "GET") &&
-    ((header != NULL && !mg_strcasecmp(header, "keep-alive")) ||
-     (header == NULL && http_version && !strcmp(http_version, "1.1")));
-}
-
-static const char *suggest_connection_header(const struct mg_connection *conn) {
-  return should_keep_alive(conn) ? "keep-alive" : "close";
-}
-
-static void mg_strlcpy(register char *dst, register const char *src, size_t n) {
-  for (; *src != '\0' && n > 1; n--) {
-    *dst++ = *src++;
-  }
-  *dst = '\0';
-}
-
 // A helper function for traversing a comma separated list of values.
 // It returns a list pointer shifted to the next value, or NULL if the end
 // of the list found.
@@ -1527,6 +1507,26 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
 #endif
 
   return 0;
+}
+
+static int should_keep_alive(const struct mg_connection *conn) {
+  const char *method = conn->request_method;
+  const char *http_version = conn->http_version;
+  const char *header = mg_get_header(conn, "Connection");
+  return method != NULL && !strcmp(method, "GET") &&
+    ((header != NULL && !mg_strcasecmp(header, "keep-alive")) ||
+     (header == NULL && http_version && !strcmp(http_version, "1.1")));
+}
+
+static const char *suggest_connection_header(const struct mg_connection *conn) {
+  return should_keep_alive(conn) ? "keep-alive" : "close";
+}
+
+static void mg_strlcpy(register char *dst, register const char *src, size_t n) {
+  for (; *src != '\0' && n > 1; n--) {
+    *dst++ = *src++;
+  }
+  *dst = '\0';
 }
 
 int mg_write(struct mg_connection *c, const void *buf, int len) {
