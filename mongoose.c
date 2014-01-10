@@ -71,7 +71,9 @@ typedef struct _stati64 file_stat_t;
 #define get_thread_id() ((unsigned long) GetCurrentThreadId())
 #define S_ISDIR(x) ((x) & _S_IFDIR)
 #define sleep(x) Sleep((x) * 1000)
-#define stat(x, y) _stati64((x), (y))
+#define stat(x, y) mg_stat((x), (y))
+#define fopen(x, y) mg_fopen((x), (y))
+#define open(x, y) mg_open((x), (y))
 #define lseek(x, y, z) _lseeki64((x), (y), (z))
 #define mkdir(x, y) _mkdir(x)
 #define to64(x) _atoi64(x)
@@ -388,6 +390,47 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
   return (void *) thread_id;
 #endif
 }
+
+#ifdef _WIN32
+// Encode 'path' which is assumed UTF-8 string, into UNICODE string.
+// wbuf and wbuf_len is a target buffer and its length.
+static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
+  char buf[MAX_PATH_SIZE * 2], buf2[MAX_PATH_SIZE * 2];
+
+  strncpy(buf, path, sizeof(buf));
+  buf[sizeof(buf) - 1] = '\0';
+  //change_slashes_to_backslashes(buf);
+
+  // Convert to Unicode and back. If doubly-converted string does not
+  // match the original, something is fishy, reject.
+  memset(wbuf, 0, wbuf_len * sizeof(wchar_t));
+  MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
+  WideCharToMultiByte(CP_UTF8, 0, wbuf, (int) wbuf_len, buf2, sizeof(buf2),
+                      NULL, NULL);
+  if (strcmp(buf, buf2) != 0) {
+    wbuf[0] = L'\0';
+  }
+}
+
+static int mg_stat(const char *path, file_stat_t *st) {
+  wchar_t wpath[MAX_PATH_SIZE];
+  to_unicode(path, wpath, ARRAY_SIZE(wpath));
+  return _wstati64(wpath, st);
+}
+
+static FILE *mg_fopen(const char *path, const char *mode) {
+  wchar_t wpath[MAX_PATH_SIZE], wmode[10];
+  to_unicode(path, wpath, ARRAY_SIZE(wpath));
+  to_unicode(mode, wmode, ARRAY_SIZE(wmode));
+  return _wfopen(wpath, wmode);
+}
+
+static int mg_open(const char *path, int flag) {
+  wchar_t wpath[MAX_PATH_SIZE];
+  to_unicode(path, wpath, ARRAY_SIZE(wpath));
+  return _wopen(wpath, flag);
+}
+#endif
 
 static void set_close_on_exec(int fd) {
 #ifdef _WIN32
@@ -2034,25 +2077,6 @@ typedef struct DIR {
   struct dirent result;
 } DIR;
 
-// Encode 'path' which is assumed UTF-8 string, into UNICODE string.
-// wbuf and wbuf_len is a target buffer and its length.
-static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
-  char buf[MAX_PATH_SIZE * 2], buf2[MAX_PATH_SIZE * 2];
-
-  mg_strlcpy(buf, path, sizeof(buf));
-  //change_slashes_to_backslashes(buf);
-
-  // Convert to Unicode and back. If doubly-converted string does not
-  // match the original, something is fishy, reject.
-  memset(wbuf, 0, wbuf_len * sizeof(wchar_t));
-  MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
-  WideCharToMultiByte(CP_UTF8, 0, wbuf, (int) wbuf_len, buf2, sizeof(buf2),
-                      NULL, NULL);
-  if (strcmp(buf, buf2) != 0) {
-    wbuf[0] = L'\0';
-  }
-}
-
 // Implementation of POSIX opendir/closedir/readdir for Windows.
 static DIR *opendir(const char *name) {
   DIR *dir = NULL;
@@ -2446,8 +2470,14 @@ static void handle_put(struct connection *conn, const char *path) {
     send_http_error(conn, 500, "put_dir: %s", strerror(errno));
   } else if (cl_hdr == NULL) {
     send_http_error(conn, 411, NULL);
+#ifdef _WIN32
+    //On Windows, open() is a macro with 2 params
+  } else if ((conn->endpoint.fd =
+              open(path, O_RDWR | O_CREAT | O_TRUNC)) < 0) {
+#else
   } else if ((conn->endpoint.fd =
               open(path, O_RDWR | O_CREAT | O_TRUNC, 0644)) < 0) {
+#endif
     send_http_error(conn, 500, "open(%s): %s", path, strerror(errno));
   } else {
     DBG(("PUT [%s] %d", path, conn->local_iobuf.len));
