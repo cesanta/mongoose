@@ -3532,6 +3532,7 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
 }
 
 void mg_destroy_server(struct mg_server **server) {
+  int i;
   struct ll *lp, *tmp;
 
   if (server != NULL && *server != NULL) {
@@ -3542,7 +3543,11 @@ void mg_destroy_server(struct mg_server **server) {
       free(LINKED_LIST_ENTRY(lp, struct connection, link));
     }
     LINKED_LIST_FOREACH(&(*server)->uri_handlers, lp, tmp) {
+      free(LINKED_LIST_ENTRY(lp, struct uri_handler, link)->uri);
       free(LINKED_LIST_ENTRY(lp, struct uri_handler, link));
+    }
+    for (i = 0; i < (int) ARRAY_SIZE((*server)->config_options); i++) {
+      free((*server)->config_options[i]);  // It is OK to free(NULL)
     }
 #ifdef USE_SSL
     if ((*server)->ssl_ctx != NULL) SSL_CTX_free((*server)->ssl_ctx);
