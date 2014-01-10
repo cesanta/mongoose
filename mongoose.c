@@ -3159,7 +3159,7 @@ static void handle_lsp_request(struct connection *conn, const char *path,
 
 static void open_local_endpoint(struct connection *conn) {
   static const char lua_pat[] = LUA_SCRIPT_PATTERN;
-  char path[MAX_PATH_SIZE] = {'\0'};
+  char path[MAX_PATH_SIZE];
   file_stat_t st;
   int exists = 0, is_directory = 0;
   const char *cl_hdr = mg_get_header(&conn->mg_conn, "Content-Length");
