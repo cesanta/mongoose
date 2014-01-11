@@ -159,7 +159,7 @@ release: tarball macos
 	zip -r mongoose-php-$(VERSION).zip mongoose_php_bundle/
 
 clean:
-	cd ../examples && $(MAKE) clean
-	rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz \
+	@cd ../examples && $(MAKE) clean
+	@rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz \
 	$(PROG).exe *.dll *.lib res.o res.RES *.dSYM *.zip *.pdb \
 	*.exe *dmg* $(PROG)-* unix_unit_test

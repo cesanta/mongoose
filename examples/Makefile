@@ -43,4 +43,4 @@ windows:
 #$(CL) lua_dll.c $(CLFLAGS) $(DLL_FLAGS) /DLL $(LFLAGS) /SUBSYSTEM:WINDOWS /ENTRY:luaopen_lua_dll /EXPORT:luaopen_lua_dll /out:lua_dll.dll
 
 clean:
-	rm -rf hello upload post websocket chat *.exe *.dSYM *.obj .*o
+	@rm -rf hello upload post websocket chat *.exe *.dSYM *.obj .*o
