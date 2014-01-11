@@ -137,7 +137,7 @@ static void show_usage_and_exit(void) {
 static const char *config_file_top_comment =
 "# Mongoose web server configuration file.\n"
 "# For detailed description of every option, visit\n"
-"# https://github.com/valenok/mongoose/blob/master/UserManual.md\n"
+"# https://github.com/cesanta/mongoose\n"
 "# Lines starting with '#' and empty lines are ignored.\n"
 "# To make a change, remove leading '#', modify option's value,\n"
 "# save this file and then restart Mongoose.\n\n";
@@ -148,7 +148,7 @@ static const char *get_url_to_first_open_port(const struct mg_server *server) {
   const char *cert = mg_get_option(server, "ssl_certificate");
 
   snprintf(url, sizeof(url), "%s://%s%s",
-           cert == NULL ? "http" : "https",
+           cert != NULL && cert[0] != '\0' ? "https" : "http",
            s == NULL || strchr(s, ':') == NULL ? "127.0.0.1:" : "", s);
 
   return url;
