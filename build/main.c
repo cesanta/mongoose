@@ -18,11 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#if defined(_WIN32)
-#define _CRT_SECURE_NO_WARNINGS  // Disable deprecation warning in VS2005
-#else
-#define _XOPEN_SOURCE 600  // For PATH_MAX on linux
-#endif
+#undef UNICODE                    // Use ANSI WinAPI functions
+#undef _UNICODE                   // Use multibyte encoding on Windows
+#define _MBCS                     // Use multibyte encoding on Windows
+#define _CRT_SECURE_NO_WARNINGS   // Disable deprecation warning in VS2005
+#define _XOPEN_SOURCE 600         // For PATH_MAX on linux
 
 #include <sys/stat.h>
 #include <stdio.h>
@@ -39,7 +39,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <direct.h>  // For getcwd
+#include <direct.h>  // For chdir()
 #include <winsvc.h>
 #include <shlobj.h>
 
@@ -57,7 +57,10 @@
 #define sleep(x) Sleep((x) * 1000)
 #define abs_path(rel, abs, abs_size) _fullpath((abs), (rel), (abs_size))
 #define SIGCHLD 0
+typedef struct _stat file_stat_t;
+#define stat(x, y) my_stat((x), (y))
 #else
+typedef struct stat file_stat_t;
 #include <sys/wait.h>
 #include <unistd.h>
 #define DIRSEP '/'
@@ -275,7 +278,7 @@ static void init_server_name(void) {
 }
 
 static int is_path_absolute(const char *path) {
-#ifdef _WIN32
+#ifdef WIN32
   return path != NULL &&
     ((path[0] == '\\' && path[1] == '\\') ||  // UNC path, e.g. \\server\dir
      (isalpha(path[0]) && path[1] == ':' && path[2] == '\\'));  // E.g. X:\dir
@@ -294,9 +297,17 @@ static char *get_option(char **options, const char *option_name) {
   return NULL;
 }
 
+#ifdef WIN32  // _WIN32 can be undefined if -DNO_GUI is used
+static int my_stat(const char *path, file_stat_t *st) {
+  wchar_t buf[PATH_MAX];
+  MultiByteToWideChar(CP_UTF8, 0, path, -1, buf, sizeof(buf) / sizeof(buf[0]));
+  return _wstat(buf, st);
+}
+#endif
+
 static void verify_existence(char **options, const char *option_name,
                              int must_be_dir) {
-  struct stat st;
+  file_stat_t st;
   const char *path = get_option(options, option_name);
 
   if (path != NULL && (stat(path, &st) != 0 ||
@@ -306,6 +317,31 @@ static void verify_existence(char **options, const char *option_name,
         option_name, path, strerror(errno));
   }
 }
+
+#ifdef WIN32
+static int my_argc;
+static char **my_argv;
+
+static void to_utf8(wchar_t *src, char *dst, size_t dst_len) {
+  WideCharToMultiByte(CP_UTF8, 0, src, wcslen(src) + 1, dst, dst_len, 0, 0);
+}
+
+static void init_utf8_argc_argv(void) {
+  wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &my_argc);
+  if (wargv != NULL) {
+    char buf[1024 * 8];
+    int i;
+    // TODO(lsm): free that at some point.
+    my_argv = calloc(my_argc + 1, sizeof(my_argv[0]));
+    for (i = 0; i < my_argc; i++) {
+      to_utf8(wargv[i], buf, sizeof(buf));
+      my_argv[i] = strdup(buf);
+      printf("init_utf8_argc_argv: [%s] [%ls]\n", my_argv[i], wargv[i]);
+    }
+    LocalFree(wargv);
+  }
+}
+#endif
 
 static void set_absolute_path(char *options[], const char *option_name,
                               const char *path_to_mongoose_exe) {
@@ -322,7 +358,13 @@ static void set_absolute_path(char *options[], const char *option_name,
     // be the relative directory for everything.
     // Extract mongoose executable directory into path.
     if ((p = strrchr(path_to_mongoose_exe, DIRSEP)) == NULL) {
+#ifdef WIN32
+      wchar_t buf[PATH_MAX];
+      GetCurrentDirectoryW(sizeof(buf) / sizeof(buf[0]), buf);
+      to_utf8(buf, path, sizeof(path));
+#else
       getcwd(path, sizeof(path));
+#endif
     } else {
       snprintf(path, sizeof(path), "%.*s", (int) (p - path_to_mongoose_exe),
                path_to_mongoose_exe);
@@ -611,7 +653,7 @@ static BOOL CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP) {
             fclose(fp);
             TerminateThread(hThread, 0);
             mg_destroy_server(&server);
-            start_mongoose(__argc, __argv);
+            start_mongoose(my_argc, my_argv);
             mg_start_thread(serving_thread_func, server);
           }
           EnableWindow(GetDlgItem(hDlg, ID_SAVE), TRUE);
@@ -867,7 +909,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
         StartServiceCtrlDispatcher(service_table);
         exit(EXIT_SUCCESS);
       } else {
-        start_mongoose(__argc, __argv);
+        start_mongoose(my_argc, my_argv);
         hThread = mg_start_thread(serving_thread_func, server);
         s_uTaskbarRestart = RegisterWindowMessage(TEXT("TaskbarCreated"));
       }
@@ -944,6 +986,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
   HWND hWnd;
   MSG msg;
 
+  init_utf8_argc_argv();
   init_server_name();
   memset(&cls, 0, sizeof(cls));
   cls.lpfnWndProc = (WNDPROC) WindowProc;
@@ -1060,6 +1103,11 @@ int main(int argc, char *argv[]) {
 }
 #else
 int main(int argc, char *argv[]) {
+#ifdef WIN32
+  init_utf8_argc_argv();
+  argc = my_argc;
+  argv = my_argv;
+#endif
   init_server_name();
   start_mongoose(argc, argv);
   printf("%s serving [%s] on port %s\n",
