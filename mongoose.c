@@ -414,7 +414,7 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
 #ifdef _WIN32
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
 // wbuf and wbuf_len is a target buffer and its length.
-static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
+static void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
   char buf[MAX_PATH_SIZE * 2], buf2[MAX_PATH_SIZE * 2], *p;
 
   strncpy(buf, path, sizeof(buf));
@@ -438,21 +438,21 @@ static void to_unicode(const char *path, wchar_t *wbuf, size_t wbuf_len) {
 
 static int mg_stat(const char *path, file_stat_t *st) {
   wchar_t wpath[MAX_PATH_SIZE];
-  to_unicode(path, wpath, ARRAY_SIZE(wpath));
+  to_wchar(path, wpath, ARRAY_SIZE(wpath));
   DBG(("[%ls] -> %d", wpath, _wstati64(wpath, st)));
   return _wstati64(wpath, st);
 }
 
 static FILE *mg_fopen(const char *path, const char *mode) {
   wchar_t wpath[MAX_PATH_SIZE], wmode[10];
-  to_unicode(path, wpath, ARRAY_SIZE(wpath));
-  to_unicode(mode, wmode, ARRAY_SIZE(wmode));
+  to_wchar(path, wpath, ARRAY_SIZE(wpath));
+  to_wchar(mode, wmode, ARRAY_SIZE(wmode));
   return _wfopen(wpath, wmode);
 }
 
 static int mg_open(const char *path, int flag) {
   wchar_t wpath[MAX_PATH_SIZE];
-  to_unicode(path, wpath, ARRAY_SIZE(wpath));
+  to_wchar(path, wpath, ARRAY_SIZE(wpath));
   return _wopen(wpath, flag);
 }
 #endif
@@ -851,12 +851,21 @@ static void spawn_stdio_thread(int sock, HANDLE hPipe, void *(*func)(void *)) {
   }
 }
 
+static void abs_path(const char *utf8_path, char *abs_path, size_t len) {
+  wchar_t buf[MAX_PATH_SIZE], buf2[MAX_PATH_SIZE];
+  to_wchar(utf8_path, buf, ARRAY_SIZE(buf));
+  GetFullPathNameW(buf, ARRAY_SIZE(buf2), buf2, NULL);
+  WideCharToMultiByte(CP_UTF8, 0, buf2, wcslen(buf2) + 1, abs_path, len, 0, 0);
+}
+
 static pid_t start_process(char *interp, const char *cmd, const char *env,
                            const char *envp[], const char *dir, sock_t sock) {
-  STARTUPINFOA si = {0};
+  STARTUPINFOW si = {0};
   PROCESS_INFORMATION pi = {0};
   HANDLE a[2], b[2], me = GetCurrentProcess();
-  char cmdline[MAX_PATH_SIZE], full_dir[MAX_PATH_SIZE], buf[MAX_PATH_SIZE], *p;
+  wchar_t wcmd[MAX_PATH_SIZE], full_dir[MAX_PATH_SIZE];
+  char buf[MAX_PATH_SIZE], buf4[MAX_PATH_SIZE], buf5[MAX_PATH_SIZE],
+       cmdline[MAX_PATH_SIZE], *p;
   DWORD flags = DUPLICATE_CLOSE_SOURCE | DUPLICATE_SAME_ACCESS;
   FILE *fp;
 
@@ -883,15 +892,17 @@ static pid_t start_process(char *interp, const char *cmd, const char *env,
   }
 
   if (interp != NULL) {
-    GetFullPathName(interp, sizeof(buf), buf, NULL);
+    abs_path(interp, buf4, ARRAY_SIZE(buf4));
     interp = buf;
   }
-  GetFullPathName(dir, sizeof(full_dir), full_dir, NULL);
+  abs_path(dir, buf5, ARRAY_SIZE(buf5));
+  to_wchar(dir, full_dir, ARRAY_SIZE(full_dir));
   mg_snprintf(cmdline, sizeof(cmdline), "%s%s\"%s\"",
               interp ? interp : "", interp ? " " : "", cmd);
+  to_wchar(cmdline, wcmd, ARRAY_SIZE(wcmd));
 
-  if (CreateProcess(NULL, cmdline, NULL, NULL, TRUE, CREATE_NEW_PROCESS_GROUP,
-                    (void *) env, full_dir, &si, &pi) != 0) {
+  if (CreateProcessW(NULL, wcmd, NULL, NULL, TRUE, CREATE_NEW_PROCESS_GROUP,
+                     (void *) env, full_dir, &si, &pi) != 0) {
     spawn_stdio_thread(sock, a[1], push_to_stdin);
     spawn_stdio_thread(sock, b[0], pull_from_stdout);
   } else {
@@ -899,7 +910,7 @@ static pid_t start_process(char *interp, const char *cmd, const char *env,
     CloseHandle(b[0]);
     closesocket(sock);
   }
-  DBG(("CGI command: [%s] -> %p", cmdline, pi.hProcess));
+  DBG(("CGI command: [%ls] -> %p", wcmd, pi.hProcess));
 
   CloseHandle(si.hStdOutput);
   CloseHandle(si.hStdInput);
@@ -2187,7 +2198,7 @@ static DIR *opendir(const char *name) {
   } else if ((dir = (DIR *) malloc(sizeof(*dir))) == NULL) {
     SetLastError(ERROR_NOT_ENOUGH_MEMORY);
   } else {
-    to_unicode(name, wpath, ARRAY_SIZE(wpath));
+    to_wchar(name, wpath, ARRAY_SIZE(wpath));
     attrs = GetFileAttributesW(wpath);
     if (attrs != 0xFFFFFFFF &&
         ((attrs & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY)) {
