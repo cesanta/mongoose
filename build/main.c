@@ -323,7 +323,7 @@ static int my_argc;
 static char **my_argv;
 
 static void to_utf8(wchar_t *src, char *dst, size_t dst_len) {
-  WideCharToMultiByte(CP_UTF8, 0, src, wcslen(src) + 1, dst, dst_len, 0, 0);
+  WideCharToMultiByte(CP_UTF8, 0, src, -1, dst, dst_len, 0, 0);
 }
 
 static void init_utf8_argc_argv(void) {
@@ -336,7 +336,6 @@ static void init_utf8_argc_argv(void) {
     for (i = 0; i < my_argc; i++) {
       to_utf8(wargv[i], buf, sizeof(buf));
       my_argv[i] = strdup(buf);
-      printf("init_utf8_argc_argv: [%s] [%ls]\n", my_argv[i], wargv[i]);
     }
     LocalFree(wargv);
   }
