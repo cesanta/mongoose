@@ -68,7 +68,7 @@ sub req {
   my ($out, $buf) = ('', '');
   eval {
     alarm $timeout if $timeout;
-    $out .= $buf while (sysread($sock, $buf, 1024) > 0);
+    $out .= $buf while ((sysread($sock, $buf, 1024) or 0) > 0);
     alarm 0 if $timeout;
   };
   close $sock;
