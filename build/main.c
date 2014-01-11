@@ -120,7 +120,9 @@ static void show_usage_and_exit(void) {
   fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka, built on %s\n",
           MONGOOSE_VERSION, __DATE__);
   fprintf(stderr, "Usage:\n");
+#ifndef NO_AUTH
   fprintf(stderr, "  mongoose -A <htpasswd_file> <realm> <user> <passwd>\n");
+#endif
   fprintf(stderr, "  mongoose [config_file]\n");
   fprintf(stderr, "  mongoose [-option value ...]\n");
   fprintf(stderr, "\nOPTIONS:\n");
@@ -142,7 +144,7 @@ static const char *config_file_top_comment =
 "# To make a change, remove leading '#', modify option's value,\n"
 "# save this file and then restart Mongoose.\n\n";
 
-static const char *get_url_to_first_open_port(const struct mg_server *server) {
+static const char *get_url_to_me(const struct mg_server *server) {
   static char url[100];
   const char *s = mg_get_option(server, "listening_port");
   const char *cert = mg_get_option(server, "ssl_certificate");
@@ -335,6 +337,7 @@ static void set_absolute_path(char *options[], const char *option_name,
   }
 }
 
+#ifndef NO_AUTH
 int modify_passwords_file(const char *fname, const char *domain,
                           const char *user, const char *pass) {
   int found;
@@ -397,6 +400,7 @@ int modify_passwords_file(const char *fname, const char *domain,
 
   return 1;
 }
+#endif
 
 static void start_mongoose(int argc, char *argv[]) {
   char *options[MAX_OPTIONS];
@@ -406,6 +410,7 @@ static void start_mongoose(int argc, char *argv[]) {
     die("%s", "Failed to start Mongoose.");
   }
 
+#ifndef NO_AUTH
   // Edit passwords file if -A option is specified
   if (argc > 1 && !strcmp(argv[1], "-A")) {
     if (argc != 6) {
@@ -414,6 +419,7 @@ static void start_mongoose(int argc, char *argv[]) {
     exit(modify_passwords_file(argv[2], argv[3], argv[4], argv[5]) ?
          EXIT_SUCCESS : EXIT_FAILURE);
   }
+#endif
 
   // Show usage if -h or --help options are specified
   if (argc == 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
@@ -882,8 +888,8 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
           manage_service(LOWORD(wParam));
           break;
         case ID_CONNECT:
-          printf("[%s]\n", get_url_to_first_open_port(server));
-          ShellExecute(NULL, "open", get_url_to_first_open_port(server),
+          printf("[%s]\n", get_url_to_me(server));
+          ShellExecute(NULL, "open", get_url_to_me(server),
                        NULL, NULL, SW_SHOW);
           break;
       }
@@ -980,7 +986,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdline, int show) {
 - (void) openBrowser {
   [[NSWorkspace sharedWorkspace]
     openURL:[NSURL URLWithString:
-      [NSString stringWithUTF8String:get_url_to_first_open_port(server)]]];
+      [NSString stringWithUTF8String:get_url_to_me(server)]]];
 }
 - (void) editConfig {
   create_config_file(config_file);

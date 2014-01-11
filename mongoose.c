@@ -189,6 +189,14 @@ struct ll { struct ll *prev, *next; };
 #define DBG(x)
 #endif
 
+#ifdef NO_FILESYSTEM
+#define NO_AUTH
+#define NO_CGI
+#define NO_DAV
+#define NO_DIRECTORY_LISTING
+#define NO_LOGGING
+#endif
+
 union socket_address {
   struct sockaddr sa;
   struct sockaddr_in sin;
@@ -217,10 +225,21 @@ struct dir_entry {
 
 // NOTE(lsm): this enum shoulds be in sync with the config_options.
 enum {
-  ACCESS_CONTROL_LIST, ACCESS_LOG_FILE, AUTH_DOMAIN, CGI_INTERPRETER,
+  ACCESS_CONTROL_LIST,
+#ifndef NO_FILESYSTEM
+  ACCESS_LOG_FILE, AUTH_DOMAIN, CGI_INTERPRETER,
   CGI_PATTERN, DAV_AUTH_FILE, DOCUMENT_ROOT, ENABLE_DIRECTORY_LISTING,
-  EXTRA_MIME_TYPES, GLOBAL_AUTH_FILE, HIDE_FILES_PATTERN,
-  IDLE_TIMEOUT_MS, INDEX_FILES, LISTENING_PORT,
+#endif
+  EXTRA_MIME_TYPES,
+#ifndef NO_FILESYSTEM
+  GLOBAL_AUTH_FILE,
+#endif
+  HIDE_FILES_PATTERN,
+  IDLE_TIMEOUT_MS,
+#ifndef NO_FILESYSTEM
+  INDEX_FILES,
+#endif
+  LISTENING_PORT,
 #ifndef _WIN32
   RUN_AS_USER,
 #endif
@@ -228,6 +247,37 @@ enum {
   SSL_CERTIFICATE,
 #endif
   URL_REWRITES, NUM_OPTIONS
+};
+
+static const char *static_config_options[] = {
+  "access_control_list", NULL,
+#ifndef NO_FILESYSTEM
+  "access_log_file", NULL,
+  "auth_domain", "mydomain.com",
+  "cgi_interpreter", NULL,
+  "cgi_pattern", "**.cgi$|**.pl$|**.php$",
+  "dav_auth_file", NULL,
+  "document_root",  NULL,
+  "enable_directory_listing", "yes",
+#endif
+  "extra_mime_types", NULL,
+#ifndef NO_FILESYSTEM
+  "global_auth_file", NULL,
+#endif
+  "hide_files_patterns", NULL,
+  "idle_timeout_ms", "30000",
+#ifndef NO_FILESYSTEM
+  "index_files","index.html,index.htm,index.cgi,index.php,index.lp",
+#endif
+  "listening_port", NULL,
+#ifndef _WIN32
+  "run_as_user", NULL,
+#endif
+#ifdef USE_SSL
+  "ssl_certificate", NULL,
+#endif
+  "url_rewrites", NULL,
+  NULL
 };
 
 struct mg_server {
@@ -337,36 +387,6 @@ static const struct {
   {".bmp", 4, "image/bmp"},
   {".ttf", 4, "application/x-font-ttf"},
   {NULL,  0, NULL}
-};
-
-static const char *static_config_options[] = {
-  "access_control_list", NULL,
-  "access_log_file", NULL,
-  "auth_domain", "mydomain.com",
-  "cgi_interpreter", NULL,
-  "cgi_pattern", "**.cgi$|**.pl$|**.php$",
-  "dav_auth_file", NULL,
-  "document_root",  NULL,
-  "enable_directory_listing", "yes",
-  "extra_mime_types", NULL,
-  "global_auth_file", NULL,
-  "hide_files_patterns", NULL,
-  "idle_timeout_ms", "30000",
-  "index_files","index.html,index.htm,index.cgi,index.php,index.lp",
-  "listening_port", NULL,
-#ifndef _WIN32
-  "run_as_user", NULL,
-#endif
-#ifdef USE_SSL
-  "ssl_certificate", NULL,
-#endif
-  "url_rewrites", NULL,
-  NULL
-};
-
-static const char *static_month_names[] = {
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
 
 void *mg_start_thread(void *(*f)(void *), void *p) {
@@ -1413,6 +1433,18 @@ static int mg_strncasecmp(const char *s1, const char *s2, size_t len) {
   return diff;
 }
 
+// Return HTTP header value, or NULL if not found.
+const char *mg_get_header(const struct mg_connection *ri, const char *s) {
+  int i;
+
+  for (i = 0; i < ri->num_headers; i++)
+    if (!mg_strcasecmp(s, ri->http_headers[i].name))
+      return ri->http_headers[i].value;
+
+  return NULL;
+}
+
+#ifndef NO_FILESYSTEM
 // Perform case-insensitive match of string against pattern
 static int match_prefix(const char *pattern, int pattern_len, const char *str) {
   const char *or_str;
@@ -1451,17 +1483,6 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
     }
   }
   return j;
-}
-
-// Return HTTP header value, or NULL if not found.
-const char *mg_get_header(const struct mg_connection *ri, const char *s) {
-  int i;
-
-  for (i = 0; i < ri->num_headers; i++)
-    if (!mg_strcasecmp(s, ri->http_headers[i].name))
-      return ri->http_headers[i].value;
-
-  return NULL;
 }
 
 // Return 1 if real file has been found, 0 otherwise
@@ -1508,6 +1529,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
 
   return 0;
 }
+#endif  // NO_FILESYSTEM
 
 static int should_keep_alive(const struct mg_connection *conn) {
   const char *method = conn->request_method;
@@ -1516,17 +1538,6 @@ static int should_keep_alive(const struct mg_connection *conn) {
   return method != NULL && !strcmp(method, "GET") &&
     ((header != NULL && !mg_strcasecmp(header, "keep-alive")) ||
      (header == NULL && http_version && !strcmp(http_version, "1.1")));
-}
-
-static const char *suggest_connection_header(const struct mg_connection *conn) {
-  return should_keep_alive(conn) ? "keep-alive" : "close";
-}
-
-static void mg_strlcpy(register char *dst, register const char *src, size_t n) {
-  for (; *src != '\0' && n > 1; n--) {
-    *dst++ = *src++;
-  }
-  *dst = '\0';
 }
 
 int mg_write(struct mg_connection *c, const void *buf, int len) {
@@ -1903,6 +1914,67 @@ const char *mg_get_mime_type(const char *path) {
   return "text/plain";
 }
 
+static struct uri_handler *find_uri_handler(struct mg_server *server,
+                                            const char *uri) {
+  struct ll *lp, *tmp;
+  struct uri_handler *uh;
+
+  LINKED_LIST_FOREACH(&server->uri_handlers, lp, tmp) {
+    uh = LINKED_LIST_ENTRY(lp, struct uri_handler, link);
+    if (!strncmp(uh->uri, uri, strlen(uh->uri))) return uh;
+  }
+
+  return NULL;
+}
+
+#ifndef NO_FILESYSTEM
+// Convert month to the month number. Return -1 on error, or month number
+static int get_month_index(const char *s) {
+  static const char *month_names[] = {
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  };
+  int i;
+
+  for (i = 0; i < (int) ARRAY_SIZE(month_names); i++)
+    if (!strcmp(s, month_names[i]))
+      return i;
+
+  return -1;
+}
+
+static int num_leap_years(int year) {
+  return year / 4 - year / 100 + year / 400;
+}
+
+// Parse UTC date-time string, and return the corresponding time_t value.
+static time_t parse_date_string(const char *datetime) {
+  static const unsigned short days_before_month[] = {
+    0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
+  };
+  char month_str[32];
+  int second, minute, hour, day, month, year, leap_days, days;
+  time_t result = (time_t) 0;
+
+  if (((sscanf(datetime, "%d/%3s/%d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6) ||
+       (sscanf(datetime, "%d %3s %d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6) ||
+       (sscanf(datetime, "%*3s, %d %3s %d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6) ||
+       (sscanf(datetime, "%d-%3s-%d %d:%d:%d",
+               &day, month_str, &year, &hour, &minute, &second) == 6)) &&
+      year > 1970 &&
+      (month = get_month_index(month_str)) != -1) {
+    leap_days = num_leap_years(year) - num_leap_years(1970);
+    year -= 1970;
+    days = year * 365 + days_before_month[month] + (day - 1) + leap_days;
+    result = days * 24 * 3600 + hour * 3600 + minute * 60 + second;
+  }
+
+  return result;
+}
+
 // Look at the "path" extension and figure what mime type it has.
 // Store mime type in the vector.
 static void get_mime_type(const struct mg_server *server, const char *path,
@@ -1929,17 +2001,81 @@ static void get_mime_type(const struct mg_server *server, const char *path,
   vec->len = strlen(vec->ptr);
 }
 
+static const char *suggest_connection_header(const struct mg_connection *conn) {
+  return should_keep_alive(conn) ? "keep-alive" : "close";
+}
+
+static void construct_etag(char *buf, size_t buf_len, const file_stat_t *st) {
+  mg_snprintf(buf, buf_len, "\"%lx.%" INT64_FMT "\"",
+              (unsigned long) st->st_mtime, (int64_t) st->st_size);
+}
+
+// Return True if we should reply 304 Not Modified.
+static int is_not_modified(const struct connection *conn,
+                           const file_stat_t *stp) {
+  char etag[64];
+  const char *ims = mg_get_header(&conn->mg_conn, "If-Modified-Since");
+  const char *inm = mg_get_header(&conn->mg_conn, "If-None-Match");
+  construct_etag(etag, sizeof(etag), stp);
+  return (inm != NULL && !mg_strcasecmp(etag, inm)) ||
+    (ims != NULL && stp->st_mtime <= parse_date_string(ims));
+}
+
+// For given directory path, substitute it to valid index file.
+// Return 0 if index file has been found, -1 if not found.
+// If the file is found, it's stats is returned in stp.
+static int find_index_file(struct connection *conn, char *path,
+                           size_t path_len, file_stat_t *stp) {
+  const char *list = conn->server->config_options[INDEX_FILES];
+  file_stat_t st;
+  struct vec filename_vec;
+  size_t n = strlen(path), found = 0;
+
+  // The 'path' given to us points to the directory. Remove all trailing
+  // directory separator characters from the end of the path, and
+  // then append single directory separator character.
+  while (n > 0 && path[n - 1] == '/') {
+    n--;
+  }
+  path[n] = '/';
+
+  // Traverse index files list. For each entry, append it to the given
+  // path and see if the file exists. If it exists, break the loop
+  while ((list = next_option(list, &filename_vec, NULL)) != NULL) {
+
+    // Ignore too long entries that may overflow path buffer
+    if (filename_vec.len > (int) (path_len - (n + 2)))
+      continue;
+
+    // Prepare full path to the index file
+    strncpy(path + n + 1, filename_vec.ptr, filename_vec.len);
+    path[n + 1 + filename_vec.len] = '\0';
+
+    //DBG(("[%s]", path));
+
+    // Does it exist?
+    if (!stat(path, &st)) {
+      // Yes it does, break the loop
+      *stp = st;
+      found = 1;
+      break;
+    }
+  }
+
+  // If no index file exists, restore directory path
+  if (!found) {
+    path[n] = '\0';
+  }
+
+  return found;
+}
+
 static int parse_range_header(const char *header, int64_t *a, int64_t *b) {
   return sscanf(header, "bytes=%" INT64_FMT "-%" INT64_FMT, a, b);
 }
 
 static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
   strftime(buf, buf_len, "%a, %d %b %Y %H:%M:%S GMT", gmtime(t));
-}
-
-static void construct_etag(char *buf, size_t buf_len, const file_stat_t *st) {
-  mg_snprintf(buf, buf_len, "\"%lx.%" INT64_FMT "\"",
-              (unsigned long) st->st_mtime, (int64_t) st->st_size);
 }
 
 static void open_file_endpoint(struct connection *conn, const char *path,
@@ -2002,120 +2138,7 @@ static void open_file_endpoint(struct connection *conn, const char *path,
   }
 }
 
-// Convert month to the month number. Return -1 on error, or month number
-static int get_month_index(const char *s) {
-  int i;
-
-  for (i = 0; i < (int) ARRAY_SIZE(static_month_names); i++)
-    if (!strcmp(s, static_month_names[i]))
-      return i;
-
-  return -1;
-}
-
-static int num_leap_years(int year) {
-  return year / 4 - year / 100 + year / 400;
-}
-
-// Parse UTC date-time string, and return the corresponding time_t value.
-static time_t parse_date_string(const char *datetime) {
-  static const unsigned short days_before_month[] = {
-    0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
-  };
-  char month_str[32];
-  int second, minute, hour, day, month, year, leap_days, days;
-  time_t result = (time_t) 0;
-
-  if (((sscanf(datetime, "%d/%3s/%d %d:%d:%d",
-               &day, month_str, &year, &hour, &minute, &second) == 6) ||
-       (sscanf(datetime, "%d %3s %d %d:%d:%d",
-               &day, month_str, &year, &hour, &minute, &second) == 6) ||
-       (sscanf(datetime, "%*3s, %d %3s %d %d:%d:%d",
-               &day, month_str, &year, &hour, &minute, &second) == 6) ||
-       (sscanf(datetime, "%d-%3s-%d %d:%d:%d",
-               &day, month_str, &year, &hour, &minute, &second) == 6)) &&
-      year > 1970 &&
-      (month = get_month_index(month_str)) != -1) {
-    leap_days = num_leap_years(year) - num_leap_years(1970);
-    year -= 1970;
-    days = year * 365 + days_before_month[month] + (day - 1) + leap_days;
-    result = days * 24 * 3600 + hour * 3600 + minute * 60 + second;
-  }
-
-  return result;
-}
-
-// Return True if we should reply 304 Not Modified.
-static int is_not_modified(const struct connection *conn,
-                           const file_stat_t *stp) {
-  char etag[64];
-  const char *ims = mg_get_header(&conn->mg_conn, "If-Modified-Since");
-  const char *inm = mg_get_header(&conn->mg_conn, "If-None-Match");
-  construct_etag(etag, sizeof(etag), stp);
-  return (inm != NULL && !mg_strcasecmp(etag, inm)) ||
-    (ims != NULL && stp->st_mtime <= parse_date_string(ims));
-}
-
-static struct uri_handler *find_uri_handler(struct mg_server *server,
-                                            const char *uri) {
-  struct ll *lp, *tmp;
-  struct uri_handler *uh;
-
-  LINKED_LIST_FOREACH(&server->uri_handlers, lp, tmp) {
-    uh = LINKED_LIST_ENTRY(lp, struct uri_handler, link);
-    if (!strncmp(uh->uri, uri, strlen(uh->uri))) return uh;
-  }
-
-  return NULL;
-}
-
-// For given directory path, substitute it to valid index file.
-// Return 0 if index file has been found, -1 if not found.
-// If the file is found, it's stats is returned in stp.
-static int find_index_file(struct connection *conn, char *path,
-                           size_t path_len, file_stat_t *stp) {
-  const char *list = conn->server->config_options[INDEX_FILES];
-  file_stat_t st;
-  struct vec filename_vec;
-  size_t n = strlen(path), found = 0;
-
-  // The 'path' given to us points to the directory. Remove all trailing
-  // directory separator characters from the end of the path, and
-  // then append single directory separator character.
-  while (n > 0 && path[n - 1] == '/') {
-    n--;
-  }
-  path[n] = '/';
-
-  // Traverse index files list. For each entry, append it to the given
-  // path and see if the file exists. If it exists, break the loop
-  while ((list = next_option(list, &filename_vec, NULL)) != NULL) {
-
-    // Ignore too long entries that may overflow path buffer
-    if (filename_vec.len > (int) (path_len - (n + 2)))
-      continue;
-
-    // Prepare full path to the index file
-    mg_strlcpy(path + n + 1, filename_vec.ptr, filename_vec.len + 1);
-
-    //DBG(("[%s]", path));
-
-    // Does it exist?
-    if (!stat(path, &st)) {
-      // Yes it does, break the loop
-      *stp = st;
-      found = 1;
-      break;
-    }
-  }
-
-  // If no index file exists, restore directory path
-  if (!found) {
-    path[n] = '\0';
-  }
-
-  return found;
-}
+#endif  // NO_FILESYSTEM
 
 static void write_terminating_chunk(struct connection *conn) {
   mg_write(&conn->mg_conn, "0\r\n\r\n", 5);
@@ -2584,7 +2607,6 @@ static void forward_put_data(struct connection *conn) {
     }
   }
 }
-#endif //  NO_DAV
 
 static void send_options(struct connection *conn) {
   static const char reply[] = "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, "
@@ -2592,6 +2614,7 @@ static void send_options(struct connection *conn) {
   spool(&conn->remote_iobuf, reply, sizeof(reply) - 1);
   conn->flags |= CONN_SPOOL_DONE;
 }
+#endif //  NO_DAV
 
 #ifndef NO_AUTH
 static void send_authorization_request(struct connection *conn) {
@@ -2630,7 +2653,7 @@ static FILE *open_auth_file(struct connection *conn, const char *path) {
   return fp;
 }
 
-#ifndef HAVE_MD5
+#if !defined(HAVE_MD5) && !defined(NO_AUTH)
 typedef struct MD5Context {
   uint32_t buf[4];
   uint32_t bits[2];
@@ -3234,13 +3257,15 @@ static void handle_lsp_request(struct connection *conn, const char *path,
 #endif // USE_LUA
 
 static void open_local_endpoint(struct connection *conn) {
-  static const char lua_pat[] = LUA_SCRIPT_PATTERN;
-  char path[MAX_PATH_SIZE];
-  file_stat_t st;
-  int exists = 0, is_directory = 0;
   const char *cl_hdr = mg_get_header(&conn->mg_conn, "Content-Length");
+#ifndef NO_FILESYSTEM
+  static const char lua_pat[] = LUA_SCRIPT_PATTERN;
+  file_stat_t st;
+  char path[MAX_PATH_SIZE];
+  int exists = 0, is_directory = 0;
   const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
   const char *dir_lst = conn->server->config_options[ENABLE_DIRECTORY_LISTING];
+#endif
 
   conn->mg_conn.content_len = cl_hdr == NULL ? 0 : (int) to64(cl_hdr);
 
@@ -3262,6 +3287,9 @@ static void open_local_endpoint(struct connection *conn) {
     return;
   }
 
+#ifdef NO_FILESYSTEM
+  send_http_error(conn, 404, NULL);
+#else
   exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
   is_directory = S_ISDIR(st.st_mode);
 
@@ -3329,6 +3357,7 @@ static void open_local_endpoint(struct connection *conn) {
   } else {
     send_http_error(conn, 404, NULL);
   }
+#endif  // NO_FILESYSTEM
 }
 
 static void send_continue_if_expected(struct connection *conn) {
