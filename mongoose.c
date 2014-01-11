@@ -1090,7 +1090,7 @@ static void prepare_cgi_environment(struct connection *conn,
   assert(blk->len < (int) sizeof(blk->buf));
 }
 
-static const char cgi_status[] = "HTTP/1.1 XXX OK\r\n";
+static const char cgi_status[] = "HTTP/1.1 200 OK\r\n";
 
 static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   struct cgi_env_block blk;
