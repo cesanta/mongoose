@@ -2899,8 +2899,9 @@ static int check_password(const char *method, const char *ha1, const char *uri,
 
 
 // Authorize against the opened passwords file. Return 1 if authorized.
-static int authorize(struct connection *conn, FILE *fp) {
-  const char *hdr = mg_get_header(&conn->mg_conn, "Authorization");
+int mg_authorize_digest(struct mg_connection *c, FILE *fp) {
+  struct connection *conn = (struct connection *) c;
+  const char *hdr = mg_get_header(c, "Authorization");
   char line[256], f_user[256], ha1[256], f_domain[256], user[100], nonce[100],
        uri[MAX_REQUEST_SIZE], cnonce[100], resp[100], qop[100], nc[100];
 
@@ -2918,7 +2919,7 @@ static int authorize(struct connection *conn, FILE *fp) {
         !strcmp(user, f_user) &&
         // NOTE(lsm): due to a bug in MSIE, we do not compare URIs
         !strcmp(conn->server->config_options[AUTH_DOMAIN], f_domain))
-      return check_password(conn->mg_conn.request_method, ha1, uri,
+      return check_password(c->request_method, ha1, uri,
                             nonce, nc, cnonce, qop, resp);
   }
   return 0;
@@ -2931,7 +2932,7 @@ static int is_authorized(struct connection *conn, const char *path) {
   int authorized = 1;
 
   if ((fp = open_auth_file(conn, path)) != NULL) {
-    authorized = authorize(conn, fp);
+    authorized = mg_authorize_digest(&conn->mg_conn, fp);
     fclose(fp);
   }
 
@@ -2944,7 +2945,7 @@ static int is_authorized_for_dav(struct connection *conn) {
   int authorized = 0;
 
   if (auth_file != NULL && (fp = fopen(auth_file, "r")) != NULL) {
-    authorized = authorize(conn, fp);
+    authorized = mg_authorize_digest(&conn->mg_conn, fp);
     fclose(fp);
   }
 
