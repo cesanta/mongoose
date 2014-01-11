@@ -9,6 +9,7 @@ EXE_SUFFIX =
 CFLAGS = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe -I. -I.. $(CFLAGS_EXTRA)
 VERSION = $(shell perl -lne \
             'print $$1 if /define\s+MONGOOSE_VERSION\s+"(\S+)"/' ../mongoose.h)
+RM = rm -rf
 VDIR = mongoose-$(VERSION)
 
 # Stock windows binary builds with Lua and YASSL library.
@@ -62,6 +63,7 @@ LINK = $(MSVC)/bin/link $(LINK_FLAGS)
 
 ifeq ($(OS), Windows_NT)
   EXE_SUFFIX = .exe
+  RM = del
 else
   UNAME_S := $(shell uname -s)
   ifeq ($(UNAME_S), Linux)
@@ -160,6 +162,6 @@ release: tarball macos
 
 clean:
 	@cd ../examples && $(MAKE) clean
-	@rm -rf *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz \
+	@$(RM) *.o *.core $(PROG) *.obj *.so $(PROG).txt *.dSYM *.tgz \
 	$(PROG).exe *.dll *.lib res.o res.RES *.dSYM *.zip *.pdb \
 	*.exe *dmg* $(PROG)-* unix_unit_test

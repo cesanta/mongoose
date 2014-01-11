@@ -1,7 +1,9 @@
 CFLAGS  = -W -Wall -I.. -pthread -g -pipe $(COPT)
 DLL_FLAGS = -DLUA_COMPAT_ALL -I../build
+RM = rm -rf
 
 ifeq ($(OS),Windows_NT)
+  RM = del /q /f
 else
   UNAME_S := $(shell uname -s)
   DLL_FLAGS += -shared
@@ -43,4 +45,4 @@ windows:
 #$(CL) lua_dll.c $(CLFLAGS) $(DLL_FLAGS) /DLL $(LFLAGS) /SUBSYSTEM:WINDOWS /ENTRY:luaopen_lua_dll /EXPORT:luaopen_lua_dll /out:lua_dll.dll
 
 clean:
-	@rm -rf hello upload post websocket chat *.exe *.dSYM *.obj .*o
+	-@$(RM) hello upload post websocket chat *.exe *.dSYM *.obj .*o
