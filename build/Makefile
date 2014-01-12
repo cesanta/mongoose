@@ -9,6 +9,7 @@ EXE_SUFFIX =
 CFLAGS = -std=c99 -O2 -W -Wall -pedantic -pthread -pipe -I. -I.. $(CFLAGS_EXTRA)
 VERSION = $(shell perl -lne \
             'print $$1 if /define\s+MONGOOSE_VERSION\s+"(\S+)"/' ../mongoose.h)
+WP = wordpress-private-1.3
 RM = rm -rf
 VDIR = mongoose-$(VERSION)
 
@@ -159,6 +160,11 @@ release: tarball macos
 	cp mongoose-lua-sqlite-ssl.exe mongoose-lua-sqlite-ssl-$(VERSION).exe
 	cp mongoose-lua-sqlite-ssl.exe mongoose_php_bundle/mongoose.exe
 	zip -r mongoose-php-$(VERSION).zip mongoose_php_bundle/
+
+wp: mongoose.exe
+	upx mongoose.exe
+	cp mongoose.exe $(WP)/
+	zip -r $(WP).zip $(WP)
 
 clean:
 	@cd ../examples && $(MAKE) clean
