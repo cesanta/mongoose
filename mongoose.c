@@ -893,7 +893,7 @@ static pid_t start_process(char *interp, const char *cmd, const char *env,
 
   if (interp != NULL) {
     abs_path(interp, buf4, ARRAY_SIZE(buf4));
-    interp = buf;
+    interp = buf4;
   }
   abs_path(dir, buf5, ARRAY_SIZE(buf5));
   to_wchar(dir, full_dir, ARRAY_SIZE(full_dir));
