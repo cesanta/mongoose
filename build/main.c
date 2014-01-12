@@ -208,6 +208,34 @@ static void set_option(char **options, const char *name, const char *value) {
   }
 }
 
+#ifdef WIN32
+static int my_argc;
+static char **my_argv;
+
+static void to_utf8(wchar_t *src, char *dst, size_t dst_len) {
+  WideCharToMultiByte(CP_UTF8, 0, src, -1, dst, dst_len, 0, 0);
+}
+
+static void to_wchar(const char *src, wchar_t *dst, size_t dst_len) {
+  MultiByteToWideChar(CP_UTF8, 0, src, -1, dst, dst_len);
+}
+
+static void init_utf8_argc_argv(void) {
+  wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &my_argc);
+  if (wargv != NULL) {
+    char buf[1024 * 8];
+    int i;
+    // TODO(lsm): free that at some point.
+    my_argv = calloc(my_argc + 1, sizeof(my_argv[0]));
+    for (i = 0; i < my_argc; i++) {
+      to_utf8(wargv[i], buf, sizeof(buf));
+      my_argv[i] = strdup(buf);
+    }
+    LocalFree(wargv);
+  }
+}
+#endif
+
 static void process_command_line_arguments(char *argv[], char **options) {
   char line[MAX_CONF_FILE_LINE_SIZE], opt[sizeof(line)], val[sizeof(line)], *p;
   FILE *fp = NULL;
@@ -225,7 +253,15 @@ static void process_command_line_arguments(char *argv[], char **options) {
              (int) (p - argv[0]), argv[0], DIRSEP, CONFIG_FILE);
   }
 
+#ifdef WIN32
+  {
+    wchar_t path[PATH_MAX];
+    to_wchar(config_file, path, sizeof(path) / sizeof(path[0]));
+    fp = _wfopen(path, L"r");
+  }
+#else
   fp = fopen(config_file, "r");
+#endif
 
   // If config file was set in command line and open failed, die
   if (cmd_line_opts_start == 2 && fp == NULL) {
@@ -317,30 +353,6 @@ static void verify_existence(char **options, const char *option_name,
         option_name, path, strerror(errno));
   }
 }
-
-#ifdef WIN32
-static int my_argc;
-static char **my_argv;
-
-static void to_utf8(wchar_t *src, char *dst, size_t dst_len) {
-  WideCharToMultiByte(CP_UTF8, 0, src, -1, dst, dst_len, 0, 0);
-}
-
-static void init_utf8_argc_argv(void) {
-  wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &my_argc);
-  if (wargv != NULL) {
-    char buf[1024 * 8];
-    int i;
-    // TODO(lsm): free that at some point.
-    my_argv = calloc(my_argc + 1, sizeof(my_argv[0]));
-    for (i = 0; i < my_argc; i++) {
-      to_utf8(wargv[i], buf, sizeof(buf));
-      my_argv[i] = strdup(buf);
-    }
-    LocalFree(wargv);
-  }
-}
-#endif
 
 static void set_absolute_path(char *options[], const char *option_name,
                               const char *path_to_mongoose_exe) {
