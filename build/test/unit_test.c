@@ -1,6 +1,7 @@
 // Unit test for the mongoose web server.
 
 #define USE_WEBSOCKET
+#define USE_LUA
 
 #ifndef _WIN32
 #define USE_IPV6
@@ -406,6 +407,25 @@ static const char *test_server_param(void) {
   return NULL;
 }
 
+static int error_handler(struct mg_connection *conn) {
+  mg_printf(conn, "error: %d", conn->status_code);
+  return 1;
+}
+
+static const char *test_error_handler(void) {
+  int reply_len;
+  char *reply;
+
+  reply = wget("127.0.0.1", atoi(HTTP_PORT), &reply_len, "%s",
+               "GET /non_exist HTTP/1.0\r\n\r\n");
+  ASSERT(reply != NULL);
+  ASSERT(reply_len == 10);
+  ASSERT(memcmp(reply, "error: 404", 10) == 0);
+  free(reply);
+
+  return NULL;
+}
+
 static void *server_thread(void *param) {
   int i;
   for (i = 0; i < 10; i++) mg_poll_server((struct mg_server *) param, 1);
@@ -419,9 +439,11 @@ static const char *test_server(void) {
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
   mg_add_uri_handler(server, "/cb1", cb1);
+  mg_set_http_error_handler(server, error_handler);
   mg_start_thread(server_thread, server);
   RUN_TEST(test_regular_file);
   RUN_TEST(test_server_param);
+  RUN_TEST(test_error_handler);
 
   // TODO(lsm): come up with a better way of thread sync
   sleep(1);

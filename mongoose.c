@@ -285,6 +285,7 @@ struct mg_server {
   union socket_address lsa;   // Listening socket address
   struct ll active_connections;
   struct ll uri_handlers;
+  mg_handler_t error_handler;
   char *config_options[NUM_OPTIONS];
   void *server_data;
   void *ssl_ctx;    // SSL context
@@ -653,6 +654,15 @@ static void send_http_error(struct connection *conn, int code,
   va_list ap;
   int body_len, headers_len, match_code;
 
+  conn->mg_conn.status_code = code;
+
+  // Invoke error handler if it is set
+  if (conn->server->error_handler != NULL &&
+      conn->server->error_handler(&conn->mg_conn)) {
+    close_local_endpoint(conn);
+    return;
+  }
+
   // Handle error code rewrites
   while ((rewrites = next_option(rewrites, &a, &b)) != NULL) {
     if ((match_code = atoi(a.ptr)) > 0 && match_code == code) {
@@ -666,7 +676,6 @@ static void send_http_error(struct connection *conn, int code,
     }
   }
 
-  conn->mg_conn.status_code = code;
   body_len = mg_snprintf(body, sizeof(body), "%d %s\n", code, message);
   if (fmt != NULL) {
     body[body_len++] = '\n';
@@ -3874,6 +3883,11 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   }
 
   return error_msg;
+}
+
+
+void mg_set_http_error_handler(struct mg_server *server, mg_handler_t handler) {
+  server->error_handler = handler;
 }
 
 void mg_set_listening_socket(struct mg_server *server, int sock) {
