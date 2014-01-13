@@ -158,7 +158,6 @@ write_file($config, "access_log_file access.log\n" .
            "listening_port 127.0.0.1:23164\n");
 spawn("$mongoose_exe -listening_port 127.0.0.1:$port");
 o("GET /hello.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'Loading config file');
-unlink $config;
 kill_spawned_child();
 
 #  "-cgi_environment CGI_FOO=foo,CGI_BAR=bar,CGI_BAZ=baz " .
