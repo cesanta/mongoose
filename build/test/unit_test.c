@@ -448,6 +448,8 @@ static const char *test_server(void) {
   // TODO(lsm): come up with a better way of thread sync
   sleep(1);
 
+  ASSERT(strcmp(static_config_options[URL_REWRITES * 2], "url_rewrites") == 0);
+
   mg_destroy_server(&server);
   ASSERT(server == NULL);
   return NULL;
