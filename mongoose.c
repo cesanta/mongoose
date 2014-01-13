@@ -2628,15 +2628,15 @@ static void send_options(struct connection *conn) {
 #endif //  NO_DAV
 
 #ifndef NO_AUTH
-static void send_authorization_request(struct connection *conn) {
-  conn->mg_conn.status_code = 401;
-  mg_printf(&conn->mg_conn,
+void mg_send_digest_auth_request(struct mg_connection *c) {
+  struct connection *conn = (struct connection *) c;
+  c->status_code = 401;
+  mg_printf(c,
             "HTTP/1.1 401 Unauthorized\r\n"
             "WWW-Authenticate: Digest qop=\"auth\", "
             "realm=\"%s\", nonce=\"%lu\"\r\n\r\n",
             conn->server->config_options[AUTH_DOMAIN],
             (unsigned long) time(NULL));
-  close_local_endpoint(conn);
 }
 
 // Use the global passwords file, if specified by auth_gpass option,
@@ -2963,7 +2963,7 @@ static int is_authorized_for_dav(struct connection *conn) {
   return authorized;
 }
 
-static int is_dangerous_dav_request(const struct connection *conn) {
+static int is_dav_mutation(const struct connection *conn) {
   const char *s = conn->mg_conn.request_method;
   return s && (!strcmp(s, "PUT") || !strcmp(s, "DELETE") ||
                !strcmp(s, "MKCOL"));
@@ -3186,6 +3186,10 @@ static void prepare_lua_environment(struct mg_connection *ri, lua_State *L) {
   reg_string(L, "query_string", ri->query_string);
   reg_string(L, "remote_ip", ri->remote_ip);
   reg_int(L, "remote_port", ri->remote_port);
+  lua_pushstring(L, "content");
+  lua_pushlstring(L, ri->content == NULL ? "" : ri->content, 0);
+  lua_rawset(L, -3);
+  reg_int(L, "content_len", ri->content_len);
   reg_int(L, "num_headers", ri->num_headers);
   lua_pushstring(L, "http_headers");
   lua_newtable(L);
@@ -3310,9 +3314,10 @@ static void open_local_endpoint(struct connection *conn) {
   } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, NULL);
 #ifndef NO_AUTH
-  } else if ((!is_dangerous_dav_request(conn) && !is_authorized(conn, path)) ||
-             (is_dangerous_dav_request(conn) && !is_authorized_for_dav(conn))) {
-    send_authorization_request(conn);
+  } else if ((!is_dav_mutation(conn) && !is_authorized(conn, path)) ||
+             (is_dav_mutation(conn) && !is_authorized_for_dav(conn))) {
+    mg_send_digest_auth_request(&conn->mg_conn);
+    close_local_endpoint(conn);
 #endif
 #ifndef NO_DAV
   } else if (!strcmp(conn->mg_conn.request_method, "PROPFIND")) {
