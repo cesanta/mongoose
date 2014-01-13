@@ -2921,11 +2921,13 @@ static int check_password(const char *method, const char *ha1, const char *uri,
 // Authorize against the opened passwords file. Return 1 if authorized.
 int mg_authorize_digest(struct mg_connection *c, FILE *fp) {
   struct connection *conn = (struct connection *) c;
-  const char *hdr = mg_get_header(c, "Authorization");
+  const char *hdr;
   char line[256], f_user[256], ha1[256], f_domain[256], user[100], nonce[100],
        uri[MAX_REQUEST_SIZE], cnonce[100], resp[100], qop[100], nc[100];
 
-  if (hdr == NULL || mg_strncasecmp(hdr, "Digest ", 7) != 0) return 0;
+  if (c == NULL || fp == NULL) return 0;
+  if ((hdr = mg_get_header(c, "Authorization")) == NULL ||
+      mg_strncasecmp(hdr, "Digest ", 7) != 0) return 0;
   if (!mg_parse_header(hdr, "username", user, sizeof(user))) return 0;
   if (!mg_parse_header(hdr, "cnonce", cnonce, sizeof(cnonce))) return 0;
   if (!mg_parse_header(hdr, "response", resp, sizeof(resp))) return 0;

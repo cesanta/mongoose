@@ -90,7 +90,8 @@ a couple of kilobytes to the executable size, and also has some runtime penalty.
 Mongoose source code contains a well-commented example code, listed below:
 
    * [hello.c](https://github.com/cesanta/mongoose/blob/master/examples/hello.c)
-   is a minimalistic hello world example
+   a minimalistic hello world example
    * [post.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
+   shows how to handle form input
    * [upload.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
    shows how to upload files
