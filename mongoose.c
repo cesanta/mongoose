@@ -2979,24 +2979,24 @@ static int is_dav_mutation(const struct connection *conn) {
 }
 #endif // NO_AUTH
 
-int mg_parse_header(const char *str, const char *var_name, char *buf,
-                    size_t buf_size) {
+int parse_header(const char *str, int str_len, const char *var_name, char *buf,
+                 size_t buf_size) {
   int ch = ' ', len = 0, n = strlen(var_name);
-  const char *p, *s = NULL;
+  const char *p, *end = str + str_len, *s = NULL;
 
   if (buf != NULL) buf[0] = '\0';
 
   // Find where variable starts
-  while (str != NULL && (s = strstr(str, var_name)) != NULL &&
-         ((s > str && s[-1] != ' ') || s[n] != '=')) {
-    str = s + n;
+  for (s = str; s != NULL && &s[n] < end; s++) {
+    if ((s == str || s[-1] == ' ') && s[n] == '=' &&
+        !memcmp(s, var_name, n)) break;
   }
 
-  if (s != NULL && s[n + 1] != '\0') {
+  if (s != NULL && &s[n + 1] < end) {
     s += n + 1;
     if (*s == '"' || *s == '\'') ch = *s++;
     p = s;
-    while (p[0] != '\0' && p[0] != ch && len < (int) buf_size) {
+    while (p < end && p[0] != ch && len < (int) buf_size) {
       if (p[0] == '\\' && p[1] == ch) p++;
       buf[len++] = *p++;
     }
@@ -3004,11 +3004,17 @@ int mg_parse_header(const char *str, const char *var_name, char *buf,
       len = 0;
     } else {
       if (len > 0 && s[len - 1] == ',') len--;
+      if (len > 0 && s[len - 1] == ';') len--;
       buf[len] = '\0';
     }
   }
 
   return len;
+}
+
+int mg_parse_header(const char *str, const char *var_name, char *buf,
+                    size_t buf_size) {
+  return parse_header(str, strlen(str), var_name, buf, buf_size);
 }
 
 #ifdef USE_LUA
@@ -3767,6 +3773,51 @@ int mg_get_var(const struct mg_connection *conn, const char *name,
     len = get_var(conn->content, conn->content_len, name, dst, dst_len);
   }
   return len;
+}
+
+static int get_line_len(const char *buf, int buf_len) {
+  int len = 0;
+  while (len < buf_len && buf[len] != '\n') len++;
+  return buf[len] == '\n' ? len + 1: -1;
+}
+
+int mg_parse_multipart(const char *buf, int buf_len,
+                       char *var_name, int var_name_len,
+                       char *file_name, int file_name_len,
+                       const char **data, int *data_len) {
+  static const char cd[] = "Content-Disposition: ";
+  //struct mg_connection c;
+  int hl, bl, n, ll, pos, cdl = sizeof(cd) - 1;
+  //char *p;
+
+  if (buf == NULL || buf_len <= 0) return 0;
+  if ((hl = get_request_len(buf, buf_len)) <= 0) return 0;
+  if (buf[0] != '-' || buf[1] != '-' || buf[2] == '\n') return 0;
+
+  // Get boundary length
+  bl = get_line_len(buf, buf_len);
+
+  // Loop through headers, fetch variable name and file name
+  var_name[0] = file_name[0] = '\0';
+  for (n = bl; (ll = get_line_len(buf + n, hl - n)) > 0; n += ll) {
+    if (mg_strncasecmp(cd, buf + n, cdl) == 0) {
+      parse_header(buf + n + cdl, ll - (cdl + 2), "name",
+                   var_name, var_name_len);
+      parse_header(buf + n + cdl, ll - (cdl + 2), "filename",
+                   file_name, file_name_len);
+    }
+  }
+
+  // Scan body, search for terminating boundary
+  for (pos = hl; pos + (bl - 2) < buf_len; pos++) {
+    if (buf[pos] == '-' && !memcmp(buf, &buf[pos], bl - 2)) {
+      if (data_len != NULL) *data_len = (pos - 2) - hl;
+      if (data != NULL) *data = buf + hl;
+      return pos;
+    }
+  }
+
+  return 0;
 }
 
 const char **mg_get_valid_option_names(void) {

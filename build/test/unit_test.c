@@ -453,6 +453,41 @@ static const char *test_server(void) {
   return NULL;
 }
 
+#define DISP "Content-Disposition: form/data; "
+#define CRLF "\r\n"
+#define BOUNDARY "--xyz"
+static const char *test_parse_multipart(void) {
+  char a[100], b[100];
+  const char *p;
+  static const char f1[] = BOUNDARY CRLF DISP "name=f1" CRLF CRLF
+    "some_content" CRLF BOUNDARY CRLF
+    BOUNDARY CRLF DISP "name=f2; filename=\"foo bar.txt\"" CRLF CRLF
+    "another_content" CRLF BOUNDARY CRLF
+    "--" CRLF;
+  int n, n2, len, f1_len = sizeof(f1) - 1;
+
+  ASSERT(mg_parse_multipart("", 0, a, sizeof(a), b, sizeof(b), &p, &len) == 0);
+  ASSERT(mg_parse_multipart("a", 1, a, sizeof(a), b, sizeof(b), &p, &len) == 0);
+  ASSERT((n = mg_parse_multipart(f1, f1_len, a, sizeof(a),
+                                 b, sizeof(b), &p, &len)) > 0);
+  ASSERT(len == 12);
+  ASSERT(memcmp(p, "some_content", len) == 0);
+  ASSERT(strcmp(a, "f1") == 0);
+  ASSERT(b[0] == '\0');
+
+  ASSERT((n2 = mg_parse_multipart(f1 + n, f1_len - n, a, sizeof(a),
+                                  b, sizeof(b), &p, &len)) > 0);
+  ASSERT(len == 15);
+  ASSERT(memcmp(p, "another_content", len) == 0);
+  ASSERT(strcmp(a, "f2") == 0);
+  ASSERT(strcmp(b, "foo bar.txt") == 0);
+
+  ASSERT((n2 = mg_parse_multipart(f1 + n + n2, f1_len - (n + n2), a, sizeof(a),
+                                  b, sizeof(b), &p, &len)) == 0);
+
+  return NULL;
+}
+
 static const char *run_all_tests(void) {
   RUN_TEST(test_should_keep_alive);
   RUN_TEST(test_match_prefix);
@@ -466,6 +501,7 @@ static const char *run_all_tests(void) {
   RUN_TEST(test_get_var);
   RUN_TEST(test_next_option);
   RUN_TEST(test_server);
+  RUN_TEST(test_parse_multipart);
   return NULL;
 }
 

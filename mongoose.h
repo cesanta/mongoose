@@ -92,6 +92,10 @@ const char *mg_get_mime_type(const char *file_name);
 int mg_get_var(const struct mg_connection *conn, const char *var_name,
                char *buf, size_t buf_len);
 int mg_parse_header(const char *hdr, const char *var_name, char *buf, size_t);
+int mg_parse_multipart(const char *buf, int buf_len,
+                       char *var_name, int var_name_len,
+                       char *file_name, int file_name_len,
+                       const char **data, int *data_len);
 
 // Utility functions
 void *mg_start_thread(void *(*func)(void *), void *param);
