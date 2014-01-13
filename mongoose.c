@@ -390,6 +390,7 @@ static const struct {
   {NULL,  0, NULL}
 };
 
+#ifndef NO_THREADS
 void *mg_start_thread(void *(*f)(void *), void *p) {
 #ifdef _WIN32
   return (void *) _beginthread((void (__cdecl *)(void *)) f, 0, p);
@@ -411,6 +412,7 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
   return (void *) thread_id;
 #endif
 }
+#endif  // NO_THREADS
 
 #ifdef _WIN32
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
