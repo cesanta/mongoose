@@ -82,7 +82,14 @@ whether the request is websocket or not. Also, for websocket requests,
 there is `struct mg_connection::wsbits` field which contains first byte
 of the websocket frame which URI handler can examine. Note that to
 reply to the websocket client, `mg_websocket_write()` should be used.
-To reply to the plain HTTP client, `mg_write()` should be used.
+To reply to the plain HTTP client, `mg_write_data()` should be used.
+
+An URI handler must return a value. If 0 is return, that signals Mongoose
+that URI handler hasn't finished sending data to the client. In this case,
+Mongoose will call URI handler after each successful socket write.
+`struct mg_connection::wsbits` flag will indicate the status of the write,
+`1` means that write has failed and connection will be closed. If URI
+handler has sent all data, it should return `1`.
 
     void mg_set_http_error_handler(struct mg_server *, mg_handler_t);
 
