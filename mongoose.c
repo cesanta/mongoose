@@ -1593,7 +1593,7 @@ static void terminate_headers(struct mg_connection *c) {
 
 void mg_send_data(struct mg_connection *c, const void *data, int data_len) {
   terminate_headers(c);
-  write_chunk((struct connection *) c, data, data_len);
+  write_chunk((struct connection *) c, (const char *) data, data_len);
 }
 
 void mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
