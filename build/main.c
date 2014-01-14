@@ -557,8 +557,7 @@ static HICON hIcon;
 static HANDLE hThread;  // Serving thread
 static SERVICE_STATUS ss;
 static SERVICE_STATUS_HANDLE hStatus;
-static const char *service_magic_argument = "--";
-static const char *service_name = "Mongoose";
+static const wchar_t *service_name = L"Mongoose";
 static NOTIFYICONDATA TrayIcon;
 
 static void WINAPI ControlHandler(DWORD code) {
@@ -574,7 +573,7 @@ static void WINAPI ControlHandler(DWORD code) {
 }
 
 static void WINAPI ServiceMain(void) {
-  hStatus = RegisterServiceCtrlHandler(service_name, ControlHandler);
+  hStatus = RegisterServiceCtrlHandlerW(service_name, ControlHandler);
   ControlHandler(SERVICE_CONTROL_INTERROGATE);
 
   while (ss.dwCurrentState == SERVICE_RUNNING) {
@@ -863,7 +862,7 @@ static void show_settings_dialog() {
 static int manage_service(int action) {
   SC_HANDLE hSCM = NULL, hService = NULL;
   SERVICE_DESCRIPTION descr = {server_name};
-  char path[PATH_MAX + 20];  // Path to executable plus magic argument
+  wchar_t wpath[PATH_MAX + 20];  // Path to executable plus magic argument
   int success = 1;
 
   if ((hSCM = OpenSCManager(NULL, NULL, action == ID_INSTALL_SERVICE ?
@@ -871,25 +870,24 @@ static int manage_service(int action) {
     success = 0;
     show_error();
   } else if (action == ID_INSTALL_SERVICE) {
-    GetModuleFileName(NULL, path, sizeof(path));
-    strncat(path, " ", sizeof(path));
-    strncat(path, service_magic_argument, sizeof(path));
-    hService = CreateService(hSCM, service_name, service_name,
-                             SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS,
-                             SERVICE_AUTO_START, SERVICE_ERROR_NORMAL,
-                             path, NULL, NULL, NULL, NULL, NULL);
+    GetModuleFileNameW(NULL, wpath, sizeof(wpath) / sizeof(wpath[0]));
+    wcsncat(wpath, L" --", sizeof(wpath) / sizeof(wpath[0]));
+    hService = CreateServiceW(hSCM, service_name, service_name,
+                              SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS,
+                              SERVICE_AUTO_START, SERVICE_ERROR_NORMAL,
+                              wpath, NULL, NULL, NULL, NULL, NULL);
     if (hService) {
       ChangeServiceConfig2(hService, SERVICE_CONFIG_DESCRIPTION, &descr);
     } else {
       show_error();
     }
   } else if (action == ID_REMOVE_SERVICE) {
-    if ((hService = OpenService(hSCM, service_name, DELETE)) == NULL ||
+    if ((hService = OpenServiceW(hSCM, service_name, DELETE)) == NULL ||
         !DeleteService(hService)) {
       show_error();
     }
-  } else if ((hService = OpenService(hSCM, service_name,
-                                     SERVICE_QUERY_STATUS)) == NULL) {
+  } else if ((hService = OpenServiceW(hSCM, service_name,
+                                      SERVICE_QUERY_STATUS)) == NULL) {
     success = 0;
   }
 
@@ -906,15 +904,15 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam,
     {NULL, NULL}
   };
   int service_installed;
-  char buf[200], *service_argv[] = {__argv[0], NULL};
+  char buf[200], *service_argv[] = {NULL, NULL};
   POINT pt;
   HMENU hMenu;
   static UINT s_uTaskbarRestart; // for taskbar creation
 
   switch (msg) {
     case WM_CREATE:
-      if (__argv[1] != NULL &&
-          !strcmp(__argv[1], service_magic_argument)) {
+      if (my_argv[1] != NULL && !strcmp(my_argv[1], "--")) {
+        service_argv[0] = my_argv[0];
         start_mongoose(1, service_argv);
         hThread = mg_start_thread(serving_thread_func, server);
         StartServiceCtrlDispatcher(service_table);
