@@ -2641,6 +2641,7 @@ static void forward_put_data(struct connection *conn) {
     }
   }
 }
+#endif //  NO_DAV
 
 static void send_options(struct connection *conn) {
   static const char reply[] = "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, "
@@ -2648,7 +2649,6 @@ static void send_options(struct connection *conn) {
   spool(&conn->remote_iobuf, reply, sizeof(reply) - 1);
   conn->flags |= CONN_SPOOL_DONE;
 }
-#endif //  NO_DAV
 
 #ifndef NO_AUTH
 void mg_send_digest_auth_request(struct mg_connection *c) {
