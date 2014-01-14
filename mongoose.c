@@ -1896,6 +1896,19 @@ static void ping_idle_websocket_connection(struct connection *conn, time_t t) {
 #define ping_idle_websocket_connection(conn, t)
 #endif // !NO_WEBSOCKET
 
+static void write_terminating_chunk(struct connection *conn) {
+  mg_write(&conn->mg_conn, "0\r\n\r\n", 5);
+}
+
+static void call_uri_handler(struct connection *conn) {
+  if (conn->endpoint.uh->handler(&conn->mg_conn)) {
+    if (conn->flags & CONN_HEADERS_SENT) {
+      write_terminating_chunk(conn);
+    }
+    close_local_endpoint(conn);
+  }
+}
+
 static void write_to_client(struct connection *conn) {
   struct iobuf *io = &conn->remote_iobuf;
   int n = conn->ssl == NULL ? send(conn->client_sock, io->buf, io->len, 0) :
@@ -1915,6 +1928,12 @@ static void write_to_client(struct connection *conn) {
     io->len -= n;
     conn->num_bytes_sent += n;
   }
+
+  if (conn->endpoint_type == EP_USER) {
+    conn->mg_conn.wsbits = conn->flags & CONN_CLOSE ? 1 : 0;
+    call_uri_handler(conn);
+  }
+
   if (io->len == 0 && conn->flags & CONN_SPOOL_DONE) {
     conn->flags |= CONN_CLOSE;
   }
@@ -2163,10 +2182,6 @@ static void open_file_endpoint(struct connection *conn, const char *path,
 
 #endif  // NO_FILESYSTEM
 
-static void write_terminating_chunk(struct connection *conn) {
-  mg_write(&conn->mg_conn, "0\r\n\r\n", 5);
-}
-
 static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   struct iobuf *loc = &conn->local_iobuf;
   struct mg_connection *c = &conn->mg_conn;
@@ -2177,12 +2192,8 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
     do { } while (deliver_websocket_frame(conn));
   } else
 #endif
-    if (loc->len >= c->content_len) {
-    conn->endpoint.uh->handler(c);
-    if (conn->flags & CONN_HEADERS_SENT) {
-      write_terminating_chunk(conn);
-    }
-    close_local_endpoint(conn);
+  if (loc->len >= c->content_len) {
+    call_uri_handler(conn);
   }
 }
 
