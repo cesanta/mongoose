@@ -1901,6 +1901,7 @@ static void write_terminating_chunk(struct connection *conn) {
 }
 
 static void call_uri_handler(struct connection *conn) {
+  conn->mg_conn.content = conn->local_iobuf.buf;
   if (conn->endpoint.uh->handler(&conn->mg_conn)) {
     if (conn->flags & CONN_HEADERS_SENT) {
       write_terminating_chunk(conn);
@@ -2186,7 +2187,6 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   struct iobuf *loc = &conn->local_iobuf;
   struct mg_connection *c = &conn->mg_conn;
 
-  c->content = loc->buf;
 #ifndef NO_WEBSOCKET
   if (conn->mg_conn.is_websocket) {
     do { } while (deliver_websocket_frame(conn));
@@ -3539,6 +3539,13 @@ static void log_access(const struct connection *conn, const char *path) {
 }
 #endif
 
+static void gobble_prior_post_data(struct iobuf *io, int len) {
+  if (len > 0 && len <= io->len) {
+    memmove(io->buf, io->buf + len, io->len - len);
+    io->len -= len;
+  }
+}
+
 static void close_local_endpoint(struct connection *conn) {
   // Must be done before free()
   int keep_alive = should_keep_alive(&conn->mg_conn) &&
@@ -3555,6 +3562,10 @@ static void close_local_endpoint(struct connection *conn) {
     log_access(conn, conn->server->config_options[ACCESS_LOG_FILE]);
   }
 #endif
+
+  if (conn->endpoint_type == EP_USER) {
+    gobble_prior_post_data(&conn->local_iobuf, conn->mg_conn.content_len);
+  }
 
   conn->endpoint_type = EP_NONE;
   conn->flags = 0;
