@@ -4,10 +4,8 @@
 
 // This function will be called by mongoose on every new request
 static int index_html(struct mg_connection *conn) {
-  mg_printf_data(conn, "Hello! Requested URI is [%s], query string is [%s]",
-                 conn->uri,
-                 conn->query_string == NULL ? "(none)" : conn->query_string);
-  return 0;
+  mg_printf_data(conn, "Hello! Requested URI is [%s]", conn->uri);
+  return 1;
 }
 
 int main(void) {
