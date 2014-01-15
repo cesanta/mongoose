@@ -3386,17 +3386,11 @@ static void open_local_endpoint(struct connection *conn) {
     send_http_error(conn, 501, NULL);
 #endif
   } else if (match_prefix(cgi_pat, strlen(cgi_pat), path) > 0) {
-    if (strcmp(conn->mg_conn.request_method, "POST") &&
-        strcmp(conn->mg_conn.request_method, "HEAD") &&
-        strcmp(conn->mg_conn.request_method, "GET")) {
-      send_http_error(conn, 501, NULL);
-    } else {
 #if !defined(NO_CGI)
-      open_cgi_endpoint(conn, path);
+    open_cgi_endpoint(conn, path);
 #else
-      send_http_error(conn, 501, NULL);
+    send_http_error(conn, 501, NULL);
 #endif // !NO_CGI
-    }
   } else if (is_not_modified(conn, &st)) {
     send_http_error(conn, 304, NULL);
   } else if ((conn->endpoint.fd = open(path, O_RDONLY | O_BINARY)) != -1) {
