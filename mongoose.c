@@ -3894,7 +3894,7 @@ static int parse_port_string(const char *str, union socket_address *sa) {
     sa->sin.sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
     sa->sin.sin_port = htons((uint16_t) port);
 #if defined(USE_IPV6)
-  } else if (sscanf(str, "[%49[^]]]:%d%n", buf, &port, &len) == 2 &&
+  } else if (sscanf(str, "[%49[^]]]:%u%n", buf, &port, &len) == 2 &&
              inet_pton(AF_INET6, buf, &sa->sin6.sin6_addr)) {
     // IPv6 address, e.g. [3ffe:2a00:100:7031::1]:8080
     sa->sin6.sin6_family = AF_INET6;
