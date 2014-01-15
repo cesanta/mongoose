@@ -853,7 +853,8 @@ static void *pull_from_stdout(void *arg) {
   return NULL;
 }
 
-static void spawn_stdio_thread(int sock, HANDLE hPipe, void *(*func)(void *)) {
+static void spawn_stdio_thread(sock_t sock, HANDLE hPipe,
+                               void *(*func)(void *)) {
   struct threadparam *tp = malloc(sizeof(*tp));
   if (tp != NULL) {
     tp->s = sock;
@@ -3972,7 +3973,7 @@ void mg_set_listening_socket(struct mg_server *server, int sock) {
   if (server->listening_sock != INVALID_SOCKET) {
     closesocket(server->listening_sock);
   }
-  server->listening_sock = sock;
+  server->listening_sock = (sock_t) sock;
 }
 
 int mg_get_listening_socket(struct mg_server *server) {
