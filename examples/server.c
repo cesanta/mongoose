@@ -39,12 +39,36 @@
 
 #include "mongoose.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <direct.h>  // For chdir()
+#include <winsvc.h>
+#include <shlobj.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX MAX_PATH
+#endif
+
+#ifndef S_ISDIR
+#define S_ISDIR(x) ((x) & _S_IFDIR)
+#endif
+
+#define DIRSEP '\\'
+#define snprintf _snprintf
+#define vsnprintf _vsnprintf
+#define sleep(x) Sleep((x) * 1000)
+#define abs_path(rel, abs, abs_size) _fullpath((abs), (rel), (abs_size))
+#define SIGCHLD 0
+typedef struct _stat file_stat_t;
+#define stat(x, y) _stat((x), (y))
+#else
 typedef struct stat file_stat_t;
 #include <sys/wait.h>
 #include <unistd.h>
 #define DIRSEP '/'
 #define __cdecl
 #define abs_path(rel, abs, abs_size) realpath((rel), (abs))
+#endif // _WIN32
 
 #define MAX_OPTIONS 100
 #define MAX_CONF_FILE_LINE_SIZE (8 * 1024)
@@ -62,18 +86,16 @@ static void __cdecl signal_handler(int sig_num) {
   // Reinstantiate signal handler
   signal(sig_num, signal_handler);
 
+#ifndef _WIN32
   // Do not do the trick with ignoring SIGCHLD, cause not all OSes (e.g. QNX)
   // reap zombies if SIGCHLD is ignored. On QNX, for example, waitpid()
   // fails if SIGCHLD is ignored, making system() non-functional.
   if (sig_num == SIGCHLD) {
     do {} while (waitpid(-1, &sig_num, WNOHANG) > 0);
   } else
+#endif
   { exit_flag = sig_num; }
 }
-
-#ifdef NO_GUI
-#undef _WIN32
-#endif
 
 static void die(const char *fmt, ...) {
   va_list ap;
@@ -209,7 +231,13 @@ static void init_server_name(void) {
 }
 
 static int is_path_absolute(const char *path) {
+#ifdef _WIN32
+  return path != NULL &&
+    ((path[0] == '\\' && path[1] == '\\') ||  // UNC path, e.g. \\server\dir
+     (isalpha(path[0]) && path[1] == ':' && path[2] == '\\'));  // E.g. X:\dir
+#else
   return path != NULL && path[0] == '/';
+#endif
 }
 
 static char *get_option(char **options, const char *option_name) {
@@ -398,7 +426,9 @@ static void start_mongoose(int argc, char *argv[]) {
   // Setup signal handler: quit on Ctrl-C
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
+#ifndef _WIN32
   signal(SIGCHLD, signal_handler);
+#endif
 }
 
 int main(int argc, char *argv[]) {
