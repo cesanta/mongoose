@@ -1,5 +1,5 @@
 // Copyright (c) 2004-2013 Sergey Lyubka <valenok@gmail.com>
-// Copyright (c) 2013 Cesanta Software Limited
+// Copyright (c) 2013-2014 Cesanta Software Limited
 // All rights reserved
 //
 // This library is dual-licensed: you can redistribute it and/or modify
@@ -64,6 +64,7 @@ typedef struct _stati64 file_stat_t;
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #define INT64_FMT  "I64d"
+#define EINPROGRESS WSAEINPROGRESS
 #define mutex_init(x) InitializeCriticalSection(x)
 #define mutex_destroy(x) DeleteCriticalSection(x)
 #define mutex_lock(x) EnterCriticalSection(x)
@@ -182,6 +183,10 @@ struct ll { struct ll *prev, *next; };
 #define USE_POST_SIZE_LIMIT 0
 #endif
 
+#ifndef USE_IDLE_TIMEOUT_SECONDS
+#define USE_IDLE_TIMEOUT_SECONDS 30
+#endif
+
 #ifdef ENABLE_DBG
 #define DBG(x) do { printf("%-20s ", __func__); printf x; putchar('\n'); \
   fflush(stdout); } while(0)
@@ -235,7 +240,6 @@ enum {
   GLOBAL_AUTH_FILE,
 #endif
   HIDE_FILES_PATTERN,
-  IDLE_TIMEOUT_MS,
 #ifndef NO_FILESYSTEM
   INDEX_FILES,
 #endif
@@ -265,7 +269,6 @@ static const char *static_config_options[] = {
   "global_auth_file", NULL,
 #endif
   "hide_files_patterns", NULL,
-  "idle_timeout_ms", "30000",
 #ifndef NO_FILESYSTEM
   "index_files","index.html,index.htm,index.cgi,index.php,index.lp",
 #endif
@@ -307,10 +310,15 @@ union endpoint {
   struct uri_handler *uh;   // URI handler user function
 };
 
-enum endpoint_type { EP_NONE, EP_FILE, EP_CGI, EP_USER, EP_PUT };
+enum endpoint_type { EP_NONE, EP_FILE, EP_CGI, EP_USER, EP_PUT, EP_CLIENT };
 enum connection_flags {
-  CONN_CLOSE = 1, CONN_SPOOL_DONE = 2, CONN_SSL_HANDS_SHAKEN = 4,
-  CONN_HEADERS_SENT = 8, CONN_BUFFER = 16
+  CONN_CLOSE = 1,           // Connection must be closed at the end of the poll
+  CONN_SPOOL_DONE = 2,        // All data has been buffered for sending
+  CONN_SSL_HANDS_SHAKEN = 4,  // SSL handshake has completed. Only for SSL
+  CONN_HEADERS_SENT = 8,      // User callback has sent HTTP headers
+  CONN_BUFFER = 16,           // CGI only. Holds data send until CGI prints
+                              // all HTTP headers
+  CONN_CONNECTED = 32         // HTTP client has connected
 };
 
 struct connection {
@@ -331,6 +339,7 @@ struct connection {
   int request_len;  // Request length, including last \r\n after last header
   int flags;        // CONN_* flags: CONN_CLOSE, CONN_SPOOL_DONE, etc
   void *ssl;        // SSL descriptor
+  mg_handler_t handler;  // Callback for HTTP client
 };
 
 static void close_local_endpoint(struct connection *conn);
@@ -3495,6 +3504,19 @@ static void read_from_client(struct connection *conn) {
   }
 }
 
+static void read_from_server(struct connection *conn) {
+  sock_t ok, sock = conn->client_sock;
+  socklen_t len = sizeof(ok);
+
+  conn->mg_conn.wsbits = 1;
+  if (!(conn->flags & CONN_CONNECTED) &&
+      getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *) &ok, &len) < 0) {
+    conn->mg_conn.wsbits = 0;
+  }
+  conn->handler(&conn->mg_conn);
+  conn->flags |= CONN_CLOSE | CONN_CONNECTED;
+}
+
 #ifndef NO_LOGGING
 static void log_header(const struct mg_connection *conn, const char *header,
                        FILE *fp) {
@@ -3547,6 +3569,7 @@ static void close_local_endpoint(struct connection *conn) {
     (conn->endpoint_type == EP_FILE || conn->endpoint_type == EP_USER);
 
   switch (conn->endpoint_type) {
+    case EP_PUT: close(conn->endpoint.fd); break;
     case EP_FILE: close(conn->endpoint.fd); break;
     case EP_CGI: closesocket(conn->endpoint.cgi_sock); break;
     default: break;
@@ -3591,6 +3614,40 @@ static void transfer_file_data(struct connection *conn) {
   }
 }
 
+struct mg_connection *mg_connect(struct mg_server *server, const char *host,
+                                 int port, mg_handler_t handler) {
+  sock_t sock = INVALID_SOCKET;
+  struct sockaddr_in sin;
+  struct hostent *he = NULL;
+  struct connection *conn = NULL;
+  int connected;
+
+  if (host == NULL || (he = gethostbyname(host)) == NULL ||
+      (sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) return NULL;
+
+  sin.sin_family = AF_INET;
+  sin.sin_port = htons((uint16_t) port);
+  sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
+  set_non_blocking_mode(sock);
+
+  connected = connect(sock, (struct sockaddr *) &sin, sizeof(sin));
+  if (connected != 0 && errno != EINPROGRESS) {
+    return NULL;
+  } else if ((conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
+    closesocket(sock);
+    return NULL;
+  }
+
+  conn->client_sock = sock;
+  conn->endpoint_type = EP_CLIENT;
+  conn->handler = handler;
+  conn->mg_conn.server_param = server->server_data;
+  conn->flags = connected == 0 ? CONN_CONNECTED : 0;
+  LINKED_LIST_ADD_TO_FRONT(&server->active_connections, &conn->link);
+
+  return &conn->mg_conn;
+}
+
 static void execute_iteration(struct mg_server *server) {
   struct ll *lp, *tmp;
   struct connection *conn;
@@ -3617,7 +3674,7 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
   fd_set read_set, write_set;
   sock_t max_fd = -1;
   time_t current_time = time(NULL), expire_time = current_time -
-    atoi(server->config_options[IDLE_TIMEOUT_MS]) / 1000;
+    USE_IDLE_TIMEOUT_SECONDS;
 
   if (server->listening_sock == INVALID_SOCKET) return 0;
 
@@ -3661,7 +3718,11 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
       conn = LINKED_LIST_ENTRY(lp, struct connection, link);
       if (FD_ISSET(conn->client_sock, &read_set)) {
         conn->last_activity_time = current_time;
-        read_from_client(conn);
+        if (conn->endpoint_type == EP_CLIENT) {
+          read_from_server(conn);
+        } else {
+          read_from_client(conn);
+        }
       }
 #ifndef NO_CGI
       if (conn->endpoint_type == EP_CGI &&
