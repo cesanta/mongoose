@@ -3504,6 +3504,45 @@ static void read_from_client(struct connection *conn) {
   }
 }
 
+int mg_connect(struct mg_server *server, const char *host,
+                                 int port, mg_handler_t handler, void *param) {
+  sock_t sock = INVALID_SOCKET;
+  struct sockaddr_in sin;
+  struct hostent *he = NULL;
+  struct connection *conn = NULL;
+  int connect_ret_val;
+
+  if (host == NULL || (he = gethostbyname(host)) == NULL ||
+      (sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) return 0;
+
+  sin.sin_family = AF_INET;
+  sin.sin_port = htons((uint16_t) port);
+  sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
+  set_non_blocking_mode(sock);
+
+  connect_ret_val = connect(sock, (struct sockaddr *) &sin, sizeof(sin));
+  if (connect_ret_val != 0 && errno != EINPROGRESS) {
+    return 0;
+  } else if ((conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
+    closesocket(sock);
+    return 0;
+  }
+
+  conn->client_sock = sock;
+  conn->endpoint_type = EP_CLIENT;
+  conn->handler = handler;
+  conn->mg_conn.server_param = server->server_data;
+  conn->mg_conn.connection_param = param;
+  LINKED_LIST_ADD_TO_FRONT(&server->active_connections, &conn->link);
+
+  if (connect_ret_val == 0) {
+    conn->flags = CONN_CONNECTED;
+    handler(&conn->mg_conn);
+  }
+
+  return 1;
+}
+
 static void read_from_server(struct connection *conn) {
   sock_t ok, sock = conn->client_sock;
   socklen_t len = sizeof(ok);
@@ -3612,40 +3651,6 @@ static void transfer_file_data(struct connection *conn) {
       close_local_endpoint(conn);
     }
   }
-}
-
-struct mg_connection *mg_connect(struct mg_server *server, const char *host,
-                                 int port, mg_handler_t handler) {
-  sock_t sock = INVALID_SOCKET;
-  struct sockaddr_in sin;
-  struct hostent *he = NULL;
-  struct connection *conn = NULL;
-  int connected;
-
-  if (host == NULL || (he = gethostbyname(host)) == NULL ||
-      (sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) return NULL;
-
-  sin.sin_family = AF_INET;
-  sin.sin_port = htons((uint16_t) port);
-  sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
-  set_non_blocking_mode(sock);
-
-  connected = connect(sock, (struct sockaddr *) &sin, sizeof(sin));
-  if (connected != 0 && errno != EINPROGRESS) {
-    return NULL;
-  } else if ((conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
-    closesocket(sock);
-    return NULL;
-  }
-
-  conn->client_sock = sock;
-  conn->endpoint_type = EP_CLIENT;
-  conn->handler = handler;
-  conn->mg_conn.server_param = server->server_data;
-  conn->flags = connected == 0 ? CONN_CONNECTED : 0;
-  LINKED_LIST_ADD_TO_FRONT(&server->active_connections, &conn->link);
-
-  return &conn->mg_conn;
 }
 
 static void execute_iteration(struct mg_server *server) {
