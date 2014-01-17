@@ -1940,7 +1940,7 @@ static void write_to_client(struct connection *conn) {
     conn->num_bytes_sent += n;
   }
 
-  if (conn->endpoint_type == EP_USER) {
+  if (conn->endpoint_type == EP_USER && !conn->mg_conn.is_websocket) {
     conn->mg_conn.wsbits = conn->flags & CONN_CLOSE ? 1 : 0;
     call_uri_handler(conn);
   }

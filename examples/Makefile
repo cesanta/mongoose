@@ -18,9 +18,9 @@ else
   endif
 endif
 
-all:
+all: websocket_html.c
 	$(CC) hello.c ../mongoose.c  -o hello $(CFLAGS)
-	$(CC) qcomm.c ../mongoose.c  -o qcomm $(CFLAGS)
+	$(CC) websocket.c websocket_html.c ../mongoose.c  -o websocket $(CFLAGS)
 	$(CC) post.c ../mongoose.c -o post $(CFLAGS)
 	$(CC) multi_threaded.c ../mongoose.c -o multi_threaded $(CFLAGS)
 	$(CC) upload.c ../mongoose.c -o upload $(CFLAGS)
@@ -31,6 +31,8 @@ all:
 #	$(CC) chat.c ../mongoose.c -o chat $(CFLAGS)
 #	$(CC) lua_dll.c ../build/lua_5.2.1.c -o $@.so $(CFLAGS) $(DLL_FLAGS)
 
+websocket_html.c: websocket.html
+	perl mkdata.pl $< > $@
 
 MSVC    = ../../vc6
 CL      = $(MSVC)/bin/cl
@@ -38,8 +40,9 @@ CLFLAGS = /MD /TC /nologo $(DBG) /W3 /DNO_SSL \
         /I$(MSVC)/include /I.. /Dsnprintf=_snprintf
 LFLAGS  = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
 
-windows:
+windows: websocket_html.c
 	$(CL) hello.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
+	$(CL) websocket.c websocket_html.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 	$(CL) post.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 	$(CL) multi_threaded.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 	$(CL) upload.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
