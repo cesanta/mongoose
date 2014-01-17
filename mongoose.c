@@ -318,7 +318,8 @@ enum connection_flags {
   CONN_HEADERS_SENT = 8,      // User callback has sent HTTP headers
   CONN_BUFFER = 16,           // CGI only. Holds data send until CGI prints
                               // all HTTP headers
-  CONN_CONNECTED = 32         // HTTP client has connected
+  CONN_CONNECTED = 32,        // HTTP client has connected
+  CONN_LONG_RUNNING = 64      // Long-running URI handlers
 };
 
 struct connection {
@@ -1917,6 +1918,8 @@ static void call_uri_handler(struct connection *conn) {
       write_terminating_chunk(conn);
     }
     close_local_endpoint(conn);
+  } else {
+    conn->flags |= CONN_LONG_RUNNING;
   }
 }
 
@@ -1938,11 +1941,6 @@ static void write_to_client(struct connection *conn) {
     memmove(io->buf, io->buf + n, io->len - n);
     io->len -= n;
     conn->num_bytes_sent += n;
-  }
-
-  if (conn->endpoint_type == EP_USER && !conn->mg_conn.is_websocket) {
-    conn->mg_conn.wsbits = conn->flags & CONN_CLOSE ? 1 : 0;
-    call_uri_handler(conn);
   }
 
   if (io->len == 0 && conn->flags & CONN_SPOOL_DONE) {
@@ -3740,6 +3738,11 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
           !(conn->flags & CONN_BUFFER)) {
         conn->last_activity_time = current_time;
         write_to_client(conn);
+      }
+
+      if (conn->flags & CONN_LONG_RUNNING) {
+        conn->mg_conn.wsbits = conn->flags & CONN_CLOSE ? 1 : 0;
+        call_uri_handler(conn);
       }
     }
   }
