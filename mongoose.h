@@ -1,5 +1,5 @@
 // Copyright (c) 2004-2013 Sergey Lyubka <valenok@gmail.com>
-// Copyright (c) 2013 Cesanta Software Limited
+// Copyright (c) 2013-2014 Cesanta Software Limited
 // All rights reserved
 //
 // This library is dual-licensed: you can redistribute it and/or modify
@@ -69,9 +69,7 @@ const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
 void mg_set_listening_socket(struct mg_server *, int sock);
 int mg_get_listening_socket(struct mg_server *);
-void mg_iterate_over_connections(struct mg_server *,
-                                 void (*func)(struct mg_connection *, void *),
-                                 void *param);
+void mg_iterate_over_connections(struct mg_server *, mg_handler_t, void *);
 
 // Connection management functions
 void mg_send_status(struct mg_connection *, int status_code);

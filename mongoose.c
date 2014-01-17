@@ -3651,12 +3651,13 @@ struct mg_connection *mg_connect(struct mg_server *server, const char *host,
 static void execute_iteration(struct mg_server *server) {
   struct ll *lp, *tmp;
   struct connection *conn;
-  union { void (*f)(struct mg_connection *, void *); void *p; } msg[2];
+  union { mg_handler_t f; void *p; } msg[2];
 
   recv(server->ctl[1], (void *) msg, sizeof(msg), 0);
   LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
     conn = LINKED_LIST_ENTRY(lp, struct connection, link);
-    msg[0].f(&conn->mg_conn, msg[1].p);
+    conn->mg_conn.connection_param = msg[1].p;
+    msg[0].f(&conn->mg_conn);
   }
 }
 
@@ -3781,12 +3782,11 @@ void mg_destroy_server(struct mg_server **server) {
 }
 
 // Apply function to all active connections.
-void mg_iterate_over_connections(struct mg_server *server,
-                                 void (*func)(struct mg_connection *, void *),
+void mg_iterate_over_connections(struct mg_server *server, mg_handler_t handler,
                                  void *param) {
   // Send closure (function + parameter) to the IO thread to execute
-  union { void (*f)(struct mg_connection *, void *); void *p; } msg[2];
-  msg[0].f = func;
+  union { mg_handler_t f; void *p; } msg[2];
+  msg[0].f = handler;
   msg[1].p = param;
   send(server->ctl[0], (void *) msg, sizeof(msg), 0);
 }
