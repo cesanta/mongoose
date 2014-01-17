@@ -1923,7 +1923,7 @@ static void call_uri_handler(struct connection *conn) {
   }
 }
 
-static void write_to_client(struct connection *conn) {
+static void write_to_socket(struct connection *conn) {
   struct iobuf *io = &conn->remote_iobuf;
   int n = conn->ssl == NULL ? send(conn->client_sock, io->buf, io->len, 0) :
 #ifdef USE_SSL
@@ -3475,30 +3475,43 @@ static void process_request(struct connection *conn) {
 #endif
 }
 
-static void read_from_client(struct connection *conn) {
+static void read_from_socket(struct connection *conn) {
   char buf[IOBUF_SIZE];
-  int n = 0;
-  if (conn->ssl != NULL) {
-#ifdef USE_SSL
-    if (conn->flags & CONN_SSL_HANDS_SHAKEN) {
-      n = SSL_read(conn->ssl, buf, sizeof(buf));
-    } else {
-      if (SSL_accept(conn->ssl) == 1) {
-        conn->flags |= CONN_SSL_HANDS_SHAKEN;
-      }
-      return;
-    }
-#endif
-  } else {
-    n = recv(conn->client_sock, buf, sizeof(buf), 0);
-  }
+  int ok, n = 0;
+  socklen_t len = sizeof(ok);
 
-  DBG(("%p %d", conn, n));
-  if (is_error(n)) {
-    conn->flags |= CONN_CLOSE;
-  } else if (n > 0) {
-    spool(&conn->local_iobuf, buf, n);
-    process_request(conn);
+  if (conn->endpoint_type == EP_CLIENT) {
+    conn->mg_conn.wsbits = 1;
+    if (!(conn->flags & CONN_CONNECTED) &&
+        getsockopt(conn->client_sock, SOL_SOCKET, SO_ERROR,
+                   (char *) &ok, &len) < 0) {
+      conn->mg_conn.wsbits = 0;
+    }
+    conn->handler(&conn->mg_conn);
+    conn->flags |= CONN_CLOSE | CONN_CONNECTED;
+  } else {
+    if (conn->ssl != NULL) {
+#ifdef USE_SSL
+      if (conn->flags & CONN_SSL_HANDS_SHAKEN) {
+        n = SSL_read(conn->ssl, buf, sizeof(buf));
+      } else {
+        if (SSL_accept(conn->ssl) == 1) {
+          conn->flags |= CONN_SSL_HANDS_SHAKEN;
+        }
+        return;
+      }
+#endif
+    } else {
+      n = recv(conn->client_sock, buf, sizeof(buf), 0);
+    }
+
+    DBG(("%p %d", conn, n));
+    if (is_error(n)) {
+      conn->flags |= CONN_CLOSE;
+    } else if (n > 0) {
+      spool(&conn->local_iobuf, buf, n);
+      process_request(conn);
+    }
   }
 }
 
@@ -3539,19 +3552,6 @@ int mg_connect(struct mg_server *server, const char *host,
   }
 
   return 1;
-}
-
-static void read_from_server(struct connection *conn) {
-  sock_t ok, sock = conn->client_sock;
-  socklen_t len = sizeof(ok);
-
-  conn->mg_conn.wsbits = 1;
-  if (!(conn->flags & CONN_CONNECTED) &&
-      getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *) &ok, &len) < 0) {
-    conn->mg_conn.wsbits = 0;
-  }
-  conn->handler(&conn->mg_conn);
-  conn->flags |= CONN_CLOSE | CONN_CONNECTED;
 }
 
 #ifndef NO_LOGGING
@@ -3722,11 +3722,7 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
       conn = LINKED_LIST_ENTRY(lp, struct connection, link);
       if (FD_ISSET(conn->client_sock, &read_set)) {
         conn->last_activity_time = current_time;
-        if (conn->endpoint_type == EP_CLIENT) {
-          read_from_server(conn);
-        } else {
-          read_from_client(conn);
-        }
+        read_from_socket(conn);
       }
 #ifndef NO_CGI
       if (conn->endpoint_type == EP_CGI &&
@@ -3737,7 +3733,7 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
       if (FD_ISSET(conn->client_sock, &write_set) &&
           !(conn->flags & CONN_BUFFER)) {
         conn->last_activity_time = current_time;
-        write_to_client(conn);
+        write_to_socket(conn);
       }
     }
   }
