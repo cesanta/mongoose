@@ -12,13 +12,14 @@ static int iterate_callback(struct mg_connection *c) {
   return 1;
 }
 
-// This handler is called for each incoming websocket frame, one or more
-// times for connection lifetime.
 static int index_html(struct mg_connection *conn) {
   size_t index_size;
   const char *index_html = find_embedded_file("websocket.html", &index_size);
 
   if (conn->is_websocket) {
+    // This handler is called for each incoming websocket frame, one or more
+    // times for connection lifetime.
+    // Echo websocket data back to the client.
     mg_websocket_write(conn, 1, conn->content, conn->content_len);
     return conn->content_len == 4 && !memcmp(conn->content, "exit", 4);
   } else {
@@ -38,7 +39,7 @@ int main(void) {
   printf("Started on port %s\n", mg_get_option(server, "listening_port"));
   for (;;) {
     current_timer = mg_poll_server(server, 100);
-    if (current_timer - last_timer > 4) {
+    if (current_timer - last_timer > 1) {
       last_timer = current_timer;
       mg_iterate_over_connections(server, iterate_callback, &current_timer);
     }
