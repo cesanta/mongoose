@@ -3739,11 +3739,6 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
         conn->last_activity_time = current_time;
         write_to_client(conn);
       }
-
-      if (conn->flags & CONN_LONG_RUNNING) {
-        conn->mg_conn.wsbits = conn->flags & CONN_CLOSE ? 1 : 0;
-        call_uri_handler(conn);
-      }
     }
   }
 
@@ -3752,6 +3747,10 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
     conn = LINKED_LIST_ENTRY(lp, struct connection, link);
     if (conn->mg_conn.is_websocket) {
       ping_idle_websocket_connection(conn, current_time);
+    }
+    if (conn->flags & CONN_LONG_RUNNING) {
+      conn->mg_conn.wsbits = conn->flags & CONN_CLOSE ? 1 : 0;
+      call_uri_handler(conn);
     }
     if (conn->flags & CONN_CLOSE || conn->last_activity_time < expire_time) {
       close_conn(conn);
