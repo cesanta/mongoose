@@ -80,9 +80,9 @@ if (CPP_BINDING)
     include_directories ("${MONGOOSE_CPP}")
 endif (CPP_BINDING)
 
-if (WEBSOCKET)
-    add_definitions("-DUSE_WEBSOCKET")
-endif (WEBSOCKET)
+if (NOT WEBSOCKET)
+    add_definitions("-DNO_WEBSOCKET")
+endif (NOT WEBSOCKET)
 
 # Adding dl
 if (NOT WIN32)
@@ -119,13 +119,10 @@ if (EXAMPLES)
     add_executable (post examples/post.c)
     target_link_libraries (post _mongoose)
 
-	if (NOT WIN32)
-	    add_executable (hello examples/hello.c)
-		target_link_libraries (hello _mongoose)	
-	endif (NOT WIN32)
-    
-    add_executable (websocket examples/websocket.c)
-    target_link_libraries (websocket _mongoose)
+    if (NOT WIN32)
+        add_executable (hello examples/hello.c)
+            target_link_libraries (hello _mongoose)	
+    endif (NOT WIN32)
 
     if (CPP_BINDING)
         add_executable (helloworld examples/helloworld.cpp)

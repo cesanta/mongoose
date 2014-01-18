@@ -33,7 +33,7 @@ static int event_handler(struct mg_connection *connection)
     Server *server = (Server *)connection->server_param;
 
     if (server != NULL) {
-#ifdef USE_WEBSOCKET
+#ifndef NO_WEBSOCKET
         if (connection->is_websocket) {
             server->_webSocketReady(connection);
             cout << "WS ready!!" << endl;
@@ -108,7 +108,7 @@ namespace Mongoose
                 }
             }
 
-#ifdef USE_WEBSOCKET
+#ifndef NO_WEBSOCKET
             mg_add_uri_handler(server, "/websocket", event_handler);
 #endif
 
