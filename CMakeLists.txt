@@ -121,10 +121,7 @@ if (EXAMPLES)
 
 	if (NOT WIN32)
 	    add_executable (hello examples/hello.c)
-		target_link_libraries (hello _mongoose)
-	
-		add_executable (chat examples/chat.c)
-		target_link_libraries (chat _mongoose)
+		target_link_libraries (hello _mongoose)	
 	endif (NOT WIN32)
     
     add_executable (websocket examples/websocket.c)

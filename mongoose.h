@@ -1,5 +1,5 @@
 // Copyright (c) 2004-2013 Sergey Lyubka <valenok@gmail.com>
-// Copyright (c) 2013 Cesanta Software Limited
+// Copyright (c) 2013-2014 Cesanta Software Limited
 // All rights reserved
 //
 // This library is dual-licensed: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 #ifndef MONGOOSE_HEADER_INCLUDED
 #define  MONGOOSE_HEADER_INCLUDED
 
-#define MONGOOSE_VERSION "5.0"
+#define MONGOOSE_VERSION "5.2"
 
 #include <stdio.h>      // required for FILE
 #include <stddef.h>     // required for size_t
@@ -62,29 +62,44 @@ typedef int (*mg_handler_t)(struct mg_connection *);
 struct mg_server *mg_create_server(void *server_param);
 void mg_destroy_server(struct mg_server **);
 const char *mg_set_option(struct mg_server *, const char *opt, const char *val);
-void mg_poll_server(struct mg_server *, int milliseconds);
+unsigned int mg_poll_server(struct mg_server *, int milliseconds);
 void mg_add_uri_handler(struct mg_server *, const char *uri, mg_handler_t);
 void mg_set_http_error_handler(struct mg_server *, mg_handler_t);
 const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
-int mg_iterate_over_connections(struct mg_server *,
-                                void (*func)(struct mg_connection *, void *),
-                                void *param);
+void mg_set_listening_socket(struct mg_server *, int sock);
+int mg_get_listening_socket(struct mg_server *);
+void mg_iterate_over_connections(struct mg_server *, mg_handler_t, void *);
 
 // Connection management functions
-int mg_write(struct mg_connection *, const void *buf, int len);
+void mg_send_status(struct mg_connection *, int status_code);
+void mg_send_header(struct mg_connection *, const char *name, const char *val);
+void mg_send_data(struct mg_connection *, const void *data, int data_len);
+void mg_printf_data(struct mg_connection *, const char *format, ...);
+
 int mg_websocket_write(struct mg_connection *, int opcode,
                        const char *data, size_t data_len);
+
+// Deprecated in favor of mg_send_* interface
+int mg_write(struct mg_connection *, const void *buf, int len);
+int mg_printf(struct mg_connection *conn, const char *fmt, ...);
+
 
 const char *mg_get_header(const struct mg_connection *, const char *name);
 const char *mg_get_mime_type(const char *file_name);
 int mg_get_var(const struct mg_connection *conn, const char *var_name,
                char *buf, size_t buf_len);
 int mg_parse_header(const char *hdr, const char *var_name, char *buf, size_t);
+int mg_parse_multipart(const char *buf, int buf_len,
+                       char *var_name, int var_name_len,
+                       char *file_name, int file_name_len,
+                       const char **data, int *data_len);
 
 // Utility functions
 void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
+int mg_authorize_digest(struct mg_connection *c, FILE *fp);
+void mg_send_digest_auth_request(struct mg_connection *conn);
 
 #ifdef __cplusplus
 }

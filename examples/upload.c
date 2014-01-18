@@ -5,48 +5,50 @@
 #include <string.h>
 #include "mongoose.h"
 
-static int event_handler(struct mg_event *event) {
+static int index_html(struct mg_connection *conn) {
+  const char *data;
+  int data_len;
+  char var_name[100], file_name[100];
 
-  if (event->type == MG_REQUEST_BEGIN) {
-    if (!strcmp(event->request_info->uri, "/handle_post_request")) {
-      char path[200];
-      FILE *fp = mg_upload(event->conn, "/tmp", path, sizeof(path));
-      if (fp != NULL) {
-        fclose(fp);
-        mg_printf(event->conn, "HTTP/1.0 200 OK\r\n\r\nSaved: [%s]", path);
-      } else {
-        mg_printf(event->conn, "%s", "HTTP/1.0 200 OK\r\n\r\nNo files sent");
-      }
-    } else {
-      // Show HTML form. Make sure it has enctype="multipart/form-data" attr.
-      static const char *html_form =
-        "<html><body>Upload example."
-        "<form method=\"POST\" action=\"/handle_post_request\" "
-        "  enctype=\"multipart/form-data\">"
-        "<input type=\"file\" name=\"file\" /> <br/>"
-        "<input type=\"submit\" value=\"Upload\" />"
-        "</form></body></html>";
+  mg_printf_data(conn, "%s",
+                 "<html><body>Upload example."
+                 "<form method=\"POST\" action=\"/handle_post_request\" "
+                 "  enctype=\"multipart/form-data\">"
+                 "<input type=\"file\" name=\"file\" /> <br/>"
+                 "<input type=\"submit\" value=\"Upload\" />"
+                 "</form>");
 
-      mg_printf(event->conn, "HTTP/1.0 200 OK\r\n"
-          "Content-Length: %d\r\n"
-          "Content-Type: text/html\r\n\r\n%s",
-          (int) strlen(html_form), html_form);
-    }
+  if (mg_parse_multipart(conn->content, conn->content_len,
+                         var_name, sizeof(var_name),
+                         file_name, sizeof(file_name),
+                         &data, &data_len) > 0) {
 
-    // Mark request as processed
-    return 1;
+    mg_printf_data(conn, "%s", "Uploaded file:<pre>");
+    mg_send_data(conn, data, data_len);
+    mg_printf_data(conn, "%s", "/pre>");
   }
 
-  // All other events left unprocessed
+  mg_printf_data(conn, "%s", "</body></html>");
+
   return 1;
 }
 
 int main(void) {
-  struct mg_context *ctx;
-  const char *options[] = {"listening_ports", "8080", NULL};
-  ctx = mg_start(options, event_handler, NULL);
-  getchar();  // Wait until user hits "enter"
-  mg_stop(ctx);
+  struct mg_server *server;
+
+  // Create and configure the server
+  server = mg_create_server(NULL);
+  mg_set_option(server, "listening_port", "8080");
+  mg_add_uri_handler(server, "/", index_html);
+
+  // Serve request. Hit Ctrl-C to terminate the program
+  printf("Starting on port %s\n", mg_get_option(server, "listening_port"));
+  for (;;) {
+    mg_poll_server(server, 1000);
+  }
+
+  // Cleanup, and free server instance
+  mg_destroy_server(&server);
 
   return 0;
 }

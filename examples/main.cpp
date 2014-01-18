@@ -68,26 +68,16 @@ class MyController : public WebController
 
         void upload(Request &request, StreamResponse &response)
         {
-            // Handling uploads to tmp/ directory
-            request.upload("tmp/");
+            request.handleUploads();
 
             // Iterate through all the uploaded files
             vector<UploadFile>::iterator it = request.uploadFiles.begin();
             for (; it != request.uploadFiles.end(); it++) {
                 UploadFile file = *it;
+                file.saveTo("tmp/");
                 response << "Uploaded file: " << file.getName() << endl;
             }
         }
-
-#ifdef ENABLE_REGEX_URL
-        void matcher(Request &request, StreamResponse &response)
-        {
-            response << "Matches:<br/>";
-            smatch matches = request.getMatches();
-            for (unsigned i=0; i<matches.size(); ++i)
-                response << i << " : " << matches[i] << "<br/>";
-        }
-#endif
 
         void setup()
         {
@@ -111,12 +101,6 @@ class MyController : public WebController
             // File upload demo
             addRoute("GET", "/upload", MyController, uploadForm);
             addRoute("POST", "/upload", MyController, upload);
-
-#ifdef ENABLE_REGEX_URL
-            // Url regex matches. For example: /matcher/MyString and /matcher/MyOtherString/1234
-            addRoute("GET", "/matcher/([a-zA-Z]+)/?", MyController, matcher);
-            addRoute("GET", "/matcher/([a-zA-Z]+)/([0-9]+)/?", MyController, matcher);
-#endif
         }
 };
 
@@ -132,15 +116,15 @@ void handle_signal(int sig)
 
 int main()
 {
-	int t;
+    int t;
 #ifdef _MSC_VER
     time_t ltime;
-	time(&ltime);
-	t = ltime;
+    time(&ltime);
+    t = ltime;
 #else
-	t = time(NULL);
+    t = time(NULL);
 #endif
-	srand(t);
+    srand(t);
 
     signal(SIGINT, handle_signal);
 
@@ -155,11 +139,10 @@ int main()
 
     while (running) {
 #ifdef WIN32
-		Sleep(10000);
+        Sleep(1000);
 #else
-        sleep(10);
+        sleep(1);
 #endif
-        server.printStats();
     }
 
     server.stop();

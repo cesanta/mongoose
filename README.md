@@ -66,8 +66,8 @@ int main()
 You can build examples using CMake:
 
 ```
-mkdir builddir
-cd builddir
+mkdir build
+cd build
 cmake -DEXAMPLES=ON ..
 make
 ```

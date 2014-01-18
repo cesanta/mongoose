@@ -10,49 +10,41 @@ static const char *html_form =
   "<input type=\"submit\" />"
   "</form></body></html>";
 
-static int event_handler(struct mg_event *event) {
-  char post_data[1024], input1[sizeof(post_data)], input2[sizeof(post_data)];
-  int post_data_len;
+static int handler(struct mg_connection *conn) {
+  char var1[500], var2[500];
 
-  if (event->type == MG_REQUEST_BEGIN) {
-    if (!strcmp(event->request_info->uri, "/handle_post_request")) {
-      // User has submitted a form, show submitted data and a variable value
-      post_data_len = mg_read(event->conn, post_data, sizeof(post_data));
+  if (strcmp(conn->uri, "/handle_post_request") == 0) {
+    // User has submitted a form, show submitted data and a variable value
+    // Parse form data. var1 and var2 are guaranteed to be NUL-terminated
+    mg_get_var(conn, "input_1", var1, sizeof(var1));
+    mg_get_var(conn, "input_2", var2, sizeof(var2));
 
-      // Parse form data. input1 and input2 are guaranteed to be NUL-terminated
-      mg_get_var(post_data, post_data_len, "input_1", input1, sizeof(input1));
-      mg_get_var(post_data, post_data_len, "input_2", input2, sizeof(input2));
-
-      // Send reply to the client, showing submitted form values.
-      mg_printf(event->conn, "HTTP/1.0 200 OK\r\n"
-                "Content-Type: text/plain\r\n\r\n"
-                "Submitted data: [%.*s]\n"
-                "Submitted data length: %d bytes\n"
-                "input_1: [%s]\n"
-                "input_2: [%s]\n",
-                post_data_len, post_data, post_data_len, input1, input2);
-    } else {
-      // Show HTML form.
-      mg_printf(event->conn, "HTTP/1.0 200 OK\r\n"
-                "Content-Length: %d\r\n"
-                "Content-Type: text/html\r\n\r\n%s",
-                (int) strlen(html_form), html_form);
-    }
-
-    return 1;  // Mark event as processed
+    // Send reply to the client, showing submitted form values.
+    // POST data is in conn->content, data length is in conn->content_len
+    mg_send_header(conn, "Content-Type", "text/plain");
+    mg_printf_data(conn,
+                   "Submitted data: [%.*s]\n"
+                   "Submitted data length: %d bytes\n"
+                   "input_1: [%s]\n"
+                   "input_2: [%s]\n",
+                   conn->content_len, conn->content,
+                   conn->content_len, var1, var2);
+  } else {
+    // Show HTML form.
+    mg_send_data(conn, html_form, strlen(html_form));
   }
 
-  // All other events are left not processed
-  return 0;
+  return 1;
 }
 
 int main(void) {
-  struct mg_context *ctx;
-  const char *options[] = {"listening_ports", "8080", NULL};
-
-  ctx = mg_start(options, &event_handler, NULL);
-  getchar();  // Wait until user hits "enter"
-  mg_stop(ctx);
-
+  struct mg_server *server = mg_create_server(NULL);
+  mg_set_option(server, "listening_port", "8080");
+  mg_add_uri_handler(server, "/", handler);
+  printf("Starting on port %s\n", mg_get_option(server, "listening_port"));
+  for (;;) {
+    mg_poll_server(server, 1000);
+  }
+  mg_destroy_server(&server);
   return 0;
 }

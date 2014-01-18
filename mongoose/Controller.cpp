@@ -43,20 +43,11 @@ namespace Mongoose
     {
         Response *response = NULL;
 
-#ifdef ENABLE_REGEX_URL
-        map<string, RequestHandlerBase *>::iterator it;
-        for (it=routes.begin(); it!=routes.end(); it++) {
-            if (request.match(it->first)){
-              response = it->second->process(request);
-              break;
-            }
-        }
-#else
         string key = request.getMethod() + ":" + request.getUrl();
         if (routes.find(key) != routes.end()) {
             response = routes[key]->process(request);
         }
-#endif        
+        
         return response;
     }
             
@@ -88,6 +79,7 @@ namespace Mongoose
     {
         string key = httpMethod + ":" + prefix + route;
         routes[key] = handler;
+        urls.push_back(prefix + route);
     }
 
     void Controller::dumpRoutes()
@@ -108,5 +100,10 @@ namespace Mongoose
         *response << "[500] Server internal error: " << message;
 
         return response;
+    }
+
+    vector<string> Controller::getUrls()
+    {
+        return urls;
     }
 };

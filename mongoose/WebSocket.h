@@ -11,6 +11,15 @@ using namespace std;
 
 #define WEBSOCKET_FIN 0x80
 
+enum {
+    WEBSOCKET_OPCODE_CONTINUATION = 0x0,
+    WEBSOCKET_OPCODE_TEXT = 0x1,
+    WEBSOCKET_OPCODE_BINARY = 0x2,
+    WEBSOCKET_OPCODE_CONNECTION_CLOSE = 0x8,
+    WEBSOCKET_OPCODE_PING = 0x9,
+    WEBSOCKET_OPCODE_PONG = 0xa,
+};
+
 namespace Mongoose
 {
     class WebSockets;
@@ -18,7 +27,7 @@ namespace Mongoose
     class WebSocket
     {
         public:
-            WebSocket(struct mg_connection *connection_, const struct mg_request_info *request_);
+            WebSocket(struct mg_connection *connection_);
 
             /**
              * Sends data through the web socket

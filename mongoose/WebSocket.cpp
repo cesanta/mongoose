@@ -7,8 +7,8 @@ using namespace std;
 
 namespace Mongoose
 {
-    WebSocket::WebSocket(struct mg_connection *connection_, const struct mg_request_info *request_)
-        : connection(connection_), closed(false), request(connection_, request_), data(""), id(-1)
+    WebSocket::WebSocket(struct mg_connection *connection_)
+        : connection(connection_), closed(false), request(connection_), data(""), id(-1)
     {
     }
 
@@ -66,9 +66,6 @@ namespace Mongoose
 
     void WebSocket::close()
     {
-        if (!closed) {
-            mg_close_connection(connection);
-        }
         closed = true;
     }
 

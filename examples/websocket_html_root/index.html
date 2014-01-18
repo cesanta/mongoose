@@ -9,7 +9,7 @@
     document.getElementById('output').appendChild(div);
   };
   window.onload = function() {
-    var url = 'ws://' + window.location.host + '/foo';
+    var url = 'ws://' + window.location.host + '/websocket';
     websocket = new WebSocket(url);
     websocket.onopen = function(ev) {
       writeToScreen('CONNECTED');
@@ -34,7 +34,7 @@
 <h2>Mongoose WebSocket Test</h2>
 
   <div style="width: 400px; color: #aaa; padding: 1em; ">
-  This page code creates websocket to the URI "/foo",
+  This page code creates websocket to the URI "/websocket",
   sends a message to it, waits for the reply, then sends an "exit" message.
   Server must echo all messages back, and terminate the conversation after
   receiving the "exit" message.
