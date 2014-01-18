@@ -1,5 +1,6 @@
 # Mongoose Internals
 
+<!--
 Mongoose is multithreaded web server. `mg_start()` function allocates
 web server context (`struct mg_context`), which holds all information
 about web server instance:
@@ -55,5 +56,4 @@ threads use blocking IO on accepted sockets for reading and writing data.
 All accepted sockets have `SO_RCVTIMEO` and `SO_SNDTIMEO` socket options set
 (controlled by `request_timeout_ms` mongoose option, 30 seconds default) which
 specify read/write timeout on client connection.
-
-
+-->

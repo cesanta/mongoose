@@ -1,145 +1,135 @@
-# Mongoose Embedding Guide
+# Mongoose API Reference
 
-Embedding Mongoose is done in two steps:
+    struct mg_server *mg_create_server(void *server_param);
 
-   1. Copy
-    [mongoose.c](https://raw.github.com/cesanta/mongoose/master/mongoose.c) and
-    [mongoose.h](https://raw.github.com/cesanta/mongoose/master/mongoose.h)
-    to your application's source tree and include these two files in the build.
-   2. Somewhere in the application code, call `mg_start()` to start the server.
-    Pass configuration options and event handlers to `mg_start()`. Call
-    `mg_stop()` when server needs to be stopped.
+Creates web server instance. Returns opaque instance pointer, or NULL if
+there is not enough memory. Note that this function doesn't make the
+server instance to serve. Serving is done by `mg_poll_server()` function.
+Web server instance has a list of active connections, initially empty,
+and a list of URI handlers, initially empty, a list of configuration
+options that can be modified by `mg_set_option()`.
 
-Mongoose calls event handlers when certain events happen.
-For example, when new request arrives, Mongoose calls `begin_request`
-handler to let user handle the request. In the handler, user code
-can get all information about the request -- parsed headers, etcetera.
-Here is a list of well-commented embedding examples:
+  `user_param`: Could be any pointer, or NULL. This pointer will be passed
+    to callback functions as `struct mg_connection::server_param` field.
+    A common use case is to pass `this` pointer of the C++ wrapper class
+    as `user_param`, to let the callback get the pointer to the C++
+    object.
 
-   * [hello.c](https://github.com/cesanta/mongoose/blob/master/examples/hello.c)
-    This is the most basic "Hello, world!" example
-   * [post.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
-    This example shows how to handle form submission
-   * [upload.c](https://github.com/cesanta/mongoose/blob/master/examples/upload.c)
-    This example shows how to handle file upload
-   * [websocket.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c)
-    This example shows how to handle websocket requests
-   * [chat.c](https://github.com/cesanta/mongoose/blob/master/examples/chat.c), [main.js](https://github.com/cesanta/mongoose/blob/master/examples/html/main.js)
-    An example of web chat application, with cookie-based user authentication,
-    session support. All UI is done using static HTML/CSS. Interaction
-    with backed is done using AJAX.
+Side-effect: on UNIX, `mg_create_server()` ignores SIGPIPE signals. If custom
+processing is required SIGPIPE, signal handler must be set up after
+calling `mg_create_server()`.
+
+Important: Mongoose does not install `SIGCHLD` handler. If CGI is used,
+`SIGCHLD` handler must be set up to reap CGI zombie processes.
 
 
+    void mg_destroy_server(struct mg_server **server);
 
-# API Reference
+Deallocates web server instance, closes all pending connections, and makes
+server pointer a NULL pointer.
 
-    struct mg_context *mg_start(const char **configuration_options
-                                int (*event_handler_func)(struct mg_event *),
-                                void *user_data);
+    const char mg_set_option(struct mg_server *server, const char *name,
+                             const char *value);
 
-Starts mongoose web server. This function starts a separate master thread,
-which opens listening sockets, and `num_threads` worker threads, which are
-used to handle incoming requests.
+Sets a particular server option. Please refer to a separate documentation page
+that lists all available option names. Note that at least one option,
+`listening_port`, must be specified. To serve static files, `document_root`
+must be specified too. If `document_root` option is left unset, Mongoose
+will not access filesystem at all. This function returns NULL if option was
+set successfully, otherwise it returns human-readable error string. It is
+allowed to call `mg_set_option()` by the same thread that does
+`mg_poll_server()` (an IO thread) and change server configuration while it
+is serving, in between `mg_poll_server()` calls.
 
-  `options`: NULL terminated list of option_name, option_value pairs that
-            specify Mongoose configuration parameters.  
-  `event_handler`: a function that will be called on specific events,
-               see description below.  
-  `user_data`: Opaque pointer, used by application developer to store
-               global private data.  
-  Return: web server context, or NULL on error.
+    void mg_poll_server(struct mg_server *server, int milliseconds);
 
-  Side-effects: on UNIX, `mg_start()` ignores `SIGPIPE` signals. If custom
-    processing is required `SIGPIPE`, signal handler must be set up
-    after calling `mg_start()`.
+This function performs one iteration of IO loop by iterating over all
+active connections, performing `select()` syscall on all sockets, and sleeping
+for `milliseconds` number of milliseconds. When `select()` returns, Mongoose
+does an IO for each socket that has data to be sent or received. Application
+code must call `mg_poll_server()` in a loop. It is an error to have more then
+one thread calling `mg_poll_server()`, `mg_set_option()` or any other function
+that take `struct mg_server *` parameter. Mongoose does not
+mutex-protect `struct mg_server *`, therefore the best practice is
+to call server management functions from the same thread (an IO thread).
 
- Important: Mongoose does not install `SIGCHLD` handler. If CGI is used,
- `SIGCHLD` handler must be set up to reap CGI zombie processes.
+    void mg_add_uri_handler(struct mg_server *, const char *uri, mg_handler_t);
 
+Adds an URI handler. If Mongoose gets a request and request's URI starts
+with `uri`, then specified handler is called to serve the request. Thus, an
+`uri` is a match prefix. For example, if `uri` is "/", then all requests will
+be routed to the handler, because all URIs start with `/` character.
 
-    void mg_stop(struct mg_context *);
+    void mg_set_http_error_handler(struct mg_server *, mg_handler_t);
 
-Stop the web server. This function blocks until all Mongoose
-threads are stopped. Context pointer becomes invalid.
+Adds HTTP error handler. An actual HTTP error is passed as
+`struct mg_connection::status_code` parameter. If handler returns 0, it
+means a handler has not processed the connection, and mongoose proceeds
+with sending HTTP error to the client. Otherwise, mongoose does nothing.
 
+    const char **mg_get_valid_option_names(void);
 
-## Events triggered by Mongoose
+Returns a NULL-terminated array of option names and their default values.
+There are two entries per option in an array: an option name followed by a
+default value. A default value could be NULL. A NULL name indicates an end
+of the array.
 
-Every time an event happens, such as new connection being made,
-Mongoose calls user-specified event handler. Mongoose passes `struct mg_event`
-structure to the event handler, which event handler can use to find any
-information required to handle an event:
+    const char *mg_get_option(const struct mg_server *server, const char *name);
 
-    struct mg_event {
-      int type;               // Event type
-      void *user_data;        // User data pointer passed to mg_start()
-      void *conn_data;        // Connection-specific, per-thread user data.
-      void *event_param;      // Event-specific parameter
-      struct mg_connection *conn;
-      struct mg_request_info *request_info;
-    };
-
-Below is a list of all events triggered by Mongoose:
-
-### MG\_REQUEST\_BEGIN
-
-Called when Mongoose has received and successfully parsed new HTTP request.
-`request_info`
-attribute of `struct mg_event` contains parsed HTTP request. Return value tells
-mongoose what to do next. If event handler returns 0, that means that the
-handler did not process the request, did not send any data to the client, and
-expects Mongoose to continue processing the request. Returning non-zero
-tells Mongoose to stop doing any processing, cause callback already sent
-valid reply to the client.
-
-### MG\_REQUEST\_END
-
-Called when mongoose has finished processing the request.
-Could be used to implement custom request logging, request execution time
-profiling, etcetera. Return value is ignored by Mongoose.
-
-### MG\_HTTP\_ERROR
-
-Called when Mongoose is about to send HTTP error to the client.
-`event_param` attribute contains integer HTTP error code, that could be
-accessed like this:  
-`int status_code = (int) (long) event->event_param;`  
-If handler returns zero, then Mongoose proceeds with sending error to the
-client, otherwise Mongoose will not send anything.
-
-### MG\_EVENT\_LOG
-
-Called when Mongoose wants to log an error message.
-Normally, error messages are logged to the error log file. If handler
-returns 0, mongoose will not log to the log file. `event_param` holds
-a message to be logged:  
-`const char *message = (const char *) event->event_param;`
-
-### MG\_THREAD\_BEGIN
-
-Called when Mongoose starts a new thread. Handler will be executing
-in the context of that new thread. It is used to perform any extra per-thread
-initialization. Return value is ignored by Mongoose.
-
-### MG\_THREAD\_END
-
-Called when Mongoose is about to terminate a thread. Used to clean up
-the state initialized by `MG_THREAD_BEGIN` handling. Return value is ignored.
-
-    const char *mg_get_option(const struct mg_context *ctx, const char *name);
-
-Get the value of particular configuration parameter.  The value returned is
-read-only. Mongoose does not allow changing configuration at run time.  If
+Returns the value of particular configuration parameter. If
 given parameter name is not valid, NULL is returned. For valid names, return
 value is guaranteed to be non-NULL. If parameter is not set, zero-length string
 is returned.
 
-    const char **mg_get_valid_option_names(void);
 
-Return array of strings that represent valid configuration options.  For each
-option, option name and default value is returned, i.e. the number of entries
-in the array equals to number_of_options x 2.  Array is NULL terminated.
+    int mg_iterate_over_connections(struct mg_server *,
+                                void (*func)(struct mg_connection *, void *),
+                                void *param);
 
+This is an interface primarily designed to push arbitrary data to websocket
+connections at any time. This function could be called from any thread. When
+it returns, an IO thread called `func()` on each active websocket connection,
+passing `param` as an extra parameter. It is allowed to call `mg_write()` or
+`mg_websocket_write()` within a callback, cause these write functions are
+thread-safe.
+
+    int mg_write(struct mg_connection *, const void *buf, int len);
+
+Send data to the client. This function is thread-safe. This function appends
+given buffer to a send queue of a given connection. It may return 0 if
+there is not enough memory, in which case the data will not be sent.
+
+    int mg_websocket_write(struct mg_connection* conn, int opcode,
+                           const char *data, size_t data_len);
+
+Similar to `mg_write()`, but wraps the data into a websocket frame with a
+given websocket `opcode`. This function is available when mongoose is
+compiled with `-DUSE_WEBSOCKET`.  
+
+    const char *mg_get_header(const struct mg_connection *, const char *name);
+
+Get the value of particular HTTP header. This is a helper function.
+It traverses http_headers array, and if the header is present in the array,
+returns its value. If it is not present, NULL is returned.
+
+
+    int mg_get_var(const struct mg_connection *conn, const char *var_name,
+                   char *buf, size_t buf_len);
+
+Gets HTTP form variable. Both POST buffer and query string are inspected.
+Form variable is url-decoded and written to the buffer. On success, this
+function returns the length of decoded variable. On error, -1 is returned if
+variable not found, and -2 is returned if destination buffer is too small
+to hold the variable. Destination buffer is guaranteed to be
+'\0' - terminated if it is not NULL or zero length.
+
+    int mg_parse_header(const char *hdr, const char *var_name, char *buf,
+                        size_t buf_size);
+
+This function parses HTTP header and fetches given variable's value in a buffer.
+A header should be like `x=123, y=345, z="other value"`. This function is
+designed to parse Cookie headers, Authorization headers, and similar. Returns
+the length of the fetched value, or 0 if variable not found.
 
     int mg_modify_passwords_file(const char *passwords_file_name,
                                  const char *domain,
@@ -154,54 +144,3 @@ cookie-based way please refer to the examples/chat.c in the source tree.
 If password is not NULL, entry is added (or modified if already exists).
 If password is NULL, entry is deleted.  
 Return: 1 on success, 0 on error.
-
-
-    int mg_write(struct mg_connection *, const void *buf, int len);
-
-Send data to the client. This function guarantees to send all requested data.
-If more then one thread is writing to the connection, writes must be
-serialized by e.g. using mutex.  
-Return: number of bytes written to the client. If return value is less then
-`len`, it is a failure, meaning that client has closed the connection.
-
-
-    int mg_websocket_write(struct mg_connection* conn, int opcode,
-                           const char *data, size_t data_len);
-
-Send data to a websocket client. If more then one thread is writing to the
-connection, writes must be serialized by e.g. using mutex. This function
-guarantees to send all data (semantic is similar to `mg_write()`).
-This function is available when mongoose is compiled with `-DUSE_WEBSOCKET`.  
-Return: number of bytes written to the client. If return value is less then
-`data_len`, it is a failure, meaning that client has closed the connection.
-
-
-    int mg_printf(struct mg_connection *, const char *fmt, ...);
-
-Send data to the client using printf() semantics.
-Works exactly like mg_write(), but allows to do message formatting.
-
-    void mg_send_file(struct mg_connection *conn, const char *path);
-
-Send contents of the entire file together with HTTP headers.
-
-    int mg_read(struct mg_connection *, void *buf, int len);
-
-Read data from the remote end, return number of bytes read.
-If remote side has closed the connection, return value is less or equal to 0.
-
-    const char *mg_get_header(const struct mg_connection *, const char *name);
-
-Get the value of particular HTTP header. This is a helper function.
-It traverses http_headers array, and if the header is present in the array,
-returns its value. If it is not present, NULL is returned.
-
-
-## Embedding Examples
-
-The common pattern is to handle `MG_REQUEST_BEGIN` and serve static files
-from memory, and/or construct dynamic replies on the fly. Here is
-my [embed.c](https://gist.github.com/valenok/4714740) gist
-that shows how to easily any data can be embedded
-directly into the executable. If such data needs to be encrypted, then
-encrypted database or encryption dongles would be a better choice.

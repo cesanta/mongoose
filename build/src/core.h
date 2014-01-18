@@ -77,10 +77,8 @@ int mg_websocket_write(struct mg_connection *, int opcode,
 
 const char *mg_get_header(const struct mg_connection *, const char *name);
 const char *mg_get_mime_type(const char *file_name);
-int mg_get_var(const struct mg_connection *conn,
-               const char *var_name, char *dst, size_t dst_len);
-int mg_get_cookie(const char *cookie, const char *var_name,
-                  char *buf, size_t buf_len);
+int mg_get_var(const struct mg_connection *conn, const char *var_name,
+               char *buf, size_t buf_len);
 int mg_parse_header(const char *hdr, const char *var_name, char *buf, size_t);
 
 // Utility functions

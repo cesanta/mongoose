@@ -46,7 +46,7 @@ LUA_SQLITE_FLAGS = $(SQLITE_FLAGS) $(LUA_FLAGS) -DUSE_LUA_SQLITE3
 #  Run "PATH_TO_VC6\bin\nmake windows"
 MSVC = ../../vc6
 #DBG = /Zi /Od
-DBG  = /DNDEBUG /O1
+DBG  = /DNDEBUG /O1 $(CFLAGS_EXTRA)
 CL   = $(MSVC)/bin/cl /MD /TC /nologo $(DBG) /W3 /I$(MSVC)/include /I.. /I.
 LINK_FLAGS = /incremental:no /libpath:$(MSVC)/lib /machine:IX86 \
             user32.lib shell32.lib comdlg32.lib ws2_32.lib advapi32.lib
@@ -64,14 +64,14 @@ endif
 all:
 	@echo "make (unix|windows|macos)"
 
-../mongoose.c: ../mongoose.h Makefile $(SOURCES)
-	cat $(SOURCES) | sed '/#include "internal.h"/d' > $@
+#../mongoose.c: ../mongoose.h Makefile $(SOURCES)
+#	cat $(SOURCES) | sed '/#include "internal.h"/d' > $@
 
-unix_unit_test: $(LUA_SOURCES) Makefile ../test/unit_test.c
-	$(CC) ../test/unit_test.c lua_5.2.1.c $(CFLAGS) -g -O0 -o t && ./t
+unix_unit_test: $(LUA_SOURCES) Makefile ./test/unit_test.c
+	$(CC) ./test/unit_test.c lua_5.2.1.c $(CFLAGS) -g -O0 -o t && ./t
 
-core_unit_test: Makefile ../test/unit_test.c
-	$(CC) ../test/unit_test.c $(CFLAGS) -g -O0 -o t && ./t
+core_unit_test: Makefile ./test/unit_test.c
+	$(CC) ./test/unit_test.c $(CFLAGS) -g -O0 -o t && ./t
 
 # Make sure that the compiler flags come last in the compilation string.
 # If not so, this can break some on some Linux distros which use
@@ -101,8 +101,8 @@ $(PROG).dll: $(TINY_SOURCES) Makefile
 	$(CL) ../mongoose.c /Gz /link $(LINK_FLAGS) /DLL /DEF:dll.def /out:$@
 
 # This is broken now due to SSL exclusion
-windows_unit_test.exe: $(LUA_SOURCES) Makefile
-	$(CL) ../test/unit_test.c lua_5.2.1.c -DLUA_COMPAT_ALL \
+windows_unit_test.exe: ../mongoose.c Makefile
+	$(CL) ./test/unit_test.c lua_5.2.1.c  \
           /link /libpath:$(MSVC)/lib advapi32.lib /out:$@
 	./$@
 
@@ -128,7 +128,7 @@ macos: $(LUA_SOURCES)
 	#rm -rf dmg
 
 tests:
-	perl ../test/test.pl $(TEST)
+	perl ./test/test.pl $(TEST)
 
 tarball: clean
 	rm -rf mongoose-$(VERSION)
