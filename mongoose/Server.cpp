@@ -98,19 +98,7 @@ namespace Mongoose
                 mg_set_option(server, (*it).first.c_str(), (*it).second.c_str());
             }
 
-            vector<Controller *>::iterator cit;
-            for (cit=controllers.begin(); cit!=controllers.end(); cit++) {
-                vector<string>::iterator rit;
-                vector<string> routes = (*cit)->getUrls();
-                for (rit=routes.begin(); rit!=routes.end(); rit++) {
-                    string &route = *rit;
-                    mg_add_uri_handler(server, route.c_str(), event_handler);
-                }
-            }
-
-#ifndef NO_WEBSOCKET
-            mg_add_uri_handler(server, "/websocket", event_handler);
-#endif
+            mg_add_uri_handler(server, "/", event_handler);
 
             stopped = false;
             mg_start_thread(server_poll, this);

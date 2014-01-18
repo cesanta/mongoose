@@ -118,6 +118,19 @@ namespace Mongoose
         return data;
     }
 
+#ifdef ENABLE_REGEX_URL
+    smatch Request::getMatches()
+    {   
+        return matches;
+    }   
+
+    bool Request::match(string pattern)
+    {   
+        key = method + ":" + url;
+        return regex_match(key, matches, regex(pattern));
+    }   
+#endif
+
     void Request::writeResponse(Response *response)
     {
         string data = response->getData();

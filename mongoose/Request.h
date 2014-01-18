@@ -4,6 +4,9 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#ifdef ENABLE_REGEX_URL
+#include <regex>
+#endif
 #include <mongoose.h>
 #include "UploadFile.h"
 #include "Response.h"
@@ -77,6 +80,10 @@ namespace Mongoose
             string getMethod();
             string getData();
 
+#ifdef ENABLE_REGEX_URL
+            smatch getMatches();
+            bool match(string pattern);
+#endif
             bool readVariable(const char *data, string key, string &output);
 
             /**
