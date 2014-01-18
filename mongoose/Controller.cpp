@@ -38,6 +38,13 @@ namespace Mongoose
 
         routes.clear();
     }
+            
+    bool Controller::handles(string method, string url)
+    { 
+        string key = method + ":" + url;
+
+        return (routes.find(key) != routes.end());
+    }
 
     Response *Controller::process(Request &request)
     {

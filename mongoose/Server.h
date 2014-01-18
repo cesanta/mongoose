@@ -116,6 +116,11 @@ namespace Mongoose
              */
             void poll();
 
+            /**
+             * Does the server handles url?
+             */
+            bool handles(string method, string url);
+
         protected:
             volatile bool stopped;
             Mutex mutex;

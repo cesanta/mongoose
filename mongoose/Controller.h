@@ -125,6 +125,7 @@ namespace Mongoose
              */
             virtual Response *serverInternalError(string message);
 
+            bool handles(string method, string url);
             vector<string> getUrls();
 
         protected:

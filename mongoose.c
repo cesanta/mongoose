@@ -292,6 +292,7 @@ struct mg_server {
   char *config_options[NUM_OPTIONS];
   void *server_data;
   void *ssl_ctx;    // SSL context
+  mg_handler_t do_i_handle;
   sock_t ctl[2];    // Control socketpair. Used to wake up from select() call
 };
 
@@ -3325,21 +3326,23 @@ static void open_local_endpoint(struct connection *conn) {
   conn->mg_conn.content_len = cl_hdr == NULL ? 0 : (int) to64(cl_hdr);
 
   // Call URI handler if one is registered for this URI
-  conn->endpoint.uh = find_uri_handler(conn->server, conn->mg_conn.uri);
-  if (conn->endpoint.uh != NULL) {
-    conn->endpoint_type = EP_USER;
-    conn->mg_conn.content = conn->local_iobuf.buf;
+  if (conn->server->do_i_handle == NULL || conn->server->do_i_handle(&conn->mg_conn)) {
+      conn->endpoint.uh = find_uri_handler(conn->server, conn->mg_conn.uri);
+      if (conn->endpoint.uh != NULL) {
+        conn->endpoint_type = EP_USER;
+        conn->mg_conn.content = conn->local_iobuf.buf;
 #if USE_POST_SIZE_LIMIT > 1
-    {
-      const char *cl = mg_get_header(&conn->mg_conn, "Content-Length");
-      if (!strcmp(conn->mg_conn.request_method, "POST") &&
-          (cl == NULL || to64(cl) > USE_POST_SIZE_LIMIT)) {
-        send_http_error(conn, 500, "POST size > %zu",
-                        (size_t) USE_POST_SIZE_LIMIT);
-      }
-    }
+        {
+          const char *cl = mg_get_header(&conn->mg_conn, "Content-Length");
+          if (!strcmp(conn->mg_conn.request_method, "POST") &&
+              (cl == NULL || to64(cl) > USE_POST_SIZE_LIMIT)) {
+            send_http_error(conn, 500, "POST size > %zu",
+                            (size_t) USE_POST_SIZE_LIMIT);
+          }
+        }
 #endif
-    return;
+        return;
+      }
   }
 
 #ifdef NO_FILESYSTEM
@@ -4047,6 +4050,8 @@ const char *mg_get_option(const struct mg_server *server, const char *name) {
 struct mg_server *mg_create_server(void *server_data) {
   struct mg_server *server = (struct mg_server *) calloc(1, sizeof(*server));
 
+  server->do_i_handle = NULL;
+
 #ifdef _WIN32
   WSADATA data;
   WSAStartup(MAKEWORD(2, 2), &data);
@@ -4070,4 +4075,9 @@ struct mg_server *mg_create_server(void *server_data) {
   set_default_option_values(server->config_options);
 
   return server;
+}
+
+void mg_server_do_i_handle(struct mg_server *server, mg_handler_t handler)
+{
+    server->do_i_handle = handler;
 }

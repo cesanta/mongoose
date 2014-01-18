@@ -24,6 +24,13 @@ static int getTime()
 #endif
 }
 
+static int do_i_handle(struct mg_connection *connection)
+{
+    Server *server = (Server *)connection->server_param;
+
+    return server->handles(connection->request_method, connection->uri);
+}
+
 /**
  * The handlers below are written in C to do the binding of the C mongoose with
  * the C++ API
@@ -36,15 +43,12 @@ static int event_handler(struct mg_connection *connection)
 #ifndef NO_WEBSOCKET
         if (connection->is_websocket) {
             server->_webSocketReady(connection);
-            cout << "WS ready!!" << endl;
-            return 1;
         }
 #endif
-    
-        return server->_handleRequest(connection);
+        server->_handleRequest(connection);
     }
 
-    return 0;
+    return 1;
 }
 
 static int iterate_callback(struct mg_connection *connection)
@@ -99,6 +103,7 @@ namespace Mongoose
             }
 
             mg_add_uri_handler(server, "/", event_handler);
+            mg_server_do_i_handle(server, do_i_handle);
 
             stopped = false;
             mg_start_thread(server_poll, this);
@@ -109,10 +114,12 @@ namespace Mongoose
 
     void Server::poll()
     {
-        int t = 100;
+        unsigned int current_timer = 0;
         while (!stopped) {
-            mg_poll_server(server, 100);
-            mg_iterate_over_connections(server, iterate_callback, &t);
+            mg_poll_server(server, 1000);
+#ifndef NO_WEBSOCKET
+            mg_iterate_over_connections(server, iterate_callback, &current_timer);
+#endif
         }
 
         mg_destroy_server(&server);
@@ -187,6 +194,24 @@ namespace Mongoose
             delete response;
             return 1;
         }
+    }
+
+    bool Server::handles(string method, string url)
+    {
+#ifndef NO_WEBSOCKET
+        if (url == "/websocket") {
+            return true;
+        }
+#endif
+
+        vector<Controller *>::iterator it;
+        for (it=controllers.begin(); it!=controllers.end(); it++) {
+            if ((*it)->handles(method, url)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     Response *Server::handleRequest(Request &request)

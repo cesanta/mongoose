@@ -9,7 +9,7 @@ option (EXAMPLES
     "Compile examples" OFF)
 
 option (WEBSOCKET
-    "Enables websocket" ON)
+    "Enables websocket" OFF)
 
 option (CPP_BINDING
     "Enables C++ binding" ON)
