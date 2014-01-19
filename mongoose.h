@@ -46,11 +46,11 @@ struct mg_connection {
   } http_headers[30];
 
   char *content;              // POST (or websocket message) data, or NULL
-  int content_len;            // content length
+  long int content_len;       // content length
 
   int is_websocket;           // Connection is a websocket connection
   int status_code;            // HTTP status code for HTTP error handler
-  unsigned char wsbits;       // First byte of the websocket frame
+  int wsbits;                 // First byte of the websocket frame
   void *server_param;         // Parameter passed to mg_add_uri_handler()
   void *connection_param;     // Placeholder for connection-specific data
 };
@@ -100,6 +100,14 @@ void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
 void mg_send_digest_auth_request(struct mg_connection *conn);
+
+// HTTP client interface
+enum {
+  MG_CONNECT_SUCCESS, MG_CONNECT_FAILURE,
+  MG_DOWNLOAD_SUCCESS, MG_DOWNLOAD_FAILURE
+};
+int mg_connect(struct mg_server *server, const char *host, int port,
+               mg_handler_t handler, void *param);
 
 #ifdef __cplusplus
 }

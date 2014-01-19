@@ -1,5 +1,5 @@
 // Unit test for the mongoose web server.
-// g++ -W -Wall -pedantic unit_test.c -o t && ./t
+// g++ -W -Wall -pedantic -g unit_test.c && ./a.out
 
 #define USE_WEBSOCKET
 
@@ -28,6 +28,7 @@
 
 static int static_num_tests = 0;
 
+#if 0
 // Connects to host:port, and sends formatted request to it. Returns
 // malloc-ed reply and reply length, or NULL on error. Reply contains
 // everything including headers, not just the message body.
@@ -73,6 +74,7 @@ static char *wget(const char *host, int port, int *len, const char *fmt, ...) {
 
   return reply;
 }
+#endif
 
 static char *read_file(const char *path, int *size) {
   FILE *fp;
@@ -361,78 +363,42 @@ static const char *test_next_option(void) {
 
 static int cb1(struct mg_connection *conn) {
   // We're not sending HTTP headers here, to make testing easier
+  //mg_printf(conn, "HTTP/1.0 200 OK\r\n\r\n%s %s %s",
   mg_printf(conn, "%s %s %s",
            conn->server_param == NULL ? "?" : (char *) conn->server_param,
            conn->connection_param == NULL ? "?" : "!", conn->remote_ip);
   return 1;
 }
 
-static const char *test_regular_file(void) {
-  static const char *fname = "mongoose.c";
-  int reply_len, file_len;
-  char *reply, *file_data;
-  file_stat_t st;
-
-  ASSERT(stat(fname, &st) == 0);
-  ASSERT(st.st_size > 0);
-
-  ASSERT((file_data = read_file(fname, &file_len)) != NULL);
-  ASSERT(file_len == st.st_size);
-
-  reply = wget("127.0.0.1", atoi(HTTP_PORT), &reply_len,
-               "GET /%s.c HTTP/1.0\r\n\r\n", fname);
-  ASSERT(reply != NULL);
-  ASSERT(reply_len > 0);
-  // TODO(lsm): test headers and content
-
-  free(reply);
-  free(file_data);
-
-  return NULL;
-}
-
-static const char *test_server_param(void) {
-  int reply_len;
-  char *reply;
-
-  reply = wget("127.0.0.1", atoi(HTTP_PORT), &reply_len, "%s",
-               "GET /cb1 HTTP/1.0\r\n\r\n");
-  ASSERT(reply != NULL);
-  ASSERT(reply_len == 15);
-  // cb1() does not send HTTP headers
-  ASSERT(memcmp(reply, "foo ? 127.0.0.1", 5) == 0);
-  //printf("%d [%.*s]\n", reply_len, reply_len, reply);
-  free(reply);
-
-  return NULL;
-}
-
 static int error_handler(struct mg_connection *conn) {
-  mg_printf(conn, "error: %d", conn->status_code);
+  mg_printf(conn, "HTTP/1.0 404 NF\r\n\r\nERR: %d", conn->status_code);
   return 1;
 }
 
-static const char *test_error_handler(void) {
-  int reply_len;
-  char *reply;
-
-  reply = wget("127.0.0.1", atoi(HTTP_PORT), &reply_len, "%s",
-               "GET /non_exist HTTP/1.0\r\n\r\n");
-  ASSERT(reply != NULL);
-  ASSERT(reply_len == 10);
-  ASSERT(memcmp(reply, "error: 404", 10) == 0);
-  free(reply);
-
-  return NULL;
+static int ts1(struct mg_connection *conn) {
+  if (conn->status_code == MG_CONNECT_SUCCESS) {
+    mg_printf(conn, "%s", "GET /cb1 HTTP/1.0\r\n\r\n");
+    return 0;
+  } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
+    sprintf((char *) conn->connection_param, "%.*s",
+            (int) conn->content_len, conn->content);
+  }
+  return 1;
 }
 
-static void *server_thread(void *param) {
-  int i;
-  for (i = 0; i < 10; i++) mg_poll_server((struct mg_server *) param, 1);
-  return NULL;
+static int ts2(struct mg_connection *conn) {
+  if (conn->status_code == MG_CONNECT_SUCCESS) {
+    mg_printf(conn, "%s", "GET /non_exist HTTP/1.0\r\n\r\n");
+    return 0;
+  } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
+    sprintf((char *) conn->connection_param, "%s %.*s",
+            conn->uri, (int) conn->content_len, conn->content);
+  }
+  return 1;
 }
 
 static const char *test_server(void) {
+  char buf1[100] = "", buf2[100] = "";
   struct mg_server *server = mg_create_server((void *) "foo");
 
   ASSERT(server != NULL);
@@ -440,34 +406,78 @@ static const char *test_server(void) {
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
   mg_add_uri_handler(server, "/cb1", cb1);
   mg_set_http_error_handler(server, error_handler);
-  mg_start_thread(server_thread, server);
-  RUN_TEST(test_regular_file);
-  RUN_TEST(test_server_param);
-  RUN_TEST(test_error_handler);
 
-  // TODO(lsm): come up with a better way of thread sync
-  sleep(1);
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), ts1, buf1) == 1);
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), ts2, buf2) == 1);
+
+  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 0); }
+  ASSERT(strcmp(buf1, "foo ? 127.0.0.1") == 0);
+  ASSERT(strcmp(buf2, "404 ERR: 404") == 0);
 
   ASSERT(strcmp(static_config_options[URL_REWRITES * 2], "url_rewrites") == 0);
-
   mg_destroy_server(&server);
   ASSERT(server == NULL);
   return NULL;
 }
 
+// This http client sends two requests using one connection
 static int cb2(struct mg_connection *conn) {
-  (void) conn;
-  return 0;
+  const char *file1 = "mongoose.h", *file2 = "mongoose.c", *file_name = file2;
+  char *buf = (char *) conn->connection_param, *file_data;
+  int file_len, ret_val = 1;
+
+  switch (conn->status_code) {
+    case MG_CONNECT_SUCCESS:
+      mg_printf(conn, "GET /%s HTTP/1.1\r\n\r\n", file1);
+      strcat(buf, "a");
+      ret_val = 0;
+      break;
+    case MG_CONNECT_FAILURE: strcat(buf, "b"); break;
+    case MG_DOWNLOAD_FAILURE: strcat(buf, "c"); break;
+    case MG_DOWNLOAD_SUCCESS:
+      if (!strcmp(buf, "a")) {
+        // Send second request
+        mg_printf(conn, "GET /%s HTTP/1.1\r\n\r\n", file2);
+        file_name = file1;
+      }
+      if ((file_data = read_file(file_name, &file_len)) != NULL) {
+        if (file_len == conn->content_len &&
+            memcmp(file_data, conn->content, file_len) == 0) {
+          strcat(buf, "d");
+        } else {
+          strcat(buf, "f");
+        }
+        free(file_data);
+      }
+      ret_val = !strcmp(buf, "ad") ? 0 : 1;
+      break;
+    default: strcat(buf, "e"); break;
+  }
+
+  return ret_val;
+}
+
+static int cb3(struct mg_connection *conn) {
+  sprintf((char *) conn->connection_param, "%d", conn->status_code);
+  return 1;
 }
 
 static const char *test_mg_connect(void) {
-  char buf[1000];
-  struct mg_server *server = mg_create_server(buf);
-  //mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), cb2);
+  char buf2[40] = "", buf3[40] = "";
+  struct mg_server *server = mg_create_server(NULL);
+
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
-  mg_add_uri_handler(server, "/cb1", cb2);
+  ASSERT(mg_connect(server, "", 0, NULL, NULL) == 0);
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), cb2, buf2) == 1);
+  ASSERT(mg_connect(server, "127.0.0.1", 1, cb3, buf3) == 1);
+
+  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 0); }
+
+  ASSERT(strcmp(buf2, "add") == 0);
+  ASSERT(strcmp(buf3, "1") == 0);
   mg_destroy_server(&server);
+
   return NULL;
 }
 

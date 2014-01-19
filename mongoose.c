@@ -318,7 +318,7 @@ enum connection_flags {
   CONN_HEADERS_SENT = 8,      // User callback has sent HTTP headers
   CONN_BUFFER = 16,           // CGI only. Holds data send until CGI prints
                               // all HTTP headers
-  CONN_CONNECTED = 32,        // HTTP client has connected
+  CONN_CONNECTING = 32,       // HTTP client is doing non-blocking connect()
   CONN_LONG_RUNNING = 64      // Long-running URI handlers
 };
 
@@ -1154,6 +1154,7 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
     conn->endpoint_type = EP_CGI;
     conn->endpoint.cgi_sock = fds[0];
     spool(&conn->remote_iobuf, cgi_status, sizeof(cgi_status) - 1);
+    conn->mg_conn.status_code = 200;
     conn->flags |= CONN_BUFFER;
   } else {
     closesocket(fds[0]);
@@ -1193,18 +1194,23 @@ static void read_from_cgi(struct connection *conn) {
         }
       }
       memcpy(io->buf + 9, status, 3);
+      conn->mg_conn.status_code = atoi(status);
       conn->flags &= ~CONN_BUFFER;
     }
+  }
+}
+
+static void discard_leading_iobuf_bytes(struct iobuf *io, int n) {
+  if (n >= 0 && n <= io->len) {
+    memmove(io->buf, io->buf + n, io->len - n);
+    io->len -= n;
   }
 }
 
 static void forward_post_data(struct connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
   int n = send(conn->endpoint.cgi_sock, io->buf, io->len, 0);
-  if (n > 0) {
-    memmove(io->buf, io->buf + n, io->len - n);
-    io->len -= n;
-  }
+  discard_leading_iobuf_bytes(io, n);
 }
 #endif  // !NO_CGI
 
@@ -1331,9 +1337,10 @@ static struct connection *accept_new_connection(struct mg_server *server) {
 }
 
 static void close_conn(struct connection *conn) {
-  DBG(("%p %d %d", conn, conn->flags, conn->endpoint_type));
   LINKED_LIST_REMOVE(&conn->link);
   closesocket(conn->client_sock);
+  close_local_endpoint(conn);
+  DBG(("%p %d %d", conn, conn->flags, conn->endpoint_type));
   free(conn->request);            // It's OK to free(NULL), ditto below
   free(conn->path_info);
   free(conn->remote_iobuf.buf);
@@ -1840,8 +1847,7 @@ static int deliver_websocket_frame(struct connection *conn) {
     if (conn->endpoint.uh->handler(&conn->mg_conn)) {
       conn->flags |= CONN_SPOOL_DONE;
     }
-    memmove(buf, buf + frame_len, buf_len - frame_len);
-    conn->local_iobuf.len -= frame_len;
+    discard_leading_iobuf_bytes(&conn->local_iobuf, frame_len);
   }
 
   return buffered;
@@ -1938,8 +1944,7 @@ static void write_to_socket(struct connection *conn) {
   if (is_error(n)) {
     conn->flags |= CONN_CLOSE;
   } else if (n > 0) {
-    memmove(io->buf, io->buf + n, io->len - n);
-    io->len -= n;
+    discard_leading_iobuf_bytes(io, n);
     conn->num_bytes_sent += n;
   }
 
@@ -2641,8 +2646,7 @@ static void forward_put_data(struct connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
   int n = write(conn->endpoint.fd, io->buf, io->len);
   if (n > 0) {
-    memmove(io->buf, io->buf + n, io->len - n);
-    io->len -= n;
+    discard_leading_iobuf_bytes(io, n);
     conn->cl -= n;
     if (conn->cl <= 0) {
       close_local_endpoint(conn);
@@ -3312,7 +3316,6 @@ static void handle_lsp_request(struct connection *conn, const char *path,
 #endif // USE_LUA
 
 static void open_local_endpoint(struct connection *conn) {
-  const char *cl_hdr = mg_get_header(&conn->mg_conn, "Content-Length");
 #ifndef NO_FILESYSTEM
   static const char lua_pat[] = LUA_SCRIPT_PATTERN;
   file_stat_t st;
@@ -3321,8 +3324,6 @@ static void open_local_endpoint(struct connection *conn) {
   const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
   const char *dir_lst = conn->server->config_options[ENABLE_DIRECTORY_LISTING];
 #endif
-
-  conn->mg_conn.content_len = cl_hdr == NULL ? 0 : (int) to64(cl_hdr);
 
   // Call URI handler if one is registered for this URI
   conn->endpoint.uh = find_uri_handler(conn->server, conn->mg_conn.uri);
@@ -3425,7 +3426,7 @@ static int is_valid_uri(const char *uri) {
   return uri[0] == '/' || (uri[0] == '*' && uri[1] == '\0');
 }
 
-static void process_request(struct connection *conn) {
+static void try_http_parse_and_set_content_length(struct connection *conn) {
   struct iobuf *io = &conn->local_iobuf;
 
   if (conn->request_len == 0 &&
@@ -3435,14 +3436,24 @@ static void process_request(struct connection *conn) {
     // become invalid.
     conn->request = (char *) malloc(conn->request_len);
     memcpy(conn->request, io->buf, conn->request_len);
-    DBG(("%p ==> [%.*s]", conn, conn->request_len, conn->request));
-    memmove(io->buf, io->buf + conn->request_len, io->len - conn->request_len);
-    io->len -= conn->request_len;
+    DBG(("%p [%.*s]", conn, conn->request_len, conn->request));
+    discard_leading_iobuf_bytes(io, conn->request_len);
     conn->request_len = parse_http_message(conn->request, conn->request_len,
                                            &conn->mg_conn);
+    if (conn->request_len > 0) {
+      const char *cl_hdr = mg_get_header(&conn->mg_conn, "Content-Length");
+      conn->cl = cl_hdr == NULL ? 0 : to64(cl_hdr);
+      conn->mg_conn.content_len = (long int) conn->cl;
+    }
   }
+}
 
-  DBG(("%p %d %d [%.*s]", conn, conn->request_len, io->len, io->len, io->buf));
+static void process_request(struct connection *conn) {
+  struct iobuf *io = &conn->local_iobuf;
+
+  try_http_parse_and_set_content_length(conn);
+  DBG(("%p %d %d %d [%.*s]", conn, conn->request_len, io->len, conn->flags,
+       io->len, io->buf));
   if (conn->request_len < 0 ||
       (conn->request_len > 0 && !is_valid_uri(conn->mg_conn.uri))) {
     send_http_error(conn, 400, NULL);
@@ -3475,48 +3486,96 @@ static void process_request(struct connection *conn) {
 #endif
 }
 
-static void read_from_socket(struct connection *conn) {
-  char buf[IOBUF_SIZE];
-  int ok, n = 0;
-  socklen_t len = sizeof(ok);
+static void call_http_client_handler(struct connection *conn, int code) {
+  conn->mg_conn.status_code = code;
+  // For responses without Content-Lengh, use the whole buffer
+  if (conn->cl == 0 && code == MG_DOWNLOAD_SUCCESS) {
+    conn->mg_conn.content_len = conn->local_iobuf.len;
+  }
+  conn->mg_conn.content = conn->local_iobuf.buf;
+  if (conn->handler(&conn->mg_conn) || code == MG_CONNECT_FAILURE ||
+      code == MG_DOWNLOAD_FAILURE) {
+    conn->flags |= CONN_CLOSE;
+  }
+  discard_leading_iobuf_bytes(&conn->local_iobuf, conn->mg_conn.content_len);
+  conn->flags = conn->mg_conn.status_code = 0;
+  conn->cl = conn->num_bytes_sent = conn->request_len = 0;
+  free(conn->request);
+  conn->request = NULL;
+}
 
-  if (conn->endpoint_type == EP_CLIENT) {
-    conn->mg_conn.wsbits = 1;
-    if (!(conn->flags & CONN_CONNECTED) &&
-        getsockopt(conn->client_sock, SOL_SOCKET, SO_ERROR,
-                   (char *) &ok, &len) < 0) {
-      conn->mg_conn.wsbits = 0;
-    }
-    conn->handler(&conn->mg_conn);
-    conn->flags |= CONN_CLOSE | CONN_CONNECTED;
-  } else {
-    if (conn->ssl != NULL) {
-#ifdef USE_SSL
-      if (conn->flags & CONN_SSL_HANDS_SHAKEN) {
-        n = SSL_read(conn->ssl, buf, sizeof(buf));
-      } else {
-        if (SSL_accept(conn->ssl) == 1) {
-          conn->flags |= CONN_SSL_HANDS_SHAKEN;
-        }
-        return;
-      }
-#endif
-    } else {
-      n = recv(conn->client_sock, buf, sizeof(buf), 0);
-    }
+static void process_response(struct connection *conn) {
+  struct iobuf *io = &conn->local_iobuf;
 
-    DBG(("%p %d", conn, n));
-    if (is_error(n)) {
-      conn->flags |= CONN_CLOSE;
-    } else if (n > 0) {
-      spool(&conn->local_iobuf, buf, n);
-      process_request(conn);
-    }
+  try_http_parse_and_set_content_length(conn);
+  DBG(("%p %d %d [%.*s]", conn, conn->request_len, io->len,
+       io->len > 40 ? 40 : io->len, io->buf));
+  if (conn->request_len < 0 ||
+      (conn->request_len == 0 && io->len > MAX_REQUEST_SIZE)) {
+    call_http_client_handler(conn, MG_DOWNLOAD_FAILURE);
+  }
+  if (io->len >= conn->cl) {
+    call_http_client_handler(conn, MG_DOWNLOAD_SUCCESS);
   }
 }
 
-int mg_connect(struct mg_server *server, const char *host,
-                                 int port, mg_handler_t handler, void *param) {
+static void callback_http_client_on_connect(struct connection *conn) {
+  int ok;
+  socklen_t len = sizeof(ok);
+
+  if (getsockopt(conn->client_sock, SOL_SOCKET, SO_ERROR, (char *) &ok,
+                 &len) == 0 && ok == 0) {
+    conn->mg_conn.status_code = MG_CONNECT_SUCCESS;
+  }
+  conn->flags &= ~CONN_CONNECTING;
+  if (conn->handler(&conn->mg_conn) || ok != 0) {
+    conn->flags |= CONN_CLOSE;
+  }
+}
+
+static void read_from_socket(struct connection *conn) {
+  char buf[IOBUF_SIZE];
+  int n = 0;
+
+  if (conn->endpoint_type == EP_CLIENT && conn->flags & CONN_CONNECTING) {
+    callback_http_client_on_connect(conn);
+    return;
+  }
+
+  if (conn->ssl != NULL) {
+#ifdef USE_SSL
+    if (conn->flags & CONN_SSL_HANDS_SHAKEN) {
+      n = SSL_read(conn->ssl, buf, sizeof(buf));
+    } else {
+      if (SSL_accept(conn->ssl) == 1) {
+        conn->flags |= CONN_SSL_HANDS_SHAKEN;
+      }
+      return;
+    }
+#endif
+  } else {
+    n = recv(conn->client_sock, buf, sizeof(buf), 0);
+  }
+
+  DBG(("%p %d %d (1)", conn, n, conn->flags));
+  if (is_error(n)) {
+    if (conn->endpoint_type == EP_CLIENT && conn->local_iobuf.len > 0) {
+      call_http_client_handler(conn, MG_DOWNLOAD_SUCCESS);
+    }
+    conn->flags |= CONN_CLOSE;
+  } else if (n > 0) {
+    spool(&conn->local_iobuf, buf, n);
+    if (conn->endpoint_type == EP_CLIENT) {
+      process_response(conn);
+    } else {
+      process_request(conn);
+    }
+  }
+  DBG(("%p %d %d (2)", conn, n, conn->flags));
+}
+
+int mg_connect(struct mg_server *server, const char *host, int port,
+               mg_handler_t handler, void *param) {
   sock_t sock = INVALID_SOCKET;
   struct sockaddr_in sin;
   struct hostent *he = NULL;
@@ -3544,10 +3603,16 @@ int mg_connect(struct mg_server *server, const char *host,
   conn->handler = handler;
   conn->mg_conn.server_param = server->server_data;
   conn->mg_conn.connection_param = param;
+  conn->birth_time = conn->last_activity_time = time(NULL);
+  conn->flags = CONN_CONNECTING;
+  conn->mg_conn.status_code = MG_CONNECT_FAILURE;
   LINKED_LIST_ADD_TO_FRONT(&server->active_connections, &conn->link);
+  DBG(("%p %s:%d", conn, host, port));
 
   if (connect_ret_val == 0) {
-    conn->flags = CONN_CONNECTED;
+    conn->mg_conn.status_code = MG_CONNECT_SUCCESS;
+    conn->flags &= ~CONN_CONNECTING;
+    conn->mg_conn.content = conn->local_iobuf.buf;
     handler(&conn->mg_conn);
   }
 
@@ -3593,17 +3658,11 @@ static void log_access(const struct connection *conn, const char *path) {
 }
 #endif
 
-static void gobble_prior_post_data(struct iobuf *io, int len) {
-  if (len > 0 && len <= io->len) {
-    memmove(io->buf, io->buf + len, io->len - len);
-    io->len -= len;
-  }
-}
-
 static void close_local_endpoint(struct connection *conn) {
   // Must be done before free()
   int keep_alive = should_keep_alive(&conn->mg_conn) &&
     (conn->endpoint_type == EP_FILE || conn->endpoint_type == EP_USER);
+  DBG(("%p %d %d %d", conn, conn->endpoint_type, keep_alive, conn->flags));
 
   switch (conn->endpoint_type) {
     case EP_PUT: close(conn->endpoint.fd); break;
@@ -3613,17 +3672,16 @@ static void close_local_endpoint(struct connection *conn) {
   }
 
 #ifndef NO_LOGGING
-  if (conn->mg_conn.status_code != 400) {
+  if (conn->mg_conn.status_code > 0 && conn->endpoint_type != EP_CLIENT &&
+      conn->mg_conn.status_code != 400) {
     log_access(conn, conn->server->config_options[ACCESS_LOG_FILE]);
   }
 #endif
 
-  if (conn->endpoint_type == EP_USER) {
-    gobble_prior_post_data(&conn->local_iobuf, conn->mg_conn.content_len);
-  }
-
+  // Gobble possible POST data sent to the URI handler
+  discard_leading_iobuf_bytes(&conn->local_iobuf, conn->mg_conn.content_len);
   conn->endpoint_type = EP_NONE;
-  conn->flags = 0;
+  conn->flags = conn->mg_conn.status_code = 0;
   conn->cl = conn->num_bytes_sent = conn->request_len = 0;
   free(conn->request);
   conn->request = NULL;
@@ -3690,6 +3748,9 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
   LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
     conn = LINKED_LIST_ENTRY(lp, struct connection, link);
     add_to_set(conn->client_sock, &read_set, &max_fd);
+    if (conn->endpoint_type == EP_CLIENT && (conn->flags & CONN_CONNECTING)) {
+      add_to_set(conn->client_sock, &write_set, &max_fd);
+    }
     if (conn->endpoint_type == EP_FILE) {
       transfer_file_data(conn);
     } else if (conn->endpoint_type == EP_CGI) {
@@ -3730,10 +3791,14 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
         read_from_cgi(conn);
       }
 #endif
-      if (FD_ISSET(conn->client_sock, &write_set) &&
-          !(conn->flags & CONN_BUFFER)) {
-        conn->last_activity_time = current_time;
-        write_to_socket(conn);
+      if (FD_ISSET(conn->client_sock, &write_set)) {
+        if (conn->endpoint_type == EP_CLIENT &&
+            (conn->flags & CONN_CONNECTING)) {
+          read_from_socket(conn);
+        } else if (!(conn->flags & CONN_BUFFER)) {
+          conn->last_activity_time = current_time;
+          write_to_socket(conn);
+        }
       }
     }
   }
@@ -3767,7 +3832,7 @@ void mg_destroy_server(struct mg_server **server) {
     closesocket((*server)->ctl[0]);
     closesocket((*server)->ctl[1]);
     LINKED_LIST_FOREACH(&(*server)->active_connections, lp, tmp) {
-      free(LINKED_LIST_ENTRY(lp, struct connection, link));
+      close_conn(LINKED_LIST_ENTRY(lp, struct connection, link));
     }
     LINKED_LIST_FOREACH(&(*server)->uri_handlers, lp, tmp) {
       free(LINKED_LIST_ENTRY(lp, struct uri_handler, link)->uri);
@@ -3980,7 +4045,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
       free(server->config_options[ind]);
     }
     server->config_options[ind] = mg_strdup(value);
-    DBG(("%s => %s", name, value));
+    DBG(("%s [%s]", name, value));
 
     if (ind == LISTENING_PORT) {
       if (server->listening_sock != INVALID_SOCKET) {
