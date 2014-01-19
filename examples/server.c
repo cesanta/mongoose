@@ -74,7 +74,7 @@ typedef struct stat file_stat_t;
 #define MAX_CONF_FILE_LINE_SIZE (8 * 1024)
 
 static int exit_flag;
-static char server_name[40];        // Set by init_server_name()
+static char server_name[50];        // Set by init_server_name()
 static char config_file[PATH_MAX];  // Set by process_command_line_arguments()
 static struct mg_server *server;    // Set by start_mongoose()
 
@@ -226,8 +226,9 @@ static void process_command_line_arguments(char *argv[], char **options) {
 }
 
 static void init_server_name(void) {
-  snprintf(server_name, sizeof(server_name), "Mongoose web server v.%s",
-           MONGOOSE_VERSION);
+  const char *descr = "";
+  snprintf(server_name, sizeof(server_name), "Mongoose web server v.%s%s",
+           MONGOOSE_VERSION, descr);
 }
 
 static int is_path_absolute(const char *path) {
