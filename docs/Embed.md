@@ -104,3 +104,5 @@ Mongoose source code contains a well-commented example code, listed below:
    shows how to handle form input
    * [upload.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
    shows how to upload files
+   * [websocket.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c) demonstrates websocket usage
+   * [auth.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c) demonstrates API-controlled Digest authorization
