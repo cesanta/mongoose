@@ -407,8 +407,8 @@ static const char *test_server(void) {
   mg_add_uri_handler(server, "/cb1", cb1);
   mg_set_http_error_handler(server, error_handler);
 
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), ts1, buf1) == 1);
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), ts2, buf2) == 1);
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT),  0, ts1, buf1) == 1);
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, ts2, buf2) == 1);
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 0); }
   ASSERT(strcmp(buf1, "foo ? 127.0.0.1") == 0);
@@ -468,9 +468,9 @@ static const char *test_mg_connect(void) {
 
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
-  ASSERT(mg_connect(server, "", 0, NULL, NULL) == 0);
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), cb2, buf2) == 1);
-  ASSERT(mg_connect(server, "127.0.0.1", 1, cb3, buf3) == 1);
+  ASSERT(mg_connect(server, "", 0, 0, NULL, NULL) == 0);
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, cb2, buf2) == 1);
+  ASSERT(mg_connect(server, "127.0.0.1", 1, 0, cb3, buf3) == 1);
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 0); }
 

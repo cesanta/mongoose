@@ -13,9 +13,9 @@
 // See the GNU General Public License for more details.
 //
 // Alternatively, you can license this library under a commercial
-// license, as set out in <http://cesanta.com/products.html>.
+// license, as set out in <http://cesanta.com/>.
 //
-// NOTE: Detailed API documentation is at http://cesanta.com/docs.html
+// NOTE: Detailed API documentation is at http://cesanta.com/#docs
 
 #ifndef MONGOOSE_HEADER_INCLUDED
 #define  MONGOOSE_HEADER_INCLUDED
@@ -106,7 +106,7 @@ enum {
   MG_CONNECT_SUCCESS, MG_CONNECT_FAILURE,
   MG_DOWNLOAD_SUCCESS, MG_DOWNLOAD_FAILURE
 };
-int mg_connect(struct mg_server *server, const char *host, int port,
+int mg_connect(struct mg_server *, const char *host, int port, int use_ssl,
                mg_handler_t handler, void *param);
 
 #ifdef __cplusplus

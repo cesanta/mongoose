@@ -13,7 +13,7 @@
 // See the GNU General Public License for more details.
 //
 // Alternatively, you can license this library under a commercial
-// license, as set out in <http://cesanta.com/products.html>.
+// license, as set out in <http://cesanta.com/>.
 
 #undef UNICODE                  // Use ANSI WinAPI functions
 #undef _UNICODE                 // Use multibyte encoding on Windows
@@ -117,31 +117,10 @@ typedef struct stat file_stat_t;
 #endif
 
 #ifdef USE_SSL
-// Following define gets rid of openssl deprecation messages
-#define MAC_OS_X_VERSION_MIN_REQUIRED MAC_OS_X_VERSION_10_6
-
-#ifdef USE_CYASSL
-#include <openssl/ssl.h>
-#else
-typedef struct ssl_ctx_st SSL_CTX;
-typedef struct ssl_st SSL;
-typedef struct ssl_method_st SSL_METHOD;
-
-extern void __cdecl SSL_free(SSL *);
-extern int __cdecl SSL_accept(SSL *);
-extern int __cdecl SSL_connect(SSL *);
-extern int __cdecl SSL_read(SSL *, void *, int);
-extern int __cdecl SSL_write(SSL *, const void *, int);
-extern int __cdecl SSL_set_fd(SSL *, int);
-extern SSL * __cdecl SSL_new(SSL_CTX *);
-extern SSL_CTX * __cdecl SSL_CTX_new(SSL_METHOD *);
-extern SSL_METHOD * __cdecl SSLv23_server_method(void);
-extern int __cdecl SSL_library_init(void);
-extern int __cdecl SSL_CTX_use_PrivateKey_file(SSL_CTX *, const char *, int);
-extern int __cdecl SSL_CTX_use_certificate_file(SSL_CTX *, const char *, int);
-extern int __cdecl SSL_CTX_use_certificate_chain_file(SSL_CTX *, const char *);
-extern void __cdecl SSL_CTX_free(SSL_CTX *);
+#ifdef __APPLE__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
+#include <openssl/ssl.h>
 #endif
 
 #include "mongoose.h"
@@ -291,7 +270,10 @@ struct mg_server {
   mg_handler_t error_handler;
   char *config_options[NUM_OPTIONS];
   void *server_data;
-  void *ssl_ctx;    // SSL context
+#ifdef USE_SSL
+  SSL_CTX *ssl_ctx;            // Server SSL context
+  SSL_CTX *client_ssl_ctx;     // Client SSL context
+#endif
   sock_t ctl[2];    // Control socketpair. Used to wake up from select() call
 };
 
@@ -339,8 +321,10 @@ struct connection {
   int64_t cl;             // Reply content length, for Range support
   int request_len;  // Request length, including last \r\n after last header
   int flags;        // CONN_* flags: CONN_CLOSE, CONN_SPOOL_DONE, etc
-  void *ssl;        // SSL descriptor
   mg_handler_t handler;  // Callback for HTTP client
+#ifdef USE_SSL
+  SSL *ssl;        // SSL descriptor
+#endif
 };
 
 static void close_local_endpoint(struct connection *conn);
@@ -3523,11 +3507,20 @@ static void callback_http_client_on_connect(struct connection *conn) {
   int ok;
   socklen_t len = sizeof(ok);
 
+  conn->flags &= ~CONN_CONNECTING;
   if (getsockopt(conn->client_sock, SOL_SOCKET, SO_ERROR, (char *) &ok,
                  &len) == 0 && ok == 0) {
     conn->mg_conn.status_code = MG_CONNECT_SUCCESS;
+#ifdef USE_SSL
+    if (conn->ssl != NULL) {
+      switch (SSL_connect(conn->ssl)) {
+        case 1: conn->flags = CONN_SSL_HANDS_SHAKEN; break;
+        case 0: conn->flags &= ~CONN_CONNECTING;  // Call this function again
+        default: ok = 1; break;
+      }
+    }
+#endif
   }
-  conn->flags &= ~CONN_CONNECTING;
   if (conn->handler(&conn->mg_conn) || ok != 0) {
     conn->flags |= CONN_CLOSE;
   }
@@ -3575,7 +3568,7 @@ static void read_from_socket(struct connection *conn) {
 }
 
 int mg_connect(struct mg_server *server, const char *host, int port,
-               mg_handler_t handler, void *param) {
+               int use_ssl, mg_handler_t handler, void *param) {
   sock_t sock = INVALID_SOCKET;
   struct sockaddr_in sin;
   struct hostent *he = NULL;
@@ -3584,6 +3577,9 @@ int mg_connect(struct mg_server *server, const char *host, int port,
 
   if (host == NULL || (he = gethostbyname(host)) == NULL ||
       (sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) return 0;
+#ifndef USE_SSL
+  if (use_ssl) return 0;
+#endif
 
   sin.sin_family = AF_INET;
   sin.sin_port = htons((uint16_t) port);
@@ -3606,6 +3602,11 @@ int mg_connect(struct mg_server *server, const char *host, int port,
   conn->birth_time = conn->last_activity_time = time(NULL);
   conn->flags = CONN_CONNECTING;
   conn->mg_conn.status_code = MG_CONNECT_FAILURE;
+#ifdef USE_SSL
+  if (use_ssl && (conn->ssl = SSL_new(server->client_ssl_ctx)) != NULL) {
+    SSL_set_fd(conn->ssl, sock);
+  }
+#endif
   LINKED_LIST_ADD_TO_FRONT(&server->active_connections, &conn->link);
   DBG(("%p %s:%d", conn, host, port));
 
@@ -3826,25 +3827,27 @@ void mg_destroy_server(struct mg_server **server) {
   struct ll *lp, *tmp;
 
   if (server != NULL && *server != NULL) {
+    struct mg_server *s = *server;
     // Do one last poll, see https://github.com/cesanta/mongoose/issues/286
-    mg_poll_server(*server, 0);
-    closesocket((*server)->listening_sock);
-    closesocket((*server)->ctl[0]);
-    closesocket((*server)->ctl[1]);
-    LINKED_LIST_FOREACH(&(*server)->active_connections, lp, tmp) {
+    mg_poll_server(s, 0);
+    closesocket(s->listening_sock);
+    closesocket(s->ctl[0]);
+    closesocket(s->ctl[1]);
+    LINKED_LIST_FOREACH(&s->active_connections, lp, tmp) {
       close_conn(LINKED_LIST_ENTRY(lp, struct connection, link));
     }
-    LINKED_LIST_FOREACH(&(*server)->uri_handlers, lp, tmp) {
+    LINKED_LIST_FOREACH(&s->uri_handlers, lp, tmp) {
       free(LINKED_LIST_ENTRY(lp, struct uri_handler, link)->uri);
       free(LINKED_LIST_ENTRY(lp, struct uri_handler, link));
     }
-    for (i = 0; i < (int) ARRAY_SIZE((*server)->config_options); i++) {
-      free((*server)->config_options[i]);  // It is OK to free(NULL)
+    for (i = 0; i < (int) ARRAY_SIZE(s->config_options); i++) {
+      free(s->config_options[i]);  // It is OK to free(NULL)
     }
 #ifdef USE_SSL
-    if ((*server)->ssl_ctx != NULL) SSL_CTX_free((*server)->ssl_ctx);
+    if (s->ssl_ctx != NULL) SSL_CTX_free((*server)->ssl_ctx);
+    if (s->client_ssl_ctx != NULL) SSL_CTX_free(s->client_ssl_ctx);
 #endif
-    free(*server);
+    free(s);
     *server = NULL;
   }
 }
@@ -4129,6 +4132,10 @@ struct mg_server *mg_create_server(void *server_data) {
   do {
     mg_socketpair(server->ctl);
   } while (server->ctl[0] == INVALID_SOCKET);
+
+#ifdef USE_SSL
+  server->client_ssl_ctx = SSL_CTX_new(SSLv23_client_method());
+#endif
 
   server->server_data = server_data;
   server->listening_sock = INVALID_SOCKET;
