@@ -440,7 +440,7 @@ static int cb2(struct mg_connection *conn) {
         file_name = file1;
       }
       if ((file_data = read_file(file_name, &file_len)) != NULL) {
-        if (file_len == conn->content_len &&
+        if ((size_t) file_len == conn->content_len &&
             memcmp(file_data, conn->content, file_len) == 0) {
           strcat(buf, "d");
         } else {
@@ -526,7 +526,7 @@ static int us1(struct mg_connection *conn) {
   } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
     char *file_data = read_file(file_name, &file_size);
     sprintf((char *) conn->connection_param, "%d",
-            file_size == conn->content_len &&
+            (size_t) file_size == conn->content_len &&
             memcmp(file_data, conn->content, file_size) == 0 ? 1 : 0);
     free(file_data);
   } else if (conn->status_code == MG_CONNECT_FAILURE) {

@@ -46,7 +46,7 @@ struct mg_connection {
   } http_headers[30];
 
   char *content;              // POST (or websocket message) data, or NULL
-  long int content_len;       // content length
+  size_t content_len;       // content length
 
   int is_websocket;           // Connection is a websocket connection
   int status_code;            // HTTP status code for HTTP error handler

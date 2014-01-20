@@ -2229,7 +2229,7 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
     do { } while (deliver_websocket_frame(conn));
   } else
 #endif
-  if (loc->len >= c->content_len) {
+  if ((size_t) loc->len >= c->content_len) {
     call_uri_handler(conn);
   }
 }
@@ -3329,7 +3329,7 @@ static void handle_lsp_request(struct connection *conn, const char *path,
     prepare_lua_environment(&conn->mg_conn, L);
     lua_pushcclosure(L, &lua_error_handler, 0);
     lua_pushglobaltable(L);
-    lsp(conn, p, st->st_size, L);
+    lsp(conn, p, (int) st->st_size, L);
     close_local_endpoint(conn);
   }
 
