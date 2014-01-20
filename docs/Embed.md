@@ -73,19 +73,25 @@ could be enabled by setting appropriate `USE_*` flag. Bare bones Mongoose
 is quite small, about 30 kilobytes of compiled x86 code. Each feature adds
 a couple of kilobytes to the executable size, and also has some runtime penalty.
 
-    -DNO_AUTH         Disable MD5 authorization support
-    -DNO_CGI          Disable CGI support
-    -DNO_DAV          Disable WebDAV support (PUT, DELETE, MKCOL, PROPFIND)
-    -DNO_DIRECTORY_LISTING  Disable directory listing
-    -DNO_LOGGING      Disable access/error logging
-    -DNO_WEBSOCKET    Disable WebSocket support
+    -DMONGOOSE_NO_AUTH          Disable MD5 authorization support
+    -DMONGOOSE_NO_CGI           Disable CGI support
+    -DMONGOOSE_NO_DAV           Disable WebDAV support
+                                (PUT, DELETE, MKCOL, PROPFIND methods)
+    -DMONGOOSE_NO_DIRECTORY_LISTING  Disable directory listing
+    -DMONGOOSE_NO_FILESYSTEM    Disables all file IO, serving from memory only
+    -DMONGOOSE_NO_LOGGING       Disable access/error logging
+    -DMONGOOSE_NO_THREADS
+    -DMONGOOSE_NO_WEBSOCKET     Disable WebSocket support
 
-    -DUSE_IPV6          Enable IPv6 support
-    -DUSE_LUA           Enable Lua scripting
-    -DUSE_LUA_SQLITE3   Enable sqlite3 binding for Lua
-    -DUSE_SSL           Enable SSL
-    -DUSE_POST_SIZE_LIMIT=X     POST requests larger than X will be rejected
-    -DUSE_EXTRA_HTTP_HEADERS=X  Append X to the HTTP headers for static files
+    -DMONGOOSE_USE_IDLE_TIMEOUT_SECONDS=X Idle connection timeout, default is 30
+    -DMONGOOSE_USE_IPV6         Enable IPv6 support
+    -DMONGOOSE_USE_LUA          Enable Lua scripting
+    -DMONGOOSE_USE_LUA_SQLITE3  Enable sqlite3 binding for Lua
+    -DMONGOOSE_USE_SSL          Enable SSL
+    -DMONGOOSE_USE_POST_SIZE_LIMIT=X      POST requests larger than X will be
+                                          rejected, not set by default
+    -DMONGOOSE_USE_EXTRA_HTTP_HEADERS=X   Append X to the HTTP headers
+                                          for static files, empty by default
 
 Mongoose source code contains a well-commented example code, listed below:
 

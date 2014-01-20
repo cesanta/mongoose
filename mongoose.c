@@ -98,7 +98,7 @@ typedef struct _stati64 file_stat_t;
 #include <signal.h>
 #include <unistd.h>
 #include <netdb.h>
-#include <arpa/inet.h>  // For inet_pton() when USE_IPV6 is defined
+#include <arpa/inet.h>  // For inet_pton() when MONGOOSE_USE_IPV6 is defined
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -118,7 +118,7 @@ typedef struct stat file_stat_t;
 #define O_BINARY 0
 #endif
 
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
 #ifdef __APPLE__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
@@ -151,21 +151,21 @@ struct ll { struct ll *prev, *next; };
 #define ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
 #define PASSWORDS_FILE_NAME ".htpasswd"
 
-#ifndef USE_WEBSOCKET_PING_INTERVAL
-#define USE_WEBSOCKET_PING_INTERVAL 5
+#ifndef MONGOOSE_USE_WEBSOCKET_PING_INTERVAL
+#define MONGOOSE_USE_WEBSOCKET_PING_INTERVAL 5
 #endif
 
 // Extra HTTP headers to send in every static file reply
-#if !defined(USE_EXTRA_HTTP_HEADERS)
-#define USE_EXTRA_HTTP_HEADERS ""
+#if !defined(MONGOOSE_USE_EXTRA_HTTP_HEADERS)
+#define MONGOOSE_USE_EXTRA_HTTP_HEADERS ""
 #endif
 
-#ifndef USE_POST_SIZE_LIMIT
-#define USE_POST_SIZE_LIMIT 0
+#ifndef MONGOOSE_USE_POST_SIZE_LIMIT
+#define MONGOOSE_USE_POST_SIZE_LIMIT 0
 #endif
 
-#ifndef USE_IDLE_TIMEOUT_SECONDS
-#define USE_IDLE_TIMEOUT_SECONDS 30
+#ifndef MONGOOSE_USE_IDLE_TIMEOUT_SECONDS
+#define MONGOOSE_USE_IDLE_TIMEOUT_SECONDS 30
 #endif
 
 #ifdef ENABLE_DBG
@@ -175,18 +175,18 @@ struct ll { struct ll *prev, *next; };
 #define DBG(x)
 #endif
 
-#ifdef NO_FILESYSTEM
-#define NO_AUTH
-#define NO_CGI
-#define NO_DAV
-#define NO_DIRECTORY_LISTING
-#define NO_LOGGING
+#ifdef MONGOOSE_NO_FILESYSTEM
+#define MONGOOSE_NO_AUTH
+#define MONGOOSE_NO_CGI
+#define MONGOOSE_NO_DAV
+#define MONGOOSE_NO_DIRECTORY_LISTING
+#define MONGOOSE_NO_LOGGING
 #endif
 
 union socket_address {
   struct sockaddr sa;
   struct sockaddr_in sin;
-#ifdef USE_IPV6
+#ifdef MONGOOSE_USE_IPV6
   struct sockaddr_in6 sin6;
 #endif
 };
@@ -212,23 +212,23 @@ struct dir_entry {
 // NOTE(lsm): this enum shoulds be in sync with the config_options.
 enum {
   ACCESS_CONTROL_LIST,
-#ifndef NO_FILESYSTEM
+#ifndef MONGOOSE_NO_FILESYSTEM
   ACCESS_LOG_FILE, AUTH_DOMAIN, CGI_INTERPRETER,
   CGI_PATTERN, DAV_AUTH_FILE, DOCUMENT_ROOT, ENABLE_DIRECTORY_LISTING,
 #endif
   EXTRA_MIME_TYPES,
-#ifndef NO_FILESYSTEM
+#ifndef MONGOOSE_NO_FILESYSTEM
   GLOBAL_AUTH_FILE,
 #endif
   HIDE_FILES_PATTERN,
-#ifndef NO_FILESYSTEM
+#ifndef MONGOOSE_NO_FILESYSTEM
   INDEX_FILES,
 #endif
   LISTENING_PORT,
 #ifndef _WIN32
   RUN_AS_USER,
 #endif
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
   SSL_CERTIFICATE,
 #endif
   URL_REWRITES, NUM_OPTIONS
@@ -236,7 +236,7 @@ enum {
 
 static const char *static_config_options[] = {
   "access_control_list", NULL,
-#ifndef NO_FILESYSTEM
+#ifndef MONGOOSE_NO_FILESYSTEM
   "access_log_file", NULL,
   "auth_domain", "mydomain.com",
   "cgi_interpreter", NULL,
@@ -246,18 +246,18 @@ static const char *static_config_options[] = {
   "enable_directory_listing", "yes",
 #endif
   "extra_mime_types", NULL,
-#ifndef NO_FILESYSTEM
+#ifndef MONGOOSE_NO_FILESYSTEM
   "global_auth_file", NULL,
 #endif
   "hide_files_patterns", NULL,
-#ifndef NO_FILESYSTEM
+#ifndef MONGOOSE_NO_FILESYSTEM
   "index_files","index.html,index.htm,index.cgi,index.php,index.lp",
 #endif
   "listening_port", NULL,
 #ifndef _WIN32
   "run_as_user", NULL,
 #endif
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
   "ssl_certificate", NULL,
 #endif
   "url_rewrites", NULL,
@@ -272,7 +272,7 @@ struct mg_server {
   mg_handler_t error_handler;
   char *config_options[NUM_OPTIONS];
   void *server_data;
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
   SSL_CTX *ssl_ctx;            // Server SSL context
   SSL_CTX *client_ssl_ctx;     // Client SSL context
 #endif
@@ -324,7 +324,7 @@ struct connection {
   int request_len;  // Request length, including last \r\n after last header
   int flags;        // CONN_* flags: CONN_CLOSE, CONN_SPOOL_DONE, etc
   mg_handler_t handler;  // Callback for HTTP client
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
   SSL *ssl;        // SSL descriptor
 #endif
 };
@@ -386,7 +386,7 @@ static const struct {
   {NULL,  0, NULL}
 };
 
-#ifndef NO_THREADS
+#ifndef MONGOOSE_NO_THREADS
 void *mg_start_thread(void *(*f)(void *), void *p) {
 #ifdef _WIN32
   return (void *) _beginthread((void (__cdecl *)(void *)) f, 0, p);
@@ -397,7 +397,7 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
   (void) pthread_attr_init(&attr);
   (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
-#if USE_STACK_SIZE > 1
+#if MONGOOSE_USE_STACK_SIZE > 1
   // Compile-time option to control stack size, e.g. -DUSE_STACK_SIZE=16384
   (void) pthread_attr_setstacksize(&attr, USE_STACK_SIZE);
 #endif
@@ -408,7 +408,7 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
   return (void *) thread_id;
 #endif
 }
-#endif  // NO_THREADS
+#endif  // MONGOOSE_NO_THREADS
 
 #ifdef _WIN32
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
@@ -800,7 +800,7 @@ static void discard_leading_iobuf_bytes(struct iobuf *io, int n) {
   }
 }
 
-#ifndef NO_CGI
+#ifndef MONGOOSE_NO_CGI
 #ifdef _WIN32
 struct threadparam {
   sock_t s;
@@ -1069,7 +1069,7 @@ static void prepare_cgi_environment(struct connection *conn,
 
   addenv(blk, "SCRIPT_FILENAME=%s", prog);
   addenv(blk, "PATH_TRANSLATED=%s", prog);
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
   addenv(blk, "HTTPS=%s", conn->ssl != NULL ? "on" : "off");
 #else
   addenv(blk, "HTTPS=%s", "off");
@@ -1202,7 +1202,7 @@ static void forward_post_data(struct connection *conn) {
   int n = send(conn->endpoint.cgi_sock, io->buf, io->len, 0);
   discard_leading_iobuf_bytes(io, n);
 }
-#endif  // !NO_CGI
+#endif  // !MONGOOSE_NO_CGI
 
 // 'sa' must be an initialized address to bind to
 static sock_t open_listening_socket(union socket_address *sa) {
@@ -1275,7 +1275,7 @@ static int check_acl(const char *acl, uint32_t remote_ip) {
 static void sockaddr_to_string(char *buf, size_t len,
                                const union socket_address *usa) {
   buf[0] = '\0';
-#if defined(USE_IPV6)
+#if defined(MONGOOSE_USE_IPV6)
   inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
             (void *) &usa->sin.sin_addr :
             (void *) &usa->sin6.sin6_addr, buf, len);
@@ -1301,7 +1301,7 @@ static struct connection *accept_new_connection(struct mg_server *server) {
     closesocket(sock);
   } else if ((conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
     closesocket(sock);
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
   } else if (server->ssl_ctx != NULL &&
              ((conn->ssl = SSL_new(server->ssl_ctx)) == NULL ||
               SSL_set_fd(conn->ssl, sock) != 1)) {
@@ -1335,7 +1335,7 @@ static void close_conn(struct connection *conn) {
   free(conn->path_info);
   free(conn->remote_iobuf.buf);
   free(conn->local_iobuf.buf);
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
   if (conn->ssl != NULL) SSL_free(conn->ssl);
 #endif
   free(conn);
@@ -1474,7 +1474,7 @@ const char *mg_get_header(const struct mg_connection *ri, const char *s) {
   return NULL;
 }
 
-#ifndef NO_FILESYSTEM
+#ifndef MONGOOSE_NO_FILESYSTEM
 // Perform case-insensitive match of string against pattern
 static int match_prefix(const char *pattern, int pattern_len, const char *str) {
   const char *or_str;
@@ -1540,7 +1540,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
 
   if (stat(buf, st) == 0) return 1;
 
-#ifndef NO_CGI
+#ifndef MONGOOSE_NO_CGI
   // Support PATH_INFO for CGI scripts.
   for (p = buf + strlen(root) + 2; *p != '\0'; p++) {
     if (*p == '/') {
@@ -1559,7 +1559,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
 
   return 0;
 }
-#endif  // NO_FILESYSTEM
+#endif  // MONGOOSE_NO_FILESYSTEM
 
 static int should_keep_alive(const struct mg_connection *conn) {
   const char *method = conn->request_method;
@@ -1614,14 +1614,14 @@ void mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
   va_end(ap);
 }
 
-#if !defined(NO_WEBSOCKET) || !defined(NO_AUTH)
+#if !defined(NO_WEBSOCKET) || !defined(MONGOOSE_NO_AUTH)
 static int is_big_endian(void) {
   static const int n = 1;
   return ((char *) &n)[0] == 0;
 }
 #endif
 
-#ifndef NO_WEBSOCKET
+#ifndef MONGOOSE_NO_WEBSOCKET
 // START OF SHA-1 code
 // Copyright(c) By Steve Reid <steve@edmweb.com>
 #define SHA1HANDSOFF
@@ -1895,13 +1895,13 @@ static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
 }
 
 static void ping_idle_websocket_connection(struct connection *conn, time_t t) {
-  if (t - conn->last_activity_time > USE_WEBSOCKET_PING_INTERVAL) {
+  if (t - conn->last_activity_time > MONGOOSE_USE_WEBSOCKET_PING_INTERVAL) {
     mg_websocket_write(&conn->mg_conn, 0x9, "", 0);
   }
 }
 #else
 #define ping_idle_websocket_connection(conn, t)
-#endif // !NO_WEBSOCKET
+#endif // !MONGOOSE_NO_WEBSOCKET
 
 static void write_terminating_chunk(struct connection *conn) {
   mg_write(&conn->mg_conn, "0\r\n\r\n", 5);
@@ -1921,7 +1921,7 @@ static void call_uri_handler(struct connection *conn) {
 
 static void write_to_socket(struct connection *conn) {
   struct iobuf *io = &conn->remote_iobuf;
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
   int n = conn->ssl == NULL ? send(conn->client_sock, io->buf, io->len, 0) :
     SSL_write(conn->ssl, io->buf, io->len);
 #else
@@ -1973,7 +1973,7 @@ static struct uri_handler *find_uri_handler(struct mg_server *server,
   return NULL;
 }
 
-#ifndef NO_FILESYSTEM
+#ifndef MONGOOSE_NO_FILESYSTEM
 // Convert month to the month number. Return -1 on error, or month number
 static int get_month_index(const char *s) {
   static const char *month_names[] = {
@@ -2174,7 +2174,7 @@ static void open_file_endpoint(struct connection *conn, const char *path,
                   conn->mg_conn.status_code, msg, date, lm, etag,
                   (int) mime_vec.len, mime_vec.ptr, conn->cl,
                   suggest_connection_header(&conn->mg_conn),
-                  range, USE_EXTRA_HTTP_HEADERS);
+                  range, MONGOOSE_USE_EXTRA_HTTP_HEADERS);
   spool(&conn->remote_iobuf, headers, n);
 
   if (!strcmp(conn->mg_conn.request_method, "HEAD")) {
@@ -2184,13 +2184,13 @@ static void open_file_endpoint(struct connection *conn, const char *path,
   }
 }
 
-#endif  // NO_FILESYSTEM
+#endif  // MONGOOSE_NO_FILESYSTEM
 
 static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   struct iobuf *loc = &conn->local_iobuf;
   struct mg_connection *c = &conn->mg_conn;
 
-#ifndef NO_WEBSOCKET
+#ifndef MONGOOSE_NO_WEBSOCKET
   if (conn->mg_conn.is_websocket) {
     do { } while (deliver_websocket_frame(conn));
   } else
@@ -2200,7 +2200,7 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   }
 }
 
-#if !defined(NO_DIRECTORY_LISTING) || !defined(NO_DAV)
+#if !defined(NO_DIRECTORY_LISTING) || !defined(MONGOOSE_NO_DAV)
 
 #ifdef _WIN32
 struct dirent {
@@ -2354,9 +2354,9 @@ static void mg_url_encode(const char *src, char *dst, size_t dst_len) {
 
   *dst = '\0';
 }
-#endif  // !NO_DIRECTORY_LISTING || !NO_DAV
+#endif  // !NO_DIRECTORY_LISTING || !MONGOOSE_NO_DAV
 
-#ifndef NO_DIRECTORY_LISTING
+#ifndef MONGOOSE_NO_DIRECTORY_LISTING
 
 static void print_dir_entry(const struct dir_entry *de) {
   char size[64], mod[64], href[MAX_PATH_SIZE * 3], chunk[MAX_PATH_SIZE * 4];
@@ -2452,9 +2452,9 @@ static void send_directory_listing(struct connection *conn, const char *dir) {
   write_terminating_chunk(conn);
   close_local_endpoint(conn);
 }
-#endif  // NO_DIRECTORY_LISTING
+#endif  // MONGOOSE_NO_DIRECTORY_LISTING
 
-#ifndef NO_DAV
+#ifndef MONGOOSE_NO_DAV
 static void print_props(struct connection *conn, const char *uri,
                         file_stat_t *stp) {
   char mtime[64], buf[MAX_PATH_SIZE + 200];
@@ -2643,7 +2643,7 @@ static void forward_put_data(struct connection *conn) {
     }
   }
 }
-#endif //  NO_DAV
+#endif //  MONGOOSE_NO_DAV
 
 static void send_options(struct connection *conn) {
   static const char reply[] = "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, "
@@ -2652,7 +2652,7 @@ static void send_options(struct connection *conn) {
   conn->flags |= CONN_SPOOL_DONE;
 }
 
-#ifndef NO_AUTH
+#ifndef MONGOOSE_NO_AUTH
 void mg_send_digest_auth_request(struct mg_connection *c) {
   struct connection *conn = (struct connection *) c;
   c->status_code = 401;
@@ -2689,7 +2689,7 @@ static FILE *open_auth_file(struct connection *conn, const char *path) {
   return fp;
 }
 
-#if !defined(HAVE_MD5) && !defined(NO_AUTH)
+#if !defined(HAVE_MD5) && !defined(MONGOOSE_NO_AUTH)
 typedef struct MD5Context {
   uint32_t buf[4];
   uint32_t bits[2];
@@ -2995,7 +2995,7 @@ static int is_dav_mutation(const struct connection *conn) {
   return s && (!strcmp(s, "PUT") || !strcmp(s, "DELETE") ||
                !strcmp(s, "MKCOL"));
 }
-#endif // NO_AUTH
+#endif // MONGOOSE_NO_AUTH
 
 int parse_header(const char *str, int str_len, const char *var_name, char *buf,
                  size_t buf_size) {
@@ -3035,7 +3035,7 @@ int mg_parse_header(const char *s, const char *var_name, char *buf,
   return parse_header(s, s == NULL ? 0 : strlen(s), var_name, buf, buf_size);
 }
 
-#ifdef USE_LUA
+#ifdef MONGOOSE_USE_LUA
 #include "lua_5.2.1.h"
 
 #ifdef _WIN32
@@ -3193,7 +3193,7 @@ static void prepare_lua_environment(struct mg_connection *ri, lua_State *L) {
   int i;
 
   luaL_openlibs(L);
-#ifdef USE_LUA_SQLITE3
+#ifdef MONGOOSE_USE_LUA_SQLITE3
   { extern int luaopen_lsqlite3(lua_State *); luaopen_lsqlite3(L); }
 #endif
 
@@ -3303,10 +3303,10 @@ static void handle_lsp_request(struct connection *conn, const char *path,
   if (p != NULL) munmap(p, st->st_size);
   if (fp != NULL) fclose(fp);
 }
-#endif // USE_LUA
+#endif // MONGOOSE_USE_LUA
 
 static void open_local_endpoint(struct connection *conn) {
-#ifndef NO_FILESYSTEM
+#ifndef MONGOOSE_NO_FILESYSTEM
   static const char lua_pat[] = LUA_SCRIPT_PATTERN;
   file_stat_t st;
   char path[MAX_PATH_SIZE];
@@ -3320,7 +3320,7 @@ static void open_local_endpoint(struct connection *conn) {
   if (conn->endpoint.uh != NULL) {
     conn->endpoint_type = EP_USER;
     conn->mg_conn.content = conn->local_iobuf.buf;
-#if USE_POST_SIZE_LIMIT > 1
+#if MONGOOSE_USE_POST_SIZE_LIMIT > 1
     {
       const char *cl = mg_get_header(&conn->mg_conn, "Content-Length");
       if (!strcmp(conn->mg_conn.request_method, "POST") &&
@@ -3333,7 +3333,7 @@ static void open_local_endpoint(struct connection *conn) {
     return;
   }
 
-#ifdef NO_FILESYSTEM
+#ifdef MONGOOSE_NO_FILESYSTEM
   send_http_error(conn, 404, NULL);
 #else
   exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
@@ -3343,13 +3343,13 @@ static void open_local_endpoint(struct connection *conn) {
     send_options(conn);
   } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, NULL);
-#ifndef NO_AUTH
+#ifndef MONGOOSE_NO_AUTH
   } else if ((!is_dav_mutation(conn) && !is_authorized(conn, path)) ||
              (is_dav_mutation(conn) && !is_authorized_for_dav(conn))) {
     mg_send_digest_auth_request(&conn->mg_conn);
     close_local_endpoint(conn);
 #endif
-#ifndef NO_DAV
+#ifndef MONGOOSE_NO_DAV
   } else if (!strcmp(conn->mg_conn.request_method, "PROPFIND")) {
     handle_propfind(conn, path, &st);
   } else if (!strcmp(conn->mg_conn.request_method, "MKCOL")) {
@@ -3369,7 +3369,7 @@ static void open_local_endpoint(struct connection *conn) {
     close_local_endpoint(conn);
   } else if (is_directory && !find_index_file(conn, path, sizeof(path), &st)) {
     if (!mg_strcasecmp(dir_lst, "yes")) {
-#ifndef NO_DIRECTORY_LISTING
+#ifndef MONGOOSE_NO_DIRECTORY_LISTING
       send_directory_listing(conn, path);
 #else
       send_http_error(conn, 501, NULL);
@@ -3378,17 +3378,17 @@ static void open_local_endpoint(struct connection *conn) {
       send_http_error(conn, 403, NULL);
     }
   } else if (match_prefix(lua_pat, sizeof(lua_pat) - 1, path) > 0) {
-#ifdef USE_LUA
+#ifdef MONGOOSE_USE_LUA
     handle_lsp_request(conn, path, &st);
 #else
     send_http_error(conn, 501, NULL);
 #endif
   } else if (match_prefix(cgi_pat, strlen(cgi_pat), path) > 0) {
-#if !defined(NO_CGI)
+#if !defined(MONGOOSE_NO_CGI)
     open_cgi_endpoint(conn, path);
 #else
     send_http_error(conn, 501, NULL);
-#endif // !NO_CGI
+#endif // !MONGOOSE_NO_CGI
   } else if (is_not_modified(conn, &st)) {
     send_http_error(conn, 304, NULL);
   } else if ((conn->endpoint.fd = open(path, O_RDONLY | O_BINARY)) != -1) {
@@ -3398,7 +3398,7 @@ static void open_local_endpoint(struct connection *conn) {
   } else {
     send_http_error(conn, 404, NULL);
   }
-#endif  // NO_FILESYSTEM
+#endif  // MONGOOSE_NO_FILESYSTEM
 }
 
 static void send_continue_if_expected(struct connection *conn) {
@@ -3454,14 +3454,14 @@ static void process_request(struct connection *conn) {
              strcmp(conn->mg_conn.http_version, "1.1") != 0) {
     send_http_error(conn, 505, NULL);
   } else if (conn->request_len > 0 && conn->endpoint_type == EP_NONE) {
-#ifndef NO_WEBSOCKET
+#ifndef MONGOOSE_NO_WEBSOCKET
     send_websocket_handshake_if_requested(&conn->mg_conn);
 #endif
     send_continue_if_expected(conn);
     open_local_endpoint(conn);
   }
 
-#ifndef NO_CGI
+#ifndef MONGOOSE_NO_CGI
   if (conn->endpoint_type == EP_CGI && io->len > 0) {
     forward_post_data(conn);
   }
@@ -3469,7 +3469,7 @@ static void process_request(struct connection *conn) {
   if (conn->endpoint_type == EP_USER) {
     call_uri_handler_if_data_is_buffered(conn);
   }
-#ifndef NO_DAV
+#ifndef MONGOOSE_NO_DAV
   if (conn->endpoint_type == EP_PUT && io->len > 0) {
     forward_put_data(conn);
   }
@@ -3517,7 +3517,7 @@ static void callback_http_client_on_connect(struct connection *conn) {
   if (getsockopt(conn->client_sock, SOL_SOCKET, SO_ERROR, (char *) &ok,
                  &len) == 0 && ok == 0) {
     conn->mg_conn.status_code = MG_CONNECT_SUCCESS;
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
     if (conn->ssl != NULL) {
       switch (SSL_connect(conn->ssl)) {
         case 1: conn->flags = CONN_SSL_HANDS_SHAKEN; break;
@@ -3541,7 +3541,7 @@ static void read_from_socket(struct connection *conn) {
     return;
   }
 
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
   if (conn->ssl != NULL) {
     if (conn->flags & CONN_SSL_HANDS_SHAKEN) {
       n = SSL_read(conn->ssl, buf, sizeof(buf));
@@ -3584,7 +3584,7 @@ int mg_connect(struct mg_server *server, const char *host, int port,
 
   if (host == NULL || (he = gethostbyname(host)) == NULL ||
       (sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) return 0;
-#ifndef USE_SSL
+#ifndef MONGOOSE_USE_SSL
   if (use_ssl) return 0;
 #endif
 
@@ -3609,7 +3609,7 @@ int mg_connect(struct mg_server *server, const char *host, int port,
   conn->birth_time = conn->last_activity_time = time(NULL);
   conn->flags = CONN_CONNECTING;
   conn->mg_conn.status_code = MG_CONNECT_FAILURE;
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
   if (use_ssl && (conn->ssl = SSL_new(server->client_ssl_ctx)) != NULL) {
     SSL_set_fd(conn->ssl, sock);
   }
@@ -3627,7 +3627,7 @@ int mg_connect(struct mg_server *server, const char *host, int port,
   return 1;
 }
 
-#ifndef NO_LOGGING
+#ifndef MONGOOSE_NO_LOGGING
 static void log_header(const struct mg_connection *conn, const char *header,
                        FILE *fp) {
   const char *header_value;
@@ -3679,7 +3679,7 @@ static void close_local_endpoint(struct connection *conn) {
     default: break;
   }
 
-#ifndef NO_LOGGING
+#ifndef MONGOOSE_NO_LOGGING
   if (conn->mg_conn.status_code > 0 && conn->endpoint_type != EP_CLIENT &&
       conn->mg_conn.status_code != 400) {
     log_access(conn, conn->server->config_options[ACCESS_LOG_FILE]);
@@ -3744,7 +3744,7 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
   fd_set read_set, write_set;
   sock_t max_fd = -1;
   time_t current_time = time(NULL), expire_time = current_time -
-    USE_IDLE_TIMEOUT_SECONDS;
+    MONGOOSE_USE_IDLE_TIMEOUT_SECONDS;
 
   if (server->listening_sock == INVALID_SOCKET) return 0;
 
@@ -3793,7 +3793,7 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
         conn->last_activity_time = current_time;
         read_from_socket(conn);
       }
-#ifndef NO_CGI
+#ifndef MONGOOSE_NO_CGI
       if (conn->endpoint_type == EP_CGI &&
           FD_ISSET(conn->endpoint.cgi_sock, &read_set)) {
         read_from_cgi(conn);
@@ -3850,7 +3850,7 @@ void mg_destroy_server(struct mg_server **server) {
     for (i = 0; i < (int) ARRAY_SIZE(s->config_options); i++) {
       free(s->config_options[i]);  // It is OK to free(NULL)
     }
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
     if (s->ssl_ctx != NULL) SSL_CTX_free((*server)->ssl_ctx);
     if (s->client_ssl_ctx != NULL) SSL_CTX_free(s->client_ssl_ctx);
 #endif
@@ -4012,7 +4012,7 @@ static void set_default_option_values(char **opts) {
 static int parse_port_string(const char *str, union socket_address *sa) {
   unsigned int a, b, c, d, port;
   int len = 0;
-#ifdef USE_IPV6
+#ifdef MONGOOSE_USE_IPV6
   char buf[100];
 #endif
 
@@ -4026,7 +4026,7 @@ static int parse_port_string(const char *str, union socket_address *sa) {
     // Bind to a specific IPv4 address, e.g. 192.168.1.5:8080
     sa->sin.sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
     sa->sin.sin_port = htons((uint16_t) port);
-#if defined(USE_IPV6)
+#if defined(MONGOOSE_USE_IPV6)
   } else if (sscanf(str, "[%49[^]]]:%u%n", buf, &port, &len) == 2 &&
              inet_pton(AF_INET6, buf, &sa->sin6.sin6_addr)) {
     // IPv6 address, e.g. [3ffe:2a00:100:7031::1]:8080
@@ -4079,7 +4079,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
         error_msg = "setuid() failed";
       }
 #endif
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
     } else if (ind == SSL_CERTIFICATE) {
       SSL_library_init();
       if ((server->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
@@ -4140,7 +4140,7 @@ struct mg_server *mg_create_server(void *server_data) {
     mg_socketpair(server->ctl);
   } while (server->ctl[0] == INVALID_SOCKET);
 
-#ifdef USE_SSL
+#ifdef MONGOOSE_USE_SSL
   server->client_ssl_ctx = SSL_CTX_new(SSLv23_client_method());
 #endif
 

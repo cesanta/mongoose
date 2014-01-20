@@ -1,10 +1,8 @@
 // Unit test for the mongoose web server.
 // g++ -W -Wall -pedantic -g unit_test.c && ./a.out
 
-#define USE_WEBSOCKET
-
 #ifndef _WIN32
-#define USE_IPV6
+#define MONGOOSE_USE_IPV6
 #endif
 
 // USE_* definitions must be made before #include "mongoose.c" !
