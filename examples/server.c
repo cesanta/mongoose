@@ -97,17 +97,22 @@ static void __cdecl signal_handler(int sig_num) {
   { exit_flag = sig_num; }
 }
 
-static void die(const char *fmt, ...) {
-  va_list ap;
+static void vnotify(const char *fmt, va_list ap, int must_exit) {
   char msg[200];
 
-  va_start(ap, fmt);
   vsnprintf(msg, sizeof(msg), fmt, ap);
-  va_end(ap);
-
   fprintf(stderr, "%s\n", msg);
 
-  exit(EXIT_FAILURE);
+  if (must_exit) {
+    exit(EXIT_FAILURE);
+  }
+}
+
+static void die(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vnotify(fmt, ap, 1);
+  va_end(ap);
 }
 
 static void show_usage_and_exit(void) {
