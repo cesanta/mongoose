@@ -398,7 +398,6 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
   (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
 #if MONGOOSE_USE_STACK_SIZE > 1
-  // Compile-time option to control stack size, e.g. -DUSE_STACK_SIZE=16384
   (void) pthread_attr_setstacksize(&attr, MONGOOSE_USE_STACK_SIZE);
 #endif
 
