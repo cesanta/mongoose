@@ -1067,7 +1067,11 @@ static void prepare_cgi_environment(struct connection *conn,
 
   addenv(blk, "SCRIPT_FILENAME=%s", prog);
   addenv(blk, "PATH_TRANSLATED=%s", prog);
+#ifdef USE_SSL
   addenv(blk, "HTTPS=%s", conn->ssl != NULL ? "on" : "off");
+#else
+  addenv(blk, "HTTPS=%s", "off");
+#endif
 
   if ((s = mg_get_header(ri, "Content-Type")) != NULL)
     addenv(blk, "CONTENT_TYPE=%s", s);
@@ -1915,11 +1919,11 @@ static void call_uri_handler(struct connection *conn) {
 
 static void write_to_socket(struct connection *conn) {
   struct iobuf *io = &conn->remote_iobuf;
-  int n = conn->ssl == NULL ? send(conn->client_sock, io->buf, io->len, 0) :
 #ifdef USE_SSL
+  int n = conn->ssl == NULL ? send(conn->client_sock, io->buf, io->len, 0) :
     SSL_write(conn->ssl, io->buf, io->len);
 #else
-  0;
+  int n = send(conn->client_sock, io->buf, io->len, 0);
 #endif
 
   DBG(("%p Written %d of %d(%d): [%.*s ...]",
@@ -3535,8 +3539,8 @@ static void read_from_socket(struct connection *conn) {
     return;
   }
 
-  if (conn->ssl != NULL) {
 #ifdef USE_SSL
+  if (conn->ssl != NULL) {
     if (conn->flags & CONN_SSL_HANDS_SHAKEN) {
       n = SSL_read(conn->ssl, buf, sizeof(buf));
     } else {
@@ -3545,8 +3549,9 @@ static void read_from_socket(struct connection *conn) {
       }
       return;
     }
+  } else
 #endif
-  } else {
+  {
     n = recv(conn->client_sock, buf, sizeof(buf), 0);
   }
 
