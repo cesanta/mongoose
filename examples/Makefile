@@ -27,7 +27,6 @@ all: websocket_html.c
 	$(CC) auth.c ../mongoose.c -o auth $(CFLAGS)
 	$(CC) server.c ../mongoose.c -o server $(CFLAGS)
 
-#	$(CC) -DUSE_WEBSOCKET websocket.c ../mongoose.c -o $@ $(CFLAGS)
 #	$(CC) chat.c ../mongoose.c -o chat $(CFLAGS)
 #	$(CC) lua_dll.c ../build/lua_5.2.1.c -o $@.so $(CFLAGS) $(DLL_FLAGS)
 
@@ -36,7 +35,7 @@ websocket_html.c: websocket.html
 
 MSVC    = ../../vc6
 CL      = $(MSVC)/bin/cl
-CLFLAGS = /MD /TC /nologo $(DBG) /W3 /DNO_SSL \
+CLFLAGS = /MD /TC /nologo $(DBG) /W3 \
         /I$(MSVC)/include /I.. /Dsnprintf=_snprintf
 LFLAGS  = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
 
@@ -49,7 +48,6 @@ windows: websocket_html.c
 	$(CL) auth.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 	$(CL) server.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 
-#	$(CL) /DUSE_WEBSOCKET websocket.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 #$(CL) lua_dll.c $(CLFLAGS) $(DLL_FLAGS) /DLL $(LFLAGS) /SUBSYSTEM:WINDOWS /ENTRY:luaopen_lua_dll /EXPORT:luaopen_lua_dll /out:lua_dll.dll
 
 clean:

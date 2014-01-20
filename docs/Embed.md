@@ -92,6 +92,9 @@ a couple of kilobytes to the executable size, and also has some runtime penalty.
                                           rejected, not set by default
     -DMONGOOSE_USE_EXTRA_HTTP_HEADERS=X   Append X to the HTTP headers
                                           for static files, empty by default
+    -DMONGOOSE_USE_STACK_SIZE=X           Let mg_start_thread() use stack
+                                          size X, default is OS default
+    -DMONGOOSE_ENABLE_DEBUG     Enables debug messages on stdout, very noisy
 
 Mongoose source code contains a well-commented example code, listed below:
 
