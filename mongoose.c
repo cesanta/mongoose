@@ -1918,17 +1918,52 @@ static void call_uri_handler(struct connection *conn) {
   }
 }
 
+static void callback_http_client_on_connect(struct connection *conn) {
+  int ok = 1;
+  socklen_t len = sizeof(ok);
+
+  conn->flags &= ~CONN_CONNECTING;
+  if (getsockopt(conn->client_sock, SOL_SOCKET, SO_ERROR, (char *) &ok,
+                 &len) == 0 && ok == 0) {
+#ifdef MONGOOSE_USE_SSL
+    if (conn->ssl != NULL) {
+      int res = SSL_connect(conn->ssl), ssl_err = SSL_get_error(conn->ssl, res);
+      //DBG(("%p res %d %d", conn, res, ssl_err));
+      if (res == 1) {
+        conn->flags = CONN_SSL_HANDS_SHAKEN;
+      } else if (res == 0 || ssl_err == 2 || ssl_err == 3) {
+        conn->flags |= CONN_CONNECTING;
+        return; // Call us again
+      } else {
+        ok = 1;
+      }
+    }
+#endif
+  }
+  conn->mg_conn.status_code = ok == 0 ? MG_CONNECT_SUCCESS : MG_CONNECT_FAILURE;
+  if (conn->handler(&conn->mg_conn) || ok != 0) {
+    conn->flags |= CONN_CLOSE;
+  }
+}
+
 static void write_to_socket(struct connection *conn) {
   struct iobuf *io = &conn->remote_iobuf;
+  int n = 0;
+
+  if (conn->endpoint_type == EP_CLIENT && conn->flags & CONN_CONNECTING) {
+    callback_http_client_on_connect(conn);
+    return;
+  }
+
 #ifdef MONGOOSE_USE_SSL
-  int n = conn->ssl == NULL ? send(conn->client_sock, io->buf, io->len, 0) :
-    SSL_write(conn->ssl, io->buf, io->len);
-#else
-  int n = send(conn->client_sock, io->buf, io->len, 0);
+  if (conn->ssl != NULL) {
+    n = SSL_write(conn->ssl, io->buf, io->len);
+  } else
 #endif
+  { n = send(conn->client_sock, io->buf, io->len, 0); }
 
   DBG(("%p Written %d of %d(%d): [%.*s ...]",
-       conn, n, io->len, io->size, 40, io->buf));
+       conn, n, io->len, io->size, io->len < 40 ? io->len : 40, io->buf));
 
   if (is_error(n)) {
     conn->flags |= CONN_CLOSE;
@@ -3508,29 +3543,6 @@ static void process_response(struct connection *conn) {
   }
 }
 
-static void callback_http_client_on_connect(struct connection *conn) {
-  int ok;
-  socklen_t len = sizeof(ok);
-
-  conn->flags &= ~CONN_CONNECTING;
-  if (getsockopt(conn->client_sock, SOL_SOCKET, SO_ERROR, (char *) &ok,
-                 &len) == 0 && ok == 0) {
-    conn->mg_conn.status_code = MG_CONNECT_SUCCESS;
-#ifdef MONGOOSE_USE_SSL
-    if (conn->ssl != NULL) {
-      switch (SSL_connect(conn->ssl)) {
-        case 1: conn->flags = CONN_SSL_HANDS_SHAKEN; break;
-        case 0: conn->flags &= ~CONN_CONNECTING;  // Call this function again
-        default: ok = 1; break;
-      }
-    }
-#endif
-  }
-  if (conn->handler(&conn->mg_conn) || ok != 0) {
-    conn->flags |= CONN_CLOSE;
-  }
-}
-
 static void read_from_socket(struct connection *conn) {
   char buf[IOBUF_SIZE];
   int n = 0;
@@ -3617,10 +3629,13 @@ int mg_connect(struct mg_server *server, const char *host, int port,
   DBG(("%p %s:%d", conn, host, port));
 
   if (connect_ret_val == 0) {
+    callback_http_client_on_connect(conn);
+#if 0
     conn->mg_conn.status_code = MG_CONNECT_SUCCESS;
     conn->flags &= ~CONN_CONNECTING;
     conn->mg_conn.content = conn->local_iobuf.buf;
     handler(&conn->mg_conn);
+#endif
   }
 
   return 1;
@@ -4080,7 +4095,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
 #endif
 #ifdef MONGOOSE_USE_SSL
     } else if (ind == SSL_CERTIFICATE) {
-      SSL_library_init();
+      //SSL_library_init();
       if ((server->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
         error_msg = "SSL_CTX_new() failed";
       } else if (SSL_CTX_use_certificate_file(server->ssl_ctx, value, 1) == 0 ||
@@ -4140,6 +4155,7 @@ struct mg_server *mg_create_server(void *server_data) {
   } while (server->ctl[0] == INVALID_SOCKET);
 
 #ifdef MONGOOSE_USE_SSL
+  SSL_library_init();
   server->client_ssl_ctx = SSL_CTX_new(SSLv23_client_method());
 #endif
 

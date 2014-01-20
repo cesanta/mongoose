@@ -1,8 +1,9 @@
 // Unit test for the mongoose web server.
-// g++ -W -Wall -pedantic -g unit_test.c && ./a.out
+// g++ -W -Wall -pedantic -g unit_test.c -lssl && ./a.out
 
 #ifndef _WIN32
 #define MONGOOSE_USE_IPV6
+#define MONGOOSE_USE_SSL
 #endif
 
 // USE_* definitions must be made before #include "mongoose.c" !
@@ -514,6 +515,46 @@ static const char *test_parse_multipart(void) {
   return NULL;
 }
 
+#ifdef MONGOOSE_USE_SSL
+static int us1(struct mg_connection *conn) {
+  static const char *file_name = "mongoose.h";
+  int file_size;
+
+  if (conn->status_code == MG_CONNECT_SUCCESS) {
+    mg_printf(conn, "GET /%s HTTP/1.0\r\n\r\n", file_name);
+    return 0;
+  } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
+    char *file_data = read_file(file_name, &file_size);
+    sprintf((char *) conn->connection_param, "%d",
+            file_size == conn->content_len &&
+            memcmp(file_data, conn->content, file_size) == 0 ? 1 : 0);
+    free(file_data);
+  } else if (conn->status_code == MG_CONNECT_FAILURE) {
+    sprintf((char *) conn->connection_param, "%s", "cf");
+  } else {
+    sprintf((char *) conn->connection_param, "%s", "df");
+  }
+  return 1;
+}
+
+static const char *test_ssl(void) {
+  static const char *ssl_cert = "examples/ssl_cert.pem";
+  char buf1[100] = "";
+  struct mg_server *server = mg_create_server(NULL);
+
+  ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
+  ASSERT(mg_set_option(server, "document_root", ".") == NULL);
+  ASSERT(mg_set_option(server, "ssl_certificate", ssl_cert) == NULL);
+
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 1, us1, buf1) == 1);
+
+  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1000); }
+  ASSERT(strcmp(buf1, "1") == 0);
+  mg_destroy_server(&server);
+  return NULL;
+}
+#endif
+
 static const char *run_all_tests(void) {
   RUN_TEST(test_should_keep_alive);
   RUN_TEST(test_match_prefix);
@@ -526,9 +567,12 @@ static const char *run_all_tests(void) {
   RUN_TEST(test_mg_parse_header);
   RUN_TEST(test_get_var);
   RUN_TEST(test_next_option);
-  RUN_TEST(test_server);
   RUN_TEST(test_parse_multipart);
+  RUN_TEST(test_server);
   RUN_TEST(test_mg_connect);
+#ifdef MONGOOSE_USE_SSL
+  RUN_TEST(test_ssl);
+#endif
   return NULL;
 }
 
