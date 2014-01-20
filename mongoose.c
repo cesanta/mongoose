@@ -168,7 +168,7 @@ struct ll { struct ll *prev, *next; };
 #define MONGOOSE_USE_IDLE_TIMEOUT_SECONDS 30
 #endif
 
-#ifdef ENABLE_DBG
+#ifdef MONGOOSE_ENABLE_DEBUG
 #define DBG(x) do { printf("%-20s ", __func__); printf x; putchar('\n'); \
   fflush(stdout); } while(0)
 #else
@@ -399,7 +399,7 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
 
 #if MONGOOSE_USE_STACK_SIZE > 1
   // Compile-time option to control stack size, e.g. -DUSE_STACK_SIZE=16384
-  (void) pthread_attr_setstacksize(&attr, USE_STACK_SIZE);
+  (void) pthread_attr_setstacksize(&attr, MONGOOSE_USE_STACK_SIZE);
 #endif
 
   pthread_create(&thread_id, &attr, f, p);
