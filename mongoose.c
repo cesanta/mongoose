@@ -791,6 +791,13 @@ static int is_error(int n) {
   return n == 0 || (n < 0 && errno != EINTR && errno != EAGAIN);
 }
 
+static void discard_leading_iobuf_bytes(struct iobuf *io, int n) {
+  if (n >= 0 && n <= io->len) {
+    memmove(io->buf, io->buf + n, io->len - n);
+    io->len -= n;
+  }
+}
+
 #ifndef NO_CGI
 #ifdef _WIN32
 struct threadparam {
@@ -1181,13 +1188,6 @@ static void read_from_cgi(struct connection *conn) {
       conn->mg_conn.status_code = atoi(status);
       conn->flags &= ~CONN_BUFFER;
     }
-  }
-}
-
-static void discard_leading_iobuf_bytes(struct iobuf *io, int n) {
-  if (n >= 0 && n <= io->len) {
-    memmove(io->buf, io->buf + n, io->len - n);
-    io->len -= n;
   }
 }
 
