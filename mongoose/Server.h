@@ -7,8 +7,10 @@
 #include "Request.h"
 #include "Response.h"
 #include "Controller.h"
+#ifndef NO_WEBSOCKET
 #include "WebSocket.h"
 #include "WebSockets.h"
+#endif
 #include "Mutex.h"
 
 using namespace std;
@@ -99,12 +101,14 @@ namespace Mongoose
              */
             void setOption(string key, string value);
 
+#ifndef NO_WEBSOCKET
             /**
              * Returns the WebSockets container
              *
              * @return WebSockets the web sockets container
              */
             WebSockets &getWebSockets();
+#endif
 
             /**
              * Print statistics
@@ -128,7 +132,9 @@ namespace Mongoose
             map<struct mg_connection*, Request *> currentRequests;
             struct mg_server *server;
 
+#ifndef NO_WEBSOCKET
             WebSockets websockets;
+#endif
 
             vector<Controller *> controllers;
 

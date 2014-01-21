@@ -51,6 +51,7 @@ static int event_handler(struct mg_connection *connection)
     return 1;
 }
 
+#ifndef NO_WEBSOCKET
 static int iterate_callback(struct mg_connection *connection)
 {
     if (connection->is_websocket && connection->content_len) {
@@ -60,6 +61,7 @@ static int iterate_callback(struct mg_connection *connection)
 
     return 1;
 }
+#endif
 
 static void *server_poll(void *param)
 {
@@ -72,7 +74,11 @@ static void *server_poll(void *param)
 namespace Mongoose
 {
     Server::Server(int port, const char *documentRoot)
-        : server(NULL), websockets(true), stopped(false)
+        : server(NULL),
+        stopped(false)
+#ifndef NO_WEBSOCKET 
+          ,websockets(NULL)
+#endif
 
     {
         ostringstream portOss;
@@ -137,6 +143,7 @@ namespace Mongoose
         controllers.push_back(controller);
     }
 
+#ifndef NO_WEBSOCKET
     void Server::_webSocketReady(struct mg_connection *conn)
     {
         WebSocket *websocket = new WebSocket(conn);
@@ -172,6 +179,7 @@ namespace Mongoose
             return 0;
         }
     }
+#endif
 
     int Server::_handleRequest(struct mg_connection *conn)
     {
@@ -240,10 +248,12 @@ namespace Mongoose
         optionsMap[key] = value;
     }
 
+#ifndef NO_WEBSOCKET
     WebSockets &Server::getWebSockets()
     {
         return websockets;
     }
+#endif
 
     void Server::printStats()
     {
