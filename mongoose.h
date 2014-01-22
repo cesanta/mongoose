@@ -101,7 +101,10 @@ char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
 void mg_send_digest_auth_request(struct mg_connection *conn);
 
-// HTTP client interface
+// Callback return codes
+enum { MG_REPLY_TO_BE_CONTINUED, MG_REPLY_COMPLETED };
+
+// HTTP client events
 enum {
   MG_CONNECT_SUCCESS, MG_CONNECT_FAILURE,
   MG_DOWNLOAD_SUCCESS, MG_DOWNLOAD_FAILURE
