@@ -1514,6 +1514,13 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
   return j;
 }
 
+static int must_hide_file(struct connection *conn, const char *path) {
+  const char *pw_pattern = "**" PASSWORDS_FILE_NAME "$";
+  const char *pattern = conn->server->config_options[HIDE_FILES_PATTERN];
+  return match_prefix(pw_pattern, strlen(pw_pattern), path) > 0 ||
+    (pattern != NULL && match_prefix(pattern, strlen(pattern), path) > 0);
+}
+
 // Return 1 if real file has been found, 0 otherwise
 static int convert_uri_to_file_name(struct connection *conn, char *buf,
                                     size_t buf_len, file_stat_t *st) {
@@ -2234,7 +2241,7 @@ static void call_uri_handler_if_data_is_buffered(struct connection *conn) {
   }
 }
 
-#if !defined(NO_DIRECTORY_LISTING) || !defined(MONGOOSE_NO_DAV)
+#if !defined(MONGOOSE_NO_DIRECTORY_LISTING) || !defined(MONGOOSE_NO_DAV)
 
 #ifdef _WIN32
 struct dirent {
@@ -2315,13 +2322,6 @@ static struct dirent *readdir(DIR *dir) {
   return result;
 }
 #endif // _WIN32  POSIX opendir/closedir/readdir implementation
-
-static int must_hide_file(struct connection *conn, const char *path) {
-  const char *pw_pattern = "**" PASSWORDS_FILE_NAME "$";
-  const char *pattern = conn->server->config_options[HIDE_FILES_PATTERN];
-  return match_prefix(pw_pattern, strlen(pw_pattern), path) > 0 ||
-    (pattern != NULL && match_prefix(pattern, strlen(pattern), path) > 0);
-}
 
 static int scan_directory(struct connection *conn, const char *dir,
                           struct dir_entry **arr) {
@@ -3368,7 +3368,11 @@ static void open_local_endpoint(struct connection *conn) {
   }
 
 #ifdef MONGOOSE_NO_FILESYSTEM
-  send_http_error(conn, 404, NULL);
+  if (!strcmp(conn->mg_conn.request_method, "OPTIONS")) {
+    send_options(conn);
+  } else {
+    send_http_error(conn, 404, NULL);
+  }
 #else
   exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
   is_directory = S_ISDIR(st.st_mode);
