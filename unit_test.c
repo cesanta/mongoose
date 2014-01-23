@@ -1,5 +1,6 @@
 // Unit test for the mongoose web server.
 // g++ -W -Wall -pedantic -g unit_test.c -lssl && ./a.out
+// cl unit_test.c /MD
 
 #ifndef _WIN32
 #define MONGOOSE_USE_IPV6
