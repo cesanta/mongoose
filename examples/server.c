@@ -108,6 +108,13 @@ static void vnotify(const char *fmt, va_list ap, int must_exit) {
   }
 }
 
+static void notify(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vnotify(fmt, ap, 0);
+  va_end(ap);
+}
+
 static void die(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -263,9 +270,9 @@ static void verify_existence(char **options, const char *option_name,
 
   if (path != NULL && (stat(path, &st) != 0 ||
                        ((S_ISDIR(st.st_mode) ? 1 : 0) != must_be_dir))) {
-    die("Invalid path for %s: [%s]: (%s). Make sure that path is either "
-        "absolute, or it is relative to mongoose executable.",
-        option_name, path, strerror(errno));
+    notify("Invalid path for %s: [%s]: (%s). Make sure that path is either "
+           "absolute, or it is relative to mongoose executable.",
+           option_name, path, strerror(errno));
   }
 }
 
@@ -412,7 +419,9 @@ static void start_mongoose(int argc, char *argv[]) {
 
   for (i = 0; options[i] != NULL; i += 2) {
     const char *msg = mg_set_option(server, options[i], options[i + 1]);
-    if (msg != NULL) die("Failed to set option [%s]: %s", options[i], msg);
+    if (msg != NULL) {
+      notify("Failed to set option [%s]: %s", options[i], msg);
+    }
     free(options[i]);
     free(options[i + 1]);
   }

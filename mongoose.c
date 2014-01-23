@@ -67,6 +67,9 @@ typedef struct _stati64 file_stat_t;
 #ifndef EINPROGRESS
 #define EINPROGRESS WSAEINPROGRESS
 #endif
+#ifndef EWOULDBLOCK
+#define EWOULDBLOCK WSAEWOULDBLOCK
+#endif
 #define mutex_init(x) InitializeCriticalSection(x)
 #define mutex_destroy(x) DeleteCriticalSection(x)
 #define mutex_lock(x) EnterCriticalSection(x)
@@ -788,7 +791,13 @@ static int mg_socketpair(sock_t sp[2]) {
 }
 
 static int is_error(int n) {
-  return n == 0 || (n < 0 && errno != EINTR && errno != EAGAIN);
+  return n == 0 ||
+    (n < 0 && errno != EINTR && errno != EINPROGRESS &&
+     errno != EAGAIN && errno != EWOULDBLOCK
+#ifdef _WIN32
+     && WSAGetLastError() != WSAEINTR && WSAGetLastError() != WSAEWOULDBLOCK
+#endif
+    );
 }
 
 static void discard_leading_iobuf_bytes(struct iobuf *io, int n) {
@@ -1206,11 +1215,13 @@ static void forward_post_data(struct connection *conn) {
 static sock_t open_listening_socket(union socket_address *sa) {
   sock_t on = 1, sock = INVALID_SOCKET;
 
-  if ((sock = socket(sa->sa.sa_family, SOCK_STREAM, 6)) == INVALID_SOCKET ||
-      setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) ||
-      bind(sock, &sa->sa, sa->sa.sa_family == AF_INET ?
-           sizeof(sa->sin) : sizeof(sa->sa)) != 0 ||
-      listen(sock, SOMAXCONN) != 0) {
+  if ((sock = socket(sa->sa.sa_family, SOCK_STREAM, 6)) != INVALID_SOCKET &&
+      !setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) &&
+      !bind(sock, &sa->sa, sa->sa.sa_family == AF_INET ?
+            sizeof(sa->sin) : sizeof(sa->sa)) &&
+      !listen(sock, SOMAXCONN)) {
+    set_non_blocking_mode(sock);
+  } else if (sock != INVALID_SOCKET) {
     closesocket(sock);
     sock = INVALID_SOCKET;
   }
@@ -1925,28 +1936,27 @@ static void call_uri_handler(struct connection *conn) {
 }
 
 static void callback_http_client_on_connect(struct connection *conn) {
-  int ok = 1;
+  int ok = 1, ret;
   socklen_t len = sizeof(ok);
 
   conn->flags &= ~CONN_CONNECTING;
-  if (getsockopt(conn->client_sock, SOL_SOCKET, SO_ERROR, (char *) &ok,
-                 &len) == 0 && ok == 0) {
+  ret = getsockopt(conn->client_sock, SOL_SOCKET, SO_ERROR, (char *) &ok, &len);
 #ifdef MONGOOSE_USE_SSL
-    if (conn->ssl != NULL) {
-      int res = SSL_connect(conn->ssl), ssl_err = SSL_get_error(conn->ssl, res);
-      //DBG(("%p res %d %d", conn, res, ssl_err));
-      if (res == 1) {
-        conn->flags = CONN_SSL_HANDS_SHAKEN;
-      } else if (res == 0 || ssl_err == 2 || ssl_err == 3) {
-        conn->flags |= CONN_CONNECTING;
-        return; // Call us again
-      } else {
-        ok = 1;
-      }
+  if (ret == 0 && ok == 0 && conn->ssl != NULL) {
+    int res = SSL_connect(conn->ssl), ssl_err = SSL_get_error(conn->ssl, res);
+    //DBG(("%p res %d %d", conn, res, ssl_err));
+    if (res == 1) {
+      conn->flags = CONN_SSL_HANDS_SHAKEN;
+    } else if (res == 0 || ssl_err == 2 || ssl_err == 3) {
+      conn->flags |= CONN_CONNECTING;
+      return; // Call us again
+    } else {
+      ok = 1;
     }
-#endif
   }
-  conn->mg_conn.status_code = ok == 0 ? MG_CONNECT_SUCCESS : MG_CONNECT_FAILURE;
+#endif
+  conn->mg_conn.status_code =
+    (ret == 0 && ok == 0) ? MG_CONNECT_SUCCESS : MG_CONNECT_FAILURE;
   if (conn->handler(&conn->mg_conn) || ok != 0) {
     conn->flags |= CONN_CLOSE;
   }
@@ -3608,7 +3618,7 @@ int mg_connect(struct mg_server *server, const char *host, int port,
   set_non_blocking_mode(sock);
 
   connect_ret_val = connect(sock, (struct sockaddr *) &sin, sizeof(sin));
-  if (connect_ret_val != 0 && errno != EINPROGRESS) {
+  if (is_error(connect_ret_val)) {
     return 0;
   } else if ((conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
     closesocket(sock);
@@ -3630,16 +3640,6 @@ int mg_connect(struct mg_server *server, const char *host, int port,
 #endif
   LINKED_LIST_ADD_TO_FRONT(&server->active_connections, &conn->link);
   DBG(("%p %s:%d", conn, host, port));
-
-  if (connect_ret_val == 0) {
-    callback_http_client_on_connect(conn);
-#if 0
-    conn->mg_conn.status_code = MG_CONNECT_SUCCESS;
-    conn->flags &= ~CONN_CONNECTING;
-    conn->mg_conn.content = conn->local_iobuf.buf;
-    handler(&conn->mg_conn);
-#endif
-  }
 
   return 1;
 }
@@ -3890,7 +3890,7 @@ void mg_add_uri_handler(struct mg_server *server, const char *uri,
                         mg_handler_t handler) {
   struct uri_handler *p = (struct uri_handler *) malloc(sizeof(*p));
   if (p != NULL) {
-    LINKED_LIST_ADD_TO_FRONT(&server->uri_handlers, &p->link);
+    LINKED_LIST_ADD_TO_TAIL(&server->uri_handlers, &p->link);
     p->uri = mg_strdup(uri);
     p->handler = handler;
   }
@@ -4082,8 +4082,6 @@ const char *mg_set_option(struct mg_server *server, const char *name,
       server->listening_sock = open_listening_socket(&server->lsa);
       if (server->listening_sock == INVALID_SOCKET) {
         error_msg = "Cannot bind to port";
-      } else {
-        set_non_blocking_mode(server->listening_sock);
       }
 #ifndef _WIN32
     } else if (ind == RUN_AS_USER) {

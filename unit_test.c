@@ -475,6 +475,8 @@ static int cb4(struct mg_connection *conn) {
 }
 
 static int cb3(struct mg_connection *conn) {
+  printf("cb3: %d\n", conn->status_code);
+  fflush(stdout);
   sprintf((char *) conn->connection_param, "%d", conn->status_code);
   return 1;
 }
@@ -488,7 +490,7 @@ static const char *test_mg_connect(void) {
   mg_add_uri_handler(server, "/x", cb4h);
   ASSERT(mg_connect(server, "", 0, 0, NULL, NULL) == 0);
   ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, cb2, buf2) == 1);
-  ASSERT(mg_connect(server, "127.0.0.1", 1, 0, cb3, buf3) == 1);
+  ASSERT(mg_connect(server, "127.0.0.1", 29, 0, cb3, buf3) == 1);
   ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, cb4, buf4) == 1);
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 0); }
