@@ -675,9 +675,8 @@ static void send_http_error(struct connection *conn, int code,
 
   body_len = mg_snprintf(body, sizeof(body), "%d %s\n", code, message);
   if (fmt != NULL) {
-    body[body_len++] = '\n';
     va_start(ap, fmt);
-    body_len += mg_snprintf(body + body_len, sizeof(body) - body_len, fmt, ap);
+    body_len += mg_vsnprintf(body + body_len, sizeof(body) - body_len, fmt, ap);
     va_end(ap);
   }
   if (code >= 300 && code <= 399) {
@@ -3358,9 +3357,9 @@ static void open_local_endpoint(struct connection *conn) {
     {
       const char *cl = mg_get_header(&conn->mg_conn, "Content-Length");
       if (!strcmp(conn->mg_conn.request_method, "POST") &&
-          (cl == NULL || to64(cl) > USE_POST_SIZE_LIMIT)) {
+          (cl == NULL || to64(cl) > MONGOOSE_USE_POST_SIZE_LIMIT)) {
         send_http_error(conn, 500, "POST size > %zu",
-                        (size_t) USE_POST_SIZE_LIMIT);
+                        (size_t) MONGOOSE_USE_POST_SIZE_LIMIT);
       }
     }
 #endif

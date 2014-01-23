@@ -5,6 +5,7 @@
 #define MONGOOSE_USE_IPV6
 #define MONGOOSE_USE_SSL
 #endif
+#define MONGOOSE_USE_POST_SIZE_LIMIT 999
 
 // USE_* definitions must be made before #include "mongoose.c" !
 #include "mongoose.c"
@@ -456,25 +457,44 @@ static int cb2(struct mg_connection *conn) {
   return ret_val;
 }
 
+static int cb4h(struct mg_connection *conn) {
+  mg_send_data(conn, ":-)", 3);
+  return MG_REPLY_COMPLETED;
+}
+
+static int cb4(struct mg_connection *conn) {
+  if (conn->status_code == MG_CONNECT_SUCCESS) {
+    mg_printf(conn, "%s", "POST /x HTTP/1.0\r\nContent-Length: 999999\r\n\r\n");
+    return MG_REPLY_TO_BE_CONTINUED;
+  } else {
+    sprintf((char *) conn->connection_param, "%.*s",
+            (int) conn->content_len, conn->content);
+  }
+  return MG_REPLY_COMPLETED;
+}
+
 static int cb3(struct mg_connection *conn) {
   sprintf((char *) conn->connection_param, "%d", conn->status_code);
   return 1;
 }
 
 static const char *test_mg_connect(void) {
-  char buf2[40] = "", buf3[40] = "";
+  char buf2[40] = "", buf3[40] = "", buf4[40] = "";
   struct mg_server *server = mg_create_server(NULL);
 
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
+  mg_add_uri_handler(server, "/x", cb4h);
   ASSERT(mg_connect(server, "", 0, 0, NULL, NULL) == 0);
   ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, cb2, buf2) == 1);
   ASSERT(mg_connect(server, "127.0.0.1", 1, 0, cb3, buf3) == 1);
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, cb4, buf4) == 1);
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 0); }
 
   ASSERT(strcmp(buf2, "add") == 0);
   ASSERT(strcmp(buf3, "1") == 0);
+  ASSERT(strcmp(buf4, "500 Server Error\nPOST size > 999") == 0);
   mg_destroy_server(&server);
 
   return NULL;
