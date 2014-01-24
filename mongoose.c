@@ -220,6 +220,7 @@ enum {
   CGI_PATTERN, DAV_AUTH_FILE, DOCUMENT_ROOT, ENABLE_DIRECTORY_LISTING,
 #endif
   EXTRA_MIME_TYPES,
+  DEFAULT_MIME_TYPE,
 #ifndef MONGOOSE_NO_FILESYSTEM
   GLOBAL_AUTH_FILE,
 #endif
@@ -249,6 +250,7 @@ static const char *static_config_options[] = {
   "enable_directory_listing", "yes",
 #endif
   "extra_mime_types", NULL,
+  "default_mime_type", "text/plain",
 #ifndef MONGOOSE_NO_FILESYSTEM
   "global_auth_file", NULL,
 #endif
@@ -1993,7 +1995,7 @@ static void write_to_socket(struct connection *conn) {
   }
 }
 
-const char *mg_get_mime_type(const char *path) {
+const char *mg_get_mime_type(struct mg_server *server, const char *path) {
   const char *ext;
   size_t i, path_len;
 
@@ -2007,7 +2009,7 @@ const char *mg_get_mime_type(const char *path) {
     }
   }
 
-  return "text/plain";
+  return server->config_options[DEFAULT_MIME_TYPE];
 }
 
 static struct uri_handler *find_uri_handler(struct mg_server *server,
@@ -2093,7 +2095,7 @@ static void get_mime_type(const struct mg_server *server, const char *path,
     }
   }
 
-  vec->ptr = mg_get_mime_type(path);
+  vec->ptr = mg_get_mime_type((struct mg_server *)server, path);
   vec->len = strlen(vec->ptr);
 }
 
