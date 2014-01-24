@@ -273,6 +273,7 @@ struct mg_server {
   struct ll active_connections;
   struct ll uri_handlers;
   mg_handler_t error_handler;
+  mg_handler_t auth_handler;
   char *config_options[NUM_OPTIONS];
   void *server_data;
 #ifdef MONGOOSE_USE_SSL
@@ -3358,6 +3359,13 @@ static void open_local_endpoint(struct connection *conn) {
   const char *dir_lst = conn->server->config_options[ENABLE_DIRECTORY_LISTING];
 #endif
 
+  // Call auth handler
+  if (conn->server->auth_handler != NULL &&
+      conn->server->auth_handler(&conn->mg_conn) == 0) {
+    mg_send_digest_auth_request(&conn->mg_conn);
+    return;
+  }
+
   // Call URI handler if one is registered for this URI
   conn->endpoint.uh = find_uri_handler(conn->server, conn->mg_conn.uri);
   if (conn->endpoint.uh != NULL) {
@@ -4115,6 +4123,10 @@ const char *mg_set_option(struct mg_server *server, const char *name,
 
 void mg_set_http_error_handler(struct mg_server *server, mg_handler_t handler) {
   server->error_handler = handler;
+}
+
+void mg_set_auth_handler(struct mg_server *server, mg_handler_t handler) {
+  server->auth_handler = handler;
 }
 
 void mg_set_listening_socket(struct mg_server *server, int sock) {

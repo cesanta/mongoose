@@ -475,7 +475,6 @@ static int cb4(struct mg_connection *conn) {
 }
 
 static int cb3(struct mg_connection *conn) {
-  printf("cb3: %d\n", conn->status_code);
   fflush(stdout);
   sprintf((char *) conn->connection_param, "%d", conn->status_code);
   return 1;
