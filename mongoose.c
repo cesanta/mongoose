@@ -1994,7 +1994,7 @@ static void write_to_socket(struct connection *conn) {
   }
 }
 
-const char *mg_get_mime_type(const char *path) {
+const char *mg_get_mime_type(const char *path, const char *default_mime_type) {
   const char *ext;
   size_t i, path_len;
 
@@ -2008,7 +2008,7 @@ const char *mg_get_mime_type(const char *path) {
     }
   }
 
-  return "text/plain";
+  return default_mime_type;
 }
 
 static struct uri_handler *find_uri_handler(struct mg_server *server,
@@ -2094,7 +2094,7 @@ static void get_mime_type(const struct mg_server *server, const char *path,
     }
   }
 
-  vec->ptr = mg_get_mime_type(path);
+  vec->ptr = mg_get_mime_type(path, "text/plain");
   vec->len = strlen(vec->ptr);
 }
 
