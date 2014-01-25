@@ -952,9 +952,9 @@ static pid_t start_process(const char *interp, const char *cmd, const char *env,
   (void) env;
 
   if (pid == 0) {
-    chdir(dir);
-    dup2(sock, 0);
-    dup2(sock, 1);
+    (void) chdir(dir);
+    (void) dup2(sock, 0);
+    (void) dup2(sock, 1);
     closesocket(sock);
 
     // After exec, all signal handlers are restored to their default values,
@@ -3692,6 +3692,7 @@ static void log_access(const struct connection *conn, const char *path) {
 #endif
 
 static void close_local_endpoint(struct connection *conn) {
+  struct mg_connection *c = &conn->mg_conn;
   // Must be done before free()
   int keep_alive = should_keep_alive(&conn->mg_conn) &&
     (conn->endpoint_type == EP_FILE || conn->endpoint_type == EP_USER);
@@ -3705,8 +3706,8 @@ static void close_local_endpoint(struct connection *conn) {
   }
 
 #ifndef MONGOOSE_NO_LOGGING
-  if (conn->mg_conn.status_code > 0 && conn->endpoint_type != EP_CLIENT &&
-      conn->mg_conn.status_code != 400) {
+  if (c->status_code > 0 && conn->endpoint_type != EP_CLIENT &&
+      c->status_code != 400) {
     log_access(conn, conn->server->config_options[ACCESS_LOG_FILE]);
   }
 #endif
@@ -3714,8 +3715,9 @@ static void close_local_endpoint(struct connection *conn) {
   // Gobble possible POST data sent to the URI handler
   discard_leading_iobuf_bytes(&conn->local_iobuf, conn->mg_conn.content_len);
   conn->endpoint_type = EP_NONE;
-  conn->flags = conn->mg_conn.status_code = 0;
-  conn->cl = conn->num_bytes_sent = conn->request_len = 0;
+  conn->cl = conn->num_bytes_sent = conn->request_len = conn->flags = 0;
+  c->request_method = c->uri = c->http_version = c->query_string = NULL;
+  c->num_headers = c->status_code = c->is_websocket = c->content_len = 0;
   free(conn->request);
   conn->request = NULL;
 
