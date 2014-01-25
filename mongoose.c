@@ -952,7 +952,14 @@ static pid_t start_process(const char *interp, const char *cmd, const char *env,
   (void) env;
 
   if (pid == 0) {
-    chdir(dir);
+    if (chdir(dir) == -1) {
+        // NOTE(dgryski): Possible information leakage here on directory name.  Do we care?
+        snprintf(buf, sizeof(buf), "Status: 500\r\n\r\n"
+                 "500 Server Error: %s%schdir(%s): %s", interp == NULL ? "" : interp,
+                 interp == NULL ? "" : " ", dir, strerror(errno));
+        send(1, buf, strlen(buf), 0);
+        exit(EXIT_FAILURE);  // exec call failed
+    }
     dup2(sock, 0);
     dup2(sock, 1);
     closesocket(sock);
@@ -3693,7 +3700,7 @@ static void log_access(const struct connection *conn, const char *path) {
 
 static void close_local_endpoint(struct connection *conn) {
   // Must be done before free()
-  int keep_alive = should_keep_alive(&conn->mg_conn) &&
+  int keep_alive = conn->request && should_keep_alive(&conn->mg_conn) &&
     (conn->endpoint_type == EP_FILE || conn->endpoint_type == EP_USER);
   DBG(("%p %d %d %d", conn, conn->endpoint_type, keep_alive, conn->flags));
 
