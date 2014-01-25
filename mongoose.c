@@ -3700,7 +3700,7 @@ static void log_access(const struct connection *conn, const char *path) {
 
 static void close_local_endpoint(struct connection *conn) {
   // Must be done before free()
-  int keep_alive = should_keep_alive(&conn->mg_conn) &&
+  int keep_alive = conn->request && should_keep_alive(&conn->mg_conn) &&
     (conn->endpoint_type == EP_FILE || conn->endpoint_type == EP_USER);
   DBG(("%p %d %d %d", conn, conn->endpoint_type, keep_alive, conn->flags));
 
