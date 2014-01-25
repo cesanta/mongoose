@@ -275,6 +275,7 @@ struct mg_server {
   mg_handler_t error_handler;
   mg_handler_t auth_handler;
   char *config_options[NUM_OPTIONS];
+  char local_ip[48];
   void *server_data;
 #ifdef MONGOOSE_USE_SSL
   SSL_CTX *ssl_ctx;            // Server SSL context
@@ -1214,6 +1215,7 @@ static void forward_post_data(struct connection *conn) {
 
 // 'sa' must be an initialized address to bind to
 static sock_t open_listening_socket(union socket_address *sa) {
+  socklen_t len = sizeof(*sa);
   sock_t on = 1, sock = INVALID_SOCKET;
 
   if ((sock = socket(sa->sa.sa_family, SOCK_STREAM, 6)) != INVALID_SOCKET &&
@@ -1222,6 +1224,8 @@ static sock_t open_listening_socket(union socket_address *sa) {
             sizeof(sa->sin) : sizeof(sa->sa)) &&
       !listen(sock, SOMAXCONN)) {
     set_non_blocking_mode(sock);
+    // In case port was set to 0, get the real port number
+    (void) getsockname(sock, &sa->sa, &len);
   } else if (sock != INVALID_SOCKET) {
     closesocket(sock);
     sock = INVALID_SOCKET;
@@ -1329,6 +1333,8 @@ static struct connection *accept_new_connection(struct mg_server *server) {
                        sizeof(conn->mg_conn.remote_ip), &sa);
     conn->mg_conn.remote_port = ntohs(sa.sin.sin_port);
     conn->mg_conn.server_param = server->server_data;
+    conn->mg_conn.local_ip = server->local_ip;
+    conn->mg_conn.local_port = ntohs(server->lsa.sin.sin_port);
     LINKED_LIST_ADD_TO_FRONT(&server->active_connections, &conn->link);
     DBG(("added conn %p", conn));
   }
@@ -4067,7 +4073,7 @@ static int parse_port_string(const char *str, union socket_address *sa) {
     port = 0;   // Parsing failure. Make port invalid.
   }
 
-  return port > 0 && port < 0xffff && str[len] == '\0';
+  return port <= 0xffff && str[len] == '\0';
 }
 
 const char *mg_set_option(struct mg_server *server, const char *name,
@@ -4092,6 +4098,16 @@ const char *mg_set_option(struct mg_server *server, const char *name,
       server->listening_sock = open_listening_socket(&server->lsa);
       if (server->listening_sock == INVALID_SOCKET) {
         error_msg = "Cannot bind to port";
+      } else {
+        sockaddr_to_string(server->local_ip, sizeof(server->local_ip),
+                           &server->lsa);
+        if (!strcmp(value, "0")) {
+          char buf[10];
+          mg_snprintf(buf, sizeof(buf), "%d",
+                      (int) ntohs(server->lsa.sin.sin_port));
+          free(server->config_options[ind]);
+          server->config_options[ind] = mg_strdup(buf);
+        }
       }
 #ifndef _WIN32
     } else if (ind == RUN_AS_USER) {

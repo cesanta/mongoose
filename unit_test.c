@@ -289,7 +289,7 @@ static const char *test_parse_port_string(void) {
     NULL
   };
   static const char *invalid[] = {
-    "0", "99999", "1k", "1.2.3", "1.2.3.4:", "1.2.3.4:2p", NULL
+    "99999", "1k", "1.2.3", "1.2.3.4:", "1.2.3.4:2p", NULL
   };
   union socket_address sa;
   int i;
@@ -301,6 +301,7 @@ static const char *test_parse_port_string(void) {
   for (i = 0; invalid[i] != NULL; i++) {
     ASSERT(parse_port_string(invalid[i], &sa) == 0);
   }
+  ASSERT(parse_port_string("0", &sa) != 0);
 
   return NULL;
 }
@@ -577,6 +578,14 @@ static const char *test_ssl(void) {
 }
 #endif
 
+static const char *test_mg_set_option(void) {
+  struct mg_server *server = mg_create_server(NULL);
+  ASSERT(mg_set_option(server, "listening_port", "0") == NULL);
+  ASSERT(mg_get_option(server, "listening_port")[0] != '\0');
+  mg_destroy_server(&server);
+  return NULL;
+}
+
 static const char *run_all_tests(void) {
   RUN_TEST(test_should_keep_alive);
   RUN_TEST(test_match_prefix);
@@ -592,6 +601,7 @@ static const char *run_all_tests(void) {
   RUN_TEST(test_parse_multipart);
   RUN_TEST(test_server);
   RUN_TEST(test_mg_connect);
+  RUN_TEST(test_mg_set_option);
 #ifdef MONGOOSE_USE_SSL
   RUN_TEST(test_ssl);
 #endif

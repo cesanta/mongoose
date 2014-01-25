@@ -38,6 +38,8 @@ struct mg_connection {
 
   char remote_ip[48];         // Max IPv6 string length is 45 characters
   int remote_port;            // Client's port
+  const char *local_ip;       // Local IP address
+  int local_port;             // Local port number
 
   int num_headers;            // Number of HTTP headers
   struct mg_header {
