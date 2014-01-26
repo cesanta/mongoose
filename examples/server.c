@@ -77,6 +77,8 @@ static int exit_flag;
 static char server_name[50];        // Set by init_server_name()
 static char config_file[PATH_MAX];  // Set by process_command_line_arguments()
 static struct mg_server *server;    // Set by start_mongoose()
+static const char *s_default_document_root = ".";
+static const char *s_default_listening_port = "8080";
 
 #if !defined(CONFIG_FILE)
 #define CONFIG_FILE "mongoose.conf"
@@ -263,16 +265,18 @@ static char *get_option(char **options, const char *option_name) {
   return NULL;
 }
 
-static void verify_existence(char **options, const char *option_name,
-                             int must_be_dir) {
+static int path_exists(const char *path, int is_dir) {
   file_stat_t st;
-  const char *path = get_option(options, option_name);
+  return path == NULL || (stat(path, &st) == 0 &&
+                          ((S_ISDIR(st.st_mode) ? 1 : 0) == is_dir));
+}
 
-  if (path != NULL && (stat(path, &st) != 0 ||
-                       ((S_ISDIR(st.st_mode) ? 1 : 0) != must_be_dir))) {
+static void verify_existence(char **options, const char *name, int is_dir) {
+  const char *path = get_option(options, name);
+  if (!path_exists(path, is_dir)) {
     notify("Invalid path for %s: [%s]: (%s). Make sure that path is either "
            "absolute, or it is relative to mongoose executable.",
-           option_name, path, strerror(errno));
+           name, path, strerror(errno));
   }
 }
 
@@ -396,8 +400,8 @@ static void start_mongoose(int argc, char *argv[]) {
   }
 
   options[0] = NULL;
-  set_option(options, "document_root", ".");
-  set_option(options, "listening_port", "8080");
+  set_option(options, "document_root", s_default_document_root);
+  set_option(options, "listening_port", s_default_listening_port);
 
   // Update config based on command line arguments
   process_command_line_arguments(argv, options);
@@ -405,12 +409,18 @@ static void start_mongoose(int argc, char *argv[]) {
   // Make sure we have absolute paths for files and directories
   // https://github.com/valenok/mongoose/issues/181
   set_absolute_path(options, "document_root", argv[0]);
-  set_absolute_path(options, "put_delete_auth_file", argv[0]);
+  set_absolute_path(options, "dav_auth_file", argv[0]);
   set_absolute_path(options, "cgi_interpreter", argv[0]);
   set_absolute_path(options, "access_log_file", argv[0]);
-  set_absolute_path(options, "error_log_file", argv[0]);
   set_absolute_path(options, "global_auth_file", argv[0]);
   set_absolute_path(options, "ssl_certificate", argv[0]);
+
+  if (!path_exists(get_option(options, "document_root"), 1)) {
+    set_option(options, "document_root", s_default_document_root);
+    set_absolute_path(options, "document_root", argv[0]);
+    notify("Setting document_root to [%s]",
+           mg_get_option(server, "document_root"));
+  }
 
   // Make extra verification for certain options
   verify_existence(options, "document_root", 1);
@@ -420,7 +430,12 @@ static void start_mongoose(int argc, char *argv[]) {
   for (i = 0; options[i] != NULL; i += 2) {
     const char *msg = mg_set_option(server, options[i], options[i + 1]);
     if (msg != NULL) {
-      notify("Failed to set option [%s]: %s", options[i], msg);
+      notify("Failed to set option [%s] to [%s]: %s",
+             options[i], options[i + 1], msg);
+      if (!strcmp(options[i], "listening_port")) {
+        mg_set_option(server, "listening_port", s_default_listening_port);
+        notify("Setting %s to [%s]", options[i], s_default_listening_port);
+      }
     }
     free(options[i]);
     free(options[i + 1]);
