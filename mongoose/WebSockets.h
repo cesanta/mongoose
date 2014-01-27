@@ -76,6 +76,6 @@ namespace Mongoose
 
             int id;
     };
-};
+}
 
 #endif

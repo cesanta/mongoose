@@ -31,6 +31,6 @@ namespace Mongoose
              */
             void preProcess(Request &request, Response &response);
     };
-};
+}
 
 #endif

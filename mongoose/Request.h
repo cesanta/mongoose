@@ -97,6 +97,6 @@ namespace Mongoose
             string data;
             struct mg_connection *connection;
     };
-};
+}
 
 #endif

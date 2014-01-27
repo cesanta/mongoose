@@ -52,6 +52,6 @@ namespace Mongoose
             string key;
             Mutex mutex;
     };
-};
+}
 
 #endif

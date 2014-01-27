@@ -12,7 +12,7 @@ namespace Mongoose
         public:
             string htmlEntities(string data);
     };
-};
+}
 
 #endif
 
