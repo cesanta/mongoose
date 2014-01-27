@@ -26,4 +26,4 @@ namespace Mongoose
     {
         humanReadable = human;
     }
-};
+}

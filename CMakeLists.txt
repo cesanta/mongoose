@@ -23,7 +23,7 @@ option (ENABLE_STATS
 option (ENABLE_REGEX_URL
     "Enable url regex matching dispatcher" OFF)
 
-set (JSONCPP_DIR "${PROJECT_SOURCE_DIR}/../jsoncpp"
+set (JSONCPP_DIR "/usr/include/jsoncpp/"
     CACHE STRING "Json C++ directory")
 
 set (SOURCES
@@ -66,7 +66,7 @@ if (CPP_BINDING)
             ${MONGOOSE_CPP}/JsonController.cpp
             )
 
-        include_directories ("${JSONCPP_DIR}/include/")
+        include_directories ("${JSONCPP_DIR}")
     endif (HAS_JSONCPP)
 
     if (WEBSOCKET)
