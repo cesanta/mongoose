@@ -51,7 +51,9 @@
 #include <io.h>         // For _lseeki64
 #include <direct.h>     // For _mkdir
 typedef int socklen_t;
+#ifndef pid_t
 typedef HANDLE pid_t;
+#endif
 typedef SOCKET sock_t;
 typedef unsigned char uint8_t;
 typedef unsigned int uint32_t;
@@ -75,7 +77,9 @@ typedef struct _stati64 file_stat_t;
 #define mutex_lock(x) EnterCriticalSection(x)
 #define mutex_unlock(x) LeaveCriticalSection(x)
 #define get_thread_id() ((unsigned long) GetCurrentThreadId())
+#ifndef S_ISDIR
 #define S_ISDIR(x) ((x) & _S_IFDIR)
+#endif
 #define sleep(x) Sleep((x) * 1000)
 #define stat(x, y) mg_stat((x), (y))
 #define fopen(x, y) mg_fopen((x), (y))
