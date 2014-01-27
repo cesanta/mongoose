@@ -3365,12 +3365,14 @@ static void open_local_endpoint(struct connection *conn) {
   const char *dir_lst = conn->server->config_options[ENABLE_DIRECTORY_LISTING];
 #endif
 
+#ifndef MONGOOSE_NO_AUTH
   // Call auth handler
   if (conn->server->auth_handler != NULL &&
       conn->server->auth_handler(&conn->mg_conn) == 0) {
     mg_send_digest_auth_request(&conn->mg_conn);
     return;
   }
+#endif
 
   // Call URI handler if one is registered for this URI
   conn->endpoint.uh = find_uri_handler(conn->server, conn->mg_conn.uri);
