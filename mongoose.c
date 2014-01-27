@@ -2609,7 +2609,7 @@ static int remove_directory(const char *dir) {
 static void handle_delete(struct connection *conn, const char *path) {
   file_stat_t st;
 
-  if (!stat(path, &st)) {
+  if (stat(path, &st) != 0) {
     send_http_error(conn, 404, NULL);
   } else if (S_ISDIR(st.st_mode)) {
     remove_directory(path);
