@@ -538,31 +538,32 @@ static const char *test_parse_multipart(void) {
   return NULL;
 }
 
-#ifdef MONGOOSE_USE_SSL
 static int us1(struct mg_connection *conn) {
   static const char *file_name = "mongoose.h";
+  char *cp = (char *) conn->connection_param;
   int file_size;
 
   if (conn->status_code == MG_CONNECT_SUCCESS) {
-    mg_printf(conn, "GET /%s HTTP/1.0\r\n\r\n", file_name);
+    mg_printf(conn, "GET /%s HTTP/1.0\r\n\r\n", cp);
     return 0;
   } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
     char *file_data = read_file(file_name, &file_size);
-    sprintf((char *) conn->connection_param, "%d",
-            (size_t) file_size == conn->content_len &&
-            memcmp(file_data, conn->content, file_size) == 0 ? 1 : 0);
+    sprintf(cp, "%d %s", (size_t) file_size == conn->content_len &&
+            memcmp(file_data, conn->content, file_size) == 0 ? 1 : 0,
+            conn->query_string == NULL ? "?" : conn->query_string);
     free(file_data);
   } else if (conn->status_code == MG_CONNECT_FAILURE) {
-    sprintf((char *) conn->connection_param, "%s", "cf");
+    sprintf(cp, "%s", "cf");
   } else {
-    sprintf((char *) conn->connection_param, "%s", "df");
+    sprintf(cp, "%s", "df");
   }
   return 1;
 }
 
+#ifdef MONGOOSE_USE_SSL
 static const char *test_ssl(void) {
   static const char *ssl_cert = "examples/ssl_cert.pem";
-  char buf1[100] = "";
+  char buf1[100] = "mongoose.h";
   struct mg_server *server = mg_create_server(NULL);
 
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
@@ -571,8 +572,8 @@ static const char *test_ssl(void) {
 
   ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 1, us1, buf1) == 1);
 
-  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1000); }
-  ASSERT(strcmp(buf1, "1") == 0);
+  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
+  ASSERT(strcmp(buf1, "1 ?") == 0);
   mg_destroy_server(&server);
   return NULL;
 }
@@ -582,6 +583,25 @@ static const char *test_mg_set_option(void) {
   struct mg_server *server = mg_create_server(NULL);
   ASSERT(mg_set_option(server, "listening_port", "0") == NULL);
   ASSERT(mg_get_option(server, "listening_port")[0] != '\0');
+  mg_destroy_server(&server);
+  return NULL;
+}
+
+static const char *test_rewrites(void) {
+  char buf1[100] = "xx";
+  struct mg_server *server = mg_create_server(NULL);
+
+  ASSERT(mg_set_option(server, "listening_port", "0") == NULL);
+  ASSERT(mg_set_option(server, "document_root", ".") == NULL);
+  ASSERT(mg_set_option(server, "url_rewrites", "/xx=./mongoose.h") == NULL);
+
+  ASSERT(mg_connect(server, "127.0.0.1",
+                    atoi(mg_get_option(server, "listening_port")),
+                    0, us1, buf1) == 1);
+
+  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
+  //printf("[%s]\n", buf1);
+  ASSERT(strcmp(buf1, "1 ?") == 0);
   mg_destroy_server(&server);
   return NULL;
 }
@@ -602,6 +622,7 @@ static const char *run_all_tests(void) {
   RUN_TEST(test_server);
   RUN_TEST(test_mg_connect);
   RUN_TEST(test_mg_set_option);
+  RUN_TEST(test_rewrites);
 #ifdef MONGOOSE_USE_SSL
   RUN_TEST(test_ssl);
 #endif

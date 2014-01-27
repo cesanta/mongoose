@@ -1542,10 +1542,10 @@ static int must_hide_file(struct connection *conn, const char *path) {
 static int convert_uri_to_file_name(struct connection *conn, char *buf,
                                     size_t buf_len, file_stat_t *st) {
   struct vec a, b;
-  const char *rewrites = conn->server->config_options[URL_REWRITES],
-        *root = conn->server->config_options[DOCUMENT_ROOT],
-        *cgi_pat = conn->server->config_options[CGI_PATTERN],
-        *uri = conn->mg_conn.uri;
+  const char *rewrites = conn->server->config_options[URL_REWRITES];
+  const char *root = conn->server->config_options[DOCUMENT_ROOT];
+  const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
+  const char *uri = conn->mg_conn.uri;
   char *p;
   int match_len;
 
@@ -3639,6 +3639,7 @@ int mg_connect(struct mg_server *server, const char *host, int port,
     return 0;
   }
 
+  conn->server = server;
   conn->client_sock = sock;
   conn->endpoint_type = EP_CLIENT;
   conn->handler = handler;
