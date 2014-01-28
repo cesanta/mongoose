@@ -1709,8 +1709,9 @@ static void SHA1Transform(uint32_t state[5], const unsigned char buffer[64]) {
   state[4] += e;
   // Erase working structures. The order of operations is important,
   // used to ensure that compiler doesn't optimize those out.
+  memset(block, 0, sizeof(block));
   a = b = c = d = e = 0;
-  memset(block, a, sizeof(block));
+  (void) a; (void) b; (void) c; (void) d; (void) e;
 }
 
 static void SHA1Init(SHA1_CTX* context) {
