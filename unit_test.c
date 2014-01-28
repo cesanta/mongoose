@@ -414,7 +414,7 @@ static const char *test_server(void) {
   ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT),  0, ts1, buf1) == 1);
   ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, ts2, buf2) == 1);
 
-  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 0); }
+  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
   ASSERT(strcmp(buf1, "foo ? 127.0.0.1") == 0);
   ASSERT(strcmp(buf2, "404 ERR: 404") == 0);
 
@@ -498,7 +498,7 @@ static const char *test_mg_connect(void) {
   ASSERT(mg_connect(server, "127.0.0.1", 29, 0, cb3, buf3) == 1);
   ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, cb4, buf4) == 1);
 
-  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 0); }
+  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
 
   ASSERT(strcmp(buf2, "add") == 0);
   ASSERT(strcmp(buf3, "1") == 0);
