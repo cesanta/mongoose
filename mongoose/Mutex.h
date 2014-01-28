@@ -32,7 +32,7 @@ namespace Mongoose
         protected:
             pthread_mutex_t _mutex;
     };
-};
+}
 
 #endif
 

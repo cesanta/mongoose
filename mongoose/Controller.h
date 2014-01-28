@@ -134,6 +134,6 @@ namespace Mongoose
             map<string, RequestHandlerBase*> routes;
             vector<string> urls;
     };
-};
+}
 
 #endif

@@ -66,6 +66,6 @@ namespace Mongoose
             int date;
             Mutex mutex;
     };
-};
+}
 
 #endif

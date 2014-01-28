@@ -50,6 +50,6 @@ namespace Mongoose
             int counter;
             Mutex mutex;
     };
-};
+}
 
 #endif

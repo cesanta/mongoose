@@ -117,6 +117,6 @@ namespace Mongoose
 
             vector<WebSockets *> containers;
     };
-};
+}
 
 #endif

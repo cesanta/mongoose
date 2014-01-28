@@ -23,6 +23,6 @@ namespace Mongoose
             string filename;
             string data;
     };
-};
+}
 
 #endif // _MONGOOSE_UPLOAD_FILE_H

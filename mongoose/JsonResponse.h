@@ -37,6 +37,6 @@ namespace Mongoose
         protected:
             bool humanReadable;
     };
-};
+}
 
 #endif

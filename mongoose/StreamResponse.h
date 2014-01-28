@@ -24,6 +24,6 @@ namespace Mongoose
              */
             virtual string getBody();
     };
-};
+}
 
 #endif

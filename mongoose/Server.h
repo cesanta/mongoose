@@ -142,6 +142,6 @@ namespace Mongoose
             int requests;
             int startTime;
     };
-};
+}
 
 #endif
