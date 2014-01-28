@@ -60,12 +60,26 @@ that take `struct mg_server *` parameter. Mongoose does not
 mutex-protect `struct mg_server *`, therefore the best practice is
 to call server management functions from the same thread (an IO thread).
 
-    void mg_add_uri_handler(struct mg_server *, const char *uri, mg_handler_t);
+    void mg_set_auth_handler(struct mg_server *, mg_handler_t handler);
 
-Adds an URI handler. If Mongoose gets a request and request's URI starts
-with `uri`, then specified handler is called to serve the request. Thus, an
-`uri` is a match prefix. For example, if `uri` is "/", then all requests will
-be routed to the handler, because all URIs start with `/` character.
+Sets authorization handler. Called by Mongoose on each request, before
+performing any other action. Handler can return either `MG_AUTH_OK` or
+`MG_AUTH_FAIL`. If `handler` returns `MG_AUTH_FAIL`, then Mongoose sends
+digest authorization request to the client. If `handler returns `MG_AUTH_OK`,
+then mongoose proceeds with handling the request. Handler function can use
+`mg_authorize_digest()` function to verify authorization, or implement any other
+custom authorization mechanism.
+
+    void mg_set_request_handler(struct mg_server *, mg_handler_t handler);
+
+Sets a request handler. When set, `handler` will be called for each request.
+Possible return values from a handler function are `MG_REQUEST_NOT_PROCESSED`,
+`MG_REQUEST_PROCESSED` and `MG_REQUEST_CALL_AGAIN`. If handler returns
+`MG_REQUEST_NOT_PROCESSED`, mongoose will proceed with handling the request.
+If handler returns `MG_REQUEST_PROCESSED`, that signals mongoose that handler
+has already processed the connection, and mongoose will skip to the next
+request. `MG_REQUEST_CALL_AGAIN` tells mongoose to call request handler
+again and again on each `mg_poll_server()` iteration.
 
 When mongoose buffers in HTTP request and successfully parses it, it calls
 appropriate URI handler immediately for GET requests. For POST requests,
@@ -82,19 +96,16 @@ whether the request is websocket or not. Also, for websocket requests,
 there is `struct mg_connection::wsbits` field which contains first byte
 of the websocket frame which URI handler can examine. Note that to
 reply to the websocket client, `mg_websocket_write()` should be used.
-To reply to the plain HTTP client, `mg_write_data()` should be used.
-
-An URI handler must return a value.  If URI handler has sent all data,
-it should return `1`.  If URI handler returns `0`, that signals Mongoose
-that URI handler hasn't finished sending data to the client. In this case,
-Mongoose will call URI handler after each successful socket write.
-`struct mg_connection::wsbits` flag will indicate the status of the write,
-`1` means that write has failed and connection will be closed.
+To reply to the plain HTTP client, `mg_write_data()` should be used. Note that
+websocket handler must return either `MG_CLIENT_CLOSE` or `MG_CLIENT_CONTINUE`
+value.
 
     void mg_set_http_error_handler(struct mg_server *, mg_handler_t);
 
 Adds HTTP error handler. An actual HTTP error is passed as
-`struct mg_connection::status_code` parameter. If handler returns 0, it
+`struct mg_connection::status_code` parameter.
+Hanlder should return either `MG_ERROR_PROCESSED` or `MG_ERROR_NOT_PROCESSED`.
+If handler returns `MG_ERROR_NOT_PROCESSED`, it
 means a handler has not processed the connection, and mongoose proceeds
 with sending HTTP error to the client. Otherwise, mongoose does nothing.
 

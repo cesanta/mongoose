@@ -24,10 +24,13 @@
       out('DISCONNECTED');
     };
     websocket.onmessage = function(ev) {
-      if (!ev.data) return; // No data, this is a PING message, ignore it
-      out('<span style="color: blue;">RESPONSE: ' + ev.data + ' </span>');
-      num_messages++;
-      if (num_messages > 100) {
+      if (!ev.data) {
+        out('<span style="color: blue;">PING... </span>');
+      } else {
+        out('<span style="color: blue;">RESPONSE: ' + ev.data + ' </span>');
+        num_messages++;
+      }
+      if (num_messages > 15) {
         websocket.send('exit');
       }
     };

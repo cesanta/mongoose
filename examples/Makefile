@@ -1,4 +1,4 @@
-CFLAGS  = -W -Wall -I.. -pthread -g -pipe $(COPT)
+CFLAGS  = -W -Wall -I.. -pthread -g -pipe $(CFLAGS_EXTRA)
 DLL_FLAGS = -DLUA_COMPAT_ALL -I../build
 RM = rm -rf
 

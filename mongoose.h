@@ -65,7 +65,7 @@ struct mg_server *mg_create_server(void *server_param);
 void mg_destroy_server(struct mg_server **);
 const char *mg_set_option(struct mg_server *, const char *opt, const char *val);
 unsigned int mg_poll_server(struct mg_server *, int milliseconds);
-void mg_add_uri_handler(struct mg_server *, const char *uri, mg_handler_t);
+void mg_set_request_handler(struct mg_server *, mg_handler_t);
 void mg_set_http_error_handler(struct mg_server *, mg_handler_t);
 void mg_set_auth_handler(struct mg_server *, mg_handler_t);
 const char **mg_get_valid_option_names(void);
@@ -87,9 +87,8 @@ int mg_websocket_write(struct mg_connection *, int opcode,
 int mg_write(struct mg_connection *, const void *buf, int len);
 int mg_printf(struct mg_connection *conn, const char *fmt, ...);
 
-
 const char *mg_get_header(const struct mg_connection *, const char *name);
-const char *mg_get_mime_type(const char *file_name, const char *default_mime_type);
+const char *mg_get_mime_type(const char *name, const char *default_mime_type);
 int mg_get_var(const struct mg_connection *conn, const char *var_name,
                char *buf, size_t buf_len);
 int mg_parse_header(const char *hdr, const char *var_name, char *buf, size_t);
@@ -102,10 +101,12 @@ int mg_parse_multipart(const char *buf, int buf_len,
 void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
-void mg_send_digest_auth_request(struct mg_connection *conn);
 
-// Callback return codes
-enum { MG_REPLY_TO_BE_CONTINUED, MG_REPLY_COMPLETED };
+// Callback function return codes
+enum { MG_REQUEST_NOT_PROCESSED, MG_REQUEST_PROCESSED, MG_REQUEST_CALL_AGAIN };
+enum { MG_AUTH_FAIL, MG_AUTH_OK };
+enum { MG_ERROR_NOT_PROCESSED, MG_ERROR_PROCESSED };
+enum { MG_CLIENT_CONTINUE, MG_CLIENT_CLOSE };
 
 // HTTP client events
 enum {

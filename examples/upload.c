@@ -30,7 +30,7 @@ static int index_html(struct mg_connection *conn) {
 
   mg_printf_data(conn, "%s", "</body></html>");
 
-  return 1;
+  return MG_REQUEST_PROCESSED;
 }
 
 int main(void) {
@@ -39,7 +39,7 @@ int main(void) {
   // Create and configure the server
   server = mg_create_server(NULL);
   mg_set_option(server, "listening_port", "8080");
-  mg_add_uri_handler(server, "/", index_html);
+  mg_set_request_handler(server, index_html);
 
   // Serve request. Hit Ctrl-C to terminate the program
   printf("Starting on port %s\n", mg_get_option(server, "listening_port"));

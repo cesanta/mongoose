@@ -6,7 +6,7 @@ static int request_handler(struct mg_connection *conn) {
   mg_send_header(conn, "Content-Type", "text/plain");
   mg_printf_data(conn, "This is a reply from server instance # %s",
                  (char *) conn->server_param);
-  return 0;
+  return MG_REQUEST_PROCESSED;
 }
 
 static void *serve(void *server) {
@@ -20,8 +20,8 @@ int main(void) {
   server1 = mg_create_server((void *) "1");
   server2 = mg_create_server((void *) "2");
 
-  mg_add_uri_handler(server1, "/", request_handler);
-  mg_add_uri_handler(server2, "/", request_handler);
+  mg_set_request_handler(server1, request_handler);
+  mg_set_request_handler(server2, request_handler);
 
   // Make both server1 and server2 listen on the same socket
   mg_set_option(server1, "listening_port", "8080");

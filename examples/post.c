@@ -34,13 +34,13 @@ static int handler(struct mg_connection *conn) {
     mg_send_data(conn, html_form, strlen(html_form));
   }
 
-  return 1;
+  return MG_REQUEST_PROCESSED;
 }
 
 int main(void) {
   struct mg_server *server = mg_create_server(NULL);
   mg_set_option(server, "listening_port", "8080");
-  mg_add_uri_handler(server, "/", handler);
+  mg_set_request_handler(server, handler);
   printf("Starting on port %s\n", mg_get_option(server, "listening_port"));
   for (;;) {
     mg_poll_server(server, 1000);

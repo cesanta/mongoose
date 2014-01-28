@@ -9,7 +9,7 @@ static int iterate_callback(struct mg_connection *c) {
     int len = snprintf(buf, sizeof(buf), "%d", * (int *) c->connection_param);
     mg_websocket_write(c, 1, buf, len);
   }
-  return 1;
+  return MG_REQUEST_PROCESSED;
 }
 
 static int index_html(struct mg_connection *conn) {
@@ -21,11 +21,12 @@ static int index_html(struct mg_connection *conn) {
     // times for connection lifetime.
     // Echo websocket data back to the client.
     mg_websocket_write(conn, 1, conn->content, conn->content_len);
-    return conn->content_len == 4 && !memcmp(conn->content, "exit", 4);
+    return conn->content_len == 4 && !memcmp(conn->content, "exit", 4) ?
+      MG_CLIENT_CLOSE : MG_CLIENT_CONTINUE;
   } else {
     mg_send_header(conn, "Content-Type", "text/html");
     mg_send_data(conn, index_html, index_size);
-    return 1;
+    return MG_REQUEST_PROCESSED;
   }
 }
 
@@ -34,12 +35,12 @@ int main(void) {
   unsigned int current_timer = 0, last_timer = 0;
 
   mg_set_option(server, "listening_port", "8080");
-  mg_add_uri_handler(server, "/", index_html);
+  mg_set_request_handler(server, index_html);
 
   printf("Started on port %s\n", mg_get_option(server, "listening_port"));
   for (;;) {
     current_timer = mg_poll_server(server, 100);
-    if (current_timer - last_timer > 1) {
+    if (current_timer - last_timer > 0) {
       last_timer = current_timer;
       mg_iterate_over_connections(server, iterate_callback, &current_timer);
     }

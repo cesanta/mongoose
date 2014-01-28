@@ -3,7 +3,7 @@
 #include "mongoose.h"
 
 static int auth_handler(struct mg_connection *conn) {
-  int result = 0; // Not authorized
+  int result = MG_AUTH_FAIL; // Not authorized
   FILE *fp;
 
   // To populate passwords file, do

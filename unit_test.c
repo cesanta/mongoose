@@ -364,39 +364,41 @@ static const char *test_next_option(void) {
 }
 
 static int cb1(struct mg_connection *conn) {
-  // We're not sending HTTP headers here, to make testing easier
-  //mg_printf(conn, "HTTP/1.0 200 OK\r\n\r\n%s %s %s",
-  mg_printf(conn, "%s %s %s",
-           conn->server_param == NULL ? "?" : (char *) conn->server_param,
-           conn->connection_param == NULL ? "?" : "!", conn->remote_ip);
-  return 1;
+  int result = MG_REQUEST_NOT_PROCESSED;
+  if (!strcmp(conn->uri, "/cb1")) {
+    mg_printf(conn, "%s %s %s",
+              conn->server_param == NULL ? "?" : (char *) conn->server_param,
+              conn->connection_param == NULL ? "?" : "!", conn->remote_ip);
+    result = MG_REQUEST_PROCESSED;
+  }
+  return result;
 }
 
 static int error_handler(struct mg_connection *conn) {
   mg_printf(conn, "HTTP/1.0 404 NF\r\n\r\nERR: %d", conn->status_code);
-  return 1;
+  return MG_ERROR_PROCESSED;
 }
 
 static int ts1(struct mg_connection *conn) {
   if (conn->status_code == MG_CONNECT_SUCCESS) {
     mg_printf(conn, "%s", "GET /cb1 HTTP/1.0\r\n\r\n");
-    return 0;
+    return MG_CLIENT_CONTINUE;
   } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
     sprintf((char *) conn->connection_param, "%.*s",
             (int) conn->content_len, conn->content);
   }
-  return 1;
+  return MG_CLIENT_CLOSE;
 }
 
 static int ts2(struct mg_connection *conn) {
   if (conn->status_code == MG_CONNECT_SUCCESS) {
     mg_printf(conn, "%s", "GET /non_exist HTTP/1.0\r\n\r\n");
-    return 0;
+    return MG_CLIENT_CONTINUE;
   } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
     sprintf((char *) conn->connection_param, "%s %.*s",
             conn->uri, (int) conn->content_len, conn->content);
   }
-  return 1;
+  return MG_CLIENT_CLOSE;
 }
 
 static const char *test_server(void) {
@@ -406,7 +408,7 @@ static const char *test_server(void) {
   ASSERT(server != NULL);
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
-  mg_add_uri_handler(server, "/cb1", cb1);
+  mg_set_request_handler(server, cb1);
   mg_set_http_error_handler(server, error_handler);
 
   ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT),  0, ts1, buf1) == 1);
@@ -460,25 +462,28 @@ static int cb2(struct mg_connection *conn) {
 }
 
 static int cb4h(struct mg_connection *conn) {
-  mg_send_data(conn, ":-)", 3);
-  return MG_REPLY_COMPLETED;
+  int result = MG_REQUEST_NOT_PROCESSED;
+  if (!strcmp(conn->uri, "/x")) {
+    mg_send_data(conn, ":-)", 3);
+    result = MG_REQUEST_PROCESSED;
+  }
+  return result;
 }
 
 static int cb4(struct mg_connection *conn) {
   if (conn->status_code == MG_CONNECT_SUCCESS) {
     mg_printf(conn, "%s", "POST /x HTTP/1.0\r\nContent-Length: 999999\r\n\r\n");
-    return MG_REPLY_TO_BE_CONTINUED;
+    return MG_CLIENT_CONTINUE;
   } else {
     sprintf((char *) conn->connection_param, "%.*s",
             (int) conn->content_len, conn->content);
   }
-  return MG_REPLY_COMPLETED;
+  return MG_CLIENT_CLOSE;
 }
 
 static int cb3(struct mg_connection *conn) {
-  fflush(stdout);
   sprintf((char *) conn->connection_param, "%d", conn->status_code);
-  return 1;
+  return MG_CLIENT_CLOSE;
 }
 
 static const char *test_mg_connect(void) {
@@ -487,7 +492,7 @@ static const char *test_mg_connect(void) {
 
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
-  mg_add_uri_handler(server, "/x", cb4h);
+  mg_set_request_handler(server, cb4h);
   ASSERT(mg_connect(server, "", 0, 0, NULL, NULL) == 0);
   ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, cb2, buf2) == 1);
   ASSERT(mg_connect(server, "127.0.0.1", 29, 0, cb3, buf3) == 1);
