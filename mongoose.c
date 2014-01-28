@@ -1131,7 +1131,7 @@ static const char cgi_status[] = "HTTP/1.1 200 OK\r\n";
 
 static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   struct cgi_env_block blk;
-  char dir[MAX_PATH_SIZE], *p = NULL;
+  char dir[MAX_PATH_SIZE];
   sock_t fds[2];
 
   prepare_cgi_environment(conn, prog, &blk);
@@ -1139,11 +1139,8 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   // directory containing executable program, 'p' must point to the
   // executable program name relative to 'dir'.
   mg_snprintf(dir, sizeof(dir), "%s", prog);
-  if ((p = strrchr(dir, '/')) != NULL) {
-    *p++ = '\0';
-  } else {
-    dir[0] = '.', dir[1] = '\0';
-    p = (char *) prog;
+  if (strrchr(dir, '/') == NULL) {
+    mg_snprintf(dir, sizeof(dir), "%s", ".");
   }
 
   // Try to create socketpair in a loop until success. mg_socketpair()
@@ -1492,7 +1489,7 @@ const char *mg_get_header(const struct mg_connection *ri, const char *s) {
 // Perform case-insensitive match of string against pattern
 static int match_prefix(const char *pattern, int pattern_len, const char *str) {
   const char *or_str;
-  int i, j, len, res;
+  int len, res, i = 0, j = 0;
 
   if ((or_str = (const char *) memchr(pattern, '|', pattern_len)) != NULL) {
     res = match_prefix(pattern, or_str - pattern, str);
@@ -1500,8 +1497,6 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
         match_prefix(or_str + 1, (pattern + pattern_len) - (or_str + 1), str);
   }
 
-  i = j = 0;
-  res = -1;
   for (; i < pattern_len; i++, j++) {
     if (pattern[i] == '?' && str[j] != '\0') {
       continue;
@@ -1714,8 +1709,8 @@ static void SHA1Transform(uint32_t state[5], const unsigned char buffer[64]) {
   state[4] += e;
   // Erase working structures. The order of operations is important,
   // used to ensure that compiler doesn't optimize those out.
-  memset(block, 0, sizeof(block));
-  a = b = c = d = e = block[0].l[0];
+  a = b = c = d = e = 0;
+  memset(block, a, sizeof(block));
 }
 
 static void SHA1Init(SHA1_CTX* context) {
