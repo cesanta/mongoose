@@ -322,7 +322,7 @@ static const char *test_base64_encode(void) {
 
 static const char *test_mg_parse_header(void) {
   const char *str = "xx=1 kl yy, ert=234 kl=123, "
-    "ii=\"12\\\"34\" zz='aa bb', gf=\"xx d=1234";
+    "ii=\"12\\\"34\" zz='aa bb',tt=2,gf=\"xx d=1234";
   char buf[10];
   ASSERT(mg_parse_header(str, "yy", buf, sizeof(buf)) == 0);
   ASSERT(mg_parse_header(str, "ert", buf, sizeof(buf)) == 3);
@@ -344,6 +344,8 @@ static const char *test_mg_parse_header(void) {
   ASSERT(strcmp(buf, "1") == 0);
   ASSERT(mg_parse_header(str, "ii", buf, sizeof(buf)) == 5);
   ASSERT(strcmp(buf, "12\"34") == 0);
+  ASSERT(mg_parse_header(str, "tt", buf, sizeof(buf)) == 1);
+  ASSERT(strcmp(buf, "2") == 0);
   return NULL;
 }
 

@@ -3042,7 +3042,7 @@ int parse_header(const char *str, int str_len, const char *var_name, char *buf,
 
   // Find where variable starts
   for (s = str; s != NULL && s + n < end; s++) {
-    if ((s == str || s[-1] == ' ') && s[n] == '=' &&
+    if ((s == str || s[-1] == ' ' || s[-1] == ',') && s[n] == '=' &&
         !memcmp(s, var_name, n)) break;
   }
 
@@ -3050,7 +3050,7 @@ int parse_header(const char *str, int str_len, const char *var_name, char *buf,
     s += n + 1;
     if (*s == '"' || *s == '\'') ch = *s++;
     p = s;
-    while (p < end && p[0] != ch && len < (int) buf_size) {
+    while (p < end && p[0] != ch && p[0] != ',' && len < (int) buf_size) {
       if (p[0] == '\\' && p[1] == ch) p++;
       buf[len++] = *p++;
     }
