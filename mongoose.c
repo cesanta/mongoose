@@ -1149,7 +1149,6 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
     *p++ = '\0';
   } else {
     dir[0] = '.', dir[1] = '\0';
-    p = (char *) prog;
   }
 
   // Try to create socketpair in a loop until success. mg_socketpair()
@@ -1507,7 +1506,6 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
   }
 
   i = j = 0;
-  res = -1;
   for (; i < pattern_len; i++, j++) {
     if (pattern[i] == '?' && str[j] != '\0') {
       continue;
@@ -1721,7 +1719,6 @@ static void SHA1Transform(uint32_t state[5], const unsigned char buffer[64]) {
   // Erase working structures. The order of operations is important,
   // used to ensure that compiler doesn't optimize those out.
   memset(block, 0, sizeof(block));
-  a = b = c = d = e = block[0].l[0];
 }
 
 static void SHA1Init(SHA1_CTX* context) {
