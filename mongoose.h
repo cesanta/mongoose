@@ -62,6 +62,7 @@ typedef int (*mg_handler_t)(struct mg_connection *);
 
 // Server management functions
 struct mg_server *mg_create_server(void *server_param);
+void *mg_get_server_param(struct mg_server *);
 void mg_destroy_server(struct mg_server **);
 const char *mg_set_option(struct mg_server *, const char *opt, const char *val);
 unsigned int mg_poll_server(struct mg_server *, int milliseconds);

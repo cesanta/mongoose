@@ -4173,3 +4173,8 @@ struct mg_server *mg_create_server(void *server_data) {
 
   return server;
 }
+
+void *mg_get_server_param(struct mg_server* server)
+{
+    return server->server_data;
+}
