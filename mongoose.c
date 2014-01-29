@@ -1131,16 +1131,17 @@ static const char cgi_status[] = "HTTP/1.1 200 OK\r\n";
 
 static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   struct cgi_env_block blk;
-  char dir[MAX_PATH_SIZE];
+  char dir[MAX_PATH_SIZE], *p;
   sock_t fds[2];
 
   prepare_cgi_environment(conn, prog, &blk);
   // CGI must be executed in its own directory. 'dir' must point to the
   // directory containing executable program, 'p' must point to the
   // executable program name relative to 'dir'.
-  mg_snprintf(dir, sizeof(dir), "%s", prog);
-  if (strrchr(dir, '/') == NULL) {
+  if ((p = strrchr(prog, '/')) == NULL) {
     mg_snprintf(dir, sizeof(dir), "%s", ".");
+  } else {
+    mg_snprintf(dir, sizeof(dir), "%.*s", p - prog, prog);
   }
 
   // Try to create socketpair in a loop until success. mg_socketpair()
