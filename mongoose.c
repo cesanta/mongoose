@@ -2698,6 +2698,7 @@ void mg_send_digest_auth_request(struct mg_connection *c) {
             "realm=\"%s\", nonce=\"%lu\"\r\n\r\n",
             conn->server->config_options[AUTH_DOMAIN],
             (unsigned long) time(NULL));
+  close_local_endpoint(conn);
 }
 
 // Use the global passwords file, if specified by auth_gpass option,
