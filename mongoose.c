@@ -1141,7 +1141,7 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   if ((p = strrchr(prog, '/')) == NULL) {
     mg_snprintf(dir, sizeof(dir), "%s", ".");
   } else {
-    mg_snprintf(dir, sizeof(dir), "%.*s", p - prog, prog);
+    mg_snprintf(dir, sizeof(dir), "%.*s", (int) (p - prog), prog);
   }
 
   // Try to create socketpair in a loop until success. mg_socketpair()
