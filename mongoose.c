@@ -153,6 +153,7 @@ struct ll { struct ll *prev, *next; };
 #define IOBUF_SIZE 8192
 #define MAX_PATH_SIZE 8192
 #define LUA_SCRIPT_PATTERN "**.lp$"
+#define DEFAULT_CGI_PATTERN "**.cgi$|**.pl$|**.php$"
 #define CGI_ENVIRONMENT_SIZE 4096
 #define MAX_CGI_ENVIR_VARS 64
 #define ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
@@ -214,11 +215,24 @@ struct dir_entry {
 enum {
   ACCESS_CONTROL_LIST,
 #ifndef MONGOOSE_NO_FILESYSTEM
-  ACCESS_LOG_FILE, AUTH_DOMAIN, CGI_INTERPRETER,
-  CGI_PATTERN, DAV_AUTH_FILE, DOCUMENT_ROOT, ENABLE_DIRECTORY_LISTING,
+  ACCESS_LOG_FILE,
+#ifndef MONGOOSE_NO_AUTH
+  AUTH_DOMAIN,
+#endif
+#ifndef MONGOOSE_NO_CGI
+  CGI_INTERPRETER,
+  CGI_PATTERN,
+#endif
+#ifndef MONGOOSE_NO_DAV
+  DAV_AUTH_FILE,
+#endif
+  DOCUMENT_ROOT,
+#ifndef MONGOOSE_NO_DIRECTORY_LISTING
+  ENABLE_DIRECTORY_LISTING,
+#endif
 #endif
   EXTRA_MIME_TYPES,
-#ifndef MONGOOSE_NO_FILESYSTEM
+#if !defined(MONGOOSE_NO_FILESYSTEM) && !defined(MONGOOSE_NO_AUTH)
   GLOBAL_AUTH_FILE,
 #endif
   HIDE_FILES_PATTERN,
@@ -232,22 +246,31 @@ enum {
 #ifdef MONGOOSE_USE_SSL
   SSL_CERTIFICATE,
 #endif
-  URL_REWRITES, NUM_OPTIONS
+  URL_REWRITES,
+  NUM_OPTIONS
 };
 
 static const char *static_config_options[] = {
   "access_control_list", NULL,
 #ifndef MONGOOSE_NO_FILESYSTEM
   "access_log_file", NULL,
+#ifndef MONGOOSE_NO_AUTH
   "auth_domain", "mydomain.com",
+#endif
+#ifndef MONGOOSE_NO_CGI
   "cgi_interpreter", NULL,
-  "cgi_pattern", "**.cgi$|**.pl$|**.php$",
+  "cgi_pattern", DEFAULT_CGI_PATTERN,
+#endif
+#ifndef MONGOOSE_NO_DAV
   "dav_auth_file", NULL,
+#endif
   "document_root",  NULL,
+#ifndef MONGOOSE_NO_DIRECTORY_LISTING
   "enable_directory_listing", "yes",
 #endif
+#endif
   "extra_mime_types", NULL,
-#ifndef MONGOOSE_NO_FILESYSTEM
+#if !defined(MONGOOSE_NO_FILESYSTEM) && !defined(MONGOOSE_NO_AUTH)
   "global_auth_file", NULL,
 #endif
   "hide_files_patterns", NULL,
@@ -1538,9 +1561,11 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
   struct vec a, b;
   const char *rewrites = conn->server->config_options[URL_REWRITES];
   const char *root = conn->server->config_options[DOCUMENT_ROOT];
+#ifndef MONGOOSE_NO_CGI
   const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
-  const char *uri = conn->mg_conn.uri;
   char *p;
+#endif
+  const char *uri = conn->mg_conn.uri;
   int match_len;
 
   // No filesystem access
@@ -3350,8 +3375,16 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
   file_stat_t st;
   char path[MAX_PATH_SIZE];
   int exists = 0, is_directory = 0;
+#ifndef MONGOOSE_NO_CGI
   const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
+#else
+  const char *cgi_pat = DEFAULT_CGI_PATTERN;
+#endif
+#ifndef MONGOOSE_NO_DIRECTORY_LISTING
   const char *dir_lst = conn->server->config_options[ENABLE_DIRECTORY_LISTING];
+#else
+  const char *dir_lst = "yes";
+#endif
 #endif
 
 #ifndef MONGOOSE_NO_AUTH
