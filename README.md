@@ -11,7 +11,7 @@ Mongoose is easy to use, powerful, embeddable web server.
 - CGI, SSL, Digest auth, Websocket, WEbDAV, Resumed download, URL rewrite, file blacklist, IP-based ACL, Windows service
 - Scripting and database support ([Lua](http://lua.org) +
 [Sqlite](http://sqlite.org), see
-[page.lp](https://github.com/cesanta/mongoose/blob/master/build/test/page.lp) ),
+[dirscan.lp](https://github.com/cesanta/mongoose/blob/master/examples/lua/dirscan.lp) ),
   which provides ready to go, powerful web development platform in
   one single-click executable with no dependencies
 - Simple and clean
