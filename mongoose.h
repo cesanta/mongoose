@@ -20,7 +20,7 @@
 #ifndef MONGOOSE_HEADER_INCLUDED
 #define  MONGOOSE_HEADER_INCLUDED
 
-#define MONGOOSE_VERSION "5.2"
+#define MONGOOSE_VERSION "5.3"
 
 #include <stdio.h>      // required for FILE
 #include <stddef.h>     // required for size_t
