@@ -131,7 +131,7 @@ static void show_usage_and_exit(void) {
   fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka, built on %s\n",
           MONGOOSE_VERSION, __DATE__);
   fprintf(stderr, "Usage:\n");
-#ifndef NO_AUTH
+#ifndef MONGOOSE_NO_AUTH
   fprintf(stderr, "  mongoose -A <htpasswd_file> <realm> <user> <passwd>\n");
 #endif
   fprintf(stderr, "  mongoose [config_file]\n");
@@ -310,7 +310,7 @@ static void set_absolute_path(char *options[], const char *option_name,
   }
 }
 
-#ifndef NO_AUTH
+#ifndef MONGOOSE_NO_AUTH
 int modify_passwords_file(const char *fname, const char *domain,
                           const char *user, const char *pass) {
   int found;
@@ -383,7 +383,7 @@ static void start_mongoose(int argc, char *argv[]) {
     die("%s", "Failed to start Mongoose.");
   }
 
-#ifndef NO_AUTH
+#ifndef MONGOOSE_NO_AUTH
   // Edit passwords file if -A option is specified
   if (argc > 1 && !strcmp(argv[1], "-A")) {
     if (argc != 6) {
