@@ -3883,7 +3883,7 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
     if (conn->flags & CONN_LONG_RUNNING) {
       conn->mg_conn.wsbits = conn->flags & CONN_CLOSE ? 1 : 0;
       if (call_request_handler(conn) == MG_REQUEST_PROCESSED) {
-        conn->flags |= CONN_CLOSE;
+        conn->flags |= conn->remote_iobuf.len == 0 ? CONN_CLOSE : CONN_SPOOL_DONE;
       }
     }
     if (conn->flags & CONN_CLOSE || conn->last_activity_time < expire_time) {
