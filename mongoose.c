@@ -1064,6 +1064,11 @@ static void prepare_cgi_environment(struct connection *conn,
   blk->len = blk->nvars = 0;
   blk->conn = ri;
 
+  if ((s = getenv("SERVER_NAME")) != NULL) {
+    addenv(blk, "SERVER_NAME=%s", s);
+  } else {
+    addenv(blk, "SERVER_NAME=%s", conn->server->local_ip);
+  }
   addenv(blk, "SERVER_NAME=%s", opts[AUTH_DOMAIN]);
   addenv(blk, "SERVER_ROOT=%s", opts[DOCUMENT_ROOT]);
   addenv(blk, "DOCUMENT_ROOT=%s", opts[DOCUMENT_ROOT]);
@@ -1115,6 +1120,8 @@ static void prepare_cgi_environment(struct connection *conn,
     addenv(blk, "CONTENT_LENGTH=%s", s);
 
   addenv2(blk, "PATH");
+  addenv2(blk, "TMP");
+  addenv2(blk, "TEMP");
   addenv2(blk, "PERLLIB");
   addenv2(blk, ENV_EXPORT_TO_CGI);
 
