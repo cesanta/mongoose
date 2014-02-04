@@ -1671,7 +1671,7 @@ void mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
   va_end(ap);
 }
 
-#if !defined(NO_WEBSOCKET) || !defined(MONGOOSE_NO_AUTH)
+#if !defined(MONGOOSE_NO_WEBSOCKET) || !defined(MONGOOSE_NO_AUTH)
 static int is_big_endian(void) {
   static const int n = 1;
   return ((char *) &n)[0] == 0;
