@@ -154,7 +154,7 @@ struct ll { struct ll *prev, *next; };
 #define MAX_PATH_SIZE 8192
 #define LUA_SCRIPT_PATTERN "**.lp$"
 #define DEFAULT_CGI_PATTERN "**.cgi$|**.pl$|**.php$"
-#define CGI_ENVIRONMENT_SIZE 4096
+#define CGI_ENVIRONMENT_SIZE 8192
 #define MAX_CGI_ENVIR_VARS 64
 #define ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
 #define PASSWORDS_FILE_NAME ".htpasswd"
@@ -1129,6 +1129,7 @@ static void prepare_cgi_environment(struct connection *conn,
   addenv2(blk, "PATH");
   addenv2(blk, "TMP");
   addenv2(blk, "TEMP");
+  addenv2(blk, "TMPDIR");
   addenv2(blk, "PERLLIB");
   addenv2(blk, ENV_EXPORT_TO_CGI);
 
