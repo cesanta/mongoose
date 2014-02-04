@@ -23,7 +23,7 @@ static int index_html(struct mg_connection *conn) {
     }
   }
 
-  return n < sizeof(buf) ? 1 : 0;
+  return n < sizeof(buf) ? MG_REQUEST_PROCESSED : MG_REQUEST_CALL_AGAIN;
 }
 
 int main(void) {
