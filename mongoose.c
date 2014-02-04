@@ -1069,7 +1069,6 @@ static void prepare_cgi_environment(struct connection *conn,
   } else {
     addenv(blk, "SERVER_NAME=%s", conn->server->local_ip);
   }
-  addenv(blk, "SERVER_NAME=%s", opts[AUTH_DOMAIN]);
   addenv(blk, "SERVER_ROOT=%s", opts[DOCUMENT_ROOT]);
   addenv(blk, "DOCUMENT_ROOT=%s", opts[DOCUMENT_ROOT]);
   addenv(blk, "SERVER_SOFTWARE=%s/%s", "Mongoose", MONGOOSE_VERSION);
