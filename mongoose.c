@@ -306,7 +306,9 @@ struct mg_server {
   SSL_CTX *ssl_ctx;            // Server SSL context
   SSL_CTX *client_ssl_ctx;     // Client SSL context
 #endif
+#ifndef MONGOOSE_NO_SOCKETPAIR
   sock_t ctl[2];    // Control socketpair. Used to wake up from select() call
+#endif
 };
 
 // Expandable IO buffer
@@ -785,6 +787,7 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   return len;
 }
 
+#ifndef MONGOOSE_NO_SOCKETPAIR
 static int mg_socketpair(sock_t sp[2]) {
   struct sockaddr_in sa;
   sock_t sock, ret = -1;
@@ -816,6 +819,7 @@ static int mg_socketpair(sock_t sp[2]) {
 
   return ret;
 }
+#endif
 
 static int is_error(int n) {
   return n == 0 ||
@@ -3110,7 +3114,8 @@ int mg_parse_header(const char *s, const char *var_name, char *buf,
 }
 
 #ifdef MONGOOSE_USE_LUA
-#include "lua_5.2.1.h"
+#include <lua.h>
+#include <lauxlib.h>
 
 #ifdef _WIN32
 static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
@@ -3783,19 +3788,6 @@ static void transfer_file_data(struct connection *conn) {
   }
 }
 
-static void execute_iteration(struct mg_server *server) {
-  struct ll *lp, *tmp;
-  struct connection *conn;
-  union { mg_handler_t f; void *p; } msg[2];
-
-  recv(server->ctl[1], (void *) msg, sizeof(msg), 0);
-  LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
-    conn = LINKED_LIST_ENTRY(lp, struct connection, link);
-    conn->mg_conn.connection_param = msg[1].p;
-    msg[0].f(&conn->mg_conn);
-  }
-}
-
 void add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   FD_SET(sock, set);
   if (sock > *max_fd) {
@@ -3817,7 +3809,9 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
   add_to_set(server->listening_sock, &read_set, &max_fd);
+#ifndef MONGOOSE_NO_SOCKETPAIR
   add_to_set(server->ctl[1], &read_set, &max_fd);
+#endif
 
   LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
     conn = LINKED_LIST_ENTRY(lp, struct connection, link);
@@ -3841,10 +3835,6 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
   tv.tv_usec = (milliseconds % 1000) * 1000;
 
   if (select(max_fd + 1, &read_set, &write_set, NULL, &tv) > 0) {
-    if (FD_ISSET(server->ctl[1], &read_set)) {
-      execute_iteration(server);
-    }
-
     // Accept new connections
     if (FD_ISSET(server->listening_sock, &read_set)) {
       // We're not looping here, and accepting just one connection at
@@ -3909,8 +3899,10 @@ void mg_destroy_server(struct mg_server **server) {
     // Do one last poll, see https://github.com/cesanta/mongoose/issues/286
     mg_poll_server(s, 0);
     closesocket(s->listening_sock);
+#ifndef MONGOOSE_NO_SOCKETPAIR
     closesocket(s->ctl[0]);
     closesocket(s->ctl[1]);
+#endif
     LINKED_LIST_FOREACH(&s->active_connections, lp, tmp) {
       close_conn(LINKED_LIST_ENTRY(lp, struct connection, link));
     }
@@ -3929,11 +3921,14 @@ void mg_destroy_server(struct mg_server **server) {
 // Apply function to all active connections.
 void mg_iterate_over_connections(struct mg_server *server, mg_handler_t handler,
                                  void *param) {
-  // Send closure (function + parameter) to the IO thread to execute
-  union { mg_handler_t f; void *p; } msg[2];
-  msg[0].f = handler;
-  msg[1].p = param;
-  send(server->ctl[0], (void *) msg, sizeof(msg), 0);
+  struct ll *lp, *tmp;
+  struct connection *conn;
+
+  LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
+    conn = LINKED_LIST_ENTRY(lp, struct connection, link);
+    conn->mg_conn.connection_param = param;
+    handler(&conn->mg_conn);
+  }
 }
 
 static int get_var(const char *data, size_t data_len, const char *name,

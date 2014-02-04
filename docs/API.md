@@ -129,8 +129,8 @@ is returned.
                                 void *param);
 
 This is an interface primarily designed to push arbitrary data to websocket
-connections at any time. This function could be called from any thread. When
-it returns, an IO thread called `func()` on each active connection,
+connections at any time. This function could be called from the IO thread only.
+When it returns, an IO thread calls `func()` on each active connection,
 passing `param` as an extra parameter. It is allowed to call `mg_send_data()` or
 `mg_websocket_write()` within a callback, cause `func` is executed in the
 context of the IO thread.
