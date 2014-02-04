@@ -176,6 +176,10 @@ struct ll { struct ll *prev, *next; };
 #define MONGOOSE_USE_IDLE_TIMEOUT_SECONDS 30
 #endif
 
+#ifdef MONGOOSE_NO_SOCKETPAIR
+#define MONGOOSE_NO_CGI
+#endif
+
 #ifdef MONGOOSE_ENABLE_DEBUG
 #define DBG(x) do { printf("%-20s ", __func__); printf x; putchar('\n'); \
   fflush(stdout); } while(0)
@@ -3843,7 +3847,10 @@ unsigned int mg_poll_server(struct mg_server *server, int milliseconds) {
 
     // Accept new connections
     if (FD_ISSET(server->listening_sock, &read_set)) {
-      while ((conn = accept_new_connection(server)) != NULL) {
+      // We're not looping here, and accepting just one connection at
+      // a time. The reason is that eCos does not respect non-blocking
+      // flag on a listening socket and hangs in a loop.
+      if ((conn = accept_new_connection(server)) != NULL) {
         conn->birth_time = conn->last_activity_time = current_time;
       }
     }
@@ -4198,11 +4205,13 @@ struct mg_server *mg_create_server(void *server_data) {
 
   LINKED_LIST_INIT(&server->active_connections);
 
+#ifndef MONGOOSE_NO_SOCKETPAIR
   // Create control socket pair. Do it in a loop to protect from
   // interrupted syscalls in mg_socketpair().
   do {
     mg_socketpair(server->ctl);
   } while (server->ctl[0] == INVALID_SOCKET);
+#endif
 
 #ifdef MONGOOSE_USE_SSL
   SSL_library_init();
