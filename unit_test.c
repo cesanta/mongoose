@@ -613,6 +613,30 @@ static const char *test_rewrites(void) {
   return NULL;
 }
 
+static int avt(char **buf, size_t buf_size, const char *fmt, ...) {
+  int result;
+  va_list ap;
+  va_start(ap, fmt);
+  result = alloc_vprintf(buf, buf_size, fmt, ap);
+  va_end(ap);
+  return result;
+}
+
+static const char *test_alloc_vprintf(void) {
+  char buf[5], *p = buf;
+
+  ASSERT(avt(&p, sizeof(buf), "%d", 123) == 3);
+  ASSERT(p == buf);
+  ASSERT(strcmp(p, "123") == 0);
+
+  ASSERT(avt(&p, sizeof(buf), "%d", 123456789) == 9);
+  ASSERT(p != buf);
+  ASSERT(strcmp(p, "123456789") == 0);
+  free(p);
+
+  return NULL;
+}
+
 static const char *run_all_tests(void) {
   RUN_TEST(test_should_keep_alive);
   RUN_TEST(test_match_prefix);
@@ -630,6 +654,7 @@ static const char *run_all_tests(void) {
   RUN_TEST(test_mg_connect);
   RUN_TEST(test_mg_set_option);
   RUN_TEST(test_rewrites);
+  RUN_TEST(test_alloc_vprintf);
 #ifdef MONGOOSE_USE_SSL
   RUN_TEST(test_ssl);
 #endif
