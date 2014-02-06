@@ -1,9 +1,17 @@
-CFLAGS  = -W -Wall -I.. -pthread -g -pipe $(CFLAGS_EXTRA)
+CFLAGS    = -W -Wall -I.. -pthread -g -pipe $(CFLAGS_EXTRA)
 DLL_FLAGS = -DLUA_COMPAT_ALL -I../build
-RM = rm -rf
+RM        = rm -rf
+MSVC      = ../../vc6
+CL        = $(MSVC)/bin/cl
+CLFLAGS   = /MD /TC /nologo $(CFLAGS_EXTRA) /W3 \
+            /I$(MSVC)/include /I.. /Dsnprintf=_snprintf
+LFLAGS    = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
+LUA_FLAGS = -I/usr/local/include -L/usr/local/lib -llua
+
 
 ifeq ($(OS),Windows_NT)
   RM = del /q /f
+  CC = $(MSVC)/bin/cl $(CLFLAGS)
 else
   UNAME_S := $(shell uname -s)
   DLL_FLAGS += -shared
@@ -27,17 +35,14 @@ all: websocket_html.c
 	$(CC) auth.c ../mongoose.c -o auth $(CFLAGS)
 	$(CC) server.c ../mongoose.c -o server $(CFLAGS)
 
+chat$(EXE_SUFFIX): chat.c
+	$(CC) chat.c ../mongoose.c -DMONGOOSE_USE_LUA -o $@ $(CFLAGS) $(LUA_FLAGS)
+
 #	$(CC) chat.c ../mongoose.c -o chat $(CFLAGS)
 #	$(CC) lua_dll.c ../build/lua_5.2.1.c -o $@.so $(CFLAGS) $(DLL_FLAGS)
 
 websocket_html.c: websocket.html
 	perl mkdata.pl $< > $@
-
-MSVC    = ../../vc6
-CL      = $(MSVC)/bin/cl
-CLFLAGS = /MD /TC /nologo $(DBG) /W3 \
-        /I$(MSVC)/include /I.. /Dsnprintf=_snprintf
-LFLAGS  = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
 
 windows: websocket_html.c
 	$(CL) hello.c ../mongoose.c $(CLFLAGS) $(LFLAGS)

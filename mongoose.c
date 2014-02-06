@@ -3290,7 +3290,9 @@ static void prepare_lua_environment(struct mg_connection *ri, lua_State *L) {
 
   luaL_newmetatable(L, "luasocket");
   lua_pushliteral(L, "__index");
-  luaL_newlib(L, luasocket_methods);
+  lua_newtable(L);
+  luaL_register(L, NULL, luasocket_methods);
+  //luaL_newlib(L, luasocket_methods);
   lua_rawset(L, -3);
   lua_pop(L, 1);
   lua_register(L, "connect", lsp_connect);
@@ -3357,7 +3359,7 @@ static void lsp(struct connection *conn, const char *p, int len, lua_State *L) {
       for (j = i + 1; j < len ; j++) {
         if (p[j] == '?' && p[j + 1] == '>') {
           mg_write(&conn->mg_conn, p + pos, i - pos);
-          if (luaL_loadbuffer(L, p + (i + 2), j - (i + 2), "") == LUA_OK) {
+          if (luaL_loadbuffer(L, p + (i + 2), j - (i + 2), "") == 0) {
             lua_pcall(L, 0, LUA_MULTRET, 0);
           }
           pos = j + 2;
@@ -3385,7 +3387,7 @@ static void handle_lsp_request(struct connection *conn, const char *path,
     // We're not sending HTTP headers here, Lua page must do it.
     prepare_lua_environment(&conn->mg_conn, L);
     lua_pushcclosure(L, &lua_error_handler, 0);
-    lua_pushglobaltable(L);
+    lua_pushvalue(L, LUA_GLOBALSINDEX);
     lsp(conn, p, (int) st->st_size, L);
     close_local_endpoint(conn);
   }
