@@ -297,6 +297,7 @@ struct mg_server {
   union socket_address lsa;   // Listening socket address
   struct ll active_connections;
   mg_handler_t request_handler;
+  mg_handler_t http_close_handler;
   mg_handler_t error_handler;
   mg_handler_t auth_handler;
   char *config_options[NUM_OPTIONS];
@@ -1391,6 +1392,10 @@ static void close_conn(struct connection *conn) {
   LINKED_LIST_REMOVE(&conn->link);
   closesocket(conn->client_sock);
   close_local_endpoint(conn);
+
+  if (conn->server->http_close_handler)
+    conn->server->http_close_handler(&conn->mg_conn);
+
   DBG(("%p %d %d", conn, conn->flags, conn->endpoint_type));
   free(conn->request);            // It's OK to free(NULL), ditto below
   free(conn->path_info);
@@ -4173,6 +4178,10 @@ const char *mg_set_option(struct mg_server *server, const char *name,
 
 void mg_set_request_handler(struct mg_server *server, mg_handler_t handler) {
   server->request_handler = handler;
+}
+
+void mg_set_http_close_handler(struct mg_server *server, mg_handler_t handler) {
+  server->http_close_handler = handler;
 }
 
 void mg_set_http_error_handler(struct mg_server *server, mg_handler_t handler) {
