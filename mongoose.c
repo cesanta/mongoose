@@ -3938,7 +3938,7 @@ void mg_iterate_over_connections(struct mg_server *server, mg_handler_t handler,
 
   LINKED_LIST_FOREACH(&server->active_connections, lp, tmp) {
     conn = LINKED_LIST_ENTRY(lp, struct connection, link);
-    conn->mg_conn.connection_param = param;
+    conn->mg_conn.callback_param = param;
     handler(&conn->mg_conn);
   }
 }

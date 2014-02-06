@@ -6,7 +6,7 @@ extern const char *find_embedded_file(const char *, size_t *);
 static int iterate_callback(struct mg_connection *c) {
   if (c->is_websocket) {
     char buf[20];
-    int len = snprintf(buf, sizeof(buf), "%d", * (int *) c->connection_param);
+    int len = snprintf(buf, sizeof(buf), "%d", * (int *) c->callback_param);
     mg_websocket_write(c, 1, buf, len);
   }
   return MG_REQUEST_PROCESSED;

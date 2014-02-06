@@ -55,6 +55,7 @@ struct mg_connection {
   int wsbits;                 // First byte of the websocket frame
   void *server_param;         // Parameter passed to mg_add_uri_handler()
   void *connection_param;     // Placeholder for connection-specific data
+  void *callback_param;       // Used by mg_iterate_over_connections()
 };
 
 struct mg_server; // Opaque structure describing server instance
