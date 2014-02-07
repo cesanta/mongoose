@@ -3,7 +3,7 @@
 var chat = {
   // Backend URL, string.
   // 'http://backend.address.com' or '' if backend is the same as frontend
-  backendUrl: '',
+  backendUrl: 'api.lp',
   maxVisibleMessages: 10,
   errorMessageFadeOutTimeoutMs: 2000,
   errorMessageFadeOutTimer: null,
@@ -20,7 +20,7 @@ chat.refresh = function(data) {
   if (data === undefined) {
     return;
   }
-  
+
   $.each(data, function(index, entry) {
     var row = $('<div>').addClass('message-row').appendTo('#mml');
     var timestamp = (new Date(entry.timestamp * 1000)).toLocaleTimeString();
@@ -49,9 +49,7 @@ chat.refresh = function(data) {
 
 chat.getMessages = function(enter_loop) {
   $.ajax({
-    dataType: 'jsonp',
-    url: chat.backendUrl + '/ajax/get_messages',
-    data: {last_id: chat.lastMessageId},
+    data: {last_id: chat.lastMessageId, cmd: 'get_messages'},
     success: chat.refresh,
     error: function() {
     },
@@ -82,9 +80,7 @@ chat.handleMessageInput = function(ev) {
     return;
   //input.disabled = true;
   $.ajax({
-    dataType: 'jsonp',
-    url: chat.backendUrl + '/ajax/send_message',
-    data: {text: input.value},
+    data: { text: input.value, cmd: 'send_message' },
     success: function(ev) {
       input.value = '';
       input.disabled = false;
@@ -98,6 +94,10 @@ chat.handleMessageInput = function(ev) {
 };
 
 $(document).ready(function() {
+  $.ajaxSetup({
+    dataType: 'json',
+    url: chat.backendUrl
+  });
   $('.menu-item').click(chat.handleMenuItemClick);
   $('.message-input').keypress(chat.handleMessageInput);
   chat.getMessages(true);
