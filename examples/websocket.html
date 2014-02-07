@@ -30,7 +30,7 @@
         out('<span style="color: blue;">RESPONSE: ' + ev.data + ' </span>');
         num_messages++;
       }
-      if (num_messages > 15) {
+      if (num_messages > 3) {
         websocket.send('exit');
       }
     };
