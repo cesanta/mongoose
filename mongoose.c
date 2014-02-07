@@ -443,6 +443,7 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
 #endif  // MONGOOSE_NO_THREADS
 
 #ifdef _WIN32
+#ifndef MONGOOSE_NO_FILESYSTEM
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
 // wbuf and wbuf_len is a target buffer and its length.
 static void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
@@ -487,6 +488,7 @@ static int mg_open(const char *path, int flag) {
   return _wopen(wpath, flag);
 }
 #endif
+#endif // MONGOOSE_NO_FILESYSTEM
 
 static void set_close_on_exec(int fd) {
 #ifdef _WIN32
