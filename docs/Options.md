@@ -43,8 +43,14 @@ Note that PHP scripts must use `php-cgi.exe` executable, not `php.exe`.
 All files that match `cgi_pattern` are treated as CGI files. Default pattern
 allows CGI files be anywhere. To restrict CGIs to a certain directory,
 use `/path/to/cgi-bin/**.cgi` as pattern. Note that full file path is
-matched against the pattern, not the URI. Note: if `MONGOOSE_CGI` environment
-variable is set, then Mongoose passes it to the CGI script.
+matched against the pattern, not the URI.
+
+When Mongoose starts CGI program, it creates new environment for it (in
+contrast, usually child program inherits the environment from parent). Several
+environment variables however are inherited from Mongoose's environment,
+they are: `PATH`, `TMP`, `TEMP`, `TMPDIR`, `PERLLIB`, `MONGOOSE_CGI`. On UNIX
+it is also `LD_LIBRARY_PATH`. On Windows it is also `COMSPEC`, `SYSTEMROOT`,
+`SystemDrive`, `ProgramFiles`, `ProgramFiles(x86)`, `CommonProgramFiles(x86)`.
 
 Default: `**.cgi$|**.pl$|**.php$`
 
