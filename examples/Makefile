@@ -1,12 +1,10 @@
 CFLAGS    = -W -Wall -I.. -pthread -g -pipe $(CFLAGS_EXTRA)
-DLL_FLAGS = -DLUA_COMPAT_ALL -I../build
 RM        = rm -rf
 MSVC      = ../../vc6
 CL        = $(MSVC)/bin/cl
 CLFLAGS   = /MD /TC /nologo $(CFLAGS_EXTRA) /W3 \
             /I$(MSVC)/include /I.. /Dsnprintf=_snprintf
 LFLAGS    = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
-LUA_FLAGS = -I/usr/local/include -L/usr/local/lib -llua
 
 
 ifeq ($(OS),Windows_NT)
@@ -26,6 +24,10 @@ else
   endif
 endif
 
+# To enable Lua in a server, uncomment following lines
+LUA    = ../lua-5.2.3/src
+#CFLAGS += -I$(LUA) -L$(LUA) -llua
+
 all: websocket_html.c
 	$(CC) hello.c ../mongoose.c  -o hello $(CFLAGS)
 	$(CC) websocket.c websocket_html.c ../mongoose.c  -o websocket $(CFLAGS)
@@ -34,12 +36,6 @@ all: websocket_html.c
 	$(CC) upload.c ../mongoose.c -o upload $(CFLAGS)
 	$(CC) auth.c ../mongoose.c -o auth $(CFLAGS)
 	$(CC) server.c ../mongoose.c -o server $(CFLAGS)
-
-chat$(EXE_SUFFIX): chat.c
-	$(CC) chat.c ../mongoose.c -DMONGOOSE_USE_LUA -o $@ $(CFLAGS) $(LUA_FLAGS)
-
-#	$(CC) chat.c ../mongoose.c -o chat $(CFLAGS)
-#	$(CC) lua_dll.c ../build/lua_5.2.1.c -o $@.so $(CFLAGS) $(DLL_FLAGS)
 
 websocket_html.c: websocket.html
 	perl mkdata.pl $< > $@
@@ -53,7 +49,5 @@ windows: websocket_html.c
 	$(CL) auth.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 	$(CL) server.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 
-#$(CL) lua_dll.c $(CLFLAGS) $(DLL_FLAGS) /DLL $(LFLAGS) /SUBSYSTEM:WINDOWS /ENTRY:luaopen_lua_dll /EXPORT:luaopen_lua_dll /out:lua_dll.dll
-
 clean:
-	-@$(RM) hello upload post websocket chat *.exe *.dSYM *.obj .*o
+	-@$(RM) hello upload post websocket auth server *.exe *.dSYM *.obj .*o
