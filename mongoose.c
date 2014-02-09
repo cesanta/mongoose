@@ -2026,6 +2026,42 @@ static void callback_http_client_on_connect(struct connection *conn) {
   }
 }
 
+#ifdef MONGOOSE_HEXDUMP
+static void hexdump(const struct connection *conn, const void *buf,
+                    int len, const char *marker) {
+  const unsigned char *p = (const unsigned char *) buf;
+  char path[MAX_PATH_SIZE], date[100], ascii[17];
+  FILE *fp;
+
+  snprintf(path, sizeof(path), "%s.%hu.txt",
+           conn->mg_conn.remote_ip, conn->mg_conn.remote_port);
+
+  if ((fp = fopen(path, "a")) != NULL) {
+    time_t cur_time = time(NULL);
+    int i, idx;
+
+    strftime(date, sizeof(date), "%d/%b/%Y %H:%M:%S", localtime(&cur_time));
+    fprintf(fp, "%s %s %d bytes\n", marker, date, len);
+
+    for (i = 0; i < len; i++) {
+      idx = i % 16;
+      if (idx == 0) {
+        if (i > 0) fprintf(fp, "  %s\n", ascii);
+        fprintf(fp, "%04x ", i);
+      }
+      fprintf(fp, " %02x", p[i]);
+      ascii[idx] = p[i] < 0x20 || p[i] > 0x7e ? '.' : p[i];
+      ascii[idx + 1] = '\0';
+    }
+
+    while (i++ % 16) fprintf(fp, "%s", "   ");
+    fprintf(fp, "  %s\n\n", ascii);
+
+    fclose(fp);
+  }
+}
+#endif
+
 static void write_to_socket(struct connection *conn) {
   struct iobuf *io = &conn->remote_iobuf;
   int n = 0;
@@ -2044,6 +2080,13 @@ static void write_to_socket(struct connection *conn) {
 
   DBG(("%p Written %d of %d(%d): [%.*s ...]",
        conn, n, io->len, io->size, io->len < 40 ? io->len : 40, io->buf));
+
+#ifdef MONGOOSE_HEXDUMP
+  if (match_prefix(MONGOOSE_HEXDUMP, strlen(MONGOOSE_HEXDUMP),
+                   conn->mg_conn.remote_ip)) {
+    hexdump(conn, io->buf, n, "->");
+  }
+#endif
 
   if (is_error(n)) {
     conn->flags |= CONN_CLOSE;
@@ -3654,6 +3697,14 @@ static void read_from_socket(struct connection *conn) {
   }
 
   DBG(("%p %d %d (1)", conn, n, conn->flags));
+
+#ifdef MONGOOSE_HEXDUMP
+  if (match_prefix(MONGOOSE_HEXDUMP, strlen(MONGOOSE_HEXDUMP),
+                   conn->mg_conn.remote_ip)) {
+    hexdump(conn, buf, n, "<-");
+  }
+#endif
+
   if (is_error(n)) {
     if (conn->endpoint_type == EP_CLIENT && conn->local_iobuf.len > 0) {
       call_http_client_handler(conn, MG_DOWNLOAD_SUCCESS);

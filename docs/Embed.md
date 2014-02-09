@@ -95,6 +95,9 @@ a couple of kilobytes to the executable size, and also has some runtime penalty.
     -DMONGOOSE_USE_STACK_SIZE=X           Let mg_start_thread() use stack
                                           size X, default is OS default
     -DMONGOOSE_ENABLE_DEBUG     Enables debug messages on stdout, very noisy
+    -DMONGOOSE_HEXDUMP=\"XXX\"  Enables hexdump of sent and received traffic
+                                to the text files. XXX must be a prefix of the
+                                IP address whose traffic must be hexdumped.
 
 Mongoose source code contains a well-commented example code, listed below:
 
