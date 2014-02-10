@@ -2029,6 +2029,8 @@ static void callback_http_client_on_connect(struct connection *conn) {
 #ifdef MONGOOSE_HEXDUMP
 static void hexdump(const struct connection *conn, const void *buf,
                     int len, const char *marker) {
+  if (match_prefix(MONGOOSE_HEXDUMP, strlen(MONGOOSE_HEXDUMP),
+                   conn->mg_conn.remote_ip))  {
   const unsigned char *p = (const unsigned char *) buf;
   char path[MAX_PATH_SIZE], date[100], ascii[17];
   FILE *fp;
@@ -2060,6 +2062,7 @@ static void hexdump(const struct connection *conn, const void *buf,
     fclose(fp);
   }
 }
+}
 #endif
 
 static void write_to_socket(struct connection *conn) {
@@ -2082,10 +2085,7 @@ static void write_to_socket(struct connection *conn) {
        conn, n, io->len, io->size, io->len < 40 ? io->len : 40, io->buf));
 
 #ifdef MONGOOSE_HEXDUMP
-  if (match_prefix(MONGOOSE_HEXDUMP, strlen(MONGOOSE_HEXDUMP),
-                   conn->mg_conn.remote_ip)) {
     hexdump(conn, io->buf, n, "->");
-  }
 #endif
 
   if (is_error(n)) {
@@ -3699,10 +3699,7 @@ static void read_from_socket(struct connection *conn) {
   DBG(("%p %d %d (1)", conn, n, conn->flags));
 
 #ifdef MONGOOSE_HEXDUMP
-  if (match_prefix(MONGOOSE_HEXDUMP, strlen(MONGOOSE_HEXDUMP),
-                   conn->mg_conn.remote_ip)) {
     hexdump(conn, buf, n, "<-");
-  }
 #endif
 
   if (is_error(n)) {
