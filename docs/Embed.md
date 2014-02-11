@@ -13,6 +13,7 @@ Embedding Mongoose is done in two steps:
 Here's a minimal application `app.c` that embeds mongoose:
 
     #include "mongoose.h"
+
     int main(void) {
       struct mg_server *server = mg_create_server(NULL);
       mg_set_option(server, "document_root", ".");      // Serve current directory
