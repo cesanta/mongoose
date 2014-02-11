@@ -23,7 +23,7 @@ Here's a minimal application `app.c` that embeds mongoose:
       return 0;
     }
 
-To compile it, put `mongoose.c`, `mongoose.h` and `minimal.c` into one
+To compile it, put `mongoose.c`, `mongoose.h` and `app.c` into one
 folder, start terminal on UNIX or Visual Studio command line prompt on Windows,
 and run the following command:
 
