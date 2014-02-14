@@ -21,11 +21,14 @@
 #define _INTEGRAL_MAX_BITS 64   // Enable _stati64() on Windows
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005+
 #undef WIN32_LEAN_AND_MEAN      // Let windows.h always include winsock2.h
-#define _XOPEN_SOURCE 600       // For flockfile() on Linux
 #define __STDC_FORMAT_MACROS    // <inttypes.h> wants this for C++
 #define __STDC_LIMIT_MACROS     // C++ wants that for INT64_MAX
 #define _LARGEFILE_SOURCE       // Enable fseeko() and ftello() functions
 #define _FILE_OFFSET_BITS 64    // Enable 64-bit file offsets
+
+#ifndef __FreeBSD__
+#define _XOPEN_SOURCE 600       // For flockfile() on Linux, not needed in FreeBSD
+#endif
 
 #ifdef _MSC_VER
 #pragma warning (disable : 4127)  // FD_SET() emits warning, disable it
