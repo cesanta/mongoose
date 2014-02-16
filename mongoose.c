@@ -4297,3 +4297,89 @@ struct mg_server *mg_create_server(void *server_data) {
 
   return server;
 }
+
+static int getbyte64(char c)
+{
+  if(c >='A' && c <='Z') return c - 'A';
+  if(c >='a' && c <='z') return c - 'a' + 26;
+  if(c >='0' && c <='9') return c  - '0' + 52;
+  if(c == '+') return 62;
+  if(c == '/') return 63;
+  return -1;
+}
+
+static int base64_decode(const unsigned char *src, int src_len, char *dst)
+{
+	int a, b, c, d, i, j;
+  int len = src_len;
+
+	if (!src || src_len == 0 || !dst) {
+    return 0;
+  }
+
+  //removing "==" from the end of src string
+  while ((src[len-1] == '=') && len) {
+		--len;
+  }
+
+	for (i=0, j=0; (i + 3) < len; i+=4) {
+		a = getbyte64(src[i]);
+		b = getbyte64(src[i + 1]);
+		c = getbyte64(src[i + 2]);
+		d = getbyte64(src[i + 3]);
+
+		dst[j++] = ((a << 2) | ((b & 0x30) >> 4));
+		dst[j++] = (((b & 0x0F) << 4) | ((c & 0x3C) >> 2));
+		dst[j++] = (((c & 0x03) << 6) | (d & 0x3F));
+	}
+	if (i < len) {
+		a = getbyte64(src[i]);
+    b = ((i + 1) < len) ? getbyte64(src[i + 1]) : -1;  
+		c = ((i + 2) < len) ? getbyte64(src[i + 2]) : -1;
+		d = -1;
+
+		if (b != -1) {
+			dst[j++] = ((a << 2) | ((b & 0x30) >> 4));
+			if (c != -1) {
+				dst[j++] = (((b & 0x0F) << 4) | ((c & 0x3C) >> 2));
+				if (d != -1) {
+					dst[j++] = (((c & 0x03) << 6) | (d & 0x3F));
+				}
+			}
+		}
+	}
+  dst[j] = '\0';
+  return (j > src_len) ? 0 : 1; 
+}
+
+// Authorize using username and password, without load data from file. 
+// Return 1 if authorized.
+int mg_authorize_basic(struct mg_connection *c, 
+                       const char *username, const char *password, int type) {
+  char cred[256], user[100], resp[100], ha[256];
+  const char *hdr, *base;
+
+  if (c == NULL || username == NULL || password == NULL) return 0;
+  if ((hdr = mg_get_header(c, "Authorization")) == NULL) return 0;
+  
+  base = strchr(hdr, ' ');
+  if ((base == NULL) || (base <= hdr)) return 0;
+  if ((mg_strncasecmp(hdr, "Basic", (base - hdr))) != 0) return 0;
+  if (base64_decode((const unsigned char *)(base + 1), 
+                    strlen(base + 1), cred) == 0) return 0;
+
+  if (sscanf(cred, "%[^:]:%s", user, resp) == 2 &&
+      !strcmp(user, username)) {
+    // compare with a MD5 password
+    if (type == MG_MD5_PASSWORD) { 
+      mg_md5(ha, password, NULL);
+      return mg_strcasecmp(ha, resp) == 0 ? 
+                            MG_AUTH_OK : MG_AUTH_FAIL;
+    }
+    // or a plain password
+    return mg_strcasecmp(password, resp) == 0 ? 
+                         MG_AUTH_OK : MG_AUTH_FAIL;
+  }
+  return MG_AUTH_FAIL;
+}
+

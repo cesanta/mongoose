@@ -104,6 +104,11 @@ void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
 
+// Support to basic access authentication
+enum { MG_MD5_PASSWORD, MG_PLAIN_PASSWORD };
+int mg_authorize_basic(struct mg_connection *c,
+                       const char *username, const char *password, int type);
+
 // Callback function return codes
 enum { MG_REQUEST_NOT_PROCESSED, MG_REQUEST_PROCESSED, MG_REQUEST_CALL_AGAIN };
 enum { MG_AUTH_FAIL, MG_AUTH_OK };
