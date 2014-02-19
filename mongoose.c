@@ -1811,7 +1811,8 @@ static const char cgi_status[] = "HTTP/1.1 200 OK\r\n";
 
 static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   struct cgi_env_block blk;
-  char dir[MAX_PATH_SIZE], *p;
+  char dir[MAX_PATH_SIZE];
+  const char *p;
   sock_t fds[2];
 
   prepare_cgi_environment(conn, prog, &blk);
