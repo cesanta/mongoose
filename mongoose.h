@@ -65,7 +65,7 @@ typedef int (*mg_handler_t)(struct mg_connection *);
 struct mg_server *mg_create_server(void *server_param);
 void mg_destroy_server(struct mg_server **);
 const char *mg_set_option(struct mg_server *, const char *opt, const char *val);
-unsigned int mg_poll_server(struct mg_server *, int milliseconds);
+int mg_poll_server(struct mg_server *, int milliseconds);
 void mg_set_request_handler(struct mg_server *, mg_handler_t);
 void mg_set_http_close_handler(struct mg_server *, mg_handler_t);
 void mg_set_http_error_handler(struct mg_server *, mg_handler_t);
