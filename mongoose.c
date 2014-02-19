@@ -831,7 +831,7 @@ struct ns_connection *ns_connect(struct ns_server *server, const char *host,
 #endif
 
   if (host == NULL || (he = gethostbyname(host)) == NULL ||
-      (sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
+      (sock = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
     DBG(("gethostbyname(%s) failed: %s", host, strerror(errno)));
     return NULL;
   }
@@ -3754,7 +3754,7 @@ static sock_t conn2(const char *host, int port) {
 
   if (host != NULL &&
       (he = gethostbyname(host)) != NULL &&
-    (sock = socket(PF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
+    (sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
     set_close_on_exec(sock);
     sin.sin_family = AF_INET;
     sin.sin_port = htons((uint16_t) port);
