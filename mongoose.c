@@ -63,6 +63,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <signal.h>
 
 #if defined(_WIN32) && !defined(__SYMBIAN32__) // Windows specific
 #define _WIN32_WINNT 0x0400 // To make it link in VS2005
