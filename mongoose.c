@@ -662,6 +662,8 @@ static void read_from_socket(struct ns_connection *conn) {
         ok = 1;
       }
     }
+#else
+    (void) ret;
 #endif
     DBG(("%p ok=%d", conn, ok));
     if (ok != 0) {
