@@ -102,6 +102,7 @@ typedef SOCKET sock_t;
 #include <pthread.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <signal.h>
 #include <arpa/inet.h>  // For inet_pton() when NS_ENABLE_IPV6 is defined
 #include <netinet/in.h>
 #include <sys/socket.h>
