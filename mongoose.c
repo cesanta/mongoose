@@ -102,7 +102,6 @@ typedef SOCKET sock_t;
 #include <pthread.h>
 #include <stdarg.h>
 #include <unistd.h>
-#include <signal.h>
 #include <arpa/inet.h>  // For inet_pton() when NS_ENABLE_IPV6 is defined
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -648,6 +647,7 @@ static void read_from_socket(struct ns_connection *conn) {
 
     conn->flags &= ~NSF_CONNECTING;
     ret = getsockopt(conn->sock, SOL_SOCKET, SO_ERROR, (char *) &ok, &len);
+    (void) ret;
 #ifdef NS_ENABLE_SSL
     if (ret == 0 && ok == 0 && conn->ssl != NULL) {
       int res = SSL_connect(conn->ssl);
@@ -856,6 +856,7 @@ struct ns_connection *ns_connect(struct ns_server *server, const char *host,
   conn->sock = sock;
   conn->connection_data = param;
   conn->flags = NSF_CONNECTING;
+  conn->last_io_time = time(NULL);
 
 #ifdef NS_ENABLE_SSL
   if (use_ssl &&
