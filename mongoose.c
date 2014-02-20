@@ -4533,8 +4533,10 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
     case NS_RECV:
       if (nc->flags & NSF_ACCEPTED) {
         process_request(conn);
+#ifndef MONGOOSE_NO_CGI
       } else if (nc->flags & MG_CGI_CONN) {
         on_cgi_data(nc);
+#endif
       } else {
         process_response(conn);
       }
