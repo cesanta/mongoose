@@ -1115,14 +1115,22 @@ struct mg_server {
 // Local endpoint representation
 union endpoint {
   int fd;                           // Opened regular local file
+#ifndef MONGOOSE_NO_CGI
   struct ns_connection *cgi_conn;   // CGI socket
+#endif
 };
 
-enum endpoint_type { EP_NONE, EP_FILE, EP_CGI, EP_USER, EP_PUT, EP_CLIENT };
+enum endpoint_type { EP_NONE, EP_FILE, 
+#ifndef MONGOOSE_NO_CGI
+	EP_CGI, 
+#endif
+	EP_USER, EP_PUT, EP_CLIENT };
 
 #define MG_HEADERS_SENT NSF_USER_1
 #define MG_LONG_RUNNING NSF_USER_2
+#ifndef MONGOOSE_NO_CGI
 #define MG_CGI_CONN NSF_USER_3
+#endif
 
 struct connection {
   struct ns_connection *ns_conn;
@@ -4212,11 +4220,13 @@ static void close_local_endpoint(struct connection *conn) {
     case EP_FILE:
       close(conn->endpoint.fd);
       break;
+#ifndef MONGOOSE_NO_CGI
     case EP_CGI:
       if (conn->endpoint.cgi_conn != NULL) {
         conn->endpoint.cgi_conn->flags |= NSF_CLOSE_IMMEDIATELY;
         conn->endpoint.cgi_conn->connection_data = NULL;
       }
+#endif
       break;
     default: break;
   }
@@ -4532,8 +4542,10 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
     case NS_RECV:
       if (nc->flags & NSF_ACCEPTED) {
         process_request(conn);
+#ifndef MONGOOSE_NO_CGI
       } else if (nc->flags & MG_CGI_CONN) {
         on_cgi_data(nc);
+#endif
       } else {
         process_response(conn);
       }
@@ -4544,12 +4556,15 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
 
     case NS_CLOSE:
       nc->connection_data = NULL;
+#ifndef MONGOOSE_NO_CGI
       if ((nc->flags & MG_CGI_CONN) && conn && conn->ns_conn) {
         conn->ns_conn->flags &= ~NSF_BUFFER_BUT_DONT_SEND;
         conn->ns_conn->flags |= conn->ns_conn->send_iobuf.len > 0 ?
           NSF_FINISHED_SENDING_DATA : NSF_CLOSE_IMMEDIATELY;
         conn->endpoint.cgi_conn = NULL;
-      } else if (conn != NULL) {
+      } else 
+#endif
+		  if (conn != NULL) {
         DBG(("%p %d closing", conn, conn->endpoint_type));
 
         if (conn->endpoint_type == EP_CLIENT && nc->recv_iobuf.len > 0) {
