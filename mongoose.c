@@ -4545,6 +4545,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
     case NS_CLOSE:
       nc->connection_data = NULL;
       if ((nc->flags & MG_CGI_CONN) && conn && conn->ns_conn) {
+        conn->ns_conn->flags &= ~NSF_BUFFER_BUT_DONT_SEND;
         conn->ns_conn->flags |= conn->ns_conn->send_iobuf.len > 0 ?
           NSF_FINISHED_SENDING_DATA : NSF_CLOSE_IMMEDIATELY;
         conn->endpoint.cgi_conn = NULL;
@@ -4573,11 +4574,12 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       {
         time_t current_time = * (time_t *) p;
 
-        if (conn->mg_conn.is_websocket) {
+        if (conn != NULL && conn->mg_conn.is_websocket) {
           ping_idle_websocket_connection(conn, current_time);
         }
 
         if (nc->last_io_time + MONGOOSE_IDLE_TIMEOUT_SECONDS < current_time) {
+          mg_ev_handler(nc, NS_CLOSE, NULL);
           nc->flags |= NSF_CLOSE_IMMEDIATELY;
         }
       }
