@@ -948,7 +948,9 @@ void ns_server_free(struct ns_server *s) {
 
 #include <ctype.h>
 
-#ifdef _WIN32
+#ifdef _WIN32         //////////////// Windows specific defines and includes
+#include <io.h>       // For _lseeki64
+#include <direct.h>   // For _mkdir
 #ifndef S_ISDIR
 #define S_ISDIR(x) ((x) & _S_IFDIR)
 #endif
@@ -964,15 +966,22 @@ void ns_server_free(struct ns_server *s) {
 #define STR(x) STRX(x)
 #define __func__ __FILE__ ":" STR(__LINE__)
 #endif
+#define INT64_FMT  "I64d"
+#define stat(x, y) mg_stat((x), (y))
+#define fopen(x, y) mg_fopen((x), (y))
+#define open(x, y) mg_open((x), (y))
+#define flockfile(x)      ((void) (x))
+#define funlockfile(x)    ((void) (x))
 typedef struct _stati64 file_stat_t;
-#else
+typedef HANDLE pid_t;
+#else                    ////////////// UNIX specific defines and includes
 #include <dirent.h>
 #include <inttypes.h>
 #include <pwd.h>
 #define O_BINARY 0
 #define INT64_FMT PRId64
 typedef struct stat file_stat_t;
-#endif
+#endif                  //////// End of platform-specific defines and includes
 
 #include "mongoose.h"
 
@@ -1622,7 +1631,7 @@ static pid_t start_process(char *interp, const char *cmd, const char *env,
   CloseHandle(pi.hThread);
   CloseHandle(pi.hProcess);
 
-  return pi.hProcess;
+  return (pid_t) pi.hProcess;
 }
 #else
 static pid_t start_process(const char *interp, const char *cmd, const char *env,
