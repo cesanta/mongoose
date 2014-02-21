@@ -9,7 +9,7 @@
 #define MONGOOSE_POST_SIZE_LIMIT 999
 
 // USE_* definitions must be made before #include "mongoose.c" !
-#include "mongoose.c"
+#include "../mongoose.c"
 
 #define FAIL(str, line) do {                    \
   printf("Fail on line %d: [%s]\n", line, str); \

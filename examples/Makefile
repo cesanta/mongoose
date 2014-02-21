@@ -49,5 +49,9 @@ windows: websocket_html.c
 	$(CL) auth.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 	$(CL) server.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
 
+u:
+	g++ unit_test.c -Wall -W -pedantic -lssl -g -O0 && ./a.out
+
+
 clean:
 	-@$(RM) hello upload post websocket auth server *.exe *.dSYM *.obj .*o
