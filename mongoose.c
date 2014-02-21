@@ -959,12 +959,18 @@ void ns_server_free(struct ns_server *s) {
 #define lseek(x, y, z) _lseeki64((x), (y), (z))
 #define mkdir(x, y) _mkdir(x)
 #define to64(x) _atoi64(x)
+#define flockfile(x) ((void)(x))
+#define funlockfile(x) ((void)(x))
 #ifndef __func__
 #define STRX(x) #x
 #define STR(x) STRX(x)
 #define __func__ __FILE__ ":" STR(__LINE__)
 #endif
 typedef struct _stati64 file_stat_t;
+#ifndef INT64_FMT
+#include <inttypes.h>
+#define INT64_FMT PRId64
+#endif
 #else
 #include <dirent.h>
 #include <inttypes.h>
@@ -1622,7 +1628,7 @@ static pid_t start_process(char *interp, const char *cmd, const char *env,
   CloseHandle(pi.hThread);
   CloseHandle(pi.hProcess);
 
-  return pi.hProcess;
+  return (pid_t) pi.hProcess;
 }
 #else
 static pid_t start_process(const char *interp, const char *cmd, const char *env,
