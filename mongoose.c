@@ -2256,19 +2256,26 @@ void mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
   struct connection *conn = MG_CONN_2_CONN(c);
   struct iobuf *io = &conn->ns_conn->send_iobuf;
   va_list ap;
-  static const char chunk_len[] = "        \r\n";
-  int len, n, cl = sizeof(chunk_len) - 1;
-  char *p, buf[9];
+  int len, n;
+  char *p;
 
   terminate_headers(c);
 
+  // Write the placeholder for the chunk size
+  p = io->buf + io->len;
+  iobuf_append(io, "        \r\n", 10);
+
+  // Write chunk itself
   va_start(ap, fmt);
-  ns_send(conn->ns_conn, chunk_len, cl);
-  p = io->buf + io->len - cl;
   len = ns_vprintf(conn->ns_conn, fmt, ap);
-  n = mg_snprintf(buf, sizeof(buf), "%X", len);
-  memcpy(p, buf, n < 9 ? n : 8);
   va_end(ap);
+
+  // Record size
+  n = mg_snprintf(p, 7, "%X", len);
+  p[n] = ' ';
+
+  // Write terminating new line
+  mg_write(c, "\r\n", 2);
 }
 
 #if !defined(MONGOOSE_NO_WEBSOCKET) || !defined(MONGOOSE_NO_AUTH)
