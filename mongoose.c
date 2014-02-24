@@ -741,9 +741,11 @@ int ns_send(struct ns_connection *conn, const void *buf, int len) {
 }
 
 static void add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
-  if (sock >= 0) FD_SET(sock, set);
-  if (sock > *max_fd) {
-    *max_fd = sock;
+  if (sock != INVALID_SOCKET) {
+    FD_SET(sock, set);
+    if (*max_fd == INVALID_SOCKET || sock > *max_fd) {
+      *max_fd = sock;
+    }
   }
 }
 
