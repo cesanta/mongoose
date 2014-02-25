@@ -15,6 +15,9 @@
 // Alternatively, you can license this library under a commercial
 // license, as set out in <http://cesanta.com/>.
 
+#ifdef NOEMBED_NET_SKELETON
+#include "net_skeleton.h"
+#else
 // net_skeleton start
 
 // Copyright (c) 2014 Cesanta Software Limited
@@ -947,6 +950,7 @@ void ns_server_free(struct ns_server *s) {
 }
 
 // net_skeleton end
+#endif  // NOEMBED_NET_SKELETON
 
 #include <ctype.h>
 
