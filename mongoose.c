@@ -4253,7 +4253,9 @@ static void close_local_endpoint(struct connection *conn) {
   iobuf_remove(&conn->ns_conn->recv_iobuf, conn->mg_conn.content_len);
   conn->endpoint_type = EP_NONE;
   conn->cl = conn->num_bytes_sent = conn->request_len = 0;
-  conn->ns_conn->flags = conn->ns_conn->flags & NSF_ACCEPTED ? NSF_ACCEPTED : 0;
+  conn->ns_conn->flags &= ~(NSF_FINISHED_SENDING_DATA |
+                            NSF_BUFFER_BUT_DONT_SEND | NSF_CLOSE_IMMEDIATELY |
+                            MG_HEADERS_SENT | MG_LONG_RUNNING);
   c->request_method = c->uri = c->http_version = c->query_string = NULL;
   c->num_headers = c->status_code = c->is_websocket = c->content_len = 0;
   free(conn->request); conn->request = NULL;
