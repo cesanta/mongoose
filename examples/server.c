@@ -36,6 +36,7 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "mongoose.h"
 
