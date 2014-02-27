@@ -2262,11 +2262,13 @@ void mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
   struct connection *conn = MG_CONN_2_CONN(c);
   struct iobuf *io = &conn->ns_conn->send_iobuf;
   va_list ap;
-  int len, n;
+  int len, n, iolen;
   char *p;
 
   terminate_headers(c);
 
+  // Remember original io->len
+  iolen = io->len;
   // Write the placeholder for the chunk size
   p = io->buf + io->len;
   iobuf_append(io, "        \r\n", 10);
@@ -2275,6 +2277,9 @@ void mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
   va_start(ap, fmt);
   len = ns_vprintf(conn->ns_conn, fmt, ap);
   va_end(ap);
+
+  // Recalculate pointer p because of potential realloc within iobuf_append
+  p = io->buf + iolen;
 
   // Record size
   n = mg_snprintf(p, 7, "%X", len);
