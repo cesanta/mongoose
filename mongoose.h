@@ -80,6 +80,7 @@ const char *mg_get_option(const struct mg_server *server, const char *name);
 void mg_set_listening_socket(struct mg_server *, int sock);
 int mg_get_listening_socket(struct mg_server *);
 void mg_iterate_over_connections(struct mg_server *, mg_handler_t);
+void mg_wakeup_server(struct mg_server *);
 
 // Connection management functions
 void mg_send_status(struct mg_connection *, int status_code);

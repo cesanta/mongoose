@@ -69,6 +69,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <signal.h>
 
 #ifdef _WIN32
 #pragma comment(lib, "ws2_32.lib")    // Linking with winsock library
@@ -103,7 +104,6 @@ typedef SOCKET sock_t;
 #include <fcntl.h>
 #include <netdb.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include <arpa/inet.h>  // For inet_pton() when NS_ENABLE_IPV6 is defined
@@ -171,6 +171,7 @@ struct ns_server {
   ns_callback_t callback;
   SSL_CTX *ssl_ctx;
   SSL_CTX *client_ssl_ctx;
+  sock_t ctl[2];
 };
 
 struct ns_connection {
@@ -198,7 +199,7 @@ struct ns_connection {
 void ns_server_init(struct ns_server *, void *server_data, ns_callback_t);
 void ns_server_free(struct ns_server *);
 int ns_server_poll(struct ns_server *, int milli);
-void ns_server_wakeup(struct ns_server *, void *conn_param);
+void ns_server_wakeup(struct ns_server *);
 void ns_iterate(struct ns_server *, ns_callback_t cb, void *param);
 struct ns_connection *ns_add_sock(struct ns_server *, sock_t sock, void *p);
 
@@ -901,9 +902,17 @@ void ns_iterate(struct ns_server *server, ns_callback_t cb, void *param) {
   }
 }
 
+void ns_server_wakeup(struct ns_server *server) {
+  unsigned char ch = 0;
+  if (server->ctl[0] != INVALID_SOCKET) {
+    send(server->ctl[0], &ch, 1, 0);
+    recv(server->ctl[0], &ch, 1, 0);
+  }
+}
+
 void ns_server_init(struct ns_server *s, void *server_data, ns_callback_t cb) {
   memset(s, 0, sizeof(*s));
-  s->listening_sock = INVALID_SOCKET;
+  s->listening_sock = s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
   s->server_data = server_data;
   s->callback = cb;
 
@@ -913,6 +922,12 @@ void ns_server_init(struct ns_server *s, void *server_data, ns_callback_t cb) {
   // Ignore SIGPIPE signal, so if client cancels the request, it
   // won't kill the whole process.
   signal(SIGPIPE, SIG_IGN);
+#endif
+
+#ifndef NS_DISABLE_SOCKETPAIR
+  do {
+    ns_socketpair(s->ctl);
+  } while (s->ctl[0] == INVALID_SOCKET);
 #endif
 
 #ifdef NS_ENABLE_SSL
@@ -929,19 +944,15 @@ void ns_server_free(struct ns_server *s) {
   // Do one last poll, see https://github.com/cesanta/mongoose/issues/286
   ns_server_poll(s, 0);
 
-  if (s->listening_sock != INVALID_SOCKET) {
-    closesocket(s->listening_sock);
-  }
+  if (s->listening_sock != INVALID_SOCKET) closesocket(s->listening_sock);
+  if (s->ctl[0] != INVALID_SOCKET) closesocket(s->ctl[0]);
+  if (s->ctl[1] != INVALID_SOCKET) closesocket(s->ctl[1]);
+  s->listening_sock = s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
 
   for (conn = s->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
     ns_close_conn(conn);
   }
-
-#ifndef NS_DISABLE_SOCKETPAIR
-  //closesocket(s->ctl[0]);
-  //closesocket(s->ctl[1]);
-#endif
 
 #ifdef NS_ENABLE_SSL
   if (s->ssl_ctx != NULL) SSL_CTX_free(s->ssl_ctx);
@@ -4612,6 +4623,10 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
     default:
       break;
   }
+}
+
+void mg_wakeup_server(struct mg_server *server) {
+  ns_server_wakeup(&server->ns_server);
 }
 
 void mg_set_listening_socket(struct mg_server *server, int sock) {
