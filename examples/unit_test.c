@@ -339,20 +339,17 @@ static const char *test_next_option(void) {
   return NULL;
 }
 
-static int cb1(struct mg_connection *conn) {
-  int result = MG_REQUEST_NOT_PROCESSED;
-  if (!strcmp(conn->uri, "/cb1")) {
+static int evh1(struct mg_connection *conn, enum mg_event ev) {
+  if (ev == MG_HTTP_ERROR) {
+    mg_printf(conn, "HTTP/1.0 404 NF\r\n\r\nERR: %d", conn->status_code);
+    return MG_TRUE;
+  } else if (ev == MG_REQ_BEGIN && !strcmp(conn->uri, "/cb1")) {
     mg_printf(conn, "%s %s %s",
               conn->server_param == NULL ? "?" : (char *) conn->server_param,
               conn->connection_param == NULL ? "?" : "!", conn->remote_ip);
-    result = MG_REQUEST_PROCESSED;
+    return MG_TRUE;
   }
-  return result;
-}
-
-static int error_handler(struct mg_connection *conn) {
-  mg_printf(conn, "HTTP/1.0 404 NF\r\n\r\nERR: %d", conn->status_code);
-  return MG_ERROR_PROCESSED;
+  return MG_FALSE;
 }
 
 static int ts1(struct mg_connection *conn) {
@@ -379,16 +376,14 @@ static int ts2(struct mg_connection *conn) {
 
 static const char *test_server(void) {
   char buf1[100] = "", buf2[100] = "";
-  struct mg_server *server = mg_create_server((void *) "foo");
+  struct mg_server *server = mg_create_server((void *) "foo", evh1);
 
   ASSERT(server != NULL);
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
-  mg_set_request_handler(server, cb1);
-  mg_set_http_error_handler(server, error_handler);
 
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT),  0, ts1, buf1) == 1);
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, ts2, buf2) == 1);
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT),  0, buf1) == 1);
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, buf2) == 1);
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
   ASSERT(strcmp(buf1, "foo ? 127.0.0.1") == 0);
@@ -464,15 +459,14 @@ static int cb3(struct mg_connection *conn) {
 
 static const char *test_mg_connect(void) {
   char buf2[40] = "", buf3[40] = "", buf4[40] = "";
-  struct mg_server *server = mg_create_server(NULL);
+  struct mg_server *server = mg_create_server(NULL, NULL);  // cb4h
 
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
-  mg_set_request_handler(server, cb4h);
   ASSERT(mg_connect(server, "", 0, 0, NULL, NULL) == 0);
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, cb2, buf2) == 1);
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, buf2) == 1);
   ASSERT(mg_connect(server, "127.0.0.1", 29, 0, cb3, buf3) == 1);
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, cb4, buf4) == 1);
+  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, buf4) == 1);
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
 
@@ -562,7 +556,7 @@ static const char *test_ssl(void) {
 #endif
 
 static const char *test_mg_set_option(void) {
-  struct mg_server *server = mg_create_server(NULL);
+  struct mg_server *server = mg_create_server(NULL, NULL);
   ASSERT(mg_set_option(server, "listening_port", "0") == NULL);
   ASSERT(mg_get_option(server, "listening_port")[0] != '\0');
   mg_destroy_server(&server);
@@ -571,7 +565,7 @@ static const char *test_mg_set_option(void) {
 
 static const char *test_rewrites(void) {
   char buf1[100] = "xx";
-  struct mg_server *server = mg_create_server(NULL);
+  struct mg_server *server = mg_create_server(NULL, NULL);
 
   ASSERT(mg_set_option(server, "listening_port", "0") == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);

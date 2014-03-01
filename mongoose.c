@@ -325,14 +325,14 @@ void *ns_start_thread(void *(*f)(void *), void *p) {
 }
 #endif  // NS_DISABLE_THREADS
 
-static void add_connection(struct ns_server *server, struct ns_connection *c) {
+static void ns_add_conn(struct ns_server *server, struct ns_connection *c) {
   c->next = server->active_connections;
   server->active_connections = c;
   c->prev = NULL;
   if (c->next != NULL) c->next->prev = c;
 }
 
-static void remove_connection(struct ns_connection *conn) {
+static void ns_remove_conn(struct ns_connection *conn) {
   if (conn->prev == NULL) conn->server->active_connections = conn->next;
   if (conn->prev) conn->prev->next = conn->next;
   if (conn->next) conn->next->prev = conn->prev;
@@ -341,7 +341,7 @@ static void remove_connection(struct ns_connection *conn) {
 // Print message to buffer. If buffer is large enough to hold the message,
 // return buffer. If buffer is to small, allocate large enough buffer on heap,
 // and return allocated buffer.
-static int alloc_vprintf(char **buf, size_t size, const char *fmt, va_list ap) {
+static int ns_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   va_list ap_copy;
   int len;
 
@@ -380,7 +380,7 @@ int ns_vprintf(struct ns_connection *conn, const char *fmt, va_list ap) {
   char mem[2000], *buf = mem;
   int len;
 
-  if ((len = alloc_vprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
+  if ((len = ns_avprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
     iobuf_append(&conn->send_iobuf, buf, len);
   }
   if (buf != mem && buf != NULL) {
@@ -399,14 +399,14 @@ int ns_printf(struct ns_connection *conn, const char *fmt, ...) {
   return len;
 }
 
-static void call_user(struct ns_connection *conn, enum ns_event ev, void *p) {
+static void ns_call(struct ns_connection *conn, enum ns_event ev, void *p) {
   if (conn->server->callback) conn->server->callback(conn, ev, p);
 }
 
-static void close_conn(struct ns_connection *conn) {
+static void ns_close_conn(struct ns_connection *conn) {
   DBG(("%p %d", conn, conn->flags));
-  call_user(conn, NS_CLOSE, NULL);
-  remove_connection(conn);
+  ns_call(conn, NS_CLOSE, NULL);
+  ns_remove_conn(conn);
   closesocket(conn->sock);
   iobuf_free(&conn->recv_iobuf);
   iobuf_free(&conn->send_iobuf);
@@ -421,7 +421,7 @@ void ns_set_close_on_exec(sock_t sock) {
 #endif
 }
 
-static void set_non_blocking_mode(sock_t sock) {
+static void ns_set_non_blocking_mode(sock_t sock) {
 #ifdef _WIN32
   unsigned long on = 1;
   ioctlsocket(sock, FIONBIO, &on);
@@ -467,7 +467,7 @@ int ns_socketpair(sock_t sp[2]) {
 #endif  // NS_DISABLE_SOCKETPAIR
 
 // Valid listening port spec is: [ip_address:]port, e.g. "80", "127.0.0.1:3128"
-static int parse_port_string(const char *str, union socket_address *sa) {
+static int ns_parse_port_string(const char *str, union socket_address *sa) {
   unsigned int a, b, c, d, port;
   int len = 0;
 #ifdef NS_ENABLE_IPV6
@@ -502,7 +502,7 @@ static int parse_port_string(const char *str, union socket_address *sa) {
 }
 
 // 'sa' must be an initialized address to bind to
-static sock_t open_listening_socket(union socket_address *sa) {
+static sock_t ns_open_listening_socket(union socket_address *sa) {
   socklen_t len = sizeof(*sa);
   sock_t on = 1, sock = INVALID_SOCKET;
 
@@ -511,7 +511,7 @@ static sock_t open_listening_socket(union socket_address *sa) {
       !bind(sock, &sa->sa, sa->sa.sa_family == AF_INET ?
             sizeof(sa->sin) : sizeof(sa->sa)) &&
       !listen(sock, SOMAXCONN)) {
-    set_non_blocking_mode(sock);
+    ns_set_non_blocking_mode(sock);
     // In case port was set to 0, get the real port number
     (void) getsockname(sock, &sa->sa, &len);
   } else if (sock != INVALID_SOCKET) {
@@ -541,11 +541,11 @@ int ns_set_ssl_cert(struct ns_server *server, const char *cert) {
 }
 
 int ns_bind(struct ns_server *server, const char *str) {
-  parse_port_string(str, &server->listening_sa);
+  ns_parse_port_string(str, &server->listening_sa);
   if (server->listening_sock != INVALID_SOCKET) {
     closesocket(server->listening_sock);
   }
-  server->listening_sock = open_listening_socket(&server->listening_sa);
+  server->listening_sock = ns_open_listening_socket(&server->listening_sa);
   return server->listening_sock == INVALID_SOCKET ? -1 :
     (int) ntohs(server->listening_sa.sin.sin_port);
 }
@@ -574,13 +574,13 @@ static struct ns_connection *accept_conn(struct ns_server *server) {
 #endif
   } else {
     ns_set_close_on_exec(sock);
-    set_non_blocking_mode(sock);
+    ns_set_non_blocking_mode(sock);
     c->server = server;
     c->sock = sock;
     c->flags |= NSF_ACCEPTED;
 
-    add_connection(server, c);
-    call_user(c, NS_ACCEPT, &sa);
+    ns_add_conn(server, c);
+    ns_call(c, NS_ACCEPT, &sa);
     DBG(("%p %d %p %p", c, c->sock, c->ssl, server->ssl_ctx));
   }
 
@@ -598,8 +598,8 @@ static int ns_is_error(int n) {
 }
 
 #ifdef NS_ENABLE_HEXDUMP
-static void hexdump(const struct ns_connection *conn, const void *buf,
-                    int len, const char *marker) {
+static void ns_hexdump(const struct ns_connection *conn, const void *buf,
+                       int len, const char *marker) {
   const unsigned char *p = (const unsigned char *) buf;
   char path[500], date[100], ascii[17];
   FILE *fp;
@@ -641,7 +641,7 @@ static void hexdump(const struct ns_connection *conn, const void *buf,
 }
 #endif
 
-static void read_from_socket(struct ns_connection *conn) {
+static void ns_read_from_socket(struct ns_connection *conn) {
   char buf[2048];
   int n = 0;
 
@@ -671,7 +671,7 @@ static void read_from_socket(struct ns_connection *conn) {
     if (ok != 0) {
       conn->flags |= NSF_CLOSE_IMMEDIATELY;
     }
-    call_user(conn, NS_CONNECT, &ok);
+    ns_call(conn, NS_CONNECT, &ok);
     return;
   }
 
@@ -692,7 +692,7 @@ static void read_from_socket(struct ns_connection *conn) {
   }
 
 #ifdef NS_ENABLE_HEXDUMP
-  hexdump(conn, buf, n, "<-");
+  ns_hexdump(conn, buf, n, "<-");
 #endif
 
   DBG(("%p <- %d bytes [%.*s%s]",
@@ -702,11 +702,11 @@ static void read_from_socket(struct ns_connection *conn) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
   } else if (n > 0) {
     iobuf_append(&conn->recv_iobuf, buf, n);
-    call_user(conn, NS_RECV, &n);
+    ns_call(conn, NS_RECV, &n);
   }
 }
 
-static void write_to_socket(struct ns_connection *conn) {
+static void ns_write_to_socket(struct ns_connection *conn) {
   struct iobuf *io = &conn->send_iobuf;
   int n = 0;
 
@@ -719,7 +719,7 @@ static void write_to_socket(struct ns_connection *conn) {
 
 
 #ifdef NS_ENABLE_HEXDUMP
-  hexdump(conn, io->buf, n, "->");
+  ns_hexdump(conn, io->buf, n, "->");
 #endif
 
   DBG(("%p -> %d bytes [%.*s%s]", conn, n, io->len < 40 ? io->len : 40,
@@ -736,14 +736,14 @@ static void write_to_socket(struct ns_connection *conn) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
   }
 
-  call_user(conn, NS_SEND, NULL);
+  ns_call(conn, NS_SEND, NULL);
 }
 
 int ns_send(struct ns_connection *conn, const void *buf, int len) {
   return iobuf_append(&conn->send_iobuf, buf, len);
 }
 
-static void add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
+static void ns_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   if (sock != INVALID_SOCKET) {
     FD_SET(sock, set);
     if (*max_fd == INVALID_SOCKET || sock > *max_fd) {
@@ -765,19 +765,19 @@ int ns_server_poll(struct ns_server *server, int milli) {
 
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
-  add_to_set(server->listening_sock, &read_set, &max_fd);
+  ns_add_to_set(server->listening_sock, &read_set, &max_fd);
 
   for (conn = server->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
-    call_user(conn, NS_POLL, &current_time);
-    add_to_set(conn->sock, &read_set, &max_fd);
+    ns_call(conn, NS_POLL, &current_time);
+    ns_add_to_set(conn->sock, &read_set, &max_fd);
     if (conn->flags & NSF_CONNECTING) {
-      add_to_set(conn->sock, &write_set, &max_fd);
+      ns_add_to_set(conn->sock, &write_set, &max_fd);
     }
     if (conn->send_iobuf.len > 0 && !(conn->flags & NSF_BUFFER_BUT_DONT_SEND)) {
-      add_to_set(conn->sock, &write_set, &max_fd);
+      ns_add_to_set(conn->sock, &write_set, &max_fd);
     } else if (conn->flags & NSF_CLOSE_IMMEDIATELY) {
-      close_conn(conn);
+      ns_close_conn(conn);
     }
   }
 
@@ -786,7 +786,7 @@ int ns_server_poll(struct ns_server *server, int milli) {
 
   if (select((int) max_fd + 1, &read_set, &write_set, NULL, &tv) > 0) {
     // Accept new connections
-    if (server->listening_sock >= 0 &&
+    if (server->listening_sock != INVALID_SOCKET &&
         FD_ISSET(server->listening_sock, &read_set)) {
       // We're not looping here, and accepting just one connection at
       // a time. The reason is that eCos does not respect non-blocking
@@ -800,14 +800,14 @@ int ns_server_poll(struct ns_server *server, int milli) {
       tmp_conn = conn->next;
       if (FD_ISSET(conn->sock, &read_set)) {
         conn->last_io_time = current_time;
-        read_from_socket(conn);
+        ns_read_from_socket(conn);
       }
       if (FD_ISSET(conn->sock, &write_set)) {
         if (conn->flags & NSF_CONNECTING) {
-          read_from_socket(conn);
+          ns_read_from_socket(conn);
         } else if (!(conn->flags & NSF_BUFFER_BUT_DONT_SEND)) {
           conn->last_io_time = current_time;
-          write_to_socket(conn);
+          ns_write_to_socket(conn);
         }
       }
     }
@@ -817,7 +817,7 @@ int ns_server_poll(struct ns_server *server, int milli) {
     tmp_conn = conn->next;
     num_active_connections++;
     if (conn->flags & NSF_CLOSE_IMMEDIATELY) {
-      close_conn(conn);
+      ns_close_conn(conn);
     }
   }
   //DBG(("%d active connections", num_active_connections));
@@ -846,7 +846,7 @@ struct ns_connection *ns_connect(struct ns_server *server, const char *host,
   sin.sin_family = AF_INET;
   sin.sin_port = htons((uint16_t) port);
   sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
-  set_non_blocking_mode(sock);
+  ns_set_non_blocking_mode(sock);
 
   connect_ret_val = connect(sock, (struct sockaddr *) &sin, sizeof(sin));
   if (ns_is_error(connect_ret_val)) {
@@ -871,7 +871,7 @@ struct ns_connection *ns_connect(struct ns_server *server, const char *host,
   }
 #endif
 
-  add_connection(server, conn);
+  ns_add_conn(server, conn);
   DBG(("%p %s:%d %d %p", conn, host, port, conn->sock, conn->ssl));
 
   return conn;
@@ -881,12 +881,12 @@ struct ns_connection *ns_add_sock(struct ns_server *s, sock_t sock, void *p) {
   struct ns_connection *conn;
   if ((conn = (struct ns_connection *) NS_MALLOC(sizeof(*conn))) != NULL) {
     memset(conn, 0, sizeof(*conn));
-    set_non_blocking_mode(sock);
+    ns_set_non_blocking_mode(sock);
     conn->sock = sock;
     conn->connection_data = p;
     conn->server = s;
     conn->last_io_time = time(NULL);
-    add_connection(s, conn);
+    ns_add_conn(s, conn);
     DBG(("%p %d", conn, sock));
   }
   return conn;
@@ -935,7 +935,7 @@ void ns_server_free(struct ns_server *s) {
 
   for (conn = s->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
-    close_conn(conn);
+    ns_close_conn(conn);
   }
 
 #ifndef NS_DISABLE_SOCKETPAIR
@@ -1122,10 +1122,7 @@ static const char *static_config_options[] = {
 struct mg_server {
   struct ns_server ns_server;
   union socket_address lsa;   // Listening socket address
-  mg_handler_t request_handler;
-  mg_handler_t http_close_handler;
-  mg_handler_t error_handler;
-  mg_handler_t auth_handler;
+  mg_handler_t event_handler;
   char *config_options[NUM_OPTIONS];
   char local_ip[48];
 };
@@ -1155,7 +1152,7 @@ struct connection {
   int64_t cl;             // Reply content length, for Range support
   int request_len;  // Request length, including last \r\n after last header
   //int flags;        // CONN_* flags: CONN_CLOSE, CONN_SPOOL_DONE, etc
-  mg_handler_t handler;  // Callback for HTTP client
+  //mg_handler_t handler;  // Callback for HTTP client
 };
 
 #define MG_CONN_2_CONN(c) ((struct connection *) ((char *) (c) - \
@@ -1433,6 +1430,12 @@ static const char *status_code_to_str(int status_code) {
   }
 }
 
+static int call_user(struct connection *conn, enum mg_event ev) {
+  return conn != NULL && conn->server != NULL &&
+    conn->server->event_handler != NULL ?
+    conn->server->event_handler(&conn->mg_conn, ev) : MG_FALSE;
+}
+
 static void send_http_error(struct connection *conn, int code,
                             const char *fmt, ...) {
   const char *message = status_code_to_str(code);
@@ -1445,8 +1448,7 @@ static void send_http_error(struct connection *conn, int code,
   conn->mg_conn.status_code = code;
 
   // Invoke error handler if it is set
-  if (conn->server->error_handler != NULL &&
-      conn->server->error_handler(&conn->mg_conn) == MG_ERROR_PROCESSED) {
+  if (call_user(conn, MG_HTTP_ERROR) == MG_TRUE) {
     close_local_endpoint(conn);
     return;
   }
@@ -2505,7 +2507,7 @@ static int deliver_websocket_frame(struct connection *conn) {
     }
 
     // Call the handler and remove frame from the iobuf
-    if (conn->server->request_handler(&conn->mg_conn) == MG_CLIENT_CLOSE) {
+    if (call_user(conn, MG_REQ_BEGIN) == MG_FALSE) {
       conn->ns_conn->flags |= NSF_FINISHED_SENDING_DATA;
     }
     iobuf_remove(&conn->ns_conn->recv_iobuf, frame_len);
@@ -2581,15 +2583,11 @@ static void write_terminating_chunk(struct connection *conn) {
 static int call_request_handler(struct connection *conn) {
   int result;
   conn->mg_conn.content = conn->ns_conn->recv_iobuf.buf;
-  switch ((result = conn->server->request_handler(&conn->mg_conn))) {
-    case MG_REQUEST_CALL_AGAIN: conn->ns_conn->flags |= MG_LONG_RUNNING; break;
-    case MG_REQUEST_NOT_PROCESSED: break;
-    default:
-      if (conn->ns_conn->flags & MG_HEADERS_SENT) {
-        write_terminating_chunk(conn);
-      }
-      close_local_endpoint(conn);
-      break;
+  if ((result = call_user(conn, MG_REQ_BEGIN)) == MG_TRUE) {
+    if (conn->ns_conn->flags & MG_HEADERS_SENT) {
+      write_terminating_chunk(conn);
+    }
+    close_local_endpoint(conn);
   }
   return result;
 }
@@ -3554,8 +3552,7 @@ static int check_password(const char *method, const char *ha1, const char *uri,
   mg_md5(expected_response, ha1, ":", nonce, ":", nc,
       ":", cnonce, ":", qop, ":", ha2, NULL);
 
-  return mg_strcasecmp(response, expected_response) == 0 ?
-    MG_AUTH_OK : MG_AUTH_FAIL;
+  return mg_strcasecmp(response, expected_response) == 0 ? MG_TRUE : MG_FALSE;
 }
 
 
@@ -3585,14 +3582,14 @@ int mg_authorize_digest(struct mg_connection *c, FILE *fp) {
       return check_password(c->request_method, ha1, uri,
                             nonce, nc, cnonce, qop, resp);
   }
-  return MG_AUTH_FAIL;
+  return MG_FALSE;
 }
 
 
 // Return 1 if request is authorised, 0 otherwise.
 static int is_authorized(struct connection *conn, const char *path) {
   FILE *fp;
-  int authorized = MG_AUTH_OK;
+  int authorized = MG_TRUE;
 
   if ((fp = open_auth_file(conn, path)) != NULL) {
     authorized = mg_authorize_digest(&conn->mg_conn, fp);
@@ -3605,7 +3602,7 @@ static int is_authorized(struct connection *conn, const char *path) {
 static int is_authorized_for_dav(struct connection *conn) {
   const char *auth_file = conn->server->config_options[DAV_AUTH_FILE];
   FILE *fp;
-  int authorized = MG_AUTH_FAIL;
+  int authorized = MG_FALSE;
 
   if (auth_file != NULL && (fp = fopen(auth_file, "r")) != NULL) {
     authorized = mg_authorize_digest(&conn->mg_conn, fp);
@@ -3952,16 +3949,14 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
 #endif
 
 #ifndef MONGOOSE_NO_AUTH
-  // Call auth handler
-  if (conn->server->auth_handler != NULL &&
-      conn->server->auth_handler(&conn->mg_conn) == MG_AUTH_FAIL) {
+  if (conn->server->event_handler && call_user(conn, MG_AUTH) == MG_FALSE) {
     mg_send_digest_auth_request(&conn->mg_conn);
     return;
   }
 #endif
 
   // Call URI handler if one is registered for this URI
-  if (skip_user == 0 && conn->server->request_handler != NULL) {
+  if (skip_user == 0 && conn->server->event_handler != NULL) {
     conn->endpoint_type = EP_USER;
 #if MONGOOSE_POST_SIZE_LIMIT > 1
     {
@@ -4130,7 +4125,7 @@ static void call_http_client_handler(struct connection *conn, int code) {
     conn->mg_conn.content_len = conn->ns_conn->recv_iobuf.len;
   }
   conn->mg_conn.content = conn->ns_conn->recv_iobuf.buf;
-  if (conn->handler(&conn->mg_conn) || code == MG_CONNECT_FAILURE ||
+  if (call_user(conn, -1) || code == MG_CONNECT_FAILURE ||
       code == MG_DOWNLOAD_FAILURE) {
     conn->ns_conn->flags |= NSF_CLOSE_IMMEDIATELY;
   }
@@ -4156,12 +4151,12 @@ static void process_response(struct connection *conn) {
   }
 }
 
-int mg_connect(struct mg_server *server, const char *host, int port,
-               int use_ssl, mg_handler_t handler, void *param) {
+struct mg_connection *mg_connect(struct mg_server *server, const char *host,
+                                 int port, int use_ssl) {
   struct ns_connection *nsconn;
   struct connection *conn;
 
-  nsconn = ns_connect(&server->ns_server, host, port, use_ssl, param);
+  nsconn = ns_connect(&server->ns_server, host, port, use_ssl, NULL);
   if (nsconn == NULL) return 0;
 
   if ((conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
@@ -4175,14 +4170,13 @@ int mg_connect(struct mg_server *server, const char *host, int port,
 
   conn->server = server;
   conn->endpoint_type = EP_CLIENT;
-  conn->handler = handler;
+  //conn->handler = handler;
   conn->mg_conn.server_param = server->ns_server.server_data;
-  conn->mg_conn.connection_param = param;
   conn->birth_time = time(NULL);
   conn->ns_conn->flags = NSF_CONNECTING;
   conn->mg_conn.status_code = MG_CONNECT_FAILURE;
 
-  return 1;
+  return &conn->mg_conn;
 }
 
 #ifndef MONGOOSE_NO_LOGGING
@@ -4311,21 +4305,20 @@ struct mg_iterator {
   mg_handler_t cb;
   void *param;
 };
+union variant { mg_handler_t cb; void *p; };
 
 static void iter(struct ns_connection *nsconn, enum ns_event ev, void *param) {
   if (ev == NS_POLL) {
-    struct mg_iterator *it = (struct mg_iterator *) param;
+    union variant *variant = (union variant *) param;
     struct connection *c = (struct connection *) nsconn->connection_data;
-    c->mg_conn.callback_param = it->param;
-    it->cb(&c->mg_conn);
+    variant->cb(&c->mg_conn, MG_POLL);
   }
 }
 
 // Apply function to all active connections.
-void mg_iterate_over_connections(struct mg_server *server, mg_handler_t handler,
-                                 void *param) {
-  struct mg_iterator it = { handler, param };
-  ns_iterate(&server->ns_server, iter, &it);
+void mg_iterate_over_connections(struct mg_server *server, mg_handler_t cb) {
+  union variant variant = { cb };
+  ns_iterate(&server->ns_server, iter, &variant);
 }
 
 static int get_var(const char *data, size_t data_len, const char *name,
@@ -4550,7 +4543,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
         int ok = * (int *) p;
         conn->mg_conn.status_code = ok == 0 ?
           MG_CONNECT_SUCCESS : MG_CONNECT_FAILURE;
-        if (conn->handler(&conn->mg_conn) != 0 || ok != 0) {
+        if (call_user(conn, MG_CONNECT) != 0 || ok != 0) {
           nc->flags |= NSF_CLOSE_IMMEDIATELY;
         }
       }
@@ -4585,10 +4578,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
           call_http_client_handler(conn, MG_DOWNLOAD_SUCCESS);
         }
 
-        if (conn->server->http_close_handler) {
-          conn->server->http_close_handler(&conn->mg_conn);
-        }
-
+        call_user(conn, MG_CLOSE);
         close_local_endpoint(conn);
         free(conn);
       }
@@ -4619,22 +4609,6 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
   }
 }
 
-void mg_set_request_handler(struct mg_server *server, mg_handler_t handler) {
-  server->request_handler = handler;
-}
-
-void mg_set_http_close_handler(struct mg_server *server, mg_handler_t handler) {
-  server->http_close_handler = handler;
-}
-
-void mg_set_http_error_handler(struct mg_server *server, mg_handler_t handler) {
-  server->error_handler = handler;
-}
-
-void mg_set_auth_handler(struct mg_server *server, mg_handler_t handler) {
-  server->auth_handler = handler;
-}
-
 void mg_set_listening_socket(struct mg_server *server, int sock) {
   if (server->ns_server.listening_sock != INVALID_SOCKET) {
     closesocket(server->ns_server.listening_sock);
@@ -4652,9 +4626,10 @@ const char *mg_get_option(const struct mg_server *server, const char *name) {
   return i == -1 ? NULL : opts[i] == NULL ? "" : opts[i];
 }
 
-struct mg_server *mg_create_server(void *server_data) {
+struct mg_server *mg_create_server(void *server_data, mg_handler_t handler) {
   struct mg_server *server = (struct mg_server *) calloc(1, sizeof(*server));
   ns_server_init(&server->ns_server, server_data, mg_ev_handler);
   set_default_option_values(server->config_options);
+  server->event_handler = handler;
   return server;
 }
