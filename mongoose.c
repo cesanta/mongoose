@@ -767,6 +767,7 @@ int ns_server_poll(struct ns_server *server, int milli) {
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
   ns_add_to_set(server->listening_sock, &read_set, &max_fd);
+  ns_add_to_set(server->ctl[1], &read_set, &max_fd);
 
   for (conn = server->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
@@ -795,6 +796,14 @@ int ns_server_poll(struct ns_server *server, int milli) {
       if ((conn = accept_conn(server)) != NULL) {
         conn->last_io_time = current_time;
       }
+    }
+
+    // Read possible wakeup calls
+    if (server->ctl[1] != INVALID_SOCKET &&
+        FD_ISSET(server->ctl[1], &read_set)) {
+      unsigned char ch;
+      recv(server->ctl[1], &ch, 1, 0);
+      send(server->ctl[1], &ch, 1, 0);
     }
 
     for (conn = server->active_connections; conn != NULL; conn = tmp_conn) {
