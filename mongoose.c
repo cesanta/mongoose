@@ -1131,7 +1131,7 @@ static const char *static_config_options[] = {
 #endif
   "hide_files_patterns", NULL,
 #ifndef MONGOOSE_NO_FILESYSTEM
-  "index_files","index.html,index.htm,index.cgi,index.php,index.lp",
+  "index_files","index.html,index.htm,index.shtml,index.cgi,index.php,index.lp",
 #endif
   "listening_port", NULL,
 #ifndef _WIN32
