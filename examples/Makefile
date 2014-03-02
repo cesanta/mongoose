@@ -55,4 +55,4 @@ u:
 	g++ unit_test.c -Wall -W -pedantic -lssl -g -O0 && ./a.out
 
 clean:
-	-@$(RM) hello upload post websocket auth server *.exe *.dSYM *.obj .*o
+	-@$(RM) hello upload post websocket auth server multi_threaded websocket_html.c *.exe *.dSYM *.obj .*o
