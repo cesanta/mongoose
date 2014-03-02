@@ -1094,6 +1094,9 @@ enum {
 #ifndef _WIN32
   RUN_AS_USER,
 #endif
+#ifndef MONGOOSE_NO_SSI
+  SSI_PATTERN,
+#endif
 #ifdef NS_ENABLE_SSL
   SSL_CERTIFICATE,
 #endif
@@ -1131,6 +1134,9 @@ static const char *static_config_options[] = {
   "listening_port", NULL,
 #ifndef _WIN32
   "run_as_user", NULL,
+#endif
+#ifndef MONGOOSE_NO_SSI
+  "ssi_pattern", "**.shtml$|**.shtm$",
 #endif
 #ifdef NS_ENABLE_SSL
   "ssl_certificate", NULL,
@@ -3944,6 +3950,162 @@ static void handle_lsp_request(struct connection *conn, const char *path,
 }
 #endif // MONGOOSE_USE_LUA
 
+#ifndef MONGOOSE_NO_SSI
+static void send_ssi_file(struct mg_connection *, const char *, FILE *, int);
+
+static void send_file_data(struct mg_connection *conn, FILE *fp) {
+  char buf[IOBUF_SIZE];
+  int n;
+  while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+    mg_write(conn, buf, n);
+  }
+}
+
+static void do_ssi_include(struct mg_connection *conn, const char *ssi,
+                           char *tag, int include_level) {
+  char file_name[IOBUF_SIZE], path[MAX_PATH_SIZE], *p;
+  char **opts = (MG_CONN_2_CONN(conn))->server->config_options;
+  FILE *fp;
+
+  // sscanf() is safe here, since send_ssi_file() also uses buffer
+  // of size MG_BUF_LEN to get the tag. So strlen(tag) is always < MG_BUF_LEN.
+  if (sscanf(tag, " virtual=\"%[^\"]\"", file_name) == 1) {
+    // File name is relative to the webserver root
+    mg_snprintf(path, sizeof(path), "%s%c%s",
+                opts[DOCUMENT_ROOT], '/', file_name);
+  } else if (sscanf(tag, " abspath=\"%[^\"]\"", file_name) == 1) {
+    // File name is relative to the webserver working directory
+    // or it is absolute system path
+    mg_snprintf(path, sizeof(path), "%s", file_name);
+  } else if (sscanf(tag, " file=\"%[^\"]\"", file_name) == 1 ||
+             sscanf(tag, " \"%[^\"]\"", file_name) == 1) {
+    // File name is relative to the currect document
+    mg_snprintf(path, sizeof(path), "%s", ssi);
+    if ((p = strrchr(path, '/')) != NULL) {
+      p[1] = '\0';
+    }
+    mg_snprintf(path + strlen(path), sizeof(path) - strlen(path), "%s",
+                file_name);
+  } else {
+    mg_printf(conn, "Bad SSI #include: [%s]", tag);
+    return;
+  }
+
+  if ((fp = fopen(path, "rb")) == NULL) {
+    mg_printf(conn, "Cannot open SSI #include: [%s]: fopen(%s): %s",
+              tag, path, strerror(errno));
+  } else {
+    ns_set_close_on_exec(fileno(fp));
+    if (match_prefix(opts[SSI_PATTERN], strlen(opts[SSI_PATTERN]), path) > 0) {
+      send_ssi_file(conn, path, fp, include_level + 1);
+    } else {
+      send_file_data(conn, fp);
+    }
+    fclose(fp);
+  }
+}
+
+#ifndef MONGOOSE_NO_POPEN
+static void do_ssi_exec(struct mg_connection *conn, char *tag) {
+  char cmd[IOBUF_SIZE];
+  FILE *fp;
+
+  if (sscanf(tag, " \"%[^\"]\"", cmd) != 1) {
+    mg_printf(conn, "Bad SSI #exec: [%s]", tag);
+  } else if ((fp = popen(cmd, "r")) == NULL) {
+    mg_printf(conn, "Cannot SSI #exec: [%s]: %s", cmd, strerror(errno));
+  } else {
+    send_file_data(conn, fp);
+    pclose(fp);
+  }
+}
+#endif // !MONGOOSE_NO_POPEN
+
+static void send_ssi_file(struct mg_connection *conn, const char *path,
+                          FILE *fp, int include_level) {
+  char buf[IOBUF_SIZE];
+  int ch, offset, len, in_ssi_tag;
+
+  if (include_level > 10) {
+    mg_printf(conn, "SSI #include level is too deep (%s)", path);
+    return;
+  }
+
+  in_ssi_tag = len = offset = 0;
+  while ((ch = fgetc(fp)) != EOF) {
+    if (in_ssi_tag && ch == '>') {
+      in_ssi_tag = 0;
+      buf[len++] = (char) ch;
+      buf[len] = '\0';
+      assert(len <= (int) sizeof(buf));
+      if (len < 6 || memcmp(buf, "<!--#", 5) != 0) {
+        // Not an SSI tag, pass it
+        (void) mg_write(conn, buf, (size_t) len);
+      } else {
+        if (!memcmp(buf + 5, "include", 7)) {
+          do_ssi_include(conn, path, buf + 12, include_level);
+#if !defined(MONGOOSE_NO_POPEN)
+        } else if (!memcmp(buf + 5, "exec", 4)) {
+          do_ssi_exec(conn, buf + 9);
+#endif // !NO_POPEN
+        } else {
+          mg_printf(conn, "%s: unknown SSI " "command: \"%s\"", path, buf);
+        }
+      }
+      len = 0;
+    } else if (in_ssi_tag) {
+      if (len == 5 && memcmp(buf, "<!--#", 5) != 0) {
+        // Not an SSI tag
+        in_ssi_tag = 0;
+      } else if (len == (int) sizeof(buf) - 2) {
+        mg_printf(conn, "%s: SSI tag is too large", path);
+        len = 0;
+      }
+      buf[len++] = ch & 0xff;
+    } else if (ch == '<') {
+      in_ssi_tag = 1;
+      if (len > 0) {
+        mg_write(conn, buf, (size_t) len);
+      }
+      len = 0;
+      buf[len++] = ch & 0xff;
+    } else {
+      buf[len++] = ch & 0xff;
+      if (len == (int) sizeof(buf)) {
+        mg_write(conn, buf, (size_t) len);
+        len = 0;
+      }
+    }
+  }
+
+  // Send the rest of buffered data
+  if (len > 0) {
+    mg_write(conn, buf, (size_t) len);
+  }
+}
+
+static void handle_ssi_request(struct connection *conn, const char *path) {
+  FILE *fp;
+  struct vec mime_vec;
+
+  if ((fp = fopen(path, "rb")) == NULL) {
+    send_http_error(conn, 500, "fopen(%s): %s", path, strerror(errno));
+  } else {
+    ns_set_close_on_exec(fileno(fp));
+    get_mime_type(conn->server, path, &mime_vec);
+    conn->mg_conn.status_code = 200;
+    mg_printf(&conn->mg_conn,
+              "HTTP/1.1 %d OK\r\n"
+              "Content-Type: %.*s\r\n"
+              "Connection: close\r\n\r\n",
+              conn->mg_conn.status_code, (int) mime_vec.len, mime_vec.ptr);
+    send_ssi_file(&conn->mg_conn, path, fp, 0);
+    fclose(fp);
+    close_local_endpoint(conn);
+  }
+}
+#endif
+
 static void open_local_endpoint(struct connection *conn, int skip_user) {
 #ifndef MONGOOSE_NO_FILESYSTEM
   static const char lua_pat[] = LUA_SCRIPT_PATTERN;
@@ -4045,6 +4207,12 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
 #else
     send_http_error(conn, 501, NULL);
 #endif // !MONGOOSE_NO_CGI
+#ifndef MONGOOSE_NO_SSI
+  } else if (match_prefix(conn->server->config_options[SSI_PATTERN],
+                          strlen(conn->server->config_options[SSI_PATTERN]),
+                          path) > 0) {
+    handle_ssi_request(conn, path);
+#endif
   } else if (is_not_modified(conn, &st)) {
     send_http_error(conn, 304, NULL);
   } else if ((conn->endpoint.fd = open(path, O_RDONLY | O_BINARY)) != -1) {
