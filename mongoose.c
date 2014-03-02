@@ -985,6 +985,8 @@ void ns_server_free(struct ns_server *s) {
 #define fopen(x, y) mg_fopen((x), (y))
 #define open(x, y) mg_open((x), (y))
 #define lseek(x, y, z) _lseeki64((x), (y), (z))
+#define popen(x, y) _popen((x), (y))
+#define pclose(x) _pclose(x)
 #define mkdir(x, y) _mkdir(x)
 #define to64(x) _atoi64(x)
 #ifndef __func__
