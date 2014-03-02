@@ -2,6 +2,10 @@
 #include <time.h>
 #include "mongoose.h"
 
+#ifdef _WIN32
+#define snprintf _snprintf
+#endif
+
 extern const char *find_embedded_file(const char *, size_t *);
 
 static int iterate_callback(struct mg_connection *c, enum mg_event ev) {
