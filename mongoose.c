@@ -4139,7 +4139,7 @@ static void call_http_client_handler(struct connection *conn, int code) {
     conn->mg_conn.content_len = conn->ns_conn->recv_iobuf.len;
   }
   conn->mg_conn.content = conn->ns_conn->recv_iobuf.buf;
-  if (call_user(conn, -1) || code == MG_CONNECT_FAILURE ||
+  if (call_user(conn, MG_CONNECT) || code == MG_CONNECT_FAILURE ||
       code == MG_DOWNLOAD_FAILURE) {
     conn->ns_conn->flags |= NSF_CLOSE_IMMEDIATELY;
   }
@@ -4553,13 +4553,10 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_CONNECT:
-      {
-        int ok = * (int *) p;
-        conn->mg_conn.status_code = ok == 0 ?
-          MG_CONNECT_SUCCESS : MG_CONNECT_FAILURE;
-        if (call_user(conn, MG_CONNECT) != 0 || ok != 0) {
-          nc->flags |= NSF_CLOSE_IMMEDIATELY;
-        }
+      conn->mg_conn.status_code = * (int *) p;
+      if (conn->mg_conn.status_code != 0 ||
+          call_user(conn, MG_CONNECT) == MG_FALSE) {
+        nc->flags |= NSF_CLOSE_IMMEDIATELY;
       }
       break;
 

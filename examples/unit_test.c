@@ -377,13 +377,14 @@ static int ts2(struct mg_connection *conn) {
 static const char *test_server(void) {
   char buf1[100] = "", buf2[100] = "";
   struct mg_server *server = mg_create_server((void *) "foo", evh1);
+  struct mg_connection *conn;
 
   ASSERT(server != NULL);
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
 
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT),  0, buf1) == 1);
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, buf2) == 1);
+  ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0)) != NULL);
+  ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0)) != NULL);
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
   ASSERT(strcmp(buf1, "foo ? 127.0.0.1") == 0);
@@ -460,13 +461,14 @@ static int cb3(struct mg_connection *conn) {
 static const char *test_mg_connect(void) {
   char buf2[40] = "", buf3[40] = "", buf4[40] = "";
   struct mg_server *server = mg_create_server(NULL, NULL);  // cb4h
+  struct mg_connection *conn;
 
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
-  ASSERT(mg_connect(server, "", 0, 0, NULL, NULL) == 0);
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, buf2) == 1);
-  ASSERT(mg_connect(server, "127.0.0.1", 29, 0, cb3, buf3) == 1);
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, buf4) == 1);
+  ASSERT(mg_connect(server, "", 0, 0) == NULL);
+  ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0)) != NULL);
+  ASSERT((conn = mg_connect(server, "127.0.0.1", 29, 0)) != NULL);
+  ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0)) != NULL);
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
 
@@ -572,8 +574,7 @@ static const char *test_rewrites(void) {
   ASSERT(mg_set_option(server, "url_rewrites", "/xx=./mongoose.h") == NULL);
 
   ASSERT(mg_connect(server, "127.0.0.1",
-                    atoi(mg_get_option(server, "listening_port")),
-                    0, us1, buf1) == 1);
+                    atoi(mg_get_option(server, "listening_port")), 0) != NULL);
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
   //printf("[%s]\n", buf1);
