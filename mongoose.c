@@ -3793,7 +3793,7 @@ static sock_t conn2(const char *host, int port) {
   if (host != NULL &&
       (he = gethostbyname(host)) != NULL &&
     (sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
-    set_close_on_exec(sock);
+    ns_set_close_on_exec(sock);
     sin.sin_family = AF_INET;
     sin.sin_port = htons((uint16_t) port);
     sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
