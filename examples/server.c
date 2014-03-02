@@ -380,7 +380,7 @@ static void start_mongoose(int argc, char *argv[]) {
   char *options[MAX_OPTIONS];
   int i;
 
-  if ((server = mg_create_server(NULL)) == NULL) {
+  if ((server = mg_create_server(NULL, NULL)) == NULL) {
     die("%s", "Failed to start Mongoose.");
   }
 

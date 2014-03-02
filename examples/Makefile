@@ -1,41 +1,50 @@
 CFLAGS    = -W -Wall -I.. -pthread -g -pipe $(CFLAGS_EXTRA)
 RM        = rm -rf
-MSVC      = ../../vc6
-CL        = $(MSVC)/bin/cl
-CLFLAGS   = /MD /TC /nologo $(CFLAGS_EXTRA) /W3 \
-            /I$(MSVC)/include /I.. /Dsnprintf=_snprintf
-LFLAGS    = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
-
 
 ifeq ($(OS),Windows_NT)
+  MSVC      = ../../vc6
   RM = del /q /f
   CC = $(MSVC)/bin/cl $(CLFLAGS)
+  CLFLAGS   = /MD /TC /nologo $(CFLAGS_EXTRA) /W3 \
+              /I$(MSVC)/include /I.. /Dsnprintf=_snprintf
+  LFLAGS    = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
 else
   UNAME_S := $(shell uname -s)
-  DLL_FLAGS += -shared
 
   ifeq ($(UNAME_S),Linux)
     CFLAGS += -ldl
   endif
 
   ifeq ($(UNAME_S),Darwin)
-    #  DLL_FLAGS += -bundle -undefined dynamic_lookup -dynamiclib
-    DLL_FLAGS += -flat_namespace -undefined suppress -dynamiclib
   endif
 endif
+
+all: hello websocket server post multi_threaded upload auth
 
 # To enable Lua in a server, uncomment following lines
 LUA    = ../lua-5.2.3/src
 #CFLAGS += -I$(LUA) -L$(LUA) -llua
 
-all: websocket_html.c
+hello: hello.c ../mongoose.c
 	$(CC) hello.c ../mongoose.c  -o hello $(CFLAGS)
+
+websocket: websocket_html.c websocket.c ../mongoose.c
 	$(CC) websocket.c websocket_html.c ../mongoose.c  -o websocket $(CFLAGS)
-	$(CC) post.c ../mongoose.c -o post $(CFLAGS)
-	$(CC) multi_threaded.c ../mongoose.c -o multi_threaded $(CFLAGS)
-	$(CC) upload.c ../mongoose.c -o upload $(CFLAGS)
-	$(CC) auth.c ../mongoose.c -o auth $(CFLAGS)
+
+server: server.c ../mongoose.c
 	$(CC) server.c ../mongoose.c -o server $(CFLAGS)
+
+post: post.c ../mongoose.c
+	$(CC) post.c ../mongoose.c -o post $(CFLAGS)
+
+multi_threaded: multi_threaded.c ../mongoose.c
+	$(CC) multi_threaded.c ../mongoose.c -o multi_threaded $(CFLAGS)
+
+upload: upload.c ../mongoose.c
+	$(CC) upload.c ../mongoose.c -o upload $(CFLAGS)
+
+auth: auth.c ../mongoose.c
+	$(CC) auth.c ../mongoose.c -o auth $(CFLAGS)
 
 websocket_html.c: websocket.html
 	perl mkdata.pl $< > $@
