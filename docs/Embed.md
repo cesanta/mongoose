@@ -27,8 +27,8 @@ To compile it, put `mongoose.c`, `mongoose.h` and `app.c` into one
 folder, start terminal on UNIX or Visual Studio command line prompt on Windows,
 and run the following command:
 
-    cc app.c mongoose.c -o app    # on Unix
-    cl app.c mongoose.c /TC /MD   # on Windows
+    cc app.c mongoose.c -pthread -o app    # on Unix
+    cl app.c mongoose.c /TC /MD            # on Windows
 
 When run, this simple application opens port 8080 and serves static files,
 CGI files and lists directory content in the current working directory.
