@@ -340,42 +340,44 @@ static const char *test_next_option(void) {
 }
 
 static int evh1(struct mg_connection *conn, enum mg_event ev) {
-  if (ev == MG_HTTP_ERROR) {
-    mg_printf(conn, "HTTP/1.0 404 NF\r\n\r\nERR: %d", conn->status_code);
-    return MG_TRUE;
-  } else if (ev == MG_REQ_BEGIN && !strcmp(conn->uri, "/cb1")) {
-    mg_printf(conn, "%s %s %s",
-              conn->server_param == NULL ? "?" : (char *) conn->server_param,
-              conn->connection_param == NULL ? "?" : "!", conn->remote_ip);
-    return MG_TRUE;
-  }
-  return MG_FALSE;
-}
+  char *buf = (char *) conn->connection_param;
+  int result = MG_FALSE;
 
-static int ts1(struct mg_connection *conn) {
-  if (conn->status_code == MG_CONNECT_SUCCESS) {
-    mg_printf(conn, "%s", "GET /cb1 HTTP/1.0\r\n\r\n");
-    return MG_CLIENT_CONTINUE;
-  } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
-    sprintf((char *) conn->connection_param, "%.*s",
-            (int) conn->content_len, conn->content);
+  switch (ev) {
+    case MG_CONNECT:
+      mg_printf(conn,  "GET %s HTTP/1.0\r\n\r\n",
+                buf[0] == '1' ? "/cb1" : "/non_exist");
+      result = MG_TRUE;
+      break;
+    case MG_HTTP_ERROR:
+      mg_printf(conn, "HTTP/1.0 404 NF\r\n\r\nERR: %d", conn->status_code);
+      result = MG_TRUE;
+      break;
+    case MG_REQUEST:
+      if (!strcmp(conn->uri, "/cb1")) {
+        mg_printf(conn, "HTTP/1.0 200 OK\r\n\r\n%s %s %s",
+                  (char *) conn->server_param,
+                  buf == NULL ? "?" : "!", conn->remote_ip);
+        result = MG_TRUE;
+      }
+      break;
+    case MG_REPLY:
+      if (buf != NULL) {
+        sprintf(buf + 1, "%.*s", (int) conn->content_len, conn->content);
+      }
+      break;
+    case MG_AUTH:
+      result = MG_TRUE;
+      break;
+    default:
+      break;
   }
-  return MG_CLIENT_CLOSE;
-}
 
-static int ts2(struct mg_connection *conn) {
-  if (conn->status_code == MG_CONNECT_SUCCESS) {
-    mg_printf(conn, "%s", "GET /non_exist HTTP/1.0\r\n\r\n");
-    return MG_CLIENT_CONTINUE;
-  } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
-    sprintf((char *) conn->connection_param, "%s %.*s",
-            conn->uri, (int) conn->content_len, conn->content);
-  }
-  return MG_CLIENT_CLOSE;
+  return result;
 }
 
 static const char *test_server(void) {
-  char buf1[100] = "", buf2[100] = "";
+  char buf1[100] = "1", buf2[100] = "2";
   struct mg_server *server = mg_create_server((void *) "foo", evh1);
   struct mg_connection *conn;
 
@@ -384,11 +386,13 @@ static const char *test_server(void) {
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
 
   ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0)) != NULL);
+  conn->connection_param = buf1;
   ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0)) != NULL);
+  conn->connection_param = buf2;
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
-  ASSERT(strcmp(buf1, "foo ? 127.0.0.1") == 0);
-  ASSERT(strcmp(buf2, "404 ERR: 404") == 0);
+  ASSERT(strcmp(buf1, "1foo ? 127.0.0.1") == 0);
+  ASSERT(strcmp(buf2, "2ERR: 404") == 0);
 
   ASSERT(strcmp(static_config_options[URL_REWRITES * 2], "url_rewrites") == 0);
   mg_destroy_server(&server);
@@ -596,7 +600,7 @@ static const char *run_all_tests(void) {
   RUN_TEST(test_next_option);
   RUN_TEST(test_parse_multipart);
   RUN_TEST(test_mg_set_option);
-  //RUN_TEST(test_server);
+  RUN_TEST(test_server);
   //RUN_TEST(test_mg_connect);
   //RUN_TEST(test_rewrites);
 #ifdef MONGOOSE_USE_SSL

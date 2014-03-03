@@ -60,12 +60,12 @@ struct mg_connection {
 struct mg_server; // Opaque structure describing server instance
 enum mg_result { MG_FALSE, MG_TRUE };
 enum mg_event {
-  MG_POLL,        // Callback return value is ignored
-  MG_AUTH,        // If callback returns MG_FALSE, authentication fails
-  MG_REQ_BEGIN,   // If callback returns MG_FALSE, Mongoose continues with req
-  MG_REQ_END,     // Callback return value is ignored
-  MG_CLOSE,       // Connection is closed
+  MG_POLL = 100,  // Callback return value is ignored
   MG_CONNECT,     // If callback returns MG_FALSE, connect fails
+  MG_AUTH,        // If callback returns MG_FALSE, authentication fails
+  MG_REQUEST,     // If callback returns MG_FALSE, Mongoose continues with req
+  MG_REPLY,       // If callback returns MG_FALSE, Mongoose closes connection
+  MG_CLOSE,       // Connection is closed
   MG_HTTP_ERROR   // If callback returns MG_FALSE, Mongoose continues with err
 };
 typedef int (*mg_handler_t)(struct mg_connection *, enum mg_event);

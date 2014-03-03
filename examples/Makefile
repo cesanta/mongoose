@@ -52,7 +52,7 @@ websocket_html.c: websocket.html
 	perl mkdata.pl $< > $@
 
 u:
-	g++ unit_test.c -Wall -W -pedantic -lssl -g -O0 && ./a.out
+	g++ unit_test.c -Wall -W -pedantic -lssl -g -O0 $(CFLAGS_EXTRA) && ./a.out
 
 clean:
 	-@$(RM) hello upload post websocket auth server multi_threaded websocket_html.c *.exe *.dSYM *.obj .*o

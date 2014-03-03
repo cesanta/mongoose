@@ -650,7 +650,6 @@ static void ns_read_from_socket(struct ns_connection *conn) {
     int ok = 1, ret;
     socklen_t len = sizeof(ok);
 
-    conn->flags &= ~NSF_CONNECTING;
     ret = getsockopt(conn->sock, SOL_SOCKET, SO_ERROR, (char *) &ok, &len);
     (void) ret;
 #ifdef NS_ENABLE_SSL
@@ -659,15 +658,15 @@ static void ns_read_from_socket(struct ns_connection *conn) {
       int ssl_err = SSL_get_error(conn->ssl, res);
       DBG(("%p res %d %d", conn, res, ssl_err));
       if (res == 1) {
-        conn->flags = NSF_SSL_HANDSHAKE_DONE;
+        conn->flags |= NSF_SSL_HANDSHAKE_DONE;
       } else if (res == 0 || ssl_err == 2 || ssl_err == 3) {
-        conn->flags |= NSF_CONNECTING;
         return; // Call us again
       } else {
         ok = 1;
       }
     }
 #endif
+    conn->flags &= ~NSF_CONNECTING;
     DBG(("%p ok=%d", conn, ok));
     if (ok != 0) {
       conn->flags |= NSF_CLOSE_IMMEDIATELY;
@@ -2528,7 +2527,7 @@ static int deliver_websocket_frame(struct connection *conn) {
     }
 
     // Call the handler and remove frame from the iobuf
-    if (call_user(conn, MG_REQ_BEGIN) == MG_FALSE) {
+    if (call_user(conn, MG_REQUEST) == MG_FALSE) {
       conn->ns_conn->flags |= NSF_FINISHED_SENDING_DATA;
     }
     iobuf_remove(&conn->ns_conn->recv_iobuf, frame_len);
@@ -2604,7 +2603,7 @@ static void write_terminating_chunk(struct connection *conn) {
 static int call_request_handler(struct connection *conn) {
   int result;
   conn->mg_conn.content = conn->ns_conn->recv_iobuf.buf;
-  if ((result = call_user(conn, MG_REQ_BEGIN)) == MG_TRUE) {
+  if ((result = call_user(conn, MG_REQUEST)) == MG_TRUE) {
     if (conn->ns_conn->flags & MG_HEADERS_SENT) {
       write_terminating_chunk(conn);
     }
@@ -4301,15 +4300,14 @@ static void process_request(struct connection *conn) {
 #endif
 }
 
-static void call_http_client_handler(struct connection *conn, int code) {
-  conn->mg_conn.status_code = code;
+static void call_http_client_handler(struct connection *conn) {
+  //conn->mg_conn.status_code = code;
   // For responses without Content-Lengh, use the whole buffer
-  if (conn->cl == 0 && code == MG_DOWNLOAD_SUCCESS) {
+  if (conn->cl == 0) {
     conn->mg_conn.content_len = conn->ns_conn->recv_iobuf.len;
   }
   conn->mg_conn.content = conn->ns_conn->recv_iobuf.buf;
-  if (call_user(conn, MG_CONNECT) || code == MG_CONNECT_FAILURE ||
-      code == MG_DOWNLOAD_FAILURE) {
+  if (call_user(conn, MG_REPLY) == MG_FALSE) {
     conn->ns_conn->flags |= NSF_CLOSE_IMMEDIATELY;
   }
   iobuf_remove(&conn->ns_conn->recv_iobuf, conn->mg_conn.content_len);
@@ -4327,10 +4325,9 @@ static void process_response(struct connection *conn) {
        io->len > 40 ? 40 : io->len, io->buf));
   if (conn->request_len < 0 ||
       (conn->request_len == 0 && io->len > MAX_REQUEST_SIZE)) {
-    call_http_client_handler(conn, MG_DOWNLOAD_FAILURE);
-  }
-  if (io->len >= conn->cl) {
-    call_http_client_handler(conn, MG_DOWNLOAD_SUCCESS);
+    call_http_client_handler(conn);
+  } else if (io->len >= conn->cl) {
+    call_http_client_handler(conn);
   }
 }
 
@@ -4755,7 +4752,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
         DBG(("%p %d closing", conn, conn->endpoint_type));
 
         if (conn->endpoint_type == EP_CLIENT && nc->recv_iobuf.len > 0) {
-          call_http_client_handler(conn, MG_DOWNLOAD_SUCCESS);
+         // call_http_client_handler(conn);
         }
 
         call_user(conn, MG_CLOSE);

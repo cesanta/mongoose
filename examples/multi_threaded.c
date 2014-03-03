@@ -3,7 +3,7 @@
 // Start a browser and hit refresh couple of times. The replies will
 // come from both server instances.
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
-  if (ev == MG_REQ_BEGIN) {
+  if (ev == MG_REQUEST) {
     mg_send_header(conn, "Content-Type", "text/plain");
     mg_printf_data(conn, "This is a reply from server instance # %s",
                    (char *) conn->server_param);

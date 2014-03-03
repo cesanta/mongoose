@@ -32,7 +32,7 @@ static void send_index_page(struct mg_connection *conn) {
 }
 
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
-  if (ev == MG_REQ_BEGIN) {
+  if (ev == MG_REQUEST) {
     send_index_page(conn);
     return MG_TRUE;
   } else if (ev == MG_AUTH) {

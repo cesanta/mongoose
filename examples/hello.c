@@ -5,7 +5,7 @@
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
   int result = MG_FALSE;
 
-  if (ev == MG_REQ_BEGIN) {
+  if (ev == MG_REQUEST) {
     mg_printf_data(conn, "Hello! Requested URI is [%s]", conn->uri);
     result = MG_TRUE;
   } else if (ev == MG_AUTH) {
