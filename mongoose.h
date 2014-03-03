@@ -81,6 +81,7 @@ void mg_set_listening_socket(struct mg_server *, int sock);
 int mg_get_listening_socket(struct mg_server *);
 void mg_iterate_over_connections(struct mg_server *, mg_handler_t);
 void mg_wakeup_server(struct mg_server *);
+struct mg_connection *mg_connect(struct mg_server *, const char *, int, int);
 
 // Connection management functions
 void mg_send_status(struct mg_connection *, int status_code);
@@ -109,19 +110,6 @@ int mg_parse_multipart(const char *buf, int buf_len,
 void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
-
-// Callback function return codes
-enum { MG_REQUEST_NOT_PROCESSED, MG_REQUEST_PROCESSED, MG_REQUEST_CALL_AGAIN };
-enum { MG_AUTH_FAIL, MG_AUTH_OK };
-enum { MG_ERROR_NOT_PROCESSED, MG_ERROR_PROCESSED };
-enum { MG_CLIENT_CONTINUE, MG_CLIENT_CLOSE };
-
-// HTTP client events
-enum {
-  MG_CONNECT_SUCCESS, MG_CONNECT_FAILURE,
-  MG_DOWNLOAD_SUCCESS, MG_DOWNLOAD_FAILURE
-};
-struct mg_connection *mg_connect(struct mg_server *, const char *, int, int);
 
 #ifdef __cplusplus
 }
