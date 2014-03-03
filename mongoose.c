@@ -4752,7 +4752,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
         DBG(("%p %d closing", conn, conn->endpoint_type));
 
         if (conn->endpoint_type == EP_CLIENT && nc->recv_iobuf.len > 0) {
-         // call_http_client_handler(conn);
+          call_http_client_handler(conn);
         }
 
         call_user(conn, MG_CLOSE);
