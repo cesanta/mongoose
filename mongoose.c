@@ -1277,10 +1277,9 @@ static void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
   strncpy(buf, path, sizeof(buf));
   buf[sizeof(buf) - 1] = '\0';
 
-  // Trim trailing slashes
+  // Trim trailing slashes. Leave backslash for paths like X:\
   p = buf + strlen(buf) - 1;
-  while (p > buf && p[0] == '\\' || p[0] == '/') *p-- = '\0';
-  //change_slashes_to_backslashes(buf);
+  while (p > buf && p[-1] != ':' && (p[0] == '\\' || p[0] == '/')) *p-- = '\0';
 
   // Convert to Unicode and back. If doubly-converted string does not
   // match the original, something is fishy, reject.
