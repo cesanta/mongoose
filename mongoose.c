@@ -849,6 +849,7 @@ struct ns_connection *ns_connect(struct ns_server *server, const char *host,
   struct ns_connection *conn = NULL;
   int connect_ret_val;
 
+  (void) use_ssl;
   if (host == NULL || (he = gethostbyname(host)) == NULL ||
       (sock = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
     DBG(("gethostbyname(%s) failed: %s", host, strerror(errno)));
@@ -1486,11 +1487,12 @@ static void send_http_error(struct connection *conn, int code,
   // Handle error code rewrites
   while ((rewrites = next_option(rewrites, &a, &b)) != NULL) {
     if ((match_code = atoi(a.ptr)) > 0 && match_code == code) {
-      conn->mg_conn.status_code = 302;
-      mg_printf(&conn->mg_conn, "HTTP/1.1 %d Moved\r\n"
-                "Location: %.*s?code=%d&orig_uri=%s\r\n\r\n",
-                conn->mg_conn.status_code, b.len, b.ptr, code,
-                conn->mg_conn.uri);
+      struct mg_connection *c = &conn->mg_conn;
+      c->status_code = 302;
+      mg_printf(c, "HTTP/1.1 %d Moved\r\n"
+                "Location: %.*s?code=%d&orig_uri=%s&query_string=%s\r\n\r\n",
+                c->status_code, b.len, b.ptr, code, c->uri,
+                c->query_string == NULL ? "" : c->query_string);
       close_local_endpoint(conn);
       return;
     }
