@@ -4783,6 +4783,10 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_POLL:
+      if (call_user(conn, MG_POLL) == MG_TRUE) {
+        nc->flags |= NSF_FINISHED_SENDING_DATA;
+      }
+
       if (conn != NULL && conn->endpoint_type == EP_FILE) {
         transfer_file_data(conn);
       }
