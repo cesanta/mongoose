@@ -2851,7 +2851,7 @@ static void call_request_handler_if_data_is_buffered(struct connection *conn) {
   } else
 #endif
   if ((size_t) loc->len >= c->content_len &&
-      call_request_handler(conn) == MG_REQUEST_NOT_PROCESSED) {
+      call_request_handler(conn) == MG_FALSE) {
     open_local_endpoint(conn, 1);
   }
 }
@@ -4354,7 +4354,6 @@ struct mg_connection *mg_connect(struct mg_server *server, const char *host,
   conn->mg_conn.server_param = server->ns_server.server_data;
   conn->birth_time = time(NULL);
   conn->ns_conn->flags = NSF_CONNECTING;
-  conn->mg_conn.status_code = MG_CONNECT_FAILURE;
 
   return &conn->mg_conn;
 }

@@ -25,6 +25,7 @@
 #define _WIN32_WINNT 0x500        // Enable MIIM_BITMAP
 #define _CRT_SECURE_NO_WARNINGS   // Disable deprecation warning in VS2005
 #define _XOPEN_SOURCE 600         // For PATH_MAX on linux
+#undef WIN32_LEAN_AND_MEAN        // Let windows.h always include winsock2.h
 
 #include <sys/stat.h>
 #include <stdio.h>
