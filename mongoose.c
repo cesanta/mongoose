@@ -2210,13 +2210,29 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
   char *p;
 #endif
   const char *uri = conn->mg_conn.uri;
-  int match_len;
+  const char *domain = mg_get_header(&conn->mg_conn, "Host");
+  int match_len, root_len = root == NULL ? 0 : strlen(root);
+
+  // Perform virtual hosting rewrites
+  if (rewrites != NULL && domain != NULL) {
+    const char *colon = strchr(domain, ':');
+    int domain_len = colon == NULL ? strlen(domain) : colon - domain;
+
+    while ((rewrites = next_option(rewrites, &a, &b)) != NULL) {
+      if (a.len > 1 && a.ptr[0] == '@' && a.len == domain_len + 1 &&
+          mg_strncasecmp(a.ptr + 1, domain, domain_len) == 0) {
+        root = b.ptr;
+        root_len = b.len;
+        break;
+      }
+    }
+  }
 
   // No filesystem access
-  if (root == NULL) return 0;
+  if (root == NULL || root_len == 0) return 0;
 
   // Handle URL rewrites
-  mg_snprintf(buf, buf_len, "%s%s", root, uri);
+  mg_snprintf(buf, buf_len, "%.*s%s", root_len, root, uri);
   while ((rewrites = next_option(rewrites, &a, &b)) != NULL) {
     if ((match_len = match_prefix(a.ptr, a.len, uri)) > 0) {
       mg_snprintf(buf, buf_len, "%.*s%s", (int) b.len, b.ptr, uri + match_len);
