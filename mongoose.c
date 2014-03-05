@@ -659,7 +659,7 @@ static void ns_read_from_socket(struct ns_connection *conn) {
       DBG(("%p res %d %d", conn, res, ssl_err));
       if (res == 1) {
         conn->flags = NSF_SSL_HANDSHAKE_DONE;
-      } else if (res == 0 || ssl_err == 2 || ssl_err == 3) {
+      } else if (res == 0 && (ssl_err == 2 || ssl_err == 3)) {
         return; // Call us again
       } else {
         ok = 1;
@@ -685,7 +685,7 @@ static void ns_read_from_socket(struct ns_connection *conn) {
       DBG(("%p res %d %d", conn, res, ssl_err));
       if (res == 1) {
         conn->flags |= NSF_SSL_HANDSHAKE_DONE;
-      } else if (res == 0 || ssl_err == 2 || ssl_err == 3) {
+      } else if (res == 0 && (ssl_err == 2 || ssl_err == 3)) {
         return; // Call us again
       } else {
         conn->flags |= NSF_CLOSE_IMMEDIATELY;
