@@ -148,6 +148,8 @@ static void show_usage_and_exit(void) {
   exit(EXIT_FAILURE);
 }
 
+#define EV_HANDLER NULL
+
 static char *sdup(const char *str) {
   char *p;
   if ((p = (char *) malloc(strlen(str) + 1)) != NULL) {
@@ -381,7 +383,7 @@ static void start_mongoose(int argc, char *argv[]) {
   char *options[MAX_OPTIONS];
   int i;
 
-  if ((server = mg_create_server(NULL, NULL)) == NULL) {
+  if ((server = mg_create_server(NULL, EV_HANDLER)) == NULL) {
     die("%s", "Failed to start Mongoose.");
   }
 
