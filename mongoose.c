@@ -4404,11 +4404,12 @@ static void log_access(const struct connection *conn, const char *path) {
   flockfile(fp);
   mg_parse_header(mg_get_header(&conn->mg_conn, "Authorization"), "username",
                   user, sizeof(user));
-  fprintf(fp, "%s - %s [%s] \"%s %s HTTP/%s\" %d %" INT64_FMT,
+  fprintf(fp, "%s - %s [%s] \"%s %s%s%s HTTP/%s\" %d %" INT64_FMT,
           c->remote_ip, user[0] == '\0' ? "-" : user, date,
           c->request_method ? c->request_method : "-",
-          c->uri ? c->uri : "-", c->http_version,
-          c->status_code, conn->num_bytes_sent);
+          c->uri ? c->uri : "-", c->query_string ? "?" : "",
+          c->query_string ? c->query_string : "",
+          c->http_version, c->status_code, conn->num_bytes_sent);
   log_header(c, "Referer", fp);
   log_header(c, "User-Agent", fp);
   fputc('\n', fp);
