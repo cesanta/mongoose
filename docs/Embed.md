@@ -18,8 +18,12 @@ Here's a minimal application `app.c` that embeds mongoose:
       struct mg_server *server = mg_create_server(NULL, NULL);
       mg_set_option(server, "document_root", ".");      // Serve current directory
       mg_set_option(server, "listening_port", "8080");  // Open port 8080
-      for (;;) mg_poll_server(server, 1000);            // Infinite loop, Ctrl-C to stop
+
+      for (;;) {
+        mg_poll_server(server, 1000);   // Infinite loop, Ctrl-C to stop
+      }
       mg_destroy_server(&server);
+
       return 0;
     }
 
@@ -33,15 +37,45 @@ and run the following command:
 When run, this simple application opens port 8080 and serves static files,
 CGI files and lists directory content in the current working directory.
 
-Mongoose can call user-defined functions when certain URIs are requested.
-These functions are _called uri handlers_.  `mg_add_uri_handler()` registers
-an URI handler, and there is no restriction exist on the number of URI handlers.
-Also, mongoose can call a user-defined function when it is about to send
-HTTP error back to client. That function is called _http error handler_ and
-can be registered by `mg_set_http_error_handler()`. Handlers are called
-by Mongoose with `struct mg_connection *` pointer as a parameter, which
+Mongoose can call user-defined function when certain events occur.
+That function is called _an event handler_, and it is the second parameter
+to `mg_create_server()` function. Here is the example event handler function:
+
+    int event_handler(struct mg_connection *conn, enum mg_event ev) {
+      switch (ev) {
+        case MG_AUTH: return MG_TRUE;
+        default: return MG_FALSE;
+      }
+    }
+
+Event handler is called by Mongoose with `struct mg_connection *`
+pointer and event number as a parameters. `struct mg_connection *conn` 
 has all information about the request: HTTP headers, POST or websocket
-data buffer, etcetera.
+data buffer, etcetera. `enum mg_event ev` tells which exactly event is sent.
+For each event, an event handler returns a value which tells Mongoose how
+to behave.
+
+The sequence of events for every connection is this:
+   * `MG_AUTH` - Mongoose asks whether this connection is authorized. If event
+      handler returns `MG_FALSE`, then Mongoose does not serve the request but
+      sends authorization request to the client. If `MG_TRUE` is returned,
+      then Mongoose continues on with the request.
+   * `MG_REQUEST` - Mongoose asks event handler to serve the request. If
+      event handler serves the request, it should return `MG_TRUE`. Otherwise,
+      it should return `MG_FALSE` which tells Mongoose that request is not
+      served and Mongoose should serve it. For example, event handler might
+      choose to serve only RESTful API requests with URIs that start with
+      certain prefix, and let Mongoose serve all static files.
+      If event handler decides to serve the request, but doesn't have
+      all the data at the moment, it should return `MG_MORE`. That tells
+      Mongoose to send `MG_POLL` events on each iteration of `mg_poll_server()`
+   * `MG_POLL` is sent only to those connections which returned `MG_MORE`.
+      Event handler should try to complete the reply. If reply is completed,
+      then event handler should return `MG_TRUE`. Otherwise, `MG_FALSE` - and
+      poll events will be sent until the handler returns `MG_TRUE`.
+   * `MG_CLOSE` is sent when the connection is closed. This event is used
+      to cleanup per-connection state, `struct mg_connection::connection_param`,
+      if it was allocated.
 
 Let's extend our minimal application example and
 create an URI that will be served by user's C code. The app will handle
@@ -54,7 +88,7 @@ http://127.0.0.1:8080/hello will say hello, and here's the code:
     static int event_handler(struct mg_connection *conn, enum mg_event ev) {
       if (ev == MG_AUTH) {
         return MG_TRUE;   // Authorize all requests
-      } else if (ev == MG_REQ_BEGIN) {
+      } else if (ev == MG_REQUEST) {
         mg_printf_data(conn, "%s", "Hello world");
         return MG_TRUE;   // Mark as processed
       } else {
@@ -93,20 +127,20 @@ a couple of kilobytes to the executable size, and also has some runtime penalty.
     -DMONGOOSE_NO_WEBSOCKET     Disable WebSocket support
 
     -DMONGOOSE_USE_IDLE_TIMEOUT_SECONDS=X Idle connection timeout, default is 30
-    -DMONGOOSE_USE_IPV6         Enable IPv6 support
     -DMONGOOSE_USE_LUA          Enable Lua scripting
     -DMONGOOSE_USE_LUA_SQLITE3  Enable sqlite3 binding for Lua
-    -DMONGOOSE_USE_SSL          Enable SSL
     -DMONGOOSE_USE_POST_SIZE_LIMIT=X      POST requests larger than X will be
                                           rejected, not set by default
     -DMONGOOSE_USE_EXTRA_HTTP_HEADERS=X   Append X to the HTTP headers
                                           for static files, empty by default
-    -DMONGOOSE_USE_STACK_SIZE=X           Let mg_start_thread() use stack
-                                          size X, default is OS default
-    -DMONGOOSE_ENABLE_DEBUG     Enables debug messages on stdout, very noisy
-    -DMONGOOSE_HEXDUMP=\"XXX\"  Enables hexdump of sent and received traffic
-                                to the text files. XXX must be a prefix of the
-                                IP address whose traffic must be hexdumped.
+
+    -DNS_ENABLE_DEBUG         Enables debug messages on stdout, very noisy
+    -DNS_ENABLE_SSL           Enable SSL
+    -DNS_ENABLE_IPV6          Enable IPv6 support
+    -DNS_ENABLE_HEXDUMP       Enables hexdump of sent and received traffic
+    -DNS_STACK_SIZE=X         Sets stack size to X for  ns_start_thread()
+    -DNS_DISABLE_THREADS      Disable threads support
+    -DNS_DISABLE_SOCKETPAIR   For systems without loopback interface
 
 Mongoose source code contains a well-commented example code, listed below:
 
@@ -118,3 +152,4 @@ Mongoose source code contains a well-commented example code, listed below:
    shows how to upload files
    * [websocket.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c) demonstrates websocket usage
    * [auth.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c) demonstrates API-controlled Digest authorization
+   * [mjpg.c](https://github.com/cesanta/mongoose/blob/master/examples/mjpg.c) demonstrates MJPEG streaming implementation
