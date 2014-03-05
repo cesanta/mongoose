@@ -2216,7 +2216,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
   // Perform virtual hosting rewrites
   if (rewrites != NULL && domain != NULL) {
     const char *colon = strchr(domain, ':');
-    int domain_len = colon == NULL ? strlen(domain) : colon - domain;
+    int domain_len = colon == NULL ? strlen(domain) : (int) (colon - domain);
 
     while ((rewrites = next_option(rewrites, &a, &b)) != NULL) {
       if (a.len > 1 && a.ptr[0] == '@' && a.len == domain_len + 1 &&
