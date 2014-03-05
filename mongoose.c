@@ -656,10 +656,10 @@ static void ns_read_from_socket(struct ns_connection *conn) {
     if (ret == 0 && ok == 0 && conn->ssl != NULL) {
       int res = SSL_connect(conn->ssl);
       int ssl_err = SSL_get_error(conn->ssl, res);
-      DBG(("%p res %d %d", conn, res, ssl_err));
+      DBG(("%p SSL_connect %d %d", conn, res, ssl_err));
       if (res == 1) {
         conn->flags = NSF_SSL_HANDSHAKE_DONE;
-      } else if (res == 0 && (ssl_err == 2 || ssl_err == 3)) {
+      } else if (ssl_err == 2 || ssl_err == 3) {
         return; // Call us again
       } else {
         ok = 1;
@@ -682,10 +682,10 @@ static void ns_read_from_socket(struct ns_connection *conn) {
     } else {
       int res = SSL_accept(conn->ssl);
       int ssl_err = SSL_get_error(conn->ssl, res);
-      DBG(("%p res %d %d", conn, res, ssl_err));
+      DBG(("%p SSL_accept %d %d", conn, res, ssl_err));
       if (res == 1) {
         conn->flags |= NSF_SSL_HANDSHAKE_DONE;
-      } else if (res == 0 && (ssl_err == 2 || ssl_err == 3)) {
+      } else if (ssl_err == 2 || ssl_err == 3) {
         return; // Call us again
       } else {
         conn->flags |= NSF_CLOSE_IMMEDIATELY;
