@@ -1054,6 +1054,7 @@ typedef struct stat file_stat_t;
 #define MONGOOSE_NO_DAV
 #define MONGOOSE_NO_DIRECTORY_LISTING
 #define MONGOOSE_NO_LOGGING
+#define MONGOOSE_NO_SSI
 #endif
 
 struct vec {
