@@ -1,12 +1,11 @@
 # Mongoose Web Server
 
 Mongoose is easy to use, powerful, embeddable web server.
-   * [Downloads](http://cesanta.com/downloads.shtml)
    * [Mailing list](http://groups.google.com/group/mongoose-users)
-   * [Documentation](http://cesanta.com/docs.shtml)
-    * [How to create basic website with Mongoose](http://cesanta.com/docs.shtml?BasicWebsite.md)
-    * [How to create PHP website with Mongoose](http://cesanta.com/docs.shtml?PhpWebsite.md)
-    * [Embedding Guide](http://cesanta.com/docs.shtml?Embed.md)
+   * [Downloads & Documentation](http://cesanta.com/mongoose.shtml)
+    * [How to create basic website with Mongoose](http://cesanta.com/docs/BasicWebsite.shtml)
+    * [How to create PHP website with Mongoose](http://cesanta.com/docs/PhpWebsite.shtml)
+    * [Embedding Guide](http://cesanta.com/docs/Embed.shtml)
 
 # Features
 
