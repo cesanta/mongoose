@@ -26,7 +26,7 @@ How To Create A PHP Website With Mongoose
 
 ![screenshot](http://cesanta.com/images/tut_php/tut6.png)
 
-## 7. Download PHP 5.3 zip file from http://windows.php.net/download and extract it to `C:\php5` directory:
+## 7. Download PHP 5.3 zip (do NOT download PHP 5.5 cause you might have missing DLLs problem) from http://windows.php.net/download and extract it to `C:\php5` directory:
 ![screenshot](http://cesanta.com/images/tut_php/tut7.png)
 
 ## 8. Click on the mongoose icon and choose "Edit Settings" menu.:
