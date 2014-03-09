@@ -1178,7 +1178,6 @@ struct connection {
   struct mg_server *server;
   union endpoint endpoint;
   enum endpoint_type endpoint_type;
-  time_t birth_time;
   char *path_info;
   char *request;
   int64_t num_bytes_sent; // Total number of bytes sent
@@ -3866,8 +3865,8 @@ static void prepare_lua_environment(struct mg_connection *ri, lua_State *L) {
   luaL_newmetatable(L, "luasocket");
   lua_pushliteral(L, "__index");
   lua_newtable(L);
-  luaL_register(L, NULL, luasocket_methods);
-  //luaL_newlib(L, luasocket_methods);
+  //luaL_register(L, NULL, luasocket_methods);
+  luaL_newlib(L, luasocket_methods);
   lua_rawset(L, -3);
   lua_pop(L, 1);
   lua_register(L, "connect", lsp_connect);
@@ -3962,7 +3961,7 @@ static void handle_lsp_request(struct connection *conn, const char *path,
     // We're not sending HTTP headers here, Lua page must do it.
     prepare_lua_environment(&conn->mg_conn, L);
     lua_pushcclosure(L, &lua_error_handler, 0);
-    lua_pushvalue(L, LUA_GLOBALSINDEX);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
     lsp(conn, p, (int) st->st_size, L);
     close_local_endpoint(conn);
   }
@@ -4375,7 +4374,6 @@ struct mg_connection *mg_connect(struct mg_server *server, const char *host,
   conn->endpoint_type = EP_CLIENT;
   //conn->handler = handler;
   conn->mg_conn.server_param = server->ns_server.server_data;
-  conn->birth_time = time(NULL);
   conn->ns_conn->flags = NSF_CONNECTING;
 
   return &conn->mg_conn;
@@ -4397,10 +4395,11 @@ static void log_access(const struct connection *conn, const char *path) {
   const struct mg_connection *c = &conn->mg_conn;
   FILE *fp = (path == NULL) ?  NULL : fopen(path, "a+");
   char date[64], user[100];
+  time_t now;
 
   if (fp == NULL) return;
-  strftime(date, sizeof(date), "%d/%b/%Y:%H:%M:%S %z",
-           localtime(&conn->birth_time));
+  now = time(NULL);
+  strftime(date, sizeof(date), "%d/%b/%Y:%H:%M:%S %z", localtime(&now));
 
   flockfile(fp);
   mg_parse_header(mg_get_header(&conn->mg_conn, "Authorization"), "username",
