@@ -3859,14 +3859,9 @@ static void prepare_lua_environment(struct mg_connection *ri, lua_State *L) {
   int i;
 
   luaL_openlibs(L);
-#ifdef MONGOOSE_USE_LUA_SQLITE3
-  { extern int luaopen_lsqlite3(lua_State *); luaopen_lsqlite3(L); }
-#endif
 
   luaL_newmetatable(L, "luasocket");
-  lua_pushliteral(L, "__index");
   lua_newtable(L);
-  //luaL_register(L, NULL, luasocket_methods);
   luaL_newlib(L, luasocket_methods);
   lua_rawset(L, -3);
   lua_pop(L, 1);
@@ -3887,10 +3882,11 @@ static void prepare_lua_environment(struct mg_connection *ri, lua_State *L) {
   reg_string(L, "query_string", ri->query_string);
   reg_string(L, "remote_ip", ri->remote_ip);
   reg_int(L, "remote_port", ri->remote_port);
+  reg_string(L, "local_ip", ri->local_ip);
+  reg_int(L, "local_port", ri->local_port);
   lua_pushstring(L, "content");
-  lua_pushlstring(L, ri->content == NULL ? "" : ri->content, 0);
+  lua_pushlstring(L, ri->content == NULL ? "" : ri->content, ri->content_len);
   lua_rawset(L, -3);
-  reg_int(L, "content_len", ri->content_len);
   reg_int(L, "num_headers", ri->num_headers);
   lua_pushstring(L, "http_headers");
   lua_newtable(L);

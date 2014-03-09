@@ -31,13 +31,14 @@ To compile it, put `mongoose.c`, `mongoose.h` and `app.c` into one
 folder, start terminal on UNIX or Visual Studio command line prompt on Windows,
 and run the following command:
 
-    cc app.c mongoose.c -pthread -o app    # on Unix
-    cl app.c mongoose.c /TC /MD            # on Windows
+    cc app.c mongoose.c -pthread -o app     # on Unix
+    cl.exe app.c mongoose.c /TC /MD         # on Windows
 
 When run, this simple application opens port 8080 and serves static files,
 CGI files and lists directory content in the current working directory.
 
-Mongoose can call user-defined function when certain events occur.
+It is possible to generate HTML page content. Mongoose can call user-defined
+function when certain events occur.
 That function is called _an event handler_, and it is the second parameter
 to `mg_create_server()` function. Here is the example event handler function:
 
@@ -49,7 +50,7 @@ to `mg_create_server()` function. Here is the example event handler function:
     }
 
 Event handler is called by Mongoose with `struct mg_connection *`
-pointer and event number as a parameters. `struct mg_connection *conn` 
+pointer and an event number. `struct mg_connection *conn` 
 has all information about the request: HTTP headers, POST or websocket
 data buffer, etcetera. `enum mg_event ev` tells which exactly event is sent.
 For each event, an event handler returns a value which tells Mongoose how
@@ -61,7 +62,8 @@ The sequence of events for every connection is this:
       sends authorization request to the client. If `MG_TRUE` is returned,
       then Mongoose continues on with the request.
    * `MG_REQUEST` - Mongoose asks event handler to serve the request. If
-      event handler serves the request, it should return `MG_TRUE`. Otherwise,
+      event handler serves the request by sending a reply,
+      it should return `MG_TRUE`. Otherwise,
       it should return `MG_FALSE` which tells Mongoose that request is not
       served and Mongoose should serve it. For example, event handler might
       choose to serve only RESTful API requests with URIs that start with
@@ -69,12 +71,17 @@ The sequence of events for every connection is this:
       If event handler decides to serve the request, but doesn't have
       all the data at the moment, it should return `MG_MORE`. That tells
       Mongoose to send `MG_POLL` events on each iteration of `mg_poll_server()`
+
+      `mg_connection::connection_param` pointer is a placeholder to keep
+      user-specific data. For example, handler could decide to open a DB
+      connection and store DB connection handle in `connection_param`.
    * `MG_POLL` is sent only to those connections which returned `MG_MORE`.
       Event handler should try to complete the reply. If reply is completed,
-      then event handler should return `MG_TRUE`. Otherwise, `MG_FALSE` - and
-      poll events will be sent until the handler returns `MG_TRUE`.
+      then event handler should return `MG_TRUE`. Otherwise, it should
+      return `MG_FALSE`, and polling will continue until
+      handler returns `MG_TRUE`.
    * `MG_CLOSE` is sent when the connection is closed. This event is used
-      to cleanup per-connection state, `struct mg_connection::connection_param`,
+      to cleanup per-connection state stored in `connection_param`
       if it was allocated.
 
 Let's extend our minimal application example and
@@ -88,7 +95,7 @@ http://127.0.0.1:8080/hello will say hello, and here's the code:
     static int event_handler(struct mg_connection *conn, enum mg_event ev) {
       if (ev == MG_AUTH) {
         return MG_TRUE;   // Authorize all requests
-      } else if (ev == MG_REQUEST) {
+      } else if (ev == MG_REQUEST && !strcmp(conn->uri, "/hello")) {
         mg_printf_data(conn, "%s", "Hello world");
         return MG_TRUE;   // Mark as processed
       } else {
@@ -109,12 +116,34 @@ http://127.0.0.1:8080/hello will say hello, and here's the code:
       return 0;
     }
 
+## Example code
+
+Mongoose source code contains a well-commented example code, listed below:
+
+   * [hello.c](https://github.com/cesanta/mongoose/blob/master/examples/hello.c)
+   a minimalistic hello world example
+   * [post.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
+   shows how to handle form input
+   * [upload.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
+   shows how to upload files
+   * [websocket.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c) demonstrates websocket usage
+   * [auth.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c) demonstrates API-controlled Digest authorization
+   * [mjpg.c](https://github.com/cesanta/mongoose/blob/master/examples/mjpg.c) demonstrates MJPEG streaming implementation
+
+## Compilation flags
+
 Below is the list of compilation flags that enable or disable certain
 features. By default, some features are enabled, and could be disabled
 by setting appropriate `NO_*` flag. Features that are disabled by default
 could be enabled by setting appropriate `USE_*` flag. Bare bones Mongoose
 is quite small, about 30 kilobytes of compiled x86 code. Each feature adds
 a couple of kilobytes to the executable size, and also has some runtime penalty.
+
+Note that some flags start with `NS_` prefix. This is because Mongoose uses
+[Net Skeleton](http://github.com/cesanta/net_skeleton) as a low-level
+networking engine. If user code has `#include <net_skeleton.h>`, then
+all Net Skeleton functions will be available too.
+
 
     -DMONGOOSE_NO_AUTH          Disable MD5 authorization support
     -DMONGOOSE_NO_CGI           Disable CGI support
@@ -141,15 +170,3 @@ a couple of kilobytes to the executable size, and also has some runtime penalty.
     -DNS_STACK_SIZE=X         Sets stack size to X for  ns_start_thread()
     -DNS_DISABLE_THREADS      Disable threads support
     -DNS_DISABLE_SOCKETPAIR   For systems without loopback interface
-
-Mongoose source code contains a well-commented example code, listed below:
-
-   * [hello.c](https://github.com/cesanta/mongoose/blob/master/examples/hello.c)
-   a minimalistic hello world example
-   * [post.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
-   shows how to handle form input
-   * [upload.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
-   shows how to upload files
-   * [websocket.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c) demonstrates websocket usage
-   * [auth.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c) demonstrates API-controlled Digest authorization
-   * [mjpg.c](https://github.com/cesanta/mongoose/blob/master/examples/mjpg.c) demonstrates MJPEG streaming implementation
