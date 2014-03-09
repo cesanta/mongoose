@@ -3957,6 +3957,8 @@ static void handle_lsp_request(struct connection *conn, const char *path,
   } else {
     // We're not sending HTTP headers here, Lua page must do it.
     prepare_lua_environment(&conn->mg_conn, L);
+    conn->mg_conn.connection_param = L;
+    call_user(conn, MG_LUA);
     lua_pushcclosure(L, &lua_error_handler, 0);
     lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
     lsp(conn, p, (int) st->st_size, L);
