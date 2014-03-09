@@ -1,9 +1,9 @@
 How To Share Files With Mongoose
 ===========================================
 
-## 1. Download Mongoose executable from http://cesanta.com/downloads.html and copy the executable inside the directory you want to share:
+## 1. Download Mongoose executable from http://cesanta.com/mongoose.shtml and copy the executable inside the directory you want to share:
 
-![screenshot](http://cesanta.chttp://cesanta.com/images/tut_sharing/tut1.png)
+![screenshot](http://cesanta.com/images/tut_sharing/tut1.png)
 
 ## 2. Double-click mongoose executable. An icon will appear on a system tray in the bottom right corner of the desktop:
 

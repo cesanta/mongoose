@@ -18,7 +18,7 @@ How To Create A PHP Website With Mongoose
 ![screenshot](http://cesanta.com/images/tut_php/tut4.png)
 
 
-## 5. Download Mongoose executable from http://cesanta.com/downloads.html and copy the executable inside `my_website` directory:
+## 5. Download Mongoose executable from http://cesanta.com/mongoose.shtml and copy the executable inside `my_website` directory:
 
 ![screenshot](http://cesanta.com/images/tut_php/tut5.png)
 
