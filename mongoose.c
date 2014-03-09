@@ -3704,19 +3704,19 @@ static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
 #include <sys/mman.h>
 #endif
 
-static void reg_string(struct lua_State *L, const char *name, const char *val) {
+void reg_string(struct lua_State *L, const char *name, const char *val) {
   lua_pushstring(L, name);
   lua_pushstring(L, val);
   lua_rawset(L, -3);
 }
 
-static void reg_int(struct lua_State *L, const char *name, int val) {
+void reg_int(struct lua_State *L, const char *name, int val) {
   lua_pushstring(L, name);
   lua_pushinteger(L, val);
   lua_rawset(L, -3);
 }
 
-static void reg_function(struct lua_State *L, const char *name,
+void reg_function(struct lua_State *L, const char *name,
                          lua_CFunction func, struct mg_connection *conn) {
   lua_pushstring(L, name);
   lua_pushlightuserdata(L, conn);

@@ -112,6 +112,14 @@ void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
 
+// Lua utility functions
+#ifdef MONGOOSE_USE_LUA
+void reg_string(struct lua_State *L, const char *name, const char *val);
+void reg_int(struct lua_State *L, const char *name, int val);
+void reg_function(struct lua_State *L, const char *name,
+                         lua_CFunction func, struct mg_connection *conn);
+#endif
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
