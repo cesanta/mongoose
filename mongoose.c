@@ -1250,24 +1250,7 @@ static const struct {
 
 #ifndef MONGOOSE_NO_THREADS
 void *mg_start_thread(void *(*f)(void *), void *p) {
-#ifdef _WIN32
-  return (void *) _beginthread((void (__cdecl *)(void *)) f, 0, p);
-#else
-  pthread_t thread_id = (pthread_t) 0;
-  pthread_attr_t attr;
-
-  (void) pthread_attr_init(&attr);
-  (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
-#if MONGOOSE_USE_STACK_SIZE > 1
-  (void) pthread_attr_setstacksize(&attr, MONGOOSE_USE_STACK_SIZE);
-#endif
-
-  pthread_create(&thread_id, &attr, f, p);
-  pthread_attr_destroy(&attr);
-
-  return (void *) thread_id;
-#endif
+  return ns_start_thread(f, p);
 }
 #endif  // MONGOOSE_NO_THREADS
 
