@@ -25,7 +25,7 @@ all: hello websocket server post multi_threaded upload auth
 
 # To enable Lua in a server, uncomment following lines
 LUA    = ../lua-5.2.3/src
-#CFLAGS += -I$(LUA) -L$(LUA) -llua
+#CFLAGS += -I$(LUA) -L$(LUA) -llua -DMONGOOSE_USE_LUA
 
 server: server.c ../mongoose.c
 	$(CC) server.c ../mongoose.c $(OUT)  $(CFLAGS)
