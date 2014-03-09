@@ -114,10 +114,12 @@ int mg_authorize_digest(struct mg_connection *c, FILE *fp);
 
 // Lua utility functions
 #ifdef MONGOOSE_USE_LUA
-void reg_string(struct lua_State *L, const char *name, const char *val);
-void reg_int(struct lua_State *L, const char *name, int val);
-void reg_function(struct lua_State *L, const char *name,
-                         lua_CFunction func, struct mg_connection *conn);
+#include <lua.h>
+#include <lauxlib.h>
+void reg_string(lua_State *L, const char *name, const char *val);
+void reg_int(lua_State *L, const char *name, int val);
+void reg_function(lua_State *L, const char *,
+                         lua_CFunction, struct mg_connection *);
 #endif
 
 #ifdef __cplusplus

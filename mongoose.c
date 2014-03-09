@@ -3684,9 +3684,6 @@ int mg_parse_header(const char *s, const char *var_name, char *buf,
 }
 
 #ifdef MONGOOSE_USE_LUA
-#include <lua.h>
-#include <lauxlib.h>
-
 #ifdef _WIN32
 static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
                   int offset) {
