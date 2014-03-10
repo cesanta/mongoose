@@ -729,7 +729,8 @@ static void ns_write_to_socket(struct ns_connection *conn) {
   ns_hexdump(conn, io->buf, n, "->");
 #endif
 
-  DBG(("%p -> %d bytes [%.*s%s]", conn, n, io->len < 40 ? io->len : 40,
+  DBG(("%p -> %d bytes %d [%.*s%s]", conn, n, conn->flags,
+       io->len < 40 ? io->len : 40,
        io->buf, io->len < 40 ? "" : "..."));
 
   if (ns_is_error(n)) {
@@ -3925,7 +3926,7 @@ static void lsp(struct connection *conn, const char *p, int len, lua_State *L) {
 
 static void handle_lsp_request(struct connection *conn, const char *path,
                                file_stat_t *st) {
-  void *p = NULL;
+  void *p = MAP_FAILED;
   lua_State *L = NULL;
   FILE *fp = NULL;
 
@@ -3946,7 +3947,7 @@ static void handle_lsp_request(struct connection *conn, const char *path,
   }
 
   if (L != NULL) lua_close(L);
-  if (p != NULL) munmap(p, st->st_size);
+  if (p != MAP_FAILED) munmap(p, st->st_size);
   if (fp != NULL) fclose(fp);
 }
 #endif // MONGOOSE_USE_LUA
@@ -4124,6 +4125,9 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
   const char *dir_lst = "yes";
 #endif
 #endif
+
+  // If EP_USER was set in a prev call, reset it
+  conn->endpoint_type = EP_NONE;
 
 #ifndef MONGOOSE_NO_AUTH
   if (conn->server->event_handler && call_user(conn, MG_AUTH) == MG_FALSE) {
