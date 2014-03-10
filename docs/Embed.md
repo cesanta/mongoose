@@ -57,6 +57,7 @@ For each event, an event handler returns a value which tells Mongoose how
 to behave.
 
 The sequence of events for every connection is this:
+
    * `MG_AUTH` - Mongoose asks whether this connection is authorized. If event
       handler returns `MG_FALSE`, then Mongoose does not serve the request but
       sends authorization request to the client. If `MG_TRUE` is returned,
