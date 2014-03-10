@@ -224,9 +224,9 @@ Return: 1 on success, 0 on error.
 
    
     int mg_parse_multipart(const char *buf, int buf_len,
-			   char *var_name, int var_name_len,
-			   char *file_name, int file_name_len,
-			   const char **data, int *data_len);
+                           char *var_name, int var_name_len,
+                           char *file_name, int file_name_len,
+                           const char **data, int *data_len);
 
 Parses a buffer that contains multipart form data. Stores chunk name
 in a `var_name` buffer. If chunk is an uploaded file, then `file_name`
@@ -234,7 +234,7 @@ will have a file name. `data` and `data_len` will point to the chunk data.
 Returns number of bytes to skip to the next chunk.
 
      struct mg_connection *mg_connect(struct mg_server *server,
-				      const char *host, int port, int use_ssl);
+                                      const char *host, int port, int use_ssl);
 
 Create connection to the remote host. Returns `NULL` on error, non-null
 if the connection has been scheduled for connection. Upon a connection,
