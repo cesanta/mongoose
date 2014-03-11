@@ -9,11 +9,9 @@ How To Share Files With Mongoose
 
 ![screenshot](http://cesanta.com/images/tut_sharing/tut2.png)
 
-## 3. Click on the mongoose icon and choose "Start browser" menu:
+## 3. Click on the mongoose icon
 ![screenshot](http://cesanta.com/images/tut_sharing/tut3.png)
 
-## 4. A browser will popup displaying files. That's all! To access those files from another computer, start a browser and type `http://<your_machine_ip_address>:8080/` in the address bar.
+## 4. Click on "Go to my address" to launch a browser locally. Or, to access a folder from another machine, launch a browser and type in the URL:
 
 ![screenshot](http://cesanta.com/images/tut_sharing/tut4.png)
-
-## Tip: to find out what is your machine IP address, take a look at http://windows.microsoft.com/en-us/windows/find-computers-ip-address
