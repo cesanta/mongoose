@@ -13,12 +13,7 @@ Mongoose is easy to use, powerful, embeddable web server.
 
 Download, double-click to start, run browser -- that's all!
 
-<style>img { height: 140px; margin: 10px; }</style>
-![shot1](http://cesanta.com/images/tut_sharing/tut1.png)
-![shot2](http://cesanta.com/images/tut_sharing/tut2.png)
-
-![shot3](http://cesanta.com/images/tut_sharing/tut3.png)
-![shot4](http://cesanta.com/images/tut_sharing/tut4.png)
+<img src="http://cesanta.com/images/tut_sharing/tut1.png" style="height:120px"/> <img src="http://cesanta.com/images/tut_sharing/tut2.png" style="height:120px"/> <img src="http://cesanta.com/images/tut_sharing/tut3.png" style="height:120px"/> <img src="http://cesanta.com/images/tut_sharing/tut4.png" style="height:120px"/>
 
 
 # Features
