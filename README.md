@@ -9,13 +9,6 @@ Mongoose is easy to use, powerful, embeddable web server.
     * [How to create PHP website with Mongoose](http://cesanta.com/docs/PhpWebsite.shtml)
     * [Embedding Guide](http://cesanta.com/docs/Embed.shtml)
 
-# Screenshots
-
-Download, double-click to start, run browser -- that's all!
-
-<img src="http://cesanta.com/images/tut_sharing/tut1.png" style="height:120px"/> <img src="http://cesanta.com/images/tut_sharing/tut2.png" style="height:120px"/> <img src="http://cesanta.com/images/tut_sharing/tut3.png" style="height:120px"/> <img src="http://cesanta.com/images/tut_sharing/tut4.png" style="height:120px"/>
-
-
 # Features
 
 - Works on Windows, Mac, UNIX/Linux, iPhone, Android, and many other platforms
@@ -33,6 +26,16 @@ Download, double-click to start, run browser -- that's all!
   has several man-years invested in continuous improvement and refinement
 - Professional support and consultancy available from
 [Cesanta Software](http://cesanta.com), developer of Mongoose
+
+# Screenshots
+
+Download, double-click to start, run browser -- that's all!
+
+![shot1](http://cesanta.com/images/tut_sharing/tut1.png)
+![shot2](http://cesanta.com/images/tut_sharing/tut2.png)
+
+![shot3](http://cesanta.com/images/tut_sharing/tut3.png)
+![shot4](http://cesanta.com/images/tut_sharing/tut4.png)
 
 # Acknowledgements
 
