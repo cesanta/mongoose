@@ -1,4 +1,4 @@
-# ![logo](http://cesanta.com/images/mongoose_logo.png =64x64) Mongoose Web Server
+# <img src="http://cesanta.com/images/mongoose_logo.png" width="64" height="64"> Mongoose Web Server
 
 Mongoose is easy to use, powerful, embeddable web server.
    * [Mailing list](http://groups.google.com/group/mongoose-users)
