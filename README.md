@@ -12,7 +12,7 @@ Mongoose is easy to use, powerful, embeddable web server.
 
 - Works on Windows, Mac, UNIX/Linux, iPhone, Android, and many other platforms
 - CGI, SSI, SSL, Digest auth, Websocket, WEbDAV, Resumed download, URL rewrite, file blacklist, Custom error pages, Virtual hosts, IP-based ACL, Windows service
-- Lua Server Pages (PHP-like scripting in [Lua](http://lua.org) ), see [dirscan.lp](https://github.com/cesanta/mongoose/blob/master/examples/lua/dirscan.lp) )
+- Lua Server Pages (PHP-like scripting in [Lua](http://lua.org) ), see [dirscan.lp](https://github.com/cesanta/mongoose/blob/master/examples/lua/dirscan.lp)
 - Simple and clean
   [embedding API](https://github.com/cesanta/mongoose/blob/master/mongoose.h).
   The source is in single
