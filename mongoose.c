@@ -1878,6 +1878,9 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
     ns_send(conn->ns_conn, cgi_status, sizeof(cgi_status) - 1);
     conn->mg_conn.status_code = 200;
     conn->ns_conn->flags |= NSF_BUFFER_BUT_DONT_SEND;
+    // Pass POST data to the CGI process
+    conn->endpoint.cgi_conn->send_iobuf = conn->ns_conn->recv_iobuf;
+    iobuf_init(&conn->ns_conn->recv_iobuf, 0);
   } else {
     closesocket(fds[0]);
     send_http_error(conn, 500, "start_process(%s) failed", prog);
