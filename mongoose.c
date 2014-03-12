@@ -2139,14 +2139,14 @@ const char *mg_get_header(const struct mg_connection *ri, const char *s) {
 
 #ifndef MONGOOSE_NO_FILESYSTEM
 // Perform case-insensitive match of string against pattern
-static int match_prefix(const char *pattern, int pattern_len, const char *str) {
+int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
   const char *or_str;
   int len, res, i = 0, j = 0;
 
   if ((or_str = (const char *) memchr(pattern, '|', pattern_len)) != NULL) {
-    res = match_prefix(pattern, or_str - pattern, str);
-    return res > 0 ? res :
-        match_prefix(or_str + 1, (pattern + pattern_len) - (or_str + 1), str);
+    res = mg_match_prefix(pattern, or_str - pattern, str);
+    return res > 0 ? res : mg_match_prefix(or_str + 1,
+      (pattern + pattern_len) - (or_str + 1), str);
   }
 
   for (; i < pattern_len; i++, j++) {
@@ -2166,7 +2166,7 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
         return j + len;
       }
       do {
-        res = match_prefix(pattern + i, pattern_len - i, str + j + len);
+        res = mg_match_prefix(pattern + i, pattern_len - i, str + j + len);
       } while (res == -1 && len-- > 0);
       return res == -1 ? -1 : j + res + len;
     } else if (lowercase(&pattern[i]) != lowercase(&str[j])) {
@@ -2179,8 +2179,8 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
 static int must_hide_file(struct connection *conn, const char *path) {
   const char *pw_pattern = "**" PASSWORDS_FILE_NAME "$";
   const char *pattern = conn->server->config_options[HIDE_FILES_PATTERN];
-  return match_prefix(pw_pattern, strlen(pw_pattern), path) > 0 ||
-    (pattern != NULL && match_prefix(pattern, strlen(pattern), path) > 0);
+  return mg_match_prefix(pw_pattern, strlen(pw_pattern), path) > 0 ||
+    (pattern != NULL && mg_match_prefix(pattern, strlen(pattern), path) > 0);
 }
 
 // Return 1 if real file has been found, 0 otherwise
@@ -2219,7 +2219,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
   mg_snprintf(buf, buf_len, "%.*s%s", root_len, root, uri);
   rewrites = conn->server->config_options[URL_REWRITES];  // Re-initialize!
   while ((rewrites = next_option(rewrites, &a, &b)) != NULL) {
-    if ((match_len = match_prefix(a.ptr, a.len, uri)) > 0) {
+    if ((match_len = mg_match_prefix(a.ptr, a.len, uri)) > 0) {
       mg_snprintf(buf, buf_len, "%.*s%s", (int) b.len, b.ptr, uri + match_len);
       break;
     }
@@ -2232,7 +2232,8 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
   for (p = buf + strlen(root) + 2; *p != '\0'; p++) {
     if (*p == '/') {
       *p = '\0';
-      if (match_prefix(cgi_pat, strlen(cgi_pat), buf) > 0 && !stat(buf, st)) {
+      if (mg_match_prefix(cgi_pat, strlen(cgi_pat), buf) > 0 &&
+          !stat(buf, st)) {
       DBG(("!!!! [%s]", buf));
         *p = '/';
         conn->path_info = mg_strdup(p);
@@ -3998,7 +3999,8 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
               tag, path, strerror(errno));
   } else {
     ns_set_close_on_exec(fileno(fp));
-    if (match_prefix(opts[SSI_PATTERN], strlen(opts[SSI_PATTERN]), path) > 0) {
+    if (mg_match_prefix(opts[SSI_PATTERN], strlen(opts[SSI_PATTERN]),
+        path) > 0) {
       send_ssi_file(conn, path, fp, include_level + 1);
     } else {
       send_file_data(conn, fp);
@@ -4200,22 +4202,22 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
     } else {
       send_http_error(conn, 403, NULL);
     }
-  } else if (match_prefix(lua_pat, sizeof(lua_pat) - 1, path) > 0) {
+  } else if (mg_match_prefix(lua_pat, sizeof(lua_pat) - 1, path) > 0) {
 #ifdef MONGOOSE_USE_LUA
     handle_lsp_request(conn, path, &st);
 #else
     send_http_error(conn, 501, NULL);
 #endif
-  } else if (match_prefix(cgi_pat, strlen(cgi_pat), path) > 0) {
+  } else if (mg_match_prefix(cgi_pat, strlen(cgi_pat), path) > 0) {
 #if !defined(MONGOOSE_NO_CGI)
     open_cgi_endpoint(conn, path);
 #else
     send_http_error(conn, 501, NULL);
 #endif // !MONGOOSE_NO_CGI
 #ifndef MONGOOSE_NO_SSI
-  } else if (match_prefix(conn->server->config_options[SSI_PATTERN],
-                          strlen(conn->server->config_options[SSI_PATTERN]),
-                          path) > 0) {
+  } else if (mg_match_prefix(conn->server->config_options[SSI_PATTERN],
+                             strlen(conn->server->config_options[SSI_PATTERN]),
+                             path) > 0) {
     handle_ssi_request(conn, path);
 #endif
   } else if (is_not_modified(conn, &st)) {
