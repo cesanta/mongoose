@@ -9,85 +9,60 @@ using System.Runtime.InteropServices;
   [MarshalAs(UnmanagedType.LPTStr)] public IntPtr value;
 };
 
-// mongoose.h :: struct mg_request_info
-[StructLayout(LayoutKind.Sequential)] public struct MongooseRequestInfo {
+// mongoose.h :: struct mg_connection
+[StructLayout(LayoutKind.Sequential)] public struct MongooseConnection {
   [MarshalAs(UnmanagedType.LPTStr)] public string request_method;
   [MarshalAs(UnmanagedType.LPTStr)] public string uri;
   [MarshalAs(UnmanagedType.LPTStr)] public string http_version;
   [MarshalAs(UnmanagedType.LPTStr)] public string query_string;
-  [MarshalAs(UnmanagedType.LPTStr)] public string remote_user;
-  public int remote_ip;
-  public int remote_port;
-  public int is_ssl;
-  [MarshalAs(UnmanagedType.ByValArray,SizeConst=64)]
+
+	[MarshalAs(UnmanagedType.ByValArray,SizeConst=48)] public char[] remote_ip;
+	[MarshalAs(UnmanagedType.LPTStr)] public string local_ip;
+	[MarshalAs(UnmanagedType.U2)] public short remote_port;
+	[MarshalAs(UnmanagedType.U2)] public short local_port;
+	
+	[MarshalAs(UnmanagedType.SysInt)] public int num_headers;
+  [MarshalAs(UnmanagedType.ByValArray,SizeConst=30)]
     public MongooseHeader[] http_headers;
+	
+	[MarshalAs(UnmanagedType.LPTStr)] public IntPtr content;
+	[MarshalAs(UnmanagedType.SysInt)] public int content_len;
+	
+	[MarshalAs(UnmanagedType.SysInt)] public int is_websocket;
+	[MarshalAs(UnmanagedType.SysInt)] public int status_code;
+	[MarshalAs(UnmanagedType.SysInt)] public int wsbits;
 };
 
-[StructLayout(LayoutKind.Sequential)] public struct MongooseEvent {
-  public int type;
-  public IntPtr user_data;
-  public IntPtr conn_data;
-  public IntPtr event_param;
-  public IntPtr conn;
-  public IntPtr request_info;
-};
-
-public delegate int MongooseEventHandlerN(ref MongooseEvent ev);
-public delegate int MongooseEventHandler(MongooseEvent ev);
+public delegate int MongooseEventHandler(IntPtr c, int ev);
 
 public class Mongoose {
-  public const string dll_name_ = "mongoose";
-  public string version_ = "??";
+  public const string dll_ = "mongoose";
+  private IntPtr server_;
 
-  // These are here to store a ref to the callbacks
-  // while they are over in unmanaged code, to prevent garbage collection.
-  private event MongooseEventHandlerN delegates;
-
-  private IntPtr ctx_;
-
-  [DllImport(dll_name_)] private static extern
-    IntPtr mg_start([MarshalAs(UnmanagedType.LPArray,
-                     ArraySubType=UnmanagedType.LPTStr)] string[] options,
-                    MongooseEventHandlerN callback,
-                    IntPtr user_data);
-  [DllImport(dll_name_)] private static extern void mg_stop(IntPtr ctx);
-  [DllImport(dll_name_)] private static extern IntPtr mg_version();
-  [DllImport(dll_name_)] public static extern int mg_write(IntPtr conn,
-      string data, int length);
+	[DllImport(dll_)] private static extern IntPtr
+		mg_create_server(IntPtr user_data, MongooseEventHandler eh);
+	[DllImport(dll_)] private static extern int
+		mg_poll_server(IntPtr server, int milli);
+  [DllImport(dll_)] private static extern IntPtr
+		mg_set_option(IntPtr server, string name, string value);
+	[DllImport(dll_)] public static extern int
+		mg_send_data(IntPtr conn, string data, int length);	
 
   public Mongoose(string document_root,
-                  string listening_ports,
+                  string listening_port,
                   MongooseEventHandler event_handler) {
-    version_ = Marshal.PtrToStringAnsi(mg_version());
-
-    string[] options = {
-      "document_root", document_root,
-      "listening_ports", listening_ports,
-      null
-    };
-
-    MongooseEventHandlerN cb = delegate(ref MongooseEvent ev) {
-      return event_handler(ev);
-    };
-
-    // Prevent garbage collection
-    delegates += cb;
-
-    ctx_ = mg_start(options, cb, IntPtr.Zero);
+    server_ = mg_create_server(IntPtr.Zero, event_handler);
+		mg_set_option(server_, "document_root", document_root);
+		mg_set_option(server_, "listening_port", listening_port);
   }
-
-  public static int write(IntPtr conn, string data) {
-    return mg_write(conn, data, data.Length);
+	
+  public static int send_data(IntPtr conn, string data) {
+    return mg_send_data(conn, data, data.Length);
   }
-
-  public void stop() {
-    if (this.ctx_ != IntPtr.Zero) {
-      mg_stop(this.ctx_);
-    }
-    this.ctx_ = IntPtr.Zero;
+	
+	public void poll(int milli) {
+    mg_poll_server(server_, milli);
   }
-
-  ~Mongoose() {
-    stop();
-  }
+	
+	// TODO: add destructor and call mg_destroy_server()
 }
