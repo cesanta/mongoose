@@ -71,16 +71,20 @@ The sequence of events for every connection is this:
       certain prefix, and let Mongoose serve all static files.
       If event handler decides to serve the request, but doesn't have
       all the data at the moment, it should return `MG_MORE`. That tells
-      Mongoose to send `MG_POLL` events on each iteration of `mg_poll_server()`
+      Mongoose to keep the connection open after callback returns.
 
       `mg_connection::connection_param` pointer is a placeholder to keep
       user-specific data. For example, handler could decide to open a DB
       connection and store DB connection handle in `connection_param`.
-   * `MG_POLL` is sent only to those connections which returned `MG_MORE`.
-      Event handler should try to complete the reply. If reply is completed,
-      then event handler should return `MG_TRUE`. Otherwise, it should
-      return `MG_FALSE`, and polling will continue until
-      handler returns `MG_TRUE`.
+   * `MG_POLL` is sent to every connection on every iteration of
+      `mg_poll_server()`. Event handler should return `MG_FALSE` to ignore
+      this event. If event handler returns `MG_TRUE`, then Mongoose assumes
+      that event handler has finished sending data, and Mongoose will
+      close the connection.
+   * `MG_HTTP_ERROR` sent when Mongoose is about to send HTTP error back
+      to the client. Event handler can choose to send a reply itself, in which
+      case event handler must return `MG_TRUE`. Otherwise, event handler must
+      return `MG_FALSE`
    * `MG_CLOSE` is sent when the connection is closed. This event is used
       to cleanup per-connection state stored in `connection_param`
       if it was allocated.
