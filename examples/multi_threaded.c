@@ -2,11 +2,17 @@
 
 // Start a browser and hit refresh couple of times. The replies will
 // come from both server instances.
-static int request_handler(struct mg_connection *conn) {
-  mg_send_header(conn, "Content-Type", "text/plain");
-  mg_printf_data(conn, "This is a reply from server instance # %s",
-                 (char *) conn->server_param);
-  return MG_REQUEST_PROCESSED;
+static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
+  if (ev == MG_REQUEST) {
+    mg_send_header(conn, "Content-Type", "text/plain");
+    mg_printf_data(conn, "This is a reply from server instance # %s",
+                   (char *) conn->server_param);
+    return MG_TRUE;
+  } else if (ev == MG_AUTH) {
+    return MG_TRUE;
+  } else {
+    return MG_FALSE;
+  }
 }
 
 static void *serve(void *server) {
@@ -17,11 +23,8 @@ static void *serve(void *server) {
 int main(void) {
   struct mg_server *server1, *server2;
 
-  server1 = mg_create_server((void *) "1");
-  server2 = mg_create_server((void *) "2");
-
-  mg_set_request_handler(server1, request_handler);
-  mg_set_request_handler(server2, request_handler);
+  server1 = mg_create_server((void *) "1", ev_handler);
+  server2 = mg_create_server((void *) "2", ev_handler);
 
   // Make both server1 and server2 listen on the same socket
   mg_set_option(server1, "listening_port", "8080");

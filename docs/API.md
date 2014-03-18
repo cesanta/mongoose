@@ -7,8 +7,7 @@ there is not enough memory. `server_param`: Could be any pointer, or NULL.
 This pointer will be passed
 to the callback functions as `struct mg_connection::server_param` field.
 A common use case is to pass `this` pointer of the C++ wrapper class
-as `user_param`, to let the callback get the pointer to the C++
-object.
+as `user_param`, to let the callback get the pointer to the C++ object.
 
 Note that this function doesn't make the
 server instance to serve. Serving is done by `mg_poll_server()` function.
@@ -17,10 +16,7 @@ When server instance is created, it contains an information about
 the configuration and the state of each connection.
 Server instance is capable on listening on only one port. After creation,
 `struct mg_server` has a list
-of active connections, initially empty. It has a list of URI handlers,
-initially empty, and configuration parameters. Configuration can be
-altered by `mg_set_option()`, and new URI handlers could be added by
-`mg_add_uri_handler()`.
+of active connections and configuration parameters.
 
 Side-effect: on UNIX, `mg_create_server()` ignores SIGPIPE signals. If custom
 processing is required SIGPIPE, signal handler must be set up after
@@ -38,57 +34,80 @@ server pointer a NULL pointer.
     const char mg_set_option(struct mg_server *server, const char *name,
                              const char *value);
 
-Sets a particular server option. Please refer to a separate documentation page
-that lists all available option names. Note that at least one option,
+Sets a particular server option. Note that at least one option,
 `listening_port`, must be specified. To serve static files, `document_root`
 must be specified too. If `document_root` option is left unset, Mongoose
-will not access filesystem at all. This function returns NULL if option was
+will not access filesystem at all. `mg_set_option()` returns NULL if option was
 set successfully, otherwise it returns human-readable error string. It is
 allowed to call `mg_set_option()` by the same thread that does
-`mg_poll_server()` (an IO thread) and change server configuration while it
+`mg_poll_server()` (Mongoose thread) and change server configuration while it
 is serving, in between `mg_poll_server()` calls.
 
     void mg_poll_server(struct mg_server *server, int milliseconds);
 
-This function performs one iteration of IO loop by iterating over all
+Performs one iteration of IO loop by iterating over all
 active connections, performing `select()` syscall on all sockets with a timeout
-of `milliseconds` number of milliseconds. When `select()` returns, Mongoose
+of `milliseconds`. When `select()` returns, Mongoose
 does an IO for each socket that has data to be sent or received. Application
 code must call `mg_poll_server()` in a loop. It is an error to have more then
 one thread calling `mg_poll_server()`, `mg_set_option()` or any other function
 that take `struct mg_server *` parameter. Mongoose does not
-mutex-protect `struct mg_server *`, therefore the best practice is
-to call server management functions from the same thread (an IO thread).
+mutex-protect `struct mg_server *`, therefore only single thread
+(Mongoose thread) should make Mongoose calls.
 
-    void mg_set_auth_handler(struct mg_server *, mg_handler_t handler);
+`mg_poll_server()` calls user-specified event handler when certain events
+occur. Sequence of events for the accepted connection is this:
 
-Sets authorization handler. Called by Mongoose on each request, before
-performing any other action. Handler can return either `MG_AUTH_OK` or
-`MG_AUTH_FAIL`. If `handler` returns `MG_AUTH_FAIL`, then Mongoose sends
-digest authorization request to the client. If `handler returns `MG_AUTH_OK`,
-then mongoose proceeds with handling the request. Handler function can use
-`mg_authorize_digest()` function to verify authorization, or implement any other
-custom authorization mechanism.
+   * `MG_AUTH` - Mongoose asks whether this connection is authorized. If event
+      handler returns `MG_FALSE`, then Mongoose does not serve the request but
+      sends authorization request to the client. If `MG_TRUE` is returned,
+      then Mongoose continues on with the request.
+   * `MG_REQUEST` - Mongoose asks event handler to serve the request. If
+      event handler serves the request by sending a reply,
+      it should return `MG_TRUE`. Otherwise,
+      it should return `MG_FALSE` which tells Mongoose that request is not
+      served and Mongoose should serve it. For example, event handler might
+      choose to serve only RESTful API requests with URIs that start with
+      certain prefix, and let Mongoose serve all static files.
+      If event handler decides to serve the request, but doesn't have
+      all the data at the moment, it should return `MG_MORE`. That tells
+      Mongoose to keep the connection open after callback returns.
 
-    void mg_set_request_handler(struct mg_server *, mg_handler_t handler);
+      `mg_connection::connection_param` pointer is a placeholder to keep
+      user-specific data. For example, handler could decide to open a DB
+      connection and store DB connection handle in `connection_param`.
+   * `MG_POLL` is sent to every connection on every iteration of
+      `mg_poll_server()`. Event handler should return `MG_FALSE` to ignore
+      this event. If event handler returns `MG_TRUE`, then Mongoose assumes
+      that event handler has finished sending data, and Mongoose will
+      close the connection.
+   * `MG_HTTP_ERROR` sent when Mongoose is about to send HTTP error back
+      to the client. Event handler can choose to send a reply itself, in which
+      case event handler must return `MG_TRUE`. Otherwise, event handler must
+      return `MG_FALSE`
+   * `MG_CLOSE` is sent when the connection is closed. This event is used
+      to cleanup per-connection state stored in `connection_param`
+      if it was allocated.
 
-Sets a request handler. When set, `handler` will be called for each request.
-Possible return values from a handler function are `MG_REQUEST_NOT_PROCESSED`,
-`MG_REQUEST_PROCESSED` and `MG_REQUEST_CALL_AGAIN`. If handler returns
-`MG_REQUEST_NOT_PROCESSED`, mongoose will proceed with handling the request.
-If handler returns `MG_REQUEST_PROCESSED`, that signals mongoose that handler
-has already processed the connection, and mongoose will skip to the next
-request. `MG_REQUEST_CALL_AGAIN` tells mongoose to call request handler
-again and again on each `mg_poll_server()` iteration.
+Sequence of events for the client connection is this:
 
-When mongoose buffers in HTTP request and successfully parses it, it calls
-appropriate URI handler immediately for GET requests. For POST requests,
+   * `MG_CONNECT` sent when Mongoose has connected to the remote host.
+   This event is sent to the connection initiated by `mg_connect()` call.
+   Connection status is held in `mg_connection::status_code`: if zero,
+   then connection was successful, otherwise connection was not established.
+   User should send a request upon successful connection.
+   * `MG_REPLY` is sent when response has been received from the remote host.
+   * `MG_CLOSE` same as for the accepted connection.
+
+
+When mongoose buffers in HTTP request and successfully parses it, it sends
+`MG_REQUEST` event for GET requests immediately. For POST requests,
 Mongoose delays the call until the whole POST request is buffered in memory.
 POST data is available to the callback as `struct mg_connection::content`,
 and POST data length is in `struct mg_connection::content_len`.
 
 Note that websocket connections are treated the same way. Mongoose buffers
-websocket frame in memory, and calls URI handler when frame is fully
+websocket frame in memory, and calls event handler when frame is fully
 buffered. Frame data is available `struct mg_connection::content`, and
 data length is in `struct mg_connection::content_len`, i.e. very similar to
 the POST request. `struct mg_connection::is_websocket` flag indicates
@@ -96,18 +115,8 @@ whether the request is websocket or not. Also, for websocket requests,
 there is `struct mg_connection::wsbits` field which contains first byte
 of the websocket frame which URI handler can examine. Note that to
 reply to the websocket client, `mg_websocket_write()` should be used.
-To reply to the plain HTTP client, `mg_write_data()` should be used. Note that
-websocket handler must return either `MG_CLIENT_CLOSE` or `MG_CLIENT_CONTINUE`
-value.
+To reply to the plain HTTP client, `mg_write_data()` should be used.
 
-    void mg_set_http_error_handler(struct mg_server *, mg_handler_t);
-
-Adds HTTP error handler. An actual HTTP error is passed as
-`struct mg_connection::status_code` parameter.
-Hanlder should return either `MG_ERROR_PROCESSED` or `MG_ERROR_NOT_PROCESSED`.
-If handler returns `MG_ERROR_NOT_PROCESSED`, it
-means a handler has not processed the connection, and mongoose proceeds
-with sending HTTP error to the client. Otherwise, mongoose does nothing.
 
     const char **mg_get_valid_option_names(void);
 
@@ -124,16 +133,22 @@ value is guaranteed to be non-NULL. If parameter is not set, zero-length string
 is returned.
 
 
-    int mg_iterate_over_connections(struct mg_server *,
-                                void (*func)(struct mg_connection *, void *),
-                                void *param);
+    void mg_iterate_over_connections(struct mg_server *, mg_handler_t func);
 
 This is an interface primarily designed to push arbitrary data to websocket
-connections at any time. This function could be called from the IO thread only.
-When it returns, an IO thread calls `func()` on each active connection,
-passing `param` as `struct mg_connection::callback_param`.
+connections at any time. This function could be called from the Mongoose thread
+only.  When it returns, Mongoose thread calls `func()` for each active
+connection.
 It is allowed to call `mg_send_data()` or `mg_websocket_write()` within a
-callback, cause `func` is executed in the context of the IO thread.
+callback, cause `func` is executed in the context of the Mongoose thread.
+
+    void mg_wakeup_server(struct mg_server *);
+
+Makes `mg_poll_server()` that could be sleeping in the `select()` syscall
+to break the call and return. This function can be called from any thread.
+It is designed to let other threads wake up Mongoose thread from the sleep
+and let it do a fresh new IO iteration over all connection. Usually it is done
+when other threads decides there is new data ready to be sent by Mongoose.
 
     void mg_send_status(struct mg_connection *, int status_code);
     void mg_send_header(struct mg_connection *, const char *name,
@@ -206,3 +221,21 @@ cookie-based way please refer to the examples/chat.c in the source tree.
 If password is not NULL, entry is added (or modified if already exists).
 If password is NULL, entry is deleted.  
 Return: 1 on success, 0 on error.
+
+   
+    int mg_parse_multipart(const char *buf, int buf_len,
+                           char *var_name, int var_name_len,
+                           char *file_name, int file_name_len,
+                           const char **data, int *data_len);
+
+Parses a buffer that contains multipart form data. Stores chunk name
+in a `var_name` buffer. If chunk is an uploaded file, then `file_name`
+will have a file name. `data` and `data_len` will point to the chunk data.
+Returns number of bytes to skip to the next chunk.
+
+     struct mg_connection *mg_connect(struct mg_server *server,
+                                      const char *host, int port, int use_ssl);
+
+Create connection to the remote host. Returns `NULL` on error, non-null
+if the connection has been scheduled for connection. Upon a connection,
+Mongoose will send `MG_CONNECT` event to the event handler.

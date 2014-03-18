@@ -2,13 +2,13 @@
 
 Mongoose is small and easy to use web server built on top of
 mongoose library. It is designed with maximum simplicity in mind. For example,
-to share any directory, just drop mongoose executable file in that directory,
+to share any directory, just drop mongoose executable in that directory,
 double-click it (on UNIX, run it from shell) and launch a browser at
 [http://localhost:8080](http://localhost:8080) Note that 'localhost' should
 be changed to a machine's name if a folder is accessed from other computer.
 
 On Windows and Mac, Mongoose iconifies itself to the system tray when started.
-Right-click on the icon pops up a menu, where it is possible to stop
+Right-click on the icon to pop up a menu, where it is possible to stop
 mongoose, or configure it.
 
 On UNIX, `mongoose` is a command line utility. Running `mongoose` in
@@ -68,17 +68,18 @@ recognized by the file name pattern. Mongoose uses shell-like glob
 patterns. Pattern match starts at the beginning of the string, so essentially
 patterns are prefix patterns. Syntax is as follows:
 
-     **      Matches everything
-     *       Matches everything but slash character, '/'
-     ?       Matches any character
-     $       Matches the end of the string
-     |       Matches if pattern on the left side or the right side matches.
+     **         Matches everything
+     *          Matches everything but slash character, '/'
+     ?          Matches any character
+     $          Matches the end of the string
+     |          Matches if pattern on the left side or the right side matches.
 
 All other characters in the pattern match themselves. Examples:
 
-    **.cgi$      Any string that ends with .cgi
-    /foo         Any string that begins with /foo
-    **a$|**b$    Any string that ends with a or b
+    # Pattern   Meaning
+    **.cgi$     Any string that ends with .cgi
+    /foo        Any string that begins with /foo
+    **a$|**b$   Any string that ends with a or b
 
 To restrict CGI files only to `/cgi-bin/` directory, use this setting:
 

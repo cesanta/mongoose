@@ -20,7 +20,7 @@
 #ifndef MONGOOSE_HEADER_INCLUDED
 #define  MONGOOSE_HEADER_INCLUDED
 
-#define MONGOOSE_VERSION "5.3"
+#define MONGOOSE_VERSION "5.4"
 
 #include <stdio.h>      // required for FILE
 #include <stddef.h>     // required for size_t
@@ -55,26 +55,34 @@ struct mg_connection {
   int wsbits;                 // First byte of the websocket frame
   void *server_param;         // Parameter passed to mg_add_uri_handler()
   void *connection_param;     // Placeholder for connection-specific data
-  void *callback_param;       // Used by mg_iterate_over_connections()
 };
 
 struct mg_server; // Opaque structure describing server instance
-typedef int (*mg_handler_t)(struct mg_connection *);
+enum mg_result { MG_FALSE, MG_TRUE, MG_MORE };
+enum mg_event {
+  MG_POLL = 100,  // Callback return value is ignored
+  MG_CONNECT,     // If callback returns MG_FALSE, connect fails
+  MG_AUTH,        // If callback returns MG_FALSE, authentication fails
+  MG_REQUEST,     // If callback returns MG_FALSE, Mongoose continues with req
+  MG_REPLY,       // If callback returns MG_FALSE, Mongoose closes connection
+  MG_CLOSE,       // Connection is closed
+  MG_LUA,         // Called before LSP page invoked
+  MG_HTTP_ERROR   // If callback returns MG_FALSE, Mongoose continues with err
+};
+typedef int (*mg_handler_t)(struct mg_connection *, enum mg_event);
 
 // Server management functions
-struct mg_server *mg_create_server(void *server_param);
+struct mg_server *mg_create_server(void *server_param, mg_handler_t handler);
 void mg_destroy_server(struct mg_server **);
 const char *mg_set_option(struct mg_server *, const char *opt, const char *val);
 int mg_poll_server(struct mg_server *, int milliseconds);
-void mg_set_request_handler(struct mg_server *, mg_handler_t);
-void mg_set_http_close_handler(struct mg_server *, mg_handler_t);
-void mg_set_http_error_handler(struct mg_server *, mg_handler_t);
-void mg_set_auth_handler(struct mg_server *, mg_handler_t);
 const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
 void mg_set_listening_socket(struct mg_server *, int sock);
 int mg_get_listening_socket(struct mg_server *);
-void mg_iterate_over_connections(struct mg_server *, mg_handler_t, void *);
+void mg_iterate_over_connections(struct mg_server *, mg_handler_t);
+void mg_wakeup_server(struct mg_server *);
+struct mg_connection *mg_connect(struct mg_server *, const char *, int, int);
 
 // Connection management functions
 void mg_send_status(struct mg_connection *, int status_code);
@@ -104,19 +112,15 @@ void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
 
-// Callback function return codes
-enum { MG_REQUEST_NOT_PROCESSED, MG_REQUEST_PROCESSED, MG_REQUEST_CALL_AGAIN };
-enum { MG_AUTH_FAIL, MG_AUTH_OK };
-enum { MG_ERROR_NOT_PROCESSED, MG_ERROR_PROCESSED };
-enum { MG_CLIENT_CONTINUE, MG_CLIENT_CLOSE };
-
-// HTTP client events
-enum {
-  MG_CONNECT_SUCCESS, MG_CONNECT_FAILURE,
-  MG_DOWNLOAD_SUCCESS, MG_DOWNLOAD_FAILURE
-};
-int mg_connect(struct mg_server *, const char *host, int port, int use_ssl,
-               mg_handler_t handler, void *param);
+// Lua utility functions
+#ifdef MONGOOSE_USE_LUA
+#include <lua.h>
+#include <lauxlib.h>
+void reg_string(lua_State *L, const char *name, const char *val);
+void reg_int(lua_State *L, const char *name, int val);
+void reg_function(lua_State *L, const char *,
+                         lua_CFunction, struct mg_connection *);
+#endif
 
 #ifdef __cplusplus
 }

@@ -10,7 +10,7 @@ static const char *html_form =
   "<input type=\"submit\" />"
   "</form></body></html>";
 
-static int handler(struct mg_connection *conn) {
+static void send_reply(struct mg_connection *conn) {
   char var1[500], var2[500];
 
   if (strcmp(conn->uri, "/handle_post_request") == 0) {
@@ -33,18 +33,30 @@ static int handler(struct mg_connection *conn) {
     // Show HTML form.
     mg_send_data(conn, html_form, strlen(html_form));
   }
+}
 
-  return MG_REQUEST_PROCESSED;
+static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
+  if (ev == MG_REQUEST) {
+    send_reply(conn);
+    return MG_TRUE;
+  } else if (ev == MG_AUTH) {
+    return MG_TRUE;
+  } else {
+    return MG_FALSE;
+  }
 }
 
 int main(void) {
-  struct mg_server *server = mg_create_server(NULL);
+  struct mg_server *server = mg_create_server(NULL, ev_handler);
+
   mg_set_option(server, "listening_port", "8080");
-  mg_set_request_handler(server, handler);
+
   printf("Starting on port %s\n", mg_get_option(server, "listening_port"));
   for (;;) {
     mg_poll_server(server, 1000);
   }
+
   mg_destroy_server(&server);
+
   return 0;
 }

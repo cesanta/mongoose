@@ -1,57 +1,62 @@
-CFLAGS    = -W -Wall -I.. -pthread -g -pipe $(CFLAGS_EXTRA)
-RM        = rm -rf
-MSVC      = ../../vc6
-CL        = $(MSVC)/bin/cl
-CLFLAGS   = /MD /TC /nologo $(CFLAGS_EXTRA) /W3 \
-            /I$(MSVC)/include /I.. /Dsnprintf=_snprintf
-LFLAGS    = /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
-
+CFLAGS = -W -Wall -I.. -pthread -g -pipe $(CFLAGS_EXTRA)
+RM = rm -rf
+OUT = -o $@
 
 ifeq ($(OS),Windows_NT)
+  MSVC = ../../vc6
   RM = del /q /f
-  CC = $(MSVC)/bin/cl $(CLFLAGS)
+  OUT =
+  CC = $(MSVC)/bin/cl
+  CFLAGS = /MD /TC /nologo /W3 /I$(MSVC)/include /I..
+  CFLAGS += /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
+  CFLAGS += $(CFLAGS_EXTRA)
 else
   UNAME_S := $(shell uname -s)
-  DLL_FLAGS += -shared
 
   ifeq ($(UNAME_S),Linux)
     CFLAGS += -ldl
   endif
 
   ifeq ($(UNAME_S),Darwin)
-    #  DLL_FLAGS += -bundle -undefined dynamic_lookup -dynamiclib
-    DLL_FLAGS += -flat_namespace -undefined suppress -dynamiclib
   endif
 endif
 
+all: hello websocket server post multi_threaded upload auth
+
 # To enable Lua in a server, uncomment following lines
 LUA    = ../lua-5.2.3/src
-#CFLAGS += -I$(LUA) -L$(LUA) -llua
+#CFLAGS += -I$(LUA) -L$(LUA) -llua -DMONGOOSE_USE_LUA
 
-all: websocket_html.c
-	$(CC) hello.c ../mongoose.c  -o hello $(CFLAGS)
-	$(CC) websocket.c websocket_html.c ../mongoose.c  -o websocket $(CFLAGS)
-	$(CC) post.c ../mongoose.c -o post $(CFLAGS)
-	$(CC) multi_threaded.c ../mongoose.c -o multi_threaded $(CFLAGS)
-	$(CC) upload.c ../mongoose.c -o upload $(CFLAGS)
-	$(CC) auth.c ../mongoose.c -o auth $(CFLAGS)
-	$(CC) server.c ../mongoose.c -o server $(CFLAGS)
+server: server.c ../mongoose.c
+	$(CC) server.c ../mongoose.c $(OUT)  $(CFLAGS)
+
+hello: hello.c ../mongoose.c
+	$(CC) hello.c ../mongoose.c $(OUT) $(CFLAGS)
+
+websocket: websocket_html.c websocket.c ../mongoose.c
+	$(CC) websocket.c websocket_html.c ../mongoose.c $(OUT)  $(CFLAGS)
+
+post: post.c ../mongoose.c
+	$(CC) post.c ../mongoose.c $(OUT) $(CFLAGS)
+
+multi_threaded: multi_threaded.c ../mongoose.c
+	$(CC) multi_threaded.c ../mongoose.c $(OUT) $(CFLAGS)
+
+upload: upload.c ../mongoose.c
+	$(CC) upload.c ../mongoose.c $(OUT) $(CFLAGS)
+
+auth: auth.c ../mongoose.c
+	$(CC) auth.c ../mongoose.c $(OUT) $(CFLAGS)
+
+mjpg: mjpg.c ../mongoose.c
+	$(CC) mjpg.c ../mongoose.c $(OUT) $(CFLAGS)
+
 
 websocket_html.c: websocket.html
 	perl mkdata.pl $< > $@
 
-windows: websocket_html.c
-	$(CL) hello.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
-	$(CL) websocket.c websocket_html.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
-	$(CL) post.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
-	$(CL) multi_threaded.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
-	$(CL) upload.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
-	$(CL) auth.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
-	$(CL) server.c ../mongoose.c $(CLFLAGS) $(LFLAGS)
-
 u:
-	g++ unit_test.c -Wall -W -pedantic -lssl -g -O0 && ./a.out
-
+	g++ unit_test.c -Wall -W -pedantic -lssl -g -O0 $(CFLAGS_EXTRA) && ./a.out
 
 clean:
-	-@$(RM) hello upload post websocket auth server *.exe *.dSYM *.obj .*o
+	-@$(RM) hello mjpg upload post websocket auth server multi_threaded websocket_html.c *.exe *.dSYM *.obj .*o

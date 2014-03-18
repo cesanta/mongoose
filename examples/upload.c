@@ -5,7 +5,7 @@
 #include <string.h>
 #include "mongoose.h"
 
-static int index_html(struct mg_connection *conn) {
+static void send_index_page(struct mg_connection *conn) {
   const char *data;
   int data_len;
   char var_name[100], file_name[100];
@@ -29,17 +29,25 @@ static int index_html(struct mg_connection *conn) {
   }
 
   mg_printf_data(conn, "%s", "</body></html>");
+}
 
-  return MG_REQUEST_PROCESSED;
+static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
+  if (ev == MG_REQUEST) {
+    send_index_page(conn);
+    return MG_TRUE;
+  } else if (ev == MG_AUTH) {
+    return MG_TRUE;
+  } else {
+    return MG_FALSE;
+  }
 }
 
 int main(void) {
   struct mg_server *server;
 
   // Create and configure the server
-  server = mg_create_server(NULL);
+  server = mg_create_server(NULL, ev_handler);
   mg_set_option(server, "listening_port", "8080");
-  mg_set_request_handler(server, index_html);
 
   // Serve request. Hit Ctrl-C to terminate the program
   printf("Starting on port %s\n", mg_get_option(server, "listening_port"));

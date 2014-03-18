@@ -25,6 +25,7 @@
 #define _WIN32_WINNT 0x500        // Enable MIIM_BITMAP
 #define _CRT_SECURE_NO_WARNINGS   // Disable deprecation warning in VS2005
 #define _XOPEN_SOURCE 600         // For PATH_MAX on linux
+#undef WIN32_LEAN_AND_MEAN        // Let windows.h always include winsock2.h
 
 #include <sys/stat.h>
 #include <stdio.h>
@@ -36,6 +37,7 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "mongoose.h"
 
@@ -145,6 +147,8 @@ static void show_usage_and_exit(void) {
   }
   exit(EXIT_FAILURE);
 }
+
+#define EV_HANDLER NULL
 
 static char *sdup(const char *str) {
   char *p;
@@ -379,7 +383,7 @@ static void start_mongoose(int argc, char *argv[]) {
   char *options[MAX_OPTIONS];
   int i;
 
-  if ((server = mg_create_server(NULL)) == NULL) {
+  if ((server = mg_create_server(NULL, EV_HANDLER)) == NULL) {
     die("%s", "Failed to start Mongoose.");
   }
 

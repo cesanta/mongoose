@@ -2,19 +2,25 @@
 #include <string.h>
 #include "mongoose.h"
 
-// This function will be called by mongoose on every new request
-static int index_html(struct mg_connection *conn) {
-  mg_printf_data(conn, "Hello! Requested URI is [%s]", conn->uri);
-  return MG_REQUEST_PROCESSED;
+static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
+  int result = MG_FALSE;
+
+  if (ev == MG_REQUEST) {
+    mg_printf_data(conn, "Hello! Requested URI is [%s]", conn->uri);
+    result = MG_TRUE;
+  } else if (ev == MG_AUTH) {
+    result = MG_TRUE;
+  }
+
+  return result;
 }
 
 int main(void) {
   struct mg_server *server;
 
   // Create and configure the server
-  server = mg_create_server(NULL);
+  server = mg_create_server(NULL, ev_handler);
   mg_set_option(server, "listening_port", "8080");
-  mg_set_request_handler(server, index_html);
 
   // Serve request. Hit Ctrl-C to terminate the program
   printf("Starting on port %s\n", mg_get_option(server, "listening_port"));

@@ -1,19 +1,19 @@
-# Mongoose Web Server
+# <img src="http://cesanta.com/images/mongoose_logo.png" width="64" height="64"> Mongoose Web Server
 
 Mongoose is easy to use, powerful, embeddable web server.
-   * [Downloads](http://cesanta.com/downloads.html)
-   * [Documentation](http://cesanta.com/docs.html)
    * [Mailing list](http://groups.google.com/group/mongoose-users)
+   * [Downloads](http://cesanta.com/mongoose.shtml) and
+   [Documentation](http://cesanta.com/docs.shtml)
+    * [How to use Lua Server Pages](http://cesanta.com/docs/Lua.shtml)
+    * [How to create basic website with Mongoose](http://cesanta.com/docs/BasicWebsite.shtml)
+    * [How to create PHP website with Mongoose](http://cesanta.com/docs/PhpWebsite.shtml)
+    * [Embedding Guide](http://cesanta.com/docs/Embed.shtml)
 
 # Features
 
-- Works on Windows, Mac, UNIX/Linux, iPhone, Android, and many other platforms
-- CGI, SSL, Digest auth, Websocket, WEbDAV, Resumed download, URL rewrite, file blacklist, IP-based ACL, Windows service
-- Scripting and database support ([Lua](http://lua.org) +
-[Sqlite](http://sqlite.org), see
-[dirscan.lp](https://github.com/cesanta/mongoose/blob/master/examples/lua/dirscan.lp) ),
-  which provides ready to go, powerful web development platform in
-  one single-click executable with no dependencies
+- Works on Windows, Mac, UNIX/Linux, iPhone, Android eCos, QNX and many other platforms
+- CGI, SSI, SSL, Digest auth, Websocket, WEbDAV, Resumed download, URL rewrite, file blacklist, Custom error pages, Virtual hosts, IP-based ACL, Windows service
+- Lua Server Pages (PHP-like scripting in [Lua](http://lua.org) ), see [dirscan.lp](https://github.com/cesanta/mongoose/blob/master/examples/lua/dirscan.lp)
 - Simple and clean
   [embedding API](https://github.com/cesanta/mongoose/blob/master/mongoose.h).
   The source is in single
@@ -21,10 +21,21 @@ Mongoose is easy to use, powerful, embeddable web server.
   to make embedding easy
 - Extremely lightweight, has a core of under 40kB and tiny runtime footprint
 - Asyncronouns, non-blocking core supporting single- or multi-threaded usage
+- HTTP client functionality
 - On the market since 2004, stable, mature and tested,
   has several man-years invested in continuous improvement and refinement
 - Professional support and consultancy available from
 [Cesanta Software](http://cesanta.com), developer of Mongoose
+
+# Screenshots
+
+Download, double-click to start, run browser -- that's all!
+
+![shot1](http://cesanta.com/images/tut_sharing/tut1.png)
+![shot2](http://cesanta.com/images/tut_sharing/tut2.png)
+
+![shot3](http://cesanta.com/images/tut_sharing/tut3.png)
+![shot4](http://cesanta.com/images/tut_sharing/tut4.png)
 
 # Acknowledgements
 

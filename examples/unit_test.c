@@ -339,149 +339,64 @@ static const char *test_next_option(void) {
   return NULL;
 }
 
-static int cb1(struct mg_connection *conn) {
-  int result = MG_REQUEST_NOT_PROCESSED;
-  if (!strcmp(conn->uri, "/cb1")) {
-    mg_printf(conn, "%s %s %s",
-              conn->server_param == NULL ? "?" : (char *) conn->server_param,
-              conn->connection_param == NULL ? "?" : "!", conn->remote_ip);
-    result = MG_REQUEST_PROCESSED;
+static int evh1(struct mg_connection *conn, enum mg_event ev) {
+  char *buf = (char *) conn->connection_param;
+  int result = MG_FALSE;
+
+  switch (ev) {
+    case MG_CONNECT:
+      mg_printf(conn,  "GET %s HTTP/1.0\r\n\r\n",
+                buf[0] == '1' ? "/cb1" : "/non_exist");
+      result = MG_TRUE;
+      break;
+    case MG_HTTP_ERROR:
+      mg_printf(conn, "HTTP/1.0 404 NF\r\n\r\nERR: %d", conn->status_code);
+      result = MG_TRUE;
+      break;
+    case MG_REQUEST:
+      if (!strcmp(conn->uri, "/cb1")) {
+        mg_printf(conn, "HTTP/1.0 200 OK\r\n\r\n%s %s %s",
+                  (char *) conn->server_param,
+                  buf == NULL ? "?" : "!", conn->remote_ip);
+        result = MG_TRUE;
+      }
+      break;
+    case MG_REPLY:
+      if (buf != NULL) {
+        sprintf(buf + 1, "%.*s", (int) conn->content_len, conn->content);
+      }
+      break;
+    case MG_AUTH:
+      result = MG_TRUE;
+      break;
+    default:
+      break;
   }
+
   return result;
 }
 
-static int error_handler(struct mg_connection *conn) {
-  mg_printf(conn, "HTTP/1.0 404 NF\r\n\r\nERR: %d", conn->status_code);
-  return MG_ERROR_PROCESSED;
-}
-
-static int ts1(struct mg_connection *conn) {
-  if (conn->status_code == MG_CONNECT_SUCCESS) {
-    mg_printf(conn, "%s", "GET /cb1 HTTP/1.0\r\n\r\n");
-    return MG_CLIENT_CONTINUE;
-  } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
-    sprintf((char *) conn->connection_param, "%.*s",
-            (int) conn->content_len, conn->content);
-  }
-  return MG_CLIENT_CLOSE;
-}
-
-static int ts2(struct mg_connection *conn) {
-  if (conn->status_code == MG_CONNECT_SUCCESS) {
-    mg_printf(conn, "%s", "GET /non_exist HTTP/1.0\r\n\r\n");
-    return MG_CLIENT_CONTINUE;
-  } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
-    sprintf((char *) conn->connection_param, "%s %.*s",
-            conn->uri, (int) conn->content_len, conn->content);
-  }
-  return MG_CLIENT_CLOSE;
-}
-
 static const char *test_server(void) {
-  char buf1[100] = "", buf2[100] = "";
-  struct mg_server *server = mg_create_server((void *) "foo");
+  char buf1[100] = "1", buf2[100] = "2";
+  struct mg_server *server = mg_create_server((void *) "foo", evh1);
+  struct mg_connection *conn;
 
   ASSERT(server != NULL);
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
-  mg_set_request_handler(server, cb1);
-  mg_set_http_error_handler(server, error_handler);
 
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT),  0, ts1, buf1) == 1);
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, ts2, buf2) == 1);
+  ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0)) != NULL);
+  conn->connection_param = buf1;
+  ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0)) != NULL);
+  conn->connection_param = buf2;
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
-  ASSERT(strcmp(buf1, "foo ? 127.0.0.1") == 0);
-  ASSERT(strcmp(buf2, "404 ERR: 404") == 0);
+  ASSERT(strcmp(buf1, "1foo ? 127.0.0.1") == 0);
+  ASSERT(strcmp(buf2, "2ERR: 404") == 0);
 
   ASSERT(strcmp(static_config_options[URL_REWRITES * 2], "url_rewrites") == 0);
   mg_destroy_server(&server);
   ASSERT(server == NULL);
-  return NULL;
-}
-
-// This http client sends two requests using one connection
-static int cb2(struct mg_connection *conn) {
-  const char *file1 = "mongoose.h", *file2 = "mongoose.c", *file_name = file2;
-  char *buf = (char *) conn->connection_param, *file_data;
-  int file_len, ret_val = 1;
-
-  switch (conn->status_code) {
-    case MG_CONNECT_SUCCESS:
-      mg_printf(conn, "GET /%s HTTP/1.1\r\n\r\n", file1);
-      strcat(buf, "a");
-      ret_val = 0;
-      break;
-    case MG_CONNECT_FAILURE: strcat(buf, "b"); break;
-    case MG_DOWNLOAD_FAILURE: strcat(buf, "c"); break;
-    case MG_DOWNLOAD_SUCCESS:
-      if (!strcmp(buf, "a")) {
-        // Send second request
-        mg_printf(conn, "GET /%s HTTP/1.1\r\n\r\n", file2);
-        file_name = file1;
-      }
-      if ((file_data = read_file(file_name, &file_len)) != NULL) {
-        if ((size_t) file_len == conn->content_len &&
-            memcmp(file_data, conn->content, file_len) == 0) {
-          strcat(buf, "d");
-        } else {
-          strcat(buf, "f");
-        }
-        free(file_data);
-      }
-      ret_val = !strcmp(buf, "ad") ? 0 : 1;
-      break;
-    default: strcat(buf, "e"); break;
-  }
-
-  return ret_val;
-}
-
-static int cb4h(struct mg_connection *conn) {
-  int result = MG_REQUEST_NOT_PROCESSED;
-  if (!strcmp(conn->uri, "/x")) {
-    mg_send_data(conn, ":-)", 3);
-    result = MG_REQUEST_PROCESSED;
-  }
-  return result;
-}
-
-static int cb4(struct mg_connection *conn) {
-  if (conn->status_code == MG_CONNECT_SUCCESS) {
-    mg_printf(conn, "%s", "POST /x HTTP/1.0\r\nContent-Length: 999999\r\n\r\n");
-    return MG_CLIENT_CONTINUE;
-  } else {
-    sprintf((char *) conn->connection_param, "%.*s",
-            (int) conn->content_len, conn->content);
-  }
-  return MG_CLIENT_CLOSE;
-}
-
-static int cb3(struct mg_connection *conn) {
-  sprintf((char *) conn->connection_param, "%d", conn->status_code);
-  return MG_CLIENT_CLOSE;
-}
-
-static const char *test_mg_connect(void) {
-  char buf2[40] = "", buf3[40] = "", buf4[40] = "";
-  struct mg_server *server = mg_create_server(NULL);
-
-  ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
-  ASSERT(mg_set_option(server, "document_root", ".") == NULL);
-  mg_set_request_handler(server, cb4h);
-  ASSERT(mg_connect(server, "", 0, 0, NULL, NULL) == 0);
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, cb2, buf2) == 1);
-  ASSERT(mg_connect(server, "127.0.0.1", 29, 0, cb3, buf3) == 1);
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0, cb4, buf4) == 1);
-
-  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
-
-  printf("buf2: [%s]\n", buf2);
-  //ASSERT(strcmp(buf2, "add") == 0);
-  ASSERT(strcmp(buf3, "1") == 0);
-  ASSERT(strcmp(buf4, "500 Server Error\nPOST size > 999") == 0);
-  mg_destroy_server(&server);
-
   return NULL;
 }
 
@@ -520,49 +435,36 @@ static const char *test_parse_multipart(void) {
   return NULL;
 }
 
-static int us1(struct mg_connection *conn) {
-  static const char *file_name = "mongoose.h";
-  char *cp = (char *) conn->connection_param;
-  int file_size;
+static int evh2(struct mg_connection *conn, enum mg_event ev) {
+  char *file_data, *cp = (char *) conn->connection_param;
+  int file_size, result = MG_FALSE;
 
-  if (conn->status_code == MG_CONNECT_SUCCESS) {
-    mg_printf(conn, "GET /%s HTTP/1.0\r\n\r\n", cp);
-    return 0;
-  } else if (conn->status_code == MG_DOWNLOAD_SUCCESS) {
-    char *file_data = read_file(file_name, &file_size);
-    sprintf(cp, "%d %s", (size_t) file_size == conn->content_len &&
-            memcmp(file_data, conn->content, file_size) == 0 ? 1 : 0,
-            conn->query_string == NULL ? "?" : conn->query_string);
-    free(file_data);
-  } else if (conn->status_code == MG_CONNECT_FAILURE) {
-    sprintf(cp, "%s", "cf");
-  } else {
-    sprintf(cp, "%s", "df");
+  switch (ev) {
+    case MG_AUTH:
+      result = MG_TRUE;
+      break;
+    case MG_CONNECT:
+      mg_printf(conn, "GET /%s HTTP/1.0\r\n\r\n", cp);
+      result = MG_TRUE;
+      break;
+    case MG_REQUEST:
+      break;
+    case MG_REPLY:
+      file_data = read_file("unit_test.c", &file_size);
+      sprintf(cp, "%d %s", (size_t) file_size == conn->content_len &&
+              memcmp(file_data, conn->content, file_size) == 0 ? 1 : 0,
+              conn->query_string == NULL ? "?" : conn->query_string);
+      free(file_data);
+      break;
+    default:
+      break;
   }
-  return 1;
+
+  return result;
 }
-
-#ifdef MONGOOSE_USE_SSL
-static const char *test_ssl(void) {
-  static const char *ssl_cert = "examples/ssl_cert.pem";
-  char buf1[100] = "mongoose.h";
-  struct mg_server *server = mg_create_server(NULL);
-
-  ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
-  ASSERT(mg_set_option(server, "document_root", ".") == NULL);
-  ASSERT(mg_set_option(server, "ssl_certificate", ssl_cert) == NULL);
-
-  ASSERT(mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 1, us1, buf1) == 1);
-
-  { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
-  ASSERT(strcmp(buf1, "1 ?") == 0);
-  mg_destroy_server(&server);
-  return NULL;
-}
-#endif
 
 static const char *test_mg_set_option(void) {
-  struct mg_server *server = mg_create_server(NULL);
+  struct mg_server *server = mg_create_server(NULL, NULL);
   ASSERT(mg_set_option(server, "listening_port", "0") == NULL);
   ASSERT(mg_get_option(server, "listening_port")[0] != '\0');
   mg_destroy_server(&server);
@@ -571,18 +473,19 @@ static const char *test_mg_set_option(void) {
 
 static const char *test_rewrites(void) {
   char buf1[100] = "xx";
-  struct mg_server *server = mg_create_server(NULL);
+  struct mg_server *server = mg_create_server(NULL, evh2);
+  struct mg_connection *conn;
+  const char *port;
 
   ASSERT(mg_set_option(server, "listening_port", "0") == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
-  ASSERT(mg_set_option(server, "url_rewrites", "/xx=./mongoose.h") == NULL);
-
-  ASSERT(mg_connect(server, "127.0.0.1",
-                    atoi(mg_get_option(server, "listening_port")),
-                    0, us1, buf1) == 1);
+  ASSERT(mg_set_option(server, "url_rewrites", "/xx=unit_test.c") == NULL);
+  ASSERT((port = mg_get_option(server, "listening_port")) != NULL);
+  ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(port), 0)) != NULL);
+  conn->connection_param = buf1;
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
-  //printf("[%s]\n", buf1);
+
   ASSERT(strcmp(buf1, "1 ?") == 0);
   mg_destroy_server(&server);
   return NULL;
@@ -601,12 +504,8 @@ static const char *run_all_tests(void) {
   RUN_TEST(test_next_option);
   RUN_TEST(test_parse_multipart);
   RUN_TEST(test_mg_set_option);
-  //RUN_TEST(test_server);
-  //RUN_TEST(test_mg_connect);
-  //RUN_TEST(test_rewrites);
-#ifdef MONGOOSE_USE_SSL
-  RUN_TEST(test_ssl);
-#endif
+  RUN_TEST(test_server);
+  RUN_TEST(test_rewrites);
   return NULL;
 }
 
