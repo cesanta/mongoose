@@ -1082,9 +1082,7 @@ enum {
   CGI_INTERPRETER,
   CGI_PATTERN,
 #endif
-#ifndef MONGOOSE_NO_DAV
   DAV_AUTH_FILE,
-#endif
   DOCUMENT_ROOT,
 #ifndef MONGOOSE_NO_DIRECTORY_LISTING
   ENABLE_DIRECTORY_LISTING,
@@ -1123,9 +1121,7 @@ static const char *static_config_options[] = {
   "cgi_interpreter", NULL,
   "cgi_pattern", DEFAULT_CGI_PATTERN,
 #endif
-#ifndef MONGOOSE_NO_DAV
   "dav_auth_file", NULL,
-#endif
   "document_root",  NULL,
 #ifndef MONGOOSE_NO_DIRECTORY_LISTING
   "enable_directory_listing", "yes",
