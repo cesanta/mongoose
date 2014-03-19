@@ -20,7 +20,7 @@ Mongoose is easy to use, powerful, embeddable web server.
   [mongoose.c](https://github.com/cesanta/mongoose/blob/master/mongoose.c) file
   to make embedding easy
 - Extremely lightweight, has a core of under 40kB and tiny runtime footprint
-- Asyncronouns, non-blocking core supporting single- or multi-threaded usage
+- Asynchronous, non-blocking core supporting single- or multi-threaded usage
 - HTTP client functionality
 - On the market since 2004, stable, mature and tested,
   has several man-years invested in continuous improvement and refinement
