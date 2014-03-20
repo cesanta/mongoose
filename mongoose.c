@@ -17,22 +17,32 @@
 
 #undef UNICODE                  // Use ANSI WinAPI functions
 #undef _UNICODE                 // Use multibyte encoding on Windows
+#ifndef _MBCS
 #define _MBCS                   // Use multibyte encoding on Windows
+#endif
 #define _INTEGRAL_MAX_BITS 64   // Enable _stati64() on Windows
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005+
+#endif
 #undef WIN32_LEAN_AND_MEAN      // Let windows.h always include winsock2.h
 #define __STDC_FORMAT_MACROS    // <inttypes.h> wants this for C++
 #define __STDC_LIMIT_MACROS     // C++ wants that for INT64_MAX
+#ifndef _LARGEFILE_SOURCE
 #define _LARGEFILE_SOURCE       // Enable fseeko() and ftello() functions
+#endif
 #define _FILE_OFFSET_BITS 64    // Enable 64-bit file offsets
 
 #ifndef __FreeBSD__
+#ifdef _XOPEN_SOURCE
+#undef _XOPEN_SOURCE
+#endif
 #define _XOPEN_SOURCE 600       // For flockfile() on Linux, not needed in FreeBSD
 #endif
 
 #ifdef _MSC_VER
 #pragma warning (disable : 4127)  // FD_SET() emits warning, disable it
 #pragma warning (disable : 4204)  // missing c99 support
+#pragma warning (disable : 4996)  // The POSIX name for this item is deprecated.
 #endif
 
 #include <sys/types.h>
@@ -133,6 +143,7 @@ typedef struct stat file_stat_t;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 #include <openssl/ssl.h>
+#include <openssl/pem.h>
 #endif
 
 #include "mongoose.h"
@@ -871,7 +882,7 @@ static int wait_until_ready(sock_t sock, int for_read) {
 }
 
 static void *push_to_stdin(void *arg) {
-  struct threadparam *tp = arg;
+  struct threadparam *tp = (struct threadparam *)arg;
   int n, sent, stop = 0;
   DWORD k;
   char buf[IOBUF_SIZE];
@@ -891,7 +902,7 @@ static void *push_to_stdin(void *arg) {
 }
 
 static void *pull_from_stdout(void *arg) {
-  struct threadparam *tp = arg;
+  struct threadparam *tp = (struct threadparam *)arg;
   int k, stop = 0;
   DWORD n, sent;
   char buf[IOBUF_SIZE];
@@ -913,7 +924,7 @@ static void *pull_from_stdout(void *arg) {
 
 static void spawn_stdio_thread(sock_t sock, HANDLE hPipe,
                                void *(*func)(void *)) {
-  struct threadparam *tp = malloc(sizeof(*tp));
+  struct threadparam *tp = (struct threadparam *)malloc(sizeof(*tp));
   if (tp != NULL) {
     tp->s = sock;
     tp->hPipe = hPipe;
@@ -1186,7 +1197,8 @@ static const char cgi_status[] = "HTTP/1.1 200 OK\r\n";
 
 static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   struct cgi_env_block blk;
-  char dir[MAX_PATH_SIZE], *p;
+  char dir[MAX_PATH_SIZE];
+  const char *p;
   sock_t fds[2];
 
   prepare_cgi_environment(conn, prog, &blk);
@@ -1270,7 +1282,7 @@ static sock_t open_listening_socket(union socket_address *sa) {
   sock_t on = 1, sock = INVALID_SOCKET;
 
   if ((sock = socket(sa->sa.sa_family, SOCK_STREAM, 6)) != INVALID_SOCKET &&
-      !setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) &&
+      !setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const char *) &on, sizeof(on)) &&
       !bind(sock, &sa->sa, sa->sa.sa_family == AF_INET ?
             sizeof(sa->sin) : sizeof(sa->sa)) &&
       !listen(sock, SOMAXCONN)) {
@@ -4229,6 +4241,32 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   }
 
   return error_msg;
+}
+
+const char *mg_ssl_certificate(struct mg_server * server, 
+    const char *pemfile, const char* passwd)
+{
+#ifdef MONGOOSE_USE_SSL
+    //SSL_library_init();
+    server->ssl_ctx = SSL_CTX_new(SSLv23_server_method());
+    if(NULL == server->ssl_ctx) {
+        return "SSL_CTX_new() failed";
+    }
+
+    if(SSL_CTX_use_certificate_file(server->ssl_ctx, pemfile, SSL_FILETYPE_PEM) == 0) {
+        return "SSL_CTX_new() failed";
+    }
+
+    BIO* bio_key = BIO_new(BIO_s_file());
+    BIO_read_filename(bio_key, pemfile);
+    EVP_PKEY* privateKey = PEM_read_bio_PrivateKey(
+        bio_key, NULL, NULL, (void*)passwd);
+
+    SSL_CTX_use_PrivateKey(server->ssl_ctx, privateKey);
+    
+    SSL_CTX_use_certificate_chain_file(server->ssl_ctx, pemfile);
+#endif
+    return NULL;
 }
 
 void mg_set_request_handler(struct mg_server *server, mg_handler_t handler) {
