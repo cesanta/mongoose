@@ -769,7 +769,7 @@ int ns_server_poll(struct ns_server *server, int milli) {
   time_t current_time = time(NULL);
 
   if (server->listening_sock == INVALID_SOCKET &&
-      server->active_connections == NULL) return 0;
+      server->active_connections == NULL) return -1;
 
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
