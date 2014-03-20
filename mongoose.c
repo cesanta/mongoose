@@ -1009,6 +1009,7 @@ typedef struct _stati64 file_stat_t;
 typedef HANDLE pid_t;
 #else                    ////////////// UNIX specific defines and includes
 #include <dirent.h>
+#include <dlfcn.h>
 #include <inttypes.h>
 #include <pwd.h>
 #define O_BINARY 0
@@ -1251,8 +1252,7 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
 }
 #endif  // MONGOOSE_NO_THREADS
 
-#ifdef _WIN32
-#ifndef MONGOOSE_NO_FILESYSTEM
+#if defined(_WIN32) && !defined(MONGOOSE_NO_FILESYSTEM)
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
 // wbuf and wbuf_len is a target buffer and its length.
 static void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
@@ -1295,8 +1295,46 @@ static int mg_open(const char *path, int flag) {
   to_wchar(path, wpath, ARRAY_SIZE(wpath));
   return _wopen(wpath, flag);
 }
+#endif // _WIN32 && !MONGOOSE_NO_FILESYSTEM
+
+#ifndef MONGOOSE_NO_DL
+void *mg_open_dll(const char *dll_name) {
+#ifdef _WIN32
+  wchar_t wbuf[MAX_PATH_SIZE];
+  to_wchar(dll_name, wbuf, ARRAY_SIZE(wbuf));
+  return LoadLibraryW(wbuf);
+#else
+  return dlopen(dll_name, RTLD_LAZY);
 #endif
-#endif // MONGOOSE_NO_FILESYSTEM
+}
+
+void *mg_find_dll_sym(void *dll_handle, const char *name) {
+#ifdef _WIN32
+  return GetProcAddress((HINSTANCE) dll_handle, name);
+#else
+  return dlsym(dll_handle, name);
+#endif
+}
+
+const char *mg_load_dll(const char *dll_name, struct mg_dll_symbol *syms) {
+  void *dll_handle;
+  int i;
+
+  if ((dll_handle = mg_open_dll(dll_name)) == NULL) {
+    return dll_name;
+  } else {
+    for (i = 0; syms != NULL && syms[i].symbol_name != NULL; i++) {
+      syms[i].symbol_address.ptr = mg_find_dll_sym(dll_handle,
+                                                   syms[i].symbol_name);
+      if (syms[i].symbol_address.ptr == NULL) {
+        return syms[i].symbol_name;
+      }
+    }
+  }
+
+  return NULL;
+}
+#endif
 
 // A helper function for traversing a comma separated list of values.
 // It returns a list pointer shifted to the next value, or NULL if the end
