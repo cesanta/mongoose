@@ -4,6 +4,11 @@
 
 Changes in pre-compiled binaries:
    * When server is started, browser is started automatically
+   * Fixed directory listing bug when directory contains `#` character
+   * Removed built-in Lua Server Pages in the binary, and instead
+     added Mongoose + Lua developer bundle which has Lua Server Pages support.
+     That also solves external Lua modules loading problem.
+
 
 ## Release 5.3, March 10 2014
 
