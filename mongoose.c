@@ -1022,7 +1022,6 @@ typedef struct stat file_stat_t;
 #define MAX_REQUEST_SIZE 16384
 #define IOBUF_SIZE 8192
 #define MAX_PATH_SIZE 8192
-#define LUA_SCRIPT_PATTERN "**.lp$"
 #define DEFAULT_CGI_PATTERN "**.cgi$|**.pl$|**.php$"
 #define CGI_ENVIRONMENT_SIZE 8192
 #define MAX_CGI_ENVIR_VARS 64
@@ -1946,8 +1945,10 @@ static void on_cgi_data(struct ns_connection *nc) {
     if (len == 0) return;
 
     if (len < 0 || len > (int) sizeof(buf)) {
+      len = io->len;
       iobuf_remove(io, io->len);
-      send_http_error(conn, 500, "%s", "CGI program sent malformed headers");
+      send_http_error(conn, 500, "CGI program sent malformed headers: [%.*s]",
+        len, io->buf);
     } else {
       memset(&c, 0, sizeof(c));
       memcpy(buf, io->buf + s_len, len);
@@ -3722,274 +3723,6 @@ int mg_parse_header(const char *s, const char *var_name, char *buf,
   return parse_header(s, s == NULL ? 0 : strlen(s), var_name, buf, buf_size);
 }
 
-#ifdef MONGOOSE_USE_LUA
-#ifdef _WIN32
-static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
-                  int offset) {
-  HANDLE fh = (HANDLE) _get_osfhandle(fd);
-  HANDLE mh = CreateFileMapping(fh, 0, PAGE_READONLY, 0, 0, 0);
-  void *p = MapViewOfFile(mh, FILE_MAP_READ, 0, 0, (size_t) len);
-  CloseHandle(mh);
-  return p;
-}
-#define munmap(x, y)  UnmapViewOfFile(x)
-#define MAP_FAILED NULL
-#define MAP_PRIVATE 0
-#define PROT_READ 0
-#else
-#include <sys/mman.h>
-#endif
-
-void reg_string(struct lua_State *L, const char *name, const char *val) {
-  lua_pushstring(L, name);
-  lua_pushstring(L, val);
-  lua_rawset(L, -3);
-}
-
-void reg_int(struct lua_State *L, const char *name, int val) {
-  lua_pushstring(L, name);
-  lua_pushinteger(L, val);
-  lua_rawset(L, -3);
-}
-
-void reg_function(struct lua_State *L, const char *name,
-                         lua_CFunction func, struct mg_connection *conn) {
-  lua_pushstring(L, name);
-  lua_pushlightuserdata(L, conn);
-  lua_pushcclosure(L, func, 1);
-  lua_rawset(L, -3);
-}
-
-static int lua_write(lua_State *L) {
-  int i, num_args;
-  const char *str;
-  size_t size;
-  struct mg_connection *conn = (struct mg_connection *)
-    lua_touserdata(L, lua_upvalueindex(1));
-
-  num_args = lua_gettop(L);
-  for (i = 1; i <= num_args; i++) {
-    if (lua_isstring(L, i)) {
-      str = lua_tolstring(L, i, &size);
-      mg_write(conn, str, size);
-    }
-  }
-
-  return 0;
-}
-
-static int lsp_sock_close(lua_State *L) {
-  if (lua_gettop(L) > 0 && lua_istable(L, -1)) {
-    lua_getfield(L, -1, "sock");
-    closesocket((sock_t) lua_tonumber(L, -1));
-  } else {
-    return luaL_error(L, "invalid :close() call");
-  }
-  return 1;
-}
-
-static int lsp_sock_recv(lua_State *L) {
-  char buf[2000];
-  int n;
-
-  if (lua_gettop(L) > 0 && lua_istable(L, -1)) {
-    lua_getfield(L, -1, "sock");
-    n = recv((sock_t) lua_tonumber(L, -1), buf, sizeof(buf), 0);
-    if (n <= 0) {
-      lua_pushnil(L);
-    } else {
-      lua_pushlstring(L, buf, n);
-    }
-  } else {
-    return luaL_error(L, "invalid :close() call");
-  }
-  return 1;
-}
-
-static int lsp_sock_send(lua_State *L) {
-  const char *buf;
-  size_t len, sent = 0;
-  int n, sock;
-
-  if (lua_gettop(L) > 1 && lua_istable(L, -2) && lua_isstring(L, -1)) {
-    buf = lua_tolstring(L, -1, &len);
-    lua_getfield(L, -2, "sock");
-    sock = (int) lua_tonumber(L, -1);
-    while (sent < len) {
-      if ((n = send(sock, buf + sent, len - sent, 0)) <= 0) break;
-      sent += n;
-    }
-    lua_pushnumber(L, sent);
-  } else {
-    return luaL_error(L, "invalid :close() call");
-  }
-  return 1;
-}
-
-static const struct luaL_Reg luasocket_methods[] = {
-  {"close", lsp_sock_close},
-  {"send", lsp_sock_send},
-  {"recv", lsp_sock_recv},
-  {NULL, NULL}
-};
-
-static sock_t conn2(const char *host, int port) {
-  struct sockaddr_in sin;
-  struct hostent *he = NULL;
-  sock_t sock = INVALID_SOCKET;
-
-  if (host != NULL &&
-      (he = gethostbyname(host)) != NULL &&
-    (sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
-    ns_set_close_on_exec(sock);
-    sin.sin_family = AF_INET;
-    sin.sin_port = htons((uint16_t) port);
-    sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
-    if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) != 0) {
-      closesocket(sock);
-      sock = INVALID_SOCKET;
-    }
-  }
-  return sock;
-}
-
-static int lsp_connect(lua_State *L) {
-  sock_t sock;
-
-  if (lua_isstring(L, -2) && lua_isnumber(L, -1)) {
-    sock = conn2(lua_tostring(L, -2), (int) lua_tonumber(L, -1));
-    if (sock == INVALID_SOCKET) {
-      lua_pushnil(L);
-    } else {
-      lua_newtable(L);
-      reg_int(L, "sock", sock);
-      reg_string(L, "host", lua_tostring(L, -4));
-      luaL_getmetatable(L, "luasocket");
-      lua_setmetatable(L, -2);
-    }
-  } else {
-    return luaL_error(L, "connect(host,port): invalid parameter given.");
-  }
-  return 1;
-}
-
-static void prepare_lua_environment(struct mg_connection *ri, lua_State *L) {
-  extern void luaL_openlibs(lua_State *);
-  int i;
-
-  luaL_openlibs(L);
-
-  luaL_newmetatable(L, "luasocket");
-  lua_newtable(L);
-  luaL_newlib(L, luasocket_methods);
-  lua_rawset(L, -3);
-  lua_pop(L, 1);
-  lua_register(L, "connect", lsp_connect);
-
-  if (ri == NULL) return;
-
-  // Register mg module
-  lua_newtable(L);
-  reg_function(L, "write", lua_write, ri);
-
-  // Export request_info
-  lua_pushstring(L, "request_info");
-  lua_newtable(L);
-  reg_string(L, "request_method", ri->request_method);
-  reg_string(L, "uri", ri->uri);
-  reg_string(L, "http_version", ri->http_version);
-  reg_string(L, "query_string", ri->query_string);
-  reg_string(L, "remote_ip", ri->remote_ip);
-  reg_int(L, "remote_port", ri->remote_port);
-  reg_string(L, "local_ip", ri->local_ip);
-  reg_int(L, "local_port", ri->local_port);
-  lua_pushstring(L, "content");
-  lua_pushlstring(L, ri->content == NULL ? "" : ri->content, ri->content_len);
-  lua_rawset(L, -3);
-  reg_int(L, "num_headers", ri->num_headers);
-  lua_pushstring(L, "http_headers");
-  lua_newtable(L);
-  for (i = 0; i < ri->num_headers; i++) {
-    reg_string(L, ri->http_headers[i].name, ri->http_headers[i].value);
-  }
-  lua_rawset(L, -3);
-  lua_rawset(L, -3);
-
-  lua_setglobal(L, "mg");
-
-  // Register default mg.onerror function
-  (void) luaL_dostring(L, "mg.onerror = function(e) mg.write('\\nLua "
-                       "error:\\n', debug.traceback(e, 1)) end");
-}
-
-static int lua_error_handler(lua_State *L) {
-  const char *error_msg =  lua_isstring(L, -1) ?  lua_tostring(L, -1) : "?\n";
-
-  lua_getglobal(L, "mg");
-  if (!lua_isnil(L, -1)) {
-    lua_getfield(L, -1, "write");   // call mg.write()
-    lua_pushstring(L, error_msg);
-    lua_pushliteral(L, "\n");
-    lua_call(L, 2, 0);
-    (void) luaL_dostring(L, "mg.write(debug.traceback(), '\\n')");
-  } else {
-    printf("Lua error: [%s]\n", error_msg);
-    (void) luaL_dostring(L, "print(debug.traceback(), '\\n')");
-  }
-  // TODO(lsm): leave the stack balanced
-
-  return 0;
-}
-
-static void lsp(struct connection *conn, const char *p, int len, lua_State *L) {
-  int i, j, pos = 0;
-
-  for (i = 0; i < len; i++) {
-    if (p[i] == '<' && p[i + 1] == '?') {
-      for (j = i + 1; j < len ; j++) {
-        if (p[j] == '?' && p[j + 1] == '>') {
-          mg_write(&conn->mg_conn, p + pos, i - pos);
-          if (luaL_loadbuffer(L, p + (i + 2), j - (i + 2), "") == 0) {
-            lua_pcall(L, 0, LUA_MULTRET, 0);
-          }
-          pos = j + 2;
-          i = pos - 1;
-          break;
-        }
-      }
-    }
-  }
-  if (i > pos) mg_write(&conn->mg_conn, p + pos, i - pos);
-}
-
-static void handle_lsp_request(struct connection *conn, const char *path,
-                               file_stat_t *st) {
-  void *p = MAP_FAILED;
-  lua_State *L = NULL;
-  FILE *fp = NULL;
-
-  if ((fp = fopen(path, "r")) == NULL ||
-      (p = mmap(NULL, st->st_size, PROT_READ, MAP_PRIVATE,
-                fileno(fp), 0)) == MAP_FAILED ||
-      (L = luaL_newstate()) == NULL) {
-    send_http_error(conn, 500, "mmap(%s): %s", path, strerror(errno));
-  } else {
-    // We're not sending HTTP headers here, Lua page must do it.
-    prepare_lua_environment(&conn->mg_conn, L);
-    conn->mg_conn.connection_param = L;
-    call_user(conn, MG_LUA);
-    lua_pushcclosure(L, &lua_error_handler, 0);
-    lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
-    lsp(conn, p, (int) st->st_size, L);
-    close_local_endpoint(conn);
-  }
-
-  if (L != NULL) lua_close(L);
-  if (p != MAP_FAILED) munmap(p, st->st_size);
-  if (fp != NULL) fclose(fp);
-}
-#endif // MONGOOSE_USE_LUA
-
 #ifndef MONGOOSE_NO_SSI
 static void send_ssi_file(struct mg_connection *, const char *, FILE *, int);
 
@@ -4149,7 +3882,6 @@ static void handle_ssi_request(struct connection *conn, const char *path) {
 
 static void open_local_endpoint(struct connection *conn, int skip_user) {
 #ifndef MONGOOSE_NO_FILESYSTEM
-  static const char lua_pat[] = LUA_SCRIPT_PATTERN;
   file_stat_t st;
   char path[MAX_PATH_SIZE];
   int exists = 0, is_directory = 0;
@@ -4239,12 +3971,6 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
     } else {
       send_http_error(conn, 403, NULL);
     }
-  } else if (mg_match_prefix(lua_pat, sizeof(lua_pat) - 1, path) > 0) {
-#ifdef MONGOOSE_USE_LUA
-    handle_lsp_request(conn, path, &st);
-#else
-    send_http_error(conn, 501, NULL);
-#endif
   } else if (mg_match_prefix(cgi_pat, strlen(cgi_pat), path) > 0) {
 #if !defined(MONGOOSE_NO_CGI)
     open_cgi_endpoint(conn, path);
