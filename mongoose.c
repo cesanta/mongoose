@@ -3077,10 +3077,9 @@ static void print_dir_entry(const struct dir_entry *de) {
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&de->st.st_mtime));
   mg_url_encode(de->file_name, href, sizeof(href));
   mg_printf_data(&de->conn->mg_conn,
-                  "<tr><td><a href=\"%s%s%s\">%s%s</a></td>"
+                  "<tr><td><a href=\"%s%s\">%s%s</a></td>"
                   "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
-                  de->conn->mg_conn.uri, href, slash, de->file_name, slash,
-                  mod, size);
+                  href, slash, de->file_name, slash, mod, size);
 }
 
 // Sort directory entries by size, or name, or modification time.
