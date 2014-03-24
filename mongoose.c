@@ -4254,20 +4254,21 @@ struct mg_iterator {
   mg_handler_t cb;
   void *param;
 };
-union variant { mg_handler_t cb; void *p; };
 
 static void iter(struct ns_connection *nsconn, enum ns_event ev, void *param) {
   if (ev == NS_POLL) {
-    union variant *variant = (union variant *) param;
+    struct mg_iterator *it = (struct mg_iterator *) param;
     struct connection *c = (struct connection *) nsconn->connection_data;
-    variant->cb(&c->mg_conn, MG_POLL);
+    c->mg_conn.callback_param = it->param;
+    it->cb(&c->mg_conn, MG_POLL);
   }
 }
 
 // Apply function to all active connections.
-void mg_iterate_over_connections(struct mg_server *server, mg_handler_t cb) {
-  union variant variant = { cb };
-  ns_iterate(&server->ns_server, iter, &variant);
+void mg_iterate_over_connections(struct mg_server *server, mg_handler_t cb,
+  void *param) {
+  struct mg_iterator it = { cb, param };
+  ns_iterate(&server->ns_server, iter, &it);
 }
 
 static int get_var(const char *data, size_t data_len, const char *name,

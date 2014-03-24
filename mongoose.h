@@ -48,13 +48,14 @@ struct mg_connection {
   } http_headers[30];
 
   char *content;              // POST (or websocket message) data, or NULL
-  size_t content_len;       // content length
+  size_t content_len;         // Data length
 
   int is_websocket;           // Connection is a websocket connection
   int status_code;            // HTTP status code for HTTP error handler
   int wsbits;                 // First byte of the websocket frame
   void *server_param;         // Parameter passed to mg_add_uri_handler()
   void *connection_param;     // Placeholder for connection-specific data
+  void *callback_param;       // Needed by mg_iterate_over_connections()
 };
 
 struct mg_server; // Opaque structure describing server instance
@@ -80,7 +81,7 @@ const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
 void mg_set_listening_socket(struct mg_server *, int sock);
 int mg_get_listening_socket(struct mg_server *);
-void mg_iterate_over_connections(struct mg_server *, mg_handler_t);
+void mg_iterate_over_connections(struct mg_server *, mg_handler_t, void *);
 void mg_wakeup_server(struct mg_server *);
 struct mg_connection *mg_connect(struct mg_server *, const char *, int, int);
 
