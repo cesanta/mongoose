@@ -3187,12 +3187,9 @@ static void handle_propfind(struct connection *conn, const char *path,
     int i, num_entries = scan_directory(conn, path, &arr);
 
     for (i = 0; i < num_entries; i++) {
-      char buf[MAX_PATH_SIZE], buf2[sizeof(buf) * 3];
+      char buf[MAX_PATH_SIZE * 3];
       struct dir_entry *de = &arr[i];
-
-      mg_snprintf(buf, sizeof(buf), "%s%s", de->conn->mg_conn.uri,
-                  de->file_name);
-      mg_url_encode(buf, buf2, sizeof(buf2) - 1);
+      mg_url_encode(de->file_name, buf, sizeof(buf) - 1);
       print_props(conn, buf, &de->st);
     }
   }
