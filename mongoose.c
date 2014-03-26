@@ -1531,7 +1531,7 @@ static void send_http_error(struct connection *conn, int code,
     body_len += mg_vsnprintf(body + body_len, sizeof(body) - body_len, fmt, ap);
     va_end(ap);
   }
-  if (code >= 300 && code <= 399) {
+  if ((code >= 300 && code <= 399) || code == 204) {
     // 3xx errors do not have body
     body_len = 0;
   }
@@ -2081,12 +2081,10 @@ int mg_url_decode(const char *src, int src_len, char *dst,
   return i >= src_len ? j : -1;
 }
 
-static int is_valid_http_method(const char *method) {
-  return !strcmp(method, "GET") || !strcmp(method, "POST") ||
-    !strcmp(method, "HEAD") || !strcmp(method, "CONNECT") ||
-    !strcmp(method, "PUT") || !strcmp(method, "DELETE") ||
-    !strcmp(method, "OPTIONS") || !strcmp(method, "PROPFIND")
-    || !strcmp(method, "MKCOL");
+static int is_valid_http_method(const char *s) {
+  return !strcmp(s, "GET") || !strcmp(s, "POST") || !strcmp(s, "HEAD") ||
+    !strcmp(s, "CONNECT") || !strcmp(s, "PUT") || !strcmp(s, "DELETE") ||
+    !strcmp(s, "OPTIONS") || !strcmp(s, "PROPFIND") || !strcmp(s, "MKCOL");
 }
 
 // Parse HTTP request, fill in mg_request structure.
@@ -3170,36 +3168,34 @@ static void handle_propfind(struct connection *conn, const char *path,
         *list_dir = conn->server->config_options[ENABLE_DIRECTORY_LISTING];
 
   conn->mg_conn.status_code = 207;
-  ns_send(conn->ns_conn, header, sizeof(header) - 1);
 
   // Print properties for the requested resource itself
-  if (exists) {
-    print_props(conn, conn->mg_conn.uri, stp);
+  if (!exists) {
+    conn->mg_conn.status_code = 404;
+    mg_printf(&conn->mg_conn, "%s", "HTTP/1.1 404 Not Found\r\n\r\n");
+  } else if (S_ISDIR(stp->st_mode) && mg_strcasecmp(list_dir, "yes") != 0) {
+    conn->mg_conn.status_code = 403;
+    mg_printf(&conn->mg_conn, "%s",
+              "HTTP/1.1 403 Directory Listing Denied\r\n\r\n");
   } else {
-    mg_printf(&conn->mg_conn,
-              "<d:response>"
-              "<d:href>%s</d:href>"
-              "<d:propstat>"
-              "<d:status>HTTP/1.1 404 Not Found</d:status>"
-              "</d:propstat>"
-              "</d:response>\n", path);
-  }
+    ns_send(conn->ns_conn, header, sizeof(header) - 1);
+    print_props(conn, conn->mg_conn.uri, stp);
 
-  // If it is a directory, print directory entries too if Depth is not 0
-  if (exists && S_ISDIR(stp->st_mode) && !mg_strcasecmp(list_dir, "yes") &&
-      (depth == NULL || strcmp(depth, "0") != 0)) {
-    struct dir_entry *arr = NULL;
-    int i, num_entries = scan_directory(conn, path, &arr);
+    if (S_ISDIR(stp->st_mode) &&
+             (depth == NULL || strcmp(depth, "0") != 0)) {
+      struct dir_entry *arr = NULL;
+      int i, num_entries = scan_directory(conn, path, &arr);
 
-    for (i = 0; i < num_entries; i++) {
-      char buf[MAX_PATH_SIZE * 3];
-      struct dir_entry *de = &arr[i];
-      mg_url_encode(de->file_name, buf, sizeof(buf) - 1);
-      print_props(conn, buf, &de->st);
+      for (i = 0; i < num_entries; i++) {
+        char buf[MAX_PATH_SIZE * 3];
+        struct dir_entry *de = &arr[i];
+        mg_url_encode(de->file_name, buf, sizeof(buf) - 1);
+        print_props(conn, buf, &de->st);
+      }
     }
+    ns_send(conn->ns_conn, footer, sizeof(footer) - 1);
   }
 
-  ns_send(conn->ns_conn, footer, sizeof(footer) - 1);
   close_local_endpoint(conn);
 }
 
@@ -3252,7 +3248,7 @@ static void handle_delete(struct connection *conn, const char *path) {
   } else if (S_ISDIR(st.st_mode)) {
     remove_directory(path);
     send_http_error(conn, 204, NULL);
-  } else if (!remove(path) == 0) {
+  } else if (remove(path) == 0) {
     send_http_error(conn, 204, NULL);
   } else {
     send_http_error(conn, 423, NULL);
@@ -3322,22 +3318,24 @@ static void handle_put(struct connection *conn, const char *path) {
 
 static void forward_put_data(struct connection *conn) {
   struct iobuf *io = &conn->ns_conn->recv_iobuf;
-  int n = write(conn->endpoint.fd, io->buf, io->len);
+  int n = conn->cl < io->len ? conn->cl : io->len;  // How many bytes to write
+  n = write(conn->endpoint.fd, io->buf, n);         // Write them!
   if (n > 0) {
     iobuf_remove(io, n);
     conn->cl -= n;
-    if (conn->cl <= 0) {
-      close_local_endpoint(conn);
-    }
+  }
+  if (conn->cl <= 0) {
+    close_local_endpoint(conn);
   }
 }
 #endif //  MONGOOSE_NO_DAV
 
 static void send_options(struct connection *conn) {
-  static const char reply[] = "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, "
-    "CONNECT, PUT, DELETE, OPTIONS, PROPFIND, MKCOL\r\nDAV: 1\r\n\r\n";
-  ns_send(conn->ns_conn, reply, sizeof(reply) - 1);
-  conn->ns_conn->flags |= NSF_FINISHED_SENDING_DATA;
+  conn->mg_conn.status_code = 200;
+  mg_printf(&conn->mg_conn, "%s",
+            "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, CONNECT, PUT, "
+            "DELETE, OPTIONS, PROPFIND, MKCOL\r\nDAV: 1\r\n\r\n");
+  close_local_endpoint(conn);
 }
 
 #ifndef MONGOOSE_NO_AUTH
@@ -3668,10 +3666,14 @@ static int is_authorized(struct connection *conn, const char *path) {
 
 static int is_authorized_for_dav(struct connection *conn) {
   const char *auth_file = conn->server->config_options[DAV_AUTH_FILE];
+  const char *method = conn->mg_conn.request_method;
   FILE *fp;
   int authorized = MG_FALSE;
 
-  if (auth_file != NULL && (fp = fopen(auth_file, "r")) != NULL) {
+  // If dav_auth_file is not set, allow non-authorized PROPFIND
+  if (method != NULL && !strcmp(method, "PROPFIND") && auth_file == NULL) {
+    authorized = MG_TRUE;
+  } else if (auth_file != NULL && (fp = fopen(auth_file, "r")) != NULL) {
     authorized = mg_authorize_digest(&conn->mg_conn, fp);
     fclose(fp);
   }
@@ -3679,10 +3681,10 @@ static int is_authorized_for_dav(struct connection *conn) {
   return authorized;
 }
 
-static int is_dav_mutation(const struct connection *conn) {
+static int is_dav_request(const struct connection *conn) {
   const char *s = conn->mg_conn.request_method;
-  return s && (!strcmp(s, "PUT") || !strcmp(s, "DELETE") ||
-               !strcmp(s, "MKCOL"));
+  return !strcmp(s, "PUT") || !strcmp(s, "DELETE") ||
+    !strcmp(s, "MKCOL") || !strcmp(s, "PROPFIND");
 }
 #endif // MONGOOSE_NO_AUTH
 
@@ -3939,8 +3941,8 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
   } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, NULL);
 #ifndef MONGOOSE_NO_AUTH
-  } else if ((!is_dav_mutation(conn) && !is_authorized(conn, path)) ||
-             (is_dav_mutation(conn) && !is_authorized_for_dav(conn))) {
+  } else if ((!is_dav_request(conn) && !is_authorized(conn, path)) ||
+             (is_dav_request(conn) && !is_authorized_for_dav(conn))) {
     mg_send_digest_auth_request(&conn->mg_conn);
     close_local_endpoint(conn);
 #endif
