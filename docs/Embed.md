@@ -132,7 +132,7 @@ Mongoose source code contains a well-commented example code, listed below:
    * [upload.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
    shows how to upload files
    * [websocket.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c) demonstrates websocket usage
-   * [auth.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c) demonstrates API-controlled Digest authorization
+   * [auth.c](https://github.com/cesanta/mongoose/blob/master/examples/auth.c) demonstrates API-controlled Digest authorization
    * [mjpg.c](https://github.com/cesanta/mongoose/blob/master/examples/mjpg.c) demonstrates MJPEG streaming implementation
 
 ## Compilation flags
