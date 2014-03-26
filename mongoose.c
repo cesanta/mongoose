@@ -100,6 +100,7 @@ typedef unsigned __int64 uint64_t;
 typedef __int64   int64_t;
 typedef SOCKET sock_t;
 #else
+#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -148,6 +149,7 @@ union socket_address {
 #endif
 };
 
+// IO buffers interface
 struct iobuf {
   char *buf;
   int len;
@@ -159,13 +161,23 @@ void iobuf_free(struct iobuf *);
 int iobuf_append(struct iobuf *, const void *data, int data_size);
 void iobuf_remove(struct iobuf *, int data_size);
 
+// Net skeleton interface
+enum ns_event {
+  NS_POLL,     // Sent to each connection on each call to ns_server_poll()
+  NS_ACCEPT,   // Listening socket accept()-ed new connection
+  NS_CONNECT,  // Connection made by ns_connect() succeeded or failed
+  NS_RECV,     // Data has benn received
+  NS_SEND,     // Data has been written to a socket
+  NS_CLOSE     // Connection is closed
+};
+
+// Callback function (event handler) prototype, must be defined by user.
+// Net skeleton will call event handler, passing events defined above.
 struct ns_connection;
-enum ns_event { NS_POLL, NS_ACCEPT, NS_CONNECT, NS_RECV, NS_SEND, NS_CLOSE };
 typedef void (*ns_callback_t)(struct ns_connection *, enum ns_event, void *);
 
 struct ns_server {
   void *server_data;
-  union socket_address listening_sa;
   sock_t listening_sock;
   struct ns_connection *active_connections;
   ns_callback_t callback;
@@ -177,12 +189,13 @@ struct ns_server {
 struct ns_connection {
   struct ns_connection *prev, *next;
   struct ns_server *server;
-  void *connection_data;
-  time_t last_io_time;
   sock_t sock;
+  union socket_address sa;
   struct iobuf recv_iobuf;
   struct iobuf send_iobuf;
   SSL *ssl;
+  void *connection_data;
+  time_t last_io_time;
   unsigned int flags;
 #define NSF_FINISHED_SENDING_DATA   (1 << 0)
 #define NSF_BUFFER_BUT_DONT_SEND    (1 << 1)
@@ -216,6 +229,8 @@ int ns_vprintf(struct ns_connection *, const char *fmt, va_list ap);
 void *ns_start_thread(void *(*f)(void *), void *p);
 int ns_socketpair(sock_t [2]);
 void ns_set_close_on_exec(sock_t);
+void ns_sock_to_str(sock_t sock, char *buf, size_t len, int add_port);
+int ns_hexdump(const void *buf, int len, char *dst, int dst_len);
 
 #ifdef __cplusplus
 }
@@ -542,13 +557,14 @@ int ns_set_ssl_cert(struct ns_server *server, const char *cert) {
 }
 
 int ns_bind(struct ns_server *server, const char *str) {
-  ns_parse_port_string(str, &server->listening_sa);
+  union socket_address sa;
+  ns_parse_port_string(str, &sa);
   if (server->listening_sock != INVALID_SOCKET) {
     closesocket(server->listening_sock);
   }
-  server->listening_sock = ns_open_listening_socket(&server->listening_sa);
+  server->listening_sock = ns_open_listening_socket(&sa);
   return server->listening_sock == INVALID_SOCKET ? -1 :
-    (int) ntohs(server->listening_sa.sin.sin_port);
+  (int) ntohs(sa.sin.sin_port);
 }
 
 
@@ -598,49 +614,52 @@ static int ns_is_error(int n) {
     );
 }
 
-#ifdef NS_ENABLE_HEXDUMP
-static void ns_hexdump(const struct ns_connection *conn, const void *buf,
-                       int len, const char *marker) {
-  const unsigned char *p = (const unsigned char *) buf;
-  char path[500], date[100], ascii[17];
-  FILE *fp;
+void ns_sock_to_str(sock_t sock, char *buf, size_t len, int add_port) {
+  union socket_address sa;
+  socklen_t slen = sizeof(sa);
 
-#if 0
-  if (!match_prefix(NS_ENABLE_HEXDUMP, strlen(NS_ENABLE_HEXDUMP),
-                    conn->remote_ip)) {
-    return;
-  }
-
-  snprintf(path, sizeof(path), "%s.%hu.txt",
-           conn->mg_conn.remote_ip, conn->mg_conn.remote_port);
+  if (buf != NULL && len > 0) {
+    buf[0] = '\0';
+    memset(&sa, 0, sizeof(sa));
+    getsockname(sock, &sa.sa, &slen);
+#if defined(NS_ENABLE_IPV6)
+    inet_ntop(sa.sa.sa_family, sa.sa.sa_family == AF_INET ?
+              (void *) &sa.sin.sin_addr :
+              (void *) &sa.sin6.sin6_addr, buf, len);
+#elif defined(_WIN32)
+    // Only Windoze Vista (and newer) have inet_ntop()
+    strncpy(buf, inet_ntoa(sa.sin.sin_addr), len);
+#else
+    inet_ntop(sa.sa.sa_family, (void *) &sa.sin.sin_addr, buf, len);
 #endif
-  snprintf(path, sizeof(path), "%p.txt", conn);
-
-  if ((fp = fopen(path, "a")) != NULL) {
-    time_t cur_time = time(NULL);
-    int i, idx;
-
-    strftime(date, sizeof(date), "%d/%b/%Y %H:%M:%S", localtime(&cur_time));
-    fprintf(fp, "%s %s %d bytes\n", marker, date, len);
-
-    for (i = 0; i < len; i++) {
-      idx = i % 16;
-      if (idx == 0) {
-        if (i > 0) fprintf(fp, "  %s\n", ascii);
-        fprintf(fp, "%04x ", i);
-      }
-      fprintf(fp, " %02x", p[i]);
-      ascii[idx] = p[i] < 0x20 || p[i] > 0x7e ? '.' : p[i];
-      ascii[idx + 1] = '\0';
+    if (add_port) {
+      snprintf(buf + strlen(buf), len - (strlen(buf) + 1), ":%d",
+      (int) ntohs(sa.sin.sin_port));
     }
-
-    while (i++ % 16) fprintf(fp, "%s", "   ");
-    fprintf(fp, "  %s\n\n", ascii);
-
-    fclose(fp);
   }
 }
-#endif
+
+int ns_hexdump(const void *buf, int len, char *dst, int dst_len) {
+  const unsigned char *p = (const unsigned char *) buf;
+  char ascii[17] = "";
+  int i, idx, n = 0;
+
+  for (i = 0; i < len; i++) {
+    idx = i % 16;
+    if (idx == 0) {
+      if (i > 0) n += snprintf(dst + n, dst_len - n, "  %s\n", ascii);
+      n += snprintf(dst + n, dst_len - n, "%04x ", i);
+    }
+    n += snprintf(dst + n, dst_len - n, " %02x", p[i]);
+    ascii[idx] = p[i] < 0x20 || p[i] > 0x7e ? '.' : p[i];
+    ascii[idx + 1] = '\0';
+  }
+
+  while (i++ % 16) n += snprintf(dst + n, dst_len - n, "%s", "   ");
+  n += snprintf(dst + n, dst_len - n, "  %s\n\n", ascii);
+
+  return n;
+}
 
 static void ns_read_from_socket(struct ns_connection *conn) {
   char buf[2048];
@@ -656,10 +675,10 @@ static void ns_read_from_socket(struct ns_connection *conn) {
     if (ret == 0 && ok == 0 && conn->ssl != NULL) {
       int res = SSL_connect(conn->ssl);
       int ssl_err = SSL_get_error(conn->ssl, res);
-      DBG(("%p SSL_connect %d %d", conn, res, ssl_err));
+      DBG(("%p res %d %d", conn, res, ssl_err));
       if (res == 1) {
         conn->flags = NSF_SSL_HANDSHAKE_DONE;
-      } else if (ssl_err == 2 || ssl_err == 3) {
+      } else if (res == 0 || ssl_err == 2 || ssl_err == 3) {
         return; // Call us again
       } else {
         ok = 1;
@@ -682,10 +701,10 @@ static void ns_read_from_socket(struct ns_connection *conn) {
     } else {
       int res = SSL_accept(conn->ssl);
       int ssl_err = SSL_get_error(conn->ssl, res);
-      DBG(("%p SSL_accept %d %d", conn, res, ssl_err));
+      DBG(("%p res %d %d", conn, res, ssl_err));
       if (res == 1) {
         conn->flags |= NSF_SSL_HANDSHAKE_DONE;
-      } else if (ssl_err == 2 || ssl_err == 3) {
+      } else if (res == 0 || ssl_err == 2 || ssl_err == 3) {
         return; // Call us again
       } else {
         conn->flags |= NSF_CLOSE_IMMEDIATELY;
@@ -697,10 +716,6 @@ static void ns_read_from_socket(struct ns_connection *conn) {
   {
     n = recv(conn->sock, buf, sizeof(buf), 0);
   }
-
-#ifdef NS_ENABLE_HEXDUMP
-  ns_hexdump(conn, buf, n, "<-");
-#endif
 
   DBG(("%p <- %d bytes [%.*s%s]",
        conn, n, n < 40 ? n : 40, buf, n < 40 ? "" : "..."));
@@ -724,27 +739,19 @@ static void ns_write_to_socket(struct ns_connection *conn) {
 #endif
   { n = send(conn->sock, io->buf, io->len, 0); }
 
-
-#ifdef NS_ENABLE_HEXDUMP
-  ns_hexdump(conn, io->buf, n, "->");
-#endif
-
-  DBG(("%p -> %d bytes %d [%.*s%s]", conn, n, conn->flags,
-       io->len < 40 ? io->len : 40,
+  DBG(("%p -> %d bytes [%.*s%s]", conn, n, io->len < 40 ? io->len : 40,
        io->buf, io->len < 40 ? "" : "..."));
 
+  ns_call(conn, NS_SEND, &n);
   if (ns_is_error(n)) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
   } else if (n > 0) {
     iobuf_remove(io, n);
-    //conn->num_bytes_sent += n;
   }
 
   if (io->len == 0 && conn->flags & NSF_FINISHED_SENDING_DATA) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
   }
-
-  ns_call(conn, NS_SEND, NULL);
 }
 
 int ns_send(struct ns_connection *conn, const void *buf, int len) {
@@ -769,7 +776,7 @@ int ns_server_poll(struct ns_server *server, int milli) {
   time_t current_time = time(NULL);
 
   if (server->listening_sock == INVALID_SOCKET &&
-      server->active_connections == NULL) return -1;
+      server->active_connections == NULL) return 0;
 
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
@@ -851,6 +858,7 @@ struct ns_connection *ns_connect(struct ns_server *server, const char *host,
   int connect_ret_val;
 
   (void) use_ssl;
+
   if (host == NULL || (he = gethostbyname(host)) == NULL ||
       (sock = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
     DBG(("gethostbyname(%s) failed: %s", host, strerror(errno)));
@@ -1093,6 +1101,7 @@ enum {
   GLOBAL_AUTH_FILE,
 #endif
   HIDE_FILES_PATTERN,
+  HEXDUMP_FILE,
 #ifndef MONGOOSE_NO_FILESYSTEM
   INDEX_FILES,
 #endif
@@ -1132,6 +1141,7 @@ static const char *static_config_options[] = {
   "global_auth_file", NULL,
 #endif
   "hide_files_patterns", NULL,
+  "hexdump_file", NULL,
 #ifndef MONGOOSE_NO_FILESYSTEM
   "index_files","index.html,index.htm,index.shtml,index.cgi,index.php,index.lp",
 #endif
@@ -2025,21 +2035,6 @@ static int check_acl(const char *acl, uint32_t remote_ip) {
   }
 
   return allowed == '+';
-}
-
-static void sockaddr_to_string(char *buf, size_t len,
-                               const union socket_address *usa) {
-  buf[0] = '\0';
-#if defined(NS_ENABLE_IPV6)
-  inet_ntop(usa->sa.sa_family, usa->sa.sa_family == AF_INET ?
-            (void *) &usa->sin.sin_addr :
-            (void *) &usa->sin6.sin6_addr, buf, len);
-#elif defined(_WIN32)
-  // Only Windoze Vista (and newer) have inet_ntop()
-  strncpy(buf, inet_ntoa(usa->sin.sin_addr), len);
-#else
-  inet_ntop(usa->sa.sa_family, (void *) &usa->sin.sin_addr, buf, len);
-#endif
 }
 
 // Protect against directory disclosure attack by removing '..',
@@ -4416,8 +4411,8 @@ const char *mg_set_option(struct mg_server *server, const char *name,
       if (port < 0) {
         error_msg = "Cannot bind to port";
       } else {
-        sockaddr_to_string(server->local_ip, sizeof(server->local_ip),
-                           &server->ns_server.listening_sa);
+        ns_sock_to_str(server->ns_server.listening_sock, server->local_ip,
+          sizeof(server->local_ip), 0);
         if (!strcmp(value, "0")) {
           char buf[10];
           mg_snprintf(buf, sizeof(buf), "%d", port);
@@ -4462,14 +4457,13 @@ static void on_accept(struct ns_connection *nc, union socket_address *sa) {
       (conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
     nc->flags |= NSF_CLOSE_IMMEDIATELY;
   } else {
-    conn->server = (struct mg_server *) nc->server;
-    sockaddr_to_string(conn->mg_conn.remote_ip,
-                       sizeof(conn->mg_conn.remote_ip), sa);
+    conn->server = server;
+    ns_sock_to_str(nc->sock, conn->mg_conn.remote_ip,
+      sizeof(conn->mg_conn.remote_ip), 0);
     conn->mg_conn.remote_port = ntohs(sa->sin.sin_port);
     conn->mg_conn.server_param = nc->server->server_data;
     conn->mg_conn.local_ip = server->local_ip;
-    conn->mg_conn.local_port =
-      ntohs(server->ns_server.listening_sa.sin.sin_port);
+    conn->mg_conn.local_port = ntohs(server->lsa.sin.sin_port);
 
     // Circularly link two connection structures
     nc->connection_data = conn;
@@ -4477,8 +4471,33 @@ static void on_accept(struct ns_connection *nc, union socket_address *sa) {
   }
 }
 
+static void hexdump(struct ns_connection *nc, const char *path,
+                    int num_bytes, int is_sent) {
+  struct connection *mc = (struct connection *) nc->connection_data;
+  const struct iobuf *io = is_sent ? &nc->send_iobuf : &nc->recv_iobuf;
+  FILE *fp;
+  char *buf;
+  int buf_size = num_bytes * 5 + 100;
+
+  if (path != NULL && num_bytes > 0 && (fp = fopen(path, "a")) != NULL) {
+    fprintf(fp, "%lu %s:%d %s %s:%d %d\n", (unsigned long) time(NULL),
+            mc->mg_conn.local_ip, mc->mg_conn.local_port,
+            is_sent ? "->" : "<-",
+            mc->mg_conn.remote_ip, mc->mg_conn.remote_port,
+            num_bytes);
+    if ((buf = malloc(buf_size)) != NULL) {
+      ns_hexdump(io->buf + (is_sent ? 0 : io->len) - (is_sent ? 0 : num_bytes),
+                 num_bytes, buf, buf_size);
+      fprintf(fp, "%s", buf);
+      free(buf);
+    }
+    fclose(fp);
+  }
+}
+
 static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
   struct connection *conn = (struct connection *) nc->connection_data;
+  struct mg_server *server = (struct mg_server *) nc->server;
 
   switch (ev) {
     case NS_ACCEPT:
@@ -4494,6 +4513,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_RECV:
+      hexdump(nc, server->config_options[HEXDUMP_FILE], * (int *) p, 0);
       if (nc->flags & NSF_ACCEPTED) {
         process_request(conn);
 #ifndef MONGOOSE_NO_CGI
@@ -4506,6 +4526,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_SEND:
+      hexdump(nc, server->config_options[HEXDUMP_FILE], * (int *) p, 1);
       break;
 
     case NS_CLOSE:
