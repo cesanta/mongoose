@@ -66,7 +66,7 @@ enum mg_event {
   MG_AUTH,        // If callback returns MG_FALSE, authentication fails
   MG_REQUEST,     // If callback returns MG_FALSE, Mongoose continues with req
   MG_REPLY,       // If callback returns MG_FALSE, Mongoose closes connection
-  MG_CLOSE,       // Connection is closed
+  MG_CLOSE,       // Connection is closed, callback return value is ignored
   MG_LUA,         // Called before LSP page invoked
   MG_HTTP_ERROR   // If callback returns MG_FALSE, Mongoose continues with err
 };
