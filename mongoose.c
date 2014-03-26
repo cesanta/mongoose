@@ -3159,7 +3159,7 @@ static void print_props(struct connection *conn, const char *uri,
 }
 
 static void handle_propfind(struct connection *conn, const char *path,
-                            file_stat_t *stp) {
+                            file_stat_t *stp, int exists) {
   static const char header[] = "HTTP/1.1 207 Multi-Status\r\n"
     "Connection: close\r\n"
     "Content-Type: text/xml; charset=utf-8\r\n\r\n"
@@ -3173,10 +3173,20 @@ static void handle_propfind(struct connection *conn, const char *path,
   ns_send(conn->ns_conn, header, sizeof(header) - 1);
 
   // Print properties for the requested resource itself
-  print_props(conn, conn->mg_conn.uri, stp);
+  if (exists) {
+    print_props(conn, conn->mg_conn.uri, stp);
+  } else {
+    mg_printf(&conn->mg_conn,
+              "<d:response>"
+              "<d:href>%s</d:href>"
+              "<d:propstat>"
+              "<d:status>HTTP/1.1 404 Not Found</d:status>"
+              "</d:propstat>"
+              "</d:response>\n", path);
+  }
 
   // If it is a directory, print directory entries too if Depth is not 0
-  if (S_ISDIR(stp->st_mode) && !mg_strcasecmp(list_dir, "yes") &&
+  if (exists && S_ISDIR(stp->st_mode) && !mg_strcasecmp(list_dir, "yes") &&
       (depth == NULL || strcmp(depth, "0") != 0)) {
     struct dir_entry *arr = NULL;
     int i, num_entries = scan_directory(conn, path, &arr);
@@ -3936,7 +3946,7 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
 #endif
 #ifndef MONGOOSE_NO_DAV
   } else if (!strcmp(conn->mg_conn.request_method, "PROPFIND")) {
-    handle_propfind(conn, path, &st);
+    handle_propfind(conn, path, &st, exists);
   } else if (!strcmp(conn->mg_conn.request_method, "MKCOL")) {
     handle_mkcol(conn, path);
   } else if (!strcmp(conn->mg_conn.request_method, "DELETE")) {
