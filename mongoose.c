@@ -162,19 +162,20 @@ int iobuf_append(struct iobuf *, const void *data, int data_size);
 void iobuf_remove(struct iobuf *, int data_size);
 
 // Net skeleton interface
+// Events. Meaning of event parameter (evp) is given in the comment.
 enum ns_event {
   NS_POLL,     // Sent to each connection on each call to ns_server_poll()
-  NS_ACCEPT,   // Listening socket accept()-ed new connection
-  NS_CONNECT,  // Connection made by ns_connect() succeeded or failed
-  NS_RECV,     // Data has benn received
-  NS_SEND,     // Data has been written to a socket
-  NS_CLOSE     // Connection is closed
+  NS_ACCEPT,   // New connection accept()-ed. union socket_address *remote_addr
+  NS_CONNECT,  // connect() succeeded or failed. int *success_status
+  NS_RECV,     // Data has benn received. int *num_bytes
+  NS_SEND,     // Data has been written to a socket. int *num_bytes
+  NS_CLOSE     // Connection is closed. NULL
 };
 
 // Callback function (event handler) prototype, must be defined by user.
 // Net skeleton will call event handler, passing events defined above.
 struct ns_connection;
-typedef void (*ns_callback_t)(struct ns_connection *, enum ns_event, void *);
+typedef void (*ns_callback_t)(struct ns_connection *, enum ns_event, void *evp);
 
 struct ns_server {
   void *server_data;
@@ -576,7 +577,6 @@ static struct ns_connection *accept_conn(struct ns_server *server) {
 
   // NOTE(lsm): on Windows, sock is always > FD_SETSIZE
   if ((sock = accept(server->listening_sock, &sa.sa, &len)) == INVALID_SOCKET) {
-    closesocket(sock);
   } else if ((c = (struct ns_connection *) NS_MALLOC(sizeof(*c))) == NULL ||
              memset(c, 0, sizeof(*c)) == NULL) {
     closesocket(sock);
@@ -735,6 +735,15 @@ static void ns_write_to_socket(struct ns_connection *conn) {
 #ifdef NS_ENABLE_SSL
   if (conn->ssl != NULL) {
     n = SSL_write(conn->ssl, io->buf, io->len);
+    if (n < 0) {
+      int ssl_err = SSL_get_error(conn->ssl, n);
+      DBG(("%p %d %d", conn, n, ssl_err));
+      if (ssl_err == 2 || ssl_err == 3) {
+        return; // Call us again
+      } else {
+        conn->flags |= NSF_CLOSE_IMMEDIATELY;
+      }
+    }
   } else
 #endif
   { n = send(conn->sock, io->buf, io->len, 0); }
@@ -4499,7 +4508,7 @@ static void hexdump(struct ns_connection *nc, const char *path,
             is_sent ? "->" : "<-",
             mc->mg_conn.remote_ip, mc->mg_conn.remote_port,
             num_bytes);
-    if ((buf = malloc(buf_size)) != NULL) {
+    if ((buf = (char *) malloc(buf_size)) != NULL) {
       ns_hexdump(io->buf + (is_sent ? 0 : io->len) - (is_sent ? 0 : num_bytes),
                  num_bytes, buf, buf_size);
       fprintf(fp, "%s", buf);
