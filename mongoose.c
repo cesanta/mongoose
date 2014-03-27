@@ -1064,6 +1064,7 @@ typedef struct stat file_stat_t;
 #define MONGOOSE_NO_DIRECTORY_LISTING
 #define MONGOOSE_NO_LOGGING
 #define MONGOOSE_NO_SSI
+#define MONGOOSE_NO_DL
 #endif
 
 struct vec {
@@ -1100,9 +1101,9 @@ enum {
 #if !defined(MONGOOSE_NO_FILESYSTEM) && !defined(MONGOOSE_NO_AUTH)
   GLOBAL_AUTH_FILE,
 #endif
+#ifndef MONGOOSE_NO_FILESYSTEM
   HIDE_FILES_PATTERN,
   HEXDUMP_FILE,
-#ifndef MONGOOSE_NO_FILESYSTEM
   INDEX_FILES,
 #endif
   LISTENING_PORT,
@@ -1140,9 +1141,9 @@ static const char *static_config_options[] = {
 #if !defined(MONGOOSE_NO_FILESYSTEM) && !defined(MONGOOSE_NO_AUTH)
   "global_auth_file", NULL,
 #endif
+#ifndef MONGOOSE_NO_FILESYSTEM
   "hide_files_patterns", NULL,
   "hexdump_file", NULL,
-#ifndef MONGOOSE_NO_FILESYSTEM
   "index_files","index.html,index.htm,index.shtml,index.cgi,index.php,index.lp",
 #endif
   "listening_port", NULL,
@@ -2168,7 +2169,6 @@ const char *mg_get_header(const struct mg_connection *ri, const char *s) {
   return NULL;
 }
 
-#ifndef MONGOOSE_NO_FILESYSTEM
 // Perform case-insensitive match of string against pattern
 int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
   const char *or_str;
@@ -2207,6 +2207,7 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
   return j;
 }
 
+#ifndef MONGOOSE_NO_FILESYSTEM
 static int must_hide_file(struct connection *conn, const char *path) {
   const char *pw_pattern = "**" PASSWORDS_FILE_NAME "$";
   const char *pattern = conn->server->config_options[HIDE_FILES_PATTERN];
@@ -4483,6 +4484,7 @@ static void on_accept(struct ns_connection *nc, union socket_address *sa) {
   }
 }
 
+#ifndef MONGOOSE_NO_FILESYSTEM
 static void hexdump(struct ns_connection *nc, const char *path,
                     int num_bytes, int is_sent) {
   struct connection *mc = (struct connection *) nc->connection_data;
@@ -4506,6 +4508,7 @@ static void hexdump(struct ns_connection *nc, const char *path,
     fclose(fp);
   }
 }
+#endif
 
 static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
   struct connection *conn = (struct connection *) nc->connection_data;
@@ -4525,7 +4528,9 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_RECV:
+#ifndef MONGOOSE_NO_FILESYSTEM
       hexdump(nc, server->config_options[HEXDUMP_FILE], * (int *) p, 0);
+#endif
       if (nc->flags & NSF_ACCEPTED) {
         process_request(conn);
 #ifndef MONGOOSE_NO_CGI
@@ -4538,7 +4543,9 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_SEND:
+#ifndef MONGOOSE_NO_FILESYSTEM
       hexdump(nc, server->config_options[HEXDUMP_FILE], * (int *) p, 1);
+#endif
       break;
 
     case NS_CLOSE:
