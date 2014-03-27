@@ -166,34 +166,34 @@ static const char *test_should_keep_alive(void) {
 }
 
 static const char *test_match_prefix(void) {
-  ASSERT(match_prefix("/api", 4, "/api") == 4);
-  ASSERT(match_prefix("/a/", 3, "/a/b/c") == 3);
-  ASSERT(match_prefix("/a/", 3, "/ab/c") == -1);
-  ASSERT(match_prefix("/*/", 3, "/ab/c") == 4);
-  ASSERT(match_prefix("**", 2, "/a/b/c") == 6);
-  ASSERT(match_prefix("/*", 2, "/a/b/c") == 2);
-  ASSERT(match_prefix("*/*", 3, "/a/b/c") == 2);
-  ASSERT(match_prefix("**/", 3, "/a/b/c") == 5);
-  ASSERT(match_prefix("**.foo|**.bar", 13, "a.bar") == 5);
-  ASSERT(match_prefix("a|b|cd", 6, "cdef") == 2);
-  ASSERT(match_prefix("a|b|c?", 6, "cdef") == 2);
-  ASSERT(match_prefix("a|?|cd", 6, "cdef") == 1);
-  ASSERT(match_prefix("/a/**.cgi", 9, "/foo/bar/x.cgi") == -1);
-  ASSERT(match_prefix("/a/**.cgi", 9, "/a/bar/x.cgi") == 12);
-  ASSERT(match_prefix("**/", 3, "/a/b/c") == 5);
-  ASSERT(match_prefix("**/$", 4, "/a/b/c") == -1);
-  ASSERT(match_prefix("**/$", 4, "/a/b/") == 5);
-  ASSERT(match_prefix("$", 1, "") == 0);
-  ASSERT(match_prefix("$", 1, "x") == -1);
-  ASSERT(match_prefix("*$", 2, "x") == 1);
-  ASSERT(match_prefix("/$", 2, "/") == 1);
-  ASSERT(match_prefix("**/$", 4, "/a/b/c") == -1);
-  ASSERT(match_prefix("**/$", 4, "/a/b/") == 5);
-  ASSERT(match_prefix("*", 1, "/hello/") == 0);
-  ASSERT(match_prefix("**.a$|**.b$", 11, "/a/b.b/") == -1);
-  ASSERT(match_prefix("**.a$|**.b$", 11, "/a/b.b") == 6);
-  ASSERT(match_prefix("**.a$|**.b$", 11, "/a/B.A") == 6);
-  ASSERT(match_prefix("**o$", 4, "HELLO") == 5);
+  ASSERT(mg_match_prefix("/api", 4, "/api") == 4);
+  ASSERT(mg_match_prefix("/a/", 3, "/a/b/c") == 3);
+  ASSERT(mg_match_prefix("/a/", 3, "/ab/c") == -1);
+  ASSERT(mg_match_prefix("/*/", 3, "/ab/c") == 4);
+  ASSERT(mg_match_prefix("**", 2, "/a/b/c") == 6);
+  ASSERT(mg_match_prefix("/*", 2, "/a/b/c") == 2);
+  ASSERT(mg_match_prefix("*/*", 3, "/a/b/c") == 2);
+  ASSERT(mg_match_prefix("**/", 3, "/a/b/c") == 5);
+  ASSERT(mg_match_prefix("**.foo|**.bar", 13, "a.bar") == 5);
+  ASSERT(mg_match_prefix("a|b|cd", 6, "cdef") == 2);
+  ASSERT(mg_match_prefix("a|b|c?", 6, "cdef") == 2);
+  ASSERT(mg_match_prefix("a|?|cd", 6, "cdef") == 1);
+  ASSERT(mg_match_prefix("/a/**.cgi", 9, "/foo/bar/x.cgi") == -1);
+  ASSERT(mg_match_prefix("/a/**.cgi", 9, "/a/bar/x.cgi") == 12);
+  ASSERT(mg_match_prefix("**/", 3, "/a/b/c") == 5);
+  ASSERT(mg_match_prefix("**/$", 4, "/a/b/c") == -1);
+  ASSERT(mg_match_prefix("**/$", 4, "/a/b/") == 5);
+  ASSERT(mg_match_prefix("$", 1, "") == 0);
+  ASSERT(mg_match_prefix("$", 1, "x") == -1);
+  ASSERT(mg_match_prefix("*$", 2, "x") == 1);
+  ASSERT(mg_match_prefix("/$", 2, "/") == 1);
+  ASSERT(mg_match_prefix("**/$", 4, "/a/b/c") == -1);
+  ASSERT(mg_match_prefix("**/$", 4, "/a/b/") == 5);
+  ASSERT(mg_match_prefix("*", 1, "/hello/") == 0);
+  ASSERT(mg_match_prefix("**.a$|**.b$", 11, "/a/b.b/") == -1);
+  ASSERT(mg_match_prefix("**.a$|**.b$", 11, "/a/b.b") == 6);
+  ASSERT(mg_match_prefix("**.a$|**.b$", 11, "/a/B.A") == 6);
+  ASSERT(mg_match_prefix("**o$", 4, "HELLO") == 5);
   return NULL;
 }
 

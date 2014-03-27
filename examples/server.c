@@ -67,6 +67,11 @@ typedef struct _stat file_stat_t;
 typedef struct stat file_stat_t;
 #include <sys/wait.h>
 #include <unistd.h>
+
+#ifdef IOS
+#include <ifaddrs.h>
+#endif
+
 #define DIRSEP '/'
 #define __cdecl
 #define abs_path(rel, abs, abs_size) realpath((rel), (abs))
@@ -74,6 +79,10 @@ typedef struct stat file_stat_t;
 
 #define MAX_OPTIONS 100
 #define MAX_CONF_FILE_LINE_SIZE (8 * 1024)
+
+#ifndef MVER
+#define MVER MONGOOSE_VERSION
+#endif
 
 static int exit_flag;
 static char server_name[50];        // Set by init_server_name()
@@ -131,7 +140,7 @@ static void show_usage_and_exit(void) {
   int i;
 
   fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka, built on %s\n",
-          MONGOOSE_VERSION, __DATE__);
+          MVER, __DATE__);
   fprintf(stderr, "Usage:\n");
 #ifndef MONGOOSE_NO_AUTH
   fprintf(stderr, "  mongoose -A <htpasswd_file> <realm> <user> <passwd>\n");
@@ -246,7 +255,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
 static void init_server_name(void) {
   const char *descr = "";
   snprintf(server_name, sizeof(server_name), "Mongoose web server v.%s%s",
-           MONGOOSE_VERSION, descr);
+           MVER, descr);
 }
 
 static int is_path_absolute(const char *path) {
@@ -269,6 +278,14 @@ static char *get_option(char **options, const char *option_name) {
   return NULL;
 }
 
+static void *serving_thread_func(void *param) {
+  struct mg_server *srv = (struct mg_server *) param;
+  while (exit_flag == 0) {
+    mg_poll_server(srv, 1000);
+  }
+  return NULL;
+}
+
 static int path_exists(const char *path, int is_dir) {
   file_stat_t st;
   return path == NULL || (stat(path, &st) == 0 &&
@@ -284,8 +301,7 @@ static void verify_existence(char **options, const char *name, int is_dir) {
   }
 }
 
-static void set_absolute_path(char *options[], const char *option_name,
-                              const char *path_to_mongoose_exe) {
+static void set_absolute_path(char *options[], const char *option_name) {
   char path[PATH_MAX], abs[PATH_MAX], *option_value;
   const char *p;
 
@@ -298,11 +314,11 @@ static void set_absolute_path(char *options[], const char *option_name,
     // Not absolute. Use the directory where mongoose executable lives
     // be the relative directory for everything.
     // Extract mongoose executable directory into path.
-    if ((p = strrchr(path_to_mongoose_exe, DIRSEP)) == NULL) {
+    if ((p = strrchr(config_file, DIRSEP)) == NULL) {
       getcwd(path, sizeof(path));
     } else {
-      snprintf(path, sizeof(path), "%.*s", (int) (p - path_to_mongoose_exe),
-               path_to_mongoose_exe);
+      snprintf(path, sizeof(path), "%.*s", (int) (p - config_file),
+               config_file);
     }
 
     strncat(path, "/", sizeof(path) - 1);
@@ -412,16 +428,16 @@ static void start_mongoose(int argc, char *argv[]) {
 
   // Make sure we have absolute paths for files and directories
   // https://github.com/valenok/mongoose/issues/181
-  set_absolute_path(options, "document_root", argv[0]);
-  set_absolute_path(options, "dav_auth_file", argv[0]);
-  set_absolute_path(options, "cgi_interpreter", argv[0]);
-  set_absolute_path(options, "access_log_file", argv[0]);
-  set_absolute_path(options, "global_auth_file", argv[0]);
-  set_absolute_path(options, "ssl_certificate", argv[0]);
+  set_absolute_path(options, "document_root");
+  set_absolute_path(options, "dav_auth_file");
+  set_absolute_path(options, "cgi_interpreter");
+  set_absolute_path(options, "access_log_file");
+  set_absolute_path(options, "global_auth_file");
+  set_absolute_path(options, "ssl_certificate");
 
   if (!path_exists(get_option(options, "document_root"), 1)) {
     set_option(options, "document_root", s_default_document_root);
-    set_absolute_path(options, "document_root", argv[0]);
+    set_absolute_path(options, "document_root");
     notify("Setting document_root to [%s]",
            mg_get_option(server, "document_root"));
   }
@@ -472,9 +488,7 @@ int main(int argc, char *argv[]) {
          server_name, mg_get_option(server, "document_root"),
          mg_get_option(server, "listening_port"));
   fflush(stdout);  // Needed, Windows terminals might not be line-buffered
-  while (exit_flag == 0) {
-    mg_poll_server(server, 1000);
-  }
+  serving_thread_func(server);
   printf("Exiting on signal %d ...", exit_flag);
   fflush(stdout);
   mg_destroy_server(&server);

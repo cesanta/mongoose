@@ -40,7 +40,7 @@ How To Create A PHP Website With Mongoose
 
 ![screenshot](http://cesanta.com/images/tut_php/tut10.png)
 
-## 11. Click on the mongoose icon and choose "Start browser" menu:
+## 11. Click on the mongoose icon and choose "Go to my address" menu:
 ![screenshot](http://cesanta.com/images/tut_php/tut11.png)
 
 
