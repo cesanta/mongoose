@@ -1023,7 +1023,7 @@ void ns_server_free(struct ns_server *s) {
 #define flockfile(x)      ((void) (x))
 #define funlockfile(x)    ((void) (x))
 typedef struct _stati64 file_stat_t;
-typedef HANDLE pid_t;
+typedef HANDLE process_id_t;
 #else                    ////////////// UNIX specific defines and includes
 #include <dirent.h>
 #include <dlfcn.h>
@@ -1032,6 +1032,7 @@ typedef HANDLE pid_t;
 #define O_BINARY 0
 #define INT64_FMT PRId64
 typedef struct stat file_stat_t;
+typedef pid_t process_id_t;
 #endif                  //////// End of platform-specific defines and includes
 
 #include "mongoose.h"
@@ -1647,8 +1648,9 @@ static void abs_path(const char *utf8_path, char *abs_path, size_t len) {
   WideCharToMultiByte(CP_UTF8, 0, buf2, wcslen(buf2) + 1, abs_path, len, 0, 0);
 }
 
-static pid_t start_process(char *interp, const char *cmd, const char *env,
-                           const char *envp[], const char *dir, sock_t sock) {
+static process_id_t start_process(char *interp, const char *cmd,
+                                  const char *env, const char *envp[],
+                                  const char *dir, sock_t sock) {
   STARTUPINFOW si = {0};
   PROCESS_INFORMATION pi = {0};
   HANDLE a[2], b[2], me = GetCurrentProcess();
@@ -1708,13 +1710,14 @@ static pid_t start_process(char *interp, const char *cmd, const char *env,
   CloseHandle(pi.hThread);
   CloseHandle(pi.hProcess);
 
-  return (pid_t) pi.hProcess;
+  return pi.hProcess;
 }
 #else
-static pid_t start_process(const char *interp, const char *cmd, const char *env,
-                           const char *envp[], const char *dir, sock_t sock) {
+static process_id_t start_process(const char *interp, const char *cmd,
+                                  const char *env, const char *envp[],
+                                  const char *dir, sock_t sock) {
   char buf[500];
-  pid_t pid = fork();
+  process_id_t pid = fork();
   (void) env;
 
   if (pid == 0) {
