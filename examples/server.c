@@ -86,10 +86,13 @@ typedef struct stat file_stat_t;
 
 static int exit_flag;
 static char server_name[50];        // Set by init_server_name()
-static char config_file[PATH_MAX];  // Set by process_command_line_arguments()
+static char s_config_file[PATH_MAX];  // Set by process_command_line_arguments
 static struct mg_server *server;    // Set by start_mongoose()
 static const char *s_default_document_root = ".";
 static const char *s_default_listening_port = "8080";
+static char **s_argv = { NULL };
+
+static void set_options(char *argv[]);
 
 #if !defined(CONFIG_FILE)
 #define CONFIG_FILE "mongoose.conf"
@@ -189,32 +192,34 @@ static void set_option(char **options, const char *name, const char *value) {
 }
 
 static void process_command_line_arguments(char *argv[], char **options) {
-  char line[MAX_CONF_FILE_LINE_SIZE], opt[sizeof(line)], val[sizeof(line)], *p;
+  char line[MAX_CONF_FILE_LINE_SIZE], opt[sizeof(line)], val[sizeof(line)],
+       *p, cpath[PATH_MAX];
   FILE *fp = NULL;
   size_t i, cmd_line_opts_start = 1, line_no = 0;
 
   // Should we use a config file ?
   if (argv[1] != NULL && argv[1][0] != '-') {
-    snprintf(config_file, sizeof(config_file), "%s", argv[1]);
+    snprintf(cpath, sizeof(cpath), "%s", argv[1]);
     cmd_line_opts_start = 2;
   } else if ((p = strrchr(argv[0], DIRSEP)) == NULL) {
     // No command line flags specified. Look where binary lives
-    snprintf(config_file, sizeof(config_file), "%s", CONFIG_FILE);
+    snprintf(cpath, sizeof(cpath), "%s", CONFIG_FILE);
   } else {
-    snprintf(config_file, sizeof(config_file), "%.*s%c%s",
+    snprintf(cpath, sizeof(cpath), "%.*s%c%s",
              (int) (p - argv[0]), argv[0], DIRSEP, CONFIG_FILE);
   }
+  abs_path(cpath, s_config_file, sizeof(s_config_file));
 
-  fp = fopen(config_file, "r");
+  fp = fopen(s_config_file, "r");
 
   // If config file was set in command line and open failed, die
   if (cmd_line_opts_start == 2 && fp == NULL) {
-    die("Cannot open config file %s: %s", config_file, strerror(errno));
+    die("Cannot open config file %s: %s", s_config_file, strerror(errno));
   }
 
   // Load config file settings first
   if (fp != NULL) {
-    fprintf(stderr, "Loading config file %s\n", config_file);
+    fprintf(stderr, "Loading config file %s\n", s_config_file);
 
     // Loop over the lines in config file
     while (fgets(line, sizeof(line), fp) != NULL) {
@@ -228,7 +233,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
 
       if (sscanf(line, "%s %[^\r\n#]", opt, val) != 2) {
         printf("%s: line %d is invalid, ignoring it:\n %s",
-               config_file, (int) line_no, line);
+               s_config_file, (int) line_no, line);
       } else {
         set_option(options, opt, val);
       }
@@ -314,11 +319,11 @@ static void set_absolute_path(char *options[], const char *option_name) {
     // Not absolute. Use the directory where mongoose executable lives
     // be the relative directory for everything.
     // Extract mongoose executable directory into path.
-    if ((p = strrchr(config_file, DIRSEP)) == NULL) {
+    if ((p = strrchr(s_config_file, DIRSEP)) == NULL) {
       getcwd(path, sizeof(path));
     } else {
-      snprintf(path, sizeof(path), "%.*s", (int) (p - config_file),
-               config_file);
+      snprintf(path, sizeof(path), "%.*s", (int) (p - s_config_file),
+               s_config_file);
     }
 
     strncat(path, "/", sizeof(path) - 1);
@@ -396,9 +401,7 @@ int modify_passwords_file(const char *fname, const char *domain,
 #endif
 
 static void start_mongoose(int argc, char *argv[]) {
-  char *options[MAX_OPTIONS];
-  int i;
-
+  s_argv = argv;
   if ((server = mg_create_server(NULL, EV_HANDLER)) == NULL) {
     die("%s", "Failed to start Mongoose.");
   }
@@ -418,6 +421,12 @@ static void start_mongoose(int argc, char *argv[]) {
   if (argc == 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
     show_usage_and_exit();
   }
+  set_options(argv);
+}
+
+static void set_options(char *argv[]) {
+  char *options[MAX_OPTIONS];
+  int i;
 
   options[0] = NULL;
   set_option(options, "document_root", s_default_document_root);
