@@ -113,21 +113,6 @@ void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
 
-struct mg_dll_symbol {
-  const char *symbol_name;
-  union { void *ptr; void (*func_ptr)(void); } symbol_address;
-};
-const char *mg_load_dll(const char *dll_path, struct mg_dll_symbol *symbols);
-
-// Lua utility functions
-#ifdef MONGOOSE_USE_LUA
-#include <lua.h>
-#include <lauxlib.h>
-void reg_string(lua_State *L, const char *name, const char *val);
-void reg_int(lua_State *L, const char *name, int val);
-void reg_function(lua_State *L, const char *,
-                         lua_CFunction, struct mg_connection *);
-#endif
 
 #ifdef __cplusplus
 }

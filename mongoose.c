@@ -100,7 +100,6 @@ typedef unsigned __int64 uint64_t;
 typedef __int64   int64_t;
 typedef SOCKET sock_t;
 #else
-#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -1316,45 +1315,6 @@ static int mg_open(const char *path, int flag) {
   return _wopen(wpath, flag);
 }
 #endif // _WIN32 && !MONGOOSE_NO_FILESYSTEM
-
-#ifndef MONGOOSE_NO_DL
-void *mg_open_dll(const char *dll_name) {
-#ifdef _WIN32
-  wchar_t wbuf[MAX_PATH_SIZE];
-  to_wchar(dll_name, wbuf, ARRAY_SIZE(wbuf));
-  return LoadLibraryW(wbuf);
-#else
-  return dlopen(dll_name, RTLD_LAZY);
-#endif
-}
-
-void *mg_find_dll_sym(void *dll_handle, const char *name) {
-#ifdef _WIN32
-  return GetProcAddress((HINSTANCE) dll_handle, name);
-#else
-  return dlsym(dll_handle, name);
-#endif
-}
-
-const char *mg_load_dll(const char *dll_name, struct mg_dll_symbol *syms) {
-  void *dll_handle;
-  int i;
-
-  if ((dll_handle = mg_open_dll(dll_name)) == NULL) {
-    return dll_name;
-  } else {
-    for (i = 0; syms != NULL && syms[i].symbol_name != NULL; i++) {
-      syms[i].symbol_address.ptr = mg_find_dll_sym(dll_handle,
-                                                   syms[i].symbol_name);
-      if (syms[i].symbol_address.ptr == NULL) {
-        return syms[i].symbol_name;
-      }
-    }
-  }
-
-  return NULL;
-}
-#endif
 
 // A helper function for traversing a comma separated list of values.
 // It returns a list pointer shifted to the next value, or NULL if the end
