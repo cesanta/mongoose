@@ -113,6 +113,13 @@ void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
 
+struct mg_expansion {
+  const char *keyword;
+  void (*handler)(struct mg_connection *);
+};
+void mg_template(struct mg_connection *, const char *text,
+                 struct mg_expansion *expansions);
+
 
 #ifdef __cplusplus
 }

@@ -2179,6 +2179,42 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
   return j;
 }
 
+// This function prints HTML pages, and expands "{{something}}" blocks
+// inside HTML by calling appropriate callback functions.
+// The output is done by the output function. In production case, the output
+// function sends data to mongoose. In test case, it prints into a string.
+// Note that {{@path/to/file}} construct outputs embedded file's contents,
+// which provides SSI-like functionality.
+void mg_template(struct mg_connection *conn, const char *s,
+                 struct mg_expansion *expansions) {
+  int i, j, pos = 0, inside_marker = 0;
+
+  for (i = 0; s[i] != '\0'; i++) {
+    if (inside_marker == 0 && !memcmp(&s[i], "{{", 2)) {
+      if (i > pos) {
+        mg_send_data(conn, &s[pos], i - pos);
+      }
+      pos = i;
+      inside_marker = 1;
+    }
+    if (inside_marker == 1 && !memcmp(&s[i], "}}", 2)) {
+      for (j = 0; expansions[j].keyword != NULL; j++) {
+        const char *kw = expansions[j].keyword;
+        if ((int) strlen(kw) == i - (pos + 2) &&
+            memcmp(kw, &s[pos + 2], i - (pos + 2)) == 0) {
+          expansions[j].handler(conn);
+          pos = i + 2;
+          break;
+        }
+      }
+      inside_marker = 0;
+    }
+  }
+  if (i > pos) {
+    mg_send_data(conn, &s[pos], i - pos);
+  }
+}
+
 #ifndef MONGOOSE_NO_FILESYSTEM
 static int must_hide_file(struct connection *conn, const char *path) {
   const char *pw_pattern = "**" PASSWORDS_FILE_NAME "$";
