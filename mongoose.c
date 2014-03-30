@@ -4415,53 +4415,63 @@ const char *mg_set_option(struct mg_server *server, const char *name,
                           const char *value) {
   int ind = get_option_index(name);
   const char *error_msg = NULL;
+  char **v = NULL;
 
-  if (ind < 0) {
-    error_msg = "No such option";
-  } else {
-    if (server->config_options[ind] != NULL) {
-      free(server->config_options[ind]);
+  if (ind < 0) return  "No such option";
+  v = &server->config_options[ind];
+
+  // Return success immediately if setting to the same value
+  if ((*v == NULL && value == NULL) ||
+      (value != NULL && *v != NULL && !strcmp(value, *v))) {
+    return NULL;
+  }
+
+  if (*v != NULL) {
+    free(*v);
+    *v = NULL;
+  }
+
+  if (value == NULL) return NULL;
+
+  *v = mg_strdup(value);
+  DBG(("%s [%s]", name, *v));
+
+  if (ind == LISTENING_PORT) {
+    int port = ns_bind(&server->ns_server, value);
+    if (port < 0) {
+      error_msg = "Cannot bind to port";
+    } else {
+      ns_sock_to_str(server->ns_server.listening_sock, server->local_ip,
+        sizeof(server->local_ip), 0);
+      if (!strcmp(value, "0")) {
+        char buf[10];
+        mg_snprintf(buf, sizeof(buf), "%d", port);
+        free(*v);
+        *v = mg_strdup(buf);
+      }
     }
-    server->config_options[ind] = mg_strdup(value);
-    DBG(("%s [%s]", name, value));
-
-    if (ind == LISTENING_PORT) {
-      int port = ns_bind(&server->ns_server, value);
-      if (port < 0) {
-        error_msg = "Cannot bind to port";
-      } else {
-        ns_sock_to_str(server->ns_server.listening_sock, server->local_ip,
-          sizeof(server->local_ip), 0);
-        if (!strcmp(value, "0")) {
-          char buf[10];
-          mg_snprintf(buf, sizeof(buf), "%d", port);
-          free(server->config_options[ind]);
-          server->config_options[ind] = mg_strdup(buf);
-        }
-      }
 #ifndef _WIN32
-    } else if (ind == RUN_AS_USER) {
-      struct passwd *pw;
-      if ((pw = getpwnam(value)) == NULL) {
-        error_msg = "Unknown user";
-      } else if (setgid(pw->pw_gid) != 0) {
-        error_msg = "setgid() failed";
-      } else if (setuid(pw->pw_uid) != 0) {
-        error_msg = "setuid() failed";
-      }
+  } else if (ind == RUN_AS_USER) {
+    struct passwd *pw;
+    if ((pw = getpwnam(value)) == NULL) {
+      error_msg = "Unknown user";
+    } else if (setgid(pw->pw_gid) != 0) {
+      error_msg = "setgid() failed";
+    } else if (setuid(pw->pw_uid) != 0) {
+      error_msg = "setuid() failed";
+    }
 #endif
 #ifdef NS_ENABLE_SSL
-    } else if (ind == SSL_CERTIFICATE) {
-      int res = ns_set_ssl_cert(&server->ns_server, value);
-      if (res == -2) {
-        error_msg = "Cannot load PEM";
-      } else if (res == -3) {
-        error_msg = "SSL not enabled";
-      } else if (res == -1) {
-        error_msg = "SSL_CTX_new() failed";
-      }
-#endif
+  } else if (ind == SSL_CERTIFICATE) {
+    int res = ns_set_ssl_cert(&server->ns_server, value);
+    if (res == -2) {
+      error_msg = "Cannot load PEM";
+    } else if (res == -3) {
+      error_msg = "SSL not enabled";
+    } else if (res == -1) {
+      error_msg = "SSL_CTX_new() failed";
     }
+#endif
   }
 
   return error_msg;
