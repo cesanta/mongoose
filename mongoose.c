@@ -229,7 +229,7 @@ int ns_vprintf(struct ns_connection *, const char *fmt, va_list ap);
 void *ns_start_thread(void *(*f)(void *), void *p);
 int ns_socketpair(sock_t [2]);
 void ns_set_close_on_exec(sock_t);
-void ns_sock_to_str(sock_t sock, char *buf, size_t len, int add_port);
+void ns_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
 int ns_hexdump(const void *buf, int len, char *dst, int dst_len);
 
 #ifdef __cplusplus
@@ -613,25 +613,31 @@ static int ns_is_error(int n) {
     );
 }
 
-void ns_sock_to_str(sock_t sock, char *buf, size_t len, int add_port) {
+void ns_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
   union socket_address sa;
   socklen_t slen = sizeof(sa);
 
   if (buf != NULL && len > 0) {
     buf[0] = '\0';
     memset(&sa, 0, sizeof(sa));
-    getsockname(sock, &sa.sa, &slen);
+    if (flags & 4) {
+      getpeername(sock, &sa.sa, &slen);
+    } else {
+      getsockname(sock, &sa.sa, &slen);
+    }
+    if (flags & 1) {
 #if defined(NS_ENABLE_IPV6)
-    inet_ntop(sa.sa.sa_family, sa.sa.sa_family == AF_INET ?
-              (void *) &sa.sin.sin_addr :
-              (void *) &sa.sin6.sin6_addr, buf, len);
+      inet_ntop(sa.sa.sa_family, sa.sa.sa_family == AF_INET ?
+                (void *) &sa.sin.sin_addr :
+                (void *) &sa.sin6.sin6_addr, buf, len);
 #elif defined(_WIN32)
-    // Only Windoze Vista (and newer) have inet_ntop()
-    strncpy(buf, inet_ntoa(sa.sin.sin_addr), len);
+      // Only Windoze Vista (and newer) have inet_ntop()
+      strncpy(buf, inet_ntoa(sa.sin.sin_addr), len);
 #else
-    inet_ntop(sa.sa.sa_family, (void *) &sa.sin.sin_addr, buf, len);
+      inet_ntop(sa.sa.sa_family, (void *) &sa.sin.sin_addr, buf, len);
 #endif
-    if (add_port) {
+    }
+    if (flags & 2) {
       snprintf(buf + strlen(buf), len - (strlen(buf) + 1), ":%d",
       (int) ntohs(sa.sin.sin_port));
     }
@@ -1174,7 +1180,6 @@ struct mg_server {
   union socket_address lsa;   // Listening socket address
   mg_handler_t event_handler;
   char *config_options[NUM_OPTIONS];
-  char local_ip[48];
 };
 
 // Local endpoint representation
@@ -1774,7 +1779,7 @@ static void prepare_cgi_environment(struct connection *conn,
   if ((s = getenv("SERVER_NAME")) != NULL) {
     addenv(blk, "SERVER_NAME=%s", s);
   } else {
-    addenv(blk, "SERVER_NAME=%s", conn->server->local_ip);
+    addenv(blk, "SERVER_NAME=%s", ri->local_ip);
   }
   addenv(blk, "SERVER_ROOT=%s", opts[DOCUMENT_ROOT]);
   addenv(blk, "DOCUMENT_ROOT=%s", opts[DOCUMENT_ROOT]);
@@ -4441,8 +4446,6 @@ const char *mg_set_option(struct mg_server *server, const char *name,
     if (port < 0) {
       error_msg = "Cannot bind to port";
     } else {
-      ns_sock_to_str(server->ns_server.listening_sock, server->local_ip,
-        sizeof(server->local_ip), 0);
       if (!strcmp(value, "0")) {
         char buf[10];
         mg_snprintf(buf, sizeof(buf), "%d", port);
@@ -4477,6 +4480,16 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   return error_msg;
 }
 
+static void set_ips(struct connection *conn, int is_rem) {
+  struct mg_connection *c = &conn->mg_conn;
+  char buf[100];
+
+  ns_sock_to_str(conn->ns_conn->sock, buf, sizeof(buf), is_rem ? 7 : 3);
+  sscanf(buf, "%47[^:]:%hu",
+         is_rem ? c->remote_ip : c->local_ip,
+         is_rem ? &c->remote_port : &c->local_port);
+}
+
 static void on_accept(struct ns_connection *nc, union socket_address *sa) {
   struct mg_server *server = (struct mg_server *) nc->server;
   struct connection *conn;
@@ -4486,17 +4499,15 @@ static void on_accept(struct ns_connection *nc, union socket_address *sa) {
       (conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
     nc->flags |= NSF_CLOSE_IMMEDIATELY;
   } else {
-    conn->server = server;
-    ns_sock_to_str(nc->sock, conn->mg_conn.remote_ip,
-      sizeof(conn->mg_conn.remote_ip), 0);
-    conn->mg_conn.remote_port = ntohs(sa->sin.sin_port);
-    conn->mg_conn.server_param = nc->server->server_data;
-    conn->mg_conn.local_ip = server->local_ip;
-    conn->mg_conn.local_port = ntohs(server->lsa.sin.sin_port);
-
     // Circularly link two connection structures
     nc->connection_data = conn;
     conn->ns_conn = nc;
+
+    // Initialize the rest of connection attributes
+    conn->server = server;
+    conn->mg_conn.server_param = nc->server->server_data;
+    set_ips(conn, 1);
+    set_ips(conn, 0);
   }
 }
 
