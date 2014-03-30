@@ -2181,8 +2181,6 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
 
 // This function prints HTML pages, and expands "{{something}}" blocks
 // inside HTML by calling appropriate callback functions.
-// The output is done by the output function. In production case, the output
-// function sends data to mongoose. In test case, it prints into a string.
 // Note that {{@path/to/file}} construct outputs embedded file's contents,
 // which provides SSI-like functionality.
 void mg_template(struct mg_connection *conn, const char *s,
