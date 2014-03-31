@@ -4042,7 +4042,7 @@ static void try_parse(struct connection *conn) {
     if (conn->request_len > 0) {
       const char *cl_hdr = mg_get_header(&conn->mg_conn, "Content-Length");
       conn->cl = cl_hdr == NULL ? 0 : to64(cl_hdr);
-      conn->mg_conn.content_len = conn->cl;
+      conn->mg_conn.content_len = (size_t) conn->cl;
     }
   }
 }
