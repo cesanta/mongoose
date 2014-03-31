@@ -597,7 +597,7 @@ static struct ns_connection *accept_conn(struct ns_server *server) {
 
     ns_add_conn(server, c);
     ns_call(c, NS_ACCEPT, &sa);
-    DBG(("%p %d %p %p", c, c->sock, c->ssl, server->ssl_ctx));
+    DBG(("%p %d %p %p %d", c, c->sock, c->ssl, server->ssl_ctx, c->flags));
   }
 
   return c;
@@ -4436,7 +4436,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
     *v = NULL;
   }
 
-  if (value == NULL) return NULL;
+  if (value == NULL || value[0] == '\0') return NULL;
 
   *v = mg_strdup(value);
   DBG(("%s [%s]", name, *v));
