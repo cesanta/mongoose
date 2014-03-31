@@ -2,7 +2,16 @@
 
 ## Release 5.4
 
+Changes in Libmongoose library:
+   * Added `hexdump_file` option for low-level request/reply debugging
+   * Added `mg_template()` API function for generating HTML pages from
+     templates with expansions
+   * Fixed `struct mg_connection::local_ip` handling, `mg_set_option()`
+     behavior with NULL values
+   * Removed Lua support
+
 Changes in pre-compiled binaries:
+   * Created HTML administration console
    * When server is started, browser is started automatically
    * Fixed directory listing bug when directory contains `#` character
    * Removed built-in Lua Server Pages in the binary, and instead
