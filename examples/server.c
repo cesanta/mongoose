@@ -67,6 +67,11 @@ typedef struct _stat file_stat_t;
 typedef struct stat file_stat_t;
 #include <sys/wait.h>
 #include <unistd.h>
+
+#ifdef IOS
+#include <ifaddrs.h>
+#endif
+
 #define DIRSEP '/'
 #define __cdecl
 #define abs_path(rel, abs, abs_size) realpath((rel), (abs))
@@ -75,12 +80,19 @@ typedef struct stat file_stat_t;
 #define MAX_OPTIONS 100
 #define MAX_CONF_FILE_LINE_SIZE (8 * 1024)
 
+#ifndef MVER
+#define MVER MONGOOSE_VERSION
+#endif
+
 static int exit_flag;
 static char server_name[50];        // Set by init_server_name()
-static char config_file[PATH_MAX];  // Set by process_command_line_arguments()
+static char s_config_file[PATH_MAX];  // Set by process_command_line_arguments
 static struct mg_server *server;    // Set by start_mongoose()
 static const char *s_default_document_root = ".";
 static const char *s_default_listening_port = "8080";
+static char **s_argv = { NULL };
+
+static void set_options(char *argv[]);
 
 #if !defined(CONFIG_FILE)
 #define CONFIG_FILE "mongoose.conf"
@@ -131,7 +143,7 @@ static void show_usage_and_exit(void) {
   int i;
 
   fprintf(stderr, "Mongoose version %s (c) Sergey Lyubka, built on %s\n",
-          MONGOOSE_VERSION, __DATE__);
+          MVER, __DATE__);
   fprintf(stderr, "Usage:\n");
 #ifndef MONGOOSE_NO_AUTH
   fprintf(stderr, "  mongoose -A <htpasswd_file> <realm> <user> <passwd>\n");
@@ -180,32 +192,34 @@ static void set_option(char **options, const char *name, const char *value) {
 }
 
 static void process_command_line_arguments(char *argv[], char **options) {
-  char line[MAX_CONF_FILE_LINE_SIZE], opt[sizeof(line)], val[sizeof(line)], *p;
+  char line[MAX_CONF_FILE_LINE_SIZE], opt[sizeof(line)], val[sizeof(line)],
+       *p, cpath[PATH_MAX];
   FILE *fp = NULL;
   size_t i, cmd_line_opts_start = 1, line_no = 0;
 
   // Should we use a config file ?
   if (argv[1] != NULL && argv[1][0] != '-') {
-    snprintf(config_file, sizeof(config_file), "%s", argv[1]);
+    snprintf(cpath, sizeof(cpath), "%s", argv[1]);
     cmd_line_opts_start = 2;
   } else if ((p = strrchr(argv[0], DIRSEP)) == NULL) {
     // No command line flags specified. Look where binary lives
-    snprintf(config_file, sizeof(config_file), "%s", CONFIG_FILE);
+    snprintf(cpath, sizeof(cpath), "%s", CONFIG_FILE);
   } else {
-    snprintf(config_file, sizeof(config_file), "%.*s%c%s",
+    snprintf(cpath, sizeof(cpath), "%.*s%c%s",
              (int) (p - argv[0]), argv[0], DIRSEP, CONFIG_FILE);
   }
+  abs_path(cpath, s_config_file, sizeof(s_config_file));
 
-  fp = fopen(config_file, "r");
+  fp = fopen(s_config_file, "r");
 
   // If config file was set in command line and open failed, die
   if (cmd_line_opts_start == 2 && fp == NULL) {
-    die("Cannot open config file %s: %s", config_file, strerror(errno));
+    die("Cannot open config file %s: %s", s_config_file, strerror(errno));
   }
 
   // Load config file settings first
   if (fp != NULL) {
-    fprintf(stderr, "Loading config file %s\n", config_file);
+    fprintf(stderr, "Loading config file %s\n", s_config_file);
 
     // Loop over the lines in config file
     while (fgets(line, sizeof(line), fp) != NULL) {
@@ -219,7 +233,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
 
       if (sscanf(line, "%s %[^\r\n#]", opt, val) != 2) {
         printf("%s: line %d is invalid, ignoring it:\n %s",
-               config_file, (int) line_no, line);
+               s_config_file, (int) line_no, line);
       } else {
         set_option(options, opt, val);
       }
@@ -246,7 +260,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
 static void init_server_name(void) {
   const char *descr = "";
   snprintf(server_name, sizeof(server_name), "Mongoose web server v.%s%s",
-           MONGOOSE_VERSION, descr);
+           MVER, descr);
 }
 
 static int is_path_absolute(const char *path) {
@@ -269,6 +283,14 @@ static char *get_option(char **options, const char *option_name) {
   return NULL;
 }
 
+static void *serving_thread_func(void *param) {
+  struct mg_server *srv = (struct mg_server *) param;
+  while (exit_flag == 0) {
+    mg_poll_server(srv, 1000);
+  }
+  return NULL;
+}
+
 static int path_exists(const char *path, int is_dir) {
   file_stat_t st;
   return path == NULL || (stat(path, &st) == 0 &&
@@ -284,8 +306,7 @@ static void verify_existence(char **options, const char *name, int is_dir) {
   }
 }
 
-static void set_absolute_path(char *options[], const char *option_name,
-                              const char *path_to_mongoose_exe) {
+static void set_absolute_path(char *options[], const char *option_name) {
   char path[PATH_MAX], abs[PATH_MAX], *option_value;
   const char *p;
 
@@ -298,11 +319,11 @@ static void set_absolute_path(char *options[], const char *option_name,
     // Not absolute. Use the directory where mongoose executable lives
     // be the relative directory for everything.
     // Extract mongoose executable directory into path.
-    if ((p = strrchr(path_to_mongoose_exe, DIRSEP)) == NULL) {
+    if ((p = strrchr(s_config_file, DIRSEP)) == NULL) {
       getcwd(path, sizeof(path));
     } else {
-      snprintf(path, sizeof(path), "%.*s", (int) (p - path_to_mongoose_exe),
-               path_to_mongoose_exe);
+      snprintf(path, sizeof(path), "%.*s", (int) (p - s_config_file),
+               s_config_file);
     }
 
     strncat(path, "/", sizeof(path) - 1);
@@ -380,9 +401,7 @@ int modify_passwords_file(const char *fname, const char *domain,
 #endif
 
 static void start_mongoose(int argc, char *argv[]) {
-  char *options[MAX_OPTIONS];
-  int i;
-
+  s_argv = argv;
   if ((server = mg_create_server(NULL, EV_HANDLER)) == NULL) {
     die("%s", "Failed to start Mongoose.");
   }
@@ -402,6 +421,12 @@ static void start_mongoose(int argc, char *argv[]) {
   if (argc == 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
     show_usage_and_exit();
   }
+  set_options(argv);
+}
+
+static void set_options(char *argv[]) {
+  char *options[MAX_OPTIONS];
+  int i;
 
   options[0] = NULL;
   set_option(options, "document_root", s_default_document_root);
@@ -412,16 +437,16 @@ static void start_mongoose(int argc, char *argv[]) {
 
   // Make sure we have absolute paths for files and directories
   // https://github.com/valenok/mongoose/issues/181
-  set_absolute_path(options, "document_root", argv[0]);
-  set_absolute_path(options, "dav_auth_file", argv[0]);
-  set_absolute_path(options, "cgi_interpreter", argv[0]);
-  set_absolute_path(options, "access_log_file", argv[0]);
-  set_absolute_path(options, "global_auth_file", argv[0]);
-  set_absolute_path(options, "ssl_certificate", argv[0]);
+  set_absolute_path(options, "document_root");
+  set_absolute_path(options, "dav_auth_file");
+  set_absolute_path(options, "cgi_interpreter");
+  set_absolute_path(options, "access_log_file");
+  set_absolute_path(options, "global_auth_file");
+  set_absolute_path(options, "ssl_certificate");
 
   if (!path_exists(get_option(options, "document_root"), 1)) {
     set_option(options, "document_root", s_default_document_root);
-    set_absolute_path(options, "document_root", argv[0]);
+    set_absolute_path(options, "document_root");
     notify("Setting document_root to [%s]",
            mg_get_option(server, "document_root"));
   }
@@ -472,9 +497,7 @@ int main(int argc, char *argv[]) {
          server_name, mg_get_option(server, "document_root"),
          mg_get_option(server, "listening_port"));
   fflush(stdout);  // Needed, Windows terminals might not be line-buffered
-  while (exit_flag == 0) {
-    mg_poll_server(server, 1000);
-  }
+  serving_thread_func(server);
   printf("Exiting on signal %d ...", exit_flag);
   fflush(stdout);
   mg_destroy_server(&server);

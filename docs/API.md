@@ -84,10 +84,10 @@ occur. Sequence of events for the accepted connection is this:
    * `MG_HTTP_ERROR` sent when Mongoose is about to send HTTP error back
       to the client. Event handler can choose to send a reply itself, in which
       case event handler must return `MG_TRUE`. Otherwise, event handler must
-      return `MG_FALSE`
+      return `MG_FALSE`.
    * `MG_CLOSE` is sent when the connection is closed. This event is used
       to cleanup per-connection state stored in `connection_param`
-      if it was allocated.
+      if it was allocated. Event handler return value is ignored.
 
 Sequence of events for the client connection is this:
 
@@ -96,7 +96,11 @@ Sequence of events for the client connection is this:
    Connection status is held in `mg_connection::status_code`: if zero,
    then connection was successful, otherwise connection was not established.
    User should send a request upon successful connection.
+   Event handler should return `MG_TRUE` if connection was successful and
+   HTTP request has been sent. Otherwise, it should send `MG_FALSE`.
    * `MG_REPLY` is sent when response has been received from the remote host.
+   If event handler sends another request, then it should return `MG_TRUE`.
+   Otherwise it should return `MG_FALSE` and Mongoose will close the connection.
    * `MG_CLOSE` same as for the accepted connection.
 
 

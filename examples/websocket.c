@@ -9,10 +9,10 @@
 extern const char *find_embedded_file(const char *, size_t *);
 
 static int iterate_callback(struct mg_connection *c, enum mg_event ev) {
-  static int counter = 0;
   if (ev == MG_POLL && c->is_websocket) {
     char buf[20];
-    int len = snprintf(buf, sizeof(buf), "%d", counter++);
+    int len = snprintf(buf, sizeof(buf), "%lu",
+     (unsigned long) * (time_t *) c->callback_param);
     mg_websocket_write(c, 1, buf, len);
   }
   return MG_TRUE;
@@ -58,7 +58,7 @@ int main(void) {
     current_timer = time(NULL);
     if (current_timer - last_timer > 0) {
       last_timer = current_timer;
-      mg_iterate_over_connections(server, iterate_callback);
+      mg_iterate_over_connections(server, iterate_callback, &current_timer);
     }
   }
 
