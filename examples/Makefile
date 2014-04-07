@@ -12,6 +12,8 @@ ifeq ($(OS),Windows_NT)
   CFLAGS += $(CFLAGS_EXTRA)
 else
   UNAME_S := $(shell uname -s)
+  CC = g++
+  CFLAGS += -lssl -g -O0
 
   ifeq ($(UNAME_S),Linux)
     CFLAGS += -ldl
@@ -56,7 +58,8 @@ websocket_html.c: websocket.html
 	perl mkdata.pl $< > $@
 
 u:
-	g++ unit_test.c -Wall -W -pedantic -lssl -g -O0 $(CFLAGS_EXTRA) && ./a.out
+	$(CC) unit_test.c $(OUT) $(CFLAGS)
+	./$@
 
 clean:
-	-@$(RM) hello mjpg upload post websocket auth server multi_threaded websocket_html.c *.exe *.dSYM *.obj .*o
+	-@$(RM) hello mjpg upload post websocket auth server multi_threaded websocket_html.c *.exe *.dSYM *.obj .*o u a.out
