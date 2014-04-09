@@ -3327,8 +3327,8 @@ static void handle_put(struct connection *conn, const char *path) {
 
 static void forward_put_data(struct connection *conn) {
   struct iobuf *io = &conn->ns_conn->recv_iobuf;
-  int n = conn->cl < io->len ? conn->cl : io->len;  // How many bytes to write
-  n = write(conn->endpoint.fd, io->buf, n);         // Write them!
+  size_t k = conn->cl < (int64_t) io->len ? conn->cl : io->len;   // To write
+  int n = write(conn->endpoint.fd, io->buf, k);   // Write them!
   if (n > 0) {
     iobuf_remove(io, n);
     conn->cl -= n;
@@ -4108,7 +4108,7 @@ static void process_response(struct connection *conn) {
   if (conn->request_len < 0 ||
       (conn->request_len == 0 && io->len > MAX_REQUEST_SIZE)) {
     call_http_client_handler(conn);
-  } else if (io->len >= conn->cl) {
+  } else if ((int64_t) io->len >= conn->cl) {
     call_http_client_handler(conn);
   }
 }
