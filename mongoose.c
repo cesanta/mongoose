@@ -266,10 +266,6 @@ int ns_hexdump(const void *buf, int len, char *dst, int dst_len);
 #define NS_FREE free
 #endif
 
-#ifndef IOBUF_RESIZE_MULTIPLIER
-#define IOBUF_RESIZE_MULTIPLIER 2.0
-#endif
-
 void iobuf_init(struct iobuf *iobuf, size_t size) {
   iobuf->len = iobuf->size = 0;
   iobuf->buf = NULL;
@@ -288,19 +284,18 @@ void iobuf_free(struct iobuf *iobuf) {
 
 size_t iobuf_append(struct iobuf *io, const void *buf, size_t len) {
   char *p = NULL;
-  size_t new_len = io->len + len, new_size = new_len * IOBUF_RESIZE_MULTIPLIER;
 
   assert(io->len <= io->size);
 
   if (len <= 0) {
-  } else if (new_len < io->size) {
+  } else if (io->len + len <= io->size) {
     memcpy(io->buf + io->len, buf, len);
-    io->len = new_len;
-  } else if ((p = (char *) NS_REALLOC(io->buf, new_size)) != NULL) {
+    io->len += len;
+  } else if ((p = (char *) NS_REALLOC(io->buf, io->len + len)) != NULL) {
     io->buf = p;
     memcpy(io->buf + io->len, buf, len);
-    io->len = new_len;
-    io->size = new_size;
+    io->len += len;
+    io->size = io->len;
   } else {
     len = 0;
   }
