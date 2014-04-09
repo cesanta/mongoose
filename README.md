@@ -1,19 +1,27 @@
 # <img src="http://cesanta.com/images/mongoose_logo.png" width="64" height="64"> Mongoose Web Server
 
-Mongoose is easy to use, powerful, embeddable web server.
+Mongoose is the most easy to use web server on the planet. A web server of choice for Web developers (PHP, Ruby, Python, etc) and Web designers.
+
+Mongoose is built on top of Libmongoose embedded library, which can turn
+anything into a web server in 5 minutes worth of effort and few lines of code.
+Libmongoose is used to serve Web GUI on embedded devices, implement RESTful
+services, RPC frameworks (e.g. JSON-RPC), handle telemetry data exchange, and
+perform many other tasks in various different industries including aerospace,
+manufacturing, finance, research, automotive, gaming, IT.
+
+
    * [Mailing list](http://groups.google.com/group/mongoose-users)
-   * [Downloads](http://cesanta.com/mongoose.shtml) and
-   [Documentation](http://cesanta.com/docs.shtml)
-    * [How to use Lua Server Pages](http://cesanta.com/docs/Lua.shtml)
-    * [How to create basic website with Mongoose](http://cesanta.com/docs/BasicWebsite.shtml)
-    * [How to create PHP website with Mongoose](http://cesanta.com/docs/PhpWebsite.shtml)
-    * [Embedding Guide](http://cesanta.com/docs/Embed.shtml)
+   * [Downloads](http://cesanta.com/mongoose.shtml)
+   * [Documentation](http://cesanta.com/docs.shtml)
 
 # Features
 
-- Works on Windows, Mac, UNIX/Linux, iPhone, Android eCos, QNX and many other platforms
-- CGI, SSI, SSL, Digest auth, Websocket, WEbDAV, Resumed download, URL rewrite, file blacklist, Custom error pages, Virtual hosts, IP-based ACL, Windows service
-- Lua Server Pages (PHP-like scripting in [Lua](http://lua.org) ), see [dirscan.lp](https://github.com/cesanta/mongoose/blob/master/examples/lua/dirscan.lp)
+- Works on Windows, Mac, UNIX/Linux, iPhone, Android eCos, QNX
+and many other platforms
+- CGI, SSI, SSL, Digest auth, Websocket, WEbDAV, Resumed download,
+  URL rewrite, file blacklist
+- Custom error pages, Virtual hosts, IP-based ACL, Windows service,
+  HTTP/HTTPS client
 - Simple and clean
   [embedding API](https://github.com/cesanta/mongoose/blob/master/mongoose.h).
   The source is in single
@@ -21,11 +29,9 @@ Mongoose is easy to use, powerful, embeddable web server.
   to make embedding easy
 - Extremely lightweight, has a core of under 40kB and tiny runtime footprint
 - Asynchronous, non-blocking core supporting single- or multi-threaded usage
-- HTTP client functionality
-- On the market since 2004, stable, mature and tested,
-  has several man-years invested in continuous improvement and refinement
-- Professional support and consultancy available from
-[Cesanta Software](http://cesanta.com), developer of Mongoose
+- On the market since 2004 with over 1 million cumulative downloads
+- Stable, mature and tested, has several man-years invested
+  in continuous improvement and refinement
 
 # Screenshots
 
