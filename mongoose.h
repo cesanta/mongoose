@@ -72,6 +72,16 @@ enum mg_event {
 };
 typedef int (*mg_handler_t)(struct mg_connection *, enum mg_event);
 
+// Websocket opcodes, from http://tools.ietf.org/html/rfc6455
+enum {
+  WEBSOCKET_OPCODE_CONTINUATION = 0x0,
+  WEBSOCKET_OPCODE_TEXT = 0x1,
+  WEBSOCKET_OPCODE_BINARY = 0x2,
+  WEBSOCKET_OPCODE_CONNECTION_CLOSE = 0x8,
+  WEBSOCKET_OPCODE_PING = 0x9,
+  WEBSOCKET_OPCODE_PONG = 0xa
+};
+
 // Server management functions
 struct mg_server *mg_create_server(void *server_param, mg_handler_t handler);
 void mg_destroy_server(struct mg_server **);

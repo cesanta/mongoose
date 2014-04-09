@@ -2639,7 +2639,7 @@ static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
 
 static void ping_idle_websocket_connection(struct connection *conn, time_t t) {
   if (t - conn->ns_conn->last_io_time > MONGOOSE_USE_WEBSOCKET_PING_INTERVAL) {
-    mg_websocket_write(&conn->mg_conn, 0x9, "", 0);
+    mg_websocket_write(&conn->mg_conn, WEBSOCKET_OPCODE_PING, "", 0);
   }
 }
 #else
