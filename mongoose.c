@@ -2631,7 +2631,9 @@ static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
         *key = mg_get_header(conn, "Sec-WebSocket-Key");
   if (ver != NULL && key != NULL) {
     conn->is_websocket = 1;
-    send_websocket_handshake(conn, key);
+    if (call_user(MG_CONN_2_CONN(conn), MG_WS_HANDSHAKE) == MG_FALSE) {
+      send_websocket_handshake(conn, key);
+    }
   }
 }
 
