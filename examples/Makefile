@@ -50,6 +50,9 @@ upload: upload.c ../mongoose.c
 auth: auth.c ../mongoose.c
 	$(CC) auth.c ../mongoose.c $(OUT) $(CFLAGS)
 
+form: form.c ../mongoose.c
+	$(CC) form.c ../mongoose.c $(OUT) $(CFLAGS)
+
 mjpg: mjpg.c ../mongoose.c
 	$(CC) mjpg.c ../mongoose.c $(OUT) $(CFLAGS)
 
