@@ -3922,7 +3922,8 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
 #if MONGOOSE_POST_SIZE_LIMIT > 1
     {
       const char *cl = mg_get_header(&conn->mg_conn, "Content-Length");
-      if (!strcmp(conn->mg_conn.request_method, "POST") &&
+      if ((strcmp(conn->mg_conn.request_method, "POST") == 0 ||
+           strcmp(conn->mg_conn.request_method, "PUT") == 0) &&
           (cl == NULL || to64(cl) > MONGOOSE_POST_SIZE_LIMIT)) {
         send_http_error(conn, 500, "POST size > %zu",
                         (size_t) MONGOOSE_POST_SIZE_LIMIT);
