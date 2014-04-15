@@ -2647,7 +2647,13 @@ static void write_terminating_chunk(struct connection *conn) {
 
 static int call_request_handler(struct connection *conn) {
   int result;
-  conn->mg_conn.content = conn->ns_conn->recv_iobuf.buf;
+  char tmpBuf[conn->mg_conn.content_len + 1]; /* +1 to add end of string char */
+
+  strncpy(tmpBuf, conn->ns_conn->recv_iobuf.buf, sizeof(tmpBuf));
+  tmpBuf[sizeof(tmpBuf) - 1] = '\0';
+
+  conn->mg_conn.content = tmpBuf;
+
   if ((result = call_user(conn, MG_REQUEST)) == MG_TRUE) {
     if (conn->ns_conn->flags & MG_HEADERS_SENT) {
       write_terminating_chunk(conn);
