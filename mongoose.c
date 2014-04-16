@@ -418,6 +418,11 @@ static void ns_close_conn(struct ns_connection *conn) {
   closesocket(conn->sock);
   iobuf_free(&conn->recv_iobuf);
   iobuf_free(&conn->send_iobuf);
+#ifdef NS_ENABLE_SSL
+  if (conn->ssl != NULL) {
+    SSL_free(conn->ssl);
+  }
+#endif
   NS_FREE(conn);
 }
 
@@ -985,6 +990,7 @@ void ns_server_free(struct ns_server *s) {
 #ifdef NS_ENABLE_SSL
   if (s->ssl_ctx != NULL) SSL_CTX_free(s->ssl_ctx);
   if (s->client_ssl_ctx != NULL) SSL_CTX_free(s->client_ssl_ctx);
+  s->ssl_ctx = s->client_ssl_ctx = NULL;
 #endif
 }
 
