@@ -228,6 +228,7 @@ int ns_vprintf(struct ns_connection *, const char *fmt, va_list ap);
 // Utility functions
 void *ns_start_thread(void *(*f)(void *), void *p);
 int ns_socketpair(sock_t [2]);
+int ns_socketpair2(sock_t [2], int sock_type);  // SOCK_STREAM or SOCK_DGRAM
 void ns_set_close_on_exec(sock_t);
 void ns_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
 int ns_hexdump(const void *buf, int len, char *dst, int dst_len);
@@ -445,26 +446,29 @@ static void ns_set_non_blocking_mode(sock_t sock) {
 }
 
 #ifndef NS_DISABLE_SOCKETPAIR
-int ns_socketpair(sock_t sp[2]) {
-  struct sockaddr_in sa;
+int ns_socketpair2(sock_t sp[2], int sock_type) {
+  union socket_address sa;
   sock_t sock;
-  socklen_t len = sizeof(sa);
+  socklen_t len = sizeof(sa.sin);
   int ret = 0;
 
   sp[0] = sp[1] = INVALID_SOCKET;
 
   (void) memset(&sa, 0, sizeof(sa));
-  sa.sin_family = AF_INET;
-  sa.sin_port = htons(0);
-  sa.sin_addr.s_addr = htonl(0x7f000001);
+  sa.sin.sin_family = AF_INET;
+  sa.sin.sin_port = htons(0);
+  sa.sin.sin_addr.s_addr = htonl(0x7f000001);
 
-  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
-      !bind(sock, (struct sockaddr *) &sa, len) &&
-      !listen(sock, 1) &&
-      !getsockname(sock, (struct sockaddr *) &sa, &len) &&
-      (sp[0] = socket(AF_INET, SOCK_STREAM, 6)) != -1 &&
-      !connect(sp[0], (struct sockaddr *) &sa, len) &&
-      (sp[1] = accept(sock,(struct sockaddr *) &sa, &len)) != INVALID_SOCKET) {
+  if ((sock = socket(AF_INET, sock_type, 0)) != INVALID_SOCKET &&
+      !bind(sock, &sa.sa, len) &&
+      (sock_type == SOCK_DGRAM || !listen(sock, 1)) &&
+      !getsockname(sock, &sa.sa, &len) &&
+      (sp[0] = socket(AF_INET, sock_type, 0)) != INVALID_SOCKET &&
+      !connect(sp[0], &sa.sa, len) &&
+      (sock_type == SOCK_STREAM ||
+       (!getsockname(sp[0], &sa.sa, &len) && !connect(sock, &sa.sa, len))) &&
+      (sp[1] = (sock_type == SOCK_DGRAM ? sock :
+                accept(sock, &sa.sa, &len))) != INVALID_SOCKET) {
     ns_set_close_on_exec(sp[0]);
     ns_set_close_on_exec(sp[1]);
     ret = 1;
@@ -473,9 +477,13 @@ int ns_socketpair(sock_t sp[2]) {
     if (sp[1] != INVALID_SOCKET) closesocket(sp[1]);
     sp[0] = sp[1] = INVALID_SOCKET;
   }
-  closesocket(sock);
+  if (sock_type != SOCK_DGRAM) closesocket(sock);
 
   return ret;
+}
+
+int ns_socketpair(sock_t sp[2]) {
+  return ns_socketpair2(sp, SOCK_STREAM);
 }
 #endif  // NS_DISABLE_SOCKETPAIR
 
@@ -1193,7 +1201,7 @@ enum endpoint_type { EP_NONE, EP_FILE, EP_CGI, EP_USER, EP_PUT, EP_CLIENT };
 #define MG_CGI_CONN NSF_USER_3
 
 struct connection {
-  struct ns_connection *ns_conn;
+  struct ns_connection *ns_conn;  // NOTE(lsm): main.c depends on this order
   struct mg_connection mg_conn;
   struct mg_server *server;
   union endpoint endpoint;
@@ -2587,11 +2595,12 @@ static int deliver_websocket_frame(struct connection *conn) {
 
 int mg_websocket_write(struct mg_connection* conn, int opcode,
                        const char *data, size_t data_len) {
-    unsigned char *copy;
+    unsigned char mem[4192], *copy = mem;
     size_t copy_len = 0;
     int retval = -1;
 
-    if ((copy = (unsigned char *) malloc(data_len + 10)) == NULL) {
+    if (data_len + 10 > sizeof(mem) &&
+        (copy = (unsigned char *) malloc(data_len + 10)) == NULL) {
       return -1;
     }
 
@@ -2622,9 +2631,30 @@ int mg_websocket_write(struct mg_connection* conn, int opcode,
     if (copy_len > 0) {
       retval = mg_write(conn, copy, copy_len);
     }
-    free(copy);
+    if (copy != mem) {
+      free(copy);
+    }
 
     return retval;
+}
+
+int mg_websocket_printf(struct mg_connection* conn, int opcode,
+                        const char *fmt, ...) {
+  char mem[4192], *buf = mem;
+  va_list ap;
+  int len;
+
+  va_start(ap, fmt);
+  if ((len = ns_avprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
+    mg_websocket_write(conn, opcode, buf, len);
+  }
+  va_end(ap);
+
+  if (buf != mem && buf != NULL) {
+    free(buf);
+  }
+
+  return len;
 }
 
 static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
@@ -4623,6 +4653,15 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
     default:
       break;
   }
+
+#ifdef MONGOOSE_SEND_NS_EVENTS
+  {
+    struct connection *conn = (struct connection *) nc->connection_data;
+    struct mg_connection *c = conn == NULL ? NULL : &conn->mg_conn;
+    if (c != NULL) c->callback_param = p;
+    if (server->event_handler) server->event_handler(c, (enum mg_event) ev);
+  }
+#endif
 }
 
 void mg_wakeup_server(struct mg_server *server) {
