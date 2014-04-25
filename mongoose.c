@@ -3065,24 +3065,25 @@ static int scan_directory(struct connection *conn, const char *dir,
   return arr_ind;
 }
 
-static void mg_url_encode(const char *src, char *dst, size_t dst_len) {
+int mg_url_encode(const char *src, size_t s_len, char *dst, size_t dst_len) {
   static const char *dont_escape = "._-$,;~()";
   static const char *hex = "0123456789abcdef";
-  const char *end = dst + dst_len - 1;
+  size_t i = 0, j = 0;
 
-  for (; *src != '\0' && dst < end; src++, dst++) {
-    if (isalnum(*(const unsigned char *) src) ||
-        strchr(dont_escape, * (const unsigned char *) src) != NULL) {
-      *dst = *src;
-    } else if (dst + 2 < end) {
-      dst[0] = '%';
-      dst[1] = hex[(* (const unsigned char *) src) >> 4];
-      dst[2] = hex[(* (const unsigned char *) src) & 0xf];
-      dst += 2;
+  for (i = j = 0; dst_len > 0 && i < s_len && j < dst_len - 1; i++, j++) {
+    if (isalnum(* (const unsigned char *) (src + i)) ||
+        strchr(dont_escape, * (const unsigned char *) (src + i)) != NULL) {
+      dst[j] = src[i];
+    } else if (j + 3 < dst_len) {
+      dst[j] = '%';
+      dst[j + 1] = hex[(* (const unsigned char *) (src + i)) >> 4];
+      dst[j + 2] = hex[(* (const unsigned char *) (src + i)) & 0xf];
+      j += 2;
     }
   }
 
-  *dst = '\0';
+  dst[j] = '\0';
+  return j;
 }
 #endif  // !NO_DIRECTORY_LISTING || !MONGOOSE_NO_DAV
 
@@ -3110,7 +3111,7 @@ static void print_dir_entry(const struct dir_entry *de) {
     }
   }
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&de->st.st_mtime));
-  mg_url_encode(de->file_name, href, sizeof(href));
+  mg_url_encode(de->file_name, strlen(de->file_name), href, sizeof(href));
   mg_printf_data(&de->conn->mg_conn,
                   "<tr><td><a href=\"%s%s\">%s%s</a></td>"
                   "<td>&nbsp;%s</td><td>&nbsp;&nbsp;%s</td></tr>\n",
@@ -3231,7 +3232,7 @@ static void handle_propfind(struct connection *conn, const char *path,
       for (i = 0; i < num_entries; i++) {
         char buf[MAX_PATH_SIZE * 3];
         struct dir_entry *de = &arr[i];
-        mg_url_encode(de->file_name, buf, sizeof(buf) - 1);
+        mg_url_encode(de->file_name, strlen(de->file_name), buf, sizeof(buf));
         print_props(conn, buf, &de->st);
       }
     }
@@ -4306,7 +4307,7 @@ static void iter(struct ns_connection *nsconn, enum ns_event ev, void *param) {
   if (ev == NS_POLL) {
     struct mg_iterator *it = (struct mg_iterator *) param;
     struct connection *c = (struct connection *) nsconn->connection_data;
-    c->mg_conn.callback_param = it->param;
+    if (c != NULL) c->mg_conn.callback_param = it->param;
     it->cb(&c->mg_conn, MG_POLL);
   }
 }
@@ -4572,9 +4573,26 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
   struct connection *conn = (struct connection *) nc->connection_data;
   struct mg_server *server = (struct mg_server *) nc->server;
 
+  // Send NS event to the handler. Note that call_user won't send an event
+  // if conn == NULL. Therefore, repeat this for NS_ACCEPT event as well.
+#ifdef MONGOOSE_SEND_NS_EVENTS
+  {
+    struct connection *conn = (struct connection *) nc->connection_data;
+    if (conn != NULL) conn->mg_conn.callback_param = p;
+    call_user(conn, (enum mg_event) ev);
+  }
+#endif
+
   switch (ev) {
     case NS_ACCEPT:
       on_accept(nc, (union socket_address *) p);
+#ifdef MONGOOSE_SEND_NS_EVENTS
+      {
+        struct connection *conn = (struct connection *) nc->connection_data;
+        if (conn != NULL) conn->mg_conn.callback_param = p;
+        call_user(conn, (enum mg_event) ev);
+      }
+#endif
       break;
 
     case NS_CONNECT:
@@ -4653,15 +4671,6 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
     default:
       break;
   }
-
-#ifdef MONGOOSE_SEND_NS_EVENTS
-  {
-    struct connection *conn = (struct connection *) nc->connection_data;
-    struct mg_connection *c = conn == NULL ? NULL : &conn->mg_conn;
-    if (c != NULL) c->callback_param = p;
-    if (server->event_handler) server->event_handler(c, (enum mg_event) ev);
-  }
-#endif
 }
 
 void mg_wakeup_server(struct mg_server *server) {

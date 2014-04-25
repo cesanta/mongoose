@@ -271,6 +271,17 @@ static const char *test_url_decode(void) {
   return NULL;
 }
 
+static const char *test_url_encode(void) {
+  char buf[100];
+  ASSERT(mg_url_encode("", 0, buf, sizeof(buf)) == 0);
+  ASSERT(buf[0] == '\0');
+  ASSERT(mg_url_encode("foo", 3, buf, sizeof(buf)) == 3);
+  ASSERT(strcmp(buf, "foo") == 0);
+  ASSERT(mg_url_encode("f o", 3, buf, sizeof(buf)) == 5);
+  ASSERT(strcmp(buf, "f%20o") == 0);
+  return NULL;
+}
+
 static const char *test_to64(void) {
   ASSERT(to64("0") == 0);
   ASSERT(to64("") == 0);
@@ -498,6 +509,7 @@ static const char *run_all_tests(void) {
   RUN_TEST(test_parse_http_message);
   RUN_TEST(test_to64);
   RUN_TEST(test_url_decode);
+  RUN_TEST(test_url_encode);
   RUN_TEST(test_base64_encode);
   RUN_TEST(test_mg_parse_header);
   RUN_TEST(test_get_var);
