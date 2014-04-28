@@ -175,3 +175,5 @@ all Net Skeleton functions will be available too.
     -DNS_STACK_SIZE=X         Sets stack size to X for  ns_start_thread()
     -DNS_DISABLE_THREADS      Disable threads support
     -DNS_DISABLE_SOCKETPAIR   For systems without loopback interface
+    -DMONGOOSE_SEND_NS_EVENTS Send Net Skeleton events to the event handler
+                              in addition to the Mongoose events
