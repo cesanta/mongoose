@@ -90,9 +90,6 @@ must be for a file name only, not including directory name, e.g.
 `mongoose -hide_files_patterns secret.txt|even_more_secret.txt`. Default:
 not set.
 
-### idle\_timeout\_ms
-Timeout for idle connections in milliseconds. Default: `30000` (30 seconds)
-
 ### index_files
 Comma-separated list of files to be treated as directory index
 files. Default: `index.html,index.htm,index.cgi,index.shtml,index.php`
