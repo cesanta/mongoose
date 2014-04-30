@@ -1259,7 +1259,7 @@ static const struct {
   {".tar", 4, "application/x-tar"},
   {".gz",  3, "application/x-gunzip"},
   {".arj", 4, "application/x-arj-compressed"},
-  {".rar", 4, "application/x-arj-compressed"},
+  {".rar", 4, "application/x-rar-compressed"},
   {".rtf", 4, "application/rtf"},
   {".pdf", 4, "application/pdf"},
   {".swf", 4, "application/x-shockwave-flash"},
