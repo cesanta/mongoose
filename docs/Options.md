@@ -10,8 +10,12 @@ this means to deny only that single IP address.
 
 Subnet masks may vary from 0 to 32, inclusive. The default setting is to allow
 all accesses. On each request the full list is traversed, and
-the last match wins. Example: `$ mongoose -access_control_list -0.0.0.0/0,+192.168/16` to deny all acccesses except those from `192.168/16` subnet. To learn
-more about subnet masks, see the
+the last match wins. Example: `$ mongoose -access_control_list -0.0.0.0/0,+192.168/16` to deny all acccesses except those from `192.168/16` subnet. Note that if the option is set, then all accesses are forbidden
+by default. Thus in a previous example, `-0.0.0.0` part is not necessary.
+For example, `$mongoose access_control_list +10.0.0.0/8`
+means disallow all, allow subnet 10/8 only.
+
+To learn more about subnet masks, see the
 [Wikipedia page on Subnetwork](http://en.wikipedia.org/wiki/Subnetwork)
 
 Default: not set, all accesses are allowed.
@@ -85,9 +89,6 @@ show up in directory listing and return `404 Not Found` if requested. Pattern
 must be for a file name only, not including directory name, e.g.
 `mongoose -hide_files_patterns secret.txt|even_more_secret.txt`. Default:
 not set.
-
-### idle\_timeout\_ms
-Timeout for idle connections in milliseconds. Default: `30000` (30 seconds)
 
 ### index_files
 Comma-separated list of files to be treated as directory index

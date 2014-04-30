@@ -1,4 +1,4 @@
-How To Create A PHP Website With Mongoose
+How To Create Basic Website With Mongoose
 ===========================================
 
 ## 1. Create a directory which will contain your website files. For example, on drive `C:\`, create a directory called `my_website`:

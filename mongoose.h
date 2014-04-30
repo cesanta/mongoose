@@ -67,10 +67,20 @@ enum mg_event {
   MG_REQUEST,     // If callback returns MG_FALSE, Mongoose continues with req
   MG_REPLY,       // If callback returns MG_FALSE, Mongoose closes connection
   MG_CLOSE,       // Connection is closed, callback return value is ignored
-  MG_LUA,         // Called before LSP page invoked
+  MG_WS_HANDSHAKE,  // New websocket connection, handshake request
   MG_HTTP_ERROR   // If callback returns MG_FALSE, Mongoose continues with err
 };
 typedef int (*mg_handler_t)(struct mg_connection *, enum mg_event);
+
+// Websocket opcodes, from http://tools.ietf.org/html/rfc6455
+enum {
+  WEBSOCKET_OPCODE_CONTINUATION = 0x0,
+  WEBSOCKET_OPCODE_TEXT = 0x1,
+  WEBSOCKET_OPCODE_BINARY = 0x2,
+  WEBSOCKET_OPCODE_CONNECTION_CLOSE = 0x8,
+  WEBSOCKET_OPCODE_PING = 0x9,
+  WEBSOCKET_OPCODE_PONG = 0xa
+};
 
 // Server management functions
 struct mg_server *mg_create_server(void *server_param, mg_handler_t handler);
@@ -93,6 +103,8 @@ void mg_printf_data(struct mg_connection *, const char *format, ...);
 
 int mg_websocket_write(struct mg_connection *, int opcode,
                        const char *data, size_t data_len);
+int mg_websocket_printf(struct mg_connection* conn, int opcode,
+                        const char *fmt, ...);
 
 // Deprecated in favor of mg_send_* interface
 int mg_write(struct mg_connection *, const void *buf, int len);
@@ -112,7 +124,10 @@ int mg_parse_multipart(const char *buf, int buf_len,
 void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
+int mg_url_encode(const char *src, size_t s_len, char *dst, size_t dst_len);
+int mg_url_decode(const char *src, int src_len, char *dst, int dst_len, int);
 
+// Templates support
 struct mg_expansion {
   const char *keyword;
   void (*handler)(struct mg_connection *);
