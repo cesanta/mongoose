@@ -528,10 +528,15 @@ static int ns_parse_port_string(const char *str, union socket_address *sa) {
 // 'sa' must be an initialized address to bind to
 static sock_t ns_open_listening_socket(union socket_address *sa) {
   socklen_t len = sizeof(*sa);
-  sock_t on = 1, sock = INVALID_SOCKET;
+#ifndef _WIN32
+  sock_t on = 1;
+#endif
+  sock_t sock = INVALID_SOCKET;
 
   if ((sock = socket(sa->sa.sa_family, SOCK_STREAM, 6)) != INVALID_SOCKET &&
+#ifndef _WIN32
       !setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) &&
+#endif
       !bind(sock, &sa->sa, sa->sa.sa_family == AF_INET ?
             sizeof(sa->sin) : sizeof(sa->sa)) &&
       !listen(sock, SOMAXCONN)) {
