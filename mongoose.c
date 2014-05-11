@@ -203,7 +203,6 @@ struct ns_connection {
 #define NSF_CONNECTING              (1 << 3)
 #define NSF_CLOSE_IMMEDIATELY       (1 << 4)
 #define NSF_ACCEPTED                (1 << 5)
-
 #define NSF_USER_1                  (1 << 26)
 #define NSF_USER_2                  (1 << 27)
 #define NSF_USER_3                  (1 << 28)
@@ -528,10 +527,10 @@ static int ns_parse_port_string(const char *str, union socket_address *sa) {
 // 'sa' must be an initialized address to bind to
 static sock_t ns_open_listening_socket(union socket_address *sa) {
   socklen_t len = sizeof(*sa);
-#ifndef _WIN32
-  sock_t on = 1;
-#endif
   sock_t sock = INVALID_SOCKET;
+#ifndef _WIN32
+  int on = 1;
+#endif
 
   if ((sock = socket(sa->sa.sa_family, SOCK_STREAM, 6)) != INVALID_SOCKET &&
 #ifndef _WIN32
@@ -569,23 +568,19 @@ static sock_t ns_open_listening_socket(union socket_address *sa) {
 //  openssl x509 -req -in client.req -CA ca.pem -CAkey ca.pem -out client.crt
 //  cat client.key client.crt > client.pem
 int ns_set_ssl_ca_cert(struct ns_server *server, const char *cert) {
-  int result = -1;
+  (void) server; (void) cert;
 #ifdef NS_ENABLE_SSL
   STACK_OF(X509_NAME) *list = SSL_load_client_CA_file(cert);
   if (cert != NULL && server->ssl_ctx != NULL && list != NULL) {
     SSL_CTX_set_client_CA_list(server->ssl_ctx, list);
     SSL_CTX_set_verify(server->ssl_ctx, SSL_VERIFY_PEER |
                        SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
-    result = 0;
+    return 0;
   }
 #endif
-  return result;
+  return -1;
 }
 
-// To generate self-signed server cert, do:
-// openssl req -x509 -newkey rsa:2048 -keyout server.key -out cert.pem -days XXX
-// openssl rsa -in server.key -out server2.key  # This removes passphrase
-// cat server2.key cert.pem > server.pem
 int ns_set_ssl_cert(struct ns_server *server, const char *cert) {
 #ifdef NS_ENABLE_SSL
   if (cert != NULL &&
