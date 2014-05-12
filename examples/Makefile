@@ -56,6 +56,8 @@ form: form.c ../mongoose.c
 mjpg: mjpg.c ../mongoose.c
 	$(CC) mjpg.c ../mongoose.c $(OUT) $(CFLAGS)
 
+proxy: proxy.c ../mongoose.c
+	$(CC) proxy.c ../mongoose.c $(OUT) -I../../net_skeleton $(CFLAGS)
 
 websocket_html.c: websocket.html
 	perl mkdata.pl $< > $@
