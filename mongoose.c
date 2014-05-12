@@ -23,17 +23,17 @@
 // Copyright (c) 2014 Cesanta Software Limited
 // All rights reserved
 //
-// This library is dual-licensed: you can redistribute it and/or modify
+// This software is dual-licensed: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 2 as
 // published by the Free Software Foundation. For the terms of this
 // license, see <http://www.gnu.org/licenses/>.
 //
-// You are free to use this library under the terms of the GNU General
+// You are free to use this software under the terms of the GNU General
 // Public License, but WITHOUT ANY WARRANTY; without even the implied
 // warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 // See the GNU General Public License for more details.
 //
-// Alternatively, you can license this library under a commercial
+// Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 
 #ifndef NS_SKELETON_HEADER_INCLUDED
@@ -203,10 +203,10 @@ struct ns_connection {
 #define NSF_CONNECTING              (1 << 3)
 #define NSF_CLOSE_IMMEDIATELY       (1 << 4)
 #define NSF_ACCEPTED                (1 << 5)
-#define NSF_USER_1                  (1 << 6)
-#define NSF_USER_2                  (1 << 7)
-#define NSF_USER_3                  (1 << 8)
-#define NSF_USER_4                  (1 << 9)
+#define NSF_USER_1                  (1 << 26)
+#define NSF_USER_2                  (1 << 27)
+#define NSF_USER_3                  (1 << 28)
+#define NSF_USER_4                  (1 << 29)
 };
 
 void ns_server_init(struct ns_server *, void *server_data, ns_callback_t);
@@ -218,6 +218,7 @@ struct ns_connection *ns_add_sock(struct ns_server *, sock_t sock, void *p);
 
 int ns_bind(struct ns_server *, const char *addr);
 int ns_set_ssl_cert(struct ns_server *, const char *ssl_cert);
+int ns_set_ssl_ca_cert(struct ns_server *, const char *ssl_ca_cert);
 struct ns_connection *ns_connect(struct ns_server *, const char *host,
                                  int port, int ssl, void *connection_param);
 
@@ -241,17 +242,17 @@ int ns_hexdump(const void *buf, int len, char *dst, int dst_len);
 // Copyright (c) 2014 Cesanta Software Limited
 // All rights reserved
 //
-// This library is dual-licensed: you can redistribute it and/or modify
+// This software is dual-licensed: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 2 as
 // published by the Free Software Foundation. For the terms of this
 // license, see <http://www.gnu.org/licenses/>.
 //
-// You are free to use this library under the terms of the GNU General
+// You are free to use this software under the terms of the GNU General
 // Public License, but WITHOUT ANY WARRANTY; without even the implied
 // warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 // See the GNU General Public License for more details.
 //
-// Alternatively, you can license this library under a commercial
+// Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 
 
@@ -286,6 +287,7 @@ void iobuf_free(struct iobuf *iobuf) {
 size_t iobuf_append(struct iobuf *io, const void *buf, size_t len) {
   char *p = NULL;
 
+  assert(io != NULL);
   assert(io->len <= io->size);
 
   if (len <= 0) {
@@ -525,10 +527,15 @@ static int ns_parse_port_string(const char *str, union socket_address *sa) {
 // 'sa' must be an initialized address to bind to
 static sock_t ns_open_listening_socket(union socket_address *sa) {
   socklen_t len = sizeof(*sa);
-  sock_t on = 1, sock = INVALID_SOCKET;
+  sock_t sock = INVALID_SOCKET;
+#ifndef _WIN32
+  int on = 1;
+#endif
 
   if ((sock = socket(sa->sa.sa_family, SOCK_STREAM, 6)) != INVALID_SOCKET &&
+#ifndef _WIN32
       !setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) &&
+#endif
       !bind(sock, &sa->sa, sa->sa.sa_family == AF_INET ?
             sizeof(sa->sin) : sizeof(sa->sa)) &&
       !listen(sock, SOMAXCONN)) {
@@ -543,6 +550,36 @@ static sock_t ns_open_listening_socket(union socket_address *sa) {
   return sock;
 }
 
+// Generating signed CA certificate:
+//  openssl genrsa -out ca.key 2048
+//  openssl req -new -x509 -key ca.key -out ca.crt -days 9999
+//  cat ca.key ca.crt > ca.pem
+//  echo 77 > ca.srl
+
+// Generating server certificate:
+//  openssl genrsa -out server.key 2048
+//  openssl req -key server.key -new -out server.req -days 9999
+//  openssl x509 -req -in server.req -CA ca.pem -CAkey ca.pem -out server.crt
+//  cat server.key server.crt > server.pem
+
+// Generating client certificate:
+//  openssl genrsa -out client.key 2048
+//  openssl req -new -key client.key -out client.req -days 9999
+//  openssl x509 -req -in client.req -CA ca.pem -CAkey ca.pem -out client.crt
+//  cat client.key client.crt > client.pem
+int ns_set_ssl_ca_cert(struct ns_server *server, const char *cert) {
+  (void) server; (void) cert;
+#ifdef NS_ENABLE_SSL
+  STACK_OF(X509_NAME) *list = SSL_load_client_CA_file(cert);
+  if (cert != NULL && server->ssl_ctx != NULL && list != NULL) {
+    SSL_CTX_set_client_CA_list(server->ssl_ctx, list);
+    SSL_CTX_set_verify(server->ssl_ctx, SSL_VERIFY_PEER |
+                       SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+    return 0;
+  }
+#endif
+  return -1;
+}
 
 int ns_set_ssl_cert(struct ns_server *server, const char *cert) {
 #ifdef NS_ENABLE_SSL
@@ -1136,6 +1173,7 @@ enum {
 #endif
 #ifdef NS_ENABLE_SSL
   SSL_CERTIFICATE,
+  SSL_CA_CERTIFICATE,
 #endif
   URL_REWRITES,
   NUM_OPTIONS
@@ -1176,6 +1214,7 @@ static const char *static_config_options[] = {
 #endif
 #ifdef NS_ENABLE_SSL
   "ssl_certificate", NULL,
+  "ssl_ca_certificate", NULL,
 #endif
   "url_rewrites", NULL,
   NULL
@@ -1267,7 +1306,7 @@ static const struct {
   {".tar", 4, "application/x-tar"},
   {".gz",  3, "application/x-gunzip"},
   {".arj", 4, "application/x-arj-compressed"},
-  {".rar", 4, "application/x-arj-compressed"},
+  {".rar", 4, "application/x-rar-compressed"},
   {".rtf", 4, "application/rtf"},
   {".pdf", 4, "application/pdf"},
   {".swf", 4, "application/x-shockwave-flash"},
@@ -4515,6 +4554,10 @@ const char *mg_set_option(struct mg_server *server, const char *name,
       error_msg = "SSL not enabled";
     } else if (res == -1) {
       error_msg = "SSL_CTX_new() failed";
+    }
+  } else if (ind == SSL_CA_CERTIFICATE) {
+    if (ns_set_ssl_ca_cert(&server->ns_server, value) != 0) {
+      error_msg = "Error setting CA cert";
     }
 #endif
   }
