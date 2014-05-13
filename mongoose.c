@@ -1188,6 +1188,7 @@ enum {
 #endif
 #ifdef NS_ENABLE_SSL
   SSL_CERTIFICATE,
+  SSL_CA_CERTIFICATE,
 #endif
   URL_REWRITES,
   NUM_OPTIONS
@@ -1228,6 +1229,7 @@ static const char *static_config_options[] = {
 #endif
 #ifdef NS_ENABLE_SSL
   "ssl_certificate", NULL,
+  "ssl_ca_certificate", NULL,
 #endif
   "url_rewrites", NULL,
   NULL
@@ -4558,6 +4560,10 @@ const char *mg_set_option(struct mg_server *server, const char *name,
     } else if (res == -1) {
       error_msg = "SSL_CTX_new() failed";
     }
+  } else if (ind == SSL_CA_CERTIFICATE) {
+    if (ns_set_ssl_ca_cert(&server->ns_server, value) != 0) {
+       error_msg = "Error setting CA cert";
+     }
 #endif
   }
 
