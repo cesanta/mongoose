@@ -94,6 +94,13 @@ static void show_usage_and_exit(const char *prog) {
   exit(EXIT_FAILURE);
 }
 
+static void setopt(struct mg_server *s, const char *opt, const char *val) {
+  const char *err_msg = mg_set_option(s, opt, val);
+  if (err_msg != NULL) {
+    elog(1, "Error setting [%s]: [%s]", opt, err_msg);
+  }
+}
+
 int main(int argc, char *argv[]) {
   int i;
 
@@ -117,17 +124,18 @@ int main(int argc, char *argv[]) {
   
   // Create, configure and start proxy server in a separate thread
   s_proxy_server = mg_create_server(NULL, &sse_handler);
-  mg_set_option(s_proxy_server, "listening_port", s_proxy_port);
-  mg_set_option(s_proxy_server, "ssl_certificate", s_cert);
-  mg_set_option(s_proxy_server, "ssl_ca_certificate", s_ca_cert);
+  setopt(s_proxy_server, "listening_port", s_proxy_port);
+  setopt(s_proxy_server, "ssl_certificate", s_cert);
+  setopt(s_proxy_server, "ssl_ca_certificate", s_ca_cert);
+  setopt(s_proxy_server, "hexdump_file", "/dev/stdout");
   mg_start_thread(serve_thread_func, s_proxy_server);
 
   // Create, configure and start SSE server and SSE pusher threads
   // Start two SSE pushing threads
   // Serve SSE server in the main thread
   s_sse_server = mg_create_server(NULL, &sse_handler);
-  mg_set_option(s_sse_server, "listening_port", s_sse_port);
-  mg_set_option(s_sse_server, "document_root", ".");
+  setopt(s_sse_server, "listening_port", s_sse_port);
+  setopt(s_sse_server, "document_root", ".");
   mg_start_thread(sse_pusher_thread_func, (void *) "sse_pusher_thread_1");
   mg_start_thread(sse_pusher_thread_func, (void *) "sse_pusher_thread_2");
   serve_thread_func(s_sse_server);
