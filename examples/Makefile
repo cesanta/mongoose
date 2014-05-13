@@ -67,4 +67,4 @@ u:
 	./$@
 
 clean:
-	-@$(RM) hello mjpg upload post websocket auth server multi_threaded websocket_html.c *.exe *.dSYM *.obj .*o u a.out
+	-@$(RM) hello mjpg upload post websocket auth server multi_threaded proxy websocket_html.c *.exe *.dSYM *.obj .*o u a.out
