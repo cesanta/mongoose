@@ -574,7 +574,6 @@ static sock_t ns_open_listening_socket(union socket_address *sa) {
 //  openssl x509 -req -in client.req -CA ca.pem -CAkey ca.pem -out client.crt
 //  cat client.key client.crt > client.pem
 int ns_set_ssl_ca_cert(struct ns_server *server, const char *cert) {
-  (void) server; (void) cert;
 #ifdef NS_ENABLE_SSL
   STACK_OF(X509_NAME) *list = SSL_load_client_CA_file(cert);
   if (cert != NULL && server->ssl_ctx != NULL && list != NULL) {
@@ -584,7 +583,7 @@ int ns_set_ssl_ca_cert(struct ns_server *server, const char *cert) {
     return 0;
   }
 #endif
-  return -1;
+  return server != NULL && cert == NULL ? 0 : -1;
 }
 
 int ns_set_ssl_cert(struct ns_server *server, const char *cert) {
@@ -597,11 +596,10 @@ int ns_set_ssl_cert(struct ns_server *server, const char *cert) {
     return -2;
   } else {
     SSL_CTX_use_certificate_chain_file(server->ssl_ctx, cert);
+    return 0;
   }
-  return 0;
-#else
-  return server != NULL && cert == NULL ? 0 : -3;
 #endif
+  return server != NULL && cert == NULL ? 0 : -3;
 }
 
 int ns_bind(struct ns_server *server, const char *str) {
@@ -874,7 +872,7 @@ int ns_server_poll(struct ns_server *server, int milli) {
       }
     }
 
-    // Read possible wakeup calls
+    // Read wakeup messages
     if (server->ctl[1] != INVALID_SOCKET &&
         FD_ISSET(server->ctl[1], &read_set)) {
       struct ctl_msg ctl_msg;
