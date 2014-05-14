@@ -93,6 +93,7 @@ void mg_set_listening_socket(struct mg_server *, int sock);
 int mg_get_listening_socket(struct mg_server *);
 void mg_iterate_over_connections(struct mg_server *, mg_handler_t, void *);
 void mg_wakeup_server(struct mg_server *);
+void mg_wakeup_server_ex(struct mg_server *, mg_handler_t, const char *, ...);
 struct mg_connection *mg_connect(struct mg_server *, const char *, int, int);
 
 // Connection management functions

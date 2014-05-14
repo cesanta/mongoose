@@ -56,6 +56,9 @@ form: form.c ../mongoose.c
 mjpg: mjpg.c ../mongoose.c
 	$(CC) mjpg.c ../mongoose.c $(OUT) $(CFLAGS)
 
+proxy: proxy.c ../mongoose.c
+	$(CC) proxy.c ../mongoose.c $(OUT) \
+		-I../../net_skeleton -DNS_ENABLE_SSL -lssl $(CFLAGS)
 
 websocket_html.c: websocket.html
 	perl mkdata.pl $< > $@
@@ -65,4 +68,4 @@ u:
 	./$@
 
 clean:
-	-@$(RM) hello mjpg upload post websocket auth server multi_threaded websocket_html.c *.exe *.dSYM *.obj .*o u a.out
+	-@$(RM) hello mjpg upload post websocket auth server multi_threaded proxy websocket_html.c *.exe *.dSYM *.obj .*o u a.out
