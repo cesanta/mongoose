@@ -3,9 +3,9 @@
 ## My Antivirus Software reports Mongoose as a security threat
 
 Mongoose doesn't contain any malicious logic. Antivirus reports a
-[false positive](http://en.wikipedia.org/wiki/Type_I_and_type_II_errors#False_positive_error). 
-This is when certain byte sequence in Mongoose accidentally matched
-a virus/malware signature in the Antivirus database.
+[false positive](http://en.wikipedia.org/wiki/Type_I_and_type_II_errors#False_positive_error).
+This is when certain byte sequence in Mongoose accidentally matches
+virus signature in the Antivirus database.
 
 ## Download page doesn't work
 
