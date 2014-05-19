@@ -1602,8 +1602,9 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
 }
 
 static void ns_forward(struct ns_connection *from, struct ns_connection *to) {
+  DBG(("%p -> %p %zu bytes", from, to, from->recv_iobuf.len));
   ns_send(to, from->recv_iobuf.buf, from->recv_iobuf.len);
-  iobuf_remove(&from->recv_iobuf, from->recv_iobuf.len);  
+  iobuf_remove(&from->recv_iobuf, from->recv_iobuf.len);
 }
 
 #ifndef MONGOOSE_NO_CGI
@@ -4007,10 +4008,10 @@ static void proxify_connection(struct connection *conn) {
   struct mg_connection *c = &conn->mg_conn;
   struct ns_server *server = &conn->server->ns_server;
   struct ns_connection *pc;
-  int i;
+  int i, n, sent_close_header = 0;
 
-  if (parse_url(c->uri, proto, sizeof(proto), host, sizeof(host), &port) &&
-      (pc = ns_connect(server, host, port, 0, conn)) != NULL) {
+  n = parse_url(c->uri, proto, sizeof(proto), host, sizeof(host), &port);
+  if (n > 0 && (pc = ns_connect(server, host, port, 0, conn)) != NULL) {
     // Interlink two connections
     pc->flags |= MG_PROXY_CONN;
     conn->endpoint_type = EP_PROXY;
@@ -4022,11 +4023,21 @@ static void proxify_connection(struct connection *conn) {
       mg_printf(c, "%s", "HTTP/1.1 200 OK\r\n\r\n");
     } else {
       // For other methods, forward the request to the target host.
-      ns_printf(pc, "%s %s HTTP/%s\r\n", c->request_method, c->uri,
+      ns_printf(pc, "%s %s HTTP/%s\r\n", c->request_method, c->uri + n,
                 c->http_version);
       for (i = 0; i < c->num_headers; i++) {
-        ns_printf(pc, "%s: %s\r\n", c->http_headers[i].name, 
-                  c->http_headers[i].value);
+        if (mg_strcasecmp(c->http_headers[i].name, "Connection") == 0) {
+          // Force connection close, cause we don't parse proxy replies
+          // therefore we don't know message boundaries
+          ns_printf(pc, "%s: %s\r\n", "Connection", "close");
+          sent_close_header = 1;
+        } else {
+          ns_printf(pc, "%s: %s\r\n", c->http_headers[i].name,
+                    c->http_headers[i].value);
+        }
+      }
+      if (!sent_close_header) {
+        ns_printf(pc, "%s: %s\r\n", "Connection", "close");
       }
       ns_printf(pc, "%s", "\r\n");
       ns_send(pc, c->content, c->content_len);
@@ -4774,7 +4785,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
     case NS_CLOSE:
       nc->connection_data = NULL;
       if ((nc->flags & MG_CGI_CONN) || (nc->flags & MG_PROXY_CONN)) {
-        DBG(("%p %d closing cgi/proxy conn", conn, conn->endpoint_type));
+        DBG(("%p closing cgi/proxy conn", conn));
         if (conn && conn->ns_conn) {
           conn->ns_conn->flags &= ~NSF_BUFFER_BUT_DONT_SEND;
           conn->ns_conn->flags |= conn->ns_conn->send_iobuf.len > 0 ?
@@ -4830,7 +4841,7 @@ static void iter2(struct ns_connection *nc, enum ns_event ev, void *param) {
   int n;
   (void) ev;
 
-  DBG(("%p [%s]", conn, msg));
+  //DBG(("%p [%s]", conn, msg));
   if (sscanf(msg, "%p %n", &func, &n) && func != NULL) {
     conn->mg_conn.callback_param = (void *) (msg + n);
     func(&conn->mg_conn, MG_POLL);
