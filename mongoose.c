@@ -3992,11 +3992,12 @@ static int parse_url(const char *url, char *proto, size_t plen,
   snprintf(fmt3, sizeof(fmt3), "%%%zu[^: ]:%%hu%%n", hlen);
 
   if (sscanf(url, fmt1, proto, host, port, &n) == 3 ||
-      sscanf(url, fmt2, proto, host, &n) == 2 ||
-      sscanf(url, fmt3, host, port, &n) == 2) {
+      sscanf(url, fmt2, proto, host, &n) == 2) {
+    return n;
+  } else if (sscanf(url, fmt3, host, port, &n) == 2) {
+    proto[0] = '\0';
     return n;
   }
-
   return 0;
 }
 
