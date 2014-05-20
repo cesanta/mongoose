@@ -767,9 +767,7 @@ static void ns_read_from_socket(struct ns_connection *conn) {
   {
     n = recv(conn->sock, buf, sizeof(buf), 0);
   }
-
-  DBG(("%p <- %d bytes [%.*s%s]",
-       conn, n, n < 40 ? n : 40, buf, n < 40 ? "" : "..."));
+  DBG(("%p <- %d bytes", conn, n));
 
   if (ns_is_error(n)) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
@@ -799,8 +797,7 @@ static void ns_write_to_socket(struct ns_connection *conn) {
 #endif
   { n = send(conn->sock, io->buf, io->len, 0); }
 
-  DBG(("%p -> %d bytes [%.*s%s]", conn, n, io->len < 40 ? (int) io->len : 40,
-       io->buf, io->len < 40 ? "" : "..."));
+  DBG(("%p -> %d bytes", conn, n));
 
   ns_call(conn, NS_SEND, &n);
   if (ns_is_error(n)) {
@@ -4213,8 +4210,7 @@ static void on_recv_data(struct connection *conn) {
   struct iobuf *io = &conn->ns_conn->recv_iobuf;
 
   try_parse(conn);
-  DBG(("%p %d %zu %d [%.*s]", conn, conn->request_len, io->len,
-       conn->ns_conn->flags, (int) io->len, io->buf));
+  DBG(("%p %d %zu %d", conn, conn->request_len, io->len, conn->ns_conn->flags));
   if (conn->request_len < 0 ||
       (conn->request_len > 0 && !is_valid_uri(conn->mg_conn.uri))) {
     send_http_error(conn, 400, NULL);
@@ -4271,8 +4267,7 @@ static void process_response(struct connection *conn) {
   struct iobuf *io = &conn->ns_conn->recv_iobuf;
 
   try_parse(conn);
-  DBG(("%p %d %zu [%.*s]", conn, conn->request_len, io->len,
-       io->len > 40 ? 40 : (int) io->len, io->buf));
+  DBG(("%p %d %zu", conn, conn->request_len, io->len));
   if (conn->request_len < 0 ||
       (conn->request_len == 0 && io->len > MAX_REQUEST_SIZE)) {
     call_http_client_handler(conn);
