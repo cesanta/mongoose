@@ -4662,7 +4662,15 @@ const char *mg_set_option(struct mg_server *server, const char *name,
     if (port < 0) {
       error_msg = "Cannot bind to port";
     } else {
-      if (!strcmp(value, "0")) {
+      size_t off = strlen(value);
+      off -= (off >= 2) ? 2 : 0;
+      if (!strcmp(value + off, ":0")) {
+        char buf[60]; // Space for a full IPV6 addr + port
+        mg_snprintf(buf, sizeof(buf), "%s", value);
+        mg_snprintf(buf + off, sizeof(buf) - off, ":%d", port);
+        free(*v);
+        *v = mg_strdup(buf);
+      } else if (!strcmp(value, "0")) {
         char buf[10];
         mg_snprintf(buf, sizeof(buf), "%d", port);
         free(*v);
