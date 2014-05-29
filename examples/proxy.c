@@ -71,10 +71,6 @@ static int try_to_serve_locally(struct mg_connection *conn) {
     strncat(path, "/index.html", sizeof(path) - strlen(path) - 1);
     res = exists(path);
     printf("PATH: [%s]\n", path);
-#if 0
-    snprintf(path + strlen(path), sizeof(path) - strlen(path),
-             "/%s", "index.html");
-#endif
   }
   if (res == 0) return MG_FALSE;
 
@@ -108,7 +104,8 @@ static int proxy_event_handler(struct mg_connection *conn, enum mg_event ev) {
              host == NULL ? "" : host);
       if (strstr(conn->uri, "/qqq") != NULL) s_received_signal = SIGTERM;
 
-      // Proxied HTTP requests have URI http://.....
+      // Proxied HTTPS requests use "CONNECT foo.com:443"
+      // Proxied HTTP requests use "GET http://..... "
       // Serve requests for target_url from the local FS.
       if (memcmp(conn->uri, target_url, target_url_size) == 0 &&
           is_resource_present_locally(conn->uri + target_url_size)) {
