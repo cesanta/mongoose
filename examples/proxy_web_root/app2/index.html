@@ -1,0 +1,37 @@
+<html>
+<head>
+  <title>App2 Index</title>
+  <meta charset="utf-8">
+  <script>
+  window.onload = function() {
+    // Using secure websocket connection, wss://
+    var ws = new WebSocket('wss://echo.websocket.org');
+    var div = document.getElementById('events');
+    ws.onmessage = function(ev) {
+      var el = document.createElement('div');
+      el.innerHTML = 'websocket message: ' + ev.data;
+      div.appendChild(el);
+      // Keep only last 5 messages in the list
+      while (div.childNodes.length > 5) div.removeChild(div.firstChild);
+    };
+
+    // Send random stuff to the websocket connection periodically.
+    // websocket server much echo that stuff back.
+    window.setInterval(function() {
+      var d = new Date();
+      ws.send(d.toString());
+    }, 1000);
+  };
+  </script>
+</head>
+<body>
+  <h1>App2 index page. Served locally from the
+    the proxy's filesystem.</h1>
+  <p>
+    Following div shows proxy forwarding of websocket connection, served by
+    ws://echo.websocket.org:
+  </p>
+
+  <div id="events"></div>
+</body>
+</html>

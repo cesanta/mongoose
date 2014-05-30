@@ -1,6 +1,6 @@
 <html>
 <head>
-  <title>example.com index</title>
+  <title> proxy index </title>
   <script type="text/javascript">
   window.onload = function() {
     var es = new EventSource("/api/sse");
@@ -16,12 +16,12 @@
   </script>
 </head>
 <body>
-  <h1>This is an example.com index page.</h1>
+  <h1> proxy index page.</h1>
   <ul>
     <li><a href="app1">App1</a> - App1 root</li>
     <li><a href="app2">App2</a> - App2 root</li>
   </ul>
-  
+
   <h2>SSE pushes, done by separate threads at random times:</h2>
   <div id="events"></div>
 

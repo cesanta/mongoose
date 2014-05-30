@@ -6,18 +6,18 @@
 //    git clone https://github.com/cesanta/mongoose.git
 //    cd mongoose/examples
 //    make proxy
-//    ./proxy   # (then point your browser at http://localhost:2014)
+//    ./proxy
+//
+//  Configure your browser to use localhost:2014 as a proxy for all protocols
+//  Then, navigate to https://cesanta.com
 
 #include "net_skeleton.h"
 #include "mongoose.h"
 
 static int s_received_signal = 0;
-static const char *s_ca_cert = NULL;
-static const char *s_cert = NULL;
-static const char *s_sse_port = "2014";
-static const char *s_proxy_port = "2015";
-static struct mg_server *s_sse_server = NULL;
-static struct mg_server *s_proxy_server = NULL;
+static struct mg_server *s_server = NULL;
+
+#define SSE_CONNECTION              ((void *) 1)
 
 static void elog(int do_exit, const char *fmt, ...) {
   va_list ap;
@@ -34,8 +34,7 @@ static void signal_handler(int sig_num) {
 }
 
 static int sse_push(struct mg_connection *conn, enum mg_event ev) {
-  const char *str = (const char *) conn->connection_param;
-  if (ev == MG_POLL && str != NULL && strcmp(str, "sse") == 0) {
+  if (ev == MG_POLL && conn->connection_param == SSE_CONNECTION) {
     mg_printf(conn, "data: %s\r\n\r\n", (const char *) conn->callback_param);
   }
   return MG_TRUE;
@@ -43,55 +42,94 @@ static int sse_push(struct mg_connection *conn, enum mg_event ev) {
 
 static void *sse_pusher_thread_func(void *param) {
   while (s_received_signal == 0) {
-    mg_wakeup_server_ex(s_sse_server, sse_push, "%lu %s",
+    mg_wakeup_server_ex(s_server, sse_push, "%lu %s",
                         (unsigned long) time(NULL), (const char *) param);
     sleep(1);
   }
   return NULL;
 }
 
-static int sse_handler(struct mg_connection *conn, enum mg_event ev) {
+// Return: 1 if regular file, 2 if directory, 0 if not found
+static int exists(const char *path) {
+  struct stat st;
+  return stat(path, &st) != 0 ? 0 : S_ISDIR(st.st_mode)  == 0 ? 1 : 2;
+}
+
+// Return: 1 if regular file, 2 if directory, 0 if not found
+static int is_local_file(const char *uri, char *path, size_t path_len) {
+  snprintf(path, path_len, "%s/%s",
+           mg_get_option(s_server, "document_root"), uri);
+  return exists(path);
+}
+
+static int try_to_serve_locally(struct mg_connection *conn) {
+  char path[500], buf[2000];
+  int n, res;
+  FILE *fp = NULL;
+
+  if ((res = is_local_file(conn->uri, path, sizeof(path))) == 2) {
+    strncat(path, "/index.html", sizeof(path) - strlen(path) - 1);
+    res = exists(path);
+    printf("PATH: [%s]\n", path);
+  }
+  if (res == 0) return MG_FALSE;
+
+  if ((fp = fopen(path, "rb")) != NULL) {
+    printf("Serving [%s] locally \n", path);
+    mg_send_header(conn, "Connection", "close");
+    mg_send_header(conn, "Content-Type", mg_get_mime_type(path, "text/plain"));
+    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+      mg_send_data(conn, buf, n);
+    }
+    mg_send_data(conn, "", 0);
+    fclose(fp);
+  }
+  return fp == NULL ? MG_FALSE : MG_TRUE;
+}
+
+static int is_resource_present_locally(const char *uri) {
+  char path[500];
+  return is_local_file(uri, path, sizeof(path)) || strcmp(uri, "/api/sse") == 0;
+}
+
+static int proxy_event_handler(struct mg_connection *conn, enum mg_event ev) {
+  static const char target_url[] = "http://cesanta.com";
+  static int target_url_size = sizeof(target_url) - 1;
+  const char *host;
+
   switch (ev) {
     case MG_REQUEST:
-      if (strcmp(conn->uri, "/") == 0) {
-        mg_printf(conn, "%s", "HTTP/1.1 302 Moved\r\n"
-                  "Location: /sse.html\r\n\r\n");
-        return MG_TRUE;
+      host = mg_get_header(conn, "Host");
+      printf("[%s] [%s] [%s]\n", conn->request_method, conn->uri,
+             host == NULL ? "" : host);
+      if (strstr(conn->uri, "/qqq") != NULL) s_received_signal = SIGTERM;
+
+      // Proxied HTTPS requests use "CONNECT foo.com:443"
+      // Proxied HTTP requests use "GET http://..... "
+      // Serve requests for target_url from the local FS.
+      if (memcmp(conn->uri, target_url, target_url_size) == 0 &&
+          is_resource_present_locally(conn->uri + target_url_size)) {
+        conn->uri += target_url_size;   // Leave only path in the URI
       }
+
       if (strcmp(conn->uri, "/api/sse") == 0) {
-        conn->connection_param = (void *) "sse";
-        mg_printf(conn, "%s",
-                  "HTTP/1.0 200 OK\r\n"
+        conn->connection_param = SSE_CONNECTION;
+        mg_printf(conn, "%s", "HTTP/1.0 200 OK\r\n"
                   "Content-Type: text/event-stream\r\n"
-                  "Cache-Control: no-cache\r\n"
-                  "\r\n");
+                  "Cache-Control: no-cache\r\n\r\n");
         return MG_MORE;
       }
+
+      if (host != NULL && strstr(host, "cesanta") != NULL) {
+        return try_to_serve_locally(conn);
+      }
+
       return MG_FALSE;
     case MG_AUTH:
       return MG_TRUE;
-    case MG_POLL:
-      return MG_FALSE;
     default:
       return MG_FALSE;
   }
-}
-
-static void *serve_thread_func(void *param) {
-  struct mg_server *server = (struct mg_server *) param;
-  printf("Starting on port %s\n", mg_get_option(server, "listening_port"));
-
-  while (s_received_signal == 0) {
-    mg_poll_server(server, 1000);
-  }
-
-  return NULL;
-}
-
-static void show_usage_and_exit(const char *prog) {
-  elog(1, "Usage: %s [-ca_cert FILE] [-sse_port PORT] [-proxy_port PORT]",
-       prog);
-  exit(EXIT_FAILURE);
 }
 
 static void setopt(struct mg_server *s, const char *opt, const char *val) {
@@ -102,47 +140,50 @@ static void setopt(struct mg_server *s, const char *opt, const char *val) {
 }
 
 int main(int argc, char *argv[]) {
+  const char *cert = NULL, *ca_cert = NULL, *port = "2014";
+  const char *mitm = NULL, *dump = NULL;
   int i;
 
   // Parse command line options
   for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-ca_cert") == 0 && i + 1 < argc) {
-      s_ca_cert = argv[++i];
+      ca_cert = argv[++i];
     } else if (strcmp(argv[i], "-cert") == 0 && i + 1 < argc) {
-      s_cert = argv[++i];
-    } else if (strcmp(argv[i], "-sse_port") == 0 && i + 1 < argc) {
-      s_sse_port = argv[++i];
-    } else if (strcmp(argv[i], "-proxy_port") == 0 && i + 1 < argc) {
-      s_proxy_port = argv[++i];
+      cert = argv[++i];
+    } else if (strcmp(argv[i], "-port") == 0 && i + 1 < argc) {
+      port = argv[++i];
+    } else if (strcmp(argv[i], "-mitm") == 0 && i + 1 < argc) {
+      mitm = argv[++i];
+    } else if (strcmp(argv[i], "-dump") == 0 && i + 1 < argc) {
+      dump = argv[++i];
     } else {
-      show_usage_and_exit(argv[0]);
+      elog(1, "Usage: %s [-cert FILE] [-ca_cert FILE] [-port PORT]", argv[0]);
     }
   }
 
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
-  
-  // Create, configure and start proxy server in a separate thread
-  s_proxy_server = mg_create_server(NULL, &sse_handler);
-  setopt(s_proxy_server, "listening_port", s_proxy_port);
-  setopt(s_proxy_server, "ssl_certificate", s_cert);
-  setopt(s_proxy_server, "ssl_ca_certificate", s_ca_cert);
-  setopt(s_proxy_server, "hexdump_file", "/dev/stdout");
-  mg_start_thread(serve_thread_func, s_proxy_server);
 
-  // Create, configure and start SSE server and SSE pusher threads
+  // Create and configure proxy server
+  s_server = mg_create_server(NULL, &proxy_event_handler);
+  setopt(s_server, "document_root",       "proxy_web_root");
+  setopt(s_server, "listening_port",      port);
+  setopt(s_server, "ssl_certificate",     cert);
+  setopt(s_server, "ssl_ca_certificate",  ca_cert);
+  setopt(s_server, "hexdump_file",        dump);
+  setopt(s_server, "ssl_mitm_certs",      mitm);
+
   // Start two SSE pushing threads
-  // Serve SSE server in the main thread
-  s_sse_server = mg_create_server(NULL, &sse_handler);
-  setopt(s_sse_server, "listening_port", s_sse_port);
-  setopt(s_sse_server, "document_root", ".");
   mg_start_thread(sse_pusher_thread_func, (void *) "sse_pusher_thread_1");
   mg_start_thread(sse_pusher_thread_func, (void *) "sse_pusher_thread_2");
-  serve_thread_func(s_sse_server);
 
+  // Start serving in the main thread
+  printf("Starting on port %s\n", mg_get_option(s_server, "listening_port"));
+  while (s_received_signal == 0) {
+    mg_poll_server(s_server, 1000);
+  }
   printf("Existing on signal %d\n", s_received_signal);
-  mg_destroy_server(&s_sse_server);
-  mg_destroy_server(&s_proxy_server);
+  mg_destroy_server(&s_server);
 
   return EXIT_SUCCESS;
 }
