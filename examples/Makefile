@@ -50,6 +50,9 @@ upload: upload.c ../mongoose.c
 auth: auth.c ../mongoose.c
 	$(CC) auth.c ../mongoose.c $(OUT) $(CFLAGS)
 
+file: file.c ../mongoose.c
+	$(CC) file.c ../mongoose.c $(OUT) $(CFLAGS)
+
 form: form.c ../mongoose.c
 	$(CC) form.c ../mongoose.c $(OUT) $(CFLAGS)
 
@@ -68,4 +71,4 @@ u:
 	./$@
 
 clean:
-	-@$(RM) hello mjpg upload post websocket auth server multi_threaded proxy websocket_html.c *.exe *.dSYM *.obj .*o u a.out
+	-@$(RM) hello mjpg upload post websocket auth file server multi_threaded proxy websocket_html.c *.exe *.dSYM *.obj .*o u a.out
