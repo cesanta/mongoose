@@ -1602,16 +1602,15 @@ static void write_chunk(struct connection *conn, const char *buf, int len) {
   ns_send(conn->ns_conn, "\r\n", 2);
 }
 
-int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
+size_t mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   struct connection *c = MG_CONN_2_CONN(conn);
-  int len;
   va_list ap;
 
   va_start(ap, fmt);
-  len = ns_vprintf(c->ns_conn, fmt, ap);
+  ns_vprintf(c->ns_conn, fmt, ap);
   va_end(ap);
 
-  return len;
+  return c->ns_conn->send_iobuf.len;
 }
 
 static void ns_forward(struct ns_connection *from, struct ns_connection *to) {
@@ -2176,7 +2175,7 @@ static int parse_http_message(char *buf, int len, struct mg_connection *ri) {
     n = (int) strlen(ri->uri);
     mg_url_decode(ri->uri, n, (char *) ri->uri, n + 1, 0);
     if (*ri->uri == '/' || *ri->uri == '.') {
-      remove_double_dots_and_double_slashes((char *) ri->uri);      
+      remove_double_dots_and_double_slashes((char *) ri->uri);
     }
   }
 
@@ -2376,9 +2375,10 @@ static int should_keep_alive(const struct mg_connection *conn) {
      (header == NULL && http_version && !strcmp(http_version, "1.1")));
 }
 
-int mg_write(struct mg_connection *c, const void *buf, int len) {
+size_t mg_write(struct mg_connection *c, const void *buf, int len) {
   struct connection *conn = MG_CONN_2_CONN(c);
-  return ns_send(conn->ns_conn, buf, len);
+  ns_send(conn->ns_conn, buf, len);
+  return conn->ns_conn->send_iobuf.len;
 }
 
 void mg_send_status(struct mg_connection *c, int status) {
@@ -2405,12 +2405,14 @@ static void terminate_headers(struct mg_connection *c) {
   }
 }
 
-void mg_send_data(struct mg_connection *c, const void *data, int data_len) {
+size_t mg_send_data(struct mg_connection *c, const void *data, int data_len) {
+  struct connection *conn = MG_CONN_2_CONN(c);
   terminate_headers(c);
   write_chunk(MG_CONN_2_CONN(c), (const char *) data, data_len);
+  return conn->ns_conn->send_iobuf.len;
 }
 
-void mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
+size_t mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
   struct connection *conn = MG_CONN_2_CONN(c);
   va_list ap;
   int len;
@@ -2428,6 +2430,7 @@ void mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
   if (buf != mem && buf != NULL) {
     free(buf);
   }
+  return conn->ns_conn->send_iobuf.len;
 }
 
 #if !defined(MONGOOSE_NO_WEBSOCKET) || !defined(MONGOOSE_NO_AUTH)
@@ -2660,15 +2663,14 @@ static int deliver_websocket_frame(struct connection *conn) {
   return buffered;
 }
 
-int mg_websocket_write(struct mg_connection* conn, int opcode,
+size_t mg_websocket_write(struct mg_connection* conn, int opcode,
                        const char *data, size_t data_len) {
     unsigned char mem[4192], *copy = mem;
     size_t copy_len = 0;
-    int retval = -1;
 
     if (data_len + 10 > sizeof(mem) &&
         (copy = (unsigned char *) malloc(data_len + 10)) == NULL) {
-      return -1;
+      return 0;
     }
 
     copy[0] = 0x80 + (opcode & 0x0f);
@@ -2696,17 +2698,17 @@ int mg_websocket_write(struct mg_connection* conn, int opcode,
     }
 
     if (copy_len > 0) {
-      retval = mg_write(conn, copy, copy_len);
+      mg_write(conn, copy, copy_len);
     }
     if (copy != mem) {
       free(copy);
     }
 
-    return retval;
+    return MG_CONN_2_CONN(conn)->ns_conn->send_iobuf.len;
 }
 
-int mg_websocket_printf(struct mg_connection* conn, int opcode,
-                        const char *fmt, ...) {
+size_t mg_websocket_printf(struct mg_connection* conn, int opcode,
+                           const char *fmt, ...) {
   char mem[4192], *buf = mem;
   va_list ap;
   int len;
@@ -2721,7 +2723,7 @@ int mg_websocket_printf(struct mg_connection* conn, int opcode,
     free(buf);
   }
 
-  return len;
+  return MG_CONN_2_CONN(conn)->ns_conn->send_iobuf.len;
 }
 
 static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
@@ -4121,8 +4123,9 @@ static void proxify_connection(struct connection *conn) {
   }
 }
 
-static void open_local_endpoint(struct connection *conn, int skip_user) {
 #ifndef MONGOOSE_NO_FILESYSTEM
+void mg_send_file(struct mg_connection *c, const char *file_name) {
+  struct connection *conn = MG_CONN_2_CONN(c);
   file_stat_t st;
   char path[MAX_PATH_SIZE];
   int exists = 0, is_directory = 0;
@@ -4136,72 +4139,12 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
 #else
   const char *dir_lst = "yes";
 #endif
-#endif
 
-  // If EP_USER was set in a prev call, reset it
-  conn->endpoint_type = EP_NONE;
-
-#ifndef MONGOOSE_NO_AUTH
-  if (conn->server->event_handler && call_user(conn, MG_AUTH) == MG_FALSE) {
-    mg_send_digest_auth_request(&conn->mg_conn);
-    return;
-  }
-#endif
-
-  // Call URI handler if one is registered for this URI
-  if (skip_user == 0 && conn->server->event_handler != NULL) {
-    conn->endpoint_type = EP_USER;
-#if MONGOOSE_POST_SIZE_LIMIT > 1
-    {
-      const char *cl = mg_get_header(&conn->mg_conn, "Content-Length");
-      if ((strcmp(conn->mg_conn.request_method, "POST") == 0 ||
-           strcmp(conn->mg_conn.request_method, "PUT") == 0) &&
-          (cl == NULL || to64(cl) > MONGOOSE_POST_SIZE_LIMIT)) {
-        send_http_error(conn, 500, "POST size > %zu",
-                        (size_t) MONGOOSE_POST_SIZE_LIMIT);
-      }
-    }
-#endif
-    return;
-  }
-
-  if (strcmp(conn->mg_conn.request_method, "CONNECT") == 0 ||
-      memcmp(conn->mg_conn.uri, "http", 4) == 0) {
-    proxify_connection(conn);
-    return;
-  }
-
-#ifdef MONGOOSE_NO_FILESYSTEM
-  if (!strcmp(conn->mg_conn.request_method, "OPTIONS")) {
-    send_options(conn);
-  } else {
-    send_http_error(conn, 404, NULL);
-  }
-#else
-  exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
+  mg_snprintf(path, sizeof(path), "%s", file_name);
+  exists = stat(path, &st) == 0;
   is_directory = S_ISDIR(st.st_mode);
-
-  if (!strcmp(conn->mg_conn.request_method, "OPTIONS")) {
-    send_options(conn);
-  } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
-    send_http_error(conn, 404, NULL);
-#ifndef MONGOOSE_NO_AUTH
-  } else if ((!is_dav_request(conn) && !is_authorized(conn, path)) ||
-             (is_dav_request(conn) && !is_authorized_for_dav(conn))) {
-    mg_send_digest_auth_request(&conn->mg_conn);
-    close_local_endpoint(conn);
-#endif
-#ifndef MONGOOSE_NO_DAV
-  } else if (!strcmp(conn->mg_conn.request_method, "PROPFIND")) {
-    handle_propfind(conn, path, &st, exists);
-  } else if (!strcmp(conn->mg_conn.request_method, "MKCOL")) {
-    handle_mkcol(conn, path);
-  } else if (!strcmp(conn->mg_conn.request_method, "DELETE")) {
-    handle_delete(conn, path);
-  } else if (!strcmp(conn->mg_conn.request_method, "PUT")) {
-    handle_put(conn, path);
-#endif
-  } else if (!exists || must_hide_file(conn, path)) {
+  
+  if (!exists || must_hide_file(conn, path)) {
     send_http_error(conn, 404, NULL);
   } else if (is_directory &&
              conn->mg_conn.uri[strlen(conn->mg_conn.uri) - 1] != '/') {
@@ -4239,6 +4182,80 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
     open_file_endpoint(conn, path, &st);
   } else {
     send_http_error(conn, 404, NULL);
+  }
+}
+#endif  // !MONGOOSE_NO_FILESYSTEM
+
+static void open_local_endpoint(struct connection *conn, int skip_user) {
+  char path[MAX_PATH_SIZE];
+  file_stat_t st;
+  int exists = 0;
+
+  // If EP_USER was set in a prev call, reset it
+  conn->endpoint_type = EP_NONE;
+
+#ifndef MONGOOSE_NO_AUTH
+  if (conn->server->event_handler && call_user(conn, MG_AUTH) == MG_FALSE) {
+    mg_send_digest_auth_request(&conn->mg_conn);
+    return;
+  }
+#endif
+
+  // Call URI handler if one is registered for this URI
+  if (skip_user == 0 && conn->server->event_handler != NULL) {
+    conn->endpoint_type = EP_USER;
+#if MONGOOSE_POST_SIZE_LIMIT > 1
+    {
+      const char *cl = mg_get_header(&conn->mg_conn, "Content-Length");
+      if ((strcmp(conn->mg_conn.request_method, "POST") == 0 ||
+           strcmp(conn->mg_conn.request_method, "PUT") == 0) &&
+          (cl == NULL || to64(cl) > MONGOOSE_POST_SIZE_LIMIT)) {
+        send_http_error(conn, 500, "POST size > %zu",
+                        (size_t) MONGOOSE_POST_SIZE_LIMIT);
+      }
+    }
+#endif
+    return;
+  }
+
+  if (strcmp(conn->mg_conn.request_method, "CONNECT") == 0 ||
+      memcmp(conn->mg_conn.uri, "http", 4) == 0) {
+    proxify_connection(conn);
+    return;
+  }
+  
+  if (!strcmp(conn->mg_conn.request_method, "OPTIONS")) {
+    send_options(conn);
+    return;
+  }
+  
+#ifdef MONGOOSE_NO_FILESYSTEM
+  send_http_error(conn, 404, NULL);
+#else
+  exists = convert_uri_to_file_name(conn, path, sizeof(path), &st);
+
+  if (!strcmp(conn->mg_conn.request_method, "OPTIONS")) {
+    send_options(conn);
+  } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
+    send_http_error(conn, 404, NULL);
+#ifndef MONGOOSE_NO_AUTH
+  } else if ((!is_dav_request(conn) && !is_authorized(conn, path)) ||
+             (is_dav_request(conn) && !is_authorized_for_dav(conn))) {
+    mg_send_digest_auth_request(&conn->mg_conn);
+    close_local_endpoint(conn);
+#endif
+#ifndef MONGOOSE_NO_DAV
+  } else if (!strcmp(conn->mg_conn.request_method, "PROPFIND")) {
+    handle_propfind(conn, path, &st, exists);
+  } else if (!strcmp(conn->mg_conn.request_method, "MKCOL")) {
+    handle_mkcol(conn, path);
+  } else if (!strcmp(conn->mg_conn.request_method, "DELETE")) {
+    handle_delete(conn, path);
+  } else if (!strcmp(conn->mg_conn.request_method, "PUT")) {
+    handle_put(conn, path);
+#endif
+  } else {
+    mg_send_file(&conn->mg_conn, path);
   }
 #endif  // MONGOOSE_NO_FILESYSTEM
 }

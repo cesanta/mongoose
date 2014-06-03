@@ -99,17 +99,15 @@ struct mg_connection *mg_connect(struct mg_server *, const char *, int, int);
 // Connection management functions
 void mg_send_status(struct mg_connection *, int status_code);
 void mg_send_header(struct mg_connection *, const char *name, const char *val);
-void mg_send_data(struct mg_connection *, const void *data, int data_len);
-void mg_printf_data(struct mg_connection *, const char *format, ...);
+size_t mg_send_data(struct mg_connection *, const void *data, int data_len);
+size_t mg_printf_data(struct mg_connection *, const char *format, ...);
+size_t mg_write(struct mg_connection *, const void *buf, int len);
+size_t mg_printf(struct mg_connection *conn, const char *fmt, ...);
 
-int mg_websocket_write(struct mg_connection *, int opcode,
-                       const char *data, size_t data_len);
-int mg_websocket_printf(struct mg_connection* conn, int opcode,
-                        const char *fmt, ...);
-
-// Deprecated in favor of mg_send_* interface
-int mg_write(struct mg_connection *, const void *buf, int len);
-int mg_printf(struct mg_connection *conn, const char *fmt, ...);
+size_t mg_websocket_write(struct mg_connection *, int opcode,
+                          const char *data, size_t data_len);
+size_t mg_websocket_printf(struct mg_connection* conn, int opcode,
+                           const char *fmt, ...);
 
 const char *mg_get_header(const struct mg_connection *, const char *name);
 const char *mg_get_mime_type(const char *name, const char *default_mime_type);
@@ -122,6 +120,7 @@ int mg_parse_multipart(const char *buf, int buf_len,
                        const char **data, int *data_len);
 
 // Utility functions
+void mg_send_file(struct mg_connection *, const char *path);
 void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
