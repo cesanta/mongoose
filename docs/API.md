@@ -171,15 +171,15 @@ a response body.  Mongoose provides functions for all three parts:
      Mongoose will call a handler repeatedly after each socket write.
      
      void mg_send_file(struct mg_connection *, const char *path);
+
+<!-- -->
      
-Signals Mongoose to serve given file. Mongoose handles file according to
+Tells Mongoose to serve given file. Mongoose handles file according to
 it's extensions, i.e. Mongoose will invoke CGI script if `path` has CGI
 extension, it'll render SSI file if `path` has SSI extension, etc. If `path`
 points to a directory, Mongoose will show directory listing. If this function
 is used, no calls to `mg_send*` or `mg_printf*` functions must be made, and
 event handler must return `MG_MORE`.
-
-<!-- -->
 
     int mg_websocket_write(struct mg_connection* conn, int opcode,
                            const char *data, size_t data_len);
