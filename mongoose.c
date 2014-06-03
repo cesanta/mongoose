@@ -805,7 +805,7 @@ static void ns_write_to_socket(struct ns_connection *conn) {
     iobuf_remove(io, n);
   }
 
-  if (io->len == 0 && conn->flags & NSF_FINISHED_SENDING_DATA) {
+  if (io->len == 0 && (conn->flags & NSF_FINISHED_SENDING_DATA)) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
   }
 }
