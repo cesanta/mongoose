@@ -4494,8 +4494,15 @@ static void close_local_endpoint(struct connection *conn) {
 
 static void transfer_file_data(struct connection *conn) {
   char buf[IOBUF_SIZE];
-  int n = read(conn->endpoint.fd, buf, conn->cl < (int64_t) sizeof(buf) ?
-               (int) conn->cl : (int) sizeof(buf));
+  int n;
+
+  // If output buffer is too big, don't send anything. Wait until
+  // mongoose drains already buffered data to the client.
+  if (conn->ns_conn->send_iobuf.len > sizeof(buf) * 2) return;
+
+  // Do not send anyt
+  n = read(conn->endpoint.fd, buf, conn->cl < (int64_t) sizeof(buf) ?
+           (int) conn->cl : (int) sizeof(buf));
 
   if (n <= 0) {
     close_local_endpoint(conn);
