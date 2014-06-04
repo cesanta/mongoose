@@ -169,11 +169,11 @@ a response body.  Mongoose provides functions for all three parts:
      send data in pieces by saving state in
      `struct mg_connection::connection_param` variable and returning `0`. Then
      Mongoose will call a handler repeatedly after each socket write.
-     
-     void mg_send_file(struct mg_connection *, const char *path);
 
 <!-- -->
      
+     void mg_send_file(struct mg_connection *, const char *path);
+
 Tells Mongoose to serve given file. Mongoose handles file according to
 it's extensions, i.e. Mongoose will invoke CGI script if `path` has CGI
 extension, it'll render SSI file if `path` has SSI extension, etc. If `path`
