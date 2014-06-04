@@ -3995,29 +3995,6 @@ static void handle_ssi_request(struct connection *conn, const char *path) {
 }
 #endif
 
-static int parse_url(const char *url, char *proto, size_t plen,
-                     char *host, size_t hlen, unsigned short *port) {
-  int n;
-  char fmt1[100], fmt2[100], fmt3[100];
-
-  *port = 80;
-  proto[0] = host[0] = '\0';
-
-  snprintf(fmt1, sizeof(fmt1), "%%%zu[a-z]://%%%zu[^: ]:%%hu%%n", plen, hlen);
-  snprintf(fmt2, sizeof(fmt2), "%%%zu[a-z]://%%%zu[^/ ]%%n", plen, hlen);
-  snprintf(fmt3, sizeof(fmt3), "%%%zu[^: ]:%%hu%%n", hlen);
-
-  if (sscanf(url, fmt1, proto, host, port, &n) == 3 ||
-      sscanf(url, fmt2, proto, host, &n) == 2) {
-    return n;
-  } else if (sscanf(url, fmt3, host, port, &n) == 2) {
-    proto[0] = '\0';
-    return n;
-  }
-
-  return 0;
-}
-
 static void proxy_request(struct ns_connection *pc, struct mg_connection *c) {
   int i, sent_close_header = 0;
 
@@ -4047,11 +4024,16 @@ static void proxify_connection(struct connection *conn) {
   unsigned short port = 80;
   struct mg_connection *c = &conn->mg_conn;
   struct ns_server *server = &conn->server->ns_server;
-  struct ns_connection *pc;
-  int n, use_ssl;
+  struct ns_connection *pc = NULL;
+  int n = 0, use_ssl = 0;
+  const char *url = c->uri;
 
   proto[0] = host[0] = cert[0] = '\0';
-  n = parse_url(c->uri, proto, sizeof(proto), host, sizeof(host), &port);
+  if (sscanf(url, "%499[^: ]:%hu%n", host, &port, &n) != 2 &&
+      sscanf(url, "%9[a-z]://%499[^: ]:%hu%n", proto, host, &port, &n) != 3 &&
+      sscanf(url, "%9[a-z]://%499[^/ ]%n", proto, host, &n) != 2) {
+    n = 0;
+  }
 
 #ifdef NS_ENABLE_SSL
   // Find out whether we should be in the MITM mode
@@ -4070,7 +4052,6 @@ static void proxify_connection(struct connection *conn) {
 #endif
 
   use_ssl = port != 80 && cert[0] != '\0';
-
   if (n > 0 &&
       (pc = ns_connect(server, host, port, use_ssl, conn)) != NULL) {
     // Interlink two connections
