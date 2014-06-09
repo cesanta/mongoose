@@ -59,6 +59,10 @@ form: form.c ../mongoose.c
 mjpg: mjpg.c ../mongoose.c
 	$(CC) mjpg.c ../mongoose.c $(OUT) $(CFLAGS)
 
+pubsub: websocket2.c ../mongoose.c
+	$(CC) websocket2.c ../mongoose.c $(OUT) $(CFLAGS)
+
+
 proxy: proxy.c ../mongoose.c
 	$(CC) proxy.c ../mongoose.c $(OUT) \
 		-I../../net_skeleton -DNS_ENABLE_SSL -lssl $(CFLAGS)
