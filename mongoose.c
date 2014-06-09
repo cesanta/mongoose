@@ -2734,6 +2734,7 @@ static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
     if (call_user(MG_CONN_2_CONN(conn), MG_WS_HANDSHAKE) == MG_FALSE) {
       send_websocket_handshake(conn, key);
     }
+    call_user(MG_CONN_2_CONN(conn), MG_WS_CONNECT);
   }
 }
 
