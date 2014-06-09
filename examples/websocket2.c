@@ -17,18 +17,6 @@ static void signal_handler(int sig_num) {
   s_signal_received = sig_num;
 }
 
-#if 0
-static int iterate_callback(struct mg_connection *c, enum mg_event ev) {
-  if (ev == MG_POLL && c->is_websocket) {
-    char buf[20];
-    int len = snprintf(buf, sizeof(buf), "%lu",
-     (unsigned long) * (time_t *) c->callback_param);
-    mg_websocket_write(c, 1, buf, len);
-  }
-  return MG_TRUE;
-}
-#endif
-
 static void handle_websocket_message(struct mg_connection *conn) {
   struct conn_data *d = (struct conn_data *) conn->connection_param;
   struct mg_connection *c;
