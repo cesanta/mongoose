@@ -222,6 +222,7 @@ int ns_server_poll(struct ns_server *, int milli);
 void ns_server_wakeup(struct ns_server *);
 void ns_server_wakeup_ex(struct ns_server *, ns_callback_t, void *, size_t);
 void ns_iterate(struct ns_server *, ns_callback_t cb, void *param);
+struct ns_connection *ns_next(struct ns_server *, struct ns_connection *);
 struct ns_connection *ns_add_sock(struct ns_server *, sock_t sock, void *p);
 
 int ns_bind(struct ns_server *, const char *addr);
@@ -876,7 +877,7 @@ int ns_server_poll(struct ns_server *server, int milli) {
     if (server->ctl[1] != INVALID_SOCKET &&
         FD_ISSET(server->ctl[1], &read_set)) {
       struct ctl_msg ctl_msg;
-      int len = recv(server->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg), 0);
+      int len = recv(server->ctl[1], (void *) &ctl_msg, sizeof(ctl_msg), 0);
       send(server->ctl[1], ctl_msg.message, 1, 0);
       if (len >= (int) sizeof(ctl_msg.callback) && ctl_msg.callback != NULL) {
         ns_iterate(server, ctl_msg.callback, ctl_msg.message);
@@ -885,7 +886,6 @@ int ns_server_poll(struct ns_server *server, int milli) {
 
     for (conn = server->active_connections; conn != NULL; conn = tmp_conn) {
       tmp_conn = conn->next;
-      //DBG(("%p LOOP %p", conn, conn->ssl));
       if (FD_ISSET(conn->sock, &read_set)) {
         conn->last_io_time = current_time;
         ns_read_from_socket(conn);
@@ -979,6 +979,10 @@ struct ns_connection *ns_add_sock(struct ns_server *s, sock_t sock, void *p) {
   return conn;
 }
 
+struct ns_connection *ns_next(struct ns_server *s, struct ns_connection *conn) {
+  return conn == NULL ? s->active_connections : conn->next;
+}
+
 void ns_iterate(struct ns_server *server, ns_callback_t cb, void *param) {
   struct ns_connection *conn, *tmp_conn;
 
@@ -995,9 +999,9 @@ void ns_server_wakeup_ex(struct ns_server *server, ns_callback_t cb,
       len < sizeof(ctl_msg.message)) {
     ctl_msg.callback = cb;
     memcpy(ctl_msg.message, data, len);
-    send(server->ctl[0], (char *) &ctl_msg,
+    send(server->ctl[0], (void *) &ctl_msg,
          offsetof(struct ctl_msg, message) + len, 0);
-    recv(server->ctl[0], (char *) &len, 1, 0);
+    recv(server->ctl[0], (void *) &len, 1, 0);
   }
 }
 
@@ -2734,6 +2738,7 @@ static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
     if (call_user(MG_CONN_2_CONN(conn), MG_WS_HANDSHAKE) == MG_FALSE) {
       send_websocket_handshake(conn, key);
     }
+    call_user(MG_CONN_2_CONN(conn), MG_WS_CONNECT);
   }
 }
 
@@ -4543,6 +4548,15 @@ static void iter(struct ns_connection *nsconn, enum ns_event ev, void *param) {
     if (c != NULL) c->mg_conn.callback_param = it->param;
     it->cb(&c->mg_conn, MG_POLL);
   }
+}
+
+struct mg_connection *mg_next(struct mg_server *s, struct mg_connection *c) {
+  struct connection *conn = MG_CONN_2_CONN(c);
+  struct ns_connection *nc = ns_next(&s->ns_server,
+                                     c == NULL ? NULL : conn->ns_conn);
+    
+  return nc == NULL ? NULL :
+    & ((struct connection *) nc->connection_data)->mg_conn;
 }
 
 // Apply function to all active connections.

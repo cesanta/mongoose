@@ -68,6 +68,7 @@ enum mg_event {
   MG_REPLY,       // If callback returns MG_FALSE, Mongoose closes connection
   MG_CLOSE,       // Connection is closed, callback return value is ignored
   MG_WS_HANDSHAKE,  // New websocket connection, handshake request
+  MG_WS_CONNECT,  // New websocket connection established
   MG_HTTP_ERROR   // If callback returns MG_FALSE, Mongoose continues with err
 };
 typedef int (*mg_handler_t)(struct mg_connection *, enum mg_event);
@@ -92,6 +93,7 @@ const char *mg_get_option(const struct mg_server *server, const char *name);
 void mg_set_listening_socket(struct mg_server *, int sock);
 int mg_get_listening_socket(struct mg_server *);
 void mg_iterate_over_connections(struct mg_server *, mg_handler_t, void *);
+struct mg_connection *mg_next(struct mg_server *, struct mg_connection *);
 void mg_wakeup_server(struct mg_server *);
 void mg_wakeup_server_ex(struct mg_server *, mg_handler_t, const char *, ...);
 struct mg_connection *mg_connect(struct mg_server *, const char *, int, int);
