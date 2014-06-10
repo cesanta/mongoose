@@ -4173,9 +4173,11 @@ void mg_send_file(struct mg_connection *c, const char *file_name) {
 #endif  // !MONGOOSE_NO_FILESYSTEM
 
 static void open_local_endpoint(struct connection *conn, int skip_user) {
+#ifndef MONGOOSE_NO_FILESYSTEM
   char path[MAX_PATH_SIZE];
   file_stat_t st;
   int exists = 0;
+#endif
 
   // If EP_USER was set in a prev call, reset it
   conn->endpoint_type = EP_NONE;
@@ -4824,7 +4826,9 @@ static void hexdump(struct ns_connection *nc, const char *path,
 
 static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
   struct connection *conn = (struct connection *) nc->connection_data;
+#ifndef MONGOOSE_NO_FILESYSTEM
   struct mg_server *server = (struct mg_server *) nc->server;
+#endif
 
   // Send NS event to the handler. Note that call_user won't send an event
   // if conn == NULL. Therefore, repeat this for NS_ACCEPT event as well.
