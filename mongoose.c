@@ -4290,10 +4290,9 @@ static void try_parse(struct connection *conn) {
 
 static void do_proxy(struct connection *conn) {
   if (conn->request_len == 0) {
-    DBG(("%p parsing", conn));
     try_parse(conn);
-    if (conn->request_len > 0 &&
-        call_user(conn, MG_REQUEST) == MG_FALSE) {
+    DBG(("%p parsing -> %d", conn, conn->request_len));
+    if (conn->request_len > 0 && call_user(conn, MG_REQUEST) == MG_FALSE) {
       proxy_request(conn->endpoint.nc, &conn->mg_conn);
     } else if (conn->request_len < 0) {
       ns_forward(conn->ns_conn, conn->endpoint.nc);
