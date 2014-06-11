@@ -677,8 +677,8 @@ void ns_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
 #endif
     }
     if (flags & 2) {
-      snprintf(buf + strlen(buf), len - (strlen(buf) + 1), ":%d",
-      (int) ntohs(sa.sin.sin_port));
+      snprintf(buf + strlen(buf), len - (strlen(buf) + 1), "%s%d",
+               flags & 1 ? ":" : "", (int) ntohs(sa.sin.sin_port));
     }
   }
 }
@@ -4732,12 +4732,10 @@ const char *mg_set_option(struct mg_server *server, const char *name,
     if (port < 0) {
       error_msg = "Cannot bind to port";
     } else {
-      if (!strcmp(value, "0")) {
-        char buf[10];
-        mg_snprintf(buf, sizeof(buf), "%d", port);
-        free(*v);
-        *v = mg_strdup(buf);
-      }
+      char buf[100];
+      ns_sock_to_str(server->ns_server.listening_sock, buf, sizeof(buf), 2);
+      free(*v);
+      *v = mg_strdup(buf);
     }
 #ifndef _WIN32
   } else if (ind == RUN_AS_USER) {

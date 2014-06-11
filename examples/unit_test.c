@@ -502,21 +502,6 @@ static const char *test_rewrites(void) {
   return NULL;
 }
 
-static const char *test_mg_parse_url(void) {
-  unsigned short port;
-  char a[100], b[100];
-  ASSERT(parse_url("", a, sizeof(a), b, sizeof(b), &port) == 0);
-  ASSERT(parse_url("ws://foo ", a, sizeof(a), b, sizeof(b), &port) == 8);
-  ASSERT(strcmp(a, "ws") == 0 && strcmp(b, "foo") == 0 && port == 80);
-  ASSERT(parse_url("xx://y:123 ", a, sizeof(a), b, sizeof(b), &port) == 10);
-  ASSERT(strcmp(a, "xx") == 0 && strcmp(b, "y") == 0 && port == 123);
-  ASSERT(parse_url(" foo ", a, sizeof(a), b, sizeof(b), &port) == 0);
-  ASSERT(parse_url(" foo:44 ", a, sizeof(a), b, sizeof(b), &port) == 0);
-  ASSERT(parse_url("foo:44 ", a, sizeof(a), b, sizeof(b), &port) == 6);
-  ASSERT(strcmp(a, "") == 0 && strcmp(b, "foo") == 0 && port == 44);
-  return NULL;
-}
-
 static const char *run_all_tests(void) {
   RUN_TEST(test_should_keep_alive);
   RUN_TEST(test_match_prefix);
@@ -533,7 +518,6 @@ static const char *run_all_tests(void) {
   RUN_TEST(test_mg_set_option);
   RUN_TEST(test_server);
   RUN_TEST(test_rewrites);
-  RUN_TEST(test_mg_parse_url);
   return NULL;
 }
 
