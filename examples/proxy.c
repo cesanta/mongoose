@@ -141,7 +141,7 @@ static void setopt(struct mg_server *s, const char *opt, const char *val) {
 
 int main(int argc, char *argv[]) {
   const char *cert = NULL, *ca_cert = NULL, *port = "2014";
-  const char *mitm = NULL, *dump = NULL;
+  const char *mitm = NULL, *dump = NULL, *root = "proxy_web_root";
   int i;
 
   // Parse command line options
@@ -154,6 +154,8 @@ int main(int argc, char *argv[]) {
       port = argv[++i];
     } else if (strcmp(argv[i], "-mitm") == 0 && i + 1 < argc) {
       mitm = argv[++i];
+    } else if (strcmp(argv[i], "-root") == 0 && i + 1 < argc) {
+      root = argv[++i];
     } else if (strcmp(argv[i], "-dump") == 0 && i + 1 < argc) {
       dump = argv[++i];
     } else {
@@ -166,7 +168,7 @@ int main(int argc, char *argv[]) {
 
   // Create and configure proxy server
   s_server = mg_create_server(NULL, &proxy_event_handler);
-  setopt(s_server, "document_root",       "proxy_web_root");
+  setopt(s_server, "document_root",       root);
   setopt(s_server, "listening_port",      port);
   setopt(s_server, "ssl_certificate",     cert);
   setopt(s_server, "ssl_ca_certificate",  ca_cert);
