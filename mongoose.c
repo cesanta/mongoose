@@ -862,6 +862,10 @@ int ns_server_poll(struct ns_server *server, int milli) {
   tv.tv_usec = (milli % 1000) * 1000;
 
   if (select((int) max_fd + 1, &read_set, &write_set, NULL, &tv) > 0) {
+    // select() might have been waiting for a long time, reset current_time
+    // now to prevent last_io_time being set to the past.
+    current_time = time(NULL);
+    
     // Accept new connections
     if (server->listening_sock != INVALID_SOCKET &&
         FD_ISSET(server->listening_sock, &read_set)) {
@@ -4024,13 +4028,42 @@ static void proxy_request(struct ns_connection *pc, struct mg_connection *c) {
 
 }
 
+#ifdef NS_ENABLE_SSL
+int mg_terminate_ssl(struct mg_connection *c, const char *cert) {
+  static const char ok[] = "HTTP/1.0 200 OK\r\n\r\n";
+  struct connection *conn = MG_CONN_2_CONN(c);
+  int n;
+  SSL_CTX *ctx;
+
+  DBG(("%p MITM", conn));
+  SSL_library_init();
+  if ((ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) return 0;
+
+  SSL_CTX_use_certificate_file(ctx, cert, 1);
+  SSL_CTX_use_PrivateKey_file(ctx, cert, 1);
+  SSL_CTX_use_certificate_chain_file(ctx, cert);
+
+  // When clear-text reply is pushed to client, switch to SSL mode.
+  n = send(conn->ns_conn->sock, ok, sizeof(ok) - 1, 0);
+  DBG(("%p %lu %d SEND", c, sizeof(ok) - 1, n));
+  conn->ns_conn->send_iobuf.len = 0;
+  conn->endpoint_type = EP_USER;  // To keep-alive in close_local_endpoint()
+  close_local_endpoint(conn);     // Clean up current CONNECT request
+  if ((conn->ns_conn->ssl = SSL_new(ctx)) != NULL) {
+    SSL_set_fd(conn->ns_conn->ssl, conn->ns_conn->sock);
+  }
+  SSL_CTX_free(ctx);
+  return 1;
+}
+#endif
+
 static void proxify_connection(struct connection *conn) {
   char proto[10], host[500], cert[500];
   unsigned short port = 80;
   struct mg_connection *c = &conn->mg_conn;
   struct ns_server *server = &conn->server->ns_server;
   struct ns_connection *pc = NULL;
-  int n = 0, use_ssl = 0;
+  int n = 0;
   const char *url = c->uri;
 
   proto[0] = host[0] = cert[0] = '\0';
@@ -4047,23 +4080,24 @@ static void proxify_connection(struct connection *conn) {
     int host_len = strlen(host);
     struct vec a, b;
 
-    while ((certs = next_option(certs, &a, &b)) != NULL) {
-      if (a.len == host_len && mg_strncasecmp(a.ptr, host, a.len) == 0) {
-        snprintf(cert, sizeof(cert), "%.*s", b.len, b.ptr);
-        break;
-      }
+    while (conn->ns_conn->ssl == NULL && port != 80 &&
+           (certs = next_option(certs, &a, &b)) != NULL) {
+      if (a.len != host_len || mg_strncasecmp(a.ptr, host, a.len)) continue;
+      snprintf(cert, sizeof(cert), "%.*s", b.len, b.ptr);
+      mg_terminate_ssl(&conn->mg_conn, cert);
+      return;
     }
   }
 #endif
 
-  use_ssl = port != 80 && cert[0] != '\0';
   if (n > 0 &&
-      (pc = ns_connect(server, host, port, use_ssl, conn)) != NULL) {
+      (pc = ns_connect(server, host, port, conn->ns_conn->ssl != NULL,
+                       conn)) != NULL) {
     // Interlink two connections
     pc->flags |= MG_PROXY_CONN;
     conn->endpoint_type = EP_PROXY;
     conn->endpoint.nc = pc;
-    DBG(("%p [%s] -> %p %d", conn, c->uri, pc, use_ssl));
+    DBG(("%p [%s] -> %p %p", conn, c->uri, pc, conn->ns_conn->ssl));
 
     if (strcmp(c->request_method, "CONNECT") == 0) {
       // For CONNECT request, reply with 200 OK. Tunnel is established.
@@ -4071,34 +4105,6 @@ static void proxify_connection(struct connection *conn) {
       conn->request_len = 0;
       free(conn->request);
       conn->request = NULL;
-#ifdef NS_ENABLE_SSL
-      if (use_ssl) {
-        SSL_CTX *ctx;
-
-        DBG(("%s", "Triggering MITM mode: terminating SSL connection"));
-        SSL_library_init();
-        ctx = SSL_CTX_new(SSLv23_server_method());
-
-        if (ctx == NULL) {
-          pc->flags |= NSF_CLOSE_IMMEDIATELY;
-        } else {
-          SSL_CTX_use_certificate_file(ctx, cert, 1);
-          SSL_CTX_use_PrivateKey_file(ctx, cert, 1);
-          SSL_CTX_use_certificate_chain_file(ctx, cert);
-
-          // When clear-text reply is pushed to client, switch to SSL mode.
-          n = send(conn->ns_conn->sock, conn->ns_conn->send_iobuf.buf,
-                   conn->ns_conn->send_iobuf.len, 0);
-          DBG(("%p %lu %d SEND", c, conn->ns_conn->send_iobuf.len, n));
-          conn->ns_conn->send_iobuf.len = 0;
-          if ((conn->ns_conn->ssl = SSL_new(ctx)) != NULL) {
-            //SSL_set_fd((SSL *) c->connection_param, conn->ns_conn->sock);
-            SSL_set_fd(conn->ns_conn->ssl, conn->ns_conn->sock);
-          }
-          SSL_CTX_free(ctx);
-        }
-      }
-#endif
     } else {
       // For other methods, forward the request to the target host.
       c->uri += n;
