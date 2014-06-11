@@ -2712,6 +2712,12 @@ size_t mg_websocket_write(struct mg_connection* conn, int opcode,
       free(copy);
     }
 
+    // If we send closing frame, schedule a connection to be closed after
+    // data is drained to the client.
+    if (opcode == WEBSOCKET_OPCODE_CONNECTION_CLOSE) {
+      MG_CONN_2_CONN(conn)->ns_conn->flags |= NSF_FINISHED_SENDING_DATA;
+    }
+
     return MG_CONN_2_CONN(conn)->ns_conn->send_iobuf.len;
 }
 
