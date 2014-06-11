@@ -862,6 +862,10 @@ int ns_server_poll(struct ns_server *server, int milli) {
   tv.tv_usec = (milli % 1000) * 1000;
 
   if (select((int) max_fd + 1, &read_set, &write_set, NULL, &tv) > 0) {
+    // select() might have been waiting for a long time, reset current_time
+    // now to prevent last_io_time being set to the past.
+    current_time = time(NULL);
+    
     // Accept new connections
     if (server->listening_sock != INVALID_SOCKET &&
         FD_ISSET(server->listening_sock, &read_set)) {
