@@ -889,7 +889,7 @@ int ns_server_poll(struct ns_server *server, int milli) {
     if (server->ctl[1] != INVALID_SOCKET &&
         FD_ISSET(server->ctl[1], &read_set)) {
       struct ctl_msg ctl_msg;
-      int len = recv(server->ctl[1], (void *) &ctl_msg, sizeof(ctl_msg), 0);
+      int len = recv(server->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg), 0);
       send(server->ctl[1], ctl_msg.message, 1, 0);
       if (len >= (int) sizeof(ctl_msg.callback) && ctl_msg.callback != NULL) {
         ns_iterate(server, ctl_msg.callback, ctl_msg.message);
@@ -1011,9 +1011,9 @@ void ns_server_wakeup_ex(struct ns_server *server, ns_callback_t cb,
       len < sizeof(ctl_msg.message)) {
     ctl_msg.callback = cb;
     memcpy(ctl_msg.message, data, len);
-    send(server->ctl[0], (void *) &ctl_msg,
+    send(server->ctl[0], (char *) &ctl_msg,
          offsetof(struct ctl_msg, message) + len, 0);
-    recv(server->ctl[0], (void *) &len, 1, 0);
+    recv(server->ctl[0], (char *) &len, 1, 0);
   }
 }
 
