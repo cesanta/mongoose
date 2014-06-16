@@ -4200,7 +4200,6 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
   file_stat_t st;
   int exists = 0;
 #endif
-  const char *pxy = conn->server->config_options[ENABLE_PROXY];
 
   // If EP_USER was set in a prev call, reset it
   conn->endpoint_type = EP_NONE;
@@ -4229,10 +4228,14 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
     return;
   }
 
-  if (pxy != NULL && !strcmp(pxy, "yes") &&
-      (strcmp(conn->mg_conn.request_method, "CONNECT") == 0 ||
-       memcmp(conn->mg_conn.uri, "http", 4) == 0)) {
-    proxify_connection(conn);
+  if (strcmp(conn->mg_conn.request_method, "CONNECT") == 0 ||
+      mg_strncasecmp(conn->mg_conn.uri, "http", 4) == 0) {
+    const char *enp = conn->server->config_options[ENABLE_PROXY];
+    if (enp == NULL || strcmp(enp, "yes") != 0) {
+      send_http_error(conn, 405, NULL);
+    } else {
+      proxify_connection(conn);
+    }
     return;
   }
   
@@ -4286,7 +4289,7 @@ static int is_valid_uri(const char *uri) {
   unsigned short n;
   return uri[0] == '/' ||
     strcmp(uri, "*") == 0 ||            // OPTIONS method can use asterisk URI
-    memcmp(uri, "http", 4) == 0 ||      // Naive check for the absolute URI
+    mg_strncasecmp(uri, "http", 4) == 0 || // Naive check for the absolute URI
     sscanf(uri, "%*[^ :]:%hu", &n) > 0; // CONNECT method can use host:port
 }
 
