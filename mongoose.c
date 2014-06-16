@@ -1672,7 +1672,7 @@ static void *push_to_stdin(void *arg) {
 
 static void *pull_from_stdout(void *arg) {
   struct threadparam *tp = (struct threadparam *)arg;
-  int k, stop = 0;
+  int k = 0, stop = 0;
   DWORD n, sent;
   char buf[IOBUF_SIZE];
 
