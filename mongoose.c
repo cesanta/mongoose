@@ -1196,6 +1196,7 @@ enum {
 #ifndef MONGOOSE_NO_DIRECTORY_LISTING
   ENABLE_DIRECTORY_LISTING,
 #endif
+  ENABLE_PROXY,
 #endif
   EXTRA_MIME_TYPES,
 #if !defined(MONGOOSE_NO_FILESYSTEM) && !defined(MONGOOSE_NO_AUTH)
@@ -1238,6 +1239,7 @@ static const char *static_config_options[] = {
 #ifndef MONGOOSE_NO_DIRECTORY_LISTING
   "enable_directory_listing", "yes",
 #endif
+  "enable_proxy", NULL,
 #endif
   "extra_mime_types", NULL,
 #if !defined(MONGOOSE_NO_FILESYSTEM) && !defined(MONGOOSE_NO_AUTH)
@@ -4198,6 +4200,7 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
   file_stat_t st;
   int exists = 0;
 #endif
+  const char *pxy = conn->server->config_options[ENABLE_PROXY];
 
   // If EP_USER was set in a prev call, reset it
   conn->endpoint_type = EP_NONE;
@@ -4226,8 +4229,9 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
     return;
   }
 
-  if (strcmp(conn->mg_conn.request_method, "CONNECT") == 0 ||
-      memcmp(conn->mg_conn.uri, "http", 4) == 0) {
+  if (pxy != NULL && !strcmp(pxy, "yes") &&
+      (strcmp(conn->mg_conn.request_method, "CONNECT") == 0 ||
+       memcmp(conn->mg_conn.uri, "http", 4) == 0)) {
     proxify_connection(conn);
     return;
   }
