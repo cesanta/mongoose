@@ -1795,9 +1795,9 @@ static process_id_t start_process(const char *interp, const char *cmd,
     signal(SIGCHLD, SIG_DFL);
 
     if (interp == NULL) {
-      execle(cmd, cmd, NULL, envp);
+      execle(cmd, cmd, (char *) 0, envp); // Using (char *) 0 to avoid warning
     } else {
-      execle(interp, interp, cmd, NULL, envp);
+      execle(interp, interp, cmd, (char *) 0, envp);
     }
     snprintf(buf, sizeof(buf), "Status: 500\r\n\r\n"
              "500 Server Error: %s%s%s: %s", interp == NULL ? "" : interp,
