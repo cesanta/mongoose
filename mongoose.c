@@ -1196,8 +1196,8 @@ enum {
 #ifndef MONGOOSE_NO_DIRECTORY_LISTING
   ENABLE_DIRECTORY_LISTING,
 #endif
-  ENABLE_PROXY,
 #endif
+  ENABLE_PROXY,
   EXTRA_MIME_TYPES,
 #if !defined(MONGOOSE_NO_FILESYSTEM) && !defined(MONGOOSE_NO_AUTH)
   GLOBAL_AUTH_FILE,
@@ -1239,8 +1239,8 @@ static const char *static_config_options[] = {
 #ifndef MONGOOSE_NO_DIRECTORY_LISTING
   "enable_directory_listing", "yes",
 #endif
-  "enable_proxy", NULL,
 #endif
+  "enable_proxy", NULL,
   "extra_mime_types", NULL,
 #if !defined(MONGOOSE_NO_FILESYSTEM) && !defined(MONGOOSE_NO_AUTH)
   "global_auth_file", NULL,
@@ -1795,9 +1795,9 @@ static process_id_t start_process(const char *interp, const char *cmd,
     signal(SIGCHLD, SIG_DFL);
 
     if (interp == NULL) {
-      execle(cmd, cmd, NULL, envp);
+      execle(cmd, cmd, (char *) 0, envp); // Using (char *) 0 to avoid warning
     } else {
-      execle(interp, interp, cmd, NULL, envp);
+      execle(interp, interp, cmd, (char *) 0, envp);
     }
     snprintf(buf, sizeof(buf), "Status: 500\r\n\r\n"
              "500 Server Error: %s%s%s: %s", interp == NULL ? "" : interp,
