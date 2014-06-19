@@ -127,7 +127,7 @@ static int proxy_event_handler(struct mg_connection *conn, enum mg_event ev) {
       // Enable man-in-the-middle SSL mode for oracle.com
       if (!strcmp(conn->request_method, "CONNECT") &&
           !strcmp(host, "oracle.com")) {
-        mg_terminate_ssl(conn, "ssl_cert.pem");
+        mg_terminate_ssl(conn, "ssl_cert.pem");  // MUST return MG_MORE after
         return MG_MORE;
       }
 
