@@ -124,6 +124,13 @@ static int proxy_event_handler(struct mg_connection *conn, enum mg_event ev) {
         return try_to_serve_locally(conn);
       }
 
+      // Enable man-in-the-middle SSL mode for oracle.com
+      if (!strcmp(conn->request_method, "CONNECT") &&
+          !strcmp(host, "oracle.com")) {
+        mg_terminate_ssl(conn, "ssl_cert.pem");  // MUST return MG_MORE after
+        return MG_MORE;
+      }
+
       return MG_FALSE;
     case MG_AUTH:
       return MG_TRUE;
@@ -168,6 +175,7 @@ int main(int argc, char *argv[]) {
 
   // Create and configure proxy server
   s_server = mg_create_server(NULL, &proxy_event_handler);
+  setopt(s_server, "enable_proxy",        "yes");
   setopt(s_server, "document_root",       root);
   setopt(s_server, "listening_port",      port);
   setopt(s_server, "ssl_certificate",     cert);
