@@ -685,7 +685,8 @@ void ns_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
 #endif
     }
     if (flags & 2) {
-      snprintf(buf + strlen(buf), len - (strlen(buf) + 1), "%s%d",
+	    const size_t buf_len = strlen(buf); 
+      snprintf(buf + buf_len, len - buf_len + 1, "%s%d",
                flags & 1 ? ":" : "", (int) ntohs(sa.sin.sin_port));
     }
   }
@@ -4945,6 +4946,8 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_POLL:
+	  if (conn != NULL)
+	  {
       if (call_user(conn, MG_POLL) == MG_TRUE) {
         if (conn->ns_conn->flags & MG_HEADERS_SENT) {
           write_terminating_chunk(conn);
@@ -4952,7 +4955,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
         close_local_endpoint(conn);
       }
 
-      if (conn != NULL && conn->endpoint_type == EP_FILE) {
+       if (conn->endpoint_type == EP_FILE) {
         transfer_file_data(conn);
       }
 
@@ -4960,7 +4963,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       {
         time_t current_time = * (time_t *) p;
 
-        if (conn != NULL && conn->mg_conn.is_websocket) {
+        if (conn->mg_conn.is_websocket) {
           ping_idle_websocket_connection(conn, current_time);
         }
 
@@ -4969,6 +4972,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
           nc->flags |= NSF_CLOSE_IMMEDIATELY;
         }
       }
+	  }
       break;
 
     default:
