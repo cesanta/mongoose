@@ -4945,15 +4945,17 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_POLL:
-      if (call_user(conn, MG_POLL) == MG_TRUE) {
-        if (conn->ns_conn->flags & MG_HEADERS_SENT) {
-          write_terminating_chunk(conn);
+      if (conn != NULL) {
+        if (call_user(conn, MG_POLL) == MG_TRUE) {
+          if (conn->ns_conn->flags & MG_HEADERS_SENT) {
+            write_terminating_chunk(conn);
+          }
+          close_local_endpoint(conn);
         }
-        close_local_endpoint(conn);
-      }
 
-      if (conn != NULL && conn->endpoint_type == EP_FILE) {
-        transfer_file_data(conn);
+        if (conn->endpoint_type == EP_FILE) {
+          transfer_file_data(conn);
+        }
       }
 
       // Expire idle connections
