@@ -752,7 +752,13 @@ static void ns_read_from_socket(struct ns_connection *conn) {
 #ifdef NS_ENABLE_SSL
   if (conn->ssl != NULL) {
     if (conn->flags & NSF_SSL_HANDSHAKE_DONE) {
-      n = SSL_read(conn->ssl, buf, sizeof(buf));
+      // SSL library may have more bytes ready to read then we ask to read.
+      // Therefore, read in a loop until we read everything. Without the loop,
+      // we skip to the next select() cycle which can just timeout.
+      while ((n = SSL_read(conn->ssl, buf, sizeof(buf))) > 0) {
+        iobuf_append(&conn->recv_iobuf, buf, n);
+        ns_call(conn, NS_RECV, &n);
+      }
     } else {
       int res = SSL_accept(conn->ssl);
       int ssl_err = SSL_get_error(conn->ssl, res);
@@ -4061,7 +4067,7 @@ int mg_terminate_ssl(struct mg_connection *c, const char *cert) {
 
   // When clear-text reply is pushed to client, switch to SSL mode.
   n = send(conn->ns_conn->sock, ok, sizeof(ok) - 1, 0);
-  DBG(("%p %lu %d SEND", c, sizeof(ok) - 1, n));
+  DBG(("%p %zu %d SEND", c, sizeof(ok) - 1, n));
   conn->ns_conn->send_iobuf.len = 0;
   conn->endpoint_type = EP_USER;  // To keep-alive in close_local_endpoint()
   close_local_endpoint(conn);     // Clean up current CONNECT request
