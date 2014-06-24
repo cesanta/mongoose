@@ -5,9 +5,9 @@
 #include <string.h>
 #include "mongoose.h"
 
-static void send_index_page(struct mg_connection *conn) {
+static int send_index_page(struct mg_connection *conn) {
   const char *data;
-  int data_len;
+  int data_len, ofs = 0;
   char var_name[100], file_name[100];
 
   mg_printf_data(conn, "%s",
@@ -15,30 +15,28 @@ static void send_index_page(struct mg_connection *conn) {
                  "<form method=\"POST\" action=\"/handle_post_request\" "
                  "  enctype=\"multipart/form-data\">"
                  "<input type=\"file\" name=\"file\" /> <br/>"
+                 "<input type=\"text\" name=\"input1\" value=hello! /> <br/>"
                  "<input type=\"submit\" value=\"Upload\" />"
                  "</form>");
 
-  if (mg_parse_multipart(conn->content, conn->content_len,
-                         var_name, sizeof(var_name),
-                         file_name, sizeof(file_name),
-                         &data, &data_len) > 0) {
-
-    mg_printf_data(conn, "%s", "Uploaded file:<pre>");
-    mg_send_data(conn, data, data_len);
-    mg_printf_data(conn, "%s", "/pre>");
+  while ((ofs = mg_parse_multipart(conn->content + ofs, conn->content_len - ofs,
+                                   var_name, sizeof(var_name),
+                                   file_name, sizeof(file_name),
+                                   &data, &data_len)) > 0) {
+    mg_printf_data(conn, "var: %s, file_name: %s, size: %d bytes<br>",
+                   var_name, file_name, data_len);
   }
 
   mg_printf_data(conn, "%s", "</body></html>");
+
+  return MG_TRUE;
 }
 
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
-  if (ev == MG_REQUEST) {
-    send_index_page(conn);
-    return MG_TRUE;
-  } else if (ev == MG_AUTH) {
-    return MG_TRUE;
-  } else {
-    return MG_FALSE;
+  switch (ev) {
+    case MG_AUTH:     return MG_TRUE;
+    case MG_REQUEST:  return send_index_page(conn);
+    default:          return MG_FALSE;
   }
 }
 
