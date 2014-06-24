@@ -29,7 +29,7 @@ static int handle_request(struct mg_connection *conn) {
       conn->connection_param = p;
       mg_send_header(conn, "Content-Type", "text/html");
     }
-    return MG_MORE;
+    return MG_MORE; // Tell mongoose to keep this connection open
   } else {
     mg_printf_data(conn, "%s",
                    "<html><body>Upload example."
@@ -38,7 +38,7 @@ static int handle_request(struct mg_connection *conn) {
                    "<input type=\"file\" name=\"file\" /> <br/>"
                    "<input type=\"submit\" value=\"Upload\" />"
                    "</form></body></html>");
-    return MG_TRUE;
+    return MG_TRUE;   // Tell mongoose to close this connection
   }
 }
 
@@ -59,10 +59,10 @@ static int handle_poll(struct mg_connection *conn) {
       fclose(p->fp);
       free(p);
       conn->connection_param = NULL;
-      return MG_TRUE;
+      return MG_TRUE; // Tell mongoose to close this connection
     }
   }
-  return MG_FALSE;
+  return MG_FALSE;  // Tell mongoose to keep this connection open
 }
 
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
