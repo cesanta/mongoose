@@ -756,6 +756,7 @@ static void ns_read_from_socket(struct ns_connection *conn) {
       // Therefore, read in a loop until we read everything. Without the loop,
       // we skip to the next select() cycle which can just timeout.
       while ((n = SSL_read(conn->ssl, buf, sizeof(buf))) > 0) {
+        DBG(("%p %d <- %d bytes (SSL)", conn, conn->flags, n));
         iobuf_append(&conn->recv_iobuf, buf, n);
         ns_call(conn, NS_RECV, &n);
       }
@@ -778,16 +779,15 @@ static void ns_read_from_socket(struct ns_connection *conn) {
   } else
 #endif
   {
-    n = recv(conn->sock, buf, sizeof(buf), 0);
+    while ((n = recv(conn->sock, buf, sizeof(buf), 0)) > 0) {
+      DBG(("%p %d <- %d bytes (PLAIN)", conn, conn->flags, n));
+      iobuf_append(&conn->recv_iobuf, buf, n);
+      ns_call(conn, NS_RECV, &n);
+    }
   }
-
-  DBG(("%p %d <- %d bytes", conn, conn->flags, n));
 
   if (ns_is_error(n)) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
-  } else if (n > 0) {
-    iobuf_append(&conn->recv_iobuf, buf, n);
-    ns_call(conn, NS_RECV, &n);
   }
 }
 
