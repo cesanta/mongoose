@@ -180,9 +180,16 @@ enum ns_event {
 struct ns_connection;
 typedef void (*ns_callback_t)(struct ns_connection *, enum ns_event, void *evp);
 
+struct ns_listener {
+  sock_t sock;
+  unsigned is_ssl:1;    // Is port SSL-ed
+  unsigned ssl_redir:1; // Is port supposed to redirect everything to SSL port
+};
+
 struct ns_server {
   void *server_data;
-  sock_t listening_sock;
+  struct ns_listener *first_ssl_listener;
+  struct ns_listener listeners[4];
   struct ns_connection *active_connections;
   ns_callback_t callback;
   SSL_CTX *ssl_ctx;
@@ -200,6 +207,7 @@ struct ns_connection {
   SSL *ssl;
   void *connection_data;
   time_t last_io_time;
+  unsigned ssl_redir:1;
   unsigned int flags;
 #define NSF_FINISHED_SENDING_DATA   (1 << 0)
 #define NSF_BUFFER_BUT_DONT_SEND    (1 << 1)
@@ -227,7 +235,7 @@ void ns_iterate(struct ns_server *, ns_callback_t cb, void *param);
 struct ns_connection *ns_next(struct ns_server *, struct ns_connection *);
 struct ns_connection *ns_add_sock(struct ns_server *, sock_t sock, void *p);
 
-int ns_bind(struct ns_server *, const char *addr);
+int ns_bind(struct ns_listener *, const char *addr);
 int ns_set_ssl_cert(struct ns_server *, const char *ssl_cert);
 int ns_set_ssl_ca_cert(struct ns_server *, const char *ssl_ca_cert);
 struct ns_connection *ns_connect(struct ns_server *, const char *host,
@@ -603,31 +611,29 @@ int ns_set_ssl_cert(struct ns_server *server, const char *cert) {
   return server != NULL && cert == NULL ? 0 : -3;
 }
 
-int ns_bind(struct ns_server *server, const char *str) {
+int ns_bind(struct ns_listener *listener, const char *str) {
   union socket_address sa;
   ns_parse_port_string(str, &sa);
-  if (server->listening_sock != INVALID_SOCKET) {
-    closesocket(server->listening_sock);
+  if (listener->sock != INVALID_SOCKET) {
+    closesocket(listener->sock);
   }
-  server->listening_sock = ns_open_listening_socket(&sa);
-  return server->listening_sock == INVALID_SOCKET ? -1 :
-  (int) ntohs(sa.sin.sin_port);
+  listener->sock = ns_open_listening_socket(&sa);
+  return listener->sock == INVALID_SOCKET ? -1 : (int) ntohs(sa.sin.sin_port);
 }
 
-
-static struct ns_connection *accept_conn(struct ns_server *server) {
+static struct ns_connection *accept_conn(struct ns_server *server, struct ns_listener *listener) {
   struct ns_connection *c = NULL;
   union socket_address sa;
   socklen_t len = sizeof(sa);
   sock_t sock = INVALID_SOCKET;
 
   // NOTE(lsm): on Windows, sock is always > FD_SETSIZE
-  if ((sock = accept(server->listening_sock, &sa.sa, &len)) == INVALID_SOCKET) {
+  if ((sock = accept(listener->sock, &sa.sa, &len)) == INVALID_SOCKET) {
   } else if ((c = (struct ns_connection *) NS_MALLOC(sizeof(*c))) == NULL ||
              memset(c, 0, sizeof(*c)) == NULL) {
     closesocket(sock);
 #ifdef NS_ENABLE_SSL
-  } else if (server->ssl_ctx != NULL &&
+  } else if (listener->is_ssl && server->ssl_ctx != NULL &&
              ((c->ssl = SSL_new(server->ssl_ctx)) == NULL ||
               SSL_set_fd(c->ssl, sock) != 1)) {
     DBG(("SSL error"));
@@ -641,6 +647,7 @@ static struct ns_connection *accept_conn(struct ns_server *server) {
     c->server = server;
     c->sock = sock;
     c->flags |= NSF_ACCEPTED;
+    c->ssl_redir = listener->ssl_redir;
 
     ns_add_conn(server, c);
     ns_call(c, NS_ACCEPT, &sa);
@@ -842,17 +849,19 @@ int ns_server_poll(struct ns_server *server, int milli) {
   struct ns_connection *conn, *tmp_conn;
   struct timeval tv;
   fd_set read_set, write_set;
-  int num_active_connections = 0;
+  int i, num_active_connections = 0;
   sock_t max_fd = INVALID_SOCKET;
   time_t current_time = time(NULL);
 
-  if (server->listening_sock == INVALID_SOCKET &&
-      server->active_connections == NULL) return 0;
-
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
-  ns_add_to_set(server->listening_sock, &read_set, &max_fd);
+
+  for (i = 0; i < ARRAY_SIZE(server->listeners); i++)
+    ns_add_to_set(server->listeners[i].sock, &read_set, &max_fd);
   ns_add_to_set(server->ctl[1], &read_set, &max_fd);
+
+  if (max_fd == INVALID_SOCKET &&
+      server->active_connections == NULL) return 0;
 
   for (conn = server->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
@@ -881,12 +890,14 @@ int ns_server_poll(struct ns_server *server, int milli) {
     current_time = time(NULL);
     
     // Accept new connections
-    if (server->listening_sock != INVALID_SOCKET &&
-        FD_ISSET(server->listening_sock, &read_set)) {
+    for (i = 0; i < ARRAY_SIZE(server->listeners); i++) {
+      if (server->listeners[i].sock == INVALID_SOCKET ||
+        !FD_ISSET(server->listeners[i].sock, &read_set))
+    	  continue;
       // We're not looping here, and accepting just one connection at
       // a time. The reason is that eCos does not respect non-blocking
       // flag on a listening socket and hangs in a loop.
-      if ((conn = accept_conn(server)) != NULL) {
+      if ((conn = accept_conn(server, server->listeners + i)) != NULL) {
         conn->last_io_time = current_time;
       }
     }
@@ -1028,8 +1039,12 @@ void ns_server_wakeup(struct ns_server *server) {
 }
 
 void ns_server_init(struct ns_server *s, void *server_data, ns_callback_t cb) {
+  int i;
+
   memset(s, 0, sizeof(*s));
-  s->listening_sock = s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
+  for (i = 0; i < ARRAY_SIZE(s->listeners); i++)
+    s->listeners[i].sock = INVALID_SOCKET;
+  s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
   s->server_data = server_data;
   s->callback = cb;
 
@@ -1054,6 +1069,7 @@ void ns_server_init(struct ns_server *s, void *server_data, ns_callback_t cb) {
 }
 
 void ns_server_free(struct ns_server *s) {
+  int i;
   struct ns_connection *conn, *tmp_conn;
 
   DBG(("%p", s));
@@ -1061,10 +1077,14 @@ void ns_server_free(struct ns_server *s) {
   // Do one last poll, see https://github.com/cesanta/mongoose/issues/286
   ns_server_poll(s, 0);
 
-  if (s->listening_sock != INVALID_SOCKET) closesocket(s->listening_sock);
+  for (i = 0; i < ARRAY_SIZE(s->listeners); i++) {
+    if (s->listeners[i].sock != INVALID_SOCKET)
+      closesocket(s->listeners[i].sock);
+    s->listeners[i].sock = INVALID_SOCKET;
+  }
   if (s->ctl[0] != INVALID_SOCKET) closesocket(s->ctl[0]);
   if (s->ctl[1] != INVALID_SOCKET) closesocket(s->ctl[1]);
-  s->listening_sock = s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
+  s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
 
   for (conn = s->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
@@ -1274,7 +1294,6 @@ static const char *static_config_options[] = {
 
 struct mg_server {
   struct ns_server ns_server;
-  union socket_address lsa;   // Listening socket address
   mg_handler_t event_handler;
   char *config_options[NUM_OPTIONS];
 };
@@ -2484,6 +2503,14 @@ static uint32_t blk0(union char64long16 *block, int i) {
   }
   return block->l[i];
 }
+
+// avoid redefine warning (ARM usr/include/sys/ucontext.h define R0~R4)
+#undef blk
+#undef R0
+#undef R1
+#undef R2
+#undef R3
+#undef R4
 
 #define blk(i) (block->l[i&15] = rol(block->l[(i+13)&15]^block->l[(i+8)&15] \
     ^block->l[(i+2)&15]^block->l[i&15],1))
@@ -4068,6 +4095,7 @@ int mg_terminate_ssl(struct mg_connection *c, const char *cert) {
   // When clear-text reply is pushed to client, switch to SSL mode.
   n = send(conn->ns_conn->sock, ok, sizeof(ok) - 1, 0);
   DBG(("%p %zu %d SEND", c, sizeof(ok) - 1, n));
+  (void)n;
   conn->ns_conn->send_iobuf.len = 0;
   conn->endpoint_type = EP_USER;  // To keep-alive in close_local_endpoint()
   close_local_endpoint(conn);     // Clean up current CONNECT request
@@ -4346,6 +4374,33 @@ static void on_recv_data(struct connection *conn) {
 
   try_parse(conn);
   DBG(("%p %d %zu %d", conn, conn->request_len, io->len, conn->ns_conn->flags));
+
+  // Perform ssl redirect ASAP.
+  if (conn->ns_conn->ssl_redir) {
+    struct ns_listener *ssl_listener = conn->server->ns_server.first_ssl_listener;
+    if (ssl_listener != NULL) {
+      if (conn->request_len > 0) {
+        char host[1025];
+        char port[8];
+        const char *host_header;
+
+        if ((host_header = mg_get_header(&conn->mg_conn, "Host")) == NULL ||
+            sscanf(host_header, "%1024[^:]", host) == 0) {
+          // Cannot get host from the Host: header. Fallback to our IP address.
+          ns_sock_to_str(conn->ns_conn->sock, host, sizeof(host), 1);
+        }
+        ns_sock_to_str(ssl_listener->sock, port, sizeof(port), 2);
+
+        conn->mg_conn.status_code = 302;
+        mg_printf(&conn->mg_conn,
+                "HTTP/1.1 302 Found\r\nLocation: https://%s:%s%s\r\n\r\n",
+                host, port, conn->mg_conn.uri);
+        close_local_endpoint(conn);
+      }
+      return;
+	}
+  }
+
   if (conn->request_len < 0 ||
       (conn->request_len > 0 && !is_valid_uri(conn->mg_conn.uri))) {
     send_http_error(conn, 400, NULL);
@@ -4729,6 +4784,68 @@ static void set_default_option_values(char **opts) {
   }
 }
 
+static int set_ports_option(struct mg_server *server, const char *ports) {
+  struct ns_listener *listeners = server->ns_server.listeners;
+  struct vec vec;
+  char addr[512];
+  size_t len;
+  int i = 0;
+
+  while ((ports = next_option(ports, &vec, NULL)) != NULL) {
+    if (!vec.len || vec.len >= sizeof(addr))
+      continue;
+    listeners[i].is_ssl = 0;
+    listeners[i].ssl_redir = 0;
+    len = vec.len - 1;
+    switch(vec.ptr[len]) {
+      case 's':
+        listeners[i].is_ssl = 1;
+        break;
+      case 'r':
+        listeners[i].ssl_redir = 1;
+        break;
+      default:
+        len++;
+        break;
+    }
+    memcpy(addr, vec.ptr, len);
+    addr[len] = 0;
+
+    DBG(("%d %s: is_ssl %d", i, addr, listeners[i].is_ssl));
+    if (ns_bind(listeners + i, addr) < 0) {
+      while (i--) {
+        if (listeners[i].sock != INVALID_SOCKET)
+          closesocket(listeners[i].sock);
+        listeners[i].sock = INVALID_SOCKET;
+      }
+      return -1;
+    }
+
+    if (listeners[i].is_ssl && server->ns_server.first_ssl_listener == NULL)
+      server->ns_server.first_ssl_listener = listeners + i;
+    if (++i >= ARRAY_SIZE(server->ns_server.listeners))
+      break;
+  }
+
+  len = 0;
+  for (i = 0; i < ARRAY_SIZE(server->ns_server.listeners); i++) {
+    if (listeners[i].sock == INVALID_SOCKET)
+      break;
+    if (i > 0) addr[len++] = ',';
+    ns_sock_to_str(listeners[i].sock, addr + len, sizeof(addr) - len, 2);
+    len = strlen(addr);
+    if (listeners[i].is_ssl) addr[len++] = 's';
+    if (listeners[i].ssl_redir) addr[len++] = 'r';
+  }
+  addr[len] = 0;
+
+  DBG(("ports: %s", addr));
+  free(server->config_options[LISTENING_PORT]);
+  server->config_options[LISTENING_PORT] = mg_strdup(addr);
+
+  return 0;
+}
+
 const char *mg_set_option(struct mg_server *server, const char *name,
                           const char *value) {
   int ind = get_option_index(name);
@@ -4755,14 +4872,8 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   DBG(("%s [%s]", name, *v));
 
   if (ind == LISTENING_PORT) {
-    int port = ns_bind(&server->ns_server, value);
-    if (port < 0) {
+    if (set_ports_option(server, value) < 0) {
       error_msg = "Cannot bind to port";
-    } else {
-      char buf[100];
-      ns_sock_to_str(server->ns_server.listening_sock, buf, sizeof(buf), 2);
-      free(*v);
-      *v = mg_strdup(buf);
     }
 #ifndef _WIN32
   } else if (ind == RUN_AS_USER) {
@@ -5019,14 +5130,14 @@ void mg_wakeup_server(struct mg_server *server) {
 }
 
 void mg_set_listening_socket(struct mg_server *server, int sock) {
-  if (server->ns_server.listening_sock != INVALID_SOCKET) {
-    closesocket(server->ns_server.listening_sock);
+  if (server->ns_server.listeners[0].sock != INVALID_SOCKET) {
+    closesocket(server->ns_server.listeners[0].sock);
   }
-  server->ns_server.listening_sock = (sock_t) sock;
+  server->ns_server.listeners[0].sock = (sock_t) sock;
 }
 
 int mg_get_listening_socket(struct mg_server *server) {
-  return server->ns_server.listening_sock;
+  return server->ns_server.listeners[0].sock;
 }
 
 const char *mg_get_option(const struct mg_server *server, const char *name) {
