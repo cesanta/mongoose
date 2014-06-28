@@ -4268,6 +4268,8 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
 #ifndef MONGOOSE_NO_DAV
   } else if (!strcmp(conn->mg_conn.request_method, "PROPFIND")) {
     handle_propfind(conn, path, &st, exists);
+  } else if (must_hide_file(conn, path)) {
+    send_http_error(conn, 404, NULL);
   } else if (!strcmp(conn->mg_conn.request_method, "MKCOL")) {
     handle_mkcol(conn, path);
   } else if (!strcmp(conn->mg_conn.request_method, "DELETE")) {
