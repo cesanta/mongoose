@@ -194,6 +194,7 @@ struct ns_connection {
   struct ns_connection *prev, *next;
   struct ns_server *server;
   sock_t sock;
+  char* host;
   union socket_address sa;
   struct iobuf recv_iobuf;
   struct iobuf send_iobuf;
@@ -434,6 +435,7 @@ static void ns_close_conn(struct ns_connection *conn) {
   DBG(("%p %d", conn, conn->flags));
   ns_call(conn, NS_CLOSE, NULL);
   ns_remove_conn(conn);
+  free(conn->host);
   closesocket(conn->sock);
   iobuf_free(&conn->recv_iobuf);
   iobuf_free(&conn->send_iobuf);
@@ -965,6 +967,7 @@ struct ns_connection *ns_connect(struct ns_server *server, const char *host,
   memset(conn, 0, sizeof(*conn));
   conn->server = server;
   conn->sock = sock;
+  conn->host = strdup(host);
   conn->connection_data = param;
   conn->flags = NSF_CONNECTING;
   conn->last_io_time = time(NULL);
@@ -4039,8 +4042,15 @@ static void proxy_request(struct ns_connection *pc, struct mg_connection *c) {
       sent_close_header = 1;
     //} else {
     }
+    
+    if (mg_strcasecmp(c->http_headers[i].name, "Host") == 0) {
+      // Host header must not be forwarded!
+      ns_printf(pc, "%s: %s\r\n", c->http_headers[i].name,
+                pc->host);
+    } else {
       ns_printf(pc, "%s: %s\r\n", c->http_headers[i].name,
                 c->http_headers[i].value);
+    }
   }
   if (!sent_close_header) {
     ns_printf(pc, "%s: %s\r\n", "Connection", "close");
@@ -4233,7 +4243,7 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
 #endif
     return;
   }
-
+   
   if (strcmp(conn->mg_conn.request_method, "CONNECT") == 0 ||
       mg_strncasecmp(conn->mg_conn.uri, "http", 4) == 0) {
     const char *enp = conn->server->config_options[ENABLE_PROXY];
