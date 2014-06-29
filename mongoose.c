@@ -967,7 +967,14 @@ struct ns_connection *ns_connect(struct ns_server *server, const char *host,
   memset(conn, 0, sizeof(*conn));
   conn->server = server;
   conn->sock = sock;
-  asprintf(&conn->host, "%s:%u", host, port);
+  conn->host = (char*)malloc(strlen(host) + 7);
+  if (conn->host != NULL) {
+    if ((!use_ssl && port != 80) || (use_ssl && port != 443)) {
+      sprintf(conn->host, "%s:%u", host, port);
+    } else {
+      strcpy(conn->host, host);
+    }
+  }
   conn->connection_data = param;
   conn->flags = NSF_CONNECTING;
   conn->last_io_time = time(NULL);
