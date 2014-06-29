@@ -4147,6 +4147,8 @@ static void proxify_connection(struct connection *conn) {
     } else {
       // For other methods, forward the request to the target host.
       c->uri += n;
+      if (*c->uri == '\0')
+          c->uri = "/";
       proxy_request(pc, c);
     }
   } else {
