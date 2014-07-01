@@ -1984,6 +1984,7 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
     mg_snprintf(dir, sizeof(dir), "%s", ".");
   } else {
     mg_snprintf(dir, sizeof(dir), "%.*s", (int) (p - prog), prog);
+    prog = p + 1;
   }
 
   // Try to create socketpair in a loop until success. ns_socketpair()
