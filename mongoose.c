@@ -2413,10 +2413,7 @@ void mg_send_status(struct mg_connection *c, int status) {
 }
 
 void mg_send_header(struct mg_connection *c, const char *name, const char *v) {
-  if (c->status_code == 0) {
-    c->status_code = 200;
-    mg_printf(c, "HTTP/1.1 %d %s\r\n", 200, status_code_to_str(200));
-  }
+  mg_send_status(c,200);
   mg_printf(c, "%s: %s\r\n", name, v);
 }
 
