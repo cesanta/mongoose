@@ -662,6 +662,7 @@ static int ns_get_error_code(struct ns_connection *conn) {
 	    conn->last_errno = errno;
         DBG(("%p %d - errno = %d %s", conn, conn->flags, conn->last_errno,strerror(conn->last_errno)));
 #endif
+		return conn->last_errno;
 }
 
 static int ns_is_error(int n) {
