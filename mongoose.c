@@ -822,7 +822,7 @@ static void ns_write_to_socket(struct ns_connection *conn) {
     if (n < 0) {
       int ssl_err = SSL_get_error(conn->ssl, n);
       DBG(("%p %d %d", conn, n, ssl_err));
-      if (ssl_err == 2 || ssl_err == 3) {
+      if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
         return; // Call us again
       } else {
         conn->flags |= NSF_CLOSE_IMMEDIATELY;
