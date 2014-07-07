@@ -115,6 +115,7 @@ typedef SOCKET sock_t;
 #define closesocket(x) close(x)
 #define __cdecl
 #define INVALID_SOCKET (-1)
+#define SOCKET_ERROR (-1)
 #define to64(x) strtoll(x, NULL, 10)
 typedef int sock_t;
 #endif
@@ -201,6 +202,7 @@ struct ns_connection {
   void *connection_data;
   time_t last_io_time;
   unsigned int flags;
+  int last_errno;
 #define NSF_FINISHED_SENDING_DATA   (1 << 0)
 #define NSF_BUFFER_BUT_DONT_SEND    (1 << 1)
 #define NSF_SSL_HANDSHAKE_DONE      (1 << 2)
@@ -433,6 +435,7 @@ static void ns_call(struct ns_connection *conn, enum ns_event ev, void *p) {
 static void ns_close_conn(struct ns_connection *conn) {
   DBG(("%p %d", conn, conn->flags));
   ns_call(conn, NS_CLOSE, NULL);
+  conn->last_errno = 0;
   ns_remove_conn(conn);
   closesocket(conn->sock);
   iobuf_free(&conn->recv_iobuf);
@@ -650,6 +653,17 @@ static struct ns_connection *accept_conn(struct ns_server *server) {
   return c;
 }
 
+static int ns_get_error_code(struct ns_connection *conn) {
+#ifdef _WIN32
+	    conn->last_errno = WSAGetLastError();
+        DBG(("%p %d - errno = %d", conn, conn->flags, conn->last_errno));
+		// TODO ERROR_INTERNET_EXTENDED_ERROR + InternetGetLastResponseInfo
+#else
+	    conn->last_errno = errno;
+        DBG(("%p %d - errno = %d %s", conn, conn->flags, conn->last_errno,strerror(conn->last_errno)));
+#endif
+}
+
 static int ns_is_error(int n) {
   return n == 0 ||
     (n < 0 && errno != EINTR && errno != EINPROGRESS &&
@@ -779,13 +793,20 @@ static void ns_read_from_socket(struct ns_connection *conn) {
   } else
 #endif
   {
-    while ((n = recv(conn->sock, buf, sizeof(buf), 0)) > 0) {
-      DBG(("%p %d <- %d bytes (PLAIN)", conn, conn->flags, n));
-      iobuf_append(&conn->recv_iobuf, buf, n);
-      ns_call(conn, NS_RECV, &n);
-    }
+    do {
+       n = recv(conn->sock, buf, sizeof(buf), 0);
+       DBG(("%p %d <- %d bytes (PLAIN)", conn, conn->flags, n));
+	   if( n > 0) {
+        iobuf_append(&conn->recv_iobuf, buf, n);
+        conn->last_errno = 0;
+        ns_call(conn, NS_RECV, &n);
+	  }
+	  else
+	   if( n == SOCKET_ERROR ) {
+         ns_get_error_code(conn);
+	  }
+    } while(n > 0);
   }
-
   if (ns_is_error(n)) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
   }
@@ -810,16 +831,21 @@ static void ns_write_to_socket(struct ns_connection *conn) {
   } else
 #endif
   { n = send(conn->sock, io->buf, io->len, 0); }
-
   DBG(("%p %d -> %d bytes", conn, conn->flags, n));
-
+  if(n == SOCKET_ERROR)
+  {
+	  ns_get_error_code(conn);
+  }
+  else
+  {
+  conn->last_errno = 0;
   ns_call(conn, NS_SEND, &n);
+  }
   if (ns_is_error(n)) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
   } else if (n > 0) {
     iobuf_remove(io, n);
   }
-
   if (io->len == 0 && (conn->flags & NSF_FINISHED_SENDING_DATA)) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
   }
@@ -1666,7 +1692,7 @@ static void *push_to_stdin(void *arg) {
 
   while (!stop && wait_until_ready(tp->s, 1) &&
          (n = recv(tp->s, buf, sizeof(buf), 0)) > 0) {
-    if (n == -1 && GetLastError() == WSAEWOULDBLOCK) continue;
+    if (n == SOCKET_ERROR && GetLastError() == WSAEWOULDBLOCK) continue;
     for (sent = 0; !stop && sent < n; sent += k) {
       if (!WriteFile(tp->hPipe, buf + sent, n - sent, &k, 0)) stop = 1;
     }
