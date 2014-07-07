@@ -13,7 +13,7 @@ static void send_file(struct mg_connection *conn, const char *path) {
 
   if (stat(path, &st) == 0 && (fp = fopen(path, "rb")) != NULL) {
     mg_printf(conn, "--myboundary\r\nContent-Type: image/jpeg\r\n"
-              "Content-Length: %zu\r\n\r\n", st.st_size);
+              "Content-Length: %llu\r\n\r\n", (unsigned long long) st.st_size);
     while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
       mg_write(conn, buf, n);
     }
