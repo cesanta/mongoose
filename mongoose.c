@@ -1638,7 +1638,7 @@ size_t mg_printf(struct mg_connection *conn, const char *fmt, ...) {
 }
 
 static void ns_forward(struct ns_connection *from, struct ns_connection *to) {
-  DBG(("%p -> %p %zu bytes", from, to, from->recv_iobuf.len));
+  DBG(("%p -> %p %lu bytes", from, to, (unsigned long)from->recv_iobuf.len));
   ns_send(to, from->recv_iobuf.buf, from->recv_iobuf.len);
   iobuf_remove(&from->recv_iobuf, from->recv_iobuf.len);
 }
@@ -3443,7 +3443,7 @@ static void handle_put(struct connection *conn, const char *path) {
 #endif
     send_http_error(conn, 500, "open(%s): %s", path, strerror(errno));
   } else {
-    DBG(("PUT [%s] %zu", path, conn->ns_conn->recv_iobuf.len));
+    DBG(("PUT [%s] %lu", path, (unsigned long) conn->ns_conn->recv_iobuf.len));
     conn->endpoint_type = EP_PUT;
     ns_set_close_on_exec(conn->endpoint.fd);
     range = mg_get_header(&conn->mg_conn, "Content-Range");
@@ -4067,7 +4067,7 @@ int mg_terminate_ssl(struct mg_connection *c, const char *cert) {
 
   // When clear-text reply is pushed to client, switch to SSL mode.
   n = send(conn->ns_conn->sock, ok, sizeof(ok) - 1, 0);
-  DBG(("%p %zu %d SEND", c, sizeof(ok) - 1, n));
+  DBG(("%p %lu %d SEND", c, (unsigned long)sizeof(ok) - 1, n));
   conn->ns_conn->send_iobuf.len = 0;
   conn->endpoint_type = EP_USER;  // To keep-alive in close_local_endpoint()
   close_local_endpoint(conn);     // Clean up current CONNECT request
@@ -4226,8 +4226,8 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
       if ((strcmp(conn->mg_conn.request_method, "POST") == 0 ||
            strcmp(conn->mg_conn.request_method, "PUT") == 0) &&
           (cl == NULL || to64(cl) > MONGOOSE_POST_SIZE_LIMIT)) {
-        send_http_error(conn, 500, "POST size > %zu",
-                        (size_t) MONGOOSE_POST_SIZE_LIMIT);
+        send_http_error(conn, 500, "POST size > %lu",
+                        (unsigned long) MONGOOSE_POST_SIZE_LIMIT);
       }
     }
 #endif
@@ -4347,7 +4347,7 @@ static void on_recv_data(struct connection *conn) {
   }
 
   try_parse(conn);
-  DBG(("%p %d %zu %d", conn, conn->request_len, io->len, conn->ns_conn->flags));
+  DBG(("%p %d %lu %d", conn, conn->request_len, (unsigned long)io->len, conn->ns_conn->flags));
   if (conn->request_len < 0 ||
       (conn->request_len > 0 && !is_valid_uri(conn->mg_conn.uri))) {
     send_http_error(conn, 400, NULL);
@@ -4401,7 +4401,7 @@ static void process_response(struct connection *conn) {
   struct iobuf *io = &conn->ns_conn->recv_iobuf;
 
   try_parse(conn);
-  DBG(("%p %d %zu", conn, conn->request_len, io->len));
+  DBG(("%p %d %lu", conn, conn->request_len, (unsigned long)io->len));
   if (conn->request_len < 0 ||
       (conn->request_len == 0 && io->len > MAX_REQUEST_SIZE)) {
     call_http_client_handler(conn);
