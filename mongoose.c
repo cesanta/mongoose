@@ -175,6 +175,7 @@ enum ns_event {
   NS_SEND,     // Data has been written to a socket. int *num_bytes
   NS_CLOSE     // Connection is closed. NULL
 };
+enum ns_error { NS_ERROR_NONE = 0, NS_ERROR_SEND, NS_ERROR_RECV};
 
 // Callback function (event handler) prototype, must be defined by user.
 // Net skeleton will call event handler, passing events defined above.
@@ -202,7 +203,7 @@ struct ns_connection {
   void *connection_data;
   time_t last_io_time;
   unsigned int flags;
-  int last_errno;
+  enum ns_error error;
 #define NSF_FINISHED_SENDING_DATA   (1 << 0)
 #define NSF_BUFFER_BUT_DONT_SEND    (1 << 1)
 #define NSF_SSL_HANDSHAKE_DONE      (1 << 2)
@@ -435,7 +436,7 @@ static void ns_call(struct ns_connection *conn, enum ns_event ev, void *p) {
 static void ns_close_conn(struct ns_connection *conn) {
   DBG(("%p %d", conn, conn->flags));
   ns_call(conn, NS_CLOSE, NULL);
-  conn->last_errno = 0;
+  conn->error = NS_ERROR_NONE;
   ns_remove_conn(conn);
   closesocket(conn->sock);
   iobuf_free(&conn->recv_iobuf);
@@ -653,18 +654,6 @@ static struct ns_connection *accept_conn(struct ns_server *server) {
   return c;
 }
 
-static int ns_get_error_code(struct ns_connection *conn) {
-#ifdef _WIN32
-	    conn->last_errno = WSAGetLastError();
-        DBG(("%p %d - errno = %d", conn, conn->flags, conn->last_errno));
-		// TODO ERROR_INTERNET_EXTENDED_ERROR + InternetGetLastResponseInfo
-#else
-	    conn->last_errno = errno;
-        DBG(("%p %d - errno = %d %s", conn, conn->flags, conn->last_errno,strerror(conn->last_errno)));
-#endif
-		return conn->last_errno;
-}
-
 static int ns_is_error(int n) {
   return n == 0 ||
     (n < 0 && errno != EINTR && errno != EINPROGRESS &&
@@ -799,12 +788,12 @@ static void ns_read_from_socket(struct ns_connection *conn) {
        DBG(("%p %d <- %d bytes (PLAIN)", conn, conn->flags, n));
 	   if( n > 0) {
         iobuf_append(&conn->recv_iobuf, buf, n);
-        conn->last_errno = 0;
+        conn->error = NS_ERROR_NONE;
         ns_call(conn, NS_RECV, &n);
 	  }
 	  else
 	   if( n == SOCKET_ERROR ) {
-         ns_get_error_code(conn);
+	    conn->error = NS_ERROR_RECV;
 	  }
     } while(n > 0);
   }
@@ -835,11 +824,11 @@ static void ns_write_to_socket(struct ns_connection *conn) {
   DBG(("%p %d -> %d bytes", conn, conn->flags, n));
   if(n == SOCKET_ERROR)
   {
-	  ns_get_error_code(conn);
+	  conn->error = NS_ERROR_SEND;
   }
   else
   {
-  conn->last_errno = 0;
+  conn->error = NS_ERROR_NONE;
   ns_call(conn, NS_SEND, &n);
   }
   if (ns_is_error(n)) {
