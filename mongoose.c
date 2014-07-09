@@ -717,6 +717,15 @@ int ns_hexdump(const void *buf, int len, char *dst, int dst_len) {
   return n;
 }
 
+#ifdef NS_ENABLE_SSL
+static int ns_ssl_err(struct ns_connection *conn, int res) {
+  int ssl_err = SSL_get_error(conn->ssl, res);
+  if (ssl_err == SSL_ERROR_WANT_READ) conn->flags |= NSF_WANT_READ;
+  if (ssl_err == SSL_ERROR_WANT_WRITE) conn->flags |= NSF_WANT_WRITE;
+  return ssl_err;
+}
+#endif
+
 static void ns_read_from_socket(struct ns_connection *conn) {
   char buf[2048];
   int n = 0;
@@ -730,10 +739,7 @@ static void ns_read_from_socket(struct ns_connection *conn) {
 #ifdef NS_ENABLE_SSL
     if (ret == 0 && ok == 0 && conn->ssl != NULL) {
       int res = SSL_connect(conn->ssl);
-      int ssl_err = SSL_get_error(conn->ssl, res);
-      DBG(("%p %d wres %d %d", conn, conn->flags, res, ssl_err));
-      if (ssl_err == SSL_ERROR_WANT_READ) conn->flags |= NSF_WANT_READ;
-      if (ssl_err == SSL_ERROR_WANT_WRITE) conn->flags |= NSF_WANT_WRITE;
+      int ssl_err = ns_ssl_err(conn, res);
       if (res == 1) {
         conn->flags |= NSF_SSL_HANDSHAKE_DONE;
       } else if (ssl_err == SSL_ERROR_WANT_READ ||
@@ -764,12 +770,10 @@ static void ns_read_from_socket(struct ns_connection *conn) {
         iobuf_append(&conn->recv_iobuf, buf, n);
         ns_call(conn, NS_RECV, &n);
       }
+      ns_ssl_err(conn, n);
     } else {
       int res = SSL_accept(conn->ssl);
-      int ssl_err = SSL_get_error(conn->ssl, res);
-      DBG(("%p %d rres %d %d", conn, conn->flags, res, ssl_err));
-      if (ssl_err == SSL_ERROR_WANT_READ) conn->flags |= NSF_WANT_READ;
-      if (ssl_err == SSL_ERROR_WANT_WRITE) conn->flags |= NSF_WANT_WRITE;
+      int ssl_err = ns_ssl_err(conn, res);
       if (res == 1) {
         conn->flags |= NSF_SSL_HANDSHAKE_DONE;
       } else if (ssl_err == SSL_ERROR_WANT_READ ||
@@ -809,9 +813,8 @@ static void ns_write_to_socket(struct ns_connection *conn) {
 #ifdef NS_ENABLE_SSL
   if (conn->ssl != NULL) {
     n = SSL_write(conn->ssl, io->buf, io->len);
-    if (n < 0) {
-      int ssl_err = SSL_get_error(conn->ssl, n);
-      DBG(("%p %d %d", conn, n, ssl_err));
+    if (n <= 0) {
+      int ssl_err = ns_ssl_err(conn, n);
       if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
         return; // Call us again
       } else {
@@ -821,7 +824,8 @@ static void ns_write_to_socket(struct ns_connection *conn) {
   } else
 #endif
   { n = send(conn->sock, io->buf, io->len, 0); }
-  DBG(("%p %d -> %d bytes", conn, conn->flags, n));
+  
+DBG(("%p %d -> %d bytes", conn, conn->flags, n));
   if(n == SOCKET_ERROR)
   {
 	  conn->error = NS_ERROR_SEND;
@@ -836,6 +840,7 @@ static void ns_write_to_socket(struct ns_connection *conn) {
   } else if (n > 0) {
     iobuf_remove(io, n);
   }
+
   if (io->len == 0 && (conn->flags & NSF_FINISHED_SENDING_DATA)) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
   }
