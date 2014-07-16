@@ -2350,6 +2350,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
   const char *rewrites = conn->server->config_options[URL_REWRITES];
   const char *root = conn->server->config_options[DOCUMENT_ROOT];
 #ifndef MONGOOSE_NO_CGI
+  file_stat_t st_cgi;
   const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
   char *p;
 #endif
@@ -2385,7 +2386,10 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
     }
   }
 
-  if (stat(buf, st) == 0) return 1;
+  if (stat(buf, st) == 0)
+		  return 1;
+  else
+	    memset(st,0,sizeof(*st));
 
 #ifndef MONGOOSE_NO_CGI
   // Support PATH_INFO for CGI scripts.
@@ -2393,7 +2397,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
     if (*p == '/') {
       *p = '\0';
       if (mg_match_prefix(cgi_pat, strlen(cgi_pat), buf) > 0 &&
-          !stat(buf, st)) {
+          !stat(buf, &st_cgi)) {
       DBG(("!!!! [%s]", buf));
         *p = '/';
         conn->path_info = mg_strdup(p);
@@ -3517,16 +3521,17 @@ void mg_send_digest_auth_request(struct mg_connection *c) {
 
 // Use the global passwords file, if specified by auth_gpass option,
 // or search for .htpasswd in the requested directory.
-static FILE *open_auth_file(struct connection *conn, const char *path) {
+static FILE *open_auth_file(struct connection *conn, const char *path, file_stat_t *st) {
   char name[MAX_PATH_SIZE];
   const char *p, *gpass = conn->server->config_options[GLOBAL_AUTH_FILE];
-  file_stat_t st;
+  file_stat_t st_local;
   FILE *fp = NULL;
 
   if (gpass != NULL) {
     // Use global passwords file
     fp = fopen(gpass, "r");
-  } else if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
+  } else if (st != NULL && S_ISDIR(st->st_mode) || 
+	         st == NULL && !stat(path, &st_local) && S_ISDIR(st_local.st_mode)) {
     mg_snprintf(name, sizeof(name), "%s%c%s", path, '/', PASSWORDS_FILE_NAME);
     fp = fopen(name, "r");
   } else {
@@ -3816,11 +3821,11 @@ int mg_authorize_digest(struct mg_connection *c, FILE *fp) {
 
 
 // Return 1 if request is authorised, 0 otherwise.
-static int is_authorized(struct connection *conn, const char *path) {
+static int is_authorized(struct connection *conn, const char *path, file_stat_t *st) {
   FILE *fp;
   int authorized = MG_TRUE;
 
-  if ((fp = open_auth_file(conn, path)) != NULL) {
+  if ((fp = open_auth_file(conn, path, st)) != NULL) {
     authorized = mg_authorize_digest(&conn->mg_conn, fp);
     fclose(fp);
   }
@@ -4281,7 +4286,7 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
   } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, NULL);
 #ifndef MONGOOSE_NO_AUTH
-  } else if ((!is_dav_request(conn) && !is_authorized(conn, path)) ||
+  } else if ((!is_dav_request(conn) && !is_authorized(conn, path, &st)) ||
              (is_dav_request(conn) && !is_authorized_for_dav(conn))) {
     mg_send_digest_auth_request(&conn->mg_conn);
     close_local_endpoint(conn);
