@@ -434,7 +434,7 @@ static void ns_call(struct ns_connection *conn, enum ns_event ev, void *p) {
 }
 
 static void ns_close_conn(struct ns_connection *conn) {
-  DBG(("%p %d", conn, conn->flags));
+  DBG(("%p %u", conn, conn->flags));
   ns_call(conn, NS_CLOSE, NULL);
   conn->error = NS_ERROR_NONE;
   ns_remove_conn(conn);
@@ -789,7 +789,7 @@ static void ns_read_from_socket(struct ns_connection *conn) {
   {
     do {
        n = recv(conn->sock, buf, sizeof(buf), 0);
-       DBG(("%p %d <- %d bytes (PLAIN)", conn, conn->flags, n));
+       DBG(("%p %u <- %d bytes (PLAIN)", conn, conn->flags, n));
 	   if( n > 0) {
         iobuf_append(&conn->recv_iobuf, buf, n);
         conn->error = NS_ERROR_NONE;
@@ -825,7 +825,7 @@ static void ns_write_to_socket(struct ns_connection *conn) {
 #endif
   { n = send(conn->sock, io->buf, io->len, 0); }
   
-DBG(("%p %d -> %d bytes", conn, conn->flags, n));
+DBG(("%p %u -> %d bytes", conn, conn->flags, n));
   if(n == SOCKET_ERROR)
   {
 	  conn->error = NS_ERROR_SEND;
@@ -2350,6 +2350,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
   const char *rewrites = conn->server->config_options[URL_REWRITES];
   const char *root = conn->server->config_options[DOCUMENT_ROOT];
 #ifndef MONGOOSE_NO_CGI
+  file_stat_t st_cgi;
   const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
   char *p;
 #endif
@@ -2385,7 +2386,8 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
     }
   }
 
-  if (stat(buf, st) == 0) return 1;
+  if (stat(buf, st) == 0)
+      return 1;
 
 #ifndef MONGOOSE_NO_CGI
   // Support PATH_INFO for CGI scripts.
@@ -2393,7 +2395,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
     if (*p == '/') {
       *p = '\0';
       if (mg_match_prefix(cgi_pat, strlen(cgi_pat), buf) > 0 &&
-          !stat(buf, st)) {
+          !stat(buf, &st_cgi)) {
       DBG(("!!!! [%s]", buf));
         *p = '/';
         conn->path_info = mg_strdup(p);
@@ -3517,16 +3519,15 @@ void mg_send_digest_auth_request(struct mg_connection *c) {
 
 // Use the global passwords file, if specified by auth_gpass option,
 // or search for .htpasswd in the requested directory.
-static FILE *open_auth_file(struct connection *conn, const char *path) {
+static FILE *open_auth_file(struct connection *conn, const char *path, int is_directory) {
   char name[MAX_PATH_SIZE];
   const char *p, *gpass = conn->server->config_options[GLOBAL_AUTH_FILE];
-  file_stat_t st;
   FILE *fp = NULL;
 
   if (gpass != NULL) {
     // Use global passwords file
     fp = fopen(gpass, "r");
-  } else if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
+  } else if (is_directory) {
     mg_snprintf(name, sizeof(name), "%s%c%s", path, '/', PASSWORDS_FILE_NAME);
     fp = fopen(name, "r");
   } else {
@@ -3816,11 +3817,11 @@ int mg_authorize_digest(struct mg_connection *c, FILE *fp) {
 
 
 // Return 1 if request is authorised, 0 otherwise.
-static int is_authorized(struct connection *conn, const char *path) {
+static int is_authorized(struct connection *conn, const char *path, int is_directory) {
   FILE *fp;
   int authorized = MG_TRUE;
 
-  if ((fp = open_auth_file(conn, path)) != NULL) {
+  if ((fp = open_auth_file(conn, path, is_directory)) != NULL) {
     authorized = mg_authorize_digest(&conn->mg_conn, fp);
     fclose(fp);
   }
@@ -4224,7 +4225,7 @@ void mg_send_file(struct mg_connection *c, const char *file_name) {
 static void open_local_endpoint(struct connection *conn, int skip_user) {
 #ifndef MONGOOSE_NO_FILESYSTEM
   char path[MAX_PATH_SIZE];
-  file_stat_t st;
+  file_stat_t st = {0};
   int exists = 0;
 #endif
 
@@ -4281,7 +4282,7 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
   } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, NULL);
 #ifndef MONGOOSE_NO_AUTH
-  } else if ((!is_dav_request(conn) && !is_authorized(conn, path)) ||
+  } else if ((!is_dav_request(conn) && !is_authorized(conn, path, exists && S_ISDIR(st.st_mode))) ||
              (is_dav_request(conn) && !is_authorized_for_dav(conn))) {
     mg_send_digest_auth_request(&conn->mg_conn);
     close_local_endpoint(conn);
@@ -4368,7 +4369,7 @@ static void on_recv_data(struct connection *conn) {
   }
 
   try_parse(conn);
-  DBG(("%p %d %lu %d", conn, conn->request_len, (unsigned long)io->len, conn->ns_conn->flags));
+  DBG(("%p %d %lu %u", conn, conn->request_len, (unsigned long)io->len, conn->ns_conn->flags));
   if (conn->request_len < 0 ||
       (conn->request_len > 0 && !is_valid_uri(conn->mg_conn.uri))) {
     send_http_error(conn, 400, NULL);
@@ -4503,7 +4504,7 @@ static void close_local_endpoint(struct connection *conn) {
   // Must be done before free()
   int keep_alive = should_keep_alive(&conn->mg_conn) &&
     (conn->endpoint_type == EP_FILE || conn->endpoint_type == EP_USER);
-  DBG(("%p %d %d %d", conn, conn->endpoint_type, keep_alive,
+  DBG(("%p %d %d %u", conn, conn->endpoint_type, keep_alive,
        conn->ns_conn->flags));
 
   switch (conn->endpoint_type) {
