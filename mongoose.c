@@ -434,7 +434,7 @@ static void ns_call(struct ns_connection *conn, enum ns_event ev, void *p) {
 }
 
 static void ns_close_conn(struct ns_connection *conn) {
-  DBG(("%p %d", conn, conn->flags));
+  DBG(("%p %u", conn, conn->flags));
   ns_call(conn, NS_CLOSE, NULL);
   conn->error = NS_ERROR_NONE;
   ns_remove_conn(conn);
@@ -789,7 +789,7 @@ static void ns_read_from_socket(struct ns_connection *conn) {
   {
     do {
        n = recv(conn->sock, buf, sizeof(buf), 0);
-       DBG(("%p %d <- %d bytes (PLAIN)", conn, conn->flags, n));
+       DBG(("%p %u <- %d bytes (PLAIN)", conn, conn->flags, n));
 	   if( n > 0) {
         iobuf_append(&conn->recv_iobuf, buf, n);
         conn->error = NS_ERROR_NONE;
@@ -825,7 +825,7 @@ static void ns_write_to_socket(struct ns_connection *conn) {
 #endif
   { n = send(conn->sock, io->buf, io->len, 0); }
   
-DBG(("%p %d -> %d bytes", conn, conn->flags, n));
+DBG(("%p %u -> %d bytes", conn, conn->flags, n));
   if(n == SOCKET_ERROR)
   {
 	  conn->error = NS_ERROR_SEND;
@@ -4225,7 +4225,7 @@ void mg_send_file(struct mg_connection *c, const char *file_name) {
 static void open_local_endpoint(struct connection *conn, int skip_user) {
 #ifndef MONGOOSE_NO_FILESYSTEM
   char path[MAX_PATH_SIZE];
-  file_stat_t st;
+  file_stat_t st = {0};
   int exists = 0;
 #endif
 
@@ -4369,7 +4369,7 @@ static void on_recv_data(struct connection *conn) {
   }
 
   try_parse(conn);
-  DBG(("%p %d %lu %d", conn, conn->request_len, (unsigned long)io->len, conn->ns_conn->flags));
+  DBG(("%p %d %lu %u", conn, conn->request_len, (unsigned long)io->len, conn->ns_conn->flags));
   if (conn->request_len < 0 ||
       (conn->request_len > 0 && !is_valid_uri(conn->mg_conn.uri))) {
     send_http_error(conn, 400, NULL);
@@ -4504,7 +4504,7 @@ static void close_local_endpoint(struct connection *conn) {
   // Must be done before free()
   int keep_alive = should_keep_alive(&conn->mg_conn) &&
     (conn->endpoint_type == EP_FILE || conn->endpoint_type == EP_USER);
-  DBG(("%p %d %d %d", conn, conn->endpoint_type, keep_alive,
+  DBG(("%p %d %d %u", conn, conn->endpoint_type, keep_alive,
        conn->ns_conn->flags));
 
   switch (conn->endpoint_type) {
