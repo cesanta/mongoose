@@ -1400,12 +1400,20 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
 // wbuf and wbuf_len is a target buffer and its length.
 static void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
   char buf[MAX_PATH_SIZE * 2], buf2[MAX_PATH_SIZE * 2], *p;
-
-  strncpy(buf, path, sizeof(buf));
-  buf[sizeof(buf) - 1] = '\0';
-
+  const char* src = path;
+  char *dest = buf;
+  size_t len = 0;
+  *dest = 0;
+  while (*dest++ = *src++) 
+  {
+	  if(++len == sizeof(buf))
+	  {
+		    buf[len-1] = 0;
+			break;
+	  }
+  }
   // Trim trailing slashes. Leave backslash for paths like "X:\"
-  p = buf + strlen(buf) - 1;
+  p = buf + len - 1;
   while (p > buf && p[-1] != ':' && (p[0] == '\\' || p[0] == '/')) *p-- = '\0';
 
   // Convert to Unicode and back. If doubly-converted string does not
