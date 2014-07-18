@@ -2993,7 +2993,7 @@ static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
 }
 
 static void open_file_endpoint(struct connection *conn, const char *path,
-                               const file_stat_t *st) {
+                               file_stat_t *st) {
   char date[64], lm[64], etag[64], range[64], headers[500];
   const char *msg = "OK", *hdr;
   time_t curtime = time(NULL);
@@ -4168,7 +4168,7 @@ static void proxify_connection(struct connection *conn) {
 }
 
 #ifndef MONGOOSE_NO_FILESYSTEM
-void mg_send_file_internal(struct mg_connection *c, const char *file_name, const file_stat_t* st, int exists) {
+void mg_send_file_internal(struct mg_connection *c, const char *file_name, file_stat_t* st, int exists) {
   struct connection *conn = MG_CONN_2_CONN(c);
   char path[MAX_PATH_SIZE];
   const int is_directory = S_ISDIR(st->st_mode);
@@ -4193,7 +4193,7 @@ void mg_send_file_internal(struct mg_connection *c, const char *file_name, const
     mg_printf(&conn->mg_conn, "HTTP/1.1 301 Moved Permanently\r\n"
               "Location: %s/\r\n\r\n", conn->mg_conn.uri);
     close_local_endpoint(conn);
-  } else if (is_directory && !find_index_file(conn, path, sizeof(path), &st)) {
+  } else if (is_directory && !find_index_file(conn, path, sizeof(path), st)) {
     if (!mg_strcasecmp(dir_lst, "yes")) {
 #ifndef MONGOOSE_NO_DIRECTORY_LISTING
       send_directory_listing(conn, path);
