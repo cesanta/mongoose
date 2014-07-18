@@ -1199,7 +1199,7 @@ struct vec {
   int len;
 };
 
-// For directory listing and WevDAV support
+// For directory listing and WebDAV support
 struct dir_entry {
   struct connection *conn;
   char *file_name;
@@ -3298,8 +3298,9 @@ static void send_directory_listing(struct connection *conn, const char *dir) {
   num_entries = scan_directory(conn, dir, &arr);
   qsort(arr, num_entries, sizeof(arr[0]), compare_dir_entries);
   for (i = 0; i < num_entries; i++) {
-    print_dir_entry(&arr[i]);
-    free(arr[i].file_name);
+    struct dir_entry *de = &arr[i];  
+    print_dir_entry(de);
+    free(de->file_name);
   }
   free(arr);
 
@@ -3365,7 +3366,9 @@ static void handle_propfind(struct connection *conn, const char *path,
         struct dir_entry *de = &arr[i];
         mg_url_encode(de->file_name, strlen(de->file_name), buf, sizeof(buf));
         print_props(conn, buf, &de->st);
+	    free(de->file_name);
       }
+	  free(arr);
     }
     ns_send(conn->ns_conn, footer, sizeof(footer) - 1);
   }
