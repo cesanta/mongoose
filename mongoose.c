@@ -2993,7 +2993,7 @@ static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
 }
 
 static void open_file_endpoint(struct connection *conn, const char *path,
-                               file_stat_t *st) {
+                               const file_stat_t *st) {
   char date[64], lm[64], etag[64], range[64], headers[500];
   const char *msg = "OK", *hdr;
   time_t curtime = time(NULL);
@@ -4168,11 +4168,10 @@ static void proxify_connection(struct connection *conn) {
 }
 
 #ifndef MONGOOSE_NO_FILESYSTEM
-void mg_send_file(struct mg_connection *c, const char *file_name) {
+void mg_send_file_internal(struct mg_connection *c, const char *file_name, const file_stat_t* st, int exists) {
   struct connection *conn = MG_CONN_2_CONN(c);
-  file_stat_t st;
   char path[MAX_PATH_SIZE];
-  int exists = 0, is_directory = 0;
+  const int is_directory = S_ISDIR(st->st_mode);
 #ifndef MONGOOSE_NO_CGI
   const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
 #else
@@ -4185,8 +4184,6 @@ void mg_send_file(struct mg_connection *c, const char *file_name) {
 #endif
 
   mg_snprintf(path, sizeof(path), "%s", file_name);
-  exists = stat(path, &st) == 0;
-  is_directory = S_ISDIR(st.st_mode);
   
   if (!exists || must_hide_file(conn, path)) {
     send_http_error(conn, 404, NULL);
@@ -4218,15 +4215,20 @@ void mg_send_file(struct mg_connection *c, const char *file_name) {
                              path) > 0) {
     handle_ssi_request(conn, path);
 #endif
-  } else if (is_not_modified(conn, &st)) {
+  } else if (is_not_modified(conn, st)) {
     send_http_error(conn, 304, NULL);
   } else if ((conn->endpoint.fd = open(path, O_RDONLY | O_BINARY)) != -1) {
     // O_BINARY is required for Windows, otherwise in default text mode
     // two bytes \r\n will be read as one.
-    open_file_endpoint(conn, path, &st);
+    open_file_endpoint(conn, path, st);
   } else {
     send_http_error(conn, 404, NULL);
   }
+}
+void mg_send_file(struct mg_connection *c, const char *file_name) {
+  file_stat_t st;
+	const int exists = stat(file_name, &st) == 0;
+	mg_send_file_internal(c,file_name,&st,exists);
 }
 #endif  // !MONGOOSE_NO_FILESYSTEM
 
@@ -4308,7 +4310,7 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
     handle_put(conn, path);
 #endif
   } else {
-    mg_send_file(&conn->mg_conn, path);
+    mg_send_file_internal(&conn->mg_conn, path, &st, exists);
   }
 #endif  // MONGOOSE_NO_FILESYSTEM
 }
