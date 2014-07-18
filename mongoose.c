@@ -4235,7 +4235,7 @@ void mg_send_file(struct mg_connection *c, const char *file_name) {
 static void open_local_endpoint(struct connection *conn, int skip_user) {
 #ifndef MONGOOSE_NO_FILESYSTEM
   char path[MAX_PATH_SIZE];
-  file_stat_t st = {0};
+  file_stat_t st;
   int exists = 0;
 #endif
 
