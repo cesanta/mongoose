@@ -22,6 +22,20 @@
 
 #define MONGOOSE_VERSION "5.4"
 
+#ifdef MONGOOSE_NO_SOCKETPAIR
+#define MONGOOSE_NO_CGI
+#endif
+
+#ifdef MONGOOSE_NO_FILESYSTEM
+#define MONGOOSE_NO_AUTH
+#define MONGOOSE_NO_CGI
+#define MONGOOSE_NO_DAV
+#define MONGOOSE_NO_DIRECTORY_LISTING
+#define MONGOOSE_NO_LOGGING
+#define MONGOOSE_NO_SSI
+#define MONGOOSE_NO_DL
+#endif
+
 #include <stdio.h>      // required for FILE
 #include <stddef.h>     // required for size_t
 
