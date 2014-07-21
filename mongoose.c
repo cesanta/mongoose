@@ -3366,9 +3366,9 @@ static void handle_propfind(struct connection *conn, const char *path,
         struct dir_entry *de = &arr[i];
         mg_url_encode(de->file_name, strlen(de->file_name), buf, sizeof(buf));
         print_props(conn, buf, &de->st);
-	    free(de->file_name);
+        free(de->file_name);
       }
-	  free(arr);
+      free(arr);
     }
     ns_send(conn->ns_conn, footer, sizeof(footer) - 1);
   }
