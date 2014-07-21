@@ -117,9 +117,9 @@ Changes in pre-compiled binaries:
     * POST and Websocket data are now buffered, and cannot be huge
    * mongoose is now capable on listening on only one port
 
-## Release 4.1, Oct 2014
-## Release 4.0, Oct 2014
-## Release 3.8, Sep 2014
+## Release 4.1, Oct 2013
+## Release 4.0, Oct 2013
+## Release 3.8, Sep 2013
 
 ## Release 3.7, Feb 2 2013
 
