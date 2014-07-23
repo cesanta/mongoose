@@ -2332,6 +2332,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
   const char *rewrites = conn->server->config_options[URL_REWRITES];
   const char *root = conn->server->config_options[DOCUMENT_ROOT];
 #ifndef MONGOOSE_NO_CGI
+  file_stat_t st_cgi;
   const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
   char *p;
 #endif
@@ -2375,7 +2376,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
     if (*p == '/') {
       *p = '\0';
       if (mg_match_prefix(cgi_pat, strlen(cgi_pat), buf) > 0 &&
-          !stat(buf, st)) {
+          !stat(buf, &st_cgi)) {
       DBG(("!!!! [%s]", buf));
         *p = '/';
         conn->path_info = mg_strdup(p);
@@ -3501,16 +3502,15 @@ void mg_send_digest_auth_request(struct mg_connection *c) {
 
 // Use the global passwords file, if specified by auth_gpass option,
 // or search for .htpasswd in the requested directory.
-static FILE *open_auth_file(struct connection *conn, const char *path) {
+static FILE *open_auth_file(struct connection *conn, const char *path, int is_directory) {
   char name[MAX_PATH_SIZE];
   const char *p, *gpass = conn->server->config_options[GLOBAL_AUTH_FILE];
-  file_stat_t st;
   FILE *fp = NULL;
 
   if (gpass != NULL) {
     // Use global passwords file
     fp = fopen(gpass, "r");
-  } else if (!stat(path, &st) && S_ISDIR(st.st_mode)) {
+  } else if (is_directory) {
     mg_snprintf(name, sizeof(name), "%s%c%s", path, '/', PASSWORDS_FILE_NAME);
     fp = fopen(name, "r");
   } else {
@@ -3800,11 +3800,11 @@ int mg_authorize_digest(struct mg_connection *c, FILE *fp) {
 
 
 // Return 1 if request is authorised, 0 otherwise.
-static int is_authorized(struct connection *conn, const char *path) {
+static int is_authorized(struct connection *conn, const char *path, int is_directory) {
   FILE *fp;
   int authorized = MG_TRUE;
 
-  if ((fp = open_auth_file(conn, path)) != NULL) {
+  if ((fp = open_auth_file(conn, path, is_directory)) != NULL) {
     authorized = mg_authorize_digest(&conn->mg_conn, fp);
     fclose(fp);
   }
@@ -4143,11 +4143,10 @@ static void proxify_connection(struct connection *conn) {
 }
 
 #ifndef MONGOOSE_NO_FILESYSTEM
-void mg_send_file(struct mg_connection *c, const char *file_name) {
+void mg_send_file_internal(struct mg_connection *c, const char *file_name, file_stat_t* st, int exists) {
   struct connection *conn = MG_CONN_2_CONN(c);
-  file_stat_t st;
   char path[MAX_PATH_SIZE];
-  int exists = 0, is_directory = 0;
+  const int is_directory = S_ISDIR(st->st_mode);
 #ifndef MONGOOSE_NO_CGI
   const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
 #else
@@ -4160,8 +4159,6 @@ void mg_send_file(struct mg_connection *c, const char *file_name) {
 #endif
 
   mg_snprintf(path, sizeof(path), "%s", file_name);
-  exists = stat(path, &st) == 0;
-  is_directory = S_ISDIR(st.st_mode);
   
   if (!exists || must_hide_file(conn, path)) {
     send_http_error(conn, 404, NULL);
@@ -4171,7 +4168,7 @@ void mg_send_file(struct mg_connection *c, const char *file_name) {
     mg_printf(&conn->mg_conn, "HTTP/1.1 301 Moved Permanently\r\n"
               "Location: %s/\r\n\r\n", conn->mg_conn.uri);
     close_local_endpoint(conn);
-  } else if (is_directory && !find_index_file(conn, path, sizeof(path), &st)) {
+  } else if (is_directory && !find_index_file(conn, path, sizeof(path), st)) {
     if (!mg_strcasecmp(dir_lst, "yes")) {
 #ifndef MONGOOSE_NO_DIRECTORY_LISTING
       send_directory_listing(conn, path);
@@ -4193,15 +4190,20 @@ void mg_send_file(struct mg_connection *c, const char *file_name) {
                              path) > 0) {
     handle_ssi_request(conn, path);
 #endif
-  } else if (is_not_modified(conn, &st)) {
+  } else if (is_not_modified(conn, st)) {
     send_http_error(conn, 304, NULL);
   } else if ((conn->endpoint.fd = open(path, O_RDONLY | O_BINARY)) != -1) {
     // O_BINARY is required for Windows, otherwise in default text mode
     // two bytes \r\n will be read as one.
-    open_file_endpoint(conn, path, &st);
+    open_file_endpoint(conn, path, st);
   } else {
     send_http_error(conn, 404, NULL);
   }
+}
+void mg_send_file(struct mg_connection *c, const char *file_name) {
+  file_stat_t st;
+	const int exists = stat(file_name, &st) == 0;
+	mg_send_file_internal(c, file_name, &st, exists);
 }
 #endif  // !MONGOOSE_NO_FILESYSTEM
 
@@ -4265,7 +4267,7 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
   } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, NULL);
 #ifndef MONGOOSE_NO_AUTH
-  } else if ((!is_dav_request(conn) && !is_authorized(conn, path)) ||
+  } else if ((!is_dav_request(conn) && !is_authorized(conn, path, exists && S_ISDIR(st.st_mode))) ||
              (is_dav_request(conn) && !is_authorized_for_dav(conn))) {
     mg_send_digest_auth_request(&conn->mg_conn);
     close_local_endpoint(conn);
@@ -4283,7 +4285,7 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
     handle_put(conn, path);
 #endif
   } else {
-    mg_send_file(&conn->mg_conn, path);
+    mg_send_file_internal(&conn->mg_conn, path, &st, exists);
   }
 #endif  // MONGOOSE_NO_FILESYSTEM
 }
