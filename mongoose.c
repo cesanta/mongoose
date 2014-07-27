@@ -2545,7 +2545,7 @@ static void SHA1Transform(uint32_t state[5], const unsigned char buffer[64]) {
   (void) a; (void) b; (void) c; (void) d; (void) e;
 }
 
-static void SHA1Init(SHA1_CTX* context) {
+static void SHA1Init(SHA1_CTX *context) {
   context->state[0] = 0x67452301;
   context->state[1] = 0xEFCDAB89;
   context->state[2] = 0x98BADCFE;
@@ -2554,7 +2554,7 @@ static void SHA1Init(SHA1_CTX* context) {
   context->count[0] = context->count[1] = 0;
 }
 
-static void SHA1Update(SHA1_CTX* context, const unsigned char* data,
+static void SHA1Update(SHA1_CTX *context, const unsigned char *data,
                        uint32_t len) {
   uint32_t i, j;
 
@@ -2575,7 +2575,7 @@ static void SHA1Update(SHA1_CTX* context, const unsigned char* data,
   memcpy(&context->buffer[j], &data[i], len - i);
 }
 
-static void SHA1Final(unsigned char digest[20], SHA1_CTX* context) {
+static void SHA1Final(unsigned char digest[20], SHA1_CTX *context) {
   unsigned i;
   unsigned char finalcount[8], c;
 
@@ -2691,7 +2691,7 @@ static int deliver_websocket_frame(struct connection *conn) {
   return buffered;
 }
 
-size_t mg_websocket_write(struct mg_connection* conn, int opcode,
+size_t mg_websocket_write(struct mg_connection *conn, int opcode,
                        const char *data, size_t data_len) {
     unsigned char mem[4192], *copy = mem;
     size_t copy_len = 0;
@@ -2741,7 +2741,7 @@ size_t mg_websocket_write(struct mg_connection* conn, int opcode,
     return MG_CONN_2_CONN(conn)->ns_conn->send_iobuf.len;
 }
 
-size_t mg_websocket_printf(struct mg_connection* conn, int opcode,
+size_t mg_websocket_printf(struct mg_connection *conn, int opcode,
                            const char *fmt, ...) {
   char mem[4192], *buf = mem;
   va_list ap;
@@ -4143,7 +4143,7 @@ static void proxify_connection(struct connection *conn) {
 }
 
 #ifndef MONGOOSE_NO_FILESYSTEM
-void mg_send_file_internal(struct mg_connection *c, const char *file_name, file_stat_t* st, int exists) {
+void mg_send_file_internal(struct mg_connection *c, const char *file_name, file_stat_t *st, int exists) {
   struct connection *conn = MG_CONN_2_CONN(c);
   char path[MAX_PATH_SIZE];
   const int is_directory = S_ISDIR(st->st_mode);
