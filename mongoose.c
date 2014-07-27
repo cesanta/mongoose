@@ -1342,7 +1342,7 @@ static const struct {
   {".ogg", 4, "application/ogg"},
   {".ram", 4, "audio/x-pn-realaudio"},
   {".xml", 4, "text/xml"},
-  {".json",  5, "text/json"},
+  {".json",  5, "application/json"},
   {".xslt", 5, "application/xml"},
   {".xsl", 4, "application/xml"},
   {".ra",  3, "audio/x-pn-realaudio"},
