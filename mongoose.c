@@ -3502,7 +3502,8 @@ void mg_send_digest_auth_request(struct mg_connection *c) {
 
 // Use the global passwords file, if specified by auth_gpass option,
 // or search for .htpasswd in the requested directory.
-static FILE *open_auth_file(struct connection *conn, const char *path, int is_directory) {
+static FILE *open_auth_file(struct connection *conn, const char *path, 
+                            int is_directory) {
   char name[MAX_PATH_SIZE];
   const char *p, *gpass = conn->server->config_options[GLOBAL_AUTH_FILE];
   FILE *fp = NULL;
@@ -3800,7 +3801,8 @@ int mg_authorize_digest(struct mg_connection *c, FILE *fp) {
 
 
 // Return 1 if request is authorised, 0 otherwise.
-static int is_authorized(struct connection *conn, const char *path, int is_directory) {
+static int is_authorized(struct connection *conn, const char *path, 
+                         int is_directory) {
   FILE *fp;
   int authorized = MG_TRUE;
 
@@ -4143,7 +4145,8 @@ static void proxify_connection(struct connection *conn) {
 }
 
 #ifndef MONGOOSE_NO_FILESYSTEM
-void mg_send_file_internal(struct mg_connection *c, const char *file_name, file_stat_t *st, int exists) {
+void mg_send_file_internal(struct mg_connection *c, const char *file_name, 
+                           file_stat_t *st, int exists) {
   struct connection *conn = MG_CONN_2_CONN(c);
   char path[MAX_PATH_SIZE];
   const int is_directory = S_ISDIR(st->st_mode);
@@ -4202,8 +4205,8 @@ void mg_send_file_internal(struct mg_connection *c, const char *file_name, file_
 }
 void mg_send_file(struct mg_connection *c, const char *file_name) {
   file_stat_t st;
-	const int exists = stat(file_name, &st) == 0;
-	mg_send_file_internal(c, file_name, &st, exists);
+  const int exists = stat(file_name, &st) == 0;
+  mg_send_file_internal(c, file_name, &st, exists);
 }
 #endif  // !MONGOOSE_NO_FILESYSTEM
 
@@ -4267,7 +4270,8 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
   } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, NULL);
 #ifndef MONGOOSE_NO_AUTH
-  } else if ((!is_dav_request(conn) && !is_authorized(conn, path, exists && S_ISDIR(st.st_mode))) ||
+  } else if ((!is_dav_request(conn) && !is_authorized(conn, path, 
+               exists && S_ISDIR(st.st_mode))) ||
              (is_dav_request(conn) && !is_authorized_for_dav(conn))) {
     mg_send_digest_auth_request(&conn->mg_conn);
     close_local_endpoint(conn);
@@ -4354,7 +4358,8 @@ static void on_recv_data(struct connection *conn) {
   }
 
   try_parse(conn);
-  DBG(("%p %d %lu %d", conn, conn->request_len, (unsigned long)io->len, conn->ns_conn->flags));
+  DBG(("%p %d %lu %d", conn, conn->request_len, (unsigned long)io->len, 
+       conn->ns_conn->flags));
   if (conn->request_len < 0 ||
       (conn->request_len > 0 && !is_valid_uri(conn->mg_conn.uri))) {
     send_http_error(conn, 400, NULL);
