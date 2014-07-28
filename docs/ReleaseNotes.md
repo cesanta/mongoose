@@ -20,8 +20,10 @@ Changes in Libmongoose library:
 - Removed server-side Lua support
 - Filesystem access, reading from socket/SSL performance improvements
 - DAV PROPFIND memory leak fixed
-- Added `big_upload.c`, `websocket2.c`, enhanced `upload.c` example
+- Added `big_upload.c` and enhanced `upload.c` example
 - Added `proxy.c` example that demonstrates proxy functionality and SSE pushes
+- Added `websocket2.c` example that shows simple web chat implementation
+    over websockets
 - Various minor fixes
 
 
