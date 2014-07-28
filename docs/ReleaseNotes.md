@@ -1,22 +1,38 @@
 # Mongoose Release Notes
 
-## Release 5.4
+## Release 5.4, July 28 2014
 
 Changes in Libmongoose library:
-   * Added `hexdump_file` option for low-level request/reply debugging
-   * Added `mg_template()` API function for generating HTML pages from
-     templates with expansions
-   * Fixed `struct mg_connection::local_ip` handling, `mg_set_option()`
-     behavior with NULL values
-   * Removed Lua support
+
+- Added `hexdump_file` option for low-level request/reply debugging
+- Added `mg_template()` API function for generating HTML pages from
+    templates with expansions
+- Fixed `struct mg_connection::local_ip` handling, `mg_set_option()`
+    behavior with NULL values
+- Added `mg_send_file()` call to send arbitrary file to the client
+- Added `mg_terminate_ssl()` for SSL termination functionality
+- Added HTTP proxy support, `enable_proxy` config option
+- Added `mg_next()` for iterating over existing active connections
+- Added client-side SSL auth, `ssl_ca_certificate` option
+- Added `mg_wakeup_server_ex()` for pushing messages to existing connections
+- Added `MG_WS_HANDSHAKE` and `MG_WS_CONNECT` events that are sent on
+     Websocket handshake is connection establishment, respectively
+- Removed server-side Lua support
+- Filesystem access, reading from socket/SSL performance improvements
+- DAV PROPFIND memory leak fixed
+- Added `big_upload.c`, `websocket2.c`, enhanced `upload.c` example
+- Added `proxy.c` example that demonstrates proxy functionality and SSE pushes
+- Various minor fixes
+
 
 Changes in pre-compiled binaries:
-   * Created HTML administration console
-   * When server is started, browser is started automatically
-   * Fixed directory listing bug when directory contains `#` character
-   * Removed built-in Lua Server Pages in the binary, and instead
-     added Mongoose + Lua developer bundle which has Lua Server Pages support.
-     That also solves external Lua modules loading problem.
+
+- Created HTML administration console
+- When server is started, browser is started automatically
+- Fixed directory listing bug when directory contains `#` character
+- Removed built-in Lua Server Pages in the binary, and instead
+  added Mongoose + Lua developer bundle which has Lua Server Pages support.
+  That also solves external Lua modules loading problem.
 
 
 ## Release 5.3, March 10 2014
