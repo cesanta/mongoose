@@ -596,6 +596,7 @@ int ns_set_ssl_cert(struct ns_server *server, const char *cert) {
              SSL_CTX_use_PrivateKey_file(server->ssl_ctx, cert, 1) == 0) {
     return -2;
   } else {
+    SSL_CTX_set_mode(server->ssl_ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
     SSL_CTX_use_certificate_chain_file(server->ssl_ctx, cert);
     return 0;
   }
