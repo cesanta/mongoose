@@ -4542,6 +4542,7 @@ static void close_local_endpoint(struct connection *conn) {
   conn->endpoint.nc = NULL;
   c->request_method = c->uri = c->http_version = c->query_string = NULL;
   conn->request = conn->path_info = NULL;
+  memset(c->http_headers, 0, sizeof(c->http_headers));
 
   if (keep_alive) {
     on_recv_data(conn);  // Can call us recursively if pipelining is used
