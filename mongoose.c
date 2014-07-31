@@ -1297,6 +1297,7 @@ enum endpoint_type {
 #define MG_LONG_RUNNING NSF_USER_2
 #define MG_CGI_CONN NSF_USER_3
 #define MG_PROXY_CONN NSF_USER_4
+#define MG_PROXY_DONT_PARSE NSF_USER_5
 
 struct connection {
   struct ns_connection *ns_conn;  // NOTE(lsm): main.c depends on this order
@@ -3502,7 +3503,7 @@ void mg_send_digest_auth_request(struct mg_connection *c) {
 
 // Use the global passwords file, if specified by auth_gpass option,
 // or search for .htpasswd in the requested directory.
-static FILE *open_auth_file(struct connection *conn, const char *path, 
+static FILE *open_auth_file(struct connection *conn, const char *path,
                             int is_directory) {
   char name[MAX_PATH_SIZE];
   const char *p, *gpass = conn->server->config_options[GLOBAL_AUTH_FILE];
@@ -3801,7 +3802,7 @@ int mg_authorize_digest(struct mg_connection *c, FILE *fp) {
 
 
 // Return 1 if request is authorised, 0 otherwise.
-static int is_authorized(struct connection *conn, const char *path, 
+static int is_authorized(struct connection *conn, const char *path,
                          int is_directory) {
   FILE *fp;
   int authorized = MG_TRUE;
@@ -4086,12 +4087,38 @@ int mg_terminate_ssl(struct mg_connection *c, const char *cert) {
 }
 #endif
 
+int mg_forward(struct mg_connection *c, const char *host, int port, int ssl) {
+  struct connection *conn = MG_CONN_2_CONN(c);
+  struct ns_server *server = &conn->server->ns_server;
+  struct ns_connection *pc;
+
+  if ((pc = ns_connect(server, host, port, ssl, conn)) == NULL) return 0;
+
+  // Interlink two connections
+  pc->flags |= MG_PROXY_CONN;
+  conn->endpoint_type = EP_PROXY;
+  conn->endpoint.nc = pc;
+  DBG(("%p [%s] -> %p %p", conn, c->uri, pc, conn->ns_conn->ssl));
+
+  if (strcmp(c->request_method, "CONNECT") == 0) {
+    // For CONNECT request, reply with 200 OK. Tunnel is established.
+    mg_printf(c, "%s", "HTTP/1.1 200 OK\r\n\r\n");
+    conn->request_len = 0;
+    free(conn->request);
+    conn->request = NULL;
+  } else {
+    // Strip "http://host:port" part from the URI
+    if (memcmp(c->uri, "http://", 7) == 0) c->uri += 7;
+    while (*c->uri != '\0' && *c->uri != '/') c->uri++;
+    proxy_request(pc, c);
+  }
+  return 1;
+}
+
 static void proxify_connection(struct connection *conn) {
   char proto[10], host[500], cert[500];
   unsigned short port = 80;
   struct mg_connection *c = &conn->mg_conn;
-  struct ns_server *server = &conn->server->ns_server;
-  struct ns_connection *pc = NULL;
   int n = 0;
   const char *url = c->uri;
 
@@ -4119,33 +4146,14 @@ static void proxify_connection(struct connection *conn) {
   }
 #endif
 
-  if (n > 0 &&
-      (pc = ns_connect(server, host, port, conn->ns_conn->ssl != NULL,
-                       conn)) != NULL) {
-    // Interlink two connections
-    pc->flags |= MG_PROXY_CONN;
-    conn->endpoint_type = EP_PROXY;
-    conn->endpoint.nc = pc;
-    DBG(("%p [%s] -> %p %p", conn, c->uri, pc, conn->ns_conn->ssl));
-
-    if (strcmp(c->request_method, "CONNECT") == 0) {
-      // For CONNECT request, reply with 200 OK. Tunnel is established.
-      mg_printf(c, "%s", "HTTP/1.1 200 OK\r\n\r\n");
-      conn->request_len = 0;
-      free(conn->request);
-      conn->request = NULL;
-    } else {
-      // For other methods, forward the request to the target host.
-      c->uri += n;
-      proxy_request(pc, c);
-    }
+  if (n > 0 && mg_forward(c, host, port, conn->ns_conn->ssl != NULL)) {
   } else {
     conn->ns_conn->flags |= NSF_CLOSE_IMMEDIATELY;
   }
 }
 
 #ifndef MONGOOSE_NO_FILESYSTEM
-void mg_send_file_internal(struct mg_connection *c, const char *file_name, 
+void mg_send_file_internal(struct mg_connection *c, const char *file_name,
                            file_stat_t *st, int exists) {
   struct connection *conn = MG_CONN_2_CONN(c);
   char path[MAX_PATH_SIZE];
@@ -4270,7 +4278,7 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
   } else if (conn->server->config_options[DOCUMENT_ROOT] == NULL) {
     send_http_error(conn, 404, NULL);
 #ifndef MONGOOSE_NO_AUTH
-  } else if ((!is_dav_request(conn) && !is_authorized(conn, path, 
+  } else if ((!is_dav_request(conn) && !is_authorized(conn, path,
                exists && S_ISDIR(st.st_mode))) ||
              (is_dav_request(conn) && !is_authorized_for_dav(conn))) {
     mg_send_digest_auth_request(&conn->mg_conn);
@@ -4335,7 +4343,7 @@ static void try_parse(struct connection *conn) {
 }
 
 static void do_proxy(struct connection *conn) {
-  if (conn->request_len == 0) {
+  if (0 && conn->request_len == 0) {
     try_parse(conn);
     DBG(("%p parsing -> %d", conn, conn->request_len));
     if (conn->request_len > 0 && call_user(conn, MG_REQUEST) == MG_FALSE) {
@@ -4358,7 +4366,7 @@ static void on_recv_data(struct connection *conn) {
   }
 
   try_parse(conn);
-  DBG(("%p %d %lu %d", conn, conn->request_len, (unsigned long)io->len, 
+  DBG(("%p %d %lu %d", conn, conn->request_len, (unsigned long)io->len,
        conn->ns_conn->flags));
   if (conn->request_len < 0 ||
       (conn->request_len > 0 && !is_valid_uri(conn->mg_conn.uri))) {

@@ -130,6 +130,8 @@ int mg_authorize_digest(struct mg_connection *c, FILE *fp);
 int mg_url_encode(const char *src, size_t s_len, char *dst, size_t dst_len);
 int mg_url_decode(const char *src, int src_len, char *dst, int dst_len, int);
 int mg_terminate_ssl(struct mg_connection *c, const char *cert);
+int mg_forward(struct mg_connection *, const char *host, int port, int use_ssl);
+
 
 // Templates support
 struct mg_expansion {
