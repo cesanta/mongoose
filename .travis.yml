@@ -1,0 +1,7 @@
+language: cpp
+compiler:
+  - gcc
+  - clang
+script:
+  - cd examples
+  - make u server
