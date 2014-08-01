@@ -1,7 +1,21 @@
 language: cpp
+
+env:
+ matrix:
+  - MONGOOSE_NO_SOCKETPAIR
+  - MONGOOSE_NO_FILESYSTEM
+  - MONGOOSE_NO_AUTH
+  - MONGOOSE_NO_DAV
+  - MONGOOSE_NO_DIRECTORY_LISTING
+  - MONGOOSE_NO_LOGGING
+  - MONGOOSE_NO_SSI
+  - MONGOOSE_NO_DL
+  - MONGOOSE_NO_WEBSOCKET
+
 compiler:
   - gcc
   - clang
+
 script:
   - cd examples
   - make u server
