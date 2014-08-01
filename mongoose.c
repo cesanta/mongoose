@@ -101,6 +101,9 @@ typedef unsigned short uint16_t;
 typedef unsigned __int64 uint64_t;
 typedef __int64   int64_t;
 typedef SOCKET sock_t;
+#ifndef S_ISDIR
+#define S_ISDIR(x) ((x) & _S_IFDIR)
+#endif
 #else
 #include <errno.h>
 #include <fcntl.h>
@@ -244,7 +247,8 @@ int ns_socketpair2(sock_t [2], int sock_type);  // SOCK_STREAM or SOCK_DGRAM
 void ns_set_close_on_exec(sock_t);
 void ns_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
 int ns_hexdump(const void *buf, int len, char *dst, int dst_len);
-
+int ns_avprintf(char **buf, size_t size, const char *fmt, va_list ap);
+  
 #ifdef __cplusplus
 }
 #endif // __cplusplus
@@ -368,7 +372,7 @@ static void ns_remove_conn(struct ns_connection *conn) {
 // Print message to buffer. If buffer is large enough to hold the message,
 // return buffer. If buffer is to small, allocate large enough buffer on heap,
 // and return allocated buffer.
-static int ns_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
+int ns_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   va_list ap_copy;
   int len;
 
@@ -823,10 +827,6 @@ static void ns_write_to_socket(struct ns_connection *conn) {
   } else if (n > 0) {
     iobuf_remove(io, n);
   }
-
-  if (io->len == 0 && (conn->flags & NSF_FINISHED_SENDING_DATA)) {
-    conn->flags |= NSF_CLOSE_IMMEDIATELY;
-  }
 }
 
 int ns_send(struct ns_connection *conn, const void *buf, int len) {
@@ -926,7 +926,9 @@ int ns_server_poll(struct ns_server *server, int milli) {
   for (conn = server->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
     num_active_connections++;
-    if (conn->flags & NSF_CLOSE_IMMEDIATELY) {
+    if ((conn->flags & NSF_CLOSE_IMMEDIATELY) ||
+        (conn->send_iobuf.len == 0 &&
+          (conn->flags & NSF_FINISHED_SENDING_DATA))) {
       ns_close_conn(conn);
     }
   }
@@ -1052,7 +1054,7 @@ void ns_server_init(struct ns_server *s, void *server_data, ns_callback_t cb) {
 #endif
 
 #ifdef NS_ENABLE_SSL
-  SSL_library_init();
+  {static int init_done; if (!init_done) { SSL_library_init(); init_done++; }}
   s->client_ssl_ctx = SSL_CTX_new(SSLv23_client_method());
 #endif
 }
@@ -4043,12 +4045,12 @@ static void proxy_request(struct ns_connection *pc, struct mg_connection *c) {
     if (mg_strcasecmp(c->http_headers[i].name, "Connection") == 0) {
       // Force connection close, cause we don't parse proxy replies
       // therefore we don't know message boundaries
-      //ns_printf(pc, "%s: %s\r\n", "Connection", "close");
+      ns_printf(pc, "%s: %s\r\n", "Connection", "close");
       sent_close_header = 1;
-    //} else {
-    }
+    } else {
       ns_printf(pc, "%s: %s\r\n", c->http_headers[i].name,
                 c->http_headers[i].value);
+    }
   }
   if (!sent_close_header) {
     ns_printf(pc, "%s: %s\r\n", "Connection", "close");
@@ -4092,13 +4094,17 @@ int mg_forward(struct mg_connection *c, const char *host, int port, int ssl) {
   struct ns_server *server = &conn->server->ns_server;
   struct ns_connection *pc;
 
-  if ((pc = ns_connect(server, host, port, ssl, conn)) == NULL) return 0;
+  if ((pc = ns_connect(server, host, port, ssl, conn)) == NULL) {
+    conn->ns_conn->flags |= NSF_CLOSE_IMMEDIATELY;
+    return 0;
+  }
 
   // Interlink two connections
   pc->flags |= MG_PROXY_CONN;
   conn->endpoint_type = EP_PROXY;
   conn->endpoint.nc = pc;
-  DBG(("%p [%s] -> %p %p", conn, c->uri, pc, conn->ns_conn->ssl));
+  DBG(("%p [%s] [%s:%d] -> %p %p",
+      conn, c->uri, host, port, pc, conn->ns_conn->ssl));
 
   if (strcmp(c->request_method, "CONNECT") == 0) {
     // For CONNECT request, reply with 200 OK. Tunnel is established.
@@ -4360,8 +4366,8 @@ static void do_proxy(struct connection *conn) {
 static void on_recv_data(struct connection *conn) {
   struct iobuf *io = &conn->ns_conn->recv_iobuf;
 
-  if (conn->endpoint_type == EP_PROXY && conn->endpoint.nc != NULL) {
-    do_proxy(conn);
+  if (conn->endpoint_type == EP_PROXY) {
+    if (conn->endpoint.nc != NULL) do_proxy(conn);
     return;
   }
 
