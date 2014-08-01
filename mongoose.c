@@ -190,6 +190,7 @@ struct ns_server {
   ns_callback_t callback;
   SSL_CTX *ssl_ctx;
   SSL_CTX *client_ssl_ctx;
+  const char *hexdump_file;
   sock_t ctl[2];
 };
 
@@ -430,7 +431,36 @@ int ns_printf(struct ns_connection *conn, const char *fmt, ...) {
   return len;
 }
 
+static void hexdump(struct ns_connection *nc, const char *path,
+                    int num_bytes, enum ns_event ev) {
+  const struct iobuf *io = ev == NS_SEND ? &nc->send_iobuf : &nc->recv_iobuf;
+  FILE *fp;
+  char *buf, src[60], dst[60];
+  int buf_size = num_bytes * 5 + 100;
+
+  if ((fp = fopen(path, "a")) != NULL) {
+    ns_sock_to_str(nc->sock, src, sizeof(src), 3);
+    ns_sock_to_str(nc->sock, dst, sizeof(dst), 7);
+    fprintf(fp, "%lu %p %s %s %s %d\n", (unsigned long) time(NULL),
+            nc->connection_data, src,
+            ev == NS_RECV ? "<-" : ev == NS_SEND ? "->" :
+            ev == NS_ACCEPT ? "<A" : ev == NS_CONNECT ? "C>" : "XX",
+            dst, num_bytes);
+    if (num_bytes > 0 && (buf = (char *) malloc(buf_size)) != NULL) {
+      ns_hexdump(io->buf + (ev == NS_SEND ? 0 : io->len) -
+        (ev == NS_SEND ? 0 : num_bytes), num_bytes, buf, buf_size);
+      fprintf(fp, "%s", buf);
+      free(buf);
+    }
+    fclose(fp);
+  }
+}
+
 static void ns_call(struct ns_connection *conn, enum ns_event ev, void *p) {
+  if (conn->server->hexdump_file != NULL && ev != NS_POLL) {
+    int len = (ev == NS_RECV || ev == NS_SEND) ? * (int *) p : 0;
+    hexdump(conn, conn->server->hexdump_file, len, ev);
+  }
   if (conn->server->callback) conn->server->callback(conn, ev, p);
 }
 
@@ -4793,6 +4823,8 @@ const char *mg_set_option(struct mg_server *server, const char *name,
       free(*v);
       *v = mg_strdup(buf);
     }
+  } else if (ind == HEXDUMP_FILE) {
+    server->ns_server.hexdump_file = *v;
 #ifndef _WIN32
   } else if (ind == RUN_AS_USER) {
     struct passwd *pw;
@@ -4857,37 +4889,8 @@ static void on_accept(struct ns_connection *nc, union socket_address *sa) {
   }
 }
 
-#ifndef MONGOOSE_NO_FILESYSTEM
-static void hexdump(struct ns_connection *nc, const char *path,
-                    int num_bytes, int is_sent) {
-  const struct iobuf *io = is_sent ? &nc->send_iobuf : &nc->recv_iobuf;
-  FILE *fp;
-  char *buf, src[60], dst[60];
-  int buf_size = num_bytes * 5 + 100;
-
-  if (path != NULL && (fp = fopen(path, "a")) != NULL) {
-    ns_sock_to_str(nc->sock, src, sizeof(src), 3);
-    ns_sock_to_str(nc->sock, dst, sizeof(dst), 7);
-    fprintf(fp, "%lu %p %s %s %s %d\n", (unsigned long) time(NULL),
-            nc->connection_data, src,
-            is_sent == 0 ? "<-" : is_sent == 1 ? "->" :
-            is_sent == 2 ? "<A" : "C>", dst, num_bytes);
-    if (num_bytes > 0 && (buf = (char *) malloc(buf_size)) != NULL) {
-      ns_hexdump(io->buf + (is_sent ? 0 : io->len) - (is_sent ? 0 : num_bytes),
-                 num_bytes, buf, buf_size);
-      fprintf(fp, "%s", buf);
-      free(buf);
-    }
-    fclose(fp);
-  }
-}
-#endif
-
 static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
   struct connection *conn = (struct connection *) nc->connection_data;
-#ifndef MONGOOSE_NO_FILESYSTEM
-  struct mg_server *server = (struct mg_server *) nc->server;
-#endif
 
   // Send NS event to the handler. Note that call_user won't send an event
   // if conn == NULL. Therefore, repeat this for NS_ACCEPT event as well.
@@ -4902,9 +4905,6 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
   switch (ev) {
     case NS_ACCEPT:
       on_accept(nc, (union socket_address *) p);
-#ifndef MONGOOSE_NO_FILESYSTEM
-      hexdump(nc, server->config_options[HEXDUMP_FILE], 0, 2);
-#endif
 #ifdef MONGOOSE_SEND_NS_EVENTS
       {
         struct connection *conn = (struct connection *) nc->connection_data;
@@ -4919,9 +4919,6 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
         set_ips(nc, 1);
         set_ips(nc, 0);
       }
-#ifndef MONGOOSE_NO_FILESYSTEM
-      hexdump(nc, server->config_options[HEXDUMP_FILE], 0, 3);
-#endif
       conn->mg_conn.status_code = * (int *) p;
       if (conn->mg_conn.status_code != 0 ||
           (!(nc->flags & MG_PROXY_CONN) &&
@@ -4931,9 +4928,6 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_RECV:
-#ifndef MONGOOSE_NO_FILESYSTEM
-      hexdump(nc, server->config_options[HEXDUMP_FILE], * (int *) p, 0);
-#endif
       if (nc->flags & NSF_ACCEPTED) {
         on_recv_data(conn);
 #ifndef MONGOOSE_NO_CGI
@@ -4950,9 +4944,6 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_SEND:
-#ifndef MONGOOSE_NO_FILESYSTEM
-      hexdump(nc, server->config_options[HEXDUMP_FILE], * (int *) p, 1);
-#endif
       break;
 
     case NS_CLOSE:
