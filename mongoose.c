@@ -249,7 +249,7 @@ void ns_set_close_on_exec(sock_t);
 void ns_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
 int ns_hexdump(const void *buf, int len, char *dst, int dst_len);
 int ns_avprintf(char **buf, size_t size, const char *fmt, va_list ap);
-  
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
@@ -913,7 +913,7 @@ int ns_server_poll(struct ns_server *server, int milli) {
     // select() might have been waiting for a long time, reset current_time
     // now to prevent last_io_time being set to the past.
     current_time = time(NULL);
-    
+
     // Accept new connections
     if (server->listening_sock != INVALID_SOCKET &&
         FD_ISSET(server->listening_sock, &read_set)) {
@@ -1195,7 +1195,7 @@ typedef pid_t process_id_t;
 #define MONGOOSE_IDLE_TIMEOUT_SECONDS 30
 #endif
 
-#ifdef MONGOOSE_NO_SOCKETPAIR
+#ifdef NS_DISABLE_SOCKETPAIR
 #define MONGOOSE_NO_CGI
 #endif
 
@@ -1578,11 +1578,11 @@ static void parse_http_headers(char **buf, struct mg_connection *ri) {
 
 static const char *status_code_to_str(int status_code) {
   switch (status_code) {
-  
+
     case 100: return "Continue";
     case 101: return "Switching Protocols";
     case 102: return "Processing";
-      
+
     case 200: return "OK";
     case 201: return "Created";
     case 202: return "Accepted";
@@ -1593,7 +1593,7 @@ static const char *status_code_to_str(int status_code) {
     case 207: return "Multi-Status";
     case 208: return "Already Reported";
     case 226: return "IM Used";
-      
+
     case 300: return "Multiple Choices";
     case 301: return "Moved Permanently";
     case 302: return "Found";
@@ -1603,7 +1603,7 @@ static const char *status_code_to_str(int status_code) {
     case 306: return "Switch Proxy";
     case 307: return "Temporary Redirect";
     case 308: return "Permanent Redirect";
-      
+
     case 400: return "Bad Request";
     case 401: return "Unauthorized";
     case 402: return "Payment Required";
@@ -1631,7 +1631,7 @@ static const char *status_code_to_str(int status_code) {
     case 429: return "Too Many Requests";
     case 431: return "Request Header Fields Too Large";
     case 451: return "Unavailable For Legal Reasons";
-      
+
     case 500: return "Internal Server Error";
     case 501: return "Not Implemented";
     case 502: return "Bad Gateway";
@@ -1643,7 +1643,7 @@ static const char *status_code_to_str(int status_code) {
     case 508: return "Loop Detected";
     case 510: return "Not Extended";
     case 511: return "Network Authentication Required";
-      
+
     default:  return "Server Error";
   }
 }
@@ -4252,7 +4252,7 @@ void mg_send_file_internal(struct mg_connection *c, const char *file_name,
 #endif
 
   mg_snprintf(path, sizeof(path), "%s", file_name);
-  
+
   if (!exists || must_hide_file(conn, path)) {
     send_http_error(conn, 404, NULL);
   } else if (is_directory &&
@@ -4344,12 +4344,12 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
     }
     return;
   }
-  
+
   if (!strcmp(conn->mg_conn.request_method, "OPTIONS")) {
     send_options(conn);
     return;
   }
-  
+
 #ifdef MONGOOSE_NO_FILESYSTEM
   send_http_error(conn, 404, NULL);
 #else
@@ -4693,7 +4693,7 @@ struct mg_connection *mg_next(struct mg_server *s, struct mg_connection *c) {
   struct connection *conn = MG_CONN_2_CONN(c);
   struct ns_connection *nc = ns_next(&s->ns_server,
                                      c == NULL ? NULL : conn->ns_conn);
-    
+
   return nc == NULL ? NULL :
     & ((struct connection *) nc->connection_data)->mg_conn;
 }
