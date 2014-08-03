@@ -4139,9 +4139,6 @@ int mg_forward(struct mg_connection *c, const char *host, int port, int ssl) {
   if (strcmp(c->request_method, "CONNECT") == 0) {
     // For CONNECT request, reply with 200 OK. Tunnel is established.
     mg_printf(c, "%s", "HTTP/1.1 200 OK\r\n\r\n");
-    conn->request_len = 0;
-    free(conn->request);
-    conn->request = NULL;
   } else {
     // Strip "http://host:port" part from the URI
     if (memcmp(c->uri, "http://", 7) == 0) c->uri += 7;
