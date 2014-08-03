@@ -1195,20 +1195,6 @@ typedef pid_t process_id_t;
 #define MONGOOSE_IDLE_TIMEOUT_SECONDS 30
 #endif
 
-#ifdef MONGOOSE_NO_SOCKETPAIR
-#define MONGOOSE_NO_CGI
-#endif
-
-#ifdef MONGOOSE_NO_FILESYSTEM
-#define MONGOOSE_NO_AUTH
-#define MONGOOSE_NO_CGI
-#define MONGOOSE_NO_DAV
-#define MONGOOSE_NO_DIRECTORY_LISTING
-#define MONGOOSE_NO_LOGGING
-#define MONGOOSE_NO_SSI
-#define MONGOOSE_NO_DL
-#endif
-
 struct vec {
   const char *ptr;
   int len;
