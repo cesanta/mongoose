@@ -77,7 +77,6 @@ typedef struct stat file_stat_t;
 #define abs_path(rel, abs, abs_size) realpath((rel), (abs))
 #endif // _WIN32
 
-#define MAX_OPTIONS 100
 #define MAX_CONF_FILE_LINE_SIZE (8 * 1024)
 
 #ifndef MVER
@@ -85,14 +84,9 @@ typedef struct stat file_stat_t;
 #endif
 
 static int exit_flag;
-static char server_name[50];        // Set by init_server_name()
 static char s_config_file[PATH_MAX];  // Set by process_command_line_arguments
-static struct mg_server *server;    // Set by start_mongoose()
 static const char *s_default_document_root = ".";
 static const char *s_default_listening_port = "8080";
-static char **s_argv = { NULL };
-
-static void set_options(char *argv[]);
 
 #if !defined(CONFIG_FILE)
 #define CONFIG_FILE "mongoose.conf"
@@ -160,38 +154,19 @@ static void show_usage_and_exit(void) {
   exit(EXIT_FAILURE);
 }
 
-#define EV_HANDLER NULL
-
-static char *sdup(const char *str) {
-  char *p;
-  if ((p = (char *) malloc(strlen(str) + 1)) != NULL) {
-    strcpy(p, str);
-  }
-  return p;
-}
-
-static void set_option(char **options, const char *name, const char *value) {
-  int i;
-
-  for (i = 0; i < MAX_OPTIONS - 3; i++) {
-    if (options[i] == NULL) {
-      options[i] = sdup(name);
-      options[i + 1] = sdup(value);
-      options[i + 2] = NULL;
-      break;
-    } else if (!strcmp(options[i], name)) {
-      free(options[i + 1]);
-      options[i + 1] = sdup(value);
-      break;
+static const char *set_option(struct mg_server *server, const char *opt, const char *val) {
+  const char *msg = mg_set_option(server, opt, val);
+  if (msg != NULL) {
+    notify("Failed to set option [%s] to [%s]: %s", opt, val, msg);
+    if (!strcmp(opt, "listening_port")) {
+      mg_set_option(server, opt, s_default_listening_port);
+      notify("Setting %s to [%s]", opt, s_default_listening_port);
     }
   }
-
-  if (i == MAX_OPTIONS - 3) {
-    die("%s", "Too many options specified");
-  }
+  return msg;
 }
 
-static void process_command_line_arguments(char *argv[], char **options) {
+static void process_command_line_arguments(struct mg_server *server, char *argv[]) {
   char line[MAX_CONF_FILE_LINE_SIZE], opt[sizeof(line)], val[sizeof(line)],
        *p, cpath[PATH_MAX];
   FILE *fp = NULL;
@@ -235,7 +210,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
         printf("%s: line %d is invalid, ignoring it:\n %s",
                s_config_file, (int) line_no, line);
       } else {
-        set_option(options, opt, val);
+    	  set_option(server, opt, val);
       }
     }
 
@@ -252,15 +227,9 @@ static void process_command_line_arguments(char *argv[], char **options) {
       if (argv[i][0] != '-' || argv[i + 1] == NULL) {
         show_usage_and_exit();
       }
-      set_option(options, &argv[i][1], argv[i + 1]);
+      set_option(server, &argv[i][1], argv[i + 1]);
     }
   }
-}
-
-static void init_server_name(void) {
-  const char *descr = "";
-  snprintf(server_name, sizeof(server_name), "Mongoose web server v.%s%s",
-           MVER, descr);
 }
 
 static int is_path_absolute(const char *path) {
@@ -273,32 +242,14 @@ static int is_path_absolute(const char *path) {
 #endif
 }
 
-static char *get_option(char **options, const char *option_name) {
-  int i;
-
-  for (i = 0; options[i] != NULL; i++)
-    if (!strcmp(options[i], option_name))
-      return options[i + 1];
-
-  return NULL;
-}
-
-static void *serving_thread_func(void *param) {
-  struct mg_server *srv = (struct mg_server *) param;
-  while (exit_flag == 0) {
-    mg_poll_server(srv, 1000);
-  }
-  return NULL;
-}
-
 static int path_exists(const char *path, int is_dir) {
   file_stat_t st;
-  return path == NULL || (stat(path, &st) == 0 &&
+  return path == NULL || *path == 0 || (stat(path, &st) == 0 &&
                           ((S_ISDIR(st.st_mode) ? 1 : 0) == is_dir));
 }
 
-static void verify_existence(char **options, const char *name, int is_dir) {
-  const char *path = get_option(options, name);
+static void verify_existence(struct mg_server *server, const char *name, int is_dir) {
+  const char *path = mg_get_option(server, name);
   if (!path_exists(path, is_dir)) {
     notify("Invalid path for %s: [%s]: (%s). Make sure that path is either "
            "absolute, or it is relative to mongoose executable.",
@@ -306,16 +257,17 @@ static void verify_existence(char **options, const char *name, int is_dir) {
   }
 }
 
-static void set_absolute_path(char *options[], const char *option_name) {
-  char path[PATH_MAX], abs[PATH_MAX], *option_value;
+static void set_absolute_path(struct mg_server *server, const char *option_name) {
+  char path[PATH_MAX], abs[PATH_MAX];
+  const char *option_value;
   const char *p;
 
   // Check whether option is already set
-  option_value = get_option(options, option_name);
+  option_value = mg_get_option(server, option_name);
 
   // If option is already set and it is an absolute path,
   // leave it as it is -- it's already absolute.
-  if (option_value != NULL && !is_path_absolute(option_value)) {
+  if (option_value != NULL && *option_value != 0 && !is_path_absolute(option_value)) {
     // Not absolute. Use the directory where mongoose executable lives
     // be the relative directory for everything.
     // Extract mongoose executable directory into path.
@@ -331,7 +283,7 @@ static void set_absolute_path(char *options[], const char *option_name) {
 
     // Absolutize the path, and set the option
     abs_path(path, abs, sizeof(abs));
-    set_option(options, option_name, abs);
+    mg_set_option(server, option_name, abs);
   }
 }
 
@@ -400,10 +352,57 @@ int modify_passwords_file(const char *fname, const char *domain,
 }
 #endif
 
-static void start_mongoose(int argc, char *argv[]) {
-  s_argv = argv;
-  if ((server = mg_create_server(NULL, EV_HANDLER)) == NULL) {
-    die("%s", "Failed to start Mongoose.");
+static void set_options(struct mg_server *server, char *argv[]) {
+  mg_set_option(server, "document_root", s_default_document_root);
+  mg_set_option(server, "listening_port", s_default_listening_port);
+
+  // Update config based on command line arguments
+  process_command_line_arguments(server, argv);
+
+  // Make sure we have absolute paths for files and directories
+  // https://github.com/valenok/mongoose/issues/181
+  set_absolute_path(server, "document_root");
+  set_absolute_path(server, "dav_auth_file");
+  set_absolute_path(server, "cgi_interpreter");
+  set_absolute_path(server, "access_log_file");
+  set_absolute_path(server, "global_auth_file");
+  set_absolute_path(server, "ssl_certificate");
+
+  if (!path_exists(mg_get_option(server, "document_root"), 1)) {
+    mg_set_option(server, "document_root", s_default_document_root);
+    set_absolute_path(server, "document_root");
+    notify("Setting document_root to [%s]",
+           mg_get_option(server, "document_root"));
+  }
+
+  // Make extra verification for certain options
+  verify_existence(server, "document_root", 1);
+  verify_existence(server, "cgi_interpreter", 0);
+  verify_existence(server, "ssl_certificate", 0);
+
+  // Add an ability to pass listening socket to mongoose
+  {
+    const char *env = getenv("MONGOOSE_LISTENING_SOCKET");
+    if (env != NULL && atoi(env) > 0 ) {
+      mg_set_listening_socket(server, atoi(env));
+    }
+  }
+}
+
+static void *serving_thread_func(void *param) {
+  struct mg_server *srv = (struct mg_server *) param;
+  while (exit_flag == 0) {
+    mg_poll_server(srv, 1000);
+  }
+  return NULL;
+}
+
+int main(int argc, char *argv[]) {
+  struct mg_server *server;
+
+  // Show usage if -h or --help options are specified
+  if (argc == 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
+    show_usage_and_exit();
   }
 
 #ifndef MONGOOSE_NO_AUTH
@@ -417,70 +416,14 @@ static void start_mongoose(int argc, char *argv[]) {
   }
 #endif
 
-  // Show usage if -h or --help options are specified
-  if (argc == 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
-    show_usage_and_exit();
+  if ((server = mg_create_server(NULL, NULL)) == NULL) {
+    die("%s", "Failed to start Mongoose.");
   }
-  set_options(argv);
-}
-
-static void set_options(char *argv[]) {
-  char *options[MAX_OPTIONS];
-  int i;
-
-  options[0] = NULL;
-  set_option(options, "document_root", s_default_document_root);
-  set_option(options, "listening_port", s_default_listening_port);
-
-  // Update config based on command line arguments
-  process_command_line_arguments(argv, options);
-
-  // Make sure we have absolute paths for files and directories
-  // https://github.com/valenok/mongoose/issues/181
-  set_absolute_path(options, "document_root");
-  set_absolute_path(options, "dav_auth_file");
-  set_absolute_path(options, "cgi_interpreter");
-  set_absolute_path(options, "access_log_file");
-  set_absolute_path(options, "global_auth_file");
-  set_absolute_path(options, "ssl_certificate");
-
-  if (!path_exists(get_option(options, "document_root"), 1)) {
-    set_option(options, "document_root", s_default_document_root);
-    set_absolute_path(options, "document_root");
-    notify("Setting document_root to [%s]",
-           mg_get_option(server, "document_root"));
-  }
-
-  // Make extra verification for certain options
-  verify_existence(options, "document_root", 1);
-  verify_existence(options, "cgi_interpreter", 0);
-  verify_existence(options, "ssl_certificate", 0);
-
-  for (i = 0; options[i] != NULL; i += 2) {
-    const char *msg = mg_set_option(server, options[i], options[i + 1]);
-    if (msg != NULL) {
-      notify("Failed to set option [%s] to [%s]: %s",
-             options[i], options[i + 1], msg);
-      if (!strcmp(options[i], "listening_port")) {
-        mg_set_option(server, "listening_port", s_default_listening_port);
-        notify("Setting %s to [%s]", options[i], s_default_listening_port);
-      }
-    }
-    free(options[i]);
-    free(options[i + 1]);
-  }
+  set_options(server, argv);
 
   // Change current working directory to document root. This way,
   // scripts can use relative paths.
   chdir(mg_get_option(server, "document_root"));
-
-  // Add an ability to pass listening socket to mongoose
-  {
-    const char *env = getenv("MONGOOSE_LISTENING_SOCKET");
-    if (env != NULL && atoi(env) > 0 ) {
-      mg_set_listening_socket(server, atoi(env));
-    }
-  }
 
   // Setup signal handler: quit on Ctrl-C
   signal(SIGTERM, signal_handler);
@@ -488,13 +431,9 @@ static void set_options(char *argv[]) {
 #ifndef _WIN32
   signal(SIGCHLD, signal_handler);
 #endif
-}
 
-int main(int argc, char *argv[]) {
-  init_server_name();
-  start_mongoose(argc, argv);
-  printf("%s serving [%s] on port %s\n",
-         server_name, mg_get_option(server, "document_root"),
+  printf("Mongoose web server v%s serving [%s] on port %s\n",
+         MVER, mg_get_option(server, "document_root"),
          mg_get_option(server, "listening_port"));
   fflush(stdout);  // Needed, Windows terminals might not be line-buffered
   serving_thread_func(server);
