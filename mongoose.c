@@ -4869,8 +4869,10 @@ const char *mg_set_option(struct mg_server *server, const char *name,
       free(*v);
       *v = mg_strdup(buf);
     }
+#ifndef MONGOOSE_NO_FILESYSTEM
   } else if (ind == HEXDUMP_FILE) {
     server->ns_server.hexdump_file = *v;
+#endif
 #ifndef _WIN32
   } else if (ind == RUN_AS_USER) {
     struct passwd *pw;
