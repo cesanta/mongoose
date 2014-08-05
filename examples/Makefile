@@ -1,6 +1,14 @@
+# Copyright (c) 2014 Cesanta Software
+# All rights reserved
+#
+# Makefile for Mongoose web server examples
+
 CFLAGS = -W -Wall -I.. -pthread -g -pipe $(CFLAGS_EXTRA)
 RM = rm -rf
 OUT = -o $@
+ALL_PROGS = hello websocket server post multi_threaded upload auth pubsub
+NS = ../../net_skeleton
+SW = ../../ssl_wrapper
 
 ifeq ($(OS),Windows_NT)
   MSVC = ../../vc6
@@ -23,7 +31,7 @@ else
   endif
 endif
 
-all: hello websocket server post multi_threaded upload auth
+all: $(ALL_PROGS)
 
 # To enable Lua in a server, uncomment following lines
 LUA    = ../lua-5.2.3/src
@@ -62,10 +70,8 @@ mjpg: mjpg.c ../mongoose.c
 pubsub: websocket2.c ../mongoose.c
 	$(CC) websocket2.c ../mongoose.c $(OUT) $(CFLAGS)
 
-
 proxy: proxy.c ../mongoose.c
-	$(CC) proxy.c ../mongoose.c $(OUT) \
-		-I../../net_skeleton -DNS_ENABLE_SSL -lssl $(CFLAGS)
+	$(CC) proxy.c ../mongoose.c $(OUT) -I$(NS) -DNS_ENABLE_SSL -lssl $(CFLAGS)
 
 websocket_html.c: websocket.html
 	perl mkdata.pl $< > $@
@@ -75,4 +81,4 @@ u:
 	./$@
 
 clean:
-	-@$(RM) hello mjpg upload post websocket auth file server multi_threaded proxy websocket_html.c *.exe *.dSYM *.obj .*o u a.out
+	-@$(RM) $(ALL_PROGS) websocket_html.c *.exe *.dSYM *.obj *.exp .*o *.lib u
