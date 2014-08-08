@@ -1192,7 +1192,7 @@ typedef pid_t process_id_t;
 #endif
 
 #ifndef MONGOOSE_IDLE_TIMEOUT_SECONDS
-#define MONGOOSE_IDLE_TIMEOUT_SECONDS 30
+#define MONGOOSE_IDLE_TIMEOUT_SECONDS 300
 #endif
 
 #ifdef NS_DISABLE_SOCKETPAIR
