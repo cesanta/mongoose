@@ -1807,14 +1807,17 @@ static void abs_path(const char *utf8_path, char *abs_path, size_t len) {
 static process_id_t start_process(char *interp, const char *cmd,
                                   const char *env, const char *envp[],
                                   const char *dir, sock_t sock) {
-  STARTUPINFOW si = {0};
-  PROCESS_INFORMATION pi = {0};
+  STARTUPINFOW si;
+  PROCESS_INFORMATION pi;
   HANDLE a[2], b[2], me = GetCurrentProcess();
   wchar_t wcmd[MAX_PATH_SIZE], full_dir[MAX_PATH_SIZE];
   char buf[MAX_PATH_SIZE], buf4[MAX_PATH_SIZE], buf5[MAX_PATH_SIZE],
        cmdline[MAX_PATH_SIZE], *p;
   DWORD flags = DUPLICATE_CLOSE_SOURCE | DUPLICATE_SAME_ACCESS;
   FILE *fp;
+
+  memset(&si, 0, sizeof(si));
+  memset(&pi, 0, sizeof(pi));
 
   si.cb = sizeof(si);
   si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;

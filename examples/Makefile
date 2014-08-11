@@ -11,13 +11,18 @@ NS = ../../net_skeleton
 SW = ../../ssl_wrapper
 
 ifeq ($(OS),Windows_NT)
-  MSVC = ../../vc6
-  RM = del /q /f
-  OUT =
-  CC = $(MSVC)/bin/cl
-  CFLAGS = /MD /TC /nologo /W3 /I$(MSVC)/include /I..
-  CFLAGS += /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
-  CFLAGS += $(CFLAGS_EXTRA)
+  ifndef MINGW
+    MSVC = ../../vc6
+    RM = del /q /f
+    OUT =
+    CC = $(MSVC)/bin/cl
+    CFLAGS = /MD /TC /nologo /W3 /I$(MSVC)/include /I..
+    CFLAGS += /link /incremental:no /libpath:$(MSVC)/lib /machine:IX86
+    CFLAGS += $(CFLAGS_EXTRA)
+  else
+    CC = g++
+    CFLAGS = -W -Wall -Wno-unused-parameter -I.. -O0 -g -pipe $(CFLAGS_EXTRA) -lwsock32
+  endif
 else
   UNAME_S := $(shell uname -s)
   CC = g++
