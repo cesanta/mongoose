@@ -21,10 +21,10 @@ struct config {
 };
 
 static struct config s_wrappers[] = {
-  {"ws1", {"127.0.0.1", 9001, 0, NULL, "7001", NULL}},
-  {"ws1", {"127.0.0.1", 9001, 0, NULL, "7002", "certs/ws1_server.pem"}},
-  {"ws2", {"127.0.0.1", 9002, 1, NULL, "7003", NULL}},
-  {"ws2", {"127.0.0.1", 9002, 1, NULL, "7004", "certs/ws2_server.pem"}}
+  {"ws1", {"127.0.0.1", 9001, 0, NULL, "7001", NULL, ""}},
+  {"ws1", {"127.0.0.1", 9001, 0, NULL, "7002", "certs/ws1_server.pem", ""}},
+  {"ws2", {"127.0.0.1", 9002, 1, NULL, "7003", NULL, ""}},
+  {"ws2", {"127.0.0.1", 9002, 1, NULL, "7004", "certs/ws2_server.pem", ""}}
 };
 static int s_received_signal = 0;
 
@@ -101,7 +101,16 @@ static void *serve_thread_func(void *param) {
 }
 
 static void *wrapper_thread_func(void *param) {
-  ssl_wrapper_serve(&((struct config *) param)->c, &s_received_signal);
+  struct ssl_wrapper_config *cfg = &((struct config *) param)->c;
+  const char *err_msg;
+  void *wrapper;
+
+  if ((wrapper = ssl_wrapper_init(cfg, &err_msg)) == NULL) {
+    fprintf(stderr, "Error: %s\n", err_msg);
+    exit(EXIT_FAILURE);
+  }
+  ssl_wrapper_serve(wrapper, &s_received_signal);
+
   return NULL;
 }
 
