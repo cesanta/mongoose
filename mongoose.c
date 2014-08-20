@@ -4148,7 +4148,6 @@ static void proxy_request(struct ns_connection *pc, struct mg_connection *c) {
 int mg_terminate_ssl(struct mg_connection *c, const char *cert) {
   static const char ok[] = "HTTP/1.0 200 OK\r\n\r\n";
   struct connection *conn = MG_CONN_2_CONN(c);
-  int n;
   SSL_CTX *ctx;
 
   DBG(("%p MITM", conn));
@@ -4160,7 +4159,8 @@ int mg_terminate_ssl(struct mg_connection *c, const char *cert) {
   SSL_CTX_use_certificate_chain_file(ctx, cert);
 
   // When clear-text reply is pushed to client, switch to SSL mode.
-  n = send(conn->ns_conn->sock, ok, sizeof(ok) - 1, 0);
+  // TODO(lsm): check for send() failure
+  send(conn->ns_conn->sock, ok, sizeof(ok) - 1, 0);
   DBG(("%p %lu %d SEND", c, (unsigned long)sizeof(ok) - 1, n));
   conn->ns_conn->send_iobuf.len = 0;
   conn->endpoint_type = EP_USER;  // To keep-alive in close_local_endpoint()
