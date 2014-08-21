@@ -4641,11 +4641,6 @@ static void close_local_endpoint(struct connection *conn) {
                             NSF_BUFFER_BUT_DONT_SEND | NSF_CLOSE_IMMEDIATELY |
                             MG_HEADERS_SENT | MG_LONG_RUNNING);
   memset(c, 0, sizeof(*c));
-#if 0
-  c->num_headers = c->status_code = c->is_websocket = c->content_len = 0;
-  c->request_method = c->uri = c->http_version = c->query_string = NULL;
-  memset(c->http_headers, 0, sizeof(c->http_headers));
-#endif
 
   if (keep_alive) {
     on_recv_data(conn);  // Can call us recursively if pipelining is used
