@@ -66,6 +66,9 @@ enum mg_event {
   MG_AUTH,        // If callback returns MG_FALSE, authentication fails
   MG_REQUEST,     // If callback returns MG_FALSE, Mongoose continues with req
   MG_REPLY,       // If callback returns MG_FALSE, Mongoose closes connection
+  MG_RECV,        // Mongoose has received POST data chunk.
+                  // Callback should return a number of bytes to discard from
+                  // the receive buffer, or -1 to close the connection.
   MG_CLOSE,       // Connection is closed, callback return value is ignored
   MG_WS_HANDSHAKE,  // New websocket connection, handshake request
   MG_WS_CONNECT,  // New websocket connection established
@@ -112,6 +115,7 @@ size_t mg_websocket_printf(struct mg_connection* conn, int opcode,
                            const char *fmt, ...);
 
 void mg_send_file(struct mg_connection *, const char *path);
+void mg_send_file_data(struct mg_connection *, int fd);
 
 const char *mg_get_header(const struct mg_connection *, const char *name);
 const char *mg_get_mime_type(const char *name, const char *default_mime_type);

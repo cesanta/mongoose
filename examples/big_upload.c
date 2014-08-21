@@ -3,33 +3,27 @@
 #include <stdlib.h>
 #include "mongoose.h"
 
-struct file_data {
-  FILE *fp;
-  const char *data;
-  int data_len;
-  int written;
-};
-
 static int handle_request(struct mg_connection *conn) {
-  const char *data;
-  int data_len;
-  char var_name[100], file_name[100], path[100];
-
   if (strcmp(conn->uri, "/upload") == 0) {
-    if (mg_parse_multipart(conn->content, conn->content_len,
-                           var_name, sizeof(var_name),
-                           file_name, sizeof(file_name),
-                           &data, &data_len) > 0) {
-      struct file_data *p = (struct file_data *) malloc(sizeof(*p));
-      snprintf(path, sizeof(path), "UPLOAD_%s", file_name);
-      p->fp = fopen(path, "wb");
-      p->data = data;
-      p->data_len = data_len;
-      p->written = 0;
-      conn->connection_param = p;
-      mg_send_header(conn, "Content-Type", "text/html");
+    FILE *fp = (FILE *) conn->connection_param;
+    if (fp != NULL) {
+      fwrite(conn->content, 1, conn->content_len, fp); // Write last bits
+      mg_printf(conn, "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "Connection: close\r\n\r\n"
+                "Written %ld of POST data to a temp file:\n\n",
+                (long) ftell(fp));
+
+      // Temp file will be destroyed after fclose(), do something with the
+      // data here -- for example, parse it and extract uploaded files.
+      // As an example, we just echo the whole POST buffer back to the client.
+      rewind(fp);
+      mg_send_file_data(conn, fileno(fp));
+      return MG_MORE;  // Tell Mongoose reply is not completed yet
+    } else {
+      mg_printf_data(conn, "%s", "Had no data to write...");
+      return MG_TRUE; // Tell Mongoose we're done with this request
     }
-    return MG_MORE; // Tell mongoose to keep this connection open
   } else {
     mg_printf_data(conn, "%s",
                    "<html><body>Upload example."
@@ -42,34 +36,36 @@ static int handle_request(struct mg_connection *conn) {
   }
 }
 
-static int handle_poll(struct mg_connection *conn) {
-  struct file_data *p = (struct file_data *) conn->connection_param;
-  if (p != NULL) {
-    // Write no more then 100 bytes in one go
-    int len = p->data_len - p->written;
-    int n = fwrite(p->data + p->written, 1, len > 100 ? 100 : len, p->fp);
-    if (n > 0) {
-      p->written += n;
-      mg_send_data(conn, " ", 1);  // Send something back to wake up select()
-    }
+// Mongoose sends MG_RECV for every received POST chunk.
+// When last POST chunk is received, Mongoose sends MG_REQUEST, then MG_CLOSE.
+static int handle_recv(struct mg_connection *conn) {
+  FILE *fp = (FILE *) conn->connection_param;
 
-    // If everything is written, close the connection
-    if (p->written >= p->data_len) {
-      mg_printf_data(conn, "Written %d bytes.", p->written);
-      fclose(p->fp);
-      free(p);
-      conn->connection_param = NULL;
-      return MG_TRUE; // Tell mongoose to close this connection
-    }
+  // Open temporary file where we going to write data
+  if (fp == NULL && ((conn->connection_param = fp = tmpfile())) == NULL) {
+    return -1;  // Close connection on error
   }
-  return MG_FALSE;  // Tell mongoose to keep this connection open
+
+  // Return number of bytes written to a temporary file: that is how many
+  // bytes we want to discard from the receive buffer
+  return fwrite(conn->content, 1, conn->content_len, fp);
+}
+
+// Make sure we free all allocated resources
+static int handle_close(struct mg_connection *conn) {
+  if (conn->connection_param != NULL) {
+    fclose((FILE *) conn->connection_param);
+    conn->connection_param = NULL;
+  }
+  return MG_TRUE;
 }
 
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
   switch (ev) {
     case MG_AUTH:     return MG_TRUE;
     case MG_REQUEST:  return handle_request(conn);
-    case MG_POLL:     return handle_poll(conn);
+    case MG_RECV:     return handle_recv(conn);
+    case MG_CLOSE:    return handle_close(conn);
     default:          return MG_FALSE;
   }
 }

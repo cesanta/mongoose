@@ -1341,7 +1341,7 @@ struct connection {
   enum endpoint_type endpoint_type;
   char *path_info;
   char *request;
-  int64_t num_bytes_sent; // Total number of bytes sent
+  int64_t num_bytes_recv; // Total number of bytes received
   int64_t cl;             // Reply content length, for Range support
   int request_len;  // Request length, including last \r\n after last header
 };
@@ -3111,18 +3111,22 @@ static void open_file_endpoint(struct connection *conn, const char *path,
     conn->endpoint_type = EP_NONE;
   }
 }
+
+void mg_send_file_data(struct mg_connection *c, int fd) {
+  struct connection *conn = MG_CONN_2_CONN(c);
+  conn->endpoint_type = EP_FILE;
+  conn->endpoint.fd = fd;
+  ns_set_close_on_exec(conn->endpoint.fd);
+}
 #endif  // MONGOOSE_NO_FILESYSTEM
 
 static void call_request_handler_if_data_is_buffered(struct connection *conn) {
-  struct iobuf *loc = &conn->ns_conn->recv_iobuf;
-  struct mg_connection *c = &conn->mg_conn;
-
 #ifndef MONGOOSE_NO_WEBSOCKET
   if (conn->mg_conn.is_websocket) {
     do { } while (deliver_websocket_frame(conn));
   } else
 #endif
-  if ((size_t) loc->len >= c->content_len &&
+  if (conn->num_bytes_recv >= (conn->cl + conn->request_len) &&
       call_request_handler(conn) == MG_FALSE) {
     open_local_endpoint(conn, 1);
   }
@@ -4446,6 +4450,7 @@ static void do_proxy(struct connection *conn) {
 
 static void on_recv_data(struct connection *conn) {
   struct iobuf *io = &conn->ns_conn->recv_iobuf;
+  int n;
 
   if (conn->endpoint_type == EP_PROXY) {
     if (conn->endpoint.nc != NULL) do_proxy(conn);
@@ -4478,6 +4483,14 @@ static void on_recv_data(struct connection *conn) {
   }
 #endif
   if (conn->endpoint_type == EP_USER) {
+    conn->mg_conn.content = io->buf;
+    conn->mg_conn.content_len = io->len;
+    n = call_user(conn, MG_RECV);
+    if (n < 0) {
+      conn->ns_conn->flags |= NSF_FINISHED_SENDING_DATA;
+    } else if ((size_t) n <= io->len) {
+      iobuf_remove(io, n);
+    }
     call_request_handler_if_data_is_buffered(conn);
   }
 #ifndef MONGOOSE_NO_DAV
@@ -4499,7 +4512,7 @@ static void call_http_client_handler(struct connection *conn) {
   }
   iobuf_remove(&conn->ns_conn->recv_iobuf, conn->mg_conn.content_len);
   conn->mg_conn.status_code = 0;
-  conn->cl = conn->num_bytes_sent = conn->request_len = 0;
+  conn->cl = conn->num_bytes_recv = conn->request_len = 0;
   free(conn->request);
   conn->request = NULL;
 }
@@ -4568,12 +4581,12 @@ static void log_access(const struct connection *conn, const char *path) {
   flockfile(fp);
   mg_parse_header(mg_get_header(&conn->mg_conn, "Authorization"), "username",
                   user, sizeof(user));
-  fprintf(fp, "%s - %s [%s] \"%s %s%s%s HTTP/%s\" %d %" INT64_FMT,
+  fprintf(fp, "%s - %s [%s] \"%s %s%s%s HTTP/%s\" %d 0",
           c->remote_ip, user[0] == '\0' ? "-" : user, date,
           c->request_method ? c->request_method : "-",
           c->uri ? c->uri : "-", c->query_string ? "?" : "",
           c->query_string ? c->query_string : "",
-          c->http_version, c->status_code, conn->num_bytes_sent);
+          c->http_version, c->status_code);
   log_header(c, "Referer", fp);
   log_header(c, "User-Agent", fp);
   fputc('\n', fp);
@@ -4619,17 +4632,20 @@ static void close_local_endpoint(struct connection *conn) {
   iobuf_free(&conn->ns_conn->recv_iobuf);
   free(conn->request);
   free(conn->path_info);
+  conn->endpoint.nc = NULL;
+  conn->request = conn->path_info = NULL;
 
   conn->endpoint_type = EP_NONE;
-  conn->cl = conn->num_bytes_sent = conn->request_len = 0;
+  conn->cl = conn->num_bytes_recv = conn->request_len = 0;
   conn->ns_conn->flags &= ~(NSF_FINISHED_SENDING_DATA |
                             NSF_BUFFER_BUT_DONT_SEND | NSF_CLOSE_IMMEDIATELY |
                             MG_HEADERS_SENT | MG_LONG_RUNNING);
+  memset(c, 0, sizeof(*c));
+#if 0
   c->num_headers = c->status_code = c->is_websocket = c->content_len = 0;
-  conn->endpoint.nc = NULL;
   c->request_method = c->uri = c->http_version = c->query_string = NULL;
-  conn->request = conn->path_info = NULL;
   memset(c->http_headers, 0, sizeof(c->http_headers));
+#endif
 
   if (keep_alive) {
     on_recv_data(conn);  // Can call us recursively if pipelining is used
@@ -4981,6 +4997,9 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_RECV:
+      if (conn != NULL) {
+        conn->num_bytes_recv += * (int *) p;
+      }
       if (nc->flags & NSF_ACCEPTED) {
         on_recv_data(conn);
 #ifndef MONGOOSE_NO_CGI
