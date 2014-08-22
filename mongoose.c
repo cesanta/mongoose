@@ -4640,7 +4640,12 @@ static void close_local_endpoint(struct connection *conn) {
   conn->ns_conn->flags &= ~(NSF_FINISHED_SENDING_DATA |
                             NSF_BUFFER_BUT_DONT_SEND | NSF_CLOSE_IMMEDIATELY |
                             MG_HEADERS_SENT | MG_LONG_RUNNING);
-  memset(c, 0, sizeof(*c));
+
+  // Do not memset() the whole structure, as some of the fields
+  // (IP addresses & ports, server_param) must survive. Nullify the rest.
+  c->request_method = c->uri = c->http_version = c->query_string = NULL;
+  c->num_headers = c->status_code = c->is_websocket = c->content_len = 0;
+  c->connection_param = c->callback_param = NULL;
 
   if (keep_alive) {
     on_recv_data(conn);  // Can call us recursively if pipelining is used
