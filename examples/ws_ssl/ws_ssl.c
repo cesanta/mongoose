@@ -21,12 +21,10 @@ struct config {
 };
 
 static struct config s_wrappers[] = {
-  {"ws1", {"127.0.0.1", 9001, 0, NULL, "7001", NULL, NULL, NULL, ""}},
-  {"ws1", {"127.0.0.1", 9001, 0, NULL, "7002", "certs/ws1_server.pem",
-    NULL, NULL, ""}},
-  {"ws2", {"127.0.0.1", 9002, 1, NULL, "7003", NULL, NULL, NULL, ""}},
-  {"ws2", {"127.0.0.1", 9002, 1, NULL, "7004", "certs/ws2_server.pem",
-    NULL, NULL, ""}}
+  {"ws1", {"127.0.0.1", 9001, 0, 0, 0, "", "7001", 0, 0}},
+  {"ws1", {"127.0.0.1", 9001, 0, 0, 0, "", "7002", "certs/ws1_server.pem", 0}},
+  {"ws2", {"127.0.0.1", 9002, 1, 0, 0, "", "7003", 0, 0}},
+  {"ws2", {"127.0.0.1", 9002, 1, 0, 0, "", "7004", "certs/ws2_server.pem", 0}}
 };
 static int s_received_signal = 0;
 
@@ -45,7 +43,7 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
       if (strcmp(conn->request_method, "CONNECT") == 0) {
         char host[1025] = "";
         int i, is_ssl, port = 0;
-        
+
         sscanf(conn->uri, "%1024[^:]:%d", host, &port);
         is_ssl = (port == 443 ? 1 : 0);
 
@@ -138,7 +136,7 @@ int main(void) {
   // Setup signal handlers
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
-  
+
   // Start SSL wrappers, each in it's own thread
   for (i = 0; i < ARRAY_SIZE(s_wrappers); i++) {
     ns_start_thread(wrapper_thread_func, &s_wrappers[i]);
@@ -147,7 +145,7 @@ int main(void) {
   // Start websocket servers in separate threads
   mg_start_thread(serve_thread_func, ws1_server);
   mg_start_thread(serve_thread_func, ws2_server);
-  
+
   // Finally, start proxy server in this thread: this call blocks
   serve_thread_func(proxy_server);
 
