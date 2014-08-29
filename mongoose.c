@@ -1862,12 +1862,11 @@ static process_id_t start_process(char *interp, const char *cmd,
   }
   DBG(("CGI command: [%ls] -> %p", wcmd, pi.hProcess));
 
+  // Not closing a[0] and b[1] because we've used DUPLICATE_CLOSE_SOURCE
   CloseHandle(si.hStdOutput);
   CloseHandle(si.hStdInput);
-  CloseHandle(a[0]);
-  CloseHandle(b[1]);
-  CloseHandle(pi.hThread);
-  CloseHandle(pi.hProcess);
+  //CloseHandle(pi.hThread);
+  //CloseHandle(pi.hProcess);
 
   return pi.hProcess;
 }
@@ -2087,8 +2086,7 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   if (start_process(conn->server->config_options[CGI_INTERPRETER],
                     prog, blk.buf, blk.vars, dir, fds[1]) > 0) {
     conn->endpoint_type = EP_CGI;
-    conn->endpoint.nc = ns_add_sock(&conn->server->ns_server,
-                                          fds[0], conn);
+    conn->endpoint.nc = ns_add_sock(&conn->server->ns_server, fds[0], conn);
     conn->endpoint.nc->flags |= MG_CGI_CONN;
     ns_send(conn->ns_conn, cgi_status, sizeof(cgi_status) - 1);
     conn->mg_conn.status_code = 200;
@@ -3265,7 +3263,7 @@ int mg_url_encode(const char *src, size_t s_len, char *dst, size_t dst_len) {
   static const char *hex = "0123456789abcdef";
   size_t i = 0, j = 0;
 
-  for (i = j = 0; dst_len > 0 && i < s_len && j < dst_len - 1; i++, j++) {
+  for (i = j = 0; dst_len > 0 && i < s_len && j + 2 < dst_len - 1; i++, j++) {
     if (isalnum(* (const unsigned char *) (src + i)) ||
         strchr(dont_escape, * (const unsigned char *) (src + i)) != NULL) {
       dst[j] = src[i];
@@ -4966,7 +4964,8 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
 #ifdef MONGOOSE_SEND_NS_EVENTS
   {
     struct connection *conn = (struct connection *) nc->connection_data;
-    if (conn != NULL) conn->mg_conn.callback_param = p;
+    void *param[2] = { nc, p };
+    if (conn != NULL) conn->mg_conn.callback_param = param;
     call_user(conn, (enum mg_event) ev);
   }
 #endif
@@ -4977,7 +4976,8 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
 #ifdef MONGOOSE_SEND_NS_EVENTS
       {
         struct connection *conn = (struct connection *) nc->connection_data;
-        if (conn != NULL) conn->mg_conn.callback_param = p;
+        void *param[2] = { nc, p };
+        if (conn != NULL) conn->mg_conn.callback_param = param;
         call_user(conn, (enum mg_event) ev);
       }
 #endif
