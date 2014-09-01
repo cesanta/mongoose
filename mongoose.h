@@ -15,7 +15,7 @@
 // Alternatively, you can license this library under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// NOTE: Detailed API documentation is at http://cesanta.com/#docs
+// $Date: 2014-09-01 19:53:26 UTC $
 
 #ifndef MONGOOSE_HEADER_INCLUDED
 #define  MONGOOSE_HEADER_INCLUDED

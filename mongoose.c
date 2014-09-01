@@ -14,6 +14,8 @@
 //
 // Alternatively, you can license this library under a commercial
 // license, as set out in <http://cesanta.com/>.
+//
+// $Date: 2014-09-01 19:53:26 UTC $
 
 #ifdef NOEMBED_NET_SKELETON
 #include "net_skeleton.h"
