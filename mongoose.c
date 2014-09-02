@@ -1152,7 +1152,12 @@ void ns_server_free(struct ns_server *s) {
 #define STR(x) STRX(x)
 #define __func__ __FILE__ ":" STR(__LINE__)
 #endif
-#define INT64_FMT  "I64d"
+/* MINGW has adopted the MSVC formatting for 64-bit ints as of gcc 4.4 till 4.8*/
+#if (defined(__MINGW32__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4 && __GNUC_MINOR__ < 8))) || defined(_MSC_VER)
+#define INT64_FMT   "I64d"
+#else
+#define INT64_FMT   "lld"
+#endif
 #define stat(x, y) mg_stat((x), (y))
 #define fopen(x, y) mg_fopen((x), (y))
 #define open(x, y) mg_open((x), (y))
@@ -2086,7 +2091,7 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   } while (fds[0] == INVALID_SOCKET);
 
   if (start_process(conn->server->config_options[CGI_INTERPRETER],
-                    prog, blk.buf, blk.vars, dir, fds[1]) > 0) {
+                    prog, blk.buf, blk.vars, dir, fds[1]) != 0) {
     conn->endpoint_type = EP_CGI;
     conn->endpoint.nc = ns_add_sock(&conn->server->ns_server, fds[0], conn);
     conn->endpoint.nc->flags |= MG_CGI_CONN;
