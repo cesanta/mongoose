@@ -43,7 +43,7 @@ allowed to call `mg_set_option()` by the same thread that does
 `mg_poll_server()` (Mongoose thread) and change server configuration while it
 is serving, in between `mg_poll_server()` calls.
 
-    void mg_poll_server(struct mg_server *server, int milliseconds);
+    int mg_poll_server(struct mg_server *server, int milliseconds);
 
 Performs one iteration of IO loop by iterating over all
 active connections, performing `select()` syscall on all sockets with a timeout
@@ -120,6 +120,8 @@ there is `struct mg_connection::wsbits` field which contains first byte
 of the websocket frame which URI handler can examine. Note that to
 reply to the websocket client, `mg_websocket_write()` should be used.
 To reply to the plain HTTP client, `mg_write_data()` should be used.
+
+Return value: number of active connections.
 
 
     const char **mg_get_valid_option_names(void);
