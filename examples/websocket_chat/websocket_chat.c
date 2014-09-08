@@ -1,3 +1,6 @@
+// Copyright (c) 2013-2014 Cesanta Software Limited
+// $Date: 2014-09-08 22:30:52 UTC $
+
 #include <string.h>
 #include <time.h>
 #include <signal.h>
