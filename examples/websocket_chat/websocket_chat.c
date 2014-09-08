@@ -46,7 +46,7 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
         handle_websocket_message(conn);
         return MG_TRUE;
       } else {
-        mg_send_file(conn, "pubsub.html");  // Return MG_MORE after mg_send_file()
+        mg_send_file(conn, "index.html");  // Return MG_MORE after mg_send_file()
         return MG_MORE;
       }
     case MG_WS_CONNECT:
@@ -67,10 +67,10 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
 int main(void) {
   s_server = mg_create_server(NULL, ev_handler);
   mg_set_option(s_server, "listening_port", "8080");
-  
+
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
-  
+
   printf("Started on port %s\n", mg_get_option(s_server, "listening_port"));
   while (s_signal_received == 0) {
     mg_poll_server(s_server, 100);

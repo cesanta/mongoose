@@ -48,7 +48,7 @@
       document.getElementById('messages').appendChild(div);
     }
   };
-  
+
   window.onload = function() {
     document.getElementById('send_button').onclick = function(ev) {
       var msg = document.getElementById('send_input').value;
@@ -74,7 +74,7 @@
       connection with Mongoose, making each browser window a websocket client.
       Join a room, send messages, and see messages sent by other clients.
     </p>
-    
+
     <p>
       My ID: <b><span id="my_id"></b></span>
     </p>
@@ -88,7 +88,7 @@
 
     <div id="messages">
     </div>
-    
+
     <p>
       <input type="text" id="send_input" />
       <button id="send_button">Send Message</button>
