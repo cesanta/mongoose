@@ -2,7 +2,7 @@
 // All rights reserved
 //
 // This example demostrates basic use of Mongoose embedded web server.
-// $Data$
+// $Date: 2014-09-09 21:47:07 UTC $
 
 #include <stdio.h>
 #include <string.h>
