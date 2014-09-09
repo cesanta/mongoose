@@ -15,7 +15,7 @@
 // Alternatively, you can license this library under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-01 19:53:26 UTC $
+// $Date: 2014-09-09 17:07:55 UTC $
 
 #ifdef NOEMBED_NET_SKELETON
 #include "net_skeleton.h"
@@ -36,11 +36,13 @@
 //
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
+//
+// $Date: 2014-09-09 17:07:55 UTC $
 
 #ifndef NS_SKELETON_HEADER_INCLUDED
 #define NS_SKELETON_HEADER_INCLUDED
 
-#define NS_SKELETON_VERSION "1.1"
+#define NS_SKELETON_VERSION "2.0.0"
 
 #undef UNICODE                  // Use ANSI WinAPI functions
 #undef _UNICODE                 // Use multibyte encoding on Windows
@@ -133,7 +135,9 @@ typedef int sock_t;
 #define DBG(x)
 #endif
 
+#ifndef ARRAY_SIZE
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
+#endif
 
 #ifdef NS_ENABLE_SSL
 #ifdef __APPLE__
@@ -174,7 +178,7 @@ void iobuf_remove(struct iobuf *, size_t data_size);
 // Net skeleton interface
 // Events. Meaning of event parameter (evp) is given in the comment.
 enum ns_event {
-  NS_POLL,     // Sent to each connection on each call to ns_server_poll()
+  NS_POLL,     // Sent to each connection on each call to ns_mgr_poll()
   NS_ACCEPT,   // New connection accept()-ed. union socket_address *remote_addr
   NS_CONNECT,  // connect() succeeded or failed. int *success_status
   NS_RECV,     // Data has benn received. int *num_bytes
@@ -187,36 +191,37 @@ enum ns_event {
 struct ns_connection;
 typedef void (*ns_callback_t)(struct ns_connection *, enum ns_event, void *evp);
 
-struct ns_server {
-  void *server_data;
-  sock_t listening_sock;
+struct ns_mgr {
   struct ns_connection *active_connections;
-  ns_callback_t callback;
-  SSL_CTX *ssl_ctx;
-  SSL_CTX *client_ssl_ctx;
-  const char *hexdump_file;
-  sock_t ctl[2];
+  ns_callback_t callback;           // Event handler function
+  const char *hexdump_file;         // Debug hexdump file path
+  sock_t ctl[2];                    // Socketpair for mg_wakeup()
+  void *user_data;                  // User data
 };
 
 struct ns_connection {
-  struct ns_connection *prev, *next;
-  struct ns_server *server;
+  struct ns_connection *next, *prev;  // ns_mgr::active_connections linkage
+  struct ns_connection *listener;     // Set only for accept()-ed connections
+  struct ns_mgr *mgr;
   sock_t sock;
   union socket_address sa;
   struct iobuf recv_iobuf;
   struct iobuf send_iobuf;
   SSL *ssl;
+  SSL_CTX *ssl_ctx;
   void *connection_data;
   time_t last_io_time;
+
   unsigned int flags;
 #define NSF_FINISHED_SENDING_DATA   (1 << 0)
 #define NSF_BUFFER_BUT_DONT_SEND    (1 << 1)
 #define NSF_SSL_HANDSHAKE_DONE      (1 << 2)
 #define NSF_CONNECTING              (1 << 3)
 #define NSF_CLOSE_IMMEDIATELY       (1 << 4)
-#define NSF_ACCEPTED                (1 << 5)
-#define NSF_WANT_READ               (1 << 6)
-#define NSF_WANT_WRITE              (1 << 7)
+#define NSF_WANT_READ               (1 << 5)
+#define NSF_WANT_WRITE              (1 << 6)
+#define NSF_LISTENING               (1 << 7)
+#define NSF_UDP                     (1 << 8)
 
 #define NSF_USER_1                  (1 << 26)
 #define NSF_USER_2                  (1 << 27)
@@ -226,20 +231,15 @@ struct ns_connection {
 #define NSF_USER_6                  (1 << 31)
 };
 
-void ns_server_init(struct ns_server *, void *server_data, ns_callback_t);
-void ns_server_free(struct ns_server *);
-int ns_server_poll(struct ns_server *, int milli);
-void ns_server_wakeup(struct ns_server *);
-void ns_server_wakeup_ex(struct ns_server *, ns_callback_t, void *, size_t);
-void ns_iterate(struct ns_server *, ns_callback_t cb, void *param);
-struct ns_connection *ns_next(struct ns_server *, struct ns_connection *);
-struct ns_connection *ns_add_sock(struct ns_server *, sock_t sock, void *p);
+void ns_mgr_init(struct ns_mgr *, void *data, ns_callback_t);
+void ns_mgr_free(struct ns_mgr *);
+int ns_mgr_poll(struct ns_mgr *, int milli);
+void ns_broadcast(struct ns_mgr *, ns_callback_t, void *, size_t);
 
-int ns_bind(struct ns_server *, const char *addr);
-int ns_set_ssl_cert(struct ns_server *, const char *ssl_cert);
-int ns_set_ssl_ca_cert(struct ns_server *, const char *ssl_ca_cert);
-struct ns_connection *ns_connect(struct ns_server *, const char *host,
-                                 int port, int ssl, void *connection_param);
+struct ns_connection *ns_next(struct ns_mgr *, struct ns_connection *);
+struct ns_connection *ns_add_sock(struct ns_mgr *, sock_t sock, void *p);
+struct ns_connection *ns_bind(struct ns_mgr *, const char *addr, void *p);
+struct ns_connection *ns_connect(struct ns_mgr *, const char *addr, void *p);
 
 int ns_send(struct ns_connection *, const void *buf, int len);
 int ns_printf(struct ns_connection *, const char *fmt, ...);
@@ -253,6 +253,7 @@ void ns_set_close_on_exec(sock_t);
 void ns_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
 int ns_hexdump(const void *buf, int len, char *dst, int dst_len);
 int ns_avprintf(char **buf, size_t size, const char *fmt, va_list ap);
+int ns_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
 
 #ifdef __cplusplus
 }
@@ -274,6 +275,8 @@ int ns_avprintf(char **buf, size_t size, const char *fmt, va_list ap);
 //
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
+//
+// $Date: 2014-09-09 17:07:55 UTC $
 
 
 #ifndef NS_MALLOC
@@ -287,6 +290,9 @@ int ns_avprintf(char **buf, size_t size, const char *fmt, va_list ap);
 #ifndef NS_FREE
 #define NS_FREE free
 #endif
+
+#define NS_UDP_RECEIVE_BUFFER_SIZE  2000
+#define NS_VPRINTF_BUFFER_SIZE      500
 
 struct ctl_msg {
   ns_callback_t callback;
@@ -338,6 +344,16 @@ void iobuf_remove(struct iobuf *io, size_t n) {
   }
 }
 
+static size_t ns_out(struct ns_connection *nc, const void *buf, size_t len) {
+  if (nc->flags & NSF_UDP) {
+    long n = send(nc->sock, buf, len, 0);
+    DBG(("%p %d send %ld (%d)", nc, nc->sock, n, errno));
+    return n < 0 ? 0 : n;
+  } else {
+    return iobuf_append(&nc->send_iobuf, buf, len);
+  }
+}
+
 #ifndef NS_DISABLE_THREADS
 void *ns_start_thread(void *(*f)(void *), void *p) {
 #ifdef _WIN32
@@ -361,15 +377,15 @@ void *ns_start_thread(void *(*f)(void *), void *p) {
 }
 #endif  // NS_DISABLE_THREADS
 
-static void ns_add_conn(struct ns_server *server, struct ns_connection *c) {
-  c->next = server->active_connections;
-  server->active_connections = c;
+static void ns_add_conn(struct ns_mgr *mgr, struct ns_connection *c) {
+  c->next = mgr->active_connections;
+  mgr->active_connections = c;
   c->prev = NULL;
   if (c->next != NULL) c->next->prev = c;
 }
 
 static void ns_remove_conn(struct ns_connection *conn) {
-  if (conn->prev == NULL) conn->server->active_connections = conn->next;
+  if (conn->prev == NULL) conn->mgr->active_connections = conn->next;
   if (conn->prev) conn->prev->next = conn->next;
   if (conn->next) conn->next->prev = conn->prev;
 }
@@ -412,12 +428,12 @@ int ns_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   return len;
 }
 
-int ns_vprintf(struct ns_connection *conn, const char *fmt, va_list ap) {
-  char mem[2000], *buf = mem;
+int ns_vprintf(struct ns_connection *nc, const char *fmt, va_list ap) {
+  char mem[NS_VPRINTF_BUFFER_SIZE], *buf = mem;
   int len;
 
   if ((len = ns_avprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
-    iobuf_append(&conn->send_iobuf, buf, len);
+    ns_out(nc, buf, len);
   }
   if (buf != mem && buf != NULL) {
     free(buf);
@@ -450,7 +466,7 @@ static void hexdump(struct ns_connection *nc, const char *path,
             ev == NS_RECV ? "<-" : ev == NS_SEND ? "->" :
             ev == NS_ACCEPT ? "<A" : ev == NS_CONNECT ? "C>" : "XX",
             dst, num_bytes);
-    if (num_bytes > 0 && (buf = (char *) malloc(buf_size)) != NULL) {
+    if (num_bytes > 0 && (buf = (char *) NS_MALLOC(buf_size)) != NULL) {
       ns_hexdump(io->buf + (ev == NS_SEND ? 0 : io->len) -
         (ev == NS_SEND ? 0 : num_bytes), num_bytes, buf, buf_size);
       fprintf(fp, "%s", buf);
@@ -461,17 +477,14 @@ static void hexdump(struct ns_connection *nc, const char *path,
 }
 
 static void ns_call(struct ns_connection *conn, enum ns_event ev, void *p) {
-  if (conn->server->hexdump_file != NULL && ev != NS_POLL) {
+  if (conn->mgr->hexdump_file != NULL && ev != NS_POLL) {
     int len = (ev == NS_RECV || ev == NS_SEND) ? * (int *) p : 0;
-    hexdump(conn, conn->server->hexdump_file, len, ev);
+    hexdump(conn, conn->mgr->hexdump_file, len, ev);
   }
-  if (conn->server->callback) conn->server->callback(conn, ev, p);
+  if (conn->mgr->callback) conn->mgr->callback(conn, ev, p);
 }
 
-static void ns_close_conn(struct ns_connection *conn) {
-  DBG(("%p %d", conn, conn->flags));
-  ns_call(conn, NS_CLOSE, NULL);
-  ns_remove_conn(conn);
+static void ns_destroy_conn(struct ns_connection *conn) {
   closesocket(conn->sock);
   iobuf_free(&conn->recv_iobuf);
   iobuf_free(&conn->send_iobuf);
@@ -479,8 +492,18 @@ static void ns_close_conn(struct ns_connection *conn) {
   if (conn->ssl != NULL) {
     SSL_free(conn->ssl);
   }
+  if (conn->ssl_ctx != NULL) {
+    SSL_CTX_free(conn->ssl_ctx);
+  }
 #endif
   NS_FREE(conn);
+}
+
+static void ns_close_conn(struct ns_connection *conn) {
+  DBG(("%p %d", conn, conn->flags));
+  ns_call(conn, NS_CLOSE, NULL);
+  ns_remove_conn(conn);
+  ns_destroy_conn(conn);
 }
 
 void ns_set_close_on_exec(sock_t sock) {
@@ -543,10 +566,31 @@ int ns_socketpair(sock_t sp[2]) {
 }
 #endif  // NS_DISABLE_SOCKETPAIR
 
-// Valid listening port spec is: [ip_address:]port, e.g. "80", "127.0.0.1:3128"
-static int ns_parse_port_string(const char *str, union socket_address *sa) {
+// TODO(lsm): use non-blocking resolver
+static int ns_resolve2(const char *host, struct in_addr *ina) {
+  struct hostent *he;
+  if ((he = gethostbyname(host)) == NULL) {
+    DBG(("gethostbyname(%s) failed: %s", host, strerror(errno)));
+  } else {
+    memcpy(ina, he->h_addr_list[0], sizeof(*ina));
+    return 1;
+  }
+  return 0;
+}
+
+// Resolve FDQN "host", store IP address in the "ip".
+// Return > 0 (IP address length) on success.
+int ns_resolve(const char *host, char *buf, size_t n) {
+  struct in_addr ad;
+  return ns_resolve2(host, &ad) ? snprintf(buf, n, "%s", inet_ntoa(ad)) : 0;
+}
+
+// Address format: [PROTO://][IP_ADDRESS:]PORT[:CERT][:CA_CERT]
+static int ns_parse_address(const char *str, union socket_address *sa,
+                            int *proto, int *use_ssl, char *cert, char *ca) {
   unsigned int a, b, c, d, port;
-  int len = 0;
+  int n = 0, len = 0;
+  char host[200];
 #ifdef NS_ENABLE_IPV6
   char buf[100];
 #endif
@@ -557,36 +601,57 @@ static int ns_parse_port_string(const char *str, union socket_address *sa) {
   memset(sa, 0, sizeof(*sa));
   sa->sin.sin_family = AF_INET;
 
+  *proto = SOCK_STREAM;
+  *use_ssl = 0;
+  cert[0] = ca[0] = '\0';
+
+  if (memcmp(str, "ssl://", 6) == 0) {
+    str += 6;
+    *use_ssl = 1;
+  } else if (memcmp(str, "udp://", 6) == 0) {
+    str += 6;
+    *proto = SOCK_DGRAM;
+  } else if (memcmp(str, "tcp://", 6) == 0) {
+    str += 6;
+  }
+
   if (sscanf(str, "%u.%u.%u.%u:%u%n", &a, &b, &c, &d, &port, &len) == 5) {
     // Bind to a specific IPv4 address, e.g. 192.168.1.5:8080
     sa->sin.sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
     sa->sin.sin_port = htons((uint16_t) port);
 #ifdef NS_ENABLE_IPV6
-  } else if (sscanf(str, "[%49[^]]]:%u%n", buf, &port, &len) == 2 &&
+  } else if (sscanf(str, "[%99[^]]]:%u%n", buf, &port, &len) == 2 &&
              inet_pton(AF_INET6, buf, &sa->sin6.sin6_addr)) {
     // IPv6 address, e.g. [3ffe:2a00:100:7031::1]:8080
     sa->sin6.sin6_family = AF_INET6;
     sa->sin6.sin6_port = htons((uint16_t) port);
 #endif
+  } else if (sscanf(str, "%199[^ :]:%u%n", host, &port, &len) == 2) {
+    sa->sin.sin_port = htons((uint16_t) port);
+    ns_resolve2(host, &sa->sin.sin_addr);
   } else if (sscanf(str, "%u%n", &port, &len) == 1) {
     // If only port is specified, bind to IPv4, INADDR_ANY
     sa->sin.sin_port = htons((uint16_t) port);
-  } else {
-    port = 0;   // Parsing failure. Make port invalid.
   }
 
-  return port <= 0xffff && str[len] == '\0';
+  if (*use_ssl && (sscanf(str + len, ":%99[^:]:%99[^:]%n", cert, ca, &n) == 2 ||
+                   sscanf(str + len, ":%99[^:]%n", cert, &n) == 1)) {
+    len += n;
+  }
+
+  return port < 0xffff && str[len] == '\0' ? len : 0;
 }
 
 // 'sa' must be an initialized address to bind to
-static sock_t ns_open_listening_socket(union socket_address *sa) {
-  socklen_t len = sizeof(*sa);
+static sock_t ns_open_listening_socket(union socket_address *sa, int proto) {
+  socklen_t sa_len = (sa->sa.sa_family == AF_INET) ?
+    sizeof(sa->sin) : sizeof(sa->sin6);
   sock_t sock = INVALID_SOCKET;
 #ifndef _WIN32
   int on = 1;
 #endif
 
-  if ((sock = socket(sa->sa.sa_family, SOCK_STREAM, 6)) != INVALID_SOCKET &&
+  if ((sock = socket(sa->sa.sa_family, proto, 0)) != INVALID_SOCKET &&
 #ifndef _WIN32
       // SO_RESUSEADDR is not enabled on Windows because the semantics of
       // SO_REUSEADDR on UNIX and Windows is different. On Windows,
@@ -596,12 +661,11 @@ static sock_t ns_open_listening_socket(union socket_address *sa) {
       // scenarios. Therefore, SO_REUSEADDR was disabled on Windows.
       !setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) &&
 #endif
-      !bind(sock, &sa->sa, sa->sa.sa_family == AF_INET ?
-            sizeof(sa->sin) : sizeof(sa->sin6)) &&
-      !listen(sock, SOMAXCONN)) {
+      !bind(sock, &sa->sa, sa_len) &&
+      (proto == SOCK_DGRAM || listen(sock, SOMAXCONN) == 0)) {
     ns_set_non_blocking_mode(sock);
     // In case port was set to 0, get the real port number
-    (void) getsockname(sock, &sa->sa, &len);
+    (void) getsockname(sock, &sa->sa, &sa_len);
   } else if (sock != INVALID_SOCKET) {
     closesocket(sock);
     sock = INVALID_SOCKET;
@@ -610,80 +674,97 @@ static sock_t ns_open_listening_socket(union socket_address *sa) {
   return sock;
 }
 
-// Certificate generation script is at
-// https://github.com/cesanta/net_skeleton/blob/master/examples/gen_certs.sh
-int ns_set_ssl_ca_cert(struct ns_server *server, const char *cert) {
 #ifdef NS_ENABLE_SSL
-  STACK_OF(X509_NAME) *list = SSL_load_client_CA_file(cert);
-  if (cert != NULL && server->ssl_ctx != NULL && list != NULL) {
-    SSL_CTX_set_client_CA_list(server->ssl_ctx, list);
-    SSL_CTX_set_verify(server->ssl_ctx, SSL_VERIFY_PEER |
-                       SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+// Certificate generation script is at
+// https://github.com/cesanta/net_skeleton/blob/master/scripts/gen_certs.sh
+
+static int ns_use_ca_cert(SSL_CTX *ctx, const char *cert) {
+  if (ctx == NULL) {
+    return -1;
+  } else if (cert == NULL || cert[0] == '\0') {
     return 0;
   }
-#endif
-  return server != NULL && cert == NULL ? 0 : -1;
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
+  return SSL_CTX_load_verify_locations(ctx, cert, NULL) == 1 ? 0 : -2;
 }
 
-int ns_set_ssl_cert(struct ns_server *server, const char *cert) {
-#ifdef NS_ENABLE_SSL
-  if (cert != NULL &&
-      (server->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
+static int ns_use_cert(SSL_CTX *ctx, const char *pem_file) {
+  if (ctx == NULL) {
     return -1;
-  } else if (SSL_CTX_use_certificate_file(server->ssl_ctx, cert, 1) == 0 ||
-             SSL_CTX_use_PrivateKey_file(server->ssl_ctx, cert, 1) == 0) {
+  } else if (pem_file == NULL || pem_file[0] == '\0') {
+    return 0;
+  } else if (SSL_CTX_use_certificate_file(ctx, pem_file, 1) == 0 ||
+             SSL_CTX_use_PrivateKey_file(ctx, pem_file, 1) == 0) {
     return -2;
   } else {
-    SSL_CTX_set_mode(server->ssl_ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-    SSL_CTX_use_certificate_chain_file(server->ssl_ctx, cert);
+    SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+    SSL_CTX_use_certificate_chain_file(ctx, pem_file);
     return 0;
   }
-#endif
-  return server != NULL && cert == NULL ? 0 : -3;
 }
+#endif  // NS_ENABLE_SSL
 
-int ns_bind(struct ns_server *server, const char *str) {
+struct ns_connection *ns_bind(struct ns_mgr *srv, const char *str, void *data) {
   union socket_address sa;
-  ns_parse_port_string(str, &sa);
-  if (server->listening_sock != INVALID_SOCKET) {
-    closesocket(server->listening_sock);
+  struct ns_connection *nc = NULL;
+  int use_ssl, proto;
+  char cert[100], ca_cert[100];
+  sock_t sock;
+
+  ns_parse_address(str, &sa, &proto, &use_ssl, cert, ca_cert);
+  if (use_ssl && cert[0] == '\0') return NULL;
+
+  if ((sock = ns_open_listening_socket(&sa, proto)) == INVALID_SOCKET) {
+  } else if ((nc = ns_add_sock(srv, sock, NULL)) == NULL) {
+    closesocket(sock);
+  } else {
+    nc->sa = sa;
+    nc->flags |= NSF_LISTENING;
+    nc->connection_data = data;
+
+    if (proto == SOCK_DGRAM) {
+      nc->flags |= NSF_UDP;
+    }
+
+#ifdef NS_ENABLE_SSL
+    if (use_ssl) {
+      nc->ssl_ctx = SSL_CTX_new(SSLv23_server_method());
+      if (ns_use_cert(nc->ssl_ctx, cert) != 0 ||
+          ns_use_ca_cert(nc->ssl_ctx, ca_cert) != 0) {
+        ns_close_conn(nc);
+        nc = NULL;
+      }
+    }
+#endif
+
+    DBG(("%p sock %d/%d ssl %p %p", nc, sock, proto, nc->ssl_ctx, nc->ssl));
   }
-  server->listening_sock = ns_open_listening_socket(&sa);
-  return server->listening_sock == INVALID_SOCKET ? -1 :
-  (int) ntohs(sa.sin.sin_port);
+
+  return nc;
 }
 
-
-static struct ns_connection *accept_conn(struct ns_server *server) {
+static struct ns_connection *accept_conn(struct ns_connection *ls) {
   struct ns_connection *c = NULL;
   union socket_address sa;
   socklen_t len = sizeof(sa);
   sock_t sock = INVALID_SOCKET;
 
   // NOTE(lsm): on Windows, sock is always > FD_SETSIZE
-  if ((sock = accept(server->listening_sock, &sa.sa, &len)) == INVALID_SOCKET) {
-  } else if ((c = (struct ns_connection *) NS_MALLOC(sizeof(*c))) == NULL ||
-             memset(c, 0, sizeof(*c)) == NULL) {
+  if ((sock = accept(ls->sock, &sa.sa, &len)) == INVALID_SOCKET) {
+  } else if ((c = ns_add_sock(ls->mgr, sock, NULL)) == NULL) {
     closesocket(sock);
 #ifdef NS_ENABLE_SSL
-  } else if (server->ssl_ctx != NULL &&
-             ((c->ssl = SSL_new(server->ssl_ctx)) == NULL ||
+  } else if (ls->ssl_ctx != NULL &&
+             ((c->ssl = SSL_new(ls->ssl_ctx)) == NULL ||
               SSL_set_fd(c->ssl, sock) != 1)) {
     DBG(("SSL error"));
-    closesocket(sock);
-    free(c);
+    ns_close_conn(c);
     c = NULL;
 #endif
   } else {
-    ns_set_close_on_exec(sock);
-    ns_set_non_blocking_mode(sock);
-    c->server = server;
-    c->sock = sock;
-    c->flags |= NSF_ACCEPTED;
-
-    ns_add_conn(server, c);
+    c->listener = ls;
     ns_call(c, NS_ACCEPT, &sa);
-    DBG(("%p %d %p %p", c, c->sock, c->ssl, server->ssl_ctx));
+    DBG(("%p %d %p %p", c, c->sock, c->ssl_ctx, c->ssl));
   }
 
   return c;
@@ -720,7 +801,7 @@ void ns_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
       // Only Windoze Vista (and newer) have inet_ntop()
       strncpy(buf, inet_ntoa(sa.sin.sin_addr), len);
 #else
-      inet_ntop(sa.sa.sa_family, (void *) &sa.sin.sin_addr, buf, len);
+      inet_ntop(sa.sa.sa_family, (void *) &sa.sin.sin_addr, buf,(socklen_t)len);
 #endif
     }
     if (flags & 2) {
@@ -822,7 +903,7 @@ static void ns_read_from_socket(struct ns_connection *conn) {
   } else
 #endif
   {
-    while ((n = recv(conn->sock, buf, sizeof(buf), 0)) > 0) {
+    while ((n = (int) recv(conn->sock, buf, sizeof(buf), 0)) > 0) {
       DBG(("%p %d <- %d bytes (PLAIN)", conn, conn->flags, n));
       iobuf_append(&conn->recv_iobuf, buf, n);
       ns_call(conn, NS_RECV, &n);
@@ -851,7 +932,7 @@ static void ns_write_to_socket(struct ns_connection *conn) {
     }
   } else
 #endif
-  { n = send(conn->sock, io->buf, io->len, 0); }
+  { n = (int) send(conn->sock, io->buf, io->len, 0); }
 
   DBG(("%p %d -> %d bytes", conn, conn->flags, n));
 
@@ -864,7 +945,27 @@ static void ns_write_to_socket(struct ns_connection *conn) {
 }
 
 int ns_send(struct ns_connection *conn, const void *buf, int len) {
-  return iobuf_append(&conn->send_iobuf, buf, len);
+  return (int) ns_out(conn, buf, len);
+}
+
+static void ns_handle_udp(struct ns_connection *ls) {
+  struct ns_connection nc;
+  char buf[NS_UDP_RECEIVE_BUFFER_SIZE];
+  int n;
+  socklen_t s_len = sizeof(nc.sa);
+
+  memset(&nc, 0, sizeof(nc));
+  n = recvfrom(ls->sock, buf, sizeof(buf), 0, &nc.sa.sa, &s_len);
+  if (n <= 0) {
+    DBG(("%p recvfrom: %s", ls, strerror(errno)));
+  } else {
+    nc.recv_iobuf.buf = buf;
+    nc.recv_iobuf.len = nc.recv_iobuf.size = n;
+    nc.sock = ls->sock;
+    nc.mgr = ls->mgr;
+    DBG(("%p %d bytes received", ls, n));
+    ns_call(&nc, NS_RECV, &n);
+  }
 }
 
 static void ns_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
@@ -876,7 +977,7 @@ static void ns_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   }
 }
 
-int ns_server_poll(struct ns_server *server, int milli) {
+int ns_mgr_poll(struct ns_mgr *mgr, int milli) {
   struct ns_connection *conn, *tmp_conn;
   struct timeval tv;
   fd_set read_set, write_set;
@@ -884,15 +985,11 @@ int ns_server_poll(struct ns_server *server, int milli) {
   sock_t max_fd = INVALID_SOCKET;
   time_t current_time = time(NULL);
 
-  if (server->listening_sock == INVALID_SOCKET &&
-      server->active_connections == NULL) return 0;
-
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
-  ns_add_to_set(server->listening_sock, &read_set, &max_fd);
-  ns_add_to_set(server->ctl[1], &read_set, &max_fd);
+  ns_add_to_set(mgr->ctl[1], &read_set, &max_fd);
 
-  for (conn = server->active_connections; conn != NULL; conn = tmp_conn) {
+  for (conn = mgr->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
     ns_call(conn, NS_POLL, &current_time);
     if (!(conn->flags & NSF_WANT_WRITE)) {
@@ -918,34 +1015,38 @@ int ns_server_poll(struct ns_server *server, int milli) {
     // now to prevent last_io_time being set to the past.
     current_time = time(NULL);
 
-    // Accept new connections
-    if (server->listening_sock != INVALID_SOCKET &&
-        FD_ISSET(server->listening_sock, &read_set)) {
-      // We're not looping here, and accepting just one connection at
-      // a time. The reason is that eCos does not respect non-blocking
-      // flag on a listening socket and hangs in a loop.
-      if ((conn = accept_conn(server)) != NULL) {
-        conn->last_io_time = current_time;
-      }
-    }
-
     // Read wakeup messages
-    if (server->ctl[1] != INVALID_SOCKET &&
-        FD_ISSET(server->ctl[1], &read_set)) {
+    if (mgr->ctl[1] != INVALID_SOCKET &&
+        FD_ISSET(mgr->ctl[1], &read_set)) {
       struct ctl_msg ctl_msg;
-      int len = recv(server->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg), 0);
-      send(server->ctl[1], ctl_msg.message, 1, 0);
+      int len = (int) recv(mgr->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg), 0);
+      send(mgr->ctl[1], ctl_msg.message, 1, 0);
       if (len >= (int) sizeof(ctl_msg.callback) && ctl_msg.callback != NULL) {
-        ns_iterate(server, ctl_msg.callback, ctl_msg.message);
+        struct ns_connection *c;
+        for (c = ns_next(mgr, NULL); c != NULL; c = ns_next(mgr, c)) {
+          ctl_msg.callback(c, NS_POLL, ctl_msg.message);
+        }
       }
     }
 
-    for (conn = server->active_connections; conn != NULL; conn = tmp_conn) {
+    for (conn = mgr->active_connections; conn != NULL; conn = tmp_conn) {
       tmp_conn = conn->next;
       if (FD_ISSET(conn->sock, &read_set)) {
-        conn->last_io_time = current_time;
-        ns_read_from_socket(conn);
+        if (conn->flags & NSF_LISTENING) {
+          if (conn->flags & NSF_UDP) {
+            ns_handle_udp(conn);
+          } else {
+            // We're not looping here, and accepting just one connection at
+            // a time. The reason is that eCos does not respect non-blocking
+            // flag on a listening socket and hangs in a loop.
+            accept_conn(conn);
+          }
+        } else {
+          conn->last_io_time = current_time;
+          ns_read_from_socket(conn);
+        }
       }
+
       if (FD_ISSET(conn->sock, &write_set)) {
         if (conn->flags & NSF_CONNECTING) {
           ns_read_from_socket(conn);
@@ -957,7 +1058,7 @@ int ns_server_poll(struct ns_server *server, int milli) {
     }
   }
 
-  for (conn = server->active_connections; conn != NULL; conn = tmp_conn) {
+  for (conn = mgr->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
     num_active_connections++;
     if ((conn->flags & NSF_CLOSE_IMMEDIATELY) ||
@@ -971,65 +1072,62 @@ int ns_server_poll(struct ns_server *server, int milli) {
   return num_active_connections;
 }
 
-struct ns_connection *ns_connect(struct ns_server *server, const char *host,
-                                 int port, int use_ssl, void *param) {
+struct ns_connection *ns_connect(struct ns_mgr *mgr,
+                                 const char *address, void *param) {
   sock_t sock = INVALID_SOCKET;
-  struct sockaddr_in sin;
-  struct hostent *he = NULL;
-  struct ns_connection *conn = NULL;
-  int connect_ret_val;
+  struct ns_connection *nc = NULL;
+  union socket_address sa;
+  char cert[100], ca_cert[100];
+  int connect_ret_val, use_ssl, proto;
 
-  (void) use_ssl;
-
-  if (host == NULL || (he = gethostbyname(host)) == NULL ||
-      (sock = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-    DBG(("gethostbyname(%s) failed: %s", host, strerror(errno)));
+  ns_parse_address(address, &sa, &proto, &use_ssl, cert, ca_cert);
+  if ((sock = socket(AF_INET, proto, 0)) == INVALID_SOCKET) {
     return NULL;
   }
-
-  sin.sin_family = AF_INET;
-  sin.sin_port = htons((uint16_t) port);
-  sin.sin_addr = * (struct in_addr *) he->h_addr_list[0];
   ns_set_non_blocking_mode(sock);
+  connect_ret_val = connect(sock, &sa.sa, sizeof(sa.sin));
 
-  connect_ret_val = connect(sock, (struct sockaddr *) &sin, sizeof(sin));
-  if (ns_is_error(connect_ret_val)) {
+  if (connect_ret_val != 0 && ns_is_error(connect_ret_val)) {
     closesocket(sock);
     return NULL;
-  } else if ((conn = (struct ns_connection *)
-              NS_MALLOC(sizeof(*conn))) == NULL) {
+  } else if ((nc = ns_add_sock(mgr, sock, param)) == NULL) {
     closesocket(sock);
     return NULL;
   }
 
-  memset(conn, 0, sizeof(*conn));
-  conn->server = server;
-  conn->sock = sock;
-  conn->connection_data = param;
-  conn->flags = NSF_CONNECTING;
-  conn->last_io_time = time(NULL);
+  nc->sa = sa;   // Essential, cause UDP conns will use sendto()
+  if (proto == SOCK_DGRAM) {
+    nc->flags = NSF_UDP;
+  } else {
+    nc->flags = NSF_CONNECTING;
+  }
 
 #ifdef NS_ENABLE_SSL
-  if (use_ssl &&
-      (conn->ssl = SSL_new(server->client_ssl_ctx)) != NULL) {
-    SSL_set_fd(conn->ssl, sock);
+  if (use_ssl) {
+    if ((nc->ssl_ctx = SSL_CTX_new(SSLv23_client_method())) == NULL ||
+        ns_use_cert(nc->ssl_ctx, cert) != 0 ||
+        ns_use_ca_cert(nc->ssl_ctx, ca_cert) != 0 ||
+        (nc->ssl = SSL_new(nc->ssl_ctx)) == NULL) {
+      ns_close_conn(nc);
+      return NULL;
+    } else {
+      SSL_set_fd(nc->ssl, sock);
+    }
   }
 #endif
 
-  ns_add_conn(server, conn);
-  DBG(("%p %s:%d %d %p", conn, host, port, conn->sock, conn->ssl));
-
-  return conn;
+  return nc;
 }
 
-struct ns_connection *ns_add_sock(struct ns_server *s, sock_t sock, void *p) {
+struct ns_connection *ns_add_sock(struct ns_mgr *s, sock_t sock, void *p) {
   struct ns_connection *conn;
   if ((conn = (struct ns_connection *) NS_MALLOC(sizeof(*conn))) != NULL) {
     memset(conn, 0, sizeof(*conn));
     ns_set_non_blocking_mode(sock);
+    ns_set_close_on_exec(sock);
     conn->sock = sock;
     conn->connection_data = p;
-    conn->server = s;
+    conn->mgr = s;
     conn->last_io_time = time(NULL);
     ns_add_conn(s, conn);
     DBG(("%p %d", conn, sock));
@@ -1037,40 +1135,26 @@ struct ns_connection *ns_add_sock(struct ns_server *s, sock_t sock, void *p) {
   return conn;
 }
 
-struct ns_connection *ns_next(struct ns_server *s, struct ns_connection *conn) {
+struct ns_connection *ns_next(struct ns_mgr *s, struct ns_connection *conn) {
   return conn == NULL ? s->active_connections : conn->next;
 }
 
-void ns_iterate(struct ns_server *server, ns_callback_t cb, void *param) {
-  struct ns_connection *conn, *tmp_conn;
-
-  for (conn = server->active_connections; conn != NULL; conn = tmp_conn) {
-    tmp_conn = conn->next;
-    cb(conn, NS_POLL, param);
-  }
-}
-
-void ns_server_wakeup_ex(struct ns_server *server, ns_callback_t cb,
-                         void *data, size_t len) {
+void ns_broadcast(struct ns_mgr *mgr, ns_callback_t cb,void *data, size_t len) {
   struct ctl_msg ctl_msg;
-  if (server->ctl[0] != INVALID_SOCKET && data != NULL &&
+  if (mgr->ctl[0] != INVALID_SOCKET && data != NULL &&
       len < sizeof(ctl_msg.message)) {
     ctl_msg.callback = cb;
     memcpy(ctl_msg.message, data, len);
-    send(server->ctl[0], (char *) &ctl_msg,
+    send(mgr->ctl[0], (char *) &ctl_msg,
          offsetof(struct ctl_msg, message) + len, 0);
-    recv(server->ctl[0], (char *) &len, 1, 0);
+    recv(mgr->ctl[0], (char *) &len, 1, 0);
   }
 }
 
-void ns_server_wakeup(struct ns_server *server) {
-  ns_server_wakeup_ex(server, NULL, (void *) "", 0);
-}
-
-void ns_server_init(struct ns_server *s, void *server_data, ns_callback_t cb) {
+void ns_mgr_init(struct ns_mgr *s, void *user_data, ns_callback_t cb) {
   memset(s, 0, sizeof(*s));
-  s->listening_sock = s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
-  s->server_data = server_data;
+  s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
+  s->user_data = user_data;
   s->callback = cb;
 
 #ifdef _WIN32
@@ -1089,33 +1173,25 @@ void ns_server_init(struct ns_server *s, void *server_data, ns_callback_t cb) {
 
 #ifdef NS_ENABLE_SSL
   {static int init_done; if (!init_done) { SSL_library_init(); init_done++; }}
-  s->client_ssl_ctx = SSL_CTX_new(SSLv23_client_method());
 #endif
 }
 
-void ns_server_free(struct ns_server *s) {
+void ns_mgr_free(struct ns_mgr *s) {
   struct ns_connection *conn, *tmp_conn;
 
   DBG(("%p", s));
   if (s == NULL) return;
   // Do one last poll, see https://github.com/cesanta/mongoose/issues/286
-  ns_server_poll(s, 0);
+  ns_mgr_poll(s, 0);
 
-  if (s->listening_sock != INVALID_SOCKET) closesocket(s->listening_sock);
   if (s->ctl[0] != INVALID_SOCKET) closesocket(s->ctl[0]);
   if (s->ctl[1] != INVALID_SOCKET) closesocket(s->ctl[1]);
-  s->listening_sock = s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
+  s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
 
   for (conn = s->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
     ns_close_conn(conn);
   }
-
-#ifdef NS_ENABLE_SSL
-  if (s->ssl_ctx != NULL) SSL_CTX_free(s->ssl_ctx);
-  if (s->client_ssl_ctx != NULL) SSL_CTX_free(s->client_ssl_ctx);
-  s->ssl_ctx = s->client_ssl_ctx = NULL;
-#endif
 }
 // net_skeleton end
 #endif  // NOEMBED_NET_SKELETON
@@ -1265,11 +1341,6 @@ enum {
 #ifndef MONGOOSE_NO_SSI
   SSI_PATTERN,
 #endif
-#ifdef NS_ENABLE_SSL
-  SSL_CERTIFICATE,
-  SSL_CA_CERTIFICATE,
-  SSL_MITM_CERTS,
-#endif
   URL_REWRITES,
   NUM_OPTIONS
 };
@@ -1299,7 +1370,7 @@ static const char *static_config_options[] = {
 #ifndef MONGOOSE_NO_FILESYSTEM
   "hide_files_patterns", NULL,
   "hexdump_file", NULL,
-  "index_files","index.html,index.htm,index.shtml,index.cgi,index.php,index.lp",
+  "index_files","index.html,index.htm,index.shtml,index.cgi,index.php",
 #endif
   "listening_port", NULL,
 #ifndef _WIN32
@@ -1308,17 +1379,12 @@ static const char *static_config_options[] = {
 #ifndef MONGOOSE_NO_SSI
   "ssi_pattern", "**.shtml$|**.shtm$",
 #endif
-#ifdef NS_ENABLE_SSL
-  "ssl_certificate", NULL,
-  "ssl_ca_certificate", NULL,
-  "ssl_mitm_certs", NULL,
-#endif
   "url_rewrites", NULL,
   NULL
 };
 
 struct mg_server {
-  struct ns_server ns_server;
+  struct ns_mgr ns_mgr;
   union socket_address lsa;   // Listening socket address
   mg_handler_t event_handler;
   char *config_options[NUM_OPTIONS];
@@ -1419,6 +1485,32 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
   return ns_start_thread(f, p);
 }
 #endif  // MONGOOSE_NO_THREADS
+
+#ifdef _WIN32
+static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
+                  int offset) {
+  HANDLE fh = (HANDLE) _get_osfhandle(fd);
+  HANDLE mh = CreateFileMapping(fh, 0, PAGE_READONLY, 0, 0, 0);
+  void *p = MapViewOfFile(mh, FILE_MAP_READ, 0, 0, (size_t) len);
+  CloseHandle(mh);
+  return p;
+}
+#define munmap(x, y)  UnmapViewOfFile(x)
+#define MAP_FAILED NULL
+#define MAP_PRIVATE 0
+#define PROT_READ 0
+#else
+#include <sys/mman.h>
+#endif
+
+void *mg_mmap(FILE *fp, size_t size) {
+  void *p = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fileno(fp), 0);
+  return p == MAP_FAILED ? NULL : p;
+}
+
+void mg_munmap(void *p, size_t size) {
+  munmap(p, size);
+}
 
 #if defined(_WIN32) && !defined(MONGOOSE_NO_FILESYSTEM)
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
@@ -2093,7 +2185,7 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   if (start_process(conn->server->config_options[CGI_INTERPRETER],
                     prog, blk.buf, blk.vars, dir, fds[1]) != 0) {
     conn->endpoint_type = EP_CGI;
-    conn->endpoint.nc = ns_add_sock(&conn->server->ns_server, fds[0], conn);
+    conn->endpoint.nc = ns_add_sock(&conn->server->ns_mgr, fds[0], conn);
     conn->endpoint.nc->flags |= MG_CGI_CONN;
     ns_send(conn->ns_conn, cgi_status, sizeof(cgi_status) - 1);
     conn->mg_conn.status_code = 200;
@@ -4160,7 +4252,6 @@ int mg_terminate_ssl(struct mg_connection *c, const char *cert) {
   SSL_CTX *ctx;
 
   DBG(("%p MITM", conn));
-  SSL_library_init();
   if ((ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) return 0;
 
   SSL_CTX_use_certificate_file(ctx, cert, 1);
@@ -4170,7 +4261,7 @@ int mg_terminate_ssl(struct mg_connection *c, const char *cert) {
   // When clear-text reply is pushed to client, switch to SSL mode.
   // TODO(lsm): check for send() failure
   send(conn->ns_conn->sock, ok, sizeof(ok) - 1, 0);
-  DBG(("%p %lu %d SEND", c, (unsigned long)sizeof(ok) - 1, n));
+  //DBG(("%p %lu %d SEND", c, (unsigned long) sizeof(ok) - 1, n));
   conn->ns_conn->send_iobuf.len = 0;
   conn->endpoint_type = EP_USER;  // To keep-alive in close_local_endpoint()
   close_local_endpoint(conn);     // Clean up current CONNECT request
@@ -4182,12 +4273,12 @@ int mg_terminate_ssl(struct mg_connection *c, const char *cert) {
 }
 #endif
 
-int mg_forward(struct mg_connection *c, const char *host, int port, int ssl) {
+int mg_forward(struct mg_connection *c, const char *addr) {
+  static const char ok[] = "HTTP/1.1 200 OK\r\n\r\n";
   struct connection *conn = MG_CONN_2_CONN(c);
-  struct ns_server *server = &conn->server->ns_server;
   struct ns_connection *pc;
 
-  if ((pc = ns_connect(server, host, port, ssl, conn)) == NULL) {
+  if ((pc = ns_connect(&conn->server->ns_mgr, addr, conn)) == NULL) {
     conn->ns_conn->flags |= NSF_CLOSE_IMMEDIATELY;
     return 0;
   }
@@ -4196,12 +4287,12 @@ int mg_forward(struct mg_connection *c, const char *host, int port, int ssl) {
   pc->flags |= MG_PROXY_CONN;
   conn->endpoint_type = EP_PROXY;
   conn->endpoint.nc = pc;
-  DBG(("%p [%s] [%s:%d] -> %p %p",
-      conn, c->uri, host, port, pc, conn->ns_conn->ssl));
+  DBG(("%p [%s] [%s] -> %p %p", conn, c->uri, addr, pc, conn->ns_conn->ssl));
 
   if (strcmp(c->request_method, "CONNECT") == 0) {
     // For CONNECT request, reply with 200 OK. Tunnel is established.
-    mg_printf(c, "%s", "HTTP/1.1 200 OK\r\n\r\n");
+    // TODO(lsm): check for send() failure
+    (void) send(conn->ns_conn->sock, ok, sizeof(ok) - 1, 0);
   } else {
     // Strip "http://host:port" part from the URI
     if (memcmp(c->uri, "http://", 7) == 0) c->uri += 7;
@@ -4212,7 +4303,7 @@ int mg_forward(struct mg_connection *c, const char *host, int port, int ssl) {
 }
 
 static void proxify_connection(struct connection *conn) {
-  char proto[10], host[500], cert[500];
+  char proto[10], host[500], cert[500], addr[1000];
   unsigned short port = 80;
   struct mg_connection *c = &conn->mg_conn;
   int n = 0;
@@ -4225,25 +4316,9 @@ static void proxify_connection(struct connection *conn) {
     n = 0;
   }
 
-#ifdef NS_ENABLE_SSL
-  // Find out whether we should be in the MITM mode
-  {
-    const char *certs = conn->server->config_options[SSL_MITM_CERTS];
-    int host_len = strlen(host);
-    struct vec a, b;
-
-    while (conn->ns_conn->ssl == NULL && port != 80 &&
-           (certs = next_option(certs, &a, &b)) != NULL) {
-      if (a.len != host_len || mg_strncasecmp(a.ptr, host, a.len)) continue;
-      snprintf(cert, sizeof(cert), "%.*s", b.len, b.ptr);
-      mg_terminate_ssl(&conn->mg_conn, cert);
-      return;
-    }
-  }
-#endif
-
-  if (n > 0 && mg_forward(c, host, port, conn->ns_conn->ssl != NULL)) {
-  } else {
+  snprintf(addr, sizeof(addr), "%s://%s:%hu",
+           conn->ns_conn->ssl != NULL ? "ssl" : "tcp", host, port);
+  if (n <= 0 || !mg_forward(c, addr)) {
     conn->ns_conn->flags |= NSF_CLOSE_IMMEDIATELY;
   }
 }
@@ -4535,12 +4610,11 @@ static void process_response(struct connection *conn) {
   }
 }
 
-struct mg_connection *mg_connect(struct mg_server *server, const char *host,
-                                 int port, int use_ssl) {
+struct mg_connection *mg_connect(struct mg_server *server, const char *addr) {
   struct ns_connection *nsconn;
   struct connection *conn;
 
-  nsconn = ns_connect(&server->ns_server, host, port, use_ssl, NULL);
+  nsconn = ns_connect(&server->ns_mgr, addr, NULL);
   if (nsconn == NULL) return 0;
 
   if ((conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
@@ -4555,7 +4629,7 @@ struct mg_connection *mg_connect(struct mg_server *server, const char *host,
   conn->server = server;
   conn->endpoint_type = EP_CLIENT;
   //conn->handler = handler;
-  conn->mg_conn.server_param = server->ns_server.server_data;
+  conn->mg_conn.server_param = server->ns_mgr.user_data;
   conn->ns_conn->flags = NSF_CONNECTING;
 
   return &conn->mg_conn;
@@ -4684,7 +4758,7 @@ static void transfer_file_data(struct connection *conn) {
 }
 
 int mg_poll_server(struct mg_server *server, int milliseconds) {
-  return ns_server_poll(&server->ns_server, milliseconds);
+  return ns_mgr_poll(&server->ns_mgr, milliseconds);
 }
 
 void mg_destroy_server(struct mg_server **server) {
@@ -4692,7 +4766,7 @@ void mg_destroy_server(struct mg_server **server) {
     struct mg_server *s = *server;
     int i;
 
-    ns_server_free(&s->ns_server);
+    ns_mgr_free(&s->ns_mgr);
     for (i = 0; i < (int) ARRAY_SIZE(s->config_options); i++) {
       free(s->config_options[i]);  // It is OK to free(NULL)
     }
@@ -4701,34 +4775,15 @@ void mg_destroy_server(struct mg_server **server) {
   }
 }
 
-struct mg_iterator {
-  mg_handler_t cb;
-  void *param;
-};
-
-static void iter(struct ns_connection *nsconn, enum ns_event ev, void *param) {
-  if (ev == NS_POLL) {
-    struct mg_iterator *it = (struct mg_iterator *) param;
-    struct connection *c = (struct connection *) nsconn->connection_data;
-    if (c != NULL) c->mg_conn.callback_param = it->param;
-    it->cb(&c->mg_conn, MG_POLL);
-  }
-}
-
 struct mg_connection *mg_next(struct mg_server *s, struct mg_connection *c) {
   struct connection *conn = MG_CONN_2_CONN(c);
-  struct ns_connection *nc = ns_next(&s->ns_server,
+  struct ns_connection *nc = ns_next(&s->ns_mgr,
                                      c == NULL ? NULL : conn->ns_conn);
-
-  return nc == NULL ? NULL :
-    & ((struct connection *) nc->connection_data)->mg_conn;
-}
-
-// Apply function to all active connections.
-void mg_iterate_over_connections(struct mg_server *server, mg_handler_t cb,
-  void *param) {
-  struct mg_iterator it = { cb, param };
-  ns_iterate(&server->ns_server, iter, &it);
+  if (nc != NULL && nc->connection_data != NULL) {
+    return & ((struct connection *) nc->connection_data)->mg_conn;
+  } else {
+    return NULL;
+  }
 }
 
 static int get_var(const char *data, size_t data_len, const char *name,
@@ -4886,18 +4941,18 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   DBG(("%s [%s]", name, *v));
 
   if (ind == LISTENING_PORT) {
-    int port = ns_bind(&server->ns_server, value);
-    if (port < 0) {
+    struct ns_connection *c = ns_bind(&server->ns_mgr, value, NULL);
+    if (c == NULL) {
       error_msg = "Cannot bind to port";
     } else {
       char buf[100];
-      ns_sock_to_str(server->ns_server.listening_sock, buf, sizeof(buf), 2);
+      ns_sock_to_str(c->sock, buf, sizeof(buf), 2);
       free(*v);
       *v = mg_strdup(buf);
     }
 #ifndef MONGOOSE_NO_FILESYSTEM
   } else if (ind == HEXDUMP_FILE) {
-    server->ns_server.hexdump_file = *v;
+    server->ns_mgr.hexdump_file = *v;
 #endif
 #ifndef _WIN32
   } else if (ind == RUN_AS_USER) {
@@ -4909,21 +4964,6 @@ const char *mg_set_option(struct mg_server *server, const char *name,
     } else if (setuid(pw->pw_uid) != 0) {
       error_msg = "setuid() failed";
     }
-#endif
-#ifdef NS_ENABLE_SSL
-  } else if (ind == SSL_CERTIFICATE) {
-    int res = ns_set_ssl_cert(&server->ns_server, value);
-    if (res == -2) {
-      error_msg = "Cannot load PEM";
-    } else if (res == -3) {
-      error_msg = "SSL not enabled";
-    } else if (res == -1) {
-      error_msg = "SSL_CTX_new() failed";
-    }
-  } else if (ind == SSL_CA_CERTIFICATE) {
-    if (ns_set_ssl_ca_cert(&server->ns_server, value) != 0) {
-       error_msg = "Error setting CA cert";
-     }
 #endif
   }
 
@@ -4943,7 +4983,7 @@ static void set_ips(struct ns_connection *nc, int is_rem) {
 }
 
 static void on_accept(struct ns_connection *nc, union socket_address *sa) {
-  struct mg_server *server = (struct mg_server *) nc->server;
+  struct mg_server *server = (struct mg_server *) nc->mgr;
   struct connection *conn;
 
   if (!check_acl(server->config_options[ACCESS_CONTROL_LIST],
@@ -4957,7 +4997,7 @@ static void on_accept(struct ns_connection *nc, union socket_address *sa) {
 
     // Initialize the rest of connection attributes
     conn->server = server;
-    conn->mg_conn.server_param = nc->server->server_data;
+    conn->mg_conn.server_param = nc->mgr->user_data;
     set_ips(nc, 1);
     set_ips(nc, 0);
   }
@@ -5007,7 +5047,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       if (conn != NULL) {
         conn->num_bytes_recv += * (int *) p;
       }
-      if (nc->flags & NSF_ACCEPTED) {
+      if (nc->listener != NULL) {
         on_recv_data(conn);
 #ifndef MONGOOSE_NO_CGI
       } else if (nc->flags & MG_CGI_CONN) {
@@ -5110,23 +5150,25 @@ void mg_wakeup_server_ex(struct mg_server *server, mg_handler_t cb,
   va_end(ap);
 
   // "len + 1" is to include terminating \0 in the message
-  ns_server_wakeup_ex(&server->ns_server, iter2, buf, len + 1);
+  ns_broadcast(&server->ns_mgr, iter2, buf, len + 1);
 }
 
 void mg_wakeup_server(struct mg_server *server) {
-  ns_server_wakeup_ex(&server->ns_server, NULL, (void *) "", 0);
+  ns_broadcast(&server->ns_mgr, NULL, (void *) "", 0);
 }
 
+#if 0
 void mg_set_listening_socket(struct mg_server *server, int sock) {
-  if (server->ns_server.listening_sock != INVALID_SOCKET) {
-    closesocket(server->ns_server.listening_sock);
+  if (server->ns_mgr.listening_sock != INVALID_SOCKET) {
+    closesocket(server->ns_mgr.listening_sock);
   }
-  server->ns_server.listening_sock = (sock_t) sock;
+  server->ns_mgr.listening_sock = (sock_t) sock;
 }
 
 int mg_get_listening_socket(struct mg_server *server) {
-  return server->ns_server.listening_sock;
+  return server->ns_mgr.listening_sock;
 }
+#endif
 
 const char *mg_get_option(const struct mg_server *server, const char *name) {
   const char **opts = (const char **) server->config_options;
@@ -5136,33 +5178,8 @@ const char *mg_get_option(const struct mg_server *server, const char *name) {
 
 struct mg_server *mg_create_server(void *server_data, mg_handler_t handler) {
   struct mg_server *server = (struct mg_server *) calloc(1, sizeof(*server));
-  ns_server_init(&server->ns_server, server_data, mg_ev_handler);
+  ns_mgr_init(&server->ns_mgr, server_data, mg_ev_handler);
   set_default_option_values(server->config_options);
   server->event_handler = handler;
   return server;
-}
-
-#ifdef _WIN32
-static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
-                  int offset) {
-  HANDLE fh = (HANDLE) _get_osfhandle(fd);
-  HANDLE mh = CreateFileMapping(fh, 0, PAGE_READONLY, 0, 0, 0);
-  void *p = MapViewOfFile(mh, FILE_MAP_READ, 0, 0, (size_t) len);
-  CloseHandle(mh);
-  return p;
-}
-#define munmap(x, y)  UnmapViewOfFile(x)
-#define MAP_FAILED NULL
-#define MAP_PRIVATE 0
-#define PROT_READ 0
-#else
-#include <sys/mman.h>
-#endif
-
-void *mg_mmap(FILE *fp, size_t size) {
-  return mmap(NULL, size, PROT_READ, MAP_PRIVATE, fileno(fp), 0);
-}
-
-void mg_munmap(void *p, size_t size) {
-  munmap(p, size);
 }

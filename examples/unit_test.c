@@ -396,9 +396,9 @@ static const char *test_server(void) {
   ASSERT(mg_set_option(server, "listening_port", LISTENING_ADDR) == NULL);
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
 
-  ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0)) != NULL);
+  ASSERT((conn = mg_connect(server, "127.0.0.1:" HTTP_PORT)) != NULL);
   conn->connection_param = buf1;
-  ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(HTTP_PORT), 0)) != NULL);
+  ASSERT((conn = mg_connect(server, "127.0.0.1:" HTTP_PORT)) != NULL);
   conn->connection_param = buf2;
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }
@@ -483,7 +483,7 @@ static const char *test_mg_set_option(void) {
 }
 
 static const char *test_rewrites(void) {
-  char buf1[100] = "xx";
+  char buf1[100] = "xx", addr[50];
   struct mg_server *server = mg_create_server(NULL, evh2);
   struct mg_connection *conn;
   const char *port;
@@ -492,7 +492,8 @@ static const char *test_rewrites(void) {
   ASSERT(mg_set_option(server, "document_root", ".") == NULL);
   ASSERT(mg_set_option(server, "url_rewrites", "/xx=unit_test.c") == NULL);
   ASSERT((port = mg_get_option(server, "listening_port")) != NULL);
-  ASSERT((conn = mg_connect(server, "127.0.0.1", atoi(port), 0)) != NULL);
+  snprintf(addr, sizeof(addr), "127.0.0.1:%s", port);
+  ASSERT((conn = mg_connect(server, addr)) != NULL);
   conn->connection_param = buf1;
 
   { int i; for (i = 0; i < 50; i++) mg_poll_server(server, 1); }

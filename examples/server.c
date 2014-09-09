@@ -474,6 +474,7 @@ static void set_options(char *argv[]) {
   // scripts can use relative paths.
   chdir(mg_get_option(server, "document_root"));
 
+#if 0
   // Add an ability to pass listening socket to mongoose
   {
     const char *env = getenv("MONGOOSE_LISTENING_SOCKET");
@@ -481,6 +482,7 @@ static void set_options(char *argv[]) {
       mg_set_listening_socket(server, atoi(env));
     }
   }
+#endif
 
   // Setup signal handler: quit on Ctrl-C
   signal(SIGTERM, signal_handler);
