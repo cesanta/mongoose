@@ -1,9 +1,14 @@
+// Copyright (c) 2014 Cesanta Software
+// All rights reserved
+//
+// This example demostrates how to send arbitrary files to the client.
+
 #include "mongoose.h"
 
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
   switch (ev) {
     case MG_REQUEST:
-      mg_send_file(conn, "file.c");
+      mg_send_file(conn, "send_file.c");  // Also could be a directory, or CGI file
       return MG_MORE; // It is important to return MG_MORE after mg_send_file!
     case MG_AUTH: return MG_TRUE;
     default: return MG_FALSE;
