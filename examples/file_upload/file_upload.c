@@ -15,7 +15,6 @@ static int send_index_page(struct mg_connection *conn) {
                  "<form method=\"POST\" action=\"/handle_post_request\" "
                  "  enctype=\"multipart/form-data\">"
                  "<input type=\"file\" name=\"file\" /> <br/>"
-                 "<input type=\"text\" name=\"input1\" value=hello! /> <br/>"
                  "<input type=\"submit\" value=\"Upload\" />"
                  "</form>");
 
