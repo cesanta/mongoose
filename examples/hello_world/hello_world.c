@@ -1,3 +1,9 @@
+// Copyright (c) 2014 Cesanta Software
+// All rights reserved
+//
+// This example demostrates basic use of Mongoose embedded web server.
+// $Data$
+
 #include <stdio.h>
 #include <string.h>
 #include "mongoose.h"
