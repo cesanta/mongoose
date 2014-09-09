@@ -3,16 +3,13 @@
 #include "mongoose.h"
 
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
-  int result = MG_FALSE;
-
-  if (ev == MG_REQUEST) {
-    mg_printf_data(conn, "Hello! Requested URI is [%s]", conn->uri);
-    result = MG_TRUE;
-  } else if (ev == MG_AUTH) {
-    result = MG_TRUE;
+  switch (ev) {
+    case MG_AUTH: return MG_TRUE;
+    case MG_REQUEST:
+      mg_printf_data(conn, "Hello! Requested URI is [%s]", conn->uri);
+      return MG_TRUE;
+    default: return MG_FALSE;
   }
-
-  return result;
 }
 
 int main(void) {
