@@ -8,7 +8,9 @@ SW = ../../../ssl_wrapper
 SOURCES = ws_ssl.c ../../mongoose.c $(NS)/net_skeleton.c $(SW)/ssl_wrapper.c
 PROG = ws_ssl
 
-unix: $(SOURCES)
+all: $(PROG)
+
+$(PROG): $(SOURCES)
 	$(CC) -o $(PROG) $(SOURCES) \
 		-I$(NS) -DNS_ENABLE_SSL -DNOEMBED_NET_SKELETON \
 		-I$(SW) -DSSL_WRAPPER_USE_AS_LIBRARY -lssl $(CFLAGS)

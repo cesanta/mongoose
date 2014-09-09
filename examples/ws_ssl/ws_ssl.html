@@ -6,7 +6,9 @@
   window.onload = function() {
     var protocols = ['ws://', 'wss://'];
     var websocketServers = ['ws1', 'ws2'];
-    
+    //protocols = ['wss://'];
+    //websocketServers = ['ws1']
+
     var createWebsocketConnection = function(proto, server) {
       var conn = new WebSocket(proto + server);
 

@@ -15,17 +15,47 @@
 #include "mongoose.h"
 #include "ssl_wrapper.h"
 
+#define S1_PEM  "certs/ws1_server.pem"
+#define C1_PEM  "certs/ws1_client.pem"
+#define CA1_PEM "certs/ws1_ca.pem"
+#define S2_PEM  "certs/ws2_server.pem"
+#define C2_PEM  "certs/ws2_client.pem"
+#define CA2_PEM "certs/ws2_ca.pem"
+
 struct config {
-  const char *requested_host;   // Host name that client uses
-  struct ssl_wrapper_config c;
+  const char *uri;
+  const char *wrapper_server_addr;
+  const char *wrapper_client_addr;
+  const char *target_addr;
 };
 
 static struct config s_wrappers[] = {
-  {"ws1", {"127.0.0.1", 9001, 0, 0, 0, "", "7001", 0, 0}},
-  {"ws1", {"127.0.0.1", 9001, 0, 0, 0, "", "7002", "certs/ws1_server.pem", 0}},
-  {"ws2", {"127.0.0.1", 9002, 1, 0, 0, "", "7003", 0, 0}},
-  {"ws2", {"127.0.0.1", 9002, 1, 0, 0, "", "7004", "certs/ws2_server.pem", 0}}
+  {
+    "ws1:80",
+    "tcp://127.0.0.1:7001",
+    "tcp://127.0.0.1:7001",
+    "tcp://127.0.0.1:9001"
+  },
+  {
+    "ws1:443",
+    "ssl://127.0.0.1:7002:" S1_PEM,
+    "tcp://127.0.0.1:7002",
+    "tcp://127.0.0.1:9001"
+  },
+  {
+    "ws2:80",
+    "tcp://127.0.0.1:7003",
+    "tcp://127.0.0.1:7003",
+    "ssl://127.0.0.1:9002:" C2_PEM ":" CA2_PEM
+  },
+  {
+    "ws2:443",
+    "ssl://127.0.0.1:7004:" S2_PEM,
+    "tcp://127.0.0.1:7004",
+    "ssl://127.0.0.1:9002:" C2_PEM ":" CA2_PEM
+  },
 };
+
 static int s_received_signal = 0;
 
 static void signal_handler(int sig_num) {
@@ -34,26 +64,20 @@ static void signal_handler(int sig_num) {
 }
 
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
+  int i;
+
   switch (ev) {
     case MG_AUTH:
       return MG_TRUE;
 
     case MG_REQUEST:
       printf("==> [%s] [%s]\n", conn->request_method, conn->uri);
+
       if (strcmp(conn->request_method, "CONNECT") == 0) {
-        char host[1025] = "";
-        int i, is_ssl, port = 0;
-
-        sscanf(conn->uri, "%1024[^:]:%d", host, &port);
-        is_ssl = (port == 443 ? 1 : 0);
-
-        // Iterate over existing wrapper, see if we can use one of them
+        // Iterate over configured wrappers, see if we can use one of them
         for (i = 0; i < (int) ARRAY_SIZE(s_wrappers); i++) {
-          if (strcmp(host, s_wrappers[i].requested_host) == 0 &&
-              is_ssl == (s_wrappers[i].c.ssl_cert == NULL ? 0 : 1)) {
-            // Found usable wrapper, tunnel to it.
-            mg_forward(conn, "127.0.0.1",
-              atoi(s_wrappers[i].c.listening_port), 0);
+          if (strcmp(conn->uri, s_wrappers[i].uri) == 0) {
+            mg_forward(conn, s_wrappers[i].wrapper_client_addr);
             return MG_MORE;
           }
         }
@@ -101,14 +125,16 @@ static void *serve_thread_func(void *param) {
 }
 
 static void *wrapper_thread_func(void *param) {
-  struct ssl_wrapper_config *cfg = &((struct config *) param)->c;
+  struct config *c = (struct config *) param;
   const char *err_msg;
   void *wrapper;
 
-  if ((wrapper = ssl_wrapper_init(cfg, &err_msg)) == NULL) {
+  wrapper = ssl_wrapper_init(c->wrapper_server_addr, c->target_addr, &err_msg);
+  if (wrapper == NULL) {
     fprintf(stderr, "Error: %s\n", err_msg);
     exit(EXIT_FAILURE);
   }
+  //((struct ns_mgr *) wrapper)->hexdump_file = "/dev/stderr";
   ssl_wrapper_serve(wrapper, &s_received_signal);
 
   return NULL;
@@ -120,6 +146,8 @@ int main(void) {
   struct mg_server *ws2_server = mg_create_server(NULL, ws_handler);
   size_t i;
 
+  ((struct ns_mgr *) proxy_server)->hexdump_file = "/dev/stderr";
+
   // Configure proxy server to listen on port 2014
   mg_set_option(proxy_server, "listening_port", "2014");
   //mg_set_option(proxy_server, "enable_proxy", "yes");
@@ -129,9 +157,9 @@ int main(void) {
   //    ws2 is WSS, listening on 9002
   // Note that HTML page thinks that ws1 is WSS, and ws2 is WS,
   // where in reality it is vice versa and proxy server makes the decision.
-  mg_set_option(ws1_server, "listening_port", "9001");
-  mg_set_option(ws2_server, "listening_port", "9002");
-  mg_set_option(ws2_server, "ssl_certificate", "certs/ws2_server.pem");
+  mg_set_option(ws1_server, "listening_port", "tcp://127.0.0.1:9001");
+  mg_set_option(ws2_server, "listening_port",
+                "ssl://127.0.0.1:9002:" S2_PEM ":" CA2_PEM);
 
   // Setup signal handlers
   signal(SIGTERM, signal_handler);
