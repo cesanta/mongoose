@@ -14,7 +14,7 @@
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/products.html>.
 //
-// $Date: 2014-09-09 17:07:55 UTC $
+// $Date: 2014-09-09 17:09:33 UTC $
 
 #ifndef SSL_WRAPPER_HEADER_INCLUDED
 #define SSL_WRAPPER_HEADER_INCLUDED
