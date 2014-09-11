@@ -15,7 +15,7 @@
 // Alternatively, you can license this library under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-09 17:07:55 UTC $
+// $Date: 2014-09-11 14:52:42 UTC $
 
 #ifdef NOEMBED_NET_SKELETON
 #include "net_skeleton.h"
@@ -37,7 +37,7 @@
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-09 17:07:55 UTC $
+// $Date: 2014-09-11 14:52:42 UTC $
 
 #ifndef NS_SKELETON_HEADER_INCLUDED
 #define NS_SKELETON_HEADER_INCLUDED
@@ -223,12 +223,12 @@ struct ns_connection {
 #define NSF_LISTENING               (1 << 7)
 #define NSF_UDP                     (1 << 8)
 
-#define NSF_USER_1                  (1 << 26)
-#define NSF_USER_2                  (1 << 27)
-#define NSF_USER_3                  (1 << 28)
-#define NSF_USER_4                  (1 << 29)
-#define NSF_USER_5                  (1 << 30)
-#define NSF_USER_6                  (1 << 31)
+#define NSF_USER_1                  (1 << 20)
+#define NSF_USER_2                  (1 << 21)
+#define NSF_USER_3                  (1 << 22)
+#define NSF_USER_4                  (1 << 23)
+#define NSF_USER_5                  (1 << 24)
+#define NSF_USER_6                  (1 << 25)
 };
 
 void ns_mgr_init(struct ns_mgr *, void *data, ns_callback_t);
@@ -276,7 +276,7 @@ int ns_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-09 17:07:55 UTC $
+// $Date: 2014-09-11 14:52:42 UTC $
 
 
 #ifndef NS_MALLOC
@@ -346,7 +346,7 @@ void iobuf_remove(struct iobuf *io, size_t n) {
 
 static size_t ns_out(struct ns_connection *nc, const void *buf, size_t len) {
   if (nc->flags & NSF_UDP) {
-    long n = send(nc->sock, buf, len, 0);
+    long n = sendto(nc->sock, buf, len, 0, &nc->sa.sa, sizeof(nc->sa.sin));
     DBG(("%p %d send %ld (%d)", nc, nc->sock, n, errno));
     return n < 0 ? 0 : n;
   } else {
@@ -959,10 +959,13 @@ static void ns_handle_udp(struct ns_connection *ls) {
   if (n <= 0) {
     DBG(("%p recvfrom: %s", ls, strerror(errno)));
   } else {
+    nc.mgr = ls->mgr;
     nc.recv_iobuf.buf = buf;
     nc.recv_iobuf.len = nc.recv_iobuf.size = n;
     nc.sock = ls->sock;
     nc.mgr = ls->mgr;
+    nc.listener = ls;
+    nc.flags = NSF_UDP;
     DBG(("%p %d bytes received", ls, n));
     ns_call(&nc, NS_RECV, &n);
   }
@@ -5003,6 +5006,18 @@ static void on_accept(struct ns_connection *nc, union socket_address *sa) {
   }
 }
 
+static void process_udp(struct ns_connection *nc) {
+  struct iobuf *io = &nc->recv_iobuf;
+  struct connection conn;
+
+  memset(&conn, 0, sizeof(conn));
+  conn.ns_conn = nc;
+  conn.server = (struct mg_server *) nc->mgr;
+  conn.request_len = parse_http_message(io->buf, io->len, &conn.mg_conn);
+  on_recv_data(&conn);
+  //ns_printf(nc, "%s", "HTTP/1.0 200 OK\r\n\r\n");
+}
+
 static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
   struct connection *conn = (struct connection *) nc->connection_data;
 
@@ -5047,7 +5062,10 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       if (conn != NULL) {
         conn->num_bytes_recv += * (int *) p;
       }
-      if (nc->listener != NULL) {
+
+      if (nc->flags & NSF_UDP) {
+        process_udp(nc);
+      } else if (nc->listener != NULL) {
         on_recv_data(conn);
 #ifndef MONGOOSE_NO_CGI
       } else if (nc->flags & MG_CGI_CONN) {
