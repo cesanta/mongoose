@@ -17,4 +17,4 @@ compiler:
   - clang
 
 script:
-  - cd examples && make u server
+  - cd test && make
