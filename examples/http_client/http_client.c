@@ -11,8 +11,7 @@
 
 static int s_received_signal = 0;
 static struct mg_server *s_server = NULL;
-static const char *s_remote_host = "glosbe.com";
-static int s_remote_port = 80;
+static const char *s_remote_addr = "glosbe.com:80";
 
 static void signal_handler(int sig_num) {
   signal(sig_num, signal_handler);
@@ -31,7 +30,7 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
       // TODO(lsm): handle connect error here.
       mg_printf(conn, "GET %s HTTP/1.0\r\nHost: %s\r\n\r\n",
                 "/gapi/translate?from=eng&dest=fra&format=json&phrase=cat",
-                s_remote_host);
+                s_remote_addr);
       return MG_TRUE;
 
     case MG_REPLY:
@@ -47,7 +46,7 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
       return MG_TRUE;
 
     case MG_REQUEST:
-      if ((client = mg_connect(s_server, s_remote_host, s_remote_port, 0)) != NULL) {
+      if ((client = mg_connect(s_server, s_remote_addr)) != NULL) {
         // Interconnect requests
         client->connection_param = conn;
         conn->connection_param = client;
