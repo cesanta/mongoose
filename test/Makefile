@@ -10,7 +10,7 @@ all: $(PROG)
 	./$(PROG)
 	gcov -b $(PROG).c | egrep '^(File|Lines)'
 
-$(PROG): $(SOURCES) Makefile
+$(PROG): $(SOURCES) Makefile ../mongoose.c clean
 	$(CC) -o $(PROG) $(SOURCES) $(CFLAGS) -ldl -lssl
 
 win:
