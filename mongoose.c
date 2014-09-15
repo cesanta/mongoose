@@ -15,7 +15,7 @@
 // Alternatively, you can license this library under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-15 00:18:38 UTC $
+// $Date: 2014-09-15 12:48:55 UTC $
 
 #ifdef NOEMBED_NET_SKELETON
 #include "net_skeleton.h"
@@ -37,7 +37,7 @@
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-15 00:18:38 UTC $
+// $Date: 2014-09-15 12:48:55 UTC $
 
 #ifndef NS_SKELETON_HEADER_INCLUDED
 #define NS_SKELETON_HEADER_INCLUDED
@@ -276,7 +276,7 @@ int ns_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-15 00:18:38 UTC $
+// $Date: 2014-09-15 12:48:55 UTC $
 
 
 #ifndef NS_MALLOC
@@ -5131,7 +5131,8 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
           ping_idle_websocket_connection(conn, current_time);
         }
 
-        if (nc->last_io_time + MONGOOSE_IDLE_TIMEOUT_SECONDS < current_time) {
+        if (nc->listener == NULL &&
+            nc->last_io_time + MONGOOSE_IDLE_TIMEOUT_SECONDS < current_time) {
           mg_ev_handler(nc, NS_CLOSE, NULL);
           nc->flags |= NSF_CLOSE_IMMEDIATELY;
         }
