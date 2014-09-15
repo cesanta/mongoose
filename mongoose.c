@@ -15,7 +15,7 @@
 // Alternatively, you can license this library under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-11 14:52:42 UTC $
+// $Date: 2014-09-15 00:18:38 UTC $
 
 #ifdef NOEMBED_NET_SKELETON
 #include "net_skeleton.h"
@@ -37,7 +37,7 @@
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-11 14:52:42 UTC $
+// $Date: 2014-09-15 00:18:38 UTC $
 
 #ifndef NS_SKELETON_HEADER_INCLUDED
 #define NS_SKELETON_HEADER_INCLUDED
@@ -276,7 +276,7 @@ int ns_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-11 14:52:42 UTC $
+// $Date: 2014-09-15 00:18:38 UTC $
 
 
 #ifndef NS_MALLOC
@@ -1489,6 +1489,7 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
 }
 #endif  // MONGOOSE_NO_THREADS
 
+#ifndef MONGOOSE_NO_MMAP
 #ifdef _WIN32
 static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
                   int offset) {
@@ -1514,6 +1515,7 @@ void *mg_mmap(FILE *fp, size_t size) {
 void mg_munmap(void *p, size_t size) {
   munmap(p, size);
 }
+#endif  // MONGOOSE_NO_MMAP
 
 #if defined(_WIN32) && !defined(MONGOOSE_NO_FILESYSTEM)
 // Encode 'path' which is assumed UTF-8 string, into UNICODE string.
