@@ -209,7 +209,7 @@ struct ns_connection {
   struct iobuf send_iobuf;
   SSL *ssl;
   SSL_CTX *ssl_ctx;
-  void *connection_data;
+  void *user_data;
   time_t last_io_time;
 
   unsigned int flags;
@@ -462,7 +462,7 @@ static void hexdump(struct ns_connection *nc, const char *path,
     ns_sock_to_str(nc->sock, src, sizeof(src), 3);
     ns_sock_to_str(nc->sock, dst, sizeof(dst), 7);
     fprintf(fp, "%lu %p %s %s %s %d\n", (unsigned long) time(NULL),
-            nc->connection_data, src,
+            nc->user_data, src,
             ev == NS_RECV ? "<-" : ev == NS_SEND ? "->" :
             ev == NS_ACCEPT ? "<A" : ev == NS_CONNECT ? "C>" : "XX",
             dst, num_bytes);
@@ -720,7 +720,7 @@ struct ns_connection *ns_bind(struct ns_mgr *srv, const char *str, void *data) {
   } else {
     nc->sa = sa;
     nc->flags |= NSF_LISTENING;
-    nc->connection_data = data;
+    nc->user_data = data;
 
     if (proto == SOCK_DGRAM) {
       nc->flags |= NSF_UDP;
@@ -1129,7 +1129,7 @@ struct ns_connection *ns_add_sock(struct ns_mgr *s, sock_t sock, void *p) {
     ns_set_non_blocking_mode(sock);
     ns_set_close_on_exec(sock);
     conn->sock = sock;
-    conn->connection_data = p;
+    conn->user_data = p;
     conn->mgr = s;
     conn->last_io_time = time(NULL);
     ns_add_conn(s, conn);
@@ -2209,7 +2209,7 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
 }
 
 static void on_cgi_data(struct ns_connection *nc) {
-  struct connection *conn = (struct connection *) nc->connection_data;
+  struct connection *conn = (struct connection *) nc->user_data;
   const char *status = "500";
   struct mg_connection c;
 
@@ -4629,7 +4629,7 @@ struct mg_connection *mg_connect(struct mg_server *server, const char *addr) {
 
   // Interlink two structs
   conn->ns_conn = nsconn;
-  nsconn->connection_data = conn;
+  nsconn->user_data = conn;
 
   conn->server = server;
   conn->endpoint_type = EP_CLIENT;
@@ -4699,7 +4699,7 @@ static void close_local_endpoint(struct connection *conn) {
       if (conn->endpoint.nc != NULL) {
         DBG(("%p %p %p :-)", conn, conn->ns_conn, conn->endpoint.nc));
         conn->endpoint.nc->flags |= NSF_CLOSE_IMMEDIATELY;
-        conn->endpoint.nc->connection_data = NULL;
+        conn->endpoint.nc->user_data = NULL;
       }
       break;
     default: break;
@@ -4784,8 +4784,8 @@ struct mg_connection *mg_next(struct mg_server *s, struct mg_connection *c) {
   struct connection *conn = MG_CONN_2_CONN(c);
   struct ns_connection *nc = ns_next(&s->ns_mgr,
                                      c == NULL ? NULL : conn->ns_conn);
-  if (nc != NULL && nc->connection_data != NULL) {
-    return & ((struct connection *) nc->connection_data)->mg_conn;
+  if (nc != NULL && nc->user_data != NULL) {
+    return & ((struct connection *) nc->user_data)->mg_conn;
   } else {
     return NULL;
   }
@@ -4976,7 +4976,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
 }
 
 static void set_ips(struct ns_connection *nc, int is_rem) {
-  struct connection *conn = (struct connection *) nc->connection_data;
+  struct connection *conn = (struct connection *) nc->user_data;
   struct mg_connection *c = &conn->mg_conn;
   char buf[100];
 
@@ -4997,7 +4997,7 @@ static void on_accept(struct ns_connection *nc, union socket_address *sa) {
     nc->flags |= NSF_CLOSE_IMMEDIATELY;
   } else {
     // Circularly link two connection structures
-    nc->connection_data = conn;
+    nc->user_data = conn;
     conn->ns_conn = nc;
 
     // Initialize the rest of connection attributes
@@ -5021,13 +5021,13 @@ static void process_udp(struct ns_connection *nc) {
 }
 
 static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
-  struct connection *conn = (struct connection *) nc->connection_data;
+  struct connection *conn = (struct connection *) nc->user_data;
 
   // Send NS event to the handler. Note that call_user won't send an event
   // if conn == NULL. Therefore, repeat this for NS_ACCEPT event as well.
 #ifdef MONGOOSE_SEND_NS_EVENTS
   {
-    struct connection *conn = (struct connection *) nc->connection_data;
+    struct connection *conn = (struct connection *) nc->user_data;
     void *param[2] = { nc, p };
     if (conn != NULL) conn->mg_conn.callback_param = param;
     call_user(conn, (enum mg_event) ev);
@@ -5039,7 +5039,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       on_accept(nc, (union socket_address *) p);
 #ifdef MONGOOSE_SEND_NS_EVENTS
       {
-        struct connection *conn = (struct connection *) nc->connection_data;
+        struct connection *conn = (struct connection *) nc->user_data;
         void *param[2] = { nc, p };
         if (conn != NULL) conn->mg_conn.callback_param = param;
         call_user(conn, (enum mg_event) ev);
@@ -5048,7 +5048,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_CONNECT:
-      if (nc->connection_data != NULL) {
+      if (nc->user_data != NULL) {
         set_ips(nc, 1);
         set_ips(nc, 0);
       }
@@ -5086,7 +5086,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       break;
 
     case NS_CLOSE:
-      nc->connection_data = NULL;
+      nc->user_data = NULL;
       if (nc->flags & (MG_CGI_CONN | MG_PROXY_CONN)) {
         DBG(("%p %p closing cgi/proxy conn", conn, nc));
         if (conn && conn->ns_conn) {
@@ -5146,7 +5146,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
 
 static void iter2(struct ns_connection *nc, enum ns_event ev, void *param) {
   mg_handler_t func = NULL;
-  struct connection *conn = (struct connection *) nc->connection_data;
+  struct connection *conn = (struct connection *) nc->user_data;
   const char *msg = (const char *) param;
   int n;
   (void) ev;
