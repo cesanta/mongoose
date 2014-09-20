@@ -50,7 +50,7 @@ to `mg_create_server()` function. Here is the example event handler function:
     }
 
 Event handler is called by Mongoose with `struct mg_connection *`
-pointer and an event number. `struct mg_connection *conn` 
+pointer and an event number. `struct mg_connection *conn`
 has all information about the request: HTTP headers, POST or websocket
 data buffer, etcetera. `enum mg_event ev` tells which exactly event is sent.
 For each event, an event handler returns a value which tells Mongoose how
@@ -123,17 +123,9 @@ http://127.0.0.1:8080/hello will say hello, and here's the code:
 
 ## Example code
 
-Mongoose source code contains a well-commented example code, listed below:
-
-   * [hello.c](https://github.com/cesanta/mongoose/blob/master/examples/hello.c)
-   a minimalistic hello world example
-   * [post.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
-   shows how to handle form input
-   * [upload.c](https://github.com/cesanta/mongoose/blob/master/examples/post.c)
-   shows how to upload files
-   * [websocket.c](https://github.com/cesanta/mongoose/blob/master/examples/websocket.c) demonstrates websocket usage
-   * [auth.c](https://github.com/cesanta/mongoose/blob/master/examples/auth.c) demonstrates API-controlled Digest authorization
-   * [mjpg.c](https://github.com/cesanta/mongoose/blob/master/examples/mjpg.c) demonstrates MJPEG streaming implementation
+Mongoose source code contains number of examples, located in the
+[examples](https://github.com/cesanta/mongoose/blob/master/examples/) directory.
+To build any example, go to the respective directory and run `make`.
 
 ## Compilation flags
 
