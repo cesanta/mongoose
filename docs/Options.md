@@ -69,6 +69,11 @@ A directory to serve. Default: current working directory.
 ### enable\_directory\_listing
 Enable directory listing, either `yes` or `no`. Default: `yes`.
 
+### enable\_proxy
+Enable proxy functionality, either `yes` or `no`. If set to `yes`, then
+browsers can be configured to use Mongoose as a proxy. Default: `no`.
+
+
 ### extra\_mime\_types
 Extra mime types to recognize, in form `extension1=type1,extension2=type2,...`.
 Extension must include dot.  Example:
