@@ -40,34 +40,37 @@ static int check_auth(struct mg_connection *conn) {
   return MG_FALSE;
 }
 
-static int serve_request(struct mg_connection *conn) {
+static int check_login_form_submission(struct mg_connection *conn) {
   char name[100], password[100], ssid[100], expire[100], expire_epoch[100];
 
-  // Always authorize requests to login page
+  mg_get_var(conn, "name", name, sizeof(name));
+  mg_get_var(conn, "password", password, sizeof(password));
+
+  // A real authentication mechanism should be employed here.
+  // Also, the whole site should be served through HTTPS.
+  if (strcmp(name, "Joe") == 0 && strcmp(password, "Doe") == 0) {
+    // Generate expiry date
+    time_t t = time(NULL) + 3600;  // Valid for 1 hour
+    snprintf(expire_epoch, sizeof(expire_epoch), "%lu", (unsigned long) t);
+    strftime(expire, sizeof(expire), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&t));
+    generate_ssid(name, expire_epoch, ssid, sizeof(ssid));
+    // Set "session id" cookie, there could be some data encoded in it.
+    mg_printf(conn,
+              "HTTP/1.1 302 Moved\r\n"
+              "Set-Cookie: ssid=%s; expire=\"%s\"; http-only; HttpOnly;\r\n"
+              "Location: /\r\n\r\n",
+              ssid, expire);
+    return MG_TRUE;
+  }
+  return MG_FALSE;
+}
+
+static int serve_request(struct mg_connection *conn) {
   if (strcmp(conn->uri, s_login_uri) == 0 &&
       strcmp(conn->request_method, "POST") == 0) {
-    mg_get_var(conn, "name", name, sizeof(name));
-    mg_get_var(conn, "password", password, sizeof(password));
-
-    // A real authentication mechanism should be employed here.
-    // Also, the whole site should be served through HTTPS.
-    if (strcmp(name, "Joe") == 0 && strcmp(password, "Doe") == 0) {
-      // Generate expiry date
-      time_t t = time(NULL) + 3600;  // Valid for 1 hour
-      snprintf(expire_epoch, sizeof(expire_epoch), "%lu", (unsigned long) t);
-      strftime(expire, sizeof(expire), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&t));
-      generate_ssid(name, expire_epoch, ssid, sizeof(ssid));
-      // Set "session id" cookie, there could be some data encoded in it.
-      mg_printf(conn,
-                "HTTP/1.1 302 Moved\r\n"
-                "Set-Cookie: ssid=%s; expire=\"%s\"; http-only; HttpOnly;\r\n"
-                "Location: /\r\n\r\n",
-                ssid, expire);
-      return MG_TRUE;
-    }
+    return check_login_form_submission(conn);
   }
-
-  return MG_FALSE;
+  return MG_FALSE;  // Serve files in the document_root
 }
 
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
