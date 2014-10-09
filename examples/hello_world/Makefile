@@ -6,6 +6,8 @@ CFLAGS = -W -Wall -I../.. $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c ../../mongoose.c
 
 all: $(PROG)
+
+run: $(PROG)
 	./$(PROG)
 
 $(PROG): $(SOURCES) Makefile

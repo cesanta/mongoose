@@ -49,7 +49,7 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
         handle_websocket_message(conn);
         return MG_TRUE;
       } else {
-        mg_send_file(conn, "index.html");  // Return MG_MORE after mg_send_file()
+        mg_send_file(conn, "index.html", NULL);  // Return MG_MORE after!
         return MG_MORE;
       }
     case MG_WS_CONNECT:

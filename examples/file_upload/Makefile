@@ -6,6 +6,8 @@ CFLAGS = -W -Wall -I../.. $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c ../../mongoose.c
 
 all: $(PROG)
+
+run: $(PROG)
 	./$(PROG)
 
 $(PROG): $(SOURCES) Makefile
@@ -13,7 +15,6 @@ $(PROG): $(SOURCES) Makefile
 
 win:
 	wine cl $(SOURCES) /MD /nologo /DNDEBUG /O1 /I../.. /Fe$(PROG).exe
-	wine $(PROG).exe
 
 clean:
 	rm -rf $(PROG) *.exe *.dSYM *.obj *.exp .*o *.lib *.gc*

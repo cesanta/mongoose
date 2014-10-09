@@ -27,7 +27,7 @@ static int send_reply(struct mg_connection *conn) {
     return conn->content_len == 4 && !memcmp(conn->content, "exit", 4) ?
       MG_FALSE : MG_TRUE;
   } else {
-    mg_send_file(conn, "index.html");
+    mg_send_file(conn, "index.html", NULL);
     return MG_MORE;
   }
 }

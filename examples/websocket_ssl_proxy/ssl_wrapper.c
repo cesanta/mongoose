@@ -14,22 +14,22 @@
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/products.html>.
 //
-// $Date: 2014-09-09 17:09:33 UTC $
+// $Date$
 
 #include "net_skeleton.h"
 #include "ssl_wrapper.h"
 
-static void ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
+static void ev_handler(struct ns_connection *nc, int ev, void *p) {
   const char *target_addr = (const char *) nc->mgr->user_data;
-  struct ns_connection *pc = (struct ns_connection *) nc->connection_data;
+  struct ns_connection *pc = (struct ns_connection *) nc->user_data;
   struct iobuf *io = &nc->recv_iobuf;
 
   (void) p;
   switch (ev) {
     case NS_ACCEPT:
       // Create a connection to the target, and interlink both connections
-      nc->connection_data = ns_connect(nc->mgr, target_addr, nc);
-      if (nc->connection_data == NULL) {
+      nc->user_data = ns_connect(nc->mgr, target_addr, ev_handler, nc);
+      if (nc->user_data == NULL) {
         nc->flags |= NSF_CLOSE_IMMEDIATELY;
       }
       break;
@@ -38,9 +38,9 @@ static void ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
       // If either connection closes, unlink them and shedule closing
       if (pc != NULL) {
         pc->flags |= NSF_FINISHED_SENDING_DATA;
-        pc->connection_data = NULL;
+        pc->user_data = NULL;
       }
-      nc->connection_data = NULL;
+      nc->user_data = NULL;
       break;
 
     case NS_RECV:
@@ -64,8 +64,8 @@ void *ssl_wrapper_init(const char *local_addr, const char *target_addr,
   if (mgr == NULL) {
     *err_msg = "malloc failed";
   } else {
-    ns_mgr_init(mgr, (void *) target_addr, ev_handler);
-    if (ns_bind(mgr, local_addr, NULL) == NULL) {
+    ns_mgr_init(mgr, (void *) target_addr);
+    if (ns_bind(mgr, local_addr, ev_handler, NULL) == NULL) {
       *err_msg = "ns_bind() failed: bad listening_port";
       ns_mgr_free(mgr);
       free(mgr);

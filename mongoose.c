@@ -37,12 +37,12 @@
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-16 06:47:40 UTC $
+// $Date: 2014-09-28 05:04:41 UTC $
 
 #ifndef NS_SKELETON_HEADER_INCLUDED
 #define NS_SKELETON_HEADER_INCLUDED
 
-#define NS_SKELETON_VERSION "2.0.0"
+#define NS_SKELETON_VERSION "2.1.0"
 
 #undef UNICODE                  // Use ANSI WinAPI functions
 #undef _UNICODE                 // Use multibyte encoding on Windows
@@ -66,6 +66,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -107,6 +108,7 @@ typedef unsigned short uint16_t;
 typedef unsigned __int64 uint64_t;
 typedef __int64   int64_t;
 typedef SOCKET sock_t;
+typedef struct _stati64 ns_stat_t;
 #ifndef S_ISDIR
 #define S_ISDIR(x) ((x) & _S_IFDIR)
 #endif
@@ -126,6 +128,7 @@ typedef SOCKET sock_t;
 #define INVALID_SOCKET (-1)
 #define to64(x) strtoll(x, NULL, 10)
 typedef int sock_t;
+typedef struct stat ns_stat_t;
 #endif
 
 #ifdef NS_ENABLE_DEBUG
@@ -163,6 +166,12 @@ union socket_address {
 #endif
 };
 
+// Describes chunk of memory
+struct ns_str {
+  const char *p;
+  size_t len;
+};
+
 // IO buffers interface
 struct iobuf {
   char *buf;
@@ -174,43 +183,45 @@ void iobuf_init(struct iobuf *, size_t initial_size);
 void iobuf_free(struct iobuf *);
 size_t iobuf_append(struct iobuf *, const void *data, size_t data_size);
 void iobuf_remove(struct iobuf *, size_t data_size);
-
-// Net skeleton interface
-// Events. Meaning of event parameter (evp) is given in the comment.
-enum ns_event {
-  NS_POLL,     // Sent to each connection on each call to ns_mgr_poll()
-  NS_ACCEPT,   // New connection accept()-ed. union socket_address *remote_addr
-  NS_CONNECT,  // connect() succeeded or failed. int *success_status
-  NS_RECV,     // Data has benn received. int *num_bytes
-  NS_SEND,     // Data has been written to a socket. int *num_bytes
-  NS_CLOSE     // Connection is closed. NULL
-};
+void iobuf_resize(struct iobuf *, size_t new_size);
 
 // Callback function (event handler) prototype, must be defined by user.
 // Net skeleton will call event handler, passing events defined above.
 struct ns_connection;
-typedef void (*ns_callback_t)(struct ns_connection *, enum ns_event, void *evp);
+typedef void (*ns_callback_t)(struct ns_connection *, int event_num, void *evp);
+
+// Events. Meaning of event parameter (evp) is given in the comment.
+#define NS_POLL    0  // Sent to each connection on each call to ns_mgr_poll()
+#define NS_ACCEPT  1  // New connection accept()-ed. union socket_address *addr
+#define NS_CONNECT 2  // connect() succeeded or failed. int *success_status
+#define NS_RECV    3  // Data has benn received. int *num_bytes
+#define NS_SEND    4  // Data has been written to a socket. int *num_bytes
+#define NS_CLOSE   5  // Connection is closed. NULL
+
 
 struct ns_mgr {
   struct ns_connection *active_connections;
-  ns_callback_t callback;           // Event handler function
   const char *hexdump_file;         // Debug hexdump file path
   sock_t ctl[2];                    // Socketpair for mg_wakeup()
   void *user_data;                  // User data
 };
 
+
 struct ns_connection {
   struct ns_connection *next, *prev;  // ns_mgr::active_connections linkage
   struct ns_connection *listener;     // Set only for accept()-ed connections
   struct ns_mgr *mgr;
-  sock_t sock;
-  union socket_address sa;
-  struct iobuf recv_iobuf;
-  struct iobuf send_iobuf;
+
+  sock_t sock;                // Socket
+  union socket_address sa;    // Peer address
+  struct iobuf recv_iobuf;    // Received data
+  struct iobuf send_iobuf;    // Data scheduled for sending
   SSL *ssl;
   SSL_CTX *ssl_ctx;
-  void *user_data;
-  time_t last_io_time;
+  void *user_data;            // User-specific data
+  void *proto_data;           // Application protocol-specific data
+  time_t last_io_time;        // Timestamp of the last socket IO
+  ns_callback_t callback;     // Event handler function
 
   unsigned int flags;
 #define NSF_FINISHED_SENDING_DATA   (1 << 0)
@@ -231,15 +242,18 @@ struct ns_connection {
 #define NSF_USER_6                  (1 << 25)
 };
 
-void ns_mgr_init(struct ns_mgr *, void *data, ns_callback_t);
+void ns_mgr_init(struct ns_mgr *, void *user_data);
 void ns_mgr_free(struct ns_mgr *);
-int ns_mgr_poll(struct ns_mgr *, int milli);
+time_t ns_mgr_poll(struct ns_mgr *, int milli);
 void ns_broadcast(struct ns_mgr *, ns_callback_t, void *, size_t);
 
 struct ns_connection *ns_next(struct ns_mgr *, struct ns_connection *);
-struct ns_connection *ns_add_sock(struct ns_mgr *, sock_t sock, void *p);
-struct ns_connection *ns_bind(struct ns_mgr *, const char *addr, void *p);
-struct ns_connection *ns_connect(struct ns_mgr *, const char *addr, void *p);
+struct ns_connection *ns_add_sock(struct ns_mgr *, sock_t,
+                                  ns_callback_t, void *);
+struct ns_connection *ns_bind(struct ns_mgr *, const char *,
+                              ns_callback_t, void *);
+struct ns_connection *ns_connect(struct ns_mgr *, const char *,
+                                 ns_callback_t, void *);
 
 int ns_send(struct ns_connection *, const void *buf, int len);
 int ns_printf(struct ns_connection *, const char *fmt, ...);
@@ -276,7 +290,7 @@ int ns_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-16 06:47:40 UTC $
+// $Date: 2014-09-28 05:04:41 UTC $
 
 
 #ifndef NS_MALLOC
@@ -299,13 +313,19 @@ struct ctl_msg {
   char message[1024 * 8];
 };
 
-void iobuf_init(struct iobuf *iobuf, size_t size) {
+void iobuf_resize(struct iobuf *io, size_t new_size) {
+  char *p;
+  if ((new_size > io->size || (new_size < io->size && new_size >= io->len)) &&
+      (p = (char *) NS_REALLOC(io->buf, new_size)) != NULL) {
+    io->size = new_size;
+    io->buf = p;
+  }
+}
+
+void iobuf_init(struct iobuf *iobuf, size_t initial_size) {
   iobuf->len = iobuf->size = 0;
   iobuf->buf = NULL;
-
-  if (size > 0 && (iobuf->buf = (char *) NS_MALLOC(size)) != NULL) {
-    iobuf->size = size;
-  }
+  iobuf_resize(iobuf, initial_size);
 }
 
 void iobuf_free(struct iobuf *iobuf) {
@@ -347,7 +367,7 @@ void iobuf_remove(struct iobuf *io, size_t n) {
 static size_t ns_out(struct ns_connection *nc, const void *buf, size_t len) {
   if (nc->flags & NSF_UDP) {
     long n = sendto(nc->sock, buf, len, 0, &nc->sa.sa, sizeof(nc->sa.sin));
-    DBG(("%p %d send %ld (%d)", nc, nc->sock, n, errno));
+    DBG(("%p %d send %ld (%d %s)", nc, nc->sock, n, errno, strerror(errno)));
     return n < 0 ? 0 : n;
   } else {
     return iobuf_append(&nc->send_iobuf, buf, len);
@@ -452,7 +472,7 @@ int ns_printf(struct ns_connection *conn, const char *fmt, ...) {
 }
 
 static void hexdump(struct ns_connection *nc, const char *path,
-                    int num_bytes, enum ns_event ev) {
+                    int num_bytes, int ev) {
   const struct iobuf *io = ev == NS_SEND ? &nc->send_iobuf : &nc->recv_iobuf;
   FILE *fp;
   char *buf, src[60], dst[60];
@@ -476,12 +496,13 @@ static void hexdump(struct ns_connection *nc, const char *path,
   }
 }
 
-static void ns_call(struct ns_connection *conn, enum ns_event ev, void *p) {
-  if (conn->mgr->hexdump_file != NULL && ev != NS_POLL) {
+static void ns_call(struct ns_connection *nc, int ev, void *p) {
+  if (nc->mgr->hexdump_file != NULL && ev != NS_POLL) {
     int len = (ev == NS_RECV || ev == NS_SEND) ? * (int *) p : 0;
-    hexdump(conn, conn->mgr->hexdump_file, len, ev);
+    hexdump(nc, nc->mgr->hexdump_file, len, ev);
   }
-  if (conn->mgr->callback) conn->mgr->callback(conn, ev, p);
+
+  nc->callback(nc, ev, p);
 }
 
 static void ns_destroy_conn(struct ns_connection *conn) {
@@ -704,7 +725,8 @@ static int ns_use_cert(SSL_CTX *ctx, const char *pem_file) {
 }
 #endif  // NS_ENABLE_SSL
 
-struct ns_connection *ns_bind(struct ns_mgr *srv, const char *str, void *data) {
+struct ns_connection *ns_bind(struct ns_mgr *srv, const char *str,
+                              ns_callback_t callback, void *user_data) {
   union socket_address sa;
   struct ns_connection *nc = NULL;
   int use_ssl, proto;
@@ -715,12 +737,13 @@ struct ns_connection *ns_bind(struct ns_mgr *srv, const char *str, void *data) {
   if (use_ssl && cert[0] == '\0') return NULL;
 
   if ((sock = ns_open_listening_socket(&sa, proto)) == INVALID_SOCKET) {
-  } else if ((nc = ns_add_sock(srv, sock, NULL)) == NULL) {
+  } else if ((nc = ns_add_sock(srv, sock, callback, NULL)) == NULL) {
     closesocket(sock);
   } else {
     nc->sa = sa;
     nc->flags |= NSF_LISTENING;
-    nc->user_data = data;
+    nc->user_data = user_data;
+    nc->callback = callback;
 
     if (proto == SOCK_DGRAM) {
       nc->flags |= NSF_UDP;
@@ -751,7 +774,8 @@ static struct ns_connection *accept_conn(struct ns_connection *ls) {
 
   // NOTE(lsm): on Windows, sock is always > FD_SETSIZE
   if ((sock = accept(ls->sock, &sa.sa, &len)) == INVALID_SOCKET) {
-  } else if ((c = ns_add_sock(ls->mgr, sock, NULL)) == NULL) {
+  } else if ((c = ns_add_sock(ls->mgr, sock, ls->callback,
+              ls->user_data)) == NULL) {
     closesocket(sock);
 #ifdef NS_ENABLE_SSL
   } else if (ls->ssl_ctx != NULL &&
@@ -763,6 +787,7 @@ static struct ns_connection *accept_conn(struct ns_connection *ls) {
 #endif
   } else {
     c->listener = ls;
+    c->proto_data = ls->proto_data;
     ns_call(c, NS_ACCEPT, &sa);
     DBG(("%p %d %p %p", c, c->sock, c->ssl_ctx, c->ssl));
   }
@@ -963,6 +988,9 @@ static void ns_handle_udp(struct ns_connection *ls) {
     nc.recv_iobuf.buf = buf;
     nc.recv_iobuf.len = nc.recv_iobuf.size = n;
     nc.sock = ls->sock;
+    nc.callback = ls->callback;
+    nc.user_data = ls->user_data;
+    nc.proto_data = ls->proto_data;
     nc.mgr = ls->mgr;
     nc.listener = ls;
     nc.flags = NSF_UDP;
@@ -980,11 +1008,10 @@ static void ns_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   }
 }
 
-int ns_mgr_poll(struct ns_mgr *mgr, int milli) {
+time_t ns_mgr_poll(struct ns_mgr *mgr, int milli) {
   struct ns_connection *conn, *tmp_conn;
   struct timeval tv;
   fd_set read_set, write_set;
-  int num_active_connections = 0;
   sock_t max_fd = INVALID_SOCKET;
   time_t current_time = time(NULL);
 
@@ -994,7 +1021,9 @@ int ns_mgr_poll(struct ns_mgr *mgr, int milli) {
 
   for (conn = mgr->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
-    ns_call(conn, NS_POLL, &current_time);
+    if (!(conn->flags & (NSF_LISTENING | NSF_CONNECTING))) {
+      ns_call(conn, NS_POLL, &current_time);
+    }
     if (!(conn->flags & NSF_WANT_WRITE)) {
       //DBG(("%p read_set", conn));
       ns_add_to_set(conn->sock, &read_set, &max_fd);
@@ -1063,47 +1092,41 @@ int ns_mgr_poll(struct ns_mgr *mgr, int milli) {
 
   for (conn = mgr->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
-    num_active_connections++;
     if ((conn->flags & NSF_CLOSE_IMMEDIATELY) ||
         (conn->send_iobuf.len == 0 &&
           (conn->flags & NSF_FINISHED_SENDING_DATA))) {
       ns_close_conn(conn);
     }
   }
-  //DBG(("%d active connections", num_active_connections));
 
-  return num_active_connections;
+  return current_time;
 }
 
-struct ns_connection *ns_connect(struct ns_mgr *mgr,
-                                 const char *address, void *param) {
+struct ns_connection *ns_connect(struct ns_mgr *mgr, const char *address,
+                                 ns_callback_t callback, void *user_data) {
   sock_t sock = INVALID_SOCKET;
   struct ns_connection *nc = NULL;
   union socket_address sa;
   char cert[100], ca_cert[100];
-  int connect_ret_val, use_ssl, proto;
+  int rc, use_ssl, proto;
 
   ns_parse_address(address, &sa, &proto, &use_ssl, cert, ca_cert);
   if ((sock = socket(AF_INET, proto, 0)) == INVALID_SOCKET) {
     return NULL;
   }
   ns_set_non_blocking_mode(sock);
-  connect_ret_val = connect(sock, &sa.sa, sizeof(sa.sin));
+  rc = (proto == SOCK_DGRAM) ? 0 : connect(sock, &sa.sa, sizeof(sa.sin));
 
-  if (connect_ret_val != 0 && ns_is_error(connect_ret_val)) {
+  if (rc != 0 && ns_is_error(rc)) {
     closesocket(sock);
     return NULL;
-  } else if ((nc = ns_add_sock(mgr, sock, param)) == NULL) {
+  } else if ((nc = ns_add_sock(mgr, sock, callback, user_data)) == NULL) {
     closesocket(sock);
     return NULL;
   }
 
-  nc->sa = sa;   // Essential, cause UDP conns will use sendto()
-  if (proto == SOCK_DGRAM) {
-    nc->flags = NSF_UDP;
-  } else {
-    nc->flags = NSF_CONNECTING;
-  }
+  nc->sa = sa;   // Important, cause UDP conns will use sendto()
+  nc->flags = (proto == SOCK_DGRAM) ? NSF_UDP : NSF_CONNECTING;
 
 #ifdef NS_ENABLE_SSL
   if (use_ssl) {
@@ -1122,14 +1145,16 @@ struct ns_connection *ns_connect(struct ns_mgr *mgr,
   return nc;
 }
 
-struct ns_connection *ns_add_sock(struct ns_mgr *s, sock_t sock, void *p) {
+struct ns_connection *ns_add_sock(struct ns_mgr *s, sock_t sock,
+                                  ns_callback_t callback, void *user_data) {
   struct ns_connection *conn;
   if ((conn = (struct ns_connection *) NS_MALLOC(sizeof(*conn))) != NULL) {
     memset(conn, 0, sizeof(*conn));
     ns_set_non_blocking_mode(sock);
     ns_set_close_on_exec(sock);
     conn->sock = sock;
-    conn->user_data = p;
+    conn->user_data = user_data;
+    conn->callback = callback;
     conn->mgr = s;
     conn->last_io_time = time(NULL);
     ns_add_conn(s, conn);
@@ -1154,11 +1179,10 @@ void ns_broadcast(struct ns_mgr *mgr, ns_callback_t cb,void *data, size_t len) {
   }
 }
 
-void ns_mgr_init(struct ns_mgr *s, void *user_data, ns_callback_t cb) {
+void ns_mgr_init(struct ns_mgr *s, void *user_data) {
   memset(s, 0, sizeof(*s));
   s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
   s->user_data = user_data;
-  s->callback = cb;
 
 #ifdef _WIN32
   { WSADATA data; WSAStartup(MAKEWORD(2, 2), &data); }
@@ -1427,6 +1451,7 @@ struct connection {
 
 static void open_local_endpoint(struct connection *conn, int skip_user);
 static void close_local_endpoint(struct connection *conn);
+static void mg_ev_handler(struct ns_connection *nc, int ev, void *p);
 
 static const struct {
   const char *extension;
@@ -2190,7 +2215,8 @@ static void open_cgi_endpoint(struct connection *conn, const char *prog) {
   if (start_process(conn->server->config_options[CGI_INTERPRETER],
                     prog, blk.buf, blk.vars, dir, fds[1]) != 0) {
     conn->endpoint_type = EP_CGI;
-    conn->endpoint.nc = ns_add_sock(&conn->server->ns_mgr, fds[0], conn);
+    conn->endpoint.nc = ns_add_sock(&conn->server->ns_mgr, fds[0],
+                                    mg_ev_handler, conn);
     conn->endpoint.nc->flags |= MG_CGI_CONN;
     ns_send(conn->ns_conn, cgi_status, sizeof(cgi_status) - 1);
     conn->mg_conn.status_code = 200;
@@ -3155,8 +3181,8 @@ static void gmt_time_string(char *buf, size_t buf_len, time_t *t) {
 }
 
 static void open_file_endpoint(struct connection *conn, const char *path,
-                               file_stat_t *st) {
-  char date[64], lm[64], etag[64], range[64], headers[500];
+                               file_stat_t *st, const char *extra_headers) {
+  char date[64], lm[64], etag[64], range[64], headers[1000];
   const char *msg = "OK", *hdr;
   time_t curtime = time(NULL);
   int64_t r1, r2;
@@ -3200,11 +3226,12 @@ static void open_file_endpoint(struct connection *conn, const char *path,
                   "Content-Length: %" INT64_FMT "\r\n"
                   "Connection: %s\r\n"
                   "Accept-Ranges: bytes\r\n"
-                  "%s%s\r\n",
+                  "%s%s%s\r\n",
                   conn->mg_conn.status_code, msg, date, lm, etag,
                   (int) mime_vec.len, mime_vec.ptr, conn->cl,
                   suggest_connection_header(&conn->mg_conn),
-                  range, MONGOOSE_USE_EXTRA_HTTP_HEADERS);
+                  range, extra_headers == NULL ? "" : extra_headers,
+                  MONGOOSE_USE_EXTRA_HTTP_HEADERS);
   ns_send(conn->ns_conn, headers, n);
 
   if (!strcmp(conn->mg_conn.request_method, "HEAD")) {
@@ -4283,7 +4310,8 @@ int mg_forward(struct mg_connection *c, const char *addr) {
   struct connection *conn = MG_CONN_2_CONN(c);
   struct ns_connection *pc;
 
-  if ((pc = ns_connect(&conn->server->ns_mgr, addr, conn)) == NULL) {
+  if ((pc = ns_connect(&conn->server->ns_mgr, addr,
+      mg_ev_handler, conn)) == NULL) {
     conn->ns_conn->flags |= NSF_CLOSE_IMMEDIATELY;
     return 0;
   }
@@ -4330,7 +4358,8 @@ static void proxify_connection(struct connection *conn) {
 
 #ifndef MONGOOSE_NO_FILESYSTEM
 void mg_send_file_internal(struct mg_connection *c, const char *file_name,
-                           file_stat_t *st, int exists) {
+                           file_stat_t *st, int exists,
+                           const char *extra_headers) {
   struct connection *conn = MG_CONN_2_CONN(c);
   char path[MAX_PATH_SIZE];
   const int is_directory = S_ISDIR(st->st_mode);
@@ -4382,15 +4411,16 @@ void mg_send_file_internal(struct mg_connection *c, const char *file_name,
   } else if ((conn->endpoint.fd = open(path, O_RDONLY | O_BINARY)) != -1) {
     // O_BINARY is required for Windows, otherwise in default text mode
     // two bytes \r\n will be read as one.
-    open_file_endpoint(conn, path, st);
+    open_file_endpoint(conn, path, st, extra_headers);
   } else {
     send_http_error(conn, 404, NULL);
   }
 }
-void mg_send_file(struct mg_connection *c, const char *file_name) {
+void mg_send_file(struct mg_connection *c, const char *file_name,
+                  const char *extra_headers) {
   file_stat_t st;
   const int exists = stat(file_name, &st) == 0;
-  mg_send_file_internal(c, file_name, &st, exists);
+  mg_send_file_internal(c, file_name, &st, exists, extra_headers);
 }
 #endif  // !MONGOOSE_NO_FILESYSTEM
 
@@ -4473,7 +4503,7 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
     handle_put(conn, path);
 #endif
   } else {
-    mg_send_file_internal(&conn->mg_conn, path, &st, exists);
+    mg_send_file_internal(&conn->mg_conn, path, &st, exists, NULL);
   }
 #endif  // MONGOOSE_NO_FILESYSTEM
 }
@@ -4619,7 +4649,7 @@ struct mg_connection *mg_connect(struct mg_server *server, const char *addr) {
   struct ns_connection *nsconn;
   struct connection *conn;
 
-  nsconn = ns_connect(&server->ns_mgr, addr, NULL);
+  nsconn = ns_connect(&server->ns_mgr, addr, mg_ev_handler, NULL);
   if (nsconn == NULL) return 0;
 
   if ((conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
@@ -4946,7 +4976,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   DBG(("%s [%s]", name, *v));
 
   if (ind == LISTENING_PORT) {
-    struct ns_connection *c = ns_bind(&server->ns_mgr, value, NULL);
+    struct ns_connection *c = ns_bind(&server->ns_mgr, value, mg_ev_handler, NULL);
     if (c == NULL) {
       error_msg = "Cannot bind to port";
     } else {
@@ -5020,7 +5050,7 @@ static void process_udp(struct ns_connection *nc) {
   //ns_printf(nc, "%s", "HTTP/1.0 200 OK\r\n\r\n");
 }
 
-static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
+static void mg_ev_handler(struct ns_connection *nc, int ev, void *p) {
   struct connection *conn = (struct connection *) nc->user_data;
 
   // Send NS event to the handler. Note that call_user won't send an event
@@ -5144,7 +5174,7 @@ static void mg_ev_handler(struct ns_connection *nc, enum ns_event ev, void *p) {
   }
 }
 
-static void iter2(struct ns_connection *nc, enum ns_event ev, void *param) {
+static void iter2(struct ns_connection *nc, int ev, void *param) {
   mg_handler_t func = NULL;
   struct connection *conn = (struct connection *) nc->user_data;
   const char *msg = (const char *) param;
@@ -5199,7 +5229,7 @@ const char *mg_get_option(const struct mg_server *server, const char *name) {
 
 struct mg_server *mg_create_server(void *server_data, mg_handler_t handler) {
   struct mg_server *server = (struct mg_server *) calloc(1, sizeof(*server));
-  ns_mgr_init(&server->ns_mgr, server_data, mg_ev_handler);
+  ns_mgr_init(&server->ns_mgr, server_data);
   set_default_option_values(server->config_options);
   server->event_handler = handler;
   return server;

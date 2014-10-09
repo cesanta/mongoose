@@ -6,7 +6,7 @@
 CFLAGS = -W -Wall -I.. -pthread -g -pipe $(CFLAGS_EXTRA)
 RM = rm -rf
 OUT = -o $@
-ALL_PROGS = hello websocket server post multi_threaded upload auth pubsub
+ALL_PROGS = server post auth
 NS = ../../net_skeleton
 SW = ../../ssl_wrapper
 

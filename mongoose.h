@@ -113,7 +113,7 @@ size_t mg_websocket_write(struct mg_connection *, int opcode,
 size_t mg_websocket_printf(struct mg_connection* conn, int opcode,
                            const char *fmt, ...);
 
-void mg_send_file(struct mg_connection *, const char *path);
+void mg_send_file(struct mg_connection *, const char *path, const char *);
 void mg_send_file_data(struct mg_connection *, int fd);
 
 const char *mg_get_header(const struct mg_connection *, const char *name);

@@ -88,7 +88,7 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
       }
 
       // Not a CONNECT request, serve HTML file.
-      mg_send_file(conn, "ws_ssl.html");
+      mg_send_file(conn, "ws_ssl.html", NULL);
       return MG_MORE;
 
     default:
