@@ -1,7 +1,7 @@
 # Copyright (c) 2014 Cesanta Software
 # All rights reserved
 
-PROG = mongoose_server
+PROG = restful_api
 CFLAGS = -W -Wall -I../.. -g -O0 $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c ../../mongoose.c
 
