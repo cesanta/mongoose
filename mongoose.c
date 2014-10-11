@@ -2410,6 +2410,9 @@ static int parse_http_message(char *buf, int len, struct mg_connection *ri) {
     if (is_request) {
       ri->http_version += 5;
     }
+    else {
+      ri->status_code = atoi(ri->uri);
+    }
     parse_http_headers(&buf, ri);
 
     if ((ri->query_string = strchr(ri->uri, '?')) != NULL) {
