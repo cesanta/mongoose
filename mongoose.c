@@ -2409,8 +2409,7 @@ static int parse_http_message(char *buf, int len, struct mg_connection *ri) {
   } else {
     if (is_request) {
       ri->http_version += 5;
-    }
-    else {
+    } else {
       ri->status_code = atoi(ri->uri);
     }
     parse_http_headers(&buf, ri);
