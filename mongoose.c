@@ -1964,7 +1964,7 @@ static process_id_t start_process(char *interp, const char *cmd,
     buf[sizeof(buf) - 1] = '\0';
     if (buf[0] == '#' && buf[1] == '!') {
       interp = buf + 2;
-      for (p = interp + strlen(interp);
+      for (p = interp + strlen(interp) - 1;
            isspace(* (uint8_t *) p) && p > interp; p--) *p = '\0';
     }
     fclose(fp);
