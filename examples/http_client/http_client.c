@@ -36,6 +36,7 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
     case MG_REPLY:
       // Send reply to the original connection
       orig = (struct mg_connection *) conn->connection_param;
+      mg_send_status(orig, conn->status_code);
       mg_send_header(orig, "Content-Type", "text/plain");
       mg_send_data(orig, conn->content, conn->content_len);
       mg_send_data(orig, "", 0);  // Last chunk: mark the end of reply
