@@ -2,7 +2,7 @@
 # All rights reserved
 
 PROG = big_upload
-CFLAGS = -W -Wall -I../.. -g -O0 $(CFLAGS_EXTRA)
+CFLAGS = -W -Wall -pthread -I../.. -g -O0 $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c ../../mongoose.c
 
 $(PROG): $(SOURCES)

@@ -2,7 +2,7 @@
 # All rights reserved
 
 PROG = send_file
-CFLAGS = -W -Wall -I../.. $(CFLAGS_EXTRA)
+CFLAGS = -W -Wall -I../.. -pthread -g -O0 $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c ../../mongoose.c
 
 all: $(PROG)

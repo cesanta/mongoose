@@ -2,7 +2,7 @@
 # All rights reserved
 
 PROG = web_server
-CFLAGS = -W -Wall -I../.. -g -O0 $(CFLAGS_EXTRA)
+CFLAGS = -W -Wall -I../.. -pthread -g -O0 $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c ../../mongoose.c
 
 $(PROG): $(SOURCES)
