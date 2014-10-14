@@ -4807,9 +4807,8 @@ void mg_destroy_server(struct mg_server **server) {
 }
 
 struct mg_connection *mg_next(struct mg_server *s, struct mg_connection *c) {
-  struct connection *conn = MG_CONN_2_CONN(c);
-  struct ns_connection *nc = ns_next(&s->ns_mgr,
-                                     c == NULL ? NULL : conn->ns_conn);
+  struct ns_connection *nc = ns_next(&s->ns_mgr, c == NULL ? NULL :
+                                     MG_CONN_2_CONN(c)->ns_conn);
   if (nc != NULL && nc->user_data != NULL) {
     return & ((struct connection *) nc->user_data)->mg_conn;
   } else {
@@ -4921,6 +4920,18 @@ int mg_parse_multipart(const char *buf, int buf_len,
 
 const char **mg_get_valid_option_names(void) {
   return static_config_options;
+}
+
+void mg_copy_listeners(struct mg_server *s, struct mg_server *to) {
+  struct ns_connection *c;
+  for (c = ns_next(&s->ns_mgr, NULL); c != NULL; c = ns_next(&s->ns_mgr, c)) {
+    struct ns_connection *tmp;
+    if ((c->flags & NSF_LISTENING) && (tmp = malloc(sizeof(*tmp))) != NULL) {
+      memcpy(tmp, c, sizeof(*tmp));
+      tmp->mgr = &to->ns_mgr;
+      ns_add_conn(tmp->mgr, tmp);
+    }
+  }
 }
 
 static int get_option_index(const char *name) {
@@ -5208,19 +5219,6 @@ void mg_wakeup_server_ex(struct mg_server *server, mg_handler_t cb,
 void mg_wakeup_server(struct mg_server *server) {
   ns_broadcast(&server->ns_mgr, NULL, (void *) "", 0);
 }
-
-#if 0
-void mg_set_listening_socket(struct mg_server *server, int sock) {
-  if (server->ns_mgr.listening_sock != INVALID_SOCKET) {
-    closesocket(server->ns_mgr.listening_sock);
-  }
-  server->ns_mgr.listening_sock = (sock_t) sock;
-}
-
-int mg_get_listening_socket(struct mg_server *server) {
-  return server->ns_mgr.listening_sock;
-}
-#endif
 
 const char *mg_get_option(const struct mg_server *server, const char *name) {
   const char **opts = (const char **) server->config_options;
