@@ -1245,7 +1245,7 @@ void ns_mgr_free(struct ns_mgr *s) {
 #endif
 #define stat(x, y) mg_stat((x), (y))
 #define fopen(x, y) mg_fopen((x), (y))
-#define open(x, y) mg_open((x), (y))
+#define open(x, y, z) mg_open((x), (y), (z))
 #define lseek(x, y, z) _lseeki64((x), (y), (z))
 #define popen(x, y) _popen((x), (y))
 #define pclose(x) _pclose(x)
@@ -1263,7 +1263,7 @@ void ns_mgr_free(struct ns_mgr *s) {
 #endif
 #define stat(x, y) mg_stat((x), (y))
 #define fopen(x, y) mg_fopen((x), (y))
-#define open(x, y) mg_open((x), (y))
+#define open(x, y, z) mg_open((x), (y), (z))
 #define flockfile(x)      ((void) (x))
 #define funlockfile(x)    ((void) (x))
 typedef struct _stati64 file_stat_t;
@@ -1580,10 +1580,10 @@ static FILE *mg_fopen(const char *path, const char *mode) {
   return _wfopen(wpath, wmode);
 }
 
-static int mg_open(const char *path, int flag) {
+static int mg_open(const char *path, int flag, int mode) {
   wchar_t wpath[MAX_PATH_SIZE];
   to_wchar(path, wpath, ARRAY_SIZE(wpath));
-  return _wopen(wpath, flag);
+  return _wopen(wpath, flag, mode);
 }
 #endif // _WIN32 && !MONGOOSE_NO_FILESYSTEM
 
@@ -2612,6 +2612,7 @@ static int should_keep_alive(const struct mg_connection *conn) {
   const char *method = conn->request_method;
   const char *http_version = conn->http_version;
   const char *header = mg_get_header(conn, "Connection");
+  return 0;
   return method != NULL &&
     (!strcmp(method, "GET") || c->endpoint_type == EP_USER) &&
     ((header != NULL && !mg_strcasecmp(header, "keep-alive")) ||
@@ -3659,14 +3660,8 @@ static void handle_put(struct connection *conn, const char *path) {
     send_http_error(conn, 500, "put_dir: %s", strerror(errno));
   } else if (cl_hdr == NULL) {
     send_http_error(conn, 411, NULL);
-#ifdef _WIN32
-    //On Windows, open() is a macro with 2 params
   } else if ((conn->endpoint.fd =
-              open(path, O_RDWR | O_CREAT | O_TRUNC)) < 0) {
-#else
-  } else if ((conn->endpoint.fd =
-              open(path, O_RDWR | O_CREAT | O_TRUNC, 0644)) < 0) {
-#endif
+              open(path, O_RDWR | O_CREAT | O_TRUNC | O_BINARY, 0644)) < 0) {
     send_http_error(conn, 500, "open(%s): %s", path, strerror(errno));
   } else {
     DBG(("PUT [%s] %lu", path, (unsigned long) conn->ns_conn->recv_iobuf.len));
@@ -4408,7 +4403,7 @@ void mg_send_file_internal(struct mg_connection *c, const char *file_name,
 #endif
   } else if (is_not_modified(conn, st)) {
     send_http_error(conn, 304, NULL);
-  } else if ((conn->endpoint.fd = open(path, O_RDONLY | O_BINARY)) != -1) {
+  } else if ((conn->endpoint.fd = open(path, O_RDONLY | O_BINARY, 0)) != -1) {
     // O_BINARY is required for Windows, otherwise in default text mode
     // two bytes \r\n will be read as one.
     open_file_endpoint(conn, path, st, extra_headers);
