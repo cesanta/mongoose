@@ -2614,7 +2614,6 @@ static int should_keep_alive(const struct mg_connection *conn) {
   const char *method = conn->request_method;
   const char *http_version = conn->http_version;
   const char *header = mg_get_header(conn, "Connection");
-  return 0;
   return method != NULL &&
     (!strcmp(method, "GET") || c->endpoint_type == EP_USER) &&
     ((header != NULL && !mg_strcasecmp(header, "keep-alive")) ||
@@ -4947,6 +4946,22 @@ static void set_default_option_values(char **opts) {
   }
 }
 
+static const char *add_listener(struct mg_server *server, char **v,
+                                const char *value) {
+  const char *error_msg = NULL;
+  struct ns_connection *c;
+
+  if ((c = ns_bind(&server->ns_mgr, value, mg_ev_handler, NULL)) == NULL) {
+    error_msg = "Cannot bind to port";
+  } else {
+    char buf[100];
+    ns_sock_to_str(c->sock, buf, sizeof(buf), 2);
+    free(*v);
+    *v = mg_strdup(buf);
+  }
+  return error_msg;
+}
+
 const char *mg_set_option(struct mg_server *server, const char *name,
                           const char *value) {
   int ind = get_option_index(name);
@@ -4973,14 +4988,9 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   DBG(("%s [%s]", name, *v));
 
   if (ind == LISTENING_PORT) {
-    struct ns_connection *c = ns_bind(&server->ns_mgr, value, mg_ev_handler, NULL);
-    if (c == NULL) {
-      error_msg = "Cannot bind to port";
-    } else {
-      char buf[100];
-      ns_sock_to_str(c->sock, buf, sizeof(buf), 2);
-      free(*v);
-      *v = mg_strdup(buf);
+    struct vec vec;
+    while (!error_msg && (value = next_option(value, &vec, NULL)) != NULL) {
+      error_msg = add_listener(server, v, vec.ptr);
     }
 #ifndef MONGOOSE_NO_FILESYSTEM
   } else if (ind == HEXDUMP_FILE) {
