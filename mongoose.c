@@ -1261,14 +1261,13 @@ void ns_mgr_free(struct ns_mgr *s) {
 #else
 #define INT64_FMT   "lld"
 #endif
-#define stat(x, y) mg_stat((x), (y))
-#define fopen(x, y) mg_fopen((x), (y))
-#define open(x, y, z) mg_open((x), (y), (z))
 #define flockfile(x)      ((void) (x))
 #define funlockfile(x)    ((void) (x))
 typedef struct _stati64 file_stat_t;
 typedef HANDLE process_id_t;
+
 #else                    ////////////// UNIX specific defines and includes
+
 #include <dirent.h>
 #include <dlfcn.h>
 #include <inttypes.h>
