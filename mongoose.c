@@ -1246,6 +1246,7 @@ void ns_mgr_free(struct ns_mgr *s) {
 #define stat(x, y) mg_stat((x), (y))
 #define fopen(x, y) mg_fopen((x), (y))
 #define open(x, y, z) mg_open((x), (y), (z))
+#define close(x) _close(x)
 #define lseek(x, y, z) _lseeki64((x), (y), (z))
 #define popen(x, y) _popen((x), (y))
 #define pclose(x) _pclose(x)
