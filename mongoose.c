@@ -3533,8 +3533,12 @@ static void handle_propfind(struct connection *conn, const char *path,
     "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
     "<d:multistatus xmlns:d='DAV:'>\n";
   static const char footer[] = "</d:multistatus>";
-  const char *depth = mg_get_header(&conn->mg_conn, "Depth"),
-        *list_dir = conn->server->config_options[ENABLE_DIRECTORY_LISTING];
+  const char *depth = mg_get_header(&conn->mg_conn, "Depth");
+#ifdef MONGOOSE_NO_DIRECTORY_LISTING
+  const char *list_dir = "no";
+#else
+  const char *list_dir = conn->server->config_options[ENABLE_DIRECTORY_LISTING];
+#endif
 
   conn->mg_conn.status_code = 207;
 
