@@ -4930,7 +4930,8 @@ void mg_copy_listeners(struct mg_server *s, struct mg_server *to) {
   struct ns_connection *c;
   for (c = ns_next(&s->ns_mgr, NULL); c != NULL; c = ns_next(&s->ns_mgr, c)) {
     struct ns_connection *tmp;
-    if ((c->flags & NSF_LISTENING) && (tmp = (ns_connection *)malloc(sizeof(*tmp))) != NULL) {
+    if ((c->flags & NSF_LISTENING) &&
+        (tmp = (struct ns_connection *) malloc(sizeof(*tmp))) != NULL) {
       memcpy(tmp, c, sizeof(*tmp));
       tmp->mgr = &to->ns_mgr;
       ns_add_conn(tmp->mgr, tmp);
