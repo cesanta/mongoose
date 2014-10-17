@@ -3,7 +3,7 @@
 
 PROG = unit_test
 PROF_FLAGS = -fprofile-arcs -ftest-coverage -g -O0 -DGUI
-CFLAGS = -W -Wall -I.. $(PROF_FLAGS) $(CFLAGS_EXTRA)
+CFLAGS = -W -Wall -pthread -I.. $(PROF_FLAGS) $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c
 
 all: $(PROG)
