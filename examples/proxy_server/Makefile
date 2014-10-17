@@ -2,7 +2,7 @@
 # All rights reserved
 
 PROG = proxy_server
-FLAGS = -I../.. -I../../../net_skeleton -DNS_ENABLE_SSL
+FLAGS = -I../..  -DNS_ENABLE_SSL
 CFLAGS = -W -Wall -g -O0 -pthread  -lssl $(FLAGS) $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c ../../mongoose.c
 

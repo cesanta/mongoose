@@ -11,7 +11,20 @@
 //  Configure your browser to use localhost:2014 as a proxy for all protocols
 //  Then, navigate to https://cesanta.com
 
-#include "net_skeleton.h"
+#include <sys/stat.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#ifdef _WIN32
+#define sleep(x) Sleep((x) * 1000)
+#else
+#include <unistd.h>
+#endif
+
 #include "mongoose.h"
 
 static int s_received_signal = 0;
