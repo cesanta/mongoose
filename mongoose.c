@@ -4264,7 +4264,9 @@ static void handle_ssi_request(struct connection *conn, const char *path) {
 static void proxy_request(struct ns_connection *pc, struct mg_connection *c) {
   int i, sent_close_header = 0;
 
-  ns_printf(pc, "%s %s HTTP/%s\r\n", c->request_method, c->uri,
+  ns_printf(pc, "%s %s%s%s HTTP/%s\r\n", c->request_method, c->uri,
+            c->query_string ? "?" : "",
+            c->query_string ? c->query_string : "",
             c->http_version);
   for (i = 0; i < c->num_headers; i++) {
     if (mg_strcasecmp(c->http_headers[i].name, "Connection") == 0) {
