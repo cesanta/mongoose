@@ -1,5 +1,30 @@
 # Mongoose Release Notes
 
+## Release 5.5, October 28 2014
+
+Changes in Libmongoose library:
+
+- Added new API function: `mg_forward()` for proxying functionality
+- Added new API function: `mg_send_file_data()` for sending file data
+- Added new utility API functions: `mg_mmap() and mg_munpap()`
+- Changed the way SSL settings are handled: removed `ssl_certificate` and
+  `ssl_ca_certificate` options, and instead made `listening_port` accept
+  `ssl://PORT:SSL_CERT:CA_CERT` notation
+- Added ability to listen on multiple ports, see `listening_port` documentation
+- Added `enable_proxy` option
+- Added [cookie_authentication](https://github.com/cesanta/mongoose/tree/master/examples/cookie_authentication) example
+- Added [websocket\_ssl\_proxy](https://github.com/cesanta/mongoose/tree/master/examples/websocket_ssl_proxy) example
+- Added [http_client](https://github.com/cesanta/mongoose/tree/master/examples/http_client) example
+- Increased default 'idle connection' timeout from 30 to 300 seconds
+- Fixed MinGW build
+- Refactored all examples, put each in it's own directory with dedicated build
+- Many smaller bugfixed, including SSL, CGI, API, proxy, etc
+
+Changes in pre-compiled binaries:
+
+- Support for multiple listening ports
+- Fixed CGI handling for scripts that specify interpreter in the hashbang line
+
 ## Release 5.4, July 28 2014
 
 Changes in Libmongoose library:
