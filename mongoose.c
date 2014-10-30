@@ -1247,10 +1247,15 @@ void ns_mgr_free(struct ns_mgr *s) {
 #define fopen(x, y) mg_fopen((x), (y))
 #define open(x, y, z) mg_open((x), (y), (z))
 #define close(x) _close(x)
+#define fileno(x) _fileno(x)
 #define lseek(x, y, z) _lseeki64((x), (y), (z))
+#define read(x, y, z) _read((x), (y), (z))
+#define write(x, y, z) _write((x), (y), (z))
 #define popen(x, y) _popen((x), (y))
 #define pclose(x) _pclose(x)
 #define mkdir(x, y) _mkdir(x)
+#define rmdir(x) _rmdir(x)
+#define strdup(x) _strdup(x)
 #ifndef __func__
 #define STRX(x) #x
 #define STR(x) STRX(x)
