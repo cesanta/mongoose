@@ -1024,18 +1024,19 @@ time_t ns_mgr_poll(struct ns_mgr *mgr, int milli) {
     if (!(conn->flags & (NSF_LISTENING | NSF_CONNECTING))) {
       ns_call(conn, NS_POLL, &current_time);
     }
-    if (!(conn->flags & NSF_WANT_WRITE)) {
-      //DBG(("%p read_set", conn));
-      ns_add_to_set(conn->sock, &read_set, &max_fd);
-    }
-    if (((conn->flags & NSF_CONNECTING) && !(conn->flags & NSF_WANT_READ)) ||
-        (conn->send_iobuf.len > 0 && !(conn->flags & NSF_CONNECTING) &&
-         !(conn->flags & NSF_BUFFER_BUT_DONT_SEND))) {
-      //DBG(("%p write_set", conn));
-      ns_add_to_set(conn->sock, &write_set, &max_fd);
-    }
     if (conn->flags & NSF_CLOSE_IMMEDIATELY) {
       ns_close_conn(conn);
+    } else {
+      if (!(conn->flags & NSF_WANT_WRITE)) {
+        //DBG(("%p read_set", conn));
+        ns_add_to_set(conn->sock, &read_set, &max_fd);
+      }
+      if (((conn->flags & NSF_CONNECTING) && !(conn->flags & NSF_WANT_READ)) ||
+          (conn->send_iobuf.len > 0 && !(conn->flags & NSF_CONNECTING) &&
+           !(conn->flags & NSF_BUFFER_BUT_DONT_SEND))) {
+        //DBG(("%p write_set", conn));
+        ns_add_to_set(conn->sock, &write_set, &max_fd);
+      }
     }
   }
 
