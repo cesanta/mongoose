@@ -5209,7 +5209,7 @@ static void iter2(struct ns_connection *nc, int ev, void *param) {
   (void) ev;
 
   //DBG(("%p [%s]", conn, msg));
-  if (sscanf(msg, "%p %n", &func, &n) && func != NULL) {
+  if (sscanf(msg, "%p %n", &func, &n) && func != NULL && conn != NULL) {
     conn->mg_conn.callback_param = (void *) (msg + n);
     func(&conn->mg_conn, MG_POLL);
   }
