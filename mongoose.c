@@ -305,12 +305,14 @@ int ns_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
 #define NS_FREE free
 #endif
 
+#define NS_CTL_MSG_MESSAGE_SIZE     (8 * 1024)
+#define NS_READ_BUFFER_SIZE         2048
 #define NS_UDP_RECEIVE_BUFFER_SIZE  2000
 #define NS_VPRINTF_BUFFER_SIZE      500
 
 struct ctl_msg {
   ns_callback_t callback;
-  char message[1024 * 8];
+  char message[NS_CTL_MSG_MESSAGE_SIZE];
 };
 
 void iobuf_resize(struct iobuf *io, size_t new_size) {
@@ -868,7 +870,7 @@ static int ns_ssl_err(struct ns_connection *conn, int res) {
 #endif
 
 static void ns_read_from_socket(struct ns_connection *conn) {
-  char buf[2048];
+  char buf[NS_READ_BUFFER_SIZE];
   int n = 0;
 
   if (conn->flags & NSF_CONNECTING) {
