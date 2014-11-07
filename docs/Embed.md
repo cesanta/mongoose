@@ -151,6 +151,8 @@ all Net Skeleton functions will be available too.
     -DMONGOOSE_NO_LOGGING       Disable access/error logging
     -DMONGOOSE_NO_THREADS
     -DMONGOOSE_NO_WEBSOCKET     Disable WebSocket support
+    -DMONGOOSE_NO_USER          No concept of a user on used platform.
+                                (Platform does not provide getpwnam, setgid or setuid)
 
     -DMONGOOSE_USE_IDLE_TIMEOUT_SECONDS=X Idle connection timeout, default is 30
     -DMONGOOSE_USE_LUA          Enable Lua scripting
