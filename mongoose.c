@@ -1274,8 +1274,13 @@ typedef HANDLE process_id_t;
 
 #else                    ////////////// UNIX specific defines and includes
 
+#if !defined(MONGOOSE_NO_FILESYSTEM) &&\
+    (!defined(MONGOOSE_NO_DAV) || !defined(MONGOOSE_NO_DIRECTORY_LISTING))
 #include <dirent.h>
+#endif
+#if !defined(MONGOOSE_NO_FILESYSTEM) && !defined(MONGOOSE_NO_DL)
 #include <dlfcn.h>
+#endif
 #include <inttypes.h>
 #include <pwd.h>
 #define O_BINARY 0
