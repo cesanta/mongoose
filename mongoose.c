@@ -5027,7 +5027,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   } else if (ind == HEXDUMP_FILE) {
     server->ns_mgr.hexdump_file = *v;
 #endif
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(MONGOOSE_NO_USER)
   } else if (ind == RUN_AS_USER) {
     struct passwd *pw;
     if ((pw = getpwnam(value)) == NULL) {
