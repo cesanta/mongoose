@@ -1320,13 +1320,15 @@ typedef pid_t process_id_t;
 #define MONGOOSE_IDLE_TIMEOUT_SECONDS 300
 #endif
 
-#ifdef NS_DISABLE_SOCKETPAIR
+#if defined(NS_DISABLE_SOCKETPAIR) && !defined(MONGOOSE_NO_CGI)
 #define MONGOOSE_NO_CGI
 #endif
 
 #ifdef MONGOOSE_NO_FILESYSTEM
 #define MONGOOSE_NO_AUTH
+#if !defined(MONGOOSE_NO_CGI)
 #define MONGOOSE_NO_CGI
+#endif
 #define MONGOOSE_NO_DAV
 #define MONGOOSE_NO_DIRECTORY_LISTING
 #define MONGOOSE_NO_LOGGING
