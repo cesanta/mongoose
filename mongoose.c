@@ -305,6 +305,10 @@ int ns_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
 #define NS_FREE free
 #endif
 
+#ifndef NS_CALLOC
+#define NS_CALLOC calloc
+#endif
+
 #define NS_CTL_MSG_MESSAGE_SIZE     (8 * 1024)
 #define NS_READ_BUFFER_SIZE         2048
 #define NS_UDP_RECEIVE_BUFFER_SIZE  2000
@@ -429,7 +433,7 @@ int ns_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
     // succeed or out of memory.
     *buf = NULL;
     while (len < 0) {
-      if (*buf) free(*buf);
+      if (*buf) NS_FREE(*buf);
       size *= 2;
       if ((*buf = (char *) NS_MALLOC(size)) == NULL) break;
       va_copy(ap_copy, ap);
@@ -458,7 +462,7 @@ int ns_vprintf(struct ns_connection *nc, const char *fmt, va_list ap) {
     ns_out(nc, buf, len);
   }
   if (buf != mem && buf != NULL) {
-    free(buf);
+    NS_FREE(buf);
   }
 
   return len;
@@ -492,7 +496,7 @@ static void hexdump(struct ns_connection *nc, const char *path,
       ns_hexdump(io->buf + (ev == NS_SEND ? 0 : io->len) -
         (ev == NS_SEND ? 0 : num_bytes), num_bytes, buf, buf_size);
       fprintf(fp, "%s", buf);
-      free(buf);
+      NS_FREE(buf);
     }
     fclose(fp);
   }
@@ -1907,7 +1911,7 @@ static void *push_to_stdin(void *arg) {
   }
   DBG(("%s", "FORWARED EVERYTHING TO CGI"));
   CloseHandle(tp->hPipe);
-  free(tp);
+  NS_FREE(tp);
   _endthread();
   return NULL;
 }
@@ -1928,14 +1932,14 @@ static void *pull_from_stdout(void *arg) {
   CloseHandle(tp->hPipe);
   shutdown(tp->s, 2);  // Without this, IO thread may get truncated data
   closesocket(tp->s);
-  free(tp);
+  NS_FREE(tp);
   _endthread();
   return NULL;
 }
 
 static void spawn_stdio_thread(sock_t sock, HANDLE hPipe,
                                void *(*func)(void *)) {
-  struct threadparam *tp = (struct threadparam *)malloc(sizeof(*tp));
+  struct threadparam *tp = (struct threadparam *)NS_MALLOC(sizeof(*tp));
   if (tp != NULL) {
     tp->s = sock;
     tp->hPipe = hPipe;
@@ -2294,7 +2298,7 @@ static void on_cgi_data(struct ns_connection *nc) {
 #endif  // !MONGOOSE_NO_CGI
 
 static char *mg_strdup(const char *str) {
-  char *copy = (char *) malloc(strlen(str) + 1);
+  char *copy = (char *) NS_MALLOC(strlen(str) + 1);
   if (copy != NULL) {
     strcpy(copy, str);
   }
@@ -2690,7 +2694,7 @@ size_t mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
     write_chunk((struct connection *) conn, buf, len);
   }
   if (buf != mem && buf != NULL) {
-    free(buf);
+    NS_FREE(buf);
   }
   return conn->ns_conn->send_iobuf.len;
 }
@@ -2939,7 +2943,7 @@ size_t mg_websocket_write(struct mg_connection *conn, int opcode,
     size_t copy_len = 0;
 
     if (data_len + 10 > sizeof(mem) &&
-        (copy = (unsigned char *) malloc(data_len + 10)) == NULL) {
+        (copy = (unsigned char *) NS_MALLOC(data_len + 10)) == NULL) {
       return 0;
     }
 
@@ -2971,7 +2975,7 @@ size_t mg_websocket_write(struct mg_connection *conn, int opcode,
       mg_write(conn, copy, copy_len);
     }
     if (copy != mem) {
-      free(copy);
+      NS_FREE(copy);
     }
 
     // If we send closing frame, schedule a connection to be closed after
@@ -2996,7 +3000,7 @@ size_t mg_websocket_printf(struct mg_connection *conn, int opcode,
   va_end(ap);
 
   if (buf != mem && buf != NULL) {
-    free(buf);
+    NS_FREE(buf);
   }
 
   return MG_CONN_2_CONN(conn)->ns_conn->send_iobuf.len;
@@ -3309,7 +3313,7 @@ static DIR *opendir(const char *name) {
 
   if (name == NULL) {
     SetLastError(ERROR_BAD_ARGUMENTS);
-  } else if ((dir = (DIR *) malloc(sizeof(*dir))) == NULL) {
+  } else if ((dir = (DIR *) NS_MALLOC(sizeof(*dir))) == NULL) {
     SetLastError(ERROR_NOT_ENOUGH_MEMORY);
   } else {
     to_wchar(name, wpath, ARRAY_SIZE(wpath));
@@ -3320,7 +3324,7 @@ static DIR *opendir(const char *name) {
       dir->handle = FindFirstFileW(wpath, &dir->info);
       dir->result.d_name[0] = '\0';
     } else {
-      free(dir);
+      NS_FREE(dir);
       dir = NULL;
     }
   }
@@ -3335,7 +3339,7 @@ static int closedir(DIR *dir) {
     if (dir->handle != INVALID_HANDLE_VALUE)
       result = FindClose(dir->handle) ? 0 : -1;
 
-    free(dir);
+    NS_FREE(dir);
   } else {
     result = -1;
     SetLastError(ERROR_BAD_ARGUMENTS);
@@ -3393,7 +3397,7 @@ static int scan_directory(struct connection *conn, const char *dir,
     // Resize the array if nesessary
     if (arr_ind >= arr_size) {
       if ((p = (struct dir_entry *)
-           realloc(*arr, (inc + arr_size) * sizeof(**arr))) != NULL) {
+           NS_REALLOC(*arr, (inc + arr_size) * sizeof(**arr))) != NULL) {
         // Memset new chunk to zero, otherwize st_mtime will have garbage which
         // can make strftime() segfault, see
         // http://code.google.com/p/mongoose/issues/detail?id=79
@@ -3519,9 +3523,9 @@ static void send_directory_listing(struct connection *conn, const char *dir) {
   qsort(arr, num_entries, sizeof(arr[0]), compare_dir_entries);
   for (i = 0; i < num_entries; i++) {
     print_dir_entry(&arr[i]);
-    free(arr[i].file_name);
+    NS_FREE(arr[i].file_name);
   }
-  free(arr);
+  NS_FREE(arr);
 
   write_terminating_chunk(conn);
   close_local_endpoint(conn);
@@ -3589,9 +3593,9 @@ static void handle_propfind(struct connection *conn, const char *path,
         struct dir_entry *de = &arr[i];
         mg_url_encode(de->file_name, strlen(de->file_name), buf, sizeof(buf));
         print_props(conn, buf, &de->st);
-        free(de->file_name);
+        NS_FREE(de->file_name);
       }
-      free(arr);
+      NS_FREE(arr);
     }
     ns_send(conn->ns_conn, footer, sizeof(footer) - 1);
   }
@@ -4561,7 +4565,7 @@ static void try_parse(struct connection *conn) {
     // If request is buffered in, remove it from the iobuf. This is because
     // iobuf could be reallocated, and pointers in parsed request could
     // become invalid.
-    conn->request = (char *) malloc(conn->request_len);
+    conn->request = (char *) NS_MALLOC(conn->request_len);
     memcpy(conn->request, io->buf, conn->request_len);
     //DBG(("%p [%.*s]", conn, conn->request_len, conn->request));
     iobuf_remove(io, conn->request_len);
@@ -4655,7 +4659,7 @@ static void call_http_client_handler(struct connection *conn) {
   iobuf_remove(&conn->ns_conn->recv_iobuf, conn->mg_conn.content_len);
   conn->mg_conn.status_code = 0;
   conn->cl = conn->num_bytes_recv = conn->request_len = 0;
-  free(conn->request);
+  NS_FREE(conn->request);
   conn->request = NULL;
 }
 
@@ -4679,7 +4683,7 @@ struct mg_connection *mg_connect(struct mg_server *server, const char *addr) {
   nsconn = ns_connect(&server->ns_mgr, addr, mg_ev_handler, NULL);
   if (nsconn == NULL) return 0;
 
-  if ((conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
+  if ((conn = (struct connection *) NS_CALLOC(1, sizeof(*conn))) == NULL) {
     nsconn->flags |= NSF_CLOSE_IMMEDIATELY;
     return 0;
   }
@@ -4771,8 +4775,8 @@ static void close_local_endpoint(struct connection *conn) {
 
   // Gobble possible POST data sent to the URI handler
   iobuf_free(&conn->ns_conn->recv_iobuf);
-  free(conn->request);
-  free(conn->path_info);
+  NS_FREE(conn->request);
+  NS_FREE(conn->path_info);
   conn->endpoint.nc = NULL;
   conn->request = conn->path_info = NULL;
 
@@ -4830,9 +4834,9 @@ void mg_destroy_server(struct mg_server **server) {
 
     ns_mgr_free(&s->ns_mgr);
     for (i = 0; i < (int) ARRAY_SIZE(s->config_options); i++) {
-      free(s->config_options[i]);  // It is OK to free(NULL)
+      NS_FREE(s->config_options[i]);  // It is OK to free(NULL)
     }
-    free(s);
+    NS_FREE(s);
     *server = NULL;
   }
 }
@@ -4958,7 +4962,7 @@ void mg_copy_listeners(struct mg_server *s, struct mg_server *to) {
   for (c = ns_next(&s->ns_mgr, NULL); c != NULL; c = ns_next(&s->ns_mgr, c)) {
     struct ns_connection *tmp;
     if ((c->flags & NSF_LISTENING) &&
-        (tmp = (struct ns_connection *) malloc(sizeof(*tmp))) != NULL) {
+        (tmp = (struct ns_connection *) NS_MALLOC(sizeof(*tmp))) != NULL) {
       memcpy(tmp, c, sizeof(*tmp));
       tmp->mgr = &to->ns_mgr;
       ns_add_conn(tmp->mgr, tmp);
@@ -5005,7 +5009,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   }
 
   if (*v != NULL) {
-    free(*v);
+    NS_FREE(*v);
     *v = NULL;
   }
 
@@ -5025,7 +5029,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
       } else {
         char buf[100];
         ns_sock_to_str(c->sock, buf, sizeof(buf), 2);
-        free(*v);
+        NS_FREE(*v);
         *v = mg_strdup(buf);
       }
     }
@@ -5067,7 +5071,7 @@ static void on_accept(struct ns_connection *nc, union socket_address *sa) {
 
   if (!check_acl(server->config_options[ACCESS_CONTROL_LIST],
                  ntohl(* (uint32_t *) &sa->sin.sin_addr)) ||
-      (conn = (struct connection *) calloc(1, sizeof(*conn))) == NULL) {
+      (conn = (struct connection *) NS_CALLOC(1, sizeof(*conn))) == NULL) {
     nc->flags |= NSF_CLOSE_IMMEDIATELY;
   } else {
     // Circularly link two connection structures
@@ -5179,7 +5183,7 @@ static void mg_ev_handler(struct ns_connection *nc, int ev, void *p) {
         call_user(conn, MG_CLOSE);
         close_local_endpoint(conn);
         conn->ns_conn = NULL;
-        free(conn);
+        NS_FREE(conn);
       }
       break;
 
@@ -5259,7 +5263,7 @@ const char *mg_get_option(const struct mg_server *server, const char *name) {
 }
 
 struct mg_server *mg_create_server(void *server_data, mg_handler_t handler) {
-  struct mg_server *server = (struct mg_server *) calloc(1, sizeof(*server));
+  struct mg_server *server = (struct mg_server *) NS_CALLOC(1, sizeof(*server));
   ns_mgr_init(&server->ns_mgr, server_data);
   set_default_option_values(server->config_options);
   server->event_handler = handler;
