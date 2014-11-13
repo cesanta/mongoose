@@ -14,6 +14,8 @@ manufacturing, finance, research, automotive, gaming, IT.
    * [Downloads](http://cesanta.com/mongoose.shtml)
    * [Documentation](http://cesanta.com/docs.shtml)
 
+Check out our [embedded multi-protocol library](https://github.com/cesanta/fossa) with TCP,UDP,HTTP,Websocket,MQTT,DNS support - designed for Internet Of Things!
+
 # Features
 
 - Works on Windows, Mac, UNIX/Linux, iPhone, Android eCos, QNX
