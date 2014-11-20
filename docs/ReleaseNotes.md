@@ -6,7 +6,7 @@ Changes in Libmongoose library:
 
 - Added new API function: `mg_forward()` for proxying functionality
 - Added new API function: `mg_send_file_data()` for sending file data
-- Added new utility API functions: `mg_mmap() and mg_munpap()`
+- Added new utility API functions: `mg_mmap() and mg_munmap()`
 - Changed the way SSL settings are handled: removed `ssl_certificate` and
   `ssl_ca_certificate` options, and instead made `listening_port` accept
   `ssl://PORT:SSL_CERT:CA_CERT` notation
