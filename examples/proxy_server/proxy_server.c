@@ -160,20 +160,13 @@ static void setopt(struct mg_server *s, const char *opt, const char *val) {
 }
 
 int main(int argc, char *argv[]) {
-  const char *cert = NULL, *ca_cert = NULL, *port = "2014";
-  const char *mitm = NULL, *dump = NULL, *root = "proxy_web_root";
+  const char *port = "2014", *dump = NULL, *root = "proxy_web_root";
   int i;
 
   // Parse command line options
   for (i = 1; i < argc; i++) {
-    if (strcmp(argv[i], "-ca_cert") == 0 && i + 1 < argc) {
-      ca_cert = argv[++i];
-    } else if (strcmp(argv[i], "-cert") == 0 && i + 1 < argc) {
-      cert = argv[++i];
-    } else if (strcmp(argv[i], "-port") == 0 && i + 1 < argc) {
+    if (strcmp(argv[i], "-port") == 0 && i + 1 < argc) {
       port = argv[++i];
-    } else if (strcmp(argv[i], "-mitm") == 0 && i + 1 < argc) {
-      mitm = argv[++i];
     } else if (strcmp(argv[i], "-root") == 0 && i + 1 < argc) {
       root = argv[++i];
     } else if (strcmp(argv[i], "-dump") == 0 && i + 1 < argc) {
@@ -191,10 +184,7 @@ int main(int argc, char *argv[]) {
   setopt(s_server, "enable_proxy",        "yes");
   setopt(s_server, "document_root",       root);
   setopt(s_server, "listening_port",      port);
-  setopt(s_server, "ssl_certificate",     cert);
-  setopt(s_server, "ssl_ca_certificate",  ca_cert);
   setopt(s_server, "hexdump_file",        dump);
-  setopt(s_server, "ssl_mitm_certs",      mitm);
 
   // Start two SSE pushing threads
   mg_start_thread(sse_pusher_thread_func, (void *) "sse_pusher_thread_1");
