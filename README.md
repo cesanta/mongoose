@@ -11,8 +11,10 @@ manufacturing, finance, research, automotive, gaming, IT.
 
 
    * [Mailing list](http://groups.google.com/group/mongoose-users)
-   * [Downloads](http://cesanta.com/mongoose.shtml)
+   * [Downloads](http://cesanta.com/products.shtml)
    * [Documentation](http://cesanta.com/docs.shtml)
+
+Check out Fossa - our [embedded multi-protocol library](https://github.com/cesanta/fossa) with TCP,UDP,HTTP,Websocket,MQTT,DNS support, designed for Internet Of Things!
 
 # Features
 

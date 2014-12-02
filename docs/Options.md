@@ -69,6 +69,11 @@ A directory to serve. Default: current working directory.
 ### enable\_directory\_listing
 Enable directory listing, either `yes` or `no`. Default: `yes`.
 
+### enable\_proxy
+Enable proxy functionality, either `yes` or `no`. If set to `yes`, then
+browsers can be configured to use Mongoose as a proxy. Default: `no`.
+
+
 ### extra\_mime\_types
 Extra mime types to recognize, in form `extension1=type1,extension2=type2,...`.
 Extension must include dot.  Example:
@@ -94,16 +99,17 @@ not set.
 Comma-separated list of files to be treated as directory index
 files. Default: `index.html,index.htm,index.cgi,index.shtml,index.php`
 
-### ssl_certificate
-Path to SSL certificate file. The file must be in PEM format,
-and it must have both private key and certificate, see for example
-[ssl_cert.pem](https://github.com/cesanta/mongoose/blob/master/build/ssl_cert.pem). If this option is set, then Mongoose serves SSL connections on
-`listening_port`. Default: not set.
-
 ### listening_port
 Port to listen on. Port could be prepended by the specific IP address to bind
 to, e.g. `mongoose -listening_port 127.0.0.1:8080`. Otherwise Mongoose
-will bind to all addresses.  Default: 8080.
+will bind to all addresses. To enable SSL, build Mongoose with
+`-DNS_ENABLE_SSL` compilation option, and specify `listening_port` as
+`ssl://PORT:SSL_CERTIFICATE.PEM`. Example SSL listener:
+`mongoose -listening_port ssl://8043:ssl_cert.pem`. Note that PEM file should
+be in PEM format, and must have both certificate and private key in it,
+concatenated together. More than one listening port can be specified,
+separated by comma,
+for example `mongoose -listening_port 8080,8000`. Default: 8080.
 
 ### run\_as\_user
 Switch to given user credentials after startup. UNIX-only. This option is

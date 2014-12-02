@@ -43,7 +43,7 @@ allowed to call `mg_set_option()` by the same thread that does
 `mg_poll_server()` (Mongoose thread) and change server configuration while it
 is serving, in between `mg_poll_server()` calls.
 
-    void mg_poll_server(struct mg_server *server, int milliseconds);
+    int mg_poll_server(struct mg_server *server, int milliseconds);
 
 Performs one iteration of IO loop by iterating over all
 active connections, performing `select()` syscall on all sockets with a timeout
@@ -120,6 +120,8 @@ there is `struct mg_connection::wsbits` field which contains first byte
 of the websocket frame which URI handler can examine. Note that to
 reply to the websocket client, `mg_websocket_write()` should be used.
 To reply to the plain HTTP client, `mg_write_data()` should be used.
+
+Return value: number of active connections.
 
 
     const char **mg_get_valid_option_names(void);
@@ -220,8 +222,7 @@ the length of the fetched value, or 0 if variable not found.
 Add, edit or delete the entry in the passwords file.  
 This function allows an application to manipulate .htpasswd files on the
 fly by adding, deleting and changing user records. This is one of the
-several ways of implementing authentication on the server side. For another,
-cookie-based way please refer to the examples/chat.c in the source tree.  
+several ways of implementing authentication on the server side.  
 If password is not NULL, entry is added (or modified if already exists).
 If password is NULL, entry is deleted.  
 Return: 1 on success, 0 on error.

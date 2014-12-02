@@ -1,22 +1,65 @@
 # Mongoose Release Notes
 
-## Release 5.4
+## Release 5.5, October 28 2014
 
 Changes in Libmongoose library:
-   * Added `hexdump_file` option for low-level request/reply debugging
-   * Added `mg_template()` API function for generating HTML pages from
-     templates with expansions
-   * Fixed `struct mg_connection::local_ip` handling, `mg_set_option()`
-     behavior with NULL values
-   * Removed Lua support
+
+- Added new API function: `mg_forward()` for proxying functionality
+- Added new API function: `mg_send_file_data()` for sending file data
+- Added new utility API functions: `mg_mmap() and mg_munmap()`
+- Changed the way SSL settings are handled: removed `ssl_certificate` and
+  `ssl_ca_certificate` options, and instead made `listening_port` accept
+  `ssl://PORT:SSL_CERT:CA_CERT` notation
+- Added ability to listen on multiple ports, see `listening_port` documentation
+- Added `enable_proxy` option
+- Added [cookie_authentication](https://github.com/cesanta/mongoose/tree/master/examples/cookie_authentication) example
+- Added [websocket\_ssl\_proxy](https://github.com/cesanta/mongoose/tree/master/examples/websocket_ssl_proxy) example
+- Added [http_client](https://github.com/cesanta/mongoose/tree/master/examples/http_client) example
+- Increased default 'idle connection' timeout from 30 to 300 seconds
+- Fixed MinGW build
+- Refactored all examples, put each in it's own directory with dedicated build
+- Many smaller bugfixed, including SSL, CGI, API, proxy, etc
 
 Changes in pre-compiled binaries:
-   * Created HTML administration console
-   * When server is started, browser is started automatically
-   * Fixed directory listing bug when directory contains `#` character
-   * Removed built-in Lua Server Pages in the binary, and instead
-     added Mongoose + Lua developer bundle which has Lua Server Pages support.
-     That also solves external Lua modules loading problem.
+
+- Support for multiple listening ports
+- Fixed CGI handling for scripts that specify interpreter in the hashbang line
+
+## Release 5.4, July 28 2014
+
+Changes in Libmongoose library:
+
+- Added `hexdump_file` option for low-level request/reply debugging
+- Added `mg_template()` API function for generating HTML pages from
+    templates with expansions
+- Fixed `struct mg_connection::local_ip` handling, `mg_set_option()`
+    behavior with NULL values
+- Added `mg_send_file()` call to send arbitrary file to the client
+- Added `mg_terminate_ssl()` for SSL termination functionality
+- Added HTTP proxy support, `enable_proxy` config option
+- Added `mg_next()` for iterating over existing active connections
+- Added client-side SSL auth, `ssl_ca_certificate` option
+- Added `mg_wakeup_server_ex()` for pushing messages to existing connections
+- Added `MG_WS_HANDSHAKE` and `MG_WS_CONNECT` events that are sent on
+     Websocket handshake is connection establishment, respectively
+- Removed server-side Lua support
+- Filesystem access, reading from socket/SSL performance improvements
+- DAV PROPFIND memory leak fixed
+- Added `big_upload.c` and enhanced `upload.c` example
+- Added `proxy.c` example that demonstrates proxy functionality and SSE pushes
+- Added `websocket2.c` example that shows simple web chat implementation
+    over websockets
+- Various minor fixes
+
+
+Changes in pre-compiled binaries:
+
+- Created HTML administration console
+- When server is started, browser is started automatically
+- Fixed directory listing bug when directory contains `#` character
+- Removed built-in Lua Server Pages in the binary, and instead
+  added Mongoose + Lua developer bundle which has Lua Server Pages support.
+  That also solves external Lua modules loading problem.
 
 
 ## Release 5.3, March 10 2014
@@ -117,9 +160,9 @@ Changes in pre-compiled binaries:
     * POST and Websocket data are now buffered, and cannot be huge
    * mongoose is now capable on listening on only one port
 
-## Release 4.1, Oct 2014
-## Release 4.0, Oct 2014
-## Release 3.8, Sep 2014
+## Release 4.1, Oct 2013
+## Release 4.0, Oct 2013
+## Release 3.8, Sep 2013
 
 ## Release 3.7, Feb 2 2013
 
