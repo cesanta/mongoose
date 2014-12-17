@@ -51,7 +51,7 @@ struct mg_connection {
   int is_websocket;           // Connection is a websocket connection
   int status_code;            // HTTP status code for HTTP error handler
   int wsbits;                 // First byte of the websocket frame
-  void *server_param;         // Parameter passed to mg_add_uri_handler()
+  void *server_param;         // Parameter passed to mg_create_server()
   void *connection_param;     // Placeholder for connection-specific data
   void *callback_param;
 };
