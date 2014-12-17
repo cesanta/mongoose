@@ -42,9 +42,11 @@
 
 #define NS_SKELETON_VERSION "2.1.0"
 
+#if defined(UNICODE) || defined(_UNICODE)
 #undef UNICODE                  // Use ANSI WinAPI functions
 #undef _UNICODE                 // Use multibyte encoding on Windows
 #define _MBCS                   // Use multibyte encoding on Windows
+#endif
 #define _INTEGRAL_MAX_BITS 64   // Enable _stati64() on Windows
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005+
 #undef WIN32_LEAN_AND_MEAN      // Let windows.h always include winsock2.h
@@ -79,6 +81,7 @@
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")    // Linking with winsock library
 #endif
+#include <winsock2.h>    // required to be included before windows.h
 #include <windows.h>
 #include <process.h>
 #ifndef EINPROGRESS
@@ -512,7 +515,7 @@ static void ns_call(struct ns_connection *nc, int ev, void *p) {
 
 static void ns_destroy_conn(struct ns_connection *conn) {
   closesocket(conn->sock);
-  free(conn->host);
+  NS_FREE(conn->host);
   iobuf_free(&conn->recv_iobuf);
   iobuf_free(&conn->send_iobuf);
 #ifdef NS_ENABLE_SSL
@@ -4295,9 +4298,7 @@ static void proxy_request(struct ns_connection *pc, struct mg_connection *c) {
       // therefore we don't know message boundaries
       ns_printf(pc, "%s: %s\r\n", "Connection", "close");
       sent_close_header = 1;
-    }
-    
-    if (mg_strcasecmp(c->http_headers[i].name, "Host") == 0) {
+    } else if (pc->host && mg_strcasecmp(c->http_headers[i].name, "Host") == 0) {
       // Host header must not be forwarded!
       ns_printf(pc, "%s: %s\r\n", c->http_headers[i].name,
                 pc->host);
@@ -4351,6 +4352,16 @@ int mg_forward(struct mg_connection *c, const char *addr) {
       mg_ev_handler, conn)) == NULL) {
     conn->ns_conn->flags |= NSF_CLOSE_IMMEDIATELY;
     return 0;
+  }
+    
+  pc->host = (char*)NS_MALLOC(strlen(addr));
+  if (pc->host != NULL) {
+    const char* host = strstr(addr, "://");
+    if (host)
+      host += 3;
+    else
+      host = addr;
+    strcpy(pc->host, host);
   }
 
   // Interlink two connections
