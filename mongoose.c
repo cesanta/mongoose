@@ -2962,9 +2962,10 @@ size_t mg_websocket_write(struct mg_connection *conn, int opcode,
     } else {
       // 64-bit length field
       copy[1] = 127;
-      * (uint32_t *) (copy + 2) = (uint32_t)
-        htonl((uint32_t) ((uint64_t) data_len >> 32));
-      * (uint32_t *) (copy + 6) = (uint32_t) htonl(data_len & 0xffffffff);
+      const uint32_t hi = htonl((uint32_t) ((uint64_t) data_len >> 32));
+      const uint32_t lo = htonl(data_len & 0xffffffff);
+      memcpy(copy+2,&hi,sizeof(hi));
+      memcpy(copy+6,&lo,sizeof(lo));
       memcpy(copy + 10, data, data_len);
       copy_len = 10 + data_len;
     }
