@@ -4120,7 +4120,7 @@ static int parse_header(const char *str, int str_len, const char *var_name,
     s += n + 1;
     if (*s == '"' || *s == '\'') ch = *s++;
     p = s;
-    while (p < end && p[0] != ch && p[0] != ',' && len < (int) buf_size) {
+    while (p < end && p[0] != ch && (!(p[0] == ',' && (strlen(p) > 1 && p[1] == ' ')) || p[0] != ',') && len < (int) buf_size) {
       if (p[0] == '\\' && p[1] == ch) p++;
       buf[len++] = *p++;
     }
