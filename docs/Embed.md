@@ -146,6 +146,7 @@ all Net Skeleton functions will be available too.
     -DMONGOOSE_NO_CGI           Disable CGI support
     -DMONGOOSE_NO_DAV           Disable WebDAV support
                                 (PUT, DELETE, MKCOL, PROPFIND methods)
+    -DMONGOOSE_NO_URL_DECODE    Disables decoding of URL pathes
     -DMONGOOSE_NO_DIRECTORY_LISTING  Disable directory listing
     -DMONGOOSE_NO_FILESYSTEM    Disables all file IO, serving from memory only
     -DMONGOOSE_NO_LOGGING       Disable access/error logging

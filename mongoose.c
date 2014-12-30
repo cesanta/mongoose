@@ -2402,7 +2402,7 @@ static int is_valid_http_method(const char *s) {
 // HTTP request components, header names and header values.
 // Note that len must point to the last \n of HTTP headers.
 static int parse_http_message(char *buf, int len, struct mg_connection *ri) {
-  int is_request, n;
+  int is_request;
 
   // Reset the connection. Make sure that we don't touch fields that are
   // set elsewhere: remote_ip, remote_port, server_param
@@ -2436,8 +2436,12 @@ static int parse_http_message(char *buf, int len, struct mg_connection *ri) {
     if ((ri->query_string = strchr(ri->uri, '?')) != NULL) {
       *(char *) ri->query_string++ = '\0';
     }
-    n = (int) strlen(ri->uri);
-    mg_url_decode(ri->uri, n, (char *) ri->uri, n + 1, 0);
+#ifndef MONGOOSE_NO_URL_DECODE
+    {
+        int n = (int) strlen(ri->uri);
+        mg_url_decode(ri->uri, n, (char *) ri->uri, n + 1, 0);
+    }
+#endif
     if (*ri->uri == '/' || *ri->uri == '.') {
       remove_double_dots_and_double_slashes((char *) ri->uri);
     }
