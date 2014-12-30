@@ -4105,23 +4105,23 @@ static int is_dav_request(const struct connection *conn) {
 
 static int parse_header(const char *str, int str_len, const char *var_name,
                         char *buf, size_t buf_size) {
-  int ch = ' ', len = 0, n = strlen(var_name);
+  int ch = ' ', ch1 = ',', len = 0, n = strlen(var_name);
   const char *p, *end = str + str_len, *s = NULL;
 
   if (buf != NULL && buf_size > 0) buf[0] = '\0';
 
   // Find where variable starts
   for (s = str; s != NULL && s + n < end; s++) {
-    if ((s == str || s[-1] == ' ' || s[-1] == ',') && s[n] == '=' &&
+    if ((s == str || s[-1] == ch || s[-1] == ch1) && s[n] == '=' &&
         !memcmp(s, var_name, n)) break;
   }
 
   if (s != NULL && &s[n + 1] < end) {
     s += n + 1;
-    if (*s == '"' || *s == '\'') ch = *s++;
+    if (*s == '"' || *s == '\'') ch = ch1 = *s++;
     p = s;
-    while (p < end && p[0] != ch && p[0] != ',' && len < (int) buf_size) {
-      if (p[0] == '\\' && p[1] == ch) p++;
+    while (p < end && p[0] != ch && p[0] != ch1 && len < (int) buf_size) {
+      if (ch == ch1 && p[0] == '\\' && p[1] == ch) p++;
       buf[len++] = *p++;
     }
     if (len >= (int) buf_size || (ch != ' ' && *p != ch)) {
