@@ -11,7 +11,7 @@ run: $(PROG)
 	./$(PROG)
 
 $(PROG): $(SOURCES) Makefile
-	$(CC) -o $(PROG) $(SOURCES) $(CFLAGS)
+	$(CC) -o $(PROG) $(SOURCES) $(CFLAGS) $(CLIBS)
 
 win:
 	wine cl $(SOURCES) /MD /nologo /DNDEBUG /O1 /I../.. /Fe$(PROG).exe
