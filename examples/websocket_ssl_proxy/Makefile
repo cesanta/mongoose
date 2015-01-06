@@ -9,7 +9,7 @@ all: $(PROG)
 
 $(PROG): $(SOURCES)
 	$(CC) -o $(PROG) $(SOURCES) \
-		-DNS_ENABLE_SSL -DSSL_WRAPPER_USE_AS_LIBRARY -lssl $(CFLAGS)
+		-DNS_ENABLE_SSL -DSSL_WRAPPER_USE_AS_LIBRARY -lssl $(CFLAGS) $(CLIBS)
 
 clean:
 	rm -rf $(PROG) *.exe *.dSYM *.obj *.exp .*o *.lib

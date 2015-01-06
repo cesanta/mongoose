@@ -7,7 +7,7 @@ CFLAGS = -W -Wall -g -O0 -pthread  -lssl $(FLAGS) $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c ../../mongoose.c
 
 unix: $(SOURCES)
-	$(CC) -o $(PROG) $(SOURCES) $(CFLAGS)
+	$(CC) -o $(PROG) $(SOURCES) $(CFLAGS) $(CLIBS)
 
 clean:
 	rm -rf $(PROG) *.exe *.dSYM *.obj *.exp .*o *.lib
