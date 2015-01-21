@@ -1,20 +1,15 @@
 # Mongoose SSL guide
 
 SSL is a protocol that makes web communication secure. To enable SSL
-in mongoose, 3 steps are required:
+in mongoose, 2 steps are required:
 
-   1. Valid certificate file must be created
-   2. `ssl_certificate` options must be set to contain path to the
-       certificate file.
-   3. `listening_ports` option must contain a port number with letter `s`
-        appended to it, which instructs Mongoose to use SSL for all connections
-        made to that port.
+   1. Create valid SSL certificate file
+   2. Append SSL certificate file path to the `listening_ports` option
 
 Below is the `mongoose.conf` file snippet for typical SSL setup:
 
-    document_root     www_root        # Serve files in www_root directory
-    listening_ports   80r,443s        # Redirect all HTTP requests to HTTPS
-    ssl_certificate   ssl_cert.pem    # Location of certificate file
+    document_root     www_root         # Serve files in www_root directory
+    listening_ports   80,443:cert.pem  # Listen on ports 80 and 443
 
 ## How to create SSL certificate file
 
