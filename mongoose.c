@@ -593,28 +593,28 @@ int ns_socketpair(sock_t sp[2]) {
 
 // TODO(lsm): use non-blocking resolver
 static int ns_resolve2(const char *host, struct in_addr *ina) {
-	int rv = 0;
-	struct addrinfo hints, *servinfo, *p;
-	struct sockaddr_in *h = NULL;
-	char *ip = malloc(17);
-	memset(ip, '\0', 17);
+  int rv = 0;
+  struct addrinfo hints, *servinfo, *p;
+  struct sockaddr_in *h = NULL;
+  char *ip = NS_MALLOC(17);
+  memset(ip, '\0', 17);
+ 
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
 
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_STREAM;
+  if((rv = getaddrinfo(host, NULL , NULL, &servinfo)) != 0) {
+    DBG(("getaddrinfo(%s) failed: %s", host, strerror(errno)));
+    return 0;
+  }
 
-	if((rv = getaddrinfo(host, NULL , NULL, &servinfo)) != 0) {
-		
-		return 0;
-	}
+  for(p = servinfo; p != NULL; p = p->ai_next) {
+    memcpy(&h, &p->ai_addr, sizeof(struct sockaddr_in *));
+    memcpy(ina, &h->sin_addr, sizeof(ina));
+  }
 
-	for(p = servinfo; p != NULL; p = p->ai_next) {
-		memcpy(&h, &p->ai_addr, sizeof(struct sockaddr_in *));
-		memcpy(ina, &h->sin_addr, sizeof(ina));
-	}
-
-	freeaddrinfo(servinfo);
-	return 1;
+  freeaddrinfo(servinfo);
+  return 1;
 }
 
 // Resolve FDQN "host", store IP address in the "ip".
