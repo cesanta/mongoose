@@ -79,6 +79,7 @@
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")    // Linking with winsock library
 #endif
+#include <Ws2tcpip.h>
 #include <windows.h>
 #include <process.h>
 #ifndef EINPROGRESS
@@ -2961,9 +2962,9 @@ size_t mg_websocket_write(struct mg_connection *conn, int opcode,
       copy_len = 4 + data_len;
     } else {
       // 64-bit length field
-      copy[1] = 127;
       const uint32_t hi = htonl((uint32_t) ((uint64_t) data_len >> 32));
       const uint32_t lo = htonl(data_len & 0xffffffff);
+      copy[1] = 127;
       memcpy(copy+2,&hi,sizeof(hi));
       memcpy(copy+6,&lo,sizeof(lo));
       memcpy(copy + 10, data, data_len);
