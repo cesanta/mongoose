@@ -48,8 +48,8 @@
 #define _INTEGRAL_MAX_BITS 64   // Enable _stati64() on Windows
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005+
 #undef WIN32_LEAN_AND_MEAN      // Let windows.h always include winsock2.h
-#ifdef __Linux__
-#define _XOPEN_SOURCE 600       // For flockfile() on Linux
+#if defined(__Linux__) || defined(_WIN32)
+#define _XOPEN_SOURCE 600       // For flockfile() on Linux & MinGW
 #endif
 #define __STDC_FORMAT_MACROS    // <inttypes.h> wants this for C++
 #define __STDC_LIMIT_MACROS     // C++ wants that for INT64_MAX
