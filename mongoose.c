@@ -48,7 +48,7 @@
 #define _INTEGRAL_MAX_BITS 64   // Enable _stati64() on Windows
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005+
 #undef WIN32_LEAN_AND_MEAN      // Let windows.h always include winsock2.h
-#ifdef __Linux__
+#if defined(__Linux__) || defined(_WIN32)
 #define _XOPEN_SOURCE 600       // For flockfile() on Linux
 #endif
 #define __STDC_FORMAT_MACROS    // <inttypes.h> wants this for C++
@@ -377,7 +377,7 @@ void iobuf_remove(struct iobuf *io, size_t n) {
 
 static size_t ns_out(struct ns_connection *nc, const void *buf, size_t len) {
   if (nc->flags & NSF_UDP) {
-    long n = sendto(nc->sock, buf, len, 0, &nc->sa.sa, sizeof(nc->sa.sin));
+    long n = sendto(nc->sock, (const char*)buf, len, 0, &nc->sa.sa, sizeof(nc->sa.sin));
     DBG(("%p %d send %ld (%d %s)", nc, nc->sock, n, errno, strerror(errno)));
     return n < 0 ? 0 : n;
   } else {
