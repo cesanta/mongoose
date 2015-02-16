@@ -377,7 +377,8 @@ void iobuf_remove(struct iobuf *io, size_t n) {
 
 static size_t ns_out(struct ns_connection *nc, const void *buf, size_t len) {
   if (nc->flags & NSF_UDP) {
-    long n = sendto(nc->sock, buf, len, 0, &nc->sa.sa, sizeof(nc->sa.sin));
+    long n = sendto(nc->sock, (const char *) buf, len, 0, &nc->sa.sa,
+                    sizeof(nc->sa.sin));
     DBG(("%p %d send %ld (%d %s)", nc, nc->sock, n, errno, strerror(errno)));
     return n < 0 ? 0 : n;
   } else {
