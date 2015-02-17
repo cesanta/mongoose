@@ -48,8 +48,8 @@
 #define _INTEGRAL_MAX_BITS 64   // Enable _stati64() on Windows
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005+
 #undef WIN32_LEAN_AND_MEAN      // Let windows.h always include winsock2.h
-#if defined(__Linux__) || defined(_WIN32)
-#define _XOPEN_SOURCE 600       // For flockfile() on Linux & MinGW
+#ifdef __Linux__
+#define _XOPEN_SOURCE 600       // For flockfile() on Linux
 #endif
 #define __STDC_FORMAT_MACROS    // <inttypes.h> wants this for C++
 #define __STDC_LIMIT_MACROS     // C++ wants that for INT64_MAX
@@ -1278,12 +1278,7 @@ void ns_mgr_free(struct ns_mgr *s) {
 #define STR(x) STRX(x)
 #define __func__ __FILE__ ":" STR(__LINE__)
 #endif
-/* MINGW has adopted the MSVC formatting for 64-bit ints as of gcc 4.4 till 4.8*/
-#if (defined(__MINGW32__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4 && __GNUC_MINOR__ < 8))) || defined(_MSC_VER)
 #define INT64_FMT   "I64d"
-#else
-#define INT64_FMT   "lld"
-#endif
 #define flockfile(x)      ((void) (x))
 #define funlockfile(x)    ((void) (x))
 typedef struct _stati64 file_stat_t;
