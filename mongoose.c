@@ -593,6 +593,7 @@ int ns_socketpair(sock_t sp[2]) {
 
 // TODO(lsm): use non-blocking resolver
 static int ns_resolve2(const char *host, struct in_addr *ina) {
+#ifdef NS_ENABLE_GETADDRINFO  
   int rv = 0;
   struct addrinfo hints, *servinfo, *p;
   struct sockaddr_in *h = NULL;
@@ -615,6 +616,16 @@ static int ns_resolve2(const char *host, struct in_addr *ina) {
 
   freeaddrinfo(servinfo);
   return 1;
+#else
+  struct hostent *he;
+  if ((he = gethostbyname(host)) == NULL) {
+    DBG(("gethostbyname(%s) failed: %s", host, strerror(errno)));
+  } else {
+    memcpy(ina, he->h_addr_list[0], sizeof(*ina));
+    return 1;
+  }
+  return 0;
+#endif
 }
 
 // Resolve FDQN "host", store IP address in the "ip".
