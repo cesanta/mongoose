@@ -601,6 +601,30 @@ int ns_socketpair(sock_t sp[2]) {
 
 // TODO(lsm): use non-blocking resolver
 static int ns_resolve2(const char *host, struct in_addr *ina) {
+#ifdef NS_ENABLE_GETADDRINFO  
+  int rv = 0;
+  struct addrinfo hints, *servinfo, *p;
+  struct sockaddr_in *h = NULL;
+  char *ip = NS_MALLOC(17);
+  memset(ip, '\0', 17);
+ 
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+
+  if((rv = getaddrinfo(host, NULL , NULL, &servinfo)) != 0) {
+    DBG(("getaddrinfo(%s) failed: %s", host, strerror(errno)));
+    return 0;
+  }
+
+  for(p = servinfo; p != NULL; p = p->ai_next) {
+    memcpy(&h, &p->ai_addr, sizeof(struct sockaddr_in *));
+    memcpy(ina, &h->sin_addr, sizeof(ina));
+  }
+
+  freeaddrinfo(servinfo);
+  return 1;
+#else
   struct hostent *he;
   if ((he = gethostbyname(host)) == NULL) {
     DBG(("gethostbyname(%s) failed: %s", host, strerror(errno)));
@@ -609,6 +633,7 @@ static int ns_resolve2(const char *host, struct in_addr *ina) {
     return 1;
   }
   return 0;
+#endif
 }
 
 // Resolve FDQN "host", store IP address in the "ip".
