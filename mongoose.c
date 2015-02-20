@@ -113,7 +113,10 @@ typedef __int64   int64_t;
 typedef SOCKET sock_t;
 typedef struct _stati64 ns_stat_t;
 #ifndef S_ISDIR
-#define S_ISDIR(x) ((x) & _S_IFDIR)
+#define S_ISDIR(x) (((x) & _S_IFMT) == _S_IFDIR)
+#endif
+#ifndef S_ISREG
+#define S_ISREG(x) (((x) & _S_IFMT) == _S_IFREG)
 #endif
 #else
 #include <errno.h>
