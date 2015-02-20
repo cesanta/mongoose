@@ -42,9 +42,11 @@
 
 #define NS_SKELETON_VERSION "2.1.0"
 
+#if defined(UNICODE) || defined(_UNICODE)
 #undef UNICODE                  // Use ANSI WinAPI functions
 #undef _UNICODE                 // Use multibyte encoding on Windows
 #define _MBCS                   // Use multibyte encoding on Windows
+#endif
 #define _INTEGRAL_MAX_BITS 64   // Enable _stati64() on Windows
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005+
 #undef WIN32_LEAN_AND_MEAN      // Let windows.h always include winsock2.h
@@ -81,6 +83,7 @@
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")    // Linking with winsock library
 #endif
+#include <winsock2.h>    // required to be included before windows.h
 #include <windows.h>
 #include <process.h>
 #ifndef EINPROGRESS
@@ -110,7 +113,10 @@ typedef __int64   int64_t;
 typedef SOCKET sock_t;
 typedef struct _stati64 ns_stat_t;
 #ifndef S_ISDIR
-#define S_ISDIR(x) ((x) & _S_IFDIR)
+#define S_ISDIR(x) (((x) & _S_IFMT) == _S_IFDIR)
+#endif
+#ifndef S_ISREG
+#define S_ISREG(x) (((x) & _S_IFMT) == _S_IFREG)
 #endif
 #else
 #include <errno.h>
@@ -213,6 +219,7 @@ struct ns_connection {
   struct ns_mgr *mgr;
 
   sock_t sock;                // Socket
+  char *host;
   union socket_address sa;    // Peer address
   struct iobuf recv_iobuf;    // Received data
   struct iobuf send_iobuf;    // Data scheduled for sending
@@ -519,6 +526,7 @@ static void ns_call(struct ns_connection *nc, int ev, void *p) {
 
 static void ns_destroy_conn(struct ns_connection *conn) {
   closesocket(conn->sock);
+  NS_FREE(conn->host);
   iobuf_free(&conn->recv_iobuf);
   iobuf_free(&conn->send_iobuf);
 #ifdef NS_ENABLE_SSL
@@ -3255,12 +3263,40 @@ static void open_file_endpoint(struct connection *conn, const char *path,
   int64_t r1, r2;
   struct vec mime_vec;
   int n;
+    
+#ifdef MONGOOSE_SERVE_GZ
+  file_stat_t gz_st;
+  const char *content_encoding = "";
+#endif
 
+  get_mime_type(conn->server, path, &mime_vec);
+    
+#ifdef MONGOOSE_SERVE_GZ
+  hdr = mg_get_header(&conn->mg_conn, "Accept-Encoding");
+  if (hdr != NULL && strstr(hdr, "gzip") != NULL) {
+    // client accepts gzip encoding, try to look for pre-gzipped file
+    if (strlen(path) < MAX_PATH_SIZE - 3) {
+      // we can assume it is safe to add .gz in-place
+      (void)strcat((char*)path, ".gz");
+      if (0 == stat(path, &gz_st) && S_ISREG(gz_st.st_mode)) {
+        // .gz file exists, try to open it
+        int gz_fd = open(path, O_RDONLY | O_BINARY, 0);
+        if (gz_fd != -1) {
+          // successfully opened, serve it instead
+          close(conn->endpoint.fd);
+          conn->endpoint.fd = gz_fd;
+          st = &gz_st;
+          content_encoding = "Content-Encoding: gzip\r\n";
+        }
+      }
+    }
+  }
+#endif
+    
   conn->endpoint_type = EP_FILE;
   ns_set_close_on_exec(conn->endpoint.fd);
   conn->mg_conn.status_code = 200;
 
-  get_mime_type(conn->server, path, &mime_vec);
   conn->cl = st->st_size;
   range[0] = '\0';
 
@@ -3289,12 +3325,18 @@ static void open_file_endpoint(struct connection *conn, const char *path,
                   "Date: %s\r\n"
                   "Last-Modified: %s\r\n"
                   "Etag: %s\r\n"
+#ifdef MONGOOSE_SERVE_GZ
+                  "%s"
+#endif
                   "Content-Type: %.*s\r\n"
                   "Content-Length: %" INT64_FMT "\r\n"
                   "Connection: %s\r\n"
                   "Accept-Ranges: bytes\r\n"
                   "%s%s%s\r\n",
                   conn->mg_conn.status_code, msg, date, lm, etag,
+#ifdef MONGOOSE_SERVE_GZ
+                  content_encoding,
+#endif
                   (int) mime_vec.len, mime_vec.ptr, conn->cl,
                   suggest_connection_header(&conn->mg_conn),
                   range, extra_headers == NULL ? "" : extra_headers,
@@ -4348,6 +4390,10 @@ static void proxy_request(struct ns_connection *pc, struct mg_connection *c) {
       // therefore we don't know message boundaries
       ns_printf(pc, "%s: %s\r\n", "Connection", "close");
       sent_close_header = 1;
+    } else if (pc->host && mg_strcasecmp(c->http_headers[i].name, "Host") == 0) {
+      // Host header must not be forwarded!
+      ns_printf(pc, "%s: %s\r\n", c->http_headers[i].name,
+                pc->host);
     } else {
       ns_printf(pc, "%s: %s\r\n", c->http_headers[i].name,
                 c->http_headers[i].value);
@@ -4398,6 +4444,16 @@ int mg_forward(struct mg_connection *c, const char *addr) {
       mg_ev_handler, conn)) == NULL) {
     conn->ns_conn->flags |= NSF_CLOSE_IMMEDIATELY;
     return 0;
+  }
+    
+  pc->host = (char*)NS_MALLOC(strlen(addr));
+  if (pc->host != NULL) {
+    const char* host = strstr(addr, "://");
+    if (host)
+      host += 3;
+    else
+      host = addr;
+    strcpy(pc->host, host);
   }
 
   // Interlink two connections
@@ -4541,7 +4597,7 @@ static void open_local_endpoint(struct connection *conn, int skip_user) {
 #endif
     return;
   }
-
+   
   if (strcmp(conn->mg_conn.request_method, "CONNECT") == 0 ||
       mg_strncasecmp(conn->mg_conn.uri, "http", 4) == 0) {
     const char *enp = conn->server->config_options[ENABLE_PROXY];
