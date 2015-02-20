@@ -82,7 +82,7 @@ Changes in Libmongoose library:
 
 Changes in pre-compiled binaries:
 
-   *  New awesome Mongoose logos buy our designer Katrin - thanks Katrin!
+   *  New awesome Mongoose logos by our designer Katrin - thanks Katrin!
         Check them out at http://cesanta.com/products.shtml
    *  Added Lua Server Pages support to the free version, quick intro is at
         http://cesanta.com/docs/Lua.shtml

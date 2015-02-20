@@ -78,11 +78,9 @@ without any of the GPL restrictions.
 
 # Other products by Cesanta Software: simple and effective
 
+- [Fossa](http://github.com/cesanta/fossa) - Multi-protocol networking library
 - [SSL Wrapper](https://github.com/cesanta/ssl_wrapper) - application to
   secure network communications
 - [Frozen](https://github.com/cesanta/frozen) - JSON parser and generator
 - [SLRE](https://github.com/cesanta/slre) - Super Light Regular Expression
   library
-- [Net Skeleton](https://github.com/cesanta/net_skeleton) - framework for
-  building network applications
-- [SLDR](https://github.com/cesanta/sldr) - Super Light DNS Resolver
