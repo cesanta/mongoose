@@ -3260,12 +3260,40 @@ static void open_file_endpoint(struct connection *conn, const char *path,
   int64_t r1, r2;
   struct vec mime_vec;
   int n;
+    
+#ifdef MONGOOSE_SERVE_GZ
+  file_stat_t gz_st;
+  const char *content_encoding = "";
+#endif
 
+  get_mime_type(conn->server, path, &mime_vec);
+    
+#ifdef MONGOOSE_SERVE_GZ
+  hdr = mg_get_header(&conn->mg_conn, "Accept-Encoding");
+  if (hdr != NULL && strstr(hdr, "gzip") != NULL) {
+    // client accepts gzip encoding, try to look for pre-gzipped file
+    if (strlen(path) < MAX_PATH_SIZE - 3) {
+      // we can assume it is safe to add .gz in-place
+      (void)strcat((char*)path, ".gz");
+      if (0 == stat(path, &gz_st) && S_ISREG(gz_st.st_mode)) {
+        // .gz file exists, try to open it
+        int gz_fd = open(path, O_RDONLY | O_BINARY, 0);
+        if (gz_fd != -1) {
+          // successfully opened, serve it instead
+          close(conn->endpoint.fd);
+          conn->endpoint.fd = gz_fd;
+          st = &gz_st;
+          content_encoding = "Content-Encoding: gzip\r\n";
+        }
+      }
+    }
+  }
+#endif
+    
   conn->endpoint_type = EP_FILE;
   ns_set_close_on_exec(conn->endpoint.fd);
   conn->mg_conn.status_code = 200;
 
-  get_mime_type(conn->server, path, &mime_vec);
   conn->cl = st->st_size;
   range[0] = '\0';
 
@@ -3294,12 +3322,18 @@ static void open_file_endpoint(struct connection *conn, const char *path,
                   "Date: %s\r\n"
                   "Last-Modified: %s\r\n"
                   "Etag: %s\r\n"
+#ifdef MONGOOSE_SERVE_GZ
+                  "%s"
+#endif
                   "Content-Type: %.*s\r\n"
                   "Content-Length: %" INT64_FMT "\r\n"
                   "Connection: %s\r\n"
                   "Accept-Ranges: bytes\r\n"
                   "%s%s%s\r\n",
                   conn->mg_conn.status_code, msg, date, lm, etag,
+#ifdef MONGOOSE_SERVE_GZ
+                  content_encoding,
+#endif
                   (int) mime_vec.len, mime_vec.ptr, conn->cl,
                   suggest_connection_header(&conn->mg_conn),
                   range, extra_headers == NULL ? "" : extra_headers,
