@@ -1,6 +1,6 @@
 # Mongoose API Reference
 
-    struct mg_server *mg_create_server(void *server_param);
+    struct mg_server *mg_create_server(void *server_param, mg_handler_t handler);
 
 Creates web server instance. Returns opaque instance pointer, or NULL if
 there is not enough memory. `server_param`: Could be any pointer, or NULL.
@@ -173,7 +173,7 @@ a response body.  Mongoose provides functions for all three parts:
      Mongoose will call a handler repeatedly after each socket write.
 
 <!-- -->
-     
+
      void mg_send_file(struct mg_connection *, const char *path);
 
 Tells Mongoose to serve given file. Mongoose handles file according to
@@ -187,7 +187,7 @@ event handler must return `MG_MORE`.
                            const char *data, size_t data_len);
 
 Similar to `mg_write()`, but wraps the data into a websocket frame with a
-given websocket `opcode`.  
+given websocket `opcode`.
 
     const char *mg_get_header(const struct mg_connection *, const char *name);
 
@@ -219,15 +219,15 @@ the length of the fetched value, or 0 if variable not found.
                                  const char *user,
                                  const char *password);
 
-Add, edit or delete the entry in the passwords file.  
+Add, edit or delete the entry in the passwords file.
 This function allows an application to manipulate .htpasswd files on the
 fly by adding, deleting and changing user records. This is one of the
-several ways of implementing authentication on the server side.  
+several ways of implementing authentication on the server side.
 If password is not NULL, entry is added (or modified if already exists).
-If password is NULL, entry is deleted.  
+If password is NULL, entry is deleted.
 Return: 1 on success, 0 on error.
 
-   
+
     int mg_parse_multipart(const char *buf, int buf_len,
                            char *var_name, int var_name_len,
                            char *file_name, int file_name_len,
