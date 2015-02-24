@@ -124,7 +124,12 @@ typedef struct _stati64 ns_stat_t;
 #include <sys/socket.h>
 #include <sys/select.h>
 #define closesocket(x) close(x)
+#ifndef __OS2__
 #define __cdecl
+#else
+#include <sys/time.h>
+typedef int socklen_t;
+#endif
 #define INVALID_SOCKET (-1)
 #define to64(x) strtoll(x, NULL, 10)
 typedef int sock_t;
@@ -1576,6 +1581,37 @@ static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
   return p;
 }
 #define munmap(x, y)  UnmapViewOfFile(x)
+#define MAP_FAILED NULL
+#define MAP_PRIVATE 0
+#define PROT_READ 0
+#elif defined(__OS2__)
+static void *mmap(void *addr, int64_t len, int prot, int flags, int fd,
+                  int offset) {
+  void *p;
+
+  int pos = lseek( fd, 0, SEEK_CUR ); /* Get a current position */
+
+  if (pos == -1)
+    return NULL;
+
+  /* Seek to offset offset */
+  if (lseek( fd, offset, SEEK_SET) == -1)
+    return NULL;
+
+  p = malloc(len);
+
+  /* Read in a file */
+  if (!p || read(fd, p, len) == -1) {
+    free(p);
+    p = NULL;
+  }
+
+  /* Restore the position */
+  lseek(fd, pos, SEEK_SET);
+
+  return p;
+}
+#define munmap(x, y)  free(x)
 #define MAP_FAILED NULL
 #define MAP_PRIVATE 0
 #define PROT_READ 0
