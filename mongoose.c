@@ -601,13 +601,13 @@ int ns_socketpair(sock_t sp[2]) {
 
 // TODO(lsm): use non-blocking resolver
 static int ns_resolve2(const char *host, struct in_addr *ina) {
-#ifdef NS_ENABLE_GETADDRINFO  
+#ifdef NS_ENABLE_GETADDRINFO
   int rv = 0;
   struct addrinfo hints, *servinfo, *p;
   struct sockaddr_in *h = NULL;
   char *ip = NS_MALLOC(17);
   memset(ip, '\0', 17);
- 
+
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
@@ -2998,9 +2998,9 @@ size_t mg_websocket_write(struct mg_connection *conn, int opcode,
       copy_len = 4 + data_len;
     } else {
       // 64-bit length field
-      copy[1] = 127;
       const uint32_t hi = htonl((uint32_t) ((uint64_t) data_len >> 32));
       const uint32_t lo = htonl(data_len & 0xffffffff);
+      copy[1] = 127;
       memcpy(copy+2,&hi,sizeof(hi));
       memcpy(copy+6,&lo,sizeof(lo));
       memcpy(copy + 10, data, data_len);
