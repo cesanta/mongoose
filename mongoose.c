@@ -1561,11 +1561,11 @@ static const struct {
   {NULL,  0, NULL}
 };
 
-#ifndef MONGOOSE_NO_THREADS
+#ifdef MONGOOSE_ENABLE_THREADS
 void *mg_start_thread(void *(*f)(void *), void *p) {
   return ns_start_thread(f, p);
 }
-#endif  // MONGOOSE_NO_THREADS
+#endif  // MONGOOSE_ENABLE_THREADS
 
 #ifndef MONGOOSE_NO_MMAP
 #ifdef _WIN32

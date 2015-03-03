@@ -149,7 +149,7 @@ all Net Skeleton functions will be available too.
     -DMONGOOSE_NO_DIRECTORY_LISTING  Disable directory listing
     -DMONGOOSE_NO_FILESYSTEM    Disables all file IO, serving from memory only
     -DMONGOOSE_NO_LOGGING       Disable access/error logging
-    -DMONGOOSE_NO_THREADS
+    -DMONGOOSE_ENABLE_THREADS   Enable mg_start_thread() function
     -DMONGOOSE_NO_WEBSOCKET     Disable WebSocket support
     -DMONGOOSE_NO_USER          No concept of a user on used platform.
                                 (Platform does not provide getpwnam, setgid or setuid)
