@@ -183,11 +183,14 @@ points to a directory, Mongoose will show directory listing. If this function
 is used, no calls to `mg_send*` or `mg_printf*` functions must be made, and
 event handler must return `MG_MORE`.
 
-    int mg_websocket_write(struct mg_connection* conn, int opcode,
-                           const char *data, size_t data_len);
+    size_t mg_websocket_write(struct mg_connection* conn, int opcode,
+                              const char *data, size_t data_len);
+    size_t mg_websocket_printf(struct mg_connection* conn, int opcode,
+                               const char *fmt, ...);
 
-Similar to `mg_write()`, but wraps the data into a websocket frame with a
-given websocket `opcode`.
+
+Similar to `mg_write()` and `mg_printf()`, but wraps the data into a
+websocket frame with a given websocket `opcode`.
 
     const char *mg_get_header(const struct mg_connection *, const char *name);
 
