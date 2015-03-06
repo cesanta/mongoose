@@ -3,7 +3,7 @@
 
 PROG = proxy_server
 FLAGS = -I../..  -DNS_ENABLE_SSL
-CFLAGS = -W -Wall -g -O0 -pthread  -lssl $(FLAGS) $(CFLAGS_EXTRA)
+CFLAGS = -W -Wall -g -O0 -pthread  -lssl -DMONGOOSE_ENABLE_THREADS $(FLAGS) $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c ../../mongoose.c
 
 unix: $(SOURCES)
