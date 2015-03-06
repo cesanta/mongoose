@@ -2,7 +2,7 @@
 # All rights reserved
 
 PROG = ws_ssl
-CFLAGS = -W -Wall -I../.. -I. -pthread -g -O0 -DNS_ENABLE_SSL -DSSL_WRAPPER_USE_AS_LIBRARY $(CFLAGS_EXTRA)
+CFLAGS = -W -Wall -I../.. -I. -pthread -g -O0 -DMONGOOSE_ENABLE_THREADS -DNS_ENABLE_SSL -DSSL_WRAPPER_USE_AS_LIBRARY $(CFLAGS_EXTRA)
 LDFLAGS = -lssl
 SOURCES = ws_ssl.c ../../mongoose.c ssl_wrapper.c
 
