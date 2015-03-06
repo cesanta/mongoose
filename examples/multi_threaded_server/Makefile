@@ -2,7 +2,7 @@
 # All rights reserved
 
 PROG = multi_threaded_server
-CFLAGS = -W -Wall -I../.. -pthread -g -O0 $(CFLAGS_EXTRA)
+CFLAGS = -W -Wall -I../.. -pthread -g -O0 -DMONGOOSE_ENABLE_THREADS $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c ../../mongoose.c
 
 $(PROG): $(SOURCES)
