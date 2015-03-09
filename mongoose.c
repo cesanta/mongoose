@@ -1486,7 +1486,7 @@ enum endpoint_type {
 };
 
 #define MG_HEADERS_SENT NSF_USER_1
-#define MG_LONG_RUNNING NSF_USER_2
+#define MG_USING_CHUNKED_API NSF_USER_2
 #define MG_CGI_CONN NSF_USER_3
 #define MG_PROXY_CONN NSF_USER_4
 #define MG_PROXY_DONT_PARSE NSF_USER_5
@@ -2716,18 +2716,22 @@ size_t mg_write(struct mg_connection *c, const void *buf, int len) {
 }
 
 void mg_send_status(struct mg_connection *c, int status) {
+  struct connection *conn = MG_CONN_2_CONN(c);
   if (c->status_code == 0) {
     c->status_code = status;
     mg_printf(c, "HTTP/1.1 %d %s\r\n", status, status_code_to_str(status));
   }
+  conn->ns_conn->flags |= MG_USING_CHUNKED_API;
 }
 
 void mg_send_header(struct mg_connection *c, const char *name, const char *v) {
+  struct connection *conn = MG_CONN_2_CONN(c);
   if (c->status_code == 0) {
     c->status_code = 200;
     mg_printf(c, "HTTP/1.1 %d %s\r\n", 200, status_code_to_str(200));
   }
   mg_printf(c, "%s: %s\r\n", name, v);
+  conn->ns_conn->flags |= MG_USING_CHUNKED_API;
 }
 
 static void terminate_headers(struct mg_connection *c) {
@@ -3109,7 +3113,8 @@ static int call_request_handler(struct connection *conn) {
   int result;
   conn->mg_conn.content = conn->ns_conn->recv_iobuf.buf;
   if ((result = call_user(conn, MG_REQUEST)) == MG_TRUE) {
-    if (conn->ns_conn->flags & MG_HEADERS_SENT) {
+    if (conn->ns_conn->flags & MG_USING_CHUNKED_API) {
+      terminate_headers(&conn->mg_conn);
       write_terminating_chunk(conn);
     }
     close_local_endpoint(conn);
@@ -4875,7 +4880,7 @@ static void close_local_endpoint(struct connection *conn) {
   conn->cl = conn->num_bytes_recv = conn->request_len = 0;
   conn->ns_conn->flags &= ~(NSF_FINISHED_SENDING_DATA |
                             NSF_BUFFER_BUT_DONT_SEND | NSF_CLOSE_IMMEDIATELY |
-                            MG_HEADERS_SENT | MG_LONG_RUNNING);
+                            MG_HEADERS_SENT | MG_USING_CHUNKED_API);
 
   // Do not memset() the whole structure, as some of the fields
   // (IP addresses & ports, server_param) must survive. Nullify the rest.
