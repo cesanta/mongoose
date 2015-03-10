@@ -88,7 +88,7 @@ enum {
 struct mg_server *mg_create_server(void *server_param, mg_handler_t handler);
 void mg_destroy_server(struct mg_server **);
 const char *mg_set_option(struct mg_server *, const char *opt, const char *val);
-int mg_poll_server(struct mg_server *, int milliseconds);
+time_t mg_poll_server(struct mg_server *, int milliseconds);
 const char **mg_get_valid_option_names(void);
 const char *mg_get_option(const struct mg_server *server, const char *name);
 void mg_copy_listeners(struct mg_server *from, struct mg_server *to);
@@ -102,7 +102,7 @@ void mg_send_status(struct mg_connection *, int status_code);
 void mg_send_header(struct mg_connection *, const char *name, const char *val);
 size_t mg_send_data(struct mg_connection *, const void *data, int data_len);
 size_t mg_printf_data(struct mg_connection *, const char *format, ...);
-size_t mg_write(struct mg_connection *, const void *buf, int len);
+size_t mg_write(struct mg_connection *, const void *buf, size_t len);
 size_t mg_printf(struct mg_connection *conn, const char *fmt, ...);
 
 size_t mg_websocket_write(struct mg_connection *, int opcode,
@@ -128,8 +128,8 @@ int mg_parse_multipart(const char *buf, int buf_len,
 void *mg_start_thread(void *(*func)(void *), void *param);
 char *mg_md5(char buf[33], ...);
 int mg_authorize_digest(struct mg_connection *c, FILE *fp);
-int mg_url_encode(const char *src, size_t s_len, char *dst, size_t dst_len);
-int mg_url_decode(const char *src, int src_len, char *dst, int dst_len, int);
+size_t mg_url_encode(const char *src, size_t s_len, char *dst, size_t dst_len);
+int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len, int);
 int mg_terminate_ssl(struct mg_connection *c, const char *cert);
 int mg_forward(struct mg_connection *c, const char *addr);
 void *mg_mmap(FILE *fp, size_t size);
