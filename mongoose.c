@@ -2428,7 +2428,8 @@ static void remove_double_dots_and_double_slashes(char *s) {
       // Skip all following slashes, backslashes and double-dots
       while (s[0] != '\0') {
         if (s[0] == '/' || s[0] == '\\') { s++; }
-        else if (s[0] == '.' && s[1] == '.') { s += 2; }
+        else if (s[0] == '.' && (s[1] == '/' || s[1] == '\\')) { s += 2; }
+        else if (s[0] == '.' && s[1] == '.' && (s[2] == '/' || s[2] == '\\')) { s += 3; }
         else { break; }
       }
     }
