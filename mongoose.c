@@ -80,6 +80,8 @@
 #ifdef _WIN32
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")    // Linking with winsock library
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
 #endif
 #include <winsock2.h>
 #include <ws2tcpip.h>

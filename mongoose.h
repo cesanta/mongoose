@@ -22,6 +22,7 @@
 
 #include <stdio.h>      // required for FILE
 #include <stddef.h>     // required for size_t
+#include <sys/types.h>  // required for time_t
 
 #ifdef __cplusplus
 extern "C" {
