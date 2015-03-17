@@ -34,8 +34,6 @@
 //
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
-//
-// $Date: 2014-09-28 05:04:41 UTC $
 
 #ifndef NS_SKELETON_HEADER_INCLUDED
 #define NS_SKELETON_HEADER_INCLUDED
@@ -1406,6 +1404,7 @@ enum {
   CGI_PATTERN,
 #endif
   DAV_AUTH_FILE,
+  DAV_ROOT,
   DOCUMENT_ROOT,
 #ifndef MONGOOSE_NO_DIRECTORY_LISTING
   ENABLE_DIRECTORY_LISTING,
@@ -1444,6 +1443,7 @@ static const char *static_config_options[] = {
   "cgi_pattern", DEFAULT_CGI_PATTERN,
 #endif
   "dav_auth_file", NULL,
+  "dav_root", NULL,
   "document_root",  NULL,
 #ifndef MONGOOSE_NO_DIRECTORY_LISTING
   "enable_directory_listing", "yes",
@@ -2633,6 +2633,12 @@ void mg_template(struct mg_connection *conn, const char *s,
 }
 
 #ifndef MONGOOSE_NO_FILESYSTEM
+static int is_dav_request(const struct connection *conn) {
+  const char *s = conn->mg_conn.request_method;
+  return !strcmp(s, "PUT") || !strcmp(s, "DELETE") ||
+    !strcmp(s, "MKCOL") || !strcmp(s, "PROPFIND");
+}
+
 static int must_hide_file(struct connection *conn, const char *path) {
   const char *pw_pattern = "**" PASSWORDS_FILE_NAME "$";
   const char *pattern = conn->server->config_options[HIDE_FILES_PATTERN];
@@ -2645,7 +2651,12 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
                                     size_t buf_len, file_stat_t *st) {
   struct vec a, b;
   const char *rewrites = conn->server->config_options[URL_REWRITES];
-  const char *root = conn->server->config_options[DOCUMENT_ROOT];
+  const char *root =
+#ifndef MONGOOSE_NO_DAV
+    is_dav_request(conn) && conn->server->config_options[DAV_ROOT] != NULL ?
+    conn->server->config_options[DAV_ROOT] :
+#endif
+    conn->server->config_options[DOCUMENT_ROOT];
 #ifndef MONGOOSE_NO_CGI
   const char *cgi_pat = conn->server->config_options[CGI_PATTERN];
   char *p;
@@ -4187,12 +4198,6 @@ static int is_authorized_for_dav(struct connection *conn) {
   }
 
   return authorized;
-}
-
-static int is_dav_request(const struct connection *conn) {
-  const char *s = conn->mg_conn.request_method;
-  return !strcmp(s, "PUT") || !strcmp(s, "DELETE") ||
-    !strcmp(s, "MKCOL") || !strcmp(s, "PROPFIND");
 }
 #endif // MONGOOSE_NO_AUTH
 
