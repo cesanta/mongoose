@@ -120,8 +120,8 @@ static const char *test_parse_http_message() {
   ASSERT(strcmp(ri.http_version, "1.1") == 0);
   ASSERT(ri.num_headers == 0);
 
-  ASSERT(parse_http_message(req2, sizeof(req2) - 1, &ri) == -1);
-  ASSERT(parse_http_message(req6, 0, &ri) == -1);
+  ASSERT(parse_http_message(req2, sizeof(req2) - 1, &ri) == SIZE_MAX);
+  ASSERT(parse_http_message(req6, 0, &ri) == SIZE_MAX);
   ASSERT(parse_http_message(req8, sizeof(req8) - 1, &ri) == sizeof(req8) - 1);
 
   // TODO(lsm): Fix this. Header value may span multiple lines.
@@ -261,6 +261,7 @@ static const char *test_url_decode(void) {
   ASSERT(strcmp(buf, "a ") == 0);
 
   ASSERT(mg_url_decode("%61", 1, buf, sizeof(buf), 1) == 1);
+  printf("[%s]\n", buf);
   ASSERT(strcmp(buf, "%") == 0);
 
   ASSERT(mg_url_decode("%61", 2, buf, sizeof(buf), 1) == 2);

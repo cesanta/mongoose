@@ -1383,7 +1383,7 @@ typedef pid_t process_id_t;
 
 struct vec {
   const char *ptr;
-  uintptr_t len;
+  size_t len;
 };
 
 // For directory listing and WevDAV support
@@ -1747,7 +1747,7 @@ static int mg_snprintf(char *buf, size_t buflen, const char *fmt, ...) {
 //   >0  actual request length, including last \r\n\r\n
 static int get_request_len(const char *s, size_t buf_len) {
   const unsigned char *buf = (unsigned char *) s;
-  int i;
+  size_t i;
 
   for (i = 0; i < buf_len; i++) {
     // Control characters are not allowed but >=128 are.
@@ -1787,7 +1787,7 @@ static char *skip(char **buf, const char *delimiters) {
 // Parse HTTP headers from the given buffer, advance buffer to the point
 // where parsing stopped.
 static void parse_http_headers(char **buf, struct mg_connection *ri) {
-  int i;
+  size_t i;
 
   for (i = 0; i < ARRAY_SIZE(ri->http_headers); i++) {
     ri->http_headers[i].name = skip(buf, ": ");
@@ -2339,12 +2339,12 @@ static void on_cgi_data(struct ns_connection *nc) {
   if (conn->ns_conn->flags & NSF_BUFFER_BUT_DONT_SEND) {
     struct iobuf *io = &conn->ns_conn->send_iobuf;
     size_t s_len = sizeof(cgi_status) - 1;
-    ssize_t len = get_request_len(io->buf + s_len, io->len - s_len);
+    int len = get_request_len(io->buf + s_len, io->len - s_len);
     char buf[MAX_REQUEST_SIZE], *s = buf;
 
     if (len == 0) return;
 
-    if (len < 0 || len > sizeof(buf)) {
+    if (len < 0 || len > (int) sizeof(buf)) {
       len = io->len;
       iobuf_remove(io, io->len);
       send_http_error(conn, 500, "CGI program sent malformed headers: [%.*s]",
@@ -2440,11 +2440,12 @@ static void remove_double_dots_and_double_slashes(char *s) {
 
 int mg_url_decode(const char *src, size_t src_len, char *dst,
                   size_t dst_len, int is_form_url_encoded) {
-  int i, j, a, b;
-#define HEXTOI(x) (isdigit(x) ? x - '0' : x - 'W')
+  size_t i, j = 0;
+  int a, b;
+#define HEXTOI(x) (isdigit(x) ? (x) - '0' : (x) - 'W')
 
   for (i = j = 0; i < src_len && j < dst_len - 1; i++, j++) {
-    if (src[i] == '%' && i < src_len - 2 &&
+    if (src[i] == '%' && i + 2 < src_len &&
         isxdigit(* (const unsigned char *) (src + i + 1)) &&
         isxdigit(* (const unsigned char *) (src + i + 2))) {
       a = tolower(* (const unsigned char *) (src + i + 1));
@@ -2473,13 +2474,16 @@ static int is_valid_http_method(const char *s) {
 // This function modifies the buffer by NUL-terminating
 // HTTP request components, header names and header values.
 // Note that len must point to the last \n of HTTP headers.
-static size_t parse_http_message(char *buf, size_t len, struct mg_connection *ri) {
+static size_t parse_http_message(char *buf, size_t len,
+                                 struct mg_connection *ri) {
   int is_request, n;
 
   // Reset the connection. Make sure that we don't touch fields that are
   // set elsewhere: remote_ip, remote_port, server_param
   ri->request_method = ri->uri = ri->http_version = ri->query_string = NULL;
   ri->num_headers = ri->status_code = ri->is_websocket = ri->content_len = 0;
+
+  if (len < 1) return SIZE_MAX;
 
   buf[len - 1] = '\0';
 
@@ -2496,7 +2500,7 @@ static size_t parse_http_message(char *buf, size_t len, struct mg_connection *ri
   is_request = is_valid_http_method(ri->request_method);
   if ((is_request && memcmp(ri->http_version, "HTTP/", 5) != 0) ||
       (!is_request && memcmp(ri->request_method, "HTTP/", 5) != 0)) {
-    len = -1;
+    len = SIZE_MAX;
   } else {
     if (is_request) {
       ri->http_version += 5;
@@ -2651,7 +2655,7 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
   // Perform virtual hosting rewrites
   if (rewrites != NULL && domain != NULL) {
     const char *colon = strchr(domain, ':');
-    ssize_t domain_len = colon == NULL ? strlen(domain) : colon - domain;
+    size_t domain_len = colon == NULL ? strlen(domain) : colon - domain;
 
     while ((rewrites = next_option(rewrites, &a, &b)) != NULL) {
       if (a.len > 1 && a.ptr[0] == '@' && a.len == domain_len + 1 &&
@@ -3258,8 +3262,12 @@ static int find_index_file(struct connection *conn, char *path,
   // path and see if the file exists. If it exists, break the loop
   while ((list = next_option(list, &filename_vec, NULL)) != NULL) {
 
+    if (path_len <= n + 2) {
+      continue;
+    }
+
     // Ignore too long entries that may overflow path buffer
-    if (filename_vec.len > (int) (path_len - (n + 2)))
+    if (filename_vec.len > (path_len - (n + 2)))
       continue;
 
     // Prepare full path to the index file
