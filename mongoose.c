@@ -2485,7 +2485,7 @@ static size_t parse_http_message(char *buf, size_t len,
   ri->request_method = ri->uri = ri->http_version = ri->query_string = NULL;
   ri->num_headers = ri->status_code = ri->is_websocket = ri->content_len = 0;
 
-  if (len < 1) return SIZE_MAX;
+  if (len < 1) return ~0;
 
   buf[len - 1] = '\0';
 
@@ -2502,7 +2502,7 @@ static size_t parse_http_message(char *buf, size_t len,
   is_request = is_valid_http_method(ri->request_method);
   if ((is_request && memcmp(ri->http_version, "HTTP/", 5) != 0) ||
       (!is_request && memcmp(ri->request_method, "HTTP/", 5) != 0)) {
-    len = SIZE_MAX;
+    len = ~0;
   } else {
     if (is_request) {
       ri->http_version += 5;

@@ -120,8 +120,8 @@ static const char *test_parse_http_message() {
   ASSERT(strcmp(ri.http_version, "1.1") == 0);
   ASSERT(ri.num_headers == 0);
 
-  ASSERT(parse_http_message(req2, sizeof(req2) - 1, &ri) == SIZE_MAX);
-  ASSERT(parse_http_message(req6, 0, &ri) == SIZE_MAX);
+  ASSERT(parse_http_message(req2, sizeof(req2) - 1, &ri) == (size_t) ~0);
+  ASSERT(parse_http_message(req6, 0, &ri) == (size_t) ~0);
   ASSERT(parse_http_message(req8, sizeof(req8) - 1, &ri) == sizeof(req8) - 1);
 
   // TODO(lsm): Fix this. Header value may span multiple lines.
