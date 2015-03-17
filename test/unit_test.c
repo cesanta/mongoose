@@ -198,17 +198,19 @@ static const char *test_match_prefix(void) {
 }
 
 static const char *test_remove_double_dots() {
-  struct { char before[20], after[20]; } data[] = {
+  struct { char before[30], after[30]; } data[] = {
     {"////a", "/a"},
-    {"/.....", "/."},
-    {"/......", "/"},
+    {"/.....", "/....."},
+    {"/......", "/......"},
     {"...", "..."},
-    {"/...///", "/./"},
+    {"/...///", "/.../"},
     {"/a...///", "/a.../"},
     {"/.x", "/.x"},
     {"/\\", "/"},
     {"/a\\", "/a\\"},
-    {"/a\\\\...", "/a\\."},
+    {"/a\\\\...", "/a\\..."},
+    {"foo/x..y/././y/../../..", "foo/x..y/y/"},
+    {"foo/..x", "foo/..x"},
   };
   size_t i;
 
