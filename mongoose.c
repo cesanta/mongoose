@@ -46,8 +46,11 @@
 #undef _UNICODE                 // Use multibyte encoding on Windows
 #define _MBCS                   // Use multibyte encoding on Windows
 #define _INTEGRAL_MAX_BITS 64   // Enable _stati64() on Windows
+#if !defined(_CRT_SECURE_NO_WARNINGS)
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005+
+#endif
 #undef WIN32_LEAN_AND_MEAN      // Let windows.h always include winsock2.h
+#pragma warning(disable:4267)   // Disable size_t to int conversion errors so can compile with Warnings as Errors enabled.
 #ifdef __Linux__
 #define _XOPEN_SOURCE 600       // For flockfile() on Linux
 #endif
@@ -614,8 +617,7 @@ static int ns_resolve2(const char *host, struct in_addr *ina) {
   int rv = 0;
   struct addrinfo hints, *servinfo, *p;
   struct sockaddr_in *h = NULL;
-  char *ip = NS_MALLOC(17);
-  memset(ip, '\0', 17);
+
 
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_INET;
@@ -2469,7 +2471,8 @@ int mg_url_decode(const char *src, size_t src_len, char *dst,
 static int is_valid_http_method(const char *s) {
   return !strcmp(s, "GET") || !strcmp(s, "POST") || !strcmp(s, "HEAD") ||
     !strcmp(s, "CONNECT") || !strcmp(s, "PUT") || !strcmp(s, "DELETE") ||
-    !strcmp(s, "OPTIONS") || !strcmp(s, "PROPFIND") || !strcmp(s, "MKCOL");
+    !strcmp(s, "OPTIONS") || !strcmp(s, "PROPFIND") || !strcmp(s, "MKCOL") || 
+    !strcmp(s, "PATCH");
 }
 
 // Parse HTTP request, fill in mg_request structure.
