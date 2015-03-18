@@ -5149,11 +5149,18 @@ const char *mg_set_option(struct mg_server *server, const char *name,
         error_msg = "Cannot bind to port";
         break;
       } else {
-        char buf2[50];
+        char buf2[50], cert[100], ca[100];
+        union socket_address sa;
+        int proto, use_ssl;
+
+        ns_parse_address(vec.ptr, &sa, &proto, &use_ssl, cert, ca);
         ns_sock_to_str(c->sock, buf2, sizeof(buf2),
                        memchr(vec.ptr, ':', vec.len) == NULL ? 2 : 3);
-        n += snprintf(buf + n, sizeof(buf) - n, "%s%s",
-                      n > 0 ? "," : "", buf2);
+
+        n += snprintf(buf + n, sizeof(buf) - n, "%s%s%s%s%s%s%s",
+                      n > 0 ? "," : "",
+                      use_ssl ? "ssl://" : "",
+                      buf2, cert[0] ? ":" : "", cert, ca[0] ? ":" : "", ca);
       }
     }
     buf[sizeof(buf) - 1] = '\0';
