@@ -699,8 +699,8 @@ static int ns_parse_address(const char *str, union socket_address *sa,
     sa->sin.sin_port = htons((uint16_t) port);
   }
 
-  if (*use_ssl && (sscanf(str + len, ":%99[^:]:%99[^:]%n", cert, ca, &n) == 2 ||
-                   sscanf(str + len, ":%99[^:]%n", cert, &n) == 1)) {
+  if (*use_ssl && (sscanf(str + len, ":%99[^:,]:%99[^:,]%n", cert, ca, &n) == 2 ||
+                   sscanf(str + len, ":%99[^:,]%n", cert, &n) == 1)) {
     len += n;
   }
 
@@ -5134,20 +5134,31 @@ const char *mg_set_option(struct mg_server *server, const char *name,
   DBG(("%s [%s]", name, *v));
 
   if (ind == LISTENING_PORT) {
+    char buf[500] = "";
+    size_t n = 0;
     struct vec vec;
+    /*
+     * Ports can be specified as 0, meaning that OS has to choose any
+     * free port that is available. In order to pass chosen port number to
+     * the user, we rewrite all 0 port to chosen values.
+     */
     while ((value = next_option(value, &vec, NULL)) != NULL) {
       struct ns_connection *c = ns_bind(&server->ns_mgr, vec.ptr,
                                         mg_ev_handler, NULL);
-      if (c== NULL) {
+      if (c == NULL) {
         error_msg = "Cannot bind to port";
         break;
       } else {
-        char buf[100];
-        ns_sock_to_str(c->sock, buf, sizeof(buf), 2);
-        NS_FREE(*v);
-        *v = mg_strdup(buf);
+        char buf2[50];
+        ns_sock_to_str(c->sock, buf2, sizeof(buf2),
+                       memchr(vec.ptr, ':', vec.len) == NULL ? 2 : 3);
+        n += snprintf(buf + n, sizeof(buf) - n, "%s%s",
+                      n > 0 ? "," : "", buf2);
       }
     }
+    buf[sizeof(buf) - 1] = '\0';
+    NS_FREE(*v);
+    *v = mg_strdup(buf);
 #ifndef MONGOOSE_NO_FILESYSTEM
   } else if (ind == HEXDUMP_FILE) {
     server->ns_mgr.hexdump_file = *v;
