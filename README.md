@@ -45,24 +45,13 @@ Download, double-click to start, run browser -- that's all!
 ![shot3](http://cesanta.com/images/tut_sharing/tut3.png)
 ![shot4](http://cesanta.com/images/tut_sharing/tut4.png)
 
-# Acknowledgements
+# Contributions
 
-Mongoose made better thanks to the contribution of following people:
-
-Arnout Vandecappelle, Benoît Amiaux, Boris Pek, Cody Hanson, Colin Leitner,
-Daniel Oaks, Eric Bakan, Erik Oomen, Filipp Kovalev, Ger Hobbelt,
-Hendrik Polczynski, Igor Okulist, Jay, Joe Mucchiello, John Safranek,
-José Miguel Gonçalves, Shueng Chuan, Katerina Blinova, Konstantin Sorokin,
-Marin Atanasov, Matt Healy, Mitch Hendrickson, Nigel Stewart, Pavel Khlebovich,
-Sebastian Reinhard, Stefan Doehla, abadc0de, nullable.type,
-T.Barmann, D.Hughes, J.C.Sloan, R.Romeo, L.E.Spencer, S.Kotay, R.M.Shorter,
-W.Mar, J.Wilander, Santa from Memphis, S.Davies, C.Beck,
-O.M.Vilhunen, C.Radik, G.Woodcock, M.Szczepkowski,
-Eternal Lands Dev Team, T.Tollet, C.Tangerino, G.Karsai, A.Bourgett,
-C.Blakemore, D.Fonaryov, T.Andrle, O.IJsselmuiden, R.Womack, M.Tomlinson,
-A.Slåttå, L.Farrell, J.D.P.Ballestero, V.Albaev, B.Harker, T.Scheffel, H.Klein,
-R.Merit, T.Bennett, H.Solis, A.Zincenko, M.S., S.Krul, K.Cooke, S.McCallum,
-F.Morenius, and 10 others.
+People who have agreed to the
+[Cesanta CLA](http://cesanta.com/contributors_la.html)
+can make contributions. Note that the CLA isn't a copyright
+_assigment_ but rather a copyright _license_.
+You retain the copyright on your contributions.
 
 # Licensing
 
@@ -72,11 +61,11 @@ source licenses. The GPLv2 open source License does not generally permit
 incorporating this software into non-open source programs. 
 For those customers who do not wish to comply with the GPLv2 open
 source license requirements,
-[Cesanta Software](http://cesanta.com) offers a full,
+[Cesanta](http://cesanta.com) offers a full,
 royalty-free commercial license and professional support
 without any of the GPL restrictions.
 
-# Other products by Cesanta Software: simple and effective
+# Other products by Cesanta
 
 - [Fossa](http://github.com/cesanta/fossa) - Multi-protocol networking library
 - [SSL Wrapper](https://github.com/cesanta/ssl_wrapper) - application to
@@ -84,3 +73,4 @@ without any of the GPL restrictions.
 - [Frozen](https://github.com/cesanta/frozen) - JSON parser and generator
 - [SLRE](https://github.com/cesanta/slre) - Super Light Regular Expression
   library
+- [V7](https://github.com/cesanta/v7) - Embedded JavaScript engine
