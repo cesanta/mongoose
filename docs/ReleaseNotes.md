@@ -23,7 +23,7 @@ Changes in Libmongoose library:
 Changes in Mongoose binary:
 
 - Added `-start_browser` option to disable automatic browser launch
-- Added SSL support to DEV edition
+- Added experimental SSL support. To listen on HTTPS port, use `ssl://PORT:SSL_CERT` format. For example, to listen on HTTP port 8080 and HTTPS port 8043, use `-listening_port 8080,ssl://8043:ssl_cert.pem`
 
 ## Release 5.5, October 28 2014
 
