@@ -616,8 +616,6 @@ static int ns_resolve2(const char *host, struct in_addr *ina) {
   int rv = 0;
   struct addrinfo hints, *servinfo, *p;
   struct sockaddr_in *h = NULL;
-  char *ip = NS_MALLOC(17);
-  memset(ip, '\0', 17);
 
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_INET;
