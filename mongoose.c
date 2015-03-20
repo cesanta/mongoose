@@ -61,6 +61,10 @@
 #pragma warning (disable : 4204)  // missing c99 support
 #endif
 
+#ifndef MONGOOSE_ENABLE_THREADS
+#define NS_DISABLE_THREADS
+#endif
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <assert.h>
