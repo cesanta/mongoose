@@ -2473,7 +2473,7 @@ int mg_url_decode(const char *src, size_t src_len, char *dst,
 static int is_valid_http_method(const char *s) {
   return !strcmp(s, "GET") || !strcmp(s, "POST") || !strcmp(s, "HEAD") ||
     !strcmp(s, "CONNECT") || !strcmp(s, "PUT") || !strcmp(s, "DELETE") ||
-    !strcmp(s, "OPTIONS") || !strcmp(s, "PROPFIND") || !strcmp(s, "MKCOL") || 
+    !strcmp(s, "OPTIONS") || !strcmp(s, "PROPFIND") || !strcmp(s, "MKCOL") ||
     !strcmp(s, "PATCH");
 }
 
@@ -3850,6 +3850,7 @@ void mg_send_digest_auth_request(struct mg_connection *c) {
   c->status_code = 401;
   mg_printf(c,
             "HTTP/1.1 401 Unauthorized\r\n"
+            "Content-Length: 0\r\n"
             "WWW-Authenticate: Digest qop=\"auth\", "
             "realm=\"%s\", nonce=\"%lu\"\r\n\r\n",
             conn->server->config_options[AUTH_DOMAIN],
