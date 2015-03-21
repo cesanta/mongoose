@@ -67,6 +67,10 @@
 #define NS_DISABLE_THREADS
 #endif
 
+#ifdef __OS2__
+#define _MMAP_DECLARED          // Prevent dummy mmap() declaration in stdio.h
+#endif
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <assert.h>
@@ -3353,7 +3357,8 @@ static void open_file_endpoint(struct connection *conn, const char *path,
   // Prepare Etag, Date, Last-Modified headers. Must be in UTC, according to
   // http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.3
   gmt_time_string(date, sizeof(date), &curtime);
-  gmt_time_string(lm, sizeof(lm), &st->st_mtime);
+  time_t t = st->st_mtime;
+  gmt_time_string(lm, sizeof(lm), &t);
   construct_etag(etag, sizeof(etag), st);
 
   n = mg_snprintf(headers, sizeof(headers),
@@ -3573,7 +3578,8 @@ static void print_dir_entry(const struct dir_entry *de) {
       mg_snprintf(size, sizeof(size), "%.1fG", (double) fsize / 1073741824);
     }
   }
-  strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&de->st.st_mtime));
+  time_t t = de->st.st_mtime;
+  strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&t));
   mg_url_encode(de->file_name, strlen(de->file_name), href, sizeof(href));
   mg_printf_data(&de->conn->mg_conn,
                   "<tr><td><a href=\"%s%s\">%s%s</a></td>"
@@ -3644,8 +3650,8 @@ static void send_directory_listing(struct connection *conn, const char *dir) {
 static void print_props(struct connection *conn, const char *uri,
                         file_stat_t *stp) {
   char mtime[64];
-
-  gmt_time_string(mtime, sizeof(mtime), &stp->st_mtime);
+  time_t t = stp->st_mtime;
+  gmt_time_string(mtime, sizeof(mtime), &t);
   mg_printf(&conn->mg_conn,
       "<d:response>"
        "<d:href>%s</d:href>"
