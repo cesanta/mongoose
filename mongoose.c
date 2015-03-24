@@ -4693,6 +4693,10 @@ static void try_parse(struct connection *conn) {
     // iobuf could be reallocated, and pointers in parsed request could
     // become invalid.
     conn->request = (char *) NS_MALLOC(conn->request_len);
+    if (conn->request == NULL) {
+      conn->ns_conn->flags |= NSF_CLOSE_IMMEDIATELY;
+      return;
+    }
     memcpy(conn->request, io->buf, conn->request_len);
     //DBG(("%p [%.*s]", conn, conn->request_len, conn->request));
     iobuf_remove(io, conn->request_len);
@@ -5094,7 +5098,9 @@ void mg_copy_listeners(struct mg_server *s, struct mg_server *to) {
 
 #ifdef NS_ENABLE_SSL
       /* See https://github.com/cesanta/mongoose/issues/441 */
-      if (tmp->ssl_ctx != NULL) (SSL_CTX *) tmp->ssl_ctx->references++;
+      if (tmp->ssl_ctx != NULL) {
+        tmp->ssl_ctx->references++;
+      }
 #endif
 
       tmp->mgr = &to->ns_mgr;
