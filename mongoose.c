@@ -5091,6 +5091,12 @@ void mg_copy_listeners(struct mg_server *s, struct mg_server *to) {
     if ((c->flags & NSF_LISTENING) &&
         (tmp = (struct ns_connection *) NS_MALLOC(sizeof(*tmp))) != NULL) {
       memcpy(tmp, c, sizeof(*tmp));
+
+#ifdef NS_ENABLE_SSL
+      /* See https://github.com/cesanta/mongoose/issues/441 */
+      if (tmp->ssl_ctx != NULL) (SSL_CTX *) tmp->ssl_ctx->references++;
+#endif
+
       tmp->mgr = &to->ns_mgr;
       ns_add_conn(tmp->mgr, tmp);
     }
