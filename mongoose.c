@@ -63,6 +63,10 @@
 #pragma warning (disable : 4204)  // missing c99 support
 #endif
 
+#if defined(_WIN32) && !defined(MONGOOSE_NO_CGI)
+#define MONGOOSE_ENABLE_THREADS   /* Windows uses stdio threads for CGI */
+#endif
+
 #ifndef MONGOOSE_ENABLE_THREADS
 #define NS_DISABLE_THREADS
 #endif
@@ -3327,7 +3331,7 @@ static void open_file_endpoint(struct connection *conn, const char *path,
                                file_stat_t *st, const char *extra_headers) {
   char date[64], lm[64], etag[64], range[64], headers[1000];
   const char *msg = "OK", *hdr;
-  time_t curtime = time(NULL);
+  time_t t, curtime = time(NULL);
   int64_t r1, r2;
   struct vec mime_vec;
   int n;
@@ -3357,7 +3361,7 @@ static void open_file_endpoint(struct connection *conn, const char *path,
   // Prepare Etag, Date, Last-Modified headers. Must be in UTC, according to
   // http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.3
   gmt_time_string(date, sizeof(date), &curtime);
-  time_t t = st->st_mtime; // store in local variable for NDK compile
+  t = st->st_mtime; // store in local variable for NDK compile
   gmt_time_string(lm, sizeof(lm), &t);
   construct_etag(etag, sizeof(etag), st);
 
@@ -3562,6 +3566,7 @@ static void print_dir_entry(const struct dir_entry *de) {
   int64_t fsize = de->st.st_size;
   int is_dir = S_ISDIR(de->st.st_mode);
   const char *slash = is_dir ? "/" : "";
+  time_t t;
 
   if (is_dir) {
     mg_snprintf(size, sizeof(size), "%s", "[DIRECTORY]");
@@ -3578,7 +3583,7 @@ static void print_dir_entry(const struct dir_entry *de) {
       mg_snprintf(size, sizeof(size), "%.1fG", (double) fsize / 1073741824);
     }
   }
-  time_t t = de->st.st_mtime;  // store in local variable for NDK compile
+  t = de->st.st_mtime;  // store in local variable for NDK compile
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&t));
   mg_url_encode(de->file_name, strlen(de->file_name), href, sizeof(href));
   mg_printf_data(&de->conn->mg_conn,
