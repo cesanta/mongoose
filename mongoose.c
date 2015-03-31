@@ -5101,8 +5101,8 @@ void mg_copy_listeners(struct mg_server *s, struct mg_server *to) {
         (tmp = (struct ns_connection *) NS_MALLOC(sizeof(*tmp))) != NULL) {
       memcpy(tmp, c, sizeof(*tmp));
 
-#ifdef NS_ENABLE_SSL
-      /* See https://github.com/cesanta/mongoose/issues/441 */
+#if defined(NS_ENABLE_SSL) && defined(HEADER_SSL_H)
+      /* OpenSSL only. See https://github.com/cesanta/mongoose/issues/441 */
       if (tmp->ssl_ctx != NULL) {
         tmp->ssl_ctx->references++;
       }
@@ -5166,6 +5166,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
     char buf[500] = "";
     size_t n = 0;
     struct vec vec;
+
     /*
      * Ports can be specified as 0, meaning that OS has to choose any
      * free port that is available. In order to pass chosen port number to
