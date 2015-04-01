@@ -3640,12 +3640,14 @@ static void send_directory_listing(struct connection *conn, const char *dir) {
               sort_direction, sort_direction, sort_direction);
 
   num_entries = scan_directory(conn, dir, &arr);
-  qsort(arr, num_entries, sizeof(arr[0]), compare_dir_entries);
-  for (i = 0; i < num_entries; i++) {
-    print_dir_entry(&arr[i]);
-    NS_FREE(arr[i].file_name);
+  if (arr) {
+      qsort(arr, num_entries, sizeof(arr[0]), compare_dir_entries);
+      for (i = 0; i < num_entries; i++) {
+        print_dir_entry(&arr[i]);
+        NS_FREE(arr[i].file_name);
+      }
+      NS_FREE(arr);
   }
-  NS_FREE(arr);
 
   write_terminating_chunk(conn);
   close_local_endpoint(conn);
