@@ -1060,7 +1060,7 @@ static void ns_handle_udp(struct ns_connection *ls) {
 }
 
 static void ns_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
-  if (sock != INVALID_SOCKET) {
+  if ( (sock != INVALID_SOCKET) && (sock >= 0) && (sock < FD_SETSIZE) ) {
     FD_SET(sock, set);
     if (*max_fd == INVALID_SOCKET || sock > *max_fd) {
       *max_fd = sock;
@@ -1971,6 +1971,8 @@ struct threadparam {
 };
 
 static int wait_until_ready(sock_t sock, int for_read) {
+  if ( (sock < 0) || (sock >= FD_SETSIZE) )
+    return 0;
   fd_set set;
   FD_ZERO(&set);
   FD_SET(sock, &set);
