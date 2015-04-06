@@ -5043,7 +5043,7 @@ int mg_get_var(const struct mg_connection *conn, const char *name,
                char *dst, size_t dst_len) {
   int len = get_var(conn->query_string, conn->query_string == NULL ? 0 :
                     strlen(conn->query_string), name, dst, dst_len);
-  if (len < 0) {
+  if (len == -1) {
     len = get_var(conn->content, conn->content_len, name, dst, dst_len);
   }
   return len;
