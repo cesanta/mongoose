@@ -1,5 +1,7 @@
 # <img src="http://cesanta.com/images/mongoose_logo.png" width="64" height="64"> Mongoose Web Server
 
+[![Join the chat at https://gitter.im/cesanta/mongoose](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/cesanta/mongoose?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 Mongoose is the most easy to use web server on the planet. A web server of choice for Web developers (PHP, Ruby, Python, etc) and Web designers.
 
 Mongoose is built on top of Libmongoose embedded library, which can turn
