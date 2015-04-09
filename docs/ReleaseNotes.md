@@ -168,7 +168,7 @@ Changes in pre-compiled binaries:
     since mongoose buffers all data prior to calling the callback
    * keep-alive support is the default
    * Dropped SSI support and throttling support
-   *  Several configuraition parameters are gone:
+   *  Several configuration parameters are gone:
     *  `cgi_environment` (replaced with MONGOOSE_CGI),
     *  `protect_uri` (not useful)
     *  `ssi_pattern` (SSI support is gone)
@@ -214,5 +214,5 @@ Changes in pre-compiled binaries:
   *  Couple of bugfixes, thanks to contributors
 
 
-Eearlier release notes could be found by searching
+Earlier release notes could be found by searching
 [Mongoose mailing list](https://groups.google.com/forum/#!forum/mongoose-users)
