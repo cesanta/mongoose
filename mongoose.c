@@ -1403,7 +1403,7 @@ struct dir_entry {
   file_stat_t st;
 };
 
-// NOTE(lsm): this enum shoulds be in sync with the config_options.
+// NOTE(lsm): this enum should be in sync with the config_options.
 enum {
   ACCESS_CONTROL_LIST,
 #ifndef MONGOOSE_NO_FILESYSTEM
@@ -1993,7 +1993,7 @@ static void *push_to_stdin(void *arg) {
       if (!WriteFile(tp->hPipe, buf + sent, n - sent, &k, 0)) stop = 1;
     }
   }
-  DBG(("%s", "FORWARED EVERYTHING TO CGI"));
+  DBG(("%s", "FORWARDED EVERYTHING TO CGI"));
   CloseHandle(tp->hPipe);
   NS_FREE(tp);
   _endthread();
@@ -2504,7 +2504,7 @@ static size_t parse_http_message(char *buf, size_t len,
 
   buf[len - 1] = '\0';
 
-  // RFC says that all initial whitespaces should be ingored
+  // RFC says that all initial whitespaces should be ignored
   while (*buf != '\0' && isspace(* (unsigned char *) buf)) {
     buf++;
   }
@@ -3514,11 +3514,11 @@ static int scan_directory(struct connection *conn, const char *dir,
     }
     mg_snprintf(path, sizeof(path), "%s%c%s", dir, '/', dp->d_name);
 
-    // Resize the array if nesessary
+    // Resize the array if necessary
     if (arr_ind >= arr_size) {
       if ((p = (struct dir_entry *)
            NS_REALLOC(*arr, (inc + arr_size) * sizeof(**arr))) != NULL) {
-        // Memset new chunk to zero, otherwize st_mtime will have garbage which
+        // Memset new chunk to zero, otherwise st_mtime will have garbage which
         // can make strftime() segfault, see
         // http://code.google.com/p/mongoose/issues/detail?id=79
         memset(p + arr_size, 0, sizeof(**arr) * inc);
@@ -4291,7 +4291,7 @@ static void do_ssi_include(struct mg_connection *conn, const char *ssi,
     mg_snprintf(path, sizeof(path), "%s", file_name);
   } else if (sscanf(tag, " file=\"%[^\"]\"", file_name) == 1 ||
              sscanf(tag, " \"%[^\"]\"", file_name) == 1) {
-    // File name is relative to the currect document
+    // File name is relative to the current document
     mg_snprintf(path, sizeof(path), "%s", ssi);
     if ((p = strrchr(path, '/')) != NULL) {
       p[1] = '\0';
@@ -5043,7 +5043,7 @@ int mg_get_var(const struct mg_connection *conn, const char *name,
                char *dst, size_t dst_len) {
   int len = get_var(conn->query_string, conn->query_string == NULL ? 0 :
                     strlen(conn->query_string), name, dst, dst_len);
-  if (len < 0) {
+  if (len == -1) {
     len = get_var(conn->content, conn->content_len, name, dst, dst_len);
   }
   return len;
