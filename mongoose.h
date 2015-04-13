@@ -60,7 +60,8 @@ struct mg_connection {
 struct mg_server; // Opaque structure describing server instance
 enum mg_result { MG_FALSE, MG_TRUE, MG_MORE };
 enum mg_event {
-  MG_POLL = 100,  // Callback return value is ignored
+  MG_POLL = 100,  // If callback returns MG_TRUE connection closes
+                  // after all of data is sent
   MG_CONNECT,     // If callback returns MG_FALSE, connect fails
   MG_AUTH,        // If callback returns MG_FALSE, authentication fails
   MG_REQUEST,     // If callback returns MG_FALSE, Mongoose continues with req
