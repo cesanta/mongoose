@@ -95,6 +95,9 @@
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
 #endif
+#ifndef FD_SETSIZE
+#define FD_SETSIZE 1024
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
