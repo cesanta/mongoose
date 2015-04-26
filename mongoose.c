@@ -451,30 +451,24 @@ static void ns_remove_conn(struct ns_connection *conn) {
 // and return allocated buffer.
 int ns_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   va_list ap_copy;
+  char nul;
   int len;
 
   va_copy(ap_copy, ap);
-  len = vsnprintf(*buf, size, fmt, ap_copy);
+  len = vsnprintf(&nul, 1, fmt, ap_copy);
   va_end(ap_copy);
 
   if (len < 0) {
-    // eCos and Windows are not standard-compliant and return -1 when
-    // the buffer is too small. Keep allocating larger buffers until we
-    // succeed or out of memory.
-    *buf = NULL;
-    while (len < 0) {
-      if (*buf) NS_FREE(*buf);
-      size *= 2;
-      if ((*buf = (char *) NS_MALLOC(size)) == NULL) break;
-      va_copy(ap_copy, ap);
-      len = vsnprintf(*buf, size, fmt, ap_copy);
-      va_end(ap_copy);
+    DBG(("unproperly formatted message %s", fmt));
+    len = -1;
+  } else {
+    if (len >= (int) size) {
+      // Standard-compliant code path. Allocate a buffer that is large enough.
+      if ((*buf = (char *) NS_REALLOC(*buf, len + 2)) == NULL) {
+        len = -1;
+      }
     }
-  } else if (len > (int) size) {
-    // Standard-compliant code path. Allocate a buffer that is large enough.
-    if ((*buf = (char *) NS_MALLOC(len + 1)) == NULL) {
-      len = -1;
-    } else {
+    if(len > -1) {
       va_copy(ap_copy, ap);
       len = vsnprintf(*buf, len + 1, fmt, ap_copy);
       va_end(ap_copy);
