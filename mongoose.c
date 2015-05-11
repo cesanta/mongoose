@@ -2681,7 +2681,8 @@ static int convert_uri_to_file_name(struct connection *conn, char *buf,
 #endif
   const char *uri = conn->mg_conn.uri;
   const char *domain = mg_get_header(&conn->mg_conn, "Host");
-  size_t match_len, root_len = root == NULL ? 0 : strlen(root);
+  // Important: match_len has to be declared as int, unless rewrites break.
+  int match_len, root_len = root == NULL ? 0 : strlen(root);
 
   // Perform virtual hosting rewrites
   if (rewrites != NULL && domain != NULL) {

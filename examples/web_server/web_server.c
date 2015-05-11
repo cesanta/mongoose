@@ -40,7 +40,9 @@
 #define DIRSEP '\\'
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
+#ifndef sleep
 #define sleep(x) Sleep((x) * 1000)
+#endif
 #define abs_path(rel, abs, abs_size) _fullpath((abs), (rel), (abs_size))
 #define SIGCHLD 0
 typedef struct _stat file_stat_t;
