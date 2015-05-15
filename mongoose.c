@@ -238,6 +238,7 @@ struct ns_connection {
 
   sock_t sock;                // Socket
   union socket_address sa;    // Peer address
+  size_t recv_iobuf_limit; /* Max size of recv buffer */
   struct iobuf recv_iobuf;    // Received data
   struct iobuf send_iobuf;    // Data scheduled for sending
   SSL *ssl;
@@ -5270,31 +5271,32 @@ static void process_udp(struct ns_connection *nc) {
   //ns_printf(nc, "%s", "HTTP/1.0 200 OK\r\n\r\n");
 }
 
+#ifdef MONGOOSE_SEND_NS_EVENTS
+static void send_ns_event(struct ns_connection *nc, int ev, void *p) {
+  struct connection *conn = (struct connection *) nc->user_data;
+  if (conn != NULL) {
+    void *param[2] = { nc, p };
+    conn->mg_conn.callback_param = param;
+    call_user(conn, (enum mg_event) ev);
+  }
+}
+#else
+static void send_ns_event(struct ns_connection *nc, int ev, void *p) {
+  (void) nc; (void) p;
+}
+#endif
+
 static void mg_ev_handler(struct ns_connection *nc, int ev, void *p) {
   struct connection *conn = (struct connection *) nc->user_data;
 
   // Send NS event to the handler. Note that call_user won't send an event
   // if conn == NULL. Therefore, repeat this for NS_ACCEPT event as well.
-#ifdef MONGOOSE_SEND_NS_EVENTS
-  {
-    struct connection *conn = (struct connection *) nc->user_data;
-    void *param[2] = { nc, p };
-    if (conn != NULL) conn->mg_conn.callback_param = param;
-    call_user(conn, (enum mg_event) ev);
-  }
-#endif
+  send_ns_event(nc, ev, p);
 
   switch (ev) {
     case NS_ACCEPT:
       on_accept(nc, (union socket_address *) p);
-#ifdef MONGOOSE_SEND_NS_EVENTS
-      {
-        struct connection *conn = (struct connection *) nc->user_data;
-        void *param[2] = { nc, p };
-        if (conn != NULL) conn->mg_conn.callback_param = param;
-        call_user(conn, (enum mg_event) ev);
-      }
-#endif
+      send_ns_event(nc, ev, p);
       break;
 
     case NS_CONNECT:
@@ -5366,9 +5368,9 @@ static void mg_ev_handler(struct ns_connection *nc, int ev, void *p) {
             write_terminating_chunk(conn);
           }
           close_local_endpoint(conn);
-          /* 
+          /*
            * MG_POLL callback returned MG_TRUE,
-           * i.e. data is sent, set corresponding flag 
+           * i.e. data is sent, set corresponding flag
            */
           conn->ns_conn->flags |= NSF_FINISHED_SENDING_DATA;
         }
