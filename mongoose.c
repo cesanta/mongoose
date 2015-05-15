@@ -3507,6 +3507,11 @@ static int scan_directory(struct connection *conn, const char *dir,
   int arr_size = 0, arr_ind = 0, inc = 100;
   DIR *dirp;
 
+  // default to document root if passed an empty uri
+  if (dir && strcmp(dir, "") == 0) {
+    dir = conn->server->config_options[DOCUMENT_ROOT];
+  }
+
   *arr = NULL;
   if ((dirp = (opendir(dir))) == NULL) return 0;
 
