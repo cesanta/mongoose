@@ -3319,8 +3319,9 @@ static int find_index_file(struct connection *conn, char *path,
     }
   }
 
-  // If no index file exists, restore directory path
+  // If no index file exists, restore directory path with trailing slash
   if (!found) {
+    if (path[n] == '/' && n == 0) n++; // don't clobber "/"
     path[n] = '\0';
   }
 
