@@ -3321,7 +3321,8 @@ static int find_index_file(struct connection *conn, char *path,
 
   // If no index file exists, restore directory path
   if (!found) {
-    path[n] = '\0';
+    path[n] = '/';
+    path[n + 1] = '\0';
   }
 
   return found;
