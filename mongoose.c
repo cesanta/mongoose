@@ -5001,7 +5001,7 @@ static int get_var(const char *data, size_t data_len, const char *name,
                    char *dst, size_t dst_len, int n) {
   const char *p, *e, *s;
   size_t name_len;
-  int len;
+  int i, len;
 
   if (dst == NULL || dst_len == 0) {
     len = -2;
@@ -5009,12 +5009,12 @@ static int get_var(const char *data, size_t data_len, const char *name,
     len = -1;
     dst[0] = '\0';
   } else {
+    i = 0;
     name_len = strlen(name);
     e = data + data_len;
     len = -1;
     dst[0] = '\0';
 
-    int i = 0;
     // data is "var1=val1&var2=val2...". Find variable first
     for (p = data; p + name_len < e; p++) {
       if ((p == data || p[-1] == '&') && p[name_len] == '=' &&

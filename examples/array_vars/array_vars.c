@@ -1,7 +1,7 @@
 // Copyright (c) 2014 Cesanta Software
 // All rights reserved
 //
-// This example demostrates basic use of Mongoose embedded web server.
+// This example demostrates how to use array get variables using mg_get_n_var
 // $Date: 2014-09-09 22:20:23 UTC $
 
 #include <stdio.h>
@@ -15,8 +15,7 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
     {
       mg_printf_data(conn, "Hello! Requested URI is [%s] ", conn->uri);
       char buffer[1024];
-      int ret,
-        i;
+      int i, ret;
       for(i=0; (ret = mg_get_n_var(conn, "foo[]", buffer, 1024, i)) > 0; i++)
         mg_printf_data(conn, "\nfoo[%d] = %s", i, buffer);
 
