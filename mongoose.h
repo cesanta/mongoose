@@ -104,8 +104,10 @@ void mg_send_status(struct mg_connection *, int status_code);
 void mg_send_header(struct mg_connection *, const char *name, const char *val);
 size_t mg_send_data(struct mg_connection *, const void *data, int data_len);
 size_t mg_printf_data(struct mg_connection *, const char *format, ...);
+size_t mg_vprintf_data(struct mg_connection *, const char *format, va_list ap);
 size_t mg_write(struct mg_connection *, const void *buf, size_t len);
 size_t mg_printf(struct mg_connection *conn, const char *fmt, ...);
+size_t mg_vprintf(struct mg_connection *conn, const char *fmt, va_list ap);
 
 size_t mg_websocket_write(struct mg_connection *, int opcode,
                           const char *data, size_t data_len);

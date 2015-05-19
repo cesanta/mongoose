@@ -1951,12 +1951,20 @@ static void write_chunk(struct connection *conn, const char *buf, int len) {
 }
 
 size_t mg_printf(struct mg_connection *conn, const char *fmt, ...) {
-  struct connection *c = MG_CONN_2_CONN(conn);
   va_list ap;
+  int ret;
 
   va_start(ap, fmt);
-  ns_vprintf(c->ns_conn, fmt, ap);
+  ret = mg_vprintf(conn, fmt, ap);
   va_end(ap);
+
+  return ret;
+}
+
+size_t mg_vprintf(struct mg_connection *conn, const char *fmt, va_list ap) {
+  struct connection *c = MG_CONN_2_CONN(conn);
+
+  ns_vprintf(c->ns_conn, fmt, ap);
 
   return c->ns_conn->send_iobuf.len;
 }
@@ -2790,16 +2798,24 @@ size_t mg_send_data(struct mg_connection *c, const void *data, int data_len) {
 }
 
 size_t mg_printf_data(struct mg_connection *c, const char *fmt, ...) {
-  struct connection *conn = MG_CONN_2_CONN(c);
   va_list ap;
+  int ret;
+
+  va_start(ap, fmt);
+  ret = mg_vprintf_data(c, fmt, ap);
+  va_end(ap);
+
+  return ret;
+}
+
+size_t mg_vprintf_data(struct mg_connection *c, const char *fmt, va_list ap) {
+  struct connection *conn = MG_CONN_2_CONN(c);
   int len;
   char mem[IOBUF_SIZE], *buf = mem;
 
   terminate_headers(c);
 
-  va_start(ap, fmt);
   len = ns_avprintf(&buf, sizeof(mem), fmt, ap);
-  va_end(ap);
 
   if (len >= 0) {
     write_chunk((struct connection *) conn, buf, len);
