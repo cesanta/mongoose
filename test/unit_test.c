@@ -224,29 +224,28 @@ static const char *test_remove_double_dots() {
 }
 
 static const char *test_get_var(void) {
-  static const char *post[] = {
-    "a=1&&b=2&d&=&c=3%20&e=",
-    "q=&st=2012%2F11%2F13+17%3A05&et=&team_id=",
-    NULL
-  };
+  static const char *data = "a=1&&b=2&d&=&c=3%20&e=&k=aa&a=23";
+  static const char *data2 = "q=&st=2012%2F11%2F13+17%3A05&et=&team_id=";
   char buf[20];
 
-  ASSERT(get_var(post[0], strlen(post[0]), "a", buf, sizeof(buf)) == 1);
+  ASSERT(get_var(data, strlen(data), "a", buf, sizeof(buf), 0) == 1);
   ASSERT(buf[0] == '1' && buf[1] == '\0');
-  ASSERT(get_var(post[0], strlen(post[0]), "b", buf, sizeof(buf)) == 1);
+  ASSERT(get_var(data, strlen(data), "a", buf, sizeof(buf), 1) == 2);
+  ASSERT(strcmp(buf, "23") == 0);
+  ASSERT(get_var(data, strlen(data), "b", buf, sizeof(buf), 0) == 1);
   ASSERT(buf[0] == '2' && buf[1] == '\0');
-  ASSERT(get_var(post[0], strlen(post[0]), "c", buf, sizeof(buf)) == 2);
+  ASSERT(get_var(data, strlen(data), "c", buf, sizeof(buf), 0) == 2);
   ASSERT(buf[0] == '3' && buf[1] == ' ' && buf[2] == '\0');
-  ASSERT(get_var(post[0], strlen(post[0]), "e", buf, sizeof(buf)) == 0);
+  ASSERT(get_var(data, strlen(data), "e", buf, sizeof(buf), 0) == 0);
   ASSERT(buf[0] == '\0');
 
-  ASSERT(get_var(post[0], strlen(post[0]), "d", buf, sizeof(buf)) == -1);
-  ASSERT(get_var(post[0], strlen(post[0]), "c", buf, 2) == -2);
+  ASSERT(get_var(data, strlen(data), "d", buf, sizeof(buf), 0) == -1);
+  ASSERT(get_var(data, strlen(data), "c", buf, 2, 0) == -2);
 
-  ASSERT(get_var(post[0], strlen(post[0]), "x", NULL, 10) == -2);
-  ASSERT(get_var(post[0], strlen(post[0]), "x", buf, 0) == -2);
-  ASSERT(get_var(post[1], strlen(post[1]), "st", buf, 16) == -2);
-  ASSERT(get_var(post[1], strlen(post[1]), "st", buf, 17) == 16);
+  ASSERT(get_var(data, strlen(data), "x", NULL, 10, 0) == -2);
+  ASSERT(get_var(data, strlen(data), "x", buf, 0, 0) == -2);
+  ASSERT(get_var(data2, strlen(data2), "st", buf, 16, 0) == -2);
+  ASSERT(get_var(data2, strlen(data2), "st", buf, 17, 0) == 16);
   return NULL;
 }
 
