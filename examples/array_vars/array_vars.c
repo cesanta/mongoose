@@ -16,7 +16,7 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
       mg_printf_data(conn, "Hello! Requested URI is [%s] ", conn->uri);
       char buffer[1024];
       int i, ret;
-      for(i=0; (ret = mg_get_n_var(conn, "foo[]", buffer, 1024, i)) > 0; i++)
+      for(i=0; (ret = mg_get_var_n(conn, "foo[]", buffer, 1024, i)) > 0; i++)
         mg_printf_data(conn, "\nfoo[%d] = %s", i, buffer);
 
       return MG_TRUE;
