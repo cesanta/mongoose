@@ -5015,10 +5015,10 @@ struct mg_connection *mg_next(struct mg_server *s, struct mg_connection *c) {
 }
 
 static int get_var(const char *data, size_t data_len, const char *name,
-                   char *dst, size_t dst_len) {
+                   char *dst, size_t dst_len, int n) {
   const char *p, *e, *s;
   size_t name_len;
-  int len;
+  int i, len;
 
   if (dst == NULL || dst_len == 0) {
     len = -2;
@@ -5026,6 +5026,7 @@ static int get_var(const char *data, size_t data_len, const char *name,
     len = -1;
     dst[0] = '\0';
   } else {
+    i = 0;
     name_len = strlen(name);
     e = data + data_len;
     len = -1;
@@ -5035,6 +5036,9 @@ static int get_var(const char *data, size_t data_len, const char *name,
     for (p = data; p + name_len < e; p++) {
       if ((p == data || p[-1] == '&') && p[name_len] == '=' &&
           !mg_strncasecmp(name, p, name_len)) {
+
+        if(n != i++)
+          continue;
 
         // Point p to variable value
         p += name_len + 1;
@@ -5063,10 +5067,15 @@ static int get_var(const char *data, size_t data_len, const char *name,
 
 int mg_get_var(const struct mg_connection *conn, const char *name,
                char *dst, size_t dst_len) {
+  return mg_get_n_var(conn, name, dst, dst_len, 0);
+}
+
+int mg_get_n_var(const struct mg_connection *conn, const char *name,
+               char *dst, size_t dst_len, int n) {
   int len = get_var(conn->query_string, conn->query_string == NULL ? 0 :
-                    strlen(conn->query_string), name, dst, dst_len);
+                    strlen(conn->query_string), name, dst, dst_len, n);
   if (len == -1) {
-    len = get_var(conn->content, conn->content_len, name, dst, dst_len);
+    len = get_var(conn->content, conn->content_len, name, dst, dst_len, n);;
   }
   return len;
 }
