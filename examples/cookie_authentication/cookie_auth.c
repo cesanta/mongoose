@@ -58,6 +58,7 @@ static int check_login_form_submission(struct mg_connection *conn) {
     mg_printf(conn,
               "HTTP/1.1 302 Moved\r\n"
               "Set-Cookie: ssid=%s; expire=\"%s\"; http-only; HttpOnly;\r\n"
+              "Content-Length: 0\r\n"
               "Location: /\r\n\r\n",
               ssid, expire);
     return MG_TRUE;
