@@ -4967,7 +4967,7 @@ static void close_local_endpoint(struct connection *conn) {
   // (IP addresses & ports, server_param) must survive. Nullify the rest.
   c->request_method = c->uri = c->http_version = c->query_string = NULL;
   c->num_headers = c->status_code = c->is_websocket = c->content_len = 0;
-  c->connection_param = c->callback_param = NULL;
+  c->callback_param = NULL;
 
   if (keep_alive) {
     on_recv_data(conn);  // Can call us recursively if pipelining is used
