@@ -7,7 +7,7 @@
 
 static int send_index_page(struct mg_connection *conn) {
   const char *data;
-  int data_len, ofs = 0;
+  int data_len, n1, n2;
   char var_name[100], file_name[100];
 
   mg_printf_data(conn, "%s",
@@ -19,12 +19,13 @@ static int send_index_page(struct mg_connection *conn) {
                  "<input type=\"submit\" value=\"Upload\" />"
                  "</form>");
 
-  while ((ofs = mg_parse_multipart(conn->content + ofs, conn->content_len - ofs,
-                                   var_name, sizeof(var_name),
-                                   file_name, sizeof(file_name),
-                                   &data, &data_len)) > 0) {
+  n1 = n2 = 0;
+  while ((n2 = mg_parse_multipart(conn->content + n1, conn->content_len - n1,
+                                  var_name, sizeof(var_name), file_name,
+                                  sizeof(file_name), &data, &data_len)) > 0) {
     mg_printf_data(conn, "var: %s, file_name: %s, size: %d bytes<br>",
                    var_name, file_name, data_len);
+    n1 += n2;
   }
 
   mg_printf_data(conn, "%s", "</body></html>");
