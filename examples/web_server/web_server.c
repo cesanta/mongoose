@@ -151,6 +151,18 @@ static char *sdup(const char *str) {
   return p;
 }
 
+static char *sdup_append(const char *str, const char * str2, const char sep) {
+  char *p;
+  char strsep[2] = { 0, 0 };
+  strsep[0] = sep;
+  if ((p = (char *) malloc(strlen(str) + strlen(strsep) + strlen(str2) + 1)) != NULL) {
+    strcpy(p, str);
+    strcat(p, strsep);
+    strcat(p, str2);
+  }
+  return p;
+}
+
 static void set_option(char **options, const char *name, const char *value) {
   int i;
 
@@ -161,8 +173,21 @@ static void set_option(char **options, const char *name, const char *value) {
       options[i + 2] = NULL;
       break;
     } else if (!strcmp(options[i], name)) {
-      free(options[i + 1]);
-      options[i + 1] = sdup(value);
+      char append_sep = 0;
+      if (!strcmp(options[i], "url_rewrites") || !strcmp(options[i], "index_files")
+        || !strcmp(options[i],"access_control_list") || !strcmp(options[i], "extra_mime_types")) {
+        if (value[0] == '^') value++;
+        else append_sep = ',';
+      }
+      if (!append_sep) {
+        free(options[i + 1]);
+        options[i + 1] = sdup(value);
+      } else {
+        char * newval = sdup_append( options[i + 1], value, append_sep );
+        free(options[i + 1]);
+        options[i + 1] = newval;
+        fprintf(stderr, "%s %s\n", options[i], options[i + 1]);
+      }
       break;
     }
   }
