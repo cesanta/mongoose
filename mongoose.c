@@ -258,6 +258,7 @@ struct ns_connection {
 #define NSF_WANT_WRITE              (1 << 6)
 #define NSF_LISTENING               (1 << 7)
 #define NSF_UDP                     (1 << 8)
+#define NSF_DISCARD                 (1 << 9)
 
 #define NSF_USER_1                  (1 << 20)
 #define NSF_USER_2                  (1 << 21)
@@ -3907,7 +3908,11 @@ void mg_send_digest_auth_request(struct mg_connection *c) {
             "realm=\"%s\", nonce=\"%lu\"\r\n\r\n",
             conn->server->config_options[AUTH_DOMAIN],
             (unsigned long) time(NULL));
-  close_local_endpoint(conn);
+  if (conn->cl > 0) {
+    conn->ns_conn->flags |= NSF_DISCARD;
+  } else {
+    close_local_endpoint(conn);
+  }
 }
 
 // Use the global passwords file, if specified by auth_gpass option,
@@ -4780,6 +4785,19 @@ static void on_recv_data(struct connection *conn) {
     return;
   }
 
+  if (conn->ns_conn->flags & NSF_DISCARD) {
+    size_t n = conn->cl;
+    if (n > io->len) {
+      n = io->len;
+    }
+    iobuf_remove(io, n);
+    conn->cl -= n;
+    if (conn->cl == 0) {
+      close_local_endpoint(conn);
+    }
+    return;
+  }
+
   try_parse(conn);
   DBG(("%p %d %lu %d", conn, conn->request_len, (unsigned long)io->len,
        conn->ns_conn->flags));
@@ -4959,7 +4977,7 @@ static void close_local_endpoint(struct connection *conn) {
 
   conn->endpoint_type = EP_NONE;
   conn->cl = conn->num_bytes_recv = conn->request_len = 0;
-  conn->ns_conn->flags &= ~(NSF_FINISHED_SENDING_DATA |
+  conn->ns_conn->flags &= ~(NSF_FINISHED_SENDING_DATA | NSF_DISCARD |
                             NSF_BUFFER_BUT_DONT_SEND | NSF_CLOSE_IMMEDIATELY |
                             MG_HEADERS_SENT | MG_USING_CHUNKED_API);
 
