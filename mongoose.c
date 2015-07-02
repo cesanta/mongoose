@@ -864,7 +864,11 @@ static int ns_is_error(int n) {
 #ifdef _WIN32
      && WSAGetLastError() != WSAEINTR && WSAGetLastError() != WSAEWOULDBLOCK
 #endif
-    );
+    )
+#ifdef NS_ENABLE_SSL
+    || n == SSL_AD_CLOSE_NOTIFY
+#endif
+    ;
 }
 
 void ns_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
