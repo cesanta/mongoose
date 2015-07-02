@@ -864,7 +864,17 @@ static int ns_is_error(int n) {
 #ifdef _WIN32
      && WSAGetLastError() != WSAEINTR && WSAGetLastError() != WSAEWOULDBLOCK
 #endif
-    );
+    )
+#ifdef NS_ENABLE_SSL
+    /*
+     * OpenSSL can return an error when the peer is closing the socket.
+     * We don't encounter this error with openssl actually, but it's returned
+     * by our polarssl <-> openssl wrapper who tries to speak the openssl API
+     * as we understood it.
+     */
+    || n == SSL_AD_CLOSE_NOTIFY
+#endif
+    ;
 }
 
 void ns_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
