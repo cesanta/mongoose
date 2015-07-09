@@ -63,7 +63,7 @@
 #pragma warning (disable : 4204)  // missing c99 support
 #endif
 
-#if defined(_WIN32) && !defined(MONGOOSE_NO_CGI)
+#if defined(_WIN32) && !defined(MONGOOSE_NO_CGI) && !defined(MONGOOSE_ENABLE_THREADS)
 #define MONGOOSE_ENABLE_THREADS   /* Windows uses stdio threads for CGI */
 #endif
 
