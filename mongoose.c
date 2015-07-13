@@ -42,10 +42,15 @@
 
 #undef UNICODE                  // Use ANSI WinAPI functions
 #undef _UNICODE                 // Use multibyte encoding on Windows
+#ifndef _MBCS
 #define _MBCS                   // Use multibyte encoding on Windows
+#endif
 #define _INTEGRAL_MAX_BITS 64   // Enable _stati64() on Windows
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005+
+#endif
+#ifndef _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS // Disable deprecated Winsock API warnings in VS2013+
 #endif
 #undef WIN32_LEAN_AND_MEAN      // Let windows.h always include winsock2.h
 #ifdef __Linux__
@@ -3887,7 +3892,7 @@ static void handle_put(struct connection *conn, const char *path) {
 
 static void forward_put_data(struct connection *conn) {
   struct iobuf *io = &conn->ns_conn->recv_iobuf;
-  size_t k = conn->cl < (int64_t) io->len ? conn->cl : (int64_t) io->len;   // To write
+  size_t k = (size_t)(conn->cl < (int64_t) io->len ? conn->cl : (int64_t) io->len);   // To write
   size_t n = write(conn->endpoint.fd, io->buf, k);   // Write them!
   if (n > 0) {
     iobuf_remove(io, n);
@@ -4796,7 +4801,7 @@ static void on_recv_data(struct connection *conn) {
   }
 
   if (conn->ns_conn->flags & NSF_DISCARD) {
-    size_t n = conn->cl;
+    size_t n = (size_t)conn->cl;
     if (n > io->len) {
       n = io->len;
     }
