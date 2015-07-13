@@ -212,7 +212,7 @@ static void process_command_line_arguments(char *argv[], char **options) {
         continue;
       }
 
-      if (sscanf(line, "%s %[^\r\n#]", opt, val) != 2) {
+      if (sscanf(line, "%s %[^\r\n# ]", opt, val) != 2) {
         printf("%s: line %d is invalid, ignoring it:\n %s",
                s_config_file, (int) line_no, line);
       } else {
