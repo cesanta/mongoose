@@ -8,8 +8,8 @@ in mongoose, 2 steps are required:
 
 Below is the `mongoose.conf` file snippet for typical SSL setup:
 
-    document_root     www_root         # Serve files in www_root directory
-    listening_ports   80,443:cert.pem  # Listen on ports 80 and 443
+    document_root     www_root               # Serve files in www_root directory
+    listening_ports   80,ssl://443:cert.pem  # Listen on ports 80 and 443
 
 ## How to create SSL certificate file
 
