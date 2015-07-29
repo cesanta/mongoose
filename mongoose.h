@@ -20,6 +20,7 @@
 
 #define MONGOOSE_VERSION "5.6"
 
+#include <stdarg.h>     // required for va_list
 #include <stdio.h>      // required for FILE
 #include <stddef.h>     // required for size_t
 #include <sys/types.h>  // required for time_t
