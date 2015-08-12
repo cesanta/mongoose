@@ -3047,6 +3047,9 @@ static void send_websocket_handshake(struct mg_connection *conn,
   mg_write(conn, buf, strlen(buf));
 }
 
+#define MG_S_WEBSOCKET_PING_DATA_LEN 16
+static const char s_websocket_ping_data[] = "4d6f6e676f6f7365"; /* Mongoose */
+
 static size_t deliver_websocket_frame(struct connection *conn) {
   // Having buf unsigned char * is important, as it is used below in arithmetic
   unsigned char *buf = (unsigned char *) conn->ns_conn->recv_iobuf.buf;
@@ -3073,6 +3076,7 @@ static size_t deliver_websocket_frame(struct connection *conn) {
   buffered = frame_len > 0 && frame_len <= buf_len;
 
   if (buffered) {
+    int opcode = buf[0] & 0x0f;
     conn->mg_conn.content_len = data_len;
     conn->mg_conn.content = (char *) buf + header_len;
     conn->mg_conn.wsbits = buf[0];
@@ -3084,11 +3088,19 @@ static size_t deliver_websocket_frame(struct connection *conn) {
       }
     }
 
-    // Call the handler and remove frame from the iobuf
-    if (call_user(conn, MG_REQUEST) == MG_FALSE ||
-        (buf[0] & 0x0f) == WEBSOCKET_OPCODE_CONNECTION_CLOSE) {
-      conn->ns_conn->flags |= NSF_FINISHED_SENDING_DATA;
+    if (opcode == WEBSOCKET_OPCODE_PONG &&
+        data_len == MG_S_WEBSOCKET_PING_DATA_LEN &&
+        memcmp(buf + header_len, s_websocket_ping_data,
+               MG_S_WEBSOCKET_PING_DATA_LEN) == 0) {
+      DBG(("ws pong"));
+      /* This is a response to our ping, swallow it. */
+    } else {
+      if (call_user(conn, MG_REQUEST) == MG_FALSE ||
+          opcode == WEBSOCKET_OPCODE_CONNECTION_CLOSE) {
+        conn->ns_conn->flags |= NSF_FINISHED_SENDING_DATA;
+      }
     }
+
     iobuf_remove(&conn->ns_conn->recv_iobuf, frame_len);
   }
 
@@ -3184,7 +3196,9 @@ static void send_websocket_handshake_if_requested(struct mg_connection *conn) {
 
 static void ping_idle_websocket_connection(struct connection *conn, time_t t) {
   if (t - conn->ns_conn->last_io_time > MONGOOSE_USE_WEBSOCKET_PING_INTERVAL) {
-    mg_websocket_write(&conn->mg_conn, WEBSOCKET_OPCODE_PING, "", 0);
+    DBG(("ws ping"));
+    mg_websocket_write(&conn->mg_conn, WEBSOCKET_OPCODE_PING,
+                       s_websocket_ping_data, MG_S_WEBSOCKET_PING_DATA_LEN);
   }
 }
 #else

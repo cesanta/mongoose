@@ -62,13 +62,6 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
     case MG_POLL:
       maybe_send_data(conn);
       return MG_FALSE;  /* Keep the connection open. */
-    case MG_REQUEST:
-      /* FIXME: This is a bug in Mongoose - ping requests are generated internally
-       * but responses fall through to the user who may not expect them. */
-      if (conn->is_websocket && (conn->wsbits & 0xf) == WEBSOCKET_OPCODE_PONG) {
-        return MG_TRUE;
-      }
-      return MG_FALSE;
     case MG_CLOSE:
       fprintf(stderr, "%s:%u went away\n", conn->remote_ip, conn->remote_port);
       free(conn->connection_param);
