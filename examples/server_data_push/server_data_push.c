@@ -53,6 +53,10 @@ void maybe_send_data(struct mg_connection *conn) {
 
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
   switch (ev) {
+    case MG_AUTH:
+      return MG_TRUE;  /* Authenticated. */
+    case MG_WS_HANDSHAKE:
+      return MG_FALSE; /* Let Mongoose complete the handshake. */
     case MG_WS_CONNECT:
       fprintf(stderr, "%s:%u joined\n", conn->remote_ip, conn->remote_port);
       conn->connection_param = calloc(1, sizeof(struct conn_state));
@@ -67,8 +71,6 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
       free(conn->connection_param);
       conn->connection_param = NULL;
       return MG_TRUE;
-    case MG_AUTH:
-      return MG_TRUE;  /* Authenticated. */
     default:
       return MG_FALSE;
   }
@@ -83,6 +85,7 @@ int main(void) {
   err = mg_set_option(server, "listening_port", listen_port);
   if (err != NULL) {
     fprintf(stderr, "Error setting up listener on %s: %s\n", listen_port, err);
+    return 1;
   }
 
   mg_start_thread(data_producer, NULL);
