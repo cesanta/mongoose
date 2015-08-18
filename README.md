@@ -9,8 +9,8 @@ it's simplicity and flexibility has made it the top choice for
 embedded software engineers.
 
 Mongoose Binary is built on top of Mongoose Library which is used to serve Web
-GUI on embedded devices, implement RESTful services, RPC frameworks (e.g. JASON-
-RPC), handle telemetry data exchange and perform many other tasks. You'll find
+GUI on embedded devices, implement RESTful services, RPC frameworks (e.g.
+JSON-RPC), handle telemetry data exchange and perform many other tasks. You'll find
 it used across various industries including aerospace, manufacturing, finance,
 research, automotive, gaming, IT and many more.
 
