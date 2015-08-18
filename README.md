@@ -1,4 +1,4 @@
-# <img src="http://www.cesanta.com/hubfs/www.cesanta.com/Images/mongoose_logo.png" width="64" height="64"> Mongoose Embedded Web Server
+# <img src="http://www.cesanta.com/hubfs/www.cesanta.com/Images/mongoose_library.png" width="64" height="64"> Mongoose Embedded Web Server
 
 [![Join the chat at https://gitter.im/cesanta/mongoose](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/cesanta/mongoose?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
