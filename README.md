@@ -1,24 +1,25 @@
-# <img src="http://cesanta.com/images/mongoose_logo.png" width="64" height="64"> Mongoose Web Server
+# <img src="http://www.cesanta.com/hubfs/www.cesanta.com/Images/mongoose_logo.png" width="64" height="64"> Mongoose Embedded Web Server
 
 [![Join the chat at https://gitter.im/cesanta/mongoose](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/cesanta/mongoose?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-Mongoose is the most easy to use web server on the planet. A web server of choice for Web developers (PHP, Ruby, Python, etc) and Web designers.
+Mongoose is an embedded HTTP and WebSocket library that can turn anything
+into a web server in 5 minutes by adding a few lines of C/C++ code.
+On the market since 2004 with over 1 million cumulative downloads,
+it's simplicity and flexibility has made it the top choice for
+embedded software engineers.
 
-Mongoose is built on top of Libmongoose embedded library, which can turn
-anything into a web server in 5 minutes worth of effort and few lines of code.
-Libmongoose is used to serve Web GUI on embedded devices, implement RESTful
-services, RPC frameworks (e.g. JSON-RPC), handle telemetry data exchange, and
-perform many other tasks in various different industries including aerospace,
-manufacturing, finance, research, automotive, gaming, IT.
+Mongoose is built on top of LibMongoose which is used to serve Web GUI on
+embedded devices, implement RESTful services, RPC frameworks (e.g. JASON-RPC),
+handle telemetry data exchange and perform many other tasks. You'll find it used
+across various industries including aerospace, manufacturing, finance, research,
+automotive, gaming, IT and many more.
 
+> "Nothing overdone. Nothing less. So unbelievably easy to use. Just how good
+> software should be!" - Pritin Tyagaraj, SAP
 
-   * [Mailing list](http://groups.google.com/group/mongoose-users)
-   * [Downloads](http://cesanta.com/products.shtml)
-   * [Documentation](http://cesanta.com/docs.shtml)
+[Download Mongoose Source Code here](https://www.cesanta.com/download_src_free)
 
-Check out Fossa - our [embedded multi-protocol library](https://github.com/cesanta/fossa) with TCP,UDP,HTTP,Websocket,MQTT,DNS support, designed for Internet Of Things!
-
-# Features
+# Technical Specification
 
 - Works on Windows, Mac, UNIX/Linux, iPhone, Android eCos, QNX
 and many other platforms
@@ -33,46 +34,53 @@ and many other platforms
   to make embedding easy
 - Extremely lightweight, has a core of under 40kB and tiny runtime footprint
 - Asynchronous, non-blocking core supporting single- or multi-threaded usage
-- On the market since 2004 with over 1 million cumulative downloads
-- Stable, mature and tested, has several man-years invested
-  in continuous improvement and refinement
 
-# Screenshots
+# Dashboard Example
 
-Download, double-click to start, run browser -- that's all!
+![](http://www.cesanta.com/hubfs/www.cesanta.com/diagrams/dash_mongoose_diagram.png)
 
-![shot1](http://cesanta.com/images/tut_sharing/tut1.png)
-![shot2](http://cesanta.com/images/tut_sharing/tut2.png)
+[Developing a new product? Contact us today to discuss how Mongoose can help
+](https://www.cesanta.com/contact)
 
-![shot3](http://cesanta.com/images/tut_sharing/tut3.png)
-![shot4](http://cesanta.com/images/tut_sharing/tut4.png)
 
-# Contributions
-
-People who have agreed to the
-[Cesanta CLA](http://cesanta.com/contributors_la.html)
-can make contributions. Note that the CLA isn't a copyright
-_assigment_ but rather a copyright _license_.
-You retain the copyright on your contributions.
 
 # Licensing
 
-Mongoose is released under commercial and
-[GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html) open
-source licenses. The GPLv2 open source License does not generally permit
-incorporating this software into non-open source programs. 
-For those customers who do not wish to comply with the GPLv2 open
-source license requirements,
-[Cesanta](http://cesanta.com) offers a full,
-royalty-free commercial license and professional support
-without any of the GPL restrictions.
+Cesanta made Mongoose open source under GPLv2 for a reason. We are all
+developers here and appreciate easy access to code and therefore seamless
+integration. It's great to be able to play around with the software before
+committing to it.
+
+However, the GPLv2 open source license does not permit incorporating the
+software into non-open source programs. In order to comply with GPLv2 licensing
+you need to open the source code of your end product fully or alternatively
+purchase a commercial license.
+
+[Enquire about commercial licensing here](https://www.cesanta.com/contact)
+
+# Documentation
+
+- [Embedding Guide](https://github.com/cesanta/mongoose/blob/master/docs/Embed.md)
+- [Config Options Reference](https://github.com/cesanta/mongoose/blob/master/docs/Options.md)
+- [API Reference](https://github.com/cesanta/mongoose/blob/master/docs/API.md)
+- [Android Build Tutorial](https://docs.cesanta.com/AndroidBuild.shtml)
+- [Release Notes](https://github.com/cesanta/mongoose/blob/master/docs/ReleaseNotes.md)
+
+# Mongoose Binary
+
+This is our easy to use web server for web developers (PHP, Ruby, Python, etc)
+and web designers. Available in three editions to suit your needs: free, pro
+(USD 5) and dev edition (from USD 8). To install, simply download, double-click
+to start and run browser - that's all!
+
+[Download Mongoose Binary here](https://www.cesanta.com/mongoose)
+
 
 # Other products by Cesanta
 
+- [Smart.js](https://github.com/cesanta/smart.js) - Generic, hardware independent, full-stack IoT software platform
 - [Fossa](http://github.com/cesanta/fossa) - Multi-protocol networking library
-- [SSL Wrapper](https://github.com/cesanta/ssl_wrapper) - application to
-  secure network communications
+- [V7](https://github.com/cesanta/v7) - Embedded JavaScript engine
 - [Frozen](https://github.com/cesanta/frozen) - JSON parser and generator
 - [SLRE](https://github.com/cesanta/slre) - Super Light Regular Expression
   library
-- [V7](https://github.com/cesanta/v7) - Embedded JavaScript engine
