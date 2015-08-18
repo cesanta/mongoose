@@ -8,11 +8,11 @@ On the market since 2004 with over 1 million cumulative downloads,
 it's simplicity and flexibility has made it the top choice for
 embedded software engineers.
 
-Mongoose is built on top of LibMongoose which is used to serve Web GUI on
-embedded devices, implement RESTful services, RPC frameworks (e.g. JASON-RPC),
-handle telemetry data exchange and perform many other tasks. You'll find it used
-across various industries including aerospace, manufacturing, finance, research,
-automotive, gaming, IT and many more.
+Mongoose Binary is built on top of Mongoose Library which is used to serve Web
+GUI on embedded devices, implement RESTful services, RPC frameworks (e.g. JASON-
+RPC), handle telemetry data exchange and perform many other tasks. You'll find
+it used across various industries including aerospace, manufacturing, finance,
+research, automotive, gaming, IT and many more.
 
 > "Nothing overdone. Nothing less. So unbelievably easy to use. Just how good
 > software should be!" - Pritin Tyagaraj, SAP
@@ -74,7 +74,6 @@ and web designers. Available in three editions to suit your needs: free, pro
 to start and run browser - that's all!
 
 [Download Mongoose Binary here](https://www.cesanta.com/mongoose)
-
 
 # Other products by Cesanta
 
