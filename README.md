@@ -17,7 +17,11 @@ research, automotive, gaming, IT and many more.
 > "Nothing overdone. Nothing less. So unbelievably easy to use. Just how good
 > software should be!" - Pritin Tyagaraj, SAP
 
-[Download Mongoose Source Code here](https://www.cesanta.com/download_src_free)
+[Download Mongoose Source Code here](http://hubs.ly/H0150GG0)
+
+If you are an embedded developer, check out our
+[embedded development products](http://hubs.ly/H0150Bb0)
+to make the right choice for your project.
 
 # Technical Specification
 
