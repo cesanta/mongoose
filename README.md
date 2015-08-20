@@ -19,8 +19,8 @@ research, automotive, gaming, IT and many more.
 
 [Download Mongoose Source Code here](http://hubs.ly/H0150GG0)
 
-If you are an embedded developer, check out our
-[embedded development products](http://hubs.ly/H0150Bb0)
+Are you an embedded developer? Working on an embedded task?
+Check out our [embedded development products](http://hubs.ly/H0150Bb0)
 to make the right choice for your project.
 
 # Technical Specification
