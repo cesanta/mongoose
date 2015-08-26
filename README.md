@@ -17,10 +17,10 @@ research, automotive, gaming, IT and many more.
 > "Nothing overdone. Nothing less. So unbelievably easy to use. Just how good
 > software should be!" - Pritin Tyagaraj, SAP
 
-[Download Mongoose Source Code here](http://hubs.ly/H0150GG0)
+[Download Mongoose Source Code here](http://hubs.ly/H0150FK0)
 
 Are you an embedded developer? Working on an embedded task?
-Check out our [embedded development products](http://hubs.ly/H0150Bb0)
+Check out our [embedded development products](http://hubs.ly/H0150sY0)
 to make the right choice for your project.
 
 # Technical Specification
