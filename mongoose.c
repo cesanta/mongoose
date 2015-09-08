@@ -731,7 +731,7 @@ static int ns_parse_address(const char *str, union socket_address *sa,
 }
 
 // 'sa' must be an initialized address to bind to
-static sock_t ns_open_listening_socket(union socket_address *sa, int proto) {
+static sock_t ns_open_listening_socket(union socket_address *sa, int proto, int listen_backlog) {
   socklen_t sa_len = (sa->sa.sa_family == AF_INET) ?
     sizeof(sa->sin) : sizeof(sa->sin6);
   sock_t sock = INVALID_SOCKET;
@@ -750,7 +750,7 @@ static sock_t ns_open_listening_socket(union socket_address *sa, int proto) {
       !setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) &&
 #endif
       !bind(sock, &sa->sa, sa_len) &&
-      (proto == SOCK_DGRAM || listen(sock, SOMAXCONN) == 0)) {
+      (proto == SOCK_DGRAM || listen(sock, listen_backlog) == 0)) {
     ns_set_non_blocking_mode(sock);
     // In case port was set to 0, get the real port number
     (void) getsockname(sock, &sa->sa, &sa_len);
@@ -793,7 +793,7 @@ static int ns_use_cert(SSL_CTX *ctx, const char *pem_file) {
 #endif  // NS_ENABLE_SSL
 
 struct ns_connection *ns_bind(struct ns_mgr *srv, const char *str,
-                              ns_callback_t callback, void *user_data) {
+                              ns_callback_t callback, void *user_data, int listen_backlog) {
   union socket_address sa;
   struct ns_connection *nc = NULL;
   int use_ssl, proto;
@@ -803,7 +803,7 @@ struct ns_connection *ns_bind(struct ns_mgr *srv, const char *str,
   ns_parse_address(str, &sa, &proto, &use_ssl, cert, ca_cert);
   if (use_ssl && cert[0] == '\0') return NULL;
 
-  if ((sock = ns_open_listening_socket(&sa, proto)) == INVALID_SOCKET) {
+  if ((sock = ns_open_listening_socket(&sa, proto, listen_backlog)) == INVALID_SOCKET) {
   } else if ((nc = ns_add_sock(srv, sock, callback, NULL)) == NULL) {
     closesocket(sock);
   } else {
@@ -1466,6 +1466,7 @@ enum {
   SSI_PATTERN,
 #endif
   URL_REWRITES,
+  LISTEN_BACKLOG,
   NUM_OPTIONS
 };
 
@@ -1505,6 +1506,7 @@ static const char *static_config_options[] = {
   "ssi_pattern", "**.shtml$|**.shtm$",
 #endif
   "url_rewrites", NULL,
+  "listen_backlog", NULL,
   NULL
 };
 
@@ -5259,6 +5261,12 @@ const char *mg_set_option(struct mg_server *server, const char *name,
     size_t n = 0;
     struct vec vec;
 
+    int listen_backlog = SOMAXCONN;
+    
+    if (server->config_options[LISTEN_BACKLOG]) {
+      listen_backlog = atoi(server->config_options[LISTEN_BACKLOG]);
+    }
+
     /*
      * Ports can be specified as 0, meaning that OS has to choose any
      * free port that is available. In order to pass chosen port number to
@@ -5266,7 +5274,7 @@ const char *mg_set_option(struct mg_server *server, const char *name,
      */
     while ((value = next_option(value, &vec, NULL)) != NULL) {
       struct ns_connection *c = ns_bind(&server->ns_mgr, vec.ptr,
-                                        mg_ev_handler, NULL);
+                                        mg_ev_handler, NULL, listen_backlog);
       if (c == NULL) {
         error_msg = "Cannot bind to port";
         break;
