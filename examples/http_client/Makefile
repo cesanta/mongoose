@@ -1,12 +1,14 @@
-# Copyright (c) 2014 Cesanta Software
-# All rights reserved
-
 PROG = http_client
-CFLAGS = -W -Wall -I../.. -pthread -g -O0 $(CFLAGS_EXTRA)
 SOURCES = $(PROG).c ../../mongoose.c
+CFLAGS = -W -Wall -I../.. -DNS_ENABLE_SSL -lssl -lcrypto -pthread $(CFLAGS_EXTRA)
 
-unix: $(SOURCES)
-	$(CC) -o $(PROG) $(SOURCES) $(CFLAGS)
+all: $(PROG)
+
+$(PROG): $(SOURCES)
+	$(CC) $(SOURCES) -o $@ $(CFLAGS)
+
+$(PROG).exe: $(SOURCES)
+	cl $(SOURCES) /I../.. /MD /Fe$@
 
 clean:
-	rm -rf $(PROG) *.exe *.dSYM *.obj *.exp *.o *.lib
+	rm -rf *.gc* *.dSYM *.exe *.obj *.o a.out $(PROG)

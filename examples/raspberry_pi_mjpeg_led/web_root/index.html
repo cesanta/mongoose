@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- Required meta tags-->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, minimal-ui">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+
+    <link rel="stylesheet" href="framework7.min.css">
+
+    <title>Smart.c mjpg example</title>
+    <style type="text/css">
+     .image img {
+       display: block;
+       margin-left: auto;
+       margin-right: auto;
+     }
+    </style>
+  </head>
+  <body>
+
+    <!-- Status bar overlay for full screen mode (PhoneGap) -->
+    <div class="statusbar-overlay"></div>
+
+    <!-- Views -->
+    <div class="views">
+      <!-- Your main view, should have "view-main" class -->
+      <div class="view view-main">
+        <!-- Top Navbar-->
+        <div class="navbar">
+          <div class="navbar-inner">
+            <!-- We need cool sliding animation on title element, so we have additional "sliding" class -->
+            <div class="left">
+              <a href="docs/docs/doc.html" class="link" onclick="location='docs/docs/doc.html'">
+                <span>About</span>
+              </a>
+            </div>
+            <div class="center sliding">Remote Camera</div>
+            <div class="right sliding">
+              <a href="https://github.com/cesanta/mongoose/tree/master/examples/raspberry_pi_mjpeg_led" class="link" onclick="location='https://github.com/cesanta/mongoose/tree/master/examples/raspberry_pi_mjpeg_led'">
+                <span>Github</span>
+                <i class="icon icon-next"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+        <!-- Pages container, because we use fixed-through navbar and toolbar, it has additional appropriate classes-->
+        <div class="pages navbar-through toolbar-through">
+          <!-- Page, "data-page" contains page name -->
+          <div data-page="index" class="page">
+            <!-- Scrollable page content -->
+            <div class="page-content">
+              <div class="content-block-title">Camera View</div>
+              <div class="content-block image">
+                <img src="/mjpg">
+              </div>
+
+              <div class="content-block-title">Device Control</div>
+              <div class="list-block">
+
+                <form action="/api" method="GET" enctype="application/json"
+                      id="form-control">
+                  <ul>
+
+                    <!-- Switch (Checkbox) -->
+                    <li>
+                      <div class="item-content">
+                        <div class="item-inner">
+                          <div class="item-title label">LED on/off</div>
+                          <div class="item-input">
+                            <label class="label-switch">
+                              <input type="checkbox" name="onoff">
+                              <div class="checkbox"></div>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="text/javascript" src="framework7.min.js"></script>
+    <script type="text/javascript">
+      var myApp = new Framework7({
+        pushState: true,
+        swipePanel: 'left',
+        // ... other parameters
+      });
+      Dom7(document).on('change', '#form-control', function(ev) {
+        var data = myApp.formToJSON('#form-control');
+        var json = JSON.stringify(data);
+        Dom7.ajax({
+          url: '/api',
+          method: 'POST',
+          contentType: 'application/json',
+          data: json
+        });
+      });
+    </script>
+  </body>
+</html>
