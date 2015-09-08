@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style type="text/css">
     body {
-      background-color: #cde; margin: 0;
+      background-color: #789; margin: 0;
       padding: 0; font: 14px Helvetica, Arial, sans-serif;
     }
     div.content {
@@ -39,24 +39,22 @@
   ws.onclose = function(ev) { console.log(ev); };
   ws.onmessage = function(ev) {
     console.log(ev);
-    var m = (ev.data || '').match(/^(\S+) (.+)/);
-    if (m[1] == 'id') {
-      document.getElementById('my_id').innerText = m[2];
-    } else if (m[1] == 'msg') {
-      var div = document.createElement('div');
-      div.innerHTML = m[2];
-      document.getElementById('messages').appendChild(div);
-    }
+    var div = document.createElement('div');
+    div.innerHTML = ev.data;
+    document.getElementById('messages').appendChild(div);
+
   };
 
   window.onload = function() {
     document.getElementById('send_button').onclick = function(ev) {
       var msg = document.getElementById('send_input').value;
-      ws.send('msg ' + msg);
+      document.getElementById('send_input').value = '';
+      ws.send(msg);
     };
-    document.getElementById('room_sel').onchange = function(ev) {
-      var roomName = this.value || '?';
-      ws.send('join ' + roomName);
+    document.getElementById('send_input').onkeypress = function(ev) {
+      if (ev.keyCode == 13 || ev.which == 13) {
+        document.getElementById('send_button').click();
+      }
     };
   };
 </script>
@@ -66,24 +64,13 @@
     <h1>Websocket PubSub Demonstration</h1>
 
     <p>
-      This page demonstrates how Mongoose web server could be used to implement
+      This page demonstrates how Mongoose could be used to implement
       <a href="http://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern">
        publish–subscribe pattern</a>. Open this page in several browser
        windows. Each window initiates persistent
        <a href="http://en.wikipedia.org/wiki/WebSocket">WebSocket</a>
-      connection with Mongoose, making each browser window a websocket client.
-      Join a room, send messages, and see messages sent by other clients.
-    </p>
-
-    <p>
-      My ID: <b><span id="my_id"></b></span>
-    </p>
-    <p>
-      Join room: <select id="room_sel">
-        <option value="">-- select room -- </option>
-        <option>A</option>
-        <option>B</option>
-      </select>
+      connection with the server, making each browser window a websocket client.
+      Send messages, and see messages sent by other clients.
     </p>
 
     <div id="messages">
