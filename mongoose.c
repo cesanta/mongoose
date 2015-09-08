@@ -674,30 +674,78 @@ void MD5_Final(unsigned char digest[16], MD5_CTX *ctx) {
 
 /* Amalgamated: #include "base64.h" */
 
+#define BASE64_ENCODE_BODY                                                \
+  static const char *b64 =                                                \
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; \
+  int i, j, a, b, c;                                                      \
+                                                                          \
+  for (i = j = 0; i < src_len; i += 3) {                                  \
+    a = src[i];                                                           \
+    b = i + 1 >= src_len ? 0 : src[i + 1];                                \
+    c = i + 2 >= src_len ? 0 : src[i + 2];                                \
+                                                                          \
+    BASE64_OUT(b64[a >> 2]);                                              \
+    BASE64_OUT(b64[((a & 3) << 4) | (b >> 4)]);                           \
+    if (i + 1 < src_len) {                                                \
+      BASE64_OUT(b64[(b & 15) << 2 | (c >> 6)]);                          \
+    }                                                                     \
+    if (i + 2 < src_len) {                                                \
+      BASE64_OUT(b64[c & 63]);                                            \
+    }                                                                     \
+  }                                                                       \
+                                                                          \
+  while (j % 4 != 0) {                                                    \
+    BASE64_OUT('=');                                                      \
+  }                                                                       \
+  BASE64_FLUSH()
+
+#define BASE64_OUT(ch) \
+  do {                 \
+    dst[j++] = (ch);   \
+  } while (0)
+
+#define BASE64_FLUSH() \
+  do {                 \
+    dst[j++] = '\0';   \
+  } while (0)
+
 void cs_base64_encode(const unsigned char *src, int src_len, char *dst) {
-  static const char *b64 =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  int i, j, a, b, c;
-
-  for (i = j = 0; i < src_len; i += 3) {
-    a = src[i];
-    b = i + 1 >= src_len ? 0 : src[i + 1];
-    c = i + 2 >= src_len ? 0 : src[i + 2];
-
-    dst[j++] = b64[a >> 2];
-    dst[j++] = b64[((a & 3) << 4) | (b >> 4)];
-    if (i + 1 < src_len) {
-      dst[j++] = b64[(b & 15) << 2 | (c >> 6)];
-    }
-    if (i + 2 < src_len) {
-      dst[j++] = b64[c & 63];
-    }
-  }
-  while (j % 4 != 0) {
-    dst[j++] = '=';
-  }
-  dst[j++] = '\0';
+  BASE64_ENCODE_BODY;
 }
+
+#undef BASE64_OUT
+#undef BASE64_FLUSH
+
+#define BASE64_OUT(ch) \
+  do {                 \
+    cb((ch));          \
+    j++;               \
+  } while (0)
+
+#define BASE64_FLUSH()
+
+void cs_base64_encode2(const unsigned char *src, int src_len,
+                       cs_base64_cb_t cb) {
+  BASE64_ENCODE_BODY;
+}
+
+#undef BASE64_OUT
+#undef BASE64_FLUSH
+
+#define BASE64_OUT(ch)      \
+  do {                      \
+    fprintf(f, "%c", (ch)); \
+    j++;                    \
+  } while (0)
+
+#define BASE64_FLUSH()
+
+void cs_fprint_base64(FILE *f, const unsigned char *src, int src_len) {
+  BASE64_ENCODE_BODY;
+}
+
+#undef BASE64_OUT
+#undef BASE64_FLUSH
 
 /* Convert one byte of encoded base64 input stream to 6-bit chunk */
 static unsigned char from_b64(unsigned char ch) {

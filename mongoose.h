@@ -402,11 +402,18 @@ void MD5_Final(unsigned char *md, MD5_CTX *c);
 #if !defined(BASE64_H_INCLUDED) && !defined(DISABLE_BASE64)
 #define BASE64_H_INCLUDED
 
+#include <stdio.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+typedef void (*cs_base64_cb_t)(char ch);
+
 void cs_base64_encode(const unsigned char *src, int src_len, char *dst);
+void cs_base64_encode2(const unsigned char *src, int src_len,
+                       cs_base64_cb_t cb);
+void cs_fprint_base64(FILE *f, const unsigned char *src, int src_len);
 int cs_base64_decode(const unsigned char *s, int len, char *dst);
 
 #ifdef __cplusplus
