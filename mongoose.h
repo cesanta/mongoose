@@ -2460,7 +2460,7 @@ uint32_t mg_coap_send_ack(struct mg_connection *nc, uint16_t msg_id);
  * underlying protocol:
  *
  * - in case of UDP COAP_NOT_ENOUGH_DATA means COAP_FORMAT_ERROR,
- * - in case of TCP client can try to recieve more data
+ * - in case of TCP client can try to receive more data
  *
  * Return value: see `mg_coap_send_message()`
  */
