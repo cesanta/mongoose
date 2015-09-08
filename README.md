@@ -60,17 +60,34 @@ go into respective directory and type `make`
 ](https://www.cesanta.com/contact)
 
 
-# Contributions
+# Licensing
 
-People who have agreed to the
-[Cesanta CLA](https://docs.cesanta.com/contributors_la.shtml)
-can make contributions. Note that the CLA isn't a copyright
-_assigment_ but rather a copyright _license_.
-You retain the copyright on your contributions.
+Cesanta made Mongoose open source under GPLv2 for a reason. We are all
+developers here and appreciate easy access to code and therefore seamless
+integration. It's great to be able to play around with the software before
+committing to it.
 
-# License
+However, the GPLv2 open source license does not permit incorporating the
+software into non-open source programs. In order to comply with GPLv2 licensing
+you need to open the source code of your end product fully or alternatively
+purchase a commercial license.
 
-Mongoose is released under
-[GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
-Businesses have an option to get non-restrictive, royalty-free commercial
-license and professional support from [Cesanta](https://www.cesanta.com).
+[Enquire about commercial licensing here](https://www.cesanta.com/contact)
+
+# Mongoose Binary
+
+This is our easy to use web server for web developers (PHP, Ruby, Python, etc)
+and web designers. Available in three editions to suit your needs: free, pro
+(USD 5) and dev edition (from USD 8). To install, simply download, double-click
+to start and run browser - that's all!
+
+[Download Mongoose Binary here](https://www.cesanta.com/mongoose)
+
+# Other products by Cesanta
+
+- [Smart.js](https://github.com/cesanta/smart.js) -
+    Generic, hardware independent, full-stack IoT software platform
+- [V7](https://github.com/cesanta/v7) - Embedded JavaScript engine
+- [Frozen](https://github.com/cesanta/frozen) - JSON parser and generator
+- [SLRE](https://github.com/cesanta/slre) - Super Light Regular Expression
+  library
