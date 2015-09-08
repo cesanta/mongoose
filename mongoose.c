@@ -147,6 +147,7 @@ typedef struct _stati64 ns_stat_t;
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/select.h>
+#include <sys/poll.h>
 #define closesocket(x) close(x)
 #ifndef __OS2__
 #define __cdecl
@@ -230,6 +231,7 @@ typedef void (*ns_callback_t)(struct ns_connection *, int event_num, void *evp);
 
 struct ns_mgr {
   struct ns_connection *active_connections;
+  unsigned int num_connections;
   const char *hexdump_file;         // Debug hexdump file path
   sock_t ctl[2];                    // Socketpair for mg_wakeup()
   void *user_data;                  // User data
@@ -446,12 +448,14 @@ static void ns_add_conn(struct ns_mgr *mgr, struct ns_connection *c) {
   mgr->active_connections = c;
   c->prev = NULL;
   if (c->next != NULL) c->next->prev = c;
+  ++mgr->num_connections;
 }
 
 static void ns_remove_conn(struct ns_connection *conn) {
   if (conn->prev == NULL) conn->mgr->active_connections = conn->next;
   if (conn->prev) conn->prev->next = conn->next;
   if (conn->next) conn->next->prev = conn->prev;
+  --conn->mgr->num_connections;
 }
 
 // Print message to buffer. If buffer is large enough to hold the message,
@@ -1089,7 +1093,107 @@ static void ns_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   }
 }
 
+time_t ns_mgr_poll_posix(struct ns_mgr *mgr, int milli) {
+  struct ns_connection *conn, *tmp_conn;
+  struct pollfd poll_list[mgr->num_connections+1];
+  time_t current_time = time(NULL);
+
+  poll_list[0].fd = mgr->ctl[1];
+  poll_list[0].events = POLLIN;
+  poll_list[0].revents = 0;
+  int idx = 1;
+
+  for (conn = mgr->active_connections; conn != NULL; conn = tmp_conn) {
+    tmp_conn = conn->next;
+    if (!(conn->flags & (NSF_LISTENING | NSF_CONNECTING))) {
+      ns_call(conn, NS_POLL, &current_time);
+    }
+    if (conn->flags & NSF_CLOSE_IMMEDIATELY) {
+      ns_close_conn(conn);
+    } else {
+      if (!(conn->flags & NSF_WANT_WRITE)) {
+        poll_list[idx].fd = conn->sock;
+        poll_list[idx].events = POLLIN;
+        poll_list[idx].revents = 0;
+      }
+      if (((conn->flags & NSF_CONNECTING) && !(conn->flags & NSF_WANT_READ)) ||
+          (conn->send_iobuf.len > 0 && !(conn->flags & NSF_CONNECTING) &&
+           !(conn->flags & NSF_BUFFER_BUT_DONT_SEND))) {
+        poll_list[idx].events |= POLLOUT;
+      }
+    }
+   idx++;
+  }
+
+  if (poll(poll_list, idx, milli) > 0) {
+    // poll() might have been waiting for a long time, reset current_time
+    // now to prevent last_io_time being set to the past.
+    current_time = time(NULL);
+
+    // Read wakeup messages
+    if (mgr->ctl[1] != INVALID_SOCKET &&
+        ((poll_list[0].revents&POLLIN) != 0) ) {
+      struct ctl_msg ctl_msg;
+      int len = (int) recv(mgr->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg), 0);
+      send(mgr->ctl[1], ctl_msg.message, 1, 0);
+      if (len >= (int) sizeof(ctl_msg.callback) && ctl_msg.callback != NULL) {
+        struct ns_connection *c;
+        for (c = ns_next(mgr, NULL); c != NULL; c = ns_next(mgr, c)) {
+          ctl_msg.callback(c, NS_POLL, ctl_msg.message);
+        }
+      }
+    }
+
+    for (conn = mgr->active_connections; conn != NULL; conn = tmp_conn) {
+      tmp_conn = conn->next;
+      int i;
+      for (i = 1; i < idx; ++i) {
+        if(poll_list[i].fd == conn->sock) {
+          if ((poll_list[i].revents&POLLIN) != 0) {
+        if (conn->flags & NSF_LISTENING) {
+          if (conn->flags & NSF_UDP) {
+            ns_handle_udp(conn);
+          } else {
+            // We're not looping here, and accepting just one connection at
+            // a time. The reason is that eCos does not respect non-blocking
+            // flag on a listening socket and hangs in a loop.
+            accept_conn(conn);
+          }
+        } else {
+          conn->last_io_time = current_time;
+          ns_read_from_socket(conn);
+        }
+      }
+
+      if ((poll_list[i].revents&POLLOUT) != 0) {
+        if (conn->flags & NSF_CONNECTING) {
+          ns_read_from_socket(conn);
+        } else if (!(conn->flags & NSF_BUFFER_BUT_DONT_SEND)) {
+          conn->last_io_time = current_time;
+          ns_write_to_socket(conn);
+        }
+      }
+      break;
+      }
+    }
+  }
+  }
+  for (conn = mgr->active_connections; conn != NULL; conn = tmp_conn) {
+    tmp_conn = conn->next;
+    if ((conn->flags & NSF_CLOSE_IMMEDIATELY) ||
+        (conn->send_iobuf.len == 0 &&
+          (conn->flags & NSF_FINISHED_SENDING_DATA))) {
+      ns_close_conn(conn);
+    }
+  }
+
+  return current_time;
+}
+
 time_t ns_mgr_poll(struct ns_mgr *mgr, int milli) {
+#ifndef _WIN32
+  return ns_mgr_poll_posix(mgr, milli);
+#else
   struct ns_connection *conn, *tmp_conn;
   struct timeval tv;
   fd_set read_set, write_set;
@@ -1184,6 +1288,7 @@ time_t ns_mgr_poll(struct ns_mgr *mgr, int milli) {
   }
 
   return current_time;
+#endif
 }
 
 struct ns_connection *ns_connect(struct ns_mgr *mgr, const char *address,
