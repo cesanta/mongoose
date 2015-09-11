@@ -1991,7 +1991,7 @@ NS_INTERNAL struct mg_connection *mg_create_connection(
 
 /* Associate a socket to a connection and and add to the manager. */
 NS_INTERNAL void mg_set_sock(struct mg_connection *nc, sock_t sock) {
-#ifndef NS_CC3200
+#if !defined(NS_CC3200) && !defined(NS_ESP8266)
   /* Can't get non-blocking connect to work.
    * TODO(rojer): Figure out why it fails where blocking succeeds.
    */
@@ -2375,17 +2375,17 @@ static void mg_ssl_begin(struct mg_connection *nc) {
 
 static void mg_read_from_socket(struct mg_connection *conn) {
   char buf[NS_READ_BUFFER_SIZE];
-  int n = 0, to_recv;
+  int n = 0;
 
   if (conn->flags & NSF_CONNECTING) {
     int ok = 1, ret;
-#ifndef NS_CC3200
+#if !defined(NS_CC3200) && !defined(NS_ESP8266)
     socklen_t len = sizeof(ok);
 #endif
 
     (void) ret;
-#ifdef NS_CC3200
-    /* On CC3200 we use blocking connect. If we got as far as this,
+#if defined(NS_CC3200) || defined(NS_ESP8266)
+    /* On CC3200 and ESP8266 we use blocking connect. If we got as far as this,
      * this means connect() was successful.
      * TODO(rojer): Figure out why it fails where blocking succeeds.
      */
@@ -2428,29 +2428,14 @@ static void mg_read_from_socket(struct mg_connection *conn) {
     }
   } else
 #endif
-  {
-    to_recv = recv_avail_size(conn, sizeof(buf));
-    while ((n = (int) NS_RECV_FUNC(conn->sock, buf, to_recv, 0)) > 0) {
+    while ((n = (int) NS_RECV_FUNC(
+                conn->sock, buf, recv_avail_size(conn, sizeof(buf)), 0)) > 0) {
       DBG(("%p %d bytes (PLAIN) <- %d", conn, n, conn->sock));
       mbuf_append(&conn->recv_mbuf, buf, n);
       mg_call(conn, NS_RECV, &n);
       if (conn->flags & NSF_CLOSE_IMMEDIATELY) break;
-#ifdef NS_ESP8266
-      /*
-       * TODO(alashkin): ESP/RTOS recv implementation tend to block
-       * even in non-blocking mode, so, break the loop
-       * if received size less than buffer size
-       * and wait for next select()
-       * Some of RTOS specific call missed?
-       */
-      if (to_recv > n) {
-        break;
-      }
-      to_recv = recv_avail_size(conn, sizeof(buf));
-#endif
     }
-    DBG(("recv returns %d", n));
-  }
+  DBG(("recv returns %d", n));
 
   if (mg_is_error(n)) {
     conn->flags |= NSF_CLOSE_IMMEDIATELY;
@@ -2592,6 +2577,7 @@ static void mg_mgr_handle_connection(struct mg_connection *nc, int fd_flags,
        (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
 }
 
+#ifndef NS_DISABLE_SOCKETPAIR
 static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
   struct ctl_msg ctl_msg;
   int len =
@@ -2604,6 +2590,7 @@ static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
     }
   }
 }
+#endif
 
 #if NS_MGR_EV_MGR == 1 /* epoll() */
 
@@ -2798,10 +2785,12 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
   now = time(NULL);
   DBG(("select @ %ld num_ev=%d", (long) now, num_selected));
 
+#ifndef NS_DISABLE_SOCKETPAIR
   if (num_selected > 0 && mgr->ctl[1] != INVALID_SOCKET &&
       FD_ISSET(mgr->ctl[1], &read_set)) {
     mg_mgr_handle_ctl_sock(mgr);
   }
+#endif
 
   for (nc = mgr->active_connections; nc != NULL; nc = tmp) {
     int fd_flags = 0;
@@ -2860,7 +2849,7 @@ NS_INTERNAL struct mg_connection *mg_finish_connect(struct mg_connection *nc,
     return NULL;
   }
 
-#ifndef NS_CC3200
+#if !defined(NS_CC3200) && !defined(NS_ESP8266)
   mg_set_non_blocking_mode(sock);
 #endif
   rc = (proto == SOCK_DGRAM) ? 0 : connect(sock, &sa->sa, sizeof(sa->sin));
