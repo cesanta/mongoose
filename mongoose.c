@@ -673,6 +673,78 @@ void MD5_Final(unsigned char digest[16], MD5_CTX *ctx) {
 #ifndef EXCLUDE_COMMON
 
 /* Amalgamated: #include "base64.h" */
+#include <string.h>
+
+/* ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/ */
+
+#define NUM_UPPERCASES ('Z' - 'A' + 1)
+#define NUM_LETTERS (NUM_UPPERCASES * 2)
+#define NUM_DIGITS ('9' - '0' + 1)
+
+/*
+ * Emit a base64 code char.
+ *
+ * Doesn't use memory, thus it's safe to use to safely dump memory in crashdumps
+ */
+static void cs_base64_emit_code(struct cs_base64_ctx *ctx, int v) {
+  if (v < NUM_UPPERCASES) {
+    ctx->b64_putc(v + 'A', ctx->user_data);
+  } else if (v < (NUM_LETTERS)) {
+    ctx->b64_putc(v - NUM_UPPERCASES + 'a', ctx->user_data);
+  } else if (v < (NUM_LETTERS + NUM_DIGITS)) {
+    ctx->b64_putc(v - NUM_LETTERS + '0', ctx->user_data);
+  } else {
+    ctx->b64_putc(v - NUM_LETTERS - NUM_DIGITS == 0 ? '+' : '/',
+                  ctx->user_data);
+  }
+}
+
+static void cs_base64_emit_chunk(struct cs_base64_ctx *ctx) {
+  int a, b, c;
+
+  a = ctx->chunk[0];
+  b = ctx->chunk[1];
+  c = ctx->chunk[2];
+
+  cs_base64_emit_code(ctx, a >> 2);
+  cs_base64_emit_code(ctx, ((a & 3) << 4) | (b >> 4));
+  if (ctx->chunk_size > 1) {
+    cs_base64_emit_code(ctx, (b & 15) << 2 | (c >> 6));
+  }
+  if (ctx->chunk_size > 2) {
+    cs_base64_emit_code(ctx, c & 63);
+  }
+}
+
+void cs_base64_init(struct cs_base64_ctx *ctx, cs_base64_putc_t b64_putc,
+                    void *user_data) {
+  ctx->chunk_size = 0;
+  ctx->b64_putc = b64_putc;
+  ctx->user_data = user_data;
+}
+
+void cs_base64_update(struct cs_base64_ctx *ctx, const char *str, size_t len) {
+  const unsigned char *src = (const unsigned char *) str;
+  size_t i;
+  for (i = 0; i < len; i++) {
+    ctx->chunk[ctx->chunk_size++] = src[i];
+    if (ctx->chunk_size == 3) {
+      cs_base64_emit_chunk(ctx);
+      ctx->chunk_size = 0;
+    }
+  }
+}
+
+void cs_base64_finish(struct cs_base64_ctx *ctx) {
+  if (ctx->chunk_size > 0) {
+    int i;
+    memset(&ctx->chunk[ctx->chunk_size], 0, 3 - ctx->chunk_size);
+    cs_base64_emit_chunk(ctx);
+    for (i = 0; i < (3 - ctx->chunk_size); i++) {
+      ctx->b64_putc('=', ctx->user_data);
+    }
+  }
+}
 
 #define BASE64_ENCODE_BODY                                                \
   static const char *b64 =                                                \
@@ -710,22 +782,6 @@ void MD5_Final(unsigned char digest[16], MD5_CTX *ctx) {
   } while (0)
 
 void cs_base64_encode(const unsigned char *src, int src_len, char *dst) {
-  BASE64_ENCODE_BODY;
-}
-
-#undef BASE64_OUT
-#undef BASE64_FLUSH
-
-#define BASE64_OUT(ch) \
-  do {                 \
-    cb((ch));          \
-    j++;               \
-  } while (0)
-
-#define BASE64_FLUSH()
-
-void cs_base64_encode2(const unsigned char *src, int src_len,
-                       cs_base64_cb_t cb) {
   BASE64_ENCODE_BODY;
 }
 
