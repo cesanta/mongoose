@@ -51,6 +51,9 @@ int main(int argc, char *argv[]) {
   struct mg_connection *nc;
   int i;
   char *cp;
+#ifdef NS_ENABLE_SSL
+  const char *ssl_cert = NULL;
+#endif
 
   mg_mgr_init(&mgr, NULL);
 
@@ -76,12 +79,7 @@ int main(int argc, char *argv[]) {
 #endif
 #ifdef NS_ENABLE_SSL
     } else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
-      const char *ssl_cert = argv[++i];
-      const char *err_str = mg_set_ssl(nc, ssl_cert, NULL);
-      if (err_str != NULL) {
-        fprintf(stderr, "Error loading SSL cert: %s\n", err_str);
-        exit(1);
-      }
+      ssl_cert = argv[++i];
 #endif
     }
   }
@@ -92,6 +90,16 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Error starting server on port %s\n", s_http_port);
     exit(1);
   }
+
+#ifdef NS_ENABLE_SSL
+  if (ssl_cert != NULL) {
+    const char *err_str = mg_set_ssl(nc, ssl_cert, NULL);
+    if (err_str != NULL) {
+      fprintf(stderr, "Error loading SSL cert: %s\n", err_str);
+      exit(1);
+    }
+  }
+#endif
 
   mg_set_protocol_http_websocket(nc);
   s_http_server_opts.document_root = ".";
