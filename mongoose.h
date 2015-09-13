@@ -139,11 +139,14 @@
 #endif
 #define random() rand()
 typedef int socklen_t;
+typedef char int8_t;
 typedef unsigned char uint8_t;
+typedef int int32_t;
 typedef unsigned int uint32_t;
+typedef short int16_t;
 typedef unsigned short uint16_t;
-typedef unsigned __int64 uint64_t;
 typedef __int64 int64_t;
+typedef unsigned __int64 uint64_t;
 typedef SOCKET sock_t;
 typedef uint32_t in_addr_t;
 #ifndef UINT16_MAX
