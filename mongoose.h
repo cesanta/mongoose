@@ -1307,7 +1307,7 @@ void mg_send_websocket_handshake(struct mg_connection *nc, const char *uri,
 /*
  * Send websocket frame to the remote end.
  *
- * `op` specifies frame's type , one of:
+ * `op_and_flags` specifies frame's type, one of:
  *
  * - WEBSOCKET_OP_CONTINUE
  * - WEBSOCKET_OP_TEXT
@@ -1315,17 +1315,22 @@ void mg_send_websocket_handshake(struct mg_connection *nc, const char *uri,
  * - WEBSOCKET_OP_CLOSE
  * - WEBSOCKET_OP_PING
  * - WEBSOCKET_OP_PONG
+ *
+ * Orred with one of the flags:
+ *
+ * - WEBSOCKET_DONT_FIN: Don't set the FIN flag on the frame to be sent.
+ *
  * `data` and `data_len` contain frame data.
  */
-void mg_send_websocket_frame(struct mg_connection *nc, int op, const void *data,
-                             size_t data_len);
+void mg_send_websocket_frame(struct mg_connection *nc, int op_and_flags,
+                             const void *data, size_t data_len);
 
 /*
  * Send multiple websocket frames.
  *
  * Like `mg_send_websocket_frame()`, but composes a frame from multiple buffers.
  */
-void mg_send_websocket_framev(struct mg_connection *nc, int op,
+void mg_send_websocket_framev(struct mg_connection *nc, int op_and_flags,
                               const struct mg_str *strings, int num_strings);
 
 /*
@@ -1334,7 +1339,7 @@ void mg_send_websocket_framev(struct mg_connection *nc, int op,
  * Like `mg_send_websocket_frame()`, but allows to create formatted message
  * with `printf()`-like semantics.
  */
-void mg_printf_websocket_frame(struct mg_connection *nc, int op,
+void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
                                const char *fmt, ...);
 
 /*
@@ -1375,6 +1380,20 @@ void mg_printf_html_escape(struct mg_connection *, const char *, ...);
 #define WEBSOCKET_OP_CLOSE 8
 #define WEBSOCKET_OP_PING 9
 #define WEBSOCKET_OP_PONG 10
+
+/*
+ * If set causes the FIN flag to not be set on outbound
+ * frames. This enables sending multiple fragments of a single
+ * logical message.
+ *
+ * The WebSocket protocol mandates that if the FIN flag of a data
+ * frame is not set, the next frame must be a WEBSOCKET_OP_CONTINUE.
+ * The last frame must have the FIN bit set.
+ *
+ * Note that mongoose will automatically defragment incoming messages,
+ * so this flag is used only on outbound messages.
+ */
+#define WEBSOCKET_DONT_FIN 0x100
 
 /*
  * Parse a HTTP message.

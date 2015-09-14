@@ -3686,7 +3686,7 @@ static void mg_send_ws_header(struct mg_connection *nc, int op, size_t len,
   int header_len;
   unsigned char header[10];
 
-  header[0] = 0x80 + (op & 0x0f);
+  header[0] = (op & WEBSOCKET_DONT_FIN ? 0x0 : 0x80) + (op & 0x0f);
   if (len < 126) {
     header[1] = len;
     header_len = 2;
