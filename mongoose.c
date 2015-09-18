@@ -415,9 +415,9 @@ void cs_sha1_final(unsigned char digest[20], cs_sha1_ctx *context) {
   memset(&finalcount, '\0', sizeof(finalcount));
 }
 
-void hmac_sha1(const unsigned char *key, size_t keylen,
-               const unsigned char *data, size_t datalen,
-               unsigned char out[20]) {
+void cs_hmac_sha1(const unsigned char *key, size_t keylen,
+                  const unsigned char *data, size_t datalen,
+                  unsigned char out[20]) {
   cs_sha1_ctx ctx;
   unsigned char buf1[64], buf2[64], tmp_key[20], i;
 
