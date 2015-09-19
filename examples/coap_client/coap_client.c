@@ -13,13 +13,13 @@ static char* s_default_address = "udp://coap.me:5683";
 
 static void coap_handler(struct mg_connection *nc, int ev, void *p) {
   switch (ev) {
-    case NS_CONNECT: {
+    case MG_EV_CONNECT: {
       struct mg_coap_message cm;
       uint32_t res;
 
       memset(&cm, 0, sizeof(cm));
       cm.msg_id = 1;
-      cm.msg_type = NS_COAP_MSG_CON;
+      cm.msg_type = MG_COAP_MSG_CON;
       printf("Sending CON...\n");
       res = mg_coap_send_message(nc, &cm);
       if (res == 0) {
@@ -30,8 +30,8 @@ static void coap_handler(struct mg_connection *nc, int ev, void *p) {
       }
       break;
     }
-    case NS_COAP_ACK:
-    case NS_COAP_RST:  {
+    case MG_EV_COAP_ACK:
+    case MG_EV_COAP_RST:  {
       struct mg_coap_message *cm = (struct mg_coap_message *)p;
       printf("ACK/RST for message with msg_id = %d received\n",
              cm->msg_id);

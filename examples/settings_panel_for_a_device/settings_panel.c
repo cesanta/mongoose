@@ -38,14 +38,14 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message *hm = (struct http_message *) ev_data;
 
   switch (ev) {
-    case NS_HTTP_REQUEST:
+    case MG_EV_HTTP_REQUEST:
       if (mg_vcmp(&hm->uri, "/save") == 0) {
         handle_save(nc, hm);                    /* Handle RESTful call */
       } else {
         mg_serve_http(nc, hm, s_http_server_opts);  /* Serve static content */
       }
       break;
-    case NS_SSI_CALL:
+    case MG_EV_SSI_CALL:
       handle_ssi_call(nc, ev_data);
       break;
     default:

@@ -1,6 +1,6 @@
 NS=../../mongoose.c
 FLAGS = ../../mongoose.c -I../..
-CFLAGS=-W -Wall -DNS_ENABLE_THREADS -pthread $(CFLAGS_EXTRA)
+CFLAGS=-W -Wall -DMG_ENABLE_THREADS -pthread $(CFLAGS_EXTRA)
 PROGS = device_side cloud_side
 
 all: $(PROGS)

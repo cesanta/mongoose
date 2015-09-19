@@ -28,11 +28,11 @@ static void push_frame_to_clients(struct mg_mgr *mgr,
                                   const struct websocket_message *wm) {
   struct mg_connection *nc;
   /*
-   * mjpeg connections are tagged with the NSF_USER_2 flag so we can find them
+   * mjpeg connections are tagged with the MG_F_USER_2 flag so we can find them
    * my scanning the connection list provided by the mongoose manager.
    */
   for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
-    if (!(nc->flags & NSF_USER_2)) continue;  // Ignore un-marked requests
+    if (!(nc->flags & MG_F_USER_2)) continue;  // Ignore un-marked requests
 
     mg_printf(nc, "--w00t\r\nContent-Type: image/jpeg\r\n"
               "Content-Length: %lu\r\n\r\n", (unsigned long) wm->size);
@@ -50,7 +50,7 @@ static void send_command_to_the_device(struct mg_mgr *mgr,
                                        const struct mg_str *cmd) {
   struct mg_connection *nc;
   for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
-    if (!(nc->flags & NSF_IS_WEBSOCKET)) continue;  // Ignore non-websocket requests
+    if (!(nc->flags & MG_F_IS_WEBSOCKET)) continue;  // Ignore non-websocket requests
 
     mg_send_websocket_frame(nc, WEBSOCKET_OP_TEXT, cmd->p, cmd->len);
     printf("Sent API command [%.*s] to %p\n", (int) cmd->len, cmd->p, nc);
@@ -73,9 +73,9 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message *hm = (struct http_message *) ev_data;
 
   switch (ev) {
-    case NS_HTTP_REQUEST:
+    case MG_EV_HTTP_REQUEST:
       if (mg_vcmp(&hm->uri, "/mjpg") == 0) {
-        nc->flags |= NSF_USER_2;   /* Set a mark on image requests */
+        nc->flags |= MG_F_USER_2;   /* Set a mark on image requests */
         mg_printf(nc, "%s",
                 "HTTP/1.0 200 OK\r\n"
                 "Cache-Control: no-cache\r\n"
@@ -99,7 +99,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
         mg_serve_http(nc, hm, web_root_opts);
       }
       break;
-    case NS_WEBSOCKET_FRAME:
+    case MG_EV_WEBSOCKET_FRAME:
       printf("Got websocket frame, size %lu\n", (unsigned long) wm->size);
       push_frame_to_clients(nc->mgr, wm);
       break;

@@ -98,7 +98,7 @@ static void rfs_ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       mg_send_http_chunk(nc, "", 0);
       break;
     case NS_SEND:
-      nc->flags |= NSF_CLOSE_IMMEDIATELY;
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
       break;
       
     default:

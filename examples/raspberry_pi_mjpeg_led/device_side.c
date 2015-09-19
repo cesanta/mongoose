@@ -85,7 +85,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct websocket_message *wm = (struct websocket_message *) ev_data;
 
   switch (ev) {
-    case NS_CONNECT:
+    case MG_EV_CONNECT:
       printf("Reconnect: %s\n", * (int *) ev_data == 0 ? "ok" : "failed");
       if (* (int *) ev_data == 0) {
         /*
@@ -102,14 +102,14 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
         mg_send_websocket_handshake(nc, "/stream", NULL);
       }
       break;
-    case NS_CLOSE:
+    case MG_EV_CLOSE:
       printf("Connection %p closed\n", nc);
       client = NULL;
       break;
-    case NS_POLL:
+    case MG_EV_POLL:
       send_mjpg_frame(nc, s_mjpg_file);
       break;
-    case NS_WEBSOCKET_FRAME:
+    case MG_EV_WEBSOCKET_FRAME:
       printf("Got control command: [%.*s]\n", (int) wm->size, wm->data);
       perform_control_command((const char*)wm->data, wm->size);
       break;

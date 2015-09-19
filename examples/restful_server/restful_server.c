@@ -29,7 +29,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message *hm = (struct http_message *) ev_data;
 
   switch (ev) {
-    case NS_HTTP_REQUEST:
+    case MG_EV_HTTP_REQUEST:
       if (mg_vcmp(&hm->uri, "/api/v1/sum") == 0) {
         handle_sum_call(nc, hm);                    /* Handle RESTful call */
       } else if (mg_vcmp(&hm->uri, "/printcontent") == 0) {
@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
   struct mg_connection *nc;
   int i;
   char *cp;
-#ifdef NS_ENABLE_SSL
+#ifdef MG_ENABLE_SSL
   const char *ssl_cert = NULL;
 #endif
 
@@ -73,11 +73,11 @@ int main(int argc, char *argv[]) {
       s_http_server_opts.per_directory_auth_file = argv[++i];
     } else if (strcmp(argv[i], "-r") == 0 && i + 1 < argc) {
       s_http_server_opts.url_rewrites = argv[++i];
-#ifndef NS_DISABLE_CGI
+#ifndef MG_DISABLE_CGI
     } else if (strcmp(argv[i], "-i") == 0 && i + 1 < argc) {
       s_http_server_opts.cgi_interpreter = argv[++i];
 #endif
-#ifdef NS_ENABLE_SSL
+#ifdef MG_ENABLE_SSL
     } else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
       ssl_cert = argv[++i];
 #endif
@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
-#ifdef NS_ENABLE_SSL
+#ifdef MG_ENABLE_SSL
   if (ssl_cert != NULL) {
     const char *err_str = mg_set_ssl(nc, ssl_cert, NULL);
     if (err_str != NULL) {

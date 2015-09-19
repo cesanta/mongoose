@@ -26,30 +26,30 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
   (void) nc;
 
 #if 0
-  if (ev != NS_POLL)
+  if (ev != MG_EV_POLL)
     printf("USER HANDLER GOT %d\n", ev);
 #endif
 
   switch (ev) {
-    case NS_CONNECT:
+    case MG_EV_CONNECT:
       mg_set_protocol_mqtt(nc);
       mg_send_mqtt_handshake(nc, "dummy");
       break;
-    case NS_MQTT_CONNACK:
-      if (msg->connack_ret_code != NS_MQTT_CONNACK_ACCEPTED) {
+    case MG_EV_MQTT_CONNACK:
+      if (msg->connack_ret_code != MG_EV_MQTT_CONNACK_ACCEPTED) {
         printf("Got mqtt connection error: %d\n", msg->connack_ret_code);
         exit(1);
       }
       printf("Subscribing to '/stuff'\n");
       mg_mqtt_subscribe(nc, topic_expressions, sizeof(topic_expressions)/sizeof(*topic_expressions), 42);
       break;
-    case NS_MQTT_PUBACK:
+    case MG_EV_MQTT_PUBACK:
       printf("Message publishing acknowledged (msg_id: %d)\n", msg->message_id);
       break;
-    case NS_MQTT_SUBACK:
+    case MG_EV_MQTT_SUBACK:
       printf("Subscription acknowledged, forwarding to '/test'\n");
       break;
-    case NS_MQTT_PUBLISH:
+    case MG_EV_MQTT_PUBLISH:
       {
 #if 0
         char hex[1024] = {0};
@@ -60,10 +60,10 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
 #endif
 
         printf("Forwarding to /test\n");
-        mg_mqtt_publish(nc, "/test", 65, NS_MQTT_QOS(0), msg->payload.p, msg->payload.len);
+        mg_mqtt_publish(nc, "/test", 65, MG_MQTT_QOS(0), msg->payload.p, msg->payload.len);
       }
       break;
-    case NS_CLOSE:
+    case MG_EV_CLOSE:
       printf("Connection closed\n");
       exit(1);
   }

@@ -15,7 +15,7 @@ static void signal_handler(int sig_num) {
 }
 
 static int is_websocket(const struct mg_connection *nc) {
-  return nc->flags & NSF_IS_WEBSOCKET;
+  return nc->flags & MG_F_IS_WEBSOCKET;
 }
 
 static void broadcast(struct mg_connection *nc, const char *msg, size_t len) {
@@ -33,20 +33,20 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct websocket_message *wm = (struct websocket_message *) ev_data;
 
   switch (ev) {
-    case NS_HTTP_REQUEST:
+    case MG_EV_HTTP_REQUEST:
       /* Usual HTTP request - serve static files */
       mg_serve_http(nc, hm, s_http_server_opts);
-      nc->flags |= NSF_SEND_AND_CLOSE;
+      nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
-    case NS_WEBSOCKET_HANDSHAKE_DONE:
+    case MG_EV_WEBSOCKET_HANDSHAKE_DONE:
       /* New websocket connection. Tell everybody. */
       broadcast(nc, "joined", 6);
       break;
-    case NS_WEBSOCKET_FRAME:
+    case MG_EV_WEBSOCKET_FRAME:
       /* New websocket message. Tell everybody. */
       broadcast(nc, (char *) wm->data, wm->size);
       break;
-    case NS_CLOSE:
+    case MG_EV_CLOSE:
       /* Disconnect. Tell everybody. */
       if (is_websocket(nc)) {
         broadcast(nc, "left", 4);

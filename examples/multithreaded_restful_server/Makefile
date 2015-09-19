@@ -1,6 +1,6 @@
 PROG = multithreaded_restful_server
 SOURCES = $(PROG).c ../../mongoose.c
-APP_FLAGS = -DNS_ENABLE_THREADS $(CFLAGS_EXTRA)
+APP_FLAGS = -DMG_ENABLE_THREADS $(CFLAGS_EXTRA)
 
 ifeq ($(OS), Windows_NT)
 APP_FLAGS += advapi32.lib

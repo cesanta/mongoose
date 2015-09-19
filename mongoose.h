@@ -18,7 +18,7 @@
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-#define NS_FOSSA_VERSION "2.0.0"
+#define MG_FOSSA_VERSION "2.0.0"
 /*
  * Copyright (c) 2015 Cesanta Software Limited
  * All rights reserved
@@ -27,8 +27,8 @@
 #ifndef OSDEP_HEADER_INCLUDED
 #define OSDEP_HEADER_INCLUDED
 
-#if !defined(NS_DISABLE_FILESYSTEM) && defined(AVR_NOFS)
-#define NS_DISABLE_FILESYSTEM
+#if !defined(MG_DISABLE_FILESYSTEM) && defined(AVR_NOFS)
+#define MG_DISABLE_FILESYSTEM
 #endif
 
 #undef UNICODE                /* Use ANSI WinAPI functions */
@@ -185,14 +185,14 @@ DIR *opendir(const char *name);
 int closedir(DIR *dir);
 struct dirent *readdir(DIR *dir);
 
-#elif /* not _WIN32 */ defined(NS_CC3200)
+#elif /* not _WIN32 */ defined(MG_CC3200)
 
 #include <fcntl.h>
 #include <unistd.h>
 #include <cc3200_libc.h>
 #include <cc3200_socket.h>
 
-#elif /* not CC3200 */ defined(NS_ESP8266) && defined(RTOS_SDK)
+#elif /* not CC3200 */ defined(MG_ESP8266) && defined(RTOS_SDK)
 
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
@@ -210,7 +210,7 @@ struct dirent *readdir(DIR *dir);
 #include <netdb.h>
 #include <pthread.h>
 #include <unistd.h>
-#include <arpa/inet.h> /* For inet_pton() when NS_ENABLE_IPV6 is defined */
+#include <arpa/inet.h> /* For inet_pton() when MG_ENABLE_IPV6 is defined */
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -222,7 +222,7 @@ struct dirent *readdir(DIR *dir);
 #include <stdarg.h>
 
 #ifndef AVR_LIBC
-#ifndef NS_ESP8266
+#ifndef MG_ESP8266
 #define closesocket(x) close(x)
 #endif
 #ifndef __cdecl
@@ -251,7 +251,7 @@ int64_t strtoll(const char *str, char **endptr, int base);
     fflush(stdout);             \
   } while (0)
 
-#ifdef NS_ENABLE_DEBUG
+#ifdef MG_ENABLE_DEBUG
 #define DBG __DBG
 #else
 #define DBG(x)
@@ -345,8 +345,8 @@ void mbuf_trim(struct mbuf *);
  * All rights reserved
  */
 
-#if !defined(NS_SHA1_HEADER_INCLUDED) && !defined(DISABLE_SHA1)
-#define NS_SHA1_HEADER_INCLUDED
+#if !defined(MG_SHA1_HEADER_INCLUDED) && !defined(DISABLE_SHA1)
+#define MG_SHA1_HEADER_INCLUDED
 
 
 #ifdef __cplusplus
@@ -368,7 +368,7 @@ void cs_hmac_sha1(const unsigned char *key, size_t key_len,
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* NS_SHA1_HEADER_INCLUDED */
+#endif /* MG_SHA1_HEADER_INCLUDED */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -557,11 +557,11 @@ int json_emit_va(char *buf, int buf_len, const char *fmt, va_list);
  * event managers handled by different threads.
  */
 
-#ifndef NS_NET_HEADER_INCLUDED
-#define NS_NET_HEADER_INCLUDED
+#ifndef MG_NET_HEADER_INCLUDED
+#define MG_NET_HEADER_INCLUDED
 
 
-#ifdef NS_ENABLE_SSL
+#ifdef MG_ENABLE_SSL
 #ifdef __APPLE__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
@@ -571,12 +571,12 @@ typedef void *SSL;
 typedef void *SSL_CTX;
 #endif
 
-#ifdef NS_USE_READ_WRITE
-#define NS_RECV_FUNC(s, b, l, f) read(s, b, l)
-#define NS_SEND_FUNC(s, b, l, f) write(s, b, l)
+#ifdef MG_USE_READ_WRITE
+#define MG_EV_RECV_FUNC(s, b, l, f) read(s, b, l)
+#define MG_EV_SEND_FUNC(s, b, l, f) write(s, b, l)
 #else
-#define NS_RECV_FUNC(s, b, l, f) recv(s, b, l, f)
-#define NS_SEND_FUNC(s, b, l, f) send(s, b, l, f)
+#define MG_EV_RECV_FUNC(s, b, l, f) recv(s, b, l, f)
+#define MG_EV_SEND_FUNC(s, b, l, f) send(s, b, l, f)
 #endif
 
 #ifdef __cplusplus
@@ -586,7 +586,7 @@ extern "C" {
 union socket_address {
   struct sockaddr sa;
   struct sockaddr_in sin;
-#ifdef NS_ENABLE_IPV6
+#ifdef MG_ENABLE_IPV6
   struct sockaddr_in6 sin6;
 #else
   struct sockaddr sin6;
@@ -599,7 +599,7 @@ struct mg_str {
   size_t len;    /* Memory chunk length */
 };
 
-#define NS_STR(str_literal) \
+#define MG_STR(str_literal) \
   { str_literal, sizeof(str_literal) - 1 }
 
 /*
@@ -610,12 +610,12 @@ struct mg_connection;
 typedef void (*mg_event_handler_t)(struct mg_connection *, int ev, void *);
 
 /* Events. Meaning of event parameter (evp) is given in the comment. */
-#define NS_POLL 0    /* Sent to each connection on each mg_mgr_poll() call */
-#define NS_ACCEPT 1  /* New connection accepted. union socket_address *addr */
-#define NS_CONNECT 2 /* connect() succeeded or failed. int *success_status */
-#define NS_RECV 3    /* Data has benn received. int *num_bytes */
-#define NS_SEND 4    /* Data has been written to a socket. int *num_bytes */
-#define NS_CLOSE 5   /* Connection is closed. NULL */
+#define MG_EV_POLL 0    /* Sent to each connection on each mg_mgr_poll() call */
+#define MG_EV_ACCEPT 1  /* New connection accepted. union socket_address * */
+#define MG_EV_CONNECT 2 /* connect() succeeded or failed. int *  */
+#define MG_EV_RECV 3    /* Data has benn received. int *num_bytes */
+#define MG_EV_SEND 4    /* Data has been written to a socket. int *num_bytes */
+#define MG_EV_CLOSE 5   /* Connection is closed. NULL */
 
 /*
  * Mongoose event manager.
@@ -654,28 +654,28 @@ struct mg_connection {
 
   unsigned long flags;
 /* Flags set by Mongoose */
-#define NSF_LISTENING (1 << 0)          /* This connection is listening */
-#define NSF_UDP (1 << 1)                /* This connection is UDP */
-#define NSF_RESOLVING (1 << 2)          /* Waiting for async resolver */
-#define NSF_CONNECTING (1 << 3)         /* connect() call in progress */
-#define NSF_SSL_HANDSHAKE_DONE (1 << 4) /* SSL specific */
-#define NSF_WANT_READ (1 << 5)          /* SSL specific */
-#define NSF_WANT_WRITE (1 << 6)         /* SSL specific */
-#define NSF_IS_WEBSOCKET (1 << 7)       /* Websocket specific */
+#define MG_F_LISTENING (1 << 0)          /* This connection is listening */
+#define MG_F_UDP (1 << 1)                /* This connection is UDP */
+#define MG_F_RESOLVING (1 << 2)          /* Waiting for async resolver */
+#define MG_F_CONNECTING (1 << 3)         /* connect() call in progress */
+#define MG_F_SSL_HANDSHAKE_DONE (1 << 4) /* SSL specific */
+#define MG_F_WANT_READ (1 << 5)          /* SSL specific */
+#define MG_F_WANT_WRITE (1 << 6)         /* SSL specific */
+#define MG_F_IS_WEBSOCKET (1 << 7)       /* Websocket specific */
 
 /* Flags that are settable by user */
-#define NSF_SEND_AND_CLOSE (1 << 10)      /* Push remaining data and close  */
-#define NSF_DONT_SEND (1 << 11)           /* Do not send data to peer */
-#define NSF_CLOSE_IMMEDIATELY (1 << 12)   /* Disconnect */
-#define NSF_WEBSOCKET_NO_DEFRAG (1 << 13) /* Websocket specific */
-#define NSF_DELETE_CHUNK (1 << 14)        /* HTTP specific */
+#define MG_F_SEND_AND_CLOSE (1 << 10)      /* Push remaining data and close  */
+#define MG_F_DONT_SEND (1 << 11)           /* Do not send data to peer */
+#define MG_F_CLOSE_IMMEDIATELY (1 << 12)   /* Disconnect */
+#define MG_F_WEBSOCKET_NO_DEFRAG (1 << 13) /* Websocket specific */
+#define MG_F_DELETE_CHUNK (1 << 14)        /* HTTP specific */
 
-#define NSF_USER_1 (1 << 20) /* Flags left for application */
-#define NSF_USER_2 (1 << 21)
-#define NSF_USER_3 (1 << 22)
-#define NSF_USER_4 (1 << 23)
-#define NSF_USER_5 (1 << 24)
-#define NSF_USER_6 (1 << 25)
+#define MG_F_USER_1 (1 << 20) /* Flags left for application */
+#define MG_F_USER_2 (1 << 21)
+#define MG_F_USER_3 (1 << 22)
+#define MG_F_USER_4 (1 << 23)
+#define MG_F_USER_5 (1 << 24)
+#define MG_F_USER_6 (1 << 25)
 };
 
 /*
@@ -713,9 +713,9 @@ time_t mg_mgr_poll(struct mg_mgr *, int milli);
  * that can be, and must be, called from a different (non-IO) thread.
  *
  * `func` callback function will be called by the IO thread for each
- * connection. When called, event would be `NS_POLL`, and message will
+ * connection. When called, event would be `MG_EV_POLL`, and message will
  * be passed as `ev_data` pointer. Maximum message size is capped
- * by `NS_CTL_MSG_MESSAGE_SIZE` which is set to 8192 bytes.
+ * by `MG_CTL_MSG_MESSAGE_SIZE` which is set to 8192 bytes.
  */
 void mg_broadcast(struct mg_mgr *, mg_event_handler_t func, void *, size_t);
 
@@ -738,7 +738,7 @@ struct mg_connection *mg_next(struct mg_mgr *, struct mg_connection *);
 /*
  * Optional parameters to mg_add_sock_opt()
  * `flags` is an initial `struct mg_connection::flags` bitmask to set,
- * see `NSF_*` flags definitions.
+ * see `MG_F_*` flags definitions.
  */
 struct mg_add_sock_opts {
   void *user_data;           /* Initial value for connection's user_data */
@@ -767,7 +767,7 @@ struct mg_connection *mg_add_sock_opt(struct mg_mgr *, sock_t,
 /*
  * Optional parameters to mg_bind_opt()
  * `flags` is an initial `struct mg_connection::flags` bitmask to set,
- * see `NSF_*` flags definitions.
+ * see `MG_F_*` flags definitions.
  */
 struct mg_bind_opts {
   void *user_data;           /* Initial value for connection's user_data */
@@ -822,7 +822,7 @@ struct mg_connection *mg_connect(struct mg_mgr *, const char *,
  *
  * `address` format is `[PROTO://]HOST:PORT`. `PROTO` could be `tcp` or `udp`.
  * `HOST` could be an IP address,
- * IPv6 address (if Mongoose is compiled with `-DNS_ENABLE_IPV6`), or a host
+ * IPv6 address (if Mongoose is compiled with `-DMG_ENABLE_IPV6`), or a host
  * name. If `HOST` is a name, Mongoose will resolve it asynchronously. Examples
  * of valid addresses: `google.com:80`, `udp://1.2.3.4:53`, `10.0.0.1:443`,
  * `[::1]:80`
@@ -834,13 +834,13 @@ struct mg_connection *mg_connect(struct mg_mgr *, const char *,
  *
  * NOTE: Connection remains owned by the manager, do not free().
  *
- * NOTE: To enable IPv6 addresses, `-DNS_ENABLE_IPV6` should be specified
+ * NOTE: To enable IPv6 addresses, `-DMG_ENABLE_IPV6` should be specified
  * in the compilation flags.
  *
- * NOTE: New connection will receive `NS_CONNECT` as it's first event
+ * NOTE: New connection will receive `MG_EV_CONNECT` as it's first event
  * which will report connect success status.
  * If asynchronous resolution fail, or `connect()` syscall fail for whatever
- * reason (e.g. with `ECONNREFUSED` or `ENETUNREACH`), then `NS_CONNECT`
+ * reason (e.g. with `ECONNREFUSED` or `ENETUNREACH`), then `MG_EV_CONNECT`
  * event report failure. Code example below:
  *
  * [source,c]
@@ -849,7 +849,7 @@ struct mg_connection *mg_connect(struct mg_mgr *, const char *,
  *   int connect_status;
  *
  *   switch (ev) {
- *     case NS_CONNECT:
+ *     case MG_EV_CONNECT:
  *       connect_status = * (int *) ev_data;
  *       if (connect_status == 0) {
  *         // Success
@@ -916,7 +916,7 @@ int mg_socketpair(sock_t[2], int sock_type);
  * Convert domain name into IP address.
  *
  * This is a utility function. If compilation flags have
- * `-DNS_ENABLE_GETADDRINFO`, then `getaddrinfo()` call is used for name
+ * `-DMG_ENABLE_GETADDRINFO`, then `getaddrinfo()` call is used for name
  * resolution. Otherwise, `gethostbyname()` is used.
  *
  * CAUTION: this function can block.
@@ -959,7 +959,7 @@ void mg_enable_multithreading(struct mg_connection *nc);
 }
 #endif /* __cplusplus */
 
-#endif /* NS_NET_HEADER_INCLUDED */
+#endif /* MG_NET_HEADER_INCLUDED */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -969,8 +969,8 @@ void mg_enable_multithreading(struct mg_connection *nc);
  * === Utilities
  */
 
-#ifndef NS_UTIL_HEADER_DEFINED
-#define NS_UTIL_HEADER_DEFINED
+#ifndef MG_UTIL_HEADER_DEFINED
+#define MG_UTIL_HEADER_DEFINED
 
 #include <stdio.h>
 
@@ -1035,7 +1035,7 @@ int mg_base64_decode(const unsigned char *s, int len, char *dst);
  */
 void mg_base64_encode(const unsigned char *src, int src_len, char *dst);
 
-#ifndef NS_DISABLE_FILESYSTEM
+#ifndef MG_DISABLE_FILESYSTEM
 /*
  * Perform a 64-bit `stat()` call against given file.
  *
@@ -1062,9 +1062,9 @@ FILE *mg_fopen(const char *path, const char *mode);
  * Return value is the same as for the `open()` syscall.
  */
 int mg_open(const char *path, int flag, int mode);
-#endif /* NS_DISABLE_FILESYSTEM */
+#endif /* MG_DISABLE_FILESYSTEM */
 
-#ifdef NS_ENABLE_THREADS
+#ifdef MG_ENABLE_THREADS
 /*
  * Start a new detached thread.
  * Arguments and semantic is the same as pthead's `pthread_create()`.
@@ -1076,28 +1076,28 @@ void *mg_start_thread(void *(*thread_func)(void *), void *thread_func_param);
 
 void mg_set_close_on_exec(sock_t);
 
-#define NS_SOCK_STRINGIFY_IP 1
-#define NS_SOCK_STRINGIFY_PORT 2
-#define NS_SOCK_STRINGIFY_REMOTE 4
+#define MG_SOCK_STRINGIFY_IP 1
+#define MG_SOCK_STRINGIFY_PORT 2
+#define MG_SOCK_STRINGIFY_REMOTE 4
 /*
  * Convert socket's local or remote address into string.
  *
  * The `flags` parameter is a bit mask that controls the behavior,
- * see `NS_SOCK_STRINGIFY_*` definitions.
+ * see `MG_SOCK_STRINGIFY_*` definitions.
  *
- * - NS_SOCK_STRINGIFY_IP - print IP address
- * - NS_SOCK_STRINGIFY_PORT - print port number
- * - NS_SOCK_STRINGIFY_REMOTE - print remote peer's IP/port, not local address
+ * - MG_SOCK_STRINGIFY_IP - print IP address
+ * - MG_SOCK_STRINGIFY_PORT - print port number
+ * - MG_SOCK_STRINGIFY_REMOTE - print remote peer's IP/port, not local address
  *
  * If both port number and IP address are printed, they are separated by `:`.
- * If compiled with `-DNS_ENABLE_IPV6`, IPv6 addresses are supported.
+ * If compiled with `-DMG_ENABLE_IPV6`, IPv6 addresses are supported.
  */
 void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
 
 /*
  * Convert socket's address into string.
  *
- * `flags` is NS_SOCK_STRINGIFY_IP and/or NS_SOCK_STRINGIFY_PORT.
+ * `flags` is MG_SOCK_STRINGIFY_IP and/or MG_SOCK_STRINGIFY_PORT.
  */
 void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
                          int flags);
@@ -1115,7 +1115,7 @@ int mg_hexdump(const void *buf, int len, char *dst, int dst_len);
 /*
  * Generates human-readable hexdump of the data sent or received by connection.
  * `path` is a file name where hexdump should be written. `num_bytes` is
- * a number of bytes sent/received. `ev` is one of the `NS_*` events sent to
+ * a number of bytes sent/received. `ev` is one of the `MG_*` events sent to
  * an event handler. This function is supposed to be called from the
  * event handler.
  */
@@ -1168,7 +1168,7 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* NS_UTIL_HEADER_DEFINED */
+#endif /* MG_UTIL_HEADER_DEFINED */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -1178,44 +1178,44 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
  * === HTTP + Websocket
  */
 
-#ifndef NS_HTTP_HEADER_DEFINED
-#define NS_HTTP_HEADER_DEFINED
+#ifndef MG_HTTP_HEADER_DEFINED
+#define MG_HTTP_HEADER_DEFINED
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
-#ifndef NS_MAX_HTTP_HEADERS
-#define NS_MAX_HTTP_HEADERS 40
+#ifndef MG_MAX_HTTP_HEADERS
+#define MG_MAX_HTTP_HEADERS 40
 #endif
 
-#ifndef NS_MAX_HTTP_REQUEST_SIZE
-#define NS_MAX_HTTP_REQUEST_SIZE 8192
+#ifndef MG_MAX_HTTP_REQUEST_SIZE
+#define MG_MAX_HTTP_REQUEST_SIZE 8192
 #endif
 
-#ifndef NS_MAX_PATH
-#define NS_MAX_PATH 1024
+#ifndef MG_MAX_PATH
+#define MG_MAX_PATH 1024
 #endif
 
-#ifndef NS_MAX_HTTP_SEND_IOBUF
-#define NS_MAX_HTTP_SEND_IOBUF 4096
+#ifndef MG_MAX_HTTP_SEND_IOBUF
+#define MG_MAX_HTTP_SEND_IOBUF 4096
 #endif
 
-#ifndef NS_WEBSOCKET_PING_INTERVAL_SECONDS
-#define NS_WEBSOCKET_PING_INTERVAL_SECONDS 5
+#ifndef MG_WEBSOCKET_PING_INTERVAL_SECONDS
+#define MG_WEBSOCKET_PING_INTERVAL_SECONDS 5
 #endif
 
-#ifndef NS_CGI_ENVIRONMENT_SIZE
-#define NS_CGI_ENVIRONMENT_SIZE 8192
+#ifndef MG_CGI_ENVIRONMENT_SIZE
+#define MG_CGI_ENVIRONMENT_SIZE 8192
 #endif
 
-#ifndef NS_MAX_CGI_ENVIR_VARS
-#define NS_MAX_CGI_ENVIR_VARS 64
+#ifndef MG_MAX_CGI_ENVIR_VARS
+#define MG_MAX_CGI_ENVIR_VARS 64
 #endif
 
-#ifndef NS_ENV_EXPORT_TO_CGI
-#define NS_ENV_EXPORT_TO_CGI "FOSSA_CGI"
+#ifndef MG_ENV_EXPORT_TO_CGI
+#define MG_ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
 #endif
 
 /* HTTP message */
@@ -1241,8 +1241,8 @@ struct http_message {
   struct mg_str query_string;
 
   /* Headers */
-  struct mg_str header_names[NS_MAX_HTTP_HEADERS];
-  struct mg_str header_values[NS_MAX_HTTP_HEADERS];
+  struct mg_str header_names[MG_MAX_HTTP_HEADERS];
+  struct mg_str header_values[MG_MAX_HTTP_HEADERS];
 
   /* Message body */
   struct mg_str body; /* Zero-length for requests with no body */
@@ -1255,40 +1255,42 @@ struct websocket_message {
 };
 
 /* HTTP and websocket events. void *ev_data is described in a comment. */
-#define NS_HTTP_REQUEST 100 /* struct http_message * */
-#define NS_HTTP_REPLY 101   /* struct http_message * */
-#define NS_HTTP_CHUNK 102   /* struct http_message * */
-#define NS_SSI_CALL 105     /* char * */
+#define MG_EV_HTTP_REQUEST 100 /* struct http_message * */
+#define MG_EV_HTTP_REPLY 101   /* struct http_message * */
+#define MG_EV_HTTP_CHUNK 102   /* struct http_message * */
+#define MG_EV_SSI_CALL 105     /* char * */
 
-#define NS_WEBSOCKET_HANDSHAKE_REQUEST 111 /* NULL */
-#define NS_WEBSOCKET_HANDSHAKE_DONE 112    /* NULL */
-#define NS_WEBSOCKET_FRAME 113             /* struct websocket_message * */
-#define NS_WEBSOCKET_CONTROL_FRAME 114     /* struct websocket_message * */
+#define MG_EV_WEBSOCKET_HANDSHAKE_REQUEST 111 /* NULL */
+#define MG_EV_WEBSOCKET_HANDSHAKE_DONE 112    /* NULL */
+#define MG_EV_WEBSOCKET_FRAME 113             /* struct websocket_message * */
+#define MG_EV_WEBSOCKET_CONTROL_FRAME 114     /* struct websocket_message * */
 
 /*
  * Attach built-in HTTP event handler to the given connection.
  * User-defined event handler will receive following extra events:
  *
- * - NS_HTTP_REQUEST: HTTP request has arrived. Parsed HTTP request is passed as
+ * - MG_EV_HTTP_REQUEST: HTTP request has arrived. Parsed HTTP request is passed
+ *as
  *   `struct http_message` through the handler's `void *ev_data` pointer.
- * - NS_HTTP_REPLY: HTTP reply has arrived. Parsed HTTP reply is passed as
+ * - MG_EV_HTTP_REPLY: HTTP reply has arrived. Parsed HTTP reply is passed as
  *   `struct http_message` through the handler's `void *ev_data` pointer.
- * - NS_HTTP_CHUNK: HTTP chunked-encoding chunk has arrived.
+ * - MG_EV_HTTP_CHUNK: HTTP chunked-encoding chunk has arrived.
  *   Parsed HTTP reply is passed as `struct http_message` through the
  *   handler's `void *ev_data` pointer. `http_message::body` would contain
  *   incomplete, reassembled HTTP body.
  *   It will grow with every new chunk arrived, and
  *   potentially can consume a lot of memory. An event handler may process
  *   the body as chunks are coming, and signal Mongoose to delete processed
- *   body by setting `NSF_DELETE_CHUNK` in `mg_connection::flags`. When
- *   the last zero chunk is received, Mongoose sends `NS_HTTP_REPLY` event will
+ *   body by setting `MG_F_DELETE_CHUNK` in `mg_connection::flags`. When
+ *   the last zero chunk is received,
+ *   Mongoose sends `MG_EV_HTTP_REPLY` event with
  *   full reassembled body (if handler did not signal to delete chunks) or
  *   with empty body (if handler did signal to delete chunks).
- * - NS_WEBSOCKET_HANDSHAKE_REQUEST: server has received websocket handshake
+ * - MG_EV_WEBSOCKET_HANDSHAKE_REQUEST: server has received websocket handshake
  *   request. `ev_data` contains parsed HTTP request.
- * - NS_WEBSOCKET_HANDSHAKE_DONE: server has completed Websocket handshake.
+ * - MG_EV_WEBSOCKET_HANDSHAKE_DONE: server has completed Websocket handshake.
  *   `ev_data` is `NULL`.
- * - NS_WEBSOCKET_FRAME: new websocket frame has arrived. `ev_data` is
+ * - MG_EV_WEBSOCKET_FRAME: new websocket frame has arrived. `ev_data` is
  *   `struct websocket_message *`
  */
 void mg_set_protocol_http_websocket(struct mg_connection *nc);
@@ -1445,7 +1447,7 @@ int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
  *
  *    static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
  *      switch(ev) {
- *        case NS_HTTP_REQUEST: {
+ *        case MG_EV_HTTP_REQUEST: {
  *          struct http_message *hm = (struct http_message *) ev_data;
  *          char var_name[100], file_name[100];
  *          const char *chunk;
@@ -1604,7 +1606,7 @@ struct mg_serve_http_opts {
  *   struct mg_serve_http_opts opts = { .document_root = "/var/www" };  // C99
  *
  *   switch (ev) {
- *     case NS_HTTP_REQUEST:
+ *     case MG_EV_HTTP_REQUEST:
  *       mg_serve_http(nc, hm, opts);
  *       break;
  *     default:
@@ -1619,7 +1621,7 @@ void mg_serve_http(struct mg_connection *, struct http_message *,
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* NS_HTTP_HEADER_DEFINED */
+#endif /* MG_HTTP_HEADER_DEFINED */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -1629,8 +1631,8 @@ void mg_serve_http(struct mg_connection *, struct http_message *,
  * === JSON-RPC
  */
 
-#ifndef NS_JSON_RPC_HEADER_DEFINED
-#define NS_JSON_RPC_HEADER_DEFINED
+#ifndef MG_JSON_RPC_HEADER_DEFINED
+#define MG_JSON_RPC_HEADER_DEFINED
 
 #ifdef __cplusplus
 extern "C" {
@@ -1756,7 +1758,7 @@ int mg_rpc_dispatch(const char *buf, int, char *dst, int dst_len,
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* NS_JSON_RPC_HEADER_DEFINED */
+#endif /* MG_JSON_RPC_HEADER_DEFINED */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -1778,8 +1780,8 @@ int mg_rpc_dispatch(const char *buf, int, char *dst, int dst_len,
  * === MQTT
  */
 
-#ifndef NS_MQTT_HEADER_INCLUDED
-#define NS_MQTT_HEADER_INCLUDED
+#ifndef MG_MQTT_HEADER_INCLUDED
+#define MG_MQTT_HEADER_INCLUDED
 
 
 struct mg_mqtt_message {
@@ -1806,62 +1808,62 @@ struct mg_send_mqtt_handshake_opts {
 };
 
 /* Message types */
-#define NS_MQTT_CMD_CONNECT 1
-#define NS_MQTT_CMD_CONNACK 2
-#define NS_MQTT_CMD_PUBLISH 3
-#define NS_MQTT_CMD_PUBACK 4
-#define NS_MQTT_CMD_PUBREC 5
-#define NS_MQTT_CMD_PUBREL 6
-#define NS_MQTT_CMD_PUBCOMP 7
-#define NS_MQTT_CMD_SUBSCRIBE 8
-#define NS_MQTT_CMD_SUBACK 9
-#define NS_MQTT_CMD_UNSUBSCRIBE 10
-#define NS_MQTT_CMD_UNSUBACK 11
-#define NS_MQTT_CMD_PINGREQ 12
-#define NS_MQTT_CMD_PINGRESP 13
-#define NS_MQTT_CMD_DISCONNECT 14
+#define MG_MQTT_CMD_CONNECT 1
+#define MG_MQTT_CMD_CONNACK 2
+#define MG_MQTT_CMD_PUBLISH 3
+#define MG_MQTT_CMD_PUBACK 4
+#define MG_MQTT_CMD_PUBREC 5
+#define MG_MQTT_CMD_PUBREL 6
+#define MG_MQTT_CMD_PUBCOMP 7
+#define MG_MQTT_CMD_SUBSCRIBE 8
+#define MG_MQTT_CMD_SUBACK 9
+#define MG_MQTT_CMD_UNSUBSCRIBE 10
+#define MG_MQTT_CMD_UNSUBACK 11
+#define MG_MQTT_CMD_PINGREQ 12
+#define MG_MQTT_CMD_PINGRESP 13
+#define MG_MQTT_CMD_DISCONNECT 14
 
 /* MQTT event types */
-#define NS_MQTT_EVENT_BASE 200
-#define NS_MQTT_CONNECT (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_CONNECT)
-#define NS_MQTT_CONNACK (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_CONNACK)
-#define NS_MQTT_PUBLISH (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_PUBLISH)
-#define NS_MQTT_PUBACK (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_PUBACK)
-#define NS_MQTT_PUBREC (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_PUBREC)
-#define NS_MQTT_PUBREL (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_PUBREL)
-#define NS_MQTT_PUBCOMP (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_PUBCOMP)
-#define NS_MQTT_SUBSCRIBE (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_SUBSCRIBE)
-#define NS_MQTT_SUBACK (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_SUBACK)
-#define NS_MQTT_UNSUBSCRIBE (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_UNSUBSCRIBE)
-#define NS_MQTT_UNSUBACK (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_UNSUBACK)
-#define NS_MQTT_PINGREQ (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_PINGREQ)
-#define NS_MQTT_PINGRESP (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_PINGRESP)
-#define NS_MQTT_DISCONNECT (NS_MQTT_EVENT_BASE + NS_MQTT_CMD_DISCONNECT)
+#define MG_MQTT_EVENT_BASE 200
+#define MG_EV_MQTT_CONNECT (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_CONNECT)
+#define MG_EV_MQTT_CONNACK (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_CONNACK)
+#define MG_EV_MQTT_PUBLISH (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_PUBLISH)
+#define MG_EV_MQTT_PUBACK (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_PUBACK)
+#define MG_EV_MQTT_PUBREC (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_PUBREC)
+#define MG_EV_MQTT_PUBREL (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_PUBREL)
+#define MG_EV_MQTT_PUBCOMP (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_PUBCOMP)
+#define MG_EV_MQTT_SUBSCRIBE (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_SUBSCRIBE)
+#define MG_EV_MQTT_SUBACK (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_SUBACK)
+#define MG_EV_MQTT_UNSUBSCRIBE (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_UNSUBSCRIBE)
+#define MG_EV_MQTT_UNSUBACK (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_UNSUBACK)
+#define MG_EV_MQTT_PINGREQ (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_PINGREQ)
+#define MG_EV_MQTT_PINGRESP (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_PINGRESP)
+#define MG_EV_MQTT_DISCONNECT (MG_MQTT_EVENT_BASE + MG_MQTT_CMD_DISCONNECT)
 
 /* Message flags */
-#define NS_MQTT_RETAIN 0x1
-#define NS_MQTT_DUP 0x4
-#define NS_MQTT_QOS(qos) ((qos) << 1)
-#define NS_MQTT_GET_QOS(flags) (((flags) &0x6) >> 1)
-#define NS_MQTT_SET_QOS(flags, qos) (flags) = ((flags) & ~0x6) | ((qos) << 1)
+#define MG_MQTT_RETAIN 0x1
+#define MG_MQTT_DUP 0x4
+#define MG_MQTT_QOS(qos) ((qos) << 1)
+#define MG_MQTT_GET_QOS(flags) (((flags) &0x6) >> 1)
+#define MG_MQTT_SET_QOS(flags, qos) (flags) = ((flags) & ~0x6) | ((qos) << 1)
 
 /* Connection flags */
-#define NS_MQTT_CLEAN_SESSION 0x02
-#define NS_MQTT_HAS_WILL 0x04
-#define NS_MQTT_WILL_RETAIN 0x20
-#define NS_MQTT_HAS_PASSWORD 0x40
-#define NS_MQTT_HAS_USER_NAME 0x80
-#define NS_MQTT_GET_WILL_QOS(flags) (((flags) &0x18) >> 3)
-#define NS_MQTT_SET_WILL_QOS(flags, qos) \
+#define MG_MQTT_CLEAN_SESSION 0x02
+#define MG_MQTT_HAS_WILL 0x04
+#define MG_MQTT_WILL_RETAIN 0x20
+#define MG_MQTT_HAS_PASSWORD 0x40
+#define MG_MQTT_HAS_USER_NAME 0x80
+#define MG_MQTT_GET_WILL_QOS(flags) (((flags) &0x18) >> 3)
+#define MG_MQTT_SET_WILL_QOS(flags, qos) \
   (flags) = ((flags) & ~0x18) | ((qos) << 3)
 
 /* CONNACK return codes */
-#define NS_MQTT_CONNACK_ACCEPTED 0
-#define NS_MQTT_CONNACK_UNACCEPTABLE_VERSION 1
-#define NS_MQTT_CONNACK_IDENTIFIER_REJECTED 2
-#define NS_MQTT_CONNACK_SERVER_UNAVAILABLE 3
-#define NS_MQTT_CONNACK_BAD_AUTH 4
-#define NS_MQTT_CONNACK_NOT_AUTHORIZED 5
+#define MG_EV_MQTT_CONNACK_ACCEPTED 0
+#define MG_EV_MQTT_CONNACK_UNACCEPTABLE_VERSION 1
+#define MG_EV_MQTT_CONNACK_IDENTIFIER_REJECTED 2
+#define MG_EV_MQTT_CONNACK_SERVER_UNAVAILABLE 3
+#define MG_EV_MQTT_CONNACK_BAD_AUTH 4
+#define MG_EV_MQTT_CONNACK_NOT_AUTHORIZED 5
 
 #ifdef __cplusplus
 extern "C" {
@@ -1872,13 +1874,13 @@ extern "C" {
  *
  * The user-defined event handler will receive following extra events:
  *
- * - NS_MQTT_CONNACK
- * - NS_MQTT_PUBLISH
- * - NS_MQTT_PUBACK
- * - NS_MQTT_PUBREC
- * - NS_MQTT_PUBREL
- * - NS_MQTT_PUBCOMP
- * - NS_MQTT_SUBACK
+ * - MG_EV_MQTT_CONNACK
+ * - MG_EV_MQTT_PUBLISH
+ * - MG_EV_MQTT_PUBACK
+ * - MG_EV_MQTT_PUBREC
+ * - MG_EV_MQTT_PUBREL
+ * - MG_EV_MQTT_PUBCOMP
+ * - MG_EV_MQTT_SUBACK
  */
 void mg_set_protocol_mqtt(struct mg_connection *);
 
@@ -1950,7 +1952,7 @@ int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *, struct mg_str *,
 }
 #endif /* __cplusplus */
 
-#endif /* NS_MQTT_HEADER_INCLUDED */
+#endif /* MG_MQTT_HEADER_INCLUDED */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -1972,17 +1974,17 @@ int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *, struct mg_str *,
  * === MQTT Broker
  */
 
-#ifndef NS_MQTT_BROKER_HEADER_INCLUDED
-#define NS_MQTT_BROKER_HEADER_INCLUDED
+#ifndef MG_MQTT_BROKER_HEADER_INCLUDED
+#define MG_MQTT_BROKER_HEADER_INCLUDED
 
-#ifdef NS_ENABLE_MQTT_BROKER
+#ifdef MG_ENABLE_MQTT_BROKER
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
-#define NS_MQTT_MAX_SESSION_SUBSCRIPTIONS 512;
+#define MG_MQTT_MAX_SESSION_SUBSCRIPTIONS 512;
 
 struct mg_mqtt_broker;
 
@@ -2028,7 +2030,7 @@ void mg_mqtt_broker_init(struct mg_mqtt_broker *, void *);
  * in the `user_data` field of the session structure. This allows the user
  * handler to store user data before `mg_mqtt_broker` creates the session.
  *
- * Since only the NS_ACCEPT message is processed by the listening socket,
+ * Since only the MG_EV_ACCEPT message is processed by the listening socket,
  * for most events the `user_data` will thus point to a `mg_mqtt_session`.
  */
 void mg_mqtt_broker(struct mg_connection *, int, void *);
@@ -2048,8 +2050,8 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *,
 }
 #endif /* __cplusplus */
 
-#endif /* NS_ENABLE_MQTT_BROKER */
-#endif /* NS_MQTT_HEADER_INCLUDED */
+#endif /* MG_ENABLE_MQTT_BROKER */
+#endif /* MG_MQTT_HEADER_INCLUDED */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -2059,28 +2061,28 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *,
  * === DNS
  */
 
-#ifndef NS_DNS_HEADER_DEFINED
-#define NS_DNS_HEADER_DEFINED
+#ifndef MG_DNS_HEADER_DEFINED
+#define MG_DNS_HEADER_DEFINED
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
-#define NS_DNS_A_RECORD 0x01     /* Lookup IP address */
-#define NS_DNS_CNAME_RECORD 0x05 /* Lookup CNAME */
-#define NS_DNS_AAAA_RECORD 0x1c  /* Lookup IPv6 address */
-#define NS_DNS_MX_RECORD 0x0f    /* Lookup mail server for domain */
+#define MG_DNS_A_RECORD 0x01     /* Lookup IP address */
+#define MG_DNS_CNAME_RECORD 0x05 /* Lookup CNAME */
+#define MG_DNS_AAAA_RECORD 0x1c  /* Lookup IPv6 address */
+#define MG_DNS_MX_RECORD 0x0f    /* Lookup mail server for domain */
 
-#define NS_MAX_DNS_QUESTIONS 32
-#define NS_MAX_DNS_ANSWERS 32
+#define MG_MAX_DNS_QUESTIONS 32
+#define MG_MAX_DNS_ANSWERS 32
 
-#define NS_DNS_MESSAGE 100 /* High-level DNS message event */
+#define MG_DNS_MESSAGE 100 /* High-level DNS message event */
 
 enum mg_dmg_resource_record_kind {
-  NS_DNS_INVALID_RECORD = 0,
-  NS_DNS_QUESTION,
-  NS_DNS_ANSWER
+  MG_DNS_INVALID_RECORD = 0,
+  MG_DNS_QUESTION,
+  MG_DNS_ANSWER
 };
 
 /* DNS resource record. */
@@ -2100,8 +2102,8 @@ struct mg_dmg_message {
   uint16_t transaction_id;
   int num_questions;
   int num_answers;
-  struct mg_dmg_resource_record questions[NS_MAX_DNS_QUESTIONS];
-  struct mg_dmg_resource_record answers[NS_MAX_DNS_ANSWERS];
+  struct mg_dmg_resource_record questions[MG_MAX_DNS_QUESTIONS];
+  struct mg_dmg_resource_record answers[MG_MAX_DNS_ANSWERS];
 };
 
 struct mg_dmg_resource_record *mg_dmg_next_record(
@@ -2186,7 +2188,7 @@ size_t mg_dmg_uncompress_name(struct mg_dmg_message *, struct mg_str *, char *,
  *
  * DNS event handler parses incoming UDP packets, treating them as DNS
  * requests. If incoming packet gets successfully parsed by the DNS event
- * handler, a user event handler will receive `NS_DNS_REQUEST` event, with
+ * handler, a user event handler will receive `MG_DNS_REQUEST` event, with
  * `ev_data` pointing to the parsed `struct mg_dmg_message`.
  *
  * See
@@ -2198,7 +2200,7 @@ void mg_set_protocol_dns(struct mg_connection *);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* NS_HTTP_HEADER_DEFINED */
+#endif /* MG_HTTP_HEADER_DEFINED */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -2207,20 +2209,20 @@ void mg_set_protocol_dns(struct mg_connection *);
 /*
  * === DNS server
  *
- * Disabled by default; enable with `-DNS_ENABLE_DNS_SERVER`.
+ * Disabled by default; enable with `-DMG_ENABLE_DNS_SERVER`.
  */
 
-#ifndef NS_DNS_SERVER_HEADER_DEFINED
-#define NS_DNS_SERVER_HEADER_DEFINED
+#ifndef MG_DNS_SERVER_HEADER_DEFINED
+#define MG_DNS_SERVER_HEADER_DEFINED
 
-#ifdef NS_ENABLE_DNS_SERVER
+#ifdef MG_ENABLE_DNS_SERVER
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
-#define NS_DNS_SERVER_DEFAULT_TTL 3600
+#define MG_DNS_SERVER_DEFAULT_TTL 3600
 
 struct mg_dmg_reply {
   struct mg_dmg_message *msg;
@@ -2250,7 +2252,7 @@ struct mg_dmg_reply {
  * reply = mg_dmg_create_reply(&nc->send_mbuf, msg);
  * for (i = 0; i < msg->num_questions; i++) {
  *   rr = &msg->questions[i];
- *   if (rr->rtype == NS_DNS_A_RECORD) {
+ *   if (rr->rtype == MG_DNS_A_RECORD) {
  *     mg_dmg_reply_record(&reply, rr, 3600, &dummy_ip_addr, 4);
  *   }
  * }
@@ -2288,8 +2290,8 @@ int mg_dmg_send_reply(struct mg_connection *, struct mg_dmg_reply *);
 }
 #endif /* __cplusplus */
 
-#endif /* NS_ENABLE_DNS_SERVER */
-#endif /* NS_HTTP_HEADER_DEFINED */
+#endif /* MG_ENABLE_DNS_SERVER */
+#endif /* MG_HTTP_HEADER_DEFINED */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -2299,8 +2301,8 @@ int mg_dmg_send_reply(struct mg_connection *, struct mg_dmg_reply *);
  * === Asynchronouns DNS resolver
  */
 
-#ifndef NS_RESOLV_HEADER_DEFINED
-#define NS_RESOLV_HEADER_DEFINED
+#ifndef MG_RESOLV_HEADER_DEFINED
+#define MG_RESOLV_HEADER_DEFINED
 
 
 #ifdef __cplusplus
@@ -2338,7 +2340,7 @@ int mg_resolve_async(struct mg_mgr *, const char *, int, mg_resolve_callback_t,
  * [source,c]
  * ----
  * struct in_addr ina;
- * struct mg_dmg_resource_record *rr = mg_next_record(msg, NS_DNS_A_RECORD,
+ * struct mg_dmg_resource_record *rr = mg_next_record(msg, MG_DNS_A_RECORD,
  *   NULL);
  * mg_dmg_parse_record_data(msg, rr, &ina, sizeof(ina));
  * ----
@@ -2357,7 +2359,7 @@ int mg_resolve_from_hosts_file(const char *host, union socket_address *usa);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* NS_RESOLV_HEADER_DEFINED */
+#endif /* MG_RESOLV_HEADER_DEFINED */
 /*
  * Copyright (c) 2015 Cesanta Software Limited
  * All rights reserved
@@ -2387,41 +2389,41 @@ int mg_resolve_from_hosts_file(const char *host, union socket_address *usa);
  *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
  */
 
-#ifndef NS_COAP_HEADER_INCLUDED
-#define NS_COAP_HEADER_INCLUDED
+#ifndef MG_COAP_HEADER_INCLUDED
+#define MG_COAP_HEADER_INCLUDED
 
-#ifdef NS_ENABLE_COAP
+#ifdef MG_ENABLE_COAP
 
-#define NS_COAP_MSG_TYPE_FIELD 0x2
-#define NS_COAP_CODE_CLASS_FIELD 0x4
-#define NS_COAP_CODE_DETAIL_FIELD 0x8
-#define NS_COAP_MSG_ID_FIELD 0x10
-#define NS_COAP_TOKEN_FIELD 0x20
-#define NS_COAP_OPTIONS_FIELD 0x40
-#define NS_COAP_PAYLOAD_FIELD 0x80
+#define MG_COAP_MSG_TYPE_FIELD 0x2
+#define MG_COAP_CODE_CLASS_FIELD 0x4
+#define MG_COAP_CODE_DETAIL_FIELD 0x8
+#define MG_COAP_MSG_ID_FIELD 0x10
+#define MG_COAP_TOKEN_FIELD 0x20
+#define MG_COAP_OPTIOMG_FIELD 0x40
+#define MG_COAP_PAYLOAD_FIELD 0x80
 
-#define NS_COAP_ERROR 0x10000
-#define NS_COAP_FORMAT_ERROR (NS_COAP_ERROR | 0x20000)
-#define NS_COAP_IGNORE (NS_COAP_ERROR | 0x40000)
-#define NS_COAP_NOT_ENOUGH_DATA (NS_COAP_ERROR | 0x80000)
-#define NS_COAP_NETWORK_ERROR (NS_COAP_ERROR | 0x100000)
+#define MG_COAP_ERROR 0x10000
+#define MG_COAP_FORMAT_ERROR (MG_COAP_ERROR | 0x20000)
+#define MG_COAP_IGNORE (MG_COAP_ERROR | 0x40000)
+#define MG_COAP_NOT_ENOUGH_DATA (MG_COAP_ERROR | 0x80000)
+#define MG_COAP_NETWORK_ERROR (MG_COAP_ERROR | 0x100000)
 
-#define NS_COAP_MSG_CON 0
-#define NS_COAP_MSG_NOC 1
-#define NS_COAP_MSG_ACK 2
-#define NS_COAP_MSG_RST 3
-#define NS_COAP_MSG_MAX 3
+#define MG_COAP_MSG_CON 0
+#define MG_COAP_MSG_NOC 1
+#define MG_COAP_MSG_ACK 2
+#define MG_COAP_MSG_RST 3
+#define MG_COAP_MSG_MAX 3
 
-#define NS_COAP_CODECLASS_REQUEST 0
-#define NS_COAP_CODECLASS_RESP_OK 2
-#define NS_COAP_CODECLASS_CLIENT_ERR 4
-#define NS_COAP_CODECLASS_SRV_ERR 5
+#define MG_COAP_CODECLASS_REQUEST 0
+#define MG_COAP_CODECLASS_RESP_OK 2
+#define MG_COAP_CODECLASS_CLIENT_ERR 4
+#define MG_COAP_CODECLASS_SRV_ERR 5
 
-#define NS_COAP_EVENT_BASE 300
-#define NS_COAP_CON (NS_COAP_EVENT_BASE + NS_COAP_MSG_CON)
-#define NS_COAP_NOC (NS_COAP_EVENT_BASE + NS_COAP_MSG_NOC)
-#define NS_COAP_ACK (NS_COAP_EVENT_BASE + NS_COAP_MSG_ACK)
-#define NS_COAP_RST (NS_COAP_EVENT_BASE + NS_COAP_MSG_RST)
+#define MG_COAP_EVENT_BASE 300
+#define MG_EV_COAP_CON (MG_COAP_EVENT_BASE + MG_COAP_MSG_CON)
+#define MG_EV_COAP_NOC (MG_COAP_EVENT_BASE + MG_COAP_MSG_NOC)
+#define MG_EV_COAP_ACK (MG_COAP_EVENT_BASE + MG_COAP_MSG_ACK)
+#define MG_EV_COAP_RST (MG_COAP_EVENT_BASE + MG_COAP_MSG_RST)
 
 /*
  * CoAP options.
@@ -2473,11 +2475,11 @@ void mg_coap_free_options(struct mg_coap_message *cm);
  * and send it into `nc` connection.
  * Return 0 on success. On error, it is a bitmask:
  *
- * - #define NS_COAP_ERROR 0x10000
- * - #define NS_COAP_FORMAT_ERROR (NS_COAP_ERROR | 0x20000)
- * - #define NS_COAP_IGNORE (NS_COAP_ERROR | 0x40000)
- * - #define NS_COAP_NOT_ENOUGH_DATA (NS_COAP_ERROR | 0x80000)
- * - #define NS_COAP_NETWORK_ERROR (NS_COAP_ERROR | 0x100000)
+ * - #define MG_COAP_ERROR 0x10000
+ * - #define MG_COAP_FORMAT_ERROR (MG_COAP_ERROR | 0x20000)
+ * - #define MG_COAP_IGNORE (MG_COAP_ERROR | 0x40000)
+ * - #define MG_COAP_NOT_ENOUGH_DATA (MG_COAP_ERROR | 0x80000)
+ * - #define MG_COAP_NETWORK_ERROR (MG_COAP_ERROR | 0x100000)
  */
 uint32_t mg_coap_send_message(struct mg_connection *nc,
                               struct mg_coap_message *cm);
@@ -2517,6 +2519,6 @@ uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io);
 }
 #endif /* __cplusplus */
 
-#endif /* NS_ENABLE_COAP */
+#endif /* MG_ENABLE_COAP */
 
-#endif /* NS_COAP_HEADER_INCLUDED */
+#endif /* MG_COAP_HEADER_INCLUDED */

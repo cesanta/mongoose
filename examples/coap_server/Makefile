@@ -1,6 +1,6 @@
 PROG = coap_server
 SOURCES = $(PROG).c ../../mongoose.c
-CFLAGS = -W -Wall -I../.. $(CFLAGS_EXTRA) -DNS_ENABLE_COAP
+CFLAGS = -W -Wall -I../.. $(CFLAGS_EXTRA) -DMG_ENABLE_COAP
 
 all: $(PROG)
 

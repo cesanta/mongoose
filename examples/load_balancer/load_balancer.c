@@ -60,7 +60,7 @@ static int s_num_vhost_backends = 0, s_num_default_backends = 0;
 static int s_sig_num = 0;
 static int s_backend_keepalive = 0;
 static FILE *s_log_file = NULL;
-#ifdef NS_ENABLE_SSL
+#ifdef MG_ENABLE_SSL
 const char *s_ssl_cert = NULL;
 #endif
 
@@ -87,7 +87,7 @@ static void respond_with_error(struct conn_data *conn, const char *err_line) {
     send_http_err(nc, err_line);
     conn->client.flags.headers_sent = 1;
   }
-  nc->flags |= NSF_SEND_AND_CLOSE;
+  nc->flags |= MG_F_SEND_AND_CLOSE;
 }
 
 static int has_prefix(const struct mg_str *uri, const char *prefix) {
@@ -203,10 +203,10 @@ static void forward(struct conn_data *conn, struct http_message *hm,
   }
 
   /* Headers. */
-  for (i = 0; i < NS_MAX_HTTP_HEADERS && hm->header_names[i].len > 0; i++) {
+  for (i = 0; i < MG_MAX_HTTP_HEADERS && hm->header_names[i].len > 0; i++) {
     struct mg_str hn = hm->header_names[i];
     struct mg_str hv = hm->header_values[i];
-#ifdef NS_ENABLE_SSL
+#ifdef MG_ENABLE_SSL
     /*
      * If we terminate SSL and backend redirects to local HTTP port,
      * strip protocol to let client use HTTPS.
@@ -330,17 +330,17 @@ static void idle_backend_handler(struct mg_connection *nc, int ev,
             bec->idle_deadline);
 #endif
   switch (ev) {
-    case NS_POLL: {
+    case MG_EV_POLL: {
       if (bec->idle_deadline > 0 && now > bec->idle_deadline) {
 #ifdef DEBUG
         write_log("bec=%p nc=%p closing due to idleness\n", bec, bec->nc);
 #endif
-        bec->nc->flags |= NSF_CLOSE_IMMEDIATELY;
+        bec->nc->flags |= MG_F_CLOSE_IMMEDIATELY;
       }
       break;
     }
 
-    case NS_CLOSE: {
+    case MG_EV_CLOSE: {
 #ifdef DEBUG
       write_log("bec=%p closed\n", bec);
 #endif
@@ -377,14 +377,14 @@ void release_backend(struct conn_data *conn) {
       STAILQ_REMOVE_HEAD(&be->conns, conns);
       be->num_conns--;
       bec->idle_deadline = 0;
-      bec->nc->flags = NSF_CLOSE_IMMEDIATELY;
+      bec->nc->flags = MG_F_CLOSE_IMMEDIATELY;
 #ifdef DEBUG
       write_log("bec=%p evicted\n", bec);
 #endif
     }
   } else {
     bec->idle_deadline = 0;
-    bec->nc->flags |= NSF_CLOSE_IMMEDIATELY;
+    bec->nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
   memset(&conn->backend, 0, sizeof(conn->backend));
 }
@@ -399,7 +399,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 #endif
 
   if (conn == NULL) {
-    if (ev == NS_ACCEPT) {
+    if (ev == MG_EV_ACCEPT) {
       conn = calloc(1, sizeof(*conn));
       if (conn == NULL) {
         send_http_err(nc, s_error_500);
@@ -413,15 +413,15 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       }
       return;
     } else {
-      nc->flags |= NSF_CLOSE_IMMEDIATELY;
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
       return;
     }
   }
 
-  if (ev != NS_POLL) conn->last_activity = now;
+  if (ev != MG_EV_POLL) conn->last_activity = now;
 
   switch (ev) {
-    case NS_HTTP_REQUEST: { /* From client */
+    case MG_EV_HTTP_REQUEST: { /* From client */
       assert(conn != NULL);
       assert(conn->be_conn == NULL);
       struct http_message *hm = (struct http_message *) ev_data;
@@ -434,7 +434,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
       if (conn->backend.nc == NULL) {
         /* This is a redirect, we're done. */
-        conn->client.nc->flags |= NSF_SEND_AND_CLOSE;
+        conn->client.nc->flags |= MG_F_SEND_AND_CLOSE;
         break;
       }
 
@@ -442,7 +442,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       break;
     }
 
-    case NS_CONNECT: { /* To backend */
+    case MG_EV_CONNECT: { /* To backend */
       assert(conn != NULL);
       assert(conn->be_conn != NULL);
       int status = *(int *) ev_data;
@@ -458,14 +458,14 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       break;
     }
 
-    case NS_HTTP_REPLY: { /* From backend */
+    case MG_EV_HTTP_REPLY: { /* From backend */
       assert(conn != NULL);
       struct http_message *hm = (struct http_message *) ev_data;
       conn->backend.flags.keep_alive = s_backend_keepalive && is_keep_alive(hm);
       forward(conn, hm, &conn->backend, &conn->client);
       release_backend(conn);
       if (!conn->client.flags.keep_alive) {
-        conn->client.nc->flags |= NSF_SEND_AND_CLOSE;
+        conn->client.nc->flags |= MG_F_SEND_AND_CLOSE;
       } else {
 #ifdef DEBUG
         write_log("conn=%p remains open\n", conn);
@@ -474,19 +474,19 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       break;
     }
 
-    case NS_POLL: {
+    case MG_EV_POLL: {
       assert(conn != NULL);
       if (now - conn->last_activity > CONN_IDLE_TIMEOUT &&
           conn->backend.nc == NULL /* not waiting for backend */) {
 #ifdef DEBUG
         write_log("conn=%p has been idle for too long\n", conn);
-        conn->client.nc->flags |= NSF_SEND_AND_CLOSE;
+        conn->client.nc->flags |= MG_F_SEND_AND_CLOSE;
 #endif
       }
       break;
     }
 
-    case NS_CLOSE: {
+    case MG_EV_CLOSE: {
       assert(conn != NULL);
       if (nc == conn->client.nc) {
 #ifdef DEBUG
@@ -495,7 +495,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 #endif
         conn->client.nc = NULL;
         if (conn->backend.nc != NULL) {
-          conn->backend.nc->flags |= NSF_CLOSE_IMMEDIATELY;
+          conn->backend.nc->flags |= MG_F_CLOSE_IMMEDIATELY;
         }
       } else if (nc == conn->backend.nc) {
 #ifdef DEBUG
@@ -520,7 +520,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 static void print_usage_and_exit(const char *prog_name) {
   fprintf(stderr,
           "Usage: %s [-D debug_dump_file] [-p http_port] [-l log] [-k]"
-#if NS_ENABLE_SSL
+#if MG_ENABLE_SSL
           "[-s ssl_cert] "
 #endif
           "<[-r] [-v vhost] -b uri_prefix[=replacement] host_port> ... \n",
@@ -589,7 +589,7 @@ int main(int argc, char *argv[]) {
       vhost = NULL;
       redirect = 0;
       i += 2;
-#ifdef NS_ENABLE_SSL
+#ifdef MG_ENABLE_SSL
     } else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
       s_ssl_cert = argv[++i];
 #endif
@@ -604,7 +604,7 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-#if NS_ENABLE_SSL
+#if MG_ENABLE_SSL
   if (s_ssl_cert != NULL) {
     const char *err_str = mg_set_ssl(nc, s_ssl_cert, NULL);
     if (err_str != NULL) {

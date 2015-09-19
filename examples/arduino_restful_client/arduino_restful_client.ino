@@ -96,9 +96,9 @@ static void rfc_ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
         int len = get_data_to_send(buf, sizeof(buf));
         mg_printf(nc, "POST %s HTTP/1.0\r\nHost: %s\r\nContent-Lenght: %d"
                   "\r\n\r\n%s", s_request, s_target_address, len, buf);
-        nc->flags |= NSF_SEND_AND_CLOSE;
+        nc->flags |= MG_F_SEND_AND_CLOSE;
       } else {
-        nc->flags |= NSF_CLOSE_IMMEDIATELY;
+        nc->flags |= MG_F_CLOSE_IMMEDIATELY;
       }
       break;
     default:

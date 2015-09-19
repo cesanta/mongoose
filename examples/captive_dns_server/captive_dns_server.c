@@ -23,13 +23,13 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   int i;
 
   switch (ev) {
-    case NS_DNS_MESSAGE:
+    case MG_DNS_MESSAGE:
       msg = (struct mg_dmg_message *) ev_data;
       reply = mg_dmg_create_reply(&nc->send_mbuf, msg);
 
       for (i = 0; i < msg->num_questions; i++) {
         rr = &msg->questions[i];
-        if (rr->rtype == NS_DNS_A_RECORD) {
+        if (rr->rtype == MG_DNS_A_RECORD) {
           mg_dmg_reply_record(&reply, rr, NULL, rr->rtype, 3600,
                               &s_our_ip_addr, 4);
         }
@@ -37,8 +37,8 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
       /*
        * We don't set the error flag even if there were no answers
-       * maching the NS_DNS_A_RECORD query type.
-       * This indicates that we have (syntetic) answers for NS_DNS_A_RECORD.
+       * maching the MG_DNS_A_RECORD query type.
+       * This indicates that we have (syntetic) answers for MG_DNS_A_RECORD.
        * See http://goo.gl/QWvufr for a distinction between NXDOMAIN and NODATA.
        */
 

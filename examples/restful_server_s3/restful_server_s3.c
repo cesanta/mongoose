@@ -34,16 +34,16 @@ static void s3_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct mg_connection *nc2 = (struct mg_connection *) nc->user_data;
 
   switch (ev) {
-    case NS_HTTP_REPLY:
+    case MG_EV_HTTP_REPLY:
       if (nc2 != NULL) {
         mg_printf_http_chunk(nc2, "Error: %.*s", (int) hm->message.len,
                              hm->message.p);
         mg_send_http_chunk(nc2, "", 0);
       }
       unlink_conns(nc);
-      nc->flags |= NSF_SEND_AND_CLOSE;
+      nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
-    case NS_CLOSE:
+    case MG_EV_CLOSE:
       unlink_conns(nc);
       break;
     default:
@@ -118,14 +118,14 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message *hm = (struct http_message *) ev_data;
 
   switch (ev) {
-    case NS_HTTP_REQUEST:
+    case MG_EV_HTTP_REQUEST:
       if (mg_vcmp(&hm->uri, "/upload") == 0) {
         handle_api_call(nc, hm); /* Handle RESTful call */
       } else {
         mg_serve_http(nc, hm, s_http_server_opts); /* Serve static content */
       }
       break;
-    case NS_CLOSE:
+    case MG_EV_CLOSE:
       unlink_conns(nc);
       break;
     default:

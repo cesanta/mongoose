@@ -15,14 +15,14 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message *hm = (struct http_message *) ev_data;
 
   switch (ev) {
-    case NS_CONNECT:
+    case MG_EV_CONNECT:
       if (* (int *) ev_data != 0) {
         fprintf(stderr, "connect() failed: %s\n", strerror(* (int *) ev_data));
         s_exit_flag = 1;
       }
       break;
-    case NS_HTTP_REPLY:
-      nc->flags |= NSF_CLOSE_IMMEDIATELY;
+    case MG_EV_HTTP_REPLY:
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
       if (s_show_headers) {
         fwrite(hm->message.p, 1, hm->message.len, stdout);
       } else {

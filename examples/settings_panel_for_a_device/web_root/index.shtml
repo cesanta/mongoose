@@ -67,7 +67,7 @@
     <h3>How to show device parameters on the page</h3>
     <p>This page has embedded
       <code>&lt;!--#call parameter_name --&gt;</code> blocks. For each such
-      block, mongoose triggers <code>NS_SSI_CALL</code> event, passing
+      block, mongoose triggers <code>MG_EV_SSI_CALL</code> event, passing
       <code>parameter_name</code> string as an event parameter. A callback
       then can print some content, which will replace the
       <code>&lt;!--#call parameter_name --&gt;</code> block.

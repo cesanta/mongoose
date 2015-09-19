@@ -29,7 +29,7 @@ static void *stdin_thread(void *param) {
 
 static void server_handler(struct mg_connection *nc, int ev, void *p) {
   (void) p;
-  if (ev == NS_RECV) {
+  if (ev == MG_EV_RECV) {
     // Push received message to all ncections
     struct mbuf *io = &nc->recv_mbuf;
     struct mg_connection *c;
@@ -45,14 +45,14 @@ static void client_handler(struct mg_connection *conn, int ev, void *p) {
   struct mbuf *io = &conn->recv_mbuf;
   (void) p;
 
-  if (ev == NS_CONNECT) {
-    if (conn->flags & NSF_CLOSE_IMMEDIATELY) {
+  if (ev == MG_EV_CONNECT) {
+    if (conn->flags & MG_F_CLOSE_IMMEDIATELY) {
       printf("%s\n", "Error connecting to server!");
       exit(EXIT_FAILURE);
     }
     printf("%s\n", "Connected to server. Type a message and press enter.");
-  } else if (ev == NS_RECV) {
-    if (conn->flags & NSF_USER_1) {
+  } else if (ev == MG_EV_RECV) {
+    if (conn->flags & MG_F_USER_1) {
       // Received data from the stdin, forward it to the server
       struct mg_connection *c = (struct mg_connection *) conn->user_data;
       mg_send(c, io->buf, io->len);
@@ -62,7 +62,7 @@ static void client_handler(struct mg_connection *conn, int ev, void *p) {
       fwrite(io->buf, io->len, 1, stdout);
       mbuf_remove(io, io->len);
     }
-  } else if (ev == NS_CLOSE) {
+  } else if (ev == MG_EV_CLOSE) {
     // Connection has closed, most probably cause server has stopped
     exit(EXIT_SUCCESS);
   }
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
 
     // The other end of a pair goes inside the server
     ioconn = mg_add_sock(&mgr, fds[0], client_handler);
-    ioconn->flags |= NSF_USER_1;    // Mark this so we know this is a stdin
+    ioconn->flags |= MG_F_USER_1;    // Mark this so we know this is a stdin
     ioconn->user_data = server_conn;
 
   } else {

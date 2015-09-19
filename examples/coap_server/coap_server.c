@@ -19,7 +19,7 @@ static void signal_handler(int sig_num) {
 
 static void coap_handler(struct mg_connection *nc, int ev, void *p) {
   switch (ev) {
-    case NS_COAP_CON: {
+    case MG_EV_COAP_CON: {
       uint32_t res;
       struct mg_coap_message *cm = (struct mg_coap_message *)p;
       printf("CON with msg_id = %d received\n", cm->msg_id);
@@ -32,9 +32,9 @@ static void coap_handler(struct mg_connection *nc, int ev, void *p) {
       }
       break;
     }
-    case NS_COAP_NOC:
-    case NS_COAP_ACK:
-    case NS_COAP_RST:  {
+    case MG_EV_COAP_NOC:
+    case MG_EV_COAP_ACK:
+    case MG_EV_COAP_RST:  {
       struct mg_coap_message *cm = (struct mg_coap_message *)p;
       printf("ACK/RST/NOC with msg_id = %d received\n",
              cm->msg_id);

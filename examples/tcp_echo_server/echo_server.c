@@ -23,7 +23,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
   (void) p;
 
   switch (ev) {
-    case NS_RECV:
+    case MG_EV_RECV:
       mg_send(nc, io->buf, io->len);  // Echo message back
       mbuf_remove(io, io->len);        // Discard message from recv buffer
       break;

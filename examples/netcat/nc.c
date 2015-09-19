@@ -46,9 +46,9 @@ static void on_stdin_read(struct mg_connection *nc, int ev, void *p) {
 
   if (ch < 0) {
     // EOF is received from stdin. Schedule the connection to close
-    nc->flags |= NSF_SEND_AND_CLOSE;
+    nc->flags |= MG_F_SEND_AND_CLOSE;
     if (nc->send_mbuf.len <= 0) {
-      nc->flags |= NSF_CLOSE_IMMEDIATELY;
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
     }
   } else {
     // A character is received from stdin. Send it to the connection.
@@ -74,16 +74,16 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
   (void) p;
 
   switch (ev) {
-    case NS_ACCEPT:
-    case NS_CONNECT:
+    case MG_EV_ACCEPT:
+    case MG_EV_CONNECT:
       mg_start_thread(stdio_thread_func, nc->mgr);
       break;
 
-    case NS_CLOSE:
+    case MG_EV_CLOSE:
       s_received_signal = 1;
       break;
 
-    case NS_RECV:
+    case MG_EV_RECV:
       fwrite(nc->recv_mbuf.buf, 1, nc->recv_mbuf.len, stdout);
       mbuf_remove(&nc->recv_mbuf, nc->recv_mbuf.len);
       break;

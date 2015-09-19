@@ -16,7 +16,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   int connect_status;
 
   switch (ev) {
-    case NS_CONNECT:
+    case MG_EV_CONNECT:
       connect_status = * (int *) ev_data;
       if (connect_status == 0) {
         printf("Connected to %s, sending request...\n", s_target_address);
@@ -28,9 +28,9 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
         s_exit_flag = 1;
       }
       break;
-    case NS_HTTP_REPLY:
+    case MG_EV_HTTP_REPLY:
       printf("Got reply:\n%.*s\n", (int) hm->body.len, hm->body.p);
-      nc->flags |= NSF_SEND_AND_CLOSE;
+      nc->flags |= MG_F_SEND_AND_CLOSE;
       s_exit_flag = 1;
       break;
     default:

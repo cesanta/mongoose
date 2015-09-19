@@ -1,6 +1,6 @@
 PROG = publish_subscribe
 SOURCES = $(PROG).c ../../mongoose.c
-CFLAGS = -W -Wall -I../.. -DNS_ENABLE_THREADS -pthread $(CFLAGS_EXTRA)
+CFLAGS = -W -Wall -I../.. -DMG_ENABLE_THREADS -pthread $(CFLAGS_EXTRA)
 
 all: $(PROG)
 

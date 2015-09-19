@@ -1,6 +1,6 @@
 PROG = settings_panel
 SOURCES = $(PROG).c ../../mongoose.c
-CFLAGS = -W -Wall -I../.. -DNS_ENABLE_SSL -lssl -lcrypto $(CFLAGS_EXTRA)
+CFLAGS = -W -Wall -I../.. -DMG_ENABLE_SSL -lssl -lcrypto $(CFLAGS_EXTRA)
 
 all: $(PROG)
 

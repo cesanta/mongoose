@@ -7,7 +7,7 @@ static const char *s_http_port = "8000";
 static struct mg_serve_http_opts s_http_server_opts;
 
 static void ev_handler(struct mg_connection *nc, int ev, void *p) {
-  if (ev == NS_HTTP_REQUEST) {
+  if (ev == MG_EV_HTTP_REQUEST) {
     mg_serve_http(nc, p, s_http_server_opts);
   }
 }
