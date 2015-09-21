@@ -2161,12 +2161,13 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int proto) {
   socklen_t sa_len =
       (sa->sa.sa_family == AF_INET) ? sizeof(sa->sin) : sizeof(sa->sin6);
   sock_t sock = INVALID_SOCKET;
-#ifndef MG_CC3200
+#if !defined(MG_CC3200) && !defined(RTOS_SDK)
   int on = 1;
 #endif
 
   if ((sock = socket(sa->sa.sa_family, proto, 0)) != INVALID_SOCKET &&
-#ifndef MG_CC3200 /* CC3200 doesn't support either */
+#if !defined(MG_CC3200) && \
+    !defined(RTOS_SDK) /* CC3200 nor ESP8266 don't support either */
 #if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE)
       /* "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE" http://goo.gl/RmrFTm */
       !setsockopt(sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (void *) &on,
@@ -2189,7 +2190,7 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int proto) {
 
       !bind(sock, &sa->sa, sa_len) &&
       (proto == SOCK_DGRAM || listen(sock, SOMAXCONN) == 0)) {
-#ifndef MG_CC3200 /* TODO(rojer): Fix this. */
+#if !defined(MG_CC3200) && !defined(RTOS_SDK) /* TODO(rojer): Fix this. */
     mg_set_non_blocking_mode(sock);
     /* In case port was set to 0, get the real port number */
     (void) getsockname(sock, &sa->sa, &sa_len);
@@ -3403,6 +3404,7 @@ static const struct {
 
 #ifndef MG_DISABLE_FILESYSTEM
 
+#ifndef MG_DISABLE_DAV
 static int mg_mkdir(const char *path, uint32_t mode) {
 #ifndef _WIN32
   return mkdir(path, mode);
@@ -3411,6 +3413,7 @@ static int mg_mkdir(const char *path, uint32_t mode) {
   return _mkdir(path);
 #endif
 }
+#endif
 
 static struct mg_str get_mime_type(const char *path, const char *dflt,
                                    const struct mg_serve_http_opts *opts) {
@@ -4259,7 +4262,9 @@ static void send_ssi_file(struct mg_connection *nc, const char *path, FILE *fp,
   static const struct mg_str btag = MG_STR("<!--#");
   static const struct mg_str d_include = MG_STR("include");
   static const struct mg_str d_call = MG_STR("call");
+#ifndef MG_DISABLE_POPEN
   static const struct mg_str d_exec = MG_STR("exec");
+#endif
   char buf[BUFSIZ], *p = buf + btag.len; /* p points to SSI directive */
   int ch, offset, len, in_ssi_tag;
 
