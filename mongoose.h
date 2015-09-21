@@ -562,6 +562,11 @@ int json_emit_va(char *buf, int buf_len, const char *fmt, va_list);
 #ifndef MG_NET_HEADER_INCLUDED
 #define MG_NET_HEADER_INCLUDED
 
+#ifdef MG_ENABLE_JAVASCRIPT
+#define EXCLUDE_COMMON
+#include <v7.h>
+#endif
+
 
 #ifdef MG_ENABLE_SSL
 #ifdef __APPLE__
@@ -628,6 +633,9 @@ struct mg_mgr {
   sock_t ctl[2];            /* Socketpair for mg_wakeup() */
   void *user_data;          /* User data */
   void *mgr_data;           /* Implementation-specific event manager's data. */
+#ifdef MG_ENABLE_JAVASCRIPT
+  struct v7 *v7;
+#endif
 };
 
 /*
@@ -956,6 +964,17 @@ int mg_check_ip_acl(const char *acl, uint32_t remote_ip);
  * other connections.
  */
 void mg_enable_multithreading(struct mg_connection *nc);
+
+#ifdef MG_ENABLE_JAVASCRIPT
+/*
+ * Enable server-side JavaScript scripting.
+ * Requires `-DMG_ENABLE_JAVASCRIPT` compilation flag, and V7 engine sources.
+ * v7 instance must not be destroyed during manager's lifetime.
+ * Return V7 error.
+ */
+enum v7_err mg_enable_javascript(struct mg_mgr *m, struct v7 *v7,
+                                 const char *init_js_file_name);
+#endif
 
 #ifdef __cplusplus
 }

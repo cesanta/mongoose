@@ -1850,10 +1850,10 @@ static void mg_close_conn(struct mg_connection *conn) {
   mg_destroy_conn(conn);
 }
 
-void mg_mgr_init(struct mg_mgr *s, void *user_data) {
-  memset(s, 0, sizeof(*s));
-  s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
-  s->user_data = user_data;
+void mg_mgr_init(struct mg_mgr *m, void *user_data) {
+  memset(m, 0, sizeof(*m));
+  m->ctl[0] = m->ctl[1] = INVALID_SOCKET;
+  m->user_data = user_data;
 
 #ifdef _WIN32
   {
@@ -1868,8 +1868,8 @@ void mg_mgr_init(struct mg_mgr *s, void *user_data) {
 
 #ifndef MG_DISABLE_SOCKETPAIR
   do {
-    mg_socketpair(s->ctl, SOCK_DGRAM);
-  } while (s->ctl[0] == INVALID_SOCKET);
+    mg_socketpair(m->ctl, SOCK_DGRAM);
+  } while (m->ctl[0] == INVALID_SOCKET);
 #endif
 
 #ifdef MG_ENABLE_SSL
@@ -1881,29 +1881,56 @@ void mg_mgr_init(struct mg_mgr *s, void *user_data) {
     }
   }
 #endif
-  mg_ev_mgr_init(s);
+
+  mg_ev_mgr_init(m);
   DBG(("=================================="));
-  DBG(("init mgr=%p", s));
+  DBG(("init mgr=%p", m));
 }
 
-void mg_mgr_free(struct mg_mgr *s) {
+#ifdef MG_ENABLE_JAVASCRIPT
+static v7_val_t mg_send_js(struct v7 *v7, v7_val_t this_obj, v7_val_t args) {
+  v7_val_t arg0 = v7_array_get(v7, args, 0);
+  v7_val_t arg1 = v7_array_get(v7, args, 1);
+  struct mg_connection *c = (struct mg_connection *) v7_to_foreign(arg0);
+  size_t len = 0;
+
+  if (v7_is_string(arg1)) {
+    const char *data = v7_to_string(v7, &arg1, &len);
+    mg_send(c, data, len);
+  }
+
+  (void) this_obj;
+
+  return v7_create_number(len);
+}
+
+enum v7_err mg_enable_javascript(struct mg_mgr *m, struct v7 *v7,
+                                 const char *init_file_name) {
+  v7_val_t v;
+  m->v7 = v7;
+  v7_set_method(v7, v7_get_global_object(v7), "mg_send", mg_send_js);
+  return v7_exec_file(v7, init_file_name, &v);
+}
+#endif
+
+void mg_mgr_free(struct mg_mgr *m) {
   struct mg_connection *conn, *tmp_conn;
 
-  DBG(("%p", s));
-  if (s == NULL) return;
+  DBG(("%p", m));
+  if (m == NULL) return;
   /* Do one last poll, see https://github.com/cesanta/mongoose/issues/286 */
-  mg_mgr_poll(s, 0);
+  mg_mgr_poll(m, 0);
 
-  if (s->ctl[0] != INVALID_SOCKET) closesocket(s->ctl[0]);
-  if (s->ctl[1] != INVALID_SOCKET) closesocket(s->ctl[1]);
-  s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
+  if (m->ctl[0] != INVALID_SOCKET) closesocket(m->ctl[0]);
+  if (m->ctl[1] != INVALID_SOCKET) closesocket(m->ctl[1]);
+  m->ctl[0] = m->ctl[1] = INVALID_SOCKET;
 
-  for (conn = s->active_connections; conn != NULL; conn = tmp_conn) {
+  for (conn = m->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
     mg_close_conn(conn);
   }
 
-  mg_ev_mgr_free(s);
+  mg_ev_mgr_free(m);
 }
 
 int mg_vprintf(struct mg_connection *nc, const char *fmt, va_list ap) {
@@ -4053,9 +4080,59 @@ static void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
     }
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
     else if (hm.message.len <= io->len) {
-      /* Whole HTTP message is fully buffered, call event handler */
-      nc->handler(nc, nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY,
-                  &hm);
+      int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
+
+/* Whole HTTP message is fully buffered, call event handler */
+
+#ifdef MG_ENABLE_JAVASCRIPT
+      v7_val_t v1, v2, headers, req, args, res;
+      struct v7 *v7 = nc->mgr->v7;
+      const char *ev_name = trigger_ev == MG_EV_HTTP_REPLY ? "onsnd" : "onrcv";
+      int i, js_callback_handled_request = 0;
+
+      if (v7 != NULL) {
+        /* Lookup JS callback */
+        v1 = v7_get(v7, v7_get_global_object(v7), "Http", ~0);
+        v2 = v7_get(v7, v1, ev_name, ~0);
+
+        /* Create callback params. TODO(lsm): own/disown those */
+        args = v7_create_array(v7);
+        req = v7_create_object(v7);
+        headers = v7_create_object(v7);
+
+        /* Populate request object */
+        v7_set(v7, req, "method", ~0, 0,
+               v7_create_string(v7, hm.method.p, hm.method.len, 1));
+        v7_set(v7, req, "uri", ~0, 0,
+               v7_create_string(v7, hm.uri.p, hm.uri.len, 1));
+        v7_set(v7, req, "body", ~0, 0,
+               v7_create_string(v7, hm.body.p, hm.body.len, 1));
+        v7_set(v7, req, "headers", ~0, 0, headers);
+        for (i = 0; hm.header_names[i].len > 0; i++) {
+          const struct mg_str *name = &hm.header_names[i];
+          const struct mg_str *value = &hm.header_values[i];
+          v7_set(v7, headers, name->p, name->len, 0,
+                 v7_create_string(v7, value->p, value->len, 1));
+        }
+
+        /* Invoke callback. TODO(lsm): report errors */
+        v7_array_push(v7, args, v7_create_foreign(nc));
+        v7_array_push(v7, args, req);
+        if (v7_apply(v7, &res, v2, v7_create_undefined(), args) == V7_OK &&
+            v7_is_true(v7, res)) {
+          js_callback_handled_request++;
+        }
+      }
+
+      /* If JS callback returns true, stop request processing */
+      if (js_callback_handled_request) {
+        nc->flags |= MG_F_SEND_AND_CLOSE;
+      } else {
+        nc->handler(nc, trigger_ev, &hm);
+      }
+#else
+      nc->handler(nc, trigger_ev, &hm);
+#endif
       mbuf_remove(io, hm.message.len);
     }
   }

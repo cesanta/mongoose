@@ -67,6 +67,11 @@ int main(int argc, char *argv[]) {
       s_http_port = argv[++i];
     } else if (strcmp(argv[i], "-a") == 0 && i + 1 < argc) {
       s_http_server_opts.auth_domain = argv[++i];
+#ifdef MG_ENABLE_JAVASCRIPT
+    } else if (strcmp(argv[i], "-j") == 0 && i + 1 < argc) {
+      const char *init_file = argv[++i];
+      mg_enable_javascript(&mgr, v7_create(), init_file);
+#endif
     } else if (strcmp(argv[i], "-P") == 0 && i + 1 < argc) {
       s_http_server_opts.global_auth_file = argv[++i];
     } else if (strcmp(argv[i], "-p") == 0 && i + 1 < argc) {
@@ -81,6 +86,9 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
       ssl_cert = argv[++i];
 #endif
+    } else {
+      fprintf(stderr, "Unknown option: [%s]\n", argv[i]);
+      exit(1);
     }
   }
 

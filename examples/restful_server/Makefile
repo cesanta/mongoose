@@ -8,6 +8,11 @@ else ifeq ($(SSL), krypton)
 	CFLAGS += -DMG_ENABLE_SSL ../../../krypton/krypton.c
 endif
 
+ifeq ($(JS), yes)
+	V7_PATH = ../../../v7
+	CFLAGS_EXTRA += -DMG_ENABLE_JAVASCRIPT -I $(V7_PATH) $(V7_PATH)/v7.c
+endif
+
 all: $(PROG)
 
 $(PROG): $(SOURCES)
