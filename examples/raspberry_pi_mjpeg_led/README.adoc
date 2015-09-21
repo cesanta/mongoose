@@ -24,7 +24,7 @@ grabbing application can handle. The device automatically attempts reconnecting.
 
 The cloud side serves the webapp static pages and serves an MPJEG image on `/mpjg`.
 The MPJEG image handler blocks all the clients until a JPEG frame arrives via websocket
-and then every client will recieve a copy of the frame.
+and then every client will receive a copy of the frame.
 
 The web app can turn on and off the LED via a RESTful api accessible via the `/api` handler.
 

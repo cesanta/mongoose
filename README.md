@@ -19,8 +19,7 @@ and let them concentrate on the logic, saving time and money.
 [Download Mongoose Source Code here](http://hubs.ly/H0150FK0)
 
 > Nothing overdone. Nothing less. So unbelievably easy to use.
-> Just how good software should be!
-> - Pritin Tyagaraj, SAP
+> Just how good software should be! -- Pritin Tyagaraj, SAP
 
 
 # Features
