@@ -5389,7 +5389,7 @@ static void prepare_cgi_environment(struct mg_connection *nc, const char *prog,
   }
   addenv(blk, "SERVER_ROOT=%s", opts->document_root);
   addenv(blk, "DOCUMENT_ROOT=%s", opts->document_root);
-  addenv(blk, "SERVER_SOFTWARE=%s/%s", "Mongoose", MG_FOSSA_VERSION);
+  addenv(blk, "SERVER_SOFTWARE=%s/%s", "Mongoose", MG_VERSION);
 
   /* Prepare the environment block */
   addenv(blk, "%s", "GATEWAY_INTERFACE=CGI/1.1");

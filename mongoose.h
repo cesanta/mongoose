@@ -2,8 +2,10 @@
 #include "avrsupport.h"
 #endif
 /*
- * Copyright (c) 2014 Cesanta Software Limited
+ * Copyright (c) 2004-2013 Sergey Lyubka
+ * Copyright (c) 2013-2015 Cesanta Software Limited
  * All rights reserved
+ *
  * This software is dual-licensed: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation. For the terms of this
@@ -18,7 +20,7 @@
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-#define MG_FOSSA_VERSION "2.0.0"
+#define MG_VERSION "6.0"
 /*
  * Copyright (c) 2015 Cesanta Software Limited
  * All rights reserved

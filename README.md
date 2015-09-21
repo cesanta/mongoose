@@ -1,30 +1,27 @@
-# <img src="http://www.cesanta.com/hubfs/www.cesanta.com/Images/mongoose_library.png" width="64" height="64"> Mongoose Embedded Web Server
+# <img src="http://www.cesanta.com/hubfs/www.cesanta.com/Images/mongoose_library.png" width="64" height="64"> Mongoose - Embedded Web Server
 
 [![Join the chat at https://gitter.im/cesanta/mongoose](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/cesanta/mongoose?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ![](https://img.shields.io/badge/license-GPL_2-green.svg "License")
 
-[Mongoose](https://www.cesanta.com/mongoose) is a
-multi-protocol networking library written in C.
+
+Mongoose is ideal for embedded environments, it has been designed as an open
+source platform for connecting devices and bringing them online.
+[Mongoose](https://www.cesanta.com/products)
+has been on the market since 2004 and attracted
+over 1 million cumulative downloads.
+
 It provides easy to use event-driven interface that allows to implement
 network protocols or scalable network applications  with little effort.
 Mongoose helps developers to manage the complexity of network programming
 and let them concentrate on the logic, saving time and money.
 
-Mongoose has built-in support for several protocols, like
-HTTP, Websocket, MQTT, mDNS. Example applications include
-Websocket-based chat server, JSON-RPC server,
-database server with RESTful API, MQTT broker, netcat with SSL and hexdump,
-Raspberry PI camera video feed + led control, and more.
-
-Mongoose is ideal for the embedded environments, it has been designed as
-an open source platform for connecting devices and bringing them online.
-
 [Download Mongoose Source Code here](http://hubs.ly/H0150FK0)
 
-Are you an embedded developer? Working on an embedded task?
-Check out our [embedded development products](http://hubs.ly/H0150sY0)
-to make the right choice for your project.
+> Nothing overdone. Nothing less. So unbelievably easy to use.
+> Just how good software should be!
+> - Pritin Tyagaraj, SAP
+
 
 # Features
 
@@ -54,6 +51,10 @@ go into respective directory and type `make`
 
 # Dashboard Example
 
+Mongoose is often used to implement device dashboards and real-time
+data exchange over Websocket. Here is a dashboard example that illustrates
+the functionality:
+
 ![](http://www.cesanta.com/hubfs/www.cesanta.com/diagrams/dash_mongoose_diagram.png)
 
 [Developing a new product? Contact us today to discuss how Mongoose can help
@@ -62,15 +63,22 @@ go into respective directory and type `make`
 
 # Licensing
 
-Cesanta made Mongoose open source under GPLv2 for a reason. We are all
-developers here and appreciate easy access to code and therefore seamless
-integration. It's great to be able to play around with the software before
-committing to it.
+You are using Mongoose under
+[GPLv2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
+and until you commercialize your
+application, can continue to use Mongoose free of charge.
 
-However, the GPLv2 open source license does not permit incorporating the
-software into non-open source programs. In order to comply with GPLv2 licensing
-you need to open the source code of your end product fully or alternatively
-purchase a commercial license.
+Once you commercialize your product, in order to comply with GPLv2
+you need to either open the source code of your product fully or
+alternatively purchase a commercial license.
+We offer [three levels of commercial licensing](https://www.cesanta.com/products):
+
+- Mongoose Lite: cross platform integration, SSL/TLS, HTTP support
+- Mongoose: Mongoose Lite + HTTP CGI, HTTP SSI, HTTP Digest Auth,
+  WebSocket support
+- Mongoose Premium: Mongoose + Plain TCP, UDP, JSON-RPC, MQTT, DNS,
+  CoAP support
+
 
 [Enquire about commercial licensing here](https://www.cesanta.com/contact)
 
