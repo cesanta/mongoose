@@ -2074,7 +2074,7 @@ MG_INTERNAL struct mg_connection *mg_create_connection(
 
 /* Associate a socket to a connection and and add to the manager. */
 MG_INTERNAL void mg_set_sock(struct mg_connection *nc, sock_t sock) {
-#if !defined(MG_CC3200) && !defined(MG_ESP8266)
+#if !defined(MG_CC3200)
   /* Can't get non-blocking connect to work.
    * TODO(rojer): Figure out why it fails where blocking succeeds.
    */
@@ -2530,6 +2530,11 @@ static void mg_write_to_socket(struct mg_connection *conn) {
   struct mbuf *io = &conn->send_mbuf;
   int n = 0;
 
+#ifdef RTOS_SDK
+  /* In ESP8266 RTOS_SDK we don't know if the socket is ready */
+  if (io->len == 0) return;
+#endif
+
   assert(io->len > 0);
 
 #ifdef MG_ENABLE_SSL
@@ -2889,6 +2894,10 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
         (nc->send_mbuf.len > 0 || nc->flags & MG_F_CONNECTING)) {
       fd_flags |= _MG_F_FD_CAN_WRITE;
     }
+#endif
+#ifdef RTOS_SDK
+    /* In ESP8266 RTOS_SDK we don't get write events */
+    fd_flags |= _MG_F_FD_CAN_WRITE;
 #endif
     tmp = nc->next;
     mg_mgr_handle_connection(nc, fd_flags, now);
