@@ -233,7 +233,11 @@ struct dirent *readdir(DIR *dir);
 
 #define INVALID_SOCKET (-1)
 #define INT64_FMT PRId64
+#if defined(ESP8266) || defined(MG_ESP8266)
+#define SIZE_T_FMT "u"
+#else
 #define SIZE_T_FMT "zu"
+#endif
 #define to64(x) strtoll(x, NULL, 10)
 typedef int sock_t;
 typedef struct stat cs_stat_t;
@@ -904,6 +908,12 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
  * sent to the socket.
  */
 int mg_send(struct mg_connection *, const void *buf, int len);
+
+/* Enables format string warnings for mg_printf */
+#if defined(__GNUC__)
+__attribute__((format(printf, 2, 3)))
+#endif
+/* don't separate from mg_printf declaration */
 
 /*
  * Send `printf`-style formatted data to the connection.

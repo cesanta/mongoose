@@ -4448,20 +4448,23 @@ static void mg_send_http_file2(struct mg_connection *nc, const char *path,
     gmt_time_string(last_modified, sizeof(last_modified), &st->st_mtime);
     mime_type = get_mime_type(path, "text/plain", opts);
     /*
-     * breaking up printing in three separate mg_printf invocations
-     * otherwise crashes inside newlib on ESP8266.
-     * Not a big performance penalty on desktop.
+     * Content length casted to size_t because:
+     * 1) that's the maximum buffer size anyway
+     * 2) ESP8266 RTOS SDK newlib vprintf cannot contain a 64bit arg at non-last
+     *    position
+     * TODO(mkm): fix ESP8266 RTOS SDK
      */
     mg_printf(nc,
               "HTTP/1.1 %d %s\r\n"
               "Date: %s\r\n"
               "Last-Modified: %s\r\n"
               "Accept-Ranges: bytes\r\n"
-              "Content-Type: %.*s\r\n",
+              "Content-Type: %.*s\r\n"
+              "Content-Length: %" SIZE_T_FMT
+              "\r\n"
+              "%sEtag: %s\r\n\r\n",
               status_code, status_message, current_time, last_modified,
-              (int) mime_type.len, mime_type.p);
-    mg_printf(nc, "Content-Length: %" INT64_FMT "\r\n", cl);
-    mg_printf(nc, "%sEtag: %s\r\n\r\n", range, etag);
+              (int) mime_type.len, mime_type.p, (size_t) cl, range, etag);
 
     nc->proto_data = (void *) dp;
     dp->cl = cl;
@@ -5816,8 +5819,8 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
       /* Do not add port. See https://github.com/cesanta/mongoose/pull/304 */
       addr[addr_len] = '\0';
     }
-    mg_printf(nc,
-              "%s /%s HTTP/1.1\r\nHost: %s\r\nContent-Length: %lu\r\n%s\r\n%s",
+    mg_printf(nc, "%s /%s HTTP/1.1\r\nHost: %s\r\nContent-Length: %" SIZE_T_FMT
+                  "\r\n%s\r\n%s",
               post_data == NULL ? "GET" : "POST", path, addr,
               post_data == NULL ? 0 : strlen(post_data),
               extra_headers == NULL ? "" : extra_headers,
