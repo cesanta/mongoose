@@ -4447,19 +4447,22 @@ static void mg_send_http_file2(struct mg_connection *nc, const char *path,
     gmt_time_string(current_time, sizeof(current_time), &t);
     gmt_time_string(last_modified, sizeof(last_modified), &st->st_mtime);
     mime_type = get_mime_type(path, "text/plain", opts);
+    /*
+     * breaking up printing in three separate mg_printf invocations
+     * otherwise crashes inside newlib on ESP8266.
+     * Not a big performance penalty on desktop.
+     */
     mg_printf(nc,
               "HTTP/1.1 %d %s\r\n"
               "Date: %s\r\n"
               "Last-Modified: %s\r\n"
               "Accept-Ranges: bytes\r\n"
-              "Content-Type: %.*s\r\n"
-              "Content-Length: %" INT64_FMT
-              "\r\n"
-              "%s"
-              "Etag: %s\r\n"
-              "\r\n",
+              "Content-Type: %.*s\r\n",
               status_code, status_message, current_time, last_modified,
-              (int) mime_type.len, mime_type.p, cl, range, etag);
+              (int) mime_type.len, mime_type.p);
+    mg_printf(nc, "Content-Length: %" INT64_FMT "\r\n", cl);
+    mg_printf(nc, "%sEtag: %s\r\n\r\n", range, etag);
+
     nc->proto_data = (void *) dp;
     dp->cl = cl;
     dp->type = DATA_FILE;
