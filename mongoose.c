@@ -4030,15 +4030,16 @@ static void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
 #ifndef MG_DISABLE_HTTP_WEBSOCKET
   struct mg_str *vec;
 #endif
-  /*
-   * For HTTP messages without Content-Length, always send HTTP message
-   * before MG_EV_CLOSE message.
-   */
-  if (ev == MG_EV_CLOSE && io->len > 0 &&
-      mg_parse_http(io->buf, io->len, &hm, is_req) > 0) {
-    hm.message.len = io->len;
-    hm.body.len = io->buf + io->len - hm.body.p;
-    nc->handler(nc, is_req ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY, &hm);
+  if (ev == MG_EV_CLOSE) {
+    /*
+     * For HTTP messages without Content-Length, always send HTTP message
+     * before MG_EV_CLOSE message.
+     */
+    if (io->len > 0 && mg_parse_http(io->buf, io->len, &hm, is_req) > 0) {
+      hm.message.len = io->len;
+      hm.body.len = io->buf + io->len - hm.body.p;
+      nc->handler(nc, is_req ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY, &hm);
+    }
     free_http_proto_data(nc);
   }
 
