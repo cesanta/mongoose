@@ -44,10 +44,12 @@
 #define MG_INTERNAL static
 #endif
 
-#if !defined(MG_MGR_EV_MGR) && defined(__linux__)
-#define MG_MGR_EV_MGR 1 /* epoll() */
-#endif
 #if !defined(MG_MGR_EV_MGR)
+/*
+ * Switches between different methods of handling sockets. Supported values:
+ * 0 - select()
+ * 1 - epoll() (Linux only)
+ */
 #define MG_MGR_EV_MGR 0 /* select() */
 #endif
 
