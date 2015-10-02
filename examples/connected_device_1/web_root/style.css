@@ -1,0 +1,31 @@
+* {
+  outline: none;
+}
+
+body {
+  background-color: #36c;
+  margin: 0;
+  padding: 0;
+  font: 16px/1.4 Helvetica, Arial, sans-serif;
+}
+
+div.content {
+  width: 800px;
+  margin: 1em auto;
+  padding: 2em;
+  background-color: #fff;
+  border-radius: 1em;
+}
+
+code {
+  background: #f0f0f0;
+  padding: 0 0.3em;
+  color: #396;
+  border-radius: 0.3em;
+}
+
+a:link, a:visited {
+  color: #69c;
+  text-decoration: none;
+}
+  
