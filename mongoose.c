@@ -1910,7 +1910,7 @@ enum v7_err mg_enable_javascript(struct mg_mgr *m, struct v7 *v7,
                                  const char *init_file_name) {
   v7_val_t v;
   m->v7 = v7;
-  v7_set_method(v7, v7_get_global_object(v7), "mg_send", mg_send_js);
+  v7_set_method(v7, v7_get_global(v7), "mg_send", mg_send_js);
   return v7_exec_file(v7, init_file_name, &v);
 }
 #endif
@@ -4107,7 +4107,7 @@ static void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
       if (v7 != NULL) {
         /* Lookup JS callback */
-        v1 = v7_get(v7, v7_get_global_object(v7), "Http", ~0);
+        v1 = v7_get(v7, v7_get_global(v7), "Http", ~0);
         v2 = v7_get(v7, v1, ev_name, ~0);
 
         /* Create callback params. TODO(lsm): own/disown those */
