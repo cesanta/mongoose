@@ -5583,7 +5583,7 @@ static void prepare_cgi_environment(struct mg_connection *nc, const char *prog,
 
 static void cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
                            void *ev_data) {
-  struct mg_connection *nc = (struct mg_connection *) cgi_nc->user_data;
+  struct mg_connection *nc = (struct mg_connection *) cgi_nc->proto_data;
   (void) ev_data;
 
   if (nc == NULL) return;
@@ -5633,7 +5633,7 @@ static void cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
     case MG_EV_CLOSE:
       free_http_proto_data(nc);
       nc->flags |= MG_F_SEND_AND_CLOSE;
-      nc->user_data = NULL;
+      nc->proto_data = NULL;
       break;
   }
 }
@@ -5677,7 +5677,7 @@ static void handle_cgi(struct mg_connection *nc, const char *prog,
     size_t n = nc->recv_mbuf.len - (hm->message.len - hm->body.len);
     dp->type = DATA_CGI;
     dp->cgi_nc = mg_add_sock(nc->mgr, fds[0], cgi_ev_handler);
-    dp->cgi_nc->user_data = nc;
+    dp->cgi_nc->proto_data = nc;
     nc->flags |= MG_F_USER_1;
     /* Push POST data to the CGI */
     if (n > 0 && n < nc->recv_mbuf.len) {
@@ -6763,8 +6763,7 @@ static void mg_mqtt_broker_handle_connect(struct mg_mqtt_broker *brk,
   /* TODO(mkm): check header (magic and version) */
 
   mg_mqtt_session_init(brk, s, nc);
-  s->user_data = nc->user_data;
-  nc->user_data = s;
+  nc->proto_data = s;
   mg_mqtt_add_session(s);
 
   mg_mqtt_connack(nc, MG_EV_MQTT_CONNACK_ACCEPTED);
@@ -6772,7 +6771,7 @@ static void mg_mqtt_broker_handle_connect(struct mg_mqtt_broker *brk,
 
 static void mg_mqtt_broker_handle_subscribe(struct mg_connection *nc,
                                             struct mg_mqtt_message *msg) {
-  struct mg_mqtt_session *ss = (struct mg_mqtt_session *) nc->user_data;
+  struct mg_mqtt_session *ss = (struct mg_mqtt_session *) nc->proto_data;
   uint8_t qoss[512];
   size_t qoss_len = 0;
   struct mg_str topic;
@@ -6837,9 +6836,9 @@ void mg_mqtt_broker(struct mg_connection *nc, int ev, void *data) {
   struct mg_mqtt_broker *brk;
 
   if (nc->listener) {
-    brk = (struct mg_mqtt_broker *) nc->listener->user_data;
+    brk = (struct mg_mqtt_broker *) nc->listener->proto_data;
   } else {
-    brk = (struct mg_mqtt_broker *) nc->user_data;
+    brk = (struct mg_mqtt_broker *) nc->proto_data;
   }
 
   switch (ev) {
@@ -6857,7 +6856,7 @@ void mg_mqtt_broker(struct mg_connection *nc, int ev, void *data) {
       break;
     case MG_EV_CLOSE:
       if (nc->listener) {
-        mg_mqtt_close_session((struct mg_mqtt_session *) nc->user_data);
+        mg_mqtt_close_session((struct mg_mqtt_session *) nc->proto_data);
       }
       break;
   }
@@ -7457,7 +7456,7 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
 
   DBG(("ev=%d", ev));
 
-  req = (struct mg_resolve_async_request *) nc->user_data;
+  req = (struct mg_resolve_async_request *) nc->proto_data;
 
   switch (ev) {
     case MG_EV_CONNECT:
@@ -7534,7 +7533,7 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
     free(req);
     return -1;
   }
-  dmg_nc->user_data = req;
+  dmg_nc->proto_data = req;
 
   return 0;
 }
