@@ -3696,7 +3696,7 @@ struct ws_mask_ctx {
   uint32_t mask;
 };
 
-static uint32_t ws_random_mask() {
+static uint32_t ws_random_mask(void) {
 /*
  * The spec requires WS client to generate hard to
  * guess mask keys. From RFC6455, Section 5.3:
@@ -3711,7 +3711,7 @@ static uint32_t ws_random_mask() {
  * mongoose use cases and thus can be disabled, e.g. when porting to a platform
  * that lacks random().
  */
-#if MG_DISABLE_WS_RANDOM_MASK
+#ifdef MG_DISABLE_WS_RANDOM_MASK
   return 0xefbeadde; /* generated with a random number generator, I swear */
 #else
   if (sizeof(long) >= 4) {
