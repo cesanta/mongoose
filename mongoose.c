@@ -1890,7 +1890,7 @@ void mg_mgr_init(struct mg_mgr *m, void *user_data) {
 }
 
 #ifdef MG_ENABLE_JAVASCRIPT
-static v7_val_t mg_send_js(struct v7 *v7, v7_val_t this_obj, v7_val_t args) {
+static v7_val_t mg_send_js(struct v7 *v7, v7_val_t args) {
   v7_val_t arg0 = v7_array_get(v7, args, 0);
   v7_val_t arg1 = v7_array_get(v7, args, 1);
   struct mg_connection *c = (struct mg_connection *) v7_to_foreign(arg0);
@@ -1900,8 +1900,6 @@ static v7_val_t mg_send_js(struct v7 *v7, v7_val_t this_obj, v7_val_t args) {
     const char *data = v7_to_string(v7, &arg1, &len);
     mg_send(c, data, len);
   }
-
-  (void) this_obj;
 
   return v7_create_number(len);
 }
