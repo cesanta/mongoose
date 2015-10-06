@@ -9,7 +9,7 @@ else ifeq ($(SSL), krypton)
 endif
 
 ifeq ($(JS), yes)
-	V7_PATH = ../../../v7
+	V7_PATH = ../../deps/v7
 	CFLAGS_EXTRA += -DMG_ENABLE_JAVASCRIPT -I $(V7_PATH) $(V7_PATH)/v7.c
 endif
 
