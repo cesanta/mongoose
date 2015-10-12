@@ -2399,6 +2399,7 @@ static struct mg_connection *accept_conn(struct mg_connection *ls) {
     c->proto_handler = ls->proto_handler;
     c->user_data = ls->user_data;
     c->recv_mbuf_limit = ls->recv_mbuf_limit;
+    c->sa = sa;
     if (c->ssl == NULL) { /* SSL connections need to perform handshake. */
       mg_call(c, MG_EV_ACCEPT, &sa);
     }
