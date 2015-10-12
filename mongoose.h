@@ -194,13 +194,17 @@ struct dirent *readdir(DIR *dir);
 #include <cc3200_libc.h>
 #include <cc3200_socket.h>
 
-#elif /* not CC3200 */ defined(MG_ESP8266) && defined(RTOS_SDK)
+#elif /* not CC3200 */ defined(MG_LWIP)
 
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
 #include <lwip/dns.h>
+
+#if defined(MG_ESP8266) && defined(RTOS_SDK)
 #include <esp_libc.h>
 #define random() os_random()
+#endif
+
 /* TODO(alashkin): check if zero is OK */
 #define SOMAXCONN 0
 #include <stdlib.h>

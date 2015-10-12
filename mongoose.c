@@ -2161,13 +2161,13 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int proto) {
   socklen_t sa_len =
       (sa->sa.sa_family == AF_INET) ? sizeof(sa->sin) : sizeof(sa->sin6);
   sock_t sock = INVALID_SOCKET;
-#if !defined(MG_CC3200) && !defined(RTOS_SDK)
+#if !defined(MG_CC3200) && !defined(MG_LWIP)
   int on = 1;
 #endif
 
   if ((sock = socket(sa->sa.sa_family, proto, 0)) != INVALID_SOCKET &&
 #if !defined(MG_CC3200) && \
-    !defined(RTOS_SDK) /* CC3200 nor ESP8266 don't support either */
+    !defined(MG_LWIP) /* CC3200 and LWIP don't support either */
 #if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE)
       /* "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE" http://goo.gl/RmrFTm */
       !setsockopt(sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (void *) &on,
@@ -2186,11 +2186,11 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int proto) {
        */
       !setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) &&
 #endif
-#endif /* !MG_CC3200 */
+#endif /* !MG_CC3200 && !MG_LWIP */
 
       !bind(sock, &sa->sa, sa_len) &&
       (proto == SOCK_DGRAM || listen(sock, SOMAXCONN) == 0)) {
-#if !defined(MG_CC3200) && !defined(RTOS_SDK) /* TODO(rojer): Fix this. */
+#if !defined(MG_CC3200) && !defined(MG_LWIP) /* TODO(rojer): Fix this. */
     mg_set_non_blocking_mode(sock);
     /* In case port was set to 0, get the real port number */
     (void) getsockname(sock, &sa->sa, &sa_len);
@@ -2530,8 +2530,8 @@ static void mg_write_to_socket(struct mg_connection *conn) {
   struct mbuf *io = &conn->send_mbuf;
   int n = 0;
 
-#ifdef RTOS_SDK
-  /* In ESP8266 RTOS_SDK we don't know if the socket is ready */
+#ifdef MG_LWIP
+  /* With LWIP we don't know if the socket is ready */
   if (io->len == 0) return;
 #endif
 
@@ -2895,8 +2895,8 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
       fd_flags |= _MG_F_FD_CAN_WRITE;
     }
 #endif
-#ifdef RTOS_SDK
-    /* In ESP8266 RTOS_SDK we don't get write events */
+#ifdef MG_LWIP
+    /* With LWIP socket emulation layer, we don't get write events */
     fd_flags |= _MG_F_FD_CAN_WRITE;
 #endif
     tmp = nc->next;
