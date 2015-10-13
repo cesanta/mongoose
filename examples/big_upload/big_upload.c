@@ -1,3 +1,6 @@
+// Copyright (c) 2015 Cesanta Software Limited
+// All rights reserved
+//
 // This example demonstrates how to handle very large requests without keeping
 // them in memory.
 
@@ -49,9 +52,9 @@ static void handle_recv(struct mg_connection *nc) {
       // This is the request that we don't want to buffer in memory.
 
       if (hm.body.len == (size_t) ~0 || hm.body.len == 0) {
-        mg_printf(nc,
+        mg_printf(nc, "%s",
                   "HTTP/1.1 411 Content-Length required\r\n"
-                  "Content-Lenght: 0\r\n\r\n");
+                  "Content-Length: 0\r\n\r\n");
         nc->flags |= MG_F_SEND_AND_CLOSE;
         return;
       }
@@ -66,9 +69,9 @@ static void handle_recv(struct mg_connection *nc) {
       data->bytes_left = hm.body.len;
       data->fp = tmpfile();
       if (data->fp == NULL) {
-        mg_printf(nc,
+        mg_printf(nc, "%s",
                   "HTTP/1.1 500 Failed to open a file\r\n"
-                  "Content-Lenght: 0\r\n\r\n");
+                  "Content-Length: 0\r\n\r\n");
         nc->flags |= MG_F_SEND_AND_CLOSE;
         return;
       }
