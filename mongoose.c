@@ -4309,6 +4309,13 @@ static void send_ssi_file(struct mg_connection *nc, const char *path, FILE *fp,
         /* Silently ignore unknown SSI directive. */
       }
       len = 0;
+    } else if (ch == '<') {
+      in_ssi_tag = 1;
+      if (len > 0) {
+        mg_send(nc, buf, (size_t) len);
+      }
+      len = 0;
+      buf[len++] = ch & 0xff;
     } else if (in_ssi_tag) {
       if (len == (int) btag.len && memcmp(buf, btag.p, btag.len) != 0) {
         /* Not an SSI tag */
@@ -4317,13 +4324,6 @@ static void send_ssi_file(struct mg_connection *nc, const char *path, FILE *fp,
         mg_printf(nc, "%s: SSI tag is too large", path);
         len = 0;
       }
-      buf[len++] = ch & 0xff;
-    } else if (ch == '<') {
-      in_ssi_tag = 1;
-      if (len > 0) {
-        mg_send(nc, buf, (size_t) len);
-      }
-      len = 0;
       buf[len++] = ch & 0xff;
     } else {
       buf[len++] = ch & 0xff;
