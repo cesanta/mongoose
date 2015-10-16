@@ -68,6 +68,7 @@
 #endif
 
 /*
+ * MSVC++ 14.0 _MSC_VER == 1900 (Visual Studio 2015)
  * MSVC++ 12.0 _MSC_VER == 1800 (Visual Studio 2013)
  * MSVC++ 11.0 _MSC_VER == 1700 (Visual Studio 2012)
  * MSVC++ 10.0 _MSC_VER == 1600 (Visual Studio 2010)
@@ -129,6 +130,7 @@
 #define __func__ __FILE__ ":" STR(__LINE__)
 #endif
 #define snprintf _snprintf
+#define fileno  _fileno
 #define vsnprintf _vsnprintf
 #define sleep(x) Sleep((x) *1000)
 #define to64(x) _atoi64(x)
