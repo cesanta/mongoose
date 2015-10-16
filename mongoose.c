@@ -1839,6 +1839,9 @@ static void mg_destroy_conn(struct mg_connection *conn) {
   if (conn->ssl_ctx != NULL) {
     SSL_CTX_free(conn->ssl_ctx);
   }
+  sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
+  EVP_cleanup();
+  CRYPTO_cleanup_all_ex_data();
 #endif
   MG_FREE(conn);
 }
