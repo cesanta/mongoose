@@ -2458,42 +2458,25 @@ static void mg_ssl_begin(struct mg_connection *nc) {
 }
 #endif /* MG_ENABLE_SSL */
 
-static void mg_read_from_socket(struct mg_connection *conn) {
-  char buf[MG_READ_BUFFER_SIZE];
-  int n = 0;
-
-  if (conn->flags & MG_F_CONNECTING) {
-    int ok = 1, ret;
-#if !defined(MG_CC3200) && !defined(MG_ESP8266)
-    socklen_t len = sizeof(ok);
-#endif
-
-    (void) ret;
-#if defined(MG_CC3200) || defined(MG_ESP8266)
-    /* On CC3200 and ESP8266 we use blocking connect. If we got as far as this,
-     * this means connect() was successful.
-     * TODO(rojer): Figure out why it fails where blocking succeeds.
-     */
-    mg_set_non_blocking_mode(conn->sock);
-    ret = ok = 0;
-#else
-    ret = getsockopt(conn->sock, SOL_SOCKET, SO_ERROR, (char *) &ok, &len);
-#endif
+static void mg_connect_done(struct mg_connection *conn, int err) {
 #ifdef MG_ENABLE_SSL
-    if (ret == 0 && ok == 0 && conn->ssl != NULL) {
-      mg_ssl_begin(conn);
-    }
-#endif
-    DBG(("%p connect ok=%d", conn, ok));
-    if (ok != 0) {
-      conn->flags |= MG_F_CLOSE_IMMEDIATELY;
-    } else {
-      conn->flags &= ~MG_F_CONNECTING;
-    }
-    mg_call(conn, MG_EV_CONNECT, &ok);
-    return;
+  if (err == 0 && conn->ssl != NULL) {
+    mg_ssl_begin(conn);
   }
+#endif
+  DBG(("%p connect, err=%d", conn, err));
+  if (err != 0) {
+    conn->flags |= MG_F_CLOSE_IMMEDIATELY;
+  } else {
+    conn->flags &= ~MG_F_CONNECTING;
+  }
+  mg_call(conn, MG_EV_CONNECT, &err);
+  return;
+}
 
+static void mg_read_from_socket(struct mg_connection *conn) {
+  int n = 0;
+  char buf[MG_READ_BUFFER_SIZE];
 #ifdef MG_ENABLE_SSL
   if (conn->ssl != NULL) {
     if (conn->flags & MG_F_SSL_HANDSHAKE_DONE) {
@@ -2630,7 +2613,21 @@ static void mg_mgr_handle_connection(struct mg_connection *nc, int fd_flags,
 
   if (nc->flags & MG_F_CONNECTING) {
     if (fd_flags != 0) {
-      mg_read_from_socket(nc);
+      int err = 1;
+#if !defined(MG_CC3200) && !defined(MG_ESP8266)
+      socklen_t len = sizeof(err);
+      int ret = getsockopt(nc->sock, SOL_SOCKET, SO_ERROR, (char *) &err, &len);
+      if (ret != 0) err = 1;
+#else
+      /* On CC3200 and ESP8266 we use blocking connect. If we got as far as
+       * this,
+       * this means connect() was successful.
+       * TODO(rojer): Figure out why it fails where blocking succeeds.
+       */
+      mg_set_non_blocking_mode(nc->sock);
+      err = 0;
+#endif
+      mg_connect_done(nc, err);
     }
     return;
   }
