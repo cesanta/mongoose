@@ -404,6 +404,22 @@ void MD5_Init(MD5_CTX *c);
 void MD5_Update(MD5_CTX *c, const unsigned char *data, size_t len);
 void MD5_Final(unsigned char *md, MD5_CTX *c);
 
+/*
+ * Return stringified MD5 hash for NULL terminated list of strings.
+ * Example:
+ *
+ *    char buf[33];
+ *    cs_md5(buf, "foo", "bar", NULL);
+ */
+char *cs_md5(char buf[33], ...);
+
+/*
+ * Stringify binary data. Output buffer size must be 2 * size_of_input + 1
+ * because each byte of input takes 2 bytes in string representation
+ * plus 1 byte for the terminating \0 character.
+ */
+void cs_to_hex(char *to, const unsigned char *p, size_t len);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
@@ -1259,10 +1275,11 @@ extern "C" {
 struct http_message {
   struct mg_str message; /* Whole message: request line + headers + body */
 
-  struct mg_str proto; /* "HTTP/1.1" -- for both request and response */
   /* HTTP Request line (or HTTP response line) */
   struct mg_str method; /* "GET" */
   struct mg_str uri;    /* "/my_file.html" */
+  struct mg_str proto;  /* "HTTP/1.1" -- for both request and response */
+
   /* For responses, code and response status message are set */
   int resp_code;
   struct mg_str resp_status_msg;
@@ -1561,6 +1578,9 @@ struct mg_serve_http_opts {
   /* List of index files. Default is "" */
   const char *index_files;
 
+  /* Path to a HTTP requests log file. Leave as NULL to disable access log. */
+  const char *access_log_file;
+
   /*
    * Leave as NULL to disable authentication.
    * To enable directory protection with authentication, set this to ".htpasswd"
@@ -1613,6 +1633,9 @@ struct mg_serve_http_opts {
 
   /* DAV document root. If NULL, DAV requests are going to fail. */
   const char *dav_document_root;
+
+  /* DAV passwords file. If NULL, DAV requests are going to fail. */
+  const char *dav_auth_file;
 
   /* Glob pattern for the files to hide. */
   const char *hidden_file_pattern;

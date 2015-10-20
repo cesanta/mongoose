@@ -662,6 +662,42 @@ void MD5_Final(unsigned char digest[16], MD5_CTX *ctx) {
   memset((char *) ctx, 0, sizeof(*ctx));
 }
 
+/*
+ * Stringify binary data. Output buffer size must be 2 * size_of_input + 1
+ * because each byte of input takes 2 bytes in string representation
+ * plus 1 byte for the terminating \0 character.
+ */
+void cs_to_hex(char *to, const unsigned char *p, size_t len) {
+  static const char *hex = "0123456789abcdef";
+
+  for (; len--; p++) {
+    *to++ = hex[p[0] >> 4];
+    *to++ = hex[p[0] & 0x0f];
+  }
+  *to = '\0';
+}
+
+char *cs_md5(char buf[33], ...) {
+  unsigned char hash[16];
+  const unsigned char *p;
+  va_list ap;
+  MD5_CTX ctx;
+
+  MD5_Init(&ctx);
+
+  va_start(ap, buf);
+  while ((p = va_arg(ap, const unsigned char *) ) != NULL) {
+    size_t len = va_arg(ap, size_t);
+    MD5_Update(&ctx, p, len);
+  }
+  va_end(ap);
+
+  MD5_Final(hash, &ctx);
+  cs_to_hex(buf, hash, sizeof(hash));
+
+  return buf;
+}
+
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
 #line 1 "src/../../common/base64.c"
@@ -3481,7 +3517,7 @@ static int get_request_len(const char *s, int buf_len) {
 static const char *parse_http_headers(const char *s, const char *end, int len,
                                       struct http_message *req) {
   int i;
-  for (i = 0; i < (int) ARRAY_SIZE(req->header_names); i++) {
+  for (i = 0; i < (int) ARRAY_SIZE(req->header_names) - 1; i++) {
     struct mg_str *k = &req->header_names[i], *v = &req->header_values[i];
 
     s = mg_skip(s, end, ": ", k);
@@ -3573,7 +3609,7 @@ int mg_parse_http(const char *s, int n, struct http_message *hm, int is_req) {
 struct mg_str *mg_get_http_header(struct http_message *hm, const char *name) {
   size_t i, len = strlen(name);
 
-  for (i = 0; i < ARRAY_SIZE(hm->header_names); i++) {
+  for (i = 0; hm->header_names[i].len > 0; i++) {
     struct mg_str *h = &hm->header_names[i], *v = &hm->header_values[i];
     if (h->p != NULL && h->len == len && !mg_ncasecmp(h->p, name, len))
       return v;
@@ -4619,9 +4655,10 @@ void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...) {
 int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
                          size_t buf_size) {
   int ch = ' ', ch1 = ',', len = 0, n = strlen(var_name);
-  const char *p, *end = hdr->p + hdr->len, *s = NULL;
+  const char *p, *end = hdr ? hdr->p + hdr->len : NULL, *s = NULL;
 
   if (buf != NULL && buf_size > 0) buf[0] = '\0';
+  if (hdr == NULL) return 0;
 
   /* Find where variable starts */
   for (s = hdr->p; s != NULL && s + n < end; s++) {
@@ -4663,66 +4700,6 @@ static int is_file_hidden(const char *path,
 }
 
 #ifndef MG_DISABLE_HTTP_DIGEST_AUTH
-static FILE *open_auth_file(const char *path, int is_directory,
-                            const struct mg_serve_http_opts *opts) {
-  char buf[MAX_PATH_SIZE];
-  const char *p;
-  FILE *fp = NULL;
-
-  if (opts->global_auth_file != NULL) {
-    fp = fopen(opts->global_auth_file, "r");
-  } else if (is_directory && opts->per_directory_auth_file) {
-    snprintf(buf, sizeof(buf), "%s%c%s", path, DIRSEP,
-             opts->per_directory_auth_file);
-    fp = fopen(buf, "r");
-  } else if (opts->per_directory_auth_file) {
-    if ((p = strrchr(path, '/')) == NULL && (p = strrchr(path, '\\')) == NULL) {
-      p = path;
-    }
-    snprintf(buf, sizeof(buf), "%.*s/%s", (int) (p - path), path,
-             opts->per_directory_auth_file);
-    fp = fopen(buf, "r");
-  }
-
-  return fp;
-}
-
-/*
- * Stringify binary data. Output buffer size must be 2 * size_of_input + 1
- * because each byte of input takes 2 bytes in string representation
- * plus 1 byte for the terminating \0 character.
- */
-static void bin2str(char *to, const unsigned char *p, size_t len) {
-  static const char *hex = "0123456789abcdef";
-
-  for (; len--; p++) {
-    *to++ = hex[p[0] >> 4];
-    *to++ = hex[p[0] & 0x0f];
-  }
-  *to = '\0';
-}
-
-static char *mg_md5(char *buf, ...) {
-  unsigned char hash[16];
-  const unsigned char *p;
-  va_list ap;
-  MD5_CTX ctx;
-
-  MD5_Init(&ctx);
-
-  va_start(ap, buf);
-  while ((p = va_arg(ap, const unsigned char *) ) != NULL) {
-    size_t len = va_arg(ap, size_t);
-    MD5_Update(&ctx, p, len);
-  }
-  va_end(ap);
-
-  MD5_Final(hash, &ctx);
-  bin2str(buf, hash, sizeof(hash));
-
-  return buf;
-}
-
 static void mkmd5resp(const char *method, size_t method_len, const char *uri,
                       size_t uri_len, const char *ha1, size_t ha1_len,
                       const char *nonce, size_t nonce_len, const char *nc,
@@ -4732,8 +4709,8 @@ static void mkmd5resp(const char *method, size_t method_len, const char *uri,
   static const size_t one = 1;
   char ha2[33];
 
-  mg_md5(ha2, method, method_len, colon, one, uri, uri_len, NULL);
-  mg_md5(resp, ha1, ha1_len, colon, one, nonce, nonce_len, colon, one, nc,
+  cs_md5(ha2, method, method_len, colon, one, uri, uri_len, NULL);
+  cs_md5(resp, ha1, ha1_len, colon, one, nonce, nonce_len, colon, one, nc,
          nc_len, colon, one, cnonce, cnonce_len, colon, one, qop, qop_len,
          colon, one, ha2, sizeof(ha2) - 1, NULL);
 }
@@ -4747,7 +4724,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
   char ha1[33], resp[33], cnonce[40];
 
   snprintf(cnonce, sizeof(cnonce), "%x", (unsigned int) time(NULL));
-  mg_md5(ha1, user, (size_t) strlen(user), colon, one, auth_domain,
+  cs_md5(ha1, user, (size_t) strlen(user), colon, one, auth_domain,
          (size_t) strlen(auth_domain), colon, one, passwd,
          (size_t) strlen(passwd), NULL);
   mkmd5resp(method, strlen(method), uri, strlen(uri), ha1, sizeof(ha1) - 1,
@@ -4820,26 +4797,47 @@ static int mg_http_check_digest_auth(struct http_message *hm,
 }
 
 static int is_authorized(struct http_message *hm, const char *path,
-                         int is_directory, struct mg_serve_http_opts *opts) {
+                         int is_directory, const char *domain,
+                         const char *passwords_file, int is_global_pass_file) {
+  char buf[MAX_PATH_SIZE];
+  const char *p;
   FILE *fp;
   int authorized = 1;
 
-  if (opts->auth_domain != NULL && (opts->per_directory_auth_file != NULL ||
-                                    opts->global_auth_file != NULL) &&
-      (fp = open_auth_file(path, is_directory, opts)) != NULL) {
-    authorized = mg_http_check_digest_auth(hm, opts->auth_domain, fp);
-    fclose(fp);
+  if (domain != NULL && passwords_file != NULL) {
+    if (is_global_pass_file) {
+      fp = fopen(passwords_file, "r");
+    } else if (is_directory) {
+      snprintf(buf, sizeof(buf), "%s%c%s", path, DIRSEP, passwords_file);
+      fp = fopen(buf, "r");
+    } else {
+      if ((p = strrchr(path, '/')) == NULL &&
+          (p = strrchr(path, '\\')) == NULL) {
+        p = path;
+      }
+      snprintf(buf, sizeof(buf), "%.*s/%s", (int) (p - path), path,
+               passwords_file);
+      fp = fopen(buf, "r");
+    }
+
+    if (fp != NULL) {
+      authorized = mg_http_check_digest_auth(hm, domain, fp);
+      fclose(fp);
+    }
   }
 
   return authorized;
 }
 #else
 static int is_authorized(struct http_message *hm, const char *path,
-                         int is_directory, struct mg_serve_http_opts *opts) {
+                         int is_directory, const char *domain,
+                         const char *passwords_file, int is_global_pass_file) {
   (void) hm;
   (void) path;
   (void) is_directory;
-  (void) opts;
+  (void) domain;
+  (void) passwords_file;
+  (void) is_global_pass_file;
   return 1;
 }
 #endif
@@ -5691,6 +5689,16 @@ static void handle_cgi(struct mg_connection *nc, const char *prog,
 }
 #endif
 
+static void mg_send_digest_auth_request(struct mg_connection *c,
+                                        const char *domain) {
+  mg_printf(c,
+            "HTTP/1.1 401 Unauthorized\r\n"
+            "WWW-Authenticate: Digest qop=\"auth\", "
+            "realm=\"%s\", nonce=\"%lu\"\r\n"
+            "Content-Length: 0\r\n\r\n",
+            domain, (unsigned long) time(NULL));
+}
+
 void mg_send_http_file(struct mg_connection *nc, char *path,
                        size_t path_buf_len, struct http_message *hm,
                        struct mg_serve_http_opts *opts) {
@@ -5706,13 +5714,11 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   } else if (is_dav && opts->dav_document_root == NULL) {
     send_http_error(nc, 501, NULL);
-  } else if (!is_authorized(hm, path, is_directory, opts)) {
-    mg_printf(nc,
-              "HTTP/1.1 401 Unauthorized\r\n"
-              "WWW-Authenticate: Digest qop=\"auth\", "
-              "realm=\"%s\", nonce=\"%lu\"\r\n"
-              "Content-Length: 0\r\n\r\n",
-              opts->auth_domain, (unsigned long) time(NULL));
+  } else if (!is_authorized(hm, path, is_directory, opts->auth_domain,
+                            opts->global_auth_file, 1) ||
+             !is_authorized(hm, path, is_directory, opts->auth_domain,
+                            opts->per_directory_auth_file, 0)) {
+    mg_send_digest_auth_request(nc, opts->auth_domain);
   } else if ((stat_result != 0 || is_file_hidden(path, opts)) && !is_dav) {
     mg_printf(nc, "%s", "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
   } else if (is_directory && path[strlen(path) - 1] != '/' && !is_dav) {
@@ -5723,6 +5729,13 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
 #ifndef MG_DISABLE_DAV
   } else if (!mg_vcmp(&hm->method, "PROPFIND")) {
     handle_propfind(nc, path, &st, hm, opts);
+#ifndef MG_DISABLE_DAV_AUTH
+  } else if (is_dav &&
+             (opts->dav_auth_file == NULL ||
+              !is_authorized(hm, path, is_directory, opts->auth_domain,
+                             opts->dav_auth_file, 1))) {
+    mg_send_digest_auth_request(nc, opts->auth_domain);
+#endif
   } else if (!mg_vcmp(&hm->method, "MKCOL")) {
     handle_mkcol(nc, path, hm);
   } else if (!mg_vcmp(&hm->method, "DELETE")) {
@@ -5756,6 +5769,7 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
 void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
                    struct mg_serve_http_opts opts) {
   char path[MG_MAX_PATH];
+  struct mg_str *hdr;
   uri_to_path(hm, path, sizeof(path), &opts);
   if (opts.per_directory_auth_file == NULL) {
     opts.per_directory_auth_file = ".htpasswd";
@@ -5773,6 +5787,15 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
     opts.index_files = "index.html,index.htm,index.shtml,index.cgi,index.php";
   }
   mg_send_http_file(nc, path, sizeof(path), hm, &opts);
+
+  /* Close connection for non-keep-alive requests */
+  if (mg_vcmp(&hm->proto, "HTTP/1.1") != 0 ||
+      ((hdr = mg_get_http_header(hm, "Connection")) != NULL &&
+       mg_vcmp(hdr, "keep-alive") != 0)) {
+#if 0
+    nc->flags |= MG_F_SEND_AND_CLOSE;
+#endif
+  }
 }
 
 #endif /* MG_DISABLE_FILESYSTEM */
