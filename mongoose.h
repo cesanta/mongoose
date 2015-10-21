@@ -2139,35 +2139,35 @@ extern "C" {
 
 #define MG_DNS_MESSAGE 100 /* High-level DNS message event */
 
-enum mg_dmg_resource_record_kind {
+enum mg_dns_resource_record_kind {
   MG_DNS_INVALID_RECORD = 0,
   MG_DNS_QUESTION,
   MG_DNS_ANSWER
 };
 
 /* DNS resource record. */
-struct mg_dmg_resource_record {
+struct mg_dns_resource_record {
   struct mg_str name; /* buffer with compressed name */
   int rtype;
   int rclass;
   int ttl;
-  enum mg_dmg_resource_record_kind kind;
+  enum mg_dns_resource_record_kind kind;
   struct mg_str rdata; /* protocol data (can be a compressed name) */
 };
 
 /* DNS message (request and response). */
-struct mg_dmg_message {
+struct mg_dns_message {
   struct mg_str pkt; /* packet body */
   uint16_t flags;
   uint16_t transaction_id;
   int num_questions;
   int num_answers;
-  struct mg_dmg_resource_record questions[MG_MAX_DNS_QUESTIONS];
-  struct mg_dmg_resource_record answers[MG_MAX_DNS_ANSWERS];
+  struct mg_dns_resource_record questions[MG_MAX_DNS_QUESTIONS];
+  struct mg_dns_resource_record answers[MG_MAX_DNS_ANSWERS];
 };
 
-struct mg_dmg_resource_record *mg_dmg_next_record(
-    struct mg_dmg_message *, int, struct mg_dmg_resource_record *);
+struct mg_dns_resource_record *mg_dns_next_record(
+    struct mg_dns_message *, int, struct mg_dns_resource_record *);
 
 /*
  * Parse the record data from a DNS resource record.
@@ -2180,20 +2180,20 @@ struct mg_dmg_resource_record *mg_dmg_next_record(
  *
  * TODO(mkm): MX
  */
-int mg_dmg_parse_record_data(struct mg_dmg_message *,
-                             struct mg_dmg_resource_record *, void *, size_t);
+int mg_dns_parse_record_data(struct mg_dns_message *,
+                             struct mg_dns_resource_record *, void *, size_t);
 
 /*
  * Send a DNS query to the remote end.
  */
-void mg_send_dmg_query(struct mg_connection *, const char *, int);
+void mg_send_dns_query(struct mg_connection *, const char *, int);
 
 /*
  * Insert a DNS header to an IO buffer.
  *
  * Return number of bytes inserted.
  */
-int mg_dmg_insert_header(struct mbuf *, size_t, struct mg_dmg_message *);
+int mg_dns_insert_header(struct mbuf *, size_t, struct mg_dns_message *);
 
 /*
  * Append already encoded body from an existing message.
@@ -2203,7 +2203,7 @@ int mg_dmg_insert_header(struct mbuf *, size_t, struct mg_dmg_message *);
  *
  * Return number of appened bytes.
  */
-int mg_dmg_copy_body(struct mbuf *, struct mg_dmg_message *);
+int mg_dns_copy_body(struct mbuf *, struct mg_dns_message *);
 
 /*
  * Encode and append a DNS resource record to an IO buffer.
@@ -2221,11 +2221,11 @@ int mg_dmg_copy_body(struct mbuf *, struct mg_dmg_message *);
  *
  * Return the number of bytes appened or -1 in case of error.
  */
-int mg_dmg_encode_record(struct mbuf *, struct mg_dmg_resource_record *,
+int mg_dns_encode_record(struct mbuf *, struct mg_dns_resource_record *,
                          const char *, size_t, const void *, size_t);
 
 /* Low-level: parses a DNS response. */
-int mg_parse_dns(const char *, int, struct mg_dmg_message *);
+int mg_parse_dns(const char *, int, struct mg_dns_message *);
 
 /*
  * Uncompress a DNS compressed name.
@@ -2240,7 +2240,7 @@ int mg_parse_dns(const char *, int, struct mg_dmg_message *);
  * If `dst_len` is 0 `dst` can be NULL.
  * Return the uncompressed name length.
  */
-size_t mg_dmg_uncompress_name(struct mg_dmg_message *, struct mg_str *, char *,
+size_t mg_dns_uncompress_name(struct mg_dns_message *, struct mg_str *, char *,
                               int);
 
 /*
@@ -2249,10 +2249,10 @@ size_t mg_dmg_uncompress_name(struct mg_dmg_message *, struct mg_str *, char *,
  * DNS event handler parses incoming UDP packets, treating them as DNS
  * requests. If incoming packet gets successfully parsed by the DNS event
  * handler, a user event handler will receive `MG_DNS_REQUEST` event, with
- * `ev_data` pointing to the parsed `struct mg_dmg_message`.
+ * `ev_data` pointing to the parsed `struct mg_dns_message`.
  *
  * See
- * https://github.com/cesanta/mongoose/tree/master/examples/captive_dmg_server[captive_dmg_server]
+ * https://github.com/cesanta/mongoose/tree/master/examples/captive_dns_server[captive_dns_server]
  * example on how to handle DNS request and send DNS reply.
  */
 void mg_set_protocol_dns(struct mg_connection *);
@@ -2284,8 +2284,8 @@ extern "C" {
 
 #define MG_DNS_SERVER_DEFAULT_TTL 3600
 
-struct mg_dmg_reply {
-  struct mg_dmg_message *msg;
+struct mg_dns_reply {
+  struct mg_dns_message *msg;
   struct mbuf *io;
   size_t start;
 };
@@ -2298,10 +2298,10 @@ struct mg_dmg_reply {
  * "reply + recursion allowed" will be added to the message flags and
  * message's num_answers will be set to 0.
  *
- * Answer records can be appended with `mg_dmg_send_reply` or by lower
+ * Answer records can be appended with `mg_dns_send_reply` or by lower
  * level function defined in the DNS API.
  *
- * In order to send the reply use `mg_dmg_send_reply`.
+ * In order to send the reply use `mg_dns_send_reply`.
  * It's possible to use a connection's send buffer as reply buffers,
  * and it will work for both UDP and TCP connections.
  *
@@ -2309,17 +2309,17 @@ struct mg_dmg_reply {
  *
  * [source,c]
  * -----
- * reply = mg_dmg_create_reply(&nc->send_mbuf, msg);
+ * reply = mg_dns_create_reply(&nc->send_mbuf, msg);
  * for (i = 0; i < msg->num_questions; i++) {
  *   rr = &msg->questions[i];
  *   if (rr->rtype == MG_DNS_A_RECORD) {
- *     mg_dmg_reply_record(&reply, rr, 3600, &dummy_ip_addr, 4);
+ *     mg_dns_reply_record(&reply, rr, 3600, &dummy_ip_addr, 4);
  *   }
  * }
- * mg_dmg_send_reply(nc, &reply);
+ * mg_dns_send_reply(nc, &reply);
  * -----
  */
-struct mg_dmg_reply mg_dmg_create_reply(struct mbuf *, struct mg_dmg_message *);
+struct mg_dns_reply mg_dns_create_reply(struct mbuf *, struct mg_dns_message *);
 
 /*
  * Append a DNS reply record to the IO buffer and to the DNS message.
@@ -2329,7 +2329,7 @@ struct mg_dmg_reply mg_dmg_create_reply(struct mbuf *, struct mg_dmg_message *);
  *
  * Returns -1 on error.
  */
-int mg_dmg_reply_record(struct mg_dmg_reply *, struct mg_dmg_resource_record *,
+int mg_dns_reply_record(struct mg_dns_reply *, struct mg_dns_resource_record *,
                         const char *, int, int, const void *, size_t);
 
 /*
@@ -2338,13 +2338,13 @@ int mg_dmg_reply_record(struct mg_dmg_reply *, struct mg_dmg_resource_record *,
  * The DNS data is stored in an IO buffer pointed by reply structure in `r`.
  * This function mutates the content of that buffer in order to ensure that
  * the DNS header reflects size and flags of the mssage, that might have been
- * updated either with `mg_dmg_reply_record` or by direct manipulation of
+ * updated either with `mg_dns_reply_record` or by direct manipulation of
  * `r->message`.
  *
  * Once sent, the IO buffer will be trimmed unless the reply IO buffer
  * is the connection's send buffer and the connection is not in UDP mode.
  */
-int mg_dmg_send_reply(struct mg_connection *, struct mg_dmg_reply *);
+int mg_dns_send_reply(struct mg_connection *, struct mg_dns_reply *);
 
 #ifdef __cplusplus
 }
@@ -2369,7 +2369,7 @@ int mg_dmg_send_reply(struct mg_connection *, struct mg_dmg_reply *);
 extern "C" {
 #endif /* __cplusplus */
 
-typedef void (*mg_resolve_callback_t)(struct mg_dmg_message *, void *);
+typedef void (*mg_resolve_callback_t)(struct mg_dns_message *, void *);
 
 /* Options for `mg_resolve_async_opt`. */
 struct mg_resolve_async_opts {
@@ -2395,14 +2395,14 @@ int mg_resolve_async(struct mg_mgr *, const char *, int, mg_resolve_callback_t,
  * will receive a NULL `msg`.
  *
  * The DNS answers can be extracted with `mg_next_record` and
- * `mg_dmg_parse_record_data`:
+ * `mg_dns_parse_record_data`:
  *
  * [source,c]
  * ----
  * struct in_addr ina;
- * struct mg_dmg_resource_record *rr = mg_next_record(msg, MG_DNS_A_RECORD,
+ * struct mg_dns_resource_record *rr = mg_next_record(msg, MG_DNS_A_RECORD,
  *   NULL);
- * mg_dmg_parse_record_data(msg, rr, &ina, sizeof(ina));
+ * mg_dns_parse_record_data(msg, rr, &ina, sizeof(ina));
  * ----
  */
 int mg_resolve_async_opt(struct mg_mgr *, const char *, int,

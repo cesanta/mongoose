@@ -3018,7 +3018,7 @@ MG_INTERNAL struct mg_connection *mg_finish_connect(struct mg_connection *nc,
  *    either failure (and dealloc the connection)
  *    or success (and proceed with connect()
  */
-static void resolve_cb(struct mg_dmg_message *msg, void *data) {
+static void resolve_cb(struct mg_dns_message *msg, void *data) {
   struct mg_connection *nc = (struct mg_connection *) data;
   int i;
   int failure = -1;
@@ -3034,7 +3034,7 @@ static void resolve_cb(struct mg_dmg_message *msg, void *data) {
          * Async resolver guarantees that there is at least one answer.
          * TODO(lsm): handle IPv6 answers too
          */
-        mg_dmg_parse_record_data(msg, &msg->answers[i], &nc->sa.sin.sin_addr,
+        mg_dns_parse_record_data(msg, &msg->answers[i], &nc->sa.sin.sin_addr,
                                  4);
         /* Make mg_finish_connect() trigger MG_EV_CONNECT on failure */
         nc->flags |= MG_F_CONNECTING;
@@ -6911,9 +6911,9 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 
 #define MAX_DNS_PACKET_LEN 2048
 
-static int mg_dmg_tid = 0xa0;
+static int mg_dns_tid = 0xa0;
 
-struct mg_dmg_header {
+struct mg_dns_header {
   uint16_t transaction_id;
   uint16_t flags;
   uint16_t num_questions;
@@ -6922,10 +6922,10 @@ struct mg_dmg_header {
   uint16_t num_other_prs;
 };
 
-struct mg_dmg_resource_record *mg_dmg_next_record(
-    struct mg_dmg_message *msg, int query,
-    struct mg_dmg_resource_record *prev) {
-  struct mg_dmg_resource_record *rr;
+struct mg_dns_resource_record *mg_dns_next_record(
+    struct mg_dns_message *msg, int query,
+    struct mg_dns_resource_record *prev) {
+  struct mg_dns_resource_record *rr;
 
   for (rr = (prev == NULL ? msg->answers : prev + 1);
        rr - msg->answers < msg->num_answers; rr++) {
@@ -6936,8 +6936,8 @@ struct mg_dmg_resource_record *mg_dmg_next_record(
   return NULL;
 }
 
-int mg_dmg_parse_record_data(struct mg_dmg_message *msg,
-                             struct mg_dmg_resource_record *rr, void *data,
+int mg_dns_parse_record_data(struct mg_dns_message *msg,
+                             struct mg_dns_resource_record *rr, void *data,
                              size_t data_len) {
   switch (rr->rtype) {
     case MG_DNS_A_RECORD:
@@ -6958,16 +6958,16 @@ int mg_dmg_parse_record_data(struct mg_dmg_message *msg,
       return 0;
 #endif
     case MG_DNS_CNAME_RECORD:
-      mg_dmg_uncompress_name(msg, &rr->rdata, (char *) data, data_len);
+      mg_dns_uncompress_name(msg, &rr->rdata, (char *) data, data_len);
       return 0;
   }
 
   return -1;
 }
 
-int mg_dmg_insert_header(struct mbuf *io, size_t pos,
-                         struct mg_dmg_message *msg) {
-  struct mg_dmg_header header;
+int mg_dns_insert_header(struct mbuf *io, size_t pos,
+                         struct mg_dns_message *msg) {
+  struct mg_dns_header header;
 
   memset(&header, 0, sizeof(header));
   header.transaction_id = msg->transaction_id;
@@ -6978,12 +6978,12 @@ int mg_dmg_insert_header(struct mbuf *io, size_t pos,
   return mbuf_insert(io, pos, &header, sizeof(header));
 }
 
-int mg_dmg_copy_body(struct mbuf *io, struct mg_dmg_message *msg) {
-  return mbuf_append(io, msg->pkt.p + sizeof(struct mg_dmg_header),
-                     msg->pkt.len - sizeof(struct mg_dmg_header));
+int mg_dns_copy_body(struct mbuf *io, struct mg_dns_message *msg) {
+  return mbuf_append(io, msg->pkt.p + sizeof(struct mg_dns_header),
+                     msg->pkt.len - sizeof(struct mg_dns_header));
 }
 
-static int mg_dmg_encode_name(struct mbuf *io, const char *name, size_t len) {
+static int mg_dns_encode_name(struct mbuf *io, const char *name, size_t len) {
   const char *s;
   unsigned char n;
   size_t pos = io->len;
@@ -7012,7 +7012,7 @@ static int mg_dmg_encode_name(struct mbuf *io, const char *name, size_t len) {
   return io->len - pos;
 }
 
-int mg_dmg_encode_record(struct mbuf *io, struct mg_dmg_resource_record *rr,
+int mg_dns_encode_record(struct mbuf *io, struct mg_dns_resource_record *rr,
                          const char *name, size_t nlen, const void *rdata,
                          size_t rlen) {
   size_t pos = io->len;
@@ -7023,7 +7023,7 @@ int mg_dmg_encode_record(struct mbuf *io, struct mg_dmg_resource_record *rr,
     return -1; /* LCOV_EXCL_LINE */
   }
 
-  if (mg_dmg_encode_name(io, name, nlen) == -1) {
+  if (mg_dns_encode_name(io, name, nlen) == -1) {
     return -1;
   }
 
@@ -7041,7 +7041,7 @@ int mg_dmg_encode_record(struct mbuf *io, struct mg_dmg_resource_record *rr,
       /* fill size after encoding */
       size_t off = io->len;
       mbuf_append(io, &u16, 2);
-      if ((clen = mg_dmg_encode_name(io, (const char *) rdata, rlen)) == -1) {
+      if ((clen = mg_dns_encode_name(io, (const char *) rdata, rlen)) == -1) {
         return -1;
       }
       u16 = clen;
@@ -7057,28 +7057,28 @@ int mg_dmg_encode_record(struct mbuf *io, struct mg_dmg_resource_record *rr,
   return io->len - pos;
 }
 
-void mg_send_dmg_query(struct mg_connection *nc, const char *name,
+void mg_send_dns_query(struct mg_connection *nc, const char *name,
                        int query_type) {
-  struct mg_dmg_message *msg =
-      (struct mg_dmg_message *) MG_CALLOC(1, sizeof(*msg));
+  struct mg_dns_message *msg =
+      (struct mg_dns_message *) MG_CALLOC(1, sizeof(*msg));
   struct mbuf pkt;
-  struct mg_dmg_resource_record *rr = &msg->questions[0];
+  struct mg_dns_resource_record *rr = &msg->questions[0];
 
   DBG(("%s %d", name, query_type));
 
   mbuf_init(&pkt, MAX_DNS_PACKET_LEN);
 
-  msg->transaction_id = ++mg_dmg_tid;
+  msg->transaction_id = ++mg_dns_tid;
   msg->flags = 0x100;
   msg->num_questions = 1;
 
-  mg_dmg_insert_header(&pkt, 0, msg);
+  mg_dns_insert_header(&pkt, 0, msg);
 
   rr->rtype = query_type;
   rr->rclass = 1; /* Class: inet */
   rr->kind = MG_DNS_QUESTION;
 
-  if (mg_dmg_encode_record(&pkt, rr, name, strlen(name), NULL, 0) == -1) {
+  if (mg_dns_encode_record(&pkt, rr, name, strlen(name), NULL, 0) == -1) {
     /* TODO(mkm): return an error code */
     goto cleanup; /* LCOV_EXCL_LINE */
   }
@@ -7096,8 +7096,8 @@ cleanup:
   MG_FREE(msg);
 }
 
-static unsigned char *mg_parse_dmg_resource_record(
-    unsigned char *data, unsigned char *end, struct mg_dmg_resource_record *rr,
+static unsigned char *mg_parse_dns_resource_record(
+    unsigned char *data, unsigned char *end, struct mg_dns_resource_record *rr,
     int reply) {
   unsigned char *name = data;
   int chunk_len, data_len;
@@ -7144,8 +7144,8 @@ static unsigned char *mg_parse_dmg_resource_record(
   return data;
 }
 
-int mg_parse_dns(const char *buf, int len, struct mg_dmg_message *msg) {
-  struct mg_dmg_header *header = (struct mg_dmg_header *) buf;
+int mg_parse_dns(const char *buf, int len, struct mg_dns_message *msg) {
+  struct mg_dns_header *header = (struct mg_dns_header *) buf;
   unsigned char *data = (unsigned char *) buf + sizeof(*header);
   unsigned char *end = (unsigned char *) buf + len;
   int i;
@@ -7163,17 +7163,17 @@ int mg_parse_dns(const char *buf, int len, struct mg_dmg_message *msg) {
 
   for (i = 0; i < msg->num_questions && i < (int) ARRAY_SIZE(msg->questions);
        i++) {
-    data = mg_parse_dmg_resource_record(data, end, &msg->questions[i], 0);
+    data = mg_parse_dns_resource_record(data, end, &msg->questions[i], 0);
   }
 
   for (i = 0; i < msg->num_answers && i < (int) ARRAY_SIZE(msg->answers); i++) {
-    data = mg_parse_dmg_resource_record(data, end, &msg->answers[i], 1);
+    data = mg_parse_dns_resource_record(data, end, &msg->answers[i], 1);
   }
 
   return 0;
 }
 
-size_t mg_dmg_uncompress_name(struct mg_dmg_message *msg, struct mg_str *name,
+size_t mg_dns_uncompress_name(struct mg_dns_message *msg, struct mg_str *name,
                               char *dst, int dst_len) {
   int chunk_len;
   char *old_dst = dst;
@@ -7222,9 +7222,9 @@ size_t mg_dmg_uncompress_name(struct mg_dmg_message *msg, struct mg_str *name,
   return dst - old_dst;
 }
 
-static void dmg_handler(struct mg_connection *nc, int ev, void *ev_data) {
+static void dns_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct mbuf *io = &nc->recv_mbuf;
-  struct mg_dmg_message msg;
+  struct mg_dns_message msg;
 
   /* Pass low-level events to the user handler */
   nc->handler(nc, ev, ev_data);
@@ -7238,7 +7238,7 @@ static void dmg_handler(struct mg_connection *nc, int ev, void *ev_data) {
         /* reply + recursion allowed + format error */
         memset(&msg, 0, sizeof(msg));
         msg.flags = 0x8081;
-        mg_dmg_insert_header(io, 0, &msg);
+        mg_dns_insert_header(io, 0, &msg);
         if (!(nc->flags & MG_F_UDP)) {
           uint16_t len = htons(io->len);
           mbuf_insert(io, 0, &len, 2);
@@ -7254,7 +7254,7 @@ static void dmg_handler(struct mg_connection *nc, int ev, void *ev_data) {
 }
 
 void mg_set_protocol_dns(struct mg_connection *nc) {
-  nc->proto_handler = dmg_handler;
+  nc->proto_handler = dns_handler;
 }
 
 #endif /* MG_DISABLE_DNS */
@@ -7271,24 +7271,24 @@ void mg_set_protocol_dns(struct mg_connection *nc) {
 
 /* Amalgamated: #include "internal.h" */
 
-struct mg_dmg_reply mg_dmg_create_reply(struct mbuf *io,
-                                        struct mg_dmg_message *msg) {
-  struct mg_dmg_reply rep;
+struct mg_dns_reply mg_dns_create_reply(struct mbuf *io,
+                                        struct mg_dns_message *msg) {
+  struct mg_dns_reply rep;
   rep.msg = msg;
   rep.io = io;
   rep.start = io->len;
 
   /* reply + recursion allowed */
   msg->flags |= 0x8080;
-  mg_dmg_copy_body(io, msg);
+  mg_dns_copy_body(io, msg);
 
   msg->num_answers = 0;
   return rep;
 }
 
-int mg_dmg_send_reply(struct mg_connection *nc, struct mg_dmg_reply *r) {
+int mg_dns_send_reply(struct mg_connection *nc, struct mg_dns_reply *r) {
   size_t sent = r->io->len - r->start;
-  mg_dmg_insert_header(r->io, r->start, r->msg);
+  mg_dns_insert_header(r->io, r->start, r->msg);
   if (!(nc->flags & MG_F_UDP)) {
     uint16_t len = htons(sent);
     mbuf_insert(r->io, r->start, &len, 2);
@@ -7301,13 +7301,13 @@ int mg_dmg_send_reply(struct mg_connection *nc, struct mg_dmg_reply *r) {
   return sent;
 }
 
-int mg_dmg_reply_record(struct mg_dmg_reply *reply,
-                        struct mg_dmg_resource_record *question,
+int mg_dns_reply_record(struct mg_dns_reply *reply,
+                        struct mg_dns_resource_record *question,
                         const char *name, int rtype, int ttl, const void *rdata,
                         size_t rdata_len) {
-  struct mg_dmg_message *msg = (struct mg_dmg_message *) reply->msg;
+  struct mg_dns_message *msg = (struct mg_dns_message *) reply->msg;
   char rname[512];
-  struct mg_dmg_resource_record *ans = &msg->answers[msg->num_answers];
+  struct mg_dns_resource_record *ans = &msg->answers[msg->num_answers];
   if (msg->num_answers >= MG_MAX_DNS_ANSWERS) {
     return -1; /* LCOV_EXCL_LINE */
   }
@@ -7315,7 +7315,7 @@ int mg_dmg_reply_record(struct mg_dmg_reply *reply,
   if (name == NULL) {
     name = rname;
     rname[511] = 0;
-    mg_dmg_uncompress_name(msg, &question->name, rname, sizeof(rname) - 1);
+    mg_dns_uncompress_name(msg, &question->name, rname, sizeof(rname) - 1);
   }
 
   *ans = *question;
@@ -7323,7 +7323,7 @@ int mg_dmg_reply_record(struct mg_dmg_reply *reply,
   ans->rtype = rtype;
   ans->ttl = ttl;
 
-  if (mg_dmg_encode_record(reply->io, ans, name, strlen(name), rdata,
+  if (mg_dns_encode_record(reply->io, ans, name, strlen(name), rdata,
                            rdata_len) == -1) {
     return -1; /* LCOV_EXCL_LINE */
   };
@@ -7350,9 +7350,9 @@ int mg_dmg_reply_record(struct mg_dmg_reply *reply,
 #define MG_DEFAULT_NAMESERVER "8.8.8.8"
 #endif
 
-static const char *mg_default_dmg_server = "udp://" MG_DEFAULT_NAMESERVER ":53";
+static const char *mg_default_dns_server = "udp://" MG_DEFAULT_NAMESERVER ":53";
 
-MG_INTERNAL char mg_dmg_server[256];
+MG_INTERNAL char mg_dns_server[256];
 
 struct mg_resolve_async_request {
   char name[1024];
@@ -7435,7 +7435,7 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
     (void) fclose(fp);
   }
 #else
-  snprintf(name, name_len, "%s", mg_default_dmg_server);
+  snprintf(name, name_len, "%s", mg_default_dns_server);
 #endif /* _WIN32 */
 
   return ret;
@@ -7480,7 +7480,7 @@ int mg_resolve_from_hosts_file(const char *name, union socket_address *usa) {
 static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
   time_t now = time(NULL);
   struct mg_resolve_async_request *req;
-  struct mg_dmg_message *msg;
+  struct mg_dns_message *msg;
 
   DBG(("ev=%d", ev));
 
@@ -7496,13 +7496,13 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
         break;
       }
       if (now - req->last_time > req->timeout) {
-        mg_send_dmg_query(nc, req->name, req->query);
+        mg_send_dns_query(nc, req->name, req->query);
         req->last_time = now;
         req->retries++;
       }
       break;
     case MG_EV_RECV:
-      msg = (struct mg_dmg_message *) MG_MALLOC(sizeof(*msg));
+      msg = (struct mg_dns_message *) MG_MALLOC(sizeof(*msg));
       if (mg_parse_dns(nc->recv_mbuf.buf, *(int *) data, msg) == 0 &&
           msg->num_answers > 0) {
         req->callback(msg, req->data);
@@ -7526,7 +7526,7 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
                          mg_resolve_callback_t cb, void *data,
                          struct mg_resolve_async_opts opts) {
   struct mg_resolve_async_request *req;
-  struct mg_connection *dmg_nc;
+  struct mg_connection *dns_nc;
   const char *nameserver = opts.nameserver_url;
 
   DBG(("%s %d", name, query));
@@ -7546,22 +7546,22 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
   req->timeout = opts.timeout ? opts.timeout : 5;
 
   /* Lazily initialize dns server */
-  if (nameserver == NULL && mg_dmg_server[0] == '\0' &&
-      mg_get_ip_address_of_nameserver(mg_dmg_server, sizeof(mg_dmg_server)) ==
+  if (nameserver == NULL && mg_dns_server[0] == '\0' &&
+      mg_get_ip_address_of_nameserver(mg_dns_server, sizeof(mg_dns_server)) ==
           -1) {
-    strncpy(mg_dmg_server, mg_default_dmg_server, sizeof(mg_dmg_server));
+    strncpy(mg_dns_server, mg_default_dns_server, sizeof(mg_dns_server));
   }
 
   if (nameserver == NULL) {
-    nameserver = mg_dmg_server;
+    nameserver = mg_dns_server;
   }
 
-  dmg_nc = mg_connect(mgr, nameserver, mg_resolve_async_eh);
-  if (dmg_nc == NULL) {
+  dns_nc = mg_connect(mgr, nameserver, mg_resolve_async_eh);
+  if (dns_nc == NULL) {
     free(req);
     return -1;
   }
-  dmg_nc->user_data = req;
+  dns_nc->user_data = req;
 
   return 0;
 }
