@@ -4442,6 +4442,7 @@ static void mg_send_http_file2(struct mg_connection *nc, const char *path,
     send_http_error(nc, 500, "Server Error");
   } else if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern),
                              path) > 0) {
+    nc->proto_data = (void *) dp;
     handle_ssi_request(nc, path, opts);
   } else {
     char etag[50], current_time[50], last_modified[50], range[50];
@@ -5625,7 +5626,7 @@ static void cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
       }
       break;
     case MG_EV_CLOSE:
-      free_http_proto_data(nc);
+      free_http_proto_data(cgi_nc);
       nc->flags |= MG_F_SEND_AND_CLOSE;
       nc->user_data = NULL;
       break;
@@ -5672,6 +5673,7 @@ static void handle_cgi(struct mg_connection *nc, const char *prog,
     dp->type = DATA_CGI;
     dp->cgi_nc = mg_add_sock(nc->mgr, fds[0], cgi_ev_handler);
     dp->cgi_nc->user_data = nc;
+    dp->cgi_nc->proto_data = dp;
     nc->flags |= MG_F_USER_1;
     /* Push POST data to the CGI */
     if (n > 0 && n < nc->recv_mbuf.len) {
@@ -6756,6 +6758,7 @@ static void mg_mqtt_destroy_session(struct mg_mqtt_session *s) {
   for (i = 0; i < s->num_subscriptions; i++) {
     MG_FREE((void *) s->subscriptions[i].topic);
   }
+  MG_FREE(s->subscriptions);
   MG_FREE(s);
 }
 
