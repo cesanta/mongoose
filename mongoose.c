@@ -5772,7 +5772,10 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
                    struct mg_serve_http_opts opts) {
   char path[MG_MAX_PATH];
   struct mg_str *hdr;
-  uri_to_path(hm, path, sizeof(path), &opts);
+
+  if (opts.document_root == NULL) {
+    opts.document_root = ".";
+  }
   if (opts.per_directory_auth_file == NULL) {
     opts.per_directory_auth_file = ".htpasswd";
   }
@@ -5788,6 +5791,8 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
   if (opts.index_files == NULL) {
     opts.index_files = "index.html,index.htm,index.shtml,index.cgi,index.php";
   }
+
+  uri_to_path(hm, path, sizeof(path), &opts);
   mg_send_http_file(nc, path, sizeof(path), hm, &opts);
 
   /* Close connection for non-keep-alive requests */
