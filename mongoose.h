@@ -605,11 +605,11 @@ typedef void *SSL_CTX;
 #endif
 
 #ifdef MG_USE_READ_WRITE
-#define MG_EV_RECV_FUNC(s, b, l, f) read(s, b, l)
-#define MG_EV_SEND_FUNC(s, b, l, f) write(s, b, l)
+#define MG_RECV_FUNC(s, b, l, f) read(s, b, l)
+#define MG_SEND_FUNC(s, b, l, f) write(s, b, l)
 #else
-#define MG_EV_RECV_FUNC(s, b, l, f) recv(s, b, l, f)
-#define MG_EV_SEND_FUNC(s, b, l, f) send(s, b, l, f)
+#define MG_RECV_FUNC(s, b, l, f) recv(s, b, l, f)
+#define MG_SEND_FUNC(s, b, l, f) send(s, b, l, f)
 #endif
 
 #ifdef __cplusplus
