@@ -239,7 +239,7 @@ struct dirent *readdir(DIR *dir);
 
 #define INVALID_SOCKET (-1)
 #define INT64_FMT PRId64
-#if defined(ESP8266) || defined(MG_ESP8266)
+#if defined(ESP8266) || defined(MG_ESP8266) || defined(MG_CC3200)
 #define SIZE_T_FMT "u"
 #else
 #define SIZE_T_FMT "zu"
