@@ -1,2 +1,15 @@
 language: c
-script: cd examples && make
+env:
+  global:
+   # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
+   #   via the "travis encrypt" command using the project repo's public key
+   - secure: "LsUJRE/2ggv+lQ2m4ZMt7qW/XYDd7Qx5vfN4x8eczNUh4chQuvhKO0QMUKIfau0R5Z2z9b7B1buwIs7vAFt+ajXXcd8nJ9Yhwzk86vAKtfT+mbawwOmexTAeMM/tlAWdkLyROnmElsN0X/DTwO4A26BX+JzPGvN7/4nazurOzUQoCPdAGq/deqxswARfFVP2LKfGE1YaFfL1XQ4e7jRLzc2LTijv6LQ8MEBwWagWo3JqlGVfVUAd9I4xAR2aYWfDPwAdXBd7D92bh37wQ8u/VamuNTz82jyLaAA0hvs/4oceFv/WsWInUuhcJ9WLgJa9+uuHUIVekhtF8h8Q3T4PLyCpFT7SxXCkADN3yv0/Ffzbl/3HJE81+LHy01rH/Od1LUZvqvq93DlIWtSfeTPHGGZGVi/RaUY7aOtxueQg/c4ZYSlbCgThJDuFQlKjNYbJz1aPXVlrxYQg75tGEeUFj3ertvbxzqVhXxDT09SMdH1otY/kQVM1TTXjGdRAFh61p5CHsbHslSN1ndhPaygqUlnKfdqHdIPCe2vPIPDkp7YTuh1uJSILTdJVBuxFdG2KDb8IJZXtCIgDkZ7Am52Wc1788Smbu+ee5YtrZ95wvlybfXTCXdx4Ys+mVO+zDgM0xqqujFJyrZBXTvYQzVEfdblkDsnNEIdRaBijYT07x4Y="
+
+addons:
+  coverity_scan:
+    project:
+      name: "kazan417/mongoose"
+      description: "Build submitted via Travis CI"
+    notification_email: kazan417@mail.ru
+    build_command:   "cd examples && make"
+    branch_pattern: master
