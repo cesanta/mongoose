@@ -1,6 +1,6 @@
 language: c
 
-script:   " tar czf cov-int.tgz examples/cov-int && curl --form token=S03wE83xL5BIpdLlQ_PKjA --form email=kazan417@mail.ru --form file=@cov-int.tgz --form version='Version' --form description='Description' https://scan.coverity.com/builds?project=kazan417%2Fmongoose"
+script:   "cd examples && tar czvf cov-int.tgz cov-int && curl --form token=S03wE83xL5BIpdLlQ_PKjA --form email=kazan417@mail.ru --form file=@cov-int.tgz --form version='Version' --form description='Description' https://scan.coverity.com/builds?project=kazan417%2Fmongoose"
 env:
   global:
    # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
