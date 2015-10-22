@@ -13,3 +13,4 @@ addons:
     notification_email: kazan417@mail.ru
     build_command:   "cd examples && make"
     branch_pattern: master
+    script:  "cd examples && make"
