@@ -13,6 +13,7 @@ addons:
       name: "kazan417/mongoose"
       description: "Build submitted via Travis CI"
     notification_email: kazan417@mail.ru
-    build_command:   "cd examples && make"
+    build_command_prepand: "cd examples"
+    build_command:   "make"
     branch_pattern: master
     script:  "cd examples && make"
