@@ -1,6 +1,6 @@
 language: c
-build_command:   "cd examples && make"
-script:   "cd examples && make"
+
+script:   "ls"
 env:
   global:
    # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
