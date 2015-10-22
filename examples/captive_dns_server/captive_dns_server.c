@@ -43,6 +43,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
        */
 
       mg_dns_send_reply(nc, &reply);
+      nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }
 }

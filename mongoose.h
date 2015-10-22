@@ -672,7 +672,8 @@ struct mg_connection {
   struct mg_connection *listener;    /* Set only for accept()-ed connections */
   struct mg_mgr *mgr;                /* Pointer to containing manager */
 
-  sock_t sock;             /* Socket to the remote peer */
+  sock_t sock; /* Socket to the remote peer */
+  int err;
   union socket_address sa; /* Remote peer address */
   size_t recv_mbuf_limit;  /* Max size of recv buffer */
   struct mbuf recv_mbuf;   /* Received data */
@@ -923,13 +924,11 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
 /*
  * Send data to the connection.
  *
- * Return number of written bytes. Note that sending
- * functions do not actually push data to the socket. They just append data
- * to the output buffer. The exception is UDP connections. For UDP, data is
- * sent immediately, and returned value indicates an actual number of bytes
- * sent to the socket.
+ * Note that sending functions do not actually push data to the socket.
+ * They just append data to the output buffer. MG_EV_SEND will be delivered when
+ * the data has actually been pushed out.
  */
-int mg_send(struct mg_connection *, const void *buf, int len);
+void mg_send(struct mg_connection *, const void *buf, int len);
 
 /* Enables format string warnings for mg_printf */
 #if defined(__GNUC__)
@@ -1013,6 +1012,57 @@ enum v7_err mg_enable_javascript(struct mg_mgr *m, struct v7 *v7,
 #endif /* __cplusplus */
 
 #endif /* MG_NET_HEADER_INCLUDED */
+#ifndef MG_NET_IF_HEADER_INCLUDED
+#define MG_NET_IF_HEADER_INCLUDED
+
+/*
+ * Internal async networking core interface.
+ * Consists of calls made by the core, which should not block,
+ * and callbacks back into the core ("..._cb").
+ * Callbacks may (will) cause methods to be invoked from within,
+ * but methods are not allowed to invoke callbacks inline.
+ *
+ * Implementation must ensure that only one callback is invoked at any time.
+ */
+
+/* Request that a TCP connection is made to the specified address. */
+void mg_if_connect_tcp(struct mg_connection *nc,
+                       const union socket_address *sa);
+/* Open a UDP socket. Doesn't actually connect anything. */
+void mg_if_connect_udp(struct mg_connection *nc);
+/* Callback invoked by connect methods. err = 0 -> ok, != 0 -> error. */
+void mg_if_connect_cb(struct mg_connection *nc, int err);
+
+/* Set up a listening TCP socket on a given address. rv = 0 -> ok. */
+int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa);
+/* Deliver a new TCP connection. */
+void mg_if_accept_tcp_cb(struct mg_connection *lc, sock_t sock,
+                         union socket_address *sa, size_t sa_len);
+
+/* Request that a "listening" UDP socket be created. */
+int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa);
+
+/* Send functions for TCP and UDP. Sent data is copied before return. */
+void mg_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len);
+void mg_if_udp_send(struct mg_connection *nc, const void *buf, size_t len);
+/* Callback that reports that data has been put on the wire. */
+void mg_if_sent_cb(struct mg_connection *nc, int num_sent);
+
+/*
+ * Receive callback.
+ * buf must be heap-allocated and ownership is transferred to the core.
+ * Core will acknowledge consumption by calling mg_if_recved.
+ * No more than one chunk of data can be unacknowledged at any time.
+ */
+void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len);
+void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
+                       union socket_address *sa, size_t sa_len);
+void mg_if_recved(struct mg_connection *nc, size_t len);
+
+/* Perform interface-related cleanup on connection before destruction. */
+void mg_if_destroy_conn(struct mg_connection *nc);
+
+#endif /* MG_NET_IF_HEADER_INCLUDED */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -2344,7 +2394,7 @@ int mg_dns_reply_record(struct mg_dns_reply *, struct mg_dns_resource_record *,
  * Once sent, the IO buffer will be trimmed unless the reply IO buffer
  * is the connection's send buffer and the connection is not in UDP mode.
  */
-int mg_dns_send_reply(struct mg_connection *, struct mg_dns_reply *);
+void mg_dns_send_reply(struct mg_connection *, struct mg_dns_reply *);
 
 #ifdef __cplusplus
 }
