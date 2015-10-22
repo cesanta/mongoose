@@ -1,6 +1,6 @@
 language: c
 
-script:   "ls examples/cov-int"
+script:   " tar cf cov-int.tar examples/cov-int && ls"
 env:
   global:
    # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
