@@ -921,7 +921,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst) {
 #if !(_XOPEN_SOURCE >= 700 || _POSIX_C_SOURCE >= 200809L) &&    \
         !(__DARWIN_C_LEVEL >= 200809L) && !defined(RTOS_SDK) || \
     defined(_WIN32)
-int strnlen(const char *s, size_t maxlen) {
+size_t strnlen(const char *s, size_t maxlen) {
   size_t l = 0;
   for (; l < maxlen && s[l] != '\0'; l++) {
   }
