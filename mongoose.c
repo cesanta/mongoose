@@ -2506,7 +2506,8 @@ static void resolve_cb(struct mg_dns_message *msg, void *data) {
 
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
                                  mg_event_handler_t callback) {
-  static struct mg_connect_opts opts;
+  struct mg_connect_opts opts;
+  memset(&opts, 0, sizeof(opts));
   return mg_connect_opt(mgr, address, callback, opts);
 }
 
@@ -2559,7 +2560,8 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
 
 struct mg_connection *mg_bind(struct mg_mgr *srv, const char *address,
                               mg_event_handler_t event_handler) {
-  static struct mg_bind_opts opts;
+  struct mg_bind_opts opts;
+  memset(&opts, 0, sizeof(opts));
   return mg_bind_opt(srv, address, event_handler, opts);
 }
 
@@ -3072,7 +3074,8 @@ static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
 
 struct mg_connection *mg_add_sock(struct mg_mgr *s, sock_t sock,
                                   mg_event_handler_t callback) {
-  static struct mg_add_sock_opts opts;
+  struct mg_add_sock_opts opts;
+  memset(&opts, 0, sizeof(opts));
   return mg_add_sock_opt(s, sock, callback, opts);
 }
 
@@ -7702,7 +7705,8 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
 
 int mg_resolve_async(struct mg_mgr *mgr, const char *name, int query,
                      mg_resolve_callback_t cb, void *data) {
-  static struct mg_resolve_async_opts opts;
+  struct mg_resolve_async_opts opts;
+  memset(&opts, 0, sizeof(opts));
   return mg_resolve_async_opt(mgr, name, query, cb, data, opts);
 }
 
