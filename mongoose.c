@@ -77,8 +77,6 @@ MG_INTERNAL void mg_forward(struct mg_connection *, struct mg_connection *);
 MG_INTERNAL void mg_add_conn(struct mg_mgr *mgr, struct mg_connection *c);
 MG_INTERNAL void mg_remove_conn(struct mg_connection *c);
 
-MG_INTERNAL void mg_set_sock(struct mg_connection *nc, sock_t sock);
-
 #ifndef MG_DISABLE_FILESYSTEM
 MG_INTERNAL int find_index_file(char *, size_t, const char *, cs_stat_t *);
 #endif
@@ -1793,10 +1791,10 @@ struct ctl_msg {
 int mg_is_error(int n);
 void mg_set_non_blocking_mode(sock_t sock);
 
-static void mg_ev_mgr_init(struct mg_mgr *mgr);
-static void mg_ev_mgr_free(struct mg_mgr *mgr);
-static void mg_ev_mgr_add_conn(struct mg_connection *nc);
-static void mg_ev_mgr_remove_conn(struct mg_connection *nc);
+extern void mg_ev_mgr_init(struct mg_mgr *mgr);
+extern void mg_ev_mgr_free(struct mg_mgr *mgr);
+extern void mg_ev_mgr_add_conn(struct mg_connection *nc);
+extern void mg_ev_mgr_remove_conn(struct mg_connection *nc);
 
 MG_INTERNAL void mg_add_conn(struct mg_mgr *mgr, struct mg_connection *c) {
   DBG(("%p %p", mgr, c));
@@ -1856,7 +1854,7 @@ static void mg_destroy_conn(struct mg_connection *conn) {
   MG_FREE(conn);
 }
 
-static void mg_close_conn(struct mg_connection *conn) {
+void mg_close_conn(struct mg_connection *conn) {
   DBG(("%p %lu", conn, conn->flags));
   if (!(conn->flags & MG_F_CONNECTING)) {
     mg_call(conn, MG_EV_CLOSE, NULL);
@@ -1928,8 +1926,10 @@ void mg_mgr_free(struct mg_mgr *m) {
   /* Do one last poll, see https://github.com/cesanta/mongoose/issues/286 */
   mg_mgr_poll(m, 0);
 
+#ifndef MG_DISABLE_SOCKETPAIR
   if (m->ctl[0] != INVALID_SOCKET) closesocket(m->ctl[0]);
   if (m->ctl[1] != INVALID_SOCKET) closesocket(m->ctl[1]);
+#endif
   m->ctl[0] = m->ctl[1] = INVALID_SOCKET;
 
   for (conn = m->active_connections; conn != NULL; conn = tmp_conn) {
@@ -1963,6 +1963,7 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   return len;
 }
 
+#ifndef MG_DISABLE_SYNC_RESOLVER
 /* TODO(lsm): use non-blocking resolver */
 static int mg_resolve2(const char *host, struct in_addr *ina) {
 #ifdef MG_ENABLE_GETADDRINFO
@@ -1998,6 +1999,7 @@ int mg_resolve(const char *host, char *buf, size_t n) {
   struct in_addr ad;
   return mg_resolve2(host, &ad) ? snprintf(buf, n, "%s", inet_ntoa(ad)) : 0;
 }
+#endif /* MG_DISABLE_SYNC_RESOLVER */
 
 MG_INTERNAL struct mg_connection *mg_create_connection(
     struct mg_mgr *mgr, mg_event_handler_t callback,
@@ -2266,16 +2268,15 @@ static int mg_ssl_err(struct mg_connection *conn, int res) {
 }
 #endif /* MG_ENABLE_SSL */
 
-void mg_if_accept_tcp_cb(struct mg_connection *lc, sock_t sock,
-                         union socket_address *sa, size_t sa_len) {
+int mg_if_accept_tcp_cb(struct mg_connection *lc, sock_t sock,
+                        union socket_address *sa, size_t sa_len) {
   struct mg_add_sock_opts opts;
   struct mg_connection *nc;
   (void) sa_len;
   memset(&opts, 0, sizeof(opts));
   nc = mg_create_connection(lc->mgr, lc->handler, opts);
   if (nc == NULL) {
-    closesocket(sock);
-    return;
+    return -ENOMEM;
   }
   nc->listener = lc;
   nc->proto_data = lc->proto_data;
@@ -2283,7 +2284,7 @@ void mg_if_accept_tcp_cb(struct mg_connection *lc, sock_t sock,
   nc->user_data = lc->user_data;
   nc->recv_mbuf_limit = lc->recv_mbuf_limit;
   nc->sa = *sa;
-  mg_set_sock(nc, sock); /* XXX */
+  mg_if_set_sock(nc, sock); /* XXX */
   mg_add_conn(nc->mgr, nc);
 #ifdef MG_ENABLE_SSL
   if (lc->ssl_ctx != NULL) {
@@ -2299,6 +2300,7 @@ void mg_if_accept_tcp_cb(struct mg_connection *lc, sock_t sock,
   }
   DBG(("%p %p %d %d, %p %p", lc, nc, nc->sock, (int) nc->flags, lc->ssl_ctx,
        nc->ssl));
+  return 0;
 }
 
 static size_t recv_avail_size(struct mg_connection *conn, size_t max) {
@@ -2605,6 +2607,7 @@ struct mg_connection *mg_next(struct mg_mgr *s, struct mg_connection *conn) {
   return conn == NULL ? s->active_connections : conn->next;
 }
 
+#ifndef MG_DISABLE_SOCKETPAIR
 void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
                   size_t len) {
   struct ctl_msg ctl_msg;
@@ -2628,6 +2631,7 @@ void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
     (void) dummy; /* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25509 */
   }
 }
+#endif /* MG_DISABLE_SOCKETPAIR */
 
 static int isbyte(int n) {
   return n >= 0 && n <= 255;
@@ -2681,6 +2685,8 @@ void mg_forward(struct mg_connection *from, struct mg_connection *to) {
 #line 1 "src/net_if_socket.c"
 /**/
 #endif
+#ifndef MG_DISABLE_SOCKET_IF
+
 /* Amalgamated: #include "internal.h" */
 
 #define MG_TCP_RECV_BUFFER_SIZE 1024
@@ -2747,14 +2753,14 @@ void mg_if_connect_udp(struct mg_connection *nc) {
 int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   sock_t sock = mg_open_listening_socket(sa, SOCK_STREAM);
   if (sock < 0) return (errno ? errno : 1);
-  mg_set_sock(nc, sock);
+  mg_if_set_sock(nc, sock);
   return 0;
 }
 
 int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
   sock_t sock = mg_open_listening_socket(sa, SOCK_DGRAM);
   if (sock < 0) return (errno ? errno : 1);
-  mg_set_sock(nc, sock);
+  mg_if_set_sock(nc, sock);
   return 0;
 }
 
@@ -2803,7 +2809,9 @@ static void mg_accept_conn(struct mg_connection *lc) {
     DBG(("%p: failed to accept: %d", lc, errno));
     return;
   }
-  mg_if_accept_tcp_cb(lc, sock, &sa, sa_len);
+  if (mg_if_accept_tcp_cb(lc, sock, &sa, sa_len) != 0) {
+    closesocket(sock);
+  }
 }
 
 /* 'sa' must be an initialized address to bind to */
@@ -3073,14 +3081,14 @@ struct mg_connection *mg_add_sock_opt(struct mg_mgr *s, sock_t sock,
                                       struct mg_add_sock_opts opts) {
   struct mg_connection *nc = mg_create_connection(s, callback, opts);
   if (nc != NULL) {
-    mg_set_sock(nc, sock);
+    mg_if_set_sock(nc, sock);
     mg_add_conn(nc->mgr, nc);
   }
   return nc;
 }
 
 /* Associate a socket to a connection. */
-MG_INTERNAL void mg_set_sock(struct mg_connection *nc, sock_t sock) {
+void mg_if_set_sock(struct mg_connection *nc, sock_t sock) {
   mg_set_non_blocking_mode(sock);
   mg_set_close_on_exec(sock);
   nc->sock = sock;
@@ -3097,15 +3105,15 @@ MG_INTERNAL void mg_set_sock(struct mg_connection *nc, sock_t sock) {
 #define _MG_EPF_EV_EPOLLOUT (1 << 1)
 #define _MG_EPF_NO_POLL (1 << 2)
 
-static uint32_t mg_epf_to_evflags(unsigned int epf) {
+uint32_t mg_epf_to_evflags(unsigned int epf) {
   uint32_t result = 0;
   if (epf & _MG_EPF_EV_EPOLLIN) result |= EPOLLIN;
   if (epf & _MG_EPF_EV_EPOLLOUT) result |= EPOLLOUT;
   return result;
 }
 
-static void mg_ev_mgr_epoll_set_flags(const struct mg_connection *nc,
-                                      struct epoll_event *ev) {
+void mg_ev_mgr_epoll_set_flags(const struct mg_connection *nc,
+                               struct epoll_event *ev) {
   /* NOTE: EPOLLERR and EPOLLHUP are always enabled. */
   ev->events = 0;
   if ((nc->flags & MG_F_LISTENING) || nc->recv_mbuf.len < nc->recv_mbuf_limit) {
@@ -3117,7 +3125,7 @@ static void mg_ev_mgr_epoll_set_flags(const struct mg_connection *nc,
   }
 }
 
-static void mg_ev_mgr_epoll_ctl(struct mg_connection *nc, int op) {
+void mg_ev_mgr_epoll_ctl(struct mg_connection *nc, int op) {
   int epoll_fd = (intptr_t) nc->mgr->mgr_data;
   struct epoll_event ev;
   assert(op == EPOLL_CTL_ADD || op == EPOLL_CTL_MOD || EPOLL_CTL_DEL);
@@ -3137,7 +3145,7 @@ static void mg_ev_mgr_epoll_ctl(struct mg_connection *nc, int op) {
   }
 }
 
-static void mg_ev_mgr_init(struct mg_mgr *mgr) {
+void mg_ev_mgr_init(struct mg_mgr *mgr) {
   int epoll_fd;
   DBG(("%p using epoll()", mgr));
 #ifndef MG_DISABLE_SOCKETPAIR
@@ -3162,18 +3170,18 @@ static void mg_ev_mgr_init(struct mg_mgr *mgr) {
   }
 }
 
-static void mg_ev_mgr_free(struct mg_mgr *mgr) {
+void mg_ev_mgr_free(struct mg_mgr *mgr) {
   int epoll_fd = (intptr_t) mgr->mgr_data;
   close(epoll_fd);
 }
 
-static void mg_ev_mgr_add_conn(struct mg_connection *nc) {
+void mg_ev_mgr_add_conn(struct mg_connection *nc) {
   if (!(nc->flags & MG_F_UDP) || nc->listener == NULL) {
     mg_ev_mgr_epoll_ctl(nc, EPOLL_CTL_ADD);
   }
 }
 
-static void mg_ev_mgr_remove_conn(struct mg_connection *nc) {
+void mg_ev_mgr_remove_conn(struct mg_connection *nc) {
   if (!(nc->flags & MG_F_UDP) || nc->listener == NULL) {
     mg_ev_mgr_epoll_ctl(nc, EPOLL_CTL_DEL);
   }
@@ -3236,7 +3244,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
 
 #else /* select() */
 
-static void mg_ev_mgr_init(struct mg_mgr *mgr) {
+void mg_ev_mgr_init(struct mg_mgr *mgr) {
   (void) mgr;
   DBG(("%p using select()", mgr));
 #ifndef MG_DISABLE_SOCKETPAIR
@@ -3246,19 +3254,19 @@ static void mg_ev_mgr_init(struct mg_mgr *mgr) {
 #endif
 }
 
-static void mg_ev_mgr_free(struct mg_mgr *mgr) {
+void mg_ev_mgr_free(struct mg_mgr *mgr) {
   (void) mgr;
 }
 
-static void mg_ev_mgr_add_conn(struct mg_connection *nc) {
+void mg_ev_mgr_add_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
-static void mg_ev_mgr_remove_conn(struct mg_connection *nc) {
+void mg_ev_mgr_remove_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
-static void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
+void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   if (sock != INVALID_SOCKET) {
     FD_SET(sock, set);
     if (*max_fd == INVALID_SOCKET || sock > *max_fd) {
@@ -3396,6 +3404,25 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
   return ret;
 }
 #endif /* MG_DISABLE_SOCKETPAIR */
+
+void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
+  union socket_address sa;
+#ifndef MG_CC3200
+  socklen_t slen = sizeof(sa);
+#endif
+
+  memset(&sa, 0, sizeof(sa));
+#ifndef MG_CC3200
+  if (flags & MG_SOCK_STRINGIFY_REMOTE) {
+    getpeername(sock, &sa.sa, &slen);
+  } else {
+    getsockname(sock, &sa.sa, &slen);
+  }
+#endif
+  mg_sock_addr_to_str(&sa, buf, len, flags);
+}
+
+#endif /* !MG_DISABLE_SOCKET_IF */
 #ifdef NS_MODULE_LINES
 #line 1 "src/multithreading.c"
 /**/
@@ -6209,23 +6236,6 @@ void mg_set_close_on_exec(sock_t sock) {
 #endif
 }
 
-void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
-  union socket_address sa;
-#ifndef MG_CC3200
-  socklen_t slen = sizeof(sa);
-#endif
-
-  memset(&sa, 0, sizeof(sa));
-#ifndef MG_CC3200
-  if (flags & MG_SOCK_STRINGIFY_REMOTE) {
-    getpeername(sock, &sa.sa, &slen);
-  } else {
-    getsockname(sock, &sa.sa, &slen);
-  }
-#endif
-  mg_sock_addr_to_str(&sa, buf, len, flags);
-}
-
 void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
                          int flags) {
   int is_v6;
@@ -7684,8 +7694,8 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
         req->callback(NULL, req->data);
       }
       MG_FREE(req);
-      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
       MG_FREE(msg);
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
       break;
   }
 }

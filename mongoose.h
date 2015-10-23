@@ -21,6 +21,11 @@
  */
 
 #define MG_VERSION "6.0"
+
+/* Local tweaks, applied before any of Mongoose's own headers. */
+#ifdef MG_LOCALS
+#include <mg_locals.h>
+#endif
 /*
  * Copyright (c) 2015 Cesanta Software Limited
  * All rights reserved
@@ -742,6 +747,7 @@ void mg_mgr_free(struct mg_mgr *);
  */
 time_t mg_mgr_poll(struct mg_mgr *, int milli);
 
+#ifndef MG_DISABLE_SOCKETPAIR
 /*
  * Pass a message of a given length to all connections.
  *
@@ -755,6 +761,7 @@ time_t mg_mgr_poll(struct mg_mgr *, int milli);
  * by `MG_CTL_MSG_MESSAGE_SIZE` which is set to 8192 bytes.
  */
 void mg_broadcast(struct mg_mgr *, mg_event_handler_t func, void *, size_t);
+#endif
 
 /*
  * Iterate over all active connections.
@@ -963,7 +970,9 @@ int mg_socketpair(sock_t[2], int sock_type);
  * CAUTION: this function can block.
  * Return 1 on success, 0 on failure.
  */
+#ifndef MG_DISABLE_SYNC_RESOLVER
 int mg_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
+#endif
 
 /*
  * Verify given IP address against the ACL.
@@ -1035,9 +1044,10 @@ void mg_if_connect_cb(struct mg_connection *nc, int err);
 
 /* Set up a listening TCP socket on a given address. rv = 0 -> ok. */
 int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa);
-/* Deliver a new TCP connection. */
-void mg_if_accept_tcp_cb(struct mg_connection *lc, sock_t sock,
-                         union socket_address *sa, size_t sa_len);
+/* Deliver a new TCP connection. Returns != 0 in case on error (unable to
+ * create connection, in which case interface state should be removed. */
+int mg_if_accept_tcp_cb(struct mg_connection *lc, sock_t sock,
+                        union socket_address *sa, size_t sa_len);
 
 /* Request that a "listening" UDP socket be created. */
 int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa);
@@ -1061,6 +1071,10 @@ void mg_if_recved(struct mg_connection *nc, size_t len);
 
 /* Perform interface-related cleanup on connection before destruction. */
 void mg_if_destroy_conn(struct mg_connection *nc);
+
+void mg_if_set_sock(struct mg_connection *nc, sock_t sock);
+
+void mg_close_conn(struct mg_connection *nc);
 
 #endif /* MG_NET_IF_HEADER_INCLUDED */
 /*
