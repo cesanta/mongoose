@@ -5969,9 +5969,10 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
                                       const char *url,
                                       const char *extra_headers,
                                       const char *post_data) {
-  struct mg_connection *nc;
-  char addr[1100], path[4096]; /* NOTE: keep sizes in sync with sscanf below */
-  int use_ssl = 0, addr_len = 0;
+  struct mg_connection *nc = NULL;
+  char *addr = NULL;
+  const char *path = NULL;
+  int use_ssl = 0, addr_len = 0, port_i = -1;
 
   if (memcmp(url, "http://", 7) == 0) {
     url += 7;
@@ -5983,15 +5984,32 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
 #endif
   }
 
-  addr[0] = path[0] = '\0';
-
-  /* addr buffer size made smaller to allow for port to be prepended */
-  sscanf(url, "%1095[^/]/%4095s", addr, path);
-  if (strchr(addr, ':') == NULL) {
-    addr_len = strlen(addr);
-    strncat(addr, use_ssl ? ":443" : ":80", sizeof(addr) - (addr_len + 1));
+  while (*url != '\0') {
+    addr = (char *) MG_REALLOC(addr, addr_len + 5 /* space for port too. */);
+    if (addr == NULL) {
+      DBG(("OOM"));
+      return NULL;
+    }
+    if (*url == '/') {
+      url++;
+      break;
+    }
+    if (*url == ':') port_i = addr_len;
+    addr[addr_len++] = *url;
+    addr[addr_len] = '\0';
+    url++;
+  }
+  if (addr_len == 0) goto cleanup;
+  if (port_i < 0) {
+    port_i = addr_len;
+    strcpy(addr + port_i, use_ssl ? ":443" : ":80");
+  } else {
+    port_i = -1;
   }
 
+  if (path == NULL) path = url;
+
+  DBG(("%s %s", addr, path));
   if ((nc = mg_connect(mgr, addr, ev_handler)) != NULL) {
     mg_set_protocol_http_websocket(nc);
 
@@ -6001,10 +6019,8 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
 #endif
     }
 
-    if (addr_len) {
-      /* Do not add port. See https://github.com/cesanta/mongoose/pull/304 */
-      addr[addr_len] = '\0';
-    }
+    /* If the port was addred by us, restore the original host. */
+    if (port_i >= 0) addr[port_i] = '\0';
     mg_printf(nc, "%s /%s HTTP/1.1\r\nHost: %s\r\nContent-Length: %" SIZE_T_FMT
                   "\r\n%s\r\n%s",
               post_data == NULL ? "GET" : "POST", path, addr,
@@ -6013,6 +6029,8 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
               post_data == NULL ? "" : post_data);
   }
 
+cleanup:
+  MG_FREE(addr);
   return nc;
 }
 
