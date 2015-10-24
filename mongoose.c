@@ -4023,7 +4023,7 @@ void mg_send_websocket_framev(struct mg_connection *nc, int op,
 
 void mg_printf_websocket_frame(struct mg_connection *nc, int op,
                                const char *fmt, ...) {
-  char mem[4192], *buf = mem;
+  char mem[BUFSIZ], *buf = mem;
   va_list ap;
   int len;
 
@@ -6329,7 +6329,7 @@ int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
       va_end(ap_copy);
     }
     /* LCOV_EXCL_STOP */
-  } else if (len > (int) size) {
+  } else if (len >= (int) size) {
     /* Standard-compliant code path. Allocate a buffer that is large enough. */
     if ((*buf = (char *) MG_MALLOC(len + 1)) == NULL) {
       len = -1; /* LCOV_EXCL_LINE */
