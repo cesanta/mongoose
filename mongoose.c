@@ -4248,9 +4248,28 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
   return body_len;
 }
 
-static void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
-  struct mbuf *io = &nc->recv_mbuf;
+/*
+ * lx106 compiler has a bug (TODO(mkm) report and insert tracking bug here)
+ * If a big structure is declared in a big function, lx106 gcc will make it
+ * even bigger (round up to 4k, from 700 bytes of actual size).
+ */
+#ifdef MG_ESP8266
+static void http_handler2(struct mg_connection *nc, int ev, void *ev_data,
+                          struct http_message *hm);
+
+void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message hm;
+  http_handler2(nc, ev, ev_data, &hm);
+}
+
+static void http_handler2(struct mg_connection *nc, int ev, void *ev_data,
+                          struct http_message *hm) {
+#else
+void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
+  struct http_message shm;
+  struct http_message *hm = &shm;
+#endif
+  struct mbuf *io = &nc->recv_mbuf;
   int req_len;
   const int is_req = (nc->listener != NULL);
 #ifndef MG_DISABLE_HTTP_WEBSOCKET
@@ -4261,10 +4280,10 @@ static void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
      * For HTTP messages without Content-Length, always send HTTP message
      * before MG_EV_CLOSE message.
      */
-    if (io->len > 0 && mg_parse_http(io->buf, io->len, &hm, is_req) > 0) {
-      hm.message.len = io->len;
-      hm.body.len = io->buf + io->len - hm.body.p;
-      nc->handler(nc, is_req ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY, &hm);
+    if (io->len > 0 && mg_parse_http(io->buf, io->len, hm, is_req) > 0) {
+      hm->message.len = io->len;
+      hm->body.len = io->buf + io->len - hm->body.p;
+      nc->handler(nc, is_req ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY, hm);
     }
     free_http_proto_data(nc);
   }
@@ -4277,12 +4296,12 @@ static void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
   if (ev == MG_EV_RECV) {
     struct mg_str *s;
-    req_len = mg_parse_http(io->buf, io->len, &hm, is_req);
+    req_len = mg_parse_http(io->buf, io->len, hm, is_req);
 
     if (req_len > 0 &&
-        (s = mg_get_http_header(&hm, "Transfer-Encoding")) != NULL &&
+        (s = mg_get_http_header(hm, "Transfer-Encoding")) != NULL &&
         mg_vcasecmp(s, "chunked") == 0) {
-      mg_handle_chunked(nc, &hm, io->buf + req_len, io->len - req_len);
+      mg_handle_chunked(nc, hm, io->buf + req_len, io->len - req_len);
     }
 
     if (req_len < 0 || (req_len == 0 && io->len >= MG_MAX_HTTP_REQUEST_SIZE)) {
@@ -4292,7 +4311,7 @@ static void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
     }
 #ifndef MG_DISABLE_HTTP_WEBSOCKET
     else if (nc->listener == NULL &&
-             mg_get_http_header(&hm, "Sec-WebSocket-Accept")) {
+             mg_get_http_header(hm, "Sec-WebSocket-Accept")) {
       /* We're websocket client, got handshake response from server. */
       /* TODO(lsm): check the validity of accept Sec-WebSocket-Accept */
       mbuf_remove(io, req_len);
@@ -4301,14 +4320,14 @@ static void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
       nc->handler(nc, MG_EV_WEBSOCKET_HANDSHAKE_DONE, NULL);
       websocket_handler(nc, MG_EV_RECV, ev_data);
     } else if (nc->listener != NULL &&
-               (vec = mg_get_http_header(&hm, "Sec-WebSocket-Key")) != NULL) {
+               (vec = mg_get_http_header(hm, "Sec-WebSocket-Key")) != NULL) {
       /* This is a websocket request. Switch protocol handlers. */
       mbuf_remove(io, req_len);
       nc->proto_handler = websocket_handler;
       nc->flags |= MG_F_IS_WEBSOCKET;
 
       /* Send handshake */
-      nc->handler(nc, MG_EV_WEBSOCKET_HANDSHAKE_REQUEST, &hm);
+      nc->handler(nc, MG_EV_WEBSOCKET_HANDSHAKE_REQUEST, hm);
       if (!(nc->flags & MG_F_CLOSE_IMMEDIATELY)) {
         if (nc->send_mbuf.len == 0) {
           ws_handshake(nc, vec);
@@ -4318,7 +4337,7 @@ static void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
       }
     }
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
-    else if (hm.message.len <= io->len) {
+    else if (hm->message.len <= io->len) {
       int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
 
 /* Whole HTTP message is fully buffered, call event handler */
@@ -4341,15 +4360,15 @@ static void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
         /* Populate request object */
         v7_set(v7, req, "method", ~0, 0,
-               v7_create_string(v7, hm.method.p, hm.method.len, 1));
+               v7_create_string(v7, hm->method.p, hm->method.len, 1));
         v7_set(v7, req, "uri", ~0, 0,
-               v7_create_string(v7, hm.uri.p, hm.uri.len, 1));
+               v7_create_string(v7, hm->uri.p, hm->uri.len, 1));
         v7_set(v7, req, "body", ~0, 0,
-               v7_create_string(v7, hm.body.p, hm.body.len, 1));
+               v7_create_string(v7, hm->body.p, hm->body.len, 1));
         v7_set(v7, req, "headers", ~0, 0, headers);
-        for (i = 0; hm.header_names[i].len > 0; i++) {
-          const struct mg_str *name = &hm.header_names[i];
-          const struct mg_str *value = &hm.header_values[i];
+        for (i = 0; hm->header_names[i].len > 0; i++) {
+          const struct mg_str *name = &hm->header_names[i];
+          const struct mg_str *value = &hm->header_values[i];
           v7_set(v7, headers, name->p, name->len, 0,
                  v7_create_string(v7, value->p, value->len, 1));
         }
@@ -4367,12 +4386,12 @@ static void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
       if (js_callback_handled_request) {
         nc->flags |= MG_F_SEND_AND_CLOSE;
       } else {
-        nc->handler(nc, trigger_ev, &hm);
+        nc->handler(nc, trigger_ev, hm);
       }
 #else
-      nc->handler(nc, trigger_ev, &hm);
+      nc->handler(nc, trigger_ev, hm);
 #endif
-      mbuf_remove(io, hm.message.len);
+      mbuf_remove(io, hm->message.len);
     }
   }
 }
