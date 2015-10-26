@@ -4255,7 +4255,7 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
  */
 #ifdef MG_ESP8266
 static void http_handler2(struct mg_connection *nc, int ev, void *ev_data,
-                          struct http_message *hm);
+                          struct http_message *hm) __attribute__((noinline));
 
 void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message hm;
