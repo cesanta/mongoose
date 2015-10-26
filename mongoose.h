@@ -1069,6 +1069,9 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
                        union socket_address *sa, size_t sa_len);
 void mg_if_recved(struct mg_connection *nc, size_t len);
 
+/* Deliver a POLL event to the connection. */
+void mg_if_poll(struct mg_connection *nc, time_t now);
+
 /* Perform interface-related cleanup on connection before destruction. */
 void mg_if_destroy_conn(struct mg_connection *nc);
 

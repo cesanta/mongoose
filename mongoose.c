@@ -1847,6 +1847,10 @@ MG_INTERNAL void mg_call(struct mg_connection *nc, int ev, void *ev_data) {
        (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
 }
 
+void mg_if_poll(struct mg_connection *nc, time_t now) {
+  mg_call(nc, MG_EV_POLL, &now);
+}
+
 static void mg_destroy_conn(struct mg_connection *conn) {
   mg_if_destroy_conn(conn);
   mbuf_free(&conn->recv_mbuf);
@@ -2344,6 +2348,7 @@ static void mg_ssl_begin(struct mg_connection *nc) {
 #endif /* MG_ENABLE_SSL */
 
 void mg_send(struct mg_connection *nc, const void *buf, int len) {
+  nc->last_io_time = time(NULL);
   if (nc->flags & MG_F_UDP) {
     mg_if_udp_send(nc, buf, len);
   } else {
@@ -2365,6 +2370,7 @@ void mg_if_sent_cb(struct mg_connection *nc, int num_sent) {
 
 static void mg_recv_common(struct mg_connection *nc, void *buf, int len) {
   DBG(("%p %d %u", nc, len, (unsigned int) nc->recv_mbuf.len));
+  nc->last_io_time = time(NULL);
   if (nc->recv_mbuf.len == 0) {
     /* Adopt buf as recv_mbuf's backing store. */
     mbuf_free(&nc->recv_mbuf);
@@ -3000,7 +3006,6 @@ static void mg_handle_udp_read(struct mg_connection *nc) {
 void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, time_t now) {
   DBG(("%p fd=%d fd_flags=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock,
        fd_flags, nc->flags, (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
-  if (fd_flags != 0) nc->last_io_time = now;
 
   if (nc->flags & MG_F_CONNECTING) {
     if (fd_flags != 0) {
@@ -3049,7 +3054,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, time_t now) {
   }
 
   if (!(fd_flags & (_MG_F_FD_CAN_READ | _MG_F_FD_CAN_WRITE))) {
-    mg_call(nc, MG_EV_POLL, &now);
+    mg_if_poll(nc, now);
   }
 
   DBG(("%p after fd=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock, nc->flags,
@@ -7097,8 +7102,6 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 
 /* Amalgamated: #include "internal.h" */
 
-#define MAX_DNS_PACKET_LEN 2048
-
 static int mg_dns_tid = 0xa0;
 
 struct mg_dns_header {
@@ -7254,7 +7257,7 @@ void mg_send_dns_query(struct mg_connection *nc, const char *name,
 
   DBG(("%s %d", name, query_type));
 
-  mbuf_init(&pkt, MAX_DNS_PACKET_LEN);
+  mbuf_init(&pkt, 64 /* Start small, it'll grow as needed. */);
 
   msg->transaction_id = ++mg_dns_tid;
   msg->flags = 0x100;
@@ -7682,7 +7685,7 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
         nc->flags |= MG_F_CLOSE_IMMEDIATELY;
         break;
       }
-      if (now - req->last_time > req->timeout) {
+      if (now - req->last_time >= req->timeout) {
         mg_send_dns_query(nc, req->name, req->query);
         req->last_time = now;
         req->retries++;
