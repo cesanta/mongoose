@@ -1044,10 +1044,11 @@ void mg_if_connect_cb(struct mg_connection *nc, int err);
 
 /* Set up a listening TCP socket on a given address. rv = 0 -> ok. */
 int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa);
-/* Deliver a new TCP connection. Returns != 0 in case on error (unable to
- * create connection, in which case interface state should be removed. */
-int mg_if_accept_tcp_cb(struct mg_connection *lc, sock_t sock,
-                        union socket_address *sa, size_t sa_len);
+/* Deliver a new TCP connection. Returns NULL in case on error (unable to
+ * create connection, in which case interface state should be discarded. */
+struct mg_connection *mg_if_accept_tcp_cb(struct mg_connection *lc,
+                                          union socket_address *sa,
+                                          size_t sa_len);
 
 /* Request that a "listening" UDP socket be created. */
 int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa);
@@ -1074,8 +1075,6 @@ void mg_if_poll(struct mg_connection *nc, time_t now);
 
 /* Perform interface-related cleanup on connection before destruction. */
 void mg_if_destroy_conn(struct mg_connection *nc);
-
-void mg_if_set_sock(struct mg_connection *nc, sock_t sock);
 
 void mg_close_conn(struct mg_connection *nc);
 

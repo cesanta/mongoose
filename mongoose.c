@@ -2272,39 +2272,29 @@ static int mg_ssl_err(struct mg_connection *conn, int res) {
 }
 #endif /* MG_ENABLE_SSL */
 
-int mg_if_accept_tcp_cb(struct mg_connection *lc, sock_t sock,
-                        union socket_address *sa, size_t sa_len) {
+struct mg_connection *mg_if_accept_tcp_cb(struct mg_connection *lc,
+                                          union socket_address *sa,
+                                          size_t sa_len) {
   struct mg_add_sock_opts opts;
   struct mg_connection *nc;
   (void) sa_len;
   memset(&opts, 0, sizeof(opts));
   nc = mg_create_connection(lc->mgr, lc->handler, opts);
-  if (nc == NULL) {
-    return -ENOMEM;
-  }
+  if (nc == NULL) return NULL;
   nc->listener = lc;
   nc->proto_data = lc->proto_data;
   nc->proto_handler = lc->proto_handler;
   nc->user_data = lc->user_data;
   nc->recv_mbuf_limit = lc->recv_mbuf_limit;
   nc->sa = *sa;
-  mg_if_set_sock(nc, sock); /* XXX */
   mg_add_conn(nc->mgr, nc);
-#ifdef MG_ENABLE_SSL
-  if (lc->ssl_ctx != NULL) {
-    nc->ssl = SSL_new(lc->ssl_ctx);
-    if (nc->ssl == NULL || SSL_set_fd(nc->ssl, sock) != 1) {
-      DBG(("SSL error"));
-      mg_close_conn(nc);
-    }
-  } else
-#endif
-  {
+  if (nc->ssl == NULL) {
+    /* For non-SSL connections deliver MG_EV_ACCEPT right away. */
     mg_call(nc, MG_EV_ACCEPT, &nc->sa);
   }
   DBG(("%p %p %d %d, %p %p", lc, nc, nc->sock, (int) nc->flags, lc->ssl_ctx,
        nc->ssl));
-  return 0;
+  return nc;
 }
 
 static size_t recv_avail_size(struct mg_connection *conn, size_t max) {
@@ -2701,6 +2691,7 @@ void mg_forward(struct mg_connection *from, struct mg_connection *to) {
 #define MG_UDP_RECV_BUFFER_SIZE 1500
 
 static sock_t mg_open_listening_socket(union socket_address *sa, int proto);
+static void mg_sock_set(struct mg_connection *nc, sock_t sock);
 
 void mg_set_non_blocking_mode(sock_t sock) {
 #ifdef _WIN32
@@ -2761,14 +2752,14 @@ void mg_if_connect_udp(struct mg_connection *nc) {
 int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   sock_t sock = mg_open_listening_socket(sa, SOCK_STREAM);
   if (sock < 0) return (errno ? errno : 1);
-  mg_if_set_sock(nc, sock);
+  mg_sock_set(nc, sock);
   return 0;
 }
 
 int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
   sock_t sock = mg_open_listening_socket(sa, SOCK_DGRAM);
   if (sock < 0) return (errno ? errno : 1);
-  mg_if_set_sock(nc, sock);
+  mg_sock_set(nc, sock);
   return 0;
 }
 
@@ -2809,6 +2800,7 @@ void mg_if_destroy_conn(struct mg_connection *nc) {
 }
 
 static void mg_accept_conn(struct mg_connection *lc) {
+  struct mg_connection *nc;
   union socket_address sa;
   socklen_t sa_len = sizeof(sa);
   /* NOTE(lsm): on Windows, sock is always > FD_SETSIZE */
@@ -2817,9 +2809,21 @@ static void mg_accept_conn(struct mg_connection *lc) {
     DBG(("%p: failed to accept: %d", lc, errno));
     return;
   }
-  if (mg_if_accept_tcp_cb(lc, sock, &sa, sa_len) != 0) {
+  nc = mg_if_accept_tcp_cb(lc, &sa, sa_len);
+  if (nc == NULL) {
     closesocket(sock);
+    return;
   }
+  mg_sock_set(nc, sock);
+#ifdef MG_ENABLE_SSL
+  if (lc->ssl_ctx != NULL) {
+    nc->ssl = SSL_new(lc->ssl_ctx);
+    if (nc->ssl == NULL || SSL_set_fd(nc->ssl, sock) != 1) {
+      DBG(("SSL error"));
+      mg_close_conn(nc);
+    }
+  }
+#endif
 }
 
 /* 'sa' must be an initialized address to bind to */
@@ -3089,14 +3093,14 @@ struct mg_connection *mg_add_sock_opt(struct mg_mgr *s, sock_t sock,
                                       struct mg_add_sock_opts opts) {
   struct mg_connection *nc = mg_create_connection(s, callback, opts);
   if (nc != NULL) {
-    mg_if_set_sock(nc, sock);
+    mg_sock_set(nc, sock);
     mg_add_conn(nc->mgr, nc);
   }
   return nc;
 }
 
 /* Associate a socket to a connection. */
-void mg_if_set_sock(struct mg_connection *nc, sock_t sock) {
+static void mg_sock_set(struct mg_connection *nc, sock_t sock) {
   mg_set_non_blocking_mode(sock);
   mg_set_close_on_exec(sock);
   nc->sock = sock;
