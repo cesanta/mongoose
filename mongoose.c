@@ -6380,8 +6380,14 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
   int buf_size = num_bytes * 5 + 100;
 
   if ((fp = fopen(path, "a")) != NULL) {
+#ifndef MG_DISABLE_SOCKET_IF
     mg_sock_to_str(nc->sock, src, sizeof(src), 3);
     mg_sock_to_str(nc->sock, dst, sizeof(dst), 7);
+#else
+    /* TODO (alashkin): should we request info from net_if? */
+    strcpy(src, "n/a");
+    strcpy(dst, "n/a");
+#endif
     fprintf(
         fp, "%lu %p %s %s %s %d\n", (unsigned long) time(NULL), nc, src,
         ev == MG_EV_RECV ? "<-" : ev == MG_EV_SEND
