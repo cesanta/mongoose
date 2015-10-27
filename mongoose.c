@@ -4332,12 +4332,12 @@ static void send_ssi_file(struct mg_connection *nc, const char *path, FILE *fp,
       }
 
       /* Handle known SSI directives */
-      if (memcmp(p, d_include.p, d_include.len) == 0) {
+      if (strncmp(p, d_include.p, d_include.len) == 0) {
         do_ssi_include(nc, path, p + d_include.len + 1, include_level, opts);
-      } else if (memcmp(p, d_call.p, d_call.len) == 0) {
+      } else if (strncmp(p, d_call.p, d_call.len) == 0) {
         do_ssi_call(nc, p + d_call.len + 1);
 #ifndef MG_DISABLE_POPEN
-      } else if (memcmp(p, d_exec.p, d_exec.len) == 0) {
+      } else if (strncmp(p, d_exec.p, d_exec.len) == 0) {
         do_ssi_exec(nc, p + d_exec.len + 1);
 #endif
       } else {
@@ -4352,7 +4352,7 @@ static void send_ssi_file(struct mg_connection *nc, const char *path, FILE *fp,
       len = 0;
       buf[len++] = ch & 0xff;
     } else if (in_ssi_tag) {
-      if (len == (int) btag.len && memcmp(buf, btag.p, btag.len) != 0) {
+      if (len == (int) btag.len && strncmp(buf, btag.p, btag.len) != 0) {
         /* Not an SSI tag */
         in_ssi_tag = 0;
       } else if (len == (int) sizeof(buf) - 2) {
@@ -4666,7 +4666,7 @@ int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
   /* Find where variable starts */
   for (s = hdr->p; s != NULL && s + n < end; s++) {
     if ((s == hdr->p || s[-1] == ch || s[-1] == ch1) && s[n] == '=' &&
-        !memcmp(s, var_name, n))
+        !strncmp(s, var_name, n))
       break;
   }
 
@@ -5818,9 +5818,9 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
   char addr[1100], path[4096]; /* NOTE: keep sizes in sync with sscanf below */
   int use_ssl = 0, addr_len = 0;
 
-  if (memcmp(url, "http://", 7) == 0) {
+  if (strncmp(url, "http://", 7) == 0) {
     url += 7;
-  } else if (memcmp(url, "https://", 8) == 0) {
+  } else if (strncmp(url, "https://", 8) == 0) {
     url += 8;
     use_ssl = 1;
 #ifndef MG_ENABLE_SSL
@@ -5895,7 +5895,7 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
 
   /* Scan through the body, search for terminating boundary */
   for (pos = hl; pos + (bl - 2) < buf_len; pos++) {
-    if (buf[pos] == '-' && !memcmp(buf, &buf[pos], bl - 2)) {
+    if (buf[pos] == '-' && !strncmp(buf, &buf[pos], bl - 2)) {
       if (data_len != NULL) *data_len = (pos - 2) - hl;
       if (data != NULL) *data = buf + hl;
       return pos;
@@ -5955,7 +5955,7 @@ int mg_vcasecmp(const struct mg_str *str1, const char *str2) {
 
 int mg_vcmp(const struct mg_str *str1, const char *str2) {
   size_t n2 = strlen(str2), n1 = str1->len;
-  int r = memcmp(str1->p, str2, (n1 < n2) ? n1 : n2);
+  int r = strncmp(str1->p, str2, (n1 < n2) ? n1 : n2);
   if (r == 0) {
     return n1 - n2;
   }
@@ -6388,7 +6388,7 @@ int mg_rpc_dispatch(const char *buf, int len, char *dst, int dst_len,
   for (i = 0; methods[i] != NULL; i++) {
     int mlen = strlen(methods[i]);
     if (mlen == req.method->len &&
-        memcmp(methods[i], req.method->ptr, mlen) == 0)
+        strncmp(methods[i], req.method->ptr, mlen) == 0)
       break;
   }
 
