@@ -72,7 +72,8 @@ MG_INTERNAL struct mg_connection *mg_do_connect(struct mg_connection *nc,
 
 MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
                                  int *proto, char *host, size_t host_len);
-MG_INTERNAL void mg_call(struct mg_connection *, int ev, void *ev_data);
+MG_INTERNAL void mg_call(struct mg_connection *nc,
+                         mg_event_handler_t ev_handler, int ev, void *ev_data);
 MG_INTERNAL void mg_forward(struct mg_connection *, struct mg_connection *);
 MG_INTERNAL void mg_add_conn(struct mg_mgr *mgr, struct mg_connection *c);
 MG_INTERNAL void mg_remove_conn(struct mg_connection *c);
@@ -1813,9 +1814,9 @@ MG_INTERNAL void mg_remove_conn(struct mg_connection *conn) {
   mg_ev_mgr_remove_conn(conn);
 }
 
-MG_INTERNAL void mg_call(struct mg_connection *nc, int ev, void *ev_data) {
+MG_INTERNAL void mg_call(struct mg_connection *nc,
+                         mg_event_handler_t ev_handler, int ev, void *ev_data) {
   unsigned long flags_before;
-  mg_event_handler_t ev_handler;
 
   DBG(("%p ev=%d ev_data=%p flags=%lu rmbl=%d smbl=%d", nc, ev, ev_data,
        nc->flags, (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
@@ -1830,11 +1831,13 @@ MG_INTERNAL void mg_call(struct mg_connection *nc, int ev, void *ev_data) {
 /* LCOV_EXCL_STOP */
 #endif
 
-  /*
-   * If protocol handler is specified, call it. Otherwise, call user-specified
-   * event handler.
-   */
-  ev_handler = nc->proto_handler ? nc->proto_handler : nc->handler;
+  if (ev_handler == NULL) {
+    /*
+     * If protocol handler is specified, call it. Otherwise, call user-specified
+     * event handler.
+     */
+    ev_handler = nc->proto_handler ? nc->proto_handler : nc->handler;
+  }
   if (ev_handler != NULL) {
     flags_before = nc->flags;
     ev_handler(nc, ev, ev_data);
@@ -1848,7 +1851,7 @@ MG_INTERNAL void mg_call(struct mg_connection *nc, int ev, void *ev_data) {
 }
 
 void mg_if_poll(struct mg_connection *nc, time_t now) {
-  mg_call(nc, MG_EV_POLL, &now);
+  mg_call(nc, NULL, MG_EV_POLL, &now);
 }
 
 static void mg_destroy_conn(struct mg_connection *conn) {
@@ -1861,7 +1864,7 @@ static void mg_destroy_conn(struct mg_connection *conn) {
 void mg_close_conn(struct mg_connection *conn) {
   DBG(("%p %lu", conn, conn->flags));
   if (!(conn->flags & MG_F_CONNECTING)) {
-    mg_call(conn, MG_EV_CLOSE, NULL);
+    mg_call(conn, NULL, MG_EV_CLOSE, NULL);
   }
   mg_remove_conn(conn);
   mg_destroy_conn(conn);
@@ -2290,7 +2293,7 @@ struct mg_connection *mg_if_accept_tcp_cb(struct mg_connection *lc,
   mg_add_conn(nc->mgr, nc);
   if (nc->ssl == NULL) {
     /* For non-SSL connections deliver MG_EV_ACCEPT right away. */
-    mg_call(nc, MG_EV_ACCEPT, &nc->sa);
+    mg_call(nc, NULL, MG_EV_ACCEPT, &nc->sa);
   }
   DBG(("%p %p %d %d, %p %p", lc, nc, nc->sock, (int) nc->flags, lc->ssl_ctx,
        nc->ssl));
@@ -2319,10 +2322,10 @@ static void mg_ssl_begin(struct mg_connection *nc) {
       socklen_t sa_len = sizeof(sa);
       /* In case port was set to 0, get the real port number */
       (void) getsockname(nc->sock, &sa.sa, &sa_len);
-      mg_call(nc, MG_EV_ACCEPT, &sa);
+      mg_call(nc, NULL, MG_EV_ACCEPT, &sa);
     } else {
       int err = 0;
-      mg_call(nc, MG_EV_CONNECT, &err);
+      mg_call(nc, NULL, MG_EV_CONNECT, &err);
     }
   } else {
     int ssl_err = mg_ssl_err(nc, res);
@@ -2330,7 +2333,7 @@ static void mg_ssl_begin(struct mg_connection *nc) {
       nc->flags |= MG_F_CLOSE_IMMEDIATELY;
       if (!server_side) {
         int err = 0;
-        mg_call(nc, MG_EV_CONNECT, &err);
+        mg_call(nc, NULL, MG_EV_CONNECT, &err);
       }
     }
   }
@@ -2355,7 +2358,7 @@ void mg_if_sent_cb(struct mg_connection *nc, int num_sent) {
   if (num_sent < 0) {
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
-  mg_call(nc, MG_EV_SEND, &num_sent);
+  mg_call(nc, NULL, MG_EV_SEND, &num_sent);
 }
 
 static void mg_recv_common(struct mg_connection *nc, void *buf, int len) {
@@ -2372,7 +2375,7 @@ static void mg_recv_common(struct mg_connection *nc, void *buf, int len) {
     mbuf_append(&nc->recv_mbuf, buf, len);
     MG_FREE(buf);
   }
-  mg_call(nc, MG_EV_RECV, &len);
+  mg_call(nc, NULL, MG_EV_RECV, &len);
 }
 
 void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len) {
@@ -2408,7 +2411,7 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
       nc->recv_mbuf_limit = lc->recv_mbuf_limit;
       nc->flags = MG_F_UDP;
       mg_add_conn(lc->mgr, nc);
-      mg_call(nc, MG_EV_ACCEPT, &nc->sa);
+      mg_call(nc, NULL, MG_EV_ACCEPT, &nc->sa);
     } else {
       DBG(("OOM"));
     }
@@ -2458,7 +2461,7 @@ void mg_if_connect_cb(struct mg_connection *nc, int err) {
   } else {
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
-  mg_call(nc, MG_EV_CONNECT, &err);
+  mg_call(nc, NULL, MG_EV_CONNECT, &err);
 }
 
 #ifndef MG_DISABLE_RESOLVER
@@ -2495,7 +2498,7 @@ static void resolve_cb(struct mg_dns_message *msg, void *data) {
   /*
    * If we get there was no MG_DNS_A_RECORD in the answer
    */
-  mg_call(nc, MG_EV_CONNECT, &failure);
+  mg_call(nc, NULL, MG_EV_CONNECT, &failure);
   mg_destroy_conn(nc);
 }
 #endif
@@ -3827,9 +3830,9 @@ static int is_ws_first_fragment(unsigned char flags) {
 static void handle_incoming_websocket_frame(struct mg_connection *nc,
                                             struct websocket_message *wsm) {
   if (wsm->flags & 0x8) {
-    nc->handler(nc, MG_EV_WEBSOCKET_CONTROL_FRAME, wsm);
+    mg_call(nc, nc->handler, MG_EV_WEBSOCKET_CONTROL_FRAME, wsm);
   } else {
-    nc->handler(nc, MG_EV_WEBSOCKET_FRAME, wsm);
+    mg_call(nc, nc->handler, MG_EV_WEBSOCKET_FRAME, wsm);
   }
 }
 
@@ -4508,7 +4511,7 @@ static void do_ssi_exec(struct mg_connection *nc, char *tag) {
 #endif /* !MG_DISABLE_POPEN */
 
 static void do_ssi_call(struct mg_connection *nc, char *tag) {
-  mg_call(nc, MG_EV_SSI_CALL, tag);
+  mg_call(nc, NULL, MG_EV_SSI_CALL, tag);
 }
 
 /*
