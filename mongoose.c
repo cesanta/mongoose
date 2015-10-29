@@ -144,13 +144,15 @@ void mbuf_free(struct mbuf *mbuf) {
 
 void mbuf_resize(struct mbuf *a, size_t new_size) {
   if (new_size > a->size || (new_size < a->size && new_size >= a->len)) {
-    a->buf = (char *) MBUF_REALLOC(a->buf, new_size);
+    char *buf = (char *) MBUF_REALLOC(a->buf, new_size);
     /*
-     * In case realloc fails, there's not much we can do except set size to 0.
-     * Note that NULL is a valid return value from realloc when size == 0, but
-     * that is covered too.
+     * In case realloc fails, there's not much we can do, except keep things as
+     * they are. Note that NULL is a valid return value from realloc when
+     * size == 0, but that is covered too.
      */
-    a->size = (a->buf != NULL ? new_size : 0);
+    if (buf == NULL && new_size != 0) return;
+    a->buf = buf;
+    a->size = new_size;
   }
 }
 
