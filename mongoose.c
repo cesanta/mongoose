@@ -4558,7 +4558,7 @@ static int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
 
   dst[j] = '\0'; /* Null-terminate the destination */
 
-  return i >= src_len ? j : -1;
+  return i >= src_len ? (int)j : -1;
 }
 
 int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
