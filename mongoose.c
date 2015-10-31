@@ -5914,6 +5914,56 @@ static void handle_cgi(struct mg_connection *nc, const char *prog,
 }
 #endif
 
+static int get_month_index(const char *s) {
+  static const char *month_names[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  size_t i;
+
+  for (i = 0; i < ARRAY_SIZE(month_names); i++)
+    if (!strcmp(s, month_names[i])) return (int) i;
+
+  return -1;
+}
+
+static int num_leap_years(int year) {
+  return year / 4 - year / 100 + year / 400;
+}
+
+/* Parse UTC date-time string, and return the corresponding time_t value. */
+static time_t parse_date_string(const char *datetime) {
+  static const unsigned short days_before_month[] = {
+      0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+  char month_str[32];
+  int second, minute, hour, day, month, year, leap_days, days;
+  time_t result = (time_t) 0;
+
+  if (((sscanf(datetime, "%d/%3s/%d %d:%d:%d", &day, month_str, &year, &hour,
+               &minute, &second) == 6) ||
+       (sscanf(datetime, "%d %3s %d %d:%d:%d", &day, month_str, &year, &hour,
+               &minute, &second) == 6) ||
+       (sscanf(datetime, "%*3s, %d %3s %d %d:%d:%d", &day, month_str, &year,
+               &hour, &minute, &second) == 6) ||
+       (sscanf(datetime, "%d-%3s-%d %d:%d:%d", &day, month_str, &year, &hour,
+               &minute, &second) == 6)) &&
+      year > 1970 && (month = get_month_index(month_str)) != -1) {
+    leap_days = num_leap_years(year) - num_leap_years(1970);
+    year -= 1970;
+    days = year * 365 + days_before_month[month] + (day - 1) + leap_days;
+    result = days * 24 * 3600 + hour * 3600 + minute * 60 + second;
+  }
+
+  return result;
+}
+
+static int mg_is_not_modified(struct http_message *hm, cs_stat_t *st) {
+  char etag[64];
+  struct mg_str *ims = mg_get_http_header(hm, "If-Modified-Since");
+  struct mg_str *inm = mg_get_http_header(hm, "If-None-Match");
+  construct_etag(etag, sizeof(etag), st);
+  return (inm != NULL && !mg_vcasecmp(inm, etag)) ||
+         (ims != NULL && st->st_mtime <= parse_date_string(ims->p));
+}
+
 static void mg_send_digest_auth_request(struct mg_connection *c,
                                         const char *domain) {
   mg_printf(c,
@@ -5986,6 +6036,8 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
 #else
     send_http_error(nc, 501, NULL);
 #endif /* MG_DISABLE_CGI */
+  } else if (mg_is_not_modified(hm, &st)) {
+    send_http_error(nc, 304, "Not Modified");
   } else {
     mg_send_http_file2(nc, path, &st, hm, opts);
   }
