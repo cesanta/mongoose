@@ -26,6 +26,10 @@
 #ifdef MG_LOCALS
 #include <mg_locals.h>
 #endif
+
+#if defined(MG_ENABLE_DEBUG) && !defined(CS_ENABLE_DEBUG)
+#define CS_ENABLE_DEBUG
+#endif
 /*
  * Copyright (c) 2015 Cesanta Software Limited
  * All rights reserved
@@ -260,25 +264,31 @@ int64_t strtoll(const char *str, char **endptr, int base);
 #endif
 #endif /* !_WIN32 */
 
-#define __DBG(x)                \
-  do {                          \
-    printf("%-20s ", __func__); \
-    printf x;                   \
-    putchar('\n');              \
-    fflush(stdout);             \
-  } while (0)
-
-#ifdef MG_ENABLE_DEBUG
-#define DBG __DBG
-#else
-#define DBG(x)
-#endif
-
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
 #endif
 
 #endif /* OSDEP_HEADER_INCLUDED */
+#ifndef _CS_DBG_H_
+#define _CS_DBG_H_
+
+#ifdef CS_ENABLE_DEBUG
+
+void cs_dbg_printf(const char *fmt, ...);
+#define __DBG(x) \
+  do {                          \
+    fprintf(stderr, "%-20s ", __func__); \
+    cs_dbg_printf x;                   \
+  } while (0)
+#define DBG __DBG
+
+#else
+
+#define DBG(x)
+
+#endif
+
+#endif /* _CS_DBG_H_ */
 /*
  * Copyright (c) 2015 Cesanta Software Limited
  * All rights reserved
