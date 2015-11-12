@@ -6000,6 +6000,7 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
   uint32_t remote_ip = ntohl(*(uint32_t *) &nc->sa.sin.sin_addr);
   cs_stat_t st;
 
+  DBG(("serving [%s]", path));
   stat_result = mg_stat(path, &st);
   is_directory = !stat_result && S_ISDIR(st.st_mode);
 
