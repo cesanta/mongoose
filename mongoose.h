@@ -139,7 +139,7 @@
 #define __func__ __FILE__ ":" STR(__LINE__)
 #endif
 #define snprintf _snprintf
-#define fileno  _fileno
+#define fileno _fileno
 #define vsnprintf _vsnprintf
 #define sleep(x) Sleep((x) *1000)
 #define to64(x) _atoi64(x)
@@ -275,10 +275,10 @@ int64_t strtoll(const char *str, char **endptr, int base);
 #ifdef CS_ENABLE_DEBUG
 
 void cs_dbg_printf(const char *fmt, ...);
-#define __DBG(x) \
-  do {                          \
+#define __DBG(x)                         \
+  do {                                   \
     fprintf(stderr, "%-20s ", __func__); \
-    cs_dbg_printf x;                   \
+    cs_dbg_printf x;                     \
   } while (0)
 #define DBG __DBG
 
