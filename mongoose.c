@@ -1803,7 +1803,7 @@ void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
 #define _MG_CALLBACK_MODIFIABLE_FLAGS_MASK                               \
   (MG_F_USER_1 | MG_F_USER_2 | MG_F_USER_3 | MG_F_USER_4 | MG_F_USER_5 | \
    MG_F_USER_6 | MG_F_WEBSOCKET_NO_DEFRAG | MG_F_SEND_AND_CLOSE |        \
-   MG_F_DONT_SEND | MG_F_CLOSE_IMMEDIATELY | MG_F_IS_WEBSOCKET)
+   MG_F_CLOSE_IMMEDIATELY | MG_F_IS_WEBSOCKET)
 
 #ifndef intptr_t
 #define intptr_t long
@@ -3080,8 +3080,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, time_t now) {
     if (nc->flags & MG_F_CLOSE_IMMEDIATELY) return;
   }
 
-  if ((fd_flags & _MG_F_FD_CAN_WRITE) && !(nc->flags & MG_F_DONT_SEND) &&
-      nc->send_mbuf.len > 0) {
+  if ((fd_flags & _MG_F_FD_CAN_WRITE) && nc->send_mbuf.len > 0) {
     mg_write_to_socket(nc);
   }
 
@@ -3159,8 +3158,7 @@ void mg_ev_mgr_epoll_set_flags(const struct mg_connection *nc,
   if ((nc->flags & MG_F_LISTENING) || nc->recv_mbuf.len < nc->recv_mbuf_limit) {
     ev->events |= EPOLLIN;
   }
-  if ((nc->flags & MG_F_CONNECTING) ||
-      (nc->send_mbuf.len > 0 && !(nc->flags & MG_F_DONT_SEND))) {
+  if ((nc->flags & MG_F_CONNECTING) || (nc->send_mbuf.len > 0)) {
     ev->events |= EPOLLOUT;
   }
 }
@@ -3345,8 +3343,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
     }
 
     if (((nc->flags & MG_F_CONNECTING) && !(nc->flags & MG_F_WANT_READ)) ||
-        (nc->send_mbuf.len > 0 && !(nc->flags & MG_F_CONNECTING) &&
-         !(nc->flags & MG_F_DONT_SEND))) {
+        (nc->send_mbuf.len > 0 && !(nc->flags & MG_F_CONNECTING))) {
       mg_add_to_set(nc->sock, &write_set, &max_fd);
       mg_add_to_set(nc->sock, &err_set, &max_fd);
     }
@@ -5835,11 +5832,11 @@ static void cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
        * which changes CODE to 302.
        *
        * Therefore we do not send the output from the CGI script to the user
-       * until all CGI headers are parsed (by setting MG_F_DONT_SEND flag).
+       * until all CGI headers are received.
        *
        * Here we parse the output from the CGI script, and if all headers has
-       * been received, amend the reply line, and clear MG_F_DONT_SEND flag,
-       * which makes data to be sent to the user.
+       * been received, send appropriate reply line, and forward all
+       * received headers to the client.
        */
       if (nc->flags & MG_F_USER_1) {
         struct mbuf *io = &cgi_nc->recv_mbuf;

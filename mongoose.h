@@ -717,10 +717,9 @@ struct mg_connection {
 
 /* Flags that are settable by user */
 #define MG_F_SEND_AND_CLOSE (1 << 10)      /* Push remaining data and close  */
-#define MG_F_DONT_SEND (1 << 11)           /* Do not send data to peer */
-#define MG_F_CLOSE_IMMEDIATELY (1 << 12)   /* Disconnect */
-#define MG_F_WEBSOCKET_NO_DEFRAG (1 << 13) /* Websocket specific */
-#define MG_F_DELETE_CHUNK (1 << 14)        /* HTTP specific */
+#define MG_F_CLOSE_IMMEDIATELY (1 << 11)   /* Disconnect */
+#define MG_F_WEBSOCKET_NO_DEFRAG (1 << 12) /* Websocket specific */
+#define MG_F_DELETE_CHUNK (1 << 13)        /* HTTP specific */
 
 #define MG_F_USER_1 (1 << 20) /* Flags left for application */
 #define MG_F_USER_2 (1 << 21)
