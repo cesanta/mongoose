@@ -4154,6 +4154,9 @@ static void transfer_file_data(struct mg_connection *nc) {
       dp->sent += n;
     } else {
       free_http_proto_data(nc);
+#ifdef MG_DISABLE_HTTP_KEEP_ALIVE
+      nc->flags |= MG_F_SEND_AND_CLOSE;
+#endif
     }
   } else if (dp->type == DATA_PUT) {
     struct mbuf *io = &nc->recv_mbuf;
@@ -4166,6 +4169,9 @@ static void transfer_file_data(struct mg_connection *nc) {
     }
     if (n == 0 || dp->sent >= dp->cl) {
       free_http_proto_data(nc);
+#ifdef MG_DISABLE_HTTP_KEEP_ALIVE
+      nc->flags |= MG_F_SEND_AND_CLOSE;
+#endif
     }
   } else if (dp->type == DATA_CGI) {
     /* This is POST data that needs to be forwarded to the CGI process */
@@ -4736,6 +4742,9 @@ static void mg_send_http_file2(struct mg_connection *nc, const char *path,
               "Last-Modified: %s\r\n"
               "Accept-Ranges: bytes\r\n"
               "Content-Type: %.*s\r\n"
+#ifdef MG_DISABLE_HTTP_KEEP_ALIVE
+              "Connection: close\r\n"
+#endif
               "Content-Length: %" SIZE_T_FMT
               "\r\n"
               "%sEtag: %s\r\n\r\n",
