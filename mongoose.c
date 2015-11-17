@@ -2763,7 +2763,7 @@ void mg_if_connect_tcp(struct mg_connection *nc,
   mg_set_non_blocking_mode(nc->sock);
 #endif
   rc = connect(nc->sock, &sa->sa, sizeof(sa->sin));
-  nc->err = rc == 0 ? 0 : (errno ? errno : 1);
+  nc->err = mg_is_error(rc) ? errno : 0;
   DBG(("%p sock %d err %d", nc, nc->sock, nc->err));
 }
 
