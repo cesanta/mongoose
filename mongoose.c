@@ -103,6 +103,7 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
 
 #ifndef MG_DISABLE_FILESYSTEM
 MG_INTERNAL time_t mg_parse_date_string(const char *datetime);
+MG_INTERNAL int mg_is_not_modified(struct http_message *hm, cs_stat_t *st);
 #endif
 
 /* Forward declarations for testing. */
@@ -5981,13 +5982,17 @@ MG_INTERNAL time_t mg_parse_date_string(const char *datetime) {
   return result;
 }
 
-static int mg_is_not_modified(struct http_message *hm, cs_stat_t *st) {
-  char etag[64];
-  struct mg_str *ims = mg_get_http_header(hm, "If-Modified-Since");
-  struct mg_str *inm = mg_get_http_header(hm, "If-None-Match");
-  construct_etag(etag, sizeof(etag), st);
-  return (inm != NULL && !mg_vcasecmp(inm, etag)) ||
-         (ims != NULL && st->st_mtime <= mg_parse_date_string(ims->p));
+MG_INTERNAL int mg_is_not_modified(struct http_message *hm, cs_stat_t *st) {
+  struct mg_str *hdr;
+  if ((hdr = mg_get_http_header(hm, "If-None-Match")) != NULL) {
+    char etag[64];
+    construct_etag(etag, sizeof(etag), st);
+    return mg_vcasecmp(hdr, etag) == 0;
+  } else if ((hdr = mg_get_http_header(hm, "If-Modified-Since")) != NULL) {
+    return st->st_mtime <= mg_parse_date_string(hdr->p);
+  } else {
+    return 0;
+  }
 }
 
 static void mg_send_digest_auth_request(struct mg_connection *c,
