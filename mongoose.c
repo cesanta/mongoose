@@ -7796,8 +7796,6 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
     case MG_EV_CONNECT:
     case MG_EV_POLL:
       if (req->retries > req->max_retries) {
-        req->callback(NULL, req->data);
-        MG_FREE(req);
         nc->flags |= MG_F_CLOSE_IMMEDIATELY;
         break;
       }
@@ -7812,12 +7810,27 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
       if (mg_parse_dns(nc->recv_mbuf.buf, *(int *) data, msg) == 0 &&
           msg->num_answers > 0) {
         req->callback(msg, req->data);
-      } else {
-        req->callback(NULL, req->data);
+        nc->user_data = NULL;
+        MG_FREE(req);
       }
-      MG_FREE(req);
       MG_FREE(msg);
       nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      break;
+    case MG_EV_SEND:
+      /*
+       * If a send error occurs, prevent closing of the connection by the core.
+       * We will retry after timeout.
+       */
+      nc->flags &= ~MG_F_CLOSE_IMMEDIATELY;
+      mbuf_remove(&nc->send_mbuf, nc->send_mbuf.len);
+      break;
+    case MG_EV_CLOSE:
+      /* If we got here with request still not done, fire an error callback. */
+      if (req != NULL) {
+        req->callback(NULL, req->data);
+        nc->user_data = NULL;
+        MG_FREE(req);
+      }
       break;
   }
 }
