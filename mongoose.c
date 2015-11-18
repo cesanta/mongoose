@@ -4469,6 +4469,27 @@ void mg_send_websocket_handshake(struct mg_connection *nc, const char *uri,
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
 
 #ifndef MG_DISABLE_FILESYSTEM
+
+void mg_send_response_line(struct mg_connection *nc, int status_code,
+                           const char *extra_headers) {
+  const char *status_message = "OK";
+  switch (status_code) {
+    case 206:
+      status_message = "Partial Content";
+      break;
+    case 416:
+      status_message = "Requested range not satisfiable";
+      break;
+    case 418:
+      status_message = "I'm a teapot";
+      break;
+  }
+  mg_printf(nc, "HTTP/1.1 %d %s\r\n", status_code, status_message);
+  if (extra_headers != NULL) {
+    mg_printf(nc, "%s\r\n", extra_headers);
+  }
+}
+
 static void send_http_error(struct mg_connection *nc, int code,
                             const char *reason) {
   if (reason == NULL) {
@@ -4643,8 +4664,8 @@ static void handle_ssi_request(struct mg_connection *nc, const char *path,
     mg_set_close_on_exec(fileno(fp));
 
     mime_type = get_mime_type(path, "text/plain", opts);
+    mg_send_response_line(nc, 200, opts->extra_headers);
     mg_printf(nc,
-              "HTTP/1.1 200 OK\r\n"
               "Content-Type: %.*s\r\n"
               "Connection: close\r\n\r\n",
               (int) mime_type.len, mime_type.p);
@@ -4709,7 +4730,6 @@ static void mg_send_http_file2(struct mg_connection *nc, const char *path,
     int64_t r1 = 0, r2 = 0, cl = st->st_size;
     struct mg_str *range_hdr = mg_get_http_header(hm, "Range");
     int n, status_code = 200;
-    const char *status_message = "OK";
 
     /* Handle Range header */
     range[0] = '\0';
@@ -4722,14 +4742,12 @@ static void mg_send_http_file2(struct mg_connection *nc, const char *path,
       }
       if (r1 > r2 || r2 >= cl) {
         status_code = 416;
-        status_message = "Requested range not satisfiable";
         cl = 0;
         snprintf(range, sizeof(range),
                  "Content-Range: bytes */%" INT64_FMT "\r\n",
                  (int64_t) st->st_size);
       } else {
         status_code = 206;
-        status_message = "Partial Content";
         cl = r2 - r1 + 1;
         snprintf(range, sizeof(range), "Content-Range: bytes %" INT64_FMT
                                        "-%" INT64_FMT "/%" INT64_FMT "\r\n",
@@ -4749,8 +4767,8 @@ static void mg_send_http_file2(struct mg_connection *nc, const char *path,
      *    position
      * TODO(mkm): fix ESP8266 RTOS SDK
      */
+    mg_send_response_line(nc, status_code, opts->extra_headers);
     mg_printf(nc,
-              "HTTP/1.1 %d %s\r\n"
               "Date: %s\r\n"
               "Last-Modified: %s\r\n"
               "Accept-Ranges: bytes\r\n"
@@ -4761,8 +4779,8 @@ static void mg_send_http_file2(struct mg_connection *nc, const char *path,
               "Content-Length: %" SIZE_T_FMT
               "\r\n"
               "%sEtag: %s\r\n\r\n",
-              status_code, status_message, current_time, last_modified,
-              (int) mime_type.len, mime_type.p, (size_t) cl, range, etag);
+              current_time, last_modified, (int) mime_type.len, mime_type.p,
+              (size_t) cl, range, etag);
 
     nc->proto_data = (void *) dp;
     dp->cl = cl;
@@ -5219,9 +5237,9 @@ static void send_directory_listing(struct mg_connection *nc, const char *dir,
       "document.onclick = function(ev){ "
       "var c = ev.target.rel; if (c) srt(tb, c)}; srt(tb, 2); };</script>";
 
-  mg_printf(nc, "%s\r\n%s: %s\r\n%s: %s\r\n\r\n", "HTTP/1.1 200 OK",
-            "Transfer-Encoding", "chunked", "Content-Type",
-            "text/html; charset=utf-8");
+  mg_send_response_line(nc, 200, opts->extra_headers);
+  mg_printf(nc, "%s: %s\r\n%s: %s\r\n\r\n", "Transfer-Encoding", "chunked",
+            "Content-Type", "text/html; charset=utf-8");
 
   mg_printf_http_chunk(
       nc,

@@ -1500,6 +1500,22 @@ void mg_send_http_chunk(struct mg_connection *nc, const char *buf, size_t len);
 void mg_printf_http_chunk(struct mg_connection *, const char *, ...);
 
 /*
+ * Send response status line.
+ * If `extra_headers` is not NULL, then `extra_headers` are also sent
+ * after the reponse line, followed by a new line.
+ * Example:
+ *
+ *      mg_send_response_line(nc, 200, "Access-Control-Allow-Origin: *");
+ *
+ * Will result in:
+ *
+ *      HTTP/1.1 200 OK\r\n
+ *      Access-Control-Allow-Origin: *\r\n
+ */
+void mg_send_response_line(struct mg_connection *nc, int status_code,
+                           const char *extra_headers);
+
+/*
  * Send printf-formatted HTTP chunk, escaping HTML tags.
  */
 void mg_printf_html_escape(struct mg_connection *, const char *, ...);
@@ -1726,6 +1742,12 @@ struct mg_serve_http_opts {
    * ".txt=text/plain; charset=utf-8,.c=text/plain"
    */
   const char *custom_mime_types;
+
+  /*
+   * Extra HTTP headers to add to each server response.
+   * Example: to enable CORS, set this to "Access-Control-Allow-Origin: *".
+   */
+  const char *extra_headers;
 };
 
 /*
