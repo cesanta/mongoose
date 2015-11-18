@@ -2076,7 +2076,7 @@ MG_INTERNAL struct mg_connection *mg_create_connection(
 MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
                                  int *proto, char *host, size_t host_len) {
   unsigned int a, b, c, d, port = 0;
-  int len = 0;
+  int ch, len = 0;
 #ifdef MG_ENABLE_IPV6
   char buf[100];
 #endif
@@ -2126,7 +2126,8 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
     return -1;
   }
 
-  return port < 0xffffUL && str[len] == '\0' ? len : -1;
+  ch = str[len]; /* Character that follows the address */
+  return port < 0xffffUL && (ch == '\0' || ch == ',' || isspace(ch)) ? len : -1;
 }
 
 #ifdef MG_ENABLE_SSL
@@ -2135,6 +2136,7 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
  * https://github.com/cesanta/mongoose/blob/master/scripts/generate_ssl_certificates.sh
  */
 
+#ifndef MG_DISABLE_PFS
 /*
  * Cipher suite options used for TLS negotiation.
  * https://wiki.mozilla.org/Security/Server_Side_TLS#Recommended_configurations
@@ -2178,7 +2180,6 @@ static const char mg_s_cipher_list[] =
 #endif
     ;
 
-#ifndef MG_DISABLE_PFS
 /*
  * Default DH params for PFS cipher negotiation. This is a 2048-bit group.
  * Will be used if none are provided by the user in the certificate file.
@@ -2213,8 +2214,8 @@ static int mg_use_cert(SSL_CTX *ctx, const char *pem_file) {
   } else if (SSL_CTX_use_certificate_file(ctx, pem_file, 1) == 0 ||
              SSL_CTX_use_PrivateKey_file(ctx, pem_file, 1) == 0) {
     return -2;
-#ifndef MG_DISABLE_PFS
   } else {
+#ifndef MG_DISABLE_PFS
     BIO *bio = NULL;
     DH *dh = NULL;
 
@@ -2238,11 +2239,10 @@ static int mg_use_cert(SSL_CTX *ctx, const char *pem_file) {
       SSL_CTX_set_options(ctx, SSL_OP_SINGLE_DH_USE);
       DH_free(dh);
     }
-
+#endif
     SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
     SSL_CTX_use_certificate_chain_file(ctx, pem_file);
     return 0;
-#endif
   }
 }
 
