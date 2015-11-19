@@ -106,6 +106,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -272,18 +273,41 @@ int64_t strtoll(const char *str, char **endptr, int base);
 #ifndef _CS_DBG_H_
 #define _CS_DBG_H_
 
-#ifdef CS_ENABLE_DEBUG
+enum cs_log_level {
+  LL_NONE = -1,
+  LL_ERROR = 0,
+  LL_WARN = 1,
+  LL_INFO = 2,
+  LL_DEBUG = 3,
 
-void cs_dbg_printf(const char *fmt, ...);
-#define __DBG(x)                         \
-  do {                                   \
+  _LL_MIN = -2,
+  _LL_MAX = 4,
+};
+
+#ifndef CS_NDEBUG
+
+extern enum cs_log_level s_cs_log_level;
+void cs_log_set_level(enum cs_log_level level);
+
+void cs_log_printf(const char *fmt, ...);
+
+#define LOG(l, x)                        \
+  if (s_cs_log_level >= l) {             \
     fprintf(stderr, "%-20s ", __func__); \
-    cs_dbg_printf x;                     \
-  } while (0)
-#define DBG __DBG
+    cs_log_printf x;                     \
+  }
 
-#else
+#define DBG(x)                           \
+  if (s_cs_log_level >= LL_DEBUG) {      \
+    fprintf(stderr, "%-20s ", __func__); \
+    cs_log_printf x;                     \
+  }
 
+#else /* NDEBUG */
+
+#define cs_log_set_level(l)
+
+#define LOG(l, x)
 #define DBG(x)
 
 #endif
@@ -1327,7 +1351,11 @@ extern "C" {
 #endif
 
 #ifndef MG_MAX_PATH
+#ifdef PATH_MAX
+#define MG_MAX_PATH PATH_MAX
+#else
 #define MG_MAX_PATH 1024
+#endif
 #endif
 
 #ifndef MG_MAX_HTTP_SEND_IOBUF
