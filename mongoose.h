@@ -1192,6 +1192,10 @@ FILE *mg_fopen(const char *path, const char *mode);
 int mg_open(const char *path, int flag, int mode);
 #endif /* MG_DISABLE_FILESYSTEM */
 
+#ifdef _WIN32
+#define MG_ENABLE_THREADS
+#endif
+
 #ifdef MG_ENABLE_THREADS
 /*
  * Start a new detached thread.
