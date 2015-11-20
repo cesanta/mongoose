@@ -95,7 +95,7 @@ and web designers. Available in three editions to suit your needs: free, pro
 (USD 5) and dev edition (from USD 8). To install, simply download, double-click
 to start and run browser - that's all!
 
-[Download Mongoose Binary here](https://www.cesanta.com/mongoose)
+[Download Mongoose Binary here](https://www.cesanta.com/products#binary)
 
 # Other products by Cesanta
 
