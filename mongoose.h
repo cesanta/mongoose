@@ -1534,7 +1534,7 @@ void mg_printf_http_chunk(struct mg_connection *, const char *, ...);
 /*
  * Send response status line.
  * If `extra_headers` is not NULL, then `extra_headers` are also sent
- * after the reponse line, followed by a new line.
+ * after the reponse line. `extra_headers` must NOT end end with new line.
  * Example:
  *
  *      mg_send_response_line(nc, 200, "Access-Control-Allow-Origin: *");
@@ -1544,8 +1544,24 @@ void mg_printf_http_chunk(struct mg_connection *, const char *, ...);
  *      HTTP/1.1 200 OK\r\n
  *      Access-Control-Allow-Origin: *\r\n
  */
-void mg_send_response_line(struct mg_connection *nc, int status_code,
+void mg_send_response_line(struct mg_connection *c, int status_code,
                            const char *extra_headers);
+
+/*
+ * Send response line and headers.
+ * This function sends response line with the `status_code`, and automatically
+ * sends one header: either "Content-Length", or "Transfer-Encoding".
+ * If `content_length` is negative, then "Transfer-Encoding: chunked" header
+ * is sent, otherwise, "Content-Length" header is sent.
+ *
+ * NOTE: If `Transfer-Encoding` is `chunked`, then message body must be sent
+ * using `mg_send_http_chunk()` or `mg_printf_http_chunk()` functions.
+ * Otherwise, `mg_send()` or `mg_printf()` must be used.
+ * Extra headers could be set through `extra_headers` - and note `extra_headers`
+ * must NOT be terminated by a new line.
+ */
+void mg_send_head(struct mg_connection *n, int status_code,
+                  int64_t content_length, const char *extra_headers);
 
 /*
  * Send printf-formatted HTTP chunk, escaping HTML tags.

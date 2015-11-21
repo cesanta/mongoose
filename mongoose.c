@@ -4503,6 +4503,17 @@ void mg_send_response_line(struct mg_connection *nc, int status_code,
   }
 }
 
+void mg_send_head(struct mg_connection *c, int status_code,
+                  int64_t content_length, const char *extra_headers) {
+  mg_send_response_line(c, status_code, extra_headers);
+  if (content_length < 0) {
+    mg_printf(c, "%s", "Transfer-Encoding: chunked\r\n");
+  } else {
+    mg_printf(c, "Content-Length: %" INT64_FMT "\r\n", content_length);
+  }
+  mg_send(c, "\r\n", 2);
+}
+
 static void send_http_error(struct mg_connection *nc, int code,
                             const char *reason) {
   if (reason == NULL) {
