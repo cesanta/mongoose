@@ -105,7 +105,6 @@
 
 #include <assert.h>
 #include <ctype.h>
-#include <errno.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -234,8 +233,11 @@ struct dirent *readdir(DIR *dir);
 #include <sys/select.h>
 #endif
 
-#ifndef _WIN32
+#ifndef LWIP_PROVIDE_ERRNO
 #include <errno.h>
+#endif
+
+#ifndef _WIN32
 #include <inttypes.h>
 #include <stdarg.h>
 
@@ -519,9 +521,12 @@ extern "C" {
 int c_snprintf(char *buf, size_t buf_size, const char *format, ...);
 int c_vsnprintf(char *buf, size_t buf_size, const char *format, va_list ap);
 
-#if !(_XOPEN_SOURCE >= 700 || _POSIX_C_SOURCE >= 200809L) &&    \
-        !(__DARWIN_C_LEVEL >= 200809L) && !defined(RTOS_SDK) || \
+#if (!(defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 700) &&           \
+     !(defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200809L) &&   \
+     !(defined(__DARWIN_C_LEVEL) && __DARWIN_C_LEVEL >= 200809L) && \
+     !defined(RTOS_SDK)) ||                                         \
     defined(_WIN32)
+#define _MG_PROVIDE_STRNLEN
 size_t strnlen(const char *s, size_t maxlen);
 #endif
 
