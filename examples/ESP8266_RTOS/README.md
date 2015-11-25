@@ -23,4 +23,14 @@ $ esptool.py --port /dev/ttyUSB0 --baud 230400 \
     0x01000 ${BIN_PATH}/upgrade/user1.4096.new.6.bin
 ```
 
-Note: the output can be made to fit in 512KB (4Mb) by moving `irom0_0_seg` in [eagle.app.v6.ld](https://github.com/espressif/ESP8266_RTOS_SDK/blob/master/ld/eagle.app.v6.ld) and increasing its size.
+
+The output can be made to fit in 512KB (4Mb), but stock linker scripts do not reserve enough space for code.
+Custom linker script is provided for that, so you can use it for smaller devices like so (example that will work with ESP-01):
+
+```
+  $ make clean; make BOOT=none APP=0 SPI_SPEED=40 SPI_MODE=qio SPI_SIZE_MAP=0 LD_FILE=ld/eagle.app.v6.512.compact.ld
+  $ esptool.py --port /dev/ttyUSB0 --baud 230400 \
+      write_flash --flash_mode=qio --flash_size=4m \
+      0x00000 ${BIN_PATH}/eagle.flash.bin \
+      0x10000 ${BIN_PATH}/eagle.irom0text.bin
+```
