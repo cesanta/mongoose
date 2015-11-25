@@ -4,7 +4,7 @@
 /*
  * Flash map for 512KB flash.
  *
- * There is 0x2000 (16KB) available between 0x8000 and 0x10000.
+ * There is 0x8000 (32KB) available between 0x8000 and 0x10000.
  *
  * Note: IROM images starts at 0x10000 (ignore Makefile output which says 0x40000.
  */
