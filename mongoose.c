@@ -4488,6 +4488,12 @@ void mg_send_response_line(struct mg_connection *nc, int status_code,
     case 206:
       status_message = "Partial Content";
       break;
+    case 301:
+      status_message = "Moved";
+      break;
+    case 302:
+      status_message = "Found";
+      break;
     case 416:
       status_message = "Requested range not satisfiable";
       break;
@@ -5502,6 +5508,34 @@ MG_INTERNAL int find_index_file(char *path, size_t path_len, const char *list,
   return found;
 }
 
+static int send_port_based_redirect(struct mg_connection *c,
+                                    struct http_message *hm,
+                                    const struct mg_serve_http_opts *opts) {
+  const char *rewrites = opts->url_rewrites;
+  struct mg_str a, b;
+  char local_port[20] = {'%'};
+
+#ifndef MG_ESP8266
+  mg_sock_to_str(c->sock, local_port + 1, sizeof(local_port) - 1,
+                 MG_SOCK_STRINGIFY_PORT);
+#else
+  /* TODO(lsm): remove when mg_sock_to_str() is implemented in LWIP codepath */
+  snprintf(local_port, sizeof(local_port), "%s", "%0");
+#endif
+
+  while ((rewrites = mg_next_comma_list_entry(rewrites, &a, &b)) != NULL) {
+    if (mg_vcmp(&a, local_port) == 0) {
+      mg_send_response_line(c, 301, NULL);
+      mg_printf(c, "Content-Length: 0\r\nLocation: %.*s%.*s\r\n\r\n",
+                (int) b.len, b.p, (int) (hm->proto.p - hm->uri.p - 1),
+                hm->uri.p);
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
 static void uri_to_path(struct http_message *hm, char *buf, size_t buf_len,
                         const struct mg_serve_http_opts *opts) {
   char uri[MG_MAX_PATH];
@@ -6131,6 +6165,10 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
                    struct mg_serve_http_opts opts) {
   char path[MG_MAX_PATH];
   struct mg_str *hdr;
+
+  if (send_port_based_redirect(nc, hm, &opts)) {
+    return;
+  }
 
   if (opts.document_root == NULL) {
     opts.document_root = ".";

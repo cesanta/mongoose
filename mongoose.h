@@ -1772,6 +1772,13 @@ struct mg_serve_http_opts {
    * If uri_pattern starts with `@` symbol, then Mongoose compares it with the
    * HOST header of the request. If they are equal, Mongoose sets document root
    * to `file_or_directory_path`, implementing virtual hosts support.
+   * Example: `@foo.com=/document/root/for/foo.com`
+   *
+   * If `uri_pattern` starts with `%` symbol, then Mongoose compares it with
+   * the listening port. If they match, then Mongoose issues a 301 redirect.
+   * For example, to redirect all HTTP requests to the
+   * HTTPS port, do `%80=https://my.site.com`. Note that the request URI is
+   * automatically appended to the redirect location.
    */
   const char *url_rewrites;
 
