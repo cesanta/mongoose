@@ -1865,12 +1865,16 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
        ev_handler == nc->handler ? "user" : "proto", ev, ev_data, nc->flags,
        (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
 
-#ifndef MG_DISABLE_FILESYSTEM
+#if !defined(NO_LIBC) && !defined(MG_DISABLE_HEXDUMP)
   /* LCOV_EXCL_START */
   if (nc->mgr->hexdump_file != NULL && ev != MG_EV_POLL &&
       ev != MG_EV_SEND /* handled separately */) {
-    int len = (ev == MG_EV_RECV ? *(int *) ev_data : 0);
-    mg_hexdump_connection(nc, nc->mgr->hexdump_file, len, ev);
+    if (ev == MG_EV_RECV) {
+      mg_hexdump_connection(nc, nc->mgr->hexdump_file, nc->recv_mbuf.buf,
+                            *(int *) ev_data, ev);
+    } else {
+      mg_hexdump_connection(nc, nc->mgr->hexdump_file, NULL, 0, ev);
+    }
   }
 /* LCOV_EXCL_STOP */
 #endif
@@ -2385,9 +2389,9 @@ void mg_send(struct mg_connection *nc, const void *buf, int len) {
   } else {
     mg_if_tcp_send(nc, buf, len);
   }
-#ifndef MG_DISABLE_FILESYSTEM
+#if !defined(NO_LIBC) && !defined(MG_DISABLE_HEXDUMP)
   if (nc->mgr && nc->mgr->hexdump_file != NULL) {
-    mg_hexdump_connection(nc, nc->mgr->hexdump_file, len, MG_EV_SEND);
+    mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, len, MG_EV_SEND);
   }
 #endif
 }
@@ -3464,21 +3468,30 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
 }
 #endif /* MG_DISABLE_SOCKETPAIR */
 
-void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
-  union socket_address sa;
+static void mg_sock_get_addr(sock_t sock, int remote,
+                             union socket_address *sa) {
 #ifndef MG_CC3200
   socklen_t slen = sizeof(sa);
-#endif
-
-  memset(&sa, 0, sizeof(sa));
-#ifndef MG_CC3200
-  if (flags & MG_SOCK_STRINGIFY_REMOTE) {
-    getpeername(sock, &sa.sa, &slen);
+  memset(sa, 0, sizeof(*sa));
+  if (remote) {
+    getpeername(sock, &sa->sa, &slen);
   } else {
-    getsockname(sock, &sa.sa, &slen);
+    getsockname(sock, &sa->sa, &slen);
   }
+#else
+  memset(sa, 0, sizeof(*sa));
 #endif
+}
+
+void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
+  union socket_address sa;
+  mg_sock_get_addr(sock, flags & MG_SOCK_STRINGIFY_REMOTE, &sa);
   mg_sock_addr_to_str(&sa, buf, len, flags);
+}
+
+void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
+                         union socket_address *sa) {
+  mg_sock_get_addr(nc->sock, remote, sa);
 }
 
 #endif /* !MG_DISABLE_SOCKET_IF */
@@ -6495,6 +6508,15 @@ void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
   }
 }
 
+void mg_conn_addr_to_str(struct mg_connection *nc, char *buf, size_t len,
+                         int flags) {
+  union socket_address sa;
+  memset(&sa, 0, sizeof(sa));
+  mg_if_get_conn_addr(nc, flags & MG_SOCK_STRINGIFY_REMOTE, &sa);
+  mg_sock_addr_to_str(&sa, buf, len, flags);
+}
+
+#ifndef MG_DISABLE_HEXDUMP
 int mg_hexdump(const void *buf, int len, char *dst, int dst_len) {
   const unsigned char *p = (const unsigned char *) buf;
   char ascii[17] = "";
@@ -6516,6 +6538,7 @@ int mg_hexdump(const void *buf, int len, char *dst, int dst_len) {
 
   return n;
 }
+#endif
 
 int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   va_list ap_copy;
@@ -6553,40 +6576,43 @@ int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   return len;
 }
 
-#ifndef MG_DISABLE_FILESYSTEM
+#if !defined(NO_LIBC) && !defined(MG_DISABLE_HEXDUMP)
 void mg_hexdump_connection(struct mg_connection *nc, const char *path,
-                           int num_bytes, int ev) {
-  const struct mbuf *io = ev == MG_EV_SEND ? &nc->send_mbuf : &nc->recv_mbuf;
-  FILE *fp;
-  char *buf, src[60], dst[60];
+                           const void *buf, int num_bytes, int ev) {
+  FILE *fp = NULL;
+  char *hexbuf, src[60], dst[60];
   int buf_size = num_bytes * 5 + 100;
 
-  if ((fp = fopen(path, "a")) != NULL) {
-#ifndef MG_DISABLE_SOCKET_IF
-    mg_sock_to_str(nc->sock, src, sizeof(src), 3);
-    mg_sock_to_str(nc->sock, dst, sizeof(dst), 7);
-#else
-    /* TODO (alashkin): should we request info from net_if? */
-    strcpy(src, "n/a");
-    strcpy(dst, "n/a");
+  if (strcmp(path, "-") == 0) {
+    fp = stdout;
+  } else if (strcmp(path, "--") == 0) {
+    fp = stderr;
+#ifndef MG_DISABLE_FILESYSTEM
+  } else {
+    fp = fopen(path, "a");
 #endif
-    fprintf(
-        fp, "%lu %p %s %s %s %d\n", (unsigned long) time(NULL), nc, src,
-        ev == MG_EV_RECV ? "<-" : ev == MG_EV_SEND
-                                      ? "->"
-                                      : ev == MG_EV_ACCEPT
-                                            ? "<A"
-                                            : ev == MG_EV_CONNECT ? "C>" : "XX",
-        dst, num_bytes);
-    if (num_bytes > 0 && (buf = (char *) MG_MALLOC(buf_size)) != NULL) {
-      mg_hexdump(io->buf + (ev == MG_EV_SEND ? 0 : io->len) -
-                     (ev == MG_EV_SEND ? 0 : num_bytes),
-                 num_bytes, buf, buf_size);
-      fprintf(fp, "%s", buf);
-      MG_FREE(buf);
-    }
-    fclose(fp);
   }
+  if (fp == NULL) return;
+
+  mg_conn_addr_to_str(nc, src, sizeof(src),
+                      MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
+  mg_conn_addr_to_str(nc, dst, sizeof(dst), MG_SOCK_STRINGIFY_IP |
+                                                MG_SOCK_STRINGIFY_PORT |
+                                                MG_SOCK_STRINGIFY_REMOTE);
+  fprintf(
+      fp, "%lu %p %s %s %s %d\n", (unsigned long) time(NULL), nc, src,
+      ev == MG_EV_RECV ? "<-" : ev == MG_EV_SEND
+                                    ? "->"
+                                    : ev == MG_EV_ACCEPT
+                                          ? "<A"
+                                          : ev == MG_EV_CONNECT ? "C>" : "XX",
+      dst, num_bytes);
+  if (num_bytes > 0 && (hexbuf = (char *) MG_MALLOC(buf_size)) != NULL) {
+    mg_hexdump(buf, num_bytes, hexbuf, buf_size);
+    fprintf(fp, "%s", hexbuf);
+    MG_FREE(hexbuf);
+  }
+  if (fp != stdin && fp != stdout) fclose(fp);
 }
 #endif
 
