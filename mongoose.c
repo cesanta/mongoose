@@ -5016,6 +5016,13 @@ static int is_file_hidden(const char *path,
                           const struct mg_serve_http_opts *opts) {
   const char *p1 = opts->per_directory_auth_file;
   const char *p2 = opts->hidden_file_pattern;
+
+  /* Strip directory path from the file name */
+  const char *pdir = strrchr(path, DIRSEP);
+  if (pdir != NULL) {
+    path = pdir + 1;
+  }
+
   return !strcmp(path, ".") || !strcmp(path, "..") ||
          (p1 != NULL && !strcmp(path, p1)) ||
          (p2 != NULL && mg_match_prefix(p2, strlen(p2), path) > 0);
