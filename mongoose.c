@@ -1905,9 +1905,7 @@ static void mg_destroy_conn(struct mg_connection *conn) {
 
 void mg_close_conn(struct mg_connection *conn) {
   DBG(("%p %lu", conn, conn->flags));
-  if (!(conn->flags & MG_F_CONNECTING)) {
-    mg_call(conn, NULL, MG_EV_CLOSE, NULL);
-  }
+  mg_call(conn, NULL, MG_EV_CLOSE, NULL);
   mg_remove_conn(conn);
   mg_destroy_conn(conn);
 }
@@ -2550,6 +2548,7 @@ static void resolve_cb(struct mg_dns_message *msg, void *data) {
    * If we get there was no MG_DNS_A_RECORD in the answer
    */
   mg_call(nc, NULL, MG_EV_CONNECT, &failure);
+  mg_call(nc, NULL, MG_EV_CLOSE, NULL);
   mg_destroy_conn(nc);
 }
 #endif
