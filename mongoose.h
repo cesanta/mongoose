@@ -20,7 +20,7 @@
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-#define MG_VERSION "6.0"
+#define MG_VERSION "6.1"
 
 /* Local tweaks, applied before any of Mongoose's own headers. */
 #ifdef MG_LOCALS
