@@ -5745,6 +5745,7 @@ static pid_t start_process(const char *interp, const char *cmd, const char *env,
   char buf[500];
   pid_t pid = fork();
   (void) env;
+  signal(SIGCHLD, SIG_IGN);
 
   if (pid == 0) {
     /*
