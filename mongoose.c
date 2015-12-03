@@ -4851,8 +4851,8 @@ static void remove_double_dots(char *s) {
 
 #endif
 
-static int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
-                         int is_form_url_encoded) {
+int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
+                  int is_form_url_encoded) {
   int i, j, a, b;
 #define HEXTOI(x) (isdigit(x) ? x - '0' : x - 'W')
 

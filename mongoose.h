@@ -1690,6 +1690,19 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
  */
 int mg_get_http_var(const struct mg_str *, const char *, char *dst, size_t);
 
+/*
+ * Decode URL-encoded string.
+ *
+ * Source string is specified by (`src`, `src_len`), and destination is
+ * (`dst`, `dst_len`). If `is_form_url_encoded` is non-zero, then
+ * `+` character is decoded as a blank space character. This function
+ * guarantees to `\0`-terminate the destination. If destination is too small,
+ * then source string is partially decoded and `-1` is returned. Otherwise,
+ * a length of decoded string is returned, not counting final `\0`.
+ */
+int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
+                  int is_form_url_encoded);
+
 /* Create Digest authentication header for client request. */
 int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
                                       const char *method, const char *uri,
