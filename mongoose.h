@@ -1744,9 +1744,6 @@ struct mg_serve_http_opts {
   /* List of index files. Default is "" */
   const char *index_files;
 
-  /* Path to a HTTP requests log file. Leave as NULL to disable access log. */
-  const char *access_log_file;
-
   /*
    * Leave as NULL to disable authentication.
    * To enable directory protection with authentication, set this to ".htpasswd"
