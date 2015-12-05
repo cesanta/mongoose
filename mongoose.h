@@ -649,6 +649,10 @@ typedef void *SSL;
 typedef void *SSL_CTX;
 #endif
 
+#ifndef MG_VPRINTF_BUFFER_SIZE
+#define MG_VPRINTF_BUFFER_SIZE 100
+#endif
+
 #ifdef MG_USE_READ_WRITE
 #define MG_RECV_FUNC(s, b, l, f) read(s, b, l)
 #define MG_SEND_FUNC(s, b, l, f) write(s, b, l)

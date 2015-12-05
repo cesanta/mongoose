@@ -1801,7 +1801,6 @@ void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
 #endif
 
 #define MG_CTL_MSG_MESSAGE_SIZE 8192
-#define MG_VPRINTF_BUFFER_SIZE 100
 #define MG_MAX_HOST_LEN 200
 
 #define MG_COPY_COMMON_CONNECTION_OPTIONS(dst, src) \
@@ -4091,7 +4090,7 @@ void mg_send_websocket_framev(struct mg_connection *nc, int op,
 
 void mg_printf_websocket_frame(struct mg_connection *nc, int op,
                                const char *fmt, ...) {
-  char mem[BUFSIZ], *buf = mem;
+  char mem[MG_VPRINTF_BUFFER_SIZE], *buf = mem;
   va_list ap;
   int len;
 
@@ -4131,7 +4130,7 @@ static void websocket_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
 static void ws_handshake(struct mg_connection *nc, const struct mg_str *key) {
   static const char *magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-  char buf[500], sha[20], b64_sha[sizeof(sha) * 2];
+  char buf[MG_VPRINTF_BUFFER_SIZE], sha[20], b64_sha[sizeof(sha) * 2];
   cs_sha1_ctx sha_ctx;
 
   snprintf(buf, sizeof(buf), "%.*s%s", (int) key->len, key->p, magic);
@@ -4525,7 +4524,12 @@ void mg_send_head(struct mg_connection *c, int status_code,
   if (content_length < 0) {
     mg_printf(c, "%s", "Transfer-Encoding: chunked\r\n");
   } else {
+#ifdef MG_ESP8266
+    /* TODO(lsm): remove this when ESP stdlib supports %lld */
+    mg_printf(c, "Content-Length: %lu\r\n", (unsigned long) content_length);
+#else
     mg_printf(c, "Content-Length: %" INT64_FMT "\r\n", content_length);
+#endif
   }
   mg_send(c, "\r\n", 2);
 }
@@ -4927,7 +4931,7 @@ void mg_send_http_chunk(struct mg_connection *nc, const char *buf, size_t len) {
 }
 
 void mg_printf_http_chunk(struct mg_connection *nc, const char *fmt, ...) {
-  char mem[500], *buf = mem;
+  char mem[MG_VPRINTF_BUFFER_SIZE], *buf = mem;
   int len;
   va_list ap;
 
@@ -4947,7 +4951,7 @@ void mg_printf_http_chunk(struct mg_connection *nc, const char *fmt, ...) {
 }
 
 void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...) {
-  char mem[500], *buf = mem;
+  char mem[MG_VPRINTF_BUFFER_SIZE], *buf = mem;
   int i, j, len;
   va_list ap;
 
