@@ -526,7 +526,7 @@ int c_vsnprintf(char *buf, size_t buf_size, const char *format, va_list ap);
      !(defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200809L) &&   \
      !(defined(__DARWIN_C_LEVEL) && __DARWIN_C_LEVEL >= 200809L) && \
      !defined(RTOS_SDK)) ||                                         \
-    defined(_WIN32)
+    (defined(_MSC_VER) && _MSC_VER < 1600 /*Visual Studio 2010*/)
 #define _MG_PROVIDE_STRNLEN
 size_t strnlen(const char *s, size_t maxlen);
 #endif
