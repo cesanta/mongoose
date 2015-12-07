@@ -1891,6 +1891,20 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
        (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
 }
 
+void mg_if_timer(struct mg_connection *c, time_t now) {
+  if (c->ev_timer_time > 0 && now >= c->ev_timer_time) {
+    double dnow = now, old_value = c->ev_timer_time;
+    mg_call(c, NULL, MG_EV_TIMER, &dnow);
+    /*
+     * To prevent timer firing all the time, reset the timer after delivery.
+     * However, in case user sets it to new value, do not reset.
+     */
+    if (c->ev_timer_time == old_value) {
+      c->ev_timer_time = 0;
+    }
+  }
+}
+
 void mg_if_poll(struct mg_connection *nc, time_t now) {
   mg_call(nc, NULL, MG_EV_POLL, &now);
 }
@@ -3115,6 +3129,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, time_t now) {
   if (!(fd_flags & (_MG_F_FD_CAN_READ | _MG_F_FD_CAN_WRITE))) {
     mg_if_poll(nc, now);
   }
+  mg_if_timer(nc, now);
 
   DBG(("%p after fd=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock, nc->flags,
        (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));

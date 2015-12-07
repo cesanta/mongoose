@@ -698,6 +698,7 @@ typedef void (*mg_event_handler_t)(struct mg_connection *, int ev, void *);
 #define MG_EV_RECV 3    /* Data has benn received. int *num_bytes */
 #define MG_EV_SEND 4    /* Data has been written to a socket. int *num_bytes */
 #define MG_EV_CLOSE 5   /* Connection is closed. NULL */
+#define MG_EV_TIMER 6   /* now >= conn->ev_timer_time. double * */
 
 /*
  * Mongoose event manager.
@@ -730,6 +731,7 @@ struct mg_connection {
   SSL *ssl;
   SSL_CTX *ssl_ctx;
   time_t last_io_time;              /* Timestamp of the last socket IO */
+  double ev_timer_time;             /* Timestamp of the future MG_EV_TIMER */
   mg_event_handler_t proto_handler; /* Protocol-specific event handler */
   void *proto_data;                 /* Protocol-specific data */
   mg_event_handler_t handler;       /* Event handler function */
@@ -1115,6 +1117,9 @@ void mg_if_recved(struct mg_connection *nc, size_t len);
 
 /* Deliver a POLL event to the connection. */
 void mg_if_poll(struct mg_connection *nc, time_t now);
+
+/* Deliver a TIMER event to the connection. */
+void mg_if_timer(struct mg_connection *c, time_t now);
 
 /* Perform interface-related cleanup on connection before destruction. */
 void mg_if_destroy_conn(struct mg_connection *nc);
