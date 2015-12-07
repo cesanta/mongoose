@@ -324,7 +324,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst) {
 
 enum cs_log_level s_cs_log_level =
 #ifdef CS_ENABLE_DEBUG
-    LL_DEBUG;
+    LL_VERBOSE_DEBUG;
 #else
     LL_ERROR;
 #endif
@@ -2277,6 +2277,7 @@ static int mg_use_cert(SSL_CTX *ctx, const char *pem_file) {
 const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
                        const char *ca_cert) {
   const char *result = NULL;
+  DBG(("%p %s %s", nc, cert, ca_cert));
 
   if ((nc->flags & MG_F_LISTENING) &&
       (nc->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
@@ -2305,13 +2306,6 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
 #endif
   return result;
 }
-
-static int mg_ssl_err(struct mg_connection *conn, int res) {
-  int ssl_err = SSL_get_error(conn->ssl, res);
-  if (ssl_err == SSL_ERROR_WANT_READ) conn->flags |= MG_F_WANT_READ;
-  if (ssl_err == SSL_ERROR_WANT_WRITE) conn->flags |= MG_F_WANT_WRITE;
-  return ssl_err;
-}
 #endif /* MG_ENABLE_SSL */
 
 struct mg_connection *mg_if_accept_tcp_cb(struct mg_connection *lc,
@@ -2330,7 +2324,7 @@ struct mg_connection *mg_if_accept_tcp_cb(struct mg_connection *lc,
   nc->recv_mbuf_limit = lc->recv_mbuf_limit;
   nc->sa = *sa;
   mg_add_conn(nc->mgr, nc);
-  if (nc->ssl == NULL) {
+  if (lc->ssl_ctx == NULL) {
     /* For non-SSL connections deliver MG_EV_ACCEPT right away. */
     mg_call(nc, NULL, MG_EV_ACCEPT, &nc->sa);
   }
@@ -2345,39 +2339,6 @@ static size_t recv_avail_size(struct mg_connection *conn, size_t max) {
   avail = conn->recv_mbuf_limit - conn->recv_mbuf.len;
   return avail > max ? max : avail;
 }
-
-#ifdef MG_ENABLE_SSL
-static void mg_ssl_begin(struct mg_connection *nc) {
-  int server_side = nc->listener != NULL;
-  int res = server_side ? SSL_accept(nc->ssl) : SSL_connect(nc->ssl);
-  DBG(("%p %d res %d %d %d", nc, server_side, res, errno, mg_ssl_err(nc, res)));
-
-  if (res == 1) {
-    nc->flags |= MG_F_SSL_HANDSHAKE_DONE;
-    nc->flags &= ~(MG_F_WANT_READ | MG_F_WANT_WRITE);
-
-    if (server_side) {
-      union socket_address sa;
-      socklen_t sa_len = sizeof(sa);
-      /* In case port was set to 0, get the real port number */
-      (void) getsockname(nc->sock, &sa.sa, &sa_len);
-      mg_call(nc, NULL, MG_EV_ACCEPT, &sa);
-    } else {
-      int err = 0;
-      mg_call(nc, NULL, MG_EV_CONNECT, &err);
-    }
-  } else {
-    int ssl_err = mg_ssl_err(nc, res);
-    if (ssl_err != SSL_ERROR_WANT_READ && ssl_err != SSL_ERROR_WANT_WRITE) {
-      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-      if (!server_side) {
-        int err = 0;
-        mg_call(nc, NULL, MG_EV_CONNECT, &err);
-      }
-    }
-  }
-}
-#endif /* MG_ENABLE_SSL */
 
 void mg_send(struct mg_connection *nc, const void *buf, int len) {
   nc->last_io_time = time(NULL);
@@ -2498,15 +2459,7 @@ MG_INTERNAL struct mg_connection *mg_do_connect(struct mg_connection *nc,
 void mg_if_connect_cb(struct mg_connection *nc, int err) {
   DBG(("%p connect, err=%d", nc, err));
   nc->flags &= ~MG_F_CONNECTING;
-  if (err == 0) {
-#ifdef MG_ENABLE_SSL
-    if (nc->ssl != NULL) {
-      SSL_set_fd(nc->ssl, nc->sock);
-      mg_ssl_begin(nc);
-      return;
-    }
-#endif
-  } else {
+  if (err != 0) {
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
   mg_call(nc, NULL, MG_EV_CONNECT, &err);
@@ -2744,6 +2697,10 @@ void mg_forward(struct mg_connection *from, struct mg_connection *to) {
 
 static sock_t mg_open_listening_socket(union socket_address *sa, int proto);
 static void mg_sock_set(struct mg_connection *nc, sock_t sock);
+#ifdef MG_ENABLE_SSL
+static void mg_ssl_begin(struct mg_connection *nc);
+static int mg_ssl_err(struct mg_connection *conn, int res);
+#endif
 
 void mg_set_non_blocking_mode(sock_t sock) {
 #ifdef _WIN32
@@ -3055,6 +3012,44 @@ static void mg_handle_udp_read(struct mg_connection *nc) {
   mg_if_recv_udp_cb(nc, buf, n, &sa, sa_len);
 }
 
+#ifdef MG_ENABLE_SSL
+static int mg_ssl_err(struct mg_connection *conn, int res) {
+  int ssl_err = SSL_get_error(conn->ssl, res);
+  if (ssl_err == SSL_ERROR_WANT_READ) conn->flags |= MG_F_WANT_READ;
+  if (ssl_err == SSL_ERROR_WANT_WRITE) conn->flags |= MG_F_WANT_WRITE;
+  return ssl_err;
+}
+
+static void mg_ssl_begin(struct mg_connection *nc) {
+  int server_side = nc->listener != NULL;
+  int res = server_side ? SSL_accept(nc->ssl) : SSL_connect(nc->ssl);
+  DBG(("%p %d res %d %d %d", nc, server_side, res, errno, mg_ssl_err(nc, res)));
+
+  if (res == 1) {
+    nc->flags |= MG_F_SSL_HANDSHAKE_DONE;
+    nc->flags &= ~(MG_F_WANT_READ | MG_F_WANT_WRITE);
+
+    if (server_side) {
+      union socket_address sa;
+      socklen_t sa_len = sizeof(sa);
+      /* In case port was set to 0, get the real port number */
+      (void) getsockname(nc->sock, &sa.sa, &sa_len);
+      mg_call(nc, NULL, MG_EV_ACCEPT, &sa);
+    } else {
+      mg_if_connect_cb(nc, 0);
+    }
+  } else {
+    int ssl_err = mg_ssl_err(nc, res);
+    if (ssl_err != SSL_ERROR_WANT_READ && ssl_err != SSL_ERROR_WANT_WRITE) {
+      if (!server_side) {
+        mg_if_connect_cb(nc, ssl_err);
+      }
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+    }
+  }
+}
+#endif /* MG_ENABLE_SSL */
+
 #define _MG_F_FD_CAN_READ 1
 #define _MG_F_FD_CAN_WRITE 1 << 1
 #define _MG_F_FD_ERROR 1 << 2
@@ -3079,7 +3074,16 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, time_t now) {
  * TODO(rojer): Figure out why it fails where blocking succeeds.
  */
 #endif
+#ifdef MG_ENABLE_SSL
+      if (nc->ssl != NULL && err == 0) {
+        SSL_set_fd(nc->ssl, nc->sock);
+        mg_ssl_begin(nc);
+      } else {
+        mg_if_connect_cb(nc, err);
+      }
+#else
       mg_if_connect_cb(nc, err);
+#endif
     } else if (nc->err != 0) {
       mg_if_connect_cb(nc, nc->err);
     }
