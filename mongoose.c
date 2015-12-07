@@ -5196,7 +5196,7 @@ static int is_authorized(struct http_message *hm, const char *path,
 #ifndef MG_DISABLE_DIRECTORY_LISTING
 static size_t mg_url_encode(const char *src, size_t s_len, char *dst,
                             size_t dst_len) {
-  static const char *dont_escape = "._-$,;~()";
+  static const char *dont_escape = "._-$,;~()/";
   static const char *hex = "0123456789abcdef";
   size_t i = 0, j = 0;
 
@@ -6133,6 +6133,17 @@ static void mg_send_digest_auth_request(struct mg_connection *c,
             domain, (unsigned long) time(NULL));
 }
 
+static void send_options(struct mg_connection *nc) {
+  mg_printf(nc, "%s",
+            "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, CONNECT, PUT, "
+            "DELETE, OPTIONS, MKCOL,"
+#ifndef MG_DISABLE_DAV
+            "PROPFIND \r\nDAV: 1"
+#endif
+            "\r\n\r\n");
+  nc->flags |= MG_F_SEND_AND_CLOSE;
+}
+
 void mg_send_http_file(struct mg_connection *nc, char *path,
                        size_t path_buf_len, struct http_message *hm,
                        struct mg_serve_http_opts *opts) {
@@ -6178,6 +6189,8 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
   } else if (!mg_vcmp(&hm->method, "PUT")) {
     handle_put(nc, path, hm);
 #endif
+  } else if (!mg_vcmp(&hm->method, "OPTIONS")) {
+    send_options(nc);
   } else if (S_ISDIR(st.st_mode) &&
              !find_index_file(path, path_buf_len, opts->index_files, &st)) {
     if (strcmp(opts->enable_directory_listing, "yes") == 0) {

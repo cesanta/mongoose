@@ -1,6 +1,6 @@
 PROG = simplest_web_server
 SOURCES = $(PROG).c ../../mongoose.c
-CFLAGS = -W -Wall -I../.. $(CFLAGS_EXTRA)
+CFLAGS = -W -Wall -I../.. $(CFLAGS_EXTRA) -DMG_DISABLE_DAV_AUTH
 
 all: $(PROG)
 
