@@ -5527,6 +5527,20 @@ static int remove_directory(const struct mg_serve_http_opts *opts,
   return 1;
 }
 
+static void handle_move(struct mg_connection *nc,
+                        const struct mg_serve_http_opts *opts, const char *path,
+                        struct http_message *hm) {
+  /*
+   * This method is not implemented now, but at least
+   * we have to send error 501
+   */
+  (void) nc;
+  (void) opts;
+  (void) path;
+  (void) hm;
+  send_http_error(nc, 501, "Not implemented");
+}
+
 static void handle_delete(struct mg_connection *nc,
                           const struct mg_serve_http_opts *opts,
                           const char *path) {
@@ -5606,7 +5620,7 @@ static void handle_put(struct mg_connection *nc, const char *path,
 
 static int is_dav_request(const struct mg_str *s) {
   return !mg_vcmp(s, "PUT") || !mg_vcmp(s, "DELETE") || !mg_vcmp(s, "MKCOL") ||
-         !mg_vcmp(s, "PROPFIND");
+         !mg_vcmp(s, "PROPFIND") || !mg_vcmp(s, "MOVE");
 }
 
 /*
@@ -6293,6 +6307,8 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
     handle_delete(nc, opts, path);
   } else if (!mg_vcmp(&hm->method, "PUT")) {
     handle_put(nc, path, hm);
+  } else if (!mg_vcmp(&hm->method, "MOVE")) {
+    handle_move(nc, opts, path, hm);
 #endif
   } else if (!mg_vcmp(&hm->method, "OPTIONS")) {
     send_options(nc);
