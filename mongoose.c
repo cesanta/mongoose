@@ -2722,7 +2722,8 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
    * connections, so not processed yet. It has a DNS resolver connection
    * linked to it. Set up a timer for the DNS connection.
    */
-  DBG(("%p %p %d", c, c->priv_2, c->flags & MG_F_RESOLVING));
+  DBG(("%p %p %d -> %lu", c, c->priv_2, c->flags & MG_F_RESOLVING,
+       (unsigned long) timestamp));
   if ((c->flags & MG_F_RESOLVING) && c->priv_2 != NULL) {
     ((struct mg_connection *) c->priv_2)->ev_timer_time = timestamp;
   }
@@ -3170,8 +3171,8 @@ static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
   struct ctl_msg ctl_msg;
   int len =
       (int) MG_RECV_FUNC(mgr->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg), 0);
-  DBG(("read %d from ctl socket", len));
   size_t dummy = MG_SEND_FUNC(mgr->ctl[1], ctl_msg.message, 1, 0);
+  DBG(("read %d from ctl socket", len));
   (void) dummy; /* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25509 */
   if (len >= (int) sizeof(ctl_msg.callback) && ctl_msg.callback != NULL) {
     struct mg_connection *nc;
