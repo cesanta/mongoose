@@ -1063,6 +1063,35 @@ enum v7_err mg_enable_javascript(struct mg_mgr *m, struct v7 *v7,
                                  const char *init_js_file_name);
 #endif
 
+/*
+ * Schedule MG_EV_TIMER event to be delivered at `timestamp` time.
+ * `timestamp` is a UNIX time (a number of seconds since Epoch). It is
+ * `double` instead of `time_t` to allow for sub-second precision.
+ * Return the old timer value.
+ *
+ * Example: set connect timeout to 1.5 seconds:
+ *
+ * ```
+ *  c = mg_connect(&mgr, "cesanta.com", ev_handler);
+ *  mg_set_timer(c, time(NULL) + 1.5);
+ *  ...
+ *
+ *  void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+ *  switch (ev) {
+ *    case MG_EV_CONNECT:
+ *      mg_set_timer(c, 0);  // Clear connect timer
+ *      break;
+ *    case MG_EV_TIMER:
+ *      log("Connect timeout");
+ *      c->flags |= MG_F_CLOSE_IMMEDIATELY;
+ *      break;
+```
+ *
+ * NOTE: sub-second precision is not implemented yet, current granularity
+ * is 1 second.
+ */
+double mg_set_timer(struct mg_connection *c, double timestamp);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
@@ -2556,7 +2585,15 @@ void mg_dns_send_reply(struct mg_connection *, struct mg_dns_reply *);
 extern "C" {
 #endif /* __cplusplus */
 
-typedef void (*mg_resolve_callback_t)(struct mg_dns_message *, void *);
+enum mg_resolve_err {
+  MG_RESOLVE_OK = 0,
+  MG_RESOLVE_NO_ANSWERS = 1,
+  MG_RESOLVE_EXCEEDED_RETRY_COUNT = 2,
+  MG_RESOLVE_TIMEOUT = 3
+};
+
+typedef void (*mg_resolve_callback_t)(struct mg_dns_message *dns_message,
+                                      void *user_data, enum mg_resolve_err);
 
 /* Options for `mg_resolve_async_opt`. */
 struct mg_resolve_async_opts {
@@ -2565,6 +2602,7 @@ struct mg_resolve_async_opts {
   int timeout;        /* in seconds; defaults to 5 if zero */
   int accept_literal; /* pseudo-resolve literal ipv4 and ipv6 addrs */
   int only_literal;   /* only resolves literal addrs; sync cb invocation */
+  struct mg_connection **dns_conn; /* return DNS connection */
 };
 
 /* See `mg_resolve_async_opt()` */
