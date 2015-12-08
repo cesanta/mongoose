@@ -1266,7 +1266,7 @@ FILE *mg_fopen(const char *path, const char *mode);
 int mg_open(const char *path, int flag, int mode);
 #endif /* MG_DISABLE_FILESYSTEM */
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(MG_ENABLE_THREADS)
 #define MG_ENABLE_THREADS
 #endif
 
