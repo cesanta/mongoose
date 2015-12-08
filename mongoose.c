@@ -1925,7 +1925,9 @@ void mg_close_conn(struct mg_connection *conn) {
 
 void mg_mgr_init(struct mg_mgr *m, void *user_data) {
   memset(m, 0, sizeof(*m));
+#ifndef MG_DISABLE_SOCKETPAIR
   m->ctl[0] = m->ctl[1] = INVALID_SOCKET;
+#endif
   m->user_data = user_data;
 
 #ifdef _WIN32
@@ -1989,8 +1991,8 @@ void mg_mgr_free(struct mg_mgr *m) {
 #ifndef MG_DISABLE_SOCKETPAIR
   if (m->ctl[0] != INVALID_SOCKET) closesocket(m->ctl[0]);
   if (m->ctl[1] != INVALID_SOCKET) closesocket(m->ctl[1]);
-#endif
   m->ctl[0] = m->ctl[1] = INVALID_SOCKET;
+#endif
 
   for (conn = m->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
@@ -3367,7 +3369,9 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
   FD_ZERO(&err_set);
+#ifndef MG_DISABLE_SOCKETPAIR
   mg_add_to_set(mgr->ctl[1], &read_set, &max_fd);
+#endif
 
   for (nc = mgr->active_connections, num_fds = 0; nc != NULL; nc = tmp) {
     tmp = nc->next;
