@@ -1962,7 +1962,7 @@ static v7_val_t mg_send_js(struct v7 *v7) {
   size_t len = 0;
 
   if (v7_is_string(arg1)) {
-    const char *data = v7_to_string(v7, &arg1, &len);
+    const char *data = v7_get_string_data(v7, &arg1, &len);
     mg_send(c, data, len);
   }
 
