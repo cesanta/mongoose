@@ -342,7 +342,7 @@ void cs_log_set_level(enum cs_log_level level) {
   s_cs_log_level = level;
 }
 #ifdef NS_MODULE_LINES
-#line 1 "src/../../common/dirent.c"
+#line 1 "src/../../common/cs_dirent.c"
 /**/
 #endif
 /*
@@ -353,6 +353,7 @@ void cs_log_set_level(enum cs_log_level level) {
 #ifndef EXCLUDE_COMMON
 
 /* Amalgamated: #include "osdep.h" */
+/* Amalgamated: #include "cs_dirent.h" */
 
 /*
  * This file contains POSIX opendir/closedir/readdir API implementation
@@ -433,6 +434,48 @@ struct dirent *readdir(DIR *dir) {
   return result;
 }
 #endif
+
+#ifdef CS_ENABLE_SPIFFS
+
+DIR *opendir(const char *dir_name) {
+  DIR *dir = NULL;
+  extern spiffs fs;
+
+  if (dir_name != NULL && (dir = (DIR *) malloc(sizeof(*dir))) != NULL &&
+      SPIFFS_opendir(&fs, (char *) dir_name, &dir->dh) == NULL) {
+    free(dir);
+    dir = NULL;
+  }
+
+  return dir;
+}
+
+int closedir(DIR *dir) {
+  if (dir != NULL) {
+    SPIFFS_closedir(&dir->dh);
+    free(dir);
+  }
+  return 0;
+}
+
+struct dirent *readdir(DIR *dir) {
+  return SPIFFS_readdir(&dir->dh, &dir->de);
+}
+
+/* SPIFFs doesn't support directory operations */
+int rmdir(const char *path) {
+  (void) path;
+  return ENOTDIR;
+}
+
+int mkdir(const char *path, mode_t mode) {
+  (void) path;
+  (void) mode;
+  /* for spiffs supports only root dir, which comes from mongoose as '.' */
+  return (strlen(path) == 1 && *path == '.') ? 0 : ENOTDIR;
+}
+
+#endif /* CS_ENABLE_SPIFFS */
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
@@ -5309,12 +5352,12 @@ static void scan_directory(struct mg_connection *nc, const char *dir,
   if ((dirp = (opendir(dir))) != NULL) {
     while ((dp = readdir(dirp)) != NULL) {
       /* Do not show current dir and hidden files */
-      if (is_file_hidden(dp->d_name, opts)) {
+      if (is_file_hidden((const char *) dp->d_name, opts)) {
         continue;
       }
       snprintf(path, sizeof(path), "%s/%s", dir, dp->d_name);
       if (mg_stat(path, &st) == 0) {
-        func(nc, dp->d_name, &st);
+        func(nc, (const char *) dp->d_name, &st);
       }
     }
     closedir(dirp);
@@ -5371,6 +5414,7 @@ static void print_props(struct mg_connection *nc, const char *name,
   time_t t = stp->st_mtime; /* store in local variable for NDK compile */
   gmt_time_string(mtime, sizeof(mtime), &t);
   mg_url_encode(name, strlen(name), buf, sizeof(buf));
+#ifndef MG_ESP8266
   mg_printf(nc,
             "<d:response>"
             "<d:href>%s</d:href>"
@@ -5386,6 +5430,28 @@ static void print_props(struct mg_connection *nc, const char *name,
             "</d:response>\n",
             buf, S_ISDIR(stp->st_mode) ? "<d:collection/>" : "",
             (int64_t) stp->st_size, mtime);
+#else
+  /*
+   * TODO(alashkin): esp's sprintf doesn't handle INT64_FMT and call abort()
+   * Fix it
+   */
+  mg_printf(nc,
+            "<d:response>"
+            "<d:href>%s</d:href>"
+            "<d:propstat>"
+            "<d:prop>"
+            "<d:resourcetype>%s</d:resourcetype>"
+            "<d:getcontentlength>%lu"
+            "</d:getcontentlength>"
+            "<d:getlastmodified>%s</d:getlastmodified>"
+            "</d:prop>"
+            "<d:status>HTTP/1.1 200 OK</d:status>"
+            "</d:propstat>"
+            "</d:response>\n",
+            buf, S_ISDIR(stp->st_mode) ? "<d:collection/>" : "",
+            (unsigned long) stp->st_size, mtime);
+
+#endif
 }
 
 static void handle_propfind(struct mg_connection *nc, const char *path,
@@ -5434,7 +5500,8 @@ static void handle_mkcol(struct mg_connection *nc, const char *path,
   send_http_error(nc, status_code, NULL);
 }
 
-static int remove_directory(const char *dir) {
+static int remove_directory(const struct mg_serve_http_opts *opts,
+                            const char *dir) {
   char path[MAX_PATH_SIZE];
   struct dirent *dp;
   cs_stat_t st;
@@ -5443,11 +5510,13 @@ static int remove_directory(const char *dir) {
   if ((dirp = opendir(dir)) == NULL) return 0;
 
   while ((dp = readdir(dirp)) != NULL) {
-    if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) continue;
+    if (is_file_hidden((const char *) dp->d_name, opts)) {
+      continue;
+    }
     snprintf(path, sizeof(path), "%s%c%s", dir, '/', dp->d_name);
     mg_stat(path, &st);
     if (S_ISDIR(st.st_mode)) {
-      remove_directory(path);
+      remove_directory(opts, path);
     } else {
       remove(path);
     }
@@ -5458,12 +5527,14 @@ static int remove_directory(const char *dir) {
   return 1;
 }
 
-static void handle_delete(struct mg_connection *nc, const char *path) {
+static void handle_delete(struct mg_connection *nc,
+                          const struct mg_serve_http_opts *opts,
+                          const char *path) {
   cs_stat_t st;
   if (mg_stat(path, &st) != 0) {
     send_http_error(nc, 404, NULL);
   } else if (S_ISDIR(st.st_mode)) {
-    remove_directory(path);
+    remove_directory(opts, path);
     send_http_error(nc, 204, NULL);
   } else if (remove(path) == 0) {
     send_http_error(nc, 204, NULL);
@@ -6170,9 +6241,9 @@ static void mg_send_digest_auth_request(struct mg_connection *c,
 static void send_options(struct mg_connection *nc) {
   mg_printf(nc, "%s",
             "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, CONNECT, PUT, "
-            "DELETE, OPTIONS, MKCOL,"
+            "DELETE, OPTIONS, MKCOL"
 #ifndef MG_DISABLE_DAV
-            "PROPFIND \r\nDAV: 1"
+            ", PROPFIND \r\nDAV: 1"
 #endif
             "\r\n\r\n");
   nc->flags |= MG_F_SEND_AND_CLOSE;
@@ -6219,7 +6290,7 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
   } else if (!mg_vcmp(&hm->method, "MKCOL")) {
     handle_mkcol(nc, path, hm);
   } else if (!mg_vcmp(&hm->method, "DELETE")) {
-    handle_delete(nc, path);
+    handle_delete(nc, opts, path);
   } else if (!mg_vcmp(&hm->method, "PUT")) {
     handle_put(nc, path, hm);
 #endif
