@@ -1748,6 +1748,9 @@ int c_vsnprintf(char *buf, size_t buf_size, const char *fmt, va_list ap) {
       } else if (ch == 'd' && len_mod == 'l') {
         i += c_itoa(buf + i, buf_size - i, va_arg(ap, long), 10, flags,
                     field_width);
+      } else if (ch == 'd' && len_mod == 'q') {
+        i += c_itoa(buf + i, buf_size - i, va_arg(ap, int64_t), 10, flags,
+                    field_width);
       } else if ((ch == 'x' || ch == 'u') && len_mod == 0) {
         i += c_itoa(buf + i, buf_size - i, va_arg(ap, unsigned),
                     ch == 'x' ? 16 : 10, flags, field_width);
@@ -4631,12 +4634,7 @@ void mg_send_head(struct mg_connection *c, int status_code,
   if (content_length < 0) {
     mg_printf(c, "%s", "Transfer-Encoding: chunked\r\n");
   } else {
-#ifdef MG_ESP8266
-    /* TODO(lsm): remove this when ESP stdlib supports %lld */
-    mg_printf(c, "Content-Length: %lu\r\n", (unsigned long) content_length);
-#else
     mg_printf(c, "Content-Length: %" INT64_FMT "\r\n", content_length);
-#endif
   }
   mg_send(c, "\r\n", 2);
 }
@@ -5425,7 +5423,6 @@ static void print_props(struct mg_connection *nc, const char *name,
   time_t t = stp->st_mtime; /* store in local variable for NDK compile */
   gmt_time_string(mtime, sizeof(mtime), &t);
   mg_url_encode(name, strlen(name), buf, sizeof(buf));
-#ifndef MG_ESP8266
   mg_printf(nc,
             "<d:response>"
             "<d:href>%s</d:href>"
@@ -5441,28 +5438,6 @@ static void print_props(struct mg_connection *nc, const char *name,
             "</d:response>\n",
             buf, S_ISDIR(stp->st_mode) ? "<d:collection/>" : "",
             (int64_t) stp->st_size, mtime);
-#else
-  /*
-   * TODO(alashkin): esp's sprintf doesn't handle INT64_FMT and call abort()
-   * Fix it
-   */
-  mg_printf(nc,
-            "<d:response>"
-            "<d:href>%s</d:href>"
-            "<d:propstat>"
-            "<d:prop>"
-            "<d:resourcetype>%s</d:resourcetype>"
-            "<d:getcontentlength>%lu"
-            "</d:getcontentlength>"
-            "<d:getlastmodified>%s</d:getlastmodified>"
-            "</d:prop>"
-            "<d:status>HTTP/1.1 200 OK</d:status>"
-            "</d:propstat>"
-            "</d:response>\n",
-            buf, S_ISDIR(stp->st_mode) ? "<d:collection/>" : "",
-            (unsigned long) stp->st_size, mtime);
-
-#endif
 }
 
 static void handle_propfind(struct mg_connection *nc, const char *path,
