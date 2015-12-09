@@ -1179,6 +1179,9 @@ void mg_if_poll(struct mg_connection *nc, time_t now);
 /* Deliver a TIMER event to the connection. */
 void mg_if_timer(struct mg_connection *c, time_t now);
 
+/* Perform interface-related connection initialization. Return 1 on success. */
+int mg_if_create_conn(struct mg_connection *nc);
+
 /* Perform interface-related cleanup on connection before destruction. */
 void mg_if_destroy_conn(struct mg_connection *nc);
 

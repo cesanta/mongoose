@@ -1954,8 +1954,13 @@ void mg_if_poll(struct mg_connection *nc, time_t now) {
 
 static void mg_destroy_conn(struct mg_connection *conn) {
   mg_if_destroy_conn(conn);
+#ifdef MG_ENABLE_SSL
+  if (conn->ssl != NULL) SSL_free(conn->ssl);
+  if (conn->ssl_ctx != NULL) SSL_CTX_free(conn->ssl_ctx);
+#endif
   mbuf_free(&conn->recv_mbuf);
   mbuf_free(&conn->send_mbuf);
+  memset(conn, 0, sizeof(*conn));
   MG_FREE(conn);
 }
 
@@ -2124,6 +2129,11 @@ MG_INTERNAL struct mg_connection *mg_create_connection(
      * doesn't compile with pedantic ansi flags.
      */
     conn->recv_mbuf_limit = ~0;
+    if (!mg_if_create_conn(conn)) {
+      MG_FREE(conn);
+      conn = NULL;
+      MG_SET_PTRPTR(opts.error_string, "failed init connection");
+    }
   } else {
     MG_SET_PTRPTR(opts.error_string, "failed create connection");
   }
@@ -2336,7 +2346,7 @@ static int mg_use_cert(SSL_CTX *ctx, const char *pem_file) {
 const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
                        const char *ca_cert) {
   const char *result = NULL;
-  DBG(("%p %s %s", nc, cert, ca_cert));
+  DBG(("%p %s %s", nc, (cert ? cert : ""), (ca_cert ? ca_cert : "")));
 
   if ((nc->flags & MG_F_LISTENING) &&
       (nc->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
@@ -2874,12 +2884,13 @@ void mg_if_recved(struct mg_connection *nc, size_t len) {
   (void) len;
 }
 
+int mg_if_create_conn(struct mg_connection *nc) {
+  (void) nc;
+  return 1;
+}
+
 void mg_if_destroy_conn(struct mg_connection *nc) {
   if (nc->sock == INVALID_SOCKET) return;
-#ifdef MG_ENABLE_SSL
-  if (nc->ssl != NULL) SSL_free(nc->ssl);
-  if (nc->ssl_ctx != NULL) SSL_CTX_free(nc->ssl_ctx);
-#endif
   if (!(nc->flags & MG_F_UDP)) {
     closesocket(nc->sock);
   } else {
