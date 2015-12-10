@@ -6240,10 +6240,9 @@ static void mg_send_digest_auth_request(struct mg_connection *c,
 
 static void send_options(struct mg_connection *nc) {
   mg_printf(nc, "%s",
-            "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, CONNECT, PUT, "
-            "DELETE, OPTIONS, MKCOL"
+            "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, CONNECT, OPTIONS"
 #ifndef MG_DISABLE_DAV
-            ", PROPFIND \r\nDAV: 1"
+            ", MKCOL, PUT, DELETE, PROPFIND, MOVE\r\nDAV: 1,2"
 #endif
             "\r\n\r\n");
   nc->flags |= MG_F_SEND_AND_CLOSE;
