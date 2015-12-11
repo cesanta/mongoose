@@ -3015,8 +3015,6 @@ static void mg_write_to_socket(struct mg_connection *nc) {
         int ssl_err = mg_ssl_err(nc, n);
         if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
           return; /* Call us again */
-        } else {
-          nc->flags |= MG_F_CLOSE_IMMEDIATELY;
         }
       } else {
         /* Successful SSL operation, clear off SSL wait flags */
@@ -3117,8 +3115,16 @@ static void mg_handle_udp_read(struct mg_connection *nc) {
 #ifdef MG_ENABLE_SSL
 static int mg_ssl_err(struct mg_connection *conn, int res) {
   int ssl_err = SSL_get_error(conn->ssl, res);
-  if (ssl_err == SSL_ERROR_WANT_READ) conn->flags |= MG_F_WANT_READ;
-  if (ssl_err == SSL_ERROR_WANT_WRITE) conn->flags |= MG_F_WANT_WRITE;
+  DBG(("%p %d -> %d", conn, res, ssl_err));
+  if (ssl_err == SSL_ERROR_WANT_READ) {
+    conn->flags |= MG_F_WANT_READ;
+  } else if (ssl_err == SSL_ERROR_WANT_WRITE) {
+    conn->flags |= MG_F_WANT_WRITE;
+  } else {
+    /* There could be an alert to deliver. Try our best. */
+    SSL_write(conn->ssl, "", 0);
+    conn->flags |= MG_F_CLOSE_IMMEDIATELY;
+  }
   return ssl_err;
 }
 
