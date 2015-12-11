@@ -1874,7 +1874,10 @@ struct mg_serve_http_opts {
   /* DAV document root. If NULL, DAV requests are going to fail. */
   const char *dav_document_root;
 
-  /* DAV passwords file. If NULL, DAV requests are going to fail. */
+  /*
+   * DAV passwords file. If NULL, DAV requests are going to fail.
+   * If passwords file is set to "-", then DAV auth is disabled.
+   */
   const char *dav_auth_file;
 
   /* Glob pattern for the files to hide. */

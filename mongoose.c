@@ -4641,10 +4641,8 @@ void mg_send_head(struct mg_connection *c, int status_code,
 
 static void send_http_error(struct mg_connection *nc, int code,
                             const char *reason) {
-  if (reason == NULL) {
-    reason = "";
-  }
-  mg_printf(nc, "HTTP/1.1 %d %s\r\nContent-Length: 0\r\n\r\n", code, reason);
+  (void) reason;
+  mg_send_head(nc, code, 0, NULL);
 }
 
 #ifndef MG_DISABLE_SSI
@@ -5513,18 +5511,28 @@ static int remove_directory(const struct mg_serve_http_opts *opts,
   return 1;
 }
 
-static void handle_move(struct mg_connection *nc,
+static void handle_move(struct mg_connection *c,
                         const struct mg_serve_http_opts *opts, const char *path,
                         struct http_message *hm) {
-  /*
-   * This method is not implemented now, but at least
-   * we have to send error 501
-   */
-  (void) nc;
-  (void) opts;
-  (void) path;
-  (void) hm;
-  send_http_error(nc, 501, "Not implemented");
+  const struct mg_str *dest = mg_get_http_header(hm, "Destination");
+  if (dest == NULL) {
+    send_http_error(c, 411, NULL);
+  } else {
+    const char *p = (char *) memchr(dest->p, '/', dest->len);
+    if (p != NULL && p[1] == '/' &&
+        (p = (char *) memchr(p + 2, '/', dest->p + dest->len - p)) != NULL) {
+      char buf[MAX_PATH_SIZE];
+      snprintf(buf, sizeof(buf), "%s%.*s", opts->dav_document_root,
+               (int) (dest->p + dest->len - p), p);
+      if (rename(path, buf) == 0) {
+        send_http_error(c, 200, NULL);
+      } else {
+        send_http_error(c, 418, NULL);
+      }
+    } else {
+      send_http_error(c, 500, NULL);
+    }
+  }
 }
 
 static void handle_delete(struct mg_connection *nc,
@@ -5545,10 +5553,10 @@ static void handle_delete(struct mg_connection *nc,
 
 /* Return -1 on error, 1 on success. */
 static int create_itermediate_directories(const char *path) {
-  const char *s = path;
+  const char *s;
 
   /* Create intermediate directories if they do not exist */
-  while (*s) {
+  for (s = path + 1; *s != '\0'; s++) {
     if (*s == '/') {
       char buf[MAX_PATH_SIZE];
       cs_stat_t st;
@@ -5558,7 +5566,6 @@ static int create_itermediate_directories(const char *path) {
         return -1;
       }
     }
-    s++;
   }
 
   return 1;
@@ -6287,8 +6294,9 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
 #ifndef MG_DISABLE_DAV_AUTH
   } else if (is_dav &&
              (opts->dav_auth_file == NULL ||
-              !is_authorized(hm, path, is_directory, opts->auth_domain,
-                             opts->dav_auth_file, 1))) {
+              (strcmp(opts->dav_auth_file, "-") != 0 &&
+               !is_authorized(hm, path, is_directory, opts->auth_domain,
+                              opts->dav_auth_file, 1)))) {
     mg_send_digest_auth_request(nc, opts->auth_domain);
 #endif
   } else if (!mg_vcmp(&hm->method, "MKCOL")) {
