@@ -6248,6 +6248,10 @@ static void send_options(struct mg_connection *nc) {
   nc->flags |= MG_F_SEND_AND_CLOSE;
 }
 
+static int is_creation_request(const struct http_message *hm) {
+  return mg_vcmp(&hm->method, "MKCOL") == 0 || mg_vcmp(&hm->method, "PUT") == 0;
+}
+
 void mg_send_http_file(struct mg_connection *nc, char *path,
                        size_t path_buf_len, struct http_message *hm,
                        struct mg_serve_http_opts *opts) {
@@ -6269,7 +6273,8 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
              !is_authorized(hm, path, is_directory, opts->auth_domain,
                             opts->per_directory_auth_file, 0)) {
     mg_send_digest_auth_request(nc, opts->auth_domain);
-  } else if ((stat_result != 0 || is_file_hidden(path, opts)) && !is_dav) {
+  } else if ((stat_result != 0 || is_file_hidden(path, opts)) &&
+             !is_creation_request(hm)) {
     mg_printf(nc, "%s", "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
   } else if (is_directory && path[strlen(path) - 1] != '/' && !is_dav) {
     mg_printf(nc,
