@@ -63,7 +63,7 @@
 #define MG_DISABLE_PFS
 #endif
 
-/* Amalgamated: #include "../mongoose.h" */
+/* Amalgamated: #include "mongoose/mongoose.h" */
 
 /* internals that need to be accessible in unit tests */
 MG_INTERNAL struct mg_connection *mg_do_connect(struct mg_connection *nc,
@@ -122,7 +122,7 @@ extern void *(*test_calloc)(size_t, size_t);
 
 #ifndef EXCLUDE_COMMON
 
-/* Amalgamated: #include "base64.h" */
+/* Amalgamated: #include "common/base64.h" */
 #include <string.h>
 
 /* ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/ */
@@ -317,7 +317,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst) {
 #line 1 "src/../../common/cs_dbg.c"
 /**/
 #endif
-/* Amalgamated: #include "cs_dbg.h" */
+/* Amalgamated: #include "common/cs_dbg.h" */
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -352,8 +352,8 @@ void cs_log_set_level(enum cs_log_level level) {
 
 #ifndef EXCLUDE_COMMON
 
-/* Amalgamated: #include "osdep.h" */
-/* Amalgamated: #include "cs_dirent.h" */
+/* Amalgamated: #include "common/osdep.h" */
+/* Amalgamated: #include "common/cs_dirent.h" */
 
 /*
  * This file contains POSIX opendir/closedir/readdir API implementation
@@ -1002,7 +1002,7 @@ int json_emit(char *buf, int buf_len, const char *fmt, ...) {
 
 #if !defined(DISABLE_MD5) && !defined(EXCLUDE_COMMON)
 
-/* Amalgamated: #include "md5.h" */
+/* Amalgamated: #include "common/md5.h" */
 
 #ifndef CS_ENABLE_NATIVE_MD5
 static void byteReverse(unsigned char *buf, unsigned longs) {
@@ -1240,7 +1240,7 @@ char *cs_md5(char buf[33], ...) {
 
 #include <assert.h>
 #include <string.h>
-/* Amalgamated: #include "mbuf.h" */
+/* Amalgamated: #include "common/mbuf.h" */
 
 #ifndef MBUF_REALLOC
 #define MBUF_REALLOC realloc
@@ -1334,11 +1334,11 @@ void mbuf_remove(struct mbuf *mb, size_t n) {
 
 #if !defined(DISABLE_SHA1) && !defined(EXCLUDE_COMMON)
 
-/* Amalgamated: #include "sha1.h" */
+/* Amalgamated: #include "common/sha1.h" */
 
 #define SHA1HANDSOFF
 #if defined(__sun)
-/* Amalgamated: #include "solarisfixes.h" */
+/* Amalgamated: #include "common/solarisfixes.h" */
 #endif
 
 union char64long16 {
@@ -1591,8 +1591,8 @@ void cs_hmac_sha1(const unsigned char *key, size_t keylen,
 
 #ifndef EXCLUDE_COMMON
 
-/* Amalgamated: #include "osdep.h" */
-/* Amalgamated: #include "str_util.h" */
+/* Amalgamated: #include "common/osdep.h" */
+/* Amalgamated: #include "common/str_util.h" */
 
 #ifdef _MG_PROVIDE_STRNLEN
 size_t strnlen(const char *s, size_t maxlen) {
@@ -1840,7 +1840,7 @@ void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 #if MG_MGR_EV_MGR == 1 /* epoll() */
 #include <sys/epoll.h>
@@ -2791,7 +2791,7 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
 #endif
 #ifndef MG_DISABLE_SOCKET_IF
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 #define MG_TCP_RECV_BUFFER_SIZE 1024
 #define MG_UDP_RECV_BUFFER_SIZE 1500
@@ -3618,7 +3618,7 @@ void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
  * All rights reserved
  */
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 #ifdef MG_ENABLE_THREADS
 
@@ -3727,7 +3727,7 @@ void mg_enable_multithreading(struct mg_connection *nc) {
 
 #ifndef MG_DISABLE_HTTP
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 enum http_proto_data_type { DATA_NONE, DATA_FILE, DATA_PUT, DATA_CGI };
 
@@ -6508,7 +6508,7 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
  * All rights reserved
  */
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 const char *mg_skip(const char *s, const char *end, const char *delims,
                     struct mg_str *v) {
@@ -6868,7 +6868,7 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
 
 #ifndef MG_DISABLE_JSON_RPC
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 int mg_rpc_create_reply(char *buf, int len, const struct mg_rpc_request *req,
                         const char *result_fmt, ...) {
@@ -7030,7 +7030,7 @@ int mg_rpc_parse_reply(const char *buf, int len, struct json_token *toks,
 
 #ifndef MG_DISABLE_MQTT
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 static int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   uint8_t header;
@@ -7329,7 +7329,7 @@ void mg_mqtt_disconnect(struct mg_connection *nc) {
  * All rights reserved
  */
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 #ifdef MG_ENABLE_MQTT_BROKER
 
@@ -7504,7 +7504,7 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 
 #ifndef MG_DISABLE_DNS
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 static int mg_dns_tid = 0xa0;
 
@@ -7864,7 +7864,7 @@ void mg_set_protocol_dns(struct mg_connection *nc) {
 
 #ifdef MG_ENABLE_DNS_SERVER
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 struct mg_dns_reply mg_dns_create_reply(struct mbuf *io,
                                         struct mg_dns_message *msg) {
@@ -7938,7 +7938,7 @@ int mg_dns_reply_record(struct mg_dns_reply *reply,
 
 #ifndef MG_DISABLE_RESOLVER
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 #ifndef MG_DEFAULT_NAMESERVER
 #define MG_DEFAULT_NAMESERVER "8.8.8.8"
@@ -8207,7 +8207,7 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-/* Amalgamated: #include "internal.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 #ifdef MG_ENABLE_COAP
 
