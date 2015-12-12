@@ -63,7 +63,10 @@
 #define MG_DISABLE_PFS
 #endif
 
-/* Amalgamated: #include "mongoose/mongoose.h" */
+/* Amalgamated: #include "mongoose/src/net.h" */
+/* Amalgamated: #include "mongoose/src/http.h" */
+
+#define MG_CTL_MSG_MESSAGE_SIZE 8192
 
 /* internals that need to be accessible in unit tests */
 MG_INTERNAL struct mg_connection *mg_do_connect(struct mg_connection *nc,
@@ -77,6 +80,10 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
 MG_INTERNAL void mg_forward(struct mg_connection *, struct mg_connection *);
 MG_INTERNAL void mg_add_conn(struct mg_mgr *mgr, struct mg_connection *c);
 MG_INTERNAL void mg_remove_conn(struct mg_connection *c);
+MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max);
+MG_INTERNAL struct mg_connection *mg_create_connection(
+    struct mg_mgr *mgr, mg_event_handler_t callback,
+    struct mg_add_sock_opts opts);
 
 #ifndef MG_DISABLE_FILESYSTEM
 MG_INTERNAL int find_index_file(char *, size_t, const char *, cs_stat_t *);
@@ -105,6 +112,11 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
 MG_INTERNAL time_t mg_parse_date_string(const char *datetime);
 MG_INTERNAL int mg_is_not_modified(struct http_message *hm, cs_stat_t *st);
 #endif
+
+struct ctl_msg {
+  mg_event_handler_t callback;
+  char message[MG_CTL_MSG_MESSAGE_SIZE];
+};
 
 /* Forward declarations for testing. */
 extern void *(*test_malloc)(size_t);
@@ -1841,12 +1853,14 @@ void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
  */
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/util.h" */
+/* Amalgamated: #include "mongoose/src/dns.h" */
+/* Amalgamated: #include "mongoose/src/resolv.h" */
 
 #if MG_MGR_EV_MGR == 1 /* epoll() */
 #include <sys/epoll.h>
 #endif
 
-#define MG_CTL_MSG_MESSAGE_SIZE 8192
 #define MG_MAX_HOST_LEN 200
 
 #define MG_COPY_COMMON_CONNECTION_OPTIONS(dst, src) \
@@ -1865,11 +1879,6 @@ void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
 #ifndef intptr_t
 #define intptr_t long
 #endif
-
-struct ctl_msg {
-  mg_event_handler_t callback;
-  char message[MG_CTL_MSG_MESSAGE_SIZE];
-};
 
 int mg_is_error(int n);
 void mg_set_non_blocking_mode(sock_t sock);
@@ -2405,7 +2414,7 @@ struct mg_connection *mg_if_accept_tcp_cb(struct mg_connection *lc,
   return nc;
 }
 
-static size_t recv_avail_size(struct mg_connection *conn, size_t max) {
+MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max) {
   size_t avail;
   if (conn->recv_mbuf_limit < conn->recv_mbuf.len) return 0;
   avail = conn->recv_mbuf_limit - conn->recv_mbuf.len;
@@ -2792,6 +2801,7 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
 #ifndef MG_DISABLE_SOCKET_IF
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/util.h" */
 
 #define MG_TCP_RECV_BUFFER_SIZE 1024
 #define MG_UDP_RECV_BUFFER_SIZE 1500
@@ -3619,6 +3629,7 @@ void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
  */
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/util.h" */
 
 #ifdef MG_ENABLE_THREADS
 
@@ -3728,6 +3739,9 @@ void mg_enable_multithreading(struct mg_connection *nc) {
 #ifndef MG_DISABLE_HTTP
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/util.h" */
+/* Amalgamated: #include "common/sha1.h" */
+/* Amalgamated: #include "common/md5.h" */
 
 enum http_proto_data_type { DATA_NONE, DATA_FILE, DATA_PUT, DATA_CGI };
 
@@ -6508,7 +6522,9 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
  * All rights reserved
  */
 
+/* Amalgamated: #include "common/base64.h" */
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/util.h" */
 
 const char *mg_skip(const char *s, const char *end, const char *delims,
                     struct mg_str *v) {
@@ -6869,6 +6885,8 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
 #ifndef MG_DISABLE_JSON_RPC
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/json-rpc.h" */
+/* Amalgamated: #include "mongoose/deps/frozen/frozen.h" */
 
 int mg_rpc_create_reply(char *buf, int len, const struct mg_rpc_request *req,
                         const char *result_fmt, ...) {
@@ -7031,6 +7049,7 @@ int mg_rpc_parse_reply(const char *buf, int len, struct json_token *toks,
 #ifndef MG_DISABLE_MQTT
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/mqtt.h" */
 
 static int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   uint8_t header;
@@ -7330,6 +7349,7 @@ void mg_mqtt_disconnect(struct mg_connection *nc) {
  */
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/mqtt-broker.h" */
 
 #ifdef MG_ENABLE_MQTT_BROKER
 
@@ -7505,6 +7525,7 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 #ifndef MG_DISABLE_DNS
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/dns.h" */
 
 static int mg_dns_tid = 0xa0;
 
@@ -7865,6 +7886,7 @@ void mg_set_protocol_dns(struct mg_connection *nc) {
 #ifdef MG_ENABLE_DNS_SERVER
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/dns-server.h" */
 
 struct mg_dns_reply mg_dns_create_reply(struct mbuf *io,
                                         struct mg_dns_message *msg) {
@@ -7939,6 +7961,7 @@ int mg_dns_reply_record(struct mg_dns_reply *reply,
 #ifndef MG_DISABLE_RESOLVER
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/resolv.h" */
 
 #ifndef MG_DEFAULT_NAMESERVER
 #define MG_DEFAULT_NAMESERVER "8.8.8.8"
@@ -8208,6 +8231,7 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
  */
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/coap.h" */
 
 #ifdef MG_ENABLE_COAP
 

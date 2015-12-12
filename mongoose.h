@@ -30,6 +30,7 @@
 #if defined(MG_ENABLE_DEBUG) && !defined(CS_ENABLE_DEBUG)
 #define CS_ENABLE_DEBUG
 #endif
+
 /*
  * Copyright (c) 2015 Cesanta Software Limited
  * All rights reserved
