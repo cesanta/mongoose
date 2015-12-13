@@ -4620,8 +4620,6 @@ void mg_send_websocket_handshake(struct mg_connection *nc, const char *uri,
 
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
 
-#ifndef MG_DISABLE_FILESYSTEM
-
 void mg_send_response_line(struct mg_connection *nc, int status_code,
                            const char *extra_headers) {
   const char *status_message = "OK";
@@ -4659,12 +4657,17 @@ void mg_send_head(struct mg_connection *c, int status_code,
   mg_send(c, "\r\n", 2);
 }
 
+#ifdef MG_DISABLE_FILESYSTEM
+void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
+                   struct mg_serve_http_opts opts) {
+  mg_send_head(nc, 501, 0, NULL);
+}
+#else
 static void send_http_error(struct mg_connection *nc, int code,
                             const char *reason) {
   (void) reason;
   mg_send_head(nc, code, 0, NULL);
 }
-
 #ifndef MG_DISABLE_SSI
 static void send_ssi_file(struct mg_connection *, const char *, FILE *, int,
                           const struct mg_serve_http_opts *);
