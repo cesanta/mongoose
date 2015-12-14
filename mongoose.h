@@ -300,8 +300,6 @@ enum cs_log_level {
   _LL_MAX = 5,
 };
 
-#ifndef CS_NDEBUG
-
 extern enum cs_log_level s_cs_log_level;
 void cs_log_set_level(enum cs_log_level level);
 
@@ -313,6 +311,8 @@ void cs_log_printf(const char *fmt, ...);
     cs_log_printf x;                     \
   }
 
+#ifndef CS_NDEBUG
+
 #define DBG(x)                              \
   if (s_cs_log_level >= LL_VERBOSE_DEBUG) { \
     fprintf(stderr, "%-20s ", __func__);    \
@@ -321,9 +321,6 @@ void cs_log_printf(const char *fmt, ...);
 
 #else /* NDEBUG */
 
-#define cs_log_set_level(l)
-
-#define LOG(l, x)
 #define DBG(x)
 
 #endif
