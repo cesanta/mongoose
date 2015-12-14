@@ -1,6 +1,6 @@
 #include "mongoose.h"
 #ifdef NS_MODULE_LINES
-#line 1 "src/internal.h"
+#line 1 "./src/internal.h"
 /**/
 #endif
 /*
@@ -124,7 +124,7 @@ extern void *(*test_calloc)(size_t, size_t);
 
 #endif /* MG_INTERNAL_HEADER_INCLUDED */
 #ifdef NS_MODULE_LINES
-#line 1 "src/../../common/base64.c"
+#line 1 "./src/../../common/base64.c"
 /**/
 #endif
 /*
@@ -326,7 +326,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "src/../../common/cs_dbg.c"
+#line 1 "./src/../../common/cs_dbg.c"
 /**/
 #endif
 /* Amalgamated: #include "common/cs_dbg.h" */
@@ -354,7 +354,7 @@ void cs_log_set_level(enum cs_log_level level) {
   s_cs_log_level = level;
 }
 #ifdef NS_MODULE_LINES
-#line 1 "src/../../common/cs_dirent.c"
+#line 1 "./src/../../common/cs_dirent.c"
 /**/
 #endif
 /*
@@ -491,7 +491,7 @@ int mkdir(const char *path, mode_t mode) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "src/../deps/frozen/frozen.c"
+#line 1 "./src/../deps/frozen/frozen.c"
 /**/
 #endif
 /*
@@ -992,7 +992,7 @@ int json_emit(char *buf, int buf_len, const char *fmt, ...) {
   return len;
 }
 #ifdef NS_MODULE_LINES
-#line 1 "src/../../common/md5.c"
+#line 1 "./src/../../common/md5.c"
 /**/
 #endif
 /*
@@ -1240,7 +1240,7 @@ char *cs_md5(char buf[33], ...) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "src/../../common/mbuf.c"
+#line 1 "./src/../../common/mbuf.c"
 /**/
 #endif
 /*
@@ -1338,7 +1338,7 @@ void mbuf_remove(struct mbuf *mb, size_t n) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "src/../../common/sha1.c"
+#line 1 "./src/../../common/sha1.c"
 /**/
 #endif
 /* Copyright(c) By Steve Reid <steve@edmweb.com> */
@@ -1593,7 +1593,7 @@ void cs_hmac_sha1(const unsigned char *key, size_t keylen,
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "src/../../common/str_util.c"
+#line 1 "./src/../../common/str_util.c"
 /**/
 #endif
 /*
@@ -1831,7 +1831,7 @@ void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "src/net.c"
+#line 1 "./src/net.c"
 /**/
 #endif
 /*
@@ -2795,7 +2795,7 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
   return result;
 }
 #ifdef NS_MODULE_LINES
-#line 1 "src/net_if_socket.c"
+#line 1 "./src/net_if_socket.c"
 /**/
 #endif
 #ifndef MG_DISABLE_SOCKET_IF
@@ -3620,7 +3620,7 @@ void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
 
 #endif /* !MG_DISABLE_SOCKET_IF */
 #ifdef NS_MODULE_LINES
-#line 1 "src/multithreading.c"
+#line 1 "./src/multithreading.c"
 /**/
 #endif
 /*
@@ -3728,7 +3728,7 @@ void mg_enable_multithreading(struct mg_connection *nc) {
 }
 #endif
 #ifdef NS_MODULE_LINES
-#line 1 "src/http.c"
+#line 1 "./src/http.c"
 /**/
 #endif
 /*
@@ -6517,7 +6517,7 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
 
 #endif /* MG_DISABLE_HTTP */
 #ifdef NS_MODULE_LINES
-#line 1 "src/util.c"
+#line 1 "./src/util.c"
 /**/
 #endif
 /*
@@ -6879,7 +6879,7 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
   return j;
 }
 #ifdef NS_MODULE_LINES
-#line 1 "src/json-rpc.c"
+#line 1 "./src/json-rpc.c"
 /**/
 #endif
 /* Copyright (c) 2014 Cesanta Software Limited */
@@ -7041,7 +7041,7 @@ int mg_rpc_parse_reply(const char *buf, int len, struct json_token *toks,
 
 #endif /* MG_DISABLE_JSON_RPC */
 #ifdef NS_MODULE_LINES
-#line 1 "src/mqtt.c"
+#line 1 "./src/mqtt.c"
 /**/
 #endif
 /*
@@ -7343,7 +7343,7 @@ void mg_mqtt_disconnect(struct mg_connection *nc) {
 
 #endif /* MG_DISABLE_MQTT */
 #ifdef NS_MODULE_LINES
-#line 1 "src/mqtt-broker.c"
+#line 1 "./src/mqtt-broker.c"
 /**/
 #endif
 /*
@@ -7517,7 +7517,7 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 
 #endif /* MG_ENABLE_MQTT_BROKER */
 #ifdef NS_MODULE_LINES
-#line 1 "src/dns.c"
+#line 1 "./src/dns.c"
 /**/
 #endif
 /*
@@ -7878,7 +7878,7 @@ void mg_set_protocol_dns(struct mg_connection *nc) {
 
 #endif /* MG_DISABLE_DNS */
 #ifdef NS_MODULE_LINES
-#line 1 "src/dns-server.c"
+#line 1 "./src/dns-server.c"
 /**/
 #endif
 /*
@@ -7953,7 +7953,7 @@ int mg_dns_reply_record(struct mg_dns_reply *reply,
 
 #endif /* MG_ENABLE_DNS_SERVER */
 #ifdef NS_MODULE_LINES
-#line 1 "src/resolv.c"
+#line 1 "./src/resolv.c"
 /**/
 #endif
 /*
@@ -8213,7 +8213,7 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
 
 #endif /* MG_DISABLE_RESOLVE */
 #ifdef NS_MODULE_LINES
-#line 1 "src/coap.c"
+#line 1 "./src/coap.c"
 /**/
 #endif
 /*
