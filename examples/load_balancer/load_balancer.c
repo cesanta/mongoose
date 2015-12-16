@@ -413,7 +413,9 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       }
       return;
     } else {
-      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      if (ev != MG_EV_POLL) {
+        nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      }
       return;
     }
   }
