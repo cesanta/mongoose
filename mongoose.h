@@ -326,6 +326,13 @@ void cs_log_printf(const char *fmt, ...);
 #endif
 
 #endif /* _CS_DBG_H_ */
+#ifndef _CS_TIME_H_
+#define _CS_TIME_H_
+
+/* Sub-second granularity time(). */
+double cs_time();
+
+#endif /* _CS_TIME_H_ */
 /*
  * Copyright (c) 2015 Cesanta Software Limited
  * All rights reserved
@@ -1187,7 +1194,7 @@ void mg_if_recved(struct mg_connection *nc, size_t len);
 void mg_if_poll(struct mg_connection *nc, time_t now);
 
 /* Deliver a TIMER event to the connection. */
-void mg_if_timer(struct mg_connection *c, time_t now);
+void mg_if_timer(struct mg_connection *c, double now);
 
 /* Perform interface-related connection initialization. Return 1 on success. */
 int mg_if_create_conn(struct mg_connection *nc);

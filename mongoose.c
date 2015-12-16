@@ -491,6 +491,30 @@ int mkdir(const char *path, mode_t mode) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
+#line 1 "./src/../../common/cs_time.c"
+/**/
+#endif
+#ifndef _WIN32
+#include <stddef.h>
+#ifndef MG_CC3200
+#include <sys/time.h>
+#endif
+#else
+#include <windows.h>
+#endif
+
+double cs_time() {
+  double now;
+#ifndef _WIN32
+  struct timeval tv;
+  if (gettimeofday(&tv, NULL /* tz */) != 0) return 0;
+  now = (double) tv.tv_sec + (((double) tv.tv_usec) / 1000000.0);
+#else
+  now = GetTickCount() / 1000.0;
+#endif
+  return now;
+}
+#ifdef NS_MODULE_LINES
 #line 1 "./src/../deps/frozen/frozen.c"
 /**/
 #endif
@@ -1946,10 +1970,10 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
        (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
 }
 
-void mg_if_timer(struct mg_connection *c, time_t now) {
+void mg_if_timer(struct mg_connection *c, double now) {
   if (c->ev_timer_time > 0 && now >= c->ev_timer_time) {
-    double dnow = now, old_value = c->ev_timer_time;
-    mg_call(c, NULL, MG_EV_TIMER, &dnow);
+    double old_value = c->ev_timer_time;
+    mg_call(c, NULL, MG_EV_TIMER, &now);
     /*
      * To prevent timer firing all the time, reset the timer after delivery.
      * However, in case user sets it to new value, do not reset.
@@ -2132,7 +2156,7 @@ MG_INTERNAL struct mg_connection *mg_create_connection(
     conn->sock = INVALID_SOCKET;
     conn->handler = callback;
     conn->mgr = mgr;
-    conn->last_io_time = time(NULL);
+    conn->last_io_time = cs_time();
     conn->flags = opts.flags & _MG_ALLOWED_CONNECT_FLAGS_MASK;
     conn->user_data = opts.user_data;
     /*
@@ -2422,7 +2446,7 @@ MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max) {
 }
 
 void mg_send(struct mg_connection *nc, const void *buf, int len) {
-  nc->last_io_time = time(NULL);
+  nc->last_io_time = cs_time();
   if (nc->flags & MG_F_UDP) {
     mg_if_udp_send(nc, buf, len);
   } else {
@@ -2453,7 +2477,7 @@ static void mg_recv_common(struct mg_connection *nc, void *buf, int len) {
     MG_FREE(buf);
     return;
   }
-  nc->last_io_time = time(NULL);
+  nc->last_io_time = cs_time();
   if (nc->recv_mbuf.len == 0) {
     /* Adopt buf as recv_mbuf's backing store. */
     mbuf_free(&nc->recv_mbuf);
@@ -2580,7 +2604,7 @@ static void resolve_cb(struct mg_dns_message *msg, void *data,
   }
 
   if (e == MG_RESOLVE_TIMEOUT) {
-    double now = time(NULL);
+    double now = cs_time();
     mg_call(nc, NULL, MG_EV_TIMER, &now);
   }
 
@@ -3172,7 +3196,7 @@ static void mg_ssl_begin(struct mg_connection *nc) {
 #define _MG_F_FD_CAN_WRITE 1 << 1
 #define _MG_F_FD_ERROR 1 << 2
 
-void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, time_t now) {
+void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
   DBG(("%p fd=%d fd_flags=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock,
        fd_flags, nc->flags, (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
 
@@ -3378,10 +3402,10 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   struct epoll_event events[MG_EPOLL_MAX_EVENTS];
   struct mg_connection *nc, *next;
   int num_ev, fd_flags;
-  time_t now;
+  double now;
 
   num_ev = epoll_wait(epoll_fd, events, MG_EPOLL_MAX_EVENTS, timeout_ms);
-  now = time(NULL);
+  now = cs_time();
   DBG(("epoll_wait @ %ld num_ev=%d", (long) now, num_ev));
 
   while (num_ev-- > 0) {
@@ -3462,7 +3486,7 @@ void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
 }
 
 time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
-  time_t now = time(NULL);
+  double now = cs_time();
   struct mg_connection *nc, *tmp;
   struct timeval tv;
   fd_set read_set, write_set, err_set;
@@ -3503,7 +3527,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
   tv.tv_usec = (milli % 1000) * 1000;
 
   num_selected = select((int) max_fd + 1, &read_set, &write_set, &err_set, &tv);
-  now = time(NULL);
+  now = cs_time();
   DBG(("select @ %ld num_ev=%d of %d", (long) now, num_selected, num_fds));
 
 #ifndef MG_DISABLE_SOCKETPAIR
