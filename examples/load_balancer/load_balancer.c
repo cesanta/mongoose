@@ -233,6 +233,12 @@ static void forward(struct conn_data *conn, struct http_message *hm,
     /* We always rewrite the connection header depending on the settings. */
     if (mg_vcasecmp(&hn, "Connection") == 0) continue;
 
+    /* Don't pass chunked transfer encoding to the client */
+    if (mg_vcasecmp(&hn, "Transfer-encoding") == 0 &&
+        mg_vcasecmp(&hv, "chunked") == 0) {
+      continue;
+    }
+
     mg_printf(dst, "%.*s: %.*s\r\n", (int) hn.len, hn.p, (int) hv.len, hv.p);
   }
 
