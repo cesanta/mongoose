@@ -1012,6 +1012,9 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *, const char *,
 const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
                        const char *ca_cert);
 
+const char *mg_set_ssl_server(struct mg_connection *nc, const char *cert,
+                       const char *ca_cert);
+
 /*
  * Send data to the connection.
  *

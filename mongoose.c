@@ -2387,6 +2387,47 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
 #endif
   return result;
 }
+
+/*
+ * Turn the connection into SSL mode.
+ * `cert` is the certificate file in PEM format. For listening connections,
+ * certificate file must contain private key and server certificate,
+ * concatenated. It may also contain DH params - these will be used for more
+ * secure key exchange. `ca_cert` is a certificate authority (CA) PEM file, and
+ * it is optional (can be set to NULL). If `ca_cert` is non-NULL, then
+ * the connection is so-called two-way-SSL: other peer's certificate is
+ * checked against the `ca_cert`.
+ *
+ * Handy OpenSSL command to generate test self-signed certificate:
+ *
+ *    openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 999
+ *
+ * Return NULL on success, or error message on failure.
+ */
+const char *mg_set_ssl_server(struct mg_connection *nc, const char *cert,
+                              const char *ca_cert) {
+  const char *result = NULL;
+  DBG(("%p %s %s", nc, (cert ? cert : ""), (ca_cert ? ca_cert : "")));
+
+  if ((nc->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
+    result = "SSL_CTX_new() failed";
+  } else if (mg_use_cert(nc->ssl_ctx, cert) != 0) {
+    result = "Invalid ssl cert";
+  } else if (mg_use_ca_cert(nc->ssl_ctx, ca_cert) != 0) {
+    result = "Invalid CA cert";
+  } else if ((nc->ssl = SSL_new(nc->ssl_ctx)) == NULL) {
+    result = "SSL_new() failed";
+  } else if (nc->sock != INVALID_SOCKET) {
+    SSL_set_fd(nc->ssl, nc->sock);
+  }
+
+/* TODO(rojer): remove when krypton exposes this function, even a dummy one */
+#ifdef OPENSSL_VERSION_NUMBER
+  SSL_CTX_set_cipher_list(nc->ssl_ctx, mg_s_cipher_list);
+#endif
+  return result;
+}
+
 #endif /* MG_ENABLE_SSL */
 
 struct mg_connection *mg_if_accept_tcp_cb(struct mg_connection *lc,
