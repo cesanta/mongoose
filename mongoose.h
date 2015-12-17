@@ -1013,6 +1013,11 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *, const char *,
 const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
                        const char *ca_cert);
 
+/*
+ * Enable SSL for a given connection; make the connection an SSL server
+ * The meaning of certification parameters are the same as in mg_set_ssl.
+ * Return: NULL on success, or error message on error.
+ */
 const char *mg_set_ssl_server(struct mg_connection *nc, const char *cert,
                        const char *ca_cert);
 
