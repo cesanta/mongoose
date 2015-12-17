@@ -789,6 +789,7 @@ struct mg_connection {
 #define MG_F_WANT_READ (1 << 5)          /* SSL specific */
 #define MG_F_WANT_WRITE (1 << 6)         /* SSL specific */
 #define MG_F_IS_WEBSOCKET (1 << 7)       /* Websocket specific */
+#define MG_F_SSL_SERVER_TRANSITION (1 << 8)   /* Transition from plain socket to server */
 
 /* Flags that are settable by user */
 #define MG_F_SEND_AND_CLOSE (1 << 10)      /* Push remaining data and close  */

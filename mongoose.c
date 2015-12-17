@@ -2421,6 +2421,8 @@ const char *mg_set_ssl_server(struct mg_connection *nc, const char *cert,
     SSL_set_fd(nc->ssl, nc->sock);
   }
 
+  nc->flags |= MG_F_SSL_SERVER_TRANSITION;
+
 /* TODO(rojer): remove when krypton exposes this function, even a dummy one */
 #ifdef OPENSSL_VERSION_NUMBER
   SSL_CTX_set_cipher_list(nc->ssl_ctx, mg_s_cipher_list);
@@ -3180,7 +3182,7 @@ static int mg_ssl_err(struct mg_connection *conn, int res) {
 }
 
 static void mg_ssl_begin(struct mg_connection *nc) {
-  int server_side = nc->listener != NULL;
+  int server_side = nc->listener != NULL || nc->flags & MG_F_SSL_SERVER_TRANSITION;
   int res = server_side ? SSL_accept(nc->ssl) : SSL_connect(nc->ssl);
   DBG(("%p %d res %d %d %d", nc, server_side, res, errno, mg_ssl_err(nc, res)));
 
