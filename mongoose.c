@@ -1880,6 +1880,7 @@ void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
 /* Amalgamated: #include "mongoose/src/util.h" */
 /* Amalgamated: #include "mongoose/src/dns.h" */
 /* Amalgamated: #include "mongoose/src/resolv.h" */
+/* Amalgamated: #include "common/cs_time.h" */
 
 #if MG_MGR_EV_MGR == 1 /* epoll() */
 #include <sys/epoll.h>
@@ -2826,6 +2827,7 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
+/* Amalgamated: #include "common/cs_time.h" */
 
 #define MG_TCP_RECV_BUFFER_SIZE 1024
 #define MG_UDP_RECV_BUFFER_SIZE 1500
