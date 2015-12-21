@@ -233,6 +233,12 @@ static void forward(struct conn_data *conn, struct http_message *hm,
     /* We always rewrite the connection header depending on the settings. */
     if (mg_vcasecmp(&hn, "Connection") == 0) continue;
 
+    /* Don't pass chunked transfer encoding to the client */
+    if (mg_vcasecmp(&hn, "Transfer-encoding") == 0 &&
+        mg_vcasecmp(&hv, "chunked") == 0) {
+      continue;
+    }
+
     mg_printf(dst, "%.*s: %.*s\r\n", (int) hn.len, hn.p, (int) hv.len, hv.p);
   }
 
@@ -272,7 +278,7 @@ static int connect_backend(struct conn_data *conn, struct http_message *hm) {
   struct http_backend *be = choose_backend(hm);
 
   write_log("%.*s %.*s backend=%s\n", (int) hm->method.len, hm->method.p,
-            (int) hm->uri.len, hm->uri.p, be->host_port);
+            (int) hm->uri.len, hm->uri.p, be ? be->host_port : "not defined");
 
   if (be == NULL) return 0;
   if (be->redirect != 0) {
@@ -413,7 +419,9 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       }
       return;
     } else {
-      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      if (ev != MG_EV_POLL) {
+        nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      }
       return;
     }
   }
