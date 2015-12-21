@@ -1,12 +1,9 @@
 # <img src="http://www.cesanta.com/hubfs/www.cesanta.com/Images/mongoose_library.png" width="64" height="64"> Mongoose - Embedded Web Server
 
-[![Join the chat at https://gitter.im/cesanta/mongoose](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/cesanta/mongoose?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-
 ![](https://img.shields.io/badge/license-GPL_2-green.svg "License")
 
-
-Mongoose is ideal for embedded environments, it has been designed as an open
-source platform for connecting devices and bringing them online.
+Mongoose is ideal for embedded environments. It has been designed
+for connecting devices and bringing them online.
 [Mongoose](https://www.cesanta.com/products)
 has been on the market since 2004 and attracted
 over 1 million cumulative downloads.
@@ -16,7 +13,10 @@ network protocols or scalable network applications  with little effort.
 Mongoose helps developers to manage the complexity of network programming
 and let them concentrate on the logic, saving time and money.
 
-[Download Mongoose Source Code here](http://hubs.ly/H01bWvx0)
+- [Download Mongoose Source Code here](http://hubs.ly/H01bWvx0)
+- [Ask questions on support forum](http://forum.cesanta.com/index.php?p=/categories/mongoose)
+- [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
+- [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples) 
 
 > Nothing overdone. Nothing less. So unbelievably easy to use.
 > Just how good software should be! -- Pritin Tyagaraj, SAP
@@ -41,12 +41,6 @@ and let them concentrate on the logic, saving time and money.
   [mongoose.h](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.h)
   files to your build tree
 * Extensively tested and production-ready, trusted by many blue chip businesses
-
-# Examples & Documentation
-
-- [User Guide](https://docs.cesanta.com/mongoose) - Detailed User Guide and API reference
-- [examples](examples) - Collection of well-commented examples. To build any example,
-go into respective directory and type `make`
 
 # Dashboard Example
 
