@@ -1146,6 +1146,10 @@ double mg_set_timer(struct mg_connection *c, double timestamp);
 #ifndef MG_NET_IF_HEADER_INCLUDED
 #define MG_NET_IF_HEADER_INCLUDED
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 /*
  * Internal async networking core interface.
  * Consists of calls made by the core, which should not block,
@@ -1209,6 +1213,10 @@ void mg_close_conn(struct mg_connection *nc);
 /* Put connection's address into *sa, local (remote = 0) or remote. */
 void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
                          union socket_address *sa);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 #endif /* MG_NET_IF_HEADER_INCLUDED */
 /*
