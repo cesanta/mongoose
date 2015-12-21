@@ -5519,7 +5519,7 @@ static void handle_propfind(struct mg_connection *nc, const char *path,
 static void handle_mkcol(struct mg_connection *nc, const char *path,
                          struct http_message *hm) {
   int status_code = 500;
-  if (mg_get_http_header(hm, "Content-Length") != NULL) {
+  if (hm->body.len != (size_t) ~0 && hm->body.len > 0) {
     status_code = 415;
   } else if (!mg_mkdir(path, 0755)) {
     status_code = 201;
@@ -5529,6 +5529,8 @@ static void handle_mkcol(struct mg_connection *nc, const char *path,
     status_code = 403;
   } else if (errno == ENOENT) {
     status_code = 409;
+  } else {
+    status_code = 500;
   }
   send_http_error(nc, status_code, NULL);
 }
