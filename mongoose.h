@@ -1630,7 +1630,7 @@ void mg_send_http_chunk(struct mg_connection *nc, const char *buf, size_t len);
  * Send printf-formatted HTTP chunk.
  * Functionality is similar to `mg_send_http_chunk()`.
  */
-void mg_printf_http_chunk(struct mg_connection *, const char *, ...);
+void mg_printf_http_chunk(struct mg_connection *nc, const char *fmt, ...);
 
 /*
  * Send response status line.
@@ -1667,7 +1667,7 @@ void mg_send_head(struct mg_connection *n, int status_code,
 /*
  * Send printf-formatted HTTP chunk, escaping HTML tags.
  */
-void mg_printf_html_escape(struct mg_connection *, const char *, ...);
+void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...);
 
 /* Websocket opcodes, from http://tools.ietf.org/html/rfc6455 */
 #define WEBSOCKET_OP_CONTINUE 0
@@ -1775,7 +1775,8 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
  * of a fetched variable. If not found, 0 is returned. `buf` must be
  * valid url-encoded buffer. If destination is too small, `-1` is returned.
  */
-int mg_get_http_var(const struct mg_str *, const char *, char *dst, size_t);
+int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
+                    size_t dst_len);
 
 /*
  * Decode URL-encoded string.
@@ -1814,7 +1815,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
  *                         NULL, "var_1=value_1&var_2=value_2");
  * ----
  */
-struct mg_connection *mg_connect_http(struct mg_mgr *,
+struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
                                       mg_event_handler_t event_handler,
                                       const char *url,
                                       const char *extra_headers,
@@ -1941,8 +1942,8 @@ struct mg_serve_http_opts {
  * }
  * ----
  */
-void mg_serve_http(struct mg_connection *, struct http_message *,
-                   struct mg_serve_http_opts);
+void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
+                   struct mg_serve_http_opts opts);
 
 #ifdef __cplusplus
 }
@@ -2062,9 +2063,10 @@ int mg_rpc_create_error(char *buf, int len, struct mg_rpc_request *req,
  * - #define JSON_RPC_INTERNAL_ERROR (-32603)
  * - #define JSON_RPC_SERVER_ERROR (-32000)
  */
-int mg_rpc_create_std_error(char *, int, struct mg_rpc_request *, int code);
+int mg_rpc_create_std_error(char *buf, int len, struct mg_rpc_request *req,
+                            int code);
 
-typedef int (*mg_rpc_handler_t)(char *buf, int len, struct mg_rpc_request *);
+typedef int (*mg_rpc_handler_t)(char *buf, int len, struct mg_rpc_request *req);
 
 /*
  * Dispatches a JSON-RPC request.
@@ -2208,13 +2210,13 @@ extern "C" {
  * - MG_EV_MQTT_PUBCOMP
  * - MG_EV_MQTT_SUBACK
  */
-void mg_set_protocol_mqtt(struct mg_connection *);
+void mg_set_protocol_mqtt(struct mg_connection *nc);
 
 /* Send MQTT handshake. */
 void mg_send_mqtt_handshake(struct mg_connection *nc, const char *client_id);
 
 /* Send MQTT handshake with optional parameters. */
-void mg_send_mqtt_handshake_opt(struct mg_connection *, const char *client_id,
+void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
                                 struct mg_send_mqtt_handshake_opts);
 
 /* Publish a message to a given topic. */
@@ -2235,34 +2237,35 @@ void mg_mqtt_unsubscribe(struct mg_connection *nc, char **topics,
 void mg_mqtt_disconnect(struct mg_connection *nc);
 
 /* Send a CONNACK command with a given `return_code`. */
-void mg_mqtt_connack(struct mg_connection *, uint8_t);
+void mg_mqtt_connack(struct mg_connection *nc, uint8_t return_code);
 
 /* Send a PUBACK command with a given `message_id`. */
-void mg_mqtt_puback(struct mg_connection *, uint16_t);
+void mg_mqtt_puback(struct mg_connection *nc, uint16_t message_id);
 
 /* Send a PUBREC command with a given `message_id`. */
-void mg_mqtt_pubrec(struct mg_connection *, uint16_t);
+void mg_mqtt_pubrec(struct mg_connection *nc, uint16_t message_id);
 
 /* Send a PUBREL command with a given `message_id`. */
-void mg_mqtt_pubrel(struct mg_connection *, uint16_t);
+void mg_mqtt_pubrel(struct mg_connection *nc, uint16_t message_id);
 
 /* Send a PUBCOMP command with a given `message_id`. */
-void mg_mqtt_pubcomp(struct mg_connection *, uint16_t);
+void mg_mqtt_pubcomp(struct mg_connection *nc, uint16_t message_id);
 
 /*
  * Send a SUBACK command with a given `message_id`
  * and a sequence of granted QoSs.
  */
-void mg_mqtt_suback(struct mg_connection *, uint8_t *, size_t, uint16_t);
+void mg_mqtt_suback(struct mg_connection *nc, uint8_t *qoss, size_t qoss_len,
+                    uint16_t message_id);
 
 /* Send a UNSUBACK command with a given `message_id`. */
-void mg_mqtt_unsuback(struct mg_connection *, uint16_t);
+void mg_mqtt_unsuback(struct mg_connection *nc, uint16_t message_id);
 
 /* Send a PINGREQ command. */
-void mg_mqtt_ping(struct mg_connection *);
+void mg_mqtt_ping(struct mg_connection *nc);
 
 /* Send a PINGRESP command. */
-void mg_mqtt_pong(struct mg_connection *);
+void mg_mqtt_pong(struct mg_connection *nc);
 
 /*
  * Extract the next topic expression from a SUBSCRIBE command payload.
@@ -2271,8 +2274,8 @@ void mg_mqtt_pong(struct mg_connection *);
  * Return the pos of the next topic expression or -1 when the list
  * of topics is exhausted.
  */
-int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *, struct mg_str *,
-                                 uint8_t *, int);
+int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
+                                 struct mg_str *topic, uint8_t *qos, int pos);
 
 #ifdef __cplusplus
 }
@@ -2331,7 +2334,7 @@ struct mg_mqtt_broker {
 };
 
 /* Initialize a MQTT broker. */
-void mg_mqtt_broker_init(struct mg_mqtt_broker *, void *);
+void mg_mqtt_broker_init(struct mg_mqtt_broker *brk, void *user_data);
 
 /*
  * Process a MQTT broker message.
@@ -2359,7 +2362,7 @@ void mg_mqtt_broker_init(struct mg_mqtt_broker *, void *);
  * Since only the MG_EV_ACCEPT message is processed by the listening socket,
  * for most events the `user_data` will thus point to a `mg_mqtt_session`.
  */
-void mg_mqtt_broker(struct mg_connection *, int, void *);
+void mg_mqtt_broker(struct mg_connection *brk, int ev, void *data);
 
 /*
  * Iterate over all mqtt sessions connections. Example:
@@ -2369,8 +2372,8 @@ void mg_mqtt_broker(struct mg_connection *, int, void *);
  *       // Do something
  *    }
  */
-struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *,
-                                     struct mg_mqtt_session *);
+struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
+                                     struct mg_mqtt_session *s);
 
 #ifdef __cplusplus
 }
@@ -2433,7 +2436,7 @@ struct mg_dns_message {
 };
 
 struct mg_dns_resource_record *mg_dns_next_record(
-    struct mg_dns_message *, int, struct mg_dns_resource_record *);
+    struct mg_dns_message *msg, int query, struct mg_dns_resource_record *prev);
 
 /*
  * Parse the record data from a DNS resource record.
@@ -2446,20 +2449,23 @@ struct mg_dns_resource_record *mg_dns_next_record(
  *
  * TODO(mkm): MX
  */
-int mg_dns_parse_record_data(struct mg_dns_message *,
-                             struct mg_dns_resource_record *, void *, size_t);
+int mg_dns_parse_record_data(struct mg_dns_message *msg,
+                             struct mg_dns_resource_record *rr, void *data,
+                             size_t data_len);
 
 /*
  * Send a DNS query to the remote end.
  */
-void mg_send_dns_query(struct mg_connection *, const char *, int);
+void mg_send_dns_query(struct mg_connection *nc, const char *name,
+                       int query_type);
 
 /*
  * Insert a DNS header to an IO buffer.
  *
  * Return number of bytes inserted.
  */
-int mg_dns_insert_header(struct mbuf *, size_t, struct mg_dns_message *);
+int mg_dns_insert_header(struct mbuf *io, size_t pos,
+                         struct mg_dns_message *msg);
 
 /*
  * Append already encoded body from an existing message.
@@ -2469,7 +2475,7 @@ int mg_dns_insert_header(struct mbuf *, size_t, struct mg_dns_message *);
  *
  * Return number of appened bytes.
  */
-int mg_dns_copy_body(struct mbuf *, struct mg_dns_message *);
+int mg_dns_copy_body(struct mbuf *io, struct mg_dns_message *msg);
 
 /*
  * Encode and append a DNS resource record to an IO buffer.
@@ -2487,11 +2493,12 @@ int mg_dns_copy_body(struct mbuf *, struct mg_dns_message *);
  *
  * Return the number of bytes appened or -1 in case of error.
  */
-int mg_dns_encode_record(struct mbuf *, struct mg_dns_resource_record *,
-                         const char *, size_t, const void *, size_t);
+int mg_dns_encode_record(struct mbuf *io, struct mg_dns_resource_record *rr,
+                         const char *name, size_t nlen, const void *rdata,
+                         size_t rlen);
 
 /* Low-level: parses a DNS response. */
-int mg_parse_dns(const char *, int, struct mg_dns_message *);
+int mg_parse_dns(const char *buf, int len, struct mg_dns_message *msg);
 
 /*
  * Uncompress a DNS compressed name.
@@ -2506,8 +2513,8 @@ int mg_parse_dns(const char *, int, struct mg_dns_message *);
  * If `dst_len` is 0 `dst` can be NULL.
  * Return the uncompressed name length.
  */
-size_t mg_dns_uncompress_name(struct mg_dns_message *, struct mg_str *, char *,
-                              int);
+size_t mg_dns_uncompress_name(struct mg_dns_message *msg, struct mg_str *name,
+                              char *dst, int dst_len);
 
 /*
  * Attach built-in DNS event handler to the given listening connection.
@@ -2521,7 +2528,7 @@ size_t mg_dns_uncompress_name(struct mg_dns_message *, struct mg_str *, char *,
  * https://github.com/cesanta/mongoose/tree/master/examples/captive_dns_server[captive_dns_server]
  * example on how to handle DNS request and send DNS reply.
  */
-void mg_set_protocol_dns(struct mg_connection *);
+void mg_set_protocol_dns(struct mg_connection *nc);
 
 #ifdef __cplusplus
 }
@@ -2585,7 +2592,8 @@ struct mg_dns_reply {
  * mg_dns_send_reply(nc, &reply);
  * -----
  */
-struct mg_dns_reply mg_dns_create_reply(struct mbuf *, struct mg_dns_message *);
+struct mg_dns_reply mg_dns_create_reply(struct mbuf *io,
+                                        struct mg_dns_message *msg);
 
 /*
  * Append a DNS reply record to the IO buffer and to the DNS message.
@@ -2595,8 +2603,10 @@ struct mg_dns_reply mg_dns_create_reply(struct mbuf *, struct mg_dns_message *);
  *
  * Returns -1 on error.
  */
-int mg_dns_reply_record(struct mg_dns_reply *, struct mg_dns_resource_record *,
-                        const char *, int, int, const void *, size_t);
+int mg_dns_reply_record(struct mg_dns_reply *reply,
+                        struct mg_dns_resource_record *question,
+                        const char *name, int rtype, int ttl, const void *rdata,
+                        size_t rdata_len);
 
 /*
  * Send a DNS reply through a connection.
@@ -2610,7 +2620,7 @@ int mg_dns_reply_record(struct mg_dns_reply *, struct mg_dns_resource_record *,
  * Once sent, the IO buffer will be trimmed unless the reply IO buffer
  * is the connection's send buffer and the connection is not in UDP mode.
  */
-void mg_dns_send_reply(struct mg_connection *, struct mg_dns_reply *);
+void mg_dns_send_reply(struct mg_connection *nc, struct mg_dns_reply *r);
 
 #ifdef __cplusplus
 }
@@ -2656,8 +2666,8 @@ struct mg_resolve_async_opts {
 };
 
 /* See `mg_resolve_async_opt()` */
-int mg_resolve_async(struct mg_mgr *, const char *, int, mg_resolve_callback_t,
-                     void *data);
+int mg_resolve_async(struct mg_mgr *mgr, const char *name, int query,
+                     mg_resolve_callback_t cb, void *data);
 
 /*
  * Resolved a DNS name asynchronously.
@@ -2680,8 +2690,8 @@ int mg_resolve_async(struct mg_mgr *, const char *, int, mg_resolve_callback_t,
  * mg_dns_parse_record_data(msg, rr, &ina, sizeof(ina));
  * ----
  */
-int mg_resolve_async_opt(struct mg_mgr *, const char *, int,
-                         mg_resolve_callback_t, void *data,
+int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
+                         mg_resolve_callback_t cb, void *data,
                          struct mg_resolve_async_opts opts);
 
 /*

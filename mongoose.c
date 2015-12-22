@@ -77,7 +77,8 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
                                  int *proto, char *host, size_t host_len);
 MG_INTERNAL void mg_call(struct mg_connection *nc,
                          mg_event_handler_t ev_handler, int ev, void *ev_data);
-MG_INTERNAL void mg_forward(struct mg_connection *, struct mg_connection *);
+MG_INTERNAL void mg_forward(struct mg_connection *from,
+                            struct mg_connection *to);
 MG_INTERNAL void mg_add_conn(struct mg_mgr *mgr, struct mg_connection *c);
 MG_INTERNAL void mg_remove_conn(struct mg_connection *c);
 MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max);
@@ -86,7 +87,8 @@ MG_INTERNAL struct mg_connection *mg_create_connection(
     struct mg_add_sock_opts opts);
 
 #ifndef MG_DISABLE_FILESYSTEM
-MG_INTERNAL int find_index_file(char *, size_t, const char *, cs_stat_t *);
+MG_INTERNAL int find_index_file(char *path, size_t path_len, const char *list,
+                                cs_stat_t *stp);
 #endif
 
 #ifdef _WIN32
@@ -119,8 +121,8 @@ struct ctl_msg {
 };
 
 /* Forward declarations for testing. */
-extern void *(*test_malloc)(size_t);
-extern void *(*test_calloc)(size_t, size_t);
+extern void *(*test_malloc)(size_t size);
+extern void *(*test_calloc)(size_t count, size_t size);
 
 #endif /* MG_INTERNAL_HEADER_INCLUDED */
 #ifdef NS_MODULE_LINES
