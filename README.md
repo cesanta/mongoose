@@ -24,8 +24,11 @@ and let them concentrate on the logic, saving time and money.
 
 # Features
 
-* Cross-platform: works on Linux/UNIX, QNX, eCos, Windows, Android, iPhone, etc
+* Cross-platform: works on Linux/UNIX, QNX, eCos, Windows, Android,
+  iPhone, FreeRTOS (TI CC3200, ESP8266), etc
 * Single-threaded, asynchronous, non-blocking core with simple event-based API
+* Native support for [PicoTCP embedded TCP/IP stack](http://www.picotcp.com), 
+  [LWIP embedded TCP/IP stack](https://en.wikipedia.org/wiki/LwIP)
 * Builtin protocols:
    - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
    - HTTP client, HTTP server
