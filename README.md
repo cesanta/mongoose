@@ -24,7 +24,7 @@ and let them concentrate on the logic, saving time and money.
 
 # Features
 
-* Cross-platform: works on Linux/UNIX, QNX, eCos, Windows, Android,
+* Cross-platform: works on Linux/UNIX, MacOS, QNX, eCos, Windows, Android,
   iPhone, FreeRTOS (TI CC3200, ESP8266), etc
 * Single-threaded, asynchronous, non-blocking core with simple event-based API
 * Native support for [PicoTCP embedded TCP/IP stack](http://www.picotcp.com), 
