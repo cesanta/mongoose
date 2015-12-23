@@ -2387,6 +2387,15 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
   const char *result = NULL;
   DBG(("%p %s %s", nc, (cert ? cert : ""), (ca_cert ? ca_cert : "")));
 
+  if (nc->ssl != NULL) {
+    SSL_free(nc->ssl);
+    nc->ssl = NULL;
+  }
+  if (nc->ssl_ctx != NULL) {
+    SSL_CTX_free(nc->ssl_ctx);
+    nc->ssl_ctx = NULL;
+  }
+
   if ((nc->flags & MG_F_LISTENING) &&
       (nc->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
     result = "SSL_CTX_new() failed";
