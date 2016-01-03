@@ -2396,20 +2396,21 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
     nc->ssl_ctx = NULL;
   }
 
-  if ((nc->flags & MG_F_LISTENING) &&
+  if ((nc->flags & MG_F_LISTENING || nc->flags & MG_F_SSL_SERVER_TRANSITION) &&
       (nc->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
     result = "SSL_CTX_new() failed";
-  } else if (!(nc->flags & MG_F_LISTENING) &&
+  } else if (!(nc->flags & MG_F_LISTENING) && !(nc->flags & MG_F_SSL_SERVER_TRANSITION) &&
              (nc->ssl_ctx = SSL_CTX_new(SSLv23_client_method())) == NULL) {
     result = "SSL_CTX_new() failed";
   } else if (mg_use_cert(nc->ssl_ctx, cert) != 0) {
     result = "Invalid ssl cert";
   } else if (mg_use_ca_cert(nc->ssl_ctx, ca_cert) != 0) {
     result = "Invalid CA cert";
-  } else if (!(nc->flags & MG_F_LISTENING) &&
+  } else if ((!(nc->flags & MG_F_LISTENING) || (nc->flags & MG_F_SSL_SERVER_TRANSITION)) &&
              (nc->ssl = SSL_new(nc->ssl_ctx)) == NULL) {
     result = "SSL_new() failed";
-  } else if (!(nc->flags & MG_F_LISTENING) && nc->sock != INVALID_SOCKET) {
+  } else if ((!(nc->flags & MG_F_LISTENING) || nc->flags & MG_F_SSL_SERVER_TRANSITION) &&
+             nc->sock != INVALID_SOCKET) {
     /*
      * Socket is open here only if we are connecting to IP address
      * and does not open if we are connecting using async DNS resolver
@@ -2423,6 +2424,32 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
 #endif
   return result;
 }
+
+/*
+ * Turn the connection into SSL mode.
+ * `cert` is the certificate file in PEM format. For listening connections,
+ * certificate file must contain private key and server certificate,
+ * concatenated. It may also contain DH params - these will be used for more
+ * secure key exchange. `ca_cert` is a certificate authority (CA) PEM file, and
+ * it is optional (can be set to NULL). If `ca_cert` is non-NULL, then
+ * the connection is so-called two-way-SSL: other peer's certificate is
+ * checked against the `ca_cert`.
+ *
+ * Handy OpenSSL command to generate test self-signed certificate:
+ *
+ *    openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 999
+ *
+ * Return NULL on success, or error message on failure.
+ */
+const char *mg_set_ssl_server(struct mg_connection *nc, const char *cert,
+                              const char *ca_cert) {
+  DBG(("%p %s %s", nc, (cert ? cert : ""), (ca_cert ? ca_cert : "")));
+
+  nc->flags |= MG_F_SSL_SERVER_TRANSITION;
+
+  return mg_set_ssl(nc, cert, ca_cert);
+}
+
 #endif /* MG_ENABLE_SSL */
 
 struct mg_connection *mg_if_accept_tcp_cb(struct mg_connection *lc,
@@ -3176,7 +3203,7 @@ static int mg_ssl_err(struct mg_connection *conn, int res) {
 }
 
 static void mg_ssl_begin(struct mg_connection *nc) {
-  int server_side = nc->listener != NULL;
+  int server_side = nc->listener != NULL || nc->flags & MG_F_SSL_SERVER_TRANSITION;
   int res = server_side ? SSL_accept(nc->ssl) : SSL_connect(nc->ssl);
   DBG(("%p %d res %d %d %d", nc, server_side, res, errno, mg_ssl_err(nc, res)));
 
