@@ -4615,7 +4615,7 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
         /* Invoke callback. TODO(lsm): report errors */
         v7_array_push(v7, args, v7_create_foreign(nc));
         v7_array_push(v7, args, req);
-        if (v7_apply(v7, &res, v2, v7_create_undefined(), args) == V7_OK &&
+        if (v7_apply(v7, v2, v7_create_undefined(), args, &res) == V7_OK &&
             v7_is_true(v7, res)) {
           js_callback_handled_request++;
         }
