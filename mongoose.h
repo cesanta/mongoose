@@ -173,6 +173,7 @@ typedef uint32_t in_addr_t;
 #define pid_t HANDLE
 #endif
 #define INT64_FMT "I64d"
+#define INT64_X_FMT "I64x"
 #define SIZE_T_FMT "Iu"
 #ifdef __MINGW32__
 typedef struct stat cs_stat_t;
@@ -252,6 +253,7 @@ struct dirent *readdir(DIR *dir);
 
 #define INVALID_SOCKET (-1)
 #define INT64_FMT PRId64
+#define INT64_X_FMT PRIx64
 #if defined(ESP8266) || defined(MG_ESP8266) || defined(MG_CC3200)
 #define SIZE_T_FMT "u"
 #else
