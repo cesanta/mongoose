@@ -1804,15 +1804,21 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
  * Host headers. `extra_headers` is an extra HTTP headers to send, e.g.
  * `"User-Agent: my-app\r\n"`.
  * If `post_data` is NULL, then GET request is created. Otherwise, POST request
- * is created with the specified POST data. Examples:
+ * is created with the specified POST data. Note that if the data being posted
+ * is a form submission, the `Content-Type` header should be set accordingly
+ * (see example below).
+ *
+ * Examples:
  *
  * [source,c]
  * ----
  *   nc1 = mg_connect_http(mgr, ev_handler_1, "http://www.google.com", NULL,
  *                         NULL);
  *   nc2 = mg_connect_http(mgr, ev_handler_1, "https://github.com", NULL, NULL);
- *   nc3 = mg_connect_http(mgr, ev_handler_1, "my_server:8000/form_submit/",
- *                         NULL, "var_1=value_1&var_2=value_2");
+ *   nc3 = mg_connect_http(
+ *       mgr, ev_handler_1, "my_server:8000/form_submit/",
+ *       "Content-Type: application/x-www-form-urlencoded\r\n",
+ *       "var_1=value_1&var_2=value_2");
  * ----
  */
 struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
