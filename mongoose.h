@@ -1119,7 +1119,7 @@ enum v7_err mg_enable_javascript(struct mg_mgr *m, struct v7 *v7,
  *
  * ```
  *  c = mg_connect(&mgr, "cesanta.com", ev_handler);
- *  mg_set_timer(c, time(NULL) + 1.5);
+ *  mg_set_timer(c, mg_time() + 1.5);
  *  ...
  *
  *  void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
@@ -1131,12 +1131,13 @@ enum v7_err mg_enable_javascript(struct mg_mgr *m, struct v7 *v7,
  *      log("Connect timeout");
  *      c->flags |= MG_F_CLOSE_IMMEDIATELY;
  *      break;
-```
- *
- * NOTE: sub-second precision is not implemented yet, current granularity
- * is 1 second.
  */
 double mg_set_timer(struct mg_connection *c, double timestamp);
+
+/*
+ * A sub-second precision version of time().
+ */
+double mg_time();
 
 #ifdef __cplusplus
 }

@@ -2161,7 +2161,7 @@ MG_INTERNAL struct mg_connection *mg_create_connection(
     conn->sock = INVALID_SOCKET;
     conn->handler = callback;
     conn->mgr = mgr;
-    conn->last_io_time = cs_time();
+    conn->last_io_time = mg_time();
     conn->flags = opts.flags & _MG_ALLOWED_CONNECT_FLAGS_MASK;
     conn->user_data = opts.user_data;
     /*
@@ -2460,7 +2460,7 @@ MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max) {
 }
 
 void mg_send(struct mg_connection *nc, const void *buf, int len) {
-  nc->last_io_time = cs_time();
+  nc->last_io_time = mg_time();
   if (nc->flags & MG_F_UDP) {
     mg_if_udp_send(nc, buf, len);
   } else {
@@ -2491,7 +2491,7 @@ static void mg_recv_common(struct mg_connection *nc, void *buf, int len) {
     MG_FREE(buf);
     return;
   }
-  nc->last_io_time = cs_time();
+  nc->last_io_time = mg_time();
   if (nc->recv_mbuf.len == 0) {
     /* Adopt buf as recv_mbuf's backing store. */
     mbuf_free(&nc->recv_mbuf);
@@ -2618,7 +2618,7 @@ static void resolve_cb(struct mg_dns_message *msg, void *data,
   }
 
   if (e == MG_RESOLVE_TIMEOUT) {
-    double now = cs_time();
+    double now = mg_time();
     mg_call(nc, NULL, MG_EV_TIMER, &now);
   }
 
@@ -2832,6 +2832,10 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
   }
   return result;
 }
+
+double mg_time() {
+  return cs_time();
+}
 #ifdef NS_MODULE_LINES
 #line 1 "./src/net_if_socket.c"
 /**/
@@ -2840,7 +2844,6 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
-/* Amalgamated: #include "common/cs_time.h" */
 
 #define MG_TCP_RECV_BUFFER_SIZE 1024
 #define MG_UDP_RECV_BUFFER_SIZE 1500
@@ -3420,7 +3423,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   double now;
 
   num_ev = epoll_wait(epoll_fd, events, MG_EPOLL_MAX_EVENTS, timeout_ms);
-  now = cs_time();
+  now = mg_time();
   DBG(("epoll_wait @ %ld num_ev=%d", (long) now, num_ev));
 
   while (num_ev-- > 0) {
@@ -3501,7 +3504,7 @@ void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
 }
 
 time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
-  double now = cs_time();
+  double now = mg_time();
   struct mg_connection *nc, *tmp;
   struct timeval tv;
   fd_set read_set, write_set, err_set;
@@ -3542,7 +3545,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
   tv.tv_usec = (milli % 1000) * 1000;
 
   num_selected = select((int) max_fd + 1, &read_set, &write_set, &err_set, &tv);
-  now = cs_time();
+  now = mg_time();
   DBG(("select @ %ld num_ev=%d of %d", (long) now, num_selected, num_fds));
 
 #ifndef MG_DISABLE_SOCKETPAIR
