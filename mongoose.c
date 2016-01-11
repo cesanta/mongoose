@@ -4601,17 +4601,17 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
         headers = v7_create_object(v7);
 
         /* Populate request object */
-        v7_set(v7, req, "method", ~0, 0,
+        v7_set(v7, req, "method", ~0,
                v7_create_string(v7, hm->method.p, hm->method.len, 1));
-        v7_set(v7, req, "uri", ~0, 0,
+        v7_set(v7, req, "uri", ~0,
                v7_create_string(v7, hm->uri.p, hm->uri.len, 1));
-        v7_set(v7, req, "body", ~0, 0,
+        v7_set(v7, req, "body", ~0,
                v7_create_string(v7, hm->body.p, hm->body.len, 1));
-        v7_set(v7, req, "headers", ~0, 0, headers);
+        v7_set(v7, req, "headers", ~0, headers);
         for (i = 0; hm->header_names[i].len > 0; i++) {
           const struct mg_str *name = &hm->header_names[i];
           const struct mg_str *value = &hm->header_values[i];
-          v7_set(v7, headers, name->p, name->len, 0,
+          v7_set(v7, headers, name->p, name->len,
                  v7_create_string(v7, value->p, value->len, 1));
         }
 
