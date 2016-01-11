@@ -5532,6 +5532,40 @@ static void handle_propfind(struct mg_connection *nc, const char *path,
   }
 }
 
+#ifdef MG_ENABLE_FAKE_DAVLOCK
+/*
+ * Windows explorer (probably there are another WebDav clients like it)
+ * requires LOCK support in webdav. W/out this, it still works, but fails
+ * to save file: shows error message and offers "Save As".
+ * "Save as" works, but this message is very annoying.
+ * This is fake lock, which doesn't lock something, just returns LOCK token,
+ * UNLOCK always answers "OK".
+ * With this fake LOCK Windows Explorer looks happy and saves file.
+ * NOTE: that is not DAV LOCK imlementation, it is just a way to shut up
+ * Windows native DAV client. This is why FAKE LOCK is not enabed by default
+ */
+static void handle_lock(struct mg_connection *nc, const char *path) {
+  static const char *reply =
+      "HTTP/1.1 207 Multi-Status\r\n"
+      "Connection: close\r\n"
+      "Content-Type: text/xml; charset=utf-8\r\n\r\n"
+      "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+      "<d:multistatus xmlns:d='DAV:'>\n"
+      "<D:lockdiscovery>\n"
+      "<D:activelock>\n"
+      "<D:locktoken>\n"
+      "<D:href>\n"
+      "opaquelocktoken:%s%u"
+      "</D:href>"
+      "</D:locktoken>"
+      "</D:activelock>\n"
+      "</D:lockdiscovery>"
+      "</d:multistatus>\n";
+  mg_printf(nc, reply, path, (unsigned int) time(NULL));
+  nc->flags |= MG_F_SEND_AND_CLOSE;
+}
+#endif
+
 static void handle_mkcol(struct mg_connection *nc, const char *path,
                          struct http_message *hm) {
   int status_code = 500;
@@ -5679,8 +5713,21 @@ static void handle_put(struct mg_connection *nc, const char *path,
 #endif /* MG_DISABLE_DAV */
 
 static int is_dav_request(const struct mg_str *s) {
-  return !mg_vcmp(s, "PUT") || !mg_vcmp(s, "DELETE") || !mg_vcmp(s, "MKCOL") ||
-         !mg_vcmp(s, "PROPFIND") || !mg_vcmp(s, "MOVE");
+  static const char *methods[] = {"PUT", "DELETE", "MKCOL", "PROPFIND", "MOVE"
+#ifdef MG_ENABLE_FAKE_DAVLOCK
+                                  ,
+                                  "LOCK", "UNLOCK"
+#endif
+  };
+  size_t i;
+
+  for (i = 0; i < ARRAY_SIZE(methods); i++) {
+    if (mg_vcmp(s, methods[i]) == 0) {
+      return 1;
+    }
+  }
+
+  return 0;
 }
 
 /*
@@ -6374,6 +6421,10 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
     handle_put(nc, path, hm);
   } else if (!mg_vcmp(&hm->method, "MOVE")) {
     handle_move(nc, opts, path, hm);
+#ifdef MG_ENABLE_FAKE_DAVLOCK
+  } else if (!mg_vcmp(&hm->method, "LOCK")) {
+    handle_lock(nc, path);
+#endif
 #endif
   } else if (!mg_vcmp(&hm->method, "OPTIONS")) {
     send_options(nc);
