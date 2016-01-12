@@ -2055,7 +2055,7 @@ static enum v7_err mg_send_js(struct v7 *v7, v7_val_t *res) {
     mg_send(c, data, len);
   }
 
-  *res = v7_create_number(len);
+  *res = v7_mk_number(len);
 
   return V7_OK;
 }
@@ -4596,29 +4596,28 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
         v2 = v7_get(v7, v1, ev_name, ~0);
 
         /* Create callback params. TODO(lsm): own/disown those */
-        args = v7_create_array(v7);
-        req = v7_create_object(v7);
-        headers = v7_create_object(v7);
+        args = v7_mk_array(v7);
+        req = v7_mk_object(v7);
+        headers = v7_mk_object(v7);
 
         /* Populate request object */
         v7_set(v7, req, "method", ~0,
-               v7_create_string(v7, hm->method.p, hm->method.len, 1));
-        v7_set(v7, req, "uri", ~0,
-               v7_create_string(v7, hm->uri.p, hm->uri.len, 1));
+               v7_mk_string(v7, hm->method.p, hm->method.len, 1));
+        v7_set(v7, req, "uri", ~0, v7_mk_string(v7, hm->uri.p, hm->uri.len, 1));
         v7_set(v7, req, "body", ~0,
-               v7_create_string(v7, hm->body.p, hm->body.len, 1));
+               v7_mk_string(v7, hm->body.p, hm->body.len, 1));
         v7_set(v7, req, "headers", ~0, headers);
         for (i = 0; hm->header_names[i].len > 0; i++) {
           const struct mg_str *name = &hm->header_names[i];
           const struct mg_str *value = &hm->header_values[i];
           v7_set(v7, headers, name->p, name->len,
-                 v7_create_string(v7, value->p, value->len, 1));
+                 v7_mk_string(v7, value->p, value->len, 1));
         }
 
         /* Invoke callback. TODO(lsm): report errors */
-        v7_array_push(v7, args, v7_create_foreign(nc));
+        v7_array_push(v7, args, v7_mk_foreign(nc));
         v7_array_push(v7, args, req);
-        if (v7_apply(v7, v2, v7_create_undefined(), args, &res) == V7_OK &&
+        if (v7_apply(v7, v2, v7_mk_undefined(), args, &res) == V7_OK &&
             v7_is_true(v7, res)) {
           js_callback_handled_request++;
         }
