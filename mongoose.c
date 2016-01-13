@@ -3770,6 +3770,148 @@ void mg_enable_multithreading(struct mg_connection *nc) {
 }
 #endif
 #ifdef NS_MODULE_LINES
+#line 1 "./src/uri.c"
+/**/
+#endif
+/*
+ * Copyright (c) 2014 Cesanta Software Limited
+ * All rights reserved
+ */
+
+/* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/uri.h" */
+
+/*
+ * scan string until `sep`, keeping track of component boundaries in `res`.
+ *
+ * `p` will point to the char after the separator or it will be `end`.
+ */
+static void parse_uri_component(const char **p, const char *end, char sep,
+                                struct mg_str *res) {
+  res->p = *p;
+  for (; *p < end; (*p)++) {
+    if (**p == sep) {
+      break;
+    }
+  }
+  res->len = (*p) - res->p;
+  (*p)++;
+}
+
+int mg_parse_uri(struct mg_str uri, struct mg_str *scheme,
+                 struct mg_str *user_info, struct mg_str *host,
+                 unsigned int *port, struct mg_str *path, struct mg_str *query,
+                 struct mg_str *fragment) {
+  struct mg_str rscheme = {0, 0}, ruser_info = {0, 0}, rhost = {0, 0},
+                rpath = {0, 0}, rquery = {0, 0}, rfragment = {0, 0};
+  unsigned int rport = 0;
+  enum {
+    P_START,
+    P_SCHEME_OR_PORT,
+    P_USER_INFO,
+    P_HOST,
+    P_PORT,
+    P_REST
+  } state = P_START;
+
+  const char *p = uri.p, *end = p + uri.len;
+  while (p < end) {
+    printf("STATE: %d (%s)\n", state, p);
+    switch (state) {
+      case P_START:
+        /*
+         * expecting on of:
+         * - `scheme://xxxx`
+         * - `xxxx:port`
+         * - `xxxx/path`
+         */
+        for (; p < end; p++) {
+          if (*p == ':') {
+            state = P_SCHEME_OR_PORT;
+            break;
+          } else if (*p == '/') {
+            state = P_REST;
+            break;
+          }
+        }
+        if (state == P_START || state == P_REST) {
+          rhost.p = uri.p;
+          rhost.len = p - uri.p;
+        }
+        break;
+      case P_SCHEME_OR_PORT:
+        if (end - p >= 3 && memcmp(p, "://", 3) == 0) {
+          rscheme.p = uri.p;
+          rscheme.len = p - uri.p;
+          state = P_USER_INFO;
+          p += 2; /* point to last separator char */
+        } else {
+          rhost.p = uri.p;
+          rhost.len = p - uri.p;
+          state = P_PORT;
+        }
+        break;
+      case P_USER_INFO:
+        p++;
+        ruser_info.p = p;
+        for (; p < end; p++) {
+          if (*p == '@') {
+            state = P_HOST;
+            break;
+          } else if (*p == '/') {
+            /* backtrack and parse as host */
+            state = P_HOST;
+            p = ruser_info.p;
+            break;
+          }
+        }
+        ruser_info.len = p - ruser_info.p;
+        break;
+      case P_HOST:
+        if (*p == '@') p++;
+        rhost.p = p;
+        for (; p < end; p++) {
+          if (*p == ':') {
+            state = P_PORT;
+            break;
+          } else if (*p == '/') {
+            state = P_REST;
+            break;
+          }
+        }
+        rhost.len = p - rhost.p;
+        break;
+      case P_PORT:
+        p++;
+        for (; p < end; p++) {
+          if (*p == '/') {
+            state = P_REST;
+            break;
+          }
+          rport *= 10;
+          rport += *p - '0';
+        }
+        break;
+      case P_REST:
+        /* `p` points to separator. `path` includes the separator */
+        parse_uri_component(&p, end, '?', &rpath);
+        parse_uri_component(&p, end, '#', &rquery);
+        parse_uri_component(&p, end, '\0', &rfragment);
+        break;
+    }
+  }
+
+  if (scheme != 0) *scheme = rscheme;
+  if (user_info != 0) *user_info = ruser_info;
+  if (host != 0) *host = rhost;
+  if (port != 0) *port = rport;
+  if (path != 0) *path = rpath;
+  if (query != 0) *query = rquery;
+  if (fragment != 0) *fragment = rfragment;
+
+  return 0;
+}
+#ifdef NS_MODULE_LINES
 #line 1 "./src/http.c"
 /**/
 #endif
