@@ -4618,7 +4618,7 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
         v7_array_push(v7, args, v7_mk_foreign(nc));
         v7_array_push(v7, args, req);
         if (v7_apply(v7, v2, v7_mk_undefined(), args, &res) == V7_OK &&
-            v7_is_true(v7, res)) {
+            v7_is_truthy(v7, res)) {
           js_callback_handled_request++;
         }
       }
