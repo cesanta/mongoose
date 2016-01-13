@@ -7115,6 +7115,11 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
   }
   return j;
 }
+
+struct mg_str mg_mk_str(const char *s) {
+  struct mg_str ret = {s, strlen(s)};
+  return ret;
+}
 #ifdef NS_MODULE_LINES
 #line 1 "./src/json-rpc.c"
 /**/

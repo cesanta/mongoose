@@ -1475,6 +1475,9 @@ const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
  */
 int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
 
+/* A helper function for creating mg_str struct from plain C string */
+struct mg_str mg_mk_str(const char *s);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
