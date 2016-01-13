@@ -1131,6 +1131,7 @@ enum v7_err mg_enable_javascript(struct mg_mgr *m, struct v7 *v7,
  *      log("Connect timeout");
  *      c->flags |= MG_F_CLOSE_IMMEDIATELY;
  *      break;
+ * ```
  */
 double mg_set_timer(struct mg_connection *c, double timestamp);
 
