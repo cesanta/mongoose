@@ -287,6 +287,11 @@ int64_t strtoll(const char *str, char **endptr, int base);
 #endif
 
 #endif /* OSDEP_HEADER_INCLUDED */
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
 #ifndef _CS_DBG_H_
 #define _CS_DBG_H_
 
@@ -328,6 +333,11 @@ void cs_log_printf(const char *fmt, ...);
 #endif
 
 #endif /* _CS_DBG_H_ */
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
 #ifndef _CS_TIME_H_
 #define _CS_TIME_H_
 
@@ -622,6 +632,11 @@ int json_emit_va(char *buf, int buf_len, const char *fmt, va_list);
 #endif /* __cplusplus */
 
 #endif /* FROZEN_HEADER_INCLUDED */
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
 #ifndef DIRENT_H_INCLUDED
 #define DIRENT_H_INCLUDED
 
@@ -1145,6 +1160,11 @@ double mg_time();
 #endif /* __cplusplus */
 
 #endif /* MG_NET_HEADER_INCLUDED */
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
 #ifndef MG_NET_IF_HEADER_INCLUDED
 #define MG_NET_IF_HEADER_INCLUDED
 

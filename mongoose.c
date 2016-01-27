@@ -331,6 +331,11 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst) {
 #line 1 "./src/../../common/cs_dbg.c"
 /**/
 #endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
 /* Amalgamated: #include "common/cs_dbg.h" */
 
 #include <stdarg.h>
@@ -496,6 +501,11 @@ int mkdir(const char *path, mode_t mode) {
 #line 1 "./src/../../common/cs_time.c"
 /**/
 #endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
 #ifndef _WIN32
 #include <stddef.h>
 #ifndef MG_CC3200
@@ -2840,6 +2850,11 @@ double mg_time() {
 #line 1 "./src/net_if_socket.c"
 /**/
 #endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
 #ifndef MG_DISABLE_SOCKET_IF
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
