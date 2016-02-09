@@ -1,7 +1,6 @@
 #include "mongoose.h"
 #ifdef NS_MODULE_LINES
-#line 1 "./src/internal.h"
-/**/
+#line 0 "./src/internal.h"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -126,8 +125,7 @@ extern void *(*test_calloc)(size_t count, size_t size);
 
 #endif /* MG_INTERNAL_HEADER_INCLUDED */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/../../common/base64.c"
-/**/
+#line 0 "./src/../../common/base64.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -328,8 +326,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/../../common/cs_dbg.c"
-/**/
+#line 0 "./src/../../common/cs_dbg.c"
 #endif
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
@@ -361,8 +358,7 @@ void cs_log_set_level(enum cs_log_level level) {
   s_cs_log_level = level;
 }
 #ifdef NS_MODULE_LINES
-#line 1 "./src/../../common/cs_dirent.c"
-/**/
+#line 0 "./src/../../common/cs_dirent.c"
 #endif
 /*
  * Copyright (c) 2015 Cesanta Software Limited
@@ -498,8 +494,7 @@ int mkdir(const char *path, mode_t mode) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/../../common/cs_time.c"
-/**/
+#line 0 "./src/../../common/cs_time.c"
 #endif
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
@@ -527,8 +522,7 @@ double cs_time() {
   return now;
 }
 #ifdef NS_MODULE_LINES
-#line 1 "./src/../deps/frozen/frozen.c"
-/**/
+#line 0 "./src/../deps/frozen/frozen.c"
 #endif
 /*
  * Copyright (c) 2004-2013 Sergey Lyubka <valenok@gmail.com>
@@ -1028,8 +1022,7 @@ int json_emit(char *buf, int buf_len, const char *fmt, ...) {
   return len;
 }
 #ifdef NS_MODULE_LINES
-#line 1 "./src/../../common/md5.c"
-/**/
+#line 0 "./src/../../common/md5.c"
 #endif
 /*
  * This code implements the MD5 message-digest algorithm.
@@ -1276,8 +1269,7 @@ char *cs_md5(char buf[33], ...) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/../../common/mbuf.c"
-/**/
+#line 0 "./src/../../common/mbuf.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -1374,8 +1366,7 @@ void mbuf_remove(struct mbuf *mb, size_t n) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/../../common/sha1.c"
-/**/
+#line 0 "./src/../../common/sha1.c"
 #endif
 /* Copyright(c) By Steve Reid <steve@edmweb.com> */
 /* 100% Public Domain */
@@ -1629,8 +1620,7 @@ void cs_hmac_sha1(const unsigned char *key, size_t keylen,
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/../../common/str_util.c"
-/**/
+#line 0 "./src/../../common/str_util.c"
 #endif
 /*
  * Copyright (c) 2015 Cesanta Software Limited
@@ -1867,8 +1857,7 @@ void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/net.c"
-/**/
+#line 0 "./src/net.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -2847,8 +2836,7 @@ double mg_time() {
   return cs_time();
 }
 #ifdef NS_MODULE_LINES
-#line 1 "./src/net_if_socket.c"
-/**/
+#line 0 "./src/net_if_socket.c"
 #endif
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
@@ -3677,8 +3665,7 @@ void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
 
 #endif /* !MG_DISABLE_SOCKET_IF */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/multithreading.c"
-/**/
+#line 0 "./src/multithreading.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -3785,8 +3772,7 @@ void mg_enable_multithreading(struct mg_connection *nc) {
 }
 #endif
 #ifdef NS_MODULE_LINES
-#line 1 "./src/uri.c"
-/**/
+#line 0 "./src/uri.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -3928,8 +3914,7 @@ int mg_parse_uri(struct mg_str uri, struct mg_str *scheme,
   return 0;
 }
 #ifdef NS_MODULE_LINES
-#line 1 "./src/http.c"
-/**/
+#line 0 "./src/http.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -6769,8 +6754,7 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
 
 #endif /* MG_DISABLE_HTTP */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/util.c"
-/**/
+#line 0 "./src/util.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -7136,8 +7120,7 @@ struct mg_str mg_mk_str(const char *s) {
   return ret;
 }
 #ifdef NS_MODULE_LINES
-#line 1 "./src/json-rpc.c"
-/**/
+#line 0 "./src/json-rpc.c"
 #endif
 /* Copyright (c) 2014 Cesanta Software Limited */
 /* All rights reserved */
@@ -7298,8 +7281,7 @@ int mg_rpc_parse_reply(const char *buf, int len, struct json_token *toks,
 
 #endif /* MG_DISABLE_JSON_RPC */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/mqtt.c"
-/**/
+#line 0 "./src/mqtt.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -7600,8 +7582,7 @@ void mg_mqtt_disconnect(struct mg_connection *nc) {
 
 #endif /* MG_DISABLE_MQTT */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/mqtt-broker.c"
-/**/
+#line 0 "./src/mqtt-broker.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -7774,8 +7755,7 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 
 #endif /* MG_ENABLE_MQTT_BROKER */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/dns.c"
-/**/
+#line 0 "./src/dns.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -8135,8 +8115,7 @@ void mg_set_protocol_dns(struct mg_connection *nc) {
 
 #endif /* MG_DISABLE_DNS */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/dns-server.c"
-/**/
+#line 0 "./src/dns-server.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -8210,8 +8189,7 @@ int mg_dns_reply_record(struct mg_dns_reply *reply,
 
 #endif /* MG_ENABLE_DNS_SERVER */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/resolv.c"
-/**/
+#line 0 "./src/resolv.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -8470,8 +8448,7 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
 
 #endif /* MG_DISABLE_RESOLVE */
 #ifdef NS_MODULE_LINES
-#line 1 "./src/coap.c"
-/**/
+#line 0 "./src/coap.c"
 #endif
 /*
  * Copyright (c) 2015 Cesanta Software Limited
