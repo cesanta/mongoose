@@ -1773,9 +1773,12 @@ int c_vsnprintf(char *buf, size_t buf_size, const char *fmt, va_list ap) {
           C_SNPRINTF_APPEND_CHAR(' ');
         }
 
-        /* Ignore negative and 0 precisions */
-        for (j = 0; (precision <= 0 || j < precision) && s[j] != '\0'; j++) {
-          C_SNPRINTF_APPEND_CHAR(s[j]);
+        /* `s` may be NULL in case of %.*s */
+        if (s != NULL) {
+          /* Ignore negative and 0 precisions */
+          for (j = 0; (precision <= 0 || j < precision) && s[j] != '\0'; j++) {
+            C_SNPRINTF_APPEND_CHAR(s[j]);
+          }
         }
       } else if (ch == 'c') {
         ch = va_arg(ap, int); /* Always fetch parameter */
