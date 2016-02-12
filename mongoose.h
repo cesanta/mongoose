@@ -181,7 +181,10 @@ typedef struct stat cs_stat_t;
 typedef struct _stati64 cs_stat_t;
 #endif
 #ifndef S_ISDIR
-#define S_ISDIR(x) ((x) &_S_IFDIR)
+#define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
+#endif
+#ifndef S_ISREG
+#define S_ISREG(x) (((x) &_S_IFMT) == _S_IFREG)
 #endif
 #define DIRSEP '\\'
 
@@ -1277,6 +1280,8 @@ int mg_parse_uri(struct mg_str uri, struct mg_str *scheme,
                  struct mg_str *user_info, struct mg_str *host,
                  unsigned int *port, struct mg_str *path, struct mg_str *query,
                  struct mg_str *fragment);
+
+int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out);
 
 #ifdef __cplusplus
 }

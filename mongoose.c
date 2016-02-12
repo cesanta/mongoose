@@ -1,5 +1,5 @@
 #include "mongoose.h"
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/internal.h"
 #endif
 /*
@@ -84,14 +84,15 @@ MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max);
 MG_INTERNAL struct mg_connection *mg_create_connection(
     struct mg_mgr *mgr, mg_event_handler_t callback,
     struct mg_add_sock_opts opts);
-
 #ifndef MG_DISABLE_FILESYSTEM
-MG_INTERNAL int find_index_file(char *path, size_t path_len, const char *list,
-                                cs_stat_t *stp);
+MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
+                                     const struct mg_serve_http_opts *opts,
+                                     char **local_path,
+                                     struct mg_str *remainder);
 #endif
-
 #ifdef _WIN32
-void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len);
+/* Retur value is the same as for MultiByteToWideChar. */
+int to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len);
 #endif
 
 /*
@@ -124,7 +125,7 @@ extern void *(*test_malloc)(size_t size);
 extern void *(*test_calloc)(size_t count, size_t size);
 
 #endif /* MG_INTERNAL_HEADER_INCLUDED */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/../../common/base64.c"
 #endif
 /*
@@ -325,7 +326,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst) {
 }
 
 #endif /* EXCLUDE_COMMON */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/../../common/cs_dbg.c"
 #endif
 /*
@@ -357,7 +358,7 @@ void cs_log_printf(const char *fmt, ...) {
 void cs_log_set_level(enum cs_log_level level) {
   s_cs_log_level = level;
 }
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/../../common/cs_dirent.c"
 #endif
 /*
@@ -425,7 +426,7 @@ int closedir(DIR *dir) {
 }
 
 struct dirent *readdir(DIR *dir) {
-  struct dirent *result = 0;
+  struct dirent *result = NULL;
 
   if (dir) {
     if (dir->handle != INVALID_HANDLE_VALUE) {
@@ -493,7 +494,7 @@ int mkdir(const char *path, mode_t mode) {
 #endif /* CS_ENABLE_SPIFFS */
 
 #endif /* EXCLUDE_COMMON */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/../../common/cs_time.c"
 #endif
 /*
@@ -521,7 +522,7 @@ double cs_time() {
 #endif
   return now;
 }
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/../deps/frozen/frozen.c"
 #endif
 /*
@@ -1021,7 +1022,7 @@ int json_emit(char *buf, int buf_len, const char *fmt, ...) {
 
   return len;
 }
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/../../common/md5.c"
 #endif
 /*
@@ -1268,7 +1269,7 @@ char *cs_md5(char buf[33], ...) {
 }
 
 #endif /* EXCLUDE_COMMON */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/../../common/mbuf.c"
 #endif
 /*
@@ -1365,7 +1366,7 @@ void mbuf_remove(struct mbuf *mb, size_t n) {
 }
 
 #endif /* EXCLUDE_COMMON */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/../../common/sha1.c"
 #endif
 /* Copyright(c) By Steve Reid <steve@edmweb.com> */
@@ -1619,7 +1620,7 @@ void cs_hmac_sha1(const unsigned char *key, size_t keylen,
 }
 
 #endif /* EXCLUDE_COMMON */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/../../common/str_util.c"
 #endif
 /*
@@ -1842,7 +1843,8 @@ int c_snprintf(char *buf, size_t buf_size, const char *fmt, ...) {
 }
 
 #ifdef _WIN32
-void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
+int to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
+  int ret;
   char buf[MAX_PATH * 2], buf2[MAX_PATH * 2], *p;
 
   strncpy(buf, path, sizeof(buf));
@@ -1852,22 +1854,26 @@ void to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
   p = buf + strlen(buf) - 1;
   while (p > buf && p[-1] != ':' && (p[0] == '\\' || p[0] == '/')) *p-- = '\0';
 
-  /*
-   * Convert to Unicode and back. If doubly-converted string does not
-   * match the original, something is fishy, reject.
-   */
   memset(wbuf, 0, wbuf_len * sizeof(wchar_t));
-  MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
+  ret = MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
+
+  /*
+   * Convert back to Unicode. If doubly-converted string does not match the
+   * original, something is fishy, reject.
+   */
   WideCharToMultiByte(CP_UTF8, 0, wbuf, (int) wbuf_len, buf2, sizeof(buf2),
                       NULL, NULL);
   if (strcmp(buf, buf2) != 0) {
     wbuf[0] = L'\0';
+    ret = 0;
   }
+
+  return ret;
 }
 #endif /* _WIN32 */
 
 #endif /* EXCLUDE_COMMON */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/net.c"
 #endif
 /*
@@ -2818,6 +2824,7 @@ int mg_check_ip_acl(const char *acl, uint32_t remote_ip) {
     }
   }
 
+  DBG(("%08x %c", remote_ip, allowed));
   return allowed == '+';
 }
 
@@ -2846,7 +2853,7 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
 double mg_time() {
   return cs_time();
 }
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/net_if_socket.c"
 #endif
 /*
@@ -2927,7 +2934,9 @@ void mg_if_connect_udp(struct mg_connection *nc) {
 
 int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   sock_t sock = mg_open_listening_socket(sa, SOCK_STREAM);
-  if (sock < 0) return (errno ? errno : 1);
+  if (sock == INVALID_SOCKET) {
+    return (errno ? errno : 1);
+  }
   mg_sock_set(nc, sock);
   return 0;
 }
@@ -3197,7 +3206,7 @@ static int mg_ssl_err(struct mg_connection *conn, int res) {
 static void mg_ssl_begin(struct mg_connection *nc) {
   int server_side = nc->listener != NULL;
   int res = server_side ? SSL_accept(nc->ssl) : SSL_connect(nc->ssl);
-  DBG(("%p %d res %d %d %d", nc, server_side, res, errno, mg_ssl_err(nc, res)));
+  DBG(("%p %d res %d %d", nc, server_side, res, errno));
 
   if (res == 1) {
     nc->flags |= MG_F_SSL_HANDSHAKE_DONE;
@@ -3650,16 +3659,14 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
 
 static void mg_sock_get_addr(sock_t sock, int remote,
                              union socket_address *sa) {
+  socklen_t slen = sizeof(*sa);
+  memset(sa, 0, slen);
 #ifndef MG_CC3200
-  socklen_t slen = sizeof(sa);
-  memset(sa, 0, sizeof(*sa));
   if (remote) {
     getpeername(sock, &sa->sa, &slen);
   } else {
     getsockname(sock, &sa->sa, &slen);
   }
-#else
-  memset(sa, 0, sizeof(*sa));
 #endif
 }
 
@@ -3675,7 +3682,7 @@ void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
 }
 
 #endif /* !MG_DISABLE_SOCKET_IF */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/multithreading.c"
 #endif
 /*
@@ -3782,7 +3789,7 @@ void mg_enable_multithreading(struct mg_connection *nc) {
   nc->handler = multithreaded_ev_handler;
 }
 #endif
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/uri.c"
 #endif
 /*
@@ -3807,7 +3814,7 @@ static void parse_uri_component(const char **p, const char *end, char sep,
     }
   }
   res->len = (*p) - res->p;
-  (*p)++;
+  if (*p < end) (*p)++;
 }
 
 int mg_parse_uri(struct mg_str uri, struct mg_str *scheme,
@@ -3924,7 +3931,42 @@ int mg_parse_uri(struct mg_str uri, struct mg_str *scheme,
 
   return 0;
 }
-#ifdef NS_MODULE_LINES
+
+/* Normalize the URI path. Remove/resolve "." and "..". */
+int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out) {
+  const char *s = in->p, *se = s + in->len;
+  char *cp = (char *) out->p, *d;
+
+  if (in->len == 0 || *s != '/') {
+    out->len = 0;
+    return 0;
+  }
+
+  d = cp;
+
+  while (s < se) {
+    const char *next = s;
+    struct mg_str component;
+    parse_uri_component(&next, se, '/', &component);
+    if (mg_vcmp(&component, ".") == 0) {
+      /* Yum. */
+    } else if (mg_vcmp(&component, "..") == 0) {
+      /* Backtrack to previous slash. */
+      if (d > cp + 1 && *(d - 1) == '/') d--;
+      while (d > cp && *(d - 1) != '/') d--;
+    } else {
+      memmove(d, s, next - s);
+      d += next - s;
+    }
+    s = next;
+  }
+  if (d == cp) *d++ = '/';
+
+  out->p = cp;
+  out->len = d - cp;
+  return 1;
+}
+#ifdef MG_MODULE_LINES
 #line 0 "./src/http.c"
 #endif
 /*
@@ -4828,6 +4870,15 @@ void mg_send_response_line(struct mg_connection *nc, int status_code,
     case 302:
       status_message = "Found";
       break;
+    case 401:
+      status_message = "Unauthorized";
+      break;
+    case 403:
+      status_message = "Forbidden";
+      break;
+    case 404:
+      status_message = "Not Found";
+      break;
     case 416:
       status_message = "Requested range not satisfiable";
       break;
@@ -4898,7 +4949,7 @@ static void do_ssi_include(struct mg_connection *nc, const char *ssi, char *tag,
              sscanf(tag, " \"%[^\"]\"", file_name) == 1) {
     /* File name is relative to the currect document */
     snprintf(path, sizeof(path), "%s", ssi);
-    if ((p = strrchr(path, '/')) != NULL) {
+    if ((p = strrchr(path, DIRSEP)) != NULL) {
       p[1] = '\0';
     }
     snprintf(path + strlen(path), sizeof(path) - strlen(path), "%s", file_name);
@@ -5024,7 +5075,7 @@ static void handle_ssi_request(struct mg_connection *nc, const char *path,
   struct mg_str mime_type;
 
   if ((fp = fopen(path, "rb")) == NULL) {
-    send_http_error(nc, 404, "Not Found");
+    send_http_error(nc, 404, NULL);
   } else {
     mg_set_close_on_exec(fileno(fp));
 
@@ -5078,13 +5129,25 @@ static void mg_send_http_file2(struct mg_connection *nc, const char *path,
   struct proto_data_http *dp;
   struct mg_str mime_type;
 
+  DBG(("%p [%s]", nc, path));
   free_http_proto_data(nc);
   if ((dp = (struct proto_data_http *) MG_CALLOC(1, sizeof(*dp))) == NULL) {
     send_http_error(nc, 500, "Server Error"); /* LCOV_EXCL_LINE */
   } else if ((dp->fp = fopen(path, "rb")) == NULL) {
+    int code;
+    switch (errno) {
+      case EACCES:
+        code = 403;
+        break;
+      case ENOENT:
+        code = 404;
+        break;
+      default:
+        code = 500;
+    };
     MG_FREE(dp);
     nc->proto_data = NULL;
-    send_http_error(nc, 500, "Server Error");
+    send_http_error(nc, code, "Open failed");
   } else if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern),
                              path) > 0) {
     nc->proto_data = (void *) dp;
@@ -5152,26 +5215,6 @@ static void mg_send_http_file2(struct mg_connection *nc, const char *path,
     dp->type = DATA_FILE;
     transfer_file_data(nc);
   }
-}
-
-static void remove_double_dots(char *s) {
-  char *p = s;
-
-  while (*s != '\0') {
-    *p++ = *s++;
-    if (s[-1] == '/' || s[-1] == '\\') {
-      while (s[0] != '\0') {
-        if (s[0] == '/' || s[0] == '\\') {
-          s++;
-        } else if (s[0] == '.' && s[1] == '.') {
-          s += 2;
-        } else {
-          break;
-        }
-      }
-    }
-  }
-  *p = '\0';
 }
 
 #endif
@@ -5337,7 +5380,8 @@ int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
 
 #ifndef MG_DISABLE_FILESYSTEM
 static int is_file_hidden(const char *path,
-                          const struct mg_serve_http_opts *opts) {
+                          const struct mg_serve_http_opts *opts,
+                          int exclude_specials) {
   const char *p1 = opts->per_directory_auth_file;
   const char *p2 = opts->hidden_file_pattern;
 
@@ -5347,8 +5391,9 @@ static int is_file_hidden(const char *path,
     path = pdir + 1;
   }
 
-  return !strcmp(path, ".") || !strcmp(path, "..") ||
-         (p1 != NULL && !strcmp(path, p1)) ||
+  return (exclude_specials && (!strcmp(path, ".") || !strcmp(path, ".."))) ||
+         (p1 != NULL &&
+          mg_match_prefix(p1, strlen(p1), path) == (int) strlen(p1)) ||
          (p2 != NULL && mg_match_prefix(p2, strlen(p2), path) > 0);
 }
 
@@ -5452,7 +5497,7 @@ static int mg_http_check_digest_auth(struct http_message *hm,
 static int is_authorized(struct http_message *hm, const char *path,
                          int is_directory, const char *domain,
                          const char *passwords_file, int is_global_pass_file) {
-  char buf[MAX_PATH_SIZE];
+  char buf[MG_MAX_PATH];
   const char *p;
   FILE *fp;
   int authorized = 1;
@@ -5464,11 +5509,9 @@ static int is_authorized(struct http_message *hm, const char *path,
       snprintf(buf, sizeof(buf), "%s%c%s", path, DIRSEP, passwords_file);
       fp = fopen(buf, "r");
     } else {
-      if ((p = strrchr(path, '/')) == NULL &&
-          (p = strrchr(path, '\\')) == NULL) {
-        p = path;
-      }
-      snprintf(buf, sizeof(buf), "%.*s/%s", (int) (p - path), path,
+      p = strrchr(path, DIRSEP);
+      if (p == NULL) p = path;
+      snprintf(buf, sizeof(buf), "%.*s%c%s", (int) (p - path), path, DIRSEP,
                passwords_file);
       fp = fopen(buf, "r");
     }
@@ -5479,6 +5522,8 @@ static int is_authorized(struct http_message *hm, const char *path,
     }
   }
 
+  DBG(("%s %s %d %d", path, passwords_file ? passwords_file : "",
+       is_global_pass_file, authorized));
   return authorized;
 }
 #else
@@ -5574,10 +5619,11 @@ static void scan_directory(struct mg_connection *nc, const char *dir,
   struct dirent *dp;
   DIR *dirp;
 
+  DBG(("%p [%s]", nc, dir));
   if ((dirp = (opendir(dir))) != NULL) {
     while ((dp = readdir(dirp)) != NULL) {
       /* Do not show current dir and hidden files */
-      if (is_file_hidden((const char *) dp->d_name, opts)) {
+      if (is_file_hidden((const char *) dp->d_name, opts, 1)) {
         continue;
       }
       snprintf(path, sizeof(path), "%s/%s", dir, dp->d_name);
@@ -5586,6 +5632,8 @@ static void scan_directory(struct mg_connection *nc, const char *dir,
       }
     }
     closedir(dirp);
+  } else {
+    DBG(("%p opendir(%s) -> %d", nc, dir, errno));
   }
 }
 
@@ -5748,7 +5796,7 @@ static int remove_directory(const struct mg_serve_http_opts *opts,
   if ((dirp = opendir(dir)) == NULL) return 0;
 
   while ((dp = readdir(dirp)) != NULL) {
-    if (is_file_hidden((const char *) dp->d_name, opts)) {
+    if (is_file_hidden((const char *) dp->d_name, opts, 1)) {
       continue;
     }
     snprintf(path, sizeof(path), "%s%c%s", dir, '/', dp->d_name);
@@ -5890,43 +5938,35 @@ static int is_dav_request(const struct mg_str *s) {
  * appended to the `path`, stat-ed, and result of `stat()` passed to `stp`.
  * If index file is not found, then `path` and `stp` remain unchanged.
  */
-MG_INTERNAL int find_index_file(char *path, size_t path_len, const char *list,
-                                cs_stat_t *stp) {
-  cs_stat_t st;
-  size_t n = strlen(path);
+MG_INTERNAL void find_index_file(const char *path, const char *list,
+                                 char **index_file, cs_stat_t *stp) {
   struct mg_str vec;
+  size_t path_len = strlen(path);
   int found = 0;
-
-  /* The 'path' given to us points to the directory. Remove all trailing */
-  /* directory separator characters from the end of the path, and */
-  /* then append single directory separator character. */
-  while (n > 0 && (path[n - 1] == '/' || path[n - 1] == '\\')) {
-    n--;
-  }
+  *index_file = NULL;
 
   /* Traverse index files list. For each entry, append it to the given */
   /* path and see if the file exists. If it exists, break the loop */
   while ((list = mg_next_comma_list_entry(list, &vec, NULL)) != NULL) {
-    /* Prepare full path to the index file */
-    snprintf(path + n, path_len - n, "/%.*s", (int) vec.len, vec.p);
-    path[path_len - 1] = '\0';
+    cs_stat_t st;
+    size_t len = path_len + 1 + vec.len + 1;
+    *index_file = (char *) MG_REALLOC(*index_file, len);
+    if (*index_file == NULL) break;
+    snprintf(*index_file, len, "%s%c%.*s", path, DIRSEP, (int) vec.len, vec.p);
 
-    /* Does it exist? */
-    if (!mg_stat(path, &st)) {
+    /* Does it exist? Is it a file? */
+    if (mg_stat(*index_file, &st) == 0 && S_ISREG(st.st_mode)) {
       /* Yes it does, break the loop */
       *stp = st;
       found = 1;
       break;
     }
   }
-
-  /* If no index file exists, restore directory path, keep trailing slash. */
   if (!found) {
-    path[n] = '\0';
-    strncat(path + n, "/", path_len - n);
+    MG_FREE(*index_file);
+    *index_file = NULL;
   }
-
-  return found;
+  DBG(("[%s] [%s]", path, (*index_file ? *index_file : "")));
 }
 
 static int send_port_based_redirect(struct mg_connection *c,
@@ -5957,39 +5997,155 @@ static int send_port_based_redirect(struct mg_connection *c,
   return 0;
 }
 
-static void uri_to_path(struct http_message *hm, char *buf, size_t buf_len,
-                        const struct mg_serve_http_opts *opts) {
-  char uri[MG_MAX_PATH];
-  struct mg_str a, b, *host_hdr = mg_get_http_header(hm, "Host");
-  const char *rewrites = opts->url_rewrites;
+MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
+                                     const struct mg_serve_http_opts *opts,
+                                     char **local_path,
+                                     struct mg_str *remainder) {
+  int ok = 1;
+  const char *cp = hm->uri.p, *cp_end = hm->uri.p + hm->uri.len;
+  struct mg_str root = {NULL, 0};
+  const char *file_uri_start = cp;
+  *local_path = NULL;
+  remainder->p = NULL;
+  remainder->len = 0;
 
-  mg_url_decode(hm->uri.p, hm->uri.len, uri, sizeof(uri), 0);
-  remove_double_dots(uri);
-  snprintf(buf, buf_len, "%s%s", opts->document_root, uri);
-
-#ifndef MG_DISABLE_DAV
-  if (is_dav_request(&hm->method) && opts->dav_document_root != NULL) {
-    snprintf(buf, buf_len, "%s%s", opts->dav_document_root, uri);
-  }
-#endif
-
-  /* Handle URL rewrites */
-  while ((rewrites = mg_next_comma_list_entry(rewrites, &a, &b)) != NULL) {
-    if (a.len > 1 && a.p[0] == '@' && host_hdr != NULL &&
-        host_hdr->len == a.len - 1 &&
-        mg_ncasecmp(a.p + 1, host_hdr->p, a.len - 1) == 0) {
-      /* This is a virtual host rewrite: @domain.name=document_root_dir */
-      snprintf(buf, buf_len, "%.*s%s", (int) b.len, b.p, uri);
-      break;
-    } else {
-      /* This is a usual rewrite, URI=directory */
-      int match_len = mg_match_prefix(a.p, a.len, uri);
-      if (match_len > 0) {
-        snprintf(buf, buf_len, "%.*s%s", (int) b.len, b.p, uri + match_len);
-        break;
+  { /* 1. Determine which root to use. */
+    const char *rewrites = opts->url_rewrites;
+    struct mg_str *hh = mg_get_http_header(hm, "Host");
+    struct mg_str a, b;
+    /* Check rewrites first. */
+    while ((rewrites = mg_next_comma_list_entry(rewrites, &a, &b)) != NULL) {
+      if (a.len > 1 && a.p[0] == '@') {
+        /* Host rewrite. */
+        if (hh != NULL && hh->len == a.len - 1 &&
+            mg_ncasecmp(a.p + 1, hh->p, a.len - 1) == 0) {
+          root = b;
+          break;
+        }
+      } else {
+        /* Regular rewrite, URI=directory */
+        int match_len = mg_match_prefix(a.p, a.len, cp);
+        if (match_len > 0) {
+          file_uri_start = cp + match_len;
+          if (*file_uri_start == '/' || file_uri_start == cp_end) {
+            /* Match ended at component boundary, ok. */
+          } else if (*(file_uri_start - 1) == '/') {
+            /* Pattern ends with '/', backtrack. */
+            file_uri_start--;
+          } else {
+            /* No match: must fall on the component boundary. */
+            continue;
+          }
+          root = b;
+          break;
+        }
       }
     }
+    /* If no rewrite rules matched, use DAV or regular document root. */
+    if (root.p == NULL) {
+#ifndef MG_DISABLE_DAV
+      if (opts->dav_document_root != NULL && is_dav_request(&hm->method)) {
+        root.p = opts->dav_document_root;
+        root.len = strlen(opts->dav_document_root);
+      } else
+#endif
+      {
+        root.p = opts->document_root;
+        root.len = strlen(opts->document_root);
+      }
+    }
+    assert(root.p != NULL && root.len > 0);
   }
+
+  { /* 2. Find where in the canonical URI path the local path ends. */
+    const char *u = file_uri_start + 1;
+    char *lp = (char *) MG_MALLOC(root.len + hm->uri.len + 1);
+    char *lp_end = lp + root.len + hm->uri.len + 1;
+    char *p = lp, *ps;
+    int exists = 1;
+    if (lp == NULL) {
+      ok = 0;
+      goto out;
+    }
+    memcpy(p, root.p, root.len);
+    p += root.len;
+    if (*(p - 1) == DIRSEP) p--;
+    *p = '\0';
+    ps = p;
+
+    /* Chop off URI path components one by one and build local path. */
+    while (u <= cp_end) {
+      const char *next = u;
+      struct mg_str component;
+      if (exists) {
+        cs_stat_t st;
+        exists = (mg_stat(lp, &st) == 0);
+        if (exists && S_ISREG(st.st_mode)) {
+          /* We found the terminal, the rest of the URI (if any) is path_info.
+           */
+          if (*(u - 1) == '/') u--;
+          break;
+        }
+      }
+      if (u >= cp_end) break;
+      parse_uri_component((const char **) &next, cp_end, '/', &component);
+      if (component.len > 0) {
+        int len;
+        memmove(p + 1, component.p, component.len);
+        len = mg_url_decode(p + 1, component.len, p + 1, lp_end - p - 1, 0);
+        if (len <= 0) {
+          ok = 0;
+          break;
+        }
+        component.p = p + 1;
+        component.len = len;
+        if (mg_vcmp(&component, ".") == 0) {
+          /* Yum. */
+        } else if (mg_vcmp(&component, "..") == 0) {
+          while (p > ps && *p != DIRSEP) p--;
+          *p = '\0';
+        } else {
+          size_t i;
+#ifdef _WIN32
+          /* On Windows, make sure it's valid Unicode (no funny stuff). */
+          wchar_t buf[MG_MAX_PATH * 2];
+          if (to_wchar(component.p, buf, MG_MAX_PATH) == 0) {
+            DBG(("[%.*s] smells funny", (int) component.len, component.p));
+            ok = 0;
+            break;
+          }
+#endif
+          *p++ = DIRSEP;
+          /* No NULs and DIRSEPs in the component (percent-encoded). */
+          for (i = 0; i < component.len; i++, p++) {
+            if (*p == '\0' || *p == DIRSEP
+#ifdef _WIN32
+                /* On Windows, "/" is also accepted, so check for that too. */
+                ||
+                *p == '/'
+#endif
+                ) {
+              ok = 0;
+              break;
+            }
+          }
+        }
+      }
+      u = next;
+    }
+    if (ok) {
+      *local_path = lp;
+      remainder->p = u;
+      remainder->len = cp_end - u;
+    } else {
+      MG_FREE(lp);
+    }
+  }
+
+out:
+  DBG(("'%.*s' -> '%s' + '%.*s'", (int) hm->uri.len, hm->uri.p,
+       *local_path ? *local_path : "", (int) remainder->len, remainder->p));
+  return ok;
 }
 
 #ifndef MG_DISABLE_CGI
@@ -6221,10 +6377,11 @@ static void addenv2(struct cgi_env_block *blk, const char *name) {
 }
 
 static void prepare_cgi_environment(struct mg_connection *nc, const char *prog,
+                                    const struct mg_str *path_info,
                                     const struct http_message *hm,
                                     const struct mg_serve_http_opts *opts,
                                     struct cgi_env_block *blk) {
-  const char *s, *slash;
+  const char *s;
   struct mg_str *h;
   char *p;
   size_t i;
@@ -6260,27 +6417,22 @@ static void prepare_cgi_environment(struct mg_connection *nc, const char *prog,
          hm->query_string.len == 0 ? "" : "?", (int) hm->query_string.len,
          hm->query_string.p);
 
-/* SCRIPT_NAME */
-#if 0
-  if (nc->path_info != NULL) {
-    addenv(blk, "SCRIPT_NAME=%.*s",
-           (int) (strlen(ri->uri) - strlen(nc->path_info)), ri->uri);
-    addenv(blk, "PATH_INFO=%s", nc->path_info);
+  s = hm->uri.p + hm->uri.len - path_info->len - 1;
+  if (*s == '/') {
+    const char *base_name = strrchr(prog, DIRSEP);
+    addenv(blk, "SCRIPT_NAME=%.*s/%s", (int) (s - hm->uri.p), hm->uri.p,
+           (base_name != NULL ? base_name + 1 : prog));
   } else {
-#endif
-  s = strrchr(prog, '/');
-  slash = hm->uri.p + hm->uri.len;
-  while (slash > hm->uri.p && *slash != '/') {
-    slash--;
+    addenv(blk, "SCRIPT_NAME=%.*s", (int) (s - hm->uri.p + 1), hm->uri.p);
   }
-  addenv(blk, "SCRIPT_NAME=%.*s%s", (int) (slash - hm->uri.p), hm->uri.p,
-         s == NULL ? prog : s);
-#if 0
-  }
-#endif
-
   addenv(blk, "SCRIPT_FILENAME=%s", prog);
-  addenv(blk, "PATH_TRANSLATED=%s", prog);
+
+  if (path_info != NULL && path_info->len > 0) {
+    addenv(blk, "PATH_INFO=%.*s", (int) path_info->len, path_info->p);
+    /* Not really translated... */
+    addenv(blk, "PATH_TRANSLATED=%.*s", (int) path_info->len, path_info->p);
+  }
+
   addenv(blk, "HTTPS=%s", nc->ssl != NULL ? "on" : "off");
 
   if ((h = mg_get_http_header((struct http_message *) hm, "Content-Type")) !=
@@ -6367,7 +6519,6 @@ static void cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
           struct http_message hm;
           struct mg_str *h;
           parse_http_headers(io->buf, io->buf + io->len, io->len, &hm);
-          /*printf("=== %d [%.*s]\n", k, k, io->buf);*/
           if (mg_get_http_header(&hm, "Location") != NULL) {
             mg_printf(nc, "%s", "HTTP/1.1 302 Moved\r\n");
           } else if ((h = mg_get_http_header(&hm, "Status")) != NULL) {
@@ -6391,6 +6542,7 @@ static void cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
 }
 
 static void handle_cgi(struct mg_connection *nc, const char *prog,
+                       const struct mg_str *path_info,
                        const struct http_message *hm,
                        const struct mg_serve_http_opts *opts) {
   struct proto_data_http *dp;
@@ -6399,13 +6551,14 @@ static void handle_cgi(struct mg_connection *nc, const char *prog,
   const char *p;
   sock_t fds[2];
 
-  prepare_cgi_environment(nc, prog, hm, opts, &blk);
+  DBG(("%p [%s]", nc, prog));
+  prepare_cgi_environment(nc, prog, path_info, hm, opts, &blk);
   /*
    * CGI must be executed in its own directory. 'dir' must point to the
    * directory containing executable program, 'p' must point to the
    * executable program name relative to 'dir'.
    */
-  if ((p = strrchr(prog, '/')) == NULL) {
+  if ((p = strrchr(prog, DIRSEP)) == NULL) {
     snprintf(dir, sizeof(dir), "%s", ".");
   } else {
     snprintf(dir, sizeof(dir), "%.*s", (int) (p - prog), prog);
@@ -6526,35 +6679,61 @@ static int is_creation_request(const struct http_message *hm) {
   return mg_vcmp(&hm->method, "MKCOL") == 0 || mg_vcmp(&hm->method, "PUT") == 0;
 }
 
-void mg_send_http_file(struct mg_connection *nc, char *path,
-                       size_t path_buf_len, struct http_message *hm,
-                       struct mg_serve_http_opts *opts) {
-  int stat_result, is_directory, is_dav = is_dav_request(&hm->method);
-  uint32_t remote_ip = ntohl(*(uint32_t *) &nc->sa.sin.sin_addr);
+MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
+                                   const struct mg_str *path_info,
+                                   struct http_message *hm,
+                                   struct mg_serve_http_opts *opts) {
+  int exists, is_directory, is_dav = is_dav_request(&hm->method);
+  int is_cgi;
+  char *index_file = NULL;
   cs_stat_t st;
 
-  DBG(("serving [%s]", path));
-  stat_result = mg_stat(path, &st);
-  is_directory = !stat_result && S_ISDIR(st.st_mode);
+  exists = (mg_stat(path, &st) == 0);
+  is_directory = exists && S_ISDIR(st.st_mode);
 
-  if (mg_check_ip_acl(opts->ip_acl, remote_ip) != 1) {
-    /* Not allowed to connect */
-    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-  } else if (is_dav && opts->dav_document_root == NULL) {
+  if (is_directory) find_index_file(path, opts->index_files, &index_file, &st);
+
+  is_cgi =
+      (mg_match_prefix(opts->cgi_file_pattern, strlen(opts->cgi_file_pattern),
+                       index_file ? index_file : path) > 0);
+
+  DBG(("%p %.*s [%s] exists=%d is_dir=%d is_dav=%d is_cgi=%d index=%s", nc,
+       (int) hm->method.len, hm->method.p, path, exists, is_directory, is_dav,
+       is_cgi, index_file ? index_file : ""));
+
+  if (is_directory && hm->uri.p[hm->uri.len - 1] != '/' && !is_dav) {
+    mg_printf(nc,
+              "HTTP/1.1 301 Moved\r\nLocation: %.*s/\r\n"
+              "Content-Length: 0\r\n\r\n",
+              (int) hm->uri.len, hm->uri.p);
+    MG_FREE(index_file);
+    return;
+  }
+
+  /* If we have path_info, the only way to handle it is CGI. */
+  if (path_info->len > 0 && !is_cgi) {
+    send_http_error(nc, 501, NULL);
+    return;
+  } else if (is_cgi) {
+#if !defined(MG_DISABLE_CGI)
+    handle_cgi(nc, index_file ? index_file : path, path_info, hm, opts);
+#else
+    send_http_error(nc, 501, NULL);
+#endif /* MG_DISABLE_CGI */
+    MG_FREE(index_file);
+    return;
+  }
+
+  if (is_dav && opts->dav_document_root == NULL) {
     send_http_error(nc, 501, NULL);
   } else if (!is_authorized(hm, path, is_directory, opts->auth_domain,
                             opts->global_auth_file, 1) ||
              !is_authorized(hm, path, is_directory, opts->auth_domain,
                             opts->per_directory_auth_file, 0)) {
     mg_send_digest_auth_request(nc, opts->auth_domain);
-  } else if ((stat_result != 0 || is_file_hidden(path, opts)) &&
+  } else if ((!exists || is_file_hidden(path, opts, 0 /* specials are ok */)) &&
              !is_creation_request(hm)) {
-    mg_printf(nc, "%s", "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
-  } else if (is_directory && path[strlen(path) - 1] != '/' && !is_dav) {
-    mg_printf(nc,
-              "HTTP/1.1 301 Moved\r\nLocation: %.*s/\r\n"
-              "Content-Length: 0\r\n\r\n",
-              (int) hm->uri.len, hm->uri.p);
+    send_http_error(nc, 404, NULL);
 #ifndef MG_DISABLE_DAV
   } else if (!mg_vcmp(&hm->method, "PROPFIND")) {
     handle_propfind(nc, path, &st, hm, opts);
@@ -6581,35 +6760,36 @@ void mg_send_http_file(struct mg_connection *nc, char *path,
 #endif
   } else if (!mg_vcmp(&hm->method, "OPTIONS")) {
     send_options(nc);
-  } else if (S_ISDIR(st.st_mode) &&
-             !find_index_file(path, path_buf_len, opts->index_files, &st)) {
-    if (strcmp(opts->enable_directory_listing, "yes") == 0) {
+  } else if (is_directory && index_file == NULL) {
 #ifndef MG_DISABLE_DIRECTORY_LISTING
+    if (strcmp(opts->enable_directory_listing, "yes") == 0) {
       send_directory_listing(nc, path, hm, opts);
-#else
-      send_http_error(nc, 501, NULL);
-#endif
     } else {
       send_http_error(nc, 403, NULL);
     }
-  } else if (mg_match_prefix(opts->cgi_file_pattern,
-                             strlen(opts->cgi_file_pattern), path) > 0) {
-#if !defined(MG_DISABLE_CGI)
-    handle_cgi(nc, path, hm, opts);
 #else
     send_http_error(nc, 501, NULL);
-#endif /* MG_DISABLE_CGI */
+#endif
   } else if (mg_is_not_modified(hm, &st)) {
     send_http_error(nc, 304, "Not Modified");
   } else {
-    mg_send_http_file2(nc, path, &st, hm, opts);
+    mg_send_http_file2(nc, index_file ? index_file : path, &st, hm, opts);
   }
+  MG_FREE(index_file);
 }
 
 void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
                    struct mg_serve_http_opts opts) {
-  char path[MG_MAX_PATH];
-  struct mg_str *hdr;
+  char *path = NULL;
+  struct mg_str *hdr, path_info;
+  uint32_t remote_ip = ntohl(*(uint32_t *) &nc->sa.sin.sin_addr);
+
+  if (mg_check_ip_acl(opts.ip_acl, remote_ip) != 1) {
+    /* Not allowed to connect */
+    send_http_error(nc, 403, NULL);
+    nc->flags |= MG_F_SEND_AND_CLOSE;
+    return;
+  }
 
   if (send_port_based_redirect(nc, hm, &opts)) {
     return;
@@ -6633,9 +6813,19 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
   if (opts.index_files == NULL) {
     opts.index_files = "index.html,index.htm,index.shtml,index.cgi,index.php";
   }
+  /* Normalize path - resolve "." and ".." (in-place). */
+  if (!mg_normalize_uri_path(&hm->uri, &hm->uri)) {
+    send_http_error(nc, 400, NULL);
+    return;
+  }
+  if (mg_uri_to_local_path(hm, &opts, &path, &path_info) == 0) {
+    send_http_error(nc, 404, NULL);
+    return;
+  }
+  mg_send_http_file(nc, path, &path_info, hm, &opts);
 
-  uri_to_path(hm, path, sizeof(path), &opts);
-  mg_send_http_file(nc, path, sizeof(path), hm, &opts);
+  MG_FREE(path);
+  path = NULL;
 
   /* Close connection for non-keep-alive requests */
   if (mg_vcmp(&hm->proto, "HTTP/1.1") != 0 ||
@@ -6764,7 +6954,7 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
 }
 
 #endif /* MG_DISABLE_HTTP */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/util.c"
 #endif
 /*
@@ -7130,7 +7320,7 @@ struct mg_str mg_mk_str(const char *s) {
   struct mg_str ret = {s, strlen(s)};
   return ret;
 }
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/json-rpc.c"
 #endif
 /* Copyright (c) 2014 Cesanta Software Limited */
@@ -7291,7 +7481,7 @@ int mg_rpc_parse_reply(const char *buf, int len, struct json_token *toks,
 }
 
 #endif /* MG_DISABLE_JSON_RPC */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/mqtt.c"
 #endif
 /*
@@ -7592,7 +7782,7 @@ void mg_mqtt_disconnect(struct mg_connection *nc) {
 }
 
 #endif /* MG_DISABLE_MQTT */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/mqtt-broker.c"
 #endif
 /*
@@ -7765,7 +7955,7 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 }
 
 #endif /* MG_ENABLE_MQTT_BROKER */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/dns.c"
 #endif
 /*
@@ -8125,7 +8315,7 @@ void mg_set_protocol_dns(struct mg_connection *nc) {
 }
 
 #endif /* MG_DISABLE_DNS */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/dns-server.c"
 #endif
 /*
@@ -8199,7 +8389,7 @@ int mg_dns_reply_record(struct mg_dns_reply *reply,
 }
 
 #endif /* MG_ENABLE_DNS_SERVER */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/resolv.c"
 #endif
 /*
@@ -8458,7 +8648,7 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
 }
 
 #endif /* MG_DISABLE_RESOLVE */
-#ifdef NS_MODULE_LINES
+#ifdef MG_MODULE_LINES
 #line 0 "./src/coap.c"
 #endif
 /*
