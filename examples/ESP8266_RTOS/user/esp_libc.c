@@ -16,6 +16,7 @@
 #include "esp_common.h"
 
 /* Makes fprintf(stdout) and stderr work. */
+/*
 _ssize_t _write_r(struct _reent *r, int fd, void *buf, size_t len) {
   if (fd == 1 || fd == 2) {
     size_t i;
@@ -26,6 +27,7 @@ _ssize_t _write_r(struct _reent *r, int fd, void *buf, size_t len) {
   }
   return -1;
 }
+*/
 
 /*
  * You'll need to implement _open_r and friends if you want file operations. See
@@ -42,7 +44,6 @@ void abort(void) {
 }
 
 void _exit(int status) {
-  printf("_exit(%d)\n", status);
   abort();
 }
 
@@ -51,4 +52,8 @@ int _gettimeofday_r(struct _reent *r, struct timeval *tp, void *tzp) {
   tp->tv_sec = time / 1000000;
   tp->tv_usec = time % 1000000;
   return 0;
+}
+
+long int random(void) {
+  return os_random();
 }

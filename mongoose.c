@@ -76,8 +76,7 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
                                  int *proto, char *host, size_t host_len);
 MG_INTERNAL void mg_call(struct mg_connection *nc,
                          mg_event_handler_t ev_handler, int ev, void *ev_data);
-MG_INTERNAL void mg_forward(struct mg_connection *from,
-                            struct mg_connection *to);
+void mg_forward(struct mg_connection *from, struct mg_connection *to);
 MG_INTERNAL void mg_add_conn(struct mg_mgr *mgr, struct mg_connection *c);
 MG_INTERNAL void mg_remove_conn(struct mg_connection *c);
 MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max);
@@ -251,6 +250,7 @@ void cs_base64_encode(const unsigned char *src, int src_len, char *dst) {
 #undef BASE64_OUT
 #undef BASE64_FLUSH
 
+#ifndef CS_DISABLE_STDIO
 #define BASE64_OUT(ch)      \
   do {                      \
     fprintf(f, "%c", (ch)); \
@@ -265,6 +265,7 @@ void cs_fprint_base64(FILE *f, const unsigned char *src, int src_len) {
 
 #undef BASE64_OUT
 #undef BASE64_FLUSH
+#endif /* !CS_DISABLE_STDIO */
 
 /* Convert one byte of encoded base64 input stream to 6-bit chunk */
 static unsigned char from_b64(unsigned char ch) {
@@ -346,6 +347,7 @@ enum cs_log_level s_cs_log_level =
     LL_ERROR;
 #endif
 
+#ifndef CS_DISABLE_STDIO
 void cs_log_printf(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -354,6 +356,7 @@ void cs_log_printf(const char *fmt, ...) {
   fputc('\n', stderr);
   fflush(stderr);
 }
+#endif /* !CS_DISABLE_STDIO */
 
 void cs_log_set_level(enum cs_log_level level) {
   s_cs_log_level = level;
@@ -368,7 +371,6 @@ void cs_log_set_level(enum cs_log_level level) {
 
 #ifndef EXCLUDE_COMMON
 
-/* Amalgamated: #include "common/osdep.h" */
 /* Amalgamated: #include "common/cs_dirent.h" */
 
 /*
@@ -1630,7 +1632,7 @@ void cs_hmac_sha1(const unsigned char *key, size_t keylen,
 
 #ifndef EXCLUDE_COMMON
 
-/* Amalgamated: #include "common/osdep.h" */
+/* Amalgamated: #include "common/platform.h" */
 /* Amalgamated: #include "common/str_util.h" */
 
 #ifdef _MG_PROVIDE_STRNLEN
@@ -2038,7 +2040,7 @@ void mg_mgr_init(struct mg_mgr *m, void *user_data) {
     WSADATA data;
     WSAStartup(MAKEWORD(2, 2), &data);
   }
-#elif !defined(AVR_LIBC) && !defined(MG_ESP8266)
+#elif defined(__unix__)
   /* Ignore SIGPIPE signal, so if client cancels the request, it
    * won't kill the whole process. */
   signal(SIGPIPE, SIG_IGN);
@@ -3984,7 +3986,9 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out) {
 enum http_proto_data_type { DATA_NONE, DATA_FILE, DATA_PUT, DATA_CGI };
 
 struct proto_data_http {
-  FILE *fp;         /* Opened file. */
+#ifndef MG_DISABLE_FILESYSTEM
+  FILE *fp; /* Opened file. */
+#endif
   int64_t cl;       /* Content-Length. How many bytes to send. */
   int64_t sent;     /* How many bytes have been already sent. */
   int64_t body_len; /* How many bytes of chunked body was reassembled. */
@@ -4521,17 +4525,18 @@ static void ws_handshake(struct mg_connection *nc, const struct mg_str *key) {
 static void free_http_proto_data(struct mg_connection *nc) {
   struct proto_data_http *dp = (struct proto_data_http *) nc->proto_data;
   if (dp != NULL) {
-    if (dp->fp != NULL) {
-      fclose(dp->fp);
-    }
-    if (dp->cgi_nc != NULL) {
-      dp->cgi_nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-    }
+#ifndef MG_DISABLE_FILESYSTEM
+    if (dp->fp != NULL) fclose(dp->fp);
+#endif
+#ifndef MG_DISABLE_CGI
+    if (dp->cgi_nc != NULL) dp->cgi_nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+#endif
     MG_FREE(dp);
     nc->proto_data = NULL;
   }
 }
 
+#ifndef MG_DISABLE_FILESYSTEM
 static void transfer_file_data(struct mg_connection *nc) {
   struct proto_data_http *dp = (struct proto_data_http *) nc->proto_data;
   char buf[MG_MAX_HTTP_SEND_IOBUF];
@@ -4583,6 +4588,7 @@ static void transfer_file_data(struct mg_connection *nc) {
     }
   }
 }
+#endif /* MG_DISABLE_FILESYSTEM */
 
 /*
  * Parse chunked-encoded buffer. Return 0 if the buffer is not encoded, or
@@ -4689,7 +4695,7 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
  * If a big structure is declared in a big function, lx106 gcc will make it
  * even bigger (round up to 4k, from 700 bytes of actual size).
  */
-#ifdef MG_ESP8266
+#ifdef __xtensa__
 static void http_handler2(struct mg_connection *nc, int ev, void *ev_data,
                           struct http_message *hm) __attribute__((noinline));
 
@@ -4700,11 +4706,11 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
 static void http_handler2(struct mg_connection *nc, int ev, void *ev_data,
                           struct http_message *hm) {
-#else
+#else  /* !__XTENSA__ */
 void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message shm;
   struct http_message *hm = &shm;
-#endif
+#endif /* __XTENSA__ */
   struct mbuf *io = &nc->recv_mbuf;
   int req_len;
   const int is_req = (nc->listener != NULL);
@@ -4725,9 +4731,11 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
     free_http_proto_data(nc);
   }
 
+#ifndef MG_DISABLE_FILESYSTEM
   if (nc->proto_data != NULL) {
     transfer_file_data(nc);
   }
+#endif
 
   mg_call(nc, nc->handler, ev, ev_data);
 
@@ -6273,10 +6281,6 @@ static pid_t start_process(const char *interp, const char *cmd, const char *env,
   }
   to_wchar(cmdline, wcmd, ARRAY_SIZE(wcmd));
 
-#if 0
-  printf("[%ls] [%ls]\n", full_dir, wcmd);
-#endif
-
   if (CreateProcessW(NULL, wcmd, NULL, NULL, TRUE, CREATE_NEW_PROCESS_GROUP,
                      (void *) env, full_dir, &si, &pi) != 0) {
     spawn_stdio_thread(sock, a[1], push_to_stdin);
@@ -7113,7 +7117,7 @@ void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
     if (inet_ntop(sa->sa.sa_family, addr, start, capacity) == NULL) {
       *buf = '\0';
     }
-#elif defined(_WIN32) || defined(MG_ESP8266)
+#elif defined(_WIN32) || defined(MG_LWIP)
     /* Only Windoze Vista (and newer) have inet_ntop() */
     strncpy(buf, inet_ntoa(sa->sin.sin_addr), len);
 #else
@@ -7199,9 +7203,10 @@ int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   return len;
 }
 
-#if !defined(NO_LIBC) && !defined(MG_DISABLE_HEXDUMP)
+#if !defined(MG_DISABLE_HEXDUMP)
 void mg_hexdump_connection(struct mg_connection *nc, const char *path,
                            const void *buf, int num_bytes, int ev) {
+#if !defined(NO_LIBC) && !defined(MG_DISABLE_STDIO)
   FILE *fp = NULL;
   char *hexbuf, src[60], dst[60];
   int buf_size = num_bytes * 5 + 100;
@@ -7236,6 +7241,7 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
     MG_FREE(hexbuf);
   }
   if (fp != stdin && fp != stdout) fclose(fp);
+#endif
 }
 #endif
 
@@ -7554,7 +7560,7 @@ static int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       var_len = 2;
       break;
     default:
-      printf("TODO: UNHANDLED COMMAND %d\n", cmd);
+      /* Unhandled command */
       break;
   }
 

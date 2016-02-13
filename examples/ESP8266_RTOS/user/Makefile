@@ -23,11 +23,14 @@ endif
 #   makefile at its root level - these are then overridden
 #   for a subtree within the makefile rooted therein
 #
-DEFINES += -DMG_DISABLE_DAV -DMG_DISABLE_SYNC_RESOLVER -DMG_DISABLE_CGI \
-           -DMG_DISABLE_SOCKETPAIR -DMG_DISABLE_DIRECTORY_LISTING \
+DEFINES += -DMG_LOCALS \
+           -DMG_NO_BSD_SOCKETS \
+           -DMG_DISABLE_FILESYSTEM \
+					 -DMG_DISABLE_STDIO \
            -DMG_MAX_HTTP_HEADERS=20 -DMG_MAX_HTTP_REQUEST_SIZE=1024 \
            -DMG_MAX_PATH=40 -DMG_MAX_HTTP_SEND_IOBUF=1024 \
-           -DMG_ESP8266 -DRTOS_SDK -DMG_LWIP
+           -DRTOS_SDK -DMG_LWIP -DLWIP_TIMEVAL_PRIVATE=0 \
+					 -DMG_INTERNAL=
 
 #############################################################
 # Recursion Magic - Don't touch this!!
