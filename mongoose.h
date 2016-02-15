@@ -840,7 +840,7 @@ size_t strnlen(const char *s, size_t maxlen);
  * See the GNU General Public License for more details.
  *
  * Alternatively, you can license this library under a commercial
- * license, as set out in <https://www.cesanta.com/license>.
+ * license, as set out in <http://cesanta.com/products.html>.
  */
 
 #ifndef FROZEN_HEADER_INCLUDED
@@ -853,27 +853,27 @@ extern "C" {
 #include <stdarg.h>
 
 enum json_type {
-  JSON_TYPE_EOF     = 0,      /* End of parsed tokens marker */
-  JSON_TYPE_STRING  = 1,
-  JSON_TYPE_NUMBER  = 2,
-  JSON_TYPE_OBJECT  = 3,
-  JSON_TYPE_TRUE    = 4,
-  JSON_TYPE_FALSE   = 5,
-  JSON_TYPE_NULL    = 6,
-  JSON_TYPE_ARRAY   = 7
+  JSON_TYPE_EOF = 0, /* End of parsed tokens marker */
+  JSON_TYPE_STRING = 1,
+  JSON_TYPE_NUMBER = 2,
+  JSON_TYPE_OBJECT = 3,
+  JSON_TYPE_TRUE = 4,
+  JSON_TYPE_FALSE = 5,
+  JSON_TYPE_NULL = 6,
+  JSON_TYPE_ARRAY = 7
 };
 
 struct json_token {
-  const char *ptr;      /* Points to the beginning of the token */
-  int len;              /* Token length */
-  int num_desc;         /* For arrays and object, total number of descendants */
-  enum json_type type;  /* Type of the token, possible values above */
+  const char *ptr;     /* Points to the beginning of the token */
+  int len;             /* Token length */
+  int num_desc;        /* For arrays and object, total number of descendants */
+  enum json_type type; /* Type of the token, possible values above */
 };
 
 /* Error codes */
-#define JSON_STRING_INVALID           -1
-#define JSON_STRING_INCOMPLETE        -2
-#define JSON_TOKEN_ARRAY_TOO_SMALL    -3
+#define JSON_STRING_INVALID -1
+#define JSON_STRING_INCOMPLETE -2
+#define JSON_TOKEN_ARRAY_TOO_SMALL -3
 
 int parse_json(const char *json_string, int json_string_length,
                struct json_token *tokens_array, int size_of_tokens_array);

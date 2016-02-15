@@ -543,7 +543,7 @@ double cs_time() {
  * See the GNU General Public License for more details.
  *
  * Alternatively, you can license this library under a commercial
- * license, as set out in <https://www.cesanta.com/license>.
+ * license, as set out in <http://cesanta.com/products.html>.
  */
 
 #define _CRT_SECURE_NO_WARNINGS /* Disable deprecation warning in VS2005+ */
@@ -578,8 +578,15 @@ struct frozen {
 static int parse_object(struct frozen *f);
 static int parse_value(struct frozen *f);
 
-#define EXPECT(cond, err_code) do { if (!(cond)) return (err_code); } while (0)
-#define TRY(expr) do { int _n = expr; if (_n < 0) return _n; } while (0)
+#define EXPECT(cond, err_code)      \
+  do {                              \
+    if (!(cond)) return (err_code); \
+  } while (0)
+#define TRY(expr)          \
+  do {                     \
+    int _n = expr;         \
+    if (_n < 0) return _n; \
+  } while (0)
 #define END_OF_STRING (-1)
 
 static int left(const struct frozen *f) {
@@ -596,12 +603,23 @@ static void skip_whitespaces(struct frozen *f) {
 
 static int cur(struct frozen *f) {
   skip_whitespaces(f);
-  return f->cur >= f->end ? END_OF_STRING : * (unsigned char *) f->cur;
+  return f->cur >= f->end ? END_OF_STRING : *(unsigned char *) f->cur;
 }
 
 static int test_and_skip(struct frozen *f, int expected) {
   int ch = cur(f);
-  if (ch == expected) { f->cur++; return 0; }
+  if (ch == expected) {
+    f->cur++;
+    return 0;
+  }
+  return ch == END_OF_STRING ? JSON_STRING_INCOMPLETE : JSON_STRING_INVALID;
+}
+
+static int test_no_skip(struct frozen *f, int expected) {
+  int ch = cur(f);
+  if (ch == expected) {
+    return 0;
+  }
   return ch == END_OF_STRING ? JSON_STRING_INCOMPLETE : JSON_STRING_INVALID;
 }
 
@@ -620,11 +638,19 @@ static int is_hex_digit(int ch) {
 static int get_escape_len(const char *s, int len) {
   switch (*s) {
     case 'u':
-      return len < 6 ? JSON_STRING_INCOMPLETE :
-        is_hex_digit(s[1]) && is_hex_digit(s[2]) &&
-        is_hex_digit(s[3]) && is_hex_digit(s[4]) ? 5 : JSON_STRING_INVALID;
-    case '"': case '\\': case '/': case 'b':
-    case 'f': case 'n': case 'r': case 't':
+      return len < 6 ? JSON_STRING_INCOMPLETE
+                     : is_hex_digit(s[1]) && is_hex_digit(s[2]) &&
+                               is_hex_digit(s[3]) && is_hex_digit(s[4])
+                           ? 5
+                           : JSON_STRING_INVALID;
+    case '"':
+    case '\\':
+    case '/':
+    case 'b':
+    case 'f':
+    case 'n':
+    case 'r':
+    case 't':
       return len < 2 ? JSON_STRING_INCOMPLETE : 1;
     default:
       return JSON_STRING_INVALID;
@@ -670,9 +696,12 @@ static int parse_identifier(struct frozen *f) {
 static int get_utf8_char_len(unsigned char ch) {
   if ((ch & 0x80) == 0) return 1;
   switch (ch & 0xf0) {
-    case 0xf0: return 4;
-    case 0xe0: return 3;
-    default: return 2;
+    case 0xf0:
+      return 4;
+    case 0xe0:
+      return 3;
+    default:
+      return 2;
   }
 }
 
@@ -682,9 +711,9 @@ static int parse_string(struct frozen *f) {
   TRY(test_and_skip(f, '"'));
   TRY(capture_ptr(f, f->cur, JSON_TYPE_STRING));
   for (; f->cur < f->end; f->cur += len) {
-    ch = * (unsigned char *) f->cur;
+    ch = *(unsigned char *) f->cur;
     len = get_utf8_char_len((unsigned char) ch);
-    EXPECT(ch >= 32 && len > 0, JSON_STRING_INVALID);  /* No control chars */
+    EXPECT(ch >= 32 && len > 0, JSON_STRING_INVALID); /* No control chars */
     EXPECT(len < left(f), JSON_STRING_INCOMPLETE);
     if (ch == '\\') {
       EXPECT((n = get_escape_len(f->cur + 1, left(f))) > 0, n);
@@ -764,14 +793,35 @@ static int parse_value(struct frozen *f) {
   int ch = cur(f);
 
   switch (ch) {
-    case '"': TRY(parse_string(f)); break;
-    case '{': TRY(parse_object(f)); break;
-    case '[': TRY(parse_array(f)); break;
-    case 'n': TRY(expect(f, "null", 4, JSON_TYPE_NULL)); break;
-    case 't': TRY(expect(f, "true", 4, JSON_TYPE_TRUE)); break;
-    case 'f': TRY(expect(f, "false", 5, JSON_TYPE_FALSE)); break;
-    case '-': case '0': case '1': case '2': case '3': case '4':
-    case '5': case '6': case '7': case '8': case '9':
+    case '"':
+      TRY(parse_string(f));
+      break;
+    case '{':
+      TRY(parse_object(f));
+      break;
+    case '[':
+      TRY(parse_array(f));
+      break;
+    case 'n':
+      TRY(expect(f, "null", 4, JSON_TYPE_NULL));
+      break;
+    case 't':
+      TRY(expect(f, "true", 4, JSON_TYPE_TRUE));
+      break;
+    case 'f':
+      TRY(expect(f, "false", 5, JSON_TYPE_FALSE));
+      break;
+    case '-':
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
       TRY(parse_number(f));
       break;
     default:
@@ -821,9 +871,19 @@ static int parse_object(struct frozen *f) {
 }
 
 static int doit(struct frozen *f) {
+  int ret = 0;
+
   if (f->cur == 0 || f->end < f->cur) return JSON_STRING_INVALID;
   if (f->end == f->cur) return JSON_STRING_INCOMPLETE;
-  TRY(parse_object(f));
+
+  if (0 == (ret = test_no_skip(f, '{'))) {
+    TRY(parse_object(f));
+  } else if (0 == (ret = test_no_skip(f, '['))) {
+    TRY(parse_array(f));
+  } else {
+    return ret;
+  }
+
   TRY(capture_ptr(f, f->cur, JSON_TYPE_EOF));
   capture_len(f, f->num_tokens, f->cur);
   return 0;
@@ -876,8 +936,9 @@ struct json_token *find_json_token(struct json_token *toks, const char *path) {
         ind += path[n] - '0';
       }
       if (path[n++] != ']') return 0;
-      skip = 1;  /* In objects, we skip 2 elems while iterating, in arrays 1. */
-    } else if (toks->type != JSON_TYPE_OBJECT) return 0;
+      skip = 1; /* In objects, we skip 2 elems while iterating, in arrays 1. */
+    } else if (toks->type != JSON_TYPE_OBJECT)
+      return 0;
     toks++;
     for (i = 0; i < toks[-1].num_desc; i += skip, ind2++) {
       /* ind == -1 indicated that we're iterating an array, not object */
@@ -919,20 +980,46 @@ int json_emit_quoted_str(char *s, int s_len, const char *str, int len) {
   const char *begin = s, *end = s + s_len, *str_end = str + len;
   char ch;
 
-#define EMIT(x) do { if (s < end) *s = x; s++; } while (0)
+#define EMIT(x)          \
+  do {                   \
+    if (s < end) *s = x; \
+    s++;                 \
+  } while (0)
 
   EMIT('"');
   while (str < str_end) {
     ch = *str++;
     switch (ch) {
-      case '"':  EMIT('\\'); EMIT('"'); break;
-      case '\\': EMIT('\\'); EMIT('\\'); break;
-      case '\b': EMIT('\\'); EMIT('b'); break;
-      case '\f': EMIT('\\'); EMIT('f'); break;
-      case '\n': EMIT('\\'); EMIT('n'); break;
-      case '\r': EMIT('\\'); EMIT('r'); break;
-      case '\t': EMIT('\\'); EMIT('t'); break;
-      default: EMIT(ch);
+      case '"':
+        EMIT('\\');
+        EMIT('"');
+        break;
+      case '\\':
+        EMIT('\\');
+        EMIT('\\');
+        break;
+      case '\b':
+        EMIT('\\');
+        EMIT('b');
+        break;
+      case '\f':
+        EMIT('\\');
+        EMIT('f');
+        break;
+      case '\n':
+        EMIT('\\');
+        EMIT('n');
+        break;
+      case '\r':
+        EMIT('\\');
+        EMIT('r');
+        break;
+      case '\t':
+        EMIT('\\');
+        EMIT('t');
+        break;
+      default:
+        EMIT(ch);
     }
   }
   EMIT('"');
@@ -960,18 +1047,26 @@ int json_emit_va(char *s, int s_len, const char *fmt, va_list ap) {
 
   while (*fmt != '\0') {
     switch (*fmt) {
-      case '[': case ']': case '{': case '}': case ',': case ':':
-      case ' ': case '\r': case '\n': case '\t':
+      case '[':
+      case ']':
+      case '{':
+      case '}':
+      case ',':
+      case ':':
+      case ' ':
+      case '\r':
+      case '\n':
+      case '\t':
         if (s < end) {
           *s = *fmt;
         }
         s++;
         break;
       case 'i':
-        s += json_emit_long(s, end - s, va_arg(ap, long));
+        s += json_emit_long(s, end - s, va_arg(ap, long) );
         break;
       case 'f':
-        s += json_emit_double(s, end - s, va_arg(ap, double));
+        s += json_emit_double(s, end - s, va_arg(ap, double) );
         break;
       case 'v':
         str = va_arg(ap, char *);
