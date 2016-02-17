@@ -2112,6 +2112,7 @@ static void mg_destroy_conn(struct mg_connection *conn) {
 #endif
   mbuf_free(&conn->recv_mbuf);
   mbuf_free(&conn->send_mbuf);
+  mbuf_free(&conn->endpoints);
   memset(conn, 0, sizeof(*conn));
   MG_FREE(conn);
 }
@@ -4785,6 +4786,45 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
   return body_len;
 }
 
+static mg_event_handler_t get_endpoint_handler(struct mg_connection *nc,
+                                               struct mg_str *uri_path) {
+  size_t pos = 0;
+  mg_event_handler_t ret = NULL;
+  int matched, matched_max = 0;
+
+  if (nc == NULL) {
+    return NULL;
+  }
+
+  while (pos < nc->endpoints.len) {
+    size_t name_len;
+    memcpy(&name_len, nc->endpoints.buf + pos, sizeof(name_len));
+    if ((matched = mg_match_prefix_n(nc->endpoints.buf + pos + sizeof(size_t),
+                                     name_len, uri_path->p, uri_path->len)) !=
+        -1) {
+      if (matched > matched_max) {
+        /* Looking for the longest suitable handler */
+        memcpy(&ret,
+               nc->endpoints.buf + pos + sizeof(name_len) + (name_len + 1),
+               sizeof(ret));
+        matched_max = matched;
+      }
+    }
+
+    pos += sizeof(name_len) + (name_len + 1) + sizeof(ret);
+  }
+
+  return ret;
+}
+
+static void mg_call_endpoint_handler(struct mg_connection *nc, int ev,
+                                     struct http_message *hm) {
+  mg_event_handler_t uri_handler =
+      ev == MG_EV_HTTP_REQUEST ? get_endpoint_handler(nc->listener, &hm->uri)
+                               : NULL;
+  mg_call(nc, uri_handler ? uri_handler : nc->handler, ev, hm);
+}
+
 /*
  * lx106 compiler has a bug (TODO(mkm) report and insert tracking bug here)
  * If a big structure is declared in a big function, lx106 gcc will make it
@@ -4821,7 +4861,7 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
       int ev2 = is_req ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
       hm->message.len = io->len;
       hm->body.len = io->buf + io->len - hm->body.p;
-      mg_call(nc, nc->handler, ev2, hm);
+      mg_call_endpoint_handler(nc, ev2, hm);
     }
     free_http_proto_data(nc);
   }
@@ -4926,10 +4966,10 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
       if (js_callback_handled_request) {
         nc->flags |= MG_F_SEND_AND_CLOSE;
       } else {
-        mg_call(nc, nc->handler, trigger_ev, hm);
+        mg_call_endpoint_handler(nc, trigger_ev, hm);
       }
 #else
-      mg_call(nc, nc->handler, trigger_ev, hm);
+      mg_call_endpoint_handler(nc, trigger_ev, hm);
 #endif
       mbuf_remove(io, hm->message.len);
     }
@@ -6127,7 +6167,7 @@ MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
         }
       } else {
         /* Regular rewrite, URI=directory */
-        int match_len = mg_match_prefix(a.p, a.len, cp);
+        int match_len = mg_match_prefix_n(a.p, a.len, cp, hm->uri.len);
         if (match_len > 0) {
           file_uri_start = cp + match_len;
           if (*file_uri_start == '/' || file_uri_start == cp_end) {
@@ -7052,6 +7092,14 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
   return 0;
 }
 
+void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
+                               mg_event_handler_t handler) {
+  size_t len = strlen(uri_path);
+  mbuf_append(&nc->endpoints, &len, sizeof(len));
+  mbuf_append(&nc->endpoints, uri_path, len + 1);
+  mbuf_append(&nc->endpoints, &handler, sizeof(handler));
+}
+
 #endif /* MG_DISABLE_HTTP */
 #ifdef MG_MODULE_LINES
 #line 0 "./src/util.c"
@@ -7379,35 +7427,41 @@ const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
   return list;
 }
 
-int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
+int mg_match_prefix_n(const char *pattern, int pattern_len, const char *str,
+                      int str_len) {
   const char *or_str;
   int len, res, i = 0, j = 0;
 
   if ((or_str = (const char *) memchr(pattern, '|', pattern_len)) != NULL) {
-    res = mg_match_prefix(pattern, or_str - pattern, str);
-    return res > 0 ? res : mg_match_prefix(
-                               or_str + 1,
-                               (pattern + pattern_len) - (or_str + 1), str);
+    res = mg_match_prefix_n(pattern, or_str - pattern, str, str_len);
+    return res > 0 ? res
+                   : mg_match_prefix_n(or_str + 1,
+                                       (pattern + pattern_len) - (or_str + 1),
+                                       str, str_len);
   }
 
   for (; i < pattern_len; i++, j++) {
-    if (pattern[i] == '?' && str[j] != '\0') {
+    if (pattern[i] == '?' && j != str_len) {
       continue;
     } else if (pattern[i] == '$') {
-      return str[j] == '\0' ? j : -1;
+      return j == str_len ? j : -1;
     } else if (pattern[i] == '*') {
       i++;
       if (pattern[i] == '*') {
         i++;
-        len = (int) strlen(str + j);
+        len = str_len - j;
       } else {
-        len = (int) strcspn(str + j, "/");
+        len = 0;
+        while (j + len != str_len && str[len] != '/') {
+          len++;
+        }
       }
       if (i == pattern_len) {
         return j + len;
       }
       do {
-        res = mg_match_prefix(pattern + i, pattern_len - i, str + j + len);
+        res = mg_match_prefix_n(pattern + i, pattern_len - i, str + j + len,
+                                str_len - j - len);
       } while (res == -1 && len-- > 0);
       return res == -1 ? -1 : j + res + len;
     } else if (lowercase(&pattern[i]) != lowercase(&str[j])) {
@@ -7415,6 +7469,10 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
     }
   }
   return j;
+}
+
+int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
+  return mg_match_prefix_n(pattern, pattern_len, str, strlen(str));
 }
 
 struct mg_str mg_mk_str(const char *s) {

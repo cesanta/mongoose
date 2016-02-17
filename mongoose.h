@@ -1061,8 +1061,8 @@ struct mg_connection {
   void *user_data;                  /* User-specific data */
   void *priv_1;                     /* Used by mg_enable_multithreading() */
   void *priv_2;                     /* Used by mg_enable_multithreading() */
+  struct mbuf endpoints;            /* Used by mg_register_http_endpoint */
   void *mgr_data; /* Implementation-specific event manager's data. */
-
   unsigned long flags;
 /* Flags set by Mongoose */
 #define MG_F_LISTENING (1 << 0)          /* This connection is listening */
@@ -1752,10 +1752,13 @@ const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
                                      struct mg_str *eq_val);
 
 /*
- * Match 0-terminated string against a glob pattern.
+ * Match 0-terminated string (mg_match_prefix) or string with given length
+ * mg_match_prefix_n against a glob pattern.
  * Match is case-insensitive. Return number of bytes matched, or -1 if no match.
  */
 int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
+int mg_match_prefix_n(const char *pattern, int pattern_len, const char *str,
+                      int str_len);
 
 /* A helper function for creating mg_str struct from plain C string */
 struct mg_str mg_mk_str(const char *s);
@@ -2289,6 +2292,38 @@ struct mg_serve_http_opts {
 void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
                    struct mg_serve_http_opts opts);
 
+/*
+ * Register callback for specified http endpoint
+ * Note: if callback is registered it is called instead of
+ * callback provided in mg_bind
+ *
+ * Example code snippet:
+ *
+ * [source,c]
+ * .web_server.c
+ * ----
+ * static void handle_hello1(struct mg_connection *nc, int ev, void *ev_data) {
+ *   (void) ev; (void) ev_data;
+ *   mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\n[I am Hello1]");
+ *  nc->flags |= MG_F_SEND_AND_CLOSE;
+ * }
+ *
+ * static void handle_hello1(struct mg_connection *nc, int ev, void *ev_data) {
+ *  (void) ev; (void) ev_data;
+ *   mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\n[I am Hello2]");
+ *  nc->flags |= MG_F_SEND_AND_CLOSE;
+ * }
+ *
+ * void init() {
+ *   nc = mg_bind(&mgr, local_addr, cb1);
+ *   mg_register_http_endpoint(nc, "/hello1", handle_hello1);
+ *   mg_register_http_endpoint(nc, "/hello1/hello2", handle_hello2);
+ * }
+ * ----
+ */
+
+void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
+                               mg_event_handler_t handler);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
