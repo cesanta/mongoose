@@ -16,7 +16,7 @@ and let them concentrate on the logic, saving time and money.
 - [Download Mongoose Source Code here](http://hubs.ly/H01bWvx0)
 - [Ask questions on support forum](http://forum.cesanta.com/index.php?p=/categories/mongoose)
 - [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
-- [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples) 
+- [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
 
 > Nothing overdone. Nothing less. So unbelievably easy to use.
 > Just how good software should be! -- Pritin Tyagaraj, SAP
@@ -27,7 +27,7 @@ and let them concentrate on the logic, saving time and money.
 * Cross-platform: works on Linux/UNIX, MacOS, QNX, eCos, Windows, Android,
   iPhone, FreeRTOS (TI CC3200, ESP8266), etc
 * Single-threaded, asynchronous, non-blocking core with simple event-based API
-* Native support for [PicoTCP embedded TCP/IP stack](http://www.picotcp.com), 
+* Native support for [PicoTCP embedded TCP/IP stack](http://www.picotcp.com),
   [LWIP embedded TCP/IP stack](https://en.wikipedia.org/wiki/LwIP)
 * Builtin protocols:
    - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
@@ -102,3 +102,5 @@ to start and run browser - that's all!
 - [Frozen](https://github.com/cesanta/frozen) - JSON parser and generator
 - [SLRE](https://github.com/cesanta/slre) - Super Light Regular Expression
   library
+
+[![Analytics](https://ga-beacon.appspot.com/UA-42732794-5/project-page)](https://github.com/cesanta/mongoose)
