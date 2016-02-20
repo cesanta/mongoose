@@ -79,7 +79,6 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
 void mg_forward(struct mg_connection *from, struct mg_connection *to);
 MG_INTERNAL void mg_add_conn(struct mg_mgr *mgr, struct mg_connection *c);
 MG_INTERNAL void mg_remove_conn(struct mg_connection *c);
-MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max);
 MG_INTERNAL struct mg_connection *mg_create_connection(
     struct mg_mgr *mgr, mg_event_handler_t callback,
     struct mg_add_sock_opts opts);
@@ -2047,7 +2046,6 @@ MG_INTERNAL void mg_remove_conn(struct mg_connection *conn) {
 
 MG_INTERNAL void mg_call(struct mg_connection *nc,
                          mg_event_handler_t ev_handler, int ev, void *ev_data) {
-  unsigned long flags_before;
   if (ev_handler == NULL) {
     /*
      * If protocol handler is specified, call it. Otherwise, call user-specified
@@ -2073,12 +2071,17 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
 /* LCOV_EXCL_STOP */
 #endif
   if (ev_handler != NULL) {
-    flags_before = nc->flags;
+    unsigned long flags_before = nc->flags;
+    size_t recv_mbuf_before = nc->recv_mbuf.len, recved;
     ev_handler(nc, ev, ev_data);
+    recved = (recv_mbuf_before - nc->recv_mbuf.len);
     /* Prevent user handler from fiddling with system flags. */
     if (ev_handler == nc->handler && nc->flags != flags_before) {
       nc->flags = (flags_before & ~_MG_CALLBACK_MODIFIABLE_FLAGS_MASK) |
                   (nc->flags & _MG_CALLBACK_MODIFIABLE_FLAGS_MASK);
+    }
+    if (recved > 0 && !(nc->flags & MG_F_UDP)) {
+      mg_if_recved(nc, recved);
     }
   }
   DBG(("%p after %s flags=%lu rmbl=%d smbl=%d", nc,
@@ -2566,13 +2569,6 @@ struct mg_connection *mg_if_accept_tcp_cb(struct mg_connection *lc,
   return nc;
 }
 
-MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max) {
-  size_t avail;
-  if (conn->recv_mbuf_limit < conn->recv_mbuf.len) return 0;
-  avail = conn->recv_mbuf_limit - conn->recv_mbuf.len;
-  return avail > max ? max : avail;
-}
-
 void mg_send(struct mg_connection *nc, const void *buf, int len) {
   nc->last_io_time = mg_time();
   if (nc->flags & MG_F_UDP) {
@@ -2612,8 +2608,6 @@ static void mg_recv_common(struct mg_connection *nc, void *buf, int len) {
     nc->recv_mbuf.buf = (char *) buf;
     nc->recv_mbuf.size = nc->recv_mbuf.len = len;
   } else {
-    size_t avail = recv_avail_size(nc, len);
-    len = avail;
     mbuf_append(&nc->recv_mbuf, buf, len);
     MG_FREE(buf);
   }
@@ -2622,7 +2616,6 @@ static void mg_recv_common(struct mg_connection *nc, void *buf, int len) {
 
 void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len) {
   mg_recv_common(nc, buf, len);
-  mg_if_recved(nc, len);
 }
 
 void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
@@ -2663,8 +2656,8 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
   } else {
     /* Drop on the floor. */
     MG_FREE(buf);
+    mg_if_recved(nc, len);
   }
-  mg_if_recved(nc, len);
 }
 
 /*
@@ -3209,6 +3202,13 @@ static void mg_write_to_socket(struct mg_connection *nc) {
     mbuf_remove(io, n);
   }
   mg_if_sent_cb(nc, n);
+}
+
+MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max) {
+  size_t avail;
+  if (conn->recv_mbuf_limit < conn->recv_mbuf.len) return 0;
+  avail = conn->recv_mbuf_limit - conn->recv_mbuf.len;
+  return avail > max ? max : avail;
 }
 
 static void mg_read_from_socket(struct mg_connection *conn) {

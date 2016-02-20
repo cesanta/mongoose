@@ -1469,7 +1469,6 @@ void mg_if_sent_cb(struct mg_connection *nc, int num_sent);
  * Receive callback.
  * buf must be heap-allocated and ownership is transferred to the core.
  * Core will acknowledge consumption by calling mg_if_recved.
- * No more than one chunk of data can be unacknowledged at any time.
  */
 void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len);
 void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
