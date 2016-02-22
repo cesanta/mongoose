@@ -565,6 +565,10 @@ void cs_log_set_level(enum cs_log_level level);
 
 #ifndef CS_DISABLE_STDIO
 
+#ifdef CS_LOG_TS_DIFF
+extern double cs_log_ts;
+#endif
+
 void cs_log_printf(const char *fmt, ...);
 
 #define LOG(l, x)                        \
