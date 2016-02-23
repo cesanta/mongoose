@@ -2560,12 +2560,9 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
 }
 #endif /* MG_ENABLE_SSL */
 
-struct mg_connection *mg_if_accept_tcp_cb(struct mg_connection *lc,
-                                          union socket_address *sa,
-                                          size_t sa_len) {
+struct mg_connection *mg_if_accept_new_conn(struct mg_connection *lc) {
   struct mg_add_sock_opts opts;
   struct mg_connection *nc;
-  (void) sa_len;
   memset(&opts, 0, sizeof(opts));
   nc = mg_create_connection(lc->mgr, lc->handler, opts);
   if (nc == NULL) return NULL;
@@ -2574,15 +2571,17 @@ struct mg_connection *mg_if_accept_tcp_cb(struct mg_connection *lc,
   nc->proto_handler = lc->proto_handler;
   nc->user_data = lc->user_data;
   nc->recv_mbuf_limit = lc->recv_mbuf_limit;
-  nc->sa = *sa;
   mg_add_conn(nc->mgr, nc);
-  if (lc->ssl_ctx == NULL) {
-    /* For non-SSL connections deliver MG_EV_ACCEPT right away. */
-    mg_call(nc, NULL, MG_EV_ACCEPT, &nc->sa);
-  }
   DBG(("%p %p %d %d, %p %p", lc, nc, nc->sock, (int) nc->flags, lc->ssl_ctx,
        nc->ssl));
   return nc;
+}
+
+void mg_if_accept_tcp_cb(struct mg_connection *nc, union socket_address *sa,
+                         size_t sa_len) {
+  (void) sa_len;
+  nc->sa = *sa;
+  mg_call(nc, NULL, MG_EV_ACCEPT, &nc->sa);
 }
 
 void mg_send(struct mg_connection *nc, const void *buf, int len) {
@@ -3102,7 +3101,7 @@ static void mg_accept_conn(struct mg_connection *lc) {
     DBG(("%p: failed to accept: %d", lc, errno));
     return;
   }
-  nc = mg_if_accept_tcp_cb(lc, &sa, sa_len);
+  nc = mg_if_accept_new_conn(lc);
   if (nc == NULL) {
     closesocket(sock);
     return;
@@ -3115,8 +3114,11 @@ static void mg_accept_conn(struct mg_connection *lc) {
       DBG(("SSL error"));
       mg_close_conn(nc);
     }
-  }
+  } else
 #endif
+  {
+    mg_if_accept_tcp_cb(nc, &sa, sa_len);
+  }
 }
 
 /* 'sa' must be an initialized address to bind to */
@@ -3331,7 +3333,7 @@ static void mg_ssl_begin(struct mg_connection *nc) {
       socklen_t sa_len = sizeof(sa);
       /* In case port was set to 0, get the real port number */
       (void) getsockname(nc->sock, &sa.sa, &sa_len);
-      mg_call(nc, NULL, MG_EV_ACCEPT, &sa);
+      mg_if_accept_tcp_cb(nc, &sa, sa_len);
     } else {
       mg_if_connect_cb(nc, 0);
     }
