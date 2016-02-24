@@ -2525,6 +2525,10 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
   const char *result = NULL;
   DBG(("%p %s %s", nc, (cert ? cert : ""), (ca_cert ? ca_cert : "")));
 
+  if (nc->flags & MG_F_UDP) {
+    return "SSL for UDP is not supported";
+  }
+
   if (nc->ssl != NULL) {
     SSL_free(nc->ssl);
     nc->ssl = NULL;
@@ -2786,6 +2790,30 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
   nc->flags |= (proto == SOCK_DGRAM) ? MG_F_UDP : 0;
   nc->user_data = opts.user_data;
 
+#ifdef MG_ENABLE_SSL
+  if (opts.ssl_cert != NULL || opts.ssl_ca_cert != NULL) {
+    const char *err = mg_set_ssl(nc, opts.ssl_cert, opts.ssl_ca_cert);
+    if (err != NULL) {
+      MG_SET_PTRPTR(opts.error_string, err);
+      mg_destroy_conn(nc);
+      return NULL;
+    }
+    if (opts.ssl_ca_cert != NULL && (opts.ssl_server_name == NULL ||
+                                     strcmp(opts.ssl_server_name, "*") != 0)) {
+      if (opts.ssl_server_name == NULL) opts.ssl_server_name = host;
+#ifdef SSL_KRYPTON
+      SSL_CTX_kr_set_verify_name(nc->ssl_ctx, opts.ssl_server_name);
+#else
+      /* TODO(rojer): Implement server name verification on OpenSSL. */
+      MG_SET_PTRPTR(opts.error_string,
+                    "Server name verification requested but is not supported");
+      mg_destroy_conn(nc);
+      return NULL;
+#endif /* SSL_KRYPTON */
+    }
+  }
+#endif /* MG_ENABLE_SSL */
+
   if (rc == 0) {
 #ifndef MG_DISABLE_RESOLVER
     /*
@@ -2858,6 +2886,16 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
     mg_destroy_conn(nc);
     return NULL;
   }
+#ifdef MG_ENABLE_SSL
+  if (opts.ssl_cert != NULL || opts.ssl_ca_cert != NULL) {
+    const char *err = mg_set_ssl(nc, opts.ssl_cert, opts.ssl_ca_cert);
+    if (err != NULL) {
+      MG_SET_PTRPTR(opts.error_string, err);
+      mg_destroy_conn(nc);
+      return NULL;
+    }
+  }
+#endif /* MG_ENABLE_SSL */
   mg_add_conn(nc->mgr, nc);
 
   return nc;

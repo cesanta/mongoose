@@ -1191,6 +1191,11 @@ struct mg_bind_opts {
   void *user_data;           /* Initial value for connection's user_data */
   unsigned int flags;        /* Extra connection flags */
   const char **error_string; /* Placeholder for the error string */
+#ifdef MG_ENABLE_SSL
+  /* SSL settings. */
+  const char *ssl_cert;    /* Server certificate to present to clients */
+  const char *ssl_ca_cert; /* Verify client certificates with this CA bundle */
+#endif
 };
 
 /*
@@ -1217,14 +1222,29 @@ struct mg_connection *mg_bind(struct mg_mgr *, const char *,
  * Return a new listening connection, or `NULL` on error.
  * NOTE: Connection remains owned by the manager, do not free().
  */
-struct mg_connection *mg_bind_opt(struct mg_mgr *, const char *,
-                                  mg_event_handler_t, struct mg_bind_opts);
+struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
+                                  mg_event_handler_t handler,
+                                  struct mg_bind_opts opts);
 
 /* Optional parameters to mg_connect_opt() */
 struct mg_connect_opts {
   void *user_data;           /* Initial value for connection's user_data */
   unsigned int flags;        /* Extra connection flags */
   const char **error_string; /* Placeholder for the error string */
+#ifdef MG_ENABLE_SSL
+  /* SSL settings. */
+  const char *ssl_cert;    /* Client certificate to present to the server */
+  const char *ssl_ca_cert; /* Verify server certificate using this CA bundle */
+
+  /*
+   * Server name verification. If ssl_ca_cert is set and the certificate has
+   * passed verification, its subject will be verified against this string.
+   * By default (if ssl_server_name is NULL) hostname part of the address will
+   * be used. Wildcard matching is supported. A special value of "*" disables
+   * name verification.
+   */
+  const char *ssl_server_name;
+#endif
 };
 
 /*
@@ -1232,8 +1252,8 @@ struct mg_connect_opts {
  *
  * See `mg_connect_opt()` for full documentation.
  */
-struct mg_connection *mg_connect(struct mg_mgr *, const char *,
-                                 mg_event_handler_t);
+struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
+                                 mg_event_handler_t handler);
 
 /*
  * Connect to a remote host.
@@ -1284,9 +1304,9 @@ struct mg_connection *mg_connect(struct mg_mgr *, const char *,
  *   mg_connect(mgr, "my_site.com:80", ev_handler);
  * ----
  */
-struct mg_connection *mg_connect_opt(struct mg_mgr *, const char *,
-                                     mg_event_handler_t,
-                                     struct mg_connect_opts);
+struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
+                                     mg_event_handler_t handler,
+                                     struct mg_connect_opts opts);
 
 /*
  * Enable SSL for a given connection.
