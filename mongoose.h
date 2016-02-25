@@ -1079,6 +1079,7 @@ struct mg_connection {
 #define MG_F_WANT_READ (1 << 5)          /* SSL specific */
 #define MG_F_WANT_WRITE (1 << 6)         /* SSL specific */
 #define MG_F_IS_WEBSOCKET (1 << 7)       /* Websocket specific */
+#define MG_F_SSL_SERVER_TRANSITION (1 << 8)   /* Transition from plain socket to server */
 
 /* Flags that are settable by user */
 #define MG_F_SEND_AND_CLOSE (1 << 10)      /* Push remaining data and close  */
@@ -1323,6 +1324,14 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
                        const char *ca_cert);
 
 /*
+ * Enable SSL for a given connection; make the connection an SSL server
+ * The meaning of certification parameters are the same as in mg_set_ssl.
+ * Return: NULL on success, or error message on error.
+ */
+const char *mg_set_ssl_server(struct mg_connection *nc, const char *cert,
+                       const char *ca_cert);
+
+/*
  * Send data to the connection.
  *
  * Note that sending functions do not actually push data to the socket.
@@ -1454,6 +1463,10 @@ double mg_time();
 #ifndef MG_NET_IF_HEADER_INCLUDED
 #define MG_NET_IF_HEADER_INCLUDED
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 /*
  * Internal async networking core interface.
  * Consists of calls made by the core, which should not block,
@@ -1521,6 +1534,10 @@ void mg_close_conn(struct mg_connection *nc);
 /* Put connection's address into *sa, local (remote = 0) or remote. */
 void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
                          union socket_address *sa);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 #endif /* MG_NET_IF_HEADER_INCLUDED */
 /*
