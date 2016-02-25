@@ -2123,7 +2123,9 @@ void mg_if_timer(struct mg_connection *c, double now) {
 }
 
 void mg_if_poll(struct mg_connection *nc, time_t now) {
-  mg_call(nc, NULL, MG_EV_POLL, &now);
+  if (nc->ssl == NULL || (nc->flags & MG_F_SSL_HANDSHAKE_DONE)) {
+    mg_call(nc, NULL, MG_EV_POLL, &now);
+  }
 }
 
 static void mg_destroy_conn(struct mg_connection *conn) {
@@ -3236,6 +3238,7 @@ static void mg_write_to_socket(struct mg_connection *nc) {
   if (nc->ssl != NULL) {
     if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
       n = SSL_write(nc->ssl, io->buf, io->len);
+      DBG(("%p %d bytes -> %d (SSL)", nc, n, nc->sock));
       if (n <= 0) {
         int ssl_err = mg_ssl_err(nc, n);
         if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
@@ -3253,9 +3256,8 @@ static void mg_write_to_socket(struct mg_connection *nc) {
 #endif
   {
     n = (int) MG_SEND_FUNC(nc->sock, io->buf, io->len, 0);
+    DBG(("%p %d bytes -> %d", nc, n, nc->sock));
   }
-
-  DBG(("%p %d bytes -> %d", nc, n, nc->sock));
 
   if (n > 0) {
     mbuf_remove(io, n);
@@ -3361,7 +3363,7 @@ static int mg_ssl_err(struct mg_connection *conn, int res) {
 }
 
 static void mg_ssl_begin(struct mg_connection *nc) {
-  int server_side = nc->listener != NULL;
+  int server_side = (nc->listener != NULL);
   int res = server_side ? SSL_accept(nc->ssl) : SSL_connect(nc->ssl);
   DBG(("%p %d res %d %d", nc, server_side, res, errno));
 
@@ -3372,8 +3374,7 @@ static void mg_ssl_begin(struct mg_connection *nc) {
     if (server_side) {
       union socket_address sa;
       socklen_t sa_len = sizeof(sa);
-      /* In case port was set to 0, get the real port number */
-      (void) getsockname(nc->sock, &sa.sa, &sa_len);
+      (void) getpeername(nc->sock, &sa.sa, &sa_len);
       mg_if_accept_tcp_cb(nc, &sa, sa_len);
     } else {
       mg_if_connect_cb(nc, 0);
