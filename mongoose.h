@@ -816,6 +816,11 @@ extern "C" {
 
 int c_snprintf(char *buf, size_t buf_size, const char *format, ...);
 int c_vsnprintf(char *buf, size_t buf_size, const char *format, va_list ap);
+/*
+ * Find the first occurrence of find in s, where the search is limited to the
+ * first slen characters of s.
+ */
+const char *c_strnstr(const char *s, const char *find, size_t slen);
 
 #if (!(defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 700) &&           \
      !(defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200809L) &&   \
@@ -829,6 +834,7 @@ size_t strnlen(const char *s, size_t maxlen);
 #ifdef __cplusplus
 }
 #endif
+
 #endif
 /*
  * Copyright (c) 2004-2013 Sergey Lyubka <valenok@gmail.com>
@@ -1069,6 +1075,9 @@ struct mg_connection {
   void *priv_2;                     /* Used by mg_enable_multithreading() */
   struct mbuf endpoints;            /* Used by mg_register_http_endpoint */
   void *mgr_data; /* Implementation-specific event manager's data. */
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+  struct mbuf strm_state; /* Used by multi-part streaming */
+#endif
   unsigned long flags;
 /* Flags set by Mongoose */
 #define MG_F_LISTENING (1 << 0)          /* This connection is listening */
@@ -1887,6 +1896,12 @@ struct websocket_message {
   unsigned char flags;
 };
 
+struct mg_http_multipart_part {
+  const char *file_name;
+  const char *var_name;
+  struct mg_str data;
+};
+
 /* HTTP and websocket events. void *ev_data is described in a comment. */
 #define MG_EV_HTTP_REQUEST 100 /* struct http_message * */
 #define MG_EV_HTTP_REPLY 101   /* struct http_message * */
@@ -1898,13 +1913,25 @@ struct websocket_message {
 #define MG_EV_WEBSOCKET_FRAME 113             /* struct websocket_message * */
 #define MG_EV_WEBSOCKET_CONTROL_FRAME 114     /* struct websocket_message * */
 
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+#define MG_EV_HTTP_MULTIPART_REQUEST 121 /* struct http_message */
+#define MG_EV_HTTP_PART_BEGIN 122        /* struct mg_http_multipart_part */
+#define MG_EV_HTTP_PART_DATA 123         /* struct mg_http_multipart_part */
+#define MG_EV_HTTP_PART_END 124          /* struct mg_http_multipart_part */
+#endif
+
 /*
  * Attach built-in HTTP event handler to the given connection.
  * User-defined event handler will receive following extra events:
  *
- * - MG_EV_HTTP_REQUEST: HTTP request has arrived. Parsed HTTP request is passed
- *as
+ * - MG_EV_HTTP_REQUEST: HTTP request has arrived. Parsed HTTP request
+ *  is passed as
  *   `struct http_message` through the handler's `void *ev_data` pointer.
+ * - MG_EV_HTTP_MULTIPART_REQUEST: A multipart POST request has received.
+ *   This event is sent before body is parsed. After this user
+ *   should expect a sequence of MG_EV_HTTP_PART_BEGIN/DATA/END requests.
+ *   This is also the last time when headers and other request fields are
+ *   accessible.
  * - MG_EV_HTTP_REPLY: HTTP reply has arrived. Parsed HTTP reply is passed as
  *   `struct http_message` through the handler's `void *ev_data` pointer.
  * - MG_EV_HTTP_CHUNK: HTTP chunked-encoding chunk has arrived.
@@ -1925,6 +1952,16 @@ struct websocket_message {
  *   `ev_data` is `NULL`.
  * - MG_EV_WEBSOCKET_FRAME: new websocket frame has arrived. `ev_data` is
  *   `struct websocket_message *`
+ * - MG_EV_HTTP_PART_BEGIN: new part of multipart message is started,
+ *   extra parameters are passed in mg_http_multipart_part
+ * - MG_EV_HTTP_PART_DATA: new portion of data from multiparted message
+ *   no additional headers are available, only data and data size
+ * - MG_EV_HTTP_PART_END: final boundary received, analogue to maybe used to
+ *   find the end of packet
+ *   Note: Mongoose should be compiled with MG_ENABLE_HTTP_STREAMING_MULTIPART
+ *   to enable MG_EV_HTTP_MULTIPART_REQUEST, MG_EV_HTTP_REQUEST_END,
+ *   MG_EV_HTTP_REQUEST_CANCEL, MG_EV_HTTP_PART_BEGIN, MG_EV_HTTP_PART_DATA,
+ *   MG_EV_HTTP_PART_END constants
  */
 void mg_set_protocol_http_websocket(struct mg_connection *nc);
 

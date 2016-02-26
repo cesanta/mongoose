@@ -1987,6 +1987,24 @@ int to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
 }
 #endif /* _WIN32 */
 
+/* The simplest O(mn) algorithm. Better implementation are GPLed */
+const char *c_strnstr(const char *s, const char *find, size_t slen) {
+  size_t find_length = strlen(find);
+  size_t i;
+
+  for (i = 0; i < slen; i++) {
+    if (i + find_length > slen) {
+      return NULL;
+    }
+
+    if (strncmp(&s[i], find, find_length) == 0) {
+      return &s[i];
+    }
+  }
+
+  return NULL;
+}
+
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
 #line 0 "./src/net.c"
@@ -2137,6 +2155,10 @@ static void mg_destroy_conn(struct mg_connection *conn) {
   mbuf_free(&conn->recv_mbuf);
   mbuf_free(&conn->send_mbuf);
   mbuf_free(&conn->endpoints);
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+  mbuf_free(&conn->strm_state);
+#endif
+
   memset(conn, 0, sizeof(*conn));
   MG_FREE(conn);
 }
@@ -4877,6 +4899,42 @@ static mg_event_handler_t get_endpoint_handler(struct mg_connection *nc,
   return ret;
 }
 
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+struct stream_info {
+  struct mg_str endpoint;
+  struct mg_str boundary;
+};
+
+/*
+ * Save/restore state into buf is convinient due to lack of
+ * protocol/connection parameters in mongoose
+ * once mongoose will have way to store connection/protocol
+ * related data these function can be replaced with usual structs
+ * TODO(alashkin): replace once those way will be implemented
+ */
+static void mg_parse_stream_info(struct mbuf *buf, struct stream_info *si) {
+  char *ptr = buf->buf;
+  memcpy(&si->endpoint.len, ptr, sizeof(si->endpoint.len));
+  ptr += sizeof(si->endpoint.len);
+  si->endpoint.p = ptr;
+  ptr += si->endpoint.len;
+  memcpy(&si->boundary.len, ptr, sizeof(si->boundary.len));
+  ptr += sizeof(si->boundary.len);
+  si->boundary.p = ptr;
+  ptr += si->boundary.len + 1; /* Explicitly zero-terminated */
+}
+
+static void mg_store_stream_info(struct mbuf *buf, struct stream_info *si) {
+  char zero = 0;
+  mbuf_append(buf, &si->endpoint.len, sizeof(si->endpoint.len));
+  mbuf_append(buf, si->endpoint.p, si->endpoint.len);
+  mbuf_append(buf, &si->boundary.len, sizeof(si->boundary.len));
+  mbuf_append(buf, si->boundary.p, si->boundary.len);
+  /* Make boundary zero terminated */
+  mbuf_append(buf, &zero, 1);
+}
+#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
+
 static void mg_call_endpoint_handler(struct mg_connection *nc, int ev,
                                      struct http_message *hm) {
   mg_event_handler_t uri_handler =
@@ -4884,6 +4942,16 @@ static void mg_call_endpoint_handler(struct mg_connection *nc, int ev,
                                : NULL;
   mg_call(nc, uri_handler ? uri_handler : nc->handler, ev, hm);
 }
+
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+static void mg_multipart_continue(struct mg_connection *nc, struct mbuf *io,
+                                  int req_len, int ev, void *ev_data);
+
+static void mg_multipart_begin(struct mg_connection *nc,
+                               struct http_message *hm, struct mbuf *io,
+                               int req_len);
+
+#endif
 
 /*
  * lx106 compiler has a bug (TODO(mkm) report and insert tracking bug here)
@@ -4944,7 +5012,12 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
       mg_handle_chunked(nc, hm, io->buf + req_len, io->len - req_len);
     }
 
-    if (req_len < 0 || (req_len == 0 && io->len >= MG_MAX_HTTP_REQUEST_SIZE)) {
+    if (
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+        nc->strm_state.len == 0 &&
+#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
+        (req_len < 0 ||
+         (req_len == 0 && io->len >= MG_MAX_HTTP_REQUEST_SIZE))) {
       DBG(("invalid request"));
       nc->flags |= MG_F_CLOSE_IMMEDIATELY;
     } else if (req_len == 0) {
@@ -4976,9 +5049,12 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
         mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_DONE, NULL);
         websocket_handler(nc, MG_EV_RECV, ev_data);
       }
-    }
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
-    else if (hm->message.len <= io->len) {
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+    } else if (nc->strm_state.len != 0) {
+      mg_multipart_continue(nc, io, req_len, ev, ev_data);
+#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
+    } else if (hm->message.len <= io->len) {
       int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
 
 /* Whole HTTP message is fully buffered, call event handler */
@@ -5029,12 +5105,173 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
         mg_call_endpoint_handler(nc, trigger_ev, hm);
       }
 #else
-      mg_call_endpoint_handler(nc, trigger_ev, hm);
+    mg_call_endpoint_handler(nc, trigger_ev, hm);
 #endif
       mbuf_remove(io, hm->message.len);
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+    } else {
+      mg_multipart_begin(nc, hm, io, req_len);
+#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
     }
   }
 }
+
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+static void mg_multipart_begin(struct mg_connection *nc,
+                               struct http_message *hm, struct mbuf *io,
+                               int req_len) {
+  struct mg_str *ct;
+  const char multipart[] = "multipart";
+  char boundary[100];
+  int boundary_len;
+  struct stream_info si;
+  mg_event_handler_t handler;
+
+  if (nc->listener == NULL) {
+    /* No streaming for replies now */
+    goto exit_mp;
+  }
+
+  ct = mg_get_http_header(hm, "Content-Type");
+  if (ct == NULL) {
+    /* We need more data - or it isn't multipart mesage */
+    goto exit_mp;
+  }
+
+  /* Content-type should start with "multipart" */
+  if (strncmp(ct->p, "multipart", ct->len < sizeof(multipart) - 1
+                                      ? ct->len
+                                      : sizeof(multipart) - 1) != 0) {
+    goto exit_mp;
+  }
+
+  boundary_len =
+      mg_http_parse_header(ct, "boundary", boundary, sizeof(boundary));
+  if (boundary_len == 0) {
+    /*
+     * Content type is multipart, but there is no boundary,
+     * probably malformed request
+     */
+    nc->flags = MG_F_CLOSE_IMMEDIATELY;
+    DBG(("invalid request"));
+    goto exit_mp;
+  }
+
+  /* If we reach this place - that is multipart request */
+
+  if (nc->strm_state.len != 0) {
+    /*
+     * Another streaming request was in progress,
+     * looks like protocol error
+     */
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+    mbuf_free(&nc->strm_state);
+  } else {
+    si.endpoint = hm->uri;
+    si.boundary.p = boundary;
+    si.boundary.len = boundary_len;
+
+    mg_store_stream_info(&nc->strm_state, &si);
+    handler = get_endpoint_handler(nc->listener, &si.endpoint);
+    mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_MULTIPART_REQUEST,
+            hm);
+
+    mbuf_remove(io, req_len);
+  }
+exit_mp:
+  ;
+}
+
+static void mg_multipart_continue(struct mg_connection *nc, struct mbuf *io,
+                                  int req_len, int ev, void *ev_data) {
+  /* Continue to stream multipart */
+  struct stream_info si;
+  mg_event_handler_t handler;
+  struct mg_http_multipart_part mp;
+  const char *boundary;
+
+  mg_parse_stream_info(&nc->strm_state, &si);
+  handler = get_endpoint_handler(nc->listener, &si.endpoint);
+  memset(&mp, 0, sizeof(mp));
+
+  boundary = c_strnstr(io->buf, si.boundary.p, io->len);
+  if (boundary == NULL) {
+    mp.data.p = io->buf;
+    mp.data.len = io->len;
+    mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_PART_DATA, &mp);
+    mbuf_remove(io, io->len);
+  } else {
+    int has_prefix = 0, has_suffix = 0;
+    if (boundary - 2 >= io->buf) {
+      has_prefix = (strncmp(boundary - 2, "--", 2) == 0);
+    }
+    if (boundary + si.boundary.len <= io->buf + io->len) {
+      has_suffix = (strncmp(boundary + si.boundary.len, "--", 2) == 0);
+    }
+    if (has_prefix && !has_suffix) {
+      /* No suffix - not last boundary */
+      char varname[100] = {0}, filename[100] = {0};
+      const char *data = NULL;
+      size_t data_len = 0;
+      /* Send previous part (if any) to callback */
+      if (boundary - io->buf != 2) { /* -- */
+        mp.data.p = io->buf;
+        mp.data.len = boundary - io->buf - 4; /* --\r\n */
+        mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_PART_DATA, &mp);
+
+        mbuf_remove(io, mp.data.len + 2);
+      }
+
+      mg_parse_multipart(io->buf, io->len, varname, sizeof(varname), filename,
+                         sizeof(filename), &data, &data_len);
+      mp.file_name = filename;
+      mp.var_name = varname;
+      if ((req_len = get_request_len(io->buf, io->len)) > 0) {
+        const char *tmp;
+        mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_PART_BEGIN,
+                &mp);
+
+        mbuf_remove(io, req_len);
+        mp.data.p = io->buf;
+
+        tmp = c_strnstr(io->buf, si.boundary.p, io->len);
+        if (tmp == NULL) {
+          mp.data.len = io->len;
+        } else {
+          mp.data.len = tmp - io->buf - 2;
+        }
+
+        if (mp.data.len != 0) {
+          mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_PART_DATA,
+                  &mp);
+          mbuf_remove(io, mp.data.len);
+        }
+
+        if (io->len != 0) {
+          http_handler(nc, ev, ev_data);
+        }
+      } /* else wait for data */
+    } else if (has_prefix && has_suffix) {
+      /* Last boundary */
+      mp.data.p = io->buf;
+      mp.data.len = boundary - io->buf - 4;
+      if (mp.data.len != 0) {
+        mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_PART_DATA, &mp);
+      }
+
+      mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_PART_END, &mp);
+
+      /* Skip epilogue (if any) */
+      mbuf_remove(io, io->len);
+      mbuf_free(&nc->strm_state);
+    } else {
+      /* Malformed request */
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      DBG(("invalid request"));
+    }
+  }
+}
+#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
 
 void mg_set_protocol_http_websocket(struct mg_connection *nc) {
   nc->proto_handler = http_handler;
