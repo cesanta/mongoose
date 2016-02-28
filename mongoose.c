@@ -4903,6 +4903,8 @@ static mg_event_handler_t get_endpoint_handler(struct mg_connection *nc,
 struct stream_info {
   struct mg_str endpoint;
   struct mg_str boundary;
+  struct mg_str var_name;
+  struct mg_str file_name;
 };
 
 /*
@@ -4913,7 +4915,7 @@ struct stream_info {
  * TODO(alashkin): replace once those way will be implemented
  */
 static void mg_parse_stream_info(struct mbuf *buf, struct stream_info *si) {
-  char *ptr = buf->buf;
+  const char *ptr = buf->buf;
   memcpy(&si->endpoint.len, ptr, sizeof(si->endpoint.len));
   ptr += sizeof(si->endpoint.len);
   si->endpoint.p = ptr;
@@ -4922,15 +4924,29 @@ static void mg_parse_stream_info(struct mbuf *buf, struct stream_info *si) {
   ptr += sizeof(si->boundary.len);
   si->boundary.p = ptr;
   ptr += si->boundary.len + 1; /* Explicitly zero-terminated */
+  memcpy(&si->var_name.len, ptr, sizeof(si->var_name.len));
+  ptr += sizeof(si->var_name.len);
+  si->var_name.p = ptr;
+  ptr += si->var_name.len + 1;
+  memcpy(&si->file_name.len, ptr, sizeof(si->file_name.len));
+  ptr += sizeof(si->file_name.len);
+  si->file_name.p = ptr;
+  ptr += si->file_name.len + 1;
 }
 
 static void mg_store_stream_info(struct mbuf *buf, struct stream_info *si) {
   char zero = 0;
+  mbuf_remove(buf, buf->len);
   mbuf_append(buf, &si->endpoint.len, sizeof(si->endpoint.len));
   mbuf_append(buf, si->endpoint.p, si->endpoint.len);
   mbuf_append(buf, &si->boundary.len, sizeof(si->boundary.len));
   mbuf_append(buf, si->boundary.p, si->boundary.len);
-  /* Make boundary zero terminated */
+  mbuf_append(buf, &zero, 1); /* Make boundary zero terminated */
+  mbuf_append(buf, &si->var_name.len, sizeof(si->var_name.len));
+  mbuf_append(buf, si->var_name.p, si->var_name.len);
+  mbuf_append(buf, &zero, 1);
+  mbuf_append(buf, &si->file_name.len, sizeof(si->file_name.len));
+  mbuf_append(buf, si->file_name.p, si->file_name.len);
   mbuf_append(buf, &zero, 1);
 }
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
@@ -5170,6 +5186,8 @@ static void mg_multipart_begin(struct mg_connection *nc,
     si.endpoint = hm->uri;
     si.boundary.p = boundary;
     si.boundary.len = boundary_len;
+    si.var_name.p = si.file_name.p = NULL;
+    si.var_name.len = si.file_name.len = 0;
 
     mg_store_stream_info(&nc->strm_state, &si);
     handler = get_endpoint_handler(nc->listener, &si.endpoint);
@@ -5194,6 +5212,8 @@ static void mg_multipart_continue(struct mg_connection *nc, struct mbuf *io,
   handler = get_endpoint_handler(nc->listener, &si.endpoint);
   memset(&mp, 0, sizeof(mp));
 
+  mp.var_name = si.var_name.p;
+  mp.file_name = si.file_name.p;
   boundary = c_strnstr(io->buf, si.boundary.p, io->len);
   if (boundary == NULL) {
     mp.data.p = io->buf;
@@ -5213,23 +5233,30 @@ static void mg_multipart_continue(struct mg_connection *nc, struct mbuf *io,
       char varname[100] = {0}, filename[100] = {0};
       const char *data = NULL;
       size_t data_len = 0;
-      /* Send previous part (if any) to callback */
-      if (boundary - io->buf != 2) { /* -- */
+      int num_left = (boundary - io->buf) - 2;
+      /* Send remainder of the previous part (if any) to callback */
+      if (num_left > 2) { /* \r\n */
         mp.data.p = io->buf;
-        mp.data.len = boundary - io->buf - 4; /* --\r\n */
+        mp.data.len = num_left - 2;
         mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_PART_DATA, &mp);
-
-        mbuf_remove(io, mp.data.len + 2);
+        mp.data.len = 0;
+        mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_PART_END, &mp);
+        mbuf_remove(io, num_left);
       }
 
       mg_parse_multipart(io->buf, io->len, varname, sizeof(varname), filename,
                          sizeof(filename), &data, &data_len);
-      mp.file_name = filename;
       mp.var_name = varname;
+      mp.file_name = filename;
       if ((req_len = get_request_len(io->buf, io->len)) > 0) {
         const char *tmp;
         mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_PART_BEGIN,
                 &mp);
+        si.var_name.p = mp.var_name;
+        si.var_name.len = strlen(mp.var_name);
+        si.file_name.p = mp.file_name;
+        si.file_name.len = strlen(mp.file_name);
+        mg_store_stream_info(&nc->strm_state, &si);
 
         mbuf_remove(io, req_len);
         mp.data.p = io->buf;
@@ -5242,9 +5269,15 @@ static void mg_multipart_continue(struct mg_connection *nc, struct mbuf *io,
         }
 
         if (mp.data.len != 0) {
+          size_t data_len = mp.data.len;
           mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_PART_DATA,
                   &mp);
-          mbuf_remove(io, mp.data.len);
+          if (data_len != io->len) {
+            mp.data.len = 0;
+            mg_call(nc, handler ? handler : nc->handler, MG_EV_HTTP_PART_END,
+                    &mp);
+          }
+          mbuf_remove(io, data_len);
         }
 
         if (io->len != 0) {
