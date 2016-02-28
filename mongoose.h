@@ -147,6 +147,10 @@
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib") /* Linking with winsock library */
 #endif
+#ifdef MG_ENABLE_IPV6
+#include <WinSock2.h>
+#include <Ws2ipdef.h>
+#endif
 #include <windows.h>
 #include <process.h>
 #ifndef EINPROGRESS
