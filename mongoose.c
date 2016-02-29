@@ -5928,7 +5928,7 @@ static int mg_http_check_digest_auth(struct http_message *hm,
                                      const char *auth_domain, FILE *fp) {
   struct mg_str *hdr;
   char buf[128], f_user[sizeof(buf)], f_ha1[sizeof(buf)], f_domain[sizeof(buf)];
-  char user[50], cnonce[20], response[40], uri[200], qop[20], nc[20], nonce[30];
+  char user[50], cnonce[33], response[40], uri[200], qop[20], nc[20], nonce[30];
   char expected_response[33];
 
   /* Parse "Authorization:" header, fail fast on parse error */
