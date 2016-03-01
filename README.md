@@ -18,8 +18,6 @@ and let them concentrate on the logic, saving time and money.
 - [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
 
-If you like what you see and want to stay up to date with our regular updates, star and watch Mongoose. 
-
 > Nothing overdone. Nothing less. So unbelievably easy to use.
 > Just how good software should be! -- Pritin Tyagaraj, SAP
 
