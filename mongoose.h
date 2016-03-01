@@ -1839,8 +1839,8 @@ extern "C" {
 #endif
 #endif
 
-#ifndef MG_MAX_HTTP_SEND_IOBUF
-#define MG_MAX_HTTP_SEND_IOBUF 4096
+#ifndef MG_MAX_HTTP_SEND_MBUF
+#define MG_MAX_HTTP_SEND_MBUF 4096
 #endif
 
 #ifndef MG_WEBSOCKET_PING_INTERVAL_SECONDS

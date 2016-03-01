@@ -26,11 +26,11 @@ endif
 DEFINES += -DMG_LOCALS \
            -DMG_NO_BSD_SOCKETS \
            -DMG_DISABLE_FILESYSTEM \
-					 -DMG_DISABLE_STDIO \
+           -DMG_DISABLE_STDIO \
            -DMG_MAX_HTTP_HEADERS=20 -DMG_MAX_HTTP_REQUEST_SIZE=1024 \
-           -DMG_MAX_PATH=40 -DMG_MAX_HTTP_SEND_IOBUF=1024 \
+           -DMG_MAX_PATH=40 -DMG_MAX_HTTP_SEND_MBUF=1024 \
            -DRTOS_SDK -DMG_LWIP -DLWIP_TIMEVAL_PRIVATE=0 \
-					 -DMG_INTERNAL=
+           -DMG_INTERNAL=
 
 #############################################################
 # Recursion Magic - Don't touch this!!

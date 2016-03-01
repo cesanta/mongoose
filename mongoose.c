@@ -4717,7 +4717,7 @@ static void free_http_proto_data(struct mg_connection *nc) {
 #ifndef MG_DISABLE_FILESYSTEM
 static void transfer_file_data(struct mg_connection *nc) {
   struct proto_data_http *dp = (struct proto_data_http *) nc->proto_data;
-  char buf[MG_MAX_HTTP_SEND_IOBUF];
+  char buf[MG_MAX_HTTP_SEND_MBUF];
   int64_t left = dp->cl - dp->sent;
   size_t n = 0, to_read = 0;
 
