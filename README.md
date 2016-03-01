@@ -18,11 +18,6 @@ and let them concentrate on the logic, saving time and money.
 - [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
 
-# Support
-- [Support Forum - Ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/smart-js)
-- [Chat - Visit www.cesanta.com for your live chat] (http://www.cesanta.com)
-- [Commercial one-to-one support - Available to all commercial license holders] (https://www.cesanta.com/services-support)
-
 If you like what you see and want to stay up to date with our regular updates, star and watch Mongoose. 
 
 > Nothing overdone. Nothing less. So unbelievably easy to use.
@@ -30,6 +25,10 @@ If you like what you see and want to stay up to date with our regular updates, s
 
 If you are looking for a complete IoT platform with firmware and cloud compotent, check out [Smart.js.] (https://github.com/cesanta/smart.js)  
 
+# Support
+- [Support Forum - Ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/smart-js)
+- [Chat - Visit www.cesanta.com for your live chat] (http://www.cesanta.com)
+- [Commercial one-to-one support - Available to all commercial license holders] (https://www.cesanta.com/services-support)
 
 # Features
 
