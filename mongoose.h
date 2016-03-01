@@ -1014,9 +1014,6 @@ struct mg_str {
   size_t len;    /* Memory chunk length */
 };
 
-#define MG_STR(str_literal) \
-  { str_literal, sizeof(str_literal) - 1 }
-
 /*
  * Callback function (event handler) prototype, must be defined by user.
  * Mongoose calls event handler, passing events defined below.
@@ -1799,8 +1796,15 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
 int mg_match_prefix_n(const char *pattern, int pattern_len, const char *str,
                       int str_len);
 
-/* A helper function for creating mg_str struct from plain C string */
+/*
+ * A helper function for creating mg_str struct from plain C string.
+ * NULL is allowed and becomes {NULL, 0}.
+ */
 struct mg_str mg_mk_str(const char *s);
+
+/* Macro for initializing mg_str. */
+#define MG_MK_STR(str_literal) \
+  { str_literal, sizeof(str_literal) - 1 }
 
 #ifdef __cplusplus
 }

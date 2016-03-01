@@ -10,9 +10,9 @@ static struct mg_serve_http_opts s_http_server_opts;
 static int s_sig_num = 0;
 static void *s_db_handle = NULL;
 static const char *s_db_path = "api_server.db";
-static const struct mg_str s_get_method = MG_STR("GET");
-static const struct mg_str s_put_method = MG_STR("PUT");
-static const struct mg_str s_delele_method = MG_STR("DELETE");
+static const struct mg_str s_get_method = MG_MK_STR("GET");
+static const struct mg_str s_put_method = MG_MK_STR("PUT");
+static const struct mg_str s_delele_method = MG_MK_STR("DELETE");
 
 static void signal_handler(int sig_num) {
   signal(sig_num, signal_handler);
@@ -28,7 +28,7 @@ static int is_equal(const struct mg_str *s1, const struct mg_str *s2) {
 }
 
 static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
-  static const struct mg_str api_prefix = MG_STR("/api/v1");
+  static const struct mg_str api_prefix = MG_MK_STR("/api/v1");
   struct http_message *hm = (struct http_message *) ev_data;
   struct mg_str key;
 
