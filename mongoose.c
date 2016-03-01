@@ -5917,7 +5917,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
 static int check_nonce(const char *nonce) {
   unsigned long now = (unsigned long) time(NULL);
   unsigned long val = (unsigned long) strtoul(nonce, NULL, 16);
-  return 1 || now < val || now - val < 3600;
+  return now < val || now - val < 3600;
 }
 
 /*
@@ -5956,9 +5956,11 @@ static int mg_http_check_digest_auth(struct http_message *hm,
         /* NOTE(lsm): due to a bug in MSIE, we do not compare URIs */
         strcmp(auth_domain, f_domain) == 0) {
       /* User and domain matched, check the password */
-      mkmd5resp(hm->method.p, hm->method.len, hm->uri.p, hm->uri.len, f_ha1,
-                strlen(f_ha1), nonce, strlen(nonce), nc, strlen(nc), cnonce,
-                strlen(cnonce), qop, strlen(qop), expected_response);
+      mkmd5resp(
+          hm->method.p, hm->method.len, hm->uri.p,
+          hm->uri.len + (hm->query_string.len ? hm->query_string.len + 1 : 0),
+          f_ha1, strlen(f_ha1), nonce, strlen(nonce), nc, strlen(nc), cnonce,
+          strlen(cnonce), qop, strlen(qop), expected_response);
       return mg_casecmp(response, expected_response) == 0;
     }
   }
