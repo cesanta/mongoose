@@ -27,7 +27,7 @@ If you are looking for a complete IoT platform with firmware and cloud compotent
 
 # Support
 - [Support Forum - Ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/smart-js)
-- [Chat - Visit www.cesanta.com for your live chat] (http://www.cesanta.com)
+- [Chat - Visit www.cesanta.com for our live chat] (http://www.cesanta.com)
 - [Commercial one-to-one support - Available to all commercial license holders] (https://www.cesanta.com/services-support)
 
 # Features
@@ -54,7 +54,7 @@ If you are looking for a complete IoT platform with firmware and cloud compotent
 
 # Licensing
 
-Mongoose is released under commercial and [GPLv2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)open source licenses. 
+Mongoose is released under commercial and [GPLv2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html) open source licenses. 
 
 Commercial Projects: 
 Once your project becomes commercialised GPLv2 licensing dictates that you need to either open your source fully or purchase a commercial license. Cesanta offer full, royalty-free commercial licenses without any GPL restrictions. [Contact us for pricing.](https://www.cesanta.com/contact) 
