@@ -286,6 +286,15 @@ struct dirent *readdir(DIR *dir);
 #include <sys/types.h>
 #include <unistd.h>
 
+/*
+ * osx correctly avoids defining strtoll when compiling in strict ansi mode.
+ * We require strtoll, and if your embedded pre-c99 compiler lacks one, please
+ * implement a shim.
+ */
+#if !(defined(__DARWIN_C_LEVEL) && __DARWIN_C_LEVEL >= 200809L)
+long long strtoll(const char *, char **, int);
+#endif
+
 typedef int sock_t;
 #define INVALID_SOCKET (-1)
 #define SIZE_T_FMT "zu"
@@ -1068,10 +1077,17 @@ struct mg_connection {
   void *proto_data;                 /* Protocol-specific data */
   mg_event_handler_t handler;       /* Event handler function */
   void *user_data;                  /* User-specific data */
-  void *priv_1;                     /* Used by mg_enable_multithreading() */
-  void *priv_2;                     /* Used by mg_enable_multithreading() */
-  struct mbuf endpoints;            /* Used by mg_register_http_endpoint */
-  void *mgr_data; /* Implementation-specific event manager's data. */
+  union {
+    void *v;
+    /*
+     * the C standard is fussy about fitting function pointers into
+     * void pointers, since some archs might have fat pointers for functions.
+     */
+    mg_event_handler_t f;
+  } priv_1;              /* Used by mg_enable_multithreading() */
+  void *priv_2;          /* Used by mg_enable_multithreading() */
+  struct mbuf endpoints; /* Used by mg_register_http_endpoint */
+  void *mgr_data;        /* Implementation-specific event manager's data. */
 #ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
   struct mbuf strm_state; /* Used by multi-part streaming */
 #endif
