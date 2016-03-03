@@ -4961,7 +4961,7 @@ static void mg_call_endpoint_handler(struct mg_connection *nc, int ev,
 
 #ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
 static void mg_multipart_continue(struct mg_connection *nc, struct mbuf *io,
-                                  int req_len, int ev, void *ev_data);
+                                  int ev, void *ev_data);
 
 static void mg_multipart_begin(struct mg_connection *nc,
                                struct http_message *hm, struct mbuf *io,
@@ -5020,6 +5020,14 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
   if (ev == MG_EV_RECV) {
     struct mg_str *s;
+
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+    if (nc->strm_state.len != 0) {
+      mg_multipart_continue(nc, io, ev, ev_data);
+      return;
+    }
+#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
+
     req_len = mg_parse_http(io->buf, io->len, hm, is_req);
 
     if (req_len > 0 &&
@@ -5028,11 +5036,8 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
       mg_handle_chunked(nc, hm, io->buf + req_len, io->len - req_len);
     }
 
-    if (
-#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
-        nc->strm_state.len == 0 &&
-#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
-        (req_len < 0 ||
+    /* TODO(alashkin): refactor this ifelseifelseifelseifelse */
+    if ((req_len < 0 ||
          (req_len == 0 && io->len >= MG_MAX_HTTP_REQUEST_SIZE))) {
       DBG(("invalid request"));
       nc->flags |= MG_F_CLOSE_IMMEDIATELY;
@@ -5066,10 +5071,6 @@ void http_handler(struct mg_connection *nc, int ev, void *ev_data) {
         websocket_handler(nc, MG_EV_RECV, ev_data);
       }
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
-#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
-    } else if (nc->strm_state.len != 0) {
-      mg_multipart_continue(nc, io, req_len, ev, ev_data);
-#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
     } else if (hm->message.len <= io->len) {
       int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
 
@@ -5201,12 +5202,13 @@ exit_mp:
 }
 
 static void mg_multipart_continue(struct mg_connection *nc, struct mbuf *io,
-                                  int req_len, int ev, void *ev_data) {
+                                  int ev, void *ev_data) {
   /* Continue to stream multipart */
   struct stream_info si;
   mg_event_handler_t handler;
   struct mg_http_multipart_part mp;
   const char *boundary;
+  int req_len;
 
   mg_parse_stream_info(&nc->strm_state, &si);
   handler = get_endpoint_handler(nc->listener, &si.endpoint);
