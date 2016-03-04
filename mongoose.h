@@ -1075,8 +1075,9 @@ struct mg_connection {
   double ev_timer_time;             /* Timestamp of the future MG_EV_TIMER */
   mg_event_handler_t proto_handler; /* Protocol-specific event handler */
   void *proto_data;                 /* Protocol-specific data */
-  mg_event_handler_t handler;       /* Event handler function */
-  void *user_data;                  /* User-specific data */
+  void (*proto_data_destructor)(void *proto_data);
+  mg_event_handler_t handler; /* Event handler function */
+  void *user_data;            /* User-specific data */
   union {
     void *v;
     /*
@@ -1088,9 +1089,6 @@ struct mg_connection {
   void *priv_2;          /* Used by mg_enable_multithreading() */
   struct mbuf endpoints; /* Used by mg_register_http_endpoint */
   void *mgr_data;        /* Implementation-specific event manager's data. */
-#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
-  struct mbuf strm_state; /* Used by multi-part streaming */
-#endif
   unsigned long flags;
 /* Flags set by Mongoose */
 #define MG_F_LISTENING (1 << 0)          /* This connection is listening */
