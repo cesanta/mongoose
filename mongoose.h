@@ -142,6 +142,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <time.h>
+#include <direct.h>
+#include <io.h>
 
 #define random() rand()
 #ifdef _MSC_VER
@@ -167,6 +170,7 @@
 #define to64(x) _atoi64(x)
 #define popen(x, y) _popen((x), (y))
 #define pclose(x) _pclose(x)
+#define rmdir _rmdir
 #if defined(_MSC_VER) && _MSC_VER >= 1400
 #define fseeko(x, y, z) _fseeki64((x), (y), (z))
 #else
@@ -834,8 +838,8 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #if (!(defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 700) &&           \
      !(defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200809L) &&   \
      !(defined(__DARWIN_C_LEVEL) && __DARWIN_C_LEVEL >= 200809L) && \
-     !defined(RTOS_SDK)) ||                                         \
-    (defined(_MSC_VER) && _MSC_VER < 1600 /*Visual Studio 2010*/)
+     !defined(RTOS_SDK)) &&                                         \
+     !(defined(_MSC_VER) && _MSC_VER >= 1600 /* MSVC2013+ has strnlen */)
 #define _MG_PROVIDE_STRNLEN
 size_t strnlen(const char *s, size_t maxlen);
 #endif

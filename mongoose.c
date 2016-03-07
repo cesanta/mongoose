@@ -564,7 +564,9 @@ double cs_time() {
  * license, as set out in <http://cesanta.com/products.html>.
  */
 
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS /* Disable deprecation warning in VS2005+ */
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1454,14 +1456,15 @@ size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
     }
     a->len += len;
   } else if ((p = (char *) MBUF_REALLOC(
-                  a->buf, (a->len + len) * MBUF_SIZE_MULTIPLIER)) != NULL) {
+                  a->buf, (size_t)((a->len + len) * MBUF_SIZE_MULTIPLIER))) !=
+             NULL) {
     a->buf = p;
     memmove(a->buf + off + len, a->buf + off, a->len - off);
     if (buf != NULL) {
       memcpy(a->buf + off, buf, len);
     }
     a->len += len;
-    a->size = a->len * MBUF_SIZE_MULTIPLIER;
+    a->size = (size_t)(a->len * MBUF_SIZE_MULTIPLIER);
   } else {
     len = 0;
   }
@@ -9089,18 +9092,18 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
   char subkey[512], value[128],
       *key = "SYSTEM\\ControlSet001\\Services\\Tcpip\\Parameters\\Interfaces";
 
-  if ((err = RegOpenKey(HKEY_LOCAL_MACHINE, key, &hKey)) != ERROR_SUCCESS) {
+  if ((err = RegOpenKeyA(HKEY_LOCAL_MACHINE, key, &hKey)) != ERROR_SUCCESS) {
     fprintf(stderr, "cannot open reg key %s: %d\n", key, err);
     ret = -1;
   } else {
     for (ret = -1, i = 0;
-         RegEnumKey(hKey, i, subkey, sizeof(subkey)) == ERROR_SUCCESS; i++) {
+         RegEnumKeyA(hKey, i, subkey, sizeof(subkey)) == ERROR_SUCCESS; i++) {
       DWORD type, len = sizeof(value);
-      if (RegOpenKey(hKey, subkey, &hSub) == ERROR_SUCCESS &&
-          (RegQueryValueEx(hSub, "NameServer", 0, &type, (void *) value,
-                           &len) == ERROR_SUCCESS ||
-           RegQueryValueEx(hSub, "DhcpNameServer", 0, &type, (void *) value,
-                           &len) == ERROR_SUCCESS)) {
+      if (RegOpenKeyA(hKey, subkey, &hSub) == ERROR_SUCCESS &&
+          (RegQueryValueExA(hSub, "NameServer", 0, &type, (void *) value,
+                            &len) == ERROR_SUCCESS ||
+           RegQueryValueExA(hSub, "DhcpNameServer", 0, &type, (void *) value,
+                            &len) == ERROR_SUCCESS)) {
         /*
          * See https://github.com/cesanta/mongoose/issues/176
          * The value taken from the registry can be empty, a single
