@@ -2157,7 +2157,6 @@ static void mg_destroy_conn(struct mg_connection *conn) {
 #endif
   mbuf_free(&conn->recv_mbuf);
   mbuf_free(&conn->send_mbuf);
-  mbuf_free(&conn->endpoints);
 
   memset(conn, 0, sizeof(*conn));
   MG_FREE(conn);
@@ -4191,6 +4190,8 @@ struct mg_http_proto_data {
   struct mbuf strm_state; /* Used by multi-part streaming */
 #endif
   struct mg_http_proto_data_chuncked chunk;
+  struct mbuf endpoints; /* Used by mg_register_http_endpoint */
+  mg_event_handler_t endpoint_handler;
 };
 
 static void mg_http_conn_destructor(void *proto_data);
@@ -4236,6 +4237,7 @@ static void mg_http_conn_destructor(void *proto_data) {
 #ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
   mbuf_free(&pd->strm_state);
 #endif
+  mbuf_free(&pd->endpoints);
   free(proto_data);
 }
 
@@ -4920,6 +4922,7 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
 
 static mg_event_handler_t mg_http_get_endpoint_handler(
     struct mg_connection *nc, struct mg_str *uri_path) {
+  struct mg_http_proto_data *pd;
   size_t pos = 0;
   mg_event_handler_t ret = NULL;
   int matched, matched_max = 0;
@@ -4928,16 +4931,18 @@ static mg_event_handler_t mg_http_get_endpoint_handler(
     return NULL;
   }
 
-  while (pos < nc->endpoints.len) {
+  pd = mg_http_get_proto_data(nc);
+
+  while (pos < pd->endpoints.len) {
     size_t name_len;
-    memcpy(&name_len, nc->endpoints.buf + pos, sizeof(name_len));
-    if ((matched = mg_match_prefix_n(nc->endpoints.buf + pos + sizeof(size_t),
+    memcpy(&name_len, pd->endpoints.buf + pos, sizeof(name_len));
+    if ((matched = mg_match_prefix_n(pd->endpoints.buf + pos + sizeof(size_t),
                                      name_len, uri_path->p, uri_path->len)) !=
         -1) {
       if (matched > matched_max) {
         /* Looking for the longest suitable handler */
         memcpy(&ret,
-               nc->endpoints.buf + pos + sizeof(name_len) + (name_len + 1),
+               pd->endpoints.buf + pos + sizeof(name_len) + (name_len + 1),
                sizeof(ret));
         matched_max = matched;
       }
@@ -5005,11 +5010,16 @@ static void mg_http_store_stream_info(struct mbuf *buf,
 
 static void mg_http_call_endpoint_handler(struct mg_connection *nc, int ev,
                                           struct http_message *hm) {
-  mg_event_handler_t uri_handler =
-      ev == MG_EV_HTTP_REQUEST
-          ? mg_http_get_endpoint_handler(nc->listener, &hm->uri)
-          : NULL;
-  mg_call(nc, uri_handler ? uri_handler : nc->handler, ev, hm);
+  struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
+
+  if (pd->endpoint_handler == NULL || ev == MG_EV_HTTP_REQUEST) {
+    pd->endpoint_handler =
+        ev == MG_EV_HTTP_REQUEST
+            ? mg_http_get_endpoint_handler(nc->listener, &hm->uri)
+            : NULL;
+  }
+  mg_call(nc, pd->endpoint_handler ? pd->endpoint_handler : nc->handler, ev,
+          hm);
 }
 
 #ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
@@ -5051,11 +5061,30 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct mg_str *vec;
 #endif
   if (ev == MG_EV_CLOSE) {
-    /*
-     * For HTTP messages without Content-Length, always send HTTP message
-     * before MG_EV_CLOSE message.
-     */
-    if (io->len > 0 && mg_parse_http(io->buf, io->len, hm, is_req) > 0) {
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+    if (pd->strm_state.len != 0) {
+      /*
+       * Multipart message is in progress, but we get close
+       * MG_EV_HTTP_PART_END with error flag
+       */
+      struct mg_http_stream_info si;
+      struct mg_http_multipart_part mp;
+      memset(&mp, 0, sizeof(mp));
+
+      mg_http_parse_stream_info(&pd->strm_state, &si);
+
+      mp.status = -1;
+      mp.var_name = si.var_name.p;
+      mp.file_name = si.file_name.p;
+      mg_call(nc, pd->endpoint_handler ? pd->endpoint_handler : nc->handler,
+              MG_EV_HTTP_PART_END, &mp);
+    } else
+#endif
+        if (io->len > 0 && mg_parse_http(io->buf, io->len, hm, is_req) > 0) {
+      /*
+      * For HTTP messages without Content-Length, always send HTTP message
+      * before MG_EV_CLOSE message.
+      */
       int ev2 = is_req ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
       hm->message.len = io->len;
       hm->body.len = io->buf + io->len - hm->body.p;
@@ -7554,10 +7583,11 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
 
 void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
                                mg_event_handler_t handler) {
+  struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   size_t len = strlen(uri_path);
-  mbuf_append(&nc->endpoints, &len, sizeof(len));
-  mbuf_append(&nc->endpoints, uri_path, len + 1);
-  mbuf_append(&nc->endpoints, &handler, sizeof(handler));
+  mbuf_append(&pd->endpoints, &len, sizeof(len));
+  mbuf_append(&pd->endpoints, uri_path, len + 1);
+  mbuf_append(&pd->endpoints, &handler, sizeof(handler));
 }
 
 #endif /* MG_DISABLE_HTTP */

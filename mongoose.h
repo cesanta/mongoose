@@ -1085,10 +1085,9 @@ struct mg_connection {
      * void pointers, since some archs might have fat pointers for functions.
      */
     mg_event_handler_t f;
-  } priv_1;              /* Used by mg_enable_multithreading() */
-  void *priv_2;          /* Used by mg_enable_multithreading() */
-  struct mbuf endpoints; /* Used by mg_register_http_endpoint */
-  void *mgr_data;        /* Implementation-specific event manager's data. */
+  } priv_1;       /* Used by mg_enable_multithreading() */
+  void *priv_2;   /* Used by mg_enable_multithreading() */
+  void *mgr_data; /* Implementation-specific event manager's data. */
   unsigned long flags;
 /* Flags set by Mongoose */
 #define MG_F_LISTENING (1 << 0)          /* This connection is listening */
@@ -1918,6 +1917,7 @@ struct mg_http_multipart_part {
   const char *file_name;
   const char *var_name;
   struct mg_str data;
+  int status; /* <0 on error */
 };
 
 /* HTTP and websocket events. void *ev_data is described in a comment. */
