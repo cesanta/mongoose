@@ -2,7 +2,10 @@
 # All rights reserved
 
 SUBDIRS = $(sort $(dir $(wildcard */)))
-X = $(SUBDIRS)
+
+ifeq ($(OS), Windows_NT)
+  SUBDIRS:=$(filter-out load_balancer/ netcat/ raspberry_pi_mjpeg_led/, $(SUBDIRS))
+endif
 
 .PHONY: $(SUBDIRS)
 

@@ -1,12 +1,15 @@
 PROG = api_server
 SOURCES = $(PROG).c sqlite3.c db_plugin_sqlite.c ../../mongoose.c
-CFLAGS = -W -Wall -pthread $(CFLAGS_EXTRA)
+CFLAGS = -W -Wall $(CFLAGS_EXTRA)
+
 
 ifeq ($(OS), Windows_NT)
+  CFLAGS += -lws2_32 -D_MG_PROVIDE_STRNLEN
+  CC = mingw32-gcc
 else
   UNAME_S := $(shell uname -s)
   ifeq ($(UNAME_S), Linux)
-    CFLAGS += -ldl -lm
+    CFLAGS += -ldl -lm -pthread
   endif
 endif
 
