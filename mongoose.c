@@ -5072,15 +5072,16 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
        */
       struct mg_http_stream_info si;
       struct mg_http_multipart_part mp;
+      mg_event_handler_t handler;
       memset(&mp, 0, sizeof(mp));
 
       mg_http_parse_stream_info(&pd->strm_state, &si);
+      handler = mg_http_get_endpoint_handler(nc->listener, &si.endpoint);
 
       mp.status = -1;
       mp.var_name = si.var_name.p;
       mp.file_name = si.file_name.p;
-      mg_call(nc, pd->endpoint_handler ? pd->endpoint_handler : nc->handler,
-              MG_EV_HTTP_PART_END, &mp);
+      mg_call(nc, (handler ? handler : nc->handler), MG_EV_HTTP_PART_END, &mp);
     } else
 #endif
         if (io->len > 0 && mg_parse_http(io->buf, io->len, hm, is_req) > 0) {

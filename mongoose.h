@@ -134,8 +134,10 @@
 #endif
 
 #include <assert.h>
+#include <direct.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <io.h>
 #include <limits.h>
 #include <signal.h>
 #include <stddef.h>
@@ -143,8 +145,6 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <time.h>
-#include <direct.h>
-#include <io.h>
 
 #define random() rand()
 #ifdef _MSC_VER
@@ -839,7 +839,7 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
      !(defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200809L) &&   \
      !(defined(__DARWIN_C_LEVEL) && __DARWIN_C_LEVEL >= 200809L) && \
      !defined(RTOS_SDK)) &&                                         \
-     !(defined(_MSC_VER) && _MSC_VER >= 1600 /* MSVC2013+ has strnlen */)
+    !(defined(_MSC_VER) && _MSC_VER >= 1600 /* MSVC2010+ has strnlen */)
 #define _MG_PROVIDE_STRNLEN
 size_t strnlen(const char *s, size_t maxlen);
 #endif
