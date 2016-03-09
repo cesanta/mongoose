@@ -5,7 +5,7 @@ CFLAGS = -W -Wall $(CFLAGS_EXTRA)
 
 ifeq ($(OS), Windows_NT)
   CFLAGS += -lws2_32 -D_MG_PROVIDE_STRNLEN
-  CC = mingw32-gcc
+  CC = gcc
 else
   UNAME_S := $(shell uname -s)
   ifeq ($(UNAME_S), Linux)
