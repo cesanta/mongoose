@@ -23,7 +23,7 @@
 #ifndef _MG_COMMON_H_
 #define _MG_COMMON_H_
 
-#define MG_VERSION "6.2"
+#define MG_VERSION "6.3"
 
 /* Local tweaks, applied before any of Mongoose's own headers. */
 #ifdef MG_LOCALS
