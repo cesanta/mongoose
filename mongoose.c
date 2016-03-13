@@ -3706,13 +3706,14 @@ void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   }
 }
 
-time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
+time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   double now = mg_time();
+  double min_timer;
   struct mg_connection *nc, *tmp;
   struct timeval tv;
   fd_set read_set, write_set, err_set;
   sock_t max_fd = INVALID_SOCKET;
-  int num_fds, num_selected;
+  int num_fds, num_ev, num_timers = 0;
 
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
@@ -3721,6 +3722,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
   mg_add_to_set(mgr->ctl[1], &read_set, &max_fd);
 #endif
 
+  min_timer = 0;
   for (nc = mgr->active_connections, num_fds = 0; nc != NULL; nc = tmp) {
     tmp = nc->next;
 
@@ -3742,17 +3744,37 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
       mg_add_to_set(nc->sock, &write_set, &max_fd);
       mg_add_to_set(nc->sock, &err_set, &max_fd);
     }
+
+    if (nc->ev_timer_time > 0) {
+      if (num_timers == 0 || nc->ev_timer_time < min_timer) {
+        min_timer = nc->ev_timer_time;
+      }
+      num_timers++;
+    }
   }
 
-  tv.tv_sec = milli / 1000;
-  tv.tv_usec = (milli % 1000) * 1000;
+  /*
+   * If there is a timer to be fired earlier than the requested timeout,
+   * adjust the timeout.
+   */
+  if (num_timers > 0) {
+    double timer_timeout_ms = (min_timer - mg_time()) * 1000 + 1 /* rounding */;
+    if (timer_timeout_ms < timeout_ms) {
+      timeout_ms = timer_timeout_ms;
+    }
+  }
+  if (timeout_ms < 0) timeout_ms = 0;
 
-  num_selected = select((int) max_fd + 1, &read_set, &write_set, &err_set, &tv);
+  tv.tv_sec = timeout_ms / 1000;
+  tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+  num_ev = select((int) max_fd + 1, &read_set, &write_set, &err_set, &tv);
   now = mg_time();
-  DBG(("select @ %ld num_ev=%d of %d", (long) now, num_selected, num_fds));
+  DBG(("select @ %ld num_ev=%d of %d, timeout=%d", (long) now, num_ev, num_fds,
+       timeout_ms));
 
 #ifndef MG_DISABLE_SOCKETPAIR
-  if (num_selected > 0 && mgr->ctl[1] != INVALID_SOCKET &&
+  if (num_ev > 0 && mgr->ctl[1] != INVALID_SOCKET &&
       FD_ISSET(mgr->ctl[1], &read_set)) {
     mg_mgr_handle_ctl_sock(mgr);
   }
@@ -3760,7 +3782,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int milli) {
 
   for (nc = mgr->active_connections; nc != NULL; nc = tmp) {
     int fd_flags = 0;
-    if (num_selected > 0) {
+    if (num_ev > 0) {
       fd_flags = (FD_ISSET(nc->sock, &read_set) ? _MG_F_FD_CAN_READ : 0) |
                  (FD_ISSET(nc->sock, &write_set) ? _MG_F_FD_CAN_WRITE : 0) |
                  (FD_ISSET(nc->sock, &err_set) ? _MG_F_FD_ERROR : 0);
