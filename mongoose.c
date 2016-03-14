@@ -5753,7 +5753,7 @@ static void mg_http_send_file2(struct mg_connection *nc, const char *path,
                              path) > 0) {
     mg_handle_ssi_request(nc, path, opts);
   } else {
-    char etag[50], current_time[50], last_modified[50], range[50];
+    char etag[50], current_time[50], last_modified[50], range[128];
     time_t t = time(NULL);
     int64_t r1 = 0, r2 = 0, cl = st->st_size;
     struct mg_str *range_hdr = mg_get_http_header(hm, "Range");
