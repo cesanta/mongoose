@@ -2585,8 +2585,7 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
     SSL_set_fd(nc->ssl, nc->sock);
   }
 
-/* TODO(rojer): remove when krypton exposes this function, even a dummy one */
-#ifdef OPENSSL_VERSION_NUMBER
+#ifndef MG_DISABLE_PFS
   SSL_CTX_set_cipher_list(nc->ssl_ctx, mg_s_cipher_list);
 #endif
   return result;
