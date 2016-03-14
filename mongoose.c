@@ -5073,6 +5073,8 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
        * MG_EV_HTTP_PART_END with error flag
        */
       struct mg_http_multipart_part mp;
+      memset(&mp, 0, sizeof(mp));
+
       mp.status = -1;
       mp.var_name = pd->mp_stream.var_name;
       mp.file_name = pd->mp_stream.file_name;
@@ -5288,6 +5290,7 @@ static void mg_http_multipart_continue(struct mg_connection *nc,
   int req_len;
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
 
+  memset(&mp, 0, sizeof(mp));
   mp.var_name = pd->mp_stream.var_name;
   mp.file_name = pd->mp_stream.file_name;
   boundary = c_strnstr(io->buf, pd->mp_stream.boundary, io->len);
