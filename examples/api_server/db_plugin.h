@@ -3,8 +3,8 @@
  * All rights reserved
  */
 
-#ifndef DB_PLUGIN_HEADER_DEFINED
-#define DB_PLUGIN_HEADER_DEFINED
+#ifndef CS_MONGOOSE_EXAMPLES_API_SERVER_DB_PLUGIN_H_
+#define CS_MONGOOSE_EXAMPLES_API_SERVER_DB_PLUGIN_H_
 
 #include "../../mongoose.h"
 
@@ -16,4 +16,4 @@ enum { API_OP_GET, API_OP_SET, API_OP_DEL };
 void db_op(struct mg_connection *nc, const struct http_message *hm,
            const struct mg_str *key, void *db, int op);
 
-#endif /* DB_PLUGIN_HEADER_DEFINED */
+#endif /* CS_MONGOOSE_EXAMPLES_API_SERVER_DB_PLUGIN_H_ */

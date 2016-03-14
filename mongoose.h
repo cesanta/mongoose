@@ -20,8 +20,8 @@
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-#ifndef _MG_COMMON_H_
-#define _MG_COMMON_H_
+#ifndef CS_MONGOOSE_SRC_COMMON_H_
+#define CS_MONGOOSE_SRC_COMMON_H_
 
 #define MG_VERSION "6.3"
 
@@ -63,9 +63,9 @@
 #endif /* MG_NO_BSD_SOCKETS */
 
 
-#endif /* _MG_COMMON_H_ */
-#ifndef _CS_PLATFORM_H_
-#define _CS_PLATFORM_H_
+#endif /* CS_MONGOOSE_SRC_COMMON_H_ */
+#ifndef CS_COMMON_PLATFORM_H_
+#define CS_COMMON_PLATFORM_H_
 
 /*
  * For the "custom" platform, includes and dependencies can be
@@ -111,9 +111,9 @@
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
 #endif
 
-#endif /* _CS_PLATFORM_H_ */
-#ifndef _CS_PLATFORM_WINDOWS_H_
-#define _CS_PLATFORM_WINDOWS_H_
+#endif /* CS_COMMON_PLATFORM_H_ */
+#ifndef CS_COMMON_PLATFORMS_PLATFORM_WINDOWS_H_
+#define CS_COMMON_PLATFORMS_PLATFORM_WINDOWS_H_
 #if CS_PLATFORM == CS_P_WINDOWS
 
 /*
@@ -237,9 +237,9 @@ struct dirent *readdir(DIR *dir);
 #endif
 
 #endif /* CS_PLATFORM == CS_P_WINDOWS */
-#endif /* _CS_PLATFORM_WINDOWS_H_ */
-#ifndef _CS_PLATFORM_UNIX_H_
-#define _CS_PLATFORM_UNIX_H_
+#endif /* CS_COMMON_PLATFORMS_PLATFORM_WINDOWS_H_ */
+#ifndef CS_COMMON_PLATFORMS_PLATFORM_UNIX_H_
+#define CS_COMMON_PLATFORMS_PLATFORM_UNIX_H_
 #if CS_PLATFORM == CS_P_UNIX
 
 #ifndef _XOPEN_SOURCE
@@ -320,9 +320,9 @@ typedef struct stat cs_stat_t;
 #define closesocket(x) close(x)
 
 #endif /* CS_PLATFORM == CS_P_UNIX */
-#endif /* _CS_PLATFORM_UNIX_H_ */
-#ifndef _CS_PLATFORM_ESP_LWIP_H_
-#define _CS_PLATFORM_ESP_LWIP_H_
+#endif /* CS_COMMON_PLATFORMS_PLATFORM_UNIX_H_ */
+#ifndef CS_COMMON_PLATFORMS_PLATFORM_ESP_LWIP_H_
+#define CS_COMMON_PLATFORMS_PLATFORM_ESP_LWIP_H_
 #if CS_PLATFORM == CS_P_ESP_LWIP
 
 #include <assert.h>
@@ -365,14 +365,14 @@ typedef struct stat cs_stat_t;
 #define __cdecl
 
 #endif /* CS_PLATFORM == CS_P_ESP_LWIP */
-#endif /* _CS_PLATFORM_ESP_LWIP_H_ */
+#endif /* CS_COMMON_PLATFORMS_PLATFORM_ESP_LWIP_H_ */
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
  * All rights reserved
  */
 
-#ifndef _CS_PLATFORM_CC3200_H_
-#define _CS_PLATFORM_CC3200_H_
+#ifndef CS_COMMON_PLATFORMS_PLATFORM_CC3200_H_
+#define CS_COMMON_PLATFORMS_PLATFORM_CC3200_H_
 #if CS_PLATFORM == CS_P_CC3200
 
 #include <assert.h>
@@ -552,14 +552,14 @@ int gettimeofday(struct timeval *t, void *tz);
 long int random(void);
 
 #endif /* CS_PLATFORM == CS_P_CC3200 */
-#endif /* _CS_PLATFORM_CC3200_H_ */
+#endif /* CS_COMMON_PLATFORMS_PLATFORM_CC3200_H_ */
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
  * All rights reserved
  */
 
-#ifndef _CS_DBG_H_
-#define _CS_DBG_H_
+#ifndef CS_COMMON_CS_DBG_H_
+#define CS_COMMON_CS_DBG_H_
 
 enum cs_log_level {
   LL_NONE = -1,
@@ -611,19 +611,19 @@ void cs_log_printf(const char *fmt, ...);
 
 #endif
 
-#endif /* _CS_DBG_H_ */
+#endif /* CS_COMMON_CS_DBG_H_ */
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
  * All rights reserved
  */
 
-#ifndef _CS_TIME_H_
-#define _CS_TIME_H_
+#ifndef CS_COMMON_CS_TIME_H_
+#define CS_COMMON_CS_TIME_H_
 
 /* Sub-second granularity time(). */
 double cs_time();
 
-#endif /* _CS_TIME_H_ */
+#endif /* CS_COMMON_CS_TIME_H_ */
 /*
  * Copyright (c) 2015 Cesanta Software Limited
  * All rights reserved
@@ -638,8 +638,8 @@ double cs_time();
  * needed.
  */
 
-#ifndef MBUF_H_INCLUDED
-#define MBUF_H_INCLUDED
+#ifndef CS_COMMON_MBUF_H_
+#define CS_COMMON_MBUF_H_
 
 #if defined(__cplusplus)
 extern "C" {
@@ -701,14 +701,16 @@ void mbuf_trim(struct mbuf *);
 }
 #endif /* __cplusplus */
 
-#endif /* MBUF_H_INCLUDED */
+#endif /* CS_COMMON_MBUF_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
  */
 
-#if !defined(MG_SHA1_HEADER_INCLUDED) && !defined(DISABLE_SHA1)
-#define MG_SHA1_HEADER_INCLUDED
+#ifndef CS_COMMON_SHA1_H_
+#define CS_COMMON_SHA1_H_
+
+#ifndef DISABLE_SHA1
 
 
 #ifdef __cplusplus
@@ -730,14 +732,17 @@ void cs_hmac_sha1(const unsigned char *key, size_t key_len,
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* MG_SHA1_HEADER_INCLUDED */
+
+#endif /* DISABLE_SHA1 */
+
+#endif /* CS_COMMON_SHA1_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
  */
 
-#ifndef MD5_HEADER_DEFINED
-#define MD5_HEADER_DEFINED
+#ifndef CS_COMMON_MD5_H_
+#define CS_COMMON_MD5_H_
 
 
 #ifdef __cplusplus
@@ -774,14 +779,16 @@ void cs_to_hex(char *to, const unsigned char *p, size_t len);
 }
 #endif /* __cplusplus */
 
-#endif
+#endif /* CS_COMMON_MD5_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
  */
 
-#if !defined(BASE64_H_INCLUDED) && !defined(DISABLE_BASE64)
-#define BASE64_H_INCLUDED
+#ifndef CS_COMMON_BASE64_H_
+#define CS_COMMON_BASE64_H_
+
+#ifndef DISABLE_BASE64
 
 #include <stdio.h>
 
@@ -811,14 +818,17 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst);
 #ifdef __cplusplus
 }
 #endif
-#endif
+
+#endif /* DISABLE_BASE64 */
+
+#endif /* CS_COMMON_BASE64_H_ */
 /*
  * Copyright (c) 2015 Cesanta Software Limited
  * All rights reserved
  */
 
-#ifndef STR_UTIL_H
-#define STR_UTIL_H
+#ifndef CS_COMMON_STR_UTIL_H_
+#define CS_COMMON_STR_UTIL_H_
 
 #include <stdarg.h>
 #include <stdlib.h>
@@ -848,7 +858,7 @@ size_t strnlen(const char *s, size_t maxlen);
 }
 #endif
 
-#endif
+#endif /* CS_COMMON_STR_UTIL_H_ */
 /*
  * Copyright (c) 2004-2013 Sergey Lyubka <valenok@gmail.com>
  * Copyright (c) 2013 Cesanta Software Limited
@@ -868,8 +878,8 @@ size_t strnlen(const char *s, size_t maxlen);
  * license, as set out in <http://cesanta.com/products.html>.
  */
 
-#ifndef FROZEN_HEADER_INCLUDED
-#define FROZEN_HEADER_INCLUDED
+#ifndef CS_MONGOOSE_DEPS_FROZEN_FROZEN_H_
+#define CS_MONGOOSE_DEPS_FROZEN_FROZEN_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -916,14 +926,14 @@ int json_emit_va(char *buf, int buf_len, const char *fmt, va_list);
 }
 #endif /* __cplusplus */
 
-#endif /* FROZEN_HEADER_INCLUDED */
+#endif /* CS_MONGOOSE_DEPS_FROZEN_FROZEN_H_ */
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
  * All rights reserved
  */
 
-#ifndef DIRENT_H_INCLUDED
-#define DIRENT_H_INCLUDED
+#ifndef CS_COMMON_CS_DIRENT_H_
+#define CS_COMMON_CS_DIRENT_H_
 
 #ifdef CS_ENABLE_SPIFFS
 
@@ -948,7 +958,7 @@ int closedir(DIR *dir);
 struct dirent *readdir(DIR *dir);
 #endif
 
-#endif
+#endif /* CS_COMMON_CS_DIRENT_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -976,8 +986,8 @@ struct dirent *readdir(DIR *dir);
  * event managers handled by different threads.
  */
 
-#ifndef MG_NET_HEADER_INCLUDED
-#define MG_NET_HEADER_INCLUDED
+#ifndef CS_MONGOOSE_SRC_NET_H_
+#define CS_MONGOOSE_SRC_NET_H_
 
 #ifdef MG_ENABLE_JAVASCRIPT
 #define EXCLUDE_COMMON
@@ -1468,14 +1478,14 @@ double mg_time();
 }
 #endif /* __cplusplus */
 
-#endif /* MG_NET_HEADER_INCLUDED */
+#endif /* CS_MONGOOSE_SRC_NET_H_ */
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
  * All rights reserved
  */
 
-#ifndef MG_NET_IF_HEADER_INCLUDED
-#define MG_NET_IF_HEADER_INCLUDED
+#ifndef CS_MONGOOSE_SRC_NET_IF_H_
+#define CS_MONGOOSE_SRC_NET_IF_H_
 
 /*
  * Internal async networking core interface.
@@ -1545,7 +1555,7 @@ void mg_close_conn(struct mg_connection *nc);
 void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
                          union socket_address *sa);
 
-#endif /* MG_NET_IF_HEADER_INCLUDED */
+#endif /* CS_MONGOOSE_SRC_NET_IF_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -1555,8 +1565,8 @@ void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
  * === URI
  */
 
-#ifndef MG_URI_HEADER_DEFINED
-#define MG_URI_HEADER_DEFINED
+#ifndef CS_MONGOOSE_SRC_URI_H_
+#define CS_MONGOOSE_SRC_URI_H_
 
 
 #ifdef __cplusplus
@@ -1596,7 +1606,7 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* MG_URI_HEADER_DEFINED */
+#endif /* CS_MONGOOSE_SRC_URI_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -1606,8 +1616,8 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out);
  * === Utilities
  */
 
-#ifndef MG_UTIL_HEADER_DEFINED
-#define MG_UTIL_HEADER_DEFINED
+#ifndef CS_MONGOOSE_SRC_UTIL_H_
+#define CS_MONGOOSE_SRC_UTIL_H_
 
 #include <stdio.h>
 
@@ -1826,7 +1836,7 @@ struct mg_str mg_mk_str(const char *s);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* MG_UTIL_HEADER_DEFINED */
+#endif /* CS_MONGOOSE_SRC_UTIL_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -1836,8 +1846,8 @@ struct mg_str mg_mk_str(const char *s);
  * === HTTP + Websocket
  */
 
-#ifndef MG_HTTP_HEADER_DEFINED
-#define MG_HTTP_HEADER_DEFINED
+#ifndef CS_MONGOOSE_SRC_HTTP_H_
+#define CS_MONGOOSE_SRC_HTTP_H_
 
 
 #ifdef __cplusplus
@@ -2462,7 +2472,7 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* MG_HTTP_HEADER_DEFINED */
+#endif /* CS_MONGOOSE_SRC_HTTP_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -2472,8 +2482,8 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
  * === JSON-RPC
  */
 
-#ifndef MG_JSON_RPC_HEADER_DEFINED
-#define MG_JSON_RPC_HEADER_DEFINED
+#ifndef CS_MONGOOSE_SRC_JSON_RPC_H_
+#define CS_MONGOOSE_SRC_JSON_RPC_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -2600,7 +2610,7 @@ int mg_rpc_dispatch(const char *buf, int, char *dst, int dst_len,
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* MG_JSON_RPC_HEADER_DEFINED */
+#endif /* CS_MONGOOSE_SRC_JSON_RPC_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -2622,8 +2632,8 @@ int mg_rpc_dispatch(const char *buf, int, char *dst, int dst_len,
  * === MQTT
  */
 
-#ifndef MG_MQTT_HEADER_INCLUDED
-#define MG_MQTT_HEADER_INCLUDED
+#ifndef CS_MONGOOSE_SRC_MQTT_H_
+#define CS_MONGOOSE_SRC_MQTT_H_
 
 
 struct mg_mqtt_message {
@@ -2795,7 +2805,7 @@ int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
 }
 #endif /* __cplusplus */
 
-#endif /* MG_MQTT_HEADER_INCLUDED */
+#endif /* CS_MONGOOSE_SRC_MQTT_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -2817,8 +2827,8 @@ int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
  * === MQTT Broker
  */
 
-#ifndef MG_MQTT_BROKER_HEADER_INCLUDED
-#define MG_MQTT_BROKER_HEADER_INCLUDED
+#ifndef CS_MONGOOSE_SRC_MQTT_BROKER_H_
+#define CS_MONGOOSE_SRC_MQTT_BROKER_H_
 
 #ifdef MG_ENABLE_MQTT_BROKER
 
@@ -2894,7 +2904,7 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 #endif /* __cplusplus */
 
 #endif /* MG_ENABLE_MQTT_BROKER */
-#endif /* MG_MQTT_HEADER_INCLUDED */
+#endif /* CS_MONGOOSE_SRC_MQTT_BROKER_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -2904,8 +2914,8 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
  * === DNS
  */
 
-#ifndef MG_DNS_HEADER_DEFINED
-#define MG_DNS_HEADER_DEFINED
+#ifndef CS_MONGOOSE_SRC_DNS_H_
+#define CS_MONGOOSE_SRC_DNS_H_
 
 
 #ifdef __cplusplus
@@ -3047,7 +3057,7 @@ void mg_set_protocol_dns(struct mg_connection *nc);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* MG_HTTP_HEADER_DEFINED */
+#endif /* CS_MONGOOSE_SRC_DNS_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -3059,8 +3069,8 @@ void mg_set_protocol_dns(struct mg_connection *nc);
  * Disabled by default; enable with `-DMG_ENABLE_DNS_SERVER`.
  */
 
-#ifndef MG_DNS_SERVER_HEADER_DEFINED
-#define MG_DNS_SERVER_HEADER_DEFINED
+#ifndef CS_MONGOOSE_SRC_DNS_SERVER_H_
+#define CS_MONGOOSE_SRC_DNS_SERVER_H_
 
 #ifdef MG_ENABLE_DNS_SERVER
 
@@ -3141,7 +3151,7 @@ void mg_dns_send_reply(struct mg_connection *nc, struct mg_dns_reply *r);
 #endif /* __cplusplus */
 
 #endif /* MG_ENABLE_DNS_SERVER */
-#endif /* MG_HTTP_HEADER_DEFINED */
+#endif /* CS_MONGOOSE_SRC_DNS_SERVER_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -3151,8 +3161,8 @@ void mg_dns_send_reply(struct mg_connection *nc, struct mg_dns_reply *r);
  * === Asynchronouns DNS resolver
  */
 
-#ifndef MG_RESOLV_HEADER_DEFINED
-#define MG_RESOLV_HEADER_DEFINED
+#ifndef CS_MONGOOSE_SRC_RESOLV_H_
+#define CS_MONGOOSE_SRC_RESOLV_H_
 
 
 #ifdef __cplusplus
@@ -3218,7 +3228,7 @@ int mg_resolve_from_hosts_file(const char *host, union socket_address *usa);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* MG_RESOLV_HEADER_DEFINED */
+#endif /* CS_MONGOOSE_SRC_RESOLV_H_ */
 /*
  * Copyright (c) 2015 Cesanta Software Limited
  * All rights reserved
@@ -3248,8 +3258,8 @@ int mg_resolve_from_hosts_file(const char *host, union socket_address *usa);
  *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
  */
 
-#ifndef MG_COAP_HEADER_INCLUDED
-#define MG_COAP_HEADER_INCLUDED
+#ifndef CS_MONGOOSE_SRC_COAP_H_
+#define CS_MONGOOSE_SRC_COAP_H_
 
 #ifdef MG_ENABLE_COAP
 
@@ -3380,4 +3390,4 @@ uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io);
 
 #endif /* MG_ENABLE_COAP */
 
-#endif /* MG_COAP_HEADER_INCLUDED */
+#endif /* CS_MONGOOSE_SRC_COAP_H_ */

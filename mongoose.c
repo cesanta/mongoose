@@ -7,8 +7,8 @@
  * All rights reserved
  */
 
-#ifndef MG_INTERNAL_HEADER_INCLUDED
-#define MG_INTERNAL_HEADER_INCLUDED
+#ifndef CS_MONGOOSE_SRC_INTERNAL_H_
+#define CS_MONGOOSE_SRC_INTERNAL_H_
 
 #ifndef MG_MALLOC
 #define MG_MALLOC malloc
@@ -122,7 +122,7 @@ struct ctl_msg {
 extern void *(*test_malloc)(size_t size);
 extern void *(*test_calloc)(size_t count, size_t size);
 
-#endif /* MG_INTERNAL_HEADER_INCLUDED */
+#endif /* CS_MONGOOSE_SRC_INTERNAL_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "./src/../../common/base64.c"
 #endif

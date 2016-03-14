@@ -30,8 +30,8 @@
 ** the version number) and changes its name to "sqlite3.h" as
 ** part of the build process.
 */
-#ifndef _SQLITE3_H_
-#define _SQLITE3_H_
+#ifndef CS_MONGOOSE_EXAMPLES_API_SERVER_SQLITE3_H_
+#define CS_MONGOOSE_EXAMPLES_API_SERVER_SQLITE3_H_
 #include <stdarg.h>     /* Needed for the definition of va_list */
 
 /*
@@ -7241,5 +7241,5 @@ struct sqlite3_rtree_geometry {
 }  /* end of the 'extern "C"' block */
 #endif
 
-#endif  /* ifndef _SQLITE3RTREE_H_ */
+#endif /* CS_MONGOOSE_EXAMPLES_API_SERVER_SQLITE3_H_ */
 
