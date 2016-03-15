@@ -150,8 +150,12 @@
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib") /* Linking with winsock library */
 #endif
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <process.h>
+
 #ifndef EINPROGRESS
 #define EINPROGRESS WSAEINPROGRESS
 #endif
