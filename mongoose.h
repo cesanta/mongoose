@@ -1575,6 +1575,9 @@ void mg_close_conn(struct mg_connection *nc);
 void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
                          union socket_address *sa);
 
+/* Associate a socket to a connection. */
+void mg_sock_set(struct mg_connection *nc, sock_t sock);
+
 #endif /* CS_MONGOOSE_SRC_NET_IF_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
