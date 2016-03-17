@@ -7540,7 +7540,6 @@ static int mg_http_common_url_parse(const char *url, const char *schema,
       return -1;
     }
     if (*url == '/') {
-      url++;
       break;
     }
     if (*url == ':') *port_i = addr_len;
@@ -7632,7 +7631,7 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
     /* If the port was addred by us, restore the original host. */
     if (port_i >= 0) addr[port_i] = '\0';
 
-    mg_printf(nc, "%s /%s HTTP/1.1\r\nHost: %s\r\nContent-Length: %" SIZE_T_FMT
+    mg_printf(nc, "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %" SIZE_T_FMT
                   "\r\n%s\r\n%s",
               post_data == NULL ? "GET" : "POST", path, addr,
               post_data == NULL ? 0 : strlen(post_data),
