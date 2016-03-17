@@ -3721,27 +3721,28 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   mg_add_to_set(mgr->ctl[1], &read_set, &max_fd);
 #endif
 
+  /*
+   * Note: it is ok to have connections with sock == INVALID_SOCKET in the list,
+   * e.g. timer-only "connections".
+   */
   min_timer = 0;
   for (nc = mgr->active_connections, num_fds = 0; nc != NULL; nc = tmp) {
     tmp = nc->next;
 
-    if (nc->sock == INVALID_SOCKET) {
-      mg_mgr_handle_conn(nc, 0, now);
-      continue;
-    }
+    if (nc->sock != INVALID_SOCKET) {
+      num_fds++;
 
-    num_fds++;
+      if (!(nc->flags & MG_F_WANT_WRITE) &&
+          nc->recv_mbuf.len < nc->recv_mbuf_limit &&
+          (!(nc->flags & MG_F_UDP) || nc->listener == NULL)) {
+        mg_add_to_set(nc->sock, &read_set, &max_fd);
+      }
 
-    if (!(nc->flags & MG_F_WANT_WRITE) &&
-        nc->recv_mbuf.len < nc->recv_mbuf_limit &&
-        (!(nc->flags & MG_F_UDP) || nc->listener == NULL)) {
-      mg_add_to_set(nc->sock, &read_set, &max_fd);
-    }
-
-    if (((nc->flags & MG_F_CONNECTING) && !(nc->flags & MG_F_WANT_READ)) ||
-        (nc->send_mbuf.len > 0 && !(nc->flags & MG_F_CONNECTING))) {
-      mg_add_to_set(nc->sock, &write_set, &max_fd);
-      mg_add_to_set(nc->sock, &err_set, &max_fd);
+      if (((nc->flags & MG_F_CONNECTING) && !(nc->flags & MG_F_WANT_READ)) ||
+          (nc->send_mbuf.len > 0 && !(nc->flags & MG_F_CONNECTING))) {
+        mg_add_to_set(nc->sock, &write_set, &max_fd);
+        mg_add_to_set(nc->sock, &err_set, &max_fd);
+      }
     }
 
     if (nc->ev_timer_time > 0) {
@@ -3781,22 +3782,24 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
 
   for (nc = mgr->active_connections; nc != NULL; nc = tmp) {
     int fd_flags = 0;
-    if (num_ev > 0) {
-      fd_flags = (FD_ISSET(nc->sock, &read_set) ? _MG_F_FD_CAN_READ : 0) |
-                 (FD_ISSET(nc->sock, &write_set) ? _MG_F_FD_CAN_WRITE : 0) |
-                 (FD_ISSET(nc->sock, &err_set) ? _MG_F_FD_ERROR : 0);
-    }
+    if (nc->sock != INVALID_SOCKET) {
+      if (num_ev > 0) {
+        fd_flags = (FD_ISSET(nc->sock, &read_set) ? _MG_F_FD_CAN_READ : 0) |
+                   (FD_ISSET(nc->sock, &write_set) ? _MG_F_FD_CAN_WRITE : 0) |
+                   (FD_ISSET(nc->sock, &err_set) ? _MG_F_FD_ERROR : 0);
+      }
 #ifdef MG_CC3200
-    // CC3200 does not report UDP sockets as writeable.
-    if (nc->flags & MG_F_UDP &&
-        (nc->send_mbuf.len > 0 || nc->flags & MG_F_CONNECTING)) {
-      fd_flags |= _MG_F_FD_CAN_WRITE;
-    }
+      // CC3200 does not report UDP sockets as writeable.
+      if (nc->flags & MG_F_UDP &&
+          (nc->send_mbuf.len > 0 || nc->flags & MG_F_CONNECTING)) {
+        fd_flags |= _MG_F_FD_CAN_WRITE;
+      }
 #endif
 #ifdef MG_LWIP
-    /* With LWIP socket emulation layer, we don't get write events */
-    fd_flags |= _MG_F_FD_CAN_WRITE;
+      /* With LWIP socket emulation layer, we don't get write events */
+      fd_flags |= _MG_F_FD_CAN_WRITE;
 #endif
+    }
     tmp = nc->next;
     mg_mgr_handle_conn(nc, fd_flags, now);
   }
