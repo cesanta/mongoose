@@ -90,6 +90,10 @@
         },
         {
             "type": "markdown",
+            "name": "mg_event_handler_t.md"
+        },
+        {
+            "type": "markdown",
             "name": "struct_mg_str.md"
         },
         {
