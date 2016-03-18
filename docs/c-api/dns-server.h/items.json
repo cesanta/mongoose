@@ -1,0 +1,20 @@
+{
+    "items": [
+        {
+            "type": "markdown",
+            "name": "intro.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_dns_create_reply.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_dns_reply_record.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_dns_send_reply.md"
+        }
+    ]
+}

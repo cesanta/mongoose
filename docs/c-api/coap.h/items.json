@@ -1,0 +1,44 @@
+{
+    "items": [
+        {
+            "type": "markdown",
+            "name": "intro.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_set_protocol_coap.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_coap_add_option.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_coap_free_options.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_coap_send_message.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_coap_send_ack.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_coap_parse.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_coap_compose.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_coap_option.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_coap_message.md"
+        }
+    ]
+}
