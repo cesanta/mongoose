@@ -1057,11 +1057,12 @@ struct mg_str {
   size_t len;    /* Memory chunk length */
 };
 
+struct mg_connection;
+
 /*
  * Callback function (event handler) prototype, must be defined by user.
  * Mongoose calls event handler, passing events defined below.
  */
-struct mg_connection;
 typedef void (*mg_event_handler_t)(struct mg_connection *, int ev, void *);
 
 /* Events. Meaning of event parameter (evp) is given in the comment. */
@@ -1197,17 +1198,17 @@ void mg_broadcast(struct mg_mgr *, mg_event_handler_t func, void *, size_t);
  * of active connections, or `NULL` if there is no more connections. Below
  * is the iteration idiom:
  *
- * [source,c]
- * ----
+ * ```c
  * for (c = mg_next(srv, NULL); c != NULL; c = mg_next(srv, c)) {
  *   // Do something with connection `c`
  * }
- * ----
+ * ```
  */
 struct mg_connection *mg_next(struct mg_mgr *, struct mg_connection *);
 
 /*
- * Optional parameters to mg_add_sock_opt()
+ * Optional parameters to `mg_add_sock_opt()`.
+ *
  * `flags` is an initial `struct mg_connection::flags` bitmask to set,
  * see `MG_F_*` flags definitions.
  */
@@ -1236,7 +1237,8 @@ struct mg_connection *mg_add_sock_opt(struct mg_mgr *, sock_t,
                                       struct mg_add_sock_opts);
 
 /*
- * Optional parameters to mg_bind_opt()
+ * Optional parameters to `mg_bind_opt()`.
+ *
  * `flags` is an initial `struct mg_connection::flags` bitmask to set,
  * see `MG_F_*` flags definitions.
  */
@@ -1279,7 +1281,7 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
                                   mg_event_handler_t handler,
                                   struct mg_bind_opts opts);
 
-/* Optional parameters to mg_connect_opt() */
+/* Optional parameters to `mg_connect_opt()` */
 struct mg_connect_opts {
   void *user_data;           /* Initial value for connection's user_data */
   unsigned int flags;        /* Extra connection flags */
@@ -1334,8 +1336,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
  * reason (e.g. with `ECONNREFUSED` or `ENETUNREACH`), then `MG_EV_CONNECT`
  * event report failure. Code example below:
  *
- * [source,c]
- * ----
+ * ```c
  * static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
  *   int connect_status;
  *
@@ -1355,7 +1356,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
  *
  *   ...
  *   mg_connect(mgr, "my_site.com:80", ev_handler);
- * ----
+ * ```
  */
 struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
                                      mg_event_handler_t handler,
@@ -1848,7 +1849,7 @@ int mg_match_prefix_n(const char *pattern, int pattern_len, const char *str,
 
 /*
  * A helper function for creating mg_str struct from plain C string.
- * NULL is allowed and becomes {NULL, 0}.
+ * `NULL` is allowed and becomes `{NULL, 0}`.
  */
 struct mg_str mg_mk_str(const char *s);
 
@@ -1944,12 +1945,14 @@ struct http_message {
   struct mg_str body; /* Zero-length for requests with no body */
 };
 
+/* WebSocket message */
 struct websocket_message {
   unsigned char *data;
   size_t size;
   unsigned char flags;
 };
 
+/* HTTP multipart part */
 struct mg_http_multipart_part {
   const char *file_name;
   const char *var_name;
@@ -2062,15 +2065,14 @@ void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
  *
  * Examples:
  *
- * [source,c]
- * ----
+ * ```c
  *   nc1 = mg_connect_ws(mgr, ev_handler_1, "ws://echo.websocket.org", NULL,
  *                       NULL);
  *   nc2 = mg_connect_ws(mgr, ev_handler_1, "wss://echo.websocket.org", NULL,
  *                       NULL);
  *   nc3 = mg_connect_ws(mgr, ev_handler_1, "ws://api.cesanta.com",
  *                       "clubby.cesanta.com", NULL);
- * ----
+ * ```
  */
 struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
                                     mg_event_handler_t event_handler,
@@ -2248,6 +2250,7 @@ int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
  *
  * Usage example:
  *
+ * ```c
  *    static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
  *      switch(ev) {
  *        case MG_EV_HTTP_REQUEST: {
@@ -2269,7 +2272,7 @@ int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
  *          }
  *        }
  *        break;
- *
+ * ```
  */
 size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
                           size_t var_name_len, char *file_name,
@@ -2319,8 +2322,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
  *
  * Examples:
  *
- * [source,c]
- * ----
+ * ```c
  *   nc1 = mg_connect_http(mgr, ev_handler_1, "http://www.google.com", NULL,
  *                         NULL);
  *   nc2 = mg_connect_http(mgr, ev_handler_1, "https://github.com", NULL, NULL);
@@ -2328,7 +2330,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
  *       mgr, ev_handler_1, "my_server:8000/form_submit/",
  *       "Content-Type: application/x-www-form-urlencoded\r\n",
  *       "var_1=value_1&var_2=value_2");
- * ----
+ * ```
  */
 struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
                                       mg_event_handler_t event_handler,
@@ -2440,9 +2442,7 @@ struct mg_serve_http_opts {
  *
  * Example code snippet:
  *
- * [source,c]
- * .web_server.c
- * ----
+ * ```c
  * static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
  *   struct http_message *hm = (struct http_message *) ev_data;
  *   struct mg_serve_http_opts opts = { .document_root = "/var/www" };  // C99
@@ -2455,7 +2455,7 @@ struct mg_serve_http_opts {
  *       break;
  *   }
  * }
- * ----
+ * ```
  */
 void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
                    struct mg_serve_http_opts opts);
@@ -2467,9 +2467,7 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
  *
  * Example code snippet:
  *
- * [source,c]
- * .web_server.c
- * ----
+ * ```c
  * static void handle_hello1(struct mg_connection *nc, int ev, void *ev_data) {
  *   (void) ev; (void) ev_data;
  *   mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\n[I am Hello1]");
@@ -2487,7 +2485,7 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
  *   mg_register_http_endpoint(nc, "/hello1", handle_hello1);
  *   mg_register_http_endpoint(nc, "/hello1/hello2", handle_hello2);
  * }
- * ----
+ * ```
  */
 
 void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
@@ -2547,9 +2545,9 @@ struct mg_rpc_error {
  * where parsing has finished. On failure, a negative number is
  * returned, one of:
  *
- *  - #define JSON_STRING_INVALID           -1
- *  - #define JSON_STRING_INCOMPLETE        -2
- *  - #define JSON_TOKEN_ARRAY_TOO_SMALL    -3
+ * - `#define JSON_STRING_INVALID           -1`
+ * - `#define JSON_STRING_INCOMPLETE        -2`
+ * - `#define JSON_TOKEN_ARRAY_TOO_SMALL    -3`
  */
 int mg_rpc_parse_reply(const char *buf, int len, struct json_token *toks,
                        int max_toks, struct mg_rpc_reply *,
@@ -2603,12 +2601,12 @@ int mg_rpc_create_error(char *buf, int len, struct mg_rpc_request *req,
  * can be larger then `len` that indicates an overflow. See
  * JSON_RPC_*_ERROR definitions for standard error values:
  *
- * - #define JSON_RPC_PARSE_ERROR (-32700)
- * - #define JSON_RPC_INVALID_REQUEST_ERROR (-32600)
- * - #define JSON_RPC_METHOD_NOT_FOUND_ERROR (-32601)
- * - #define JSON_RPC_INVALID_PARAMS_ERROR (-32602)
- * - #define JSON_RPC_INTERNAL_ERROR (-32603)
- * - #define JSON_RPC_SERVER_ERROR (-32000)
+ * - `#define JSON_RPC_PARSE_ERROR (-32700)`
+ * - `#define JSON_RPC_INVALID_REQUEST_ERROR (-32600)`
+ * - `#define JSON_RPC_METHOD_NOT_FOUND_ERROR (-32601)`
+ * - `#define JSON_RPC_INVALID_PARAMS_ERROR (-32602)`
+ * - `#define JSON_RPC_INTERNAL_ERROR (-32603)`
+ * - `#define JSON_RPC_SERVER_ERROR (-32000)`
  */
 int mg_rpc_create_std_error(char *buf, int len, struct mg_rpc_request *req,
                             int code);
@@ -2891,15 +2889,14 @@ void mg_mqtt_broker_init(struct mg_mqtt_broker *brk, void *user_data);
  *
  * Basic usage:
  *
- * [source,c]
- * -----
+ * ```c
  * mg_mqtt_broker_init(&brk, NULL);
  *
  * if ((nc = mg_bind(&mgr, address, mg_mqtt_broker)) == NULL) {
  *   // fail;
  * }
  * nc->user_data = &brk;
- * -----
+ * ```
  *
  * New incoming connections will receive a `mg_mqtt_session` structure
  * in the connection `user_data`. The original `user_data` will be stored
@@ -2914,10 +2911,12 @@ void mg_mqtt_broker(struct mg_connection *brk, int ev, void *data);
 /*
  * Iterate over all mqtt sessions connections. Example:
  *
- *    struct mg_mqtt_session *s;
- *    for (s = mg_mqtt_next(brk, NULL); s != NULL; s = mg_mqtt_next(brk, s)) {
- *       // Do something
- *    }
+ * ```c
+ * struct mg_mqtt_session *s;
+ * for (s = mg_mqtt_next(brk, NULL); s != NULL; s = mg_mqtt_next(brk, s)) {
+ *   // Do something
+ * }
+ * ```
  */
 struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
                                      struct mg_mqtt_session *s);
@@ -3072,7 +3071,7 @@ size_t mg_dns_uncompress_name(struct mg_dns_message *msg, struct mg_str *name,
  * `ev_data` pointing to the parsed `struct mg_dns_message`.
  *
  * See
- * https://github.com/cesanta/mongoose/tree/master/examples/captive_dns_server[captive_dns_server]
+ * [captive_dns_server](https://github.com/cesanta/mongoose/tree/master/examples/captive_dns_server)
  * example on how to handle DNS request and send DNS reply.
  */
 void mg_set_protocol_dns(struct mg_connection *nc);
@@ -3127,8 +3126,7 @@ struct mg_dns_reply {
  *
  * Example:
  *
- * [source,c]
- * -----
+ * ```c
  * reply = mg_dns_create_reply(&nc->send_mbuf, msg);
  * for (i = 0; i < msg->num_questions; i++) {
  *   rr = &msg->questions[i];
@@ -3137,7 +3135,7 @@ struct mg_dns_reply {
  *   }
  * }
  * mg_dns_send_reply(nc, &reply);
- * -----
+ * ```
  */
 struct mg_dns_reply mg_dns_create_reply(struct mbuf *io,
                                         struct mg_dns_message *msg);
@@ -3274,11 +3272,13 @@ int mg_resolve_from_hosts_file(const char *host, union socket_address *usa);
  *
  * CoAP message format:
  *
- *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
- *    |Ver| T | TKL | Code | Message ID | Token (if any, TKL bytes) ...
- *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
- *    | Options (if any) ...            |1 1 1 1 1 1 1 1| Payload (if any) ...
- *    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+ * ```
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+ * |Ver| T | TKL | Code | Message ID | Token (if any, TKL bytes) ...
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+ * | Options (if any) ...            |1 1 1 1 1 1 1 1| Payload (if any) ...
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+ * ```
  */
 
 #ifndef CS_MONGOOSE_SRC_COAP_H_
@@ -3367,11 +3367,11 @@ void mg_coap_free_options(struct mg_coap_message *cm);
  * and send it into `nc` connection.
  * Return 0 on success. On error, it is a bitmask:
  *
- * - #define MG_COAP_ERROR 0x10000
- * - #define MG_COAP_FORMAT_ERROR (MG_COAP_ERROR | 0x20000)
- * - #define MG_COAP_IGNORE (MG_COAP_ERROR | 0x40000)
- * - #define MG_COAP_NOT_ENOUGH_DATA (MG_COAP_ERROR | 0x80000)
- * - #define MG_COAP_NETWORK_ERROR (MG_COAP_ERROR | 0x100000)
+ * - `#define MG_COAP_ERROR 0x10000`
+ * - `#define MG_COAP_FORMAT_ERROR (MG_COAP_ERROR | 0x20000)`
+ * - `#define MG_COAP_IGNORE (MG_COAP_ERROR | 0x40000)`
+ * - `#define MG_COAP_NOT_ENOUGH_DATA (MG_COAP_ERROR | 0x80000)`
+ * - `#define MG_COAP_NETWORK_ERROR (MG_COAP_ERROR | 0x100000)`
  */
 uint32_t mg_coap_send_message(struct mg_connection *nc,
                               struct mg_coap_message *cm);
