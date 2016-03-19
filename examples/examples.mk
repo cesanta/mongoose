@@ -5,7 +5,7 @@ all: $(PROG)
 
 ifeq ($(OS), Windows_NT)
 # TODO(alashkin): enable SSL in Windows
-CFLAGS += -lws2_32 -D_MG_PROVIDE_STRNLEN
+CFLAGS += -lws2_32
 CC = gcc
 else
 ifeq ($(SSL_LIB),openssl)

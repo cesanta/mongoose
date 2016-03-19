@@ -857,6 +857,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst);
 extern "C" {
 #endif
 
+size_t c_strnlen(const char *s, size_t maxlen);
 int c_snprintf(char *buf, size_t buf_size, const char *format, ...);
 int c_vsnprintf(char *buf, size_t buf_size, const char *format, va_list ap);
 /*
@@ -864,15 +865,6 @@ int c_vsnprintf(char *buf, size_t buf_size, const char *format, va_list ap);
  * first slen characters of s.
  */
 const char *c_strnstr(const char *s, const char *find, size_t slen);
-
-#if (!(defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 700) &&           \
-     !(defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200809L) &&   \
-     !(defined(__DARWIN_C_LEVEL) && __DARWIN_C_LEVEL >= 200809L) && \
-     !defined(RTOS_SDK)) &&                                         \
-    !(defined(_MSC_VER) && _MSC_VER >= 1600 /* MSVC2010+ has strnlen */)
-#define _MG_PROVIDE_STRNLEN
-size_t strnlen(const char *s, size_t maxlen);
-#endif
 
 #ifdef __cplusplus
 }
