@@ -5865,7 +5865,12 @@ static void mg_http_send_file2(struct mg_connection *nc, const char *path,
         snprintf(range, sizeof(range), "Content-Range: bytes %" INT64_FMT
                                        "-%" INT64_FMT "/%" INT64_FMT "\r\n",
                  r1, r1 + cl - 1, (int64_t) st->st_size);
+#if _FILE_OFFSET_BITS == 64 || _POSIX_C_SOURCE >= 200112L || \
+    _XOPEN_SOURCE >= 600
         fseeko(pd->file.fp, r1, SEEK_SET);
+#else
+        fseek(pd->file.fp, r1, SEEK_SET);
+#endif
       }
     }
 
