@@ -118,6 +118,11 @@ struct ctl_msg {
   char message[MG_CTL_MSG_MESSAGE_SIZE];
 };
 
+#ifndef MG_DISABLE_MQTT
+struct mg_mqtt_message;
+MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm);
+#endif
+
 /* Forward declarations for testing. */
 extern void *(*test_malloc)(size_t size);
 extern void *(*test_calloc)(size_t count, size_t size);
@@ -8245,7 +8250,7 @@ int mg_rpc_parse_reply(const char *buf, int len, struct json_token *toks,
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/mqtt.h" */
 
-static int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
+MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   uint8_t header;
   int cmd;
   size_t len = 0;
@@ -8262,7 +8267,7 @@ static int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
     len += (*vlen & 127) << 7 * (vlen - &io->buf[1]);
   } while ((*vlen++ & 128) != 0 && ((size_t)(vlen - io->buf) <= io->len));
 
-  if (io->len < (size_t)(len - 1)) return -1;
+  if (len != 0 && io->len < (size_t)(len - 1)) return -1;
 
   mbuf_remove(io, 1 + (vlen - &io->buf[1]));
   mm->cmd = cmd;
