@@ -5231,6 +5231,7 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
     }
   }
+  (void) pd;
 }
 
 static size_t mg_get_line_len(const char *buf, size_t buf_len) {

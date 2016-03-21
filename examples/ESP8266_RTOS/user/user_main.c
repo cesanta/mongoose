@@ -101,13 +101,6 @@ xTaskHandle s_mg_task_handle;
 void user_init(void) {
   uart_div_modify(0, UART_CLK_FREQ / 115200);
 
-//  setvbuf(stdout, NULL, _IONBF, 0);
-//  setvbuf(stderr, NULL, _IONBF, 0);
-
   xTaskCreate(mg_task, (const signed char *) "mongoose", MG_TASK_STACK_SIZE,
               NULL, MG_TASK_PRIORITY, &s_mg_task_handle);
-}
-
-void call_user_start(void) {
-  user_init();
 }

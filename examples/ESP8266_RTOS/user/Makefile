@@ -23,7 +23,7 @@ endif
 #   makefile at its root level - these are then overridden
 #   for a subtree within the makefile rooted therein
 #
-DEFINES += -DMG_LOCALS \
+DEFINES += -DCS_PLATFORM=3 \
            -DMG_NO_BSD_SOCKETS \
            -DMG_DISABLE_FILESYSTEM \
            -DMG_DISABLE_STDIO \
