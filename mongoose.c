@@ -4754,6 +4754,7 @@ static void mg_ws_mask_frame(struct mbuf *mbuf, struct ws_mask_ctx *ctx) {
 void mg_send_websocket_frame(struct mg_connection *nc, int op, const void *data,
                              size_t len) {
   struct ws_mask_ctx ctx;
+  DBG(("%p %d %d", nc, op, (int) len));
   mg_send_ws_header(nc, op, len, &ctx);
   mg_send(nc, data, len);
 
@@ -4846,6 +4847,7 @@ static void mg_ws_handshake(struct mg_connection *nc,
             "Connection: Upgrade\r\n"
             "Sec-WebSocket-Accept: ",
             b64_sha, "\r\n\r\n");
+  DBG(("%p %.*s %s", nc, (int) key->len, key->p, b64_sha));
 }
 
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
