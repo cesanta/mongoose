@@ -7398,13 +7398,6 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
   /* If we have path_info, the only way to handle it is CGI. */
   if (path_info->len > 0 && !is_cgi) {
     mg_http_send_http_error(nc, 501, NULL);
-    return;
-  } else if (is_cgi) {
-#if !defined(MG_DISABLE_CGI)
-    mg_handle_cgi(nc, index_file ? index_file : path, path_info, hm, opts);
-#else
-    mg_http_send_http_error(nc, 501, NULL);
-#endif /* MG_DISABLE_CGI */
     MG_FREE(index_file);
     return;
   }
@@ -7416,6 +7409,12 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
              !mg_is_authorized(hm, path, is_directory, opts->auth_domain,
                                opts->per_directory_auth_file, 0)) {
     mg_http_send_digest_auth_request(nc, opts->auth_domain);
+  } else if (is_cgi) {
+#if !defined(MG_DISABLE_CGI)
+    mg_handle_cgi(nc, index_file ? index_file : path, path_info, hm, opts);
+#else
+    mg_http_send_http_error(nc, 501, NULL);
+#endif /* MG_DISABLE_CGI */
   } else if ((!exists ||
               mg_is_file_hidden(path, opts, 0 /* specials are ok */)) &&
              !mg_is_creation_request(hm)) {
