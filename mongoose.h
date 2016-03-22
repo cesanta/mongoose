@@ -1,6 +1,3 @@
-#ifdef __AVR__
-#include "avrsupport.h"
-#endif
 /*
  * Copyright (c) 2004-2013 Sergey Lyubka
  * Copyright (c) 2013-2015 Cesanta Software Limited
