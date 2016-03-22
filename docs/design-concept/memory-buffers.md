@@ -11,5 +11,5 @@ When Mongoose successfully writes data to the socket, it discards data from
 `struct mg_connection::send_mbuf` and sends `MG_EV_SEND` event. When connection
 is closed, `MG_EV_CLOSE` event is sent.
 
-![](../../static/img/mongoose/mbuf.png)
+![](mbuf.png)
 
