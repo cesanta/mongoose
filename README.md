@@ -71,9 +71,6 @@ the functionality:
 [Developing a new product? Contact us today to discuss how Mongoose can help
 ](https://www.cesanta.com/contact)
 
-# Mongoose Binary - Web Server Application
-Are  you looking to run a web server on Mac or Win? [Check out the free, pro and PHP developer version of Mongoose Binary.] (https://www.cesanta.com/products/binary) 
-
 # Contributions
 
 People who have agreed to the [Cesanta CLA] (https://docs.cesanta.com/contributors_la.shtml) can make contributions. Note that the CLA isn't a copyright assigment but rather a copyright license. You retain the copyright on your contributions.
