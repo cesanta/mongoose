@@ -144,8 +144,7 @@ int main() {
 
   setvbuf(stdout, NULL, _IONBF, 0);
   setvbuf(stderr, NULL, _IONBF, 0);
-  //cs_log_set_level(LL_INFO);
-  cs_log_set_level(LL_VERBOSE_DEBUG);
+  cs_log_set_level(LL_INFO);
 
   VStartSimpleLinkSpawnTask(8);
   osi_TaskCreate(mg_task, (const signed char *) "mg", 8192, NULL, 3, NULL);
