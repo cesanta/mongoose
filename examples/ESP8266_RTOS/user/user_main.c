@@ -37,7 +37,6 @@ void ev_handler(struct mg_connection *nc, int ev, void *p) {
     case MG_EV_HTTP_REQUEST: {
       char addr[32];
       struct http_message *hm = (struct http_message *) p;
-      (void) hm;
       mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
                           MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
       LOG(LL_INFO,
