@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
 #include "tmp006.h"
 
 #include "mongoose.h"
@@ -8,8 +13,8 @@
 #define TMP006_REG_DIE_TEMP 0x01
 #define TMP006_REG_CONFIG 0x02
 
-bool tmp006_set_config(
-    uint8_t addr, enum tmp006_conversion_rate conv_rate, bool drdy_en) {
+bool tmp006_init(uint8_t addr, enum tmp006_conversion_rate conv_rate,
+                 bool drdy_en) {
   unsigned char val[3] = {TMP006_REG_CONFIG, 0x80, 0};
   /* Reset first */
   if (I2C_IF_Write(addr, val, 3, 1) != 0) return false;

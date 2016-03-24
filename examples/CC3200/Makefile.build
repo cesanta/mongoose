@@ -92,7 +92,7 @@ CC3200_PLATFORM_SRCS = cc3200_fs.c cc3200_fs_slfs.c cc3200_libc.c cc3200_socket.
 VPATH += $(COMMON_PATH)/platforms/cc3200
 
 FREERTOS_SRCS = timers.c list.c queue.c tasks.c port.c heap_3.c osi_freertos.c
-DRIVER_SRCS = cpu.c i2c.c i2c_if.c interrupt.c pin.c prcm.c spi.c uart.c udma.c utils.c
+DRIVER_SRCS = cpu.c gpio_if.c i2c_if.c interrupt.c pin.c prcm.c spi.c uart.c udma.c utils.c
 SL_SRCS = socket.c wlan.c driver.c device.c netapp.c netcfg.c cc_pal.c fs.c
 SDK_SRCS = startup_gcc.c $(FREERTOS_SRCS) $(DRIVER_SRCS) $(SL_SRCS)
 IPATH += $(SDK_PATH) $(SDK_PATH)/inc $(SDK_PATH)/driverlib \
@@ -107,7 +107,7 @@ VPATH += $(SDK_PATH)/driverlib $(SDK_PATH)/example/common $(SDK_PATH)/oslib \
          $(SDK_PATH)/third_party/FreeRTOS/source/portable/GCC/ARM_CM4 \
          $(SDK_PATH)/third_party/FreeRTOS/source/portable/MemMang \
 
-APP_SRCS = main.c tmp006.c mongoose.c $(CC3200_PLATFORM_SRCS) $(SDK_SRCS)
+APP_SRCS = main.c bm222.c tmp006.c mongoose.c $(CC3200_PLATFORM_SRCS) $(SDK_SRCS)
 APP_OBJS = $(addprefix $(OBJDIR)/,$(patsubst %.c,%.o,$(APP_SRCS)))
 
 $(FW_ELF): $(APP_OBJS)
