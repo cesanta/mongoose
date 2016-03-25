@@ -91,16 +91,20 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
   switch (ev) {
     case MG_EV_ACCEPT: {
       char addr[32];
-      mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
-                          MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
+      mg_conn_addr_to_str(
+          nc, addr, sizeof(addr),
+          MG_SOCK_STRINGIFY_REMOTE | MG_SOCK_STRINGIFY_IP |
+          MG_SOCK_STRINGIFY_PORT);
       LOG(LL_INFO, ("%p conn from %s", nc, addr));
       break;
     }
     case MG_EV_HTTP_REQUEST: {
       char addr[32];
       struct http_message *hm = (struct http_message *) p;
-      mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
-                          MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
+      mg_conn_addr_to_str(
+          nc, addr, sizeof(addr),
+          MG_SOCK_STRINGIFY_REMOTE | MG_SOCK_STRINGIFY_IP |
+          MG_SOCK_STRINGIFY_PORT);
       LOG(LL_INFO,
           ("HTTP request from %s: %.*s %.*s", addr, (int) hm->method.len,
            hm->method.p, (int) hm->uri.len, hm->uri.p));
