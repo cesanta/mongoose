@@ -3863,17 +3863,16 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
 }
 #endif /* MG_DISABLE_SOCKETPAIR */
 
+#ifndef MG_CC3200
 static void mg_sock_get_addr(sock_t sock, int remote,
                              union socket_address *sa) {
   socklen_t slen = sizeof(*sa);
   memset(sa, 0, slen);
-#ifndef MG_CC3200
   if (remote) {
     getpeername(sock, &sa->sa, &slen);
   } else {
     getsockname(sock, &sa->sa, &slen);
   }
-#endif
 }
 
 void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
@@ -3881,10 +3880,18 @@ void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
   mg_sock_get_addr(sock, flags & MG_SOCK_STRINGIFY_REMOTE, &sa);
   mg_sock_addr_to_str(&sa, buf, len, flags);
 }
+#endif
 
 void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
                          union socket_address *sa) {
+#ifndef MG_CC3200
   mg_sock_get_addr(nc->sock, remote, sa);
+#else
+  /* SimpleLink does not provide a way to get socket's peer address after
+   * accept or connect. Address hould have been preserved in the connection,
+   * so we do our best here by using it. */
+  if (remote) memcpy(sa, &nc->sa, sizeof(*sa));
+#endif
 }
 
 #endif /* !MG_DISABLE_SOCKET_IF */
@@ -6667,13 +6674,8 @@ static int mg_http_send_port_based_redirect(
   struct mg_str a, b;
   char local_port[20] = {'%'};
 
-#ifndef MG_ESP8266
-  mg_sock_to_str(c->sock, local_port + 1, sizeof(local_port) - 1,
-                 MG_SOCK_STRINGIFY_PORT);
-#else
-  /* TODO(lsm): remove when mg_sock_to_str() is implemented in LWIP codepath */
-  snprintf(local_port, sizeof(local_port), "%s", "%0");
-#endif
+  mg_conn_addr_to_str(c, local_port + 1, sizeof(local_port) - 1,
+                      MG_SOCK_STRINGIFY_PORT);
 
   while ((rewrites = mg_next_comma_list_entry(rewrites, &a, &b)) != NULL) {
     if (mg_vcmp(&a, local_port) == 0) {
