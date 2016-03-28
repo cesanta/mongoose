@@ -5256,7 +5256,6 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
   struct mg_str *ct;
   struct mbuf *io = &nc->recv_mbuf;
 
-  const char multipart[] = "multipart";
   char boundary[100];
   int boundary_len;
 
@@ -5272,9 +5271,7 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
   }
 
   /* Content-type should start with "multipart" */
-  if (strncmp(ct->p, "multipart", ct->len < sizeof(multipart) - 1
-                                      ? ct->len
-                                      : sizeof(multipart) - 1) != 0) {
+  if (ct->len < 9 || strncmp(ct->p, "multipart", 9) != 0) {
     goto exit_mp;
   }
 
