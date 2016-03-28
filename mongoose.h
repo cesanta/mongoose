@@ -385,7 +385,9 @@ unsigned long os_random(void);
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#ifndef __TI_COMPILER_VERSION__
 #include <fcntl.h>
+#endif
 #include <inttypes.h>
 #include <stdint.h>
 #include <time.h>
@@ -503,7 +505,6 @@ unsigned long os_random(void);
 #define fd_set                              SlFdSet_t
 
 #define socket                              sl_Socket
-#define close                               sl_Close
 #define accept                              sl_Accept
 #define bind                                sl_Bind
 #define listen                              sl_Listen
@@ -534,7 +535,7 @@ typedef struct stat cs_stat_t;
 #define INT64_X_FMT PRIx64
 #define __cdecl
 
-#define closesocket(x) close(x)
+#define closesocket(x) sl_Close(x)
 
 /* Some functions we implement for Mongoose. */
 
@@ -544,19 +545,51 @@ int inet_pton(int af, const char *src, void *dst);
 
 void cc3200_set_non_blocking_mode(int fd);
 
-struct hostent {
-  char *h_name;       /* official name of host */
-  char **h_aliases;   /* alias list */
-  int h_addrtype;     /* host address type */
-  int h_length;       /* length of address */
-  char **h_addr_list; /* list of addresses */
-};
-struct hostent *gethostbyname(const char *name);
-
 struct timeval;
 int gettimeofday(struct timeval *t, void *tz);
 
 long int random(void);
+
+
+/* TI's libc does not have stat & friends, add them. */
+#ifdef __TI_COMPILER_VERSION__
+
+#include <file.h>
+
+typedef unsigned int mode_t;
+typedef size_t _off_t;
+typedef long ssize_t;
+
+struct stat {
+  int st_ino;
+  mode_t st_mode;
+  int st_nlink;
+  time_t st_mtime;
+  off_t st_size;
+};
+
+int _stat(const char *pathname, struct stat *st);
+#define stat(a, b) _stat(a, b)
+
+#define __S_IFMT 0170000
+
+#define __S_IFDIR 0040000
+#define __S_IFCHR 0020000
+#define __S_IFREG 0100000
+
+#define __S_ISTYPE(mode, mask) (((mode) & __S_IFMT) == (mask))
+
+#define S_IFDIR __S_IFDIR
+#define S_IFCHR __S_IFCHR
+#define S_IFREG __S_IFREG
+#define S_ISDIR(mode) __S_ISTYPE((mode), __S_IFDIR)
+#define S_ISREG(mode) __S_ISTYPE((mode), __S_IFREG)
+
+/* As of 5.2.7, TI compiler does not support va_copy() yet. */
+#define va_copy(apc, ap) ((apc) = (ap))
+
+#endif /* __TI_COMPILER_VERSION__ */
+
 
 #ifdef CC3200_FS_SPIFFS
 #include <common/spiffs/spiffs.h>
