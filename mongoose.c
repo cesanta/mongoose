@@ -4688,6 +4688,7 @@ struct ws_mask_ctx {
 };
 
 static uint32_t mg_ws_random_mask(void) {
+  uint32_t mask;
 /*
  * The spec requires WS client to generate hard to
  * guess mask keys. From RFC6455, Section 5.3:
@@ -4703,14 +4704,15 @@ static uint32_t mg_ws_random_mask(void) {
  * that lacks random().
  */
 #ifdef MG_DISABLE_WS_RANDOM_MASK
-  return 0xefbeadde; /* generated with a random number generator, I swear */
+  mask = 0xefbeadde; /* generated with a random number generator, I swear */
 #else
   if (sizeof(long) >= 4) {
-    return (uint32_t) random();
+    mask = (uint32_t) random();
   } else if (sizeof(long) == 2) {
-    return (uint32_t) random() << 16 | (uint32_t) random();
+    mask = (uint32_t) random() << 16 | (uint32_t) random();
   }
 #endif
+  return mask;
 }
 
 static void mg_send_ws_header(struct mg_connection *nc, int op, size_t len,
