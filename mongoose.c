@@ -529,7 +529,7 @@ typedef int cs_dirent_dummy;
 
 #ifndef _WIN32
 #include <stddef.h>
-#ifndef MG_CC3200
+#if !defined(CS_PLATFORM) || CS_PLATFORM != CS_P_CC3200
 #include <sys/time.h>
 #endif
 #else
@@ -3071,8 +3071,10 @@ void mg_set_non_blocking_mode(sock_t sock) {
 #ifdef _WIN32
   unsigned long on = 1;
   ioctlsocket(sock, FIONBIO, &on);
-#elif defined(MG_CC3200)
-  cc3200_set_non_blocking_mode(sock);
+#elif defined(MG_SOCKET_SIMPLELINK)
+  SlSockNonblocking_t opt;
+  opt.NonblockingEnabled = 1;
+  sl_SetSockOpt(sock, SL_SOL_SOCKET, SL_SO_NONBLOCKING, &opt, sizeof(opt));
 #else
   int flags = fcntl(sock, F_GETFL, 0);
   fcntl(sock, F_SETFL, flags | O_NONBLOCK);
@@ -3080,13 +3082,13 @@ void mg_set_non_blocking_mode(sock_t sock) {
 }
 
 int mg_is_error(int n) {
-#ifdef MG_CC3200
+#ifdef MG_SOCKET_SIMPLELINK
   DBG(("n = %d, errno = %d", n, errno));
   if (n < 0) errno = n;
 #endif
   return n == 0 || (n < 0 && errno != EINTR && errno != EINPROGRESS &&
                     errno != EAGAIN && errno != EWOULDBLOCK
-#ifdef MG_CC3200
+#ifdef MG_SOCKET_SIMPLELINK
                     && errno != SL_EALREADY
 #endif
 #ifdef _WIN32
@@ -3105,7 +3107,7 @@ void mg_if_connect_tcp(struct mg_connection *nc,
     nc->err = errno ? errno : 1;
     return;
   }
-#if !defined(MG_CC3200) && !defined(MG_ESP8266)
+#if !defined(MG_SOCKET_SIMPLELINK) && !defined(MG_ESP8266)
   mg_set_non_blocking_mode(nc->sock);
 #endif
   rc = connect(nc->sock, &sa->sa, sizeof(sa->sin));
@@ -3211,13 +3213,13 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int proto) {
   socklen_t sa_len =
       (sa->sa.sa_family == AF_INET) ? sizeof(sa->sin) : sizeof(sa->sin6);
   sock_t sock = INVALID_SOCKET;
-#if !defined(MG_CC3200) && !defined(MG_LWIP)
+#if !defined(MG_SOCKET_SIMPLELINK) && !defined(MG_LWIP)
   int on = 1;
 #endif
 
   if ((sock = socket(sa->sa.sa_family, proto, 0)) != INVALID_SOCKET &&
-#if !defined(MG_CC3200) && \
-    !defined(MG_LWIP) /* CC3200 and LWIP don't support either */
+#if !defined(MG_SOCKET_SIMPLELINK) && \
+    !defined(MG_LWIP) /* SimpleLink and LWIP don't support either */
 #if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE)
       /* "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE" http://goo.gl/RmrFTm */
       !setsockopt(sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (void *) &on,
@@ -3236,11 +3238,12 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int proto) {
        */
       !setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) &&
 #endif
-#endif /* !MG_CC3200 && !MG_LWIP */
+#endif /* !MG_SOCKET_SIMPLELINK && !MG_LWIP */
 
       !bind(sock, &sa->sa, sa_len) &&
       (proto == SOCK_DGRAM || listen(sock, SOMAXCONN) == 0)) {
-#if !defined(MG_CC3200) && !defined(MG_LWIP) /* TODO(rojer): Fix this. */
+#if !defined(MG_SOCKET_SIMPLELINK) && \
+    !defined(MG_LWIP) /* TODO(rojer): Fix this. */
     mg_set_non_blocking_mode(sock);
     /* In case port was set to 0, get the real port number */
     (void) getsockname(sock, &sa->sa, &sa_len);
@@ -3444,7 +3447,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
   if (nc->flags & MG_F_CONNECTING) {
     if (fd_flags != 0) {
       int err = 0;
-#if !defined(MG_CC3200) && !defined(MG_ESP8266)
+#if !defined(MG_SOCKET_SIMPLELINK) && !defined(MG_ESP8266)
       if (!(nc->flags & MG_F_UDP)) {
         socklen_t len = sizeof(err);
         int ret =
@@ -3452,7 +3455,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
         if (ret != 0) err = 1;
       }
 #else
-/* On CC3200 and ESP8266 we use blocking connect. If we got as far as
+/* On SimpleLink and ESP8266 we use blocking connect. If we got as far as
  * this, it means connect() was successful.
  * TODO(rojer): Figure out why it fails where blocking succeeds.
  */
@@ -3794,8 +3797,8 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
                    (FD_ISSET(nc->sock, &write_set) ? _MG_F_FD_CAN_WRITE : 0) |
                    (FD_ISSET(nc->sock, &err_set) ? _MG_F_FD_ERROR : 0);
       }
-#ifdef MG_CC3200
-      // CC3200 does not report UDP sockets as writeable.
+#ifdef MG_SOCKET_SIMPLELINK
+      /* SimpleLink does not report UDP sockets as writeable. */
       if (nc->flags & MG_F_UDP &&
           (nc->send_mbuf.len > 0 || nc->flags & MG_F_CONNECTING)) {
         fd_flags |= _MG_F_FD_CAN_WRITE;
@@ -3867,7 +3870,7 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
 }
 #endif /* MG_DISABLE_SOCKETPAIR */
 
-#ifndef MG_CC3200
+#ifndef MG_SOCKET_SIMPLELINK
 static void mg_sock_get_addr(sock_t sock, int remote,
                              union socket_address *sa) {
   socklen_t slen = sizeof(*sa);
@@ -3888,7 +3891,7 @@ void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
 
 void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
                          union socket_address *sa) {
-#ifndef MG_CC3200
+#ifndef MG_SOCKET_SIMPLELINK
   mg_sock_get_addr(nc->sock, remote, sa);
 #else
   /* SimpleLink does not provide a way to get socket's peer address after
