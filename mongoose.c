@@ -2684,19 +2684,20 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
       struct mg_add_sock_opts opts;
       memset(&opts, 0, sizeof(opts));
       nc = mg_create_connection(lc->mgr, lc->handler, opts);
-    }
-    if (nc != NULL) {
-      nc->sock = lc->sock;
-      nc->listener = lc;
-      nc->sa = *sa;
-      nc->proto_handler = lc->proto_handler;
-      nc->user_data = lc->user_data;
-      nc->recv_mbuf_limit = lc->recv_mbuf_limit;
-      nc->flags = MG_F_UDP;
-      mg_add_conn(lc->mgr, nc);
-      mg_call(nc, NULL, MG_EV_ACCEPT, &nc->sa);
-    } else {
-      DBG(("OOM"));
+      if (nc != NULL) {
+        nc->sock = lc->sock;
+        nc->listener = lc;
+        nc->sa = *sa;
+        nc->proto_handler = lc->proto_handler;
+        nc->user_data = lc->user_data;
+        nc->recv_mbuf_limit = lc->recv_mbuf_limit;
+        nc->flags = MG_F_UDP;
+        mg_add_conn(lc->mgr, nc);
+        mg_call(nc, NULL, MG_EV_ACCEPT, &nc->sa);
+      } else {
+        DBG(("OOM"));
+        /* No return here, we still need to drop on the floor */
+      }
     }
   }
   if (nc != NULL) {
