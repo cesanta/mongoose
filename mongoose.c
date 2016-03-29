@@ -5710,14 +5710,14 @@ static void mg_send_ssi_file(struct mg_connection *nc, const char *path,
   static const struct mg_str d_exec = MG_MK_STR("exec");
 #endif
   char buf[BUFSIZ], *p = buf + btag.len; /* p points to SSI directive */
-  int ch, offset, len, in_ssi_tag;
+  int ch, len, in_ssi_tag;
 
   if (include_level > 10) {
     mg_printf(nc, "SSI #include level is too deep (%s)", path);
     return;
   }
 
-  in_ssi_tag = len = offset = 0;
+  in_ssi_tag = len = 0;
   while ((ch = fgetc(fp)) != EOF) {
     if (in_ssi_tag && ch == '>' && buf[len - 1] == '-' && buf[len - 2] == '-') {
       size_t i = len - 2;
@@ -7838,8 +7838,10 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
 void mg_set_close_on_exec(sock_t sock) {
 #ifdef _WIN32
   (void) SetHandleInformation((HANDLE) sock, HANDLE_FLAG_INHERIT, 0);
-#else
+#elif defined(__unix__)
   fcntl(sock, F_SETFD, FD_CLOEXEC);
+#else
+  (void) sock;
 #endif
 }
 
