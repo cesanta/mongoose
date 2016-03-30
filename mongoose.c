@@ -361,23 +361,24 @@ FILE *cs_log_file = NULL;
 double cs_log_ts;
 #endif
 
+void cs_log_print_prefix(const char *func) {
+  if (cs_log_file == NULL) cs_log_file = stderr;
+  fprintf(cs_log_file, "%-20s ", func);
+#ifdef CS_LOG_TS_DIFF
+  {
+    double now = cs_time();
+    fprintf(cs_log_file, "%7u ", (unsigned int) ((now - cs_log_ts) * 1000000));
+    cs_log_ts = now;
+  }
+#endif
+}
+
 void cs_log_printf(const char *fmt, ...) {
   va_list ap;
-#ifdef CS_LOG_TS_DIFF
-  double now = cs_time();
-#endif
-
-  if (cs_log_file == NULL) cs_log_file = stderr;
-#ifdef CS_LOG_TS_DIFF
-  fprintf(cs_log_file, "%7u ", (unsigned int) ((now - cs_log_ts) * 1000000));
-#endif
   va_start(ap, fmt);
   vfprintf(cs_log_file, fmt, ap);
   va_end(ap);
   fputc('\n', cs_log_file);
-#ifdef CS_LOG_TS_DIFF
-  cs_log_ts = now;
-#endif
   fflush(cs_log_file);
 }
 #endif /* !CS_DISABLE_STDIO */

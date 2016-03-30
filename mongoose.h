@@ -646,19 +646,20 @@ void cs_log_set_level(enum cs_log_level level);
 void cs_log_set_file(FILE *file);
 
 extern enum cs_log_level cs_log_level;
+void cs_log_print_prefix(const char *func);
 void cs_log_printf(const char *fmt, ...);
 
-#define LOG(l, x)                      \
-  if (cs_log_level >= l) {             \
-    cs_log_printf("%-20s ", __func__); \
-    cs_log_printf x;                   \
+#define LOG(l, x)                  \
+  if (cs_log_level >= l) {         \
+    cs_log_print_prefix(__func__); \
+    cs_log_printf x;               \
   }
 
 #ifndef CS_NDEBUG
 
 #define DBG(x)                            \
   if (cs_log_level >= LL_VERBOSE_DEBUG) { \
-    cs_log_printf("%-20s ", __func__);    \
+    cs_log_print_prefix(__func__);        \
     cs_log_printf x;                      \
   }
 
