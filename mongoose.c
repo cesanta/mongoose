@@ -1472,18 +1472,17 @@ size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
       memcpy(a->buf + off, buf, len);
     }
     a->len += len;
-  } else if ((p = (char *) MBUF_REALLOC(
-                  a->buf, (size_t)((a->len + len) * MBUF_SIZE_MULTIPLIER))) !=
-             NULL) {
-    a->buf = p;
-    memmove(a->buf + off + len, a->buf + off, a->len - off);
-    if (buf != NULL) {
-      memcpy(a->buf + off, buf, len);
-    }
-    a->len += len;
-    a->size = (size_t)(a->len * MBUF_SIZE_MULTIPLIER);
   } else {
-    len = 0;
+    size_t new_size = (a->len + len) * MBUF_SIZE_MULTIPLIER;
+    if ((p = (char *) MBUF_REALLOC(a->buf, new_size)) != NULL) {
+      a->buf = p;
+      memmove(a->buf + off + len, a->buf + off, a->len - off);
+      if (buf != NULL) memcpy(a->buf + off, buf, len);
+      a->len += len;
+      a->size = new_size;
+    } else {
+      len = 0;
+    }
   }
 
   return len;
@@ -3158,7 +3157,6 @@ void mg_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
 }
 
 void mg_if_udp_send(struct mg_connection *nc, const void *buf, size_t len) {
-  DBG(("%p %d %d", nc, (int) len, (int) nc->send_mbuf.len));
   mbuf_append(&nc->send_mbuf, buf, len);
 }
 
@@ -5601,6 +5599,9 @@ void mg_send_response_line(struct mg_connection *nc, int status_code,
     case 418:
       status_message = "I'm a teapot";
       break;
+    case 500:
+      status_message = "Internal Server Error";
+      break;
   }
   mg_printf(nc, "HTTP/1.1 %d %s\r\n", status_code, status_message);
   if (extra_headers != NULL) {
@@ -5625,10 +5626,14 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
   mg_send_head(nc, 501, 0, NULL);
 }
 #else
-static void mg_http_send_http_error(struct mg_connection *nc, int code,
-                                    const char *reason) {
-  (void) reason;
-  mg_send_head(nc, code, 0, NULL);
+static void mg_http_send_error(struct mg_connection *nc, int code,
+                               const char *reason) {
+  if (!reason) reason = "";
+  DBG(("%p %d %s", nc, code, reason));
+  mg_send_head(nc, code, strlen(reason),
+               "Content-Type: text/plain\r\nConnection: close");
+  mg_send(nc, reason, strlen(reason));
+  nc->flags |= MG_F_SEND_AND_CLOSE;
 }
 #ifndef MG_DISABLE_SSI
 static void mg_send_ssi_file(struct mg_connection *, const char *, FILE *, int,
@@ -5791,7 +5796,7 @@ static void mg_handle_ssi_request(struct mg_connection *nc, const char *path,
   struct mg_str mime_type;
 
   if ((fp = fopen(path, "rb")) == NULL) {
-    mg_http_send_http_error(nc, 404, NULL);
+    mg_http_send_error(nc, 404, NULL);
   } else {
     mg_set_close_on_exec(fileno(fp));
 
@@ -5811,7 +5816,7 @@ static void mg_handle_ssi_request(struct mg_connection *nc, const char *path,
                                   const struct mg_serve_http_opts *opts) {
   (void) path;
   (void) opts;
-  mg_http_send_http_error(nc, 500, "SSI disabled");
+  mg_http_send_error(nc, 500, "SSI disabled");
 }
 #endif /* MG_DISABLE_SSI */
 
@@ -5860,7 +5865,7 @@ static void mg_http_send_file2(struct mg_connection *nc, const char *path,
       default:
         code = 500;
     };
-    mg_http_send_http_error(nc, code, "Open failed");
+    mg_http_send_error(nc, code, "Open failed");
   } else if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern),
                              path) > 0) {
     mg_handle_ssi_request(nc, path, opts);
@@ -6503,7 +6508,7 @@ static void mg_handle_mkcol(struct mg_connection *nc, const char *path,
   } else {
     status_code = 500;
   }
-  mg_http_send_http_error(nc, status_code, NULL);
+  mg_http_send_error(nc, status_code, NULL);
 }
 
 static int mg_remove_directory(const struct mg_serve_http_opts *opts,
@@ -6538,7 +6543,7 @@ static void mg_handle_move(struct mg_connection *c,
                            const char *path, struct http_message *hm) {
   const struct mg_str *dest = mg_get_http_header(hm, "Destination");
   if (dest == NULL) {
-    mg_http_send_http_error(c, 411, NULL);
+    mg_http_send_error(c, 411, NULL);
   } else {
     const char *p = (char *) memchr(dest->p, '/', dest->len);
     if (p != NULL && p[1] == '/' &&
@@ -6547,12 +6552,12 @@ static void mg_handle_move(struct mg_connection *c,
       snprintf(buf, sizeof(buf), "%s%.*s", opts->dav_document_root,
                (int) (dest->p + dest->len - p), p);
       if (rename(path, buf) == 0) {
-        mg_http_send_http_error(c, 200, NULL);
+        mg_http_send_error(c, 200, NULL);
       } else {
-        mg_http_send_http_error(c, 418, NULL);
+        mg_http_send_error(c, 418, NULL);
       }
     } else {
-      mg_http_send_http_error(c, 500, NULL);
+      mg_http_send_error(c, 500, NULL);
     }
   }
 }
@@ -6562,14 +6567,14 @@ static void mg_handle_delete(struct mg_connection *nc,
                              const char *path) {
   cs_stat_t st;
   if (mg_stat(path, &st) != 0) {
-    mg_http_send_http_error(nc, 404, NULL);
+    mg_http_send_error(nc, 404, NULL);
   } else if (S_ISDIR(st.st_mode)) {
     mg_remove_directory(opts, path);
-    mg_http_send_http_error(nc, 204, NULL);
+    mg_http_send_error(nc, 204, NULL);
   } else if (remove(path) == 0) {
-    mg_http_send_http_error(nc, 204, NULL);
+    mg_http_send_error(nc, 204, NULL);
   } else {
-    mg_http_send_http_error(nc, 423, NULL);
+    mg_http_send_error(nc, 423, NULL);
   }
 }
 
@@ -6604,11 +6609,11 @@ static void mg_handle_put(struct mg_connection *nc, const char *path,
   if ((rc = mg_create_itermediate_directories(path)) == 0) {
     mg_printf(nc, "HTTP/1.1 %d OK\r\nContent-Length: 0\r\n\r\n", status_code);
   } else if (rc == -1) {
-    mg_http_send_http_error(nc, 500, NULL);
+    mg_http_send_error(nc, 500, NULL);
   } else if (cl_hdr == NULL) {
-    mg_http_send_http_error(nc, 411, NULL);
+    mg_http_send_error(nc, 411, NULL);
   } else if ((pd->file.fp = fopen(path, "w+b")) == NULL) {
-    mg_http_send_http_error(nc, 500, NULL);
+    mg_http_send_error(nc, 500, NULL);
   } else {
     const struct mg_str *range_hdr = mg_get_http_header(hm, "Content-Range");
     int64_t r1 = 0, r2 = 0;
@@ -7224,7 +7229,7 @@ static void mg_cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
         if (len == 0) break;
         if (len < 0 || io->len > MG_MAX_HTTP_REQUEST_SIZE) {
           cgi_nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-          mg_http_send_http_error(nc, 500, "Bad headers");
+          mg_http_send_error(nc, 500, "Bad headers");
         } else {
           struct http_message hm;
           struct mg_str *h;
@@ -7298,7 +7303,7 @@ static void mg_handle_cgi(struct mg_connection *nc, const char *prog,
     mbuf_remove(&nc->recv_mbuf, nc->recv_mbuf.len);
   } else {
     closesocket(fds[0]);
-    mg_http_send_http_error(nc, 500, "CGI failure");
+    mg_http_send_error(nc, 500, "CGI failure");
   }
 
 #ifndef _WIN32
@@ -7419,13 +7424,13 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
 
   /* If we have path_info, the only way to handle it is CGI. */
   if (path_info->len > 0 && !is_cgi) {
-    mg_http_send_http_error(nc, 501, NULL);
+    mg_http_send_error(nc, 501, NULL);
     MG_FREE(index_file);
     return;
   }
 
   if (is_dav && opts->dav_document_root == NULL) {
-    mg_http_send_http_error(nc, 501, NULL);
+    mg_http_send_error(nc, 501, NULL);
   } else if (!mg_is_authorized(hm, path, is_directory, opts->auth_domain,
                                opts->global_auth_file, 1) ||
              !mg_is_authorized(hm, path, is_directory, opts->auth_domain,
@@ -7435,12 +7440,12 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
 #if !defined(MG_DISABLE_CGI)
     mg_handle_cgi(nc, index_file ? index_file : path, path_info, hm, opts);
 #else
-    mg_http_send_http_error(nc, 501, NULL);
+    mg_http_send_error(nc, 501, NULL);
 #endif /* MG_DISABLE_CGI */
   } else if ((!exists ||
               mg_is_file_hidden(path, opts, 0 /* specials are ok */)) &&
              !mg_is_creation_request(hm)) {
-    mg_http_send_http_error(nc, 404, NULL);
+    mg_http_send_error(nc, 404, NULL);
 #ifndef MG_DISABLE_DAV
   } else if (!mg_vcmp(&hm->method, "PROPFIND")) {
     mg_handle_propfind(nc, path, &st, hm, opts);
@@ -7472,13 +7477,13 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
     if (strcmp(opts->enable_directory_listing, "yes") == 0) {
       mg_send_directory_listing(nc, path, hm, opts);
     } else {
-      mg_http_send_http_error(nc, 403, NULL);
+      mg_http_send_error(nc, 403, NULL);
     }
 #else
-    mg_http_send_http_error(nc, 501, NULL);
+    mg_http_send_error(nc, 501, NULL);
 #endif
   } else if (mg_is_not_modified(hm, &st)) {
-    mg_http_send_http_error(nc, 304, "Not Modified");
+    mg_http_send_error(nc, 304, "Not Modified");
   } else {
     mg_http_send_file2(nc, index_file ? index_file : path, &st, hm, opts);
   }
@@ -7493,7 +7498,7 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
 
   if (mg_check_ip_acl(opts.ip_acl, remote_ip) != 1) {
     /* Not allowed to connect */
-    mg_http_send_http_error(nc, 403, NULL);
+    mg_http_send_error(nc, 403, NULL);
     nc->flags |= MG_F_SEND_AND_CLOSE;
     return;
   }
@@ -7522,11 +7527,11 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
   }
   /* Normalize path - resolve "." and ".." (in-place). */
   if (!mg_normalize_uri_path(&hm->uri, &hm->uri)) {
-    mg_http_send_http_error(nc, 400, NULL);
+    mg_http_send_error(nc, 400, NULL);
     return;
   }
   if (mg_uri_to_local_path(hm, &opts, &path, &path_info) == 0) {
-    mg_http_send_http_error(nc, 404, NULL);
+    mg_http_send_error(nc, 404, NULL);
     return;
   }
   mg_send_http_file(nc, path, &path_info, hm, &opts);

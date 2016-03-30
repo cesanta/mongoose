@@ -3,11 +3,10 @@
  * All rights reserved
  */
 
-#include <malloc.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 /* Driverlib includes */
 #include "hw_types.h"
@@ -29,7 +28,7 @@
 #include "simplelink.h"
 #include "device.h"
 
-#include "oslib/osi.h"
+#include "osi.h"
 
 #include "mongoose.h"
 
@@ -44,6 +43,7 @@
 #define CONSOLE_UART UARTA0_BASE
 #define CONSOLE_UART_PERIPH PRCM_UARTA0
 #define SYS_CLK 80000000
+#define MG_TASK_STACK_SIZE 8192
 
 #define BM222_ADDR 0x18
 #define TMP006_ADDR 0x41
@@ -72,7 +72,7 @@ void SimpleLinkNetAppEventHandler(SlNetAppEvent_t *e) {
     LOG(LL_INFO, ("IP: %lu.%lu.%lu.%lu", SL_IPV4_BYTE(ed->ip, 3),
                   SL_IPV4_BYTE(ed->ip, 2), SL_IPV4_BYTE(ed->ip, 1),
                   SL_IPV4_BYTE(ed->ip, 0)));
-    GPIO_IF_LedOff(MCU_RED_LED_GPIO);
+    GPIO_IF_LedToggle(MCU_RED_LED_GPIO);
   }
 }
 
@@ -86,7 +86,7 @@ struct temp_data {
 
 static struct temp_data s_temp_data;
 
-static void ev_handler(struct mg_connection *nc, int ev, void *p) {
+static void mg_ev_handler(struct mg_connection *nc, int ev, void *p) {
   LOG(LL_DEBUG, ("Ev: %d", ev));
   switch (ev) {
     case MG_EV_ACCEPT: {
@@ -282,7 +282,8 @@ static void data_ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 }
 
 static void mg_task(void *arg) {
-  LOG(LL_INFO, ("Hello, world!"));
+  LOG(LL_INFO, ("MG task running"));
+  GPIO_IF_LedToggle(MCU_RED_LED_GPIO);
 
   osi_MsgQCreate(&s_v7_q, "V7", sizeof(struct sj_event), 32 /* len */);
 
@@ -329,7 +330,7 @@ static void mg_task(void *arg) {
   memset(&opts, 0, sizeof(opts));
   opts.error_string = &err;
 
-  struct mg_connection *nc = mg_bind(&mg_mgr, "80", ev_handler);
+  struct mg_connection *nc = mg_bind(&mg_mgr, "80", mg_ev_handler);
   if (nc != NULL) {
     mg_set_protocol_http_websocket(nc);
     nc->ev_timer_time = mg_time(); /* Start data collection */
@@ -344,11 +345,15 @@ static void mg_task(void *arg) {
   }
 }
 
+#ifndef USE_TIRTOS
 /* Int vector table, defined in startup_gcc.c */
 extern void (*const g_pfnVectors[])(void);
+#endif
 
 int main() {
+#ifndef USE_TIRTOS
   MAP_IntVTableBaseSet((unsigned long) &g_pfnVectors[0]);
+#endif
   MAP_IntEnable(FAULT_SYSTICK);
   MAP_IntMasterEnable();
   PRCMCC3200MCUInit();
@@ -364,10 +369,11 @@ int main() {
   MAP_UARTFIFOLevelSet(CONSOLE_UART, UART_FIFO_TX1_8, UART_FIFO_RX4_8);
   MAP_UARTFIFOEnable(CONSOLE_UART);
 
-  setvbuf(stdout, NULL, _IONBF, 0);
-  setvbuf(stderr, NULL, _IONBF, 0);
-  cs_log_set_file(stdout);
+  setvbuf(stdout, NULL, _IOLBF, 0);
+  setvbuf(stderr, NULL, _IOLBF, 0);
   cs_log_set_level(LL_INFO);
+  cs_log_set_file(stdout);
+  LOG(LL_INFO, ("Hello, world!"));
 
   MAP_PinTypeI2C(PIN_01, PIN_MODE_1); /* SDA */
   MAP_PinTypeI2C(PIN_02, PIN_MODE_1); /* SCL */
@@ -379,10 +385,15 @@ int main() {
   MAP_PinTypeGPIO(PIN_64, PIN_MODE_0, false);
   MAP_GPIODirModeSet(GPIOA1_BASE, 0x2, GPIO_DIR_MODE_OUT);
   GPIO_IF_LedConfigure(LED1);
-  GPIO_IF_LedOn(MCU_RED_LED_GPIO);
+  GPIO_IF_LedToggle(MCU_RED_LED_GPIO);
 
-  VStartSimpleLinkSpawnTask(8);
-  osi_TaskCreate(mg_task, (const signed char *) "mg", 8192, NULL, 3, NULL);
+  if (VStartSimpleLinkSpawnTask(8) != 0) {
+	LOG(LL_ERROR, ("Failed to create SL task"));
+  }
+  if (osi_TaskCreate(mg_task, (const signed char *) "mg", MG_TASK_STACK_SIZE, NULL, 3, NULL) != 0) {
+	LOG(LL_ERROR, ("Failed to create MG task"));
+  }
+
   osi_start();
 
   return 0;
