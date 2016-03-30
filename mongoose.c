@@ -8152,8 +8152,8 @@ int mg_rpc_create_error(char *buf, int len, struct mg_rpc_request *req,
 
   n += json_emit(buf + n, len - n, "{s:s,s:V,s:{s:i,s:s,s:", "jsonrpc", "2.0",
                  "id", req->id == NULL ? "null" : req->id->ptr,
-                 req->id == NULL ? 4 : req->id->len, "error", "code", code,
-                 "message", message, "data");
+                 req->id == NULL ? 4 : req->id->len, "error", "code",
+                 (long) code, "message", message, "data");
   va_start(ap, fmt);
   n += json_emit_va(buf + n, len - n, fmt, ap);
   va_end(ap);
