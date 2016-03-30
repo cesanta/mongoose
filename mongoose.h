@@ -637,29 +637,29 @@ enum cs_log_level {
   _LL_MAX = 5,
 };
 
-extern enum cs_log_level s_cs_log_level;
 void cs_log_set_level(enum cs_log_level level);
 
 #ifndef CS_DISABLE_STDIO
 
-#ifdef CS_LOG_TS_DIFF
-extern double cs_log_ts;
-#endif
+#include <stdio.h>
 
+void cs_log_set_file(FILE *file);
+
+extern enum cs_log_level cs_log_level;
 void cs_log_printf(const char *fmt, ...);
 
-#define LOG(l, x)                        \
-  if (s_cs_log_level >= l) {             \
-    fprintf(stderr, "%-20s ", __func__); \
-    cs_log_printf x;                     \
+#define LOG(l, x)                      \
+  if (cs_log_level >= l) {             \
+    cs_log_printf("%-20s ", __func__); \
+    cs_log_printf x;                   \
   }
 
 #ifndef CS_NDEBUG
 
-#define DBG(x)                              \
-  if (s_cs_log_level >= LL_VERBOSE_DEBUG) { \
-    fprintf(stderr, "%-20s ", __func__);    \
-    cs_log_printf x;                        \
+#define DBG(x)                            \
+  if (cs_log_level >= LL_VERBOSE_DEBUG) { \
+    cs_log_printf("%-20s ", __func__);    \
+    cs_log_printf x;                      \
   }
 
 #else /* NDEBUG */

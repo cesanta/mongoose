@@ -366,6 +366,7 @@ int main() {
 
   setvbuf(stdout, NULL, _IONBF, 0);
   setvbuf(stderr, NULL, _IONBF, 0);
+  cs_log_set_file(stdout);
   cs_log_set_level(LL_INFO);
 
   MAP_PinTypeI2C(PIN_01, PIN_MODE_1); /* SDA */
