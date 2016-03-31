@@ -48,7 +48,9 @@
 #define BM222_ADDR 0x18
 #define TMP006_ADDR 0x41
 
-struct sj_event {
+extern int cc3200_fs_init();
+
+struct event {
   int type;
   void *data;
 };
@@ -110,7 +112,7 @@ static void mg_ev_handler(struct mg_connection *nc, int ev, void *p) {
            hm->method.p, (int) hm->uri.len, hm->uri.p));
       struct mg_serve_http_opts opts;
       memset(&opts, 0, sizeof(opts));
-      opts.document_root = ".";
+      opts.document_root = "SL:";
       mg_serve_http(nc, (struct http_message *) p, opts);
       break;
     }
@@ -285,7 +287,7 @@ static void mg_task(void *arg) {
   LOG(LL_INFO, ("MG task running"));
   GPIO_IF_LedToggle(MCU_RED_LED_GPIO);
 
-  osi_MsgQCreate(&s_v7_q, "V7", sizeof(struct sj_event), 32 /* len */);
+  osi_MsgQCreate(&s_v7_q, "MG", sizeof(struct event), 32 /* len */);
 
   sl_Start(NULL, NULL, NULL);
   if (!tmp006_init(TMP006_ADDR, TMP006_CONV_2, false)) {
@@ -299,6 +301,8 @@ static void mg_task(void *arg) {
   } else {
     LOG(LL_INFO, ("Accelerometer initialized"));
   }
+
+  cc3200_fs_init();
 
   if (strlen(WIFI_SSID) > 0) {
     int ret;
@@ -339,7 +343,7 @@ static void mg_task(void *arg) {
   }
 
   while (1) {
-    struct sj_event e;
+    struct event e;
     mg_mgr_poll(&mg_mgr, 0);
     if (osi_MsgQRead(&s_v7_q, &e, 1) != OSI_OK) continue;
   }
@@ -373,6 +377,7 @@ int main() {
   setvbuf(stderr, NULL, _IOLBF, 0);
   cs_log_set_level(LL_INFO);
   cs_log_set_file(stdout);
+
   LOG(LL_INFO, ("Hello, world!"));
 
   MAP_PinTypeI2C(PIN_01, PIN_MODE_1); /* SDA */
@@ -388,10 +393,10 @@ int main() {
   GPIO_IF_LedToggle(MCU_RED_LED_GPIO);
 
   if (VStartSimpleLinkSpawnTask(8) != 0) {
-	LOG(LL_ERROR, ("Failed to create SL task"));
+    LOG(LL_ERROR, ("Failed to create SL task"));
   }
   if (osi_TaskCreate(mg_task, (const signed char *) "mg", MG_TASK_STACK_SIZE, NULL, 3, NULL) != 0) {
-	LOG(LL_ERROR, ("Failed to create MG task"));
+    LOG(LL_ERROR, ("Failed to create MG task"));
   }
 
   osi_start();
