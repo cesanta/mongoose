@@ -88,8 +88,16 @@ struct temp_data {
 
 static struct temp_data s_temp_data;
 
+static struct mg_str upload_fname(struct mg_connection *nc, struct mg_str fname) {
+  struct mg_str lfn;
+  lfn.len = fname.len + 3;
+  lfn.p = malloc(lfn.len);
+  memcpy((char *) lfn.p, "SL:", 3);
+  memcpy((char *) lfn.p + 3, fname.p, fname.len);
+  return lfn;
+}
+
 static void mg_ev_handler(struct mg_connection *nc, int ev, void *p) {
-  LOG(LL_DEBUG, ("Ev: %d", ev));
   switch (ev) {
     case MG_EV_ACCEPT: {
       char addr[32];
@@ -137,6 +145,11 @@ static void mg_ev_handler(struct mg_connection *nc, int ev, void *p) {
       }
       bm222_get_data(s_accel_ctx);
       nc->ev_timer_time = mg_time() + (DATA_SAMPLING_INTERVAL_MS * 0.001);
+    }
+    case MG_EV_HTTP_PART_BEGIN:
+    case MG_EV_HTTP_PART_DATA:
+    case MG_EV_HTTP_PART_END: {
+      mg_file_upload_handler(nc, ev, p, upload_fname);
     }
   }
 }
@@ -287,7 +300,7 @@ static void mg_task(void *arg) {
   LOG(LL_INFO, ("MG task running"));
   GPIO_IF_LedToggle(MCU_RED_LED_GPIO);
 
-  osi_MsgQCreate(&s_v7_q, "MG", sizeof(struct event), 32 /* len */);
+  osi_MsgQCreate(&s_v7_q, "V7", sizeof(struct event), 32 /* len */);
 
   sl_Start(NULL, NULL, NULL);
   if (!tmp006_init(TMP006_ADDR, TMP006_CONV_2, false)) {
