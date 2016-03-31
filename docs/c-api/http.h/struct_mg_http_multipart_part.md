@@ -8,6 +8,7 @@ signature: |
     const char *var_name;
     struct mg_str data;
     int status; /* <0 on error */
+    void *user_data;
   };
 ---
 

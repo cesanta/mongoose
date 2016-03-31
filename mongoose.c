@@ -4254,6 +4254,7 @@ struct mg_http_multipart_stream {
   int boundary_len;
   const char *var_name;
   const char *file_name;
+  void *user_data;
   int prev_io_len;
   enum mg_http_multipart_stream_state state;
   int processing_part;
@@ -5342,9 +5343,11 @@ static void mg_http_multipart_call_handler(struct mg_connection *c, int ev,
 
   mp.var_name = pd->mp_stream.var_name;
   mp.file_name = pd->mp_stream.file_name;
+  mp.user_data = pd->mp_stream.user_data;
   mp.data.p = data;
   mp.data.len = data_len;
   mg_call(c, pd->endpoint_handler, ev, &mp);
+  pd->mp_stream.user_data = mp.user_data;
 }
 
 static int mg_http_multipart_got_chunk(struct mg_connection *c) {
@@ -5522,6 +5525,128 @@ static void mg_http_multipart_continue(struct mg_connection *c) {
         mbuf_remove(&c->recv_mbuf, c->recv_mbuf.len);
         return;
       }
+    }
+  }
+}
+
+struct file_upload_state {
+  char *lfn;
+  size_t num_recd;
+  FILE *fp;
+};
+
+void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
+                            mg_fu_fname_fn local_name_fn) {
+  switch (ev) {
+    case MG_EV_HTTP_PART_BEGIN: {
+      struct mg_http_multipart_part *mp =
+          (struct mg_http_multipart_part *) ev_data;
+      struct file_upload_state *fus =
+          (struct file_upload_state *) calloc(1, sizeof(*fus));
+      mp->user_data = NULL;
+
+      struct mg_str lfn = local_name_fn(nc, mg_mk_str(mp->file_name));
+      if (lfn.p == NULL || lfn.len == 0) {
+        LOG(LL_ERROR, ("%p Not allowed to upload %s", nc, mp->file_name));
+        mg_printf(nc,
+                  "HTTP/1.1 403 Not Allowed\r\n"
+                  "Content-Type: text/plain\r\n"
+                  "Connection: close\r\n\r\n"
+                  "Not allowed to upload %s\r\n",
+                  mp->file_name);
+        nc->flags |= MG_F_SEND_AND_CLOSE;
+        return;
+      }
+      fus->lfn = (char *) malloc(lfn.len + 1);
+      memcpy(fus->lfn, lfn.p, lfn.len);
+      fus->lfn[lfn.len] = '\0';
+      if (lfn.p != mp->file_name) free((char *) lfn.p);
+      LOG(LL_DEBUG,
+          ("%p Receiving file %s -> %s", nc, mp->file_name, fus->lfn));
+      fus->fp = fopen(fus->lfn, "w");
+      if (fus->fp == NULL) {
+        mg_printf(nc,
+                  "HTTP/1.1 500 Internal Server Error\r\n"
+                  "Content-Type: text/plain\r\n"
+                  "Connection: close\r\n\r\n");
+        LOG(LL_ERROR, ("Failed to open %s: %d\n", fus->lfn, errno));
+        mg_printf(nc, "Failed to open %s: %d\n", fus->lfn, errno);
+        /* Do not close the connection just yet, discard remainder of the data.
+         * This is because at the time of writing some browsers (Chrome) fail to
+         * render response before all the data is sent. */
+      }
+      mp->user_data = (void *) fus;
+      break;
+    }
+    case MG_EV_HTTP_PART_DATA: {
+      struct mg_http_multipart_part *mp =
+          (struct mg_http_multipart_part *) ev_data;
+      struct file_upload_state *fus =
+          (struct file_upload_state *) mp->user_data;
+      if (fus == NULL || fus->fp == NULL) break;
+      if (fwrite(mp->data.p, 1, mp->data.len, fus->fp) != mp->data.len) {
+        LOG(LL_ERROR, ("Failed to write to %s: %d, wrote %d", fus->lfn, errno,
+                       (int) fus->num_recd));
+        if (errno == ENOSPC
+#ifdef SPIFFS_ERR_FULL
+            || errno == SPIFFS_ERR_FULL
+#endif
+            ) {
+          mg_printf(nc,
+                    "HTTP/1.1 413 Payload Too Large\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Connection: close\r\n\r\n");
+          mg_printf(nc, "Failed to write to %s: no space left; wrote %d\r\n",
+                    fus->lfn, (int) fus->num_recd);
+        } else {
+          mg_printf(nc,
+                    "HTTP/1.1 500 Internal Server Error\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Connection: close\r\n\r\n");
+          mg_printf(nc, "Failed to write to %s: %d, wrote %d", mp->file_name,
+                    errno, (int) fus->num_recd);
+        }
+        fclose(fus->fp);
+        remove(fus->lfn);
+        fus->fp = NULL;
+        /* Do not close the connection just yet, discard remainder of the data.
+         * This is because at the time of writing some browsers (Chrome) fail to
+         * render response before all the data is sent. */
+        return;
+      }
+      fus->num_recd += mp->data.len;
+      LOG(LL_DEBUG, ("%p rec'd %d bytes, %d total", nc, (int) mp->data.len,
+                     (int) fus->num_recd));
+      break;
+    }
+    case MG_EV_HTTP_PART_END: {
+      struct mg_http_multipart_part *mp =
+          (struct mg_http_multipart_part *) ev_data;
+      struct file_upload_state *fus =
+          (struct file_upload_state *) mp->user_data;
+      if (fus == NULL) break;
+      if (mp->status >= 0 && fus->fp != NULL) {
+        LOG(LL_DEBUG, ("%p Uploaded %s (%s), %d bytes", nc, mp->file_name,
+                       fus->lfn, (int) fus->num_recd));
+        mg_printf(nc,
+                  "HTTP/1.1 200 OK\r\n"
+                  "Content-Type: text/plain\r\n"
+                  "Connection: close\r\n\r\n"
+                  "Ok, %s - %d bytes.\r\n",
+                  mp->file_name, (int) fus->num_recd);
+      } else {
+        LOG(LL_ERROR, ("Failed to store %s (%s)", mp->file_name, fus->lfn));
+        /*
+         * mp->status < 0 means connection was terminated, so no reason to send
+         * HTTP reply
+         */
+      }
+      if (fus->fp != NULL) fclose(fus->fp);
+      free(fus->lfn);
+      free(fus);
+      mp->user_data = NULL;
+      nc->flags |= MG_F_SEND_AND_CLOSE;
+      break;
     }
   }
 }
