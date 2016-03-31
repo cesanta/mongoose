@@ -1881,8 +1881,7 @@ const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
  * Match is case-insensitive. Return number of bytes matched, or -1 if no match.
  */
 int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
-int mg_match_prefix_n(const char *pattern, int pattern_len, const char *str,
-                      int str_len);
+int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
 
 /*
  * A helper function for creating mg_str struct from plain C string.

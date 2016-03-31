@@ -5044,8 +5044,8 @@ static mg_event_handler_t mg_http_get_endpoint_handler(
 
   ep = pd->endpoints;
   while (ep != NULL) {
-    if ((matched = mg_match_prefix_n(ep->name, ep->name_len, uri_path->p,
-                                     uri_path->len)) != -1) {
+    const struct mg_str name_s = {ep->name, ep->name_len};
+    if ((matched = mg_match_prefix_n(name_s, *uri_path)) != -1) {
       if (matched > matched_max) {
         /* Looking for the longest suitable handler */
         ret = ep->handler;
@@ -6740,9 +6740,9 @@ MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
         }
       } else {
         /* Regular rewrite, URI=directory */
-        int match_len = mg_match_prefix_n(a.p, a.len, cp, hm->uri.len);
+        int match_len = mg_match_prefix_n(a, hm->uri);
         if (match_len > 0) {
-          file_uri_start = cp + match_len;
+          file_uri_start = hm->uri.p + match_len;
           if (*file_uri_start == '/' || file_uri_start == cp_end) {
             /* Match ended at component boundary, ok. */
           } else if (*(file_uri_start - 1) == '/') {
@@ -8057,44 +8057,46 @@ const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
   return list;
 }
 
-int mg_match_prefix_n(const char *pattern, int pattern_len, const char *str,
-                      int str_len) {
+int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str) {
   const char *or_str;
-  int len, res, i = 0, j = 0;
+  size_t len, i = 0, j = 0;
+  int res;
 
-  if ((or_str = (const char *) memchr(pattern, '|', pattern_len)) != NULL) {
-    res = mg_match_prefix_n(pattern, or_str - pattern, str, str_len);
-    return res > 0 ? res
-                   : mg_match_prefix_n(or_str + 1,
-                                       (pattern + pattern_len) - (or_str + 1),
-                                       str, str_len);
+  if ((or_str = (const char *) memchr(pattern.p, '|', pattern.len)) != NULL) {
+    struct mg_str pstr = {pattern.p, (size_t)(or_str - pattern.p)};
+    res = mg_match_prefix_n(pstr, str);
+    if (res > 0) return res;
+    pstr.p = or_str + 1;
+    pstr.len = (pattern.p + pattern.len) - (or_str + 1);
+    return mg_match_prefix_n(pstr, str);
   }
 
-  for (; i < pattern_len; i++, j++) {
-    if (pattern[i] == '?' && j != str_len) {
+  for (; i < pattern.len; i++, j++) {
+    if (pattern.p[i] == '?' && j != str.len) {
       continue;
-    } else if (pattern[i] == '$') {
-      return j == str_len ? j : -1;
-    } else if (pattern[i] == '*') {
+    } else if (pattern.p[i] == '$') {
+      return j == str.len ? (int) j : -1;
+    } else if (pattern.p[i] == '*') {
       i++;
-      if (pattern[i] == '*') {
+      if (pattern.p[i] == '*') {
         i++;
-        len = str_len - j;
+        len = str.len - j;
       } else {
         len = 0;
-        while (j + len != str_len && str[len] != '/') {
+        while (j + len != str.len && str.p[len] != '/') {
           len++;
         }
       }
-      if (i == pattern_len) {
+      if (i == pattern.len) {
         return j + len;
       }
       do {
-        res = mg_match_prefix_n(pattern + i, pattern_len - i, str + j + len,
-                                str_len - j - len);
+        const struct mg_str pstr = {pattern.p + i, pattern.len - i};
+        const struct mg_str sstr = {str.p + j + len, str.len - j - len};
+        res = mg_match_prefix_n(pstr, sstr);
       } while (res == -1 && len-- > 0);
-      return res == -1 ? -1 : j + res + len;
-    } else if (lowercase(&pattern[i]) != lowercase(&str[j])) {
+      return res == -1 ? -1 : (int) (j + res + len);
+    } else if (lowercase(&pattern.p[i]) != lowercase(&str.p[j])) {
       return -1;
     }
   }
@@ -8102,7 +8104,8 @@ int mg_match_prefix_n(const char *pattern, int pattern_len, const char *str,
 }
 
 int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
-  return mg_match_prefix_n(pattern, pattern_len, str, strlen(str));
+  const struct mg_str pstr = {pattern, (size_t) pattern_len};
+  return mg_match_prefix_n(pstr, mg_mk_str(str));
 }
 
 struct mg_str mg_mk_str(const char *s) {
