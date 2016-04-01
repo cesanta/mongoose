@@ -239,6 +239,18 @@ struct dirent *readdir(DIR *dir);
 #endif
 #endif
 
+#ifndef MG_MAX_HTTP_REQUEST_SIZE
+#define MG_MAX_HTTP_REQUEST_SIZE 8192
+#endif
+
+#ifndef MG_MAX_HTTP_SEND_MBUF
+#define MG_MAX_HTTP_SEND_MBUF 4096
+#endif
+
+#ifndef MG_MAX_HTTP_HEADERS
+#define MG_MAX_HTTP_HEADERS 40
+#endif
+
 #endif /* CS_PLATFORM == CS_P_WINDOWS */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_WINDOWS_H_ */
 #ifndef CS_COMMON_PLATFORMS_PLATFORM_UNIX_H_
@@ -322,6 +334,18 @@ typedef struct stat cs_stat_t;
 
 #define closesocket(x) close(x)
 
+#ifndef MG_MAX_HTTP_REQUEST_SIZE
+#define MG_MAX_HTTP_REQUEST_SIZE 8192
+#endif
+
+#ifndef MG_MAX_HTTP_SEND_MBUF
+#define MG_MAX_HTTP_SEND_MBUF 4096
+#endif
+
+#ifndef MG_MAX_HTTP_HEADERS
+#define MG_MAX_HTTP_HEADERS 40
+#endif
+
 #endif /* CS_PLATFORM == CS_P_UNIX */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_UNIX_H_ */
 #ifndef CS_COMMON_PLATFORMS_PLATFORM_ESP_LWIP_H_
@@ -401,6 +425,11 @@ unsigned long os_random(void);
 #define MG_DISABLE_SYNC_RESOLVER 1
 #define MG_DISABLE_POPEN 1
 #define MG_DISABLE_CGI 1
+/* Only SPIFFS supports directories, SLFS does not. */
+#ifndef CC3200_FS_SPIFFS
+#define MG_DISABLE_DAV 1
+#define MG_DISABLE_DIRECTORY_LISTING 1
+#endif
 
 #include <simplelink/include/simplelink.h>
 
@@ -1922,23 +1951,23 @@ extern "C" {
 #endif /* __cplusplus */
 
 #ifndef MG_MAX_HTTP_HEADERS
-#define MG_MAX_HTTP_HEADERS 40
+#define MG_MAX_HTTP_HEADERS 20
 #endif
 
 #ifndef MG_MAX_HTTP_REQUEST_SIZE
-#define MG_MAX_HTTP_REQUEST_SIZE 8192
+#define MG_MAX_HTTP_REQUEST_SIZE 1024
 #endif
 
 #ifndef MG_MAX_PATH
 #ifdef PATH_MAX
 #define MG_MAX_PATH PATH_MAX
 #else
-#define MG_MAX_PATH 1024
+#define MG_MAX_PATH 256
 #endif
 #endif
 
 #ifndef MG_MAX_HTTP_SEND_MBUF
-#define MG_MAX_HTTP_SEND_MBUF 4096
+#define MG_MAX_HTTP_SEND_MBUF 1024
 #endif
 
 #ifndef MG_WEBSOCKET_PING_INTERVAL_SECONDS
