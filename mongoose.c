@@ -5177,6 +5177,15 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
       mg_handle_chunked(nc, hm, io->buf + req_len, io->len - req_len);
     }
 
+#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+    if (req_len > 0 && (s = mg_get_http_header(hm, "Content-Type")) != NULL &&
+        s->len >= 9 && strncmp(s->p, "multipart", 9) == 0) {
+      mg_http_multipart_begin(nc, hm, req_len);
+      mg_http_multipart_continue(nc);
+      return;
+    }
+#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
+
     /* TODO(alashkin): refactor this ifelseifelseifelseifelse */
     if ((req_len < 0 ||
          (req_len == 0 && io->len >= MG_MAX_HTTP_REQUEST_SIZE))) {
@@ -5266,10 +5275,6 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
     mg_http_call_endpoint_handler(nc, trigger_ev, hm);
 #endif
       mbuf_remove(io, hm->message.len);
-#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
-    } else {
-      mg_http_multipart_begin(nc, hm, req_len);
-#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
     }
   }
   (void) pd;
