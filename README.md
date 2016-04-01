@@ -4,7 +4,7 @@
 
 Mongoose is ideal for embedded environments. It has been designed
 for connecting devices and bringing them online.
-[Mongoose](http://hubs.ly/H02z5FS0)
+[Mongoose](https://www.cesanta.com/products)
 has been on the market since 2004 and attracted
 over 1 million cumulative downloads.
 
@@ -13,18 +13,18 @@ network protocols or scalable network applications  with little effort.
 Mongoose helps developers to manage the complexity of network programming
 and let them concentrate on the logic, saving time and money.
 
-- [Download Mongoose Source Code here](http://hubs.ly/H02z4Ds0)
+- [Download Mongoose Source Code here](http://hubs.ly/H01bWvx0)
 - [Check our latest releases] (https://github.com/cesanta/mongoose/releases)
-- [Read User Guide and API reference](https://docs.cesanta.com/mongoose/dev/)
+- [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
 
 > Nothing overdone. Nothing less. So unbelievably easy to use.
 > Just how good software should be! -- Pritin Tyagaraj, SAP
 
-If you are looking for a complete IoT platform with firmware and cloud compotent, check out [Smart.js.] (http://hubs.ly/H02z5Hl0)
+If you are looking for a complete IoT platform with firmware and cloud compotent, check out [Smart.js.] (https://github.com/cesanta/smart.js)
 
 # Support
-- [Support Forum - Ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/mongoose)
+- [Support Forum - Ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/smart-js)
 - [Chat - Visit www.cesanta.com for our live chat] (http://www.cesanta.com)
 - [Commercial one-to-one support - Available to all commercial license holders] (https://www.cesanta.com/services-support)
 
@@ -55,7 +55,7 @@ If you are looking for a complete IoT platform with firmware and cloud compotent
 Mongoose is released under commercial and [GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html) open source licenses.
 
 Commercial Projects:
-Once your project becomes commercialised GPLv2 licensing dictates that you need to either open your source fully or purchase a commercial license. Cesanta offer full, royalty-free commercial licenses without any GPL restrictions. If your needs require a custom license, we’d be happy to work on a solution with you. [Contact us for pricing.] (http://hubs.ly/H02z61W0)
+Once your project becomes commercialised GPLv2 licensing dictates that you need to either open your source fully or purchase a commercial license. Cesanta offer full, royalty-free commercial licenses without any GPL restrictions. If your needs require a custom license, we’d be happy to work on a solution with you. [Contact us for pricing.] (https://www.cesanta.com/contact)
 
 Prototyping:
 While your project is still in prototyping stage and not for sale, you can use Mongoose’s open source code without license restrictions.
@@ -69,7 +69,7 @@ the functionality:
 ![](http://www.cesanta.com/hubfs/www.cesanta.com/diagrams/dash_mongoose_diagram.png)
 
 [Developing a new product? Contact us today to discuss how Mongoose can help
-](http://hubs.ly/H02z61W0)
+](https://www.cesanta.com/contact)
 
 # Contributions
 
