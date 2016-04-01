@@ -6,7 +6,7 @@ PLATFORM = CC3200
 SDK_PATH ?= /cc3200-sdk
 REPO_PATH ?= ../../..
 COMMON_PATH ?= $(REPO_PATH)/common
-BUILD_DIR ?= ./build
+BUILD_DIR ?= ./.build
 FW_DIR ?= ./out
 SLFS_PATH ?= ./slfs
 
