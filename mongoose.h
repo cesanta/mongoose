@@ -387,12 +387,14 @@ unsigned long os_random(void);
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
-#ifndef __TI_COMPILER_VERSION__
-#include <fcntl.h>
-#endif
 #include <inttypes.h>
 #include <stdint.h>
 #include <time.h>
+
+#ifndef __TI_COMPILER_VERSION__
+#include <fcntl.h>
+#include <sys/time.h>
+#endif
 
 #define MG_SOCKET_SIMPLELINK 1
 #define MG_DISABLE_SOCKETPAIR 1
@@ -400,7 +402,7 @@ unsigned long os_random(void);
 #define MG_DISABLE_POPEN 1
 #define MG_DISABLE_CGI 1
 
-#include <simplelink.h>
+#include <simplelink/include/simplelink.h>
 
 #define SOMAXCONN 8
 
@@ -497,7 +499,9 @@ unsigned long os_random(void);
 #define IP_DROP_MEMBERSHIP                  SL_IP_DROP_MEMBERSHIP
 
 #define socklen_t                           SlSocklen_t
+#ifdef __TI_COMPILER_VERSION__
 #define timeval                             SlTimeval_t
+#endif
 #define sockaddr                            SlSockAddr_t
 #define in6_addr                            SlIn6Addr_t
 #define sockaddr_in6                        SlSockAddrIn6_t
@@ -558,6 +562,9 @@ int gettimeofday(struct timeval *t, void *tz);
 
 long int random(void);
 
+#undef select
+#define select(nfds, rfds, wfds, efds, tout) \
+  sl_Select((nfds), (rfds), (wfds), (efds), (struct SlTimeval_t *) (tout))
 
 /* TI's libc does not have stat & friends, add them. */
 #ifdef __TI_COMPILER_VERSION__
@@ -3491,3 +3498,35 @@ uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io);
 #endif /* MG_ENABLE_COAP */
 
 #endif /* CS_MONGOOSE_SRC_COAP_H_ */
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_SMARTJS_PLATFORMS_CC3200_CC3200_FS_SLFS_H_
+#define CS_SMARTJS_PLATFORMS_CC3200_CC3200_FS_SLFS_H_
+
+#if CS_PLATFORM == CS_P_CC3200 && defined(CC3200_FS_SLFS)
+
+#include <stdio.h>
+#ifndef __TI_COMPILER_VERSION__
+#include <unistd.h>
+#include <sys/stat.h>
+#endif
+
+#define MAX_OPEN_SLFS_FILES 8
+
+/* Indirect libc interface - same functions, different names. */
+int fs_slfs_open(const char *pathname, int flags, mode_t mode);
+int fs_slfs_close(int fd);
+ssize_t fs_slfs_read(int fd, void *buf, size_t count);
+ssize_t fs_slfs_write(int fd, const void *buf, size_t count);
+int fs_slfs_stat(const char *pathname, struct stat *s);
+int fs_slfs_fstat(int fd, struct stat *s);
+off_t fs_slfs_lseek(int fd, off_t offset, int whence);
+int fs_slfs_unlink(const char *filename);
+int fs_slfs_rename(const char *from, const char *to);
+
+#endif /* CS_PLATFORM == CS_P_CC3200 && defined(CC3200_FS_SLFS) */
+
+#endif /* CS_SMARTJS_PLATFORMS_CC3200_CC3200_FS_SLFS_H_ */

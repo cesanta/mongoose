@@ -10163,3 +10163,698 @@ int mg_set_protocol_coap(struct mg_connection *nc) {
 }
 
 #endif /* MG_DISABLE_COAP */
+#ifdef MG_MODULE_LINES
+#line 1 "./src/../../common/platforms/cc3200/cc3200_fs_slfs.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+/* Standard libc interface to TI SimpleLink FS. */
+
+#if CS_PLATFORM == CS_P_CC3200 && defined(CC3200_FS_SLFS)
+
+/* Amalgamated: #include "cc3200_fs_slfs.h" */
+
+#include <errno.h>
+
+#include <inc/hw_types.h>
+#include <simplelink/include/simplelink.h>
+#include <simplelink/include/fs.h>
+
+/* Amalgamated: #include "common/cs_dbg.h" */
+
+extern int set_errno(int e);  /* From cc3200_fs.c */
+
+/*
+ * With SLFS, you have to pre-declare max file size. Yes. Really.
+ * 64K should be enough for everyone. Right?
+ */
+#ifndef FS_SLFS_MAX_FILE_SIZE
+#define FS_SLFS_MAX_FILE_SIZE (64 * 1024)
+#endif
+
+struct sl_fd_info {
+  _i32 fh;
+  _off_t pos;
+  size_t size;
+};
+
+static struct sl_fd_info s_sl_fds[MAX_OPEN_SLFS_FILES];
+
+static int sl_fs_to_errno(_i32 r) {
+  DBG(("SL error: %d", (int) r));
+  switch (r) {
+    case SL_FS_OK:
+      return 0;
+    case SL_FS_FILE_NAME_EXIST:
+      return EEXIST;
+    case SL_FS_WRONG_FILE_NAME:
+      return EINVAL;
+    case SL_FS_ERR_NO_AVAILABLE_NV_INDEX:
+    case SL_FS_ERR_NO_AVAILABLE_BLOCKS:
+      return ENOSPC;
+    case SL_FS_ERR_FAILED_TO_ALLOCATE_MEM:
+      return ENOMEM;
+    case SL_FS_ERR_FILE_NOT_EXISTS:
+      return ENOENT;
+    case SL_FS_ERR_NOT_SUPPORTED:
+      return ENOTSUP;
+  }
+  return ENXIO;
+}
+
+int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
+  int fd;
+  for (fd = 0; fd < MAX_OPEN_SLFS_FILES; fd++) {
+    if (s_sl_fds[fd].fh <= 0) break;
+  }
+  if (fd >= MAX_OPEN_SLFS_FILES) return set_errno(ENOMEM);
+  struct sl_fd_info *fi = &s_sl_fds[fd];
+
+  _u32 am = 0;
+  fi->size = -1;
+  if (pathname[0] == '/') pathname++;
+  int rw = (flags & 3);
+  if (rw == O_RDONLY) {
+    SlFsFileInfo_t sl_fi;
+    _i32 r = sl_FsGetInfo((const _u8 *) pathname, 0, &sl_fi);
+    if (r == SL_FS_OK) {
+      fi->size = sl_fi.FileLen;
+    }
+    am = FS_MODE_OPEN_READ;
+  } else {
+    if (!(flags & O_TRUNC) || (flags & O_APPEND)) {
+      // FailFS files cannot be opened for append and will be truncated
+      // when opened for write.
+      return set_errno(ENOTSUP);
+    }
+    if (flags & O_CREAT) {
+      am = FS_MODE_OPEN_CREATE(FS_SLFS_MAX_FILE_SIZE, 0);
+    } else {
+      am = FS_MODE_OPEN_WRITE;
+    }
+  }
+  _i32 r = sl_FsOpen((_u8 *) pathname, am, NULL, &fi->fh);
+  DBG(("sl_FsOpen(%s, 0x%x) = %d, %d", pathname, (int) am, (int) r,
+           (int) fi->fh));
+  if (r == SL_FS_OK) {
+    fi->pos = 0;
+    r = fd;
+  } else {
+    fi->fh = -1;
+    r = set_errno(sl_fs_to_errno(r));
+  }
+  return r;
+}
+
+int fs_slfs_close(int fd) {
+  struct sl_fd_info *fi = &s_sl_fds[fd];
+  if (fi->fh <= 0) return set_errno(EBADF);
+  _i32 r = sl_FsClose(fi->fh, NULL, NULL, 0);
+  DBG(("sl_FsClose(%d) = %d", (int) fi->fh, (int) r));
+  s_sl_fds[fd].fh = -1;
+  return set_errno(sl_fs_to_errno(r));
+}
+
+ssize_t fs_slfs_read(int fd, void *buf, size_t count) {
+  struct sl_fd_info *fi = &s_sl_fds[fd];
+  if (fi->fh <= 0) return set_errno(EBADF);
+  /* Simulate EOF. sl_FsRead @ file_size return SL_FS_ERR_OFFSET_OUT_OF_RANGE.
+   */
+  if (fi->size >= 0 && fi->pos == fi->size) return 0;
+  _i32 r = sl_FsRead(fi->fh, fi->pos, buf, count);
+  DBG(("sl_FsRead(%d, %d, %d) = %d", (int) fi->fh, (int) fi->pos,
+           (int) count, (int) r));
+  if (r >= 0) {
+    fi->pos += r;
+    return r;
+  }
+  return set_errno(sl_fs_to_errno(r));
+}
+
+ssize_t fs_slfs_write(int fd, const void *buf, size_t count) {
+  struct sl_fd_info *fi = &s_sl_fds[fd];
+  if (fi->fh <= 0) return set_errno(EBADF);
+  _i32 r = sl_FsWrite(fi->fh, fi->pos, (_u8 *) buf, count);
+  DBG(("sl_FsWrite(%d, %d, %d) = %d", (int) fi->fh, (int) fi->pos,
+           (int) count, (int) r));
+  if (r >= 0) {
+    fi->pos += r;
+    return r;
+  }
+  return set_errno(sl_fs_to_errno(r));
+}
+
+int fs_slfs_stat(const char *pathname, struct stat *s) {
+  SlFsFileInfo_t sl_fi;
+  _i32 r = sl_FsGetInfo((const _u8 *) pathname, 0, &sl_fi);
+  if (r == SL_FS_OK) {
+    s->st_mode = S_IFREG | 0666;
+    s->st_nlink = 1;
+    s->st_size = sl_fi.FileLen;
+    return 0;
+  }
+  return set_errno(sl_fs_to_errno(r));
+}
+
+int fs_slfs_fstat(int fd, struct stat *s) {
+  struct sl_fd_info *fi = &s_sl_fds[fd];
+  if (fi->fh <= 0) return set_errno(EBADF);
+  s->st_mode = 0666;
+  s->st_mode = S_IFREG | 0666;
+  s->st_nlink = 1;
+  s->st_size = fi->size;
+  return 0;
+}
+
+off_t fs_slfs_lseek(int fd, off_t offset, int whence) {
+  if (s_sl_fds[fd].fh <= 0) return set_errno(EBADF);
+  switch (whence) {
+    case SEEK_SET:
+      s_sl_fds[fd].pos = offset;
+      break;
+    case SEEK_CUR:
+      s_sl_fds[fd].pos += offset;
+      break;
+    case SEEK_END:
+      return set_errno(ENOTSUP);
+  }
+  return 0;
+}
+
+int fs_slfs_unlink(const char *filename) {
+  return set_errno(sl_fs_to_errno(sl_FsDel((const _u8 *) filename, 0)));
+}
+
+int fs_slfs_rename(const char *from, const char *to) {
+  return set_errno(ENOTSUP);
+}
+
+#endif /* CS_PLATFORM == CS_P_CC3200 && defined(CC3200_FS_SLFS) */
+#ifdef MG_MODULE_LINES
+#line 1 "./src/../../common/platforms/cc3200/cc3200_fs.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if CS_PLATFORM == CS_P_CC3200
+
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#ifdef __TI_COMPILER_VERSION__
+#include <file.h>
+#endif
+
+#include <inc/hw_types.h>
+#include <inc/hw_memmap.h>
+#include <driverlib/rom.h>
+#include <driverlib/rom_map.h>
+#include <driverlib/uart.h>
+
+/* Amalgamated: #include "common/cs_dbg.h" */
+/* Amalgamated: #include "common/platform.h" */
+
+#ifdef CC3200_FS_SPIFFS
+/* Amalgamated: #include "cc3200_fs_spiffs.h" */
+#endif
+
+#ifdef CC3200_FS_SLFS
+/* Amalgamated: #include "cc3200_fs_slfs.h" */
+#endif
+
+#define NUM_SYS_FDS 3
+#define SPIFFS_FD_BASE 10
+#define SLFS_FD_BASE 100
+
+#define CONSOLE_UART UARTA0_BASE
+
+int set_errno(int e) {
+  errno = e;
+  return -e;
+}
+
+static int is_sl_fname(const char *fname) {
+  return strncmp(fname, "SL:", 3) == 0;
+}
+
+static const char *sl_fname(const char *fname) {
+  return fname + 3;
+}
+
+static const char *drop_dir(const char *fname) {
+  if (*fname == '.') fname++;
+  if (*fname == '/') fname++;
+  return fname;
+}
+
+enum fd_type {
+  FD_INVALID,
+  FD_SYS,
+#ifdef CC3200_FS_SPIFFS
+  FD_SPIFFS,
+#endif
+#ifdef CC3200_FS_SLFS
+  FD_SLFS
+#endif
+};
+static int fd_type(int fd) {
+  if (fd >= 0 && fd < NUM_SYS_FDS) return FD_SYS;
+#ifdef CC3200_FS_SPIFFS
+  if (fd >= SPIFFS_FD_BASE && fd < SPIFFS_FD_BASE + MAX_OPEN_SPIFFS_FILES) {
+    return FD_SPIFFS;
+  }
+#endif
+#ifdef CC3200_FS_SLFS
+  if (fd >= SLFS_FD_BASE && fd < SLFS_FD_BASE + MAX_OPEN_SLFS_FILES) {
+    return FD_SLFS;
+  }
+#endif
+  return FD_INVALID;
+}
+
+int _open(const char *pathname, int flags, mode_t mode) {
+  int fd = -1;
+  pathname = drop_dir(pathname);
+  if (is_sl_fname(pathname)) {
+#ifdef CC3200_FS_SLFS
+    fd = fs_slfs_open(sl_fname(pathname), flags, mode);
+    if (fd >= 0) fd += SLFS_FD_BASE;
+#endif
+  } else {
+#ifdef CC3200_FS_SPIFFS
+    fd = fs_spiffs_open(pathname, flags, mode);
+    if (fd >= 0) fd += SPIFFS_FD_BASE;
+#endif
+  }
+  DBG(("open(%s, 0x%x) = %d", pathname, flags, fd));
+  return fd;
+}
+
+int _stat(const char *pathname, struct stat *st) {
+  int res = -1;
+  const char *fname = pathname;
+  int is_sl = is_sl_fname(pathname);
+  if (is_sl) fname = sl_fname(pathname);
+  fname = drop_dir(fname);
+  memset(st, 0, sizeof(*st));
+  /* Simulate statting the root directory. */
+  if (strcmp(fname, "") == 0) {
+    st->st_ino = 0;
+    st->st_mode = S_IFDIR | 0777;
+    st->st_nlink = 1;
+    st->st_size = 0;
+    return 0;
+  }
+  if (is_sl) {
+#ifdef CC3200_FS_SLFS
+    res = fs_slfs_stat(fname, st);
+#endif
+  } else {
+#ifdef CC3200_FS_SPIFFS
+    res = fs_spiffs_stat(fname, st);
+#endif
+  }
+  DBG(("stat(%s) = %d; fname = %s", pathname, res, fname));
+  return res;
+}
+
+int _close(int fd) {
+  int r = -1;
+  switch (fd_type(fd)) {
+    case FD_INVALID:
+      r = set_errno(EBADF);
+      break;
+    case FD_SYS:
+      r = set_errno(EACCES);
+      break;
+#ifdef CC3200_FS_SPIFFS
+    case FD_SPIFFS:
+      r = fs_spiffs_close(fd - SPIFFS_FD_BASE);
+      break;
+#endif
+#ifdef CC3200_FS_SLFS
+    case FD_SLFS:
+      r = fs_slfs_close(fd - SLFS_FD_BASE);
+      break;
+#endif
+  }
+  DBG(("close(%d) = %d", fd, r));
+  return r;
+}
+
+off_t _lseek(int fd, off_t offset, int whence) {
+  int r = -1;
+  switch (fd_type(fd)) {
+    case FD_INVALID:
+      r = set_errno(EBADF);
+      break;
+    case FD_SYS:
+      r = set_errno(ESPIPE);
+      break;
+#ifdef CC3200_FS_SPIFFS
+    case FD_SPIFFS:
+      r = fs_spiffs_lseek(fd - SPIFFS_FD_BASE, offset, whence);
+      break;
+#endif
+#ifdef CC3200_FS_SLFS
+    case FD_SLFS:
+      r = fs_slfs_lseek(fd - SLFS_FD_BASE, offset, whence);
+      break;
+#endif
+  }
+  DBG(("lseek(%d, %d, %d) = %d", fd, (int) offset, whence, r));
+  return r;
+}
+
+int _fstat(int fd, struct stat *s) {
+  int r = -1;
+  memset(s, 0, sizeof(*s));
+  switch (fd_type(fd)) {
+    case FD_INVALID:
+      r = set_errno(EBADF);
+      break;
+    case FD_SYS: {
+      /* Create barely passable stats for STD{IN,OUT,ERR}. */
+      memset(s, 0, sizeof(*s));
+      s->st_ino = fd;
+      s->st_mode = S_IFCHR | 0666;
+      r = 0;
+      break;
+    }
+#ifdef CC3200_FS_SPIFFS
+    case FD_SPIFFS:
+      r = fs_spiffs_fstat(fd - SPIFFS_FD_BASE, s);
+      break;
+#endif
+#ifdef CC3200_FS_SLFS
+    case FD_SLFS:
+      r = fs_slfs_fstat(fd - SLFS_FD_BASE, s);
+      break;
+#endif
+  }
+  DBG(("fstat(%d) = %d", fd, r));
+  return r;
+}
+
+ssize_t _read(int fd, void *buf, size_t count) {
+  int r = -1;
+  switch (fd_type(fd)) {
+    case FD_INVALID:
+      r = set_errno(EBADF);
+      break;
+    case FD_SYS: {
+      if (fd != 0) {
+        r = set_errno(EACCES);
+        break;
+      }
+      /* Should we allow reading from stdin = uart? */
+      r = set_errno(ENOTSUP);
+      break;
+    }
+#ifdef CC3200_FS_SPIFFS
+    case FD_SPIFFS:
+      r = fs_spiffs_read(fd - SPIFFS_FD_BASE, buf, count);
+      break;
+#endif
+#ifdef CC3200_FS_SLFS
+    case FD_SLFS:
+      r = fs_slfs_read(fd - SLFS_FD_BASE, buf, count);
+      break;
+#endif
+  }
+  DBG(("read(%d, %u) = %d", fd, count, r));
+  return r;
+}
+
+ssize_t _write(int fd, const void *buf, size_t count) {
+  int r = -1;
+  size_t i;
+  switch (fd_type(fd)) {
+    case FD_INVALID:
+      r = set_errno(EBADF);
+      break;
+    case FD_SYS: {
+      if (fd == 0) {
+        r = set_errno(EACCES);
+        break;
+      }
+      for (i = 0; i < count; i++) {
+        const char c = ((const char *) buf)[i];
+        if (c == '\n') MAP_UARTCharPut(CONSOLE_UART, '\r');
+        MAP_UARTCharPut(CONSOLE_UART, c);
+      }
+      r = count;
+      break;
+    }
+#ifdef CC3200_FS_SPIFFS
+    case FD_SPIFFS:
+      r = fs_spiffs_write(fd - SPIFFS_FD_BASE, buf, count);
+      break;
+#endif
+#ifdef CC3200_FS_SLFS
+    case FD_SLFS:
+      r = fs_slfs_write(fd - SLFS_FD_BASE, buf, count);
+      break;
+#endif
+  }
+  return r;
+}
+
+int _rename(const char *from, const char *to) {
+  int r = -1;
+  from = drop_dir(from);
+  to = drop_dir(to);
+  if (is_sl_fname(from) || is_sl_fname(to)) {
+#ifdef CC3200_FS_SLFS
+    r = fs_slfs_rename(sl_fname(from), sl_fname(to));
+#endif
+  } else {
+#ifdef CC3200_FS_SPIFFS
+    r = fs_spiffs_rename(from, to);
+#endif
+  }
+  DBG(("rename(%s, %s) = %d", from, to, r));
+  return r;
+}
+
+int _link(const char *from, const char *to) {
+  DBG(("link(%s, %s)", from, to));
+  return set_errno(ENOTSUP);
+}
+
+int _unlink(const char *filename) {
+  int r = -1;
+  filename = drop_dir(filename);
+  if (is_sl_fname(filename)) {
+#ifdef CC3200_FS_SLFS
+    r = fs_slfs_unlink(sl_fname(filename));
+#endif
+  } else {
+#ifdef CC3200_FS_SPIFFS
+    r = fs_spiffs_unlink(filename);
+#endif
+  }
+  DBG(("unlink(%s) = %d", filename, r));
+  return r;
+}
+
+#ifdef CC3200_FS_SPIFFS /* FailFS does not support listing files. */
+DIR *opendir(const char *dir_name) {
+  DIR *r = NULL;
+  if (is_sl_fname(dir_name)) {
+    r = NULL;
+    set_errno(ENOTSUP);
+  } else {
+    r = fs_spiffs_opendir(dir_name);
+  }
+  DBG(("opendir(%s) = %p", dir_name, r));
+  return r;
+}
+
+struct dirent *readdir(DIR *dir) {
+  struct dirent *res = fs_spiffs_readdir(dir);
+  DBG(("readdir(%p) = %p", dir, res));
+  return res;
+}
+
+int closedir(DIR *dir) {
+  int res = fs_spiffs_closedir(dir);
+  DBG(("closedir(%p) = %d", dir, res));
+  return res;
+}
+
+int rmdir(const char *path) {
+  return fs_spiffs_rmdir(path);
+}
+
+int mkdir(const char *path, mode_t mode) {
+  (void) path;
+  (void) mode;
+  /* for spiffs supports only root dir, which comes from mongoose as '.' */
+  return (strlen(path) == 1 && *path == '.') ? 0 : ENOTDIR;
+}
+#endif
+
+
+int cc3200_fs_init() {
+#ifdef __TI_COMPILER_VERSION__
+#ifdef CC3200_FS_SLFS
+  return add_device("SL", _MSA, fs_slfs_open, fs_slfs_close, fs_slfs_read, fs_slfs_write, fs_slfs_lseek, fs_slfs_unlink, fs_slfs_rename) == 0;
+#endif
+#else
+  return 1;
+#endif
+}
+
+#endif /* CS_PLATFORM == CS_P_CC3200 */
+#ifdef MG_MODULE_LINES
+#line 1 "./src/../../common/platforms/cc3200/cc3200_libc.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if CS_PLATFORM == CS_P_CC3200
+
+#include <stdio.h>
+#include <string.h>
+
+#ifndef __TI_COMPILER_VERSION__
+#include <reent.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <unistd.h>
+#endif
+
+#include <inc/hw_types.h>
+#include <inc/hw_memmap.h>
+#include <driverlib/prcm.h>
+#include <driverlib/rom.h>
+#include <driverlib/rom_map.h>
+#include <driverlib/uart.h>
+#include <driverlib/utils.h>
+
+#define CONSOLE_UART UARTA0_BASE
+
+#ifndef __TI_COMPILER_VERSION__
+int _gettimeofday_r(struct _reent *r, struct timeval *tp, void *tzp) {
+#else
+int gettimeofday(struct timeval *tp, void *tzp) {
+#endif
+  unsigned long long r1 = 0, r2;
+  /* Achieve two consecutive reads of the same value. */
+  do {
+    r2 = r1;
+    r1 = PRCMSlowClkCtrFastGet();
+  } while (r1 != r2);
+  /* This is a 32768 Hz counter. */
+  tp->tv_sec = (r1 >> 15);
+  /* 1/32768-th of a second is 30.517578125 microseconds, approx. 31,
+   * but we round down so it doesn't overflow at 32767 */
+  tp->tv_usec = (r1 & 0x7FFF) * 30;
+  return 0;
+}
+
+long int random(void) {
+  return 42; /* FIXME */
+}
+
+void fprint_str(FILE *fp, const char *str) {
+  while (*str != '\0') {
+    if (*str == '\n') MAP_UARTCharPut(CONSOLE_UART, '\r');
+    MAP_UARTCharPut(CONSOLE_UART, *str++);
+  }
+}
+
+void _exit(int status) {
+  fprint_str(stderr, "_exit\n");
+  /* cause an unaligned access exception, that will drop you into gdb */
+  *(int *) 1 = status;
+  while (1)
+    ; /* avoid gcc warning because stdlib abort() has noreturn attribute */
+}
+
+void _not_implemented(const char *what) {
+  fprint_str(stderr, what);
+  fprint_str(stderr, " is not implemented\n");
+  _exit(42);
+}
+
+int _kill(int pid, int sig) {
+  (void) pid;
+  (void) sig;
+  _not_implemented("_kill");
+  return -1;
+}
+
+int _getpid() {
+  fprint_str(stderr, "_getpid is not implemented\n");
+  return 42;
+}
+
+int _isatty(int fd) {
+  /* 0, 1 and 2 are TTYs. */
+  return fd < 2;
+}
+
+#endif /* CS_PLATFORM == CS_P_CC3200 */
+#ifdef MG_MODULE_LINES
+#line 1 "./src/../../common/platforms/cc3200/cc3200_socket.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if CS_PLATFORM == CS_P_CC3200
+
+#include <errno.h>
+#include <stdio.h>
+
+/* Amalgamated: #include "common/platform.h" */
+
+#include <simplelink/include/netapp.h>
+
+const char *inet_ntop(int af, const void *src, char *dst, socklen_t size) {
+  int res;
+  struct in_addr *in = (struct in_addr *) src;
+  if (af != AF_INET) {
+    errno = EAFNOSUPPORT;
+    return NULL;
+  }
+  res = snprintf(dst, size, "%lu.%lu.%lu.%lu", SL_IPV4_BYTE(in->s_addr, 0),
+                 SL_IPV4_BYTE(in->s_addr, 1), SL_IPV4_BYTE(in->s_addr, 2),
+                 SL_IPV4_BYTE(in->s_addr, 3));
+  return res > 0 ? dst : NULL;
+}
+
+char *inet_ntoa(struct in_addr n) {
+  static char a[16];
+  return (char *) inet_ntop(AF_INET, &n, a, sizeof(n));
+}
+
+int inet_pton(int af, const char *src, void *dst) {
+  uint32_t a0, a1, a2, a3;
+  uint8_t *db = (uint8_t *) dst;
+  if (af != AF_INET) {
+    errno = EAFNOSUPPORT;
+    return 0;
+  }
+  if (sscanf(src, "%lu.%lu.%lu.%lu", &a0, &a1, &a2, &a3) != 4) {
+    return 0;
+  }
+  *db = a3;
+  *(db + 1) = a2;
+  *(db + 2) = a1;
+  *(db + 3) = a0;
+  return 1;
+}
+
+#endif /* CS_PLATFORM == CS_P_CC3200 */
