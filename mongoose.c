@@ -2698,7 +2698,9 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
      * This is very inefficient for long connection lists.
      */
     for (nc = mg_next(lc->mgr, NULL); nc != NULL; nc = mg_next(lc->mgr, nc)) {
-      if (memcmp(&nc->sa.sa, &sa->sa, sa_len) == 0) break;
+      if (memcmp(&nc->sa.sa, &sa->sa, sa_len) == 0 && nc->listener == lc) {
+        break;
+      }
     }
     if (nc == NULL) {
       struct mg_add_sock_opts opts;
