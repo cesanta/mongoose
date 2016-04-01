@@ -2328,7 +2328,7 @@ int mg_resolve(const char *host, char *buf, size_t n) {
 }
 #endif /* MG_DISABLE_SYNC_RESOLVER */
 
-MG_INTERNAL struct mg_connection *mg_create_connection(
+MG_INTERNAL struct mg_connection *mg_create_connection_base(
     struct mg_mgr *mgr, mg_event_handler_t callback,
     struct mg_add_sock_opts opts) {
   struct mg_connection *conn;
@@ -2346,13 +2346,22 @@ MG_INTERNAL struct mg_connection *mg_create_connection(
      * doesn't compile with pedantic ansi flags.
      */
     conn->recv_mbuf_limit = ~0;
-    if (!mg_if_create_conn(conn)) {
-      MG_FREE(conn);
-      conn = NULL;
-      MG_SET_PTRPTR(opts.error_string, "failed init connection");
-    }
   } else {
-    MG_SET_PTRPTR(opts.error_string, "failed create connection");
+    MG_SET_PTRPTR(opts.error_string, "failed to create connection");
+  }
+
+  return conn;
+}
+
+MG_INTERNAL struct mg_connection *mg_create_connection(
+    struct mg_mgr *mgr, mg_event_handler_t callback,
+    struct mg_add_sock_opts opts) {
+  struct mg_connection *conn = mg_create_connection_base(mgr, callback, opts);
+
+  if (!mg_if_create_conn(conn)) {
+    MG_FREE(conn);
+    conn = NULL;
+    MG_SET_PTRPTR(opts.error_string, "failed to init connection");
   }
 
   return conn;
@@ -2694,7 +2703,8 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
     if (nc == NULL) {
       struct mg_add_sock_opts opts;
       memset(&opts, 0, sizeof(opts));
-      nc = mg_create_connection(lc->mgr, lc->handler, opts);
+      /* Create fake connection w/out sock initialization */
+      nc = mg_create_connection_base(lc->mgr, lc->handler, opts);
       if (nc != NULL) {
         nc->sock = lc->sock;
         nc->listener = lc;
