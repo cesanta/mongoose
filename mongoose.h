@@ -2147,10 +2147,24 @@ void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
  *                       "clubby.cesanta.com", NULL);
  * ```
  */
+
 struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
                                     mg_event_handler_t event_handler,
                                     const char *url, const char *protocol,
                                     const char *extra_headers);
+
+/*
+ * Helper function that creates an outbound WebSocket connection
+ *
+ * Mostly identical to mg_connect_ws, but allows to provide extra parameters
+ * (for example, SSL parameters
+ */
+
+struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
+                                        mg_event_handler_t ev_handler,
+                                        struct mg_connect_opts opts,
+                                        const char *url, const char *protocol,
+                                        const char *extra_headers);
 
 /*
  * Send websocket frame to the remote end.
@@ -2405,12 +2419,26 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
  *       "var_1=value_1&var_2=value_2");
  * ```
  */
+
 struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
                                       mg_event_handler_t event_handler,
                                       const char *url,
                                       const char *extra_headers,
                                       const char *post_data);
 
+/*
+ * Helper function that creates outbound HTTP connection.
+ *
+ * Mostly identical to mg_connect_http, but allows to provide extra parameters
+ * (for example, SSL parameters
+ */
+
+struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
+                                          mg_event_handler_t ev_handler,
+                                          struct mg_connect_opts opts,
+                                          const char *url,
+                                          const char *extra_headers,
+                                          const char *post_data);
 /*
  * This structure defines how `mg_serve_http()` works.
  * Best practice is to set only required settings, and leave the rest as NULL.

@@ -18,10 +18,6 @@
         },
         {
             "type": "markdown",
-            "name": "mg_connect_ws.md"
-        },
-        {
-            "type": "markdown",
             "name": "mg_send_websocket_frame.md"
         },
         {
@@ -79,10 +75,6 @@
         {
             "type": "markdown",
             "name": "mg_http_create_digest_auth_header.md"
-        },
-        {
-            "type": "markdown",
-            "name": "mg_connect_http.md"
         },
         {
             "type": "markdown",
