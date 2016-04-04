@@ -15,7 +15,7 @@ and let them concentrate on the logic, saving time and money.
 
 - [Download Mongoose Source Code here](http://hubs.ly/H02z4Ds0)
 - [Check our latest releases] (https://github.com/cesanta/mongoose/releases)
-- [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
+- [Read User Guide and API reference](https://docs.cesanta.com/mongoose/dev/)
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
 
 > Nothing overdone. Nothing less. So unbelievably easy to use.
@@ -24,7 +24,7 @@ and let them concentrate on the logic, saving time and money.
 If you are looking for a complete IoT platform with firmware and cloud compotent, check out [Smart.js.] (http://hubs.ly/H02z5Hl0)
 
 # Support
-- [Support Forum - Ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/smart-js)
+- [Support Forum - Ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/mongoose)
 - [Chat - Visit www.cesanta.com for our live chat] (http://www.cesanta.com)
 - [Commercial one-to-one support - Available to all commercial license holders] (https://www.cesanta.com/services-support)
 
