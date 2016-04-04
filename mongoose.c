@@ -7745,36 +7745,68 @@ cleanup:
   return -1;
 }
 
-struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
-                                    mg_event_handler_t ev_handler,
-                                    const char *url, const char *protocol,
-                                    const char *extra_headers) {
+struct mg_connection *mg_connect_http_base(
+    struct mg_mgr *mgr, mg_event_handler_t ev_handler,
+    struct mg_connect_opts opts, const char *schema, const char *schema_ssl,
+    const char *url, const char **path, char **addr) {
   struct mg_connection *nc = NULL;
-  char *addr = NULL;
   int port_i = -1;
-  const char *path = NULL;
   int use_ssl = 0;
 
-  if (mg_http_common_url_parse(url, "ws://", "wss://", &use_ssl, &addr, &port_i,
-                               &path) < 0) {
-    DBG(("%p: error parsing wss url: %s", (void *) nc, url));
+  if (mg_http_common_url_parse(url, schema, schema_ssl, &use_ssl, addr, &port_i,
+                               path) < 0) {
     return NULL;
   }
 
-  if ((nc = mg_connect(mgr, addr, ev_handler)) != NULL) {
+#ifndef MG_ENABLE_SSL
+  if (use_ssl) {
+    MG_SET_PTRPTR(opts.error_string, "ssl is disabled");
+    MG_FREE(addr);
+    return NULL;
+  }
+#endif
+
+  if ((nc = mg_connect_opt(mgr, *addr, ev_handler, opts)) != NULL) {
+#ifdef MG_ENABLE_SSL
+    if (use_ssl && nc->ssl_ctx == NULL) {
+      /*
+       * Schema requires SSL, but no SSL parameters were provided in
+       * opts. In order to maintain backward compatibility, use
+       * NULL, NULL
+       */
+      mg_set_ssl(nc, NULL, NULL);
+    }
+#endif
     mg_set_protocol_http_websocket(nc);
 
-    if (use_ssl) {
-#ifdef MG_ENABLE_SSL
-      mg_set_ssl(nc, NULL, NULL);
-#endif
-    }
-
     /* If the port was addred by us, restore the original host. */
-    if (port_i >= 0) addr[port_i] = '\0';
-
-    mg_send_websocket_handshake2(nc, path, addr, protocol, extra_headers);
+    if (port_i >= 0) (*addr)[port_i] = '\0';
   }
+
+  return nc;
+}
+
+struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
+                                          mg_event_handler_t ev_handler,
+                                          struct mg_connect_opts opts,
+                                          const char *url,
+                                          const char *extra_headers,
+                                          const char *post_data) {
+  char *addr = NULL;
+  const char *path = NULL;
+  struct mg_connection *nc = mg_connect_http_base(
+      mgr, ev_handler, opts, "http://", "https://", url, &path, &addr);
+
+  if (nc == NULL) {
+    return NULL;
+  }
+
+  mg_printf(nc, "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %" SIZE_T_FMT
+                "\r\n%s\r\n%s",
+            post_data == NULL ? "GET" : "POST", path, addr,
+            post_data == NULL ? 0 : strlen(post_data),
+            extra_headers == NULL ? "" : extra_headers,
+            post_data == NULL ? "" : post_data);
 
   MG_FREE(addr);
   return nc;
@@ -7785,39 +7817,39 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
                                       const char *url,
                                       const char *extra_headers,
                                       const char *post_data) {
-  struct mg_connection *nc = NULL;
-  char *addr = NULL;
-  int port_i = -1;
-  const char *path = NULL;
-  int use_ssl = 0;
+  struct mg_connect_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  return mg_connect_http_opt(mgr, ev_handler, opts, url, extra_headers,
+                             post_data);
+}
 
-  if (mg_http_common_url_parse(url, "http://", "https://", &use_ssl, &addr,
-                               &port_i, &path) < 0) {
+struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
+                                        mg_event_handler_t ev_handler,
+                                        struct mg_connect_opts opts,
+                                        const char *url, const char *protocol,
+                                        const char *extra_headers) {
+  char *addr = NULL;
+  const char *path = NULL;
+  struct mg_connection *nc = mg_connect_http_base(
+      mgr, ev_handler, opts, "ws://", "wss://", url, &path, &addr);
+
+  if (nc == NULL) {
     return NULL;
   }
 
-  if ((nc = mg_connect(mgr, addr, ev_handler)) != NULL) {
-    mg_set_protocol_http_websocket(nc);
-
-    if (use_ssl) {
-#ifdef MG_ENABLE_SSL
-      mg_set_ssl(nc, NULL, NULL);
-#endif
-    }
-
-    /* If the port was addred by us, restore the original host. */
-    if (port_i >= 0) addr[port_i] = '\0';
-
-    mg_printf(nc, "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %" SIZE_T_FMT
-                  "\r\n%s\r\n%s",
-              post_data == NULL ? "GET" : "POST", path, addr,
-              post_data == NULL ? 0 : strlen(post_data),
-              extra_headers == NULL ? "" : extra_headers,
-              post_data == NULL ? "" : post_data);
-  }
+  mg_send_websocket_handshake2(nc, path, addr, protocol, extra_headers);
 
   MG_FREE(addr);
   return nc;
+}
+
+struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
+                                    mg_event_handler_t ev_handler,
+                                    const char *url, const char *protocol,
+                                    const char *extra_headers) {
+  struct mg_connect_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  return mg_connect_ws_opt(mgr, ev_handler, opts, url, protocol, extra_headers);
 }
 
 size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
