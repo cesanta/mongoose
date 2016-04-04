@@ -2616,7 +2616,6 @@ struct mg_connection *mg_if_accept_new_conn(struct mg_connection *lc) {
   nc->proto_handler = lc->proto_handler;
   nc->user_data = lc->user_data;
   nc->recv_mbuf_limit = lc->recv_mbuf_limit;
-  mg_add_conn(nc->mgr, nc);
   DBG(("%p %p %d %d, %p %p", lc, nc, nc->sock, (int) nc->flags, lc->ssl_ctx,
        nc->ssl));
   return nc;
@@ -3204,6 +3203,7 @@ static void mg_accept_conn(struct mg_connection *lc) {
     return;
   }
   mg_sock_set(nc, sock);
+  mg_add_conn(nc->mgr, nc);
 #ifdef MG_ENABLE_SSL
   if (lc->ssl_ctx != NULL) {
     nc->ssl = SSL_new(lc->ssl_ctx);
