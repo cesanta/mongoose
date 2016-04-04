@@ -3050,7 +3050,7 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
 struct mg_connection *mg_add_sock_opt(struct mg_mgr *s, sock_t sock,
                                       mg_event_handler_t callback,
                                       struct mg_add_sock_opts opts) {
-  struct mg_connection *nc = mg_create_connection(s, callback, opts);
+  struct mg_connection *nc = mg_create_connection_base(s, callback, opts);
   if (nc != NULL) {
     mg_sock_set(nc, sock);
     mg_add_conn(nc->mgr, nc);
