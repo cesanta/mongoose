@@ -28,38 +28,30 @@
 #include "simplelink.h"
 #include "device.h"
 
-#include "osi.h"
-
 #include "data.h"
 #include "mongoose.h"
+#include "mg_task.h"
 #include "wifi.h"
 
 /* Set up an AP or connect to existing WiFi network. */
-//#define WIFI_AP_SSID "Mongoose"
-//#define WIFI_AP_PASS ""
-//#define WIFI_AP_CHAN 6
-#define WIFI_STA_SSID "YourWiFi"
-#define WIFI_STA_PASS "YourPass"
+#define WIFI_AP_SSID "Mongoose"
+#define WIFI_AP_PASS ""
+#define WIFI_AP_CHAN 6
+// #define WIFI_STA_SSID "YourWiFi"
+// #define WIFI_STA_PASS "YourPass"
 
 #define DATA_COLLECTION_INTERVAL_MS 20
 
 #define CONSOLE_BAUD_RATE 115200
 #define CONSOLE_UART UARTA0_BASE
 #define CONSOLE_UART_PERIPH PRCM_UARTA0
+#define MG_TASK_PRIORITY 3
 #define MG_TASK_STACK_SIZE 8192
 
 #define BM222_ADDR 0x18
 #define TMP006_ADDR 0x41
 
 extern int cc3200_fs_init();
-
-struct event {
-  int type;
-  void *data;
-};
-
-OsiMsgQ_t s_v7_q;
-struct mg_mgr mg_mgr;
 
 static struct mg_str upload_fname(struct mg_connection *nc,
                                   struct mg_str fname) {
@@ -71,7 +63,7 @@ static struct mg_str upload_fname(struct mg_connection *nc,
   return lfn;
 }
 
-static void mg_ev_handler(struct mg_connection *nc, int ev, void *p) {
+static void mg_ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   switch (ev) {
     case MG_EV_ACCEPT: {
       char addr[32];
@@ -83,7 +75,7 @@ static void mg_ev_handler(struct mg_connection *nc, int ev, void *p) {
     }
     case MG_EV_HTTP_REQUEST: {
       char addr[32];
-      struct http_message *hm = (struct http_message *) p;
+      struct http_message *hm = (struct http_message *) ev_data;
       mg_conn_addr_to_str(nc, addr, sizeof(addr), MG_SOCK_STRINGIFY_REMOTE |
                                                       MG_SOCK_STRINGIFY_IP |
                                                       MG_SOCK_STRINGIFY_PORT);
@@ -93,7 +85,7 @@ static void mg_ev_handler(struct mg_connection *nc, int ev, void *p) {
       struct mg_serve_http_opts opts;
       memset(&opts, 0, sizeof(opts));
       opts.document_root = "SL:";
-      mg_serve_http(nc, (struct http_message *) p, opts);
+      mg_serve_http(nc, hm, opts);
       break;
     }
     case MG_EV_CLOSE: {
@@ -113,18 +105,21 @@ static void mg_ev_handler(struct mg_connection *nc, int ev, void *p) {
     case MG_EV_HTTP_PART_BEGIN:
     case MG_EV_HTTP_PART_DATA:
     case MG_EV_HTTP_PART_END: {
-      mg_file_upload_handler(nc, ev, p, upload_fname);
+      struct mg_http_multipart_part *mp =
+          (struct mg_http_multipart_part *) ev_data;
+      if (ev == MG_EV_HTTP_PART_BEGIN) {
+        LOG(LL_INFO, ("Begin file upload: %s", mp->file_name));
+      } else if (ev == MG_EV_HTTP_PART_END) {
+        LOG(LL_INFO, ("End file upload: %s", mp->file_name));
+      }
+      mg_file_upload_handler(nc, ev, ev_data, upload_fname);
     }
   }
 }
 
-static void mg_task(void *arg) {
+static void mg_init(struct mg_mgr *mgr) {
   LOG(LL_INFO, ("MG task running"));
   GPIO_IF_LedToggle(MCU_RED_LED_GPIO);
-
-  osi_MsgQCreate(&s_v7_q, "MG", sizeof(struct event), 32 /* len */);
-
-  sl_Start(NULL, NULL, NULL);
 
   data_init_sensors(TMP006_ADDR, BM222_ADDR);
 
@@ -145,25 +140,17 @@ static void mg_task(void *arg) {
   /* We don't need SimpleLink's web server. */
   sl_NetAppStop(SL_NET_APP_HTTP_SERVER_ID);
 
-  mg_mgr_init(&mg_mgr, NULL);
-
   const char *err = "";
   struct mg_bind_opts opts;
   memset(&opts, 0, sizeof(opts));
   opts.error_string = &err;
 
-  struct mg_connection *nc = mg_bind(&mg_mgr, "80", mg_ev_handler);
+  struct mg_connection *nc = mg_bind(mgr, "80", mg_ev_handler);
   if (nc != NULL) {
     mg_set_protocol_http_websocket(nc);
     nc->ev_timer_time = mg_time(); /* Start data collection */
   } else {
     LOG(LL_ERROR, ("Failed to create listener: %s", err));
-  }
-
-  while (1) {
-    struct event e;
-    mg_mgr_poll(&mg_mgr, 0);
-    if (osi_MsgQRead(&s_v7_q, &e, 1) != OSI_OK) continue;
   }
 }
 
@@ -213,8 +200,8 @@ int main() {
   if (VStartSimpleLinkSpawnTask(8) != 0) {
     LOG(LL_ERROR, ("Failed to create SL task"));
   }
-  if (osi_TaskCreate(mg_task, (const signed char *) "mg", MG_TASK_STACK_SIZE,
-                     NULL, 3, NULL) != 0) {
+
+  if (!mg_start_task(MG_TASK_PRIORITY, MG_TASK_STACK_SIZE, mg_init)) {
     LOG(LL_ERROR, ("Failed to create MG task"));
   }
 
