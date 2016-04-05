@@ -114,6 +114,7 @@ MG_INTERNAL int mg_is_not_modified(struct http_message *hm, cs_stat_t *st);
 #endif
 
 struct ctl_msg {
+  struct mg_connection* conn;
   mg_event_handler_t callback;
   char message[MG_CTL_MSG_MESSAGE_SIZE];
 };
@@ -2944,10 +2945,24 @@ struct mg_connection *mg_next(struct mg_mgr *s, struct mg_connection *conn) {
 }
 
 #ifndef MG_DISABLE_SOCKETPAIR
+MG_INTERNAL void mg_send_ctl_msg( struct mg_mgr*, struct ctl_msg*, mg_event_handler_t, void *, size_t );
+
 void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
                   size_t len) {
   struct ctl_msg ctl_msg;
+  ctl_msg.conn = NULL;
+  mg_send_ctl_msg( mgr, &ctl_msg, cb, data, len );
+}
 
+void mg_poll_conn(struct mg_connection *nc, mg_event_handler_t cb, void *data,
+                  size_t len) {
+  struct ctl_msg ctl_msg;
+  ctl_msg.conn = nc;
+  mg_send_ctl_msg( nc->mgr, &ctl_msg, cb, data, len );
+}
+
+void mg_send_ctl_msg( struct mg_mgr* mgr, struct ctl_msg* msg,
+		      mg_event_handler_t cb, void *data, size_t len ) {
   /*
    * Mongoose manager has a socketpair, `struct mg_mgr::ctl`,
    * where `mg_broadcast()` pushes the message.
@@ -2956,12 +2971,11 @@ void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
    * in event manager thread.
    */
   if (mgr->ctl[0] != INVALID_SOCKET && data != NULL &&
-      len < sizeof(ctl_msg.message)) {
+      len < sizeof(msg->message)) {
     size_t dummy;
-
-    ctl_msg.callback = cb;
-    memcpy(ctl_msg.message, data, len);
-    dummy = MG_SEND_FUNC(mgr->ctl[0], (char *) &ctl_msg,
+    msg->callback = cb;
+    memcpy(msg->message, data, len);
+    dummy = MG_SEND_FUNC(mgr->ctl[0], (char *) msg,
                          offsetof(struct ctl_msg, message) + len, 0);
     dummy = MG_RECV_FUNC(mgr->ctl[0], (char *) &len, 1, 0);
     (void) dummy; /* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25509 */
@@ -3526,9 +3540,14 @@ static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
   DBG(("read %d from ctl socket", len));
   (void) dummy; /* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25509 */
   if (len >= (int) sizeof(ctl_msg.callback) && ctl_msg.callback != NULL) {
-    struct mg_connection *nc;
-    for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
-      ctl_msg.callback(nc, MG_EV_POLL, ctl_msg.message);
+    if (NULL != ctl_msg.conn) {
+      ctl_msg.callback( ctl_msg.conn, MG_EV_POLL, ctl_msg.message);
+    }
+    else {
+      struct mg_connection *nc;
+      for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
+	ctl_msg.callback(nc, MG_EV_POLL, ctl_msg.message);
+      }
     }
   }
 }
