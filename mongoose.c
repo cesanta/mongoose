@@ -43,15 +43,6 @@
 #define MG_INTERNAL static
 #endif
 
-#if !defined(MG_MGR_EV_MGR)
-/*
- * Switches between different methods of handling sockets. Supported values:
- * 0 - select()
- * 1 - epoll() (Linux only)
- */
-#define MG_MGR_EV_MGR 0 /* select() */
-#endif
-
 #ifdef PICOTCP
 #define NO_LIBC
 #define MG_DISABLE_FILESYSTEM
@@ -2050,10 +2041,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen) {
 /* Amalgamated: #include "mongoose/src/resolv.h" */
 /* Amalgamated: #include "common/cs_time.h" */
 
-#if MG_MGR_EV_MGR == 1 /* epoll() */
-#include <sys/epoll.h>
-#endif
-
 #define MG_MAX_HOST_LEN 200
 
 #define MG_COPY_COMMON_CONNECTION_OPTIONS(dst, src) \
@@ -3554,154 +3541,6 @@ void mg_sock_set(struct mg_connection *nc, sock_t sock) {
   DBG(("%p %d", nc, sock));
 }
 
-#if MG_MGR_EV_MGR == 1 /* epoll() */
-
-#ifndef MG_EPOLL_MAX_EVENTS
-#define MG_EPOLL_MAX_EVENTS 100
-#endif
-
-#define _MG_EPF_EV_EPOLLIN (1 << 0)
-#define _MG_EPF_EV_EPOLLOUT (1 << 1)
-#define _MG_EPF_NO_POLL (1 << 2)
-
-uint32_t mg_epf_to_evflags(unsigned int epf) {
-  uint32_t result = 0;
-  if (epf & _MG_EPF_EV_EPOLLIN) result |= EPOLLIN;
-  if (epf & _MG_EPF_EV_EPOLLOUT) result |= EPOLLOUT;
-  return result;
-}
-
-void mg_ev_mgr_epoll_set_flags(const struct mg_connection *nc,
-                               struct epoll_event *ev) {
-  /* NOTE: EPOLLERR and EPOLLHUP are always enabled. */
-  ev->events = 0;
-  if ((nc->flags & MG_F_LISTENING) || nc->recv_mbuf.len < nc->recv_mbuf_limit) {
-    ev->events |= EPOLLIN;
-  }
-  if ((nc->flags & MG_F_CONNECTING) || (nc->send_mbuf.len > 0)) {
-    ev->events |= EPOLLOUT;
-  }
-}
-
-void mg_ev_mgr_epoll_ctl(struct mg_connection *nc, int op) {
-  int epoll_fd = (intptr_t) nc->mgr->mgr_data;
-  struct epoll_event ev;
-  assert(op == EPOLL_CTL_ADD || op == EPOLL_CTL_MOD || EPOLL_CTL_DEL);
-  DBG(("%p %d %d", nc, nc->sock, op));
-  if (nc->sock == INVALID_SOCKET) return;
-  if (op != EPOLL_CTL_DEL) {
-    mg_ev_mgr_epoll_set_flags(nc, &ev);
-    if (op == EPOLL_CTL_MOD) {
-      uint32_t old_ev_flags = mg_epf_to_evflags((intptr_t) nc->mgr_data);
-      if (ev.events == old_ev_flags) return;
-    }
-    ev.data.ptr = nc;
-  }
-  if (epoll_ctl(epoll_fd, op, nc->sock, &ev) != 0) {
-    perror("epoll_ctl");
-    abort();
-  }
-}
-
-void mg_ev_mgr_init(struct mg_mgr *mgr) {
-  int epoll_fd;
-  DBG(("%p using epoll()", mgr));
-#ifndef MG_DISABLE_SOCKETPAIR
-  do {
-    mg_socketpair(mgr->ctl, SOCK_DGRAM);
-  } while (mgr->ctl[0] == INVALID_SOCKET);
-#endif
-  epoll_fd = epoll_create(MG_EPOLL_MAX_EVENTS /* unused but required */);
-  if (epoll_fd < 0) {
-    perror("epoll_ctl");
-    abort();
-  }
-  mgr->mgr_data = (void *) ((intptr_t) epoll_fd);
-  if (mgr->ctl[1] != INVALID_SOCKET) {
-    struct epoll_event ev;
-    ev.events = EPOLLIN;
-    ev.data.ptr = NULL;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, mgr->ctl[1], &ev) != 0) {
-      perror("epoll_ctl");
-      abort();
-    }
-  }
-}
-
-void mg_ev_mgr_free(struct mg_mgr *mgr) {
-  int epoll_fd = (intptr_t) mgr->mgr_data;
-  close(epoll_fd);
-}
-
-void mg_ev_mgr_add_conn(struct mg_connection *nc) {
-  if (!(nc->flags & MG_F_UDP) || nc->listener == NULL) {
-    mg_ev_mgr_epoll_ctl(nc, EPOLL_CTL_ADD);
-  }
-}
-
-void mg_ev_mgr_remove_conn(struct mg_connection *nc) {
-  if (!(nc->flags & MG_F_UDP) || nc->listener == NULL) {
-    mg_ev_mgr_epoll_ctl(nc, EPOLL_CTL_DEL);
-  }
-}
-
-time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
-  int epoll_fd = (intptr_t) mgr->mgr_data;
-  struct epoll_event events[MG_EPOLL_MAX_EVENTS];
-  struct mg_connection *nc, *next;
-  int num_ev, fd_flags;
-  double now;
-
-  num_ev = epoll_wait(epoll_fd, events, MG_EPOLL_MAX_EVENTS, timeout_ms);
-  now = mg_time();
-  DBG(("epoll_wait @ %ld num_ev=%d", (long) now, num_ev));
-
-  while (num_ev-- > 0) {
-    intptr_t epf;
-    struct epoll_event *ev = events + num_ev;
-    nc = (struct mg_connection *) ev->data.ptr;
-    if (nc == NULL) {
-      mg_mgr_handle_ctl_sock(mgr);
-      continue;
-    }
-    fd_flags = ((ev->events & (EPOLLIN | EPOLLHUP)) ? _MG_F_FD_CAN_READ : 0) |
-               ((ev->events & (EPOLLOUT)) ? _MG_F_FD_CAN_WRITE : 0) |
-               ((ev->events & (EPOLLERR)) ? _MG_F_FD_ERROR : 0);
-    mg_mgr_handle_conn(nc, fd_flags, now);
-    epf = (intptr_t) nc->mgr_data;
-    epf ^= _MG_EPF_NO_POLL;
-    nc->mgr_data = (void *) epf;
-  }
-
-  for (nc = mgr->active_connections; nc != NULL; nc = next) {
-    next = nc->next;
-    if (!(((intptr_t) nc->mgr_data) & _MG_EPF_NO_POLL)) {
-      mg_mgr_handle_conn(nc, 0, now);
-    } else {
-      intptr_t epf = (intptr_t) nc->mgr_data;
-      epf ^= _MG_EPF_NO_POLL;
-      nc->mgr_data = (void *) epf;
-    }
-    if ((nc->flags & MG_F_CLOSE_IMMEDIATELY) ||
-        (nc->send_mbuf.len == 0 && (nc->flags & MG_F_SEND_AND_CLOSE))) {
-      mg_close_conn(nc);
-    } else {
-      if (!(nc->flags & MG_F_UDP) || nc->listener == NULL) {
-        mg_ev_mgr_epoll_ctl(nc, EPOLL_CTL_MOD);
-      } else {
-        /* This is a kludge, but... */
-        if (nc->send_mbuf.len > 0) {
-          mg_mgr_handle_conn(nc, _MG_F_FD_CAN_WRITE, now);
-        }
-      }
-    }
-  }
-
-  return now;
-}
-
-#else /* select() */
-
 void mg_ev_mgr_init(struct mg_mgr *mgr) {
   (void) mgr;
   DBG(("%p using select()", mgr));
@@ -3845,8 +3684,6 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
 
   return now;
 }
-
-#endif
 
 #ifndef MG_DISABLE_SOCKETPAIR
 int mg_socketpair(sock_t sp[2], int sock_type) {
