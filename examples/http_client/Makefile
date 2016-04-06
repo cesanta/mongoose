@@ -1,3 +1,3 @@
 PROG = http_client
-SSL_LIB=open_ssl
+SSL_LIB=openssl
 include ../examples.mk

@@ -1,4 +1,4 @@
 PROG = restful_server_s3
-SSL_LIB=open_ssl
+SSL_LIB=openssl
 include ../examples.mk
 
