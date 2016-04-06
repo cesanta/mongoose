@@ -25,6 +25,7 @@
 #include "gpio_if.h"
 #include "i2c_if.h"
 
+#include "mongoose.h"
 #include "simplelink.h"
 #include "device.h"
 
@@ -225,4 +226,9 @@ void SimpleLinkHttpServerCallback(SlHttpServerEvent_t *e,
 }
 
 void SimpleLinkSockEventHandler(SlSockEvent_t *e) {
+}
+
+void SimpleLinkGeneralEventHandler(SlDeviceEvent_t *e) {
+  LOG(LL_INFO, ("status %d sender %d", e->EventData.deviceEvent.status,
+                e->EventData.deviceEvent.sender));
 }

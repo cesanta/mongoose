@@ -1,7 +1,5 @@
 #include "mg_task.h"
 
-#include <oslib/osi.h>
-
 enum mg_q_msg_type {
   MG_Q_MSG_CB,
 };
@@ -13,11 +11,11 @@ struct mg_q_msg {
 static OsiMsgQ_t s_mg_q;
 static void mg_task(void *arg);
 
-bool mg_start_task(int priority, int stask_size, mg_init_cb mg_init) {
+bool mg_start_task(int priority, int stack_size, mg_init_cb mg_init) {
   if (osi_MsgQCreate(&s_mg_q, "MG", sizeof(struct mg_q_msg), 16) != OSI_OK) {
     return false;
   }
-  if (osi_TaskCreate(mg_task, (const signed char *) "MG", stask_size,
+  if (osi_TaskCreate(mg_task, (const signed char *) "MG", stack_size,
                      (void *) mg_init, priority, NULL) != OSI_OK) {
     return false;
   }

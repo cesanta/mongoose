@@ -1,11 +1,10 @@
 #include "wifi.h"
 
+#include "mongoose.h"
 #include "simplelink.h"
 #include "wlan.h"
 
 #include "gpio_if.h"
-
-#include "mongoose.h"
 
 void SimpleLinkWlanEventHandler(SlWlanEvent_t *e) {
   switch (e->Event) {

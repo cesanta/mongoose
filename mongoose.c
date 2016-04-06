@@ -10071,7 +10071,7 @@ int mg_set_protocol_coap(struct mg_connection *nc) {
 
 /* Amalgamated: #include "common/cs_dbg.h" */
 
-extern int set_errno(int e);  /* From cc3200_fs.c */
+extern int set_errno(int e); /* From cc3200_fs.c */
 
 /*
  * With SLFS, you have to pre-declare max file size. Yes. Really.
@@ -10144,7 +10144,7 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
   }
   _i32 r = sl_FsOpen((_u8 *) pathname, am, NULL, &fi->fh);
   DBG(("sl_FsOpen(%s, 0x%x) = %d, %d", pathname, (int) am, (int) r,
-           (int) fi->fh));
+       (int) fi->fh));
   if (r == SL_FS_OK) {
     fi->pos = 0;
     r = fd;
@@ -10171,8 +10171,8 @@ ssize_t fs_slfs_read(int fd, void *buf, size_t count) {
    */
   if (fi->size >= 0 && fi->pos == fi->size) return 0;
   _i32 r = sl_FsRead(fi->fh, fi->pos, buf, count);
-  DBG(("sl_FsRead(%d, %d, %d) = %d", (int) fi->fh, (int) fi->pos,
-           (int) count, (int) r));
+  DBG(("sl_FsRead(%d, %d, %d) = %d", (int) fi->fh, (int) fi->pos, (int) count,
+       (int) r));
   if (r >= 0) {
     fi->pos += r;
     return r;
@@ -10184,8 +10184,8 @@ ssize_t fs_slfs_write(int fd, const void *buf, size_t count) {
   struct sl_fd_info *fi = &s_sl_fds[fd];
   if (fi->fh <= 0) return set_errno(EBADF);
   _i32 r = sl_FsWrite(fi->fh, fi->pos, (_u8 *) buf, count);
-  DBG(("sl_FsWrite(%d, %d, %d) = %d", (int) fi->fh, (int) fi->pos,
-           (int) count, (int) r));
+  DBG(("sl_FsWrite(%d, %d, %d) = %d", (int) fi->fh, (int) fi->pos, (int) count,
+       (int) r));
   if (r >= 0) {
     fi->pos += r;
     return r;
@@ -10587,15 +10587,16 @@ int mkdir(const char *path, mode_t mode) {
 }
 #endif
 
-
 int cc3200_fs_init() {
+  int ret = 1;
 #ifdef __TI_COMPILER_VERSION__
 #ifdef CC3200_FS_SLFS
-  return add_device("SL", _MSA, fs_slfs_open, fs_slfs_close, fs_slfs_read, fs_slfs_write, fs_slfs_lseek, fs_slfs_unlink, fs_slfs_rename) == 0;
+  ret = (add_device("SL", _MSA, fs_slfs_open, fs_slfs_close, fs_slfs_read,
+                    fs_slfs_write, fs_slfs_lseek, fs_slfs_unlink,
+                    fs_slfs_rename) == 0);
 #endif
-#else
-  return 1;
 #endif
+  return ret;
 }
 
 #endif /* CS_PLATFORM == CS_P_CC3200 */

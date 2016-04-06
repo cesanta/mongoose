@@ -78,11 +78,12 @@ $(FW_ZIP): $(FW_ELF) $(FW_BIN) $(SLFS_FILES)
 
 FREERTOS_SRCS = timers.c list.c queue.c tasks.c port.c heap_3.c osi_freertos.c
 DRIVER_SRCS = cpu.c gpio.c gpio_if.c i2c.c i2c_if.c interrupt.c pin.c prcm.c spi.c uart.c udma.c utils.c
-SL_SRCS = socket.c wlan.c driver.c device.c netapp.c netcfg.c cc_pal.c fs.c
+SL_SRCS = socket.c wlan.c driver.c device.c netapp.c netcfg.c network_common.c cc_pal.c fs.c
 SDK_SRCS = startup_gcc.c $(FREERTOS_SRCS) $(DRIVER_SRCS) $(SL_SRCS)
 IPATH += $(SDK_PATH) $(SDK_PATH)/inc $(SDK_PATH)/driverlib \
          $(SDK_PATH)/example/common $(SDK_PATH)/oslib \
          $(SDK_PATH)/simplelink $(SDK_PATH)/simplelink/include \
+         $(SDK_PATH)/simplelink_extlib/provisioninglib \
          $(SDK_PATH)/third_party/FreeRTOS/source \
          $(SDK_PATH)/third_party/FreeRTOS/source/include \
          $(SDK_PATH)/third_party/FreeRTOS/source/portable/GCC/ARM_CM4
@@ -103,4 +104,5 @@ ENTRY_$(PROG) = ResetISR
 # Disable certain warnings on SDK sources, we have no control over them anyway.
 
 SDK_OBJS = $(addprefix $(OBJDIR)/,$(patsubst %.c,%.o,$(SDK_SRCS)))
-$(SDK_OBJS): CFLAGS += -Wno-missing-braces -Wno-strict-aliasing -Wno-parentheses -Wno-unused-variable
+$(SDK_OBJS): CFLAGS += -include mongoose.h -Wno-missing-braces -Wno-strict-aliasing -Wno-parentheses -Wno-unused-variable
+$(BUILD_DIR)/cc_pal.o: CFLAGS += -Wno-error
