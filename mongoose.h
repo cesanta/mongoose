@@ -32,6 +32,8 @@
 #endif
 #if defined(MG_DISABLE_STDIO) && !defined(CS_DISABLE_STDIO)
 #define CS_DISABLE_STDIO
+#elif defined(CS_DISABLE_STDIO) && !defined(MG_DISABLE_STDIO)
+#define MG_DISABLE_STDIO
 #endif
 
 /* All of the below features depend on filesystem access, disable them. */
