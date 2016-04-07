@@ -11,13 +11,12 @@ Compile (for NodeMCU 1.0):
 ```
 $ export SDK_PATH=/path/to/ESP8266_RTOS_SDK
 $ export BIN_PATH=./bin
-$ make clean; make BOOT=new APP=1 SPI_SPEED=40 SPI_MODE=dio SPI_SIZE_MAP=6
+$ make clean; make BOOT=none APP=0 SPI_SPEED=40 SPI_MODE=dio SPI_SIZE_MAP=0
 ```
 
 Flash (using [esptool](https://github.com/themadinventor/esptool)):
 
 ```
-  $ make clean; make BOOT=none APP=0 SPI_SPEED=40 SPI_MODE=qio SPI_SIZE_MAP=0
   $ esptool.py --port /dev/ttyUSB0 --baud 230400 \
       write_flash --flash_mode=qio --flash_size=4m \
       0x00000 ${BIN_PATH}/eagle.flash.bin \
