@@ -533,7 +533,8 @@ typedef int cs_dirent_dummy;
 
 #ifndef _WIN32
 #include <stddef.h>
-#if !defined(CS_PLATFORM) || CS_PLATFORM != CS_P_CC3200
+#if !defined(CS_PLATFORM) || \
+    (CS_PLATFORM != CS_P_CC3200 && CS_PLATFORM != CS_P_MSP432)
 #include <sys/time.h>
 #endif
 #else
@@ -10051,7 +10052,156 @@ int mg_set_protocol_coap(struct mg_connection *nc) {
 
 #endif /* MG_DISABLE_COAP */
 #ifdef MG_MODULE_LINES
-#line 1 "./src/../../common/platforms/cc3200/cc3200_fs_slfs.c"
+#line 1 "./src/../../common/platforms/cc3200/cc3200_libc.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if CS_PLATFORM == CS_P_CC3200
+
+#include <stdio.h>
+#include <string.h>
+
+#ifndef __TI_COMPILER_VERSION__
+#include <reent.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <unistd.h>
+#endif
+
+#include <inc/hw_types.h>
+#include <inc/hw_memmap.h>
+#include <driverlib/prcm.h>
+#include <driverlib/rom.h>
+#include <driverlib/rom_map.h>
+#include <driverlib/uart.h>
+#include <driverlib/utils.h>
+
+#define CONSOLE_UART UARTA0_BASE
+
+#ifndef __TI_COMPILER_VERSION__
+int _gettimeofday_r(struct _reent *r, struct timeval *tp, void *tzp) {
+#else
+int gettimeofday(struct timeval *tp, void *tzp) {
+#endif
+  unsigned long long r1 = 0, r2;
+  /* Achieve two consecutive reads of the same value. */
+  do {
+    r2 = r1;
+    r1 = PRCMSlowClkCtrFastGet();
+  } while (r1 != r2);
+  /* This is a 32768 Hz counter. */
+  tp->tv_sec = (r1 >> 15);
+  /* 1/32768-th of a second is 30.517578125 microseconds, approx. 31,
+   * but we round down so it doesn't overflow at 32767 */
+  tp->tv_usec = (r1 & 0x7FFF) * 30;
+  return 0;
+}
+
+long int random(void) {
+  return 42; /* FIXME */
+}
+
+void fprint_str(FILE *fp, const char *str) {
+  while (*str != '\0') {
+    if (*str == '\n') MAP_UARTCharPut(CONSOLE_UART, '\r');
+    MAP_UARTCharPut(CONSOLE_UART, *str++);
+  }
+}
+
+void _exit(int status) {
+  fprint_str(stderr, "_exit\n");
+  /* cause an unaligned access exception, that will drop you into gdb */
+  *(int *) 1 = status;
+  while (1)
+    ; /* avoid gcc warning because stdlib abort() has noreturn attribute */
+}
+
+void _not_implemented(const char *what) {
+  fprint_str(stderr, what);
+  fprint_str(stderr, " is not implemented\n");
+  _exit(42);
+}
+
+int _kill(int pid, int sig) {
+  (void) pid;
+  (void) sig;
+  _not_implemented("_kill");
+  return -1;
+}
+
+int _getpid() {
+  fprint_str(stderr, "_getpid is not implemented\n");
+  return 42;
+}
+
+int _isatty(int fd) {
+  /* 0, 1 and 2 are TTYs. */
+  return fd < 2;
+}
+
+#endif /* CS_PLATFORM == CS_P_CC3200 */
+#ifdef MG_MODULE_LINES
+#line 1 "./src/../../common/platforms/msp432/msp432_libc.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if CS_PLATFORM == CS_P_MSP432
+
+int gettimeofday(struct timeval *tp, void *tzp) {
+  /* FIXME */
+  tp->tv_sec = 42;
+  tp->tv_usec = 123;
+  return 0;
+}
+
+long int random(void) {
+  return 42; /* FIXME */
+}
+
+#endif /* CS_PLATFORM == CS_P_MSP432 */
+#ifdef MG_MODULE_LINES
+#line 1 "./src/../../common/platforms/simplelink/sl_fs_slfs.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_SMARTJS_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_
+#define CS_SMARTJS_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_
+
+#if defined(MG_FS_SLFS)
+
+#include <stdio.h>
+#ifndef __TI_COMPILER_VERSION__
+#include <unistd.h>
+#include <sys/stat.h>
+#endif
+
+#define MAX_OPEN_SLFS_FILES 8
+
+/* Indirect libc interface - same functions, different names. */
+int fs_slfs_open(const char *pathname, int flags, mode_t mode);
+int fs_slfs_close(int fd);
+ssize_t fs_slfs_read(int fd, void *buf, size_t count);
+ssize_t fs_slfs_write(int fd, const void *buf, size_t count);
+int fs_slfs_stat(const char *pathname, struct stat *s);
+int fs_slfs_fstat(int fd, struct stat *s);
+off_t fs_slfs_lseek(int fd, off_t offset, int whence);
+int fs_slfs_unlink(const char *filename);
+int fs_slfs_rename(const char *from, const char *to);
+
+#endif /* defined(MG_FS_SLFS) */
+
+#endif /* CS_SMARTJS_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_ */
+#ifdef MG_MODULE_LINES
+#line 1 "./src/../../common/platforms/simplelink/sl_fs_slfs.c"
 #endif
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
@@ -10060,19 +10210,21 @@ int mg_set_protocol_coap(struct mg_connection *nc) {
 
 /* Standard libc interface to TI SimpleLink FS. */
 
-#if CS_PLATFORM == CS_P_CC3200 && defined(CC3200_FS_SLFS)
+#if defined(MG_FS_SLFS) || defined(CC3200_FS_SLFS)
 
-/* Amalgamated: #include "cc3200_fs_slfs.h" */
+/* Amalgamated: #include "common/platforms/simplelink/sl_fs_slfs.h" */
 
 #include <errno.h>
 
+#if CS_PLATFORM == CS_P_CC3200
 #include <inc/hw_types.h>
+#endif
 #include <simplelink/include/simplelink.h>
 #include <simplelink/include/fs.h>
 
 /* Amalgamated: #include "common/cs_dbg.h" */
 
-extern int set_errno(int e); /* From cc3200_fs.c */
+extern int set_errno(int e); /* From sl_fs.c */
 
 /*
  * With SLFS, you have to pre-declare max file size. Yes. Really.
@@ -10239,16 +10391,17 @@ int fs_slfs_rename(const char *from, const char *to) {
   return set_errno(ENOTSUP);
 }
 
-#endif /* CS_PLATFORM == CS_P_CC3200 && defined(CC3200_FS_SLFS) */
+#endif /* defined(MG_FS_SLFS) || defined(CC3200_FS_SLFS) */
 #ifdef MG_MODULE_LINES
-#line 1 "./src/../../common/platforms/cc3200/cc3200_fs.c"
+#line 1 "./src/../../common/platforms/simplelink/sl_fs.c"
 #endif
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
  * All rights reserved
  */
 
-#if CS_PLATFORM == CS_P_CC3200
+#if defined(MG_SOCKET_SIMPLELINK) && \
+    (defined(MG_FS_SLFS) || defined(MG_FS_SPIFFS))
 
 #include <errno.h>
 #include <stdio.h>
@@ -10258,11 +10411,13 @@ int fs_slfs_rename(const char *from, const char *to) {
 #include <file.h>
 #endif
 
+#if CS_PLATFORM == CS_P_CC3200
 #include <inc/hw_types.h>
 #include <inc/hw_memmap.h>
 #include <driverlib/rom.h>
 #include <driverlib/rom_map.h>
 #include <driverlib/uart.h>
+#endif
 
 /* Amalgamated: #include "common/cs_dbg.h" */
 /* Amalgamated: #include "common/platform.h" */
@@ -10271,8 +10426,8 @@ int fs_slfs_rename(const char *from, const char *to) {
 /* Amalgamated: #include "cc3200_fs_spiffs.h" */
 #endif
 
-#ifdef CC3200_FS_SLFS
-/* Amalgamated: #include "cc3200_fs_slfs.h" */
+#ifdef MG_FS_SLFS
+/* Amalgamated: #include "sl_fs_slfs.h" */
 #endif
 
 #define NUM_SYS_FDS 3
@@ -10306,7 +10461,7 @@ enum fd_type {
 #ifdef CC3200_FS_SPIFFS
   FD_SPIFFS,
 #endif
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
   FD_SLFS
 #endif
 };
@@ -10317,7 +10472,7 @@ static int fd_type(int fd) {
     return FD_SPIFFS;
   }
 #endif
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
   if (fd >= SLFS_FD_BASE && fd < SLFS_FD_BASE + MAX_OPEN_SLFS_FILES) {
     return FD_SLFS;
   }
@@ -10329,7 +10484,7 @@ int _open(const char *pathname, int flags, mode_t mode) {
   int fd = -1;
   pathname = drop_dir(pathname);
   if (is_sl_fname(pathname)) {
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
     fd = fs_slfs_open(sl_fname(pathname), flags, mode);
     if (fd >= 0) fd += SLFS_FD_BASE;
 #endif
@@ -10359,7 +10514,7 @@ int _stat(const char *pathname, struct stat *st) {
     return 0;
   }
   if (is_sl) {
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
     res = fs_slfs_stat(fname, st);
 #endif
   } else {
@@ -10385,7 +10540,7 @@ int _close(int fd) {
       r = fs_spiffs_close(fd - SPIFFS_FD_BASE);
       break;
 #endif
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
     case FD_SLFS:
       r = fs_slfs_close(fd - SLFS_FD_BASE);
       break;
@@ -10409,7 +10564,7 @@ off_t _lseek(int fd, off_t offset, int whence) {
       r = fs_spiffs_lseek(fd - SPIFFS_FD_BASE, offset, whence);
       break;
 #endif
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
     case FD_SLFS:
       r = fs_slfs_lseek(fd - SLFS_FD_BASE, offset, whence);
       break;
@@ -10439,7 +10594,7 @@ int _fstat(int fd, struct stat *s) {
       r = fs_spiffs_fstat(fd - SPIFFS_FD_BASE, s);
       break;
 #endif
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
     case FD_SLFS:
       r = fs_slfs_fstat(fd - SLFS_FD_BASE, s);
       break;
@@ -10469,7 +10624,7 @@ ssize_t _read(int fd, void *buf, size_t count) {
       r = fs_spiffs_read(fd - SPIFFS_FD_BASE, buf, count);
       break;
 #endif
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
     case FD_SLFS:
       r = fs_slfs_read(fd - SLFS_FD_BASE, buf, count);
       break;
@@ -10491,11 +10646,13 @@ ssize_t _write(int fd, const void *buf, size_t count) {
         r = set_errno(EACCES);
         break;
       }
+#if CS_PLATFORM == CS_P_CC3200
       for (i = 0; i < count; i++) {
         const char c = ((const char *) buf)[i];
         if (c == '\n') MAP_UARTCharPut(CONSOLE_UART, '\r');
         MAP_UARTCharPut(CONSOLE_UART, c);
       }
+#endif
       r = count;
       break;
     }
@@ -10504,7 +10661,7 @@ ssize_t _write(int fd, const void *buf, size_t count) {
       r = fs_spiffs_write(fd - SPIFFS_FD_BASE, buf, count);
       break;
 #endif
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
     case FD_SLFS:
       r = fs_slfs_write(fd - SLFS_FD_BASE, buf, count);
       break;
@@ -10518,7 +10675,7 @@ int _rename(const char *from, const char *to) {
   from = drop_dir(from);
   to = drop_dir(to);
   if (is_sl_fname(from) || is_sl_fname(to)) {
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
     r = fs_slfs_rename(sl_fname(from), sl_fname(to));
 #endif
   } else {
@@ -10539,7 +10696,7 @@ int _unlink(const char *filename) {
   int r = -1;
   filename = drop_dir(filename);
   if (is_sl_fname(filename)) {
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
     r = fs_slfs_unlink(sl_fname(filename));
 #endif
   } else {
@@ -10591,7 +10748,7 @@ int mkdir(const char *path, mode_t mode) {
 int cc3200_fs_init() {
   int ret = 1;
 #ifdef __TI_COMPILER_VERSION__
-#ifdef CC3200_FS_SLFS
+#ifdef MG_FS_SLFS
   ret = (add_device("SL", _MSA, fs_slfs_open, fs_slfs_close, fs_slfs_read,
                     fs_slfs_write, fs_slfs_lseek, fs_slfs_unlink,
                     fs_slfs_rename) == 0);
@@ -10600,108 +10757,17 @@ int cc3200_fs_init() {
   return ret;
 }
 
-#endif /* CS_PLATFORM == CS_P_CC3200 */
+#endif /* defined(MG_SOCKET_SIMPLELINK) && (defined(MG_FS_SLFS) || \
+          defined(MG_FS_SPIFFS)) */
 #ifdef MG_MODULE_LINES
-#line 1 "./src/../../common/platforms/cc3200/cc3200_libc.c"
+#line 1 "./src/../../common/platforms/simplelink/sl_socket.c"
 #endif
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
  * All rights reserved
  */
 
-#if CS_PLATFORM == CS_P_CC3200
-
-#include <stdio.h>
-#include <string.h>
-
-#ifndef __TI_COMPILER_VERSION__
-#include <reent.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <unistd.h>
-#endif
-
-#include <inc/hw_types.h>
-#include <inc/hw_memmap.h>
-#include <driverlib/prcm.h>
-#include <driverlib/rom.h>
-#include <driverlib/rom_map.h>
-#include <driverlib/uart.h>
-#include <driverlib/utils.h>
-
-#define CONSOLE_UART UARTA0_BASE
-
-#ifndef __TI_COMPILER_VERSION__
-int _gettimeofday_r(struct _reent *r, struct timeval *tp, void *tzp) {
-#else
-int gettimeofday(struct timeval *tp, void *tzp) {
-#endif
-  unsigned long long r1 = 0, r2;
-  /* Achieve two consecutive reads of the same value. */
-  do {
-    r2 = r1;
-    r1 = PRCMSlowClkCtrFastGet();
-  } while (r1 != r2);
-  /* This is a 32768 Hz counter. */
-  tp->tv_sec = (r1 >> 15);
-  /* 1/32768-th of a second is 30.517578125 microseconds, approx. 31,
-   * but we round down so it doesn't overflow at 32767 */
-  tp->tv_usec = (r1 & 0x7FFF) * 30;
-  return 0;
-}
-
-long int random(void) {
-  return 42; /* FIXME */
-}
-
-void fprint_str(FILE *fp, const char *str) {
-  while (*str != '\0') {
-    if (*str == '\n') MAP_UARTCharPut(CONSOLE_UART, '\r');
-    MAP_UARTCharPut(CONSOLE_UART, *str++);
-  }
-}
-
-void _exit(int status) {
-  fprint_str(stderr, "_exit\n");
-  /* cause an unaligned access exception, that will drop you into gdb */
-  *(int *) 1 = status;
-  while (1)
-    ; /* avoid gcc warning because stdlib abort() has noreturn attribute */
-}
-
-void _not_implemented(const char *what) {
-  fprint_str(stderr, what);
-  fprint_str(stderr, " is not implemented\n");
-  _exit(42);
-}
-
-int _kill(int pid, int sig) {
-  (void) pid;
-  (void) sig;
-  _not_implemented("_kill");
-  return -1;
-}
-
-int _getpid() {
-  fprint_str(stderr, "_getpid is not implemented\n");
-  return 42;
-}
-
-int _isatty(int fd) {
-  /* 0, 1 and 2 are TTYs. */
-  return fd < 2;
-}
-
-#endif /* CS_PLATFORM == CS_P_CC3200 */
-#ifdef MG_MODULE_LINES
-#line 1 "./src/../../common/platforms/cc3200/cc3200_socket.c"
-#endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
-
-#if CS_PLATFORM == CS_P_CC3200
+#ifdef MG_SOCKET_SIMPLELINK
 
 #include <errno.h>
 #include <stdio.h>
@@ -10745,4 +10811,4 @@ int inet_pton(int af, const char *src, void *dst) {
   return 1;
 }
 
-#endif /* CS_PLATFORM == CS_P_CC3200 */
+#endif /* MG_SOCKET_SIMPLELINK */

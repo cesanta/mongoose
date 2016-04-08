@@ -75,11 +75,15 @@
 #define CS_P_WINDOWS 2
 #define CS_P_ESP_LWIP 3
 #define CS_P_CC3200 4
+#define CS_P_MSP432 5
 
 /* If not specified explicitly, we guess platform by defines. */
 #ifndef CS_PLATFORM
 
-#ifdef cc3200
+#if defined(TARGET_IS_MSP432P4XX) || defined(__MSP432P401R__)
+
+#define CS_PLATFORM CS_P_MSP432
+#elif defined(cc3200)
 #define CS_PLATFORM CS_P_CC3200
 #elif defined(__unix__) || defined(__APPLE__)
 #define CS_PLATFORM CS_P_UNIX
@@ -434,88 +438,6 @@ unsigned long os_random(void);
 #define MG_DISABLE_DIRECTORY_LISTING 1
 #endif
 
-/* If simplelink.h is already included, all bets are off. */
-#ifndef __SIMPLELINK_H__
-
-#ifndef __TI_COMPILER_VERSION__
-#undef __CONCAT
-#undef FD_CLR
-#undef FD_ISSET
-#undef FD_SET
-#undef FD_SETSIZE
-#undef FD_ZERO
-#undef fd_set
-#endif
-
-/* We want to disable SL_INC_STD_BSD_API_NAMING, so we include user.h ourselves
- * and undef it. */
-#define PROVISIONING_API_H_
-#include <simplelink/user.h>
-#undef PROVISIONING_API_H_
-#undef SL_INC_STD_BSD_API_NAMING
-
-#include <simplelink/include/simplelink.h>
-
-/* Now define only the subset of the BSD API that we use.
- * Notably, close(), read() and write() are not defined. */
-#define AF_INET SL_AF_INET
-
-#define socklen_t SlSocklen_t
-#define sockaddr SlSockAddr_t
-#define sockaddr_in SlSockAddrIn_t
-#define in_addr SlInAddr_t
-
-#define SOCK_STREAM SL_SOCK_STREAM
-#define SOCK_DGRAM SL_SOCK_DGRAM
-
-#define FD_SET SL_FD_SET
-#define FD_CLR SL_FD_CLR
-#define FD_ISSET SL_FD_ISSET
-#define FD_ZERO SL_FD_ZERO
-#define fd_set SlFdSet_t
-
-#define htonl sl_Htonl
-#define ntohl sl_Ntohl
-#define htons sl_Htons
-#define ntohs sl_Ntohs
-
-#define accept sl_Accept
-#define closesocket sl_Close
-#define bind sl_Bind
-#define connect sl_Connect
-#define listen sl_Listen
-#define recv sl_Recv
-#define recvfrom sl_RecvFrom
-#define select sl_Select
-#define send sl_Send
-#define sendto sl_SendTo
-#define socket sl_Socket
-
-#ifndef EACCES
-#define EACCES SL_EACCES
-#endif
-#ifndef EAFNOSUPPORT
-#define EAFNOSUPPORT SL_EAFNOSUPPORT
-#endif
-#ifndef EAGAIN
-#define EAGAIN SL_EAGAIN
-#endif
-#ifndef EBADF
-#define EBADF SL_EBADF
-#endif
-#ifndef EINVAL
-#define EINVAL SL_EINVAL
-#endif
-#ifndef ENOMEM
-#define ENOMEM SL_ENOMEM
-#endif
-#ifndef EWOULDBLOCK
-#define EWOULDBLOCK SL_EWOULDBLOCK
-#endif
-
-#define SOMAXCONN 8
-
-#endif /* !__SIMPLELINK_H__ */
 
 typedef int sock_t;
 #define INVALID_SOCKET (-1)
@@ -531,22 +453,13 @@ typedef struct stat cs_stat_t;
 
 /* Some functions we implement for Mongoose. */
 
-const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
-char *inet_ntoa(struct in_addr in);
-int inet_pton(int af, const char *src, void *dst);
-
 #ifdef __TI_COMPILER_VERSION__
+struct SlTimeval_t;
 #define timeval SlTimeval_t
 int gettimeofday(struct timeval *t, void *tz);
-#else
-#undef timeval
 #endif
 
 long int random(void);
-
-#undef select
-#define select(nfds, rfds, wfds, efds, tout) \
-  sl_Select((nfds), (rfds), (wfds), (efds), (struct SlTimeval_t *)(tout))
 
 /* TI's libc does not have stat & friends, add them. */
 #ifdef __TI_COMPILER_VERSION__
@@ -603,8 +516,204 @@ int closedir(DIR *dir);
 struct dirent *readdir(DIR *dir);
 #endif /* CC3200_FS_SPIFFS */
 
+#ifdef CC3200_FS_SLFS
+#define MG_FS_SLFS
+#endif
+
 #endif /* CS_PLATFORM == CS_P_CC3200 */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_CC3200_H_ */
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_COMMON_PLATFORMS_PLATFORM_MSP432_H_
+#define CS_COMMON_PLATFORMS_PLATFORM_MSP432_H_
+#if CS_PLATFORM == CS_P_MSP432
+
+#include <assert.h>
+#include <ctype.h>
+#include <errno.h>
+#include <inttypes.h>
+#include <stdint.h>
+#include <string.h>
+#include <time.h>
+
+#ifndef __TI_COMPILER_VERSION__
+#include <fcntl.h>
+#include <sys/time.h>
+#endif
+
+#define MG_SOCKET_SIMPLELINK 1
+#define MG_DISABLE_SOCKETPAIR 1
+#define MG_DISABLE_SYNC_RESOLVER 1
+#define MG_DISABLE_POPEN 1
+#define MG_DISABLE_CGI 1
+#define MG_DISABLE_DAV 1
+#define MG_DISABLE_DIRECTORY_LISTING 1
+
+
+typedef int sock_t;
+#define INVALID_SOCKET (-1)
+#define SIZE_T_FMT "u"
+typedef struct stat cs_stat_t;
+#define DIRSEP '/'
+#define to64(x) strtoll(x, NULL, 10)
+#define INT64_FMT PRId64
+#define INT64_X_FMT PRIx64
+#define __cdecl
+
+#define fileno(x) -1
+
+/* Some functions we implement for Mongoose. */
+
+#ifdef __TI_COMPILER_VERSION__
+struct SlTimeval_t;
+#define timeval SlTimeval_t
+int gettimeofday(struct timeval *t, void *tz);
+#endif
+
+long int random(void);
+
+/* TI's libc does not have stat & friends, add them. */
+#ifdef __TI_COMPILER_VERSION__
+
+#include <file.h>
+
+typedef unsigned int mode_t;
+typedef size_t _off_t;
+typedef long ssize_t;
+
+struct stat {
+  int st_ino;
+  mode_t st_mode;
+  int st_nlink;
+  time_t st_mtime;
+  off_t st_size;
+};
+
+int _stat(const char *pathname, struct stat *st);
+#define stat(a, b) _stat(a, b)
+
+#define __S_IFMT 0170000
+
+#define __S_IFDIR 0040000
+#define __S_IFCHR 0020000
+#define __S_IFREG 0100000
+
+#define __S_ISTYPE(mode, mask) (((mode) &__S_IFMT) == (mask))
+
+#define S_IFDIR __S_IFDIR
+#define S_IFCHR __S_IFCHR
+#define S_IFREG __S_IFREG
+#define S_ISDIR(mode) __S_ISTYPE((mode), __S_IFDIR)
+#define S_ISREG(mode) __S_ISTYPE((mode), __S_IFREG)
+
+/* As of 5.2.7, TI compiler does not support va_copy() yet. */
+#define va_copy(apc, ap) ((apc) = (ap))
+
+#endif /* __TI_COMPILER_VERSION__ */
+
+#endif /* CS_PLATFORM == CS_P_MSP432 */
+#endif /* CS_COMMON_PLATFORMS_PLATFORM_MSP432_H_ */
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_SMARTJS_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_
+#define CS_SMARTJS_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_
+
+/* If simplelink.h is already included, all bets are off. */
+#if defined(MG_SOCKET_SIMPLELINK) && !defined(__SIMPLELINK_H__)
+
+#ifndef __TI_COMPILER_VERSION__
+#undef __CONCAT
+#undef FD_CLR
+#undef FD_ISSET
+#undef FD_SET
+#undef FD_SETSIZE
+#undef FD_ZERO
+#undef fd_set
+#endif
+
+/* We want to disable SL_INC_STD_BSD_API_NAMING, so we include user.h ourselves
+ * and undef it. */
+#define PROVISIONING_API_H_
+#include <simplelink/user.h>
+#undef PROVISIONING_API_H_
+#undef SL_INC_STD_BSD_API_NAMING
+
+#include <simplelink/include/simplelink.h>
+
+/* Now define only the subset of the BSD API that we use.
+ * Notably, close(), read() and write() are not defined. */
+#define AF_INET SL_AF_INET
+
+#define socklen_t SlSocklen_t
+#define sockaddr SlSockAddr_t
+#define sockaddr_in SlSockAddrIn_t
+#define in_addr SlInAddr_t
+
+#define SOCK_STREAM SL_SOCK_STREAM
+#define SOCK_DGRAM SL_SOCK_DGRAM
+
+#define FD_SET SL_FD_SET
+#define FD_CLR SL_FD_CLR
+#define FD_ISSET SL_FD_ISSET
+#define FD_ZERO SL_FD_ZERO
+#define fd_set SlFdSet_t
+
+#define htonl sl_Htonl
+#define ntohl sl_Ntohl
+#define htons sl_Htons
+#define ntohs sl_Ntohs
+
+#define accept sl_Accept
+#define closesocket sl_Close
+#define bind sl_Bind
+#define connect sl_Connect
+#define listen sl_Listen
+#define recv sl_Recv
+#define recvfrom sl_RecvFrom
+#define send sl_Send
+#define sendto sl_SendTo
+#define socket sl_Socket
+
+#define select(nfds, rfds, wfds, efds, tout) \
+  sl_Select((nfds), (rfds), (wfds), (efds), (struct SlTimeval_t *)(tout))
+
+#ifndef EACCES
+#define EACCES SL_EACCES
+#endif
+#ifndef EAFNOSUPPORT
+#define EAFNOSUPPORT SL_EAFNOSUPPORT
+#endif
+#ifndef EAGAIN
+#define EAGAIN SL_EAGAIN
+#endif
+#ifndef EBADF
+#define EBADF SL_EBADF
+#endif
+#ifndef EINVAL
+#define EINVAL SL_EINVAL
+#endif
+#ifndef ENOMEM
+#define ENOMEM SL_ENOMEM
+#endif
+#ifndef EWOULDBLOCK
+#define EWOULDBLOCK SL_EWOULDBLOCK
+#endif
+
+#define SOMAXCONN 8
+
+const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
+char *inet_ntoa(struct in_addr in);
+int inet_pton(int af, const char *src, void *dst);
+
+#endif /* defined(MG_SOCKET_SIMPLELINK) && !defined(__SIMPLELINK_H__) */
+
+#endif /* CS_SMARTJS_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_ */
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
  * All rights reserved
@@ -3507,35 +3616,3 @@ uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io);
 #endif /* MG_ENABLE_COAP */
 
 #endif /* CS_MONGOOSE_SRC_COAP_H_ */
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
-
-#ifndef CS_SMARTJS_PLATFORMS_CC3200_CC3200_FS_SLFS_H_
-#define CS_SMARTJS_PLATFORMS_CC3200_CC3200_FS_SLFS_H_
-
-#if CS_PLATFORM == CS_P_CC3200 && defined(CC3200_FS_SLFS)
-
-#include <stdio.h>
-#ifndef __TI_COMPILER_VERSION__
-#include <unistd.h>
-#include <sys/stat.h>
-#endif
-
-#define MAX_OPEN_SLFS_FILES 8
-
-/* Indirect libc interface - same functions, different names. */
-int fs_slfs_open(const char *pathname, int flags, mode_t mode);
-int fs_slfs_close(int fd);
-ssize_t fs_slfs_read(int fd, void *buf, size_t count);
-ssize_t fs_slfs_write(int fd, const void *buf, size_t count);
-int fs_slfs_stat(const char *pathname, struct stat *s);
-int fs_slfs_fstat(int fd, struct stat *s);
-off_t fs_slfs_lseek(int fd, off_t offset, int whence);
-int fs_slfs_unlink(const char *filename);
-int fs_slfs_rename(const char *from, const char *to);
-
-#endif /* CS_PLATFORM == CS_P_CC3200 && defined(CC3200_FS_SLFS) */
-
-#endif /* CS_SMARTJS_PLATFORMS_CC3200_CC3200_FS_SLFS_H_ */
