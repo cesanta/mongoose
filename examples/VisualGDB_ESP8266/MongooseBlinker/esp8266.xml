@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<EmbeddedProfile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <ToolchainID>com.visualgdb.xtensa-lx106-elf</ToolchainID>
+  <BspID>com.sysprogs.esp8266.core</BspID>
+  <BspVersion>1.0</BspVersion>
+  <McuID>ESP8266</McuID>
+  <MCUProperties>
+    <Entries>
+      <KeyValue>
+        <Key>com.sysprogs.esp8266.icache_flash</Key>
+        <Value>ICACHE_FLASH</Value>
+      </KeyValue>
+      <KeyValue>
+        <Key>com.sysprogs.esp8266.gdbstub</Key>
+        <Value />
+      </KeyValue>
+      <KeyValue>
+        <Key>com.sysprogs.esp8266.gdbstub.break</Key>
+        <Value>GDBSTUB_BREAK_ON_INIT=1</Value>
+      </KeyValue>
+    </Entries>
+  </MCUProperties>
+  <BSPSourceFolderName>Device-specific files</BSPSourceFolderName>
+  <MCUMakFile>esp8266.mak</MCUMakFile>
+  <ReferencedFrameworks>
+    <string>com.sysprogs.esp8266.rtos_sdk</string>
+    <string>com.sysprogs.esp8266.rtos_sdk_drivers</string>
+  </ReferencedFrameworks>
+  <FrameworkProperties>
+    <Entries />
+  </FrameworkProperties>
+</EmbeddedProfile>

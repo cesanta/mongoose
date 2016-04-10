@@ -1,0 +1,152 @@
+<?xml version="1.0"?>
+<VisualGDBProjectSettings2 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <ConfigurationName>Debug</ConfigurationName>
+  <Project xsi:type="com.visualgdb.project.embedded">
+    <CustomSourceDirectories>
+      <Directories />
+      <PathStyle>MinGWUnixSlash</PathStyle>
+    </CustomSourceDirectories>
+    <MainSourceDirectory>$(ProjectDir)</MainSourceDirectory>
+    <EmbeddedProfileFile>esp8266.xml</EmbeddedProfileFile>
+  </Project>
+  <Build xsi:type="com.visualgdb.build.embedded">
+    <MakeFilePathRelativeToSourceDir>Makefile</MakeFilePathRelativeToSourceDir>
+    <MakeConfigurationName>Debug</MakeConfigurationName>
+    <AdditionalMakeArguments>$(LocalMultiThreadedBuildFlags)</AdditionalMakeArguments>
+    <MakeCommandTemplate>
+      <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>
+      <Command>cmd.exe</Command>
+      <Arguments>/c "$(TOOLCHAIN_ROOT)\bin\make.exe"</Arguments>
+      <WorkingDirectory>$(BuildDir)</WorkingDirectory>
+      <Environment>
+        <Records>
+          <Record>
+            <VariableName>LANG</VariableName>
+            <Value>en_US.UTF-8</Value>
+          </Record>
+          <Record>
+            <VariableName>PATH</VariableName>
+            <Value>$(TOOLCHAIN_ROOT)\bin;%PATH%</Value>
+          </Record>
+        </Records>
+      </Environment>
+    </MakeCommandTemplate>
+    <ShowMemoryUtilizationSummary>true</ShowMemoryUtilizationSummary>
+  </Build>
+  <Debug xsi:type="com.visualgdb.debug.embedded">
+    <AdditionalStartupCommands />
+    <AdditionalGDBSettings>
+      <FilterSpuriousStoppedNotifications>false</FilterSpuriousStoppedNotifications>
+      <ForceSingleThreadedMode>false</ForceSingleThreadedMode>
+      <PendingBreakpointsSupported>true</PendingBreakpointsSupported>
+      <DisableChildRanges>false</DisableChildRanges>
+      <UseAppleExtensions>false</UseAppleExtensions>
+      <CanAcceptCommandsWhileRunning>false</CanAcceptCommandsWhileRunning>
+      <MakeLogFile>false</MakeLogFile>
+      <IgnoreModuleEventsWhileStepping>true</IgnoreModuleEventsWhileStepping>
+      <UseRelativePathsOnly>false</UseRelativePathsOnly>
+      <ExitAction>None</ExitAction>
+      <Features>
+        <DisableAutoDetection>false</DisableAutoDetection>
+        <UseFrameParameter>false</UseFrameParameter>
+        <SimpleValuesFlagSupported>false</SimpleValuesFlagSupported>
+        <ListLocalsSupported>false</ListLocalsSupported>
+        <ByteLevelMemoryCommandsAvailable>false</ByteLevelMemoryCommandsAvailable>
+        <ThreadInfoSupported>false</ThreadInfoSupported>
+        <PendingBreakpointsSupported>false</PendingBreakpointsSupported>
+        <SupportTargetCommand>false</SupportTargetCommand>
+        <ReliableBreakpointNotifications>false</ReliableBreakpointNotifications>
+      </Features>
+      <DisableDisassembly>false</DisableDisassembly>
+      <ExamineMemoryWithXCommand>false</ExamineMemoryWithXCommand>
+      <StepIntoNewInstanceEntry>main</StepIntoNewInstanceEntry>
+      <ExamineRegistersInRawFormat>true</ExamineRegistersInRawFormat>
+      <EnableSmartStepping>false</EnableSmartStepping>
+      <DisableSignals>false</DisableSignals>
+      <EnableAsyncExecutionMode>false</EnableAsyncExecutionMode>
+      <EnableNonStopMode>false</EnableNonStopMode>
+    </AdditionalGDBSettings>
+    <DebugMethodID>openocd</DebugMethodID>
+    <DebugMethodProperties>
+      <Entries>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.xt-ocd.program_flash</Key>
+          <Value>1</Value>
+        </KeyValue>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.xt-ocd.flash_start_mode</Key>
+          <Value>soft_reset</Value>
+        </KeyValue>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.xt-ocd.prog_sector_size</Key>
+          <Value>4096</Value>
+        </KeyValue>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.xt-ocd.erase_sector_size</Key>
+          <Value>4096</Value>
+        </KeyValue>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.xt-ocd.flash_freq</Key>
+          <Value>40m</Value>
+        </KeyValue>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.xt-ocd.flash_mode</Key>
+          <Value>qio</Value>
+        </KeyValue>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.xt-ocd.flash_size</Key>
+          <Value>32m</Value>
+        </KeyValue>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.openocd.iface_script</Key>
+          <Value>interface/ftdi/olimex-arm-usb-tiny-h.cfg</Value>
+        </KeyValue>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.openocd.speed_cmd</Key>
+          <Value />
+        </KeyValue>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.disable_interrupts_during_steps</Key>
+          <Value>on</Value>
+        </KeyValue>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.autofeed_watchdog</Key>
+          <Value>on</Value>
+        </KeyValue>
+        <KeyValue>
+          <Key>com.sysprogs.esp8266.openocd.extra_cmdline</Key>
+          <Value />
+        </KeyValue>
+      </Entries>
+    </DebugMethodProperties>
+    <SemihostingSupport>Auto</SemihostingSupport>
+    <StepIntoEntryPoint>false</StepIntoEntryPoint>
+    <ReloadFirmwareOnReset>false</ReloadFirmwareOnReset>
+    <ValidateEndOfStackAddress>true</ValidateEndOfStackAddress>
+    <StopAtEntryPoint>false</StopAtEntryPoint>
+  </Debug>
+  <CustomBuild>
+    <PreBuildActions />
+    <PostBuildActions />
+    <PreCleanActions />
+    <PostCleanActions />
+  </CustomBuild>
+  <CustomDebug>
+    <PreDebugActions />
+    <PostDebugActions />
+    <DebugStopActions />
+    <BreakMode>Default</BreakMode>
+  </CustomDebug>
+  <CustomShortcuts>
+    <Shortcuts />
+    <ShowMessageAfterExecuting>true</ShowMessageAfterExecuting>
+  </CustomShortcuts>
+  <UserDefinedVariables />
+  <ImportedPropertySheets />
+  <CodeSense>
+    <Enabled>Unknown</Enabled>
+    <ExtraSettings>
+      <HideErrorsInSystemHeaders>true</HideErrorsInSystemHeaders>
+    </ExtraSettings>
+  </CodeSense>
+</VisualGDBProjectSettings2>

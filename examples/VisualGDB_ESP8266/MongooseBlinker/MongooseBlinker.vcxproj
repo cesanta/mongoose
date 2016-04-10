@@ -1,0 +1,123 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{2007DD98-07AF-4E6E-9AE9-CFB08E9E98FE}</ProjectGuid>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <NMakeIncludeSearchPath>.;C:\SysGCC\esp8266\esp8266-bsp\sysprogs\include;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp8266;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\lwip;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\lwip\ipv4;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\lwip\ipv6;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\extra_include;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\examples\driver_lib\include;c:\sysgcc\esp8266\xtensa-lx106-elf\include\c++\5.2.0;c:\sysgcc\esp8266\xtensa-lx106-elf\include\c++\5.2.0\xtensa-lx106-elf;c:\sysgcc\esp8266\xtensa-lx106-elf\include\c++\5.2.0\backward;c:\sysgcc\esp8266\lib\gcc\xtensa-lx106-elf\5.2.0\include;c:\sysgcc\esp8266\lib\gcc\xtensa-lx106-elf\5.2.0\include-fixed;c:\sysgcc\esp8266\xtensa-lx106-elf\sys-include;c:\sysgcc\esp8266\xtensa-lx106-elf\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeForcedIncludes>$(ProjectDir)\gcc_Debug.h;$(VISUALGDB_DIR)\gcc_compat.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
+    <NMakeBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /build "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeBuildCommandLine>
+    <NMakeCleanCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /clean "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeCleanCommandLine>
+    <NMakeReBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /rebuild "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeReBuildCommandLine>
+    <NMakeOutput>$(ProjectDir)MongooseBlinker-Debug.vgdbsettings</NMakeOutput>
+    <IncludePath />
+    <ReferencePath />
+    <LibraryPath />
+    <NMakePreprocessorDefinitions>__VisualGDB_CFG_Debug;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <NMakeIncludeSearchPath>.;C:\SysGCC\esp8266\esp8266-bsp\sysprogs\include;c:\sysgcc\esp8266\xtensa-lx106-elf\include\c++\5.2.0;c:\sysgcc\esp8266\xtensa-lx106-elf\include\c++\5.2.0\xtensa-lx106-elf;c:\sysgcc\esp8266\xtensa-lx106-elf\include\c++\5.2.0\backward;c:\sysgcc\esp8266\lib\gcc\xtensa-lx106-elf\5.2.0\include;c:\sysgcc\esp8266\lib\gcc\xtensa-lx106-elf\5.2.0\include-fixed;c:\sysgcc\esp8266\xtensa-lx106-elf\sys-include;c:\sysgcc\esp8266\xtensa-lx106-elf\include;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp8266;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\lwip;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\lwip\ipv4;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\lwip\ipv6;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\extra_include;C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\examples\driver_lib\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeForcedIncludes>$(ProjectDir)\gcc_Release.h;$(VISUALGDB_DIR)\gcc_compat.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
+    <NMakePreprocessorDefinitions>__VisualGDB_CFG_Release;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /build "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeBuildCommandLine>
+    <NMakeCleanCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /clean "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeCleanCommandLine>
+    <NMakeReBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /rebuild "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeReBuildCommandLine>
+    <NMakeOutput>$(ProjectDir)MongooseBlinker-Release.vgdbsettings</NMakeOutput>
+    <IncludePath />
+    <ReferencePath />
+    <LibraryPath />
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\examples\driver_lib\driver\gpio.c" />
+    <ClCompile Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\examples\driver_lib\driver\hw_timer.c" />
+    <ClCompile Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\examples\driver_lib\driver\uart.c" />
+    <ClCompile Include="C:\SysGCC\esp8266\esp8266-bsp\sysprogs\stubs.c" />
+    <ClCompile Include="esp_libc.c" />
+    <ClCompile Include="LEDBlink.cpp" />
+    <ClCompile Include="mongoose.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\examples\driver_lib\include\gpio.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\examples\driver_lib\include\hw_timer.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\examples\driver_lib\include\uart.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\c_types.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp8266\eagle_soc.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp8266\esp8266.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp8266\ets_sys.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp8266\gpio_register.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp8266\pin_mux_register.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp8266\spi_register.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp8266\timer_register.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp8266\uart_register.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\espconn.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\espnow.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp_common.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp_libc.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp_misc.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp_softap.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp_spiffs.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp_ssc.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp_sta.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp_system.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp_timer.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp_wifi.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\esp_wps.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\mesh.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\pwm.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\queue.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\smartconfig.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\spi_flash.h" />
+    <ClInclude Include="C:\SysGCC\esp8266\esp8266-bsp\RTOS-SDK\include\espressif\upgrade.h" />
+    <ClInclude Include="mongoose.h" />
+    <ClInclude Include="user_config.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="debug.mak" />
+    <None Include="esp8266.mak" />
+    <None Include="Makefile" />
+    <None Include="MongooseBlinker-Debug.vgdbsettings" />
+    <None Include="MongooseBlinker-Release.vgdbsettings" />
+    <None Include="release.mak" />
+  </ItemGroup>
+  <ItemGroup>
+    <Xml Include="esp8266.xml" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
