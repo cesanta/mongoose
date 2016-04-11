@@ -10153,10 +10153,13 @@ int _isatty(int fd) {
 
 #if CS_PLATFORM == CS_P_MSP432
 
+#include <ti/sysbios/BIOS.h>
+#include <ti/sysbios/knl/Clock.h>
+
 int gettimeofday(struct timeval *tp, void *tzp) {
-  /* FIXME */
-  tp->tv_sec = 42;
-  tp->tv_usec = 123;
+  uint32_t ticks = Clock_getTicks();
+  tp->tv_sec = ticks / 1000;
+  tp->tv_usec = (ticks % 1000) * 1000;
   return 0;
 }
 
@@ -10173,8 +10176,8 @@ long int random(void) {
  * All rights reserved
  */
 
-#ifndef CS_SMARTJS_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_
-#define CS_SMARTJS_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_
+#ifndef CS_COMMON_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_
+#define CS_COMMON_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_
 
 #if defined(MG_FS_SLFS)
 
@@ -10199,7 +10202,7 @@ int fs_slfs_rename(const char *from, const char *to);
 
 #endif /* defined(MG_FS_SLFS) */
 
-#endif /* CS_SMARTJS_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_ */
+#endif /* CS_COMMON_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "./src/../../common/platforms/simplelink/sl_fs_slfs.c"
 #endif
@@ -10273,7 +10276,7 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
   struct sl_fd_info *fi = &s_sl_fds[fd];
 
   _u32 am = 0;
-  fi->size = -1;
+  fi->size = (size_t) -1;
   if (pathname[0] == '/') pathname++;
   int rw = (flags & 3);
   if (rw == O_RDONLY) {
@@ -10322,7 +10325,7 @@ ssize_t fs_slfs_read(int fd, void *buf, size_t count) {
   if (fi->fh <= 0) return set_errno(EBADF);
   /* Simulate EOF. sl_FsRead @ file_size return SL_FS_ERR_OFFSET_OUT_OF_RANGE.
    */
-  if (fi->size >= 0 && fi->pos == fi->size) return 0;
+  if (fi->pos == fi->size) return 0;
   _i32 r = sl_FsRead(fi->fh, fi->pos, buf, count);
   DBG(("sl_FsRead(%d, %d, %d) = %d", (int) fi->fh, (int) fi->pos, (int) count,
        (int) r));
@@ -10636,7 +10639,7 @@ ssize_t _read(int fd, void *buf, size_t count) {
 
 ssize_t _write(int fd, const void *buf, size_t count) {
   int r = -1;
-  size_t i;
+  size_t i = 0;
   switch (fd_type(fd)) {
     case FD_INVALID:
       r = set_errno(EBADF);
@@ -10652,6 +10655,8 @@ ssize_t _write(int fd, const void *buf, size_t count) {
         if (c == '\n') MAP_UARTCharPut(CONSOLE_UART, '\r');
         MAP_UARTCharPut(CONSOLE_UART, c);
       }
+#else
+      (void) i;
 #endif
       r = count;
       break;
@@ -10745,7 +10750,7 @@ int mkdir(const char *path, mode_t mode) {
 }
 #endif
 
-int cc3200_fs_init() {
+int sl_fs_init() {
   int ret = 1;
 #ifdef __TI_COMPILER_VERSION__
 #ifdef MG_FS_SLFS
@@ -10811,4 +10816,58 @@ int inet_pton(int af, const char *src, void *dst) {
   return 1;
 }
 
-#endif /* MG_SOCKET_SIMPLELINK */
+#endif /* CS_COMMON_PLATFORMS_SIMPLELINK_SL_SOCKET_C_ */
+#ifdef MG_MODULE_LINES
+#line 1 "./src/../../common/platforms/simplelink/sl_mg_task.c"
+#endif
+#if defined(MG_SOCKET_SIMPLELINK)
+
+/* Amalgamated: #include "mg_task.h" */
+
+#include <oslib/osi.h>
+
+enum mg_q_msg_type {
+  MG_Q_MSG_CB,
+};
+struct mg_q_msg {
+  enum mg_q_msg_type type;
+  void (*cb)(struct mg_mgr *mgr, void *arg);
+  void *arg;
+};
+static OsiMsgQ_t s_mg_q;
+static void mg_task(void *arg);
+
+bool mg_start_task(int priority, int stack_size, mg_init_cb mg_init) {
+  if (osi_MsgQCreate(&s_mg_q, "MG", sizeof(struct mg_q_msg), 16) != OSI_OK) {
+    return false;
+  }
+  if (osi_TaskCreate(mg_task, (const signed char *) "MG", stack_size,
+                     (void *) mg_init, priority, NULL) != OSI_OK) {
+    return false;
+  }
+  return true;
+}
+
+static void mg_task(void *arg) {
+  struct mg_mgr mgr;
+  mg_init_cb mg_init = (mg_init_cb) arg;
+  mg_mgr_init(&mgr, NULL);
+  mg_init(&mgr);
+  while (1) {
+    struct mg_q_msg msg;
+    mg_mgr_poll(&mgr, 1);
+    if (osi_MsgQRead(&s_mg_q, &msg, 1) != OSI_OK) continue;
+    switch (msg.type) {
+      case MG_Q_MSG_CB: {
+        msg.cb(&mgr, msg.arg);
+      }
+    }
+  }
+}
+
+void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg) {
+  struct mg_q_msg msg = {MG_Q_MSG_CB, cb, cb_arg};
+  osi_MsgQWrite(&s_mg_q, &msg, OSI_NO_WAIT);
+}
+
+#endif /* defined(MG_SOCKET_SIMPLELINK) */

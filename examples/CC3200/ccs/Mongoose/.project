@@ -26,16 +26,6 @@
 	</natures>
 	<linkedResources>
 		<link>
-			<name>mg_task.c</name>
-			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/mg_task.c</locationURI>
-		</link>
-		<link>
-			<name>mg_task.h</name>
-			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/mg_task.h</locationURI>
-		</link>
-		<link>
 			<name>mongoose.c</name>
 			<type>1</type>
 			<locationURI>PARENT-4-PROJECT_LOC/mongoose.c</locationURI>

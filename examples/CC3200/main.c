@@ -31,7 +31,6 @@
 
 #include "data.h"
 #include "mongoose.h"
-#include "mg_task.h"
 #include "wifi.h"
 
 /* Set up an AP or connect to existing WiFi network. */
@@ -51,8 +50,6 @@
 
 #define BM222_ADDR 0x18
 #define TMP006_ADDR 0x41
-
-extern int cc3200_fs_init();
 
 static struct mg_str upload_fname(struct mg_connection *nc,
                                   struct mg_str fname) {
@@ -124,7 +121,9 @@ static void mg_init(struct mg_mgr *mgr) {
 
   data_init_sensors(TMP006_ADDR, BM222_ADDR);
 
-  cc3200_fs_init();
+  sl_fs_init();
+
+  sl_Start(NULL, NULL, NULL);
 
 #if defined(WIFI_STA_SSID)
   if (!wifi_setup_sta(WIFI_STA_SSID, WIFI_STA_PASS)) {

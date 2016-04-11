@@ -621,11 +621,13 @@ int _stat(const char *pathname, struct stat *st);
  * All rights reserved
  */
 
-#ifndef CS_SMARTJS_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_
-#define CS_SMARTJS_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_
+#ifndef CS_COMMON_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_
+#define CS_COMMON_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_
 
 /* If simplelink.h is already included, all bets are off. */
 #if defined(MG_SOCKET_SIMPLELINK) && !defined(__SIMPLELINK_H__)
+
+#include <stdbool.h>
 
 #ifndef __TI_COMPILER_VERSION__
 #undef __CONCAT
@@ -711,9 +713,18 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 char *inet_ntoa(struct in_addr in);
 int inet_pton(int af, const char *src, void *dst);
 
+struct mg_mgr;
+
+typedef void (*mg_init_cb)(struct mg_mgr *mgr);
+bool mg_start_task(int priority, int stack_size, mg_init_cb mg_init);
+
+void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg);
+
+int sl_fs_init();
+
 #endif /* defined(MG_SOCKET_SIMPLELINK) && !defined(__SIMPLELINK_H__) */
 
-#endif /* CS_SMARTJS_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_ */
+#endif /* CS_COMMON_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_ */
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
  * All rights reserved

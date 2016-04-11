@@ -93,7 +93,7 @@ VPATH += $(SDK_PATH)/driverlib $(SDK_PATH)/example/common $(SDK_PATH)/oslib \
          $(SDK_PATH)/third_party/FreeRTOS/source/portable/GCC/ARM_CM4 \
          $(SDK_PATH)/third_party/FreeRTOS/source/portable/MemMang \
 
-APP_SRCS = main.c bm222.c data.c mongoose.c mg_task.c tmp006.c wifi.c $(SDK_SRCS)
+APP_SRCS = main.c bm222.c data.c mongoose.c tmp006.c wifi.c $(SDK_SRCS)
 APP_OBJS = $(addprefix $(OBJDIR)/,$(patsubst %.c,%.o,$(APP_SRCS)))
 
 $(FW_ELF): $(APP_OBJS)
