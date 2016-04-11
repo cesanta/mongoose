@@ -18,6 +18,14 @@
         },
         {
             "type": "markdown",
+            "name": "mg_connect_ws.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_connect_ws_opt.md"
+        },
+        {
+            "type": "markdown",
             "name": "mg_send_websocket_frame.md"
         },
         {
@@ -78,7 +86,27 @@
         },
         {
             "type": "markdown",
+            "name": "mg_connect_http.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_connect_http_opt.md"
+        },
+        {
+            "type": "markdown",
             "name": "mg_serve_http.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_register_http_endpoint.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_file_upload_handler.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_fu_fname_fn.md"
         },
         {
             "type": "markdown",

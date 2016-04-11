@@ -2208,7 +2208,6 @@ void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
  *                       "clubby.cesanta.com", NULL);
  * ```
  */
-
 struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
                                     mg_event_handler_t event_handler,
                                     const char *url, const char *protocol,
@@ -2220,7 +2219,6 @@ struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
  * Mostly identical to mg_connect_ws, but allows to provide extra parameters
  * (for example, SSL parameters
  */
-
 struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
                                         mg_event_handler_t ev_handler,
                                         struct mg_connect_opts opts,
@@ -2456,6 +2454,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
                                       const char *method, const char *uri,
                                       const char *auth_domain, const char *user,
                                       const char *passwd);
+
 /*
  * Helper function that creates outbound HTTP connection.
  *
@@ -2480,7 +2479,6 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
  *       "var_1=value_1&var_2=value_2");
  * ```
  */
-
 struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
                                       mg_event_handler_t event_handler,
                                       const char *url,
@@ -2493,7 +2491,6 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
  * Mostly identical to mg_connect_http, but allows to provide extra parameters
  * (for example, SSL parameters
  */
-
 struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
                                           mg_event_handler_t ev_handler,
                                           struct mg_connect_opts opts,
@@ -2649,11 +2646,15 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
  * }
  * ```
  */
-
 void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
                                mg_event_handler_t handler);
 
 #ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+
+/* Callback prototype for `mg_file_upload_handler()`. */
+typedef struct mg_str (*mg_fu_fname_fn)(struct mg_connection *nc,
+                                        struct mg_str fname);
+
 /*
  * File upload handler.
  * This handler can be used to implement file uploads with minimum code.
@@ -2685,9 +2686,6 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
  * }
  * ```
  */
-
-typedef struct mg_str (*mg_fu_fname_fn)(struct mg_connection *nc,
-                                        struct mg_str fname);
 void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
                             mg_fu_fname_fn local_name_fn);
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
