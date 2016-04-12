@@ -13,15 +13,18 @@ network protocols or scalable network applications  with little effort.
 Mongoose helps developers to manage the complexity of network programming
 and let them concentrate on the logic, saving time and money.
 
+If you're looking for a pre-compiled Windows or Mac binary,
+- [Download pre-compiled Mongoose web server binary](https://www.cesanta.com/products/binary)
+
+Alternatively,
+
 - [Download Mongoose Source Code here](http://hubs.ly/H01bWvx0)
 - [Check our latest releases] (https://github.com/cesanta/mongoose/releases)
 - [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
 
-> Nothing overdone. Nothing less. So unbelievably easy to use.
-> Just how good software should be! -- Pritin Tyagaraj, SAP
-
-If you are looking for a complete IoT platform with firmware and cloud compotent, check out [Smart.js.] (https://github.com/cesanta/smart.js)
+If you are looking for a complete IoT platform with firmware and cloud compotent,
+- [Check out Smart.js - a full stack IoT platform](https://github.com/cesanta/smart.js)
 
 # Support
 - [Support Forum - Ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/smart-js)
