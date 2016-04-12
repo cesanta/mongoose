@@ -228,6 +228,6 @@ void SimpleLinkSockEventHandler(SlSockEvent_t *e) {
 }
 
 void SimpleLinkGeneralEventHandler(SlDeviceEvent_t *e) {
-  LOG(LL_INFO, ("status %d sender %d", e->EventData.deviceEvent.status,
-                e->EventData.deviceEvent.sender));
+  LOG(LL_ERROR, ("status %d sender %d", e->EventData.deviceEvent.status,
+                 e->EventData.deviceEvent.sender));
 }

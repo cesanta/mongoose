@@ -7,9 +7,6 @@ PORT ?= auto
 MAKEFLAGS += w
 
 all clean:
-	rm -rf ccs/*/Debug
-	rm -rf ccs/*/Release
-	rm -rf ccs/*/.launches
 	docker run --rm -i -v $(SRC_DIR):/src $(SDK) \
 		/bin/bash -c "\
 			make -C /src/mongoose mongoose.c mongoose.h && \
