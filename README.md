@@ -3,12 +3,11 @@
 ![](https://img.shields.io/badge/license-GPL_2-green.svg "License")
 
 Mongoose is ideal for embedded environments. It has been designed
-for connecting devices and bringing them online.
-[Mongoose](https://www.cesanta.com/products)
-has been on the market since 2004 and attracted
-over 1 million cumulative downloads.
+for connecting devices and bringing them online. Mongoose
+is on the market since 2004, used by vast number of open source and
+commercial products - it even runs on space stations!
 
-It provides easy to use event-driven interface that allows to implement
+Mongoose provides easy to use event-driven interface that allows to implement
 network protocols or scalable network applications  with little effort.
 Mongoose helps developers to manage the complexity of network programming
 and let them concentrate on the logic, saving time and money.
@@ -20,7 +19,7 @@ Alternatively,
 
 - [Download Mongoose Source Code here](http://hubs.ly/H01bWvx0)
 - [Check our latest releases] (https://github.com/cesanta/mongoose/releases)
-- [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
+- [Read User Guide and API reference](https://docs.cesanta.com/mongoose/dev)
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
 
 If you are looking for a complete IoT platform with firmware and cloud compotent,
