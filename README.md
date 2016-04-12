@@ -3,14 +3,10 @@
 ![](https://img.shields.io/badge/license-GPL_2-green.svg "License")
 
 Mongoose is ideal for embedded environments. It has been designed
-for connecting devices and bringing them online. Mongoose
-is on the market since 2004, used by vast number of open source and
+for connecting devices and bringing them online. On the market since 2004,
+used by vast number of open source and
 commercial products - it even runs on space stations!
-
-Mongoose provides easy to use event-driven interface that allows to implement
-network protocols or scalable network applications  with little effort.
-Mongoose helps developers to manage the complexity of network programming
-and let them concentrate on the logic, saving time and money.
+Mongoose makes embedded network programming fast, robust, and easy.
 
 If you're looking for a pre-compiled Windows or Mac binary,
 - [Download pre-compiled Mongoose web server binary](https://www.cesanta.com/products/binary)
