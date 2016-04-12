@@ -8973,13 +8973,13 @@ static unsigned char *mg_parse_dns_resource_record(
     data += chunk_len + 1;
   }
 
+  if (data > end - 5) {
+    return NULL;
+  }
+
   rr->name.p = (char *) name;
   rr->name.len = data - name + 1;
-
   data++;
-  if (data > end - 4) {
-    return data;
-  }
 
   rr->rtype = data[0] << 8 | data[1];
   data += 2;
@@ -8990,7 +8990,7 @@ static unsigned char *mg_parse_dns_resource_record(
   rr->kind = reply ? MG_DNS_ANSWER : MG_DNS_QUESTION;
   if (reply) {
     if (data >= end - 6) {
-      return data;
+      return NULL;
     }
 
     rr->ttl = (uint32_t) data[0] << 24 | (uint32_t) data[1] << 16 |
@@ -9012,25 +9012,32 @@ int mg_parse_dns(const char *buf, int len, struct mg_dns_message *msg) {
   unsigned char *data = (unsigned char *) buf + sizeof(*header);
   unsigned char *end = (unsigned char *) buf + len;
   int i;
+
+  memset(msg, 0, sizeof(*msg));
   msg->pkt.p = buf;
   msg->pkt.len = len;
 
-  if (len < (int) sizeof(*header)) {
-    return -1; /* LCOV_EXCL_LINE */
-  }
+  if (len < (int) sizeof(*header)) return -1;
 
   msg->transaction_id = header->transaction_id;
   msg->flags = ntohs(header->flags);
   msg->num_questions = ntohs(header->num_questions);
+  if (msg->num_questions > (int) ARRAY_SIZE(msg->questions)) {
+    msg->num_questions = (int) ARRAY_SIZE(msg->questions);
+  }
   msg->num_answers = ntohs(header->num_answers);
-
-  for (i = 0; i < msg->num_questions && i < (int) ARRAY_SIZE(msg->questions);
-       i++) {
-    data = mg_parse_dns_resource_record(data, end, &msg->questions[i], 0);
+  if (msg->num_answers > (int) ARRAY_SIZE(msg->answers)) {
+    msg->num_answers = (int) ARRAY_SIZE(msg->answers);
   }
 
-  for (i = 0; i < msg->num_answers && i < (int) ARRAY_SIZE(msg->answers); i++) {
+  for (i = 0; i < msg->num_questions; i++) {
+    data = mg_parse_dns_resource_record(data, end, &msg->questions[i], 0);
+    if (data == NULL) return -1;
+  }
+
+  for (i = 0; i < msg->num_answers; i++) {
     data = mg_parse_dns_resource_record(data, end, &msg->answers[i], 1);
+    if (data == NULL) return -1;
   }
 
   return 0;
