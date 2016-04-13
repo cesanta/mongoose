@@ -209,7 +209,7 @@ typedef uint32_t in_addr_t;
 #define INT64_FMT "I64d"
 #define INT64_X_FMT "I64x"
 #define SIZE_T_FMT "Iu"
-#ifdef __MINGW32__
+#if defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR)
 typedef struct stat cs_stat_t;
 #else
 typedef struct _stati64 cs_stat_t;
