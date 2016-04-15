@@ -2,11 +2,14 @@
 
 #include "mongoose.h"
 
+#include <simplelink/cc_pal.h>
 #include <simplelink/include/wlan.h>
 
 #include <inc/hw_types.h>
 
 #include <driverlib/gpio.h>
+#include <driverlib/utils.h>
+
 #include <example/common/gpio_if.h>
 
 void SimpleLinkWlanEventHandler(SlWlanEvent_t *e) {
@@ -112,4 +115,51 @@ bool wifi_setup_sta(const char *ssid, const char *pass) {
     return false;
   }
   return true;
+}
+
+/*
+ * In SDK 1.2.0 TI decided to stop resetting NWP before sl_Start, which in
+ * practice means that sl_start will hang on subsequent runs after the first.
+ *
+ * See this post for details and suggested solution:
+ * https://e2e.ti.com/support/wireless_connectivity/simplelink_wifi_cc31xx_cc32xx/f/968/p/499123/1806610#1806610
+ *
+ * However, since they don't provide OS_debug variant of simplelink.a and
+ * adding another project dependency will complicate our demo even more,
+ * we just take the required bit of code.
+ *
+ * This is a copy-paste of NwpPowerOnPreamble from cc_pal.c.
+ */
+void stop_nwp(void) {
+#define MAX_RETRY_COUNT 1000
+  unsigned int sl_stop_ind, apps_int_sts_raw, nwp_lpds_wake_cfg;
+  unsigned int retry_count;
+  /* Perform the sl_stop equivalent to ensure network services
+     are turned off if active */
+  HWREG(0x400F70B8) = 1; /* APPs to NWP interrupt */
+  UtilsDelay(800000 / 5);
+
+  retry_count = 0;
+  nwp_lpds_wake_cfg = HWREG(0x4402D404);
+  sl_stop_ind = HWREG(0x4402E16C);
+
+  if ((nwp_lpds_wake_cfg != 0x20) && /* Check for NWP POR condition */
+      !(sl_stop_ind & 0x2))          /* Check if sl_stop was executed */
+  {
+    /* Loop until APPs->NWP interrupt is cleared or timeout */
+    while (retry_count < MAX_RETRY_COUNT) {
+      apps_int_sts_raw = HWREG(0x400F70C0);
+      if (apps_int_sts_raw & 0x1) {
+        UtilsDelay(800000 / 5);
+        retry_count++;
+      } else {
+        break;
+      }
+    }
+  }
+  HWREG(0x400F70B0) = 1; /* Clear APPs to NWP interrupt */
+  UtilsDelay(800000 / 5);
+
+  /* Stop the networking services */
+  NwpPowerOff();
 }

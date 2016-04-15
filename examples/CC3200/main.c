@@ -50,7 +50,8 @@
 #define BM222_ADDR 0x18
 #define TMP006_ADDR 0x41
 
-static const char *upload_form = "\
+static const char *upload_form =
+    "\
 <h1>Upload file</h1> \
 <form action='/upload' method='POST' enctype='multipart/form-data'> \
   <input type='file' name='file'> \
@@ -88,8 +89,7 @@ static void mg_ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
           ("HTTP request from %s: %.*s %.*s", addr, (int) hm->method.len,
            hm->method.p, (int) hm->uri.len, hm->uri.p));
       if (mg_vcmp(&hm->uri, "/upload") == 0 ||
-          (mg_vcmp(&hm->uri, "/") == 0 &&
-           mg_stat("SL:index.html", &st) != 0)) {
+          (mg_vcmp(&hm->uri, "/") == 0 && mg_stat("SL:index.html", &st) != 0)) {
         mg_send(nc, upload_form, strlen(upload_form));
         nc->flags |= MG_F_SEND_AND_CLOSE;
         break;
@@ -131,13 +131,19 @@ static void mg_ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
 static void mg_init(struct mg_mgr *mgr) {
   LOG(LL_INFO, ("MG task running"));
+
+  stop_nwp(); /* See function description in wifi.c */
+  int role = sl_Start(0, 0, 0);
+  if (role < 0) {
+    LOG(LL_ERROR, ("Failed to start NWP"));
+    return;
+  }
+  LOG(LL_INFO, ("NWP started"));
   GPIO_IF_LedToggle(MCU_RED_LED_GPIO);
 
   data_init_sensors(TMP006_ADDR, BM222_ADDR);
 
   sl_fs_init();
-
-  sl_Start(NULL, NULL, NULL);
 
 #if defined(WIFI_STA_SSID)
   if (!wifi_setup_sta(WIFI_STA_SSID, WIFI_STA_PASS)) {
