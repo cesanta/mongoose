@@ -1,10 +1,13 @@
 #include "wifi.h"
 
 #include "mongoose.h"
-#include "simplelink.h"
-#include "wlan.h"
 
-#include "gpio_if.h"
+#include <simplelink/include/wlan.h>
+
+#include <inc/hw_types.h>
+
+#include <driverlib/gpio.h>
+#include <example/common/gpio_if.h>
 
 void SimpleLinkWlanEventHandler(SlWlanEvent_t *e) {
   switch (e->Event) {
@@ -22,8 +25,6 @@ void SimpleLinkWlanEventHandler(SlWlanEvent_t *e) {
   }
 }
 
-int ip_acquired = 0;
-
 void SimpleLinkNetAppEventHandler(SlNetAppEvent_t *e) {
   if (e->Event == SL_NETAPP_IPV4_IPACQUIRED_EVENT) {
     SlIpV4AcquiredAsync_t *ed = &e->EventData.ipAcquiredV4;
@@ -31,7 +32,6 @@ void SimpleLinkNetAppEventHandler(SlNetAppEvent_t *e) {
                   SL_IPV4_BYTE(ed->ip, 2), SL_IPV4_BYTE(ed->ip, 1),
                   SL_IPV4_BYTE(ed->ip, 0)));
     GPIO_IF_LedToggle(MCU_RED_LED_GPIO);
-    ip_acquired = 1;
   } else if (e->Event == SL_NETAPP_IP_LEASED_EVENT) {
     LOG(LL_INFO, ("IP leased"));
   } else {

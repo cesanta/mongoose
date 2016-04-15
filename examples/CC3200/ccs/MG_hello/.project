@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>MG_sensor_demo</name>
+	<name>MG_hello</name>
 	<comment></comment>
 	<projects>
 		<project>Mongoose</project>
@@ -27,39 +27,9 @@
 	</natures>
 	<linkedResources>
 		<link>
-			<name>bm222.c</name>
-			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/bm222.c</locationURI>
-		</link>
-		<link>
-			<name>bm222.h</name>
-			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/bm222.h</locationURI>
-		</link>
-		<link>
-			<name>data.c</name>
-			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/data.c</locationURI>
-		</link>
-		<link>
-			<name>data.h</name>
-			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/data.h</locationURI>
-		</link>
-		<link>
 			<name>gpio_if.c</name>
 			<type>1</type>
 			<locationURI>CC3200_SDK_ROOT/example/common/gpio_if.c</locationURI>
-		</link>
-		<link>
-			<name>i2c_if.c</name>
-			<type>1</type>
-			<locationURI>CC3200_SDK_ROOT/example/common/i2c_if.c</locationURI>
-		</link>
-		<link>
-			<name>main.c</name>
-			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/main.c</locationURI>
 		</link>
 		<link>
 			<name>network_common.c</name>
@@ -70,16 +40,6 @@
 			<name>startup_ccs.c</name>
 			<type>1</type>
 			<locationURI>CC3200_SDK_ROOT/example/common/startup_ccs.c</locationURI>
-		</link>
-		<link>
-			<name>tmp006.c</name>
-			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/tmp006.c</locationURI>
-		</link>
-		<link>
-			<name>tmp006.h</name>
-			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/tmp006.h</locationURI>
 		</link>
 		<link>
 			<name>wifi.c</name>

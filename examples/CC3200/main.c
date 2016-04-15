@@ -8,29 +8,28 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Driverlib includes */
-#include "hw_types.h"
+#include <inc/hw_types.h>
+#include <inc/hw_ints.h>
+#include <inc/hw_memmap.h>
 
-#include "hw_ints.h"
-#include "hw_memmap.h"
-#include "interrupt.h"
-#include "pin.h"
-#include "prcm.h"
-#include "rom.h"
-#include "rom_map.h"
-#include "uart.h"
-#include "utils.h"
+#include <driverlib/gpio.h>
+#include <driverlib/interrupt.h>
+#include <driverlib/pin.h>
+#include <driverlib/prcm.h>
+#include <driverlib/rom.h>
+#include <driverlib/rom_map.h>
+#include <driverlib/uart.h>
+#include <driverlib/utils.h>
 
-#include "gpio.h"
-#include "gpio_if.h"
-#include "i2c_if.h"
+#include <example/common/gpio_if.h>
+#include <example/common/i2c_if.h>
 
-#include "mongoose.h"
-#include "simplelink.h"
-#include "device.h"
+/* Mongoose.h brings in SimpleLink support. Do not include simplelink.h. */
+#include <mongoose.h>
+
+#include <simplelink/include/device.h>
 
 #include "data.h"
-#include "mongoose.h"
 #include "wifi.h"
 
 /* Set up an AP or connect to existing WiFi network. */
@@ -50,6 +49,13 @@
 
 #define BM222_ADDR 0x18
 #define TMP006_ADDR 0x41
+
+static const char *upload_form = "\
+<h1>Upload file</h1> \
+<form action='/upload' method='POST' enctype='multipart/form-data'> \
+  <input type='file' name='file'> \
+  <input type='submit' value='Upload'> \
+</form>";
 
 static struct mg_str upload_fname(struct mg_connection *nc,
                                   struct mg_str fname) {
@@ -74,12 +80,20 @@ static void mg_ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
     case MG_EV_HTTP_REQUEST: {
       char addr[32];
       struct http_message *hm = (struct http_message *) ev_data;
+      cs_stat_t st;
       mg_conn_addr_to_str(nc, addr, sizeof(addr), MG_SOCK_STRINGIFY_REMOTE |
                                                       MG_SOCK_STRINGIFY_IP |
                                                       MG_SOCK_STRINGIFY_PORT);
       LOG(LL_INFO,
           ("HTTP request from %s: %.*s %.*s", addr, (int) hm->method.len,
            hm->method.p, (int) hm->uri.len, hm->uri.p));
+      if (mg_vcmp(&hm->uri, "/upload") == 0 ||
+          (mg_vcmp(&hm->uri, "/") == 0 &&
+           mg_stat("SL:index.html", &st) != 0)) {
+        mg_send(nc, upload_form, strlen(upload_form));
+        nc->flags |= MG_F_SEND_AND_CLOSE;
+        break;
+      }
       struct mg_serve_http_opts opts;
       memset(&opts, 0, sizeof(opts));
       opts.document_root = "SL:";
@@ -195,7 +209,7 @@ int main() {
   MAP_PinTypeGPIO(PIN_64, PIN_MODE_0, false);
   MAP_GPIODirModeSet(GPIOA1_BASE, 0x2, GPIO_DIR_MODE_OUT);
   GPIO_IF_LedConfigure(LED1);
-  GPIO_IF_LedToggle(MCU_RED_LED_GPIO);
+  GPIO_IF_LedOn(MCU_RED_LED_GPIO);
 
   if (VStartSimpleLinkSpawnTask(8) != 0) {
     LOG(LL_ERROR, ("Failed to create SL task"));

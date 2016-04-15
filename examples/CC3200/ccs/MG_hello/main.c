@@ -17,23 +17,28 @@
 #include <stdio.h>
 #include <string.h>
 
-/* XDCtools Header files */
-#include <xdc/std.h>
-#include <xdc/runtime/System.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-/* BIOS Header files */
-#include <ti/sysbios/BIOS.h>
-#include <ti/sysbios/knl/Task.h>
+#include <inc/hw_types.h>
+#include <inc/hw_ints.h>
+#include <inc/hw_memmap.h>
 
-/* TI-RTOS Header files */
-#include <ti/drivers/GPIO.h>
-#include <ti/drivers/WiFi.h>
+#include <driverlib/gpio.h>
+#include <driverlib/interrupt.h>
+#include <driverlib/pin.h>
+#include <driverlib/prcm.h>
+#include <driverlib/rom.h>
+#include <driverlib/rom_map.h>
 
-/* Example/Board Header file */
-#include "Board.h"
+#include <example/common/gpio_if.h>
 
 /* Mongoose.h brings in SimpleLink support. Do not include simplelink.h. */
 #include <mongoose.h>
+
+#include <simplelink/include/device.h>
 
 #include "wifi.h"
 
@@ -107,18 +112,7 @@ void mg_ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 }
 
 static void mg_init(struct mg_mgr *mgr) {
-  WiFi_Params        wifiParams;
-  WiFi_Handle        handle;
-
   LOG(LL_INFO, ("MG task running"));
-
-  /* Open WiFi driver */
-  WiFi_Params_init(&wifiParams);
-  wifiParams.bitRate = 2000000;
-  handle = WiFi_open(Board_WIFI, Board_WIFI_SPI, NULL, &wifiParams);
-  if (handle == NULL) {
-    System_abort("WiFi driver failed to open.");
-  }
 
   sl_Start(0, 0, 0);
 
@@ -152,24 +146,55 @@ static void mg_init(struct mg_mgr *mgr) {
   }
 }
 
-int main(void) {
-    Board_initGeneral();
-    Board_initGPIO();
-    Board_initWiFi();
+#ifndef USE_TIRTOS
+/* Int vector table, defined in startup_gcc.c */
+extern void (*const g_pfnVectors[])(void);
+#endif
 
-    setvbuf(stdout, NULL, _IOLBF, 0);
-    setvbuf(stderr, NULL, _IOLBF, 0);
-    cs_log_set_level(LL_INFO);
-    cs_log_set_file(stdout);
+int main() {
+#ifndef USE_TIRTOS
+  MAP_IntVTableBaseSet((unsigned long) &g_pfnVectors[0]);
+#endif
+  MAP_IntEnable(FAULT_SYSTICK);
+  MAP_IntMasterEnable();
+  PRCMCC3200MCUInit();
 
-    if (!mg_start_task(MG_TASK_PRIORITY, MG_TASK_STACK_SIZE, mg_init)) {
-      LOG(LL_ERROR, ("Error starting Mongoose task"));
-      return 1;
-    }
+  setvbuf(stdout, NULL, _IOLBF, 0);
+  setvbuf(stderr, NULL, _IOLBF, 0);
+  cs_log_set_level(LL_INFO);
+  cs_log_set_file(stdout);
 
-    osi_start();
+  LOG(LL_INFO, ("Hello, world!"));
 
-    return 0;
+  /* Set up the red LED. Note that amber and green cannot be used as they share
+   * pins with I2C. */
+  MAP_PRCMPeripheralClkEnable(PRCM_GPIOA1, PRCM_RUN_MODE_CLK);
+  MAP_PinTypeGPIO(PIN_64, PIN_MODE_0, false);
+  MAP_GPIODirModeSet(GPIOA1_BASE, 0x2, GPIO_DIR_MODE_OUT);
+  GPIO_IF_LedConfigure(LED1);
+  GPIO_IF_LedOn(MCU_RED_LED_GPIO);
+
+  if (VStartSimpleLinkSpawnTask(8) != 0) {
+    LOG(LL_ERROR, ("Failed to create SL task"));
+  }
+
+  if (!mg_start_task(MG_TASK_PRIORITY, MG_TASK_STACK_SIZE, mg_init)) {
+    LOG(LL_ERROR, ("Failed to create MG task"));
+  }
+
+  osi_start();
+
+  return 0;
+}
+
+/* These are FreeRTOS hooks for various life situations. */
+void vApplicationMallocFailedHook() {
+}
+
+void vApplicationIdleHook() {
+}
+
+void vApplicationStackOverflowHook(OsiTaskHandle *th, signed char *tn) {
 }
 
 void SimpleLinkHttpServerCallback(SlHttpServerEvent_t *e,
