@@ -3114,8 +3114,7 @@ void mg_if_connect_tcp(struct mg_connection *nc,
                        const union socket_address *sa) {
   int rc;
   nc->sock = socket(AF_INET, SOCK_STREAM, 0);
-  if (nc->sock < 0) {
-    nc->sock = INVALID_SOCKET;
+  if (nc->sock == INVALID_SOCKET) {
     nc->err = errno ? errno : 1;
     return;
   }
@@ -3129,8 +3128,7 @@ void mg_if_connect_tcp(struct mg_connection *nc,
 
 void mg_if_connect_udp(struct mg_connection *nc) {
   nc->sock = socket(AF_INET, SOCK_DGRAM, 0);
-  if (nc->sock < 0) {
-    nc->sock = INVALID_SOCKET;
+  if (nc->sock == INVALID_SOCKET) {
     nc->err = errno ? errno : 1;
     return;
   }
@@ -3148,7 +3146,7 @@ int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
 
 int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
   sock_t sock = mg_open_listening_socket(sa, SOCK_DGRAM);
-  if (sock < 0) return (errno ? errno : 1);
+  if (sock == INVALID_SOCKET) return (errno ? errno : 1);
   mg_sock_set(nc, sock);
   return 0;
 }
@@ -3195,7 +3193,7 @@ static void mg_accept_conn(struct mg_connection *lc) {
   socklen_t sa_len = sizeof(sa);
   /* NOTE(lsm): on Windows, sock is always > FD_SETSIZE */
   sock_t sock = accept(lc->sock, &sa.sa, &sa_len);
-  if (sock < 0) {
+  if (sock == INVALID_SOCKET) {
     DBG(("%p: failed to accept: %d", lc, errno));
     return;
   }
