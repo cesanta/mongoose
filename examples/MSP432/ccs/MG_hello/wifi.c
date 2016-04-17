@@ -7,7 +7,7 @@
 void SimpleLinkWlanEventHandler(SlWlanEvent_t *e) {
   switch (e->Event) {
     case SL_WLAN_CONNECT_EVENT:
-      LOG(LL_INFO, ("WiFi: connected"));
+      LOG(LL_INFO, ("WiFi: connected, getting IP"));
       break;
     case SL_WLAN_STA_CONNECTED_EVENT:
       LOG(LL_INFO, ("WiFi: station connected"));
