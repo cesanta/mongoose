@@ -23,28 +23,35 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   int i;
 
   switch (ev) {
-    case MG_DNS_MESSAGE:
+    case MG_DNS_MESSAGE: {
+      struct mbuf reply_buf;
+      mbuf_init(&reply_buf, 512);
       msg = (struct mg_dns_message *) ev_data;
-      reply = mg_dns_create_reply(&nc->send_mbuf, msg);
+      reply = mg_dns_create_reply(&reply_buf, msg);
 
       for (i = 0; i < msg->num_questions; i++) {
+        char rname[256];
         rr = &msg->questions[i];
+        mg_dns_uncompress_name(msg, &rr->name, rname, sizeof(rname) - 1);
+        LOG(LL_INFO, ("Q type %d name %s", rr->rtype, rname));
         if (rr->rtype == MG_DNS_A_RECORD) {
-          mg_dns_reply_record(&reply, rr, NULL, rr->rtype, 3600,
-                              &s_our_ip_addr, 4);
+          mg_dns_reply_record(&reply, rr, NULL, rr->rtype, 10, &s_our_ip_addr,
+                              4);
         }
       }
 
       /*
        * We don't set the error flag even if there were no answers
-       * maching the MG_DNS_A_RECORD query type.
-       * This indicates that we have (syntetic) answers for MG_DNS_A_RECORD.
+       * matching the MG_DNS_A_RECORD query type.
+       * This indicates that we have (synthetic) answers for MG_DNS_A_RECORD.
        * See http://goo.gl/QWvufr for a distinction between NXDOMAIN and NODATA.
        */
 
       mg_dns_send_reply(nc, &reply);
       nc->flags |= MG_F_SEND_AND_CLOSE;
+      mbuf_free(&reply_buf);
       break;
+    }
   }
 }
 
@@ -55,6 +62,7 @@ int main(int argc, char *argv[]) {
 
   mg_mgr_init(&mgr, NULL);
   s_our_ip_addr = inet_addr("127.0.0.1");
+  cs_log_set_level(LL_INFO);
 
   /* Parse command line arguments */
   for (i = 1; i < argc; i++) {

@@ -8841,9 +8841,14 @@ int mg_dns_insert_header(struct mbuf *io, size_t pos,
   return mbuf_insert(io, pos, &header, sizeof(header));
 }
 
-int mg_dns_copy_body(struct mbuf *io, struct mg_dns_message *msg) {
-  return mbuf_append(io, msg->pkt.p + sizeof(struct mg_dns_header),
-                     msg->pkt.len - sizeof(struct mg_dns_header));
+int mg_dns_copy_questions(struct mbuf *io, struct mg_dns_message *msg) {
+  unsigned char *begin, *end;
+  struct mg_dns_resource_record *last_q;
+  if (msg->num_questions <= 0) return 0;
+  begin = (unsigned char *) msg->pkt.p + sizeof(struct mg_dns_header);
+  last_q = &msg->questions[msg->num_questions - 1];
+  end = (unsigned char *) last_q->name.p + last_q->name.len + 4;
+  return mbuf_append(io, begin, end - begin);
 }
 
 static int mg_dns_encode_name(struct mbuf *io, const char *name, size_t len) {
@@ -9150,7 +9155,7 @@ struct mg_dns_reply mg_dns_create_reply(struct mbuf *io,
 
   /* reply + recursion allowed */
   msg->flags |= 0x8080;
-  mg_dns_copy_body(io, msg);
+  mg_dns_copy_questions(io, msg);
 
   msg->num_answers = 0;
   return rep;

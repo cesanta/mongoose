@@ -3253,14 +3253,14 @@ int mg_dns_insert_header(struct mbuf *io, size_t pos,
                          struct mg_dns_message *msg);
 
 /*
- * Append already encoded body from an existing message.
+ * Append already encoded questions from an existing message.
  *
  * This is useful when generating a DNS reply message which includes
  * all question records.
  *
  * Return number of appened bytes.
  */
-int mg_dns_copy_body(struct mbuf *io, struct mg_dns_message *msg);
+int mg_dns_copy_questions(struct mbuf *io, struct mg_dns_message *msg);
 
 /*
  * Encode and append a DNS resource record to an IO buffer.
