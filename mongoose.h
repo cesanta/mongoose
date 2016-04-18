@@ -735,6 +735,14 @@ int sl_fs_init();
 #ifndef CS_COMMON_CS_DBG_H_
 #define CS_COMMON_CS_DBG_H_
 
+#ifndef CS_DISABLE_STDIO
+#include <stdio.h>
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 enum cs_log_level {
   LL_NONE = -1,
   LL_ERROR = 0,
@@ -750,8 +758,6 @@ enum cs_log_level {
 void cs_log_set_level(enum cs_log_level level);
 
 #ifndef CS_DISABLE_STDIO
-
-#include <stdio.h>
 
 void cs_log_set_file(FILE *file);
 
@@ -786,6 +792,10 @@ void cs_log_printf(const char *fmt, ...);
 
 #endif
 
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
 #endif /* CS_COMMON_CS_DBG_H_ */
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
@@ -795,8 +805,16 @@ void cs_log_printf(const char *fmt, ...);
 #ifndef CS_COMMON_CS_TIME_H_
 #define CS_COMMON_CS_TIME_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 /* Sub-second granularity time(). */
 double cs_time();
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 #endif /* CS_COMMON_CS_TIME_H_ */
 /*
@@ -1102,6 +1120,10 @@ int json_emit_va(char *buf, int buf_len, const char *fmt, va_list);
 #ifndef CS_COMMON_CS_DIRENT_H_
 #define CS_COMMON_CS_DIRENT_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 #ifdef CS_ENABLE_SPIFFS
 
 #include <spiffs.h>
@@ -1124,6 +1146,10 @@ DIR *opendir(const char *dir_name);
 int closedir(DIR *dir);
 struct dirent *readdir(DIR *dir);
 #endif
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 #endif /* CS_COMMON_CS_DIRENT_H_ */
 /*

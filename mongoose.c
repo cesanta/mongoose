@@ -531,6 +531,8 @@ typedef int cs_dirent_dummy;
  * All rights reserved
  */
 
+/* Amalgamated: #include "common/cs_time.h" */
+
 #ifndef _WIN32
 #include <stddef.h>
 #if !defined(CS_PLATFORM) || \
