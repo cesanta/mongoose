@@ -50,6 +50,8 @@
 #define BM222_ADDR 0x18
 #define TMP006_ADDR 0x41
 
+void fs_slfs_set_new_file_size(const char *name, size_t size);
+
 static const char *upload_form =
     "\
 <h1>Upload file</h1> \
@@ -61,10 +63,18 @@ static const char *upload_form =
 static struct mg_str upload_fname(struct mg_connection *nc,
                                   struct mg_str fname) {
   struct mg_str lfn;
-  lfn.len = fname.len + 3;
-  lfn.p = malloc(lfn.len);
-  memcpy((char *) lfn.p, "SL:", 3);
-  memcpy((char *) lfn.p + 3, fname.p, fname.len);
+  char *fn = malloc(fname.len + 4);
+  memcpy(fn, "SL:", 3);
+  memcpy(fn + 3, fname.p, fname.len);
+  fn[3 + fname.len] = '\0';
+  if (nc->user_data != NULL) {
+    intptr_t cl = (intptr_t) nc->user_data;
+    if (cl >= 0) {
+      fs_slfs_set_new_file_size(fn + 3, cl);
+    }
+  }
+  lfn.len = fname.len + 4;
+  lfn.p = fn;
   return lfn;
 }
 
@@ -113,6 +123,24 @@ static void mg_ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
     case MG_EV_TIMER: {
       data_collect();
       nc->ev_timer_time = mg_time() + (DATA_COLLECTION_INTERVAL_MS * 0.001);
+      break;
+    }
+    /* SimpleLink FS requires pre-declaring max file size. We use Content-Length
+     * for that purpose - it will not exactly match file size, but is guaranteed
+     * to exceed it and should be close enough. */
+    case MG_EV_HTTP_MULTIPART_REQUEST: {
+      struct http_message *hm = (struct http_message *) ev_data;
+      struct mg_str *cl_header = mg_get_http_header(hm, "Content-Length");
+      intptr_t cl = -1;
+      if (cl_header != NULL && cl_header->len < 20) {
+        char buf[20];
+        memcpy(buf, cl_header->p, cl_header->len);
+        buf[cl_header->len] = '\0';
+        cl = atoi(buf);
+        if (cl < 0) cl = -1;
+      }
+      nc->user_data = (void *) cl;
+      break;
     }
     case MG_EV_HTTP_PART_BEGIN:
     case MG_EV_HTTP_PART_DATA:
@@ -133,6 +161,7 @@ static void mg_init(struct mg_mgr *mgr) {
   LOG(LL_INFO, ("MG task running"));
 
   stop_nwp(); /* See function description in wifi.c */
+  LOG(LL_INFO, ("Starting NWP..."));
   int role = sl_Start(0, 0, 0);
   if (role < 0) {
     LOG(LL_ERROR, ("Failed to start NWP"));

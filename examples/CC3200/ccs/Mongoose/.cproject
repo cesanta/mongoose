@@ -29,7 +29,6 @@
 								<option id="com.ti.ccstudio.buildDefinitions.TMS470_5.2.compilerID.DEFINE.2068422510" name="Pre-define NAME (--define, -D)" superClass="com.ti.ccstudio.buildDefinitions.TMS470_5.2.compilerID.DEFINE" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="MG_ENABLE_HTTP_STREAMING_MULTIPART=1"/>
 									<listOptionValue builtIn="false" value="SL_PLATFORM_MULTI_THREADED=1"/>
-									<listOptionValue builtIn="false" value="FS_SLFS_MAX_FILE_SIZE=262144"/>
 									<listOptionValue builtIn="false" value="MG_FS_SLFS=1"/>
 									<listOptionValue builtIn="false" value="cc3200"/>
 								</option>
@@ -95,7 +94,6 @@
 								<option id="com.ti.ccstudio.buildDefinitions.TMS470_5.2.compilerID.DEFINE.1633469996" name="Pre-define NAME (--define, -D)" superClass="com.ti.ccstudio.buildDefinitions.TMS470_5.2.compilerID.DEFINE" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="MG_ENABLE_HTTP_STREAMING_MULTIPART=1"/>
 									<listOptionValue builtIn="false" value="SL_PLATFORM_MULTI_THREADED=1"/>
-									<listOptionValue builtIn="false" value="FS_SLFS_MAX_FILE_SIZE=262144"/>
 									<listOptionValue builtIn="false" value="MG_FS_SLFS=1"/>
 									<listOptionValue builtIn="false" value="cc3200"/>
 								</option>

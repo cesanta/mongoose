@@ -10216,6 +10216,8 @@ off_t fs_slfs_lseek(int fd, off_t offset, int whence);
 int fs_slfs_unlink(const char *filename);
 int fs_slfs_rename(const char *from, const char *to);
 
+void fs_slfs_set_new_file_size(const char *name, size_t size);
+
 #endif /* defined(MG_FS_SLFS) */
 
 #endif /* CS_COMMON_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_ */
@@ -10253,6 +10255,11 @@ extern int set_errno(int e); /* From sl_fs.c */
 #define FS_SLFS_MAX_FILE_SIZE (64 * 1024)
 #endif
 
+struct sl_file_size_hint {
+  char *name;
+  size_t size;
+};
+
 struct sl_fd_info {
   _i32 fh;
   _off_t pos;
@@ -10260,6 +10267,7 @@ struct sl_fd_info {
 };
 
 static struct sl_fd_info s_sl_fds[MAX_OPEN_SLFS_FILES];
+static struct sl_file_size_hint s_sl_file_size_hints[MAX_OPEN_SLFS_FILES];
 
 static int sl_fs_to_errno(_i32 r) {
   DBG(("SL error: %d", (int) r));
@@ -10309,7 +10317,18 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
       return set_errno(ENOTSUP);
     }
     if (flags & O_CREAT) {
-      am = FS_MODE_OPEN_CREATE(FS_SLFS_MAX_FILE_SIZE, 0);
+      size_t i, size = FS_SLFS_MAX_FILE_SIZE;
+      for (i = 0; i < MAX_OPEN_SLFS_FILES; i++) {
+        if (s_sl_file_size_hints[i].name != NULL &&
+            strcmp(s_sl_file_size_hints[i].name, pathname) == 0) {
+          size = s_sl_file_size_hints[i].size;
+          free(s_sl_file_size_hints[i].name);
+          s_sl_file_size_hints[i].name = NULL;
+          break;
+        }
+      }
+      DBG(("creating %s with max size %d", pathname, (int) size));
+      am = FS_MODE_OPEN_CREATE(size, 0);
     } else {
       am = FS_MODE_OPEN_WRITE;
     }
@@ -10408,6 +10427,18 @@ int fs_slfs_unlink(const char *filename) {
 
 int fs_slfs_rename(const char *from, const char *to) {
   return set_errno(ENOTSUP);
+}
+
+void fs_slfs_set_new_file_size(const char *name, size_t size) {
+  int i;
+  for (i = 0; i < MAX_OPEN_SLFS_FILES; i++) {
+    if (s_sl_file_size_hints[i].name == NULL) {
+      DBG(("File size hint: %s %d", name, (int) size));
+      s_sl_file_size_hints[i].name = strdup(name);
+      s_sl_file_size_hints[i].size = size;
+      break;
+    }
+  }
 }
 
 #endif /* defined(MG_FS_SLFS) || defined(CC3200_FS_SLFS) */
