@@ -447,6 +447,8 @@ API.txt for details.
 
 })(jQuery);
 
+var ws = null;
+var connected = false;
 
 $(document).ready(function() {
   var startTime = Date.now();
@@ -478,6 +480,7 @@ $(document).ready(function() {
   };
 
   var updateGraph = function(g) {
+    if (!connected) return;
     var now = Date.now();
     //if (now - g.lastUpdateTime < 50) return;
     g.lastUpdateTime = now;
@@ -518,7 +521,7 @@ $(document).ready(function() {
       ]
     },
     temp: {
-      title: 'Temperature sensor',
+      title: 'Sensor die temperature',
       plot: null,
       lastUpdateTime: null,
       data: [
@@ -533,10 +536,24 @@ $(document).ready(function() {
     setInterval(function() { updateGraph(v); }, 100);
   });
 
-  // Create Websocket connection. For simplicity, no reconnect logic is here.
-  //var ws = new WebSocket('ws://' + location.host);
-  var ws = new WebSocket('ws://192.168.1.54');
-  ws.onmessage = function(ev) {
+  function wsConnect() {
+    if (ws != null) return;
+    var wsAddr = 'ws://' + location.host;
+    console.log('Connecting to', wsAddr);
+    ws = new WebSocket(wsAddr);
+    ws.onopen = function() {
+      console.log('Connected');
+      connected = true;
+    };
+    ws.onclose = function() {
+      console.log('Disconnected');
+      connected = false;
+      ws = null;
+    };
+    ws.onmessage = handleWsMessage;
+  }
+
+  function handleWsMessage(ev) {
     try {
       var obj = JSON.parse(ev.data);
       //var timestamp = startTime + parseInt(obj.ts * 1000);
@@ -565,4 +582,6 @@ $(document).ready(function() {
     ws.send(JSON.stringify({ t: 1, v: state }));
   });
 
+  wsConnect();
+  setInterval(wsConnect, 1000);
 });
