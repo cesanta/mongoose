@@ -9357,9 +9357,13 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
   struct mg_resolve_async_request *req;
   struct mg_dns_message *msg;
 
-  DBG(("ev=%d", ev));
+  DBG(("ev=%d user_data=%p", ev, nc->user_data));
 
   req = (struct mg_resolve_async_request *) nc->user_data;
+
+  if (req == NULL) {
+    return;
+  }
 
   switch (ev) {
     case MG_EV_CONNECT:
