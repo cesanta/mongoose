@@ -1,10 +1,11 @@
 ---
-title: "MG_MK_STR()"
-decl_name: "MG_MK_STR"
+title: "mg_mk_str()"
+decl_name: "mg_mk_str"
 symbol_kind: "func"
 signature: |
-  #define MG_MK_STR(str_literal);
+  struct mg_str mg_mk_str(const char *s);
 ---
 
-Macro for initializing mg_str. 
+A helper function for creating mg_str struct from plain C string.
+`NULL` is allowed and becomes `{NULL, 0}`. 
 
