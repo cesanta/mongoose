@@ -224,21 +224,6 @@ typedef struct _stati64 cs_stat_t;
 #endif
 #define DIRSEP '\\'
 
-/* POSIX opendir/closedir/readdir API for Windows. */
-struct dirent {
-  char d_name[MAX_PATH];
-};
-
-typedef struct DIR {
-  HANDLE handle;
-  WIN32_FIND_DATAW info;
-  struct dirent result;
-} DIR;
-
-DIR *opendir(const char *name);
-int closedir(DIR *dir);
-struct dirent *readdir(DIR *dir);
-
 #ifndef va_copy
 #ifdef __va_copy
 #define va_copy __va_copy
@@ -1112,46 +1097,6 @@ int json_emit_va(char *buf, int buf_len, const char *fmt, va_list);
 #endif /* __cplusplus */
 
 #endif /* CS_MONGOOSE_DEPS_FROZEN_FROZEN_H_ */
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
-
-#ifndef CS_COMMON_CS_DIRENT_H_
-#define CS_COMMON_CS_DIRENT_H_
-
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-#ifdef CS_ENABLE_SPIFFS
-
-#include <spiffs.h>
-
-typedef struct {
-  spiffs_DIR dh;
-  struct spiffs_dirent de;
-} DIR;
-
-#define d_name name
-#define dirent spiffs_dirent
-
-int rmdir(const char *path);
-int mkdir(const char *path, mode_t mode);
-
-#endif
-
-#if defined(_WIN32) || defined(CS_ENABLE_SPIFFS)
-DIR *opendir(const char *dir_name);
-int closedir(DIR *dir);
-struct dirent *readdir(DIR *dir);
-#endif
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* CS_COMMON_CS_DIRENT_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
