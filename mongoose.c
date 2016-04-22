@@ -3313,6 +3313,7 @@ static void mg_write_to_socket(struct mg_connection *nc) {
   {
     n = (int) MG_SEND_FUNC(nc->sock, io->buf, io->len, 0);
     DBG(("%p %d bytes -> %d", nc, n, nc->sock));
+    if (n < 0 && !mg_is_error(n)) return;
   }
 
   if (n > 0) {
