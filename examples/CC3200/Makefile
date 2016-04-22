@@ -19,9 +19,9 @@ endif
 flash:
 	docker run --rm -it --privileged -v $(SRC_DIR):/src $(SDK) /bin/bash -c "\
 		cd /usr/local/bin; \
-		./cc3200prog $(PORT) /src/smartjs/platforms/cc3200/firmware/smartjs.bin \
+		./cc3200prog $(PORT) /src/fw/platforms/cc3200/firmware/fw.bin \
 	"
 
 debug:
 	docker run --rm -it --privileged -v $(SRC_DIR):/src $(SDK) \
-		/bin/bash -c "cd /src/smartjs/platforms/cc3200 && tools/gdb.sh"
+		/bin/bash -c "cd /src/fw/platforms/cc3200 && tools/gdb.sh"
