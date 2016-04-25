@@ -4127,9 +4127,10 @@ static const char *mg_version_header = "Mongoose/" MG_VERSION;
 enum mg_http_proto_data_type { DATA_NONE, DATA_FILE, DATA_PUT };
 
 struct mg_http_proto_data_file {
-  FILE *fp;     /* Opened file. */
-  int64_t cl;   /* Content-Length. How many bytes to send. */
-  int64_t sent; /* How many bytes have been already sent. */
+  FILE *fp;      /* Opened file. */
+  int64_t cl;    /* Content-Length. How many bytes to send. */
+  int64_t sent;  /* How many bytes have been already sent. */
+  int keepalive; /* Keep connection open after sending. */
   enum mg_http_proto_data_type type;
 };
 
@@ -4812,10 +4813,8 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
       mg_send(nc, buf, n);
       pd->file.sent += n;
     } else {
+      if (!pd->file.keepalive) nc->flags |= MG_F_SEND_AND_CLOSE;
       mg_http_free_proto_data_file(&pd->file);
-#ifdef MG_DISABLE_HTTP_KEEP_ALIVE
-      nc->flags |= MG_F_SEND_AND_CLOSE;
-#endif
     }
   } else if (pd->file.type == DATA_PUT) {
     struct mbuf *io = &nc->recv_mbuf;
@@ -4827,10 +4826,8 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
       pd->file.sent += n;
     }
     if (n == 0 || pd->file.sent >= pd->file.cl) {
+      if (!pd->file.keepalive) nc->flags |= MG_F_SEND_AND_CLOSE;
       mg_http_free_proto_data_file(&pd->file);
-#ifdef MG_DISABLE_HTTP_KEEP_ALIVE
-      nc->flags |= MG_F_SEND_AND_CLOSE;
-#endif
     }
   }
 #ifndef MG_DISABLE_CGI
@@ -5946,6 +5943,17 @@ static void mg_http_send_file2(struct mg_connection *nc, const char *path,
       }
     }
 
+#ifndef MG_DISABLE_HTTP_KEEP_ALIVE
+    {
+      struct mg_str *conn_hdr = mg_get_http_header(hm, "Connection");
+      if (conn_hdr != NULL) {
+        pd->file.keepalive = (mg_vcasecmp(conn_hdr, "keep-alive") == 0);
+      } else {
+        pd->file.keepalive = (mg_vcmp(&hm->proto, "HTTP/1.1") == 0);
+      }
+    }
+#endif
+
     mg_http_construct_etag(etag, sizeof(etag), st);
     mg_gmt_time_string(current_time, sizeof(current_time), &t);
     mg_gmt_time_string(last_modified, sizeof(last_modified), &st->st_mtime);
@@ -5963,14 +5971,13 @@ static void mg_http_send_file2(struct mg_connection *nc, const char *path,
               "Last-Modified: %s\r\n"
               "Accept-Ranges: bytes\r\n"
               "Content-Type: %.*s\r\n"
-#ifdef MG_DISABLE_HTTP_KEEP_ALIVE
-              "Connection: close\r\n"
-#endif
+              "Connection: %s\r\n"
               "Content-Length: %" SIZE_T_FMT
               "\r\n"
               "%sEtag: %s\r\n\r\n",
               current_time, last_modified, (int) mime_type.len, mime_type.p,
-              (size_t) cl, range, etag);
+              (pd->file.keepalive ? "keep-alive" : "close"), (size_t) cl, range,
+              etag);
 
     pd->file.cl = cl;
     pd->file.type = DATA_FILE;
