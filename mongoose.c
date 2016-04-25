@@ -4122,6 +4122,8 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out) {
 #define MG_WS_NO_HOST_HEADER_MAGIC ((char *) 0x1)
 #endif
 
+static const char *mg_version_header = "Mongoose/" MG_VERSION;
+
 enum mg_http_proto_data_type { DATA_NONE, DATA_FILE, DATA_PUT };
 
 struct mg_http_proto_data_file {
@@ -5640,7 +5642,8 @@ void mg_send_response_line(struct mg_connection *nc, int status_code,
       status_message = "Internal Server Error";
       break;
   }
-  mg_printf(nc, "HTTP/1.1 %d %s\r\n", status_code, status_message);
+  mg_printf(nc, "HTTP/1.1 %d %s\r\nServer: %s\r\n", status_code, status_message,
+            mg_version_header);
   if (extra_headers != NULL) {
     mg_printf(nc, "%s\r\n", extra_headers);
   }
@@ -6426,16 +6429,24 @@ static void mg_send_directory_listing(struct mg_connection *nc, const char *dir,
   mg_printf_http_chunk(
       nc,
       "<html><head><title>Index of %.*s</title>%s%s"
-      "<style>th,td {text-align: left; padding-right: 1em; }</style></head>"
-      "<body><h1>Index of %.*s</h1><pre><table cellpadding=\"0\"><thead>"
+      "<style>th,td {text-align: left; padding-right: 1em; "
+      "font-family: monospace; }</style></head>\n"
+      "<body><h1>Index of %.*s</h1>\n<table cellpadding=0><thead>"
       "<tr><th><a href=# rel=0>Name</a></th><th>"
       "<a href=# rel=1>Modified</a</th>"
       "<th><a href=# rel=2>Size</a></th></tr>"
-      "<tr><td colspan=\"3\"><hr></td></tr></thead><tbody id=tb>",
+      "<tr><td colspan=3><hr></td></tr>\n"
+      "</thead>\n"
+      "<tbody id=tb>",
       (int) hm->uri.len, hm->uri.p, sort_js_code, sort_js_code2,
       (int) hm->uri.len, hm->uri.p);
   mg_scan_directory(nc, dir, opts, mg_print_dir_entry);
-  mg_printf_http_chunk(nc, "%s", "</tbody></body></html>");
+  mg_printf_http_chunk(nc,
+                       "<tr><td colspan=3><hr></td></tr>\n"
+                       "</tbody></table>\n"
+                       "<address>%s</address>\n"
+                       "</body></html>",
+                       mg_version_header);
   mg_send_http_chunk(nc, "", 0);
   /* TODO(rojer): Remove when cesanta/dev/issues/197 is fixed. */
   nc->flags |= MG_F_SEND_AND_CLOSE;
