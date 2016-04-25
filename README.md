@@ -18,8 +18,7 @@ Alternatively,
 - [Read User Guide and API reference](https://docs.cesanta.com/mongoose/dev)
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
 
-If you are looking for a complete IoT platform with firmware and cloud compotent,
-- [Check out Smart.js - a full stack IoT platform](https://github.com/cesanta/iot)
+If you are looking for a complete solution with firmware and cloud components, check out [Mongoose IoT Platform](https://github.com/cesanta/mongoose-iot).
 
 # Support
 - [Support Forum - Ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/smart-js)
