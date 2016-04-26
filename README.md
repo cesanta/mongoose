@@ -21,7 +21,7 @@ Alternatively,
 If you are looking for a complete solution with firmware and cloud components, check out [Mongoose IoT Platform](https://github.com/cesanta/mongoose-iot).
 
 # Support
-- [Support Forum - Ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/smart-js)
+- [Support Forum - Ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/mongoose)
 - [Chat - Visit www.cesanta.com for our live chat] (http://www.cesanta.com)
 - [Commercial one-to-one support - Available to all commercial license holders] (https://www.cesanta.com/services-support)
 
