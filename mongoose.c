@@ -4122,6 +4122,11 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out) {
 #define MG_WS_NO_HOST_HEADER_MAGIC ((char *) 0x1)
 #endif
 
+/* CGI requires socketpair. */
+#if defined(MG_DISABLE_SOCKETPAIR) && !defined(MG_DISABLE_CGI)
+#define MG_DISABLE_CGI 1
+#endif
+
 static const char *mg_version_header = "Mongoose/" MG_VERSION;
 
 enum mg_http_proto_data_type { DATA_NONE, DATA_FILE, DATA_PUT };
