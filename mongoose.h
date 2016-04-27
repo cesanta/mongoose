@@ -315,7 +315,10 @@ typedef struct stat cs_stat_t;
 #define to64(x) strtoll(x, NULL, 10)
 #define INT64_FMT PRId64
 #define INT64_X_FMT PRIx64
+
+#ifndef __cdecl
 #define __cdecl
+#endif
 
 #ifndef va_copy
 #ifdef __va_copy

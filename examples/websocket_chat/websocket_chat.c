@@ -18,42 +18,42 @@ static int is_websocket(const struct mg_connection *nc) {
   return nc->flags & MG_F_IS_WEBSOCKET;
 }
 
-static void broadcast(struct mg_connection *nc, const char *msg, size_t len) {
+static void broadcast(struct mg_connection *nc, const struct mg_str msg) {
   struct mg_connection *c;
   char buf[500];
+  char addr[32];
+  mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
+                      MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
 
-  snprintf(buf, sizeof(buf), "%p %.*s", nc, (int) len, msg);
+  snprintf(buf, sizeof(buf), "%s %.*s", addr, (int) msg.len, msg.p);
+  printf("%s\n", buf); /* Local echo. */
   for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c)) {
+    if (c == nc) continue; /* Don't send to the sender. */
     mg_send_websocket_frame(c, WEBSOCKET_OP_TEXT, buf, strlen(buf));
   }
 }
 
 static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
-  struct http_message *hm = (struct http_message *) ev_data;
-  struct websocket_message *wm = (struct websocket_message *) ev_data;
-
   switch (ev) {
-    case MG_EV_HTTP_REQUEST:
-      /* Usual HTTP request - serve static files */
-      mg_serve_http(nc, hm, s_http_server_opts);
-      nc->flags |= MG_F_SEND_AND_CLOSE;
-      break;
-    case MG_EV_WEBSOCKET_HANDSHAKE_DONE:
+    case MG_EV_WEBSOCKET_HANDSHAKE_DONE: {
       /* New websocket connection. Tell everybody. */
-      broadcast(nc, "joined", 6);
+      broadcast(nc, mg_mk_str("++ joined"));
       break;
-    case MG_EV_WEBSOCKET_FRAME:
+    }
+    case MG_EV_WEBSOCKET_FRAME: {
+      struct websocket_message *wm = (struct websocket_message *) ev_data;
       /* New websocket message. Tell everybody. */
-      broadcast(nc, (char *) wm->data, wm->size);
+      struct mg_str d = {(char *) wm->data, wm->size};
+      broadcast(nc, d);
       break;
-    case MG_EV_CLOSE:
+    }
+    case MG_EV_CLOSE: {
       /* Disconnect. Tell everybody. */
       if (is_websocket(nc)) {
-        broadcast(nc, "left", 4);
+        broadcast(nc, mg_mk_str("-- left"));
       }
       break;
-    default:
-      break;
+    }
   }
 }
 
@@ -63,6 +63,8 @@ int main(void) {
 
   signal(SIGTERM, signal_handler);
   signal(SIGINT, signal_handler);
+  setvbuf(stdout, NULL, _IOLBF, 0);
+  setvbuf(stderr, NULL, _IOLBF, 0);
 
   mg_mgr_init(&mgr, NULL);
 
