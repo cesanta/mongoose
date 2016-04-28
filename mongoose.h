@@ -715,6 +715,10 @@ int _stat(const char *pathname, struct stat *st);
 
 #define SOMAXCONN 8
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 char *inet_ntoa(struct in_addr in);
 int inet_pton(int af, const char *src, void *dst);
@@ -727,6 +731,10 @@ bool mg_start_task(int priority, int stack_size, mg_init_cb mg_init);
 void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg);
 
 int sl_fs_init();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* defined(MG_SOCKET_SIMPLELINK) && !defined(__SIMPLELINK_H__) */
 
