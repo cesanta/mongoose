@@ -443,6 +443,10 @@ typedef struct stat cs_stat_t;
 
 /* Some functions we implement for Mongoose. */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef __TI_COMPILER_VERSION__
 struct SlTimeval_t;
 #define timeval SlTimeval_t
@@ -510,6 +514,10 @@ struct dirent *readdir(DIR *dir);
 #define MG_FS_SLFS
 #endif
 
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* CS_PLATFORM == CS_P_CC3200 */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_CC3200_H_ */
 /*
@@ -557,6 +565,10 @@ typedef struct stat cs_stat_t;
 
 /* Some functions we implement for Mongoose. */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef __TI_COMPILER_VERSION__
 struct SlTimeval_t;
 #define timeval SlTimeval_t
@@ -603,6 +615,10 @@ int _stat(const char *pathname, struct stat *st);
 #define va_copy(apc, ap) ((apc) = (ap))
 
 #endif /* __TI_COMPILER_VERSION__ */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* CS_PLATFORM == CS_P_MSP432 */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_MSP432_H_ */
