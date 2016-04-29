@@ -3429,7 +3429,10 @@ static void mg_read_from_socket(struct mg_connection *conn) {
     } else {
       MG_FREE(buf);
     }
-    if (mg_is_error(n)) {
+    if (n == 0) {
+      /* Orderly shutdown of the socket, try flushing output. */
+      conn->flags |= MG_F_SEND_AND_CLOSE;
+    } else if (mg_is_error(n)) {
       conn->flags |= MG_F_CLOSE_IMMEDIATELY;
     }
   }
