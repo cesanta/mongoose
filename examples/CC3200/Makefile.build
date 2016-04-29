@@ -104,4 +104,3 @@ ENTRY_$(PROG) = ResetISR
 
 SDK_OBJS = $(addprefix $(OBJDIR)/,$(patsubst %.c,%.o,$(SDK_SRCS)))
 $(SDK_OBJS): CFLAGS += -include mongoose.h -Wno-missing-braces -Wno-strict-aliasing -Wno-parentheses -Wno-unused-variable
-$(BUILD_DIR)/cc_pal.o: CFLAGS += -Wno-error
