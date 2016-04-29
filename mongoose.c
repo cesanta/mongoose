@@ -3244,21 +3244,23 @@ void mg_if_destroy_conn(struct mg_connection *nc) {
   nc->sock = INVALID_SOCKET;
 }
 
-static void mg_accept_conn(struct mg_connection *lc) {
+static int mg_accept_conn(struct mg_connection *lc) {
   struct mg_connection *nc;
   union socket_address sa;
   socklen_t sa_len = sizeof(sa);
   /* NOTE(lsm): on Windows, sock is always > FD_SETSIZE */
   sock_t sock = accept(lc->sock, &sa.sa, &sa_len);
   if (sock == INVALID_SOCKET) {
-    DBG(("%p: failed to accept: %d", lc, errno));
-    return;
+    if (mg_is_error(-1)) DBG(("%p: failed to accept: %d", lc, errno));
+    return 0;
   }
   nc = mg_if_accept_new_conn(lc);
   if (nc == NULL) {
     closesocket(sock);
-    return;
+    return 0;
   }
+  DBG(("%p conn from %s:%d", nc, inet_ntoa(sa.sin.sin_addr),
+       ntohs(sa.sin.sin_port)));
   mg_sock_set(nc, sock);
 #ifdef MG_ENABLE_SSL
   if (lc->ssl_ctx != NULL) {
@@ -3272,6 +3274,7 @@ static void mg_accept_conn(struct mg_connection *lc) {
   {
     mg_if_accept_tcp_cb(nc, &sa, sa_len);
   }
+  return 1;
 }
 
 /* 'sa' must be an initialized address to bind to */
@@ -3420,8 +3423,8 @@ static void mg_read_from_socket(struct mg_connection *conn) {
   {
     n = (int) MG_RECV_FUNC(conn->sock, buf,
                            recv_avail_size(conn, MG_TCP_RECV_BUFFER_SIZE), 0);
+    DBG(("%p %d bytes (PLAIN) <- %d", conn, n, conn->sock));
     if (n > 0) {
-      DBG(("%p %d bytes (PLAIN) <- %d", conn, n, conn->sock));
       mg_if_recv_tcp_cb(conn, buf, n);
     } else {
       MG_FREE(buf);
@@ -3553,22 +3556,22 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
          * flag on a listening socket and hangs in a loop.
          */
         if (fd_flags & _MG_F_FD_CAN_READ) mg_accept_conn(nc);
-        return;
       } else {
         mg_read_from_socket(nc);
       }
     }
-    if (nc->flags & MG_F_CLOSE_IMMEDIATELY) return;
   }
 
-  if ((fd_flags & _MG_F_FD_CAN_WRITE) && nc->send_mbuf.len > 0) {
-    mg_write_to_socket(nc);
-  }
+  if (!(nc->flags & MG_F_CLOSE_IMMEDIATELY)) {
+    if ((fd_flags & _MG_F_FD_CAN_WRITE) && nc->send_mbuf.len > 0) {
+      mg_write_to_socket(nc);
+    }
 
-  if (!(fd_flags & (_MG_F_FD_CAN_READ | _MG_F_FD_CAN_WRITE))) {
-    mg_if_poll(nc, now);
+    if (!(fd_flags & (_MG_F_FD_CAN_READ | _MG_F_FD_CAN_WRITE))) {
+      mg_if_poll(nc, now);
+    }
+    mg_if_timer(nc, now);
   }
-  mg_if_timer(nc, now);
 
   DBG(("%p after fd=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock, nc->flags,
        (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
@@ -3622,7 +3625,11 @@ void mg_ev_mgr_remove_conn(struct mg_connection *nc) {
 }
 
 void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
-  if (sock != INVALID_SOCKET) {
+  if (sock != INVALID_SOCKET
+#ifdef __unix__
+      && sock < FD_SETSIZE
+#endif
+      ) {
     FD_SET(sock, set);
     if (*max_fd == INVALID_SOCKET || sock > *max_fd) {
       *max_fd = sock;
@@ -3638,6 +3645,9 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   fd_set read_set, write_set, err_set;
   sock_t max_fd = INVALID_SOCKET;
   int num_fds, num_ev, num_timers = 0;
+#ifdef __unix__
+  int try_dup = 1;
+#endif
 
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
@@ -3656,6 +3666,20 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
 
     if (nc->sock != INVALID_SOCKET) {
       num_fds++;
+
+#ifdef __unix__
+      /* A hack to make sure all our file descriptos fit into FD_SETSIZE. */
+      if (nc->sock >= FD_SETSIZE && try_dup) {
+        int new_sock = dup(nc->sock);
+        if (new_sock >= 0 && new_sock < FD_SETSIZE) {
+          closesocket(nc->sock);
+          DBG(("new sock %d -> %d", nc->sock, new_sock));
+          nc->sock = new_sock;
+        } else {
+          try_dup = 0;
+        }
+      }
+#endif
 
       if (!(nc->flags & MG_F_WANT_WRITE) &&
           nc->recv_mbuf.len < nc->recv_mbuf_limit &&
