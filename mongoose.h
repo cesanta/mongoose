@@ -449,6 +449,9 @@ extern "C" {
 struct SlTimeval_t;
 #define timeval SlTimeval_t
 int gettimeofday(struct timeval *t, void *tz);
+
+int asprintf(char **strp, const char *fmt, ...);
+
 #endif
 
 long int random(void);

@@ -4307,6 +4307,8 @@ struct mg_cgi_env_block {
   int nvars;                               /* Number of variables in envp[] */
 };
 
+#ifndef MG_DISABLE_FILESYSTEM
+
 #define MIME_ENTRY(_ext, _type) \
   { _ext, sizeof(_ext) - 1, _type }
 static const struct {
@@ -4363,8 +4365,6 @@ static const struct {
     MIME_ENTRY("avi", "video/x-msvideo"),
     MIME_ENTRY("bmp", "image/bmp"),
     {NULL, 0, NULL}};
-
-#ifndef MG_DISABLE_FILESYSTEM
 
 #ifndef MG_DISABLE_DAV
 static int mg_mkdir(const char *path, uint32_t mode) {
@@ -10202,6 +10202,33 @@ int mg_set_protocol_coap(struct mg_connection *nc) {
 #include <driverlib/utils.h>
 
 #define CONSOLE_UART UARTA0_BASE
+
+#ifdef __TI_COMPILER_VERSION__
+int asprintf(char **strp, const char *fmt, ...) {
+  va_list ap;
+  int len;
+
+  *strp = malloc(BUFSIZ);
+  if (*strp == NULL) return -1;
+
+  va_start(ap, fmt);
+  len = vsnprintf(*strp, BUFSIZ, fmt, ap);
+  va_end(ap);
+
+  if (len > 0) {
+    *strp = realloc(*strp, len);
+    if (*strp == NULL) return -1;
+  }
+
+  if (len >= BUFSIZ) {
+    va_start(ap, fmt);
+    len = vsnprintf(*strp, len, fmt, ap);
+    va_end(ap);
+  }
+
+  return len;
+}
+#endif /* __TI_COMPILER_VERSION__ */
 
 #ifndef __TI_COMPILER_VERSION__
 int _gettimeofday_r(struct _reent *r, struct timeval *tp, void *tzp) {
