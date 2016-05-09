@@ -7463,9 +7463,11 @@ static void mg_http_send_digest_auth_request(struct mg_connection *c,
             domain, (unsigned long) time(NULL));
 }
 
-static void mg_http_send_options(struct mg_connection *nc) {
+static void mg_http_send_options(struct mg_connection *nc,
+                                 struct mg_serve_http_opts *opts) {
+  mg_send_response_line(nc, 200, opts->extra_headers);
   mg_printf(nc, "%s",
-            "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, CONNECT, OPTIONS"
+            "Allow: GET, POST, HEAD, CONNECT, OPTIONS"
 #ifndef MG_DISABLE_DAV
             ", MKCOL, PUT, DELETE, PROPFIND, MOVE\r\nDAV: 1,2"
 #endif
@@ -7558,7 +7560,7 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
 #endif
 #endif
   } else if (!mg_vcmp(&hm->method, "OPTIONS")) {
-    mg_http_send_options(nc);
+    mg_http_send_options(nc, opts);
   } else if (is_directory && index_file == NULL) {
 #ifndef MG_DISABLE_DIRECTORY_LISTING
     if (strcmp(opts->enable_directory_listing, "yes") == 0) {
