@@ -1,0 +1,36 @@
+==== mg_do_connect()
+
+[source,c]
+----
+MG_INTERNAL struct mg_connection *mg_do_connect(struct mg_connection *nc,
+                                                int proto,
+                                                union socket_address *sa);
+----
+internals that need to be accessible in unit tests 
+
+==== to_wchar()
+
+[source,c]
+----
+int to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len);
+----
+Retur value is the same as for MultiByteToWideChar. 
+
+==== mg_handle_chunked()
+
+[source,c]
+----
+MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
+                                     struct http_message *hm, char *buf,
+                                     size_t blen);
+----
+Reassemble the content of the buffer (buf, blen) which should be
+in the HTTP chunked encoding, by collapsing data chunks to the
+beginning of the buffer.
+
+If chunks get reassembled, modify hm->body to point to the reassembled
+body and fire MG_EV_HTTP_CHUNK event. If handler sets MG_F_DELETE_CHUNK
+in nc->flags, delete reassembled body from the mbuf.
+
+Return reassembled body size. 
+

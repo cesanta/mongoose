@@ -1,0 +1,129 @@
+=== CoAP
+
+CoAP message format:
+
+```
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+|Ver| T | TKL | Code | Message ID | Token (if any, TKL bytes) ...
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+| Options (if any) ...            |1 1 1 1 1 1 1 1| Payload (if any) ...
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+``` 
+
+==== struct mg_coap_option
+
+[source,c]
+----
+struct mg_coap_option {
+  struct mg_coap_option *next;
+  uint32_t number;
+  struct mg_str value;
+};
+----
+CoAP options.
+Use mg_coap_add_option and mg_coap_free_options
+for creation and destruction. 
+
+==== struct mg_coap_message
+
+[source,c]
+----
+struct mg_coap_message {
+  uint32_t flags;
+  uint8_t msg_type;
+  uint8_t code_class;
+  uint8_t code_detail;
+  uint16_t msg_id;
+  struct mg_str token;
+  struct mg_coap_option *options;
+  struct mg_str payload;
+  struct mg_coap_option *optiomg_tail;
+};
+----
+CoAP message. See RFC 7252 for details. 
+
+==== mg_set_protocol_coap()
+
+[source,c]
+----
+int mg_set_protocol_coap(struct mg_connection *nc);
+----
+Set CoAP protocol handler - trigger CoAP specific events 
+
+==== mg_coap_add_option()
+
+[source,c]
+----
+struct mg_coap_option *mg_coap_add_option(struct mg_coap_message *cm,
+                                          uint32_t number, char *value,
+                                          size_t len);
+----
+Add new option to mg_coap_message structure.
+Returns pointer to the newly created option. 
+
+==== mg_coap_free_options()
+
+[source,c]
+----
+void mg_coap_free_options(struct mg_coap_message *cm);
+----
+Free the memory allocated for options,
+if cm paramater doesn't contain any option does nothing. 
+
+==== mg_coap_send_message()
+
+[source,c]
+----
+uint32_t mg_coap_send_message(struct mg_connection *nc,
+                              struct mg_coap_message *cm);
+----
+Compose CoAP message from `mg_coap_message`
+and send it into `nc` connection.
+Return 0 on success. On error, it is a bitmask:
+
+- `#define MG_COAP_ERROR 0x10000`
+- `#define MG_COAP_FORMAT_ERROR (MG_COAP_ERROR | 0x20000)`
+- `#define MG_COAP_IGNORE (MG_COAP_ERROR | 0x40000)`
+- `#define MG_COAP_NOT_ENOUGH_DATA (MG_COAP_ERROR | 0x80000)`
+- `#define MG_COAP_NETWORK_ERROR (MG_COAP_ERROR | 0x100000)` 
+
+==== mg_coap_send_ack()
+
+[source,c]
+----
+uint32_t mg_coap_send_ack(struct mg_connection *nc, uint16_t msg_id);
+----
+Compose CoAP acknowledgement from `mg_coap_message`
+and send it into `nc` connection.
+Return value: see `mg_coap_send_message()` 
+
+==== mg_coap_parse()
+
+[source,c]
+----
+uint32_t mg_coap_parse(struct mbuf *io, struct mg_coap_message *cm);
+----
+Parse COAP message and fills mg_coap_message and returns cm->flags.
+This is a helper function.
+
+NOTE: usually CoAP work over UDP, so lack of data means format error,
+but in theory it is possible to use CoAP over TCP (according to RFC)
+
+The caller have to check results and treat COAP_NOT_ENOUGH_DATA according to
+underlying protocol:
+
+- in case of UDP COAP_NOT_ENOUGH_DATA means COAP_FORMAT_ERROR,
+- in case of TCP client can try to receive more data
+
+Return value: see `mg_coap_send_message()` 
+
+==== mg_coap_compose()
+
+[source,c]
+----
+uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io);
+----
+Composes CoAP message from mg_coap_message structure.
+This is a helper function.
+Return value: see `mg_coap_send_message()` 
+

@@ -1,0 +1,151 @@
+=== DNS 
+
+==== struct mg_dns_resource_record
+
+[source,c]
+----
+struct mg_dns_resource_record {
+  struct mg_str name; /* buffer with compressed name */
+  int rtype;
+  int rclass;
+  int ttl;
+  enum mg_dns_resource_record_kind kind;
+  struct mg_str rdata; /* protocol data (can be a compressed name) */
+};
+----
+DNS resource record. 
+
+==== struct mg_dns_message
+
+[source,c]
+----
+struct mg_dns_message {
+  struct mg_str pkt; /* packet body */
+  uint16_t flags;
+  uint16_t transaction_id;
+  int num_questions;
+  int num_answers;
+  struct mg_dns_resource_record questions[MG_MAX_DNS_QUESTIONS];
+  struct mg_dns_resource_record answers[MG_MAX_DNS_ANSWERS];
+};
+----
+DNS message (request and response). 
+
+==== mg_dns_parse_record_data()
+
+[source,c]
+----
+int mg_dns_parse_record_data(struct mg_dns_message *msg,
+                             struct mg_dns_resource_record *rr, void *data,
+                             size_t data_len);
+----
+Parse the record data from a DNS resource record.
+
+ - A:     struct in_addr *ina
+ - AAAA:  struct in6_addr *ina
+ - CNAME: char buffer
+
+Returns -1 on error.
+
+TODO(mkm): MX 
+
+==== mg_send_dns_query()
+
+[source,c]
+----
+void mg_send_dns_query(struct mg_connection *nc, const char *name,
+                       int query_type);
+----
+Send a DNS query to the remote end. 
+
+==== mg_dns_insert_header()
+
+[source,c]
+----
+int mg_dns_insert_header(struct mbuf *io, size_t pos,
+                         struct mg_dns_message *msg);
+----
+Insert a DNS header to an IO buffer.
+
+Return number of bytes inserted. 
+
+==== mg_dns_copy_questions()
+
+[source,c]
+----
+int mg_dns_copy_questions(struct mbuf *io, struct mg_dns_message *msg);
+----
+Append already encoded questions from an existing message.
+
+This is useful when generating a DNS reply message which includes
+all question records.
+
+Return number of appened bytes. 
+
+==== mg_dns_encode_record()
+
+[source,c]
+----
+int mg_dns_encode_record(struct mbuf *io, struct mg_dns_resource_record *rr,
+                         const char *name, size_t nlen, const void *rdata,
+                         size_t rlen);
+----
+Encode and append a DNS resource record to an IO buffer.
+
+The record metadata is taken from the `rr` parameter, while the name and data
+are taken from the parameters, encoded in the appropriate format depending on
+record type, and stored in the IO buffer. The encoded values might contain
+offsets within the IO buffer. It's thus important that the IO buffer doesn't
+get trimmed while a sequence of records are encoded while preparing a DNS
+*reply.
+
+This function doesn't update the `name` and `rdata` pointers in the `rr`
+*struct
+because they might be invalidated as soon as the IO buffer grows again.
+
+Return the number of bytes appened or -1 in case of error. 
+
+==== mg_parse_dns()
+
+[source,c]
+----
+int mg_parse_dns(const char *buf, int len, struct mg_dns_message *msg);
+----
+Low-level: parses a DNS response. 
+
+==== mg_dns_uncompress_name()
+
+[source,c]
+----
+size_t mg_dns_uncompress_name(struct mg_dns_message *msg, struct mg_str *name,
+                              char *dst, int dst_len);
+----
+Uncompress a DNS compressed name.
+
+The containing dns message is required because the compressed encoding
+and reference suffixes present elsewhere in the packet.
+
+If name is less than `dst_len` characters long, the remainder
+of `dst` is terminated with `\0' characters. Otherwise, `dst` is not
+*terminated.
+
+If `dst_len` is 0 `dst` can be NULL.
+Return the uncompressed name length. 
+
+==== mg_set_protocol_dns()
+
+[source,c]
+----
+void mg_set_protocol_dns(struct mg_connection *nc);
+----
+Attach built-in DNS event handler to the given listening connection.
+
+DNS event handler parses incoming UDP packets, treating them as DNS
+requests. If incoming packet gets successfully parsed by the DNS event
+handler, a user event handler will receive `MG_DNS_REQUEST` event, with
+`ev_data` pointing to the parsed `struct mg_dns_message`.
+
+See
+[captive_dns_server](https://github.com/cesanta/mongoose/tree/master/examples/captive_dns_server)
+example on how to handle DNS request and send DNS reply. 
+

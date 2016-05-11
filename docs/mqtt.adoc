@@ -1,0 +1,161 @@
+=== MQTT 
+
+==== mg_set_protocol_mqtt()
+
+[source,c]
+----
+void mg_set_protocol_mqtt(struct mg_connection *nc);
+----
+Attach built-in MQTT event handler to the given connection.
+
+The user-defined event handler will receive following extra events:
+
+- MG_EV_MQTT_CONNACK
+- MG_EV_MQTT_PUBLISH
+- MG_EV_MQTT_PUBACK
+- MG_EV_MQTT_PUBREC
+- MG_EV_MQTT_PUBREL
+- MG_EV_MQTT_PUBCOMP
+- MG_EV_MQTT_SUBACK 
+
+==== mg_send_mqtt_handshake()
+
+[source,c]
+----
+void mg_send_mqtt_handshake(struct mg_connection *nc, const char *client_id);
+----
+Send MQTT handshake. 
+
+==== mg_send_mqtt_handshake_opt()
+
+[source,c]
+----
+void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
+                                struct mg_send_mqtt_handshake_opts);
+----
+Send MQTT handshake with optional parameters. 
+
+==== mg_mqtt_publish()
+
+[source,c]
+----
+void mg_mqtt_publish(struct mg_connection *nc, const char *topic,
+                     uint16_t message_id, int flags, const void *data,
+                     size_t len);
+----
+Publish a message to a given topic. 
+
+==== mg_mqtt_subscribe()
+
+[source,c]
+----
+void mg_mqtt_subscribe(struct mg_connection *nc,
+                       const struct mg_mqtt_topic_expression *topics,
+                       size_t topics_len, uint16_t message_id);
+----
+Subscribe to a bunch of topics. 
+
+==== mg_mqtt_unsubscribe()
+
+[source,c]
+----
+void mg_mqtt_unsubscribe(struct mg_connection *nc, char **topics,
+                         size_t topics_len, uint16_t message_id);
+----
+Unsubscribe from a bunch of topics. 
+
+==== mg_mqtt_disconnect()
+
+[source,c]
+----
+void mg_mqtt_disconnect(struct mg_connection *nc);
+----
+Send a DISCONNECT command. 
+
+==== mg_mqtt_connack()
+
+[source,c]
+----
+void mg_mqtt_connack(struct mg_connection *nc, uint8_t return_code);
+----
+Send a CONNACK command with a given `return_code`. 
+
+==== mg_mqtt_puback()
+
+[source,c]
+----
+void mg_mqtt_puback(struct mg_connection *nc, uint16_t message_id);
+----
+Send a PUBACK command with a given `message_id`. 
+
+==== mg_mqtt_pubrec()
+
+[source,c]
+----
+void mg_mqtt_pubrec(struct mg_connection *nc, uint16_t message_id);
+----
+Send a PUBREC command with a given `message_id`. 
+
+==== mg_mqtt_pubrel()
+
+[source,c]
+----
+void mg_mqtt_pubrel(struct mg_connection *nc, uint16_t message_id);
+----
+Send a PUBREL command with a given `message_id`. 
+
+==== mg_mqtt_pubcomp()
+
+[source,c]
+----
+void mg_mqtt_pubcomp(struct mg_connection *nc, uint16_t message_id);
+----
+Send a PUBCOMP command with a given `message_id`. 
+
+==== mg_mqtt_suback()
+
+[source,c]
+----
+void mg_mqtt_suback(struct mg_connection *nc, uint8_t *qoss, size_t qoss_len,
+                    uint16_t message_id);
+----
+Send a SUBACK command with a given `message_id`
+and a sequence of granted QoSs. 
+
+==== mg_mqtt_unsuback()
+
+[source,c]
+----
+void mg_mqtt_unsuback(struct mg_connection *nc, uint16_t message_id);
+----
+Send a UNSUBACK command with a given `message_id`. 
+
+==== mg_mqtt_ping()
+
+[source,c]
+----
+void mg_mqtt_ping(struct mg_connection *nc);
+----
+Send a PINGREQ command. 
+
+==== mg_mqtt_pong()
+
+[source,c]
+----
+void mg_mqtt_pong(struct mg_connection *nc);
+----
+Send a PINGRESP command. 
+
+==== mg_mqtt_next_subscribe_topic()
+
+[source,c]
+----
+int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
+                                 struct mg_str *topic, uint8_t *qos, int pos);
+----
+Extract the next topic expression from a SUBSCRIBE command payload.
+
+Topic expression name will point to a string in the payload buffer.
+Return the pos of the next topic expression or -1 when the list
+of topics is exhausted. 
+

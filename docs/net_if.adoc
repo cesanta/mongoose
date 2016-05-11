@@ -1,0 +1,127 @@
+==== mg_if_connect_tcp()
+
+[source,c]
+----
+void mg_if_connect_tcp(struct mg_connection *nc,
+                       const union socket_address *sa);
+----
+Request that a TCP connection is made to the specified address. 
+
+==== mg_if_connect_udp()
+
+[source,c]
+----
+void mg_if_connect_udp(struct mg_connection *nc);
+----
+Open a UDP socket. Doesn't actually connect anything. 
+
+==== mg_if_connect_cb()
+
+[source,c]
+----
+void mg_if_connect_cb(struct mg_connection *nc, int err);
+----
+Callback invoked by connect methods. err = 0 -> ok, != 0 -> error. 
+
+==== mg_if_listen_tcp()
+
+[source,c]
+----
+int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa);
+----
+Set up a listening TCP socket on a given address. rv = 0 -> ok. 
+
+==== mg_if_accept_new_conn()
+
+[source,c]
+----
+struct mg_connection *mg_if_accept_new_conn(struct mg_connection *lc);
+----
+Deliver a new TCP connection. Returns NULL in case on error (unable to
+create connection, in which case interface state should be discarded.
+This is phase 1 of the two-phase process - MG_EV_ACCEPT will be delivered
+when mg_if_accept_tcp_cb is invoked. 
+
+==== mg_if_listen_udp()
+
+[source,c]
+----
+int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa);
+----
+Request that a "listening" UDP socket be created. 
+
+==== mg_if_tcp_send()
+
+[source,c]
+----
+void mg_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len);
+----
+Send functions for TCP and UDP. Sent data is copied before return. 
+
+==== mg_if_sent_cb()
+
+[source,c]
+----
+void mg_if_sent_cb(struct mg_connection *nc, int num_sent);
+----
+Callback that reports that data has been put on the wire. 
+
+==== mg_if_recv_tcp_cb()
+
+[source,c]
+----
+void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len);
+----
+Receive callback.
+buf must be heap-allocated and ownership is transferred to the core.
+Core will acknowledge consumption by calling mg_if_recved. 
+
+==== mg_if_poll()
+
+[source,c]
+----
+void mg_if_poll(struct mg_connection *nc, time_t now);
+----
+Deliver a POLL event to the connection. 
+
+==== mg_if_timer()
+
+[source,c]
+----
+void mg_if_timer(struct mg_connection *c, double now);
+----
+Deliver a TIMER event to the connection. 
+
+==== mg_if_create_conn()
+
+[source,c]
+----
+int mg_if_create_conn(struct mg_connection *nc);
+----
+Perform interface-related connection initialization. Return 1 on success. 
+
+==== mg_if_destroy_conn()
+
+[source,c]
+----
+void mg_if_destroy_conn(struct mg_connection *nc);
+----
+Perform interface-related cleanup on connection before destruction. 
+
+==== mg_if_get_conn_addr()
+
+[source,c]
+----
+void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
+                         union socket_address *sa);
+----
+Put connection's address into *sa, local (remote = 0) or remote. 
+
+==== mg_sock_set()
+
+[source,c]
+----
+void mg_sock_set(struct mg_connection *nc, sock_t sock);
+----
+Associate a socket to a connection. 
+

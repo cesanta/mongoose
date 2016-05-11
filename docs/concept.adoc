@@ -1,0 +1,167 @@
+
+== Design Concept
+
+Mongoose is a multi-protocol networking library that implements non-blocking,
+asyncronous IO and provides event-based API. It has three basic data structures:
+
+- link:#_struct_mg_mgr[`struct mg_mgr`] is an event manager
+  that holds all active connections
+- link:#_struct_mg_connection[`struct mg_connection`] describes a connection
+- link:#_struct_mbuf[`struct mbuf`] describes data buffer
+  (received or sent data)
+
+Connections could be either *listening*, *outbound* or *inbound*.
+Outbound connections are created by link:#_mg_connect[`mg_connect()`] call.
+Listening connections are created by link:#_mg_bind[`mg_bind()`] call.
+Inbound connections are those accepted by a listening connection.
+Each connection is described by
+link:#_struct_mg_connection[`struct mg_connection`] structure, which has
+a number of fields like socket, event handler function, send/receive buffer,
+flags, et cetera.
+
+Mongoose usage pattern is to declare and initialize event manager, create
+connections and create an event loop by calling
+link:#_mg_mgr_poll[`mg_mgr_poll()`] in a loop.
+link:#_mg_mgr_poll[`mg_mgr_poll()`] iterates over all sockets,
+accepts new connections, sends and receives data, closes connections,
+and calls event handler functions for the respective events.
+
+=== Memory buffers
+
+Each connection has send and receive buffer,
+link:#_struct_mg_connection[`struct mg_connection::send_mbuf`]
+and
+link:#_struct_mg_connection[`struct mg_connection::recv_mbuf`] respectively.
+When data arrives,
+Mongoose appends received data to the `recv_mbuf` and
+triggers `MG_EV_RECV` event. User may send data back by calling one of the
+output functions, like link:#_mg_send[`mg_send()`] or
+link:#_mg_printf[`mg_printf()`]. Output functions append data to the
+`send_mbuf`. When Mongoose
+successfully writes data to the socket, it discards data from
+link:#_struct_mg_connection[`mg_connection::send_mbuf`] and
+sends `MG_EV_SEND` event. When connection is closed, `MG_EV_CLOSE` event is sent.
+
+image::mongoose/mbuf.png[width="600",align="center"]
+
+=== Event handler function
+
+Each connection has an event handler function associated with it. That
+function must be implemented by user. Event handler is the key element of
+the Mongoose application, since it defines application's behavior. This is how
+an event handler function looks like:
+
+[source,c]
+----
+static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
+  switch (ev) {
+    /* Event handler code that defines behavior of the connection */
+    ...
+  }
+}
+----
+
+struct mg_connection *nc::
+  Connection that has received an event.
+
+int ev::
+  Event number, defined in `mongoose.h`. For example, when data arrives
+  on inbound connection `ev` would be `MG_EV_RECV`.
+
+void *ev_data::
+  This pointer points to the event-specific data, and it has different
+  meaning for different events. For example, for `MG_EV_RECV` event,
+  `ev_data` is an `int *` pointer, pointing to the number of bytes received
+  from the remote peer and saved into the receive IO buffer. Exact meaning
+  of `ev_data` is described for each event. Protocol-specific events usually
+  have `ev_data` pointing to structures that hold protocol-specific information.
+
+NOTE: link:#_struct_mg_connection[`struct mg_connection`] has `void *user_data`
+which is a placeholder for a application-specific data. Mongoose does not use
+that pointer. Event handler can store any kind of information there.
+
+=== Events
+
+Mongoose accepts incoming connections, reads and writes data, and
+calls specified event handler for each connection when appropriate. Typical
+event sequence is this:
+
+- For outbound connection: `MG_EV_CONNECT` -> (`MG_EV_RECV`, `MG_EV_SEND`, `MG_EV_POLL` ...) -> `MG_EV_CLOSE`
+- For inbound connection: `MG_EV_ACCEPT` ->  (`MG_EV_RECV`, `MG_EV_SEND`, `MG_EV_POLL` ...) -> `MG_EV_CLOSE`
+
+
+Below is a list
+of core events triggered by Mongoose (note that each protocol triggers
+protocol-specific events in addition to the core ones):
+
+MG_EV_ACCEPT:: sent when new server connection is accepted by a
+listening connection. `void *ev_data` is `union socket_address`
+of the remote peer.
+MG_EV_CONNECT:: sent when a new outbound connection created by
+link:#_mg_connect[`mg_connect()`]
+either failed or succeeded. `void *ev_data` is `int *success`.
+If `success` is 0, then connection has been established,
+otherwise it contains error code. See
+link:#_mg_connect_opt[`mg_connect_opt()`] function for code example.
+
+MG_EV_RECV:: New data is received and appended to the end of `recv_mbuf`.
+`void *ev_data` is `int *num_received_bytes`. Typically, event handler
+should check received data in `nc->recv_mbuf`,
+discard processed data by calling link:#_mbuf_remove[`mbuf_remove()`],
+set connection flags `nc->flags` if necessary
+(see link:#_struct_mg_connection[`struct mg_connection`]), and write
+data the remote peer by output functions like link:#_mg_send[`mg_send()`].
+
+WARNING: Mongoose uses `realloc()` to expand receive buffer.
+It is user's responsibility to discard processed
+data from the beginning of receive buffer, note the `mbuf_remove()`
+call in the example above.
+
+MG_EV_SEND:: Mongoose has written data to the remote peer and discarded
+written data from the
+link:#_struct_mg_connection[`mg_connection::send_mbuf`]. `void *ev_data`
+is `int *num_sent_bytes`.
+
+NOTE: Mongoose output functions only append
+data to the `mg_connection::send_mbuf`, they do not do any socket writes.
+An actual IO is done by link:#_mg_mgr_poll[`mg_mgr_poll()`]. `MG_EV_SEND` event
+is just a notification about an IO has been done.
+
+MG_EV_POLL:: Sent to all connections on each invocation of
+link:#_mg_mgr_poll[`mg_mgr_poll()`].
+This event could be used to do any housekeeping, for example check whether
+certain timeout has expired and close the connection, or send heartbeet
+message, et cetera.
+
+MG_EV_TIMER:: Sent to the connection if
+link:#_mg_set_timer[`mg_set_timer()`] was called.
+
+=== Connection flags
+
+Each connection has a `flags` bit field. Some flags are set by Mongoose, for
+example if a user creates an outbound UDP connection using `udp://1.2.3.4:5678`
+address, Mongoose is going to set `MG_F_UDP` flag for that connection. Other flags
+are meant to be set only by user event handler to tell Mongoose how to behave.
+Below is a list of connection flags that are meant to be set by event handlers:
+
+* `MG_F_FINISHED_SENDING_DATA` tells Mongoose that all data has been
+  appended to the `send_mbuf`. As soon as Mongoose sends it to the
+  socket, the connection will be closed.
+* `MG_F_BUFFER_BUT_DONT_SEND` tells Mongoose to append data to the
+  `send_mbuf` but hold on sending it, because the data will be modified
+  later and then will be sent by clearing `MG_F_BUFFER_BUT_DONT_SEND` flag.
+* `MG_F_CLOSE_IMMEDIATELY` tells Mongoose to close the connection
+  immediately, usually after some error
+* `MG_F_USER_1`, `MG_F_USER_2`, `MG_F_USER_3`, `MG_F_USER_4` could be
+  used by a developer to store application-specific state
+
+Flags below are set by Mongoose:
+
+* `MG_F_SSL_HANDSHAKE_DONE` SSL only, set when SSL handshake is done.
+* `MG_F_CONNECTING` set when connection is in connecting state after
+  `mg_connect()` call but connect did not finish yet.
+* `MG_F_LISTENING` set for all listening connections
+* `MG_F_UDP` set if connection is UDP
+* `MG_F_IS_WEBSOCKET` set if connection is a Websocket connection
+* `MG_F_WEBSOCKET_NO_DEFRAG` should be set by a user if user wants to switch
+  off automatic Websocket frame defragmentation

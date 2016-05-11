@@ -1,0 +1,694 @@
+=== HTTP + Websocket 
+
+==== struct http_message
+
+[source,c]
+----
+struct http_message {
+  struct mg_str message; /* Whole message: request line + headers + body */
+
+  /* HTTP Request line (or HTTP response line) */
+  struct mg_str method; /* "GET" */
+  struct mg_str uri;    /* "/my_file.html" */
+  struct mg_str proto;  /* "HTTP/1.1" -- for both request and response */
+
+  /* For responses, code and response status message are set */
+  int resp_code;
+  struct mg_str resp_status_msg;
+
+  /*
+   * Query-string part of the URI. For example, for HTTP request
+   *    GET /foo/bar?param1=val1&param2=val2
+   *    |    uri    |     query_string     |
+   *
+   * Note that question mark character doesn't belong neither to the uri,
+   * nor to the query_string
+   */
+  struct mg_str query_string;
+
+  /* Headers */
+  struct mg_str header_names[MG_MAX_HTTP_HEADERS];
+  struct mg_str header_values[MG_MAX_HTTP_HEADERS];
+
+  /* Message body */
+  struct mg_str body; /* Zero-length for requests with no body */
+};
+----
+HTTP message 
+
+==== struct websocket_message
+
+[source,c]
+----
+struct websocket_message {
+  unsigned char *data;
+  size_t size;
+  unsigned char flags;
+};
+----
+WebSocket message 
+
+==== struct mg_http_multipart_part
+
+[source,c]
+----
+struct mg_http_multipart_part {
+  const char *file_name;
+  const char *var_name;
+  struct mg_str data;
+  int status; /* <0 on error */
+  void *user_data;
+};
+----
+HTTP multipart part 
+
+==== struct mg_serve_http_opts
+
+[source,c]
+----
+struct mg_serve_http_opts {
+  /* Path to web root directory */
+  const char *document_root;
+
+  /* List of index files. Default is "" */
+  const char *index_files;
+
+  /*
+   * Leave as NULL to disable authentication.
+   * To enable directory protection with authentication, set this to ".htpasswd"
+   * Then, creating ".htpasswd" file in any directory automatically protects
+   * it with digest authentication.
+   * Use `mongoose` web server binary, or `htdigest` Apache utility to
+   * create/manipulate passwords file.
+   * Make sure `auth_domain` is set to a valid domain name.
+   */
+  const char *per_directory_auth_file;
+
+  /* Authorization domain (domain name of this web server) */
+  const char *auth_domain;
+
+  /*
+   * Leave as NULL to disable authentication.
+   * Normally, only selected directories in the document root are protected.
+   * If absolutely every access to the web server needs to be authenticated,
+   * regardless of the URI, set this option to the path to the passwords file.
+   * Format of that file is the same as ".htpasswd" file. Make sure that file
+   * is located outside document root to prevent people fetching it.
+   */
+  const char *global_auth_file;
+
+  /* Set to "no" to disable directory listing. Enabled by default. */
+  const char *enable_directory_listing;
+
+  /* SSI files pattern. If not set, "**.shtml$|**.shtm$" is used. */
+  const char *ssi_pattern;
+
+  /* IP ACL. By default, NULL, meaning all IPs are allowed to connect */
+  const char *ip_acl;
+
+  /* URL rewrites.
+   *
+   * Comma-separated list of `uri_pattern=file_or_directory_path` rewrites.
+   * When HTTP request is received, Mongoose constructs a file name from the
+   * requested URI by combining `document_root` and the URI. However, if the
+   * rewrite option is used and `uri_pattern` matches requested URI, then
+   * `document_root` is ignored. Instead, `file_or_directory_path` is used,
+   * which should be a full path name or a path relative to the web server's
+   * current working directory. Note that `uri_pattern`, as all Mongoose
+   * patterns, is a prefix pattern.
+   *
+   * If uri_pattern starts with `@` symbol, then Mongoose compares it with the
+   * HOST header of the request. If they are equal, Mongoose sets document root
+   * to `file_or_directory_path`, implementing virtual hosts support.
+   * Example: `@foo.com=/document/root/for/foo.com`
+   *
+   * If `uri_pattern` starts with `%` symbol, then Mongoose compares it with
+   * the listening port. If they match, then Mongoose issues a 301 redirect.
+   * For example, to redirect all HTTP requests to the
+   * HTTPS port, do `%80=https://my.site.com`. Note that the request URI is
+   * automatically appended to the redirect location.
+   */
+  const char *url_rewrites;
+
+  /* DAV document root. If NULL, DAV requests are going to fail. */
+  const char *dav_document_root;
+
+  /*
+   * DAV passwords file. If NULL, DAV requests are going to fail.
+   * If passwords file is set to "-", then DAV auth is disabled.
+   */
+  const char *dav_auth_file;
+
+  /* Glob pattern for the files to hide. */
+  const char *hidden_file_pattern;
+
+  /* Set to non-NULL to enable CGI, e.g. **.cgi$|**.php$" */
+  const char *cgi_file_pattern;
+
+  /* If not NULL, ignore CGI script hashbang and use this interpreter */
+  const char *cgi_interpreter;
+
+  /*
+   * Comma-separated list of Content-Type overrides for path suffixes, e.g.
+   * ".txt=text/plain; charset=utf-8,.c=text/plain"
+   */
+  const char *custom_mime_types;
+
+  /*
+   * Extra HTTP headers to add to each server response.
+   * Example: to enable CORS, set this to "Access-Control-Allow-Origin: *".
+   */
+  const char *extra_headers;
+};
+----
+This structure defines how `mg_serve_http()` works.
+Best practice is to set only required settings, and leave the rest as NULL. 
+
+==== mg_set_protocol_http_websocket()
+
+[source,c]
+----
+void mg_set_protocol_http_websocket(struct mg_connection *nc);
+----
+Attach built-in HTTP event handler to the given connection.
+User-defined event handler will receive following extra events:
+
+- MG_EV_HTTP_REQUEST: HTTP request has arrived. Parsed HTTP request
+ is passed as
+  `struct http_message` through the handler's `void *ev_data` pointer.
+- MG_EV_HTTP_MULTIPART_REQUEST: A multipart POST request has received.
+  This event is sent before body is parsed. After this user
+  should expect a sequence of MG_EV_HTTP_PART_BEGIN/DATA/END requests.
+  This is also the last time when headers and other request fields are
+  accessible.
+- MG_EV_HTTP_REPLY: HTTP reply has arrived. Parsed HTTP reply is passed as
+  `struct http_message` through the handler's `void *ev_data` pointer.
+- MG_EV_HTTP_CHUNK: HTTP chunked-encoding chunk has arrived.
+  Parsed HTTP reply is passed as `struct http_message` through the
+  handler's `void *ev_data` pointer. `http_message::body` would contain
+  incomplete, reassembled HTTP body.
+  It will grow with every new chunk arrived, and
+  potentially can consume a lot of memory. An event handler may process
+  the body as chunks are coming, and signal Mongoose to delete processed
+  body by setting `MG_F_DELETE_CHUNK` in `mg_connection::flags`. When
+  the last zero chunk is received,
+  Mongoose sends `MG_EV_HTTP_REPLY` event with
+  full reassembled body (if handler did not signal to delete chunks) or
+  with empty body (if handler did signal to delete chunks).
+- MG_EV_WEBSOCKET_HANDSHAKE_REQUEST: server has received websocket handshake
+  request. `ev_data` contains parsed HTTP request.
+- MG_EV_WEBSOCKET_HANDSHAKE_DONE: server has completed Websocket handshake.
+  `ev_data` is `NULL`.
+- MG_EV_WEBSOCKET_FRAME: new websocket frame has arrived. `ev_data` is
+  `struct websocket_message *`
+- MG_EV_HTTP_PART_BEGIN: new part of multipart message is started,
+  extra parameters are passed in mg_http_multipart_part
+- MG_EV_HTTP_PART_DATA: new portion of data from multiparted message
+  no additional headers are available, only data and data size
+- MG_EV_HTTP_PART_END: final boundary received, analogue to maybe used to
+  find the end of packet
+  Note: Mongoose should be compiled with MG_ENABLE_HTTP_STREAMING_MULTIPART
+  to enable MG_EV_HTTP_MULTIPART_REQUEST, MG_EV_HTTP_REQUEST_END,
+  MG_EV_HTTP_REQUEST_CANCEL, MG_EV_HTTP_PART_BEGIN, MG_EV_HTTP_PART_DATA,
+  MG_EV_HTTP_PART_END constants 
+
+==== mg_send_websocket_handshake()
+
+[source,c]
+----
+void mg_send_websocket_handshake(struct mg_connection *nc, const char *uri,
+                                 const char *extra_headers);
+----
+Send websocket handshake to the server.
+
+`nc` must be a valid connection, connected to a server. `uri` is an URI
+to fetch, extra_headers` is extra HTTP headers to send or `NULL`.
+
+This function is intended to be used by websocket client.
+
+Note that the Host header is mandatory in HTTP/1.1 and must be
+included in `extra_headers`. `mg_send_websocket_handshake2` offers
+a better API for that.
+
+Deprecated in favour of `mg_send_websocket_handshake2` 
+
+==== mg_send_websocket_handshake2()
+
+[source,c]
+----
+void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
+                                  const char *host, const char *protocol,
+                                  const char *extra_headers);
+----
+Send websocket handshake to the server.
+
+`nc` must be a valid connection, connected to a server. `uri` is an URI
+to fetch, `host` goes into the `Host` header, `protocol` goes into the
+`Sec-WebSocket-Proto` header (NULL to omit), extra_headers` is extra HTTP
+headers to send or `NULL`.
+
+This function is intended to be used by websocket client. 
+
+==== mg_connect_ws()
+
+[source,c]
+----
+struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
+                                    mg_event_handler_t event_handler,
+                                    const char *url, const char *protocol,
+                                    const char *extra_headers);
+----
+Helper function that creates an outbound WebSocket connection.
+
+`url` is a URL to connect to. It must be properly URL-encoded, e.g. have
+no spaces, etc. By default, `mg_connect_ws()` sends Connection and
+Host headers. `extra_headers` is an extra HTTP headers to send, e.g.
+`"User-Agent: my-app\r\n"`.
+If `protocol` is not NULL, then a `Sec-WebSocket-Protocol` header is sent.
+
+Examples:
+
+```c
+  nc1 = mg_connect_ws(mgr, ev_handler_1, "ws://echo.websocket.org", NULL,
+                      NULL);
+  nc2 = mg_connect_ws(mgr, ev_handler_1, "wss://echo.websocket.org", NULL,
+                      NULL);
+  nc3 = mg_connect_ws(mgr, ev_handler_1, "ws://api.cesanta.com",
+                      "clubby.cesanta.com", NULL);
+``` 
+
+==== mg_connect_ws_opt()
+
+[source,c]
+----
+struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
+                                        mg_event_handler_t ev_handler,
+                                        struct mg_connect_opts opts,
+                                        const char *url, const char *protocol,
+                                        const char *extra_headers);
+----
+Helper function that creates an outbound WebSocket connection
+
+Mostly identical to mg_connect_ws, but allows to provide extra parameters
+(for example, SSL parameters 
+
+==== mg_send_websocket_frame()
+
+[source,c]
+----
+void mg_send_websocket_frame(struct mg_connection *nc, int op_and_flags,
+                             const void *data, size_t data_len);
+----
+Send websocket frame to the remote end.
+
+`op_and_flags` specifies frame's type, one of:
+
+- WEBSOCKET_OP_CONTINUE
+- WEBSOCKET_OP_TEXT
+- WEBSOCKET_OP_BINARY
+- WEBSOCKET_OP_CLOSE
+- WEBSOCKET_OP_PING
+- WEBSOCKET_OP_PONG
+
+Orred with one of the flags:
+
+- WEBSOCKET_DONT_FIN: Don't set the FIN flag on the frame to be sent.
+
+`data` and `data_len` contain frame data. 
+
+==== mg_send_websocket_framev()
+
+[source,c]
+----
+void mg_send_websocket_framev(struct mg_connection *nc, int op_and_flags,
+                              const struct mg_str *strings, int num_strings);
+----
+Send multiple websocket frames.
+
+Like `mg_send_websocket_frame()`, but composes a frame from multiple buffers. 
+
+==== mg_printf_websocket_frame()
+
+[source,c]
+----
+void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
+                               const char *fmt, ...);
+----
+Send websocket frame to the remote end.
+
+Like `mg_send_websocket_frame()`, but allows to create formatted message
+with `printf()`-like semantics. 
+
+==== mg_send_http_chunk()
+
+[source,c]
+----
+void mg_send_http_chunk(struct mg_connection *nc, const char *buf, size_t len);
+----
+Send buffer `buf` of size `len` to the client using chunked HTTP encoding.
+This function first sends buffer size as hex number + newline, then
+buffer itself, then newline. For example,
+  `mg_send_http_chunk(nc, "foo", 3)` whill append `3\r\nfoo\r\n` string to
+the `nc->send_mbuf` output IO buffer.
+
+NOTE: HTTP header "Transfer-Encoding: chunked" should be sent prior to
+using this function.
+
+NOTE: do not forget to send empty chunk at the end of the response,
+to tell the client that everything was sent. Example:
+
+```
+  mg_printf_http_chunk(nc, "%s", "my response!");
+  mg_send_http_chunk(nc, "", 0); // Tell the client we're finished
+``` 
+
+==== mg_printf_http_chunk()
+
+[source,c]
+----
+void mg_printf_http_chunk(struct mg_connection *nc, const char *fmt, ...);
+----
+Send printf-formatted HTTP chunk.
+Functionality is similar to `mg_send_http_chunk()`. 
+
+==== mg_send_response_line()
+
+[source,c]
+----
+void mg_send_response_line(struct mg_connection *c, int status_code,
+                           const char *extra_headers);
+----
+Send response status line.
+If `extra_headers` is not NULL, then `extra_headers` are also sent
+after the reponse line. `extra_headers` must NOT end end with new line.
+Example:
+
+     mg_send_response_line(nc, 200, "Access-Control-Allow-Origin: *");
+
+Will result in:
+
+     HTTP/1.1 200 OK\r\n
+     Access-Control-Allow-Origin: *\r\n 
+
+==== mg_send_head()
+
+[source,c]
+----
+void mg_send_head(struct mg_connection *n, int status_code,
+                  int64_t content_length, const char *extra_headers);
+----
+Send response line and headers.
+This function sends response line with the `status_code`, and automatically
+sends one header: either "Content-Length", or "Transfer-Encoding".
+If `content_length` is negative, then "Transfer-Encoding: chunked" header
+is sent, otherwise, "Content-Length" header is sent.
+
+NOTE: If `Transfer-Encoding` is `chunked`, then message body must be sent
+using `mg_send_http_chunk()` or `mg_printf_http_chunk()` functions.
+Otherwise, `mg_send()` or `mg_printf()` must be used.
+Extra headers could be set through `extra_headers` - and note `extra_headers`
+must NOT be terminated by a new line. 
+
+==== mg_printf_html_escape()
+
+[source,c]
+----
+void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...);
+----
+Send printf-formatted HTTP chunk, escaping HTML tags. 
+
+==== mg_parse_http()
+
+[source,c]
+----
+int mg_parse_http(const char *s, int n, struct http_message *hm, int is_req);
+----
+Parse a HTTP message.
+
+`is_req` should be set to 1 if parsing request, 0 if reply.
+
+Return number of bytes parsed. If HTTP message is
+incomplete, `0` is returned. On parse error, negative number is returned. 
+
+==== mg_get_http_header()
+
+[source,c]
+----
+struct mg_str *mg_get_http_header(struct http_message *hm, const char *name);
+----
+Search and return header `name` in parsed HTTP message `hm`.
+If header is not found, NULL is returned. Example:
+
+    struct mg_str *host_hdr = mg_get_http_header(hm, "Host"); 
+
+==== mg_http_parse_header()
+
+[source,c]
+----
+int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
+                         size_t buf_size);
+----
+Parse HTTP header `hdr`. Find variable `var_name` and store it's value
+in the buffer `buf`, `buf_size`. Return 0 if variable not found, non-zero
+otherwise.
+
+This function is supposed to parse
+cookies, authentication headers, etcetera. Example (error handling omitted):
+
+    char user[20];
+    struct mg_str *hdr = mg_get_http_header(hm, "Authorization");
+    mg_http_parse_header(hdr, "username", user, sizeof(user));
+
+Return length of the variable's value. If buffer is not large enough,
+or variable not found, 0 is returned. 
+
+==== mg_parse_multipart()
+
+[source,c]
+----
+size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
+                          size_t var_name_len, char *file_name,
+                          size_t file_name_len, const char **chunk,
+                          size_t *chunk_len);
+----
+Parse buffer `buf`, `buf_len` that contains multipart form data chunks.
+Store chunk name in a `var_name`, `var_name_len` buffer.
+If a chunk is an uploaded file, then `file_name`, `file_name_len` is
+filled with an uploaded file name. `chunk`, `chunk_len`
+points to the chunk data.
+
+Return: number of bytes to skip to the next chunk, or 0 if there are
+        no more chunks.
+
+Usage example:
+
+```c
+   static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
+     switch(ev) {
+       case MG_EV_HTTP_REQUEST: {
+         struct http_message *hm = (struct http_message *) ev_data;
+         char var_name[100], file_name[100];
+         const char *chunk;
+         size_t chunk_len, n1, n2;
+
+         n1 = n2 = 0;
+         while ((n2 = mg_parse_multipart(hm->body.p + n1,
+                                         hm->body.len - n1,
+                                         var_name, sizeof(var_name),
+                                         file_name, sizeof(file_name),
+                                         &chunk, &chunk_len)) > 0) {
+           printf("var: %s, file_name: %s, size: %d, chunk: [%.*s]\n",
+                  var_name, file_name, (int) chunk_len,
+                  (int) chunk_len, chunk);
+           n1 += n2;
+         }
+       }
+       break;
+``` 
+
+==== mg_get_http_var()
+
+[source,c]
+----
+int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
+                    size_t dst_len);
+----
+Fetch an HTTP form variable.
+
+Fetch a variable `name` from a `buf` into a buffer specified by
+`dst`, `dst_len`. Destination is always zero-terminated. Return length
+of a fetched variable. If not found, 0 is returned. `buf` must be
+valid url-encoded buffer. If destination is too small, `-1` is returned. 
+
+==== mg_url_decode()
+
+[source,c]
+----
+int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
+                  int is_form_url_encoded);
+----
+Decode URL-encoded string.
+
+Source string is specified by (`src`, `src_len`), and destination is
+(`dst`, `dst_len`). If `is_form_url_encoded` is non-zero, then
+`+` character is decoded as a blank space character. This function
+guarantees to `\0`-terminate the destination. If destination is too small,
+then source string is partially decoded and `-1` is returned. Otherwise,
+a length of decoded string is returned, not counting final `\0`. 
+
+==== mg_http_create_digest_auth_header()
+
+[source,c]
+----
+int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
+                                      const char *method, const char *uri,
+                                      const char *auth_domain, const char *user,
+                                      const char *passwd);
+----
+Create Digest authentication header for client request. 
+
+==== mg_connect_http()
+
+[source,c]
+----
+struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
+                                      mg_event_handler_t event_handler,
+                                      const char *url,
+                                      const char *extra_headers,
+                                      const char *post_data);
+----
+Helper function that creates outbound HTTP connection.
+
+`url` is a URL to fetch. It must be properly URL-encoded, e.g. have
+no spaces, etc. By default, `mg_connect_http()` sends Connection and
+Host headers. `extra_headers` is an extra HTTP headers to send, e.g.
+`"User-Agent: my-app\r\n"`.
+If `post_data` is NULL, then GET request is created. Otherwise, POST request
+is created with the specified POST data. Note that if the data being posted
+is a form submission, the `Content-Type` header should be set accordingly
+(see example below).
+
+Examples:
+
+```c
+  nc1 = mg_connect_http(mgr, ev_handler_1, "http://www.google.com", NULL,
+                        NULL);
+  nc2 = mg_connect_http(mgr, ev_handler_1, "https://github.com", NULL, NULL);
+  nc3 = mg_connect_http(
+      mgr, ev_handler_1, "my_server:8000/form_submit/",
+      "Content-Type: application/x-www-form-urlencoded\r\n",
+      "var_1=value_1&var_2=value_2");
+``` 
+
+==== mg_connect_http_opt()
+
+[source,c]
+----
+struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
+                                          mg_event_handler_t ev_handler,
+                                          struct mg_connect_opts opts,
+                                          const char *url,
+                                          const char *extra_headers,
+                                          const char *post_data);
+----
+Helper function that creates outbound HTTP connection.
+
+Mostly identical to mg_connect_http, but allows to provide extra parameters
+(for example, SSL parameters 
+
+==== mg_serve_http()
+
+[source,c]
+----
+void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
+                   struct mg_serve_http_opts opts);
+----
+Serve given HTTP request according to the `options`.
+
+Example code snippet:
+
+```c
+static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
+  struct http_message *hm = (struct http_message *) ev_data;
+  struct mg_serve_http_opts opts = { .document_root = "/var/www" };  // C99
+
+  switch (ev) {
+    case MG_EV_HTTP_REQUEST:
+      mg_serve_http(nc, hm, opts);
+      break;
+    default:
+      break;
+  }
+}
+``` 
+
+==== mg_register_http_endpoint()
+
+[source,c]
+----
+void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
+                               mg_event_handler_t handler);
+----
+Register callback for specified http endpoint
+Note: if callback is registered it is called instead of
+callback provided in mg_bind
+
+Example code snippet:
+
+```c
+static void handle_hello1(struct mg_connection *nc, int ev, void *ev_data) {
+  (void) ev; (void) ev_data;
+  mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\n[I am Hello1]");
+ nc->flags |= MG_F_SEND_AND_CLOSE;
+}
+
+static void handle_hello1(struct mg_connection *nc, int ev, void *ev_data) {
+ (void) ev; (void) ev_data;
+  mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\n[I am Hello2]");
+ nc->flags |= MG_F_SEND_AND_CLOSE;
+}
+
+void init() {
+  nc = mg_bind(&mgr, local_addr, cb1);
+  mg_register_http_endpoint(nc, "/hello1", handle_hello1);
+  mg_register_http_endpoint(nc, "/hello1/hello2", handle_hello2);
+}
+``` 
+
+==== mg_file_upload_handler()
+
+[source,c]
+----
+void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
+                            mg_fu_fname_fn local_name_fn);
+----
+File upload handler.
+This handler can be used to implement file uploads with minimum code.
+This handler will process MG_EV_HTTP_PART_* events and store file data into
+a local file.
+`local_name_fn` will be invoked with whatever name was provided by the client
+and will expect the name of the local file to open. Return value of NULL will
+abort file upload (client will get a "403 Forbidden" response). If non-null,
+the returned string must be heap-allocated and will be freed by the caller.
+Exception: it is ok to return the same string verbatim.
+
+Example:
+
+```c
+struct mg_str upload_fname(struct mg_connection *nc, struct mg_str fname) {
+  // Just return the same filename. Do not actually do this except in test!
+  // fname is user-controlled and needs to be sanitized.
+  return fname;
+}
+void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
+  switch (ev) {
+    ...
+    case MG_EV_HTTP_PART_BEGIN:
+    case MG_EV_HTTP_PART_DATA:
+    case MG_EV_HTTP_PART_END:
+      mg_file_upload_handler(nc, ev, ev_data, upload_fname);
+      break;
+  }
+}
+``` 
+
