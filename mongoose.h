@@ -187,6 +187,9 @@
 #endif
 #define random() rand()
 typedef int socklen_t;
+#if _MSC_VER >= 1700
+#include <stdint.h>
+#else
 typedef signed char int8_t;
 typedef unsigned char uint8_t;
 typedef int int32_t;
@@ -195,6 +198,7 @@ typedef short int16_t;
 typedef unsigned short uint16_t;
 typedef __int64 int64_t;
 typedef unsigned __int64 uint64_t;
+#endif
 typedef SOCKET sock_t;
 typedef uint32_t in_addr_t;
 #ifndef UINT16_MAX
