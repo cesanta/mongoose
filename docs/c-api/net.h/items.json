@@ -1,0 +1,120 @@
+{
+    "items": [
+        {
+            "type": "markdown",
+            "name": "intro.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_mgr_init.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_mgr_free.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_mgr_poll.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_broadcast.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_next.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_add_sock.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_add_sock_opt.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_bind.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_bind_opt.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_connect.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_connect_opt.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_set_ssl.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_send.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_printf.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_vprintf.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_socketpair.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_check_ip_acl.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_enable_multithreading.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_enable_javascript.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_set_timer.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_time.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_event_handler_t.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_str.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_mgr.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_connection.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_add_sock_opts.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_bind_opts.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_connect_opts.md"
+        }
+    ]
+}

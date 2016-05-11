@@ -1,0 +1,44 @@
+{
+    "items": [
+        {
+            "type": "markdown",
+            "name": "intro.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_rpc_parse_reply.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_rpc_create_request.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_rpc_create_reply.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_rpc_create_error.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_rpc_create_std_error.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_rpc_dispatch.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_rpc_request.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_rpc_reply.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_rpc_error.md"
+        }
+    ]
+}

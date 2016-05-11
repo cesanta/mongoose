@@ -1,0 +1,8 @@
+{
+  "items": [
+    { "type": "section", "name": "usage-example" },
+    { "type": "section", "name": "design-concept" },
+    { "type": "section", "name": "build-options" },
+    { "type": "flat_sections_set", "name": "c-api" }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+    "items": [
+        {
+            "type": "section",
+            "name": "mbuf.h"
+        },
+        {
+            "type": "section",
+            "name": "net.h"
+        },
+        {
+            "type": "section",
+            "name": "http.h"
+        },
+        {
+            "type": "section",
+            "name": "json-rpc.h"
+        },
+        {
+            "type": "section",
+            "name": "dns.h"
+        },
+        {
+            "type": "section",
+            "name": "dns-server.h"
+        },
+        {
+            "type": "section",
+            "name": "mqtt.h"
+        },
+        {
+            "type": "section",
+            "name": "mqtt-broker.h"
+        },
+        {
+            "type": "section",
+            "name": "coap.h"
+        },
+        {
+            "type": "section",
+            "name": "util.h"
+        }
+    ]
+}

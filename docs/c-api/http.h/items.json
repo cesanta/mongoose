@@ -1,0 +1,128 @@
+{
+    "items": [
+        {
+            "type": "markdown",
+            "name": "intro.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_set_protocol_http_websocket.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_send_websocket_handshake.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_send_websocket_handshake2.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_connect_ws.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_connect_ws_opt.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_send_websocket_frame.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_send_websocket_framev.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_printf_websocket_frame.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_send_http_chunk.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_printf_http_chunk.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_send_response_line.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_send_head.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_printf_html_escape.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_parse_http.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_get_http_header.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_http_parse_header.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_parse_multipart.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_get_http_var.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_url_decode.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_http_create_digest_auth_header.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_connect_http.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_connect_http_opt.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_serve_http.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_register_http_endpoint.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_file_upload_handler.md"
+        },
+        {
+            "type": "markdown",
+            "name": "mg_fu_fname_fn.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_http_message.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_websocket_message.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_http_multipart_part.md"
+        },
+        {
+            "type": "markdown",
+            "name": "struct_mg_serve_http_opts.md"
+        }
+    ]
+}
