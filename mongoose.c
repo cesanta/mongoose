@@ -2269,11 +2269,11 @@ void mg_mgr_init(struct mg_mgr *m, void *user_data) {
 static enum v7_err mg_send_js(struct v7 *v7, v7_val_t *res) {
   v7_val_t arg0 = v7_arg(v7, 0);
   v7_val_t arg1 = v7_arg(v7, 1);
-  struct mg_connection *c = (struct mg_connection *) v7_to_foreign(arg0);
+  struct mg_connection *c = (struct mg_connection *) v7_get_ptr(arg0);
   size_t len = 0;
 
   if (v7_is_string(arg1)) {
-    const char *data = v7_get_string_data(v7, &arg1, &len);
+    const char *data = v7_get_string(v7, &arg1, &len);
     mg_send(c, data, len);
   }
 
