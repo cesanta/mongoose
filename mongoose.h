@@ -1669,6 +1669,10 @@ double mg_time();
  * Implementation must ensure that only one callback is invoked at any time.
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 /* Request that a TCP connection is made to the specified address. */
 void mg_if_connect_tcp(struct mg_connection *nc,
                        const union socket_address *sa);
@@ -1729,6 +1733,10 @@ void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
 
 /* Associate a socket to a connection. */
 void mg_sock_set(struct mg_connection *nc, sock_t sock);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 #endif /* CS_MONGOOSE_SRC_NET_IF_H_ */
 /*
