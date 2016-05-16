@@ -7183,6 +7183,7 @@ static void mg_prepare_cgi_environment(struct mg_connection *nc,
   struct mg_str *h;
   char *p;
   size_t i;
+  char buf[100];
 
   blk->len = blk->nvars = 0;
   blk->nc = nc;
@@ -7190,7 +7191,6 @@ static void mg_prepare_cgi_environment(struct mg_connection *nc,
   if ((s = getenv("SERVER_NAME")) != NULL) {
     mg_addenv(blk, "SERVER_NAME=%s", s);
   } else {
-    char buf[100];
     mg_sock_to_str(nc->sock, buf, sizeof(buf), 3);
     mg_addenv(blk, "SERVER_NAME=%s", buf);
   }
@@ -7203,17 +7203,17 @@ static void mg_prepare_cgi_environment(struct mg_connection *nc,
   mg_addenv(blk, "%s", "SERVER_PROTOCOL=HTTP/1.1");
   mg_addenv(blk, "%s", "REDIRECT_STATUS=200"); /* For PHP */
 
-  /* TODO(lsm): fix this for IPv6 case */
-  /*addenv(blk, "SERVER_PORT=%d", ri->remote_port); */
-
   mg_addenv(blk, "REQUEST_METHOD=%.*s", (int) hm->method.len, hm->method.p);
-#if 0
-  addenv(blk, "REMOTE_ADDR=%s", ri->remote_ip);
-  addenv(blk, "REMOTE_PORT=%d", ri->remote_port);
-#endif
+
   mg_addenv(blk, "REQUEST_URI=%.*s%s%.*s", (int) hm->uri.len, hm->uri.p,
             hm->query_string.len == 0 ? "" : "?", (int) hm->query_string.len,
             hm->query_string.p);
+
+  mg_conn_addr_to_str(nc, buf, sizeof(buf),
+                      MG_SOCK_STRINGIFY_REMOTE | MG_SOCK_STRINGIFY_IP);
+  mg_addenv(blk, "REMOTE_ADDR=%s", buf);
+  mg_conn_addr_to_str(nc, buf, sizeof(buf), MG_SOCK_STRINGIFY_PORT);
+  mg_addenv(blk, "SERVER_PORT=%s", buf);
 
   s = hm->uri.p + hm->uri.len - path_info->len - 1;
   if (*s == '/') {
