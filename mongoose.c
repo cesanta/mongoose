@@ -6247,12 +6247,8 @@ static int mg_check_nonce(const char *nonce) {
   return now < val || now - val < 3600;
 }
 
-/*
- * Authenticate HTTP request against opened passwords file.
- * Returns 1 if authenticated, 0 otherwise.
- */
-static int mg_http_check_digest_auth(struct http_message *hm,
-                                     const char *auth_domain, FILE *fp) {
+int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
+                              FILE *fp) {
   struct mg_str *hdr;
   char buf[128], f_user[sizeof(buf)], f_ha1[sizeof(buf)], f_domain[sizeof(buf)];
   char user[50], cnonce[33], response[40], uri[200], qop[20], nc[20], nonce[30];

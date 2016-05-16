@@ -2715,6 +2715,13 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
                             mg_fu_fname_fn local_name_fn);
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
 
+/*
+ * Authenticate HTTP request against opened passwords file.
+ * Returns 1 if authenticated, 0 otherwise.
+ */
+int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
+                              FILE *fp);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
