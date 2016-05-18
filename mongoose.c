@@ -8399,6 +8399,8 @@ int mg_rpc_parse_reply(const char *buf, int len, struct json_token *toks,
 
 #ifndef MG_DISABLE_MQTT
 
+#include <string.h>
+
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/mqtt.h" */
 
@@ -8509,7 +8511,7 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
   uint8_t header = MG_MQTT_CMD_CONNECT << 4;
   uint8_t rem_len;
   uint16_t keep_alive;
-  uint16_t client_id_len;
+  uint16_t len;
 
   /*
    * 9: version_header(len, magic_string, version_number), 1: flags, 2:
@@ -8517,6 +8519,15 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
    * 2: client_identifier_len, n: client_id
    */
   rem_len = 9 + 1 + 2 + 2 + strlen(client_id);
+
+  if (opts.user_name != NULL) {
+    opts.flags |= MG_MQTT_HAS_USER_NAME;
+    rem_len += strlen(opts.user_name) + 2;
+  }
+  if (opts.password != NULL) {
+    opts.flags |= MG_MQTT_HAS_PASSWORD;
+    rem_len += strlen(opts.password) + 2;
+  }
 
   mg_send(nc, &header, 1);
   mg_send(nc, &rem_len, 1);
@@ -8529,9 +8540,20 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
   keep_alive = htons(opts.keep_alive);
   mg_send(nc, &keep_alive, 2);
 
-  client_id_len = htons(strlen(client_id));
-  mg_send(nc, &client_id_len, 2);
+  len = htons(strlen(client_id));
+  mg_send(nc, &len, 2);
   mg_send(nc, client_id, strlen(client_id));
+
+  if (opts.flags & MG_MQTT_HAS_USER_NAME) {
+    len = htons(strlen(opts.user_name));
+    mg_send(nc, &len, 2);
+    mg_send(nc, opts.user_name, strlen(opts.user_name));
+  }
+  if (opts.flags & MG_MQTT_HAS_PASSWORD) {
+    len = htons(strlen(opts.password));
+    mg_send(nc, &len, 2);
+    mg_send(nc, opts.password, strlen(opts.password));
+  }
 }
 
 static void mg_mqtt_prepend_header(struct mg_connection *nc, uint8_t cmd,
