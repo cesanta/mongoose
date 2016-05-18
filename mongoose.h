@@ -104,10 +104,12 @@
 #define NORETURN __attribute__((noreturn))
 #define NOINLINE __attribute__((noinline))
 #define WARN_UNUSED_RESULT __attribute__((warn_unused_result))
+#define NOINSTR __attribute__((no_instrument_function))
 #else
 #define NORETURN
 #define NOINLINE
 #define WARN_UNUSED_RESULT
+#define NOINSTR
 #endif /* __GNUC__ */
 
 #ifndef ARRAY_SIZE

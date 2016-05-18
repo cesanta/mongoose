@@ -2269,7 +2269,7 @@ void mg_mgr_init(struct mg_mgr *m, void *user_data) {
 static enum v7_err mg_send_js(struct v7 *v7, v7_val_t *res) {
   v7_val_t arg0 = v7_arg(v7, 0);
   v7_val_t arg1 = v7_arg(v7, 1);
-  struct mg_connection *c = (struct mg_connection *) v7_get_ptr(arg0);
+  struct mg_connection *c = (struct mg_connection *) v7_get_ptr(v7, arg0);
   size_t len = 0;
 
   if (v7_is_string(arg1)) {
@@ -2277,7 +2277,7 @@ static enum v7_err mg_send_js(struct v7 *v7, v7_val_t *res) {
     mg_send(c, data, len);
   }
 
-  *res = v7_mk_number(len);
+  *res = v7_mk_number(v7, len);
 
   return V7_OK;
 }
@@ -5183,9 +5183,9 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
         }
 
         /* Invoke callback. TODO(lsm): report errors */
-        v7_array_push(v7, args, v7_mk_foreign(nc));
+        v7_array_push(v7, args, v7_mk_foreign(v7, nc));
         v7_array_push(v7, args, req);
-        if (v7_apply(v7, v2, v7_mk_undefined(), args, &res) == V7_OK &&
+        if (v7_apply(v7, v2, V7_UNDEFINED, args, &res) == V7_OK &&
             v7_is_truthy(v7, res)) {
           js_callback_handled_request++;
         }
