@@ -1,5 +1,10 @@
 ---
 title: Build Options
+items:
+  - { type: file, name: enabling-flags.md }
+  - { type: file, name: disabling-flags.md }
+  - { type: file, name: platform-spec.md }
+  - { type: file, name: tunables.md }
 ---
 
 Mongoose source code ships in a single .c file that contains functionality

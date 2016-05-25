@@ -1,5 +1,10 @@
 ---
 title: Design Concept
+items:
+  - { type: file, name: memory-buffers.md }
+  - { type: file, name: event-handler.md }
+  - { type: file, name: events.md }
+  - { type: file, name: conn-flags.md }
 ---
 
 Mongoose is a multi-protocol networking library that implements non-blocking,
