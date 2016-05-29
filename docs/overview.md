@@ -14,12 +14,13 @@ Features include:
   [LWIP embedded TCP/IP stack](https://en.wikipedia.org/wiki/LwIP)
 - Builtin protocols:
    - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
-   - HTTP client, HTTP server
-   - WebSocket client, WebSocket server
-   - JSON-RPC client, JSON-RPC server
-   - MQTT client, MQTT broker
-   - CoAP client, CoAP server
-   - DNS client, DNS server, async DNS resolver
+   - HTTP client and server
+   - WebSocket client and server
+   - JSON-RPC client and server
+   - MQTT client and server
+   - CoAP client and server
+   - DNS client and server
+   - asynchronous DNS resolver
 - Tiny static and run-time footprint
 - Source code is both ISO C and ISO C++ compliant
 - Very easy to integrate: just copy
