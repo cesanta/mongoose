@@ -5,7 +5,6 @@
 PLATFORM = CC3200
 SDK_PATH ?= /cc3200-sdk
 REPO_PATH ?= ../../..
-COMMON_PATH ?= $(REPO_PATH)/common
 BUILD_DIR ?= ./.build
 FW_DIR ?= ./out
 SLFS_PATH ?= ./slfs
@@ -59,10 +58,10 @@ $(FW_DIR):
 $(FW_ZIP): $(FW_ELF) $(FW_BIN) $(SLFS_FILES)
 	@echo "    Code size: $(shell ls -l $(FW_BIN) | awk '{print $$5}')"
 	@echo "  GEN   $(FW_MANIFEST)"
-	@$(COMMON_PATH)/tools/fw_meta.py gen_build_info \
+	@fw_meta gen_build_info \
 	  --json_output=$(BUILD_INFO_JSON)
 	@cp -v $(SLFS_FILES) out/
-	@$(COMMON_PATH)/tools/fw_meta.py create_manifest \
+	@fw_meta create_manifest \
 	  --name=$(PROG) --platform=$(PLATFORM) \
 	  --build_info=$(BUILD_INFO_JSON) \
 	  --output=$(FW_MANIFEST) \
@@ -70,7 +69,7 @@ $(FW_ZIP): $(FW_ELF) $(FW_BIN) $(SLFS_FILES)
 	  sys_mcuimg.bin:src=$(notdir $(FW_BIN)) \
 		$(foreach f,$(SLFS_FILES), $(notdir $(f)):src=$(notdir $(f)))
 	@echo "  ZIP   $@"
-	@$(COMMON_PATH)/tools/fw_meta.py create_fw \
+	@fw_meta create_fw \
 	  --manifest=$(FW_MANIFEST) \
 	  --src_dir=$(FW_DIR) \
 	  --output=$@
