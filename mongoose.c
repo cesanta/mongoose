@@ -3528,10 +3528,11 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
         if (ret != 0) err = 1;
       }
 #else
-/* On SimpleLink and ESP8266 we use blocking connect. If we got as far as
- * this, it means connect() was successful.
- * TODO(rojer): Figure out why it fails where blocking succeeds.
- */
+      /*
+       * On SimpleLink and ESP8266 we use blocking connect.
+       * TODO(rojer): Figure out why it fails where blocking succeeds.
+       */
+      err = nc->err;
 #endif
 #ifdef MG_ENABLE_SSL
       if (nc->ssl != NULL && err == 0) {
