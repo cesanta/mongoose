@@ -5200,7 +5200,7 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
         mg_http_call_endpoint_handler(nc, trigger_ev, hm);
       }
 #else
-    mg_http_call_endpoint_handler(nc, trigger_ev, hm);
+      mg_http_call_endpoint_handler(nc, trigger_ev, hm);
 #endif
       mbuf_remove(io, hm->message.len);
     }
