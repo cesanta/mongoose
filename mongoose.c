@@ -5146,8 +5146,9 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
         mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_DONE, NULL);
         mg_websocket_handler(nc, MG_EV_RECV, ev_data);
       }
+    }
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
-    } else if (hm->message.len <= io->len) {
+    else if (hm->message.len <= io->len) {
       int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
 
 /* Whole HTTP message is fully buffered, call event handler */
@@ -7764,6 +7765,7 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
                              post_data);
 }
 
+#ifndef MG_DISABLE_HTTP_WEBSOCKET
 struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
                                         mg_event_handler_t ev_handler,
                                         struct mg_connect_opts opts,
@@ -7792,6 +7794,7 @@ struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
   memset(&opts, 0, sizeof(opts));
   return mg_connect_ws_opt(mgr, ev_handler, opts, url, protocol, extra_headers);
 }
+#endif /* MG_DISABLE_HTTP_WEBSOCKET */
 
 size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
                           size_t var_name_len, char *file_name,

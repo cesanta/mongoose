@@ -2127,10 +2127,12 @@ struct mg_http_multipart_part {
 #define MG_EV_HTTP_CHUNK 102   /* struct http_message * */
 #define MG_EV_SSI_CALL 105     /* char * */
 
+#ifndef MG_DISABLE_HTTP_WEBSOCKET
 #define MG_EV_WEBSOCKET_HANDSHAKE_REQUEST 111 /* NULL */
 #define MG_EV_WEBSOCKET_HANDSHAKE_DONE 112    /* NULL */
 #define MG_EV_WEBSOCKET_FRAME 113             /* struct websocket_message * */
 #define MG_EV_WEBSOCKET_CONTROL_FRAME 114     /* struct websocket_message * */
+#endif
 
 #ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
 #define MG_EV_HTTP_MULTIPART_REQUEST 121 /* struct http_message */
@@ -2184,6 +2186,7 @@ struct mg_http_multipart_part {
  */
 void mg_set_protocol_http_websocket(struct mg_connection *nc);
 
+#ifndef MG_DISABLE_HTTP_WEBSOCKET
 /*
  * Send websocket handshake to the server.
  *
@@ -2289,6 +2292,7 @@ void mg_send_websocket_framev(struct mg_connection *nc, int op_and_flags,
  */
 void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
                                const char *fmt, ...);
+#endif /* MG_DISABLE_HTTP_WEBSOCKET */
 
 /*
  * Send buffer `buf` of size `len` to the client using chunked HTTP encoding.
