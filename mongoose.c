@@ -5146,8 +5146,9 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
         mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_DONE, NULL);
         mg_websocket_handler(nc, MG_EV_RECV, ev_data);
       }
+    }
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
-    } else if (hm->message.len <= io->len) {
+    else if (hm->message.len <= io->len) {
       int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
 
 /* Whole HTTP message is fully buffered, call event handler */
