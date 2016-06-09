@@ -10,7 +10,7 @@ struct device_settings {
 
 static const char *s_http_port = "8000";
 static struct mg_serve_http_opts s_http_server_opts;
-static struct device_settings s_settings = { "value1", "value2" };
+static struct device_settings s_settings = {"value1", "value2"};
 
 static void handle_save(struct mg_connection *nc, struct http_message *hm) {
   // Get form variables and store settings values

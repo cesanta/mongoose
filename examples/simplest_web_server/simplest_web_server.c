@@ -21,7 +21,7 @@ int main(void) {
 
   // Set up HTTP server parameters
   mg_set_protocol_http_websocket(nc);
-  s_http_server_opts.document_root = ".";  // Serve current directory
+  s_http_server_opts.document_root = ".";      // Serve current directory
   s_http_server_opts.dav_document_root = ".";  // Allow access via WebDav
   s_http_server_opts.enable_directory_listing = "yes";
 

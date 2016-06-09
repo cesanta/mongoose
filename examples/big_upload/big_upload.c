@@ -34,7 +34,7 @@ static void handle_request(struct mg_connection *nc) {
 
 static void handle_upload(struct mg_connection *nc, int ev, void *p) {
   struct file_writer_data *data = (struct file_writer_data *) nc->user_data;
-  struct mg_http_multipart_part *mp = (struct mg_http_multipart_part*)p;
+  struct mg_http_multipart_part *mp = (struct mg_http_multipart_part *) p;
 
   switch (ev) {
     case MG_EV_HTTP_PART_BEGIN: {

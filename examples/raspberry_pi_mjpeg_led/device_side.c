@@ -53,7 +53,8 @@ static void send_mjpg_frame(struct mg_connection *nc, const char *file_path) {
 
     /* Send those buffer through the websocket connection */
     mg_send_websocket_frame(nc, WEBSOCKET_OP_BINARY, buf, sizeof(buf));
-    printf("Sent mjpg frame, %lu bytes after skippping %d frames\n", (unsigned long) sizeof(buf), skipped_frames);
+    printf("Sent mjpg frame, %lu bytes after skippping %d frames\n",
+           (unsigned long) sizeof(buf), skipped_frames);
     skipped_frames = 0;
   }
 }
@@ -64,8 +65,10 @@ static void send_mjpg_frame(struct mg_connection *nc, const char *file_path) {
  */
 static void set_led(int v) {
   char cmd[512];
-  snprintf(cmd, sizeof(cmd), "for i in 22 23 24; do"
-           " echo %d >/sys/class/gpio/gpio$i/value; done", v);
+  snprintf(cmd, sizeof(cmd),
+           "for i in 22 23 24; do"
+           " echo %d >/sys/class/gpio/gpio$i/value; done",
+           v);
   system(cmd);
 }
 
@@ -73,7 +76,7 @@ static void set_led(int v) {
  * Parse control JSON and perform command:
  * for now only LED on/off is supported.
  */
-static void perform_control_command(const char* data, size_t len) {
+static void perform_control_command(const char *data, size_t len) {
   struct json_token toks[200], *onoff;
   parse_json(data, len, toks, sizeof(toks));
   onoff = find_json_token(toks, "onoff");
@@ -86,16 +89,16 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
   switch (ev) {
     case MG_EV_CONNECT:
-      printf("Reconnect: %s\n", * (int *) ev_data == 0 ? "ok" : "failed");
-      if (* (int *) ev_data == 0) {
+      printf("Reconnect: %s\n", *(int *) ev_data == 0 ? "ok" : "failed");
+      if (*(int *) ev_data == 0) {
         /*
          * Tune the tcp send buffer size, so that we can skip frames
          * when the connection is congested. This helps maintaining a
          * reasonable latency.
          */
         int sndbuf_size = 512;
-        if(setsockopt(nc->sock, SOL_SOCKET, SO_SNDBUF,
-                      (void *) &sndbuf_size, sizeof(int)) == -1) {
+        if (setsockopt(nc->sock, SOL_SOCKET, SO_SNDBUF, (void *) &sndbuf_size,
+                       sizeof(int)) == -1) {
           perror("failed to tune TCP send buffer size\n");
         }
 
@@ -111,7 +114,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       break;
     case MG_EV_WEBSOCKET_FRAME:
       printf("Got control command: [%.*s]\n", (int) wm->size, wm->data);
-      perform_control_command((const char*)wm->data, wm->size);
+      perform_control_command((const char *) wm->data, wm->size);
       break;
   }
 }
@@ -124,11 +127,13 @@ static void *generate_mjpg_data_thread_func(void *param) {
   char cmd[400];
   (void) param;
 
-  snprintf(cmd, sizeof(cmd), "raspistill -w %d -h %d -n -q 100 -tl %d "
-                "-t 999999999 -v %s -o %s >/dev/null 2>&1", s_width, s_height,
-                s_still_period, s_vertical_flip ? "-vf" : "", s_mjpg_file);
+  snprintf(cmd, sizeof(cmd),
+           "raspistill -w %d -h %d -n -q 100 -tl %d "
+           "-t 999999999 -v %s -o %s >/dev/null 2>&1",
+           s_width, s_height, s_still_period, s_vertical_flip ? "-vf" : "",
+           s_mjpg_file);
 
-  for(;;) {
+  for (;;) {
     int ret = system(cmd);
     if (WIFSIGNALED(ret)) exit(1);
     sleep(1);
@@ -152,7 +157,7 @@ int main(int argc, char *argv[]) {
 
   mg_mgr_init(&mgr, NULL);
 
-  for(;;) {
+  for (;;) {
     mg_mgr_poll(&mgr, s_poll_interval_ms);
 
     /* Reconnect if disconnected */

@@ -37,7 +37,8 @@
 
 #include "wifi.h"
 
-static const char *upload_form = "\
+static const char *upload_form =
+    "\
 <h1>Upload file</h1> \
 <form action='/upload' method='POST' enctype='multipart/form-data'> \
   <input type='file' name='file'> \
@@ -75,8 +76,7 @@ void mg_ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
           ("HTTP request from %s: %.*s %.*s", addr, (int) hm->method.len,
            hm->method.p, (int) hm->uri.len, hm->uri.p));
       if (mg_vcmp(&hm->uri, "/upload") == 0 ||
-          (mg_vcmp(&hm->uri, "/") == 0 &&
-           mg_stat("SL:index.html", &st) != 0)) {
+          (mg_vcmp(&hm->uri, "/") == 0 && mg_stat("SL:index.html", &st) != 0)) {
         mg_send(nc, upload_form, strlen(upload_form));
         nc->flags |= MG_F_SEND_AND_CLOSE;
         break;
@@ -107,8 +107,8 @@ void mg_ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 }
 
 static void mg_init(struct mg_mgr *mgr) {
-  WiFi_Params        wifiParams;
-  WiFi_Handle        handle;
+  WiFi_Params wifiParams;
+  WiFi_Handle handle;
 
   LOG(LL_INFO, ("MG task running"));
 
@@ -153,23 +153,23 @@ static void mg_init(struct mg_mgr *mgr) {
 }
 
 int main(void) {
-    Board_initGeneral();
-    Board_initGPIO();
-    Board_initWiFi();
+  Board_initGeneral();
+  Board_initGPIO();
+  Board_initWiFi();
 
-    setvbuf(stdout, NULL, _IOLBF, 0);
-    setvbuf(stderr, NULL, _IOLBF, 0);
-    cs_log_set_level(LL_INFO);
-    cs_log_set_file(stdout);
+  setvbuf(stdout, NULL, _IOLBF, 0);
+  setvbuf(stderr, NULL, _IOLBF, 0);
+  cs_log_set_level(LL_INFO);
+  cs_log_set_file(stdout);
 
-    if (!mg_start_task(MG_TASK_PRIORITY, MG_TASK_STACK_SIZE, mg_init)) {
-      LOG(LL_ERROR, ("Error starting Mongoose task"));
-      return 1;
-    }
+  if (!mg_start_task(MG_TASK_PRIORITY, MG_TASK_STACK_SIZE, mg_init)) {
+    LOG(LL_ERROR, ("Error starting Mongoose task"));
+    return 1;
+  }
 
-    osi_start();
+  osi_start();
 
-    return 0;
+  return 0;
 }
 
 void SimpleLinkHttpServerCallback(SlHttpServerEvent_t *e,

@@ -34,8 +34,10 @@ static void push_frame_to_clients(struct mg_mgr *mgr,
   for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
     if (!(nc->flags & MG_F_USER_2)) continue;  // Ignore un-marked requests
 
-    mg_printf(nc, "--w00t\r\nContent-Type: image/jpeg\r\n"
-              "Content-Length: %lu\r\n\r\n", (unsigned long) wm->size);
+    mg_printf(nc,
+              "--w00t\r\nContent-Type: image/jpeg\r\n"
+              "Content-Length: %lu\r\n\r\n",
+              (unsigned long) wm->size);
     mg_send(nc, wm->data, wm->size);
     mg_send(nc, "\r\n", 2);
     printf("Image pushed to %p\n", nc);
@@ -50,7 +52,8 @@ static void send_command_to_the_device(struct mg_mgr *mgr,
                                        const struct mg_str *cmd) {
   struct mg_connection *nc;
   for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
-    if (!(nc->flags & MG_F_IS_WEBSOCKET)) continue;  // Ignore non-websocket requests
+    if (!(nc->flags & MG_F_IS_WEBSOCKET))
+      continue;  // Ignore non-websocket requests
 
     mg_send_websocket_frame(nc, WEBSOCKET_OP_TEXT, cmd->p, cmd->len);
     printf("Sent API command [%.*s] to %p\n", (int) cmd->len, cmd->p, nc);
@@ -75,15 +78,15 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   switch (ev) {
     case MG_EV_HTTP_REQUEST:
       if (mg_vcmp(&hm->uri, "/mjpg") == 0) {
-        nc->flags |= MG_F_USER_2;   /* Set a mark on image requests */
+        nc->flags |= MG_F_USER_2; /* Set a mark on image requests */
         mg_printf(nc, "%s",
-                "HTTP/1.0 200 OK\r\n"
-                "Cache-Control: no-cache\r\n"
-                "Pragma: no-cache\r\n"
-                "Expires: Thu, 01 Dec 1994 16:00:00 GMT\r\n"
-                "Connection: close\r\n"
-                "Content-Type: multipart/x-mixed-replace; "
-                "boundary=--w00t\r\n\r\n");
+                  "HTTP/1.0 200 OK\r\n"
+                  "Cache-Control: no-cache\r\n"
+                  "Pragma: no-cache\r\n"
+                  "Expires: Thu, 01 Dec 1994 16:00:00 GMT\r\n"
+                  "Connection: close\r\n"
+                  "Content-Type: multipart/x-mixed-replace; "
+                  "boundary=--w00t\r\n\r\n");
       } else if (mg_vcmp(&hm->uri, "/api") == 0 && hm->body.len > 0) {
         /*
          * RESTful API call. HTTP message body should be a JSON message.
@@ -129,13 +132,13 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
   mg_set_protocol_http_websocket(nc);
-  web_root_opts.document_root =  "./web_root";
+  web_root_opts.document_root = "./web_root";
 
   /*
    * We explicitly hand over control to the Mongoose manager
    * in this event loop and we can easily multiplex other activities.
    */
-  for(;;) {
+  for (;;) {
     mg_mgr_poll(&mgr, 1000);
   }
 

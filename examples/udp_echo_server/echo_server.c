@@ -22,8 +22,8 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
   (void) p;
   switch (ev) {
     case MG_EV_RECV:
-      mg_send(nc, io->buf, io->len);   // Echo message back
-      mbuf_remove(io, io->len);        // Discard message from recv buffer
+      mg_send(nc, io->buf, io->len);  // Echo message back
+      mbuf_remove(io, io->len);       // Discard message from recv buffer
       // In case of UDP, Mongoose creates new virtual connection for
       // incoming messages
       // We can keep it (and it will be reused for another messages from

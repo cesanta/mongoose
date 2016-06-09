@@ -20,9 +20,10 @@ static void ev_handler(struct mg_connection *c, int ev, void *p) {
     sleep(3);
 
     /* Send the reply */
-    snprintf(reply, sizeof(reply), "{ \"uri\": \"%.*s\" }\n",
-             (int) hm->uri.len, hm->uri.p);
-    mg_printf(c, "HTTP/1.1 200 OK\r\n"
+    snprintf(reply, sizeof(reply), "{ \"uri\": \"%.*s\" }\n", (int) hm->uri.len,
+             hm->uri.p);
+    mg_printf(c,
+              "HTTP/1.1 200 OK\r\n"
               "Content-Type: application/json\r\n"
               "Content-Length: %d\r\n"
               "\r\n"

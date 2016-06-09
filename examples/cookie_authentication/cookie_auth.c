@@ -11,16 +11,11 @@ static struct mg_serve_http_opts s_http_server_opts;
 static const char *s_login_uri = "/login.html";
 static const char *s_secret = ":-)";  // Must be known only to server
 
-
 static void generate_ssid(const char *user_name, const char *expiration_date,
                           char *ssid, size_t ssid_size) {
   char hash[33];
-  cs_md5(hash,
-         user_name, strlen(user_name),
-         ":", (size_t) 1,
-         expiration_date, strlen(expiration_date),
-         ":", (size_t) 1,
-         s_secret, strlen(s_secret),
+  cs_md5(hash, user_name, strlen(user_name), ":", (size_t) 1, expiration_date,
+         strlen(expiration_date), ":", (size_t) 1, s_secret, strlen(s_secret),
          NULL);
   snprintf(ssid, ssid_size, "%s|%s|%s", user_name, expiration_date, hash);
 }
@@ -36,8 +31,8 @@ static int check_auth(struct http_message *hm) {
     // Look for session ID in the Cookie.
     // That session ID can be validated against the database that stores
     // current active sessions.
-    mg_http_parse_header(
-      mg_get_http_header(hm, "Cookie"), "ssid", ssid, sizeof(ssid));
+    mg_http_parse_header(mg_get_http_header(hm, "Cookie"), "ssid", ssid,
+                         sizeof(ssid));
     if (sscanf(ssid, "%[^|]|%[^|]|", name, expire) == 2) {
       generate_ssid(name, expire, calculated_ssid, sizeof(calculated_ssid));
       if (strcmp(ssid, calculated_ssid) == 0) {
@@ -59,7 +54,6 @@ static void check_login_form_submission(struct mg_connection *c,
   // A real authentication mechanism should be employed here.
   // Also, the whole site should be served through HTTPS.
   if (strcmp(name, "Joe") == 0 && strcmp(password, "Doe") == 0) {
-
     // Generate expiry date
     time_t t = time(NULL) + 3600;  // Valid for 1 hour
     snprintf(expire_epoch, sizeof(expire_epoch), "%lu", (unsigned long) t);
@@ -73,7 +67,7 @@ static void check_login_form_submission(struct mg_connection *c,
               "Location: /\r\n\r\n",
               ssid, expire);
   } else {
-      mg_printf(c, "%s", "HTTP/1.1 302 Moved\r\nLocation: /\r\n\r\n");
+    mg_printf(c, "%s", "HTTP/1.1 302 Moved\r\nLocation: /\r\n\r\n");
   }
 }
 

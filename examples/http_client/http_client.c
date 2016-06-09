@@ -16,8 +16,8 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
   switch (ev) {
     case MG_EV_CONNECT:
-      if (* (int *) ev_data != 0) {
-        fprintf(stderr, "connect() failed: %s\n", strerror(* (int *) ev_data));
+      if (*(int *) ev_data != 0) {
+        fprintf(stderr, "connect() failed: %s\n", strerror(*(int *) ev_data));
         s_exit_flag = 1;
       }
       break;
@@ -54,8 +54,8 @@ int main(int argc, char *argv[]) {
   }
 
   if (i + 1 != argc) {
-    fprintf(stderr, "Usage: %s [%s] [--hexdump <file>] <URL>\n",
-            argv[0], s_show_headers_opt);
+    fprintf(stderr, "Usage: %s [%s] [--hexdump <file>] <URL>\n", argv[0],
+            s_show_headers_opt);
     exit(EXIT_FAILURE);
   }
 

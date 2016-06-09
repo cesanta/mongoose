@@ -12,7 +12,7 @@ struct device_settings {
 
 static const char *s_http_port = "8000";
 static struct mg_serve_http_opts s_http_server_opts;
-static struct device_settings s_settings = { "value1", "value2" };
+static struct device_settings s_settings = {"value1", "value2"};
 
 static void handle_save(struct mg_connection *nc, struct http_message *hm) {
   /* Get form variables and store settings values */
@@ -40,9 +40,9 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   switch (ev) {
     case MG_EV_HTTP_REQUEST:
       if (mg_vcmp(&hm->uri, "/save") == 0) {
-        handle_save(nc, hm);                    /* Handle RESTful call */
+        handle_save(nc, hm); /* Handle RESTful call */
       } else {
-        mg_serve_http(nc, hm, s_http_server_opts);  /* Serve static content */
+        mg_serve_http(nc, hm, s_http_server_opts); /* Serve static content */
       }
       break;
     case MG_EV_SSI_CALL:
@@ -63,11 +63,11 @@ int main(int argc, char *argv[]) {
   mg_set_protocol_http_websocket(nc);
   s_http_server_opts.document_root = "./web_root";
   s_http_server_opts.auth_domain = "example.com";
-  //mgr.hexdump_file = "/dev/stdout";
+  // mgr.hexdump_file = "/dev/stdout";
 
   /* If our current directory */
   if (argc > 0 && (p = strrchr(argv[0], '/'))) {
-    snprintf(path, sizeof(path), "%.*s/web_root", (int)(p - argv[0]), argv[0]);
+    snprintf(path, sizeof(path), "%.*s/web_root", (int) (p - argv[0]), argv[0]);
     s_http_server_opts.document_root = path;
   }
 

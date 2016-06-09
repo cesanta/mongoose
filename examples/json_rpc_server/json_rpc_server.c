@@ -31,15 +31,16 @@ static int rpc_sum(char *buf, int len, struct mg_rpc_request *req) {
 
 static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message *hm = (struct http_message *) ev_data;
-  static const char *methods[] = { "sum", NULL };
-  static mg_rpc_handler_t handlers[] = { rpc_sum, NULL };
+  static const char *methods[] = {"sum", NULL};
+  static mg_rpc_handler_t handlers[] = {rpc_sum, NULL};
   char buf[100];
 
   switch (ev) {
     case MG_EV_HTTP_REQUEST:
-      mg_rpc_dispatch(hm->body.p, hm->body.len, buf, sizeof(buf),
-                      methods, handlers);
-      mg_printf(nc, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n"
+      mg_rpc_dispatch(hm->body.p, hm->body.len, buf, sizeof(buf), methods,
+                      handlers);
+      mg_printf(nc,
+                "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n"
                 "Content-Type: application/json\r\n\r\n%s",
                 (int) strlen(buf), buf);
       nc->flags |= MG_F_SEND_AND_CLOSE;

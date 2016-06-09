@@ -1,3 +1,4 @@
+/* clang-format off */
 /*
  * Copyright (c) 2015-2016, Texas Instruments Incorporated
  * All rights reserved.

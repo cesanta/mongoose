@@ -88,8 +88,8 @@ bool wifi_setup_ap(const char *ssid, const char *pass, int channel) {
   sl_Stop(0);
   int role = sl_Start(NULL, NULL, NULL);
   if (role != ROLE_AP) {
-	LOG(LL_ERROR, ("Expected ROLE_AP (%d), got %d", ROLE_AP, role));
-	return false;
+    LOG(LL_ERROR, ("Expected ROLE_AP (%d), got %d", ROLE_AP, role));
+    return false;
   }
   if (sl_NetAppStart(SL_NET_APP_DHCP_SERVER_ID) != 0) {
     LOG(LL_ERROR, ("DHCP server failed to start"));

@@ -30,7 +30,8 @@ static void signal_handler(int sig_num) {
 static void show_usage_and_exit(const char *prog_name) {
   fprintf(stderr, "%s\n", "Copyright (c) 2014 CESANTA SOFTWARE");
   fprintf(stderr, "%s\n", "Usage:");
-  fprintf(stderr, "  %s\n [-d debug_file] [-l] [tcp|ssl]://[ip:]port[:cert][:ca_cert]",
+  fprintf(stderr,
+          "  %s\n [-d debug_file] [-l] [tcp|ssl]://[ip:]port[:cert][:ca_cert]",
           prog_name);
   fprintf(stderr, "%s\n", "Examples:");
   fprintf(stderr, "  %s\n -d hexdump.txt ssl://google.com:443", prog_name);
@@ -40,7 +41,7 @@ static void show_usage_and_exit(const char *prog_name) {
 }
 
 static void on_stdin_read(struct mg_connection *nc, int ev, void *p) {
-  int ch = * (int *) p;
+  int ch = *(int *) p;
 
   (void) ev;
 
