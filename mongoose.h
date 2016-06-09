@@ -731,6 +731,7 @@ char *inet_ntoa(struct in_addr in);
 int inet_pton(int af, const char *src, void *dst);
 
 struct mg_mgr;
+struct mg_connection;
 
 typedef void (*mg_init_cb)(struct mg_mgr *mgr);
 bool mg_start_task(int priority, int stack_size, mg_init_cb mg_init);
@@ -738,6 +739,8 @@ bool mg_start_task(int priority, int stack_size, mg_init_cb mg_init);
 void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg);
 
 int sl_fs_init();
+
+int sl_set_ssl_opts(struct mg_connection *nc);
 
 #ifdef __cplusplus
 }
@@ -1172,11 +1175,10 @@ int json_emit_va(char *buf, int buf_len, const char *fmt, va_list);
 #ifdef __APPLE__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
+#if !defined(MG_SOCKET_SIMPLELINK)
 #include <openssl/ssl.h>
-#else
-typedef void *SSL;
-typedef void *SSL_CTX;
 #endif
+#endif /* MG_ENABLE_SSL */
 
 #ifndef MG_VPRINTF_BUFFER_SIZE
 #define MG_VPRINTF_BUFFER_SIZE 100
@@ -1257,8 +1259,17 @@ struct mg_connection {
   size_t recv_mbuf_limit;  /* Max size of recv buffer */
   struct mbuf recv_mbuf;   /* Received data */
   struct mbuf send_mbuf;   /* Data scheduled for sending */
+#if defined(MG_ENABLE_SSL)
+#if !defined(MG_SOCKET_SIMPLELINK)
   SSL *ssl;
   SSL_CTX *ssl_ctx;
+#else
+  char *ssl_cert;
+  char *ssl_key;
+  char *ssl_ca_cert;
+  char *ssl_server_name;
+#endif
+#endif
   time_t last_io_time;              /* Timestamp of the last socket IO */
   double ev_timer_time;             /* Timestamp of the future MG_EV_TIMER */
   mg_event_handler_t proto_handler; /* Protocol-specific event handler */
@@ -1402,6 +1413,9 @@ struct mg_bind_opts {
 #ifdef MG_ENABLE_SSL
   /* SSL settings. */
   const char *ssl_cert;    /* Server certificate to present to clients */
+  const char *ssl_key;     /* Private key corresponding to the certificate.
+                              If ssl_cert is set but ssl_key is not, ssl_cert
+                              is used. */
   const char *ssl_ca_cert; /* Verify client certificates with this CA bundle */
 #endif
 };
@@ -1442,6 +1456,9 @@ struct mg_connect_opts {
 #ifdef MG_ENABLE_SSL
   /* SSL settings. */
   const char *ssl_cert;    /* Client certificate to present to the server */
+  const char *ssl_key;     /* Private key corresponding to the certificate.
+                              If ssl_cert is set but ssl_key is not, ssl_cert
+                              is used. */
   const char *ssl_ca_cert; /* Verify server certificate using this CA bundle */
 
   /*
@@ -1515,19 +1532,23 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
                                      mg_event_handler_t handler,
                                      struct mg_connect_opts opts);
 
+#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
 /*
+ * Note: This function is deprecated, please use SSL options in mg_connect_opt.
+ *
  * Enable SSL for a given connection.
  * `cert` is a server certificate file name for a listening connection,
  * or a client certificate file name for an outgoing connection.
  * Certificate files must be in PEM format. Server certificate file
  * must contain a certificate, concatenated with a private key, optionally
- * concatenated with parameters.
+ * concatenated with DH parameters.
  * `ca_cert` is a CA certificate, or NULL if peer verification is not
  * required.
  * Return: NULL on success, or error message on error.
  */
 const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
                        const char *ca_cert);
+#endif
 
 /*
  * Send data to the connection.

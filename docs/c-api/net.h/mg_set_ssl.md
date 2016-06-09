@@ -7,12 +7,14 @@ signature: |
                          const char *ca_cert);
 ---
 
+Note: This function is deprecated, please use SSL options in mg_connect_opt.
+
 Enable SSL for a given connection.
 `cert` is a server certificate file name for a listening connection,
 or a client certificate file name for an outgoing connection.
 Certificate files must be in PEM format. Server certificate file
 must contain a certificate, concatenated with a private key, optionally
-concatenated with parameters.
+concatenated with DH parameters.
 `ca_cert` is a CA certificate, or NULL if peer verification is not
 required.
 Return: NULL on success, or error message on error. 

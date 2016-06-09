@@ -2204,9 +2204,13 @@ void mg_if_timer(struct mg_connection *c, double now) {
 }
 
 void mg_if_poll(struct mg_connection *nc, time_t now) {
+#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
   if (nc->ssl == NULL || (nc->flags & MG_F_SSL_HANDSHAKE_DONE)) {
     mg_call(nc, NULL, MG_EV_POLL, &now);
   }
+#else
+  mg_call(nc, NULL, MG_EV_POLL, &now);
+#endif
 }
 
 static void mg_destroy_conn(struct mg_connection *conn) {
@@ -2214,9 +2218,16 @@ static void mg_destroy_conn(struct mg_connection *conn) {
     conn->proto_data_destructor(conn->proto_data);
   }
   mg_if_destroy_conn(conn);
-#ifdef MG_ENABLE_SSL
+#if defined(MG_ENABLE_SSL)
+#if !defined(MG_SOCKET_SIMPLELINK)
   if (conn->ssl != NULL) SSL_free(conn->ssl);
   if (conn->ssl_ctx != NULL) SSL_CTX_free(conn->ssl_ctx);
+#else
+  MG_FREE(conn->ssl_cert);
+  MG_FREE(conn->ssl_key);
+  MG_FREE(conn->ssl_ca_cert);
+  MG_FREE(conn->ssl_server_name);
+#endif
 #endif
   mbuf_free(&conn->recv_mbuf);
   mbuf_free(&conn->send_mbuf);
@@ -2250,7 +2261,7 @@ void mg_mgr_init(struct mg_mgr *m, void *user_data) {
   signal(SIGPIPE, SIG_IGN);
 #endif
 
-#ifdef MG_ENABLE_SSL
+#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
   {
     static int init_done;
     if (!init_done) {
@@ -2484,6 +2495,8 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
 }
 
 #ifdef MG_ENABLE_SSL
+
+#ifndef MG_SOCKET_SIMPLELINK
 /*
  * Certificate generation script is at
  * https://github.com/cesanta/mongoose/blob/master/scripts/generate_ssl_certificates.sh
@@ -2559,13 +2572,13 @@ static int mg_use_ca_cert(SSL_CTX *ctx, const char *cert) {
   return SSL_CTX_load_verify_locations(ctx, cert, NULL) == 1 ? 0 : -2;
 }
 
-static int mg_use_cert(SSL_CTX *ctx, const char *pem_file) {
+static int mg_use_cert(SSL_CTX *ctx, const char *cert, const char *key) {
   if (ctx == NULL) {
     return -1;
-  } else if (pem_file == NULL || pem_file[0] == '\0') {
+  } else if (cert == NULL || cert[0] == '\0' || key == NULL || key[0] == '\0') {
     return 0;
-  } else if (SSL_CTX_use_certificate_file(ctx, pem_file, 1) == 0 ||
-             SSL_CTX_use_PrivateKey_file(ctx, pem_file, 1) == 0) {
+  } else if (SSL_CTX_use_certificate_file(ctx, cert, 1) == 0 ||
+             SSL_CTX_use_PrivateKey_file(ctx, key, 1) == 0) {
     return -2;
   } else {
 #ifndef MG_DISABLE_PFS
@@ -2573,7 +2586,7 @@ static int mg_use_cert(SSL_CTX *ctx, const char *pem_file) {
     DH *dh = NULL;
 
     /* Try to read DH parameters from the cert/key file. */
-    bio = BIO_new_file(pem_file, "r");
+    bio = BIO_new_file(cert, "r");
     if (bio != NULL) {
       dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
       BIO_free(bio);
@@ -2594,7 +2607,7 @@ static int mg_use_cert(SSL_CTX *ctx, const char *pem_file) {
     }
 #endif
     SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-    SSL_CTX_use_certificate_chain_file(ctx, pem_file);
+    SSL_CTX_use_certificate_chain_file(ctx, cert);
     return 0;
   }
 }
@@ -2615,14 +2628,17 @@ static int mg_use_cert(SSL_CTX *ctx, const char *pem_file) {
  *
  * Return NULL on success, or error message on failure.
  */
-const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
-                       const char *ca_cert) {
+static const char *mg_set_ssl2(struct mg_connection *nc, const char *cert,
+                               const char *key, const char *ca_cert) {
   const char *result = NULL;
-  DBG(("%p %s %s", nc, (cert ? cert : ""), (ca_cert ? ca_cert : "")));
+  DBG(("%p %s,%s,%s", nc, (cert ? cert : ""), (key ? key : ""),
+       (ca_cert ? ca_cert : "")));
 
   if (nc->flags & MG_F_UDP) {
     return "SSL for UDP is not supported";
   }
+
+  if (key == NULL && cert != NULL) key = cert;
 
   if (nc->ssl != NULL) {
     SSL_free(nc->ssl);
@@ -2639,19 +2655,13 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
   } else if (!(nc->flags & MG_F_LISTENING) &&
              (nc->ssl_ctx = SSL_CTX_new(SSLv23_client_method())) == NULL) {
     result = "SSL_CTX_new() failed";
-  } else if (mg_use_cert(nc->ssl_ctx, cert) != 0) {
+  } else if (mg_use_cert(nc->ssl_ctx, cert, key) != 0) {
     result = "Invalid ssl cert";
   } else if (mg_use_ca_cert(nc->ssl_ctx, ca_cert) != 0) {
     result = "Invalid CA cert";
   } else if (!(nc->flags & MG_F_LISTENING) &&
              (nc->ssl = SSL_new(nc->ssl_ctx)) == NULL) {
     result = "SSL_new() failed";
-  } else if (!(nc->flags & MG_F_LISTENING) && nc->sock != INVALID_SOCKET) {
-    /*
-     * Socket is open here only if we are connecting to IP address
-     * and does not open if we are connecting using async DNS resolver
-     */
-    SSL_set_fd(nc->ssl, nc->sock);
   }
 
 #ifndef MG_DISABLE_PFS
@@ -2659,6 +2669,37 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
 #endif
   return result;
 }
+
+const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
+                       const char *ca_cert) {
+  return mg_set_ssl2(nc, cert, NULL, ca_cert);
+}
+
+#else  /* !MG_SOCKET_SIMPLELINK */
+
+static const char *mg_set_ssl2(struct mg_connection *nc, const char *cert,
+                               const char *key, const char *ca_cert) {
+  DBG(("%p %s,%s,%s", nc, (cert ? cert : ""), (key ? key : ""),
+       (ca_cert ? ca_cert : "")));
+
+  if (nc->flags & MG_F_UDP) {
+    return "SSL for UDP is not supported";
+  }
+
+  if (cert != NULL || key != NULL) {
+    if (cert != NULL && key != NULL) {
+      nc->ssl_cert = strdup(cert);
+      nc->ssl_key = strdup(key);
+    } else {
+      return "both cert and key are required";
+    }
+  }
+  if (ca_cert != NULL) nc->ssl_ca_cert = strdup(ca_cert);
+
+  return NULL;
+}
+#endif /* MG_SOCKET_SIMPLELINK */
+
 #endif /* MG_ENABLE_SSL */
 
 struct mg_connection *mg_if_accept_new_conn(struct mg_connection *lc) {
@@ -2672,8 +2713,7 @@ struct mg_connection *mg_if_accept_new_conn(struct mg_connection *lc) {
   nc->user_data = lc->user_data;
   nc->recv_mbuf_limit = lc->recv_mbuf_limit;
   mg_add_conn(nc->mgr, nc);
-  DBG(("%p %p %d %d, %p %p", lc, nc, nc->sock, (int) nc->flags, lc->ssl_ctx,
-       nc->ssl));
+  DBG(("%p %p %d %d", lc, nc, nc->sock, (int) nc->flags));
   return nc;
 }
 
@@ -2875,20 +2915,28 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
 
   if ((nc = mg_create_connection(mgr, callback, add_sock_opts)) == NULL) {
     return NULL;
-  } else if ((rc = mg_parse_address(address, &nc->sa, &proto, host,
-                                    sizeof(host))) < 0) {
+  }
+
+  if ((rc = mg_parse_address(address, &nc->sa, &proto, host, sizeof(host))) <
+      0) {
     /* Address is malformed */
     MG_SET_PTRPTR(opts.error_string, "cannot parse address");
     mg_destroy_conn(nc);
     return NULL;
   }
+
   nc->flags |= opts.flags & _MG_ALLOWED_CONNECT_FLAGS_MASK;
   nc->flags |= (proto == SOCK_DGRAM) ? MG_F_UDP : 0;
   nc->user_data = opts.user_data;
 
 #ifdef MG_ENABLE_SSL
+  DBG(("%p %s %s %s %s", nc, address, (opts.ssl_cert ? opts.ssl_cert : ""),
+       (opts.ssl_key ? opts.ssl_key : ""),
+       (opts.ssl_ca_cert ? opts.ssl_ca_cert : "")));
+
   if (opts.ssl_cert != NULL || opts.ssl_ca_cert != NULL) {
-    const char *err = mg_set_ssl(nc, opts.ssl_cert, opts.ssl_ca_cert);
+    const char *err =
+        mg_set_ssl2(nc, opts.ssl_cert, opts.ssl_key, opts.ssl_ca_cert);
     if (err != NULL) {
       MG_SET_PTRPTR(opts.error_string, err);
       mg_destroy_conn(nc);
@@ -2899,6 +2947,8 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
       if (opts.ssl_server_name == NULL) opts.ssl_server_name = host;
 #ifdef SSL_KRYPTON
       SSL_CTX_kr_set_verify_name(nc->ssl_ctx, opts.ssl_server_name);
+#elif defined(MG_SOCKET_SIMPLELINK)
+      nc->ssl_server_name = strdup(opts.ssl_server_name);
 #else
       /* TODO(rojer): Implement server name verification on OpenSSL. */
       MG_SET_PTRPTR(opts.error_string,
@@ -2970,8 +3020,25 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
 
   nc->sa = sa;
   nc->flags |= MG_F_LISTENING;
-  if (proto == SOCK_DGRAM) {
-    nc->flags |= MG_F_UDP;
+  if (proto == SOCK_DGRAM) nc->flags |= MG_F_UDP;
+
+#ifdef MG_ENABLE_SSL
+  DBG(("%p %s %s %s %s", nc, address, (opts.ssl_cert ? opts.ssl_cert : ""),
+       (opts.ssl_key ? opts.ssl_key : ""),
+       (opts.ssl_ca_cert ? opts.ssl_ca_cert : "")));
+
+  if (opts.ssl_cert != NULL || opts.ssl_ca_cert != NULL) {
+    const char *err =
+        mg_set_ssl2(nc, opts.ssl_cert, opts.ssl_key, opts.ssl_ca_cert);
+    if (err != NULL) {
+      MG_SET_PTRPTR(opts.error_string, err);
+      mg_destroy_conn(nc);
+      return NULL;
+    }
+  }
+#endif /* MG_ENABLE_SSL */
+
+  if (nc->flags & MG_F_UDP) {
     rc = mg_if_listen_udp(nc, &nc->sa);
   } else {
     rc = mg_if_listen_tcp(nc, &nc->sa);
@@ -2982,16 +3049,6 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
     mg_destroy_conn(nc);
     return NULL;
   }
-#ifdef MG_ENABLE_SSL
-  if (opts.ssl_cert != NULL || opts.ssl_ca_cert != NULL) {
-    const char *err = mg_set_ssl(nc, opts.ssl_cert, opts.ssl_ca_cert);
-    if (err != NULL) {
-      MG_SET_PTRPTR(opts.error_string, err);
-      mg_destroy_conn(nc);
-      return NULL;
-    }
-  }
-#endif /* MG_ENABLE_SSL */
   mg_add_conn(nc->mgr, nc);
 
   return nc;
@@ -3130,8 +3187,9 @@ double mg_time() {
 #define MG_TCP_RECV_BUFFER_SIZE 1024
 #define MG_UDP_RECV_BUFFER_SIZE 1500
 
-static sock_t mg_open_listening_socket(union socket_address *sa, int proto);
-#ifdef MG_ENABLE_SSL
+static sock_t mg_open_listening_socket(union socket_address *sa, int type,
+                                       int proto);
+#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
 static void mg_ssl_begin(struct mg_connection *nc);
 static int mg_ssl_err(struct mg_connection *conn, int res);
 #endif
@@ -3169,8 +3227,11 @@ int mg_is_error(int n) {
 
 void mg_if_connect_tcp(struct mg_connection *nc,
                        const union socket_address *sa) {
-  int rc;
-  nc->sock = socket(AF_INET, SOCK_STREAM, 0);
+  int rc, proto = 0;
+#if defined(MG_ENABLE_SSL) && defined(MG_SOCKET_SIMPLELINK)
+  if (nc->ssl_cert != NULL || nc->ssl_ca_cert != NULL) proto = SL_SEC_SOCKET;
+#endif
+  nc->sock = socket(AF_INET, SOCK_STREAM, proto);
   if (nc->sock == INVALID_SOCKET) {
     nc->err = errno ? errno : 1;
     return;
@@ -3178,9 +3239,16 @@ void mg_if_connect_tcp(struct mg_connection *nc,
 #if !defined(MG_SOCKET_SIMPLELINK) && !defined(MG_ESP8266)
   mg_set_non_blocking_mode(nc->sock);
 #endif
+#if defined(MG_ENABLE_SSL) && defined(MG_SOCKET_SIMPLELINK)
+  int is_ssl_no_vrfy = (nc->ssl_ca_cert != NULL && nc->ssl_ca_cert[0] == '\0');
+  if (!sl_set_ssl_opts(nc)) return;
+#endif
   rc = connect(nc->sock, &sa->sa, sizeof(sa->sin));
+#if defined(MG_ENABLE_SSL) && defined(MG_SOCKET_SIMPLELINK)
+  if (is_ssl_no_vrfy && rc == SL_ESECSNOVERIFY) rc = 0;
+#endif
   nc->err = mg_is_error(rc) ? errno : 0;
-  DBG(("%p sock %d err %d", nc, nc->sock, nc->err));
+  LOG(LL_INFO, ("%p sock %d err %d", nc, nc->sock, nc->err));
 }
 
 void mg_if_connect_udp(struct mg_connection *nc) {
@@ -3193,16 +3261,23 @@ void mg_if_connect_udp(struct mg_connection *nc) {
 }
 
 int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
-  sock_t sock = mg_open_listening_socket(sa, SOCK_STREAM);
+  int proto = 0;
+#if defined(MG_ENABLE_SSL) && defined(MG_SOCKET_SIMPLELINK)
+  if (nc->ssl_cert != NULL || nc->ssl_ca_cert != NULL) proto = SL_SEC_SOCKET;
+#endif
+  sock_t sock = mg_open_listening_socket(sa, SOCK_STREAM, proto);
   if (sock == INVALID_SOCKET) {
     return (errno ? errno : 1);
   }
   mg_sock_set(nc, sock);
+#if defined(MG_ENABLE_SSL) && defined(MG_SOCKET_SIMPLELINK)
+  if (!sl_set_ssl_opts(nc)) return nc->err;
+#endif
   return 0;
 }
 
 int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
-  sock_t sock = mg_open_listening_socket(sa, SOCK_DGRAM);
+  sock_t sock = mg_open_listening_socket(sa, SOCK_DGRAM, 0);
   if (sock == INVALID_SOCKET) return (errno ? errno : 1);
   mg_sock_set(nc, sock);
   return 0;
@@ -3262,7 +3337,7 @@ static int mg_accept_conn(struct mg_connection *lc) {
   DBG(("%p conn from %s:%d", nc, inet_ntoa(sa.sin.sin_addr),
        ntohs(sa.sin.sin_port)));
   mg_sock_set(nc, sock);
-#ifdef MG_ENABLE_SSL
+#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
   if (lc->ssl_ctx != NULL) {
     nc->ssl = SSL_new(lc->ssl_ctx);
     if (nc->ssl == NULL || SSL_set_fd(nc->ssl, sock) != 1) {
@@ -3278,7 +3353,8 @@ static int mg_accept_conn(struct mg_connection *lc) {
 }
 
 /* 'sa' must be an initialized address to bind to */
-static sock_t mg_open_listening_socket(union socket_address *sa, int proto) {
+static sock_t mg_open_listening_socket(union socket_address *sa, int type,
+                                       int proto) {
   socklen_t sa_len =
       (sa->sa.sa_family == AF_INET) ? sizeof(sa->sin) : sizeof(sa->sin6);
   sock_t sock = INVALID_SOCKET;
@@ -3286,7 +3362,7 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int proto) {
   int on = 1;
 #endif
 
-  if ((sock = socket(sa->sa.sa_family, proto, 0)) != INVALID_SOCKET &&
+  if ((sock = socket(sa->sa.sa_family, type, proto)) != INVALID_SOCKET &&
 #if !defined(MG_SOCKET_SIMPLELINK) && \
     !defined(MG_LWIP) /* SimpleLink and LWIP don't support either */
 #if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE)
@@ -3310,7 +3386,7 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int proto) {
 #endif /* !MG_SOCKET_SIMPLELINK && !MG_LWIP */
 
       !bind(sock, &sa->sa, sa_len) &&
-      (proto == SOCK_DGRAM || listen(sock, SOMAXCONN) == 0)) {
+      (type == SOCK_DGRAM || listen(sock, SOMAXCONN) == 0)) {
 #if !defined(MG_SOCKET_SIMPLELINK) && \
     !defined(MG_LWIP) /* TODO(rojer): Fix this. */
     mg_set_non_blocking_mode(sock);
@@ -3348,7 +3424,7 @@ static void mg_write_to_socket(struct mg_connection *nc) {
     return;
   }
 
-#ifdef MG_ENABLE_SSL
+#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
   if (nc->ssl != NULL) {
     if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
       n = SSL_write(nc->ssl, io->buf, io->len);
@@ -3396,7 +3472,7 @@ static void mg_read_from_socket(struct mg_connection *conn) {
     return;
   }
 
-#ifdef MG_ENABLE_SSL
+#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
   if (conn->ssl != NULL) {
     if (conn->flags & MG_F_SSL_HANDSHAKE_DONE) {
       /* SSL library may have more bytes ready to read then we ask to read.
@@ -3464,7 +3540,7 @@ static void mg_handle_udp_read(struct mg_connection *nc) {
   mg_if_recv_udp_cb(nc, buf, n, &sa, sa_len);
 }
 
-#ifdef MG_ENABLE_SSL
+#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
 static int mg_ssl_err(struct mg_connection *conn, int res) {
   int ssl_err = SSL_get_error(conn->ssl, res);
   DBG(("%p %d -> %d", conn, res, ssl_err));
@@ -3507,7 +3583,7 @@ static void mg_ssl_begin(struct mg_connection *nc) {
     }
   }
 }
-#endif /* MG_ENABLE_SSL */
+#endif /* defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK) */
 
 #define _MG_F_FD_CAN_READ 1
 #define _MG_F_FD_CAN_WRITE 1 << 1
@@ -3533,8 +3609,12 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
        * TODO(rojer): Figure out why it fails where blocking succeeds.
        */
       err = nc->err;
+#if defined(MG_SOCKET_SIMPLELINK)
+      /* TODO(rojer): Provide API to set date. */
+      if (err == SL_ESECDATEERROR) err = 0;
 #endif
-#ifdef MG_ENABLE_SSL
+#endif
+#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
       if (nc->ssl != NULL && err == 0) {
         SSL_set_fd(nc->ssl, nc->sock);
         mg_ssl_begin(nc);
@@ -7233,7 +7313,11 @@ static void mg_prepare_cgi_environment(struct mg_connection *nc,
     mg_addenv(blk, "PATH_TRANSLATED=%.*s", (int) path_info->len, path_info->p);
   }
 
+#ifdef MG_ENABLE_SSL
   mg_addenv(blk, "HTTPS=%s", nc->ssl != NULL ? "on" : "off");
+#else
+  mg_addenv(blk, "HTTPS=off");
+#endif
 
   if ((h = mg_get_http_header((struct http_message *) hm, "Content-Type")) !=
       NULL) {
@@ -7708,9 +7792,14 @@ struct mg_connection *mg_connect_http_base(
     return NULL;
   }
 #endif
+#if defined(MG_ENABLE_SSL) && defined(MG_SOCKET_SIMPLELINK)
+  if (use_ssl && opts.ssl_ca_cert == NULL) {
+    opts.ssl_ca_cert = "";
+  }
+#endif
 
   if ((nc = mg_connect_opt(mgr, *addr, ev_handler, opts)) != NULL) {
-#ifdef MG_ENABLE_SSL
+#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
     if (use_ssl && nc->ssl_ctx == NULL) {
       /*
        * Schema requires SSL, but no SSL parameters were provided in
@@ -11001,7 +11090,7 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size) {
 
 char *inet_ntoa(struct in_addr n) {
   static char a[16];
-  return (char *) inet_ntop(AF_INET, &n, a, sizeof(n));
+  return (char *) inet_ntop(AF_INET, &n, a, sizeof(a));
 }
 
 int inet_pton(int af, const char *src, void *dst) {
@@ -11020,6 +11109,50 @@ int inet_pton(int af, const char *src, void *dst) {
   *(db + 3) = a0;
   return 1;
 }
+
+#ifdef MG_ENABLE_SSL
+int sl_set_ssl_opts(struct mg_connection *nc) {
+  DBG(("%p %s,%s,%s,%s", nc, (nc->ssl_cert ? nc->ssl_cert : ""), (nc->ssl_key ? nc->ssl_cert : ""), (nc->ssl_ca_cert ? nc->ssl_ca_cert : ""), (nc->ssl_server_name ? nc->ssl_server_name : "")));
+  if (nc->ssl_cert != NULL && nc->ssl_key != NULL) {
+    nc->err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                            SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME,
+                            nc->ssl_cert,
+                            strlen(nc->ssl_cert));
+    DBG(("CERTIFICATE_FILE_NAME %s -> %d", nc->ssl_cert, nc->err));
+    if (nc->err != 0) return 0;
+    nc->err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                            SL_SO_SECURE_FILES_PRIVATE_KEY_FILE_NAME,
+                            nc->ssl_key,
+                            strlen(nc->ssl_key));
+    DBG(("PRIVATE_KEY_FILE_NAME %s -> %d", nc->ssl_key, nc->err));
+    if (nc->err != 0) return 0;
+    MG_FREE(nc->ssl_cert);
+    MG_FREE(nc->ssl_key);
+    nc->ssl_cert = nc->ssl_key = NULL;
+  }
+  if (nc->ssl_ca_cert != NULL && nc->ssl_ca_cert[0] != '\0') {
+    nc->err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                            SL_SO_SECURE_FILES_CA_FILE_NAME,
+                            nc->ssl_ca_cert,
+                            strlen(nc->ssl_ca_cert));
+    DBG(("CA_FILE_NAME %s -> %d", nc->ssl_ca_cert, nc->err));
+    if (nc->err != 0) return 0;
+    MG_FREE(nc->ssl_ca_cert);
+    nc->ssl_ca_cert = NULL;
+  }
+  if (nc->ssl_server_name != NULL) {
+    nc->err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                            SO_SECURE_DOMAIN_NAME_VERIFICATION,
+                            nc->ssl_server_name,
+                            strlen(nc->ssl_server_name));
+    DBG(("DOMAIN_NAME_VERIFICATION %s -> %d", nc->ssl_server_name, nc->err));
+    if (nc->err != 0) return 0;
+    MG_FREE(nc->ssl_server_name);
+    nc->ssl_server_name = NULL;
+  }
+  return 1;
+}
+#endif
 
 #endif /* CS_COMMON_PLATFORMS_SIMPLELINK_SL_SOCKET_C_ */
 #ifdef MG_MODULE_LINES

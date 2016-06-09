@@ -167,7 +167,21 @@ static void mg_init(struct mg_mgr *mgr) {
     LOG(LL_ERROR, ("Failed to start NWP"));
     return;
   }
-  LOG(LL_INFO, ("NWP started"));
+
+  {
+    SlVersionFull ver;
+    unsigned char opt = SL_DEVICE_GENERAL_VERSION;
+    unsigned char len = sizeof(ver);
+
+    memset(&ver, 0, sizeof(ver));
+    sl_DevGet(SL_DEVICE_GENERAL_CONFIGURATION, &opt, &len,
+              (unsigned char *) (&ver));
+    LOG(LL_INFO, ("NWP v%d.%d.%d.%d started, host v%d.%d.%d.%d",
+                  ver.NwpVersion[0], ver.NwpVersion[1], ver.NwpVersion[2],
+                  ver.NwpVersion[3], SL_MAJOR_VERSION_NUM, SL_MINOR_VERSION_NUM,
+                  SL_VERSION_NUM, SL_SUB_VERSION_NUM));
+  }
+
   GPIO_IF_LedToggle(MCU_RED_LED_GPIO);
 
   data_init_sensors(TMP006_ADDR, BM222_ADDR);
@@ -194,7 +208,7 @@ static void mg_init(struct mg_mgr *mgr) {
   memset(&opts, 0, sizeof(opts));
   opts.error_string = &err;
 
-  struct mg_connection *nc = mg_bind(mgr, "80", mg_ev_handler);
+  struct mg_connection *nc = mg_bind_opt(mgr, "80", mg_ev_handler, opts);
   if (nc != NULL) {
     mg_set_protocol_http_websocket(nc);
     nc->ev_timer_time = mg_time(); /* Start data collection */
