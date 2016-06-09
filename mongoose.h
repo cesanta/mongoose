@@ -1293,10 +1293,11 @@ struct mg_connection {
 #define MG_F_UDP (1 << 1)                /* This connection is UDP */
 #define MG_F_RESOLVING (1 << 2)          /* Waiting for async resolver */
 #define MG_F_CONNECTING (1 << 3)         /* connect() call in progress */
-#define MG_F_SSL_HANDSHAKE_DONE (1 << 4) /* SSL specific */
-#define MG_F_WANT_READ (1 << 5)          /* SSL specific */
-#define MG_F_WANT_WRITE (1 << 6)         /* SSL specific */
-#define MG_F_IS_WEBSOCKET (1 << 7)       /* Websocket specific */
+#define MG_F_SSL (1 << 4)                /* SSL is enabled on the connection */
+#define MG_F_SSL_HANDSHAKE_DONE (1 << 5) /* SSL hanshake has completed */
+#define MG_F_WANT_READ (1 << 6)          /* SSL specific */
+#define MG_F_WANT_WRITE (1 << 7)         /* SSL specific */
+#define MG_F_IS_WEBSOCKET (1 << 8)       /* Websocket specific */
 
 /* Flags that are settable by user */
 #define MG_F_SEND_AND_CLOSE (1 << 10)      /* Push remaining data and close  */
