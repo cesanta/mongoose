@@ -277,8 +277,9 @@ static int connect_backend(struct conn_data *conn, struct http_message *hm) {
   struct mg_connection *nc = conn->client.nc;
   struct http_backend *be = choose_backend(hm);
 
-  write_log("%.*s %.*s backend=%s\n", (int) hm->method.len, hm->method.p,
-            (int) hm->uri.len, hm->uri.p, be ? be->host_port : "not defined");
+  write_log("%ld %.*s %.*s backend=%s\n", (long) time(NULL),
+            (int) hm->method.len, hm->method.p, (int) hm->uri.len, hm->uri.p,
+            be ? be->host_port : "not defined");
 
   if (be == NULL) return 0;
   if (be->redirect != 0) {
