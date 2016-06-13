@@ -66,7 +66,7 @@ $(FW_ZIP): $(FW_ELF) $(FW_BIN) $(SLFS_FILES)
 	  --build_info=$(BUILD_INFO_JSON) \
 	  --output=$(FW_MANIFEST) \
 	  --src_dir=$(FW_DIR) \
-	  sys_mcuimg.bin:src=$(notdir $(FW_BIN)) \
+	  /sys/mcuimg.bin:src=$(notdir $(FW_BIN)) \
 		$(foreach f,$(SLFS_FILES), $(notdir $(f)):src=$(notdir $(f)))
 	@echo "  ZIP   $@"
 	@fw_meta create_fw \
