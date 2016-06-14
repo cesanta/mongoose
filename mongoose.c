@@ -5214,7 +5214,7 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
   struct mg_str *ct;
   struct mbuf *io = &nc->recv_mbuf;
 
-  char boundary[100];
+  char boundary[100] = {0};
   int boundary_len;
 
   if (nc->listener == NULL) {
@@ -5342,7 +5342,7 @@ static int mg_http_multipart_process_boundary(struct mg_connection *c) {
   const char *boundary, *block_begin;
   struct mbuf *io = &c->recv_mbuf;
   struct mg_http_proto_data *pd = mg_http_get_proto_data(c);
-  char file_name[100], var_name[100];
+  char file_name[100] = {0}, var_name[100] = {0};
   int line_len;
   boundary = c_strnstr(io->buf, pd->mp_stream.boundary, io->len);
   block_begin = boundary + pd->mp_stream.boundary_len + 2;
@@ -6245,9 +6245,9 @@ static int mg_check_nonce(const char *nonce) {
 int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
                               FILE *fp) {
   struct mg_str *hdr;
-  char buf[128], f_user[sizeof(buf)], f_ha1[sizeof(buf)], f_domain[sizeof(buf)];
-  char user[50], cnonce[33], response[40], uri[200], qop[20], nc[20], nonce[30];
-  char expected_response[33];
+  char buf[128] = {0}, f_user[sizeof(buf)] = {0}, f_ha1[sizeof(buf)] = {0}, f_domain[sizeof(buf)] = {0};
+  char user[50] = {0}, cnonce[33] = {0}, response[40] = {0}, uri[200] = {0}, qop[20] = {0}, nc[20] = {0}, nonce[30] = {0};
+  char expected_response[33] = {0};
 
   /* Parse "Authorization:" header, fail fast on parse error */
   if (hm == NULL || fp == NULL ||
