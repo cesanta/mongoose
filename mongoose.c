@@ -7779,11 +7779,9 @@ struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
   struct mg_connection *nc = mg_connect_http_base(
       mgr, ev_handler, opts, "ws://", "wss://", url, &path, &addr);
 
-  if (nc == NULL) {
-    return NULL;
+  if (nc != NULL) {
+    mg_send_websocket_handshake2(nc, path, addr, protocol, extra_headers);
   }
-
-  mg_send_websocket_handshake2(nc, path, addr, protocol, extra_headers);
 
   MG_FREE(addr);
   return nc;
