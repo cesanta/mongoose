@@ -11208,9 +11208,7 @@ int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   int proto = 0;
   if (nc->flags & MG_F_SSL) proto = SL_SEC_SOCKET;
   sock_t sock = mg_open_listening_socket(sa, SOCK_STREAM, proto);
-  if (sock == INVALID_SOCKET) {
-    return (errno ? errno : 1);
-  }
+  if (sock < 0) return sock;
   mg_sock_set(nc, sock);
 #ifdef MG_ENABLE_SSL
   return sl_set_ssl_opts(nc);
@@ -11286,17 +11284,18 @@ static int mg_accept_conn(struct mg_connection *lc) {
 /* 'sa' must be an initialized address to bind to */
 static sock_t mg_open_listening_socket(union socket_address *sa, int type,
                                        int proto) {
+  int r;
   socklen_t sa_len =
       (sa->sa.sa_family == AF_INET) ? sizeof(sa->sin) : sizeof(sa->sin6);
   sock_t sock = sl_Socket(sa->sa.sa_family, type, proto);
-  if (sock < 0) return INVALID_SOCKET;
-  if (bind(sock, &sa->sa, sa_len) < 0) {
+  if (sock < 0) return sock;
+  if ((r = bind(sock, &sa->sa, sa_len)) < 0) {
     sl_Close(sock);
-    return INVALID_SOCKET;
+    return r;
   }
-  if (type != SOCK_DGRAM && sl_Listen(sock, SOMAXCONN) < 0) {
+  if (type != SOCK_DGRAM && (r = sl_Listen(sock, SOMAXCONN)) < 0) {
     sl_Close(sock);
-    return INVALID_SOCKET;
+    return r;
   }
   mg_set_non_blocking_mode(sock);
   return sock;
