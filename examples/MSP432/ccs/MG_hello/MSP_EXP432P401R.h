@@ -43,8 +43,8 @@
  *
  *  ============================================================================
  */
-#ifndef __MSP_EXP432P401R_H
-#define __MSP_EXP432P401R_H
+#ifndef CS_MONGOOSE_EXAMPLES_MSP432_CCS_MG_HELLO_MSP_EXP432P401R_H_
+#define CS_MONGOOSE_EXAMPLES_MSP432_CCS_MG_HELLO_MSP_EXP432P401R_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -250,4 +250,4 @@ extern void MSP_EXP432P401R_initWiFi(void);
 }
 #endif
 
-#endif /* __MSP_EXP432P401R_H */
+#endif /* CS_MONGOOSE_EXAMPLES_MSP432_CCS_MG_HELLO_MSP_EXP432P401R_H_ */

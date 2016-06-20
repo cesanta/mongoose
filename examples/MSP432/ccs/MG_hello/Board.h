@@ -31,8 +31,8 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __BOARD_H
-#define __BOARD_H
+#ifndef CS_MONGOOSE_EXAMPLES_MSP432_CCS_MG_HELLO_BOARD_H_
+#define CS_MONGOOSE_EXAMPLES_MSP432_CCS_MG_HELLO_BOARD_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,4 +97,4 @@ extern "C" {
 }
 #endif
 
-#endif /* __BOARD_H */
+#endif /* CS_MONGOOSE_EXAMPLES_MSP432_CCS_MG_HELLO_BOARD_H_ */
