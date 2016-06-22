@@ -10250,6 +10250,15 @@ int asprintf(char **strp, const char *fmt, ...) {
 
   return len;
 }
+
+#if MG_TI_NO_HOST_INTERFACE
+time_t HOSTtime() {
+  struct timeval tp;
+  gettimeofday(&tp, NULL);
+  return tp.tv_sec;
+}
+#endif
+
 #endif /* __TI_COMPILER_VERSION__ */
 
 #ifndef __TI_COMPILER_VERSION__
@@ -10643,7 +10652,7 @@ void fs_slfs_set_new_file_size(const char *name, size_t size) {
 
 int set_errno(int e) {
   errno = e;
-  return -e;
+  return (e == 0 ? 0 : -1);
 }
 
 static int is_sl_fname(const char *fname) {
@@ -10685,7 +10694,11 @@ static int fd_type(int fd) {
   return FD_INVALID;
 }
 
+#if MG_TI_NO_HOST_INTERFACE
+int open(const char *pathname, unsigned flags, int mode) {
+#else
 int _open(const char *pathname, int flags, mode_t mode) {
+#endif
   int fd = -1;
   pathname = drop_dir(pathname);
   if (is_sl_fname(pathname)) {
@@ -10731,7 +10744,11 @@ int _stat(const char *pathname, struct stat *st) {
   return res;
 }
 
+#if MG_TI_NO_HOST_INTERFACE
+int close(int fd) {
+#else
 int _close(int fd) {
+#endif
   int r = -1;
   switch (fd_type(fd)) {
     case FD_INVALID:
@@ -10755,7 +10772,11 @@ int _close(int fd) {
   return r;
 }
 
+#if MG_TI_NO_HOST_INTERFACE
+off_t lseek(int fd, off_t offset, int whence) {
+#else
 off_t _lseek(int fd, off_t offset, int whence) {
+#endif
   int r = -1;
   switch (fd_type(fd)) {
     case FD_INVALID:
@@ -10809,7 +10830,11 @@ int _fstat(int fd, struct stat *s) {
   return r;
 }
 
+#if MG_TI_NO_HOST_INTERFACE
+int read(int fd, char *buf, unsigned count) {
+#else
 ssize_t _read(int fd, void *buf, size_t count) {
+#endif
   int r = -1;
   switch (fd_type(fd)) {
     case FD_INVALID:
@@ -10839,7 +10864,11 @@ ssize_t _read(int fd, void *buf, size_t count) {
   return r;
 }
 
+#if MG_TI_NO_HOST_INTERFACE
+int write(int fd, const char *buf, unsigned count) {
+#else
 ssize_t _write(int fd, const void *buf, size_t count) {
+#endif
   int r = -1;
   size_t i = 0;
   switch (fd_type(fd)) {
@@ -10877,7 +10906,11 @@ ssize_t _write(int fd, const void *buf, size_t count) {
   return r;
 }
 
+#if MG_TI_NO_HOST_INTERFACE
+int rename(const char *from, const char *to) {
+#else
 int _rename(const char *from, const char *to) {
+#endif
   int r = -1;
   from = drop_dir(from);
   to = drop_dir(to);
@@ -10899,7 +10932,11 @@ int _link(const char *from, const char *to) {
   return set_errno(ENOTSUP);
 }
 
+#if MG_TI_NO_HOST_INTERFACE
+int unlink(const char *filename) {
+#else
 int _unlink(const char *filename) {
+#endif
   int r = -1;
   filename = drop_dir(filename);
   if (is_sl_fname(filename)) {
