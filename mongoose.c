@@ -10238,13 +10238,13 @@ int asprintf(char **strp, const char *fmt, ...) {
   va_end(ap);
 
   if (len > 0) {
-    *strp = realloc(*strp, len);
+    *strp = realloc(*strp, len + 1);
     if (*strp == NULL) return -1;
   }
 
   if (len >= BUFSIZ) {
     va_start(ap, fmt);
-    len = vsnprintf(*strp, len, fmt, ap);
+    len = vsnprintf(*strp, len + 1, fmt, ap);
     va_end(ap);
   }
 
