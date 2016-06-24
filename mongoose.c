@@ -11167,7 +11167,7 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
     err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
                         SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME, nc->ssl_cert,
                         strlen(nc->ssl_cert));
-    DBG(("CERTIFICATE_FILE_NAME %s -> %d", nc->ssl_cert, nc->err));
+    DBG(("CERTIFICATE_FILE_NAME %s -> %d", nc->ssl_cert, err));
     if (err != 0) return err;
     err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
                         SL_SO_SECURE_FILES_PRIVATE_KEY_FILE_NAME, nc->ssl_key,
@@ -11183,7 +11183,7 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
       err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
                           SL_SO_SECURE_FILES_CA_FILE_NAME, nc->ssl_ca_cert,
                           strlen(nc->ssl_ca_cert));
-      DBG(("CA_FILE_NAME %s -> %d", nc->ssl_ca_cert, nc->err));
+      DBG(("CA_FILE_NAME %s -> %d", nc->ssl_ca_cert, err));
       if (err != 0) return err;
     }
     MG_FREE(nc->ssl_ca_cert);
@@ -11193,8 +11193,11 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
     err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
                         SO_SECURE_DOMAIN_NAME_VERIFICATION, nc->ssl_server_name,
                         strlen(nc->ssl_server_name));
-    DBG(("DOMAIN_NAME_VERIFICATION %s -> %d", nc->ssl_server_name, nc->err));
-    if (err != 0) return err;
+    DBG(("DOMAIN_NAME_VERIFICATION %s -> %d", nc->ssl_server_name, err));
+    /* Domain name verificationw as added in a NWP service pack, older versions
+     * return SL_ENOPROTOOPT. There isn't much we can do about it, so we ignore
+     * the error. */
+    if (err != 0 && err != SL_ENOPROTOOPT) return err;
     MG_FREE(nc->ssl_server_name);
     nc->ssl_server_name = NULL;
   }
