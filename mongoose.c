@@ -11231,7 +11231,7 @@ void mg_if_connect_tcp(struct mg_connection *nc,
 #endif
   nc->err = sl_Connect(sock, &sa->sa, sizeof(sa->sin));
 out:
-  LOG(LL_INFO, ("%p sock %d err %d", nc, nc->sock, nc->err));
+  DBG(("%p sock %d err %d", nc, nc->sock, nc->err));
 }
 
 void mg_if_connect_udp(struct mg_connection *nc) {
