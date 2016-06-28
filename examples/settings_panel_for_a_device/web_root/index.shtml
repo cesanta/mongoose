@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>RESTful API demo</title>
+  <title>ACMEtron 9000 - Settings</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style type="text/css">
     * { outline: none; }
@@ -17,7 +17,7 @@
     }
     code { background: #eee; padding: 0 0.3em; border-radius: 0.2em; }
     label { display: inline-block; min-width: 5em; }
-    input { border: 1px solid #ccc; padding: 0.2em; margin-right: 2em; }
+    input[type="text"] { border: 1px solid #ccc; padding: 0.2em; margin-right: 2em; }
     a:link, a:visited { color: #69c; text-decoration: none; }
     @media (max-width: 900px) {
       div.content { width: auto; margin: 2em; padding: 1em; }
@@ -36,6 +36,7 @@
     $(document).on('submit', '#settings_form', function() {
       var data = {};
       $('#settings_form [name]').each(function(index, el) {
+        if ($(el).attr('type') == 'radio' && !$(el).is(':checked')) return;
         data[$(el).attr('name')] = $(el).val();
       });
       $('#result').text('');
@@ -91,6 +92,9 @@
         name="setting1" value="<!--#call setting1 -->" >
       <label>Setting 2:</label> <input type="text"
         name="setting2" value="<!--#call setting2 -->" >
+      <label>Setting 3:</label>
+        <input type="radio" name="setting3" value="one" <!--#call setting3_is_one --> > One
+        <input type="radio" name="setting3" value="two" <!--#call setting3_is_two --> > Two
     </fieldset>
 
     <div style="margin: 1em 0;">

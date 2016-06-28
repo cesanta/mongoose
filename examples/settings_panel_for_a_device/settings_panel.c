@@ -8,11 +8,12 @@
 struct device_settings {
   char setting1[100];
   char setting2[100];
+  char setting3[4];
 };
 
 static const char *s_http_port = "8000";
 static struct mg_serve_http_opts s_http_server_opts;
-static struct device_settings s_settings = {"value1", "value2"};
+static struct device_settings s_settings = {"value1", "value2", ""};
 
 static void handle_save(struct mg_connection *nc, struct http_message *hm) {
   /* Get form variables and store settings values */
@@ -20,7 +21,11 @@ static void handle_save(struct mg_connection *nc, struct http_message *hm) {
                   sizeof(s_settings.setting1));
   mg_get_http_var(&hm->body, "setting2", s_settings.setting2,
                   sizeof(s_settings.setting2));
+  mg_get_http_var(&hm->body, "setting3", s_settings.setting3,
+                  sizeof(s_settings.setting3));
 
+  printf("Settings updated to '%s' '%s' '%s'\n", s_settings.setting1,
+         s_settings.setting2, s_settings.setting3);
   /* Send response */
   mg_printf(nc, "HTTP/1.1 200 OK\r\nContent-Length: %lu\r\n\r\n%.*s",
             (unsigned long) hm->body.len, (int) hm->body.len, hm->body.p);
@@ -31,6 +36,10 @@ static void handle_ssi_call(struct mg_connection *nc, const char *param) {
     mg_printf_html_escape(nc, "%s", s_settings.setting1);
   } else if (strcmp(param, "setting2") == 0) {
     mg_printf_html_escape(nc, "%s", s_settings.setting2);
+  } else if (strcmp(param, "setting3_is_one") == 0) {
+    if (strcmp(s_settings.setting3, "one") == 0) mg_printf(nc, "checked");
+  } else if (strcmp(param, "setting3_is_two") == 0) {
+    if (strcmp(s_settings.setting3, "two") == 0) mg_printf(nc, "checked");
   }
 }
 
