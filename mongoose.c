@@ -4791,19 +4791,32 @@ static void mg_websocket_handler(struct mg_connection *nc, int ev,
   }
 }
 
+#ifndef MG_EXT_SHA1
+static void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
+                           const size_t *msg_lens, uint8_t *digest) {
+  size_t i;
+  cs_sha1_ctx sha_ctx;
+  cs_sha1_init(&sha_ctx);
+  for (i = 0; i < num_msgs; i++) {
+    cs_sha1_update(&sha_ctx, msgs[i], msg_lens[i]);
+  }
+  cs_sha1_final(digest, &sha_ctx);
+}
+#else
+extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
+                           const size_t *msg_lens, uint8_t *digest);
+#endif
+
 static void mg_ws_handshake(struct mg_connection *nc,
                             const struct mg_str *key) {
   static const char *magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-  char buf[MG_VPRINTF_BUFFER_SIZE], sha[20], b64_sha[sizeof(sha) * 2];
-  cs_sha1_ctx sha_ctx;
+  const uint8_t *msgs[2] = {(const uint8_t *) key->p, (const uint8_t *) magic};
+  const size_t msg_lens[2] = {key->len, 36};
+  unsigned char sha[20];
+  char b64_sha[30];
 
-  snprintf(buf, sizeof(buf), "%.*s%s", (int) key->len, key->p, magic);
-
-  cs_sha1_init(&sha_ctx);
-  cs_sha1_update(&sha_ctx, (unsigned char *) buf, strlen(buf));
-  cs_sha1_final((unsigned char *) sha, &sha_ctx);
-
-  mg_base64_encode((unsigned char *) sha, sizeof(sha), b64_sha);
+  mg_hash_sha1_v(2, msgs, msg_lens, sha);
+  mg_base64_encode(sha, sizeof(sha), b64_sha);
   mg_printf(nc, "%s%s%s",
             "HTTP/1.1 101 Switching Protocols\r\n"
             "Upgrade: websocket\r\n"
