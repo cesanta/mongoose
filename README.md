@@ -1,4 +1,4 @@
-# <img src="http://www.cesanta.com/hubfs/www.cesanta.com/Images/mongoose_library.png" width="64" height="64"> Mongoose - Embedded Web Server / Embedded Networking Library
+# Mongoose - Embedded Web Server / Embedded Networking Library
 
 ![](https://img.shields.io/badge/license-GPL_2-green.svg "License")
 
