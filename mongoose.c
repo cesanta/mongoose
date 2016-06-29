@@ -4227,11 +4227,9 @@ static struct mg_http_proto_data *mg_http_get_proto_data(
 static void mg_http_free_proto_data_mp_stream(
     struct mg_http_multipart_stream *mp) {
   free((void *) mp->boundary);
-  mp->boundary = NULL;
   free((void *) mp->var_name);
-  mp->var_name = NULL;
   free((void *) mp->file_name);
-  mp->file_name = NULL;
+  memset(mp, 0, sizeof(*mp));
 }
 #endif
 
@@ -5267,6 +5265,7 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
      */
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   } else {
+    pd->mp_stream.state = MPS_BEGIN;
     pd->mp_stream.boundary = strdup(boundary);
     pd->mp_stream.boundary_len = strlen(boundary);
     pd->mp_stream.var_name = pd->mp_stream.file_name = NULL;
