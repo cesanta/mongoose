@@ -95,27 +95,19 @@ static double send_acc_data_since(struct mg_connection *nc,
 
 static void process_command(struct mg_connection *nc, unsigned char *data,
                             size_t len) {
-  struct json_token *toks = parse_json2((const char *) data, len);
-  if (toks == NULL) {
+  // TODO(lsm): use proper JSON parser
+  int cmd, n, val;
+  double t;
+  if (sscanf((char *) data, "{\t\": %d, \"ts\": %lf, %n", &cmd, &t, &n) != 2) {
     LOG(LL_ERROR, ("Invalid command: %.*s", (int) len, data));
     return;
   }
-  struct json_token *t = find_json_token(toks, "t");
-  if (t == NULL) {
-    LOG(LL_ERROR, ("Missing type field: %.*s", (int) len, data));
-    goto out_free;
-  }
-  if (t->len == 1 && *t->ptr == '1') {
-    struct json_token *v = find_json_token(toks, "v");
-    if (v == NULL) {
+  if (t == 1) {
+    if (sscanf((char *) data + n, "\"v\": %d", &val) != 1) {
       LOG(LL_ERROR, ("Missing value: %.*s", (int) len, data));
-      goto out_free;
+      return;
     }
-    if (v->len != 1) {
-      LOG(LL_ERROR, ("Invalid value: %.*s", (int) len, data));
-      goto out_free;
-    }
-    switch (*v->ptr) {
+    switch (val) {
       case '0': {
         GPIO_IF_LedOff(MCU_RED_LED_GPIO);
         break;
@@ -130,15 +122,13 @@ static void process_command(struct mg_connection *nc, unsigned char *data,
       }
       default: {
         LOG(LL_ERROR, ("Invalid value: %.*s", (int) len, data));
-        goto out_free;
+        return;
       }
     }
   } else {
-    LOG(LL_ERROR, ("Unknown command: %.*s", (int) t->len, t->ptr));
-    goto out_free;
+    LOG(LL_ERROR, ("Unknown command: %.*s", (int) len, data));
+    return;
   }
-out_free:
-  free(toks);
 }
 
 void data_conn_handler(struct mg_connection *nc, int ev, void *ev_data) {

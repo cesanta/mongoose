@@ -4,7 +4,7 @@ title: Overview
 
 Mongoose is a swiss army knife for embedded network programming.
 It implements event-driven non-blocking API for TCP, UDP, HTTP,
-WebSocket, CoAP, MQTT, JSON-RPC for both client and server mode.
+WebSocket, CoAP, MQTT for both client and server mode.
 Features include:
 
 - Cross-platform: works on Linux/UNIX, MacOS, QNX, eCos, Windows, Android,
@@ -16,7 +16,6 @@ Features include:
    - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
    - HTTP client and server
    - WebSocket client and server
-   - JSON-RPC client and server
    - MQTT client and server
    - CoAP client and server
    - DNS client and server

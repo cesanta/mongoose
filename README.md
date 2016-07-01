@@ -36,7 +36,6 @@ If you are looking for a complete solution with firmware and cloud components, c
    - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
    - HTTP client, HTTP server
    - WebSocket client, WebSocket server
-   - JSON-RPC client, JSON-RPC server
    - MQTT client, MQTT broker
    - CoAP client, CoAP server
    - DNS client, DNS server, async DNS resolver

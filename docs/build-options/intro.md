@@ -14,9 +14,9 @@ flags. Also, some preprocessor flags can be used to tune internal Mongoose
 parameters.
 
 To set a preprocessor flag during compile time, use `-D <PREPROCESSOR_FLAG>`
-compiler option. For example, to disable both MQTT and JSON-RPC,
+compiler option. For example, to disable both MQTT and COAP,
 compile the application `my_app.c` like this (assumed UNIX system):
 
 ```
-  $ cc my_app.c mongoose.c -D MG_DISABLE_MQTT -D MG_DISABLE_JSON_RPC
+  $ cc my_app.c mongoose.c -D MG_DISABLE_MQTT -D MG_DISABLE_COAP
 ```
