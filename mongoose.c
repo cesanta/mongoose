@@ -10428,9 +10428,6 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
                         strlen(nc->ssl_key));
     DBG(("PRIVATE_KEY_FILE_NAME %s -> %d", nc->ssl_key, nc->err));
     if (err != 0) return err;
-    MG_FREE(nc->ssl_cert);
-    MG_FREE(nc->ssl_key);
-    nc->ssl_cert = nc->ssl_key = NULL;
   }
   if (nc->ssl_ca_cert != NULL) {
     if (nc->ssl_ca_cert[0] != '\0') {
@@ -10440,8 +10437,6 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
       DBG(("CA_FILE_NAME %s -> %d", nc->ssl_ca_cert, err));
       if (err != 0) return err;
     }
-    MG_FREE(nc->ssl_ca_cert);
-    nc->ssl_ca_cert = NULL;
   }
   if (nc->ssl_server_name != NULL) {
     err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
@@ -10452,8 +10447,6 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
      * return SL_ENOPROTOOPT. There isn't much we can do about it, so we ignore
      * the error. */
     if (err != 0 && err != SL_ENOPROTOOPT) return err;
-    MG_FREE(nc->ssl_server_name);
-    nc->ssl_server_name = NULL;
   }
   return 0;
 }
@@ -10485,7 +10478,8 @@ void mg_if_connect_tcp(struct mg_connection *nc,
 #endif
   nc->err = sl_Connect(sock, &sa->sa, sizeof(sa->sin));
 out:
-  DBG(("%p sock %d err %d", nc, nc->sock, nc->err));
+  DBG(("%p to %s:%d sock %d err %d", nc, inet_ntoa(sa->sin.sin_addr),
+       ntohs(sa->sin.sin_port), nc->sock, nc->err));
 }
 
 void mg_if_connect_udp(struct mg_connection *nc) {
@@ -10814,8 +10808,8 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
 
   num_ev = sl_Select((int) max_fd + 1, &read_set, &write_set, &err_set, &tv);
   now = mg_time();
-  DBG(("sl_Select @ %ld num_ev=%d of %d, timeout=%d", (long) now, num_ev, num_fds,
-       timeout_ms));
+  DBG(("sl_Select @ %ld num_ev=%d of %d, timeout=%d", (long) now, num_ev,
+       num_fds, timeout_ms));
 
   for (nc = mgr->active_connections; nc != NULL; nc = tmp) {
     int fd_flags = 0;
@@ -10854,6 +10848,31 @@ void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
    * accept or connect. Address hould have been preserved in the connection,
    * so we do our best here by using it. */
   if (remote) memcpy(sa, &nc->sa, sizeof(*sa));
+}
+
+void sl_restart_cb(struct mg_mgr *mgr) {
+  /*
+   * SimpleLink has been restarted, meaning all sockets have been invalidated.
+   * We try our best - we'll restart the listeners, but for outgoing
+   * connections we have no option but to terminate.
+   */
+  struct mg_connection *nc;
+  for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
+    if (nc->sock == INVALID_SOCKET) continue; /* Could be a timer */
+    if (nc->flags & MG_F_LISTENING) {
+      DBG(("restarting %p %s:%d", nc, inet_ntoa(nc->sa.sin.sin_addr),
+           ntohs(nc->sa.sin.sin_port)));
+      int res = (nc->flags & MG_F_UDP ? mg_if_listen_udp(nc, &nc->sa)
+                                      : mg_if_listen_tcp(nc, &nc->sa));
+      if (res == 0) continue;
+      /* Well, we tried and failed. Fall through to closing. */
+    }
+    nc->sock = INVALID_SOCKET;
+    DBG(("terminating %p %s:%d", nc, inet_ntoa(nc->sa.sin.sin_addr),
+         ntohs(nc->sa.sin.sin_port)));
+    /* TODO(rojer): Outgoing UDP? */
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+  }
 }
 
 #endif /* !defined(MG_DISABLE_SOCKET_IF) && defined(MG_SOCKET_SIMPLELINK) */

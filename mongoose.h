@@ -740,6 +740,8 @@ void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg);
 
 int sl_fs_init();
 
+void sl_restart_cb(struct mg_mgr *mgr);
+
 int sl_set_ssl_opts(struct mg_connection *nc);
 
 #ifdef __cplusplus
