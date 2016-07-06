@@ -7066,7 +7066,7 @@ static int mg_http_common_url_parse(const char *url, const char *schema,
   }
 
   while (*url != '\0') {
-    *addr = (char *) MG_REALLOC(*addr, addr_len + 5 /* space for port too. */);
+    *addr = (char *) MG_REALLOC(*addr, addr_len + 6 /* space for port too. */);
     if (*addr == NULL) {
       DBG(("OOM"));
       return -1;
