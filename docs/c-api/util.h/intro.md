@@ -6,8 +6,6 @@ items:
   - { type: file, name: mg_skip.md }
   - { type: file, name: mg_ncasecmp.md }
   - { type: file, name: mg_casecmp.md }
-  - { type: file, name: mg_vcmp.md }
-  - { type: file, name: mg_vcasecmp.md }
   - { type: file, name: mg_base64_decode.md }
   - { type: file, name: mg_base64_encode.md }
   - { type: file, name: mg_stat.md }
@@ -23,8 +21,6 @@ items:
   - { type: file, name: mg_is_big_endian.md }
   - { type: file, name: mg_next_comma_list_entry.md }
   - { type: file, name: mg_match_prefix.md }
-  - { type: file, name: mg_mk_str.md }
-  - { type: file, name: MG_MK_STR.md }
 ---
 
 

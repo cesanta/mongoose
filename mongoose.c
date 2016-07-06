@@ -954,6 +954,41 @@ void mbuf_remove(struct mbuf *mb, size_t n) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
+#line 1 "./src/../../common/mg_str.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+/* Amalgamated: #include "common/mg_str.h" */
+
+#include <string.h>
+
+struct mg_str mg_mk_str(const char *s) {
+  struct mg_str ret = {s, 0};
+  if (s != NULL) ret.len = strlen(s);
+  return ret;
+}
+
+int mg_vcmp(const struct mg_str *str1, const char *str2) {
+  size_t n2 = strlen(str2), n1 = str1->len;
+  int r = memcmp(str1->p, str2, (n1 < n2) ? n1 : n2);
+  if (r == 0) {
+    return n1 - n2;
+  }
+  return r;
+}
+
+int mg_vcasecmp(const struct mg_str *str1, const char *str2) {
+  size_t n2 = strlen(str2), n1 = str1->len;
+  int r = mg_ncasecmp(str1->p, str2, (n1 < n2) ? n1 : n2);
+  if (r == 0) {
+    return n1 - n2;
+  }
+  return r;
+}
+#ifdef MG_MODULE_LINES
 #line 1 "./src/../../common/sha1.c"
 #endif
 /* Copyright(c) By Steve Reid <steve@edmweb.com> */
@@ -7302,24 +7337,6 @@ int mg_casecmp(const char *s1, const char *s2) {
   return mg_ncasecmp(s1, s2, (size_t) ~0);
 }
 
-int mg_vcasecmp(const struct mg_str *str1, const char *str2) {
-  size_t n2 = strlen(str2), n1 = str1->len;
-  int r = mg_ncasecmp(str1->p, str2, (n1 < n2) ? n1 : n2);
-  if (r == 0) {
-    return n1 - n2;
-  }
-  return r;
-}
-
-int mg_vcmp(const struct mg_str *str1, const char *str2) {
-  size_t n2 = strlen(str2), n1 = str1->len;
-  int r = memcmp(str1->p, str2, (n1 < n2) ? n1 : n2);
-  if (r == 0) {
-    return n1 - n2;
-  }
-  return r;
-}
-
 #ifndef MG_DISABLE_FILESYSTEM
 int mg_stat(const char *path, cs_stat_t *st) {
 #ifdef _WIN32
@@ -7640,12 +7657,6 @@ int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str) {
 int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
   const struct mg_str pstr = {pattern, (size_t) pattern_len};
   return mg_match_prefix_n(pstr, mg_mk_str(str));
-}
-
-struct mg_str mg_mk_str(const char *s) {
-  struct mg_str ret = {s, 0};
-  if (s != NULL) ret.len = strlen(s);
-  return ret;
 }
 #ifdef MG_MODULE_LINES
 #line 1 "./src/mqtt.c"

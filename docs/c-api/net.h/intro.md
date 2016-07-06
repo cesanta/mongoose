@@ -25,7 +25,6 @@ items:
   - { type: file, name: mg_set_timer.md }
   - { type: file, name: mg_time.md }
   - { type: file, name: mg_event_handler_t.md }
-  - { type: file, name: struct_mg_str.md }
   - { type: file, name: struct_mg_mgr.md }
   - { type: file, name: struct_mg_connection.md }
   - { type: file, name: struct_mg_add_sock_opts.md }
