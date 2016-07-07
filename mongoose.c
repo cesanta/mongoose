@@ -5886,21 +5886,28 @@ static void mg_send_directory_listing(struct mg_connection *nc, const char *dir,
                                       struct http_message *hm,
                                       struct mg_serve_http_opts *opts) {
   static const char *sort_js_code =
-      "<script>function srt(tb, col) {"
+      "<script>function srt(tb, sc, so, d) {"
       "var tr = Array.prototype.slice.call(tb.rows, 0),"
-      "tr = tr.sort(function (a, b) { var c1 = a.cells[col], c2 = b.cells[col],"
+      "tr = tr.sort(function (a, b) { var c1 = a.cells[sc], c2 = b.cells[sc],"
       "n1 = c1.getAttribute('name'), n2 = c2.getAttribute('name'), "
       "t1 = a.cells[2].getAttribute('name'), "
       "t2 = b.cells[2].getAttribute('name'); "
-      "return t1 < 0 && t2 >= 0 ? -1 : t2 < 0 && t1 >= 0 ? 1 : "
+      "return so * (t1 < 0 && t2 >= 0 ? -1 : t2 < 0 && t1 >= 0 ? 1 : "
       "n1 ? parseInt(n2) - parseInt(n1) : "
-      "c1.textContent.trim().localeCompare(c2.textContent.trim()); });";
+      "c1.textContent.trim().localeCompare(c2.textContent.trim())); });";
   static const char *sort_js_code2 =
-      "for (var i = 0; i < tr.length; i++) tb.appendChild(tr[i]);}"
-      "window.onload = function() { "
+      "for (var i = 0; i < tr.length; i++) tb.appendChild(tr[i]); "
+      "if (!d) window.location.hash = ('sc=' + sc + '&so=' + so); "
+      "};"
+      "window.onload = function() {"
       "var tb = document.getElementById('tb');"
-      "document.onclick = function(ev){ "
-      "var c = ev.target.rel; if (c) srt(tb, c)}; srt(tb, 2); };</script>";
+      "var m = /sc=([012]).so=(1|-1)/.exec(window.location.hash) || [0, 2, 1];"
+      "var sc = m[1], so = m[2]; document.onclick = function(ev) { "
+      "var c = ev.target.rel; if (c) {if (c == sc) so *= -1; srt(tb, c, so); "
+      "sc = c; ev.preventDefault();}};"
+      "srt(tb, sc, so, true);"
+      "}"
+      "</script>";
 
   mg_send_response_line(nc, 200, opts->extra_headers);
   mg_printf(nc, "%s: %s\r\n%s: %s\r\n\r\n", "Transfer-Encoding", "chunked",
@@ -5922,8 +5929,8 @@ static void mg_send_directory_listing(struct mg_connection *nc, const char *dir,
       (int) hm->uri.len, hm->uri.p);
   mg_scan_directory(nc, dir, opts, mg_print_dir_entry);
   mg_printf_http_chunk(nc,
-                       "<tr><td colspan=3><hr></td></tr>\n"
-                       "</tbody></table>\n"
+                       "</tbody><tr><td colspan=3><hr></td></tr>\n"
+                       "</table>\n"
                        "<address>%s</address>\n"
                        "</body></html>",
                        mg_version_header);
