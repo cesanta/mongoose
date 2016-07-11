@@ -10178,11 +10178,11 @@ ssize_t _write(int fd, const void *buf, size_t count) {
   return r;
 }
 
-#if MG_TI_NO_HOST_INTERFACE
+/*
+ * On Newlib we override rename directly too, because the default
+ * implementation using _link and _unlink doesn't work for us.
+ */
 int rename(const char *from, const char *to) {
-#else
-int _rename(const char *from, const char *to) {
-#endif
   int r = -1;
   from = drop_dir(from);
   to = drop_dir(to);
@@ -10197,11 +10197,6 @@ int _rename(const char *from, const char *to) {
   }
   DBG(("rename(%s, %s) = %d", from, to, r));
   return r;
-}
-
-int _link(const char *from, const char *to) {
-  DBG(("link(%s, %s)", from, to));
-  return set_errno(ENOTSUP);
 }
 
 #if MG_TI_NO_HOST_INTERFACE
