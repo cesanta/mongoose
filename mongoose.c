@@ -2803,9 +2803,10 @@ static void mg_write_to_socket(struct mg_connection *nc) {
       DBG(("%p %d bytes -> %d (SSL)", nc, n, nc->sock));
       if (n <= 0) {
         int ssl_err = mg_ssl_err(nc, n);
-        if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
-          return; /* Call us again */
+        if (ssl_err != SSL_ERROR_WANT_READ && ssl_err != SSL_ERROR_WANT_WRITE) {
+          nc->flags |= MG_F_CLOSE_IMMEDIATELY;
         }
+        return;
       } else {
         /* Successful SSL operation, clear off SSL wait flags */
         nc->flags &= ~(MG_F_WANT_READ | MG_F_WANT_WRITE);
@@ -2819,7 +2820,11 @@ static void mg_write_to_socket(struct mg_connection *nc) {
   {
     n = (int) MG_SEND_FUNC(nc->sock, io->buf, io->len, 0);
     DBG(("%p %d bytes -> %d", nc, n, nc->sock));
-    if (n < 0 && !mg_is_error(n)) return;
+    if (n < 0 && mg_is_error(n)) {
+      /* Something went wrong, drop the connection. */
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      return;
+    }
   }
 
   if (n > 0) {
@@ -10607,22 +10612,21 @@ static void mg_write_to_socket(struct mg_connection *nc) {
   int n = 0;
 
   if (nc->flags & MG_F_UDP) {
-    int n = sl_SendTo(nc->sock, io->buf, io->len, 0, &nc->sa.sa,
+    n = sl_SendTo(nc->sock, io->buf, io->len, 0, &nc->sa.sa,
                       sizeof(nc->sa.sin));
     DBG(("%p %d %d %d %s:%hu", nc, nc->sock, n, errno,
          inet_ntoa(nc->sa.sin.sin_addr), ntohs(nc->sa.sin.sin_port)));
-    if (n > 0) mbuf_remove(io, n);
-    mg_if_sent_cb(nc, n);
-    return;
   } else {
     n = (int) sl_Send(nc->sock, io->buf, io->len, 0);
     DBG(("%p %d bytes -> %d", nc, n, nc->sock));
-    if (n < 0 && !mg_is_error(n)) return;
   }
 
   if (n > 0) {
     mbuf_remove(io, n);
     mg_if_sent_cb(nc, n);
+  } else if (n < 0 && mg_is_error(n)) {
+    /* Something went wrong, drop the connection. */
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
 }
 
