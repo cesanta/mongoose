@@ -862,10 +862,11 @@ struct mg_str {
 };
 
 /*
- * A helper function for creating mg_str struct from plain C string.
+ * Helper functions for creating mg_str struct from plain C string.
  * `NULL` is allowed and becomes `{NULL, 0}`.
  */
 struct mg_str mg_mk_str(const char *s);
+struct mg_str mg_mk_str_n(const char *s, size_t len);
 
 /* Macro for initializing mg_str. */
 #define MG_MK_STR(str_literal) \
