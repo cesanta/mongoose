@@ -97,7 +97,7 @@ bool wifi_setup_ap(const char *ssid, const char *pass, int channel) {
     LOG(LL_ERROR, ("DHCP server failed to start"));
     return false;
   }
-  LOG(LL_INFO, ("WiFi: AP %s configured", ssid));
+  LOG(LL_INFO, ("WiFi: AP %s configured, IP 192.168.4.1", ssid));
   return true;
 }
 

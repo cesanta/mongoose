@@ -96,17 +96,12 @@ static double send_acc_data_since(struct mg_connection *nc,
 static void process_command(struct mg_connection *nc, unsigned char *data,
                             size_t len) {
   // TODO(lsm): use proper JSON parser
-  int cmd, n, val;
-  double t;
-  if (sscanf((char *) data, "{\t\": %d, \"ts\": %lf, %n", &cmd, &t, &n) != 2) {
-    LOG(LL_ERROR, ("Invalid command: %.*s", (int) len, data));
+  int cmd, val;
+  if (sscanf((char *) data, "{\"t\":%d,\"v\":%d}", &cmd, &val) != 2) {
+    LOG(LL_ERROR, ("Invalid request: %.*s", (int) len, data));
     return;
   }
-  if (t == 1) {
-    if (sscanf((char *) data + n, "\"v\": %d", &val) != 1) {
-      LOG(LL_ERROR, ("Missing value: %.*s", (int) len, data));
-      return;
-    }
+  if (cmd == 1) {
     switch (val) {
       case '0': {
         GPIO_IF_LedOff(MCU_RED_LED_GPIO);
