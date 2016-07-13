@@ -10192,6 +10192,7 @@ ssize_t _write(int fd, const void *buf, size_t count) {
  * On Newlib we override rename directly too, because the default
  * implementation using _link and _unlink doesn't work for us.
  */
+#if MG_TI_NO_HOST_INTERFACE || defined(_NEWLIB_VERSION)
 int rename(const char *from, const char *to) {
   int r = -1;
   from = drop_dir(from);
@@ -10208,6 +10209,7 @@ int rename(const char *from, const char *to) {
   DBG(("rename(%s, %s) = %d", from, to, r));
   return r;
 }
+#endif /* MG_TI_NO_HOST_INTERFACE || defined(_NEWLIB_VERSION) */
 
 #if MG_TI_NO_HOST_INTERFACE
 int unlink(const char *filename) {
