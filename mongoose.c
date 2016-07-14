@@ -1994,7 +1994,7 @@ wMuPn7qlUkEFDIkAZy59/Hue/H2Q2vU/JsvVhHWCQBL4F1ofEAt50il6ZxR1QfFK\n\
 static int mg_use_ca_cert(SSL_CTX *ctx, const char *cert) {
   if (ctx == NULL) {
     return -1;
-  } else if (cert == NULL || cert[0] == '\0') {
+  } else if (cert == NULL || strcmp(cert, "*") == 0) {
     return 0;
   }
   SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
@@ -2316,6 +2316,22 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
   return mg_connect_opt(mgr, address, callback, opts);
 }
 
+#ifdef MG_ENABLE_SSL
+static void mg_set_ssl_server_name(struct mg_connection *nc,
+                                   const char *server_name) {
+  DBG(("%p '%s'", nc, server_name));
+#ifdef SSL_KRYPTON
+  SSL_CTX_kr_set_verify_name(nc->ssl_ctx, server_name);
+#elif defined(MG_SOCKET_SIMPLELINK)
+  nc->ssl_server_name = strdup(server_name);
+#else
+  /* TODO(rojer): Implement server name verification on OpenSSL. */
+  (void) nc;
+  (void) server_name;
+#endif
+}
+#endif /* MG_ENABLE_SSL */
+
 struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
                                      mg_event_handler_t callback,
                                      struct mg_connect_opts opts) {
@@ -2343,9 +2359,10 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
   nc->user_data = opts.user_data;
 
 #ifdef MG_ENABLE_SSL
-  DBG(("%p %s %s %s %s", nc, address, (opts.ssl_cert ? opts.ssl_cert : ""),
-       (opts.ssl_key ? opts.ssl_key : ""),
-       (opts.ssl_ca_cert ? opts.ssl_ca_cert : "")));
+  LOG(LL_DEBUG,
+      ("%p %s %s,%s,%s", nc, address, (opts.ssl_cert ? opts.ssl_cert : "-"),
+       (opts.ssl_key ? opts.ssl_key : "-"),
+       (opts.ssl_ca_cert ? opts.ssl_ca_cert : "-")));
 
   if (opts.ssl_cert != NULL || opts.ssl_ca_cert != NULL) {
     const char *err =
@@ -2355,21 +2372,10 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
       mg_destroy_conn(nc);
       return NULL;
     }
-    if (opts.ssl_ca_cert != NULL && (opts.ssl_server_name == NULL ||
-                                     strcmp(opts.ssl_server_name, "*") != 0)) {
-      if (opts.ssl_server_name == NULL) opts.ssl_server_name = host;
-#ifdef SSL_KRYPTON
-      SSL_CTX_kr_set_verify_name(nc->ssl_ctx, opts.ssl_server_name);
-#elif defined(MG_SOCKET_SIMPLELINK)
-      nc->ssl_server_name = strdup(opts.ssl_server_name);
-#else
-      /* TODO(rojer): Implement server name verification on OpenSSL. */
-      MG_SET_PTRPTR(opts.error_string,
-                    "Server name verification requested but is not supported");
-      mg_destroy_conn(nc);
-      return NULL;
-#endif /* SSL_KRYPTON */
-    }
+  }
+  if (opts.ssl_ca_cert != NULL && opts.ssl_server_name != NULL &&
+      strcmp(opts.ssl_server_name, "*") != 0) {
+    mg_set_ssl_server_name(nc, opts.ssl_server_name);
   }
 #endif /* MG_ENABLE_SSL */
 
@@ -2391,6 +2397,11 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
     }
     nc->priv_2 = dns_conn;
     nc->flags |= MG_F_RESOLVING;
+#ifdef MG_ENABLE_SSL
+    if (opts.ssl_ca_cert != NULL && opts.ssl_server_name == NULL) {
+      mg_set_ssl_server_name(nc, host);
+    }
+#endif
     return nc;
 #else
     MG_SET_PTRPTR(opts.error_string, "Resolver is disabled");
@@ -7165,32 +7176,26 @@ struct mg_connection *mg_connect_http_base(
     return NULL;
   }
 
-#ifndef MG_ENABLE_SSL
+  LOG(LL_DEBUG, ("%s use_ssl? %d", url, use_ssl));
   if (use_ssl) {
+#ifdef MG_ENABLE_SSL
+    /*
+     * Schema requires SSL, but no SSL parameters were provided in opts.
+     * In order to maintain backward compatibility, use a faux-SSL with no
+     * verification.
+     */
+    if (opts.ssl_ca_cert == NULL) {
+      opts.ssl_ca_cert = "*";
+    }
+#else
     MG_SET_PTRPTR(opts.error_string, "ssl is disabled");
     MG_FREE(addr);
     return NULL;
-  }
 #endif
-#if defined(MG_ENABLE_SSL) && defined(MG_SOCKET_SIMPLELINK)
-  if (use_ssl && opts.ssl_ca_cert == NULL) {
-    opts.ssl_ca_cert = "";
   }
-#endif
 
   if ((nc = mg_connect_opt(mgr, *addr, ev_handler, opts)) != NULL) {
-#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
-    if (use_ssl && nc->ssl_ctx == NULL) {
-      /*
-       * Schema requires SSL, but no SSL parameters were provided in
-       * opts. In order to maintain backward compatibility, use
-       * NULL, NULL
-       */
-      mg_set_ssl(nc, NULL, NULL);
-    }
-#endif
     mg_set_protocol_http_websocket(nc);
-
     /* If the port was addred by us, restore the original host. */
     if (port_i >= 0) (*addr)[port_i] = '\0';
   }
@@ -10414,8 +10419,8 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int type,
 #ifdef MG_ENABLE_SSL
 const char *mg_set_ssl2(struct mg_connection *nc, const char *cert,
                         const char *key, const char *ca_cert) {
-  DBG(("%p %s,%s,%s", nc, (cert ? cert : ""), (key ? key : ""),
-       (ca_cert ? ca_cert : "")));
+  DBG(("%p %s,%s,%s", nc, (cert ? cert : "-"), (key ? key : "-"),
+       (ca_cert ? ca_cert : "-")));
 
   if (nc->flags & MG_F_UDP) {
     return "SSL for UDP is not supported";
@@ -10429,7 +10434,9 @@ const char *mg_set_ssl2(struct mg_connection *nc, const char *cert,
       return "both cert and key are required";
     }
   }
-  if (ca_cert != NULL) nc->ssl_ca_cert = strdup(ca_cert);
+  if (ca_cert != NULL && strcmp(ca_cert, "*") != 0) {
+    nc->ssl_ca_cert = strdup(ca_cert);
+  }
 
   nc->flags |= MG_F_SSL;
 
@@ -10438,10 +10445,10 @@ const char *mg_set_ssl2(struct mg_connection *nc, const char *cert,
 
 int sl_set_ssl_opts(struct mg_connection *nc) {
   int err;
-  DBG(("%p %s,%s,%s,%s", nc, (nc->ssl_cert ? nc->ssl_cert : ""),
-       (nc->ssl_key ? nc->ssl_cert : ""),
-       (nc->ssl_ca_cert ? nc->ssl_ca_cert : ""),
-       (nc->ssl_server_name ? nc->ssl_server_name : "")));
+  DBG(("%p %s,%s,%s,%s", nc, (nc->ssl_cert ? nc->ssl_cert : "-"),
+       (nc->ssl_key ? nc->ssl_cert : "-"),
+       (nc->ssl_ca_cert ? nc->ssl_ca_cert : "-"),
+       (nc->ssl_server_name ? nc->ssl_server_name : "-")));
   if (nc->ssl_cert != NULL && nc->ssl_key != NULL) {
     err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
                         SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME, nc->ssl_cert,
@@ -10503,8 +10510,8 @@ void mg_if_connect_tcp(struct mg_connection *nc,
 #endif
   nc->err = sl_Connect(sock, &sa->sa, sizeof(sa->sin));
 out:
-  DBG(("%p to %s:%d sock %d err %d", nc, inet_ntoa(sa->sin.sin_addr),
-       ntohs(sa->sin.sin_port), nc->sock, nc->err));
+  DBG(("%p to %s:%d sock %d %d err %d", nc, inet_ntoa(sa->sin.sin_addr),
+       ntohs(sa->sin.sin_port), nc->sock, proto, nc->err));
 }
 
 void mg_if_connect_udp(struct mg_connection *nc) {
@@ -10702,6 +10709,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
        * which will now return the real status. */
       if (fd_flags & _MG_F_FD_CAN_WRITE) {
         nc->err = sl_Connect(nc->sock, &nc->sa.sa, sizeof(nc->sa.sin));
+        DBG(("%p conn res=%d", nc, nc->err));
         if (nc->err == SL_ESECSNOVERIFY ||
             /* TODO(rojer): Provide API to set the date for verification. */
             nc->err == SL_ESECDATEERROR) {

@@ -13,7 +13,9 @@ signature: |
     const char *ssl_key;     /* Private key corresponding to the certificate.
                                 If ssl_cert is set but ssl_key is not, ssl_cert
                                 is used. */
-    const char *ssl_ca_cert; /* Verify server certificate using this CA bundle */
+    const char *ssl_ca_cert; /* Verify server certificate using this CA bundle.
+                                If set to "*", then SSL is enabled but no cert
+                                verification is performed. */
   
     /*
      * Server name verification. If ssl_ca_cert is set and the certificate has
