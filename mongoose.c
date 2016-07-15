@@ -9935,7 +9935,13 @@ void fs_slfs_set_new_file_size(const char *name, size_t size) {
 #define SPIFFS_FD_BASE 10
 #define SLFS_FD_BASE 100
 
-#define CONSOLE_UART UARTA0_BASE
+#ifndef MG_UART_CHAR_PUT
+#if CS_PLATFORM == CS_P_CC3200
+#define MG_UART_CHAR_PUT(fd, c) MAP_UARTCharPut(CONSOLE_UART, c);
+#else
+#define MG_UART_CHAR_PUT(fd, c)
+#endif /* CS_PLATFORM == CS_P_CC3200 */
+#endif /* !MG_UART_CHAR_PUT */
 
 int set_errno(int e) {
   errno = e;
@@ -10167,15 +10173,11 @@ ssize_t _write(int fd, const void *buf, size_t count) {
         r = set_errno(EACCES);
         break;
       }
-#if CS_PLATFORM == CS_P_CC3200
       for (i = 0; i < count; i++) {
         const char c = ((const char *) buf)[i];
-        if (c == '\n') MAP_UARTCharPut(CONSOLE_UART, '\r');
-        MAP_UARTCharPut(CONSOLE_UART, c);
+        if (c == '\n') MG_UART_CHAR_PUT(fd, '\r');
+        MG_UART_CHAR_PUT(fd, c);
       }
-#else
-      (void) i;
-#endif
       r = count;
       break;
     }
