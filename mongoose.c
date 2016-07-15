@@ -9912,14 +9912,6 @@ void fs_slfs_set_new_file_size(const char *name, size_t size) {
 #include <file.h>
 #endif
 
-#if CS_PLATFORM == CS_P_CC3200
-#include <inc/hw_types.h>
-#include <inc/hw_memmap.h>
-#include <driverlib/rom.h>
-#include <driverlib/rom_map.h>
-#include <driverlib/uart.h>
-#endif
-
 /* Amalgamated: #include "common/cs_dbg.h" */
 /* Amalgamated: #include "common/platform.h" */
 
@@ -9937,7 +9929,12 @@ void fs_slfs_set_new_file_size(const char *name, size_t size) {
 
 #ifndef MG_UART_CHAR_PUT
 #if CS_PLATFORM == CS_P_CC3200
-#define MG_UART_CHAR_PUT(fd, c) MAP_UARTCharPut(CONSOLE_UART, c);
+#include <inc/hw_types.h>
+#include <inc/hw_memmap.h>
+#include <driverlib/rom.h>
+#include <driverlib/rom_map.h>
+#include <driverlib/uart.h>
+#define MG_UART_CHAR_PUT(fd, c) MAP_UARTCharPut(UARTA0_BASE, c);
 #else
 #define MG_UART_CHAR_PUT(fd, c)
 #endif /* CS_PLATFORM == CS_P_CC3200 */
