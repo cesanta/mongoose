@@ -2544,7 +2544,64 @@ struct mg_serve_http_opts {
   /* Set to "no" to disable directory listing. Enabled by default. */
   const char *enable_directory_listing;
 
-  /* SSI files pattern. If not set, "**.shtml$|**.shtm$" is used. */
+  /*
+   * SSI files pattern. If not set, "**.shtml$|**.shtm$" is used.
+   *
+   * All files that match ssi_pattern are treated as SSI.
+   *
+   * Server Side Includes (SSI) is a simple interpreted server-side scripting
+   * language which is most commonly used to include the contents of a file
+   * into a web page. It can be useful when it is desirable to include a common
+   * piece of code throughout a website, for example, headers and footers.
+   *
+   * In order for a webpage to recognize an SSI-enabled HTML file, the
+   * filename should end with a special extension, by default the extension
+   * should be either .shtml or .shtm
+   *
+   * Unknown SSI directives are silently ignored by Mongoose. Currently,
+   * the following SSI directives are supported:
+   *    &lt;!--#include FILE_TO_INCLUDE --&gt;
+   *    &lt;!--#exec "COMMAND_TO_EXECUTE" --&gt;
+   *    &lt;!--#call COMMAND --&gt;
+   *
+   * Note that &lt;!--#include ...> directive supports three path
+   *specifications:
+   *
+   * &lt;!--#include virtual="path" --&gt;  Path is relative to web server root
+   * &lt;!--#include abspath="path" --&gt;  Path is absolute or relative to the
+   *                                  web server working dir
+   * &lt;!--#include file="path" --&gt;,    Path is relative to current document
+   * &lt;!--#include "path" --&gt;
+   *
+   * The include directive may be used to include the contents of a file or
+   * the result of running a CGI script.
+   *
+   * The exec directive is used to execute
+   * a command on a server, and show command's output. Example:
+   *
+   * &lt;!--#exec "ls -l" --&gt;
+   *
+   * The call directive is a way to invoke a C handler from the HTML page.
+   * On each occurence of &lt;!--#call COMMAND OPTIONAL_PARAMS> directive,
+   * Mongoose calls a registered event handler with MG_EV_SSI_CALL event,
+   * and event parameter will point to the COMMAND OPTIONAL_PARAMS string.
+   * An event handler can output any text, for example by calling
+   * `mg_printf()`. This is a flexible way of generating a web page on
+   * server side by calling a C event handler. Example:
+   *
+   * &lt;!--#call foo --&gt; ... &lt;!--#call bar --&gt;
+   *
+   * In the event handler:
+   *    case MG_EV_SSI_CALL: {
+   *      const char *param = (const char *) ev_data;
+   *      if (strcmp(param, "foo") == 0) {
+   *        mg_printf(c, "hello from foo");
+   *      } else if (strcmp(param, "bar") == 0) {
+   *        mg_printf(c, "hello from bar");
+   *      }
+   *      break;
+   *    }
+   */
   const char *ssi_pattern;
 
   /* IP ACL. By default, NULL, meaning all IPs are allowed to connect */
