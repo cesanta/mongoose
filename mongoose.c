@@ -1649,11 +1649,11 @@ void mg_if_poll(struct mg_connection *nc, time_t now) {
   }
 }
 
-static void mg_destroy_conn(struct mg_connection *conn) {
+static void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
+  if (destroy_if) mg_if_destroy_conn(conn);
   if (conn->proto_data != NULL && conn->proto_data_destructor != NULL) {
     conn->proto_data_destructor(conn->proto_data);
   }
-  mg_if_destroy_conn(conn);
 #if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
   if (conn->ssl != NULL) SSL_free(conn->ssl);
   if (conn->ssl_ctx != NULL) SSL_CTX_free(conn->ssl_ctx);
@@ -1666,10 +1666,11 @@ static void mg_destroy_conn(struct mg_connection *conn) {
 }
 
 void mg_close_conn(struct mg_connection *conn) {
-  DBG(("%p %lu", conn, conn->flags));
-  mg_call(conn, NULL, MG_EV_CLOSE, NULL);
+  LOG(LL_INFO, ("%p %lu %d", conn, conn->flags, conn->sock));
   mg_remove_conn(conn);
-  mg_destroy_conn(conn);
+  mg_if_destroy_conn(conn);
+  mg_call(conn, NULL, MG_EV_CLOSE, NULL);
+  mg_destroy_conn(conn, 0 /* destroy_if */);
 }
 
 void mg_mgr_init(struct mg_mgr *m, void *user_data) {
@@ -2305,7 +2306,7 @@ static void resolve_cb(struct mg_dns_message *msg, void *data,
    */
   mg_call(nc, NULL, MG_EV_CONNECT, &failure);
   mg_call(nc, NULL, MG_EV_CLOSE, NULL);
-  mg_destroy_conn(nc);
+  mg_destroy_conn(nc, 1 /* destroy_if */);
 }
 #endif
 
@@ -2350,7 +2351,7 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
       0) {
     /* Address is malformed */
     MG_SET_PTRPTR(opts.error_string, "cannot parse address");
-    mg_destroy_conn(nc);
+    mg_destroy_conn(nc, 1 /* destroy_if */);
     return NULL;
   }
 
@@ -2369,7 +2370,7 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
         mg_set_ssl2(nc, opts.ssl_cert, opts.ssl_key, opts.ssl_ca_cert);
     if (err != NULL) {
       MG_SET_PTRPTR(opts.error_string, err);
-      mg_destroy_conn(nc);
+      mg_destroy_conn(nc, 1 /* destroy_if */);
       return NULL;
     }
   }
@@ -2392,7 +2393,7 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
     if (mg_resolve_async_opt(nc->mgr, host, MG_DNS_A_RECORD, resolve_cb, nc,
                              o) != 0) {
       MG_SET_PTRPTR(opts.error_string, "cannot schedule DNS lookup");
-      mg_destroy_conn(nc);
+      mg_destroy_conn(nc, 1 /* destroy_if */);
       return NULL;
     }
     nc->priv_2 = dns_conn;
@@ -2405,7 +2406,7 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
     return nc;
 #else
     MG_SET_PTRPTR(opts.error_string, "Resolver is disabled");
-    mg_destroy_conn(nc);
+    mg_destroy_conn(nc, 1 /* destroy_if */);
     return NULL;
 #endif
   } else {
@@ -2456,7 +2457,7 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
         mg_set_ssl2(nc, opts.ssl_cert, opts.ssl_key, opts.ssl_ca_cert);
     if (err != NULL) {
       MG_SET_PTRPTR(opts.error_string, err);
-      mg_destroy_conn(nc);
+      mg_destroy_conn(nc, 1 /* destroy_if */);
       return NULL;
     }
   }
@@ -2470,7 +2471,7 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
   if (rc != 0) {
     DBG(("Failed to open listener: %d", rc));
     MG_SET_PTRPTR(opts.error_string, "failed to open listener");
-    mg_destroy_conn(nc);
+    mg_destroy_conn(nc, 1 /* destroy_if */);
     return NULL;
   }
   mg_add_conn(nc->mgr, nc);
@@ -10563,11 +10564,9 @@ int mg_if_create_conn(struct mg_connection *nc) {
 
 void mg_if_destroy_conn(struct mg_connection *nc) {
   if (nc->sock == INVALID_SOCKET) return;
-  if (!(nc->flags & MG_F_UDP)) {
+  /* For UDP, only close outgoing sockets or listeners. */
+  if (!(nc->flags & MG_F_UDP) || nc->listener == NULL) {
     sl_Close(nc->sock);
-  } else {
-    /* Only close outgoing UDP sockets or listeners. */
-    if (nc->listener == NULL) sl_Close(nc->sock);
   }
   nc->sock = INVALID_SOCKET;
 #ifdef MG_ENABLE_SSL
