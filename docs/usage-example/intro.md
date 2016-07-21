@@ -3,7 +3,7 @@ title: Usage Example
 ---
 
 - Copy `mongoose.c` and `mongoose.h` to your build tree
-- Write code that uses Mongoose API, e.g. in `my_app.c`
+- Write code that uses the Mongoose API, e.g. in `my_app.c`
 - Compile application: `$ cc my_app.c mongoose.c`
 
 ```c
