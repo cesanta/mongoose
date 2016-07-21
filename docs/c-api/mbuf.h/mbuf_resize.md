@@ -6,7 +6,7 @@ signature: |
   void mbuf_resize(struct mbuf *, size_t new_size);
 ---
 
-Resize an Mbuf.
+Resizes an Mbuf.
 
 If `new_size` is smaller than buffer's `len`, the
 resize is not performed. 

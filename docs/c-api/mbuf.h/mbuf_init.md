@@ -6,6 +6,6 @@ signature: |
   void mbuf_init(struct mbuf *, size_t initial_capacity);
 ---
 
-Initialize an Mbuf.
+Initialises an Mbuf.
 `initial_capacity` specifies the initial capacity of the mbuf. 
 

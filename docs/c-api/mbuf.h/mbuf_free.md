@@ -6,5 +6,5 @@ signature: |
   void mbuf_free(struct mbuf *);
 ---
 
-Free the space allocated for the mbuffer and resets the mbuf structure. 
+Frees the space allocated for the mbuffer and resets the mbuf structure. 
 

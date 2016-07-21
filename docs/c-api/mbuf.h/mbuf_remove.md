@@ -6,5 +6,5 @@ signature: |
   void mbuf_remove(struct mbuf *, size_t data_size);
 ---
 
-Remove `data_size` bytes from the beginning of the buffer. 
+Removes `data_size` bytes from the beginning of the buffer. 
 

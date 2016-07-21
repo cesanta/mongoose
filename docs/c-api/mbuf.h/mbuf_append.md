@@ -8,5 +8,5 @@ signature: |
 
 Appends data to the Mbuf.
 
-Return the number of bytes appended, or 0 if out of memory. 
+Returns the number of bytes appended or 0 if out of memory. 
 
