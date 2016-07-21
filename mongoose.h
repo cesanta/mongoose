@@ -1139,8 +1139,8 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
  *
  * NOTE: Mongoose manager is single threaded. It does not protect
  * its data structures by mutexes, therefore all functions that are dealing
- * with particular event manager should be called from the same thread,
- * with exception of `mg_broadcast()` function. It is fine to have different
+ * with a particular event manager should be called from the same thread,
+ * with exception of the `mg_broadcast()` function. It is fine to have different
  * event managers handled by different threads.
  */
 
@@ -1191,8 +1191,8 @@ union socket_address {
 struct mg_connection;
 
 /*
- * Callback function (event handler) prototype, must be defined by user.
- * Mongoose calls event handler, passing events defined below.
+ * Callback function (event handler) prototype. Must be defined by the user.
+ * Mongoose calls the event handler, passing events defined below.
  */
 typedef void (*mg_event_handler_t)(struct mg_connection *, int ev, void *);
 
