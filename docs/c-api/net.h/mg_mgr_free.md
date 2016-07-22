@@ -6,7 +6,7 @@ signature: |
   void mg_mgr_free(struct mg_mgr *);
 ---
 
-De-initializes Mongoose manager.
+De-initialises Mongoose manager.
 
-Close and deallocate all active connections. 
+Closes and deallocates all active connections. 
 
