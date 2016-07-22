@@ -10,13 +10,13 @@ signature: |
                                         const char *post_data);
 ---
 
-Helper function that creates outbound HTTP connection.
+Helper function that creates an outbound HTTP connection.
 
 `url` is a URL to fetch. It must be properly URL-encoded, e.g. have
-no spaces, etc. By default, `mg_connect_http()` sends Connection and
-Host headers. `extra_headers` is an extra HTTP headers to send, e.g.
+no spaces, etc. By default, `mg_connect_http()` sends the Connection and
+Host headers. `extra_headers` is an extra HTTP header to send, e.g.
 `"User-Agent: my-app\r\n"`.
-If `post_data` is NULL, then GET request is created. Otherwise, POST request
+If `post_data` is NULL, then a GET request is created. Otherwise, a POST request
 is created with the specified POST data. Note that if the data being posted
 is a form submission, the `Content-Type` header should be set accordingly
 (see example below).
