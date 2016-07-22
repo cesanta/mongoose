@@ -6,7 +6,7 @@ signature: |
   int mg_socketpair(sock_t[2], int sock_type);
 ---
 
-Create a socket pair.
+Creates a socket pair.
 `sock_type` can be either `SOCK_STREAM` or `SOCK_DGRAM`.
-Return 0 on failure, 1 on success. 
+Returns 0 on failure and 1 on success. 
 
