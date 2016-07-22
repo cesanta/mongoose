@@ -6,10 +6,10 @@ signature: |
   struct mg_connection *mg_next(struct mg_mgr *, struct mg_connection *);
 ---
 
-Iterate over all active connections.
+Iterates over all active connections.
 
-Returns next connection from the list
-of active connections, or `NULL` if there is no more connections. Below
+Returns the next connection from the list
+of active connections or `NULL` if there are no more connections. Below
 is the iteration idiom:
 
 ```c
