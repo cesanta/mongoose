@@ -4113,15 +4113,15 @@ static uint32_t mg_ws_random_mask(void) {
  * is untrusted code that wouldn't have access to a lower level net API
  * anyway (e.g. web browsers). Hence this feature is low prio for most
  * mongoose use cases and thus can be disabled, e.g. when porting to a platform
- * that lacks random().
+ * that lacks rand().
  */
 #ifdef MG_DISABLE_WS_RANDOM_MASK
   mask = 0xefbeadde; /* generated with a random number generator, I swear */
 #else
   if (sizeof(long) >= 4) {
-    mask = (uint32_t) random();
+    mask = (uint32_t) rand();
   } else if (sizeof(long) == 2) {
-    mask = (uint32_t) random() << 16 | (uint32_t) random();
+    mask = (uint32_t) rand() << 16 | (uint32_t) rand();
   }
 #endif
   return mask;
@@ -9568,10 +9568,6 @@ int gettimeofday(struct timeval *tp, void *tzp) {
   return 0;
 }
 
-long int random(void) {
-  return 42; /* FIXME */
-}
-
 void fprint_str(FILE *fp, const char *str) {
   while (*str != '\0') {
     if (*str == '\n') MAP_UARTCharPut(CONSOLE_UART, '\r');
@@ -9629,10 +9625,6 @@ int gettimeofday(struct timeval *tp, void *tzp) {
   tp->tv_sec = ticks / 1000;
   tp->tv_usec = (ticks % 1000) * 1000;
   return 0;
-}
-
-long int random(void) {
-  return 42; /* FIXME */
 }
 
 #endif /* CS_PLATFORM == CS_P_MSP432 */

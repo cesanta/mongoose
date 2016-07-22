@@ -151,7 +151,6 @@
 #include <sys/stat.h>
 #include <time.h>
 
-#define random() rand()
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib") /* Linking with winsock library */
 #endif
@@ -187,7 +186,6 @@
 #else
 #define fseeko(x, y, z) fseek((x), (y), (z))
 #endif
-#define random() rand()
 typedef int socklen_t;
 #if _MSC_VER >= 1700
 #include <stdint.h>
@@ -460,8 +458,6 @@ int asprintf(char **strp, const char *fmt, ...);
 
 #endif
 
-long int random(void);
-
 /* TI's libc does not have stat & friends, add them. */
 #ifdef __TI_COMPILER_VERSION__
 
@@ -581,8 +577,6 @@ struct SlTimeval_t;
 #define timeval SlTimeval_t
 int gettimeofday(struct timeval *t, void *tz);
 #endif
-
-long int random(void);
 
 /* TI's libc does not have stat & friends, add them. */
 #ifdef __TI_COMPILER_VERSION__
