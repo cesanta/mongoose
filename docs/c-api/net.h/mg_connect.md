@@ -7,7 +7,7 @@ signature: |
                                    mg_event_handler_t handler);
 ---
 
-Connects to a remote host.
+Connect to a remote host.
 
 See `mg_connect_opt()` for full documentation. 
 

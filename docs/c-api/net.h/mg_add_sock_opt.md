@@ -8,8 +8,8 @@ signature: |
                                         struct mg_add_sock_opts);
 ---
 
-Creates a connection, associates it with the given socket and event handler
-and adds to the manager.
+Create a connection, associate it with the given socket and event handler,
+and add to the manager.
 
 See the `mg_add_sock_opts` structure for a description of the options. 
 
