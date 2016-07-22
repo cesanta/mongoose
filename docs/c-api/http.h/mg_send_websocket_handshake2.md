@@ -8,12 +8,12 @@ signature: |
                                     const char *extra_headers);
 ---
 
-Send WebSocket handshake to the server.
+Send websocket handshake to the server.
 
 `nc` must be a valid connection, connected to a server. `uri` is an URI
 to fetch, `host` goes into the `Host` header, `protocol` goes into the
-`Sec-WebSocket-Proto` header (NULL to omit), `extra_headers` is an extra HTTP
-header to send or `NULL`.
+`Sec-WebSocket-Proto` header (NULL to omit), extra_headers` is extra HTTP
+headers to send or `NULL`.
 
-This function is intended to be used by the WebSocket client. 
+This function is intended to be used by websocket client. 
 

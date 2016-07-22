@@ -7,17 +7,17 @@ signature: |
                            size_t buf_size);
 ---
 
-Parses the HTTP header `hdr`. Finds variable `var_name` and stores its value
-in the buffer `buf`, `buf_size`. Returns 0 if variable not found, non-zero
+Parse HTTP header `hdr`. Find variable `var_name` and store it's value
+in the buffer `buf`, `buf_size`. Return 0 if variable not found, non-zero
 otherwise.
 
 This function is supposed to parse
-cookies, authentication headers, etc. Example (error handling omitted):
+cookies, authentication headers, etcetera. Example (error handling omitted):
 
     char user[20];
     struct mg_str *hdr = mg_get_http_header(hm, "Authorization");
     mg_http_parse_header(hdr, "username", user, sizeof(user));
 
-Returns the length of the variable's value. If buffer is not large enough,
+Return length of the variable's value. If buffer is not large enough,
 or variable not found, 0 is returned. 
 

@@ -7,6 +7,6 @@ signature: |
                                 FILE *fp);
 ---
 
-Authenticates a HTTP request against an opened password file.
+Authenticate HTTP request against opened passwords file.
 Returns 1 if authenticated, 0 otherwise. 
 

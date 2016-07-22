@@ -9,5 +9,5 @@ signature: |
                                         const char *passwd);
 ---
 
-Creates digest authentication header for a client request. 
+Create Digest authentication header for client request. 
 
