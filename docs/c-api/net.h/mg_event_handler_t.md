@@ -7,5 +7,5 @@ signature: |
 ---
 
 Callback function (event handler) prototype. Must be defined by the user.
-Mongoose calls the event handler, passing events defined below. 
+Mongoose calls the event handler, passing the events defined below. 
 
