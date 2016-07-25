@@ -8,7 +8,7 @@ signature: |
                                size_t data_len);
 ---
 
-Parse the record data from a DNS resource record.
+Parses the record data from a DNS resource record.
 
  - A:     struct in_addr *ina
  - AAAA:  struct in6_addr *ina
