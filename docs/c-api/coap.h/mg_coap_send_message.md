@@ -7,9 +7,9 @@ signature: |
                                 struct mg_coap_message *cm);
 ---
 
-Compose CoAP message from `mg_coap_message`
-and send it into `nc` connection.
-Return 0 on success. On error, it is a bitmask:
+Composes a CoAP message from `mg_coap_message`
+and sends it into `nc` connection.
+Returns 0 on success. On error, it is a bitmask:
 
 - `#define MG_COAP_ERROR 0x10000`
 - `#define MG_COAP_FORMAT_ERROR (MG_COAP_ERROR | 0x20000)`
