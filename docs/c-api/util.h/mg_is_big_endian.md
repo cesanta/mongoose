@@ -6,5 +6,5 @@ signature: |
   int mg_is_big_endian(void);
 ---
 
-Returns true if the target platform is big endian. 
+Return true if target platform is big endian. 
 

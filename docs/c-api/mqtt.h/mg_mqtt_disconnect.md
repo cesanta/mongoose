@@ -6,5 +6,5 @@ signature: |
   void mg_mqtt_disconnect(struct mg_connection *nc);
 ---
 
-Sends a DISCONNECT command. 
+Send a DISCONNECT command. 
 

@@ -6,7 +6,7 @@ signature: |
   int mg_stat(const char *path, cs_stat_t *st);
 ---
 
-Performs a 64-bit `stat()` call against a given file.
+Perform a 64-bit `stat()` call against given file.
 
 `path` should be UTF8 encoded.
 

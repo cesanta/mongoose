@@ -7,7 +7,7 @@ signature: |
                            int flags);
 ---
 
-Converts the socket's address into string.
+Convert socket's address into string.
 
 `flags` is MG_SOCK_STRINGIFY_IP and/or MG_SOCK_STRINGIFY_PORT. 
 

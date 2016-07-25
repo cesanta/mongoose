@@ -6,11 +6,11 @@ signature: |
   void mg_dns_send_reply(struct mg_connection *nc, struct mg_dns_reply *r);
 ---
 
-Sends a DNS reply through a connection.
+Send a DNS reply through a connection.
 
 The DNS data is stored in an IO buffer pointed by reply structure in `r`.
 This function mutates the content of that buffer in order to ensure that
-the DNS header reflects the size and flags of the message, that might have been
+the DNS header reflects size and flags of the mssage, that might have been
 updated either with `mg_dns_reply_record` or by direct manipulation of
 `r->message`.
 

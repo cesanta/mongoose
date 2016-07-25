@@ -8,5 +8,5 @@ signature: |
                          size_t topics_len, uint16_t message_id);
 ---
 
-Subscribes to a bunch of topics. 
+Subscribe to a bunch of topics. 
 

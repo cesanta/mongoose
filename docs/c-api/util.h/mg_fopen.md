@@ -6,7 +6,7 @@ signature: |
   FILE *mg_fopen(const char *path, const char *mode);
 ---
 
-Opens the given file and returns a file stream.
+Open the given file and return a file stream.
 
 `path` and `mode` should be UTF8 encoded.
 

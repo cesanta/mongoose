@@ -6,5 +6,5 @@ signature: |
   void mg_mqtt_ping(struct mg_connection *nc);
 ---
 
-Sends a PINGREQ command. 
+Send a PINGREQ command. 
 

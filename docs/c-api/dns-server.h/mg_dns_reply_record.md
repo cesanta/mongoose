@@ -9,10 +9,10 @@ signature: |
                           size_t rdata_len);
 ---
 
-Appends a DNS reply record to the IO buffer and to the DNS message.
+Append a DNS reply record to the IO buffer and to the DNS message.
 
-The message's num_answers field will be incremented. It's the caller's duty
-to ensure num_answers is properly initialised.
+The message num_answers field will be incremented. It's caller's duty
+to ensure num_answers is propertly initialized.
 
 Returns -1 on error. 
 

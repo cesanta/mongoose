@@ -7,9 +7,9 @@ signature: |
                                    struct mg_str *topic, uint8_t *qos, int pos);
 ---
 
-Extracts the next topic expression from a SUBSCRIBE command payload.
+Extract the next topic expression from a SUBSCRIBE command payload.
 
-The topic expression name will point to a string in the payload buffer.
-Returns the pos of the next topic expression or -1 when the list
+Topic expression name will point to a string in the payload buffer.
+Return the pos of the next topic expression or -1 when the list
 of topics is exhausted. 
 

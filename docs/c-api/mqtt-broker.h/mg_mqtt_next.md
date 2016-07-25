@@ -7,7 +7,7 @@ signature: |
                                        struct mg_mqtt_session *s);
 ---
 
-Iterates over all MQTT session connections. Example:
+Iterate over all mqtt sessions connections. Example:
 
 ```c
 struct mg_mqtt_session *s;

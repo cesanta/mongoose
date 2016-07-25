@@ -6,9 +6,9 @@ signature: |
   int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap);
 ---
 
-Prints message to the buffer. If the buffer is large enough to hold the message,
-it returns buffer. If buffer is to small, it allocates a large enough buffer on heap
-and returns allocated buffer.
+Print message to buffer. If buffer is large enough to hold the message,
+return buffer. If buffer is to small, allocate large enough buffer on heap,
+and return allocated buffer.
 This is a supposed use case:
 
    char buf[5], *p = buf;

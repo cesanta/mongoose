@@ -7,7 +7,7 @@ signature: |
                            struct mg_dns_message *msg);
 ---
 
-Inserts a DNS header to an IO buffer.
+Insert a DNS header to an IO buffer.
 
-Returns the number of bytes inserted. 
+Return number of bytes inserted. 
 
