@@ -6,5 +6,5 @@ signature: |
   void mg_mqtt_broker_init(struct mg_mqtt_broker *brk, void *user_data);
 ---
 
-Initialize a MQTT broker. 
+Initialises a MQTT broker. 
 
