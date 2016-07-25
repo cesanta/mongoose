@@ -7,5 +7,5 @@ signature: |
                            size_t topics_len, uint16_t message_id);
 ---
 
-Unsubscribe from a bunch of topics. 
+Unsubscribes from a bunch of topics. 
 
