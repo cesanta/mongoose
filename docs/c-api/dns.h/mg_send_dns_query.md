@@ -7,5 +7,5 @@ signature: |
                          int query_type);
 ---
 
-Send a DNS query to the remote end. 
+Sends a DNS query to the remote end. 
 
