@@ -6,9 +6,9 @@ signature: |
   void mg_mqtt_broker(struct mg_connection *brk, int ev, void *data);
 ---
 
-Process a MQTT broker message.
+Processes a MQTT broker message.
 
-Listening connection expects a pointer to an initialized `mg_mqtt_broker`
+The listening connection expects a pointer to an initialised `mg_mqtt_broker`
 structure in the `user_data` field.
 
 Basic usage:
