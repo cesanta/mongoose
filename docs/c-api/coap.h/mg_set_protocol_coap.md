@@ -6,5 +6,5 @@ signature: |
   int mg_set_protocol_coap(struct mg_connection *nc);
 ---
 
-Set CoAP protocol handler - trigger CoAP specific events 
+Sets CoAP protocol handler - triggers CoAP specific events. 
 
