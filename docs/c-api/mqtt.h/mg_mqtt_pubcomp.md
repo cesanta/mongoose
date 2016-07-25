@@ -6,5 +6,5 @@ signature: |
   void mg_mqtt_pubcomp(struct mg_connection *nc, uint16_t message_id);
 ---
 
-Send a PUBCOMP command with a given `message_id`. 
+Sends a PUBCOMP command with a given `message_id`. 
 
