@@ -6,13 +6,13 @@ signature: |
   uint32_t mg_coap_parse(struct mbuf *io, struct mg_coap_message *cm);
 ---
 
-Parse COAP message and fills mg_coap_message and returns cm->flags.
+Parses CoAP message and fills mg_coap_message and returns cm->flags.
 This is a helper function.
 
-NOTE: usually CoAP work over UDP, so lack of data means format error,
-but in theory it is possible to use CoAP over TCP (according to RFC)
+NOTE: usually CoAP works over UDP, so lack of data means format error.
+But, in theory, it is possible to use CoAP over TCP (according to RFC)
 
-The caller have to check results and treat COAP_NOT_ENOUGH_DATA according to
+The caller has to check results and treat COAP_NOT_ENOUGH_DATA according to
 underlying protocol:
 
 - in case of UDP COAP_NOT_ENOUGH_DATA means COAP_FORMAT_ERROR,
