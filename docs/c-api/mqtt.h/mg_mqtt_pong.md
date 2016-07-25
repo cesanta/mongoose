@@ -6,5 +6,5 @@ signature: |
   void mg_mqtt_pong(struct mg_connection *nc);
 ---
 
-Send a PINGRESP command. 
+Sends a PINGRESP command. 
 
