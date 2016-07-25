@@ -7,18 +7,18 @@ signature: |
                                           struct mg_dns_message *msg);
 ---
 
-Create a DNS reply.
+Creates a DNS reply.
 
 The reply will be based on an existing query message `msg`.
 The query body will be appended to the output buffer.
-"reply + recursion allowed" will be added to the message flags and
+"reply + recursion allowed" will be added to the message flags and the
 message's num_answers will be set to 0.
 
 Answer records can be appended with `mg_dns_send_reply` or by lower
 level function defined in the DNS API.
 
-In order to send the reply use `mg_dns_send_reply`.
-It's possible to use a connection's send buffer as reply buffers,
+In order to send a reply use `mg_dns_send_reply`.
+It's possible to use a connection's send buffer as reply buffer,
 and it will work for both UDP and TCP connections.
 
 Example:
