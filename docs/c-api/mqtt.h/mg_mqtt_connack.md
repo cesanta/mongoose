@@ -6,5 +6,5 @@ signature: |
   void mg_mqtt_connack(struct mg_connection *nc, uint8_t return_code);
 ---
 
-Send a CONNACK command with a given `return_code`. 
+Sends a CONNACK command with a given `return_code`. 
 
