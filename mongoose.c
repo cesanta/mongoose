@@ -1666,7 +1666,7 @@ static void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
 }
 
 void mg_close_conn(struct mg_connection *conn) {
-  LOG(LL_INFO, ("%p %lu %d", conn, conn->flags, conn->sock));
+  DBG(("%p %lu %d", conn, conn->flags, conn->sock));
   mg_remove_conn(conn);
   mg_if_destroy_conn(conn);
   mg_call(conn, NULL, MG_EV_CLOSE, NULL);
