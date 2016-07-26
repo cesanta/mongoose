@@ -6,10 +6,10 @@ signature: |
   int mg_parse_http(const char *s, int n, struct http_message *hm, int is_req);
 ---
 
-Parse a HTTP message.
+Parses a HTTP message.
 
-`is_req` should be set to 1 if parsing request, 0 if reply.
+`is_req` should be set to 1 if parsing a request, 0 if reply.
 
-Return number of bytes parsed. If HTTP message is
-incomplete, `0` is returned. On parse error, negative number is returned. 
+Returns the number of bytes parsed. If HTTP message is
+incomplete `0` is returned. On parse error, a negative number is returned. 
 

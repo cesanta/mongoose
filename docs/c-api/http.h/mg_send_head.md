@@ -7,15 +7,15 @@ signature: |
                     int64_t content_length, const char *extra_headers);
 ---
 
-Send response line and headers.
-This function sends response line with the `status_code`, and automatically
-sends one header: either "Content-Length", or "Transfer-Encoding".
+Sends a response line and headers.
+This function sends a response line with the `status_code`, and automatically
+sends one header: either "Content-Length" or "Transfer-Encoding".
 If `content_length` is negative, then "Transfer-Encoding: chunked" header
 is sent, otherwise, "Content-Length" header is sent.
 
 NOTE: If `Transfer-Encoding` is `chunked`, then message body must be sent
 using `mg_send_http_chunk()` or `mg_printf_http_chunk()` functions.
 Otherwise, `mg_send()` or `mg_printf()` must be used.
-Extra headers could be set through `extra_headers` - and note `extra_headers`
+Extra headers could be set through `extra_headers`. Note `extra_headers`
 must NOT be terminated by a new line. 
 

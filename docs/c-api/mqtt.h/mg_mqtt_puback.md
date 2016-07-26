@@ -6,5 +6,5 @@ signature: |
   void mg_mqtt_puback(struct mg_connection *nc, uint16_t message_id);
 ---
 
-Send a PUBACK command with a given `message_id`. 
+Sends a PUBACK command with a given `message_id`. 
 

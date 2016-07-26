@@ -13,15 +13,15 @@ Verify given IP address against the ACL.
 Each subnet is
 prepended by either a - or a + sign. A plus sign means allow, where a
 minus sign means deny. If a subnet mask is omitted, such as `-1.2.3.4`,
-this means to deny only that single IP address.
+it means that only that single IP address is denied.
 Subnet masks may vary from 0 to 32, inclusive. The default setting
-is to allow all accesses. On each request the full list is traversed,
+is to allow all access. On each request the full list is traversed,
 and the last match wins. Example:
 
 `-0.0.0.0/0,+192.168/16` - deny all acccesses, only allow 192.168/16 subnet
 
-To learn more about subnet masks, see the
-link:https://en.wikipedia.org/wiki/Subnetwork[Wikipedia page on Subnetwork]
+To learn more about subnet masks, see this
+link:https://en.wikipedia.org/wiki/Subnetwork[Wikipedia page on Subnetwork].
 
-Return -1 if ACL is malformed, 0 if address is disallowed, 1 if allowed. 
+Returns -1 if ACL is malformed, 0 if address is disallowed, 1 if allowed. 
 

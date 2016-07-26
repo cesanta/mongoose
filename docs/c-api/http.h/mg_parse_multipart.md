@@ -9,13 +9,13 @@ signature: |
                             size_t *chunk_len);
 ---
 
-Parse buffer `buf`, `buf_len` that contains multipart form data chunks.
-Store chunk name in a `var_name`, `var_name_len` buffer.
+Parses the buffer `buf`, `buf_len` that contains multipart form data chunks.
+Stores the chunk name in a `var_name`, `var_name_len` buffer.
 If a chunk is an uploaded file, then `file_name`, `file_name_len` is
 filled with an uploaded file name. `chunk`, `chunk_len`
 points to the chunk data.
 
-Return: number of bytes to skip to the next chunk, or 0 if there are
+Return: number of bytes to skip to the next chunk or 0 if there are
         no more chunks.
 
 Usage example:

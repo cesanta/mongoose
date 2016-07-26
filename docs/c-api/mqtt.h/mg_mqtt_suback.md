@@ -7,6 +7,6 @@ signature: |
                       uint16_t message_id);
 ---
 
-Send a SUBACK command with a given `message_id`
+Sends a SUBACK command with a given `message_id`
 and a sequence of granted QoSs. 
 

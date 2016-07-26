@@ -12,6 +12,6 @@ signature: |
 
 Helper function that creates an outbound WebSocket connection
 
-Mostly identical to mg_connect_ws, but allows to provide extra parameters
-(for example, SSL parameters 
+Mostly identical to `mg_connect_ws`, but allows to provide extra parameters
+(for example, SSL parameters) 
 

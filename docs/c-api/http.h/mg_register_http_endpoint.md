@@ -7,8 +7,8 @@ signature: |
                                  mg_event_handler_t handler);
 ---
 
-Register callback for specified http endpoint
-Note: if callback is registered it is called instead of
+Registers a callback for a specified http endpoint
+Note: if callback is registered it is called instead of the
 callback provided in mg_bind
 
 Example code snippet:

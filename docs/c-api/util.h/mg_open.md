@@ -6,7 +6,7 @@ signature: |
   int mg_open(const char *path, int flag, int mode);
 ---
 
-Open the given file and return a file stream.
+Opens the given file and returns a file stream.
 
 `path` should be UTF8 encoded.
 

@@ -13,7 +13,7 @@ Helper function that creates an outbound WebSocket connection.
 
 `url` is a URL to connect to. It must be properly URL-encoded, e.g. have
 no spaces, etc. By default, `mg_connect_ws()` sends Connection and
-Host headers. `extra_headers` is an extra HTTP headers to send, e.g.
+Host headers. `extra_headers` is an extra HTTP header to send, e.g.
 `"User-Agent: my-app\r\n"`.
 If `protocol` is not NULL, then a `Sec-WebSocket-Protocol` header is sent.
 

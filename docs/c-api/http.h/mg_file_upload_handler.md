@@ -12,9 +12,10 @@ This handler can be used to implement file uploads with minimum code.
 This handler will process MG_EV_HTTP_PART_* events and store file data into
 a local file.
 `local_name_fn` will be invoked with whatever name was provided by the client
-and will expect the name of the local file to open. Return value of NULL will
-abort file upload (client will get a "403 Forbidden" response). If non-null,
-the returned string must be heap-allocated and will be freed by the caller.
+and will expect the name of the local file to open. A return value of NULL
+will abort file upload (client will get a "403 Forbidden" response). If
+non-null, the returned string must be heap-allocated and will be freed by
+the caller.
 Exception: it is ok to return the same string verbatim.
 
 Example:

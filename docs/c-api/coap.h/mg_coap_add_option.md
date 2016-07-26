@@ -8,6 +8,6 @@ signature: |
                                             size_t len);
 ---
 
-Add new option to mg_coap_message structure.
+Adds a new option to mg_coap_message structure.
 Returns pointer to the newly created option. 
 

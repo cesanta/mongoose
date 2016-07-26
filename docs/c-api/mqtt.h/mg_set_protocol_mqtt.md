@@ -6,7 +6,7 @@ signature: |
   void mg_set_protocol_mqtt(struct mg_connection *nc);
 ---
 
-Attach built-in MQTT event handler to the given connection.
+Attaches a built-in MQTT event handler to the given connection.
 
 The user-defined event handler will receive following extra events:
 

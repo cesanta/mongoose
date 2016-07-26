@@ -6,5 +6,5 @@ signature: |
   void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...);
 ---
 
-Send printf-formatted HTTP chunk, escaping HTML tags. 
+Sends a printf-formatted HTTP chunk, escaping HTML tags. 
 

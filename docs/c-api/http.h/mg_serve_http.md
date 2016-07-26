@@ -7,7 +7,7 @@ signature: |
                      struct mg_serve_http_opts opts);
 ---
 
-Serve given HTTP request according to the `options`.
+Serves given HTTP request according to the `options`.
 
 Example code snippet:
 

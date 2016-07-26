@@ -7,9 +7,9 @@ signature: |
                                const void *data, size_t data_len);
 ---
 
-Send websocket frame to the remote end.
+Send WebSocket frame to the remote end.
 
-`op_and_flags` specifies frame's type, one of:
+`op_and_flags` specifies the frame's type. It's one of:
 
 - WEBSOCKET_OP_CONTINUE
 - WEBSOCKET_OP_TEXT

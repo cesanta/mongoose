@@ -7,15 +7,15 @@ signature: |
                                 char *dst, int dst_len);
 ---
 
-Uncompress a DNS compressed name.
+Uncompresses a DNS compressed name.
 
-The containing dns message is required because the compressed encoding
+The containing DNS message is required because of the compressed encoding
 and reference suffixes present elsewhere in the packet.
 
-If name is less than `dst_len` characters long, the remainder
-of `dst` is terminated with `\0' characters. Otherwise, `dst` is not
-*terminated.
+If the name is less than `dst_len` characters long, the remainder
+of `dst` is terminated with `\0` characters. Otherwise, `dst` is not
+terminated.
 
 If `dst_len` is 0 `dst` can be NULL.
-Return the uncompressed name length. 
+Returns the uncompressed name length. 
 

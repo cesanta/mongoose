@@ -7,9 +7,9 @@ signature: |
                            int flags);
 ---
 
-Convert connection's local or remote address into string.
+Converts a connection's local or remote address into string.
 
-The `flags` parameter is a bit mask that controls the behavior,
+The `flags` parameter is a bit mask that controls the behaviour,
 see `MG_SOCK_STRINGIFY_*` definitions.
 
 - MG_SOCK_STRINGIFY_IP - print IP address

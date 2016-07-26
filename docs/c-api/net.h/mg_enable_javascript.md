@@ -7,8 +7,8 @@ signature: |
                                    const char *init_js_file_name);
 ---
 
-Enable server-side JavaScript scripting.
-Requires `-DMG_ENABLE_JAVASCRIPT` compilation flag, and V7 engine sources.
-v7 instance must not be destroyed during manager's lifetime.
-Return V7 error. 
+Enables server-side JavaScript scripting.
+Requires a `-DMG_ENABLE_JAVASCRIPT` compilation flag and V7 engine sources.
+V7 instance must not be destroyed during manager's lifetime.
+Returns a V7 error. 
 

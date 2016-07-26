@@ -6,11 +6,11 @@ signature: |
   void mg_set_protocol_dns(struct mg_connection *nc);
 ---
 
-Attach built-in DNS event handler to the given listening connection.
+Attaches a built-in DNS event handler to the given listening connection.
 
-DNS event handler parses incoming UDP packets, treating them as DNS
-requests. If incoming packet gets successfully parsed by the DNS event
-handler, a user event handler will receive `MG_DNS_REQUEST` event, with
+The DNS event handler parses the incoming UDP packets, treating them as DNS
+requests. If an incoming packet gets successfully parsed by the DNS event
+handler, a user event handler will receive an `MG_DNS_REQUEST` event, with
 `ev_data` pointing to the parsed `struct mg_dns_message`.
 
 See

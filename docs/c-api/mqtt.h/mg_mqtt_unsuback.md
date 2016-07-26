@@ -6,5 +6,5 @@ signature: |
   void mg_mqtt_unsuback(struct mg_connection *nc, uint16_t message_id);
 ---
 
-Send a UNSUBACK command with a given `message_id`. 
+Sends a UNSUBACK command with a given `message_id`. 
 

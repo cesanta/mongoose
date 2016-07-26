@@ -1186,7 +1186,7 @@ struct mg_connection;
 
 /*
  * Callback function (event handler) prototype. Must be defined by the user.
- * Mongoose calls the event handler, passing events defined below.
+ * Mongoose calls the event handler, passing the events defined below.
  */
 typedef void (*mg_event_handler_t)(struct mg_connection *, int ev, void *);
 
@@ -1284,53 +1284,53 @@ struct mg_connection {
 };
 
 /*
- * Initialize Mongoose manager. Side effect: ignores SIGPIPE signal.
- * `mgr->user_data` field will be initialized with `user_data` parameter.
- * That is an arbitrary pointer, where user code can associate some data
+ * Initialise Mongoose manager. Side effect: ignores SIGPIPE signal.
+ * `mgr->user_data` field will be initialised with a `user_data` parameter.
+ * That is an arbitrary pointer, where the user code can associate some data
  * with the particular Mongoose manager. For example, a C++ wrapper class
- * could be written, in which case `user_data` can hold a pointer to the
+ * could be written in which case `user_data` can hold a pointer to the
  * class instance.
  */
 void mg_mgr_init(struct mg_mgr *mgr, void *user_data);
 
 /*
- * De-initializes Mongoose manager.
+ * De-initialises Mongoose manager.
  *
- * Close and deallocate all active connections.
+ * Closes and deallocates all active connections.
  */
 void mg_mgr_free(struct mg_mgr *);
 
 /*
- * This function performs the actual IO, and must be called in a loop
- * (an event loop). Returns the current timestamp.
+ * This function performs the actual IO and must be called in a loop
+ * (an event loop). It returns the current timestamp.
  * `milli` is the maximum number of milliseconds to sleep.
- * `mg_mgr_poll()` checks all connection for IO readiness. If at least one
- * of the connections is IO-ready, `mg_mgr_poll()` triggers respective
+ * `mg_mgr_poll()` checks all connections for IO readiness. If at least one
+ * of the connections is IO-ready, `mg_mgr_poll()` triggers the respective
  * event handlers and returns.
  */
 time_t mg_mgr_poll(struct mg_mgr *, int milli);
 
 #ifndef MG_DISABLE_SOCKETPAIR
 /*
- * Pass a message of a given length to all connections.
+ * Passes a message of a given length to all connections.
  *
  * Must be called from a thread that does NOT call `mg_mgr_poll()`.
  * Note that `mg_broadcast()` is the only function
  * that can be, and must be, called from a different (non-IO) thread.
  *
  * `func` callback function will be called by the IO thread for each
- * connection. When called, event would be `MG_EV_POLL`, and message will
- * be passed as `ev_data` pointer. Maximum message size is capped
+ * connection. When called, the event will be `MG_EV_POLL`, and a message will
+ * be passed as the `ev_data` pointer. Maximum message size is capped
  * by `MG_CTL_MSG_MESSAGE_SIZE` which is set to 8192 bytes.
  */
 void mg_broadcast(struct mg_mgr *, mg_event_handler_t func, void *, size_t);
 #endif
 
 /*
- * Iterate over all active connections.
+ * Iterates over all active connections.
  *
- * Returns next connection from the list
- * of active connections, or `NULL` if there is no more connections. Below
+ * Returns the next connection from the list
+ * of active connections or `NULL` if there are no more connections. Below
  * is the iteration idiom:
  *
  * ```c
@@ -1354,16 +1354,16 @@ struct mg_add_sock_opts {
 };
 
 /*
- * Create a connection, associate it with the given socket and event handler,
- * and add it to the manager.
+ * Creates a connection, associates it with the given socket and event handler
+ * and adds it to the manager.
  *
  * For more options see the `mg_add_sock_opt` variant.
  */
 struct mg_connection *mg_add_sock(struct mg_mgr *, sock_t, mg_event_handler_t);
 
 /*
- * Create a connection, associate it with the given socket and event handler,
- * and add to the manager.
+ * Creates a connection, associates it with the given socket and event handler
+ * and adds to the manager.
  *
  * See the `mg_add_sock_opts` structure for a description of the options.
  */
@@ -1392,28 +1392,29 @@ struct mg_bind_opts {
 };
 
 /*
- * Create listening connection.
+ * Creates a listening connection.
  *
  * See `mg_bind_opt` for full documentation.
  */
 struct mg_connection *mg_bind(struct mg_mgr *, const char *,
                               mg_event_handler_t);
 /*
- * Create listening connection.
+ * Creates a listening connection.
  *
- * `address` parameter tells which address to bind to. It's format is the same
- * as for the `mg_connect()` call, where `HOST` part is optional. `address`
- * can be just a port number, e.g. `:8000`. To bind to a specific interface,
- * an IP address can be specified, e.g. `1.2.3.4:8000`. By default, a TCP
- * connection is created. To create UDP connection, prepend `udp://` prefix,
- * e.g. `udp://:8000`. To summarize, `address` paramer has following format:
- * `[PROTO://][IP_ADDRESS]:PORT`, where `PROTO` could be `tcp` or `udp`.
+ * The `address` parameter specifies which address to bind to. It's format is
+ * the same as for the `mg_connect()` call, where `HOST` part is optional.
+ * `address` can be just a port number, e.g. `:8000`. To bind to a specific
+ * interface, an IP address can be specified, e.g. `1.2.3.4:8000`. By default,
+ * a TCP connection is created. To create UDP connection, prepend `udp://`
+ * prefix, e.g. `udp://:8000`. To summarize, `address` paramer has following
+ * format: `[PROTO://][IP_ADDRESS]:PORT`, where `PROTO` could be `tcp` or
+ * `udp`.
  *
  * See the `mg_bind_opts` structure for a description of the optional
  * parameters.
  *
- * Return a new listening connection, or `NULL` on error.
- * NOTE: Connection remains owned by the manager, do not free().
+ * Returns a new listening connection or `NULL` on error.
+ * NOTE: The connection remains owned by the manager, do not free().
  */
 struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
                                   mg_event_handler_t handler,
@@ -1446,7 +1447,7 @@ struct mg_connect_opts {
 };
 
 /*
- * Connect to a remote host.
+ * Connects to a remote host.
  *
  * See `mg_connect_opt()` for full documentation.
  */
@@ -1454,11 +1455,11 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
                                  mg_event_handler_t handler);
 
 /*
- * Connect to a remote host.
+ * Connects to a remote host.
  *
- * `address` format is `[PROTO://]HOST:PORT`. `PROTO` could be `tcp` or `udp`.
- * `HOST` could be an IP address,
- * IPv6 address (if Mongoose is compiled with `-DMG_ENABLE_IPV6`), or a host
+ * The `address` format is `[PROTO://]HOST:PORT`. `PROTO` could be `tcp` or
+ * `udp`. `HOST` could be an IP address,
+ * IPv6 address (if Mongoose is compiled with `-DMG_ENABLE_IPV6`) or a host
  * name. If `HOST` is a name, Mongoose will resolve it asynchronously. Examples
  * of valid addresses: `google.com:80`, `udp://1.2.3.4:53`, `10.0.0.1:443`,
  * `[::1]:80`
@@ -1466,18 +1467,18 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
  * See the `mg_connect_opts` structure for a description of the optional
  * parameters.
  *
- * Returns a new outbound connection, or `NULL` on error.
+ * Returns a new outbound connection or `NULL` on error.
  *
- * NOTE: Connection remains owned by the manager, do not free().
+ * NOTE: The connection remains owned by the manager, do not free().
  *
- * NOTE: To enable IPv6 addresses, `-DMG_ENABLE_IPV6` should be specified
+ * NOTE: To enable IPv6 addresses `-DMG_ENABLE_IPV6` should be specified
  * in the compilation flags.
  *
- * NOTE: New connection will receive `MG_EV_CONNECT` as it's first event
- * which will report connect success status.
- * If asynchronous resolution fail, or `connect()` syscall fail for whatever
- * reason (e.g. with `ECONNREFUSED` or `ENETUNREACH`), then `MG_EV_CONNECT`
- * event report failure. Code example below:
+ * NOTE: The new connection will receive `MG_EV_CONNECT` as its first event
+ * which will report the connect success status.
+ * If the asynchronous resolution fails or the `connect()` syscall fails for
+ * whatever reason (e.g. with `ECONNREFUSED` or `ENETUNREACH`), then
+ * `MG_EV_CONNECT` event will report failure. Code example below:
  *
  * ```c
  * static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
@@ -1507,24 +1508,25 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
 
 #if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
 /*
- * Note: This function is deprecated, please use SSL options in mg_connect_opt.
+ * Note: This function is deprecated. Please, use SSL options in
+ * mg_connect_opt.
  *
- * Enable SSL for a given connection.
- * `cert` is a server certificate file name for a listening connection,
+ * Enables SSL for a given connection.
+ * `cert` is a server certificate file name for a listening connection
  * or a client certificate file name for an outgoing connection.
- * Certificate files must be in PEM format. Server certificate file
+ * The certificate files must be in PEM format. The server certificate file
  * must contain a certificate, concatenated with a private key, optionally
  * concatenated with DH parameters.
- * `ca_cert` is a CA certificate, or NULL if peer verification is not
+ * `ca_cert` is a CA certificate or NULL if peer verification is not
  * required.
- * Return: NULL on success, or error message on error.
+ * Return: NULL on success or error message on error.
  */
 const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
                        const char *ca_cert);
 #endif
 
 /*
- * Send data to the connection.
+ * Sends data to the connection.
  *
  * Note that sending functions do not actually push data to the socket.
  * They just append data to the output buffer. MG_EV_SEND will be delivered when
@@ -1539,7 +1541,7 @@ __attribute__((format(printf, 2, 3)))
 /* don't separate from mg_printf declaration */
 
 /*
- * Send `printf`-style formatted data to the connection.
+ * Sends `printf`-style formatted data to the connection.
  *
  * See `mg_send` for more details on send semantics.
  */
@@ -1549,9 +1551,9 @@ int mg_printf(struct mg_connection *, const char *fmt, ...);
 int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 
 /*
- * Create a socket pair.
+ * Creates a socket pair.
  * `sock_type` can be either `SOCK_STREAM` or `SOCK_DGRAM`.
- * Return 0 on failure, 1 on success.
+ * Returns 0 on failure and 1 on success.
  */
 int mg_socketpair(sock_t[2], int sock_type);
 
@@ -1577,47 +1579,47 @@ int mg_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
  * Each subnet is
  * prepended by either a - or a + sign. A plus sign means allow, where a
  * minus sign means deny. If a subnet mask is omitted, such as `-1.2.3.4`,
- * this means to deny only that single IP address.
+ * it means that only that single IP address is denied.
  * Subnet masks may vary from 0 to 32, inclusive. The default setting
- * is to allow all accesses. On each request the full list is traversed,
+ * is to allow all access. On each request the full list is traversed,
  * and the last match wins. Example:
  *
  * `-0.0.0.0/0,+192.168/16` - deny all acccesses, only allow 192.168/16 subnet
  *
- * To learn more about subnet masks, see the
- * link:https://en.wikipedia.org/wiki/Subnetwork[Wikipedia page on Subnetwork]
+ * To learn more about subnet masks, see this
+ * link:https://en.wikipedia.org/wiki/Subnetwork[Wikipedia page on Subnetwork].
  *
- * Return -1 if ACL is malformed, 0 if address is disallowed, 1 if allowed.
+ * Returns -1 if ACL is malformed, 0 if address is disallowed, 1 if allowed.
  */
 int mg_check_ip_acl(const char *acl, uint32_t remote_ip);
 
 /*
- * Enable multi-threaded handling for the given listening connection `nc`.
+ * Enables multi-threaded handling for the given listening connection `nc`.
  * For each accepted connection, Mongoose will create a separate thread
- * and run event handler in that thread. Thus, if an event hanler is doing
- * a blocking call or some long computation, that will not slow down
+ * and run an event handler in that thread. Thus, if an event handler is doing
+ * a blocking call or some long computation, it will not slow down
  * other connections.
  */
 void mg_enable_multithreading(struct mg_connection *nc);
 
 #ifdef MG_ENABLE_JAVASCRIPT
 /*
- * Enable server-side JavaScript scripting.
- * Requires `-DMG_ENABLE_JAVASCRIPT` compilation flag, and V7 engine sources.
- * v7 instance must not be destroyed during manager's lifetime.
- * Return V7 error.
+ * Enables server-side JavaScript scripting.
+ * Requires a `-DMG_ENABLE_JAVASCRIPT` compilation flag and V7 engine sources.
+ * V7 instance must not be destroyed during manager's lifetime.
+ * Returns a V7 error.
  */
 enum v7_err mg_enable_javascript(struct mg_mgr *m, struct v7 *v7,
                                  const char *init_js_file_name);
 #endif
 
 /*
- * Schedule MG_EV_TIMER event to be delivered at `timestamp` time.
- * `timestamp` is a UNIX time (a number of seconds since Epoch). It is
+ * Schedules an MG_EV_TIMER event to be delivered at `timestamp` time.
+ * `timestamp` is UNIX time (the number of seconds since Epoch). It is
  * `double` instead of `time_t` to allow for sub-second precision.
- * Return the old timer value.
+ * Returns the old timer value.
  *
- * Example: set connect timeout to 1.5 seconds:
+ * Example: set the connect timeout to 1.5 seconds:
  *
  * ```
  *  c = mg_connect(&mgr, "cesanta.com", ev_handler);
@@ -1810,13 +1812,13 @@ extern "C" {
 #endif
 
 /*
- * Fetch substring from input string `s`, `end` into `v`.
+ * Fetches substring from input string `s`, `end` into `v`.
  * Skips initial delimiter characters. Records first non-delimiter character
- * as the beginning of substring `v`. Then scans the rest of the string
+ * at the beginning of substring `v`. Then scans the rest of the string
  * until a delimiter character or end-of-string is found.
  * `delimiters` is a 0-terminated string containing delimiter characters.
  * Either one of `delimiters` or `end_string` terminates the search.
- * Return an `s` pointer, advanced forward where parsing stopped.
+ * Returns an `s` pointer, advanced forward where parsing has stopped.
  */
 const char *mg_skip(const char *s, const char *end_string,
                     const char *delimiters, struct mg_str *v);
@@ -1832,13 +1834,14 @@ int mg_ncasecmp(const char *s1, const char *s2, size_t len);
 int mg_casecmp(const char *s1, const char *s2);
 
 /*
- * Decode base64-encoded string `s`, `len` into the destination `dst`.
- * Destination has to have enough space to hold decoded buffer.
- * Decoding stops either when all string has been decoded, or invalid
+ * Decodes base64-encoded string `s`, `len` into the destination `dst`.
+ * The destination has to have enough space to hold the decoded buffer.
+ * Decoding stops either when all strings have been decoded or invalid an
  * character appeared.
  * Destination is '\0'-terminated.
- * Return number of decoded characters. On success, that should be equal to
- * `len`. On error (invalid character) the return value is smaller then `len`.
+ * Returns the number of decoded characters. On success, that should be equal
+ * to `len`. On error (invalid character) the return value is smaller then
+ * `len`.
  */
 int mg_base64_decode(const unsigned char *s, int len, char *dst);
 
@@ -1851,7 +1854,7 @@ void mg_base64_encode(const unsigned char *src, int src_len, char *dst);
 
 #ifndef MG_DISABLE_FILESYSTEM
 /*
- * Perform a 64-bit `stat()` call against given file.
+ * Performs a 64-bit `stat()` call against a given file.
  *
  * `path` should be UTF8 encoded.
  *
@@ -1860,7 +1863,7 @@ void mg_base64_encode(const unsigned char *src, int src_len, char *dst);
 int mg_stat(const char *path, cs_stat_t *st);
 
 /*
- * Open the given file and return a file stream.
+ * Opens the given file and returns a file stream.
  *
  * `path` and `mode` should be UTF8 encoded.
  *
@@ -1869,7 +1872,7 @@ int mg_stat(const char *path, cs_stat_t *st);
 FILE *mg_fopen(const char *path, const char *mode);
 
 /*
- * Open the given file and return a file stream.
+ * Opens the given file and returns a file stream.
  *
  * `path` should be UTF8 encoded.
  *
@@ -1884,8 +1887,8 @@ int mg_open(const char *path, int flag, int mode);
 
 #ifdef MG_ENABLE_THREADS
 /*
- * Start a new detached thread.
- * Arguments and semantic is the same as pthead's `pthread_create()`.
+ * Starts a new detached thread.
+ * Arguments and semantics are the same as pthead's `pthread_create()`.
  * `thread_func` is a thread function, `thread_func_param` is a parameter
  * that is passed to the thread function.
  */
@@ -1898,9 +1901,9 @@ void mg_set_close_on_exec(sock_t);
 #define MG_SOCK_STRINGIFY_PORT 2
 #define MG_SOCK_STRINGIFY_REMOTE 4
 /*
- * Convert connection's local or remote address into string.
+ * Converts a connection's local or remote address into string.
  *
- * The `flags` parameter is a bit mask that controls the behavior,
+ * The `flags` parameter is a bit mask that controls the behaviour,
  * see `MG_SOCK_STRINGIFY_*` definitions.
  *
  * - MG_SOCK_STRINGIFY_IP - print IP address
@@ -1917,7 +1920,7 @@ void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
 #endif
 
 /*
- * Convert socket's address into string.
+ * Convert the socket's address into string.
  *
  * `flags` is MG_SOCK_STRINGIFY_IP and/or MG_SOCK_STRINGIFY_PORT.
  */
@@ -1925,28 +1928,28 @@ void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
                          int flags);
 
 /*
- * Generates human-readable hexdump of memory chunk.
+ * Generates a human-readable hexdump of memory chunk.
  *
  * Takes a memory buffer `buf` of length `len` and creates a hex dump of that
- * buffer in `dst`. Generated output is a-la hexdump(1).
- * Return length of generated string, excluding terminating `\0`. If returned
- * length is bigger than `dst_len`, overflow bytes are discarded.
+ * buffer in `dst`. The generated output is a-la hexdump(1).
+ * Returns the length of generated string, excluding terminating `\0`. If
+ * returned length is bigger than `dst_len`, the overflow bytes are discarded.
  */
 int mg_hexdump(const void *buf, int len, char *dst, int dst_len);
 
 /*
- * Generates human-readable hexdump of the data sent or received by connection.
- * `path` is a file name where hexdump should be written. `num_bytes` is
- * a number of bytes sent/received. `ev` is one of the `MG_*` events sent to
- * an event handler. This function is supposed to be called from the
- * event handler.
+ * Generates human-readable hexdump of the data sent or received by the
+ * connection. `path` is a file name where hexdump should be written.
+ * `num_bytes` is a number of bytes sent/received. `ev` is one of the `MG_*`
+ * events sent to an event handler. This function is supposed to be called from
+ * the event handler.
  */
 void mg_hexdump_connection(struct mg_connection *nc, const char *path,
                            const void *buf, int num_bytes, int ev);
 /*
- * Print message to buffer. If buffer is large enough to hold the message,
- * return buffer. If buffer is to small, allocate large enough buffer on heap,
- * and return allocated buffer.
+ * Prints message to the buffer. If the buffer is large enough to hold the
+ * message, it returns buffer. If buffer is to small, it allocates a large
+ * enough buffer on heap and returns allocated buffer.
  * This is a supposed use case:
  *
  *    char buf[5], *p = buf;
@@ -1961,18 +1964,18 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
 int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap);
 
 /*
- * Return true if target platform is big endian.
+ * Returns true if target platform is big endian.
  */
 int mg_is_big_endian(void);
 
 /*
  * A helper function for traversing a comma separated list of values.
- * It returns a list pointer shifted to the next value, or NULL if the end
+ * It returns a list pointer shifted to the next value or NULL if the end
  * of the list found.
- * Value is stored in val vector. If value has form "x=y", then eq_val
- * vector is initialized to point to the "y" part, and val vector length
+ * The value is stored in a val vector. If the value has a form "x=y", then
+ * eq_val vector is initialised to point to the "y" part, and val vector length
  * is adjusted to point only to "x".
- * If list is just a comma separated list of entries, like "aa,bb,cc" then
+ * If the list is just a comma separated list of entries, like "aa,bb,cc" then
  * `eq_val` will contain zero-length string.
  *
  * The purpose of this function is to parse comma separated string without
@@ -1982,9 +1985,11 @@ const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
                                      struct mg_str *eq_val);
 
 /*
- * Match 0-terminated string (mg_match_prefix) or string with given length
+ * Matches 0-terminated string (mg_match_prefix) or string with given length
  * mg_match_prefix_n against a glob pattern.
- * Match is case-insensitive. Return number of bytes matched, or -1 if no match.
+ *
+ * Match is case-insensitive. Returns number of bytes matched, or -1 if no
+ * match.
  */
 int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
 int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
@@ -2114,40 +2119,41 @@ struct mg_http_multipart_part {
 #endif
 
 /*
- * Attach built-in HTTP event handler to the given connection.
- * User-defined event handler will receive following extra events:
+ * Attaches a built-in HTTP event handler to the given connection.
+ * The user-defined event handler will receive following extra events:
  *
  * - MG_EV_HTTP_REQUEST: HTTP request has arrived. Parsed HTTP request
  *  is passed as
  *   `struct http_message` through the handler's `void *ev_data` pointer.
  * - MG_EV_HTTP_MULTIPART_REQUEST: A multipart POST request has received.
- *   This event is sent before body is parsed. After this user
+ *   This event is sent before body is parsed. After this, the user
  *   should expect a sequence of MG_EV_HTTP_PART_BEGIN/DATA/END requests.
  *   This is also the last time when headers and other request fields are
  *   accessible.
- * - MG_EV_HTTP_REPLY: HTTP reply has arrived. Parsed HTTP reply is passed as
- *   `struct http_message` through the handler's `void *ev_data` pointer.
- * - MG_EV_HTTP_CHUNK: HTTP chunked-encoding chunk has arrived.
- *   Parsed HTTP reply is passed as `struct http_message` through the
+ * - MG_EV_HTTP_REPLY: The HTTP reply has arrived. The parsed HTTP reply is
+ *   passed as `struct http_message` through the handler's `void *ev_data`
+ *   pointer.
+ * - MG_EV_HTTP_CHUNK: The HTTP chunked-encoding chunk has arrived.
+ *   The parsed HTTP reply is passed as `struct http_message` through the
  *   handler's `void *ev_data` pointer. `http_message::body` would contain
  *   incomplete, reassembled HTTP body.
- *   It will grow with every new chunk arrived, and
- *   potentially can consume a lot of memory. An event handler may process
+ *   It will grow with every new chunk that arrives, and it can
+ *   potentially consume a lot of memory. An event handler may process
  *   the body as chunks are coming, and signal Mongoose to delete processed
  *   body by setting `MG_F_DELETE_CHUNK` in `mg_connection::flags`. When
  *   the last zero chunk is received,
  *   Mongoose sends `MG_EV_HTTP_REPLY` event with
  *   full reassembled body (if handler did not signal to delete chunks) or
  *   with empty body (if handler did signal to delete chunks).
- * - MG_EV_WEBSOCKET_HANDSHAKE_REQUEST: server has received websocket handshake
- *   request. `ev_data` contains parsed HTTP request.
- * - MG_EV_WEBSOCKET_HANDSHAKE_DONE: server has completed Websocket handshake.
- *   `ev_data` is `NULL`.
- * - MG_EV_WEBSOCKET_FRAME: new websocket frame has arrived. `ev_data` is
+ * - MG_EV_WEBSOCKET_HANDSHAKE_REQUEST: server has received the WebSocket
+ *   handshake request. `ev_data` contains parsed HTTP request.
+ * - MG_EV_WEBSOCKET_HANDSHAKE_DONE: server has completed the WebSocket
+ *   handshake. `ev_data` is `NULL`.
+ * - MG_EV_WEBSOCKET_FRAME: new WebSocket frame has arrived. `ev_data` is
  *   `struct websocket_message *`
  * - MG_EV_HTTP_PART_BEGIN: new part of multipart message is started,
  *   extra parameters are passed in mg_http_multipart_part
- * - MG_EV_HTTP_PART_DATA: new portion of data from multiparted message
+ * - MG_EV_HTTP_PART_DATA: new portion of data from the multiparted message
  *   no additional headers are available, only data and data size
  * - MG_EV_HTTP_PART_END: final boundary received, analogue to maybe used to
  *   find the end of packet
@@ -2195,7 +2201,7 @@ void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
  *
  * `url` is a URL to connect to. It must be properly URL-encoded, e.g. have
  * no spaces, etc. By default, `mg_connect_ws()` sends Connection and
- * Host headers. `extra_headers` is an extra HTTP headers to send, e.g.
+ * Host headers. `extra_headers` is an extra HTTP header to send, e.g.
  * `"User-Agent: my-app\r\n"`.
  * If `protocol` is not NULL, then a `Sec-WebSocket-Protocol` header is sent.
  *
@@ -2218,8 +2224,8 @@ struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
 /*
  * Helper function that creates an outbound WebSocket connection
  *
- * Mostly identical to mg_connect_ws, but allows to provide extra parameters
- * (for example, SSL parameters
+ * Mostly identical to `mg_connect_ws`, but allows to provide extra parameters
+ * (for example, SSL parameters)
  */
 struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
                                         mg_event_handler_t ev_handler,
@@ -2228,9 +2234,9 @@ struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
                                         const char *extra_headers);
 
 /*
- * Send websocket frame to the remote end.
+ * Send WebSocket frame to the remote end.
  *
- * `op_and_flags` specifies frame's type, one of:
+ * `op_and_flags` specifies the frame's type. It's one of:
  *
  * - WEBSOCKET_OP_CONTINUE
  * - WEBSOCKET_OP_TEXT
@@ -2249,7 +2255,7 @@ void mg_send_websocket_frame(struct mg_connection *nc, int op_and_flags,
                              const void *data, size_t data_len);
 
 /*
- * Send multiple websocket frames.
+ * Sends multiple websocket frames.
  *
  * Like `mg_send_websocket_frame()`, but composes a frame from multiple buffers.
  */
@@ -2257,9 +2263,9 @@ void mg_send_websocket_framev(struct mg_connection *nc, int op_and_flags,
                               const struct mg_str *strings, int num_strings);
 
 /*
- * Send websocket frame to the remote end.
+ * Sends WebSocket frame to the remote end.
  *
- * Like `mg_send_websocket_frame()`, but allows to create formatted message
+ * Like `mg_send_websocket_frame()`, but allows to create formatted messages
  * with `printf()`-like semantics.
  */
 void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
@@ -2267,16 +2273,17 @@ void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
 
 /*
- * Send buffer `buf` of size `len` to the client using chunked HTTP encoding.
- * This function first sends buffer size as hex number + newline, then
- * buffer itself, then newline. For example,
- *   `mg_send_http_chunk(nc, "foo", 3)` whill append `3\r\nfoo\r\n` string to
+ * Sends buffer `buf` of size `len` to the client using chunked HTTP encoding.
+ * This function sends the buffer size as hex number + newline first, then
+ * the buffer itself, then the newline. For example,
+ *   `mg_send_http_chunk(nc, "foo", 3)` whill append the `3\r\nfoo\r\n` string
+ *to
  * the `nc->send_mbuf` output IO buffer.
  *
- * NOTE: HTTP header "Transfer-Encoding: chunked" should be sent prior to
+ * NOTE: The HTTP header "Transfer-Encoding: chunked" should be sent prior to
  * using this function.
  *
- * NOTE: do not forget to send empty chunk at the end of the response,
+ * NOTE: do not forget to send an empty chunk at the end of the response,
  * to tell the client that everything was sent. Example:
  *
  * ```
@@ -2287,13 +2294,13 @@ void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
 void mg_send_http_chunk(struct mg_connection *nc, const char *buf, size_t len);
 
 /*
- * Send printf-formatted HTTP chunk.
+ * Sends a printf-formatted HTTP chunk.
  * Functionality is similar to `mg_send_http_chunk()`.
  */
 void mg_printf_http_chunk(struct mg_connection *nc, const char *fmt, ...);
 
 /*
- * Send response status line.
+ * Sends a response status line.
  * If `extra_headers` is not NULL, then `extra_headers` are also sent
  * after the reponse line. `extra_headers` must NOT end end with new line.
  * Example:
@@ -2309,23 +2316,23 @@ void mg_send_response_line(struct mg_connection *c, int status_code,
                            const char *extra_headers);
 
 /*
- * Send response line and headers.
- * This function sends response line with the `status_code`, and automatically
- * sends one header: either "Content-Length", or "Transfer-Encoding".
+ * Sends a response line and headers.
+ * This function sends a response line with the `status_code`, and automatically
+ * sends one header: either "Content-Length" or "Transfer-Encoding".
  * If `content_length` is negative, then "Transfer-Encoding: chunked" header
  * is sent, otherwise, "Content-Length" header is sent.
  *
  * NOTE: If `Transfer-Encoding` is `chunked`, then message body must be sent
  * using `mg_send_http_chunk()` or `mg_printf_http_chunk()` functions.
  * Otherwise, `mg_send()` or `mg_printf()` must be used.
- * Extra headers could be set through `extra_headers` - and note `extra_headers`
+ * Extra headers could be set through `extra_headers`. Note `extra_headers`
  * must NOT be terminated by a new line.
  */
 void mg_send_head(struct mg_connection *n, int status_code,
                   int64_t content_length, const char *extra_headers);
 
 /*
- * Send printf-formatted HTTP chunk, escaping HTML tags.
+ * Sends a printf-formatted HTTP chunk, escaping HTML tags.
  */
 void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...);
 
@@ -2352,17 +2359,17 @@ void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...);
 #define WEBSOCKET_DONT_FIN 0x100
 
 /*
- * Parse a HTTP message.
+ * Parses a HTTP message.
  *
- * `is_req` should be set to 1 if parsing request, 0 if reply.
+ * `is_req` should be set to 1 if parsing a request, 0 if reply.
  *
- * Return number of bytes parsed. If HTTP message is
- * incomplete, `0` is returned. On parse error, negative number is returned.
+ * Returns the number of bytes parsed. If HTTP message is
+ * incomplete `0` is returned. On parse error, a negative number is returned.
  */
 int mg_parse_http(const char *s, int n, struct http_message *hm, int is_req);
 
 /*
- * Search and return header `name` in parsed HTTP message `hm`.
+ * Searches and returns the header `name` in parsed HTTP message `hm`.
  * If header is not found, NULL is returned. Example:
  *
  *     struct mg_str *host_hdr = mg_get_http_header(hm, "Host");
@@ -2370,31 +2377,31 @@ int mg_parse_http(const char *s, int n, struct http_message *hm, int is_req);
 struct mg_str *mg_get_http_header(struct http_message *hm, const char *name);
 
 /*
- * Parse HTTP header `hdr`. Find variable `var_name` and store it's value
- * in the buffer `buf`, `buf_size`. Return 0 if variable not found, non-zero
+ * Parses the HTTP header `hdr`. Finds variable `var_name` and stores its value
+ * in the buffer `buf`, `buf_size`. Returns 0 if variable not found, non-zero
  * otherwise.
  *
- * This function is supposed to parse
- * cookies, authentication headers, etcetera. Example (error handling omitted):
+ * This function is supposed to parse cookies, authentication headers, etc.
+ * Example (error handling omitted):
  *
  *     char user[20];
  *     struct mg_str *hdr = mg_get_http_header(hm, "Authorization");
  *     mg_http_parse_header(hdr, "username", user, sizeof(user));
  *
- * Return length of the variable's value. If buffer is not large enough,
+ * Returns the length of the variable's value. If buffer is not large enough,
  * or variable not found, 0 is returned.
  */
 int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
                          size_t buf_size);
 
 /*
- * Parse buffer `buf`, `buf_len` that contains multipart form data chunks.
- * Store chunk name in a `var_name`, `var_name_len` buffer.
+ * Parses the buffer `buf`, `buf_len` that contains multipart form data chunks.
+ * Stores the chunk name in a `var_name`, `var_name_len` buffer.
  * If a chunk is an uploaded file, then `file_name`, `file_name_len` is
  * filled with an uploaded file name. `chunk`, `chunk_len`
  * points to the chunk data.
  *
- * Return: number of bytes to skip to the next chunk, or 0 if there are
+ * Return: number of bytes to skip to the next chunk or 0 if there are
  *         no more chunks.
  *
  * Usage example:
@@ -2429,46 +2436,46 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
                           size_t *chunk_len);
 
 /*
- * Fetch an HTTP form variable.
+ * Fetches a HTTP form variable.
  *
- * Fetch a variable `name` from a `buf` into a buffer specified by
- * `dst`, `dst_len`. Destination is always zero-terminated. Return length
- * of a fetched variable. If not found, 0 is returned. `buf` must be
- * valid url-encoded buffer. If destination is too small, `-1` is returned.
+ * Fetches a variable `name` from a `buf` into a buffer specified by `dst`,
+ * `dst_len`. The destination is always zero-terminated. Returns the length of
+ * a fetched variable. If not found, 0 is returned. `buf` must be valid
+ * url-encoded buffer. If destination is too small, `-1` is returned.
  */
 int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
                     size_t dst_len);
 
 /*
- * Decode URL-encoded string.
+ * Decodes URL-encoded string.
  *
  * Source string is specified by (`src`, `src_len`), and destination is
  * (`dst`, `dst_len`). If `is_form_url_encoded` is non-zero, then
  * `+` character is decoded as a blank space character. This function
  * guarantees to `\0`-terminate the destination. If destination is too small,
- * then source string is partially decoded and `-1` is returned. Otherwise,
+ * then the source string is partially decoded and `-1` is returned. Otherwise,
  * a length of decoded string is returned, not counting final `\0`.
  */
 int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
                   int is_form_url_encoded);
 
-/* Create Digest authentication header for client request. */
+/* Creates digest authentication header for a client request. */
 int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
                                       const char *method, const char *uri,
                                       const char *auth_domain, const char *user,
                                       const char *passwd);
 
 /*
- * Helper function that creates outbound HTTP connection.
+ * Helper function that creates an outbound HTTP connection.
  *
  * `url` is a URL to fetch. It must be properly URL-encoded, e.g. have
- * no spaces, etc. By default, `mg_connect_http()` sends Connection and
- * Host headers. `extra_headers` is an extra HTTP headers to send, e.g.
+ * no spaces, etc. By default, `mg_connect_http()` sends the Connection and
+ * Host headers. `extra_headers` is an extra HTTP header to send, e.g.
  * `"User-Agent: my-app\r\n"`.
- * If `post_data` is NULL, then GET request is created. Otherwise, POST request
- * is created with the specified POST data. Note that if the data being posted
- * is a form submission, the `Content-Type` header should be set accordingly
- * (see example below).
+ * If `post_data` is NULL, then a GET request is created. Otherwise, a POST
+ * request is created with the specified POST data. Note that if the data being
+ * posted is a form submission, the `Content-Type` header should be set
+ * accordingly (see example below).
  *
  * Examples:
  *
@@ -2489,10 +2496,11 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
                                       const char *post_data);
 
 /*
- * Helper function that creates outbound HTTP connection.
+ * Helper function that creates an outbound HTTP connection.
  *
- * Mostly identical to mg_connect_http, but allows to provide extra parameters
- * (for example, SSL parameters
+ * Mostly identical to mg_connect_http, but allows you to provide extra
+ *parameters
+ * (for example, SSL parameters)
  */
 struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
                                           mg_event_handler_t ev_handler,
@@ -2657,7 +2665,7 @@ struct mg_serve_http_opts {
 };
 
 /*
- * Serve given HTTP request according to the `options`.
+ * Serves given HTTP request according to the `options`.
  *
  * Example code snippet:
  *
@@ -2680,8 +2688,8 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
                    struct mg_serve_http_opts opts);
 
 /*
- * Register callback for specified http endpoint
- * Note: if callback is registered it is called instead of
+ * Registers a callback for a specified http endpoint
+ * Note: if callback is registered it is called instead of the
  * callback provided in mg_bind
  *
  * Example code snippet:
@@ -2721,9 +2729,10 @@ typedef struct mg_str (*mg_fu_fname_fn)(struct mg_connection *nc,
  * This handler will process MG_EV_HTTP_PART_* events and store file data into
  * a local file.
  * `local_name_fn` will be invoked with whatever name was provided by the client
- * and will expect the name of the local file to open. Return value of NULL will
- * abort file upload (client will get a "403 Forbidden" response). If non-null,
- * the returned string must be heap-allocated and will be freed by the caller.
+ * and will expect the name of the local file to open. A return value of NULL
+ * will abort file upload (client will get a "403 Forbidden" response). If
+ * non-null, the returned string must be heap-allocated and will be freed by
+ * the caller.
  * Exception: it is ok to return the same string verbatim.
  *
  * Example:
@@ -2751,7 +2760,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
 
 /*
- * Authenticate HTTP request against opened passwords file.
+ * Authenticates a HTTP request against an opened password file.
  * Returns 1 if authenticated, 0 otherwise.
  */
 int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
@@ -2872,7 +2881,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /*
- * Attach built-in MQTT event handler to the given connection.
+ * Attaches a built-in MQTT event handler to the given connection.
  *
  * The user-defined event handler will receive following extra events:
  *
@@ -2886,66 +2895,66 @@ extern "C" {
  */
 void mg_set_protocol_mqtt(struct mg_connection *nc);
 
-/* Send MQTT handshake. */
+/* Sends an MQTT handshake. */
 void mg_send_mqtt_handshake(struct mg_connection *nc, const char *client_id);
 
-/* Send MQTT handshake with optional parameters. */
+/* Sends an MQTT handshake with optional parameters. */
 void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
                                 struct mg_send_mqtt_handshake_opts);
 
-/* Publish a message to a given topic. */
+/* Publishes a message to a given topic. */
 void mg_mqtt_publish(struct mg_connection *nc, const char *topic,
                      uint16_t message_id, int flags, const void *data,
                      size_t len);
 
-/* Subscribe to a bunch of topics. */
+/* Subscribes to a bunch of topics. */
 void mg_mqtt_subscribe(struct mg_connection *nc,
                        const struct mg_mqtt_topic_expression *topics,
                        size_t topics_len, uint16_t message_id);
 
-/* Unsubscribe from a bunch of topics. */
+/* Unsubscribes from a bunch of topics. */
 void mg_mqtt_unsubscribe(struct mg_connection *nc, char **topics,
                          size_t topics_len, uint16_t message_id);
 
-/* Send a DISCONNECT command. */
+/* Sends a DISCONNECT command. */
 void mg_mqtt_disconnect(struct mg_connection *nc);
 
-/* Send a CONNACK command with a given `return_code`. */
+/* Sends a CONNACK command with a given `return_code`. */
 void mg_mqtt_connack(struct mg_connection *nc, uint8_t return_code);
 
-/* Send a PUBACK command with a given `message_id`. */
+/* Sends a PUBACK command with a given `message_id`. */
 void mg_mqtt_puback(struct mg_connection *nc, uint16_t message_id);
 
-/* Send a PUBREC command with a given `message_id`. */
+/* Sends a PUBREC command with a given `message_id`. */
 void mg_mqtt_pubrec(struct mg_connection *nc, uint16_t message_id);
 
-/* Send a PUBREL command with a given `message_id`. */
+/* Sends a PUBREL command with a given `message_id`. */
 void mg_mqtt_pubrel(struct mg_connection *nc, uint16_t message_id);
 
-/* Send a PUBCOMP command with a given `message_id`. */
+/* Sends a PUBCOMP command with a given `message_id`. */
 void mg_mqtt_pubcomp(struct mg_connection *nc, uint16_t message_id);
 
 /*
- * Send a SUBACK command with a given `message_id`
+ * Sends a SUBACK command with a given `message_id`
  * and a sequence of granted QoSs.
  */
 void mg_mqtt_suback(struct mg_connection *nc, uint8_t *qoss, size_t qoss_len,
                     uint16_t message_id);
 
-/* Send a UNSUBACK command with a given `message_id`. */
+/* Sends a UNSUBACK command with a given `message_id`. */
 void mg_mqtt_unsuback(struct mg_connection *nc, uint16_t message_id);
 
-/* Send a PINGREQ command. */
+/* Sends a PINGREQ command. */
 void mg_mqtt_ping(struct mg_connection *nc);
 
-/* Send a PINGRESP command. */
+/* Sends a PINGRESP command. */
 void mg_mqtt_pong(struct mg_connection *nc);
 
 /*
- * Extract the next topic expression from a SUBSCRIBE command payload.
+ * Extracts the next topic expression from a SUBSCRIBE command payload.
  *
- * Topic expression name will point to a string in the payload buffer.
- * Return the pos of the next topic expression or -1 when the list
+ * The topic expression name will point to a string in the payload buffer.
+ * Returns the pos of the next topic expression or -1 when the list
  * of topics is exhausted.
  */
 int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
@@ -3007,14 +3016,14 @@ struct mg_mqtt_broker {
   void *user_data;                  /* User data */
 };
 
-/* Initialize a MQTT broker. */
+/* Initialises a MQTT broker. */
 void mg_mqtt_broker_init(struct mg_mqtt_broker *brk, void *user_data);
 
 /*
- * Process a MQTT broker message.
+ * Processes a MQTT broker message.
  *
- * Listening connection expects a pointer to an initialized `mg_mqtt_broker`
- * structure in the `user_data` field.
+ * The listening connection expects a pointer to an initialised
+ * `mg_mqtt_broker` structure in the `user_data` field.
  *
  * Basic usage:
  *
@@ -3038,7 +3047,7 @@ void mg_mqtt_broker_init(struct mg_mqtt_broker *brk, void *user_data);
 void mg_mqtt_broker(struct mg_connection *brk, int ev, void *data);
 
 /*
- * Iterate over all mqtt sessions connections. Example:
+ * Iterates over all MQTT session connections. Example:
  *
  * ```c
  * struct mg_mqtt_session *s;
@@ -3114,7 +3123,7 @@ struct mg_dns_resource_record *mg_dns_next_record(
     struct mg_dns_message *msg, int query, struct mg_dns_resource_record *prev);
 
 /*
- * Parse the record data from a DNS resource record.
+ * Parses the record data from a DNS resource record.
  *
  *  - A:     struct in_addr *ina
  *  - AAAA:  struct in6_addr *ina
@@ -3129,35 +3138,35 @@ int mg_dns_parse_record_data(struct mg_dns_message *msg,
                              size_t data_len);
 
 /*
- * Send a DNS query to the remote end.
+ * Sends a DNS query to the remote end.
  */
 void mg_send_dns_query(struct mg_connection *nc, const char *name,
                        int query_type);
 
 /*
- * Insert a DNS header to an IO buffer.
+ * Inserts a DNS header to an IO buffer.
  *
- * Return number of bytes inserted.
+ * Returns the number of bytes inserted.
  */
 int mg_dns_insert_header(struct mbuf *io, size_t pos,
                          struct mg_dns_message *msg);
 
 /*
- * Append already encoded questions from an existing message.
+ * Appends already encoded questions from an existing message.
  *
  * This is useful when generating a DNS reply message which includes
  * all question records.
  *
- * Return number of appened bytes.
+ * Returns the number of appended bytes.
  */
 int mg_dns_copy_questions(struct mbuf *io, struct mg_dns_message *msg);
 
 /*
- * Encode and append a DNS resource record to an IO buffer.
+ * Encodes and appends a DNS resource record to an IO buffer.
  *
  * The record metadata is taken from the `rr` parameter, while the name and data
  * are taken from the parameters, encoded in the appropriate format depending on
- * record type, and stored in the IO buffer. The encoded values might contain
+ * record type and stored in the IO buffer. The encoded values might contain
  * offsets within the IO buffer. It's thus important that the IO buffer doesn't
  * get trimmed while a sequence of records are encoded while preparing a DNS
  *reply.
@@ -3166,7 +3175,7 @@ int mg_dns_copy_questions(struct mbuf *io, struct mg_dns_message *msg);
  *struct
  * because they might be invalidated as soon as the IO buffer grows again.
  *
- * Return the number of bytes appened or -1 in case of error.
+ * Returns the number of bytes appened or -1 in case of error.
  */
 int mg_dns_encode_record(struct mbuf *io, struct mg_dns_resource_record *rr,
                          const char *name, size_t nlen, const void *rdata,
@@ -3176,27 +3185,27 @@ int mg_dns_encode_record(struct mbuf *io, struct mg_dns_resource_record *rr,
 int mg_parse_dns(const char *buf, int len, struct mg_dns_message *msg);
 
 /*
- * Uncompress a DNS compressed name.
+ * Uncompresses a DNS compressed name.
  *
- * The containing dns message is required because the compressed encoding
+ * The containing DNS message is required because of the compressed encoding
  * and reference suffixes present elsewhere in the packet.
  *
- * If name is less than `dst_len` characters long, the remainder
- * of `dst` is terminated with `\0' characters. Otherwise, `dst` is not
- *terminated.
+ * If the name is less than `dst_len` characters long, the remainder
+ * of `dst` is terminated with `\0` characters. Otherwise, `dst` is not
+ * terminated.
  *
  * If `dst_len` is 0 `dst` can be NULL.
- * Return the uncompressed name length.
+ * Returns the uncompressed name length.
  */
 size_t mg_dns_uncompress_name(struct mg_dns_message *msg, struct mg_str *name,
                               char *dst, int dst_len);
 
 /*
- * Attach built-in DNS event handler to the given listening connection.
+ * Attaches a built-in DNS event handler to the given listening connection.
  *
- * DNS event handler parses incoming UDP packets, treating them as DNS
- * requests. If incoming packet gets successfully parsed by the DNS event
- * handler, a user event handler will receive `MG_DNS_REQUEST` event, with
+ * The DNS event handler parses the incoming UDP packets, treating them as DNS
+ * requests. If an incoming packet gets successfully parsed by the DNS event
+ * handler, a user event handler will receive an `MG_DNS_REQUEST` event, with
  * `ev_data` pointing to the parsed `struct mg_dns_message`.
  *
  * See
@@ -3239,18 +3248,18 @@ struct mg_dns_reply {
 };
 
 /*
- * Create a DNS reply.
+ * Creates a DNS reply.
  *
  * The reply will be based on an existing query message `msg`.
  * The query body will be appended to the output buffer.
- * "reply + recursion allowed" will be added to the message flags and
+ * "reply + recursion allowed" will be added to the message flags and the
  * message's num_answers will be set to 0.
  *
  * Answer records can be appended with `mg_dns_send_reply` or by lower
  * level function defined in the DNS API.
  *
- * In order to send the reply use `mg_dns_send_reply`.
- * It's possible to use a connection's send buffer as reply buffers,
+ * In order to send a reply use `mg_dns_send_reply`.
+ * It's possible to use a connection's send buffer as reply buffer,
  * and it will work for both UDP and TCP connections.
  *
  * Example:
@@ -3270,10 +3279,10 @@ struct mg_dns_reply mg_dns_create_reply(struct mbuf *io,
                                         struct mg_dns_message *msg);
 
 /*
- * Append a DNS reply record to the IO buffer and to the DNS message.
+ * Appends a DNS reply record to the IO buffer and to the DNS message.
  *
- * The message num_answers field will be incremented. It's caller's duty
- * to ensure num_answers is propertly initialized.
+ * The message's num_answers field will be incremented. It's the caller's duty
+ * to ensure num_answers is properly initialised.
  *
  * Returns -1 on error.
  */
@@ -3283,12 +3292,12 @@ int mg_dns_reply_record(struct mg_dns_reply *reply,
                         size_t rdata_len);
 
 /*
- * Send a DNS reply through a connection.
+ * Sends a DNS reply through a connection.
  *
  * The DNS data is stored in an IO buffer pointed by reply structure in `r`.
  * This function mutates the content of that buffer in order to ensure that
- * the DNS header reflects size and flags of the mssage, that might have been
- * updated either with `mg_dns_reply_record` or by direct manipulation of
+ * the DNS header reflects the size and flags of the message, that might have
+ * been updated either with `mg_dns_reply_record` or by direct manipulation of
  * `r->message`.
  *
  * Once sent, the IO buffer will be trimmed unless the reply IO buffer
@@ -3474,11 +3483,11 @@ struct mg_coap_message {
 extern "C" {
 #endif /* __cplusplus */
 
-/* Set CoAP protocol handler - trigger CoAP specific events */
+/* Sets CoAP protocol handler - triggers CoAP specific events. */
 int mg_set_protocol_coap(struct mg_connection *nc);
 
 /*
- * Add new option to mg_coap_message structure.
+ * Adds a new option to mg_coap_message structure.
  * Returns pointer to the newly created option.
  */
 struct mg_coap_option *mg_coap_add_option(struct mg_coap_message *cm,
@@ -3486,15 +3495,15 @@ struct mg_coap_option *mg_coap_add_option(struct mg_coap_message *cm,
                                           size_t len);
 
 /*
- * Free the memory allocated for options,
- * if cm paramater doesn't contain any option does nothing.
+ * Frees the memory allocated for options.
+ * If the cm paramater doesn't contain any option it does nothing.
  */
 void mg_coap_free_options(struct mg_coap_message *cm);
 
 /*
- * Compose CoAP message from `mg_coap_message`
- * and send it into `nc` connection.
- * Return 0 on success. On error, it is a bitmask:
+ * Composes a CoAP message from `mg_coap_message`
+ * and sends it into `nc` connection.
+ * Returns 0 on success. On error, it is a bitmask:
  *
  * - `#define MG_COAP_ERROR 0x10000`
  * - `#define MG_COAP_FORMAT_ERROR (MG_COAP_ERROR | 0x20000)`
@@ -3506,20 +3515,20 @@ uint32_t mg_coap_send_message(struct mg_connection *nc,
                               struct mg_coap_message *cm);
 
 /*
- * Compose CoAP acknowledgement from `mg_coap_message`
- * and send it into `nc` connection.
+ * Composes CoAP acknowledgement from `mg_coap_message`
+ * and sends it into `nc` connection.
  * Return value: see `mg_coap_send_message()`
  */
 uint32_t mg_coap_send_ack(struct mg_connection *nc, uint16_t msg_id);
 
 /*
- * Parse COAP message and fills mg_coap_message and returns cm->flags.
+ * Parses CoAP message and fills mg_coap_message and returns cm->flags.
  * This is a helper function.
  *
- * NOTE: usually CoAP work over UDP, so lack of data means format error,
- * but in theory it is possible to use CoAP over TCP (according to RFC)
+ * NOTE: usually CoAP works over UDP, so lack of data means format error.
+ * But, in theory, it is possible to use CoAP over TCP (according to RFC)
  *
- * The caller have to check results and treat COAP_NOT_ENOUGH_DATA according to
+ * The caller has to check results and treat COAP_NOT_ENOUGH_DATA according to
  * underlying protocol:
  *
  * - in case of UDP COAP_NOT_ENOUGH_DATA means COAP_FORMAT_ERROR,

@@ -7,7 +7,7 @@ signature: |
                              const char *extra_headers);
 ---
 
-Send response status line.
+Sends a response status line.
 If `extra_headers` is not NULL, then `extra_headers` are also sent
 after the reponse line. `extra_headers` must NOT end end with new line.
 Example:

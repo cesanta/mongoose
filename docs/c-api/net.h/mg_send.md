@@ -6,7 +6,7 @@ signature: |
   void mg_send(struct mg_connection *, const void *buf, int len);
 ---
 
-Send data to the connection.
+Sends data to the connection.
 
 Note that sending functions do not actually push data to the socket.
 They just append data to the output buffer. MG_EV_SEND will be delivered when

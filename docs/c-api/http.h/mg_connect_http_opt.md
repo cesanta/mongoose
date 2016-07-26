@@ -11,8 +11,9 @@ signature: |
                                             const char *post_data);
 ---
 
-Helper function that creates outbound HTTP connection.
+Helper function that creates an outbound HTTP connection.
 
-Mostly identical to mg_connect_http, but allows to provide extra parameters
-(for example, SSL parameters 
+Mostly identical to mg_connect_http, but allows you to provide extra
+*parameters
+(for example, SSL parameters) 
 

@@ -6,16 +6,17 @@ signature: |
   void mg_send_http_chunk(struct mg_connection *nc, const char *buf, size_t len);
 ---
 
-Send buffer `buf` of size `len` to the client using chunked HTTP encoding.
-This function first sends buffer size as hex number + newline, then
-buffer itself, then newline. For example,
-  `mg_send_http_chunk(nc, "foo", 3)` whill append `3\r\nfoo\r\n` string to
+Sends buffer `buf` of size `len` to the client using chunked HTTP encoding.
+This function sends the buffer size as hex number + newline first, then
+the buffer itself, then the newline. For example,
+  `mg_send_http_chunk(nc, "foo", 3)` whill append the `3\r\nfoo\r\n` string
+*to
 the `nc->send_mbuf` output IO buffer.
 
-NOTE: HTTP header "Transfer-Encoding: chunked" should be sent prior to
+NOTE: The HTTP header "Transfer-Encoding: chunked" should be sent prior to
 using this function.
 
-NOTE: do not forget to send empty chunk at the end of the response,
+NOTE: do not forget to send an empty chunk at the end of the response,
 to tell the client that everything was sent. Example:
 
 ```

@@ -8,5 +8,5 @@ signature: |
                        size_t len);
 ---
 
-Publish a message to a given topic. 
+Publishes a message to a given topic. 
 

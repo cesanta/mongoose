@@ -6,5 +6,5 @@ signature: |
   void mg_send_mqtt_handshake(struct mg_connection *nc, const char *client_id);
 ---
 
-Send MQTT handshake. 
+Sends an MQTT handshake. 
 

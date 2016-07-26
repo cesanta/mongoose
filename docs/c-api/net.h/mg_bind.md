@@ -7,7 +7,7 @@ signature: |
                                 mg_event_handler_t);
 ---
 
-Create listening connection.
+Creates a listening connection.
 
 See `mg_bind_opt` for full documentation. 
 

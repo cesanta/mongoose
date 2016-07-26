@@ -7,8 +7,8 @@ signature: |
                                  const char *fmt, ...);
 ---
 
-Send websocket frame to the remote end.
+Sends WebSocket frame to the remote end.
 
-Like `mg_send_websocket_frame()`, but allows to create formatted message
+Like `mg_send_websocket_frame()`, but allows to create formatted messages
 with `printf()`-like semantics. 
 

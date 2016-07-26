@@ -7,5 +7,5 @@ signature: |
                                   struct mg_send_mqtt_handshake_opts);
 ---
 
-Send MQTT handshake with optional parameters. 
+Sends an MQTT handshake with optional parameters. 
 
