@@ -965,6 +965,8 @@ void mbuf_remove(struct mbuf *mb, size_t n) {
 
 #include <string.h>
 
+int mg_ncasecmp(const char *s1, const char *s2, size_t len);
+
 struct mg_str mg_mk_str(const char *s) {
   struct mg_str ret = {s, 0};
   if (s != NULL) ret.len = strlen(s);
