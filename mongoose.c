@@ -5160,7 +5160,7 @@ void mg_send_head(struct mg_connection *c, int status_code,
 
 #ifdef MG_DISABLE_FILESYSTEM
 void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
-                   struct mg_serve_http_opts opts) {
+                   struct mg_serve_http_opts *opts) {
   mg_send_head(nc, 501, 0, NULL);
 }
 #else
@@ -7054,50 +7054,50 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
 }
 
 void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
-                   struct mg_serve_http_opts opts) {
+                   struct mg_serve_http_opts *opts) {
   char *path = NULL;
   struct mg_str *hdr, path_info;
   uint32_t remote_ip = ntohl(*(uint32_t *) &nc->sa.sin.sin_addr);
 
-  if (mg_check_ip_acl(opts.ip_acl, remote_ip) != 1) {
+  if (mg_check_ip_acl(opts->ip_acl, remote_ip) != 1) {
     /* Not allowed to connect */
     mg_http_send_error(nc, 403, NULL);
     nc->flags |= MG_F_SEND_AND_CLOSE;
     return;
   }
 
-  if (mg_http_send_port_based_redirect(nc, hm, &opts)) {
+  if (mg_http_send_port_based_redirect(nc, hm, opts)) {
     return;
   }
 
-  if (opts.document_root == NULL) {
-    opts.document_root = ".";
+  if (opts->document_root == NULL) {
+    opts->document_root = ".";
   }
-  if (opts.per_directory_auth_file == NULL) {
-    opts.per_directory_auth_file = ".htpasswd";
+  if (opts->per_directory_auth_file == NULL) {
+    opts->per_directory_auth_file = ".htpasswd";
   }
-  if (opts.enable_directory_listing == NULL) {
-    opts.enable_directory_listing = "yes";
+  if (opts->enable_directory_listing == NULL) {
+    opts->enable_directory_listing = "yes";
   }
-  if (opts.cgi_file_pattern == NULL) {
-    opts.cgi_file_pattern = "**.cgi$|**.php$";
+  if (opts->cgi_file_pattern == NULL) {
+    opts->cgi_file_pattern = "**.cgi$|**.php$";
   }
-  if (opts.ssi_pattern == NULL) {
-    opts.ssi_pattern = "**.shtml$|**.shtm$";
+  if (opts->ssi_pattern == NULL) {
+    opts->ssi_pattern = "**.shtml$|**.shtm$";
   }
-  if (opts.index_files == NULL) {
-    opts.index_files = "index.html,index.htm,index.shtml,index.cgi,index.php";
+  if (opts->index_files == NULL) {
+    opts->index_files = "index.html,index.htm,index.shtml,index.cgi,index.php";
   }
   /* Normalize path - resolve "." and ".." (in-place). */
   if (!mg_normalize_uri_path(&hm->uri, &hm->uri)) {
     mg_http_send_error(nc, 400, NULL);
     return;
   }
-  if (mg_uri_to_local_path(hm, &opts, &path, &path_info) == 0) {
+  if (mg_uri_to_local_path(hm, opts, &path, &path_info) == 0) {
     mg_http_send_error(nc, 404, NULL);
     return;
   }
-  mg_send_http_file(nc, path, &path_info, hm, &opts);
+  mg_send_http_file(nc, path, &path_info, hm, opts);
 
   MG_FREE(path);
   path = NULL;
