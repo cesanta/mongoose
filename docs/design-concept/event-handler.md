@@ -4,7 +4,7 @@ title: Event handler function
 
 Each connection has an event handler function associated with it. That function
 must be implemented by the user. Event handler is the key element of the Mongoose
-application, since it defines the application's behaviour. This is how an event
+application, since it defines the application's behaviour. This is what an event
 handler function looks like:
 
 ```c
