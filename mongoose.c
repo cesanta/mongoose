@@ -3277,6 +3277,12 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
 
   return ret;
 }
+#else
+int mg_socketpair(sock_t sp[2], int sock_type) {
+    (void)sp;
+    (void)sock_type;
+    return -1;
+}
 #endif /* MG_DISABLE_SOCKETPAIR */
 
 static void mg_sock_get_addr(sock_t sock, int remote,
@@ -6846,9 +6852,11 @@ static void mg_handle_cgi(struct mg_connection *nc, const char *prog,
    * can be interrupted by a signal and fail.
    * TODO(lsm): use sigaction to restart interrupted syscall
    */
+#ifndef MG_DISABLE_SOCKETPAIR
   do {
     mg_socketpair(fds, SOCK_STREAM);
   } while (fds[0] == INVALID_SOCKET);
+#endif
 
   if (mg_start_process(opts->cgi_interpreter, prog, blk.buf, blk.vars, dir,
                        fds[1]) != 0) {
