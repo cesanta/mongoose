@@ -6576,6 +6576,7 @@ static pid_t mg_start_process(const char *interp, const char *cmd,
   char buf[500];
   pid_t pid = fork();
   (void) env;
+  signal(SIGCHLD, SIG_IGN);
 
   if (pid == 0) {
     /*
