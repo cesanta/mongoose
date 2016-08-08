@@ -6567,6 +6567,7 @@ static pid_t mg_start_process(const char *interp, const char *cmd,
   /* CloseHandle(pi.hThread); */
   /* CloseHandle(pi.hProcess); */
 
+  (void) envp;
   return pi.hProcess;
 }
 #else
@@ -8676,7 +8677,7 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
       *key = "SYSTEM\\ControlSet001\\Services\\Tcpip\\Parameters\\Interfaces";
 
   if ((err = RegOpenKeyA(HKEY_LOCAL_MACHINE, key, &hKey)) != ERROR_SUCCESS) {
-    fprintf(stderr, "cannot open reg key %s: %d\n", key, err);
+    fprintf(stderr, "cannot open reg key %s: %ld\n", key, err);
     ret = -1;
   } else {
     for (ret = -1, i = 0;
