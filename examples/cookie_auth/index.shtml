@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Log in - Mongoose cookie_auth</title>
+  <title>Main - Mongoose cookie_auth</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style type="text/css">
     * { outline: none; }
@@ -26,18 +26,9 @@
 </head>
 <body>
   <div class="content">
-    <h1>Please log in</h1>
-    <form method="POST">
-    <div>
-      <label>Username:</label> <input type="text" name="user" />
-    </div>
-    <div>
-      <label>Password:</label> <input type="password" name="pass" />
-    </div>
-    <div>
-      <input type="submit" value="Log in">
-    </div>
-    </form>
+    <h1>Hello, <!--#call user -->!</h1>
+    <p>Your lucky number is <!--#call lucky_number -->.</p>
+    <p><a href="/logout">Log out</a>
   </div>
 </body>
 </html>

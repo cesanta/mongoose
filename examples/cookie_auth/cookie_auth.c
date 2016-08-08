@@ -197,37 +197,48 @@ void check_sessions() {
 
 /* Main event handler. */
 static void ev_handler(struct mg_connection *nc, int ev, void *p) {
-  /* Perform session maintenance. */
-  if (ev == MG_EV_TIMER) {
-    check_sessions();
-    mg_set_timer(nc, mg_time() + SESSION_CHECK_INTERVAL);
-    return;
+  switch (ev) {
+    case MG_EV_HTTP_REQUEST: {
+      struct http_message *hm = (struct http_message *) p;
+      struct session *s = get_session(hm);
+      /* Ask the user to log in if they did not present a valid cookie. */
+      if (s == NULL) {
+        mg_printf(nc,
+                  "HTTP/1.0 302 Found\r\n"
+                  "Location: /login.html\r\n"
+                  "\r\n"
+                  "Please log in");
+        nc->flags |= MG_F_SEND_AND_CLOSE;
+        break;
+      }
+      /*
+       * Serve the page that was requested.
+       * Save session in user_data for use by SSI calls.
+       */
+      fprintf(stderr, "%s (sid %" INT64_X_FMT ") requested %.*s\n", s->user,
+              s->id, (int) hm->uri.len, hm->uri.p);
+      nc->user_data = s;
+      mg_serve_http(nc, (struct http_message *) p, s_http_server_opts);
+      break;
+    }
+    case MG_EV_SSI_CALL: {
+      /* Expand variables in a page by using session data. */
+      const char *var = (const char *) p;
+      const struct session *s = (const struct session *) nc->user_data;
+      if (strcmp(var, "user") == 0) {
+        mg_printf_html_escape(nc, "%s", s->user);
+      } else if (strcmp(var, "lucky_number") == 0) {
+        mg_printf_html_escape(nc, "%d", s->lucky_number);
+      }
+      break;
+    }
+    case MG_EV_TIMER: {
+      /* Perform session maintenance. */
+      check_sessions();
+      mg_set_timer(nc, mg_time() + SESSION_CHECK_INTERVAL);
+      break;
+    }
   }
-  if (ev != MG_EV_HTTP_REQUEST) return;
-
-  nc->flags |= MG_F_SEND_AND_CLOSE;
-  struct http_message *hm = (struct http_message *) p;
-  struct session *s = get_session(hm);
-  /* Ask the user to log in if they did not present a valid cookie. */
-  if (s == NULL) {
-    mg_printf(nc,
-              "HTTP/1.0 302 Found\r\n"
-              "Location: /login.html\r\n"
-              "\r\n"
-              "Please log in");
-    return;
-  }
-  /* Application logic that uses session data goes here. */
-  fprintf(stderr, "%s (sid %" INT64_X_FMT ") requested %.*s\n", s->user, s->id,
-          (int) hm->uri.len, hm->uri.p);
-  mg_printf(nc,
-            "HTTP/1.0 200 Ok\r\n"
-            "COntent-Type: text/html\r\n"
-            "\r\n"
-            "<h1>Hello, %s!</h1>\r\n"
-            "<p>Your lucky number is %d.</p>\r\n"
-            "<p><a href=/logout>Log out</a>",
-            s->user, s->lucky_number);
 }
 
 int main(void) {
