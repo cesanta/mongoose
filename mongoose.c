@@ -5108,8 +5108,8 @@ void mg_send_websocket_handshake(struct mg_connection *nc, const char *path,
 
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
 
-void mg_send_response_line(struct mg_connection *nc, int status_code,
-                           const char *extra_headers) {
+void mg_send_response_line_s(struct mg_connection *nc, int status_code,
+                             const struct mg_str extra_headers) {
   const char *status_message = "OK";
   switch (status_code) {
     case 206:
@@ -5142,9 +5142,14 @@ void mg_send_response_line(struct mg_connection *nc, int status_code,
   }
   mg_printf(nc, "HTTP/1.1 %d %s\r\nServer: %s\r\n", status_code, status_message,
             mg_version_header);
-  if (extra_headers != NULL) {
-    mg_printf(nc, "%s\r\n", extra_headers);
+  if (extra_headers.len > 0) {
+    mg_printf(nc, "%.*s\r\n", (int) extra_headers.len, extra_headers.p);
   }
+}
+
+void mg_send_response_line(struct mg_connection *nc, int status_code,
+                           const char *extra_headers) {
+  mg_send_response_line_s(nc, status_code, mg_mk_str(extra_headers));
 }
 
 void mg_send_head(struct mg_connection *c, int status_code,
@@ -5332,6 +5337,7 @@ static void mg_handle_ssi_request(struct mg_connection *nc, const char *path,
                                   const struct mg_serve_http_opts *opts) {
   FILE *fp;
   struct mg_str mime_type;
+  DBG(("%p %s", nc, path));
 
   if ((fp = fopen(path, "rb")) == NULL) {
     mg_http_send_error(nc, 404, NULL);
@@ -5383,15 +5389,13 @@ static int mg_http_parse_range_header(const struct mg_str *header, int64_t *a,
   return result;
 }
 
-static void mg_http_send_file2(struct mg_connection *nc, const char *path,
-                               cs_stat_t *st, struct http_message *hm,
-                               struct mg_serve_http_opts *opts) {
+void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
+                        const char *path, const struct mg_str mime_type,
+                        const struct mg_str extra_headers) {
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
-  struct mg_str mime_type;
-
-  DBG(("%p [%s]", nc, path));
-  mg_http_free_proto_data_file(&pd->file);
-  if ((pd->file.fp = fopen(path, "rb")) == NULL) {
+  cs_stat_t st;
+  DBG(("%p [%s] %.*s", nc, path, (int) mime_type.len, mime_type.p));
+  if (mg_stat(path, &st) != 0 || (pd->file.fp = fopen(path, "rb")) == NULL) {
     int code;
     switch (errno) {
       case EACCES:
@@ -5404,13 +5408,10 @@ static void mg_http_send_file2(struct mg_connection *nc, const char *path,
         code = 500;
     };
     mg_http_send_error(nc, code, "Open failed");
-  } else if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern),
-                             path) > 0) {
-    mg_handle_ssi_request(nc, path, opts);
   } else {
     char etag[50], current_time[50], last_modified[50], range[70];
     time_t t = time(NULL);
-    int64_t r1 = 0, r2 = 0, cl = st->st_size;
+    int64_t r1 = 0, r2 = 0, cl = st.st_size;
     struct mg_str *range_hdr = mg_get_http_header(hm, "Range");
     int n, status_code = 200;
 
@@ -5428,13 +5429,13 @@ static void mg_http_send_file2(struct mg_connection *nc, const char *path,
         cl = 0;
         snprintf(range, sizeof(range),
                  "Content-Range: bytes */%" INT64_FMT "\r\n",
-                 (int64_t) st->st_size);
+                 (int64_t) st.st_size);
       } else {
         status_code = 206;
         cl = r2 - r1 + 1;
         snprintf(range, sizeof(range), "Content-Range: bytes %" INT64_FMT
                                        "-%" INT64_FMT "/%" INT64_FMT "\r\n",
-                 r1, r1 + cl - 1, (int64_t) st->st_size);
+                 r1, r1 + cl - 1, (int64_t) st.st_size);
 #if _FILE_OFFSET_BITS == 64 || _POSIX_C_SOURCE >= 200112L || \
     _XOPEN_SOURCE >= 600
         fseeko(pd->file.fp, r1, SEEK_SET);
@@ -5455,10 +5456,9 @@ static void mg_http_send_file2(struct mg_connection *nc, const char *path,
     }
 #endif
 
-    mg_http_construct_etag(etag, sizeof(etag), st);
+    mg_http_construct_etag(etag, sizeof(etag), &st);
     mg_gmt_time_string(current_time, sizeof(current_time), &t);
-    mg_gmt_time_string(last_modified, sizeof(last_modified), &st->st_mtime);
-    mime_type = mg_get_mime_type(path, "text/plain", opts);
+    mg_gmt_time_string(last_modified, sizeof(last_modified), &st.st_mtime);
     /*
      * Content length casted to size_t because:
      * 1) that's the maximum buffer size anyway
@@ -5466,7 +5466,7 @@ static void mg_http_send_file2(struct mg_connection *nc, const char *path,
      *    position
      * TODO(mkm): fix ESP8266 RTOS SDK
      */
-    mg_send_response_line(nc, status_code, opts->extra_headers);
+    mg_send_response_line_s(nc, status_code, extra_headers);
     mg_printf(nc,
               "Date: %s\r\n"
               "Last-Modified: %s\r\n"
@@ -5484,6 +5484,17 @@ static void mg_http_send_file2(struct mg_connection *nc, const char *path,
     pd->file.type = DATA_FILE;
     mg_http_transfer_file_data(nc);
   }
+}
+
+static void mg_http_serve_file2(struct mg_connection *nc, const char *path,
+                                struct http_message *hm,
+                                struct mg_serve_http_opts *opts) {
+  if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern), path) > 0) {
+    mg_handle_ssi_request(nc, path, opts);
+    return;
+  }
+  mg_http_serve_file(nc, hm, path, mg_get_mime_type(path, "text/plain", opts),
+                     mg_mk_str(opts->extra_headers));
 }
 
 #endif
@@ -7050,7 +7061,7 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
   } else if (mg_is_not_modified(hm, &st)) {
     mg_http_send_error(nc, 304, "Not Modified");
   } else {
-    mg_http_send_file2(nc, index_file ? index_file : path, &st, hm, opts);
+    mg_http_serve_file2(nc, index_file ? index_file : path, hm, opts);
   }
   MG_FREE(index_file);
 }

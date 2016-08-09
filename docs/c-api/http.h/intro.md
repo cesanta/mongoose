@@ -26,6 +26,7 @@ items:
   - { type: file, name: mg_connect_http.md }
   - { type: file, name: mg_connect_http_opt.md }
   - { type: file, name: mg_serve_http.md }
+  - { type: file, name: mg_http_serve_file.md }
   - { type: file, name: mg_register_http_endpoint.md }
   - { type: file, name: mg_file_upload_handler.md }
   - { type: file, name: mg_http_check_digest_auth.md }
