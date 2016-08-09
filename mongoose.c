@@ -6410,6 +6410,7 @@ MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
     }
     if (ok) {
       *local_path = lp;
+      if (u > cp_end) u = cp_end;
       remainder->p = u;
       remainder->len = cp_end - u;
     } else {
