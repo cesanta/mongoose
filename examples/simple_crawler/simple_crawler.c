@@ -22,11 +22,13 @@ static void event_handler(struct mg_connection *nc, int event, void *data) {
     case MG_EV_CONNECT:
       connect_status = *(int *) data;
       if (connect_status != 0) {
-        printf("Error while loading page: %s, error: %s\n", ((struct userdata*) nc->user_data)->url, strerror(connect_status));
+        printf("Error while loading page: %s, error: %s\n",
+               ((struct userdata *) nc->user_data)->url,
+               strerror(connect_status));
       }
       break;
     case MG_EV_CLOSE:
-      free(((struct userdata*) nc->user_data)->url);
+      free(((struct userdata *) nc->user_data)->url);
       free(nc->user_data);
       break;
     case MG_EV_HTTP_REPLY:
@@ -53,7 +55,8 @@ int main() {
   return 0;
 }
 
-void crawl_page(struct mg_mgr *mgr, const char *url, size_t url_len, int depth) {
+void crawl_page(struct mg_mgr *mgr, const char *url, size_t url_len,
+                int depth) {
   struct mg_connection *nc;
   struct userdata *data = malloc(sizeof(struct userdata));
 
@@ -73,10 +76,7 @@ void handle_reply(struct mg_connection *nc, struct http_message *hm) {
   struct userdata *ud = (struct userdata *) nc->user_data;
   const char *body = hm->body.p;
 
-  int offset,
-    max_matches = 2,
-    cursor = 0,
-    str_len = strlen(body);
+  int offset, max_matches = 2, cursor = 0, str_len = strlen(body);
   struct slre_cap caps[max_matches];
 
   printf("Loaded url: %s at depth %d\n", ud->url, ud->depth);
@@ -84,7 +84,9 @@ void handle_reply(struct mg_connection *nc, struct http_message *hm) {
     return;
   }
 
-  while (cursor < str_len && (offset = slre_match(regex, body + cursor, str_len - cursor, caps, max_matches, SLRE_IGNORE_CASE)) > 0) {
+  while (cursor < str_len &&
+         (offset = slre_match(regex, body + cursor, str_len - cursor, caps,
+                              max_matches, SLRE_IGNORE_CASE)) > 0) {
     crawl_page(nc->mgr, caps[0].ptr, caps[0].len, ud->depth + 1);
     cursor += offset;
   }
