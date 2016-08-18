@@ -6,6 +6,7 @@
 #include "esp_common.h"
 
 #include "mongoose.h"
+#include "cs_dbg.h"
 
 #define AP_SSID "Mongoose"
 #define AP_PASS "Mongoose"

@@ -12,6 +12,7 @@
 
 #include "bm222.h"
 #include "tmp006.h"
+#include "cs_dbg.h"
 
 struct temp_data {
   double ts;

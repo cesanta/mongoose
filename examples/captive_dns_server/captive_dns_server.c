@@ -33,7 +33,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
         char rname[256];
         rr = &msg->questions[i];
         mg_dns_uncompress_name(msg, &rr->name, rname, sizeof(rname) - 1);
-        LOG(LL_INFO, ("Q type %d name %s", rr->rtype, rname));
+        fprintf(stdout, "Q type %d name %s\n", rr->rtype, rname);
         if (rr->rtype == MG_DNS_A_RECORD) {
           mg_dns_reply_record(&reply, rr, NULL, rr->rtype, 10, &s_our_ip_addr,
                               4);
@@ -62,7 +62,6 @@ int main(int argc, char *argv[]) {
 
   mg_mgr_init(&mgr, NULL);
   s_our_ip_addr = inet_addr("127.0.0.1");
-  cs_log_set_level(LL_INFO);
 
   /* Parse command line arguments */
   for (i = 1; i < argc; i++) {

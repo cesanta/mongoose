@@ -6,6 +6,7 @@
 #include "bm222.h"
 
 #include "mongoose.h"
+#include "cs_dbg.h"
 
 #include "i2c_if.h"
 

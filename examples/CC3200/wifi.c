@@ -11,6 +11,7 @@
 #include <driverlib/utils.h>
 
 #include <example/common/gpio_if.h>
+#include "cs_dbg.h"
 
 void SimpleLinkWlanEventHandler(SlWlanEvent_t *e) {
   switch (e->Event) {

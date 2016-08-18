@@ -26,7 +26,7 @@
 
 /* Mongoose.h brings in SimpleLink support. Do not include simplelink.h. */
 #include <mongoose.h>
-
+#include "cs_dbg.h"
 #include <simplelink/include/device.h>
 
 #include "data.h"
