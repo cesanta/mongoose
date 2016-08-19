@@ -1509,7 +1509,7 @@ int c_vsnprintf(char *buf, size_t buf_size, const char *fmt, va_list ap) {
         i += c_itoa(buf + i, buf_size - i, va_arg(ap, size_t),
                     ch == 'x' ? 16 : 10, flags, field_width);
       } else if (ch == 'p') {
-        unsigned long num = (unsigned long) va_arg(ap, void *);
+        unsigned long num = (unsigned long) (uintptr_t) va_arg(ap, void *);
         C_SNPRINTF_APPEND_CHAR('0');
         C_SNPRINTF_APPEND_CHAR('x');
         i += c_itoa(buf + i, buf_size - i, num, 16, flags, 0);
@@ -5151,7 +5151,7 @@ void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
                                   const char *host, const char *protocol,
                                   const char *extra_headers) {
   /* pretty poor source of randomness, TODO fix */
-  unsigned long random = (unsigned long) path;
+  unsigned long random = (unsigned long) (uintptr_t) path;
   char key[sizeof(random) * 3];
 
   mg_base64_encode((unsigned char *) &random, sizeof(random), key);

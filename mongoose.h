@@ -186,6 +186,9 @@
 #else
 #define fseeko(x, y, z) fseek((x), (y), (z))
 #endif
+#if defined(_MSC_VER) && _MSC_VER <= 1200
+typedef unsigned long uintptr_t;
+#endif
 typedef int socklen_t;
 #if _MSC_VER >= 1700
 #include <stdint.h>
