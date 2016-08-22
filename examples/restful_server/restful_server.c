@@ -49,8 +49,10 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 int main(int argc, char *argv[]) {
   struct mg_mgr mgr;
   struct mg_connection *nc;
+  struct mg_bind_opts bind_opts;
   int i;
   char *cp;
+  const char *err_str;
 #ifdef MG_ENABLE_SSL
   const char *ssl_cert = NULL;
 #endif
@@ -99,21 +101,19 @@ int main(int argc, char *argv[]) {
   }
 
   /* Set HTTP server options */
-  nc = mg_bind(&mgr, s_http_port, ev_handler);
-  if (nc == NULL) {
-    fprintf(stderr, "Error starting server on port %s\n", s_http_port);
-    exit(1);
-  }
-
+  memset(&bind_opts, 0, sizeof(bind_opts));
+  bind_opts.error_string = &err_str;
 #ifdef MG_ENABLE_SSL
   if (ssl_cert != NULL) {
-    const char *err_str = mg_set_ssl(nc, ssl_cert, NULL);
-    if (err_str != NULL) {
-      fprintf(stderr, "Error loading SSL cert: %s\n", err_str);
-      exit(1);
-    }
+    bind_opts.ssl_cert = ssl_cert;
   }
 #endif
+  nc = mg_bind_opt(&mgr, s_http_port, ev_handler, bind_opts);
+  if (nc == NULL) {
+    fprintf(stderr, "Error starting server on port %s: %s\n", s_http_port,
+            *bind_opts.error_string);
+    exit(1);
+  }
 
   mg_set_protocol_http_websocket(nc);
   s_http_server_opts.enable_directory_listing = "yes";

@@ -17,15 +17,18 @@ int main(void) {
   struct mg_connection *nc;
 
   mg_mgr_init(&mgr, NULL);
+  printf("Starting web server on port %s\n", s_http_port);
   nc = mg_bind(&mgr, s_http_port, ev_handler);
+  if (nc == NULL) {
+    printf("Failed to create listener\n");
+    return 1;
+  }
 
   // Set up HTTP server parameters
   mg_set_protocol_http_websocket(nc);
-  s_http_server_opts.document_root = ".";      // Serve current directory
-  s_http_server_opts.dav_document_root = ".";  // Allow access via WebDav
+  s_http_server_opts.document_root = ".";  // Serve current directory
   s_http_server_opts.enable_directory_listing = "yes";
 
-  printf("Starting web server on port %s\n", s_http_port);
   for (;;) {
     mg_mgr_poll(&mgr, 1000);
   }
