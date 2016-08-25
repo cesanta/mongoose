@@ -3338,6 +3338,15 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
 
 #ifndef MG_DISABLE_SOCKETPAIR
 int mg_socketpair(sock_t sp[2], int sock_type) {
+#if CS_PLATFORM == CS_P_UNIX
+  sp[0] = sp[1] = INVALID_SOCKET;
+  if (socketpair(AF_UNIX, sock_type, 0, sp) == 0) {
+    mg_set_close_on_exec(sp[0]);
+    mg_set_close_on_exec(sp[1]);
+    return 1;
+  }
+  return 0;
+#else
   union socket_address sa;
   sock_t sock;
   socklen_t len = sizeof(sa.sin);
@@ -3377,6 +3386,7 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
   }
 
   return ret;
+#endif
 }
 #endif /* MG_DISABLE_SOCKETPAIR */
 
