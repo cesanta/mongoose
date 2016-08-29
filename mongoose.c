@@ -1064,6 +1064,7 @@ void mbuf_remove(struct mbuf *mb, size_t n) {
 
 /* Amalgamated: #include "common/mg_str.h" */
 
+#include <stdlib.h>
 #include <string.h>
 
 int mg_ncasecmp(const char *s1, const char *s2, size_t len);
@@ -1095,6 +1096,30 @@ int mg_vcasecmp(const struct mg_str *str1, const char *str2) {
     return n1 - n2;
   }
   return r;
+}
+
+struct mg_str mg_strdup(const struct mg_str s) {
+  struct mg_str r = {NULL, 0};
+  if (s.len > 0 && s.p != NULL) {
+    r.p = (char *) malloc(s.len);
+    if (r.p != NULL) {
+      memcpy((char *) r.p, s.p, s.len);
+      r.len = s.len;
+    }
+  }
+  return r;
+}
+
+int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
+  size_t i = 0;
+  while (i < str1.len && i < str2.len) {
+    if (str1.p[i] < str2.p[i]) return -1;
+    if (str1.p[i] > str2.p[i]) return 1;
+    i++;
+  }
+  if (i < str1.len) return 1;
+  if (i < str2.len) return -1;
+  return 0;
 }
 #ifdef MG_MODULE_LINES
 #line 1 "./src/../../common/sha1.c"
