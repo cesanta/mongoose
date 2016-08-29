@@ -10626,7 +10626,7 @@ void mg_set_non_blocking_mode(sock_t sock) {
 }
 
 static int mg_is_error(int n) {
-  return (n < 0 && n != SL_EALREADY);
+  return (n < 0 && n != SL_EALREADY && n != SL_EAGAIN);
 }
 
 void mg_if_connect_tcp(struct mg_connection *nc,
