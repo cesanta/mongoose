@@ -29,16 +29,19 @@ int main(void) {
   struct mg_mgr mgr;
   struct mg_connection *nc;
   struct mg_bind_opts bind_opts;
+  const char *err;
 
   mg_mgr_init(&mgr, NULL);
   memset(&bind_opts, 0, sizeof(bind_opts));
   bind_opts.ssl_cert = s_ssl_cert;
   bind_opts.ssl_key = s_ssl_key;
+  bind_opts.error_string = &err;
+
   printf("Starting SSL server on port %s, cert from %s, key from %s\n",
          s_http_port, bind_opts.ssl_cert, bind_opts.ssl_key);
   nc = mg_bind_opt(&mgr, s_http_port, ev_handler, bind_opts);
   if (nc == NULL) {
-    printf("Failed to create listener\n");
+    printf("Failed to create listener: %s\n", err);
     return 1;
   }
 
