@@ -3,14 +3,14 @@ title: "Memory Buffers"
 symbol_kind: "intro"
 decl_name: "mbuf.h"
 items:
-  - { type: file, name: mbuf_init.md }
-  - { type: file, name: mbuf_free.md }
-  - { type: file, name: mbuf_append.md }
-  - { type: file, name: mbuf_insert.md }
-  - { type: file, name: mbuf_remove.md }
-  - { type: file, name: mbuf_resize.md }
-  - { type: file, name: mbuf_trim.md }
-  - { type: file, name: struct_mbuf.md }
+  - { name: mbuf_init.md }
+  - { name: mbuf_free.md }
+  - { name: mbuf_append.md }
+  - { name: mbuf_insert.md }
+  - { name: mbuf_remove.md }
+  - { name: mbuf_resize.md }
+  - { name: mbuf_trim.md }
+  - { name: struct_mbuf.md }
 ---
 
 Mbufs are mutable/growing memory buffers, like C++ strings.

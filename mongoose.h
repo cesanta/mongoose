@@ -1065,7 +1065,7 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
  */
 
 /*
- * === Core: TCP/UDP/SSL
+ * === Core API: TCP/UDP/SSL
  *
  * NOTE: Mongoose manager is single threaded. It does not protect
  * its data structures by mutexes, therefore all functions that are dealing
@@ -1730,7 +1730,7 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out);
  */
 
 /*
- * === Utilities
+ * === Utility API
  */
 
 #ifndef CS_MONGOOSE_SRC_UTIL_H_
@@ -1940,7 +1940,7 @@ int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
  */
 
 /*
- * === HTTP + Websocket
+ * === Common API reference
  */
 
 #ifndef CS_MONGOOSE_SRC_HTTP_H_
@@ -2208,70 +2208,6 @@ void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
                                const char *fmt, ...);
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
 
-/*
- * Sends buffer `buf` of size `len` to the client using chunked HTTP encoding.
- * This function sends the buffer size as hex number + newline first, then
- * the buffer itself, then the newline. For example,
- *   `mg_send_http_chunk(nc, "foo", 3)` whill append the `3\r\nfoo\r\n` string
- *to
- * the `nc->send_mbuf` output IO buffer.
- *
- * NOTE: The HTTP header "Transfer-Encoding: chunked" should be sent prior to
- * using this function.
- *
- * NOTE: do not forget to send an empty chunk at the end of the response,
- * to tell the client that everything was sent. Example:
- *
- * ```
- *   mg_printf_http_chunk(nc, "%s", "my response!");
- *   mg_send_http_chunk(nc, "", 0); // Tell the client we're finished
- * ```
- */
-void mg_send_http_chunk(struct mg_connection *nc, const char *buf, size_t len);
-
-/*
- * Sends a printf-formatted HTTP chunk.
- * Functionality is similar to `mg_send_http_chunk()`.
- */
-void mg_printf_http_chunk(struct mg_connection *nc, const char *fmt, ...);
-
-/*
- * Sends a response status line.
- * If `extra_headers` is not NULL, then `extra_headers` are also sent
- * after the reponse line. `extra_headers` must NOT end end with new line.
- * Example:
- *
- *      mg_send_response_line(nc, 200, "Access-Control-Allow-Origin: *");
- *
- * Will result in:
- *
- *      HTTP/1.1 200 OK\r\n
- *      Access-Control-Allow-Origin: *\r\n
- */
-void mg_send_response_line(struct mg_connection *c, int status_code,
-                           const char *extra_headers);
-
-/*
- * Sends a response line and headers.
- * This function sends a response line with the `status_code`, and automatically
- * sends one header: either "Content-Length" or "Transfer-Encoding".
- * If `content_length` is negative, then "Transfer-Encoding: chunked" header
- * is sent, otherwise, "Content-Length" header is sent.
- *
- * NOTE: If `Transfer-Encoding` is `chunked`, then message body must be sent
- * using `mg_send_http_chunk()` or `mg_printf_http_chunk()` functions.
- * Otherwise, `mg_send()` or `mg_printf()` must be used.
- * Extra headers could be set through `extra_headers`. Note `extra_headers`
- * must NOT be terminated by a new line.
- */
-void mg_send_head(struct mg_connection *n, int status_code,
-                  int64_t content_length, const char *extra_headers);
-
-/*
- * Sends a printf-formatted HTTP chunk, escaping HTML tags.
- */
-void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...);
-
 /* Websocket opcodes, from http://tools.ietf.org/html/rfc6455 */
 #define WEBSOCKET_OP_CONTINUE 0
 #define WEBSOCKET_OP_TEXT 1
@@ -2293,6 +2229,34 @@ void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...);
  * so this flag is used only on outbound messages.
  */
 #define WEBSOCKET_DONT_FIN 0x100
+
+/*
+ * Decodes a URL-encoded string.
+ *
+ * Source string is specified by (`src`, `src_len`), and destination is
+ * (`dst`, `dst_len`). If `is_form_url_encoded` is non-zero, then
+ * `+` character is decoded as a blank space character. This function
+ * guarantees to NUL-terminate the destination. If destination is too small,
+ * then the source string is partially decoded and `-1` is returned. Otherwise,
+ * a length of the decoded string is returned, not counting final NUL.
+ */
+int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
+                  int is_form_url_encoded);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+#endif /* CS_MONGOOSE_SRC_HTTP_H_ */
+/*
+ * === Server API reference
+ */
+
+#ifndef CS_MONGOOSE_SRC_HTTP_SERVER_H_
+#define CS_MONGOOSE_SRC_HTTP_SERVER_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
 
 /*
  * Parses a HTTP message.
@@ -2382,68 +2346,6 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
 int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
                     size_t dst_len);
 
-/*
- * Decodes URL-encoded string.
- *
- * Source string is specified by (`src`, `src_len`), and destination is
- * (`dst`, `dst_len`). If `is_form_url_encoded` is non-zero, then
- * `+` character is decoded as a blank space character. This function
- * guarantees to `\0`-terminate the destination. If destination is too small,
- * then the source string is partially decoded and `-1` is returned. Otherwise,
- * a length of decoded string is returned, not counting final `\0`.
- */
-int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
-                  int is_form_url_encoded);
-
-/* Creates digest authentication header for a client request. */
-int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
-                                      const char *method, const char *uri,
-                                      const char *auth_domain, const char *user,
-                                      const char *passwd);
-
-/*
- * Helper function that creates an outbound HTTP connection.
- *
- * `url` is a URL to fetch. It must be properly URL-encoded, e.g. have
- * no spaces, etc. By default, `mg_connect_http()` sends the Connection and
- * Host headers. `extra_headers` is an extra HTTP header to send, e.g.
- * `"User-Agent: my-app\r\n"`.
- * If `post_data` is NULL, then a GET request is created. Otherwise, a POST
- * request is created with the specified POST data. Note that if the data being
- * posted is a form submission, the `Content-Type` header should be set
- * accordingly (see example below).
- *
- * Examples:
- *
- * ```c
- *   nc1 = mg_connect_http(mgr, ev_handler_1, "http://www.google.com", NULL,
- *                         NULL);
- *   nc2 = mg_connect_http(mgr, ev_handler_1, "https://github.com", NULL, NULL);
- *   nc3 = mg_connect_http(
- *       mgr, ev_handler_1, "my_server:8000/form_submit/",
- *       "Content-Type: application/x-www-form-urlencoded\r\n",
- *       "var_1=value_1&var_2=value_2");
- * ```
- */
-struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
-                                      mg_event_handler_t event_handler,
-                                      const char *url,
-                                      const char *extra_headers,
-                                      const char *post_data);
-
-/*
- * Helper function that creates an outbound HTTP connection.
- *
- * Mostly identical to mg_connect_http, but allows you to provide extra
- *parameters
- * (for example, SSL parameters)
- */
-struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
-                                          mg_event_handler_t ev_handler,
-                                          struct mg_connect_opts opts,
-                                          const char *url,
-                                          const char *extra_headers,
-                                          const char *post_data);
 /*
  * This structure defines how `mg_serve_http()` works.
  * Best practice is to set only required settings, and leave the rest as NULL.
@@ -2725,10 +2627,139 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
 int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
                               FILE *fp);
 
+/*
+ * Sends buffer `buf` of size `len` to the client using chunked HTTP encoding.
+ * This function sends the buffer size as hex number + newline first, then
+ * the buffer itself, then the newline. For example,
+ * `mg_send_http_chunk(nc, "foo", 3)` whill append the `3\r\nfoo\r\n` string
+ * to the `nc->send_mbuf` output IO buffer.
+ *
+ * NOTE: The HTTP header "Transfer-Encoding: chunked" should be sent prior to
+ * using this function.
+ *
+ * NOTE: do not forget to send an empty chunk at the end of the response,
+ * to tell the client that everything was sent. Example:
+ *
+ * ```
+ *   mg_printf_http_chunk(nc, "%s", "my response!");
+ *   mg_send_http_chunk(nc, "", 0); // Tell the client we're finished
+ * ```
+ */
+void mg_send_http_chunk(struct mg_connection *nc, const char *buf, size_t len);
+
+/*
+ * Sends a printf-formatted HTTP chunk.
+ * Functionality is similar to `mg_send_http_chunk()`.
+ */
+void mg_printf_http_chunk(struct mg_connection *nc, const char *fmt, ...);
+
+/*
+ * Sends the response status line.
+ * If `extra_headers` is not NULL, then `extra_headers` are also sent
+ * after the reponse line. `extra_headers` must NOT end end with new line.
+ * Example:
+ *
+ *      mg_send_response_line(nc, 200, "Access-Control-Allow-Origin: *");
+ *
+ * Will result in:
+ *
+ *      HTTP/1.1 200 OK\r\n
+ *      Access-Control-Allow-Origin: *\r\n
+ */
+void mg_send_response_line(struct mg_connection *c, int status_code,
+                           const char *extra_headers);
+
+/*
+ * Sends the response line and headers.
+ * This function sends the response line with the `status_code`, and
+ * automatically
+ * sends one header: either "Content-Length" or "Transfer-Encoding".
+ * If `content_length` is negative, then "Transfer-Encoding: chunked" header
+ * is sent, otherwise, "Content-Length" header is sent.
+ *
+ * NOTE: If `Transfer-Encoding` is `chunked`, then message body must be sent
+ * using `mg_send_http_chunk()` or `mg_printf_http_chunk()` functions.
+ * Otherwise, `mg_send()` or `mg_printf()` must be used.
+ * Extra headers could be set through `extra_headers`. Note `extra_headers`
+ * must NOT be terminated by a new line.
+ */
+void mg_send_head(struct mg_connection *n, int status_code,
+                  int64_t content_length, const char *extra_headers);
+
+/*
+ * Sends a printf-formatted HTTP chunk, escaping HTML tags.
+ */
+void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-#endif /* CS_MONGOOSE_SRC_HTTP_H_ */
+#endif /* CS_MONGOOSE_SRC_HTTP_SERVER_H_ */
+/*
+ * === Client API reference
+ */
+
+#ifndef CS_MONGOOSE_SRC_HTTP_CLIENT_H_
+#define CS_MONGOOSE_SRC_HTTP_CLIENT_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+/*
+ * Helper function that creates an outbound HTTP connection.
+ *
+ * `url` is the URL to fetch. It must be properly URL-encoded, e.g. have
+ * no spaces, etc. By default, `mg_connect_http()` sends the Connection and
+ * Host headers. `extra_headers` is an extra HTTP header to send, e.g.
+ * `"User-Agent: my-app\r\n"`.
+ * If `post_data` is NULL, then a GET request is created. Otherwise, a POST
+ * request is created with the specified POST data. Note that if the data being
+ * posted is a form submission, the `Content-Type` header should be set
+ * accordingly (see example below).
+ *
+ * Examples:
+ *
+ * ```c
+ *   nc1 = mg_connect_http(mgr, ev_handler_1, "http://www.google.com", NULL,
+ *                         NULL);
+ *   nc2 = mg_connect_http(mgr, ev_handler_1, "https://github.com", NULL, NULL);
+ *   nc3 = mg_connect_http(
+ *       mgr, ev_handler_1, "my_server:8000/form_submit/",
+ *       "Content-Type: application/x-www-form-urlencoded\r\n",
+ *       "var_1=value_1&var_2=value_2");
+ * ```
+ */
+struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
+                                      mg_event_handler_t event_handler,
+                                      const char *url,
+                                      const char *extra_headers,
+                                      const char *post_data);
+
+/*
+ * Helper function that creates an outbound HTTP connection.
+ *
+ * Mostly identical to mg_connect_http, but allows you to provide extra
+ *parameters
+ * (for example, SSL parameters)
+ */
+struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
+                                          mg_event_handler_t ev_handler,
+                                          struct mg_connect_opts opts,
+                                          const char *url,
+                                          const char *extra_headers,
+                                          const char *post_data);
+
+/* Creates digest authentication header for a client request. */
+int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
+                                      const char *method, const char *uri,
+                                      const char *auth_domain, const char *user,
+                                      const char *passwd);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+#endif /* CS_MONGOOSE_SRC_HTTP_CLIENT_H_ */
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
@@ -2747,7 +2778,7 @@ int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
  */
 
 /*
- * === MQTT
+ * === MQTT API reference
  */
 
 #ifndef CS_MONGOOSE_SRC_MQTT_H_
@@ -2942,7 +2973,7 @@ int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
  */
 
 /*
- * === MQTT Broker
+ * === MQTT Server API reference
  */
 
 #ifndef CS_MONGOOSE_SRC_MQTT_BROKER_H_
@@ -3030,7 +3061,7 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
  */
 
 /*
- * === DNS
+ * === DNS API reference
  */
 
 #ifndef CS_MONGOOSE_SRC_DNS_H_
@@ -3183,7 +3214,7 @@ void mg_set_protocol_dns(struct mg_connection *nc);
  */
 
 /*
- * === DNS server
+ * === DNS server API reference
  *
  * Disabled by default; enable with `-DMG_ENABLE_DNS_SERVER`.
  */
@@ -3276,7 +3307,7 @@ void mg_dns_send_reply(struct mg_connection *nc, struct mg_dns_reply *r);
  */
 
 /*
- * === Asynchronouns DNS resolver
+ * === API reference
  */
 
 #ifndef CS_MONGOOSE_SRC_RESOLV_H_
@@ -3365,7 +3396,7 @@ int mg_resolve_from_hosts_file(const char *host, union socket_address *usa);
  */
 
 /*
- * === CoAP
+ * === CoAP API reference
  *
  * CoAP message format:
  *

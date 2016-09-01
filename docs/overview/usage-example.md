@@ -1,5 +1,5 @@
 ---
-title: Usage Example
+title: Example - TCP echo server
 ---
 
 - Copy `mongoose.c` and `mongoose.h` to your build tree

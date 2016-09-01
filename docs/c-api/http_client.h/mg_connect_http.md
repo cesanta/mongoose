@@ -12,7 +12,7 @@ signature: |
 
 Helper function that creates an outbound HTTP connection.
 
-`url` is a URL to fetch. It must be properly URL-encoded, e.g. have
+`url` is the URL to fetch. It must be properly URL-encoded, e.g. have
 no spaces, etc. By default, `mg_connect_http()` sends the Connection and
 Host headers. `extra_headers` is an extra HTTP header to send, e.g.
 `"User-Agent: my-app\r\n"`.

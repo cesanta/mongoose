@@ -7,8 +7,9 @@ signature: |
                     int64_t content_length, const char *extra_headers);
 ---
 
-Sends a response line and headers.
-This function sends a response line with the `status_code`, and automatically
+Sends the response line and headers.
+This function sends the response line with the `status_code`, and
+automatically
 sends one header: either "Content-Length" or "Transfer-Encoding".
 If `content_length` is negative, then "Transfer-Encoding: chunked" header
 is sent, otherwise, "Content-Length" header is sent.

@@ -1,15 +1,8 @@
 ---
 title: Design Concept
-items:
-  - { type: file, name: memory-buffers.md }
-  - { type: file, name: event-handler.md }
-  - { type: file, name: events.md }
-  - { type: file, name: conn-flags.md }
 ---
 
-Mongoose is a multi-protocol networking library that implements non-blocking,
-asyncronous IO and provides event-based APIs. It has three basic data
-structures:
+Mongoose has three basic data structures:
 
 - `struct mg_mgr` is an event manager that holds all active connections
 - `struct mg_connection` describes a connection
@@ -22,8 +15,33 @@ listening connection. Each connection is described by the `struct mg_connection`
 structure, which has a number of fields like socket, event handler function,
 send/receive buffer, flags, etc.
 
-Mongoose's usage pattern is to declare and initialise event manager, create
-connections and create an event loop by calling `mg_mgr_poll()` in a loop.
+An application that uses mongoose should follow a standard pattern of
+event-driven application:
+
+1. declare and initialise event manager:
+
+    ```c
+    struct mg_mgr mgr;
+    mg_mgr_init(&mgr, NULL);
+    ```
+2. Create connections. For example, a server application should create
+   listening connections:
+
+   ```c
+    struct mg_connection *c = mg_bind(&mgr, "80", ev_handler_function);
+    mg_set_protocol_http_websocket(c);
+   ```
+
+3. create an event loop by calling `mg_mgr_poll()` in a loop:
+
+    ```c
+    for (;;) {
+      mg_mgr_poll(&mgr, 1000);
+    }
+    ```
+
 `mg_mgr_poll()` iterates over all sockets, accepts new connections, sends and
 receives data, closes connections and calls event handler functions for the
-respective events.
+respective events. For the full example, see
+[Usage Example](#/overview/usage-example.md/)
+which implements TCP echo server.

@@ -1,12 +1,16 @@
 ---
 items:
-  - { type: dir, name: mbuf.h }
-  - { type: dir, name: net.h }
-  - { type: dir, name: http.h }
-  - { type: dir, name: dns.h }
-  - { type: dir, name: dns-server.h }
-  - { type: dir, name: mqtt.h }
-  - { type: dir, name: mqtt-broker.h }
-  - { type: dir, name: coap.h }
-  - { type: dir, name: util.h }
+  - { name: mbuf.h }
+  - { name: net.h }
+  - { name: http.h }
+  - { name: http_server.h }
+  - { name: http_client.h }
+  - { name: dns.h }
+  - { name: dns_server.h }
+  - { name: resolv.h }
+  - { name: mqtt.h }
+  - { name: mqtt_server.h }
+  - { name: coap.h }
+  - { name: util.h }
+  - { name: uri.h }
 ---
