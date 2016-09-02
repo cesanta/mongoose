@@ -51,3 +51,5 @@ int main(void) {
   return 0;
 }
 ```
+
+See full [HTTP server example](https://github.com/cesanta/mongoose/tree/master/examples/simplest_web_server).
