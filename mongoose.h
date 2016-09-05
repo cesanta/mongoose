@@ -788,7 +788,7 @@ bool mg_start_task(int priority, int stack_size, mg_init_cb mg_init);
 
 void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg);
 
-int sl_fs_init();
+int sl_fs_init(void);
 
 void sl_restart_cb(struct mg_mgr *mgr);
 
@@ -814,7 +814,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /* Sub-second granularity time(). */
-double cs_time();
+double cs_time(void);
 
 #ifdef __cplusplus
 }
@@ -1631,7 +1631,7 @@ double mg_set_timer(struct mg_connection *c, double timestamp);
 /*
  * A sub-second precision version of time().
  */
-double mg_time();
+double mg_time(void);
 
 #ifdef __cplusplus
 }

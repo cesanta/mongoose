@@ -54,7 +54,7 @@ void ev_handler(struct mg_connection *nc, int ev, void *p) {
   }
 }
 
-void setup_ap() {
+void setup_ap(void) {
   int off = 0;
   struct ip_info info;
   struct softap_config cfg;

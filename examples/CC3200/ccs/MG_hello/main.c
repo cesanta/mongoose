@@ -186,7 +186,7 @@ static void mg_init(struct mg_mgr *mgr) {
 extern void (*const g_pfnVectors[])(void);
 #endif
 
-int main() {
+int main(void) {
 #ifndef USE_TIRTOS
   MAP_IntVTableBaseSet((unsigned long) &g_pfnVectors[0]);
 #endif
@@ -223,10 +223,10 @@ int main() {
 }
 
 /* These are FreeRTOS hooks for various life situations. */
-void vApplicationMallocFailedHook() {
+void vApplicationMallocFailedHook(void) {
 }
 
-void vApplicationIdleHook() {
+void vApplicationIdleHook(void) {
 }
 
 void vApplicationStackOverflowHook(OsiTaskHandle *th, signed char *tn) {

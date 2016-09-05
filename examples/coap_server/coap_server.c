@@ -42,7 +42,7 @@ static void coap_handler(struct mg_connection *nc, int ev, void *p) {
   }
 }
 
-int main() {
+int main(void) {
   struct mg_mgr mgr;
   struct mg_connection *nc;
 

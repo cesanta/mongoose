@@ -47,7 +47,7 @@ void data_init_sensors(int tmp006_addr, int bm222_addr) {
   }
 }
 
-void data_collect() {
+void data_collect(void) {
   double volt = tmp006_read_sensor_voltage(s_tmp006_addr);
   double temp = tmp006_read_die_temp(s_tmp006_addr);
   if (volt != TMP006_INVALID_READING && temp != TMP006_INVALID_READING) {

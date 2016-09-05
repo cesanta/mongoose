@@ -8,7 +8,7 @@
 
 #include "mongoose.h"
 
-void data_collect();
+void data_collect(void);
 void data_init_sensors(int tmp006_addr, int bm222_addr);
 void data_conn_handler(struct mg_connection *nc, int ev, void *p);
 

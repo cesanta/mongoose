@@ -40,7 +40,7 @@ static void event_handler(struct mg_connection *nc, int event, void *data) {
   }
 }
 
-int main() {
+int main(void) {
   struct mg_mgr mgr;
 
   mg_mgr_init(&mgr, NULL);

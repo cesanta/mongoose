@@ -672,7 +672,7 @@ typedef int cs_dirent_dummy;
 #include <windows.h>
 #endif
 
-double cs_time() {
+double cs_time(void) {
   double now;
 #ifndef _WIN32
   struct timeval tv;
@@ -2721,7 +2721,7 @@ struct mg_connection *mg_add_sock(struct mg_mgr *s, sock_t sock,
   return mg_add_sock_opt(s, sock, callback, opts);
 }
 
-double mg_time() {
+double mg_time(void) {
   return cs_time();
 }
 #ifdef MG_MODULE_LINES
@@ -10408,7 +10408,7 @@ int mkdir(const char *path, mode_t mode) {
 }
 #endif
 
-int sl_fs_init() {
+int sl_fs_init(void) {
   int ret = 1;
 #ifdef __TI_COMPILER_VERSION__
 #ifdef MG_FS_SLFS

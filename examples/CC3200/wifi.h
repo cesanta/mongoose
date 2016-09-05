@@ -10,6 +10,6 @@
 
 bool wifi_setup_ap(const char *ssid, const char *pass, int channel);
 bool wifi_setup_sta(const char *ssid, const char *pass);
-void stop_nwp();
+void stop_nwp(void);
 
 #endif /* CS_MONGOOSE_EXAMPLES_CC3200_WIFI_H_ */
