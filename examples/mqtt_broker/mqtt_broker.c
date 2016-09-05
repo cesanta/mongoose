@@ -32,6 +32,8 @@ int main(void) {
   }
   nc->user_data = &brk;
 
+  printf("MQTT broker started on %s\n", address);
+
   /*
    * TODO: Add a HTTP status page that shows current sessions
    * and subscriptions

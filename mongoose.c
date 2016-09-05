@@ -10440,8 +10440,6 @@ int sl_fs_init() {
 
 /* Amalgamated: #include "common/platform.h" */
 
-#include <simplelink/include/netapp.h>
-
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t size) {
   int res;
   struct in_addr *in = (struct in_addr *) src;
@@ -10481,7 +10479,7 @@ int inet_pton(int af, const char *src, void *dst) {
 #ifdef MG_MODULE_LINES
 #line 1 "./src/../../common/platforms/simplelink/sl_mg_task.c"
 #endif
-#if defined(MG_SOCKET_SIMPLELINK)
+#if defined(MG_SOCKET_SIMPLELINK) && !defined(MG_SIMPLELINK_NO_OSI)
 
 /* Amalgamated: #include "mg_task.h" */
 
