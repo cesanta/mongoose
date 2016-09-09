@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Cesanta Software Limited
+// Copyright (c) 2014-2016 Cesanta Software Limited
 // All rights reserved
 //
 // This software is dual-licensed: you can redistribute it and/or modify
@@ -13,14 +13,13 @@
 //
 // Alternatively, you can license this software under a commercial
 // license, as set out in <https://www.cesanta.com/license>.
-//
-// $Date: 2014-09-28 05:04:41 UTC $
 
 // This file implements "netcat" utility with SSL and traffic hexdump.
 
 #include "mongoose.h"
 
 static sig_atomic_t s_received_signal = 0;
+static int s_is_websocket;
 
 static void signal_handler(int sig_num) {
   signal(sig_num, signal_handler);
@@ -28,15 +27,12 @@ static void signal_handler(int sig_num) {
 }
 
 static void show_usage_and_exit(const char *prog_name) {
-  fprintf(stderr, "%s\n", "Copyright (c) 2014 CESANTA SOFTWARE");
-  fprintf(stderr, "%s\n", "Usage:");
-  fprintf(stderr,
-          "  %s\n [-d debug_file] [-l] [tcp|ssl]://[ip:]port[:cert][:ca_cert]",
-          prog_name);
-  fprintf(stderr, "%s\n", "Examples:");
-  fprintf(stderr, "  %s\n -d hexdump.txt ssl://google.com:443", prog_name);
-  fprintf(stderr, "  %s\n -l ssl://443:ssl_cert.pem", prog_name);
-  fprintf(stderr, "  %s\n -l tcp://8080", prog_name);
+  fprintf(stderr, "%s\n", "Copyright (c) Cesanta. Built on: " __DATE__);
+  fprintf(stderr, "Usage: %s [OPTIONS] [IP:]PORT\n", prog_name);
+  fprintf(stderr, "%s\n", "Options:");
+  fprintf(stderr, "%s\n", "  -l\t\tOpen a listening socket");
+  fprintf(stderr, "%s\n", "  -d file\tHexdump traffic into a file");
+  fprintf(stderr, "%s\n", "  -ws\t\tUse WebSocket protocol");
   exit(EXIT_FAILURE);
 }
 
@@ -54,7 +50,11 @@ static void on_stdin_read(struct mg_connection *nc, int ev, void *p) {
   } else {
     // A character is received from stdin. Send it to the connection.
     unsigned char c = (unsigned char) ch;
-    mg_send(nc, &c, 1);
+    if (s_is_websocket) {
+      mg_send_websocket_frame(nc, WEBSOCKET_OP_TEXT, &c, 1);
+    } else {
+      mg_send(nc, &c, 1);
+    }
   }
 }
 
@@ -72,21 +72,27 @@ static void *stdio_thread_func(void *param) {
 }
 
 static void ev_handler(struct mg_connection *nc, int ev, void *p) {
-  (void) p;
-
   switch (ev) {
     case MG_EV_ACCEPT:
     case MG_EV_CONNECT:
       mg_start_thread(stdio_thread_func, nc->mgr);
       break;
 
+    case MG_EV_WEBSOCKET_FRAME: {
+      struct websocket_message *wm = (struct websocket_message *) p;
+      fwrite(wm->data, 1, wm->size, stdout);
+      break;
+    }
+
     case MG_EV_CLOSE:
       s_received_signal = 1;
       break;
 
     case MG_EV_RECV:
-      fwrite(nc->recv_mbuf.buf, 1, nc->recv_mbuf.len, stdout);
-      mbuf_remove(&nc->recv_mbuf, nc->recv_mbuf.len);
+      if (!s_is_websocket) {
+        fwrite(nc->recv_mbuf.buf, 1, nc->recv_mbuf.len, stdout);
+        mbuf_remove(&nc->recv_mbuf, nc->recv_mbuf.len);
+      }
       break;
 
     default:
@@ -98,6 +104,8 @@ int main(int argc, char *argv[]) {
   struct mg_mgr mgr;
   int i, is_listening = 0;
   const char *address = NULL;
+  struct mg_connection *c;
+  // struct mg_bind_opts = {};
 
   mg_mgr_init(&mgr, NULL);
 
@@ -107,6 +115,8 @@ int main(int argc, char *argv[]) {
       is_listening = 1;
     } else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
       mgr.hexdump_file = argv[++i];
+    } else if (strcmp(argv[i], "-ws") == 0 && i + 1 < argc) {
+      s_is_websocket = 1;
     } else {
       show_usage_and_exit(argv[0]);
     }
@@ -123,13 +133,19 @@ int main(int argc, char *argv[]) {
   signal(SIGPIPE, SIG_IGN);
 
   if (is_listening) {
-    if (mg_bind(&mgr, address, ev_handler) == NULL) {
+    if ((c = mg_bind(&mgr, address, ev_handler)) == NULL) {
       fprintf(stderr, "mg_bind(%s) failed\n", address);
       exit(EXIT_FAILURE);
     }
-  } else if (mg_connect(&mgr, address, ev_handler) == NULL) {
+  } else if ((c = mg_connect(&mgr, address, ev_handler)) == NULL) {
     fprintf(stderr, "mg_connect(%s) failed\n", address);
     exit(EXIT_FAILURE);
+  }
+  if (s_is_websocket) {
+    mg_set_protocol_http_websocket(c);
+    if (!is_listening) {
+      mg_send_websocket_handshake2(c, "/", address, NULL, NULL);
+    }
   }
 
   while (s_received_signal == 0) {
