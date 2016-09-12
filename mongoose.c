@@ -1679,7 +1679,7 @@ const char *c_strnstr(const char *s, const char *find, size_t slen) {
 /* Which flags can be pre-set by the user at connection creation time. */
 #define _MG_ALLOWED_CONNECT_FLAGS_MASK                                   \
   (MG_F_USER_1 | MG_F_USER_2 | MG_F_USER_3 | MG_F_USER_4 | MG_F_USER_5 | \
-   MG_F_USER_6 | MG_F_WEBSOCKET_NO_DEFRAG)
+   MG_F_USER_6 | MG_F_WEBSOCKET_NO_DEFRAG | MG_F_ENABLE_BROADCAST)
 /* Which flags should be modifiable by user's callbacks. */
 #define _MG_CALLBACK_MODIFIABLE_FLAGS_MASK                               \
   (MG_F_USER_1 | MG_F_USER_2 | MG_F_USER_3 | MG_F_USER_4 | MG_F_USER_5 | \
@@ -2788,6 +2788,11 @@ void mg_if_connect_udp(struct mg_connection *nc) {
   if (nc->sock == INVALID_SOCKET) {
     nc->err = errno ? errno : 1;
     return;
+  }
+  if (nc->flags & MG_F_ENABLE_BROADCAST) {
+    int optval = 1;
+    setsockopt(nc->sock, SOL_SOCKET, SO_BROADCAST, (const char *) &optval,
+               sizeof(optval));
   }
   nc->err = 0;
 }
