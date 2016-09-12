@@ -3519,6 +3519,7 @@ static void spawn_handling_thread(struct mg_connection *nc) {
   c[1]->proto_handler = nc->proto_handler;
   c[1]->user_data = nc->user_data;
   c[1]->sa = nc->sa;
+  c[1]->flags = nc->flags;
 
   mg_start_thread(per_connection_thread_function, c[1]);
 }
