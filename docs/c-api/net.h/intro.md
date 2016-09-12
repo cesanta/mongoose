@@ -30,6 +30,7 @@ items:
   - { name: struct_mg_add_sock_opts.md }
   - { name: struct_mg_bind_opts.md }
   - { name: struct_mg_connect_opts.md }
+  - { name: struct_mg_multithreading_opts.md }
 ---
 
 NOTE: Mongoose manager is single threaded. It does not protect

@@ -3456,13 +3456,15 @@ static void multithreaded_ev_handler(struct mg_connection *c, int ev, void *p);
 static void *per_connection_thread_function(void *param) {
   struct mg_connection *c = (struct mg_connection *) param;
   struct mg_mgr m;
+  /* mgr_data can be used subsequently, store its value */
+  int poll_timeout = (intptr_t) c->mgr_data;
 
   mg_mgr_init(&m, NULL);
   mg_add_conn(&m, c);
   mg_call(c, NULL, MG_EV_ACCEPT, &c->sa);
 
   while (m.active_connections != NULL) {
-    mg_mgr_poll(&m, 1000);
+    mg_mgr_poll(&m, poll_timeout ? poll_timeout : 1000);
   }
   mg_mgr_free(&m);
 
@@ -3496,7 +3498,7 @@ static void spawn_handling_thread(struct mg_connection *nc) {
   struct mg_mgr dummy;
   sock_t sp[2];
   struct mg_connection *c[2];
-
+  int poll_timeout;
   /*
    * Create a socket pair, and wrap each socket into the connection with
    * dummy event manager.
@@ -3506,6 +3508,9 @@ static void spawn_handling_thread(struct mg_connection *nc) {
   memset(&dummy, 0, sizeof(dummy));
   c[0] = mg_add_sock(&dummy, sp[0], forwarder_ev_handler);
   c[1] = mg_add_sock(&dummy, sp[1], nc->listener->priv_1.f);
+
+  /* link_conns replaces priv_2, storing its value */
+  poll_timeout = (intptr_t) nc->priv_2;
 
   /* Interlink client connection with c[0] */
   link_conns(c[0], nc);
@@ -3526,6 +3531,9 @@ static void spawn_handling_thread(struct mg_connection *nc) {
   c[1]->sa = nc->sa;
   c[1]->flags = nc->flags;
 
+  /* priv_2 is used, so, put timeout to mgr_data */
+  c[1]->mgr_data = (void *) (intptr_t) poll_timeout;
+
   mg_start_thread(per_connection_thread_function, c[1]);
 }
 
@@ -3537,11 +3545,25 @@ static void multithreaded_ev_handler(struct mg_connection *c, int ev, void *p) {
   }
 }
 
-void mg_enable_multithreading(struct mg_connection *nc) {
+void mg_enable_multithreading_opt(struct mg_connection *nc,
+                                  struct mg_multithreading_opts opts) {
   /* Wrap user event handler into our multithreaded_ev_handler */
   nc->priv_1.f = nc->handler;
+  /*
+   * We put timeout to `priv_2` member of the main
+   * (listening) connection, mt is not enabled yet,
+   * and this member is not used
+   */
+  nc->priv_2 = (void *) (intptr_t) opts.poll_timeout;
   nc->handler = multithreaded_ev_handler;
 }
+
+void mg_enable_multithreading(struct mg_connection *nc) {
+  struct mg_multithreading_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  mg_enable_multithreading_opt(nc, opts);
+}
+
 #endif
 #ifdef MG_MODULE_LINES
 #line 1 "./src/uri.c"

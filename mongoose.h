@@ -189,6 +189,7 @@
 #endif
 #if defined(_MSC_VER) && _MSC_VER <= 1200
 typedef unsigned long uintptr_t;
+typedef long intptr_t;
 #endif
 typedef int socklen_t;
 #if _MSC_VER >= 1700
@@ -287,6 +288,7 @@ typedef struct _stati64 cs_stat_t;
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <stdint.h>
 #include <limits.h>
 #include <math.h>
 #include <netdb.h>
@@ -1584,6 +1586,13 @@ int mg_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
 int mg_check_ip_acl(const char *acl, uint32_t remote_ip);
 
 /*
+ * Optional parameters for mg_enable_multithreading_opt()
+ */
+struct mg_multithreading_opts {
+  int poll_timeout; /* Polling interval */
+};
+
+/*
  * Enables multi-threaded handling for the given listening connection `nc`.
  * For each accepted connection, Mongoose will create a separate thread
  * and run an event handler in that thread. Thus, if an event handler is doing
@@ -1591,6 +1600,8 @@ int mg_check_ip_acl(const char *acl, uint32_t remote_ip);
  * other connections.
  */
 void mg_enable_multithreading(struct mg_connection *nc);
+void mg_enable_multithreading_opt(struct mg_connection *nc,
+                                  struct mg_multithreading_opts opts);
 
 #ifdef MG_ENABLE_JAVASCRIPT
 /*
