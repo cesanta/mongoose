@@ -7,7 +7,7 @@ signature: |
     struct mg_connection *active_connections;
     const char *hexdump_file; /* Debug hexdump file path */
   #ifndef MG_DISABLE_SOCKETPAIR
-    sock_t ctl[2]; /* Socketpair for mg_broadcast() */
+    sock_t ctl[2]; /* Socketpair for mg_wakeup() */
   #endif
     void *user_data; /* User data */
     void *mgr_data;  /* Implementation-specific event manager's data. */
