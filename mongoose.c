@@ -1027,7 +1027,7 @@ size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
     }
     a->len += len;
   } else {
-    size_t new_size = (a->len + len) * MBUF_SIZE_MULTIPLIER;
+    size_t new_size = (size_t)((a->len + len) * MBUF_SIZE_MULTIPLIER);
     if ((p = (char *) MBUF_REALLOC(a->buf, new_size)) != NULL) {
       a->buf = p;
       memmove(a->buf + off + len, a->buf + off, a->len - off);
@@ -1952,7 +1952,7 @@ MG_INTERNAL struct mg_connection *mg_create_connection_base(
     conn->sock = INVALID_SOCKET;
     conn->handler = callback;
     conn->mgr = mgr;
-    conn->last_io_time = mg_time();
+    conn->last_io_time = (time_t) mg_time();
     conn->flags = opts.flags & _MG_ALLOWED_CONNECT_FLAGS_MASK;
     conn->user_data = opts.user_data;
     /*
@@ -2267,7 +2267,7 @@ void mg_if_accept_tcp_cb(struct mg_connection *nc, union socket_address *sa,
 }
 
 void mg_send(struct mg_connection *nc, const void *buf, int len) {
-  nc->last_io_time = mg_time();
+  nc->last_io_time = (time_t) mg_time();
   if (nc->flags & MG_F_UDP) {
     mg_if_udp_send(nc, buf, len);
   } else {
@@ -2298,7 +2298,7 @@ static void mg_recv_common(struct mg_connection *nc, void *buf, int len) {
     MG_FREE(buf);
     return;
   }
-  nc->last_io_time = mg_time();
+  nc->last_io_time = (time_t) mg_time();
   if (nc->recv_mbuf.len == 0) {
     /* Adopt buf as recv_mbuf's backing store. */
     mbuf_free(&nc->recv_mbuf);
@@ -3174,7 +3174,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
     }
 
     if (!(fd_flags & (_MG_F_FD_CAN_READ | _MG_F_FD_CAN_WRITE))) {
-      mg_if_poll(nc, now);
+      mg_if_poll(nc, (time_t) now);
     }
     mg_if_timer(nc, now);
   }
@@ -3315,7 +3315,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   if (num_timers > 0) {
     double timer_timeout_ms = (min_timer - mg_time()) * 1000 + 1 /* rounding */;
     if (timer_timeout_ms < timeout_ms) {
-      timeout_ms = timer_timeout_ms;
+      timeout_ms = (int) timer_timeout_ms;
     }
   }
   if (timeout_ms < 0) timeout_ms = 0;
@@ -3363,7 +3363,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
     }
   }
 
-  return now;
+  return (time_t) now;
 }
 
 #ifndef MG_DISABLE_SOCKETPAIR
@@ -4063,7 +4063,7 @@ static const char *mg_http_parse_headers(const char *s, const char *end,
     }
 
     if (!mg_ncasecmp(k->p, "Content-Length", 14)) {
-      req->body.len = to64(v->p);
+      req->body.len = (size_t) to64(v->p);
       req->message.len = len + req->body.len;
     }
   }
@@ -4292,7 +4292,7 @@ static void mg_send_ws_header(struct mg_connection *nc, int op, size_t len,
 
   header[0] = (op & WEBSOCKET_DONT_FIN ? 0x0 : 0x80) + (op & 0x0f);
   if (len < 126) {
-    header[1] = len;
+    header[1] = (unsigned char) len;
     header_len = 2;
   } else if (len < 65535) {
     uint16_t tmp = htons((uint16_t) len);
@@ -4448,8 +4448,7 @@ static void mg_ws_handshake(struct mg_connection *nc,
 static void mg_http_transfer_file_data(struct mg_connection *nc) {
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   char buf[MG_MAX_HTTP_SEND_MBUF];
-  int64_t left = pd->file.cl - pd->file.sent;
-  size_t n = 0, to_read = 0;
+  size_t n = 0, to_read = 0, left = (size_t)(pd->file.cl - pd->file.sent);
 
   if (pd->file.type == DATA_FILE) {
     struct mbuf *io = &nc->send_mbuf;
@@ -4457,7 +4456,7 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
       to_read = sizeof(buf) - io->len;
     }
 
-    if (left > 0 && to_read > (size_t) left) {
+    if (left > 0 && to_read > left) {
       to_read = left;
     }
 
@@ -4473,8 +4472,7 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
     }
   } else if (pd->file.type == DATA_PUT) {
     struct mbuf *io = &nc->recv_mbuf;
-    size_t to_write =
-        left <= 0 ? 0 : left < (int64_t) io->len ? (size_t) left : io->len;
+    size_t to_write = left <= 0 ? 0 : left < io->len ? (size_t) left : io->len;
     size_t n = fwrite(io->buf, 1, to_write, pd->file.fp);
     if (n > 0) {
       mbuf_remove(io, n);
@@ -4542,9 +4540,8 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   char *data;
   size_t i, n, data_len, body_len, zero_chunk_received = 0;
-
   /* Find out piece of received data that is not yet reassembled */
-  body_len = pd->chunk.body_len;
+  body_len = (size_t) pd->chunk.body_len;
   assert(blen >= body_len);
 
   /* Traverse all fully buffered chunks */
@@ -4580,11 +4577,12 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
       memset(buf, 0, body_len);
       memmove(buf, buf + body_len, blen - i);
       nc->recv_mbuf.len -= body_len;
-      hm->body.len = pd->chunk.body_len = 0;
+      hm->body.len = 0;
+      pd->chunk.body_len = 0;
     }
 
     if (zero_chunk_received) {
-      hm->message.len = pd->chunk.body_len + blen - i;
+      hm->message.len = (size_t) pd->chunk.body_len + blen - i;
     }
   }
 
@@ -5596,7 +5594,7 @@ void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
     _XOPEN_SOURCE >= 600
         fseeko(pd->file.fp, r1, SEEK_SET);
 #else
-        fseek(pd->file.fp, r1, SEEK_SET);
+        fseek(pd->file.fp, (long) r1, SEEK_SET);
 #endif
       }
     }
@@ -7981,15 +7979,15 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
    * keep-alive timer,
    * 2: client_identifier_len, n: client_id
    */
-  rem_len = 9 + 1 + 2 + 2 + strlen(client_id);
+  rem_len = 9 + 1 + 2 + 2 + (uint8_t) strlen(client_id);
 
   if (opts.user_name != NULL) {
     opts.flags |= MG_MQTT_HAS_USER_NAME;
-    rem_len += strlen(opts.user_name) + 2;
+    rem_len += (uint8_t) strlen(opts.user_name) + 2;
   }
   if (opts.password != NULL) {
     opts.flags |= MG_MQTT_HAS_PASSWORD;
-    rem_len += strlen(opts.password) + 2;
+    rem_len += (uint8_t) strlen(opts.password) + 2;
   }
 
   mg_send(nc, &header, 1);
@@ -8003,17 +8001,17 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
   keep_alive = htons(opts.keep_alive);
   mg_send(nc, &keep_alive, 2);
 
-  len = htons(strlen(client_id));
+  len = htons((uint16_t) strlen(client_id));
   mg_send(nc, &len, 2);
   mg_send(nc, client_id, strlen(client_id));
 
   if (opts.flags & MG_MQTT_HAS_USER_NAME) {
-    len = htons(strlen(opts.user_name));
+    len = htons((uint16_t) strlen(opts.user_name));
     mg_send(nc, &len, 2);
     mg_send(nc, opts.user_name, strlen(opts.user_name));
   }
   if (opts.flags & MG_MQTT_HAS_PASSWORD) {
-    len = htons(strlen(opts.password));
+    len = htons((uint16_t) strlen(opts.password));
     mg_send(nc, &len, 2);
     mg_send(nc, opts.password, strlen(opts.password));
   }
@@ -8047,7 +8045,7 @@ void mg_mqtt_publish(struct mg_connection *nc, const char *topic,
                      size_t len) {
   size_t old_len = nc->send_mbuf.len;
 
-  uint16_t topic_len = htons(strlen(topic));
+  uint16_t topic_len = htons((uint16_t) strlen(topic));
   uint16_t message_id_net = htons(message_id);
 
   mg_send(nc, &topic_len, 2);
@@ -8071,7 +8069,7 @@ void mg_mqtt_subscribe(struct mg_connection *nc,
 
   mg_send(nc, (char *) &message_id_n, 2);
   for (i = 0; i < topics_len; i++) {
-    uint16_t topic_len_n = htons(strlen(topics[i].topic));
+    uint16_t topic_len_n = htons((uint16_t) strlen(topics[i].topic));
     mg_send(nc, &topic_len_n, 2);
     mg_send(nc, topics[i].topic, strlen(topics[i].topic));
     mg_send(nc, &topics[i].qos, 1);
@@ -8103,7 +8101,7 @@ void mg_mqtt_unsubscribe(struct mg_connection *nc, char **topics,
 
   mg_send(nc, (char *) &message_id_n, 2);
   for (i = 0; i < topics_len; i++) {
-    uint16_t topic_len_n = htons(strlen(topics[i]));
+    uint16_t topic_len_n = htons((uint16_t) strlen(topics[i]));
     mg_send(nc, &topic_len_n, 2);
     mg_send(nc, topics[i], strlen(topics[i]));
   }
@@ -8503,7 +8501,7 @@ int mg_dns_encode_record(struct mbuf *io, struct mg_dns_resource_record *rr,
       io->buf[off] = u16 >> 8;
       io->buf[off + 1] = u16 & 0xff;
     } else {
-      u16 = htons(rlen);
+      u16 = htons((uint16_t) rlen);
       mbuf_append(io, &u16, 2);
       mbuf_append(io, rdata, rlen);
     }
@@ -8540,7 +8538,7 @@ void mg_send_dns_query(struct mg_connection *nc, const char *name,
 
   /* TCP DNS requires messages to be prefixed with len */
   if (!(nc->flags & MG_F_UDP)) {
-    uint16_t len = htons(pkt.len);
+    uint16_t len = htons((uint16_t) pkt.len);
     mbuf_insert(&pkt, 0, &len, 2);
   }
 
@@ -8702,7 +8700,7 @@ static void dns_handler(struct mg_connection *nc, int ev, void *ev_data) {
         msg.flags = 0x8081;
         mg_dns_insert_header(io, 0, &msg);
         if (!(nc->flags & MG_F_UDP)) {
-          uint16_t len = htons(io->len);
+          uint16_t len = htons((uint16_t) io->len);
           mbuf_insert(io, 0, &len, 2);
         }
         mg_send(nc, io->buf, io->len);
@@ -8752,7 +8750,7 @@ void mg_dns_send_reply(struct mg_connection *nc, struct mg_dns_reply *r) {
   size_t sent = r->io->len - r->start;
   mg_dns_insert_header(r->io, r->start, r->msg);
   if (!(nc->flags & MG_F_UDP)) {
-    uint16_t len = htons(sent);
+    uint16_t len = htons((uint16_t) sent);
     mbuf_insert(r->io, r->start, &len, 2);
   }
 
@@ -9445,7 +9443,7 @@ static char *coap_add_uint16(char *ptr, uint16_t val) {
  */
 static char *coap_add_opt_info(char *ptr, uint16_t val, size_t len) {
   if (len == sizeof(uint8_t)) {
-    *ptr = val;
+    *ptr = (char) val;
     ptr++;
   } else if (len == sizeof(uint16_t)) {
     ptr = coap_add_uint16(ptr, val);
@@ -9529,7 +9527,7 @@ uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io) {
    */
 
   /* ver: 2 bits, msg_type: 2 bits, toklen: 4 bits */
-  *ptr = (1 << 6) | (cm->msg_type << 4) | (cm->token.len);
+  *ptr = (1 << 6) | (cm->msg_type << 4) | (uint8_t)(cm->token.len);
   ptr++;
 
   /* code class: 3 bits, code detail: 5 bits */

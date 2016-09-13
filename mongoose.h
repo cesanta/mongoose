@@ -139,6 +139,8 @@
 #pragma warning(disable : 4204) /* missing c99 support */
 #endif
 
+#define _WINSOCK_DEPRECATED_NO_WARNINGS 1
+
 #include <assert.h>
 #include <direct.h>
 #include <errno.h>
