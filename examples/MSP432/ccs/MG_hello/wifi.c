@@ -1,3 +1,4 @@
+#include "cs_dbg.h"
 #include "wifi.h"
 
 #include "mongoose.h"

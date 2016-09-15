@@ -40,6 +40,7 @@
 
 #include <simplelink/include/device.h>
 
+#include "cs_dbg.h"
 #include "wifi.h"
 
 void fs_slfs_set_new_file_size(const char *name, size_t size);

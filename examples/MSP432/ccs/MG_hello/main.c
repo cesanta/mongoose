@@ -35,6 +35,7 @@
 /* Mongoose.h brings in SimpleLink support. Do not include simplelink.h. */
 #include <mongoose.h>
 
+#include "cs_dbg.h"
 #include "wifi.h"
 
 static const char *upload_form =
