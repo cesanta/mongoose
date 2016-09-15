@@ -140,7 +140,6 @@
 #endif
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 1
-#define _CRT_SECURE_NO_WARNINGS
 
 #include <assert.h>
 #include <direct.h>
@@ -163,10 +162,6 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <process.h>
-
-#if defined(_MSC_VER) && _MSC_VER >= 1800
-#define strdup _strdup
-#endif
 
 #ifndef EINPROGRESS
 #define EINPROGRESS WSAEINPROGRESS
