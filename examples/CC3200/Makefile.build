@@ -61,13 +61,16 @@ $(FW_ZIP): $(FW_ELF) $(FW_BIN) $(SLFS_FILES)
 	@fw_meta gen_build_info \
 	  --json_output=$(BUILD_INFO_JSON)
 	@cp -v $(SLFS_FILES) out/
+	@cp $(CC3200_SP_FILE)* $(FW_DIR)
 	@fw_meta create_manifest \
 	  --name=$(PROG) --platform=$(PLATFORM) \
 	  --build_info=$(BUILD_INFO_JSON) \
 	  --output=$(FW_MANIFEST) \
 	  --src_dir=$(FW_DIR) \
-	  /sys/mcuimg.bin:src=$(notdir $(FW_BIN)) \
-		$(foreach f,$(SLFS_FILES), $(notdir $(f)):src=$(notdir $(f)))
+	  /sys/servicepack.ucf:type=slfile,src=$(CC3200_SP_FILE),falloc=60416,sign=$(notdir $(CC3200_SP_FILE)).sign \
+	  $(notdir $(CC3200_SP_FILE)).sign:type=signature,src=$(CC3200_SP_FILE).sign \
+	  /sys/mcuimg.bin:type=app,src=$(notdir $(FW_BIN)) \
+	  $(foreach f,$(SLFS_FILES), $(notdir $(f)):type=slfile,src=$(notdir $(f)))
 	@echo "  ZIP   $@"
 	@fw_meta create_fw \
 	  --manifest=$(FW_MANIFEST) \
