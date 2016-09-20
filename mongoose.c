@@ -612,9 +612,9 @@ DIR *opendir(const char *dir_name) {
   DIR *dir = NULL;
   extern spiffs fs;
 
-  if (dir_name != NULL && (dir = (DIR *) malloc(sizeof(*dir))) != NULL &&
+  if (dir_name != NULL && (dir = (DIR *) MG_MALLOC(sizeof(*dir))) != NULL &&
       SPIFFS_opendir(&fs, (char *) dir_name, &dir->dh) == NULL) {
-    free(dir);
+    MG_FREE(dir);
     dir = NULL;
   }
 
@@ -624,7 +624,7 @@ DIR *opendir(const char *dir_name) {
 int closedir(DIR *dir) {
   if (dir != NULL) {
     SPIFFS_closedir(&dir->dh);
-    free(dir);
+    MG_FREE(dir);
   }
   return 0;
 }
@@ -1101,7 +1101,7 @@ int mg_vcasecmp(const struct mg_str *str1, const char *str2) {
 struct mg_str mg_strdup(const struct mg_str s) {
   struct mg_str r = {NULL, 0};
   if (s.len > 0 && s.p != NULL) {
-    r.p = (char *) malloc(s.len);
+    r.p = (char *) MG_MALLOC(s.len);
     if (r.p != NULL) {
       memcpy((char *) r.p, s.p, s.len);
       r.len = s.len;
@@ -3844,9 +3844,9 @@ static struct mg_http_proto_data *mg_http_get_proto_data(
 #ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
 static void mg_http_free_proto_data_mp_stream(
     struct mg_http_multipart_stream *mp) {
-  free((void *) mp->boundary);
-  free((void *) mp->var_name);
-  free((void *) mp->file_name);
+  MG_FREE((void *) mp->boundary);
+  MG_FREE((void *) mp->var_name);
+  MG_FREE((void *) mp->file_name);
   memset(mp, 0, sizeof(*mp));
 }
 #endif
@@ -3876,8 +3876,8 @@ static void mg_http_free_proto_data_endpoints(struct mg_http_endpoint **ep) {
 
   while (current != NULL) {
     struct mg_http_endpoint *tmp = current->next;
-    free((void *) current->name);
-    free(current);
+    MG_FREE((void *) current->name);
+    MG_FREE(current);
     current = tmp;
   }
 
@@ -3896,7 +3896,7 @@ static void mg_http_conn_destructor(void *proto_data) {
   mg_http_free_proto_data_mp_stream(&pd->mp_stream);
 #endif
   mg_http_free_proto_data_endpoints(&pd->endpoints);
-  free(proto_data);
+  MG_FREE(proto_data);
 }
 
 /*
@@ -5000,9 +5000,9 @@ static int mg_http_multipart_process_boundary(struct mg_connection *c) {
         mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_END, NULL, 0);
       }
 
-      free((void *) pd->mp_stream.file_name);
+      MG_FREE((void *) pd->mp_stream.file_name);
       pd->mp_stream.file_name = strdup(file_name);
-      free((void *) pd->mp_stream.var_name);
+      MG_FREE((void *) pd->mp_stream.var_name);
       pd->mp_stream.var_name = strdup(var_name);
 
       mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_BEGIN, NULL, 0);
@@ -5108,7 +5108,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
       struct mg_http_multipart_part *mp =
           (struct mg_http_multipart_part *) ev_data;
       struct file_upload_state *fus =
-          (struct file_upload_state *) calloc(1, sizeof(*fus));
+          (struct file_upload_state *) MG_CALLOC(1, sizeof(*fus));
       mp->user_data = NULL;
 
       struct mg_str lfn = local_name_fn(nc, mg_mk_str(mp->file_name));
@@ -5123,10 +5123,10 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
         nc->flags |= MG_F_SEND_AND_CLOSE;
         return;
       }
-      fus->lfn = (char *) malloc(lfn.len + 1);
+      fus->lfn = (char *) MG_MALLOC(lfn.len + 1);
       memcpy(fus->lfn, lfn.p, lfn.len);
       fus->lfn[lfn.len] = '\0';
-      if (lfn.p != mp->file_name) free((char *) lfn.p);
+      if (lfn.p != mp->file_name) MG_FREE((char *) lfn.p);
       LOG(LL_DEBUG,
           ("%p Receiving file %s -> %s", nc, mp->file_name, fus->lfn));
       fus->fp = fopen(fus->lfn, "w");
@@ -5208,8 +5208,8 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
          */
       }
       if (fus->fp != NULL) fclose(fus->fp);
-      free(fus->lfn);
-      free(fus);
+      MG_FREE(fus->lfn);
+      MG_FREE(fus);
       mp->user_data = NULL;
       nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
@@ -7486,7 +7486,7 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
   struct mg_http_endpoint *new_ep = NULL;
 
   if (nc == NULL) return;
-  new_ep = (struct mg_http_endpoint *) calloc(1, sizeof(*new_ep));
+  new_ep = (struct mg_http_endpoint *) MG_CALLOC(1, sizeof(*new_ep));
   if (new_ep == NULL) return;
 
   pd = mg_http_get_proto_data(nc);
@@ -8237,7 +8237,7 @@ void mg_mqtt_broker_init(struct mg_mqtt_broker *brk, void *user_data) {
 
 static void mg_mqtt_broker_handle_connect(struct mg_mqtt_broker *brk,
                                           struct mg_connection *nc) {
-  struct mg_mqtt_session *s = (struct mg_mqtt_session *) malloc(sizeof *s);
+  struct mg_mqtt_session *s = (struct mg_mqtt_session *) MG_MALLOC(sizeof *s);
   if (s == NULL) {
     /* LCOV_EXCL_START */
     mg_mqtt_connack(nc, MG_EV_MQTT_CONNACK_SERVER_UNAVAILABLE);
@@ -8270,13 +8270,13 @@ static void mg_mqtt_broker_handle_subscribe(struct mg_connection *nc,
     qoss[qoss_len++] = qos;
   }
 
-  ss->subscriptions = (struct mg_mqtt_topic_expression *) realloc(
+  ss->subscriptions = (struct mg_mqtt_topic_expression *) MG_REALLOC(
       ss->subscriptions, sizeof(*ss->subscriptions) * qoss_len);
   for (pos = 0;
        (pos = mg_mqtt_next_subscribe_topic(msg, &topic, &qos, pos)) != -1;
        ss->num_subscriptions++) {
     te = &ss->subscriptions[ss->num_subscriptions];
-    te->topic = (char *) malloc(topic.len + 1);
+    te->topic = (char *) MG_MALLOC(topic.len + 1);
     te->qos = qos;
     strncpy((char *) te->topic, topic.p, topic.len + 1);
   }
@@ -9051,7 +9051,7 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
 
   dns_nc = mg_connect(mgr, nameserver, mg_resolve_async_eh);
   if (dns_nc == NULL) {
-    free(req);
+    MG_FREE(req);
     return -1;
   }
   dns_nc->user_data = req;
@@ -9695,7 +9695,7 @@ int asprintf(char **strp, const char *fmt, ...) {
   va_list ap;
   int len;
 
-  *strp = malloc(BUFSIZ);
+  *strp = MG_MALLOC(BUFSIZ);
   if (*strp == NULL) return -1;
 
   va_start(ap, fmt);
@@ -9703,7 +9703,7 @@ int asprintf(char **strp, const char *fmt, ...) {
   va_end(ap);
 
   if (len > 0) {
-    *strp = realloc(*strp, len + 1);
+    *strp = MG_REALLOC(*strp, len + 1);
     if (*strp == NULL) return -1;
   }
 
@@ -9943,7 +9943,7 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
         if (s_sl_file_size_hints[i].name != NULL &&
             strcmp(s_sl_file_size_hints[i].name, pathname) == 0) {
           size = s_sl_file_size_hints[i].size;
-          free(s_sl_file_size_hints[i].name);
+          MG_FREE(s_sl_file_size_hints[i].name);
           s_sl_file_size_hints[i].name = NULL;
           break;
         }
