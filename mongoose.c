@@ -7479,9 +7479,14 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
 
 void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
                                mg_event_handler_t handler) {
-  struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
-  struct mg_http_endpoint *new_ep =
-      (struct mg_http_endpoint *) calloc(1, sizeof(*new_ep));
+  struct mg_http_proto_data *pd = NULL;
+  struct mg_http_endpoint *new_ep = NULL;
+
+  if (nc == NULL) return;
+  new_ep = (struct mg_http_endpoint *) calloc(1, sizeof(*new_ep));
+  if (new_ep == NULL) return;
+
+  pd = mg_http_get_proto_data(nc);
   new_ep->name = strdup(uri_path);
   new_ep->name_len = strlen(new_ep->name);
   new_ep->handler = handler;
