@@ -732,30 +732,10 @@ int _stat(const char *pathname, struct stat *st);
 #define SOCK_STREAM SL_SOCK_STREAM
 #define SOCK_DGRAM SL_SOCK_DGRAM
 
-#define FD_SET SL_FD_SET
-#define FD_CLR SL_FD_CLR
-#define FD_ISSET SL_FD_ISSET
-#define FD_ZERO SL_FD_ZERO
-#define fd_set SlFdSet_t
-
 #define htonl sl_Htonl
 #define ntohl sl_Ntohl
 #define htons sl_Htons
 #define ntohs sl_Ntohs
-
-#define accept sl_Accept
-#define closesocket sl_Close
-#define bind sl_Bind
-#define connect sl_Connect
-#define listen sl_Listen
-#define recv sl_Recv
-#define recvfrom sl_RecvFrom
-#define send sl_Send
-#define sendto sl_SendTo
-#define socket sl_Socket
-
-#define select(nfds, rfds, wfds, efds, tout) \
-  sl_Select((nfds), (rfds), (wfds), (efds), (struct SlTimeval_t *)(tout))
 
 #ifndef EACCES
 #define EACCES SL_EACCES
