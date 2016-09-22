@@ -5228,11 +5228,14 @@ void mg_set_protocol_http_websocket(struct mg_connection *nc) {
 void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
                                   const char *host, const char *protocol,
                                   const char *extra_headers) {
-  /* pretty poor source of randomness, TODO fix */
-  unsigned long random = (unsigned long) (uintptr_t) path;
-  char key[sizeof(random) * 3];
+  char key[25];
+  uint32_t nonce[4];
+  nonce[0] = mg_ws_random_mask();
+  nonce[1] = mg_ws_random_mask();
+  nonce[2] = mg_ws_random_mask();
+  nonce[3] = mg_ws_random_mask();
+  mg_base64_encode((unsigned char *) &nonce, sizeof(nonce), key);
 
-  mg_base64_encode((unsigned char *) &random, sizeof(random), key);
   mg_printf(nc,
             "GET %s HTTP/1.1\r\n"
             "Upgrade: websocket\r\n"
