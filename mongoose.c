@@ -6676,9 +6676,9 @@ static void mg_abs_path(const char *utf8_path, char *abs_path, size_t len) {
   WideCharToMultiByte(CP_UTF8, 0, buf2, wcslen(buf2) + 1, abs_path, len, 0, 0);
 }
 
-static int mg_start_process(const char *interp, const char *cmd,
-                            const char *env, const char *envp[],
-                            const char *dir, sock_t sock) {
+static pid_t mg_start_process(const char *interp, const char *cmd,
+                              const char *env, const char *envp[],
+                              const char *dir, sock_t sock) {
   STARTUPINFOW si;
   PROCESS_INFORMATION pi;
   HANDLE a[2], b[2], me = GetCurrentProcess();
@@ -6733,12 +6733,6 @@ static int mg_start_process(const char *interp, const char *cmd,
                      (void *) env, full_dir, &si, &pi) != 0) {
     mg_spawn_stdio_thread(sock, a[1], mg_push_to_stdin);
     mg_spawn_stdio_thread(sock, b[0], mg_pull_from_stdout);
-
-    CloseHandle(si.hStdOutput);
-    CloseHandle(si.hStdInput);
-
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
   } else {
     CloseHandle(a[1]);
     CloseHandle(b[0]);
@@ -6747,13 +6741,19 @@ static int mg_start_process(const char *interp, const char *cmd,
   DBG(("CGI command: [%ls] -> %p", wcmd, pi.hProcess));
 
   /* Not closing a[0] and b[1] because we've used DUPLICATE_CLOSE_SOURCE */
+  CloseHandle(si.hStdOutput);
+  CloseHandle(si.hStdInput);
+  /* TODO(lsm): check if we need close process and thread handles too */
+  /* CloseHandle(pi.hThread); */
+  /* CloseHandle(pi.hProcess); */
+
   (void) envp;
-  return (pi.hProcess != NULL);
+  return pi.hProcess;
 }
 #else
-static int mg_start_process(const char *interp, const char *cmd,
-                            const char *env, const char *envp[],
-                            const char *dir, sock_t sock) {
+static pid_t mg_start_process(const char *interp, const char *cmd,
+                              const char *env, const char *envp[],
+                              const char *dir, sock_t sock) {
   char buf[500];
   pid_t pid = fork();
   (void) env;
@@ -6791,7 +6791,7 @@ static int mg_start_process(const char *interp, const char *cmd,
     exit(EXIT_FAILURE); /* exec call failed */
   }
 
-  return (pid != 0);
+  return pid;
 }
 #endif /* _WIN32 */
 
