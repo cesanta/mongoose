@@ -4045,8 +4045,8 @@ static int mg_http_get_request_len(const char *s, int buf_len) {
 
 static const char *mg_http_parse_headers(const char *s, const char *end,
                                          int len, struct http_message *req) {
-  int i;
-  for (i = 0; i < (int) ARRAY_SIZE(req->header_names) - 1; i++) {
+  int i = 0;
+  while (i < (int) ARRAY_SIZE(req->header_names) - 1) {
     struct mg_str *k = &req->header_names[i], *v = &req->header_values[i];
 
     s = mg_skip(s, end, ": ", k);
@@ -4054,6 +4054,15 @@ static const char *mg_http_parse_headers(const char *s, const char *end,
 
     while (v->len > 0 && v->p[v->len - 1] == ' ') {
       v->len--; /* Trim trailing spaces in header value */
+    }
+
+    /*
+     * If header value is empty - skip it and go to next (if any).
+     * NOTE: Do not add it to headers_values because such addition changes API
+     * behaviour
+     */
+    if (k->len != 0 && v->len == 0) {
+      continue;
     }
 
     if (k->len == 0 || v->len == 0) {
@@ -4066,6 +4075,8 @@ static const char *mg_http_parse_headers(const char *s, const char *end,
       req->body.len = (size_t) to64(v->p);
       req->message.len = len + req->body.len;
     }
+
+    i++;
   }
 
   return s;
