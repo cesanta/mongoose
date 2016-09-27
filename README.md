@@ -73,4 +73,8 @@ To submit contributions, sign
 [Cesanta CLA](https://docs.cesanta.com/contributors_la.shtml)
 and send GitHub pull request. You retain the copyright on your contributions.
 
+## Working with the Source Code
+
+See [tools](https://github.com/cesanta/mongoose/tree/master/tools) directory.
+
 [![Analytics](https://ga-beacon.appspot.com/UA-42732794-5/project-page)](https://github.com/cesanta/mongoose)
