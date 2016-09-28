@@ -27,7 +27,7 @@
 								<listOptionValue builtIn="false" value="EXPANDED_REPOS="/>
 								<listOptionValue builtIn="false" value="OUTPUT_TYPE=rtscApplication:staticLibrary"/>
 							</option>
-							<option id="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION.910806295" name="Compiler version" superClass="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION" value="5.2.7" valueType="string"/>
+							<option id="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION.910806295" name="Compiler version" superClass="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION" value="5.2.8" valueType="string"/>
 							<targetPlatform id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.targetPlatformDebug.220661868" name="Platform" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.targetPlatformDebug"/>
 							<builder buildPath="${BuildDirectory}" id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.builderDebug.2008525884" keepEnvironmentInBuildfile="false" name="GNU Make" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.builderDebug"/>
 							<tool id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.compilerDebug.1957478400" name="MSP432 Compiler" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.compilerDebug">
@@ -115,7 +115,7 @@
 								<listOptionValue builtIn="false" value="EXPANDED_REPOS="/>
 								<listOptionValue builtIn="false" value="OUTPUT_TYPE=rtscApplication:staticLibrary"/>
 							</option>
-							<option id="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION.1127638216" name="Compiler version" superClass="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION" value="5.2.7" valueType="string"/>
+							<option id="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION.1127638216" name="Compiler version" superClass="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION" value="5.2.8" valueType="string"/>
 							<targetPlatform id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.targetPlatformRelease.1428280703" name="Platform" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.targetPlatformRelease"/>
 							<builder buildPath="${BuildDirectory}" id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.builderRelease.2091719435" keepEnvironmentInBuildfile="false" name="GNU Make" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.builderRelease"/>
 							<tool id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.compilerRelease.574316885" name="MSP432 Compiler" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.library.compilerRelease">

@@ -28,7 +28,7 @@
 								<listOptionValue builtIn="false" value="RTSC_PRODUCTS=com.ti.rtsc.TIRTOSmsp430:2.16.0.08;"/>
 								<listOptionValue builtIn="false" value="OUTPUT_TYPE=rtscApplication:executable"/>
 							</option>
-							<option id="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION.138822681" name="Compiler version" superClass="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION" value="5.2.7" valueType="string"/>
+							<option id="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION.138822681" name="Compiler version" superClass="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION" value="5.2.8" valueType="string"/>
 							<targetPlatform id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.targetPlatformDebug.1618410608" name="Platform" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.targetPlatformDebug"/>
 							<builder buildPath="${BuildDirectory}" id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.builderDebug.736457078" keepEnvironmentInBuildfile="false" name="GNU Make" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.builderDebug"/>
 							<tool id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.compilerDebug.736356176" name="MSP432 Compiler" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.compilerDebug">
@@ -46,7 +46,7 @@
 									<listOptionValue builtIn="false" value="MG_FS_SLFS=1"/>
 								</option>
 								<option id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.compilerID.INCLUDE_PATH.1321802084" name="Add dir to #include search path (--include_path, -I)" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.compilerID.INCLUDE_PATH" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${PROJECT_LOC}/../Mongoose&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${PROJECT_LOC}/../MSP432_Mongoose&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${PROJECT_LOC}/../../../..&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${CCS_BASE_ROOT}/arm/include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${CCS_BASE_ROOT}/arm/include/CMSIS&quot;"/>
@@ -94,7 +94,7 @@
 								<option id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.linkerID.LIBRARY.710098937" name="Include library file or command file as input (--library, -l)" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.linkerID.LIBRARY" valueType="libs">
 									<listOptionValue builtIn="false" value="&quot;${COM_TI_RTSC_TIRTOSMSP430_INSTALL_DIR}/products/msp432_driverlib_3_10_00_09/driverlib/MSP432P4xx/ccs/msp432p4xx_driverlib.lib&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;libc.a&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${PROJECT_LOC}/../Mongoose/Debug/Mongoose.lib&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${PROJECT_LOC}/../MSP432_Mongoose/Debug/MSP432_Mongoose.lib&quot;"/>
 								</option>
 								<inputType id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exeLinker.inputType__CMD_SRCS.1725215293" name="Linker Command Files" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exeLinker.inputType__CMD_SRCS"/>
 								<inputType id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exeLinker.inputType__CMD2_SRCS.1216891169" name="Linker Command Files" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exeLinker.inputType__CMD2_SRCS"/>
@@ -124,7 +124,7 @@
 				</configuration>
 			</storageModule>
 			<storageModule moduleId="org.eclipse.cdt.core.externalSettings">
-				<externalSettings containerId="Mongoose;com.ti.ccstudio.buildDefinitions.MSP432.Debug.242205865" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier"/>
+				<externalSettings containerId="MSP432_Mongoose;com.ti.ccstudio.buildDefinitions.MSP432.Debug.242205865" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier"/>
 			</storageModule>
 		</cconfiguration>
 		<cconfiguration id="com.ti.ccstudio.buildDefinitions.MSP432.Release.436397866">
@@ -154,7 +154,7 @@
 								<listOptionValue builtIn="false" value="RTSC_PRODUCTS=com.ti.rtsc.TIRTOSmsp430:2.16.0.08;"/>
 								<listOptionValue builtIn="false" value="OUTPUT_TYPE=rtscApplication:executable"/>
 							</option>
-							<option id="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION.927265857" name="Compiler version" superClass="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION" value="5.2.7" valueType="string"/>
+							<option id="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION.927265857" name="Compiler version" superClass="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION" value="5.2.8" valueType="string"/>
 							<targetPlatform id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.targetPlatformRelease.1835040420" name="Platform" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.targetPlatformRelease"/>
 							<builder buildPath="${BuildDirectory}" id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.builderRelease.1977190713" keepEnvironmentInBuildfile="false" name="GNU Make" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.builderRelease"/>
 							<tool id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.compilerRelease.1200593934" name="MSP432 Compiler" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exe.compilerRelease">
@@ -172,7 +172,7 @@
 									<listOptionValue builtIn="false" value="MG_FS_SLFS=1"/>
 								</option>
 								<option id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.compilerID.INCLUDE_PATH.881229545" name="Add dir to #include search path (--include_path, -I)" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.compilerID.INCLUDE_PATH" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${PROJECT_LOC}/../Mongoose&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${PROJECT_LOC}/../MSP432_Mongoose&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${PROJECT_LOC}/../../../..&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${CCS_BASE_ROOT}/arm/include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${CCS_BASE_ROOT}/arm/include/CMSIS&quot;"/>
@@ -219,7 +219,7 @@
 								<option id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.linkerID.LIBRARY.818310635" name="Include library file or command file as input (--library, -l)" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.linkerID.LIBRARY" valueType="libs">
 									<listOptionValue builtIn="false" value="&quot;${COM_TI_RTSC_TIRTOSMSP430_INSTALL_DIR}/products/msp432_driverlib_3_10_00_09/driverlib/MSP432P4xx/ccs/msp432p4xx_driverlib.lib&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;libc.a&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${PROJECT_LOC}/../Mongoose/Release/Mongoose.lib&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${PROJECT_LOC}/../MSP432_Mongoose/Release/MSP432_Mongoose.lib&quot;"/>
 								</option>
 								<inputType id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exeLinker.inputType__CMD_SRCS.1894656966" name="Linker Command Files" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exeLinker.inputType__CMD_SRCS"/>
 								<inputType id="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exeLinker.inputType__CMD2_SRCS.762446262" name="Linker Command Files" superClass="com.ti.ccstudio.buildDefinitions.MSP432_5.2.exeLinker.inputType__CMD2_SRCS"/>
@@ -249,7 +249,7 @@
 				</configuration>
 			</storageModule>
 			<storageModule moduleId="org.eclipse.cdt.core.externalSettings">
-				<externalSettings containerId="Mongoose;com.ti.ccstudio.buildDefinitions.MSP432.Release.1544782967" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier"/>
+				<externalSettings containerId="MSP432_Mongoose;com.ti.ccstudio.buildDefinitions.MSP432.Release.1544782967" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier"/>
 			</storageModule>
 		</cconfiguration>
 	</storageModule>

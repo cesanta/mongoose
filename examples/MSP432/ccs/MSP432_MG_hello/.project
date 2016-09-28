@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>MG_hello</name>
+	<name>MSP432_MG_hello</name>
 	<comment></comment>
 	<projects>
-		<project>Mongoose</project>
+		<project>MSP432_Mongoose</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

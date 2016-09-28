@@ -4,7 +4,7 @@
 	<deviceVariant value="MSP432P401R"/>
 	<deviceFamily value="MSP432"/>
 	<deviceEndianness value="little"/>
-	<codegenToolVersion value="5.2.7"/>
+	<codegenToolVersion value="5.2.8"/>
 	<isElfFormat value="true"/>
 	<connection value="common/targetdb/connections/TIXDS110_Connection.xml"/>
 	<createSlaveProjects value=""/>
