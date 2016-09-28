@@ -28,6 +28,13 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
   struct mbuf *io = &nc->recv_mbuf;
   (void) p;
   switch (ev) {
+    case MG_EV_POLL: {
+      const char *peer;
+      peer = inet_ntoa(nc->sa.sin.sin_addr);
+      printf("nc->sa: %s %d\n", peer, ntohs(nc->sa.sin.sin_port));
+
+      break;
+    }
     case MG_EV_RECV:
       printf("Received (%zu bytes): '%.*s'\n", io->len, (int) io->len, io->buf);
       mbuf_remove(io, io->len);

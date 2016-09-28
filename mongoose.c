@@ -8455,7 +8455,7 @@ int mg_dns_copy_questions(struct mbuf *io, struct mg_dns_message *msg) {
   return mbuf_append(io, begin, end - begin);
 }
 
-static int mg_dns_encode_name(struct mbuf *io, const char *name, size_t len) {
+int mg_dns_encode_name(struct mbuf *io, const char *name, size_t len) {
   const char *s;
   unsigned char n;
   size_t pos = io->len;

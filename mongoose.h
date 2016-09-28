@@ -3223,7 +3223,10 @@ extern "C" {
 
 #define MG_DNS_A_RECORD 0x01     /* Lookup IP address */
 #define MG_DNS_CNAME_RECORD 0x05 /* Lookup CNAME */
+#define MG_DNS_PTR_RECORD 0x0c   /* Lookup PTR */
+#define MG_DNS_TXT_RECORD 0x10   /* Lookup TXT */
 #define MG_DNS_AAAA_RECORD 0x1c  /* Lookup IPv6 address */
+#define MG_DNS_SRV_RECORD 0x21   /* Lookup SRV */
 #define MG_DNS_MX_RECORD 0x0f    /* Lookup mail server for domain */
 
 #define MG_MAX_DNS_QUESTIONS 32
@@ -3308,17 +3311,22 @@ int mg_dns_copy_questions(struct mbuf *io, struct mg_dns_message *msg);
  * record type and stored in the IO buffer. The encoded values might contain
  * offsets within the IO buffer. It's thus important that the IO buffer doesn't
  * get trimmed while a sequence of records are encoded while preparing a DNS
- *reply.
+ * reply.
  *
  * This function doesn't update the `name` and `rdata` pointers in the `rr`
- *struct
- * because they might be invalidated as soon as the IO buffer grows again.
+ * struct because they might be invalidated as soon as the IO buffer grows
+ * again.
  *
  * Returns the number of bytes appened or -1 in case of error.
  */
 int mg_dns_encode_record(struct mbuf *io, struct mg_dns_resource_record *rr,
                          const char *name, size_t nlen, const void *rdata,
                          size_t rlen);
+
+/*
+ * Encodes a DNS name.
+ */
+int mg_dns_encode_name(struct mbuf *io, const char *name, size_t len);
 
 /* Low-level: parses a DNS response. */
 int mg_parse_dns(const char *buf, int len, struct mg_dns_message *msg);

@@ -8,6 +8,7 @@ items:
   - { name: mg_dns_insert_header.md }
   - { name: mg_dns_copy_questions.md }
   - { name: mg_dns_encode_record.md }
+  - { name: mg_dns_encode_name.md }
   - { name: mg_parse_dns.md }
   - { name: mg_dns_uncompress_name.md }
   - { name: mg_set_protocol_dns.md }
