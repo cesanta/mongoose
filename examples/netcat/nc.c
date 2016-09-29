@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
   int i, is_listening = 0;
   const char *address = NULL;
   struct mg_connection *c;
-  // struct mg_bind_opts = {};
+  const char *err = NULL;
 
   mg_mgr_init(&mgr, NULL);
 
@@ -133,13 +133,21 @@ int main(int argc, char *argv[]) {
   signal(SIGPIPE, SIG_IGN);
 
   if (is_listening) {
-    if ((c = mg_bind(&mgr, address, ev_handler)) == NULL) {
-      fprintf(stderr, "mg_bind(%s) failed\n", address);
+    struct mg_bind_opts opts;
+    memset(&opts, 0, sizeof(opts));
+    opts.error_string = &err;
+    if ((c = mg_bind_opt(&mgr, address, ev_handler, opts)) == NULL) {
+      fprintf(stderr, "mg_bind(%s) failed: %s\n", address, err);
       exit(EXIT_FAILURE);
     }
-  } else if ((c = mg_connect(&mgr, address, ev_handler)) == NULL) {
-    fprintf(stderr, "mg_connect(%s) failed\n", address);
-    exit(EXIT_FAILURE);
+  } else {
+    struct mg_connect_opts opts;
+    memset(&opts, 0, sizeof(opts));
+    opts.error_string = &err;
+    if ((c = mg_connect_opt(&mgr, address, ev_handler, opts)) == NULL) {
+      fprintf(stderr, "mg_connect(%s) failed: %s\n", address, err);
+      exit(EXIT_FAILURE);
+    }
   }
   if (s_is_websocket) {
     mg_set_protocol_http_websocket(c);
