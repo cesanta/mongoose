@@ -16,6 +16,7 @@ items:
   - { name: mg_send_http_chunk.md }
   - { name: mg_printf_http_chunk.md }
   - { name: mg_send_response_line.md }
+  - { name: mg_http_send_redirect.md }
   - { name: mg_send_head.md }
   - { name: mg_printf_html_escape.md }
   - { name: mg_fu_fname_fn.md }

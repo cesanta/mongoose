@@ -5336,6 +5336,28 @@ void mg_send_response_line(struct mg_connection *nc, int status_code,
   mg_send_response_line_s(nc, status_code, mg_mk_str(extra_headers));
 }
 
+void mg_http_send_redirect(struct mg_connection *nc, int status_code,
+                           const struct mg_str location,
+                           const struct mg_str extra_headers) {
+  char bbody[100], *pbody = bbody;
+  int bl = mg_asprintf(&pbody, sizeof(bbody),
+                       "<p>Moved <a href='%.*s'>here</a>.\r\n",
+                       (int) location.len, location.p);
+  char bhead[150], *phead = bhead;
+  mg_asprintf(&phead, sizeof(bhead),
+              "Location: %.*s\r\n"
+              "Content-Type: text/html\r\n"
+              "Content-Length: %d\r\n"
+              "Cache-Control: no-cache\r\n"
+              "%.*s%s",
+              (int) location.len, location.p, bl, (int) extra_headers.len,
+              extra_headers.p, (extra_headers.len > 0 ? "\r\n" : ""));
+  mg_send_response_line(nc, status_code, phead);
+  if (phead != bhead) MG_FREE(phead);
+  mg_send(nc, pbody, bl);
+  if (pbody != bbody) MG_FREE(pbody);
+}
+
 void mg_send_head(struct mg_connection *c, int status_code,
                   int64_t content_length, const char *extra_headers) {
   mg_send_response_line(c, status_code, extra_headers);
@@ -7752,6 +7774,15 @@ int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   }
 
   return len;
+}
+
+int mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
+  int ret;
+  va_list ap;
+  va_start(ap, fmt);
+  ret = mg_avprintf(buf, size, fmt, ap);
+  va_end(ap);
+  return ret;
 }
 
 #if !defined(MG_DISABLE_HEXDUMP)

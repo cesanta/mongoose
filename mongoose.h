@@ -2009,6 +2009,7 @@ int mg_hexdump(const void *buf, int len, char *dst, int dst_len);
  */
 void mg_hexdump_connection(struct mg_connection *nc, const char *path,
                            const void *buf, int num_bytes, int ev);
+
 /*
  * Prints message to the buffer. If the buffer is large enough to hold the
  * message, it returns buffer. If buffer is to small, it allocates a large
@@ -2016,7 +2017,7 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
  * This is a supposed use case:
  *
  *    char buf[5], *p = buf;
- *    p = mg_avprintf(&p, sizeof(buf), "%s", "hi there");
+ *    mg_avprintf(&p, sizeof(buf), "%s", "hi there");
  *    use_p_somehow(p);
  *    if (p != buf) {
  *      free(p);
@@ -2024,6 +2025,9 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
  *
  * The purpose of this is to avoid malloc-ing if generated strings are small.
  */
+int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
+
+/* Same as mg_asprintf, but takes varargs list. */
 int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap);
 
 /*
@@ -2800,8 +2804,27 @@ void mg_printf_http_chunk(struct mg_connection *nc, const char *fmt, ...);
  *      HTTP/1.1 200 OK\r\n
  *      Access-Control-Allow-Origin: *\r\n
  */
-void mg_send_response_line(struct mg_connection *c, int status_code,
+void mg_send_response_line(struct mg_connection *nc, int status_code,
                            const char *extra_headers);
+
+/*
+ * Sends a redirect response.
+ * `status_code` should be either 301 or 302 and `location` point to the
+ * new location.
+ * If `extra_headers` is not empty, then `extra_headers` are also sent
+ * after the reponse line. `extra_headers` must NOT end end with new line.
+ * Example:
+ *
+ *      mg_send_response_line(nc, 200, "Access-Control-Allow-Origin: *");
+ *
+ * Will result in:
+ *
+ *      HTTP/1.1 200 OK\r\n
+ *      Access-Control-Allow-Origin: *\r\n
+ */
+void mg_http_send_redirect(struct mg_connection *nc, int status_code,
+                           const struct mg_str location,
+                           const struct mg_str extra_headers);
 
 /*
  * Sends the response line and headers.

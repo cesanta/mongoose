@@ -17,6 +17,7 @@ items:
   - { name: mg_sock_addr_to_str.md }
   - { name: mg_hexdump.md }
   - { name: mg_hexdump_connection.md }
+  - { name: mg_asprintf.md }
   - { name: mg_avprintf.md }
   - { name: mg_is_big_endian.md }
   - { name: mg_next_comma_list_entry.md }

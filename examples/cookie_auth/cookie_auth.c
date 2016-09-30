@@ -120,12 +120,6 @@ static struct session *create_session(const char *user,
   return s;
 }
 
-static void set_session_cookie(struct mg_connection *nc,
-                               const struct session *s) {
-  mg_printf(nc, "Set-Cookie: %s=%" INT64_X_FMT "; path=/\r\n",
-            SESSION_COOKIE_NAME, s->id);
-}
-
 /*
  * If requested via GET, serves the login page.
  * If requested via POST (form submission), checks password and logs user in.
@@ -143,10 +137,11 @@ static void login_handler(struct mg_connection *nc, int ev, void *p) {
     if (ul > 0 && pl > 0) {
       if (check_pass(user, pass)) {
         struct session *s = create_session(user, hm);
-        mg_printf(nc, "HTTP/1.0 302 Found\r\n");
-        set_session_cookie(nc, s);
-        mg_printf(nc, "Location: /\r\n");
-        mg_printf(nc, "\r\nHello, %s!\r\n", s->user);
+        char shead[100];
+        snprintf(shead, sizeof(shead),
+                 "Set-Cookie: %s=%" INT64_X_FMT "; path=/", SESSION_COOKIE_NAME,
+                 s->id);
+        mg_http_send_redirect(nc, 302, mg_mk_str("/"), mg_mk_str(shead));
         fprintf(stderr, "%s logged in, sid %" INT64_X_FMT "\n", s->user, s->id);
       } else {
         mg_printf(nc, "HTTP/1.0 403 Unauthorized\r\n\r\nWrong password.\r\n");
@@ -165,13 +160,9 @@ static void login_handler(struct mg_connection *nc, int ev, void *p) {
  */
 static void logout_handler(struct mg_connection *nc, int ev, void *p) {
   struct http_message *hm = (struct http_message *) p;
-  mg_printf(nc,
-            "HTTP/1.0 302 Found\r\n"
-            "Set-Cookie: %s=\r\n"
-            "Location: /\r\n"
-            "\r\n"
-            "Logged out",
-            SESSION_COOKIE_NAME);
+  char shead[100];
+  snprintf(shead, sizeof(shead), "Set-Cookie: %s=", SESSION_COOKIE_NAME);
+  mg_http_send_redirect(nc, 302, mg_mk_str("/"), mg_mk_str(shead));
   struct session *s = get_session(hm);
   if (s != NULL) {
     fprintf(stderr, "%s logged out, session %" INT64_X_FMT " destroyed\n",
@@ -203,11 +194,8 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
       struct session *s = get_session(hm);
       /* Ask the user to log in if they did not present a valid cookie. */
       if (s == NULL) {
-        mg_printf(nc,
-                  "HTTP/1.0 302 Found\r\n"
-                  "Location: /login.html\r\n"
-                  "\r\n"
-                  "Please log in");
+        mg_http_send_redirect(nc, 302, mg_mk_str("/login.html"),
+                              mg_mk_str(NULL));
         nc->flags |= MG_F_SEND_AND_CLOSE;
         break;
       }

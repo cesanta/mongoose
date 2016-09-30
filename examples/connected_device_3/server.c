@@ -20,7 +20,7 @@ static void handle_save(struct mg_connection *nc, struct http_message *hm) {
                   sizeof(s_settings.setting2));
 
   // Send response
-  mg_printf(nc, "%s", "HTTP/1.1 302 OK\r\nLocation: /\r\n\r\n");
+  mg_http_send_redirect(nc, 302, mg_mk_str("/"), mg_mk_str(NULL));
 }
 
 static void handle_get_cpu_usage(struct mg_connection *nc) {

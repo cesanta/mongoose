@@ -3,7 +3,7 @@ title: "mg_send_response_line()"
 decl_name: "mg_send_response_line"
 symbol_kind: "func"
 signature: |
-  void mg_send_response_line(struct mg_connection *c, int status_code,
+  void mg_send_response_line(struct mg_connection *nc, int status_code,
                              const char *extra_headers);
 ---
 
