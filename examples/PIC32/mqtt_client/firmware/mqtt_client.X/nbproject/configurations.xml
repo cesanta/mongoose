@@ -1,0 +1,489 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configurationDescriptor version="62">
+  <logicalFolder name="root" displayName="root" projectFiles="true">
+    <logicalFolder name="HeaderFiles"
+                   displayName="Header Files"
+                   projectFiles="true">
+      <logicalFolder name="f3" displayName="app" projectFiles="true">
+        <logicalFolder name="f1" displayName="system_config" projectFiles="true">
+          <logicalFolder name="f1" displayName="mx795_CC3100_e16" projectFiles="true">
+            <logicalFolder name="f1" displayName="framework" projectFiles="true">
+              <logicalFolder name="f1" displayName="driver" projectFiles="true">
+                <logicalFolder name="f1" displayName="rtcc" projectFiles="true">
+                  <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/rtcc/drv_rtcc_static.h</itemPath>
+                </logicalFolder>
+                <logicalFolder name="f2" displayName="spi" projectFiles="true">
+                  <logicalFolder name="f1" displayName="static" projectFiles="true">
+                    <logicalFolder name="f1" displayName="src" projectFiles="true">
+                      <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/spi/static/src/drv_spi_static_local.h</itemPath>
+                      <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/spi/static/src/drv_spi_static_sys_queue.h</itemPath>
+                    </logicalFolder>
+                    <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/spi/static/drv_spi_static.h</itemPath>
+                  </logicalFolder>
+                </logicalFolder>
+                <logicalFolder name="f3" displayName="usart" projectFiles="true">
+                  <logicalFolder name="f1" displayName="src" projectFiles="true">
+                    <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/usart/src/drv_usart_static_local.h</itemPath>
+                  </logicalFolder>
+                  <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/usart/drv_usart_static.h</itemPath>
+                </logicalFolder>
+              </logicalFolder>
+              <logicalFolder name="f2" displayName="system" projectFiles="true">
+                <logicalFolder name="f1" displayName="clk" projectFiles="true">
+                  <itemPath>../src/system_config/mx795_CC3100_e16/framework/system/clk/sys_clk_static.h</itemPath>
+                </logicalFolder>
+              </logicalFolder>
+            </logicalFolder>
+            <itemPath>../src/system_config/mx795_CC3100_e16/system_config.h</itemPath>
+            <itemPath>../src/system_config/mx795_CC3100_e16/system_definitions.h</itemPath>
+          </logicalFolder>
+        </logicalFolder>
+        <itemPath>../src/app.h</itemPath>
+        <itemPath>../src/user_params.h</itemPath>
+      </logicalFolder>
+      <logicalFolder name="f1" displayName="framework" projectFiles="true">
+        <logicalFolder name="f1" displayName="driver" projectFiles="true">
+          <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/driver/driver.h</itemPath>
+          <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/driver/driver_common.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="f2" displayName="gfx" projectFiles="true">
+          <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/gfx/gfx_palette.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="f3" displayName="osal" projectFiles="true">
+          <logicalFolder name="f1" displayName="src" projectFiles="true">
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/osal/src/osal_impl_basic.h</itemPath>
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/osal/src/osal_impl_none.h</itemPath>
+          </logicalFolder>
+          <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/osal/osal.h</itemPath>
+          <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/osal/osal_definitions.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="f4" displayName="peripheral" projectFiles="true">
+          <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/peripheral/peripheral.h</itemPath>
+          <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/peripheral/peripheral_common.h</itemPath>
+          <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/peripheral/peripheral_common_32bit.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="f5" displayName="system" projectFiles="true">
+          <logicalFolder name="f1" displayName="clk" projectFiles="true">
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/clk/sys_clk.h</itemPath>
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/clk/sys_clk_mapping.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="f2" displayName="common" projectFiles="true">
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/common/sys_common.h</itemPath>
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/common/sys_module.h</itemPath>
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/common/sys_buffer.h</itemPath>
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/common/sys_queue.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="f3" displayName="console" projectFiles="true">
+            <logicalFolder name="f1" displayName="src" projectFiles="true">
+              <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/console/src/sys_console_local.h</itemPath>
+            </logicalFolder>
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/console/sys_console.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="f4" displayName="debug" projectFiles="true">
+            <logicalFolder name="f1" displayName="src" projectFiles="true">
+              <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/debug/src/sys_debug_local.h</itemPath>
+            </logicalFolder>
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/debug/sys_debug.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="f5" displayName="devcon" projectFiles="true">
+            <logicalFolder name="f1" displayName="src" projectFiles="true">
+              <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/devcon/src/sys_devcon_local.h</itemPath>
+            </logicalFolder>
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/devcon/sys_devcon.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="f6" displayName="int" projectFiles="true">
+            <logicalFolder name="f1" displayName="src" projectFiles="true">
+              <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/int/src/sys_int_private.h</itemPath>
+            </logicalFolder>
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/int/sys_int.h</itemPath>
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/int/sys_int_mapping.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="f7" displayName="ports" projectFiles="true">
+            <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/ports/sys_ports.h</itemPath>
+          </logicalFolder>
+          <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/system.h</itemPath>
+        </logicalFolder>
+      </logicalFolder>
+      <itemPath>../src/user.h</itemPath>
+    </logicalFolder>
+    <logicalFolder name="LinkerScript"
+                   displayName="Linker Files"
+                   projectFiles="true">
+    </logicalFolder>
+    <logicalFolder name="f1" displayName="Mongoose" projectFiles="true">
+      <itemPath>../../../../../mongoose.c</itemPath>
+      <itemPath>../../../../../mongoose.h</itemPath>
+    </logicalFolder>
+    <logicalFolder name="simplelink" displayName="simplelink" projectFiles="true">
+      <logicalFolder name="include" displayName="include" projectFiles="true">
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/include/trace.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/include/device.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/include/socket.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/include/fs.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/include/netcfg.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/include/netapp.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/include/simplelink.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/include/wlan_rx_filters.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/include/wlan.h</itemPath>
+      </logicalFolder>
+      <logicalFolder name="source" displayName="source" projectFiles="true">
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/netcfg.c</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/device.c</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/driver.c</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/protocol.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/nonos.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/objInclusion.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/fs.c</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/wlan.c</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/driver.h</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/socket.c</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/netapp.c</itemPath>
+        <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/source/nonos.c</itemPath>
+      </logicalFolder>
+      <itemPath>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink/template_user.h</itemPath>
+    </logicalFolder>
+    <logicalFolder name="SourceFiles"
+                   displayName="Source Files"
+                   projectFiles="true">
+      <logicalFolder name="f3" displayName="app" projectFiles="true">
+        <logicalFolder name="f1" displayName="system_config" projectFiles="true">
+          <logicalFolder name="f1" displayName="mx795_CC3100_e16" projectFiles="true">
+            <logicalFolder name="f1" displayName="framework" projectFiles="true">
+              <logicalFolder name="f1" displayName="driver" projectFiles="true">
+                <logicalFolder name="f1" displayName="rtcc" projectFiles="true">
+                  <logicalFolder name="f1" displayName="src" projectFiles="true">
+                    <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/rtcc/src/drv_rtcc_static.c</itemPath>
+                  </logicalFolder>
+                </logicalFolder>
+                <logicalFolder name="f2" displayName="spi" projectFiles="true">
+                  <logicalFolder name="f1" displayName="static" projectFiles="true">
+                    <logicalFolder name="f1" displayName="src" projectFiles="true">
+                      <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/spi/static/src/drv_spi_static.c</itemPath>
+                      <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/spi/static/src/drv_spi_mapping.c</itemPath>
+                      <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/spi/static/src/drv_spi_static_tasks.c</itemPath>
+                      <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/spi/static/src/drv_spi_static_sys_queue.c</itemPath>
+                      <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/spi/static/src/drv_spi_static_rm_tasks.c</itemPath>
+                    </logicalFolder>
+                  </logicalFolder>
+                </logicalFolder>
+                <logicalFolder name="f3" displayName="usart" projectFiles="true">
+                  <logicalFolder name="f1" displayName="src" projectFiles="true">
+                    <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/usart/src/drv_usart_mapping.c</itemPath>
+                    <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/usart/src/drv_usart_static.c</itemPath>
+                    <itemPath>../src/system_config/mx795_CC3100_e16/framework/driver/usart/src/drv_usart_static_byte_model.c</itemPath>
+                  </logicalFolder>
+                </logicalFolder>
+              </logicalFolder>
+              <logicalFolder name="f2" displayName="system" projectFiles="true">
+                <logicalFolder name="f1" displayName="clk" projectFiles="true">
+                  <logicalFolder name="f1" displayName="src" projectFiles="true">
+                    <itemPath>../src/system_config/mx795_CC3100_e16/framework/system/clk/src/sys_clk_static.c</itemPath>
+                  </logicalFolder>
+                </logicalFolder>
+                <logicalFolder name="f2" displayName="console" projectFiles="true">
+                  <logicalFolder name="f1" displayName="src" projectFiles="true">
+                    <itemPath>../src/system_config/mx795_CC3100_e16/framework/system/console/src/sys_console_static.c</itemPath>
+                  </logicalFolder>
+                </logicalFolder>
+                <logicalFolder name="f3" displayName="ports" projectFiles="true">
+                  <logicalFolder name="f1" displayName="src" projectFiles="true">
+                    <itemPath>../src/system_config/mx795_CC3100_e16/framework/system/ports/src/sys_ports_static.c</itemPath>
+                  </logicalFolder>
+                </logicalFolder>
+              </logicalFolder>
+            </logicalFolder>
+            <itemPath>../src/system_config/mx795_CC3100_e16/system_init.c</itemPath>
+            <itemPath>../src/system_config/mx795_CC3100_e16/system_interrupt.c</itemPath>
+            <itemPath>../src/system_config/mx795_CC3100_e16/system_exceptions.c</itemPath>
+            <itemPath>../src/system_config/mx795_CC3100_e16/system_tasks.c</itemPath>
+          </logicalFolder>
+        </logicalFolder>
+        <itemPath>../src/app.c</itemPath>
+        <itemPath>../src/main.c</itemPath>
+        <itemPath>../src/cc3100_port.c</itemPath>
+      </logicalFolder>
+      <logicalFolder name="f1" displayName="framework" projectFiles="true">
+        <logicalFolder name="f1" displayName="system" projectFiles="true">
+          <logicalFolder name="f1" displayName="debug" projectFiles="true">
+            <logicalFolder name="f1" displayName="src" projectFiles="true">
+              <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/debug/src/sys_debug.c</itemPath>
+            </logicalFolder>
+          </logicalFolder>
+          <logicalFolder name="f2" displayName="devcon" projectFiles="true">
+            <logicalFolder name="f1" displayName="src" projectFiles="true">
+              <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/devcon/src/sys_devcon.c</itemPath>
+              <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/devcon/src/sys_devcon_pic32mx.c</itemPath>
+            </logicalFolder>
+          </logicalFolder>
+          <logicalFolder name="f3" displayName="int" projectFiles="true">
+            <logicalFolder name="f1" displayName="src" projectFiles="true">
+              <itemPath>../../../../../../../../../microchip/harmony/v1_08_01/framework/system/int/src/sys_int_pic32.c</itemPath>
+            </logicalFolder>
+          </logicalFolder>
+        </logicalFolder>
+      </logicalFolder>
+    </logicalFolder>
+    <logicalFolder name="ExternalFiles"
+                   displayName="Important Files"
+                   projectFiles="false">
+      <itemPath>Makefile</itemPath>
+    </logicalFolder>
+  </logicalFolder>
+  <sourceRootList>
+    <Elem>../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink</Elem>
+    <Elem>../../../../../../../go/src/cesanta.com/mongoose</Elem>
+    <Elem>../../../../../../../microchip/harmony/v1_08_01</Elem>
+    <Elem>../../../../../../../../../CC3100SDK_1.2.0/cc3100-sdk/simplelink</Elem>
+    <Elem>../../../../..</Elem>
+  </sourceRootList>
+  <projectmakefile>Makefile</projectmakefile>
+  <confs>
+    <conf name="mx795_CC3100_e16" type="2">
+      <toolsSet>
+        <developmentServer>localhost</developmentServer>
+        <targetDevice>PIC32MX795F512L</targetDevice>
+        <targetHeader></targetHeader>
+        <targetPluginBoard></targetPluginBoard>
+        <platformTool>PKOBSKDEPlatformTool</platformTool>
+        <languageToolchain>XC32</languageToolchain>
+        <languageToolchainVersion>1.42</languageToolchainVersion>
+        <platform>2</platform>
+      </toolsSet>
+      <compileType>
+        <linkerTool>
+          <linkerLibItems>
+            <linkerLibFileItem>../../../../../../../../../microchip/harmony/v1_08_01/bin/framework/peripheral/PIC32MX795F512L_peripherals.a</linkerLibFileItem>
+            <linkerLibFileItem>../../../../../../../../../microchip/harmony/v1_08_01/framework/tcpip/src/crypto/aes_pic32mx.a</linkerLibFileItem>
+          </linkerLibItems>
+        </linkerTool>
+        <archiverTool>
+        </archiverTool>
+        <loading>
+          <useAlternateLoadableFile>false</useAlternateLoadableFile>
+          <parseOnProdLoad>false</parseOnProdLoad>
+          <alternateLoadableFile></alternateLoadableFile>
+        </loading>
+      </compileType>
+      <makeCustomizationType>
+        <makeCustomizationPreStepEnabled>false</makeCustomizationPreStepEnabled>
+        <makeCustomizationPreStep></makeCustomizationPreStep>
+        <makeCustomizationPostStepEnabled>false</makeCustomizationPostStepEnabled>
+        <makeCustomizationPostStep></makeCustomizationPostStep>
+        <makeCustomizationPutChecksumInUserID>false</makeCustomizationPutChecksumInUserID>
+        <makeCustomizationEnableLongLines>false</makeCustomizationEnableLongLines>
+        <makeCustomizationNormalizeHexFile>false</makeCustomizationNormalizeHexFile>
+      </makeCustomizationType>
+      <C32>
+        <property key="additional-warnings" value="false"/>
+        <property key="addresss-attribute-use" value="false"/>
+        <property key="enable-app-io" value="false"/>
+        <property key="enable-omit-frame-pointer" value="false"/>
+        <property key="enable-symbols" value="true"/>
+        <property key="enable-unroll-loops" value="false"/>
+        <property key="exclude-floating-point" value="false"/>
+        <property key="extra-include-directories"
+                  value="../src;../src/system_config/mx795_CC3100_e16;../src/mx795_CC3100_e16;../../../../framework;../src/system_config/mx795_CC3100_e16/framework;../../../../../../../../../microchip/harmony/v1_08_01/framework"/>
+        <property key="generate-16-bit-code" value="false"/>
+        <property key="generate-micro-compressed-code" value="false"/>
+        <property key="isolate-each-function" value="true"/>
+        <property key="make-warnings-into-errors" value="false"/>
+        <property key="optimization-level" value="-O1"/>
+        <property key="place-data-into-section" value="false"/>
+        <property key="post-instruction-scheduling" value="default"/>
+        <property key="pre-instruction-scheduling" value="default"/>
+        <property key="preprocessor-macros" value=""/>
+        <property key="strict-ansi" value="false"/>
+        <property key="support-ansi" value="false"/>
+        <property key="toplevel-reordering" value=""/>
+        <property key="use-cci" value="false"/>
+        <property key="use-iar" value="false"/>
+        <property key="use-indirect-calls" value="false"/>
+      </C32>
+      <C32-AR>
+        <property key="additional-options-chop-files" value="false"/>
+      </C32-AR>
+      <C32-AS>
+        <property key="assembler-symbols" value=""/>
+        <property key="enable-symbols" value="true"/>
+        <property key="exclude-floating-point-library" value="false"/>
+        <property key="expand-macros" value="false"/>
+        <property key="extra-include-directories-for-assembler" value=""/>
+        <property key="extra-include-directories-for-preprocessor" value=""/>
+        <property key="false-conditionals" value="false"/>
+        <property key="generate-16-bit-code" value="false"/>
+        <property key="generate-micro-compressed-code" value="false"/>
+        <property key="keep-locals" value="false"/>
+        <property key="list-assembly" value="false"/>
+        <property key="list-source" value="false"/>
+        <property key="list-symbols" value="false"/>
+        <property key="oXC32asm-list-to-file" value="false"/>
+        <property key="omit-debug-dirs" value="false"/>
+        <property key="omit-forms" value="false"/>
+        <property key="preprocessor-macros" value=""/>
+        <property key="warning-level" value=""/>
+      </C32-AS>
+      <C32-LD>
+        <property key="additional-options-use-response-files" value="false"/>
+        <property key="allocate-dinit" value="false"/>
+        <property key="code-dinit" value="false"/>
+        <property key="ebase-addr" value=""/>
+        <property key="enable-check-sections" value="false"/>
+        <property key="exclude-floating-point-library" value="false"/>
+        <property key="exclude-standard-libraries" value="false"/>
+        <property key="extra-lib-directories" value=""/>
+        <property key="fill-flash-options-addr" value=""/>
+        <property key="fill-flash-options-const" value=""/>
+        <property key="fill-flash-options-how" value="0"/>
+        <property key="fill-flash-options-inc-const" value="1"/>
+        <property key="fill-flash-options-increment" value=""/>
+        <property key="fill-flash-options-seq" value=""/>
+        <property key="fill-flash-options-what" value="0"/>
+        <property key="generate-16-bit-code" value="false"/>
+        <property key="generate-cross-reference-file" value="false"/>
+        <property key="generate-micro-compressed-code" value="false"/>
+        <property key="heap-size" value="2048"/>
+        <property key="input-libraries" value=""/>
+        <property key="kseg-length" value=""/>
+        <property key="kseg-origin" value=""/>
+        <property key="linker-symbols" value=""/>
+        <property key="map-file" value="${DISTDIR}/${PROJECTNAME}.${IMAGE_TYPE}.map"/>
+        <property key="no-startup-files" value="false"/>
+        <property key="oXC32ld-extra-opts" value=""/>
+        <property key="optimization-level" value=""/>
+        <property key="preprocessor-macros" value=""/>
+        <property key="remove-unused-sections" value="true"/>
+        <property key="report-memory-usage" value="false"/>
+        <property key="serial-length" value=""/>
+        <property key="serial-origin" value=""/>
+        <property key="stack-size" value=""/>
+        <property key="symbol-stripping" value=""/>
+        <property key="trace-symbols" value=""/>
+        <property key="warn-section-align" value="false"/>
+      </C32-LD>
+      <C32CPP>
+        <property key="additional-warnings" value="false"/>
+        <property key="addresss-attribute-use" value="false"/>
+        <property key="check-new" value="false"/>
+        <property key="eh-specs" value="true"/>
+        <property key="enable-app-io" value="false"/>
+        <property key="enable-omit-frame-pointer" value="false"/>
+        <property key="enable-symbols" value="true"/>
+        <property key="enable-unroll-loops" value="false"/>
+        <property key="exceptions" value="true"/>
+        <property key="exclude-floating-point" value="false"/>
+        <property key="extra-include-directories" value=""/>
+        <property key="generate-16-bit-code" value="false"/>
+        <property key="generate-micro-compressed-code" value="false"/>
+        <property key="isolate-each-function" value="true"/>
+        <property key="make-warnings-into-errors" value="false"/>
+        <property key="optimization-level" value="-O1"/>
+        <property key="place-data-into-section" value="false"/>
+        <property key="post-instruction-scheduling" value="default"/>
+        <property key="pre-instruction-scheduling" value="default"/>
+        <property key="preprocessor-macros" value=""/>
+        <property key="rtti" value="true"/>
+        <property key="strict-ansi" value="false"/>
+        <property key="toplevel-reordering" value=""/>
+        <property key="use-cci" value="false"/>
+        <property key="use-iar" value="false"/>
+        <property key="use-indirect-calls" value="false"/>
+      </C32CPP>
+      <C32Global>
+        <property key="common-include-directories"
+                  value="/home/alex/CC3100SDK_1.2.0/cc3100-sdk/simplelink/include"/>
+        <property key="gp-relative-option" value=""/>
+        <property key="legacy-libc" value="false"/>
+        <property key="relaxed-math" value="false"/>
+        <property key="save-temps" value="false"/>
+        <property key="wpo-lto" value="false"/>
+        <appendMe value="-DEXT_LIB_REGISTERED_GENERAL_EVENTS -DSL_FULL -DCS_PLATFORM=6 -DMG_SIMPLELINK_NO_OSI"/>
+      </C32Global>
+      <PICkit3PlatformTool>
+        <property key="ADC 1" value="true"/>
+        <property key="AutoSelectMemRanges" value="auto"/>
+        <property key="CHANGE NOTICE" value="true"/>
+        <property key="COMPARATOR" value="true"/>
+        <property key="CTMU" value="true"/>
+        <property key="DMA" value="true"/>
+        <property key="Freeze All Other Peripherals" value="true"/>
+        <property key="I2C1" value="true"/>
+        <property key="I2C2" value="true"/>
+        <property key="INPUT CAPTURE 1" value="true"/>
+        <property key="INPUT CAPTURE 2" value="true"/>
+        <property key="INPUT CAPTURE 3" value="true"/>
+        <property key="INPUT CAPTURE 4" value="true"/>
+        <property key="INPUT CAPTURE 5" value="true"/>
+        <property key="INTERRUPT CONTROL" value="true"/>
+        <property key="OUTPUT COMPARE 1" value="true"/>
+        <property key="OUTPUT COMPARE 2" value="true"/>
+        <property key="OUTPUT COMPARE 3" value="true"/>
+        <property key="OUTPUT COMPARE 4" value="true"/>
+        <property key="OUTPUT COMPARE 5" value="true"/>
+        <property key="PARALLEL MASTER/SLAVE PORT" value="true"/>
+        <property key="REAL TIME CLOCK" value="true"/>
+        <property key="SPI/I2S 1" value="true"/>
+        <property key="SPI/I2S 2" value="true"/>
+        <property key="SecureSegment.SegmentProgramming" value="FullChipProgramming"/>
+        <property key="TIMER1" value="true"/>
+        <property key="TIMER2" value="true"/>
+        <property key="TIMER3" value="true"/>
+        <property key="TIMER4" value="true"/>
+        <property key="TIMER5" value="true"/>
+        <property key="ToolFirmwareFilePath"
+                  value="Press to browse for a specific firmware version"/>
+        <property key="ToolFirmwareOption.UseLatestFirmware" value="true"/>
+        <property key="UART1" value="true"/>
+        <property key="UART2" value="true"/>
+        <property key="hwtoolclock.frcindebug" value="false"/>
+        <property key="memories.aux" value="false"/>
+        <property key="memories.bootflash" value="true"/>
+        <property key="memories.configurationmemory" value="true"/>
+        <property key="memories.eeprom" value="true"/>
+        <property key="memories.flashdata" value="true"/>
+        <property key="memories.id" value="true"/>
+        <property key="memories.programmemory" value="true"/>
+        <property key="memories.programmemory.end" value="0x1d003fff"/>
+        <property key="memories.programmemory.start" value="0x1d000000"/>
+        <property key="poweroptions.powerenable" value="false"/>
+        <property key="programmertogo.imagename" value=""/>
+        <property key="programoptions.donoteraseauxmem" value="false"/>
+        <property key="programoptions.eraseb4program" value="true"/>
+        <property key="programoptions.pgmspeed" value="2"/>
+        <property key="programoptions.preserveeeprom" value="false"/>
+        <property key="programoptions.preserveprogramrange" value="false"/>
+        <property key="programoptions.preserveprogramrange.end" value="0x1d003fff"/>
+        <property key="programoptions.preserveprogramrange.start" value="0x1d000000"/>
+        <property key="programoptions.preserveuserid" value="false"/>
+        <property key="programoptions.testmodeentrymethod" value="VPPFirst"/>
+        <property key="programoptions.usehighvoltageonmclr" value="false"/>
+        <property key="programoptions.uselvpprogramming" value="false"/>
+        <property key="voltagevalue" value="3.25"/>
+      </PICkit3PlatformTool>
+      <PKOBSKDEPlatformTool>
+        <property key="AutoSelectMemRanges" value="auto"/>
+        <property key="SecureSegment.SegmentProgramming" value="FullChipProgramming"/>
+        <property key="ToolFirmwareFilePath"
+                  value="Press to browse for a specific firmware version"/>
+        <property key="ToolFirmwareOption.UseLatestFirmware" value="true"/>
+        <property key="firmware.download.all" value="false"/>
+        <property key="memories.configurationmemory" value="true"/>
+        <property key="memories.dataflash" value="true"/>
+        <property key="memories.eeprom" value="true"/>
+        <property key="memories.id" value="true"/>
+        <property key="memories.programmemory" value="true"/>
+        <property key="memories.programmemory.end" value="0x1d07ffff"/>
+        <property key="memories.programmemory.start" value="0x1d000000"/>
+        <property key="memories.userotp" value="true"/>
+        <property key="programoptions.donoteraseauxmem" value="false"/>
+        <property key="programoptions.eraseb4program" value="true"/>
+        <property key="programoptions.preservedataflash" value="false"/>
+        <property key="programoptions.preserveeeprom" value="false"/>
+        <property key="programoptions.preserveprogramrange" value="false"/>
+        <property key="programoptions.preserveprogramrange.end" value="0x1d0001ff"/>
+        <property key="programoptions.preserveprogramrange.start" value="0x1d000000"/>
+        <property key="programoptions.usehighvoltageonmclr" value="false"/>
+        <property key="programoptions.uselvpprogramming" value="true"/>
+      </PKOBSKDEPlatformTool>
+    </conf>
+  </confs>
+</configurationDescriptor>
