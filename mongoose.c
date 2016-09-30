@@ -2037,7 +2037,23 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
              sscanf(str, "%[^ :]:%u%n", host, &port, &len) == 2) {
     sa->sin.sin_port = htons((uint16_t) port);
     if (mg_resolve_from_hosts_file(host, sa) != 0) {
-      return 0;
+      /*
+       * if resolving from hosts file failed and the host
+       * we are trying to resolve is `localhost` - we should
+       * try to resolve it using `gethostbyname` and do not try
+       * to resolve it via DNS server if gethostbyname has failed too
+       */
+      if (mg_ncasecmp(host, "localhost", 9) != 0) {
+        return 0;
+      }
+
+#ifndef MG_DISABLE_SYNC_RESOLVER
+      if (!mg_resolve2(host, &sa->sin.sin_addr)) {
+        return -1;
+      }
+#else
+      return -1;
+#endif
     }
 #endif
   } else if (sscanf(str, ":%u%n", &port, &len) == 1 ||
