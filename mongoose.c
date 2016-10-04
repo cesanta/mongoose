@@ -5385,8 +5385,9 @@ static void mg_http_send_error(struct mg_connection *nc, int code,
   nc->flags |= MG_F_SEND_AND_CLOSE;
 }
 #ifndef MG_DISABLE_SSI
-static void mg_send_ssi_file(struct mg_connection *, const char *, FILE *, int,
-                             const struct mg_serve_http_opts *);
+static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
+                             const char *path, FILE *fp, int include_level,
+                             const struct mg_serve_http_opts *opts);
 
 static void mg_send_file_data(struct mg_connection *nc, FILE *fp) {
   char buf[BUFSIZ];
@@ -5396,8 +5397,8 @@ static void mg_send_file_data(struct mg_connection *nc, FILE *fp) {
   }
 }
 
-static void mg_do_ssi_include(struct mg_connection *nc, const char *ssi,
-                              char *tag, int include_level,
+static void mg_do_ssi_include(struct mg_connection *nc, struct http_message *hm,
+                              const char *ssi, char *tag, int include_level,
                               const struct mg_serve_http_opts *opts) {
   char file_name[BUFSIZ], path[MAX_PATH_SIZE], *p;
   FILE *fp;
@@ -5434,7 +5435,7 @@ static void mg_do_ssi_include(struct mg_connection *nc, const char *ssi,
     mg_set_close_on_exec(fileno(fp));
     if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern), path) >
         0) {
-      mg_send_ssi_file(nc, path, fp, include_level + 1, opts);
+      mg_send_ssi_file(nc, hm, path, fp, include_level + 1, opts);
     } else {
       mg_send_file_data(nc, fp);
     }
@@ -5458,16 +5459,12 @@ static void do_ssi_exec(struct mg_connection *nc, char *tag) {
 }
 #endif /* !MG_DISABLE_POPEN */
 
-static void mg_do_ssi_call(struct mg_connection *nc, char *tag) {
-  mg_call(nc, NULL, MG_EV_SSI_CALL, tag);
-}
-
 /*
  * SSI directive has the following format:
  * <!--#directive parameter=value parameter=value -->
  */
-static void mg_send_ssi_file(struct mg_connection *nc, const char *path,
-                             FILE *fp, int include_level,
+static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
+                             const char *path, FILE *fp, int include_level,
                              const struct mg_serve_http_opts *opts) {
   static const struct mg_str btag = MG_MK_STR("<!--#");
   static const struct mg_str d_include = MG_MK_STR("include");
@@ -5497,9 +5494,17 @@ static void mg_send_ssi_file(struct mg_connection *nc, const char *path,
 
       /* Handle known SSI directives */
       if (memcmp(p, d_include.p, d_include.len) == 0) {
-        mg_do_ssi_include(nc, path, p + d_include.len + 1, include_level, opts);
+        mg_do_ssi_include(nc, hm, path, p + d_include.len + 1, include_level,
+                          opts);
       } else if (memcmp(p, d_call.p, d_call.len) == 0) {
-        mg_do_ssi_call(nc, p + d_call.len + 1);
+        struct mg_ssi_call_ctx cctx;
+        memset(&cctx, 0, sizeof(cctx));
+        cctx.req = hm;
+        cctx.file = mg_mk_str(path);
+        cctx.arg = mg_mk_str(p + d_call.len + 1);
+        mg_call(nc, NULL, MG_EV_SSI_CALL,
+                (void *) cctx.arg.p); /* NUL added above */
+        mg_call(nc, NULL, MG_EV_SSI_CALL_CTX, &cctx);
 #ifndef MG_DISABLE_POPEN
       } else if (memcmp(p, d_exec.p, d_exec.len) == 0) {
         do_ssi_exec(nc, p + d_exec.len + 1);
@@ -5539,7 +5544,8 @@ static void mg_send_ssi_file(struct mg_connection *nc, const char *path,
   }
 }
 
-static void mg_handle_ssi_request(struct mg_connection *nc, const char *path,
+static void mg_handle_ssi_request(struct mg_connection *nc,
+                                  struct http_message *hm, const char *path,
                                   const struct mg_serve_http_opts *opts) {
   FILE *fp;
   struct mg_str mime_type;
@@ -5556,15 +5562,17 @@ static void mg_handle_ssi_request(struct mg_connection *nc, const char *path,
               "Content-Type: %.*s\r\n"
               "Connection: close\r\n\r\n",
               (int) mime_type.len, mime_type.p);
-    mg_send_ssi_file(nc, path, fp, 0, opts);
+    mg_send_ssi_file(nc, hm, path, fp, 0, opts);
     fclose(fp);
     nc->flags |= MG_F_SEND_AND_CLOSE;
   }
 }
 #else
-static void mg_handle_ssi_request(struct mg_connection *nc, const char *path,
+static void mg_handle_ssi_request(struct mg_connection *nc,
+                                  struct http_message *hm, const char *path,
                                   const struct mg_serve_http_opts *opts) {
   (void) path;
+  (void) hm;
   (void) opts;
   mg_http_send_error(nc, 500, "SSI disabled");
 }
@@ -5696,7 +5704,7 @@ static void mg_http_serve_file2(struct mg_connection *nc, const char *path,
                                 struct http_message *hm,
                                 struct mg_serve_http_opts *opts) {
   if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern), path) > 0) {
-    mg_handle_ssi_request(nc, path, opts);
+    mg_handle_ssi_request(nc, hm, path, opts);
     return;
   }
   mg_http_serve_file(nc, hm, path, mg_get_mime_type(path, "text/plain", opts),

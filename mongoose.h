@@ -2170,11 +2170,19 @@ struct mg_http_multipart_part {
   void *user_data;
 };
 
+/* SSI call context */
+struct mg_ssi_call_ctx {
+  struct http_message *req; /* The request being processed. */
+  struct mg_str file;       /* Filesystem path of the file being processed. */
+  struct mg_str arg; /* The argument passed to the tag: <!-- call arg -->. */
+};
+
 /* HTTP and websocket events. void *ev_data is described in a comment. */
 #define MG_EV_HTTP_REQUEST 100 /* struct http_message * */
 #define MG_EV_HTTP_REPLY 101   /* struct http_message * */
 #define MG_EV_HTTP_CHUNK 102   /* struct http_message * */
 #define MG_EV_SSI_CALL 105     /* char * */
+#define MG_EV_SSI_CALL_CTX 106 /* struct mg_ssi_call_ctx * */
 
 #ifndef MG_DISABLE_HTTP_WEBSOCKET
 #define MG_EV_WEBSOCKET_HANDSHAKE_REQUEST 111 /* NULL */

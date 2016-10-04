@@ -15,6 +15,7 @@ items:
   - { name: struct_http_message.md }
   - { name: struct_websocket_message.md }
   - { name: struct_mg_http_multipart_part.md }
+  - { name: struct_mg_ssi_call_ctx.md }
 ---
 
 
