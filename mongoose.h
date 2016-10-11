@@ -433,6 +433,15 @@ typedef struct stat cs_stat_t;
 unsigned long os_random(void);
 #define random os_random
 
+#ifndef RTOS_SDK
+#define MG_NET_IF_LWIP
+struct mg_mgr;
+struct mg_connection;
+uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr);
+void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
+                                  int interval, int count);
+#endif
+
 #endif /* CS_PLATFORM == CS_P_ESP_LWIP */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_ESP_LWIP_H_ */
 #ifdef MG_MODULE_LINES
