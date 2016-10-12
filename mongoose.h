@@ -1453,14 +1453,14 @@ struct mg_bind_opts {
   void *user_data;           /* Initial value for connection's user_data */
   unsigned int flags;        /* Extra connection flags */
   const char **error_string; /* Placeholder for the error string */
-#ifdef MG_ENABLE_SSL
+//#ifdef MG_ENABLE_SSL
   /* SSL settings. */
   const char *ssl_cert;    /* Server certificate to present to clients */
   const char *ssl_key;     /* Private key corresponding to the certificate.
                               If ssl_cert is set but ssl_key is not, ssl_cert
                               is used. */
   const char *ssl_ca_cert; /* Verify client certificates with this CA bundle */
-#endif
+//#endif
 };
 
 /*
@@ -1497,7 +1497,7 @@ struct mg_connect_opts {
   void *user_data;           /* Initial value for connection's user_data */
   unsigned int flags;        /* Extra connection flags */
   const char **error_string; /* Placeholder for the error string */
-#ifdef MG_ENABLE_SSL
+//#ifdef MG_ENABLE_SSL
   /* SSL settings. */
   const char *ssl_cert;    /* Client certificate to present to the server */
   const char *ssl_key;     /* Private key corresponding to the certificate.
@@ -1515,7 +1515,7 @@ struct mg_connect_opts {
    * name verification.
    */
   const char *ssl_server_name;
-#endif
+//#endif
 };
 
 /*
