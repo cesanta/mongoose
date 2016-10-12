@@ -198,9 +198,11 @@
 #define STR(x) STRX(x)
 #define __func__ __FILE__ ":" STR(__LINE__)
 #endif
+#if !defined(__MINGW32__) && !defined(__MINGW64__)
 #define snprintf _snprintf
-#define fileno _fileno
 #define vsnprintf _vsnprintf
+#endif
+#define fileno _fileno
 #define sleep(x) Sleep((x) *1000)
 #define to64(x) _atoi64(x)
 #if !defined(__MINGW32__) && !defined(__MINGW64__)
