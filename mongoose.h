@@ -1396,6 +1396,7 @@ time_t mg_mgr_poll(struct mg_mgr *, int milli);
  * by `MG_CTL_MSG_MESSAGE_SIZE` which is set to 8192 bytes.
  */
 void mg_broadcast(struct mg_mgr *, mg_event_handler_t func, void *, size_t);
+void mg_poll_conn(struct mg_connection *, mg_event_handler_t, void *, size_t);
 #endif
 
 /*
