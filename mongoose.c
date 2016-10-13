@@ -757,6 +757,8 @@ double cs_time(void) {
 
 #if !DISABLE_MD5 && !defined(EXCLUDE_COMMON)
 
+/* Amalgamated: #include "common/cs_endian.h" */
+
 static void byteReverse(unsigned char *buf, unsigned longs) {
 /* Forrest: MD5 expect LITTLE_ENDIAN, swap if BIG_ENDIAN */
 #if BYTE_ORDER == BIG_ENDIAN
@@ -1148,9 +1150,11 @@ int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
 /* Copyright(c) By Steve Reid <steve@edmweb.com> */
 /* 100% Public Domain */
 
+/* Amalgamated: #include "common/sha1.h" */
+
 #if !DISABLE_SHA1 && !defined(EXCLUDE_COMMON)
 
-/* Amalgamated: #include "common/sha1.h" */
+/* Amalgamated: #include "common/cs_endian.h" */
 
 #define SHA1HANDSOFF
 #if defined(__sun)
