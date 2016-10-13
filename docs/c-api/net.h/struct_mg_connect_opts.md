@@ -7,7 +7,7 @@ signature: |
     void *user_data;           /* Initial value for connection's user_data */
     unsigned int flags;        /* Extra connection flags */
     const char **error_string; /* Placeholder for the error string */
-  #ifdef MG_ENABLE_SSL
+  #if MG_ENABLE_SSL
     /* SSL settings. */
     const char *ssl_cert;    /* Client certificate to present to the server */
     const char *ssl_key;     /* Private key corresponding to the certificate.

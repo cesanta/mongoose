@@ -6,7 +6,7 @@
 #ifndef CS_COMMON_CS_DBG_H_
 #define CS_COMMON_CS_DBG_H_
 
-#ifndef CS_DISABLE_STDIO
+#if !CS_DISABLE_STDIO
 #include <stdio.h>
 #endif
 
@@ -28,7 +28,7 @@ enum cs_log_level {
 
 void cs_log_set_level(enum cs_log_level level);
 
-#ifndef CS_DISABLE_STDIO
+#if !CS_DISABLE_STDIO
 
 void cs_log_set_file(FILE *file);
 
