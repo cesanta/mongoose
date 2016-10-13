@@ -1219,10 +1219,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_DISABLE_DAV 0
 #endif
 
-#ifndef MG_DISABLE_MQTT
-#define MG_DISABLE_MQTT 0
-#endif
-
 #ifndef MG_DISABLE_PFS
 #define MG_DISABLE_PFS 0
 #endif
@@ -1287,6 +1283,10 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_ENABLE_JAVASCRIPT 0
 #endif
 
+#ifndef MG_ENABLE_MQTT
+#define MG_ENABLE_MQTT 0
+#endif
+
 #ifndef MG_ENABLE_MQTT_BROKER
 #define MG_ENABLE_MQTT_BROKER 0
 #endif
@@ -1321,6 +1321,12 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #undef MG_DISABLE_SOCKETPAIR
 #define MG_DISABLE_SOCKETPAIR 1
 #endif /* MG_NO_BSD_SOCKETS */
+
+/* MQTT broker requires MQTT */
+#if MG_ENABLE_MQTT_BROKER && !MG_ENABLE_MQTT
+#undef MG_ENABLE_MQTT
+#define MG_ENABLE_MQTT 1
+#endif
 
 #endif /* CS_MONGOOSE_SRC_FEATURES_H_ */
 #ifdef MG_MODULE_LINES
