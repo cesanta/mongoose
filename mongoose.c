@@ -109,7 +109,7 @@ struct ctl_msg {
   char message[MG_CTL_MSG_MESSAGE_SIZE];
 };
 
-#if !MG_DISABLE_MQTT
+#if MG_ENABLE_MQTT
 struct mg_mqtt_message;
 MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm);
 #endif
@@ -7979,7 +7979,7 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
  * All rights reserved
  */
 
-#if !MG_DISABLE_MQTT
+#if MG_ENABLE_MQTT
 
 #include <string.h>
 
@@ -8293,7 +8293,7 @@ void mg_mqtt_disconnect(struct mg_connection *nc) {
   mg_mqtt_prepend_header(nc, MG_MQTT_CMD_DISCONNECT, 0, 0);
 }
 
-#endif /* MG_DISABLE_MQTT */
+#endif /* MG_ENABLE_MQTT */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mqtt_server.c"
 #endif
