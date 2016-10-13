@@ -60,7 +60,7 @@ static int s_num_vhost_backends = 0, s_num_default_backends = 0;
 static int s_sig_num = 0;
 static int s_backend_keepalive = 0;
 static FILE *s_log_file = NULL;
-#ifdef MG_ENABLE_SSL
+#if MG_ENABLE_SSL
 const char *s_ssl_cert = NULL;
 #endif
 
@@ -206,7 +206,7 @@ static void forward(struct conn_data *conn, struct http_message *hm,
   for (i = 0; i < MG_MAX_HTTP_HEADERS && hm->header_names[i].len > 0; i++) {
     struct mg_str hn = hm->header_names[i];
     struct mg_str hv = hm->header_values[i];
-#ifdef MG_ENABLE_SSL
+#if MG_ENABLE_SSL
     /*
      * If we terminate SSL and backend redirects to local HTTP port,
      * strip protocol to let client use HTTPS.
@@ -598,7 +598,7 @@ int main(int argc, char *argv[]) {
       vhost = NULL;
       redirect = 0;
       i += 2;
-#ifdef MG_ENABLE_SSL
+#if MG_ENABLE_SSL
     } else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
       s_ssl_cert = argv[++i];
 #endif

@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
   int i;
   char *cp;
   const char *err_str;
-#ifdef MG_ENABLE_SSL
+#if MG_ENABLE_SSL
   const char *ssl_cert = NULL;
 #endif
 
@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
       s_http_port = argv[++i];
     } else if (strcmp(argv[i], "-a") == 0 && i + 1 < argc) {
       s_http_server_opts.auth_domain = argv[++i];
-#ifdef MG_ENABLE_JAVASCRIPT
+#if MG_ENABLE_JAVASCRIPT
     } else if (strcmp(argv[i], "-j") == 0 && i + 1 < argc) {
       const char *init_file = argv[++i];
       mg_enable_javascript(&mgr, v7_create(), init_file);
@@ -86,11 +86,11 @@ int main(int argc, char *argv[]) {
       s_http_server_opts.per_directory_auth_file = argv[++i];
     } else if (strcmp(argv[i], "-r") == 0 && i + 1 < argc) {
       s_http_server_opts.url_rewrites = argv[++i];
-#ifndef MG_DISABLE_CGI
+#if !MG_DISABLE_CGI
     } else if (strcmp(argv[i], "-i") == 0 && i + 1 < argc) {
       s_http_server_opts.cgi_interpreter = argv[++i];
 #endif
-#ifdef MG_ENABLE_SSL
+#if MG_ENABLE_SSL
     } else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
       ssl_cert = argv[++i];
 #endif
@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
   /* Set HTTP server options */
   memset(&bind_opts, 0, sizeof(bind_opts));
   bind_opts.error_string = &err_str;
-#ifdef MG_ENABLE_SSL
+#if MG_ENABLE_SSL
   if (ssl_cert != NULL) {
     bind_opts.ssl_cert = ssl_cert;
   }

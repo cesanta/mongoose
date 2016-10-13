@@ -30,39 +30,24 @@
 #include <mg_locals.h>
 #endif
 
-#if defined(MG_ENABLE_DEBUG) && !defined(CS_ENABLE_DEBUG)
-#define CS_ENABLE_DEBUG
-#endif
-#if defined(MG_DISABLE_STDIO) && !defined(CS_DISABLE_STDIO)
-#define CS_DISABLE_STDIO
-#elif defined(CS_DISABLE_STDIO) && !defined(MG_DISABLE_STDIO)
-#define MG_DISABLE_STDIO
+#ifndef MG_ENABLE_DEBUG
+#define MG_ENABLE_DEBUG 0
 #endif
 
-/* All of the below features depend on filesystem access, disable them. */
-#ifdef MG_DISABLE_FILESYSTEM
-#ifndef MG_DISABLE_DAV
-#define MG_DISABLE_DAV
+#if MG_ENABLE_DEBUG && !defined(CS_ENABLE_DEBUG)
+#define CS_ENABLE_DEBUG 1
 #endif
-#ifndef MG_DISABLE_CGI
-#define MG_DISABLE_CGI
-#endif
-#ifndef MG_DISABLE_DIRECTORY_LISTING
-#define MG_DISABLE_DIRECTORY_LISTING
-#endif
-#ifndef MG_DISABLE_DAV
-#define MG_DISABLE_DAV
-#endif
-#endif /* MG_DISABLE_FILESYSTEM */
 
-#ifdef MG_NO_BSD_SOCKETS
-#ifndef MG_DISABLE_SYNC_RESOLVER
-#define MG_DISABLE_SYNC_RESOLVER
+#ifndef MG_DISABLE_STDIO
+#define MG_DISABLE_STDIO 0
 #endif
-#ifndef MG_DISABLE_SOCKETPAIR
-#define MG_DISABLE_SOCKETPAIR
+
+#if MG_DISABLE_STDIO && !defined(CS_DISABLE_STDIO)
+#define CS_DISABLE_STDIO 1
+#elif defined(CS_DISABLE_STDIO) && !MG_DISABLE_STDIO
+#undef MG_DISABLE_STDIO
+#define MG_DISABLE_STDIO 1
 #endif
-#endif /* MG_NO_BSD_SOCKETS */
 
 /* Amalgamated: #include "common/cs_dbg.h" */
 
@@ -429,6 +414,7 @@ typedef struct stat cs_stat_t;
 #define INT64_FMT PRId64
 #define INT64_X_FMT PRIx64
 #define __cdecl
+#define _FILE_OFFSET_BITS 32
 
 unsigned long os_random(void);
 #define random os_random
@@ -1025,6 +1011,10 @@ void mbuf_trim(struct mbuf *);
 #define CS_COMMON_SHA1_H_
 
 #ifndef DISABLE_SHA1
+#define DISABLE_SHA1 0
+#endif
+
+#if !DISABLE_SHA1
 
 /* Amalgamated: #include "common/platform.h" */
 
@@ -1063,6 +1053,10 @@ void cs_hmac_sha1(const unsigned char *key, size_t key_len,
 #define CS_COMMON_MD5_H_
 
 /* Amalgamated: #include "common/platform.h" */
+
+#ifndef DISABLE_MD5
+#define DISABLE_MD5 0
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -1112,6 +1106,10 @@ void cs_to_hex(char *to, const unsigned char *p, size_t len);
 #define CS_COMMON_BASE64_H_
 
 #ifndef DISABLE_BASE64
+#define DISABLE_BASE64 0
+#endif
+
+#if !DISABLE_BASE64
 
 #include <stdio.h>
 
@@ -1178,6 +1176,157 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 
 #endif /* CS_COMMON_STR_UTIL_H_ */
 #ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/features.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_MONGOOSE_SRC_FEATURES_H_
+#define CS_MONGOOSE_SRC_FEATURES_H_
+
+#ifndef MG_DISABLE_CGI
+#define MG_DISABLE_CGI 0
+#endif
+
+#ifndef MG_DISABLE_DIRECTORY_LISTING
+#define MG_DISABLE_DIRECTORY_LISTING 0
+#endif
+
+#ifndef MG_DISABLE_DNS
+#define MG_DISABLE_DNS 0
+#endif
+
+#ifndef MG_DISABLE_FILESYSTEM
+#define MG_DISABLE_FILESYSTEM 0
+#endif
+
+#ifndef MG_DISABLE_HEXDUMP
+#define MG_DISABLE_HEXDUMP 0
+#endif
+
+#ifndef MG_DISABLE_HTTP_DIGEST_AUTH
+#define MG_DISABLE_HTTP_DIGEST_AUTH 0
+#endif
+
+#ifndef MG_DISABLE_HTTP
+#define MG_DISABLE_HTTP 0
+#endif
+
+#ifndef MG_DISABLE_HTTP_KEEP_ALIVE
+#define MG_DISABLE_HTTP_KEEP_ALIVE 0
+#endif
+
+#ifndef MG_DISABLE_HTTP_WEBSOCKET
+#define MG_DISABLE_HTTP_WEBSOCKET 0
+#endif
+
+#ifndef MG_DISABLE_DAV
+#define MG_DISABLE_DAV 0
+#endif
+
+#ifndef MG_DISABLE_MQTT
+#define MG_DISABLE_MQTT 0
+#endif
+
+#ifndef MG_DISABLE_PFS
+#define MG_DISABLE_PFS 0
+#endif
+
+#ifndef MG_DISABLE_POPEN
+#define MG_DISABLE_POPEN 0
+#endif
+
+#ifndef MG_DISABLE_RESOLVER
+#define MG_DISABLE_RESOLVER 0
+#endif
+
+#ifndef MG_DISABLE_SOCKET_IF
+#define MG_DISABLE_SOCKET_IF 0
+#endif
+
+#ifndef MG_DISABLE_SOCKETPAIR
+#define MG_DISABLE_SOCKETPAIR 0
+#endif
+
+#ifndef MG_DISABLE_SSI
+#define MG_DISABLE_SSI 0
+#endif
+
+#ifndef MG_DISABLE_SYNC_RESOLVER
+#define MG_DISABLE_SYNC_RESOLVER 0
+#endif
+
+#ifndef MG_DISABLE_WS_RANDOM_MASK
+#define MG_DISABLE_WS_RANDOM_MASK 0
+#endif
+
+#ifndef MG_ENABLE_COAP
+#define MG_ENABLE_COAP 0
+#endif
+
+#ifndef MG_ENABLE_DNS_SERVER
+#define MG_ENABLE_DNS_SERVER 0
+#endif
+
+#ifndef MG_ENABLE_FAKE_DAVLOCK
+#define MG_ENABLE_FAKE_DAVLOCK 0
+#endif
+
+#ifndef MG_ENABLE_GETADDRINFO
+#define MG_ENABLE_GETADDRINFO 0
+#endif
+
+#ifndef MG_ENABLE_HTTP_STREAMING_MULTIPART
+#define MG_ENABLE_HTTP_STREAMING_MULTIPART 0
+#endif
+
+#ifndef MG_ENABLE_IPV6
+#define MG_ENABLE_IPV6 0
+#endif
+
+#ifndef MG_ENABLE_JAVASCRIPT
+#define MG_ENABLE_JAVASCRIPT 0
+#endif
+
+#ifndef MG_ENABLE_MQTT_BROKER
+#define MG_ENABLE_MQTT_BROKER 0
+#endif
+
+#ifndef MG_ENABLE_SSL
+#define MG_ENABLE_SSL 0
+#endif
+
+#ifndef MG_ENABLE_THREADS /* ifdef-ok */
+#ifdef _WIN32
+#define MG_ENABLE_THREADS 1
+#else
+#define MG_ENABLE_THREADS 0
+#endif
+#endif
+
+/* All of the below features depend on filesystem access, disable them. */
+#if MG_DISABLE_FILESYSTEM
+#undef MG_DISABLE_DAV
+#define MG_DISABLE_DAV 1
+#undef MG_DISABLE_CGI
+#define MG_DISABLE_CGI 1
+#undef MG_DISABLE_DIRECTORY_LISTING
+#define MG_DISABLE_DIRECTORY_LISTING 1
+#undef MG_DISABLE_DAV
+#define MG_DISABLE_DAV 1
+#endif /* MG_DISABLE_FILESYSTEM */
+
+#ifdef MG_NO_BSD_SOCKETS
+#undef MG_DISABLE_SYNC_RESOLVER
+#define MG_DISABLE_SYNC_RESOLVER 1
+#undef MG_DISABLE_SOCKETPAIR
+#define MG_DISABLE_SOCKETPAIR 1
+#endif /* MG_NO_BSD_SOCKETS */
+
+#endif /* CS_MONGOOSE_SRC_FEATURES_H_ */
+#ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net.h"
 #endif
 /*
@@ -1210,7 +1359,7 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #ifndef CS_MONGOOSE_SRC_NET_H_
 #define CS_MONGOOSE_SRC_NET_H_
 
-#ifdef MG_ENABLE_JAVASCRIPT
+#if MG_ENABLE_JAVASCRIPT
 #define EXCLUDE_COMMON
 #include <v7.h>
 #endif
@@ -1218,7 +1367,7 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 /* Amalgamated: #include "mongoose/src/common.h" */
 /* Amalgamated: #include "common/mbuf.h" */
 
-#ifdef MG_ENABLE_SSL
+#if MG_ENABLE_SSL
 #ifdef __APPLE__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
@@ -1246,7 +1395,7 @@ extern "C" {
 union socket_address {
   struct sockaddr sa;
   struct sockaddr_in sin;
-#ifdef MG_ENABLE_IPV6
+#if MG_ENABLE_IPV6
   struct sockaddr_in6 sin6;
 #else
   struct sockaddr sin6;
@@ -1276,12 +1425,12 @@ typedef void (*mg_event_handler_t)(struct mg_connection *, int ev, void *);
 struct mg_mgr {
   struct mg_connection *active_connections;
   const char *hexdump_file; /* Debug hexdump file path */
-#ifndef MG_DISABLE_SOCKETPAIR
+#if !MG_DISABLE_SOCKETPAIR
   sock_t ctl[2]; /* Socketpair for mg_broadcast() */
 #endif
   void *user_data; /* User data */
   void *mgr_data;  /* Implementation-specific event manager's data. */
-#ifdef MG_ENABLE_JAVASCRIPT
+#if MG_ENABLE_JAVASCRIPT
   struct v7 *v7;
 #endif
 };
@@ -1300,7 +1449,7 @@ struct mg_connection {
   size_t recv_mbuf_limit;  /* Max size of recv buffer */
   struct mbuf recv_mbuf;   /* Received data */
   struct mbuf send_mbuf;   /* Data scheduled for sending */
-#if defined(MG_ENABLE_SSL)
+#if MG_ENABLE_SSL
 #if !defined(MG_SOCKET_SIMPLELINK)
   SSL *ssl;
   SSL_CTX *ssl_ctx;
@@ -1382,7 +1531,7 @@ void mg_mgr_free(struct mg_mgr *);
  */
 time_t mg_mgr_poll(struct mg_mgr *, int milli);
 
-#ifndef MG_DISABLE_SOCKETPAIR
+#if !MG_DISABLE_SOCKETPAIR
 /*
  * Passes a message of a given length to all connections.
  *
@@ -1453,7 +1602,7 @@ struct mg_bind_opts {
   void *user_data;           /* Initial value for connection's user_data */
   unsigned int flags;        /* Extra connection flags */
   const char **error_string; /* Placeholder for the error string */
-#ifdef MG_ENABLE_SSL
+#if MG_ENABLE_SSL
   /* SSL settings. */
   const char *ssl_cert;    /* Server certificate to present to clients */
   const char *ssl_key;     /* Private key corresponding to the certificate.
@@ -1497,7 +1646,7 @@ struct mg_connect_opts {
   void *user_data;           /* Initial value for connection's user_data */
   unsigned int flags;        /* Extra connection flags */
   const char **error_string; /* Placeholder for the error string */
-#ifdef MG_ENABLE_SSL
+#if MG_ENABLE_SSL
   /* SSL settings. */
   const char *ssl_cert;    /* Client certificate to present to the server */
   const char *ssl_key;     /* Private key corresponding to the certificate.
@@ -1578,7 +1727,7 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
                                      mg_event_handler_t handler,
                                      struct mg_connect_opts opts);
 
-#if defined(MG_ENABLE_SSL) && !defined(MG_SOCKET_SIMPLELINK)
+#if MG_ENABLE_SSL && !defined(MG_SOCKET_SIMPLELINK)
 /*
  * Note: This function is deprecated. Please, use SSL options in
  * mg_connect_opt.
@@ -1639,7 +1788,7 @@ int mg_socketpair(sock_t[2], int sock_type);
  * CAUTION: this function can block.
  * Return 1 on success, 0 on failure.
  */
-#ifndef MG_DISABLE_SYNC_RESOLVER
+#if !MG_DISABLE_SYNC_RESOLVER
 int mg_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
 #endif
 
@@ -1683,7 +1832,7 @@ void mg_enable_multithreading(struct mg_connection *nc);
 void mg_enable_multithreading_opt(struct mg_connection *nc,
                                   struct mg_multithreading_opts opts);
 
-#ifdef MG_ENABLE_JAVASCRIPT
+#if MG_ENABLE_JAVASCRIPT
 /*
  * Enables server-side JavaScript scripting.
  * Requires a `-DMG_ENABLE_JAVASCRIPT` compilation flag and V7 engine sources.
@@ -1945,7 +2094,7 @@ int mg_base64_decode(const unsigned char *s, int len, char *dst);
  */
 void mg_base64_encode(const unsigned char *src, int src_len, char *dst);
 
-#ifndef MG_DISABLE_FILESYSTEM
+#if !MG_DISABLE_FILESYSTEM
 /*
  * Performs a 64-bit `stat()` call against a given file.
  *
@@ -1974,11 +2123,7 @@ FILE *mg_fopen(const char *path, const char *mode);
 int mg_open(const char *path, int flag, int mode);
 #endif /* MG_DISABLE_FILESYSTEM */
 
-#if defined(_WIN32) && !defined(MG_ENABLE_THREADS)
-#define MG_ENABLE_THREADS
-#endif
-
-#ifdef MG_ENABLE_THREADS
+#if MG_ENABLE_THREADS
 /*
  * Starts a new detached thread.
  * Arguments and semantics are the same as pthead's `pthread_create()`.
@@ -2008,7 +2153,7 @@ void mg_set_close_on_exec(sock_t);
  */
 void mg_conn_addr_to_str(struct mg_connection *nc, char *buf, size_t len,
                          int flags);
-#ifndef MG_DISABLE_SOCKET_IF /* Legacy interface. */
+#if !MG_DISABLE_SOCKET_IF /* Legacy interface. */
 void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
 #endif
 
@@ -2213,14 +2358,14 @@ struct mg_ssi_call_ctx {
 #define MG_EV_SSI_CALL 105     /* char * */
 #define MG_EV_SSI_CALL_CTX 106 /* struct mg_ssi_call_ctx * */
 
-#ifndef MG_DISABLE_HTTP_WEBSOCKET
+#if !MG_DISABLE_HTTP_WEBSOCKET
 #define MG_EV_WEBSOCKET_HANDSHAKE_REQUEST 111 /* NULL */
 #define MG_EV_WEBSOCKET_HANDSHAKE_DONE 112    /* NULL */
 #define MG_EV_WEBSOCKET_FRAME 113             /* struct websocket_message * */
 #define MG_EV_WEBSOCKET_CONTROL_FRAME 114     /* struct websocket_message * */
 #endif
 
-#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+#if MG_ENABLE_HTTP_STREAMING_MULTIPART
 #define MG_EV_HTTP_MULTIPART_REQUEST 121 /* struct http_message */
 #define MG_EV_HTTP_PART_BEGIN 122        /* struct mg_http_multipart_part */
 #define MG_EV_HTTP_PART_DATA 123         /* struct mg_http_multipart_part */
@@ -2273,7 +2418,7 @@ struct mg_ssi_call_ctx {
  */
 void mg_set_protocol_http_websocket(struct mg_connection *nc);
 
-#ifndef MG_DISABLE_HTTP_WEBSOCKET
+#if !MG_DISABLE_HTTP_WEBSOCKET
 /*
  * Send websocket handshake to the server.
  *
@@ -2754,7 +2899,7 @@ void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
 void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
                                mg_event_handler_t handler);
 
-#ifdef MG_ENABLE_HTTP_STREAMING_MULTIPART
+#if MG_ENABLE_HTTP_STREAMING_MULTIPART
 
 /* Callback prototype for `mg_file_upload_handler()`. */
 typedef struct mg_str (*mg_fu_fname_fn)(struct mg_connection *nc,
@@ -3180,7 +3325,7 @@ int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
 #ifndef CS_MONGOOSE_SRC_MQTT_BROKER_H_
 #define CS_MONGOOSE_SRC_MQTT_BROKER_H_
 
-#ifdef MG_ENABLE_MQTT_BROKER
+#if MG_ENABLE_MQTT_BROKER
 
 /* Amalgamated: #include "mongoose/src/mqtt.h" */
 
@@ -3439,7 +3584,7 @@ void mg_set_protocol_dns(struct mg_connection *nc);
 #ifndef CS_MONGOOSE_SRC_DNS_SERVER_H_
 #define CS_MONGOOSE_SRC_DNS_SERVER_H_
 
-#ifdef MG_ENABLE_DNS_SERVER
+#if MG_ENABLE_DNS_SERVER
 
 /* Amalgamated: #include "mongoose/src/dns.h" */
 
@@ -3637,7 +3782,7 @@ int mg_resolve_from_hosts_file(const char *host, union socket_address *usa);
 #ifndef CS_MONGOOSE_SRC_COAP_H_
 #define CS_MONGOOSE_SRC_COAP_H_
 
-#ifdef MG_ENABLE_COAP
+#if MG_ENABLE_COAP
 
 #define MG_COAP_MSG_TYPE_FIELD 0x2
 #define MG_COAP_CODE_CLASS_FIELD 0x4

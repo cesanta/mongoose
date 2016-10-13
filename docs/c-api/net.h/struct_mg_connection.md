@@ -14,7 +14,7 @@ signature: |
     size_t recv_mbuf_limit;  /* Max size of recv buffer */
     struct mbuf recv_mbuf;   /* Received data */
     struct mbuf send_mbuf;   /* Data scheduled for sending */
-  #if defined(MG_ENABLE_SSL)
+  #if MG_ENABLE_SSL
   #if !defined(MG_SOCKET_SIMPLELINK)
     SSL *ssl;
     SSL_CTX *ssl_ctx;

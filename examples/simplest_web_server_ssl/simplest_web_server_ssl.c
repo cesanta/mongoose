@@ -3,7 +3,7 @@
  * All rights reserved
  */
 
-#ifdef MG_ENABLE_SSL
+#if MG_ENABLE_SSL
 /*
  * This example starts an SSL web server on https://localhost:8443/
  *

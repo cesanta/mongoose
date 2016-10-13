@@ -27,7 +27,7 @@ endif # } PDIR
 
 LDDIR = $(SDK_PATH)/ld
 
-CCFLAGS += -Os
+CCFLAGS += -Os -Wno-undef
 
 TARGET_LDFLAGS =		\
 	-nostdlib		\
