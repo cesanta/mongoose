@@ -454,7 +454,6 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
 #define MG_DISABLE_SOCKETPAIR 1
 #define MG_DISABLE_SYNC_RESOLVER 1
 #define MG_DISABLE_POPEN 1
-#define MG_DISABLE_CGI 1
 #define MG_DISABLE_DAV 1
 #define MG_DISABLE_DIRECTORY_LISTING 1
 #define MG_DISABLE_FILESYSTEM 1
@@ -514,7 +513,6 @@ int inet_pton(int af, const char *src, void *dst);
 #define MG_DISABLE_SOCKETPAIR 1
 #define MG_DISABLE_SYNC_RESOLVER 1
 #define MG_DISABLE_POPEN 1
-#define MG_DISABLE_CGI 1
 /* Only SPIFFS supports directories, SLFS does not. */
 #ifndef CC3200_FS_SPIFFS
 #define MG_DISABLE_DAV 1
@@ -644,7 +642,6 @@ struct dirent *readdir(DIR *dir);
 #define MG_DISABLE_SOCKETPAIR 1
 #define MG_DISABLE_SYNC_RESOLVER 1
 #define MG_DISABLE_POPEN 1
-#define MG_DISABLE_CGI 1
 #define MG_DISABLE_DAV 1
 #define MG_DISABLE_DIRECTORY_LISTING 1
 
@@ -1186,10 +1183,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #ifndef CS_MONGOOSE_SRC_FEATURES_H_
 #define CS_MONGOOSE_SRC_FEATURES_H_
 
-#ifndef MG_DISABLE_CGI
-#define MG_DISABLE_CGI 0
-#endif
-
 #ifndef MG_DISABLE_DIRECTORY_LISTING
 #define MG_DISABLE_DIRECTORY_LISTING 0
 #endif
@@ -1260,6 +1253,10 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 
 #ifndef MG_DISABLE_WS_RANDOM_MASK
 #define MG_DISABLE_WS_RANDOM_MASK 0
+#endif
+
+#ifndef MG_ENABLE_CGI
+#define MG_ENABLE_CGI (CS_PLATFORM == CS_P_UNIX || CS_PLATFORM == CS_P_WINDOWS)
 #endif
 
 #ifndef MG_ENABLE_COAP
