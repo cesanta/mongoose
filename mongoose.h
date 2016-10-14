@@ -49,6 +49,7 @@
 #define CS_P_MSP432 5
 #define CS_P_CC3100 6
 #define CS_P_MBED 7
+#define CS_P_WINCE 8
 
 /* If not specified explicitly, we guess platform by defines. */
 #ifndef CS_PLATFORM
@@ -60,6 +61,8 @@
 #define CS_PLATFORM CS_P_CC3200
 #elif defined(__unix__) || defined(__APPLE__)
 #define CS_PLATFORM CS_P_UNIX
+#elif defined(WINCE)
+#define CS_PLATFORM CS_P_WINCE
 #elif defined(_WIN32)
 #define CS_PLATFORM CS_P_WINDOWS
 #elif defined(__MBED__)
@@ -78,6 +81,7 @@
 /* Amalgamated: #include "common/platforms/platform_cc3200.h" */
 /* Amalgamated: #include "common/platforms/platform_cc3100.h" */
 /* Amalgamated: #include "common/platforms/platform_mbed.h" */
+/* Amalgamated: #include "common/platforms/platform_wince.h" */
 
 /* Common stuff */
 
@@ -861,6 +865,169 @@ int sl_set_ssl_opts(struct mg_connection *nc);
 #endif /* defined(MG_SOCKET_SIMPLELINK) && !defined(__SIMPLELINK_H__) */
 
 #endif /* CS_COMMON_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_ */
+#ifdef MG_MODULE_LINES
+#line 1 "common/platforms/platform_wince.h"
+#endif
+#ifndef CS_COMMON_PLATFORMS_PLATFORM_WINCE_H_
+#define CS_COMMON_PLATFORMS_PLATFORM_WINCE_H_
+
+#if CS_PLATFORM == CS_P_WINCE
+
+/*
+ * MSVC++ 14.0 _MSC_VER == 1900 (Visual Studio 2015)
+ * MSVC++ 12.0 _MSC_VER == 1800 (Visual Studio 2013)
+ * MSVC++ 11.0 _MSC_VER == 1700 (Visual Studio 2012)
+ * MSVC++ 10.0 _MSC_VER == 1600 (Visual Studio 2010)
+ * MSVC++ 9.0  _MSC_VER == 1500 (Visual Studio 2008)
+ * MSVC++ 8.0  _MSC_VER == 1400 (Visual Studio 2005)
+ * MSVC++ 7.1  _MSC_VER == 1310 (Visual Studio 2003)
+ * MSVC++ 7.0  _MSC_VER == 1300
+ * MSVC++ 6.0  _MSC_VER == 1200
+ * MSVC++ 5.0  _MSC_VER == 1100
+ */
+#pragma warning(disable : 4127) /* FD_SET() emits warning, disable it */
+#pragma warning(disable : 4204) /* missing c99 support */
+
+#ifndef _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS 1
+#endif
+
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
+#include <assert.h>
+#include <limits.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#pragma comment(lib, "ws2.lib") /* Linking with WinCE winsock library */
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+
+#define strdup _strdup
+
+#ifndef EINPROGRESS
+#define EINPROGRESS WSAEINPROGRESS
+#endif
+
+#ifndef EWOULDBLOCK
+#define EWOULDBLOCK WSAEWOULDBLOCK
+#endif
+
+#ifndef __func__
+#define STRX(x) #x
+#define STR(x) STRX(x)
+#define __func__ __FILE__ ":" STR(__LINE__)
+#endif
+
+#define snprintf _snprintf
+#define fileno _fileno
+#define vsnprintf _vsnprintf
+#define sleep(x) Sleep((x) *1000)
+#define to64(x) _atoi64(x)
+#define rmdir _rmdir
+
+#if defined(_MSC_VER) && _MSC_VER >= 1400
+#define fseeko(x, y, z) _fseeki64((x), (y), (z))
+#else
+#define fseeko(x, y, z) fseek((x), (y), (z))
+#endif
+
+typedef int socklen_t;
+
+#if _MSC_VER >= 1700
+#include <stdint.h>
+#else
+typedef signed char int8_t;
+typedef unsigned char uint8_t;
+typedef int int32_t;
+typedef unsigned int uint32_t;
+typedef short int16_t;
+typedef unsigned short uint16_t;
+typedef __int64 int64_t;
+typedef unsigned __int64 uint64_t;
+#endif
+
+typedef SOCKET sock_t;
+typedef uint32_t in_addr_t;
+
+#ifndef UINT16_MAX
+#define UINT16_MAX 65535
+#endif
+
+#ifndef UINT32_MAX
+#define UINT32_MAX 4294967295
+#endif
+
+#ifndef pid_t
+#define pid_t HANDLE
+#endif
+
+#define INT64_FMT "I64d"
+#define INT64_X_FMT "I64x"
+/* TODO(alashkin): check if this is correct */
+#define SIZE_T_FMT "u"
+typedef struct _stati64 cs_stat_t;
+
+#ifndef S_ISDIR
+#define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
+#endif
+
+#ifndef S_ISREG
+#define S_ISREG(x) (((x) &_S_IFMT) == _S_IFREG)
+#endif
+
+#define DIRSEP '\\'
+
+#ifndef va_copy
+#ifdef __va_copy
+#define va_copy __va_copy
+#else
+#define va_copy(x, y) (x) = (y)
+#endif
+#endif
+
+#ifndef MG_MAX_HTTP_REQUEST_SIZE
+#define MG_MAX_HTTP_REQUEST_SIZE 8192
+#endif
+
+#ifndef MG_MAX_HTTP_SEND_MBUF
+#define MG_MAX_HTTP_SEND_MBUF 4096
+#endif
+
+#ifndef MG_MAX_HTTP_HEADERS
+#define MG_MAX_HTTP_HEADERS 40
+#endif
+
+#ifndef CS_ENABLE_STDIO
+#define CS_ENABLE_STDIO 1
+#endif
+
+typedef unsigned int* uintptr_t;
+#define abort() DebugBreak();
+
+#ifndef BUFSIZ
+#define BUFSIZ 4096
+#define ENOMEM ERROR_NOT_ENOUGH_MEMORY
+#endif
+
+const char *strerror();
+
+#define MG_ENABLE_FILESYSTEM 0
+
+/*
+ * WinCE lacks a lot of used in CGI API functions
+ * TODO(alaskin): look for wce_xxxx alternatives
+ */
+#define MG_ENABLE_CGI 0
+
+#endif /* CS_PLATFORM == CS_P_WINCE */
+#endif /* CS_COMMON_PLATFORMS_PLATFORM_WINCE_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "common/cs_time.h"
 #endif

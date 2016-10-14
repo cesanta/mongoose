@@ -143,6 +143,8 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
                                struct http_message *hm);
 #endif
 
+MG_INTERNAL int mg_get_errno();
+
 #endif /* CS_MONGOOSE_SRC_INTERNAL_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "common/cs_dbg.h"
@@ -1963,7 +1965,7 @@ static int mg_resolve2(const char *host, struct in_addr *ina) {
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
   if ((rv = getaddrinfo(host, NULL, NULL, &servinfo)) != 0) {
-    DBG(("getaddrinfo(%s) failed: %s", host, strerror(errno)));
+    DBG(("getaddrinfo(%s) failed: %s", host, strerror(mg_get_errno())));
     return 0;
   }
   for (p = servinfo; p != NULL; p = p->ai_next) {
@@ -1975,7 +1977,7 @@ static int mg_resolve2(const char *host, struct in_addr *ina) {
 #else
   struct hostent *he;
   if ((he = gethostbyname(host)) == NULL) {
-    DBG(("gethostbyname(%s) failed: %s", host, strerror(errno)));
+    DBG(("gethostbyname(%s) failed: %s", host, strerror(mg_get_errno())));
   } else {
     memcpy(ina, he->h_addr_list[0], sizeof(*ina));
     return 1;
@@ -2821,8 +2823,11 @@ void mg_set_non_blocking_mode(sock_t sock) {
 }
 
 static int mg_is_error(int n) {
-  return n == 0 || (n < 0 && errno != EINTR && errno != EINPROGRESS &&
-                    errno != EAGAIN && errno != EWOULDBLOCK
+  int err = mg_get_errno();
+  return n == 0 || (n < 0 && err != EINPROGRESS && err != EWOULDBLOCK
+#ifndef WINCE
+                    && err != EAGAIN && err != EINTR
+#endif
 #ifdef _WIN32
                     && WSAGetLastError() != WSAEINTR &&
                     WSAGetLastError() != WSAEWOULDBLOCK
@@ -2835,21 +2840,21 @@ void mg_if_connect_tcp(struct mg_connection *nc,
   int rc, proto = 0;
   nc->sock = socket(AF_INET, SOCK_STREAM, proto);
   if (nc->sock == INVALID_SOCKET) {
-    nc->err = errno ? errno : 1;
+    nc->err = mg_get_errno() ? mg_get_errno() : 1;
     return;
   }
 #if !defined(MG_ESP8266)
   mg_set_non_blocking_mode(nc->sock);
 #endif
   rc = connect(nc->sock, &sa->sa, sizeof(sa->sin));
-  nc->err = mg_is_error(rc) ? errno : 0;
+  nc->err = mg_is_error(rc) ? mg_get_errno() : 0;
   LOG(LL_INFO, ("%p sock %d err %d", nc, nc->sock, nc->err));
 }
 
 void mg_if_connect_udp(struct mg_connection *nc) {
   nc->sock = socket(AF_INET, SOCK_DGRAM, 0);
   if (nc->sock == INVALID_SOCKET) {
-    nc->err = errno ? errno : 1;
+    nc->err = mg_get_errno() ? mg_get_errno() : 1;
     return;
   }
   if (nc->flags & MG_F_ENABLE_BROADCAST) {
@@ -2864,7 +2869,7 @@ int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   int proto = 0;
   sock_t sock = mg_open_listening_socket(sa, SOCK_STREAM, proto);
   if (sock == INVALID_SOCKET) {
-    return (errno ? errno : 1);
+    return (mg_get_errno() ? mg_get_errno() : 1);
   }
   mg_sock_set(nc, sock);
   return 0;
@@ -2872,7 +2877,7 @@ int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
 
 int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
   sock_t sock = mg_open_listening_socket(sa, SOCK_DGRAM, 0);
-  if (sock == INVALID_SOCKET) return (errno ? errno : 1);
+  if (sock == INVALID_SOCKET) return (mg_get_errno() ? mg_get_errno() : 1);
   mg_sock_set(nc, sock);
   return 0;
 }
@@ -2913,7 +2918,7 @@ static int mg_accept_conn(struct mg_connection *lc) {
   /* NOTE(lsm): on Windows, sock is always > FD_SETSIZE */
   sock_t sock = accept(lc->sock, &sa.sa, &sa_len);
   if (sock == INVALID_SOCKET) {
-    if (mg_is_error(-1)) DBG(("%p: failed to accept: %d", lc, errno));
+    if (mg_is_error(-1)) DBG(("%p: failed to accept: %d", lc, mg_get_errno()));
     return 0;
   }
   nc = mg_if_accept_new_conn(lc);
@@ -3000,7 +3005,7 @@ static void mg_write_to_socket(struct mg_connection *nc) {
   if (nc->flags & MG_F_UDP) {
     int n =
         sendto(nc->sock, io->buf, io->len, 0, &nc->sa.sa, sizeof(nc->sa.sin));
-    DBG(("%p %d %d %d %s:%hu", nc, nc->sock, n, errno,
+    DBG(("%p %d %d %d %s:%hu", nc, nc->sock, n, mg_get_errno(),
          inet_ntoa(nc->sa.sin.sin_addr), ntohs(nc->sa.sin.sin_port)));
     if (n > 0) {
       mbuf_remove(io, n);
@@ -3114,7 +3119,7 @@ static int mg_recvfrom(struct mg_connection *nc, union socket_address *sa,
   }
   n = recvfrom(nc->sock, *buf, MG_UDP_RECV_BUFFER_SIZE, 0, &sa->sa, sa_len);
   if (n <= 0) {
-    DBG(("%p recvfrom: %s", nc, strerror(errno)));
+    DBG(("%p recvfrom: %s", nc, strerror(mg_get_errno())));
     MG_FREE(*buf);
   }
   return n;
@@ -3149,7 +3154,7 @@ static int mg_ssl_err(struct mg_connection *conn, int res) {
 static void mg_ssl_begin(struct mg_connection *nc) {
   int server_side = (nc->listener != NULL);
   int res = server_side ? SSL_accept(nc->ssl) : SSL_connect(nc->ssl);
-  DBG(("%p %d res %d %d", nc, server_side, res, errno));
+  DBG(("%p %d res %d %d", nc, server_side, res, mg_get_errno()));
 
   if (res == 1) {
     nc->flags |= MG_F_SSL_HANDSHAKE_DONE;
@@ -5168,8 +5173,8 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
                   "HTTP/1.1 500 Internal Server Error\r\n"
                   "Content-Type: text/plain\r\n"
                   "Connection: close\r\n\r\n");
-        LOG(LL_ERROR, ("Failed to open %s: %d\n", fus->lfn, errno));
-        mg_printf(nc, "Failed to open %s: %d\n", fus->lfn, errno);
+        LOG(LL_ERROR, ("Failed to open %s: %d\n", fus->lfn, mg_get_errno()));
+        mg_printf(nc, "Failed to open %s: %d\n", fus->lfn, mg_get_errno());
         /* Do not close the connection just yet, discard remainder of the data.
          * This is because at the time of writing some browsers (Chrome) fail to
          * render response before all the data is sent. */
@@ -5184,11 +5189,11 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
           (struct file_upload_state *) mp->user_data;
       if (fus == NULL || fus->fp == NULL) break;
       if (fwrite(mp->data.p, 1, mp->data.len, fus->fp) != mp->data.len) {
-        LOG(LL_ERROR, ("Failed to write to %s: %d, wrote %d", fus->lfn, errno,
-                       (int) fus->num_recd));
-        if (errno == ENOSPC
+        LOG(LL_ERROR, ("Failed to write to %s: %d, wrote %d", fus->lfn,
+                       mg_get_errno(), (int) fus->num_recd));
+        if (mg_get_errno() == ENOSPC
 #ifdef SPIFFS_ERR_FULL
-            || errno == SPIFFS_ERR_FULL
+            || mg_get_errno() == SPIFFS_ERR_FULL
 #endif
             ) {
           mg_printf(nc,
@@ -5203,7 +5208,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
                     "Content-Type: text/plain\r\n"
                     "Connection: close\r\n\r\n");
           mg_printf(nc, "Failed to write to %s: %d, wrote %d", mp->file_name,
-                    errno, (int) fus->num_recd);
+                    mg_get_errno(), (int) fus->num_recd);
         }
         fclose(fus->fp);
         remove(fus->lfn);
@@ -5431,7 +5436,8 @@ static void mg_do_ssi_include(struct mg_connection *nc, struct http_message *hm,
   }
 
   if ((fp = fopen(path, "rb")) == NULL) {
-    mg_printf(nc, "SSI include error: fopen(%s): %s", path, strerror(errno));
+    mg_printf(nc, "SSI include error: fopen(%s): %s", path,
+              strerror(mg_get_errno()));
   } else {
     mg_set_close_on_exec(fileno(fp));
     if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern), path) >
@@ -5452,7 +5458,7 @@ static void do_ssi_exec(struct mg_connection *nc, char *tag) {
   if (sscanf(tag, " \"%[^\"]\"", cmd) != 1) {
     mg_printf(nc, "Bad SSI #exec: [%s]", tag);
   } else if ((fp = popen(cmd, "r")) == NULL) {
-    mg_printf(nc, "Cannot SSI #exec: [%s]: %s", cmd, strerror(errno));
+    mg_printf(nc, "Cannot SSI #exec: [%s]: %s", cmd, strerror(mg_get_errno()));
   } else {
     mg_send_file_data(nc, fp);
     pclose(fp);
@@ -5611,8 +5617,8 @@ void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
   cs_stat_t st;
   DBG(("%p [%s] %.*s", nc, path, (int) mime_type.len, mime_type.p));
   if (mg_stat(path, &st) != 0 || (pd->file.fp = fopen(path, "rb")) == NULL) {
-    int code;
-    switch (errno) {
+    int code, err = mg_get_errno();
+    switch (err) {
       case EACCES:
         code = 403;
         break;
@@ -6128,7 +6134,7 @@ static void mg_scan_directory(struct mg_connection *nc, const char *dir,
     }
     closedir(dirp);
   } else {
-    DBG(("%p opendir(%s) -> %d", nc, dir, errno));
+    DBG(("%p opendir(%s) -> %d", nc, dir, mg_get_errno()));
   }
 }
 
@@ -6917,7 +6923,6 @@ static void *mg_push_to_stdin(void *arg) {
   DBG(("%s", "FORWARED EVERYTHING TO CGI"));
   CloseHandle(tp->hPipe);
   MG_FREE(tp);
-  _endthread();
   return NULL;
 }
 
@@ -6939,7 +6944,6 @@ static void *mg_pull_from_stdout(void *arg) {
   shutdown(tp->s, 2);  // Without this, IO thread may get truncated data
   closesocket(tp->s);
   MG_FREE(tp);
-  _endthread();
   return NULL;
 }
 
@@ -7701,7 +7705,9 @@ int mg_base64_decode(const unsigned char *s, int len, char *dst) {
 
 #if MG_ENABLE_THREADS
 void *mg_start_thread(void *(*f)(void *), void *p) {
-#ifdef _WIN32
+#ifdef WINCE
+  return (void *) CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) f, p, 0, NULL);
+#elif defined(_WIN32)
   return (void *) _beginthread((void(__cdecl *) (void *) ) f, 0, p);
 #else
   pthread_t thread_id = (pthread_t) 0;
@@ -7724,7 +7730,7 @@ void *mg_start_thread(void *(*f)(void *), void *p) {
 
 /* Set close-on-exec bit for a given socket. */
 void mg_set_close_on_exec(sock_t sock) {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(WINCE)
   (void) SetHandleInformation((HANDLE) sock, HANDLE_FLAG_INHERIT, 0);
 #elif defined(__unix__)
   fcntl(sock, F_SETFD, FD_CLOEXEC);
@@ -7833,7 +7839,7 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
                                                 MG_SOCK_STRINGIFY_PORT |
                                                 MG_SOCK_STRINGIFY_REMOTE);
   fprintf(
-      fp, "%lu %p %s %s %s %d\n", (unsigned long) time(NULL), (void *) nc, src,
+      fp, "%lu %p %s %s %s %d\n", (unsigned long) mg_time(), (void *) nc, src,
       ev == MG_EV_RECV ? "<-" : ev == MG_EV_SEND
                                     ? "->"
                                     : ev == MG_EV_ACCEPT
@@ -7982,6 +7988,15 @@ int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str) {
 int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
   const struct mg_str pstr = {pattern, (size_t) pattern_len};
   return mg_match_prefix_n(pstr, mg_mk_str(str));
+}
+
+MG_INTERNAL int mg_get_errno() {
+#ifndef WINCE
+  return errno;
+#else
+  /* TODO(alashkin): translate error codes? */
+  return GetLastError();
+#endif
 }
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mqtt.c"
@@ -8972,20 +8987,24 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
   int i;
   LONG err;
   HKEY hKey, hSub;
-  char subkey[512], value[128],
-      *key = "SYSTEM\\ControlSet001\\Services\\Tcpip\\Parameters\\Interfaces";
+  wchar_t subkey[512], value[128],
+      *key = L"SYSTEM\\ControlSet001\\Services\\Tcpip\\Parameters\\Interfaces";
 
-  if ((err = RegOpenKeyA(HKEY_LOCAL_MACHINE, key, &hKey)) != ERROR_SUCCESS) {
-    fprintf(stderr, "cannot open reg key %s: %ld\n", key, err);
+  if ((err = RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &hKey)) !=
+      ERROR_SUCCESS) {
+    fprintf(stderr, "cannot open reg key %S: %ld\n", key, err);
     ret = -1;
   } else {
-    for (ret = -1, i = 0;
-         RegEnumKeyA(hKey, i, subkey, sizeof(subkey)) == ERROR_SUCCESS; i++) {
-      DWORD type, len = sizeof(value);
-      if (RegOpenKeyA(hKey, subkey, &hSub) == ERROR_SUCCESS &&
-          (RegQueryValueExA(hSub, "NameServer", 0, &type, (void *) value,
+    for (ret = -1, i = 0; 1; i++) {
+      DWORD subkey_size = sizeof(subkey), type, len = sizeof(value);
+      if (RegEnumKeyExW(hKey, i, subkey, &subkey_size, NULL, NULL, NULL,
+                        NULL) != ERROR_SUCCESS) {
+        break;
+      }
+      if (RegOpenKeyExW(hKey, subkey, 0, KEY_READ, &hSub) == ERROR_SUCCESS &&
+          (RegQueryValueExW(hSub, L"NameServer", 0, &type, (void *) value,
                             &len) == ERROR_SUCCESS ||
-           RegQueryValueExA(hSub, "DhcpNameServer", 0, &type, (void *) value,
+           RegQueryValueExW(hSub, L"DhcpNameServer", 0, &type, (void *) value,
                             &len) == ERROR_SUCCESS)) {
         /*
          * See https://github.com/cesanta/mongoose/issues/176
@@ -8994,14 +9013,14 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
          * If it's empty, check the next interface.
          * If it's multiple IP addresses, take the first one.
          */
-        char *comma = strchr(value, ',');
+        wchar_t *comma = wcschr(value, ',');
         if (value[0] == '\0') {
           continue;
         }
         if (comma != NULL) {
           *comma = '\0';
         }
-        snprintf(name, name_len, "udp://%s:53", value);
+        snprintf(name, name_len, "udp://%S:53", value);
         ret = 0;
         RegCloseKey(hSub);
         break;
@@ -9074,7 +9093,7 @@ int mg_resolve_from_hosts_file(const char *name, union socket_address *usa) {
 }
 
 static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
-  time_t now = time(NULL);
+  time_t now = (time_t) mg_time();
   struct mg_resolve_async_request *req;
   struct mg_dns_message *msg;
 
@@ -12049,3 +12068,24 @@ ssize_t kr_recv(int fd, void *buf, size_t len, int flags) {
 }
 
 #endif /* defined(MG_NET_IF_LWIP) && defined(SSL_KRYPTON) */
+#ifdef MG_MODULE_LINES
+#line 1 "common/platforms/wince/wince_libc.c"
+#endif
+/*
+ * Copyright (c) 2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifdef WINCE
+
+const char *strerror(int err) {
+  /*
+   * TODO(alashkin): there is no strerror on WinCE;
+   * look for similar wce_xxxx function
+   */
+  static char buf[10];
+  snprintf(buf, sizeof(buf), "%d", err);
+  return buf;
+}
+
+#endif
