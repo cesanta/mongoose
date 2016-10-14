@@ -71,33 +71,10 @@ MG_INTERNAL void mg_remove_conn(struct mg_connection *c);
 MG_INTERNAL struct mg_connection *mg_create_connection(
     struct mg_mgr *mgr, mg_event_handler_t callback,
     struct mg_add_sock_opts opts);
-#if MG_ENABLE_FILESYSTEM
-MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
-                                     const struct mg_serve_http_opts *opts,
-                                     char **local_path,
-                                     struct mg_str *remainder);
-MG_INTERNAL time_t mg_parse_date_string(const char *datetime);
-MG_INTERNAL int mg_is_not_modified(struct http_message *hm, cs_stat_t *st);
-#endif
 #ifdef _WIN32
 /* Retur value is the same as for MultiByteToWideChar. */
 int to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len);
 #endif
-
-/*
- * Reassemble the content of the buffer (buf, blen) which should be
- * in the HTTP chunked encoding, by collapsing data chunks to the
- * beginning of the buffer.
- *
- * If chunks get reassembled, modify hm->body to point to the reassembled
- * body and fire MG_EV_HTTP_CHUNK event. If handler sets MG_F_DELETE_CHUNK
- * in nc->flags, delete reassembled body from the mbuf.
- *
- * Return reassembled body size.
- */
-MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
-                                     struct http_message *hm, char *buf,
-                                     size_t blen);
 
 struct ctl_msg {
   mg_event_handler_t callback;
@@ -117,7 +94,31 @@ extern void *(*test_calloc)(size_t count, size_t size);
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-#if !MG_DISABLE_HTTP && MG_ENABLE_CGI
+#if MG_ENABLE_HTTP
+/*
+ * Reassemble the content of the buffer (buf, blen) which should be
+ * in the HTTP chunked encoding, by collapsing data chunks to the
+ * beginning of the buffer.
+ *
+ * If chunks get reassembled, modify hm->body to point to the reassembled
+ * body and fire MG_EV_HTTP_CHUNK event. If handler sets MG_F_DELETE_CHUNK
+ * in nc->flags, delete reassembled body from the mbuf.
+ *
+ * Return reassembled body size.
+ */
+MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
+                                     struct http_message *hm, char *buf,
+                                     size_t blen);
+
+#if MG_ENABLE_FILESYSTEM
+MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
+                                     const struct mg_serve_http_opts *opts,
+                                     char **local_path,
+                                     struct mg_str *remainder);
+MG_INTERNAL time_t mg_parse_date_string(const char *datetime);
+MG_INTERNAL int mg_is_not_modified(struct http_message *hm, cs_stat_t *st);
+#endif
+#if MG_ENABLE_HTTP_CGI
 MG_INTERNAL void mg_handle_cgi(struct mg_connection *nc, const char *prog,
                                const struct mg_str *path_info,
                                const struct http_message *hm,
@@ -125,7 +126,13 @@ MG_INTERNAL void mg_handle_cgi(struct mg_connection *nc, const char *prog,
 struct mg_http_proto_data_cgi;
 MG_INTERNAL void mg_http_free_proto_data_cgi(struct mg_http_proto_data_cgi *d);
 #endif
-#if !MG_DISABLE_HTTP && MG_ENABLE_HTTP_WEBDAV
+#if MG_ENABLE_HTTP_SSI
+MG_INTERNAL void mg_handle_ssi_request(struct mg_connection *nc,
+                                       struct http_message *hm,
+                                       const char *path,
+                                       const struct mg_serve_http_opts *opts);
+#endif
+#if MG_ENABLE_HTTP_WEBDAV
 MG_INTERNAL int mg_is_dav_request(const struct mg_str *s);
 MG_INTERNAL void mg_handle_propfind(struct mg_connection *nc, const char *path,
                                     cs_stat_t *stp, struct http_message *hm,
@@ -142,6 +149,12 @@ MG_INTERNAL void mg_handle_delete(struct mg_connection *nc,
 MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
                                struct http_message *hm);
 #endif
+#if MG_ENABLE_HTTP_WEBSOCKET
+MG_INTERNAL void mg_ws_handler(struct mg_connection *nc, int ev, void *ev_data);
+MG_INTERNAL void mg_ws_handshake(struct mg_connection *nc,
+                                 const struct mg_str *key);
+#endif
+#endif /* MG_ENABLE_HTTP */
 
 MG_INTERNAL int mg_get_errno();
 
@@ -3818,16 +3831,12 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out) {
  * All rights reserved
  */
 
-#if !MG_DISABLE_HTTP
+#if MG_ENABLE_HTTP
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
 /* Amalgamated: #include "common/sha1.h" */
 /* Amalgamated: #include "common/md5.h" */
-
-#if !MG_DISABLE_HTTP_WEBSOCKET
-#define MG_WS_NO_HOST_HEADER_MAGIC ((char *) 0x1)
-#endif
 
 static const char *mg_version_header = "Mongoose/" MG_VERSION;
 
@@ -3841,7 +3850,7 @@ struct mg_http_proto_data_file {
   enum mg_http_proto_data_type type;
 };
 
-#if MG_ENABLE_CGI
+#if MG_ENABLE_HTTP_CGI
 struct mg_http_proto_data_cgi {
   struct mg_connection *cgi_nc;
 };
@@ -3883,7 +3892,7 @@ struct mg_http_proto_data {
 #if MG_ENABLE_FILESYSTEM
   struct mg_http_proto_data_file file;
 #endif
-#if MG_ENABLE_CGI
+#if MG_ENABLE_HTTP_CGI
   struct mg_http_proto_data_cgi cgi;
 #endif
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
@@ -3945,7 +3954,7 @@ static void mg_http_conn_destructor(void *proto_data) {
 #if MG_ENABLE_FILESYSTEM
   mg_http_free_proto_data_file(&pd->file);
 #endif
-#if MG_ENABLE_CGI
+#if MG_ENABLE_HTTP_CGI
   mg_http_free_proto_data_cgi(&pd->cgi);
 #endif
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
@@ -4185,303 +4194,6 @@ struct mg_str *mg_get_http_header(struct http_message *hm, const char *name) {
   return NULL;
 }
 
-#if !MG_DISABLE_HTTP_WEBSOCKET
-
-static int mg_is_ws_fragment(unsigned char flags) {
-  return (flags & 0x80) == 0 || (flags & 0x0f) == 0;
-}
-
-static int mg_is_ws_first_fragment(unsigned char flags) {
-  return (flags & 0x80) == 0 && (flags & 0x0f) != 0;
-}
-
-static void mg_handle_incoming_websocket_frame(struct mg_connection *nc,
-                                               struct websocket_message *wsm) {
-  if (wsm->flags & 0x8) {
-    mg_call(nc, nc->handler, MG_EV_WEBSOCKET_CONTROL_FRAME, wsm);
-  } else {
-    mg_call(nc, nc->handler, MG_EV_WEBSOCKET_FRAME, wsm);
-  }
-}
-
-static int mg_deliver_websocket_data(struct mg_connection *nc) {
-  /* Using unsigned char *, cause of integer arithmetic below */
-  uint64_t i, data_len = 0, frame_len = 0, buf_len = nc->recv_mbuf.len, len,
-              mask_len = 0, header_len = 0;
-  unsigned char *p = (unsigned char *) nc->recv_mbuf.buf, *buf = p,
-                *e = p + buf_len;
-  unsigned *sizep = (unsigned *) &p[1]; /* Size ptr for defragmented frames */
-  int ok, reass = buf_len > 0 && mg_is_ws_fragment(p[0]) &&
-                  !(nc->flags & MG_F_WEBSOCKET_NO_DEFRAG);
-
-  /* If that's a continuation frame that must be reassembled, handle it */
-  if (reass && !mg_is_ws_first_fragment(p[0]) &&
-      buf_len >= 1 + sizeof(*sizep) && buf_len >= 1 + sizeof(*sizep) + *sizep) {
-    buf += 1 + sizeof(*sizep) + *sizep;
-    buf_len -= 1 + sizeof(*sizep) + *sizep;
-  }
-
-  if (buf_len >= 2) {
-    len = buf[1] & 127;
-    mask_len = buf[1] & 128 ? 4 : 0;
-    if (len < 126 && buf_len >= mask_len) {
-      data_len = len;
-      header_len = 2 + mask_len;
-    } else if (len == 126 && buf_len >= 4 + mask_len) {
-      header_len = 4 + mask_len;
-      data_len = ntohs(*(uint16_t *) &buf[2]);
-    } else if (buf_len >= 10 + mask_len) {
-      header_len = 10 + mask_len;
-      data_len = (((uint64_t) ntohl(*(uint32_t *) &buf[2])) << 32) +
-                 ntohl(*(uint32_t *) &buf[6]);
-    }
-  }
-
-  frame_len = header_len + data_len;
-  ok = frame_len > 0 && frame_len <= buf_len;
-
-  if (ok) {
-    struct websocket_message wsm;
-
-    wsm.size = (size_t) data_len;
-    wsm.data = buf + header_len;
-    wsm.flags = buf[0];
-
-    /* Apply mask if necessary */
-    if (mask_len > 0) {
-      for (i = 0; i < data_len; i++) {
-        buf[i + header_len] ^= (buf + header_len - mask_len)[i % 4];
-      }
-    }
-
-    if (reass) {
-      /* On first fragmented frame, nullify size */
-      if (mg_is_ws_first_fragment(wsm.flags)) {
-        mbuf_resize(&nc->recv_mbuf, nc->recv_mbuf.size + sizeof(*sizep));
-        p[0] &= ~0x0f; /* Next frames will be treated as continuation */
-        buf = p + 1 + sizeof(*sizep);
-        *sizep = 0; /* TODO(lsm): fix. this can stomp over frame data */
-      }
-
-      /* Append this frame to the reassembled buffer */
-      memmove(buf, wsm.data, e - wsm.data);
-      (*sizep) += wsm.size;
-      nc->recv_mbuf.len -= wsm.data - buf;
-
-      /* On last fragmented frame - call user handler and remove data */
-      if (wsm.flags & 0x80) {
-        wsm.data = p + 1 + sizeof(*sizep);
-        wsm.size = *sizep;
-        mg_handle_incoming_websocket_frame(nc, &wsm);
-        mbuf_remove(&nc->recv_mbuf, 1 + sizeof(*sizep) + *sizep);
-      }
-    } else {
-      /* TODO(lsm): properly handle OOB control frames during defragmentation */
-      mg_handle_incoming_websocket_frame(nc, &wsm);
-      mbuf_remove(&nc->recv_mbuf, (size_t) frame_len); /* Cleanup frame */
-    }
-
-    /* If client closes, close too */
-    if ((buf[0] & 0x0f) == WEBSOCKET_OP_CLOSE) {
-      nc->flags |= MG_F_SEND_AND_CLOSE;
-    }
-  }
-
-  return ok;
-}
-
-struct ws_mask_ctx {
-  size_t pos; /* zero means unmasked */
-  uint32_t mask;
-};
-
-static uint32_t mg_ws_random_mask(void) {
-  uint32_t mask;
-/*
- * The spec requires WS client to generate hard to
- * guess mask keys. From RFC6455, Section 5.3:
- *
- * The unpredictability of the masking key is essential to prevent
- * authors of malicious applications from selecting the bytes that appear on
- * the wire.
- *
- * Hence this feature is essential when the actual end user of this API
- * is untrusted code that wouldn't have access to a lower level net API
- * anyway (e.g. web browsers). Hence this feature is low prio for most
- * mongoose use cases and thus can be disabled, e.g. when porting to a platform
- * that lacks rand().
- */
-#if MG_DISABLE_WS_RANDOM_MASK
-  mask = 0xefbeadde; /* generated with a random number generator, I swear */
-#else
-  if (sizeof(long) >= 4) {
-    mask = (uint32_t) rand();
-  } else if (sizeof(long) == 2) {
-    mask = (uint32_t) rand() << 16 | (uint32_t) rand();
-  }
-#endif
-  return mask;
-}
-
-static void mg_send_ws_header(struct mg_connection *nc, int op, size_t len,
-                              struct ws_mask_ctx *ctx) {
-  int header_len;
-  unsigned char header[10];
-
-  header[0] = (op & WEBSOCKET_DONT_FIN ? 0x0 : 0x80) + (op & 0x0f);
-  if (len < 126) {
-    header[1] = (unsigned char) len;
-    header_len = 2;
-  } else if (len < 65535) {
-    uint16_t tmp = htons((uint16_t) len);
-    header[1] = 126;
-    memcpy(&header[2], &tmp, sizeof(tmp));
-    header_len = 4;
-  } else {
-    uint32_t tmp;
-    header[1] = 127;
-    tmp = htonl((uint32_t)((uint64_t) len >> 32));
-    memcpy(&header[2], &tmp, sizeof(tmp));
-    tmp = htonl((uint32_t)(len & 0xffffffff));
-    memcpy(&header[6], &tmp, sizeof(tmp));
-    header_len = 10;
-  }
-
-  /* client connections enable masking */
-  if (nc->listener == NULL) {
-    header[1] |= 1 << 7; /* set masking flag */
-    mg_send(nc, header, header_len);
-    ctx->mask = mg_ws_random_mask();
-    mg_send(nc, &ctx->mask, sizeof(ctx->mask));
-    ctx->pos = nc->send_mbuf.len;
-  } else {
-    mg_send(nc, header, header_len);
-    ctx->pos = 0;
-  }
-}
-
-static void mg_ws_mask_frame(struct mbuf *mbuf, struct ws_mask_ctx *ctx) {
-  size_t i;
-  if (ctx->pos == 0) return;
-  for (i = 0; i < (mbuf->len - ctx->pos); i++) {
-    mbuf->buf[ctx->pos + i] ^= ((char *) &ctx->mask)[i % 4];
-  }
-}
-
-void mg_send_websocket_frame(struct mg_connection *nc, int op, const void *data,
-                             size_t len) {
-  struct ws_mask_ctx ctx;
-  DBG(("%p %d %d", nc, op, (int) len));
-  mg_send_ws_header(nc, op, len, &ctx);
-  mg_send(nc, data, len);
-
-  mg_ws_mask_frame(&nc->send_mbuf, &ctx);
-
-  if (op == WEBSOCKET_OP_CLOSE) {
-    nc->flags |= MG_F_SEND_AND_CLOSE;
-  }
-}
-
-void mg_send_websocket_framev(struct mg_connection *nc, int op,
-                              const struct mg_str *strv, int strvcnt) {
-  struct ws_mask_ctx ctx;
-  int i;
-  int len = 0;
-  for (i = 0; i < strvcnt; i++) {
-    len += strv[i].len;
-  }
-
-  mg_send_ws_header(nc, op, len, &ctx);
-
-  for (i = 0; i < strvcnt; i++) {
-    mg_send(nc, strv[i].p, strv[i].len);
-  }
-
-  mg_ws_mask_frame(&nc->send_mbuf, &ctx);
-
-  if (op == WEBSOCKET_OP_CLOSE) {
-    nc->flags |= MG_F_SEND_AND_CLOSE;
-  }
-}
-
-void mg_printf_websocket_frame(struct mg_connection *nc, int op,
-                               const char *fmt, ...) {
-  char mem[MG_VPRINTF_BUFFER_SIZE], *buf = mem;
-  va_list ap;
-  int len;
-
-  va_start(ap, fmt);
-  if ((len = mg_avprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
-    mg_send_websocket_frame(nc, op, buf, len);
-  }
-  va_end(ap);
-
-  if (buf != mem && buf != NULL) {
-    MG_FREE(buf);
-  }
-}
-
-static void mg_websocket_handler(struct mg_connection *nc, int ev,
-                                 void *ev_data) {
-  mg_call(nc, nc->handler, ev, ev_data);
-
-  switch (ev) {
-    case MG_EV_RECV:
-      do {
-      } while (mg_deliver_websocket_data(nc));
-      break;
-    case MG_EV_POLL:
-      /* Ping idle websocket connections */
-      {
-        time_t now = *(time_t *) ev_data;
-        if (nc->flags & MG_F_IS_WEBSOCKET &&
-            now > nc->last_io_time + MG_WEBSOCKET_PING_INTERVAL_SECONDS) {
-          mg_send_websocket_frame(nc, WEBSOCKET_OP_PING, "", 0);
-        }
-      }
-      break;
-    default:
-      break;
-  }
-}
-
-#ifndef MG_EXT_SHA1
-static void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
-                           const size_t *msg_lens, uint8_t *digest) {
-  size_t i;
-  cs_sha1_ctx sha_ctx;
-  cs_sha1_init(&sha_ctx);
-  for (i = 0; i < num_msgs; i++) {
-    cs_sha1_update(&sha_ctx, msgs[i], msg_lens[i]);
-  }
-  cs_sha1_final(digest, &sha_ctx);
-}
-#else
-extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
-                           const size_t *msg_lens, uint8_t *digest);
-#endif
-
-static void mg_ws_handshake(struct mg_connection *nc,
-                            const struct mg_str *key) {
-  static const char *magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-  const uint8_t *msgs[2] = {(const uint8_t *) key->p, (const uint8_t *) magic};
-  const size_t msg_lens[2] = {key->len, 36};
-  unsigned char sha[20];
-  char b64_sha[30];
-
-  mg_hash_sha1_v(2, msgs, msg_lens, sha);
-  mg_base64_encode(sha, sizeof(sha), b64_sha);
-  mg_printf(nc, "%s%s%s",
-            "HTTP/1.1 101 Switching Protocols\r\n"
-            "Upgrade: websocket\r\n"
-            "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: ",
-            b64_sha, "\r\n\r\n");
-  DBG(("%p %.*s %s", nc, (int) key->len, key->p, b64_sha));
-}
-
-#endif /* MG_DISABLE_HTTP_WEBSOCKET */
-
 #if MG_ENABLE_FILESYSTEM
 static void mg_http_transfer_file_data(struct mg_connection *nc) {
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
@@ -4521,7 +4233,7 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
       mg_http_free_proto_data_file(&pd->file);
     }
   }
-#if MG_ENABLE_CGI
+#if MG_ENABLE_HTTP_CGI
   else if (pd->cgi.cgi_nc != NULL) {
     /* This is POST data that needs to be forwarded to the CGI process */
     if (pd->cgi.cgi_nc != NULL) {
@@ -4704,7 +4416,7 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct mbuf *io = &nc->recv_mbuf;
   int req_len;
   const int is_req = (nc->listener != NULL);
-#if !MG_DISABLE_HTTP_WEBSOCKET
+#if MG_ENABLE_HTTP_WEBSOCKET
   struct mg_str *vec;
 #endif
   if (ev == MG_EV_CLOSE) {
@@ -4779,21 +4491,21 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
     } else if (req_len == 0) {
       /* Do nothing, request is not yet fully buffered */
     }
-#if !MG_DISABLE_HTTP_WEBSOCKET
+#if MG_ENABLE_HTTP_WEBSOCKET
     else if (nc->listener == NULL &&
              mg_get_http_header(hm, "Sec-WebSocket-Accept")) {
       /* We're websocket client, got handshake response from server. */
       /* TODO(lsm): check the validity of accept Sec-WebSocket-Accept */
       mbuf_remove(io, req_len);
-      nc->proto_handler = mg_websocket_handler;
+      nc->proto_handler = mg_ws_handler;
       nc->flags |= MG_F_IS_WEBSOCKET;
       mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_DONE, NULL);
-      mg_websocket_handler(nc, MG_EV_RECV, ev_data);
+      mg_ws_handler(nc, MG_EV_RECV, ev_data);
     } else if (nc->listener != NULL &&
                (vec = mg_get_http_header(hm, "Sec-WebSocket-Key")) != NULL) {
       /* This is a websocket request. Switch protocol handlers. */
       mbuf_remove(io, req_len);
-      nc->proto_handler = mg_websocket_handler;
+      nc->proto_handler = mg_ws_handler;
       nc->flags |= MG_F_IS_WEBSOCKET;
 
       /* Send handshake */
@@ -4803,10 +4515,10 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
           mg_ws_handshake(nc, vec);
         }
         mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_DONE, NULL);
-        mg_websocket_handler(nc, MG_EV_RECV, ev_data);
+        mg_ws_handler(nc, MG_EV_RECV, ev_data);
       }
     }
-#endif /* MG_DISABLE_HTTP_WEBSOCKET */
+#endif /* MG_ENABLE_HTTP_WEBSOCKET */
     else if (hm->message.len <= io->len) {
       int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
 
@@ -5261,48 +4973,6 @@ void mg_set_protocol_http_websocket(struct mg_connection *nc) {
   nc->proto_handler = mg_http_handler;
 }
 
-#if !MG_DISABLE_HTTP_WEBSOCKET
-
-void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
-                                  const char *host, const char *protocol,
-                                  const char *extra_headers) {
-  char key[25];
-  uint32_t nonce[4];
-  nonce[0] = mg_ws_random_mask();
-  nonce[1] = mg_ws_random_mask();
-  nonce[2] = mg_ws_random_mask();
-  nonce[3] = mg_ws_random_mask();
-  mg_base64_encode((unsigned char *) &nonce, sizeof(nonce), key);
-
-  mg_printf(nc,
-            "GET %s HTTP/1.1\r\n"
-            "Upgrade: websocket\r\n"
-            "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Version: 13\r\n"
-            "Sec-WebSocket-Key: %s\r\n",
-            path, key);
-
-  /* TODO(mkm): take default hostname from http proto data if host == NULL */
-  if (host != MG_WS_NO_HOST_HEADER_MAGIC) {
-    mg_printf(nc, "Host: %s\r\n", host);
-  }
-  if (protocol != NULL) {
-    mg_printf(nc, "Sec-WebSocket-Protocol: %s\r\n", protocol);
-  }
-  if (extra_headers != NULL) {
-    mg_printf(nc, "%s", extra_headers);
-  }
-  mg_printf(nc, "\r\n");
-}
-
-void mg_send_websocket_handshake(struct mg_connection *nc, const char *path,
-                                 const char *extra_headers) {
-  mg_send_websocket_handshake2(nc, path, MG_WS_NO_HOST_HEADER_MAGIC, NULL,
-                               extra_headers);
-}
-
-#endif /* MG_DISABLE_HTTP_WEBSOCKET */
-
 void mg_send_response_line_s(struct mg_connection *nc, int status_code,
                              const struct mg_str extra_headers) {
   const char *status_message = "OK";
@@ -5390,200 +5060,6 @@ static void mg_http_send_error(struct mg_connection *nc, int code,
   mg_send(nc, reason, strlen(reason));
   nc->flags |= MG_F_SEND_AND_CLOSE;
 }
-#if !MG_DISABLE_SSI
-static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
-                             const char *path, FILE *fp, int include_level,
-                             const struct mg_serve_http_opts *opts);
-
-static void mg_send_file_data(struct mg_connection *nc, FILE *fp) {
-  char buf[BUFSIZ];
-  size_t n;
-  while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
-    mg_send(nc, buf, n);
-  }
-}
-
-static void mg_do_ssi_include(struct mg_connection *nc, struct http_message *hm,
-                              const char *ssi, char *tag, int include_level,
-                              const struct mg_serve_http_opts *opts) {
-  char file_name[BUFSIZ], path[MAX_PATH_SIZE], *p;
-  FILE *fp;
-
-  /*
-   * sscanf() is safe here, since send_ssi_file() also uses buffer
-   * of size MG_BUF_LEN to get the tag. So strlen(tag) is always < MG_BUF_LEN.
-   */
-  if (sscanf(tag, " virtual=\"%[^\"]\"", file_name) == 1) {
-    /* File name is relative to the webserver root */
-    snprintf(path, sizeof(path), "%s/%s", opts->document_root, file_name);
-  } else if (sscanf(tag, " abspath=\"%[^\"]\"", file_name) == 1) {
-    /*
-     * File name is relative to the webserver working directory
-     * or it is absolute system path
-     */
-    snprintf(path, sizeof(path), "%s", file_name);
-  } else if (sscanf(tag, " file=\"%[^\"]\"", file_name) == 1 ||
-             sscanf(tag, " \"%[^\"]\"", file_name) == 1) {
-    /* File name is relative to the currect document */
-    snprintf(path, sizeof(path), "%s", ssi);
-    if ((p = strrchr(path, DIRSEP)) != NULL) {
-      p[1] = '\0';
-    }
-    snprintf(path + strlen(path), sizeof(path) - strlen(path), "%s", file_name);
-  } else {
-    mg_printf(nc, "Bad SSI #include: [%s]", tag);
-    return;
-  }
-
-  if ((fp = fopen(path, "rb")) == NULL) {
-    mg_printf(nc, "SSI include error: fopen(%s): %s", path,
-              strerror(mg_get_errno()));
-  } else {
-    mg_set_close_on_exec(fileno(fp));
-    if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern), path) >
-        0) {
-      mg_send_ssi_file(nc, hm, path, fp, include_level + 1, opts);
-    } else {
-      mg_send_file_data(nc, fp);
-    }
-    fclose(fp);
-  }
-}
-
-#if !MG_DISABLE_POPEN
-static void do_ssi_exec(struct mg_connection *nc, char *tag) {
-  char cmd[BUFSIZ];
-  FILE *fp;
-
-  if (sscanf(tag, " \"%[^\"]\"", cmd) != 1) {
-    mg_printf(nc, "Bad SSI #exec: [%s]", tag);
-  } else if ((fp = popen(cmd, "r")) == NULL) {
-    mg_printf(nc, "Cannot SSI #exec: [%s]: %s", cmd, strerror(mg_get_errno()));
-  } else {
-    mg_send_file_data(nc, fp);
-    pclose(fp);
-  }
-}
-#endif /* !MG_DISABLE_POPEN */
-
-/*
- * SSI directive has the following format:
- * <!--#directive parameter=value parameter=value -->
- */
-static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
-                             const char *path, FILE *fp, int include_level,
-                             const struct mg_serve_http_opts *opts) {
-  static const struct mg_str btag = MG_MK_STR("<!--#");
-  static const struct mg_str d_include = MG_MK_STR("include");
-  static const struct mg_str d_call = MG_MK_STR("call");
-#if !MG_DISABLE_POPEN
-  static const struct mg_str d_exec = MG_MK_STR("exec");
-#endif
-  char buf[BUFSIZ], *p = buf + btag.len; /* p points to SSI directive */
-  int ch, len, in_ssi_tag;
-
-  if (include_level > 10) {
-    mg_printf(nc, "SSI #include level is too deep (%s)", path);
-    return;
-  }
-
-  in_ssi_tag = len = 0;
-  while ((ch = fgetc(fp)) != EOF) {
-    if (in_ssi_tag && ch == '>' && buf[len - 1] == '-' && buf[len - 2] == '-') {
-      size_t i = len - 2;
-      in_ssi_tag = 0;
-
-      /* Trim closing --> */
-      buf[i--] = '\0';
-      while (i > 0 && buf[i] == ' ') {
-        buf[i--] = '\0';
-      }
-
-      /* Handle known SSI directives */
-      if (memcmp(p, d_include.p, d_include.len) == 0) {
-        mg_do_ssi_include(nc, hm, path, p + d_include.len + 1, include_level,
-                          opts);
-      } else if (memcmp(p, d_call.p, d_call.len) == 0) {
-        struct mg_ssi_call_ctx cctx;
-        memset(&cctx, 0, sizeof(cctx));
-        cctx.req = hm;
-        cctx.file = mg_mk_str(path);
-        cctx.arg = mg_mk_str(p + d_call.len + 1);
-        mg_call(nc, NULL, MG_EV_SSI_CALL,
-                (void *) cctx.arg.p); /* NUL added above */
-        mg_call(nc, NULL, MG_EV_SSI_CALL_CTX, &cctx);
-#if !MG_DISABLE_POPEN
-      } else if (memcmp(p, d_exec.p, d_exec.len) == 0) {
-        do_ssi_exec(nc, p + d_exec.len + 1);
-#endif
-      } else {
-        /* Silently ignore unknown SSI directive. */
-      }
-      len = 0;
-    } else if (ch == '<') {
-      in_ssi_tag = 1;
-      if (len > 0) {
-        mg_send(nc, buf, (size_t) len);
-      }
-      len = 0;
-      buf[len++] = ch & 0xff;
-    } else if (in_ssi_tag) {
-      if (len == (int) btag.len && memcmp(buf, btag.p, btag.len) != 0) {
-        /* Not an SSI tag */
-        in_ssi_tag = 0;
-      } else if (len == (int) sizeof(buf) - 2) {
-        mg_printf(nc, "%s: SSI tag is too large", path);
-        len = 0;
-      }
-      buf[len++] = ch & 0xff;
-    } else {
-      buf[len++] = ch & 0xff;
-      if (len == (int) sizeof(buf)) {
-        mg_send(nc, buf, (size_t) len);
-        len = 0;
-      }
-    }
-  }
-
-  /* Send the rest of buffered data */
-  if (len > 0) {
-    mg_send(nc, buf, (size_t) len);
-  }
-}
-
-static void mg_handle_ssi_request(struct mg_connection *nc,
-                                  struct http_message *hm, const char *path,
-                                  const struct mg_serve_http_opts *opts) {
-  FILE *fp;
-  struct mg_str mime_type;
-  DBG(("%p %s", nc, path));
-
-  if ((fp = fopen(path, "rb")) == NULL) {
-    mg_http_send_error(nc, 404, NULL);
-  } else {
-    mg_set_close_on_exec(fileno(fp));
-
-    mime_type = mg_get_mime_type(path, "text/plain", opts);
-    mg_send_response_line(nc, 200, opts->extra_headers);
-    mg_printf(nc,
-              "Content-Type: %.*s\r\n"
-              "Connection: close\r\n\r\n",
-              (int) mime_type.len, mime_type.p);
-    mg_send_ssi_file(nc, hm, path, fp, 0, opts);
-    fclose(fp);
-    nc->flags |= MG_F_SEND_AND_CLOSE;
-  }
-}
-#else
-static void mg_handle_ssi_request(struct mg_connection *nc,
-                                  struct http_message *hm, const char *path,
-                                  const struct mg_serve_http_opts *opts) {
-  (void) path;
-  (void) hm;
-  (void) opts;
-  mg_http_send_error(nc, 500, "SSI disabled");
-}
-#endif /* MG_DISABLE_SSI */
 
 static void mg_http_construct_etag(char *buf, size_t buf_len,
                                    const cs_stat_t *st) {
@@ -5710,10 +5186,12 @@ void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
 static void mg_http_serve_file2(struct mg_connection *nc, const char *path,
                                 struct http_message *hm,
                                 struct mg_serve_http_opts *opts) {
+#if MG_ENABLE_HTTP_SSI
   if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern), path) > 0) {
     mg_handle_ssi_request(nc, hm, path, opts);
     return;
   }
+#endif
   mg_http_serve_file(nc, hm, path, mg_get_mime_type(path, "text/plain", opts),
                      mg_mk_str(opts->extra_headers));
 }
@@ -6538,11 +6016,11 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
                                opts->per_directory_auth_file, 0)) {
     mg_http_send_digest_auth_request(nc, opts->auth_domain);
   } else if (is_cgi) {
-#if MG_ENABLE_CGI
+#if MG_ENABLE_HTTP_CGI
     mg_handle_cgi(nc, index_file ? index_file : path, path_info, hm, opts);
 #else
     mg_http_send_error(nc, 501, NULL);
-#endif /* MG_DISABLE_CGI */
+#endif /* MG_ENABLE_HTTP_CGI */
   } else if ((!exists ||
               mg_is_file_hidden(path, opts, 0 /* specials are ok */)) &&
              !mg_is_creation_request(hm)) {
@@ -6781,35 +6259,6 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
                              post_data);
 }
 
-#if !MG_DISABLE_HTTP_WEBSOCKET
-struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
-                                        mg_event_handler_t ev_handler,
-                                        struct mg_connect_opts opts,
-                                        const char *url, const char *protocol,
-                                        const char *extra_headers) {
-  char *addr = NULL;
-  const char *path = NULL;
-  struct mg_connection *nc = mg_connect_http_base(
-      mgr, ev_handler, opts, "ws://", "wss://", url, &path, &addr);
-
-  if (nc != NULL) {
-    mg_send_websocket_handshake2(nc, path, addr, protocol, extra_headers);
-  }
-
-  MG_FREE(addr);
-  return nc;
-}
-
-struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
-                                    mg_event_handler_t ev_handler,
-                                    const char *url, const char *protocol,
-                                    const char *extra_headers) {
-  struct mg_connect_opts opts;
-  memset(&opts, 0, sizeof(opts));
-  return mg_connect_ws_opt(mgr, ev_handler, opts, url, protocol, extra_headers);
-}
-#endif /* MG_DISABLE_HTTP_WEBSOCKET */
-
 size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
                           size_t var_name_len, char *file_name,
                           size_t file_name_len, const char **data,
@@ -6865,7 +6314,7 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
   pd->endpoints = new_ep;
 }
 
-#endif /* MG_DISABLE_HTTP */
+#endif /* MG_ENABLE_HTTP */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/http_cgi.c"
 #endif
@@ -6874,7 +6323,15 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
  * All rights reserved
  */
 
-#if !MG_DISABLE_HTTP && MG_ENABLE_CGI
+#if MG_ENABLE_HTTP && MG_ENABLE_HTTP_CGI
+
+#ifndef MG_MAX_CGI_ENVIR_VARS
+#define MG_MAX_CGI_ENVIR_VARS 64
+#endif
+
+#ifndef MG_ENV_EXPORT_TO_CGI
+#define MG_ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
+#endif
 
 /*
  * This structure helps to create an environment for the spawned CGI program.
@@ -7350,7 +6807,203 @@ MG_INTERNAL void mg_http_free_proto_data_cgi(struct mg_http_proto_data_cgi *d) {
   }
 }
 
-#endif /* MG_ENABLE_HTTP && MG_ENABLE_CGI */
+#endif /* MG_ENABLE_HTTP && MG_ENABLE_HTTP_CGI */
+#ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/http_ssi.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if MG_ENABLE_HTTP && MG_ENABLE_HTTP_SSI && MG_ENABLE_FILESYSTEM
+
+static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
+                             const char *path, FILE *fp, int include_level,
+                             const struct mg_serve_http_opts *opts);
+
+static void mg_send_file_data(struct mg_connection *nc, FILE *fp) {
+  char buf[BUFSIZ];
+  size_t n;
+  while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+    mg_send(nc, buf, n);
+  }
+}
+
+static void mg_do_ssi_include(struct mg_connection *nc, struct http_message *hm,
+                              const char *ssi, char *tag, int include_level,
+                              const struct mg_serve_http_opts *opts) {
+  char file_name[BUFSIZ], path[MAX_PATH_SIZE], *p;
+  FILE *fp;
+
+  /*
+   * sscanf() is safe here, since send_ssi_file() also uses buffer
+   * of size MG_BUF_LEN to get the tag. So strlen(tag) is always < MG_BUF_LEN.
+   */
+  if (sscanf(tag, " virtual=\"%[^\"]\"", file_name) == 1) {
+    /* File name is relative to the webserver root */
+    snprintf(path, sizeof(path), "%s/%s", opts->document_root, file_name);
+  } else if (sscanf(tag, " abspath=\"%[^\"]\"", file_name) == 1) {
+    /*
+     * File name is relative to the webserver working directory
+     * or it is absolute system path
+     */
+    snprintf(path, sizeof(path), "%s", file_name);
+  } else if (sscanf(tag, " file=\"%[^\"]\"", file_name) == 1 ||
+             sscanf(tag, " \"%[^\"]\"", file_name) == 1) {
+    /* File name is relative to the currect document */
+    snprintf(path, sizeof(path), "%s", ssi);
+    if ((p = strrchr(path, DIRSEP)) != NULL) {
+      p[1] = '\0';
+    }
+    snprintf(path + strlen(path), sizeof(path) - strlen(path), "%s", file_name);
+  } else {
+    mg_printf(nc, "Bad SSI #include: [%s]", tag);
+    return;
+  }
+
+  if ((fp = fopen(path, "rb")) == NULL) {
+    mg_printf(nc, "SSI include error: fopen(%s): %s", path,
+              strerror(mg_get_errno()));
+  } else {
+    mg_set_close_on_exec(fileno(fp));
+    if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern), path) >
+        0) {
+      mg_send_ssi_file(nc, hm, path, fp, include_level + 1, opts);
+    } else {
+      mg_send_file_data(nc, fp);
+    }
+    fclose(fp);
+  }
+}
+
+#if !MG_DISABLE_POPEN
+static void do_ssi_exec(struct mg_connection *nc, char *tag) {
+  char cmd[BUFSIZ];
+  FILE *fp;
+
+  if (sscanf(tag, " \"%[^\"]\"", cmd) != 1) {
+    mg_printf(nc, "Bad SSI #exec: [%s]", tag);
+  } else if ((fp = popen(cmd, "r")) == NULL) {
+    mg_printf(nc, "Cannot SSI #exec: [%s]: %s", cmd, strerror(mg_get_errno()));
+  } else {
+    mg_send_file_data(nc, fp);
+    pclose(fp);
+  }
+}
+#endif /* !MG_DISABLE_POPEN */
+
+/*
+ * SSI directive has the following format:
+ * <!--#directive parameter=value parameter=value -->
+ */
+static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
+                             const char *path, FILE *fp, int include_level,
+                             const struct mg_serve_http_opts *opts) {
+  static const struct mg_str btag = MG_MK_STR("<!--#");
+  static const struct mg_str d_include = MG_MK_STR("include");
+  static const struct mg_str d_call = MG_MK_STR("call");
+#if !MG_DISABLE_POPEN
+  static const struct mg_str d_exec = MG_MK_STR("exec");
+#endif
+  char buf[BUFSIZ], *p = buf + btag.len; /* p points to SSI directive */
+  int ch, len, in_ssi_tag;
+
+  if (include_level > 10) {
+    mg_printf(nc, "SSI #include level is too deep (%s)", path);
+    return;
+  }
+
+  in_ssi_tag = len = 0;
+  while ((ch = fgetc(fp)) != EOF) {
+    if (in_ssi_tag && ch == '>' && buf[len - 1] == '-' && buf[len - 2] == '-') {
+      size_t i = len - 2;
+      in_ssi_tag = 0;
+
+      /* Trim closing --> */
+      buf[i--] = '\0';
+      while (i > 0 && buf[i] == ' ') {
+        buf[i--] = '\0';
+      }
+
+      /* Handle known SSI directives */
+      if (memcmp(p, d_include.p, d_include.len) == 0) {
+        mg_do_ssi_include(nc, hm, path, p + d_include.len + 1, include_level,
+                          opts);
+      } else if (memcmp(p, d_call.p, d_call.len) == 0) {
+        struct mg_ssi_call_ctx cctx;
+        memset(&cctx, 0, sizeof(cctx));
+        cctx.req = hm;
+        cctx.file = mg_mk_str(path);
+        cctx.arg = mg_mk_str(p + d_call.len + 1);
+        mg_call(nc, NULL, MG_EV_SSI_CALL,
+                (void *) cctx.arg.p); /* NUL added above */
+        mg_call(nc, NULL, MG_EV_SSI_CALL_CTX, &cctx);
+#if !MG_DISABLE_POPEN
+      } else if (memcmp(p, d_exec.p, d_exec.len) == 0) {
+        do_ssi_exec(nc, p + d_exec.len + 1);
+#endif
+      } else {
+        /* Silently ignore unknown SSI directive. */
+      }
+      len = 0;
+    } else if (ch == '<') {
+      in_ssi_tag = 1;
+      if (len > 0) {
+        mg_send(nc, buf, (size_t) len);
+      }
+      len = 0;
+      buf[len++] = ch & 0xff;
+    } else if (in_ssi_tag) {
+      if (len == (int) btag.len && memcmp(buf, btag.p, btag.len) != 0) {
+        /* Not an SSI tag */
+        in_ssi_tag = 0;
+      } else if (len == (int) sizeof(buf) - 2) {
+        mg_printf(nc, "%s: SSI tag is too large", path);
+        len = 0;
+      }
+      buf[len++] = ch & 0xff;
+    } else {
+      buf[len++] = ch & 0xff;
+      if (len == (int) sizeof(buf)) {
+        mg_send(nc, buf, (size_t) len);
+        len = 0;
+      }
+    }
+  }
+
+  /* Send the rest of buffered data */
+  if (len > 0) {
+    mg_send(nc, buf, (size_t) len);
+  }
+}
+
+MG_INTERNAL void mg_handle_ssi_request(struct mg_connection *nc,
+                                       struct http_message *hm,
+                                       const char *path,
+                                       const struct mg_serve_http_opts *opts) {
+  FILE *fp;
+  struct mg_str mime_type;
+  DBG(("%p %s", nc, path));
+
+  if ((fp = fopen(path, "rb")) == NULL) {
+    mg_http_send_error(nc, 404, NULL);
+  } else {
+    mg_set_close_on_exec(fileno(fp));
+
+    mime_type = mg_get_mime_type(path, "text/plain", opts);
+    mg_send_response_line(nc, 200, opts->extra_headers);
+    mg_printf(nc,
+              "Content-Type: %.*s\r\n"
+              "Connection: close\r\n\r\n",
+              (int) mime_type.len, mime_type.p);
+    mg_send_ssi_file(nc, hm, path, fp, 0, opts);
+    fclose(fp);
+    nc->flags |= MG_F_SEND_AND_CLOSE;
+  }
+}
+
+#endif /* MG_ENABLE_HTTP_SSI && MG_ENABLE_HTTP && MG_ENABLE_FILESYSTEM */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/http_webdav.c"
 #endif
@@ -7359,7 +7012,7 @@ MG_INTERNAL void mg_http_free_proto_data_cgi(struct mg_http_proto_data_cgi *d) {
  * All rights reserved
  */
 
-#if !MG_DISABLE_HTTP && MG_ENABLE_HTTP_WEBDAV
+#if MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBDAV
 
 MG_INTERNAL int mg_is_dav_request(const struct mg_str *s) {
   static const char *methods[] = {
@@ -7621,7 +7274,381 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
   }
 }
 
-#endif /* !MG_DISABLE_HTTP && MG_ENABLE_HTTP_WEBDAV */
+#endif /* MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBDAV */
+#ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/http_websocket.c"
+#endif
+/*
+ * Copyright (c) 2014 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBSOCKET
+
+#ifndef MG_WEBSOCKET_PING_INTERVAL_SECONDS
+#define MG_WEBSOCKET_PING_INTERVAL_SECONDS 5
+#endif
+
+#define MG_WS_NO_HOST_HEADER_MAGIC ((char *) 0x1)
+
+static int mg_is_ws_fragment(unsigned char flags) {
+  return (flags & 0x80) == 0 || (flags & 0x0f) == 0;
+}
+
+static int mg_is_ws_first_fragment(unsigned char flags) {
+  return (flags & 0x80) == 0 && (flags & 0x0f) != 0;
+}
+
+static void mg_handle_incoming_websocket_frame(struct mg_connection *nc,
+                                               struct websocket_message *wsm) {
+  if (wsm->flags & 0x8) {
+    mg_call(nc, nc->handler, MG_EV_WEBSOCKET_CONTROL_FRAME, wsm);
+  } else {
+    mg_call(nc, nc->handler, MG_EV_WEBSOCKET_FRAME, wsm);
+  }
+}
+
+static int mg_deliver_websocket_data(struct mg_connection *nc) {
+  /* Using unsigned char *, cause of integer arithmetic below */
+  uint64_t i, data_len = 0, frame_len = 0, buf_len = nc->recv_mbuf.len, len,
+              mask_len = 0, header_len = 0;
+  unsigned char *p = (unsigned char *) nc->recv_mbuf.buf, *buf = p,
+                *e = p + buf_len;
+  unsigned *sizep = (unsigned *) &p[1]; /* Size ptr for defragmented frames */
+  int ok, reass = buf_len > 0 && mg_is_ws_fragment(p[0]) &&
+                  !(nc->flags & MG_F_WEBSOCKET_NO_DEFRAG);
+
+  /* If that's a continuation frame that must be reassembled, handle it */
+  if (reass && !mg_is_ws_first_fragment(p[0]) &&
+      buf_len >= 1 + sizeof(*sizep) && buf_len >= 1 + sizeof(*sizep) + *sizep) {
+    buf += 1 + sizeof(*sizep) + *sizep;
+    buf_len -= 1 + sizeof(*sizep) + *sizep;
+  }
+
+  if (buf_len >= 2) {
+    len = buf[1] & 127;
+    mask_len = buf[1] & 128 ? 4 : 0;
+    if (len < 126 && buf_len >= mask_len) {
+      data_len = len;
+      header_len = 2 + mask_len;
+    } else if (len == 126 && buf_len >= 4 + mask_len) {
+      header_len = 4 + mask_len;
+      data_len = ntohs(*(uint16_t *) &buf[2]);
+    } else if (buf_len >= 10 + mask_len) {
+      header_len = 10 + mask_len;
+      data_len = (((uint64_t) ntohl(*(uint32_t *) &buf[2])) << 32) +
+                 ntohl(*(uint32_t *) &buf[6]);
+    }
+  }
+
+  frame_len = header_len + data_len;
+  ok = frame_len > 0 && frame_len <= buf_len;
+
+  if (ok) {
+    struct websocket_message wsm;
+
+    wsm.size = (size_t) data_len;
+    wsm.data = buf + header_len;
+    wsm.flags = buf[0];
+
+    /* Apply mask if necessary */
+    if (mask_len > 0) {
+      for (i = 0; i < data_len; i++) {
+        buf[i + header_len] ^= (buf + header_len - mask_len)[i % 4];
+      }
+    }
+
+    if (reass) {
+      /* On first fragmented frame, nullify size */
+      if (mg_is_ws_first_fragment(wsm.flags)) {
+        mbuf_resize(&nc->recv_mbuf, nc->recv_mbuf.size + sizeof(*sizep));
+        p[0] &= ~0x0f; /* Next frames will be treated as continuation */
+        buf = p + 1 + sizeof(*sizep);
+        *sizep = 0; /* TODO(lsm): fix. this can stomp over frame data */
+      }
+
+      /* Append this frame to the reassembled buffer */
+      memmove(buf, wsm.data, e - wsm.data);
+      (*sizep) += wsm.size;
+      nc->recv_mbuf.len -= wsm.data - buf;
+
+      /* On last fragmented frame - call user handler and remove data */
+      if (wsm.flags & 0x80) {
+        wsm.data = p + 1 + sizeof(*sizep);
+        wsm.size = *sizep;
+        mg_handle_incoming_websocket_frame(nc, &wsm);
+        mbuf_remove(&nc->recv_mbuf, 1 + sizeof(*sizep) + *sizep);
+      }
+    } else {
+      /* TODO(lsm): properly handle OOB control frames during defragmentation */
+      mg_handle_incoming_websocket_frame(nc, &wsm);
+      mbuf_remove(&nc->recv_mbuf, (size_t) frame_len); /* Cleanup frame */
+    }
+
+    /* If client closes, close too */
+    if ((buf[0] & 0x0f) == WEBSOCKET_OP_CLOSE) {
+      nc->flags |= MG_F_SEND_AND_CLOSE;
+    }
+  }
+
+  return ok;
+}
+
+struct ws_mask_ctx {
+  size_t pos; /* zero means unmasked */
+  uint32_t mask;
+};
+
+static uint32_t mg_ws_random_mask(void) {
+  uint32_t mask;
+/*
+ * The spec requires WS client to generate hard to
+ * guess mask keys. From RFC6455, Section 5.3:
+ *
+ * The unpredictability of the masking key is essential to prevent
+ * authors of malicious applications from selecting the bytes that appear on
+ * the wire.
+ *
+ * Hence this feature is essential when the actual end user of this API
+ * is untrusted code that wouldn't have access to a lower level net API
+ * anyway (e.g. web browsers). Hence this feature is low prio for most
+ * mongoose use cases and thus can be disabled, e.g. when porting to a platform
+ * that lacks rand().
+ */
+#if MG_DISABLE_WS_RANDOM_MASK
+  mask = 0xefbeadde; /* generated with a random number generator, I swear */
+#else
+  if (sizeof(long) >= 4) {
+    mask = (uint32_t) rand();
+  } else if (sizeof(long) == 2) {
+    mask = (uint32_t) rand() << 16 | (uint32_t) rand();
+  }
+#endif
+  return mask;
+}
+
+static void mg_send_ws_header(struct mg_connection *nc, int op, size_t len,
+                              struct ws_mask_ctx *ctx) {
+  int header_len;
+  unsigned char header[10];
+
+  header[0] = (op & WEBSOCKET_DONT_FIN ? 0x0 : 0x80) + (op & 0x0f);
+  if (len < 126) {
+    header[1] = (unsigned char) len;
+    header_len = 2;
+  } else if (len < 65535) {
+    uint16_t tmp = htons((uint16_t) len);
+    header[1] = 126;
+    memcpy(&header[2], &tmp, sizeof(tmp));
+    header_len = 4;
+  } else {
+    uint32_t tmp;
+    header[1] = 127;
+    tmp = htonl((uint32_t)((uint64_t) len >> 32));
+    memcpy(&header[2], &tmp, sizeof(tmp));
+    tmp = htonl((uint32_t)(len & 0xffffffff));
+    memcpy(&header[6], &tmp, sizeof(tmp));
+    header_len = 10;
+  }
+
+  /* client connections enable masking */
+  if (nc->listener == NULL) {
+    header[1] |= 1 << 7; /* set masking flag */
+    mg_send(nc, header, header_len);
+    ctx->mask = mg_ws_random_mask();
+    mg_send(nc, &ctx->mask, sizeof(ctx->mask));
+    ctx->pos = nc->send_mbuf.len;
+  } else {
+    mg_send(nc, header, header_len);
+    ctx->pos = 0;
+  }
+}
+
+static void mg_ws_mask_frame(struct mbuf *mbuf, struct ws_mask_ctx *ctx) {
+  size_t i;
+  if (ctx->pos == 0) return;
+  for (i = 0; i < (mbuf->len - ctx->pos); i++) {
+    mbuf->buf[ctx->pos + i] ^= ((char *) &ctx->mask)[i % 4];
+  }
+}
+
+void mg_send_websocket_frame(struct mg_connection *nc, int op, const void *data,
+                             size_t len) {
+  struct ws_mask_ctx ctx;
+  DBG(("%p %d %d", nc, op, (int) len));
+  mg_send_ws_header(nc, op, len, &ctx);
+  mg_send(nc, data, len);
+
+  mg_ws_mask_frame(&nc->send_mbuf, &ctx);
+
+  if (op == WEBSOCKET_OP_CLOSE) {
+    nc->flags |= MG_F_SEND_AND_CLOSE;
+  }
+}
+
+void mg_send_websocket_framev(struct mg_connection *nc, int op,
+                              const struct mg_str *strv, int strvcnt) {
+  struct ws_mask_ctx ctx;
+  int i;
+  int len = 0;
+  for (i = 0; i < strvcnt; i++) {
+    len += strv[i].len;
+  }
+
+  mg_send_ws_header(nc, op, len, &ctx);
+
+  for (i = 0; i < strvcnt; i++) {
+    mg_send(nc, strv[i].p, strv[i].len);
+  }
+
+  mg_ws_mask_frame(&nc->send_mbuf, &ctx);
+
+  if (op == WEBSOCKET_OP_CLOSE) {
+    nc->flags |= MG_F_SEND_AND_CLOSE;
+  }
+}
+
+void mg_printf_websocket_frame(struct mg_connection *nc, int op,
+                               const char *fmt, ...) {
+  char mem[MG_VPRINTF_BUFFER_SIZE], *buf = mem;
+  va_list ap;
+  int len;
+
+  va_start(ap, fmt);
+  if ((len = mg_avprintf(&buf, sizeof(mem), fmt, ap)) > 0) {
+    mg_send_websocket_frame(nc, op, buf, len);
+  }
+  va_end(ap);
+
+  if (buf != mem && buf != NULL) {
+    MG_FREE(buf);
+  }
+}
+
+MG_INTERNAL void mg_ws_handler(struct mg_connection *nc, int ev,
+                               void *ev_data) {
+  mg_call(nc, nc->handler, ev, ev_data);
+
+  switch (ev) {
+    case MG_EV_RECV:
+      do {
+      } while (mg_deliver_websocket_data(nc));
+      break;
+    case MG_EV_POLL:
+      /* Ping idle websocket connections */
+      {
+        time_t now = *(time_t *) ev_data;
+        if (nc->flags & MG_F_IS_WEBSOCKET &&
+            now > nc->last_io_time + MG_WEBSOCKET_PING_INTERVAL_SECONDS) {
+          mg_send_websocket_frame(nc, WEBSOCKET_OP_PING, "", 0);
+        }
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+#ifndef MG_EXT_SHA1
+static void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
+                           const size_t *msg_lens, uint8_t *digest) {
+  size_t i;
+  cs_sha1_ctx sha_ctx;
+  cs_sha1_init(&sha_ctx);
+  for (i = 0; i < num_msgs; i++) {
+    cs_sha1_update(&sha_ctx, msgs[i], msg_lens[i]);
+  }
+  cs_sha1_final(digest, &sha_ctx);
+}
+#else
+extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
+                           const size_t *msg_lens, uint8_t *digest);
+#endif
+
+MG_INTERNAL void mg_ws_handshake(struct mg_connection *nc,
+                                 const struct mg_str *key) {
+  static const char *magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+  const uint8_t *msgs[2] = {(const uint8_t *) key->p, (const uint8_t *) magic};
+  const size_t msg_lens[2] = {key->len, 36};
+  unsigned char sha[20];
+  char b64_sha[30];
+
+  mg_hash_sha1_v(2, msgs, msg_lens, sha);
+  mg_base64_encode(sha, sizeof(sha), b64_sha);
+  mg_printf(nc, "%s%s%s",
+            "HTTP/1.1 101 Switching Protocols\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            "Sec-WebSocket-Accept: ",
+            b64_sha, "\r\n\r\n");
+  DBG(("%p %.*s %s", nc, (int) key->len, key->p, b64_sha));
+}
+
+void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
+                                  const char *host, const char *protocol,
+                                  const char *extra_headers) {
+  char key[25];
+  uint32_t nonce[4];
+  nonce[0] = mg_ws_random_mask();
+  nonce[1] = mg_ws_random_mask();
+  nonce[2] = mg_ws_random_mask();
+  nonce[3] = mg_ws_random_mask();
+  mg_base64_encode((unsigned char *) &nonce, sizeof(nonce), key);
+
+  mg_printf(nc,
+            "GET %s HTTP/1.1\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            "Sec-WebSocket-Version: 13\r\n"
+            "Sec-WebSocket-Key: %s\r\n",
+            path, key);
+
+  /* TODO(mkm): take default hostname from http proto data if host == NULL */
+  if (host != MG_WS_NO_HOST_HEADER_MAGIC) {
+    mg_printf(nc, "Host: %s\r\n", host);
+  }
+  if (protocol != NULL) {
+    mg_printf(nc, "Sec-WebSocket-Protocol: %s\r\n", protocol);
+  }
+  if (extra_headers != NULL) {
+    mg_printf(nc, "%s", extra_headers);
+  }
+  mg_printf(nc, "\r\n");
+}
+
+void mg_send_websocket_handshake(struct mg_connection *nc, const char *path,
+                                 const char *extra_headers) {
+  mg_send_websocket_handshake2(nc, path, MG_WS_NO_HOST_HEADER_MAGIC, NULL,
+                               extra_headers);
+}
+
+struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
+                                        mg_event_handler_t ev_handler,
+                                        struct mg_connect_opts opts,
+                                        const char *url, const char *protocol,
+                                        const char *extra_headers) {
+  char *addr = NULL;
+  const char *path = NULL;
+  struct mg_connection *nc = mg_connect_http_base(
+      mgr, ev_handler, opts, "ws://", "wss://", url, &path, &addr);
+
+  if (nc != NULL) {
+    mg_send_websocket_handshake2(nc, path, addr, protocol, extra_headers);
+  }
+
+  MG_FREE(addr);
+  return nc;
+}
+
+struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
+                                    mg_event_handler_t ev_handler,
+                                    const char *url, const char *protocol,
+                                    const char *extra_headers) {
+  struct mg_connect_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  return mg_connect_ws_opt(mgr, ev_handler, opts, url, protocol, extra_headers);
+}
+#endif /* MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBSOCKET */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/util.c"
 #endif

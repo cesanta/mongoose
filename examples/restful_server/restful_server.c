@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
       s_http_server_opts.per_directory_auth_file = argv[++i];
     } else if (strcmp(argv[i], "-r") == 0 && i + 1 < argc) {
       s_http_server_opts.url_rewrites = argv[++i];
-#if !MG_DISABLE_CGI
+#if MG_ENABLE_HTTP_CGI
     } else if (strcmp(argv[i], "-i") == 0 && i + 1 < argc) {
       s_http_server_opts.cgi_interpreter = argv[++i];
 #endif
