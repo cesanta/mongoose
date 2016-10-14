@@ -2046,7 +2046,7 @@ MG_INTERNAL struct mg_connection *mg_create_connection(
  * Address format: [PROTO://][HOST]:PORT
  *
  * HOST could be IPv4/IPv6 address or a host name.
- * `host` is a destination buffer to hold parsed HOST part. Shoud be at least
+ * `host` is a destination buffer to hold parsed HOST part. Should be at least
  * MG_MAX_HOST_LEN bytes long.
  * `proto` is a returned socket type, either SOCK_STREAM or SOCK_DGRAM
  *
@@ -11192,7 +11192,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
             (SL_FD_ISSET(nc->sock, &write_set) ? _MG_F_FD_CAN_WRITE : 0) |
             (SL_FD_ISSET(nc->sock, &err_set) ? _MG_F_FD_ERROR : 0);
       }
-      /* SimpleLink does not report UDP sockets as writeable. */
+      /* SimpleLink does not report UDP sockets as writable. */
       if (nc->flags & MG_F_UDP && nc->send_mbuf.len > 0) {
         fd_flags |= _MG_F_FD_CAN_WRITE;
       }
@@ -11215,7 +11215,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
 void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
                          union socket_address *sa) {
   /* SimpleLink does not provide a way to get socket's peer address after
-   * accept or connect. Address hould have been preserved in the connection,
+   * accept or connect. Address should have been preserved in the connection,
    * so we do our best here by using it. */
   if (remote) memcpy(sa, &nc->sa, sizeof(*sa));
 }
