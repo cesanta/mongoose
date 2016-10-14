@@ -1024,7 +1024,7 @@ const char *strerror();
  * WinCE lacks a lot of used in CGI API functions
  * TODO(alaskin): look for wce_xxxx alternatives
  */
-#define MG_ENABLE_CGI 0
+#define MG_ENABLE_HTTP_CGI 0
 
 #endif /* CS_PLATFORM == CS_P_WINCE */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_WINCE_H_ */
@@ -1381,16 +1381,8 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_DISABLE_HTTP_DIGEST_AUTH 0
 #endif
 
-#ifndef MG_DISABLE_HTTP
-#define MG_DISABLE_HTTP 0
-#endif
-
 #ifndef MG_DISABLE_HTTP_KEEP_ALIVE
 #define MG_DISABLE_HTTP_KEEP_ALIVE 0
-#endif
-
-#ifndef MG_DISABLE_HTTP_WEBSOCKET
-#define MG_DISABLE_HTTP_WEBSOCKET 0
 #endif
 
 #ifndef MG_DISABLE_PFS
@@ -1413,10 +1405,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_DISABLE_SOCKETPAIR 0
 #endif
 
-#ifndef MG_DISABLE_SSI
-#define MG_DISABLE_SSI 0
-#endif
-
 #ifndef MG_DISABLE_SYNC_RESOLVER
 #define MG_DISABLE_SYNC_RESOLVER 0
 #endif
@@ -1425,8 +1413,13 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_DISABLE_WS_RANDOM_MASK 0
 #endif
 
-#ifndef MG_ENABLE_CGI
-#define MG_ENABLE_CGI (CS_PLATFORM == CS_P_UNIX || CS_PLATFORM == CS_P_WINDOWS)
+#ifndef MG_ENABLE_HTTP
+#define MG_ENABLE_HTTP 1
+#endif
+
+#ifndef MG_ENABLE_HTTP_CGI
+#define MG_ENABLE_HTTP_CGI \
+  (CS_PLATFORM == CS_P_UNIX || CS_PLATFORM == CS_P_WINDOWS)
 #endif
 
 #ifndef MG_ENABLE_COAP
@@ -1461,12 +1454,20 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_ENABLE_HEXDUMP CS_ENABLE_STDIO
 #endif
 
+#ifndef MG_ENABLE_HTTP_SSI
+#define MG_ENABLE_HTTP_SSI MG_ENABLE_FILESYSTEM
+#endif
+
 #ifndef MG_ENABLE_HTTP_STREAMING_MULTIPART
 #define MG_ENABLE_HTTP_STREAMING_MULTIPART 0
 #endif
 
 #ifndef MG_ENABLE_HTTP_WEBDAV
 #define MG_ENABLE_HTTP_WEBDAV 0
+#endif
+
+#ifndef MG_ENABLE_HTTP_WEBSOCKET
+#define MG_ENABLE_HTTP_WEBSOCKET 1
 #endif
 
 #ifndef MG_ENABLE_IPV6
@@ -2452,6 +2453,8 @@ int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
 #ifndef CS_MONGOOSE_SRC_HTTP_H_
 #define CS_MONGOOSE_SRC_HTTP_H_
 
+#if MG_ENABLE_HTTP
+
 /* Amalgamated: #include "mongoose/src/net.h" */
 
 #ifdef __cplusplus
@@ -2478,20 +2481,8 @@ extern "C" {
 #define MG_MAX_HTTP_SEND_MBUF 1024
 #endif
 
-#ifndef MG_WEBSOCKET_PING_INTERVAL_SECONDS
-#define MG_WEBSOCKET_PING_INTERVAL_SECONDS 5
-#endif
-
 #ifndef MG_CGI_ENVIRONMENT_SIZE
 #define MG_CGI_ENVIRONMENT_SIZE 8192
-#endif
-
-#ifndef MG_MAX_CGI_ENVIR_VARS
-#define MG_MAX_CGI_ENVIR_VARS 64
-#endif
-
-#ifndef MG_ENV_EXPORT_TO_CGI
-#define MG_ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
 #endif
 
 /* HTTP message */
@@ -2525,12 +2516,14 @@ struct http_message {
   struct mg_str body; /* Zero-length for requests with no body */
 };
 
+#if MG_ENABLE_HTTP_WEBSOCKET
 /* WebSocket message */
 struct websocket_message {
   unsigned char *data;
   size_t size;
   unsigned char flags;
 };
+#endif
 
 /* HTTP multipart part */
 struct mg_http_multipart_part {
@@ -2555,7 +2548,7 @@ struct mg_ssi_call_ctx {
 #define MG_EV_SSI_CALL 105     /* char * */
 #define MG_EV_SSI_CALL_CTX 106 /* struct mg_ssi_call_ctx * */
 
-#if !MG_DISABLE_HTTP_WEBSOCKET
+#if MG_ENABLE_HTTP_WEBSOCKET
 #define MG_EV_WEBSOCKET_HANDSHAKE_REQUEST 111 /* NULL */
 #define MG_EV_WEBSOCKET_HANDSHAKE_DONE 112    /* NULL */
 #define MG_EV_WEBSOCKET_FRAME 113             /* struct websocket_message * */
@@ -2615,7 +2608,7 @@ struct mg_ssi_call_ctx {
  */
 void mg_set_protocol_http_websocket(struct mg_connection *nc);
 
-#if !MG_DISABLE_HTTP_WEBSOCKET
+#if MG_ENABLE_HTTP_WEBSOCKET
 /*
  * Send websocket handshake to the server.
  *
@@ -2721,7 +2714,6 @@ void mg_send_websocket_framev(struct mg_connection *nc, int op_and_flags,
  */
 void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
                                const char *fmt, ...);
-#endif /* MG_DISABLE_HTTP_WEBSOCKET */
 
 /* Websocket opcodes, from http://tools.ietf.org/html/rfc6455 */
 #define WEBSOCKET_OP_CONTINUE 0
@@ -2745,6 +2737,8 @@ void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
  */
 #define WEBSOCKET_DONT_FIN 0x100
 
+#endif /* MG_ENABLE_HTTP_WEBSOCKET */
+
 /*
  * Decodes a URL-encoded string.
  *
@@ -2761,6 +2755,9 @@ int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
+
+#endif /* MG_ENABLE_HTTP */
+
 #endif /* CS_MONGOOSE_SRC_HTTP_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/http_server.h"
@@ -2771,6 +2768,8 @@ int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
 
 #ifndef CS_MONGOOSE_SRC_HTTP_SERVER_H_
 #define CS_MONGOOSE_SRC_HTTP_SERVER_H_
+
+#if MG_ENABLE_HTTP
 
 #ifdef __cplusplus
 extern "C" {
@@ -3229,6 +3228,9 @@ void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
+
+#endif /* MG_ENABLE_HTTP */
+
 #endif /* CS_MONGOOSE_SRC_HTTP_SERVER_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/http_client.h"
