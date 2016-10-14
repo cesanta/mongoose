@@ -1,3 +1,4 @@
+# -*- mode: makefile -*-
 .PHONY: all clean
 
 CC3100_DRV_SRCS = driver.c device.c nonos.c socket.c netapp.c wlan.c
@@ -54,15 +55,16 @@ IPATH = . \
 LDFLAGS	= --static -nostartfiles
 LDLIBS = -Wl,--start-group -lc -lgcc -lnosys -Wl,--end-group
 LDSCRIPT = stm32f429xx.ld
- 
+
 INCDIRS = $(addprefix -I,$(IPATH))
 
 CFLAGS = ${FP_FLAGS} ${ARCH_FLAGS} ${INCDIRS}\
 		-D${BOARD} -DEXT_LIB_REGISTERED_GENERAL_EVENTS \
 		-DSL_FULL\
-		-DCS_PLATFORM=6\
-   		-D__STM32F407xx_H\
+		-DCS_PLATFORM=6 \
+		-D__STM32F407xx_H \
 		-DMG_SIMPLELINK_NO_OSI \
+		-DMG_ENABLE_MQTT \
 		-g -fno-common -ffunction-sections -fdata-sections \
 
 ELF = ${BUILD_DIR}/${PROJECT}.elf
