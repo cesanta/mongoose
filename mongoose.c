@@ -45,9 +45,7 @@
 
 #ifdef PICOTCP
 #define NO_LIBC
-#define MG_DISABLE_FILESYSTEM
 #define MG_DISABLE_POPEN
-#define MG_DISABLE_DIRECTORY_LISTING
 #define MG_DISABLE_SOCKETPAIR
 #define MG_DISABLE_PFS
 #endif
@@ -73,11 +71,13 @@ MG_INTERNAL void mg_remove_conn(struct mg_connection *c);
 MG_INTERNAL struct mg_connection *mg_create_connection(
     struct mg_mgr *mgr, mg_event_handler_t callback,
     struct mg_add_sock_opts opts);
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
 MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
                                      const struct mg_serve_http_opts *opts,
                                      char **local_path,
                                      struct mg_str *remainder);
+MG_INTERNAL time_t mg_parse_date_string(const char *datetime);
+MG_INTERNAL int mg_is_not_modified(struct http_message *hm, cs_stat_t *st);
 #endif
 #ifdef _WIN32
 /* Retur value is the same as for MultiByteToWideChar. */
@@ -98,11 +98,6 @@ int to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len);
 MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
                                      struct http_message *hm, char *buf,
                                      size_t blen);
-
-#if !MG_DISABLE_FILESYSTEM
-MG_INTERNAL time_t mg_parse_date_string(const char *datetime);
-MG_INTERNAL int mg_is_not_modified(struct http_message *hm, cs_stat_t *st);
-#endif
 
 struct ctl_msg {
   mg_event_handler_t callback;
@@ -3880,7 +3875,7 @@ struct mg_http_multipart_stream {
 };
 
 struct mg_http_proto_data {
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
   struct mg_http_proto_data_file file;
 #endif
 #if MG_ENABLE_CGI
@@ -3916,7 +3911,7 @@ static void mg_http_free_proto_data_mp_stream(
 }
 #endif
 
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
 static void mg_http_free_proto_data_file(struct mg_http_proto_data_file *d) {
   if (d != NULL) {
     if (d->fp != NULL) {
@@ -3942,7 +3937,7 @@ static void mg_http_free_proto_data_endpoints(struct mg_http_endpoint **ep) {
 
 static void mg_http_conn_destructor(void *proto_data) {
   struct mg_http_proto_data *pd = (struct mg_http_proto_data *) proto_data;
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
   mg_http_free_proto_data_file(&pd->file);
 #endif
 #if MG_ENABLE_CGI
@@ -3955,7 +3950,7 @@ static void mg_http_conn_destructor(void *proto_data) {
   free(proto_data);
 }
 
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
 
 #define MIME_ENTRY(_ext, _type) \
   { _ext, sizeof(_ext) - 1, _type }
@@ -4482,7 +4477,7 @@ static void mg_ws_handshake(struct mg_connection *nc,
 
 #endif /* MG_DISABLE_HTTP_WEBSOCKET */
 
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
 static void mg_http_transfer_file_data(struct mg_connection *nc) {
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   char buf[MG_MAX_HTTP_SEND_MBUF];
@@ -4532,7 +4527,7 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
   }
 #endif
 }
-#endif /* MG_DISABLE_FILESYSTEM */
+#endif /* MG_ENABLE_FILESYSTEM */
 
 /*
  * Parse chunked-encoded buffer. Return 0 if the buffer is not encoded, or
@@ -4736,7 +4731,7 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
     }
   }
 
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
   if (pd->file.fp != NULL) {
     mg_http_transfer_file_data(nc);
   }
@@ -5380,12 +5375,7 @@ void mg_send_head(struct mg_connection *c, int status_code,
   mg_send(c, "\r\n", 2);
 }
 
-#if MG_DISABLE_FILESYSTEM
-void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
-                   struct mg_serve_http_opts opts) {
-  mg_send_head(nc, 501, 0, NULL);
-}
-#else
+#if MG_ENABLE_FILESYSTEM
 static void mg_http_send_error(struct mg_connection *nc, int code,
                                const char *reason) {
   if (!reason) reason = "";
@@ -5883,7 +5873,7 @@ int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
   return len;
 }
 
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
 static int mg_is_file_hidden(const char *path,
                              const struct mg_serve_http_opts *opts,
                              int exclude_specials) {
@@ -6045,7 +6035,7 @@ static int mg_is_authorized(struct http_message *hm, const char *path,
 }
 #endif
 
-#if !MG_DISABLE_DIRECTORY_LISTING
+#if MG_ENABLE_DIRECTORY_LISTING
 static size_t mg_url_encode(const char *src, size_t s_len, char *dst,
                             size_t dst_len) {
   static const char *dont_escape = "._-$,;~()/";
@@ -6198,7 +6188,7 @@ static void mg_send_directory_listing(struct mg_connection *nc, const char *dir,
   /* TODO(rojer): Remove when cesanta/dev/issues/197 is fixed. */
   nc->flags |= MG_F_SEND_AND_CLOSE;
 }
-#endif /* MG_DISABLE_DIRECTORY_LISTING */
+#endif /* MG_ENABLE_DIRECTORY_LISTING */
 
 /*
  * Given a directory path, find one of the files specified in the
@@ -6578,7 +6568,7 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
   } else if (!mg_vcmp(&hm->method, "OPTIONS")) {
     mg_http_send_options(nc);
   } else if (is_directory && index_file == NULL) {
-#if !MG_DISABLE_DIRECTORY_LISTING
+#if MG_ENABLE_DIRECTORY_LISTING
     if (strcmp(opts->enable_directory_listing, "yes") == 0) {
       mg_send_directory_listing(nc, path, hm, opts);
     } else {
@@ -6654,7 +6644,7 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
   }
 }
 
-#endif /* MG_DISABLE_FILESYSTEM */
+#endif /* MG_ENABLE_FILESYSTEM */
 
 /* returns 0 on success, -1 on error */
 static int mg_http_common_url_parse(const char *url, const char *schema,
@@ -7667,7 +7657,7 @@ int mg_casecmp(const char *s1, const char *s2) {
   return mg_ncasecmp(s1, s2, (size_t) ~0);
 }
 
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
 int mg_stat(const char *path, cs_stat_t *st) {
 #ifdef _WIN32
   wchar_t wpath[MAX_PATH_SIZE];
@@ -7830,7 +7820,7 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
     fp = stdout;
   } else if (strcmp(path, "--") == 0) {
     fp = stderr;
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
   } else {
     fp = fopen(path, "a");
 #endif
@@ -9019,7 +9009,7 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
     }
     RegCloseKey(hKey);
   }
-#elif !MG_DISABLE_FILESYSTEM
+#elif MG_ENABLE_FILESYSTEM
   FILE *fp;
   char line[512];
 
@@ -9045,7 +9035,7 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
 }
 
 int mg_resolve_from_hosts_file(const char *name, union socket_address *usa) {
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
   /* TODO(mkm) cache /etc/hosts */
   FILE *fp;
   char line[1024];
@@ -9075,6 +9065,9 @@ int mg_resolve_from_hosts_file(const char *name, union socket_address *usa) {
   }
 
   fclose(fp);
+#else
+  (void) name;
+  (void) usa;
 #endif
 
   return -1;
