@@ -160,8 +160,10 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
 #ifndef CS_COMMON_CS_DBG_H_
 #define CS_COMMON_CS_DBG_H_
 
-#ifndef CS_DISABLE_STDIO
-#define CS_DISABLE_STDIO 0
+/* Amalgamated: #include "common/platform.h" */
+
+#if CS_ENABLE_STDIO
+#include <stdio.h>
 #endif
 
 #ifndef CS_ENABLE_DEBUG
@@ -170,10 +172,6 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
 
 #ifndef CS_LOG_TS_DIFF
 #define CS_LOG_TS_DIFF 0
-#endif
-
-#if !CS_DISABLE_STDIO
-#include <stdio.h>
 #endif
 
 #ifdef __cplusplus
@@ -194,7 +192,7 @@ enum cs_log_level {
 
 void cs_log_set_level(enum cs_log_level level);
 
-#if !CS_DISABLE_STDIO
+#if CS_ENABLE_STDIO
 
 void cs_log_set_file(FILE *file);
 
@@ -222,7 +220,7 @@ void cs_log_printf(const char *fmt, ...);
 
 #endif
 
-#else /* CS_DISABLE_STDIO */
+#else /* CS_ENABLE_STDIO */
 
 #define LOG(l, x)
 #define DBG(x)
@@ -256,7 +254,7 @@ enum cs_log_level cs_log_level =
     LL_ERROR;
 #endif
 
-#if !CS_DISABLE_STDIO
+#if CS_ENABLE_STDIO
 
 FILE *cs_log_file = NULL;
 
@@ -289,11 +287,11 @@ void cs_log_set_file(FILE *file) {
   cs_log_file = file;
 }
 
-#endif /* !CS_DISABLE_STDIO */
+#endif /* CS_ENABLE_STDIO */
 
 void cs_log_set_level(enum cs_log_level level) {
   cs_log_level = level;
-#if CS_LOG_TS_DIFF && !CS_DISABLE_STDIO
+#if CS_LOG_TS_DIFF && CS_ENABLE_STDIO
   cs_log_ts = cs_time();
 #endif
 }
@@ -426,7 +424,7 @@ void cs_base64_encode(const unsigned char *src, int src_len, char *dst) {
 #undef BASE64_OUT
 #undef BASE64_FLUSH
 
-#if !CS_DISABLE_STDIO
+#if CS_ENABLE_STDIO
 #define BASE64_OUT(ch)      \
   do {                      \
     fprintf(f, "%c", (ch)); \
@@ -441,7 +439,7 @@ void cs_fprint_base64(FILE *f, const unsigned char *src, int src_len) {
 
 #undef BASE64_OUT
 #undef BASE64_FLUSH
-#endif /* !CS_DISABLE_STDIO */
+#endif /* CS_ENABLE_STDIO */
 
 /* Convert one byte of encoded base64 input stream to 6-bit chunk */
 static unsigned char from_b64(unsigned char ch) {
@@ -1779,7 +1777,7 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
        ev_handler == nc->handler ? "user" : "proto", ev, ev_data, nc->flags,
        (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
 
-#if !defined(NO_LIBC) && !MG_DISABLE_HEXDUMP
+#if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
   /* LCOV_EXCL_START */
   if (nc->mgr->hexdump_file != NULL && ev != MG_EV_POLL &&
       ev != MG_EV_SEND /* handled separately */) {
@@ -2343,7 +2341,7 @@ void mg_send(struct mg_connection *nc, const void *buf, int len) {
   } else {
     mg_if_tcp_send(nc, buf, len);
   }
-#if !defined(NO_LIBC) && !MG_DISABLE_HEXDUMP
+#if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
   if (nc->mgr && nc->mgr->hexdump_file != NULL) {
     mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, len, MG_EV_SEND);
   }
@@ -7799,7 +7797,7 @@ void mg_conn_addr_to_str(struct mg_connection *nc, char *buf, size_t len,
   mg_sock_addr_to_str(&sa, buf, len, flags);
 }
 
-#if !MG_DISABLE_HEXDUMP
+#if MG_ENABLE_HEXDUMP
 int mg_hexdump(const void *buf, int len, char *dst, int dst_len) {
   const unsigned char *p = (const unsigned char *) buf;
   char ascii[17] = "";
@@ -7820,6 +7818,44 @@ int mg_hexdump(const void *buf, int len, char *dst, int dst_len) {
   n += snprintf(dst + n, dst_len - n, "  %s\n\n", ascii);
 
   return n;
+}
+
+void mg_hexdump_connection(struct mg_connection *nc, const char *path,
+                           const void *buf, int num_bytes, int ev) {
+  FILE *fp = NULL;
+  char *hexbuf, src[60], dst[60];
+  int buf_size = num_bytes * 5 + 100;
+
+  if (strcmp(path, "-") == 0) {
+    fp = stdout;
+  } else if (strcmp(path, "--") == 0) {
+    fp = stderr;
+#if !MG_DISABLE_FILESYSTEM
+  } else {
+    fp = fopen(path, "a");
+#endif
+  }
+  if (fp == NULL) return;
+
+  mg_conn_addr_to_str(nc, src, sizeof(src),
+                      MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
+  mg_conn_addr_to_str(nc, dst, sizeof(dst), MG_SOCK_STRINGIFY_IP |
+                                                MG_SOCK_STRINGIFY_PORT |
+                                                MG_SOCK_STRINGIFY_REMOTE);
+  fprintf(
+      fp, "%lu %p %s %s %s %d\n", (unsigned long) time(NULL), (void *) nc, src,
+      ev == MG_EV_RECV ? "<-" : ev == MG_EV_SEND
+                                    ? "->"
+                                    : ev == MG_EV_ACCEPT
+                                          ? "<A"
+                                          : ev == MG_EV_CONNECT ? "C>" : "XX",
+      dst, num_bytes);
+  if (num_bytes > 0 && (hexbuf = (char *) MG_MALLOC(buf_size)) != NULL) {
+    mg_hexdump(buf, num_bytes, hexbuf, buf_size);
+    fprintf(fp, "%s", hexbuf);
+    MG_FREE(hexbuf);
+  }
+  if (fp != stdin && fp != stdout) fclose(fp);
 }
 #endif
 
@@ -7867,48 +7903,6 @@ int mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
   va_end(ap);
   return ret;
 }
-
-#if !MG_DISABLE_HEXDUMP
-void mg_hexdump_connection(struct mg_connection *nc, const char *path,
-                           const void *buf, int num_bytes, int ev) {
-#if !defined(NO_LIBC) && !MG_DISABLE_STDIO
-  FILE *fp = NULL;
-  char *hexbuf, src[60], dst[60];
-  int buf_size = num_bytes * 5 + 100;
-
-  if (strcmp(path, "-") == 0) {
-    fp = stdout;
-  } else if (strcmp(path, "--") == 0) {
-    fp = stderr;
-#if !MG_DISABLE_FILESYSTEM
-  } else {
-    fp = fopen(path, "a");
-#endif
-  }
-  if (fp == NULL) return;
-
-  mg_conn_addr_to_str(nc, src, sizeof(src),
-                      MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
-  mg_conn_addr_to_str(nc, dst, sizeof(dst), MG_SOCK_STRINGIFY_IP |
-                                                MG_SOCK_STRINGIFY_PORT |
-                                                MG_SOCK_STRINGIFY_REMOTE);
-  fprintf(
-      fp, "%lu %p %s %s %s %d\n", (unsigned long) time(NULL), (void *) nc, src,
-      ev == MG_EV_RECV ? "<-" : ev == MG_EV_SEND
-                                    ? "->"
-                                    : ev == MG_EV_ACCEPT
-                                          ? "<A"
-                                          : ev == MG_EV_CONNECT ? "C>" : "XX",
-      dst, num_bytes);
-  if (num_bytes > 0 && (hexbuf = (char *) MG_MALLOC(buf_size)) != NULL) {
-    mg_hexdump(buf, num_bytes, hexbuf, buf_size);
-    fprintf(fp, "%s", hexbuf);
-    MG_FREE(hexbuf);
-  }
-  if (fp != stdin && fp != stdout) fclose(fp);
-#endif
-}
-#endif
 
 int mg_is_big_endian(void) {
   static const int n = 1;

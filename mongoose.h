@@ -30,27 +30,6 @@
 #include <mg_locals.h>
 #endif
 
-#ifndef MG_ENABLE_DEBUG
-#define MG_ENABLE_DEBUG 0
-#endif
-
-#if MG_ENABLE_DEBUG && !defined(CS_ENABLE_DEBUG)
-#define CS_ENABLE_DEBUG 1
-#endif
-
-#ifndef MG_DISABLE_STDIO
-#define MG_DISABLE_STDIO 0
-#endif
-
-#if MG_DISABLE_STDIO && !defined(CS_DISABLE_STDIO)
-#define CS_DISABLE_STDIO 1
-#elif defined(CS_DISABLE_STDIO) && !MG_DISABLE_STDIO
-#undef MG_DISABLE_STDIO
-#define MG_DISABLE_STDIO 1
-#endif
-
-/* Amalgamated: #include "common/cs_dbg.h" */
-
 #endif /* CS_MONGOOSE_SRC_COMMON_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platform.h"
@@ -262,6 +241,10 @@ typedef struct _stati64 cs_stat_t;
 #define MG_MAX_HTTP_HEADERS 40
 #endif
 
+#ifndef CS_ENABLE_STDIO
+#define CS_ENABLE_STDIO 1
+#endif
+
 #endif /* CS_PLATFORM == CS_P_WINDOWS */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_WINDOWS_H_ */
 #ifdef MG_MODULE_LINES
@@ -364,6 +347,10 @@ typedef struct stat cs_stat_t;
 #define MG_MAX_HTTP_HEADERS 40
 #endif
 
+#ifndef CS_ENABLE_STDIO
+#define CS_ENABLE_STDIO 1
+#endif
+
 #endif /* CS_PLATFORM == CS_P_UNIX */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_UNIX_H_ */
 #ifdef MG_MODULE_LINES
@@ -426,6 +413,10 @@ struct mg_connection;
 uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr);
 void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
                                   int interval, int count);
+#endif
+
+#ifndef CS_ENABLE_STDIO
+#define CS_ENABLE_STDIO 1
 #endif
 
 #endif /* CS_PLATFORM == CS_P_ESP_LWIP */
@@ -607,6 +598,10 @@ struct dirent *readdir(DIR *dir);
 #define MG_FS_SLFS
 #endif
 
+#ifndef CS_ENABLE_STDIO
+#define CS_ENABLE_STDIO 1
+#endif
+
 #ifdef __cplusplus
 }
 #endif
@@ -710,6 +705,10 @@ int _stat(const char *pathname, struct stat *st);
 
 #endif /* __TI_COMPILER_VERSION__ */
 
+#ifndef CS_ENABLE_STDIO
+#define CS_ENABLE_STDIO 1
+#endif
+
 #ifdef __cplusplus
 }
 #endif
@@ -729,6 +728,10 @@ int _stat(const char *pathname, struct stat *st);
 #if CS_PLATFORM == CS_P_MBED
 
 /* Amalgamated: #include "mbed.h" */
+
+#ifndef CS_ENABLE_STDIO
+#define CS_ENABLE_STDIO 1
+#endif
 
 #endif /* CS_PLATFORM == CS_P_MBED */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_MBED_H_ */
@@ -1195,10 +1198,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_DISABLE_FILESYSTEM 0
 #endif
 
-#ifndef MG_DISABLE_HEXDUMP
-#define MG_DISABLE_HEXDUMP 0
-#endif
-
 #ifndef MG_DISABLE_HTTP_DIGEST_AUTH
 #define MG_DISABLE_HTTP_DIGEST_AUTH 0
 #endif
@@ -1255,6 +1254,10 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_ENABLE_COAP 0
 #endif
 
+#ifndef MG_ENABLE_DEBUG
+#define MG_ENABLE_DEBUG 0
+#endif
+
 #ifndef MG_ENABLE_DNS_SERVER
 #define MG_ENABLE_DNS_SERVER 0
 #endif
@@ -1265,6 +1268,10 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 
 #ifndef MG_ENABLE_GETADDRINFO
 #define MG_ENABLE_GETADDRINFO 0
+#endif
+
+#ifndef MG_ENABLE_HEXDUMP
+#define MG_ENABLE_HEXDUMP CS_ENABLE_STDIO
 #endif
 
 #ifndef MG_ENABLE_HTTP_STREAMING_MULTIPART
@@ -1295,6 +1302,10 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_ENABLE_SSL 0
 #endif
 
+#ifndef MG_ENABLE_STDIO
+#define MG_ENABLE_STDIO CS_ENABLE_STDIO
+#endif
+
 #ifndef MG_ENABLE_THREADS /* ifdef-ok */
 #ifdef _WIN32
 #define MG_ENABLE_THREADS 1
@@ -1303,16 +1314,14 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #endif
 #endif
 
+#if MG_ENABLE_DEBUG && !defined(CS_ENABLE_DEBUG)
+#define CS_ENABLE_DEBUG 1
+#endif
+
 /* All of the below features depend on filesystem access, disable them. */
 #if MG_DISABLE_FILESYSTEM
-#undef MG_DISABLE_DAV
-#define MG_DISABLE_DAV 1
-#undef MG_DISABLE_CGI
-#define MG_DISABLE_CGI 1
 #undef MG_DISABLE_DIRECTORY_LISTING
 #define MG_DISABLE_DIRECTORY_LISTING 1
-#undef MG_DISABLE_DAV
-#define MG_DISABLE_DAV 1
 #endif /* MG_DISABLE_FILESYSTEM */
 
 #ifdef MG_NO_BSD_SOCKETS
@@ -1427,7 +1436,9 @@ typedef void (*mg_event_handler_t)(struct mg_connection *, int ev, void *);
  */
 struct mg_mgr {
   struct mg_connection *active_connections;
+#if MG_ENABLE_HEXDUMP
   const char *hexdump_file; /* Debug hexdump file path */
+#endif
 #if !MG_DISABLE_SOCKETPAIR
   sock_t ctl[2]; /* Socketpair for mg_broadcast() */
 #endif
@@ -2168,6 +2179,7 @@ void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
 void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
                          int flags);
 
+#if MG_ENABLE_HEXDUMP
 /*
  * Generates a human-readable hexdump of memory chunk.
  *
@@ -2187,6 +2199,7 @@ int mg_hexdump(const void *buf, int len, char *dst, int dst_len);
  */
 void mg_hexdump_connection(struct mg_connection *nc, const char *path,
                            const void *buf, int num_bytes, int ev);
+#endif
 
 /*
  * Prints message to the buffer. If the buffer is large enough to hold the

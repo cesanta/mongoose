@@ -6,7 +6,6 @@
 #include "esp_common.h"
 
 #include "mongoose.h"
-#include "cs_dbg.h"
 
 #define AP_SSID "Mongoose"
 #define AP_PASS "Mongoose"
@@ -25,14 +24,13 @@ void ev_handler(struct mg_connection *nc, int ev, void *p) {
       "Content-Type: text/plain\r\n"
       "\r\n"
       "Hello %s\n";
-  LOG(LL_DEBUG, ("conn %p ev %d", nc, ev));
 
   switch (ev) {
     case MG_EV_ACCEPT: {
       char addr[32];
       mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
                           MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
-      LOG(LL_INFO, ("Connection %p from %s", nc, addr));
+      printf("Connection %p from %s\n", nc, addr);
       break;
     }
     case MG_EV_HTTP_REQUEST: {
@@ -40,15 +38,14 @@ void ev_handler(struct mg_connection *nc, int ev, void *p) {
       struct http_message *hm = (struct http_message *) p;
       mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
                           MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
-      LOG(LL_INFO,
-          ("HTTP request from %s: %.*s %.*s", addr, (int) hm->method.len,
-           hm->method.p, (int) hm->uri.len, hm->uri.p));
+      printf("HTTP request from %s: %.*s %.*s\n", addr, (int) hm->method.len,
+             hm->method.p, (int) hm->uri.len, hm->uri.p);
       mg_printf(nc, reply_fmt, addr);
       nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
     }
     case MG_EV_CLOSE: {
-      LOG(LL_INFO, ("Connection %p closed", nc));
+      printf("Connection %p closed\n", nc);
       break;
     }
   }
@@ -71,30 +68,28 @@ void setup_ap(void) {
   cfg.max_connection = 10;
   cfg.beacon_interval = 100; /* ms */
 
-  LOG(LL_INFO, ("Setting up AP '%s' on channel %d", cfg.ssid, cfg.channel));
+  printf("Setting up AP '%s' on channel %d\n", cfg.ssid, cfg.channel);
   wifi_softap_set_config_current(&cfg);
   wifi_softap_dhcps_stop();
   wifi_softap_set_dhcps_offer_option(OFFER_ROUTER, &off);
   wifi_softap_dhcps_start();
   wifi_get_ip_info(SOFTAP_IF, &info);
-  LOG(LL_INFO, ("WiFi AP: SSID %s, channel %d, IP " IPSTR "", cfg.ssid,
-                cfg.channel, IP2STR(&info.ip)));
+  printf("WiFi AP: SSID %s, channel %d, IP " IPSTR "\n", cfg.ssid, cfg.channel,
+         IP2STR(&info.ip));
 }
 
 static void mg_task(void *arg) {
   struct mg_mgr mgr;
   struct mg_connection *nc;
 
-  cs_log_set_level(LL_INFO);
-
-  LOG(LL_INFO, ("SDK version: %s", system_get_sdk_version()));
+  printf("SDK version: %s\n", system_get_sdk_version());
   setup_ap();
 
   mg_mgr_init(&mgr, NULL);
 
   nc = mg_bind(&mgr, MG_LISTEN_ADDR, ev_handler);
   if (nc == NULL) {
-    LOG(LL_ERROR, ("Error setting up listener!"));
+    printf("Error setting up listener!\n");
     return;
   }
   mg_set_protocol_http_websocket(nc);
