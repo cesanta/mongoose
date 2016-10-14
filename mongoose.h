@@ -1215,10 +1215,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_DISABLE_HTTP_WEBSOCKET 0
 #endif
 
-#ifndef MG_DISABLE_DAV
-#define MG_DISABLE_DAV 0
-#endif
-
 #ifndef MG_DISABLE_PFS
 #define MG_DISABLE_PFS 0
 #endif
@@ -1273,6 +1269,10 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 
 #ifndef MG_ENABLE_HTTP_STREAMING_MULTIPART
 #define MG_ENABLE_HTTP_STREAMING_MULTIPART 0
+#endif
+
+#ifndef MG_ENABLE_HTTP_WEBDAV
+#define MG_ENABLE_HTTP_WEBDAV 0
 #endif
 
 #ifndef MG_ENABLE_IPV6

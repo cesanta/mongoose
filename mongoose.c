@@ -130,6 +130,23 @@ MG_INTERNAL void mg_handle_cgi(struct mg_connection *nc, const char *prog,
 struct mg_http_proto_data_cgi;
 MG_INTERNAL void mg_http_free_proto_data_cgi(struct mg_http_proto_data_cgi *d);
 #endif
+#if !MG_DISABLE_HTTP && MG_ENABLE_HTTP_WEBDAV
+MG_INTERNAL int mg_is_dav_request(const struct mg_str *s);
+MG_INTERNAL void mg_handle_propfind(struct mg_connection *nc, const char *path,
+                                    cs_stat_t *stp, struct http_message *hm,
+                                    struct mg_serve_http_opts *opts);
+MG_INTERNAL void mg_handle_lock(struct mg_connection *nc, const char *path);
+MG_INTERNAL void mg_handle_mkcol(struct mg_connection *nc, const char *path,
+                                 struct http_message *hm);
+MG_INTERNAL void mg_handle_move(struct mg_connection *c,
+                                const struct mg_serve_http_opts *opts,
+                                const char *path, struct http_message *hm);
+MG_INTERNAL void mg_handle_delete(struct mg_connection *nc,
+                                  const struct mg_serve_http_opts *opts,
+                                  const char *path);
+MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
+                               struct http_message *hm);
+#endif
 
 #endif /* CS_MONGOOSE_SRC_INTERNAL_H_ */
 #ifdef MG_MODULE_LINES
@@ -3999,17 +4016,6 @@ static const struct {
     MIME_ENTRY("bmp", "image/bmp"),
     {NULL, 0, NULL}};
 
-#if !MG_DISABLE_DAV
-static int mg_mkdir(const char *path, uint32_t mode) {
-#ifndef _WIN32
-  return mkdir(path, mode);
-#else
-  (void) mode;
-  return _mkdir(path);
-#endif
-}
-#endif
-
 static struct mg_str mg_get_mime_type(const char *path, const char *dflt,
                                       const struct mg_serve_http_opts *opts) {
   const char *ext, *overrides;
@@ -6196,259 +6202,6 @@ static void mg_send_directory_listing(struct mg_connection *nc, const char *dir,
 }
 #endif /* MG_DISABLE_DIRECTORY_LISTING */
 
-#if !MG_DISABLE_DAV
-static void mg_print_props(struct mg_connection *nc, const char *name,
-                           cs_stat_t *stp) {
-  char mtime[64], buf[MAX_PATH_SIZE * 3];
-  time_t t = stp->st_mtime; /* store in local variable for NDK compile */
-  mg_gmt_time_string(mtime, sizeof(mtime), &t);
-  mg_url_encode(name, strlen(name), buf, sizeof(buf));
-  mg_printf(nc,
-            "<d:response>"
-            "<d:href>%s</d:href>"
-            "<d:propstat>"
-            "<d:prop>"
-            "<d:resourcetype>%s</d:resourcetype>"
-            "<d:getcontentlength>%" INT64_FMT
-            "</d:getcontentlength>"
-            "<d:getlastmodified>%s</d:getlastmodified>"
-            "</d:prop>"
-            "<d:status>HTTP/1.1 200 OK</d:status>"
-            "</d:propstat>"
-            "</d:response>\n",
-            buf, S_ISDIR(stp->st_mode) ? "<d:collection/>" : "",
-            (int64_t) stp->st_size, mtime);
-}
-
-static void mg_handle_propfind(struct mg_connection *nc, const char *path,
-                               cs_stat_t *stp, struct http_message *hm,
-                               struct mg_serve_http_opts *opts) {
-  static const char header[] =
-      "HTTP/1.1 207 Multi-Status\r\n"
-      "Connection: close\r\n"
-      "Content-Type: text/xml; charset=utf-8\r\n\r\n"
-      "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-      "<d:multistatus xmlns:d='DAV:'>\n";
-  static const char footer[] = "</d:multistatus>\n";
-  const struct mg_str *depth = mg_get_http_header(hm, "Depth");
-
-  /* Print properties for the requested resource itself */
-  if (S_ISDIR(stp->st_mode) &&
-      strcmp(opts->enable_directory_listing, "yes") != 0) {
-    mg_printf(nc, "%s", "HTTP/1.1 403 Directory Listing Denied\r\n\r\n");
-  } else {
-    char uri[MAX_PATH_SIZE];
-    mg_send(nc, header, sizeof(header) - 1);
-    snprintf(uri, sizeof(uri), "%.*s", (int) hm->uri.len, hm->uri.p);
-    mg_print_props(nc, uri, stp);
-    if (S_ISDIR(stp->st_mode) && (depth == NULL || mg_vcmp(depth, "0") != 0)) {
-      mg_scan_directory(nc, path, opts, mg_print_props);
-    }
-    mg_send(nc, footer, sizeof(footer) - 1);
-    nc->flags |= MG_F_SEND_AND_CLOSE;
-  }
-}
-
-#if MG_ENABLE_FAKE_DAVLOCK
-/*
- * Windows explorer (probably there are another WebDav clients like it)
- * requires LOCK support in webdav. W/out this, it still works, but fails
- * to save file: shows error message and offers "Save As".
- * "Save as" works, but this message is very annoying.
- * This is fake lock, which doesn't lock something, just returns LOCK token,
- * UNLOCK always answers "OK".
- * With this fake LOCK Windows Explorer looks happy and saves file.
- * NOTE: that is not DAV LOCK imlementation, it is just a way to shut up
- * Windows native DAV client. This is why FAKE LOCK is not enabed by default
- */
-static void mg_handle_lock(struct mg_connection *nc, const char *path) {
-  static const char *reply =
-      "HTTP/1.1 207 Multi-Status\r\n"
-      "Connection: close\r\n"
-      "Content-Type: text/xml; charset=utf-8\r\n\r\n"
-      "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-      "<d:multistatus xmlns:d='DAV:'>\n"
-      "<D:lockdiscovery>\n"
-      "<D:activelock>\n"
-      "<D:locktoken>\n"
-      "<D:href>\n"
-      "opaquelocktoken:%s%u"
-      "</D:href>"
-      "</D:locktoken>"
-      "</D:activelock>\n"
-      "</D:lockdiscovery>"
-      "</d:multistatus>\n";
-  mg_printf(nc, reply, path, (unsigned int) time(NULL));
-  nc->flags |= MG_F_SEND_AND_CLOSE;
-}
-#endif
-
-static void mg_handle_mkcol(struct mg_connection *nc, const char *path,
-                            struct http_message *hm) {
-  int status_code = 500;
-  if (hm->body.len != (size_t) ~0 && hm->body.len > 0) {
-    status_code = 415;
-  } else if (!mg_mkdir(path, 0755)) {
-    status_code = 201;
-  } else if (errno == EEXIST) {
-    status_code = 405;
-  } else if (errno == EACCES) {
-    status_code = 403;
-  } else if (errno == ENOENT) {
-    status_code = 409;
-  } else {
-    status_code = 500;
-  }
-  mg_http_send_error(nc, status_code, NULL);
-}
-
-static int mg_remove_directory(const struct mg_serve_http_opts *opts,
-                               const char *dir) {
-  char path[MAX_PATH_SIZE];
-  struct dirent *dp;
-  cs_stat_t st;
-  DIR *dirp;
-
-  if ((dirp = opendir(dir)) == NULL) return 0;
-
-  while ((dp = readdir(dirp)) != NULL) {
-    if (mg_is_file_hidden((const char *) dp->d_name, opts, 1)) {
-      continue;
-    }
-    snprintf(path, sizeof(path), "%s%c%s", dir, '/', dp->d_name);
-    mg_stat(path, &st);
-    if (S_ISDIR(st.st_mode)) {
-      mg_remove_directory(opts, path);
-    } else {
-      remove(path);
-    }
-  }
-  closedir(dirp);
-  rmdir(dir);
-
-  return 1;
-}
-
-static void mg_handle_move(struct mg_connection *c,
-                           const struct mg_serve_http_opts *opts,
-                           const char *path, struct http_message *hm) {
-  const struct mg_str *dest = mg_get_http_header(hm, "Destination");
-  if (dest == NULL) {
-    mg_http_send_error(c, 411, NULL);
-  } else {
-    const char *p = (char *) memchr(dest->p, '/', dest->len);
-    if (p != NULL && p[1] == '/' &&
-        (p = (char *) memchr(p + 2, '/', dest->p + dest->len - p)) != NULL) {
-      char buf[MAX_PATH_SIZE];
-      snprintf(buf, sizeof(buf), "%s%.*s", opts->dav_document_root,
-               (int) (dest->p + dest->len - p), p);
-      if (rename(path, buf) == 0) {
-        mg_http_send_error(c, 200, NULL);
-      } else {
-        mg_http_send_error(c, 418, NULL);
-      }
-    } else {
-      mg_http_send_error(c, 500, NULL);
-    }
-  }
-}
-
-static void mg_handle_delete(struct mg_connection *nc,
-                             const struct mg_serve_http_opts *opts,
-                             const char *path) {
-  cs_stat_t st;
-  if (mg_stat(path, &st) != 0) {
-    mg_http_send_error(nc, 404, NULL);
-  } else if (S_ISDIR(st.st_mode)) {
-    mg_remove_directory(opts, path);
-    mg_http_send_error(nc, 204, NULL);
-  } else if (remove(path) == 0) {
-    mg_http_send_error(nc, 204, NULL);
-  } else {
-    mg_http_send_error(nc, 423, NULL);
-  }
-}
-
-/* Return -1 on error, 1 on success. */
-static int mg_create_itermediate_directories(const char *path) {
-  const char *s;
-
-  /* Create intermediate directories if they do not exist */
-  for (s = path + 1; *s != '\0'; s++) {
-    if (*s == '/') {
-      char buf[MAX_PATH_SIZE];
-      cs_stat_t st;
-      snprintf(buf, sizeof(buf), "%.*s", (int) (s - path), path);
-      buf[sizeof(buf) - 1] = '\0';
-      if (mg_stat(buf, &st) != 0 && mg_mkdir(buf, 0755) != 0) {
-        return -1;
-      }
-    }
-  }
-
-  return 1;
-}
-
-static void mg_handle_put(struct mg_connection *nc, const char *path,
-                          struct http_message *hm) {
-  struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
-  cs_stat_t st;
-  const struct mg_str *cl_hdr = mg_get_http_header(hm, "Content-Length");
-  int rc, status_code = mg_stat(path, &st) == 0 ? 200 : 201;
-
-  mg_http_free_proto_data_file(&pd->file);
-  if ((rc = mg_create_itermediate_directories(path)) == 0) {
-    mg_printf(nc, "HTTP/1.1 %d OK\r\nContent-Length: 0\r\n\r\n", status_code);
-  } else if (rc == -1) {
-    mg_http_send_error(nc, 500, NULL);
-  } else if (cl_hdr == NULL) {
-    mg_http_send_error(nc, 411, NULL);
-  } else if ((pd->file.fp = fopen(path, "w+b")) == NULL) {
-    mg_http_send_error(nc, 500, NULL);
-  } else {
-    const struct mg_str *range_hdr = mg_get_http_header(hm, "Content-Range");
-    int64_t r1 = 0, r2 = 0;
-    pd->file.type = DATA_PUT;
-    mg_set_close_on_exec(fileno(pd->file.fp));
-    pd->file.cl = to64(cl_hdr->p);
-    if (range_hdr != NULL &&
-        mg_http_parse_range_header(range_hdr, &r1, &r2) > 0) {
-      status_code = 206;
-      fseeko(pd->file.fp, r1, SEEK_SET);
-      pd->file.cl = r2 > r1 ? r2 - r1 + 1 : pd->file.cl - r1;
-    }
-    mg_printf(nc, "HTTP/1.1 %d OK\r\nContent-Length: 0\r\n\r\n", status_code);
-    /* Remove HTTP request from the mbuf, leave only payload */
-    mbuf_remove(&nc->recv_mbuf, hm->message.len - hm->body.len);
-    mg_http_transfer_file_data(nc);
-  }
-}
-#endif /* MG_DISABLE_DAV */
-
-static int mg_is_dav_request(const struct mg_str *s) {
-  static const char *methods[] = {
-    "PUT",
-    "DELETE",
-    "MKCOL",
-    "PROPFIND",
-    "MOVE"
-#if MG_ENABLE_FAKE_DAVLOCK
-    ,
-    "LOCK",
-    "UNLOCK"
-#endif
-  };
-  size_t i;
-
-  for (i = 0; i < ARRAY_SIZE(methods); i++) {
-    if (mg_vcmp(s, methods[i]) == 0) {
-      return 1;
-    }
-  }
-
-  return 0;
-}
-
 /*
  * Given a directory path, find one of the files specified in the
  * comma-separated list of index files `list`.
@@ -6556,7 +6309,7 @@ MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
     }
     /* If no rewrite rules matched, use DAV or regular document root. */
     if (root.p == NULL) {
-#if !MG_DISABLE_DAV
+#if MG_ENABLE_HTTP_WEBDAV
       if (opts->dav_document_root != NULL && mg_is_dav_request(&hm->method)) {
         root.p = opts->dav_document_root;
         root.len = strlen(opts->dav_document_root);
@@ -6729,7 +6482,7 @@ static void mg_http_send_digest_auth_request(struct mg_connection *c,
 static void mg_http_send_options(struct mg_connection *nc) {
   mg_printf(nc, "%s",
             "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, CONNECT, OPTIONS"
-#if !MG_DISABLE_DAV
+#if MG_ENABLE_HTTP_WEBDAV
             ", MKCOL, PUT, DELETE, PROPFIND, MOVE\r\nDAV: 1,2"
 #endif
             "\r\n\r\n");
@@ -6744,8 +6497,12 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
                                    const struct mg_str *path_info,
                                    struct http_message *hm,
                                    struct mg_serve_http_opts *opts) {
-  int exists, is_directory, is_dav = mg_is_dav_request(&hm->method);
-  int is_cgi;
+  int exists, is_directory, is_cgi;
+#if MG_ENABLE_HTTP_WEBDAV
+  int is_dav = mg_is_dav_request(&hm->method);
+#else
+  int is_dav = 0;
+#endif
   char *index_file = NULL;
   cs_stat_t st;
 
@@ -6796,7 +6553,7 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
               mg_is_file_hidden(path, opts, 0 /* specials are ok */)) &&
              !mg_is_creation_request(hm)) {
     mg_http_send_error(nc, 404, NULL);
-#if !MG_DISABLE_DAV
+#if MG_ENABLE_HTTP_WEBDAV
   } else if (!mg_vcmp(&hm->method, "PROPFIND")) {
     mg_handle_propfind(nc, path, &st, hm, opts);
 #if !MG_DISABLE_DAV_AUTH
@@ -6819,7 +6576,7 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
   } else if (!mg_vcmp(&hm->method, "LOCK")) {
     mg_handle_lock(nc, path);
 #endif
-#endif
+#endif /* MG_ENABLE_HTTP_WEBDAV */
   } else if (!mg_vcmp(&hm->method, "OPTIONS")) {
     mg_http_send_options(nc);
   } else if (is_directory && index_file == NULL) {
@@ -7602,6 +7359,277 @@ MG_INTERNAL void mg_http_free_proto_data_cgi(struct mg_http_proto_data_cgi *d) {
 }
 
 #endif /* MG_ENABLE_HTTP && MG_ENABLE_CGI */
+#ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/http_webdav.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if !MG_DISABLE_HTTP && MG_ENABLE_HTTP_WEBDAV
+
+MG_INTERNAL int mg_is_dav_request(const struct mg_str *s) {
+  static const char *methods[] = {
+    "PUT",
+    "DELETE",
+    "MKCOL",
+    "PROPFIND",
+    "MOVE"
+#if MG_ENABLE_FAKE_DAVLOCK
+    ,
+    "LOCK",
+    "UNLOCK"
+#endif
+  };
+  size_t i;
+
+  for (i = 0; i < ARRAY_SIZE(methods); i++) {
+    if (mg_vcmp(s, methods[i]) == 0) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+static int mg_mkdir(const char *path, uint32_t mode) {
+#ifndef _WIN32
+  return mkdir(path, mode);
+#else
+  (void) mode;
+  return _mkdir(path);
+#endif
+}
+
+static void mg_print_props(struct mg_connection *nc, const char *name,
+                           cs_stat_t *stp) {
+  char mtime[64], buf[MAX_PATH_SIZE * 3];
+  time_t t = stp->st_mtime; /* store in local variable for NDK compile */
+  mg_gmt_time_string(mtime, sizeof(mtime), &t);
+  mg_url_encode(name, strlen(name), buf, sizeof(buf));
+  mg_printf(nc,
+            "<d:response>"
+            "<d:href>%s</d:href>"
+            "<d:propstat>"
+            "<d:prop>"
+            "<d:resourcetype>%s</d:resourcetype>"
+            "<d:getcontentlength>%" INT64_FMT
+            "</d:getcontentlength>"
+            "<d:getlastmodified>%s</d:getlastmodified>"
+            "</d:prop>"
+            "<d:status>HTTP/1.1 200 OK</d:status>"
+            "</d:propstat>"
+            "</d:response>\n",
+            buf, S_ISDIR(stp->st_mode) ? "<d:collection/>" : "",
+            (int64_t) stp->st_size, mtime);
+}
+
+MG_INTERNAL void mg_handle_propfind(struct mg_connection *nc, const char *path,
+                                    cs_stat_t *stp, struct http_message *hm,
+                                    struct mg_serve_http_opts *opts) {
+  static const char header[] =
+      "HTTP/1.1 207 Multi-Status\r\n"
+      "Connection: close\r\n"
+      "Content-Type: text/xml; charset=utf-8\r\n\r\n"
+      "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+      "<d:multistatus xmlns:d='DAV:'>\n";
+  static const char footer[] = "</d:multistatus>\n";
+  const struct mg_str *depth = mg_get_http_header(hm, "Depth");
+
+  /* Print properties for the requested resource itself */
+  if (S_ISDIR(stp->st_mode) &&
+      strcmp(opts->enable_directory_listing, "yes") != 0) {
+    mg_printf(nc, "%s", "HTTP/1.1 403 Directory Listing Denied\r\n\r\n");
+  } else {
+    char uri[MAX_PATH_SIZE];
+    mg_send(nc, header, sizeof(header) - 1);
+    snprintf(uri, sizeof(uri), "%.*s", (int) hm->uri.len, hm->uri.p);
+    mg_print_props(nc, uri, stp);
+    if (S_ISDIR(stp->st_mode) && (depth == NULL || mg_vcmp(depth, "0") != 0)) {
+      mg_scan_directory(nc, path, opts, mg_print_props);
+    }
+    mg_send(nc, footer, sizeof(footer) - 1);
+    nc->flags |= MG_F_SEND_AND_CLOSE;
+  }
+}
+
+#if MG_ENABLE_FAKE_DAVLOCK
+/*
+ * Windows explorer (probably there are another WebDav clients like it)
+ * requires LOCK support in webdav. W/out this, it still works, but fails
+ * to save file: shows error message and offers "Save As".
+ * "Save as" works, but this message is very annoying.
+ * This is fake lock, which doesn't lock something, just returns LOCK token,
+ * UNLOCK always answers "OK".
+ * With this fake LOCK Windows Explorer looks happy and saves file.
+ * NOTE: that is not DAV LOCK imlementation, it is just a way to shut up
+ * Windows native DAV client. This is why FAKE LOCK is not enabed by default
+ */
+MG_INTERNAL void mg_handle_lock(struct mg_connection *nc, const char *path) {
+  static const char *reply =
+      "HTTP/1.1 207 Multi-Status\r\n"
+      "Connection: close\r\n"
+      "Content-Type: text/xml; charset=utf-8\r\n\r\n"
+      "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+      "<d:multistatus xmlns:d='DAV:'>\n"
+      "<D:lockdiscovery>\n"
+      "<D:activelock>\n"
+      "<D:locktoken>\n"
+      "<D:href>\n"
+      "opaquelocktoken:%s%u"
+      "</D:href>"
+      "</D:locktoken>"
+      "</D:activelock>\n"
+      "</D:lockdiscovery>"
+      "</d:multistatus>\n";
+  mg_printf(nc, reply, path, (unsigned int) time(NULL));
+  nc->flags |= MG_F_SEND_AND_CLOSE;
+}
+#endif
+
+MG_INTERNAL void mg_handle_mkcol(struct mg_connection *nc, const char *path,
+                                 struct http_message *hm) {
+  int status_code = 500;
+  if (hm->body.len != (size_t) ~0 && hm->body.len > 0) {
+    status_code = 415;
+  } else if (!mg_mkdir(path, 0755)) {
+    status_code = 201;
+  } else if (errno == EEXIST) {
+    status_code = 405;
+  } else if (errno == EACCES) {
+    status_code = 403;
+  } else if (errno == ENOENT) {
+    status_code = 409;
+  } else {
+    status_code = 500;
+  }
+  mg_http_send_error(nc, status_code, NULL);
+}
+
+static int mg_remove_directory(const struct mg_serve_http_opts *opts,
+                               const char *dir) {
+  char path[MAX_PATH_SIZE];
+  struct dirent *dp;
+  cs_stat_t st;
+  DIR *dirp;
+
+  if ((dirp = opendir(dir)) == NULL) return 0;
+
+  while ((dp = readdir(dirp)) != NULL) {
+    if (mg_is_file_hidden((const char *) dp->d_name, opts, 1)) {
+      continue;
+    }
+    snprintf(path, sizeof(path), "%s%c%s", dir, '/', dp->d_name);
+    mg_stat(path, &st);
+    if (S_ISDIR(st.st_mode)) {
+      mg_remove_directory(opts, path);
+    } else {
+      remove(path);
+    }
+  }
+  closedir(dirp);
+  rmdir(dir);
+
+  return 1;
+}
+
+MG_INTERNAL void mg_handle_move(struct mg_connection *c,
+                                const struct mg_serve_http_opts *opts,
+                                const char *path, struct http_message *hm) {
+  const struct mg_str *dest = mg_get_http_header(hm, "Destination");
+  if (dest == NULL) {
+    mg_http_send_error(c, 411, NULL);
+  } else {
+    const char *p = (char *) memchr(dest->p, '/', dest->len);
+    if (p != NULL && p[1] == '/' &&
+        (p = (char *) memchr(p + 2, '/', dest->p + dest->len - p)) != NULL) {
+      char buf[MAX_PATH_SIZE];
+      snprintf(buf, sizeof(buf), "%s%.*s", opts->dav_document_root,
+               (int) (dest->p + dest->len - p), p);
+      if (rename(path, buf) == 0) {
+        mg_http_send_error(c, 200, NULL);
+      } else {
+        mg_http_send_error(c, 418, NULL);
+      }
+    } else {
+      mg_http_send_error(c, 500, NULL);
+    }
+  }
+}
+
+MG_INTERNAL void mg_handle_delete(struct mg_connection *nc,
+                                  const struct mg_serve_http_opts *opts,
+                                  const char *path) {
+  cs_stat_t st;
+  if (mg_stat(path, &st) != 0) {
+    mg_http_send_error(nc, 404, NULL);
+  } else if (S_ISDIR(st.st_mode)) {
+    mg_remove_directory(opts, path);
+    mg_http_send_error(nc, 204, NULL);
+  } else if (remove(path) == 0) {
+    mg_http_send_error(nc, 204, NULL);
+  } else {
+    mg_http_send_error(nc, 423, NULL);
+  }
+}
+
+/* Return -1 on error, 1 on success. */
+static int mg_create_itermediate_directories(const char *path) {
+  const char *s;
+
+  /* Create intermediate directories if they do not exist */
+  for (s = path + 1; *s != '\0'; s++) {
+    if (*s == '/') {
+      char buf[MAX_PATH_SIZE];
+      cs_stat_t st;
+      snprintf(buf, sizeof(buf), "%.*s", (int) (s - path), path);
+      buf[sizeof(buf) - 1] = '\0';
+      if (mg_stat(buf, &st) != 0 && mg_mkdir(buf, 0755) != 0) {
+        return -1;
+      }
+    }
+  }
+
+  return 1;
+}
+
+MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
+                               struct http_message *hm) {
+  struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
+  cs_stat_t st;
+  const struct mg_str *cl_hdr = mg_get_http_header(hm, "Content-Length");
+  int rc, status_code = mg_stat(path, &st) == 0 ? 200 : 201;
+
+  mg_http_free_proto_data_file(&pd->file);
+  if ((rc = mg_create_itermediate_directories(path)) == 0) {
+    mg_printf(nc, "HTTP/1.1 %d OK\r\nContent-Length: 0\r\n\r\n", status_code);
+  } else if (rc == -1) {
+    mg_http_send_error(nc, 500, NULL);
+  } else if (cl_hdr == NULL) {
+    mg_http_send_error(nc, 411, NULL);
+  } else if ((pd->file.fp = fopen(path, "w+b")) == NULL) {
+    mg_http_send_error(nc, 500, NULL);
+  } else {
+    const struct mg_str *range_hdr = mg_get_http_header(hm, "Content-Range");
+    int64_t r1 = 0, r2 = 0;
+    pd->file.type = DATA_PUT;
+    mg_set_close_on_exec(fileno(pd->file.fp));
+    pd->file.cl = to64(cl_hdr->p);
+    if (range_hdr != NULL &&
+        mg_http_parse_range_header(range_hdr, &r1, &r2) > 0) {
+      status_code = 206;
+      fseeko(pd->file.fp, r1, SEEK_SET);
+      pd->file.cl = r2 > r1 ? r2 - r1 + 1 : pd->file.cl - r1;
+    }
+    mg_printf(nc, "HTTP/1.1 %d OK\r\nContent-Length: 0\r\n\r\n", status_code);
+    /* Remove HTTP request from the mbuf, leave only payload */
+    mbuf_remove(&nc->recv_mbuf, hm->message.len - hm->body.len);
+    mg_http_transfer_file_data(nc);
+  }
+}
+
+#endif /* !MG_DISABLE_HTTP && MG_ENABLE_HTTP_WEBDAV */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/util.c"
 #endif
@@ -9772,7 +9800,7 @@ int mg_set_protocol_coap(struct mg_connection *nc) {
   return 0;
 }
 
-#endif /* MG_DISABLE_COAP */
+#endif /* MG_ENABLE_COAP */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/cc3200/cc3200_libc.c"
 #endif
