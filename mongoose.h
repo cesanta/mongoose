@@ -245,6 +245,14 @@ typedef struct _stati64 cs_stat_t;
 #define CS_ENABLE_STDIO 1
 #endif
 
+#ifndef MG_ENABLE_DIRECTORY_LISTING
+#define MG_ENABLE_DIRECTORY_LISTING 1
+#endif
+
+#ifndef MG_ENABLE_FILESYSTEM
+#define MG_ENABLE_FILESYSTEM 1
+#endif
+
 #endif /* CS_PLATFORM == CS_P_WINDOWS */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_WINDOWS_H_ */
 #ifdef MG_MODULE_LINES
@@ -351,6 +359,14 @@ typedef struct stat cs_stat_t;
 #define CS_ENABLE_STDIO 1
 #endif
 
+#ifndef MG_ENABLE_DIRECTORY_LISTING
+#define MG_ENABLE_DIRECTORY_LISTING 1
+#endif
+
+#ifndef MG_ENABLE_FILESYSTEM
+#define MG_ENABLE_FILESYSTEM 1
+#endif
+
 #endif /* CS_PLATFORM == CS_P_UNIX */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_UNIX_H_ */
 #ifdef MG_MODULE_LINES
@@ -445,9 +461,6 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
 #define MG_DISABLE_SOCKETPAIR 1
 #define MG_DISABLE_SYNC_RESOLVER 1
 #define MG_DISABLE_POPEN 1
-#define MG_DISABLE_DAV 1
-#define MG_DISABLE_DIRECTORY_LISTING 1
-#define MG_DISABLE_FILESYSTEM 1
 
 /*
  * CC3100 SDK and STM32 SDK include headers w/out path, just like
@@ -504,10 +517,10 @@ int inet_pton(int af, const char *src, void *dst);
 #define MG_DISABLE_SOCKETPAIR 1
 #define MG_DISABLE_SYNC_RESOLVER 1
 #define MG_DISABLE_POPEN 1
+
 /* Only SPIFFS supports directories, SLFS does not. */
-#ifndef CC3200_FS_SPIFFS
-#define MG_DISABLE_DAV 1
-#define MG_DISABLE_DIRECTORY_LISTING 1
+#if defined(CC3200_FS_SPIFFS) && !defined(MG_ENABLE_DIRECTORY_LISTING)
+#define MG_ENABLE_DIRECTORY_LISTING 1
 #endif
 
 /* Amalgamated: #include "common/platforms/simplelink/cs_simplelink.h" */
@@ -598,6 +611,10 @@ struct dirent *readdir(DIR *dir);
 #define MG_FS_SLFS
 #endif
 
+#if (defined(CC3200_FS_SPIFFS) || defined(CC3200_FS_SLFS)) && !defined(MG_ENABLE_FILESYSTEM)
+#define MG_ENABLE_FILESYSTEM 1
+#endif
+
 #ifndef CS_ENABLE_STDIO
 #define CS_ENABLE_STDIO 1
 #endif
@@ -638,7 +655,6 @@ struct dirent *readdir(DIR *dir);
 #define MG_DISABLE_SYNC_RESOLVER 1
 #define MG_DISABLE_POPEN 1
 #define MG_DISABLE_DAV 1
-#define MG_DISABLE_DIRECTORY_LISTING 1
 
 /* Amalgamated: #include "common/platforms/simplelink/cs_simplelink.h" */
 
@@ -707,6 +723,10 @@ int _stat(const char *pathname, struct stat *st);
 
 #ifndef CS_ENABLE_STDIO
 #define CS_ENABLE_STDIO 1
+#endif
+
+#if (defined(CC3200_FS_SPIFFS) || defined(CC3200_FS_SLFS)) && !defined(MG_ENABLE_FILESYSTEM)
+#define MG_ENABLE_FILESYSTEM 1
 #endif
 
 #ifdef __cplusplus
@@ -1186,16 +1206,8 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #ifndef CS_MONGOOSE_SRC_FEATURES_H_
 #define CS_MONGOOSE_SRC_FEATURES_H_
 
-#ifndef MG_DISABLE_DIRECTORY_LISTING
-#define MG_DISABLE_DIRECTORY_LISTING 0
-#endif
-
 #ifndef MG_DISABLE_DNS
 #define MG_DISABLE_DNS 0
-#endif
-
-#ifndef MG_DISABLE_FILESYSTEM
-#define MG_DISABLE_FILESYSTEM 0
 #endif
 
 #ifndef MG_DISABLE_HTTP_DIGEST_AUTH
@@ -1258,12 +1270,20 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_ENABLE_DEBUG 0
 #endif
 
+#ifndef MG_ENABLE_DIRECTORY_LISTING
+#define MG_ENABLE_DIRECTORY_LISTING 0
+#endif
+
 #ifndef MG_ENABLE_DNS_SERVER
 #define MG_ENABLE_DNS_SERVER 0
 #endif
 
 #ifndef MG_ENABLE_FAKE_DAVLOCK
 #define MG_ENABLE_FAKE_DAVLOCK 0
+#endif
+
+#ifndef MG_ENABLE_FILESYSTEM
+#define MG_ENABLE_FILESYSTEM 0
 #endif
 
 #ifndef MG_ENABLE_GETADDRINFO
@@ -1317,12 +1337,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #if MG_ENABLE_DEBUG && !defined(CS_ENABLE_DEBUG)
 #define CS_ENABLE_DEBUG 1
 #endif
-
-/* All of the below features depend on filesystem access, disable them. */
-#if MG_DISABLE_FILESYSTEM
-#undef MG_DISABLE_DIRECTORY_LISTING
-#define MG_DISABLE_DIRECTORY_LISTING 1
-#endif /* MG_DISABLE_FILESYSTEM */
 
 #ifdef MG_NO_BSD_SOCKETS
 #undef MG_DISABLE_SYNC_RESOLVER
@@ -2108,7 +2122,7 @@ int mg_base64_decode(const unsigned char *s, int len, char *dst);
  */
 void mg_base64_encode(const unsigned char *src, int src_len, char *dst);
 
-#if !MG_DISABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM
 /*
  * Performs a 64-bit `stat()` call against a given file.
  *
@@ -2135,7 +2149,7 @@ FILE *mg_fopen(const char *path, const char *mode);
  * Return value is the same as for the `open()` syscall.
  */
 int mg_open(const char *path, int flag, int mode);
-#endif /* MG_DISABLE_FILESYSTEM */
+#endif /* MG_ENABLE_FILESYSTEM */
 
 #if MG_ENABLE_THREADS
 /*
@@ -2683,6 +2697,7 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
 int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
                     size_t dst_len);
 
+#if MG_ENABLE_FILESYSTEM
 /*
  * This structure defines how `mg_serve_http()` works.
  * Best practice is to set only required settings, and leave the rest as NULL.
@@ -2884,6 +2899,7 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
 void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
                         const char *path, const struct mg_str mime_type,
                         const struct mg_str extra_headers);
+#endif /* MG_ENABLE_FILESYSTEM */
 
 /*
  * Registers a callback for a specified http endpoint
