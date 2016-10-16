@@ -45,7 +45,6 @@
 
 #ifdef PICOTCP
 #define NO_LIBC
-#define MG_DISABLE_POPEN
 #define MG_DISABLE_SOCKETPAIR
 #define MG_DISABLE_PFS
 #endif
@@ -6877,7 +6876,7 @@ static void mg_do_ssi_include(struct mg_connection *nc, struct http_message *hm,
   }
 }
 
-#if !MG_DISABLE_POPEN
+#if MG_ENABLE_HTTP_SSI_EXEC
 static void do_ssi_exec(struct mg_connection *nc, char *tag) {
   char cmd[BUFSIZ];
   FILE *fp;
@@ -6891,7 +6890,7 @@ static void do_ssi_exec(struct mg_connection *nc, char *tag) {
     pclose(fp);
   }
 }
-#endif /* !MG_DISABLE_POPEN */
+#endif /* MG_ENABLE_HTTP_SSI_EXEC */
 
 /*
  * SSI directive has the following format:
@@ -6903,7 +6902,7 @@ static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
   static const struct mg_str btag = MG_MK_STR("<!--#");
   static const struct mg_str d_include = MG_MK_STR("include");
   static const struct mg_str d_call = MG_MK_STR("call");
-#if !MG_DISABLE_POPEN
+#if MG_ENABLE_HTTP_SSI_EXEC
   static const struct mg_str d_exec = MG_MK_STR("exec");
 #endif
   char buf[BUFSIZ], *p = buf + btag.len; /* p points to SSI directive */
@@ -6939,7 +6938,7 @@ static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
         mg_call(nc, NULL, MG_EV_SSI_CALL,
                 (void *) cctx.arg.p); /* NUL added above */
         mg_call(nc, NULL, MG_EV_SSI_CALL_CTX, &cctx);
-#if !MG_DISABLE_POPEN
+#if MG_ENABLE_HTTP_SSI_EXEC
       } else if (memcmp(p, d_exec.p, d_exec.len) == 0) {
         do_ssi_exec(nc, p + d_exec.len + 1);
 #endif

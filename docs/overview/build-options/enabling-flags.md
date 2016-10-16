@@ -10,7 +10,8 @@ title: Enabling flags
 - `MG_ENABLE_COAP` enable CoAP protocol
 - `MG_ENABLE_HTTP` Enable HTTP protocol support (on by default, set to 0 to disable)
 - `MG_ENABLE_HTTP_CGI` Enable [CGI](https://docs.cesanta.com/mongoose/master/#/http/cgi.md/) support
-- `MG_ENABLE_HTTP_SSI` Enable [Server SIde Includes](https://docs.cesanta.com/mongoose/master/#/http/ssi.md/) support
+- `MG_ENABLE_HTTP_SSI` Enable [Server Side Includes](https://docs.cesanta.com/mongoose/master/#/http/ssi.md/) support
+- `MG_ENABLE_HTTP_SSI_EXEC` Enable SSI `exec` operator
 - `MG_ENABLE_HTTP_WEBDAV` enable WebDAV extensions to HTTP
 - `MG_ENABLE_HTTP_WEBSOCKET` enable WebSocket extension to HTTP (on by default, =0 to disable)
 - `MG_ENABLE_GETADDRINFO` enable `getaddrinfo()` in `mg_resolve2()`

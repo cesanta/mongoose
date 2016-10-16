@@ -464,7 +464,6 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
 #define MG_SOCKET_SIMPLELINK 1
 #define MG_DISABLE_SOCKETPAIR 1
 #define MG_DISABLE_SYNC_RESOLVER 1
-#define MG_DISABLE_POPEN 1
 
 /*
  * CC3100 SDK and STM32 SDK include headers w/out path, just like
@@ -520,7 +519,6 @@ int inet_pton(int af, const char *src, void *dst);
 #define MG_SOCKET_SIMPLELINK 1
 #define MG_DISABLE_SOCKETPAIR 1
 #define MG_DISABLE_SYNC_RESOLVER 1
-#define MG_DISABLE_POPEN 1
 
 /* Only SPIFFS supports directories, SLFS does not. */
 #if defined(CC3200_FS_SPIFFS) && !defined(MG_ENABLE_DIRECTORY_LISTING)
@@ -657,8 +655,6 @@ struct dirent *readdir(DIR *dir);
 #define MG_SOCKET_SIMPLELINK 1
 #define MG_DISABLE_SOCKETPAIR 1
 #define MG_DISABLE_SYNC_RESOLVER 1
-#define MG_DISABLE_POPEN 1
-#define MG_DISABLE_DAV 1
 
 /* Amalgamated: #include "common/platforms/simplelink/cs_simplelink.h" */
 
@@ -1389,10 +1385,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_DISABLE_PFS 0
 #endif
 
-#ifndef MG_DISABLE_POPEN
-#define MG_DISABLE_POPEN 0
-#endif
-
 #ifndef MG_DISABLE_RESOLVER
 #define MG_DISABLE_RESOLVER 0
 #endif
@@ -1456,6 +1448,10 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 
 #ifndef MG_ENABLE_HTTP_SSI
 #define MG_ENABLE_HTTP_SSI MG_ENABLE_FILESYSTEM
+#endif
+
+#ifndef MG_ENABLE_HTTP_SSI_EXEC
+#define MG_ENABLE_HTTP_SSI_EXEC 0
 #endif
 
 #ifndef MG_ENABLE_HTTP_STREAMING_MULTIPART
