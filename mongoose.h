@@ -249,12 +249,20 @@ typedef struct _stati64 cs_stat_t;
 #define CS_ENABLE_STDIO 1
 #endif
 
+#ifndef MG_ENABLE_BROADCAST
+#define MG_ENABLE_BROADCAST 1
+#endif
+
 #ifndef MG_ENABLE_DIRECTORY_LISTING
 #define MG_ENABLE_DIRECTORY_LISTING 1
 #endif
 
 #ifndef MG_ENABLE_FILESYSTEM
 #define MG_ENABLE_FILESYSTEM 1
+#endif
+
+#ifndef MG_ENABLE_HTTP_CGI
+#define MG_ENABLE_HTTP_CGI 1
 #endif
 
 #endif /* CS_PLATFORM == CS_P_WINDOWS */
@@ -363,12 +371,20 @@ typedef struct stat cs_stat_t;
 #define CS_ENABLE_STDIO 1
 #endif
 
+#ifndef MG_ENABLE_BROADCAST
+#define MG_ENABLE_BROADCAST 1
+#endif
+
 #ifndef MG_ENABLE_DIRECTORY_LISTING
 #define MG_ENABLE_DIRECTORY_LISTING 1
 #endif
 
 #ifndef MG_ENABLE_FILESYSTEM
 #define MG_ENABLE_FILESYSTEM 1
+#endif
+
+#ifndef MG_ENABLE_HTTP_CGI
+#define MG_ENABLE_HTTP_CGI 1
 #endif
 
 #endif /* CS_PLATFORM == CS_P_UNIX */
@@ -462,7 +478,6 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
 #include <time.h>
 
 #define MG_SOCKET_SIMPLELINK 1
-#define MG_DISABLE_SOCKETPAIR 1
 #define MG_DISABLE_SYNC_RESOLVER 1
 
 /*
@@ -517,7 +532,6 @@ int inet_pton(int af, const char *src, void *dst);
 #endif
 
 #define MG_SOCKET_SIMPLELINK 1
-#define MG_DISABLE_SOCKETPAIR 1
 #define MG_DISABLE_SYNC_RESOLVER 1
 
 /* Only SPIFFS supports directories, SLFS does not. */
@@ -653,7 +667,6 @@ struct dirent *readdir(DIR *dir);
 #endif
 
 #define MG_SOCKET_SIMPLELINK 1
-#define MG_DISABLE_SOCKETPAIR 1
 #define MG_DISABLE_SYNC_RESOLVER 1
 
 /* Amalgamated: #include "common/platforms/simplelink/cs_simplelink.h" */
@@ -1393,10 +1406,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_DISABLE_SOCKET_IF 0
 #endif
 
-#ifndef MG_DISABLE_SOCKETPAIR
-#define MG_DISABLE_SOCKETPAIR 0
-#endif
-
 #ifndef MG_DISABLE_SYNC_RESOLVER
 #define MG_DISABLE_SYNC_RESOLVER 0
 #endif
@@ -1405,13 +1414,8 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_DISABLE_WS_RANDOM_MASK 0
 #endif
 
-#ifndef MG_ENABLE_HTTP
-#define MG_ENABLE_HTTP 1
-#endif
-
-#ifndef MG_ENABLE_HTTP_CGI
-#define MG_ENABLE_HTTP_CGI \
-  (CS_PLATFORM == CS_P_UNIX || CS_PLATFORM == CS_P_WINDOWS)
+#ifndef MG_ENABLE_BROADCAST
+#define MG_ENABLE_BROADCAST 0
 #endif
 
 #ifndef MG_ENABLE_COAP
@@ -1444,6 +1448,14 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 
 #ifndef MG_ENABLE_HEXDUMP
 #define MG_ENABLE_HEXDUMP CS_ENABLE_STDIO
+#endif
+
+#ifndef MG_ENABLE_HTTP
+#define MG_ENABLE_HTTP 1
+#endif
+
+#ifndef MG_ENABLE_HTTP_CGI
+#define MG_ENABLE_HTTP_CGI 0
 #endif
 
 #ifndef MG_ENABLE_HTTP_SSI
@@ -1505,8 +1517,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #ifdef MG_NO_BSD_SOCKETS
 #undef MG_DISABLE_SYNC_RESOLVER
 #define MG_DISABLE_SYNC_RESOLVER 1
-#undef MG_DISABLE_SOCKETPAIR
-#define MG_DISABLE_SOCKETPAIR 1
 #endif /* MG_NO_BSD_SOCKETS */
 
 /* MQTT broker requires MQTT */
@@ -1617,7 +1627,7 @@ struct mg_mgr {
 #if MG_ENABLE_HEXDUMP
   const char *hexdump_file; /* Debug hexdump file path */
 #endif
-#if !MG_DISABLE_SOCKETPAIR
+#if MG_ENABLE_BROADCAST
   sock_t ctl[2]; /* Socketpair for mg_broadcast() */
 #endif
   void *user_data; /* User data */
@@ -1723,7 +1733,7 @@ void mg_mgr_free(struct mg_mgr *);
  */
 time_t mg_mgr_poll(struct mg_mgr *, int milli);
 
-#if !MG_DISABLE_SOCKETPAIR
+#if MG_ENABLE_BROADCAST
 /*
  * Passes a message of a given length to all connections.
  *

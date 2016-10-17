@@ -45,7 +45,6 @@
 
 #ifdef PICOTCP
 #define NO_LIBC
-#define MG_DISABLE_SOCKETPAIR
 #define MG_DISABLE_PFS
 #endif
 
@@ -1864,7 +1863,7 @@ void mg_close_conn(struct mg_connection *conn) {
 
 void mg_mgr_init(struct mg_mgr *m, void *user_data) {
   memset(m, 0, sizeof(*m));
-#if !MG_DISABLE_SOCKETPAIR
+#if MG_ENABLE_BROADCAST
   m->ctl[0] = m->ctl[1] = INVALID_SOCKET;
 #endif
   m->user_data = user_data;
@@ -1929,7 +1928,7 @@ void mg_mgr_free(struct mg_mgr *m) {
   /* Do one last poll, see https://github.com/cesanta/mongoose/issues/286 */
   mg_mgr_poll(m, 0);
 
-#if !MG_DISABLE_SOCKETPAIR
+#if MG_ENABLE_BROADCAST
   if (m->ctl[0] != INVALID_SOCKET) closesocket(m->ctl[0]);
   if (m->ctl[1] != INVALID_SOCKET) closesocket(m->ctl[1]);
   m->ctl[0] = m->ctl[1] = INVALID_SOCKET;
@@ -2688,7 +2687,7 @@ struct mg_connection *mg_next(struct mg_mgr *s, struct mg_connection *conn) {
   return conn == NULL ? s->active_connections : conn->next;
 }
 
-#if !MG_DISABLE_SOCKETPAIR
+#if MG_ENABLE_BROADCAST
 void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
                   size_t len) {
   struct ctl_msg ctl_msg;
@@ -2712,7 +2711,7 @@ void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
     (void) dummy; /* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25509 */
   }
 }
-#endif /* MG_DISABLE_SOCKETPAIR */
+#endif /* MG_ENABLE_BROADCAST */
 
 static int isbyte(int n) {
   return n >= 0 && n <= 255;
@@ -3263,7 +3262,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
        (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
 }
 
-#if !MG_DISABLE_SOCKETPAIR
+#if MG_ENABLE_BROADCAST
 static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
   struct ctl_msg ctl_msg;
   int len =
@@ -3291,7 +3290,7 @@ void mg_sock_set(struct mg_connection *nc, sock_t sock) {
 void mg_ev_mgr_init(struct mg_mgr *mgr) {
   (void) mgr;
   DBG(("%p using select()", mgr));
-#if !MG_DISABLE_SOCKETPAIR
+#if MG_ENABLE_BROADCAST
   do {
     mg_socketpair(mgr->ctl, SOCK_DGRAM);
   } while (mgr->ctl[0] == INVALID_SOCKET);
@@ -3338,7 +3337,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   FD_ZERO(&read_set);
   FD_ZERO(&write_set);
   FD_ZERO(&err_set);
-#if !MG_DISABLE_SOCKETPAIR
+#if MG_ENABLE_BROADCAST
   mg_add_to_set(mgr->ctl[1], &read_set, &max_fd);
 #endif
 
@@ -3408,7 +3407,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   DBG(("select @ %ld num_ev=%d of %d, timeout=%d", (long) now, num_ev, num_fds,
        timeout_ms));
 
-#if !MG_DISABLE_SOCKETPAIR
+#if MG_ENABLE_BROADCAST
   if (num_ev > 0 && mgr->ctl[1] != INVALID_SOCKET &&
       FD_ISSET(mgr->ctl[1], &read_set)) {
     mg_mgr_handle_ctl_sock(mgr);
@@ -3446,7 +3445,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   return (time_t) now;
 }
 
-#if !MG_DISABLE_SOCKETPAIR
+#if MG_ENABLE_BROADCAST
 int mg_socketpair(sock_t sp[2], int sock_type) {
   union socket_address sa;
   sock_t sock;
@@ -3488,7 +3487,7 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
 
   return ret;
 }
-#endif /* MG_DISABLE_SOCKETPAIR */
+#endif /* MG_ENABLE_BROADCAST */
 
 static void mg_sock_get_addr(sock_t sock, int remote,
                              union socket_address *sa) {
