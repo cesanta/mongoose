@@ -497,7 +497,6 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
 #include <time.h>
 
 #define MG_NET_IF MG_NET_IF_SIMPLELINK
-#define MG_DISABLE_SYNC_RESOLVER 1
 
 /*
  * CC3100 SDK and STM32 SDK include headers w/out path, just like
@@ -551,7 +550,6 @@ int inet_pton(int af, const char *src, void *dst);
 #endif
 
 #define MG_NET_IF MG_NET_IF_SIMPLELINK
-#define MG_DISABLE_SYNC_RESOLVER 1
 
 /* Only SPIFFS supports directories, SLFS does not. */
 #if defined(CC3200_FS_SPIFFS) && !defined(MG_ENABLE_DIRECTORY_LISTING)
@@ -686,7 +684,6 @@ struct dirent *readdir(DIR *dir);
 #endif
 
 #define MG_NET_IF MG_NET_IF_SIMPLELINK
-#define MG_DISABLE_SYNC_RESOLVER 1
 
 /* Amalgamated: #include "common/platforms/simplelink/cs_simplelink.h" */
 
@@ -1421,10 +1418,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #ifndef CS_MONGOOSE_SRC_FEATURES_H_
 #define CS_MONGOOSE_SRC_FEATURES_H_
 
-#ifndef MG_DISABLE_DNS
-#define MG_DISABLE_DNS 0
-#endif
-
 #ifndef MG_DISABLE_HTTP_DIGEST_AUTH
 #define MG_DISABLE_HTTP_DIGEST_AUTH 0
 #endif
@@ -1437,16 +1430,12 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_DISABLE_PFS 0
 #endif
 
-#ifndef MG_DISABLE_RESOLVER
-#define MG_DISABLE_RESOLVER 0
-#endif
-
-#ifndef MG_DISABLE_SYNC_RESOLVER
-#define MG_DISABLE_SYNC_RESOLVER 0
-#endif
-
 #ifndef MG_DISABLE_WS_RANDOM_MASK
 #define MG_DISABLE_WS_RANDOM_MASK 0
+#endif
+
+#ifndef MG_ENABLE_ASYNC_RESOLVER
+#define MG_ENABLE_ASYNC_RESOLVER 1
 #endif
 
 #ifndef MG_ENABLE_BROADCAST
@@ -1463,6 +1452,10 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 
 #ifndef MG_ENABLE_DIRECTORY_LISTING
 #define MG_ENABLE_DIRECTORY_LISTING 0
+#endif
+
+#ifndef MG_ENABLE_DNS
+#define MG_ENABLE_DNS 1
 #endif
 
 #ifndef MG_ENABLE_DNS_SERVER
@@ -1533,6 +1526,10 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #define MG_ENABLE_SSL 0
 #endif
 
+#ifndef MG_ENABLE_SYNC_RESOLVER
+#define MG_ENABLE_SYNC_RESOLVER 0
+#endif
+
 #ifndef MG_ENABLE_STDIO
 #define MG_ENABLE_STDIO CS_ENABLE_STDIO
 #endif
@@ -1552,11 +1549,6 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #if MG_ENABLE_DEBUG && !defined(CS_ENABLE_DEBUG)
 #define CS_ENABLE_DEBUG 1
 #endif
-
-#ifdef MG_NO_BSD_SOCKETS
-#undef MG_DISABLE_SYNC_RESOLVER
-#define MG_DISABLE_SYNC_RESOLVER 1
-#endif /* MG_NO_BSD_SOCKETS */
 
 /* MQTT broker requires MQTT */
 #if MG_ENABLE_MQTT_BROKER && !MG_ENABLE_MQTT
@@ -2019,6 +2011,7 @@ int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
  */
 int mg_socketpair(sock_t[2], int sock_type);
 
+#if MG_ENABLE_SYNC_RESOLVER
 /*
  * Convert domain name into IP address.
  *
@@ -2029,7 +2022,6 @@ int mg_socketpair(sock_t[2], int sock_type);
  * CAUTION: this function can block.
  * Return 1 on success, 0 on failure.
  */
-#if !MG_DISABLE_SYNC_RESOLVER
 int mg_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
 #endif
 

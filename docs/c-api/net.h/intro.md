@@ -19,6 +19,7 @@ items:
   - { name: mg_printf.md }
   - { name: mg_vprintf.md }
   - { name: mg_socketpair.md }
+  - { name: mg_resolve.md }
   - { name: mg_check_ip_acl.md }
   - { name: mg_enable_multithreading.md }
   - { name: mg_enable_javascript.md }
