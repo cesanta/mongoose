@@ -126,8 +126,13 @@
 #pragma warning(disable : 4204) /* missing c99 support */
 #endif
 
+#ifndef _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 1
+#endif
+
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif
 
 #include <assert.h>
 #include <direct.h>
@@ -981,15 +986,6 @@ typedef uint32_t in_addr_t;
 #define INT64_X_FMT "I64x"
 /* TODO(alashkin): check if this is correct */
 #define SIZE_T_FMT "u"
-typedef struct _stati64 cs_stat_t;
-
-#ifndef S_ISDIR
-#define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
-#endif
-
-#ifndef S_ISREG
-#define S_ISREG(x) (((x) &_S_IFMT) == _S_IFREG)
-#endif
 
 #define DIRSEP '\\'
 
@@ -1024,16 +1020,41 @@ typedef unsigned int* uintptr_t;
 #define BUFSIZ 4096
 #define ENOMEM ERROR_NOT_ENOUGH_MEMORY
 #endif
-
-const char *strerror();
-
-#define MG_ENABLE_FILESYSTEM 0
-
 /*
- * WinCE lacks a lot of used in CGI API functions
- * TODO(alaskin): look for wce_xxxx alternatives
+ * Explicitly disabling MG_ENABLE_THREADS for WinCE
+ * because they are enabled for _WIN32 by default
  */
-#define MG_ENABLE_HTTP_CGI 0
+#ifndef MG_ENABLE_THREADS
+#define MG_ENABLE_THREADS 0
+#endif
+
+#ifndef MG_ENABLE_FILESYSTEM
+#define MG_ENABLE_FILESYSTEM 1
+#endif
+
+typedef struct _stati64 {
+  uint32_t st_mtime;
+  uint32_t st_size;
+  uint32_t st_mode;
+} cs_stat_t;
+
+#define ENOENT ERROR_PATH_NOT_FOUND
+#define EACCES ERROR_ACCESS_DENIED
+
+#define _S_IFREG 2
+#define _S_IFDIR 4
+
+#ifndef S_ISDIR
+#define S_ISDIR(x) (((x) & _S_IFDIR) != 0)
+#endif
+
+#ifndef S_ISREG
+#define S_ISREG(x) (((x) & _S_IFREG) != 0)
+#endif
+
+int open(const char *filename, int oflag, int pmode);
+int _wstati64(const wchar_t *path, cs_stat_t *st);
+const char *strerror();
 
 #endif /* CS_PLATFORM == CS_P_WINCE */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_WINCE_H_ */

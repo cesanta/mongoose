@@ -733,8 +733,23 @@ double cs_time(void) {
   if (gettimeofday(&tv, NULL /* tz */) != 0) return 0;
   now = (double) tv.tv_sec + (((double) tv.tv_usec) / 1000000.0);
 #else
-  now = GetTickCount() / 1000.0;
-#endif
+  SYSTEMTIME sysnow;
+  FILETIME ftime;
+  GetLocalTime(&sysnow);
+  SystemTimeToFileTime(&sysnow, &ftime);
+  /*
+   * 1. VC 6.0 doesn't support conversion uint64 -> double, so, using int64
+   * This should not cause a problems in this (21th) century
+   * 2. Windows FILETIME is a number of 100-nanosecond intervals since January
+   * 1, 1601 while time_t is a number of _seconds_ since January 1, 1970 UTC,
+   * thus, we need to convert to seconds and adjust amount (subtract 11644473600
+   * seconds)
+   */
+  now = (double) (((int64_t) ftime.dwLowDateTime +
+                   ((int64_t) ftime.dwHighDateTime << 32)) /
+                  10000000.0) -
+        11644473600;
+#endif /* _WIN32 */
   return now;
 }
 #ifdef MG_MODULE_LINES
@@ -5064,9 +5079,15 @@ static void mg_http_construct_etag(char *buf, size_t buf_len,
   snprintf(buf, buf_len, "\"%lx.%" INT64_FMT "\"", (unsigned long) st->st_mtime,
            (int64_t) st->st_size);
 }
+
+#ifndef WINCE
 static void mg_gmt_time_string(char *buf, size_t buf_len, time_t *t) {
   strftime(buf, buf_len, "%a, %d %b %Y %H:%M:%S GMT", gmtime(t));
 }
+#else
+/* Look wince_lib.c for WindowsCE implementation */
+static void mg_gmt_time_string(char *buf, size_t buf_len, time_t *t);
+#endif
 
 static int mg_http_parse_range_header(const struct mg_str *header, int64_t *a,
                                       int64_t *b) {
@@ -5105,7 +5126,7 @@ void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
     mg_http_send_error(nc, code, "Open failed");
   } else {
     char etag[50], current_time[50], last_modified[50], range[70];
-    time_t t = time(NULL);
+    time_t t = (time_t) mg_time();
     int64_t r1 = 0, r2 = 0, cl = st.st_size;
     struct mg_str *range_hdr = mg_get_http_header(hm, "Range");
     int n, status_code = 200;
@@ -5398,7 +5419,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
   static const size_t one = 1;
   char ha1[33], resp[33], cnonce[40];
 
-  snprintf(cnonce, sizeof(cnonce), "%x", (unsigned int) time(NULL));
+  snprintf(cnonce, sizeof(cnonce), "%x", (unsigned int) mg_time());
   cs_md5(ha1, user, (size_t) strlen(user), colon, one, auth_domain,
          (size_t) strlen(auth_domain), colon, one, passwd,
          (size_t) strlen(passwd), NULL);
@@ -5419,7 +5440,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
  * Assumption: nonce is a hexadecimal number of seconds since 1970.
  */
 static int mg_check_nonce(const char *nonce) {
-  unsigned long now = (unsigned long) time(NULL);
+  unsigned long now = (unsigned long) mg_time();
   unsigned long val = (unsigned long) strtoul(nonce, NULL, 16);
   return now < val || now - val < 3600;
 }
@@ -5946,7 +5967,7 @@ static void mg_http_send_digest_auth_request(struct mg_connection *c,
             "WWW-Authenticate: Digest qop=\"auth\", "
             "realm=\"%s\", nonce=\"%lu\"\r\n"
             "Content-Length: 0\r\n\r\n",
-            domain, (unsigned long) time(NULL));
+            domain, (unsigned long) mg_time());
 }
 
 static void mg_http_send_options(struct mg_connection *nc) {
@@ -6864,7 +6885,7 @@ static void mg_do_ssi_include(struct mg_connection *nc, struct http_message *hm,
     mg_printf(nc, "SSI include error: fopen(%s): %s", path,
               strerror(mg_get_errno()));
   } else {
-    mg_set_close_on_exec(fileno(fp));
+    mg_set_close_on_exec((sock_t) fileno(fp));
     if (mg_match_prefix(opts->ssi_pattern, strlen(opts->ssi_pattern), path) >
         0) {
       mg_send_ssi_file(nc, hm, path, fp, include_level + 1, opts);
@@ -6987,7 +7008,7 @@ MG_INTERNAL void mg_handle_ssi_request(struct mg_connection *nc,
   if ((fp = fopen(path, "rb")) == NULL) {
     mg_http_send_error(nc, 404, NULL);
   } else {
-    mg_set_close_on_exec(fileno(fp));
+    mg_set_close_on_exec((sock_t) fileno(fp));
 
     mime_type = mg_get_mime_type(path, "text/plain", opts);
     mg_send_response_line(nc, 200, opts->extra_headers);
@@ -7126,7 +7147,7 @@ MG_INTERNAL void mg_handle_lock(struct mg_connection *nc, const char *path) {
       "</D:activelock>\n"
       "</D:lockdiscovery>"
       "</d:multistatus>\n";
-  mg_printf(nc, reply, path, (unsigned int) time(NULL));
+  mg_printf(nc, reply, path, (unsigned int) mg_time());
   nc->flags |= MG_F_SEND_AND_CLOSE;
 }
 #endif
@@ -7257,7 +7278,7 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
     const struct mg_str *range_hdr = mg_get_http_header(hm, "Content-Range");
     int64_t r1 = 0, r2 = 0;
     pd->file.type = DATA_PUT;
-    mg_set_close_on_exec(fileno(pd->file.fp));
+    mg_set_close_on_exec((sock_t) fileno(pd->file.fp));
     pd->file.cl = to64(cl_hdr->p);
     if (range_hdr != NULL &&
         mg_http_parse_range_header(range_hdr, &r1, &r2) > 0) {
@@ -7710,7 +7731,7 @@ FILE *mg_fopen(const char *path, const char *mode) {
 }
 
 int mg_open(const char *path, int flag, int mode) { /* LCOV_EXCL_LINE */
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(WINCE)
   wchar_t wpath[MAX_PATH_SIZE];
   to_wchar(path, wpath, ARRAY_SIZE(wpath));
   return _wopen(wpath, flag, mode);
@@ -12111,6 +12132,60 @@ const char *strerror(int err) {
   static char buf[10];
   snprintf(buf, sizeof(buf), "%d", err);
   return buf;
+}
+
+int open(const char *filename, int oflag, int pmode) {
+  /*
+   * TODO(alashkin): mg_open function is not used in mongoose
+   * but exists in documentation as utility function
+   * Shall we delete it at all or implement for WinCE as well?
+   */
+   DebugBreak();
+   return 0; /* for compiler */
+}
+
+int _wstati64(const wchar_t *path, cs_stat_t *st) {
+  DWORD fa = GetFileAttributesW(path);
+  if (fa == INVALID_FILE_ATTRIBUTES) {
+    return -1;
+  }
+  memset(st, 0, sizeof(*st));
+  if ((fa & FILE_ATTRIBUTE_DIRECTORY) == 0) {
+    HANDLE h;
+    FILETIME ftime;
+    st->st_mode |= _S_IFREG;
+    h = CreateFileW(path, GENERIC_READ, 0, NULL, OPEN_EXISTING,
+    FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) {
+      return -1;
+    }
+    st->st_size = GetFileSize(h, NULL);
+    GetFileTime(h, NULL, NULL, &ftime);
+    st->st_mtime = (uint32_t)((((uint64_t)ftime.dwLowDateTime +
+        ((uint64_t)ftime.dwHighDateTime << 32)) / 10000000.0) - 11644473600);
+    CloseHandle(h);
+  } else {
+    st->st_mode |= _S_IFDIR;
+  }
+  return 0;
+}
+
+/* Windows CE doesn't have neither gmtime nor strftime */
+static void mg_gmt_time_string(char *buf, size_t buf_len, time_t *t) {
+  FILETIME ft;
+  SYSTEMTIME systime;
+  if (t != NULL) {
+    uint64_t filetime = (*t + 11644473600) * 10000000;
+    ft.dwLowDateTime = filetime & 0xFFFFFFFF;
+    ft.dwHighDateTime = (filetime & 0xFFFFFFFF00000000) >> 32;
+    FileTimeToSystemTime(&ft, &systime);
+  } else {
+    GetSystemTime(&systime);
+  }
+  /* There is no PRIu16 in WinCE SDK */
+  snprintf(buf, buf_len, "%d.%d.%d %d:%d:%d GMT", (int)systime.wYear,
+           (int)systime.wMonth, (int)systime.wDay, (int)systime.wHour,
+           (int)systime.wMinute, (int)systime.wSecond);
 }
 
 #endif
