@@ -11691,9 +11691,13 @@ void mg_if_recved(struct mg_connection *nc, size_t len) {
   DBG(("%p %p %u", nc, cs->pcb.tcp, len));
   /* Currently SSL acknowledges data immediately.
    * TODO(rojer): Find a way to propagate mg_if_recved. */
+#if MG_ENABLE_SSL
   if (nc->ssl == NULL) {
     tcp_recved(cs->pcb.tcp, len);
   }
+#else
+  tcp_recved(cs->pcb.tcp, len);
+#endif
   mbuf_trim(&nc->recv_mbuf);
 }
 
