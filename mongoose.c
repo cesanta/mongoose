@@ -1980,7 +1980,7 @@ int mg_printf(struct mg_connection *conn, const char *fmt, ...) {
   return len;
 }
 
-#if !MG_DISABLE_SYNC_RESOLVER
+#if MG_ENABLE_SYNC_RESOLVER
 /* TODO(lsm): use non-blocking resolver */
 static int mg_resolve2(const char *host, struct in_addr *ina) {
 #if MG_ENABLE_GETADDRINFO
@@ -2016,7 +2016,7 @@ int mg_resolve(const char *host, char *buf, size_t n) {
   struct in_addr ad;
   return mg_resolve2(host, &ad) ? snprintf(buf, n, "%s", inet_ntoa(ad)) : 0;
 }
-#endif /* MG_DISABLE_SYNC_RESOLVER */
+#endif /* MG_ENABLE_SYNC_RESOLVER */
 
 MG_INTERNAL struct mg_connection *mg_create_connection_base(
     struct mg_mgr *mgr, mg_event_handler_t callback,
@@ -2107,7 +2107,7 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
     sa->sin6.sin6_family = AF_INET6;
     sa->sin.sin_port = htons((uint16_t) port);
 #endif
-#if !MG_DISABLE_RESOLVER
+#if MG_ENABLE_ASYNC_RESOLVER
   } else if (strlen(str) < host_len &&
              sscanf(str, "%[^ :]:%u%n", host, &port, &len) == 2) {
     sa->sin.sin_port = htons((uint16_t) port);
@@ -2122,7 +2122,7 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
         return 0;
       }
 
-#if !MG_DISABLE_SYNC_RESOLVER
+#if MG_ENABLE_SYNC_RESOLVER
       if (!mg_resolve2(host, &sa->sin.sin_addr)) {
         return -1;
       }
@@ -2482,7 +2482,7 @@ void mg_if_connect_cb(struct mg_connection *nc, int err) {
   mg_call(nc, NULL, MG_EV_CONNECT, &err);
 }
 
-#if !MG_DISABLE_RESOLVER
+#if MG_ENABLE_ASYNC_RESOLVER
 /*
  * Callback for the async resolver on mg_connect_opt() call.
  * Main task of this function is to trigger MG_EV_CONNECT event with
@@ -2600,7 +2600,7 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
 #endif /* MG_ENABLE_SSL */
 
   if (rc == 0) {
-#if !MG_DISABLE_RESOLVER
+#if MG_ENABLE_ASYNC_RESOLVER
     /*
      * DNS resolution is required for host.
      * mg_parse_address() fills port in nc->sa, which we pass to resolve_cb()
@@ -8548,7 +8548,7 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
  * All rights reserved
  */
 
-#if !MG_DISABLE_DNS
+#if MG_ENABLE_DNS
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/dns.h" */
@@ -8911,7 +8911,7 @@ void mg_set_protocol_dns(struct mg_connection *nc) {
   nc->proto_handler = dns_handler;
 }
 
-#endif /* MG_DISABLE_DNS */
+#endif /* MG_ENABLE_DNS */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/dns_server.c"
 #endif
@@ -8994,7 +8994,7 @@ int mg_dns_reply_record(struct mg_dns_reply *reply,
  * All rights reserved
  */
 
-#if !MG_DISABLE_RESOLVER
+#if MG_ENABLE_ASYNC_RESOLVER
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/resolv.h" */
@@ -9255,7 +9255,7 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
   return 0;
 }
 
-#endif /* MG_DISABLE_RESOLVE */
+#endif /* MG_ENABLE_ASYNC_RESOLVER */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/coap.c"
 #endif
