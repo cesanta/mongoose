@@ -15,7 +15,7 @@ signature: |
     struct mbuf recv_mbuf;   /* Received data */
     struct mbuf send_mbuf;   /* Data scheduled for sending */
   #if MG_ENABLE_SSL
-  #if !defined(MG_SOCKET_SIMPLELINK)
+  #if MG_NET_IF != MG_NET_IF_SIMPLELINK
     SSL *ssl;
     SSL_CTX *ssl_ctx;
   #else

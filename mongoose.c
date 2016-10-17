@@ -1857,7 +1857,7 @@ static void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
   if (conn->proto_data != NULL && conn->proto_data_destructor != NULL) {
     conn->proto_data_destructor(conn->proto_data);
   }
-#if MG_ENABLE_SSL && !defined(MG_SOCKET_SIMPLELINK)
+#if MG_ENABLE_SSL && MG_NET_IF == MG_NET_IF_SOCKET
   if (conn->ssl != NULL) SSL_free(conn->ssl);
   if (conn->ssl_ctx != NULL) SSL_CTX_free(conn->ssl_ctx);
 #endif
@@ -1894,7 +1894,7 @@ void mg_mgr_init(struct mg_mgr *m, void *user_data) {
   signal(SIGPIPE, SIG_IGN);
 #endif
 
-#if MG_ENABLE_SSL && !defined(MG_SOCKET_SIMPLELINK)
+#if MG_ENABLE_SSL && MG_NET_IF == MG_NET_IF_SOCKET
   {
     static int init_done;
     if (!init_done) {
@@ -2145,7 +2145,7 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
 
 #if MG_ENABLE_SSL
 
-#ifndef MG_SOCKET_SIMPLELINK
+#if MG_NET_IF != MG_NET_IF_SIMPLELINK
 /*
  * Certificate generation script is at
  * https://github.com/cesanta/mongoose/blob/master/scripts/generate_ssl_certificates.sh
@@ -2330,7 +2330,7 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
 #else
 const char *mg_set_ssl2(struct mg_connection *nc, const char *cert,
                         const char *key, const char *ca_cert);
-#endif /* MG_SOCKET_SIMPLELINK */
+#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK */
 
 #endif /* MG_ENABLE_SSL */
 
@@ -2542,7 +2542,7 @@ static void mg_set_ssl_server_name(struct mg_connection *nc,
   DBG(("%p '%s'", nc, server_name));
 #ifdef SSL_KRYPTON
   SSL_CTX_kr_set_verify_name(nc->ssl_ctx, server_name);
-#elif defined(MG_SOCKET_SIMPLELINK)
+#elif MG_NET_IF == MG_NET_IF_SIMPLELINK
   nc->ssl_server_name = strdup(server_name);
 #else
   /* TODO(rojer): Implement server name verification on OpenSSL. */
@@ -2823,7 +2823,7 @@ double mg_time(void) {
  * All rights reserved
  */
 
-#if !MG_DISABLE_SOCKET_IF && !defined(MG_SOCKET_SIMPLELINK)
+#if MG_NET_IF == MG_NET_IF_SOCKET
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
@@ -3526,7 +3526,7 @@ void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
   mg_sock_get_addr(nc->sock, remote, sa);
 }
 
-#endif /* !MG_DISABLE_SOCKET_IF && !defined(MG_SOCKET_SIMPLELINK) */
+#endif /* MG_NET_IF == MG_NET_IF_SOCKET */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/multithreading.c"
 #endif
@@ -10264,7 +10264,7 @@ void fs_slfs_set_new_file_size(const char *name, size_t size) {
  * All rights reserved
  */
 
-#if defined(MG_SOCKET_SIMPLELINK) && \
+#if MG_NET_IF == MG_NET_IF_SIMPLELINK && \
     (defined(MG_FS_SLFS) || defined(MG_FS_SPIFFS))
 
 #include <errno.h>
@@ -10650,7 +10650,7 @@ int sl_fs_init(void) {
   return ret;
 }
 
-#endif /* defined(MG_SOCKET_SIMPLELINK) && (defined(MG_FS_SLFS) || \
+#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK && (defined(MG_FS_SLFS) || \
           defined(MG_FS_SPIFFS)) */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_socket.c"
@@ -10660,7 +10660,7 @@ int sl_fs_init(void) {
  * All rights reserved
  */
 
-#ifdef MG_SOCKET_SIMPLELINK
+#if MG_NET_IF == MG_NET_IF_SIMPLELINK
 
 #include <errno.h>
 #include <stdio.h>
@@ -10702,11 +10702,11 @@ int inet_pton(int af, const char *src, void *dst) {
   return 1;
 }
 
-#endif /* CS_COMMON_PLATFORMS_SIMPLELINK_SL_SOCKET_C_ */
+#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_mg_task.c"
 #endif
-#if defined(MG_SOCKET_SIMPLELINK) && !defined(MG_SIMPLELINK_NO_OSI)
+#if MG_NET_IF == MG_NET_IF_SIMPLELINK && !defined(MG_SIMPLELINK_NO_OSI)
 
 /* Amalgamated: #include "mg_task.h" */
 
@@ -10756,7 +10756,7 @@ void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg) {
   osi_MsgQWrite(&s_mg_q, &msg, OSI_NO_WAIT);
 }
 
-#endif /* defined(MG_SOCKET_SIMPLELINK) */
+#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK && !defined(MG_SIMPLELINK_NO_OSI) */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_net_if.c"
 #endif
@@ -10765,7 +10765,7 @@ void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg) {
  * All rights reserved
  */
 
-#if !MG_DISABLE_SOCKET_IF && defined(MG_SOCKET_SIMPLELINK)
+#if MG_NET_IF == MG_NET_IF_SIMPLELINK
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
@@ -11266,7 +11266,7 @@ void sl_restart_cb(struct mg_mgr *mgr) {
   }
 }
 
-#endif /* !MG_DISABLE_SOCKET_IF && defined(MG_SOCKET_SIMPLELINK) */
+#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip_net_if.h"
 #endif
@@ -11278,7 +11278,7 @@ void sl_restart_cb(struct mg_mgr *mgr) {
 #ifndef CS_COMMON_PLATFORMS_LWIP_MG_NET_IF_LWIP_H_
 #define CS_COMMON_PLATFORMS_LWIP_MG_NET_IF_LWIP_H_
 
-#ifdef MG_NET_IF_LWIP
+#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
 
 #include <inttypes.h>
 
@@ -11307,7 +11307,7 @@ void mg_lwip_post_signal(enum mg_sig_type sig, struct mg_connection *nc);
 /* To be implemented by the platform. */
 void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
 
-#endif /* MG_NET_IF_LWIP */
+#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL */
 
 #endif /* CS_COMMON_PLATFORMS_LWIP_MG_NET_IF_LWIP_H_ */
 #ifdef MG_MODULE_LINES
@@ -11318,7 +11318,7 @@ void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
  * All rights reserved
  */
 
-#ifdef MG_NET_IF_LWIP
+#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
 
 #include <lwip/pbuf.h>
 #include <lwip/tcp.h>
@@ -11769,7 +11769,7 @@ void mg_sock_set(struct mg_connection *nc, sock_t sock) {
   nc->sock = sock;
 }
 
-#endif /* MG_NET_IF_LWIP */
+#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip_ev_mgr.c"
 #endif
@@ -11778,7 +11778,7 @@ void mg_sock_set(struct mg_connection *nc, sock_t sock) {
  * All rights reserved
  */
 
-#ifdef MG_NET_IF_LWIP
+#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
 
 #ifndef MG_SIG_QUEUE_LEN
 #define MG_SIG_QUEUE_LEN 16
@@ -11946,7 +11946,7 @@ uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
   return timeout_ms;
 }
 
-#endif /* MG_NET_IF_LWIP */
+#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip_ssl_krypton.c"
 #endif
@@ -11955,7 +11955,7 @@ uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
  * All rights reserved
  */
 
-#if defined(MG_NET_IF_LWIP) && defined(SSL_KRYPTON)
+#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && defined(SSL_KRYPTON)
 
 /* Amalgamated: #include "common/cs_dbg.h" */
 
@@ -12117,7 +12117,7 @@ ssize_t kr_recv(int fd, void *buf, size_t len, int flags) {
   return len;
 }
 
-#endif /* defined(MG_NET_IF_LWIP) && defined(SSL_KRYPTON) */
+#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && defined(SSL_KRYPTON) */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/wince/wince_libc.c"
 #endif
