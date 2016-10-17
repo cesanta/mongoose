@@ -1,3 +1,4 @@
+/* clang-format off */
 /*
 ** 2001 September 15
 **
