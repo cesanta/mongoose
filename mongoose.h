@@ -1584,7 +1584,7 @@ const char *c_strnstr(const char *s, const char *find, size_t slen);
 #endif
 
 #ifndef MG_ENABLE_MQTT
-#define MG_ENABLE_MQTT 0
+#define MG_ENABLE_MQTT 1
 #endif
 
 #ifndef MG_ENABLE_MQTT_BROKER
