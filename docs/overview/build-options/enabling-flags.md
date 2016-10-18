@@ -4,7 +4,7 @@ title: Enabling flags
 
 - `MG_ENABLE_SSL` Enable [SSL/TLS support](https://docs.cesanta.com/mongoose/master/#/http/ssl.md/) (OpenSSL API)
 - `MG_ENABLE_IPV6` Enable IPv6 support
-- `MG_ENABLE_MQTT` enable [MQTT client](https://docs.cesanta.com/mongoose/master/#/mqtt/client_example.md/)
+- `MG_ENABLE_MQTT` enable [MQTT client](https://docs.cesanta.com/mongoose/master/#/mqtt/client_example.md/) (on by default, set to 0 to disable)
 - `MG_ENABLE_MQTT_BROKER` enable [MQTT broker](https://docs.cesanta.com/mongoose/master/#/mqtt/server_example.md/)
 - `MG_ENABLE_DNS_SERVER` enable DNS server
 - `MG_ENABLE_COAP` enable CoAP protocol
