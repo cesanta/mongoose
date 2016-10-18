@@ -25,7 +25,7 @@ endif
 #
 DEFINES += -DCS_PLATFORM=3 \
            -DMG_NO_BSD_SOCKETS=1 \
-           -DRTOS_SDK -DMG_LWIP -DLWIP_TIMEVAL_PRIVATE=0 \
+           -DRTOS_SDK \
            -DMG_INTERNAL=
 
 #############################################################

@@ -2976,12 +2976,12 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int type,
   socklen_t sa_len =
       (sa->sa.sa_family == AF_INET) ? sizeof(sa->sin) : sizeof(sa->sin6);
   sock_t sock = INVALID_SOCKET;
-#if !defined(MG_LWIP)
+#if !MG_LWIP
   int on = 1;
 #endif
 
   if ((sock = socket(sa->sa.sa_family, type, proto)) != INVALID_SOCKET &&
-#if !defined(MG_LWIP) /* LWIP doesn't support either */
+#if !MG_LWIP /* LWIP doesn't support either */
 #if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE)
       /* "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE" http://goo.gl/RmrFTm */
       !setsockopt(sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (void *) &on,
@@ -3004,7 +3004,7 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int type,
 
       !bind(sock, &sa->sa, sa_len) &&
       (type == SOCK_DGRAM || listen(sock, SOMAXCONN) == 0)) {
-#if !defined(MG_LWIP)
+#if !MG_LWIP
     mg_set_non_blocking_mode(sock);
     /* In case port was set to 0, get the real port number */
     (void) getsockname(sock, &sa->sa, &sa_len);
@@ -3021,7 +3021,7 @@ static void mg_write_to_socket(struct mg_connection *nc) {
   struct mbuf *io = &nc->send_mbuf;
   int n = 0;
 
-#ifdef MG_LWIP
+#if MG_LWIP
   /* With LWIP we don't know if the socket is ready */
   if (io->len == 0) return;
 #endif
@@ -3440,7 +3440,7 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
                    (FD_ISSET(nc->sock, &write_set) ? _MG_F_FD_CAN_WRITE : 0) |
                    (FD_ISSET(nc->sock, &err_set) ? _MG_F_FD_ERROR : 0);
       }
-#ifdef MG_LWIP
+#if MG_LWIP
       /* With LWIP socket emulation layer, we don't get write events */
       fd_flags |= _MG_F_FD_CAN_WRITE;
 #endif
@@ -7813,7 +7813,7 @@ void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
     if (inet_ntop(sa->sa.sa_family, addr, start, capacity) == NULL) {
       *buf = '\0';
     }
-#elif defined(_WIN32) || defined(MG_LWIP)
+#elif defined(_WIN32) || MG_LWIP
     /* Only Windoze Vista (and newer) have inet_ntop() */
     strncpy(buf, inet_ntoa(sa->sin.sin_addr), len);
 #else
@@ -11331,6 +11331,7 @@ void mg_lwip_ssl_do_hs(struct mg_connection *nc);
 void mg_lwip_ssl_send(struct mg_connection *nc);
 void mg_lwip_ssl_recv(struct mg_connection *nc);
 
+#if LWIP_TCP_KEEPALIVE
 void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
                                   int interval, int count) {
   if (nc->sock == INVALID_SOCKET || nc->flags & MG_F_UDP) {
@@ -11347,6 +11348,9 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
     tpcb->so_options &= ~SOF_KEEPALIVE;
   }
 }
+#elif !defined(MG_NO_LWIP_TCP_KEEPALIVE)
+#warning LWIP TCP keepalive is disabled. Please consider enabling it.
+#endif /* LWIP_TCP_KEEPALIVE */
 
 static err_t mg_lwip_tcp_conn_cb(void *arg, struct tcp_pcb *tpcb, err_t err) {
   struct mg_connection *nc = (struct mg_connection *) arg;
@@ -11358,7 +11362,9 @@ static err_t mg_lwip_tcp_conn_cb(void *arg, struct tcp_pcb *tpcb, err_t err) {
   }
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   cs->err = err;
+#if LWIP_TCP_KEEPALIVE
   if (err == 0) mg_lwip_set_keepalive_params(nc, 60, 10, 6);
+#endif
 #ifdef SSL_KRYPTON
   if (err == 0 && nc->ssl != NULL) {
     SSL_set_fd(nc->ssl, (intptr_t) nc);
@@ -11559,7 +11565,9 @@ static err_t mg_lwip_accept_cb(void *arg, struct tcp_pcb *newtpcb, err_t err) {
   tcp_err(newtpcb, mg_lwip_tcp_error_cb);
   tcp_sent(newtpcb, mg_lwip_tcp_sent_cb);
   tcp_recv(newtpcb, mg_lwip_tcp_recv_cb);
+#if LWIP_TCP_KEEPALIVE
   mg_lwip_set_keepalive_params(nc, 60, 10, 6);
+#endif
 #ifdef SSL_KRYPTON
   if (lc->ssl_ctx != NULL) {
     nc->ssl = SSL_new(lc->ssl_ctx);
