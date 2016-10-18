@@ -67,6 +67,6 @@ To submit contributions, sign
 and send GitHub pull request. You retain the copyright on your contributions.
 
 # Looking for a pre-compiled Mongoose web server Windows or Mac binary?
-- [Download pre-compiled Mongoose web server binary](https://www.cesanta.com/products/binary)
+- [Download pre-compiled Mongoose web server binary.](https://www.cesanta.com/products/binary)
 
 [![Analytics](https://ga-beacon.appspot.com/UA-42732794-5/project-page)](https://github.com/cesanta/mongoose)
