@@ -25,7 +25,7 @@ Check out [Mongoose IoT Firmware and Cloud](https://mongoose-iot.com).
 
 * Cross-platform: works on Linux/UNIX, MacOS, QNX, eCos, Windows, Android,
   iPhone, FreeRTOS (TI CC3200, ESP8266), etc
-* Supported hardware platforms: TI CC3200, TI MSP432, NRF52, STM32, PIC32, ESP8266, ESP32 and more.
+* Supported hardware platforms: TI CC3200, TI MSP432, NRF52, STM32, PIC32, ESP8266, ESP32 and more
 * Builtin protocols:
    - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
    - HTTP client, HTTP server
@@ -57,7 +57,7 @@ the functionality:
 
 ![](http://www.cesanta.com/hubfs/www.cesanta.com/diagrams/dash_mongoose_diagram.png)
 
-[Developing a new product? Contact us today to discuss how Mongoose can help
+[Developing a new product? Contact us today to discuss how Mongoose can help.
 ](https://www.cesanta.com/contact)
 
 # Contributions
