@@ -138,7 +138,7 @@
 		</variable>
 		<variable>
 			<name>SDK_PATH</name>
-			<value>PARENT-1-PROJECT_LOC/SDK_2.0_FRDM-K64F</value>
+			<value>$%7BPARENT-1-PROJECT_LOC%7D/SDK_2.0_FRDM-K64F</value>
 		</variable>
 	</variableList>
 </projectDescription>
