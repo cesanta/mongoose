@@ -718,8 +718,12 @@ typedef int cs_dirent_dummy;
 
 #ifndef _WIN32
 #include <stddef.h>
-#if !defined(CS_PLATFORM) || \
-    (CS_PLATFORM != CS_P_CC3200 && CS_PLATFORM != CS_P_MSP432)
+/*
+ * There is no sys/time.h on ARMCC.
+ */
+#if !(defined(__ARMCC_VERSION) || defined(__ICCARM__)) && \
+    (!defined(CS_PLATFORM) ||                             \
+     (CS_PLATFORM != CS_P_CC3200 && CS_PLATFORM != CS_P_MSP432))
 #include <sys/time.h>
 #endif
 #else
@@ -9142,6 +9146,7 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
   time_t now = (time_t) mg_time();
   struct mg_resolve_async_request *req;
   struct mg_dns_message *msg;
+  int first = 0;
 
   DBG(("ev=%d user_data=%p", ev, nc->user_data));
 
@@ -9153,13 +9158,16 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
 
   switch (ev) {
     case MG_EV_CONNECT:
+      /* don't depend on timer not being at epoch for sending out first req */
+      first = 1;
+    /* fallthrough */
     case MG_EV_POLL:
       if (req->retries > req->max_retries) {
         req->err = MG_RESOLVE_EXCEEDED_RETRY_COUNT;
         nc->flags |= MG_F_CLOSE_IMMEDIATELY;
         break;
       }
-      if (now - req->last_time >= req->timeout) {
+      if (first || now - req->last_time >= req->timeout) {
         mg_send_dns_query(nc, req->name, req->query);
         req->last_time = now;
         req->retries++;
