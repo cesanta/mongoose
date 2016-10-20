@@ -115,7 +115,7 @@ int main(void) {
     }
     sys_check_timeouts();
   } while (ds != DHCP_BOUND);
-  printf("Waiting for DHCP...\n");
+  printf("DHCP bound.\n");
 #else
   ip_addr_t ip, nm, gw;
   if (!ipaddr_aton(STATIC_IP, &ip) || !ipaddr_aton(STATIC_NM, &nm) ||
