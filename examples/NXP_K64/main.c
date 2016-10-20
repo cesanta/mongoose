@@ -47,13 +47,13 @@ void gpio_init() {
 
 void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   if (ev == MG_EV_POLL) return;
-  /* printf("ev %d\n", ev); */
+  /* printf("ev %d\r\n", ev); */
   switch (ev) {
     case MG_EV_ACCEPT: {
       char addr[32];
       mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
                           MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
-      printf("%p: Connection from %s\n", nc, addr);
+      printf("%p: Connection from %s\r\n", nc, addr);
       break;
     }
     case MG_EV_HTTP_REQUEST: {
@@ -61,7 +61,7 @@ void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       char addr[32];
       mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
                           MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
-      printf("%p: %.*s %.*s\n", nc, (int) hm->method.len, hm->method.p,
+      printf("%p: %.*s %.*s\r\n", nc, (int) hm->method.len, hm->method.p,
              (int) hm->uri.len, hm->uri.p);
       mg_send_response_line(nc, 200,
                             "Content-Type: text/html\r\n"
@@ -75,7 +75,7 @@ void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       break;
     }
     case MG_EV_CLOSE: {
-      printf("%p: Connection closed\n", nc);
+      printf("%p: Connection closed\r\n", nc);
       break;
     }
   }
@@ -100,27 +100,27 @@ int main(void) {
   lwip_init();
   gpio_init();
   LED_RED_ON();
-  printf("Waiting for link...\n");
+  printf("Waiting for link...\r\n");
 #if USE_DHCP
   netif_add(&eth0, NULL, NULL, NULL, NULL, ethernetif_init, ethernet_input);
-  printf("Waiting for DHCP...\n");
+  printf("Waiting for DHCP...\r\n");
   LED_GREEN_ON();
   dhcp_start(&eth0);
   u8_t os = 0xff, ds;
   do {
     ds = eth0.dhcp->state;
     if (ds != os) {
-      printf("  DHCP state: %d\n", ds);
+      printf("  DHCP state: %d\r\n", ds);
       os = ds;
     }
     sys_check_timeouts();
   } while (ds != DHCP_BOUND);
-  printf("DHCP bound.\n");
+  printf("DHCP bound.\r\n");
 #else
   ip_addr_t ip, nm, gw;
   if (!ipaddr_aton(STATIC_IP, &ip) || !ipaddr_aton(STATIC_NM, &nm) ||
       !ipaddr_aton(STATIC_GW, &gw)) {
-    printf("Invalid static IP configuration.\n");
+    printf("Invalid static IP configuration.\r\n");
     return 1;
   } else {
     netif_add(&eth0, &ip, &nm, &gw, NULL, ethernetif_init, ethernet_input);
@@ -128,7 +128,7 @@ int main(void) {
   }
 #endif
   netif_set_default(&eth0);
-  printf("Setting up HTTP server...\n");
+  printf("Setting up HTTP server...\r\n");
 
   struct mg_mgr mgr;
   mg_mgr_init(&mgr, NULL);
@@ -138,13 +138,13 @@ int main(void) {
   opts.error_string = &err;
   struct mg_connection *nc = mg_bind_opt(&mgr, "80", ev_handler, opts);
   if (nc == NULL) {
-    printf("Failed to create listener: %s\n", err);
+    printf("Failed to create listener: %s\r\n", err);
     LED_RED_ON();
     LED_GREEN_OFF();
     return 1;
   }
   mg_set_protocol_http_websocket(nc);
-  printf("Server address: http://%s/\n", ipaddr_ntoa(&eth0.ip_addr));
+  printf("Server address: http://%s/\r\n", ipaddr_ntoa(&eth0.ip_addr));
   LED_RED_OFF();
   LED_GREEN_ON();
 
