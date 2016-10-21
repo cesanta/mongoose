@@ -9778,7 +9778,7 @@ uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io) {
   }
 
   if (cm->payload.len != 0) {
-    *ptr = -1;
+    *ptr = (char)-1;
     ptr++;
     memcpy(ptr, cm->payload.p, cm->payload.len);
   }
