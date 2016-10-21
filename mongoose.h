@@ -794,6 +794,10 @@ struct timeval {
 
 #if MG_NET_IF == MG_NET_IF_SIMPLELINK
 
+#define MG_SIMPLELINK_NO_OSI 1
+
+#include <simplelink.h>
+
 typedef int sock_t;
 #define INVALID_SOCKET (-1)
 
