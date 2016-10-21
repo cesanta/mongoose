@@ -9694,7 +9694,7 @@ static uint32_t coap_calculate_packet_size(struct mg_coap_message *cm,
   prev_opt_number = 0;
   while (opt != NULL) {
     *len += 1; /* basic delta/length */
-    *len += coap_get_ext_opt_size(opt->number);
+    *len += coap_get_ext_opt_size(opt->number - prev_opt_number);
     *len += coap_get_ext_opt_size((uint32_t) opt->value.len);
     /*
      * Current implementation performs check if
@@ -9708,6 +9708,7 @@ static uint32_t coap_calculate_packet_size(struct mg_coap_message *cm,
       return MG_COAP_ERROR | MG_COAP_OPTIOMG_FIELD;
     }
     *len += opt->value.len;
+    prev_opt_number = opt->number;
     opt = opt->next;
   }
 
