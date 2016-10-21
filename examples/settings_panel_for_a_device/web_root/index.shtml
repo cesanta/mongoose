@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ACMEtron 9000 - Settings</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style type="text/css">
+    * { outline: none; }
+    body {
+      background-color: #789; margin: 0;
+      padding: 0; font: 16px/1.4 Helvetica, Arial, sans-serif;
+      font: 16px/1.4 Helvetica, Arial, sans-serif;
+    }
+    div.content {
+      width: 800px; margin: 2em auto; padding: 20px 50px;
+      background-color: #fff; border-radius: 1em;
+    }
+    code { background: #eee; padding: 0 0.3em; border-radius: 0.2em; }
+    label { display: inline-block; min-width: 5em; }
+    input[type="text"] { border: 1px solid #ccc; padding: 0.2em; margin-right: 2em; }
+    a:link, a:visited { color: #69c; text-decoration: none; }
+    @media (max-width: 900px) {
+      div.content { width: auto; margin: 2em; padding: 1em; }
+    }
+    fieldset { border: 1px solid #ccc; padding: 1em; }
+    #result {
+      background: #cfc; border: 1px solid #ccc; padding: 2px 1em;
+      white-space: pre-wrap; font-size: 85%; display: none; text-align: center;
+    }
+</style>
+
+<script src="jquery-1.11.3.min.js"></script>
+<script language="javascript" type="text/javascript">
+  jQuery(function() {
+
+    $(document).on('submit', '#settings_form', function() {
+      var data = {};
+      $('#settings_form [name]').each(function(index, el) {
+        if ($(el).attr('type') == 'radio' && !$(el).is(':checked')) return;
+        data[$(el).attr('name')] = $(el).val();
+      });
+      $('#result').text('');
+      $.ajax({
+        url: '/save',
+        method: 'POST',
+        dataType: 'html',
+        data: data,
+        success: function(data) {
+          $('#result').text('saved').show().fadeOut(2000);
+        }
+      });
+      return false;
+    });
+
+
+  });
+</script>
+</head>
+<body>
+  <div class="content">
+    <img src="mongoose.jpg" style="float:right; height: 50px; border-radius: 3px;">
+    <h1>Device Configurator demo.</h1>
+
+    <p>
+      This page demonstrates how Mongoose could be used to implement
+      device settings page.</p>
+
+    <h3>How to show device parameters on the page</h3>
+    <p>This page has embedded
+      <code>&lt;!--#call parameter_name --&gt;</code> blocks. For each such
+      block, mongoose triggers <code>MG_EV_SSI_CALL</code> event, passing
+      <code>parameter_name</code> string as an event parameter. A callback
+      then can print some content, which will replace the
+      <code>&lt;!--#call parameter_name --&gt;</code> block.
+      Take a look at <code>handle_ssi_call()</code> to see how that is done.
+    </p>
+
+    <h3>How to save updated values</h3>
+    <p>When Save button is clicked, this page makes Ajax call and passes
+    values to the backend in a POST request. Backend extracts values from
+    the POST request and updates the configuration. Take a look at
+    <code>handle_save()</code> to see how that is done.</p>
+
+
+    <p>You can change values, click Save button, refresh this page - make sure
+    settings values stay intact between refreshes. </p>
+
+    <form method="POST" id="settings_form">
+    <fieldset>
+      <legend>Device settings</legend>
+      <label>Setting 1:</label> <input type="text"
+        name="setting1" value="<!--#call setting1 -->" >
+      <label>Setting 2:</label> <input type="text"
+        name="setting2" value="<!--#call setting2 -->" >
+      <label>Setting 3:</label>
+        <input type="radio" name="setting3" value="one" <!--#call setting3_is_one --> > One
+        <input type="radio" name="setting3" value="two" <!--#call setting3_is_two --> > Two
+    </fieldset>
+
+    <div style="margin: 1em 0;">
+     <button type="submit">Save</button>
+    </div>
+     <div id="result">&nbsp;</div>
+    </form>
+
+  </div>
+</body>
+</html>

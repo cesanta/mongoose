@@ -1,0 +1,328 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<configuration version="1.0.8.7">
+  <Designer>
+    <Assets>
+      <Settings bpp="16">
+        <MemoryLocations>
+          <MemoryLocation address="0" id="default"/>
+        </MemoryLocations>
+      </Settings>
+    </Assets>
+    <Screens height="200" width="320">
+      <Screen active="true" background="000000" clearOnShow="true" doubleBuffer="false" export="true" name="Screen1" primary="true" visible="true">
+        <Objects/>
+      </Screen>
+    </Screens>
+    <Schemes defaultSchemeName="default">
+      <Scheme name="default">
+        <Alpha>100</Alpha>
+        <BackgroundOffset>0,0</BackgroundOffset>
+        <EmbossSize>3</EmbossSize>
+        <Colors>
+          <Primary>FFFFFF</Primary>
+          <Secondary>404040</Secondary>
+          <Disabled>C0C0C0</Disabled>
+          <Background>000000</Background>
+          <EmbossLight>C0C0C0</EmbossLight>
+          <EmbossDark>404040</EmbossDark>
+          <TextPrimary>000000</TextPrimary>
+          <TextSecondary>FFFFFF</TextSecondary>
+          <TextDisabled>404040</TextDisabled>
+          <GradientStart>000000</GradientStart>
+          <GradientEnd>FFFFFF</GradientEnd>
+        </Colors>
+        <FillStyle>Color</FillStyle>
+        <BackgroundType>None</BackgroundType>
+      </Scheme>
+    </Schemes>
+  </Designer>
+  <General>
+    <HarmonyPath path="../../../../../../../microchip/harmony/v1_08_01"/>
+    <Processor name=""/>
+    <ForceOptimization flag="true"/>
+    <MergeStrategy flag="USER_ALL"/>
+  </General>
+  <Manifest>
+    <Files>
+      <File>
+        <Name>osal_impl_basic.h</Name>
+        <Path>Header Files/framework/osal/src</Path>
+      </File>
+      <File>
+        <Name>peripheral_common_32bit.h</Name>
+        <Path>Header Files/framework/peripheral</Path>
+      </File>
+      <File>
+        <Name>driver_common.h</Name>
+        <Path>Header Files/framework/driver</Path>
+      </File>
+      <File>
+        <Name>sys_devcon.c</Name>
+        <Path>Source Files/framework/system/devcon/src</Path>
+      </File>
+      <File>
+        <Name>osal.h</Name>
+        <Path>Header Files/framework/osal</Path>
+      </File>
+      <File>
+        <Name>sys_ports.h</Name>
+        <Path>Header Files/framework/system/ports</Path>
+      </File>
+      <File>
+        <Name>driver.h</Name>
+        <Path>Header Files/framework/driver</Path>
+      </File>
+      <File>
+        <Name>peripheral_common.h</Name>
+        <Path>Header Files/framework/peripheral</Path>
+      </File>
+      <File>
+        <Name>sys_debug_local.h</Name>
+        <Path>Header Files/framework/system/debug/src</Path>
+      </File>
+      <File>
+        <Name>sys_common.h</Name>
+        <Path>Header Files/framework/system/common</Path>
+      </File>
+      <File>
+        <Name>sys_buffer.h</Name>
+        <Path>Header Files/framework/system/common</Path>
+      </File>
+      <File>
+        <Name>sys_int_pic32.c</Name>
+        <Path>Source Files/framework/system/int/src</Path>
+      </File>
+      <File>
+        <Name>sys_clk.h</Name>
+        <Path>Header Files/framework/system/clk</Path>
+      </File>
+      <File>
+        <Name>osal_impl_none.h</Name>
+        <Path>Header Files/framework/osal/src</Path>
+      </File>
+      <File>
+        <Name>sys_clk_mapping.h</Name>
+        <Path>Header Files/framework/system/clk</Path>
+      </File>
+      <File>
+        <Name>osal_definitions.h</Name>
+        <Path>Header Files/framework/osal</Path>
+      </File>
+      <File>
+        <Name>sys_int_mapping.h</Name>
+        <Path>Header Files/framework/system/int</Path>
+      </File>
+      <File>
+        <Name>gfx_palette.h</Name>
+        <Path>Header Files/framework/gfx</Path>
+      </File>
+      <File>
+        <Name>sys_int_private.h</Name>
+        <Path>Header Files/framework/system/int/src</Path>
+      </File>
+      <File>
+        <Name>sys_devcon.h</Name>
+        <Path>Header Files/framework/system/devcon</Path>
+      </File>
+      <File>
+        <Name>system.h</Name>
+        <Path>Header Files/framework/system</Path>
+      </File>
+      <File>
+        <Name>sys_debug.c</Name>
+        <Path>Source Files/framework/system/debug/src</Path>
+      </File>
+      <File>
+        <Name>sys_console.h</Name>
+        <Path>Header Files/framework/system/console</Path>
+      </File>
+      <File>
+        <Name>sys_debug.h</Name>
+        <Path>Header Files/framework/system/debug</Path>
+      </File>
+      <File>
+        <Name>sys_module.h</Name>
+        <Path>Header Files/framework/system/common</Path>
+      </File>
+      <File>
+        <Name>sys_devcon_pic32mx.c</Name>
+        <Path>Source Files/framework/system/devcon/src</Path>
+      </File>
+      <File>
+        <Name>sys_devcon_local.h</Name>
+        <Path>Header Files/framework/system/devcon/src</Path>
+      </File>
+      <File>
+        <Name>peripheral.h</Name>
+        <Path>Header Files/framework/peripheral</Path>
+      </File>
+      <File>
+        <Name>sys_queue.h</Name>
+        <Path>Header Files/framework/system/common</Path>
+      </File>
+      <File>
+        <Name>sys_console_local.h</Name>
+        <Path>Header Files/framework/system/console/src</Path>
+      </File>
+      <File>
+        <Name>sys_int.h</Name>
+        <Path>Header Files/framework/system/int</Path>
+      </File>
+    </Files>
+    <Templates>
+      <Template>
+        <Name>sys_console_static.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/system/console/src</Path>
+        <Checksum>0B506F1F6112899EF538390AD8DBD62F</Checksum>
+      </Template>
+      <Template>
+        <Name>system_definitions.h</Name>
+        <Path>Header Files/app/system_config/mx795_CC3100_e16</Path>
+        <Checksum>1F863F474CF6B1EF5BCAEC53DA0A1EB9</Checksum>
+      </Template>
+      <Template>
+        <Name>system_exceptions.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16</Path>
+        <Checksum>C111969CA43D6CEA1E9E33A6164E7AE0</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_spi_static_local.h</Name>
+        <Path>Header Files/app/system_config/mx795_CC3100_e16/framework/driver/spi/static/src</Path>
+        <Checksum>70055803006A2C67E983956B3B3ABD25</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_spi_mapping.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/driver/spi/static/src</Path>
+        <Checksum>ADEEE2519E932B46D44C41B8F44E1F19</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_usart_static_byte_model.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/driver/usart/src</Path>
+        <Checksum>F91C429976AC25EB8B3639F0B0356E3B</Checksum>
+      </Template>
+      <Template>
+        <Name>system_init.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16</Path>
+        <Checksum>34219E31193F143A502765E488BC500E</Checksum>
+        <ProjectFileChecksum>368F06F4DCF995EE27BD5F31F9034D30</ProjectFileChecksum>
+      </Template>
+      <Template>
+        <Name>drv_usart_static.h</Name>
+        <Path>Header Files/app/system_config/mx795_CC3100_e16/framework/driver/usart</Path>
+        <Checksum>AE37BD63B6EC9F6ADD6B8006CE192FCB</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_spi_static_tasks.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/driver/spi/static/src</Path>
+        <Checksum>8D9BDD4F87493B036E9786F53F65EE82</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_spi_static.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/driver/spi/static/src</Path>
+        <Checksum>C0323F1E5F9550BF1BC4441ADB9B09D8</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_rtcc_static.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/driver/rtcc/src</Path>
+        <Checksum>9A5D97DC0EADF32162B4B222AAC95408</Checksum>
+      </Template>
+      <Template>
+        <Name>sys_clk_static.h</Name>
+        <Path>Header Files/app/system_config/mx795_CC3100_e16/framework/system/clk</Path>
+        <Checksum>B4BD59D8D7C4DA95DC5E3B57755FD352</Checksum>
+      </Template>
+      <Template>
+        <Name>system_config.h</Name>
+        <Path>Header Files/app/system_config/mx795_CC3100_e16</Path>
+        <Checksum>85CDEB06EBF7053ADCB2CB37014D10D1</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_usart_static_local.h</Name>
+        <Path>Header Files/app/system_config/mx795_CC3100_e16/framework/driver/usart/src</Path>
+        <Checksum>62F7F49D6A443F111DA38971475472FD</Checksum>
+      </Template>
+      <Template>
+        <Name>system_interrupt.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16</Path>
+        <Checksum>CACF8AB870174547FD1DC4FE62DECBAD</Checksum>
+        <ProjectFileChecksum>DB1F2DBEF12282D8AF55C36D1192E873</ProjectFileChecksum>
+      </Template>
+      <Template>
+        <Name>sys_clk_static.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/system/clk/src</Path>
+        <Checksum>E8C935BED4628875A8C3428DDD07355C</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_spi_static.h</Name>
+        <Path>Header Files/app/system_config/mx795_CC3100_e16/framework/driver/spi/static</Path>
+        <Checksum>68B5BA023AB90B18D229B6E7CBF0850C</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_usart_mapping.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/driver/usart/src</Path>
+        <Checksum>115DDE4372E58D4116BC77DC36FD97DC</Checksum>
+      </Template>
+      <Template>
+        <Name>main.c</Name>
+        <Path>Source Files/app</Path>
+      </Template>
+      <Template>
+        <Name>drv_spi_static_sys_queue.h</Name>
+        <Path>Header Files/app/system_config/mx795_CC3100_e16/framework/driver/spi/static/src</Path>
+        <Checksum>3D489FB0B5415BB6F80FA34FC0CEE9F7</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_spi_static_rm_tasks.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/driver/spi/static/src</Path>
+        <Checksum>BED98A3F5628502709D95341DC70019B</Checksum>
+      </Template>
+      <Template>
+        <Name>app.c</Name>
+        <Path>Source Files/app</Path>
+      </Template>
+      <Template>
+        <Name>sys_ports_static.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/system/ports/src</Path>
+        <Checksum>F693DCC21C702581B107B8A238195A13</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_spi_static_sys_queue.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/driver/spi/static/src</Path>
+        <Checksum>E06222D2E5F5F69EE3C77ACD6FCC3059</Checksum>
+      </Template>
+      <Template>
+        <Name>system_tasks.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16</Path>
+        <Checksum>9990FEA6D9BDD86EAA2B873D5A5B9DAC</Checksum>
+        <ProjectFileChecksum>91547DE270F61E54B606034EBF1BAEC1</ProjectFileChecksum>
+      </Template>
+      <Template>
+        <Name>app.h</Name>
+        <Path>Header Files/app</Path>
+      </Template>
+      <Template>
+        <Name>drv_rtcc_static.h</Name>
+        <Path>Header Files/app/system_config/mx795_CC3100_e16/framework/driver/rtcc</Path>
+        <Checksum>FED59BF02817E49C245011170B963EE2</Checksum>
+      </Template>
+      <Template>
+        <Name>drv_usart_static.c</Name>
+        <Path>Source Files/app/system_config/mx795_CC3100_e16/framework/driver/usart/src</Path>
+        <Checksum>BD4DEFD647BB5AF32D1DBF352D6139D5</Checksum>
+      </Template>
+    </Templates>
+    <CompilerItems>
+      <C32>
+        <Include value="/home/alex/go/src/cesanta.com/mongoose/examples/PIC32/mqtt_client/firmware/src"/>
+        <Include value="/home/alex/go/src/cesanta.com/mongoose/examples/PIC32/mqtt_client/firmware/src/system_config/mx795_CC3100_e16"/>
+        <Include value="/home/alex/go/src/cesanta.com/mongoose/examples/PIC32/mqtt_client/firmware/src/mx795_CC3100_e16"/>
+        <Include value="/home/alex/microchip/harmony/v1_08_01/framework"/>
+        <Include value="/home/alex/go/src/cesanta.com/mongoose/examples/PIC32/mqtt_client/firmware/src/system_config/mx795_CC3100_e16/framework"/>
+      </C32>
+    </CompilerItems>
+    <Libraries>
+      <Library value="../../../../../../../../../microchip/harmony/v1_08_01/framework/tcpip/src/crypto/aes_pic32mx.a"/>
+      <Library value="../../../../../../../../../microchip/harmony/v1_08_01/bin/framework/peripheral/PIC32MX795F512L_peripherals.a"/>
+    </Libraries>
+  </Manifest>
+</configuration>

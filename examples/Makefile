@@ -1,8 +1,13 @@
 # Copyright (c) 2014 Cesanta Software
 # All rights reserved
 
-SUBDIRS = $(sort $(filter-out csharp/, $(dir $(wildcard */))))
-X = $(SUBDIRS)
+# `wildcard ./*/` works in both linux and linux/wine, while `wildcard */` enumerates nothing under wine
+SUBDIRS = $(sort $(dir $(wildcard ./*/)))
+SUBDIRS:=$(filter-out ./ ./CC3200/ ./ESP8266_RTOS/ ./MSP432/ ./NXP_K64/ ./PIC32/ ./STM32F4_CC3100/, $(SUBDIRS))
+
+ifeq ($(OS), Windows_NT)
+  SUBDIRS:=$(filter-out ./load_balancer/ ./netcat/ ./raspberry_pi_mjpeg_led/ ./captive_dns_server/, $(SUBDIRS))
+endif
 
 .PHONY: $(SUBDIRS)
 

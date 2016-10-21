@@ -1,88 +1,72 @@
-# <img src="http://cesanta.com/images/mongoose_logo.png" width="64" height="64"> Mongoose Web Server
+# Mongoose - Embedded Web Server / Embedded Networking Library
 
-Mongoose is the most easy to use web server on the planet. A web server of choice for Web developers (PHP, Ruby, Python, etc) and Web designers.
+![](https://img.shields.io/badge/license-GPL_2-green.svg "License")
 
-Mongoose is built on top of Libmongoose embedded library, which can turn
-anything into a web server in 5 minutes worth of effort and few lines of code.
-Libmongoose is used to serve Web GUI on embedded devices, implement RESTful
-services, RPC frameworks (e.g. JSON-RPC), handle telemetry data exchange, and
-perform many other tasks in various different industries including aerospace,
-manufacturing, finance, research, automotive, gaming, IT.
+Mongoose is ideal for embedded environments. It has been designed
+for connecting devices and bringing them online. On the market since 2004,
+used by vast number of open source and
+commercial products - it even runs on the International Space station!
+Mongoose makes embedded network programming fast, robust, and easy.
 
+- [Download Mongoose Source Code here](https://www.cesanta.com)
 
-   * [Mailing list](http://groups.google.com/group/mongoose-users)
-   * [Downloads](http://cesanta.com/products.shtml)
-   * [Documentation](http://cesanta.com/docs.shtml)
+Looking for a complete IoT solution with firmware and cloud components?
+Check out [Mongoose IoT Firmware and Cloud](https://mongoose-iot.com).
 
-Check out Fossa - our [embedded multi-protocol library](https://github.com/cesanta/fossa) with TCP,UDP,HTTP,Websocket,MQTT,DNS support, designed for Internet Of Things!
+# Support
+- [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
+- [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
+- [Support Forum - ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/mongoose)
+- [Chat - visit www.cesanta.com for our live chat] (http://www.cesanta.com)
+- [Commercial licensing and support available] (https://www.cesanta.com/services-support)
+- [Check our latest releases] (https://github.com/cesanta/mongoose/releases)
 
 # Features
 
-- Works on Windows, Mac, UNIX/Linux, iPhone, Android eCos, QNX
-and many other platforms
-- CGI, SSI, SSL, Digest auth, Websocket, WEbDAV, Resumed download,
-  URL rewrite, file blacklist
-- Custom error pages, Virtual hosts, IP-based ACL, Windows service,
-  HTTP/HTTPS client
-- Simple and clean
-  [embedding API](https://github.com/cesanta/mongoose/blob/master/mongoose.h).
-  The source is in single
-  [mongoose.c](https://github.com/cesanta/mongoose/blob/master/mongoose.c) file
-  to make embedding easy
-- Extremely lightweight, has a core of under 40kB and tiny runtime footprint
-- Asynchronous, non-blocking core supporting single- or multi-threaded usage
-- On the market since 2004 with over 1 million cumulative downloads
-- Stable, mature and tested, has several man-years invested
-  in continuous improvement and refinement
-
-# Screenshots
-
-Download, double-click to start, run browser -- that's all!
-
-![shot1](http://cesanta.com/images/tut_sharing/tut1.png)
-![shot2](http://cesanta.com/images/tut_sharing/tut2.png)
-
-![shot3](http://cesanta.com/images/tut_sharing/tut3.png)
-![shot4](http://cesanta.com/images/tut_sharing/tut4.png)
-
-# Acknowledgements
-
-Mongoose made better thanks to the contribution of following people:
-
-Arnout Vandecappelle, Benoît Amiaux, Boris Pek, Cody Hanson, Colin Leitner,
-Daniel Oaks, Eric Bakan, Erik Oomen, Filipp Kovalev, Ger Hobbelt,
-Hendrik Polczynski, Igor Okulist, Jay, Joe Mucchiello, John Safranek,
-José Miguel Gonçalves, Shueng Chuan, Katerina Blinova, Konstantin Sorokin,
-Marin Atanasov, Matt Healy, Mitch Hendrickson, Nigel Stewart, Pavel Khlebovich,
-Sebastian Reinhard, Stefan Doehla, abadc0de, nullable.type,
-T.Barmann, D.Hughes, J.C.Sloan, R.Romeo, L.E.Spencer, S.Kotay, R.M.Shorter,
-W.Mar, J.Wilander, Santa from Memphis, S.Davies, C.Beck,
-O.M.Vilhunen, C.Radik, G.Woodcock, M.Szczepkowski,
-Eternal Lands Dev Team, T.Tollet, C.Tangerino, G.Karsai, A.Bourgett,
-C.Blakemore, D.Fonaryov, T.Andrle, O.IJsselmuiden, R.Womack, M.Tomlinson,
-A.Slåttå, L.Farrell, J.D.P.Ballestero, V.Albaev, B.Harker, T.Scheffel, H.Klein,
-R.Merit, T.Bennett, H.Solis, A.Zincenko, M.S., S.Krul, K.Cooke, S.McCallum,
-F.Morenius, and 10 others.
+* Cross-platform: works on Linux/UNIX, MacOS, QNX, eCos, Windows, Android,
+  iPhone, FreeRTOS (TI CC3200, ESP8266), etc
+* Supported hardware platforms: TI CC3200, TI MSP432, NRF52, STM32, PIC32, ESP8266, ESP32 and more
+* Builtin protocols:
+   - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
+   - HTTP client, HTTP server
+   - WebSocket client, WebSocket server
+   - MQTT client, MQTT broker
+   - CoAP client, CoAP server
+   - DNS client, DNS server, async DNS resolver
+* Single-threaded, asynchronous, non-blocking core with simple event-based API
+* Native support for [PicoTCP embedded TCP/IP stack](http://www.picotcp.com),
+  [LWIP embedded TCP/IP stack](https://en.wikipedia.org/wiki/LwIP)
+* Tiny static and run-time footprint
+* Source code is both ISO C and ISO C++ compliant
+* Very easy to integrate: just copy
+  [mongoose.c](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.c) and
+  [mongoose.h](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.h)
+  files to your build tree
 
 # Licensing
 
-Mongoose is released under commercial and
-[GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html) open
-source licenses. The GPLv2 open source License does not generally permit
-incorporating this software into non-open source programs. 
-For those customers who do not wish to comply with the GPLv2 open
-source license requirements,
-[Cesanta Software](http://cesanta.com) offers a full,
-royalty-free commercial license and professional support
-without any of the GPL restrictions.
+Mongoose is released under Commercial and [GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html) open source licenses.
 
-# Other products by Cesanta Software: simple and effective
+Commercial Projects: [Contact us for commercial license.] (https://www.cesanta.com/contact)
 
-- [SSL Wrapper](https://github.com/cesanta/ssl_wrapper) - application to
-  secure network communications
-- [Frozen](https://github.com/cesanta/frozen) - JSON parser and generator
-- [SLRE](https://github.com/cesanta/slre) - Super Light Regular Expression
-  library
-- [Net Skeleton](https://github.com/cesanta/net_skeleton) - framework for
-  building network applications
-- [SLDR](https://github.com/cesanta/sldr) - Super Light DNS Resolver
+# Dashboard Example
+
+Mongoose is often used to implement device dashboards and real-time
+data exchange over Websocket. Here is a dashboard example that illustrates
+the functionality:
+
+![](http://www.cesanta.com/hubfs/www.cesanta.com/diagrams/dash_mongoose_diagram.png)
+
+[Developing a new product? Contact us today to discuss how Mongoose can help.
+](https://www.cesanta.com/contact)
+
+# Contributions
+
+To submit contributions, sign
+[Cesanta CLA](https://docs.cesanta.com/contributors_la.shtml)
+and send GitHub pull request. You retain the copyright on your contributions.
+
+# Looking for a pre-compiled Mongoose web server Windows or Mac binary?
+- [Download pre-compiled Mongoose web server binary.](https://www.cesanta.com/products/binary)
+
+[![Analytics](https://ga-beacon.appspot.com/UA-42732794-5/project-page)](https://github.com/cesanta/mongoose)
