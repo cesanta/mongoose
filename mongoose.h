@@ -344,10 +344,11 @@ typedef struct _stati64 cs_stat_t;
 
 /*
  * osx correctly avoids defining strtoll when compiling in strict ansi mode.
+ * c++ 11 standard defines strtoll as well.
  * We require strtoll, and if your embedded pre-c99 compiler lacks one, please
  * implement a shim.
  */
-#if !(defined(__DARWIN_C_LEVEL) && __DARWIN_C_LEVEL >= 200809L)
+#if !(defined(__cplusplus) && __cplusplus >= 201103L) && !(defined(__DARWIN_C_LEVEL) && __DARWIN_C_LEVEL >= 200809L)
 long long strtoll(const char *, char **, int);
 #endif
 
