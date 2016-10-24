@@ -1744,11 +1744,11 @@ const char *c_strnstr(const char *s, const char *find, size_t slen) {
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-/* Amalgamated: #include "mongoose/src/internal.h" */
-/* Amalgamated: #include "mongoose/src/util.h" */
-/* Amalgamated: #include "mongoose/src/dns.h" */
-/* Amalgamated: #include "mongoose/src/resolv.h" */
 /* Amalgamated: #include "common/cs_time.h" */
+/* Amalgamated: #include "mongoose/src/dns.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/resolv.h" */
+/* Amalgamated: #include "mongoose/src/util.h" */
 
 #define MG_MAX_HOST_LEN 200
 
@@ -2142,6 +2142,10 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
   } else {
     return -1;
   }
+
+  /* Required for MG_ENABLE_ASYNC_RESOLVER=0 */
+  (void) host;
+  (void) host_len;
 
   ch = str[len]; /* Character that follows the address */
   return port < 0xffffUL && (ch == '\0' || ch == ',' || isspace(ch)) ? len : -1;
