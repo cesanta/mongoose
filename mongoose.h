@@ -836,6 +836,8 @@ int inet_pton(int af, const char *src, void *dst);
 #include <string.h>
 #include <time.h>
 
+#define to64(x) strtoll(x, NULL, 10)
+
 #define MG_NET_IF             MG_NET_IF_LWIP_LOW_LEVEL
 #define LWIP_TIMEVAL_PRIVATE  0
 #define LWIP_PROVIDE_ERRNO    1
