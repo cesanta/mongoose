@@ -11339,10 +11339,11 @@ struct mg_lwip_conn_state {
 };
 
 enum mg_sig_type {
-  MG_SIG_CONNECT_RESULT = 1, /* struct mg_connection* */
-  MG_SIG_SENT_CB = 2,        /* struct mg_connection* */
-  MG_SIG_CLOSE_CONN = 3,     /* struct mg_connection* */
-  MG_SIG_TOMBSTONE = 4,
+  MG_SIG_CONNECT_RESULT = 1,
+  MG_SIG_RECV = 2,
+  MG_SIG_SENT_CB = 3,
+  MG_SIG_CLOSE_CONN = 4,
+  MG_SIG_TOMBSTONE = 5,
 };
 
 void mg_lwip_post_signal(enum mg_sig_type sig, struct mg_connection *nc);
@@ -11437,15 +11438,7 @@ static err_t mg_lwip_tcp_conn_cb(void *arg, struct tcp_pcb *tpcb, err_t err) {
 #if LWIP_TCP_KEEPALIVE
   if (err == 0) mg_lwip_set_keepalive_params(nc, 60, 10, 6);
 #endif
-#ifdef SSL_KRYPTON
-  if (err == 0 && nc->ssl != NULL) {
-    SSL_set_fd(nc->ssl, (intptr_t) nc);
-    mg_lwip_ssl_do_hs(nc);
-  } else
-#endif
-  {
-    mg_lwip_post_signal(MG_SIG_CONNECT_RESULT, nc);
-  }
+  mg_lwip_post_signal(MG_SIG_CONNECT_RESULT, nc);
   return ERR_OK;
 }
 
@@ -11504,6 +11497,12 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
     }
     pbuf_chain(cs->rx_chain, p);
   }
+  mg_lwip_post_signal(MG_SIG_RECV, nc);
+  return ERR_OK;
+}
+
+static void mg_lwip_handle_recv(struct mg_connection *nc) {
+  struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
 
 #ifdef SSL_KRYPTON
   if (nc->ssl != NULL) {
@@ -11512,7 +11511,7 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
     } else {
       mg_lwip_ssl_do_hs(nc);
     }
-    return ERR_OK;
+    return;
   }
 #endif
 
@@ -11522,7 +11521,7 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
     char *data = (char *) malloc(len);
     if (data == NULL) {
       DBG(("OOM"));
-      return ERR_MEM;
+      return;
     }
     pbuf_copy_partial(seg, data, len, cs->rx_offset);
     mg_if_recv_tcp_cb(nc, data, len); /* callee takes over data */
@@ -11537,7 +11536,6 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
   if (nc->send_mbuf.len > 0) {
     mg_lwip_mgr_schedule_poll(nc->mgr);
   }
-  return ERR_OK;
 }
 
 static err_t mg_lwip_tcp_sent_cb(void *arg, struct tcp_pcb *tpcb,
@@ -11892,12 +11890,24 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
     struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
     switch (md->sig_queue[md->start_index].sig) {
       case MG_SIG_CONNECT_RESULT: {
-        mg_if_connect_cb(nc, cs->err);
+#ifdef SSL_KRYPTON
+        if (cs->err == 0 && nc->flags & MG_F_SSL && !(nc->flags & MG_F_SSL_HANDSHAKE_DONE)) {
+          SSL_set_fd(nc->ssl, (intptr_t) nc);
+          mg_lwip_ssl_do_hs(nc);
+        } else
+#endif
+        {
+          mg_if_connect_cb(nc, cs->err);
+        }
         break;
       }
       case MG_SIG_CLOSE_CONN: {
         nc->flags |= MG_F_CLOSE_IMMEDIATELY;
         mg_close_conn(nc);
+        break;
+      }
+      case MG_SIG_RECV: {
+        mg_lwip_handle_recv(nc);
         break;
       }
       case MG_SIG_SENT_CB: {
@@ -11945,7 +11955,9 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   struct mg_connection *nc, *tmp;
   double min_timer = 0;
   int num_timers = 0;
+#if 0
   DBG(("begin poll @%u", (unsigned int) (now * 1000)));
+#endif
   mg_ev_mgr_lwip_process_signals(mgr);
   for (nc = mgr->active_connections; nc != NULL; nc = tmp) {
     struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
@@ -11996,9 +12008,12 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
       num_timers++;
     }
   }
+#if 0
   DBG(("end poll @%u, %d conns, %d timers (min %u), next in %d ms",
        (unsigned int) (now * 1000), n, num_timers,
        (unsigned int) (min_timer * 1000), timeout_ms));
+#endif
+  (void) timeout_ms;
   return now;
 }
 
@@ -12147,8 +12162,11 @@ void mg_lwip_ssl_recv(struct mg_connection *nc) {
         cs->err = 0;
         return;
       } else {
-        LOG(LL_ERROR, ("SSL read error: %d", err));
+        if (err != SSL_ERROR_ZERO_RETURN) {
+          LOG(LL_ERROR, ("SSL read error: %d", err));
+        }
         mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
+        return;
       }
     } else {
       mg_if_recv_tcp_cb(nc, buf, ret); /* callee takes over data */
@@ -12161,27 +12179,21 @@ void mg_lwip_ssl_recv(struct mg_connection *nc) {
   }
 }
 
-ssize_t kr_send(int fd, const void *buf, size_t len, int flags) {
+ssize_t kr_send(int fd, const void *buf, size_t len) {
   struct mg_connection *nc = (struct mg_connection *) fd;
   int ret = mg_lwip_tcp_write(nc, buf, len);
-  (void) flags;
   DBG(("mg_lwip_tcp_write %u = %d", len, ret));
-  if (ret <= 0) {
-    errno = (ret == 0 ? EWOULDBLOCK : EIO);
-    ret = -1;
-  }
+  if (ret == 0) ret = KR_IO_WOULDBLOCK;
   return ret;
 }
 
-ssize_t kr_recv(int fd, void *buf, size_t len, int flags) {
+ssize_t kr_recv(int fd, void *buf, size_t len) {
   struct mg_connection *nc = (struct mg_connection *) fd;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   struct pbuf *seg = cs->rx_chain;
-  (void) flags;
   if (seg == NULL) {
     DBG(("%u - nothing to read", len));
-    errno = EWOULDBLOCK;
-    return -1;
+    return KR_IO_WOULDBLOCK;
   }
   size_t seg_len = (seg->len - cs->rx_offset);
   DBG(("%u %u %u %u", len, cs->rx_chain->len, seg_len, cs->rx_chain->tot_len));
