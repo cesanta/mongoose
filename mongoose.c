@@ -1722,6 +1722,20 @@ const char *c_strnstr(const char *s, const char *find, size_t slen) {
   return NULL;
 }
 
+/*
+ * ARM C Compiler doesn't have strdup, so we provide it
+ */
+#if defined(__ARMCC_VERSION)
+char *strdup(const char *src) {
+  size_t len = strlen(src) + 1;
+  char *ret = malloc(len);
+  if (ret != NULL) {
+    strcpy(ret, src);
+  }
+  return ret;
+}
+#endif
+
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net.c"
@@ -10012,6 +10026,22 @@ int gettimeofday(struct timeval *tp, void *tzp) {
 
 #endif /* CS_PLATFORM == CS_P_MSP432 */
 #ifdef MG_MODULE_LINES
+#line 1 "common/platforms/nrf5/nrf5_libc.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if CS_PLATFORM == CS_P_NRF52 && defined(__ARMCC_VERSION)
+int gettimeofday(struct timeval *tp, void *tzp) {
+  /* TODO */
+  tp->tv_sec = 0;
+  tp->tv_usec = 0;
+  return 0;
+}
+#endif
+#ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_fs_slfs.h"
 #endif
 /*
@@ -11348,7 +11378,7 @@ void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
 # define TCP_NEW tcp_new_ip6
 # define TCP_BIND tcp_bind_ip6
 # define UDP_BIND udp_bind_ip6
-# define IPADDR_NTOA ip6addr_ntoa
+# define IPADDR_NTOA(x) ip6addr_ntoa((const ip6_addr_t *)(x))
 # define SET_ADDR(dst, src)                                \
     memcpy((dst)->sin6.sin6_addr.s6_addr, (src)->ip6.addr, \
            sizeof((dst)->sin6.sin6_addr.s6_addr))

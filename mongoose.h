@@ -850,10 +850,17 @@ int inet_pton(int af, const char *src, void *dst);
 #define to64(x) strtoll(x, NULL, 10)
 
 #define MG_NET_IF             MG_NET_IF_LWIP_LOW_LEVEL
-#define LWIP_TIMEVAL_PRIVATE  0
 #define LWIP_PROVIDE_ERRNO    1
 #define MG_LWIP               1
 #define MG_ENABLE_IPV6        1
+
+/*
+ * For ARM C Compiler, make lwip to export `struct timeval`; for other
+ * compilers, suppress it.
+ */
+#if !defined(__ARMCC_VERSION)
+# define LWIP_TIMEVAL_PRIVATE  0
+#endif
 
 #define INT64_FMT PRId64
 #define SIZE_T_FMT "u"
@@ -1565,6 +1572,13 @@ int c_vsnprintf(char *buf, size_t buf_size, const char *format, va_list ap);
  * first slen characters of s.
  */
 const char *c_strnstr(const char *s, const char *find, size_t slen);
+
+/*
+ * ARM C Compiler doesn't have strdup, so we provide it
+ */
+#if defined(__ARMCC_VERSION)
+char *strdup(const char *src);
+#endif
 
 #ifdef __cplusplus
 }
