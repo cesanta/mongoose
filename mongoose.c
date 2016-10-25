@@ -1814,9 +1814,11 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
      */
     ev_handler = nc->proto_handler ? nc->proto_handler : nc->handler;
   }
-  DBG(("%p %s ev=%d ev_data=%p flags=%lu rmbl=%d smbl=%d", nc,
-       ev_handler == nc->handler ? "user" : "proto", ev, ev_data, nc->flags,
-       (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
+  if (ev != MG_EV_POLL) {
+    DBG(("%p %s ev=%d ev_data=%p flags=%lu rmbl=%d smbl=%d", nc,
+         ev_handler == nc->handler ? "user" : "proto", ev, ev_data, nc->flags,
+         (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
+  }
 
 #if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
   /* LCOV_EXCL_START */
@@ -1845,9 +1847,11 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
       mg_if_recved(nc, recved);
     }
   }
-  DBG(("%p after %s flags=%lu rmbl=%d smbl=%d", nc,
-       ev_handler == nc->handler ? "user" : "proto", nc->flags,
-       (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
+  if (ev != MG_EV_POLL) {
+    DBG(("%p after %s flags=%lu rmbl=%d smbl=%d", nc,
+         ev_handler == nc->handler ? "user" : "proto", nc->flags,
+         (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
+  }
 }
 
 void mg_if_timer(struct mg_connection *c, double now) {
@@ -3233,8 +3237,14 @@ static void mg_ssl_begin(struct mg_connection *nc) {
 #define _MG_F_FD_ERROR 1 << 2
 
 void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
-  DBG(("%p fd=%d fd_flags=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock,
-       fd_flags, nc->flags, (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
+  int worth_logging =
+      fd_flags != 0 || (nc->flags & (MG_F_WANT_READ | MG_F_SSL_HANDSHAKE_DONE |
+                                     MG_F_WANT_WRITE));
+  if (worth_logging) {
+    DBG(("%p fd=%d fd_flags=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock,
+         fd_flags, nc->flags, (int) nc->recv_mbuf.len,
+         (int) nc->send_mbuf.len));
+  }
 
   if (nc->flags & MG_F_CONNECTING) {
     if (fd_flags != 0) {
@@ -3295,8 +3305,10 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
     mg_if_timer(nc, now);
   }
 
-  DBG(("%p after fd=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock, nc->flags,
-       (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
+  if (worth_logging) {
+    DBG(("%p after fd=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock, nc->flags,
+         (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
+  }
 }
 
 #if MG_ENABLE_BROADCAST
@@ -3441,8 +3453,10 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
 
   num_ev = select((int) max_fd + 1, &read_set, &write_set, &err_set, &tv);
   now = mg_time();
+#if 0
   DBG(("select @ %ld num_ev=%d of %d, timeout=%d", (long) now, num_ev, num_fds,
        timeout_ms));
+#endif
 
 #if MG_ENABLE_BROADCAST
   if (num_ev > 0 && mgr->ctl[1] != INVALID_SOCKET &&
