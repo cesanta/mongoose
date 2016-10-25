@@ -342,13 +342,24 @@ typedef struct _stati64 cs_stat_t;
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifdef __APPLE__
+#include <machine/endian.h>
+#ifndef BYTE_ORDER
+#define LITTLE_ENDIAN __DARWIN_LITTLE_ENDIAN
+#define BIG_ENDIAN __DARWIN_BIG_ENDIAN
+#define PDP_ENDIAN __DARWIN_PDP_ENDIAN
+#define BYTE_ORDER __DARWIN_BYTE_ORDER
+#endif
+#endif
+
 /*
  * osx correctly avoids defining strtoll when compiling in strict ansi mode.
  * c++ 11 standard defines strtoll as well.
  * We require strtoll, and if your embedded pre-c99 compiler lacks one, please
  * implement a shim.
  */
-#if !(defined(__cplusplus) && __cplusplus >= 201103L) && !(defined(__DARWIN_C_LEVEL) && __DARWIN_C_LEVEL >= 200809L)
+#if !(defined(__cplusplus) && __cplusplus >= 201103L) && \
+    !(defined(__DARWIN_C_LEVEL) && __DARWIN_C_LEVEL >= 200809L)
 long long strtoll(const char *, char **, int);
 #endif
 
