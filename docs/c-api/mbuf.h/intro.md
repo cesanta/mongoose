@@ -3,9 +3,9 @@ title: "Memory Buffers"
 symbol_kind: "intro"
 decl_name: "mbuf.h"
 items:
-  - { name: mbuf_init.md }
-  - { name: mbuf_free.md }
   - { name: mbuf_append.md }
+  - { name: mbuf_free.md }
+  - { name: mbuf_init.md }
   - { name: mbuf_insert.md }
   - { name: mbuf_remove.md }
   - { name: mbuf_resize.md }
