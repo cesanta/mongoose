@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
 
 /* clang-format off */
 
@@ -35,12 +31,11 @@
 #include "ipv6_medium.h"
 #include "SEGGER_RTT.h"
 #include "myboard.h"
-#include "app_cfg.h"
 
 #define SCHED_MAX_EVENT_DATA_SIZE           128                                                     /**< Maximum size of scheduler events. */
 #define SCHED_QUEUE_SIZE                    12                                                      /**< Maximum number of events in the scheduler queue. */
 
-#if COMMISSIONING_ENABLED
+#ifdef COMMISSIONING_ENABLED
 #define ERASE_BUTTON_PIN_NO                 BSP_BUTTON_3                                            /**< Button used to erase commissioning settings. */
 #endif // COMMISSIONING_ENABLED
 
@@ -71,7 +66,7 @@ static ipv6_medium_instance_t               m_ipv6_medium;
 static struct tcp_pcb                     * mp_tcp_port;                                            /**< TCP Port to listen on. */
 static tcp_state_t                          m_tcp_state;                                            /**< TCP State information. */
 
-#if COMMISSIONING_ENABLED
+#ifdef COMMISSIONING_ENABLED
 static bool                                 m_power_off_on_failure = false;
 static bool                                 m_identity_mode_active;
 #endif // COMMISSIONING_ENABLED
@@ -79,7 +74,7 @@ static bool                                 m_identity_mode_active;
 /**@brief Function to handle interface up event. */
 void nrf_driver_interface_up(void)
 {
-#if COMMISSIONING_ENABLED
+#ifdef COMMISSIONING_ENABLED
   commissioning_joining_mode_timer_ctrl(JOINING_MODE_TIMER_STOP_RESET);
 #endif // COMMISSIONING_ENABLED
 
@@ -97,7 +92,7 @@ void nrf_driver_interface_up(void)
 /**@brief Function to handle interface down event. */
 void nrf_driver_interface_down(void)
 {
-#if COMMISSIONING_ENABLED
+#ifdef COMMISSIONING_ENABLED
   commissioning_joining_mode_timer_ctrl(JOINING_MODE_TIMER_START);
 #endif // COMMISSIONING_ENABLED
 
@@ -156,7 +151,7 @@ static void leds_init(void)
   LEDS_OFF(ALL_APP_LED);
 }
 
-#if COMMISSIONING_ENABLED
+#ifdef COMMISSIONING_ENABLED
 /**@brief Timer callback used for controlling board LEDs to represent application state.
  *
  */
@@ -211,7 +206,7 @@ static void iot_timer_init(void)
   static const iot_timer_client_t list_of_clients[] =
   {
     {system_timer_callback,   LWIP_SYS_TICK_MS},
-#if COMMISSIONING_ENABLED
+#ifdef COMMISSIONING_ENABLED
     {blink_timeout_handler,   LED_BLINK_INTERVAL_MS},
     {commissioning_time_tick, SEC_TO_MILLISEC(COMMISSIONING_TICK_INTERVAL_SEC)}
 #endif // COMMISSIONING_ENABLED
@@ -258,7 +253,7 @@ static void ip_stack_init(void)
   APP_ERROR_CHECK(err_code);
 }
 
-#if COMMISSIONING_ENABLED
+#ifdef COMMISSIONING_ENABLED
 /**@brief Function for handling button events.
  *
  * @param[in]   pin_no         The pin number of the button pressed.
@@ -286,7 +281,7 @@ static void buttons_init(void)
 
   static app_button_cfg_t buttons[] =
   {
-#if COMMISSIONING_ENABLED
+#ifdef COMMISSIONING_ENABLED
     {ERASE_BUTTON_PIN_NO, false, BUTTON_PULL, button_event_handler}
 #endif // COMMISSIONING_ENABLED
   };
@@ -340,7 +335,7 @@ static void on_ipv6_medium_error(ipv6_medium_error_t * p_ipv6_medium_error)
   // Do something.
 }
 
-#if COMMISSIONING_ENABLED
+#ifdef COMMISSIONING_ENABLED
 void commissioning_id_mode_cb(mode_control_cmd_t control_command)
 {
   switch (control_command)
@@ -386,7 +381,7 @@ void bleconfig_init(void) {
   timers_init();
   iot_timer_init();
 
-#if COMMISSIONING_ENABLED
+#ifdef COMMISSIONING_ENABLED
   err_code = pstorage_init();
   APP_ERROR_CHECK(err_code);
 
@@ -398,7 +393,7 @@ void bleconfig_init(void) {
   ipv6_medium_init_params.ipv6_medium_evt_handler    = on_ipv6_medium_evt;
   ipv6_medium_init_params.ipv6_medium_error_handler  = on_ipv6_medium_error;
   ipv6_medium_init_params.use_scheduler              = true;
-#if COMMISSIONING_ENABLED
+#ifdef COMMISSIONING_ENABLED
   ipv6_medium_init_params.commissioning_id_mode_cb   = commissioning_id_mode_cb;
   ipv6_medium_init_params.commissioning_power_off_cb = commissioning_power_off_cb;
 #endif // COMMISSIONING_ENABLED

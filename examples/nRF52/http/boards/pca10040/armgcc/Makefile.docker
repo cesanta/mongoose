@@ -1,5 +1,5 @@
 SDK ?= $(shell cat sdk.version)
-SRC_DIR ?= $(realpath ../../..)
+SRC_DIR ?= $(realpath ../../../../../../..)
 
 .PHONY: all clean flash gdbserver gdb jlinkexe rtt
 
@@ -22,5 +22,6 @@ all clean flash gdbserver gdb jlinkexe rtt:
 	$(V)docker run --rm -it $(ADD_DOCKER_ARGS) -v $(SRC_DIR):/src $(SDK) \
 		/bin/bash -c "\
 			make -C /src/mongoose mongoose.c mongoose.h && \
-			make -C /src/mongoose/examples/nRF52 -f Makefile.build $@ -$(MAKEFLAGS) \
+			if [ ! -e /src/mongoose/examples/nRF52/nrf5_iot_sdk ]; then ln -s /opt/nrf5_iot_sdk /src/mongoose/examples/nRF52/nrf5_iot_sdk; fi && \
+			make -C /src/mongoose/examples/nRF52/http/boards/pca10040/armgcc $@ -$(MAKEFLAGS) \
 		"

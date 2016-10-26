@@ -6,7 +6,7 @@
 #include "bleconfig.h"
 #include "myboard.h"
 
-#include "../../mongoose.h"
+#include "mongoose.h"
 
 /*
  * This is a callback invoked by Mongoose to signal that a poll is needed soon.
@@ -72,9 +72,11 @@ int main(void)
     // Note that many connections can be added to a single event manager
     // Connections can be created at any point, e.g. in event handler function
     const char *err;
-    struct mg_bind_opts opts = {};
+    struct mg_bind_opts opts;
+    struct mg_connection *nc = NULL;
+    memset(&opts, 0x00, sizeof(opts));
     opts.error_string = &err;
-    struct mg_connection *nc = mg_bind_opt(&mgr, "80", ev_handler, opts);  // Create listening connection and add it to the event manager
+    nc = mg_bind_opt(&mgr, "80", ev_handler, opts);  // Create listening connection and add it to the event manager
     if (nc == NULL) {
       printf("Failed to create listener: %s\n", err);
       return 1;
