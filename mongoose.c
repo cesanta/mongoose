@@ -1181,6 +1181,19 @@ int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
   if (i < str2.len) return -1;
   return 0;
 }
+
+int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n) {
+  struct mg_str s1 = str1;
+  struct mg_str s2 = str2;
+
+  if (s1.len > n) {
+    s1.len = n;
+  }
+  if (s2.len > n) {
+    s2.len = n;
+  }
+  return mg_strcmp(s1, s2);
+}
 #ifdef MG_MODULE_LINES
 #line 1 "common/sha1.c"
 #endif
@@ -3970,6 +3983,10 @@ struct mg_http_proto_data {
 };
 
 static void mg_http_conn_destructor(void *proto_data);
+struct mg_connection *mg_connect_http_base(
+    struct mg_mgr *mgr, mg_event_handler_t ev_handler,
+    struct mg_connect_opts opts, const char *schema, const char *schema_ssl,
+    const char *url, const char **path, char **addr);
 
 static struct mg_http_proto_data *mg_http_get_proto_data(
     struct mg_connection *c) {
@@ -5039,40 +5056,37 @@ void mg_set_protocol_http_websocket(struct mg_connection *nc) {
   nc->proto_handler = mg_http_handler;
 }
 
-void mg_send_response_line_s(struct mg_connection *nc, int status_code,
-                             const struct mg_str extra_headers) {
-  const char *status_message = "OK";
+const char *mg_status_message(int status_code) {
   switch (status_code) {
     case 206:
-      status_message = "Partial Content";
-      break;
+      return "Partial Content";
     case 301:
-      status_message = "Moved";
-      break;
+      return "Moved";
     case 302:
-      status_message = "Found";
-      break;
+      return "Found";
     case 401:
-      status_message = "Unauthorized";
-      break;
+      return "Unauthorized";
     case 403:
-      status_message = "Forbidden";
-      break;
+      return "Forbidden";
     case 404:
-      status_message = "Not Found";
-      break;
+      return "Not Found";
     case 416:
-      status_message = "Requested range not satisfiable";
-      break;
+      return "Requested range not satisfiable";
     case 418:
-      status_message = "I'm a teapot";
-      break;
+      return "I'm a teapot";
     case 500:
-      status_message = "Internal Server Error";
-      break;
+      return "Internal Server Error";
+    case 502:
+      return "Bad Gateway";
+    default:
+      return "OK";
   }
-  mg_printf(nc, "HTTP/1.1 %d %s\r\nServer: %s\r\n", status_code, status_message,
-            mg_version_header);
+}
+
+void mg_send_response_line_s(struct mg_connection *nc, int status_code,
+                             const struct mg_str extra_headers) {
+  mg_printf(nc, "HTTP/1.1 %d %s\r\nServer: %s\r\n", status_code,
+            mg_status_message(status_code), mg_version_header);
   if (extra_headers.len > 0) {
     mg_printf(nc, "%.*s\r\n", (int) extra_headers.len, extra_headers.p);
   }
@@ -5116,10 +5130,9 @@ void mg_send_head(struct mg_connection *c, int status_code,
   mg_send(c, "\r\n", 2);
 }
 
-#if MG_ENABLE_FILESYSTEM
-static void mg_http_send_error(struct mg_connection *nc, int code,
-                               const char *reason) {
-  if (!reason) reason = "";
+void mg_http_send_error(struct mg_connection *nc, int code,
+                        const char *reason) {
+  if (!reason) reason = mg_status_message(code);
   DBG(("%p %d %s", nc, code, reason));
   mg_send_head(nc, code, strlen(reason),
                "Content-Type: text/plain\r\nConnection: close");
@@ -5127,6 +5140,7 @@ static void mg_http_send_error(struct mg_connection *nc, int code,
   nc->flags |= MG_F_SEND_AND_CLOSE;
 }
 
+#if MG_ENABLE_FILESYSTEM
 static void mg_http_construct_etag(char *buf, size_t buf_len,
                                    const cs_stat_t *st) {
   snprintf(buf, buf_len, "\"%lx.%" INT64_FMT "\"", (unsigned long) st->st_mtime,
@@ -5784,6 +5798,7 @@ MG_INTERNAL void mg_find_index_file(const char *path, const char *list,
   DBG(("[%s] [%s]", path, (*index_file ? *index_file : "")));
 }
 
+#if MG_ENABLE_HTTP_URL_REWRITES
 static int mg_http_send_port_based_redirect(
     struct mg_connection *c, struct http_message *hm,
     const struct mg_serve_http_opts *opts) {
@@ -5807,6 +5822,103 @@ static int mg_http_send_port_based_redirect(
   return 0;
 }
 
+static void mg_reverse_proxy_handler(struct mg_connection *nc, int ev,
+                                     void *ev_data) {
+  struct http_message *hm = (struct http_message *) ev_data;
+  struct mg_connection *upstream = (struct mg_connection *) nc->user_data;
+
+  switch (ev) {
+    case MG_EV_CONNECT:
+      if (*(int *) ev_data != 0) {
+        mg_http_send_error(upstream, 502, NULL);
+      }
+      break;
+    /* TODO(mkm): handle streaming */
+    case MG_EV_HTTP_REPLY:
+      mg_send(upstream, hm->message.p, hm->message.len);
+      upstream->flags |= MG_F_SEND_AND_CLOSE;
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      break;
+    case MG_EV_CLOSE:
+      upstream->flags |= MG_F_SEND_AND_CLOSE;
+      break;
+  }
+}
+
+void mg_handle_reverse_proxy(struct mg_connection *nc, struct http_message *hm,
+                             struct mg_str mount, struct mg_str upstream) {
+  struct mg_connection *be;
+  char burl[256], *purl = burl;
+  char *addr = NULL;
+  const char *path = NULL;
+  int i;
+  struct mg_connect_opts opts;
+  memset(&opts, 0, sizeof(opts));
+
+  mg_asprintf(&purl, sizeof(burl), "%.*s%.*s", (int) upstream.len, upstream.p,
+              (int) (hm->uri.len - mount.len), hm->uri.p + mount.len);
+
+  be = mg_connect_http_base(nc->mgr, mg_reverse_proxy_handler, opts, "http://",
+                            "https://", purl, &path, &addr);
+  DBG(("Proxying %.*s to %s (rule: %.*s)", (int) hm->uri.len, hm->uri.p, purl,
+       (int) mount.len, mount.p));
+
+  if (be == NULL) {
+    mg_http_send_error(nc, 502, NULL);
+    goto cleanup;
+  }
+  be->user_data = nc;
+
+  /* send request upstream */
+  mg_printf(be, "%.*s %s HTTP/1.1\r\n", (int) hm->method.len, hm->method.p,
+            path);
+
+  mg_printf(be, "Host: %s\r\n", addr);
+  for (i = 0; i < MG_MAX_HTTP_HEADERS && hm->header_names[i].len > 0; i++) {
+    struct mg_str hn = hm->header_names[i];
+    struct mg_str hv = hm->header_values[i];
+
+    /* we rewrite the host header */
+    if (mg_vcasecmp(&hn, "Host") == 0) continue;
+    /*
+     * Don't pass chunked transfer encoding to the client because hm->body is
+     * already dechunked when we arrive here.
+     */
+    if (mg_vcasecmp(&hn, "Transfer-encoding") == 0 &&
+        mg_vcasecmp(&hv, "chunked") == 0) {
+      mg_printf(be, "Content-Length: %" SIZE_T_FMT "\r\n", hm->body.len);
+      continue;
+    }
+    mg_printf(be, "%.*s: %.*s\r\n", (int) hn.len, hn.p, (int) hv.len, hv.p);
+  }
+
+  mg_send(be, "\r\n", 2);
+  mg_send(be, hm->body.p, hm->body.len);
+
+cleanup:
+  if (purl != burl) MG_FREE(purl);
+}
+
+static int mg_http_handle_forwarding(struct mg_connection *nc,
+                                     struct http_message *hm,
+                                     const struct mg_serve_http_opts *opts) {
+  const char *rewrites = opts->url_rewrites;
+  struct mg_str a, b;
+  struct mg_str p1 = MG_MK_STR("http://"), p2 = MG_MK_STR("https://");
+
+  while ((rewrites = mg_next_comma_list_entry(rewrites, &a, &b)) != NULL) {
+    if (mg_strncmp(a, hm->uri, a.len) == 0) {
+      if (mg_strncmp(b, p1, p1.len) == 0 || mg_strncmp(b, p2, p2.len) == 0) {
+        mg_handle_reverse_proxy(nc, hm, a, b);
+        return 1;
+      }
+    }
+  }
+
+  return 0;
+}
+#endif
+
 MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
                                      const struct mg_serve_http_opts *opts,
                                      char **local_path,
@@ -5820,7 +5932,12 @@ MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
   remainder->len = 0;
 
   { /* 1. Determine which root to use. */
+
+#if MG_ENABLE_HTTP_URL_REWRITES
     const char *rewrites = opts->url_rewrites;
+#else
+    const char *rewrites = "";
+#endif
     struct mg_str *hh = mg_get_http_header(hm, "Host");
     struct mg_str a, b;
     /* Check rewrites first. */
@@ -6154,9 +6271,15 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
     return;
   }
 
+#if MG_ENABLE_HTTP_URL_REWRITES
+  if (mg_http_handle_forwarding(nc, hm, &opts)) {
+    return;
+  }
+
   if (mg_http_send_port_based_redirect(nc, hm, &opts)) {
     return;
   }
+#endif
 
   if (opts.document_root == NULL) {
     opts.document_root = ".";

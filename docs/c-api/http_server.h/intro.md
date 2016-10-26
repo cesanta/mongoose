@@ -8,6 +8,7 @@ items:
   - { name: mg_get_http_var.md }
   - { name: mg_http_check_digest_auth.md }
   - { name: mg_http_parse_header.md }
+  - { name: mg_http_send_error.md }
   - { name: mg_http_send_redirect.md }
   - { name: mg_http_serve_file.md }
   - { name: mg_parse_http.md }
