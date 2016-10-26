@@ -1354,6 +1354,7 @@ int mg_vcasecmp(const struct mg_str *str2, const char *str1);
 
 struct mg_str mg_strdup(const struct mg_str s);
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
+int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n);
 
 #ifdef __cplusplus
 }
@@ -1777,6 +1778,11 @@ char *strdup(const char *src);
 #if MG_ENABLE_MQTT_BROKER && !MG_ENABLE_MQTT
 #undef MG_ENABLE_MQTT
 #define MG_ENABLE_MQTT 1
+#endif
+
+#ifndef MG_ENABLE_HTTP_URL_REWRITES
+#define MG_ENABLE_HTTP_URL_REWRITES \
+  (CS_PLATFORM == CS_P_WINDOWS || CS_PLATFORM == CS_P_UNIX)
 #endif
 
 #endif /* CS_MONGOOSE_SRC_FEATURES_H_ */
@@ -3226,16 +3232,19 @@ struct mg_serve_http_opts {
   /* IP ACL. By default, NULL, meaning all IPs are allowed to connect */
   const char *ip_acl;
 
+#if MG_ENABLE_HTTP_URL_REWRITES
   /* URL rewrites.
    *
-   * Comma-separated list of `uri_pattern=file_or_directory_path` rewrites.
+   * Comma-separated list of `uri_pattern=url_file_or_directory_path` rewrites.
    * When HTTP request is received, Mongoose constructs a file name from the
    * requested URI by combining `document_root` and the URI. However, if the
    * rewrite option is used and `uri_pattern` matches requested URI, then
-   * `document_root` is ignored. Instead, `file_or_directory_path` is used,
+   * `document_root` is ignored. Instead, `url_file_or_directory_path` is used,
    * which should be a full path name or a path relative to the web server's
-   * current working directory. Note that `uri_pattern`, as all Mongoose
-   * patterns, is a prefix pattern.
+   * current working directory. It can also be an URI (http:// or https://)
+   * in which case mongoose will behave as a reverse proxy for that destination.
+   *
+   * Note that `uri_pattern`, as all Mongoose patterns, is a prefix pattern.
    *
    * If uri_pattern starts with `@` symbol, then Mongoose compares it with the
    * HOST header of the request. If they are equal, Mongoose sets document root
@@ -3249,6 +3258,7 @@ struct mg_serve_http_opts {
    * automatically appended to the redirect location.
    */
   const char *url_rewrites;
+#endif
 
   /* DAV document root. If NULL, DAV requests are going to fail. */
   const char *dav_document_root;
@@ -3448,6 +3458,12 @@ void mg_printf_http_chunk(struct mg_connection *nc, const char *fmt, ...);
  */
 void mg_send_response_line(struct mg_connection *nc, int status_code,
                            const char *extra_headers);
+
+/*
+ * Sends an error response. If reason is NULL, the message will be inferred
+ * from the error code (if supported).
+ */
+void mg_http_send_error(struct mg_connection *nc, int code, const char *reason);
 
 /*
  * Sends a redirect response.

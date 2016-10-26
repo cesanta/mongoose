@@ -100,16 +100,19 @@ signature: |
     /* IP ACL. By default, NULL, meaning all IPs are allowed to connect */
     const char *ip_acl;
   
+  #if MG_ENABLE_HTTP_URL_REWRITES
     /* URL rewrites.
      *
-     * Comma-separated list of `uri_pattern=file_or_directory_path` rewrites.
+     * Comma-separated list of `uri_pattern=url_file_or_directory_path` rewrites.
      * When HTTP request is received, Mongoose constructs a file name from the
      * requested URI by combining `document_root` and the URI. However, if the
      * rewrite option is used and `uri_pattern` matches requested URI, then
-     * `document_root` is ignored. Instead, `file_or_directory_path` is used,
+     * `document_root` is ignored. Instead, `url_file_or_directory_path` is used,
      * which should be a full path name or a path relative to the web server's
-     * current working directory. Note that `uri_pattern`, as all Mongoose
-     * patterns, is a prefix pattern.
+     * current working directory. It can also be an URI (http:// or https://)
+     * in which case mongoose will behave as a reverse proxy for that destination.
+     *
+     * Note that `uri_pattern`, as all Mongoose patterns, is a prefix pattern.
      *
      * If uri_pattern starts with `@` symbol, then Mongoose compares it with the
      * HOST header of the request. If they are equal, Mongoose sets document root
@@ -123,6 +126,7 @@ signature: |
      * automatically appended to the redirect location.
      */
     const char *url_rewrites;
+  #endif
   
     /* DAV document root. If NULL, DAV requests are going to fail. */
     const char *dav_document_root;
