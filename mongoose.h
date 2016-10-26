@@ -1485,13 +1485,6 @@ void MD5_Final(unsigned char *md, MD5_CTX *c);
  */
 char *cs_md5(char buf[33], ...);
 
-/*
- * Stringify binary data. Output buffer size must be 2 * size_of_input + 1
- * because each byte of input takes 2 bytes in string representation
- * plus 1 byte for the terminating \0 character.
- */
-void cs_to_hex(char *to, const unsigned char *p, size_t len);
-
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
@@ -1572,6 +1565,19 @@ int c_vsnprintf(char *buf, size_t buf_size, const char *format, va_list ap);
  * first slen characters of s.
  */
 const char *c_strnstr(const char *s, const char *find, size_t slen);
+
+/*
+ * Stringify binary data. Output buffer size must be 2 * size_of_input + 1
+ * because each byte of input takes 2 bytes in string representation
+ * plus 1 byte for the terminating \0 character.
+ */
+void cs_to_hex(char *to, const unsigned char *p, size_t len);
+
+/*
+ * Convert stringified binary data back to binary.
+ * Does the reverse of `cs_to_hex()`.
+ */
+void cs_from_hex(char *to, const char *p, size_t len);
 
 /*
  * ARM C Compiler doesn't have strdup, so we provide it

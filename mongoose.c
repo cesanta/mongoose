@@ -805,7 +805,8 @@ double cs_time(void) {
 
 /* Amalgamated: #include "common/md5.h" */
 
-#if !DISABLE_MD5 && !defined(EXCLUDE_COMMON)
+#if !defined(EXCLUDE_COMMON)
+#if !DISABLE_MD5
 
 /* Amalgamated: #include "common/cs_endian.h" */
 
@@ -992,21 +993,7 @@ void MD5_Final(unsigned char digest[16], MD5_CTX *ctx) {
   memcpy(digest, ctx->buf, 16);
   memset((char *) ctx, 0, sizeof(*ctx));
 }
-
-/*
- * Stringify binary data. Output buffer size must be 2 * size_of_input + 1
- * because each byte of input takes 2 bytes in string representation
- * plus 1 byte for the terminating \0 character.
- */
-void cs_to_hex(char *to, const unsigned char *p, size_t len) {
-  static const char *hex = "0123456789abcdef";
-
-  for (; len--; p++) {
-    *to++ = hex[p[0] >> 4];
-    *to++ = hex[p[0] & 0x0f];
-  }
-  *to = '\0';
-}
+#endif /* DISABLE_MD5 */
 
 char *cs_md5(char buf[33], ...) {
   unsigned char hash[16];
@@ -1735,6 +1722,36 @@ char *strdup(const char *src) {
   return ret;
 }
 #endif
+
+void cs_to_hex(char *to, const unsigned char *p, size_t len) {
+  static const char *hex = "0123456789abcdef";
+
+  for (; len--; p++) {
+    *to++ = hex[p[0] >> 4];
+    *to++ = hex[p[0] & 0x0f];
+  }
+  *to = '\0';
+}
+
+static int fourbit(int ch) {
+  if (ch >= '0' && ch <= '9') {
+    return ch - '0';
+  } else if (ch >= 'a' && ch <= 'f') {
+    return ch - 'a' + 10;
+  } else if (ch >= 'A' && ch <= 'F') {
+    return ch - 'A' + 10;
+  }
+  return 0;
+}
+
+void cs_from_hex(char *to, const char *p, size_t len) {
+  size_t i;
+
+  for (i = 0; i < len; i += 2) {
+    *to++ = (fourbit(p[i]) << 4) + fourbit(p[i + 1]);
+  }
+  *to = '\0';
+}
 
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
