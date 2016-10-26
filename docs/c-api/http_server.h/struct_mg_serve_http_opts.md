@@ -6,10 +6,10 @@ signature: |
   struct mg_serve_http_opts {
     /* Path to web root directory */
     const char *document_root;
-  
+
     /* List of index files. Default is "" */
     const char *index_files;
-  
+
     /*
      * Leave as NULL to disable authentication.
      * To enable directory protection with authentication, set this to ".htpasswd"
@@ -20,10 +20,10 @@ signature: |
      * Make sure `auth_domain` is set to a valid domain name.
      */
     const char *per_directory_auth_file;
-  
+
     /* Authorization domain (domain name of this web server) */
     const char *auth_domain;
-  
+
     /*
      * Leave as NULL to disable authentication.
      * Normally, only selected directories in the document root are protected.
@@ -33,10 +33,10 @@ signature: |
      * is located outside document root to prevent people fetching it.
      */
     const char *global_auth_file;
-  
+
     /* Set to "no" to disable directory listing. Enabled by default. */
     const char *enable_directory_listing;
-  
+
     /*
      * SSI files pattern. If not set, "**.shtml$|**.shtm$" is used.
      *
@@ -75,7 +75,7 @@ signature: |
      * &lt;!--#exec "ls -l" --&gt;
      *
      * The call directive is a way to invoke a C handler from the HTML page.
-     * On each occurence of &lt;!--#call COMMAND OPTIONAL_PARAMS> directive,
+     * On each occurrence of &lt;!--#call COMMAND OPTIONAL_PARAMS> directive,
      * Mongoose calls a registered event handler with MG_EV_SSI_CALL event,
      * and event parameter will point to the COMMAND OPTIONAL_PARAMS string.
      * An event handler can output any text, for example by calling
@@ -96,10 +96,10 @@ signature: |
      *    }
      */
     const char *ssi_pattern;
-  
+
     /* IP ACL. By default, NULL, meaning all IPs are allowed to connect */
     const char *ip_acl;
-  
+
     /* URL rewrites.
      *
      * Comma-separated list of `uri_pattern=file_or_directory_path` rewrites.
@@ -123,31 +123,31 @@ signature: |
      * automatically appended to the redirect location.
      */
     const char *url_rewrites;
-  
+
     /* DAV document root. If NULL, DAV requests are going to fail. */
     const char *dav_document_root;
-  
+
     /*
      * DAV passwords file. If NULL, DAV requests are going to fail.
      * If passwords file is set to "-", then DAV auth is disabled.
      */
     const char *dav_auth_file;
-  
+
     /* Glob pattern for the files to hide. */
     const char *hidden_file_pattern;
-  
+
     /* Set to non-NULL to enable CGI, e.g. **.cgi$|**.php$" */
     const char *cgi_file_pattern;
-  
+
     /* If not NULL, ignore CGI script hashbang and use this interpreter */
     const char *cgi_interpreter;
-  
+
     /*
      * Comma-separated list of Content-Type overrides for path suffixes, e.g.
      * ".txt=text/plain; charset=utf-8,.c=text/plain"
      */
     const char *custom_mime_types;
-  
+
     /*
      * Extra HTTP headers to add to each server response.
      * Example: to enable CORS, set this to "Access-Control-Allow-Origin: *".
@@ -157,5 +157,5 @@ signature: |
 ---
 
 This structure defines how `mg_serve_http()` works.
-Best practice is to set only required settings, and leave the rest as NULL. 
+Best practice is to set only required settings, and leave the rest as NULL.
 

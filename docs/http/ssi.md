@@ -35,7 +35,7 @@ The exec directive is used to execute a command on a server,
 and show command's output. Example: `<!--#exec "ls -l" -->`
 
 The call directive is a way to invoke a C handler from the HTML page.
-On each occurence of `<!--#call PARAMS -->` directive,
+On each occurrence of `<!--#call PARAMS -->` directive,
 Mongoose calls a registered event handler with `MG_EV_SSI_CALL` event.
 Event parameter will point to the `PARAMS` string.
 An event handler can output any text, for example by calling
