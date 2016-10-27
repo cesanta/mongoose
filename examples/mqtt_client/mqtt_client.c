@@ -63,10 +63,10 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
 #if 0
         char hex[1024] = {0};
         mg_hexdump(nc->recv_mbuf.buf, msg->payload.len, hex, sizeof(hex));
-        printf("Got incoming message %s:\n%s", msg->topic, hex);
+        printf("Got incoming message %.*s:\n%s", (int)msg->topic.len, msg->topic.p, hex);
 #else
-      printf("Got incoming message %s: %.*s\n", msg->topic,
-             (int) msg->payload.len, msg->payload.p);
+      printf("Got incoming message %.*s: %.*s\n", (int)msg->topic.len,
+             msg->topic.p,  (int) msg->payload.len, msg->payload.p);
 #endif
 
       printf("Forwarding to /test\n");
