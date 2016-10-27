@@ -28,6 +28,11 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       nc->flags |= MG_F_SEND_AND_CLOSE;
       s_exit_flag = 1;
       break;
+    case MG_EV_CLOSE:
+      if(0 == s_exit_flag) {
+          s_exit_flag = -1;
+      }
+      break;
     default:
       break;
   }
