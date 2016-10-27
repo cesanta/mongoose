@@ -5853,8 +5853,10 @@ void mg_http_reverse_proxy(struct mg_connection *nc,
   char *addr = NULL;
   const char *path = NULL;
   int i;
+  const char *error;
   struct mg_connect_opts opts;
   memset(&opts, 0, sizeof(opts));
+  opts.error_string = &error;
 
   mg_asprintf(&purl, sizeof(burl), "%.*s%.*s", (int) upstream.len, upstream.p,
               (int) (hm->uri.len - mount.len), hm->uri.p + mount.len);
@@ -5865,6 +5867,7 @@ void mg_http_reverse_proxy(struct mg_connection *nc,
        (int) mount.len, mount.p));
 
   if (be == NULL) {
+    LOG(LL_ERROR, ("Error connecting to %s: %s", purl, error));
     mg_http_send_error(nc, 502, NULL);
     goto cleanup;
   }
@@ -6394,6 +6397,7 @@ struct mg_connection *mg_connect_http_base(
 
   if (mg_http_common_url_parse(url, schema, schema_ssl, &use_ssl, addr, &port_i,
                                path) < 0) {
+    MG_SET_PTRPTR(opts.error_string, "cannot parse url");
     return NULL;
   }
 
