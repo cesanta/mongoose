@@ -154,7 +154,7 @@ MG_INTERNAL void mg_ws_handshake(struct mg_connection *nc,
 #endif
 #endif /* MG_ENABLE_HTTP */
 
-MG_INTERNAL int mg_get_errno();
+MG_INTERNAL int mg_get_errno(void);
 
 #endif /* CS_MONGOOSE_SRC_INTERNAL_H_ */
 #ifdef MG_MODULE_LINES
@@ -8219,7 +8219,7 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
   return mg_match_prefix_n(pstr, mg_mk_str(str));
 }
 
-MG_INTERNAL int mg_get_errno() {
+MG_INTERNAL int mg_get_errno(void) {
 #ifndef WINCE
   return errno;
 #else
