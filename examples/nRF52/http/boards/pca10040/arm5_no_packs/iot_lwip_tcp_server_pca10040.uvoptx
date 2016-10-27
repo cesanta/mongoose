@@ -277,7 +277,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\examples\bsp\bsp.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\examples\bsp\bsp.c</PathWithFileName>
       <FilenameWithoutPath>bsp.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -332,7 +332,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\def.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\def.c</PathWithFileName>
       <FilenameWithoutPath>def.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -345,7 +345,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\dhcp.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\dhcp.c</PathWithFileName>
       <FilenameWithoutPath>dhcp.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -358,7 +358,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\dhcp6.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\dhcp6.c</PathWithFileName>
       <FilenameWithoutPath>dhcp6.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -371,7 +371,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\dns.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\dns.c</PathWithFileName>
       <FilenameWithoutPath>dns.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -384,7 +384,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv4\icmp.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv4\icmp.c</PathWithFileName>
       <FilenameWithoutPath>icmp.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -397,7 +397,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\icmp6.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\icmp6.c</PathWithFileName>
       <FilenameWithoutPath>icmp6.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -410,7 +410,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\inet6.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\inet6.c</PathWithFileName>
       <FilenameWithoutPath>inet6.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -423,7 +423,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\inet_chksum.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\inet_chksum.c</PathWithFileName>
       <FilenameWithoutPath>inet_chksum.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -436,7 +436,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\init.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\init.c</PathWithFileName>
       <FilenameWithoutPath>init.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -449,7 +449,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv4\ip4.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv4\ip4.c</PathWithFileName>
       <FilenameWithoutPath>ip4.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -462,7 +462,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv4\ip4_addr.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv4\ip4_addr.c</PathWithFileName>
       <FilenameWithoutPath>ip4_addr.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -475,7 +475,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\ip6.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\ip6.c</PathWithFileName>
       <FilenameWithoutPath>ip6.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -488,7 +488,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\ip6_addr.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\ip6_addr.c</PathWithFileName>
       <FilenameWithoutPath>ip6_addr.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -501,7 +501,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\memp.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\memp.c</PathWithFileName>
       <FilenameWithoutPath>memp.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -514,7 +514,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\mld6.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\mld6.c</PathWithFileName>
       <FilenameWithoutPath>mld6.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -527,7 +527,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\nd6.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\ipv6\nd6.c</PathWithFileName>
       <FilenameWithoutPath>nd6.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -540,7 +540,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\netif.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\netif.c</PathWithFileName>
       <FilenameWithoutPath>netif.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -553,7 +553,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\port\nrf_platform_port.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\port\nrf_platform_port.c</PathWithFileName>
       <FilenameWithoutPath>nrf_platform_port.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -566,7 +566,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\pbuf.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\pbuf.c</PathWithFileName>
       <FilenameWithoutPath>pbuf.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -579,7 +579,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\raw.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\raw.c</PathWithFileName>
       <FilenameWithoutPath>raw.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -592,7 +592,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\sys.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\sys.c</PathWithFileName>
       <FilenameWithoutPath>sys.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -605,7 +605,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\tcp.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\tcp.c</PathWithFileName>
       <FilenameWithoutPath>tcp.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -618,7 +618,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\tcp_in.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\tcp_in.c</PathWithFileName>
       <FilenameWithoutPath>tcp_in.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -631,7 +631,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\tcp_out.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\tcp_out.c</PathWithFileName>
       <FilenameWithoutPath>tcp_out.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -644,7 +644,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\timers.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\timers.c</PathWithFileName>
       <FilenameWithoutPath>timers.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -657,7 +657,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\external\lwip\src\core\udp.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\external\lwip\src\core\udp.c</PathWithFileName>
       <FilenameWithoutPath>udp.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -678,7 +678,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\ble\common\ble_advdata.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\ble\common\ble_advdata.c</PathWithFileName>
       <FilenameWithoutPath>ble_advdata.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -691,7 +691,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\ble\common\ble_conn_params.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\ble\common\ble_conn_params.c</PathWithFileName>
       <FilenameWithoutPath>ble_conn_params.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -704,7 +704,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\ble\common\ble_srv_common.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\ble\common\ble_srv_common.c</PathWithFileName>
       <FilenameWithoutPath>ble_srv_common.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -725,7 +725,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\libraries\uart\app_uart_fifo.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\libraries\uart\app_uart_fifo.c</PathWithFileName>
       <FilenameWithoutPath>app_uart_fifo.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -738,7 +738,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\drivers_nrf\delay\nrf_delay.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\drivers_nrf\delay\nrf_delay.c</PathWithFileName>
       <FilenameWithoutPath>nrf_delay.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -751,7 +751,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\drivers_nrf\common\nrf_drv_common.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\drivers_nrf\common\nrf_drv_common.c</PathWithFileName>
       <FilenameWithoutPath>nrf_drv_common.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -764,7 +764,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\drivers_nrf\gpiote\nrf_drv_gpiote.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\drivers_nrf\gpiote\nrf_drv_gpiote.c</PathWithFileName>
       <FilenameWithoutPath>nrf_drv_gpiote.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -777,7 +777,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\drivers_nrf\uart\nrf_drv_uart.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\drivers_nrf\uart\nrf_drv_uart.c</PathWithFileName>
       <FilenameWithoutPath>nrf_drv_uart.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -790,7 +790,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\drivers_nrf\pstorage\pstorage.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\drivers_nrf\pstorage\pstorage.c</PathWithFileName>
       <FilenameWithoutPath>pstorage.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -811,7 +811,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\iot\ble_6lowpan\lib\ble_6lowpan.lib</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\iot\ble_6lowpan\lib\ble_6lowpan.lib</PathWithFileName>
       <FilenameWithoutPath>ble_6lowpan.lib</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -824,7 +824,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\iot\errno\errno.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\iot\errno\errno.c</PathWithFileName>
       <FilenameWithoutPath>errno.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -837,7 +837,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\iot\context_manager\iot_context_manager.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\iot\context_manager\iot_context_manager.c</PathWithFileName>
       <FilenameWithoutPath>iot_context_manager.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -850,7 +850,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\iot\iot_timer\iot_timer.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\iot\iot_timer\iot_timer.c</PathWithFileName>
       <FilenameWithoutPath>iot_timer.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -863,7 +863,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\iot\medium\ipv6_medium_ble.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\iot\medium\ipv6_medium_ble.c</PathWithFileName>
       <FilenameWithoutPath>ipv6_medium_ble.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -876,7 +876,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\iot\common\ipv6_parse.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\iot\common\ipv6_parse.c</PathWithFileName>
       <FilenameWithoutPath>ipv6_parse.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -897,7 +897,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\iot\medium\ble_ncfgs\ble_ncfgs.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\iot\medium\ble_ncfgs\ble_ncfgs.c</PathWithFileName>
       <FilenameWithoutPath>ble_ncfgs.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -910,7 +910,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\iot\medium\commissioning\commissioning.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\iot\medium\commissioning\commissioning.c</PathWithFileName>
       <FilenameWithoutPath>commissioning.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -931,7 +931,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\libraries\button\app_button.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\libraries\button\app_button.c</PathWithFileName>
       <FilenameWithoutPath>app_button.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -944,7 +944,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\libraries\util\app_error.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\libraries\util\app_error.c</PathWithFileName>
       <FilenameWithoutPath>app_error.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -957,7 +957,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\libraries\fifo\app_fifo.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\libraries\fifo\app_fifo.c</PathWithFileName>
       <FilenameWithoutPath>app_fifo.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -970,7 +970,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\libraries\scheduler\app_scheduler.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\libraries\scheduler\app_scheduler.c</PathWithFileName>
       <FilenameWithoutPath>app_scheduler.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -983,7 +983,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\libraries\timer\app_timer.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\libraries\timer\app_timer.c</PathWithFileName>
       <FilenameWithoutPath>app_timer.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -996,7 +996,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\libraries\timer\app_timer_appsh.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\libraries\timer\app_timer_appsh.c</PathWithFileName>
       <FilenameWithoutPath>app_timer_appsh.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -1009,7 +1009,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\libraries\trace\app_trace.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\libraries\trace\app_trace.c</PathWithFileName>
       <FilenameWithoutPath>app_trace.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -1022,7 +1022,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\libraries\mem_manager\mem_manager.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\libraries\mem_manager\mem_manager.c</PathWithFileName>
       <FilenameWithoutPath>mem_manager.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -1035,7 +1035,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\libraries\util\nrf_assert.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\libraries\util\nrf_assert.c</PathWithFileName>
       <FilenameWithoutPath>nrf_assert.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -1048,7 +1048,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\libraries\uart\retarget.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\libraries\uart\retarget.c</PathWithFileName>
       <FilenameWithoutPath>retarget.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -1069,7 +1069,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\softdevice\common\softdevice_handler\softdevice_handler.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\softdevice\common\softdevice_handler\softdevice_handler.c</PathWithFileName>
       <FilenameWithoutPath>softdevice_handler.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -1082,7 +1082,7 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\..\..\nrf5_iot_sdk\components\softdevice\common\softdevice_handler\softdevice_handler_appsh.c</PathWithFileName>
+      <PathWithFileName>..\..\..\..\nrf5_iot_sdk\components\softdevice\common\softdevice_handler\softdevice_handler_appsh.c</PathWithFileName>
       <FilenameWithoutPath>softdevice_handler_appsh.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
