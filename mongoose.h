@@ -3624,11 +3624,23 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
 
 struct mg_mqtt_message {
   int cmd;
-  struct mg_str payload;
   int qos;
+  struct mg_str topic;
+  struct mg_str payload;
+
   uint8_t connack_ret_code; /* connack */
   uint16_t message_id;      /* puback */
-  char *topic;
+
+  /* connect */
+  uint8_t protocol_version;
+  uint8_t connect_flags;
+  uint16_t keep_alive_timer;
+  struct mg_str protocol_name;
+  struct mg_str client_id;
+  struct mg_str will_topic;
+  struct mg_str will_message;
+  struct mg_str user_name;
+  struct mg_str password;
 };
 
 struct mg_mqtt_topic_expression {
