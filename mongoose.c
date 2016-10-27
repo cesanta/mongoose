@@ -5845,8 +5845,9 @@ static void mg_reverse_proxy_handler(struct mg_connection *nc, int ev,
   }
 }
 
-void mg_handle_reverse_proxy(struct mg_connection *nc, struct http_message *hm,
-                             struct mg_str mount, struct mg_str upstream) {
+void mg_http_reverse_proxy(struct mg_connection *nc,
+                           const struct http_message *hm, struct mg_str mount,
+                           struct mg_str upstream) {
   struct mg_connection *be;
   char burl[256], *purl = burl;
   char *addr = NULL;
@@ -5889,6 +5890,12 @@ void mg_handle_reverse_proxy(struct mg_connection *nc, struct http_message *hm,
       mg_printf(be, "Content-Length: %" SIZE_T_FMT "\r\n", hm->body.len);
       continue;
     }
+    /* We don't support proxying Expect: 100-continue. */
+    if (mg_vcasecmp(&hn, "Expect") == 0 &&
+        mg_vcasecmp(&hv, "100-continue") == 0) {
+      continue;
+    }
+
     mg_printf(be, "%.*s: %.*s\r\n", (int) hn.len, hn.p, (int) hv.len, hv.p);
   }
 
@@ -5909,7 +5916,7 @@ static int mg_http_handle_forwarding(struct mg_connection *nc,
   while ((rewrites = mg_next_comma_list_entry(rewrites, &a, &b)) != NULL) {
     if (mg_strncmp(a, hm->uri, a.len) == 0) {
       if (mg_strncmp(b, p1, p1.len) == 0 || mg_strncmp(b, p2, p2.len) == 0) {
-        mg_handle_reverse_proxy(nc, hm, a, b);
+        mg_http_reverse_proxy(nc, hm, a, b);
         return 1;
       }
     }
