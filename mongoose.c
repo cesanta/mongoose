@@ -4506,17 +4506,20 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
     if (pd->mp_stream.boundary != NULL) {
       /*
-       * Multipart message is in progress, but we get close
-       * MG_EV_HTTP_PART_END with error flag
+       * Multipart message is in progress, but connection is closed.
+       * Finish part and request with an error flag.
        */
       struct mg_http_multipart_part mp;
       memset(&mp, 0, sizeof(mp));
-
       mp.status = -1;
       mp.var_name = pd->mp_stream.var_name;
       mp.file_name = pd->mp_stream.file_name;
       mg_call(nc, (pd->endpoint_handler ? pd->endpoint_handler : nc->handler),
               MG_EV_HTTP_PART_END, &mp);
+      mp.var_name = NULL;
+      mp.file_name = NULL;
+      mg_call(nc, (pd->endpoint_handler ? pd->endpoint_handler : nc->handler),
+              MG_EV_HTTP_MULTIPART_REQUEST_END, &mp);
     } else
 #endif
         if (io->len > 0 && mg_parse_http(io->buf, io->len, hm, is_req) > 0) {
@@ -4766,6 +4769,11 @@ static int mg_http_multipart_finalize(struct mg_connection *c) {
   struct mg_http_proto_data *pd = mg_http_get_proto_data(c);
 
   mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_END, NULL, 0);
+  free((void *) pd->mp_stream.file_name);
+  pd->mp_stream.file_name = NULL;
+  free((void *) pd->mp_stream.var_name);
+  pd->mp_stream.var_name = NULL;
+  mg_http_multipart_call_handler(c, MG_EV_HTTP_MULTIPART_REQUEST_END, NULL, 0);
   mg_http_free_proto_data_mp_stream(&pd->mp_stream);
   pd->mp_stream.state = MPS_FINISHED;
 
@@ -4783,11 +4791,13 @@ static int mg_http_multipart_wait_for_boundary(struct mg_connection *c) {
 
   boundary = c_strnstr(io->buf, pd->mp_stream.boundary, io->len);
   if (boundary != NULL) {
-    if (io->len - (boundary - io->buf) < 4) {
+    const char *boundary_end = (boundary + pd->mp_stream.boundary_len);
+    if (io->len - (boundary_end - io->buf) < 4) {
       return 0;
     }
-    if (memcmp(boundary + pd->mp_stream.boundary_len, "--", 2) == 0) {
+    if (memcmp(boundary_end, "--\r\n", 4) == 0) {
       pd->mp_stream.state = MPS_FINALIZE;
+      mbuf_remove(io, (boundary_end - io->buf) + 4);
     } else {
       pd->mp_stream.state = MPS_GOT_BOUNDARY;
     }

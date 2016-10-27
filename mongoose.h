@@ -2823,10 +2823,11 @@ struct mg_ssi_call_ctx {
 #endif
 
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
-#define MG_EV_HTTP_MULTIPART_REQUEST 121 /* struct http_message */
-#define MG_EV_HTTP_PART_BEGIN 122        /* struct mg_http_multipart_part */
-#define MG_EV_HTTP_PART_DATA 123         /* struct mg_http_multipart_part */
-#define MG_EV_HTTP_PART_END 124          /* struct mg_http_multipart_part */
+#define MG_EV_HTTP_MULTIPART_REQUEST 121     /* struct http_message */
+#define MG_EV_HTTP_PART_BEGIN 122            /* struct mg_http_multipart_part */
+#define MG_EV_HTTP_PART_DATA 123             /* struct mg_http_multipart_part */
+#define MG_EV_HTTP_PART_END 124              /* struct mg_http_multipart_part */
+#define MG_EV_HTTP_MULTIPART_REQUEST_END 125 /* struct mg_http_multipart_part */
 #endif
 
 /*
@@ -2836,11 +2837,6 @@ struct mg_ssi_call_ctx {
  * - MG_EV_HTTP_REQUEST: HTTP request has arrived. Parsed HTTP request
  *  is passed as
  *   `struct http_message` through the handler's `void *ev_data` pointer.
- * - MG_EV_HTTP_MULTIPART_REQUEST: A multipart POST request has received.
- *   This event is sent before body is parsed. After this, the user
- *   should expect a sequence of MG_EV_HTTP_PART_BEGIN/DATA/END requests.
- *   This is also the last time when headers and other request fields are
- *   accessible.
  * - MG_EV_HTTP_REPLY: The HTTP reply has arrived. The parsed HTTP reply is
  *   passed as `struct http_message` through the handler's `void *ev_data`
  *   pointer.
@@ -2862,16 +2858,29 @@ struct mg_ssi_call_ctx {
  *   handshake. `ev_data` is `NULL`.
  * - MG_EV_WEBSOCKET_FRAME: new WebSocket frame has arrived. `ev_data` is
  *   `struct websocket_message *`
- * - MG_EV_HTTP_PART_BEGIN: new part of multipart message is started,
- *   extra parameters are passed in mg_http_multipart_part
- * - MG_EV_HTTP_PART_DATA: new portion of data from the multiparted message
- *   no additional headers are available, only data and data size
- * - MG_EV_HTTP_PART_END: final boundary received, analogue to maybe used to
- *   find the end of packet
- *   Note: Mongoose should be compiled with MG_ENABLE_HTTP_STREAMING_MULTIPART
- *   to enable MG_EV_HTTP_MULTIPART_REQUEST, MG_EV_HTTP_REQUEST_END,
- *   MG_EV_HTTP_REQUEST_CANCEL, MG_EV_HTTP_PART_BEGIN, MG_EV_HTTP_PART_DATA,
- *   MG_EV_HTTP_PART_END constants
+ *
+ * When compiled with MG_ENABLE_HTTP_STREAMING_MULTIPART, Mongoose parses
+ * multipart requests and splits them into separate events:
+ * - MG_EV_HTTP_MULTIPART_REQUEST: Start of the request.
+ *   This event is sent before body is parsed. After this, the user
+ *   should expect a sequence of PART_BEGIN/DATA/END requests.
+ *   This is also the last time when headers and other request fields are
+ *   accessible.
+ * - MG_EV_HTTP_PART_BEGIN: Start of a part of a multipart message.
+ *   Argument: mg_http_multipart_part with var_name and file_name set
+ *   (if present). No data is passed in this message.
+ * - MG_EV_HTTP_PART_DATA: new portion of data from the multipart message.
+ *   Argument: mg_http_multipart_part. var_name and file_name are preserved,
+ *   data is available in mg_http_multipart_part.data.
+ * - MG_EV_HTTP_PART_END: End of the current part. var_name, file_name are
+ *   the same, no data in the message. If status is 0, then the part is
+ *   properly terminated with a boundary, status < 0 means that connection
+ *   was terminated.
+ * - MG_EV_HTTP_MULTIPART_REQUEST_END: End of the multipart request.
+ *   Argument: mg_http_multipart_part, var_name and file_name are NULL,
+ *   status = 0 means request was properly closed, < 0 means connection
+ *   was terminated (note: in this case both PART_END and REQUEST_END are
+ *   delivered).
  */
 void mg_set_protocol_http_websocket(struct mg_connection *nc);
 
