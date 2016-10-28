@@ -53,6 +53,7 @@
 #define CS_P_NXP_KINETIS 9
 #define CS_P_NRF52 10
 #define CS_P_PIC32_HARMONY 11
+#define CS_P_NRF51 12
 
 /* If not specified explicitly, we guess platform by defines. */
 #ifndef CS_PLATFORM
@@ -833,6 +834,46 @@ int inet_pton(int af, const char *src, void *dst);
 
 #endif /* CS_PLATFORM == CS_P_MBED */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_MBED_H_ */
+#ifdef MG_MODULE_LINES
+#line 1 "common/platforms/platform_nrf51.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+#ifndef CS_COMMON_PLATFORMS_PLATFORM_NRF51_H_
+#define CS_COMMON_PLATFORMS_PLATFORM_NRF51_H_
+#if CS_PLATFORM == CS_P_NRF51
+
+#include <assert.h>
+#include <ctype.h>
+#include <inttypes.h>
+#include <stdint.h>
+#include <string.h>
+#include <time.h>
+
+#define to64(x) strtoll(x, NULL, 10)
+
+#define MG_NET_IF             MG_NET_IF_LWIP_LOW_LEVEL
+#define MG_ENABLE_IPV6        1
+
+/*
+ * For ARM C Compiler, make lwip to export `struct timeval`; for other
+ * compilers, suppress it.
+ */
+#if !defined(__ARMCC_VERSION)
+# define LWIP_TIMEVAL_PRIVATE  0
+#else
+struct timeval;
+int gettimeofday(struct timeval *tp, void *tzp);
+#endif
+
+#define INT64_FMT PRId64
+#define SIZE_T_FMT "u"
+
+
+#endif /* CS_PLATFORM == CS_P_NRF51 */
+#endif /* CS_COMMON_PLATFORMS_PLATFORM_NRF51_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/platform_nrf52.h"
 #endif
