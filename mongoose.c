@@ -8631,7 +8631,7 @@ static void mg_mqtt_close_session(struct mg_mqtt_session *s) {
 }
 
 void mg_mqtt_broker_init(struct mg_mqtt_broker *brk, void *user_data) {
-  LIST_EMPTY(&brk->sessions);
+  LIST_INIT(&brk->sessions);
   brk->user_data = user_data;
 }
 
@@ -8742,7 +8742,7 @@ void mg_mqtt_broker(struct mg_connection *nc, int ev, void *data) {
   switch (ev) {
     case MG_EV_ACCEPT:
       mg_set_protocol_mqtt(nc);
-      nc->user_data = NULL;  // This is NOT a listening connection
+      nc->user_data = NULL; /* Clear up the inherited pointer to broker */
       break;
     case MG_EV_MQTT_CONNECT:
       mg_mqtt_broker_handle_connect(brk, nc);
