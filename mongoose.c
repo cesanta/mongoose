@@ -8595,7 +8595,7 @@ void mg_mqtt_disconnect(struct mg_connection *nc) {
  */
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
-/* Amalgamated: #include "mongoose/src/mqtt-broker.h" */
+/* Amalgamated: #include "mongoose/src/mqtt-server.h" */
 
 #if MG_ENABLE_MQTT_BROKER
 
@@ -8609,16 +8609,11 @@ static void mg_mqtt_session_init(struct mg_mqtt_broker *brk,
 }
 
 static void mg_mqtt_add_session(struct mg_mqtt_session *s) {
-  s->next = s->brk->sessions;
-  s->brk->sessions = s;
-  s->prev = NULL;
-  if (s->next != NULL) s->next->prev = s;
+  LIST_INSERT_HEAD(&s->brk->sessions, s, link);
 }
 
 static void mg_mqtt_remove_session(struct mg_mqtt_session *s) {
-  if (s->prev == NULL) s->brk->sessions = s->next;
-  if (s->prev) s->prev->next = s->next;
-  if (s->next) s->next->prev = s->prev;
+  LIST_REMOVE(s, link);
 }
 
 static void mg_mqtt_destroy_session(struct mg_mqtt_session *s) {
@@ -8636,7 +8631,7 @@ static void mg_mqtt_close_session(struct mg_mqtt_session *s) {
 }
 
 void mg_mqtt_broker_init(struct mg_mqtt_broker *brk, void *user_data) {
-  brk->sessions = NULL;
+  LIST_EMPTY(&brk->sessions);
   brk->user_data = user_data;
 }
 
@@ -8662,7 +8657,6 @@ static void mg_mqtt_broker_handle_connect(struct mg_mqtt_broker *brk,
 
 static void mg_mqtt_broker_handle_subscribe(struct mg_connection *nc,
                                             struct mg_mqtt_message *msg) {
-
   struct mg_mqtt_session *ss = (struct mg_mqtt_session *) nc->user_data;
   uint8_t qoss[512];
   size_t qoss_len = 0;
@@ -8675,7 +8669,6 @@ static void mg_mqtt_broker_handle_subscribe(struct mg_connection *nc,
        (pos = mg_mqtt_next_subscribe_topic(msg, &topic, &qos, pos)) != -1;) {
     qoss[qoss_len++] = qos;
   }
-
 
   ss->subscriptions = (struct mg_mqtt_topic_expression *) realloc(
       ss->subscriptions, sizeof(*ss->subscriptions) * qoss_len);
@@ -8721,7 +8714,8 @@ static void mg_mqtt_broker_handle_publish(struct mg_mqtt_broker *brk,
       if (mg_mqtt_match_topic_expression(s->subscriptions[i].topic,
                                          &msg->topic)) {
         char buf[100], *p = buf;
-        mg_asprintf(&p, sizeof(buf), "%.*s", (int) msg->topic.len, msg->topic.p);
+        mg_asprintf(&p, sizeof(buf), "%.*s", (int) msg->topic.len,
+                    msg->topic.p);
         if (p == NULL) {
           return;
         }
@@ -8748,6 +8742,7 @@ void mg_mqtt_broker(struct mg_connection *nc, int ev, void *data) {
   switch (ev) {
     case MG_EV_ACCEPT:
       mg_set_protocol_mqtt(nc);
+      nc->user_data = NULL;  // This is NOT a listening connection
       break;
     case MG_EV_MQTT_CONNECT:
       mg_mqtt_broker_handle_connect(brk, nc);
@@ -8768,7 +8763,7 @@ void mg_mqtt_broker(struct mg_connection *nc, int ev, void *data) {
 
 struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
                                      struct mg_mqtt_session *s) {
-  return s == NULL ? brk->sessions : s->next;
+  return s == NULL ? LIST_FIRST(&brk->sessions) : LIST_NEXT(s, link);
 }
 
 #endif /* MG_ENABLE_MQTT_BROKER */
