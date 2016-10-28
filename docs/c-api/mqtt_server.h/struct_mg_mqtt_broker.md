@@ -4,8 +4,8 @@ decl_name: "struct mg_mqtt_broker"
 symbol_kind: "struct"
 signature: |
   struct mg_mqtt_broker {
-    struct mg_mqtt_session *sessions; /* Session list */
-    void *user_data;                  /* User data */
+    LIST_HEAD(, mg_mqtt_session) sessions; /* Session list */
+    void *user_data;                       /* User data */
   };
 ---
 
