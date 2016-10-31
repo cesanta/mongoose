@@ -23,9 +23,7 @@ endif
 #   makefile at its root level - these are then overridden
 #   for a subtree within the makefile rooted therein
 #
-DEFINES += -DCS_PLATFORM=3 \
-           -DRTOS_SDK \
-           -DMG_INTERNAL=
+DEFINES +=
 
 #############################################################
 # Recursion Magic - Don't touch this!!
