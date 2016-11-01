@@ -2749,7 +2749,7 @@ struct mg_connection;
  * Callback function (event handler) prototype. Must be defined by the user.
  * Mongoose calls the event handler, passing the events defined below.
  */
-typedef void (*mg_event_handler_t)(struct mg_connection *, int ev, void *);
+typedef void (*mg_event_handler_t)(struct mg_connection *nc, int ev, void *ev_data);
 
 /* Events. Meaning of event parameter (evp) is given in the comment. */
 #define MG_EV_POLL 0    /* Sent to each connection on each mg_mgr_poll() call */
