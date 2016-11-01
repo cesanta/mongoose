@@ -2510,6 +2510,18 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
         nc->user_data = lc->user_data;
         nc->recv_mbuf_limit = lc->recv_mbuf_limit;
         nc->flags = MG_F_UDP;
+        /*
+         * Long-lived UDP "connections" i.e. interactions that involve more
+         * than one request and response are rare, most are transactional:
+         * response is sent and the "connection" is closed. Or - should be.
+         * But users (including ourselves) tend to forget about that part,
+         * because UDP is connectionless and one does not think about
+         * processing a UDP request as handling a connection that needs to be
+         * closed. Thus, we begin with SEND_AND_CLOSE flag set, which should
+         * be a reasonable default for most use cases, but it is possible to
+         * turn it off the connection should be kept alive after processing.
+         */
+        nc->flags |= MG_F_SEND_AND_CLOSE;
         mg_add_conn(lc->mgr, nc);
         mg_call(nc, NULL, MG_EV_ACCEPT, &nc->sa);
       } else {
