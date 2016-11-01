@@ -7,10 +7,10 @@ To create a CoAP client, follow this pattern:
 1. Create an outbound connection by calling `mg_connect`
 2. Call `mg_set_protocol_coap` for created connection
 3. Create an event handler function that handles the following events:
-- `MG_EV_COAP_CON` 
-- `MG_EV_COAP_NOC` 
-- `MG_EV_COAP_ACK` 
-- `MG_EV_COAP_RST` 
+- `MG_EV_COAP_CON`
+- `MG_EV_COAP_NOC`
+- `MG_EV_COAP_ACK`
+- `MG_EV_COAP_RST`
 
 Here's an example of the simplest CoAP client.
 Error checking is omitted for the sake of clarity:
@@ -37,6 +37,13 @@ static void coap_handler(struct mg_connection *nc, int ev, void *p) {
       struct mg_coap_message *cm = (struct mg_coap_message *) p;
       printf("ACK/RST for message with msg_id = %d received\n", cm->msg_id);
       s_time_to_exit = 1;
+      break;
+    }
+    case MG_EV_CLOSE: {
+      if (s_time_to_exit == 0) {
+        printf("Server closed connection\n");
+        s_time_to_exit = 1;
+      }
       break;
     }
   }
