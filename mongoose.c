@@ -5106,6 +5106,8 @@ const char *mg_status_message(int status_code) {
       return "Moved";
     case 302:
       return "Found";
+    case 400:
+      return "Bad Request";
     case 401:
       return "Unauthorized";
     case 403:
@@ -5120,6 +5122,8 @@ const char *mg_status_message(int status_code) {
       return "Internal Server Error";
     case 502:
       return "Bad Gateway";
+    case 503:
+      return "Service Unavailable";
     default:
       return "OK";
   }
