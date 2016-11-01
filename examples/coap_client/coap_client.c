@@ -34,7 +34,15 @@ static void coap_handler(struct mg_connection *nc, int ev, void *p) {
     case MG_EV_COAP_RST: {
       struct mg_coap_message *cm = (struct mg_coap_message *) p;
       printf("ACK/RST for message with msg_id = %d received\n", cm->msg_id);
+      nc->flags |= MG_F_SEND_AND_CLOSE;
       s_time_to_exit = 1;
+      break;
+    }
+    case MG_EV_CLOSE: {
+      if (s_time_to_exit == 0) {
+        printf("Server closed connection\n");
+        s_time_to_exit = 1;
+      }
       break;
     }
   }

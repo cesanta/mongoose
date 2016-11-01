@@ -31,6 +31,12 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       putchar('\n');
       s_exit_flag = 1;
       break;
+    case MG_EV_CLOSE:
+      if(s_exit_flag == 0) {
+        printf("Server closed connection\n");
+        s_exit_flag = 1;
+      }
+      break;
     default:
       break;
   }
