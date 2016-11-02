@@ -1170,12 +1170,10 @@ typedef uint32_t in_addr_t;
 #define CS_ENABLE_STDIO 1
 #endif
 
-typedef unsigned int* uintptr_t;
 #define abort() DebugBreak();
 
 #ifndef BUFSIZ
 #define BUFSIZ 4096
-#define ENOMEM ERROR_NOT_ENOUGH_MEMORY
 #endif
 /*
  * Explicitly disabling MG_ENABLE_THREADS for WinCE
@@ -1199,8 +1197,26 @@ typedef struct _stati64 {
   uint32_t st_mode;
 } cs_stat_t;
 
+/*
+ * WinCE 6.0 has a lot of useful definitions in ATL (not windows.h) headers
+ * use #ifdefs to avoid conflicts
+ */
+
+#ifndef ENOENT
 #define ENOENT ERROR_PATH_NOT_FOUND
+#endif
+
+#ifndef EACCES
 #define EACCES ERROR_ACCESS_DENIED
+#endif
+
+#ifndef ENOMEM
+#define ENOMEM ERROR_NOT_ENOUGH_MEMORY
+#endif
+
+#ifndef _UINTPTR_T_DEFINED
+typedef unsigned int* uintptr_t;
+#endif
 
 #define _S_IFREG 2
 #define _S_IFDIR 4
