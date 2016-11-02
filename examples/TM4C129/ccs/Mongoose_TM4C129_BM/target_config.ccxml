@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<configurations XML_version="1.2" id="configurations_0">
+    <configuration XML_version="1.2" id="Stellaris In-Circuit Debug Interface_0">
+    <instance XML_version="1.2" desc="Stellaris In-Circuit Debug Interface_0" href="connections/Stellaris_ICDI_Connection.xml" id="Stellaris In-Circuit Debug Interface_0" xml="Stellaris_ICDI_Connection.xml" xmlpath="connections"/>
+    <connection XML_version="1.2" id="Stellaris In-Circuit Debug Interface_0">
+      <instance XML_version="1.2" href="drivers/stellaris_cs_dap.xml" id="drivers" xml="stellaris_cs_dap.xml" xmlpath="drivers"/>
+      <instance XML_version="1.2" href="drivers/stellaris_cortex_m4.xml" id="drivers" xml="stellaris_cortex_m4.xml" xmlpath="drivers"/>
+      <platform XML_version="1.2" id="platform_0">
+        <instance XML_version="1.2" desc="Stellaris TM4C129ENCPDT_0" href="devices/tm4c129encpdt.xml" id="Stellaris TM4C129ENCPDT_0" xml="tm4c129encpdt.xml" xmlpath="devices"/>
+      </platform>
+    </connection>
+  </configuration>
+</configurations>

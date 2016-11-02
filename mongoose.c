@@ -725,10 +725,9 @@ typedef int cs_dirent_dummy;
 /*
  * There is no sys/time.h on ARMCC.
  */
-#if !(defined(__ARMCC_VERSION) || defined(__ICCARM__)) &&         \
-    (!defined(CS_PLATFORM) ||                                     \
-     (CS_PLATFORM != CS_P_CC3200 && CS_PLATFORM != CS_P_MSP432 && \
-      CS_PLATFORM != CS_P_NXP_LPC))
+#if !(defined(__ARMCC_VERSION) || defined(__ICCARM__)) && \
+    !defined(__TI_COMPILER_VERSION__) &&                  \
+    (!defined(CS_PLATFORM) || CS_PLATFORM != CS_P_NXP_LPC)
 #include <sys/time.h>
 #endif
 #else
