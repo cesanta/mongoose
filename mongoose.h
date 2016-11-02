@@ -3778,7 +3778,7 @@ struct mg_ssi_call_ctx {
 #define MG_EV_SSI_CALL_CTX 106 /* struct mg_ssi_call_ctx * */
 
 #if MG_ENABLE_HTTP_WEBSOCKET
-#define MG_EV_WEBSOCKET_HANDSHAKE_REQUEST 111 /* NULL */
+#define MG_EV_WEBSOCKET_HANDSHAKE_REQUEST 111 /* struct http_message * */
 #define MG_EV_WEBSOCKET_HANDSHAKE_DONE 112    /* NULL */
 #define MG_EV_WEBSOCKET_FRAME 113             /* struct websocket_message * */
 #define MG_EV_WEBSOCKET_CONTROL_FRAME 114     /* struct websocket_message * */
@@ -3789,7 +3789,8 @@ struct mg_ssi_call_ctx {
 #define MG_EV_HTTP_PART_BEGIN 122            /* struct mg_http_multipart_part */
 #define MG_EV_HTTP_PART_DATA 123             /* struct mg_http_multipart_part */
 #define MG_EV_HTTP_PART_END 124              /* struct mg_http_multipart_part */
-#define MG_EV_HTTP_MULTIPART_REQUEST_END 125 /* struct mg_http_multipart_part */
+#define MG_EV_HTTP_MULTIPART_REQUEST_END 125 /* struct mg_http_multipart_part \
+                                                */
 #endif
 
 /*
