@@ -928,6 +928,7 @@ int inet_pton(int af, const char *src, void *dst);
 #define to64(x) strtoll(x, NULL, 10)
 
 #define MG_NET_IF             MG_NET_IF_LWIP_LOW_LEVEL
+#define MG_LWIP               1
 #define MG_ENABLE_IPV6        1
 
 /*

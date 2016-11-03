@@ -224,7 +224,7 @@
             <hadIRAM2>0</hadIRAM2>
             <hadIROM2>0</hadIROM2>
             <StupSel>8</StupSel>
-            <useUlib>1</useUlib>
+            <useUlib>0</useUlib>
             <EndSel>0</EndSel>
             <uLtcg>0</uLtcg>
             <RoSelD>3</RoSelD>
@@ -363,9 +363,9 @@
             <useXO>0</useXO>
             <VariousControls>
               <MiscControls>--c99</MiscControls>
-              <Define>__HEAP_SIZE=1024 BOARD_PCA10028 BLE_STACK_SUPPORT_REQD S110 BSP_DEFINES_ONLY NRF51 SOFTDEVICE_PRESENT SWI_DISABLE0 MG_DISABLE_HTTP_DIGEST_AUTH MG_DISABLE_MD5 MG_DISABLE_HTTP_KEEP_ALIVE MG_ENABLE_HTTP_SSI=0 MG_ENABLE_HTTP_STREAMING_MULTIPART MG_NO_BSD_SOCKETS CS_PLATFORM=CS_P_NRF51 CS_ENABLE_STDIO</Define>
+              <Define>__HEAP_SIZE=1024 BOARD_PCA10028 BLE_STACK_SUPPORT_REQD S110 BSP_DEFINES_ONLY NRF51 SOFTDEVICE_PRESENT SWI_DISABLE0 MG_DISABLE_HTTP_DIGEST_AUTH MG_DISABLE_MD5 MG_DISABLE_HTTP_KEEP_ALIVE MG_ENABLE_HTTP_SSI=0 MG_ENABLE_HTTP_STREAMING_MULTIPART CS_PLATFORM=CS_P_NRF51 CS_ENABLE_STDIO NRF_LOG_USES_RTT  ENABLE_DEBUG_LOG_SUPPORT</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\..\config;..\..\..;..\..\..\..\nrf51_iot_sdk\examples\bsp;..\..\..\..\nrf51_iot_sdk\components\softdevice\s1xx_iot\headers;..\..\..\..\nrf51_iot_sdk\components\ble\common;..\..\..\..\nrf51_iot_sdk\components\drivers_nrf\uart;..\..\..\..\nrf51_iot_sdk\components\libraries\timer;..\..\..\..\nrf51_iot_sdk\components\softdevice\common\softdevice_handler;..\..\..\..\nrf51_iot_sdk\components\libraries\scheduler;..\..\..\..\nrf51_iot_sdk\components\libraries\button;..\..\..\..\nrf51_iot_sdk\external\lwip\src\include;..\..\..\..\nrf51_iot_sdk\external\lwip\src\include\netif;..\..\..\..\nrf51_iot_sdk\external\lwip\src\port;..\..\..\..\nrf51_iot_sdk\external\lwip\src\port\arch;..\..\..\..\nrf51_iot_sdk\components\iot\ble_6lowpan;..\..\..\..\nrf51_iot_sdk\components\device;..\..\..\..\nrf51_iot_sdk\components\toolchain;..\..\..\..\nrf51_iot_sdk\components\libraries\util;..\..\..\..\nrf51_iot_sdk\components\libraries\fifo;..\..\..\..\nrf51_iot_sdk\components\drivers_nrf\gpiote;..\..\..\..\nrf51_iot_sdk\components\drivers_nrf\config;..\..\..\..\nrf51_iot_sdk\components\drivers_nrf\common;..\..\..\..\nrf51_iot_sdk\components\drivers_nrf\hal;..\..\..\..\nrf51_iot_sdk\components\libraries\mem_manager;..\..\..\..\nrf51_iot_sdk\components\iot\include;..\..\..\..\nrf51_iot_sdk\components\iot\context_manager;..\..\..\..\nrf51_iot_sdk\components\iot\ble_ipsp;..\..\..\..\nrf51_iot_sdk\components\libraries\trace;..\..\..\..\..\..</IncludePath>
+              <IncludePath>..\..\..\config;..\..\..;..\..\..\..\nrf51_iot_sdk\examples\bsp;..\..\..\..\nrf51_iot_sdk\components\softdevice\s1xx_iot\headers;..\..\..\..\nrf51_iot_sdk\components\ble\common;..\..\..\..\nrf51_iot_sdk\components\drivers_nrf\uart;..\..\..\..\nrf51_iot_sdk\components\libraries\timer;..\..\..\..\nrf51_iot_sdk\components\softdevice\common\softdevice_handler;..\..\..\..\nrf51_iot_sdk\components\libraries\scheduler;..\..\..\..\nrf51_iot_sdk\components\libraries\button;..\..\..\..\nrf51_iot_sdk\external\lwip\src\include;..\..\..\..\nrf51_iot_sdk\external\lwip\src\include\netif;..\..\..\..\nrf51_iot_sdk\external\lwip\src\port;..\..\..\..\nrf51_iot_sdk\external\lwip\src\port\arch;..\..\..\..\nrf51_iot_sdk\components\iot\ble_6lowpan;..\..\..\..\nrf51_iot_sdk\components\device;..\..\..\..\nrf51_iot_sdk\components\toolchain;..\..\..\..\nrf51_iot_sdk\components\libraries\util;..\..\..\..\nrf51_iot_sdk\components\libraries\fifo;..\..\..\..\nrf51_iot_sdk\components\drivers_nrf\gpiote;..\..\..\..\nrf51_iot_sdk\components\drivers_nrf\config;..\..\..\..\nrf51_iot_sdk\components\drivers_nrf\common;..\..\..\..\nrf51_iot_sdk\components\drivers_nrf\hal;..\..\..\..\nrf51_iot_sdk\components\libraries\mem_manager;..\..\..\..\nrf51_iot_sdk\components\iot\include;..\..\..\..\nrf51_iot_sdk\components\iot\context_manager;..\..\..\..\nrf51_iot_sdk\components\iot\ble_ipsp;..\..\..\..\nrf51_iot_sdk\components\libraries\trace;..\..\..\..\..\..;..\..\..\rtt\RTT</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -380,7 +380,7 @@
             <useXO>0</useXO>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define> __HEAP_SIZE=1024 BOARD_PCA10028 BLE_STACK_SUPPORT_REQD S110 BSP_DEFINES_ONLY NRF51 SOFTDEVICE_PRESENT SWI_DISABLE0</Define>
+              <Define>__HEAP_SIZE=1024 BOARD_PCA10028 BLE_STACK_SUPPORT_REQD S110 BSP_DEFINES_ONLY NRF51 SOFTDEVICE_PRESENT SWI_DISABLE0 NRF_LOG_USES_RTT  ENABLE_DEBUG_LOG_SUPPORT</Define>
               <Undefine></Undefine>
               <IncludePath></IncludePath>
             </VariousControls>
@@ -563,11 +563,6 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\..\nrf51_iot_sdk\components\libraries\util\nrf_assert.c</FilePath>
             </File>
-            <File>
-              <FileName>retarget.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\nrf51_iot_sdk\components\libraries\uart\retarget.c</FilePath>
-            </File>
           </Files>
         </Group>
         <Group>
@@ -597,6 +592,36 @@
               <FileName>mongoose.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\..\..\mongoose.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>RTT</GroupName>
+          <Files>
+            <File>
+              <FileName>SEGGER_RTT.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\rtt\RTT\SEGGER_RTT.c</FilePath>
+            </File>
+            <File>
+              <FileName>SEGGER_RTT.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\rtt\RTT\SEGGER_RTT.h</FilePath>
+            </File>
+            <File>
+              <FileName>SEGGER_RTT_Conf.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\rtt\RTT\SEGGER_RTT_Conf.h</FilePath>
+            </File>
+            <File>
+              <FileName>SEGGER_RTT_printf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\rtt\RTT\SEGGER_RTT_printf.c</FilePath>
+            </File>
+            <File>
+              <FileName>RTT_Syscalls_KEIL.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\rtt\Syscalls\RTT_Syscalls_KEIL.c</FilePath>
             </File>
           </Files>
         </Group>
