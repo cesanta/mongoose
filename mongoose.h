@@ -5328,6 +5328,7 @@ int mg_set_protocol_coap(struct mg_connection *nc);
 /*
  * Adds a new option to mg_coap_message structure.
  * Returns pointer to the newly created option.
+ * Note: options must be freed by using mg_coap_free_options
  */
 struct mg_coap_option *mg_coap_add_option(struct mg_coap_message *cm,
                                           uint32_t number, char *value,
