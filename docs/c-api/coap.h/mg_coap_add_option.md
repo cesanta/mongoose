@@ -9,5 +9,6 @@ signature: |
 ---
 
 Adds a new option to mg_coap_message structure.
-Returns pointer to the newly created option. 
+Returns pointer to the newly created option.
+Note: options must be freed by using mg_coap_free_options 
 
