@@ -85,7 +85,6 @@ int main(void)
 
     for (;;) {  // Start infinite event loop
       bleconfig_poll();
-      sys_check_timeouts();
       mg_mgr_poll(&mgr, 0);
     }
 

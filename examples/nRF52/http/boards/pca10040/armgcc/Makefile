@@ -36,7 +36,7 @@ SIZE            := '$(GNU_INSTALL_ROOT)/bin/$(GNU_PREFIX)-size'
 remduplicates = $(strip $(if $1,$(firstword $1) $(call remduplicates,$(filter-out $(firstword $1),$1))))
 
 #source common to all targets
-C_SOURCE_FILES += \
+C_SOURCE_FILES_SDK = \
 $(abspath ../../../../nrf5_iot_sdk/components/libraries/button/app_button.c) \
 $(abspath ../../../../nrf5_iot_sdk/components/libraries/util/app_error.c) \
 $(abspath ../../../../nrf5_iot_sdk/components/libraries/fifo/app_fifo.c) \
@@ -80,12 +80,6 @@ $(abspath ../../../../nrf5_iot_sdk/components/drivers_nrf/gpiote/nrf_drv_gpiote.
 $(abspath ../../../../nrf5_iot_sdk/components/drivers_nrf/uart/nrf_drv_uart.c) \
 $(abspath ../../../../nrf5_iot_sdk/components/drivers_nrf/pstorage/pstorage.c) \
 $(abspath ../../../../nrf5_iot_sdk/examples/bsp/bsp.c) \
-$(abspath ../../../main.c) \
-$(abspath ../../../bleconfig.c) \
-$(abspath ../../../../../../mongoose.c) \
-$(abspath ../../../rtt/RTT/SEGGER_RTT.c) \
-$(abspath ../../../rtt/RTT/SEGGER_RTT_printf.c) \
-$(abspath ../../../rtt/Syscalls/RTT_Syscalls_GCC.c) \
 $(abspath ../../../../nrf5_iot_sdk/components/ble/common/ble_advdata.c) \
 $(abspath ../../../../nrf5_iot_sdk/components/ble/common/ble_conn_params.c) \
 $(abspath ../../../../nrf5_iot_sdk/components/ble/common/ble_srv_common.c) \
@@ -99,6 +93,16 @@ $(abspath ../../../../nrf5_iot_sdk/components/iot/medium/ble_ncfgs/ble_ncfgs.c) 
 $(abspath ../../../../nrf5_iot_sdk/components/iot/medium/commissioning/commissioning.c) \
 $(abspath ../../../../nrf5_iot_sdk/components/softdevice/common/softdevice_handler/softdevice_handler.c) \
 $(abspath ../../../../nrf5_iot_sdk/components/softdevice/common/softdevice_handler/softdevice_handler_appsh.c) \
+
+C_SOURCE_FILES_APP = \
+$(abspath ../../../main.c) \
+$(abspath ../../../bleconfig.c) \
+$(abspath ../../../../../../mongoose.c) \
+$(abspath ../../../rtt/RTT/SEGGER_RTT.c) \
+$(abspath ../../../rtt/RTT/SEGGER_RTT_printf.c) \
+$(abspath ../../../rtt/Syscalls/RTT_Syscalls_GCC.c) \
+
+C_SOURCE_FILES = $(C_SOURCE_FILES_APP) $(C_SOURCE_FILES_SDK)
 
 #assembly files common to all targets
 ASM_SOURCE_FILES  = $(abspath ../../../../nrf5_iot_sdk/components/toolchain/gcc/gcc_startup_nrf52.s)
@@ -178,7 +182,7 @@ CFLAGS += -DBLE_STACK_SUPPORT_REQD
 CFLAGS += -Ds1xx
 CFLAGS += -mcpu=cortex-m4
 CFLAGS += -mthumb -mabi=aapcs --std=gnu99
-CFLAGS += -w -g3 -O3
+CFLAGS += -g3 -O3
 CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 # keep every function in separate section. This will allow linker to dump unused functions
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
@@ -229,6 +233,17 @@ help:
 C_SOURCE_FILE_NAMES = $(notdir $(C_SOURCE_FILES))
 C_PATHS = $(call remduplicates, $(dir $(C_SOURCE_FILES) ) )
 C_OBJECTS = $(addprefix $(OBJECT_DIRECTORY)/, $(C_SOURCE_FILE_NAMES:.c=.o) )
+
+C_SOURCE_FILE_NAMES_SDK = $(notdir $(C_SOURCE_FILES_SDK))
+C_SOURCE_FILE_NAMES_APP = $(notdir $(C_SOURCE_FILES_APP))
+C_OBJECTS_SDK = $(addprefix $(OBJECT_DIRECTORY)/, $(C_SOURCE_FILE_NAMES_SDK:.c=.o) )
+C_OBJECTS_APP = $(addprefix $(OBJECT_DIRECTORY)/, $(C_SOURCE_FILE_NAMES_APP:.c=.o) )
+
+# Disable all warnings for SDK sources since we have no control of them
+$(C_OBJECTS_SDK): CFLAGS += -w
+
+# Enable all warnings for the application's files
+$(C_OBJECTS_APP): CFLAGS += -Wall
 
 ASM_SOURCE_FILE_NAMES = $(notdir $(ASM_SOURCE_FILES))
 ASM_PATHS = $(call remduplicates, $(dir $(ASM_SOURCE_FILES) ))

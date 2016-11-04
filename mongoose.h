@@ -975,9 +975,12 @@ int gettimeofday(struct timeval *tp, void *tzp);
 #define to64(x) strtoll(x, NULL, 10)
 
 #define MG_NET_IF             MG_NET_IF_LWIP_LOW_LEVEL
-#define LWIP_PROVIDE_ERRNO    1
 #define MG_LWIP               1
 #define MG_ENABLE_IPV6        1
+
+#if !defined(ENOSPC)
+# define ENOSPC 28  /* No space left on device */
+#endif
 
 /*
  * For ARM C Compiler, make lwip to export `struct timeval`; for other
@@ -1441,6 +1444,20 @@ char* inet_ntoa(struct in_addr in);
 #endif
 
 #if MG_LWIP
+
+
+/*
+ * When compiling for nRF5x chips with arm-none-eabi-gcc, it has BYTE_ORDER
+ * already defined, so in order to avoid warnings in lwip, we have to undefine
+ * it.
+ *
+ * TODO: Check if in the future versions of nRF5 SDK that changes.
+ *       Current version of nRF51 SDK: 0.8.0
+ *                          nRF5 SDK:  0.9.0
+ */
+#if CS_PLATFORM == CS_P_NRF51 || CS_PLATFORM == CS_P_NRF52
+# undef BYTE_ORDER
+#endif
 
 #include <lwip/opt.h>
 #include <lwip/err.h>

@@ -16,6 +16,16 @@
 #include "ble_6lowpan.h"
 #include "mem_manager.h"
 #include "app_trace.h"
+
+/*
+ * arm-none-eabi-gcc has BYTE_ORDER already defined, so in order to avoid
+ * warnings in lwip, we have to undefine it
+ *
+ * TODO: Check if in the future versions of nRF5 SDK that changes.
+ *       Current version of nRF51 SDK: 0.8.0
+ *                          nRF5 SDK:  0.9.0
+ */
+#undef BYTE_ORDER
 #include "lwip/init.h"
 #include "lwip/inet6.h"
 #include "lwip/ip6.h"
@@ -63,7 +73,6 @@ typedef enum
 APP_TIMER_DEF(m_iot_timer_tick_src_id);                                                             /**< System Timer used to service CoAP and LWIP periodically. */
 eui64_t                                     eui64_local_iid;                                        /**< Local EUI64 value that is used as the IID for*/
 static ipv6_medium_instance_t               m_ipv6_medium;
-static struct tcp_pcb                     * mp_tcp_port;                                            /**< TCP Port to listen on. */
 static tcp_state_t                          m_tcp_state;                                            /**< TCP State information. */
 
 #ifdef COMMISSIONING_ENABLED
@@ -419,11 +428,12 @@ void bleconfig_init(void) {
   //Start execution.
   connectable_mode_enter();
 
-  APPL_LOG(0, "BLE init done\n");
+  APPL_LOG("BLE init done\n");
 }
 
 void bleconfig_poll(void) {
   //Execute event schedule.
   app_sched_execute();
+  sys_check_timeouts();
 }
 
