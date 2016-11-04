@@ -11818,8 +11818,18 @@ void mg_if_connect_tcp(struct mg_connection *nc,
   }
 }
 
+/*
+ * Lwip included in the SDKs for nRF5x chips has different type for the
+ * callback of `udp_recv()`
+ */
+#if CS_PLATFORM == CS_P_NRF51 || CS_PLATFORM == CS_P_NRF52
 static void mg_lwip_udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,
-                                ip_addr_t *addr, u16_t port) {
+                                const ip_addr_t *addr, u16_t port)
+#else
+static void mg_lwip_udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,
+                                ip_addr_t *addr, u16_t port)
+#endif
+{
   struct mg_connection *nc = (struct mg_connection *) arg;
   size_t len = p->len;
   char *data = (char *) malloc(len);
