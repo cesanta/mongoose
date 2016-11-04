@@ -35,6 +35,16 @@
 #include "ble_6lowpan.h"
 #include "mem_manager.h"
 #include "app_trace.h"
+
+/*
+ * arm-none-eabi-gcc has BYTE_ORDER already defined, so in order to avoid
+ * warnings in lwip, we have to undefine it
+ *
+ * TODO: Check if in the future versions of nRF5 SDK that changes.
+ *       Current version of nRF51 SDK: 0.8.0
+ *                          nRF5 SDK:  0.9.0
+ */
+#undef BYTE_ORDER
 #include "lwip/init.h"
 #include "lwip/inet6.h"
 #include "lwip/ip6.h"
