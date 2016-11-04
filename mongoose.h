@@ -103,6 +103,7 @@
 /* Amalgamated: #include "common/platforms/platform_cc3200.h" */
 /* Amalgamated: #include "common/platforms/platform_cc3100.h" */
 /* Amalgamated: #include "common/platforms/platform_mbed.h" */
+/* Amalgamated: #include "common/platforms/platform_nrf51.h" */
 /* Amalgamated: #include "common/platforms/platform_nrf52.h" */
 /* Amalgamated: #include "common/platforms/platform_wince.h" */
 /* Amalgamated: #include "common/platforms/platform_nxp_lpc.h" */

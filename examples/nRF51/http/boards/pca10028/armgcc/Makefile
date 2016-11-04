@@ -142,7 +142,7 @@ CFLAGS += -DCS_ENABLE_STDIO
 CFLAGS += -DENABLE_DEBUG_LOG_SUPPORT
 
 # Mongoose flags
-CFLAGS += -DCS_PLATFORM=CS_P_NRF52 $(MG_FEATURES_TINY) -DMG_MODULE_LINES
+CFLAGS += -DCS_PLATFORM=CS_P_NRF51 $(MG_FEATURES_TINY) -DMG_MODULE_LINES
 
 # keep every function in separate section. This will allow linker to dump unused functions
 LDFLAGS += -Xlinker -Map=$(LISTING_DIRECTORY)/$(OUTPUT_FILENAME).map
