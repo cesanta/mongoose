@@ -88,11 +88,12 @@ void handle_eth(struct netif *eth_if) {
       printf("Link up\r\n");
     } else {
       Board_LED_Set(0, false);
-      Board_LED_Set(1, false);
       netif_set_link_down(eth_if);
       printf("Link down\r\n");
     }
   }
+
+  Board_LED_Set(1, (eth_if->dhcp->state == DHCP_BOUND));
 
   /* Handle packets as part of this loop, not in the IRQ handler */
   lpc_enetif_input(eth_if);
