@@ -23,10 +23,7 @@ endif
 #   makefile at its root level - these are then overridden
 #   for a subtree within the makefile rooted therein
 #
-DEFINES += -DCS_PLATFORM=3 \
-           -DMG_NO_BSD_SOCKETS=1 \
-           -DRTOS_SDK -DMG_LWIP -DLWIP_TIMEVAL_PRIVATE=0 \
-           -DMG_INTERNAL=
+DEFINES +=
 
 #############################################################
 # Recursion Magic - Don't touch this!!

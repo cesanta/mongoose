@@ -40,6 +40,7 @@
 									<listOptionValue builtIn="false" value="__MSP432P401R__"/>
 									<listOptionValue builtIn="false" value="TARGET_IS_MSP432P4XX"/>
 									<listOptionValue builtIn="false" value="ccs"/>
+									<listOptionValue builtIn="false" value="MG_ENABLE_FILESYSTEM=1"/>
 									<listOptionValue builtIn="false" value="MG_ENABLE_HTTP_STREAMING_MULTIPART=1"/>
 									<listOptionValue builtIn="false" value="MG_FS_SLFS=1"/>
 								</option>
@@ -128,6 +129,7 @@
 									<listOptionValue builtIn="false" value="__MSP432P401R__"/>
 									<listOptionValue builtIn="false" value="TARGET_IS_MSP432P4XX"/>
 									<listOptionValue builtIn="false" value="ccs"/>
+									<listOptionValue builtIn="false" value="MG_ENABLE_FILESYSTEM=1"/>
 									<listOptionValue builtIn="false" value="MG_ENABLE_HTTP_STREAMING_MULTIPART=1"/>
 									<listOptionValue builtIn="false" value="MG_FS_SLFS=1"/>
 								</option>
