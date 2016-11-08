@@ -12,7 +12,8 @@ signature: |
     sock_t ctl[2]; /* Socketpair for mg_broadcast() */
   #endif
     void *user_data; /* User data */
-    void *mgr_data;  /* Implementation-specific event manager's data. */
+    int num_ifaces;
+    struct mg_iface **ifaces; /* network interfaces */
   #if MG_ENABLE_JAVASCRIPT
     struct v7 *v7;
   #endif

@@ -1832,11 +1832,6 @@ int64_t cs_to64(const char *s) {
 #define intptr_t long
 #endif
 
-extern void mg_ev_mgr_init(struct mg_mgr *mgr);
-extern void mg_ev_mgr_free(struct mg_mgr *mgr);
-extern void mg_ev_mgr_add_conn(struct mg_connection *nc);
-extern void mg_ev_mgr_remove_conn(struct mg_connection *nc);
-
 MG_INTERNAL void mg_add_conn(struct mg_mgr *mgr, struct mg_connection *c) {
   DBG(("%p %p", mgr, c));
   c->mgr = mgr;
@@ -1844,14 +1839,14 @@ MG_INTERNAL void mg_add_conn(struct mg_mgr *mgr, struct mg_connection *c) {
   mgr->active_connections = c;
   c->prev = NULL;
   if (c->next != NULL) c->next->prev = c;
-  mg_ev_mgr_add_conn(c);
+  c->iface->vtable->add_conn(c);
 }
 
 MG_INTERNAL void mg_remove_conn(struct mg_connection *conn) {
   if (conn->prev == NULL) conn->mgr->active_connections = conn->next;
   if (conn->prev) conn->prev->next = conn->next;
   if (conn->next) conn->next->prev = conn->prev;
-  mg_ev_mgr_remove_conn(conn);
+  conn->iface->vtable->remove_conn(conn);
 }
 
 MG_INTERNAL void mg_call(struct mg_connection *nc,
@@ -1893,7 +1888,7 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
                   (nc->flags & _MG_CALLBACK_MODIFIABLE_FLAGS_MASK);
     }
     if (recved > 0 && !(nc->flags & MG_F_UDP)) {
-      mg_if_recved(nc, recved);
+      nc->iface->vtable->recved(nc, recved);
     }
   }
   if (ev != MG_EV_POLL) {
@@ -1924,7 +1919,7 @@ void mg_if_poll(struct mg_connection *nc, time_t now) {
 }
 
 static void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
-  if (destroy_if) mg_if_destroy_conn(conn);
+  if (destroy_if) conn->iface->vtable->destroy_conn(conn);
   if (conn->proto_data != NULL && conn->proto_data_destructor != NULL) {
     conn->proto_data_destructor(conn->proto_data);
   }
@@ -1942,12 +1937,19 @@ static void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
 void mg_close_conn(struct mg_connection *conn) {
   DBG(("%p %lu %d", conn, conn->flags, conn->sock));
   mg_remove_conn(conn);
-  mg_if_destroy_conn(conn);
+  conn->iface->vtable->destroy_conn(conn);
   mg_call(conn, NULL, MG_EV_CLOSE, NULL);
   mg_destroy_conn(conn, 0 /* destroy_if */);
 }
 
 void mg_mgr_init(struct mg_mgr *m, void *user_data) {
+  struct mg_mgr_init_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  mg_mgr_init_opt(m, user_data, opts);
+}
+
+void mg_mgr_init_opt(struct mg_mgr *m, void *user_data,
+                     struct mg_mgr_init_opts opts) {
   memset(m, 0, sizeof(*m));
 #if MG_ENABLE_BROADCAST
   m->ctl[0] = m->ctl[1] = INVALID_SOCKET;
@@ -1974,8 +1976,23 @@ void mg_mgr_init(struct mg_mgr *m, void *user_data) {
     }
   }
 #endif
-
-  mg_ev_mgr_init(m);
+  {
+    int i;
+    if (opts.num_ifaces == 0) {
+      opts.num_ifaces = MG_NUM_IFACES;
+      opts.ifaces = mg_ifaces;
+    }
+    if (opts.main_iface != NULL) {
+      opts.ifaces[MG_MAIN_IFACE] = opts.main_iface;
+    }
+    m->num_ifaces = opts.num_ifaces;
+    m->ifaces =
+        (struct mg_iface **) MG_MALLOC(sizeof(*m->ifaces) * opts.num_ifaces);
+    for (i = 0; i < MG_NUM_IFACES; i++) {
+      m->ifaces[i] = mg_if_create_iface(opts.ifaces[i], m);
+      m->ifaces[i]->vtable->init(m->ifaces[i]);
+    }
+  }
   DBG(("=================================="));
   DBG(("init mgr=%p", m));
 }
@@ -2025,7 +2042,29 @@ void mg_mgr_free(struct mg_mgr *m) {
     mg_close_conn(conn);
   }
 
-  mg_ev_mgr_free(m);
+  {
+    int i;
+    for (i = 0; i < m->num_ifaces; i++) {
+      m->ifaces[i]->vtable->free(m->ifaces[i]);
+      MG_FREE(m->ifaces[i]);
+    }
+    MG_FREE(m->ifaces);
+  }
+}
+
+time_t mg_mgr_poll(struct mg_mgr *m, int timeout_ms) {
+  int i;
+  time_t now = 0; /* oh GCC, seriously ? */
+
+  if (m->num_ifaces == 0) {
+    LOG(LL_ERROR, ("cannot poll: no interfaces"));
+    return 0;
+  }
+
+  for (i = 0; i < m->num_ifaces; i++) {
+    now = m->ifaces[i]->vtable->poll(m->ifaces[i], timeout_ms);
+  }
+  return now;
 }
 
 int mg_vprintf(struct mg_connection *nc, const char *fmt, va_list ap) {
@@ -2099,6 +2138,7 @@ MG_INTERNAL struct mg_connection *mg_create_connection_base(
     conn->handler = callback;
     conn->mgr = mgr;
     conn->last_io_time = (time_t) mg_time();
+    conn->iface = mgr->ifaces[MG_MAIN_IFACE];
     conn->flags = opts.flags & _MG_ALLOWED_CONNECT_FLAGS_MASK;
     conn->user_data = opts.user_data;
     /*
@@ -2119,9 +2159,11 @@ MG_INTERNAL struct mg_connection *mg_create_connection(
     struct mg_add_sock_opts opts) {
   struct mg_connection *conn = mg_create_connection_base(mgr, callback, opts);
 
-  if (!mg_if_create_conn(conn)) {
+  if (conn != NULL && !conn->iface->vtable->create_conn(conn)) {
     MG_FREE(conn);
     conn = NULL;
+  }
+  if (conn == NULL) {
     MG_SET_PTRPTR(opts.error_string, "failed to init connection");
   }
 
@@ -2435,9 +2477,9 @@ void mg_if_accept_tcp_cb(struct mg_connection *nc, union socket_address *sa,
 void mg_send(struct mg_connection *nc, const void *buf, int len) {
   nc->last_io_time = (time_t) mg_time();
   if (nc->flags & MG_F_UDP) {
-    mg_if_udp_send(nc, buf, len);
+    nc->iface->vtable->udp_send(nc, buf, len);
   } else {
-    mg_if_tcp_send(nc, buf, len);
+    nc->iface->vtable->tcp_send(nc, buf, len);
   }
 #if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
   if (nc->mgr && nc->mgr->hexdump_file != NULL) {
@@ -2534,7 +2576,7 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
   } else {
     /* Drop on the floor. */
     MG_FREE(buf);
-    mg_if_recved(nc, len);
+    nc->iface->vtable->recved(nc, len);
   }
 }
 
@@ -2552,9 +2594,9 @@ MG_INTERNAL struct mg_connection *mg_do_connect(struct mg_connection *nc,
 
   nc->flags |= MG_F_CONNECTING;
   if (proto == SOCK_DGRAM) {
-    mg_if_connect_udp(nc);
+    nc->iface->vtable->connect_udp(nc);
   } else {
-    mg_if_connect_tcp(nc, sa);
+    nc->iface->vtable->connect_tcp(nc, sa);
   }
   mg_add_conn(nc->mgr, nc);
   return nc;
@@ -2770,9 +2812,9 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
 #endif /* MG_ENABLE_SSL */
 
   if (nc->flags & MG_F_UDP) {
-    rc = mg_if_listen_udp(nc, &nc->sa);
+    rc = nc->iface->vtable->listen_udp(nc, &nc->sa);
   } else {
-    rc = mg_if_listen_tcp(nc, &nc->sa);
+    rc = nc->iface->vtable->listen_tcp(nc, &nc->sa);
   }
   if (rc != 0) {
     DBG(("Failed to open listener: %d", rc));
@@ -2881,6 +2923,15 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
   return result;
 }
 
+void mg_sock_set(struct mg_connection *nc, sock_t sock) {
+  nc->iface->vtable->sock_set(nc, sock);
+}
+
+void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
+                         union socket_address *sa) {
+  nc->iface->vtable->get_conn_addr(nc, remote, sa);
+}
+
 struct mg_connection *mg_add_sock_opt(struct mg_mgr *s, sock_t sock,
                                       mg_event_handler_t callback,
                                       struct mg_add_sock_opts opts) {
@@ -2903,6 +2954,53 @@ double mg_time(void) {
   return cs_time();
 }
 #ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/net_if_socket.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_MONGOOSE_SRC_NET_IF_SOCKET_H_
+#define CS_MONGOOSE_SRC_NET_IF_SOCKET_H_
+
+/* Amalgamated: #include "mongoose/src/net_if.h" */
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+#ifndef MG_ENABLE_NET_IF_SOCKET
+#define MG_ENABLE_NET_IF_SOCKET MG_NET_IF == MG_NET_IF_SOCKET
+#endif
+
+extern struct mg_iface_vtable mg_socket_iface_vtable;
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* CS_MONGOOSE_SRC_NET_IF_SOCKET_H_ */
+#ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/net_if.c"
+#endif
+/* Amalgamated: #include "mongoose/src/net_if.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/net_if_socket.h" */
+
+extern struct mg_iface_vtable mg_default_iface_vtable;
+
+struct mg_iface_vtable *mg_ifaces[] = {&mg_default_iface_vtable};
+
+struct mg_iface *mg_if_create_iface(struct mg_iface_vtable *vtable,
+                                    struct mg_mgr *mgr) {
+  struct mg_iface *iface = (struct mg_iface *) MG_CALLOC(1, sizeof(*iface));
+  iface->mgr = mgr;
+  iface->data = NULL;
+  iface->vtable = vtable;
+  return iface;
+}
+#ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net_if_socket.c"
 #endif
 /*
@@ -2910,8 +3008,9 @@ double mg_time(void) {
  * All rights reserved
  */
 
-#if MG_NET_IF == MG_NET_IF_SOCKET
+#if MG_ENABLE_NET_IF_SOCKET
 
+/* Amalgamated: #include "mongoose/src/net_if_socket.h" */
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
 
@@ -2948,8 +3047,8 @@ static int mg_is_error(int n) {
                     );
 }
 
-void mg_if_connect_tcp(struct mg_connection *nc,
-                       const union socket_address *sa) {
+void mg_socket_if_connect_tcp(struct mg_connection *nc,
+                              const union socket_address *sa) {
   int rc, proto = 0;
   nc->sock = socket(AF_INET, SOCK_STREAM, proto);
   if (nc->sock == INVALID_SOCKET) {
@@ -2964,7 +3063,7 @@ void mg_if_connect_tcp(struct mg_connection *nc,
   LOG(LL_INFO, ("%p sock %d err %d", nc, nc->sock, nc->err));
 }
 
-void mg_if_connect_udp(struct mg_connection *nc) {
+void mg_socket_if_connect_udp(struct mg_connection *nc) {
   nc->sock = socket(AF_INET, SOCK_DGRAM, 0);
   if (nc->sock == INVALID_SOCKET) {
     nc->err = mg_get_errno() ? mg_get_errno() : 1;
@@ -2978,7 +3077,8 @@ void mg_if_connect_udp(struct mg_connection *nc) {
   nc->err = 0;
 }
 
-int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
+int mg_socket_if_listen_tcp(struct mg_connection *nc,
+                            union socket_address *sa) {
   int proto = 0;
   sock_t sock = mg_open_listening_socket(sa, SOCK_STREAM, proto);
   if (sock == INVALID_SOCKET) {
@@ -2988,32 +3088,35 @@ int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   return 0;
 }
 
-int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
+int mg_socket_if_listen_udp(struct mg_connection *nc,
+                            union socket_address *sa) {
   sock_t sock = mg_open_listening_socket(sa, SOCK_DGRAM, 0);
   if (sock == INVALID_SOCKET) return (mg_get_errno() ? mg_get_errno() : 1);
   mg_sock_set(nc, sock);
   return 0;
 }
 
-void mg_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
+void mg_socket_if_tcp_send(struct mg_connection *nc, const void *buf,
+                           size_t len) {
   mbuf_append(&nc->send_mbuf, buf, len);
 }
 
-void mg_if_udp_send(struct mg_connection *nc, const void *buf, size_t len) {
+void mg_socket_if_udp_send(struct mg_connection *nc, const void *buf,
+                           size_t len) {
   mbuf_append(&nc->send_mbuf, buf, len);
 }
 
-void mg_if_recved(struct mg_connection *nc, size_t len) {
+void mg_socket_if_recved(struct mg_connection *nc, size_t len) {
   (void) nc;
   (void) len;
 }
 
-int mg_if_create_conn(struct mg_connection *nc) {
+int mg_socket_if_create_conn(struct mg_connection *nc) {
   (void) nc;
   return 1;
 }
 
-void mg_if_destroy_conn(struct mg_connection *nc) {
+void mg_socket_if_destroy_conn(struct mg_connection *nc) {
   if (nc->sock == INVALID_SOCKET) return;
   if (!(nc->flags & MG_F_UDP)) {
     closesocket(nc->sock);
@@ -3390,32 +3493,32 @@ static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
 #endif
 
 /* Associate a socket to a connection. */
-void mg_sock_set(struct mg_connection *nc, sock_t sock) {
+void mg_socket_if_sock_set(struct mg_connection *nc, sock_t sock) {
   mg_set_non_blocking_mode(sock);
   mg_set_close_on_exec(sock);
   nc->sock = sock;
   DBG(("%p %d", nc, sock));
 }
 
-void mg_ev_mgr_init(struct mg_mgr *mgr) {
-  (void) mgr;
-  DBG(("%p using select()", mgr));
+void mg_socket_if_init(struct mg_iface *iface) {
+  (void) iface;
+  DBG(("%p using select()", iface->mgr));
 #if MG_ENABLE_BROADCAST
   do {
-    mg_socketpair(mgr->ctl, SOCK_DGRAM);
-  } while (mgr->ctl[0] == INVALID_SOCKET);
+    mg_socketpair(iface->mgr->ctl, SOCK_DGRAM);
+  } while (iface->mgr->ctl[0] == INVALID_SOCKET);
 #endif
 }
 
-void mg_ev_mgr_free(struct mg_mgr *mgr) {
-  (void) mgr;
+void mg_socket_if_free(struct mg_iface *iface) {
+  (void) iface;
 }
 
-void mg_ev_mgr_add_conn(struct mg_connection *nc) {
+void mg_socket_if_add_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
-void mg_ev_mgr_remove_conn(struct mg_connection *nc) {
+void mg_socket_if_remove_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
@@ -3432,7 +3535,8 @@ void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   }
 }
 
-time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
+time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
+  struct mg_mgr *mgr = iface->mgr;
   double now = mg_time();
   double min_timer;
   struct mg_connection *nc, *tmp;
@@ -3618,12 +3722,39 @@ void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
   mg_sock_addr_to_str(&sa, buf, len, flags);
 }
 
-void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
-                         union socket_address *sa) {
+void mg_socket_if_get_conn_addr(struct mg_connection *nc, int remote,
+                                union socket_address *sa) {
   mg_sock_get_addr(nc->sock, remote, sa);
 }
 
-#endif /* MG_NET_IF == MG_NET_IF_SOCKET */
+/* clang-format off */
+#define MG_SOCKET_IFACE_VTABLE                                          \
+  {                                                                     \
+    mg_socket_if_init,                                                  \
+    mg_socket_if_free,                                                  \
+    mg_socket_if_add_conn,                                              \
+    mg_socket_if_remove_conn,                                           \
+    mg_socket_if_poll,                                                  \
+    mg_socket_if_listen_tcp,                                            \
+    mg_socket_if_listen_udp,                                            \
+    mg_socket_if_connect_tcp,                                           \
+    mg_socket_if_connect_udp,                                           \
+    mg_socket_if_tcp_send,                                              \
+    mg_socket_if_udp_send,                                              \
+    mg_socket_if_recved,                                                \
+    mg_socket_if_create_conn,                                           \
+    mg_socket_if_destroy_conn,                                          \
+    mg_socket_if_sock_set,                                              \
+    mg_socket_if_get_conn_addr,                                         \
+  }
+/* clang-format on */
+
+struct mg_iface_vtable mg_socket_iface_vtable = MG_SOCKET_IFACE_VTABLE;
+#if MG_NET_IF == MG_NET_IF_SOCKET
+struct mg_iface_vtable mg_default_iface_vtable = MG_SOCKET_IFACE_VTABLE;
+#endif
+
+#endif /* MG_ENABLE_NET_IF_SOCKET */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/multithreading.c"
 #endif
@@ -10036,7 +10167,7 @@ uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io) {
   }
 
   if (cm->payload.len != 0) {
-    *ptr = (char)-1;
+    *ptr = (char) -1;
     ptr++;
     memcpy(ptr, cm->payload.p, cm->payload.len);
   }
@@ -11041,6 +11172,34 @@ void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg) {
 
 #endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK && !defined(MG_SIMPLELINK_NO_OSI) */
 #ifdef MG_MODULE_LINES
+#line 1 "common/platforms/simplelink/sl_net_if.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_COMMON_PLATFORMS_SIMPLELINK_SL_NET_IF_H_
+#define CS_COMMON_PLATFORMS_SIMPLELINK_SL_NET_IF_H_
+
+/* Amalgamated: #include "mongoose/src/net_if.h" */
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+#ifndef MG_ENABLE_NET_IF_SIMPLELINK
+#define MG_ENABLE_NET_IF_SIMPLELINK MG_NET_IF == MG_NET_IF_SIMPLELINK
+#endif
+
+extern struct mg_iface_vtable mg_simplelink_iface_vtable;
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* CS_COMMON_PLATFORMS_SIMPLELINK_SL_NET_IF_H_ */
+#ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_net_if.c"
 #endif
 /*
@@ -11048,7 +11207,9 @@ void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg) {
  * All rights reserved
  */
 
-#if MG_NET_IF == MG_NET_IF_SIMPLELINK
+/* Amalgamated: #include "common/platforms/simplelink/sl_net_if.h" */
+
+#if MG_ENABLE_NET_IF_SIMPLELINK
 
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
@@ -11137,8 +11298,8 @@ static int mg_is_error(int n) {
   return (n < 0 && n != SL_EALREADY && n != SL_EAGAIN);
 }
 
-void mg_if_connect_tcp(struct mg_connection *nc,
-                       const union socket_address *sa) {
+void mg_sl_if_connect_tcp(struct mg_connection *nc,
+                          const union socket_address *sa) {
   int proto = 0;
   if (nc->flags & MG_F_SSL) proto = SL_SEC_SOCKET;
   sock_t sock = sl_Socket(AF_INET, SOCK_STREAM, proto);
@@ -11157,7 +11318,7 @@ out:
        ntohs(sa->sin.sin_port), nc->sock, proto, nc->err));
 }
 
-void mg_if_connect_udp(struct mg_connection *nc) {
+void mg_sl_if_connect_udp(struct mg_connection *nc) {
   sock_t sock = sl_Socket(AF_INET, SOCK_DGRAM, 0);
   if (sock < 0) {
     nc->err = sock;
@@ -11167,7 +11328,7 @@ void mg_if_connect_udp(struct mg_connection *nc) {
   nc->err = 0;
 }
 
-int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
+int mg_sl_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   int proto = 0;
   if (nc->flags & MG_F_SSL) proto = SL_SEC_SOCKET;
   sock_t sock = mg_open_listening_socket(sa, SOCK_STREAM, proto);
@@ -11180,32 +11341,32 @@ int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
 #endif
 }
 
-int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
+int mg_sl_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
   sock_t sock = mg_open_listening_socket(sa, SOCK_DGRAM, 0);
   if (sock == INVALID_SOCKET) return (errno ? errno : 1);
   mg_sock_set(nc, sock);
   return 0;
 }
 
-void mg_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
+void mg_sl_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
   mbuf_append(&nc->send_mbuf, buf, len);
 }
 
-void mg_if_udp_send(struct mg_connection *nc, const void *buf, size_t len) {
+void mg_sl_if_udp_send(struct mg_connection *nc, const void *buf, size_t len) {
   mbuf_append(&nc->send_mbuf, buf, len);
 }
 
-void mg_if_recved(struct mg_connection *nc, size_t len) {
+void mg_sl_if_recved(struct mg_connection *nc, size_t len) {
   (void) nc;
   (void) len;
 }
 
-int mg_if_create_conn(struct mg_connection *nc) {
+int mg_sl_if_create_conn(struct mg_connection *nc) {
   (void) nc;
   return 1;
 }
 
-void mg_if_destroy_conn(struct mg_connection *nc) {
+void mg_sl_if_destroy_conn(struct mg_connection *nc) {
   if (nc->sock == INVALID_SOCKET) return;
   /* For UDP, only close outgoing sockets or listeners. */
   if (!(nc->flags & MG_F_UDP) || nc->listener == NULL) {
@@ -11394,30 +11555,31 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
 }
 
 /* Associate a socket to a connection. */
-void mg_sock_set(struct mg_connection *nc, sock_t sock) {
+void mg_sl_if_sock_set(struct mg_connection *nc, sock_t sock) {
   mg_set_non_blocking_mode(sock);
   nc->sock = sock;
   DBG(("%p %d", nc, sock));
 }
 
-void mg_ev_mgr_init(struct mg_mgr *mgr) {
-  (void) mgr;
-  DBG(("%p using sl_Select()", mgr));
+void mg_sl_if_init(struct mg_iface *iface) {
+  (void) iface;
+  DBG(("%p using sl_Select()", iface->mgr));
 }
 
-void mg_ev_mgr_free(struct mg_mgr *mgr) {
-  (void) mgr;
+void mg_sl_if_free(struct mg_iface *iface) {
+  (void) iface;
 }
 
-void mg_ev_mgr_add_conn(struct mg_connection *nc) {
+void mg_sl_if_add_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
-void mg_ev_mgr_remove_conn(struct mg_connection *nc) {
+void mg_sl_if_remove_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
-time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
+time_t mg_sl_if_poll(struct mg_iface *iface, int timeout_ms) {
+  struct mg_mgr *mgr = iface->mgr;
   double now = mg_time();
   double min_timer;
   struct mg_connection *nc, *tmp;
@@ -11516,8 +11678,8 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   return now;
 }
 
-void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
-                         union socket_address *sa) {
+void mg_sl_if_get_conn_addr(struct mg_connection *nc, int remote,
+                            union socket_address *sa) {
   /* SimpleLink does not provide a way to get socket's peer address after
    * accept or connect. Address hould have been preserved in the connection,
    * so we do our best here by using it. */
@@ -11536,8 +11698,8 @@ void sl_restart_cb(struct mg_mgr *mgr) {
     if (nc->flags & MG_F_LISTENING) {
       DBG(("restarting %p %s:%d", nc, inet_ntoa(nc->sa.sin.sin_addr),
            ntohs(nc->sa.sin.sin_port)));
-      int res = (nc->flags & MG_F_UDP ? mg_if_listen_udp(nc, &nc->sa)
-                                      : mg_if_listen_tcp(nc, &nc->sa));
+      int res = (nc->flags & MG_F_UDP ? mg_sl_if_listen_udp(nc, &nc->sa)
+                                      : mg_sl_if_listen_tcp(nc, &nc->sa));
       if (res == 0) continue;
       /* Well, we tried and failed. Fall through to closing. */
     }
@@ -11549,7 +11711,34 @@ void sl_restart_cb(struct mg_mgr *mgr) {
   }
 }
 
-#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK */
+/* clang-format off */
+#define MG_SL_IFACE_VTABLE                                              \
+  {                                                                     \
+    mg_sl_if_init,                                                      \
+    mg_sl_if_free,                                                      \
+    mg_sl_if_add_conn,                                                  \
+    mg_sl_if_remove_conn,                                               \
+    mg_sl_if_poll,                                                      \
+    mg_sl_if_listen_tcp,                                                \
+    mg_sl_if_listen_udp,                                                \
+    mg_sl_if_connect_tcp,                                               \
+    mg_sl_if_connect_udp,                                               \
+    mg_sl_if_tcp_send,                                                  \
+    mg_sl_if_udp_send,                                                  \
+    mg_sl_if_recved,                                                    \
+    mg_sl_if_create_conn,                                               \
+    mg_sl_if_destroy_conn,                                              \
+    mg_sl_if_sock_set,                                                  \
+    mg_sl_if_get_conn_addr,                                             \
+  }
+/* clang-format on */
+
+struct mg_iface_vtable mg_simplelink_iface_vtable = MG_SL_IFACE_VTABLE;
+#if MG_NET_IF == MG_NET_IF_SIMPLELINK
+struct mg_iface_vtable mg_default_iface_vtable = MG_SL_IFACE_VTABLE;
+#endif
+
+#endif /* MG_ENABLE_NET_IF_SIMPLELINK */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip_net_if.h"
 #endif
@@ -11561,9 +11750,15 @@ void sl_restart_cb(struct mg_mgr *mgr) {
 #ifndef CS_COMMON_PLATFORMS_LWIP_MG_NET_IF_LWIP_H_
 #define CS_COMMON_PLATFORMS_LWIP_MG_NET_IF_LWIP_H_
 
-#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
+#ifndef MG_ENABLE_NET_IF_LWIP_LOW_LEVEL
+#define MG_ENABLE_NET_IF_LWIP_LOW_LEVEL MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
+#endif
+
+#if MG_ENABLE_NET_IF_LWIP_LOW_LEVEL
 
 #include <stdint.h>
+
+extern struct mg_iface_vtable mg_lwip_iface_vtable;
 
 struct mg_lwip_conn_state {
   union {
@@ -11591,7 +11786,7 @@ void mg_lwip_post_signal(enum mg_sig_type sig, struct mg_connection *nc);
 /* To be implemented by the platform. */
 void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
 
-#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL */
+#endif /* MG_ENABLE_NET_IF_LWIP_LOW_LEVEL */
 
 #endif /* CS_COMMON_PLATFORMS_LWIP_MG_NET_IF_LWIP_H_ */
 #ifdef MG_MODULE_LINES
@@ -11602,7 +11797,7 @@ void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
  * All rights reserved
  */
 
-#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
+#if MG_ENABLE_NET_IF_LWIP_LOW_LEVEL
 
 #include <lwip/pbuf.h>
 #include <lwip/tcp.h>
@@ -11616,33 +11811,39 @@ void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
  * lwip functions
  */
 #if MG_ENABLE_IPV6
-# define TCP_NEW tcp_new_ip6
-# define TCP_BIND tcp_bind_ip6
-# define UDP_BIND udp_bind_ip6
-# define IPADDR_NTOA(x) ip6addr_ntoa((const ip6_addr_t *)(x))
-# define SET_ADDR(dst, src)                                \
-    memcpy((dst)->sin6.sin6_addr.s6_addr, (src)->ip6.addr, \
-           sizeof((dst)->sin6.sin6_addr.s6_addr))
+#define TCP_NEW tcp_new_ip6
+#define TCP_BIND tcp_bind_ip6
+#define UDP_BIND udp_bind_ip6
+#define IPADDR_NTOA(x) ip6addr_ntoa((const ip6_addr_t *)(x))
+#define SET_ADDR(dst, src)                               \
+  memcpy((dst)->sin6.sin6_addr.s6_addr, (src)->ip6.addr, \
+         sizeof((dst)->sin6.sin6_addr.s6_addr))
 #else
-# define TCP_NEW tcp_new
-# define TCP_BIND tcp_bind
-# define UDP_BIND udp_bind
-# define IPADDR_NTOA ipaddr_ntoa
-# define SET_ADDR(dst, src) (dst)->sin.sin_addr.s_addr = GET_IPV4(src)
+#define TCP_NEW tcp_new
+#define TCP_BIND tcp_bind
+#define UDP_BIND udp_bind
+#define IPADDR_NTOA ipaddr_ntoa
+#define SET_ADDR(dst, src) (dst)->sin.sin_addr.s_addr = GET_IPV4(src)
 #endif
 
 /*
  * If lwip is compiled with ipv6 support, then API changes even for ipv4
  */
 #if !defined(LWIP_IPV6) || !LWIP_IPV6
-# define GET_IPV4(ipX_addr) ((ipX_addr)->addr)
+#define GET_IPV4(ipX_addr) ((ipX_addr)->addr)
 #else
-# define GET_IPV4(ipX_addr) ((ipX_addr)->ip4.addr)
+#define GET_IPV4(ipX_addr) ((ipX_addr)->ip4.addr)
 #endif
 
 void mg_lwip_ssl_do_hs(struct mg_connection *nc);
 void mg_lwip_ssl_send(struct mg_connection *nc);
 void mg_lwip_ssl_recv(struct mg_connection *nc);
+
+void mg_lwip_if_init(struct mg_iface *iface);
+void mg_lwip_if_free(struct mg_iface *iface);
+void mg_lwip_if_add_conn(struct mg_connection *nc);
+void mg_lwip_if_remove_conn(struct mg_connection *nc);
+time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms);
 
 #if LWIP_TCP_KEEPALIVE
 void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
@@ -11793,8 +11994,8 @@ static err_t mg_lwip_tcp_sent_cb(void *arg, struct tcp_pcb *tpcb,
   return ERR_OK;
 }
 
-void mg_if_connect_tcp(struct mg_connection *nc,
-                       const union socket_address *sa) {
+void mg_lwip_if_connect_tcp(struct mg_connection *nc,
+                            const union socket_address *sa) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   struct tcp_pcb *tpcb = TCP_NEW();
   cs->pcb.tcp = tpcb;
@@ -11848,7 +12049,7 @@ static void mg_lwip_udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,
   mg_if_recv_udp_cb(nc, data, len, &sa, sizeof(sa.sin));
 }
 
-void mg_if_connect_udp(struct mg_connection *nc) {
+void mg_lwip_if_connect_udp(struct mg_connection *nc) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   struct udp_pcb *upcb = udp_new();
   cs->err = UDP_BIND(upcb, IP_ADDR_ANY, 0 /* any port */);
@@ -11903,7 +12104,7 @@ static err_t mg_lwip_accept_cb(void *arg, struct tcp_pcb *newtpcb, err_t err) {
   return ERR_OK;
 }
 
-int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
+int mg_lwip_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   struct tcp_pcb *tpcb = TCP_NEW();
   ip_addr_t *ip = (ip_addr_t *) &sa->sin.sin_addr.s_addr;
@@ -11921,7 +12122,7 @@ int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   return 0;
 }
 
-int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
+int mg_lwip_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   struct udp_pcb *upcb = udp_new();
   ip_addr_t *ip = (ip_addr_t *) &sa->sin.sin_addr.s_addr;
@@ -11977,12 +12178,14 @@ static void mg_lwip_send_more(struct mg_connection *nc) {
   mbuf_trim(&nc->send_mbuf);
 }
 
-void mg_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
+void mg_lwip_if_tcp_send(struct mg_connection *nc, const void *buf,
+                         size_t len) {
   mbuf_append(&nc->send_mbuf, buf, len);
   mg_lwip_mgr_schedule_poll(nc->mgr);
 }
 
-void mg_if_udp_send(struct mg_connection *nc, const void *buf, size_t len) {
+void mg_lwip_if_udp_send(struct mg_connection *nc, const void *buf,
+                         size_t len) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   if (nc->sock == INVALID_SOCKET || cs->pcb.udp == NULL) {
     /*
@@ -12009,7 +12212,7 @@ void mg_if_udp_send(struct mg_connection *nc, const void *buf, size_t len) {
   }
 }
 
-void mg_if_recved(struct mg_connection *nc, size_t len) {
+void mg_lwip_if_recved(struct mg_connection *nc, size_t len) {
   if (nc->flags & MG_F_UDP) return;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   if (nc->sock == INVALID_SOCKET || cs->pcb.tcp == NULL) {
@@ -12017,8 +12220,8 @@ void mg_if_recved(struct mg_connection *nc, size_t len) {
     return;
   }
   DBG(("%p %p %u", nc, cs->pcb.tcp, len));
-  /* Currently SSL acknowledges data immediately.
-   * TODO(rojer): Find a way to propagate mg_if_recved. */
+/* Currently SSL acknowledges data immediately.
+ * TODO(rojer): Find a way to propagate mg_lwip_if_recved. */
 #if MG_ENABLE_SSL
   if (nc->ssl == NULL) {
     tcp_recved(cs->pcb.tcp, len);
@@ -12029,7 +12232,7 @@ void mg_if_recved(struct mg_connection *nc, size_t len) {
   mbuf_trim(&nc->recv_mbuf);
 }
 
-int mg_if_create_conn(struct mg_connection *nc) {
+int mg_lwip_if_create_conn(struct mg_connection *nc) {
   struct mg_lwip_conn_state *cs =
       (struct mg_lwip_conn_state *) calloc(1, sizeof(*cs));
   if (cs == NULL) return 0;
@@ -12037,7 +12240,7 @@ int mg_if_create_conn(struct mg_connection *nc) {
   return 1;
 }
 
-void mg_if_destroy_conn(struct mg_connection *nc) {
+void mg_lwip_if_destroy_conn(struct mg_connection *nc) {
   if (nc->sock == INVALID_SOCKET) return;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   if (!(nc->flags & MG_F_UDP)) {
@@ -12068,8 +12271,8 @@ void mg_if_destroy_conn(struct mg_connection *nc) {
   nc->sock = INVALID_SOCKET;
 }
 
-void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
-                         union socket_address *sa) {
+void mg_lwip_if_get_conn_addr(struct mg_connection *nc, int remote,
+                              union socket_address *sa) {
   memset(sa, 0, sizeof(*sa));
   if (nc->sock == INVALID_SOCKET) return;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
@@ -12093,11 +12296,38 @@ void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
   }
 }
 
-void mg_sock_set(struct mg_connection *nc, sock_t sock) {
+void mg_lwip_if_sock_set(struct mg_connection *nc, sock_t sock) {
   nc->sock = sock;
 }
 
-#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL */
+/* clang-format off */
+#define MG_LWIP_IFACE_VTABLE                                          \
+  {                                                                   \
+    mg_lwip_if_init,                                                  \
+    mg_lwip_if_free,                                                  \
+    mg_lwip_if_add_conn,                                              \
+    mg_lwip_if_remove_conn,                                           \
+    mg_lwip_if_poll,                                                  \
+    mg_lwip_if_listen_tcp,                                            \
+    mg_lwip_if_listen_udp,                                            \
+    mg_lwip_if_connect_tcp,                                           \
+    mg_lwip_if_connect_udp,                                           \
+    mg_lwip_if_tcp_send,                                              \
+    mg_lwip_if_udp_send,                                              \
+    mg_lwip_if_recved,                                                \
+    mg_lwip_if_create_conn,                                           \
+    mg_lwip_if_destroy_conn,                                          \
+    mg_lwip_if_sock_set,                                              \
+    mg_lwip_if_get_conn_addr,                                         \
+  }
+/* clang-format on */
+
+struct mg_iface_vtable mg_lwip_iface_vtable = MG_LWIP_IFACE_VTABLE;
+#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
+struct mg_iface_vtable mg_default_iface_vtable = MG_LWIP_IFACE_VTABLE;
+#endif
+
+#endif /* MG_ENABLE_NET_IF_LWIP_LOW_LEVEL */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip_ev_mgr.c"
 #endif
@@ -12125,7 +12355,7 @@ struct mg_ev_mgr_lwip_data {
 
 void mg_lwip_post_signal(enum mg_sig_type sig, struct mg_connection *nc) {
   struct mg_ev_mgr_lwip_data *md =
-      (struct mg_ev_mgr_lwip_data *) nc->mgr->mgr_data;
+      (struct mg_ev_mgr_lwip_data *) nc->iface->data;
   if (md->sig_queue_len >= MG_SIG_QUEUE_LEN) return;
   int end_index = (md->start_index + md->sig_queue_len) % MG_SIG_QUEUE_LEN;
   md->sig_queue[end_index].sig = sig;
@@ -12134,14 +12364,16 @@ void mg_lwip_post_signal(enum mg_sig_type sig, struct mg_connection *nc) {
 }
 
 void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
-  struct mg_ev_mgr_lwip_data *md = (struct mg_ev_mgr_lwip_data *) mgr->mgr_data;
+  struct mg_ev_mgr_lwip_data *md =
+      (struct mg_ev_mgr_lwip_data *) mgr->ifaces[MG_MAIN_IFACE]->data;
   while (md->sig_queue_len > 0) {
     struct mg_connection *nc = md->sig_queue[md->start_index].nc;
     struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
     switch (md->sig_queue[md->start_index].sig) {
       case MG_SIG_CONNECT_RESULT: {
 #ifdef SSL_KRYPTON
-        if (cs->err == 0 && nc->flags & MG_F_SSL && !(nc->flags & MG_F_SSL_HANDSHAKE_DONE)) {
+        if (cs->err == 0 && nc->flags & MG_F_SSL &&
+            !(nc->flags & MG_F_SSL_HANDSHAKE_DONE)) {
           SSL_set_fd(nc->ssl, (intptr_t) nc);
           mg_lwip_ssl_do_hs(nc);
         } else
@@ -12174,23 +12406,23 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
   }
 }
 
-void mg_ev_mgr_init(struct mg_mgr *mgr) {
+void mg_lwip_if_init(struct mg_iface *iface) {
   LOG(LL_INFO, ("%p Mongoose init"));
-  mgr->mgr_data = MG_CALLOC(1, sizeof(struct mg_ev_mgr_lwip_data));
+  iface->data = MG_CALLOC(1, sizeof(struct mg_ev_mgr_lwip_data));
 }
 
-void mg_ev_mgr_free(struct mg_mgr *mgr) {
-  MG_FREE(mgr->mgr_data);
-  mgr->mgr_data = NULL;
+void mg_lwip_if_free(struct mg_iface *iface) {
+  MG_FREE(iface->data);
+  iface->data = NULL;
 }
 
-void mg_ev_mgr_add_conn(struct mg_connection *nc) {
+void mg_lwip_if_add_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
-void mg_ev_mgr_remove_conn(struct mg_connection *nc) {
+void mg_lwip_if_remove_conn(struct mg_connection *nc) {
   struct mg_ev_mgr_lwip_data *md =
-      (struct mg_ev_mgr_lwip_data *) nc->mgr->mgr_data;
+      (struct mg_ev_mgr_lwip_data *) nc->iface->data;
   /* Walk the queue and null-out further signals for this conn. */
   for (int i = 0; i < MG_SIG_QUEUE_LEN; i++) {
     if (md->sig_queue[i].nc == nc) {
@@ -12199,7 +12431,8 @@ void mg_ev_mgr_remove_conn(struct mg_connection *nc) {
   }
 }
 
-time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
+time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
+  struct mg_mgr *mgr = iface->mgr;
   int n = 0;
   double now = mg_time();
   struct mg_connection *nc, *tmp;
@@ -12536,6 +12769,34 @@ static void mg_gmt_time_string(char *buf, size_t buf_len, time_t *t) {
 
 #endif
 #ifdef MG_MODULE_LINES
+#line 1 "common/platforms/pic32_harmony/pic32_harmony_net_if.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_COMMON_PLATFORMS_PIC32_HARMONY_NET_IF_H_
+#define CS_COMMON_PLATFORMS_PIC32_HARMONY_NET_IF_H_
+
+/* Amalgamated: #include "mongoose/src/net_if.h" */
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+#ifndef MG_ENABLE_NET_IF_PIC32_HARMONY
+#define MG_ENABLE_NET_IF_PIC32_HARMONY MG_NET_IF == MG_NET_IF_PIC32_HARMONY
+#endif
+
+extern struct mg_iface_vtable mg_pic32_harmony_iface_vtable;
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* CS_COMMON_PLATFORMS_PIC32_HARMONY_NET_IF_H_ */
+#ifdef MG_MODULE_LINES
 #line 1 "common/platforms/pic32_harmony/pic32_harmony_net_if.c"
 #endif
 /*
@@ -12543,36 +12804,36 @@ static void mg_gmt_time_string(char *buf, size_t buf_len, time_t *t) {
  * All rights reserved
  */
 
-#if CS_PLATFORM == CS_P_PIC32_HARMONY
+#if MG_ENABLE_NET_IF_PIC32_HARMONY
 
-int mg_if_create_conn(struct mg_connection *nc) {
+int mg_pic32_harmony_if_create_conn(struct mg_connection *nc) {
   (void) nc;
   return 1;
 }
 
-void mg_if_recved(struct mg_connection *nc, size_t len) {
+void mg_pic32_harmony_if_recved(struct mg_connection *nc, size_t len) {
   (void) nc;
   (void) len;
 }
 
-void mg_ev_mgr_add_conn(struct mg_connection *nc) {
+void mg_pic32_harmony_if_add_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
-void mg_ev_mgr_init(struct mg_mgr *mgr) {
-  (void) mgr;
+void mg_pic32_harmony_if_init(struct mg_iface *iface) {
+  (void) iface;
   (void) mg_get_errno(); /* Shutup compiler */
 }
 
-void mg_ev_mgr_free(struct mg_mgr *mgr) {
-  (void) mgr;
+void mg_pic32_harmony_if_free(struct mg_iface *iface) {
+  (void) iface;
 }
 
-void mg_ev_mgr_remove_conn(struct mg_connection *nc) {
+void mg_pic32_harmony_if_remove_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
-void mg_if_destroy_conn(struct mg_connection *nc) {
+void mg_pic32_harmony_if_destroy_conn(struct mg_connection *nc) {
   if (nc->sock == INVALID_SOCKET) return;
   /* For UDP, only close outgoing sockets or listeners. */
   if (!(nc->flags & MG_F_UDP)) {
@@ -12586,7 +12847,8 @@ void mg_if_destroy_conn(struct mg_connection *nc) {
   nc->sock = INVALID_SOCKET;
 }
 
-int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
+int mg_pic32_harmony_if_listen_udp(struct mg_connection *nc,
+                                   union socket_address *sa) {
   nc->sock = TCPIP_UDP_ServerOpen(
       sa->sin.sin_family == AF_INET ? IP_ADDRESS_TYPE_IPV4
                                     : IP_ADDRESS_TYPE_IPV6,
@@ -12598,15 +12860,18 @@ int mg_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
   return 0;
 }
 
-void mg_if_udp_send(struct mg_connection *nc, const void *buf, size_t len) {
+void mg_pic32_harmony_if_udp_send(struct mg_connection *nc, const void *buf,
+                                  size_t len) {
   mbuf_append(&nc->send_mbuf, buf, len);
 }
 
-void mg_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
+void mg_pic32_harmony_if_tcp_send(struct mg_connection *nc, const void *buf,
+                                  size_t len) {
   mbuf_append(&nc->send_mbuf, buf, len);
 }
 
-int mg_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
+int mg_pic32_harmony_if_listen_tcp(struct mg_connection *nc,
+                                   union socket_address *sa) {
   nc->sock = TCPIP_TCP_ServerOpen(
       sa->sin.sin_family == AF_INET ? IP_ADDRESS_TYPE_IPV4
                                     : IP_ADDRESS_TYPE_IPV6,
@@ -12648,7 +12913,7 @@ static int mg_accept_conn(struct mg_connection *lc) {
 
   mg_if_accept_tcp_cb(nc, (union socket_address *) &sa, sizeof(sa));
 
-  return mg_if_listen_tcp(lc, &lc->sa) >= 0;
+  return mg_pic32_harmony_if_listen_tcp(lc, &lc->sa) >= 0;
 }
 
 char *inet_ntoa(struct in_addr in) {
@@ -12730,7 +12995,8 @@ static void mg_handle_recv(struct mg_connection *nc) {
   }
 }
 
-time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
+time_t mg_pic32_harmony_if_poll(struct mg_iface *iface, int timeout_ms) {
+  struct mg_mgr *mgr = iface->mgr;
   double now = mg_time();
   struct mg_connection *nc, *tmp;
 
@@ -12771,4 +13037,41 @@ time_t mg_mgr_poll(struct mg_mgr *mgr, int timeout_ms) {
   return now;
 }
 
-#endif /* CS_PLATFORM == CS_P_PIC32_HARMONY */
+void mg_pic32_harmony_if_sock_set(struct mg_connection *nc, sock_t sock) {
+  nc->sock = sock;
+}
+
+void mg_pic32_harmony_if_get_conn_addr(struct mg_connection *nc, int remote,
+                                       union socket_address *sa) {
+  /* TODO(alaskin): not implemented yet */
+}
+
+/* clang-format off */
+#define MG_PIC32_HARMONY_IFACE_VTABLE                                   \
+  {                                                                     \
+    mg_pic32_harmony_if_init,                                           \
+    mg_pic32_harmony_if_free,                                           \
+    mg_pic32_harmony_if_add_conn,                                       \
+    mg_pic32_harmony_if_remove_conn,                                    \
+    mg_pic32_harmony_if_poll,                                           \
+    mg_pic32_harmony_if_listen_tcp,                                     \
+    mg_pic32_harmony_if_listen_udp,                                     \
+    mg_pic32_harmony_if_connect_tcp,                                    \
+    mg_pic32_harmony_if_connect_udp,                                    \
+    mg_pic32_harmony_if_tcp_send,                                       \
+    mg_pic32_harmony_if_udp_send,                                       \
+    mg_pic32_harmony_if_recved,                                         \
+    mg_pic32_harmony_if_create_conn,                                    \
+    mg_pic32_harmony_if_destroy_conn,                                   \
+    mg_pic32_harmony_if_sock_set,                                       \
+    mg_pic32_harmony_if_get_conn_addr,                                  \
+  }
+/* clang-format on */
+
+struct mg_iface_vtable mg_pic32_harmony_iface_vtable =
+    MG_PIC32_HARMONY_IFACE_VTABLE;
+#if MG_NET_IF == MG_NET_IF_PIC32_HARMONY_LOW_LEVEL
+struct mg_iface_vtable mg_default_iface_vtable = MG_PIC32_HARMONY_IFACE_VTABLE;
+#endif
+
+#endif /* MG_ENABLE_NET_IF_PIC32_HARMONY */

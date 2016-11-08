@@ -42,6 +42,7 @@ signature: |
     } priv_1;       /* Used by mg_enable_multithreading() */
     void *priv_2;   /* Used by mg_enable_multithreading() */
     void *mgr_data; /* Implementation-specific event manager's data. */
+    struct mg_iface *iface;
     unsigned long flags;
   /* Flags set by Mongoose */
   #define MG_F_LISTENING (1 << 0)          /* This connection is listening */
