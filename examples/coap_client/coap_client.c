@@ -38,11 +38,6 @@ static void coap_handler(struct mg_connection *nc, int ev, void *p) {
       s_time_to_exit = 1;
       break;
     }
-<<<<<<< HEAD
-    case MG_EV_CLOSE:
-      s_time_to_exit = 1;
-      break;
-=======
     case MG_EV_CLOSE: {
       if (s_time_to_exit == 0) {
         printf("Server closed connection\n");
@@ -50,7 +45,6 @@ static void coap_handler(struct mg_connection *nc, int ev, void *p) {
       }
       break;
     }
->>>>>>> upstream/master
   }
 }
 
