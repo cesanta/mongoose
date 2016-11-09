@@ -12939,6 +12939,14 @@ char *inet_ntoa(struct in_addr in) {
 static void mg_handle_send(struct mg_connection *nc) {
   uint16_t bytes_written = 0;
   if (nc->flags & MG_F_UDP) {
+    if (!TCPIP_UDP_RemoteBind(
+            (UDP_SOCKET) nc->sock,
+            nc->sa.sin.sin_family == AF_INET ? IP_ADDRESS_TYPE_IPV4
+                                             : IP_ADDRESS_TYPE_IPV6,
+            ntohs(nc->sa.sin.sin_port), (IP_MULTI_ADDRESS *) &nc->sa.sin)) {
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      return;
+    }
     bytes_written = TCPIP_UDP_TxPutIsReady((UDP_SOCKET) nc->sock, 0);
     if (bytes_written >= nc->send_mbuf.len) {
       if (TCPIP_UDP_ArrayPut((UDP_SOCKET) nc->sock,
@@ -13058,6 +13066,20 @@ void mg_pic32_harmony_if_get_conn_addr(struct mg_connection *nc, int remote,
   /* TODO(alaskin): not implemented yet */
 }
 
+void mg_pic32_harmony_if_connect_tcp(struct mg_connection *nc,
+                                     const union socket_address *sa) {
+  nc->sock = TCPIP_TCP_ClientOpen(
+      sa->sin.sin_family == AF_INET ? IP_ADDRESS_TYPE_IPV4
+                                    : IP_ADDRESS_TYPE_IPV6,
+      ntohs(sa->sin.sin_port), (IP_MULTI_ADDRESS *) &sa->sin);
+  nc->err = (nc->sock == INVALID_SOCKET) ? -1 : 0;
+}
+
+void mg_pic32_harmony_if_connect_udp(struct mg_connection *nc) {
+  nc->sock = TCPIP_UDP_ClientOpen(IP_ADDRESS_TYPE_ANY, 0, NULL);
+  nc->err = (nc->sock == INVALID_SOCKET) ? -1 : 0;
+}
+
 /* clang-format off */
 #define MG_PIC32_HARMONY_IFACE_VTABLE                                   \
   {                                                                     \
@@ -13082,7 +13104,7 @@ void mg_pic32_harmony_if_get_conn_addr(struct mg_connection *nc, int remote,
 
 struct mg_iface_vtable mg_pic32_harmony_iface_vtable =
     MG_PIC32_HARMONY_IFACE_VTABLE;
-#if MG_NET_IF == MG_NET_IF_PIC32_HARMONY_LOW_LEVEL
+#if MG_NET_IF == MG_NET_IF_PIC32_HARMONY
 struct mg_iface_vtable mg_default_iface_vtable = MG_PIC32_HARMONY_IFACE_VTABLE;
 #endif
 
