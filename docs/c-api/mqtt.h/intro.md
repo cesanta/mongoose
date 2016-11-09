@@ -20,6 +20,7 @@ items:
   - { name: mg_send_mqtt_handshake.md }
   - { name: mg_send_mqtt_handshake_opt.md }
   - { name: mg_set_protocol_mqtt.md }
+  - { name: struct_mg_mqtt_proto_data.md }
 ---
 
 
