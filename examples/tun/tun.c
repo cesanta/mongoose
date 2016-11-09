@@ -2,7 +2,8 @@
 
 static const char *s_local_port = ":8001";
 static const char *s_dispatcher = "ws://localhost:8000";
-static const char *s_auth = "foo:bar";
+static const char *s_user = "foo";
+static const char *s_pass = "bar";
 
 void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message *hm = (struct http_message *) ev_data;
@@ -36,16 +37,19 @@ int main(int argc, char **argv) {
   for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-D") == 0) {
       mgr.hexdump_file = argv[++i];
-    } else if (strcmp(argv[i], "-p") == 0) {
+    } else if (strcmp(argv[i], "-l") == 0) {
       s_local_port = argv[++i];
     } else if (strcmp(argv[i], "-d") == 0) {
       s_dispatcher = argv[++i];
     } else if (strcmp(argv[i], "-u") == 0) {
-      s_auth = argv[++i];
+      s_user = argv[++i];
+    } else if (strcmp(argv[i], "-p") == 0) {
+      s_pass = argv[++i];
     }
   }
 
-  if ((nc = mg_tuna_bind(&mgr, ev_handler, s_dispatcher, s_auth)) == NULL) {
+  if ((nc = mg_tuna_bind(&mgr, ev_handler, s_dispatcher, s_user, s_pass)) ==
+      NULL) {
     fprintf(stderr, "Cannot create tunneled listening socket on [%s]\n",
             s_dispatcher);
     exit(EXIT_FAILURE);

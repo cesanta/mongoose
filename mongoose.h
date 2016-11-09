@@ -5560,7 +5560,9 @@ struct mg_tun_client {
   struct mg_mgr *mgr;
   struct mg_iface *iface;
   const char *disp_url;
-  const char *auth;
+  const char *user;
+  const char *pass;
+
   uint32_t last_stream_id; /* stream id of most recently accepted connection */
 
   struct mg_connection *disp;
@@ -5573,7 +5575,8 @@ extern "C" {
 
 struct mg_connection *mg_tuna_bind(struct mg_mgr *mgr,
                                    mg_event_handler_t handler,
-                                   const char *dispatcher, const char *auth);
+                                   const char *dispatcher, const char *user,
+                                   const char *pass);
 
 int mg_tun_parse_frame(void *data, size_t len, struct mg_tun_frame *frame);
 

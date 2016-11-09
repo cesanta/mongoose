@@ -10557,11 +10557,12 @@ static void mg_tun_reconnect(struct mg_tun_client *client);
 
 static void mg_tun_init_client(struct mg_tun_client *client, struct mg_mgr *mgr,
                                struct mg_iface *iface, const char *dispatcher,
-                               const char *auth) {
+                               const char *user, const char *pass) {
   client->mgr = mgr;
   client->iface = iface;
   client->disp_url = dispatcher;
-  client->auth = auth;
+  client->user = user;
+  client->pass = pass;
   client->last_stream_id = 0;
 
   client->disp = NULL;     /* will be set by mg_tun_reconnect */
@@ -10671,7 +10672,7 @@ static void mg_tun_do_reconnect(struct mg_tun_client *client) {
   mbuf_init(&headers, 0);
 
   /* HTTP/Websocket listener */
-  mg_basic_auth_header(client->auth, NULL, &headers);
+  mg_basic_auth_header(client->user, client->pass, &headers);
   mbuf_append(&headers, "", 1); /* nul terminate */
   if ((dc = mg_connect_ws(client->mgr, mg_tun_client_handler, client->disp_url,
                           "mg_tun", headers.buf)) == NULL) {
@@ -10709,7 +10710,8 @@ static void mg_tun_reconnect(struct mg_tun_client *client) {
 
 static struct mg_tun_client *mg_tun_create_client(struct mg_mgr *mgr,
                                                   const char *dispatcher,
-                                                  const char *auth) {
+                                                  const char *user,
+                                                  const char *pass) {
   struct mg_tun_client *client = NULL;
   struct mg_iface *iface = mg_find_iface(mgr, &mg_tun_iface_vtable, NULL);
   if (iface == NULL) {
@@ -10719,7 +10721,7 @@ static struct mg_tun_client *mg_tun_create_client(struct mg_mgr *mgr,
   }
 
   client = (struct mg_tun_client *) MG_MALLOC(sizeof(*client));
-  mg_tun_init_client(client, mgr, iface, dispatcher, auth);
+  mg_tun_init_client(client, mgr, iface, dispatcher, user, pass);
   iface->data = client;
 
   mg_tun_do_reconnect(client);
@@ -10744,8 +10746,10 @@ static struct mg_connection *mg_tuna_do_bind(struct mg_tun_client *client,
 
 struct mg_connection *mg_tuna_bind(struct mg_mgr *mgr,
                                    mg_event_handler_t handler,
-                                   const char *dispatcher, const char *auth) {
-  struct mg_tun_client *client = mg_tun_create_client(mgr, dispatcher, auth);
+                                   const char *dispatcher, const char *user,
+                                   const char *pass) {
+  struct mg_tun_client *client =
+      mg_tun_create_client(mgr, dispatcher, user, pass);
   if (client == NULL) {
     return NULL;
   }
