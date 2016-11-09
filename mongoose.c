@@ -3036,7 +3036,7 @@ void mg_set_non_blocking_mode(sock_t sock) {
 
 static int mg_is_error(int n) {
   int err = mg_get_errno();
-  return n == 0 || (n < 0 && err != EINPROGRESS && err != EWOULDBLOCK
+  return (n < 0 && err != EINPROGRESS && err != EWOULDBLOCK
 #ifndef WINCE
                     && err != EAGAIN && err != EINTR
 #endif
