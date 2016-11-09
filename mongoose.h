@@ -2709,7 +2709,7 @@ struct {								\
 #endif
 
 #ifndef MG_ENABLE_HTTP_WEBSOCKET
-#define MG_ENABLE_HTTP_WEBSOCKET 1
+#define MG_ENABLE_HTTP_WEBSOCKET MG_ENABLE_HTTP
 #endif
 
 #ifndef MG_ENABLE_IPV6
@@ -2767,6 +2767,10 @@ struct {								\
   (CS_PLATFORM == CS_P_WINDOWS || CS_PLATFORM == CS_P_UNIX)
 #endif
 
+#ifndef MG_ENABLE_TUN
+#define MG_ENABLE_TUN MG_ENABLE_HTTP_WEBSOCKET
+#endif
+
 #endif /* CS_MONGOOSE_SRC_FEATURES_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net_if.h"
@@ -2796,7 +2800,6 @@ extern "C" {
 #endif /* __cplusplus */
 
 #define MG_MAIN_IFACE 0
-#define MG_NUM_IFACES 1
 
 struct mg_mgr;
 struct mg_connection;
@@ -2847,11 +2850,19 @@ struct mg_iface_vtable {
 };
 
 extern struct mg_iface_vtable *mg_ifaces[];
+extern int mg_num_ifaces;
 
 /* Creates a new interface instance. */
 struct mg_iface *mg_if_create_iface(struct mg_iface_vtable *vtable,
                                     struct mg_mgr *mgr);
 
+/*
+ * Find an interface with a given implementation. The search is started from
+ * interface `from`, exclusive. Returns NULL if none is found.
+ */
+struct mg_iface *mg_find_iface(struct mg_mgr *mgr,
+                               struct mg_iface_vtable *vtable,
+                               struct mg_iface *from);
 /*
  * Deliver a new TCP connection. Returns NULL in case on error (unable to
  * create connection, in which case interface state should be discarded.
@@ -2868,10 +2879,16 @@ void mg_if_connect_cb(struct mg_connection *nc, int err);
 void mg_if_sent_cb(struct mg_connection *nc, int num_sent);
 /*
  * Receive callback.
+ * if `own` is true, buf must be heap-allocated and ownership is transferred
+ * to the core.
+ * Core will acknowledge consumption by calling iface::recved.
+ */
+void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len, int own);
+/*
+ * Receive callback.
  * buf must be heap-allocated and ownership is transferred to the core.
  * Core will acknowledge consumption by calling iface::recved.
  */
-void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len);
 void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
                        union socket_address *sa, size_t sa_len);
 
@@ -3170,6 +3187,7 @@ struct mg_add_sock_opts {
   void *user_data;           /* Initial value for connection's user_data */
   unsigned int flags;        /* Initial connection flags */
   const char **error_string; /* Placeholder for the error string */
+  struct mg_iface *iface;    /* Interface instance */
 };
 
 /*
@@ -3200,6 +3218,7 @@ struct mg_bind_opts {
   void *user_data;           /* Initial value for connection's user_data */
   unsigned int flags;        /* Extra connection flags */
   const char **error_string; /* Placeholder for the error string */
+  struct mg_iface *iface;    /* Interface instance */
 #if MG_ENABLE_SSL
   /* SSL settings. */
   const char *ssl_cert;    /* Server certificate to present to clients */
@@ -3244,6 +3263,7 @@ struct mg_connect_opts {
   void *user_data;           /* Initial value for connection's user_data */
   unsigned int flags;        /* Extra connection flags */
   const char **error_string; /* Placeholder for the error string */
+  struct mg_iface *iface;    /* Interface instance */
 #if MG_ENABLE_SSL
   /* SSL settings. */
   const char *ssl_cert;    /* Client certificate to present to the server */
@@ -3746,6 +3766,23 @@ const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
 int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
 int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
 
+/*
+ * Use with cs_base64_init/update/finish in order to write out base64 in chunks.
+ */
+void mg_mbuf_append_base64_putc(char ch, void *user_data);
+
+/*
+ * Encode `len` bytes starting at `data` as base64 and append them to an mbuf.
+ */
+void mg_mbuf_append_base64(struct mbuf *mbuf, const void *data, size_t len);
+
+/*
+ * Generate a Basic Auth header and appends it to buf.
+ * If pass is NULL, then user is expected to contain the credentials pair
+ * already encoded as `user:pass`.
+ */
+void mg_basic_auth_header(const char *user, const char *pass, struct mbuf *buf);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
@@ -3768,6 +3805,7 @@ int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
 #if MG_ENABLE_HTTP
 
 /* Amalgamated: #include "mongoose/src/net.h" */
+/* Amalgamated: #include "common/mg_str.h" */
 
 #ifdef __cplusplus
 extern "C" {
@@ -5480,3 +5518,72 @@ uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io);
 #endif /* MG_ENABLE_COAP */
 
 #endif /* CS_MONGOOSE_SRC_COAP_H_ */
+#ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/tun.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_MONGOOSE_SRC_TUN_H_
+#define CS_MONGOOSE_SRC_TUN_H_
+
+#if MG_ENABLE_TUN
+
+/* Amalgamated: #include "mongoose/src/net.h" */
+/* Amalgamated: #include "common/mg_str.h" */
+
+#ifndef MG_TUN_RECONNECT_INTERVAL
+#define MG_TUN_RECONNECT_INTERVAL 1
+#endif
+
+#define MG_TUN_DATA_FRAME 0x0
+#define MG_TUN_F_END_STREAM 0x1
+
+/*
+ * MG TUN frame format is loosely based on HTTP/2.
+ * However since the communication happens via WebSocket
+ * there is no need to encode the frame length, since that's
+ * solved by WebSocket framing.
+ *
+ * TODO(mkm): Detailed description of the protocol.
+ */
+struct mg_tun_frame {
+  uint8_t type;
+  uint8_t flags;
+  uint32_t stream_id; /* opaque stream identifier */
+  struct mg_str body;
+};
+
+struct mg_tun_client {
+  struct mg_mgr *mgr;
+  struct mg_iface *iface;
+  const char *disp_url;
+  const char *auth;
+  uint32_t last_stream_id; /* stream id of most recently accepted connection */
+
+  struct mg_connection *disp;
+  struct mg_connection *listener;
+};
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+struct mg_connection *mg_tuna_bind(struct mg_mgr *mgr,
+                                   mg_event_handler_t handler,
+                                   const char *dispatcher, const char *auth);
+
+int mg_tun_parse_frame(void *data, size_t len, struct mg_tun_frame *frame);
+
+void mg_tun_send_frame(struct mg_connection *ws, uint32_t stream_id,
+                       uint8_t type, uint8_t flags, struct mg_str msg);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* MG_ENABLE_TUN */
+
+#endif /* CS_MONGOOSE_SRC_TUN_H_ */

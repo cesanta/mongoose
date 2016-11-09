@@ -7,6 +7,7 @@ signature: |
     void *user_data;           /* Initial value for connection's user_data */
     unsigned int flags;        /* Extra connection flags */
     const char **error_string; /* Placeholder for the error string */
+    struct mg_iface *iface;    /* Interface instance */
   #if MG_ENABLE_SSL
     /* SSL settings. */
     const char *ssl_cert;    /* Server certificate to present to clients */
