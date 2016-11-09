@@ -8536,8 +8536,14 @@ static void mqtt_handler(struct mg_connection *nc, int ev, void *ev_data) {
   }
 }
 
+static void mg_mqtt_proto_data_destructor(void *proto_data) {
+  MG_FREE(proto_data);
+}
+
 void mg_set_protocol_mqtt(struct mg_connection *nc) {
   nc->proto_handler = mqtt_handler;
+  nc->proto_data = MG_CALLOC(1, sizeof(struct mg_mqtt_proto_data));
+  nc->proto_data_destructor = mg_mqtt_proto_data_destructor;
 }
 
 void mg_send_mqtt_handshake(struct mg_connection *nc, const char *client_id) {
@@ -8551,6 +8557,7 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
   uint8_t rem_len;
   uint16_t keep_alive;
   uint16_t len;
+  struct mg_mqtt_proto_data* pd = (struct mg_mqtt_proto_data*) nc->proto_data;
 
   /*
    * 9: version_header(len, magic_string, version_number), 1: flags, 2:
@@ -8576,6 +8583,7 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
   if (opts.keep_alive == 0) {
     opts.keep_alive = 60;
   }
+
   keep_alive = htons(opts.keep_alive);
   mg_send(nc, &keep_alive, 2);
 
@@ -8592,6 +8600,10 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
     len = htons((uint16_t) strlen(opts.password));
     mg_send(nc, &len, 2);
     mg_send(nc, opts.password, strlen(opts.password));
+  }
+
+  if (pd != NULL) {
+    pd->keep_alive = opts.keep_alive;
   }
 }
 

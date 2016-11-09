@@ -4712,6 +4712,11 @@ struct mg_send_mqtt_handshake_opts {
   const char *password;
 };
 
+/* mg_mqtt_proto_data should be in header to allow external access to it */
+struct mg_mqtt_proto_data {
+  uint16_t keep_alive;
+};
+
 /* Message types */
 #define MG_MQTT_CMD_CONNECT 1
 #define MG_MQTT_CMD_CONNACK 2
