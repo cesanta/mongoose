@@ -93,6 +93,8 @@ extern void *(*test_calloc)(size_t count, size_t size);
 #endif
 
 #if MG_ENABLE_HTTP
+struct mg_serve_http_opts;
+
 /*
  * Reassemble the content of the buffer (buf, blen) which should be
  * in the HTTP chunked encoding, by collapsing data chunks to the
@@ -155,6 +157,8 @@ MG_INTERNAL void mg_ws_handshake(struct mg_connection *nc,
 #endif /* MG_ENABLE_HTTP */
 
 MG_INTERNAL int mg_get_errno(void);
+
+MG_INTERNAL void mg_close_conn(struct mg_connection *conn);
 
 #endif /* CS_MONGOOSE_SRC_INTERNAL_H_ */
 #ifdef MG_MODULE_LINES
@@ -1979,7 +1983,7 @@ void mg_mgr_init_opt(struct mg_mgr *m, void *user_data,
   {
     int i;
     if (opts.num_ifaces == 0) {
-      opts.num_ifaces = MG_NUM_IFACES;
+      opts.num_ifaces = mg_num_ifaces;
       opts.ifaces = mg_ifaces;
     }
     if (opts.main_iface != NULL) {
@@ -1988,7 +1992,7 @@ void mg_mgr_init_opt(struct mg_mgr *m, void *user_data,
     m->num_ifaces = opts.num_ifaces;
     m->ifaces =
         (struct mg_iface **) MG_MALLOC(sizeof(*m->ifaces) * opts.num_ifaces);
-    for (i = 0; i < MG_NUM_IFACES; i++) {
+    for (i = 0; i < mg_num_ifaces; i++) {
       m->ifaces[i] = mg_if_create_iface(opts.ifaces[i], m);
       m->ifaces[i]->vtable->init(m->ifaces[i]);
     }
@@ -2138,7 +2142,8 @@ MG_INTERNAL struct mg_connection *mg_create_connection_base(
     conn->handler = callback;
     conn->mgr = mgr;
     conn->last_io_time = (time_t) mg_time();
-    conn->iface = mgr->ifaces[MG_MAIN_IFACE];
+    conn->iface =
+        (opts.iface != NULL ? opts.iface : mgr->ifaces[MG_MAIN_IFACE]);
     conn->flags = opts.flags & _MG_ALLOWED_CONNECT_FLAGS_MASK;
     conn->user_data = opts.user_data;
     /*
@@ -2461,6 +2466,7 @@ struct mg_connection *mg_if_accept_new_conn(struct mg_connection *lc) {
   nc->proto_handler = lc->proto_handler;
   nc->user_data = lc->user_data;
   nc->recv_mbuf_limit = lc->recv_mbuf_limit;
+  nc->iface = lc->iface;
   if (lc->flags & MG_F_SSL) nc->flags |= MG_F_SSL;
   mg_add_conn(nc->mgr, nc);
   DBG(("%p %p %d %d", lc, nc, nc->sock, (int) nc->flags));
@@ -2495,7 +2501,8 @@ void mg_if_sent_cb(struct mg_connection *nc, int num_sent) {
   mg_call(nc, NULL, MG_EV_SEND, &num_sent);
 }
 
-static void mg_recv_common(struct mg_connection *nc, void *buf, int len) {
+MG_INTERNAL void mg_recv_common(struct mg_connection *nc, void *buf, int len,
+                                int own) {
   DBG(("%p %d %u", nc, len, (unsigned int) nc->recv_mbuf.len));
   if (nc->flags & MG_F_CLOSE_IMMEDIATELY) {
     DBG(("%p discarded %d bytes", nc, len));
@@ -2503,11 +2510,15 @@ static void mg_recv_common(struct mg_connection *nc, void *buf, int len) {
      * This connection will not survive next poll. Do not deliver events,
      * send data to /dev/null without acking.
      */
-    MG_FREE(buf);
+    if (own) {
+      MG_FREE(buf);
+    }
     return;
   }
   nc->last_io_time = (time_t) mg_time();
-  if (nc->recv_mbuf.len == 0) {
+  if (!own) {
+    mbuf_append(&nc->recv_mbuf, buf, len);
+  } else if (nc->recv_mbuf.len == 0) {
     /* Adopt buf as recv_mbuf's backing store. */
     mbuf_free(&nc->recv_mbuf);
     nc->recv_mbuf.buf = (char *) buf;
@@ -2519,8 +2530,8 @@ static void mg_recv_common(struct mg_connection *nc, void *buf, int len) {
   mg_call(nc, NULL, MG_EV_RECV, &len);
 }
 
-void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len) {
-  mg_recv_common(nc, buf, len);
+void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len, int own) {
+  mg_recv_common(nc, buf, len, own);
 }
 
 void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
@@ -2572,7 +2583,7 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
     }
   }
   if (nc != NULL) {
-    mg_recv_common(nc, buf, len);
+    mg_recv_common(nc, buf, len, 1);
   } else {
     /* Drop on the floor. */
     MG_FREE(buf);
@@ -2982,15 +2993,56 @@ extern struct mg_iface_vtable mg_socket_iface_vtable;
 
 #endif /* CS_MONGOOSE_SRC_NET_IF_SOCKET_H_ */
 #ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/net_if_tun.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_MONGOOSE_SRC_NET_IF_TUN_H_
+#define CS_MONGOOSE_SRC_NET_IF_TUN_H_
+
+#if MG_ENABLE_TUN
+
+/* Amalgamated: #include "mongoose/src/net_if.h" */
+
+struct mg_tun_client;
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+extern struct mg_iface_vtable mg_tun_iface_vtable;
+
+struct mg_connection *mg_tun_if_find_conn(struct mg_tun_client *client,
+                                          uint32_t stream_id);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* MG_ENABLE_TUN */
+
+#endif /* CS_MONGOOSE_SRC_NET_IF_TUN_H_ */
+#ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net_if.c"
 #endif
 /* Amalgamated: #include "mongoose/src/net_if.h" */
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/net_if_socket.h" */
+/* Amalgamated: #include "mongoose/src/net_if_tun.h" */
 
 extern struct mg_iface_vtable mg_default_iface_vtable;
 
+#if MG_ENABLE_TUN
+struct mg_iface_vtable *mg_ifaces[] = {&mg_default_iface_vtable,
+                                       &mg_tun_iface_vtable};
+#else
 struct mg_iface_vtable *mg_ifaces[] = {&mg_default_iface_vtable};
+#endif
+
+int mg_num_ifaces = (int) (sizeof(mg_ifaces) / sizeof(mg_ifaces[0]));
 
 struct mg_iface *mg_if_create_iface(struct mg_iface_vtable *vtable,
                                     struct mg_mgr *mgr) {
@@ -2999,6 +3051,27 @@ struct mg_iface *mg_if_create_iface(struct mg_iface_vtable *vtable,
   iface->data = NULL;
   iface->vtable = vtable;
   return iface;
+}
+
+struct mg_iface *mg_find_iface(struct mg_mgr *mgr,
+                               struct mg_iface_vtable *vtable,
+                               struct mg_iface *from) {
+  int i = 0;
+  if (from != NULL) {
+    for (i = 0; i < mgr->num_ifaces; i++) {
+      if (mgr->ifaces[i] == from) {
+        i++;
+        break;
+      }
+    }
+  }
+
+  for (; i < mgr->num_ifaces; i++) {
+    if (mgr->ifaces[i]->vtable == vtable) {
+      return mgr->ifaces[i];
+    }
+  }
+  return NULL;
 }
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net_if_socket.c"
@@ -3291,7 +3364,7 @@ static void mg_handle_tcp_read(struct mg_connection *conn) {
        * we skip to the next select() cycle which can just timeout. */
       while ((n = SSL_read(conn->ssl, buf, MG_TCP_RECV_BUFFER_SIZE)) > 0) {
         DBG(("%p %d bytes <- %d (SSL)", conn, n, conn->sock));
-        mg_if_recv_tcp_cb(conn, buf, n);
+        mg_if_recv_tcp_cb(conn, buf, n, 1 /* own */);
         buf = NULL;
         if (conn->flags & MG_F_CLOSE_IMMEDIATELY) break;
         /* buf has been freed, we need a new one. */
@@ -3312,7 +3385,7 @@ static void mg_handle_tcp_read(struct mg_connection *conn) {
                            recv_avail_size(conn, MG_TCP_RECV_BUFFER_SIZE), 0);
     DBG(("%p %d bytes (PLAIN) <- %d", conn, n, conn->sock));
     if (n > 0) {
-      mg_if_recv_tcp_cb(conn, buf, n);
+      mg_if_recv_tcp_cb(conn, buf, n, 1 /* own */);
     } else {
       MG_FREE(buf);
     }
@@ -3755,6 +3828,174 @@ struct mg_iface_vtable mg_default_iface_vtable = MG_SOCKET_IFACE_VTABLE;
 #endif
 
 #endif /* MG_ENABLE_NET_IF_SOCKET */
+#ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/net_if_tun.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if MG_ENABLE_TUN
+
+/* Amalgamated: #include "common/cs_dbg.h" */
+/* Amalgamated: #include "common/cs_time.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/net_if_tun.h" */
+/* Amalgamated: #include "mongoose/src/tun.h" */
+/* Amalgamated: #include "mongoose/src/util.h" */
+
+#define MG_TCP_RECV_BUFFER_SIZE 1024
+#define MG_UDP_RECV_BUFFER_SIZE 1500
+
+void mg_tun_if_connect_tcp(struct mg_connection *nc,
+                           const union socket_address *sa) {
+  (void) nc;
+  (void) sa;
+}
+
+void mg_tun_if_connect_udp(struct mg_connection *nc) {
+  (void) nc;
+}
+
+int mg_tun_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
+  (void) nc;
+  (void) sa;
+  return 0;
+}
+
+int mg_tun_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
+  (void) nc;
+  (void) sa;
+  return -1;
+}
+
+void mg_tun_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
+  struct mg_tun_client *client = (struct mg_tun_client *) nc->iface->data;
+  uint32_t stream_id = (uint32_t)(uintptr_t) nc->mgr_data;
+  struct mg_str msg = {(char *) buf, len};
+#if MG_ENABLE_HEXDUMP
+  char hex[512];
+  mg_hexdump(buf, len, hex, sizeof(hex));
+  LOG(LL_DEBUG, ("sending to stream %zu:\n%s", stream_id, hex));
+#endif
+
+  mg_tun_send_frame(client->disp, stream_id, MG_TUN_DATA_FRAME, 0, msg);
+}
+
+void mg_tun_if_udp_send(struct mg_connection *nc, const void *buf, size_t len) {
+  (void) nc;
+  (void) buf;
+  (void) len;
+}
+
+void mg_tun_if_recved(struct mg_connection *nc, size_t len) {
+  (void) nc;
+  (void) len;
+}
+
+int mg_tun_if_create_conn(struct mg_connection *nc) {
+  (void) nc;
+  return 1;
+}
+
+void mg_tun_if_destroy_conn(struct mg_connection *nc) {
+  struct mg_tun_client *client = (struct mg_tun_client *) nc->iface->data;
+  uint32_t stream_id = (uint32_t)(uintptr_t) nc->mgr_data;
+  struct mg_str msg = {NULL, 0};
+
+  LOG(LL_DEBUG, ("closing %zu:", stream_id));
+  mg_tun_send_frame(client->disp, stream_id, MG_TUN_DATA_FRAME,
+                    MG_TUN_F_END_STREAM, msg);
+}
+
+/* Associate a socket to a connection. */
+void mg_tun_if_sock_set(struct mg_connection *nc, sock_t sock) {
+  (void) nc;
+  (void) sock;
+}
+
+void mg_tun_if_init(struct mg_iface *iface) {
+  (void) iface;
+}
+
+void mg_tun_if_free(struct mg_iface *iface) {
+  (void) iface;
+}
+
+void mg_tun_if_add_conn(struct mg_connection *nc) {
+  nc->sock = INVALID_SOCKET;
+}
+
+void mg_tun_if_remove_conn(struct mg_connection *nc) {
+  (void) nc;
+}
+
+time_t mg_tun_if_poll(struct mg_iface *iface, int timeout_ms) {
+  (void) iface;
+  (void) timeout_ms;
+  return (time_t) cs_time();
+}
+
+void mg_tun_if_get_conn_addr(struct mg_connection *nc, int remote,
+                             union socket_address *sa) {
+  (void) nc;
+  (void) remote;
+  (void) sa;
+}
+
+struct mg_connection *mg_tun_if_find_conn(struct mg_tun_client *client,
+                                          uint32_t stream_id) {
+  struct mg_connection *nc = NULL;
+
+  for (nc = client->mgr->active_connections; nc != NULL; nc = nc->next) {
+    if (nc->iface != client->iface || (nc->flags & MG_F_LISTENING)) {
+      continue;
+    }
+    if (stream_id == (uint32_t)(uintptr_t) nc->mgr_data) {
+      return nc;
+    }
+  }
+
+  if (stream_id > client->last_stream_id) {
+    /* create a new connection */
+    LOG(LL_DEBUG, ("new stream 0x%lx, accepting", stream_id));
+    nc = mg_if_accept_new_conn(client->listener);
+    nc->mgr_data = (void *) (uintptr_t) stream_id;
+    client->last_stream_id = stream_id;
+  } else {
+    LOG(LL_DEBUG, ("Ignoring stream 0x%lx (last_stream_id 0x%lx)", stream_id,
+                   client->last_stream_id));
+  }
+
+  return nc;
+}
+
+/* clang-format off */
+#define MG_TUN_IFACE_VTABLE                                             \
+  {                                                                     \
+    mg_tun_if_init,                                                     \
+    mg_tun_if_free,                                                     \
+    mg_tun_if_add_conn,                                                 \
+    mg_tun_if_remove_conn,                                              \
+    mg_tun_if_poll,                                                     \
+    mg_tun_if_listen_tcp,                                               \
+    mg_tun_if_listen_udp,                                               \
+    mg_tun_if_connect_tcp,                                              \
+    mg_tun_if_connect_udp,                                              \
+    mg_tun_if_tcp_send,                                                 \
+    mg_tun_if_udp_send,                                                 \
+    mg_tun_if_recved,                                                   \
+    mg_tun_if_create_conn,                                              \
+    mg_tun_if_destroy_conn,                                             \
+    mg_tun_if_sock_set,                                                 \
+    mg_tun_if_get_conn_addr,                                            \
+  }
+/* clang-format on */
+
+struct mg_iface_vtable mg_tun_iface_vtable = MG_TUN_IFACE_VTABLE;
+
+#endif /* MG_ENABLE_TUN */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/multithreading.c"
 #endif
@@ -8407,6 +8648,37 @@ MG_INTERNAL int mg_get_errno(void) {
   return GetLastError();
 #endif
 }
+
+void mg_mbuf_append_base64_putc(char ch, void *user_data) {
+  struct mbuf *mbuf = (struct mbuf *) user_data;
+  mbuf_append(mbuf, &ch, sizeof(ch));
+}
+
+void mg_mbuf_append_base64(struct mbuf *mbuf, const void *data, size_t len) {
+  struct cs_base64_ctx ctx;
+  cs_base64_init(&ctx, mg_mbuf_append_base64_putc, mbuf);
+  cs_base64_update(&ctx, (const char *) data, len);
+  cs_base64_finish(&ctx);
+}
+
+void mg_basic_auth_header(const char *user, const char *pass,
+                          struct mbuf *buf) {
+  const char *header_prefix = "Authorization: Basic ";
+  const char *header_suffix = "\r\n";
+
+  struct cs_base64_ctx ctx;
+  cs_base64_init(&ctx, mg_mbuf_append_base64_putc, buf);
+
+  mbuf_append(buf, header_prefix, strlen(header_prefix));
+
+  cs_base64_update(&ctx, user, strlen(user));
+  if (pass != NULL) {
+    cs_base64_update(&ctx, ":", 1);
+    cs_base64_update(&ctx, pass, strlen(pass));
+  }
+  cs_base64_finish(&ctx);
+  mbuf_append(buf, header_suffix, strlen(header_suffix));
+}
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mqtt.c"
 #endif
@@ -10264,6 +10536,253 @@ int mg_set_protocol_coap(struct mg_connection *nc) {
 
 #endif /* MG_ENABLE_COAP */
 #ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/tun.c"
+#endif
+/*
+ * Copyright (c) 2014 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if MG_ENABLE_TUN
+
+/* Amalgamated: #include "common/cs_dbg.h" */
+/* Amalgamated: #include "mongoose/src/http.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/net.h" */
+/* Amalgamated: #include "mongoose/src/net_if_tun.h" */
+/* Amalgamated: #include "mongoose/src/tun.h" */
+/* Amalgamated: #include "mongoose/src/util.h" */
+
+static void mg_tun_reconnect(struct mg_tun_client *client);
+
+static void mg_tun_init_client(struct mg_tun_client *client, struct mg_mgr *mgr,
+                               struct mg_iface *iface, const char *dispatcher,
+                               const char *auth) {
+  client->mgr = mgr;
+  client->iface = iface;
+  client->disp_url = dispatcher;
+  client->auth = auth;
+  client->last_stream_id = 0;
+
+  client->disp = NULL;     /* will be set by mg_tun_reconnect */
+  client->listener = NULL; /* will be set by mg_do_bind */
+}
+
+void mg_tun_log_frame(struct mg_tun_frame *frame) {
+  LOG(LL_DEBUG, ("Got TUN frame: type=0x%x, flags=0x%x stream_id=0x%lx, "
+                 "len=%zu",
+                 frame->type, frame->flags, frame->stream_id, frame->body.len));
+#if MG_ENABLE_HEXDUMP
+  {
+    char hex[512];
+    mg_hexdump(frame->body.p, frame->body.len, hex, sizeof(hex));
+    LOG(LL_DEBUG, ("body:\n%s", hex));
+  }
+#else
+  LOG(LL_DEBUG, ("body: '%.*s'", (int) frame->body.len, frame->body.p));
+#endif
+}
+
+static void mg_tun_close_all(struct mg_tun_client *client) {
+  struct mg_connection *nc;
+  for (nc = client->mgr->active_connections; nc != NULL; nc = nc->next) {
+    if (nc->iface == client->iface && !(nc->flags & MG_F_LISTENING)) {
+      LOG(LL_DEBUG, ("Closing tunneled connection %p", nc));
+      mg_close_conn(nc);
+    }
+  }
+}
+
+static void mg_tun_client_handler(struct mg_connection *nc, int ev,
+                                  void *ev_data) {
+  struct mg_tun_client *client = (struct mg_tun_client *) nc->user_data;
+
+  switch (ev) {
+    case MG_EV_CONNECT: {
+      int err = *(int *) ev_data;
+
+      if (err) {
+        LOG(LL_ERROR, ("Cannot connect to the tunnel dispatcher: %d", err));
+      } else {
+        LOG(LL_INFO, ("Connected to the tunnel dispatcher"));
+      }
+      break;
+    }
+    case MG_EV_HTTP_REPLY: {
+      struct http_message *hm = (struct http_message *) ev_data;
+
+      if (hm->resp_code != 200) {
+        LOG(LL_ERROR,
+            ("Tunnel dispatcher reply non-OK status code %d", hm->resp_code));
+      }
+      break;
+    }
+    case MG_EV_WEBSOCKET_HANDSHAKE_DONE: {
+      LOG(LL_INFO, ("Tunnel dispatcher handshake done"));
+      break;
+    }
+    case MG_EV_WEBSOCKET_FRAME: {
+      struct websocket_message *wm = (struct websocket_message *) ev_data;
+      struct mg_connection *tc;
+      struct mg_tun_frame frame;
+
+      if (mg_tun_parse_frame(wm->data, wm->size, &frame) == -1) {
+        LOG(LL_ERROR, ("Got invalid tun frame dropping", wm->size));
+        break;
+      }
+
+      mg_tun_log_frame(&frame);
+
+      tc = mg_tun_if_find_conn(client, frame.stream_id);
+      if (tc == NULL) {
+        if (frame.body.len > 0) {
+          LOG(LL_DEBUG, ("Got frame after receiving end has been closed"));
+        }
+        break;
+      }
+      if (frame.body.len > 0) {
+        mg_if_recv_tcp_cb(tc, (void *) frame.body.p, frame.body.len,
+                          0 /* own */);
+      }
+      if (frame.flags & MG_TUN_F_END_STREAM) {
+        LOG(LL_DEBUG, ("Closing tunneled connection because got end of stream "
+                       "from other end"));
+        tc->flags |= MG_F_CLOSE_IMMEDIATELY;
+        mg_close_conn(tc);
+      }
+      break;
+    }
+    case MG_EV_CLOSE: {
+      LOG(LL_DEBUG, ("Closing all tunneled connections"));
+      mg_tun_close_all(client);
+      client->disp = NULL;
+      LOG(LL_INFO, ("Dispatcher connection is no more, reconnecting"));
+      mg_tun_reconnect(client);
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+static void mg_tun_do_reconnect(struct mg_tun_client *client) {
+  struct mg_connection *dc;
+  struct mbuf headers;
+  mbuf_init(&headers, 0);
+
+  /* HTTP/Websocket listener */
+  mg_basic_auth_header(client->auth, NULL, &headers);
+  mbuf_append(&headers, "", 1); /* nul terminate */
+  if ((dc = mg_connect_ws(client->mgr, mg_tun_client_handler, client->disp_url,
+                          "mg_tun", headers.buf)) == NULL) {
+    LOG(LL_ERROR,
+        ("Cannot connect to WS server on addr [%s]\n", client->disp_url));
+    goto clean;
+  }
+
+  client->disp = dc;
+  dc->user_data = client;
+
+clean:
+  mbuf_free(&headers);
+}
+
+void mg_tun_reconnect_ev_handler(struct mg_connection *nc, int ev,
+                                 void *ev_data) {
+  struct mg_tun_client *client = (struct mg_tun_client *) nc->user_data;
+  (void) ev_data;
+
+  switch (ev) {
+    case MG_EV_TIMER:
+      mg_tun_do_reconnect(client);
+      break;
+  }
+}
+
+static void mg_tun_reconnect(struct mg_tun_client *client) {
+  struct mg_connection *nc;
+  nc = mg_add_sock(client->mgr, INVALID_SOCKET, mg_tun_reconnect_ev_handler);
+  nc->user_data = client;
+  /* TODO(mkm): implement exp back off */
+  nc->ev_timer_time = mg_time() + MG_TUN_RECONNECT_INTERVAL;
+}
+
+static struct mg_tun_client *mg_tun_create_client(struct mg_mgr *mgr,
+                                                  const char *dispatcher,
+                                                  const char *auth) {
+  struct mg_tun_client *client = NULL;
+  struct mg_iface *iface = mg_find_iface(mgr, &mg_tun_iface_vtable, NULL);
+  if (iface == NULL) {
+    LOG(LL_ERROR, ("The tun feature requires the manager to have a tun "
+                   "interface enabled"));
+    return NULL;
+  }
+
+  client = (struct mg_tun_client *) MG_MALLOC(sizeof(*client));
+  mg_tun_init_client(client, mgr, iface, dispatcher, auth);
+  iface->data = client;
+
+  mg_tun_do_reconnect(client);
+  return client;
+}
+
+static struct mg_connection *mg_tuna_do_bind(struct mg_tun_client *client,
+                                             mg_event_handler_t handler) {
+  struct mg_connection *lc;
+  struct mg_bind_opts opts;
+  const char *err;
+  memset(&opts, 0, sizeof(opts));
+  opts.iface = client->iface;
+  opts.error_string = &err;
+  lc = mg_bind_opt(client->mgr, ":1234" /* dummy port */, handler, opts);
+  if (lc == NULL) {
+    LOG(LL_ERROR, ("Cannot bind: %s", err));
+  }
+  client->listener = lc;
+  return lc;
+}
+
+struct mg_connection *mg_tuna_bind(struct mg_mgr *mgr,
+                                   mg_event_handler_t handler,
+                                   const char *dispatcher, const char *auth) {
+  struct mg_tun_client *client = mg_tun_create_client(mgr, dispatcher, auth);
+  if (client == NULL) {
+    return NULL;
+  }
+  return mg_tuna_do_bind(client, handler);
+}
+
+int mg_tun_parse_frame(void *data, size_t len, struct mg_tun_frame *frame) {
+  const size_t header_size = sizeof(uint32_t) + sizeof(uint8_t) * 2;
+  if (len < header_size) {
+    return -1;
+  }
+
+  frame->type = *(uint8_t *) (data);
+  frame->flags = *(uint8_t *) ((char *) data + 1);
+  memcpy(&frame->stream_id, (char *) data + 2, sizeof(uint32_t));
+  frame->stream_id = ntohl(frame->stream_id);
+  frame->body.p = (char *) data + header_size;
+  frame->body.len = len - header_size;
+  return 0;
+}
+
+void mg_tun_send_frame(struct mg_connection *ws, uint32_t stream_id,
+                       uint8_t type, uint8_t flags, struct mg_str msg) {
+  stream_id = htonl(stream_id);
+  {
+    struct mg_str parts[] = {
+        {(char *) &type, sizeof(type)},
+        {(char *) &flags, sizeof(flags)},
+        {(char *) &stream_id, sizeof(stream_id)},
+        {msg.p, msg.len} /* vc6 doesn't like just `msg` here */};
+    mg_send_websocket_framev(ws, WEBSOCKET_OP_BINARY, parts,
+                             sizeof(parts) / sizeof(parts[0]));
+  }
+}
+
+#endif /* MG_ENABLE_TUN */
+#ifdef MG_MODULE_LINES
 #line 1 "common/platforms/cc3200/cc3200_libc.c"
 #endif
 /*
@@ -11478,7 +11997,7 @@ static void mg_handle_tcp_read(struct mg_connection *conn) {
                     recv_avail_size(conn, MG_TCP_RECV_BUFFER_SIZE), 0);
   DBG(("%p %d bytes <- %d", conn, n, conn->sock));
   if (n > 0) {
-    mg_if_recv_tcp_cb(conn, buf, n);
+    mg_if_recv_tcp_cb(conn, buf, n, 1 /* own */);
   } else {
     MG_FREE(buf);
   }
@@ -11977,7 +12496,7 @@ static void mg_lwip_handle_recv(struct mg_connection *nc) {
       return;
     }
     pbuf_copy_partial(seg, data, len, cs->rx_offset);
-    mg_if_recv_tcp_cb(nc, data, len); /* callee takes over data */
+    mg_if_recv_tcp_cb(nc, data, len, 1 /* own */);
     cs->rx_offset += len;
     if (cs->rx_offset == cs->rx_chain->len) {
       cs->rx_chain = pbuf_dechain(cs->rx_chain);
@@ -12664,7 +13183,7 @@ void mg_lwip_ssl_recv(struct mg_connection *nc) {
         return;
       }
     } else {
-      mg_if_recv_tcp_cb(nc, buf, ret); /* callee takes over data */
+      mg_if_recv_tcp_cb(nc, buf, ret, 1 /* own */);
     }
   }
   if (nc->recv_mbuf.len >= MG_LWIP_SSL_RECV_MBUF_LIMIT) {
@@ -13011,7 +13530,7 @@ static void mg_handle_recv(struct mg_connection *nc) {
   }
 
   if (bytes_read != 0) {
-    mg_if_recv_tcp_cb(nc, buf, bytes_read);
+    mg_if_recv_tcp_cb(nc, buf, bytes_read, 1 /* own */);
   }
 }
 
