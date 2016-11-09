@@ -4992,10 +4992,22 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
       mg_ws_handler(nc, MG_EV_RECV, ev_data);
     } else if (nc->listener != NULL &&
                (vec = mg_get_http_header(hm, "Sec-WebSocket-Key")) != NULL) {
+      mg_event_handler_t handler;
+
       /* This is a websocket request. Switch protocol handlers. */
       mbuf_remove(io, req_len);
       nc->proto_handler = mg_ws_handler;
       nc->flags |= MG_F_IS_WEBSOCKET;
+
+      /*
+       * If we have a handler set up with mg_register_http_endpoint(),
+       * deliver subsequent websocket events to this handler after the
+       * protocol switch.
+       */
+      handler = mg_http_get_endpoint_handler(nc->listener, &hm->uri);
+      if (handler != NULL) {
+        nc->handler = handler;
+      }
 
       /* Send handshake */
       mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_REQUEST, hm);
