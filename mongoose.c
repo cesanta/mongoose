@@ -1796,6 +1796,87 @@ int64_t cs_to64(const char *s) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/tun.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_MONGOOSE_SRC_TUN_H_
+#define CS_MONGOOSE_SRC_TUN_H_
+
+#if MG_ENABLE_TUN
+
+/* Amalgamated: #include "mongoose/src/net.h" */
+/* Amalgamated: #include "common/mg_str.h" */
+
+#ifndef MG_TUN_RECONNECT_INTERVAL
+#define MG_TUN_RECONNECT_INTERVAL 1
+#endif
+
+#define MG_TUN_DATA_FRAME 0x0
+#define MG_TUN_F_END_STREAM 0x1
+
+/*
+ * MG TUN frame format is loosely based on HTTP/2.
+ * However since the communication happens via WebSocket
+ * there is no need to encode the frame length, since that's
+ * solved by WebSocket framing.
+ *
+ * TODO(mkm): Detailed description of the protocol.
+ */
+struct mg_tun_frame {
+  uint8_t type;
+  uint8_t flags;
+  uint32_t stream_id; /* opaque stream identifier */
+  struct mg_str body;
+};
+
+struct mg_tun_ssl_opts {
+#if MG_ENABLE_SSL
+  const char *ssl_cert;
+  const char *ssl_key;
+  const char *ssl_ca_cert;
+#else
+  int dummy; /* some compilers don't like empty structs */
+#endif
+};
+
+struct mg_tun_client {
+  struct mg_mgr *mgr;
+  struct mg_iface *iface;
+  const char *disp_url;
+  struct mg_tun_ssl_opts ssl;
+
+  uint32_t last_stream_id; /* stream id of most recently accepted connection */
+
+  struct mg_connection *disp;
+  struct mg_connection *listener;
+};
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+struct mg_connection *mg_tun_bind_opt(struct mg_mgr *mgr,
+                                      const char *dispatcher,
+                                      mg_event_handler_t handler,
+                                      struct mg_bind_opts opts);
+
+int mg_tun_parse_frame(void *data, size_t len, struct mg_tun_frame *frame);
+
+void mg_tun_send_frame(struct mg_connection *ws, uint32_t stream_id,
+                       uint8_t type, uint8_t flags, struct mg_str msg);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* MG_ENABLE_TUN */
+
+#endif /* CS_MONGOOSE_SRC_TUN_H_ */
+#ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net.c"
 #endif
 /*
@@ -1821,6 +1902,7 @@ int64_t cs_to64(const char *s) {
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/resolv.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
+/* Amalgamated: #include "mongoose/src/tun.h" */
 
 #define MG_MAX_HOST_LEN 200
 
@@ -2796,6 +2878,13 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
   char host[MG_MAX_HOST_LEN];
 
   MG_COPY_COMMON_CONNECTION_OPTIONS(&add_sock_opts, &opts);
+
+#if MG_ENABLE_TUN
+  if (mg_strncmp(mg_mk_str(address), mg_mk_str("ws://"), 5) == 0 ||
+      mg_strncmp(mg_mk_str(address), mg_mk_str("wss://"), 6) == 0) {
+    return mg_tun_bind_opt(mgr, address, callback, opts);
+  }
+#endif
 
   if (mg_parse_address(address, &sa, &proto, host, sizeof(host)) <= 0) {
     MG_SET_PTRPTR(opts.error_string, "cannot parse address");
@@ -10676,13 +10765,12 @@ static void mg_tun_reconnect(struct mg_tun_client *client);
 
 static void mg_tun_init_client(struct mg_tun_client *client, struct mg_mgr *mgr,
                                struct mg_iface *iface, const char *dispatcher,
-                               const char *user, const char *pass) {
+                               struct mg_tun_ssl_opts ssl) {
   client->mgr = mgr;
   client->iface = iface;
   client->disp_url = dispatcher;
-  client->user = user;
-  client->pass = pass;
   client->last_stream_id = 0;
+  client->ssl = ssl;
 
   client->disp = NULL;     /* will be set by mg_tun_reconnect */
   client->listener = NULL; /* will be set by mg_do_bind */
@@ -10787,24 +10875,23 @@ static void mg_tun_client_handler(struct mg_connection *nc, int ev,
 
 static void mg_tun_do_reconnect(struct mg_tun_client *client) {
   struct mg_connection *dc;
-  struct mbuf headers;
-  mbuf_init(&headers, 0);
-
+  struct mg_connect_opts opts;
+  memset(&opts, 0, sizeof(opts));
+#if MG_ENABLE_SSL
+  opts.ssl_cert = client->ssl.ssl_cert;
+  opts.ssl_key = client->ssl.ssl_key;
+  opts.ssl_ca_cert = client->ssl.ssl_ca_cert;
+#endif
   /* HTTP/Websocket listener */
-  mg_basic_auth_header(client->user, client->pass, &headers);
-  mbuf_append(&headers, "", 1); /* nul terminate */
-  if ((dc = mg_connect_ws(client->mgr, mg_tun_client_handler, client->disp_url,
-                          "mg_tun", headers.buf)) == NULL) {
+  if ((dc = mg_connect_ws_opt(client->mgr, mg_tun_client_handler, opts,
+                              client->disp_url, "mg_tun", NULL)) == NULL) {
     LOG(LL_ERROR,
         ("Cannot connect to WS server on addr [%s]\n", client->disp_url));
-    goto clean;
+    return;
   }
 
   client->disp = dc;
   dc->user_data = client;
-
-clean:
-  mbuf_free(&headers);
 }
 
 void mg_tun_reconnect_ev_handler(struct mg_connection *nc, int ev,
@@ -10829,8 +10916,7 @@ static void mg_tun_reconnect(struct mg_tun_client *client) {
 
 static struct mg_tun_client *mg_tun_create_client(struct mg_mgr *mgr,
                                                   const char *dispatcher,
-                                                  const char *user,
-                                                  const char *pass) {
+                                                  struct mg_tun_ssl_opts ssl) {
   struct mg_tun_client *client = NULL;
   struct mg_iface *iface = mg_find_iface(mgr, &mg_tun_iface_vtable, NULL);
   if (iface == NULL) {
@@ -10840,39 +10926,43 @@ static struct mg_tun_client *mg_tun_create_client(struct mg_mgr *mgr,
   }
 
   client = (struct mg_tun_client *) MG_MALLOC(sizeof(*client));
-  mg_tun_init_client(client, mgr, iface, dispatcher, user, pass);
+  mg_tun_init_client(client, mgr, iface, dispatcher, ssl);
   iface->data = client;
 
   mg_tun_do_reconnect(client);
   return client;
 }
 
-static struct mg_connection *mg_tuna_do_bind(struct mg_tun_client *client,
-                                             mg_event_handler_t handler) {
+static struct mg_connection *mg_tun_do_bind(struct mg_tun_client *client,
+                                            mg_event_handler_t handler,
+                                            struct mg_bind_opts opts) {
   struct mg_connection *lc;
-  struct mg_bind_opts opts;
-  const char *err;
-  memset(&opts, 0, sizeof(opts));
   opts.iface = client->iface;
-  opts.error_string = &err;
   lc = mg_bind_opt(client->mgr, ":1234" /* dummy port */, handler, opts);
-  if (lc == NULL) {
-    LOG(LL_ERROR, ("Cannot bind: %s", err));
-  }
   client->listener = lc;
   return lc;
 }
 
-struct mg_connection *mg_tuna_bind(struct mg_mgr *mgr,
-                                   mg_event_handler_t handler,
-                                   const char *dispatcher, const char *user,
-                                   const char *pass) {
-  struct mg_tun_client *client =
-      mg_tun_create_client(mgr, dispatcher, user, pass);
+struct mg_connection *mg_tun_bind_opt(struct mg_mgr *mgr,
+                                      const char *dispatcher,
+                                      mg_event_handler_t handler,
+                                      struct mg_bind_opts opts) {
+#if MG_ENABLE_SSL
+  struct mg_tun_ssl_opts ssl = {opts.ssl_cert, opts.ssl_key, opts.ssl_ca_cert};
+#else
+  struct mg_tun_ssl_opts ssl = {0};
+#endif
+  struct mg_tun_client *client = mg_tun_create_client(mgr, dispatcher, ssl);
   if (client == NULL) {
     return NULL;
   }
-  return mg_tuna_do_bind(client, handler);
+#if MG_ENABLE_SSL
+  /* these options don't make sense in the local mouth of the tunnel */
+  opts.ssl_cert = NULL;
+  opts.ssl_key = NULL;
+  opts.ssl_ca_cert = NULL;
+#endif
+  return mg_tun_do_bind(client, handler, opts);
 }
 
 int mg_tun_parse_frame(void *data, size_t len, struct mg_tun_frame *frame) {
