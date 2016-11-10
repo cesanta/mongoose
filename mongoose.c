@@ -110,6 +110,11 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
                                      struct http_message *hm, char *buf,
                                      size_t blen);
 
+MG_INTERNAL int mg_http_common_url_parse(const char *url, const char *schema,
+                                         const char *schema_tls, int *use_ssl,
+                                         char **user, char **pass, char **addr,
+                                         int *port_i, const char **path);
+
 #if MG_ENABLE_FILESYSTEM
 MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
                                      const struct mg_serve_http_opts *opts,
@@ -4389,7 +4394,7 @@ static void mg_http_conn_destructor(void *proto_data);
 struct mg_connection *mg_connect_http_base(
     struct mg_mgr *mgr, mg_event_handler_t ev_handler,
     struct mg_connect_opts opts, const char *schema, const char *schema_ssl,
-    const char *url, const char **path, char **addr);
+    const char *url, const char **path, char **user, char **pass, char **addr);
 
 static struct mg_http_proto_data *mg_http_get_proto_data(
     struct mg_connection *c) {
@@ -5872,6 +5877,35 @@ int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
   return len;
 }
 
+int mg_get_http_basic_auth(struct http_message *hm, char *user, size_t user_len,
+                           char *pass, size_t pass_len) {
+  struct mg_str *hdr = mg_get_http_header(hm, "Authorization");
+  if (hdr == NULL) return -1;
+  return mg_parse_http_basic_auth(hdr, user, user_len, pass, pass_len);
+}
+
+int mg_parse_http_basic_auth(struct mg_str *hdr, char *user, size_t user_len,
+                             char *pass, size_t pass_len) {
+  char *buf = NULL;
+  char fmt[64];
+  int res = 0;
+
+  if (mg_strncmp(*hdr, mg_mk_str("Basic "), 6) != 0) return -1;
+
+  buf = (char *) MG_MALLOC(hdr->len);
+  cs_base64_decode((unsigned char *) hdr->p + 6, hdr->len, buf);
+
+  /* e.g. "%123[^:]:%321[^\n]" */
+  snprintf(fmt, sizeof(fmt), "%%%" SIZE_T_FMT "[^:]:%%%" SIZE_T_FMT "[^\n]",
+           user_len - 1, pass_len - 1);
+  if (sscanf(buf, fmt, user, pass) == 0) {
+    res = -1;
+  }
+
+  MG_FREE(buf);
+  return res;
+}
+
 #if MG_ENABLE_FILESYSTEM
 static int mg_is_file_hidden(const char *path,
                              const struct mg_serve_http_opts *opts,
@@ -6291,7 +6325,8 @@ void mg_http_reverse_proxy(struct mg_connection *nc,
               (int) (hm->uri.len - mount.len), hm->uri.p + mount.len);
 
   be = mg_connect_http_base(nc->mgr, mg_reverse_proxy_handler, opts, "http://",
-                            "https://", purl, &path, &addr);
+                            "https://", purl, &path, NULL /* user */,
+                            NULL /* pass */, &addr);
   DBG(("Proxying %.*s to %s (rule: %.*s)", (int) hm->uri.len, hm->uri.p, purl,
        (int) mount.len, mount.p));
 
@@ -6765,11 +6800,15 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
 #endif /* MG_ENABLE_FILESYSTEM */
 
 /* returns 0 on success, -1 on error */
-static int mg_http_common_url_parse(const char *url, const char *schema,
-                                    const char *schema_tls, int *use_ssl,
-                                    char **addr, int *port_i,
-                                    const char **path) {
+MG_INTERNAL int mg_http_common_url_parse(const char *url, const char *schema,
+                                         const char *schema_tls, int *use_ssl,
+                                         char **user, char **pass, char **addr,
+                                         int *port_i, const char **path) {
   int addr_len = 0;
+  int auth_sep_pos = -1;
+  int user_sep_pos = -1;
+  (void) user;
+  (void) pass;
 
   if (memcmp(url, schema, strlen(schema)) == 0) {
     url += strlen(schema);
@@ -6790,11 +6829,17 @@ static int mg_http_common_url_parse(const char *url, const char *schema,
     if (*url == '/') {
       break;
     }
+    if (*url == '@') {
+      auth_sep_pos = addr_len;
+      user_sep_pos = *port_i;
+      *port_i = -1;
+    }
     if (*url == ':') *port_i = addr_len;
     (*addr)[addr_len++] = *url;
     (*addr)[addr_len] = '\0';
     url++;
   }
+
   if (addr_len == 0) goto cleanup;
   if (*port_i < 0) {
     *port_i = addr_len;
@@ -6806,6 +6851,25 @@ static int mg_http_common_url_parse(const char *url, const char *schema,
   if (*path == NULL) *path = url;
 
   if (**path == '\0') *path = "/";
+
+  if (user != NULL && pass != NULL) {
+    if (auth_sep_pos == -1) {
+      *user = NULL;
+      *pass = NULL;
+    } else {
+      /* user is from 0 to user_sep_pos */
+      *user = (char *) MG_MALLOC(user_sep_pos + 1);
+      memcpy(*user, *addr, user_sep_pos);
+      (*user)[user_sep_pos] = '\0';
+      /* pass is from user_sep_pos + 1 to auth_sep_pos */
+      *pass = (char *) MG_MALLOC(auth_sep_pos - user_sep_pos - 1 + 1);
+      memcpy(*pass, *addr + user_sep_pos + 1, auth_sep_pos - user_sep_pos - 1);
+      (*pass)[auth_sep_pos - user_sep_pos - 1] = '\0';
+
+      /* move address proper to the front */
+      memmove(*addr, *addr + auth_sep_pos + 1, addr_len - auth_sep_pos);
+    }
+  }
 
   DBG(("%s %s", *addr, *path));
 
@@ -6819,13 +6883,13 @@ cleanup:
 struct mg_connection *mg_connect_http_base(
     struct mg_mgr *mgr, mg_event_handler_t ev_handler,
     struct mg_connect_opts opts, const char *schema, const char *schema_ssl,
-    const char *url, const char **path, char **addr) {
+    const char *url, const char **path, char **user, char **pass, char **addr) {
   struct mg_connection *nc = NULL;
   int port_i = -1;
   int use_ssl = 0;
 
-  if (mg_http_common_url_parse(url, schema, schema_ssl, &use_ssl, addr, &port_i,
-                               path) < 0) {
+  if (mg_http_common_url_parse(url, schema, schema_ssl, &use_ssl, user, pass,
+                               addr, &port_i, path) < 0) {
     MG_SET_PTRPTR(opts.error_string, "cannot parse url");
     return NULL;
   }
@@ -6843,7 +6907,9 @@ struct mg_connection *mg_connect_http_base(
     }
 #else
     MG_SET_PTRPTR(opts.error_string, "ssl is disabled");
-    MG_FREE(addr);
+    if (user != NULL) MG_FREE(*user);
+    if (pass != NULL) MG_FREE(*pass);
+    MG_FREE(*addr);
     return NULL;
 #endif
   }
@@ -6863,22 +6929,32 @@ struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
                                           const char *url,
                                           const char *extra_headers,
                                           const char *post_data) {
-  char *addr = NULL;
+  char *user = NULL, *pass = NULL, *addr = NULL;
   const char *path = NULL;
-  struct mg_connection *nc = mg_connect_http_base(
-      mgr, ev_handler, opts, "http://", "https://", url, &path, &addr);
+  struct mbuf auth;
+  struct mg_connection *nc =
+      mg_connect_http_base(mgr, ev_handler, opts, "http://", "https://", url,
+                           &path, &user, &pass, &addr);
 
   if (nc == NULL) {
     return NULL;
   }
 
+  mbuf_init(&auth, 0);
+  if (user != NULL) {
+    mg_basic_auth_header(user, pass, &auth);
+  }
+
   mg_printf(nc, "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %" SIZE_T_FMT
-                "\r\n%s\r\n%s",
+                "\r\n%.*s%s\r\n%s",
             post_data == NULL ? "GET" : "POST", path, addr,
-            post_data == NULL ? 0 : strlen(post_data),
+            post_data == NULL ? 0 : strlen(post_data), (int) auth.len, auth.buf,
             extra_headers == NULL ? "" : extra_headers,
             post_data == NULL ? "" : post_data);
 
+  mbuf_free(&auth);
+  MG_FREE(user);
+  MG_FREE(pass);
   MG_FREE(addr);
   return nc;
 }
@@ -8222,6 +8298,16 @@ MG_INTERNAL void mg_ws_handshake(struct mg_connection *nc,
 void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
                                   const char *host, const char *protocol,
                                   const char *extra_headers) {
+  mg_send_websocket_handshake3(nc, path, host, protocol, extra_headers, NULL,
+                               NULL);
+}
+
+void mg_send_websocket_handshake3(struct mg_connection *nc, const char *path,
+                                  const char *host, const char *protocol,
+                                  const char *extra_headers, const char *user,
+                                  const char *pass) {
+  struct mbuf auth;
+  const char *authstr = "";
   char key[25];
   uint32_t nonce[4];
   nonce[0] = mg_ws_random_mask();
@@ -8230,13 +8316,28 @@ void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
   nonce[3] = mg_ws_random_mask();
   mg_base64_encode((unsigned char *) &nonce, sizeof(nonce), key);
 
+  mbuf_init(&auth, 0);
+  if (user != NULL) {
+    mg_basic_auth_header(user, pass, &auth);
+
+    /*
+     * cc3200 libc is broken: it doesn't like zero length to be passed to %.*s
+     * i.e. sprintf("f%.*so", (int)0, ""), yields `f\0o`.
+     * Thus we ensure the header fragment is null terminated and use `%s` below.
+     */
+
+    mbuf_append(&auth, "", 1);
+    authstr = auth.buf;
+  }
+
   mg_printf(nc,
             "GET %s HTTP/1.1\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
+            "%s"
             "Sec-WebSocket-Version: 13\r\n"
             "Sec-WebSocket-Key: %s\r\n",
-            path, key);
+            path, authstr, key);
 
   /* TODO(mkm): take default hostname from http proto data if host == NULL */
   if (host != MG_WS_NO_HOST_HEADER_MAGIC) {
@@ -8249,6 +8350,8 @@ void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
     mg_printf(nc, "%s", extra_headers);
   }
   mg_printf(nc, "\r\n");
+
+  mbuf_free(&auth);
 }
 
 void mg_send_websocket_handshake(struct mg_connection *nc, const char *path,
@@ -8262,16 +8365,20 @@ struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
                                         struct mg_connect_opts opts,
                                         const char *url, const char *protocol,
                                         const char *extra_headers) {
-  char *addr = NULL;
+  char *user = NULL, *pass = NULL, *addr = NULL;
   const char *path = NULL;
-  struct mg_connection *nc = mg_connect_http_base(
-      mgr, ev_handler, opts, "ws://", "wss://", url, &path, &addr);
+  struct mg_connection *nc =
+      mg_connect_http_base(mgr, ev_handler, opts, "ws://", "wss://", url, &path,
+                           &user, &pass, &addr);
 
   if (nc != NULL) {
-    mg_send_websocket_handshake2(nc, path, addr, protocol, extra_headers);
+    mg_send_websocket_handshake3(nc, path, addr, protocol, extra_headers, user,
+                                 pass);
   }
 
   MG_FREE(addr);
+  MG_FREE(user);
+  MG_FREE(pass);
   return nc;
 }
 

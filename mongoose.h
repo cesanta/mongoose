@@ -4000,6 +4000,11 @@ void mg_send_websocket_handshake2(struct mg_connection *nc, const char *path,
                                   const char *host, const char *protocol,
                                   const char *extra_headers);
 
+/* Like mg_send_websocket_handshake2 but also passes basic auth header */
+void mg_send_websocket_handshake3(struct mg_connection *nc, const char *path,
+                                  const char *host, const char *protocol,
+                                  const char *extra_headers, const char *user,
+                                  const char *pass);
 /*
  * Helper function that creates an outbound WebSocket connection.
  *
@@ -4170,6 +4175,23 @@ struct mg_str *mg_get_http_header(struct http_message *hm, const char *name);
  */
 int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
                          size_t buf_size);
+
+/*
+ * Gets and parses the Authorization: Basic header
+ * Returns -1 if no Authorization header is found, or if
+ * mg_parse_http_basic_auth
+ * fails parsing the resulting header.
+ */
+int mg_get_http_basic_auth(struct http_message *hm, char *user, size_t user_len,
+                           char *pass, size_t pass_len);
+
+/*
+ * Parses the Authorization: Basic header
+ * Returns -1 iif the authorization type is not "Basic" or any other error such
+ * as incorrectly encoded base64 user password pair.
+ */
+int mg_parse_http_basic_auth(struct mg_str *hdr, char *user, size_t user_len,
+                             char *pass, size_t pass_len);
 
 /*
  * Parses the buffer `buf`, `buf_len` that contains multipart form data chunks.
