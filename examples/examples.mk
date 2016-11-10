@@ -11,7 +11,7 @@ else
 ifeq ($(SSL_LIB),openssl)
 CFLAGS += -DMG_ENABLE_SSL -lssl -lcrypto
 else ifeq ($(SSL_LIB), krypton)
-CFLAGS += -DMG_ENABLE_SSL -DMG_DISABLE_PFS -DSSL_KRYPTON ../../../krypton/krypton.c -I../../../krypton
+CFLAGS += -DMG_ENABLE_SSL -DMG_DISABLE_PFS ../../../krypton/krypton.c -I../../../krypton
 endif
 CFLAGS += -lpthread
 endif

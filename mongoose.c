@@ -2685,7 +2685,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
 static void mg_set_ssl_server_name(struct mg_connection *nc,
                                    const char *server_name) {
   DBG(("%p '%s'", nc, server_name));
-#ifdef SSL_KRYPTON
+#ifdef KR_VERSION
   SSL_CTX_kr_set_verify_name(nc->ssl_ctx, server_name);
 #elif MG_NET_IF == MG_NET_IF_SIMPLELINK
   nc->ssl_server_name = strdup(server_name);
@@ -12599,7 +12599,7 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
 static void mg_lwip_handle_recv(struct mg_connection *nc) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
 
-#ifdef SSL_KRYPTON
+#ifdef KR_VERSION
   if (nc->ssl != NULL) {
     if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
       mg_lwip_ssl_recv(nc);
@@ -12743,7 +12743,7 @@ static err_t mg_lwip_accept_cb(void *arg, struct tcp_pcb *newtpcb, err_t err) {
 #if LWIP_TCP_KEEPALIVE
   mg_lwip_set_keepalive_params(nc, 60, 10, 6);
 #endif
-#ifdef SSL_KRYPTON
+#ifdef KR_VERSION
   if (lc->ssl_ctx != NULL) {
     nc->ssl = SSL_new(lc->ssl_ctx);
     if (nc->ssl == NULL || SSL_set_fd(nc->ssl, (intptr_t) nc) != 1) {
@@ -13025,7 +13025,7 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
     struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
     switch (md->sig_queue[md->start_index].sig) {
       case MG_SIG_CONNECT_RESULT: {
-#ifdef SSL_KRYPTON
+#ifdef KR_VERSION
         if (cs->err == 0 && nc->flags & MG_F_SSL &&
             !(nc->flags & MG_F_SSL_HANDSHAKE_DONE)) {
           SSL_set_fd(nc->ssl, (intptr_t) nc);
@@ -13112,7 +13112,7 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
       mg_close_conn(nc);
       continue;
     }
-#ifdef SSL_KRYPTON
+#ifdef KR_VERSION
     if (nc->ssl != NULL && cs != NULL && cs->pcb.tcp != NULL &&
         cs->pcb.tcp->state == ESTABLISHED) {
       if (((nc->flags & MG_F_WANT_WRITE) || nc->send_mbuf.len > 0) &&
@@ -13132,7 +13132,7 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
         }
       }
     } else
-#endif /* SSL_KRYPTON */
+#endif /* KR_VERSION */
     {
       if (!(nc->flags & (MG_F_CONNECTING | MG_F_UDP))) {
         if (nc->send_mbuf.len > 0) mg_lwip_send_more(nc);
@@ -13187,7 +13187,7 @@ uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
  * All rights reserved
  */
 
-#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && defined(SSL_KRYPTON)
+#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && MG_ENABLE_SSL && defined(KR_VERSION)
 
 /* Amalgamated: #include "common/cs_dbg.h" */
 
@@ -13346,7 +13346,7 @@ ssize_t kr_recv(int fd, void *buf, size_t len) {
   return len;
 }
 
-#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && defined(SSL_KRYPTON) */
+#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && MG_ENABLE_SSL && defined(KR_VERSION) */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/wince/wince_libc.c"
 #endif
