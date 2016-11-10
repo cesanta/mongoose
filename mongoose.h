@@ -3221,11 +3221,14 @@ struct mg_bind_opts {
   struct mg_iface *iface;    /* Interface instance */
 #if MG_ENABLE_SSL
   /* SSL settings. */
-  const char *ssl_cert;    /* Server certificate to present to clients */
+  const char *ssl_cert;    /* Server certificate to present to clients
+                            * Or client certificate to present to tunnel
+                            * dispatcher. */
   const char *ssl_key;     /* Private key corresponding to the certificate.
                               If ssl_cert is set but ssl_key is not, ssl_cert
                               is used. */
-  const char *ssl_ca_cert; /* Verify client certificates with this CA bundle */
+  const char *ssl_ca_cert; /* CA bundle used to verify client certificates or
+                            * tunnel dispatchers. */
 #endif
 };
 
@@ -5540,75 +5543,3 @@ uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io);
 #endif /* MG_ENABLE_COAP */
 
 #endif /* CS_MONGOOSE_SRC_COAP_H_ */
-#ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/tun.h"
-#endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
-
-#ifndef CS_MONGOOSE_SRC_TUN_H_
-#define CS_MONGOOSE_SRC_TUN_H_
-
-#if MG_ENABLE_TUN
-
-/* Amalgamated: #include "mongoose/src/net.h" */
-/* Amalgamated: #include "common/mg_str.h" */
-
-#ifndef MG_TUN_RECONNECT_INTERVAL
-#define MG_TUN_RECONNECT_INTERVAL 1
-#endif
-
-#define MG_TUN_DATA_FRAME 0x0
-#define MG_TUN_F_END_STREAM 0x1
-
-/*
- * MG TUN frame format is loosely based on HTTP/2.
- * However since the communication happens via WebSocket
- * there is no need to encode the frame length, since that's
- * solved by WebSocket framing.
- *
- * TODO(mkm): Detailed description of the protocol.
- */
-struct mg_tun_frame {
-  uint8_t type;
-  uint8_t flags;
-  uint32_t stream_id; /* opaque stream identifier */
-  struct mg_str body;
-};
-
-struct mg_tun_client {
-  struct mg_mgr *mgr;
-  struct mg_iface *iface;
-  const char *disp_url;
-  const char *user;
-  const char *pass;
-
-  uint32_t last_stream_id; /* stream id of most recently accepted connection */
-
-  struct mg_connection *disp;
-  struct mg_connection *listener;
-};
-
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-struct mg_connection *mg_tuna_bind(struct mg_mgr *mgr,
-                                   mg_event_handler_t handler,
-                                   const char *dispatcher, const char *user,
-                                   const char *pass);
-
-int mg_tun_parse_frame(void *data, size_t len, struct mg_tun_frame *frame);
-
-void mg_tun_send_frame(struct mg_connection *ws, uint32_t stream_id,
-                       uint8_t type, uint8_t flags, struct mg_str msg);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* MG_ENABLE_TUN */
-
-#endif /* CS_MONGOOSE_SRC_TUN_H_ */
