@@ -1446,7 +1446,6 @@ char* inet_ntoa(struct in_addr in);
 
 #if MG_LWIP
 
-
 /*
  * When compiling for nRF5x chips with arm-none-eabi-gcc, it has BYTE_ORDER
  * already defined, so in order to avoid warnings in lwip, we have to undefine
@@ -1457,7 +1456,7 @@ char* inet_ntoa(struct in_addr in);
  *                          nRF5 SDK:  0.9.0
  */
 #if CS_PLATFORM == CS_P_NRF51 || CS_PLATFORM == CS_P_NRF52
-# undef BYTE_ORDER
+#undef BYTE_ORDER
 #endif
 
 #include <lwip/opt.h>
@@ -1472,14 +1471,14 @@ char* inet_ntoa(struct in_addr in);
 #endif
 
 #if LWIP_SOCKET
-#  include <lwip/sockets.h>
+#include <lwip/sockets.h>
 #else
 /* We really need the definitions from sockets.h. */
-#  undef LWIP_SOCKET
-#  define LWIP_SOCKET 1
-#  include <lwip/sockets.h>
-#  undef LWIP_SOCKET
-#  define LWIP_SOCKET 0
+#undef LWIP_SOCKET
+#define LWIP_SOCKET 1
+#include <lwip/sockets.h>
+#undef LWIP_SOCKET
+#define LWIP_SOCKET 0
 #endif
 
 #define INVALID_SOCKET (-1)

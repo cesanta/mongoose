@@ -11148,7 +11148,8 @@ int gettimeofday(struct timeval *tp, void *tzp) {
  * All rights reserved
  */
 
-#if (CS_PLATFORM == CS_P_NRF51 || CS_PLATFORM == CS_P_NRF52) && defined(__ARMCC_VERSION)
+#if (CS_PLATFORM == CS_P_NRF51 || CS_PLATFORM == CS_P_NRF52) && \
+    defined(__ARMCC_VERSION)
 int gettimeofday(struct timeval *tp, void *tzp) {
   /* TODO */
   tp->tv_sec = 0;
@@ -11798,7 +11799,8 @@ int sl_fs_init(void) {
 #ifdef __TI_COMPILER_VERSION__
 #ifdef MG_FS_SLFS
 #pragma diag_push
-#pragma diag_suppress 169 /* Nothing we can do about the prototype mismatch. */
+#pragma diag_suppress 169 /* Nothing we can do about the prototype mismatch. \
+                             */
   ret = (add_device("SL", _MSA, fs_slfs_open, fs_slfs_close, fs_slfs_read,
                     fs_slfs_write, fs_slfs_lseek, fs_slfs_unlink,
                     fs_slfs_rename) == 0);
@@ -11914,7 +11916,8 @@ void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg) {
   osi_MsgQWrite(&s_mg_q, &msg, OSI_NO_WAIT);
 }
 
-#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK && !defined(MG_SIMPLELINK_NO_OSI) */
+#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK && !defined(MG_SIMPLELINK_NO_OSI) \
+          */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_net_if.h"
 #endif
@@ -13277,7 +13280,8 @@ uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
  * All rights reserved
  */
 
-#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && MG_ENABLE_SSL && defined(KR_VERSION)
+#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && MG_ENABLE_SSL && \
+    defined(KR_VERSION)
 
 /* Amalgamated: #include "common/cs_dbg.h" */
 
@@ -13436,7 +13440,8 @@ ssize_t kr_recv(int fd, void *buf, size_t len) {
   return len;
 }
 
-#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && MG_ENABLE_SSL && defined(KR_VERSION) */
+#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && MG_ENABLE_SSL && \
+          defined(KR_VERSION) */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/wince/wince_libc.c"
 #endif
@@ -13463,8 +13468,8 @@ int open(const char *filename, int oflag, int pmode) {
    * but exists in documentation as utility function
    * Shall we delete it at all or implement for WinCE as well?
    */
-   DebugBreak();
-   return 0; /* for compiler */
+  DebugBreak();
+  return 0; /* for compiler */
 }
 
 int _wstati64(const wchar_t *path, cs_stat_t *st) {
@@ -13478,14 +13483,16 @@ int _wstati64(const wchar_t *path, cs_stat_t *st) {
     FILETIME ftime;
     st->st_mode |= _S_IFREG;
     h = CreateFileW(path, GENERIC_READ, 0, NULL, OPEN_EXISTING,
-    FILE_ATTRIBUTE_NORMAL, NULL);
+                    FILE_ATTRIBUTE_NORMAL, NULL);
     if (h == INVALID_HANDLE_VALUE) {
       return -1;
     }
     st->st_size = GetFileSize(h, NULL);
     GetFileTime(h, NULL, NULL, &ftime);
-    st->st_mtime = (uint32_t)((((uint64_t)ftime.dwLowDateTime +
-        ((uint64_t)ftime.dwHighDateTime << 32)) / 10000000.0) - 11644473600);
+    st->st_mtime = (uint32_t)((((uint64_t) ftime.dwLowDateTime +
+                                ((uint64_t) ftime.dwHighDateTime << 32)) /
+                               10000000.0) -
+                              11644473600);
     CloseHandle(h);
   } else {
     st->st_mode |= _S_IFDIR;
@@ -13506,9 +13513,9 @@ static void mg_gmt_time_string(char *buf, size_t buf_len, time_t *t) {
     GetSystemTime(&systime);
   }
   /* There is no PRIu16 in WinCE SDK */
-  snprintf(buf, buf_len, "%d.%d.%d %d:%d:%d GMT", (int)systime.wYear,
-           (int)systime.wMonth, (int)systime.wDay, (int)systime.wHour,
-           (int)systime.wMinute, (int)systime.wSecond);
+  snprintf(buf, buf_len, "%d.%d.%d %d:%d:%d GMT", (int) systime.wYear,
+           (int) systime.wMonth, (int) systime.wDay, (int) systime.wHour,
+           (int) systime.wMinute, (int) systime.wSecond);
 }
 
 #endif
