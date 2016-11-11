@@ -3998,9 +3998,11 @@ void mg_tun_if_destroy_conn(struct mg_connection *nc) {
   uint32_t stream_id = (uint32_t)(uintptr_t) nc->mgr_data;
   struct mg_str msg = {NULL, 0};
 
-  LOG(LL_DEBUG, ("closing %zu:", stream_id));
-  mg_tun_send_frame(client->disp, stream_id, MG_TUN_DATA_FRAME,
-                    MG_TUN_F_END_STREAM, msg);
+  if (client->disp) {
+    LOG(LL_DEBUG, ("closing %zu:", stream_id));
+    mg_tun_send_frame(client->disp, stream_id, MG_TUN_DATA_FRAME,
+                      MG_TUN_F_END_STREAM, msg);
+  }
 }
 
 /* Associate a socket to a connection. */
