@@ -2905,6 +2905,58 @@ void mg_if_timer(struct mg_connection *c, double now);
 
 #endif /* CS_MONGOOSE_SRC_NET_IF_H_ */
 #ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/ssl_if.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_MONGOOSE_SRC_SSL_IF_H_
+#define CS_MONGOOSE_SRC_SSL_IF_H_
+
+#if MG_ENABLE_SSL
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+struct mg_ssl_if_ctx;
+struct mg_connection;
+
+void mg_ssl_if_init();
+
+enum mg_ssl_if_result {
+  MG_SSL_OK = 0,
+  MG_SSL_WANT_READ = -1,
+  MG_SSL_WANT_WRITE = -2,
+  MG_SSL_ERROR = -3,
+};
+
+struct mg_ssl_if_conn_params {
+  const char *cert;
+  const char *key;
+  const char *ca_cert;
+  const char *server_name;
+};
+
+enum mg_ssl_if_result mg_ssl_if_conn_init(struct mg_connection *nc, const struct mg_ssl_if_conn_params *params,
+    const char **err_msg);
+enum mg_ssl_if_result mg_ssl_if_conn_accept(struct mg_connection *nc, struct mg_connection *lc);
+void mg_ssl_if_conn_free(struct mg_connection *nc);
+
+enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc);
+int mg_ssl_if_read(struct mg_connection *nc, void *buf, size_t buf_size);
+int mg_ssl_if_write(struct mg_connection *nc, const void *data, size_t len);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* MG_ENABLE_SSL */
+
+#endif /* CS_MONGOOSE_SRC_SSL_IF_H_ */
+#ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net.h"
 #endif
 /*
@@ -2945,15 +2997,6 @@ void mg_if_timer(struct mg_connection *c, double now);
 /* Amalgamated: #include "mongoose/src/common.h" */
 /* Amalgamated: #include "mongoose/src/net_if.h" */
 /* Amalgamated: #include "common/mbuf.h" */
-
-#if MG_ENABLE_SSL
-#ifdef __APPLE__
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#if MG_NET_IF != MG_NET_IF_SIMPLELINK
-#include <openssl/ssl.h>
-#endif
-#endif /* MG_ENABLE_SSL */
 
 #ifndef MG_VPRINTF_BUFFER_SIZE
 #define MG_VPRINTF_BUFFER_SIZE 100
@@ -3032,19 +3075,11 @@ struct mg_connection {
   size_t recv_mbuf_limit;  /* Max size of recv buffer */
   struct mbuf recv_mbuf;   /* Received data */
   struct mbuf send_mbuf;   /* Data scheduled for sending */
-#if MG_ENABLE_SSL
-#if MG_NET_IF != MG_NET_IF_SIMPLELINK
-  SSL *ssl;
-  SSL_CTX *ssl_ctx;
-#else
-  char *ssl_cert;
-  char *ssl_key;
-  char *ssl_ca_cert;
-  char *ssl_server_name;
-#endif
-#endif
   time_t last_io_time;              /* Timestamp of the last socket IO */
   double ev_timer_time;             /* Timestamp of the future MG_EV_TIMER */
+#if MG_ENABLE_SSL
+  void *ssl_if_data; /* SSL library data. */
+#endif
   mg_event_handler_t proto_handler; /* Protocol-specific event handler */
   void *proto_data;                 /* Protocol-specific data */
   void (*proto_data_destructor)(void *proto_data);
