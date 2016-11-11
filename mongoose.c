@@ -8667,6 +8667,9 @@ int mg_hexdump(const void *buf, int len, char *dst, int dst_len) {
       if (i > 0) n += snprintf(dst + n, dst_len - n, "  %s\n", ascii);
       n += snprintf(dst + n, dst_len - n, "%04x ", i);
     }
+    if (dst_len - n < 0) {
+      return n;
+    }
     n += snprintf(dst + n, dst_len - n, " %02x", p[i]);
     ascii[idx] = p[i] < 0x20 || p[i] > 0x7e ? '.' : p[i];
     ascii[idx + 1] = '\0';
@@ -10787,7 +10790,8 @@ void mg_tun_log_frame(struct mg_tun_frame *frame) {
 #if MG_ENABLE_HEXDUMP
   {
     char hex[512];
-    mg_hexdump(frame->body.p, frame->body.len, hex, sizeof(hex));
+    mg_hexdump(frame->body.p, frame->body.len, hex, sizeof(hex) - 1);
+    hex[sizeof(hex) - 1] = '\0';
     LOG(LL_DEBUG, ("body:\n%s", hex));
   }
 #else
