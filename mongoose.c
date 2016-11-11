@@ -2016,9 +2016,8 @@ static void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
   if (conn->proto_data != NULL && conn->proto_data_destructor != NULL) {
     conn->proto_data_destructor(conn->proto_data);
   }
-#if MG_ENABLE_SSL && MG_NET_IF == MG_NET_IF_SOCKET
-  if (conn->ssl != NULL) SSL_free(conn->ssl);
-  if (conn->ssl_ctx != NULL) SSL_CTX_free(conn->ssl_ctx);
+#if MG_ENABLE_SSL
+  mg_ssl_if_conn_free(conn);
 #endif
   mbuf_free(&conn->recv_mbuf);
   mbuf_free(&conn->send_mbuf);
@@ -2060,11 +2059,11 @@ void mg_mgr_init_opt(struct mg_mgr *m, void *user_data,
   signal(SIGPIPE, SIG_IGN);
 #endif
 
-#if MG_ENABLE_SSL && MG_NET_IF == MG_NET_IF_SOCKET
+#if MG_ENABLE_SSL
   {
     static int init_done;
     if (!init_done) {
-      SSL_library_init();
+      mg_ssl_if_init();
       init_done++;
     }
   }
@@ -2354,197 +2353,6 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
   return port < 0xffffUL && (ch == '\0' || ch == ',' || isspace(ch)) ? len : -1;
 }
 
-#if MG_ENABLE_SSL
-
-#if MG_NET_IF != MG_NET_IF_SIMPLELINK
-/*
- * Certificate generation script is at
- * https://github.com/cesanta/mongoose/blob/master/scripts/generate_ssl_certificates.sh
- */
-
-#if !MG_DISABLE_PFS
-/*
- * Cipher suite options used for TLS negotiation.
- * https://wiki.mozilla.org/Security/Server_Side_TLS#Recommended_configurations
- */
-static const char mg_s_cipher_list[] =
-#if defined(MG_SSL_CRYPTO_MODERN)
-    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:"
-    "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:"
-    "DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:"
-    "ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:"
-    "ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:"
-    "ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:"
-    "DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:"
-    "DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:"
-    "!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK"
-#elif defined(MG_SSL_CRYPTO_OLD)
-    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:"
-    "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:"
-    "DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:"
-    "ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:"
-    "ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:"
-    "ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:"
-    "DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:"
-    "DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:"
-    "ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:"
-    "AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SHA:"
-    "HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:"
-    "!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA"
-#else /* Default - intermediate. */
-    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:"
-    "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:"
-    "DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:"
-    "ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:"
-    "ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:"
-    "ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:"
-    "DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:"
-    "DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:"
-    "AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:"
-    "DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:"
-    "!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA"
-#endif
-    ;
-
-/*
- * Default DH params for PFS cipher negotiation. This is a 2048-bit group.
- * Will be used if none are provided by the user in the certificate file.
- */
-static const char mg_s_default_dh_params[] =
-    "\
------BEGIN DH PARAMETERS-----\n\
-MIIBCAKCAQEAlvbgD/qh9znWIlGFcV0zdltD7rq8FeShIqIhkQ0C7hYFThrBvF2E\n\
-Z9bmgaP+sfQwGpVlv9mtaWjvERbu6mEG7JTkgmVUJrUt/wiRzwTaCXBqZkdUO8Tq\n\
-+E6VOEQAilstG90ikN1Tfo+K6+X68XkRUIlgawBTKuvKVwBhuvlqTGerOtnXWnrt\n\
-ym//hd3cd5PBYGBix0i7oR4xdghvfR2WLVu0LgdThTBb6XP7gLd19cQ1JuBtAajZ\n\
-wMuPn7qlUkEFDIkAZy59/Hue/H2Q2vU/JsvVhHWCQBL4F1ofEAt50il6ZxR1QfFK\n\
-9VGKDC4oOgm9DlxwwBoC2FjqmvQlqVV3kwIBAg==\n\
------END DH PARAMETERS-----\n";
-#endif
-
-static int mg_use_ca_cert(SSL_CTX *ctx, const char *cert) {
-  if (ctx == NULL) {
-    return -1;
-  } else if (cert == NULL || strcmp(cert, "*") == 0) {
-    return 0;
-  }
-  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
-  return SSL_CTX_load_verify_locations(ctx, cert, NULL) == 1 ? 0 : -2;
-}
-
-static int mg_use_cert(SSL_CTX *ctx, const char *cert, const char *key) {
-  if (ctx == NULL) {
-    return -1;
-  } else if (cert == NULL || cert[0] == '\0' || key == NULL || key[0] == '\0') {
-    return 0;
-  } else if (SSL_CTX_use_certificate_file(ctx, cert, 1) == 0 ||
-             SSL_CTX_use_PrivateKey_file(ctx, key, 1) == 0) {
-    return -2;
-  } else {
-#if !MG_DISABLE_PFS
-    BIO *bio = NULL;
-    DH *dh = NULL;
-
-    /* Try to read DH parameters from the cert/key file. */
-    bio = BIO_new_file(cert, "r");
-    if (bio != NULL) {
-      dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
-      BIO_free(bio);
-    }
-    /*
-     * If there are no DH params in the file, fall back to hard-coded ones.
-     * Not ideal, but better than nothing.
-     */
-    if (dh == NULL) {
-      bio = BIO_new_mem_buf((void *) mg_s_default_dh_params, -1);
-      dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
-      BIO_free(bio);
-    }
-    if (dh != NULL) {
-      SSL_CTX_set_tmp_dh(ctx, dh);
-      SSL_CTX_set_options(ctx, SSL_OP_SINGLE_DH_USE);
-      DH_free(dh);
-    }
-#endif
-    SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-    SSL_CTX_use_certificate_chain_file(ctx, cert);
-    return 0;
-  }
-}
-
-/*
- * Turn the connection into SSL mode.
- * `cert` is the certificate file in PEM format. For listening connections,
- * certificate file must contain private key and server certificate,
- * concatenated. It may also contain DH params - these will be used for more
- * secure key exchange. `ca_cert` is a certificate authority (CA) PEM file, and
- * it is optional (can be set to NULL). If `ca_cert` is non-NULL, then
- * the connection is so-called two-way-SSL: other peer's certificate is
- * checked against the `ca_cert`.
- *
- * Handy OpenSSL command to generate test self-signed certificate:
- *
- *    openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 999
- *
- * Return NULL on success, or error message on failure.
- */
-static const char *mg_set_ssl2(struct mg_connection *nc, const char *cert,
-                               const char *key, const char *ca_cert) {
-  const char *result = NULL;
-  DBG(("%p %s,%s,%s", nc, (cert ? cert : ""), (key ? key : ""),
-       (ca_cert ? ca_cert : "")));
-
-  if (nc->flags & MG_F_UDP) {
-    return "SSL for UDP is not supported";
-  }
-
-  if (key == NULL && cert != NULL) key = cert;
-
-  if (nc->ssl != NULL) {
-    SSL_free(nc->ssl);
-    nc->ssl = NULL;
-  }
-  if (nc->ssl_ctx != NULL) {
-    SSL_CTX_free(nc->ssl_ctx);
-    nc->ssl_ctx = NULL;
-  }
-
-  if ((nc->flags & MG_F_LISTENING) &&
-      (nc->ssl_ctx = SSL_CTX_new(SSLv23_server_method())) == NULL) {
-    result = "SSL_CTX_new() failed";
-  } else if (!(nc->flags & MG_F_LISTENING) &&
-             (nc->ssl_ctx = SSL_CTX_new(SSLv23_client_method())) == NULL) {
-    result = "SSL_CTX_new() failed";
-  } else if (mg_use_cert(nc->ssl_ctx, cert, key) != 0) {
-    result = "Invalid ssl cert";
-  } else if (mg_use_ca_cert(nc->ssl_ctx, ca_cert) != 0) {
-    result = "Invalid CA cert";
-  } else if (!(nc->flags & MG_F_LISTENING) &&
-             (nc->ssl = SSL_new(nc->ssl_ctx)) == NULL) {
-    result = "SSL_new() failed";
-  }
-
-#if !MG_DISABLE_PFS
-  SSL_CTX_set_cipher_list(nc->ssl_ctx, mg_s_cipher_list);
-#endif
-
-  if (result == NULL) nc->flags |= MG_F_SSL;
-
-  return result;
-}
-
-const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
-                       const char *ca_cert) {
-  return mg_set_ssl2(nc, cert, NULL, ca_cert);
-}
-
-#else
-const char *mg_set_ssl2(struct mg_connection *nc, const char *cert,
-                        const char *key, const char *ca_cert);
-#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK */
-
-#endif /* MG_ENABLE_SSL */
-
 struct mg_connection *mg_if_accept_new_conn(struct mg_connection *lc) {
   struct mg_add_sock_opts opts;
   struct mg_connection *nc;
@@ -2765,22 +2573,6 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
   return mg_connect_opt(mgr, address, callback, opts);
 }
 
-#if MG_ENABLE_SSL
-static void mg_set_ssl_server_name(struct mg_connection *nc,
-                                   const char *server_name) {
-  DBG(("%p '%s'", nc, server_name));
-#ifdef KR_VERSION
-  SSL_CTX_kr_set_verify_name(nc->ssl_ctx, server_name);
-#elif MG_NET_IF == MG_NET_IF_SIMPLELINK
-  nc->ssl_server_name = strdup(server_name);
-#else
-  /* TODO(rojer): Implement server name verification on OpenSSL. */
-  (void) nc;
-  (void) server_name;
-#endif
-}
-#endif /* MG_ENABLE_SSL */
-
 struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
                                      mg_event_handler_t callback,
                                      struct mg_connect_opts opts) {
@@ -2808,23 +2600,37 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
   nc->user_data = opts.user_data;
 
 #if MG_ENABLE_SSL
-  LOG(LL_DEBUG,
-      ("%p %s %s,%s,%s", nc, address, (opts.ssl_cert ? opts.ssl_cert : "-"),
+  DBG(("%p %s %s,%s,%s", nc, address, (opts.ssl_cert ? opts.ssl_cert : "-"),
        (opts.ssl_key ? opts.ssl_key : "-"),
        (opts.ssl_ca_cert ? opts.ssl_ca_cert : "-")));
 
   if (opts.ssl_cert != NULL || opts.ssl_ca_cert != NULL) {
-    const char *err =
-        mg_set_ssl2(nc, opts.ssl_cert, opts.ssl_key, opts.ssl_ca_cert);
-    if (err != NULL) {
-      MG_SET_PTRPTR(opts.error_string, err);
+    const char *err_msg = NULL;
+    struct mg_ssl_if_conn_params params;
+    if (nc->flags & MG_F_UDP) {
+      MG_SET_PTRPTR(opts.error_string, "SSL for UDP is not supported");
       mg_destroy_conn(nc, 1 /* destroy_if */);
       return NULL;
     }
-  }
-  if (opts.ssl_ca_cert != NULL && opts.ssl_server_name != NULL &&
-      strcmp(opts.ssl_server_name, "*") != 0) {
-    mg_set_ssl_server_name(nc, opts.ssl_server_name);
+    memset(&params, 0, sizeof(params));
+    params.cert = opts.ssl_cert;
+    params.key = opts.ssl_key;
+    params.ca_cert = opts.ssl_ca_cert;
+    if (opts.ssl_ca_cert != NULL) {
+      if (opts.ssl_server_name != NULL) {
+        if (strcmp(opts.ssl_server_name, "*") != 0) {
+          params.server_name = opts.ssl_server_name;
+        }
+      } else if (rc == 0) {  /* If it's a DNS name, use host. */
+        params.server_name = host;
+      }
+    }
+    if (mg_ssl_if_conn_init(nc, &params, &err_msg) != MG_SSL_OK) {
+      MG_SET_PTRPTR(opts.error_string, err_msg);
+      mg_destroy_conn(nc, 1 /* destroy_if */);
+      return NULL;
+    }
+    nc->flags |= MG_F_SSL;
   }
 #endif /* MG_ENABLE_SSL */
 
@@ -2846,11 +2652,6 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
     }
     nc->priv_2 = dns_conn;
     nc->flags |= MG_F_RESOLVING;
-#if MG_ENABLE_SSL
-    if (opts.ssl_ca_cert != NULL && opts.ssl_server_name == NULL) {
-      mg_set_ssl_server_name(nc, host);
-    }
-#endif
     return nc;
 #else
     MG_SET_PTRPTR(opts.error_string, "Resolver is disabled");
@@ -2903,18 +2704,28 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
   if (proto == SOCK_DGRAM) nc->flags |= MG_F_UDP;
 
 #if MG_ENABLE_SSL
-  DBG(("%p %s %s %s %s", nc, address, (opts.ssl_cert ? opts.ssl_cert : ""),
-       (opts.ssl_key ? opts.ssl_key : ""),
-       (opts.ssl_ca_cert ? opts.ssl_ca_cert : "")));
+  DBG(("%p %s %s,%s,%s", nc, address, (opts.ssl_cert ? opts.ssl_cert : "-"),
+       (opts.ssl_key ? opts.ssl_key : "-"),
+       (opts.ssl_ca_cert ? opts.ssl_ca_cert : "-")));
 
   if (opts.ssl_cert != NULL || opts.ssl_ca_cert != NULL) {
-    const char *err =
-        mg_set_ssl2(nc, opts.ssl_cert, opts.ssl_key, opts.ssl_ca_cert);
-    if (err != NULL) {
-      MG_SET_PTRPTR(opts.error_string, err);
+    const char *err_msg = NULL;
+    struct mg_ssl_if_conn_params params;
+    if (nc->flags & MG_F_UDP) {
+      MG_SET_PTRPTR(opts.error_string, "SSL for UDP is not supported");
       mg_destroy_conn(nc, 1 /* destroy_if */);
       return NULL;
     }
+    memset(&params, 0, sizeof(params));
+    params.cert = opts.ssl_cert;
+    params.key = opts.ssl_key;
+    params.ca_cert = opts.ssl_ca_cert;
+    if (mg_ssl_if_conn_init(nc, &params, &err_msg) != MG_SSL_OK) {
+      MG_SET_PTRPTR(opts.error_string, err_msg);
+      mg_destroy_conn(nc, 1 /* destroy_if */);
+      return NULL;
+    }
+    nc->flags |= MG_F_SSL;
   }
 #endif /* MG_ENABLE_SSL */
 
@@ -3190,7 +3001,6 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int type,
                                        int proto);
 #if MG_ENABLE_SSL
 static void mg_ssl_begin(struct mg_connection *nc);
-static int mg_ssl_err(struct mg_connection *conn, int res);
 #endif
 
 void mg_set_non_blocking_mode(sock_t sock) {
@@ -3315,12 +3125,8 @@ static int mg_accept_conn(struct mg_connection *lc) {
        ntohs(sa.sin.sin_port)));
   mg_sock_set(nc, sock);
 #if MG_ENABLE_SSL
-  if (lc->ssl_ctx != NULL) {
-    nc->ssl = SSL_new(lc->ssl_ctx);
-    if (nc->ssl == NULL || SSL_set_fd(nc->ssl, sock) != 1) {
-      DBG(("SSL error"));
-      mg_close_conn(nc);
-    }
+  if (lc->flags & MG_F_SSL) {
+    if (mg_ssl_if_conn_accept(nc, lc) != MG_SSL_OK) mg_close_conn(nc);
   } else
 #endif
   {
@@ -3400,13 +3206,12 @@ static void mg_write_to_socket(struct mg_connection *nc) {
   }
 
 #if MG_ENABLE_SSL
-  if (nc->ssl != NULL) {
+  if (nc->flags & MG_F_SSL) {
     if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
-      n = SSL_write(nc->ssl, io->buf, io->len);
+      n = mg_ssl_if_write(nc, io->buf, io->len);
       DBG(("%p %d bytes -> %d (SSL)", nc, n, nc->sock));
-      if (n <= 0) {
-        int ssl_err = mg_ssl_err(nc, n);
-        if (ssl_err != SSL_ERROR_WANT_READ && ssl_err != SSL_ERROR_WANT_WRITE) {
+      if (n < 0) {
+        if (n != MG_SSL_WANT_READ && n != MG_SSL_WANT_WRITE) {
           nc->flags |= MG_F_CLOSE_IMMEDIATELY;
         }
         return;
@@ -3453,12 +3258,12 @@ static void mg_handle_tcp_read(struct mg_connection *conn) {
   }
 
 #if MG_ENABLE_SSL
-  if (conn->ssl != NULL) {
+  if (conn->flags & MG_F_SSL) {
     if (conn->flags & MG_F_SSL_HANDSHAKE_DONE) {
-      /* SSL library may have more bytes ready to read then we ask to read.
+      /* SSL library may have more bytes ready to read than we ask to read.
        * Therefore, read in a loop until we read everything. Without the loop,
        * we skip to the next select() cycle which can just timeout. */
-      while ((n = SSL_read(conn->ssl, buf, MG_TCP_RECV_BUFFER_SIZE)) > 0) {
+      while ((n = mg_ssl_if_read(conn, buf, MG_TCP_RECV_BUFFER_SIZE)) > 0) {
         DBG(("%p %d bytes <- %d (SSL)", conn, n, conn->sock));
         mg_if_recv_tcp_cb(conn, buf, n, 1 /* own */);
         buf = NULL;
@@ -3468,7 +3273,7 @@ static void mg_handle_tcp_read(struct mg_connection *conn) {
         if (buf == NULL) break;
       }
       MG_FREE(buf);
-      mg_ssl_err(conn, n);
+      if (n < 0 && n != MG_SSL_WANT_READ) conn->flags |= MG_F_CLOSE_IMMEDIATELY;
     } else {
       MG_FREE(buf);
       mg_ssl_begin(conn);
@@ -3521,27 +3326,12 @@ static void mg_handle_udp_read(struct mg_connection *nc) {
 }
 
 #if MG_ENABLE_SSL
-static int mg_ssl_err(struct mg_connection *conn, int res) {
-  int ssl_err = SSL_get_error(conn->ssl, res);
-  DBG(("%p %d -> %d", conn, res, ssl_err));
-  if (ssl_err == SSL_ERROR_WANT_READ) {
-    conn->flags |= MG_F_WANT_READ;
-  } else if (ssl_err == SSL_ERROR_WANT_WRITE) {
-    conn->flags |= MG_F_WANT_WRITE;
-  } else {
-    /* There could be an alert to deliver. Try our best. */
-    SSL_write(conn->ssl, "", 0);
-    conn->flags |= MG_F_CLOSE_IMMEDIATELY;
-  }
-  return ssl_err;
-}
-
 static void mg_ssl_begin(struct mg_connection *nc) {
   int server_side = (nc->listener != NULL);
-  int res = server_side ? SSL_accept(nc->ssl) : SSL_connect(nc->ssl);
-  DBG(("%p %d res %d %d", nc, server_side, res, mg_get_errno()));
+  enum mg_ssl_if_result res = mg_ssl_if_handshake(nc);
+  DBG(("%p %d res %d", nc, server_side, res));
 
-  if (res == 1) {
+  if (res == MG_SSL_OK) {
     nc->flags |= MG_F_SSL_HANDSHAKE_DONE;
     nc->flags &= ~(MG_F_WANT_READ | MG_F_WANT_WRITE);
 
@@ -3553,14 +3343,11 @@ static void mg_ssl_begin(struct mg_connection *nc) {
     } else {
       mg_if_connect_cb(nc, 0);
     }
-  } else {
-    int ssl_err = mg_ssl_err(nc, res);
-    if (ssl_err != SSL_ERROR_WANT_READ && ssl_err != SSL_ERROR_WANT_WRITE) {
-      if (!server_side) {
-        mg_if_connect_cb(nc, ssl_err);
-      }
-      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+  } else if (res != MG_SSL_WANT_READ && res != MG_SSL_WANT_WRITE) {
+    if (!server_side) {
+      mg_if_connect_cb(nc, res);
     }
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
 }
 #endif /* MG_ENABLE_SSL */
@@ -3596,8 +3383,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
       err = nc->err;
 #endif
 #if MG_ENABLE_SSL
-      if (nc->ssl != NULL && err == 0) {
-        SSL_set_fd(nc->ssl, nc->sock);
+      if ((nc->flags & MG_F_SSL) && err == 0) {
         mg_ssl_begin(nc);
       } else {
         mg_if_connect_cb(nc, err);
@@ -4094,6 +3880,296 @@ struct mg_connection *mg_tun_if_find_conn(struct mg_tun_client *client,
 struct mg_iface_vtable mg_tun_iface_vtable = MG_TUN_IFACE_VTABLE;
 
 #endif /* MG_ENABLE_TUN */
+#ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/ssl_if_openssl.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if MG_ENABLE_SSL && MG_NET_IF != MG_NET_IF_SIMPLELINK
+
+#ifdef __APPLE__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
+#include <openssl/ssl.h>
+
+struct mg_ssl_if_ctx {
+  SSL *ssl;
+  SSL_CTX *ssl_ctx;
+};
+
+void mg_ssl_if_init() {
+  SSL_library_init();
+}
+
+enum mg_ssl_if_result mg_ssl_if_conn_accept(struct mg_connection *nc,
+                                            struct mg_connection *lc) {
+  struct mg_ssl_if_ctx *ctx =
+      (struct mg_ssl_if_ctx *) MG_CALLOC(1, sizeof(*ctx));
+  struct mg_ssl_if_ctx *lc_ctx = (struct mg_ssl_if_ctx *) lc->ssl_if_data;
+  nc->ssl_if_data = ctx;
+  if (ctx == NULL || lc_ctx == NULL) return MG_SSL_ERROR;
+  ctx->ssl_ctx = lc_ctx->ssl_ctx;
+  if ((ctx->ssl = SSL_new(ctx->ssl_ctx)) == NULL) {
+    return MG_SSL_ERROR;
+  }
+  return MG_SSL_OK;
+}
+
+static enum mg_ssl_if_result mg_use_cert(SSL_CTX *ctx, const char *cert,
+                                         const char *key, const char **err_msg);
+static enum mg_ssl_if_result mg_use_ca_cert(SSL_CTX *ctx, const char *cert);
+static enum mg_ssl_if_result mg_set_cipher_list(SSL_CTX *ctx);
+
+enum mg_ssl_if_result mg_ssl_if_conn_init(
+    struct mg_connection *nc, const struct mg_ssl_if_conn_params *params,
+    const char **err_msg) {
+  struct mg_ssl_if_ctx *ctx =
+      (struct mg_ssl_if_ctx *) MG_CALLOC(1, sizeof(*ctx));
+  DBG(("%p %s,%s,%s", nc, (params->cert ? params->cert : ""),
+       (params->key ? params->key : ""),
+       (params->ca_cert ? params->ca_cert : "")));
+  if (ctx == NULL) {
+    MG_SET_PTRPTR(err_msg, "Out of memory");
+    return MG_SSL_ERROR;
+  }
+  nc->ssl_if_data = ctx;
+  if (nc->flags & MG_F_LISTENING) {
+    ctx->ssl_ctx = SSL_CTX_new(SSLv23_server_method());
+  } else {
+    ctx->ssl_ctx = SSL_CTX_new(SSLv23_client_method());
+  }
+  if (ctx->ssl_ctx == NULL) {
+    MG_SET_PTRPTR(err_msg, "Failed to create SSL context");
+    return MG_SSL_ERROR;
+  }
+
+  if (params->cert != NULL &&
+      mg_use_cert(ctx->ssl_ctx, params->cert, params->key, err_msg) !=
+          MG_SSL_OK) {
+    return MG_SSL_ERROR;
+  }
+
+  if (params->ca_cert != NULL &&
+      mg_use_ca_cert(ctx->ssl_ctx, params->ca_cert) != MG_SSL_OK) {
+    MG_SET_PTRPTR(err_msg, "Invalid SSL CA cert");
+    return MG_SSL_ERROR;
+  }
+
+  if (params->server_name != NULL) {
+#ifdef KR_VERSION
+    SSL_CTX_kr_set_verify_name(ctx->ssl_ctx, params->server_name);
+#else
+/* TODO(rojer): Implement server name verification on OpenSSL. */
+#endif
+  }
+
+  mg_set_cipher_list(ctx->ssl_ctx);
+
+  if ((ctx->ssl = SSL_new(ctx->ssl_ctx)) == NULL) {
+    MG_SET_PTRPTR(err_msg, "Failed to create SSL session");
+    return MG_SSL_ERROR;
+  }
+
+  nc->flags |= MG_F_SSL;
+
+  DBG(("%p new SSL %p -> %p", ctx->ssl_ctx, ctx->ssl));
+  return MG_SSL_OK;
+}
+
+enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  int server_side = (nc->listener != NULL);
+  int res;
+  /* If descriptor is not yet set, do it now. */
+  if (SSL_get_fd(ctx->ssl) < 0) {
+    if (SSL_set_fd(ctx->ssl, nc->sock) != 1) return MG_SSL_ERROR;
+  }
+  res = server_side ? SSL_accept(ctx->ssl) : SSL_connect(ctx->ssl);
+  if (res != 1) {
+    int err = SSL_get_error(ctx->ssl, res);
+    if (err == SSL_ERROR_WANT_READ) return MG_SSL_WANT_READ;
+    if (err == SSL_ERROR_WANT_WRITE) return MG_SSL_WANT_WRITE;
+    DBG(("%p %p SSL error: %d", nc, ctx->ssl_ctx, err));
+    nc->err = err;
+    return MG_SSL_ERROR;
+  }
+  return MG_SSL_OK;
+}
+
+int mg_ssl_if_read(struct mg_connection *nc, void *buf, size_t buf_size) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  int n = SSL_read(ctx->ssl, buf, buf_size);
+  DBG(("%p %d -> %d", nc, (int) buf_size, n));
+  if (n <= 0) {
+    int err = SSL_get_error(ctx->ssl, n);
+    if (err == SSL_ERROR_WANT_READ) return MG_SSL_WANT_READ;
+    if (err == SSL_ERROR_WANT_WRITE) return MG_SSL_WANT_WRITE;
+    nc->err = err;
+    return MG_SSL_ERROR;
+  }
+  return n;
+}
+
+int mg_ssl_if_write(struct mg_connection *nc, const void *data, size_t len) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  int n = SSL_write(ctx->ssl, data, len);
+  DBG(("%p %d -> %d", nc, (int) len, n));
+  if (n <= 0) {
+    int err = SSL_get_error(ctx->ssl, n);
+    if (err == SSL_ERROR_WANT_READ) return MG_SSL_WANT_READ;
+    if (err == SSL_ERROR_WANT_WRITE) return MG_SSL_WANT_WRITE;
+    nc->err = err;
+    return MG_SSL_ERROR;
+  }
+  return n;
+}
+
+void mg_ssl_if_conn_free(struct mg_connection *nc) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  if (ctx == NULL) return;
+  nc->ssl_if_data = NULL;
+  if (ctx->ssl != NULL) SSL_free(ctx->ssl);
+  if (ctx->ssl_ctx != NULL && nc->listener == NULL) SSL_CTX_free(ctx->ssl_ctx);
+  memset(ctx, 0, sizeof(*ctx));
+  MG_FREE(ctx);
+}
+
+/*
+ * Cipher suite options used for TLS negotiation.
+ * https://wiki.mozilla.org/Security/Server_Side_TLS#Recommended_configurations
+ */
+static const char mg_s_cipher_list[] =
+#if defined(MG_SSL_CRYPTO_MODERN)
+    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:"
+    "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:"
+    "DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:"
+    "ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:"
+    "ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:"
+    "ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:"
+    "DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:"
+    "DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:"
+    "!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK"
+#elif defined(MG_SSL_CRYPTO_OLD)
+    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:"
+    "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:"
+    "DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:"
+    "ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:"
+    "ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:"
+    "ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:"
+    "DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:"
+    "DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:"
+    "ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:"
+    "AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SHA:"
+    "HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:"
+    "!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA"
+#else /* Default - intermediate. */
+    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:"
+    "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:"
+    "DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:"
+    "ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:"
+    "ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:"
+    "ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:"
+    "DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:"
+    "DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:"
+    "AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:"
+    "DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:"
+    "!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA"
+#endif
+    ;
+
+/*
+ * Default DH params for PFS cipher negotiation. This is a 2048-bit group.
+ * Will be used if none are provided by the user in the certificate file.
+ */
+#if !MG_DISABLE_PFS && !defined(KR_VERSION)
+static const char mg_s_default_dh_params[] =
+    "\
+-----BEGIN DH PARAMETERS-----\n\
+MIIBCAKCAQEAlvbgD/qh9znWIlGFcV0zdltD7rq8FeShIqIhkQ0C7hYFThrBvF2E\n\
+Z9bmgaP+sfQwGpVlv9mtaWjvERbu6mEG7JTkgmVUJrUt/wiRzwTaCXBqZkdUO8Tq\n\
++E6VOEQAilstG90ikN1Tfo+K6+X68XkRUIlgawBTKuvKVwBhuvlqTGerOtnXWnrt\n\
+ym//hd3cd5PBYGBix0i7oR4xdghvfR2WLVu0LgdThTBb6XP7gLd19cQ1JuBtAajZ\n\
+wMuPn7qlUkEFDIkAZy59/Hue/H2Q2vU/JsvVhHWCQBL4F1ofEAt50il6ZxR1QfFK\n\
+9VGKDC4oOgm9DlxwwBoC2FjqmvQlqVV3kwIBAg==\n\
+-----END DH PARAMETERS-----\n";
+#endif
+
+static enum mg_ssl_if_result mg_use_ca_cert(SSL_CTX *ctx, const char *cert) {
+  if (cert == NULL || strcmp(cert, "*") == 0) {
+    return MG_SSL_OK;
+  }
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
+  return SSL_CTX_load_verify_locations(ctx, cert, NULL) == 1 ? MG_SSL_OK
+                                                             : MG_SSL_ERROR;
+}
+
+static enum mg_ssl_if_result mg_use_cert(SSL_CTX *ctx, const char *cert,
+                                         const char *key,
+                                         const char **err_msg) {
+  if (key == NULL) key = cert;
+  if (cert == NULL || cert[0] == '\0' || key == NULL || key[0] == '\0') {
+    return MG_SSL_OK;
+  } else if (SSL_CTX_use_certificate_file(ctx, cert, 1) == 0) {
+    MG_SET_PTRPTR(err_msg, "Invalid SSL cert");
+    return MG_SSL_ERROR;
+  } else if (SSL_CTX_use_PrivateKey_file(ctx, key, 1) == 0) {
+    MG_SET_PTRPTR(err_msg, "Invalid SSL key");
+    return MG_SSL_ERROR;
+  } else {
+#if !MG_DISABLE_PFS && !defined(KR_VERSION)
+    BIO *bio = NULL;
+    DH *dh = NULL;
+
+    /* Try to read DH parameters from the cert/key file. */
+    bio = BIO_new_file(cert, "r");
+    if (bio != NULL) {
+      dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+      BIO_free(bio);
+    }
+    /*
+     * If there are no DH params in the file, fall back to hard-coded ones.
+     * Not ideal, but better than nothing.
+     */
+    if (dh == NULL) {
+      bio = BIO_new_mem_buf((void *) mg_s_default_dh_params, -1);
+      dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+      BIO_free(bio);
+    }
+    if (dh != NULL) {
+      SSL_CTX_set_tmp_dh(ctx, dh);
+      SSL_CTX_set_options(ctx, SSL_OP_SINGLE_DH_USE);
+      DH_free(dh);
+    }
+#endif
+    SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+    SSL_CTX_use_certificate_chain_file(ctx, cert);
+  }
+  return MG_SSL_OK;
+}
+
+static enum mg_ssl_if_result mg_set_cipher_list(SSL_CTX *ctx) {
+  return (SSL_CTX_set_cipher_list(ctx, mg_s_cipher_list) == 1 ? MG_SSL_OK
+                                                              : MG_SSL_ERROR);
+}
+
+const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
+                       const char *ca_cert) {
+  const char *err_msg = NULL;
+  struct mg_ssl_if_conn_params params;
+  memset(&params, 0, sizeof(params));
+  params.cert = cert;
+  params.ca_cert = ca_cert;
+  if (mg_ssl_if_conn_init(nc, &params, &err_msg) != MG_SSL_OK) {
+    return err_msg;
+  }
+  return NULL;
+}
+
+#endif /* MG_ENABLE_SSL && MG_NET_IF != MG_NET_IF_SIMPLELINK */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/multithreading.c"
 #endif
@@ -7438,7 +7514,7 @@ static void mg_prepare_cgi_environment(struct mg_connection *nc,
   }
 
 #if MG_ENABLE_SSL
-  mg_addenv(blk, "HTTPS=%s", nc->ssl != NULL ? "on" : "off");
+  mg_addenv(blk, "HTTPS=%s", (nc->flags & MG_F_SSL ? "on" : "off"));
 #else
   mg_addenv(blk, "HTTPS=off");
 #endif
@@ -11976,73 +12052,7 @@ extern struct mg_iface_vtable mg_simplelink_iface_vtable;
 static sock_t mg_open_listening_socket(union socket_address *sa, int type,
                                        int proto);
 
-#if MG_ENABLE_SSL
-const char *mg_set_ssl2(struct mg_connection *nc, const char *cert,
-                        const char *key, const char *ca_cert) {
-  DBG(("%p %s,%s,%s", nc, (cert ? cert : "-"), (key ? key : "-"),
-       (ca_cert ? ca_cert : "-")));
-
-  if (nc->flags & MG_F_UDP) {
-    return "SSL for UDP is not supported";
-  }
-
-  if (cert != NULL || key != NULL) {
-    if (cert != NULL && key != NULL) {
-      nc->ssl_cert = strdup(cert);
-      nc->ssl_key = strdup(key);
-    } else {
-      return "both cert and key are required";
-    }
-  }
-  if (ca_cert != NULL && strcmp(ca_cert, "*") != 0) {
-    nc->ssl_ca_cert = strdup(ca_cert);
-  }
-
-  nc->flags |= MG_F_SSL;
-
-  return NULL;
-}
-
-int sl_set_ssl_opts(struct mg_connection *nc) {
-  int err;
-  DBG(("%p %s,%s,%s,%s", nc, (nc->ssl_cert ? nc->ssl_cert : "-"),
-       (nc->ssl_key ? nc->ssl_cert : "-"),
-       (nc->ssl_ca_cert ? nc->ssl_ca_cert : "-"),
-       (nc->ssl_server_name ? nc->ssl_server_name : "-")));
-  if (nc->ssl_cert != NULL && nc->ssl_key != NULL) {
-    err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
-                        SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME, nc->ssl_cert,
-                        strlen(nc->ssl_cert));
-    DBG(("CERTIFICATE_FILE_NAME %s -> %d", nc->ssl_cert, err));
-    if (err != 0) return err;
-    err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
-                        SL_SO_SECURE_FILES_PRIVATE_KEY_FILE_NAME, nc->ssl_key,
-                        strlen(nc->ssl_key));
-    DBG(("PRIVATE_KEY_FILE_NAME %s -> %d", nc->ssl_key, nc->err));
-    if (err != 0) return err;
-  }
-  if (nc->ssl_ca_cert != NULL) {
-    if (nc->ssl_ca_cert[0] != '\0') {
-      err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
-                          SL_SO_SECURE_FILES_CA_FILE_NAME, nc->ssl_ca_cert,
-                          strlen(nc->ssl_ca_cert));
-      DBG(("CA_FILE_NAME %s -> %d", nc->ssl_ca_cert, err));
-      if (err != 0) return err;
-    }
-  }
-  if (nc->ssl_server_name != NULL) {
-    err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
-                        SO_SECURE_DOMAIN_NAME_VERIFICATION, nc->ssl_server_name,
-                        strlen(nc->ssl_server_name));
-    DBG(("DOMAIN_NAME_VERIFICATION %s -> %d", nc->ssl_server_name, err));
-    /* Domain name verificationw as added in a NWP service pack, older versions
-     * return SL_ENOPROTOOPT. There isn't much we can do about it, so we ignore
-     * the error. */
-    if (err != 0 && err != SL_ENOPROTOOPT) return err;
-  }
-  return 0;
-}
-#endif
+int sl_set_ssl_opts(struct mg_connection *nc);
 
 void mg_set_non_blocking_mode(sock_t sock) {
   SlSockNonblocking_t opt;
@@ -12129,12 +12139,6 @@ void mg_sl_if_destroy_conn(struct mg_connection *nc) {
     sl_Close(nc->sock);
   }
   nc->sock = INVALID_SOCKET;
-#if MG_ENABLE_SSL
-  MG_FREE(nc->ssl_cert);
-  MG_FREE(nc->ssl_key);
-  MG_FREE(nc->ssl_ca_cert);
-  MG_FREE(nc->ssl_server_name);
-#endif
 }
 
 static int mg_accept_conn(struct mg_connection *lc) {
@@ -12496,6 +12500,109 @@ struct mg_iface_vtable mg_default_iface_vtable = MG_SL_IFACE_VTABLE;
 
 #endif /* MG_ENABLE_NET_IF_SIMPLELINK */
 #ifdef MG_MODULE_LINES
+#line 1 "common/platforms/simplelink/sl_ssl_if.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if MG_ENABLE_SSL && MG_NET_IF == MG_NET_IF_SIMPLELINK
+
+struct mg_ssl_if_ctx {
+  char *ssl_cert;
+  char *ssl_key;
+  char *ssl_ca_cert;
+  char *ssl_server_name;
+};
+
+void mg_ssl_if_init() {
+}
+
+enum mg_ssl_if_result mg_ssl_if_conn_init(
+    struct mg_connection *nc, const struct mg_ssl_if_conn_params *params,
+    const char **err_msg) {
+  struct mg_ssl_if_ctx *ctx =
+      (struct mg_ssl_if_ctx *) MG_CALLOC(1, sizeof(*ctx));
+  if (ctx == NULL) {
+    MG_SET_PTRPTR(err_msg, "Out of memory");
+    return MG_SSL_ERROR;
+  }
+  nc->ssl_if_data = ctx;
+
+  if (params->cert != NULL || params->key != NULL) {
+    if (params->cert != NULL && params->key != NULL) {
+      ctx->ssl_cert = strdup(params->cert);
+      ctx->ssl_key = strdup(params->key);
+    } else {
+      MG_SET_PTRPTR(err_msg, "Both cert and key are required.");
+      return MG_SSL_ERROR;
+    }
+  }
+  if (params->ca_cert != NULL && strcmp(params->ca_cert, "*") != 0) {
+    ctx->ssl_ca_cert = strdup(params->ca_cert);
+  }
+  if (params->server_name != NULL) {
+    ctx->ssl_server_name = strdup(params->server_name);
+  }
+  return MG_SSL_OK;
+}
+
+void mg_ssl_if_conn_free(struct mg_connection *nc) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  if (ctx == NULL) return;
+  nc->ssl_if_data = NULL;
+  MG_FREE(ctx->ssl_cert);
+  MG_FREE(ctx->ssl_key);
+  MG_FREE(ctx->ssl_ca_cert);
+  MG_FREE(ctx->ssl_server_name);
+  memset(ctx, 0, sizeof(*ctx));
+  MG_FREE(ctx);
+}
+
+int sl_set_ssl_opts(struct mg_connection *nc) {
+  int err;
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  DBG(("%p %s,%s,%s,%s", nc, (ctx->ssl_cert ? ctx->ssl_cert : "-"),
+       (ctx->ssl_key ? ctx->ssl_cert : "-"),
+       (ctx->ssl_ca_cert ? ctx->ssl_ca_cert : "-"),
+       (ctx->ssl_server_name ? ctx->ssl_server_name : "-")));
+  if (ctx->ssl_cert != NULL && ctx->ssl_key != NULL) {
+    err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                        SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME, ctx->ssl_cert,
+                        strlen(ctx->ssl_cert));
+    DBG(("CERTIFICATE_FILE_NAME %s -> %d", ctx->ssl_cert, err));
+    if (err != 0) return err;
+    err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                        SL_SO_SECURE_FILES_PRIVATE_KEY_FILE_NAME, ctx->ssl_key,
+                        strlen(ctx->ssl_key));
+    DBG(("PRIVATE_KEY_FILE_NAME %s -> %d", ctx->ssl_key, nc->err));
+    if (err != 0) return err;
+  }
+  if (ctx->ssl_ca_cert != NULL) {
+    if (ctx->ssl_ca_cert[0] != '\0') {
+      err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                          SL_SO_SECURE_FILES_CA_FILE_NAME, ctx->ssl_ca_cert,
+                          strlen(ctx->ssl_ca_cert));
+      DBG(("CA_FILE_NAME %s -> %d", ctx->ssl_ca_cert, err));
+      if (err != 0) return err;
+    }
+  }
+  if (ctx->ssl_server_name != NULL) {
+    err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                        SO_SECURE_DOMAIN_NAME_VERIFICATION,
+                        ctx->ssl_server_name, strlen(ctx->ssl_server_name));
+    DBG(("DOMAIN_NAME_VERIFICATION %s -> %d", ctx->ssl_server_name, err));
+    /* Domain name verificationw as added in a NWP service pack, older versions
+     * return SL_ENOPROTOOPT. There isn't much we can do about it, so we ignore
+     * the error. */
+    if (err != 0 && err != SL_ENOPROTOOPT) return err;
+  }
+  return 0;
+}
+
+#endif /* MG_ENABLE_SSL && MG_NET_IF == MG_NET_IF_SIMPLELINK */
+#ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip_net_if.h"
 #endif
 /*
@@ -12517,6 +12624,7 @@ struct mg_iface_vtable mg_default_iface_vtable = MG_SL_IFACE_VTABLE;
 extern struct mg_iface_vtable mg_lwip_iface_vtable;
 
 struct mg_lwip_conn_state {
+  struct mg_connection *nc;
   union {
     struct tcp_pcb *tcp;
     struct udp_pcb *udp;
@@ -12701,8 +12809,8 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
 static void mg_lwip_handle_recv(struct mg_connection *nc) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
 
-#ifdef KR_VERSION
-  if (nc->ssl != NULL) {
+#if MG_ENABLE_SSL
+  if (nc->flags & MG_F_SSL) {
     if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
       mg_lwip_ssl_recv(nc);
     } else {
@@ -12845,10 +12953,9 @@ static err_t mg_lwip_accept_cb(void *arg, struct tcp_pcb *newtpcb, err_t err) {
 #if LWIP_TCP_KEEPALIVE
   mg_lwip_set_keepalive_params(nc, 60, 10, 6);
 #endif
-#ifdef KR_VERSION
-  if (lc->ssl_ctx != NULL) {
-    nc->ssl = SSL_new(lc->ssl_ctx);
-    if (nc->ssl == NULL || SSL_set_fd(nc->ssl, (intptr_t) nc) != 1) {
+#if MG_ENABLE_SSL
+  if (lc->flags & MG_F_SSL) {
+    if (mg_ssl_if_conn_accept(nc, lc) != MG_SSL_OK) {
       LOG(LL_ERROR, ("SSL error"));
       tcp_close(newtpcb);
     }
@@ -12979,7 +13086,7 @@ void mg_lwip_if_recved(struct mg_connection *nc, size_t len) {
 /* Currently SSL acknowledges data immediately.
  * TODO(rojer): Find a way to propagate mg_lwip_if_recved. */
 #if MG_ENABLE_SSL
-  if (nc->ssl == NULL) {
+  if (!(nc->flags & MG_F_SSL)) {
     tcp_recved(cs->pcb.tcp, len);
   }
 #else
@@ -12992,6 +13099,7 @@ int mg_lwip_if_create_conn(struct mg_connection *nc) {
   struct mg_lwip_conn_state *cs =
       (struct mg_lwip_conn_state *) calloc(1, sizeof(*cs));
   if (cs == NULL) return 0;
+  cs->nc = nc;
   nc->sock = (intptr_t) cs;
   return 1;
 }
@@ -13127,10 +13235,9 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
     struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
     switch (md->sig_queue[md->start_index].sig) {
       case MG_SIG_CONNECT_RESULT: {
-#ifdef KR_VERSION
-        if (cs->err == 0 && nc->flags & MG_F_SSL &&
+#if MG_ENABLE_SSL
+        if (cs->err == 0 && (nc->flags & MG_F_SSL) &&
             !(nc->flags & MG_F_SSL_HANDSHAKE_DONE)) {
-          SSL_set_fd(nc->ssl, (intptr_t) nc);
           mg_lwip_ssl_do_hs(nc);
         } else
 #endif
@@ -13214,8 +13321,8 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
       mg_close_conn(nc);
       continue;
     }
-#ifdef KR_VERSION
-    if (nc->ssl != NULL && cs != NULL && cs->pcb.tcp != NULL &&
+#if MG_ENABLE_SSL
+    if ((nc->flags & MG_F_SSL) && cs != NULL && cs->pcb.tcp != NULL &&
         cs->pcb.tcp->state == ESTABLISHED) {
       if (((nc->flags & MG_F_WANT_WRITE) || nc->send_mbuf.len > 0) &&
           cs->pcb.tcp->snd_buf > 0) {
@@ -13289,8 +13396,7 @@ uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
  * All rights reserved
  */
 
-#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && MG_ENABLE_SSL && \
-    defined(KR_VERSION)
+#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && MG_ENABLE_SSL
 
 /* Amalgamated: #include "common/cs_dbg.h" */
 
@@ -13314,19 +13420,17 @@ uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
 void mg_lwip_ssl_do_hs(struct mg_connection *nc) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   int server_side = (nc->listener != NULL);
-  int ret = server_side ? SSL_accept(nc->ssl) : SSL_connect(nc->ssl);
-  int err = SSL_get_error(nc->ssl, ret);
-  DBG(("%s %d %d", (server_side ? "SSL_accept" : "SSL_connect"), ret, err));
-  if (ret <= 0) {
-    if (err == SSL_ERROR_WANT_WRITE) {
+  enum mg_ssl_if_result res = mg_ssl_if_handshake(nc);
+  DBG(("%d %d %d", server_side, res));
+  if (res != MG_SSL_OK) {
+    if (res == MG_SSL_WANT_WRITE) {
       nc->flags |= MG_F_WANT_WRITE;
       cs->err = 0;
-    } else if (err == SSL_ERROR_WANT_READ) {
+    } else if (res == MG_SSL_WANT_READ) {
       /* Nothing, we are callback-driven. */
       cs->err = 0;
     } else {
-      cs->err = err;
-      LOG(LL_ERROR, ("SSL handshake error: %d", cs->err));
+      cs->err = res;
       if (server_side) {
         mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
       } else {
@@ -13360,9 +13464,8 @@ void mg_lwip_ssl_send(struct mg_connection *nc) {
   if (len == 0) {
     len = MIN(MG_LWIP_SSL_IO_SIZE, nc->send_mbuf.len);
   }
-  int ret = SSL_write(nc->ssl, nc->send_mbuf.buf, len);
-  int err = SSL_get_error(nc->ssl, ret);
-  DBG(("%p SSL_write %u = %d, %d", nc, len, ret, err));
+  int ret = mg_ssl_if_write(nc, nc->send_mbuf.buf, len);
+  DBG(("%p SSL_write %u = %d, %d", nc, len, ret));
   if (ret > 0) {
     mbuf_remove(&nc->send_mbuf, ret);
     mbuf_trim(&nc->send_mbuf);
@@ -13372,12 +13475,11 @@ void mg_lwip_ssl_send(struct mg_connection *nc) {
      * exactly the same send next time. */
     cs->last_ssl_write_size = len;
   }
-  if (err == SSL_ERROR_NONE) {
+  if (ret == len) {
     nc->flags &= ~MG_F_WANT_WRITE;
-  } else if (err == SSL_ERROR_WANT_WRITE) {
+  } else if (ret == MG_SSL_WANT_WRITE) {
     nc->flags |= MG_F_WANT_WRITE;
   } else {
-    LOG(LL_ERROR, ("SSL write error: %d", err));
     mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
   }
 }
@@ -13389,22 +13491,22 @@ void mg_lwip_ssl_recv(struct mg_connection *nc) {
   while (nc->recv_mbuf.len < MG_LWIP_SSL_RECV_MBUF_LIMIT) {
     char *buf = (char *) malloc(MG_LWIP_SSL_IO_SIZE);
     if (buf == NULL) return;
-    int ret = SSL_read(nc->ssl, buf, MG_LWIP_SSL_IO_SIZE);
-    int err = SSL_get_error(nc->ssl, ret);
-    DBG(("%p SSL_read %u = %d, %d", nc, MG_LWIP_SSL_IO_SIZE, ret, err));
+    int ret = mg_ssl_if_read(nc, buf, MG_LWIP_SSL_IO_SIZE);
+    DBG(("%p %p SSL_read %u = %d", nc, cs->rx_chain, MG_LWIP_SSL_IO_SIZE, ret));
     if (ret <= 0) {
       free(buf);
-      if (err == SSL_ERROR_WANT_WRITE) {
+      if (ret == MG_SSL_WANT_WRITE) {
         nc->flags |= MG_F_WANT_WRITE;
         return;
-      } else if (err == SSL_ERROR_WANT_READ) {
-        /* Nothing, we are callback-driven. */
+      } else if (ret == MG_SSL_WANT_READ) {
+        /*
+         * Nothing to do in particular, we are callback-driven.
+         * What we definitely do not need anymore is SSL reading (nothing left).
+         */
+        nc->flags &= ~MG_F_WANT_READ;
         cs->err = 0;
         return;
       } else {
-        if (err != SSL_ERROR_ZERO_RETURN) {
-          LOG(LL_ERROR, ("SSL read error: %d", err));
-        }
         mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
         return;
       }
@@ -13412,24 +13514,20 @@ void mg_lwip_ssl_recv(struct mg_connection *nc) {
       mg_if_recv_tcp_cb(nc, buf, ret, 1 /* own */);
     }
   }
-  if (nc->recv_mbuf.len >= MG_LWIP_SSL_RECV_MBUF_LIMIT) {
-    nc->flags |= MG_F_WANT_READ;
-  } else {
-    nc->flags &= ~MG_F_WANT_READ;
-  }
 }
 
+#ifdef KR_VERSION
+
 ssize_t kr_send(int fd, const void *buf, size_t len) {
-  struct mg_connection *nc = (struct mg_connection *) fd;
-  int ret = mg_lwip_tcp_write(nc, buf, len);
-  DBG(("mg_lwip_tcp_write %u = %d", len, ret));
+  struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) fd;
+  int ret = mg_lwip_tcp_write(cs->nc, buf, len);
+  DBG(("%p mg_lwip_tcp_write %u = %d", cs->nc, len, ret));
   if (ret == 0) ret = KR_IO_WOULDBLOCK;
   return ret;
 }
 
 ssize_t kr_recv(int fd, void *buf, size_t len) {
-  struct mg_connection *nc = (struct mg_connection *) fd;
-  struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
+  struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) fd;
   struct pbuf *seg = cs->rx_chain;
   if (seg == NULL) {
     DBG(("%u - nothing to read", len));
@@ -13449,8 +13547,9 @@ ssize_t kr_recv(int fd, void *buf, size_t len) {
   return len;
 }
 
-#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && MG_ENABLE_SSL && \
-          defined(KR_VERSION) */
+#endif
+
+#endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL && MG_ENABLE_SSL */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/wince/wince_libc.c"
 #endif
