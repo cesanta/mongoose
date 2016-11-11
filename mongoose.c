@@ -1815,6 +1815,8 @@ int64_t cs_to64(const char *s) {
 #define MG_TUN_RECONNECT_INTERVAL 1
 #endif
 
+#define MG_TUN_PROTO_NAME "mg_tun"
+
 #define MG_TUN_DATA_FRAME 0x0
 #define MG_TUN_F_END_STREAM 0x1
 
@@ -10886,7 +10888,8 @@ static void mg_tun_do_reconnect(struct mg_tun_client *client) {
 #endif
   /* HTTP/Websocket listener */
   if ((dc = mg_connect_ws_opt(client->mgr, mg_tun_client_handler, opts,
-                              client->disp_url, "mg_tun", NULL)) == NULL) {
+                              client->disp_url, MG_TUN_PROTO_NAME, NULL)) ==
+      NULL) {
     LOG(LL_ERROR,
         ("Cannot connect to WS server on addr [%s]\n", client->disp_url));
     return;
