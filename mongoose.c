@@ -3888,7 +3888,7 @@ struct mg_iface_vtable mg_tun_iface_vtable = MG_TUN_IFACE_VTABLE;
  * All rights reserved
  */
 
-#if MG_ENABLE_SSL && MG_NET_IF != MG_NET_IF_SIMPLELINK
+#if MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_OPENSSL
 
 #ifdef __APPLE__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -3969,15 +3969,24 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
 
   mg_set_cipher_list(ctx->ssl_ctx);
 
-  if ((ctx->ssl = SSL_new(ctx->ssl_ctx)) == NULL) {
+  if (!(nc->flags & MG_F_LISTENING) && (ctx->ssl = SSL_new(ctx->ssl_ctx)) == NULL) {
     MG_SET_PTRPTR(err_msg, "Failed to create SSL session");
     return MG_SSL_ERROR;
   }
 
   nc->flags |= MG_F_SSL;
 
-  DBG(("%p new SSL %p -> %p", ctx->ssl_ctx, ctx->ssl));
   return MG_SSL_OK;
+}
+
+static enum mg_ssl_if_result mg_ssl_if_ssl_err(struct mg_connection *nc, int res) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  int err = SSL_get_error(ctx->ssl, res);
+  if (err == SSL_ERROR_WANT_READ) return MG_SSL_WANT_READ;
+  if (err == SSL_ERROR_WANT_WRITE) return MG_SSL_WANT_WRITE;
+  DBG(("%p %p SSL error: %d %d", nc, ctx->ssl_ctx, res, err));
+  nc->err = err;
+  return MG_SSL_ERROR;
 }
 
 enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
@@ -3989,14 +3998,7 @@ enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
     if (SSL_set_fd(ctx->ssl, nc->sock) != 1) return MG_SSL_ERROR;
   }
   res = server_side ? SSL_accept(ctx->ssl) : SSL_connect(ctx->ssl);
-  if (res != 1) {
-    int err = SSL_get_error(ctx->ssl, res);
-    if (err == SSL_ERROR_WANT_READ) return MG_SSL_WANT_READ;
-    if (err == SSL_ERROR_WANT_WRITE) return MG_SSL_WANT_WRITE;
-    DBG(("%p %p SSL error: %d", nc, ctx->ssl_ctx, err));
-    nc->err = err;
-    return MG_SSL_ERROR;
-  }
+  if (res != 1) return mg_ssl_if_ssl_err(nc, res);
   return MG_SSL_OK;
 }
 
@@ -4004,13 +4006,8 @@ int mg_ssl_if_read(struct mg_connection *nc, void *buf, size_t buf_size) {
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
   int n = SSL_read(ctx->ssl, buf, buf_size);
   DBG(("%p %d -> %d", nc, (int) buf_size, n));
-  if (n <= 0) {
-    int err = SSL_get_error(ctx->ssl, n);
-    if (err == SSL_ERROR_WANT_READ) return MG_SSL_WANT_READ;
-    if (err == SSL_ERROR_WANT_WRITE) return MG_SSL_WANT_WRITE;
-    nc->err = err;
-    return MG_SSL_ERROR;
-  }
+  if (n < 0) return mg_ssl_if_ssl_err(nc, n);
+  if (n == 0) nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   return n;
 }
 
@@ -4018,13 +4015,7 @@ int mg_ssl_if_write(struct mg_connection *nc, const void *data, size_t len) {
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
   int n = SSL_write(ctx->ssl, data, len);
   DBG(("%p %d -> %d", nc, (int) len, n));
-  if (n <= 0) {
-    int err = SSL_get_error(ctx->ssl, n);
-    if (err == SSL_ERROR_WANT_READ) return MG_SSL_WANT_READ;
-    if (err == SSL_ERROR_WANT_WRITE) return MG_SSL_WANT_WRITE;
-    nc->err = err;
-    return MG_SSL_ERROR;
-  }
+  if (n <= 0) return mg_ssl_if_ssl_err(nc, n);
   return n;
 }
 
@@ -4044,8 +4035,8 @@ void mg_ssl_if_conn_free(struct mg_connection *nc) {
  */
 static const char mg_s_cipher_list[] =
 #if defined(MG_SSL_CRYPTO_MODERN)
-    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:"
-    "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:"
+    "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+    "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
     "DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:"
     "ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:"
     "ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:"
@@ -4086,8 +4077,7 @@ static const char mg_s_cipher_list[] =
  * Will be used if none are provided by the user in the certificate file.
  */
 #if !MG_DISABLE_PFS && !defined(KR_VERSION)
-static const char mg_s_default_dh_params[] =
-    "\
+static const char mg_s_default_dh_params[] = "\
 -----BEGIN DH PARAMETERS-----\n\
 MIIBCAKCAQEAlvbgD/qh9znWIlGFcV0zdltD7rq8FeShIqIhkQ0C7hYFThrBvF2E\n\
 Z9bmgaP+sfQwGpVlv9mtaWjvERbu6mEG7JTkgmVUJrUt/wiRzwTaCXBqZkdUO8Tq\n\
@@ -4119,7 +4109,11 @@ static enum mg_ssl_if_result mg_use_cert(SSL_CTX *ctx, const char *cert,
   } else if (SSL_CTX_use_PrivateKey_file(ctx, key, 1) == 0) {
     MG_SET_PTRPTR(err_msg, "Invalid SSL key");
     return MG_SSL_ERROR;
+  } else if (SSL_CTX_use_certificate_chain_file(ctx, cert) == 0) {
+    MG_SET_PTRPTR(err_msg, "Invalid CA bundle");
+    return MG_SSL_ERROR;
   } else {
+    SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
 #if !MG_DISABLE_PFS && !defined(KR_VERSION)
     BIO *bio = NULL;
     DH *dh = NULL;
@@ -4144,9 +4138,10 @@ static enum mg_ssl_if_result mg_use_cert(SSL_CTX *ctx, const char *cert,
       SSL_CTX_set_options(ctx, SSL_OP_SINGLE_DH_USE);
       DH_free(dh);
     }
+#if OPENSSL_VERSION_NUMBER > 0x10002000L
+    SSL_CTX_set_ecdh_auto(ctx, 1);
 #endif
-    SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-    SSL_CTX_use_certificate_chain_file(ctx, cert);
+#endif
   }
   return MG_SSL_OK;
 }
@@ -4169,7 +4164,326 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
   return NULL;
 }
 
-#endif /* MG_ENABLE_SSL && MG_NET_IF != MG_NET_IF_SIMPLELINK */
+#endif /* MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_OPENSSL */
+#ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/ssl_if_mbedtls.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_MBEDTLS
+
+#include <mbedtls/debug.h>
+#include <mbedtls/ecp.h>
+#include <mbedtls/ssl.h>
+#include <mbedtls/x509_crt.h>
+
+static void mg_ssl_mbed_log(void *ctx, int level, const char *file, int line, const char *str) {
+  enum cs_log_level cs_level;
+  switch (level) {
+    case 1:
+      cs_level = LL_ERROR;
+      break;
+    case 2:
+    case 3:
+      cs_level = LL_DEBUG;
+      break;
+    default:
+      cs_level = LL_VERBOSE_DEBUG;
+  }
+  LOG(cs_level, ("%p %s", ctx, str));
+  (void) file;
+  (void) line;
+}
+
+struct mg_ssl_if_ctx {
+  mbedtls_ssl_config *conf;
+  mbedtls_ssl_context *ssl;
+  mbedtls_x509_crt *cert;
+  mbedtls_pk_context *key;
+  mbedtls_x509_crt *ca_cert;
+};
+
+/* Must be provided by the platform. ctx is struct mg_connection. */
+extern int mg_ssl_if_mbed_random(void *ctx, unsigned char *buf, size_t len);
+
+void mg_ssl_if_init() {
+}
+
+enum mg_ssl_if_result mg_ssl_if_conn_accept(struct mg_connection *nc,
+                                            struct mg_connection *lc) {
+  struct mg_ssl_if_ctx *ctx =
+      (struct mg_ssl_if_ctx *) MG_CALLOC(1, sizeof(*ctx));
+  struct mg_ssl_if_ctx *lc_ctx = (struct mg_ssl_if_ctx *) lc->ssl_if_data;
+  nc->ssl_if_data = ctx;
+  if (ctx == NULL || lc_ctx == NULL) return MG_SSL_ERROR;
+  ctx->ssl = MG_CALLOC(1, sizeof(*ctx->ssl));
+  if (mbedtls_ssl_setup(ctx->ssl, lc_ctx->conf) != 0) {
+    return MG_SSL_ERROR;
+  }
+  return MG_SSL_OK;
+}
+
+static enum mg_ssl_if_result mg_use_cert(struct mg_ssl_if_ctx *ctx, const char *cert,
+                                         const char *key, const char **err_msg);
+static enum mg_ssl_if_result mg_use_ca_cert(struct mg_ssl_if_ctx *ctx, const char *cert);
+static enum mg_ssl_if_result mg_set_cipher_list(struct mg_ssl_if_ctx *ctx, const char *ciphers);
+
+enum mg_ssl_if_result mg_ssl_if_conn_init(
+    struct mg_connection *nc, const struct mg_ssl_if_conn_params *params,
+    const char **err_msg) {
+  struct mg_ssl_if_ctx *ctx =
+      (struct mg_ssl_if_ctx *) MG_CALLOC(1, sizeof(*ctx));
+  DBG(("%p %s,%s,%s", nc, (params->cert ? params->cert : ""),
+       (params->key ? params->key : ""),
+       (params->ca_cert ? params->ca_cert : "")));
+  if (ctx == NULL) {
+    MG_SET_PTRPTR(err_msg, "Out of memory");
+    return MG_SSL_ERROR;
+  }
+  nc->ssl_if_data = ctx;
+  ctx->conf = MG_CALLOC(1, sizeof(*ctx->conf));
+  mbedtls_ssl_config_init(ctx->conf);
+  mbedtls_ssl_conf_dbg(ctx->conf, mg_ssl_mbed_log, nc);
+  if (mbedtls_ssl_config_defaults(
+        ctx->conf,
+        (nc->flags & MG_F_LISTENING ? MBEDTLS_SSL_IS_SERVER : MBEDTLS_SSL_IS_CLIENT),
+        MBEDTLS_SSL_TRANSPORT_STREAM,
+        MBEDTLS_SSL_PRESET_DEFAULT) != 0) {
+    MG_SET_PTRPTR(err_msg, "Failed to init SSL config");
+    return MG_SSL_ERROR;
+  }
+  /* TLS 1.2 and up */
+  mbedtls_ssl_conf_min_version(ctx->conf, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_3);
+  mbedtls_ssl_conf_rng(ctx->conf, mg_ssl_if_mbed_random, nc);
+
+  if (params->cert != NULL &&
+      mg_use_cert(ctx, params->cert, params->key, err_msg) !=
+          MG_SSL_OK) {
+    return MG_SSL_ERROR;
+  }
+
+  if (params->ca_cert != NULL &&
+      mg_use_ca_cert(ctx, params->ca_cert) != MG_SSL_OK) {
+    MG_SET_PTRPTR(err_msg, "Invalid SSL CA cert");
+    return MG_SSL_ERROR;
+  }
+
+  if (params->server_name != NULL) {
+    /* TODO(rojer): Implement server name verification on mbedTLS. */
+  }
+
+  mg_set_cipher_list(ctx, NULL);
+
+  mbedtls_debug_set_threshold(4);
+
+  if (!(nc->flags & MG_F_LISTENING)) {
+    ctx->ssl = MG_CALLOC(1, sizeof(*ctx->ssl));
+    mbedtls_ssl_init(ctx->ssl);
+    if (mbedtls_ssl_setup(ctx->ssl, ctx->conf) != 0) {
+      MG_SET_PTRPTR(err_msg, "Failed to create SSL session");
+      return MG_SSL_ERROR;
+    }
+  }
+
+  nc->flags |= MG_F_SSL;
+
+  return MG_SSL_OK;
+}
+
+int ssl_socket_send(void *ctx, const unsigned char *buf, size_t len) {
+  struct mg_connection *nc = (struct mg_connection *) ctx;
+  int n = (int) MG_SEND_FUNC(nc->sock, buf, len, 0);
+  DBG(("%p %d -> %d", nc, (int) len, n));
+  if (n >= 0) return n;
+  n = mg_get_errno();
+  return ((n == EAGAIN || n == EINPROGRESS) ? MBEDTLS_ERR_SSL_WANT_WRITE : -1);
+}
+
+static int ssl_socket_recv(void *ctx, unsigned char *buf, size_t len) {
+  struct mg_connection *nc = (struct mg_connection *) ctx;
+  int n = (int) MG_RECV_FUNC(nc->sock, buf, len, 0);
+  DBG(("%p %d <- %d", nc, (int) len, n));
+  if (n >= 0) return n;
+  n = mg_get_errno();
+  return ((n == EAGAIN || n == EINPROGRESS) ? MBEDTLS_ERR_SSL_WANT_READ : -1);
+}
+
+static enum mg_ssl_if_result mg_ssl_if_mbed_err(struct mg_connection *nc, int ret) {
+  if (ret == MBEDTLS_ERR_SSL_WANT_READ) return MG_SSL_WANT_READ;
+  if (ret == MBEDTLS_ERR_SSL_WANT_WRITE) return MG_SSL_WANT_WRITE;
+  DBG(("%p SSL error: %d", nc, ret));
+  nc->err = ret;
+  return MG_SSL_ERROR;
+}
+
+enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  int err;
+  /* If bio is not yet set, do it now. */
+  if (ctx->ssl->p_bio == NULL) {
+    mbedtls_ssl_set_bio(ctx->ssl, nc, ssl_socket_send, ssl_socket_recv, NULL);
+  }
+  err = mbedtls_ssl_handshake(ctx->ssl);
+  if (err != 0) return mg_ssl_if_mbed_err(nc, err);
+  return MG_SSL_OK;
+}
+
+int mg_ssl_if_read(struct mg_connection *nc, void *buf, size_t buf_size) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  int n = mbedtls_ssl_read(ctx->ssl, buf, buf_size);
+  DBG(("%p %d -> %d", nc, (int) buf_size, n));
+  if (n < 0) return mg_ssl_if_mbed_err(nc, n);
+  if (n == 0) nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+  return n;
+}
+
+int mg_ssl_if_write(struct mg_connection *nc, const void *data, size_t len) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  int n = mbedtls_ssl_write(ctx->ssl, data, len);
+  DBG(("%p %d -> %d", nc, (int) len, n));
+  if (n < 0) return mg_ssl_if_mbed_err(nc, n);
+  return n;
+}
+
+void mg_ssl_if_conn_free(struct mg_connection *nc) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  if (ctx == NULL) return;
+  nc->ssl_if_data = NULL;
+  if (ctx->ssl != NULL) {
+    mbedtls_ssl_free(ctx->ssl);
+    MG_FREE(ctx->ssl);
+  }
+  if (ctx->conf != NULL) {
+    mbedtls_ssl_config_free(ctx->conf);
+    MG_FREE(ctx->conf);
+  }
+  if (ctx->ca_cert != NULL) {
+    mbedtls_x509_crt_free(ctx->ca_cert);
+    MG_FREE(ctx->ca_cert);
+  }
+  if (ctx->cert != NULL) {
+    mbedtls_x509_crt_free(ctx->cert);
+    MG_FREE(ctx->cert);
+  }
+  if (ctx->key != NULL) {
+    mbedtls_pk_free(ctx->key);
+    MG_FREE(ctx->key);
+  }
+  memset(ctx, 0, sizeof(*ctx));
+  MG_FREE(ctx);
+}
+
+static enum mg_ssl_if_result mg_use_ca_cert(struct mg_ssl_if_ctx *ctx, const char *ca_cert) {
+  if (ca_cert == NULL || strcmp(ca_cert, "*") == 0) {
+    return MG_SSL_OK;
+  }
+  ctx->ca_cert = MG_CALLOC(1, sizeof(*ctx->ca_cert));
+  mbedtls_x509_crt_init(ctx->ca_cert);
+  if (mbedtls_x509_crt_parse_file(ctx->ca_cert, ca_cert) != 0) {
+    return MG_SSL_ERROR;
+  }
+  mbedtls_ssl_conf_ca_chain(ctx->conf, ctx->ca_cert, NULL);
+  mbedtls_ssl_conf_authmode(ctx->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+  return MG_SSL_OK;
+}
+
+static enum mg_ssl_if_result mg_use_cert(struct mg_ssl_if_ctx *ctx, const char *cert,
+                                         const char *key,
+                                         const char **err_msg) {
+  if (key == NULL) key = cert;
+  if (cert == NULL || cert[0] == '\0' || key == NULL || key[0] == '\0') {
+    return MG_SSL_OK;
+  }
+  ctx->cert = MG_CALLOC(1, sizeof(*ctx->cert));
+  mbedtls_x509_crt_init(ctx->cert);
+  ctx->key = MG_CALLOC(1, sizeof(*ctx->key));
+  mbedtls_pk_init(ctx->key);
+  if (mbedtls_x509_crt_parse_file(ctx->cert, cert) != 0) {
+    MG_SET_PTRPTR(err_msg, "Invalid SSL cert");
+    return MG_SSL_ERROR;
+  }
+  if (mbedtls_pk_parse_keyfile(ctx->key, key, NULL) != 0) {
+    MG_SET_PTRPTR(err_msg, "Invalid SSL key");
+    return MG_SSL_ERROR;
+  }
+  if (mbedtls_ssl_conf_own_cert(ctx->conf, ctx->cert, ctx->key) != 0) {
+    MG_SET_PTRPTR(err_msg, "Invalid SSL key or cert");
+    return MG_SSL_ERROR;
+  }
+  return MG_SSL_OK;
+}
+
+static const int mg_s_cipher_list[] = {
+  MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+  MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+  MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+  MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+  MBEDTLS_TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
+  MBEDTLS_TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
+  MBEDTLS_TLS_DHE_RSA_WITH_AES_128_CBC_SHA256,
+  MBEDTLS_TLS_RSA_WITH_AES_256_GCM_SHA384,
+  MBEDTLS_TLS_RSA_WITH_AES_256_CBC_SHA256,
+  MBEDTLS_TLS_RSA_WITH_AES_128_GCM_SHA256,
+  MBEDTLS_TLS_RSA_WITH_AES_128_CBC_SHA256,
+  MBEDTLS_TLS_RSA_WITH_AES_256_CBC_SHA,
+  MBEDTLS_TLS_RSA_WITH_AES_128_CBC_SHA,
+  0
+};
+
+/*
+ * Ciphers can be specified as a colon-separated list of cipher suite names.
+ * These can be found in https://github.com/ARMmbed/mbedtls/blob/development/library/ssl_ciphersuites.c#L267
+ * E.g.: TLS-ECDHE-ECDSA-WITH-AES-128-GCM-SHA256:TLS-DHE-RSA-WITH-AES-256-CCM
+ */
+static enum mg_ssl_if_result mg_set_cipher_list(struct mg_ssl_if_ctx *ctx, const char *ciphers) {
+  if (ciphers != NULL) {
+    int ids[50], n = 0, l, id;
+    const char *s = ciphers;
+    char *e, tmp[50];
+    while (s != NULL && n < (int) (sizeof(ids) / sizeof(ids[0])) - 1) {
+      e = strchr(s, ':');
+      l = (e != NULL ? (e - s) : (int) strlen(s));
+      strncpy(tmp, s, l);
+      id = mbedtls_ssl_get_ciphersuite_id(tmp);
+      DBG(("%s -> %d", tmp, id));
+      if (id != 0) ids[n++] = id;
+      s = (e != NULL ? e + 1 : NULL);
+    }
+    if (n == 0) return MG_SSL_ERROR;
+    ids[n] = 0;
+    mbedtls_ssl_conf_ciphersuites(ctx->conf, ids);
+  } else {
+    mbedtls_ssl_conf_ciphersuites(ctx->conf, mg_s_cipher_list);
+  }
+  return MG_SSL_OK;
+}
+
+const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
+                       const char *ca_cert) {
+  const char *err_msg = NULL;
+  struct mg_ssl_if_conn_params params;
+  memset(&params, 0, sizeof(params));
+  params.cert = cert;
+  params.ca_cert = ca_cert;
+  if (mg_ssl_if_conn_init(nc, &params, &err_msg) != MG_SSL_OK) {
+    return err_msg;
+  }
+  return NULL;
+}
+
+/* Lazy RNG. Warning: it would be a bad idea to do this in production! */
+#ifdef MG_SSL_MBED_DUMMY_RANDOM
+int mg_ssl_if_mbed_random(void *ctx, unsigned char *buf, size_t len) {
+  (void) ctx;
+  while (len--) *buf++ = rand();
+  return 0;
+}
+#endif
+
+#endif /* MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_MBEDTLS */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/multithreading.c"
 #endif
@@ -12507,7 +12821,7 @@ struct mg_iface_vtable mg_default_iface_vtable = MG_SL_IFACE_VTABLE;
  * All rights reserved
  */
 
-#if MG_ENABLE_SSL && MG_NET_IF == MG_NET_IF_SIMPLELINK
+#if MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_SIMPLELINK
 
 struct mg_ssl_if_ctx {
   char *ssl_cert;
@@ -12601,7 +12915,7 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
   return 0;
 }
 
-#endif /* MG_ENABLE_SSL && MG_NET_IF == MG_NET_IF_SIMPLELINK */
+#endif /* MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_SIMPLELINK */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip_net_if.h"
 #endif
