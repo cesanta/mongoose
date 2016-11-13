@@ -97,6 +97,10 @@
 #define MG_NET_IF_LWIP_LOW_LEVEL 3
 #define MG_NET_IF_PIC32_HARMONY 4
 
+#define MG_SSL_IF_OPENSSL 1
+#define MG_SSL_IF_MBEDTLS 2
+#define MG_SSL_IF_SIMPLELINK 3
+
 /* Amalgamated: #include "common/platforms/platform_unix.h" */
 /* Amalgamated: #include "common/platforms/platform_windows.h" */
 /* Amalgamated: #include "common/platforms/platform_esp8266.h" */
@@ -513,6 +517,7 @@ typedef struct stat cs_stat_t;
 #include <time.h>
 
 #define MG_NET_IF MG_NET_IF_SIMPLELINK
+#define MG_SSL_IF MG_SSL_IF_SIMPLELINK
 
 /*
  * CC3100 SDK and STM32 SDK include headers w/out path, just like
@@ -566,6 +571,7 @@ int inet_pton(int af, const char *src, void *dst);
 #endif
 
 #define MG_NET_IF MG_NET_IF_SIMPLELINK
+#define MG_SSL_IF MG_SSL_IF_SIMPLELINK
 
 /* Only SPIFFS supports directories, SLFS does not. */
 #if defined(CC3200_FS_SPIFFS) && !defined(MG_ENABLE_DIRECTORY_LISTING)
@@ -700,6 +706,7 @@ struct dirent *readdir(DIR *dir);
 #endif
 
 #define MG_NET_IF MG_NET_IF_SIMPLELINK
+#define MG_SSL_IF MG_SSL_IF_SIMPLELINK
 
 /* Amalgamated: #include "common/platforms/simplelink/cs_simplelink.h" */
 
@@ -2741,6 +2748,10 @@ struct {								\
 
 #ifndef MG_NET_IF
 #define MG_NET_IF MG_NET_IF_SOCKET
+#endif
+
+#ifndef MG_SSL_IF
+#define MG_SSL_IF MG_SSL_IF_OPENSSL
 #endif
 
 #ifndef MG_ENABLE_THREADS /* ifdef-ok */
