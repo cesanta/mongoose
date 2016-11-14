@@ -8791,7 +8791,6 @@ void mg_send_websocket_handshake3(struct mg_connection *nc, const char *path,
                                   const char *extra_headers, const char *user,
                                   const char *pass) {
   struct mbuf auth;
-  const char *authstr = "";
   char key[25];
   uint32_t nonce[4];
   nonce[0] = mg_ws_random_mask();
@@ -8803,25 +8802,22 @@ void mg_send_websocket_handshake3(struct mg_connection *nc, const char *path,
   mbuf_init(&auth, 0);
   if (user != NULL) {
     mg_basic_auth_header(user, pass, &auth);
-
-    /*
-     * cc3200 libc is broken: it doesn't like zero length to be passed to %.*s
-     * i.e. sprintf("f%.*so", (int)0, ""), yields `f\0o`.
-     * Thus we ensure the header fragment is null terminated and use `%s` below.
-     */
-
-    mbuf_append(&auth, "", 1);
-    authstr = auth.buf;
   }
 
+  /*
+   * NOTE: the  (auth.buf == NULL ? "" : auth.buf) is because cc3200 libc is
+   * broken: it doesn't like zero length to be passed to %.*s
+   * i.e. sprintf("f%.*so", (int)0, NULL), yields `f\0o`.
+   * because it handles NULL specially (and incorrectly).
+   */
   mg_printf(nc,
             "GET %s HTTP/1.1\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
-            "%s"
+            "%.*s"
             "Sec-WebSocket-Version: 13\r\n"
             "Sec-WebSocket-Key: %s\r\n",
-            path, authstr, key);
+            path, (int) auth.len, (auth.buf == NULL ? "" : auth.buf), key);
 
   /* TODO(mkm): take default hostname from http proto data if host == NULL */
   if (host != MG_WS_NO_HOST_HEADER_MAGIC) {
