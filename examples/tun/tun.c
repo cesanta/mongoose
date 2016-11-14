@@ -5,6 +5,7 @@ static const char *s_dispatcher = "ws://foo:bar@localhost:8000";
 
 void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message *hm = (struct http_message *) ev_data;
+  int i;
   switch (ev) {
     case MG_EV_ACCEPT:
       fprintf(stderr, "HTTP accept. nc=%p\n", nc);
@@ -15,7 +16,15 @@ void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
     case MG_EV_HTTP_REQUEST:
       fprintf(stderr, "HTTP got request. nc=%p path=%.*s\n", nc,
               (int) hm->uri.len, hm->uri.p);
-      mg_http_send_error(nc, 200, "OK");
+
+      mg_printf(nc, "%s",
+                "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+
+      for (i = 0; i < 10; i++) {
+        mg_printf_http_chunk(nc, "OK %d\n", i);
+      }
+      mg_send_http_chunk(nc, "", 0); /* Send empty chunk, the end of response */
+      nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
     case MG_EV_CLOSE:
       fprintf(stderr, "HTTP close\n");
