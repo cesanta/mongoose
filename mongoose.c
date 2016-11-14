@@ -1871,6 +1871,8 @@ int mg_tun_parse_frame(void *data, size_t len, struct mg_tun_frame *frame);
 void mg_tun_send_frame(struct mg_connection *ws, uint32_t stream_id,
                        uint8_t type, uint8_t flags, struct mg_str msg);
 
+void mg_tun_destroy_client(struct mg_tun_client *client);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
@@ -3783,10 +3785,13 @@ int mg_tun_if_create_conn(struct mg_connection *nc) {
 
 void mg_tun_if_destroy_conn(struct mg_connection *nc) {
   struct mg_tun_client *client = (struct mg_tun_client *) nc->iface->data;
-  uint32_t stream_id = (uint32_t)(uintptr_t) nc->mgr_data;
-  struct mg_str msg = {NULL, 0};
 
-  if (client->disp) {
+  if (nc->flags & MG_F_LISTENING) {
+    mg_tun_destroy_client(client);
+  } else if (client->disp) {
+    uint32_t stream_id = (uint32_t)(uintptr_t) nc->mgr_data;
+    struct mg_str msg = {NULL, 0};
+
     LOG(LL_DEBUG, ("closing %zu:", stream_id));
     mg_tun_send_frame(client->disp, stream_id, MG_TUN_DATA_FRAME,
                       MG_TUN_F_END_STREAM, msg);
@@ -11191,7 +11196,8 @@ static void mg_tun_close_all(struct mg_tun_client *client) {
   for (nc = client->mgr->active_connections; nc != NULL; nc = nc->next) {
     if (nc->iface == client->iface && !(nc->flags & MG_F_LISTENING)) {
       LOG(LL_DEBUG, ("Closing tunneled connection %p", nc));
-      mg_close_conn(nc);
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      /* mg_close_conn(nc); */
     }
   }
 }
@@ -11257,10 +11263,16 @@ static void mg_tun_client_handler(struct mg_connection *nc, int ev,
     }
     case MG_EV_CLOSE: {
       LOG(LL_DEBUG, ("Closing all tunneled connections"));
-      mg_tun_close_all(client);
-      client->disp = NULL;
-      LOG(LL_INFO, ("Dispatcher connection is no more, reconnecting"));
-      mg_tun_reconnect(client);
+      /*
+       * The client might have been already freed when the listening socket is
+       * closed.
+       */
+      if (client != NULL) {
+        mg_tun_close_all(client);
+        client->disp = NULL;
+        LOG(LL_INFO, ("Dispatcher connection is no more, reconnecting"));
+        mg_tun_reconnect(client);
+      }
       break;
     }
     default:
@@ -11327,6 +11339,14 @@ static struct mg_tun_client *mg_tun_create_client(struct mg_mgr *mgr,
 
   mg_tun_do_reconnect(client);
   return client;
+}
+
+void mg_tun_destroy_client(struct mg_tun_client *client) {
+  /* the dispatcher connection handler will in turn close all tunnels */
+  client->disp->flags |= MG_F_CLOSE_IMMEDIATELY;
+  /* this is used as a signal to other tun handlers that the party is over */
+  client->disp->user_data = client->iface->data = NULL;
+  MG_FREE(client);
 }
 
 static struct mg_connection *mg_tun_do_bind(struct mg_tun_client *client,

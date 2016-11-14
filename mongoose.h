@@ -3086,8 +3086,8 @@ struct mg_connection {
   size_t recv_mbuf_limit;  /* Max size of recv buffer */
   struct mbuf recv_mbuf;   /* Received data */
   struct mbuf send_mbuf;   /* Data scheduled for sending */
-  time_t last_io_time;              /* Timestamp of the last socket IO */
-  double ev_timer_time;             /* Timestamp of the future MG_EV_TIMER */
+  time_t last_io_time;     /* Timestamp of the last socket IO */
+  double ev_timer_time;    /* Timestamp of the future MG_EV_TIMER */
 #if MG_ENABLE_SSL
   void *ssl_if_data; /* SSL library data. */
 #endif
