@@ -7431,7 +7431,8 @@ struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
   mg_printf(nc, "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %" SIZE_T_FMT
                 "\r\n%.*s%s\r\n%s",
             post_data == NULL ? "GET" : "POST", path, addr,
-            post_data == NULL ? 0 : strlen(post_data), (int) auth.len, auth.buf,
+            post_data == NULL ? 0 : strlen(post_data),
+            (int) auth.len, (auth.buf == NULL ? "" : auth.buf),
             extra_headers == NULL ? "" : extra_headers,
             post_data == NULL ? "" : post_data);
 
