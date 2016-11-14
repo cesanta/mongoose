@@ -5024,8 +5024,8 @@ struct mg_mqtt_session {
 
 /* MQTT broker. */
 struct mg_mqtt_broker {
-  LIST_HEAD(, mg_mqtt_session) sessions; /* Session list */
-  void *user_data;                       /* User data */
+  LIST_HEAD(_mg_sesshead, mg_mqtt_session) sessions; /* Session list */
+  void *user_data;                                   /* User data */
 };
 
 /* Initialises a MQTT broker. */
