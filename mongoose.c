@@ -9222,7 +9222,7 @@ int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str) {
         len = str.len - j;
       } else {
         len = 0;
-        while (j + len != str.len && str.p[len] != '/') {
+        while (j + len != str.len && str.p[j + len] != '/') {
           len++;
         }
       }
