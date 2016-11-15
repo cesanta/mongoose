@@ -12894,40 +12894,46 @@ void mg_ssl_if_conn_free(struct mg_connection *nc) {
 int sl_set_ssl_opts(struct mg_connection *nc) {
   int err;
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
-  DBG(("%p %s,%s,%s,%s", nc, (ctx->ssl_cert ? ctx->ssl_cert : "-"),
-       (ctx->ssl_key ? ctx->ssl_cert : "-"),
-       (ctx->ssl_ca_cert ? ctx->ssl_ca_cert : "-"),
-       (ctx->ssl_server_name ? ctx->ssl_server_name : "-")));
-  if (ctx->ssl_cert != NULL && ctx->ssl_key != NULL) {
-    err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
-                        SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME, ctx->ssl_cert,
-                        strlen(ctx->ssl_cert));
-    DBG(("CERTIFICATE_FILE_NAME %s -> %d", ctx->ssl_cert, err));
-    if (err != 0) return err;
-    err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
-                        SL_SO_SECURE_FILES_PRIVATE_KEY_FILE_NAME, ctx->ssl_key,
-                        strlen(ctx->ssl_key));
-    DBG(("PRIVATE_KEY_FILE_NAME %s -> %d", ctx->ssl_key, nc->err));
-    if (err != 0) return err;
-  }
-  if (ctx->ssl_ca_cert != NULL) {
-    if (ctx->ssl_ca_cert[0] != '\0') {
+  DBG(("%p ssl ctx: %p", nc, ctx));
+
+  if (ctx) {
+    DBG(("%p %s,%s,%s,%s", nc, (ctx->ssl_cert ? ctx->ssl_cert : "-"),
+         (ctx->ssl_key ? ctx->ssl_cert : "-"),
+         (ctx->ssl_ca_cert ? ctx->ssl_ca_cert : "-"),
+         (ctx->ssl_server_name ? ctx->ssl_server_name : "-")));
+    if (ctx->ssl_cert != NULL && ctx->ssl_key != NULL) {
       err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
-                          SL_SO_SECURE_FILES_CA_FILE_NAME, ctx->ssl_ca_cert,
-                          strlen(ctx->ssl_ca_cert));
-      DBG(("CA_FILE_NAME %s -> %d", ctx->ssl_ca_cert, err));
+                          SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME,
+                          ctx->ssl_cert, strlen(ctx->ssl_cert));
+      DBG(("CERTIFICATE_FILE_NAME %s -> %d", ctx->ssl_cert, err));
+      if (err != 0) return err;
+      err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                          SL_SO_SECURE_FILES_PRIVATE_KEY_FILE_NAME,
+                          ctx->ssl_key, strlen(ctx->ssl_key));
+      DBG(("PRIVATE_KEY_FILE_NAME %s -> %d", ctx->ssl_key, nc->err));
       if (err != 0) return err;
     }
-  }
-  if (ctx->ssl_server_name != NULL) {
-    err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
-                        SO_SECURE_DOMAIN_NAME_VERIFICATION,
-                        ctx->ssl_server_name, strlen(ctx->ssl_server_name));
-    DBG(("DOMAIN_NAME_VERIFICATION %s -> %d", ctx->ssl_server_name, err));
-    /* Domain name verificationw as added in a NWP service pack, older versions
-     * return SL_ENOPROTOOPT. There isn't much we can do about it, so we ignore
-     * the error. */
-    if (err != 0 && err != SL_ENOPROTOOPT) return err;
+    if (ctx->ssl_ca_cert != NULL) {
+      if (ctx->ssl_ca_cert[0] != '\0') {
+        err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                            SL_SO_SECURE_FILES_CA_FILE_NAME, ctx->ssl_ca_cert,
+                            strlen(ctx->ssl_ca_cert));
+        DBG(("CA_FILE_NAME %s -> %d", ctx->ssl_ca_cert, err));
+        if (err != 0) return err;
+      }
+    }
+    if (ctx->ssl_server_name != NULL) {
+      err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                          SO_SECURE_DOMAIN_NAME_VERIFICATION,
+                          ctx->ssl_server_name, strlen(ctx->ssl_server_name));
+      DBG(("DOMAIN_NAME_VERIFICATION %s -> %d", ctx->ssl_server_name, err));
+      /* Domain name verificationw as added in a NWP service pack, older
+       * versions
+       * return SL_ENOPROTOOPT. There isn't much we can do about it, so we
+       * ignore
+       * the error. */
+      if (err != 0 && err != SL_ENOPROTOOPT) return err;
+    }
   }
   return 0;
 }
