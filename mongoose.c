@@ -12896,7 +12896,7 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
   DBG(("%p ssl ctx: %p", nc, ctx));
 
-  if (ctx) {
+  if (ctx != NULL) {
     DBG(("%p %s,%s,%s,%s", nc, (ctx->ssl_cert ? ctx->ssl_cert : "-"),
          (ctx->ssl_key ? ctx->ssl_cert : "-"),
          (ctx->ssl_ca_cert ? ctx->ssl_ca_cert : "-"),
@@ -12928,10 +12928,8 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
                           ctx->ssl_server_name, strlen(ctx->ssl_server_name));
       DBG(("DOMAIN_NAME_VERIFICATION %s -> %d", ctx->ssl_server_name, err));
       /* Domain name verificationw as added in a NWP service pack, older
-       * versions
-       * return SL_ENOPROTOOPT. There isn't much we can do about it, so we
-       * ignore
-       * the error. */
+       * versions return SL_ENOPROTOOPT. There isn't much we can do about it,
+       * so we ignore the error. */
       if (err != 0 && err != SL_ENOPROTOOPT) return err;
     }
   }
