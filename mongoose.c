@@ -11342,10 +11342,24 @@ static struct mg_tun_client *mg_tun_create_client(struct mg_mgr *mgr,
 }
 
 void mg_tun_destroy_client(struct mg_tun_client *client) {
-  /* the dispatcher connection handler will in turn close all tunnels */
-  client->disp->flags |= MG_F_CLOSE_IMMEDIATELY;
-  /* this is used as a signal to other tun handlers that the party is over */
-  client->disp->user_data = client->iface->data = NULL;
+  /*
+   *  NOTE:
+   * `client` is NULL in case of OOM
+   * `client->disp` is NULL if connection failed
+   * `client->iface is NULL is `mg_find_iface` failed
+   */
+
+  if (client != NULL && client->disp != NULL) {
+    /* the dispatcher connection handler will in turn close all tunnels */
+    client->disp->flags |= MG_F_CLOSE_IMMEDIATELY;
+    /* this is used as a signal to other tun handlers that the party is over */
+    client->disp->user_data = NULL;
+  }
+
+  if (client != NULL && client->iface != NULL) {
+    client->iface->data = NULL;
+  }
+
   MG_FREE(client);
 }
 
