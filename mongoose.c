@@ -8888,6 +8888,11 @@ struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
 
+/* For platforms with limited libc */
+#ifndef MAX
+#define MAX(a,b) ((a) > (b)? (a): (b))
+#endif
+
 const char *mg_skip(const char *s, const char *end, const char *delims,
                     struct mg_str *v) {
   v->p = s;
@@ -9056,19 +9061,19 @@ int mg_hexdump(const void *buf, int len, char *dst, int dst_len) {
   for (i = 0; i < len; i++) {
     idx = i % 16;
     if (idx == 0) {
-      if (i > 0) n += snprintf(dst + n, dst_len - n, "  %s\n", ascii);
-      n += snprintf(dst + n, dst_len - n, "%04x ", i);
+      if (i > 0) n += snprintf(dst + n, MAX(dst_len - n, 0), "  %s\n", ascii);
+      n += snprintf(dst + n, MAX(dst_len - n, 0), "%04x ", i);
     }
     if (dst_len - n < 0) {
       return n;
     }
-    n += snprintf(dst + n, dst_len - n, " %02x", p[i]);
+    n += snprintf(dst + n, MAX(dst_len - n, 0), " %02x", p[i]);
     ascii[idx] = p[i] < 0x20 || p[i] > 0x7e ? '.' : p[i];
     ascii[idx + 1] = '\0';
   }
 
-  while (i++ % 16) n += snprintf(dst + n, dst_len - n, "%s", "   ");
-  n += snprintf(dst + n, dst_len - n, "  %s\n\n", ascii);
+  while (i++ % 16) n += snprintf(dst + n, MAX(dst_len - n, 0), "%s", "   ");
+  n += snprintf(dst + n, MAX(dst_len - n, 0), "  %s\n\n", ascii);
 
   return n;
 }
