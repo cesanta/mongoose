@@ -7295,6 +7295,7 @@ MG_INTERNAL int mg_http_common_url_parse(const char *url, const char *schema,
   int addr_len = 0;
   int auth_sep_pos = -1;
   int user_sep_pos = -1;
+  int port_pos = -1;
   (void) user;
   (void) pass;
 
@@ -7319,19 +7320,19 @@ MG_INTERNAL int mg_http_common_url_parse(const char *url, const char *schema,
     }
     if (*url == '@') {
       auth_sep_pos = addr_len;
-      user_sep_pos = *port_i;
-      *port_i = -1;
+      user_sep_pos = port_pos;
+      port_pos = -1;
     }
-    if (*url == ':') *port_i = addr_len;
+    if (*url == ':') port_pos = addr_len;
     (*addr)[addr_len++] = *url;
     (*addr)[addr_len] = '\0';
     url++;
   }
 
   if (addr_len == 0) goto cleanup;
-  if (*port_i < 0) {
-    *port_i = addr_len;
-    strcpy(*addr + *port_i, *use_ssl ? ":443" : ":80");
+  if (port_pos < 0) {
+    *port_i = *use_ssl ? 443 : 80;
+    addr_len += sprintf(*addr + addr_len, ":%d", *port_i);
   } else {
     *port_i = -1;
   }
