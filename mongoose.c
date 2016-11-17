@@ -1794,6 +1794,24 @@ int64_t cs_to64(const char *s) {
 }
 #endif
 
+static int str_util_lowercase(const char *s) {
+  return tolower(*(const unsigned char *) s);
+}
+
+int mg_ncasecmp(const char *s1, const char *s2, size_t len) {
+  int diff = 0;
+
+  if (len > 0) do {
+      diff = str_util_lowercase(s1++) - str_util_lowercase(s2++);
+    } while (diff == 0 && s1[-1] != '\0' && --len > 0);
+
+  return diff;
+}
+
+int mg_casecmp(const char *s1, const char *s2) {
+  return mg_ncasecmp(s1, s2, (size_t) ~0);
+}
+
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/tun.h"
@@ -8891,7 +8909,7 @@ struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
 
 /* For platforms with limited libc */
 #ifndef MAX
-#define MAX(a,b) ((a) > (b)? (a): (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
 const char *mg_skip(const char *s, const char *end, const char *delims,
@@ -8905,20 +8923,6 @@ const char *mg_skip(const char *s, const char *end, const char *delims,
 
 static int lowercase(const char *s) {
   return tolower(*(const unsigned char *) s);
-}
-
-int mg_ncasecmp(const char *s1, const char *s2, size_t len) {
-  int diff = 0;
-
-  if (len > 0) do {
-      diff = lowercase(s1++) - lowercase(s2++);
-    } while (diff == 0 && s1[-1] != '\0' && --len > 0);
-
-  return diff;
-}
-
-int mg_casecmp(const char *s1, const char *s2) {
-  return mg_ncasecmp(s1, s2, (size_t) ~0);
 }
 
 #if MG_ENABLE_FILESYSTEM

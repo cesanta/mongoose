@@ -1859,6 +1859,16 @@ char *strdup(const char *src);
 int64_t cs_to64(const char *s);
 #endif
 
+/*
+ * Cross-platform version of `strncasecmp()`.
+ */
+int mg_ncasecmp(const char *s1, const char *s2, size_t len);
+
+/*
+ * Cross-platform version of `strcasecmp()`.
+ */
+int mg_casecmp(const char *s1, const char *s2);
+
 #ifdef __cplusplus
 }
 #endif
@@ -3639,16 +3649,6 @@ extern "C" {
  */
 const char *mg_skip(const char *s, const char *end_string,
                     const char *delimiters, struct mg_str *v);
-
-/*
- * Cross-platform version of `strncasecmp()`.
- */
-int mg_ncasecmp(const char *s1, const char *s2, size_t len);
-
-/*
- * Cross-platform version of `strcasecmp()`.
- */
-int mg_casecmp(const char *s1, const char *s2);
 
 /*
  * Decodes base64-encoded string `s`, `len` into the destination `dst`.
