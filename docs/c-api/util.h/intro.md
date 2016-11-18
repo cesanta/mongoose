@@ -3,8 +3,6 @@ title: "Utility API"
 symbol_kind: "intro"
 decl_name: "util.h"
 items:
-  - { name: mg_asprintf.md }
-  - { name: mg_avprintf.md }
   - { name: mg_base64_decode.md }
   - { name: mg_base64_encode.md }
   - { name: mg_basic_auth_header.md }
