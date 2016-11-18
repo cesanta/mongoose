@@ -4578,8 +4578,9 @@ static void spawn_handling_thread(struct mg_connection *nc) {
    * dummy event manager.
    * c[0] stays in this thread, c[1] goes to another thread.
    */
+  mg_mgr_init(&dummy, NULL);
   mg_socketpair(sp, SOCK_STREAM);
-  memset(&dummy, 0, sizeof(dummy));
+
   c[0] = mg_add_sock(&dummy, sp[0], forwarder_ev_handler);
   c[1] = mg_add_sock(&dummy, sp[1], nc->listener->priv_1.f);
 
