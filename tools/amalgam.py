@@ -51,6 +51,10 @@ parser.add_argument('--public-header', dest="public",
                     ' included at the beginning of the file')
 parser.add_argument('--autoinc', action='store_true',
                     help='automatically embed include files')
+parser.add_argument('--strict', action='store_true',
+                    help='fail loudly if an include file cannot be resolved')
+parser.add_argument('--norel', action='store_true',
+                    help="do not try to compute a friendly relative path")
 parser.add_argument('--exportable-headers', dest="export", action='store_true',
                     help='allow exporting internal headers')
 parser.add_argument('-I', default=".", dest='include_path', help='include path')
@@ -77,7 +81,7 @@ ignore_files = [i.strip() for i in args.ignore.split(',')]
 
 def should_ignore(name):
     return (name in already_included
-            or not os.path.exists(resolve(name))
+            or not (args.strict or os.path.exists(resolve(name)))
             or name in ignore_files)
 
 def resolve(path):
@@ -85,9 +89,9 @@ def resolve(path):
         p = path
     else:
         p = os.path.join(args.include_path, path)
-    if os.path.exists(p):
+    if os.path.exists(p) and not args.norel:
         p = os.path.realpath(p).replace('%s/' % os.getcwd(), '')
-#    print >>sys.stderr, '%s -> %s' % (path, p)
+    # print >>sys.stderr, '%s -> %s (cwd %s)' % (path, p, os.getcwd())
     return p
 
 def emit_line_directive(out, name):
@@ -100,13 +104,13 @@ def emit_line_directive(out, name):
 
 def emit_body(out, name):
     path = resolve(name)
-    if not os.path.exists(path):
+    if not args.strict and not os.path.exists(path):
         print >>out, '#include "%s"' % (name,)
         return
 
     with open(resolve(name)) as f:
         for l in f:
-            match = re.match('(#include "(.*)")', l)
+            match = re.match('( *#include "(.*)")', l)
             if match:
                 all, path = match.groups()
                 if args.autoinc:
