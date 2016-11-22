@@ -11737,7 +11737,6 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
 
   _u32 am = 0;
   fi->size = (size_t) -1;
-  if (pathname[0] == '/') pathname++;
   int rw = (flags & 3);
   if (rw == O_RDONLY) {
     SlFsFileInfo_t sl_fi;
@@ -11861,10 +11860,6 @@ int fs_slfs_unlink(const char *filename) {
   return set_errno(sl_fs_to_errno(sl_FsDel((const _u8 *) filename, 0)));
 }
 
-int fs_slfs_rename(const char *from, const char *to) {
-  return set_errno(ENOTSUP);
-}
-
 void fs_slfs_set_new_file_size(const char *name, size_t size) {
   int i;
   for (i = 0; i < MAX_OPEN_SLFS_FILES; i++) {
@@ -11890,6 +11885,7 @@ void fs_slfs_set_new_file_size(const char *name, size_t size) {
     (defined(MG_FS_SLFS) || defined(MG_FS_SPIFFS))
 
 #include <errno.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11930,17 +11926,20 @@ int set_errno(int e) {
   return (e == 0 ? 0 : -1);
 }
 
-static int is_sl_fname(const char *fname) {
-  return strncmp(fname, "SL:", 3) == 0;
-}
-
-static const char *sl_fname(const char *fname) {
-  return fname + 3;
-}
-
-static const char *drop_dir(const char *fname) {
-  if (*fname == '.') fname++;
-  if (*fname == '/') fname++;
+static const char *drop_dir(const char *fname, bool *is_slfs) {
+  *is_slfs = (strncmp(fname, "SL:", 3) == 0);
+  if (*is_slfs) fname += 3;
+  /* Drop "./", if any */
+  if (fname[0] == '.' && fname[1] == '/') {
+    fname += 2;
+  }
+  /*
+   * Drop / if it is the only one in the path.
+   * This allows use of /pretend/directories but serves /file.txt as normal.
+   */
+  if (fname[0] == '/' && strchr(fname + 1, '/') == NULL) {
+    fname++;
+  }
   return fname;
 }
 
@@ -11975,31 +11974,30 @@ int open(const char *pathname, unsigned flags, int mode) {
 int _open(const char *pathname, int flags, mode_t mode) {
 #endif
   int fd = -1;
-  pathname = drop_dir(pathname);
-  if (is_sl_fname(pathname)) {
+  bool is_sl;
+  const char *fname = drop_dir(pathname, &is_sl);
+  if (is_sl) {
 #ifdef MG_FS_SLFS
-    fd = fs_slfs_open(sl_fname(pathname), flags, mode);
+    fd = fs_slfs_open(fname, flags, mode);
     if (fd >= 0) fd += SLFS_FD_BASE;
 #endif
   } else {
 #ifdef CC3200_FS_SPIFFS
-    fd = fs_spiffs_open(pathname, flags, mode);
+    fd = fs_spiffs_open(fname, flags, mode);
     if (fd >= 0) fd += SPIFFS_FD_BASE;
 #endif
   }
-  DBG(("open(%s, 0x%x) = %d", pathname, flags, fd));
+  DBG(("open(%s, 0x%x) = %d, fname = %s", pathname, flags, fd, fname));
   return fd;
 }
 
 int _stat(const char *pathname, struct stat *st) {
   int res = -1;
-  const char *fname = pathname;
-  int is_sl = is_sl_fname(pathname);
-  if (is_sl) fname = sl_fname(pathname);
-  fname = drop_dir(fname);
+  bool is_sl;
+  const char *fname = drop_dir(pathname, &is_sl);
   memset(st, 0, sizeof(*st));
   /* Simulate statting the root directory. */
-  if (strcmp(fname, "") == 0) {
+  if (fname[0] == '\0' || strcmp(fname, ".") == 0) {
     st->st_ino = 0;
     st->st_mode = S_IFDIR | 0777;
     st->st_nlink = 1;
@@ -12182,14 +12180,13 @@ ssize_t _write(int fd, const void *buf, size_t count) {
  * implementation using _link and _unlink doesn't work for us.
  */
 #if MG_TI_NO_HOST_INTERFACE || defined(_NEWLIB_VERSION)
-int rename(const char *from, const char *to) {
+int rename(const char *frompath, const char *topath) {
   int r = -1;
-  from = drop_dir(from);
-  to = drop_dir(to);
-  if (is_sl_fname(from) || is_sl_fname(to)) {
-#ifdef MG_FS_SLFS
-    r = fs_slfs_rename(sl_fname(from), sl_fname(to));
-#endif
+  bool is_sl_from, is_sl_to;
+  const char *from = drop_dir(frompath, &is_sl_from);
+  const char *to = drop_dir(topath, &is_sl_to);
+  if (is_sl_from || is_sl_to) {
+    set_errno(ENOTSUP);
   } else {
 #ifdef CC3200_FS_SPIFFS
     r = fs_spiffs_rename(from, to);
@@ -12201,29 +12198,32 @@ int rename(const char *from, const char *to) {
 #endif /* MG_TI_NO_HOST_INTERFACE || defined(_NEWLIB_VERSION) */
 
 #if MG_TI_NO_HOST_INTERFACE
-int unlink(const char *filename) {
+int unlink(const char *pathname) {
 #else
-int _unlink(const char *filename) {
+int _unlink(const char *pathname) {
 #endif
   int r = -1;
-  filename = drop_dir(filename);
-  if (is_sl_fname(filename)) {
+  bool is_sl;
+  const char *fname = drop_dir(pathname, &is_sl);
+  if (is_sl) {
 #ifdef MG_FS_SLFS
-    r = fs_slfs_unlink(sl_fname(filename));
+    r = fs_slfs_unlink(fname);
 #endif
   } else {
 #ifdef CC3200_FS_SPIFFS
-    r = fs_spiffs_unlink(filename);
+    r = fs_spiffs_unlink(fname);
 #endif
   }
-  DBG(("unlink(%s) = %d", filename, r));
+  DBG(("unlink(%s) = %d, fname = %s", pathname, r, fname));
   return r;
 }
 
 #ifdef CC3200_FS_SPIFFS /* FailFS does not support listing files. */
 DIR *opendir(const char *dir_name) {
   DIR *r = NULL;
-  if (is_sl_fname(dir_name)) {
+  bool is_sl;
+  drop_dir(dir_name, &is_sl);
+  if (is_sl) {
     r = NULL;
     set_errno(ENOTSUP);
   } else {
