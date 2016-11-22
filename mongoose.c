@@ -817,6 +817,7 @@ double cs_time(void) {
  */
 
 /* Amalgamated: #include "common/md5.h" */
+/* Amalgamated: #include "common/str_util.h" */
 
 #if !defined(EXCLUDE_COMMON)
 #if !DISABLE_MD5
