@@ -475,6 +475,7 @@ typedef struct stat cs_stat_t;
 #define INT64_X_FMT PRIx64
 #define __cdecl
 #define _FILE_OFFSET_BITS 32
+#define fineno(x) -1
 
 #define MG_LWIP 1
 

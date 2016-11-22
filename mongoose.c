@@ -11054,7 +11054,7 @@ uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io) {
   prev_opt_number = 0;
   while (opt != NULL) {
     uint8_t delta_base = 0, length_base = 0;
-    uint16_t delta_ext, length_ext;
+    uint16_t delta_ext = 0, length_ext = 0;
 
     size_t opt_delta_len =
         coap_split_opt(opt->number - prev_opt_number, &delta_base, &delta_ext);
