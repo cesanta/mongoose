@@ -2695,7 +2695,7 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
         if (strcmp(opts.ssl_server_name, "*") != 0) {
           params.server_name = opts.ssl_server_name;
         }
-      } else if (rc == 0) {  /* If it's a DNS name, use host. */
+      } else if (rc == 0) { /* If it's a DNS name, use host. */
         params.server_name = host;
       }
     }
@@ -3091,13 +3091,13 @@ static int mg_is_error(int n) {
   int err = mg_get_errno();
   return (n < 0 && err != EINPROGRESS && err != EWOULDBLOCK
 #ifndef WINCE
-                    && err != EAGAIN && err != EINTR
+          && err != EAGAIN && err != EINTR
 #endif
 #ifdef _WIN32
-                    && WSAGetLastError() != WSAEINTR &&
-                    WSAGetLastError() != WSAEWOULDBLOCK
+          && WSAGetLastError() != WSAEINTR &&
+          WSAGetLastError() != WSAEWOULDBLOCK
 #endif
-                    );
+          );
 }
 
 void mg_socket_if_connect_tcp(struct mg_connection *nc,
@@ -4046,7 +4046,8 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
 
   mg_set_cipher_list(ctx->ssl_ctx);
 
-  if (!(nc->flags & MG_F_LISTENING) && (ctx->ssl = SSL_new(ctx->ssl_ctx)) == NULL) {
+  if (!(nc->flags & MG_F_LISTENING) &&
+      (ctx->ssl = SSL_new(ctx->ssl_ctx)) == NULL) {
     MG_SET_PTRPTR(err_msg, "Failed to create SSL session");
     return MG_SSL_ERROR;
   }
@@ -4056,7 +4057,8 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
   return MG_SSL_OK;
 }
 
-static enum mg_ssl_if_result mg_ssl_if_ssl_err(struct mg_connection *nc, int res) {
+static enum mg_ssl_if_result mg_ssl_if_ssl_err(struct mg_connection *nc,
+                                               int res) {
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
   int err = SSL_get_error(ctx->ssl, res);
   if (err == SSL_ERROR_WANT_READ) return MG_SSL_WANT_READ;
@@ -4154,7 +4156,8 @@ static const char mg_s_cipher_list[] =
  * Will be used if none are provided by the user in the certificate file.
  */
 #if !MG_DISABLE_PFS && !defined(KR_VERSION)
-static const char mg_s_default_dh_params[] = "\
+static const char mg_s_default_dh_params[] =
+    "\
 -----BEGIN DH PARAMETERS-----\n\
 MIIBCAKCAQEAlvbgD/qh9znWIlGFcV0zdltD7rq8FeShIqIhkQ0C7hYFThrBvF2E\n\
 Z9bmgaP+sfQwGpVlv9mtaWjvERbu6mEG7JTkgmVUJrUt/wiRzwTaCXBqZkdUO8Tq\n\
@@ -7524,8 +7527,8 @@ struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
   mg_printf(nc, "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %" SIZE_T_FMT
                 "\r\n%.*s%s\r\n%s",
             post_data == NULL ? "GET" : "POST", path, addr,
-            post_data == NULL ? 0 : strlen(post_data),
-            (int) auth.len, (auth.buf == NULL ? "" : auth.buf),
+            post_data == NULL ? 0 : strlen(post_data), (int) auth.len,
+            (auth.buf == NULL ? "" : auth.buf),
             extra_headers == NULL ? "" : extra_headers,
             post_data == NULL ? "" : post_data);
 
@@ -9470,7 +9473,7 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
   uint8_t rem_len;
   uint16_t keep_alive;
   uint16_t len;
-  struct mg_mqtt_proto_data* pd = (struct mg_mqtt_proto_data*) nc->proto_data;
+  struct mg_mqtt_proto_data *pd = (struct mg_mqtt_proto_data *) nc->proto_data;
 
   /*
    * 9: version_header(len, magic_string, version_number), 1: flags, 2:
