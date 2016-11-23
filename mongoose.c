@@ -7421,8 +7421,8 @@ MG_INTERNAL int mg_http_common_url_parse(const char *url, const char *schema,
 
   if (addr_len == 0) goto cleanup;
   if (port_pos < 0) {
-    *port_i = *use_ssl ? 443 : 80;
-    addr_len += sprintf(*addr + addr_len, ":%d", *port_i);
+    *port_i = addr_len;
+    addr_len += sprintf(*addr + addr_len, ":%d", *use_ssl ? 443 : 80);
   } else {
     *port_i = -1;
   }
