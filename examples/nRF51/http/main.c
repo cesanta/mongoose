@@ -10,11 +10,11 @@
 
 /*
  * This is a callback invoked by Mongoose to signal that a poll is needed soon.
- * Since we're in a tight polling loop anyway (see below), we don't need to do anything.
+ * Since we're in a tight polling loop anyway (see below), we don't need to do
+ * anything.
  */
 void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr) {
 }
-
 
 // Define an event handler function
 void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
@@ -53,13 +53,10 @@ void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   }
 }
 
-
 /**
  * @brief Function for application main entry.
  */
-int main(void)
-{
-
+int main(void) {
   cs_log_set_file(stdout);
 
   bleconfig_init();
@@ -76,7 +73,9 @@ int main(void)
     struct mg_connection *nc = NULL;
     memset(&opts, 0x00, sizeof(opts));
     opts.error_string = &err;
-    nc = mg_bind_opt(&mgr, "80", ev_handler, opts);  // Create listening connection and add it to the event manager
+    nc = mg_bind_opt(
+        &mgr, "80", ev_handler,
+        opts);  // Create listening connection and add it to the event manager
     if (nc == NULL) {
       printf("Failed to create listener: %s\n", err);
       return 1;
@@ -88,5 +87,4 @@ int main(void)
       mg_mgr_poll(&mgr, 0);
     }
   }
-
 }

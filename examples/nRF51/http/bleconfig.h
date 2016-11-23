@@ -5,4 +5,3 @@
 
 void bleconfig_init(void);
 void bleconfig_poll(void);
-

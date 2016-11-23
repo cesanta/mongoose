@@ -2982,9 +2982,11 @@ struct mg_ssl_if_conn_params {
   const char *server_name;
 };
 
-enum mg_ssl_if_result mg_ssl_if_conn_init(struct mg_connection *nc, const struct mg_ssl_if_conn_params *params,
+enum mg_ssl_if_result mg_ssl_if_conn_init(
+    struct mg_connection *nc, const struct mg_ssl_if_conn_params *params,
     const char **err_msg);
-enum mg_ssl_if_result mg_ssl_if_conn_accept(struct mg_connection *nc, struct mg_connection *lc);
+enum mg_ssl_if_result mg_ssl_if_conn_accept(struct mg_connection *nc,
+                                            struct mg_connection *lc);
 void mg_ssl_if_conn_free(struct mg_connection *nc);
 
 enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc);
