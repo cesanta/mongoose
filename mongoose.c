@@ -11864,6 +11864,10 @@ int fs_slfs_unlink(const char *filename) {
   return set_errno(sl_fs_to_errno(sl_FsDel((const _u8 *) filename, 0)));
 }
 
+int fs_slfs_rename(const char *from, const char *to) {
+  return set_errno(ENOTSUP);
+}
+
 void fs_slfs_set_new_file_size(const char *name, size_t size) {
   int i;
   for (i = 0; i < MAX_OPEN_SLFS_FILES; i++) {
