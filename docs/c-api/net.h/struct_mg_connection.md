@@ -14,19 +14,11 @@ signature: |
     size_t recv_mbuf_limit;  /* Max size of recv buffer */
     struct mbuf recv_mbuf;   /* Received data */
     struct mbuf send_mbuf;   /* Data scheduled for sending */
+    time_t last_io_time;     /* Timestamp of the last socket IO */
+    double ev_timer_time;    /* Timestamp of the future MG_EV_TIMER */
   #if MG_ENABLE_SSL
-  #if MG_NET_IF != MG_NET_IF_SIMPLELINK
-    SSL *ssl;
-    SSL_CTX *ssl_ctx;
-  #else
-    char *ssl_cert;
-    char *ssl_key;
-    char *ssl_ca_cert;
-    char *ssl_server_name;
+    void *ssl_if_data; /* SSL library data. */
   #endif
-  #endif
-    time_t last_io_time;              /* Timestamp of the last socket IO */
-    double ev_timer_time;             /* Timestamp of the future MG_EV_TIMER */
     mg_event_handler_t proto_handler; /* Protocol-specific event handler */
     void *proto_data;                 /* Protocol-specific data */
     void (*proto_data_destructor)(void *proto_data);
@@ -42,6 +34,7 @@ signature: |
     } priv_1;       /* Used by mg_enable_multithreading() */
     void *priv_2;   /* Used by mg_enable_multithreading() */
     void *mgr_data; /* Implementation-specific event manager's data. */
+    struct mg_iface *iface;
     unsigned long flags;
   /* Flags set by Mongoose */
   #define MG_F_LISTENING (1 << 0)          /* This connection is listening */

@@ -7,6 +7,7 @@ signature: |
     void *user_data;           /* Initial value for connection's user_data */
     unsigned int flags;        /* Initial connection flags */
     const char **error_string; /* Placeholder for the error string */
+    struct mg_iface *iface;    /* Interface instance */
   };
 ---
 

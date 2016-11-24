@@ -4,6 +4,7 @@ symbol_kind: "intro"
 decl_name: "http_server.h"
 items:
   - { name: mg_file_upload_handler.md }
+  - { name: mg_get_http_basic_auth.md }
   - { name: mg_get_http_header.md }
   - { name: mg_get_http_var.md }
   - { name: mg_http_check_digest_auth.md }
@@ -13,6 +14,7 @@ items:
   - { name: mg_http_send_redirect.md }
   - { name: mg_http_serve_file.md }
   - { name: mg_parse_http.md }
+  - { name: mg_parse_http_basic_auth.md }
   - { name: mg_parse_multipart.md }
   - { name: mg_printf_html_escape.md }
   - { name: mg_printf_http_chunk.md }

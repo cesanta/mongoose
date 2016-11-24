@@ -15,6 +15,7 @@ items:
   - { name: mg_enable_multithreading.md }
   - { name: mg_mgr_free.md }
   - { name: mg_mgr_init.md }
+  - { name: mg_mgr_init_opt.md }
   - { name: mg_mgr_poll.md }
   - { name: mg_next.md }
   - { name: mg_printf.md }
@@ -31,6 +32,7 @@ items:
   - { name: struct_mg_connect_opts.md }
   - { name: struct_mg_connection.md }
   - { name: struct_mg_mgr.md }
+  - { name: struct_mg_mgr_init_opts.md }
   - { name: struct_mg_multithreading_opts.md }
 ---
 
