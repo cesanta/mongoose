@@ -3108,6 +3108,11 @@ void mg_socket_if_connect_tcp(struct mg_connection *nc,
     nc->err = mg_get_errno() ? mg_get_errno() : 1;
     return;
   }
+  if(0 != nc->timeo.tv_sec || 0 != nc->timeo.tv_usec) {
+    if(setsockopt(nc->sock, SOL_SOCKET, SO_SNDTIMEO, &timeo, len) == -1) {
+      return;
+    }
+  }
 #if !defined(MG_ESP8266)
   mg_set_non_blocking_mode(nc->sock);
 #endif
@@ -12460,6 +12465,11 @@ void mg_sl_if_connect_tcp(struct mg_connection *nc,
     goto out;
   }
   mg_sock_set(nc, sock);
+  if(0 != nc->timeo.tv_sec || 0 != nc->timeo.tv_usec) {
+    if(setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeo, len) == -1) {
+      return;
+    }
+  }
 #if MG_ENABLE_SSL
   nc->err = sl_set_ssl_opts(nc);
   if (nc->err != 0) goto out;

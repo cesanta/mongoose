@@ -3114,6 +3114,7 @@ struct mg_connection {
   struct mg_mgr *mgr;                /* Pointer to containing manager */
 
   sock_t sock; /* Socket to the remote peer */
+  struct timeval timeo;
   int err;
   union socket_address sa; /* Remote peer address */
   size_t recv_mbuf_limit;  /* Max size of recv buffer */
