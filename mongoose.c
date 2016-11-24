@@ -12287,7 +12287,8 @@ int _open(const char *pathname, int flags, mode_t mode) {
     if (fd >= 0) fd += SPIFFS_FD_BASE;
 #endif
   }
-  DBG(("open(%s, 0x%x) = %d, fname = %s", pathname, flags, fd, fname));
+  LOG(LL_DEBUG,
+      ("open(%s, 0x%x) = %d, fname = %s", pathname, flags, fd, fname));
   return fd;
 }
 
@@ -12313,7 +12314,7 @@ int _stat(const char *pathname, struct stat *st) {
     res = fs_spiffs_stat(fname, st);
 #endif
   }
-  DBG(("stat(%s) = %d; fname = %s", pathname, res, fname));
+  LOG(LL_DEBUG, ("stat(%s) = %d; fname = %s", pathname, res, fname));
   return res;
 }
 
