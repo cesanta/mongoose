@@ -11977,7 +11977,9 @@ void fs_slfs_set_new_file_size(const char *name, size_t size);
 
 /* Amalgamated: #include "common/cs_dbg.h" */
 
-extern int set_errno(int e); /* From sl_fs.c */
+/* From sl_fs.c */
+extern int set_errno(int e);
+static const char *drop_dir(const char *fname, bool *is_slfs);
 
 /*
  * With SLFS, you have to pre-declare max file size. Yes. Really.
@@ -12030,6 +12032,12 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
   }
   if (fd >= MAX_OPEN_SLFS_FILES) return set_errno(ENOMEM);
   struct sl_fd_info *fi = &s_sl_fds[fd];
+
+  /*
+   * Apply path manipulations again, in case we got here directly
+   * (via TI libc's "add_device").
+   */
+  pathname = drop_dir(pathname, NULL);
 
   _u32 am = 0;
   fi->size = (size_t) -1;
@@ -12117,6 +12125,11 @@ ssize_t fs_slfs_write(int fd, const void *buf, size_t count) {
 
 int fs_slfs_stat(const char *pathname, struct stat *s) {
   SlFsFileInfo_t sl_fi;
+  /*
+   * Apply path manipulations again, in case we got here directly
+   * (via TI libc's "add_device").
+   */
+  pathname = drop_dir(pathname, NULL);
   _i32 r = sl_FsGetInfo((const _u8 *) pathname, 0, &sl_fi);
   if (r == SL_FS_OK) {
     s->st_mode = S_IFREG | 0666;
@@ -12152,8 +12165,13 @@ off_t fs_slfs_lseek(int fd, off_t offset, int whence) {
   return 0;
 }
 
-int fs_slfs_unlink(const char *filename) {
-  return set_errno(sl_fs_to_errno(sl_FsDel((const _u8 *) filename, 0)));
+int fs_slfs_unlink(const char *pathname) {
+  /*
+   * Apply path manipulations again, in case we got here directly
+   * (via TI libc's "add_device").
+   */
+  pathname = drop_dir(pathname, NULL);
+  return set_errno(sl_fs_to_errno(sl_FsDel((const _u8 *) pathname, 0)));
 }
 
 int fs_slfs_rename(const char *from, const char *to) {
@@ -12227,8 +12245,10 @@ int set_errno(int e) {
 }
 
 static const char *drop_dir(const char *fname, bool *is_slfs) {
-  *is_slfs = (strncmp(fname, "SL:", 3) == 0);
-  if (*is_slfs) fname += 3;
+  if (is_slfs != NULL) {
+    *is_slfs = (strncmp(fname, "SL:", 3) == 0);
+    if (*is_slfs) fname += 3;
+  }
   /* Drop "./", if any */
   if (fname[0] == '.' && fname[1] == '/') {
     fname += 2;
