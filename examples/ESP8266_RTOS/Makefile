@@ -15,7 +15,7 @@ TARGET = eagle
 #FLAVOR = release
 FLAVOR = debug
 
-EXTRA_CCFLAGS += -Wall -Werror
+EXTRA_CCFLAGS += -Wall -Werror -DRTOS_SDK
 
 ifndef PDIR # {
 GEN_IMAGES= eagle.app.v6.out
