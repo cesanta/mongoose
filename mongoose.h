@@ -1794,7 +1794,7 @@ void cs_base64_finish(struct cs_base64_ctx *ctx);
 
 void cs_base64_encode(const unsigned char *src, int src_len, char *dst);
 void cs_fprint_base64(FILE *f, const unsigned char *src, int src_len);
-int cs_base64_decode(const unsigned char *s, int len, char *dst);
+int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len);
 
 #ifdef __cplusplus
 }
