@@ -10414,9 +10414,9 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
   } else {
     /* Try to figure out what nameserver to use */
     for (ret = -1; fgets(line, sizeof(line), fp) != NULL;) {
-      char buf[256];
-      if (sscanf(line, "nameserver %255[^\n\t #]s", buf) == 1) {
-        snprintf(name, name_len, "udp://%s:53", buf);
+      unsigned int a, b, c, d;
+      if (sscanf(line, "nameserver %u.%u.%u.%u", &a, &b, &c, &d) == 4) {
+        snprintf(name, name_len, "udp://%u.%u.%u.%u:53", a, b, c, d);
         ret = 0;
         break;
       }
