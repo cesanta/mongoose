@@ -512,9 +512,10 @@ static unsigned char from_b64(unsigned char ch) {
   return tab[ch & 127];
 }
 
-int cs_base64_decode(const unsigned char *s, int len, char *dst) {
+int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len) {
   unsigned char a, b, c, d;
   int orig_len = len;
+  char *orig_dst = dst;
   while (len >= 4 && (a = from_b64(s[0])) != 255 &&
          (b = from_b64(s[1])) != 255 && (c = from_b64(s[2])) != 255 &&
          (d = from_b64(s[3])) != 255) {
@@ -528,6 +529,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst) {
     *dst++ = c << 6 | d;
   }
   *dst = 0;
+  if (dec_len != NULL) *dec_len = (dst - orig_dst);
   return orig_len - len;
 }
 
@@ -6482,7 +6484,7 @@ int mg_parse_http_basic_auth(struct mg_str *hdr, char *user, size_t user_len,
   if (mg_strncmp(*hdr, mg_mk_str("Basic "), 6) != 0) return -1;
 
   buf = (char *) MG_MALLOC(hdr->len);
-  cs_base64_decode((unsigned char *) hdr->p + 6, hdr->len, buf);
+  cs_base64_decode((unsigned char *) hdr->p + 6, hdr->len, buf, NULL);
 
   /* e.g. "%123[^:]:%321[^\n]" */
   snprintf(fmt, sizeof(fmt), "%%%" SIZE_T_FMT "[^:]:%%%" SIZE_T_FMT "[^\n]",
@@ -9047,7 +9049,7 @@ void mg_base64_encode(const unsigned char *src, int src_len, char *dst) {
 }
 
 int mg_base64_decode(const unsigned char *s, int len, char *dst) {
-  return cs_base64_decode(s, len, dst);
+  return cs_base64_decode(s, len, dst, NULL);
 }
 
 #if MG_ENABLE_THREADS
@@ -13277,6 +13279,82 @@ void mg_ssl_if_conn_free(struct mg_connection *nc) {
   MG_FREE(ctx);
 }
 
+bool pem_to_der(const char *pem_file, const char *der_file) {
+  bool ret = false;
+  FILE *pf = NULL, *df = NULL;
+  bool writing = false;
+  pf = fopen(pem_file, "r");
+  if (pf == NULL) goto clean;
+  remove(der_file);
+  fs_slfs_set_new_file_size(der_file + 3, 2048);
+  df = fopen(der_file, "w");
+  if (df == NULL) goto clean;
+  while (1) {
+    char pem_buf[70];
+    char der_buf[48];
+    if (!fgets(pem_buf, sizeof(pem_buf), pf)) break;
+    if (writing) {
+      if (strstr(pem_buf, "-----END ") != NULL) {
+        ret = true;
+        break;
+      }
+      int l = 0;
+      while (!isspace((unsigned int) pem_buf[l])) l++;
+      int der_len = 0;
+      cs_base64_decode((const unsigned char *) pem_buf, sizeof(pem_buf),
+                       der_buf, &der_len);
+      if (der_len <= 0) break;
+      if (fwrite(der_buf, 1, der_len, df) != der_len) break;
+    } else if (strstr(pem_buf, "-----BEGIN ") != NULL) {
+      writing = true;
+    }
+  }
+
+clean:
+  if (pf != NULL) fclose(pf);
+  if (df != NULL) {
+    fclose(df);
+    if (!ret) remove(der_file);
+  }
+  return ret;
+}
+
+#if MG_ENABLE_FILESYSTEM && defined(MG_FS_SLFS)
+/* If the file's extension is .pem, convert it to DER format and put on SLFS. */
+static char *sl_pem2der(const char *pem_file) {
+  const char *pem_ext = strstr(pem_file, ".pem");
+  if (pem_ext == NULL || *(pem_ext + 4) != '\0') {
+    return strdup(pem_file);
+  }
+  char *der_file = NULL;
+  /* DER file must be located on SLFS, add prefix. */
+  int l = mg_asprintf(&der_file, 0, "SL:%.*s.der", (int) (pem_ext - pem_file),
+                      pem_file);
+  if (der_file == NULL) return NULL;
+  bool result = false;
+  cs_stat_t st;
+  if (mg_stat(der_file, &st) != 0) {
+    result = pem_to_der(pem_file, der_file);
+    LOG(LL_DEBUG, ("%s -> %s = %d", pem_file, der_file, result));
+  } else {
+    /* File exists, assume it's already been converted. */
+    result = true;
+  }
+  if (result) {
+    /* Strip the SL: prefix we added since NWP does not expect it. */
+    memmove(der_file, der_file + 3, l - 2 /* including \0 */);
+  } else {
+    free(der_file);
+    der_file = NULL;
+  }
+  return der_file;
+}
+#else
+static char *sl_pem2der(const char *pem_file) {
+  return strdup(pem_file);
+}
+#endif
+
 int sl_set_ssl_opts(struct mg_connection *nc) {
   int err;
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
@@ -13288,23 +13366,36 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
          (ctx->ssl_ca_cert ? ctx->ssl_ca_cert : "-"),
          (ctx->ssl_server_name ? ctx->ssl_server_name : "-")));
     if (ctx->ssl_cert != NULL && ctx->ssl_key != NULL) {
-      err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
-                          SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME,
-                          ctx->ssl_cert, strlen(ctx->ssl_cert));
-      DBG(("CERTIFICATE_FILE_NAME %s -> %d", ctx->ssl_cert, err));
-      if (err != 0) return err;
-      err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
-                          SL_SO_SECURE_FILES_PRIVATE_KEY_FILE_NAME,
-                          ctx->ssl_key, strlen(ctx->ssl_key));
-      DBG(("PRIVATE_KEY_FILE_NAME %s -> %d", ctx->ssl_key, nc->err));
+      char *ssl_cert = sl_pem2der(ctx->ssl_cert);
+      char *ssl_key = sl_pem2der(ctx->ssl_key);
+      if (ssl_cert != NULL && ssl_key != NULL) {
+        err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                            SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME, ssl_cert,
+                            strlen(ssl_cert));
+        LOG(LL_INFO, ("CERTIFICATE_FILE_NAME %s -> %d", ssl_cert, err));
+        err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                            SL_SO_SECURE_FILES_PRIVATE_KEY_FILE_NAME, ssl_key,
+                            strlen(ssl_key));
+        LOG(LL_INFO, ("PRIVATE_KEY_FILE_NAME %s -> %d", ssl_key, err));
+      } else {
+        err = -1;
+      }
+      free(ssl_cert);
+      free(ssl_key);
       if (err != 0) return err;
     }
     if (ctx->ssl_ca_cert != NULL) {
       if (ctx->ssl_ca_cert[0] != '\0') {
-        err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
-                            SL_SO_SECURE_FILES_CA_FILE_NAME, ctx->ssl_ca_cert,
-                            strlen(ctx->ssl_ca_cert));
-        DBG(("CA_FILE_NAME %s -> %d", ctx->ssl_ca_cert, err));
+        char *ssl_ca_cert = sl_pem2der(ctx->ssl_ca_cert);
+        if (ssl_ca_cert != NULL) {
+          err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+                              SL_SO_SECURE_FILES_CA_FILE_NAME, ssl_ca_cert,
+                              strlen(ssl_ca_cert));
+          LOG(LL_INFO, ("CA_FILE_NAME %s -> %d", ssl_ca_cert, err));
+        } else {
+          err = -1;
+        }
+        free(ssl_ca_cert);
         if (err != 0) return err;
       }
     }
