@@ -1937,6 +1937,7 @@ struct mg_tun_client {
 
   struct mg_connection *disp;
   struct mg_connection *listener;
+  struct mg_connection *reconnect;
 };
 
 #ifdef __cplusplus
@@ -11207,7 +11208,7 @@ int mg_set_protocol_coap(struct mg_connection *nc) {
 /* Amalgamated: #include "mongoose/src/tun.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
 
-static void mg_tun_reconnect(struct mg_tun_client *client);
+static void mg_tun_reconnect(struct mg_tun_client *client, int timeout);
 
 static void mg_tun_init_client(struct mg_tun_client *client, struct mg_mgr *mgr,
                                struct mg_iface *iface, const char *dispatcher,
@@ -11218,8 +11219,9 @@ static void mg_tun_init_client(struct mg_tun_client *client, struct mg_mgr *mgr,
   client->last_stream_id = 0;
   client->ssl = ssl;
 
-  client->disp = NULL;     /* will be set by mg_tun_reconnect */
-  client->listener = NULL; /* will be set by mg_do_bind */
+  client->disp = NULL;      /* will be set by mg_tun_reconnect */
+  client->listener = NULL;  /* will be set by mg_do_bind */
+  client->reconnect = NULL; /* will be set by mg_tun_reconnect */
 }
 
 void mg_tun_log_frame(struct mg_tun_frame *frame) {
@@ -11318,7 +11320,8 @@ static void mg_tun_client_handler(struct mg_connection *nc, int ev,
         mg_tun_close_all(client);
         client->disp = NULL;
         LOG(LL_INFO, ("Dispatcher connection is no more, reconnecting"));
-        mg_tun_reconnect(client);
+        /* TODO(mkm): implement exp back off */
+        mg_tun_reconnect(client, MG_TUN_RECONNECT_INTERVAL);
       }
       break;
     }
@@ -11356,17 +11359,23 @@ void mg_tun_reconnect_ev_handler(struct mg_connection *nc, int ev,
 
   switch (ev) {
     case MG_EV_TIMER:
-      mg_tun_do_reconnect(client);
+      if (!(client->listener->flags & MG_F_TUN_DO_NOT_RECONNECT)) {
+        mg_tun_do_reconnect(client);
+      } else {
+        /* Reconnecting is suppressed, we'll check again at the next poll */
+        mg_tun_reconnect(client, 0);
+      }
       break;
   }
 }
 
-static void mg_tun_reconnect(struct mg_tun_client *client) {
-  struct mg_connection *nc;
-  nc = mg_add_sock(client->mgr, INVALID_SOCKET, mg_tun_reconnect_ev_handler);
-  nc->user_data = client;
-  /* TODO(mkm): implement exp back off */
-  nc->ev_timer_time = mg_time() + MG_TUN_RECONNECT_INTERVAL;
+static void mg_tun_reconnect(struct mg_tun_client *client, int timeout) {
+  if (client->reconnect == NULL) {
+    client->reconnect =
+        mg_add_sock(client->mgr, INVALID_SOCKET, mg_tun_reconnect_ev_handler);
+    client->reconnect->user_data = client;
+  }
+  client->reconnect->ev_timer_time = mg_time() + timeout;
 }
 
 static struct mg_tun_client *mg_tun_create_client(struct mg_mgr *mgr,
@@ -11384,7 +11393,12 @@ static struct mg_tun_client *mg_tun_create_client(struct mg_mgr *mgr,
   mg_tun_init_client(client, mgr, iface, dispatcher, ssl);
   iface->data = client;
 
-  mg_tun_do_reconnect(client);
+  /*
+   * We need to give application a chance to set MG_F_TUN_DO_NOT_RECONNECT on a
+   * listening connection right after mg_tun_bind_opt() returned it, so we
+   * should use mg_tun_reconnect() here, instead of mg_tun_do_reconnect()
+   */
+  mg_tun_reconnect(client, 0);
   return client;
 }
 
@@ -11401,6 +11415,10 @@ void mg_tun_destroy_client(struct mg_tun_client *client) {
     client->disp->flags |= MG_F_CLOSE_IMMEDIATELY;
     /* this is used as a signal to other tun handlers that the party is over */
     client->disp->user_data = NULL;
+  }
+
+  if (client != NULL && client->reconnect != NULL) {
+    client->reconnect->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
 
   if (client != NULL && client->iface != NULL) {
