@@ -4270,6 +4270,7 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
 
 #include <mbedtls/debug.h>
 #include <mbedtls/ecp.h>
+#include <mbedtls/platform.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/x509_crt.h>
 
@@ -4434,6 +4435,15 @@ enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
   }
   err = mbedtls_ssl_handshake(ctx->ssl);
   if (err != 0) return mg_ssl_if_mbed_err(nc, err);
+#ifdef MG_SSL_IF_MBEDTLS_FREE_PEER_CERT
+  /*
+   * Free the peer certificate, we don't need it after handshake.
+   * Note that this effectively disables renegotiation.
+   */
+  mbedtls_x509_crt_free(ctx->ssl->session->peer_cert);
+  mbedtls_free(ctx->ssl->session->peer_cert);
+  ctx->ssl->session->peer_cert = NULL;
+#endif
   return MG_SSL_OK;
 }
 
@@ -13824,8 +13834,21 @@ int mg_lwip_tcp_write(struct mg_connection *nc, const void *data,
     tcp_output(tpcb);
     return 0;
   }
+/*
+ * On ESP8266 we only allow one TCP segment in flight at any given time.
+ * This may increase latency and reduce efficiency of tcp windowing,
+ * but memory is scarce and precious on that platform so we do this to
+ * reduce footprint.
+ */
+#if CS_PLATFORM == CS_P_ESP8266
+  if (tpcb->unacked != NULL) {
+    return 0;
+  }
+  if (tpcb->unsent != NULL) {
+    len = MIN(len, (TCP_MSS - tpcb->unsent->len));
+  }
+#endif
   err_t err = tcp_write(tpcb, data, len, TCP_WRITE_FLAG_COPY);
-  tcp_output(tpcb);
   DBG(("%p tcp_write %u = %d", tpcb, len, err));
   if (err != ERR_OK) {
     /*
@@ -14119,7 +14142,6 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
   mg_ev_mgr_lwip_process_signals(mgr);
   for (nc = mgr->active_connections; nc != NULL; nc = tmp) {
     struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
-    (void) cs;
     tmp = nc->next;
     n++;
     if (nc->flags & MG_F_CLOSE_IMMEDIATELY) {
@@ -14154,11 +14176,16 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
         }
       }
     } else
-#endif /* KR_VERSION */
+#endif /* MG_ENABLE_SSL */
     {
       if (!(nc->flags & (MG_F_CONNECTING | MG_F_UDP))) {
         if (nc->send_mbuf.len > 0) mg_lwip_send_more(nc);
       }
+    }
+    if (nc->sock != INVALID_SOCKET &&
+        !(nc->flags & (MG_F_UDP | MG_F_LISTENING)) && cs->pcb.tcp != NULL &&
+        cs->pcb.tcp->unsent != NULL) {
+      tcp_output(cs->pcb.tcp);
     }
     if (nc->ev_timer_time > 0) {
       if (num_timers == 0 || nc->ev_timer_time < min_timer) {
