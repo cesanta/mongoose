@@ -4370,10 +4370,6 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
     return MG_SSL_ERROR;
   }
 
-  if (params->server_name != NULL) {
-    /* TODO(rojer): Implement server name verification on mbedTLS. */
-  }
-
   mg_set_cipher_list(ctx, NULL);
 
   if (!(nc->flags & MG_F_LISTENING)) {
@@ -4381,6 +4377,10 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
     mbedtls_ssl_init(ctx->ssl);
     if (mbedtls_ssl_setup(ctx->ssl, ctx->conf) != 0) {
       MG_SET_PTRPTR(err_msg, "Failed to create SSL session");
+      return MG_SSL_ERROR;
+    }
+    if (params->server_name != NULL &&
+        mbedtls_ssl_set_hostname(ctx->ssl, params->server_name) != 0) {
       return MG_SSL_ERROR;
     }
   }
