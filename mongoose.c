@@ -4426,6 +4426,24 @@ static enum mg_ssl_if_result mg_ssl_if_mbed_err(struct mg_connection *nc,
   return MG_SSL_ERROR;
 }
 
+static void mg_ssl_if_mbed_free_certs_and_keys(struct mg_ssl_if_ctx *ctx) {
+  if (ctx->cert != NULL) {
+    ctx->conf->key_cert = NULL;
+    mbedtls_x509_crt_free(ctx->cert);
+    MG_FREE(ctx->cert);
+    ctx->cert = NULL;
+    mbedtls_pk_free(ctx->key);
+    MG_FREE(ctx->key);
+    ctx->key = NULL;
+  }
+  if (ctx->ca_cert != NULL) {
+    mbedtls_ssl_conf_ca_chain(ctx->conf, NULL, NULL);
+    mbedtls_x509_crt_free(ctx->ca_cert);
+    MG_FREE(ctx->ca_cert);
+    ctx->ca_cert = NULL;
+  }
+}
+
 enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
   int err;
@@ -4435,7 +4453,7 @@ enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
   }
   err = mbedtls_ssl_handshake(ctx->ssl);
   if (err != 0) return mg_ssl_if_mbed_err(nc, err);
-#ifdef MG_SSL_IF_MBEDTLS_FREE_PEER_CERT
+#ifdef MG_SSL_IF_MBEDTLS_FREE_CERTS
   /*
    * Free the peer certificate, we don't need it after handshake.
    * Note that this effectively disables renegotiation.
@@ -4443,6 +4461,16 @@ enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
   mbedtls_x509_crt_free(ctx->ssl->session->peer_cert);
   mbedtls_free(ctx->ssl->session->peer_cert);
   ctx->ssl->session->peer_cert = NULL;
+  /* On a client connection we can also free our own and CA certs. */
+  if (nc->listener == NULL) {
+    if (ctx->conf->key_cert != NULL) {
+      /* Note that this assumes one key_cert entry, which matches our init. */
+      MG_FREE(ctx->conf->key_cert);
+      ctx->conf->key_cert = NULL;
+    }
+    mbedtls_ssl_conf_ca_chain(ctx->conf, NULL, NULL);
+    mg_ssl_if_mbed_free_certs_and_keys(ctx);
+  }
 #endif
   return MG_SSL_OK;
 }
@@ -4476,18 +4504,7 @@ void mg_ssl_if_conn_free(struct mg_connection *nc) {
     mbedtls_ssl_config_free(ctx->conf);
     MG_FREE(ctx->conf);
   }
-  if (ctx->ca_cert != NULL) {
-    mbedtls_x509_crt_free(ctx->ca_cert);
-    MG_FREE(ctx->ca_cert);
-  }
-  if (ctx->cert != NULL) {
-    mbedtls_x509_crt_free(ctx->cert);
-    MG_FREE(ctx->cert);
-  }
-  if (ctx->key != NULL) {
-    mbedtls_pk_free(ctx->key);
-    MG_FREE(ctx->key);
-  }
+  mg_ssl_if_mbed_free_certs_and_keys(ctx);
   memset(ctx, 0, sizeof(*ctx));
   MG_FREE(ctx);
 }
