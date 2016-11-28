@@ -4428,7 +4428,6 @@ static enum mg_ssl_if_result mg_ssl_if_mbed_err(struct mg_connection *nc,
 
 static void mg_ssl_if_mbed_free_certs_and_keys(struct mg_ssl_if_ctx *ctx) {
   if (ctx->cert != NULL) {
-    ctx->conf->key_cert = NULL;
     mbedtls_x509_crt_free(ctx->cert);
     MG_FREE(ctx->cert);
     ctx->cert = NULL;
@@ -4500,11 +4499,11 @@ void mg_ssl_if_conn_free(struct mg_connection *nc) {
     mbedtls_ssl_free(ctx->ssl);
     MG_FREE(ctx->ssl);
   }
+  mg_ssl_if_mbed_free_certs_and_keys(ctx);
   if (ctx->conf != NULL) {
     mbedtls_ssl_config_free(ctx->conf);
     MG_FREE(ctx->conf);
   }
-  mg_ssl_if_mbed_free_certs_and_keys(ctx);
   memset(ctx, 0, sizeof(*ctx));
   MG_FREE(ctx);
 }
