@@ -5633,7 +5633,7 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
       /* Send handshake */
       mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_REQUEST, hm);
-      if (!(nc->flags & MG_F_CLOSE_IMMEDIATELY)) {
+      if (!(nc->flags & (MG_F_CLOSE_IMMEDIATELY | MG_F_SEND_AND_CLOSE))) {
         if (nc->send_mbuf.len == 0) {
           mg_ws_handshake(nc, vec);
         }
