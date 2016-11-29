@@ -6009,7 +6009,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
       if (lfn.p != mp->file_name) free((char *) lfn.p);
       LOG(LL_DEBUG,
           ("%p Receiving file %s -> %s", nc, mp->file_name, fus->lfn));
-      fus->fp = fopen(fus->lfn, "w");
+      fus->fp = mg_fopen(fus->lfn, "w");
       if (fus->fp == NULL) {
         mg_printf(nc,
                   "HTTP/1.1 500 Internal Server Error\r\n"
@@ -6329,7 +6329,7 @@ void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   cs_stat_t st;
   DBG(("%p [%s] %.*s", nc, path, (int) mime_type.len, mime_type.p));
-  if (mg_stat(path, &st) != 0 || (pd->file.fp = fopen(path, "rb")) == NULL) {
+  if (mg_stat(path, &st) != 0 || (pd->file.fp = mg_fopen(path, "rb")) == NULL) {
     int code, err = mg_get_errno();
     switch (err) {
       case EACCES:
@@ -6748,16 +6748,16 @@ static int mg_is_authorized(struct http_message *hm, const char *path,
 
   if (domain != NULL && passwords_file != NULL) {
     if (is_global_pass_file) {
-      fp = fopen(passwords_file, "r");
+      fp = mg_fopen(passwords_file, "r");
     } else if (is_directory) {
       snprintf(buf, sizeof(buf), "%s%c%s", path, DIRSEP, passwords_file);
-      fp = fopen(buf, "r");
+      fp = mg_fopen(buf, "r");
     } else {
       p = strrchr(path, DIRSEP);
       if (p == NULL) p = path;
       snprintf(buf, sizeof(buf), "%.*s%c%s", (int) (p - path), path, DIRSEP,
                passwords_file);
-      fp = fopen(buf, "r");
+      fp = mg_fopen(buf, "r");
     }
 
     if (fp != NULL) {
@@ -7876,7 +7876,7 @@ static int mg_start_process(const char *interp, const char *cmd,
   DuplicateHandle(me, a[0], me, &si.hStdInput, 0, TRUE, flags);
   DuplicateHandle(me, b[1], me, &si.hStdOutput, 0, TRUE, flags);
 
-  if (interp == NULL && (fp = fopen(cmd, "r")) != NULL) {
+  if (interp == NULL && (fp = mg_fopen(cmd, "r")) != NULL) {
     buf[0] = buf[1] = '\0';
     fgets(buf, sizeof(buf), fp);
     buf[sizeof(buf) - 1] = '\0';
@@ -8292,8 +8292,8 @@ static void mg_do_ssi_include(struct mg_connection *nc, struct http_message *hm,
     return;
   }
 
-  if ((fp = fopen(path, "rb")) == NULL) {
-    mg_printf(nc, "SSI include error: fopen(%s): %s", path,
+  if ((fp = mg_fopen(path, "rb")) == NULL) {
+    mg_printf(nc, "SSI include error: mg_fopen(%s): %s", path,
               strerror(mg_get_errno()));
   } else {
     mg_set_close_on_exec((sock_t) fileno(fp));
@@ -8416,7 +8416,7 @@ MG_INTERNAL void mg_handle_ssi_request(struct mg_connection *nc,
   struct mg_str mime_type;
   DBG(("%p %s", nc, path));
 
-  if ((fp = fopen(path, "rb")) == NULL) {
+  if ((fp = mg_fopen(path, "rb")) == NULL) {
     mg_http_send_error(nc, 404, NULL);
   } else {
     mg_set_close_on_exec((sock_t) fileno(fp));
@@ -8683,7 +8683,7 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
     mg_http_send_error(nc, 500, NULL);
   } else if (cl_hdr == NULL) {
     mg_http_send_error(nc, 411, NULL);
-  } else if ((pd->file.fp = fopen(path, "w+b")) == NULL) {
+  } else if ((pd->file.fp = mg_fopen(path, "w+b")) == NULL) {
     mg_http_send_error(nc, 500, NULL);
   } else {
     const struct mg_str *range_hdr = mg_get_http_header(hm, "Content-Range");
@@ -9306,7 +9306,7 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
     fp = stderr;
 #if MG_ENABLE_FILESYSTEM
   } else {
-    fp = fopen(path, "a");
+    fp = mg_fopen(path, "a");
 #endif
   }
   if (fp == NULL) return;
@@ -10538,7 +10538,7 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
   FILE *fp;
   char line[512];
 
-  if ((fp = fopen("/etc/resolv.conf", "r")) == NULL) {
+  if ((fp = mg_fopen("/etc/resolv.conf", "r")) == NULL) {
     ret = -1;
   } else {
     /* Try to figure out what nameserver to use */
@@ -10569,7 +10569,7 @@ int mg_resolve_from_hosts_file(const char *name, union socket_address *usa) {
   unsigned int a, b, c, d;
   int len = 0;
 
-  if ((fp = fopen("/etc/hosts", "r")) == NULL) {
+  if ((fp = mg_fopen("/etc/hosts", "r")) == NULL) {
     return -1;
   }
 
