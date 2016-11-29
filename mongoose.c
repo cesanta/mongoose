@@ -9142,7 +9142,7 @@ int mg_stat(const char *path, cs_stat_t *st) {
   wchar_t wpath[MAX_PATH_SIZE];
   to_wchar(path, wpath, ARRAY_SIZE(wpath));
   DBG(("[%ls] -> %d", wpath, _wstati64(wpath, st)));
-  return _wstati64(wpath, (struct _stati64 *) st);
+  return _wstati64(wpath, st);
 #else
   return stat(path, st);
 #endif
