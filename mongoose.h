@@ -2819,6 +2819,10 @@ struct {								\
 #define MG_ENABLE_SNTP 0
 #endif
 
+#ifndef MG_ENABLE_EXTRA_ERRORS_DESC
+#define MG_ENABLE_EXTRA_ERRORS_DESC 0
+#endif
+
 #endif /* CS_MONGOOSE_SRC_FEATURES_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net_if.h"
