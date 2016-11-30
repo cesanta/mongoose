@@ -2661,6 +2661,9 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
     return NULL;
   }
 
+  nc->timeo.tv_sec = mgr->timeo.tv_sec;
+  nc->timeo.tv_usec = mgr->timeo.tv_usec;
+
   if ((rc = mg_parse_address(address, &nc->sa, &proto, host, sizeof(host))) <
       0) {
     /* Address is malformed */
@@ -3109,7 +3112,7 @@ void mg_socket_if_connect_tcp(struct mg_connection *nc,
     return;
   }
   if(0 != nc->timeo.tv_sec || 0 != nc->timeo.tv_usec) {
-    if(setsockopt(nc->sock, SOL_SOCKET, SO_SNDTIMEO, &timeo, len) == -1) {
+    if(setsockopt(nc->sock, SOL_SOCKET, SO_SNDTIMEO, &nc->timeo, len) == -1) {
       return;
     }
   }
@@ -12466,7 +12469,7 @@ void mg_sl_if_connect_tcp(struct mg_connection *nc,
   }
   mg_sock_set(nc, sock);
   if(0 != nc->timeo.tv_sec || 0 != nc->timeo.tv_usec) {
-    if(setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeo, len) == -1) {
+    if(setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &nc->timeo, len) == -1) {
       return;
     }
   }

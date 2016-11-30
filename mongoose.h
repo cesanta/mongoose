@@ -3097,6 +3097,7 @@ struct mg_mgr {
 #if MG_ENABLE_BROADCAST
   sock_t ctl[2]; /* Socketpair for mg_broadcast() */
 #endif
+  struct timeval timeo;
   void *user_data; /* User data */
   int num_ifaces;
   struct mg_iface **ifaces; /* network interfaces */
