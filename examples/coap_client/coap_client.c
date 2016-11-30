@@ -61,6 +61,9 @@ int main(int argc, char *argv[]) {
 
   mg_mgr_init(&mgr, 0);
 
+  /* Setting timeout for client connect */
+  mgr.timeo.tv_sec = 10;
+
   nc = mg_connect(&mgr, address, coap_handler);
   if (nc == NULL) {
     printf("Unable to connect to %s\n", address);

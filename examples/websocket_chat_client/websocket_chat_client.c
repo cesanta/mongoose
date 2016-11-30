@@ -84,6 +84,9 @@ int main(int argc, char **argv) {
 
   mg_mgr_init(&mgr, NULL);
 
+  /* Setting timeout for client connect */
+  mgr.timeo.tv_sec = 10;
+
   nc = mg_connect_ws(&mgr, ev_handler, chat_server_url, "ws_chat", NULL);
   if (nc == NULL) {
     fprintf(stderr, "Invalid address\n");

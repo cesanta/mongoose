@@ -65,6 +65,9 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
+  /* Setting timeout for client connect */
+  mgr.timeo.tv_sec = 10;
+
   mg_connect_http(&mgr, ev_handler, argv[i], NULL, NULL);
 
   while (s_exit_flag == 0) {

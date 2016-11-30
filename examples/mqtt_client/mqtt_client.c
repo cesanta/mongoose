@@ -100,6 +100,9 @@ int main(int argc, char **argv) {
     }
   }
 
+  /* Setting timeout for client connect */
+  mgr.timeo.tv_sec = 10;
+
   if (mg_connect(&mgr, s_address, ev_handler) == NULL) {
     fprintf(stderr, "mg_connect(%s) failed\n", s_address);
     exit(EXIT_FAILURE);

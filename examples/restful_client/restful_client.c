@@ -44,6 +44,10 @@ int main(void) {
   struct mg_connection *nc;
 
   mg_mgr_init(&mgr, NULL);
+
+  /* Setting timeout for client connect */
+  mgr.timeo.tv_sec = 10;
+
   nc = mg_connect_http(&mgr, ev_handler, s_url, NULL, NULL);
   mg_set_protocol_http_websocket(nc);
 

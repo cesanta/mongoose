@@ -128,6 +128,10 @@ void setup()
 }
 
 void loop() {
+
+  /* Setting timeout for client connect */
+  mgr.timeo.tv_sec = 10;
+
   nc = mg_connect(&mgr, s_target_address, rfc_ev_handler);
   if (nc != NULL) {
     mg_set_protocol_http_websocket(nc);
