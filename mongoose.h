@@ -116,6 +116,12 @@
 
 /* Common stuff */
 
+#if (defined(__GNUC__) || defined(__TI_COMPILER_VERSION__)) && !defined(_WIN32)
+#define WEAK __attribute__((weak))
+#else
+#define WEAK
+#endif
+
 #ifdef __GNUC__
 #define NORETURN __attribute__((noreturn))
 #define NOINLINE __attribute__((noinline))
@@ -666,7 +672,8 @@ struct dirent *readdir(DIR *dir);
 #define MG_FS_SLFS
 #endif
 
-#if (defined(CC3200_FS_SPIFFS) || defined(CC3200_FS_SLFS)) && !defined(MG_ENABLE_FILESYSTEM)
+#if (defined(CC3200_FS_SPIFFS) || defined(CC3200_FS_SLFS)) && \
+    !defined(MG_ENABLE_FILESYSTEM)
 #define MG_ENABLE_FILESYSTEM 1
 #endif
 
@@ -1514,6 +1521,8 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
 #ifndef CS_COMMON_CS_TIME_H_
 #define CS_COMMON_CS_TIME_H_
 
+/* Amalgamated: #include "common/platform.h" */
+
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
@@ -1538,6 +1547,8 @@ double cs_time(void);
 #define CS_COMMON_MG_STR_H_
 
 #include <stddef.h>
+
+/* Amalgamated: #include "common/platform.h" */
 
 #ifdef __cplusplus
 extern "C" {
@@ -1606,6 +1617,8 @@ extern "C" {
 #endif
 
 #include <stdlib.h>
+
+/* Amalgamated: #include "common/platform.h" */
 
 #ifndef MBUF_SIZE_MULTIPLIER
 #define MBUF_SIZE_MULTIPLIER 1.5
@@ -1812,6 +1825,8 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len);
 
 #include <stdarg.h>
 #include <stdlib.h>
+
+/* Amalgamated: #include "common/platform.h" */
 
 #ifndef CS_ENABLE_STRDUP
 #define CS_ENABLE_STRDUP 0

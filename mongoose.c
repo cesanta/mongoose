@@ -222,7 +222,6 @@ void cs_log_set_level(enum cs_log_level level);
 #if CS_ENABLE_STDIO
 
 void cs_log_set_file(FILE *file);
-
 extern enum cs_log_level cs_log_level;
 void cs_log_print_prefix(const char *func);
 void cs_log_printf(const char *fmt, ...);
@@ -278,7 +277,7 @@ void cs_log_printf(const char *fmt, ...);
 
 /* Amalgamated: #include "common/cs_time.h" */
 
-enum cs_log_level cs_log_level =
+enum cs_log_level cs_log_level WEAK =
 #if CS_ENABLE_DEBUG
     LL_VERBOSE_DEBUG;
 #else
@@ -287,12 +286,13 @@ enum cs_log_level cs_log_level =
 
 #if CS_ENABLE_STDIO
 
-FILE *cs_log_file = NULL;
+FILE *cs_log_file WEAK = NULL;
 
 #if CS_LOG_ENABLE_TS_DIFF
-double cs_log_ts;
+double cs_log_ts WEAK;
 #endif
 
+void cs_log_print_prefix(const char *func) WEAK;
 void cs_log_print_prefix(const char *func) {
   if (cs_log_file == NULL) cs_log_file = stderr;
   fprintf(cs_log_file, "%-20s ", func);
@@ -305,6 +305,7 @@ void cs_log_print_prefix(const char *func) {
 #endif
 }
 
+void cs_log_printf(const char *fmt, ...) WEAK;
 void cs_log_printf(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -314,12 +315,14 @@ void cs_log_printf(const char *fmt, ...) {
   fflush(cs_log_file);
 }
 
+void cs_log_set_file(FILE *file) WEAK;
 void cs_log_set_file(FILE *file) {
   cs_log_file = file;
 }
 
 #endif /* CS_ENABLE_STDIO */
 
+void cs_log_set_level(enum cs_log_level level) WEAK;
 void cs_log_set_level(enum cs_log_level level) {
   cs_log_level = level;
 #if CS_LOG_ENABLE_TS_DIFF && CS_ENABLE_STDIO
@@ -755,6 +758,7 @@ typedef int cs_dirent_dummy;
 #include <windows.h>
 #endif
 
+double cs_time(void) WEAK;
 double cs_time(void) {
   double now;
 #ifndef _WIN32
@@ -1065,12 +1069,14 @@ char *cs_md5(char buf[33], ...) {
 #define MBUF_FREE free
 #endif
 
+void mbuf_init(struct mbuf *mbuf, size_t initial_size) WEAK;
 void mbuf_init(struct mbuf *mbuf, size_t initial_size) {
   mbuf->len = mbuf->size = 0;
   mbuf->buf = NULL;
   mbuf_resize(mbuf, initial_size);
 }
 
+void mbuf_free(struct mbuf *mbuf) WEAK;
 void mbuf_free(struct mbuf *mbuf) {
   if (mbuf->buf != NULL) {
     MBUF_FREE(mbuf->buf);
@@ -1078,6 +1084,7 @@ void mbuf_free(struct mbuf *mbuf) {
   }
 }
 
+void mbuf_resize(struct mbuf *a, size_t new_size) WEAK;
 void mbuf_resize(struct mbuf *a, size_t new_size) {
   if (new_size > a->size || (new_size < a->size && new_size >= a->len)) {
     char *buf = (char *) MBUF_REALLOC(a->buf, new_size);
@@ -1092,10 +1099,12 @@ void mbuf_resize(struct mbuf *a, size_t new_size) {
   }
 }
 
+void mbuf_trim(struct mbuf *mbuf) WEAK;
 void mbuf_trim(struct mbuf *mbuf) {
   mbuf_resize(mbuf, mbuf->len);
 }
 
+size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t) WEAK;
 size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
   char *p = NULL;
 
@@ -1128,10 +1137,12 @@ size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
   return len;
 }
 
+size_t mbuf_append(struct mbuf *a, const void *buf, size_t len) WEAK;
 size_t mbuf_append(struct mbuf *a, const void *buf, size_t len) {
   return mbuf_insert(a, a->len, buf, len);
 }
 
+void mbuf_remove(struct mbuf *mb, size_t n) WEAK;
 void mbuf_remove(struct mbuf *mb, size_t n) {
   if (n > 0 && n <= mb->len) {
     memmove(mb->buf, mb->buf + n, mb->len - n);
@@ -1153,19 +1164,22 @@ void mbuf_remove(struct mbuf *mb, size_t n) {
 #include <stdlib.h>
 #include <string.h>
 
-int mg_ncasecmp(const char *s1, const char *s2, size_t len);
+int mg_ncasecmp(const char *s1, const char *s2, size_t len) WEAK;
 
+struct mg_str mg_mk_str(const char *s) WEAK;
 struct mg_str mg_mk_str(const char *s) {
   struct mg_str ret = {s, 0};
   if (s != NULL) ret.len = strlen(s);
   return ret;
 }
 
+struct mg_str mg_mk_str_n(const char *s, size_t len) WEAK;
 struct mg_str mg_mk_str_n(const char *s, size_t len) {
   struct mg_str ret = {s, len};
   return ret;
 }
 
+int mg_vcmp(const struct mg_str *str1, const char *str2) WEAK;
 int mg_vcmp(const struct mg_str *str1, const char *str2) {
   size_t n2 = strlen(str2), n1 = str1->len;
   int r = memcmp(str1->p, str2, (n1 < n2) ? n1 : n2);
@@ -1175,6 +1189,7 @@ int mg_vcmp(const struct mg_str *str1, const char *str2) {
   return r;
 }
 
+int mg_vcasecmp(const struct mg_str *str1, const char *str2) WEAK;
 int mg_vcasecmp(const struct mg_str *str1, const char *str2) {
   size_t n2 = strlen(str2), n1 = str1->len;
   int r = mg_ncasecmp(str1->p, str2, (n1 < n2) ? n1 : n2);
@@ -1184,6 +1199,7 @@ int mg_vcasecmp(const struct mg_str *str1, const char *str2) {
   return r;
 }
 
+struct mg_str mg_strdup(const struct mg_str s) WEAK;
 struct mg_str mg_strdup(const struct mg_str s) {
   struct mg_str r = {NULL, 0};
   if (s.len > 0 && s.p != NULL) {
@@ -1196,6 +1212,7 @@ struct mg_str mg_strdup(const struct mg_str s) {
   return r;
 }
 
+int mg_strcmp(const struct mg_str str1, const struct mg_str str2) WEAK;
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
   size_t i = 0;
   while (i < str1.len && i < str2.len) {
@@ -1208,6 +1225,7 @@ int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
   return 0;
 }
 
+int mg_strncmp(const struct mg_str, const struct mg_str, size_t n) WEAK;
 int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n) {
   struct mg_str s1 = str1;
   struct mg_str s2 = str2;
@@ -1501,6 +1519,7 @@ void cs_hmac_sha1(const unsigned char *key, size_t keylen,
 #define MG_FREE free
 #endif
 
+size_t c_strnlen(const char *s, size_t maxlen) WEAK;
 size_t c_strnlen(const char *s, size_t maxlen) {
   size_t l = 0;
   for (; l < maxlen && s[l] != '\0'; l++) {
@@ -1517,6 +1536,7 @@ size_t c_strnlen(const char *s, size_t maxlen) {
 #define C_SNPRINTF_FLAG_ZERO 1
 
 #if C_DISABLE_BUILTIN_SNPRINTF
+int c_vsnprintf(char *buf, size_t buf_size, const char *fmt, va_list ap) WEAK;
 int c_vsnprintf(char *buf, size_t buf_size, const char *fmt, va_list ap) {
   return vsnprintf(buf, buf_size, fmt, ap);
 }
@@ -1562,6 +1582,7 @@ static int c_itoa(char *buf, size_t buf_size, int64_t num, int base, int flags,
   return i;
 }
 
+int c_vsnprintf(char *buf, size_t buf_size, const char *fmt, va_list ap) WEAK;
 int c_vsnprintf(char *buf, size_t buf_size, const char *fmt, va_list ap) {
   int ch, i = 0, len_mod, flags, precision, field_width;
 
@@ -1699,6 +1720,7 @@ int c_vsnprintf(char *buf, size_t buf_size, const char *fmt, va_list ap) {
 }
 #endif
 
+int c_snprintf(char *buf, size_t buf_size, const char *fmt, ...) WEAK;
 int c_snprintf(char *buf, size_t buf_size, const char *fmt, ...) {
   int result;
   va_list ap;
@@ -1739,6 +1761,7 @@ int to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
 #endif /* _WIN32 */
 
 /* The simplest O(mn) algorithm. Better implementation are GPLed */
+const char *c_strnstr(const char *s, const char *find, size_t slen) WEAK;
 const char *c_strnstr(const char *s, const char *find, size_t slen) {
   size_t find_length = strlen(find);
   size_t i;
@@ -1757,6 +1780,7 @@ const char *c_strnstr(const char *s, const char *find, size_t slen) {
 }
 
 #if CS_ENABLE_STRDUP
+char *strdup(const char *src) WEAK;
 char *strdup(const char *src) {
   size_t len = strlen(src) + 1;
   char *ret = malloc(len);
@@ -1767,6 +1791,7 @@ char *strdup(const char *src) {
 }
 #endif
 
+void cs_to_hex(char *to, const unsigned char *p, size_t len) WEAK;
 void cs_to_hex(char *to, const unsigned char *p, size_t len) {
   static const char *hex = "0123456789abcdef";
 
@@ -1788,6 +1813,7 @@ static int fourbit(int ch) {
   return 0;
 }
 
+void cs_from_hex(char *to, const char *p, size_t len) WEAK;
 void cs_from_hex(char *to, const char *p, size_t len) {
   size_t i;
 
@@ -1798,6 +1824,7 @@ void cs_from_hex(char *to, const char *p, size_t len) {
 }
 
 #if CS_ENABLE_TO64
+int64_t cs_to64(const char *s) WEAK;
 int64_t cs_to64(const char *s) {
   int64_t result = 0;
   int64_t neg = 1;
@@ -1819,6 +1846,7 @@ static int str_util_lowercase(const char *s) {
   return tolower(*(const unsigned char *) s);
 }
 
+int mg_ncasecmp(const char *s1, const char *s2, size_t len) WEAK;
 int mg_ncasecmp(const char *s1, const char *s2, size_t len) {
   int diff = 0;
 
@@ -1829,10 +1857,12 @@ int mg_ncasecmp(const char *s1, const char *s2, size_t len) {
   return diff;
 }
 
+int mg_casecmp(const char *s1, const char *s2) WEAK;
 int mg_casecmp(const char *s1, const char *s2) {
   return mg_ncasecmp(s1, s2, (size_t) ~0);
 }
 
+int mg_asprintf(char **buf, size_t size, const char *fmt, ...) WEAK;
 int mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
   int ret;
   va_list ap;
@@ -1842,6 +1872,7 @@ int mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
   return ret;
 }
 
+int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap) WEAK;
 int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   va_list ap_copy;
   int len;
