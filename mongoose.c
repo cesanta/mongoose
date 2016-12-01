@@ -4992,6 +4992,10 @@ struct mg_http_multipart_stream {
   int processing_part;
 };
 
+struct mg_reverse_proxy_data {
+  struct mg_connection *linked_conn;
+};
+
 struct mg_http_proto_data {
 #if MG_ENABLE_FILESYSTEM
   struct mg_http_proto_data_file file;
@@ -5005,6 +5009,7 @@ struct mg_http_proto_data {
   struct mg_http_proto_data_chuncked chunk;
   struct mg_http_endpoint *endpoints;
   mg_event_handler_t endpoint_handler;
+  struct mg_reverse_proxy_data reverse_proxy_data;
 };
 
 static void mg_http_conn_destructor(void *proto_data);
@@ -5057,6 +5062,22 @@ static void mg_http_free_proto_data_endpoints(struct mg_http_endpoint **ep) {
   ep = NULL;
 }
 
+static void mg_http_free_reverse_proxy_data(struct mg_reverse_proxy_data *rpd) {
+  if (rpd->linked_conn != NULL) {
+    /*
+     * Connection has linked one, we have to unlink & close it
+     * since _this_ connection is going to die and
+     * it doesn't make sense to keep another one
+     */
+    struct mg_http_proto_data *pd = mg_http_get_proto_data(rpd->linked_conn);
+    if (pd->reverse_proxy_data.linked_conn != NULL) {
+      pd->reverse_proxy_data.linked_conn->flags |= MG_F_SEND_AND_CLOSE;
+      pd->reverse_proxy_data.linked_conn = NULL;
+    }
+    rpd->linked_conn = NULL;
+  }
+}
+
 static void mg_http_conn_destructor(void *proto_data) {
   struct mg_http_proto_data *pd = (struct mg_http_proto_data *) proto_data;
 #if MG_ENABLE_FILESYSTEM
@@ -5069,6 +5090,7 @@ static void mg_http_conn_destructor(void *proto_data) {
   mg_http_free_proto_data_mp_stream(&pd->mp_stream);
 #endif
   mg_http_free_proto_data_endpoints(&pd->endpoints);
+  mg_http_free_reverse_proxy_data(&pd->reverse_proxy_data);
   free(proto_data);
 }
 
@@ -7005,22 +7027,28 @@ static int mg_http_send_port_based_redirect(
 static void mg_reverse_proxy_handler(struct mg_connection *nc, int ev,
                                      void *ev_data) {
   struct http_message *hm = (struct http_message *) ev_data;
-  struct mg_connection *upstream = (struct mg_connection *) nc->user_data;
+  struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
+
+  if (pd == NULL || pd->reverse_proxy_data.linked_conn == NULL) {
+    DBG(("%p: upstream closed", nc));
+    return;
+  }
 
   switch (ev) {
     case MG_EV_CONNECT:
       if (*(int *) ev_data != 0) {
-        mg_http_send_error(upstream, 502, NULL);
+        mg_http_send_error(pd->reverse_proxy_data.linked_conn, 502, NULL);
       }
       break;
     /* TODO(mkm): handle streaming */
     case MG_EV_HTTP_REPLY:
-      mg_send(upstream, hm->message.p, hm->message.len);
-      upstream->flags |= MG_F_SEND_AND_CLOSE;
+      mg_send(pd->reverse_proxy_data.linked_conn, hm->message.p,
+              hm->message.len);
+      pd->reverse_proxy_data.linked_conn->flags |= MG_F_SEND_AND_CLOSE;
       nc->flags |= MG_F_CLOSE_IMMEDIATELY;
       break;
     case MG_EV_CLOSE:
-      upstream->flags |= MG_F_SEND_AND_CLOSE;
+      pd->reverse_proxy_data.linked_conn->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }
 }
@@ -7052,7 +7080,10 @@ void mg_http_reverse_proxy(struct mg_connection *nc,
     mg_http_send_error(nc, 502, NULL);
     goto cleanup;
   }
-  be->user_data = nc;
+
+  /* link connections to each other, they must live and die together */
+  mg_http_get_proto_data(be)->reverse_proxy_data.linked_conn = nc;
+  mg_http_get_proto_data(nc)->reverse_proxy_data.linked_conn = be;
 
   /* send request upstream */
   mg_printf(be, "%.*s %s HTTP/1.1\r\n", (int) hm->method.len, hm->method.p,
