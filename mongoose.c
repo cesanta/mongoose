@@ -4850,7 +4850,7 @@ int mg_parse_uri(struct mg_str uri, struct mg_str *scheme,
         }
         break;
       case P_SCHEME_OR_PORT:
-        if (end - p >= 3 && memcmp(p, "://", 3) == 0) {
+        if (end - p >= 3 && strncmp(p, "://", 3) == 0) {
           rscheme.p = uri.p;
           rscheme.len = p - uri.p;
           state = P_USER_INFO;
@@ -5885,7 +5885,7 @@ static int mg_http_multipart_wait_for_boundary(struct mg_connection *c) {
     if (io->len - (boundary_end - io->buf) < 4) {
       return 0;
     }
-    if (memcmp(boundary_end, "--\r\n", 4) == 0) {
+    if (strncmp(boundary_end, "--\r\n", 4) == 0) {
       pd->mp_stream.state = MPS_FINALIZE;
       mbuf_remove(io, (boundary_end - io->buf) + 4);
     } else {
@@ -6621,7 +6621,7 @@ int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
   /* Find where variable starts */
   for (s = hdr->p; s != NULL && s + n < end; s++) {
     if ((s == hdr->p || s[-1] == ch || s[-1] == ch1) && s[n] == '=' &&
-        !memcmp(s, var_name, n))
+        !strncmp(s, var_name, n))
       break;
   }
 
@@ -7590,9 +7590,9 @@ MG_INTERNAL int mg_http_common_url_parse(const char *url, const char *schema,
   (void) user;
   (void) pass;
 
-  if (memcmp(url, schema, strlen(schema)) == 0) {
+  if (strncmp(url, schema, strlen(schema)) == 0) {
     url += strlen(schema);
-  } else if (memcmp(url, schema_tls, strlen(schema_tls)) == 0) {
+  } else if (strncmp(url, schema_tls, strlen(schema_tls)) == 0) {
     url += strlen(schema_tls);
     *use_ssl = 1;
 #if !MG_ENABLE_SSL
@@ -7779,7 +7779,7 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
 
   /* Scan through the body, search for terminating boundary */
   for (pos = hl; pos + (bl - 2) < buf_len; pos++) {
-    if (buf[pos] == '-' && !memcmp(buf, &buf[pos], bl - 2)) {
+    if (buf[pos] == '-' && !strncmp(buf, &buf[pos], bl - 2)) {
       if (data_len != NULL) *data_len = (pos - 2) - hl;
       if (data != NULL) *data = buf + hl;
       return pos;
@@ -8419,10 +8419,10 @@ static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
       }
 
       /* Handle known SSI directives */
-      if (memcmp(p, d_include.p, d_include.len) == 0) {
+      if (strncmp(p, d_include.p, d_include.len) == 0) {
         mg_do_ssi_include(nc, hm, path, p + d_include.len + 1, include_level,
                           opts);
-      } else if (memcmp(p, d_call.p, d_call.len) == 0) {
+      } else if (strncmp(p, d_call.p, d_call.len) == 0) {
         struct mg_ssi_call_ctx cctx;
         memset(&cctx, 0, sizeof(cctx));
         cctx.req = hm;
@@ -8432,7 +8432,7 @@ static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
                 (void *) cctx.arg.p); /* NUL added above */
         mg_call(nc, NULL, MG_EV_SSI_CALL_CTX, &cctx);
 #if MG_ENABLE_HTTP_SSI_EXEC
-      } else if (memcmp(p, d_exec.p, d_exec.len) == 0) {
+      } else if (strncmp(p, d_exec.p, d_exec.len) == 0) {
         do_ssi_exec(nc, p + d_exec.len + 1);
 #endif
       } else {
@@ -8447,7 +8447,7 @@ static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
       len = 0;
       buf[len++] = ch & 0xff;
     } else if (in_ssi_tag) {
-      if (len == (int) btag.len && memcmp(buf, btag.p, btag.len) != 0) {
+      if (len == (int) btag.len && strncmp(buf, btag.p, btag.len) != 0) {
         /* Not an SSI tag */
         in_ssi_tag = 0;
       } else if (len == (int) sizeof(buf) - 2) {
