@@ -9691,6 +9691,11 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
     opts.flags |= MG_MQTT_HAS_PASSWORD;
     rem_len += (uint8_t) strlen(opts.password) + 2;
   }
+ if (opts.will_topic != NULL && opts.will_message != NULL) {
+   opts.flags |= MG_MQTT_HAS_WILL;
+   rem_len += (uint8_t) strlen(opts.will_topic) + 2;
+   rem_len += (uint8_t) strlen(opts.will_message) + 2;
+ }
 
   mg_send(nc, &header, 1);
   mg_send(nc, &rem_len, 1);
@@ -9707,6 +9712,16 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
   len = htons((uint16_t) strlen(client_id));
   mg_send(nc, &len, 2);
   mg_send(nc, client_id, strlen(client_id));
+
+  if (opts.flags & MG_MQTT_HAS_WILL) {
+    len = htons((uint16_t) strlen(opts.will_topic));
+    mg_send(nc, &len, 2);
+    mg_send(nc, opts.will_topic, strlen(opts.will_topic));
+
+    len = htons((uint16_t) strlen(opts.will_message));
+    mg_send(nc, &len, 2);
+    mg_send(nc, opts.will_message, strlen(opts.will_message));
+  }
 
   if (opts.flags & MG_MQTT_HAS_USER_NAME) {
     len = htons((uint16_t) strlen(opts.user_name));
