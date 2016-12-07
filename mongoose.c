@@ -9691,11 +9691,11 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
     opts.flags |= MG_MQTT_HAS_PASSWORD;
     rem_len += (uint8_t) strlen(opts.password) + 2;
   }
- if (opts.will_topic != NULL && opts.will_message != NULL) {
-   opts.flags |= MG_MQTT_HAS_WILL;
-   rem_len += (uint8_t) strlen(opts.will_topic) + 2;
-   rem_len += (uint8_t) strlen(opts.will_message) + 2;
- }
+  if (opts.will_topic != NULL && opts.will_message != NULL) {
+    opts.flags |= MG_MQTT_HAS_WILL;
+    rem_len += (uint8_t) strlen(opts.will_topic) + 2;
+    rem_len += (uint8_t) strlen(opts.will_message) + 2;
+  }
 
   mg_send(nc, &header, 1);
   mg_send(nc, &rem_len, 1);
