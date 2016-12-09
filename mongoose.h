@@ -304,7 +304,7 @@ typedef struct _stati64 cs_stat_t;
 #endif
 
 #ifndef MG_ENABLE_HTTP_CGI
-#define MG_ENABLE_HTTP_CGI 1
+#define MG_ENABLE_HTTP_CGI MG_ENABLE_FILESYSTEM
 #endif
 
 #ifndef MG_NET_IF
@@ -443,7 +443,7 @@ typedef struct stat cs_stat_t;
 #endif
 
 #ifndef MG_ENABLE_HTTP_CGI
-#define MG_ENABLE_HTTP_CGI 1
+#define MG_ENABLE_HTTP_CGI MG_ENABLE_FILESYSTEM
 #endif
 
 #ifndef MG_NET_IF

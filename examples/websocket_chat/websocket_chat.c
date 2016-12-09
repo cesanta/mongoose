@@ -7,7 +7,6 @@
 
 static sig_atomic_t s_signal_received = 0;
 static const char *s_http_port = "8000";
-static struct mg_serve_http_opts s_http_server_opts;
 
 static void signal_handler(int sig_num) {
   signal(sig_num, signal_handler);  // Reinstantiate signal handler
@@ -69,7 +68,6 @@ int main(void) {
   mg_mgr_init(&mgr, NULL);
 
   nc = mg_bind(&mgr, s_http_port, ev_handler);
-  s_http_server_opts.document_root = ".";
   mg_set_protocol_http_websocket(nc);
 
   printf("Started on port %s\n", s_http_port);
