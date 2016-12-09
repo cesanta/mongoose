@@ -9485,7 +9485,7 @@ int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
   return mg_match_prefix_n(pstr, mg_mk_str(str));
 }
 
-MG_INTERNAL int mg_get_errno(void) {
+DO_NOT_WARN_UNUSED MG_INTERNAL int mg_get_errno(void) {
 #ifndef WINCE
   return errno;
 #else
