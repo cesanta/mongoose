@@ -55,7 +55,7 @@
 #define CS_P_NXP_KINETIS 9
 #define CS_P_NRF51 12
 #define CS_P_NRF52 10
-#define CS_P_PIC32_HARMONY 11
+#define CS_P_PIC32 11
 /* Next id: 15 */
 
 /* If not specified explicitly, we guess platform by defines. */
@@ -78,7 +78,7 @@
 #elif defined(FRDM_K64F) || defined(FREEDOM)
 #define CS_PLATFORM CS_P_NXP_KINETIS
 #elif defined(PIC32)
-#define CS_PLATFORM CS_P_PIC32_HARMONY
+#define CS_PLATFORM CS_P_PIC32
 #elif defined(ICACHE_FLASH)
 #define CS_PLATFORM CS_P_ESP8266
 #elif defined(TARGET_IS_TM4C129_RA0) || defined(TARGET_IS_TM4C129_RA1) || \
@@ -95,7 +95,7 @@
 #define MG_NET_IF_SOCKET 1
 #define MG_NET_IF_SIMPLELINK 2
 #define MG_NET_IF_LWIP_LOW_LEVEL 3
-#define MG_NET_IF_PIC32_HARMONY 4
+#define MG_NET_IF_PIC32 4
 
 #define MG_SSL_IF_OPENSSL 1
 #define MG_SSL_IF_MBEDTLS 2
@@ -112,7 +112,7 @@
 /* Amalgamated: #include "common/platforms/platform_wince.h" */
 /* Amalgamated: #include "common/platforms/platform_nxp_lpc.h" */
 /* Amalgamated: #include "common/platforms/platform_nxp_kinetis.h" */
-/* Amalgamated: #include "common/platforms/platform_pic32_harmony.h" */
+/* Amalgamated: #include "common/platforms/platform_pic32.h" */
 
 /* Common stuff */
 
@@ -1424,19 +1424,19 @@ typedef struct stat cs_stat_t;
 #endif /* CS_PLATFORM == CS_P_NXP_KINETIS */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_NXP_KINETIS_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/platform_pic32_harmony.h"
+#line 1 "common/platforms/platform_pic32.h"
 #endif
 /*
  * Copyright (c) 2014-2016 Cesanta Software Limited
  * All rights reserved
  */
 
-#ifndef CS_COMMON_PLATFORMS_PLATFORM_PIC32_HARMONY_H_
-#define CS_COMMON_PLATFORMS_PLATFORM_PIC32_HARMONY_H_
+#ifndef CS_COMMON_PLATFORMS_PLATFORM_PIC32_H_
+#define CS_COMMON_PLATFORMS_PLATFORM_PIC32_H_
 
-#if CS_PLATFORM == CS_P_PIC32_HARMONY
+#if CS_PLATFORM == CS_P_PIC32
 
-#define MG_NET_IF MG_NET_IF_PIC32_HARMONY
+#define MG_NET_IF MG_NET_IF_PIC32
 
 #include <stdint.h>
 #include <time.h>
@@ -1456,9 +1456,9 @@ typedef TCP_SOCKET sock_t;
 
 char* inet_ntoa(struct in_addr in);
 
-#endif /* CS_PLATFORM == CS_P_PIC32_HARMONY */
+#endif /* CS_PLATFORM == CS_P_PIC32 */
 
-#endif /* CS_COMMON_PLATFORMS_PLATFORM_PIC32_HARMONY_H_ */
+#endif /* CS_COMMON_PLATFORMS_PLATFORM_PIC32_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip.h"
 #endif
