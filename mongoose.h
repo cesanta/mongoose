@@ -4558,37 +4558,6 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
 void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
                         const char *path, const struct mg_str mime_type,
                         const struct mg_str extra_headers);
-#endif /* MG_ENABLE_FILESYSTEM */
-
-/*
- * Registers a callback for a specified http endpoint
- * Note: if callback is registered it is called instead of the
- * callback provided in mg_bind
- *
- * Example code snippet:
- *
- * ```c
- * static void handle_hello1(struct mg_connection *nc, int ev, void *ev_data) {
- *   (void) ev; (void) ev_data;
- *   mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\n[I am Hello1]");
- *  nc->flags |= MG_F_SEND_AND_CLOSE;
- * }
- *
- * static void handle_hello1(struct mg_connection *nc, int ev, void *ev_data) {
- *  (void) ev; (void) ev_data;
- *   mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\n[I am Hello2]");
- *  nc->flags |= MG_F_SEND_AND_CLOSE;
- * }
- *
- * void init() {
- *   nc = mg_bind(&mgr, local_addr, cb1);
- *   mg_register_http_endpoint(nc, "/hello1", handle_hello1);
- *   mg_register_http_endpoint(nc, "/hello1/hello2", handle_hello2);
- * }
- * ```
- */
-void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
-                               mg_event_handler_t handler);
 
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
 
@@ -4631,6 +4600,37 @@ typedef struct mg_str (*mg_fu_fname_fn)(struct mg_connection *nc,
 void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
                             mg_fu_fname_fn local_name_fn);
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
+#endif /* MG_ENABLE_FILESYSTEM */
+
+/*
+ * Registers a callback for a specified http endpoint
+ * Note: if callback is registered it is called instead of the
+ * callback provided in mg_bind
+ *
+ * Example code snippet:
+ *
+ * ```c
+ * static void handle_hello1(struct mg_connection *nc, int ev, void *ev_data) {
+ *   (void) ev; (void) ev_data;
+ *   mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\n[I am Hello1]");
+ *  nc->flags |= MG_F_SEND_AND_CLOSE;
+ * }
+ *
+ * static void handle_hello1(struct mg_connection *nc, int ev, void *ev_data) {
+ *  (void) ev; (void) ev_data;
+ *   mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\n[I am Hello2]");
+ *  nc->flags |= MG_F_SEND_AND_CLOSE;
+ * }
+ *
+ * void init() {
+ *   nc = mg_bind(&mgr, local_addr, cb1);
+ *   mg_register_http_endpoint(nc, "/hello1", handle_hello1);
+ *   mg_register_http_endpoint(nc, "/hello1/hello2", handle_hello2);
+ * }
+ * ```
+ */
+void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
+                               mg_event_handler_t handler);
 
 /*
  * Authenticates a HTTP request against an opened password file.
