@@ -1454,6 +1454,10 @@ typedef TCP_SOCKET sock_t;
 #define SIZE_T_FMT "lu"
 #define INT64_FMT "lld"
 
+#ifndef CS_ENABLE_STDIO
+#define CS_ENABLE_STDIO 1
+#endif
+
 char* inet_ntoa(struct in_addr in);
 
 #endif /* CS_PLATFORM == CS_P_PIC32 */
