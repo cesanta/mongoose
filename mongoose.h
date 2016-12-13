@@ -880,7 +880,7 @@ typedef struct stat cs_stat_t;
  */
 #ifdef __cplusplus
 /* Amalgamated: #include "mbed.h" */
-#endif
+#endif /* __cplusplus */
 
 #include <assert.h>
 #include <ctype.h>
@@ -1636,13 +1636,12 @@ int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n);
 #ifndef CS_COMMON_MBUF_H_
 #define CS_COMMON_MBUF_H_
 
+#include <stdlib.h>
+/* Amalgamated: #include "common/platform.h" */
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
-#include <stdlib.h>
-
-/* Amalgamated: #include "common/platform.h" */
 
 #ifndef MBUF_SIZE_MULTIPLIER
 #define MBUF_SIZE_MULTIPLIER 1.5
