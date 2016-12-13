@@ -20,8 +20,8 @@
 static const char *s_address = "localhost:1883";
 static const char *s_user_name = NULL;
 static const char *s_password = NULL;
-
-struct mg_mqtt_topic_expression topic_expressions[] = {{"/stuff", 0}};
+static const char *s_topic = "/stuff";
+static struct mg_mqtt_topic_expression s_topic_expr = {NULL, 0};
 
 static void ev_handler(struct mg_connection *nc, int ev, void *p) {
   struct mg_mqtt_message *msg = (struct mg_mqtt_message *) p;
@@ -48,10 +48,9 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
         printf("Got mqtt connection error: %d\n", msg->connack_ret_code);
         exit(1);
       }
-      printf("Subscribing to '/stuff'\n");
-      mg_mqtt_subscribe(nc, topic_expressions,
-                        sizeof(topic_expressions) / sizeof(*topic_expressions),
-                        42);
+      s_topic_expr.topic = s_topic;
+      printf("Subscribing to '%s'\n", s_topic);
+      mg_mqtt_subscribe(nc, &s_topic_expr, 1, 42);
       break;
     case MG_EV_MQTT_PUBACK:
       printf("Message publishing acknowledged (msg_id: %d)\n", msg->message_id);
@@ -89,14 +88,13 @@ int main(int argc, char **argv) {
   /* Parse command line arguments */
   for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-h") == 0) {
-      s_address = argv[i + 1];
-      i++;
+      s_address = argv[++i];
     } else if (strcmp(argv[i], "-u") == 0) {
-      s_user_name = argv[i + 1];
-      i++;
+      s_user_name = argv[++i];
+    } else if (strcmp(argv[i], "-t") == 0) {
+      s_topic = argv[++i];
     } else if (strcmp(argv[i], "-p") == 0) {
-      s_password = argv[i + 1];
-      i++;
+      s_password = argv[++i];
     }
   }
 
