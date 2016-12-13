@@ -9541,10 +9541,15 @@ void mg_basic_auth_header(const char *user, const char *pass,
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/mqtt.h" */
 
+static uint16_t getu16(const char *p) {
+  const uint8_t *up = (const uint8_t *) p;
+  return (up[0] << 8) + up[1];
+}
+
 static const char *scanto(const char *p, struct mg_str *s) {
-  s->len = ntohs(*(uint16_t *) p);
+  s->len = getu16(p);
   s->p = p + 2;
-  return p + 2 + s->len;
+  return s->p + s->len;
 }
 
 MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
@@ -9575,7 +9580,7 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       p = scanto(p, &mm->protocol_name);
       mm->protocol_version = *(uint8_t *) p++;
       mm->connect_flags = *(uint8_t *) p++;
-      mm->keep_alive_timer = ntohs(*(uint16_t *) p);
+      mm->keep_alive_timer = getu16(p);
       p += 2;
       if (p < end) p = scanto(p, &mm->client_id);
       if (p < end && (mm->connect_flags & MG_MQTT_HAS_WILL))
@@ -9606,11 +9611,11 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
     case MG_MQTT_CMD_PUBREL:
     case MG_MQTT_CMD_PUBCOMP:
     case MG_MQTT_CMD_SUBACK:
-      mm->message_id = ntohs(*(uint16_t *) p);
+      mm->message_id = getu16(p);
       break;
     case MG_MQTT_CMD_PUBLISH: {
       if (MG_MQTT_GET_QOS(header) > 0) {
-        mm->message_id = ntohs(*(uint16_t *) io->buf);
+        mm->message_id = getu16(p);
         p += 2;
       }
       p = scanto(p, &mm->topic);
@@ -9620,7 +9625,7 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       break;
     }
     case MG_MQTT_CMD_SUBSCRIBE:
-      mm->message_id = ntohs(*(uint16_t *) p);
+      mm->message_id = getu16(p);
       p += 2;
       /*
        * topic expressions are left in the payload and can be parsed with
