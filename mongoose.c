@@ -2050,7 +2050,9 @@ MG_INTERNAL void mg_add_conn(struct mg_mgr *mgr, struct mg_connection *c) {
   mgr->active_connections = c;
   c->prev = NULL;
   if (c->next != NULL) c->next->prev = c;
-  c->iface->vtable->add_conn(c);
+  if (c->sock != INVALID_SOCKET) {
+    c->iface->vtable->add_conn(c);
+  }
 }
 
 MG_INTERNAL void mg_remove_conn(struct mg_connection *conn) {
@@ -2960,7 +2962,9 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
 }
 
 void mg_sock_set(struct mg_connection *nc, sock_t sock) {
-  nc->iface->vtable->sock_set(nc, sock);
+  if (sock != INVALID_SOCKET) {
+    nc->iface->vtable->sock_set(nc, sock);
+  }
 }
 
 void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
@@ -13275,7 +13279,7 @@ time_t mg_sl_if_poll(struct mg_iface *iface, int timeout_ms) {
   struct SlTimeval_t tv;
   SlFdSet_t read_set, write_set, err_set;
   sock_t max_fd = INVALID_SOCKET;
-  int num_fds, num_ev, num_timers = 0;
+  int num_fds, num_ev = 0, num_timers = 0;
 
   SL_FD_ZERO(&read_set);
   SL_FD_ZERO(&write_set);
@@ -13330,7 +13334,10 @@ time_t mg_sl_if_poll(struct mg_iface *iface, int timeout_ms) {
   tv.tv_sec = timeout_ms / 1000;
   tv.tv_usec = (timeout_ms % 1000) * 1000;
 
-  num_ev = sl_Select((int) max_fd + 1, &read_set, &write_set, &err_set, &tv);
+  if (num_fds > 0) {
+    num_ev = sl_Select((int) max_fd + 1, &read_set, &write_set, &err_set, &tv);
+  }
+
   now = mg_time();
   DBG(("sl_Select @ %ld num_ev=%d of %d, timeout=%d", (long) now, num_ev,
        num_fds, timeout_ms));
