@@ -548,6 +548,8 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len) {
 #ifndef CS_COMMON_CS_DIRENT_H_
 #define CS_COMMON_CS_DIRENT_H_
 
+/* Amalgamated: #include "common/platform.h" */
+
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
