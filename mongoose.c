@@ -587,6 +587,10 @@ typedef struct DIR {
 } DIR;
 #endif
 
+#if CS_ENABLE_SPIFFS
+extern spiffs *cs_spiffs_get_fs(void);
+#endif
+
 #if defined(_WIN32) || CS_ENABLE_SPIFFS
 DIR *opendir(const char *dir_name);
 int closedir(DIR *dir);
@@ -694,10 +698,14 @@ struct dirent *readdir(DIR *dir) {
 
 DIR *opendir(const char *dir_name) {
   DIR *dir = NULL;
-  extern spiffs fs;
+  spiffs *fs = cs_spiffs_get_fs();
 
-  if (dir_name != NULL && (dir = (DIR *) malloc(sizeof(*dir))) != NULL &&
-      SPIFFS_opendir(&fs, (char *) dir_name, &dir->dh) == NULL) {
+  if (dir_name == NULL || fs == NULL ||
+      (dir = (DIR *) calloc(1, sizeof(*dir))) == NULL) {
+    return NULL;
+  }
+
+  if (SPIFFS_opendir(fs, dir_name, &dir->dh) == NULL) {
     free(dir);
     dir = NULL;
   }
@@ -720,14 +728,14 @@ struct dirent *readdir(DIR *dir) {
 /* SPIFFs doesn't support directory operations */
 int rmdir(const char *path) {
   (void) path;
-  return ENOTDIR;
+  return ENOTSUP;
 }
 
 int mkdir(const char *path, mode_t mode) {
   (void) path;
   (void) mode;
   /* for spiffs supports only root dir, which comes from mongoose as '.' */
-  return (strlen(path) == 1 && *path == '.') ? 0 : ENOTDIR;
+  return (strlen(path) == 1 && *path == '.') ? 0 : ENOTSUP;
 }
 
 #endif /* CS_ENABLE_SPIFFS */
