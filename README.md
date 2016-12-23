@@ -18,7 +18,6 @@ Check out [Mongoose OS](https://mongoose-iot.com) - open source embedded operati
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
 - [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
 - [Support Forum - ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/mongoose)
-- [Chat - visit www.cesanta.com for our live chat] (http://www.cesanta.com)
 - [Commercial licensing and support available] (https://www.cesanta.com/services-support)
 - [Check our latest releases] (https://github.com/cesanta/mongoose/releases)
 
