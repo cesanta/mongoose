@@ -8896,9 +8896,11 @@ static int mg_deliver_websocket_data(struct mg_connection *nc) {
       mbuf_remove(&nc->recv_mbuf, (size_t) frame_len); /* Cleanup frame */
     }
 
-    /* If client closes, close too */
-    if ((buf[0] & 0x0f) == WEBSOCKET_OP_CLOSE) {
-      nc->flags |= MG_F_SEND_AND_CLOSE;
+    if(!reass) {
+      /* If client closes, close too. Only valid when the frame is not reassembled */
+      if ((buf[0] & 0x0f) == WEBSOCKET_OP_CLOSE) {
+        nc->flags |= MG_F_SEND_AND_CLOSE;
+      }
     }
   }
 
