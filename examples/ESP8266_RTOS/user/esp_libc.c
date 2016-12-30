@@ -29,7 +29,7 @@ _ssize_t _write_r(struct _reent *r, int fd, void *buf, size_t len) {
 
 /*
  * You'll need to implement _open_r and friends if you want file operations. See
- * https://github.com/cesanta/mongoose-iot/blob/master/fw/platforms/esp8266/user/esp_fs.c
+ * https://github.com/cesanta/mongoose-os/blob/master/fw/platforms/esp8266/user/esp_fs.c
  * for SPIFFS-based implementation.
  */
 

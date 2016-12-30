@@ -13,7 +13,7 @@
 #define MG_LISTEN_ADDR "80"
 
 #define MG_TASK_STACK_SIZE 4096
-#define MIOT_TASK_PRIORITY 1
+#define MGOS_TASK_PRIORITY 1
 
 void uart_div_modify(int uart_no, unsigned int freq);
 
@@ -105,5 +105,5 @@ void user_init(void) {
   uart_div_modify(0, UART_CLK_FREQ / 115200);
 
   xTaskCreate(mg_task, (const signed char *) "mongoose", MG_TASK_STACK_SIZE,
-              NULL, MIOT_TASK_PRIORITY, &s_mg_task_handle);
+              NULL, MGOS_TASK_PRIORITY, &s_mg_task_handle);
 }
