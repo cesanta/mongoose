@@ -44,7 +44,7 @@
 #define CONSOLE_BAUD_RATE 115200
 #define CONSOLE_UART UARTA0_BASE
 #define CONSOLE_UART_PERIPH PRCM_UARTA0
-#define MIOT_TASK_PRIORITY 3
+#define MGOS_TASK_PRIORITY 3
 #define MG_TASK_STACK_SIZE 8192
 
 #define BM222_ADDR 0x18
@@ -264,7 +264,7 @@ int main(void) {
     LOG(LL_ERROR, ("Failed to create SL task"));
   }
 
-  if (!mg_start_task(MIOT_TASK_PRIORITY, MG_TASK_STACK_SIZE, mg_init)) {
+  if (!mg_start_task(MGOS_TASK_PRIORITY, MG_TASK_STACK_SIZE, mg_init)) {
     LOG(LL_ERROR, ("Failed to create MG task"));
   }
 

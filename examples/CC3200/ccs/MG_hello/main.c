@@ -10,7 +10,7 @@
 // #define WIFI_STA_SSID "YourWiFi"
 // #define WIFI_STA_PASS "YourPass"
 
-#define MIOT_TASK_PRIORITY 3
+#define MGOS_TASK_PRIORITY 3
 #define MG_TASK_STACK_SIZE 8192
 
 #include <stdbool.h>
@@ -214,7 +214,7 @@ int main(void) {
     LOG(LL_ERROR, ("Failed to create SL task"));
   }
 
-  if (!mg_start_task(MIOT_TASK_PRIORITY, MG_TASK_STACK_SIZE, mg_init)) {
+  if (!mg_start_task(MGOS_TASK_PRIORITY, MG_TASK_STACK_SIZE, mg_init)) {
     LOG(LL_ERROR, ("Failed to create MG task"));
   }
 
