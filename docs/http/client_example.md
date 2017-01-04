@@ -43,4 +43,4 @@ int main(void) {
 }
 ```
 
-See full source code at [HTTP client example](https://github.com/cesanta/dev/tree/master/mongoose/examples/http_client).
+See full source code at [HTTP client example](https://github.com/cesanta/mongoose/tree/master/examples/http_client).
