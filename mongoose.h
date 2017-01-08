@@ -57,7 +57,8 @@
 #define CS_P_NRF51 12
 #define CS_P_NRF52 10
 #define CS_P_PIC32 11
-/* Next id: 16 */
+#define CS_P_STM32 16
+/* Next id: 17 */
 
 /* If not specified explicitly, we guess platform by defines. */
 #ifndef CS_PLATFORM
@@ -87,6 +88,8 @@
 #elif defined(TARGET_IS_TM4C129_RA0) || defined(TARGET_IS_TM4C129_RA1) || \
     defined(TARGET_IS_TM4C129_RA2)
 #define CS_PLATFORM CS_P_TM4C129
+#elif defined(STM32)
+#define CS_PLATFORM CS_P_STM32
 #endif
 
 #ifndef CS_PLATFORM
@@ -117,6 +120,7 @@
 /* Amalgamated: #include "common/platforms/platform_nxp_lpc.h" */
 /* Amalgamated: #include "common/platforms/platform_nxp_kinetis.h" */
 /* Amalgamated: #include "common/platforms/platform_pic32.h" */
+/* Amalgamated: #include "common/platforms/platform_stm32.h" */
 
 /* Common stuff */
 
@@ -1516,6 +1520,63 @@ char* inet_ntoa(struct in_addr in);
 #endif /* CS_PLATFORM == CS_P_PIC32 */
 
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_PIC32_H_ */
+#ifdef MG_MODULE_LINES
+#line 1 "common/platforms/platform_stm32.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_COMMON_PLATFORMS_PLATFORM_STM32_H_
+#define CS_COMMON_PLATFORMS_PLATFORM_STM32_H_
+#if CS_PLATFORM == CS_P_STM32
+
+#include <stdint.h>
+#include <stdio.h>
+#include <ctype.h>
+#include <errno.h>
+#include <memory.h>
+
+/*
+ * Fake declarations to get c_hello compiling w/out network
+ * TODO(alashkin): remove this during working on stm32/cude networking
+ */
+
+typedef int sock_t;
+
+struct sockaddr {
+};
+
+struct in_addr{
+  int s_addr;
+};
+
+struct sockaddr_in {
+  int sin_family;
+  int sin_port;
+  struct in_addr sin_addr;
+};
+
+#define INVALID_SOCKET -1
+#define SOCK_DGRAM -1
+#define SOCK_STREAM -1
+#define AF_INET -1
+
+#define to64(x) strtoll(x, NULL, 10)
+
+#define INT64_FMT "ld"
+#define SIZE_T_FMT "u"
+
+#define htonl(x) (x)
+#define htons(x) (x)
+#define ntohs(x) (x)
+#define ntohl(x) (x)
+
+const char *inet_ntop(int af, const void *src, char *dst, int size);
+
+#endif /* CS_PLATFORM == CS_P_STM32 */
+#endif /* CS_COMMON_PLATFORMS_PLATFORM_STM32_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip.h"
 #endif
