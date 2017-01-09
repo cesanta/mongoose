@@ -2746,6 +2746,7 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
     params.cert = opts.ssl_cert;
     params.key = opts.ssl_key;
     params.ca_cert = opts.ssl_ca_cert;
+    params.cipher_suites = opts.ssl_cipher_suites;
     if (opts.ssl_ca_cert != NULL) {
       if (opts.ssl_server_name != NULL) {
         if (strcmp(opts.ssl_server_name, "*") != 0) {
@@ -2850,6 +2851,7 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
     params.cert = opts.ssl_cert;
     params.key = opts.ssl_key;
     params.ca_cert = opts.ssl_ca_cert;
+    params.cipher_suites = opts.ssl_cipher_suites;
     if (mg_ssl_if_conn_init(nc, &params, &err_msg) != MG_SSL_OK) {
       MG_SET_PTRPTR(opts.error_string, err_msg);
       mg_destroy_conn(nc, 1 /* destroy_if */);
@@ -4060,7 +4062,7 @@ enum mg_ssl_if_result mg_ssl_if_conn_accept(struct mg_connection *nc,
 static enum mg_ssl_if_result mg_use_cert(SSL_CTX *ctx, const char *cert,
                                          const char *key, const char **err_msg);
 static enum mg_ssl_if_result mg_use_ca_cert(SSL_CTX *ctx, const char *cert);
-static enum mg_ssl_if_result mg_set_cipher_list(SSL_CTX *ctx);
+static enum mg_ssl_if_result mg_set_cipher_list(SSL_CTX *ctx, const char *cl);
 
 enum mg_ssl_if_result mg_ssl_if_conn_init(
     struct mg_connection *nc, const struct mg_ssl_if_conn_params *params,
@@ -4105,7 +4107,10 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
 #endif
   }
 
-  mg_set_cipher_list(ctx->ssl_ctx);
+  if (mg_set_cipher_list(ctx->ssl_ctx, params->cipher_suites) != MG_SSL_OK) {
+    MG_SET_PTRPTR(err_msg, "Invalid cipher suite list");
+    return MG_SSL_ERROR;
+  }
 
   if (!(nc->flags & MG_F_LISTENING) &&
       (ctx->ssl = SSL_new(ctx->ssl_ctx)) == NULL) {
@@ -4287,9 +4292,10 @@ static enum mg_ssl_if_result mg_use_cert(SSL_CTX *ctx, const char *cert,
   return MG_SSL_OK;
 }
 
-static enum mg_ssl_if_result mg_set_cipher_list(SSL_CTX *ctx) {
-  return (SSL_CTX_set_cipher_list(ctx, mg_s_cipher_list) == 1 ? MG_SSL_OK
-                                                              : MG_SSL_ERROR);
+static enum mg_ssl_if_result mg_set_cipher_list(SSL_CTX *ctx, const char *cl) {
+  return (SSL_CTX_set_cipher_list(ctx, cl ? cl : mg_s_cipher_list) == 1
+              ? MG_SSL_OK
+              : MG_SSL_ERROR);
 }
 
 const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
@@ -4418,7 +4424,10 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
     return MG_SSL_ERROR;
   }
 
-  mg_set_cipher_list(ctx, NULL);
+  if (mg_set_cipher_list(ctx, params->cipher_suites) != MG_SSL_OK) {
+    MG_SET_PTRPTR(err_msg, "Invalid cipher suite list");
+    return MG_SSL_ERROR;
+  }
 
   if (!(nc->flags & MG_F_LISTENING)) {
     ctx->ssl = MG_CALLOC(1, sizeof(*ctx->ssl));
@@ -13493,6 +13502,7 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
   if (params->ca_cert != NULL && strcmp(params->ca_cert, "*") != 0) {
     ctx->ssl_ca_cert = strdup(params->ca_cert);
   }
+  /* TODO(rojer): cipher_suites. */
   if (params->server_name != NULL) {
     ctx->ssl_server_name = strdup(params->server_name);
   }
