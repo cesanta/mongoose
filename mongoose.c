@@ -6721,7 +6721,7 @@ static int mg_is_authorized(struct http_message *hm, const char *path,
   }
 
   LOG(LL_DEBUG, ("%s '%s' %d %d", path, passwords_file ? passwords_file : "",
-       is_global_pass_file, authorized));
+                 is_global_pass_file, authorized));
   return authorized;
 }
 #else
@@ -7004,8 +7004,8 @@ void mg_http_reverse_proxy(struct mg_connection *nc,
   be = mg_connect_http_base(nc->mgr, mg_reverse_proxy_handler, opts, "http://",
                             "https://", purl, &path, NULL /* user */,
                             NULL /* pass */, &addr);
-  LOG(LL_DEBUG, ("Proxying %.*s to %s (rule: %.*s)", (int) hm->uri.len, hm->uri.p, purl,
-       (int) mount.len, mount.p));
+  LOG(LL_DEBUG, ("Proxying %.*s to %s (rule: %.*s)", (int) hm->uri.len,
+                 hm->uri.p, purl, (int) mount.len, mount.p));
 
   if (be == NULL) {
     LOG(LL_ERROR, ("Error connecting to %s: %s", purl, error));
@@ -7225,7 +7225,8 @@ MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
   }
 
 out:
-  LOG(LL_DEBUG, ("'%.*s' -> '%s' + '%.*s'", (int) hm->uri.len, hm->uri.p,
+  LOG(LL_DEBUG,
+      ("'%.*s' -> '%s' + '%.*s'", (int) hm->uri.len, hm->uri.p,
        *local_path ? *local_path : "", (int) remainder->len, remainder->p));
   return ok;
 }
@@ -7331,7 +7332,8 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
       (mg_match_prefix(opts->cgi_file_pattern, strlen(opts->cgi_file_pattern),
                        index_file ? index_file : path) > 0);
 
-  LOG(LL_DEBUG, ("%p %.*s [%s] exists=%d is_dir=%d is_dav=%d is_cgi=%d index=%s", nc,
+  LOG(LL_DEBUG,
+      ("%p %.*s [%s] exists=%d is_dir=%d is_dav=%d is_cgi=%d index=%s", nc,
        (int) hm->method.len, hm->method.p, path, exists, is_directory, is_dav,
        is_cgi, index_file ? index_file : ""));
 
