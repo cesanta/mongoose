@@ -6238,7 +6238,7 @@ void mg_send_head(struct mg_connection *c, int status_code,
 void mg_http_send_error(struct mg_connection *nc, int code,
                         const char *reason) {
   if (!reason) reason = mg_status_message(code);
-  DBG(("%p %d %s", nc, code, reason));
+  LOG(LL_DEBUG, ("%p %d %s", nc, code, reason));
   mg_send_head(nc, code, strlen(reason),
                "Content-Type: text/plain\r\nConnection: close");
   mg_send(nc, reason, strlen(reason));
@@ -6282,7 +6282,7 @@ void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
                         const struct mg_str extra_headers) {
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   cs_stat_t st;
-  DBG(("%p [%s] %.*s", nc, path, (int) mime_type.len, mime_type.p));
+  LOG(LL_DEBUG, ("%p [%s] %.*s", nc, path, (int) mime_type.len, mime_type.p));
   if (mg_stat(path, &st) != 0 || (pd->file.fp = mg_fopen(path, "rb")) == NULL) {
     int code, err = mg_get_errno();
     switch (err) {
@@ -6720,7 +6720,7 @@ static int mg_is_authorized(struct http_message *hm, const char *path,
     }
   }
 
-  DBG(("%s %s %d %d", path, passwords_file ? passwords_file : "",
+  LOG(LL_DEBUG, ("%s '%s' %d %d", path, passwords_file ? passwords_file : "",
        is_global_pass_file, authorized));
   return authorized;
 }
@@ -6818,7 +6818,7 @@ static void mg_scan_directory(struct mg_connection *nc, const char *dir,
   struct dirent *dp;
   DIR *dirp;
 
-  DBG(("%p [%s]", nc, dir));
+  LOG(LL_DEBUG, ("%p [%s]", nc, dir));
   if ((dirp = (opendir(dir))) != NULL) {
     while ((dp = readdir(dirp)) != NULL) {
       /* Do not show current dir and hidden files */
@@ -6832,7 +6832,7 @@ static void mg_scan_directory(struct mg_connection *nc, const char *dir,
     }
     closedir(dirp);
   } else {
-    DBG(("%p opendir(%s) -> %d", nc, dir, mg_get_errno()));
+    LOG(LL_DEBUG, ("%p opendir(%s) -> %d", nc, dir, mg_get_errno()));
   }
 }
 
@@ -6929,7 +6929,7 @@ MG_INTERNAL void mg_find_index_file(const char *path, const char *list,
     MG_FREE(*index_file);
     *index_file = NULL;
   }
-  DBG(("[%s] [%s]", path, (*index_file ? *index_file : "")));
+  LOG(LL_DEBUG, ("[%s] [%s]", path, (*index_file ? *index_file : "")));
 }
 
 #if MG_ENABLE_HTTP_URL_REWRITES
@@ -7004,7 +7004,7 @@ void mg_http_reverse_proxy(struct mg_connection *nc,
   be = mg_connect_http_base(nc->mgr, mg_reverse_proxy_handler, opts, "http://",
                             "https://", purl, &path, NULL /* user */,
                             NULL /* pass */, &addr);
-  DBG(("Proxying %.*s to %s (rule: %.*s)", (int) hm->uri.len, hm->uri.p, purl,
+  LOG(LL_DEBUG, ("Proxying %.*s to %s (rule: %.*s)", (int) hm->uri.len, hm->uri.p, purl,
        (int) mount.len, mount.p));
 
   if (be == NULL) {
@@ -7225,7 +7225,7 @@ MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
   }
 
 out:
-  DBG(("'%.*s' -> '%s' + '%.*s'", (int) hm->uri.len, hm->uri.p,
+  LOG(LL_DEBUG, ("'%.*s' -> '%s' + '%.*s'", (int) hm->uri.len, hm->uri.p,
        *local_path ? *local_path : "", (int) remainder->len, remainder->p));
   return ok;
 }
@@ -7331,7 +7331,7 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
       (mg_match_prefix(opts->cgi_file_pattern, strlen(opts->cgi_file_pattern),
                        index_file ? index_file : path) > 0);
 
-  DBG(("%p %.*s [%s] exists=%d is_dir=%d is_dav=%d is_cgi=%d index=%s", nc,
+  LOG(LL_DEBUG, ("%p %.*s [%s] exists=%d is_dir=%d is_dav=%d is_cgi=%d index=%s", nc,
        (int) hm->method.len, hm->method.p, path, exists, is_directory, is_dav,
        is_cgi, index_file ? index_file : ""));
 
