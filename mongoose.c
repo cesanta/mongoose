@@ -4354,6 +4354,7 @@ struct mg_ssl_if_ctx {
   mbedtls_x509_crt *cert;
   mbedtls_pk_context *key;
   mbedtls_x509_crt *ca_cert;
+  struct mbuf cipher_suites;
 };
 
 /* Must be provided by the platform. ctx is struct mg_connection. */
@@ -4399,6 +4400,7 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
   }
   nc->ssl_if_data = ctx;
   ctx->conf = MG_CALLOC(1, sizeof(*ctx->conf));
+  mbuf_init(&ctx->cipher_suites, 0);
   mbedtls_ssl_config_init(ctx->conf);
   mbedtls_ssl_conf_dbg(ctx->conf, mg_ssl_mbed_log, nc);
   if (mbedtls_ssl_config_defaults(
@@ -4561,6 +4563,7 @@ void mg_ssl_if_conn_free(struct mg_connection *nc) {
     mbedtls_ssl_config_free(ctx->conf);
     MG_FREE(ctx->conf);
   }
+  mbuf_free(&ctx->cipher_suites);
   memset(ctx, 0, sizeof(*ctx));
   MG_FREE(ctx);
 }
@@ -4630,21 +4633,26 @@ static const int mg_s_cipher_list[] = {
 static enum mg_ssl_if_result mg_set_cipher_list(struct mg_ssl_if_ctx *ctx,
                                                 const char *ciphers) {
   if (ciphers != NULL) {
-    int ids[50], n = 0, l, id;
+    int l, id;
     const char *s = ciphers;
     char *e, tmp[50];
-    while (s != NULL && n < (int) (sizeof(ids) / sizeof(ids[0])) - 1) {
+    while (s != NULL) {
       e = strchr(s, ':');
       l = (e != NULL ? (e - s) : (int) strlen(s));
       strncpy(tmp, s, l);
+      tmp[l] = '\0';
       id = mbedtls_ssl_get_ciphersuite_id(tmp);
-      DBG(("%s -> %d", tmp, id));
-      if (id != 0) ids[n++] = id;
+      DBG(("%s -> %04x", tmp, id));
+      if (id != 0) {
+        mbuf_append(&ctx->cipher_suites, &id, sizeof(id));
+      }
       s = (e != NULL ? e + 1 : NULL);
     }
-    if (n == 0) return MG_SSL_ERROR;
-    ids[n] = 0;
-    mbedtls_ssl_conf_ciphersuites(ctx->conf, ids);
+    if (ctx->cipher_suites.len == 0) return MG_SSL_ERROR;
+    id = 0;
+    mbuf_append(&ctx->cipher_suites, &id, sizeof(id));
+    mbedtls_ssl_conf_ciphersuites(ctx->conf,
+                                  (const int *) ctx->cipher_suites.buf);
   } else {
     mbedtls_ssl_conf_ciphersuites(ctx->conf, mg_s_cipher_list);
   }
