@@ -1544,6 +1544,10 @@ char* inet_ntoa(struct in_addr in);
 #define INT64_FMT PRId64
 #define SIZE_T_FMT "u"
 
+#ifndef CS_ENABLE_STDIO
+#define CS_ENABLE_STDIO 1
+#endif
+
 #endif /* CS_PLATFORM == CS_P_STM32 */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_STM32_H_ */
 #ifdef MG_MODULE_LINES
