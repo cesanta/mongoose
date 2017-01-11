@@ -13727,7 +13727,9 @@ void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
 
 #include <lwip/pbuf.h>
 #include <lwip/tcp.h>
+#if CS_PLATFORM != CS_P_STM32
 #include <lwip/tcp_impl.h>
+#endif
 #include <lwip/udp.h>
 
 /* Amalgamated: #include "common/cs_dbg.h" */
@@ -13949,7 +13951,8 @@ void mg_lwip_if_connect_tcp(struct mg_connection *nc,
  * Lwip included in the SDKs for nRF5x chips has different type for the
  * callback of `udp_recv()`
  */
-#if CS_PLATFORM == CS_P_NRF51 || CS_PLATFORM == CS_P_NRF52
+#if CS_PLATFORM == CS_P_NRF51 || CS_PLATFORM == CS_P_NRF52 || \
+    CS_PLATFORM == CS_P_STM32
 static void mg_lwip_udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,
                                 const ip_addr_t *addr, u16_t port)
 #else
