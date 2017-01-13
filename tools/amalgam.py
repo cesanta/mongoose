@@ -61,10 +61,11 @@ parser.add_argument('-I', default=".", dest='include_path', help='include path')
 parser.add_argument('sources', nargs='*', help='sources')
 
 class File(object):
-    def __init__(self, name):
+    def __init__(self, name, parent_name):
         self.name = name
+        self.parent_name = parent_name
         self.buf = StringIO()
-        emit_file(self.buf, self.name)
+        emit_file(self.buf, self.name, self.parent_name)
 
     def emit(self):
         print self.buf.getvalue(),
@@ -79,14 +80,22 @@ already_included = set()
 
 ignore_files = [i.strip() for i in args.ignore.split(',')]
 
-def should_ignore(name):
+def should_ignore(name, parent_name):
     return (name in already_included
-            or not (args.strict or os.path.exists(resolve(name)))
+            or not (args.strict or os.path.exists(resolve(name, parent_name)))
             or name in ignore_files)
 
-def resolve(path):
+def resolve(path, parent_name):
+    path_from_parent = None
+    if parent_name != None and not os.path.isabs(path):
+        # calculate the path relative to the "parent_name" file, i.e. to the file
+        # which includes the current one.
+        path_from_parent = os.path.join(os.path.dirname(parent_name), path)
+
     if os.path.isabs(path) or os.path.exists(path):
         p = path
+    elif path_from_parent != None and os.path.exists(path_from_parent):
+        p = path_from_parent
     else:
         p = os.path.join(args.include_path, path)
     if os.path.exists(p) and not args.norel:
@@ -94,40 +103,40 @@ def resolve(path):
     # print >>sys.stderr, '%s -> %s (cwd %s)' % (path, p, os.getcwd())
     return p
 
-def emit_line_directive(out, name):
+def emit_line_directive(out, name, parent_name):
     print >>out, '''#ifdef %(prefix)s_MODULE_LINES
 #line 1 "%(name)s"
 #endif''' % dict(
     prefix = args.prefix,
-    name = resolve(name),
+    name = resolve(name, parent_name),
 )
 
-def emit_body(out, name):
-    path = resolve(name)
-    if not args.strict and not os.path.exists(path):
+def emit_body(out, name, parent_name):
+    resolved_name = resolve(name, parent_name)
+    if not args.strict and not os.path.exists(resolved_name):
         print >>out, '#include "%s"' % (name,)
         return
 
-    with open(resolve(name)) as f:
+    with open(resolved_name) as f:
         for l in f:
             match = re.match('( *#include "(.*)")', l)
             if match:
-                all, path = match.groups()
+                all, path_to_include = match.groups()
                 if args.autoinc:
-                    if not should_ignore(path):
-                        already_included.add(path)
-                        includes.append(File(path))
+                    if not should_ignore(path_to_include, parent_name):
+                        already_included.add(path_to_include)
+                        includes.append(File(path_to_include, resolved_name))
                 print >>out, '/* Amalgamated: %s */' % (all,)
             else:
                 print >>out, l,
 
 
-def emit_file(out, name):
-    emit_line_directive(out, name)
-    emit_body(out, name)
+def emit_file(out, name, parent_name):
+    emit_line_directive(out, name, parent_name)
+    emit_body(out, name, parent_name)
 
 for i in args.sources:
-    sources.append(File(i))
+    sources.append(File(i, None))
 
 if args.first:
     for inc in reversed(args.first.split(',')):
