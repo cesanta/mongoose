@@ -3,7 +3,7 @@
 #line 1 "mongoose/src/internal.h"
 #endif
 /*
- * Copyright (c) 2014 Cesanta Software Limited
+ * Copyright (c) 2017 Cesanta Software Limited
  * All rights reserved
  */
 
@@ -5191,6 +5191,8 @@ static const struct {
     MIME_ENTRY("ram", "audio/x-pn-realaudio"),
     MIME_ENTRY("xml", "text/xml"),
     MIME_ENTRY("ttf", "application/x-font-ttf"),
+    MIME_ENTRY("woff", "font/woff"),
+    MIME_ENTRY("woff2", "font/woff2"),
     MIME_ENTRY("json", "application/json"),
     MIME_ENTRY("xslt", "application/xml"),
     MIME_ENTRY("xsl", "application/xml"),
