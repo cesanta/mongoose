@@ -1534,19 +1534,27 @@ char* inet_ntoa(struct in_addr in);
 #if CS_PLATFORM == CS_P_STM32
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
 #include <memory.h>
+#include <fcntl.h>
 
 #define to64(x) strtoll(x, NULL, 10)
 #define INT64_FMT PRId64
 #define SIZE_T_FMT "u"
+typedef struct stat cs_stat_t;
+#define DIRSEP '/'
 
 #ifndef CS_ENABLE_STDIO
 #define CS_ENABLE_STDIO 1
+#endif
+
+#ifndef MG_ENABLE_FILESYSTEM
+#define MG_ENABLE_FILESYSTEM 1
 #endif
 
 #endif /* CS_PLATFORM == CS_P_STM32 */
