@@ -548,54 +548,31 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len) {
 #ifndef CS_COMMON_CS_DIRENT_H_
 #define CS_COMMON_CS_DIRENT_H_
 
+#include <limits.h>
+
 /* Amalgamated: #include "common/platform.h" */
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
-#ifndef CS_ENABLE_SPIFFS
-#define CS_ENABLE_SPIFFS 0
-#endif
+#ifdef CS_DEFINE_DIRENT
+typedef struct { int dummy; } DIR;
 
-#if CS_ENABLE_SPIFFS
-
-#include <spiffs.h>
-
-typedef struct {
-  spiffs_DIR dh;
-  struct spiffs_dirent de;
-} DIR;
-
-#define d_name name
-#define dirent spiffs_dirent
-
-int rmdir(const char *path);
-int mkdir(const char *path, mode_t mode);
-
-#endif
-
-#if defined(_WIN32)
 struct dirent {
+  int d_ino;
+#ifdef _WIN32
   char d_name[MAX_PATH];
+#else
+  /* TODO(rojer): Use PATH_MAX but make sure it's sane on every platform */
+  char d_name[256];
+#endif
 };
 
-typedef struct DIR {
-  HANDLE handle;
-  WIN32_FIND_DATAW info;
-  struct dirent result;
-} DIR;
-#endif
-
-#if CS_ENABLE_SPIFFS
-extern spiffs *cs_spiffs_get_fs(void);
-#endif
-
-#if defined(_WIN32) || CS_ENABLE_SPIFFS
 DIR *opendir(const char *dir_name);
 int closedir(DIR *dir);
 struct dirent *readdir(DIR *dir);
-#endif
+#endif /* CS_DEFINE_DIRENT */
 
 #ifdef __cplusplus
 }
@@ -628,14 +605,21 @@ struct dirent *readdir(DIR *dir);
 #endif
 
 #ifdef _WIN32
+struct win32_dir {
+  DIR d;
+  HANDLE handle;
+  WIN32_FIND_DATAW info;
+  struct dirent result;
+};
+
 DIR *opendir(const char *name) {
-  DIR *dir = NULL;
+  struct win32_dir *dir = NULL;
   wchar_t wpath[MAX_PATH];
   DWORD attrs;
 
   if (name == NULL) {
     SetLastError(ERROR_BAD_ARGUMENTS);
-  } else if ((dir = (DIR *) MG_MALLOC(sizeof(*dir))) == NULL) {
+  } else if ((dir = (struct win32_dir *) MG_MALLOC(sizeof(*dir))) == NULL) {
     SetLastError(ERROR_NOT_ENOUGH_MEMORY);
   } else {
     to_wchar(name, wpath, ARRAY_SIZE(wpath));
@@ -650,10 +634,11 @@ DIR *opendir(const char *name) {
     }
   }
 
-  return dir;
+  return (DIR *) dir;
 }
 
-int closedir(DIR *dir) {
+int closedir(DIR *d) {
+  struct win32_dir *dir = (struct win32_dir *) d;
   int result = 0;
 
   if (dir != NULL) {
@@ -668,10 +653,12 @@ int closedir(DIR *dir) {
   return result;
 }
 
-struct dirent *readdir(DIR *dir) {
+struct dirent *readdir(DIR *d) {
+  struct win32_dir *dir = (struct win32_dir *) d;
   struct dirent *result = NULL;
 
   if (dir) {
+    memset(&dir->result, 0, sizeof(dir->result));
     if (dir->handle != INVALID_HANDLE_VALUE) {
       result = &dir->result;
       (void) WideCharToMultiByte(CP_UTF8, 0, dir->info.cFileName, -1,
@@ -693,52 +680,6 @@ struct dirent *readdir(DIR *dir) {
   return result;
 }
 #endif
-
-#if CS_ENABLE_SPIFFS
-
-DIR *opendir(const char *dir_name) {
-  DIR *dir = NULL;
-  spiffs *fs = cs_spiffs_get_fs();
-
-  if (dir_name == NULL || fs == NULL ||
-      (dir = (DIR *) calloc(1, sizeof(*dir))) == NULL) {
-    return NULL;
-  }
-
-  if (SPIFFS_opendir(fs, dir_name, &dir->dh) == NULL) {
-    free(dir);
-    dir = NULL;
-  }
-
-  return dir;
-}
-
-int closedir(DIR *dir) {
-  if (dir != NULL) {
-    SPIFFS_closedir(&dir->dh);
-    free(dir);
-  }
-  return 0;
-}
-
-struct dirent *readdir(DIR *dir) {
-  return SPIFFS_readdir(&dir->dh, &dir->de);
-}
-
-/* SPIFFs doesn't support directory operations */
-int rmdir(const char *path) {
-  (void) path;
-  return ENOTSUP;
-}
-
-int mkdir(const char *path, mode_t mode) {
-  (void) path;
-  (void) mode;
-  /* for spiffs supports only root dir, which comes from mongoose as '.' */
-  return (strlen(path) == 1 && *path == '.') ? 0 : ENOTSUP;
-}
-
-#endif /* CS_ENABLE_SPIFFS */
 
 #endif /* EXCLUDE_COMMON */
 
@@ -7505,9 +7446,8 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
           (struct mg_http_multipart_part *) ev_data;
       struct file_upload_state *fus =
           (struct file_upload_state *) calloc(1, sizeof(*fus));
-      mp->user_data = NULL;
-
       struct mg_str lfn = local_name_fn(nc, mg_mk_str(mp->file_name));
+      mp->user_data = NULL;
       if (lfn.p == NULL || lfn.len == 0) {
         LOG(LL_ERROR, ("%p Not allowed to upload %s", nc, mp->file_name));
         mg_printf(nc,
