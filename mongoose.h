@@ -274,6 +274,7 @@ typedef struct _stati64 cs_stat_t;
 #define S_ISREG(x) (((x) &_S_IFMT) == _S_IFREG)
 #endif
 #define DIRSEP '\\'
+#define CS_DEFINE_DIRENT
 
 #ifndef va_copy
 #ifdef __va_copy
@@ -528,6 +529,8 @@ typedef struct stat cs_stat_t;
 #define SIZE_T_FMT "u"
 typedef struct stat cs_stat_t;
 #define DIRSEP '/'
+#define CS_DEFINE_DIRENT
+
 #define to64(x) strtoll(x, NULL, 10)
 #define INT64_FMT PRId64
 #define INT64_X_FMT PRIx64
@@ -708,22 +711,6 @@ int _stat(const char *pathname, struct stat *st);
 
 #endif /* __TI_COMPILER_VERSION__ */
 
-#ifdef CC3200_FS_SPIFFS
-#include <common/spiffs/spiffs.h>
-
-typedef struct {
-  spiffs_DIR dh;
-  struct spiffs_dirent de;
-} DIR;
-
-#define d_name name
-#define dirent spiffs_dirent
-
-DIR *opendir(const char *dir_name);
-int closedir(DIR *dir);
-struct dirent *readdir(DIR *dir);
-#endif /* CC3200_FS_SPIFFS */
-
 #ifdef CC3200_FS_SLFS
 #define MG_FS_SLFS
 #endif
@@ -731,6 +718,7 @@ struct dirent *readdir(DIR *dir);
 #if (defined(CC3200_FS_SPIFFS) || defined(CC3200_FS_SLFS)) && \
     !defined(MG_ENABLE_FILESYSTEM)
 #define MG_ENABLE_FILESYSTEM 1
+#define CS_DEFINE_DIRENT
 #endif
 
 #ifndef CS_ENABLE_STDIO
@@ -1302,6 +1290,7 @@ typedef uint32_t in_addr_t;
 #define SIZE_T_FMT "u"
 
 #define DIRSEP '\\'
+#define CS_DEFINE_DIRENT
 
 #ifndef va_copy
 #ifdef __va_copy
