@@ -4703,6 +4703,12 @@ static void spawn_handling_thread(struct mg_connection *nc) {
   c[0] = mg_add_sock(&dummy, sp[0], forwarder_ev_handler);
   c[1] = mg_add_sock(&dummy, sp[1], nc->listener->priv_1.f);
 
+#if MG_ENABLE_BROADCAST
+  if (dummy.ctl[0] != INVALID_SOCKET) closesocket(dummy.ctl[0]);
+  if (dummy.ctl[1] != INVALID_SOCKET) closesocket(dummy.ctl[1]);
+  dummy.ctl[0] = dummy.ctl[1] = INVALID_SOCKET;
+#endif
+
   /* link_conns replaces priv_2, storing its value */
   poll_timeout = (intptr_t) nc->priv_2;
 
