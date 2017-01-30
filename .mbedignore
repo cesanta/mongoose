@@ -1,0 +1,9 @@
+binary/
+deps/
+docker/
+docs/
+examples/
+platforms/
+src/
+test/
+multilingual/
