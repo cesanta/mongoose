@@ -294,8 +294,11 @@ double cs_log_ts WEAK;
 
 void cs_log_print_prefix(const char *func) WEAK;
 void cs_log_print_prefix(const char *func) {
+  char prefix[21];
+  strncpy(prefix, func, 20);
+  prefix[20] = '\0';
   if (cs_log_file == NULL) cs_log_file = stderr;
-  fprintf(cs_log_file, "%-20s ", func);
+  fprintf(cs_log_file, "%-20s ", prefix);
 #if CS_LOG_ENABLE_TS_DIFF
   {
     double now = cs_time();
