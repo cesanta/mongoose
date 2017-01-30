@@ -31,8 +31,8 @@ signature: |
        * void pointers, since some archs might have fat pointers for functions.
        */
       mg_event_handler_t f;
-    } priv_1;       /* Used by mg_enable_multithreading() */
-    void *priv_2;   /* Used by mg_enable_multithreading() */
+    } priv_1;
+    void *priv_2;
     void *mgr_data; /* Implementation-specific event manager's data. */
     struct mg_iface *iface;
     unsigned long flags;

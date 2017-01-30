@@ -3281,8 +3281,8 @@ struct mg_connection {
      * void pointers, since some archs might have fat pointers for functions.
      */
     mg_event_handler_t f;
-  } priv_1;       /* Used by mg_enable_multithreading() */
-  void *priv_2;   /* Used by mg_enable_multithreading() */
+  } priv_1;
+  void *priv_2;
   void *mgr_data; /* Implementation-specific event manager's data. */
   struct mg_iface *iface;
   unsigned long flags;
@@ -3691,24 +3691,6 @@ int mg_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
  * Returns -1 if ACL is malformed, 0 if address is disallowed, 1 if allowed.
  */
 int mg_check_ip_acl(const char *acl, uint32_t remote_ip);
-
-/*
- * Optional parameters for mg_enable_multithreading_opt()
- */
-struct mg_multithreading_opts {
-  int poll_timeout; /* Polling interval */
-};
-
-/*
- * Enables multi-threaded handling for the given listening connection `nc`.
- * For each accepted connection, Mongoose will create a separate thread
- * and run an event handler in that thread. Thus, if an event handler is doing
- * a blocking call or some long computation, it will not slow down
- * other connections.
- */
-void mg_enable_multithreading(struct mg_connection *nc);
-void mg_enable_multithreading_opt(struct mg_connection *nc,
-                                  struct mg_multithreading_opts opts);
 
 #if MG_ENABLE_JAVASCRIPT
 /*

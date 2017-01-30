@@ -12,7 +12,6 @@ items:
   - { name: mg_connect.md }
   - { name: mg_connect_opt.md }
   - { name: mg_enable_javascript.md }
-  - { name: mg_enable_multithreading.md }
   - { name: mg_mgr_free.md }
   - { name: mg_mgr_init.md }
   - { name: mg_mgr_init_opt.md }
@@ -33,7 +32,6 @@ items:
   - { name: struct_mg_connection.md }
   - { name: struct_mg_mgr.md }
   - { name: struct_mg_mgr_init_opts.md }
-  - { name: struct_mg_multithreading_opts.md }
 ---
 
 NOTE: Mongoose manager is single threaded. It does not protect
