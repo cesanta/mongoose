@@ -14212,7 +14212,8 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
     if ((nc->flags & MG_F_SSL) && cs != NULL && cs->pcb.tcp != NULL &&
         cs->pcb.tcp->state == ESTABLISHED) {
       if (((nc->flags & MG_F_WANT_WRITE) ||
-           (nc->send_mbuf.len > 0) && (nc->flags & MG_F_SSL_HANDSHAKE_DONE)) &&
+           ((nc->send_mbuf.len > 0) &&
+            (nc->flags & MG_F_SSL_HANDSHAKE_DONE))) &&
           cs->pcb.tcp->snd_buf > 0) {
         /* Can write more. */
         if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
