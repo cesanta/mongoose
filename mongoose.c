@@ -14146,6 +14146,12 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
       case MG_SIG_SENT_CB: {
         if (cs->num_sent > 0) mg_if_sent_cb(nc, cs->num_sent);
         cs->num_sent = 0;
+
+        if (nc->send_mbuf.len == 0 && (nc->flags & MG_F_SEND_AND_CLOSE) &&
+            !(nc->flags & MG_F_WANT_WRITE)) {
+          mg_close_conn(nc);
+        }
+
         break;
       }
       case MG_SIG_TOMBSTONE: {
@@ -14203,11 +14209,6 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
     }
     mg_if_poll(nc, now);
     mg_if_timer(nc, now);
-    if (nc->send_mbuf.len == 0 && (nc->flags & MG_F_SEND_AND_CLOSE) &&
-        !(nc->flags & MG_F_WANT_WRITE)) {
-      mg_close_conn(nc);
-      continue;
-    }
 #if MG_ENABLE_SSL
     if ((nc->flags & MG_F_SSL) && cs != NULL && cs->pcb.tcp != NULL &&
         cs->pcb.tcp->state == ESTABLISHED) {
