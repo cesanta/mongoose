@@ -2,4 +2,4 @@
 title: MQTT client example
 ---
 
-TBD
+See https://github.com/cesanta/mongoose-examples/tree/master/examples/mqtt_client
