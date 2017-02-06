@@ -15,7 +15,7 @@ Looking for a complete IoT firmware solution?
 Check out [Mongoose OS](https://mongoose-iot.com) - open source embedded operating system for low-power connected microcontrollers. Secure, designed for Internet of Things, complete environment for prototyping, development and managing.
 
 # Support
-- [Study mongoose example code](https://github.com/cesanta/mongoose-examples)
+- [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
 - [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
 - [Support Forum - ask your technical questions here] (http://forum.cesanta.com/index.php?p=/categories/mongoose)
 - [Commercial licensing and support available] (https://www.cesanta.com/services-support)
