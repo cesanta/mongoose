@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<configurations XML_version="1.2" id="configurations_0">
+    <configuration XML_version="1.2" id="configuration_0">
+        <instance XML_version="1.2" desc="Stellaris In-Circuit Debug Interface" href="connections/Stellaris_ICDI_Connection.xml" id="Stellaris In-Circuit Debug Interface" xml="Stellaris_ICDI_Connection.xml" xmlpath="connections"/>
+        <connection XML_version="1.2" id="Stellaris In-Circuit Debug Interface">
+            <instance XML_version="1.2" href="drivers/cc3200_cs_icepick.xml" id="drivers" xml="cc3200_cs_icepick.xml" xmlpath="drivers"/>
+            <instance XML_version="1.2" href="drivers/stellaris_cs_dap.xml" id="drivers" xml="stellaris_cs_dap.xml" xmlpath="drivers"/>
+            <instance XML_version="1.2" href="drivers/cc3200_cortex_m4.xml" id="drivers" xml="cc3200_cortex_m4.xml" xmlpath="drivers"/>
+            <platform XML_version="1.2" id="platform_0">
+                <instance XML_version="1.2" desc="CC3200" href="devices/CC3200.xml" id="CC3200" xml="CC3200.xml" xmlpath="devices"/>
+            </platform>
+        </connection>
+    </configuration>
+</configurations>

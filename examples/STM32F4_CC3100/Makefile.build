@@ -1,0 +1,93 @@
+# -*- mode: makefile -*-
+.PHONY: all clean
+
+CC3100_DRV_SRCS = driver.c device.c nonos.c socket.c netapp.c wlan.c
+
+CC3100_PLATFORM_SRCS = spi.c board.c cli_uart.c stm32f4xx_it.c system_stm32f4xx.c stm32f4xx_hal_msp.c
+
+STM32F4_SRCS = stm32f4xx_hal_spi.c stm32f4xx_hal_gpio.c stm32f4xx_hal_cortex.c\
+               stm32f4xx_hal.c stm32f4xx_hal_rcc.c stm32f4xx_hal_dma.c \
+               stm32f4xx_hal_pwr_ex.c stm32f4_discovery.c stm32f4xx_hal_i2c.c \
+               stm32f4xx_hal_uart.c stm32f4xx_hal_tim.c \
+               stm32f4xx_hal_tim_ex.c stm32f4xx_hal_rtc_ex.c stm32f4xx_hal_rtc.c
+
+SRCS = main.c mongoose.c startup_utils.c ${CC3100_DRV_SRCS} ${CC3100_PLATFORM_SRCS} ${STM32F4_SRCS}
+
+REPO_ROOT=./../../
+CC3100_SDKROOT=/opt/CC3100SDK_1.2.0/cc3100-sdk
+STM32CUBEF4_ROOT=/opt/STM32CubeF4
+STM32CUBEF4_DRV_PATH=${STM32CUBEF4_ROOT}/Drivers
+
+CC = arm-none-eabi-gcc
+OBJCOPY = arm-none-eabi-objcopy
+
+FP_FLAGS = -mfloat-abi=hard -mfpu=fpv4-sp-d16
+ARCH_FLAGS = -mthumb -mcpu=cortex-m4
+
+BUILD_DIR=.build
+OUT_DIR=out
+PROJECT=example
+BOARD=STM32F429xx
+STARTUP_SCRIPT=startup_stm32f429xx.s
+
+INCDIRS = $(addprefix -I,$(IPATH))
+
+OBJS = $(addprefix $(BUILD_DIR)/,$(patsubst %.c,%.o,$(SRCS)) $(patsubst %.s,%.o,$(STARTUP_SCRIPT)))
+
+VPATH = ${CC3100_SDKROOT}/simplelink/source\
+        ${CC3100_SDKROOT}/platform/stm32discovery\
+        ${STM32CUBEF4_ROOT}/Drivers/STM32F4xx_HAL_Driver/Src\
+        ${STM32CUBEF4_ROOT}/Drivers/BSP/STM32F4-Discovery\
+        ${REPO_ROOT}
+
+# CC3100 SDK and STM32 SDK include headers w/out path, just like
+# #include "simplelink.h". As result, we have to add all required directories
+# into IPATH
+
+IPATH = . ${CC3100_SDKROOT}/simplelink/include\
+        ${CC3100_SDKROOT}/platform/stm32discovery\
+        ${STM32CUBEF4_DRV_PATH}/BSP/STM32F4-Discovery\
+        ${STM32CUBEF4_DRV_PATH}/STM32F4xx_HAL_Driver/Inc\
+        ${STM32CUBEF4_DRV_PATH}/CMSIS/Include\
+        ${STM32CUBEF4_DRV_PATH}/CMSIS/Device/ST/STM32F4xx/Include
+
+LDFLAGS	= --static -nostartfiles
+LDLIBS = -Wl,--start-group -lc -lgcc -lnosys -Wl,--end-group
+LDSCRIPT = stm32f429xx.ld
+
+INCDIRS = $(addprefix -I,$(IPATH))
+
+CFLAGS = ${FP_FLAGS} ${ARCH_FLAGS} ${INCDIRS}\
+         -D${BOARD} -DEXT_LIB_REGISTERED_GENERAL_EVENTS \
+         -DSL_FULL\
+         -DCS_PLATFORM=6 \
+         -D__STM32F407xx_H \
+         -DMG_SIMPLELINK_NO_OSI \
+         -DMG_ENABLE_MQTT \
+         -g -fno-common -ffunction-sections -fdata-sections \
+
+ELF = ${BUILD_DIR}/${PROJECT}.elf
+BIN = ${OUT_DIR}/${PROJECT}.bin
+
+all: ${BUILD_DIR} ${OUT_DIR} ${OBJS} ${ELF} ${BIN}
+
+${BUILD_DIR}:
+	mkdir -p $@
+
+${OUT_DIR}:
+	mkdir -p $@
+
+$(BUILD_DIR)/%.o: %.c
+	$(CC) ${CFLAGS} $^ -c -o $@
+
+$(BUILD_DIR)/%.o: %.s
+	$(CC) ${CFLAGS} $^ -c -o $@
+
+${ELF}: ${OBJS}
+	$(CC) ${ARCH_FLAGS} ${FP_FLAGS} $(LDFLAGS) $(OBJS) $(LDLIBS) -T$(LDSCRIPT) -o $@
+
+${BIN}: ${ELF}
+	$(OBJCOPY) -Obinary $^ $@
+
+clean:
+	rm -rf ${BUILD_DIR} ${OUT_DIR}

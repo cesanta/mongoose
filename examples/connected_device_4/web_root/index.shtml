@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Connected device demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <script type="text/javascript" src="jquery-1.11.3.min.js"></script>
+  <script src="jquery.flot.min.js"></script>
+  <script src="jquery.flot.time.js"></script>
+  <script type="text/javascript" src="main.js"></script>
+</head>
+<body>
+  <div class="content">
+    <img src="logo.png" style="float:right; height: 50px; border-radius: 3px;">
+    <h1>Connected device demo - Websocket push</h1>
+
+    <p>
+      This page is one of the series of examples that show how to make
+      devices connected with Mongoose. Here we add a real-time Websocket
+      server push, and update dashboard graph as data arrives.
+    </p>
+
+    <h1>Settings section</h1>
+    <form method="POST" action="/save">
+      <fieldset>
+        <legend>Device settings</legend>
+        <label>Setting 1:</label> <input type="text"
+          name="setting1" value="<!--#call setting1 -->" >
+        <label>Setting 2:</label> <input type="text"
+          name="setting2" value="<!--#call setting2 -->" >
+
+        <div>
+          <button type="submit">Save Settings</button>
+        </div>
+
+      </fieldset>
+    </form>
+
+    <h1>Dashboard section</h1>
+    <label>CPU usage:</label> <span id="cpu_usage">&nbsp;</span>
+    <div id="graphs"></div>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<?ccsproject version="1.0"?>
+<projectOptions>
+	<deviceVariant value="MSP432P401R"/>
+	<deviceFamily value="MSP432"/>
+	<deviceEndianness value="little"/>
+	<codegenToolVersion value="5.2.8"/>
+	<isElfFormat value="true"/>
+	<connection value="common/targetdb/connections/TIXDS110_Connection.xml"/>
+	<createSlaveProjects value=""/>
+	<templateProperties value="id=org.eclipse.rtsc.project.templates.EmptyRtscApplication,buildProfile=release,isHybrid=true,"/>
+	<isTargetManual value="false"/>
+</projectOptions>

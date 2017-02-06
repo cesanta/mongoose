@@ -1,0 +1,13 @@
+#
+# Generated - do not edit!
+#
+# NOCDDL
+#
+CND_BASEDIR=`pwd`
+# pic32mx_eth_sk2_encx24j600 configuration
+CND_ARTIFACT_DIR_pic32mx_eth_sk2_encx24j600=dist/pic32mx_eth_sk2_encx24j600/production
+CND_ARTIFACT_NAME_pic32mx_eth_sk2_encx24j600=http_server.X.production.hex
+CND_ARTIFACT_PATH_pic32mx_eth_sk2_encx24j600=dist/pic32mx_eth_sk2_encx24j600/production/http_server.X.production.hex
+CND_PACKAGE_DIR_pic32mx_eth_sk2_encx24j600=${CND_DISTDIR}/pic32mx_eth_sk2_encx24j600/package
+CND_PACKAGE_NAME_pic32mx_eth_sk2_encx24j600=httpserver.x.tar
+CND_PACKAGE_PATH_pic32mx_eth_sk2_encx24j600=${CND_DISTDIR}/pic32mx_eth_sk2_encx24j600/package/httpserver.x.tar
