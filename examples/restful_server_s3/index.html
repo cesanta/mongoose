@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>RESTful API demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style type="text/css">
+    * { outline: none; }
+    body {
+      background-color: #789; margin: 0;
+      padding: 0; font: 16px/1.4 Helvetica, Arial, sans-serif;
+      font: 16px/1.4 Helvetica, Arial, sans-serif;
+    }
+    div.content {
+      width: 800px; margin: 2em auto; padding: 20px 50px;
+      background-color: #fff; border-radius: 1em;
+    }
+    label { display: inline-block; min-width: 12em; }
+    input { border: 1px solid #ccc; padding: 0.2em; min-width: 20em; }
+    a:link, a:visited { color: #69c; text-decoration: none; }
+    #result {
+      background: #ffc; min-height: 3em; border: 1px solid #ccc;
+      white-space: pre-wrap; font-size: 85%;
+    }
+    @media (max-width: 700px) {
+      body { background-color: #fff; }
+      div.content { width: auto; margin: 0 auto; padding: 1em; }
+    }
+</style>
+
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+<script language="javascript" type="text/javascript">
+  jQuery(function() {
+
+    $(document).on('click', '#upload', function() {
+      var data = {};
+      $('#upload_form [name]').each(function(index, el) {
+        data[$(el).attr('name')] = $(el).val();
+      });
+      $('#result').text('');
+      $.ajax({
+        url: '/upload',
+        method: 'POST',
+        dataType: 'html',
+        data: data,
+        success: function(data) {
+          $('#result').text(data);
+        }
+      });
+    });
+
+  });
+</script>
+</head>
+<body>
+  <div class="content">
+    <h1>RESTful server with Amazon S3 integration demo.</h1>
+
+    <p>
+      This page demonstrates how Mongoose could be used to implement
+      a RESTful service that uses another RESTful service to handle
+      it's own API call. This example takes form data and uploads it as a file
+      to Amazon S3.
+      Open S3 console and create a bucket for testing. Fill out correct
+      bucket name in the fields below.
+    </p>
+
+    <p>If you're getting a "Temporary Redirect" error, look what is the
+      <b>Endpoint</b> value is. It's likely that you have something like
+      <b>BUCKET_NAME.S3_ZONE.amazonaws.com</b>. Change
+      the <b>Host</b> field to <b>S3_ZONE.amazonaws.com</b> and retry.
+    </p>
+
+    <div id="upload_form">
+    <div>
+      <label>Bucket name:</label> <input type="text" name="bucket"
+        value="my_uploads"/>
+    </div><div>
+      <label>File name:</label> <input type="text" name="file_name"
+        value="myfile.txt"/>
+    </div><div>
+      <label>File content:</label> <input type="text" name="file_data"
+        value=":-)"/>
+    </div><div>
+      <label>Host:</label> <input type="text" name="host"
+        value="s3.amazonaws.com"/>
+    </div><div>
+      <label></label>
+      <button id="upload">Upload</button>
+    </div><div>
+      <label>Result:</label> <pre id="result">&nbsp;</pre>
+    </div>
+    </div>
+
+  </div>
+</body>
+</html>
