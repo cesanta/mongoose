@@ -9128,7 +9128,7 @@ void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
                          int flags) {
   int is_v6;
   if (buf == NULL || len <= 0) return;
-  buf[0] = '\0';
+  memset(buf, 0, len);
 #if MG_ENABLE_IPV6
   is_v6 = sa->sa.sa_family == AF_INET6;
 #else
@@ -9150,24 +9150,37 @@ void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
       }
     }
     if (inet_ntop(sa->sa.sa_family, addr, start, capacity) == NULL) {
-      *buf = '\0';
+      goto cleanup;
     }
 #elif defined(_WIN32) || MG_LWIP || (MG_NET_IF == MG_NET_IF_PIC32)
     /* Only Windoze Vista (and newer) have inet_ntop() */
-    strncpy(buf, inet_ntoa(sa->sin.sin_addr), len);
+    char *addr_str = inet_ntoa(sa->sin.sin_addr);
+    if (addr_str != NULL) {
+      strncpy(buf, inet_ntoa(sa->sin.sin_addr), len - 1);
+    } else {
+      goto cleanup;
+    }
 #else
-    inet_ntop(AF_INET, (void *) &sa->sin.sin_addr, buf, len);
+    if (inet_ntop(AF_INET, (void *) &sa->sin.sin_addr, buf, len - 1) == NULL) {
+      goto cleanup;
+    }
 #endif
   }
   if (flags & MG_SOCK_STRINGIFY_PORT) {
     int port = ntohs(sa->sin.sin_port);
     if (flags & MG_SOCK_STRINGIFY_IP) {
-      snprintf(buf + strlen(buf), len - (strlen(buf) + 1), "%s:%d",
-               (is_v6 ? "]" : ""), port);
+      int buf_len = strlen(buf);
+      snprintf(buf + buf_len, len - (buf_len + 1), "%s:%d", (is_v6 ? "]" : ""),
+               port);
     } else {
       snprintf(buf, len, "%d", port);
     }
   }
+
+  return;
+
+cleanup:
+  *buf = '\0';
 }
 
 void mg_conn_addr_to_str(struct mg_connection *nc, char *buf, size_t len,
