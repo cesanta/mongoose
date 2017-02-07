@@ -7873,7 +7873,7 @@ static int mg_start_process(const char *interp, const char *cmd,
              interp == NULL ? "" : interp, interp == NULL ? "" : " ", cmd,
              strerror(errno));
     send(1, buf, strlen(buf), 0);
-    exit(EXIT_FAILURE); /* exec call failed */
+    _exit(EXIT_FAILURE); /* exec call failed */
   }
 
   return (pid != 0);
