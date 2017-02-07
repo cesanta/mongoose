@@ -5338,7 +5338,9 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
     }
 
     if (zero_chunk_received) {
-      hm->message.len = (size_t) pd->chunk.body_len + blen - i;
+      /* Total message size is len(body) + len(headers) */
+      hm->message.len =
+          (size_t) pd->chunk.body_len + blen - i + (hm->body.p - hm->message.p);
     }
   }
 
