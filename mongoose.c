@@ -3559,7 +3559,7 @@ void mg_socket_if_remove_conn(struct mg_connection *nc) {
 void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   if (sock != INVALID_SOCKET
 #ifdef __unix__
-      && sock < FD_SETSIZE
+      && sock < (sock_t) FD_SETSIZE
 #endif
       ) {
     FD_SET(sock, set);
@@ -3602,9 +3602,9 @@ time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
 
 #ifdef __unix__
       /* A hack to make sure all our file descriptos fit into FD_SETSIZE. */
-      if (nc->sock >= FD_SETSIZE && try_dup) {
+      if (nc->sock >= (sock_t) FD_SETSIZE && try_dup) {
         int new_sock = dup(nc->sock);
-        if (new_sock >= 0 && new_sock < FD_SETSIZE) {
+        if (new_sock >= 0 && new_sock < (sock_t) FD_SETSIZE) {
           closesocket(nc->sock);
           DBG(("new sock %d -> %d", nc->sock, new_sock));
           nc->sock = new_sock;
