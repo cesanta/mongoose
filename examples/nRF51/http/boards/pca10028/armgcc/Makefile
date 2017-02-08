@@ -266,8 +266,8 @@ clean:
 cleanobj:
 	$(RM) $(BUILD_DIRECTORIES)/*.o
 
-flash: $(MAKECMDGOALS)
+flash: nrf51422_xxac_s1xx_iot
 	@echo Flashing: $(OUTPUT_BINARY_DIRECTORY)/$<.hex
-	nrfjprog --reset --program $(OUTPUT_BINARY_DIRECTORY)/$<.hex
+	nrfjprog --reset --program $(OUTPUT_BINARY_DIRECTORY)/$<.hex -f nrf51 --sectorerase
 
 ## Flash softdevice
