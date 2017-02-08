@@ -13799,8 +13799,7 @@ static void mg_lwip_udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,
 #endif
 {
   struct mg_connection *nc = (struct mg_connection *) arg;
-  LOG(LL_INFO,
-      ("%p %s:%u %p %u %u", nc, IPADDR_NTOA(addr), port, p, p->ref, p->len));
+  DBG(("%p %s:%u %p %u %u", nc, IPADDR_NTOA(addr), port, p, p->ref, p->len));
   /* Put address in a separate pbuf and tack it onto the packet. */
   struct pbuf *sap =
       pbuf_alloc(PBUF_RAW, sizeof(union socket_address), PBUF_RAM);
