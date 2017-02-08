@@ -5635,11 +5635,6 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
   char boundary[100];
   int boundary_len;
 
-  if (nc->listener == NULL) {
-    /* No streaming for replies now */
-    goto exit_mp;
-  }
-
   ct = mg_get_http_header(hm, "Content-Type");
   if (ct == NULL) {
     /* We need more data - or it isn't multipart mesage */
@@ -6369,8 +6364,8 @@ int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
 
   /* Find where variable starts */
   for (s = hdr->p; s != NULL && s + n < end; s++) {
-    if ((s == hdr->p || s[-1] == ch || s[-1] == ch1) && s[n] == '=' &&
-        !strncmp(s, var_name, n))
+    if ((s == hdr->p || s[-1] == ch || s[-1] == ch1 || s[-1] == ';') &&
+        s[n] == '=' && !strncmp(s, var_name, n))
       break;
   }
 
