@@ -4388,6 +4388,24 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
     }
   }
 
+#ifdef MG_SSL_IF_MBEDTLS_MAX_FRAG_LEN
+  if (mbedtls_ssl_conf_max_frag_len(ctx->conf,
+#if MG_SSL_IF_MBEDTLS_MAX_FRAG_LEN == 512
+                                    MBEDTLS_SSL_MAX_FRAG_LEN_512
+#elif MG_SSL_IF_MBEDTLS_MAX_FRAG_LEN == 1024
+                                    MBEDTLS_SSL_MAX_FRAG_LEN_1024
+#elif MG_SSL_IF_MBEDTLS_MAX_FRAG_LEN == 2048
+                                    MBEDTLS_SSL_MAX_FRAG_LEN_2048
+#elif MG_SSL_IF_MBEDTLS_MAX_FRAG_LEN == 4096
+                                    MBEDTLS_SSL_MAX_FRAG_LEN_4096
+#else
+#error Invalid MG_SSL_IF_MBEDTLS_MAX_FRAG_LEN
+#endif
+                                    ) != 0) {
+    return MG_SSL_ERROR;
+  }
+#endif
+
   nc->flags |= MG_F_SSL;
 
   return MG_SSL_OK;
