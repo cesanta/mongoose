@@ -3938,6 +3938,9 @@ void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
  */
 int mg_hexdump(const void *buf, int len, char *dst, int dst_len);
 
+/* Same as mg_hexdump, but with output going to file instead of a buffer. */
+void mg_hexdumpf(FILE *fp, const void *buf, int len);
+
 /*
  * Generates human-readable hexdump of the data sent or received by the
  * connection. `path` is a file name where hexdump should be written.

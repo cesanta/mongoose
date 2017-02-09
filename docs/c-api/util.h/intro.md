@@ -10,6 +10,7 @@ items:
   - { name: mg_fopen.md }
   - { name: mg_hexdump.md }
   - { name: mg_hexdump_connection.md }
+  - { name: mg_hexdumpf.md }
   - { name: mg_is_big_endian.md }
   - { name: mg_match_prefix.md }
   - { name: mg_mbuf_append_base64.md }
