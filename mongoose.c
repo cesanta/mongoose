@@ -9207,7 +9207,8 @@ void mg_conn_addr_to_str(struct mg_connection *nc, char *buf, size_t len,
 }
 
 #if MG_ENABLE_HEXDUMP
-int mg_hexdump(const void *buf, int len, char *dst, int dst_len) {
+static int mg_hexdump_n(const void *buf, int len, char *dst, int dst_len,
+                        int offset) {
   const unsigned char *p = (const unsigned char *) buf;
   char ascii[17] = "";
   int i, idx, n = 0;
@@ -9216,7 +9217,7 @@ int mg_hexdump(const void *buf, int len, char *dst, int dst_len) {
     idx = i % 16;
     if (idx == 0) {
       if (i > 0) n += snprintf(dst + n, MAX(dst_len - n, 0), "  %s\n", ascii);
-      n += snprintf(dst + n, MAX(dst_len - n, 0), "%04x ", i);
+      n += snprintf(dst + n, MAX(dst_len - n, 0), "%04x ", i + offset);
     }
     if (dst_len - n < 0) {
       return n;
@@ -9227,9 +9228,25 @@ int mg_hexdump(const void *buf, int len, char *dst, int dst_len) {
   }
 
   while (i++ % 16) n += snprintf(dst + n, MAX(dst_len - n, 0), "%s", "   ");
-  n += snprintf(dst + n, MAX(dst_len - n, 0), "  %s\n\n", ascii);
+  n += snprintf(dst + n, MAX(dst_len - n, 0), "  %s\n", ascii);
 
   return n;
+}
+
+int mg_hexdump(const void *buf, int len, char *dst, int dst_len) {
+  return mg_hexdump_n(buf, len, dst, dst_len, 0);
+}
+
+void mg_hexdumpf(FILE *fp, const void *buf, int len) {
+  char tmp[80];
+  int offset = 0, n;
+  while (len > 0) {
+    n = (len < 16 ? len : 16);
+    mg_hexdump_n(((const char *) buf) + offset, n, tmp, sizeof(tmp), offset);
+    fputs(tmp, fp);
+    offset += n;
+    len -= n;
+  }
 }
 
 void mg_hexdump_connection(struct mg_connection *nc, const char *path,
@@ -13535,8 +13552,8 @@ struct mg_lwip_conn_state {
   size_t rx_offset; /* Offset within the first pbuf (if partially consumed) */
   /* Last SSL write size, for retries. */
   int last_ssl_write_size;
-  int recv_pending; /* Whether MG_SIG_RECV is already pending for this
-                       connection */
+  /* Whether MG_SIG_RECV is already pending for this connection */
+  int recv_pending;
 };
 
 enum mg_sig_type {
