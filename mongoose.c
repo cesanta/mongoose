@@ -14035,6 +14035,10 @@ void mg_lwip_if_udp_send(struct mg_connection *nc, const void *buf,
   struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, len, PBUF_RAM);
   ip_addr_t *ip = (ip_addr_t *) &nc->sa.sin.sin_addr.s_addr;
   u16_t port = ntohs(nc->sa.sin.sin_port);
+  if (p == NULL) {
+    DBG(("OOM"));
+    return;
+  }
   memcpy(p->payload, buf, len);
   cs->err = udp_sendto(upcb, p, (ip_addr_t *) ip, port);
   DBG(("%p udp_sendto = %d", nc, cs->err));
