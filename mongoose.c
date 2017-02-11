@@ -5446,6 +5446,13 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct mg_str *vec;
 #endif
   if (ev == MG_EV_CLOSE) {
+#if MG_ENABLE_HTTP_CGI
+    /* Close associated CGI forwarder connection */
+    if (pd->cgi.cgi_nc != NULL) {
+      pd->cgi.cgi_nc->user_data = NULL;
+      pd->cgi.cgi_nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+    }
+#endif
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
     if (pd->mp_stream.boundary != NULL) {
       /*
@@ -8049,7 +8056,10 @@ static void mg_cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
   struct mg_connection *nc = (struct mg_connection *) cgi_nc->user_data;
   (void) ev_data;
 
-  if (nc == NULL) return;
+  if (nc == NULL) {
+    cgi_nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+    return;
+  }
 
   switch (ev) {
     case MG_EV_RECV:
@@ -8093,7 +8103,7 @@ static void mg_cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
       }
       break;
     case MG_EV_CLOSE:
-      mg_http_free_proto_data_cgi(&mg_http_get_proto_data(cgi_nc)->cgi);
+      mg_http_free_proto_data_cgi(&mg_http_get_proto_data(nc)->cgi);
       nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }
@@ -8136,7 +8146,7 @@ MG_INTERNAL void mg_handle_cgi(struct mg_connection *nc, const char *prog,
     size_t n = nc->recv_mbuf.len - (hm->message.len - hm->body.len);
     struct mg_connection *cgi_nc =
         mg_add_sock(nc->mgr, fds[0], mg_cgi_ev_handler);
-    struct mg_http_proto_data *cgi_pd = mg_http_get_proto_data(cgi_nc);
+    struct mg_http_proto_data *cgi_pd = mg_http_get_proto_data(nc);
     cgi_pd->cgi.cgi_nc = cgi_nc;
     cgi_pd->cgi.cgi_nc->user_data = nc;
     nc->flags |= MG_F_USER_1;
