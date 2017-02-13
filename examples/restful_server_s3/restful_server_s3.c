@@ -36,8 +36,9 @@ static void s3_handler(struct mg_connection *nc, int ev, void *ev_data) {
   switch (ev) {
     case MG_EV_HTTP_REPLY:
       if (nc2 != NULL) {
-        mg_printf_http_chunk(nc2, "Error: %.*s", (int) hm->message.len,
-                             hm->message.p);
+        mg_printf_http_chunk(nc2, "%s%.*s",
+                             (hm->resp_code == 200 ? "" : "Error: "),
+                             (int) hm->message.len, hm->message.p);
         mg_send_http_chunk(nc2, "", 0);
       }
       unlink_conns(nc);
