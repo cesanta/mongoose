@@ -44,6 +44,15 @@ signature: |
      * name verification.
      */
     const char *ssl_server_name;
+    /*
+     * PSK identity and key. Identity is a NUL-terminated string and key is a hex
+     * string. Key must be either 16 or 32 bytes (32 or 64 hex digits) for AES-128
+     * or AES-256 respectively.
+     * Note: Default list of cipher suites does not include PSK suites, if you
+     * want to use PSK you will need to set ssl_cipher_suites as well.
+     */
+    const char *ssl_psk_identity;
+    const char *ssl_psk_key;
   #endif
   };
 ---
