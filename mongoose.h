@@ -1615,6 +1615,11 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
                                   int interval, int count);
 #endif
 
+/* For older version of LWIP */
+#ifndef ipX_2_ip
+#define ipX_2_ip(x) (x)
+#endif
+
 #endif /* MG_LWIP */
 
 #endif /* CS_COMMON_PLATFORMS_LWIP_MG_LWIP_H_ */

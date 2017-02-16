@@ -107,3 +107,7 @@ void user_init(void) {
   xTaskCreate(mg_task, (const signed char *) "mongoose", MG_TASK_STACK_SIZE,
               NULL, MGOS_TASK_PRIORITY, &s_mg_task_handle);
 }
+
+uint32_t user_rf_cal_sector_set(void) {
+  return 0xfb; /* 0xfb000, just before system data for 8Mbit flash. */
+}

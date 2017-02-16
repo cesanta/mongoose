@@ -116,3 +116,5 @@ sinclude $(SDK_PATH)/Makefile
 .PHONY: FORCE
 FORCE:
 
+clean:
+	rm -rf user/.output .bin
