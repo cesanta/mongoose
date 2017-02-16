@@ -13688,6 +13688,7 @@ extern struct mg_iface_vtable mg_lwip_iface_vtable;
 
 struct mg_lwip_conn_state {
   struct mg_connection *nc;
+  struct mg_connection *lc;
   union {
     struct tcp_pcb *tcp;
     struct udp_pcb *udp;
@@ -13708,6 +13709,7 @@ enum mg_sig_type {
   MG_SIG_SENT_CB = 3,
   MG_SIG_CLOSE_CONN = 4,
   MG_SIG_TOMBSTONE = 5,
+  MG_SIG_ACCEPT = 6,
 };
 
 void mg_lwip_post_signal(enum mg_sig_type sig, struct mg_connection *nc);
@@ -14039,9 +14041,23 @@ void mg_lwip_accept_conn(struct mg_connection *nc, struct tcp_pcb *tpcb) {
   mg_if_accept_tcp_cb(nc, &sa, sizeof(sa.sin));
 }
 
+void mg_lwip_handle_accept(struct mg_connection *nc) {
+  struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
+#if MG_ENABLE_SSL
+  if (cs->lc->flags & MG_F_SSL) {
+    if (mg_ssl_if_conn_accept(nc, cs->lc) != MG_SSL_OK) {
+      LOG(LL_ERROR, ("SSL error"));
+      tcp_close(cs->pcb.tcp);
+    }
+  } else
+#endif
+  {
+    mg_lwip_accept_conn(nc, cs->pcb.tcp);
+  }
+}
+
 static err_t mg_lwip_accept_cb(void *arg, struct tcp_pcb *newtpcb, err_t err) {
   struct mg_connection *lc = (struct mg_connection *) arg;
-  (void) err;
   DBG(("%p conn %p from %s:%u", lc, newtpcb,
        IPADDR_NTOA(ipX_2_ip(&newtpcb->remote_ip)), newtpcb->remote_port));
   struct mg_connection *nc = mg_if_accept_new_conn(lc);
@@ -14050,7 +14066,10 @@ static err_t mg_lwip_accept_cb(void *arg, struct tcp_pcb *newtpcb, err_t err) {
     return ERR_ABRT;
   }
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
+  cs->lc = lc;
   cs->pcb.tcp = newtpcb;
+  /* We need to set up callbacks before returning because data may start
+   * arriving immediately. */
   tcp_arg(newtpcb, nc);
   tcp_err(newtpcb, mg_lwip_tcp_error_cb);
   tcp_sent(newtpcb, mg_lwip_tcp_sent_cb);
@@ -14058,17 +14077,8 @@ static err_t mg_lwip_accept_cb(void *arg, struct tcp_pcb *newtpcb, err_t err) {
 #if LWIP_TCP_KEEPALIVE
   mg_lwip_set_keepalive_params(nc, 60, 10, 6);
 #endif
-#if MG_ENABLE_SSL
-  if (lc->flags & MG_F_SSL) {
-    if (mg_ssl_if_conn_accept(nc, lc) != MG_SSL_OK) {
-      LOG(LL_ERROR, ("SSL error"));
-      tcp_close(newtpcb);
-    }
-  } else
-#endif
-  {
-    mg_lwip_accept_conn(nc, newtpcb);
-  }
+  mg_lwip_post_signal(MG_SIG_ACCEPT, nc);
+  (void) err;
   return ERR_OK;
 }
 
@@ -14347,6 +14357,7 @@ void mg_lwip_post_signal(enum mg_sig_type sig, struct mg_connection *nc) {
   md->sig_queue[end_index].sig = sig;
   md->sig_queue[end_index].nc = nc;
   md->sig_queue_len++;
+  mg_lwip_mgr_schedule_poll(nc->mgr);
 }
 
 void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
@@ -14394,6 +14405,10 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
         break;
       }
       case MG_SIG_TOMBSTONE: {
+        break;
+      }
+      case MG_SIG_ACCEPT: {
+        mg_lwip_handle_accept(nc);
         break;
       }
     }
@@ -14506,11 +14521,24 @@ uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
   int num_timers = 0;
   mg_ev_mgr_lwip_process_signals(mgr);
   for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
+    struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
     if (nc->ev_timer_time > 0) {
       if (num_timers == 0 || nc->ev_timer_time < min_timer) {
         min_timer = nc->ev_timer_time;
       }
       num_timers++;
+    }
+    if (nc->send_mbuf.len > 0) {
+      int can_send = 0;
+      /* We have stuff to send, but can we? */
+      if (nc->flags & MG_F_UDP) {
+        /* UDP is always ready for sending. */
+        can_send = (cs->pcb.udp != NULL);
+      } else {
+        can_send = (cs->pcb.tcp != NULL && cs->pcb.tcp->snd_buf > 0);
+      }
+      /* We want and can send, request a poll immediately. */
+      if (can_send) return 0;
     }
   }
   uint32_t timeout_ms = ~0;
