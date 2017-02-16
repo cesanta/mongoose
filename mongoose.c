@@ -13801,7 +13801,7 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
 
 static err_t mg_lwip_tcp_conn_cb(void *arg, struct tcp_pcb *tpcb, err_t err) {
   struct mg_connection *nc = (struct mg_connection *) arg;
-  DBG(("%p connect to %s:%u = %d", nc, IPADDR_NTOA(&tpcb->remote_ip),
+  DBG(("%p connect to %s:%u = %d", nc, IPADDR_NTOA(ipX_2_ip(&tpcb->remote_ip)),
        tpcb->remote_port, err));
   if (nc == NULL) {
     tcp_abort(tpcb);
@@ -14042,8 +14042,8 @@ void mg_lwip_accept_conn(struct mg_connection *nc, struct tcp_pcb *tpcb) {
 static err_t mg_lwip_accept_cb(void *arg, struct tcp_pcb *newtpcb, err_t err) {
   struct mg_connection *lc = (struct mg_connection *) arg;
   (void) err;
-  DBG(("%p conn %p from %s:%u", lc, newtpcb, IPADDR_NTOA(&newtpcb->remote_ip),
-       newtpcb->remote_port));
+  DBG(("%p conn %p from %s:%u", lc, newtpcb,
+       IPADDR_NTOA(ipX_2_ip(&newtpcb->remote_ip)), newtpcb->remote_port));
   struct mg_connection *nc = mg_if_accept_new_conn(lc);
   if (nc == NULL) {
     tcp_abort(newtpcb);
