@@ -2013,6 +2013,7 @@ MG_INTERNAL void mg_remove_conn(struct mg_connection *conn) {
   if (conn->prev == NULL) conn->mgr->active_connections = conn->next;
   if (conn->prev) conn->prev->next = conn->next;
   if (conn->next) conn->next->prev = conn->prev;
+  conn->prev = conn->next = NULL;
   conn->iface->vtable->remove_conn(conn);
 }
 
@@ -10725,7 +10726,7 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
   struct mg_dns_message *msg;
   int first = 0;
 
-  DBG(("ev=%d user_data=%p", ev, nc->user_data));
+  if (ev != MG_EV_POLL) DBG(("ev=%d user_data=%p", ev, nc->user_data));
 
   req = (struct mg_resolve_async_request *) nc->user_data;
 
@@ -13778,6 +13779,14 @@ void mg_lwip_if_add_conn(struct mg_connection *nc);
 void mg_lwip_if_remove_conn(struct mg_connection *nc);
 time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms);
 
+#ifdef RTOS_SDK
+extern void mgos_lock();
+extern void mgos_unlock();
+#else
+#define mgos_lock()
+#define mgos_unlock()
+#endif
+
 static void mg_lwip_recv_common(struct mg_connection *nc, struct pbuf *p);
 
 #if LWIP_TCP_KEEPALIVE
@@ -13887,16 +13896,20 @@ static void mg_lwip_handle_recv_tcp(struct mg_connection *nc) {
   }
 #endif
 
+  mgos_lock();
   while (cs->rx_chain != NULL) {
     struct pbuf *seg = cs->rx_chain;
     size_t len = (seg->len - cs->rx_offset);
     char *data = (char *) malloc(len);
     if (data == NULL) {
+      mgos_unlock();
       DBG(("OOM"));
       return;
     }
     pbuf_copy_partial(seg, data, len, cs->rx_offset);
+    mgos_unlock();
     mg_if_recv_tcp_cb(nc, data, len, 1 /* own */);
+    mgos_lock();
     cs->rx_offset += len;
     if (cs->rx_offset == cs->rx_chain->len) {
       cs->rx_chain = pbuf_dechain(cs->rx_chain);
@@ -13904,6 +13917,7 @@ static void mg_lwip_handle_recv_tcp(struct mg_connection *nc) {
       cs->rx_offset = 0;
     }
   }
+  mgos_unlock();
 
   if (nc->send_mbuf.len > 0) {
     mg_lwip_mgr_schedule_poll(nc->mgr);
@@ -13984,6 +13998,7 @@ static void mg_lwip_udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,
 
 static void mg_lwip_recv_common(struct mg_connection *nc, struct pbuf *p) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
+  mgos_lock();
   if (cs->rx_chain == NULL) {
     cs->rx_chain = p;
   } else {
@@ -13993,6 +14008,7 @@ static void mg_lwip_recv_common(struct mg_connection *nc, struct pbuf *p) {
     cs->recv_pending = 1;
     mg_lwip_post_signal(MG_SIG_RECV, nc);
   }
+  mgos_unlock();
 }
 
 static void mg_lwip_handle_recv_udp(struct mg_connection *nc) {
@@ -14335,7 +14351,7 @@ struct mg_iface_vtable mg_default_iface_vtable = MG_LWIP_IFACE_VTABLE;
 #if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
 
 #ifndef MG_SIG_QUEUE_LEN
-#define MG_SIG_QUEUE_LEN 16
+#define MG_SIG_QUEUE_LEN 32
 #endif
 
 struct mg_ev_mgr_lwip_signal {
@@ -14352,21 +14368,32 @@ struct mg_ev_mgr_lwip_data {
 void mg_lwip_post_signal(enum mg_sig_type sig, struct mg_connection *nc) {
   struct mg_ev_mgr_lwip_data *md =
       (struct mg_ev_mgr_lwip_data *) nc->iface->data;
-  if (md->sig_queue_len >= MG_SIG_QUEUE_LEN) return;
+  mgos_lock();
+  if (md->sig_queue_len >= MG_SIG_QUEUE_LEN) {
+    mgos_unlock();
+    return;
+  }
   int end_index = (md->start_index + md->sig_queue_len) % MG_SIG_QUEUE_LEN;
   md->sig_queue[end_index].sig = sig;
   md->sig_queue[end_index].nc = nc;
   md->sig_queue_len++;
   mg_lwip_mgr_schedule_poll(nc->mgr);
+  mgos_unlock();
 }
 
 void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
   struct mg_ev_mgr_lwip_data *md =
       (struct mg_ev_mgr_lwip_data *) mgr->ifaces[MG_MAIN_IFACE]->data;
   while (md->sig_queue_len > 0) {
+    mgos_lock();
+    int sig = md->sig_queue[md->start_index].sig;
     struct mg_connection *nc = md->sig_queue[md->start_index].nc;
     struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
-    switch (md->sig_queue[md->start_index].sig) {
+    md->start_index = (md->start_index + 1) % MG_SIG_QUEUE_LEN;
+    md->sig_queue_len--;
+    mgos_unlock();
+    if (nc->iface == NULL || nc->mgr == NULL) continue;
+    switch (sig) {
       case MG_SIG_CONNECT_RESULT: {
 #if MG_ENABLE_SSL
         if (cs->err == 0 && (nc->flags & MG_F_SSL) &&
@@ -14412,8 +14439,6 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
         break;
       }
     }
-    md->start_index = (md->start_index + 1) % MG_SIG_QUEUE_LEN;
-    md->sig_queue_len--;
   }
 }
 
