@@ -1,5 +1,7 @@
 # simplest basel (http://basel.io) BUILD file for mongoose
 
+package(default_visibility = ["//visibility:public"],)
+
 filegroup(
     name = "mongoose_sources",
     srcs = [
