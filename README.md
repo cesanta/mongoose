@@ -12,7 +12,7 @@ Mongoose makes embedded network programming fast, robust, and easy.
 
 Looking for a complete IoT firmware solution?
 
-Check out [Mongoose OS](https://mongoose-iot.com) - open source embedded operating system for low-power connected microcontrollers. Secure, designed for Internet of Things, complete environment for prototyping, development and managing.
+Check out [Mongoose OS](https://mongoose-os.com) - open source embedded operating system for low-power connected microcontrollers. Secure, designed for Internet of Things, complete environment for prototyping, development and managing.
 
 # Support
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
