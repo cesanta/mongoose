@@ -56,7 +56,7 @@ LINKFLAGS_eagle.app.v6 = \
 	-Wl,-static						\
 	-Wl,--start-group					\
 	-lcirom \
-	-lgcc					\
+	-lgcc_sdk	\
 	-lhal					\
 	-lphy	\
 	-lpp	\
@@ -116,5 +116,23 @@ sinclude $(SDK_PATH)/Makefile
 .PHONY: FORCE
 FORCE:
 
+fw.zip:
+	@/usr/local/bin/fw_meta* create_manifest \
+	  --platform=esp8266 \
+	  --name=mongoose_example \
+		--build_info='{"build_version": "1.0", "build_id": "test"}' \
+	  --staging_dir=$(ODIR) \
+		--output=$(ODIR)/manifest.json \
+		iram:addr=0,src=$(BIN_PATH)/eagle.flash.bin \
+		irom:addr=0x20000,src=$(BIN_PATH)/eagle.irom0text.bin \
+	  sysparams:addr=0x7e000,type=sys_params,src=$(SDK_PATH)/bin/esp_init_data_default.bin
+	@/usr/local/bin/fw_meta* create_fw \
+		--manifest=$(ODIR)/manifest.json \
+		--src_dir=$(ODIR) \
+		--output=$@
+	@echo
+	@echo "  $@ built. Use \"mos flash $@\" to flash."
+	@echo
+
 clean:
-	rm -rf user/.output .bin
+	rm -rf fw.zip $(BIN_PATH) $(ODIR) user/.output

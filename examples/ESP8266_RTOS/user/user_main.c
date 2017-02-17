@@ -12,7 +12,7 @@
 #define AP_CHAN 9
 #define MG_LISTEN_ADDR "80"
 
-#define MG_TASK_STACK_SIZE 4096
+#define MG_TASK_STACK_SIZE 4096 /* bytes */
 #define MGOS_TASK_PRIORITY 1
 
 void uart_div_modify(int uart_no, unsigned int freq);
@@ -82,7 +82,8 @@ static void mg_task(void *arg) {
   struct mg_mgr mgr;
   struct mg_connection *nc;
 
-  printf("SDK version: %s\n", system_get_sdk_version());
+  printf("\r\n\r\nSDK version: %s\r\n", system_get_sdk_version());
+  printf("Free RAM: %d\r\n", system_get_free_heap_size());
   setup_ap();
 
   mg_mgr_init(&mgr, NULL);
@@ -104,8 +105,10 @@ xTaskHandle s_mg_task_handle;
 void user_init(void) {
   uart_div_modify(0, UART_CLK_FREQ / 115200);
 
-  xTaskCreate(mg_task, (const signed char *) "mongoose", MG_TASK_STACK_SIZE,
-              NULL, MGOS_TASK_PRIORITY, &s_mg_task_handle);
+  printf("Free RAM: %d\r\n", system_get_free_heap_size());
+  xTaskCreate(mg_task, (const signed char *) "mongoose",
+              MG_TASK_STACK_SIZE / 4, /* in 32-bit words */
+              NULL, MGOS_TASK_PRIORITY, NULL);
 }
 
 uint32_t user_rf_cal_sector_set(void) {
