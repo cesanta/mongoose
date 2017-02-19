@@ -100,8 +100,6 @@ static void mg_task(void *arg) {
   }
 }
 
-xTaskHandle s_mg_task_handle;
-
 void user_init(void) {
   uart_div_modify(0, UART_CLK_FREQ / 115200);
 
