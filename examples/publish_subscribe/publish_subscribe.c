@@ -36,9 +36,15 @@ static void server_handler(struct mg_connection *nc, int ev, void *p) {
     struct mg_connection *c;
 
     for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c)) {
+      if (!(c->flags |= MG_F_USER_2)) continue;  // Skip non-client connections
       mg_send(c, io->buf, io->len);
     }
     mbuf_remove(io, io->len);
+  } else if (ev == MG_EV_ACCEPT) {
+    char addr[32];
+    mg_sock_addr_to_str(p, addr, sizeof(addr),
+                        MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
+    printf("New client connected from %s\n", addr);
   }
 }
 
@@ -87,6 +93,7 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "Cannot connect to port %s\n", argv[1]);
       exit(EXIT_FAILURE);
     }
+    server_conn->flags |= MG_F_USER_2;  // Mark this as a client connection
 
     // Create a socketpair and give one end to the thread that reads stdin
     mg_socketpair(fds, SOCK_STREAM);
