@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <string.h>
-#include "mongoose.h"
 #include "../../../slre/slre.h"
+#include "mongoose.h"
 
+static const char *initial_url = "http://test.mosquitto.org";
 static const char *regex = "href=\"((https?://)[^\\s/'\"<>]+/?[^\\s'\"<>]*)";
 const int max_depth = 2;
 
@@ -44,7 +45,7 @@ int main(void) {
   struct mg_mgr mgr;
 
   mg_mgr_init(&mgr, NULL);
-  crawl_page(&mgr, "http://www.simpleweb.org/", ~0, 0);
+  crawl_page(&mgr, initial_url, ~0, 0);
 
   for (;;) {
     mg_mgr_poll(&mgr, 1000);
@@ -69,7 +70,12 @@ void crawl_page(struct mg_mgr *mgr, const char *url, size_t url_len,
   data->depth = depth;
 
   nc = mg_connect_http(mgr, event_handler, url, NULL, NULL);
-  nc->user_data = data;
+  if (nc != NULL) {
+    nc->user_data = data;
+  } else {
+    printf("Error connecting to [%s]\n", url);
+    free(data);
+  }
 }
 
 void handle_reply(struct mg_connection *nc, struct http_message *hm) {
