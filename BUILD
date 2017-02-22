@@ -18,6 +18,7 @@ cc_library(
         "-DNO_CGI",
     ],
     defines = [
+        "DISABLE_MD5",
         "NO_SSL",
         "USE_WEBSOCKET",
     ],
