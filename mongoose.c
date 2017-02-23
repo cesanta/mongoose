@@ -4968,10 +4968,10 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out) {
 
 #if MG_ENABLE_HTTP
 
+/* Amalgamated: #include "common/md5.h" */
+/* Amalgamated: #include "common/sha1.h" */
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
-/* Amalgamated: #include "common/sha1.h" */
-/* Amalgamated: #include "common/md5.h" */
 
 static const char *mg_version_header = "Mongoose/" MG_VERSION;
 
@@ -5825,8 +5825,7 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
 
     mbuf_remove(io, req_len);
   }
-exit_mp:
-  ;
+exit_mp:;
 }
 
 #define CONTENT_DISPOSITION "Content-Disposition: "
@@ -7189,8 +7188,7 @@ MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
             if (*p == '\0' || *p == DIRSEP
 #ifdef _WIN32
                 /* On Windows, "/" is also accepted, so check for that too. */
-                ||
-                *p == '/'
+                || *p == '/'
 #endif
                 ) {
               ok = 0;
@@ -7732,13 +7730,14 @@ struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
     mg_basic_auth_header(user, pass, &auth);
   }
 
+  if (post_data == NULL) post_data = "";
+  if (extra_headers == NULL) extra_headers = "";
+
   mg_printf(nc, "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %" SIZE_T_FMT
                 "\r\n%.*s%s\r\n%s",
-            post_data == NULL ? "GET" : "POST", path, addr,
-            post_data == NULL ? 0 : strlen(post_data), (int) auth.len,
-            (auth.buf == NULL ? "" : auth.buf),
-            extra_headers == NULL ? "" : extra_headers,
-            post_data == NULL ? "" : post_data);
+            post_data[0] == '\0' ? "GET" : "POST", path, addr,
+            strlen(post_data), (int) auth.len,
+            (auth.buf == NULL ? "" : auth.buf), extra_headers, post_data);
 
   mbuf_free(&auth);
   MG_FREE(user);
