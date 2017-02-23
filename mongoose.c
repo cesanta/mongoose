@@ -5825,7 +5825,8 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
 
     mbuf_remove(io, req_len);
   }
-exit_mp:;
+exit_mp:
+  ;
 }
 
 #define CONTENT_DISPOSITION "Content-Disposition: "
@@ -7188,7 +7189,8 @@ MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
             if (*p == '\0' || *p == DIRSEP
 #ifdef _WIN32
                 /* On Windows, "/" is also accepted, so check for that too. */
-                || *p == '/'
+                ||
+                *p == '/'
 #endif
                 ) {
               ok = 0;
