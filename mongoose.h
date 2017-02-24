@@ -5152,6 +5152,19 @@ void mg_mqtt_pong(struct mg_connection *nc);
 int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
                                  struct mg_str *topic, uint8_t *qos, int pos);
 
+/*
+ * Matches a topic against a topic expression
+ *
+ * Returns 1 if it matches; 0 otherwise.
+ */
+int mg_mqtt_match_topic_expression(struct mg_str exp, struct mg_str topic);
+
+/*
+ * Same as `mg_mqtt_match_topic_expression()`, but takes `exp` as a
+ * NULL-terminated string.
+ */
+int mg_mqtt_vmatch_topic_expression(const char *exp, struct mg_str topic);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

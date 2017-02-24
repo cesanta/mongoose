@@ -9703,6 +9703,21 @@ static void mg_mqtt_proto_data_destructor(void *proto_data) {
   MG_FREE(proto_data);
 }
 
+int mg_mqtt_match_topic_expression(struct mg_str exp, struct mg_str topic) {
+  /* TODO(mkm): implement real matching */
+  if (memchr(exp.p, '#', exp.len)) {
+    exp.len -= 2;
+    if (topic.len < exp.len) {
+      exp.len = topic.len;
+    }
+  }
+  return strncmp(topic.p, exp.p, exp.len) == 0;
+}
+
+int mg_mqtt_vmatch_topic_expression(const char *exp, struct mg_str topic) {
+  return mg_mqtt_match_topic_expression(mg_mk_str(exp), topic);
+}
+
 void mg_set_protocol_mqtt(struct mg_connection *nc) {
   nc->proto_handler = mqtt_handler;
   nc->proto_data = MG_CALLOC(1, sizeof(struct mg_mqtt_proto_data));
@@ -10040,26 +10055,6 @@ static void mg_mqtt_broker_handle_subscribe(struct mg_connection *nc,
   mg_mqtt_suback(nc, qoss, qoss_len, msg->message_id);
 }
 
-/*
- * Matches a topic against a topic expression
- *
- * See http://goo.gl/iWk21X
- *
- * Returns 1 if it matches; 0 otherwise.
- */
-static int mg_mqtt_match_topic_expression(const char *exp,
-                                          const struct mg_str *topic) {
-  /* TODO(mkm): implement real matching */
-  size_t len = strlen(exp);
-  if (strchr(exp, '#')) {
-    len -= 2;
-    if (topic->len < len) {
-      len = topic->len;
-    }
-  }
-  return strncmp(topic->p, exp, len) == 0;
-}
-
 static void mg_mqtt_broker_handle_publish(struct mg_mqtt_broker *brk,
                                           struct mg_mqtt_message *msg) {
   struct mg_mqtt_session *s;
@@ -10067,8 +10062,8 @@ static void mg_mqtt_broker_handle_publish(struct mg_mqtt_broker *brk,
 
   for (s = mg_mqtt_next(brk, NULL); s != NULL; s = mg_mqtt_next(brk, s)) {
     for (i = 0; i < s->num_subscriptions; i++) {
-      if (mg_mqtt_match_topic_expression(s->subscriptions[i].topic,
-                                         &msg->topic)) {
+      if (mg_mqtt_vmatch_topic_expression(s->subscriptions[i].topic,
+                                          msg->topic)) {
         char buf[100], *p = buf;
         mg_asprintf(&p, sizeof(buf), "%.*s", (int) msg->topic.len,
                     msg->topic.p);
