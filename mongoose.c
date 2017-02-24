@@ -9706,10 +9706,21 @@ static void mg_mqtt_proto_data_destructor(void *proto_data) {
 int mg_mqtt_match_topic_expression(struct mg_str exp, struct mg_str topic) {
   /* TODO(mkm): implement real matching */
   if (memchr(exp.p, '#', exp.len)) {
-    exp.len -= 2;
-    if (topic.len < exp.len) {
-      exp.len = topic.len;
+    /* exp `foo/#` will become `foo/` */
+    exp.len -= 1;
+    /*
+     * topic should be longer than the expression: e.g. topic `foo/bar` does
+     * match `foo/#`, but neither `foo` nor `foo/` do.
+     */
+    if (topic.len <= exp.len) {
+      return 0;
     }
+
+    /* Truncate topic so that it'll pass the next length check */
+    topic.len = exp.len;
+  }
+  if (topic.len != exp.len) {
+    return 0;
   }
   return strncmp(topic.p, exp.p, exp.len) == 0;
 }
