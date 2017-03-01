@@ -5374,7 +5374,7 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
     if (to_read == 0) {
       /* Rate limiting. send_mbuf is too full, wait until it's drained. */
     } else if (pd->file.sent < pd->file.cl &&
-               (n = fread(buf, 1, to_read, pd->file.fp)) > 0) {
+               (n = mg_fread(buf, 1, to_read, pd->file.fp)) > 0) {
       mg_send(nc, buf, n);
       pd->file.sent += n;
     } else {
@@ -5384,7 +5384,7 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
   } else if (pd->file.type == DATA_PUT) {
     struct mbuf *io = &nc->recv_mbuf;
     size_t to_write = left <= 0 ? 0 : left < io->len ? (size_t) left : io->len;
-    size_t n = fwrite(io->buf, 1, to_write, pd->file.fp);
+    size_t n = mg_fwrite(io->buf, 1, to_write, pd->file.fp);
     if (n > 0) {
       mbuf_remove(io, n);
       pd->file.sent += n;
@@ -7515,7 +7515,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
       struct file_upload_state *fus =
           (struct file_upload_state *) mp->user_data;
       if (fus == NULL || fus->fp == NULL) break;
-      if (fwrite(mp->data.p, 1, mp->data.len, fus->fp) != mp->data.len) {
+      if (mg_fwrite(mp->data.p, 1, mp->data.len, fus->fp) != mp->data.len) {
         LOG(LL_ERROR, ("Failed to write to %s: %d, wrote %d", fus->lfn,
                        mg_get_errno(), (int) fus->num_recd));
         if (mg_get_errno() == ENOSPC
@@ -8328,7 +8328,7 @@ static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
 static void mg_send_file_data(struct mg_connection *nc, FILE *fp) {
   char buf[BUFSIZ];
   size_t n;
-  while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+  while ((n = mg_fread(buf, 1, sizeof(buf), fp)) > 0) {
     mg_send(nc, buf, n);
   }
 }
@@ -9209,7 +9209,7 @@ static int lowercase(const char *s) {
   return tolower(*(const unsigned char *) s);
 }
 
-#if MG_ENABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM && !defined(MG_USER_FILE_FUNCTIONS)
 int mg_stat(const char *path, cs_stat_t *st) {
 #ifdef _WIN32
   wchar_t wpath[MAX_PATH_SIZE];
@@ -9240,6 +9240,14 @@ int mg_open(const char *path, int flag, int mode) { /* LCOV_EXCL_LINE */
 #else
   return open(path, flag, mode); /* LCOV_EXCL_LINE */
 #endif
+}
+
+size_t mg_fread(void *ptr, size_t size, size_t count, FILE *f) {
+  return fread(ptr, size, count, f);
+}
+
+size_t mg_fwrite(const void *ptr, size_t size, size_t count, FILE *f) {
+  return fwrite(ptr, size, count, f);
 }
 #endif
 

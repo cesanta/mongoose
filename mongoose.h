@@ -3898,6 +3898,21 @@ FILE *mg_fopen(const char *path, const char *mode);
  * Return value is the same as for the `open()` syscall.
  */
 int mg_open(const char *path, int flag, int mode);
+
+/*
+ * Reads data from the given file stream.
+ *
+ * Return value is a number of bytes readen.
+ */
+size_t mg_fread(void *ptr, size_t size, size_t count, FILE *f);
+
+/*
+ * Writes data to the given file stream.
+ *
+ * Return value is a number of bytes wtitten.
+ */
+size_t mg_fwrite(const void *ptr, size_t size, size_t count, FILE *f);
+
 #endif /* MG_ENABLE_FILESYSTEM */
 
 #if MG_ENABLE_THREADS

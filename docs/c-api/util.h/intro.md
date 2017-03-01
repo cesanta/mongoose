@@ -8,6 +8,8 @@ items:
   - { name: mg_basic_auth_header.md }
   - { name: mg_conn_addr_to_str.md }
   - { name: mg_fopen.md }
+  - { name: mg_fread.md }
+  - { name: mg_fwrite.md }
   - { name: mg_hexdump.md }
   - { name: mg_hexdump_connection.md }
   - { name: mg_hexdumpf.md }
