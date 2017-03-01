@@ -1136,7 +1136,7 @@ struct mg_str mg_mk_str_n(const char *s, size_t len) {
 int mg_vcmp(const struct mg_str *str1, const char *str2) WEAK;
 int mg_vcmp(const struct mg_str *str1, const char *str2) {
   size_t n2 = strlen(str2), n1 = str1->len;
-  int r = memcmp(str1->p, str2, (n1 < n2) ? n1 : n2);
+  int r = strncmp(str1->p, str2, (n1 < n2) ? n1 : n2);
   if (r == 0) {
     return n1 - n2;
   }
