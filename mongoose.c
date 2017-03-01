@@ -8888,8 +8888,8 @@ static int mg_deliver_websocket_data(struct mg_connection *nc) {
       mbuf_remove(&nc->recv_mbuf, (size_t) frame_len); /* Cleanup frame */
     }
 
-    /* If client closes, close too */
-    if ((buf[0] & 0x0f) == WEBSOCKET_OP_CLOSE) {
+    /* If the frame is not reassembled - client closes and close too */
+    if (!reass && (buf[0] & 0x0f) == WEBSOCKET_OP_CLOSE) {
       nc->flags |= MG_F_SEND_AND_CLOSE;
     }
   }
