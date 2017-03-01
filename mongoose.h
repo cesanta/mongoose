@@ -3235,7 +3235,7 @@ typedef void (*mg_event_handler_t)(struct mg_connection *nc, int ev,
 #define MG_EV_POLL 0    /* Sent to each connection on each mg_mgr_poll() call */
 #define MG_EV_ACCEPT 1  /* New connection accepted. union socket_address * */
 #define MG_EV_CONNECT 2 /* connect() succeeded or failed. int *  */
-#define MG_EV_RECV 3    /* Data has benn received. int *num_bytes */
+#define MG_EV_RECV 3    /* Data has been received. int *num_bytes */
 #define MG_EV_SEND 4    /* Data has been written to a socket. int *num_bytes */
 #define MG_EV_CLOSE 5   /* Connection is closed. NULL */
 #define MG_EV_TIMER 6   /* now >= conn->ev_timer_time. double * */
@@ -3495,7 +3495,7 @@ struct mg_connection *mg_bind(struct mg_mgr *, const char *,
  * `address` can be just a port number, e.g. `:8000`. To bind to a specific
  * interface, an IP address can be specified, e.g. `1.2.3.4:8000`. By default,
  * a TCP connection is created. To create UDP connection, prepend `udp://`
- * prefix, e.g. `udp://:8000`. To summarize, `address` paramer has following
+ * prefix, e.g. `udp://:8000`. To summarize, `address` parameter has following
  * format: `[PROTO://][IP_ADDRESS]:PORT`, where `PROTO` could be `tcp` or
  * `udp`.
  *
@@ -3701,7 +3701,7 @@ int mg_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
  * is to allow all access. On each request the full list is traversed,
  * and the last match wins. Example:
  *
- * `-0.0.0.0/0,+192.168/16` - deny all acccesses, only allow 192.168/16 subnet
+ * `-0.0.0.0/0,+192.168/16` - deny all accesses, only allow 192.168/16 subnet
  *
  * To learn more about subnet masks, see this
  * link:https://en.wikipedia.org/wiki/Subnetwork[Wikipedia page on Subnetwork].
@@ -4794,7 +4794,7 @@ void mg_printf_http_chunk(struct mg_connection *nc, const char *fmt, ...);
 /*
  * Sends the response status line.
  * If `extra_headers` is not NULL, then `extra_headers` are also sent
- * after the reponse line. `extra_headers` must NOT end end with new line.
+ * after the response line. `extra_headers` must NOT end end with new line.
  * Example:
  *
  *      mg_send_response_line(nc, 200, "Access-Control-Allow-Origin: *");
@@ -4818,7 +4818,7 @@ void mg_http_send_error(struct mg_connection *nc, int code, const char *reason);
  * `status_code` should be either 301 or 302 and `location` point to the
  * new location.
  * If `extra_headers` is not empty, then `extra_headers` are also sent
- * after the reponse line. `extra_headers` must NOT end end with new line.
+ * after the response line. `extra_headers` must NOT end end with new line.
  *
  * Example:
  *
@@ -5392,7 +5392,7 @@ int mg_dns_copy_questions(struct mbuf *io, struct mg_dns_message *msg);
  * struct because they might be invalidated as soon as the IO buffer grows
  * again.
  *
- * Returns the number of bytes appened or -1 in case of error.
+ * Returns the number of bytes appended or -1 in case of error.
  */
 int mg_dns_encode_record(struct mbuf *io, struct mg_dns_resource_record *rr,
                          const char *name, size_t nlen, const void *rdata,
@@ -5730,7 +5730,7 @@ struct mg_coap_option *mg_coap_add_option(struct mg_coap_message *cm,
 
 /*
  * Frees the memory allocated for options.
- * If the cm paramater doesn't contain any option it does nothing.
+ * If the cm parameter doesn't contain any option it does nothing.
  */
 void mg_coap_free_options(struct mg_coap_message *cm);
 

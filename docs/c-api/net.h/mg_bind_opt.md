@@ -15,7 +15,7 @@ the same as for the `mg_connect()` call, where `HOST` part is optional.
 `address` can be just a port number, e.g. `:8000`. To bind to a specific
 interface, an IP address can be specified, e.g. `1.2.3.4:8000`. By default,
 a TCP connection is created. To create UDP connection, prepend `udp://`
-prefix, e.g. `udp://:8000`. To summarize, `address` paramer has following
+prefix, e.g. `udp://:8000`. To summarize, `address` parameter has following
 format: `[PROTO://][IP_ADDRESS]:PORT`, where `PROTO` could be `tcp` or
 `udp`.
 

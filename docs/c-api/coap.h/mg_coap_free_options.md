@@ -7,5 +7,5 @@ signature: |
 ---
 
 Frees the memory allocated for options.
-If the cm paramater doesn't contain any option it does nothing. 
+If the cm parameter doesn't contain any option it does nothing. 
 
