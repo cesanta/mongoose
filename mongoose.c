@@ -5706,6 +5706,11 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
 #endif /* MG_ENABLE_HTTP_WEBSOCKET */
     else if (hm->message.len <= io->len) {
       int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
+      char addr[32];
+      mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
+                          MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
+      DBG(("%p %s %.*s %.*s", nc, addr, (int) hm->method.len, hm->method.p,
+           (int) hm->uri.len, hm->uri.p));
 
 /* Whole HTTP message is fully buffered, call event handler */
 
