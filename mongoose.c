@@ -274,6 +274,7 @@ void cs_log_printf(const char *fmt, ...);
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 /* Amalgamated: #include "common/cs_time.h" */
 
