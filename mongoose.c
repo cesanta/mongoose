@@ -9667,12 +9667,11 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       mm->message_id = getu16(p);
       break;
     case MG_MQTT_CMD_PUBLISH: {
-      if (MG_MQTT_GET_QOS(header) > 0) {
+      p = scanto(p, &mm->topic);
+      if (mm->qos > 0) {
         mm->message_id = getu16(p);
         p += 2;
       }
-      p = scanto(p, &mm->topic);
-
       mm->payload.p = p;
       mm->payload.len = end - p;
       break;
