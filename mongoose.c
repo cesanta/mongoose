@@ -13928,15 +13928,15 @@ static void mg_lwip_handle_recv_tcp(struct mg_connection *nc) {
       return;
     }
     pbuf_copy_partial(seg, data, len, cs->rx_offset);
-    mgos_unlock();
-    mg_if_recv_tcp_cb(nc, data, len, 1 /* own */);
-    mgos_lock();
     cs->rx_offset += len;
     if (cs->rx_offset == cs->rx_chain->len) {
       cs->rx_chain = pbuf_dechain(cs->rx_chain);
       pbuf_free(seg);
       cs->rx_offset = 0;
     }
+    mgos_unlock();
+    mg_if_recv_tcp_cb(nc, data, len, 1 /* own */);
+    mgos_lock();
   }
   mgos_unlock();
 
