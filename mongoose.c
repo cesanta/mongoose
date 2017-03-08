@@ -9933,8 +9933,9 @@ void mg_mqtt_connack(struct mg_connection *nc, uint8_t return_code) {
 static void mg_send_mqtt_short_command(struct mg_connection *nc, uint8_t cmd,
                                        uint16_t message_id) {
   uint16_t message_id_net = htons(message_id);
+  uint8_t flags = (cmd == MG_MQTT_CMD_PUBREL ? 2 : 0);
   mg_send(nc, &message_id_net, 2);
-  mg_mqtt_prepend_header(nc, cmd, MG_MQTT_QOS(1), 2);
+  mg_mqtt_prepend_header(nc, cmd, flags, 2 /* len */);
 }
 
 void mg_mqtt_puback(struct mg_connection *nc, uint16_t message_id) {
