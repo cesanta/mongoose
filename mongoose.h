@@ -3002,7 +3002,7 @@ struct mg_iface_vtable;
 struct mg_iface {
   struct mg_mgr *mgr;
   void *data; /* Implementation-specific data */
-  struct mg_iface_vtable *vtable;
+  const struct mg_iface_vtable *vtable;
 };
 
 struct mg_iface_vtable {
@@ -3041,11 +3041,11 @@ struct mg_iface_vtable {
                         union socket_address *sa);
 };
 
-extern struct mg_iface_vtable *mg_ifaces[];
+extern const struct mg_iface_vtable *mg_ifaces[];
 extern int mg_num_ifaces;
 
 /* Creates a new interface instance. */
-struct mg_iface *mg_if_create_iface(struct mg_iface_vtable *vtable,
+struct mg_iface *mg_if_create_iface(const struct mg_iface_vtable *vtable,
                                     struct mg_mgr *mgr);
 
 /*
@@ -3053,7 +3053,7 @@ struct mg_iface *mg_if_create_iface(struct mg_iface_vtable *vtable,
  * interface `from`, exclusive. Returns NULL if none is found.
  */
 struct mg_iface *mg_find_iface(struct mg_mgr *mgr,
-                               struct mg_iface_vtable *vtable,
+                               const struct mg_iface_vtable *vtable,
                                struct mg_iface *from);
 /*
  * Deliver a new TCP connection. Returns NULL in case on error (unable to
@@ -3348,9 +3348,9 @@ void mg_mgr_init(struct mg_mgr *mgr, void *user_data);
  * `num_ifaces` pointers it contains will be reclaimed by `mg_mgr_free`.
  */
 struct mg_mgr_init_opts {
-  struct mg_iface_vtable *main_iface;
+  const struct mg_iface_vtable *main_iface;
   int num_ifaces;
-  struct mg_iface_vtable **ifaces;
+  const struct mg_iface_vtable **ifaces;
 };
 
 /*

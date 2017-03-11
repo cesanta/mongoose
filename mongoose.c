@@ -2975,7 +2975,7 @@ extern "C" {
 #define MG_ENABLE_NET_IF_SOCKET MG_NET_IF == MG_NET_IF_SOCKET
 #endif
 
-extern struct mg_iface_vtable mg_socket_iface_vtable;
+extern const struct mg_iface_vtable mg_socket_iface_vtable;
 
 #ifdef __cplusplus
 }
@@ -3003,7 +3003,7 @@ struct mg_tun_client;
 extern "C" {
 #endif /* __cplusplus */
 
-extern struct mg_iface_vtable mg_tun_iface_vtable;
+extern const struct mg_iface_vtable mg_tun_iface_vtable;
 
 struct mg_connection *mg_tun_if_find_conn(struct mg_tun_client *client,
                                           uint32_t stream_id);
@@ -3023,18 +3023,18 @@ struct mg_connection *mg_tun_if_find_conn(struct mg_tun_client *client,
 /* Amalgamated: #include "mongoose/src/net_if_socket.h" */
 /* Amalgamated: #include "mongoose/src/net_if_tun.h" */
 
-extern struct mg_iface_vtable mg_default_iface_vtable;
+extern const struct mg_iface_vtable mg_default_iface_vtable;
 
 #if MG_ENABLE_TUN
-struct mg_iface_vtable *mg_ifaces[] = {&mg_default_iface_vtable,
-                                       &mg_tun_iface_vtable};
+const struct mg_iface_vtable *mg_ifaces[] = {&mg_default_iface_vtable,
+                                             &mg_tun_iface_vtable};
 #else
-struct mg_iface_vtable *mg_ifaces[] = {&mg_default_iface_vtable};
+const struct mg_iface_vtable *mg_ifaces[] = {&mg_default_iface_vtable};
 #endif
 
 int mg_num_ifaces = (int) (sizeof(mg_ifaces) / sizeof(mg_ifaces[0]));
 
-struct mg_iface *mg_if_create_iface(struct mg_iface_vtable *vtable,
+struct mg_iface *mg_if_create_iface(const struct mg_iface_vtable *vtable,
                                     struct mg_mgr *mgr) {
   struct mg_iface *iface = (struct mg_iface *) MG_CALLOC(1, sizeof(*iface));
   iface->mgr = mgr;
@@ -3044,7 +3044,7 @@ struct mg_iface *mg_if_create_iface(struct mg_iface_vtable *vtable,
 }
 
 struct mg_iface *mg_find_iface(struct mg_mgr *mgr,
-                               struct mg_iface_vtable *vtable,
+                               const struct mg_iface_vtable *vtable,
                                struct mg_iface *from) {
   int i = 0;
   if (from != NULL) {
@@ -3790,9 +3790,9 @@ void mg_socket_if_get_conn_addr(struct mg_connection *nc, int remote,
   }
 /* clang-format on */
 
-struct mg_iface_vtable mg_socket_iface_vtable = MG_SOCKET_IFACE_VTABLE;
+const struct mg_iface_vtable mg_socket_iface_vtable = MG_SOCKET_IFACE_VTABLE;
 #if MG_NET_IF == MG_NET_IF_SOCKET
-struct mg_iface_vtable mg_default_iface_vtable = MG_SOCKET_IFACE_VTABLE;
+const struct mg_iface_vtable mg_default_iface_vtable = MG_SOCKET_IFACE_VTABLE;
 #endif
 
 #endif /* MG_ENABLE_NET_IF_SOCKET */
@@ -3966,7 +3966,7 @@ struct mg_connection *mg_tun_if_find_conn(struct mg_tun_client *client,
   }
 /* clang-format on */
 
-struct mg_iface_vtable mg_tun_iface_vtable = MG_TUN_IFACE_VTABLE;
+const struct mg_iface_vtable mg_tun_iface_vtable = MG_TUN_IFACE_VTABLE;
 
 #endif /* MG_ENABLE_TUN */
 #ifdef MG_MODULE_LINES
@@ -13012,7 +13012,7 @@ extern "C" {
 #define MG_ENABLE_NET_IF_SIMPLELINK MG_NET_IF == MG_NET_IF_SIMPLELINK
 #endif
 
-extern struct mg_iface_vtable mg_simplelink_iface_vtable;
+extern const struct mg_iface_vtable mg_simplelink_iface_vtable;
 
 #ifdef __cplusplus
 }
@@ -13484,9 +13484,9 @@ void sl_restart_cb(struct mg_mgr *mgr) {
   }
 /* clang-format on */
 
-struct mg_iface_vtable mg_simplelink_iface_vtable = MG_SL_IFACE_VTABLE;
+const struct mg_iface_vtable mg_simplelink_iface_vtable = MG_SL_IFACE_VTABLE;
 #if MG_NET_IF == MG_NET_IF_SIMPLELINK
-struct mg_iface_vtable mg_default_iface_vtable = MG_SL_IFACE_VTABLE;
+const struct mg_iface_vtable mg_default_iface_vtable = MG_SL_IFACE_VTABLE;
 #endif
 
 #endif /* MG_ENABLE_NET_IF_SIMPLELINK */
@@ -13706,7 +13706,7 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
 
 #include <stdint.h>
 
-extern struct mg_iface_vtable mg_lwip_iface_vtable;
+extern const struct mg_iface_vtable mg_lwip_iface_vtable;
 
 struct mg_lwip_conn_state {
   struct mg_connection *nc;
@@ -14355,9 +14355,9 @@ void mg_lwip_if_sock_set(struct mg_connection *nc, sock_t sock) {
   }
 /* clang-format on */
 
-struct mg_iface_vtable mg_lwip_iface_vtable = MG_LWIP_IFACE_VTABLE;
+const struct mg_iface_vtable mg_lwip_iface_vtable = MG_LWIP_IFACE_VTABLE;
 #if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
-struct mg_iface_vtable mg_default_iface_vtable = MG_LWIP_IFACE_VTABLE;
+const struct mg_iface_vtable mg_default_iface_vtable = MG_LWIP_IFACE_VTABLE;
 #endif
 
 #endif /* MG_ENABLE_NET_IF_LWIP_LOW_LEVEL */
@@ -14902,7 +14902,7 @@ extern "C" {
 #define MG_ENABLE_NET_IF_PIC32 MG_NET_IF == MG_NET_IF_PIC32
 #endif
 
-extern struct mg_iface_vtable mg_pic32_iface_vtable;
+extern const struct mg_iface_vtable mg_pic32_iface_vtable;
 
 #ifdef __cplusplus
 }
@@ -15201,9 +15201,9 @@ void mg_pic32_if_connect_udp(struct mg_connection *nc) {
   }
 /* clang-format on */
 
-struct mg_iface_vtable mg_pic32_iface_vtable = MG_PIC32_IFACE_VTABLE;
+const struct mg_iface_vtable mg_pic32_iface_vtable = MG_PIC32_IFACE_VTABLE;
 #if MG_NET_IF == MG_NET_IF_PIC32
-struct mg_iface_vtable mg_default_iface_vtable = MG_PIC32_IFACE_VTABLE;
+const struct mg_iface_vtable mg_default_iface_vtable = MG_PIC32_IFACE_VTABLE;
 #endif
 
 #endif /* MG_ENABLE_NET_IF_PIC32 */
