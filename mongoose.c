@@ -11845,7 +11845,7 @@ void mg_sntp_send_request(struct mg_connection *c) {
 */
 #ifndef MG_SNMP_NO_DELAY_CORRECTION
   uint32_t sec;
-  sec = htonl(mg_time() + SNTP_TIME_OFFSET);
+  sec = htonl((uint32_t)(mg_time() + SNTP_TIME_OFFSET));
   memcpy(&buf[40], &sec, sizeof(sec));
 #endif
 
