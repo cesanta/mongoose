@@ -2111,6 +2111,11 @@ static void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
 
 void mg_close_conn(struct mg_connection *conn) {
   DBG(("%p %lu %d", conn, conn->flags, conn->sock));
+#if MG_ENABLE_SSL
+  if (conn->flags & MG_F_SSL_HANDSHAKE_DONE) {
+    mg_ssl_if_conn_close_notify(conn);
+  }
+#endif
   mg_remove_conn(conn);
   conn->iface->vtable->destroy_conn(conn);
   mg_call(conn, NULL, conn->user_data, MG_EV_CLOSE, NULL);
@@ -4150,6 +4155,12 @@ int mg_ssl_if_write(struct mg_connection *nc, const void *data, size_t len) {
   return n;
 }
 
+void mg_ssl_if_conn_close_notify(struct mg_connection *nc) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  if (ctx == NULL) return;
+  SSL_shutdown(ctx->ssl);
+}
+
 void mg_ssl_if_conn_free(struct mg_connection *nc) {
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
   if (ctx == NULL) return;
@@ -4635,6 +4646,12 @@ int mg_ssl_if_write(struct mg_connection *nc, const void *data, size_t len) {
   DBG(("%p %d -> %d", nc, (int) len, n));
   if (n < 0) return mg_ssl_if_mbed_err(nc, n);
   return n;
+}
+
+void mg_ssl_if_conn_close_notify(struct mg_connection *nc) {
+  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  if (ctx == NULL) return;
+  mbedtls_ssl_close_notify(ctx->ssl);
 }
 
 void mg_ssl_if_conn_free(struct mg_connection *nc) {
@@ -13636,6 +13653,11 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
     ctx->ssl_server_name = strdup(params->server_name);
   }
   return MG_SSL_OK;
+}
+
+void mg_ssl_if_conn_close_notify(struct mg_connection *nc) {
+  /* Nothing to do */
+  (void) nc;
 }
 
 void mg_ssl_if_conn_free(struct mg_connection *nc) {
