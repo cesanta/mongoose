@@ -62,7 +62,8 @@ MG_INTERNAL struct mg_connection *mg_do_connect(struct mg_connection *nc,
 MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
                                  int *proto, char *host, size_t host_len);
 MG_INTERNAL void mg_call(struct mg_connection *nc,
-                         mg_event_handler_t ev_handler, int ev, void *ev_data);
+                         mg_event_handler_t ev_handler, void *user_data, int ev,
+                         void *ev_data);
 void mg_forward(struct mg_connection *from, struct mg_connection *to);
 MG_INTERNAL void mg_add_conn(struct mg_mgr *mgr, struct mg_connection *c);
 MG_INTERNAL void mg_remove_conn(struct mg_connection *c);
@@ -2021,7 +2022,8 @@ MG_INTERNAL void mg_remove_conn(struct mg_connection *conn) {
 }
 
 MG_INTERNAL void mg_call(struct mg_connection *nc,
-                         mg_event_handler_t ev_handler, int ev, void *ev_data) {
+                         mg_event_handler_t ev_handler, void *user_data, int ev,
+                         void *ev_data) {
   if (ev_handler == NULL) {
     /*
      * If protocol handler is specified, call it. Otherwise, call user-specified
@@ -2051,7 +2053,7 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
   if (ev_handler != NULL) {
     unsigned long flags_before = nc->flags;
     size_t recv_mbuf_before = nc->recv_mbuf.len, recved;
-    ev_handler(nc, ev, ev_data MG_UD_ARG(nc->user_data));
+    ev_handler(nc, ev, ev_data MG_UD_ARG(user_data));
     recved = (recv_mbuf_before - nc->recv_mbuf.len);
     /* Prevent user handler from fiddling with system flags. */
     if (ev_handler == nc->handler && nc->flags != flags_before) {
@@ -2067,12 +2069,15 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
          ev_handler == nc->handler ? "user" : "proto", nc->flags,
          (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
   }
+#if !MG_ENABLE_CALLBACK_USERDATA
+  (void) user_data;
+#endif
 }
 
 void mg_if_timer(struct mg_connection *c, double now) {
   if (c->ev_timer_time > 0 && now >= c->ev_timer_time) {
     double old_value = c->ev_timer_time;
-    mg_call(c, NULL, MG_EV_TIMER, &now);
+    mg_call(c, NULL, c->user_data, MG_EV_TIMER, &now);
     /*
      * To prevent timer firing all the time, reset the timer after delivery.
      * However, in case user sets it to new value, do not reset.
@@ -2085,7 +2090,7 @@ void mg_if_timer(struct mg_connection *c, double now) {
 
 void mg_if_poll(struct mg_connection *nc, time_t now) {
   if (!(nc->flags & MG_F_SSL) || (nc->flags & MG_F_SSL_HANDSHAKE_DONE)) {
-    mg_call(nc, NULL, MG_EV_POLL, &now);
+    mg_call(nc, NULL, nc->user_data, MG_EV_POLL, &now);
   }
 }
 
@@ -2108,7 +2113,7 @@ void mg_close_conn(struct mg_connection *conn) {
   DBG(("%p %lu %d", conn, conn->flags, conn->sock));
   mg_remove_conn(conn);
   conn->iface->vtable->destroy_conn(conn);
-  mg_call(conn, NULL, MG_EV_CLOSE, NULL);
+  mg_call(conn, NULL, conn->user_data, MG_EV_CLOSE, NULL);
   mg_destroy_conn(conn, 0 /* destroy_if */);
 }
 
@@ -2452,7 +2457,7 @@ void mg_if_accept_tcp_cb(struct mg_connection *nc, union socket_address *sa,
                          size_t sa_len) {
   (void) sa_len;
   nc->sa = *sa;
-  mg_call(nc, NULL, MG_EV_ACCEPT, &nc->sa);
+  mg_call(nc, NULL, nc->user_data, MG_EV_ACCEPT, &nc->sa);
 }
 
 void mg_send(struct mg_connection *nc, const void *buf, int len) {
@@ -2473,7 +2478,7 @@ void mg_if_sent_cb(struct mg_connection *nc, int num_sent) {
   if (num_sent < 0) {
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
-  mg_call(nc, NULL, MG_EV_SEND, &num_sent);
+  mg_call(nc, NULL, nc->user_data, MG_EV_SEND, &num_sent);
 }
 
 MG_INTERNAL void mg_recv_common(struct mg_connection *nc, void *buf, int len,
@@ -2502,7 +2507,7 @@ MG_INTERNAL void mg_recv_common(struct mg_connection *nc, void *buf, int len,
     mbuf_append(&nc->recv_mbuf, buf, len);
     MG_FREE(buf);
   }
-  mg_call(nc, NULL, MG_EV_RECV, &len);
+  mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &len);
 }
 
 void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len, int own) {
@@ -2550,7 +2555,7 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
          */
         nc->flags |= MG_F_SEND_AND_CLOSE;
         mg_add_conn(lc->mgr, nc);
-        mg_call(nc, NULL, MG_EV_ACCEPT, &nc->sa);
+        mg_call(nc, NULL, nc->user_data, MG_EV_ACCEPT, &nc->sa);
       } else {
         DBG(("OOM"));
         /* No return here, we still need to drop on the floor */
@@ -2594,7 +2599,7 @@ void mg_if_connect_cb(struct mg_connection *nc, int err) {
   if (err != 0) {
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
-  mg_call(nc, NULL, MG_EV_CONNECT, &err);
+  mg_call(nc, NULL, nc->user_data, MG_EV_CONNECT, &err);
 }
 
 #if MG_ENABLE_ASYNC_RESOLVER
@@ -2632,14 +2637,14 @@ static void resolve_cb(struct mg_dns_message *msg, void *data,
 
   if (e == MG_RESOLVE_TIMEOUT) {
     double now = mg_time();
-    mg_call(nc, NULL, MG_EV_TIMER, &now);
+    mg_call(nc, NULL, nc->user_data, MG_EV_TIMER, &now);
   }
 
   /*
    * If we get there was no MG_DNS_A_RECORD in the answer
    */
-  mg_call(nc, NULL, MG_EV_CONNECT, &failure);
-  mg_call(nc, NULL, MG_EV_CLOSE, NULL);
+  mg_call(nc, NULL, nc->user_data, MG_EV_CONNECT, &failure);
+  mg_call(nc, NULL, nc->user_data, MG_EV_CLOSE, NULL);
   mg_destroy_conn(nc, 1 /* destroy_if */);
 }
 #endif
@@ -5021,6 +5026,9 @@ struct mg_http_endpoint {
   const char *name;
   size_t name_len;
   mg_event_handler_t handler;
+#if MG_ENABLE_CALLBACK_USERDATA
+  void *user_data;
+#endif
 };
 
 enum mg_http_multipart_stream_state {
@@ -5502,7 +5510,7 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
 
     /* Send MG_EV_HTTP_CHUNK event */
     nc->flags &= ~MG_F_DELETE_CHUNK;
-    mg_call(nc, nc->handler, MG_EV_HTTP_CHUNK, hm);
+    mg_call(nc, nc->handler, nc->user_data, MG_EV_HTTP_CHUNK, hm);
 
     /* Delete processed data if user set MG_F_DELETE_CHUNK flag */
     if (nc->flags & MG_F_DELETE_CHUNK) {
@@ -5523,10 +5531,10 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
   return body_len;
 }
 
-static mg_event_handler_t mg_http_get_endpoint_handler(
-    struct mg_connection *nc, struct mg_str *uri_path) {
+struct mg_http_endpoint *mg_http_get_endpoint_handler(struct mg_connection *nc,
+                                                      struct mg_str *uri_path) {
   struct mg_http_proto_data *pd;
-  mg_event_handler_t ret = NULL;
+  struct mg_http_endpoint *ret = NULL;
   int matched, matched_max = 0;
   struct mg_http_endpoint *ep;
 
@@ -5542,7 +5550,7 @@ static mg_event_handler_t mg_http_get_endpoint_handler(
     if ((matched = mg_match_prefix_n(name_s, *uri_path)) != -1) {
       if (matched > matched_max) {
         /* Looking for the longest suitable handler */
-        ret = ep->handler;
+        ret = ep;
         matched_max = matched;
       }
     }
@@ -5556,15 +5564,20 @@ static mg_event_handler_t mg_http_get_endpoint_handler(
 static void mg_http_call_endpoint_handler(struct mg_connection *nc, int ev,
                                           struct http_message *hm) {
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
+  void *user_data = nc->user_data;
 
-  if (pd->endpoint_handler == NULL || ev == MG_EV_HTTP_REQUEST) {
-    pd->endpoint_handler =
-        ev == MG_EV_HTTP_REQUEST
-            ? mg_http_get_endpoint_handler(nc->listener, &hm->uri)
-            : NULL;
+  if (ev == MG_EV_HTTP_REQUEST) {
+    struct mg_http_endpoint *ep =
+        mg_http_get_endpoint_handler(nc->listener, &hm->uri);
+    if (ep != NULL) {
+      pd->endpoint_handler = ep->handler;
+#if MG_ENABLE_CALLBACK_USERDATA
+      user_data = ep->user_data;
+#endif
+    }
   }
-  mg_call(nc, pd->endpoint_handler ? pd->endpoint_handler : nc->handler, ev,
-          hm);
+  mg_call(nc, pd->endpoint_handler ? pd->endpoint_handler : nc->handler,
+          user_data, ev, hm);
 }
 
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
@@ -5627,11 +5640,11 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       mp.var_name = pd->mp_stream.var_name;
       mp.file_name = pd->mp_stream.file_name;
       mg_call(nc, (pd->endpoint_handler ? pd->endpoint_handler : nc->handler),
-              MG_EV_HTTP_PART_END, &mp);
+              nc->user_data, MG_EV_HTTP_PART_END, &mp);
       mp.var_name = NULL;
       mp.file_name = NULL;
       mg_call(nc, (pd->endpoint_handler ? pd->endpoint_handler : nc->handler),
-              MG_EV_HTTP_MULTIPART_REQUEST_END, &mp);
+              nc->user_data, MG_EV_HTTP_MULTIPART_REQUEST_END, &mp);
     } else
 #endif
         if (io->len > 0 && mg_parse_http(io->buf, io->len, hm, is_req) > 0) {
@@ -5652,7 +5665,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
   }
 #endif
 
-  mg_call(nc, nc->handler, ev, ev_data);
+  mg_call(nc, nc->handler, nc->user_data, ev, ev_data);
 
   if (ev == MG_EV_RECV) {
     struct mg_str *s;
@@ -5697,11 +5710,12 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       mbuf_remove(io, req_len);
       nc->proto_handler = mg_ws_handler;
       nc->flags |= MG_F_IS_WEBSOCKET;
-      mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_DONE, NULL);
+      mg_call(nc, nc->handler, nc->user_data, MG_EV_WEBSOCKET_HANDSHAKE_DONE,
+              NULL);
       mg_ws_handler(nc, MG_EV_RECV, ev_data MG_UD_ARG(user_data));
     } else if (nc->listener != NULL &&
                (vec = mg_get_http_header(hm, "Sec-WebSocket-Key")) != NULL) {
-      mg_event_handler_t handler;
+      struct mg_http_endpoint *ep;
 
       /* This is a websocket request. Switch protocol handlers. */
       mbuf_remove(io, req_len);
@@ -5713,18 +5727,23 @@ void mg_http_handler(struct mg_connection *nc, int ev,
        * deliver subsequent websocket events to this handler after the
        * protocol switch.
        */
-      handler = mg_http_get_endpoint_handler(nc->listener, &hm->uri);
-      if (handler != NULL) {
-        nc->handler = handler;
+      ep = mg_http_get_endpoint_handler(nc->listener, &hm->uri);
+      if (ep != NULL) {
+        nc->handler = ep->handler;
+#if MG_ENABLE_CALLBACK_USERDATA
+        nc->user_data = ep->user_data;
+#endif
       }
 
       /* Send handshake */
-      mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_REQUEST, hm);
+      mg_call(nc, nc->handler, nc->user_data, MG_EV_WEBSOCKET_HANDSHAKE_REQUEST,
+              hm);
       if (!(nc->flags & (MG_F_CLOSE_IMMEDIATELY | MG_F_SEND_AND_CLOSE))) {
         if (nc->send_mbuf.len == 0) {
           mg_ws_handshake(nc, vec);
         }
-        mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_DONE, NULL);
+        mg_call(nc, nc->handler, nc->user_data, MG_EV_WEBSOCKET_HANDSHAKE_DONE,
+                NULL);
         mg_ws_handler(nc, MG_EV_RECV, ev_data MG_UD_ARG(user_data));
       }
     }
@@ -5805,6 +5824,7 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   struct mg_str *ct;
   struct mbuf *io = &nc->recv_mbuf;
+  void *user_data = nc->user_data;
 
   char boundary[100];
   int boundary_len;
@@ -5841,17 +5861,23 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
      */
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   } else {
+    struct mg_http_endpoint *ep = NULL;
     pd->mp_stream.state = MPS_BEGIN;
     pd->mp_stream.boundary = strdup(boundary);
     pd->mp_stream.boundary_len = strlen(boundary);
     pd->mp_stream.var_name = pd->mp_stream.file_name = NULL;
+    pd->endpoint_handler = nc->handler;
 
-    pd->endpoint_handler = mg_http_get_endpoint_handler(nc->listener, &hm->uri);
-    if (pd->endpoint_handler == NULL) {
-      pd->endpoint_handler = nc->handler;
+    ep = mg_http_get_endpoint_handler(nc->listener, &hm->uri);
+    if (ep != NULL) {
+      pd->endpoint_handler = ep->handler;
+#if MG_ENABLE_CALLBACK_USERDATA
+      user_data = ep->user_data;
+#endif
     }
 
-    mg_call(nc, pd->endpoint_handler, MG_EV_HTTP_MULTIPART_REQUEST, hm);
+    mg_call(nc, pd->endpoint_handler, user_data, MG_EV_HTTP_MULTIPART_REQUEST,
+            hm);
 
     mbuf_remove(io, req_len);
   }
@@ -5872,7 +5898,7 @@ static void mg_http_multipart_call_handler(struct mg_connection *c, int ev,
   mp.user_data = pd->mp_stream.user_data;
   mp.data.p = data;
   mp.data.len = data_len;
-  mg_call(c, pd->endpoint_handler, ev, &mp);
+  mg_call(c, pd->endpoint_handler, c->user_data, ev, &mp);
   pd->mp_stream.user_data = mp.user_data;
 }
 
@@ -7834,7 +7860,8 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
 }
 
 void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
-                               mg_event_handler_t handler) {
+                               MG_CB(mg_event_handler_t handler,
+                                     void *user_data)) {
   struct mg_http_proto_data *pd = NULL;
   struct mg_http_endpoint *new_ep = NULL;
 
@@ -7846,6 +7873,9 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
   new_ep->name = strdup(uri_path);
   new_ep->name_len = strlen(new_ep->name);
   new_ep->handler = handler;
+#if MG_ENABLE_CALLBACK_USERDATA
+  new_ep->user_data = user_data;
+#endif
   new_ep->next = pd->endpoints;
   pd->endpoints = new_ep;
 }
@@ -8480,9 +8510,9 @@ static void mg_send_ssi_file(struct mg_connection *nc, struct http_message *hm,
         cctx.req = hm;
         cctx.file = mg_mk_str(path);
         cctx.arg = mg_mk_str(p + d_call.len + 1);
-        mg_call(nc, NULL, MG_EV_SSI_CALL,
+        mg_call(nc, NULL, nc->user_data, MG_EV_SSI_CALL,
                 (void *) cctx.arg.p); /* NUL added above */
-        mg_call(nc, NULL, MG_EV_SSI_CALL_CTX, &cctx);
+        mg_call(nc, NULL, nc->user_data, MG_EV_SSI_CALL_CTX, &cctx);
 #if MG_ENABLE_HTTP_SSI_EXEC
       } else if (strncmp(p, d_exec.p, d_exec.len) == 0) {
         do_ssi_exec(nc, p + d_exec.len + 1);
@@ -8846,9 +8876,9 @@ static int mg_is_ws_first_fragment(unsigned char flags) {
 static void mg_handle_incoming_websocket_frame(struct mg_connection *nc,
                                                struct websocket_message *wsm) {
   if (wsm->flags & 0x8) {
-    mg_call(nc, nc->handler, MG_EV_WEBSOCKET_CONTROL_FRAME, wsm);
+    mg_call(nc, nc->handler, nc->user_data, MG_EV_WEBSOCKET_CONTROL_FRAME, wsm);
   } else {
-    mg_call(nc, nc->handler, MG_EV_WEBSOCKET_FRAME, wsm);
+    mg_call(nc, nc->handler, nc->user_data, MG_EV_WEBSOCKET_FRAME, wsm);
   }
 }
 
@@ -9071,7 +9101,7 @@ void mg_printf_websocket_frame(struct mg_connection *nc, int op,
 
 MG_INTERNAL void mg_ws_handler(struct mg_connection *nc, int ev,
                                void *ev_data MG_UD_ARG(void *user_data)) {
-  mg_call(nc, nc->handler, ev, ev_data);
+  mg_call(nc, nc->handler, nc->user_data, ev, ev_data);
 
   switch (ev) {
     case MG_EV_RECV:
@@ -12057,7 +12087,7 @@ static void mg_sntp_util_ev_handler(struct mg_connection *c, int ev,
   switch (ev) {
     case MG_EV_CONNECT:
       if (*(int *) ev_data != 0) {
-        mg_call(c, sd->hander, MG_SNTP_FAILED, NULL);
+        mg_call(c, sd->hander, c->user_data, MG_SNTP_FAILED, NULL);
         break;
       }
     /* fallthrough */
@@ -12067,16 +12097,16 @@ static void mg_sntp_util_ev_handler(struct mg_connection *c, int ev,
         mg_set_timer(c, mg_time() + 10);
         sd->count++;
       } else {
-        mg_call(c, sd->hander, MG_SNTP_FAILED, NULL);
+        mg_call(c, sd->hander, c->user_data, MG_SNTP_FAILED, NULL);
         c->flags |= MG_F_CLOSE_IMMEDIATELY;
       }
       break;
     case MG_SNTP_MALFORMED_REPLY:
-      mg_call(c, sd->hander, MG_SNTP_FAILED, NULL);
+      mg_call(c, sd->hander, c->user_data, MG_SNTP_FAILED, NULL);
       c->flags |= MG_F_CLOSE_IMMEDIATELY;
       break;
     case MG_SNTP_REPLY:
-      mg_call(c, sd->hander, MG_SNTP_REPLY, ev_data);
+      mg_call(c, sd->hander, c->user_data, MG_SNTP_REPLY, ev_data);
       c->flags |= MG_F_CLOSE_IMMEDIATELY;
       break;
     case MG_EV_CLOSE:

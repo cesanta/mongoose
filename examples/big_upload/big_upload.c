@@ -98,7 +98,7 @@ int main(void) {
   mg_mgr_init(&mgr, NULL);
   nc = mg_bind(&mgr, s_http_port, ev_handler);
 
-  mg_register_http_endpoint(nc, "/upload", handle_upload);
+  mg_register_http_endpoint(nc, "/upload", handle_upload MG_UD_ARG(NULL));
   // Set up HTTP server parameters
   mg_set_protocol_http_websocket(nc);
 

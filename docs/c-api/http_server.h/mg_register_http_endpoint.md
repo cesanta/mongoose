@@ -4,7 +4,8 @@ decl_name: "mg_register_http_endpoint"
 symbol_kind: "func"
 signature: |
   void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
-                                 mg_event_handler_t handler);
+                                 MG_CB(mg_event_handler_t handler,
+                                       void *user_data);
 ---
 
 Registers a callback for a specified http endpoint

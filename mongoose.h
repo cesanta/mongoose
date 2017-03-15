@@ -4792,7 +4792,8 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
  * ```
  */
 void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
-                               mg_event_handler_t handler);
+                               MG_CB(mg_event_handler_t handler,
+                                     void *user_data));
 
 /*
  * Authenticates a HTTP request against an opened password file.
