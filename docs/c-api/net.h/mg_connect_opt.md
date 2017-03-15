@@ -4,8 +4,8 @@ decl_name: "mg_connect_opt"
 symbol_kind: "func"
 signature: |
   struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
-                                       mg_event_handler_t handler,
-                                       struct mg_connect_opts opts);
+                                       MG_CB(mg_event_handler_t handler,
+                                             void *user_data);
 ---
 
 Connects to a remote host.

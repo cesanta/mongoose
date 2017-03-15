@@ -2963,6 +2963,18 @@ struct {								\
 #define MG_ENABLE_EXTRA_ERRORS_DESC 0
 #endif
 
+#ifndef MG_ENABLE_CALLBACK_USERDATA
+#define MG_ENABLE_CALLBACK_USERDATA 0
+#endif
+
+#if MG_ENABLE_CALLBACK_USERDATA
+#define MG_UD_ARG(ud) , ud
+#define MG_CB(cb, ud) cb, ud
+#else
+#define MG_UD_ARG(ud)
+#define MG_CB(cb, ud) cb
+#endif
+
 #endif /* CS_MONGOOSE_SRC_FEATURES_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net_if.h"
@@ -3229,7 +3241,7 @@ struct mg_connection;
  * Mongoose calls the event handler, passing the events defined below.
  */
 typedef void (*mg_event_handler_t)(struct mg_connection *nc, int ev,
-                                   void *ev_data);
+                                   void *ev_data MG_UD_ARG(void *user_data));
 
 /* Events. Meaning of event parameter (evp) is given in the comment. */
 #define MG_EV_POLL 0    /* Sent to each connection on each mg_mgr_poll() call */
@@ -3392,7 +3404,8 @@ time_t mg_mgr_poll(struct mg_mgr *, int milli);
  * be passed as the `ev_data` pointer. Maximum message size is capped
  * by `MG_CTL_MSG_MESSAGE_SIZE` which is set to 8192 bytes.
  */
-void mg_broadcast(struct mg_mgr *, mg_event_handler_t func, void *, size_t);
+void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
+                  size_t len);
 #endif
 
 /*
@@ -3408,7 +3421,7 @@ void mg_broadcast(struct mg_mgr *, mg_event_handler_t func, void *, size_t);
  * }
  * ```
  */
-struct mg_connection *mg_next(struct mg_mgr *, struct mg_connection *);
+struct mg_connection *mg_next(struct mg_mgr *mgr, struct mg_connection *c);
 
 /*
  * Optional parameters to `mg_add_sock_opt()`.
@@ -3429,7 +3442,9 @@ struct mg_add_sock_opts {
  *
  * For more options see the `mg_add_sock_opt` variant.
  */
-struct mg_connection *mg_add_sock(struct mg_mgr *, sock_t, mg_event_handler_t);
+struct mg_connection *mg_add_sock(struct mg_mgr *mgr, sock_t sock,
+                                  MG_CB(mg_event_handler_t handler,
+                                        void *user_data));
 
 /*
  * Creates a connection, associates it with the given socket and event handler
@@ -3437,9 +3452,10 @@ struct mg_connection *mg_add_sock(struct mg_mgr *, sock_t, mg_event_handler_t);
  *
  * See the `mg_add_sock_opts` structure for a description of the options.
  */
-struct mg_connection *mg_add_sock_opt(struct mg_mgr *, sock_t,
-                                      mg_event_handler_t,
-                                      struct mg_add_sock_opts);
+struct mg_connection *mg_add_sock_opt(struct mg_mgr *mgr, sock_t sock,
+                                      MG_CB(mg_event_handler_t handler,
+                                            void *user_data),
+                                      struct mg_add_sock_opts opts);
 
 /*
  * Optional parameters to `mg_bind_opt()`.
@@ -3485,8 +3501,9 @@ struct mg_bind_opts {
  *
  * See `mg_bind_opt` for full documentation.
  */
-struct mg_connection *mg_bind(struct mg_mgr *, const char *,
-                              mg_event_handler_t);
+struct mg_connection *mg_bind(struct mg_mgr *mgr, const char *address,
+                              MG_CB(mg_event_handler_t handler,
+                                    void *user_data));
 /*
  * Creates a listening connection.
  *
@@ -3506,7 +3523,8 @@ struct mg_connection *mg_bind(struct mg_mgr *, const char *,
  * NOTE: The connection remains owned by the manager, do not free().
  */
 struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
-                                  mg_event_handler_t handler,
+                                  MG_CB(mg_event_handler_t handler,
+                                        void *user_data),
                                   struct mg_bind_opts opts);
 
 /* Optional parameters to `mg_connect_opt()` */
@@ -3569,7 +3587,8 @@ struct mg_connect_opts {
  * See `mg_connect_opt()` for full documentation.
  */
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
-                                 mg_event_handler_t handler);
+                                 MG_CB(mg_event_handler_t handler,
+                                       void *user_data));
 
 /*
  * Connects to a remote host.
@@ -3620,7 +3639,8 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
  * ```
  */
 struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
-                                     mg_event_handler_t handler,
+                                     MG_CB(mg_event_handler_t handler,
+                                           void *user_data),
                                      struct mg_connect_opts opts);
 
 #if MG_ENABLE_SSL && MG_NET_IF != MG_NET_IF_SIMPLELINK
@@ -4274,7 +4294,8 @@ void mg_send_websocket_handshake3(struct mg_connection *nc, const char *path,
  * ```
  */
 struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
-                                    mg_event_handler_t event_handler,
+                                    MG_CB(mg_event_handler_t event_handler,
+                                          void *user_data),
                                     const char *url, const char *protocol,
                                     const char *extra_headers);
 
@@ -4284,11 +4305,10 @@ struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
  * Mostly identical to `mg_connect_ws`, but allows to provide extra parameters
  * (for example, SSL parameters)
  */
-struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
-                                        mg_event_handler_t ev_handler,
-                                        struct mg_connect_opts opts,
-                                        const char *url, const char *protocol,
-                                        const char *extra_headers);
+struct mg_connection *mg_connect_ws_opt(
+    struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
+    struct mg_connect_opts opts, const char *url, const char *protocol,
+    const char *extra_headers);
 
 /*
  * Send WebSocket frame to the remote end.
@@ -4739,7 +4759,8 @@ typedef struct mg_str (*mg_fu_fname_fn)(struct mg_connection *nc,
  * ```
  */
 void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
-                            mg_fu_fname_fn local_name_fn);
+                            mg_fu_fname_fn local_name_fn
+                                MG_UD_ARG(void *user_data));
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
 #endif /* MG_ENABLE_FILESYSTEM */
 
@@ -4926,11 +4947,10 @@ extern "C" {
  *       "var_1=value_1&var_2=value_2");
  * ```
  */
-struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
-                                      mg_event_handler_t event_handler,
-                                      const char *url,
-                                      const char *extra_headers,
-                                      const char *post_data);
+struct mg_connection *mg_connect_http(
+    struct mg_mgr *mgr,
+    MG_CB(mg_event_handler_t event_handler, void *user_data), const char *url,
+    const char *extra_headers, const char *post_data);
 
 /*
  * Helper function that creates an outbound HTTP connection.
@@ -4939,12 +4959,10 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
  *parameters
  * (for example, SSL parameters)
  */
-struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
-                                          mg_event_handler_t ev_handler,
-                                          struct mg_connect_opts opts,
-                                          const char *url,
-                                          const char *extra_headers,
-                                          const char *post_data);
+struct mg_connection *mg_connect_http_opt(
+    struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
+    struct mg_connect_opts opts, const char *url, const char *extra_headers,
+    const char *post_data);
 
 /* Creates digest authentication header for a client request. */
 int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
@@ -5837,7 +5855,8 @@ struct mg_sntp_message {
 
 /* Establishes connection to given sntp server */
 struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr,
-                                      mg_event_handler_t event_handler,
+                                      MG_CB(mg_event_handler_t event_handler,
+                                            void *user_data),
                                       const char *sntp_server_name);
 
 /* Sends time request to given connection */

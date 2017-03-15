@@ -3,7 +3,8 @@ title: "mg_broadcast()"
 decl_name: "mg_broadcast"
 symbol_kind: "func"
 signature: |
-  void mg_broadcast(struct mg_mgr *, mg_event_handler_t func, void *, size_t);
+  void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
+                    size_t len);
 ---
 
 Passes a message of a given length to all connections.

@@ -155,7 +155,8 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
                                struct http_message *hm);
 #endif
 #if MG_ENABLE_HTTP_WEBSOCKET
-MG_INTERNAL void mg_ws_handler(struct mg_connection *nc, int ev, void *ev_data);
+MG_INTERNAL void mg_ws_handler(struct mg_connection *nc, int ev,
+                               void *ev_data MG_UD_ARG(void *user_data));
 MG_INTERNAL void mg_ws_handshake(struct mg_connection *nc,
                                  const struct mg_str *key);
 #endif
@@ -1934,7 +1935,8 @@ extern "C" {
 
 struct mg_connection *mg_tun_bind_opt(struct mg_mgr *mgr,
                                       const char *dispatcher,
-                                      mg_event_handler_t handler,
+                                      MG_CB(mg_event_handler_t handler,
+                                            void *user_data),
                                       struct mg_bind_opts opts);
 
 int mg_tun_parse_frame(void *data, size_t len, struct mg_tun_frame *frame);
@@ -2049,7 +2051,7 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
   if (ev_handler != NULL) {
     unsigned long flags_before = nc->flags;
     size_t recv_mbuf_before = nc->recv_mbuf.len, recved;
-    ev_handler(nc, ev, ev_data);
+    ev_handler(nc, ev, ev_data MG_UD_ARG(nc->user_data));
     recved = (recv_mbuf_before - nc->recv_mbuf.len);
     /* Prevent user handler from fiddling with system flags. */
     if (ev_handler == nc->handler && nc->flags != flags_before) {
@@ -2643,14 +2645,16 @@ static void resolve_cb(struct mg_dns_message *msg, void *data,
 #endif
 
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
-                                 mg_event_handler_t callback) {
+                                 MG_CB(mg_event_handler_t callback,
+                                       void *user_data)) {
   struct mg_connect_opts opts;
   memset(&opts, 0, sizeof(opts));
-  return mg_connect_opt(mgr, address, callback, opts);
+  return mg_connect_opt(mgr, address, MG_CB(callback, user_data), opts);
 }
 
 struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
-                                     mg_event_handler_t callback,
+                                     MG_CB(mg_event_handler_t callback,
+                                           void *user_data),
                                      struct mg_connect_opts opts) {
   struct mg_connection *nc = NULL;
   int proto, rc;
@@ -2673,7 +2677,11 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
 
   nc->flags |= opts.flags & _MG_ALLOWED_CONNECT_FLAGS_MASK;
   nc->flags |= (proto == SOCK_DGRAM) ? MG_F_UDP : 0;
+#if MG_ENABLE_CALLBACK_USERDATA
+  nc->user_data = user_data;
+#else
   nc->user_data = opts.user_data;
+#endif
 
 #if MG_ENABLE_SSL
   DBG(("%p %s %s,%s,%s", nc, address, (opts.ssl_cert ? opts.ssl_cert : "-"),
@@ -2745,14 +2753,16 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
 }
 
 struct mg_connection *mg_bind(struct mg_mgr *srv, const char *address,
-                              mg_event_handler_t event_handler) {
+                              MG_CB(mg_event_handler_t event_handler,
+                                    void *user_data)) {
   struct mg_bind_opts opts;
   memset(&opts, 0, sizeof(opts));
-  return mg_bind_opt(srv, address, event_handler, opts);
+  return mg_bind_opt(srv, address, MG_CB(event_handler, user_data), opts);
 }
 
 struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
-                                  mg_event_handler_t callback,
+                                  MG_CB(mg_event_handler_t callback,
+                                        void *user_data),
                                   struct mg_bind_opts opts) {
   union socket_address sa;
   struct mg_connection *nc = NULL;
@@ -2765,7 +2775,7 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
 #if MG_ENABLE_TUN
   if (mg_strncmp(mg_mk_str(address), mg_mk_str("ws://"), 5) == 0 ||
       mg_strncmp(mg_mk_str(address), mg_mk_str("wss://"), 6) == 0) {
-    return mg_tun_bind_opt(mgr, address, callback, opts);
+    return mg_tun_bind_opt(mgr, address, MG_CB(callback, user_data), opts);
   }
 #endif
 
@@ -2823,6 +2833,9 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
   }
   mg_add_conn(nc->mgr, nc);
 
+#if MG_ENABLE_CALLBACK_USERDATA
+  (void) user_data;
+#endif
   return nc;
 }
 
@@ -2934,8 +2947,13 @@ void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
 }
 
 struct mg_connection *mg_add_sock_opt(struct mg_mgr *s, sock_t sock,
-                                      mg_event_handler_t callback,
+                                      MG_CB(mg_event_handler_t callback,
+                                            void *user_data),
                                       struct mg_add_sock_opts opts) {
+#if MG_ENABLE_CALLBACK_USERDATA
+  opts.user_data = user_data;
+#endif
+
   struct mg_connection *nc = mg_create_connection_base(s, callback, opts);
   if (nc != NULL) {
     mg_sock_set(nc, sock);
@@ -2945,10 +2963,11 @@ struct mg_connection *mg_add_sock_opt(struct mg_mgr *s, sock_t sock,
 }
 
 struct mg_connection *mg_add_sock(struct mg_mgr *s, sock_t sock,
-                                  mg_event_handler_t callback) {
+                                  MG_CB(mg_event_handler_t callback,
+                                        void *user_data)) {
   struct mg_add_sock_opts opts;
   memset(&opts, 0, sizeof(opts));
-  return mg_add_sock_opt(s, sock, callback, opts);
+  return mg_add_sock_opt(s, sock, MG_CB(callback, user_data), opts);
 }
 
 double mg_time(void) {
@@ -3525,7 +3544,8 @@ static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
   if (len >= (int) sizeof(ctl_msg.callback) && ctl_msg.callback != NULL) {
     struct mg_connection *nc;
     for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
-      ctl_msg.callback(nc, MG_EV_POLL, ctl_msg.message);
+      ctl_msg.callback(nc, MG_EV_POLL,
+                       ctl_msg.message MG_UD_ARG(nc->user_data));
     }
   }
 }
@@ -5046,7 +5066,7 @@ struct mg_http_proto_data {
 
 static void mg_http_conn_destructor(void *proto_data);
 struct mg_connection *mg_connect_http_base(
-    struct mg_mgr *mgr, mg_event_handler_t ev_handler,
+    struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
     struct mg_connect_opts opts, const char *schema, const char *schema_ssl,
     const char *url, const char **path, char **user, char **pass, char **addr);
 
@@ -5561,18 +5581,22 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
  * even bigger (round up to 4k, from 700 bytes of actual size).
  */
 #ifdef __xtensa__
-static void mg_http_handler2(struct mg_connection *nc, int ev, void *ev_data,
+static void mg_http_handler2(struct mg_connection *nc, int ev,
+                             void *ev_data MG_UD_ARG(void *user_data),
                              struct http_message *hm) __attribute__((noinline));
 
-void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
+void mg_http_handler(struct mg_connection *nc, int ev,
+                     void *ev_data MG_UD_ARG(void *user_data)) {
   struct http_message hm;
-  mg_http_handler2(nc, ev, ev_data, &hm);
+  mg_http_handler2(nc, ev, ev_data MG_UD_ARG(user_data), &hm);
 }
 
-static void mg_http_handler2(struct mg_connection *nc, int ev, void *ev_data,
+static void mg_http_handler2(struct mg_connection *nc, int ev,
+                             void *ev_data MG_UD_ARG(void *user_data),
                              struct http_message *hm) {
 #else  /* !__XTENSA__ */
-void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
+void mg_http_handler(struct mg_connection *nc, int ev,
+                     void *ev_data MG_UD_ARG(void *user_data)) {
   struct http_message shm;
   struct http_message *hm = &shm;
 #endif /* __XTENSA__ */
@@ -5674,7 +5698,7 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
       nc->proto_handler = mg_ws_handler;
       nc->flags |= MG_F_IS_WEBSOCKET;
       mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_DONE, NULL);
-      mg_ws_handler(nc, MG_EV_RECV, ev_data);
+      mg_ws_handler(nc, MG_EV_RECV, ev_data MG_UD_ARG(user_data));
     } else if (nc->listener != NULL &&
                (vec = mg_get_http_header(hm, "Sec-WebSocket-Key")) != NULL) {
       mg_event_handler_t handler;
@@ -5701,7 +5725,7 @@ void mg_http_handler(struct mg_connection *nc, int ev, void *ev_data) {
           mg_ws_handshake(nc, vec);
         }
         mg_call(nc, nc->handler, MG_EV_WEBSOCKET_HANDSHAKE_DONE, NULL);
-        mg_ws_handler(nc, MG_EV_RECV, ev_data);
+        mg_ws_handler(nc, MG_EV_RECV, ev_data MG_UD_ARG(user_data));
       }
     }
 #endif /* MG_ENABLE_HTTP_WEBSOCKET */
@@ -6950,7 +6974,7 @@ static int mg_http_send_port_based_redirect(
 }
 
 static void mg_reverse_proxy_handler(struct mg_connection *nc, int ev,
-                                     void *ev_data) {
+                                     void *ev_data MG_UD_ARG(void *user_data)) {
   struct http_message *hm = (struct http_message *) ev_data;
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
 
@@ -6976,6 +7000,10 @@ static void mg_reverse_proxy_handler(struct mg_connection *nc, int ev,
       pd->reverse_proxy_data.linked_conn->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }
+
+#if MG_ENABLE_CALLBACK_USERDATA
+  (void) user_data;
+#endif
 }
 
 void mg_http_reverse_proxy(struct mg_connection *nc,
@@ -6994,9 +7022,9 @@ void mg_http_reverse_proxy(struct mg_connection *nc,
   mg_asprintf(&purl, sizeof(burl), "%.*s%.*s", (int) upstream.len, upstream.p,
               (int) (hm->uri.len - mount.len), hm->uri.p + mount.len);
 
-  be = mg_connect_http_base(nc->mgr, mg_reverse_proxy_handler, opts, "http://",
-                            "https://", purl, &path, NULL /* user */,
-                            NULL /* pass */, &addr);
+  be = mg_connect_http_base(nc->mgr, MG_CB(mg_reverse_proxy_handler, NULL),
+                            opts, "http://", "https://", purl, &path,
+                            NULL /* user */, NULL /* pass */, &addr);
   LOG(LL_DEBUG, ("Proxying %.*s to %s (rule: %.*s)", (int) hm->uri.len,
                  hm->uri.p, purl, (int) mount.len, mount.p));
 
@@ -7474,7 +7502,8 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
 
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
 void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
-                            mg_fu_fname_fn local_name_fn) {
+                            mg_fu_fname_fn local_name_fn
+                                MG_UD_ARG(void *user_data)) {
   switch (ev) {
     case MG_EV_HTTP_PART_BEGIN: {
       struct mg_http_multipart_part *mp =
@@ -7586,6 +7615,10 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
       break;
     }
   }
+
+#if MG_ENABLE_CALLBACK_USERDATA
+  (void) user_data;
+#endif
 }
 
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
@@ -7674,7 +7707,7 @@ cleanup:
 }
 
 struct mg_connection *mg_connect_http_base(
-    struct mg_mgr *mgr, mg_event_handler_t ev_handler,
+    struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
     struct mg_connect_opts opts, const char *schema, const char *schema_ssl,
     const char *url, const char **path, char **user, char **pass, char **addr) {
   struct mg_connection *nc = NULL;
@@ -7707,7 +7740,8 @@ struct mg_connection *mg_connect_http_base(
 #endif
   }
 
-  if ((nc = mg_connect_opt(mgr, *addr, ev_handler, opts)) != NULL) {
+  if ((nc = mg_connect_opt(mgr, *addr, MG_CB(ev_handler, user_data), opts)) !=
+      NULL) {
     mg_set_protocol_http_websocket(nc);
     /* If the port was addred by us, restore the original host. */
     if (port_i >= 0) (*addr)[port_i] = '\0';
@@ -7716,18 +7750,16 @@ struct mg_connection *mg_connect_http_base(
   return nc;
 }
 
-struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
-                                          mg_event_handler_t ev_handler,
-                                          struct mg_connect_opts opts,
-                                          const char *url,
-                                          const char *extra_headers,
-                                          const char *post_data) {
+struct mg_connection *mg_connect_http_opt(
+    struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
+    struct mg_connect_opts opts, const char *url, const char *extra_headers,
+    const char *post_data) {
   char *user = NULL, *pass = NULL, *addr = NULL;
   const char *path = NULL;
   struct mbuf auth;
   struct mg_connection *nc =
-      mg_connect_http_base(mgr, ev_handler, opts, "http://", "https://", url,
-                           &path, &user, &pass, &addr);
+      mg_connect_http_base(mgr, MG_CB(ev_handler, user_data), opts, "http://",
+                           "https://", url, &path, &user, &pass, &addr);
 
   if (nc == NULL) {
     return NULL;
@@ -7754,15 +7786,13 @@ struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
   return nc;
 }
 
-struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
-                                      mg_event_handler_t ev_handler,
-                                      const char *url,
-                                      const char *extra_headers,
-                                      const char *post_data) {
+struct mg_connection *mg_connect_http(
+    struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
+    const char *url, const char *extra_headers, const char *post_data) {
   struct mg_connect_opts opts;
   memset(&opts, 0, sizeof(opts));
-  return mg_connect_http_opt(mgr, ev_handler, opts, url, extra_headers,
-                             post_data);
+  return mg_connect_http_opt(mgr, MG_CB(ev_handler, user_data), opts, url,
+                             extra_headers, post_data);
 }
 
 size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
@@ -8196,8 +8226,11 @@ static void mg_prepare_cgi_environment(struct mg_connection *nc,
 }
 
 static void mg_cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
-                              void *ev_data) {
-  struct mg_connection *nc = (struct mg_connection *) cgi_nc->user_data;
+                              void *ev_data MG_UD_ARG(void *user_data)) {
+#if !MG_ENABLE_CALLBACK_USERDATA
+  void *user_data = cgi_nc->user_data;
+#endif
+  struct mg_connection *nc = (struct mg_connection *) user_data;
   (void) ev_data;
 
   if (nc == NULL) {
@@ -8289,10 +8322,12 @@ MG_INTERNAL void mg_handle_cgi(struct mg_connection *nc, const char *prog,
                        fds[1]) != 0) {
     size_t n = nc->recv_mbuf.len - (hm->message.len - hm->body.len);
     struct mg_connection *cgi_nc =
-        mg_add_sock(nc->mgr, fds[0], mg_cgi_ev_handler);
+        mg_add_sock(nc->mgr, fds[0], mg_cgi_ev_handler MG_UD_ARG(nc));
     struct mg_http_proto_data *cgi_pd = mg_http_get_proto_data(nc);
     cgi_pd->cgi.cgi_nc = cgi_nc;
+#if !MG_ENABLE_CALLBACK_USERDATA
     cgi_pd->cgi.cgi_nc->user_data = nc;
+#endif
     nc->flags |= MG_F_USER_1;
     /* Push POST data to the CGI */
     if (n > 0 && n < nc->recv_mbuf.len) {
@@ -9035,7 +9070,7 @@ void mg_printf_websocket_frame(struct mg_connection *nc, int op,
 }
 
 MG_INTERNAL void mg_ws_handler(struct mg_connection *nc, int ev,
-                               void *ev_data) {
+                               void *ev_data MG_UD_ARG(void *user_data)) {
   mg_call(nc, nc->handler, ev, ev_data);
 
   switch (ev) {
@@ -9056,6 +9091,9 @@ MG_INTERNAL void mg_ws_handler(struct mg_connection *nc, int ev,
     default:
       break;
   }
+#if MG_ENABLE_CALLBACK_USERDATA
+  (void) user_data;
+#endif
 }
 
 #ifndef MG_EXT_SHA1
@@ -9154,16 +9192,15 @@ void mg_send_websocket_handshake(struct mg_connection *nc, const char *path,
                                extra_headers);
 }
 
-struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
-                                        mg_event_handler_t ev_handler,
-                                        struct mg_connect_opts opts,
-                                        const char *url, const char *protocol,
-                                        const char *extra_headers) {
+struct mg_connection *mg_connect_ws_opt(
+    struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
+    struct mg_connect_opts opts, const char *url, const char *protocol,
+    const char *extra_headers) {
   char *user = NULL, *pass = NULL, *addr = NULL;
   const char *path = NULL;
   struct mg_connection *nc =
-      mg_connect_http_base(mgr, ev_handler, opts, "ws://", "wss://", url, &path,
-                           &user, &pass, &addr);
+      mg_connect_http_base(mgr, MG_CB(ev_handler, user_data), opts, "ws://",
+                           "wss://", url, &path, &user, &pass, &addr);
 
   if (nc != NULL) {
     mg_send_websocket_handshake3(nc, path, addr, protocol, extra_headers, user,
@@ -9176,13 +9213,13 @@ struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
   return nc;
 }
 
-struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
-                                    mg_event_handler_t ev_handler,
-                                    const char *url, const char *protocol,
-                                    const char *extra_headers) {
+struct mg_connection *mg_connect_ws(
+    struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
+    const char *url, const char *protocol, const char *extra_headers) {
   struct mg_connect_opts opts;
   memset(&opts, 0, sizeof(opts));
-  return mg_connect_ws_opt(mgr, ev_handler, opts, url, protocol, extra_headers);
+  return mg_connect_ws_opt(mgr, MG_CB(ev_handler, user_data), opts, url,
+                           protocol, extra_headers);
 }
 #endif /* MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBSOCKET */
 #ifdef MG_MODULE_LINES
@@ -9694,19 +9731,20 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   return end - io->buf;
 }
 
-static void mqtt_handler(struct mg_connection *nc, int ev, void *ev_data) {
+static void mqtt_handler(struct mg_connection *nc, int ev,
+                         void *ev_data MG_UD_ARG(void *user_data)) {
   int len;
   struct mbuf *io = &nc->recv_mbuf;
   struct mg_mqtt_message mm;
   memset(&mm, 0, sizeof(mm));
 
-  nc->handler(nc, ev, ev_data);
+  nc->handler(nc, ev, ev_data MG_UD_ARG(user_data));
 
   switch (ev) {
     case MG_EV_RECV:
       len = parse_mqtt(io, &mm);
       if (len == -1) break; /* not fully buffered */
-      nc->handler(nc, MG_MQTT_EVENT_BASE + mm.cmd, &mm);
+      nc->handler(nc, MG_MQTT_EVENT_BASE + mm.cmd, &mm MG_UD_ARG(user_data));
       mbuf_remove(io, len);
       break;
   }
@@ -10479,12 +10517,13 @@ size_t mg_dns_uncompress_name(struct mg_dns_message *msg, struct mg_str *name,
   return dst - old_dst;
 }
 
-static void dns_handler(struct mg_connection *nc, int ev, void *ev_data) {
+static void dns_handler(struct mg_connection *nc, int ev,
+                        void *ev_data MG_UD_ARG(void *user_data)) {
   struct mbuf *io = &nc->recv_mbuf;
   struct mg_dns_message msg;
 
   /* Pass low-level events to the user handler */
-  nc->handler(nc, ev, ev_data);
+  nc->handler(nc, ev, ev_data MG_UD_ARG(user_data));
 
   switch (ev) {
     case MG_EV_RECV:
@@ -10503,7 +10542,7 @@ static void dns_handler(struct mg_connection *nc, int ev, void *ev_data) {
         mg_send(nc, io->buf, io->len);
       } else {
         /* Call user handler with parsed message */
-        nc->handler(nc, MG_DNS_MESSAGE, &msg);
+        nc->handler(nc, MG_DNS_MESSAGE, &msg MG_UD_ARG(user_data));
       }
       mbuf_remove(io, io->len);
       break;
@@ -10741,15 +10780,19 @@ int mg_resolve_from_hosts_file(const char *name, union socket_address *usa) {
   return -1;
 }
 
-static void mg_resolve_async_eh(struct mg_connection *nc, int ev, void *data) {
+static void mg_resolve_async_eh(struct mg_connection *nc, int ev,
+                                void *data MG_UD_ARG(void *user_data)) {
   time_t now = (time_t) mg_time();
   struct mg_resolve_async_request *req;
   struct mg_dns_message *msg;
   int first = 0;
+#if !MG_ENABLE_CALLBACK_USERDATA
+  void *user_data = nc->user_data;
+#endif
 
-  if (ev != MG_EV_POLL) DBG(("ev=%d user_data=%p", ev, nc->user_data));
+  if (ev != MG_EV_POLL) DBG(("ev=%d user_data=%p", ev, user_data));
 
-  req = (struct mg_resolve_async_request *) nc->user_data;
+  req = (struct mg_resolve_async_request *) user_data;
 
   if (req == NULL) {
     return;
@@ -10849,7 +10892,7 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
     nameserver = mg_dns_server;
   }
 
-  dns_nc = mg_connect(mgr, nameserver, mg_resolve_async_eh);
+  dns_nc = mg_connect(mgr, nameserver, MG_CB(mg_resolve_async_eh, NULL));
   if (dns_nc == NULL) {
     free(req);
     return -1;
@@ -11523,8 +11566,13 @@ static void mg_tun_close_all(struct mg_tun_client *client) {
 }
 
 static void mg_tun_client_handler(struct mg_connection *nc, int ev,
-                                  void *ev_data) {
-  struct mg_tun_client *client = (struct mg_tun_client *) nc->user_data;
+                                  void *ev_data MG_UD_ARG(void *user_data)) {
+#if !MG_ENABLE_CALLBACK_USERDATA
+  void *user_data = nc->user_data;
+#else
+  (void) nc;
+#endif
+  struct mg_tun_client *client = (struct mg_tun_client *) user_data;
 
   switch (ev) {
     case MG_EV_CONNECT: {
@@ -11611,21 +11659,28 @@ static void mg_tun_do_reconnect(struct mg_tun_client *client) {
   opts.ssl_ca_cert = client->ssl.ssl_ca_cert;
 #endif
   /* HTTP/Websocket listener */
-  if ((dc = mg_connect_ws_opt(client->mgr, mg_tun_client_handler, opts,
-                              client->disp_url, MG_TUN_PROTO_NAME, NULL)) ==
-      NULL) {
+  if ((dc = mg_connect_ws_opt(client->mgr, MG_CB(mg_tun_client_handler, client),
+                              opts, client->disp_url, MG_TUN_PROTO_NAME,
+                              NULL)) == NULL) {
     LOG(LL_ERROR,
         ("Cannot connect to WS server on addr [%s]\n", client->disp_url));
     return;
   }
 
   client->disp = dc;
+#if !MG_ENABLE_CALLBACK_USERDATA
   dc->user_data = client;
+#endif
 }
 
 void mg_tun_reconnect_ev_handler(struct mg_connection *nc, int ev,
-                                 void *ev_data) {
-  struct mg_tun_client *client = (struct mg_tun_client *) nc->user_data;
+                                 void *ev_data MG_UD_ARG(void *user_data)) {
+#if !MG_ENABLE_CALLBACK_USERDATA
+  void *user_data = nc->user_data;
+#else
+  (void) nc;
+#endif
+  struct mg_tun_client *client = (struct mg_tun_client *) user_data;
   (void) ev_data;
 
   switch (ev) {
@@ -11642,9 +11697,11 @@ void mg_tun_reconnect_ev_handler(struct mg_connection *nc, int ev,
 
 static void mg_tun_reconnect(struct mg_tun_client *client, int timeout) {
   if (client->reconnect == NULL) {
-    client->reconnect =
-        mg_add_sock(client->mgr, INVALID_SOCKET, mg_tun_reconnect_ev_handler);
+    client->reconnect = mg_add_sock(client->mgr, INVALID_SOCKET,
+                                    MG_CB(mg_tun_reconnect_ev_handler, client));
+#if !MG_ENABLE_CALLBACK_USERDATA
     client->reconnect->user_data = client;
+#endif
   }
   client->reconnect->ev_timer_time = mg_time() + timeout;
 }
@@ -11700,18 +11757,21 @@ void mg_tun_destroy_client(struct mg_tun_client *client) {
 }
 
 static struct mg_connection *mg_tun_do_bind(struct mg_tun_client *client,
-                                            mg_event_handler_t handler,
+                                            MG_CB(mg_event_handler_t handler,
+                                                  void *user_data),
                                             struct mg_bind_opts opts) {
   struct mg_connection *lc;
   opts.iface = client->iface;
-  lc = mg_bind_opt(client->mgr, ":1234" /* dummy port */, handler, opts);
+  lc = mg_bind_opt(client->mgr, ":1234" /* dummy port */,
+                   MG_CB(handler, user_data), opts);
   client->listener = lc;
   return lc;
 }
 
 struct mg_connection *mg_tun_bind_opt(struct mg_mgr *mgr,
                                       const char *dispatcher,
-                                      mg_event_handler_t handler,
+                                      MG_CB(mg_event_handler_t handler,
+                                            void *user_data),
                                       struct mg_bind_opts opts) {
 #if MG_ENABLE_SSL
   struct mg_tun_ssl_opts ssl = {opts.ssl_cert, opts.ssl_key, opts.ssl_ca_cert};
@@ -11728,7 +11788,7 @@ struct mg_connection *mg_tun_bind_opt(struct mg_mgr *mgr,
   opts.ssl_key = NULL;
   opts.ssl_ca_cert = NULL;
 #endif
-  return mg_tun_do_bind(client, handler, opts);
+  return mg_tun_do_bind(client, MG_CB(handler, user_data), opts);
 }
 
 int mg_tun_parse_frame(void *data, size_t len, struct mg_tun_frame *frame) {
@@ -11909,19 +11969,20 @@ MG_INTERNAL int mg_sntp_parse_reply(const char *buf, int len,
   return 0;
 }
 
-static void mg_sntp_handler(struct mg_connection *c, int ev, void *ev_data) {
+static void mg_sntp_handler(struct mg_connection *c, int ev,
+                            void *ev_data MG_UD_ARG(void *user_data)) {
   struct mbuf *io = &c->recv_mbuf;
   struct mg_sntp_message msg;
 
-  c->handler(c, ev, ev_data);
+  c->handler(c, ev, ev_data MG_UD_ARG(user_data));
 
   switch (ev) {
     case MG_EV_RECV: {
       if (mg_sntp_parse_reply(io->buf, io->len, &msg) < 0) {
         DBG(("Invalid SNTP packet received (%d)", (int) io->len));
-        c->handler(c, MG_SNTP_MALFORMED_REPLY, NULL);
+        c->handler(c, MG_SNTP_MALFORMED_REPLY, NULL MG_UD_ARG(user_data));
       } else {
-        c->handler(c, MG_SNTP_REPLY, (void *) &msg);
+        c->handler(c, MG_SNTP_REPLY, (void *) &msg MG_UD_ARG(user_data));
       }
 
       mbuf_remove(io, io->len);
@@ -11941,7 +12002,8 @@ int mg_set_protocol_sntp(struct mg_connection *c) {
 }
 
 struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr,
-                                      mg_event_handler_t event_handler,
+                                      MG_CB(mg_event_handler_t event_handler,
+                                            void *user_data),
                                       const char *sntp_server_name) {
   struct mg_connection *c = NULL;
   char url[100], *p_url = url;
@@ -11964,7 +12026,7 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr,
 
   mg_asprintf(&p_url, sizeof(url), "%s%s%s", proto, sntp_server_name, port);
 
-  c = mg_connect(mgr, p_url, event_handler);
+  c = mg_connect(mgr, p_url, event_handler MG_UD_ARG(user_data));
 
   if (c == NULL) {
     goto cleanup;
@@ -11986,8 +12048,11 @@ struct sntp_data {
 };
 
 static void mg_sntp_util_ev_handler(struct mg_connection *c, int ev,
-                                    void *ev_data) {
-  struct sntp_data *sd = (struct sntp_data *) c->user_data;
+                                    void *ev_data MG_UD_ARG(void *user_data)) {
+#if !MG_ENABLE_CALLBACK_USERDATA
+  void *user_data = c->user_data;
+#endif
+  struct sntp_data *sd = (struct sntp_data *) user_data;
 
   switch (ev) {
     case MG_EV_CONNECT:
@@ -12015,7 +12080,7 @@ static void mg_sntp_util_ev_handler(struct mg_connection *c, int ev,
       c->flags |= MG_F_CLOSE_IMMEDIATELY;
       break;
     case MG_EV_CLOSE:
-      MG_FREE(c->user_data);
+      MG_FREE(user_data);
       c->user_data = NULL;
       break;
   }
@@ -12030,14 +12095,17 @@ struct mg_connection *mg_sntp_get_time(struct mg_mgr *mgr,
     return NULL;
   }
 
-  c = mg_sntp_connect(mgr, mg_sntp_util_ev_handler, sntp_server_name);
+  c = mg_sntp_connect(mgr, MG_CB(mg_sntp_util_ev_handler, sd),
+                      sntp_server_name);
   if (c == NULL) {
     MG_FREE(sd);
     return NULL;
   }
 
   sd->hander = event_handler;
+#if !MG_ENABLE_CALLBACK_USERDATA
   c->user_data = sd;
+#endif
 
   return c;
 }

@@ -3,11 +3,9 @@ title: "mg_connect_http()"
 decl_name: "mg_connect_http"
 symbol_kind: "func"
 signature: |
-  struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
-                                        mg_event_handler_t event_handler,
-                                        const char *url,
-                                        const char *extra_headers,
-                                        const char *post_data);
+  struct mg_connection *mg_connect_http(
+      struct mg_mgr *mgr,
+      MG_CB(mg_event_handler_t event_handler, void *user_data);
 ---
 
 Helper function that creates an outbound HTTP connection.

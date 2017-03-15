@@ -4,8 +4,8 @@ decl_name: "mg_bind_opt"
 symbol_kind: "func"
 signature: |
   struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
-                                    mg_event_handler_t handler,
-                                    struct mg_bind_opts opts);
+                                    MG_CB(mg_event_handler_t handler,
+                                          void *user_data);
 ---
 
 Creates a listening connection.

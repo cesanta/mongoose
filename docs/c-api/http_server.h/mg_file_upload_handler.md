@@ -4,7 +4,8 @@ decl_name: "mg_file_upload_handler"
 symbol_kind: "func"
 signature: |
   void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
-                              mg_fu_fname_fn local_name_fn);
+                              mg_fu_fname_fn local_name_fn
+                                  MG_UD_ARG(void *user_data);
 ---
 
 File upload handler.
