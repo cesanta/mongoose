@@ -1235,6 +1235,10 @@ int sl_set_ssl_opts(struct mg_connection *nc);
 #define EWOULDBLOCK WSAEWOULDBLOCK
 #endif
 
+#ifndef EAGAIN
+#define EAGAIN EWOULDBLOCK
+#endif
+
 #ifndef __func__
 #define STRX(x) #x
 #define STR(x) STRX(x)
