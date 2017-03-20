@@ -2173,6 +2173,9 @@ void mg_mgr_init_opt(struct mg_mgr *m, void *user_data,
       m->ifaces[i]->vtable->init(m->ifaces[i]);
     }
   }
+  if (opts.nameserver != NULL) {
+    m->nameserver = strdup(opts.nameserver);
+  }
   DBG(("=================================="));
   DBG(("init mgr=%p", m));
 }
@@ -2230,6 +2233,8 @@ void mg_mgr_free(struct mg_mgr *m) {
     }
     MG_FREE(m->ifaces);
   }
+
+  MG_FREE((char *) m->nameserver);
 }
 
 time_t mg_mgr_poll(struct mg_mgr *m, int timeout_ms) {
@@ -2742,6 +2747,7 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
     struct mg_resolve_async_opts o;
     memset(&o, 0, sizeof(o));
     o.dns_conn = &dns_conn;
+    o.nameserver = opts.nameserver;
     if (mg_resolve_async_opt(nc->mgr, host, MG_DNS_A_RECORD, resolve_cb, nc,
                              o) != 0) {
       MG_SET_PTRPTR(opts.error_string, "cannot schedule DNS lookup");
@@ -10692,10 +10698,6 @@ int mg_dns_reply_record(struct mg_dns_reply *reply,
 #define MG_DEFAULT_NAMESERVER "8.8.8.8"
 #endif
 
-static const char *mg_default_dns_server = "udp://" MG_DEFAULT_NAMESERVER ":53";
-
-MG_INTERNAL char mg_dns_server[256];
-
 struct mg_resolve_async_request {
   char name[1024];
   int query;
@@ -10755,7 +10757,8 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
         if (comma != NULL) {
           *comma = '\0';
         }
-        snprintf(name, name_len, "udp://%S:53", value);
+        /* %S will convert wchar_t -> char */
+        snprintf(name, name_len, "%S", value);
         ret = 0;
         RegCloseKey(hSub);
         break;
@@ -10774,7 +10777,7 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
     for (ret = -1; fgets(line, sizeof(line), fp) != NULL;) {
       unsigned int a, b, c, d;
       if (sscanf(line, "nameserver %u.%u.%u.%u", &a, &b, &c, &d) == 4) {
-        snprintf(name, name_len, "udp://%u.%u.%u.%u:53", a, b, c, d);
+        snprintf(name, name_len, "%u.%u.%u.%u", a, b, c, d);
         ret = 0;
         break;
       }
@@ -10782,7 +10785,7 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
     (void) fclose(fp);
   }
 #else
-  snprintf(name, name_len, "%s", mg_default_dns_server);
+  snprintf(name, name_len, "%s", MG_DEFAULT_NAMESERVER);
 #endif /* _WIN32 */
 
   return ret;
@@ -10910,7 +10913,12 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
                          struct mg_resolve_async_opts opts) {
   struct mg_resolve_async_request *req;
   struct mg_connection *dns_nc;
-  const char *nameserver = opts.nameserver_url;
+  const char *nameserver = opts.nameserver;
+  char dns_server_buff[17], nameserver_url[26];
+
+  if (nameserver == NULL) {
+    nameserver = mgr->nameserver;
+  }
 
   DBG(("%s %d %p", name, query, opts.dns_conn));
 
@@ -10929,17 +10937,18 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
   req->timeout = opts.timeout ? opts.timeout : 5;
 
   /* Lazily initialize dns server */
-  if (nameserver == NULL && mg_dns_server[0] == '\0' &&
-      mg_get_ip_address_of_nameserver(mg_dns_server, sizeof(mg_dns_server)) ==
-          -1) {
-    strncpy(mg_dns_server, mg_default_dns_server, sizeof(mg_dns_server));
-  }
-
   if (nameserver == NULL) {
-    nameserver = mg_dns_server;
+    if (mg_get_ip_address_of_nameserver(dns_server_buff,
+                                        sizeof(dns_server_buff)) != -1) {
+      nameserver = dns_server_buff;
+    } else {
+      nameserver = MG_DEFAULT_NAMESERVER;
+    }
   }
 
-  dns_nc = mg_connect(mgr, nameserver, MG_CB(mg_resolve_async_eh, NULL));
+  snprintf(nameserver_url, sizeof(nameserver_url), "udp://%s:53", nameserver);
+
+  dns_nc = mg_connect(mgr, nameserver_url, MG_CB(mg_resolve_async_eh, NULL));
   if (dns_nc == NULL) {
     free(req);
     return -1;
@@ -10950,6 +10959,13 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
   }
 
   return 0;
+}
+
+void mg_set_nameserver(struct mg_mgr *mgr, const char *nameserver) {
+  free((char *) mgr->nameserver);
+  if (nameserver != NULL) {
+    mgr->nameserver = strdup(nameserver);
+  }
 }
 
 #endif /* MG_ENABLE_ASYNC_RESOLVER */

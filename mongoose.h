@@ -3274,6 +3274,7 @@ struct mg_mgr {
 #if MG_ENABLE_JAVASCRIPT
   struct v7 *v7;
 #endif
+  const char *nameserver; /* DNS server to use */
 };
 
 /*
@@ -3368,6 +3369,7 @@ struct mg_mgr_init_opts {
   const struct mg_iface_vtable *main_iface;
   int num_ifaces;
   const struct mg_iface_vtable **ifaces;
+  const char *nameserver;
 };
 
 /*
@@ -3538,6 +3540,7 @@ struct mg_connect_opts {
   unsigned int flags;        /* Extra connection flags */
   const char **error_string; /* Placeholder for the error string */
   struct mg_iface *iface;    /* Interface instance */
+  const char *nameserver;    /* DNS server to use, NULL for default */
 #if MG_ENABLE_SSL
   /*
    * SSL settings.
@@ -5609,7 +5612,7 @@ typedef void (*mg_resolve_callback_t)(struct mg_dns_message *dns_message,
 
 /* Options for `mg_resolve_async_opt`. */
 struct mg_resolve_async_opts {
-  const char *nameserver_url;
+  const char *nameserver;
   int max_retries;    /* defaults to 2 if zero */
   int timeout;        /* in seconds; defaults to 5 if zero */
   int accept_literal; /* pseudo-resolve literal ipv4 and ipv6 addrs */
@@ -5620,6 +5623,9 @@ struct mg_resolve_async_opts {
 /* See `mg_resolve_async_opt()` */
 int mg_resolve_async(struct mg_mgr *mgr, const char *name, int query,
                      mg_resolve_callback_t cb, void *data);
+
+/* Set default DNS server */
+void mg_set_nameserver(struct mg_mgr *mgr, const char *nameserver);
 
 /*
  * Resolved a DNS name asynchronously.

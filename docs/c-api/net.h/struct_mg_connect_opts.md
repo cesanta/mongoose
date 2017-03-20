@@ -8,6 +8,7 @@ signature: |
     unsigned int flags;        /* Extra connection flags */
     const char **error_string; /* Placeholder for the error string */
     struct mg_iface *iface;    /* Interface instance */
+    const char *nameserver;    /* DNS server to use, NULL for default */
   #if MG_ENABLE_SSL
     /*
      * SSL settings.

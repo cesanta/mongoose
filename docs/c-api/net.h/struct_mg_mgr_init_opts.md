@@ -7,6 +7,7 @@ signature: |
     const struct mg_iface_vtable *main_iface;
     int num_ifaces;
     const struct mg_iface_vtable **ifaces;
+    const char *nameserver;
   };
 ---
 
