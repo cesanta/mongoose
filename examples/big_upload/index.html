@@ -35,6 +35,15 @@
 </head>
 
 <body>
+  <h1>Upload file using standard form upload</h1>
+
+  <form method="POST" action="/upload" enctype="multipart/form-data">
+    <label>Select a file:</label><br>
+    <input type="file" name="file" />
+    <input type="submit" value="Upload" />
+  </form>
+
+  <h1>Upload file using Ajax - that also gives progress report</h1>
   <form method="post" id="filename" name="filename" onsubmit="return uploadFile();">
     <label>Select a file:</label><br>
     <input type="file" id="file" name="file" required />
