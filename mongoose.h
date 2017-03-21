@@ -1802,11 +1802,11 @@ void mbuf_trim(struct mbuf *);
 #ifndef CS_COMMON_SHA1_H_
 #define CS_COMMON_SHA1_H_
 
-#ifndef DISABLE_SHA1
-#define DISABLE_SHA1 0
+#ifndef CS_DISABLE_SHA1
+#define CS_DISABLE_SHA1 0
 #endif
 
-#if !DISABLE_SHA1
+#if !CS_DISABLE_SHA1
 
 /* Amalgamated: #include "common/platform.h" */
 
@@ -1830,7 +1830,7 @@ void cs_hmac_sha1(const unsigned char *key, size_t key_len,
 }
 #endif /* __cplusplus */
 
-#endif /* DISABLE_SHA1 */
+#endif /* CS_DISABLE_SHA1 */
 
 #endif /* CS_COMMON_SHA1_H_ */
 #ifdef MG_MODULE_LINES
@@ -1846,8 +1846,8 @@ void cs_hmac_sha1(const unsigned char *key, size_t key_len,
 
 /* Amalgamated: #include "common/platform.h" */
 
-#ifndef DISABLE_MD5
-#define DISABLE_MD5 0
+#ifndef CS_DISABLE_MD5
+#define CS_DISABLE_MD5 0
 #endif
 
 #ifdef __cplusplus
