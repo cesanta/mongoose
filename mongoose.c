@@ -6492,6 +6492,13 @@ int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
   size_t name_len;
   int len;
 
+  /*
+   * According to the documentation function returns negative
+   * value in case of error. For debug purposes it returns:
+   * -1 - src is wrong (NUUL)
+   * -2 - dst is wrong (NULL)
+   * -3 - failed to decode url or dst is to small
+   */
   if (dst == NULL || dst_len == 0) {
     len = -2;
   } else if (buf->p == NULL || name == NULL || buf->len == 0) {
@@ -6500,7 +6507,7 @@ int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
   } else {
     name_len = strlen(name);
     e = buf->p + buf->len;
-    len = -1;
+    len = 0;
     dst[0] = '\0';
 
     for (p = buf->p; p + name_len < e; p++) {
@@ -6512,8 +6519,9 @@ int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
           s = e;
         }
         len = mg_url_decode(p, (size_t)(s - p), dst, dst_len, 1);
+        /* -1 means: failed to decode or dst is too small */
         if (len == -1) {
-          len = -2;
+          len = -3;
         }
         break;
       }
