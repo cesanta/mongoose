@@ -11529,14 +11529,15 @@ uint32_t mg_coap_send_ack(struct mg_connection *nc, uint16_t msg_id) {
   return mg_coap_send_message(nc, &cm);
 }
 
-static void coap_handler(struct mg_connection *nc, int ev, void *ev_data) {
+static void coap_handler(struct mg_connection *nc, int ev,
+                         void *ev_data MG_UD_ARG(void *user_data)) {
   struct mbuf *io = &nc->recv_mbuf;
   struct mg_coap_message cm;
   uint32_t parse_res;
 
   memset(&cm, 0, sizeof(cm));
 
-  nc->handler(nc, ev, ev_data);
+  nc->handler(nc, ev, ev_data MG_UD_ARG(user_data));
 
   switch (ev) {
     case MG_EV_RECV:
@@ -11549,7 +11550,8 @@ static void coap_handler(struct mg_connection *nc, int ev, void *ev_data) {
            */
           cm.flags |= MG_COAP_FORMAT_ERROR; /* LCOV_EXCL_LINE */
         }                                   /* LCOV_EXCL_LINE */
-        nc->handler(nc, MG_COAP_EVENT_BASE + cm.msg_type, &cm);
+        nc->handler(nc, MG_COAP_EVENT_BASE + cm.msg_type,
+                    &cm MG_UD_ARG(user_data));
       }
 
       mg_coap_free_options(&cm);
