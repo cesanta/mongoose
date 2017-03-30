@@ -14313,6 +14313,7 @@ int mg_lwip_tcp_write(struct mg_connection *nc, const void *data,
                       uint16_t len) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   struct tcp_pcb *tpcb = cs->pcb.tcp;
+  if (tpcb == NULL) return -1;
   len = MIN(tpcb->mss, MIN(len, tpcb->snd_buf));
   if (len == 0) {
     DBG(("%p no buf avail %u %u %u %p %p", tpcb, tpcb->acked, tpcb->snd_buf,
