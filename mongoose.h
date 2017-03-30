@@ -195,6 +195,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <ctype.h>
 
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib") /* Linking with winsock library */
@@ -221,13 +222,13 @@
 #define __func__ __FILE__ ":" STR(__LINE__)
 #endif
 #define snprintf _snprintf
-#define fileno _fileno
 #define vsnprintf _vsnprintf
 #define sleep(x) Sleep((x) *1000)
 #define to64(x) _atoi64(x)
 #if !defined(__MINGW32__) && !defined(__MINGW64__)
 #define popen(x, y) _popen((x), (y))
 #define pclose(x) _pclose(x)
+#define fileno _fileno
 #endif
 #define rmdir _rmdir
 #if defined(_MSC_VER) && _MSC_VER >= 1400
