@@ -5963,7 +5963,7 @@ static int mg_http_multipart_wait_for_boundary(struct mg_connection *c) {
 
   if (pd->mp_stream.boundary == NULL) {
     pd->mp_stream.state = MPS_FINALIZE;
-    DBG(("Invalid request: boundary not initilaized"));
+    DBG(("Invalid request: boundary not initialized"));
     return 0;
   }
 
