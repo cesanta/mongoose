@@ -5961,6 +5961,12 @@ static int mg_http_multipart_wait_for_boundary(struct mg_connection *c) {
   struct mbuf *io = &c->recv_mbuf;
   struct mg_http_proto_data *pd = mg_http_get_proto_data(c);
 
+  if (pd->mp_stream.boundary == NULL) {
+    pd->mp_stream.state = MPS_FINALIZE;
+    DBG(("Invalid request: boundary not initilaized"));
+    return 0;
+  }
+
   if ((int) io->len < pd->mp_stream.boundary_len + 2) {
     return 0;
   }
