@@ -11986,7 +11986,7 @@ void mg_sntp_send_request(struct mg_connection *c) {
  * but if local clock is absolutely broken (and doesn't work even
  * as simple timer), it is better to disable it
 */
-#ifndef MG_SNMP_NO_DELAY_CORRECTION
+#ifndef MG_SNTP_NO_DELAY_CORRECTION
   uint32_t sec;
   sec = htonl((uint32_t)(mg_time() + SNTP_TIME_OFFSET));
   memcpy(&buf[40], &sec, sizeof(sec));
@@ -11995,7 +11995,7 @@ void mg_sntp_send_request(struct mg_connection *c) {
   mg_send(c, buf, sizeof(buf));
 }
 
-#ifndef MG_SNMP_NO_DELAY_CORRECTION
+#ifndef MG_SNTP_NO_DELAY_CORRECTION
 static uint64_t mg_calculate_delay(uint64_t t1, uint64_t t2, uint64_t t3) {
   /* roundloop delay = (T4 - T1) - (T3 - T2) */
   uint64_t d1 = ((mg_time() + SNTP_TIME_OFFSET) * 1000000) -
@@ -12010,12 +12010,10 @@ static uint64_t mg_calculate_delay(uint64_t t1, uint64_t t2, uint64_t t3) {
 MG_INTERNAL int mg_sntp_parse_reply(const char *buf, int len,
                                     struct mg_sntp_message *msg) {
   uint8_t hdr;
-  uint64_t orig_ts_T1, recv_ts_T2, trsm_ts_T3, delay = 0;
+  uint64_t trsm_ts_T3, delay = 0;
   int mode;
   struct timeval tv;
 
-  (void) orig_ts_T1;
-  (void) recv_ts_T2;
   if (len < 48) {
     return -1;
   }
@@ -12039,10 +12037,13 @@ MG_INTERNAL int mg_sntp_parse_reply(const char *buf, int len,
 
   mg_get_ntp_ts(&buf[40], &trsm_ts_T3);
 
-#ifndef MG_SNMP_NO_DELAY_CORRECTION
-  mg_get_ntp_ts(&buf[24], &orig_ts_T1);
-  mg_get_ntp_ts(&buf[32], &recv_ts_T2);
-  delay = mg_calculate_delay(orig_ts_T1, recv_ts_T2, trsm_ts_T3);
+#ifndef MG_SNTP_NO_DELAY_CORRECTION
+  {
+    uint64_t orig_ts_T1, recv_ts_T2;
+    mg_get_ntp_ts(&buf[24], &orig_ts_T1);
+    mg_get_ntp_ts(&buf[32], &recv_ts_T2);
+    delay = mg_calculate_delay(orig_ts_T1, recv_ts_T2, trsm_ts_T3);
+  }
 #endif
 
   mg_ntp_to_tv(trsm_ts_T3, &tv);
