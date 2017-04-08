@@ -9856,82 +9856,6 @@ void mg_set_protocol_mqtt(struct mg_connection *nc) {
   nc->proto_data_destructor = mg_mqtt_proto_data_destructor;
 }
 
-void mg_send_mqtt_handshake(struct mg_connection *nc, const char *client_id) {
-  static struct mg_send_mqtt_handshake_opts opts;
-  mg_send_mqtt_handshake_opt(nc, client_id, opts);
-}
-
-void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
-                                struct mg_send_mqtt_handshake_opts opts) {
-  uint8_t header = MG_MQTT_CMD_CONNECT << 4;
-  uint8_t rem_len;
-  uint16_t keep_alive;
-  uint16_t len;
-  struct mg_mqtt_proto_data *pd = (struct mg_mqtt_proto_data *) nc->proto_data;
-
-  /*
-   * 9: version_header(len, magic_string, version_number), 1: flags, 2:
-   * keep-alive timer,
-   * 2: client_identifier_len, n: client_id
-   */
-  rem_len = 9 + 1 + 2 + 2 + (uint8_t) strlen(client_id);
-
-  if (opts.user_name != NULL) {
-    opts.flags |= MG_MQTT_HAS_USER_NAME;
-    rem_len += (uint8_t) strlen(opts.user_name) + 2;
-  }
-  if (opts.password != NULL) {
-    opts.flags |= MG_MQTT_HAS_PASSWORD;
-    rem_len += (uint8_t) strlen(opts.password) + 2;
-  }
-  if (opts.will_topic != NULL && opts.will_message != NULL) {
-    opts.flags |= MG_MQTT_HAS_WILL;
-    rem_len += (uint8_t) strlen(opts.will_topic) + 2;
-    rem_len += (uint8_t) strlen(opts.will_message) + 2;
-  }
-
-  mg_send(nc, &header, 1);
-  mg_send(nc, &rem_len, 1);
-  mg_send(nc, "\00\06MQIsdp\03", 9);
-  mg_send(nc, &opts.flags, 1);
-
-  if (opts.keep_alive == 0) {
-    opts.keep_alive = 60;
-  }
-
-  keep_alive = htons(opts.keep_alive);
-  mg_send(nc, &keep_alive, 2);
-
-  len = htons((uint16_t) strlen(client_id));
-  mg_send(nc, &len, 2);
-  mg_send(nc, client_id, strlen(client_id));
-
-  if (opts.flags & MG_MQTT_HAS_WILL) {
-    len = htons((uint16_t) strlen(opts.will_topic));
-    mg_send(nc, &len, 2);
-    mg_send(nc, opts.will_topic, strlen(opts.will_topic));
-
-    len = htons((uint16_t) strlen(opts.will_message));
-    mg_send(nc, &len, 2);
-    mg_send(nc, opts.will_message, strlen(opts.will_message));
-  }
-
-  if (opts.flags & MG_MQTT_HAS_USER_NAME) {
-    len = htons((uint16_t) strlen(opts.user_name));
-    mg_send(nc, &len, 2);
-    mg_send(nc, opts.user_name, strlen(opts.user_name));
-  }
-  if (opts.flags & MG_MQTT_HAS_PASSWORD) {
-    len = htons((uint16_t) strlen(opts.password));
-    mg_send(nc, &len, 2);
-    mg_send(nc, opts.password, strlen(opts.password));
-  }
-
-  if (pd != NULL) {
-    pd->keep_alive = opts.keep_alive;
-  }
-}
-
 static void mg_mqtt_prepend_header(struct mg_connection *nc, uint8_t cmd,
                                    uint8_t flags, size_t len) {
   size_t off = nc->send_mbuf.len - len;
@@ -9953,6 +9877,81 @@ static void mg_mqtt_prepend_header(struct mg_connection *nc, uint8_t cmd,
   } while (len > 0);
 
   mbuf_insert(&nc->send_mbuf, off, buf, vlen - buf);
+}
+
+void mg_send_mqtt_handshake(struct mg_connection *nc, const char *client_id) {
+  static struct mg_send_mqtt_handshake_opts opts;
+  mg_send_mqtt_handshake_opt(nc, client_id, opts);
+}
+
+void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
+                                struct mg_send_mqtt_handshake_opts opts) {
+  uint16_t hlen, nlen, rem_len = 0;
+  struct mg_mqtt_proto_data *pd = (struct mg_mqtt_proto_data *) nc->proto_data;
+
+  mg_send(nc, "\00\04MQTT\04", 7);
+  rem_len += 7;
+
+  if (opts.user_name != NULL) {
+    opts.flags |= MG_MQTT_HAS_USER_NAME;
+  }
+  if (opts.password != NULL) {
+    opts.flags |= MG_MQTT_HAS_PASSWORD;
+  }
+  if (opts.will_topic != NULL && opts.will_message != NULL) {
+    opts.flags |= MG_MQTT_HAS_WILL;
+  }
+  if (opts.keep_alive == 0) {
+    opts.keep_alive = 60;
+  }
+
+  mg_send(nc, &opts.flags, 1);
+  rem_len += 1;
+
+  nlen = htons(opts.keep_alive);
+  mg_send(nc, &nlen, 2);
+  rem_len += 2;
+
+  hlen = strlen(client_id);
+  nlen = htons((uint16_t) hlen);
+  mg_send(nc, &nlen, 2);
+  mg_send(nc, client_id, hlen);
+  rem_len += 2 + hlen;
+
+  if (opts.flags & MG_MQTT_HAS_WILL) {
+    hlen = strlen(opts.will_topic);
+    nlen = htons((uint16_t) hlen);
+    mg_send(nc, &nlen, 2);
+    mg_send(nc, opts.will_topic, hlen);
+    rem_len += 2 + hlen;
+
+    hlen = strlen(opts.will_message);
+    nlen = htons((uint16_t) nlen);
+    mg_send(nc, &nlen, 2);
+    mg_send(nc, opts.will_message, hlen);
+    rem_len += 2 + hlen;
+  }
+
+  if (opts.flags & MG_MQTT_HAS_USER_NAME) {
+    hlen = strlen(opts.user_name);
+    nlen = htons((uint16_t) hlen);
+    mg_send(nc, &nlen, 2);
+    mg_send(nc, opts.user_name, hlen);
+    rem_len += 2 + hlen;
+  }
+  if (opts.flags & MG_MQTT_HAS_PASSWORD) {
+    hlen = strlen(opts.password);
+    nlen = htons((uint16_t) hlen);
+    mg_send(nc, &nlen, 2);
+    mg_send(nc, opts.password, hlen);
+    rem_len += 2 + hlen;
+  }
+
+  mg_mqtt_prepend_header(nc, MG_MQTT_CMD_CONNECT, 0, rem_len);
+
+  if (pd != NULL) {
+    pd->keep_alive = opts.keep_alive;
+  }
 }
 
 void mg_mqtt_publish(struct mg_connection *nc, const char *topic,
