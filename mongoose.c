@@ -3582,9 +3582,7 @@ void mg_socket_if_init(struct mg_iface *iface) {
   (void) iface;
   DBG(("%p using select()", iface->mgr));
 #if MG_ENABLE_BROADCAST
-  do {
-    mg_socketpair(iface->mgr->ctl, SOCK_DGRAM);
-  } while (iface->mgr->ctl[0] == INVALID_SOCKET);
+  mg_socketpair(iface->mgr->ctl, SOCK_DGRAM);
 #endif
 }
 
@@ -3742,6 +3740,27 @@ time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
 }
 
 #if MG_ENABLE_BROADCAST
+MG_INTERNAL void mg_socketpair_close(sock_t *sock) {
+  while (1) {
+    if (closesocket(*sock) == -1 && errno == EINTR)
+      continue;
+    break;
+  }
+  *sock = INVALID_SOCKET;
+}
+
+MG_INTERNAL sock_t mg_socketpair_accept(sock_t sock, 
+                                     union socket_address *sa,
+                                     socklen_t sa_len) {
+  sock_t rc;
+  while(1) {
+    if ((rc = accept(sock, &sa->sa, &sa_len)) == INVALID_SOCKET && errno == EINTR)
+        continue;
+    break;
+  }
+  return rc;
+}
+
 int mg_socketpair(sock_t sp[2], int sock_type) {
   union socket_address sa;
   sock_t sock;
@@ -3765,20 +3784,19 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
              (getsockname(sp[0], &sa.sa, &len) != 0 ||
               connect(sock, &sa.sa, len) != 0)) {
   } else if ((sp[1] = (sock_type == SOCK_DGRAM ? sock
-                                               : accept(sock, &sa.sa, &len))) ==
+                                               : mg_socketpair_accept(sock, &sa, len))) ==
              INVALID_SOCKET) {
   } else {
     mg_set_close_on_exec(sp[0]);
     mg_set_close_on_exec(sp[1]);
-    if (sock_type == SOCK_STREAM) closesocket(sock);
+    if (sock_type == SOCK_STREAM) mg_socketpair_close(&sock);
     ret = 1;
   }
 
   if (!ret) {
-    if (sp[0] != INVALID_SOCKET) closesocket(sp[0]);
-    if (sp[1] != INVALID_SOCKET) closesocket(sp[1]);
-    if (sock != INVALID_SOCKET) closesocket(sock);
-    sock = sp[0] = sp[1] = INVALID_SOCKET;
+    if (sp[0] != INVALID_SOCKET) mg_socketpair_close(&sp[0]);
+    if (sp[1] != INVALID_SOCKET) mg_socketpair_close(&sp[1]);
+    if (sock != INVALID_SOCKET) mg_socketpair_close(&sock);
   }
 
   return ret;
@@ -7929,6 +7947,10 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
  * All rights reserved
  */
 
+#ifndef _WIN32
+#include <signal.h>
+#endif
+
 #if MG_ENABLE_HTTP && MG_ENABLE_HTTP_CGI
 
 #ifndef MG_MAX_CGI_ENVIR_VARS
@@ -8379,14 +8401,19 @@ MG_INTERNAL void mg_handle_cgi(struct mg_connection *nc, const char *prog,
     prog = p + 1;
   }
 
-  /*
-   * Try to create socketpair in a loop until success. mg_socketpair()
-   * can be interrupted by a signal and fail.
-   * TODO(lsm): use sigaction to restart interrupted syscall
-   */
-  do {
-    mg_socketpair(fds, SOCK_STREAM);
-  } while (fds[0] == INVALID_SOCKET);
+  if (!mg_socketpair(fds, SOCK_STREAM)) {
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+    return;
+  }
+
+#ifndef _WIN32
+  struct sigaction sa;
+
+  sigemptyset(&sa.sa_mask);
+  sa.sa_handler = SIG_IGN;
+  sa.sa_flags = 0;
+  sigaction(SIGCHLD, &sa, NULL);
+#endif
 
   if (mg_start_process(opts->cgi_interpreter, prog, blk.buf, blk.vars, dir,
                        fds[1]) != 0) {
