@@ -2042,14 +2042,9 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
 
 #if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
   /* LCOV_EXCL_START */
-  if (nc->mgr->hexdump_file != NULL && ev != MG_EV_POLL &&
+  if (nc->mgr->hexdump_file != NULL && ev != MG_EV_POLL && ev != MG_EV_RECV &&
       ev != MG_EV_SEND /* handled separately */) {
-    if (ev == MG_EV_RECV) {
-      mg_hexdump_connection(nc, nc->mgr->hexdump_file, nc->recv_mbuf.buf,
-                            *(int *) ev_data, ev);
-    } else {
-      mg_hexdump_connection(nc, nc->mgr->hexdump_file, NULL, 0, ev);
-    }
+    mg_hexdump_connection(nc, nc->mgr->hexdump_file, NULL, 0, ev);
   }
 /* LCOV_EXCL_STOP */
 #endif
@@ -2480,16 +2475,20 @@ void mg_send(struct mg_connection *nc, const void *buf, int len) {
   } else {
     nc->iface->vtable->tcp_send(nc, buf, len);
   }
-#if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
-  if (nc->mgr && nc->mgr->hexdump_file != NULL) {
-    mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, len, MG_EV_SEND);
-  }
-#endif
 }
 
 void mg_if_sent_cb(struct mg_connection *nc, int num_sent) {
+#if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
+  if (nc->mgr && nc->mgr->hexdump_file != NULL) {
+    char *buf = nc->send_mbuf.buf;
+    mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, num_sent, MG_EV_SEND);
+  }
+#endif
   if (num_sent < 0) {
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+  } else {
+    mbuf_remove(&nc->send_mbuf, num_sent);
+    mbuf_trim(&nc->send_mbuf);
   }
   mg_call(nc, NULL, nc->user_data, MG_EV_SEND, &num_sent);
 }
@@ -2497,6 +2496,13 @@ void mg_if_sent_cb(struct mg_connection *nc, int num_sent) {
 MG_INTERNAL void mg_recv_common(struct mg_connection *nc, void *buf, int len,
                                 int own) {
   DBG(("%p %d %u", nc, len, (unsigned int) nc->recv_mbuf.len));
+
+#if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
+  if (nc->mgr && nc->mgr->hexdump_file != NULL) {
+    mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, len, MG_EV_RECV);
+  }
+#endif
+
   if (nc->flags & MG_F_CLOSE_IMMEDIATELY) {
     DBG(("%p discarded %d bytes", nc, len));
     /*
@@ -3134,17 +3140,16 @@ void mg_set_non_blocking_mode(sock_t sock) {
 #endif
 }
 
-static int mg_is_error(int n) {
+static int mg_is_error(void) {
   int err = mg_get_errno();
-  return (n < 0 && err != EINPROGRESS && err != EWOULDBLOCK
+  return err != EINPROGRESS && err != EWOULDBLOCK
 #ifndef WINCE
-          && err != EAGAIN && err != EINTR
+         && err != EAGAIN && err != EINTR
 #endif
 #ifdef _WIN32
-          && WSAGetLastError() != WSAEINTR &&
-          WSAGetLastError() != WSAEWOULDBLOCK
+         && WSAGetLastError() != WSAEINTR && WSAGetLastError() != WSAEWOULDBLOCK
 #endif
-          );
+      ;
 }
 
 void mg_socket_if_connect_tcp(struct mg_connection *nc,
@@ -3159,7 +3164,7 @@ void mg_socket_if_connect_tcp(struct mg_connection *nc,
   mg_set_non_blocking_mode(nc->sock);
 #endif
   rc = connect(nc->sock, &sa->sa, sizeof(sa->sin));
-  nc->err = mg_is_error(rc) ? mg_get_errno() : 0;
+  nc->err = rc < 0 && mg_is_error() ? mg_get_errno() : 0;
   DBG(("%p sock %d rc %d errno %d err %d", nc, nc->sock, rc, mg_get_errno(),
        nc->err));
 }
@@ -3235,7 +3240,7 @@ static int mg_accept_conn(struct mg_connection *lc) {
   /* NOTE(lsm): on Windows, sock is always > FD_SETSIZE */
   sock_t sock = accept(lc->sock, &sa.sa, &sa_len);
   if (sock == INVALID_SOCKET) {
-    if (mg_is_error(-1)) DBG(("%p: failed to accept: %d", lc, mg_get_errno()));
+    if (mg_is_error()) DBG(("%p: failed to accept: %d", lc, mg_get_errno()));
     return 0;
   }
   nc = mg_if_accept_new_conn(lc);
@@ -3320,10 +3325,7 @@ static void mg_write_to_socket(struct mg_connection *nc) {
         sendto(nc->sock, io->buf, io->len, 0, &nc->sa.sa, sizeof(nc->sa.sin));
     DBG(("%p %d %d %d %s:%hu", nc, nc->sock, n, mg_get_errno(),
          inet_ntoa(nc->sa.sin.sin_addr), ntohs(nc->sa.sin.sin_port)));
-    if (n > 0) {
-      mbuf_remove(io, n);
-      mg_if_sent_cb(nc, n);
-    }
+    mg_if_sent_cb(nc, n);
     return;
   }
 
@@ -3350,17 +3352,9 @@ static void mg_write_to_socket(struct mg_connection *nc) {
   {
     n = (int) MG_SEND_FUNC(nc->sock, io->buf, io->len, 0);
     DBG(("%p %d bytes -> %d", nc, n, nc->sock));
-    if (n < 0 && mg_is_error(n)) {
-      /* Something went wrong, drop the connection. */
-      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-      return;
-    }
   }
 
-  if (n > 0) {
-    mbuf_remove(io, n);
-    mg_if_sent_cb(nc, n);
-  }
+  mg_if_sent_cb(nc, n);
 }
 
 MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max) {
@@ -3415,7 +3409,7 @@ static void mg_handle_tcp_read(struct mg_connection *conn) {
     if (n == 0) {
       /* Orderly shutdown of the socket, try flushing output. */
       conn->flags |= MG_F_SEND_AND_CLOSE;
-    } else if (mg_is_error(n)) {
+    } else if (n < 0 && mg_is_error()) {
       conn->flags |= MG_F_CLOSE_IMMEDIATELY;
     }
   }
@@ -9549,6 +9543,25 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
   FILE *fp = NULL;
   char *hexbuf, src[60], dst[60];
   int buf_size = num_bytes * 5 + 100;
+  const char *tag = NULL;
+  switch (ev) {
+    case MG_EV_RECV:
+      tag = "<-";
+      break;
+    case MG_EV_SEND:
+      tag = "->";
+      break;
+    case MG_EV_ACCEPT:
+      tag = "<A";
+      break;
+    case MG_EV_CONNECT:
+      tag = "C>";
+      break;
+    case MG_EV_CLOSE:
+      tag = "XX";
+      break;
+  }
+  if (tag == NULL) return; /* Don't log MG_EV_TIMER, etc */
 
   if (strcmp(path, "-") == 0) {
     fp = stdout;
@@ -9566,14 +9579,8 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
   mg_conn_addr_to_str(nc, dst, sizeof(dst), MG_SOCK_STRINGIFY_IP |
                                                 MG_SOCK_STRINGIFY_PORT |
                                                 MG_SOCK_STRINGIFY_REMOTE);
-  fprintf(
-      fp, "%lu %p %s %s %s %d\n", (unsigned long) mg_time(), (void *) nc, src,
-      ev == MG_EV_RECV ? "<-" : ev == MG_EV_SEND
-                                    ? "->"
-                                    : ev == MG_EV_ACCEPT
-                                          ? "<A"
-                                          : ev == MG_EV_CONNECT ? "C>" : "XX",
-      dst, num_bytes);
+  fprintf(fp, "%lu %p %s %s %s %d\n", (unsigned long) mg_time(), (void *) nc,
+          src, tag, dst, num_bytes);
   if (num_bytes > 0 && (hexbuf = (char *) MG_MALLOC(buf_size)) != NULL) {
     mg_hexdump(buf, num_bytes, hexbuf, buf_size);
     fprintf(fp, "%s", hexbuf);
@@ -11991,7 +11998,7 @@ static void mg_get_ntp_ts(const char *ntp, uint64_t *val) {
 }
 
 void mg_sntp_send_request(struct mg_connection *c) {
-  char buf[48] = {0};
+  uint8_t buf[48] = {0};
   /*
    * header - 8 bit:
    * LI (2 bit) - 3 (not in sync), VN (3 bit) - 4 (version),
@@ -13373,7 +13380,6 @@ static void mg_write_to_socket(struct mg_connection *nc) {
   }
 
   if (n > 0) {
-    mbuf_remove(io, n);
     mg_if_sent_cb(nc, n);
   } else if (n < 0 && mg_is_error(n)) {
     /* Something went wrong, drop the connection. */
@@ -14399,8 +14405,6 @@ static void mg_lwip_send_more(struct mg_connection *nc) {
   if (num_written < 0) {
     mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
   }
-  mbuf_remove(&nc->send_mbuf, num_written);
-  mbuf_trim(&nc->send_mbuf);
 }
 
 void mg_lwip_if_tcp_send(struct mg_connection *nc, const void *buf,
@@ -14639,7 +14643,7 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
         break;
       }
       case MG_SIG_SENT_CB: {
-        if (cs->num_sent > 0) mg_if_sent_cb(nc, cs->num_sent);
+        mg_if_sent_cb(nc, cs->num_sent);
         cs->num_sent = 0;
 
         if (nc->send_mbuf.len == 0 && (nc->flags & MG_F_SEND_AND_CLOSE) &&
@@ -15268,10 +15272,7 @@ static void mg_handle_send(struct mg_connection *nc) {
     }
   }
 
-  if (bytes_written != 0) {
-    mbuf_remove(&nc->send_mbuf, bytes_written);
-    mg_if_sent_cb(nc, bytes_written);
-  }
+  mg_if_sent_cb(nc, bytes_written);
 }
 
 static void mg_handle_recv(struct mg_connection *nc) {
