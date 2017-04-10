@@ -9740,21 +9740,27 @@ static const char *scanto(const char *p, struct mg_str *s) {
 
 MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   uint8_t header;
-  size_t len = 0;
+  size_t len = 0, len_len = 0;
+  const char *p, *end;
+  unsigned char lc = 0;
   int cmd;
-  const char *p = &io->buf[1], *end;
 
   if (io->len < 2) return -1;
   header = io->buf[0];
   cmd = header >> 4;
 
   /* decode mqtt variable length */
-  do {
-    len += (*p & 127) << 7 * (p - &io->buf[1]);
-  } while ((*p++ & 128) != 0 && ((size_t)(p - io->buf) <= io->len));
+  len = len_len = 0;
+  p = io->buf + 1;
+  while ((size_t)(p - io->buf) < io->len) {
+    lc = *((const unsigned char *) p++);
+    len += (lc & 0x7f) << 7 * len_len;
+    len_len++;
+    if (!(lc & 0x80) || (len_len > sizeof(len))) break;
+  }
 
   end = p + len;
-  if (end > io->buf + io->len + 1) {
+  if (lc & 0x80 || end > io->buf + io->len) {
     return -1;
   }
 
@@ -9829,7 +9835,6 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
 
 static void mqtt_handler(struct mg_connection *nc, int ev,
                          void *ev_data MG_UD_ARG(void *user_data)) {
-  int len;
   struct mbuf *io = &nc->recv_mbuf;
   struct mg_mqtt_message mm;
   memset(&mm, 0, sizeof(mm));
@@ -9838,10 +9843,13 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
 
   switch (ev) {
     case MG_EV_RECV:
-      len = parse_mqtt(io, &mm);
-      if (len == -1) break; /* not fully buffered */
-      nc->handler(nc, MG_MQTT_EVENT_BASE + mm.cmd, &mm MG_UD_ARG(user_data));
-      mbuf_remove(io, len);
+      /* There can be multiple messages in the buffer, process them all. */
+      while (1) {
+        int len = parse_mqtt(io, &mm);
+        if (len == -1) break; /* not fully buffered */
+        nc->handler(nc, MG_MQTT_EVENT_BASE + mm.cmd, &mm MG_UD_ARG(user_data));
+        mbuf_remove(io, len);
+      }
       break;
   }
 }
