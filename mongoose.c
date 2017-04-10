@@ -3742,20 +3742,19 @@ time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
 #if MG_ENABLE_BROADCAST
 MG_INTERNAL void mg_socketpair_close(sock_t *sock) {
   while (1) {
-    if (closesocket(*sock) == -1 && errno == EINTR)
-      continue;
+    if (closesocket(*sock) == -1 && errno == EINTR) continue;
     break;
   }
   *sock = INVALID_SOCKET;
 }
 
-MG_INTERNAL sock_t mg_socketpair_accept(sock_t sock, 
-                                     union socket_address *sa,
-                                     socklen_t sa_len) {
+MG_INTERNAL sock_t
+mg_socketpair_accept(sock_t sock, union socket_address *sa, socklen_t sa_len) {
   sock_t rc;
-  while(1) {
-    if ((rc = accept(sock, &sa->sa, &sa_len)) == INVALID_SOCKET && errno == EINTR)
-        continue;
+  while (1) {
+    if ((rc = accept(sock, &sa->sa, &sa_len)) == INVALID_SOCKET &&
+        errno == EINTR)
+      continue;
     break;
   }
   return rc;
@@ -3783,8 +3782,8 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
   } else if (sock_type == SOCK_DGRAM &&
              (getsockname(sp[0], &sa.sa, &len) != 0 ||
               connect(sock, &sa.sa, len) != 0)) {
-  } else if ((sp[1] = (sock_type == SOCK_DGRAM ? sock
-                                               : mg_socketpair_accept(sock, &sa, len))) ==
+  } else if ((sp[1] = (sock_type == SOCK_DGRAM ? sock : mg_socketpair_accept(
+                                                            sock, &sa, len))) ==
              INVALID_SOCKET) {
   } else {
     mg_set_close_on_exec(sp[0]);
