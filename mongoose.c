@@ -9215,6 +9215,7 @@ static int lowercase(const char *s) {
 }
 
 #if MG_ENABLE_FILESYSTEM
+#ifndef MG_VIRTUAL_FILESYSTEM
 int mg_stat(const char *path, cs_stat_t *st) {
 #ifdef _WIN32
   wchar_t wpath[MAX_PATH_SIZE];
@@ -9246,6 +9247,7 @@ int mg_open(const char *path, int flag, int mode) { /* LCOV_EXCL_LINE */
   return open(path, flag, mode); /* LCOV_EXCL_LINE */
 #endif
 }
+#endif
 #endif
 
 void mg_base64_encode(const unsigned char *src, int src_len, char *dst) {
