@@ -11001,6 +11001,11 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev,
     case MG_EV_CLOSE:
       /* If we got here with request still not done, fire an error callback. */
       if (req != NULL) {
+        char addr[32];
+        mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr), MG_SOCK_STRINGIFY_IP);
+#ifdef MG_LOG_DNS_FAILURES
+        LOG(LL_ERROR, ("Failed to resolve '%s', server %s", req->name, addr));
+#endif
         req->callback(NULL, req->data, req->err);
         nc->user_data = NULL;
         MG_FREE(req);
