@@ -977,7 +977,6 @@ void MD5_Final(unsigned char digest[16], MD5_CTX *ctx) {
   memcpy(digest, ctx->buf, 16);
   memset((char *) ctx, 0, sizeof(*ctx));
 }
-#endif /* DISABLE_MD5 */
 
 char *cs_md5(char buf[33], ...) {
   unsigned char hash[16];
@@ -999,6 +998,7 @@ char *cs_md5(char buf[33], ...) {
 
   return buf;
 }
+#endif /* DISABLE_MD5 */
 
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
