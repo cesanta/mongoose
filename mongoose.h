@@ -1629,6 +1629,84 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
 
 #endif /* CS_COMMON_PLATFORMS_LWIP_MG_LWIP_H_ */
 #ifdef MG_MODULE_LINES
+#line 1 "common/cs_md5.h"
+#endif
+/*
+ * Copyright (c) 2014 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_COMMON_MD5_H_
+#define CS_COMMON_MD5_H_
+
+/* Amalgamated: #include "common/platform.h" */
+
+#ifndef CS_DISABLE_MD5
+#define CS_DISABLE_MD5 0
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+typedef struct {
+  uint32_t buf[4];
+  uint32_t bits[2];
+  unsigned char in[64];
+} cs_md5_ctx;
+
+void cs_md5_init(cs_md5_ctx *c);
+void cs_md5_update(cs_md5_ctx *c, const unsigned char *data, size_t len);
+void cs_md5_final(unsigned char *md, cs_md5_ctx *c);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* CS_COMMON_MD5_H_ */
+#ifdef MG_MODULE_LINES
+#line 1 "common/cs_sha1.h"
+#endif
+/*
+ * Copyright (c) 2014 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_COMMON_SHA1_H_
+#define CS_COMMON_SHA1_H_
+
+#ifndef CS_DISABLE_SHA1
+#define CS_DISABLE_SHA1 0
+#endif
+
+#if !CS_DISABLE_SHA1
+
+/* Amalgamated: #include "common/platform.h" */
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+typedef struct {
+  uint32_t state[5];
+  uint32_t count[2];
+  unsigned char buffer[64];
+} cs_sha1_ctx;
+
+void cs_sha1_init(cs_sha1_ctx *);
+void cs_sha1_update(cs_sha1_ctx *, const unsigned char *data, uint32_t len);
+void cs_sha1_final(unsigned char digest[20], cs_sha1_ctx *);
+void cs_hmac_sha1(const unsigned char *key, size_t key_len,
+                  const unsigned char *text, size_t text_len,
+                  unsigned char out[20]);
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* CS_DISABLE_SHA1 */
+
+#endif /* CS_COMMON_SHA1_H_ */
+#ifdef MG_MODULE_LINES
 #line 1 "common/cs_time.h"
 #endif
 /*
@@ -1792,94 +1870,6 @@ void mbuf_trim(struct mbuf *);
 #endif /* __cplusplus */
 
 #endif /* CS_COMMON_MBUF_H_ */
-#ifdef MG_MODULE_LINES
-#line 1 "common/sha1.h"
-#endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
-
-#ifndef CS_COMMON_SHA1_H_
-#define CS_COMMON_SHA1_H_
-
-#ifndef CS_DISABLE_SHA1
-#define CS_DISABLE_SHA1 0
-#endif
-
-#if !CS_DISABLE_SHA1
-
-/* Amalgamated: #include "common/platform.h" */
-
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-typedef struct {
-  uint32_t state[5];
-  uint32_t count[2];
-  unsigned char buffer[64];
-} cs_sha1_ctx;
-
-void cs_sha1_init(cs_sha1_ctx *);
-void cs_sha1_update(cs_sha1_ctx *, const unsigned char *data, uint32_t len);
-void cs_sha1_final(unsigned char digest[20], cs_sha1_ctx *);
-void cs_hmac_sha1(const unsigned char *key, size_t key_len,
-                  const unsigned char *text, size_t text_len,
-                  unsigned char out[20]);
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* CS_DISABLE_SHA1 */
-
-#endif /* CS_COMMON_SHA1_H_ */
-#ifdef MG_MODULE_LINES
-#line 1 "common/md5.h"
-#endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
-
-#ifndef CS_COMMON_MD5_H_
-#define CS_COMMON_MD5_H_
-
-/* Amalgamated: #include "common/platform.h" */
-
-#ifndef CS_DISABLE_MD5
-#define CS_DISABLE_MD5 0
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-typedef struct MD5Context {
-  uint32_t buf[4];
-  uint32_t bits[2];
-  unsigned char in[64];
-} MD5_CTX;
-
-void MD5_Init(MD5_CTX *c);
-void MD5_Update(MD5_CTX *c, const unsigned char *data, size_t len);
-void MD5_Final(unsigned char *md, MD5_CTX *c);
-
-/*
- * Return stringified MD5 hash for NULL terminated list of pointer/length pairs.
- * A length should be specified as size_t variable.
- * Example:
- *
- *    char buf[33];
- *    cs_md5(buf, "foo", (size_t) 3, "bar", (size_t) 3, NULL);
- */
-char *cs_md5(char buf[33], ...);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* CS_COMMON_MD5_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "common/base64.h"
 #endif
@@ -4394,6 +4384,11 @@ void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
 int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
                   int is_form_url_encoded);
 
+extern void mg_hash_md5_v(size_t num_msgs, const uint8_t *msgs[],
+                          const size_t *msg_lens, uint8_t *digest);
+extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
+                           const size_t *msg_lens, uint8_t *digest);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
@@ -4804,6 +4799,18 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
 void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
                                MG_CB(mg_event_handler_t handler,
                                      void *user_data));
+
+struct mg_http_endpoint_opts {
+  void *user_data;
+  /* Authorization domain (realm) */
+  const char *auth_domain;
+  const char *auth_file;
+};
+
+void mg_register_http_endpoint_opt(struct mg_connection *nc,
+                                   const char *uri_path,
+                                   mg_event_handler_t handler,
+                                   struct mg_http_endpoint_opts opts);
 
 /*
  * Authenticates a HTTP request against an opened password file.

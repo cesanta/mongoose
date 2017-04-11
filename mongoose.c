@@ -777,7 +777,7 @@ double cs_time(void) {
 
 #endif /* CS_COMMON_CS_ENDIAN_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/md5.c"
+#line 1 "common/cs_md5.c"
 #endif
 /*
  * This code implements the MD5 message-digest algorithm.
@@ -796,7 +796,7 @@ double cs_time(void) {
  * will fill a supplied 16-byte array with the digest.
  */
 
-/* Amalgamated: #include "common/md5.h" */
+/* Amalgamated: #include "common/cs_md5.h" */
 /* Amalgamated: #include "common/str_util.h" */
 
 #if !defined(EXCLUDE_COMMON)
@@ -831,7 +831,7 @@ static void byteReverse(unsigned char *buf, unsigned longs) {
  * Start MD5 accumulation.  Set bit count to 0 and buffer to mysterious
  * initialization constants.
  */
-void MD5_Init(MD5_CTX *ctx) {
+void cs_md5_init(cs_md5_ctx *ctx) {
   ctx->buf[0] = 0x67452301;
   ctx->buf[1] = 0xefcdab89;
   ctx->buf[2] = 0x98badcfe;
@@ -841,7 +841,7 @@ void MD5_Init(MD5_CTX *ctx) {
   ctx->bits[1] = 0;
 }
 
-static void MD5Transform(uint32_t buf[4], uint32_t const in[16]) {
+static void cs_md5_transform(uint32_t buf[4], uint32_t const in[16]) {
   register uint32_t a, b, c, d;
 
   a = buf[0];
@@ -923,7 +923,7 @@ static void MD5Transform(uint32_t buf[4], uint32_t const in[16]) {
   buf[3] += d;
 }
 
-void MD5_Update(MD5_CTX *ctx, const unsigned char *buf, size_t len) {
+void cs_md5_update(cs_md5_ctx *ctx, const unsigned char *buf, size_t len) {
   uint32_t t;
 
   t = ctx->bits[0];
@@ -942,7 +942,7 @@ void MD5_Update(MD5_CTX *ctx, const unsigned char *buf, size_t len) {
     }
     memcpy(p, buf, t);
     byteReverse(ctx->in, 16);
-    MD5Transform(ctx->buf, (uint32_t *) ctx->in);
+    cs_md5_transform(ctx->buf, (uint32_t *) ctx->in);
     buf += t;
     len -= t;
   }
@@ -950,7 +950,7 @@ void MD5_Update(MD5_CTX *ctx, const unsigned char *buf, size_t len) {
   while (len >= 64) {
     memcpy(ctx->in, buf, 64);
     byteReverse(ctx->in, 16);
-    MD5Transform(ctx->buf, (uint32_t *) ctx->in);
+    cs_md5_transform(ctx->buf, (uint32_t *) ctx->in);
     buf += 64;
     len -= 64;
   }
@@ -958,7 +958,7 @@ void MD5_Update(MD5_CTX *ctx, const unsigned char *buf, size_t len) {
   memcpy(ctx->in, buf, len);
 }
 
-void MD5_Final(unsigned char digest[16], MD5_CTX *ctx) {
+void cs_md5_final(unsigned char digest[16], cs_md5_ctx *ctx) {
   unsigned count;
   unsigned char *p;
   uint32_t *a;
@@ -971,7 +971,7 @@ void MD5_Final(unsigned char digest[16], MD5_CTX *ctx) {
   if (count < 8) {
     memset(p, 0, count);
     byteReverse(ctx->in, 16);
-    MD5Transform(ctx->buf, (uint32_t *) ctx->in);
+    cs_md5_transform(ctx->buf, (uint32_t *) ctx->in);
     memset(ctx->in, 0, 56);
   } else {
     memset(p, 0, count - 8);
@@ -982,234 +982,21 @@ void MD5_Final(unsigned char digest[16], MD5_CTX *ctx) {
   a[14] = ctx->bits[0];
   a[15] = ctx->bits[1];
 
-  MD5Transform(ctx->buf, (uint32_t *) ctx->in);
+  cs_md5_transform(ctx->buf, (uint32_t *) ctx->in);
   byteReverse((unsigned char *) ctx->buf, 4);
   memcpy(digest, ctx->buf, 16);
   memset((char *) ctx, 0, sizeof(*ctx));
 }
 
-char *cs_md5(char buf[33], ...) {
-  unsigned char hash[16];
-  const unsigned char *p;
-  va_list ap;
-  MD5_CTX ctx;
-
-  MD5_Init(&ctx);
-
-  va_start(ap, buf);
-  while ((p = va_arg(ap, const unsigned char *) ) != NULL) {
-    size_t len = va_arg(ap, size_t);
-    MD5_Update(&ctx, p, len);
-  }
-  va_end(ap);
-
-  MD5_Final(hash, &ctx);
-  cs_to_hex(buf, hash, sizeof(hash));
-
-  return buf;
-}
-
 #endif /* CS_DISABLE_MD5 */
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
-#line 1 "common/mbuf.c"
-#endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
-
-#ifndef EXCLUDE_COMMON
-
-#include <assert.h>
-#include <string.h>
-/* Amalgamated: #include "common/mbuf.h" */
-
-#ifndef MBUF_REALLOC
-#define MBUF_REALLOC realloc
-#endif
-
-#ifndef MBUF_FREE
-#define MBUF_FREE free
-#endif
-
-void mbuf_init(struct mbuf *mbuf, size_t initial_size) WEAK;
-void mbuf_init(struct mbuf *mbuf, size_t initial_size) {
-  mbuf->len = mbuf->size = 0;
-  mbuf->buf = NULL;
-  mbuf_resize(mbuf, initial_size);
-}
-
-void mbuf_free(struct mbuf *mbuf) WEAK;
-void mbuf_free(struct mbuf *mbuf) {
-  if (mbuf->buf != NULL) {
-    MBUF_FREE(mbuf->buf);
-    mbuf_init(mbuf, 0);
-  }
-}
-
-void mbuf_resize(struct mbuf *a, size_t new_size) WEAK;
-void mbuf_resize(struct mbuf *a, size_t new_size) {
-  if (new_size > a->size || (new_size < a->size && new_size >= a->len)) {
-    char *buf = (char *) MBUF_REALLOC(a->buf, new_size);
-    /*
-     * In case realloc fails, there's not much we can do, except keep things as
-     * they are. Note that NULL is a valid return value from realloc when
-     * size == 0, but that is covered too.
-     */
-    if (buf == NULL && new_size != 0) return;
-    a->buf = buf;
-    a->size = new_size;
-  }
-}
-
-void mbuf_trim(struct mbuf *mbuf) WEAK;
-void mbuf_trim(struct mbuf *mbuf) {
-  mbuf_resize(mbuf, mbuf->len);
-}
-
-size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t) WEAK;
-size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
-  char *p = NULL;
-
-  assert(a != NULL);
-  assert(a->len <= a->size);
-  assert(off <= a->len);
-
-  /* check overflow */
-  if (~(size_t) 0 - (size_t) a->buf < len) return 0;
-
-  if (a->len + len <= a->size) {
-    memmove(a->buf + off + len, a->buf + off, a->len - off);
-    if (buf != NULL) {
-      memcpy(a->buf + off, buf, len);
-    }
-    a->len += len;
-  } else {
-    size_t new_size = (size_t)((a->len + len) * MBUF_SIZE_MULTIPLIER);
-    if ((p = (char *) MBUF_REALLOC(a->buf, new_size)) != NULL) {
-      a->buf = p;
-      memmove(a->buf + off + len, a->buf + off, a->len - off);
-      if (buf != NULL) memcpy(a->buf + off, buf, len);
-      a->len += len;
-      a->size = new_size;
-    } else {
-      len = 0;
-    }
-  }
-
-  return len;
-}
-
-size_t mbuf_append(struct mbuf *a, const void *buf, size_t len) WEAK;
-size_t mbuf_append(struct mbuf *a, const void *buf, size_t len) {
-  return mbuf_insert(a, a->len, buf, len);
-}
-
-void mbuf_remove(struct mbuf *mb, size_t n) WEAK;
-void mbuf_remove(struct mbuf *mb, size_t n) {
-  if (n > 0 && n <= mb->len) {
-    memmove(mb->buf, mb->buf + n, mb->len - n);
-    mb->len -= n;
-  }
-}
-
-#endif /* EXCLUDE_COMMON */
-#ifdef MG_MODULE_LINES
-#line 1 "common/mg_str.c"
-#endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
-
-/* Amalgamated: #include "common/mg_mem.h" */
-/* Amalgamated: #include "common/mg_str.h" */
-
-#include <stdlib.h>
-#include <string.h>
-
-int mg_ncasecmp(const char *s1, const char *s2, size_t len) WEAK;
-
-struct mg_str mg_mk_str(const char *s) WEAK;
-struct mg_str mg_mk_str(const char *s) {
-  struct mg_str ret = {s, 0};
-  if (s != NULL) ret.len = strlen(s);
-  return ret;
-}
-
-struct mg_str mg_mk_str_n(const char *s, size_t len) WEAK;
-struct mg_str mg_mk_str_n(const char *s, size_t len) {
-  struct mg_str ret = {s, len};
-  return ret;
-}
-
-int mg_vcmp(const struct mg_str *str1, const char *str2) WEAK;
-int mg_vcmp(const struct mg_str *str1, const char *str2) {
-  size_t n2 = strlen(str2), n1 = str1->len;
-  int r = strncmp(str1->p, str2, (n1 < n2) ? n1 : n2);
-  if (r == 0) {
-    return n1 - n2;
-  }
-  return r;
-}
-
-int mg_vcasecmp(const struct mg_str *str1, const char *str2) WEAK;
-int mg_vcasecmp(const struct mg_str *str1, const char *str2) {
-  size_t n2 = strlen(str2), n1 = str1->len;
-  int r = mg_ncasecmp(str1->p, str2, (n1 < n2) ? n1 : n2);
-  if (r == 0) {
-    return n1 - n2;
-  }
-  return r;
-}
-
-struct mg_str mg_strdup(const struct mg_str s) WEAK;
-struct mg_str mg_strdup(const struct mg_str s) {
-  struct mg_str r = {NULL, 0};
-  if (s.len > 0 && s.p != NULL) {
-    r.p = (char *) MG_MALLOC(s.len);
-    if (r.p != NULL) {
-      memcpy((char *) r.p, s.p, s.len);
-      r.len = s.len;
-    }
-  }
-  return r;
-}
-
-int mg_strcmp(const struct mg_str str1, const struct mg_str str2) WEAK;
-int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
-  size_t i = 0;
-  while (i < str1.len && i < str2.len) {
-    if (str1.p[i] < str2.p[i]) return -1;
-    if (str1.p[i] > str2.p[i]) return 1;
-    i++;
-  }
-  if (i < str1.len) return 1;
-  if (i < str2.len) return -1;
-  return 0;
-}
-
-int mg_strncmp(const struct mg_str, const struct mg_str, size_t n) WEAK;
-int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n) {
-  struct mg_str s1 = str1;
-  struct mg_str s2 = str2;
-
-  if (s1.len > n) {
-    s1.len = n;
-  }
-  if (s2.len > n) {
-    s2.len = n;
-  }
-  return mg_strcmp(s1, s2);
-}
-#ifdef MG_MODULE_LINES
-#line 1 "common/sha1.c"
+#line 1 "common/cs_sha1.c"
 #endif
 /* Copyright(c) By Steve Reid <steve@edmweb.com> */
 /* 100% Public Domain */
 
-/* Amalgamated: #include "common/sha1.h" */
+/* Amalgamated: #include "common/cs_sha1.h" */
 
 #if !CS_DISABLE_SHA1 && !defined(EXCLUDE_COMMON)
 
@@ -1459,6 +1246,198 @@ void cs_hmac_sha1(const unsigned char *key, size_t keylen,
 }
 
 #endif /* EXCLUDE_COMMON */
+#ifdef MG_MODULE_LINES
+#line 1 "common/mbuf.c"
+#endif
+/*
+ * Copyright (c) 2014 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef EXCLUDE_COMMON
+
+#include <assert.h>
+#include <string.h>
+/* Amalgamated: #include "common/mbuf.h" */
+
+#ifndef MBUF_REALLOC
+#define MBUF_REALLOC realloc
+#endif
+
+#ifndef MBUF_FREE
+#define MBUF_FREE free
+#endif
+
+void mbuf_init(struct mbuf *mbuf, size_t initial_size) WEAK;
+void mbuf_init(struct mbuf *mbuf, size_t initial_size) {
+  mbuf->len = mbuf->size = 0;
+  mbuf->buf = NULL;
+  mbuf_resize(mbuf, initial_size);
+}
+
+void mbuf_free(struct mbuf *mbuf) WEAK;
+void mbuf_free(struct mbuf *mbuf) {
+  if (mbuf->buf != NULL) {
+    MBUF_FREE(mbuf->buf);
+    mbuf_init(mbuf, 0);
+  }
+}
+
+void mbuf_resize(struct mbuf *a, size_t new_size) WEAK;
+void mbuf_resize(struct mbuf *a, size_t new_size) {
+  if (new_size > a->size || (new_size < a->size && new_size >= a->len)) {
+    char *buf = (char *) MBUF_REALLOC(a->buf, new_size);
+    /*
+     * In case realloc fails, there's not much we can do, except keep things as
+     * they are. Note that NULL is a valid return value from realloc when
+     * size == 0, but that is covered too.
+     */
+    if (buf == NULL && new_size != 0) return;
+    a->buf = buf;
+    a->size = new_size;
+  }
+}
+
+void mbuf_trim(struct mbuf *mbuf) WEAK;
+void mbuf_trim(struct mbuf *mbuf) {
+  mbuf_resize(mbuf, mbuf->len);
+}
+
+size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t) WEAK;
+size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
+  char *p = NULL;
+
+  assert(a != NULL);
+  assert(a->len <= a->size);
+  assert(off <= a->len);
+
+  /* check overflow */
+  if (~(size_t) 0 - (size_t) a->buf < len) return 0;
+
+  if (a->len + len <= a->size) {
+    memmove(a->buf + off + len, a->buf + off, a->len - off);
+    if (buf != NULL) {
+      memcpy(a->buf + off, buf, len);
+    }
+    a->len += len;
+  } else {
+    size_t new_size = (size_t)((a->len + len) * MBUF_SIZE_MULTIPLIER);
+    if ((p = (char *) MBUF_REALLOC(a->buf, new_size)) != NULL) {
+      a->buf = p;
+      memmove(a->buf + off + len, a->buf + off, a->len - off);
+      if (buf != NULL) memcpy(a->buf + off, buf, len);
+      a->len += len;
+      a->size = new_size;
+    } else {
+      len = 0;
+    }
+  }
+
+  return len;
+}
+
+size_t mbuf_append(struct mbuf *a, const void *buf, size_t len) WEAK;
+size_t mbuf_append(struct mbuf *a, const void *buf, size_t len) {
+  return mbuf_insert(a, a->len, buf, len);
+}
+
+void mbuf_remove(struct mbuf *mb, size_t n) WEAK;
+void mbuf_remove(struct mbuf *mb, size_t n) {
+  if (n > 0 && n <= mb->len) {
+    memmove(mb->buf, mb->buf + n, mb->len - n);
+    mb->len -= n;
+  }
+}
+
+#endif /* EXCLUDE_COMMON */
+#ifdef MG_MODULE_LINES
+#line 1 "common/mg_str.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+/* Amalgamated: #include "common/mg_mem.h" */
+/* Amalgamated: #include "common/mg_str.h" */
+
+#include <stdlib.h>
+#include <string.h>
+
+int mg_ncasecmp(const char *s1, const char *s2, size_t len) WEAK;
+
+struct mg_str mg_mk_str(const char *s) WEAK;
+struct mg_str mg_mk_str(const char *s) {
+  struct mg_str ret = {s, 0};
+  if (s != NULL) ret.len = strlen(s);
+  return ret;
+}
+
+struct mg_str mg_mk_str_n(const char *s, size_t len) WEAK;
+struct mg_str mg_mk_str_n(const char *s, size_t len) {
+  struct mg_str ret = {s, len};
+  return ret;
+}
+
+int mg_vcmp(const struct mg_str *str1, const char *str2) WEAK;
+int mg_vcmp(const struct mg_str *str1, const char *str2) {
+  size_t n2 = strlen(str2), n1 = str1->len;
+  int r = strncmp(str1->p, str2, (n1 < n2) ? n1 : n2);
+  if (r == 0) {
+    return n1 - n2;
+  }
+  return r;
+}
+
+int mg_vcasecmp(const struct mg_str *str1, const char *str2) WEAK;
+int mg_vcasecmp(const struct mg_str *str1, const char *str2) {
+  size_t n2 = strlen(str2), n1 = str1->len;
+  int r = mg_ncasecmp(str1->p, str2, (n1 < n2) ? n1 : n2);
+  if (r == 0) {
+    return n1 - n2;
+  }
+  return r;
+}
+
+struct mg_str mg_strdup(const struct mg_str s) WEAK;
+struct mg_str mg_strdup(const struct mg_str s) {
+  struct mg_str r = {NULL, 0};
+  if (s.len > 0 && s.p != NULL) {
+    r.p = (char *) MG_MALLOC(s.len);
+    if (r.p != NULL) {
+      memcpy((char *) r.p, s.p, s.len);
+      r.len = s.len;
+    }
+  }
+  return r;
+}
+
+int mg_strcmp(const struct mg_str str1, const struct mg_str str2) WEAK;
+int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
+  size_t i = 0;
+  while (i < str1.len && i < str2.len) {
+    if (str1.p[i] < str2.p[i]) return -1;
+    if (str1.p[i] > str2.p[i]) return 1;
+    i++;
+  }
+  if (i < str1.len) return 1;
+  if (i < str2.len) return -1;
+  return 0;
+}
+
+int mg_strncmp(const struct mg_str, const struct mg_str, size_t n) WEAK;
+int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n) {
+  struct mg_str s1 = str1;
+  struct mg_str s2 = str2;
+
+  if (s1.len > n) {
+    s1.len = n;
+  }
+  if (s2.len > n) {
+    s2.len = n;
+  }
+  return mg_strcmp(s1, s2);
+}
 #ifdef MG_MODULE_LINES
 #line 1 "common/str_util.c"
 #endif
@@ -5032,7 +5011,6 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out) {
 #if MG_ENABLE_HTTP
 
 /* Amalgamated: #include "common/md5.h" */
-/* Amalgamated: #include "common/sha1.h" */
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
 
@@ -5060,8 +5038,10 @@ struct mg_http_proto_data_chuncked {
 
 struct mg_http_endpoint {
   struct mg_http_endpoint *next;
-  const char *name;
-  size_t name_len;
+  struct mg_str uri_pattern; /* owned */
+  char *auth_domain;         /* owned */
+  char *auth_file;           /* owned */
+
   mg_event_handler_t handler;
 #if MG_ENABLE_CALLBACK_USERDATA
   void *user_data;
@@ -5151,7 +5131,9 @@ static void mg_http_free_proto_data_endpoints(struct mg_http_endpoint **ep) {
 
   while (current != NULL) {
     struct mg_http_endpoint *tmp = current->next;
-    MG_FREE((void *) current->name);
+    MG_FREE((void *) current->uri_pattern.p);
+    MG_FREE((void *) current->auth_domain);
+    MG_FREE((void *) current->auth_file);
     MG_FREE(current);
     current = tmp;
   }
@@ -5583,8 +5565,7 @@ struct mg_http_endpoint *mg_http_get_endpoint_handler(struct mg_connection *nc,
 
   ep = pd->endpoints;
   while (ep != NULL) {
-    const struct mg_str name_s = {ep->name, ep->name_len};
-    if ((matched = mg_match_prefix_n(name_s, *uri_path)) != -1) {
+    if ((matched = mg_match_prefix_n(ep->uri_pattern, *uri_path)) != -1) {
       if (matched > matched_max) {
         /* Looking for the longest suitable handler */
         ret = ep;
@@ -5598,25 +5579,6 @@ struct mg_http_endpoint *mg_http_get_endpoint_handler(struct mg_connection *nc,
   return ret;
 }
 
-static void mg_http_call_endpoint_handler(struct mg_connection *nc, int ev,
-                                          struct http_message *hm) {
-  struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
-  void *user_data = nc->user_data;
-
-  if (ev == MG_EV_HTTP_REQUEST) {
-    struct mg_http_endpoint *ep =
-        mg_http_get_endpoint_handler(nc->listener, &hm->uri);
-    if (ep != NULL) {
-      pd->endpoint_handler = ep->handler;
-#if MG_ENABLE_CALLBACK_USERDATA
-      user_data = ep->user_data;
-#endif
-    }
-  }
-  mg_call(nc, pd->endpoint_handler ? pd->endpoint_handler : nc->handler,
-          user_data, ev, hm);
-}
-
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
 static void mg_http_multipart_continue(struct mg_connection *nc);
 
@@ -5624,6 +5586,9 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
                                     struct http_message *hm, int req_len);
 
 #endif
+
+static void mg_http_call_endpoint_handler(struct mg_connection *nc, int ev,
+                                          struct http_message *hm);
 
 /*
  * lx106 compiler has a bug (TODO(mkm) report and insert tracking bug here)
@@ -6691,6 +6656,42 @@ static int mg_is_file_hidden(const char *path,
 }
 
 #if !MG_DISABLE_HTTP_DIGEST_AUTH
+
+#ifndef MG_EXT_MD5
+void mg_hash_md5_v(size_t num_msgs, const uint8_t *msgs[],
+                   const size_t *msg_lens, uint8_t *digest) {
+  size_t i;
+  cs_md5_ctx md5_ctx;
+  cs_md5_init(&md5_ctx);
+  for (i = 0; i < num_msgs; i++) {
+    cs_md5_update(&md5_ctx, msgs[i], msg_lens[i]);
+  }
+  cs_md5_final(digest, &md5_ctx);
+}
+#else
+extern void mg_hash_md5_v(size_t num_msgs, const uint8_t *msgs[],
+                          const size_t *msg_lens, uint8_t *digest);
+#endif
+
+void cs_md5(char buf[33], ...) {
+  unsigned char hash[16];
+  const uint8_t *msgs[20], *p;
+  size_t msg_lens[20];
+  size_t num_msgs = 0;
+  va_list ap;
+
+  va_start(ap, buf);
+  while ((p = va_arg(ap, const unsigned char *) ) != NULL) {
+    msgs[num_msgs] = p;
+    msg_lens[num_msgs] = va_arg(ap, size_t);
+    num_msgs++;
+  }
+  va_end(ap);
+
+  mg_hash_md5_v(num_msgs, msgs, msg_lens, hash);
+  cs_to_hex(buf, hash, sizeof(hash));
+}
+
 static void mg_mkmd5resp(const char *method, size_t method_len, const char *uri,
                          size_t uri_len, const char *ha1, size_t ha1_len,
                          const char *nonce, size_t nonce_len, const char *nc,
@@ -6699,7 +6700,6 @@ static void mg_mkmd5resp(const char *method, size_t method_len, const char *uri,
   static const char colon[] = ":";
   static const size_t one = 1;
   char ha2[33];
-
   cs_md5(ha2, method, method_len, colon, one, uri, uri_len, NULL);
   cs_md5(resp, ha1, ha1_len, colon, one, nonce, nonce_len, colon, one, nc,
          nc_len, colon, one, cnonce, cnonce_len, colon, one, qop, qop_len,
@@ -6744,7 +6744,7 @@ int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
                               FILE *fp) {
   struct mg_str *hdr;
   char buf[128], f_user[sizeof(buf)], f_ha1[sizeof(buf)], f_domain[sizeof(buf)];
-  char user[50], cnonce[33], response[40], uri[200], qop[20], nc[20], nonce[30];
+  char user[50], cnonce[64], response[40], uri[200], qop[20], nc[20], nonce[30];
   char expected_response[33];
 
   /* Parse "Authorization:" header, fail fast on parse error */
@@ -6777,6 +6777,8 @@ int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
           hm->uri.len + (hm->query_string.len ? hm->query_string.len + 1 : 0),
           f_ha1, strlen(f_ha1), nonce, strlen(nonce), nc, strlen(nc), cnonce,
           strlen(cnonce), qop, strlen(qop), expected_response);
+      LOG(LL_DEBUG,
+          ("%s %s %s %s", user, f_domain, response, expected_response));
       return mg_casecmp(response, expected_response) == 0;
     }
   }
@@ -6785,10 +6787,10 @@ int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
   return 0;
 }
 
-static int mg_is_authorized(struct http_message *hm, const char *path,
-                            int is_directory, const char *domain,
-                            const char *passwords_file,
-                            int is_global_pass_file) {
+static int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
+                                 int is_directory, const char *domain,
+                                 const char *passwords_file,
+                                 int is_global_pass_file) {
   char buf[MG_MAX_PATH];
   const char *p;
   FILE *fp;
@@ -6798,12 +6800,13 @@ static int mg_is_authorized(struct http_message *hm, const char *path,
     if (is_global_pass_file) {
       fp = mg_fopen(passwords_file, "r");
     } else if (is_directory) {
-      snprintf(buf, sizeof(buf), "%s%c%s", path, DIRSEP, passwords_file);
+      snprintf(buf, sizeof(buf), "%.*s%c%s", (int) path.len, path.p, DIRSEP,
+               passwords_file);
       fp = mg_fopen(buf, "r");
     } else {
-      p = strrchr(path, DIRSEP);
-      if (p == NULL) p = path;
-      snprintf(buf, sizeof(buf), "%.*s%c%s", (int) (p - path), path, DIRSEP,
+      p = strrchr(path.p, DIRSEP);
+      if (p == NULL) p = path.p;
+      snprintf(buf, sizeof(buf), "%.*s%c%s", (int) (p - path.p), path.p, DIRSEP,
                passwords_file);
       fp = mg_fopen(buf, "r");
     }
@@ -6814,15 +6817,16 @@ static int mg_is_authorized(struct http_message *hm, const char *path,
     }
   }
 
-  LOG(LL_DEBUG, ("%s '%s' %d %d", path, passwords_file ? passwords_file : "",
-                 is_global_pass_file, authorized));
+  LOG(LL_DEBUG,
+      ("%.*s %s %d %d", (int) path.len, path.p,
+       passwords_file ? passwords_file : "", is_global_pass_file, authorized));
   return authorized;
 }
 #else
-static int mg_is_authorized(struct http_message *hm, const char *path,
-                            int is_directory, const char *domain,
-                            const char *passwords_file,
-                            int is_global_pass_file) {
+static int mg_http_is_authorized(struct http_message *hm,
+                                 const struct mg_str path, int is_directory,
+                                 const char *domain, const char *passwords_file,
+                                 int is_global_pass_file) {
   (void) hm;
   (void) path;
   (void) is_directory;
@@ -7169,7 +7173,7 @@ static int mg_http_handle_forwarding(struct mg_connection *nc,
 
   return 0;
 }
-#endif
+#endif /* MG_ENABLE_FILESYSTEM */
 
 MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
                                      const struct mg_serve_http_opts *opts,
@@ -7453,10 +7457,12 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
 
   if (is_dav && opts->dav_document_root == NULL) {
     mg_http_send_error(nc, 501, NULL);
-  } else if (!mg_is_authorized(hm, path, is_directory, opts->auth_domain,
-                               opts->global_auth_file, 1) ||
-             !mg_is_authorized(hm, path, is_directory, opts->auth_domain,
-                               opts->per_directory_auth_file, 0)) {
+  } else if (!mg_http_is_authorized(hm, mg_mk_str(path), is_directory,
+                                    opts->auth_domain, opts->global_auth_file,
+                                    1) ||
+             !mg_http_is_authorized(hm, mg_mk_str(path), is_directory,
+                                    opts->auth_domain,
+                                    opts->per_directory_auth_file, 0)) {
     mg_http_send_digest_auth_request(nc, opts->auth_domain);
   } else if (is_cgi) {
 #if MG_ENABLE_HTTP_CGI
@@ -7472,11 +7478,11 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
   } else if (!mg_vcmp(&hm->method, "PROPFIND")) {
     mg_handle_propfind(nc, path, &st, hm, opts);
 #if !MG_DISABLE_DAV_AUTH
-  } else if (is_dav &&
-             (opts->dav_auth_file == NULL ||
-              (strcmp(opts->dav_auth_file, "-") != 0 &&
-               !mg_is_authorized(hm, path, is_directory, opts->auth_domain,
-                                 opts->dav_auth_file, 1)))) {
+  } else if (is_dav && (opts->dav_auth_file == NULL ||
+                        (strcmp(opts->dav_auth_file, "-") != 0 &&
+                         !mg_http_is_authorized(hm, mg_mk_str(path),
+                                                is_directory, opts->auth_domain,
+                                                opts->dav_auth_file, 1)))) {
     mg_http_send_digest_auth_request(nc, opts->auth_domain);
 #endif
   } else if (!mg_vcmp(&hm->method, "MKCOL")) {
@@ -7910,9 +7916,10 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
   return 0;
 }
 
-void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
-                               MG_CB(mg_event_handler_t handler,
-                                     void *user_data)) {
+void mg_register_http_endpoint_opt(struct mg_connection *nc,
+                                   const char *uri_path,
+                                   mg_event_handler_t handler,
+                                   struct mg_http_endpoint_opts opts) {
   struct mg_http_proto_data *pd = NULL;
   struct mg_http_endpoint *new_ep = NULL;
 
@@ -7921,14 +7928,55 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
   if (new_ep == NULL) return;
 
   pd = mg_http_get_proto_data(nc);
-  new_ep->name = strdup(uri_path);
-  new_ep->name_len = strlen(new_ep->name);
+  new_ep->uri_pattern = mg_strdup(mg_mk_str(uri_path));
+  if (opts.auth_domain != NULL && opts.auth_file != NULL) {
+    new_ep->auth_domain = strdup(opts.auth_domain);
+    new_ep->auth_file = strdup(opts.auth_file);
+  }
   new_ep->handler = handler;
 #if MG_ENABLE_CALLBACK_USERDATA
-  new_ep->user_data = user_data;
+  new_ep->user_data = opts.user_data;
 #endif
   new_ep->next = pd->endpoints;
   pd->endpoints = new_ep;
+}
+
+static void mg_http_call_endpoint_handler(struct mg_connection *nc, int ev,
+                                          struct http_message *hm) {
+  struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
+  void *user_data = nc->user_data;
+
+  if (ev == MG_EV_HTTP_REQUEST) {
+    struct mg_http_endpoint *ep =
+        mg_http_get_endpoint_handler(nc->listener, &hm->uri);
+    if (ep != NULL) {
+#if MG_ENABLE_FILESYSTEM && !MG_DISABLE_HTTP_DIGEST_AUTH
+      if (!mg_http_is_authorized(hm, hm->uri, 0 /* is_directory */,
+                                 ep->auth_domain, ep->auth_file,
+                                 1 /* is_global_pass_file */)) {
+        mg_http_send_digest_auth_request(nc, ep->auth_domain);
+        return;
+      }
+#endif
+      pd->endpoint_handler = ep->handler;
+#if MG_ENABLE_CALLBACK_USERDATA
+      user_data = ep->user_data;
+#endif
+    }
+  }
+  mg_call(nc, pd->endpoint_handler ? pd->endpoint_handler : nc->handler,
+          user_data, ev, hm);
+}
+
+void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
+                               MG_CB(mg_event_handler_t handler,
+                                     void *user_data)) {
+  struct mg_http_endpoint_opts opts;
+  memset(&opts, 0, sizeof(opts));
+#if MG_ENABLE_CALLBACK_USERDATA
+  opts.user_data = user_data;
+#endif
+  mg_register_http_endpoint_opt(nc, uri_path, handler, opts);
 }
 
 #endif /* MG_ENABLE_HTTP */
@@ -8919,6 +8967,8 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
 
 #if MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBSOCKET
 
+/* Amalgamated: #include "common/sha1.h" */
+
 #ifndef MG_WEBSOCKET_PING_INTERVAL_SECONDS
 #define MG_WEBSOCKET_PING_INTERVAL_SECONDS 5
 #endif
@@ -9187,8 +9237,8 @@ MG_INTERNAL void mg_ws_handler(struct mg_connection *nc, int ev,
 }
 
 #ifndef MG_EXT_SHA1
-static void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
-                           const size_t *msg_lens, uint8_t *digest) {
+void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
+                    const size_t *msg_lens, uint8_t *digest) {
   size_t i;
   cs_sha1_ctx sha_ctx;
   cs_sha1_init(&sha_ctx);
@@ -9650,7 +9700,7 @@ int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str) {
       return j == str.len ? (int) j : -1;
     } else if (pattern.p[i] == '*') {
       i++;
-      if (pattern.p[i] == '*') {
+      if (i < pattern.len && pattern.p[i] == '*') {
         i++;
         len = str.len - j;
       } else {
