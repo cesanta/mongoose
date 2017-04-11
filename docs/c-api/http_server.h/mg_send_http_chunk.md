@@ -9,7 +9,7 @@ signature: |
 Sends buffer `buf` of size `len` to the client using chunked HTTP encoding.
 This function sends the buffer size as hex number + newline first, then
 the buffer itself, then the newline. For example,
-`mg_send_http_chunk(nc, "foo", 3)` whill append the `3\r\nfoo\r\n` string
+`mg_send_http_chunk(nc, "foo", 3)` will append the `3\r\nfoo\r\n` string
 to the `nc->send_mbuf` output IO buffer.
 
 NOTE: The HTTP header "Transfer-Encoding: chunked" should be sent prior to
