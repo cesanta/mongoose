@@ -1856,9 +1856,10 @@ typedef struct MD5Context {
   unsigned char in[64];
 } MD5_CTX;
 
-void MD5_Init(MD5_CTX *c);
-void MD5_Update(MD5_CTX *c, const unsigned char *data, size_t len);
-void MD5_Final(unsigned char *md, MD5_CTX *c);
+/* _ prefix to avoid redefining OpenSSL / libcrypto functions */
+void _MD5_Init(MD5_CTX *c);
+void _MD5_Update(MD5_CTX *c, const unsigned char *data, size_t len);
+void _MD5_Final(unsigned char *md, MD5_CTX *c);
 
 /*
  * Return stringified MD5 hash for NULL terminated list of pointer/length pairs.
