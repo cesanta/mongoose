@@ -53,6 +53,10 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       }
       break;
     }
+    case MG_EV_HTTP_REQUEST: {
+      mg_serve_http(nc, (struct http_message *) ev_data, s_http_server_opts);
+      break;
+    }
   }
 }
 
