@@ -2020,12 +2020,10 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
   }
 
 #if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
-  /* LCOV_EXCL_START */
   if (nc->mgr->hexdump_file != NULL && ev != MG_EV_POLL && ev != MG_EV_RECV &&
       ev != MG_EV_SEND /* handled separately */) {
     mg_hexdump_connection(nc, nc->mgr->hexdump_file, NULL, 0, ev);
   }
-/* LCOV_EXCL_STOP */
 #endif
   if (ev_handler != NULL) {
     unsigned long flags_before = nc->flags;
@@ -9591,8 +9589,7 @@ void mg_hexdumpf(FILE *fp, const void *buf, int len) {
 void mg_hexdump_connection(struct mg_connection *nc, const char *path,
                            const void *buf, int num_bytes, int ev) {
   FILE *fp = NULL;
-  char *hexbuf, src[60], dst[60];
-  int buf_size = num_bytes * 5 + 100;
+  char src[60], dst[60];
   const char *tag = NULL;
   switch (ev) {
     case MG_EV_RECV:
@@ -9630,13 +9627,11 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
                                                 MG_SOCK_STRINGIFY_PORT |
                                                 MG_SOCK_STRINGIFY_REMOTE);
   fprintf(fp, "%lu %p %s %s %s %d\n", (unsigned long) mg_time(), (void *) nc,
-          src, tag, dst, num_bytes);
-  if (num_bytes > 0 && (hexbuf = (char *) MG_MALLOC(buf_size)) != NULL) {
-    mg_hexdump(buf, num_bytes, hexbuf, buf_size);
-    fprintf(fp, "%s", hexbuf);
-    MG_FREE(hexbuf);
+          src, tag, dst, (int) num_bytes);
+  if (num_bytes > 0) {
+    mg_hexdumpf(fp, buf, num_bytes);
   }
-  if (fp != stdin && fp != stdout) fclose(fp);
+  if (fp != stdout && fp != stderr) fclose(fp);
 }
 #endif
 
@@ -13983,10 +13978,9 @@ struct mg_lwip_conn_state {
 enum mg_sig_type {
   MG_SIG_CONNECT_RESULT = 1,
   MG_SIG_RECV = 2,
-  MG_SIG_SENT_CB = 3,
-  MG_SIG_CLOSE_CONN = 4,
-  MG_SIG_TOMBSTONE = 5,
-  MG_SIG_ACCEPT = 6,
+  MG_SIG_CLOSE_CONN = 3,
+  MG_SIG_TOMBSTONE = 4,
+  MG_SIG_ACCEPT = 5,
 };
 
 void mg_lwip_post_signal(enum mg_sig_type sig, struct mg_connection *nc);
@@ -14206,14 +14200,10 @@ static err_t mg_lwip_tcp_sent_cb(void *arg, struct tcp_pcb *tpcb,
                                  u16_t num_sent) {
   struct mg_connection *nc = (struct mg_connection *) arg;
   DBG(("%p %p %u", nc, tpcb, num_sent));
-  if (nc == NULL) {
-    tcp_abort(tpcb);
-    return ERR_ABRT;
+  if ((nc->flags & MG_F_SEND_AND_CLOSE) && !(nc->flags & MG_F_WANT_WRITE) &&
+      nc->send_mbuf.len == 0 && tpcb->unacked == 0) {
+    mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
   }
-  struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
-  cs->num_sent += num_sent;
-
-  mg_lwip_post_signal(MG_SIG_SENT_CB, nc);
   return ERR_OK;
 }
 
@@ -14436,28 +14426,59 @@ int mg_lwip_tcp_write(struct mg_connection *nc, const void *data,
     len = MIN(len, (TCP_MSS - tpcb->unsent->len));
   }
 #endif
-  err_t err = tcp_write(tpcb, data, len, TCP_WRITE_FLAG_COPY);
-  DBG(("%p tcp_write %u = %d", tpcb, len, err));
-  if (err != ERR_OK) {
+  cs->err = tcp_write(tpcb, data, len, TCP_WRITE_FLAG_COPY);
+  DBG(("%p tcp_write %u = %d", tpcb, len, cs->err));
+  if (cs->err != ERR_OK) {
     /*
      * We ignore ERR_MEM because memory will be freed up when the data is sent
      * and we'll retry.
      */
-    return (err == ERR_MEM ? 0 : -1);
+    return (cs->err == ERR_MEM ? 0 : -1);
   }
   return len;
 }
 
-static void mg_lwip_send_more(struct mg_connection *nc) {
+static int mg_lwip_udp_send(struct mg_connection *nc, const void *data,
+                            uint16_t len) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
-  if (nc->sock == INVALID_SOCKET || cs->pcb.tcp == NULL) {
-    DBG(("%p invalid socket", nc));
-    return;
+  if (cs->pcb.udp == NULL) {
+    /*
+     * In case of UDP, this usually means, what
+     * async DNS resolve is still in progress and connection
+     * is not ready yet
+     */
+    DBG(("%p socket is not connected", nc));
+    return -1;
   }
-  int num_written = mg_lwip_tcp_write(nc, nc->send_mbuf.buf, nc->send_mbuf.len);
-  DBG(("%p mg_lwip_tcp_write %u = %d", nc, nc->send_mbuf.len, num_written));
-  if (num_written == 0) return;
-  if (num_written < 0) {
+  struct udp_pcb *upcb = cs->pcb.udp;
+  struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, len, PBUF_RAM);
+  ip_addr_t *ip = (ip_addr_t *) &nc->sa.sin.sin_addr.s_addr;
+  u16_t port = ntohs(nc->sa.sin.sin_port);
+  if (p == NULL) {
+    DBG(("OOM"));
+    return 0;
+  }
+  memcpy(p->payload, data, len);
+  cs->err = udp_sendto(upcb, p, (ip_addr_t *) ip, port);
+  DBG(("%p udp_sendto = %d", nc, cs->err));
+  pbuf_free(p);
+  return (cs->err == ERR_OK ? len : -1);
+}
+
+static void mg_lwip_send_more(struct mg_connection *nc) {
+  int num_sent = 0;
+  if (nc->sock == INVALID_SOCKET) return;
+  if (nc->flags & MG_F_UDP) {
+    num_sent = mg_lwip_udp_send(nc, nc->send_mbuf.buf, nc->send_mbuf.len);
+    DBG(("%p mg_lwip_udp_send %u = %d", nc, nc->send_mbuf.len, num_sent));
+  } else {
+    num_sent = mg_lwip_tcp_write(nc, nc->send_mbuf.buf, nc->send_mbuf.len);
+    DBG(("%p mg_lwip_tcp_write %u = %d", nc, nc->send_mbuf.len, num_sent));
+  }
+  if (num_sent == 0) return;
+  if (num_sent > 0) {
+    mg_if_sent_cb(nc, num_sent);
+  } else {
     mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
   }
 }
@@ -14470,34 +14491,8 @@ void mg_lwip_if_tcp_send(struct mg_connection *nc, const void *buf,
 
 void mg_lwip_if_udp_send(struct mg_connection *nc, const void *buf,
                          size_t len) {
-  struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
-  if (nc->sock == INVALID_SOCKET || cs->pcb.udp == NULL) {
-    /*
-     * In case of UDP, this usually means, what
-     * async DNS resolve is still in progress and connection
-     * is not ready yet
-     */
-    DBG(("%p socket is not connected", nc));
-    return;
-  }
-  struct udp_pcb *upcb = cs->pcb.udp;
-  struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, len, PBUF_RAM);
-  ip_addr_t *ip = (ip_addr_t *) &nc->sa.sin.sin_addr.s_addr;
-  u16_t port = ntohs(nc->sa.sin.sin_port);
-  if (p == NULL) {
-    DBG(("OOM"));
-    return;
-  }
-  memcpy(p->payload, buf, len);
-  cs->err = udp_sendto(upcb, p, (ip_addr_t *) ip, port);
-  DBG(("%p udp_sendto = %d", nc, cs->err));
-  pbuf_free(p);
-  if (cs->err != ERR_OK) {
-    mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
-  } else {
-    cs->num_sent += len;
-    mg_lwip_post_signal(MG_SIG_SENT_CB, nc);
-  }
+  mbuf_append(&nc->send_mbuf, buf, len);
+  mg_lwip_mgr_schedule_poll(nc->mgr);
 }
 
 void mg_lwip_if_recved(struct mg_connection *nc, size_t len) {
@@ -14697,17 +14692,6 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
         }
         break;
       }
-      case MG_SIG_SENT_CB: {
-        mg_if_sent_cb(nc, cs->num_sent);
-        cs->num_sent = 0;
-
-        if (nc->send_mbuf.len == 0 && (nc->flags & MG_F_SEND_AND_CLOSE) &&
-            !(nc->flags & MG_F_WANT_WRITE)) {
-          mg_close_conn(nc);
-        }
-
-        break;
-      }
       case MG_SIG_TOMBSTONE: {
         break;
       }
@@ -14791,8 +14775,8 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
     } else
 #endif /* MG_ENABLE_SSL */
     {
-      if (!(nc->flags & (MG_F_CONNECTING | MG_F_UDP))) {
-        if (nc->send_mbuf.len > 0) mg_lwip_send_more(nc);
+      if (nc->send_mbuf.len > 0 && !(nc->flags & MG_F_CONNECTING)) {
+        mg_lwip_send_more(nc);
       }
     }
     if (nc->sock != INVALID_SOCKET &&
