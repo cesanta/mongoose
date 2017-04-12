@@ -5824,7 +5824,6 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   struct mg_str *ct;
   struct mbuf *io = &nc->recv_mbuf;
-  void *user_data = nc->user_data;
 
   char boundary[100];
   int boundary_len;
@@ -5871,13 +5870,9 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
     ep = mg_http_get_endpoint_handler(nc->listener, &hm->uri);
     if (ep != NULL) {
       pd->endpoint_handler = ep->handler;
-#if MG_ENABLE_CALLBACK_USERDATA
-      user_data = ep->user_data;
-#endif
     }
 
-    mg_call(nc, pd->endpoint_handler, user_data, MG_EV_HTTP_MULTIPART_REQUEST,
-            hm);
+    mg_http_call_endpoint_handler(nc, MG_EV_HTTP_MULTIPART_REQUEST, hm);
 
     mbuf_remove(io, req_len);
   }
@@ -7944,7 +7939,11 @@ static void mg_http_call_endpoint_handler(struct mg_connection *nc, int ev,
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   void *user_data = nc->user_data;
 
-  if (ev == MG_EV_HTTP_REQUEST) {
+  if (ev == MG_EV_HTTP_REQUEST
+#if MG_ENABLE_HTTP_STREAMING_MULTIPART
+      || ev == MG_EV_HTTP_MULTIPART_REQUEST
+#endif
+      ) {
     struct mg_http_endpoint *ep =
         mg_http_get_endpoint_handler(nc->listener, &hm->uri);
     if (ep != NULL) {
