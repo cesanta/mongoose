@@ -3317,6 +3317,10 @@ static void mg_write_to_socket(struct mg_connection *nc) {
       return;
     }
   }
+  
+  if(n < 0 && !mg_is_error(n)) {
+      return;
+  }
 
   if (n > 0) {
     mbuf_remove(io, n);
