@@ -7,6 +7,7 @@
 
 static sig_atomic_t s_signal_received = 0;
 static const char *s_http_port = "8000";
+static struct mg_serve_http_opts s_http_server_opts;
 
 static void signal_handler(int sig_num) {
   signal(sig_num, signal_handler);  // Reinstantiate signal handler
@@ -46,6 +47,10 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       broadcast(nc, d);
       break;
     }
+    case MG_EV_HTTP_REQUEST: {
+      mg_serve_http(nc, (struct http_message *) ev_data, s_http_server_opts);
+      break;
+    }
     case MG_EV_CLOSE: {
       /* Disconnect. Tell everybody. */
       if (is_websocket(nc)) {
@@ -69,6 +74,8 @@ int main(void) {
 
   nc = mg_bind(&mgr, s_http_port, ev_handler);
   mg_set_protocol_http_websocket(nc);
+  s_http_server_opts.document_root = ".";  // Serve current directory
+  s_http_server_opts.enable_directory_listing = "yes";
 
   printf("Started on port %s\n", s_http_port);
   while (s_signal_received == 0) {
