@@ -29,3 +29,7 @@ Example:
 ```c
   opts.cgi_interpreter = "C:\\ruby\\ruby.exe";
 ```
+NOTE: In the CGI handler we don't use explicitly a system call waitpid() for
+reaping zombie processes. Instead, we set the SIGCHLD handler to SIG_IGN.
+It will cause zombie processes to be reaped automatically.
+CAUTION: not all OSes (e.g. QNX) reap zombies if SIGCHLD is ignored.
