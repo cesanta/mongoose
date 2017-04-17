@@ -10011,7 +10011,7 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
     rem_len += 2 + hlen;
 
     hlen = strlen(opts.will_message);
-    nlen = htons((uint16_t) nlen);
+    nlen = htons((uint16_t) hlen);
     mg_send(nc, &nlen, 2);
     mg_send(nc, opts.will_message, hlen);
     rem_len += 2 + hlen;
