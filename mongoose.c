@@ -3792,6 +3792,10 @@ void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
 
 void mg_socket_if_get_conn_addr(struct mg_connection *nc, int remote,
                                 union socket_address *sa) {
+  if ((nc->flags & MG_F_UDP) && remote) {
+    memcpy(sa, &nc->sa, sizeof(*sa));
+    return;
+  }
   mg_sock_get_addr(nc->sock, remote, sa);
 }
 
