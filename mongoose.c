@@ -10872,11 +10872,11 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
     }
     RegCloseKey(hKey);
   }
-#elif MG_ENABLE_FILESYSTEM
+#elif MG_ENABLE_FILESYSTEM && defined(MG_RESOLV_CONF_FILE_NAME)
   FILE *fp;
   char line[512];
 
-  if ((fp = mg_fopen("/etc/resolv.conf", "r")) == NULL) {
+  if ((fp = mg_fopen(MG_RESOLV_CONF_FILE_NAME, "r")) == NULL) {
     ret = -1;
   } else {
     /* Try to figure out what nameserver to use */
@@ -10898,7 +10898,7 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
 }
 
 int mg_resolve_from_hosts_file(const char *name, union socket_address *usa) {
-#if MG_ENABLE_FILESYSTEM
+#if MG_ENABLE_FILESYSTEM && defined(MG_HOSTS_FILE_NAME)
   /* TODO(mkm) cache /etc/hosts */
   FILE *fp;
   char line[1024];
@@ -10907,7 +10907,7 @@ int mg_resolve_from_hosts_file(const char *name, union socket_address *usa) {
   unsigned int a, b, c, d;
   int len = 0;
 
-  if ((fp = mg_fopen("/etc/hosts", "r")) == NULL) {
+  if ((fp = mg_fopen(MG_HOSTS_FILE_NAME, "r")) == NULL) {
     return -1;
   }
 
