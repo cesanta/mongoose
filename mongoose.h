@@ -5362,6 +5362,8 @@ extern "C" {
 #define MG_DNS_AAAA_RECORD 0x1c  /* Lookup IPv6 address */
 #define MG_DNS_SRV_RECORD 0x21   /* Lookup SRV */
 #define MG_DNS_MX_RECORD 0x0f    /* Lookup mail server for domain */
+#define MG_DNS_ANY_RECORD 0xff
+#define MG_DNS_NSEC_RECORD 0x2f
 
 #define MG_MAX_DNS_QUESTIONS 32
 #define MG_MAX_DNS_ANSWERS 32
