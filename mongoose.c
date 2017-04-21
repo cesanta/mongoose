@@ -14562,22 +14562,21 @@ void mg_lwip_if_destroy_conn(struct mg_connection *nc) {
 void mg_lwip_if_get_conn_addr(struct mg_connection *nc, int remote,
                               union socket_address *sa) {
   memset(sa, 0, sizeof(*sa));
-  if (nc->sock == INVALID_SOCKET) return;
+  if (nc == NULL || nc->sock == INVALID_SOCKET) return;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   if (nc->flags & MG_F_UDP) {
     struct udp_pcb *upcb = cs->pcb.udp;
     if (remote) {
       memcpy(sa, &nc->sa, sizeof(*sa));
-    } else {
+    } else if (upcb != NULL) {
       sa->sin.sin_port = htons(upcb->local_port);
       SET_ADDR(sa, &upcb->local_ip);
     }
   } else {
     struct tcp_pcb *tpcb = cs->pcb.tcp;
     if (remote) {
-      sa->sin.sin_port = htons(tpcb->remote_port);
-      SET_ADDR(sa, &tpcb->remote_ip);
-    } else {
+      memcpy(sa, &nc->sa, sizeof(*sa));
+    } else if (tpcb != NULL) {
       sa->sin.sin_port = htons(tpcb->local_port);
       SET_ADDR(sa, &tpcb->local_ip);
     }
