@@ -1774,6 +1774,8 @@ struct mg_str mg_mk_str_n(const char *s, size_t len);
 /* Macro for initializing mg_str. */
 #define MG_MK_STR(str_literal) \
   { str_literal, sizeof(str_literal) - 1 }
+#define MG_NULL_STR \
+  { NULL, 0 }
 
 /*
  * Cross-platform version of `strcmp()` where where first string is
@@ -3828,7 +3830,7 @@ extern "C" {
  *
  * Returns 0 on success, -1 on error.
  */
-int mg_parse_uri(struct mg_str uri, struct mg_str *scheme,
+int mg_parse_uri(const struct mg_str uri, struct mg_str *scheme,
                  struct mg_str *user_info, struct mg_str *host,
                  unsigned int *port, struct mg_str *path, struct mg_str *query,
                  struct mg_str *fragment);
@@ -4056,7 +4058,8 @@ void mg_mbuf_append_base64(struct mbuf *mbuf, const void *data, size_t len);
  * If pass is NULL, then user is expected to contain the credentials pair
  * already encoded as `user:pass`.
  */
-void mg_basic_auth_header(const char *user, const char *pass, struct mbuf *buf);
+void mg_basic_auth_header(const struct mg_str user, const struct mg_str pass,
+                          struct mbuf *buf);
 
 #ifdef __cplusplus
 }
@@ -4280,6 +4283,17 @@ void mg_send_websocket_handshake3(struct mg_connection *nc, const char *path,
                                   const char *host, const char *protocol,
                                   const char *extra_headers, const char *user,
                                   const char *pass);
+
+/* Same as mg_send_websocket_handshake3 but with strings not necessarily
+ * NUL-temrinated */
+void mg_send_websocket_handshake3v(struct mg_connection *nc,
+                                   const struct mg_str path,
+                                   const struct mg_str host,
+                                   const struct mg_str protocol,
+                                   const struct mg_str extra_headers,
+                                   const struct mg_str user,
+                                   const struct mg_str pass);
+
 /*
  * Helper function that creates an outbound WebSocket connection.
  *
@@ -4341,7 +4355,8 @@ void mg_send_websocket_frame(struct mg_connection *nc, int op_and_flags,
 /*
  * Sends multiple websocket frames.
  *
- * Like `mg_send_websocket_frame()`, but composes a frame from multiple buffers.
+ * Like `mg_send_websocket_frame()`, but composes a frame from multiple
+ *buffers.
  */
 void mg_send_websocket_framev(struct mg_connection *nc, int op_and_flags,
                               const struct mg_str *strings, int num_strings);
@@ -4386,7 +4401,8 @@ void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
  * (`dst`, `dst_len`). If `is_form_url_encoded` is non-zero, then
  * `+` character is decoded as a blank space character. This function
  * guarantees to NUL-terminate the destination. If destination is too small,
- * then the source string is partially decoded and `-1` is returned. Otherwise,
+ * then the source string is partially decoded and `-1` is returned.
+ *Otherwise,
  * a length of the decoded string is returned, not counting final NUL.
  */
 int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,

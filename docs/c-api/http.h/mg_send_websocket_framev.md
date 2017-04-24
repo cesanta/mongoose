@@ -9,5 +9,6 @@ signature: |
 
 Sends multiple websocket frames.
 
-Like `mg_send_websocket_frame()`, but composes a frame from multiple buffers. 
+Like `mg_send_websocket_frame()`, but composes a frame from multiple
+*buffers. 
 
