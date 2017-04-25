@@ -1789,7 +1789,15 @@ int mg_vcmp(const struct mg_str *str2, const char *str1);
  */
 int mg_vcasecmp(const struct mg_str *str2, const char *str1);
 
+/* Creates a copy of s (heap-allocated). */
 struct mg_str mg_strdup(const struct mg_str s);
+
+/*
+ * Creates a copy of s (heap-allocated).
+ * Resulting string is NUL-terminated (but NUL is not included in len).
+ */
+struct mg_str mg_strdup_nul(const struct mg_str s);
+
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
 int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n);
 

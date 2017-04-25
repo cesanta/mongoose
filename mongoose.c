@@ -1389,17 +1389,29 @@ int mg_vcasecmp(const struct mg_str *str1, const char *str2) {
   return r;
 }
 
-struct mg_str mg_strdup(const struct mg_str s) WEAK;
-struct mg_str mg_strdup(const struct mg_str s) {
+static struct mg_str mg_strdup_common(const struct mg_str s,
+                                      int nul_terminate) {
   struct mg_str r = {NULL, 0};
   if (s.len > 0 && s.p != NULL) {
-    r.p = (char *) MG_MALLOC(s.len);
-    if (r.p != NULL) {
-      memcpy((char *) r.p, s.p, s.len);
+    char *sc = (char *) MG_MALLOC(s.len + (nul_terminate ? 1 : 0));
+    if (sc != NULL) {
+      memcpy(sc, s.p, s.len);
+      if (nul_terminate) sc[s.len] = '\0';
+      r.p = sc;
       r.len = s.len;
     }
   }
   return r;
+}
+
+struct mg_str mg_strdup(const struct mg_str s) WEAK;
+struct mg_str mg_strdup(const struct mg_str s) {
+  return mg_strdup_common(s, 1 /* NUL-terminate */);
+}
+
+struct mg_str mg_strdup_nul(const struct mg_str s) WEAK;
+struct mg_str mg_strdup_nul(const struct mg_str s) {
+  return mg_strdup_common(s, 0 /* NUL-terminate */);
 }
 
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2) WEAK;
