@@ -4839,17 +4839,20 @@ int mg_ssl_if_mbed_random(void *ctx, unsigned char *buf, size_t len) {
 /* Amalgamated: #include "mongoose/src/uri.h" */
 
 /*
- * scan string until `sep`, keeping track of component boundaries in `res`.
+ * scan string until encountering one of `seps`, keeping track of component
+ * boundaries in `res`.
  *
  * `p` will point to the char after the separator or it will be `end`.
  */
-static void parse_uri_component(const char **p, const char *end, char sep,
-                                struct mg_str *res) {
+static void parse_uri_component(const char **p, const char *end,
+                                const char *seps, struct mg_str *res) {
+  const char *q;
   res->p = *p;
   for (; *p < end; (*p)++) {
-    if (**p == sep) {
-      break;
+    for (q = seps; *q != '\0'; q++) {
+      if (**p == *q) break;
     }
+    if (*q != '\0') break;
   }
   res->len = (*p) - res->p;
   if (*p < end) (*p)++;
@@ -4964,9 +4967,11 @@ int mg_parse_uri(const struct mg_str uri, struct mg_str *scheme,
         break;
       case P_REST:
         /* `p` points to separator. `path` includes the separator */
-        parse_uri_component(&p, end, '?', &rpath);
-        parse_uri_component(&p, end, '#', &rquery);
-        parse_uri_component(&p, end, '\0', &rfragment);
+        parse_uri_component(&p, end, "?#", &rpath);
+        if (p < end && *(p - 1) == '?') {
+          parse_uri_component(&p, end, "#", &rquery);
+        }
+        parse_uri_component(&p, end, "", &rfragment);
         break;
     }
   }
@@ -4997,7 +5002,7 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out) {
   while (s < se) {
     const char *next = s;
     struct mg_str component;
-    parse_uri_component(&next, se, '/', &component);
+    parse_uri_component(&next, se, "/", &component);
     if (mg_vcmp(&component, ".") == 0) {
       /* Yum. */
     } else if (mg_vcmp(&component, "..") == 0) {
@@ -7282,7 +7287,7 @@ MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
         }
       }
       if (u >= cp_end) break;
-      parse_uri_component((const char **) &next, cp_end, '/', &component);
+      parse_uri_component((const char **) &next, cp_end, "/", &component);
       if (component.len > 0) {
         int len;
         memmove(p + 1, component.p, component.len);
