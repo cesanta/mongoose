@@ -1406,12 +1406,12 @@ static struct mg_str mg_strdup_common(const struct mg_str s,
 
 struct mg_str mg_strdup(const struct mg_str s) WEAK;
 struct mg_str mg_strdup(const struct mg_str s) {
-  return mg_strdup_common(s, 1 /* NUL-terminate */);
+  return mg_strdup_common(s, 0 /* NUL-terminate */);
 }
 
 struct mg_str mg_strdup_nul(const struct mg_str s) WEAK;
 struct mg_str mg_strdup_nul(const struct mg_str s) {
-  return mg_strdup_common(s, 0 /* NUL-terminate */);
+  return mg_strdup_common(s, 1 /* NUL-terminate */);
 }
 
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2) WEAK;
