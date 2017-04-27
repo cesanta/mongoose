@@ -3843,6 +3843,21 @@ int mg_parse_uri(const struct mg_str uri, struct mg_str *scheme,
                  unsigned int *port, struct mg_str *path, struct mg_str *query,
                  struct mg_str *fragment);
 
+/*
+ * Assemble URI from parts. Any of the inputs can be NULL or zero-length mg_str.
+ *
+ * If normalize_path is true, path is normalized by resolving relative refs.
+ *
+ * Result is a heap-allocated string (uri->p must be free()d after use).
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int mg_assemble_uri(const struct mg_str *scheme, const struct mg_str *user_info,
+                    const struct mg_str *host, unsigned int port,
+                    const struct mg_str *path, const struct mg_str *query,
+                    const struct mg_str *fragment, int normalize_path,
+                    struct mg_str *uri);
+
 int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out);
 
 #ifdef __cplusplus
