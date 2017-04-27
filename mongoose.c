@@ -5113,9 +5113,9 @@ struct mg_http_proto_data {
 static void mg_http_conn_destructor(void *proto_data);
 struct mg_connection *mg_connect_http_base(
     struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
-    struct mg_connect_opts opts, const char *schema, const char *schema_ssl,
-    const char *url, struct mg_str *path, struct mg_str *user_info,
-    struct mg_str *host);
+    struct mg_connect_opts opts, const char *scheme1, const char *scheme2,
+    const char *scheme_ssl1, const char *scheme_ssl2, const char *url,
+    struct mg_str *path, struct mg_str *user_info, struct mg_str *host);
 
 static struct mg_http_proto_data *mg_http_get_proto_data(
     struct mg_connection *c) {
@@ -7119,9 +7119,9 @@ void mg_http_reverse_proxy(struct mg_connection *nc,
   mg_asprintf(&purl, sizeof(burl), "%.*s%.*s", (int) upstream.len, upstream.p,
               (int) (hm->uri.len - mount.len), hm->uri.p + mount.len);
 
-  be =
-      mg_connect_http_base(nc->mgr, MG_CB(mg_reverse_proxy_handler, NULL), opts,
-                           "http", "https", purl, &path, &user_info, &host);
+  be = mg_connect_http_base(nc->mgr, MG_CB(mg_reverse_proxy_handler, NULL),
+                            opts, "http", NULL, "https", NULL, purl, &path,
+                            &user_info, &host);
   LOG(LL_DEBUG, ("Proxying %.*s to %s (rule: %.*s)", (int) hm->uri.len,
                  hm->uri.p, purl, (int) mount.len, mount.p));
 
@@ -7725,9 +7725,9 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
 
 struct mg_connection *mg_connect_http_base(
     struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
-    struct mg_connect_opts opts, const char *schema, const char *schema_ssl,
-    const char *url, struct mg_str *path, struct mg_str *user_info,
-    struct mg_str *host) {
+    struct mg_connect_opts opts, const char *scheme1, const char *scheme2,
+    const char *scheme_ssl1, const char *scheme_ssl2, const char *url,
+    struct mg_str *path, struct mg_str *user_info, struct mg_str *host) {
   struct mg_connection *nc = NULL;
   unsigned int port_i = 0;
   int use_ssl = 0;
@@ -7741,10 +7741,12 @@ struct mg_connection *mg_connect_http_base(
     goto out;
   }
 
-  if (mg_vcmp(&scheme, schema) == 0) {
+  if (scheme.len == 0 || mg_vcmp(&scheme, scheme1) == 0 ||
+      (scheme2 != NULL && mg_vcmp(&scheme, scheme2) == 0)) {
     use_ssl = 0;
     if (port_i == 0) port_i = 80;
-  } else if (mg_vcmp(&scheme, schema_ssl) == 0) {
+  } else if (mg_vcmp(&scheme, scheme_ssl1) == 0 ||
+             (scheme2 != NULL && mg_vcmp(&scheme, scheme_ssl2) == 0)) {
     use_ssl = 1;
     if (port_i == 0) port_i = 443;
   } else {
@@ -7791,7 +7793,7 @@ struct mg_connection *mg_connect_http_opt(
   struct mbuf auth;
   struct mg_connection *nc =
       mg_connect_http_base(mgr, MG_CB(ev_handler, user_data), opts, "http",
-                           "https", url, &path, &user, &host);
+                           NULL, "https", NULL, url, &path, &user, &host);
 
   if (nc == NULL) {
     return NULL;
@@ -9304,8 +9306,8 @@ struct mg_connection *mg_connect_ws_opt(
   struct mg_str null_str = MG_NULL_STR;
   struct mg_str host = MG_NULL_STR, path = MG_NULL_STR, user_info = MG_NULL_STR;
   struct mg_connection *nc =
-      mg_connect_http_base(mgr, MG_CB(ev_handler, user_data), opts, "ws", "wss",
-                           url, &path, &user_info, &host);
+      mg_connect_http_base(mgr, MG_CB(ev_handler, user_data), opts, "http",
+                           "ws", "https", "wss", url, &path, &user_info, &host);
   if (nc != NULL) {
     mg_send_websocket_handshake3v(nc, path, host, mg_mk_str(protocol),
                                   mg_mk_str(extra_headers), user_info,
