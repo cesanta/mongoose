@@ -228,26 +228,26 @@ void cs_log_set_level(enum cs_log_level level);
 #if CS_ENABLE_STDIO
 
 void cs_log_set_file(FILE *file);
-extern enum cs_log_level cs_log_level;
-void cs_log_print_prefix(const char *func);
+extern enum cs_log_level cs_log_threshold;
+void cs_log_print_prefix(enum cs_log_level level, const char *func);
 void cs_log_printf(const char *fmt, ...);
 
-#define LOG(l, x)                    \
-  do {                               \
-    if (cs_log_level >= l) {         \
-      cs_log_print_prefix(__func__); \
-      cs_log_printf x;               \
-    }                                \
+#define LOG(l, x)                       \
+  do {                                  \
+    if (cs_log_threshold >= l) {        \
+      cs_log_print_prefix(l, __func__); \
+      cs_log_printf x;                  \
+    }                                   \
   } while (0)
 
 #ifndef CS_NDEBUG
 
-#define DBG(x)                              \
-  do {                                      \
-    if (cs_log_level >= LL_VERBOSE_DEBUG) { \
-      cs_log_print_prefix(__func__);        \
-      cs_log_printf x;                      \
-    }                                       \
+#define DBG(x)                                         \
+  do {                                                 \
+    if (cs_log_threshold >= LL_VERBOSE_DEBUG) {        \
+      cs_log_print_prefix(LL_VERBOSE_DEBUG, __func__); \
+      cs_log_printf x;                                 \
+    }                                                  \
   } while (0)
 
 #else /* NDEBUG */
@@ -284,7 +284,7 @@ void cs_log_printf(const char *fmt, ...);
 
 /* Amalgamated: #include "common/cs_time.h" */
 
-enum cs_log_level cs_log_level WEAK =
+enum cs_log_level cs_log_threshold WEAK =
 #if CS_ENABLE_DEBUG
     LL_VERBOSE_DEBUG;
 #else
@@ -299,12 +299,15 @@ FILE *cs_log_file WEAK = NULL;
 double cs_log_ts WEAK;
 #endif
 
-void cs_log_print_prefix(const char *func) WEAK;
-void cs_log_print_prefix(const char *func) {
+enum cs_log_level cs_log_cur_msg_level WEAK = LL_NONE;
+
+void cs_log_print_prefix(enum cs_log_level level, const char *func) WEAK;
+void cs_log_print_prefix(enum cs_log_level level, const char *func) {
   char prefix[21];
   strncpy(prefix, func, 20);
   prefix[20] = '\0';
   if (cs_log_file == NULL) cs_log_file = stderr;
+  cs_log_cur_msg_level = level;
   fprintf(cs_log_file, "%-20s ", prefix);
 #if CS_LOG_ENABLE_TS_DIFF
   {
@@ -323,6 +326,7 @@ void cs_log_printf(const char *fmt, ...) {
   va_end(ap);
   fputc('\n', cs_log_file);
   fflush(cs_log_file);
+  cs_log_cur_msg_level = LL_NONE;
 }
 
 void cs_log_set_file(FILE *file) WEAK;
@@ -334,7 +338,7 @@ void cs_log_set_file(FILE *file) {
 
 void cs_log_set_level(enum cs_log_level level) WEAK;
 void cs_log_set_level(enum cs_log_level level) {
-  cs_log_level = level;
+  cs_log_threshold = level;
 #if CS_LOG_ENABLE_TS_DIFF && CS_ENABLE_STDIO
   cs_log_ts = cs_time();
 #endif
@@ -12797,7 +12801,7 @@ void fs_slfs_set_new_file_size(const char *name, size_t size) {
 #define SPIFFS_FD_BASE 10
 #define SLFS_FD_BASE 100
 
-#ifndef MG_UART_CHAR_PUT
+#if !defined(MG_UART_CHAR_PUT) && !defined(MG_UART_WRITE)
 #if CS_PLATFORM == CS_P_CC3200
 #include <inc/hw_types.h>
 #include <inc/hw_memmap.h>
@@ -12806,7 +12810,7 @@ void fs_slfs_set_new_file_size(const char *name, size_t size) {
 #include <driverlib/uart.h>
 #define MG_UART_CHAR_PUT(fd, c) MAP_UARTCharPut(UARTA0_BASE, c);
 #else
-#define MG_UART_CHAR_PUT(fd, c)
+#define MG_UART_WRITE(fd, buf, len)
 #endif /* CS_PLATFORM == CS_P_CC3200 */
 #endif /* !MG_UART_CHAR_PUT */
 
@@ -13035,7 +13039,6 @@ int write(int fd, const char *buf, unsigned count) {
 ssize_t _write(int fd, const void *buf, size_t count) {
 #endif
   int r = -1;
-  size_t i = 0;
   switch (fd_type(fd)) {
     case FD_INVALID:
       r = set_errno(EBADF);
@@ -13045,11 +13048,18 @@ ssize_t _write(int fd, const void *buf, size_t count) {
         r = set_errno(EACCES);
         break;
       }
-      for (i = 0; i < count; i++) {
-        const char c = ((const char *) buf)[i];
-        if (c == '\n') MG_UART_CHAR_PUT(fd, '\r');
-        MG_UART_CHAR_PUT(fd, c);
+#ifdef MG_UART_WRITE
+      MG_UART_WRITE(fd, buf, count);
+#elif defined(MG_UART_CHAR_PUT)
+      {
+        size_t i;
+        for (i = 0; i < count; i++) {
+          const char c = ((const char *) buf)[i];
+          if (c == '\n') MG_UART_CHAR_PUT(fd, '\r');
+          MG_UART_CHAR_PUT(fd, c);
+        }
       }
+#endif
       r = count;
       break;
     }
