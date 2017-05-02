@@ -676,6 +676,7 @@ extern "C" {
 struct SlTimeval_t;
 #define timeval SlTimeval_t
 int gettimeofday(struct timeval *t, void *tz);
+int settimeofday(const struct timeval *tv, const void *tz);
 
 int asprintf(char **strp, const char *fmt, ...);
 

@@ -12388,21 +12388,24 @@ time_t HOSTtime() {
 #endif /* __TI_COMPILER_VERSION__ */
 
 #ifndef __TI_COMPILER_VERSION__
-int _gettimeofday_r(struct _reent *r, struct timeval *tp, void *tzp) {
+int _gettimeofday_r(struct _reent *r, struct timeval *tp, void *tz) {
 #else
-int gettimeofday(struct timeval *tp, void *tzp) {
+int gettimeofday(struct timeval *tp, void *tz) {
 #endif
-  unsigned long long r1 = 0, r2;
-  /* Achieve two consecutive reads of the same value. */
-  do {
-    r2 = r1;
-    r1 = PRCMSlowClkCtrFastGet();
-  } while (r1 != r2);
-  /* This is a 32768 Hz counter. */
-  tp->tv_sec = (r1 >> 15);
-  /* 1/32768-th of a second is 30.517578125 microseconds, approx. 31,
-   * but we round down so it doesn't overflow at 32767 */
-  tp->tv_usec = (r1 & 0x7FFF) * 30;
+  unsigned long sec;
+  unsigned short msec;
+  MAP_PRCMRTCGet(&sec, &msec);
+  tp->tv_sec = sec;
+  tp->tv_usec = ((unsigned long) msec) * 1000;
+  return 0;
+}
+
+#ifndef __TI_COMPILER_VERSION__
+int settimeofday(const struct timeval *tv, const struct timezone *tz) {
+#else
+int settimeofday(const struct timeval *tv, const void *tz) {
+#endif
+  MAP_PRCMRTCSet(tv->tv_sec, tv->tv_usec / 1000);
   return 0;
 }
 
