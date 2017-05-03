@@ -14850,7 +14850,7 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
 
 uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
   struct mg_connection *nc;
-  double now = mg_time();
+  double now;
   double min_timer = 0;
   int num_timers = 0;
   mg_ev_mgr_lwip_process_signals(mgr);
@@ -14876,7 +14876,10 @@ uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
     }
   }
   uint32_t timeout_ms = ~0;
+  now = mg_time();
   if (num_timers > 0) {
+    /* If we have a timer that is past due, do a poll ASAP. */
+    if (min_timer < now) return 0;
     double timer_timeout_ms = (min_timer - now) * 1000 + 1 /* rounding */;
     if (timer_timeout_ms < timeout_ms) {
       timeout_ms = timer_timeout_ms;
