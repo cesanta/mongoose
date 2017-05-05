@@ -1,7 +1,8 @@
 #!/bin/bash
+REPO=$(cd ../.. && pwd)
 
 docker run \
-  --rm -i -v $(realpath ${PWD}/../..):/src \
+  --rm -i -v $REPO:/src \
   --entrypoint=/bin/bash $(cat sdk.version) -l -c -x '
     export SDK_PATH=/opt/Espressif/ESP8266_RTOS_SDK;
     export BIN_PATH=./bin;
