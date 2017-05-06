@@ -5,6 +5,7 @@ symbol_kind: "struct"
 signature: |
   struct http_message {
     struct mg_str message; /* Whole message: request line + headers + body */
+    struct mg_str body;    /* Message body. 0-length for requests with no body */
   
     /* HTTP Request line (or HTTP response line) */
     struct mg_str method; /* "GET" */
@@ -28,9 +29,6 @@ signature: |
     /* Headers */
     struct mg_str header_names[MG_MAX_HTTP_HEADERS];
     struct mg_str header_values[MG_MAX_HTTP_HEADERS];
-  
-    /* Message body */
-    struct mg_str body; /* Zero-length for requests with no body */
   };
 ---
 
