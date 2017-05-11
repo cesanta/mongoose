@@ -15099,6 +15099,7 @@ void mg_lwip_ssl_send(struct mg_connection *nc) {
   int ret = mg_ssl_if_write(nc, nc->send_mbuf.buf, len);
   DBG(("%p SSL_write %u = %d, %d", nc, len, ret));
   if (ret > 0) {
+    mg_if_sent_cb(nc, ret);
     mbuf_remove(&nc->send_mbuf, ret);
     mbuf_trim(&nc->send_mbuf);
     cs->last_ssl_write_size = 0;
