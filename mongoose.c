@@ -2461,6 +2461,7 @@ void mg_send(struct mg_connection *nc, const void *buf, int len) {
 }
 
 void mg_if_sent_cb(struct mg_connection *nc, int num_sent) {
+  DBG(("%p %d", nc, num_sent));
 #if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
   if (nc->mgr && nc->mgr->hexdump_file != NULL) {
     char *buf = nc->send_mbuf.buf;
@@ -5507,21 +5508,26 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
 
   if (pd->file.type == DATA_FILE) {
     struct mbuf *io = &nc->send_mbuf;
-    if (io->len < sizeof(buf)) {
-      to_read = sizeof(buf) - io->len;
+    if (io->len >= MG_MAX_HTTP_SEND_MBUF) {
+      to_read = 0;
+    } else {
+      to_read = MG_MAX_HTTP_SEND_MBUF - io->len;
     }
-
-    if (left > 0 && to_read > left) {
+    if (to_read > left) {
       to_read = left;
     }
-
-    if (to_read == 0) {
-      /* Rate limiting. send_mbuf is too full, wait until it's drained. */
-    } else if (pd->file.sent < pd->file.cl &&
-               (n = mg_fread(buf, 1, to_read, pd->file.fp)) > 0) {
-      mg_send(nc, buf, n);
-      pd->file.sent += n;
+    if (to_read > 0) {
+      n = mg_fread(buf, 1, to_read, pd->file.fp);
+      if (n > 0) {
+        mg_send(nc, buf, n);
+        pd->file.sent += n;
+        DBG(("%p sent %d (total %d)", nc, (int) n, (int) pd->file.sent));
+      }
     } else {
+      /* Rate-limited */
+    }
+    if (pd->file.sent >= pd->file.cl) {
+      LOG(LL_DEBUG, ("%p done, %d bytes", nc, (int) pd->file.sent));
       if (!pd->file.keepalive) nc->flags |= MG_F_SEND_AND_CLOSE;
       mg_http_free_proto_data_file(&pd->file);
     }
@@ -14056,7 +14062,7 @@ void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
 #include <lwip/tcp.h>
 #include <lwip/tcpip.h>
 #if LWIP_VERSION >= 0x01050000
-#include <lwip/priv/tcpip_priv.h> /* For tcp_seg */
+#include <lwip/priv/tcp_priv.h> /* For tcp_seg */
 #else
 #include <lwip/tcp_impl.h>
 #endif
@@ -14259,10 +14265,10 @@ static void mg_lwip_handle_recv_tcp(struct mg_connection *nc) {
 static err_t mg_lwip_tcp_sent_cb(void *arg, struct tcp_pcb *tpcb,
                                  u16_t num_sent) {
   struct mg_connection *nc = (struct mg_connection *) arg;
-  DBG(("%p %p %u", nc, tpcb, num_sent));
+  DBG(("%p %p %u %u %u", nc, tpcb, num_sent, tpcb->unsent, tpcb->unacked));
   if (nc == NULL) return ERR_OK;
   if ((nc->flags & MG_F_SEND_AND_CLOSE) && !(nc->flags & MG_F_WANT_WRITE) &&
-      nc->send_mbuf.len == 0 && tpcb->unacked == 0) {
+      nc->send_mbuf.len == 0 && tpcb->unsent == 0 && tpcb->unacked == 0) {
     mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
   }
   return ERR_OK;
@@ -14530,7 +14536,8 @@ static void mg_lwip_tcp_write_tcpip(void *arg) {
   struct mg_connection *nc = ctx->nc;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   struct tcp_pcb *tpcb = cs->pcb.tcp;
-  uint16_t len = MIN(tpcb->mss, MIN(ctx->len, tpcb->snd_buf));
+  size_t len = MIN(tpcb->mss, MIN(ctx->len, tpcb->snd_buf));
+  size_t unsent, unacked;
   if (len == 0) {
     DBG(("%p no buf avail %u %u %u %p %p", tpcb, tpcb->acked, tpcb->snd_buf,
          tpcb->snd_queuelen, tpcb->unsent, tpcb->unacked));
@@ -14538,6 +14545,8 @@ static void mg_lwip_tcp_write_tcpip(void *arg) {
     ctx->ret = 0;
     return;
   }
+  unsent = (tpcb->unsent != NULL ? tpcb->unsent->len : 0);
+  unacked = (tpcb->unacked != NULL ? tpcb->unacked->len : 0);
 /*
  * On ESP8266 we only allow one TCP segment in flight at any given time.
  * This may increase latency and reduce efficiency of tcp windowing,
@@ -14545,16 +14554,16 @@ static void mg_lwip_tcp_write_tcpip(void *arg) {
  * reduce footprint.
  */
 #if CS_PLATFORM == CS_P_ESP8266
-  if (tpcb->unacked != NULL) {
+  if (unacked > 0) {
     ctx->ret = 0;
     return;
   }
-  if (tpcb->unsent != NULL) {
-    len = MIN(len, (TCP_MSS - tpcb->unsent->len));
-  }
+  len = MIN(len, (TCP_MSS - unsent));
 #endif
   cs->err = tcp_write(tpcb, ctx->data, len, TCP_WRITE_FLAG_COPY);
-  DBG(("%p tcp_write %u = %d", tpcb, len, cs->err));
+  unsent = (tpcb->unsent != NULL ? tpcb->unsent->len : 0);
+  unacked = (tpcb->unacked != NULL ? tpcb->unacked->len : 0);
+  DBG(("%p tcp_write %u = %d, %u %u", tpcb, len, cs->err, unsent, unacked));
   if (cs->err != ERR_OK) {
     /*
      * We ignore ERR_MEM because memory will be freed up when the data is sent
@@ -14984,7 +14993,11 @@ uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
       }
       num_timers++;
     }
-    if (nc->send_mbuf.len > 0) {
+    if (nc->send_mbuf.len > 0
+#if MG_ENABLE_SSL
+        || (nc->flags & MG_F_WANT_WRITE)
+#endif
+            ) {
       int can_send = 0;
       /* We have stuff to send, but can we? */
       if (nc->flags & MG_F_UDP) {
@@ -15097,11 +15110,9 @@ void mg_lwip_ssl_send(struct mg_connection *nc) {
     len = MIN(MG_LWIP_SSL_IO_SIZE, nc->send_mbuf.len);
   }
   int ret = mg_ssl_if_write(nc, nc->send_mbuf.buf, len);
-  DBG(("%p SSL_write %u = %d, %d", nc, len, ret));
+  DBG(("%p SSL_write %u = %d", nc, len, ret));
   if (ret > 0) {
     mg_if_sent_cb(nc, ret);
-    mbuf_remove(&nc->send_mbuf, ret);
-    mbuf_trim(&nc->send_mbuf);
     cs->last_ssl_write_size = 0;
   } else if (ret < 0) {
     /* This is tricky. We must remember the exact data we were sending to retry
@@ -15186,8 +15197,8 @@ int ssl_socket_send(void *ctx, const unsigned char *buf, size_t len) {
   struct mg_connection *nc = (struct mg_connection *) ctx;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   int ret = mg_lwip_tcp_write(cs->nc, buf, len);
-  LOG(LL_DEBUG, ("%p %d -> %d", nc, len, ret));
   if (ret == 0) ret = MBEDTLS_ERR_SSL_WANT_WRITE;
+  LOG(LL_DEBUG, ("%p %d -> %d", nc, len, ret));
   return ret;
 }
 
