@@ -11129,6 +11129,7 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
 
 void mg_set_nameserver(struct mg_mgr *mgr, const char *nameserver) {
   MG_FREE((char *) mgr->nameserver);
+  mgr->nameserver = NULL;
   if (nameserver != NULL) {
     mgr->nameserver = strdup(nameserver);
   }
