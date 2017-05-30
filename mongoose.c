@@ -230,7 +230,11 @@ void cs_log_set_level(enum cs_log_level level);
 void cs_log_set_file(FILE *file);
 extern enum cs_log_level cs_log_threshold;
 void cs_log_print_prefix(enum cs_log_level level, const char *func);
-void cs_log_printf(const char *fmt, ...);
+void cs_log_printf(const char *fmt, ...)
+#ifdef __GNUC__
+    __attribute__((format(printf, 1, 2)))
+#endif
+    ;
 
 #define LOG(l, x)                       \
   do {                                  \
@@ -2918,7 +2922,7 @@ int mg_check_ip_acl(const char *acl, uint32_t remote_ip) {
     }
   }
 
-  DBG(("%08x %c", remote_ip, allowed));
+  DBG(("%08x %c", (unsigned int) remote_ip, allowed));
   return allowed == '+';
 }
 
@@ -2936,7 +2940,7 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
    * connections, so not processed yet. It has a DNS resolver connection
    * linked to it. Set up a timer for the DNS connection.
    */
-  DBG(("%p %p %d -> %lu", c, c->priv_2, c->flags & MG_F_RESOLVING,
+  DBG(("%p %p %d -> %lu", c, c->priv_2, (c->flags & MG_F_RESOLVING ? 1 : 0),
        (unsigned long) timestamp));
   if ((c->flags & MG_F_RESOLVING) && c->priv_2 != NULL) {
     ((struct mg_connection *) c->priv_2)->ev_timer_time = timestamp;
@@ -3883,7 +3887,7 @@ void mg_tun_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
 #if MG_ENABLE_HEXDUMP
   char hex[512];
   mg_hexdump(buf, len, hex, sizeof(hex));
-  LOG(LL_DEBUG, ("sending to stream %zu:\n%s", stream_id, hex));
+  LOG(LL_DEBUG, ("sending to stream 0x%x:\n%s", (unsigned int) stream_id, hex));
 #endif
 
   mg_tun_send_frame(client->disp, stream_id, MG_TUN_DATA_FRAME, 0, msg);
@@ -3914,7 +3918,7 @@ void mg_tun_if_destroy_conn(struct mg_connection *nc) {
     uint32_t stream_id = (uint32_t)(uintptr_t) nc->mgr_data;
     struct mg_str msg = {NULL, 0};
 
-    LOG(LL_DEBUG, ("closing %zu:", stream_id));
+    LOG(LL_DEBUG, ("closing 0x%x:", (unsigned int) stream_id));
     mg_tun_send_frame(client->disp, stream_id, MG_TUN_DATA_FRAME,
                       MG_TUN_F_END_STREAM, msg);
   }
@@ -3970,13 +3974,14 @@ struct mg_connection *mg_tun_if_find_conn(struct mg_tun_client *client,
 
   if (stream_id > client->last_stream_id) {
     /* create a new connection */
-    LOG(LL_DEBUG, ("new stream 0x%lx, accepting", stream_id));
+    LOG(LL_DEBUG, ("new stream 0x%x, accepting", (unsigned int) stream_id));
     nc = mg_if_accept_new_conn(client->listener);
     nc->mgr_data = (void *) (uintptr_t) stream_id;
     client->last_stream_id = stream_id;
   } else {
-    LOG(LL_DEBUG, ("Ignoring stream 0x%lx (last_stream_id 0x%lx)", stream_id,
-                   client->last_stream_id));
+    LOG(LL_DEBUG,
+        ("Ignoring stream 0x%x (last_stream_id 0x%x)", (unsigned int) stream_id,
+         (unsigned int) client->last_stream_id));
   }
 
   return nc;
@@ -9897,7 +9902,7 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       LOG(LL_DEBUG,
           ("%d %2x %d proto [%.*s] client_id [%.*s] will_topic [%.*s] "
            "will_msg [%.*s] user_name [%.*s] password [%.*s]",
-           len, (int) mm->connect_flags, (int) mm->keep_alive_timer,
+           (int) len, (int) mm->connect_flags, (int) mm->keep_alive_timer,
            (int) mm->protocol_name.len, mm->protocol_name.p,
            (int) mm->client_id.len, mm->client_id.p, (int) mm->will_topic.len,
            mm->will_topic.p, (int) mm->will_message.len, mm->will_message.p,
@@ -11771,9 +11776,10 @@ static void mg_tun_init_client(struct mg_tun_client *client, struct mg_mgr *mgr,
 }
 
 void mg_tun_log_frame(struct mg_tun_frame *frame) {
-  LOG(LL_DEBUG, ("Got TUN frame: type=0x%x, flags=0x%x stream_id=0x%lx, "
-                 "len=%zu",
-                 frame->type, frame->flags, frame->stream_id, frame->body.len));
+  LOG(LL_DEBUG, ("Got TUN frame: type=0x%x, flags=0x%x stream_id=0x%x, "
+                 "len=%d",
+                 frame->type, frame->flags, (unsigned int) frame->stream_id,
+                 (int) frame->body.len));
 #if MG_ENABLE_HEXDUMP
   {
     char hex[512];
@@ -11836,7 +11842,7 @@ static void mg_tun_client_handler(struct mg_connection *nc, int ev,
       struct mg_tun_frame frame;
 
       if (mg_tun_parse_frame(wm->data, wm->size, &frame) == -1) {
-        LOG(LL_ERROR, ("Got invalid tun frame dropping", wm->size));
+        LOG(LL_ERROR, ("Got invalid tun frame dropping"));
         break;
       }
 
@@ -14279,10 +14285,10 @@ static void mg_lwip_handle_recv_tcp(struct mg_connection *nc) {
 static err_t mg_lwip_tcp_sent_cb(void *arg, struct tcp_pcb *tpcb,
                                  u16_t num_sent) {
   struct mg_connection *nc = (struct mg_connection *) arg;
-  DBG(("%p %p %u %u %u", nc, tpcb, num_sent, tpcb->unsent, tpcb->unacked));
+  DBG(("%p %p %u %p %p", nc, tpcb, num_sent, tpcb->unsent, tpcb->unacked));
   if (nc == NULL) return ERR_OK;
   if ((nc->flags & MG_F_SEND_AND_CLOSE) && !(nc->flags & MG_F_WANT_WRITE) &&
-      nc->send_mbuf.len == 0 && tpcb->unsent == 0 && tpcb->unacked == 0) {
+      nc->send_mbuf.len == 0 && tpcb->unsent == NULL && tpcb->unacked == NULL) {
     mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
   }
   return ERR_OK;
@@ -14897,7 +14903,7 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
 }
 
 void mg_lwip_if_init(struct mg_iface *iface) {
-  LOG(LL_INFO, ("%p Mongoose init"));
+  LOG(LL_INFO, ("%p Mongoose init", iface));
   iface->data = MG_CALLOC(1, sizeof(struct mg_ev_mgr_lwip_data));
 }
 
@@ -15076,7 +15082,7 @@ void mg_lwip_ssl_do_hs(struct mg_connection *nc) {
   enum mg_ssl_if_result res;
   if (nc->flags & MG_F_CLOSE_IMMEDIATELY) return;
   res = mg_ssl_if_handshake(nc);
-  DBG(("%p %d %d %d", nc, nc->flags, server_side, res));
+  DBG(("%p %lu %d %d", nc, nc->flags, server_side, res));
   if (res != MG_SSL_OK) {
     if (res == MG_SSL_WANT_WRITE) {
       nc->flags |= MG_F_WANT_WRITE;
