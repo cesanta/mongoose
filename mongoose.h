@@ -5105,6 +5105,7 @@ struct mg_send_mqtt_handshake_opts {
 /* mg_mqtt_proto_data should be in header to allow external access to it */
 struct mg_mqtt_proto_data {
   uint16_t keep_alive;
+  double last_control_time;
 };
 
 /* Message types */

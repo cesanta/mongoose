@@ -5,6 +5,7 @@ symbol_kind: "struct"
 signature: |
   struct mg_mqtt_proto_data {
     uint16_t keep_alive;
+    double last_control_time;
   };
 ---
 

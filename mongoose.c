@@ -2079,7 +2079,7 @@ void mg_if_poll(struct mg_connection *nc, time_t now) {
   }
 }
 
-static void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
+void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
   if (destroy_if) conn->iface->vtable->destroy_conn(conn);
   if (conn->proto_data != NULL && conn->proto_data_destructor != NULL) {
     conn->proto_data_destructor(conn->proto_data);
@@ -9957,7 +9957,7 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
   nc->handler(nc, ev, ev_data MG_UD_ARG(user_data));
 
   switch (ev) {
-    case MG_EV_RECV:
+    case MG_EV_RECV: {
       /* There can be multiple messages in the buffer, process them all. */
       while (1) {
         int len = parse_mqtt(io, &mm);
@@ -9966,6 +9966,17 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
         mbuf_remove(io, len);
       }
       break;
+    }
+    case MG_EV_POLL: {
+      struct mg_mqtt_proto_data *pd =
+          (struct mg_mqtt_proto_data *) nc->proto_data;
+      double now = mg_time();
+      if (pd->keep_alive > 0 && pd->last_control_time > 0 &&
+          (now - pd->last_control_time) > pd->keep_alive) {
+        LOG(LL_DEBUG, ("Send PINGREQ"));
+        mg_mqtt_ping(nc);
+      }
+    }
   }
 }
 
@@ -10007,6 +10018,7 @@ void mg_set_protocol_mqtt(struct mg_connection *nc) {
 
 static void mg_mqtt_prepend_header(struct mg_connection *nc, uint8_t cmd,
                                    uint8_t flags, size_t len) {
+  struct mg_mqtt_proto_data *pd = (struct mg_mqtt_proto_data *) nc->proto_data;
   size_t off = nc->send_mbuf.len - len;
   uint8_t header = cmd << 4 | (uint8_t) flags;
 
@@ -10026,6 +10038,7 @@ static void mg_mqtt_prepend_header(struct mg_connection *nc, uint8_t cmd,
   } while (len > 0);
 
   mbuf_insert(&nc->send_mbuf, off, buf, vlen - buf);
+  pd->last_control_time = mg_time();
 }
 
 void mg_send_mqtt_handshake(struct mg_connection *nc, const char *client_id) {
