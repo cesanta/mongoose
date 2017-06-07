@@ -11618,7 +11618,7 @@ uint32_t mg_coap_compose(struct mg_coap_message *cm, struct mbuf *io) {
 
   /* saving previous lenght to handle non-empty mbuf */
   prev_io_len = io->len;
-  mbuf_append(io, NULL, packet_size);
+  if (mbuf_append(io, NULL, packet_size) == 0) return MG_COAP_ERROR;
   ptr = io->buf + prev_io_len;
 
   /*
