@@ -2783,6 +2783,10 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
   struct mg_add_sock_opts add_sock_opts;
   char host[MG_MAX_HOST_LEN];
 
+#if MG_ENABLE_CALLBACK_USERDATA
+  opts.user_data = user_data;
+#endif
+
   MG_COPY_COMMON_CONNECTION_OPTIONS(&add_sock_opts, &opts);
 
 #if MG_ENABLE_TUN
@@ -2846,9 +2850,6 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
   }
   mg_add_conn(nc->mgr, nc);
 
-#if MG_ENABLE_CALLBACK_USERDATA
-  (void) user_data;
-#endif
   return nc;
 }
 
