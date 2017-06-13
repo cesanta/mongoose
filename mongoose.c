@@ -12593,8 +12593,8 @@ void fs_slfs_set_new_file_size(const char *name, size_t size);
 /* Amalgamated: #include "common/mg_mem.h" */
 
 /* From sl_fs.c */
-extern int set_errno(int e);
-static const char *drop_dir(const char *fname, bool *is_slfs);
+int set_errno(int e);
+const char *drop_dir(const char *fname, bool *is_slfs);
 
 /*
  * With SLFS, you have to pre-declare max file size. Yes. Really.
@@ -12657,6 +12657,7 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
   _u32 am = 0;
   fi->size = (size_t) -1;
   int rw = (flags & 3);
+  size_t new_size = FS_SLFS_MAX_FILE_SIZE;
   if (rw == O_RDONLY) {
     SlFsFileInfo_t sl_fi;
     _i32 r = sl_FsGetInfo((const _u8 *) pathname, 0, &sl_fi);
@@ -12671,25 +12672,24 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
       return set_errno(ENOTSUP);
     }
     if (flags & O_CREAT) {
-      size_t i, size = FS_SLFS_MAX_FILE_SIZE;
+      size_t i;
       for (i = 0; i < MAX_OPEN_SLFS_FILES; i++) {
         if (s_sl_file_size_hints[i].name != NULL &&
             strcmp(s_sl_file_size_hints[i].name, pathname) == 0) {
-          size = s_sl_file_size_hints[i].size;
+          new_size = s_sl_file_size_hints[i].size;
           MG_FREE(s_sl_file_size_hints[i].name);
           s_sl_file_size_hints[i].name = NULL;
           break;
         }
       }
-      DBG(("creating %s with max size %d", pathname, (int) size));
-      am = FS_MODE_OPEN_CREATE(size, 0);
+      am = FS_MODE_OPEN_CREATE(new_size, 0);
     } else {
       am = FS_MODE_OPEN_WRITE;
     }
   }
   _i32 r = sl_FsOpen((_u8 *) pathname, am, NULL, &fi->fh);
-  DBG(("sl_FsOpen(%s, 0x%x) = %d, %d", pathname, (int) am, (int) r,
-       (int) fi->fh));
+  LOG(LL_DEBUG, ("sl_FsOpen(%s, 0x%x) sz %u = %d, %d", pathname, (int) am,
+                 (unsigned int) new_size, (int) r, (int) fi->fh));
   if (r == SL_FS_OK) {
     fi->pos = 0;
     r = fd;
@@ -12704,7 +12704,7 @@ int fs_slfs_close(int fd) {
   struct sl_fd_info *fi = &s_sl_fds[fd];
   if (fi->fh <= 0) return set_errno(EBADF);
   _i32 r = sl_FsClose(fi->fh, NULL, NULL, 0);
-  DBG(("sl_FsClose(%d) = %d", (int) fi->fh, (int) r));
+  LOG(LL_DEBUG, ("sl_FsClose(%d) = %d", (int) fi->fh, (int) r));
   s_sl_fds[fd].fh = -1;
   return set_errno(sl_fs_to_errno(r));
 }
@@ -12817,6 +12817,32 @@ void fs_slfs_set_new_file_size(const char *name, size_t size) {
 #if MG_NET_IF == MG_NET_IF_SIMPLELINK && \
     (defined(MG_FS_SLFS) || defined(MG_FS_SPIFFS))
 
+int set_errno(int e) {
+  errno = e;
+  return (e == 0 ? 0 : -1);
+}
+
+const char *drop_dir(const char *fname, bool *is_slfs) {
+  if (is_slfs != NULL) {
+    *is_slfs = (strncmp(fname, "SL:", 3) == 0);
+    if (*is_slfs) fname += 3;
+  }
+  /* Drop "./", if any */
+  if (fname[0] == '.' && fname[1] == '/') {
+    fname += 2;
+  }
+  /*
+   * Drop / if it is the only one in the path.
+   * This allows use of /pretend/directories but serves /file.txt as normal.
+   */
+  if (fname[0] == '/' && strchr(fname + 1, '/') == NULL) {
+    fname++;
+  }
+  return fname;
+}
+
+#if !defined(MG_FS_NO_VFS)
+
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -12853,30 +12879,6 @@ void fs_slfs_set_new_file_size(const char *name, size_t size) {
 #define MG_UART_WRITE(fd, buf, len)
 #endif /* CS_PLATFORM == CS_P_CC3200 */
 #endif /* !MG_UART_CHAR_PUT */
-
-int set_errno(int e) {
-  errno = e;
-  return (e == 0 ? 0 : -1);
-}
-
-static const char *drop_dir(const char *fname, bool *is_slfs) {
-  if (is_slfs != NULL) {
-    *is_slfs = (strncmp(fname, "SL:", 3) == 0);
-    if (*is_slfs) fname += 3;
-  }
-  /* Drop "./", if any */
-  if (fname[0] == '.' && fname[1] == '/') {
-    fname += 2;
-  }
-  /*
-   * Drop / if it is the only one in the path.
-   * This allows use of /pretend/directories but serves /file.txt as normal.
-   */
-  if (fname[0] == '/' && strchr(fname + 1, '/') == NULL) {
-    fname++;
-  }
-  return fname;
-}
 
 enum fd_type {
   FD_INVALID,
@@ -13215,6 +13217,7 @@ int sl_fs_init(void) {
   return ret;
 }
 
+#endif /* !defined(MG_FS_NO_VFS) */
 #endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK && (defined(MG_FS_SLFS) || \
           defined(MG_FS_SPIFFS)) */
 #ifdef MG_MODULE_LINES
@@ -13833,6 +13836,13 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_SL_IFACE_VTABLE;
 
 /* Amalgamated: #include "common/mg_mem.h" */
 
+#ifndef MG_SSL_IF_SIMPLELINK_SLFS_PREFIX
+#define MG_SSL_IF_SIMPLELINK_SLFS_PREFIX "SL:"
+#endif
+
+#define MG_SSL_IF_SIMPLELINK_SLFS_PREFIX_LEN \
+  (sizeof(MG_SSL_IF_SIMPLELINK_SLFS_PREFIX) - 1)
+
 struct mg_ssl_if_ctx {
   char *ssl_cert;
   char *ssl_key;
@@ -13897,7 +13907,8 @@ bool pem_to_der(const char *pem_file, const char *der_file) {
   pf = fopen(pem_file, "r");
   if (pf == NULL) goto clean;
   remove(der_file);
-  fs_slfs_set_new_file_size(der_file + 3, 2048);
+  fs_slfs_set_new_file_size(der_file + MG_SSL_IF_SIMPLELINK_SLFS_PREFIX_LEN,
+                            2048);
   df = fopen(der_file, "w");
   if (df == NULL) goto clean;
   while (1) {
@@ -13939,8 +13950,8 @@ static char *sl_pem2der(const char *pem_file) {
   }
   char *der_file = NULL;
   /* DER file must be located on SLFS, add prefix. */
-  int l = mg_asprintf(&der_file, 0, "SL:%.*s.der", (int) (pem_ext - pem_file),
-                      pem_file);
+  int l = mg_asprintf(&der_file, 0, MG_SSL_IF_SIMPLELINK_SLFS_PREFIX "%.*s.der",
+                      (int) (pem_ext - pem_file), pem_file);
   if (der_file == NULL) return NULL;
   bool result = false;
   cs_stat_t st;
@@ -13953,7 +13964,8 @@ static char *sl_pem2der(const char *pem_file) {
   }
   if (result) {
     /* Strip the SL: prefix we added since NWP does not expect it. */
-    memmove(der_file, der_file + 3, l - 2 /* including \0 */);
+    memmove(der_file, der_file + MG_SSL_IF_SIMPLELINK_SLFS_PREFIX_LEN,
+            l - 2 /* including \0 */);
   } else {
     MG_FREE(der_file);
     der_file = NULL;

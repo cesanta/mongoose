@@ -538,7 +538,9 @@ typedef struct stat cs_stat_t;
 #define SIZE_T_FMT "u"
 typedef struct stat cs_stat_t;
 #define DIRSEP '/'
+#if !defined(MGOS_VFS_DEFINE_DIRENT)
 #define CS_DEFINE_DIRENT
+#endif
 
 #define to64(x) strtoll(x, NULL, 10)
 #define INT64_FMT PRId64
@@ -700,7 +702,7 @@ struct stat {
 };
 
 int _stat(const char *pathname, struct stat *st);
-#define stat(a, b) _stat(a, b)
+int stat(const char *pathname, struct stat *st);
 
 #define __S_IFMT 0170000
 
