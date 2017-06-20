@@ -6991,7 +6991,7 @@ static void mg_escape(const char *src, char *dst, size_t dst_len) {
 
 static void mg_print_dir_entry(struct mg_connection *nc, const char *file_name,
                                cs_stat_t *stp) {
-  char size[64], mod[64], href[MAX_PATH_SIZE * 3], path[MAX_PATH_SIZE];
+  char size[64], mod[64], href[MG_MAX_PATH * 3], path[MG_MAX_PATH];
   int64_t fsize = stp->st_size;
   int is_dir = S_ISDIR(stp->st_mode);
   const char *slash = is_dir ? "/" : "";
@@ -7027,7 +7027,7 @@ static void mg_scan_directory(struct mg_connection *nc, const char *dir,
                               const struct mg_serve_http_opts *opts,
                               void (*func)(struct mg_connection *, const char *,
                                            cs_stat_t *)) {
-  char path[MAX_PATH_SIZE];
+  char path[MG_MAX_PATH];
   cs_stat_t st;
   struct dirent *dp;
   DIR *dirp;
@@ -8136,7 +8136,7 @@ static void mg_spawn_stdio_thread(sock_t sock, HANDLE hPipe,
 }
 
 static void mg_abs_path(const char *utf8_path, char *abs_path, size_t len) {
-  wchar_t buf[MAX_PATH_SIZE], buf2[MAX_PATH_SIZE];
+  wchar_t buf[MG_MAX_PATH], buf2[MG_MAX_PATH];
   to_wchar(utf8_path, buf, ARRAY_SIZE(buf));
   GetFullPathNameW(buf, ARRAY_SIZE(buf2), buf2, NULL);
   WideCharToMultiByte(CP_UTF8, 0, buf2, wcslen(buf2) + 1, abs_path, len, 0, 0);
@@ -8148,9 +8148,9 @@ static int mg_start_process(const char *interp, const char *cmd,
   STARTUPINFOW si;
   PROCESS_INFORMATION pi;
   HANDLE a[2], b[2], me = GetCurrentProcess();
-  wchar_t wcmd[MAX_PATH_SIZE], full_dir[MAX_PATH_SIZE];
-  char buf[MAX_PATH_SIZE], buf2[MAX_PATH_SIZE], buf5[MAX_PATH_SIZE],
-      buf4[MAX_PATH_SIZE], cmdline[MAX_PATH_SIZE];
+  wchar_t wcmd[MG_MAX_PATH], full_dir[MG_MAX_PATH];
+  char buf[MG_MAX_PATH], buf2[MG_MAX_PATH], buf5[MG_MAX_PATH],
+      buf4[MG_MAX_PATH], cmdline[MG_MAX_PATH];
   DWORD flags = DUPLICATE_CLOSE_SOURCE | DUPLICATE_SAME_ACCESS;
   FILE *fp;
 
@@ -8476,7 +8476,7 @@ MG_INTERNAL void mg_handle_cgi(struct mg_connection *nc, const char *prog,
                                const struct http_message *hm,
                                const struct mg_serve_http_opts *opts) {
   struct mg_cgi_env_block blk;
-  char dir[MAX_PATH_SIZE];
+  char dir[MG_MAX_PATH];
   const char *p;
   sock_t fds[2];
 
@@ -8567,7 +8567,7 @@ static void mg_send_file_data(struct mg_connection *nc, FILE *fp) {
 static void mg_do_ssi_include(struct mg_connection *nc, struct http_message *hm,
                               const char *ssi, char *tag, int include_level,
                               const struct mg_serve_http_opts *opts) {
-  char file_name[BUFSIZ], path[MAX_PATH_SIZE], *p;
+  char file_name[MG_MAX_PATH], path[MG_MAX_PATH], *p;
   FILE *fp;
 
   /*
@@ -8783,7 +8783,7 @@ static int mg_mkdir(const char *path, uint32_t mode) {
 
 static void mg_print_props(struct mg_connection *nc, const char *name,
                            cs_stat_t *stp) {
-  char mtime[64], buf[MAX_PATH_SIZE * 3];
+  char mtime[64], buf[MG_MAX_PATH * 3];
   time_t t = stp->st_mtime; /* store in local variable for NDK compile */
   mg_gmt_time_string(mtime, sizeof(mtime), &t);
   mg_url_encode(name, strlen(name), buf, sizeof(buf));
@@ -8821,7 +8821,7 @@ MG_INTERNAL void mg_handle_propfind(struct mg_connection *nc, const char *path,
       strcmp(opts->enable_directory_listing, "yes") != 0) {
     mg_printf(nc, "%s", "HTTP/1.1 403 Directory Listing Denied\r\n\r\n");
   } else {
-    char uri[MAX_PATH_SIZE];
+    char uri[MG_MAX_PATH];
     mg_send(nc, header, sizeof(header) - 1);
     snprintf(uri, sizeof(uri), "%.*s", (int) hm->uri.len, hm->uri.p);
     mg_print_props(nc, uri, stp);
@@ -8888,7 +8888,7 @@ MG_INTERNAL void mg_handle_mkcol(struct mg_connection *nc, const char *path,
 
 static int mg_remove_directory(const struct mg_serve_http_opts *opts,
                                const char *dir) {
-  char path[MAX_PATH_SIZE];
+  char path[MG_MAX_PATH];
   struct dirent *dp;
   cs_stat_t st;
   DIR *dirp;
@@ -8923,7 +8923,7 @@ MG_INTERNAL void mg_handle_move(struct mg_connection *c,
     const char *p = (char *) memchr(dest->p, '/', dest->len);
     if (p != NULL && p[1] == '/' &&
         (p = (char *) memchr(p + 2, '/', dest->p + dest->len - p)) != NULL) {
-      char buf[MAX_PATH_SIZE];
+      char buf[MG_MAX_PATH];
       snprintf(buf, sizeof(buf), "%s%.*s", opts->dav_document_root,
                (int) (dest->p + dest->len - p), p);
       if (rename(path, buf) == 0) {
@@ -8960,7 +8960,7 @@ static int mg_create_itermediate_directories(const char *path) {
   /* Create intermediate directories if they do not exist */
   for (s = path + 1; *s != '\0'; s++) {
     if (*s == '/') {
-      char buf[MAX_PATH_SIZE];
+      char buf[MG_MAX_PATH];
       cs_stat_t st;
       snprintf(buf, sizeof(buf), "%.*s", (int) (s - path), path);
       buf[sizeof(buf) - 1] = '\0';
@@ -9457,7 +9457,7 @@ static int lowercase(const char *s) {
 #if MG_ENABLE_FILESYSTEM && !defined(MG_USER_FILE_FUNCTIONS)
 int mg_stat(const char *path, cs_stat_t *st) {
 #ifdef _WIN32
-  wchar_t wpath[MAX_PATH_SIZE];
+  wchar_t wpath[MG_MAX_PATH];
   to_wchar(path, wpath, ARRAY_SIZE(wpath));
   DBG(("[%ls] -> %d", wpath, _wstati64(wpath, st)));
   return _wstati64(wpath, st);
@@ -9468,7 +9468,7 @@ int mg_stat(const char *path, cs_stat_t *st) {
 
 FILE *mg_fopen(const char *path, const char *mode) {
 #ifdef _WIN32
-  wchar_t wpath[MAX_PATH_SIZE], wmode[10];
+  wchar_t wpath[MG_MAX_PATH], wmode[10];
   to_wchar(path, wpath, ARRAY_SIZE(wpath));
   to_wchar(mode, wmode, ARRAY_SIZE(wmode));
   return _wfopen(wpath, wmode);
@@ -9479,7 +9479,7 @@ FILE *mg_fopen(const char *path, const char *mode) {
 
 int mg_open(const char *path, int flag, int mode) { /* LCOV_EXCL_LINE */
 #if defined(_WIN32) && !defined(WINCE)
-  wchar_t wpath[MAX_PATH_SIZE];
+  wchar_t wpath[MG_MAX_PATH];
   to_wchar(path, wpath, ARRAY_SIZE(wpath));
   return _wopen(wpath, flag, mode);
 #else

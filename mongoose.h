@@ -3891,8 +3891,12 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out);
 extern "C" {
 #endif /* __cplusplus */
 
-#ifndef MAX_PATH_SIZE
-#define MAX_PATH_SIZE 500
+#ifndef MG_MAX_PATH
+#ifdef PATH_MAX
+#define MG_MAX_PATH PATH_MAX
+#else
+#define MG_MAX_PATH 256
+#endif
 #endif
 
 /*
@@ -4121,14 +4125,6 @@ extern "C" {
 
 #ifndef MG_MAX_HTTP_REQUEST_SIZE
 #define MG_MAX_HTTP_REQUEST_SIZE 1024
-#endif
-
-#ifndef MG_MAX_PATH
-#ifdef PATH_MAX
-#define MG_MAX_PATH PATH_MAX
-#else
-#define MG_MAX_PATH 256
-#endif
 #endif
 
 #ifndef MG_MAX_HTTP_SEND_MBUF
