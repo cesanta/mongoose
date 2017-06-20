@@ -14230,7 +14230,7 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
   struct mg_connection *nc = (struct mg_connection *) arg;
   DBG(("%p %p %u %d", nc, tpcb, (p != NULL ? p->tot_len : 0), err));
   if (p == NULL) {
-    if (nc != NULL) {
+    if (nc != NULL && !(nc->flags & MG_F_CLOSE_IMMEDIATELY)) {
       mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
     } else {
       /* Tombstoned connection, do nothing. */
