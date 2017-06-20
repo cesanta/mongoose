@@ -14481,15 +14481,27 @@ void mg_lwip_handle_accept(struct mg_connection *nc) {
 }
 
 static err_t mg_lwip_accept_cb(void *arg, struct tcp_pcb *newtpcb, err_t err) {
-  struct mg_connection *lc = (struct mg_connection *) arg;
-  DBG(("%p conn %p from %s:%u", lc, newtpcb,
+  struct mg_connection *lc = (struct mg_connection *) arg, *nc;
+  struct mg_lwip_conn_state *lcs, *cs;
+  struct tcp_pcb_listen *lpcb;
+  LOG(LL_INFO,
+      ("%p conn %p from %s:%u", lc, newtpcb,
        IPADDR_NTOA(ipX_2_ip(&newtpcb->remote_ip)), newtpcb->remote_port));
-  struct mg_connection *nc = mg_if_accept_new_conn(lc);
+  if (lc == NULL) {
+    tcp_abort(newtpcb);
+    return ERR_ABRT;
+  }
+  lcs = (struct mg_lwip_conn_state *) lc->sock;
+  lpcb = (struct tcp_pcb_listen *) lcs->pcb.tcp;
+#if TCP_LISTEN_BACKLOG
+  tcp_accepted(lpcb);
+#endif
+  nc = mg_if_accept_new_conn(lc);
   if (nc == NULL) {
     tcp_abort(newtpcb);
     return ERR_ABRT;
   }
-  struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
+  cs = (struct mg_lwip_conn_state *) nc->sock;
   cs->lc = lc;
   cs->pcb.tcp = newtpcb;
   /* We need to set up callbacks before returning because data may start
@@ -14503,6 +14515,7 @@ static err_t mg_lwip_accept_cb(void *arg, struct tcp_pcb *newtpcb, err_t err) {
 #endif
   mg_lwip_post_signal(MG_SIG_ACCEPT, nc);
   (void) err;
+  (void) lpcb;
   return ERR_OK;
 }
 
