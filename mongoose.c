@@ -14484,7 +14484,7 @@ static err_t mg_lwip_accept_cb(void *arg, struct tcp_pcb *newtpcb, err_t err) {
   struct mg_connection *lc = (struct mg_connection *) arg, *nc;
   struct mg_lwip_conn_state *lcs, *cs;
   struct tcp_pcb_listen *lpcb;
-  LOG(LL_INFO,
+  LOG(LL_DEBUG,
       ("%p conn %p from %s:%u", lc, newtpcb,
        IPADDR_NTOA(ipX_2_ip(&newtpcb->remote_ip)), newtpcb->remote_port));
   if (lc == NULL) {
