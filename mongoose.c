@@ -4695,6 +4695,7 @@ void mg_ssl_if_conn_free(struct mg_connection *nc) {
 static enum mg_ssl_if_result mg_use_ca_cert(struct mg_ssl_if_ctx *ctx,
                                             const char *ca_cert) {
   if (ca_cert == NULL || strcmp(ca_cert, "*") == 0) {
+    mbedtls_ssl_conf_authmode(ctx->conf, MBEDTLS_SSL_VERIFY_NONE);
     return MG_SSL_OK;
   }
   ctx->ca_cert = (mbedtls_x509_crt *) MG_CALLOC(1, sizeof(*ctx->ca_cert));
