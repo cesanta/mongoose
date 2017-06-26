@@ -9541,10 +9541,10 @@ void mg_set_close_on_exec(sock_t sock) {
 #endif
 }
 
-void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
-                         int flags) {
+int mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
+                        int flags) {
   int is_v6;
-  if (buf == NULL || len <= 0) return;
+  if (buf == NULL || len <= 0) return 0;
   memset(buf, 0, len);
 #if MG_ENABLE_IPV6
   is_v6 = sa->sa.sa_family == AF_INET6;
@@ -9594,18 +9594,19 @@ void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
     }
   }
 
-  return;
+  return strlen(buf);
 
 cleanup:
   *buf = '\0';
+  return 0;
 }
 
-void mg_conn_addr_to_str(struct mg_connection *nc, char *buf, size_t len,
-                         int flags) {
+int mg_conn_addr_to_str(struct mg_connection *nc, char *buf, size_t len,
+                        int flags) {
   union socket_address sa;
   memset(&sa, 0, sizeof(sa));
   mg_if_get_conn_addr(nc, flags & MG_SOCK_STRINGIFY_REMOTE, &sa);
-  mg_sock_addr_to_str(&sa, buf, len, flags);
+  return mg_sock_addr_to_str(&sa, buf, len, flags);
 }
 
 #if MG_ENABLE_HEXDUMP

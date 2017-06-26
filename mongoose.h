@@ -4001,9 +4001,10 @@ void mg_set_close_on_exec(sock_t);
  *
  * If both port number and IP address are printed, they are separated by `:`.
  * If compiled with `-DMG_ENABLE_IPV6`, IPv6 addresses are supported.
+ * Return length of the stringified address.
  */
-void mg_conn_addr_to_str(struct mg_connection *nc, char *buf, size_t len,
-                         int flags);
+int mg_conn_addr_to_str(struct mg_connection *c, char *buf, size_t len,
+                        int flags);
 #if MG_NET_IF == MG_NET_IF_SOCKET
 /* Legacy interface. */
 void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
@@ -4014,8 +4015,8 @@ void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
  *
  * `flags` is MG_SOCK_STRINGIFY_IP and/or MG_SOCK_STRINGIFY_PORT.
  */
-void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
-                         int flags);
+int mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
+                        int flags);
 
 #if MG_ENABLE_HEXDUMP
 /*
