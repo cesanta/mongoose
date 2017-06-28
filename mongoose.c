@@ -9795,7 +9795,6 @@ int mg_is_big_endian(void) {
   return ((char *) &n)[0] == 0;
 }
 
-
 DO_NOT_WARN_UNUSED MG_INTERNAL int mg_get_errno(void) {
 #ifndef WINCE
   return errno;
