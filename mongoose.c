@@ -1858,6 +1858,98 @@ int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   return len;
 }
 
+const char *mg_next_comma_list_entry(const char *, struct mg_str *,
+                                     struct mg_str *) WEAK;
+const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
+                                     struct mg_str *eq_val) {
+  if (list == NULL || *list == '\0') {
+    /* End of the list */
+    list = NULL;
+  } else {
+    val->p = list;
+    if ((list = strchr(val->p, ',')) != NULL) {
+      /* Comma found. Store length and shift the list ptr */
+      val->len = list - val->p;
+      list++;
+    } else {
+      /* This value is the last one */
+      list = val->p + strlen(val->p);
+      val->len = list - val->p;
+    }
+
+    if (eq_val != NULL) {
+      /* Value has form "x=y", adjust pointers and lengths */
+      /* so that val points to "x", and eq_val points to "y". */
+      eq_val->len = 0;
+      eq_val->p = (const char *) memchr(val->p, '=', val->len);
+      if (eq_val->p != NULL) {
+        eq_val->p++; /* Skip over '=' character */
+        eq_val->len = val->p + val->len - eq_val->p;
+        val->len = (eq_val->p - val->p) - 1;
+      }
+    }
+  }
+
+  return list;
+}
+
+int mg_match_prefix_n(const struct mg_str, const struct mg_str) WEAK;
+int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str) {
+  const char *or_str;
+  size_t len, i = 0, j = 0;
+  int res;
+
+  if ((or_str = (const char *) memchr(pattern.p, '|', pattern.len)) != NULL ||
+      (or_str = (const char *) memchr(pattern.p, ',', pattern.len)) != NULL) {
+    struct mg_str pstr = {pattern.p, (size_t)(or_str - pattern.p)};
+    res = mg_match_prefix_n(pstr, str);
+    if (res > 0) return res;
+    pstr.p = or_str + 1;
+    pstr.len = (pattern.p + pattern.len) - (or_str + 1);
+    return mg_match_prefix_n(pstr, str);
+  }
+
+  for (; i < pattern.len; i++, j++) {
+    if (pattern.p[i] == '?' && j != str.len) {
+      continue;
+    } else if (pattern.p[i] == '$') {
+      return j == str.len ? (int) j : -1;
+    } else if (pattern.p[i] == '*') {
+      i++;
+      if (i < pattern.len && pattern.p[i] == '*') {
+        i++;
+        len = str.len - j;
+      } else {
+        len = 0;
+        while (j + len != str.len && str.p[j + len] != '/') {
+          len++;
+        }
+      }
+      if (i == pattern.len) {
+        return j + len;
+      }
+      do {
+        const struct mg_str pstr = {pattern.p + i, pattern.len - i};
+        const struct mg_str sstr = {str.p + j + len, str.len - j - len};
+        res = mg_match_prefix_n(pstr, sstr);
+      } while (res == -1 && len-- > 0);
+      return res == -1 ? -1 : (int) (j + res + len);
+    } else if (str_util_lowercase(&pattern.p[i]) !=
+               str_util_lowercase(&str.p[j])) {
+      return -1;
+    }
+  }
+  return j;
+}
+
+int mg_match_prefix(const char *, int, const char *) WEAK;
+int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
+  const struct mg_str pstr = {pattern, (size_t) pattern_len};
+  struct mg_str s = {str, 0};
+  if (str != NULL) s.len = strlen(str);
+  return mg_match_prefix_n(pstr, s);
+}
+
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/tun.h"
@@ -9451,10 +9543,6 @@ const char *mg_skip(const char *s, const char *end, const char *delims,
   return s;
 }
 
-static int lowercase(const char *s) {
-  return tolower(*(const unsigned char *) s);
-}
-
 #if MG_ENABLE_FILESYSTEM && !defined(MG_USER_FILE_FUNCTIONS)
 int mg_stat(const char *path, cs_stat_t *st) {
 #ifdef _WIN32
@@ -9707,89 +9795,6 @@ int mg_is_big_endian(void) {
   return ((char *) &n)[0] == 0;
 }
 
-const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
-                                     struct mg_str *eq_val) {
-  if (list == NULL || *list == '\0') {
-    /* End of the list */
-    list = NULL;
-  } else {
-    val->p = list;
-    if ((list = strchr(val->p, ',')) != NULL) {
-      /* Comma found. Store length and shift the list ptr */
-      val->len = list - val->p;
-      list++;
-    } else {
-      /* This value is the last one */
-      list = val->p + strlen(val->p);
-      val->len = list - val->p;
-    }
-
-    if (eq_val != NULL) {
-      /* Value has form "x=y", adjust pointers and lengths */
-      /* so that val points to "x", and eq_val points to "y". */
-      eq_val->len = 0;
-      eq_val->p = (const char *) memchr(val->p, '=', val->len);
-      if (eq_val->p != NULL) {
-        eq_val->p++; /* Skip over '=' character */
-        eq_val->len = val->p + val->len - eq_val->p;
-        val->len = (eq_val->p - val->p) - 1;
-      }
-    }
-  }
-
-  return list;
-}
-
-int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str) {
-  const char *or_str;
-  size_t len, i = 0, j = 0;
-  int res;
-
-  if ((or_str = (const char *) memchr(pattern.p, '|', pattern.len)) != NULL) {
-    struct mg_str pstr = {pattern.p, (size_t)(or_str - pattern.p)};
-    res = mg_match_prefix_n(pstr, str);
-    if (res > 0) return res;
-    pstr.p = or_str + 1;
-    pstr.len = (pattern.p + pattern.len) - (or_str + 1);
-    return mg_match_prefix_n(pstr, str);
-  }
-
-  for (; i < pattern.len; i++, j++) {
-    if (pattern.p[i] == '?' && j != str.len) {
-      continue;
-    } else if (pattern.p[i] == '$') {
-      return j == str.len ? (int) j : -1;
-    } else if (pattern.p[i] == '*') {
-      i++;
-      if (i < pattern.len && pattern.p[i] == '*') {
-        i++;
-        len = str.len - j;
-      } else {
-        len = 0;
-        while (j + len != str.len && str.p[j + len] != '/') {
-          len++;
-        }
-      }
-      if (i == pattern.len) {
-        return j + len;
-      }
-      do {
-        const struct mg_str pstr = {pattern.p + i, pattern.len - i};
-        const struct mg_str sstr = {str.p + j + len, str.len - j - len};
-        res = mg_match_prefix_n(pstr, sstr);
-      } while (res == -1 && len-- > 0);
-      return res == -1 ? -1 : (int) (j + res + len);
-    } else if (lowercase(&pattern.p[i]) != lowercase(&str.p[j])) {
-      return -1;
-    }
-  }
-  return j;
-}
-
-int mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
-  const struct mg_str pstr = {pattern, (size_t) pattern_len};
-  return mg_match_prefix_n(pstr, mg_mk_str(str));
-}
 
 DO_NOT_WARN_UNUSED MG_INTERNAL int mg_get_errno(void) {
 #ifndef WINCE

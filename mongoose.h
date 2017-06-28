@@ -1955,6 +1955,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len);
 #include <stdlib.h>
 
 /* Amalgamated: #include "common/platform.h" */
+/* Amalgamated: #include "common/mg_str.h" */
 
 #ifndef CS_ENABLE_STRDUP
 #define CS_ENABLE_STRDUP 0
@@ -2048,6 +2049,32 @@ int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
 
 /* Same as mg_asprintf, but takes varargs list. */
 int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap);
+
+/*
+ * A helper function for traversing a comma separated list of values.
+ * It returns a list pointer shifted to the next value or NULL if the end
+ * of the list found.
+ * The value is stored in a val vector. If the value has a form "x=y", then
+ * eq_val vector is initialised to point to the "y" part, and val vector length
+ * is adjusted to point only to "x".
+ * If the list is just a comma separated list of entries, like "aa,bb,cc" then
+ * `eq_val` will contain zero-length string.
+ *
+ * The purpose of this function is to parse comma separated string without
+ * any copying/memory allocation.
+ */
+const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
+                                     struct mg_str *eq_val);
+
+/*
+ * Matches 0-terminated string (mg_match_prefix) or string with given length
+ * mg_match_prefix_n against a glob pattern.
+ *
+ * Match is case-insensitive. Returns number of bytes matched, or -1 if no
+ * match.
+ */
+int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
+int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
 
 #ifdef __cplusplus
 }
@@ -4047,32 +4074,6 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
  * Returns true if target platform is big endian.
  */
 int mg_is_big_endian(void);
-
-/*
- * A helper function for traversing a comma separated list of values.
- * It returns a list pointer shifted to the next value or NULL if the end
- * of the list found.
- * The value is stored in a val vector. If the value has a form "x=y", then
- * eq_val vector is initialised to point to the "y" part, and val vector length
- * is adjusted to point only to "x".
- * If the list is just a comma separated list of entries, like "aa,bb,cc" then
- * `eq_val` will contain zero-length string.
- *
- * The purpose of this function is to parse comma separated string without
- * any copying/memory allocation.
- */
-const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
-                                     struct mg_str *eq_val);
-
-/*
- * Matches 0-terminated string (mg_match_prefix) or string with given length
- * mg_match_prefix_n against a glob pattern.
- *
- * Match is case-insensitive. Returns number of bytes matched, or -1 if no
- * match.
- */
-int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
-int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
 
 /*
  * Use with cs_base64_init/update/finish in order to write out base64 in chunks.
