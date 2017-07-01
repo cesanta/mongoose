@@ -2939,10 +2939,6 @@ struct {								\
 #define MG_ENABLE_IPV6 0
 #endif
 
-#ifndef MG_ENABLE_JAVASCRIPT
-#define MG_ENABLE_JAVASCRIPT 0
-#endif
-
 #ifndef MG_ENABLE_MQTT
 #define MG_ENABLE_MQTT 1
 #endif
@@ -3243,11 +3239,6 @@ int mg_ssl_if_write(struct mg_connection *nc, const void *data, size_t len);
 #ifndef CS_MONGOOSE_SRC_NET_H_
 #define CS_MONGOOSE_SRC_NET_H_
 
-#if MG_ENABLE_JAVASCRIPT
-#define EXCLUDE_COMMON
-#include <v7.h>
-#endif
-
 /* Amalgamated: #include "mongoose/src/common.h" */
 /* Amalgamated: #include "mongoose/src/net_if.h" */
 /* Amalgamated: #include "common/mbuf.h" */
@@ -3310,9 +3301,6 @@ struct mg_mgr {
   void *user_data; /* User data */
   int num_ifaces;
   struct mg_iface **ifaces; /* network interfaces */
-#if MG_ENABLE_JAVASCRIPT
-  struct v7 *v7;
-#endif
   const char *nameserver; /* DNS server to use */
 };
 
@@ -3776,17 +3764,6 @@ int mg_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
  * Returns -1 if ACL is malformed, 0 if address is disallowed, 1 if allowed.
  */
 int mg_check_ip_acl(const char *acl, uint32_t remote_ip);
-
-#if MG_ENABLE_JAVASCRIPT
-/*
- * Enables server-side JavaScript scripting.
- * Requires a `-DMG_ENABLE_JAVASCRIPT` compilation flag and V7 engine sources.
- * V7 instance must not be destroyed during manager's lifetime.
- * Returns a V7 error.
- */
-enum v7_err mg_enable_javascript(struct mg_mgr *m, struct v7 *v7,
-                                 const char *init_js_file_name);
-#endif
 
 /*
  * Schedules an MG_EV_TIMER event to be delivered at `timestamp` time.
