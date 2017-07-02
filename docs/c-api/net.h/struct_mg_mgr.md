@@ -14,7 +14,7 @@ signature: |
     void *user_data; /* User data */
     int num_ifaces;
     struct mg_iface **ifaces; /* network interfaces */
-    const char *nameserver; /* DNS server to use */
+    const char *nameserver;   /* DNS server to use */
   };
 ---
 
