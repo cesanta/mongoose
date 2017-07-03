@@ -4407,7 +4407,7 @@ static unsigned int mg_ssl_if_ossl_psk_cb(SSL *ssl, const char *hint,
                                           unsigned char *psk,
                                           unsigned int max_psk_len) {
   struct mg_ssl_if_ctx *ctx =
-      (struct mg_ssl_if_ctx *) ssl->ctx->msg_callback_arg;
+      (struct mg_ssl_if_ctx *) SSL_CTX_get_app_data(SSL_get_SSL_CTX(ssl));
   size_t key_len = ctx->psk.len - ctx->identity_len - 1;
   DBG(("hint: '%s'", (hint ? hint : "")));
   if (ctx->identity_len + 1 > max_identity_len) {
@@ -4456,8 +4456,7 @@ static enum mg_ssl_if_result mg_ssl_if_ossl_set_psk(struct mg_ssl_if_ctx *ctx,
   mbuf_append(&ctx->psk, identity, ctx->identity_len + 1);
   mbuf_append(&ctx->psk, key, key_len);
   SSL_CTX_set_psk_client_callback(ctx->ssl_ctx, mg_ssl_if_ossl_psk_cb);
-  /* Hack: there is no field for us to keep this, so we use msg_callback_arg */
-  ctx->ssl_ctx->msg_callback_arg = ctx;
+  SSL_CTX_set_app_data(ctx->ssl_ctx, ctx);
   return MG_SSL_OK;
 }
 #else
