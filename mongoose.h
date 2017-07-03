@@ -1801,6 +1801,11 @@ struct mg_str mg_strdup(const struct mg_str s);
  */
 struct mg_str mg_strdup_nul(const struct mg_str s);
 
+/*
+ * Locates character in a string.
+ */
+const char *mg_strchr(const struct mg_str s, int c);
+
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
 int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n);
 

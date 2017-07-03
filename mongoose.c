@@ -1446,6 +1446,15 @@ struct mg_str mg_strdup_nul(const struct mg_str s) {
   return mg_strdup_common(s, 1 /* NUL-terminate */);
 }
 
+const char *mg_strchr(const struct mg_str s, int c) WEAK;
+const char *mg_strchr(const struct mg_str s, int c) {
+  size_t i;
+  for (i = 0; i < s.len; i++) {
+    if (s.p[i] == c) return &s.p[i];
+  }
+  return NULL;
+}
+
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2) WEAK;
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
   size_t i = 0;
