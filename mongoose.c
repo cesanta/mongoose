@@ -14636,17 +14636,20 @@ static int mg_lwip_udp_send(struct mg_connection *nc, const void *data,
   }
   struct udp_pcb *upcb = cs->pcb.udp;
   struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, len, PBUF_RAM);
-  ip_addr_t *ip = (ip_addr_t *) &nc->sa.sin.sin_addr.s_addr;
+#if defined(LWIP_IPV4) && LWIP_IPV4 && defined(LWIP_IPV6) && LWIP_IPV6
+  ip_addr_t ip = { .u_addr.ip4.addr = nc->sa.sin.sin_addr.s_addr, .type = 0 };
+#else
+  ip_addr_t ip = { .addr = nc->sa.sin.sin_addr.s_addr };
+#endif
   u16_t port = ntohs(nc->sa.sin.sin_port);
   if (p == NULL) {
     DBG(("OOM"));
     return 0;
   }
   memcpy(p->payload, data, len);
-  struct udp_sendto_ctx ctx = {.upcb = upcb, .p = p, .ip = ip, .port = port};
+  struct udp_sendto_ctx ctx = {.upcb = upcb, .p = p, .ip = &ip, .port = port};
   tcpip_callback(udp_sendto_tcpip, &ctx);
   cs->err = ctx.ret;
-  DBG(("%p udp_sendto = %d", nc, cs->err));
   pbuf_free(p);
   return (cs->err == ERR_OK ? len : -1);
 }
