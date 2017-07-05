@@ -10636,10 +10636,10 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
         break;
       }
       if (RegOpenKeyExW(hKey, subkey, 0, KEY_READ, &hSub) == ERROR_SUCCESS &&
-          (RegQueryValueExW(hSub, L"NameServer", 0, &type, (void *) value,
-                            &len) == ERROR_SUCCESS ||
-           RegQueryValueExW(hSub, L"DhcpNameServer", 0, &type, (void *) value,
-                            &len) == ERROR_SUCCESS)) {
+          ((RegQueryValueExW(hSub, L"NameServer", 0, &type, (void *) value,
+                            &len) == ERROR_SUCCESS && value[0] != '\0' ) ||
+           (RegQueryValueExW(hSub, L"DhcpNameServer", 0, &type, (void *) value,
+                            &len) == ERROR_SUCCESS && value[0] != '\0' ))) {
         /*
          * See https://github.com/cesanta/mongoose/issues/176
          * The value taken from the registry can be empty, a single
@@ -10648,9 +10648,6 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
          * If it's multiple IP addresses, take the first one.
          */
         wchar_t *comma = wcschr(value, ',');
-        if (value[0] == '\0') {
-          continue;
-        }
         if (comma != NULL) {
           *comma = '\0';
         }
