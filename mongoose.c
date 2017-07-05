@@ -4198,6 +4198,21 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
     return MG_SSL_ERROR;
   }
 
+#ifndef KR_VERSION
+  /* Disable deprecated protocols. */
+  SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2);
+  SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv3);
+  SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1);
+#ifdef MG_SSL_OPENSSL_NO_COMPRESSION
+  SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_COMPRESSION);
+#endif
+#ifdef MG_SSL_OPENSSL_CIPHER_SERVER_PREFERENCE
+  SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
+#endif
+#else
+/* Krypton only supports TLSv1.2 anyway. */
+#endif
+
   if (params->cert != NULL &&
       mg_use_cert(ctx->ssl_ctx, params->cert, params->key, err_msg) !=
           MG_SSL_OK) {
