@@ -1481,6 +1481,20 @@ int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n) {
   }
   return mg_strcmp(s1, s2);
 }
+
+const char *mg_strstr(const struct mg_str haystack,
+                      const struct mg_str needle) WEAK;
+const char *mg_strstr(const struct mg_str haystack,
+                      const struct mg_str needle) {
+  size_t i;
+  if (needle.len > haystack.len) return NULL;
+  for (i = 0; i <= haystack.len - needle.len; i++) {
+    if (memcmp(haystack.p + i, needle.p, needle.len) == 0) {
+      return haystack.p + i;
+    }
+  }
+  return NULL;
+}
 #ifdef MG_MODULE_LINES
 #line 1 "common/str_util.c"
 #endif
