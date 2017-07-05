@@ -10648,9 +10648,6 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
          * If it's multiple IP addresses, take the first one.
          */
         wchar_t *comma = wcschr(value, ',');
-        if (value[0] == '\0') {
-          continue;
-        }
         if (comma != NULL) {
           *comma = '\0';
         }
