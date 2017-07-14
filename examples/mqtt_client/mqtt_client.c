@@ -27,10 +27,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
   struct mg_mqtt_message *msg = (struct mg_mqtt_message *) p;
   (void) nc;
 
-#if 0
-  if (ev != MG_EV_POLL)
-    printf("USER HANDLER GOT %d\n", ev);
-#endif
+  if (ev != MG_EV_POLL) printf("USER HANDLER GOT EVENT %d\n", ev);
 
   switch (ev) {
     case MG_EV_CONNECT: {
