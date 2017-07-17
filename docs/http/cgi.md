@@ -16,7 +16,7 @@ CGI file must be executable. Mongoose honours the shebang line - see
 http://en.wikipedia.org/wiki/Shebang_(Unix).
 
 For example, if both PHP and Perl CGIs are used, then
-``#!/path/to/php-cgi.exe` and ``#!/path/to/perl.exe` must be the first lines
+`#!/path/to/php-cgi.exe` and `#!/path/to/perl.exe` must be the first lines
 of the respective CGI scripts.
 
 It is possible to hardcode the path to the CGI interpreter for all
