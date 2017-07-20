@@ -7919,6 +7919,9 @@ struct mg_connection *mg_connect_http_base(
     goto out;
   }
 
+  /* If query is present, do not strip it. Pass to the caller. */
+  if (query.len > 0) path->len += query.len + 1;
+
   if (scheme.len == 0 || mg_vcmp(&scheme, scheme1) == 0 ||
       (scheme2 != NULL && mg_vcmp(&scheme, scheme2) == 0)) {
     use_ssl = 0;
