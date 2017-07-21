@@ -5330,6 +5330,7 @@ struct mg_http_proto_data {
   struct mg_http_endpoint *endpoints;
   mg_event_handler_t endpoint_handler;
   struct mg_reverse_proxy_data reverse_proxy_data;
+  size_t rcvd; /* How many bytes we have received. */
 };
 
 static void mg_http_conn_destructor(void *proto_data);
@@ -5839,6 +5840,16 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
 static void mg_http_call_endpoint_handler(struct mg_connection *nc, int ev,
                                           struct http_message *hm);
 
+static void deliver_chunk(struct mg_connection *c, struct http_message *hm,
+                          int req_len) {
+  /* Incomplete message received. Send MG_EV_HTTP_CHUNK event */
+  hm->body.len = c->recv_mbuf.len - req_len;
+  c->flags &= ~MG_F_DELETE_CHUNK;
+  mg_call(c, c->handler, c->user_data, MG_EV_HTTP_CHUNK, hm);
+  /* Delete processed data if user set MG_F_DELETE_CHUNK flag */
+  if (c->flags & MG_F_DELETE_CHUNK) c->recv_mbuf.len = req_len;
+}
+
 /*
  * lx106 compiler has a bug (TODO(mkm) report and insert tracking bug here)
  * If a big structure is declared in a big function, lx106 gcc will make it
@@ -5861,8 +5872,7 @@ static void mg_http_handler2(struct mg_connection *nc, int ev,
 #else  /* !__XTENSA__ */
 void mg_http_handler(struct mg_connection *nc, int ev,
                      void *ev_data MG_UD_ARG(void *user_data)) {
-  struct http_message shm;
-  struct http_message *hm = &shm;
+  struct http_message shm, *hm = &shm;
 #endif /* __XTENSA__ */
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   struct mbuf *io = &nc->recv_mbuf;
@@ -5898,7 +5908,8 @@ void mg_http_handler(struct mg_connection *nc, int ev,
               nc->user_data, MG_EV_HTTP_MULTIPART_REQUEST_END, &mp);
     } else
 #endif
-        if (io->len > 0 && mg_parse_http(io->buf, io->len, hm, is_req) > 0) {
+        if (io->len > 0 &&
+            (req_len = mg_parse_http(io->buf, io->len, hm, is_req)) > 0) {
       /*
       * For HTTP messages without Content-Length, always send HTTP message
       * before MG_EV_CLOSE message.
@@ -5906,8 +5917,10 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       int ev2 = is_req ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
       hm->message.len = io->len;
       hm->body.len = io->buf + io->len - hm->body.p;
+      deliver_chunk(nc, hm, req_len);
       mg_http_call_endpoint_handler(nc, ev2, hm);
     }
+    pd->rcvd = 0;
   }
 
 #if MG_ENABLE_FILESYSTEM
@@ -5920,6 +5933,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
 
   if (ev == MG_EV_RECV) {
     struct mg_str *s;
+    pd->rcvd += *(int *) ev_data;
 
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
     if (pd->mp_stream.boundary != NULL) {
@@ -5999,19 +6013,24 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       }
     }
 #endif /* MG_ENABLE_HTTP_WEBSOCKET */
-    else if (hm->message.len <= io->len) {
+    else if (hm->message.len > pd->rcvd) {
+      /* Not yet received all HTTP body, deliver MG_EV_HTTP_CHUNK */
+      deliver_chunk(nc, hm, req_len);
+    } else {
+      /* We did receive all HTTP body. */
       int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
       char addr[32];
       mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
                           MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT);
       DBG(("%p %s %.*s %.*s", nc, addr, (int) hm->method.len, hm->method.p,
            (int) hm->uri.len, hm->uri.p));
+      deliver_chunk(nc, hm, req_len);
       /* Whole HTTP message is fully buffered, call event handler */
       mg_http_call_endpoint_handler(nc, trigger_ev, hm);
       mbuf_remove(io, hm->message.len);
+      pd->rcvd = 0;
     }
   }
-  (void) pd;
 }
 
 static size_t mg_get_line_len(const char *buf, size_t buf_len) {
