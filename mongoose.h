@@ -4077,6 +4077,14 @@ void mg_mbuf_append_base64(struct mbuf *mbuf, const void *data, size_t len);
 void mg_basic_auth_header(const struct mg_str user, const struct mg_str pass,
                           struct mbuf *buf);
 
+/*
+ * URL-escape the specified string.
+ * All non-printable characters are escaped, plus `._-$,;~()/`.
+ * Input need not be NUL-terminated, but the returned string is.
+ * Returned string is heap-allocated and must be free()'d.
+ */
+struct mg_str mg_url_encode(const struct mg_str src);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

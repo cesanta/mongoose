@@ -7033,28 +7033,6 @@ static int mg_http_is_authorized(struct http_message *hm,
 #endif
 
 #if MG_ENABLE_DIRECTORY_LISTING
-static size_t mg_url_encode(const char *src, size_t s_len, char *dst,
-                            size_t dst_len) {
-  static const char *dont_escape = "._-$,;~()/";
-  static const char *hex = "0123456789abcdef";
-  size_t i = 0, j = 0;
-
-  for (i = j = 0; dst_len > 0 && i < s_len && j + 2 < dst_len - 1; i++, j++) {
-    if (isalnum(*(const unsigned char *) (src + i)) ||
-        strchr(dont_escape, *(const unsigned char *) (src + i)) != NULL) {
-      dst[j] = src[i];
-    } else if (j + 3 < dst_len) {
-      dst[j] = '%';
-      dst[j + 1] = hex[(*(const unsigned char *) (src + i)) >> 4];
-      dst[j + 2] = hex[(*(const unsigned char *) (src + i)) & 0xf];
-      j += 2;
-    }
-  }
-
-  dst[j] = '\0';
-  return j;
-}
-
 static void mg_escape(const char *src, char *dst, size_t dst_len) {
   size_t n = 0;
   while (*src != '\0' && n + 5 < dst_len) {
@@ -7070,10 +7048,11 @@ static void mg_escape(const char *src, char *dst, size_t dst_len) {
 
 static void mg_print_dir_entry(struct mg_connection *nc, const char *file_name,
                                cs_stat_t *stp) {
-  char size[64], mod[64], href[MG_MAX_PATH * 3], path[MG_MAX_PATH];
+  char size[64], mod[64], path[MG_MAX_PATH];
   int64_t fsize = stp->st_size;
   int is_dir = S_ISDIR(stp->st_mode);
   const char *slash = is_dir ? "/" : "";
+  struct mg_str href;
 
   if (is_dir) {
     snprintf(size, sizeof(size), "%s", "[DIRECTORY]");
@@ -7094,12 +7073,13 @@ static void mg_print_dir_entry(struct mg_connection *nc, const char *file_name,
   }
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&stp->st_mtime));
   mg_escape(file_name, path, sizeof(path));
-  mg_url_encode(file_name, strlen(file_name), href, sizeof(href));
+  href = mg_url_encode(mg_mk_str(file_name));
   mg_printf_http_chunk(nc,
                        "<tr><td><a href=\"%s%s\">%s%s</a></td>"
                        "<td>%s</td><td name=%" INT64_FMT ">%s</td></tr>\n",
-                       href, slash, path, slash, mod, is_dir ? -1 : fsize,
+                       href.p, slash, path, slash, mod, is_dir ? -1 : fsize,
                        size);
+  free((void *) href.p);
 }
 
 static void mg_scan_directory(struct mg_connection *nc, const char *dir,
@@ -8865,10 +8845,10 @@ static int mg_mkdir(const char *path, uint32_t mode) {
 
 static void mg_print_props(struct mg_connection *nc, const char *name,
                            cs_stat_t *stp) {
-  char mtime[64], buf[MG_MAX_PATH * 3];
+  char mtime[64];
   time_t t = stp->st_mtime; /* store in local variable for NDK compile */
+  struct mg_str name_esc = mg_url_encode(mg_mk_str(name));
   mg_gmt_time_string(mtime, sizeof(mtime), &t);
-  mg_url_encode(name, strlen(name), buf, sizeof(buf));
   mg_printf(nc,
             "<d:response>"
             "<d:href>%s</d:href>"
@@ -8882,8 +8862,9 @@ static void mg_print_props(struct mg_connection *nc, const char *name,
             "<d:status>HTTP/1.1 200 OK</d:status>"
             "</d:propstat>"
             "</d:response>\n",
-            buf, S_ISDIR(stp->st_mode) ? "<d:collection/>" : "",
+            name_esc.p, S_ISDIR(stp->st_mode) ? "<d:collection/>" : "",
             (int64_t) stp->st_size, mtime);
+  free((void *) name_esc.p);
 }
 
 MG_INTERNAL void mg_handle_propfind(struct mg_connection *nc, const char *path,
@@ -9822,6 +9803,28 @@ void mg_basic_auth_header(const struct mg_str user, const struct mg_str pass,
   }
   cs_base64_finish(&ctx);
   mbuf_append(buf, header_suffix, strlen(header_suffix));
+}
+
+struct mg_str mg_url_encode(const struct mg_str src) {
+  static const char *dont_escape = "._-$,;~()/";
+  static const char *hex = "0123456789abcdef";
+  size_t i = 0;
+  struct mbuf mb;
+  mbuf_init(&mb, src.len);
+
+  for (i = 0; i < src.len; i++) {
+    const unsigned char c = *((const unsigned char *) src.p + i);
+    if (isalnum(c) || strchr(dont_escape, c) != NULL) {
+      mbuf_append(&mb, &c, 1);
+    } else {
+      mbuf_append(&mb, "%", 1);
+      mbuf_append(&mb, &hex[c >> 4], 1);
+      mbuf_append(&mb, &hex[c & 15], 1);
+    }
+  }
+  mbuf_append(&mb, "", 1);
+  mbuf_trim(&mb);
+  return mg_mk_str_n(mb.buf, mb.len - 1);
 }
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mqtt.c"
