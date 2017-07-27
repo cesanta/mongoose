@@ -165,6 +165,10 @@ MG_INTERNAL int mg_sntp_parse_reply(const char *buf, int len,
 #ifndef CS_COMMON_MG_MEM_H_
 #define CS_COMMON_MG_MEM_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef MG_MALLOC
 #define MG_MALLOC malloc
 #endif
@@ -179,6 +183,10 @@ MG_INTERNAL int mg_sntp_parse_reply(const char *buf, int len,
 
 #ifndef MG_FREE
 #define MG_FREE free
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif /* CS_COMMON_MG_MEM_H_ */
@@ -782,6 +790,10 @@ double cs_time(void) {
 #ifndef CS_COMMON_CS_ENDIAN_H_
 #define CS_COMMON_CS_ENDIAN_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * clang with std=-c99 uses __LITTLE_ENDIAN, by default
  * while for ex, RTOS gcc - LITTLE_ENDIAN, by default
@@ -796,6 +808,10 @@ double cs_time(void) {
 #define BIG_ENDIAN __LITTLE_ENDIAN
 #endif /* BIG_ENDIAN */
 #endif /* BYTE_ORDER */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* CS_COMMON_CS_ENDIAN_H_ */
 #ifdef MG_MODULE_LINES
