@@ -14500,6 +14500,7 @@ static void tcp_close_tcpip(void *arg) {
 
 void mg_lwip_handle_accept(struct mg_connection *nc) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
+  if (cs->pcb.tcp == NULL) return;
 #if MG_ENABLE_SSL
   if (cs->lc->flags & MG_F_SSL) {
     if (mg_ssl_if_conn_accept(nc, cs->lc) != MG_SSL_OK) {
