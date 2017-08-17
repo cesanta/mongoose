@@ -15726,3 +15726,23 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_PIC32_IFACE_VTABLE;
 #endif
 
 #endif /* MG_ENABLE_NET_IF_PIC32 */
+#ifdef MG_MODULE_LINES
+#line 1 "common/platforms/windows/windows_direct.c"
+#endif
+/*
+ * Copyright (c) 2017 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifdef _WIN32
+
+int rmdir(const char *dirname) {
+  return _rmdir(dirname);
+}
+
+unsigned int sleep(unsigned int seconds) {
+  Sleep(seconds * 1000);
+  return 0;
+}
+
+#endif /* _WIN32 */

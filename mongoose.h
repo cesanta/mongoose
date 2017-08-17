@@ -223,14 +223,12 @@
 #endif
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
-#define sleep(x) Sleep((x) *1000)
 #define to64(x) _atoi64(x)
 #if !defined(__MINGW32__) && !defined(__MINGW64__)
 #define popen(x, y) _popen((x), (y))
 #define pclose(x) _pclose(x)
 #define fileno _fileno
 #endif
-#define rmdir _rmdir
 #if defined(_MSC_VER) && _MSC_VER >= 1400
 #define fseeko(x, y, z) _fseeki64((x), (y), (z))
 #else
@@ -320,6 +318,9 @@ typedef struct _stati64 cs_stat_t;
 #ifndef MG_NET_IF
 #define MG_NET_IF MG_NET_IF_SOCKET
 #endif
+
+int rmdir(const char *dirname);
+unsigned int sleep(unsigned int seconds);
 
 #endif /* CS_PLATFORM == CS_P_WINDOWS */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_WINDOWS_H_ */
