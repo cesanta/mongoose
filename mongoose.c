@@ -14195,7 +14195,7 @@ void mg_lwip_if_add_conn(struct mg_connection *nc);
 void mg_lwip_if_remove_conn(struct mg_connection *nc);
 time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms);
 
-#ifdef RTOS_SDK
+#if defined(RTOS_SDK) || defined(ESP_PLATFORM)
 extern void mgos_lock();
 extern void mgos_unlock();
 #else
