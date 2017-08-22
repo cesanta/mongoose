@@ -4871,6 +4871,18 @@ int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
                               FILE *fp);
 
 /*
+ * Authenticates given response params against an opened password file.
+ * Returns 1 if authenticated, 0 otherwise.
+ *
+ * It's used by mg_http_check_digest_auth().
+ */
+int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
+                         struct mg_str username, struct mg_str cnonce,
+                         struct mg_str response, struct mg_str qop,
+                         struct mg_str nc, struct mg_str nonce,
+                         struct mg_str auth_domain, FILE *fp);
+
+/*
  * Sends buffer `buf` of size `len` to the client using chunked HTTP encoding.
  * This function sends the buffer size as hex number + newline first, then
  * the buffer itself, then the newline. For example,

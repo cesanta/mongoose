@@ -6973,14 +6973,13 @@ static int mg_check_nonce(const char *nonce) {
 int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
                               FILE *fp) {
   struct mg_str *hdr;
-  char buf[128], f_user[sizeof(buf)], f_ha1[sizeof(buf)], f_domain[sizeof(buf)];
-  char user[50], cnonce[64], response[40], uri[200], qop[20], nc[20], nonce[30];
-  char expected_response[33];
+  char username[50], cnonce[64], response[40], uri[200], qop[20], nc[20],
+      nonce[30];
 
   /* Parse "Authorization:" header, fail fast on parse error */
   if (hm == NULL || fp == NULL ||
       (hdr = mg_get_http_header(hm, "Authorization")) == NULL ||
-      mg_http_parse_header(hdr, "username", user, sizeof(user)) == 0 ||
+      mg_http_parse_header(hdr, "username", username, sizeof(username)) == 0 ||
       mg_http_parse_header(hdr, "cnonce", cnonce, sizeof(cnonce)) == 0 ||
       mg_http_parse_header(hdr, "response", response, sizeof(response)) == 0 ||
       mg_http_parse_header(hdr, "uri", uri, sizeof(uri)) == 0 ||
@@ -6991,6 +6990,26 @@ int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
     return 0;
   }
 
+  /* NOTE(lsm): due to a bug in MSIE, we do not compare URIs */
+
+  return mg_check_digest_auth(
+      hm->method,
+      mg_mk_str_n(
+          hm->uri.p,
+          hm->uri.len + (hm->query_string.len ? hm->query_string.len + 1 : 0)),
+      mg_mk_str(username), mg_mk_str(cnonce), mg_mk_str(response),
+      mg_mk_str(qop), mg_mk_str(nc), mg_mk_str(nonce), mg_mk_str(auth_domain),
+      fp);
+}
+
+int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
+                         struct mg_str username, struct mg_str cnonce,
+                         struct mg_str response, struct mg_str qop,
+                         struct mg_str nc, struct mg_str nonce,
+                         struct mg_str auth_domain, FILE *fp) {
+  char buf[128], f_user[sizeof(buf)], f_ha1[sizeof(buf)], f_domain[sizeof(buf)];
+  char expected_response[33];
+
   /*
    * Read passwords file line by line. If should have htdigest format,
    * i.e. each line should be a colon-separated sequence:
@@ -6998,18 +7017,16 @@ int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
    */
   while (fgets(buf, sizeof(buf), fp) != NULL) {
     if (sscanf(buf, "%[^:]:%[^:]:%s", f_user, f_domain, f_ha1) == 3 &&
-        strcmp(user, f_user) == 0 &&
-        /* NOTE(lsm): due to a bug in MSIE, we do not compare URIs */
-        strcmp(auth_domain, f_domain) == 0) {
-      /* User and domain matched, check the password */
-      mg_mkmd5resp(
-          hm->method.p, hm->method.len, hm->uri.p,
-          hm->uri.len + (hm->query_string.len ? hm->query_string.len + 1 : 0),
-          f_ha1, strlen(f_ha1), nonce, strlen(nonce), nc, strlen(nc), cnonce,
-          strlen(cnonce), qop, strlen(qop), expected_response);
+        mg_vcmp(&username, f_user) == 0 &&
+        mg_vcmp(&auth_domain, f_domain) == 0) {
+      /* Username and domain matched, check the password */
+      mg_mkmd5resp(method.p, method.len, uri.p, uri.len, f_ha1, strlen(f_ha1),
+                   nonce.p, nonce.len, nc.p, nc.len, cnonce.p, cnonce.len,
+                   qop.p, qop.len, expected_response);
       LOG(LL_DEBUG,
-          ("%s %s %s %s", user, f_domain, response, expected_response));
-      return mg_casecmp(response, expected_response) == 0;
+          ("%.*s %s %.*s %s", (int) username.len, username.p, f_domain,
+           (int) response.len, response.p, expected_response));
+      return mg_ncasecmp(response.p, expected_response, response.len) == 0;
     }
   }
 

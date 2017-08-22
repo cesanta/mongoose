@@ -3,6 +3,7 @@ title: "Server API reference"
 symbol_kind: "intro"
 decl_name: "http_server.h"
 items:
+  - { name: mg_check_digest_auth.md }
   - { name: mg_file_upload_handler.md }
   - { name: mg_get_http_basic_auth.md }
   - { name: mg_get_http_header.md }
