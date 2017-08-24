@@ -34,9 +34,9 @@
 #define MG_DISABLE_PFS
 #endif
 
-/* Amalgamated: #include "mongoose/src/net.h" */
-/* Amalgamated: #include "mongoose/src/http.h" */
 /* Amalgamated: #include "common/cs_dbg.h" */
+/* Amalgamated: #include "mongoose/src/http.h" */
+/* Amalgamated: #include "mongoose/src/net.h" */
 
 #define MG_CTL_MSG_MESSAGE_SIZE 8192
 
@@ -140,7 +140,8 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
 MG_INTERNAL void mg_ws_handler(struct mg_connection *nc, int ev,
                                void *ev_data MG_UD_ARG(void *user_data));
 MG_INTERNAL void mg_ws_handshake(struct mg_connection *nc,
-                                 const struct mg_str *key);
+                                 const struct mg_str *key,
+                                 struct http_message *);
 #endif
 #endif /* MG_ENABLE_HTTP */
 
@@ -6021,7 +6022,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
               hm);
       if (!(nc->flags & (MG_F_CLOSE_IMMEDIATELY | MG_F_SEND_AND_CLOSE))) {
         if (nc->send_mbuf.len == 0) {
-          mg_ws_handshake(nc, vec);
+          mg_ws_handshake(nc, vec, hm);
         }
         mg_call(nc, nc->handler, nc->user_data, MG_EV_WEBSOCKET_HANDSHAKE_DONE,
                 NULL);
@@ -9164,8 +9165,9 @@ static int mg_deliver_websocket_data(struct mg_connection *nc) {
   unsigned char *p = (unsigned char *) nc->recv_mbuf.buf, *buf = p,
                 *e = p + buf_len;
   unsigned *sizep = (unsigned *) &p[1]; /* Size ptr for defragmented frames */
-  int ok, reass = buf_len > 0 && mg_is_ws_fragment(p[0]) &&
-                  !(nc->flags & MG_F_WEBSOCKET_NO_DEFRAG);
+  int ok;
+  int reass = buf_len > 0 && mg_is_ws_fragment(p[0]) &&
+              !(nc->flags & MG_F_WEBSOCKET_NO_DEFRAG);
 
   /* If that's a continuation frame that must be reassembled, handle it */
   if (reass && !mg_is_ws_first_fragment(p[0]) &&
@@ -9418,21 +9420,28 @@ extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
 #endif
 
 MG_INTERNAL void mg_ws_handshake(struct mg_connection *nc,
-                                 const struct mg_str *key) {
+                                 const struct mg_str *key,
+                                 struct http_message *hm) {
   static const char *magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
   const uint8_t *msgs[2] = {(const uint8_t *) key->p, (const uint8_t *) magic};
   const size_t msg_lens[2] = {key->len, 36};
   unsigned char sha[20];
   char b64_sha[30];
+  struct mg_str *s;
 
   mg_hash_sha1_v(2, msgs, msg_lens, sha);
   mg_base64_encode(sha, sizeof(sha), b64_sha);
-  mg_printf(nc, "%s%s%s",
+  mg_printf(nc, "%s",
             "HTTP/1.1 101 Switching Protocols\r\n"
             "Upgrade: websocket\r\n"
-            "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: ",
-            b64_sha, "\r\n\r\n");
+            "Connection: Upgrade\r\n");
+
+  s = mg_get_http_header(hm, "Sec-WebSocket-Protocol");
+  if (s != NULL) {
+    mg_printf(nc, "Sec-WebSocket-Protocol: %.*s\r\n", (int) s->len, s->p);
+  }
+  mg_printf(nc, "Sec-WebSocket-Accept: %s%s", b64_sha, "\r\n\r\n");
+
   DBG(("%p %.*s %s", nc, (int) key->len, key->p, b64_sha));
 }
 
@@ -9996,7 +10005,8 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       break;
   }
 
-  return end - io->buf;
+  mm->len = end - io->buf;
+  return mm->len;
 }
 
 static void mqtt_handler(struct mg_connection *nc, int ev,
@@ -10008,6 +10018,9 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
   nc->handler(nc, ev, ev_data MG_UD_ARG(user_data));
 
   switch (ev) {
+    case MG_EV_ACCEPT:
+      if (nc->proto_data == NULL) mg_set_protocol_mqtt(nc);
+      break;
     case MG_EV_RECV: {
       /* There can be multiple messages in the buffer, process them all. */
       while (1) {
@@ -10027,6 +10040,7 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
         LOG(LL_DEBUG, ("Send PINGREQ"));
         mg_mqtt_ping(nc);
       }
+      break;
     }
   }
 }
@@ -10438,7 +10452,7 @@ void mg_mqtt_broker(struct mg_connection *nc, int ev, void *data) {
 
   switch (ev) {
     case MG_EV_ACCEPT:
-      mg_set_protocol_mqtt(nc);
+      if (nc->proto_data == NULL) mg_set_protocol_mqtt(nc);
       nc->user_data = NULL; /* Clear up the inherited pointer to broker */
       break;
     case MG_EV_MQTT_CONNECT:

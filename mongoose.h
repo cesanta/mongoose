@@ -5087,6 +5087,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
 struct mg_mqtt_message {
   int cmd;
   int qos;
+  int len; /* message length in the IO buffer */
   struct mg_str topic;
   struct mg_str payload;
 
