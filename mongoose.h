@@ -66,8 +66,10 @@
 
 #if defined(TARGET_IS_MSP432P4XX) || defined(__MSP432P401R__)
 #define CS_PLATFORM CS_P_MSP432
-#elif defined(cc3200)
+#elif defined(cc3200) || defined(TARGET_IS_CC3200)
 #define CS_PLATFORM CS_P_CC3200
+#elif defined(cc3220) || defined(TARGET_IS_CC3220)
+#define CS_PLATFORM CS_P_CC3220
 #elif defined(__unix__) || defined(__APPLE__)
 #define CS_PLATFORM CS_P_UNIX
 #elif defined(WINCE)
@@ -1103,9 +1105,10 @@ int gettimeofday(struct timeval *tp, void *tzp);
 #ifndef CS_COMMON_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_
 #define CS_COMMON_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_
 
+#if defined(MG_NET_IF) && MG_NET_IF == MG_NET_IF_SIMPLELINK
+
 /* If simplelink.h is already included, all bets are off. */
-#if defined(MG_NET_IF) && MG_NET_IF == MG_NET_IF_SIMPLELINK && \
-    !defined(__SIMPLELINK_H__)
+#if !defined(__SIMPLELINK_H__)
 
 #include <stdbool.h>
 
@@ -1122,6 +1125,7 @@ int gettimeofday(struct timeval *tp, void *tzp);
 #if CS_PLATFORM == CS_P_CC3220
 #include <ti/drivers/net/wifi/porting/user.h>
 #include <ti/drivers/net/wifi/simplelink.h>
+#include <ti/drivers/net/wifi/sl_socket.h>
 #include <ti/drivers/net/wifi/netapp.h>
 #else
 /* We want to disable SL_INC_STD_BSD_API_NAMING, so we include user.h ourselves
@@ -1202,7 +1206,22 @@ int sl_set_ssl_opts(struct mg_connection *nc);
 }
 #endif
 
-#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK && !defined(__SIMPLELINK_H__) */
+#endif /* !defined(__SIMPLELINK_H__) */
+
+/* COmpatibility with older versions of SimpleLink */
+#if SL_MAJOR_VERSION_NUM < 2
+#define SL_ERROR_BSD_EAGAIN SL_EAGAIN
+#define SL_ERROR_BSD_EALREADY SL_EALREADY
+#define SL_ERROR_BSD_ENOPROTOOPT SL_ENOPROTOOPT
+#define SL_ERROR_BSD_ESECDATEERROR SL_ESECDATEERROR
+#define SL_ERROR_BSD_ESECSNOVERIFY SL_ESECSNOVERIFY
+#define SL_SOCKET_FD_ZERO SL_FD_ZERO
+#define SL_SOCKET_FD_SET SL_FD_SET
+#define SL_SOCKET_FD_ISSET SL_FD_ISSET
+#define SL_SO_SECURE_DOMAIN_NAME_VERIFICATION SO_SECURE_DOMAIN_NAME_VERIFICATION
+#endif
+
+#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK */
 
 #endif /* CS_COMMON_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_ */
 #ifdef MG_MODULE_LINES
