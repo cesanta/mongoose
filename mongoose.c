@@ -1926,19 +1926,30 @@ const char *mg_next_comma_list_entry(const char *, struct mg_str *,
                                      struct mg_str *) WEAK;
 const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
                                      struct mg_str *eq_val) {
-  if (list == NULL || *list == '\0') {
+  struct mg_str ret = mg_next_comma_list_entry_n(mg_mk_str(list), val, eq_val);
+  return ret.p;
+}
+
+struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
+                                         struct mg_str *eq_val) WEAK;
+struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
+                                         struct mg_str *eq_val) {
+  if (list.len == 0) {
     /* End of the list */
-    list = NULL;
+    list = mg_mk_str(NULL);
   } else {
-    val->p = list;
-    if ((list = strchr(val->p, ',')) != NULL) {
+    const char *chr = NULL;
+    *val = list;
+
+    if ((chr = mg_strchr(*val, ',')) != NULL) {
       /* Comma found. Store length and shift the list ptr */
-      val->len = list - val->p;
-      list++;
+      val->len = chr - val->p;
+      chr++;
+      list.len -= (chr - list.p);
+      list.p = chr;
     } else {
       /* This value is the last one */
-      list = val->p + strlen(val->p);
-      val->len = list - val->p;
+      list = mg_mk_str_n(list.p + list.len, 0);
     }
 
     if (eq_val != NULL) {
