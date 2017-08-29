@@ -12505,28 +12505,6 @@ time_t HOSTtime() {
 
 #endif /* __TI_COMPILER_VERSION__ */
 
-#ifndef __TI_COMPILER_VERSION__
-int _gettimeofday_r(struct _reent *r, struct timeval *tp, void *tz) {
-#else
-int gettimeofday(struct timeval *tp, void *tz) {
-#endif
-  unsigned long sec;
-  unsigned short msec;
-  MAP_PRCMRTCGet(&sec, &msec);
-  tp->tv_sec = sec;
-  tp->tv_usec = ((unsigned long) msec) * 1000;
-  return 0;
-}
-
-#ifndef __TI_COMPILER_VERSION__
-int settimeofday(const struct timeval *tv, const struct timezone *tz) {
-#else
-int settimeofday(const struct timeval *tv, const void *tz) {
-#endif
-  MAP_PRCMRTCSet(tv->tv_sec, tv->tv_usec / 1000);
-  return 0;
-}
-
 void fprint_str(FILE *fp, const char *str) {
   while (*str != '\0') {
     if (*str == '\n') MAP_UARTCharPut(CONSOLE_UART, '\r');

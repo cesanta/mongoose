@@ -294,3 +294,16 @@ void SimpleLinkGeneralEventHandler(SlDeviceEvent_t *e) {
   LOG(LL_ERROR, ("status %d sender %d", e->EventData.deviceEvent.status,
                  e->EventData.deviceEvent.sender));
 }
+
+#ifndef __TI_COMPILER_VERSION__
+int _gettimeofday_r(struct _reent *r, struct timeval *tp, void *tz) {
+#else
+int gettimeofday(struct timeval *tp, void *tz) {
+#endif
+  unsigned long sec;
+  unsigned short msec;
+  MAP_PRCMRTCGet(&sec, &msec);
+  tp->tv_sec = sec;
+  tp->tv_usec = ((unsigned long) msec) * 1000;
+  return 0;
+}

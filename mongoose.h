@@ -1208,7 +1208,7 @@ int sl_set_ssl_opts(struct mg_connection *nc);
 
 #endif /* !defined(__SIMPLELINK_H__) */
 
-/* COmpatibility with older versions of SimpleLink */
+/* Compatibility with older versions of SimpleLink */
 #if SL_MAJOR_VERSION_NUM < 2
 #define SL_ERROR_BSD_EAGAIN SL_EAGAIN
 #define SL_ERROR_BSD_EALREADY SL_EALREADY
@@ -1219,6 +1219,13 @@ int sl_set_ssl_opts(struct mg_connection *nc);
 #define SL_SOCKET_FD_SET SL_FD_SET
 #define SL_SOCKET_FD_ISSET SL_FD_ISSET
 #define SL_SO_SECURE_DOMAIN_NAME_VERIFICATION SO_SECURE_DOMAIN_NAME_VERIFICATION
+
+#define SlDeviceVersion_t SlVersionFull
+#define sl_DeviceGet sl_DevGet
+#define SL_DEVICE_GENERAL SL_DEVICE_GENERAL_CONFIGURATION
+#define SL_DEV_GET_LEN_TYPE _u8
+#else
+#define SL_DEV_GET_LEN_TYPE _u16
 #endif
 
 #endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK */
