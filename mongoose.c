@@ -9956,19 +9956,31 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   switch (cmd) {
     case MG_MQTT_CMD_CONNECT: {
       p = scanto(p, &mm->protocol_name);
+      if (p > end - 4) return -2;
       mm->protocol_version = *(uint8_t *) p++;
       mm->connect_flags = *(uint8_t *) p++;
       mm->keep_alive_timer = getu16(p);
       p += 2;
-      if (p < end) p = scanto(p, &mm->client_id);
-      if (p < end && (mm->connect_flags & MG_MQTT_HAS_WILL))
+      if (p >= end) return -2;
+      p = scanto(p, &mm->client_id);
+      if (p > end) return -2;
+      if (mm->connect_flags & MG_MQTT_HAS_WILL) {
+        if (p >= end) return -2;
         p = scanto(p, &mm->will_topic);
-      if (p < end && (mm->connect_flags & MG_MQTT_HAS_WILL))
+      }
+      if (mm->connect_flags & MG_MQTT_HAS_WILL) {
+        if (p >= end) return -2;
         p = scanto(p, &mm->will_message);
-      if (p < end && (mm->connect_flags & MG_MQTT_HAS_USER_NAME))
+      }
+      if (mm->connect_flags & MG_MQTT_HAS_USER_NAME) {
+        if (p >= end) return -2;
         p = scanto(p, &mm->user_name);
-      if (p < end && (mm->connect_flags & MG_MQTT_HAS_PASSWORD))
+      }
+      if (mm->connect_flags & MG_MQTT_HAS_PASSWORD) {
+        if (p >= end) return -2;
         p = scanto(p, &mm->password);
+      }
+      if (p != end) return -2;
 
       LOG(LL_DEBUG,
           ("%d %2x %d proto [%.*s] client_id [%.*s] will_topic [%.*s] "
@@ -9982,6 +9994,7 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       break;
     }
     case MG_MQTT_CMD_CONNACK:
+      if (end - p < 2) return -2;
       mm->connack_ret_code = p[1];
       break;
     case MG_MQTT_CMD_PUBACK:
@@ -9993,7 +10006,9 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       break;
     case MG_MQTT_CMD_PUBLISH: {
       p = scanto(p, &mm->topic);
+      if (p > end) return -2;
       if (mm->qos > 0) {
+        if (end - p < 2) return -2;
         mm->message_id = getu16(p);
         p += 2;
       }
@@ -10002,6 +10017,7 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       break;
     }
     case MG_MQTT_CMD_SUBSCRIBE:
+      if (end - p < 2) return -2;
       mm->message_id = getu16(p);
       p += 2;
       /*
@@ -10036,7 +10052,12 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
       /* There can be multiple messages in the buffer, process them all. */
       while (1) {
         int len = parse_mqtt(io, &mm);
-        if (len == -1) break; /* not fully buffered */
+        if (len < 0) {
+          if (len == -1) break; /* not fully buffered */
+          /* Protocol error. */
+          nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+          break;
+        }
         nc->handler(nc, MG_MQTT_EVENT_BASE + mm.cmd, &mm MG_UD_ARG(user_data));
         mbuf_remove(io, len);
       }
