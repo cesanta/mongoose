@@ -10234,15 +10234,16 @@ void mg_mqtt_subscribe(struct mg_connection *nc,
 int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
                                  struct mg_str *topic, uint8_t *qos, int pos) {
   unsigned char *buf = (unsigned char *) msg->payload.p + pos;
+  int new_pos;
 
-  if ((size_t) pos >= msg->payload.len) {
-    return -1;
-  }
+  if ((size_t) pos >= msg->payload.len) return -1;
 
   topic->len = buf[0] << 8 | buf[1];
   topic->p = (char *) buf + 2;
   *qos = buf[2 + topic->len];
-  return pos + 2 + topic->len + 1;
+  new_pos = pos + 2 + topic->len + 1;
+  if ((size_t) new_pos > msg->payload.len) return -1;
+  return new_pos;
 }
 
 void mg_mqtt_unsubscribe(struct mg_connection *nc, char **topics,
@@ -10467,13 +10468,28 @@ void mg_mqtt_broker(struct mg_connection *nc, int ev, void *data) {
       nc->user_data = NULL; /* Clear up the inherited pointer to broker */
       break;
     case MG_EV_MQTT_CONNECT:
-      mg_mqtt_broker_handle_connect(brk, nc);
+      if (nc->user_data == NULL) {
+        mg_mqtt_broker_handle_connect(brk, nc);
+      } else {
+        /* Repeated CONNECT */
+        nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      }
       break;
     case MG_EV_MQTT_SUBSCRIBE:
-      mg_mqtt_broker_handle_subscribe(nc, msg);
+      if (nc->user_data != NULL) {
+        mg_mqtt_broker_handle_subscribe(nc, msg);
+      } else {
+        /* Subscribe before CONNECT */
+        nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      }
       break;
     case MG_EV_MQTT_PUBLISH:
-      mg_mqtt_broker_handle_publish(brk, msg);
+      if (nc->user_data != NULL) {
+        mg_mqtt_broker_handle_publish(brk, msg);
+      } else {
+        /* Publish before CONNECT */
+        nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      }
       break;
     case MG_EV_CLOSE:
       if (nc->listener && nc->user_data != NULL) {
