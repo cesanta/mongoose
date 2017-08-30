@@ -12675,11 +12675,21 @@ void fs_slfs_set_new_file_size(const char *name, size_t size);
 #if CS_PLATFORM == CS_P_CC3200
 #include <inc/hw_types.h>
 #endif
-#include <simplelink/include/simplelink.h>
-#include <simplelink/include/fs.h>
 
 /* Amalgamated: #include "common/cs_dbg.h" */
 /* Amalgamated: #include "common/mg_mem.h" */
+
+#if SL_MAJOR_VERSION_NUM < 2
+int slfs_open(const unsigned char *fname, uint32_t flags) {
+  _i32 fh;
+  _i32 r = sl_FsOpen(fname, flags, NULL /* token */, &fh);
+  return (r < 0 ? r : fh);
+}
+#else /* SL_MAJOR_VERSION_NUM >= 2 */
+int slfs_open(const unsigned char *fname, uint32_t flags) {
+  return sl_FsOpen(fname, flags, NULL /* token */);
+}
+#endif
 
 /* From sl_fs.c */
 int set_errno(int e);
@@ -12712,18 +12722,18 @@ static int sl_fs_to_errno(_i32 r) {
   switch (r) {
     case SL_FS_OK:
       return 0;
-    case SL_FS_FILE_NAME_EXIST:
+    case SL_ERROR_FS_FILE_NAME_EXIST:
       return EEXIST;
-    case SL_FS_WRONG_FILE_NAME:
+    case SL_ERROR_FS_WRONG_FILE_NAME:
       return EINVAL;
-    case SL_FS_ERR_NO_AVAILABLE_NV_INDEX:
-    case SL_FS_ERR_NO_AVAILABLE_BLOCKS:
+    case SL_ERROR_FS_NO_AVAILABLE_NV_INDEX:
+    case SL_ERROR_FS_NOT_ENOUGH_STORAGE_SPACE:
       return ENOSPC;
-    case SL_FS_ERR_FAILED_TO_ALLOCATE_MEM:
+    case SL_ERROR_FS_FAILED_TO_ALLOCATE_MEM:
       return ENOMEM;
-    case SL_FS_ERR_FILE_NOT_EXISTS:
+    case SL_ERROR_FS_FILE_NOT_EXISTS:
       return ENOENT;
-    case SL_FS_ERR_NOT_SUPPORTED:
+    case SL_ERROR_FS_NOT_SUPPORTED:
       return ENOTSUP;
   }
   return ENXIO;
@@ -12751,9 +12761,9 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
     SlFsFileInfo_t sl_fi;
     _i32 r = sl_FsGetInfo((const _u8 *) pathname, 0, &sl_fi);
     if (r == SL_FS_OK) {
-      fi->size = sl_fi.FileLen;
+      fi->size = SL_FI_FILE_SIZE(sl_fi);
     }
-    am = FS_MODE_OPEN_READ;
+    am = SL_FS_READ;
   } else {
     if (!(flags & O_TRUNC) || (flags & O_APPEND)) {
       // FailFS files cannot be opened for append and will be truncated
@@ -12773,18 +12783,18 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
       }
       am = FS_MODE_OPEN_CREATE(new_size, 0);
     } else {
-      am = FS_MODE_OPEN_WRITE;
+      am = SL_FS_WRITE;
     }
   }
-  _i32 r = sl_FsOpen((_u8 *) pathname, am, NULL, &fi->fh);
-  LOG(LL_DEBUG, ("sl_FsOpen(%s, 0x%x) sz %u = %d, %d", pathname, (int) am,
-                 (unsigned int) new_size, (int) r, (int) fi->fh));
-  if (r == SL_FS_OK) {
+  fi->fh = slfs_open((_u8 *) pathname, am);
+  LOG(LL_DEBUG, ("sl_FsOpen(%s, 0x%x) sz %u = %d", pathname, (int) am,
+                 (unsigned int) new_size, (int) fi->fh));
+  int r;
+  if (fi->fh >= 0) {
     fi->pos = 0;
     r = fd;
   } else {
-    fi->fh = -1;
-    r = set_errno(sl_fs_to_errno(r));
+    r = set_errno(sl_fs_to_errno(fi->fh));
   }
   return r;
 }
@@ -12838,7 +12848,7 @@ int fs_slfs_stat(const char *pathname, struct stat *s) {
   if (r == SL_FS_OK) {
     s->st_mode = S_IFREG | 0666;
     s->st_nlink = 1;
-    s->st_size = sl_fi.FileLen;
+    s->st_size = SL_FI_FILE_SIZE(sl_fi);
     return 0;
   }
   return set_errno(sl_fs_to_errno(r));
