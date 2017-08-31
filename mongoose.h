@@ -1241,7 +1241,8 @@ int sl_set_ssl_opts(struct mg_connection *nc);
 #define SlDeviceVersion_t SlVersionFull
 #define sl_DeviceGet sl_DevGet
 #define SL_DEVICE_GENERAL SL_DEVICE_GENERAL_CONFIGURATION
-#define SL_DEV_GET_LEN_TYPE _u8
+#define SL_LEN_TYPE _u8
+#define SL_OPT_TYPE _u8
 
 #else /* SL_MAJOR_VERSION_NUM >= 2 */
 
@@ -1250,7 +1251,8 @@ int sl_set_ssl_opts(struct mg_connection *nc);
 #define SL_FI_FILE_SIZE(fi) ((fi).Len)
 #define SL_FI_FILE_MAX_SIZE(fi) ((fi).MaxSize)
 
-#define SL_DEV_GET_LEN_TYPE _u16
+#define SL_LEN_TYPE _u16
+#define SL_OPT_TYPE _u16
 
 #endif /* SL_MAJOR_VERSION_NUM < 2 */
 
