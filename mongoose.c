@@ -13699,7 +13699,15 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
         DBG(("%p conn res=%d", nc, nc->err));
         if (nc->err == SL_ERROR_BSD_ESECSNOVERIFY ||
             /* TODO(rojer): Provide API to set the date for verification. */
-            nc->err == SL_ERROR_BSD_ESECDATEERROR) {
+            nc->err == SL_ERROR_BSD_ESECDATEERROR
+#if SL_MAJOR_VERSION_NUM >= 2
+            /* Per SWRU455, this error does not mean verification failed,
+             * it only means that the cert used is not present in the trusted
+             * root CA catalog. Which is perfectly fine. */
+            ||
+            nc->err == SL_ERROR_BSD_ESECUNKNOWNROOTCA
+#endif
+            ) {
           nc->err = 0;
         }
         if (nc->flags & MG_F_SSL && nc->err == 0) {
