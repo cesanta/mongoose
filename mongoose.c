@@ -8036,7 +8036,7 @@ struct mg_connection *mg_connect_http_opt(
   mg_printf(nc, "%s %.*s HTTP/1.1\r\nHost: %.*s\r\nContent-Length: %" SIZE_T_FMT
                 "\r\n%.*s%s\r\n%s",
             (post_data[0] == '\0' ? "GET" : "POST"), (int) path.len, path.p,
-            (int) host.len, host.p, strlen(post_data), (int) auth.len,
+            (int) (path.p - host.p), host.p, strlen(post_data), (int) auth.len,
             (auth.buf == NULL ? "" : auth.buf), extra_headers, post_data);
 
   mbuf_free(&auth);
@@ -9511,7 +9511,8 @@ void mg_send_websocket_handshake3v(struct mg_connection *nc,
 
   /* TODO(mkm): take default hostname from http proto data if host == NULL */
   if (host.len > 0) {
-    mg_printf(nc, "Host: %.*s\r\n", (int) host.len, host.p);
+    int host_len = (int) (path.p - host.p); /* Account for possible :PORT */
+    mg_printf(nc, "Host: %.*s\r\n", host_len, host.p);
   }
   if (protocol.len > 0) {
     mg_printf(nc, "Sec-WebSocket-Protocol: %.*s\r\n", (int) protocol.len,
