@@ -10424,8 +10424,8 @@ static void mg_mqtt_broker_handle_connect(struct mg_mqtt_broker *brk,
 static void mg_mqtt_broker_handle_subscribe(struct mg_connection *nc,
                                             struct mg_mqtt_message *msg) {
   struct mg_mqtt_session *ss = (struct mg_mqtt_session *) nc->user_data;
-  uint8_t qoss[512];
-  size_t qoss_len = 0;
+  uint8_t qoss[MG_MQTT_MAX_SESSION_SUBSCRIPTIONS];
+  size_t num_subs = 0;
   struct mg_str topic;
   uint8_t qos;
   int pos;
@@ -10433,11 +10433,23 @@ static void mg_mqtt_broker_handle_subscribe(struct mg_connection *nc,
 
   for (pos = 0;
        (pos = mg_mqtt_next_subscribe_topic(msg, &topic, &qos, pos)) != -1;) {
-    qoss[qoss_len++] = qos;
+    if (num_subs >= sizeof(MG_MQTT_MAX_SESSION_SUBSCRIPTIONS) ||
+        (ss->num_subscriptions + num_subs >=
+         MG_MQTT_MAX_SESSION_SUBSCRIPTIONS)) {
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      return;
+    }
+    qoss[num_subs++] = qos;
   }
 
-  ss->subscriptions = (struct mg_mqtt_topic_expression *) MG_REALLOC(
-      ss->subscriptions, sizeof(*ss->subscriptions) * qoss_len);
+  te = (struct mg_mqtt_topic_expression *) MG_REALLOC(
+      ss->subscriptions,
+      sizeof(*ss->subscriptions) * (ss->num_subscriptions + num_subs));
+  if (te == NULL) {
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+    return;
+  }
+  ss->subscriptions = te;
   for (pos = 0;
        (pos = mg_mqtt_next_subscribe_topic(msg, &topic, &qos, pos)) != -1;
        ss->num_subscriptions++) {
@@ -10447,7 +10459,7 @@ static void mg_mqtt_broker_handle_subscribe(struct mg_connection *nc,
     strncpy((char *) te->topic, topic.p, topic.len + 1);
   }
 
-  mg_mqtt_suback(nc, qoss, qoss_len, msg->message_id);
+  mg_mqtt_suback(nc, qoss, num_subs, msg->message_id);
 }
 
 static void mg_mqtt_broker_handle_publish(struct mg_mqtt_broker *brk,

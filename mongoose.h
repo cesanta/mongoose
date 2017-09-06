@@ -5380,7 +5380,9 @@ int mg_mqtt_vmatch_topic_expression(const char *exp, struct mg_str topic);
 extern "C" {
 #endif /* __cplusplus */
 
-#define MG_MQTT_MAX_SESSION_SUBSCRIPTIONS 512;
+#ifndef MG_MQTT_MAX_SESSION_SUBSCRIPTIONS
+#define MG_MQTT_MAX_SESSION_SUBSCRIPTIONS 512
+#endif
 
 struct mg_mqtt_broker;
 
