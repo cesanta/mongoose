@@ -10263,9 +10263,9 @@ int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
 
   topic->len = buf[0] << 8 | buf[1];
   topic->p = (char *) buf + 2;
-  *qos = buf[2 + topic->len];
   new_pos = pos + 2 + topic->len + 1;
   if ((size_t) new_pos > msg->payload.len) return -1;
+  *qos = buf[2 + topic->len];
   return new_pos;
 }
 
