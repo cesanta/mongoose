@@ -5344,6 +5344,10 @@ struct mg_reverse_proxy_data {
   struct mg_connection *linked_conn;
 };
 
+struct mg_ws_proto_data {
+  size_t reass_len; /* Defragmented size of the frame so far. */
+};
+
 struct mg_http_proto_data {
 #if MG_ENABLE_FILESYSTEM
   struct mg_http_proto_data_file file;
@@ -5353,6 +5357,9 @@ struct mg_http_proto_data {
 #endif
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
   struct mg_http_multipart_stream mp_stream;
+#endif
+#if MG_ENABLE_HTTP_WEBSOCKET
+  struct mg_ws_proto_data ws_data;
 #endif
   struct mg_http_proto_data_chuncked chunk;
   struct mg_http_endpoint *endpoints;
@@ -9169,27 +9176,32 @@ static void mg_handle_incoming_websocket_frame(struct mg_connection *nc,
   }
 }
 
+static struct mg_ws_proto_data *mg_ws_get_proto_data(struct mg_connection *nc) {
+  struct mg_http_proto_data *htd = mg_http_get_proto_data(nc);
+  return (htd != NULL ? &htd->ws_data : NULL);
+};
+
 static int mg_deliver_websocket_data(struct mg_connection *nc) {
   /* Using unsigned char *, cause of integer arithmetic below */
   uint64_t i, data_len = 0, frame_len = 0, buf_len = nc->recv_mbuf.len, len,
               mask_len = 0, header_len = 0;
   unsigned char *p = (unsigned char *) nc->recv_mbuf.buf, *buf = p,
                 *e = p + buf_len;
-  unsigned *sizep = (unsigned *) &p[1]; /* Size ptr for defragmented frames */
+  struct mg_ws_proto_data *wsd = mg_ws_get_proto_data(nc);
   int ok;
   int reass = buf_len > 0 && mg_is_ws_fragment(p[0]) &&
               !(nc->flags & MG_F_WEBSOCKET_NO_DEFRAG);
 
   /* If that's a continuation frame that must be reassembled, handle it */
-  if (reass && !mg_is_ws_first_fragment(p[0]) &&
-      buf_len >= 1 + sizeof(*sizep) && buf_len >= 1 + sizeof(*sizep) + *sizep) {
-    buf += 1 + sizeof(*sizep) + *sizep;
-    buf_len -= 1 + sizeof(*sizep) + *sizep;
+  if (reass && !mg_is_ws_first_fragment(p[0]) && buf_len >= 1 &&
+      buf_len >= 1 + wsd->reass_len) {
+    buf += 1 + wsd->reass_len;
+    buf_len -= 1 + wsd->reass_len;
   }
 
   if (buf_len >= 2) {
-    len = buf[1] & 127;
-    mask_len = buf[1] & 128 ? 4 : 0;
+    len = buf[1] & 0x7f;
+    mask_len = buf[1] & 0x80 ? 4 : 0;
     if (len < 126 && buf_len >= mask_len) {
       data_len = len;
       header_len = 2 + mask_len;
@@ -9229,28 +9241,29 @@ static int mg_deliver_websocket_data(struct mg_connection *nc) {
     if (reass) {
       /* On first fragmented frame, nullify size */
       if (mg_is_ws_first_fragment(wsm.flags)) {
-        mbuf_resize(&nc->recv_mbuf, nc->recv_mbuf.size + sizeof(*sizep));
         p[0] &= ~0x0f; /* Next frames will be treated as continuation */
-        buf = p + 1 + sizeof(*sizep);
-        *sizep = 0; /* TODO(lsm): fix. this can stomp over frame data */
+        buf = p + 1;
+        wsd->reass_len = 0;
       }
 
       /* Append this frame to the reassembled buffer */
       memmove(buf, wsm.data, e - wsm.data);
-      (*sizep) += wsm.size;
+      wsd->reass_len += wsm.size;
       nc->recv_mbuf.len -= wsm.data - buf;
 
       /* On last fragmented frame - call user handler and remove data */
       if (wsm.flags & 0x80) {
-        wsm.data = p + 1 + sizeof(*sizep);
-        wsm.size = *sizep;
+        wsm.data = p + 1;
+        wsm.size = wsd->reass_len;
         mg_handle_incoming_websocket_frame(nc, &wsm);
-        mbuf_remove(&nc->recv_mbuf, 1 + sizeof(*sizep) + *sizep);
+        mbuf_remove(&nc->recv_mbuf, 1 + wsd->reass_len);
+        wsd->reass_len = 0;
       }
     } else {
       /* TODO(lsm): properly handle OOB control frames during defragmentation */
       mg_handle_incoming_websocket_frame(nc, &wsm);
       mbuf_remove(&nc->recv_mbuf, (size_t) frame_len); /* Cleanup frame */
+      wsd->reass_len = 0;
     }
 
     /* If the frame is not reassembled - client closes and close too */
