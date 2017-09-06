@@ -9943,11 +9943,12 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
     lc = *((const unsigned char *) p++);
     len += (lc & 0x7f) << 7 * len_len;
     len_len++;
-    if (!(lc & 0x80) || (len_len > sizeof(len))) break;
+    if (!(lc & 0x80)) break;
+    if (len_len > 4) return -2;
   }
 
   end = p + len;
-  if (lc & 0x80 || end > io->buf + io->len) {
+  if (lc & 0x80 || len > (io->len - (p - io->buf))) {
     return -1;
   }
 
