@@ -9204,7 +9204,13 @@ static int mg_deliver_websocket_data(struct mg_connection *nc) {
   }
 
   frame_len = header_len + data_len;
-  ok = frame_len > 0 && frame_len <= buf_len;
+  ok = (frame_len > 0 && frame_len <= buf_len);
+
+  /* Check for overflow */
+  if (frame_len < header_len || frame_len < data_len) {
+    ok = 0;
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+  }
 
   if (ok) {
     struct websocket_message wsm;
