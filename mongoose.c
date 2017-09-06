@@ -10835,7 +10835,7 @@ int mg_parse_dns(const char *buf, int len, struct mg_dns_message *msg) {
 
 size_t mg_dns_uncompress_name(struct mg_dns_message *msg, struct mg_str *name,
                               char *dst, int dst_len) {
-  int chunk_len;
+  int chunk_len, num_ptrs = 0;
   char *old_dst = dst;
   const unsigned char *data = (unsigned char *) name->p;
   const unsigned char *end = (unsigned char *) msg->pkt.p + msg->pkt.len;
@@ -10850,13 +10850,20 @@ size_t mg_dns_uncompress_name(struct mg_dns_message *msg, struct mg_str *name,
       return 0;
     }
 
-    if (chunk_len & 0xc0) {
+    if ((chunk_len & 0xc0) == 0xc0) {
       uint16_t off = (data[-1] & (~0xc0)) << 8 | data[0];
       if (off >= msg->pkt.len) {
         return 0;
       }
+      /* Basic circular loop avoidance: allow up to 16 pointer hops. */
+      if (++num_ptrs > 15) {
+        return 0;
+      }
       data = (unsigned char *) msg->pkt.p + off;
       continue;
+    }
+    if (chunk_len > 63) {
+      return 0;
     }
     if (chunk_len > leeway) {
       chunk_len = leeway;
