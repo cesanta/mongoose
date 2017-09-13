@@ -3,7 +3,7 @@ title: "mg_parse_uri()"
 decl_name: "mg_parse_uri"
 symbol_kind: "func"
 signature: |
-  int mg_parse_uri(struct mg_str uri, struct mg_str *scheme,
+  int mg_parse_uri(const struct mg_str uri, struct mg_str *scheme,
                    struct mg_str *user_info, struct mg_str *host,
                    unsigned int *port, struct mg_str *path, struct mg_str *query,
                    struct mg_str *fragment);

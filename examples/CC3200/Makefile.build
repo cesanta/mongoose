@@ -22,7 +22,7 @@ IPATH = . ../.. $(REPO_PATH)
 
 VPATH = ../..
 
-MONGOOSE_FEATURES = -DMG_ENABLE_SSL -DMG_ENABLE_HTTP_STREAMING_MULTIPART
+MONGOOSE_FEATURES = -DMG_ENABLE_SSL -DMG_ENABLE_HTTP_STREAMING_MULTIPART -DMG_MODULE_LINES
 
 SDK_FLAGS = -DUSE_FREERTOS -DSL_PLATFORM_MULTI_THREADED
 # -DTARGET_IS_CC3200 would reduce code size by using functions in ROM
@@ -58,11 +58,11 @@ $(FW_DIR):
 $(FW_ZIP): $(FW_ELF) $(FW_BIN) $(SLFS_FILES)
 	@echo "    Code size: $(shell ls -l $(FW_BIN) | awk '{print $$5}')"
 	@echo "  GEN   $(FW_MANIFEST)"
-	@fw_meta gen_build_info \
+	@fw_meta.py gen_build_info \
 	  --json_output=$(BUILD_INFO_JSON)
 	@cp -v $(SLFS_FILES) out/
 	@cp $(CC3200_SP_FILE)* $(FW_DIR)
-	@fw_meta create_manifest \
+	@fw_meta.py create_manifest \
 	  --name=$(PROG) --platform=$(PLATFORM) \
 	  --build_info=$(BUILD_INFO_JSON) \
 	  --output=$(FW_MANIFEST) \
@@ -72,14 +72,14 @@ $(FW_ZIP): $(FW_ELF) $(FW_BIN) $(SLFS_FILES)
 	  /sys/mcuimg.bin:type=app,src=$(notdir $(FW_BIN)) \
 	  $(foreach f,$(SLFS_FILES), $(notdir $(f)):type=slfile,src=$(notdir $(f)))
 	@echo "  ZIP   $@"
-	@fw_meta create_fw \
+	@fw_meta.py create_fw \
 	  --manifest=$(FW_MANIFEST) \
 	  --src_dir=$(FW_DIR) \
 	  --output=$@
 
 FREERTOS_SRCS = timers.c list.c queue.c tasks.c port.c heap_3.c osi_freertos.c
 DRIVER_SRCS = cpu.c gpio.c gpio_if.c i2c.c i2c_if.c interrupt.c pin.c prcm.c spi.c uart.c udma.c utils.c
-SL_SRCS = socket.c wlan.c driver.c device.c netapp.c netcfg.c network_common.c cc_pal.c fs.c
+SL_SRCS = socket.c wlan.c driver.c device.c netapp.c netcfg.c network_common.c timer.c cc_pal.c fs.c
 SDK_SRCS = startup_gcc.c $(FREERTOS_SRCS) $(DRIVER_SRCS) $(SL_SRCS)
 IPATH += $(SDK_PATH) $(SDK_PATH)/inc $(SDK_PATH)/driverlib \
          $(SDK_PATH)/example/common $(SDK_PATH)/oslib \

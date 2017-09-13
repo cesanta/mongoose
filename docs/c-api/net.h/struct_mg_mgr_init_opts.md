@@ -4,9 +4,10 @@ decl_name: "struct mg_mgr_init_opts"
 symbol_kind: "struct"
 signature: |
   struct mg_mgr_init_opts {
-    struct mg_iface_vtable *main_iface;
+    const struct mg_iface_vtable *main_iface;
     int num_ifaces;
-    struct mg_iface_vtable **ifaces;
+    const struct mg_iface_vtable **ifaces;
+    const char *nameserver;
   };
 ---
 

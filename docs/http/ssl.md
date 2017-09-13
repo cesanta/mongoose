@@ -30,4 +30,4 @@ int main(void) {
 }
 ```
 
-For the full example, please see the [Simplest HTTPS server example](https://github.com/cesanta/dev/tree/master/mongoose/examples/simplest_web_server_ssl).
+For the full example, please see the [Simplest HTTPS server example](https://github.com/cesanta/mongoose/tree/master/examples/simplest_web_server_ssl).

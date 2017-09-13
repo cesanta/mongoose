@@ -9,3 +9,4 @@ title: Tunables
 - `MG_SSL_CRYPTO_MODERN`, `MG_SSL_CRYPTO_OLD` - choose either "Modern" or "Old" ciphers
   instead of the default "Intermediate" setting.
   See [this article](https://wiki.mozilla.org/Security/Server_Side_TLS#Recommended_configurations) for details.
+- `MG_USER_FILE_FUNCTIONS` allow you to use custom file operation, by defining you own `mg_stat`, `mg_fopen`, `mg_open`, `mg_fread` and `mg_fwrite` functions

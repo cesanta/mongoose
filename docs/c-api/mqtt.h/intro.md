@@ -5,6 +5,7 @@ decl_name: "mqtt.h"
 items:
   - { name: mg_mqtt_connack.md }
   - { name: mg_mqtt_disconnect.md }
+  - { name: mg_mqtt_match_topic_expression.md }
   - { name: mg_mqtt_next_subscribe_topic.md }
   - { name: mg_mqtt_ping.md }
   - { name: mg_mqtt_pong.md }
@@ -17,6 +18,7 @@ items:
   - { name: mg_mqtt_subscribe.md }
   - { name: mg_mqtt_unsuback.md }
   - { name: mg_mqtt_unsubscribe.md }
+  - { name: mg_mqtt_vmatch_topic_expression.md }
   - { name: mg_send_mqtt_handshake.md }
   - { name: mg_send_mqtt_handshake_opt.md }
   - { name: mg_set_protocol_mqtt.md }

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AJAX Upload Example</title>
+  <script src="//code.jquery.com/jquery-1.9.1.js"></script>
+  <script type="text/javascript">
+    function updateProgress(evt) {
+      if (evt.lengthComputable) {
+        document.getElementById("output").textContent =
+              "Uploaded " + evt.loaded + " of " + evt.total + " bytes";
+      }
+    }
+    function uploadFile() {
+      var file_data = new FormData(document.getElementById('filename'));
+      $.ajax({
+        url: "/upload",
+        type: "POST",
+        data: file_data,
+        processData: false,
+        contentType: false,
+        cache: false,
+        xhr: function() {
+          myXhr = $.ajaxSettings.xhr();
+          if(myXhr.upload){
+            myXhr.upload.addEventListener('progress',updateProgress, false); // for handling the progress of the upload
+          }
+          return myXhr;
+        },
+      }).done(function(data) {
+          document.getElementById("output").textContent = "Result: " + data;
+      });
+      return false;
+    }
+  </script>
+</head>
+
+<body>
+  <h1>Upload file using standard form upload</h1>
+
+  <form method="POST" action="/upload" enctype="multipart/form-data">
+    <label>Select a file:</label><br>
+    <input type="file" name="file" />
+    <input type="submit" value="Upload" />
+  </form>
+
+  <h1>Upload file using Ajax - that also gives progress report</h1>
+  <form method="post" id="filename" name="filename" onsubmit="return uploadFile();">
+    <label>Select a file:</label><br>
+    <input type="file" id="file" name="file" required />
+    <input type="submit" value="Upload" />
+  </form>
+  <br><br><div id="output"></div>
+</body>
+</html>

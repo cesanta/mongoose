@@ -18,8 +18,9 @@ static int exit_flag = 0;
 
 static void ev_handler(struct mg_connection *c, int ev, void *p) {
   if (ev == MG_EV_HTTP_REPLY) {
+    struct http_message *hm = (struct http_message *)p;
     c->flags |= MG_F_CLOSE_IMMEDIATELY;
-    fwrite(hm->message.p, 1, hm->message.len, stdout);
+    fwrite(hm->message.p, 1, (int)hm->message.len, stdout);
     putchar('\n');
     exit_flag = 1;
   } else if (ev == MG_EV_CLOSE) {
@@ -31,7 +32,7 @@ int main(void) {
   struct mg_mgr mgr;
 
   mg_mgr_init(&mgr, NULL);
-  mg_connect_http(mgr, ev_handler, url, NULL, NULL);
+  mg_connect_http(&mgr, ev_handler, url, NULL, NULL);
 
 
   while (exit_flag == 0) {

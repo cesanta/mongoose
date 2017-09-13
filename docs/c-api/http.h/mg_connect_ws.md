@@ -4,9 +4,8 @@ decl_name: "mg_connect_ws"
 symbol_kind: "func"
 signature: |
   struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
-                                      mg_event_handler_t event_handler,
-                                      const char *url, const char *protocol,
-                                      const char *extra_headers);
+                                      MG_CB(mg_event_handler_t event_handler,
+                                            void *user_data);
 ---
 
 Helper function that creates an outbound WebSocket connection.

@@ -11,7 +11,6 @@ items:
   - { name: mg_check_ip_acl.md }
   - { name: mg_connect.md }
   - { name: mg_connect_opt.md }
-  - { name: mg_enable_javascript.md }
   - { name: mg_mgr_free.md }
   - { name: mg_mgr_init.md }
   - { name: mg_mgr_init_opt.md }

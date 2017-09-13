@@ -10,27 +10,12 @@
 #include "mongoose.h"
 
 static const char *s_http_port = "8000";
+static struct mg_serve_http_opts s_http_server_opts;
 
 struct file_writer_data {
   FILE *fp;
   size_t bytes_written;
 };
-
-static void handle_request(struct mg_connection *nc) {
-  // This handler gets for all endpoints but /upload
-  mg_printf(nc, "%s",
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/html\r\n"
-            "Connection: close\r\n"
-            "\r\n"
-            "<html><body>Upload example."
-            "<form method=\"POST\" action=\"/upload\" "
-            "  enctype=\"multipart/form-data\">"
-            "<input type=\"file\" name=\"file\" /> <br/>"
-            "<input type=\"submit\" value=\"Upload\" />"
-            "</form></body></html>");
-  nc->flags |= MG_F_SEND_AND_CLOSE;
-}
 
 static void handle_upload(struct mg_connection *nc, int ev, void *p) {
   struct file_writer_data *data = (struct file_writer_data *) nc->user_data;
@@ -82,25 +67,27 @@ static void handle_upload(struct mg_connection *nc, int ev, void *p) {
 }
 
 static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
-  (void) ev_data;
-  switch (ev) {
-    case MG_EV_HTTP_REQUEST:
-      // Invoked when the full HTTP request is in the buffer (including body).
-      handle_request(nc);
-      break;
+  if (ev == MG_EV_HTTP_REQUEST) {
+    mg_serve_http(nc, ev_data, s_http_server_opts);
   }
 }
 
 int main(void) {
   struct mg_mgr mgr;
-  struct mg_connection *nc;
+  struct mg_connection *c;
 
   mg_mgr_init(&mgr, NULL);
-  nc = mg_bind(&mgr, s_http_port, ev_handler);
+  c = mg_bind(&mgr, s_http_port, ev_handler);
+  if (c == NULL) {
+    fprintf(stderr, "Cannot start server on port %s\n", s_http_port);
+    exit(EXIT_FAILURE);
+  }
 
-  mg_register_http_endpoint(nc, "/upload", handle_upload);
+  s_http_server_opts.document_root = ".";  // Serve current directory
+  mg_register_http_endpoint(c, "/upload", handle_upload MG_UD_ARG(NULL));
+
   // Set up HTTP server parameters
-  mg_set_protocol_http_websocket(nc);
+  mg_set_protocol_http_websocket(c);
 
   printf("Starting web server on port %s\n", s_http_port);
   for (;;) {

@@ -23,7 +23,7 @@
 #ifndef CS_MONGOOSE_SRC_COMMON_H_
 #define CS_MONGOOSE_SRC_COMMON_H_
 
-#define MG_VERSION "6.7"
+#define MG_VERSION "6.8"
 
 /* Local tweaks, applied before any of Mongoose's own headers. */
 #ifdef MG_LOCALS
@@ -46,9 +46,10 @@
 #define CS_P_WINDOWS 2
 #define CS_P_ESP32 15
 #define CS_P_ESP8266 3
-#define CS_P_CC3200 4
-#define CS_P_MSP432 5
 #define CS_P_CC3100 6
+#define CS_P_CC3200 4
+#define CS_P_CC3220 17
+#define CS_P_MSP432 5
 #define CS_P_TM4C129 14
 #define CS_P_MBED 7
 #define CS_P_WINCE 8
@@ -58,15 +59,17 @@
 #define CS_P_NRF52 10
 #define CS_P_PIC32 11
 #define CS_P_STM32 16
-/* Next id: 17 */
+/* Next id: 18 */
 
 /* If not specified explicitly, we guess platform by defines. */
 #ifndef CS_PLATFORM
 
 #if defined(TARGET_IS_MSP432P4XX) || defined(__MSP432P401R__)
 #define CS_PLATFORM CS_P_MSP432
-#elif defined(cc3200)
+#elif defined(cc3200) || defined(TARGET_IS_CC3200)
 #define CS_PLATFORM CS_P_CC3200
+#elif defined(cc3220) || defined(TARGET_IS_CC3220)
+#define CS_PLATFORM CS_P_CC3220
 #elif defined(__unix__) || defined(__APPLE__)
 #define CS_PLATFORM CS_P_UNIX
 #elif defined(WINCE)
@@ -111,8 +114,9 @@
 /* Amalgamated: #include "common/platforms/platform_windows.h" */
 /* Amalgamated: #include "common/platforms/platform_esp32.h" */
 /* Amalgamated: #include "common/platforms/platform_esp8266.h" */
-/* Amalgamated: #include "common/platforms/platform_cc3200.h" */
 /* Amalgamated: #include "common/platforms/platform_cc3100.h" */
+/* Amalgamated: #include "common/platforms/platform_cc3200.h" */
+/* Amalgamated: #include "common/platforms/platform_cc3220.h" */
 /* Amalgamated: #include "common/platforms/platform_mbed.h" */
 /* Amalgamated: #include "common/platforms/platform_nrf51.h" */
 /* Amalgamated: #include "common/platforms/platform_nrf52.h" */
@@ -195,6 +199,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <ctype.h>
 
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib") /* Linking with winsock library */
@@ -221,15 +226,13 @@
 #define __func__ __FILE__ ":" STR(__LINE__)
 #endif
 #define snprintf _snprintf
-#define fileno _fileno
 #define vsnprintf _vsnprintf
-#define sleep(x) Sleep((x) *1000)
 #define to64(x) _atoi64(x)
 #if !defined(__MINGW32__) && !defined(__MINGW64__)
 #define popen(x, y) _popen((x), (y))
 #define pclose(x) _pclose(x)
+#define fileno _fileno
 #endif
-#define rmdir _rmdir
 #if defined(_MSC_VER) && _MSC_VER >= 1400
 #define fseeko(x, y, z) _fseeki64((x), (y), (z))
 #else
@@ -319,6 +322,9 @@ typedef struct _stati64 cs_stat_t;
 #ifndef MG_NET_IF
 #define MG_NET_IF MG_NET_IF_SOCKET
 #endif
+
+int rmdir(const char *dirname);
+unsigned int sleep(unsigned int seconds);
 
 #endif /* CS_PLATFORM == CS_P_WINDOWS */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_WINDOWS_H_ */
@@ -459,6 +465,14 @@ typedef struct stat cs_stat_t;
 #define MG_NET_IF MG_NET_IF_SOCKET
 #endif
 
+#ifndef MG_HOSTS_FILE_NAME
+#define MG_HOSTS_FILE_NAME "/etc/hosts"
+#endif
+
+#ifndef MG_RESOLV_CONF_FILE_NAME
+#define MG_RESOLV_CONF_FILE_NAME "/etc/resolv.conf"
+#endif
+
 #endif /* CS_PLATFORM == CS_P_UNIX */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_UNIX_H_ */
 #ifdef MG_MODULE_LINES
@@ -529,7 +543,9 @@ typedef struct stat cs_stat_t;
 #define SIZE_T_FMT "u"
 typedef struct stat cs_stat_t;
 #define DIRSEP '/'
+#if !defined(MGOS_VFS_DEFINE_DIRENT)
 #define CS_DEFINE_DIRENT
+#endif
 
 #define to64(x) strtoll(x, NULL, 10)
 #define INT64_FMT PRId64
@@ -537,7 +553,7 @@ typedef struct stat cs_stat_t;
 #define __cdecl
 #define _FILE_OFFSET_BITS 32
 
-#ifndef RTOS_SDK
+#if !defined(RTOS_SDK) && !defined(__cplusplus)
 #define fileno(x) -1
 #endif
 
@@ -549,9 +565,9 @@ typedef struct stat cs_stat_t;
 #ifndef MG_NET_IF
 #include <lwip/opt.h>
 #if LWIP_SOCKET /* RTOS SDK has LWIP sockets */
-#  define MG_NET_IF MG_NET_IF_SOCKET
+#define MG_NET_IF MG_NET_IF_SOCKET
 #else
-#  define MG_NET_IF MG_NET_IF_LWIP_LOW_LEVEL
+#define MG_NET_IF MG_NET_IF_LWIP_LOW_LEVEL
 #endif
 #endif
 
@@ -592,7 +608,7 @@ typedef struct stat cs_stat_t;
 
 #include <simplelink.h>
 #include <netapp.h>
-#undef timeval 
+#undef timeval
 
 typedef int sock_t;
 #define INVALID_SOCKET (-1)
@@ -667,6 +683,7 @@ extern "C" {
 struct SlTimeval_t;
 #define timeval SlTimeval_t
 int gettimeofday(struct timeval *t, void *tz);
+int settimeofday(const struct timeval *tv, const void *tz);
 
 int asprintf(char **strp, const char *fmt, ...);
 
@@ -690,7 +707,7 @@ struct stat {
 };
 
 int _stat(const char *pathname, struct stat *st);
-#define stat(a, b) _stat(a, b)
+int stat(const char *pathname, struct stat *st);
 
 #define __S_IFMT 0170000
 
@@ -706,8 +723,10 @@ int _stat(const char *pathname, struct stat *st);
 #define S_ISDIR(mode) __S_ISTYPE((mode), __S_IFDIR)
 #define S_ISREG(mode) __S_ISTYPE((mode), __S_IFREG)
 
-/* As of 5.2.7, TI compiler does not support va_copy() yet. */
+/* 5.x series compilers don't have va_copy, 16.x do. */
+#if __TI_COMPILER_VERSION__ < 16000000
 #define va_copy(apc, ap) ((apc) = (ap))
+#endif
 
 #endif /* __TI_COMPILER_VERSION__ */
 
@@ -828,7 +847,8 @@ int _stat(const char *pathname, struct stat *st);
 #define CS_ENABLE_STDIO 1
 #endif
 
-#if (defined(CC3200_FS_SPIFFS) || defined(CC3200_FS_SLFS)) && !defined(MG_ENABLE_FILESYSTEM)
+#if (defined(CC3200_FS_SPIFFS) || defined(CC3200_FS_SLFS)) && \
+    !defined(MG_ENABLE_FILESYSTEM)
 #define MG_ENABLE_FILESYSTEM 1
 #endif
 
@@ -872,15 +892,15 @@ typedef struct stat cs_stat_t;
 #define __cdecl
 
 #ifndef MG_NET_IF
-#  include <lwip/opt.h>
-#  if LWIP_SOCKET
-#    define MG_NET_IF MG_NET_IF_SOCKET
-#  else
-#    define MG_NET_IF MG_NET_IF_LWIP_LOW_LEVEL
-#  endif
-#  define MG_LWIP 1
+#include <lwip/opt.h>
+#if LWIP_SOCKET
+#define MG_NET_IF MG_NET_IF_SOCKET
+#else
+#define MG_NET_IF MG_NET_IF_LWIP_LOW_LEVEL
+#endif
+#define MG_LWIP 1
 #elif MG_NET_IF == MG_NET_IF_SIMPLELINK
-#  include "common/platforms/simplelink/cs_simplelink.h"
+/* Amalgamated: #include "common/platforms/simplelink/cs_simplelink.h" */
 #endif
 
 #ifndef CS_ENABLE_STDIO
@@ -1002,16 +1022,16 @@ in_addr_t inet_addr(const char *cp);
 
 #define to64(x) strtoll(x, NULL, 10)
 
-#define MG_NET_IF             MG_NET_IF_LWIP_LOW_LEVEL
-#define MG_LWIP               1
-#define MG_ENABLE_IPV6        1
+#define MG_NET_IF MG_NET_IF_LWIP_LOW_LEVEL
+#define MG_LWIP 1
+#define MG_ENABLE_IPV6 1
 
 /*
  * For ARM C Compiler, make lwip to export `struct timeval`; for other
  * compilers, suppress it.
  */
 #if !defined(__ARMCC_VERSION)
-# define LWIP_TIMEVAL_PRIVATE  0
+#define LWIP_TIMEVAL_PRIVATE 0
 #else
 struct timeval;
 int gettimeofday(struct timeval *tp, void *tzp);
@@ -1048,12 +1068,12 @@ int gettimeofday(struct timeval *tp, void *tzp);
 
 #define to64(x) strtoll(x, NULL, 10)
 
-#define MG_NET_IF             MG_NET_IF_LWIP_LOW_LEVEL
-#define MG_LWIP               1
-#define MG_ENABLE_IPV6        1
+#define MG_NET_IF MG_NET_IF_LWIP_LOW_LEVEL
+#define MG_LWIP 1
+#define MG_ENABLE_IPV6 1
 
 #if !defined(ENOSPC)
-# define ENOSPC 28  /* No space left on device */
+#define ENOSPC 28 /* No space left on device */
 #endif
 
 /*
@@ -1061,7 +1081,7 @@ int gettimeofday(struct timeval *tp, void *tzp);
  * compilers, suppress it.
  */
 #if !defined(__ARMCC_VERSION)
-# define LWIP_TIMEVAL_PRIVATE  0
+#define LWIP_TIMEVAL_PRIVATE 0
 #endif
 
 #define INT64_FMT PRId64
@@ -1085,9 +1105,10 @@ int gettimeofday(struct timeval *tp, void *tzp);
 #ifndef CS_COMMON_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_
 #define CS_COMMON_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_
 
+#if defined(MG_NET_IF) && MG_NET_IF == MG_NET_IF_SIMPLELINK
+
 /* If simplelink.h is already included, all bets are off. */
-#if defined(MG_NET_IF) && MG_NET_IF == MG_NET_IF_SIMPLELINK && \
-    !defined(__SIMPLELINK_H__)
+#if !defined(__SIMPLELINK_H__)
 
 #include <stdbool.h>
 
@@ -1101,6 +1122,12 @@ int gettimeofday(struct timeval *tp, void *tzp);
 #undef fd_set
 #endif
 
+#if CS_PLATFORM == CS_P_CC3220
+#include <ti/drivers/net/wifi/porting/user.h>
+#include <ti/drivers/net/wifi/simplelink.h>
+#include <ti/drivers/net/wifi/sl_socket.h>
+#include <ti/drivers/net/wifi/netapp.h>
+#else
 /* We want to disable SL_INC_STD_BSD_API_NAMING, so we include user.h ourselves
  * and undef it. */
 #define PROVISIONING_API_H_
@@ -1110,6 +1137,7 @@ int gettimeofday(struct timeval *tp, void *tzp);
 
 #include <simplelink/include/simplelink.h>
 #include <simplelink/include/netapp.h>
+#endif /* CS_PLATFORM == CS_P_CC3220 */
 
 /* Now define only the subset of the BSD API that we use.
  * Notably, close(), read() and write() are not defined. */
@@ -1178,7 +1206,59 @@ int sl_set_ssl_opts(struct mg_connection *nc);
 }
 #endif
 
-#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK && !defined(__SIMPLELINK_H__) */
+#endif /* !defined(__SIMPLELINK_H__) */
+
+/* Compatibility with older versions of SimpleLink */
+#if SL_MAJOR_VERSION_NUM < 2
+
+#define SL_ERROR_BSD_EAGAIN SL_EAGAIN
+#define SL_ERROR_BSD_EALREADY SL_EALREADY
+#define SL_ERROR_BSD_ENOPROTOOPT SL_ENOPROTOOPT
+#define SL_ERROR_BSD_ESECDATEERROR SL_ESECDATEERROR
+#define SL_ERROR_BSD_ESECSNOVERIFY SL_ESECSNOVERIFY
+#define SL_ERROR_FS_FAILED_TO_ALLOCATE_MEM SL_FS_ERR_FAILED_TO_ALLOCATE_MEM
+#define SL_ERROR_FS_FILE_HAS_NOT_BEEN_CLOSE_CORRECTLY \
+  SL_FS_FILE_HAS_NOT_BEEN_CLOSE_CORRECTLY
+#define SL_ERROR_FS_FILE_NAME_EXIST SL_FS_FILE_NAME_EXIST
+#define SL_ERROR_FS_FILE_NOT_EXISTS SL_FS_ERR_FILE_NOT_EXISTS
+#define SL_ERROR_FS_NO_AVAILABLE_NV_INDEX SL_FS_ERR_NO_AVAILABLE_NV_INDEX
+#define SL_ERROR_FS_NOT_ENOUGH_STORAGE_SPACE SL_FS_ERR_NO_AVAILABLE_BLOCKS
+#define SL_ERROR_FS_NOT_SUPPORTED SL_FS_ERR_NOT_SUPPORTED
+#define SL_ERROR_FS_WRONG_FILE_NAME SL_FS_WRONG_FILE_NAME
+#define SL_ERROR_FS_INVALID_HANDLE SL_FS_ERR_INVALID_HANDLE
+#define SL_NETCFG_MAC_ADDRESS_GET SL_MAC_ADDRESS_GET
+#define SL_SOCKET_FD_ZERO SL_FD_ZERO
+#define SL_SOCKET_FD_SET SL_FD_SET
+#define SL_SOCKET_FD_ISSET SL_FD_ISSET
+#define SL_SO_SECURE_DOMAIN_NAME_VERIFICATION SO_SECURE_DOMAIN_NAME_VERIFICATION
+
+#define SL_FS_READ FS_MODE_OPEN_READ
+#define SL_FS_WRITE FS_MODE_OPEN_WRITE
+
+#define SL_FI_FILE_SIZE(fi) ((fi).FileLen)
+#define SL_FI_FILE_MAX_SIZE(fi) ((fi).AllocatedLen)
+
+#define SlDeviceVersion_t SlVersionFull
+#define sl_DeviceGet sl_DevGet
+#define SL_DEVICE_GENERAL SL_DEVICE_GENERAL_CONFIGURATION
+#define SL_LEN_TYPE _u8
+#define SL_OPT_TYPE _u8
+
+#else /* SL_MAJOR_VERSION_NUM >= 2 */
+
+#define FS_MODE_OPEN_CREATE(max_size, flag) \
+  (SL_FS_CREATE | SL_FS_CREATE_MAX_SIZE(max_size))
+#define SL_FI_FILE_SIZE(fi) ((fi).Len)
+#define SL_FI_FILE_MAX_SIZE(fi) ((fi).MaxSize)
+
+#define SL_LEN_TYPE _u16
+#define SL_OPT_TYPE _u16
+
+#endif /* SL_MAJOR_VERSION_NUM < 2 */
+
+int slfs_open(const unsigned char *fname, uint32_t flags);
+
+#endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK */
 
 #endif /* CS_COMMON_PLATFORMS_SIMPLELINK_CS_SIMPLELINK_H_ */
 #ifdef MG_MODULE_LINES
@@ -1233,6 +1313,10 @@ int sl_set_ssl_opts(struct mg_connection *nc);
 
 #ifndef EWOULDBLOCK
 #define EWOULDBLOCK WSAEWOULDBLOCK
+#endif
+
+#ifndef EAGAIN
+#define EAGAIN EWOULDBLOCK
 #endif
 
 #ifndef __func__
@@ -1361,18 +1445,18 @@ typedef struct _stati64 {
 #endif
 
 #ifndef _UINTPTR_T_DEFINED
-typedef unsigned int* uintptr_t;
+typedef unsigned int *uintptr_t;
 #endif
 
 #define _S_IFREG 2
 #define _S_IFDIR 4
 
 #ifndef S_ISDIR
-#define S_ISDIR(x) (((x) & _S_IFDIR) != 0)
+#define S_ISDIR(x) (((x) &_S_IFDIR) != 0)
 #endif
 
 #ifndef S_ISREG
-#define S_ISREG(x) (((x) & _S_IFREG) != 0)
+#define S_ISREG(x) (((x) &_S_IFREG) != 0)
 #endif
 
 int open(const char *filename, int oflag, int pmode);
@@ -1409,7 +1493,8 @@ typedef struct stat cs_stat_t;
 #define MG_NET_IF MG_NET_IF_LWIP_LOW_LEVEL
 
 /*
- * LPCXpress comes with 3 C library implementations: Newlib, NewlibNano and Redlib.
+ * LPCXpress comes with 3 C library implementations: Newlib, NewlibNano and
+ *Redlib.
  * See https://community.nxp.com/message/630860 for more details.
  *
  * Redlib is the default and lacks certain things, so we provide them.
@@ -1505,7 +1590,7 @@ typedef TCP_SOCKET sock_t;
 #define CS_ENABLE_STDIO 1
 #endif
 
-char* inet_ntoa(struct in_addr in);
+char *inet_ntoa(struct in_addr in);
 
 #endif /* CS_PLATFORM == CS_P_PIC32 */
 
@@ -1624,6 +1709,84 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
 
 #endif /* CS_COMMON_PLATFORMS_LWIP_MG_LWIP_H_ */
 #ifdef MG_MODULE_LINES
+#line 1 "common/cs_md5.h"
+#endif
+/*
+ * Copyright (c) 2014 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_COMMON_MD5_H_
+#define CS_COMMON_MD5_H_
+
+/* Amalgamated: #include "common/platform.h" */
+
+#ifndef CS_DISABLE_MD5
+#define CS_DISABLE_MD5 0
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+typedef struct {
+  uint32_t buf[4];
+  uint32_t bits[2];
+  unsigned char in[64];
+} cs_md5_ctx;
+
+void cs_md5_init(cs_md5_ctx *c);
+void cs_md5_update(cs_md5_ctx *c, const unsigned char *data, size_t len);
+void cs_md5_final(unsigned char *md, cs_md5_ctx *c);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* CS_COMMON_MD5_H_ */
+#ifdef MG_MODULE_LINES
+#line 1 "common/cs_sha1.h"
+#endif
+/*
+ * Copyright (c) 2014 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_COMMON_SHA1_H_
+#define CS_COMMON_SHA1_H_
+
+#ifndef CS_DISABLE_SHA1
+#define CS_DISABLE_SHA1 0
+#endif
+
+#if !CS_DISABLE_SHA1
+
+/* Amalgamated: #include "common/platform.h" */
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+typedef struct {
+  uint32_t state[5];
+  uint32_t count[2];
+  unsigned char buffer[64];
+} cs_sha1_ctx;
+
+void cs_sha1_init(cs_sha1_ctx *);
+void cs_sha1_update(cs_sha1_ctx *, const unsigned char *data, uint32_t len);
+void cs_sha1_final(unsigned char digest[20], cs_sha1_ctx *);
+void cs_hmac_sha1(const unsigned char *key, size_t key_len,
+                  const unsigned char *text, size_t text_len,
+                  unsigned char out[20]);
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* CS_DISABLE_SHA1 */
+
+#endif /* CS_COMMON_SHA1_H_ */
+#ifdef MG_MODULE_LINES
 #line 1 "common/cs_time.h"
 #endif
 /*
@@ -1634,6 +1797,8 @@ void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
 #ifndef CS_COMMON_CS_TIME_H_
 #define CS_COMMON_CS_TIME_H_
 
+#include <time.h>
+
 /* Amalgamated: #include "common/platform.h" */
 
 #ifdef __cplusplus
@@ -1642,6 +1807,12 @@ extern "C" {
 
 /* Sub-second granularity time(). */
 double cs_time(void);
+
+/*
+ * Similar to (non-standard) timegm, converts broken-down time into the number
+ * of seconds since Unix Epoch.
+ */
+double cs_timegm(const struct tm *tm);
 
 #ifdef __cplusplus
 }
@@ -1665,7 +1836,7 @@ double cs_time(void);
 
 #ifdef __cplusplus
 extern "C" {
-#endif /* __cplusplus */
+#endif
 
 /* Describes chunk of memory */
 struct mg_str {
@@ -1683,6 +1854,8 @@ struct mg_str mg_mk_str_n(const char *s, size_t len);
 /* Macro for initializing mg_str. */
 #define MG_MK_STR(str_literal) \
   { str_literal, sizeof(str_literal) - 1 }
+#define MG_NULL_STR \
+  { NULL, 0 }
 
 /*
  * Cross-platform version of `strcmp()` where where first string is
@@ -1696,13 +1869,28 @@ int mg_vcmp(const struct mg_str *str2, const char *str1);
  */
 int mg_vcasecmp(const struct mg_str *str2, const char *str1);
 
+/* Creates a copy of s (heap-allocated). */
 struct mg_str mg_strdup(const struct mg_str s);
+
+/*
+ * Creates a copy of s (heap-allocated).
+ * Resulting string is NUL-terminated (but NUL is not included in len).
+ */
+struct mg_str mg_strdup_nul(const struct mg_str s);
+
+/*
+ * Locates character in a string.
+ */
+const char *mg_strchr(const struct mg_str s, int c);
+
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
 int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n);
 
+const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
+
 #ifdef __cplusplus
 }
-#endif /* __cplusplus */
+#endif
 
 #endif /* CS_COMMON_MG_STR_H_ */
 #ifdef MG_MODULE_LINES
@@ -1788,94 +1976,6 @@ void mbuf_trim(struct mbuf *);
 
 #endif /* CS_COMMON_MBUF_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/sha1.h"
-#endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
-
-#ifndef CS_COMMON_SHA1_H_
-#define CS_COMMON_SHA1_H_
-
-#ifndef DISABLE_SHA1
-#define DISABLE_SHA1 0
-#endif
-
-#if !DISABLE_SHA1
-
-/* Amalgamated: #include "common/platform.h" */
-
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-typedef struct {
-  uint32_t state[5];
-  uint32_t count[2];
-  unsigned char buffer[64];
-} cs_sha1_ctx;
-
-void cs_sha1_init(cs_sha1_ctx *);
-void cs_sha1_update(cs_sha1_ctx *, const unsigned char *data, uint32_t len);
-void cs_sha1_final(unsigned char digest[20], cs_sha1_ctx *);
-void cs_hmac_sha1(const unsigned char *key, size_t key_len,
-                  const unsigned char *text, size_t text_len,
-                  unsigned char out[20]);
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* DISABLE_SHA1 */
-
-#endif /* CS_COMMON_SHA1_H_ */
-#ifdef MG_MODULE_LINES
-#line 1 "common/md5.h"
-#endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
-
-#ifndef CS_COMMON_MD5_H_
-#define CS_COMMON_MD5_H_
-
-/* Amalgamated: #include "common/platform.h" */
-
-#ifndef DISABLE_MD5
-#define DISABLE_MD5 0
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-typedef struct MD5Context {
-  uint32_t buf[4];
-  uint32_t bits[2];
-  unsigned char in[64];
-} MD5_CTX;
-
-void MD5_Init(MD5_CTX *c);
-void MD5_Update(MD5_CTX *c, const unsigned char *data, size_t len);
-void MD5_Final(unsigned char *md, MD5_CTX *c);
-
-/*
- * Return stringified MD5 hash for NULL terminated list of pointer/length pairs.
- * A length should be specified as size_t variable.
- * Example:
- *
- *    char buf[33];
- *    cs_md5(buf, "foo", (size_t) 3, "bar", (size_t) 3, NULL);
- */
-char *cs_md5(char buf[33], ...);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* CS_COMMON_MD5_H_ */
-#ifdef MG_MODULE_LINES
 #line 1 "common/base64.h"
 #endif
 /*
@@ -1939,6 +2039,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len);
 #include <stdlib.h>
 
 /* Amalgamated: #include "common/platform.h" */
+/* Amalgamated: #include "common/mg_str.h" */
 
 #ifndef CS_ENABLE_STRDUP
 #define CS_ENABLE_STRDUP 0
@@ -2032,6 +2133,34 @@ int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
 
 /* Same as mg_asprintf, but takes varargs list. */
 int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap);
+
+/*
+ * A helper function for traversing a comma separated list of values.
+ * It returns a list pointer shifted to the next value or NULL if the end
+ * of the list found.
+ * The value is stored in a val vector. If the value has a form "x=y", then
+ * eq_val vector is initialised to point to the "y" part, and val vector length
+ * is adjusted to point only to "x".
+ * If the list is just a comma separated list of entries, like "aa,bb,cc" then
+ * `eq_val` will contain zero-length string.
+ *
+ * The purpose of this function is to parse comma separated string without
+ * any copying/memory allocation.
+ */
+const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
+                                     struct mg_str *eq_val);
+struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
+                                         struct mg_str *eq_val);
+
+/*
+ * Matches 0-terminated string (mg_match_prefix) or string with given length
+ * mg_match_prefix_n against a glob pattern.
+ *
+ * Match is case-insensitive. Returns number of bytes matched, or -1 if no
+ * match.
+ */
+int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
+int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
 
 #ifdef __cplusplus
 }
@@ -2896,10 +3025,6 @@ struct {								\
 #define MG_ENABLE_IPV6 0
 #endif
 
-#ifndef MG_ENABLE_JAVASCRIPT
-#define MG_ENABLE_JAVASCRIPT 0
-#endif
-
 #ifndef MG_ENABLE_MQTT
 #define MG_ENABLE_MQTT 1
 #endif
@@ -2963,6 +3088,18 @@ struct {								\
 #define MG_ENABLE_EXTRA_ERRORS_DESC 0
 #endif
 
+#ifndef MG_ENABLE_CALLBACK_USERDATA
+#define MG_ENABLE_CALLBACK_USERDATA 0
+#endif
+
+#if MG_ENABLE_CALLBACK_USERDATA
+#define MG_UD_ARG(ud) , ud
+#define MG_CB(cb, ud) cb, ud
+#else
+#define MG_UD_ARG(ud)
+#define MG_CB(cb, ud) cb
+#endif
+
 #endif /* CS_MONGOOSE_SRC_FEATURES_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net_if.h"
@@ -3002,7 +3139,7 @@ struct mg_iface_vtable;
 struct mg_iface {
   struct mg_mgr *mgr;
   void *data; /* Implementation-specific data */
-  struct mg_iface_vtable *vtable;
+  const struct mg_iface_vtable *vtable;
 };
 
 struct mg_iface_vtable {
@@ -3041,11 +3178,11 @@ struct mg_iface_vtable {
                         union socket_address *sa);
 };
 
-extern struct mg_iface_vtable *mg_ifaces[];
+extern const struct mg_iface_vtable *mg_ifaces[];
 extern int mg_num_ifaces;
 
 /* Creates a new interface instance. */
-struct mg_iface *mg_if_create_iface(struct mg_iface_vtable *vtable,
+struct mg_iface *mg_if_create_iface(const struct mg_iface_vtable *vtable,
                                     struct mg_mgr *mgr);
 
 /*
@@ -3053,7 +3190,7 @@ struct mg_iface *mg_if_create_iface(struct mg_iface_vtable *vtable,
  * interface `from`, exclusive. Returns NULL if none is found.
  */
 struct mg_iface *mg_find_iface(struct mg_mgr *mgr,
-                               struct mg_iface_vtable *vtable,
+                               const struct mg_iface_vtable *vtable,
                                struct mg_iface *from);
 /*
  * Deliver a new TCP connection. Returns NULL in case on error (unable to
@@ -3141,6 +3278,7 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
     const char **err_msg);
 enum mg_ssl_if_result mg_ssl_if_conn_accept(struct mg_connection *nc,
                                             struct mg_connection *lc);
+void mg_ssl_if_conn_close_notify(struct mg_connection *nc);
 void mg_ssl_if_conn_free(struct mg_connection *nc);
 
 enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc);
@@ -3187,11 +3325,6 @@ int mg_ssl_if_write(struct mg_connection *nc, const void *data, size_t len);
 #ifndef CS_MONGOOSE_SRC_NET_H_
 #define CS_MONGOOSE_SRC_NET_H_
 
-#if MG_ENABLE_JAVASCRIPT
-#define EXCLUDE_COMMON
-#include <v7.h>
-#endif
-
 /* Amalgamated: #include "mongoose/src/common.h" */
 /* Amalgamated: #include "mongoose/src/net_if.h" */
 /* Amalgamated: #include "common/mbuf.h" */
@@ -3229,13 +3362,13 @@ struct mg_connection;
  * Mongoose calls the event handler, passing the events defined below.
  */
 typedef void (*mg_event_handler_t)(struct mg_connection *nc, int ev,
-                                   void *ev_data);
+                                   void *ev_data MG_UD_ARG(void *user_data));
 
 /* Events. Meaning of event parameter (evp) is given in the comment. */
 #define MG_EV_POLL 0    /* Sent to each connection on each mg_mgr_poll() call */
 #define MG_EV_ACCEPT 1  /* New connection accepted. union socket_address * */
 #define MG_EV_CONNECT 2 /* connect() succeeded or failed. int *  */
-#define MG_EV_RECV 3    /* Data has benn received. int *num_bytes */
+#define MG_EV_RECV 3    /* Data has been received. int *num_bytes */
 #define MG_EV_SEND 4    /* Data has been written to a socket. int *num_bytes */
 #define MG_EV_CLOSE 5   /* Connection is closed. NULL */
 #define MG_EV_TIMER 6   /* now >= conn->ev_timer_time. double * */
@@ -3254,9 +3387,7 @@ struct mg_mgr {
   void *user_data; /* User data */
   int num_ifaces;
   struct mg_iface **ifaces; /* network interfaces */
-#if MG_ENABLE_JAVASCRIPT
-  struct v7 *v7;
-#endif
+  const char *nameserver;   /* DNS server to use */
 };
 
 /*
@@ -3348,9 +3479,10 @@ void mg_mgr_init(struct mg_mgr *mgr, void *user_data);
  * `num_ifaces` pointers it contains will be reclaimed by `mg_mgr_free`.
  */
 struct mg_mgr_init_opts {
-  struct mg_iface_vtable *main_iface;
+  const struct mg_iface_vtable *main_iface;
   int num_ifaces;
-  struct mg_iface_vtable **ifaces;
+  const struct mg_iface_vtable **ifaces;
+  const char *nameserver;
 };
 
 /*
@@ -3392,7 +3524,8 @@ time_t mg_mgr_poll(struct mg_mgr *, int milli);
  * be passed as the `ev_data` pointer. Maximum message size is capped
  * by `MG_CTL_MSG_MESSAGE_SIZE` which is set to 8192 bytes.
  */
-void mg_broadcast(struct mg_mgr *, mg_event_handler_t func, void *, size_t);
+void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
+                  size_t len);
 #endif
 
 /*
@@ -3408,7 +3541,7 @@ void mg_broadcast(struct mg_mgr *, mg_event_handler_t func, void *, size_t);
  * }
  * ```
  */
-struct mg_connection *mg_next(struct mg_mgr *, struct mg_connection *);
+struct mg_connection *mg_next(struct mg_mgr *mgr, struct mg_connection *c);
 
 /*
  * Optional parameters to `mg_add_sock_opt()`.
@@ -3429,7 +3562,9 @@ struct mg_add_sock_opts {
  *
  * For more options see the `mg_add_sock_opt` variant.
  */
-struct mg_connection *mg_add_sock(struct mg_mgr *, sock_t, mg_event_handler_t);
+struct mg_connection *mg_add_sock(struct mg_mgr *mgr, sock_t sock,
+                                  MG_CB(mg_event_handler_t handler,
+                                        void *user_data));
 
 /*
  * Creates a connection, associates it with the given socket and event handler
@@ -3437,9 +3572,10 @@ struct mg_connection *mg_add_sock(struct mg_mgr *, sock_t, mg_event_handler_t);
  *
  * See the `mg_add_sock_opts` structure for a description of the options.
  */
-struct mg_connection *mg_add_sock_opt(struct mg_mgr *, sock_t,
-                                      mg_event_handler_t,
-                                      struct mg_add_sock_opts);
+struct mg_connection *mg_add_sock_opt(struct mg_mgr *mgr, sock_t sock,
+                                      MG_CB(mg_event_handler_t handler,
+                                            void *user_data),
+                                      struct mg_add_sock_opts opts);
 
 /*
  * Optional parameters to `mg_bind_opt()`.
@@ -3485,8 +3621,9 @@ struct mg_bind_opts {
  *
  * See `mg_bind_opt` for full documentation.
  */
-struct mg_connection *mg_bind(struct mg_mgr *, const char *,
-                              mg_event_handler_t);
+struct mg_connection *mg_bind(struct mg_mgr *mgr, const char *address,
+                              MG_CB(mg_event_handler_t handler,
+                                    void *user_data));
 /*
  * Creates a listening connection.
  *
@@ -3495,7 +3632,7 @@ struct mg_connection *mg_bind(struct mg_mgr *, const char *,
  * `address` can be just a port number, e.g. `:8000`. To bind to a specific
  * interface, an IP address can be specified, e.g. `1.2.3.4:8000`. By default,
  * a TCP connection is created. To create UDP connection, prepend `udp://`
- * prefix, e.g. `udp://:8000`. To summarize, `address` paramer has following
+ * prefix, e.g. `udp://:8000`. To summarize, `address` parameter has following
  * format: `[PROTO://][IP_ADDRESS]:PORT`, where `PROTO` could be `tcp` or
  * `udp`.
  *
@@ -3506,7 +3643,8 @@ struct mg_connection *mg_bind(struct mg_mgr *, const char *,
  * NOTE: The connection remains owned by the manager, do not free().
  */
 struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
-                                  mg_event_handler_t handler,
+                                  MG_CB(mg_event_handler_t handler,
+                                        void *user_data),
                                   struct mg_bind_opts opts);
 
 /* Optional parameters to `mg_connect_opt()` */
@@ -3515,6 +3653,7 @@ struct mg_connect_opts {
   unsigned int flags;        /* Extra connection flags */
   const char **error_string; /* Placeholder for the error string */
   struct mg_iface *iface;    /* Interface instance */
+  const char *nameserver;    /* DNS server to use, NULL for default */
 #if MG_ENABLE_SSL
   /*
    * SSL settings.
@@ -3569,7 +3708,8 @@ struct mg_connect_opts {
  * See `mg_connect_opt()` for full documentation.
  */
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
-                                 mg_event_handler_t handler);
+                                 MG_CB(mg_event_handler_t handler,
+                                       void *user_data));
 
 /*
  * Connects to a remote host.
@@ -3620,7 +3760,8 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
  * ```
  */
 struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
-                                     mg_event_handler_t handler,
+                                     MG_CB(mg_event_handler_t handler,
+                                           void *user_data),
                                      struct mg_connect_opts opts);
 
 #if MG_ENABLE_SSL && MG_NET_IF != MG_NET_IF_SIMPLELINK
@@ -3701,7 +3842,7 @@ int mg_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
  * is to allow all access. On each request the full list is traversed,
  * and the last match wins. Example:
  *
- * `-0.0.0.0/0,+192.168/16` - deny all acccesses, only allow 192.168/16 subnet
+ * `-0.0.0.0/0,+192.168/16` - deny all accesses, only allow 192.168/16 subnet
  *
  * To learn more about subnet masks, see this
  * link:https://en.wikipedia.org/wiki/Subnetwork[Wikipedia page on Subnetwork].
@@ -3709,17 +3850,6 @@ int mg_resolve(const char *domain_name, char *ip_addr_buf, size_t buf_len);
  * Returns -1 if ACL is malformed, 0 if address is disallowed, 1 if allowed.
  */
 int mg_check_ip_acl(const char *acl, uint32_t remote_ip);
-
-#if MG_ENABLE_JAVASCRIPT
-/*
- * Enables server-side JavaScript scripting.
- * Requires a `-DMG_ENABLE_JAVASCRIPT` compilation flag and V7 engine sources.
- * V7 instance must not be destroyed during manager's lifetime.
- * Returns a V7 error.
- */
-enum v7_err mg_enable_javascript(struct mg_mgr *m, struct v7 *v7,
-                                 const char *init_js_file_name);
-#endif
 
 /*
  * Schedules an MG_EV_TIMER event to be delivered at `timestamp` time.
@@ -3801,10 +3931,25 @@ extern "C" {
  *
  * Returns 0 on success, -1 on error.
  */
-int mg_parse_uri(struct mg_str uri, struct mg_str *scheme,
+int mg_parse_uri(const struct mg_str uri, struct mg_str *scheme,
                  struct mg_str *user_info, struct mg_str *host,
                  unsigned int *port, struct mg_str *path, struct mg_str *query,
                  struct mg_str *fragment);
+
+/*
+ * Assemble URI from parts. Any of the inputs can be NULL or zero-length mg_str.
+ *
+ * If normalize_path is true, path is normalized by resolving relative refs.
+ *
+ * Result is a heap-allocated string (uri->p must be free()d after use).
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int mg_assemble_uri(const struct mg_str *scheme, const struct mg_str *user_info,
+                    const struct mg_str *host, unsigned int port,
+                    const struct mg_str *path, const struct mg_str *query,
+                    const struct mg_str *fragment, int normalize_path,
+                    struct mg_str *uri);
 
 int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out);
 
@@ -3836,8 +3981,12 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out);
 extern "C" {
 #endif /* __cplusplus */
 
-#ifndef MAX_PATH_SIZE
-#define MAX_PATH_SIZE 500
+#ifndef MG_MAX_PATH
+#ifdef PATH_MAX
+#define MG_MAX_PATH PATH_MAX
+#else
+#define MG_MAX_PATH 256
+#endif
 #endif
 
 /*
@@ -3898,6 +4047,21 @@ FILE *mg_fopen(const char *path, const char *mode);
  * Return value is the same as for the `open()` syscall.
  */
 int mg_open(const char *path, int flag, int mode);
+
+/*
+ * Reads data from the given file stream.
+ *
+ * Return value is a number of bytes readen.
+ */
+size_t mg_fread(void *ptr, size_t size, size_t count, FILE *f);
+
+/*
+ * Writes data to the given file stream.
+ *
+ * Return value is a number of bytes wtitten.
+ */
+size_t mg_fwrite(const void *ptr, size_t size, size_t count, FILE *f);
+
 #endif /* MG_ENABLE_FILESYSTEM */
 
 #if MG_ENABLE_THREADS
@@ -3927,9 +4091,10 @@ void mg_set_close_on_exec(sock_t);
  *
  * If both port number and IP address are printed, they are separated by `:`.
  * If compiled with `-DMG_ENABLE_IPV6`, IPv6 addresses are supported.
+ * Return length of the stringified address.
  */
-void mg_conn_addr_to_str(struct mg_connection *nc, char *buf, size_t len,
-                         int flags);
+int mg_conn_addr_to_str(struct mg_connection *c, char *buf, size_t len,
+                        int flags);
 #if MG_NET_IF == MG_NET_IF_SOCKET
 /* Legacy interface. */
 void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
@@ -3940,8 +4105,8 @@ void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags);
  *
  * `flags` is MG_SOCK_STRINGIFY_IP and/or MG_SOCK_STRINGIFY_PORT.
  */
-void mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
-                         int flags);
+int mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
+                        int flags);
 
 #if MG_ENABLE_HEXDUMP
 /*
@@ -3974,32 +4139,6 @@ void mg_hexdump_connection(struct mg_connection *nc, const char *path,
 int mg_is_big_endian(void);
 
 /*
- * A helper function for traversing a comma separated list of values.
- * It returns a list pointer shifted to the next value or NULL if the end
- * of the list found.
- * The value is stored in a val vector. If the value has a form "x=y", then
- * eq_val vector is initialised to point to the "y" part, and val vector length
- * is adjusted to point only to "x".
- * If the list is just a comma separated list of entries, like "aa,bb,cc" then
- * `eq_val` will contain zero-length string.
- *
- * The purpose of this function is to parse comma separated string without
- * any copying/memory allocation.
- */
-const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
-                                     struct mg_str *eq_val);
-
-/*
- * Matches 0-terminated string (mg_match_prefix) or string with given length
- * mg_match_prefix_n against a glob pattern.
- *
- * Match is case-insensitive. Returns number of bytes matched, or -1 if no
- * match.
- */
-int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
-int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
-
-/*
  * Use with cs_base64_init/update/finish in order to write out base64 in chunks.
  */
 void mg_mbuf_append_base64_putc(char ch, void *user_data);
@@ -4014,7 +4153,16 @@ void mg_mbuf_append_base64(struct mbuf *mbuf, const void *data, size_t len);
  * If pass is NULL, then user is expected to contain the credentials pair
  * already encoded as `user:pass`.
  */
-void mg_basic_auth_header(const char *user, const char *pass, struct mbuf *buf);
+void mg_basic_auth_header(const struct mg_str user, const struct mg_str pass,
+                          struct mbuf *buf);
+
+/*
+ * URL-escape the specified string.
+ * All non-printable characters are escaped, plus `._-$,;~()/`.
+ * Input need not be NUL-terminated, but the returned string is.
+ * Returned string is heap-allocated and must be free()'d.
+ */
+struct mg_str mg_url_encode(const struct mg_str src);
 
 #ifdef __cplusplus
 }
@@ -4052,14 +4200,6 @@ extern "C" {
 #define MG_MAX_HTTP_REQUEST_SIZE 1024
 #endif
 
-#ifndef MG_MAX_PATH
-#ifdef PATH_MAX
-#define MG_MAX_PATH PATH_MAX
-#else
-#define MG_MAX_PATH 256
-#endif
-#endif
-
 #ifndef MG_MAX_HTTP_SEND_MBUF
 #define MG_MAX_HTTP_SEND_MBUF 1024
 #endif
@@ -4071,6 +4211,7 @@ extern "C" {
 /* HTTP message */
 struct http_message {
   struct mg_str message; /* Whole message: request line + headers + body */
+  struct mg_str body;    /* Message body. 0-length for requests with no body */
 
   /* HTTP Request line (or HTTP response line) */
   struct mg_str method; /* "GET" */
@@ -4094,9 +4235,6 @@ struct http_message {
   /* Headers */
   struct mg_str header_names[MG_MAX_HTTP_HEADERS];
   struct mg_str header_values[MG_MAX_HTTP_HEADERS];
-
-  /* Message body */
-  struct mg_str body; /* Zero-length for requests with no body */
 };
 
 #if MG_ENABLE_HTTP_WEBSOCKET
@@ -4238,6 +4376,17 @@ void mg_send_websocket_handshake3(struct mg_connection *nc, const char *path,
                                   const char *host, const char *protocol,
                                   const char *extra_headers, const char *user,
                                   const char *pass);
+
+/* Same as mg_send_websocket_handshake3 but with strings not necessarily
+ * NUL-temrinated */
+void mg_send_websocket_handshake3v(struct mg_connection *nc,
+                                   const struct mg_str path,
+                                   const struct mg_str host,
+                                   const struct mg_str protocol,
+                                   const struct mg_str extra_headers,
+                                   const struct mg_str user,
+                                   const struct mg_str pass);
+
 /*
  * Helper function that creates an outbound WebSocket connection.
  *
@@ -4259,7 +4408,8 @@ void mg_send_websocket_handshake3(struct mg_connection *nc, const char *path,
  * ```
  */
 struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
-                                    mg_event_handler_t event_handler,
+                                    MG_CB(mg_event_handler_t event_handler,
+                                          void *user_data),
                                     const char *url, const char *protocol,
                                     const char *extra_headers);
 
@@ -4269,11 +4419,10 @@ struct mg_connection *mg_connect_ws(struct mg_mgr *mgr,
  * Mostly identical to `mg_connect_ws`, but allows to provide extra parameters
  * (for example, SSL parameters)
  */
-struct mg_connection *mg_connect_ws_opt(struct mg_mgr *mgr,
-                                        mg_event_handler_t ev_handler,
-                                        struct mg_connect_opts opts,
-                                        const char *url, const char *protocol,
-                                        const char *extra_headers);
+struct mg_connection *mg_connect_ws_opt(
+    struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
+    struct mg_connect_opts opts, const char *url, const char *protocol,
+    const char *extra_headers);
 
 /*
  * Send WebSocket frame to the remote end.
@@ -4299,7 +4448,8 @@ void mg_send_websocket_frame(struct mg_connection *nc, int op_and_flags,
 /*
  * Sends multiple websocket frames.
  *
- * Like `mg_send_websocket_frame()`, but composes a frame from multiple buffers.
+ * Like `mg_send_websocket_frame()`, but composes a frame from multiple
+ *buffers.
  */
 void mg_send_websocket_framev(struct mg_connection *nc, int op_and_flags,
                               const struct mg_str *strings, int num_strings);
@@ -4344,11 +4494,17 @@ void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
  * (`dst`, `dst_len`). If `is_form_url_encoded` is non-zero, then
  * `+` character is decoded as a blank space character. This function
  * guarantees to NUL-terminate the destination. If destination is too small,
- * then the source string is partially decoded and `-1` is returned. Otherwise,
+ * then the source string is partially decoded and `-1` is returned.
+ *Otherwise,
  * a length of the decoded string is returned, not counting final NUL.
  */
 int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
                   int is_form_url_encoded);
+
+extern void mg_hash_md5_v(size_t num_msgs, const uint8_t *msgs[],
+                          const size_t *msg_lens, uint8_t *digest);
+extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
+                           const size_t *msg_lens, uint8_t *digest);
 
 #ifdef __cplusplus
 }
@@ -4473,7 +4629,8 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
  * Fetches a variable `name` from a `buf` into a buffer specified by `dst`,
  * `dst_len`. The destination is always zero-terminated. Returns the length of
  * a fetched variable. If not found, 0 is returned. `buf` must be valid
- * url-encoded buffer. If destination is too small, `-1` is returned.
+ * url-encoded buffer. If destination is too small or an error occured,
+ * negative number is returned.
  */
 int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
                     size_t dst_len);
@@ -4724,7 +4881,8 @@ typedef struct mg_str (*mg_fu_fname_fn)(struct mg_connection *nc,
  * ```
  */
 void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
-                            mg_fu_fname_fn local_name_fn);
+                            mg_fu_fname_fn local_name_fn
+                                MG_UD_ARG(void *user_data));
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
 #endif /* MG_ENABLE_FILESYSTEM */
 
@@ -4742,7 +4900,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
  *  nc->flags |= MG_F_SEND_AND_CLOSE;
  * }
  *
- * static void handle_hello1(struct mg_connection *nc, int ev, void *ev_data) {
+ * static void handle_hello2(struct mg_connection *nc, int ev, void *ev_data) {
  *  (void) ev; (void) ev_data;
  *   mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\n[I am Hello2]");
  *  nc->flags |= MG_F_SEND_AND_CLOSE;
@@ -4756,7 +4914,20 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
  * ```
  */
 void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
-                               mg_event_handler_t handler);
+                               MG_CB(mg_event_handler_t handler,
+                                     void *user_data));
+
+struct mg_http_endpoint_opts {
+  void *user_data;
+  /* Authorization domain (realm) */
+  const char *auth_domain;
+  const char *auth_file;
+};
+
+void mg_register_http_endpoint_opt(struct mg_connection *nc,
+                                   const char *uri_path,
+                                   mg_event_handler_t handler,
+                                   struct mg_http_endpoint_opts opts);
 
 /*
  * Authenticates a HTTP request against an opened password file.
@@ -4766,10 +4937,22 @@ int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
                               FILE *fp);
 
 /*
+ * Authenticates given response params against an opened password file.
+ * Returns 1 if authenticated, 0 otherwise.
+ *
+ * It's used by mg_http_check_digest_auth().
+ */
+int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
+                         struct mg_str username, struct mg_str cnonce,
+                         struct mg_str response, struct mg_str qop,
+                         struct mg_str nc, struct mg_str nonce,
+                         struct mg_str auth_domain, FILE *fp);
+
+/*
  * Sends buffer `buf` of size `len` to the client using chunked HTTP encoding.
  * This function sends the buffer size as hex number + newline first, then
  * the buffer itself, then the newline. For example,
- * `mg_send_http_chunk(nc, "foo", 3)` whill append the `3\r\nfoo\r\n` string
+ * `mg_send_http_chunk(nc, "foo", 3)` will append the `3\r\nfoo\r\n` string
  * to the `nc->send_mbuf` output IO buffer.
  *
  * NOTE: The HTTP header "Transfer-Encoding: chunked" should be sent prior to
@@ -4794,7 +4977,7 @@ void mg_printf_http_chunk(struct mg_connection *nc, const char *fmt, ...);
 /*
  * Sends the response status line.
  * If `extra_headers` is not NULL, then `extra_headers` are also sent
- * after the reponse line. `extra_headers` must NOT end end with new line.
+ * after the response line. `extra_headers` must NOT end end with new line.
  * Example:
  *
  *      mg_send_response_line(nc, 200, "Access-Control-Allow-Origin: *");
@@ -4818,7 +5001,7 @@ void mg_http_send_error(struct mg_connection *nc, int code, const char *reason);
  * `status_code` should be either 301 or 302 and `location` point to the
  * new location.
  * If `extra_headers` is not empty, then `extra_headers` are also sent
- * after the reponse line. `extra_headers` must NOT end end with new line.
+ * after the response line. `extra_headers` must NOT end end with new line.
  *
  * Example:
  *
@@ -4911,11 +5094,10 @@ extern "C" {
  *       "var_1=value_1&var_2=value_2");
  * ```
  */
-struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
-                                      mg_event_handler_t event_handler,
-                                      const char *url,
-                                      const char *extra_headers,
-                                      const char *post_data);
+struct mg_connection *mg_connect_http(
+    struct mg_mgr *mgr,
+    MG_CB(mg_event_handler_t event_handler, void *user_data), const char *url,
+    const char *extra_headers, const char *post_data);
 
 /*
  * Helper function that creates an outbound HTTP connection.
@@ -4924,12 +5106,10 @@ struct mg_connection *mg_connect_http(struct mg_mgr *mgr,
  *parameters
  * (for example, SSL parameters)
  */
-struct mg_connection *mg_connect_http_opt(struct mg_mgr *mgr,
-                                          mg_event_handler_t ev_handler,
-                                          struct mg_connect_opts opts,
-                                          const char *url,
-                                          const char *extra_headers,
-                                          const char *post_data);
+struct mg_connection *mg_connect_http_opt(
+    struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
+    struct mg_connect_opts opts, const char *url, const char *extra_headers,
+    const char *post_data);
 
 /* Creates digest authentication header for a client request. */
 int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
@@ -4973,6 +5153,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
 struct mg_mqtt_message {
   int cmd;
   int qos;
+  int len; /* message length in the IO buffer */
   struct mg_str topic;
   struct mg_str payload;
 
@@ -5008,6 +5189,7 @@ struct mg_send_mqtt_handshake_opts {
 /* mg_mqtt_proto_data should be in header to allow external access to it */
 struct mg_mqtt_proto_data {
   uint16_t keep_alive;
+  double last_control_time;
 };
 
 /* Message types */
@@ -5152,6 +5334,19 @@ void mg_mqtt_pong(struct mg_connection *nc);
 int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
                                  struct mg_str *topic, uint8_t *qos, int pos);
 
+/*
+ * Matches a topic against a topic expression
+ *
+ * Returns 1 if it matches; 0 otherwise.
+ */
+int mg_mqtt_match_topic_expression(struct mg_str exp, struct mg_str topic);
+
+/*
+ * Same as `mg_mqtt_match_topic_expression()`, but takes `exp` as a
+ * NULL-terminated string.
+ */
+int mg_mqtt_vmatch_topic_expression(const char *exp, struct mg_str topic);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
@@ -5193,7 +5388,9 @@ int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
 extern "C" {
 #endif /* __cplusplus */
 
-#define MG_MQTT_MAX_SESSION_SUBSCRIPTIONS 512;
+#ifndef MG_MQTT_MAX_SESSION_SUBSCRIPTIONS
+#define MG_MQTT_MAX_SESSION_SUBSCRIPTIONS 512
+#endif
 
 struct mg_mqtt_broker;
 
@@ -5290,6 +5487,8 @@ extern "C" {
 #define MG_DNS_AAAA_RECORD 0x1c  /* Lookup IPv6 address */
 #define MG_DNS_SRV_RECORD 0x21   /* Lookup SRV */
 #define MG_DNS_MX_RECORD 0x0f    /* Lookup mail server for domain */
+#define MG_DNS_ANY_RECORD 0xff
+#define MG_DNS_NSEC_RECORD 0x2f
 
 #define MG_MAX_DNS_QUESTIONS 32
 #define MG_MAX_DNS_ANSWERS 32
@@ -5379,7 +5578,7 @@ int mg_dns_copy_questions(struct mbuf *io, struct mg_dns_message *msg);
  * struct because they might be invalidated as soon as the IO buffer grows
  * again.
  *
- * Returns the number of bytes appened or -1 in case of error.
+ * Returns the number of bytes appended or -1 in case of error.
  */
 int mg_dns_encode_record(struct mbuf *io, struct mg_dns_resource_record *rr,
                          const char *name, size_t nlen, const void *rdata,
@@ -5557,7 +5756,7 @@ typedef void (*mg_resolve_callback_t)(struct mg_dns_message *dns_message,
 
 /* Options for `mg_resolve_async_opt`. */
 struct mg_resolve_async_opts {
-  const char *nameserver_url;
+  const char *nameserver;
   int max_retries;    /* defaults to 2 if zero */
   int timeout;        /* in seconds; defaults to 5 if zero */
   int accept_literal; /* pseudo-resolve literal ipv4 and ipv6 addrs */
@@ -5568,6 +5767,9 @@ struct mg_resolve_async_opts {
 /* See `mg_resolve_async_opt()` */
 int mg_resolve_async(struct mg_mgr *mgr, const char *name, int query,
                      mg_resolve_callback_t cb, void *data);
+
+/* Set default DNS server */
+void mg_set_nameserver(struct mg_mgr *mgr, const char *nameserver);
 
 /*
  * Resolved a DNS name asynchronously.
@@ -5717,7 +5919,7 @@ struct mg_coap_option *mg_coap_add_option(struct mg_coap_message *cm,
 
 /*
  * Frees the memory allocated for options.
- * If the cm paramater doesn't contain any option it does nothing.
+ * If the cm parameter doesn't contain any option it does nothing.
  */
 void mg_coap_free_options(struct mg_coap_message *cm);
 
@@ -5809,7 +6011,8 @@ struct mg_sntp_message {
 
 /* Establishes connection to given sntp server */
 struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr,
-                                      mg_event_handler_t event_handler,
+                                      MG_CB(mg_event_handler_t event_handler,
+                                            void *user_data),
                                       const char *sntp_server_name);
 
 /* Sends time request to given connection */

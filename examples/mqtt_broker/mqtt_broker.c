@@ -17,22 +17,31 @@
 
 #include "../../mongoose.h"
 
+static const char *s_listening_address = "0.0.0.0:1883";
+
+static void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev != MG_EV_POLL) printf("USER HANDLER GOT EVENT %d\n", ev);
+  /* Do your custom event processing here */
+  mg_mqtt_broker(c, ev, ev_data);
+}
+
 int main(void) {
   struct mg_mgr mgr;
-  const char *address = "0.0.0.0:1883";
-  struct mg_connection *nc;
+  struct mg_connection *c;
   struct mg_mqtt_broker brk;
 
   mg_mgr_init(&mgr, NULL);
   mg_mqtt_broker_init(&brk, NULL);
 
-  if ((nc = mg_bind(&mgr, address, mg_mqtt_broker)) == NULL) {
-    fprintf(stderr, "mg_bind(%s) failed\n", address);
+  if ((c = mg_bind(&mgr, s_listening_address, ev_handler)) == NULL) {
+    fprintf(stderr, "mg_bind(%s) failed\n", s_listening_address);
     exit(EXIT_FAILURE);
   }
-  nc->user_data = &brk;
+  mg_mqtt_broker_init(&brk, NULL);
+  c->user_data = &brk;
+  mg_set_protocol_mqtt(c);
 
-  printf("MQTT broker started on %s\n", address);
+  printf("MQTT broker started on %s\n", s_listening_address);
 
   /*
    * TODO: Add a HTTP status page that shows current sessions

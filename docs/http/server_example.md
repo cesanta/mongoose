@@ -30,8 +30,8 @@ static void ev_handler(struct mg_connection *c, int ev, void *p) {
 
     // We have received an HTTP request. Parsed request is contained in `hm`.
     // Send HTTP reply to the client which shows full original request.
-    mg_send_head(c, 200, hm.message.len, "Content-Type: text/plain");
-    mg_printf(c, "%.*s", hm.message.len, hm.message.p);
+    mg_send_head(c, 200, hm->message.len, "Content-Type: text/plain");
+    mg_printf(c, "%.*s", (int)hm->message.len, hm->message.p);
   }
 }
 

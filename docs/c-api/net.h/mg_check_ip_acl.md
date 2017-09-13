@@ -18,7 +18,7 @@ Subnet masks may vary from 0 to 32, inclusive. The default setting
 is to allow all access. On each request the full list is traversed,
 and the last match wins. Example:
 
-`-0.0.0.0/0,+192.168/16` - deny all acccesses, only allow 192.168/16 subnet
+`-0.0.0.0/0,+192.168/16` - deny all accesses, only allow 192.168/16 subnet
 
 To learn more about subnet masks, see this
 link:https://en.wikipedia.org/wiki/Subnetwork[Wikipedia page on Subnetwork].

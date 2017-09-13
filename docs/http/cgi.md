@@ -16,7 +16,7 @@ CGI file must be executable. Mongoose honours the shebang line - see
 http://en.wikipedia.org/wiki/Shebang_(Unix).
 
 For example, if both PHP and Perl CGIs are used, then
-``#!/path/to/php-cgi.exe` and ``#!/path/to/perl.exe` must be the first lines
+`#!/path/to/php-cgi.exe` and `#!/path/to/perl.exe` must be the first lines
 of the respective CGI scripts.
 
 It is possible to hardcode the path to the CGI interpreter for all
@@ -29,3 +29,7 @@ Example:
 ```c
   opts.cgi_interpreter = "C:\\ruby\\ruby.exe";
 ```
+NOTE: In the CGI handler we don't use explicitly a system call waitpid() for
+reaping zombie processes. Instead, we set the SIGCHLD handler to SIG_IGN.
+It will cause zombie processes to be reaped automatically.
+CAUTION: not all OSes (e.g. QNX) reap zombies if SIGCHLD is ignored.

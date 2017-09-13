@@ -21,5 +21,5 @@ This function doesn't update the `name` and `rdata` pointers in the `rr`
 struct because they might be invalidated as soon as the IO buffer grows
 again.
 
-Returns the number of bytes appened or -1 in case of error. 
+Returns the number of bytes appended or -1 in case of error. 
 

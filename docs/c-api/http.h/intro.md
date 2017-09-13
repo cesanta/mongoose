@@ -11,6 +11,7 @@ items:
   - { name: mg_send_websocket_handshake.md }
   - { name: mg_send_websocket_handshake2.md }
   - { name: mg_send_websocket_handshake3.md }
+  - { name: mg_send_websocket_handshake3v.md }
   - { name: mg_set_protocol_http_websocket.md }
   - { name: mg_url_decode.md }
   - { name: struct_http_message.md }
