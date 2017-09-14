@@ -15465,6 +15465,7 @@ int ssl_socket_recv(void *ctx, unsigned char *buf, size_t len) {
   }
   size_t seg_len = (seg->len - cs->rx_offset);
   DBG(("%u %u %u %u", len, cs->rx_chain->len, seg_len, cs->rx_chain->tot_len));
+  mgos_lock();
   len = MIN(len, seg_len);
   pbuf_copy_partial(seg, buf, len, cs->rx_offset);
   cs->rx_offset += len;
@@ -15476,6 +15477,7 @@ int ssl_socket_recv(void *ctx, unsigned char *buf, size_t len) {
     pbuf_free(seg);
     cs->rx_offset = 0;
   }
+  mgos_unlock();
   LOG(LL_DEBUG, ("%p <- %d", nc, (int) len));
   return len;
 }
