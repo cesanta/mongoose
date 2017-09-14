@@ -2218,6 +2218,8 @@ MG_INTERNAL void mg_remove_conn(struct mg_connection *conn) {
 MG_INTERNAL void mg_call(struct mg_connection *nc,
                          mg_event_handler_t ev_handler, void *user_data, int ev,
                          void *ev_data) {
+  static int nesting_level = 0;
+  nesting_level++;
   if (ev_handler == NULL) {
     /*
      * If protocol handler is specified, call it. Otherwise, call user-specified
@@ -2247,7 +2249,10 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
       nc->flags = (flags_before & ~_MG_CALLBACK_MODIFIABLE_FLAGS_MASK) |
                   (nc->flags & _MG_CALLBACK_MODIFIABLE_FLAGS_MASK);
     }
-    if (recved > 0 && !(nc->flags & MG_F_UDP)) {
+    /* It's important to not double-count recved bytes, and since mg_call can be
+     * called recursively (e.g. proto_handler invokes user handler), we keep
+     * track of recursion and only report received bytes at the top level. */
+    if (nesting_level == 1 && recved > 0 && !(nc->flags & MG_F_UDP)) {
       nc->iface->vtable->recved(nc, recved);
     }
   }
@@ -2256,6 +2261,7 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
          ev_handler == nc->handler ? "user" : "proto", nc->flags,
          (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
   }
+  nesting_level--;
 #if !MG_ENABLE_CALLBACK_USERDATA
   (void) user_data;
 #endif
@@ -14439,6 +14445,7 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
     struct pbuf *q = p->next;
     for (; q != NULL; q = q->next) pbuf_ref(q);
   }
+  mgos_lock();
   if (cs->rx_chain == NULL) {
     cs->rx_offset = 0;
   } else if (pbuf_clen(cs->rx_chain) >= 4) {
@@ -14452,6 +14459,7 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
       p = np;
     }
   }
+  mgos_unlock();
   mg_lwip_recv_common(nc, p);
   return ERR_OK;
 }
@@ -14929,7 +14937,8 @@ void mg_lwip_if_recved(struct mg_connection *nc, size_t len) {
     DBG(("%p invalid socket", nc));
     return;
   }
-  DBG(("%p %p %u", nc, cs->pcb.tcp, len));
+  DBG(("%p %p %u %u", nc, cs->pcb.tcp, len,
+       (cs->rx_chain ? cs->rx_chain->tot_len : 0)));
   struct tcp_recved_ctx ctx = {.tpcb = cs->pcb.tcp, .len = len};
 #if MG_ENABLE_SSL
   if (!(nc->flags & MG_F_SSL)) {
