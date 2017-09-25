@@ -7809,6 +7809,8 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
 void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
                    struct mg_serve_http_opts opts) {
   char *path = NULL;
+  size_t pathlen_dr=0, pathlen_fr=0;
+  cs_stat_t st;
   struct mg_str *hdr, path_info;
   uint32_t remote_ip = ntohl(*(uint32_t *) &nc->sa.sin.sin_addr);
 
@@ -7855,6 +7857,22 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
   if (mg_uri_to_local_path(hm, &opts, &path, &path_info) == 0) {
     mg_http_send_error(nc, 404, NULL);
     return;
+  }
+  if(opts.fallback_resource != NULL && mg_stat(path, &st)) {
+    pathlen_dr=strlen(opts.document_root);
+    pathlen_fr=strlen(opts.fallback_resource);
+    path = (char *) MG_REALLOC(path, pathlen_dr+pathlen_fr+2); /* save 1 char for optional / */
+    if(!path){
+      mg_http_send_error(nc, 500, NULL);
+      return;
+    }
+    memcpy(path, opts.document_root, pathlen_dr);
+    if(path[pathlen_dr-1] != '/') {
+        path[pathlen_dr] = '/';
+        pathlen_dr++;
+    }
+    memcpy(path+pathlen_dr, opts.fallback_resource, pathlen_fr+1);
+    path_info.len = 0; //necessary?
   }
   mg_send_http_file(nc, path, &path_info, hm, &opts);
 

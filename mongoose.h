@@ -4648,6 +4648,12 @@ struct mg_serve_http_opts {
   const char *index_files;
 
   /*
+   * Fallback resource for when a resource is not found
+   * Leave as NULL to disable the functionnality.
+   */
+  const char *fallback_resource;
+
+  /*
    * Leave as NULL to disable authentication.
    * To enable directory protection with authentication, set this to ".htpasswd"
    * Then, creating ".htpasswd" file in any directory automatically protects
