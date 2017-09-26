@@ -7858,7 +7858,9 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
     mg_http_send_error(nc, 404, NULL);
     return;
   }
-  if(opts.fallback_resource != NULL && mg_stat(path, &st)) {
+  if(opts.fallback_resource != NULL &&
+    ( mg_stat(path, &st) ||
+    ( S_ISDIR(st.st_mode) && strcmp(opts.enable_directory_listing, "yes") ) ) ) {
     pathlen_dr=strlen(opts.document_root);
     pathlen_fr=strlen(opts.fallback_resource);
     path = (char *) MG_REALLOC(path, pathlen_dr+pathlen_fr+2); /* save 1 char for optional / */
