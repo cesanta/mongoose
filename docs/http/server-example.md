@@ -1,6 +1,4 @@
----
-title: HTTP server example
----
+# HTTP server example
 
 To create an HTTP server, follow this pattern:
 

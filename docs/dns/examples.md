@@ -1,6 +1,7 @@
----
-title: DNS server example
----
+# Examples
+
+
+## DNS server example
 
 To create a DNS server, follow this pattern:
 
@@ -71,3 +72,10 @@ int main(int argc, char *argv[]) {
 ```
 
 See full [Captive DNS server example](https://github.com/cesanta/mongoose/tree/master/examples/captive_dns_server).
+
+
+## DNS client example
+
+See https://github.com/cesanta/mongoose/blob/master/mongoose.c and search
+for the `mg_resolve_async_eh()` function - that is the core of
+built-in Mongoose async DNS resolver.

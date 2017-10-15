@@ -1,6 +1,4 @@
----
-title: SSI
----
+# SSI
 
 Server Side Includes (SSI) is a simple interpreted server-side scripting
 language which is most commonly used to include the contents of a file

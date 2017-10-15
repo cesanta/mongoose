@@ -1,6 +1,4 @@
----
-title: Example - TCP echo server
----
+# Example - TCP echo server
 
 - Copy `mongoose.c` and `mongoose.h` to your build tree
 - Write code that uses the Mongoose API, e.g. in `my_app.c`

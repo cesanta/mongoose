@@ -1,6 +1,4 @@
----
-title: Events
----
+# Events
 
 Mongoose accepts incoming connections, reads and writes data and calls
 specified event handlers for each connection when appropriate. A typical event

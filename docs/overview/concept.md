@@ -1,6 +1,4 @@
----
-title: Design Concept
----
+# Design Concept
 
 Mongoose has three basic data structures:
 

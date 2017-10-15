@@ -1,6 +1,4 @@
----
-title: Memory buffers
----
+# Memory buffers
 
 Each connection has a send and receive buffer, `struct mg_connection::send_mbuf`
 and `struct mg_connection::recv_mbuf` respectively. When data arrives,
@@ -11,4 +9,4 @@ When Mongoose successfully writes data to the socket, it discards data from
 `struct mg_connection::send_mbuf` and sends an `MG_EV_SEND` event. When the connection
 is closed, an `MG_EV_CLOSE` event is sent.
 
-![](media/mbuf.png)
+![](/docs/media/mbuf.png)

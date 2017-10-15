@@ -1,6 +1,4 @@
----
-title: Enabling HTTPS
----
+# Enabling SSL (HTTPS)
 
 To enable SSL on the server side, please follow these steps:
 

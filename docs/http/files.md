@@ -1,6 +1,4 @@
----
-title: Serving files
----
+# Serving files
 
 API function `mg_serve_http()` makes it easy to serve files from a filesystem.
 Generally speaking, that function is an implementation of the HTTP server

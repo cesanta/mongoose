@@ -1,6 +1,4 @@
----
-title: CGI
----
+# CGI
 
 [CGI](https://en.wikipedia.org/wiki/Common_Gateway_Interface)
 is a simple mechanism to generate dynamic content.

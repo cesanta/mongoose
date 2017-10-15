@@ -1,6 +1,4 @@
----
-title: HTTP events
----
+#: HTTP events
 
 As discussed in the overview, `mg_set_protocol_http_websocket()` function
 parses incoming data, treats it as HTTP or WebSocket, and triggers high-level

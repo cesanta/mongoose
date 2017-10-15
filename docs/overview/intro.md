@@ -1,15 +1,4 @@
----
-title: Overview
-items:
-#  - { name: usage-example.md }
-  - { name: concept.md }
-  - { name: mbufs.md }
-  - { name: event-handler.md }
-  - { name: events.md }
-  - { name: conn-flags.md }
-  - { name: build-options }
-  - { name: usage-example.md }
----
+# Introduction
 
 Mongoose is a networking library written in C.
 It is a swiss army knife for embedded network programming.

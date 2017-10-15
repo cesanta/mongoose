@@ -1,14 +1,12 @@
----
-title: Handling file uploads
----
+# Handling file uploads
 
 In order to handle file uploads, use the following HTML snippet:
 
 ```HTML
-&lt;form method="POST" action="/upload" enctype="multipart/form-data"&gt;
-  &lt;input type="file" name="file"&gt;
-  &lt;input type="submit" value="Upload"&gt;
-&lt;/form&gt;
+<form method="POST" action="/upload" enctype="multipart/form-data">
+  <input type="file" name="file">
+  <input type="submit" value="Upload">
+</form>
 ```
 
 Uploaded files will be sent to the `/upload` endpoint via the `POST` request.

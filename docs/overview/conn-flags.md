@@ -1,6 +1,4 @@
----
-title: Connection flags
----
+# Connection flags
 
 Each connection has a `flags` bit field. Some flags are set by Mongoose, for
 example if a user creates an outbound UDP connection using a `udp://1.2.3.4:5678`

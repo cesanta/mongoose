@@ -1,6 +1,4 @@
----
-title: HTTP client example
----
+# HTTP client example
 
 To create an HTTP client, follow this pattern:
 

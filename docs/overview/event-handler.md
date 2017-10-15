@@ -1,6 +1,4 @@
----
-title: Event handler function
----
+# Event handler function
 
 Each connection has an event handler function associated with it. That function
 must be implemented by the user. Event handler is the key element of the Mongoose
