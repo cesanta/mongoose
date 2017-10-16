@@ -3231,6 +3231,31 @@ struct mg_connection *mg_tun_if_find_conn(struct mg_tun_client *client,
 
 #endif /* CS_MONGOOSE_SRC_NET_IF_TUN_H_ */
 #ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/net_if_socks.h"
+#endif
+/*
+* Copyright (c) 2014-2017 Cesanta Software Limited
+* All rights reserved
+*/
+
+#ifndef CS_MONGOOSE_SRC_NET_IF_SOCKS_H_
+#define CS_MONGOOSE_SRC_NET_IF_SOCKS_H_
+
+#if MG_ENABLE_SOCKS
+/* Amalgamated: #include "mongoose/src/net_if.h" */
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+extern const struct mg_iface_vtable mg_socks_iface_vtable;
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+#endif /* MG_ENABLE_SOCKS */
+#endif /* CS_MONGOOSE_SRC_NET_IF_SOCKS_H_ */
+#ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net_if.c"
 #endif
 /* Amalgamated: #include "mongoose/src/net_if.h" */
@@ -3240,12 +3265,12 @@ struct mg_connection *mg_tun_if_find_conn(struct mg_tun_client *client,
 
 extern const struct mg_iface_vtable mg_default_iface_vtable;
 
+const struct mg_iface_vtable *mg_ifaces[] = {
+  &mg_default_iface_vtable,
 #if MG_ENABLE_TUN
-const struct mg_iface_vtable *mg_ifaces[] = {&mg_default_iface_vtable,
-                                             &mg_tun_iface_vtable};
-#else
-const struct mg_iface_vtable *mg_ifaces[] = {&mg_default_iface_vtable};
+  &mg_tun_iface_vtable,
 #endif
+};
 
 int mg_num_ifaces = (int) (sizeof(mg_ifaces) / sizeof(mg_ifaces[0]));
 
@@ -4021,6 +4046,220 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_SOCKET_IFACE_VTABLE;
 #endif
 
 #endif /* MG_ENABLE_NET_IF_SOCKET */
+#ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/net_if_socks.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if MG_ENABLE_SOCKS
+
+#define MG_SOCKS_HANDSHAKE_DONE MG_F_USER_1
+#define MG_SOCKS_CONNECT_DONE MG_F_USER_2
+
+struct socksdata {
+  char *proxy_addr;        /* HOST:PORT of the socks5 proxy server */
+  struct mg_connection *s; /* Respective connection to the server */
+  struct mg_connection *c; /* Connection to the client */
+  struct mbuf tmp;         /* Temporary buffer for sent data */
+};
+
+static void socks_if_disband(struct socksdata *d) {
+  LOG(LL_DEBUG, ("disbanding proxy %p %p", d->c, d->s));
+  if (d->c) d->c->flags |= MG_F_SEND_AND_CLOSE;
+  if (d->s) d->s->flags |= MG_F_SEND_AND_CLOSE;
+  d->c = d->s = NULL;
+}
+
+static void socks_if_handler(struct mg_connection *c, int ev, void *ev_data) {
+  struct socksdata *d = (struct socksdata *) c->user_data;
+  if (ev == MG_EV_CONNECT) {
+    int res = *(int *) ev_data;
+    if (res == 0) {
+      /* Send handshake to the proxy server */
+      unsigned char buf[] = {MG_SOCKS_VERSION, 1, MG_SOCKS_HANDSHAKE_NOAUTH};
+      mg_send(d->s, buf, sizeof(buf));
+      LOG(LL_DEBUG, ("Sent handshake to %s", d->proxy_addr));
+    } else {
+      LOG(LL_ERROR, ("Cannot connect to %s: %d", d->proxy_addr, res));
+      d->c->flags |= MG_F_CLOSE_IMMEDIATELY;
+    }
+  } else if (ev == MG_EV_CLOSE) {
+    socks_if_disband(d);
+  } else if (ev == MG_EV_RECV) {
+    /* Handle handshake reply */
+    if (!(c->flags & MG_SOCKS_HANDSHAKE_DONE)) {
+      /* TODO(lsm): process IPv6 too */
+      unsigned char buf[10] = {MG_SOCKS_VERSION, MG_SOCKS_CMD_CONNECT, 0,
+                               MG_SOCKS_ADDR_IPV4};
+      if (c->recv_mbuf.len < 2) return;
+      if ((unsigned char) c->recv_mbuf.buf[1] == MG_SOCKS_HANDSHAKE_FAILURE) {
+        LOG(LL_ERROR, ("Server kicked us out"));
+        socks_if_disband(d);
+        return;
+      }
+      mbuf_remove(&c->recv_mbuf, 2);
+      c->flags |= MG_SOCKS_HANDSHAKE_DONE;
+
+      /* Send connect request */
+      memcpy(buf + 4, &d->c->sa.sin.sin_addr, 4);
+      memcpy(buf + 8, &d->c->sa.sin.sin_port, 2);
+      mg_send(c, buf, sizeof(buf));
+    }
+    /* Process connect request */
+    if ((c->flags & MG_SOCKS_HANDSHAKE_DONE) &&
+        !(c->flags & MG_SOCKS_CONNECT_DONE)) {
+      if (c->recv_mbuf.len < 10) return;
+      if (c->recv_mbuf.buf[1] != MG_SOCKS_SUCCESS) {
+        LOG(LL_ERROR, ("Socks connection error: %d", c->recv_mbuf.buf[1]));
+        socks_if_disband(d);
+        return;
+      }
+      mbuf_remove(&c->recv_mbuf, 10);
+      c->flags |= MG_SOCKS_CONNECT_DONE;
+      /* Connected. Move sent data from client, if any, to server */
+      if (d->s && d->c) {
+        mbuf_append(&d->s->send_mbuf, d->tmp.buf, d->tmp.len);
+        mbuf_free(&d->tmp);
+      }
+    }
+    /* All flags are set, we're in relay mode */
+    if ((c->flags & MG_SOCKS_CONNECT_DONE) && d->c && d->s) {
+      mbuf_append(&d->c->recv_mbuf, d->s->recv_mbuf.buf, d->s->recv_mbuf.len);
+      mbuf_remove(&d->s->recv_mbuf, d->s->recv_mbuf.len);
+    }
+  }
+}
+
+static void mg_socks_if_connect_tcp(struct mg_connection *c,
+                                    const union socket_address *sa) {
+  struct socksdata *d = (struct socksdata *) c->iface->data;
+  d->c = c;
+  d->s = mg_connect(c->mgr, d->proxy_addr, socks_if_handler);
+  d->s->user_data = d;
+  LOG(LL_DEBUG, ("%p %s", c, d->proxy_addr));
+  (void) sa;
+}
+
+static void mg_socks_if_connect_udp(struct mg_connection *c) {
+  (void) c;
+}
+
+static int mg_socks_if_listen_tcp(struct mg_connection *c,
+                                  union socket_address *sa) {
+  (void) c;
+  (void) sa;
+  return 0;
+}
+
+static int mg_socks_if_listen_udp(struct mg_connection *c,
+                                  union socket_address *sa) {
+  (void) c;
+  (void) sa;
+  return -1;
+}
+
+static void mg_socks_if_tcp_send(struct mg_connection *c, const void *buf,
+                                 size_t len) {
+  struct socksdata *d = (struct socksdata *) c->iface->data;
+  LOG(LL_DEBUG, ("%p -> %p %d %d", c, buf, (int) len, (int) c->send_mbuf.len));
+  if (d && d->s && d->s->flags & MG_SOCKS_CONNECT_DONE) {
+    mbuf_append(&d->s->send_mbuf, d->tmp.buf, d->tmp.len);
+    mbuf_append(&d->s->send_mbuf, buf, len);
+    mbuf_free(&d->tmp);
+  } else {
+    mbuf_append(&d->tmp, buf, len);
+  }
+}
+
+static void mg_socks_if_udp_send(struct mg_connection *c, const void *buf,
+                                 size_t len) {
+  (void) c;
+  (void) buf;
+  (void) len;
+}
+
+static void mg_socks_if_recved(struct mg_connection *c, size_t len) {
+  (void) c;
+  (void) len;
+}
+
+static int mg_socks_if_create_conn(struct mg_connection *c) {
+  (void) c;
+  return 1;
+}
+
+static void mg_socks_if_destroy_conn(struct mg_connection *c) {
+  c->iface->vtable->free(c->iface);
+  MG_FREE(c->iface);
+  c->iface = NULL;
+  LOG(LL_DEBUG, ("%p", c));
+}
+
+static void mg_socks_if_sock_set(struct mg_connection *c, sock_t sock) {
+  (void) c;
+  (void) sock;
+}
+
+static void mg_socks_if_init(struct mg_iface *iface) {
+  (void) iface;
+}
+
+static void mg_socks_if_free(struct mg_iface *iface) {
+  struct socksdata *d = (struct socksdata *) iface->data;
+  LOG(LL_DEBUG, ("%p", iface));
+  if (d != NULL) {
+    socks_if_disband(d);
+    MG_FREE(d->proxy_addr);
+    MG_FREE(d);
+    iface->data = NULL;
+  }
+}
+
+static void mg_socks_if_add_conn(struct mg_connection *c) {
+  c->sock = INVALID_SOCKET;
+}
+
+static void mg_socks_if_remove_conn(struct mg_connection *c) {
+  (void) c;
+}
+
+static time_t mg_socks_if_poll(struct mg_iface *iface, int timeout_ms) {
+  LOG(LL_DEBUG, ("%p", iface));
+  (void) iface;
+  (void) timeout_ms;
+  return (time_t) cs_time();
+}
+
+static void mg_socks_if_get_conn_addr(struct mg_connection *c, int remote,
+                                      union socket_address *sa) {
+  LOG(LL_DEBUG, ("%p", c));
+  (void) c;
+  (void) remote;
+  (void) sa;
+}
+
+const struct mg_iface_vtable mg_socks_iface_vtable = {
+    mg_socks_if_init,        mg_socks_if_free,
+    mg_socks_if_add_conn,    mg_socks_if_remove_conn,
+    mg_socks_if_poll,        mg_socks_if_listen_tcp,
+    mg_socks_if_listen_udp,  mg_socks_if_connect_tcp,
+    mg_socks_if_connect_udp, mg_socks_if_tcp_send,
+    mg_socks_if_udp_send,    mg_socks_if_recved,
+    mg_socks_if_create_conn, mg_socks_if_destroy_conn,
+    mg_socks_if_sock_set,    mg_socks_if_get_conn_addr,
+};
+
+struct mg_iface *mg_socks_mk_iface(struct mg_mgr *mgr, const char *proxy_addr) {
+  struct mg_iface *iface = mg_if_create_iface(&mg_socks_iface_vtable, mgr);
+  iface->data = MG_CALLOC(1, sizeof(struct socksdata));
+  ((struct socksdata *) iface->data)->proxy_addr = strdup(proxy_addr);
+  return iface;
+}
+
+#endif
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/net_if_tun.c"
 #endif
@@ -9222,7 +9461,7 @@ static void mg_handle_incoming_websocket_frame(struct mg_connection *nc,
 static struct mg_ws_proto_data *mg_ws_get_proto_data(struct mg_connection *nc) {
   struct mg_http_proto_data *htd = mg_http_get_proto_data(nc);
   return (htd != NULL ? &htd->ws_data : NULL);
-};
+}
 
 static int mg_deliver_websocket_data(struct mg_connection *nc) {
   /* Using unsigned char *, cause of integer arithmetic below */
@@ -12558,6 +12797,167 @@ struct mg_connection *mg_sntp_get_time(struct mg_mgr *mgr,
 }
 
 #endif /* MG_ENABLE_SNTP */
+#ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/socks.c"
+#endif
+/*
+ * Copyright (c) 2017 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#if MG_ENABLE_SOCKS
+
+/* Amalgamated: #include "mongoose/src/internal.h" */
+/* Amalgamated: #include "mongoose/src/socks.h" */
+
+/*
+ *  https://www.ietf.org/rfc/rfc1928.txt paragraph 3, handle client handshake
+ *
+ *  +----+----------+----------+
+ *  |VER | NMETHODS | METHODS  |
+ *  +----+----------+----------+
+ *  | 1  |    1     | 1 to 255 |
+ *  +----+----------+----------+
+ */
+static void mg_socks5_handshake(struct mg_connection *c) {
+  struct mbuf *r = &c->recv_mbuf;
+  if (r->buf[0] != MG_SOCKS_VERSION) {
+    c->flags |= MG_F_CLOSE_IMMEDIATELY;
+  } else if (r->len > 2 && (size_t) r->buf[1] + 2 <= r->len) {
+    /* https://www.ietf.org/rfc/rfc1928.txt paragraph 3 */
+    unsigned char reply[2] = {MG_SOCKS_VERSION, MG_SOCKS_HANDSHAKE_FAILURE};
+    int i;
+    for (i = 2; i < r->buf[1] + 2; i++) {
+      /* TODO(lsm): support other auth methods */
+      if (r->buf[i] == MG_SOCKS_HANDSHAKE_NOAUTH) reply[1] = r->buf[i];
+    }
+    mbuf_remove(r, 2 + r->buf[1]);
+    mg_send(c, reply, sizeof(reply));
+    c->flags |= MG_F_USER_1;  /* Mark handshake done */
+  }
+}
+
+static void disband(struct mg_connection *c) {
+  struct mg_connection *c2 = (struct mg_connection *) c->user_data;
+  if (c2 != NULL) {
+    c2->flags |= MG_F_SEND_AND_CLOSE;
+    c2->user_data = NULL;
+  }
+  c->flags |= MG_F_SEND_AND_CLOSE;
+  c->user_data = NULL;
+}
+
+static void relay_data(struct mg_connection *c) {
+  struct mg_connection *c2 = (struct mg_connection *) c->user_data;
+  if (c2 != NULL) {
+    mg_send(c2, c->recv_mbuf.buf, c->recv_mbuf.len);
+    mbuf_remove(&c->recv_mbuf, c->recv_mbuf.len);
+  } else {
+    c->flags |= MG_F_SEND_AND_CLOSE;
+  }
+}
+
+static void serv_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_CLOSE) {
+    disband(c);
+  } else if (ev == MG_EV_RECV) {
+    relay_data(c);
+  } else if (ev == MG_EV_CONNECT) {
+    int res = * (int *) ev_data;
+    if (res != 0) LOG(LL_ERROR, ("connect error: %d", res));
+  }
+}
+
+static void mg_socks5_connect(struct mg_connection *c, const char *addr) {
+  struct mg_connection *serv = mg_connect(c->mgr, addr, serv_ev_handler);
+  serv->user_data = c;
+  c->user_data = serv;
+}
+
+/*
+ *  Request, https://www.ietf.org/rfc/rfc1928.txt paragraph 4
+ *
+ *  +----+-----+-------+------+----------+----------+
+ *  |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
+ *  +----+-----+-------+------+----------+----------+
+ *  | 1  |  1  | X'00' |  1   | Variable |    2     |
+ *  +----+-----+-------+------+----------+----------+
+ */
+static void mg_socks5_handle_request(struct mg_connection *c) {
+  struct mbuf *r = &c->recv_mbuf;
+  unsigned char *p = (unsigned char *) r->buf;
+  unsigned char addr_len = 4, reply = MG_SOCKS_SUCCESS;
+  int ver, cmd, atyp;
+  char addr[300];
+
+  if (r->len < 8) return; /* return if not fully buffered. min DST.ADDR is 2 */
+  ver = p[0];
+  cmd = p[1];
+  atyp = p[3];
+
+  /* TODO(lsm): support other commands */
+  if (ver != MG_SOCKS_VERSION || cmd != MG_SOCKS_CMD_CONNECT) {
+    reply = MG_SOCKS_CMD_NOT_SUPPORTED;
+  } else if (atyp == MG_SOCKS_ADDR_IPV4) {
+    addr_len = 4;
+    if (r->len < (size_t) addr_len + 6) return; /* return if not buffered */
+    snprintf(addr, sizeof(addr), "%d.%d.%d.%d:%d", p[4], p[5], p[6], p[7],
+             p[8] << 8 | p[9]);
+    mg_socks5_connect(c, addr);
+  } else if (atyp == MG_SOCKS_ADDR_IPV6) {
+    addr_len = 16;
+    if (r->len < (size_t) addr_len + 6) return; /* return if not buffered */
+    snprintf(addr, sizeof(addr), "[%x:%x:%x:%x:%x:%x:%x:%x]:%d",
+             p[4] << 8 | p[5], p[6] << 8 | p[7], p[8] << 8 | p[9],
+             p[10] << 8 | p[11], p[12] << 8 | p[13], p[14] << 8 | p[15],
+             p[16] << 8 | p[17], p[18] << 8 | p[19], p[20] << 8 | p[21]);
+    mg_socks5_connect(c, addr);
+  } else if (atyp == MG_SOCKS_ADDR_DOMAIN) {
+    addr_len = p[4] + 1;
+    if (r->len < (size_t) addr_len + 6) return; /* return if not buffered */
+    snprintf(addr, sizeof(addr), "%.*s:%d", p[4], p + 5,
+             p[4 + addr_len] << 8 | p[4 + addr_len + 1]);
+    mg_socks5_connect(c, addr);
+  } else {
+    reply = MG_SOCKS_ADDR_NOT_SUPPORTED;
+  }
+
+  /*
+   *  Reply, https://www.ietf.org/rfc/rfc1928.txt paragraph 5
+   *
+   *  +----+-----+-------+------+----------+----------+
+   *  |VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
+   *  +----+-----+-------+------+----------+----------+
+   *  | 1  |  1  | X'00' |  1   | Variable |    2     |
+   *  +----+-----+-------+------+----------+----------+
+   */
+  {
+    unsigned char buf[] = {MG_SOCKS_VERSION, reply, 0};
+    mg_send(c, buf, sizeof(buf));
+  }
+  mg_send(c, r->buf + 3, addr_len + 1 + 2);
+
+  mbuf_remove(r, 6 + addr_len); /* Remove request from the input stream */
+  c->flags |= MG_F_USER_2;      /* Mark ourselves as connected */
+}
+
+static void socks_handler(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_RECV) {
+    if (!(c->flags & MG_F_USER_1)) mg_socks5_handshake(c);
+    if (c->flags & MG_F_USER_1 && !(c->flags & MG_F_USER_2)) {
+      mg_socks5_handle_request(c);
+    }
+    if (c->flags & MG_F_USER_2) relay_data(c);
+  } else if (ev == MG_EV_CLOSE) {
+    disband(c);
+  }
+  (void) ev_data;
+}
+
+void mg_set_protocol_socks(struct mg_connection *c) {
+  c->proto_handler = socks_handler;
+}
+#endif
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/cc3200/cc3200_libc.c"
 #endif
