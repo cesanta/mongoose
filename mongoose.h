@@ -6061,16 +6061,16 @@ enum mg_socks_handshake_method {
 
 /* SOCKS5 commands */
 enum mg_socks_command {
-  MG_SOCKS_CMD_CONNECT = 1,        /* Command: CONNECT */
-  MG_SOCKS_CMD_BIND = 2,           /* Command: BIND */
-  MG_SOCKS_CMD_UDP_ASSOCIATE = 3,  /* Command: UDP ASSOCIATE */
+  MG_SOCKS_CMD_CONNECT = 1,       /* Command: CONNECT */
+  MG_SOCKS_CMD_BIND = 2,          /* Command: BIND */
+  MG_SOCKS_CMD_UDP_ASSOCIATE = 3, /* Command: UDP ASSOCIATE */
 };
 
 /* SOCKS5 address types */
 enum mg_socks_address_type {
-  MG_SOCKS_ADDR_IPV4 = 1,          /* Address type: IPv4 */
-  MG_SOCKS_ADDR_DOMAIN = 3,        /* Address type: Domain name */
-  MG_SOCKS_ADDR_IPV6 = 4,          /* Address type: IPv6 */
+  MG_SOCKS_ADDR_IPV4 = 1,   /* Address type: IPv4 */
+  MG_SOCKS_ADDR_DOMAIN = 3, /* Address type: Domain name */
+  MG_SOCKS_ADDR_IPV6 = 4,   /* Address type: IPv6 */
 };
 
 /* SOCKS5 response codes */

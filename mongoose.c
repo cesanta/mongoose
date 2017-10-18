@@ -3266,9 +3266,9 @@ extern const struct mg_iface_vtable mg_socks_iface_vtable;
 extern const struct mg_iface_vtable mg_default_iface_vtable;
 
 const struct mg_iface_vtable *mg_ifaces[] = {
-  &mg_default_iface_vtable,
+    &mg_default_iface_vtable,
 #if MG_ENABLE_TUN
-  &mg_tun_iface_vtable,
+    &mg_tun_iface_vtable,
 #endif
 };
 
@@ -12833,7 +12833,7 @@ static void mg_socks5_handshake(struct mg_connection *c) {
     }
     mbuf_remove(r, 2 + r->buf[1]);
     mg_send(c, reply, sizeof(reply));
-    c->flags |= MG_F_USER_1;  /* Mark handshake done */
+    c->flags |= MG_F_USER_1; /* Mark handshake done */
   }
 }
 
@@ -12863,7 +12863,7 @@ static void serv_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_RECV) {
     relay_data(c);
   } else if (ev == MG_EV_CONNECT) {
-    int res = * (int *) ev_data;
+    int res = *(int *) ev_data;
     if (res != 0) LOG(LL_ERROR, ("connect error: %d", res));
   }
 }
