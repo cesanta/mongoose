@@ -75,11 +75,6 @@ int main(int argc, char *argv[]) {
       s_http_port = argv[++i];
     } else if (strcmp(argv[i], "-a") == 0 && i + 1 < argc) {
       s_http_server_opts.auth_domain = argv[++i];
-#if MG_ENABLE_JAVASCRIPT
-    } else if (strcmp(argv[i], "-j") == 0 && i + 1 < argc) {
-      const char *init_file = argv[++i];
-      mg_enable_javascript(&mgr, v7_create(), init_file);
-#endif
     } else if (strcmp(argv[i], "-P") == 0 && i + 1 < argc) {
       s_http_server_opts.global_auth_file = argv[++i];
     } else if (strcmp(argv[i], "-A") == 0 && i + 1 < argc) {

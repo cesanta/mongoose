@@ -21,11 +21,6 @@ ifeq ($(SSL_LIB),mbedtls)
 CFLAGS += -DMG_ENABLE_SSL -DMG_SSL_IF=MG_SSL_IF_MBEDTLS -DMG_SSL_MBED_DUMMY_RANDOM -lmbedcrypto -lmbedtls -lmbedx509
 endif
 
-ifeq ($(JS), yes)
-	V7_PATH = ../../deps/v7
-	CFLAGS_EXTRA += -DMG_ENABLE_JAVASCRIPT -I $(V7_PATH) $(V7_PATH)/v7.c
-endif
-
 $(PROG): $(SOURCES)
 	$(CC) $(SOURCES) -o $@ $(CFLAGS)
 
