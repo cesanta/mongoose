@@ -99,9 +99,9 @@ def resolve(path, parent_name):
     else:
         p = os.path.join(args.include_path, path)
     if os.path.exists(p) and not args.norel:
-        p = os.path.realpath(p).replace('%s/' % os.getcwd(), '')
+        p = os.path.realpath(p).replace('%s%s' % (os.getcwd(), os.sep), '')
     # print >>sys.stderr, '%s -> %s (cwd %s)' % (path, p, os.getcwd())
-    return p
+    return p.replace(os.sep, '/')
 
 def emit_line_directive(out, name, parent_name):
     print >>out, '''#ifdef %(prefix)s_MODULE_LINES
@@ -147,6 +147,10 @@ if args.first:
                 break
 
 # emitting
+
+if sys.platform == "win32":
+    import os, msvcrt
+    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
 
 if args.public:
     print '#include "%s"' % (args.public)
