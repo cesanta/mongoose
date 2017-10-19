@@ -4209,6 +4209,7 @@ static void mg_socks_if_free(struct mg_iface *iface) {
   LOG(LL_DEBUG, ("%p", iface));
   if (d != NULL) {
     socks_if_disband(d);
+    mbuf_free(&d->tmp);
     MG_FREE(d->proxy_addr);
     MG_FREE(d);
     iface->data = NULL;
