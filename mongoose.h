@@ -6051,6 +6051,9 @@ struct mg_connection *mg_sntp_get_time(struct mg_mgr *mgr,
 
 #define MG_SOCKS_VERSION 5
 
+#define MG_SOCKS_HANDSHAKE_DONE MG_F_USER_1
+#define MG_SOCKS_CONNECT_DONE MG_F_USER_2
+
 /* SOCKS5 handshake methods */
 enum mg_socks_handshake_method {
   MG_SOCKS_HANDSHAKE_NOAUTH = 0,     /* Handshake method - no authentication */

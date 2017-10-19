@@ -4056,9 +4056,6 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_SOCKET_IFACE_VTABLE;
 
 #if MG_ENABLE_SOCKS
 
-#define MG_SOCKS_HANDSHAKE_DONE MG_F_USER_1
-#define MG_SOCKS_CONNECT_DONE MG_F_USER_2
-
 struct socksdata {
   char *proxy_addr;        /* HOST:PORT of the socks5 proxy server */
   struct mg_connection *s; /* Respective connection to the server */
@@ -12807,8 +12804,8 @@ struct mg_connection *mg_sntp_get_time(struct mg_mgr *mgr,
 
 #if MG_ENABLE_SOCKS
 
-/* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/socks.h" */
+/* Amalgamated: #include "mongoose/src/internal.h" */
 
 /*
  *  https://www.ietf.org/rfc/rfc1928.txt paragraph 3, handle client handshake
@@ -12833,7 +12830,7 @@ static void mg_socks5_handshake(struct mg_connection *c) {
     }
     mbuf_remove(r, 2 + r->buf[1]);
     mg_send(c, reply, sizeof(reply));
-    c->flags |= MG_F_USER_1; /* Mark handshake done */
+    c->flags |= MG_SOCKS_HANDSHAKE_DONE; /* Mark handshake done */
   }
 }
 
@@ -12937,17 +12934,18 @@ static void mg_socks5_handle_request(struct mg_connection *c) {
   }
   mg_send(c, r->buf + 3, addr_len + 1 + 2);
 
-  mbuf_remove(r, 6 + addr_len); /* Remove request from the input stream */
-  c->flags |= MG_F_USER_2;      /* Mark ourselves as connected */
+  mbuf_remove(r, 6 + addr_len);      /* Remove request from the input stream */
+  c->flags |= MG_SOCKS_CONNECT_DONE; /* Mark ourselves as connected */
 }
 
 static void socks_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_RECV) {
-    if (!(c->flags & MG_F_USER_1)) mg_socks5_handshake(c);
-    if (c->flags & MG_F_USER_1 && !(c->flags & MG_F_USER_2)) {
+    if (!(c->flags & MG_SOCKS_HANDSHAKE_DONE)) mg_socks5_handshake(c);
+    if (c->flags & MG_SOCKS_HANDSHAKE_DONE &&
+        !(c->flags & MG_SOCKS_CONNECT_DONE)) {
       mg_socks5_handle_request(c);
     }
-    if (c->flags & MG_F_USER_2) relay_data(c);
+    if (c->flags & MG_SOCKS_CONNECT_DONE) relay_data(c);
   } else if (ev == MG_EV_CLOSE) {
     disband(c);
   }
