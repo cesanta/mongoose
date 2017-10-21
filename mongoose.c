@@ -2270,14 +2270,8 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
 void mg_if_timer(struct mg_connection *c, double now) {
   if (c->ev_timer_time > 0 && now >= c->ev_timer_time) {
     double old_value = c->ev_timer_time;
-    mg_call(c, NULL, c->user_data, MG_EV_TIMER, &now);
-    /*
-     * To prevent timer firing all the time, reset the timer after delivery.
-     * However, in case user sets it to new value, do not reset.
-     */
-    if (c->ev_timer_time == old_value) {
-      c->ev_timer_time = 0;
-    }
+    c->ev_timer_time = 0;
+    mg_call(c, NULL, c->user_data, MG_EV_TIMER, &old_value);
   }
 }
 
