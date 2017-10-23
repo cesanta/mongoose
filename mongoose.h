@@ -1200,7 +1200,7 @@ int sl_fs_init(void);
 
 void sl_restart_cb(struct mg_mgr *mgr);
 
-int sl_set_ssl_opts(struct mg_connection *nc);
+int sl_set_ssl_opts(int sock, struct mg_connection *nc);
 
 #ifdef __cplusplus
 }

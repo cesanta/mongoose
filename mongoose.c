@@ -13947,10 +13947,9 @@ extern const struct mg_iface_vtable mg_simplelink_iface_vtable;
 #define MG_TCP_RECV_BUFFER_SIZE 1024
 #define MG_UDP_RECV_BUFFER_SIZE 1500
 
-static sock_t mg_open_listening_socket(union socket_address *sa, int type,
+static sock_t mg_open_listening_socket(struct mg_connection *nc,
+                                       union socket_address *sa, int type,
                                        int proto);
-
-int sl_set_ssl_opts(struct mg_connection *nc);
 
 void mg_set_non_blocking_mode(sock_t sock) {
   SlSockNonblocking_t opt;
@@ -13977,7 +13976,7 @@ void mg_sl_if_connect_tcp(struct mg_connection *nc,
   }
   mg_sock_set(nc, sock);
 #if MG_ENABLE_SSL
-  nc->err = sl_set_ssl_opts(nc);
+  nc->err = sl_set_ssl_opts(sock, nc);
   if (nc->err != 0) goto out;
 #endif
   nc->err = sl_Connect(sock, &sa->sa, sizeof(sa->sin));
@@ -13999,18 +13998,14 @@ void mg_sl_if_connect_udp(struct mg_connection *nc) {
 int mg_sl_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   int proto = 0;
   if (nc->flags & MG_F_SSL) proto = SL_SEC_SOCKET;
-  sock_t sock = mg_open_listening_socket(sa, SOCK_STREAM, proto);
+  sock_t sock = mg_open_listening_socket(nc, sa, SOCK_STREAM, proto);
   if (sock < 0) return sock;
   mg_sock_set(nc, sock);
-#if MG_ENABLE_SSL
-  return sl_set_ssl_opts(nc);
-#else
   return 0;
-#endif
 }
 
 int mg_sl_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
-  sock_t sock = mg_open_listening_socket(sa, SOCK_DGRAM, 0);
+  sock_t sock = mg_open_listening_socket(nc, sa, SOCK_DGRAM, 0);
   if (sock == INVALID_SOCKET) return (errno ? errno : 1);
   mg_sock_set(nc, sock);
   return 0;
@@ -14066,22 +14061,27 @@ static int mg_accept_conn(struct mg_connection *lc) {
 }
 
 /* 'sa' must be an initialized address to bind to */
-static sock_t mg_open_listening_socket(union socket_address *sa, int type,
+static sock_t mg_open_listening_socket(struct mg_connection *nc,
+                                       union socket_address *sa, int type,
                                        int proto) {
   int r;
   socklen_t sa_len =
       (sa->sa.sa_family == AF_INET) ? sizeof(sa->sin) : sizeof(sa->sin6);
   sock_t sock = sl_Socket(sa->sa.sa_family, type, proto);
   if (sock < 0) return sock;
-  if ((r = sl_Bind(sock, &sa->sa, sa_len)) < 0) {
-    sl_Close(sock);
-    return r;
-  }
-  if (type != SOCK_DGRAM && (r = sl_Listen(sock, SOMAXCONN)) < 0) {
-    sl_Close(sock);
-    return r;
+  if ((r = sl_Bind(sock, &sa->sa, sa_len)) < 0) goto clean;
+  if (type != SOCK_DGRAM) {
+#if MG_ENABLE_SSL
+    if ((r = sl_set_ssl_opts(sock, nc)) < 0) goto clean;
+#endif
+    if ((r = sl_Listen(sock, SOMAXCONN)) < 0) goto clean;
   }
   mg_set_non_blocking_mode(sock);
+clean:
+  if (r < 0) {
+    sl_Close(sock);
+    sock = r;
+  }
   return sock;
 }
 
@@ -14566,9 +14566,9 @@ static char *sl_pem2der(const char *pem_file) {
 }
 #endif
 
-int sl_set_ssl_opts(struct mg_connection *nc) {
+int sl_set_ssl_opts(int sock, struct mg_connection *nc) {
   int err;
-  struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
+  const struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
   DBG(("%p ssl ctx: %p", nc, ctx));
 
   if (ctx != NULL) {
@@ -14580,11 +14580,11 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
       char *ssl_cert = sl_pem2der(ctx->ssl_cert);
       char *ssl_key = sl_pem2der(ctx->ssl_key);
       if (ssl_cert != NULL && ssl_key != NULL) {
-        err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+        err = sl_SetSockOpt(sock, SL_SOL_SOCKET,
                             SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME, ssl_cert,
                             strlen(ssl_cert));
         LOG(LL_INFO, ("CERTIFICATE_FILE_NAME %s -> %d", ssl_cert, err));
-        err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+        err = sl_SetSockOpt(sock, SL_SOL_SOCKET,
                             SL_SO_SECURE_FILES_PRIVATE_KEY_FILE_NAME, ssl_key,
                             strlen(ssl_key));
         LOG(LL_INFO, ("PRIVATE_KEY_FILE_NAME %s -> %d", ssl_key, err));
@@ -14599,7 +14599,7 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
       if (ctx->ssl_ca_cert[0] != '\0') {
         char *ssl_ca_cert = sl_pem2der(ctx->ssl_ca_cert);
         if (ssl_ca_cert != NULL) {
-          err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+          err = sl_SetSockOpt(sock, SL_SOL_SOCKET,
                               SL_SO_SECURE_FILES_CA_FILE_NAME, ssl_ca_cert,
                               strlen(ssl_ca_cert));
           LOG(LL_INFO, ("CA_FILE_NAME %s -> %d", ssl_ca_cert, err));
@@ -14611,7 +14611,7 @@ int sl_set_ssl_opts(struct mg_connection *nc) {
       }
     }
     if (ctx->ssl_server_name != NULL) {
-      err = sl_SetSockOpt(nc->sock, SL_SOL_SOCKET,
+      err = sl_SetSockOpt(sock, SL_SOL_SOCKET,
                           SL_SO_SECURE_DOMAIN_NAME_VERIFICATION,
                           ctx->ssl_server_name, strlen(ctx->ssl_server_name));
       DBG(("DOMAIN_NAME_VERIFICATION %s -> %d", ctx->ssl_server_name, err));
