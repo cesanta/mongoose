@@ -10741,24 +10741,33 @@ static void mg_mqtt_broker_handle_subscribe(struct mg_connection *nc,
     qoss[num_subs++] = qos;
   }
 
-  te = (struct mg_mqtt_topic_expression *) MG_REALLOC(
-      ss->subscriptions,
-      sizeof(*ss->subscriptions) * (ss->num_subscriptions + num_subs));
-  if (te == NULL) {
-    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-    return;
-  }
-  ss->subscriptions = te;
-  for (pos = 0;
-       (pos = mg_mqtt_next_subscribe_topic(msg, &topic, &qos, pos)) != -1;
-       ss->num_subscriptions++) {
-    te = &ss->subscriptions[ss->num_subscriptions];
-    te->topic = (char *) MG_MALLOC(topic.len + 1);
-    te->qos = qos;
-    strncpy((char *) te->topic, topic.p, topic.len + 1);
+  if (num_subs > 0) {
+    te = (struct mg_mqtt_topic_expression *) MG_REALLOC(
+        ss->subscriptions,
+        sizeof(*ss->subscriptions) * (ss->num_subscriptions + num_subs));
+    if (te == NULL) {
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      return;
+    }
+    ss->subscriptions = te;
+    for (pos = 0;
+         pos < (int) msg->payload.len &&
+             (pos = mg_mqtt_next_subscribe_topic(msg, &topic, &qos, pos)) != -1;
+         ss->num_subscriptions++) {
+      te = &ss->subscriptions[ss->num_subscriptions];
+      te->topic = (char *) MG_MALLOC(topic.len + 1);
+      te->qos = qos;
+      memcpy((char *) te->topic, topic.p, topic.len);
+      ((char *) te->topic)[topic.len] = '\0';
+    }
   }
 
-  mg_mqtt_suback(nc, qoss, num_subs, msg->message_id);
+  if (pos == (int) msg->payload.len) {
+    mg_mqtt_suback(nc, qoss, num_subs, msg->message_id);
+  } else {
+    /* We did not fully parse the payload, something must be wrong. */
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+  }
 }
 
 static void mg_mqtt_broker_handle_publish(struct mg_mqtt_broker *brk,
