@@ -8461,6 +8461,8 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
 #define MG_ENV_EXPORT_TO_CGI "MONGOOSE_CGI"
 #endif
 
+#define MG_F_HTTP_CGI_PARSE_HEADERS MG_F_USER_1
+
 /*
  * This structure helps to create an environment for the spawned CGI program.
  * Environment is an array of "VARIABLE=VALUE\0" ASCIIZ strings,
@@ -8826,6 +8828,7 @@ static void mg_cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
   (void) ev_data;
 
   if (nc == NULL) {
+    /* The corresponding network connection was closed. */
     cgi_nc->flags |= MG_F_CLOSE_IMMEDIATELY;
     return;
   }
@@ -8845,7 +8848,7 @@ static void mg_cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
        * been received, send appropriate reply line, and forward all
        * received headers to the client.
        */
-      if (nc->flags & MG_F_USER_1) {
+      if (nc->flags & MG_F_HTTP_CGI_PARSE_HEADERS) {
         struct mbuf *io = &cgi_nc->recv_mbuf;
         int len = mg_http_get_request_len(io->buf, io->len);
 
@@ -8865,13 +8868,14 @@ static void mg_cgi_ev_handler(struct mg_connection *cgi_nc, int ev,
             mg_printf(nc, "%s", "HTTP/1.1 200 OK\r\n");
           }
         }
-        nc->flags &= ~MG_F_USER_1;
+        nc->flags &= ~MG_F_HTTP_CGI_PARSE_HEADERS;
       }
-      if (!(nc->flags & MG_F_USER_1)) {
+      if (!(nc->flags & MG_F_HTTP_CGI_PARSE_HEADERS)) {
         mg_forward(cgi_nc, nc);
       }
       break;
     case MG_EV_CLOSE:
+      DBG(("%p CLOSE", cgi_nc));
       mg_http_free_proto_data_cgi(&mg_http_get_proto_data(nc)->cgi);
       nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
@@ -8925,7 +8929,7 @@ MG_INTERNAL void mg_handle_cgi(struct mg_connection *nc, const char *prog,
 #if !MG_ENABLE_CALLBACK_USERDATA
     cgi_pd->cgi.cgi_nc->user_data = nc;
 #endif
-    nc->flags |= MG_F_USER_1;
+    nc->flags |= MG_F_HTTP_CGI_PARSE_HEADERS;
     /* Push POST data to the CGI */
     if (n > 0 && n < nc->recv_mbuf.len) {
       mg_send(cgi_pd->cgi.cgi_nc, hm->body.p, n);
@@ -8942,10 +8946,12 @@ MG_INTERNAL void mg_handle_cgi(struct mg_connection *nc, const char *prog,
 }
 
 MG_INTERNAL void mg_http_free_proto_data_cgi(struct mg_http_proto_data_cgi *d) {
-  if (d != NULL) {
-    if (d->cgi_nc != NULL) d->cgi_nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-    memset(d, 0, sizeof(struct mg_http_proto_data_cgi));
+  if (d == NULL) return;
+  if (d->cgi_nc != NULL) {
+    d->cgi_nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+    d->cgi_nc->user_data = NULL;
   }
+  memset(d, 0, sizeof(*d));
 }
 
 #endif /* MG_ENABLE_HTTP && MG_ENABLE_HTTP_CGI */
