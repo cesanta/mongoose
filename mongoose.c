@@ -7015,6 +7015,7 @@ int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
    * -1 - src is wrong (NUUL)
    * -2 - dst is wrong (NULL)
    * -3 - failed to decode url or dst is to small
+   * -4 - name does not exist
    */
   if (dst == NULL || dst_len == 0) {
     len = -2;
@@ -7024,7 +7025,7 @@ int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
   } else {
     name_len = strlen(name);
     e = buf->p + buf->len;
-    len = 0;
+    len = -4;
     dst[0] = '\0';
 
     for (p = buf->p; p + name_len < e; p++) {
