@@ -16,7 +16,7 @@ Check out [Mongoose OS](https://mongoose-os.com) - open source embedded operatin
 
 # Support
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
-- [Read User Guide and API reference](https://docs.cesanta.com/mongoose)
+- [Read User Guide and API reference](https://cesanta.com/docs)
 - [Support Forum - ask your technical questions here](https://forum.mongoose-os.com/categories/mongoose)
 - [Commercial licensing and support available](https://www.cesanta.com/licensing.html)
 - [Check our latest releases](https://github.com/cesanta/mongoose/releases)
