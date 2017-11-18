@@ -4011,7 +4011,7 @@ extern "C" {
 #endif
 
 /*
- * Fetches substring from input string `s`, `end` into `v`.
+ * Fetches substring from input string `s`, `end_string` into `v`.
  * Skips initial delimiter characters. Records first non-delimiter character
  * at the beginning of substring `v`. Then scans the rest of the string
  * until a delimiter character or end-of-string is found.
