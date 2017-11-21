@@ -5181,6 +5181,7 @@ static enum mg_ssl_if_result mg_use_cert(struct mg_ssl_if_ctx *ctx,
 }
 
 static const int mg_s_cipher_list[] = {
+#if CS_PLATFORM != CS_P_ESP8266
     MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
     MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
     MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -5195,7 +5196,29 @@ static const int mg_s_cipher_list[] = {
     MBEDTLS_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA,
     MBEDTLS_TLS_RSA_WITH_AES_128_GCM_SHA256,
     MBEDTLS_TLS_RSA_WITH_AES_128_CBC_SHA256,
-    MBEDTLS_TLS_RSA_WITH_AES_128_CBC_SHA, 0};
+    MBEDTLS_TLS_RSA_WITH_AES_128_CBC_SHA,
+#else
+    /*
+     * ECDHE is way too slow on ESP8266 w/o cryptochip, this sometimes results
+     * in WiFi STA deauths. Use weaker but faster cipher suites. Sad but true.
+     * Disable DHE completely because it's just hopelessly slow.
+     */
+    MBEDTLS_TLS_RSA_WITH_AES_128_GCM_SHA256,
+    MBEDTLS_TLS_RSA_WITH_AES_128_CBC_SHA256,
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+    MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+    MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+    MBEDTLS_TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256,
+    MBEDTLS_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256,
+    MBEDTLS_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA,
+    MBEDTLS_TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256,
+    MBEDTLS_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256,
+    MBEDTLS_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA,
+    MBEDTLS_TLS_RSA_WITH_AES_128_CBC_SHA,
+#endif /* CS_PLATFORM != CS_P_ESP8266 */
+    0,
+};
 
 /*
  * Ciphers can be specified as a colon-separated list of cipher suite names.
