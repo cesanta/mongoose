@@ -4454,6 +4454,8 @@ const struct mg_iface_vtable mg_tun_iface_vtable = MG_TUN_IFACE_VTABLE;
 
 #include <openssl/ssl.h>
 
+static const int default_session_id_context = 1;
+
 struct mg_ssl_if_ctx {
   SSL *ssl;
   SSL_CTX *ssl_ctx;
@@ -4515,6 +4517,8 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2);
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv3);
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1);
+  SSL_CTX_set_session_id_context(ctx->ssl_ctx, (void *)&default_session_id_context,
+   sizeof(default_session_id_context));
 #ifdef MG_SSL_OPENSSL_NO_COMPRESSION
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_COMPRESSION);
 #endif
