@@ -20,7 +20,7 @@ static void signal_handler(int sig_num) {
 }
 
 static int has_prefix(const struct mg_str *uri, const struct mg_str *prefix) {
-  return uri->len > prefix->len && memcmp(uri->p, prefix->p, prefix->len) == 0;
+  return uri->len == prefix->len && memcmp(uri->p, prefix->p, prefix->len) == 0;
 }
 
 static int is_equal(const struct mg_str *s1, const struct mg_str *s2) {
