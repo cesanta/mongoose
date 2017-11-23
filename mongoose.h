@@ -2171,10 +2171,24 @@ struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
 
 /*
  * Matches 0-terminated string (mg_match_prefix) or string with given length
- * mg_match_prefix_n against a glob pattern.
- *
+ * mg_match_prefix_n against a glob pattern. Glob syntax:
+ * ```
+ * - * matches zero or more characters until a slash character /
+ * - ** matches zero or more characters
+ * - ? Matches exactly one character which is not a slash /
+ * - | or ,  divides alternative patterns
+ * - any other character matches itself
+ * ```
  * Match is case-insensitive. Returns number of bytes matched, or -1 if no
  * match.
+ * Examples:
+ * ```
+ * mg_match_prefix("a*f", len, "abcdefgh") == 6
+ * mg_match_prefix("a*f", len, "abcdexgh") == -1
+ * mg_match_prefix("a*f|de*,xy", len, "defgh") == 5
+ * mg_match_prefix("?*", len, "abc") == 3
+ * mg_match_prefix("?*", len, "") == -1
+ * ```
  */
 int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
 int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
