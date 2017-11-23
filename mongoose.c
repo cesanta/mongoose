@@ -14747,7 +14747,7 @@ void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
 #include <lwip/pbuf.h>
 #include <lwip/tcp.h>
 #include <lwip/tcpip.h>
-#if LWIP_VERSION >= 0x01050000
+#if ((LWIP_VERSION_MAJOR << 8) | LWIP_VERSION_MINOR) >= 0x0105
 #include <lwip/priv/tcp_priv.h> /* For tcp_seg */
 #else
 #include <lwip/tcp_impl.h>
@@ -15006,7 +15006,7 @@ void mg_lwip_if_connect_tcp(struct mg_connection *nc,
  * Lwip included in the SDKs for nRF5x chips has different type for the
  * callback of `udp_recv()`
  */
-#if LWIP_VERSION >= 0x01050000
+#if ((LWIP_VERSION_MAJOR << 8) | LWIP_VERSION_MINOR) >= 0x0105
 static void mg_lwip_udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,
                                 const ip_addr_t *addr, u16_t port)
 #else
@@ -15024,7 +15024,7 @@ static void mg_lwip_udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,
     return;
   }
   union socket_address *sa = (union socket_address *) sap->payload;
-#if LWIP_VERSION >= 0x01050000
+#if ((LWIP_VERSION_MAJOR << 8) | LWIP_VERSION_MINOR) >= 0x0105
   sa->sin.sin_addr.s_addr = ip_2_ip4(addr)->addr;
 #else
   sa->sin.sin_addr.s_addr = addr->addr;
@@ -15241,8 +15241,8 @@ static void mg_lwip_tcp_write_tcpip(void *arg) {
   size_t len = MIN(tpcb->mss, MIN(ctx->len, tpcb->snd_buf));
   size_t unsent, unacked;
   if (len == 0) {
-    DBG(("%p no buf avail %u %u %u %p %p", tpcb, tpcb->acked, tpcb->snd_buf,
-         tpcb->snd_queuelen, tpcb->unsent, tpcb->unacked));
+    DBG(("%p no buf avail %u %u %p %p", tpcb, tpcb->snd_buf, tpcb->snd_queuelen,
+         tpcb->unsent, tpcb->unacked));
     tcpip_callback(tcp_output_tcpip, tpcb);
     ctx->ret = 0;
     return;
