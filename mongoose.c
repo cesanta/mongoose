@@ -192,196 +192,7 @@ extern "C" {
 
 #endif /* CS_COMMON_MG_MEM_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/cs_dbg.h"
-#endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
-
-#ifndef CS_COMMON_CS_DBG_H_
-#define CS_COMMON_CS_DBG_H_
-
-/* Amalgamated: #include "common/platform.h" */
-
-#if CS_ENABLE_STDIO
-#include <stdio.h>
-#endif
-
-#ifndef CS_ENABLE_DEBUG
-#define CS_ENABLE_DEBUG 0
-#endif
-
-#ifndef CS_LOG_ENABLE_TS_DIFF
-#define CS_LOG_ENABLE_TS_DIFF 0
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-enum cs_log_level {
-  LL_NONE = -1,
-  LL_ERROR = 0,
-  LL_WARN = 1,
-  LL_INFO = 2,
-  LL_DEBUG = 3,
-  LL_VERBOSE_DEBUG = 4,
-
-  _LL_MIN = -2,
-  _LL_MAX = 5,
-};
-
-/* Set log level. */
-void cs_log_set_level(enum cs_log_level level);
-
-/* Set log filter. NULL (a default) logs everything. */
-void cs_log_set_filter(const char *source_file_name);
-
-int cs_log_print_prefix(enum cs_log_level level, const char *func,
-                        const char *filename);
-
-extern enum cs_log_level cs_log_threshold;
-
-#if CS_ENABLE_STDIO
-
-void cs_log_set_file(FILE *file);
-void cs_log_printf(const char *fmt, ...)
-#ifdef __GNUC__
-    __attribute__((format(printf, 1, 2)))
-#endif
-    ;
-
-#define LOG(l, x)                                                    \
-  do {                                                               \
-    if (cs_log_print_prefix(l, __func__, __FILE__)) cs_log_printf x; \
-  } while (0)
-
-#ifndef CS_NDEBUG
-
-#define DBG(x) LOG(LL_VERBOSE_DEBUG, x)
-
-#else /* NDEBUG */
-
-#define DBG(x)
-
-#endif
-
-#else /* CS_ENABLE_STDIO */
-
-#define LOG(l, x)
-#define DBG(x)
-
-#endif
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* CS_COMMON_CS_DBG_H_ */
-#ifdef MG_MODULE_LINES
-#line 1 "common/cs_dbg.c"
-#endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
-
-/* Amalgamated: #include "common/cs_dbg.h" */
-
-#include <stdarg.h>
-#include <stdio.h>
-#include <string.h>
-
-/* Amalgamated: #include "common/cs_time.h" */
-/* Amalgamated: #include "common/str_util.h" */
-
-enum cs_log_level cs_log_threshold WEAK =
-#if CS_ENABLE_DEBUG
-    LL_VERBOSE_DEBUG;
-#else
-    LL_ERROR;
-#endif
-
-static char *s_filter_pattern = NULL;
-static size_t s_filter_pattern_len;
-
-#if CS_ENABLE_STDIO
-
-FILE *cs_log_file WEAK = NULL;
-
-#if CS_LOG_ENABLE_TS_DIFF
-double cs_log_ts WEAK;
-#endif
-
-enum cs_log_level cs_log_cur_msg_level WEAK = LL_NONE;
-
-void cs_log_set_filter(const char *str) WEAK;
-void cs_log_set_filter(const char *str) {
-  free(s_filter_pattern);
-  if (str != NULL) {
-    s_filter_pattern = strdup(str);
-    s_filter_pattern_len = strlen(str);
-  } else {
-    s_filter_pattern = NULL;
-    s_filter_pattern_len = 0;
-  }
-}
-
-int cs_log_print_prefix(enum cs_log_level, const char *, const char *) WEAK;
-int cs_log_print_prefix(enum cs_log_level level, const char *func,
-                        const char *filename) {
-  char prefix[21];
-
-  if (level > cs_log_threshold) return 0;
-  if (s_filter_pattern != NULL &&
-      mg_match_prefix(s_filter_pattern, s_filter_pattern_len, func) < 0 &&
-      mg_match_prefix(s_filter_pattern, s_filter_pattern_len, filename) < 0) {
-    return 0;
-  }
-
-  strncpy(prefix, func, 20);
-  prefix[20] = '\0';
-  if (cs_log_file == NULL) cs_log_file = stderr;
-  cs_log_cur_msg_level = level;
-  fprintf(cs_log_file, "%-20s ", prefix);
-#if CS_LOG_ENABLE_TS_DIFF
-  {
-    double now = cs_time();
-    fprintf(cs_log_file, "%7u ", (unsigned int) ((now - cs_log_ts) * 1000000));
-    cs_log_ts = now;
-  }
-#endif
-  return 1;
-}
-
-void cs_log_printf(const char *fmt, ...) WEAK;
-void cs_log_printf(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  vfprintf(cs_log_file, fmt, ap);
-  va_end(ap);
-  fputc('\n', cs_log_file);
-  fflush(cs_log_file);
-  cs_log_cur_msg_level = LL_NONE;
-}
-
-void cs_log_set_file(FILE *file) WEAK;
-void cs_log_set_file(FILE *file) {
-  cs_log_file = file;
-}
-
-#endif /* CS_ENABLE_STDIO */
-
-void cs_log_set_level(enum cs_log_level level) WEAK;
-void cs_log_set_level(enum cs_log_level level) {
-  cs_log_threshold = level;
-#if CS_LOG_ENABLE_TS_DIFF && CS_ENABLE_STDIO
-  cs_log_ts = cs_time();
-#endif
-}
-#ifdef MG_MODULE_LINES
-#line 1 "common/base64.c"
+#line 1 "common/cs_base64.c"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
@@ -390,7 +201,7 @@ void cs_log_set_level(enum cs_log_level level) {
 
 #ifndef EXCLUDE_COMMON
 
-/* Amalgamated: #include "common/base64.h" */
+/* Amalgamated: #include "common/cs_base64.h" */
 
 #include <string.h>
 
@@ -588,6 +399,195 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len) {
 }
 
 #endif /* EXCLUDE_COMMON */
+#ifdef MG_MODULE_LINES
+#line 1 "common/cs_dbg.h"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_COMMON_CS_DBG_H_
+#define CS_COMMON_CS_DBG_H_
+
+/* Amalgamated: #include "common/platform.h" */
+
+#if CS_ENABLE_STDIO
+#include <stdio.h>
+#endif
+
+#ifndef CS_ENABLE_DEBUG
+#define CS_ENABLE_DEBUG 0
+#endif
+
+#ifndef CS_LOG_ENABLE_TS_DIFF
+#define CS_LOG_ENABLE_TS_DIFF 0
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+enum cs_log_level {
+  LL_NONE = -1,
+  LL_ERROR = 0,
+  LL_WARN = 1,
+  LL_INFO = 2,
+  LL_DEBUG = 3,
+  LL_VERBOSE_DEBUG = 4,
+
+  _LL_MIN = -2,
+  _LL_MAX = 5,
+};
+
+/* Set log level. */
+void cs_log_set_level(enum cs_log_level level);
+
+/* Set log filter. NULL (a default) logs everything. */
+void cs_log_set_filter(const char *source_file_name);
+
+int cs_log_print_prefix(enum cs_log_level level, const char *func,
+                        const char *filename);
+
+extern enum cs_log_level cs_log_threshold;
+
+#if CS_ENABLE_STDIO
+
+void cs_log_set_file(FILE *file);
+void cs_log_printf(const char *fmt, ...)
+#ifdef __GNUC__
+    __attribute__((format(printf, 1, 2)))
+#endif
+    ;
+
+#define LOG(l, x)                                                    \
+  do {                                                               \
+    if (cs_log_print_prefix(l, __func__, __FILE__)) cs_log_printf x; \
+  } while (0)
+
+#ifndef CS_NDEBUG
+
+#define DBG(x) LOG(LL_VERBOSE_DEBUG, x)
+
+#else /* NDEBUG */
+
+#define DBG(x)
+
+#endif
+
+#else /* CS_ENABLE_STDIO */
+
+#define LOG(l, x)
+#define DBG(x)
+
+#endif
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* CS_COMMON_CS_DBG_H_ */
+#ifdef MG_MODULE_LINES
+#line 1 "common/cs_dbg.c"
+#endif
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+/* Amalgamated: #include "common/cs_dbg.h" */
+
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+
+/* Amalgamated: #include "common/cs_time.h" */
+/* Amalgamated: #include "common/str_util.h" */
+
+enum cs_log_level cs_log_threshold WEAK =
+#if CS_ENABLE_DEBUG
+    LL_VERBOSE_DEBUG;
+#else
+    LL_ERROR;
+#endif
+
+static char *s_filter_pattern = NULL;
+static size_t s_filter_pattern_len;
+
+#if CS_ENABLE_STDIO
+
+FILE *cs_log_file WEAK = NULL;
+
+#if CS_LOG_ENABLE_TS_DIFF
+double cs_log_ts WEAK;
+#endif
+
+enum cs_log_level cs_log_cur_msg_level WEAK = LL_NONE;
+
+void cs_log_set_filter(const char *str) WEAK;
+void cs_log_set_filter(const char *str) {
+  free(s_filter_pattern);
+  if (str != NULL) {
+    s_filter_pattern = strdup(str);
+    s_filter_pattern_len = strlen(str);
+  } else {
+    s_filter_pattern = NULL;
+    s_filter_pattern_len = 0;
+  }
+}
+
+int cs_log_print_prefix(enum cs_log_level, const char *, const char *) WEAK;
+int cs_log_print_prefix(enum cs_log_level level, const char *func,
+                        const char *filename) {
+  char prefix[21];
+
+  if (level > cs_log_threshold) return 0;
+  if (s_filter_pattern != NULL &&
+      mg_match_prefix(s_filter_pattern, s_filter_pattern_len, func) < 0 &&
+      mg_match_prefix(s_filter_pattern, s_filter_pattern_len, filename) < 0) {
+    return 0;
+  }
+
+  strncpy(prefix, func, 20);
+  prefix[20] = '\0';
+  if (cs_log_file == NULL) cs_log_file = stderr;
+  cs_log_cur_msg_level = level;
+  fprintf(cs_log_file, "%-20s ", prefix);
+#if CS_LOG_ENABLE_TS_DIFF
+  {
+    double now = cs_time();
+    fprintf(cs_log_file, "%7u ", (unsigned int) ((now - cs_log_ts) * 1000000));
+    cs_log_ts = now;
+  }
+#endif
+  return 1;
+}
+
+void cs_log_printf(const char *fmt, ...) WEAK;
+void cs_log_printf(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(cs_log_file, fmt, ap);
+  va_end(ap);
+  fputc('\n', cs_log_file);
+  fflush(cs_log_file);
+  cs_log_cur_msg_level = LL_NONE;
+}
+
+void cs_log_set_file(FILE *file) WEAK;
+void cs_log_set_file(FILE *file) {
+  cs_log_file = file;
+}
+
+#endif /* CS_ENABLE_STDIO */
+
+void cs_log_set_level(enum cs_log_level level) WEAK;
+void cs_log_set_level(enum cs_log_level level) {
+  cs_log_threshold = level;
+#if CS_LOG_ENABLE_TS_DIFF && CS_ENABLE_STDIO
+  cs_log_ts = cs_time();
+#endif
+}
 #ifdef MG_MODULE_LINES
 #line 1 "common/cs_dirent.h"
 #endif
@@ -9903,7 +9903,7 @@ struct mg_connection *mg_connect_ws(
  * All rights reserved
  */
 
-/* Amalgamated: #include "common/base64.h" */
+/* Amalgamated: #include "common/cs_base64.h" */
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/util.h" */
 

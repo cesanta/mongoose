@@ -1993,15 +1993,15 @@ void mbuf_trim(struct mbuf *);
 
 #endif /* CS_COMMON_MBUF_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/base64.h"
+#line 1 "common/cs_base64.h"
 #endif
 /*
  * Copyright (c) 2014 Cesanta Software Limited
  * All rights reserved
  */
 
-#ifndef CS_COMMON_BASE64_H_
-#define CS_COMMON_BASE64_H_
+#ifndef CS_COMMON_CS_BASE64_H_
+#define CS_COMMON_CS_BASE64_H_
 
 #ifndef DISABLE_BASE64
 #define DISABLE_BASE64 0
@@ -2040,7 +2040,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len);
 
 #endif /* DISABLE_BASE64 */
 
-#endif /* CS_COMMON_BASE64_H_ */
+#endif /* CS_COMMON_CS_BASE64_H_ */
 #ifdef MG_MODULE_LINES
 #line 1 "common/str_util.h"
 #endif
