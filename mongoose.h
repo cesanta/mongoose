@@ -4541,6 +4541,23 @@ extern void mg_hash_md5_v(size_t num_msgs, const uint8_t *msgs[],
 extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
                            const size_t *msg_lens, uint8_t *digest);
 
+/*
+ * Checks whether an http request is authorized. `domain` is the authentication
+ * realm, `passwords_file` is a htdigest file (can be created e.g. with
+ * `htdigest` utility). If either `domain` or `passwords_file` is NULL, this
+ * function always returns 1; otherwise checks the authentication in the
+ * http request and returns 1 only if there is a match; 0 otherwise.
+ */
+int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
+                          int is_directory, const char *domain,
+                          const char *passwords_file, int is_global_pass_file);
+
+/*
+ * Sends 401 Unauthorized response.
+ */
+void mg_http_send_digest_auth_request(struct mg_connection *c,
+                                      const char *domain);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

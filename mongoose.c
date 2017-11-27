@@ -7363,10 +7363,9 @@ int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
   return 0;
 }
 
-static int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
-                                 int is_directory, const char *domain,
-                                 const char *passwords_file,
-                                 int is_global_pass_file) {
+int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
+                          int is_directory, const char *domain,
+                          const char *passwords_file, int is_global_pass_file) {
   char buf[MG_MAX_PATH];
   const char *p;
   FILE *fp;
@@ -7399,10 +7398,9 @@ static int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
   return authorized;
 }
 #else
-static int mg_http_is_authorized(struct http_message *hm,
-                                 const struct mg_str path, int is_directory,
-                                 const char *domain, const char *passwords_file,
-                                 int is_global_pass_file) {
+int mg_http_is_authorized(struct http_message *hm, const struct mg_str path,
+                          int is_directory, const char *domain,
+                          const char *passwords_file, int is_global_pass_file) {
   (void) hm;
   (void) path;
   (void) is_directory;
@@ -7942,8 +7940,8 @@ MG_INTERNAL int mg_is_not_modified(struct http_message *hm, cs_stat_t *st) {
   }
 }
 
-static void mg_http_send_digest_auth_request(struct mg_connection *c,
-                                             const char *domain) {
+void mg_http_send_digest_auth_request(struct mg_connection *c,
+                                      const char *domain) {
   mg_printf(c,
             "HTTP/1.1 401 Unauthorized\r\n"
             "WWW-Authenticate: Digest qop=\"auth\", "
