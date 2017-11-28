@@ -5407,7 +5407,7 @@ int mg_parse_uri(const struct mg_str uri, struct mg_str *scheme,
       case P_USER_INFO:
         ruser_info.p = p;
         for (; p < end; p++) {
-          if (*p == '@' || *p == '[') {
+          if (*p == '@' || *p == '[' || *p == '/') {
             break;
           }
         }
