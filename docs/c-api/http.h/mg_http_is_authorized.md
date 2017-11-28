@@ -4,8 +4,8 @@ decl_name: "mg_http_is_authorized"
 symbol_kind: "func"
 signature: |
   int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
-                            int is_directory, const char *domain,
-                            const char *passwords_file, int is_global_pass_file);
+                            const char *domain, const char *passwords_file,
+                            int flags);
 ---
 
 Checks whether an http request is authorized. `domain` is the authentication

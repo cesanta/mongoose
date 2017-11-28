@@ -7364,17 +7364,17 @@ int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
 }
 
 int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
-                          int is_directory, const char *domain,
-                          const char *passwords_file, int is_global_pass_file) {
+                          const char *domain, const char *passwords_file,
+                          int flags) {
   char buf[MG_MAX_PATH];
   const char *p;
   FILE *fp;
   int authorized = 1;
 
   if (domain != NULL && passwords_file != NULL) {
-    if (is_global_pass_file) {
+    if (flags & MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE) {
       fp = mg_fopen(passwords_file, "r");
-    } else if (is_directory) {
+    } else if (flags & MG_AUTH_FLAG_IS_DIRECTORY) {
       snprintf(buf, sizeof(buf), "%.*s%c%s", (int) path.len, path.p, DIRSEP,
                passwords_file);
       fp = mg_fopen(buf, "r");
@@ -7389,24 +7389,24 @@ int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
     if (fp != NULL) {
       authorized = mg_http_check_digest_auth(hm, domain, fp);
       fclose(fp);
+    } else if (!(flags & MG_AUTH_FLAG_ALLOW_MISSING_FILE)) {
+      authorized = 0;
     }
   }
 
-  LOG(LL_DEBUG,
-      ("%.*s %s %d %d", (int) path.len, path.p,
-       passwords_file ? passwords_file : "", is_global_pass_file, authorized));
+  LOG(LL_DEBUG, ("%.*s %s %x %d", (int) path.len, path.p,
+                 passwords_file ? passwords_file : "", flags, authorized));
   return authorized;
 }
 #else
 int mg_http_is_authorized(struct http_message *hm, const struct mg_str path,
-                          int is_directory, const char *domain,
-                          const char *passwords_file, int is_global_pass_file) {
+                          const char *domain, const char *passwords_file,
+                          int flags) {
   (void) hm;
   (void) path;
-  (void) is_directory;
   (void) domain;
   (void) passwords_file;
-  (void) is_global_pass_file;
+  (void) flags;
   return 1;
 }
 #endif
@@ -8010,12 +8010,16 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
 
   if (is_dav && opts->dav_document_root == NULL) {
     mg_http_send_error(nc, 501, NULL);
-  } else if (!mg_http_is_authorized(hm, mg_mk_str(path), is_directory,
-                                    opts->auth_domain, opts->global_auth_file,
-                                    1) ||
-             !mg_http_is_authorized(hm, mg_mk_str(path), is_directory,
-                                    opts->auth_domain,
-                                    opts->per_directory_auth_file, 0)) {
+  } else if (!mg_http_is_authorized(
+                 hm, mg_mk_str(path), opts->auth_domain, opts->global_auth_file,
+                 ((is_directory ? MG_AUTH_FLAG_IS_DIRECTORY : 0) |
+                  MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE |
+                  MG_AUTH_FLAG_ALLOW_MISSING_FILE)) ||
+             !mg_http_is_authorized(
+                 hm, mg_mk_str(path), opts->auth_domain,
+                 opts->per_directory_auth_file,
+                 ((is_directory ? MG_AUTH_FLAG_IS_DIRECTORY : 0) |
+                  MG_AUTH_FLAG_ALLOW_MISSING_FILE))) {
     mg_http_send_digest_auth_request(nc, opts->auth_domain);
   } else if (is_cgi) {
 #if MG_ENABLE_HTTP_CGI
@@ -8031,11 +8035,14 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
   } else if (!mg_vcmp(&hm->method, "PROPFIND")) {
     mg_handle_propfind(nc, path, &st, hm, opts);
 #if !MG_DISABLE_DAV_AUTH
-  } else if (is_dav && (opts->dav_auth_file == NULL ||
-                        (strcmp(opts->dav_auth_file, "-") != 0 &&
-                         !mg_http_is_authorized(hm, mg_mk_str(path),
-                                                is_directory, opts->auth_domain,
-                                                opts->dav_auth_file, 1)))) {
+  } else if (is_dav &&
+             (opts->dav_auth_file == NULL ||
+              (strcmp(opts->dav_auth_file, "-") != 0 &&
+               !mg_http_is_authorized(
+                   hm, mg_mk_str(path), opts->auth_domain, opts->dav_auth_file,
+                   ((is_directory ? MG_AUTH_FLAG_IS_DIRECTORY : 0) |
+                    MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE |
+                    MG_AUTH_FLAG_ALLOW_MISSING_FILE))))) {
     mg_http_send_digest_auth_request(nc, opts->auth_domain);
 #endif
   } else if (!mg_vcmp(&hm->method, "MKCOL")) {
@@ -8444,9 +8451,8 @@ static void mg_http_call_endpoint_handler(struct mg_connection *nc, int ev,
         mg_http_get_endpoint_handler(nc->listener, &hm->uri);
     if (ep != NULL) {
 #if MG_ENABLE_FILESYSTEM && !MG_DISABLE_HTTP_DIGEST_AUTH
-      if (!mg_http_is_authorized(hm, hm->uri, 0 /* is_directory */,
-                                 ep->auth_domain, ep->auth_file,
-                                 1 /* is_global_pass_file */)) {
+      if (!mg_http_is_authorized(hm, hm->uri, ep->auth_domain, ep->auth_file,
+                                 MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE)) {
         mg_http_send_digest_auth_request(nc, ep->auth_domain);
         return;
       }
