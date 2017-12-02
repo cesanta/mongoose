@@ -176,7 +176,7 @@ static void mg_init(struct mg_mgr *mgr) {
     memset(&ver, 0, sizeof(ver));
     sl_DevGet(SL_DEVICE_GENERAL_CONFIGURATION, &opt, &len,
               (unsigned char *) (&ver));
-    LOG(LL_INFO, ("NWP v%d.%d.%d.%d started, host v%d.%d.%d.%d",
+    LOG(LL_INFO, ("NWP v%ld.%ld.%ld.%ld started, host v%ld.%ld.%ld.%ld",
                   ver.NwpVersion[0], ver.NwpVersion[1], ver.NwpVersion[2],
                   ver.NwpVersion[3], SL_MAJOR_VERSION_NUM, SL_MINOR_VERSION_NUM,
                   SL_VERSION_NUM, SL_SUB_VERSION_NUM));

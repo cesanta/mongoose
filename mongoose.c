@@ -2185,8 +2185,8 @@ void mg_tun_destroy_client(struct mg_tun_client *client);
 /* Amalgamated: #include "mongoose/src/dns.h" */
 /* Amalgamated: #include "mongoose/src/internal.h" */
 /* Amalgamated: #include "mongoose/src/resolv.h" */
-/* Amalgamated: #include "mongoose/src/util.h" */
 /* Amalgamated: #include "mongoose/src/tun.h" */
+/* Amalgamated: #include "mongoose/src/util.h" */
 
 #define MG_MAX_HOST_LEN 200
 
@@ -2703,6 +2703,17 @@ MG_INTERNAL void mg_recv_common(struct mg_connection *nc, void *buf, int len,
     MG_FREE(buf);
   }
   mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &len);
+
+  /* If the buffer is still full after the user callback, fail */
+  if (nc->recv_mbuf_limit > 0 && nc->recv_mbuf.len >= nc->recv_mbuf_limit) {
+    char h1[50], h2[50];
+    int flags = MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT;
+    mg_conn_addr_to_str(nc, h1, sizeof(h1), flags);
+    mg_conn_addr_to_str(nc, h2, sizeof(h2), flags | MG_SOCK_STRINGIFY_REMOTE);
+    LOG(LL_ERROR, ("%p %s <-> %s recv buffer %lu bytes, not drained, closing",
+                   nc, h1, h2, (unsigned long) nc->recv_mbuf.len));
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+  }
 }
 
 void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len, int own) {
@@ -15754,14 +15765,6 @@ uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
 #define MG_LWIP_SSL_IO_SIZE 1024
 #endif
 
-/*
- * Stop processing incoming SSL traffic when recv_mbuf.size is this big.
- * It'a a uick solution for SSL recv pushback.
- */
-#ifndef MG_LWIP_SSL_RECV_MBUF_LIMIT
-#define MG_LWIP_SSL_RECV_MBUF_LIMIT 3072
-#endif
-
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
@@ -15842,7 +15845,7 @@ void mg_lwip_ssl_recv(struct mg_connection *nc) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   /* Don't deliver data before connect callback */
   if (nc->flags & MG_F_CONNECTING) return;
-  while (nc->recv_mbuf.len < MG_LWIP_SSL_RECV_MBUF_LIMIT) {
+  while (nc->recv_mbuf.len < nc->recv_mbuf_limit) {
     char *buf = (char *) MG_MALLOC(MG_LWIP_SSL_IO_SIZE);
     if (buf == NULL) return;
     int ret = mg_ssl_if_read(nc, buf, MG_LWIP_SSL_IO_SIZE);
