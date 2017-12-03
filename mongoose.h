@@ -1862,10 +1862,14 @@ struct mg_str {
 };
 
 /*
- * Helper functions for creating mg_str struct from plain C string.
+ * Helper function for creating mg_str struct from plain C string.
  * `NULL` is allowed and becomes `{NULL, 0}`.
  */
 struct mg_str mg_mk_str(const char *s);
+
+/*
+ * Like `mg_mk_str`, but takes string length explicitly.
+ */
 struct mg_str mg_mk_str_n(const char *s, size_t len);
 
 /* Macro for initializing mg_str. */
@@ -1900,9 +1904,19 @@ struct mg_str mg_strdup_nul(const struct mg_str s);
  */
 const char *mg_strchr(const struct mg_str s, int c);
 
+/*
+ * Compare two `mg_str`s; return value is the same as `strcmp`.
+ */
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
+
+/*
+ * Like `mg_strcmp`, but compares at most `n` characters.
+ */
 int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n);
 
+/*
+ * Finds the first occurrence of a substring `needle` in the `haystack`.
+ */
 const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
 
 #ifdef __cplusplus
