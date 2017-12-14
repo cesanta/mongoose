@@ -8365,6 +8365,7 @@ struct mg_connection *mg_connect_http_opt(
   if (post_data == NULL) post_data = "";
   if (extra_headers == NULL) extra_headers = "";
   if (path.len == 0) path = mg_mk_str("/");
+  if (host.len == 0) host = mg_mk_str("");
 
   mg_printf(nc, "%s %.*s HTTP/1.1\r\nHost: %.*s\r\nContent-Length: %" SIZE_T_FMT
                 "\r\n%.*s%s\r\n%s",
