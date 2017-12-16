@@ -2107,9 +2107,21 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len);
 extern "C" {
 #endif
 
+/*
+ * Equivalent of standard `strnlen()`.
+ */
 size_t c_strnlen(const char *s, size_t maxlen);
+
+/*
+ * Equivalent of standard `snprintf()`.
+ */
 int c_snprintf(char *buf, size_t buf_size, const char *format, ...);
+
+/*
+ * Equivalent of standard `vsnprintf()`.
+ */
 int c_vsnprintf(char *buf, size_t buf_size, const char *format, va_list ap);
+
 /*
  * Find the first occurrence of find in s, where the search is limited to the
  * first slen characters of s.
@@ -2130,6 +2142,9 @@ void cs_to_hex(char *to, const unsigned char *p, size_t len);
 void cs_from_hex(char *to, const char *p, size_t len);
 
 #if CS_ENABLE_STRDUP
+/*
+ * Equivalent of standard `strdup()`, defined if only `CS_ENABLE_STRDUP` is 1.
+ */
 char *strdup(const char *src);
 #endif
 
@@ -2157,12 +2172,14 @@ int mg_casecmp(const char *s1, const char *s2);
  * enough buffer on heap and returns allocated buffer.
  * This is a supposed use case:
  *
+ * ```c
  *    char buf[5], *p = buf;
  *    mg_avprintf(&p, sizeof(buf), "%s", "hi there");
  *    use_p_somehow(p);
  *    if (p != buf) {
  *      free(p);
  *    }
+ * ```
  *
  * The purpose of this is to avoid malloc-ing if generated strings are small.
  */
@@ -2186,6 +2203,10 @@ int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap);
  */
 const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
                                      struct mg_str *eq_val);
+
+/*
+ * Like `mg_next_comma_list_entry()`, but takes `list` as `struct mg_str`.
+ */
 struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
                                          struct mg_str *eq_val);
 
@@ -2211,6 +2232,10 @@ struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
  * ```
  */
 int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
+
+/*
+ * Like `mg_match_prefix()`, but takes `pattern` and `str` as `struct mg_str`.
+ */
 int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
 
 #ifdef __cplusplus
