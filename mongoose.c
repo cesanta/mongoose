@@ -15003,9 +15003,12 @@ static void mg_lwip_handle_recv_tcp(struct mg_connection *nc) {
 #endif
 
   mgos_lock();
-  while (cs->rx_chain != NULL) {
+  while (cs->rx_chain != NULL && nc->recv_mbuf.len < nc->recv_mbuf_limit) {
     struct pbuf *seg = cs->rx_chain;
-    size_t len = (seg->len - cs->rx_offset);
+    size_t seg_len = (seg->len - cs->rx_offset);
+    size_t buf_avail = (nc->recv_mbuf_limit - nc->recv_mbuf.len);
+    size_t len = MIN(seg_len, buf_avail);
+
     char *data = (char *) MG_MALLOC(len);
     if (data == NULL) {
       mgos_unlock();
