@@ -68,6 +68,10 @@ struct ctl_msg {
 
 #if MG_ENABLE_MQTT
 struct mg_mqtt_message;
+
+#define MG_MQTT_ERROR_INCOMPLETE_MSG -1
+#define MG_MQTT_ERROR_MALFORMED_MSG -2
+
 MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm);
 #endif
 
@@ -10336,7 +10340,7 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   unsigned char lc = 0;
   int cmd;
 
-  if (io->len < 2) return -1;
+  if (io->len < 2) return MG_MQTT_ERROR_INCOMPLETE_MSG;
   header = io->buf[0];
   cmd = header >> 4;
 
@@ -10348,12 +10352,12 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
     len += (lc & 0x7f) << 7 * len_len;
     len_len++;
     if (!(lc & 0x80)) break;
-    if (len_len > 4) return -2;
+    if (len_len > 4) return MG_MQTT_ERROR_MALFORMED_MSG;
   }
 
   end = p + len;
   if (lc & 0x80 || len > (io->len - (p - io->buf))) {
-    return -1;
+    return MG_MQTT_ERROR_INCOMPLETE_MSG;
   }
 
   mm->cmd = cmd;
@@ -10362,31 +10366,31 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   switch (cmd) {
     case MG_MQTT_CMD_CONNECT: {
       p = scanto(p, &mm->protocol_name);
-      if (p > end - 4) return -2;
+      if (p > end - 4) return MG_MQTT_ERROR_MALFORMED_MSG;
       mm->protocol_version = *(uint8_t *) p++;
       mm->connect_flags = *(uint8_t *) p++;
       mm->keep_alive_timer = getu16(p);
       p += 2;
-      if (p >= end) return -2;
+      if (p >= end) return MG_MQTT_ERROR_MALFORMED_MSG;
       p = scanto(p, &mm->client_id);
-      if (p > end) return -2;
+      if (p > end) return MG_MQTT_ERROR_MALFORMED_MSG;
       if (mm->connect_flags & MG_MQTT_HAS_WILL) {
-        if (p >= end) return -2;
+        if (p >= end) return MG_MQTT_ERROR_MALFORMED_MSG;
         p = scanto(p, &mm->will_topic);
       }
       if (mm->connect_flags & MG_MQTT_HAS_WILL) {
-        if (p >= end) return -2;
+        if (p >= end) return MG_MQTT_ERROR_MALFORMED_MSG;
         p = scanto(p, &mm->will_message);
       }
       if (mm->connect_flags & MG_MQTT_HAS_USER_NAME) {
-        if (p >= end) return -2;
+        if (p >= end) return MG_MQTT_ERROR_MALFORMED_MSG;
         p = scanto(p, &mm->user_name);
       }
       if (mm->connect_flags & MG_MQTT_HAS_PASSWORD) {
-        if (p >= end) return -2;
+        if (p >= end) return MG_MQTT_ERROR_MALFORMED_MSG;
         p = scanto(p, &mm->password);
       }
-      if (p != end) return -2;
+      if (p != end) return MG_MQTT_ERROR_MALFORMED_MSG;
 
       LOG(LL_DEBUG,
           ("%d %2x %d proto [%.*s] client_id [%.*s] will_topic [%.*s] "
@@ -10400,7 +10404,7 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       break;
     }
     case MG_MQTT_CMD_CONNACK:
-      if (end - p < 2) return -2;
+      if (end - p < 2) return MG_MQTT_ERROR_MALFORMED_MSG;
       mm->connack_ret_code = p[1];
       break;
     case MG_MQTT_CMD_PUBACK:
@@ -10412,9 +10416,9 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       break;
     case MG_MQTT_CMD_PUBLISH: {
       p = scanto(p, &mm->topic);
-      if (p > end) return -2;
+      if (p > end) return MG_MQTT_ERROR_MALFORMED_MSG;
       if (mm->qos > 0) {
-        if (end - p < 2) return -2;
+        if (end - p < 2) return MG_MQTT_ERROR_MALFORMED_MSG;
         mm->message_id = getu16(p);
         p += 2;
       }
@@ -10423,7 +10427,7 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
       break;
     }
     case MG_MQTT_CMD_SUBSCRIBE:
-      if (end - p < 2) return -2;
+      if (end - p < 2) return MG_MQTT_ERROR_MALFORMED_MSG;
       mm->message_id = getu16(p);
       p += 2;
       /*
@@ -10459,10 +10463,10 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
       while (1) {
         int len = parse_mqtt(io, &mm);
         if (len < 0) {
-          if (len == -2) {
+          if (len == MG_MQTT_ERROR_MALFORMED_MSG) {
             /* Protocol error. */
             nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-          } else if (len == -1) {
+          } else if (len == MG_MQTT_ERROR_INCOMPLETE_MSG) {
             /* Not fully buffered, let's check if we have a chance to get more
              * data later */
             if (nc->recv_mbuf_limit > 0 &&
@@ -10473,6 +10477,10 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
                              (unsigned long) nc->recv_mbuf_limit));
               nc->flags |= MG_F_CLOSE_IMMEDIATELY;
             }
+          } else {
+            /* Should never be here */
+            LOG(LL_ERROR, ("%p invalid len: %d, closing", nc, len));
+            nc->flags |= MG_F_CLOSE_IMMEDIATELY;
           }
           break;
         }
