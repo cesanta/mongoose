@@ -2767,17 +2767,6 @@ MG_INTERNAL void mg_recv_common(struct mg_connection *nc, void *buf, int len,
     MG_FREE(buf);
   }
   mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &len);
-
-  /* If the buffer is still full after the user callback, fail */
-  if (nc->recv_mbuf_limit > 0 && nc->recv_mbuf.len >= nc->recv_mbuf_limit) {
-    char h1[50], h2[50];
-    int flags = MG_SOCK_STRINGIFY_IP | MG_SOCK_STRINGIFY_PORT;
-    mg_conn_addr_to_str(nc, h1, sizeof(h1), flags);
-    mg_conn_addr_to_str(nc, h2, sizeof(h2), flags | MG_SOCK_STRINGIFY_REMOTE);
-    LOG(LL_ERROR, ("%p %s <-> %s recv buffer %lu bytes, not drained, closing",
-                   nc, h1, h2, (unsigned long) nc->recv_mbuf.len));
-    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-  }
 }
 
 void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len, int own) {
@@ -10470,11 +10459,24 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
       while (1) {
         int len = parse_mqtt(io, &mm);
         if (len < 0) {
-          if (len == -1) break; /* not fully buffered */
-          /* Protocol error. */
-          nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+          if (len == -2) {
+            /* Protocol error. */
+            nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+          } else if (len == -1) {
+            /* Not fully buffered, let's check if we have a chance to get more
+             * data later */
+            if (nc->recv_mbuf_limit > 0 &&
+                nc->recv_mbuf.len >= nc->recv_mbuf_limit) {
+              LOG(LL_ERROR, ("%p recv buffer (%lu bytes) exceeds the limit "
+                             "%lu bytes, and not drained, closing",
+                             nc, (unsigned long) nc->recv_mbuf.len,
+                             (unsigned long) nc->recv_mbuf_limit));
+              nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+            }
+          }
           break;
         }
+
         nc->handler(nc, MG_MQTT_EVENT_BASE + mm.cmd, &mm MG_UD_ARG(user_data));
         mbuf_remove(io, len);
       }
