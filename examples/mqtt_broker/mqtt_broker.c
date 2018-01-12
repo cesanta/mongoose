@@ -31,7 +31,6 @@ int main(void) {
   struct mg_mqtt_broker brk;
 
   mg_mgr_init(&mgr, NULL);
-  mg_mqtt_broker_init(&brk, NULL);
 
   if ((c = mg_bind(&mgr, s_listening_address, ev_handler)) == NULL) {
     fprintf(stderr, "mg_bind(%s) failed\n", s_listening_address);
