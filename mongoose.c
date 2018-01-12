@@ -10839,8 +10839,7 @@ static void mg_mqtt_broker_handle_connect(struct mg_mqtt_broker *brk,
   /* TODO(mkm): check header (magic and version) */
 
   mg_mqtt_session_init(brk, s, nc);
-  s->user_data = nc->user_data;
-  nc->user_data = s;
+  nc->priv_2 = s;
   mg_mqtt_add_session(s);
 
   mg_mqtt_connack(nc, MG_EV_MQTT_CONNACK_ACCEPTED);
@@ -10848,7 +10847,7 @@ static void mg_mqtt_broker_handle_connect(struct mg_mqtt_broker *brk,
 
 static void mg_mqtt_broker_handle_subscribe(struct mg_connection *nc,
                                             struct mg_mqtt_message *msg) {
-  struct mg_mqtt_session *ss = (struct mg_mqtt_session *) nc->user_data;
+  struct mg_mqtt_session *ss = (struct mg_mqtt_session *) nc->priv_2;
   uint8_t qoss[MG_MQTT_MAX_SESSION_SUBSCRIPTIONS];
   size_t num_subs = 0;
   struct mg_str topic;
@@ -10926,18 +10925,18 @@ void mg_mqtt_broker(struct mg_connection *nc, int ev, void *data) {
   struct mg_mqtt_broker *brk;
 
   if (nc->listener) {
-    brk = (struct mg_mqtt_broker *) nc->listener->user_data;
+    brk = (struct mg_mqtt_broker *) nc->listener->priv_2;
   } else {
-    brk = (struct mg_mqtt_broker *) nc->user_data;
+    brk = (struct mg_mqtt_broker *) nc->priv_2;
   }
 
   switch (ev) {
     case MG_EV_ACCEPT:
       if (nc->proto_data == NULL) mg_set_protocol_mqtt(nc);
-      nc->user_data = NULL; /* Clear up the inherited pointer to broker */
+      nc->priv_2 = NULL; /* Clear up the inherited pointer to broker */
       break;
     case MG_EV_MQTT_CONNECT:
-      if (nc->user_data == NULL) {
+      if (nc->priv_2 == NULL) {
         mg_mqtt_broker_handle_connect(brk, nc);
       } else {
         /* Repeated CONNECT */
@@ -10945,7 +10944,7 @@ void mg_mqtt_broker(struct mg_connection *nc, int ev, void *data) {
       }
       break;
     case MG_EV_MQTT_SUBSCRIBE:
-      if (nc->user_data != NULL) {
+      if (nc->priv_2 != NULL) {
         mg_mqtt_broker_handle_subscribe(nc, msg);
       } else {
         /* Subscribe before CONNECT */
@@ -10953,7 +10952,7 @@ void mg_mqtt_broker(struct mg_connection *nc, int ev, void *data) {
       }
       break;
     case MG_EV_MQTT_PUBLISH:
-      if (nc->user_data != NULL) {
+      if (nc->priv_2 != NULL) {
         mg_mqtt_broker_handle_publish(brk, msg);
       } else {
         /* Publish before CONNECT */
@@ -10961,8 +10960,8 @@ void mg_mqtt_broker(struct mg_connection *nc, int ev, void *data) {
       }
       break;
     case MG_EV_CLOSE:
-      if (nc->listener && nc->user_data != NULL) {
-        mg_mqtt_close_session((struct mg_mqtt_session *) nc->user_data);
+      if (nc->listener && nc->priv_2 != NULL) {
+        mg_mqtt_close_session((struct mg_mqtt_session *) nc->priv_2);
       }
       break;
   }
