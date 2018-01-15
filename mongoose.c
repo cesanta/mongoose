@@ -582,6 +582,8 @@ enum cs_log_level cs_log_threshold WEAK =
 static char *s_filter_pattern = NULL;
 static size_t s_filter_pattern_len;
 
+void cs_log_set_filter(const char *pattern) WEAK;
+
 #if CS_ENABLE_STDIO
 
 FILE *cs_log_file WEAK = NULL;
@@ -592,7 +594,6 @@ double cs_log_ts WEAK;
 
 enum cs_log_level cs_log_cur_msg_level WEAK = LL_NONE;
 
-void cs_log_set_filter(const char *pattern) WEAK;
 void cs_log_set_filter(const char *pattern) {
   free(s_filter_pattern);
   if (pattern != NULL) {
@@ -645,6 +646,12 @@ void cs_log_printf(const char *fmt, ...) {
 void cs_log_set_file(FILE *file) WEAK;
 void cs_log_set_file(FILE *file) {
   cs_log_file = file;
+}
+
+#else
+
+void cs_log_set_filter(const char *pattern) {
+  (void) pattern;
 }
 
 #endif /* CS_ENABLE_STDIO */
