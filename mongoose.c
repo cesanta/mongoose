@@ -6435,6 +6435,13 @@ void mg_http_handler(struct mg_connection *nc, int ev,
     else if (hm->message.len > pd->rcvd) {
       /* Not yet received all HTTP body, deliver MG_EV_HTTP_CHUNK */
       deliver_chunk(nc, hm, req_len);
+      if (nc->recv_mbuf_limit > 0 && nc->recv_mbuf.len >= nc->recv_mbuf_limit) {
+        LOG(LL_ERROR, ("%p recv buffer (%lu bytes) exceeds the limit "
+                       "%lu bytes, and not drained, closing",
+                       nc, (unsigned long) nc->recv_mbuf.len,
+                       (unsigned long) nc->recv_mbuf_limit));
+        nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      }
     } else {
       /* We did receive all HTTP body. */
       int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
