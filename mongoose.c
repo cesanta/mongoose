@@ -15025,6 +15025,17 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
 
 static void mg_lwip_consume_rx_chain_tcp(struct mg_connection *nc) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
+  if (cs->rx_chain == NULL) return;
+#if MG_ENABLE_SSL
+  if (nc->flags & MG_F_SSL) {
+    if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
+      mg_lwip_ssl_recv(nc);
+    } else {
+      mg_lwip_ssl_do_hs(nc);
+    }
+    return;
+  }
+#endif
   mgos_lock();
   while (cs->rx_chain != NULL && nc->recv_mbuf.len < nc->recv_mbuf_limit) {
     struct pbuf *seg = cs->rx_chain;
@@ -15054,17 +15065,6 @@ static void mg_lwip_consume_rx_chain_tcp(struct mg_connection *nc) {
 }
 
 static void mg_lwip_handle_recv_tcp(struct mg_connection *nc) {
-#if MG_ENABLE_SSL
-  if (nc->flags & MG_F_SSL) {
-    if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
-      mg_lwip_ssl_recv(nc);
-    } else {
-      mg_lwip_ssl_do_hs(nc);
-    }
-    return;
-  }
-#endif
-
   mg_lwip_consume_rx_chain_tcp(nc);
 
   if (nc->send_mbuf.len > 0) {
