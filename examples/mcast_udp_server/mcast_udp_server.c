@@ -45,7 +45,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
   }
 }
 
-void usage(char **argv) {
+static void usage(char **argv) {
   fprintf(stderr, "%s: -i address_of_mcast_interface [ -g %s ] [ -p %s ]\n",
           argv[0], MCAST_GROUP, DEFAULT_PORT);
   exit(1);

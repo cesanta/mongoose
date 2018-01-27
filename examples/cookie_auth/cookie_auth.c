@@ -174,7 +174,7 @@ static void logout_handler(struct mg_connection *nc, int ev, void *p) {
 }
 
 /* Cleans up sessions that have been idle for too long. */
-void check_sessions(void) {
+static void check_sessions(void) {
   double threshold = mg_time() - SESSION_TTL;
   for (int i = 0; i < NUM_SESSIONS; i++) {
     struct session *s = &s_sessions[i];

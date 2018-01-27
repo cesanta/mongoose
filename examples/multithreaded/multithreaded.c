@@ -45,7 +45,7 @@ static void on_work_complete(struct mg_connection *nc, int ev, void *ev_data) {
   }
 }
 
-void *worker_thread_proc(void *param) {
+static void *worker_thread_proc(void *param) {
   struct mg_mgr *mgr = (struct mg_mgr *) param;
   struct work_request req = {0};
   

@@ -1200,7 +1200,7 @@ static uint32_t blk0(union char64long16 *block, int i) {
   z += (w ^ x ^ y) + blk(i) + 0xCA62C1D6 + rol(v, 5); \
   w = rol(w, 30);
 
-void cs_sha1_transform(uint32_t state[5], const unsigned char buffer[64]) {
+static void cs_sha1_transform(uint32_t state[5], const unsigned char buffer[64]) {
   uint32_t a, b, c, d, e;
   union char64long16 block[1];
 
@@ -2365,7 +2365,7 @@ void mg_if_poll(struct mg_connection *nc, time_t now) {
   }
 }
 
-void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
+static void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
   if (destroy_if) conn->iface->vtable->destroy_conn(conn);
   if (conn->proto_data != NULL && conn->proto_data_destructor != NULL) {
     conn->proto_data_destructor(conn->proto_data);
@@ -3209,13 +3209,13 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
   return result;
 }
 
-void mg_sock_set(struct mg_connection *nc, sock_t sock) {
+static void mg_sock_set(struct mg_connection *nc, sock_t sock) {
   if (sock != INVALID_SOCKET) {
     nc->iface->vtable->sock_set(nc, sock);
   }
 }
 
-void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
+static void mg_if_get_conn_addr(struct mg_connection *nc, int remote,
                          union socket_address *sa) {
   nc->iface->vtable->get_conn_addr(nc, remote, sa);
 }
@@ -3404,7 +3404,7 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int type,
 static void mg_ssl_begin(struct mg_connection *nc);
 #endif
 
-void mg_set_non_blocking_mode(sock_t sock) {
+static void mg_set_non_blocking_mode(sock_t sock) {
 #ifdef _WIN32
   unsigned long on = 1;
   ioctlsocket(sock, FIONBIO, &on);
@@ -3426,7 +3426,7 @@ static int mg_is_error(void) {
       ;
 }
 
-void mg_socket_if_connect_tcp(struct mg_connection *nc,
+static void mg_socket_if_connect_tcp(struct mg_connection *nc,
                               const union socket_address *sa) {
   int rc, proto = 0;
   nc->sock = socket(AF_INET, SOCK_STREAM, proto);
@@ -3443,7 +3443,7 @@ void mg_socket_if_connect_tcp(struct mg_connection *nc,
        nc->err));
 }
 
-void mg_socket_if_connect_udp(struct mg_connection *nc) {
+static void mg_socket_if_connect_udp(struct mg_connection *nc) {
   nc->sock = socket(AF_INET, SOCK_DGRAM, 0);
   if (nc->sock == INVALID_SOCKET) {
     nc->err = mg_get_errno() ? mg_get_errno() : 1;
@@ -3457,7 +3457,7 @@ void mg_socket_if_connect_udp(struct mg_connection *nc) {
   nc->err = 0;
 }
 
-int mg_socket_if_listen_tcp(struct mg_connection *nc,
+static int mg_socket_if_listen_tcp(struct mg_connection *nc,
                             union socket_address *sa) {
   int proto = 0;
   sock_t sock = mg_open_listening_socket(sa, SOCK_STREAM, proto);
@@ -3468,7 +3468,7 @@ int mg_socket_if_listen_tcp(struct mg_connection *nc,
   return 0;
 }
 
-int mg_socket_if_listen_udp(struct mg_connection *nc,
+static int mg_socket_if_listen_udp(struct mg_connection *nc,
                             union socket_address *sa) {
   sock_t sock = mg_open_listening_socket(sa, SOCK_DGRAM, 0);
   if (sock == INVALID_SOCKET) return (mg_get_errno() ? mg_get_errno() : 1);
@@ -3476,27 +3476,27 @@ int mg_socket_if_listen_udp(struct mg_connection *nc,
   return 0;
 }
 
-void mg_socket_if_tcp_send(struct mg_connection *nc, const void *buf,
+static void mg_socket_if_tcp_send(struct mg_connection *nc, const void *buf,
                            size_t len) {
   mbuf_append(&nc->send_mbuf, buf, len);
 }
 
-void mg_socket_if_udp_send(struct mg_connection *nc, const void *buf,
+static void mg_socket_if_udp_send(struct mg_connection *nc, const void *buf,
                            size_t len) {
   mbuf_append(&nc->send_mbuf, buf, len);
 }
 
-void mg_socket_if_recved(struct mg_connection *nc, size_t len) {
+static void mg_socket_if_recved(struct mg_connection *nc, size_t len) {
   (void) nc;
   (void) len;
 }
 
-int mg_socket_if_create_conn(struct mg_connection *nc) {
+static int mg_socket_if_create_conn(struct mg_connection *nc) {
   (void) nc;
   return 1;
 }
 
-void mg_socket_if_destroy_conn(struct mg_connection *nc) {
+static void mg_socket_if_destroy_conn(struct mg_connection *nc) {
   if (nc->sock == INVALID_SOCKET) return;
   if (!(nc->flags & MG_F_UDP)) {
     closesocket(nc->sock);
@@ -3746,7 +3746,7 @@ static void mg_ssl_begin(struct mg_connection *nc) {
 #define _MG_F_FD_CAN_WRITE 1 << 1
 #define _MG_F_FD_ERROR 1 << 2
 
-void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
+static void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
   int worth_logging =
       fd_flags != 0 || (nc->flags & (MG_F_WANT_READ | MG_F_WANT_WRITE));
   if (worth_logging) {
@@ -3839,14 +3839,14 @@ static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
 #endif
 
 /* Associate a socket to a connection. */
-void mg_socket_if_sock_set(struct mg_connection *nc, sock_t sock) {
+static void mg_socket_if_sock_set(struct mg_connection *nc, sock_t sock) {
   mg_set_non_blocking_mode(sock);
   mg_set_close_on_exec(sock);
   nc->sock = sock;
   DBG(("%p %d", nc, sock));
 }
 
-void mg_socket_if_init(struct mg_iface *iface) {
+static void mg_socket_if_init(struct mg_iface *iface) {
   (void) iface;
   DBG(("%p using select()", iface->mgr));
 #if MG_ENABLE_BROADCAST
@@ -3854,19 +3854,19 @@ void mg_socket_if_init(struct mg_iface *iface) {
 #endif
 }
 
-void mg_socket_if_free(struct mg_iface *iface) {
+static void mg_socket_if_free(struct mg_iface *iface) {
   (void) iface;
 }
 
-void mg_socket_if_add_conn(struct mg_connection *nc) {
+static void mg_socket_if_add_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
-void mg_socket_if_remove_conn(struct mg_connection *nc) {
+static void mg_socket_if_remove_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
-void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
+static void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   if (sock != INVALID_SOCKET
 #ifdef __unix__
       && sock < (sock_t) FD_SETSIZE
@@ -3879,7 +3879,7 @@ void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd) {
   }
 }
 
-time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
+static time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
   struct mg_mgr *mgr = iface->mgr;
   double now = mg_time();
   double min_timer;
@@ -4087,7 +4087,7 @@ void mg_sock_to_str(sock_t sock, char *buf, size_t len, int flags) {
   mg_sock_addr_to_str(&sa, buf, len, flags);
 }
 
-void mg_socket_if_get_conn_addr(struct mg_connection *nc, int remote,
+static void mg_socket_if_get_conn_addr(struct mg_connection *nc, int remote,
                                 union socket_address *sa) {
   if ((nc->flags & MG_F_UDP) && remote) {
     memcpy(sa, &nc->sa, sizeof(*sa));
@@ -4356,29 +4356,29 @@ struct mg_iface *mg_socks_mk_iface(struct mg_mgr *mgr, const char *proxy_addr) {
 #define MG_TCP_RECV_BUFFER_SIZE 1024
 #define MG_UDP_RECV_BUFFER_SIZE 1500
 
-void mg_tun_if_connect_tcp(struct mg_connection *nc,
+static void mg_tun_if_connect_tcp(struct mg_connection *nc,
                            const union socket_address *sa) {
   (void) nc;
   (void) sa;
 }
 
-void mg_tun_if_connect_udp(struct mg_connection *nc) {
+static void mg_tun_if_connect_udp(struct mg_connection *nc) {
   (void) nc;
 }
 
-int mg_tun_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
+static int mg_tun_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   (void) nc;
   (void) sa;
   return 0;
 }
 
-int mg_tun_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
+static int mg_tun_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
   (void) nc;
   (void) sa;
   return -1;
 }
 
-void mg_tun_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
+static void mg_tun_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
   struct mg_tun_client *client = (struct mg_tun_client *) nc->iface->data;
   uint32_t stream_id = (uint32_t)(uintptr_t) nc->mgr_data;
   struct mg_str msg = {(char *) buf, len};
@@ -4391,23 +4391,23 @@ void mg_tun_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
   mg_tun_send_frame(client->disp, stream_id, MG_TUN_DATA_FRAME, 0, msg);
 }
 
-void mg_tun_if_udp_send(struct mg_connection *nc, const void *buf, size_t len) {
+static void mg_tun_if_udp_send(struct mg_connection *nc, const void *buf, size_t len) {
   (void) nc;
   (void) buf;
   (void) len;
 }
 
-void mg_tun_if_recved(struct mg_connection *nc, size_t len) {
+static void mg_tun_if_recved(struct mg_connection *nc, size_t len) {
   (void) nc;
   (void) len;
 }
 
-int mg_tun_if_create_conn(struct mg_connection *nc) {
+static int mg_tun_if_create_conn(struct mg_connection *nc) {
   (void) nc;
   return 1;
 }
 
-void mg_tun_if_destroy_conn(struct mg_connection *nc) {
+static void mg_tun_if_destroy_conn(struct mg_connection *nc) {
   struct mg_tun_client *client = (struct mg_tun_client *) nc->iface->data;
 
   if (nc->flags & MG_F_LISTENING) {
@@ -4423,34 +4423,34 @@ void mg_tun_if_destroy_conn(struct mg_connection *nc) {
 }
 
 /* Associate a socket to a connection. */
-void mg_tun_if_sock_set(struct mg_connection *nc, sock_t sock) {
+static void mg_tun_if_sock_set(struct mg_connection *nc, sock_t sock) {
   (void) nc;
   (void) sock;
 }
 
-void mg_tun_if_init(struct mg_iface *iface) {
+static void mg_tun_if_init(struct mg_iface *iface) {
   (void) iface;
 }
 
-void mg_tun_if_free(struct mg_iface *iface) {
+static void mg_tun_if_free(struct mg_iface *iface) {
   (void) iface;
 }
 
-void mg_tun_if_add_conn(struct mg_connection *nc) {
+static void mg_tun_if_add_conn(struct mg_connection *nc) {
   nc->sock = INVALID_SOCKET;
 }
 
-void mg_tun_if_remove_conn(struct mg_connection *nc) {
+static void mg_tun_if_remove_conn(struct mg_connection *nc) {
   (void) nc;
 }
 
-time_t mg_tun_if_poll(struct mg_iface *iface, int timeout_ms) {
+static time_t mg_tun_if_poll(struct mg_iface *iface, int timeout_ms) {
   (void) iface;
   (void) timeout_ms;
   return (time_t) cs_time();
 }
 
-void mg_tun_if_get_conn_addr(struct mg_connection *nc, int remote,
+static void mg_tun_if_get_conn_addr(struct mg_connection *nc, int remote,
                              union socket_address *sa) {
   (void) nc;
   (void) remote;
@@ -6216,7 +6216,7 @@ MG_INTERNAL size_t mg_handle_chunked(struct mg_connection *nc,
   return body_len;
 }
 
-struct mg_http_endpoint *mg_http_get_endpoint_handler(struct mg_connection *nc,
+static struct mg_http_endpoint *mg_http_get_endpoint_handler(struct mg_connection *nc,
                                                       struct mg_str *uri_path) {
   struct mg_http_proto_data *pd;
   struct mg_http_endpoint *ret = NULL;
@@ -6276,7 +6276,7 @@ static void mg_http_handler2(struct mg_connection *nc, int ev,
                              void *ev_data MG_UD_ARG(void *user_data),
                              struct http_message *hm) __attribute__((noinline));
 
-void mg_http_handler(struct mg_connection *nc, int ev,
+static void mg_http_handler(struct mg_connection *nc, int ev,
                      void *ev_data MG_UD_ARG(void *user_data)) {
   struct http_message hm;
   mg_http_handler2(nc, ev, ev_data MG_UD_ARG(user_data), &hm);
@@ -6286,7 +6286,7 @@ static void mg_http_handler2(struct mg_connection *nc, int ev,
                              void *ev_data MG_UD_ARG(void *user_data),
                              struct http_message *hm) {
 #else  /* !__XTENSA__ */
-void mg_http_handler(struct mg_connection *nc, int ev,
+static void mg_http_handler(struct mg_connection *nc, int ev,
                      void *ev_data MG_UD_ARG(void *user_data)) {
   struct http_message shm, *hm = &shm;
 #endif /* __XTENSA__ */
@@ -6745,7 +6745,7 @@ void mg_set_protocol_http_websocket(struct mg_connection *nc) {
   nc->proto_handler = mg_http_handler;
 }
 
-const char *mg_status_message(int status_code) {
+static const char *mg_status_message(int status_code) {
   switch (status_code) {
     case 206:
       return "Partial Content";
@@ -6876,7 +6876,7 @@ const char *mg_status_message(int status_code) {
   }
 }
 
-void mg_send_response_line_s(struct mg_connection *nc, int status_code,
+static void mg_send_response_line_s(struct mg_connection *nc, int status_code,
                              const struct mg_str extra_headers) {
   mg_printf(nc, "HTTP/1.1 %d %s\r\nServer: %s\r\n", status_code,
             mg_status_message(status_code), mg_version_header);
@@ -7310,7 +7310,7 @@ extern void mg_hash_md5_v(size_t num_msgs, const uint8_t *msgs[],
                           const size_t *msg_lens, uint8_t *digest);
 #endif
 
-void cs_md5(char buf[33], ...) {
+static void cs_md5(char buf[33], ...) {
   unsigned char hash[16];
   const uint8_t *msgs[20], *p;
   size_t msg_lens[20];
@@ -12365,7 +12365,7 @@ static void mg_tun_init_client(struct mg_tun_client *client, struct mg_mgr *mgr,
   client->reconnect = NULL; /* will be set by mg_tun_reconnect */
 }
 
-void mg_tun_log_frame(struct mg_tun_frame *frame) {
+static void mg_tun_log_frame(struct mg_tun_frame *frame) {
   LOG(LL_DEBUG, ("Got TUN frame: type=0x%x, flags=0x%x stream_id=0x%x, "
                  "len=%d",
                  frame->type, frame->flags, (unsigned int) frame->stream_id,
@@ -12501,7 +12501,7 @@ static void mg_tun_do_reconnect(struct mg_tun_client *client) {
 #endif
 }
 
-void mg_tun_reconnect_ev_handler(struct mg_connection *nc, int ev,
+static void mg_tun_reconnect_ev_handler(struct mg_connection *nc, int ev,
                                  void *ev_data MG_UD_ARG(void *user_data)) {
 #if !MG_ENABLE_CALLBACK_USERDATA
   void *user_data = nc->user_data;
@@ -12820,7 +12820,7 @@ static void mg_sntp_handler(struct mg_connection *c, int ev,
   }
 }
 
-int mg_set_protocol_sntp(struct mg_connection *c) {
+static int mg_set_protocol_sntp(struct mg_connection *c) {
   if ((c->flags & MG_F_UDP) == 0) {
     return -1;
   }
@@ -14102,7 +14102,7 @@ static sock_t mg_open_listening_socket(struct mg_connection *nc,
                                        union socket_address *sa, int type,
                                        int proto);
 
-void mg_set_non_blocking_mode(sock_t sock) {
+static void mg_set_non_blocking_mode(sock_t sock) {
   SlSockNonblocking_t opt;
 #if SL_MAJOR_VERSION_NUM < 2
   opt.NonblockingEnabled = 1;
@@ -14310,7 +14310,7 @@ static void mg_handle_udp_read(struct mg_connection *nc) {
 #define _MG_F_FD_CAN_WRITE 1 << 1
 #define _MG_F_FD_ERROR 1 << 2
 
-void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
+static void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
   DBG(("%p fd=%d fd_flags=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock,
        fd_flags, nc->flags, (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
 
