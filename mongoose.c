@@ -3595,7 +3595,7 @@ static void mg_write_to_socket(struct mg_connection *nc) {
   assert(io->len > 0);
 
   if (nc->flags & MG_F_UDP) {
-    int n =
+    n =
         sendto(nc->sock, io->buf, io->len, 0, &nc->sa.sa, sizeof(nc->sa.sin));
     DBG(("%p %d %d %d %s:%hu", nc, nc->sock, n, mg_get_errno(),
          inet_ntoa(nc->sa.sin.sin_addr), ntohs(nc->sa.sin.sin_port)));
@@ -6098,7 +6098,7 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
   } else if (pd->file.type == DATA_PUT) {
     struct mbuf *io = &nc->recv_mbuf;
     size_t to_write = left <= 0 ? 0 : left < io->len ? (size_t) left : io->len;
-    size_t n = mg_fwrite(io->buf, 1, to_write, pd->file.fp);
+    n = mg_fwrite(io->buf, 1, to_write, pd->file.fp);
     if (n > 0) {
       mbuf_remove(io, n);
       pd->file.sent += n;
