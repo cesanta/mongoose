@@ -2076,8 +2076,8 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len);
 #include <stdarg.h>
 #include <stdlib.h>
 
-/* Amalgamated: #include "common/platform.h" */
 /* Amalgamated: #include "common/mg_str.h" */
+/* Amalgamated: #include "common/platform.h" */
 
 #ifndef CS_ENABLE_STRDUP
 #define CS_ENABLE_STRDUP 0
@@ -2221,23 +2221,22 @@ struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
  * - | or ,  divides alternative patterns
  * - any other character matches itself
  * ```
- * Match is case-insensitive. Returns number of bytes matched, or -1 if no
- * match.
+ * Match is case-insensitive. Return number of bytes matched.
  * Examples:
  * ```
  * mg_match_prefix("a*f", len, "abcdefgh") == 6
- * mg_match_prefix("a*f", len, "abcdexgh") == -1
+ * mg_match_prefix("a*f", len, "abcdexgh") == 0
  * mg_match_prefix("a*f|de*,xy", len, "defgh") == 5
  * mg_match_prefix("?*", len, "abc") == 3
- * mg_match_prefix("?*", len, "") == -1
+ * mg_match_prefix("?*", len, "") == 0
  * ```
  */
-int mg_match_prefix(const char *pattern, int pattern_len, const char *str);
+size_t mg_match_prefix(const char *pattern, int pattern_len, const char *str);
 
 /*
  * Like `mg_match_prefix()`, but takes `pattern` and `str` as `struct mg_str`.
  */
-int mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
+size_t mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str);
 
 #ifdef __cplusplus
 }
