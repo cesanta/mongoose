@@ -38,7 +38,7 @@ int main(void) {
     exit(EXIT_FAILURE);
   }
   mg_mqtt_broker_init(&brk, NULL);
-  c->user_data = &brk;
+  c->priv_2 = &brk;
   mg_set_protocol_mqtt(c);
 
   printf("MQTT broker started on %s\n", s_listening_address);
