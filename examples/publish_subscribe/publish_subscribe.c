@@ -23,7 +23,9 @@ static void *stdin_thread(void *param) {
   // Forward all types characters to the socketpair
   while ((ch = getchar()) != EOF) {
     unsigned char c = (unsigned char) ch;
-    send(sock, (const char *) &c, 1, 0);
+    if (send(sock, (const char *) &c, 1, 0) < 0) {
+      fprintf(stderr, "Failed to send byte to the socket");
+    }
   }
   return NULL;
 }
