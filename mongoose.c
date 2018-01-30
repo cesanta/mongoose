@@ -8464,9 +8464,11 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
                           size_t *data_len) {
   static const char cd[] = "Content-Disposition: ";
   size_t hl, bl, n, ll, pos, cdl = sizeof(cd) - 1;
+  int shl;
 
   if (buf == NULL || buf_len <= 0) return 0;
-  if ((hl = mg_http_get_request_len(buf, buf_len)) <= 0) return 0;
+  if ((shl = mg_http_get_request_len(buf, buf_len)) <= 0) return 0;
+  hl = shl;
   if (buf[0] != '-' || buf[1] != '-' || buf[2] == '\n') return 0;
 
   /* Get boundary length */
