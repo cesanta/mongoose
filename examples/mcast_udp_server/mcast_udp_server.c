@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
   mg_mgr_init(&mgr, NULL);
   {
     char listen[256];
-    sprintf(listen, "udp://%s", port);
+    snprintf(listen, sizeof(listen), "udp://%s", port);
     nc = mg_bind(&mgr, listen, ev_handler);
   }
 
