@@ -11699,6 +11699,8 @@ int mg_resolve_async_opt(struct mg_mgr *mgr, const char *name, int query,
   }
 
   strncpy(req->name, name, sizeof(req->name));
+  req->name[sizeof(req->name) - 1] = '\0';
+
   req->query = query;
   req->callback = cb;
   req->data = data;
