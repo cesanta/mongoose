@@ -3914,10 +3914,16 @@ time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
       /* A hack to make sure all our file descriptos fit into FD_SETSIZE. */
       if (nc->sock >= (sock_t) FD_SETSIZE && try_dup) {
         int new_sock = dup(nc->sock);
-        if (new_sock >= 0 && new_sock < (sock_t) FD_SETSIZE) {
-          closesocket(nc->sock);
-          DBG(("new sock %d -> %d", nc->sock, new_sock));
-          nc->sock = new_sock;
+        if (new_sock >= 0) {
+          if (new_sock < (sock_t) FD_SETSIZE) {
+            closesocket(nc->sock);
+            DBG(("new sock %d -> %d", nc->sock, new_sock));
+            nc->sock = new_sock;
+          } else {
+            closesocket(new_sock);
+            DBG(("new sock is still larger than FD_SETSIZE, disregard"));
+            try_dup = 0;
+          }
         } else {
           try_dup = 0;
         }
