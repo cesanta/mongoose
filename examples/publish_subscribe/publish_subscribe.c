@@ -36,7 +36,7 @@ static void server_handler(struct mg_connection *nc, int ev, void *p) {
     struct mg_connection *c;
 
     for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c)) {
-      if (!(c->flags |= MG_F_USER_2)) continue;  // Skip non-client connections
+      if (!(c->flags & MG_F_USER_2)) continue;  // Skip non-client connections
       mg_send(c, io->buf, io->len);
     }
     mbuf_remove(io, io->len);
