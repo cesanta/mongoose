@@ -6450,7 +6450,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       deliver_chunk(nc, hm, req_len);
       /* Whole HTTP message is fully buffered, call event handler */
       mg_http_call_endpoint_handler(nc, trigger_ev, hm);
-      mbuf_remove(io, hm->message.len);
+      mbuf_remove(io, nc->recv_mbuf.len);
       pd->rcvd = 0;
     }
   }
