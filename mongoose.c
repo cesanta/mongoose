@@ -8845,6 +8845,7 @@ static void mg_prepare_cgi_environment(struct mg_connection *nc,
   char *p;
   size_t i;
   char buf[100];
+  size_t path_info_len = path_info != NULL ? path_info->len : 0;
 
   blk->len = blk->nvars = 0;
   blk->nc = nc;
@@ -8876,7 +8877,7 @@ static void mg_prepare_cgi_environment(struct mg_connection *nc,
   mg_conn_addr_to_str(nc, buf, sizeof(buf), MG_SOCK_STRINGIFY_PORT);
   mg_addenv(blk, "SERVER_PORT=%s", buf);
 
-  s = hm->uri.p + hm->uri.len - path_info->len - 1;
+  s = hm->uri.p + hm->uri.len - path_info_len - 1;
   if (*s == '/') {
     const char *base_name = strrchr(prog, DIRSEP);
     mg_addenv(blk, "SCRIPT_NAME=%.*s/%s", (int) (s - hm->uri.p), hm->uri.p,
