@@ -2834,7 +2834,6 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
   } else {
     /* Drop on the floor. */
     MG_FREE(buf);
-    nc->iface->vtable->recved(nc, len);
   }
 }
 
