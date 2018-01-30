@@ -33,6 +33,7 @@ static void handle_upload(struct mg_connection *nc, int ev, void *p) {
                     "HTTP/1.1 500 Failed to open a file\r\n"
                     "Content-Length: 0\r\n\r\n");
           nc->flags |= MG_F_SEND_AND_CLOSE;
+          free(data);
           return;
         }
         nc->user_data = (void *) data;
