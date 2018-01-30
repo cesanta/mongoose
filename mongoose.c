@@ -3450,8 +3450,11 @@ void mg_socket_if_connect_udp(struct mg_connection *nc) {
   }
   if (nc->flags & MG_F_ENABLE_BROADCAST) {
     int optval = 1;
-    setsockopt(nc->sock, SOL_SOCKET, SO_BROADCAST, (const char *) &optval,
-               sizeof(optval));
+    if (setsockopt(nc->sock, SOL_SOCKET, SO_BROADCAST, (const char *) &optval,
+                   sizeof(optval)) < 0) {
+      nc->err = mg_get_errno() ? mg_get_errno() : 1;
+      return;
+    }
   }
   nc->err = 0;
 }
