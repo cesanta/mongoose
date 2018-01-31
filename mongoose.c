@@ -594,6 +594,12 @@ double cs_log_ts WEAK;
 
 enum cs_log_level cs_log_cur_msg_level WEAK = LL_NONE;
 
+#if MG_ESP_LOG_STDERR
+static const char *cs_log_esp_tag = "mongoose";
+static char cs_log_cur_msg_line[200];
+static uint8_t cs_log_cur_msg_pfxlen;
+#endif
+
 void cs_log_set_filter(const char *pattern) {
   free(s_filter_pattern);
   if (pattern != NULL) {
@@ -621,6 +627,22 @@ int cs_log_print_prefix(enum cs_log_level level, const char *func,
   prefix[20] = '\0';
   if (cs_log_file == NULL) cs_log_file = stderr;
   cs_log_cur_msg_level = level;
+
+#if MG_ESP_LOG_STDERR
+  if (cs_log_file == stderr) {
+    cs_log_cur_msg_pfxlen = sprintf(cs_log_cur_msg_line, "%-20s ", prefix);
+#if CS_LOG_ENABLE_TS_DIFF
+    {
+      double now = cs_time();
+      cs_log_cur_msg_pfxlen += sprintf(cs_log_cur_msg_line + cs_log_cur_msg_pfxlen,
+                                      "%7u ", (unsigned int) ((now - cs_log_ts) * 1000000));
+      cs_log_ts = now;
+    }
+#endif
+    return 1;
+  }
+#endif // MG_ESP_LOG_STDERR
+
   fprintf(cs_log_file, "%-20s ", prefix);
 #if CS_LOG_ENABLE_TS_DIFF
   {
@@ -634,6 +656,26 @@ int cs_log_print_prefix(enum cs_log_level level, const char *func,
 
 void cs_log_printf(const char *fmt, ...) WEAK;
 void cs_log_printf(const char *fmt, ...) {
+#if MG_ESP_LOG_STDERR
+  if (cs_log_file == stderr) {
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(cs_log_cur_msg_line + cs_log_cur_msg_pfxlen,
+              sizeof(cs_log_cur_msg_line) - cs_log_cur_msg_pfxlen, fmt, ap);
+    switch(cs_log_cur_msg_level) {
+      case LL_ERROR:          ESP_LOGE(cs_log_esp_tag, "%s", cs_log_cur_msg_line); break;
+      case LL_WARN:           ESP_LOGW(cs_log_esp_tag, "%s", cs_log_cur_msg_line); break;
+      case LL_INFO:           ESP_LOGI(cs_log_esp_tag, "%s", cs_log_cur_msg_line); break;
+      case LL_DEBUG:          ESP_LOGD(cs_log_esp_tag, "%s", cs_log_cur_msg_line); break;
+      case LL_VERBOSE_DEBUG:  ESP_LOGV(cs_log_esp_tag, "%s", cs_log_cur_msg_line); break;
+      default: break;
+    }
+    va_end(ap);
+    cs_log_cur_msg_level = LL_NONE;
+    return;
+  }
+#endif // MG_ESP_LOG_STDERR
+
   va_list ap;
   va_start(ap, fmt);
   vfprintf(cs_log_file, fmt, ap);

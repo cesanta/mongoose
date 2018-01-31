@@ -532,6 +532,10 @@ typedef struct stat cs_stat_t;
 #define CS_ENABLE_STDIO 1
 #endif
 
+#ifndef MG_ESP_LOG_STDERR
+#define MG_ESP_LOG_STDERR 1
+#endif
+
 #endif /* CS_PLATFORM == CS_P_ESP32 */
 #endif /* CS_COMMON_PLATFORMS_PLATFORM_ESP32_H_ */
 #ifdef MG_MODULE_LINES

@@ -45,6 +45,7 @@ to explicitly declare some peculiarities of your target, such as:
 
 - `MG_CC3200`: enable workarounds for the TI CC3200 target.
 - `MG_ESP8266`: enable workarounds for the ESP8266 target, add `RTOS_SDK` to specify the RTOS SDK flavour.
+- `MG_ESP_LOG_STDERR`: replace stderr logging by ESP_LOG calls (on by default, =0 to disable).
 
 ## Tunables
 
