@@ -512,6 +512,7 @@ typedef struct stat cs_stat_t;
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <esp_log.h>
 
 #define SIZE_T_FMT "u"
 typedef struct stat cs_stat_t;
