@@ -3541,6 +3541,7 @@ int mg_socket_if_create_conn(struct mg_connection *nc) {
 }
 
 void mg_socket_if_destroy_conn(struct mg_connection *nc) {
+  DBG(("nc=%p sock=%d flags=%lx", nc, nc->sock, nc->flags));
   if (nc->sock == INVALID_SOCKET) return;
   if (!(nc->flags & MG_F_UDP)) {
     closesocket(nc->sock);
