@@ -7,8 +7,6 @@ signature: |
                                 const struct mg_str *strings, int num_strings);
 ---
 
-Sends multiple websocket frames.
-
-Like `mg_send_websocket_frame()`, but composes a frame from multiple
-*buffers. 
+Like `mg_send_websocket_frame()`, but composes a single frame from multiple
+buffers. 
 

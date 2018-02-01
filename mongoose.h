@@ -4527,10 +4527,8 @@ void mg_send_websocket_frame(struct mg_connection *nc, int op_and_flags,
                              const void *data, size_t data_len);
 
 /*
- * Sends multiple websocket frames.
- *
- * Like `mg_send_websocket_frame()`, but composes a frame from multiple
- *buffers.
+ * Like `mg_send_websocket_frame()`, but composes a single frame from multiple
+ * buffers.
  */
 void mg_send_websocket_framev(struct mg_connection *nc, int op_and_flags,
                               const struct mg_str *strings, int num_strings);
