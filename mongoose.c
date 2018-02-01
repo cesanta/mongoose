@@ -7360,23 +7360,23 @@ static void mg_mkmd5resp(const char *method, size_t method_len, const char *uri,
 int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
                                       const char *method, const char *uri,
                                       const char *auth_domain, const char *user,
-                                      const char *passwd) {
+                                      const char *passwd, const char *nonce) {
   static const char colon[] = ":", qop[] = "auth";
   static const size_t one = 1;
   char ha1[33], resp[33], cnonce[40];
 
-  snprintf(cnonce, sizeof(cnonce), "%x", (unsigned int) mg_time());
+  snprintf(cnonce, sizeof(cnonce), "%lx", (unsigned long) mg_time());
   cs_md5(ha1, user, (size_t) strlen(user), colon, one, auth_domain,
          (size_t) strlen(auth_domain), colon, one, passwd,
          (size_t) strlen(passwd), NULL);
   mg_mkmd5resp(method, strlen(method), uri, strlen(uri), ha1, sizeof(ha1) - 1,
-               cnonce, strlen(cnonce), "1", one, cnonce, strlen(cnonce), qop,
+               nonce, strlen(nonce), "1", one, cnonce, strlen(cnonce), qop,
                sizeof(qop) - 1, resp);
   return snprintf(buf, buf_len,
                   "Authorization: Digest username=\"%s\","
                   "realm=\"%s\",uri=\"%s\",qop=%s,nc=1,cnonce=%s,"
                   "nonce=%s,response=%s\r\n",
-                  user, auth_domain, uri, qop, cnonce, cnonce, resp);
+                  user, auth_domain, uri, qop, cnonce, nonce, resp);
 }
 
 /*
@@ -7388,7 +7388,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
 static int mg_check_nonce(const char *nonce) {
   unsigned long now = (unsigned long) mg_time();
   unsigned long val = (unsigned long) strtoul(nonce, NULL, 16);
-  return now < val || now - val < 3600;
+  return (now >= val) && (now - val < 60 * 60);
 }
 
 int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
@@ -8037,7 +8037,7 @@ void mg_http_send_digest_auth_request(struct mg_connection *c,
   mg_printf(c,
             "HTTP/1.1 401 Unauthorized\r\n"
             "WWW-Authenticate: Digest qop=\"auth\", "
-            "realm=\"%s\", nonce=\"%lu\"\r\n"
+            "realm=\"%s\", nonce=\"%lx\"\r\n"
             "Content-Length: 0\r\n\r\n",
             domain, (unsigned long) mg_time());
 }
