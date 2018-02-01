@@ -3046,6 +3046,11 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
   opts.user_data = user_data;
 #endif
 
+  if (callback == NULL) {
+    MG_SET_PTRPTR(opts.error_string, "handler is required");
+    return NULL;
+  }
+
   MG_COPY_COMMON_CONNECTION_OPTIONS(&add_sock_opts, &opts);
 
 #if MG_ENABLE_TUN
