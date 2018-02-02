@@ -3,7 +3,7 @@
 PROG = unit_test
 REPO_ROOT ?= ../../
 SRC_DIR = ../src
-TEST_SOURCES = unit_test.c $(REPO_ROOT)/common/test_util.c $(REPO_ROOT)/tuna/dispatcher.c
+TEST_SOURCES = unit_test.c $(REPO_ROOT)/common/test_util.c
 AMALGAMATED_SOURCES = ../mongoose.c
 KRYPTON_PATH = $(REPO_ROOT)/krypton
 # or Krypton, or mbedTLS

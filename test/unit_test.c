@@ -20,7 +20,6 @@
 #include "unit_test.h"
 #include "common/test_util.h"
 #include "common/cs_md5.h"
-#include "tuna/dispatcher.h"
 
 #if defined(_MSC_VER) && _MSC_VER >= 1900
 #include <crtdbg.h>
@@ -3816,44 +3815,6 @@ void tunnel_client_test_handler(struct mg_connection *nc, int ev,
   }
 }
 
-/*
- * NOTE(mkm): this test requires compiling the unit_test.c file with
- * //tuna/dispatcher.c .
- * Windows test runner doesn't use a makefile that's checked in
- * and I can't shave this yak now.
- * This doesn't mean the tunnel is not supposed to work on windows; there
- * is no fundamental reason it shouldn't, but obviously we should shave
- * the yak and make it testable there as well.
- */
-#ifndef _WIN32
-static const char *test_tunnel(void) {
-  struct mg_connection *client, *server;
-  struct mg_mgr mgr;
-  int sentinel = 0;
-  mg_mgr_init(&mgr, NULL);
-
-  mg_tund_bind(&mgr, "localhost:4321");
-
-  server = mg_bind(&mgr, "ws://localhost:4321", tunnel_server_test_handler);
-  mg_set_protocol_http_websocket(server);
-  /*
-   * Connection happens only at the next poll (because we need to give the app
-   * a chance to set MG_F_TUN_DO_NOT_RECONNECT), so let's poll once
-   */
-  mg_mgr_poll(&mgr, 1);
-  mg_mgr_poll(&mgr, 1);
-  client = mg_connect_http(&mgr, tunnel_client_test_handler,
-                           "http://localhost:4321/foo", NULL, NULL);
-  client->user_data = (void *) &sentinel;
-
-  poll_until(&mgr, 1, c_int_eq, &sentinel, (void *) 1);
-  ASSERT_EQ(sentinel, 1);
-
-  mg_mgr_free(&mgr);
-  return NULL;
-}
-#endif
-
 static const char *test_http_chunk(void) {
   struct mg_connection nc;
   init_test_connection(&nc);
@@ -5544,9 +5505,6 @@ static const char *run_tests(const char *filter, double *total_elapsed) {
   RUN_TEST(test_hexdump_file);
   RUN_TEST(test_basic_auth_helpers);
   RUN_TEST(test_http_auth);
-#ifndef _WIN32
-  RUN_TEST(test_tunnel);
-#endif
 #if MG_ENABLE_SSL
   RUN_TEST(test_ssl);
 #ifdef OPENSSL_VERSION_NUMBER

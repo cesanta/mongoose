@@ -20,7 +20,6 @@
 #include "mongoose/src/dns.h"
 #include "mongoose/src/internal.h"
 #include "mongoose/src/resolv.h"
-#include "mongoose/src/tun.h"
 #include "mongoose/src/util.h"
 
 #define MG_MAX_HOST_LEN 200
@@ -815,13 +814,6 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
   }
 
   MG_COPY_COMMON_CONNECTION_OPTIONS(&add_sock_opts, &opts);
-
-#if MG_ENABLE_TUN
-  if (mg_strncmp(mg_mk_str(address), mg_mk_str("ws://"), 5) == 0 ||
-      mg_strncmp(mg_mk_str(address), mg_mk_str("wss://"), 6) == 0) {
-    return mg_tun_bind_opt(mgr, address, MG_CB(callback, user_data), opts);
-  }
-#endif
 
   if (mg_parse_address(address, &sa, &proto, host, sizeof(host)) <= 0) {
     MG_SET_PTRPTR(opts.error_string, "cannot parse address");

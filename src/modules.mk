@@ -59,15 +59,12 @@ SOURCES = $(COMMON)/mg_mem.h \
           $(COMMON)/mbuf.c \
           $(COMMON)/mg_str.c \
           $(COMMON)/str_util.c \
-          tun.h \
           net.c \
           net_if_socket.h \
-          net_if_tun.h \
           net_if_socks.h \
           net_if.c \
           net_if_socket.c \
           net_if_socks.c \
-          net_if_tun.c \
           ssl_if_openssl.c \
           ssl_if_mbedtls.c \
           uri.c \
@@ -83,7 +80,6 @@ SOURCES = $(COMMON)/mg_mem.h \
           dns_server.c \
           resolv.c \
           coap.c \
-          tun.c \
           sntp.c \
           socks.c \
           $(COMMON)/platforms/cc3200/cc3200_libc.c \

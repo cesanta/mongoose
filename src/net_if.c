@@ -1,15 +1,11 @@
 #include "mongoose/src/net_if.h"
 #include "mongoose/src/internal.h"
 #include "mongoose/src/net_if_socket.h"
-#include "mongoose/src/net_if_tun.h"
 
 extern const struct mg_iface_vtable mg_default_iface_vtable;
 
 const struct mg_iface_vtable *mg_ifaces[] = {
     &mg_default_iface_vtable,
-#if MG_ENABLE_TUN
-    &mg_tun_iface_vtable,
-#endif
 };
 
 int mg_num_ifaces = (int) (sizeof(mg_ifaces) / sizeof(mg_ifaces[0]));
