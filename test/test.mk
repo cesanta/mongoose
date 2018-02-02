@@ -87,7 +87,7 @@ alltests: $(ALL_TESTS) lcov cpplint
 # but we don't enforce them for presubmit until they are stable again.
 presubmit: $(SHORT_TESTS) cpplint
 
-.PHONY: clean clean_coverage lcov valgrind docker cpplint
+.PHONY: clean clean_coverage lcov valgrind docker cpplint test_sources_resolved
 ifneq ($(V), 1)
 .SILENT: $(ALL_PROGS) $(ALL_TESTS)
 endif
@@ -95,18 +95,25 @@ endif
 compile:
 	@make $(foreach p,$(DIALECTS),$(PROG)-$(p)) CFLAGS_EXTRA="$(CFLAGS_EXTRA) -fsyntax-only" LDFLAGS=
 
+# A target which is only needed to VPATH-resolve $(TEST_SOURCES).
+# Other targets which need exact (VPATH-resolved) paths to $(TEST_SOURCES),
+# need to depend on this phony target, and then use $(TEST_SOURCES_RESOLVED)
+# instead.
+test_sources_resolved: $(TEST_SOURCES)
+	$(eval TEST_SOURCES_RESOLVED=$^)
+
 # HACK: cannot have two underscores
-$(PROG)-%: Makefile $(TEST_SOURCES) $(or $(SOURCES_$*), $(AMALGAMATED_SOURCES)) data/cgi/index.cgi
+$(PROG)-%: Makefile test_sources_resolved $(or $(SOURCES_$*), $(AMALGAMATED_SOURCES)) data/cgi/index.cgi
 	@echo -e "CC\t$(PROG)_$*"
-	$(or $(CC_$*), $(CC)) $(CFLAGS_$*) $(TEST_SOURCES) $(or $(SOURCES_$*), $(AMALGAMATED_SOURCES)) -o $(PROG)_$* $(CFLAGS) $(LDFLAGS)
+	$(or $(CC_$*), $(CC)) $(CFLAGS_$*) $(TEST_SOURCES_RESOLVED) $(or $(SOURCES_$*), $(AMALGAMATED_SOURCES)) -o $(PROG)_$* $(CFLAGS) $(LDFLAGS)
 
 $(ALL_TESTS): test_%: Makefile $(PROG)-%
 	@echo -e "RUN\t$(PROG)_$* $(TEST_FILTER)"
 	@$(or $(CMD_$*), $(CMD)) ./$(PROG)_$* $(TEST_FILTER)
 
-coverage: Makefile clean_coverage test_gcov
+coverage: Makefile clean_coverage test_gcov test_sources_resolved
 	@echo -e "RUN\tGCOV"
-	@$(GCOV) -p $(notdir $(TEST_SOURCES)) $(notdir $(GCOV_SOURCES)) >/dev/null
+	@$(GCOV) -p $(notdir $(TEST_SOURCES_RESOLVED)) $(notdir $(GCOV_SOURCES)) >/dev/null
 
 test_leaks: Makefile
 	$(MAKE) test_valgrind CMD_valgrind="$(CMD_valgrind) --leak-check=full"

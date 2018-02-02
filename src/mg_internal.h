@@ -31,8 +31,8 @@
 #endif
 
 #include "common/cs_dbg.h"
-#include "mongoose/src/mg_http.h"
-#include "mongoose/src/mg_net.h"
+#include "mg_http.h"
+#include "mg_net.h"
 
 #define MG_CTL_MSG_MESSAGE_SIZE 8192
 

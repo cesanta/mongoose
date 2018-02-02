@@ -1,11 +1,28 @@
 # vim: ts=8 noet sw=8 ai cin smarttab
 
 PROG = unit_test
-REPO_ROOT ?= ../../
+
+MONGOOSE_DIR = ..
+
 SRC_DIR = ../src
-TEST_SOURCES = unit_test.c $(REPO_ROOT)/common/test_util.c
+
+COMMON_DIR_PUB = ../src/common
+COMMON_DIR_DEV = ../../common
+
+ifneq ("$(wildcard ../../fw/defs)","")
+COMMON_PARENT = ../..
+else
+COMMON_PARENT = $(SRC_DIR)
+endif
+
+TEST_SOURCES = unit_test.c test_util.c
 AMALGAMATED_SOURCES = ../mongoose.c
 KRYPTON_PATH = $(REPO_ROOT)/krypton
+
+# Our dev repo and public mongoose repo have different layouts, so here
+# we make it work on both
+VPATH = $(MONGOOSE_DIR) $(SRC_DIR) $(COMMON_DIR_PUB) $(COMMON_DIR_DEV) $(COMMON_PARENT)
+
 # or Krypton, or mbedTLS
 SSL ?= OpenSSL
 
@@ -30,7 +47,8 @@ COMMON_FEATURE_FLAGS = \
 UNIX_FEATURE_FLAGS=-DMG_ENABLE_IPV6 -DMG_ENABLE_SSL
 CFLAGS = -W -Wall -Wundef -Werror -g -O0 -Wno-multichar -D__USE_MISC \
 	 $(COMMON_FEATURE_FLAGS) $(UNIX_FEATURE_FLAGS) \
-	 -I$(REPO_ROOT) -include unit_test.h -pthread $(CFLAGS_EXTRA)
+	 $(patsubst %,-I%,$(subst :, ,$(VPATH))) \
+	 -include unit_test.h -pthread $(CFLAGS_EXTRA)
 
 LDFLAGS = -lm
 
@@ -57,13 +75,13 @@ MINGW_GCC=/usr/local/gcc-4.8.0-qt-4.8.4-for-mingw32/win32-gcc/bin/i586-mingw32-g
 $(PROG)_mingw.exe: Makefile
 	$(MINGW_GCC) $(AMALGAMATED_SOURCES) -o $(PROG)_mingw.exe -W -Wall -Werror
 
-$(PROG).exe: $(AMALGAMATED_SOURCES) data/cgi/index.cgi.exe
+$(PROG).exe: $(AMALGAMATED_SOURCES) data/cgi/index.cgi.exe test_sources_resolved
 ifndef VC6_DIR
 	$(error Please set VC6_DIR)
 endif
 	Include=$(VC6_DIR)/include Lib=$(VC6_DIR)/lib \
 	wine $(VC6_DIR)/bin/cl \
-	  $(TEST_SOURCES) $(AMALGAMATED_SOURCES) \
+	  $(TEST_SOURCES_RESOLVED) $(AMALGAMATED_SOURCES) \
 	  /MD /I. /I.. /Zi \
 	  /FIunit_test.h \
 	  /I$(REPO_ROOT) \

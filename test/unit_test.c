@@ -15,8 +15,8 @@
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-#include "mongoose/mongoose.h"
-#include "mongoose/src/mg_internal.h"
+#include "mongoose.h"
+#include "src/mg_internal.h"
 #include "unit_test.h"
 #include "common/test_util.h"
 #include "common/cs_md5.h"

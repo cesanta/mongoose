@@ -35,8 +35,8 @@
 #endif
 
 /* Amalgamated: #include "common/cs_dbg.h" */
-/* Amalgamated: #include "mongoose/src/mg_http.h" */
-/* Amalgamated: #include "mongoose/src/mg_net.h" */
+/* Amalgamated: #include "mg_http.h" */
+/* Amalgamated: #include "mg_net.h" */
 
 #define MG_CTL_MSG_MESSAGE_SIZE 8192
 
