@@ -16,7 +16,7 @@
  */
 
 #include "mongoose/mongoose.h"
-#include "mongoose/src/internal.h"
+#include "mongoose/src/mg_internal.h"
 #include "unit_test.h"
 #include "common/test_util.h"
 #include "common/cs_md5.h"

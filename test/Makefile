@@ -47,7 +47,7 @@ LDFLAGS += -lmbedcrypto -lmbedtls -lmbedx509
 endif
 
 include test.mk
-include $(SRC_DIR)/modules.mk
+include $(SRC_DIR)/mg_modules.mk
 
 # http://crossgcc.rts-software.org/doku.php?id=compiling_for_win32
 MINGW_GCC=/usr/local/gcc-4.8.0-qt-4.8.4-for-mingw32/win32-gcc/bin/i586-mingw32-gcc
