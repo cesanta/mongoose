@@ -1,0 +1,11 @@
+You may need to edit Makefile and t/Makefile to specify where
+your openssl include files and libraries are located.  To build
+without openssl see the comments in Makefile.
+
+To build: make
+
+To test:  make test  (requires openssl)
+
+To install:
+  copy libccgi.a to a lib directory such as /usr/local/lib
+  copy ccgi.h to an include directory such as /usr/local/include

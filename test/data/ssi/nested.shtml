@@ -1,0 +1,3 @@
+<!--#include file="f1.txt"-->
+<b><!--#call foo(bar) --></b>
+<!--#exec "echo b"-->
