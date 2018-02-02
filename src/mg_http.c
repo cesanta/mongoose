@@ -5,7 +5,7 @@
 
 #if MG_ENABLE_HTTP
 
-#include "common/md5.h"
+#include "common/cs_md5.h"
 #include "mongoose/src/mg_internal.h"
 #include "mongoose/src/mg_util.h"
 

@@ -5,7 +5,7 @@
 
 #if MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBSOCKET
 
-#include "common/sha1.h"
+#include "common/cs_sha1.h"
 
 #ifndef MG_WEBSOCKET_PING_INTERVAL_SECONDS
 #define MG_WEBSOCKET_PING_INTERVAL_SECONDS 5

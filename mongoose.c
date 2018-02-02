@@ -5369,7 +5369,7 @@ out:
 
 #if MG_ENABLE_HTTP
 
-/* Amalgamated: #include "common/md5.h" */
+/* Amalgamated: #include "common/cs_md5.h" */
 /* Amalgamated: #include "mongoose/src/mg_internal.h" */
 /* Amalgamated: #include "mongoose/src/mg_util.h" */
 
@@ -9268,7 +9268,7 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
 
 #if MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBSOCKET
 
-/* Amalgamated: #include "common/sha1.h" */
+/* Amalgamated: #include "common/cs_sha1.h" */
 
 #ifndef MG_WEBSOCKET_PING_INTERVAL_SECONDS
 #define MG_WEBSOCKET_PING_INTERVAL_SECONDS 5
