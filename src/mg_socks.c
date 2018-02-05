@@ -5,8 +5,8 @@
 
 #if MG_ENABLE_SOCKS
 
-#include "mongoose/src/mg_socks.h"
-#include "mongoose/src/mg_internal.h"
+#include "mg_socks.h"
+#include "mg_internal.h"
 
 /*
  *  https://www.ietf.org/rfc/rfc1928.txt paragraph 3, handle client handshake

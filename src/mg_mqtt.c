@@ -7,8 +7,8 @@
 
 #include <string.h>
 
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_mqtt.h"
+#include "mg_internal.h"
+#include "mg_mqtt.h"
 
 static uint16_t getu16(const char *p) {
   const uint8_t *up = (const uint8_t *) p;

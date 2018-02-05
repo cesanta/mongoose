@@ -15,8 +15,8 @@
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_coap.h"
+#include "mg_internal.h"
+#include "mg_coap.h"
 
 #if MG_ENABLE_COAP
 

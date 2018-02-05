@@ -5,9 +5,9 @@
 
 #if MG_ENABLE_NET_IF_SOCKET
 
-#include "mongoose/src/mg_net_if_socket.h"
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_util.h"
+#include "mg_net_if_socket.h"
+#include "mg_internal.h"
+#include "mg_util.h"
 
 #define MG_TCP_RECV_BUFFER_SIZE 1024
 #define MG_UDP_RECV_BUFFER_SIZE 1500

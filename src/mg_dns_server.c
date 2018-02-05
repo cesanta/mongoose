@@ -5,8 +5,8 @@
 
 #if MG_ENABLE_DNS_SERVER
 
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/dns-server.h"
+#include "mg_internal.h"
+#include "dns-server.h"
 
 struct mg_dns_reply mg_dns_create_reply(struct mbuf *io,
                                         struct mg_dns_message *msg) {

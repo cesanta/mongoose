@@ -25,7 +25,7 @@
 #if MG_ENABLE_MQTT_BROKER
 
 #include "common/queue.h"
-#include "mongoose/src/mg_mqtt.h"
+#include "mg_mqtt.h"
 
 #ifdef __cplusplus
 extern "C" {

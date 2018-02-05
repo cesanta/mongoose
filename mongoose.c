@@ -2167,10 +2167,10 @@ size_t mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
  */
 
 /* Amalgamated: #include "common/cs_time.h" */
-/* Amalgamated: #include "mongoose/src/mg_dns.h" */
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_resolv.h" */
-/* Amalgamated: #include "mongoose/src/mg_util.h" */
+/* Amalgamated: #include "mg_dns.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_resolv.h" */
+/* Amalgamated: #include "mg_util.h" */
 
 #define MG_MAX_HOST_LEN 200
 
@@ -3167,7 +3167,7 @@ double mg_time(void) {
 #ifndef CS_MONGOOSE_SRC_NET_IF_SOCKET_H_
 #define CS_MONGOOSE_SRC_NET_IF_SOCKET_H_
 
-/* Amalgamated: #include "mongoose/src/mg_net_if.h" */
+/* Amalgamated: #include "mg_net_if.h" */
 
 #ifdef __cplusplus
 extern "C" {
@@ -3196,7 +3196,7 @@ extern const struct mg_iface_vtable mg_socket_iface_vtable;
 #define CS_MONGOOSE_SRC_NET_IF_SOCKS_H_
 
 #if MG_ENABLE_SOCKS
-/* Amalgamated: #include "mongoose/src/mg_net_if.h" */
+/* Amalgamated: #include "mg_net_if.h" */
 
 #ifdef __cplusplus
 extern "C" {
@@ -3212,9 +3212,9 @@ extern const struct mg_iface_vtable mg_socks_iface_vtable;
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_net_if.c"
 #endif
-/* Amalgamated: #include "mongoose/src/mg_net_if.h" */
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_net_if_socket.h" */
+/* Amalgamated: #include "mg_net_if.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_net_if_socket.h" */
 
 extern const struct mg_iface_vtable mg_default_iface_vtable;
 
@@ -3263,9 +3263,9 @@ struct mg_iface *mg_find_iface(struct mg_mgr *mgr,
 
 #if MG_ENABLE_NET_IF_SOCKET
 
-/* Amalgamated: #include "mongoose/src/mg_net_if_socket.h" */
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_util.h" */
+/* Amalgamated: #include "mg_net_if_socket.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_util.h" */
 
 #define MG_TCP_RECV_BUFFER_SIZE 1024
 #define MG_UDP_RECV_BUFFER_SIZE 1500
@@ -5103,8 +5103,8 @@ int mg_ssl_if_mbed_random(void *ctx, unsigned char *buf, size_t len) {
  * All rights reserved
  */
 
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_uri.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_uri.h" */
 
 /*
  * scan string until encountering one of `seps`, keeping track of component
@@ -5370,8 +5370,8 @@ out:
 #if MG_ENABLE_HTTP
 
 /* Amalgamated: #include "common/cs_md5.h" */
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_util.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_util.h" */
 
 static const char *mg_version_header = "Mongoose/" MG_VERSION;
 
@@ -9787,8 +9787,8 @@ struct mg_connection *mg_connect_ws(
  */
 
 /* Amalgamated: #include "common/cs_base64.h" */
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_util.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_util.h" */
 
 /* For platforms with limited libc */
 #ifndef MAX
@@ -10129,8 +10129,8 @@ struct mg_str mg_url_encode(const struct mg_str src) {
 
 #include <string.h>
 
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_mqtt.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_mqtt.h" */
 
 static uint16_t getu16(const char *p) {
   const uint8_t *up = (const uint8_t *) p;
@@ -10594,8 +10594,8 @@ void mg_mqtt_disconnect(struct mg_connection *nc) {
  * All rights reserved
  */
 
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_mqtt_server.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_mqtt_server.h" */
 
 #if MG_ENABLE_MQTT_BROKER
 
@@ -10793,8 +10793,8 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 
 #if MG_ENABLE_DNS
 
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_dns.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_dns.h" */
 
 static int mg_dns_tid = 0xa0;
 
@@ -11173,8 +11173,8 @@ void mg_set_protocol_dns(struct mg_connection *nc) {
 
 #if MG_ENABLE_DNS_SERVER
 
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/dns-server.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "dns-server.h" */
 
 struct mg_dns_reply mg_dns_create_reply(struct mbuf *io,
                                         struct mg_dns_message *msg) {
@@ -11247,8 +11247,8 @@ int mg_dns_reply_record(struct mg_dns_reply *reply,
 
 #if MG_ENABLE_ASYNC_RESOLVER
 
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_resolv.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_resolv.h" */
 
 #ifndef MG_DEFAULT_NAMESERVER
 #define MG_DEFAULT_NAMESERVER "8.8.8.8"
@@ -11552,8 +11552,8 @@ void mg_set_nameserver(struct mg_mgr *mgr, const char *nameserver) {
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_coap.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_coap.h" */
 
 #if MG_ENABLE_COAP
 
@@ -12140,9 +12140,9 @@ int mg_set_protocol_coap(struct mg_connection *nc) {
  * All rights reserved
  */
 
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
-/* Amalgamated: #include "mongoose/src/mg_sntp.h" */
-/* Amalgamated: #include "mongoose/src/mg_util.h" */
+/* Amalgamated: #include "mg_internal.h" */
+/* Amalgamated: #include "mg_sntp.h" */
+/* Amalgamated: #include "mg_util.h" */
 
 #if MG_ENABLE_SNTP
 
@@ -12433,8 +12433,8 @@ struct mg_connection *mg_sntp_get_time(struct mg_mgr *mgr,
 
 #if MG_ENABLE_SOCKS
 
-/* Amalgamated: #include "mongoose/src/mg_socks.h" */
-/* Amalgamated: #include "mongoose/src/mg_internal.h" */
+/* Amalgamated: #include "mg_socks.h" */
+/* Amalgamated: #include "mg_internal.h" */
 
 /*
  *  https://www.ietf.org/rfc/rfc1928.txt paragraph 3, handle client handshake

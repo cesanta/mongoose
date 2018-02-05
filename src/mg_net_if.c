@@ -1,6 +1,6 @@
-#include "mongoose/src/mg_net_if.h"
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_net_if_socket.h"
+#include "mg_net_if.h"
+#include "mg_internal.h"
+#include "mg_net_if_socket.h"
 
 extern const struct mg_iface_vtable mg_default_iface_vtable;
 

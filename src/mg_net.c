@@ -17,10 +17,10 @@
  */
 
 #include "common/cs_time.h"
-#include "mongoose/src/mg_dns.h"
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_resolv.h"
-#include "mongoose/src/mg_util.h"
+#include "mg_dns.h"
+#include "mg_internal.h"
+#include "mg_resolv.h"
+#include "mg_util.h"
 
 #define MG_MAX_HOST_LEN 200
 

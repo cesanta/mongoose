@@ -3,8 +3,8 @@
  * All rights reserved
  */
 
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_uri.h"
+#include "mg_internal.h"
+#include "mg_uri.h"
 
 /*
  * scan string until encountering one of `seps`, keeping track of component

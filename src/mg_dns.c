@@ -5,8 +5,8 @@
 
 #if MG_ENABLE_DNS
 
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_dns.h"
+#include "mg_internal.h"
+#include "mg_dns.h"
 
 static int mg_dns_tid = 0xa0;
 

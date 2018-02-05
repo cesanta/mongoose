@@ -4,8 +4,8 @@
  */
 
 #include "common/cs_base64.h"
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_util.h"
+#include "mg_internal.h"
+#include "mg_util.h"
 
 /* For platforms with limited libc */
 #ifndef MAX

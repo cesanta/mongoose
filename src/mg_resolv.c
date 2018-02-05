@@ -5,8 +5,8 @@
 
 #if MG_ENABLE_ASYNC_RESOLVER
 
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_resolv.h"
+#include "mg_internal.h"
+#include "mg_resolv.h"
 
 #ifndef MG_DEFAULT_NAMESERVER
 #define MG_DEFAULT_NAMESERVER "8.8.8.8"

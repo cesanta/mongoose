@@ -3,8 +3,8 @@
  * All rights reserved
  */
 
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_mqtt_server.h"
+#include "mg_internal.h"
+#include "mg_mqtt_server.h"
 
 #if MG_ENABLE_MQTT_BROKER
 

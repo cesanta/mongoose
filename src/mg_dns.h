@@ -10,7 +10,7 @@
 #ifndef CS_MONGOOSE_SRC_DNS_H_
 #define CS_MONGOOSE_SRC_DNS_H_
 
-#include "mongoose/src/mg_net.h"
+#include "mg_net.h"
 
 #ifdef __cplusplus
 extern "C" {

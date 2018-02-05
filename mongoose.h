@@ -3402,8 +3402,8 @@ int mg_ssl_if_write(struct mg_connection *nc, const void *data, size_t len);
 #ifndef CS_MONGOOSE_SRC_NET_H_
 #define CS_MONGOOSE_SRC_NET_H_
 
-/* Amalgamated: #include "mongoose/src/mg_common.h" */
-/* Amalgamated: #include "mongoose/src/mg_net_if.h" */
+/* Amalgamated: #include "mg_common.h" */
+/* Amalgamated: #include "mg_net_if.h" */
 /* Amalgamated: #include "common/mbuf.h" */
 
 #ifndef MG_VPRINTF_BUFFER_SIZE
@@ -3978,7 +3978,7 @@ double mg_time(void);
 #ifndef CS_MONGOOSE_SRC_URI_H_
 #define CS_MONGOOSE_SRC_URI_H_
 
-/* Amalgamated: #include "mongoose/src/mg_net.h" */
+/* Amalgamated: #include "mg_net.h" */
 
 #ifdef __cplusplus
 extern "C" {
@@ -4050,8 +4050,8 @@ int mg_normalize_uri_path(const struct mg_str *in, struct mg_str *out);
 
 #include <stdio.h>
 
-/* Amalgamated: #include "mongoose/src/mg_common.h" */
-/* Amalgamated: #include "mongoose/src/mg_net_if.h" */
+/* Amalgamated: #include "mg_common.h" */
+/* Amalgamated: #include "mg_net_if.h" */
 
 #ifdef __cplusplus
 extern "C" {
@@ -4261,7 +4261,7 @@ struct mg_str mg_url_encode(const struct mg_str src);
 
 #if MG_ENABLE_HTTP
 
-/* Amalgamated: #include "mongoose/src/mg_net.h" */
+/* Amalgamated: #include "mg_net.h" */
 /* Amalgamated: #include "common/mg_str.h" */
 
 #ifdef __cplusplus
@@ -5246,7 +5246,7 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
 #ifndef CS_MONGOOSE_SRC_MQTT_H_
 #define CS_MONGOOSE_SRC_MQTT_H_
 
-/* Amalgamated: #include "mongoose/src/mg_net.h" */
+/* Amalgamated: #include "mg_net.h" */
 
 struct mg_mqtt_message {
   int cmd;
@@ -5480,7 +5480,7 @@ int mg_mqtt_vmatch_topic_expression(const char *exp, struct mg_str topic);
 #if MG_ENABLE_MQTT_BROKER
 
 /* Amalgamated: #include "common/queue.h" */
-/* Amalgamated: #include "mongoose/src/mg_mqtt.h" */
+/* Amalgamated: #include "mg_mqtt.h" */
 
 #ifdef __cplusplus
 extern "C" {
@@ -5572,7 +5572,7 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 #ifndef CS_MONGOOSE_SRC_DNS_H_
 #define CS_MONGOOSE_SRC_DNS_H_
 
-/* Amalgamated: #include "mongoose/src/mg_net.h" */
+/* Amalgamated: #include "mg_net.h" */
 
 #ifdef __cplusplus
 extern "C" {
@@ -5743,7 +5743,7 @@ void mg_set_protocol_dns(struct mg_connection *nc);
 
 #if MG_ENABLE_DNS_SERVER
 
-/* Amalgamated: #include "mongoose/src/mg_dns.h" */
+/* Amalgamated: #include "mg_dns.h" */
 
 #ifdef __cplusplus
 extern "C" {
@@ -5836,7 +5836,7 @@ void mg_dns_send_reply(struct mg_connection *nc, struct mg_dns_reply *r);
 #ifndef CS_MONGOOSE_SRC_RESOLV_H_
 #define CS_MONGOOSE_SRC_RESOLV_H_
 
-/* Amalgamated: #include "mongoose/src/mg_dns.h" */
+/* Amalgamated: #include "mg_dns.h" */
 
 #ifdef __cplusplus
 extern "C" {

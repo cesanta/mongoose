@@ -28,8 +28,8 @@
 #ifndef CS_MONGOOSE_SRC_NET_H_
 #define CS_MONGOOSE_SRC_NET_H_
 
-#include "mongoose/src/mg_common.h"
-#include "mongoose/src/mg_net_if.h"
+#include "mg_common.h"
+#include "mg_net_if.h"
 #include "common/mbuf.h"
 
 #ifndef MG_VPRINTF_BUFFER_SIZE

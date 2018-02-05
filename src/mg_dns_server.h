@@ -14,7 +14,7 @@
 
 #if MG_ENABLE_DNS_SERVER
 
-#include "mongoose/src/mg_dns.h"
+#include "mg_dns.h"
 
 #ifdef __cplusplus
 extern "C" {

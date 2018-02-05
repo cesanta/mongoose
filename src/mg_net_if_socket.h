@@ -6,7 +6,7 @@
 #ifndef CS_MONGOOSE_SRC_NET_IF_SOCKET_H_
 #define CS_MONGOOSE_SRC_NET_IF_SOCKET_H_
 
-#include "mongoose/src/mg_net_if.h"
+#include "mg_net_if.h"
 
 #ifdef __cplusplus
 extern "C" {

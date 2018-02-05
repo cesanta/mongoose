@@ -6,8 +6,8 @@
 #if MG_ENABLE_HTTP
 
 #include "common/cs_md5.h"
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_util.h"
+#include "mg_internal.h"
+#include "mg_util.h"
 
 static const char *mg_version_header = "Mongoose/" MG_VERSION;
 

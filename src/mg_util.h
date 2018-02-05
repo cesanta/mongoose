@@ -12,8 +12,8 @@
 
 #include <stdio.h>
 
-#include "mongoose/src/mg_common.h"
-#include "mongoose/src/mg_net_if.h"
+#include "mg_common.h"
+#include "mg_net_if.h"
 
 #ifdef __cplusplus
 extern "C" {

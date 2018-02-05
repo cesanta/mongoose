@@ -22,7 +22,7 @@
 #ifndef CS_MONGOOSE_SRC_MQTT_H_
 #define CS_MONGOOSE_SRC_MQTT_H_
 
-#include "mongoose/src/mg_net.h"
+#include "mg_net.h"
 
 struct mg_mqtt_message {
   int cmd;

@@ -12,7 +12,7 @@
 
 #if MG_ENABLE_HTTP
 
-#include "mongoose/src/mg_net.h"
+#include "mg_net.h"
 #include "common/mg_str.h"
 
 #ifdef __cplusplus

@@ -7,7 +7,7 @@
 #define CS_MONGOOSE_SRC_NET_IF_SOCKS_H_
 
 #if MG_ENABLE_SOCKS
-#include "mongoose/src/mg_net_if.h"
+#include "mg_net_if.h"
 
 #ifdef __cplusplus
 extern "C" {

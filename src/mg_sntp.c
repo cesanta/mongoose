@@ -3,9 +3,9 @@
  * All rights reserved
  */
 
-#include "mongoose/src/mg_internal.h"
-#include "mongoose/src/mg_sntp.h"
-#include "mongoose/src/mg_util.h"
+#include "mg_internal.h"
+#include "mg_sntp.h"
+#include "mg_util.h"
 
 #if MG_ENABLE_SNTP
 
