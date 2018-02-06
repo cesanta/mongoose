@@ -51,6 +51,8 @@ void _strfail(const char *a, const char *e, int len);
     num_tests++;                        \
     if (!(expr)) FAIL(#expr, __LINE__); \
   } while (0)
+#define ASSERT_TRUE(expr) ASSERT(expr)
+#define ASSERT_FALSE(expr) ASSERT(!(expr))
 
 /*
  * Run test function, use its name as the test name to print
