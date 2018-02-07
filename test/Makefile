@@ -15,7 +15,7 @@ else
 COMMON_PARENT = $(SRC_DIR)
 endif
 
-TEST_SOURCES = unit_test.c test_util.c
+TEST_SOURCES = unit_test.c test_util.c test_main.c
 AMALGAMATED_SOURCES = ../mongoose.c
 KRYPTON_PATH = $(REPO_ROOT)/krypton
 

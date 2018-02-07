@@ -27,7 +27,7 @@
 extern "C" {
 #endif
 
-extern int num_tests;
+extern int g_num_tests;
 
 #ifdef MG_TEST_ABORT_ON_FAIL
 #define MG_TEST_ABORT abort()
@@ -48,7 +48,7 @@ void _strfail(const char *a, const char *e, int len);
 
 #define ASSERT(expr)                    \
   do {                                  \
-    num_tests++;                        \
+    g_num_tests++;                      \
     if (!(expr)) FAIL(#expr, __LINE__); \
   } while (0)
 #define ASSERT_TRUE(expr) ASSERT(expr)
@@ -71,7 +71,6 @@ void _strfail(const char *a, const char *e, int len);
       elapsed = cs_time() - elapsed;               \
       printf("  [%.3f] %s\n", elapsed, test_name); \
       fflush(stdout);                              \
-      *total_elapsed += elapsed;                   \
     }                                              \
     if (msg) return msg;                           \
   } while (0)
@@ -89,7 +88,7 @@ void _strfail(const char *a, const char *e, int len);
  */
 #define ASSERT_EQ(actual, expected)                                 \
   do {                                                              \
-    num_tests++;                                                    \
+    g_num_tests++;                                                  \
     if (!((actual) == (expected))) {                                \
       printf("%f != %f\n", AS_DOUBLE(actual), AS_DOUBLE(expected)); \
       FAIL(#actual " == " #expected, __LINE__);                     \
@@ -99,7 +98,7 @@ void _strfail(const char *a, const char *e, int len);
 /* "Less than" assertion. */
 #define ASSERT_LT(a, b)                                 \
   do {                                                  \
-    num_tests++;                                        \
+    g_num_tests++;                                      \
     if (!((a) < (b))) {                                 \
       printf("%f >= %f\n", AS_DOUBLE(a), AS_DOUBLE(b)); \
       FAIL(#a " < " #b, __LINE__);                      \
@@ -109,7 +108,7 @@ void _strfail(const char *a, const char *e, int len);
 /* "Greater than" assertion. */
 #define ASSERT_GT(a, b)                                 \
   do {                                                  \
-    num_tests++;                                        \
+    g_num_tests++;                                      \
     if (!((a) > (b))) {                                 \
       printf("%f <= %f\n", AS_DOUBLE(a), AS_DOUBLE(b)); \
       FAIL(#a " > " #b, __LINE__);                      \
@@ -119,7 +118,7 @@ void _strfail(const char *a, const char *e, int len);
 /* Assert that actual == expected, where both are NUL-terminated. */
 #define ASSERT_STREQ(actual, expected)                            \
   do {                                                            \
-    num_tests++;                                                  \
+    g_num_tests++;                                                \
     if (!_assert_streq(actual, expected)) {                       \
       FAIL("ASSERT_STREQ(" #actual ", " #expected ")", __LINE__); \
     }                                                             \
@@ -128,7 +127,7 @@ void _strfail(const char *a, const char *e, int len);
 /* Assert that actual == expected, where both are pointers */
 #define ASSERT_PTREQ(actual, expected)                            \
   do {                                                            \
-    num_tests++;                                                  \
+    g_num_tests++;                                                \
     if (actual != expected) {                                     \
       printf("%p != %p\n", actual, expected);                     \
       FAIL("ASSERT_PTREQ(" #actual ", " #expected ")", __LINE__); \
@@ -138,7 +137,7 @@ void _strfail(const char *a, const char *e, int len);
 /* Assert that actual != expected, where both are pointers */
 #define ASSERT_PTRNEQ(actual, expected)                            \
   do {                                                             \
-    num_tests++;                                                   \
+    g_num_tests++;                                                 \
     if (actual == expected) {                                      \
       printf("%p == %p\n", actual, expected);                      \
       FAIL("ASSERT_PTRNEQ(" #actual ", " #expected ")", __LINE__); \
@@ -148,7 +147,7 @@ void _strfail(const char *a, const char *e, int len);
 /* Same as STREQ, but only expected is NUL-terminated. */
 #define ASSERT_STREQ_NZ(actual, expected)                            \
   do {                                                               \
-    num_tests++;                                                     \
+    g_num_tests++;                                                   \
     if (!_assert_streq_nz(actual, expected)) {                       \
       FAIL("ASSERT_STREQ_NZ(" #actual ", " #expected ")", __LINE__); \
     }                                                                \
@@ -156,7 +155,7 @@ void _strfail(const char *a, const char *e, int len);
 
 #define ASSERT_MG_STREQ(actual, expected)                            \
   do {                                                               \
-    num_tests++;                                                     \
+    g_num_tests++;                                                   \
     if ((actual).len != strlen(expected) ||                          \
         memcmp((actual).p, expected, (actual).len) != 0) {           \
       printf("'%.*s' (%d) != '%s'\n", (int)(actual).len, (actual).p, \

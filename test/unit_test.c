@@ -18,12 +18,9 @@
 #include "mongoose.h"
 #include "src/mg_internal.h"
 #include "unit_test.h"
+#include "common/test_main.h"
 #include "common/test_util.h"
 #include "common/cs_md5.h"
-
-#if defined(_MSC_VER) && _MSC_VER >= 1900
-#include <crtdbg.h>
-#endif
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ < 199901L && !defined(WIN32)
 #define __func__ ""
@@ -35,7 +32,6 @@
 #define LOOPBACK_IP "127.0.0.1"
 #define LISTENING_ADDR LOOPBACK_IP ":" HTTP_PORT
 
-static const char *s_argv_0 = NULL;
 static struct mg_serve_http_opts s_http_server_opts;
 static int s_listening_port = 23456;
 
@@ -1648,8 +1644,8 @@ static void cb7(struct mg_connection *nc, int ev, void *ev_data) {
 
   if (ev == MG_EV_HTTP_REPLY) {
     /* Make sure that we've downloaded this executable, byte-to-byte */
-    data = read_file(s_argv_0, &size);
-    DBG(("file %s, size %d; got %d", s_argv_0, (int) size, (int) hm->body.len));
+    data = read_file(g_argv_0, &size);
+    DBG(("file %s, size %d; got %d", g_argv_0, (int) size, (int) hm->body.len));
     if (data != NULL && size == hm->body.len &&
         memcmp(hm->body.p, data, size) == 0) {
       strcpy(user_data, "success");
@@ -2025,12 +2021,12 @@ static const char *test_http(void) {
   nc->user_data = status;
 
   /* Wine and GDB set argv0 to full path: strip the dir component */
-  if ((this_binary = strrchr(s_argv_0, '\\')) != NULL) {
+  if ((this_binary = strrchr(g_argv_0, '\\')) != NULL) {
     this_binary++;
-  } else if ((this_binary = strrchr(s_argv_0, '/')) != NULL) {
+  } else if ((this_binary = strrchr(g_argv_0, '/')) != NULL) {
     this_binary++;
   } else {
-    this_binary = s_argv_0;
+    this_binary = g_argv_0;
   }
   mg_printf(nc, "GET /%s HTTP/1.0\n\n", this_binary);
   /* Test mime type for static file */
@@ -5394,12 +5390,12 @@ static const char *test_socks(void) {
   mg_set_protocol_http_websocket(c);
   c->user_data = status;
   /* Wine and GDB set argv0 to full path: strip the dir component */
-  if ((this_binary = strrchr(s_argv_0, '\\')) != NULL) {
+  if ((this_binary = strrchr(g_argv_0, '\\')) != NULL) {
     this_binary++;
-  } else if ((this_binary = strrchr(s_argv_0, '/')) != NULL) {
+  } else if ((this_binary = strrchr(g_argv_0, '/')) != NULL) {
     this_binary++;
   } else {
-    this_binary = s_argv_0;
+    this_binary = g_argv_0;
   }
   mg_printf(c, "GET /%s HTTP/1.0\n\n", this_binary);
 
@@ -5412,7 +5408,11 @@ static const char *test_socks(void) {
 }
 #endif
 
-static const char *run_tests(const char *filter, double *total_elapsed) {
+void tests_setup(void) {
+  test_iface = mg_if_create_iface(mg_ifaces[MG_MAIN_IFACE], NULL);
+}
+
+const char *tests_run(const char *filter) {
   RUN_TEST(test_mbuf);
   RUN_TEST(test_parse_uri);
   RUN_TEST(test_assemble_uri);
@@ -5525,51 +5525,6 @@ static const char *run_tests(const char *filter, double *total_elapsed) {
   return NULL;
 }
 
-#if defined(_MSC_VER) && _MSC_VER >= 1900
-int __cdecl CrtDbgHook(int nReportType, char *szMsg, int *pnRet) {
-  (void) nReportType;
-  (void) szMsg;
-  (void) pnRet;
-
-  fprintf(stderr, "CRT debug hook: type: %d, msg: %s\n", nReportType, szMsg);
-  /* Return true - Abort,Retry,Ignore dialog will *not* be displayed */
-  return 1;
-}
-#endif
-
-void setup() {
-  test_iface = mg_if_create_iface(mg_ifaces[MG_MAIN_IFACE], NULL);
-}
-
-void teardown() {
+void tests_teardown(void) {
   free(test_iface);
-}
-
-int __cdecl main(int argc, char *argv[]) {
-  const char *fail_msg;
-  const char *filter = argc > 1 ? argv[1] : "";
-  double total_elapsed = 0.0;
-
-  setvbuf(stdout, NULL, _IONBF, 0);
-  setvbuf(stderr, NULL, _IONBF, 0);
-
-#if defined(_MSC_VER) && _MSC_VER >= 1900
-  /* NOTE: not available on wine/vc6 */
-  _CrtSetReportHook2(_CRT_RPTHOOK_INSTALL, CrtDbgHook);
-#endif
-
-  setup();
-
-  s_argv_0 = argv[0];
-  fail_msg = run_tests(filter, &total_elapsed);
-  printf("%s, run %d in %.3lfs\n", fail_msg ? "FAIL" : "PASS", num_tests,
-         total_elapsed);
-
-  teardown();
-  if (fail_msg != NULL) {
-    /* Prevent leak analyzer from running: there will be "leaks" because of
-     * premature return from the test, and in this case we don't care. */
-    _exit(EXIT_FAILURE);
-  }
-  return EXIT_SUCCESS;
 }
