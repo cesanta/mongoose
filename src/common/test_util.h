@@ -164,10 +164,13 @@ void _strfail(const char *a, const char *e, int len);
     }                                                                \
   } while (0)
 
-#define CHECK_CALL(call)     \
-  do {                       \
-    const char *r = (call);  \
-    if (r != NULL) return r; \
+#define CHECK_CALL(call)                                                  \
+  do {                                                                    \
+    const char *r = (call);                                               \
+    if (r != NULL) {                                                      \
+      fprintf(stderr, "... %s:%d in %s\n", __FILE__, __LINE__, __func__); \
+      return r;                                                           \
+    }                                                                     \
   } while (0)
 
 #ifndef MG_ENABLE_POLL_UNTIL
