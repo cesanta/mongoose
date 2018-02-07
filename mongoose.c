@@ -5373,6 +5373,86 @@ out:
 /* Amalgamated: #include "mg_internal.h" */
 /* Amalgamated: #include "mg_util.h" */
 
+/* altbuf {{{ */
+
+/*
+ * Alternate buffer: fills the client-provided buffer with data; and if it's
+ * not large enough, allocates another buffer (via mbuf), similar to asprintf.
+ */
+struct altbuf {
+  struct mbuf m;
+  char *user_buf;
+  size_t len;
+  size_t user_buf_size;
+};
+
+/*
+ * Initializes altbuf; `buf`, `buf_size` is the client-provided buffer.
+ */
+MG_INTERNAL void altbuf_init(struct altbuf *ab, char *buf, size_t buf_size) {
+  mbuf_init(&ab->m, 0);
+  ab->user_buf = buf;
+  ab->user_buf_size = buf_size;
+  ab->len = 0;
+}
+
+/*
+ * Appends a single char to the altbuf.
+ */
+MG_INTERNAL void altbuf_append(struct altbuf *ab, char c) {
+  if (ab->len < ab->user_buf_size) {
+    /* The data fits into the original buffer */
+    ab->user_buf[ab->len++] = c;
+  } else {
+    /* The data can't fit into the original buffer, so write it to mbuf.  */
+
+    /*
+     * First of all, see if that's the first byte which overflows the original
+     * buffer: if so, copy the existing data from there to a newly allocated
+     * mbuf.
+     */
+    if (ab->len > 0 && ab->m.len == 0) {
+      mbuf_append(&ab->m, ab->user_buf, ab->len);
+    }
+
+    mbuf_append(&ab->m, &c, 1);
+    ab->len = ab->m.len;
+  }
+}
+
+/*
+ * Resets any data previously appended to altbuf.
+ */
+MG_INTERNAL void altbuf_reset(struct altbuf *ab) {
+  mbuf_free(&ab->m);
+  ab->len = 0;
+}
+
+/*
+ * Returns whether the additional buffer was allocated (and thus the data
+ * is in the mbuf, not the client-provided buffer)
+ */
+MG_INTERNAL int altbuf_reallocated(struct altbuf *ab) {
+  return ab->len > ab->user_buf_size;
+}
+
+/*
+ * Returns the actual buffer with data, either the client-provided or a newly
+ * allocated one. If `trim` is non-zero, mbuf-backed buffer is trimmed first.
+ */
+MG_INTERNAL char *altbuf_get_buf(struct altbuf *ab, int trim) {
+  if (altbuf_reallocated(ab)) {
+    if (trim) {
+      mbuf_trim(&ab->m);
+    }
+    return ab->m.buf;
+  } else {
+    return ab->user_buf;
+  }
+}
+
+/* }}} */
+
 static const char *mg_version_header = "Mongoose/" MG_VERSION;
 
 enum mg_http_proto_data_type { DATA_NONE, DATA_FILE, DATA_PUT };
@@ -6182,7 +6262,8 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
   struct mg_str *ct;
   struct mbuf *io = &nc->recv_mbuf;
 
-  char boundary[100];
+  char boundary_buf[100];
+  char *boundary = boundary_buf;
   int boundary_len;
 
   ct = mg_get_http_header(hm, "Content-Type");
@@ -6197,7 +6278,7 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
   }
 
   boundary_len =
-      mg_http_parse_header(ct, "boundary", boundary, sizeof(boundary));
+      mg_http_parse_header2(ct, "boundary", &boundary, sizeof(boundary_buf));
   if (boundary_len == 0) {
     /*
      * Content type is multipart, but there is no boundary,
@@ -6234,7 +6315,7 @@ static void mg_http_multipart_begin(struct mg_connection *nc,
     mbuf_remove(io, req_len);
   }
 exit_mp:
-  ;
+  if (boundary != boundary_buf) MG_FREE(boundary);
 }
 
 #define CONTENT_DISPOSITION "Content-Disposition: "
@@ -6316,16 +6397,23 @@ static int mg_http_multipart_wait_for_boundary(struct mg_connection *c) {
   return 1;
 }
 
+static void mg_http_parse_header_internal(struct mg_str *hdr,
+                                          const char *var_name,
+                                          struct altbuf *ab);
+
 static int mg_http_multipart_process_boundary(struct mg_connection *c) {
   int data_size;
   const char *boundary, *block_begin;
   struct mbuf *io = &c->recv_mbuf;
   struct mg_http_proto_data *pd = mg_http_get_proto_data(c);
-  char file_name[100], var_name[100];
+  struct altbuf ab_file_name, ab_var_name;
   int line_len;
   boundary = c_strnstr(io->buf, pd->mp_stream.boundary, io->len);
   block_begin = boundary + pd->mp_stream.boundary_len + 2;
   data_size = io->len - (block_begin - io->buf);
+
+  altbuf_init(&ab_file_name, NULL, 0);
+  altbuf_init(&ab_var_name, NULL, 0);
 
   while (data_size > 0 &&
          (line_len = mg_get_line_len(block_begin, data_size)) != 0) {
@@ -6336,11 +6424,16 @@ static int mg_http_multipart_process_boundary(struct mg_connection *c) {
 
       header.p = block_begin + sizeof(CONTENT_DISPOSITION) - 1;
       header.len = line_len - sizeof(CONTENT_DISPOSITION) - 1;
-      mg_http_parse_header(&header, "name", var_name, sizeof(var_name) - 2);
-      mg_http_parse_header(&header, "filename", file_name,
-                           sizeof(file_name) - 2);
+
+      altbuf_reset(&ab_var_name);
+      mg_http_parse_header_internal(&header, "name", &ab_var_name);
+
+      altbuf_reset(&ab_file_name);
+      mg_http_parse_header_internal(&header, "filename", &ab_file_name);
+
       block_begin += line_len;
       data_size -= line_len;
+
       continue;
     }
 
@@ -6351,10 +6444,16 @@ static int mg_http_multipart_process_boundary(struct mg_connection *c) {
         mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_END, NULL, 0);
       }
 
+      /* Reserve 2 bytes for "\r\n" in file_name and var_name */
+      altbuf_append(&ab_file_name, '\0');
+      altbuf_append(&ab_file_name, '\0');
+      altbuf_append(&ab_var_name, '\0');
+      altbuf_append(&ab_var_name, '\0');
+
       MG_FREE((void *) pd->mp_stream.file_name);
-      pd->mp_stream.file_name = strdup(file_name);
+      pd->mp_stream.file_name = altbuf_get_buf(&ab_file_name, 1 /* trim */);
       MG_FREE((void *) pd->mp_stream.var_name);
-      pd->mp_stream.var_name = strdup(var_name);
+      pd->mp_stream.var_name = altbuf_get_buf(&ab_var_name, 1 /* trim */);
 
       mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_BEGIN, NULL, 0);
       pd->mp_stream.state = MPS_WAITING_FOR_CHUNK;
@@ -6366,6 +6465,9 @@ static int mg_http_multipart_process_boundary(struct mg_connection *c) {
   }
 
   pd->mp_stream.state = MPS_WAITING_FOR_BOUNDARY;
+
+  altbuf_reset(&ab_var_name);
+  altbuf_reset(&ab_file_name);
 
   return 0;
 }
@@ -6921,13 +7023,11 @@ void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...) {
   /* LCOV_EXCL_STOP */
 }
 
-int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
-                         size_t buf_size) {
-  int ch = ' ', ch1 = ',', len = 0, n = strlen(var_name);
+static void mg_http_parse_header_internal(struct mg_str *hdr,
+                                          const char *var_name,
+                                          struct altbuf *ab) {
+  int ch = ' ', ch1 = ',', n = strlen(var_name);
   const char *p, *end = hdr ? hdr->p + hdr->len : NULL, *s = NULL;
-
-  if (buf != NULL && buf_size > 0) buf[0] = '\0';
-  if (hdr == NULL) return 0;
 
   /* Find where variable starts */
   for (s = hdr->p; s != NULL && s + n < end; s++) {
@@ -6942,17 +7042,49 @@ int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
       ch = ch1 = *s++;
     }
     p = s;
-    while (p < end && p[0] != ch && p[0] != ch1 && len < (int) buf_size) {
+    while (p < end && p[0] != ch && p[0] != ch1) {
       if (ch != ' ' && p[0] == '\\' && p[1] == ch) p++;
-      buf[len++] = *p++;
+      altbuf_append(ab, *p++);
     }
-    if (len >= (int) buf_size || (ch != ' ' && *p != ch)) {
-      len = 0;
-    } else {
-      if (len > 0 && s[len - 1] == ',') len--;
-      if (len > 0 && s[len - 1] == ';') len--;
-      buf[len] = '\0';
+
+    if (ch != ' ' && *p != ch) {
+      altbuf_reset(ab);
     }
+  }
+
+  /* If there is some data, append a NUL. */
+  if (ab->len > 0) {
+    altbuf_append(ab, '\0');
+  }
+}
+
+int mg_http_parse_header2(struct mg_str *hdr, const char *var_name, char **buf,
+                          size_t buf_size) {
+  struct altbuf ab;
+  altbuf_init(&ab, *buf, buf_size);
+  if (hdr == NULL) return 0;
+  if (*buf != NULL && buf_size > 0) *buf[0] = '\0';
+
+  mg_http_parse_header_internal(hdr, var_name, &ab);
+
+  /*
+   * Get a (trimmed) buffer, and return a len without a NUL byte which might
+   * have been added.
+   */
+  *buf = altbuf_get_buf(&ab, 1 /* trim */);
+  return ab.len > 0 ? ab.len - 1 : 0;
+}
+
+int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
+                         size_t buf_size) {
+  char *buf2 = buf;
+
+  int len = mg_http_parse_header2(hdr, var_name, &buf2, buf_size);
+
+  if (buf2 != buf) {
+    /* Buffer was not enough and was reallocated: free it and just return 0 */
+    MG_FREE(buf2);
+    return 0;
   }
 
   return len;
@@ -7092,27 +7224,34 @@ static int mg_check_nonce(const char *nonce) {
 
 int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
                               FILE *fp) {
+  int ret = 0;
   struct mg_str *hdr;
-  char username[50], cnonce[64], response[40], uri[200], qop[20], nc[20],
-      nonce[30];
+  char username_buf[50], cnonce_buf[64], response_buf[40], uri_buf[200],
+      qop_buf[20], nc_buf[20], nonce_buf[16];
+
+  char *username = username_buf, *cnonce = cnonce_buf, *response = response_buf,
+       *uri = uri_buf, *qop = qop_buf, *nc = nc_buf, *nonce = nonce_buf;
 
   /* Parse "Authorization:" header, fail fast on parse error */
   if (hm == NULL || fp == NULL ||
       (hdr = mg_get_http_header(hm, "Authorization")) == NULL ||
-      mg_http_parse_header(hdr, "username", username, sizeof(username)) == 0 ||
-      mg_http_parse_header(hdr, "cnonce", cnonce, sizeof(cnonce)) == 0 ||
-      mg_http_parse_header(hdr, "response", response, sizeof(response)) == 0 ||
-      mg_http_parse_header(hdr, "uri", uri, sizeof(uri)) == 0 ||
-      mg_http_parse_header(hdr, "qop", qop, sizeof(qop)) == 0 ||
-      mg_http_parse_header(hdr, "nc", nc, sizeof(nc)) == 0 ||
-      mg_http_parse_header(hdr, "nonce", nonce, sizeof(nonce)) == 0 ||
+      mg_http_parse_header2(hdr, "username", &username, sizeof(username_buf)) ==
+          0 ||
+      mg_http_parse_header2(hdr, "cnonce", &cnonce, sizeof(cnonce_buf)) == 0 ||
+      mg_http_parse_header2(hdr, "response", &response, sizeof(response_buf)) ==
+          0 ||
+      mg_http_parse_header2(hdr, "uri", &uri, sizeof(uri_buf)) == 0 ||
+      mg_http_parse_header2(hdr, "qop", &qop, sizeof(qop_buf)) == 0 ||
+      mg_http_parse_header2(hdr, "nc", &nc, sizeof(nc_buf)) == 0 ||
+      mg_http_parse_header2(hdr, "nonce", &nonce, sizeof(nonce_buf)) == 0 ||
       mg_check_nonce(nonce) == 0) {
-    return 0;
+    ret = 0;
+    goto clean;
   }
 
   /* NOTE(lsm): due to a bug in MSIE, we do not compare URIs */
 
-  return mg_check_digest_auth(
+  ret = mg_check_digest_auth(
       hm->method,
       mg_mk_str_n(
           hm->uri.p,
@@ -7120,6 +7259,17 @@ int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
       mg_mk_str(username), mg_mk_str(cnonce), mg_mk_str(response),
       mg_mk_str(qop), mg_mk_str(nc), mg_mk_str(nonce), mg_mk_str(auth_domain),
       fp);
+
+clean:
+  if (username != username_buf) MG_FREE(username);
+  if (cnonce != cnonce_buf) MG_FREE(cnonce);
+  if (response != response_buf) MG_FREE(response);
+  if (uri != uri_buf) MG_FREE(uri);
+  if (qop != qop_buf) MG_FREE(qop);
+  if (nc != nc_buf) MG_FREE(nc);
+  if (nonce != nonce_buf) MG_FREE(nonce);
+
+  return ret;
 }
 
 int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
@@ -8189,8 +8339,24 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
       struct mg_str header;
       header.p = buf + n + cdl;
       header.len = ll - (cdl + 2);
-      mg_http_parse_header(&header, "name", var_name, var_name_len);
-      mg_http_parse_header(&header, "filename", file_name, file_name_len);
+      {
+        char *var_name2 = var_name;
+        mg_http_parse_header2(&header, "name", &var_name2, var_name_len);
+        /* TODO: handle reallocated buffer correctly */
+        if (var_name2 != var_name) {
+          MG_FREE(var_name2);
+          var_name[0] = '\0';
+        }
+      }
+      {
+        char *file_name2 = file_name;
+        mg_http_parse_header2(&header, "filename", &file_name2, file_name_len);
+        /* TODO: handle reallocated buffer correctly */
+        if (file_name2 != file_name) {
+          MG_FREE(file_name2);
+          file_name[0] = '\0';
+        }
+      }
     }
   }
 

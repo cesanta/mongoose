@@ -45,7 +45,9 @@ COMMON_FEATURE_FLAGS = \
 	-DMG_ENABLE_SNTP -DMG_SNTP_NO_DELAY_CORRECTION \
 	-DMG_ENABLE_HTTP_STREAMING_MULTIPART
 UNIX_FEATURE_FLAGS=-DMG_ENABLE_IPV6 -DMG_ENABLE_SSL
-CFLAGS = -W -Wall -Wundef -Werror -g -O0 -Wno-multichar -D__USE_MISC \
+# TODO: remove -Wno-deprecated-declarations once deprecated
+# `mg_http_parse_header()` is removed from mongoose.
+CFLAGS = -W -Wall -Wundef -Werror -Wno-deprecated-declarations -g -O0 -Wno-multichar -D__USE_MISC \
 	 $(COMMON_FEATURE_FLAGS) $(UNIX_FEATURE_FLAGS) \
 	 $(patsubst %,-I%,$(subst :, ,$(VPATH))) \
 	 -include unit_test.h -pthread $(CFLAGS_EXTRA)

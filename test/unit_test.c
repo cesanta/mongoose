@@ -4941,12 +4941,34 @@ static const char *test_http_parse_header(void) {
       "xx=1 kl yy, ert=234 kl=123, "
       "uri=\"/?naii=x,y\";ii=\"12\\\"34\" zz='aa bb',tt=2,gf=\"xx d=1234");
   char buf[20];
+  char *buf2;
 
   ASSERT_EQ(mg_http_parse_header(&h, "ert", buf, sizeof(buf)), 3);
   ASSERT_STREQ(buf, "234");
+
   ASSERT_EQ(mg_http_parse_header(&h, "ert", buf, 2), 0);
   ASSERT_EQ(mg_http_parse_header(&h, "ert", buf, 3), 0);
   ASSERT_EQ(mg_http_parse_header(&h, "ert", buf, 4), 3);
+
+  buf2 = buf;
+  ASSERT_EQ(mg_http_parse_header2(&h, "ert", &buf2, 2), 3);
+  ASSERT(buf2 != buf);
+  free(buf2);
+
+  buf2 = buf;
+  ASSERT_EQ(mg_http_parse_header2(&h, "ert", &buf2, 3), 3);
+  ASSERT(buf2 != buf);
+  free(buf2);
+
+  buf2 = buf;
+  ASSERT_EQ(mg_http_parse_header2(&h, "ert", &buf2, 4), 3);
+  ASSERT(buf2 == buf);
+
+  buf2 = NULL;
+  ASSERT_EQ(mg_http_parse_header2(&h, "ert", &buf2, 0), 3);
+  ASSERT_STREQ(buf2, "234");
+  free(buf2);
+
   ASSERT_EQ(mg_http_parse_header(&h, "gf", buf, sizeof(buf)), 0);
   ASSERT_EQ(mg_http_parse_header(&h, "zz", buf, sizeof(buf)), 5);
   ASSERT_STREQ(buf, "aa bb");

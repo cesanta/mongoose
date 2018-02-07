@@ -10,6 +10,7 @@ items:
   - { name: mg_get_http_var.md }
   - { name: mg_http_check_digest_auth.md }
   - { name: mg_http_parse_header.md }
+  - { name: mg_http_parse_header2.md }
   - { name: mg_http_reverse_proxy.md }
   - { name: mg_http_send_error.md }
   - { name: mg_http_send_redirect.md }

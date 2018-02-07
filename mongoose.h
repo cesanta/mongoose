@@ -4647,21 +4647,42 @@ struct mg_str *mg_get_http_header(struct http_message *hm, const char *name);
 
 /*
  * Parses the HTTP header `hdr`. Finds variable `var_name` and stores its value
- * in the buffer `buf`, `buf_size`. Returns 0 if variable not found, non-zero
- * otherwise.
+ * in the buffer `*buf`, `buf_size`. If the buffer size is not enough,
+ * allocates a buffer of required size and writes it to `*buf`, similar to
+ * asprintf(). The caller should always check whether the buffer was updated,
+ * and free it if so.
  *
  * This function is supposed to parse cookies, authentication headers, etc.
  * Example (error handling omitted):
  *
- *     char user[20];
+ *     char user_buf[20];
+ *     char *user = user_buf;
  *     struct mg_str *hdr = mg_get_http_header(hm, "Authorization");
- *     mg_http_parse_header(hdr, "username", user, sizeof(user));
+ *     mg_http_parse_header2(hdr, "username", &user, sizeof(user_buf));
+ *     // ... do something useful with user
+ *     if (user != user_buf) {
+ *       free(user);
+ *     }
  *
- * Returns the length of the variable's value. If buffer is not large enough,
- * or variable not found, 0 is returned.
+ * Returns the length of the variable's value. If variable is not found, 0 is
+ * returned.
+ */
+int mg_http_parse_header2(struct mg_str *hdr, const char *var_name, char **buf,
+                          size_t buf_size);
+
+/*
+ * DEPRECATED: use mg_http_parse_header2() instead.
+ *
+ * Same as mg_http_parse_header2(), but takes buffer as a `char *` (instead of
+ * `char **`), and thus it cannot allocate a new buffer if the provided one
+ * is not enough, and just returns 0 in that case.
  */
 int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
-                         size_t buf_size);
+                         size_t buf_size)
+#ifdef __GNUC__
+    __attribute__((deprecated));
+#endif
+;
 
 /*
  * Gets and parses the Authorization: Basic header
