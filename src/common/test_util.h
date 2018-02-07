@@ -165,6 +165,12 @@ void _strfail(const char *a, const char *e, int len);
     }                                                                \
   } while (0)
 
+#define CHECK_CALL(call)     \
+  do {                       \
+    const char *r = (call);  \
+    if (r != NULL) return r; \
+  } while (0)
+
 #ifndef MG_ENABLE_POLL_UNTIL
 #define MG_ENABLE_POLL_UNTIL 0
 #endif
