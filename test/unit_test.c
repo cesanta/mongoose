@@ -1533,7 +1533,7 @@ static const char *test_parse_http_message(void) {
   ASSERT_EQ(mg_vcmp(&req.query_string, "a=b&c=d"), 0);
 
   ASSERT_EQ(mg_parse_http(f, strlen(f), &req, 1), (int) strlen(f));
-  ASSERT_EQ(req.body.len, (size_t) ~0);
+  ASSERT_EQ64(req.body.len, (size_t) ~0);
 
   ASSERT_EQ(mg_parse_http(g, strlen(g), &req, 1), (int) strlen(g));
   ASSERT_EQ(req.body.len, 0);
@@ -1542,7 +1542,7 @@ static const char *test_parse_http_message(void) {
   ASSERT_EQ(mg_vcmp(&req.proto, "HTTP/1.0"), 0);
   ASSERT_EQ(req.resp_code, 200);
   ASSERT_EQ(mg_vcmp(&req.resp_status_msg, "OK"), 0);
-  ASSERT_EQ(req.body.len, (size_t) ~0);
+  ASSERT_EQ64(req.body.len, (size_t) ~0);
 
   ASSERT_EQ(mg_parse_http(i, strlen(i), &req, 0), -1);
 
@@ -3921,7 +3921,7 @@ static const char *test_http_chunk2(void) {
   strcat(buf, "3\r\n...\r\na\r\n0123456789\r\n0\r");
   ASSERT_EQ(mg_handle_chunked(&nc, &hm, buf, strlen(buf)), 13);
   ASSERT_STREQ(buf, "...01234567890\r");
-  ASSERT_EQ(hm.message.len, (size_t) ~0);
+  ASSERT_EQ64(hm.message.len, (size_t) ~0);
 
   strcat(buf, "\n\r\n");
   ASSERT_EQ(mg_handle_chunked(&nc, &hm, buf, strlen(buf)), 13);
