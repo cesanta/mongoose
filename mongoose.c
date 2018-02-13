@@ -10093,7 +10093,7 @@ int mg_sock_addr_to_str(const union socket_address *sa, char *buf, size_t len,
       goto cleanup;
     }
 #else
-    if (inet_ntop(AF_INET, (void *) &sa->sin.sin_addr, buf, len - 1) == NULL) {
+    if (inet_ntop(AF_INET, (void *) &sa->sin.sin_addr, buf, len) == NULL) {
       goto cleanup;
     }
 #endif
