@@ -3910,7 +3910,7 @@ mg_socketpair_accept(sock_t sock, union socket_address *sa, socklen_t sa_len) {
 }
 
 int mg_socketpair(sock_t sp[2], int sock_type) {
-  union socket_address sa;
+  union socket_address sa, sa2;
   sock_t sock;
   socklen_t len = sizeof(sa.sin);
   int ret = 0;
@@ -3919,18 +3919,20 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
 
   (void) memset(&sa, 0, sizeof(sa));
   sa.sin.sin_family = AF_INET;
-  sa.sin.sin_port = htons(0);
   sa.sin.sin_addr.s_addr = htonl(0x7f000001); /* 127.0.0.1 */
+  sa2 = sa;
 
   if ((sock = socket(AF_INET, sock_type, 0)) == INVALID_SOCKET) {
   } else if (bind(sock, &sa.sa, len) != 0) {
   } else if (sock_type == SOCK_STREAM && listen(sock, 1) != 0) {
   } else if (getsockname(sock, &sa.sa, &len) != 0) {
   } else if ((sp[0] = socket(AF_INET, sock_type, 0)) == INVALID_SOCKET) {
-  } else if (connect(sp[0], &sa.sa, len) != 0) {
+  } else if (sock_type == SOCK_STREAM && connect(sp[0], &sa.sa, len) != 0) {
   } else if (sock_type == SOCK_DGRAM &&
-             (getsockname(sp[0], &sa.sa, &len) != 0 ||
-              connect(sock, &sa.sa, len) != 0)) {
+             (bind(sp[0], &sa2.sa, len) != 0 ||
+              getsockname(sp[0], &sa2.sa, &len) != 0 ||
+              connect(sp[0], &sa.sa, len) != 0 ||
+              connect(sock, &sa2.sa, len) != 0)) {
   } else if ((sp[1] = (sock_type == SOCK_DGRAM ? sock : mg_socketpair_accept(
                                                             sock, &sa, len))) ==
              INVALID_SOCKET) {
