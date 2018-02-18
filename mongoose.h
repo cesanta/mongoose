@@ -4680,9 +4680,9 @@ int mg_http_parse_header2(struct mg_str *hdr, const char *var_name, char **buf,
 int mg_http_parse_header(struct mg_str *hdr, const char *var_name, char *buf,
                          size_t buf_size)
 #ifdef __GNUC__
-    __attribute__((deprecated));
+    __attribute__((deprecated))
 #endif
-;
+    ;
 
 /*
  * Gets and parses the Authorization: Basic header
