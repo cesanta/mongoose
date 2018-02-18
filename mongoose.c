@@ -3567,12 +3567,27 @@ static void mg_handle_tcp_read(struct mg_connection *conn) {
 static int mg_recvfrom(struct mg_connection *nc, union socket_address *sa,
                        socklen_t *sa_len, char **buf) {
   int n;
-  *buf = (char *) MG_MALLOC(MG_UDP_RECV_BUFFER_SIZE);
-  if (*buf == NULL) {
-    DBG(("Out of memory"));
-    return -ENOMEM;
-  }
-  n = recvfrom(nc->sock, *buf, MG_UDP_RECV_BUFFER_SIZE, 0, &sa->sa, sa_len);
+  int pending_size;
+
+  /* peek at data to determine full size of incoming buffer */
+  pending_size = 0;
+  do
+  {
+    pending_size += MG_UDP_RECV_BUFFER_SIZE;
+    *buf = (char *) MG_REALLOC(*buf, pending_size);
+    if (*buf == NULL) {
+      DBG(("Out of memory"));
+      return -ENOMEM;
+    }
+
+    n = recvfrom(nc->sock, *buf, pending_size, MSG_PEEK, &sa->sa, sa_len);
+    if (n <= 0) {
+      DBG(("%p recvfrom (MSG_PEEK): %s", nc, strerror(mg_get_errno())));
+      return n;
+    }
+  } while (pending_size <= n);
+
+  n = recvfrom(nc->sock, *buf, pending_size, 0, &sa->sa, sa_len);
   if (n <= 0) {
     DBG(("%p recvfrom: %s", nc, strerror(mg_get_errno())));
     MG_FREE(*buf);
