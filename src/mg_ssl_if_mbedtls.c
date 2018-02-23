@@ -67,9 +67,11 @@ static enum mg_ssl_if_result mg_use_ca_cert(struct mg_ssl_if_ctx *ctx,
                                             const char *cert);
 static enum mg_ssl_if_result mg_set_cipher_list(struct mg_ssl_if_ctx *ctx,
                                                 const char *ciphers);
+#ifdef MBEDTLS_KEY_EXCHANGE__SOME__PSK_ENABLED
 static enum mg_ssl_if_result mg_ssl_if_mbed_set_psk(struct mg_ssl_if_ctx *ctx,
                                                     const char *identity,
                                                     const char *key);
+#endif
 
 enum mg_ssl_if_result mg_ssl_if_conn_init(
     struct mg_connection *nc, const struct mg_ssl_if_conn_params *params,
@@ -118,11 +120,13 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
     return MG_SSL_ERROR;
   }
 
+#ifdef MBEDTLS_KEY_EXCHANGE__SOME__PSK_ENABLED
   if (mg_ssl_if_mbed_set_psk(ctx, params->psk_identity, params->psk_key) !=
       MG_SSL_OK) {
     MG_SET_PTRPTR(err_msg, "Invalid PSK settings");
     return MG_SSL_ERROR;
   }
+#endif
 
   if (!(nc->flags & MG_F_LISTENING)) {
     ctx->ssl = (mbedtls_ssl_context *) MG_CALLOC(1, sizeof(*ctx->ssl));
@@ -416,6 +420,7 @@ static enum mg_ssl_if_result mg_set_cipher_list(struct mg_ssl_if_ctx *ctx,
   return MG_SSL_OK;
 }
 
+#ifdef MBEDTLS_KEY_EXCHANGE__SOME__PSK_ENABLED
 static enum mg_ssl_if_result mg_ssl_if_mbed_set_psk(struct mg_ssl_if_ctx *ctx,
                                                     const char *identity,
                                                     const char *key_str) {
@@ -452,6 +457,7 @@ static enum mg_ssl_if_result mg_ssl_if_mbed_set_psk(struct mg_ssl_if_ctx *ctx,
   }
   return MG_SSL_OK;
 }
+#endif
 
 const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
                        const char *ca_cert) {
