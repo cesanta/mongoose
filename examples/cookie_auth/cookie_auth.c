@@ -59,20 +59,29 @@ static int check_pass(const char *user, const char *pass) {
  */
 static struct session *get_session(struct http_message *hm) {
   struct mg_str *cookie_header = mg_get_http_header(hm, "cookie");
-  if (cookie_header == NULL) return NULL;
-  char ssid[21];
-  if (!mg_http_parse_header(cookie_header, SESSION_COOKIE_NAME, ssid,
-                            sizeof(ssid))) {
-    return NULL;
+  if (cookie_header == NULL) goto clean;
+  char ssid_buf[21];
+  char *ssid = ssid_buf;
+  struct session *ret = NULL;
+  if (!mg_http_parse_header2(cookie_header, SESSION_COOKIE_NAME, &ssid,
+                             sizeof(ssid_buf))) {
+    goto clean;
   }
   uint64_t sid = strtoull(ssid, NULL, 16);
-  for (int i = 0; i < NUM_SESSIONS; i++) {
+  int i;
+  for (i = 0; i < NUM_SESSIONS; i++) {
     if (s_sessions[i].id == sid) {
       s_sessions[i].last_used = mg_time();
-      return &s_sessions[i];
+      ret = &s_sessions[i];
+      goto clean;
     }
   }
-  return NULL;
+
+clean:
+  if (ssid != ssid_buf) {
+    free(ssid);
+  }
+  return ret;
 }
 
 /*
@@ -91,7 +100,8 @@ static struct session *create_session(const char *user,
   /* Find first available slot or use the oldest one. */
   struct session *s = NULL;
   struct session *oldest_s = s_sessions;
-  for (int i = 0; i < NUM_SESSIONS; i++) {
+  int i;
+  for (i = 0; i < NUM_SESSIONS; i++) {
     if (s_sessions[i].id == 0) {
       s = &s_sessions[i];
       break;
@@ -176,7 +186,8 @@ static void logout_handler(struct mg_connection *nc, int ev, void *p) {
 /* Cleans up sessions that have been idle for too long. */
 void check_sessions(void) {
   double threshold = mg_time() - SESSION_TTL;
-  for (int i = 0; i < NUM_SESSIONS; i++) {
+  int i;
+  for (i = 0; i < NUM_SESSIONS; i++) {
     struct session *s = &s_sessions[i];
     if (s->id != 0 && s->last_used < threshold) {
       fprintf(stderr, "Session %" INT64_X_FMT " (%s) closed due to idleness.\n",

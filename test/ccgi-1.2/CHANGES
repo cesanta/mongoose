@@ -1,0 +1,28 @@
+Changes for C CGI Library
+
+1.0
+  Initial Release
+
+1.1
+  Added hexadecimal encoding: CGI_encode_hex() CGI_decode_hex()
+
+  Added simple cryptography: CGI_encrypt() CGI_decrypt()
+
+  Added SCGI server:  CGI_prefork_server()
+
+  Modified CGI_decode_query() to parse query strings less
+  strictly.
+
+1.2
+  Switched to the GNU Lesser General Public License
+
+  Fixed a bug when testing CONTENT_TYPE for
+  application/x-www-form-urlencoded.  Changed strcasecmp()
+  to strncasecmp().
+
+  Changed t/test.c to terminate variable length argument
+  list passed to CGI_encode_query() with (char *)0.  Type
+  cast needed for 64 bit platforms.
+
+  Changed doc.html to document that CGI_encode_query()
+  argument list must end with (char *)0.

@@ -1,0 +1,73 @@
+<html>
+<head>
+<title>C CGI Test Form</title>
+<style>
+.middle {
+    vertical-align: middle;
+}
+</style>
+</head>
+<body>
+
+<h2>C CGI Library Test Form</h2>
+
+<form method="POST"
+action="dump.cgi?qvar1=q+val+1&amp;qvar2=q+val+2&amp;qvar3=q+val+3"
+enctype="multipart/form-data">
+
+<p>
+Text Input: <input type="text" name="textvar1" />
+</p>
+
+<p>
+File Uploads:
+</p>
+<p>
+File 1:<input type="file" name="upload1" /><br />
+File 2:<input type="file" name="upload2" />
+</p>
+
+<p>
+Check Boxes:
+cb1<input type="checkbox" name="cbvar1" value="cb #1" checked="checked" />
+cb2<input type="checkbox" name="cbvar1" value="cb #2" />
+cb3<input type="checkbox" name="cbvar1" value="cb #3" checked="checked" />
+cb4<input type="checkbox" name="cbvar1" value="cb #4" />
+</p>
+
+<p>
+Radio Buttons:
+rb1<input type="radio" name="rbvar1" value="rb #1" />
+rb2<input type="radio" name="rbvar1" value="rb #2" />
+rb3<input type="radio" name="rbvar1" value="rb #3" checked="checked" />
+rb4<input type="radio" name="rbvar1" value="rb #4" />
+NONE: <input type="radio" name="rbvar1" value="none" />
+</p>
+
+<p>
+Selection:
+<select class="middle" multiple name="selvar1">
+<option value="sel val #1" selected="selected">Select Value 1</option>
+<option value="sel val #2">Select Value 2</option>
+<option value="sel val #3" selected="selected">Select Value 3</option>
+<option value="sel val #4" selected="selected">Select Value 4</option>
+<option value="sel val #5">Select Value 5</option>
+<option value="sel val #6">Select Value 6</option>
+<option value="sel val #7" selected="selected">Select Value 7</option>
+</select>
+</p>
+
+<p>
+Text Area:
+<textarea class="middle" name="textarea1" rows="10" cols="40">Initial Line 1
+Initial Line 2</textarea>
+</p>
+
+<p>
+<input type="submit" name="submitbutton" value="Submit Form" />
+<input type="hidden" name="hidden"
+    value="This is three&#13;&#10;lines of hidden&#13;&#10;form data" />
+</p>
+</form>
+</body>
+</html>

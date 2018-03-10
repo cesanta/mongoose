@@ -1,0 +1,176 @@
+/*
+ * Copyright (c) 2014-2016 Cesanta Software Limited
+ * All rights reserved
+ */
+
+#ifndef CS_MONGOOSE_SRC_FEATURES_H_
+#define CS_MONGOOSE_SRC_FEATURES_H_
+
+#ifndef MG_DISABLE_HTTP_DIGEST_AUTH
+#define MG_DISABLE_HTTP_DIGEST_AUTH 0
+#endif
+
+#ifndef MG_DISABLE_HTTP_KEEP_ALIVE
+#define MG_DISABLE_HTTP_KEEP_ALIVE 0
+#endif
+
+#ifndef MG_DISABLE_PFS
+#define MG_DISABLE_PFS 0
+#endif
+
+#ifndef MG_DISABLE_WS_RANDOM_MASK
+#define MG_DISABLE_WS_RANDOM_MASK 0
+#endif
+
+#ifndef MG_ENABLE_ASYNC_RESOLVER
+#define MG_ENABLE_ASYNC_RESOLVER 1
+#endif
+
+#ifndef MG_ENABLE_BROADCAST
+#define MG_ENABLE_BROADCAST 0
+#endif
+
+#ifndef MG_ENABLE_COAP
+#define MG_ENABLE_COAP 0
+#endif
+
+#ifndef MG_ENABLE_DEBUG
+#define MG_ENABLE_DEBUG 0
+#endif
+
+#ifndef MG_ENABLE_DIRECTORY_LISTING
+#define MG_ENABLE_DIRECTORY_LISTING 0
+#endif
+
+#ifndef MG_ENABLE_DNS
+#define MG_ENABLE_DNS 1
+#endif
+
+#ifndef MG_ENABLE_DNS_SERVER
+#define MG_ENABLE_DNS_SERVER 0
+#endif
+
+#ifndef MG_ENABLE_FAKE_DAVLOCK
+#define MG_ENABLE_FAKE_DAVLOCK 0
+#endif
+
+#ifndef MG_ENABLE_FILESYSTEM
+#define MG_ENABLE_FILESYSTEM 0
+#endif
+
+#ifndef MG_ENABLE_GETADDRINFO
+#define MG_ENABLE_GETADDRINFO 0
+#endif
+
+#ifndef MG_ENABLE_HEXDUMP
+#define MG_ENABLE_HEXDUMP CS_ENABLE_STDIO
+#endif
+
+#ifndef MG_ENABLE_HTTP
+#define MG_ENABLE_HTTP 1
+#endif
+
+#ifndef MG_ENABLE_HTTP_CGI
+#define MG_ENABLE_HTTP_CGI 0
+#endif
+
+#ifndef MG_ENABLE_HTTP_SSI
+#define MG_ENABLE_HTTP_SSI MG_ENABLE_FILESYSTEM
+#endif
+
+#ifndef MG_ENABLE_HTTP_SSI_EXEC
+#define MG_ENABLE_HTTP_SSI_EXEC 0
+#endif
+
+#ifndef MG_ENABLE_HTTP_STREAMING_MULTIPART
+#define MG_ENABLE_HTTP_STREAMING_MULTIPART 0
+#endif
+
+#ifndef MG_ENABLE_HTTP_WEBDAV
+#define MG_ENABLE_HTTP_WEBDAV 0
+#endif
+
+#ifndef MG_ENABLE_HTTP_WEBSOCKET
+#define MG_ENABLE_HTTP_WEBSOCKET MG_ENABLE_HTTP
+#endif
+
+#ifndef MG_ENABLE_IPV6
+#define MG_ENABLE_IPV6 0
+#endif
+
+#ifndef MG_ENABLE_MQTT
+#define MG_ENABLE_MQTT 1
+#endif
+
+#ifndef MG_ENABLE_SOCKS
+#define MG_ENABLE_SOCKS 0
+#endif
+
+#ifndef MG_ENABLE_MQTT_BROKER
+#define MG_ENABLE_MQTT_BROKER 0
+#endif
+
+#ifndef MG_ENABLE_SSL
+#define MG_ENABLE_SSL 0
+#endif
+
+#ifndef MG_ENABLE_SYNC_RESOLVER
+#define MG_ENABLE_SYNC_RESOLVER 0
+#endif
+
+#ifndef MG_ENABLE_STDIO
+#define MG_ENABLE_STDIO CS_ENABLE_STDIO
+#endif
+
+#ifndef MG_NET_IF
+#define MG_NET_IF MG_NET_IF_SOCKET
+#endif
+
+#ifndef MG_SSL_IF
+#define MG_SSL_IF MG_SSL_IF_OPENSSL
+#endif
+
+#ifndef MG_ENABLE_THREADS /* ifdef-ok */
+#ifdef _WIN32
+#define MG_ENABLE_THREADS 1
+#else
+#define MG_ENABLE_THREADS 0
+#endif
+#endif
+
+#if MG_ENABLE_DEBUG && !defined(CS_ENABLE_DEBUG)
+#define CS_ENABLE_DEBUG 1
+#endif
+
+/* MQTT broker requires MQTT */
+#if MG_ENABLE_MQTT_BROKER && !MG_ENABLE_MQTT
+#undef MG_ENABLE_MQTT
+#define MG_ENABLE_MQTT 1
+#endif
+
+#ifndef MG_ENABLE_HTTP_URL_REWRITES
+#define MG_ENABLE_HTTP_URL_REWRITES \
+  (CS_PLATFORM == CS_P_WINDOWS || CS_PLATFORM == CS_P_UNIX)
+#endif
+
+#ifndef MG_ENABLE_SNTP
+#define MG_ENABLE_SNTP 0
+#endif
+
+#ifndef MG_ENABLE_EXTRA_ERRORS_DESC
+#define MG_ENABLE_EXTRA_ERRORS_DESC 0
+#endif
+
+#ifndef MG_ENABLE_CALLBACK_USERDATA
+#define MG_ENABLE_CALLBACK_USERDATA 0
+#endif
+
+#if MG_ENABLE_CALLBACK_USERDATA
+#define MG_UD_ARG(ud) , ud
+#define MG_CB(cb, ud) cb, ud
+#else
+#define MG_UD_ARG(ud)
+#define MG_CB(cb, ud) cb
+#endif
+
+#endif /* CS_MONGOOSE_SRC_FEATURES_H_ */

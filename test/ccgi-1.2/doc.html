@@ -1,0 +1,921 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta name="generator" content=
+  "HTML Tidy for Linux/x86 (vers 14 June 2007), see www.w3.org" />
+
+  <title>C CGI Library 1.2</title>
+  <style type="text/css">
+/*<![CDATA[*/
+  pre {
+    font-family:courier;
+    background-color:#FFFFCC;
+  }
+  dd, li {
+    margin-top: 0.5em;
+  }
+  dt {
+    margin-top: 1em;
+  }
+  /*]]>*/
+  </style>
+</head>
+
+<body style="width:100ex;margin-left:3em">
+  <h1 style="text-align:center">C CGI Library 1.2</h1>
+
+  <h2>Contents</h2>
+
+  <ul>
+    <li><a href="#intro">Introduction</a></li>
+
+    <li><a href="#types">C CGI Library Data Types</a></li>
+
+    <li><a href="#func">C CGI Library Functions</a></li>
+
+    <li><a href="#using">Using the C CGI Library</a></li>
+
+    <li><a href="#upload">Uploading Files</a></li>
+
+    <li><a href="#crypto">Simple Cryptography Support</a></li>
+
+    <li><a href="#prefork">Pre Forking SCGI Server</a></li>
+  </ul>
+
+  <h2><a name="intro" id="intro"></a>Introduction</h2>
+
+  <p><i>C CGI</i> is a C language library for decoding, storing,
+  and retrieving CGI data passed by the web server via the CGI
+  interface. The library also has several handy data conversion
+  functions.</p>
+
+  <p>Author: Stephen C. Losen, University of Virginia</p>
+
+  <h3>C CGI Library Features</h3>
+
+  <ul>
+    <li>Decodes and stores CGI variables in <a href=
+    "#query">application/x-www-form-urlencoded</a> format, which
+    may come from the <i>QUERY_STRING</i> environment variable or
+    from standard input.</li>
+
+    <li>Decodes and stores CGI variables in
+    <i>multipart/form-data</i> format from standard input.</li>
+
+    <li>Handles <a href="#upload">file uploads</a>.</li>
+
+    <li>Parses and stores HTTP <i>cookies</i> from the
+    <i>HTTP_COOKIE</i> environment variable.</li>
+
+    <li>Stores CGI data in lookup tables, which can be accessed
+    directly by variable name, or accessed iteratively.</li>
+
+    <li>Allows strings to be stored in lookup tables.</li>
+
+    <li>Encodes/decodes strings in <a href=
+    "#query">application/x-www-form-urlencoded</a> format.</li>
+
+    <li>Encodes/decodes data in base64 format.</li>
+
+    <li>Encodes/decodes data in hexadecimal format.</li>
+
+    <li>Encodes text strings using HTML entity encodings such as
+    <b>&amp;lt;</b> and <b>&amp;amp;</b>.</li>
+
+    <li>Provides <i>openssl</i> <a href="#crypto">cryptography</a>
+    to encrypt/decrypt and verify data.</li>
+
+    <li>Provides a <a href="#prefork">pre forking SCGI
+    server</a>.</li>
+  </ul>
+
+  <h3><a name="query" id="query"></a>Query Strings and URL
+  Encoding</h3>
+
+  <p>A <i>query string</i> is a list of CGI variable names and
+  values in <i>application/x-www-form-urlencoded</i> format, which
+  looks like this:
+  <b>name1=value1&amp;name2=value2&amp;name3=value3</b>&nbsp;...
+  Each name and value is <i>URL encoded</i> as follows. Letters and
+  digits are not changed. Each <i>space</i> is converted to
+  <b>+</b>. Most other characters become <b>%xx</b> (percent
+  followed by two hexadecimal digits) where <i>xx</i> is the
+  numeric code of the character. For example, <b>Help&nbsp;Me!</b>
+  is URL encoded as <b>Help+Me%21</b>. Note that in a query string
+  the <b>=</b> and <b>&amp;</b> characters <b>between</b> names and
+  values are <b>not</b> URL encoded. However, if a name or value
+  itself contains a <b>=</b> or <b>&amp;</b>, then it is URL
+  encoded using <b>%xx</b>.</p>
+
+  <p>When decoding query strings, the C CGI Library is tolerant of
+  lax <b>%xx</b> encoding. It accepts most literal punctuation
+  characters except for <b>+</b> and <b>&amp;</b>, which must be
+  encoded. It accepts literal <b>=</b> in variable values and it
+  accepts literal <b>%</b> when not followed by two hexadecimal
+  digits. For example, <b>var=20%=1/5</b> is treated like
+  <b>var=20%25%3D1%2F5</b> and sets the value of <i>var</i> to
+  <b>20%=1/5</b>. A string that is not followed by <b>=</b> is a
+  variable name whose value is <b>""</b>, a zero length string. For
+  example, <b>str1&amp;str2&amp;</b>&nbsp;... is the same as
+  <b>str1=&amp;str2=&amp;</b>&nbsp;..., where <i>str1</i> and
+  <i>str2</i> are variable names whose value is <b>""</b>.</p>
+
+  <h3>CGI Data Representation and Conversion</h3>
+
+  <p>For simplicity and ease of use, most C CGI Library functions
+  accept and/or return null terminated strings. You can easily
+  convert a string to a numeric data type with the standard C
+  library functions <i>atoi()</i>, <i>atof()</i>, <i>strtol()</i>,
+  <i>strtod()</i>, etc. And you can convert a numeric data type to
+  a string with <i>sprintf()</i>.</p>
+
+  <p>Unfortunately, null terminated strings are not suitable for
+  storing raw binary data, because a null byte in the data is
+  mistaken for the string terminator. URL encoded strings
+  containing <b>%00</b> do not decode correctly because <b>%00</b>
+  results in a null byte. You can still manipulate binary data if
+  you encode it beforehand, and the C CGI library has functions for
+  encoding/decoding <a href="#CGI_encode_base64">base64</a> and
+  <a href="#CGI_encode_hex">hexadecimal</a>.</p>
+
+  <h2><a name="types" id="types"></a>C CGI Library Data Types</h2>
+
+  <p>In your C source you include the <i>ccgi.h</i> header file,
+  which declares these data types.</p>
+
+  <dl>
+    <dt>CGI_varlist</dt>
+
+    <dd>is a list (lookup table) of CGI variables and/or cookies.
+    Each list entry is a name and one or more values, where names
+    and values are all null terminated strings. A name may have
+    multiple values because 1) some HTML form elements, such as
+    <i>checkboxes</i> and <i>selections</i> allow the user to
+    choose multiple values and 2) the same name can be given to
+    multiple form input elements. A CGI_varlist lists variable
+    names and values in the same order that they are stored. In
+    practice this ends up being the order of the input tags in the
+    HTML form, but there is no requirement that browsers must
+    preserve this ordering.</dd>
+
+    <dt>CGI_value</dt>
+
+    <dd>is a read only pointer to a read only null terminated
+    string (<i>const char * const</i>). The <a href=
+    "#CGI_lookup_all">CGI_lookup_all()</a> function returns a null
+    terminated array of these pointers.</dd>
+  </dl>
+
+  <h2><a name="func" id="func"></a>C CGI Library Functions</h2>
+
+  <p>The C CGI library provides these functions.</p>
+
+  <ul>
+    <li><a href="#CGI_get_query">CGI_get_query()</a> decodes CGI
+    variables from the <i>QUERY_STRING</i> environment variable and
+    adds them to a CGI_varlist.</li>
+
+    <li><a href="#CGI_get_post">CGI_get_post()</a> decodes CGI
+    variables from standard input and adds them to a
+    CGI_varlist.</li>
+
+    <li><a href="#CGI_get_cookie">CGI_get_cookie()</a> parses
+    cookies from the <i>HTTP_COOKIE</i> environment variable and
+    adds them to a CGI_varlist.</li>
+
+    <li><a href="#CGI_get_all">CGI_get_all()</a> decodes all CGI
+    variables and cookies and returns them in a CGI_varlist.</li>
+
+    <li><a href="#CGI_decode_query">CGI_decode_query()</a> decodes
+    CGI variables in a null terminated <a href="#query">query
+    string</a> and adds them to a CGI_varlist.</li>
+
+    <li><a href="#CGI_add_var">CGI_add_var()</a> adds a variable
+    name and value to a CGI_varlist.</li>
+
+    <li><a href="#CGI_lookup_all">CGI_lookup_all()</a> looks up a
+    name in a CGI_varlist and returns all of its values in an
+    array.</li>
+
+    <li><a href="#CGI_lookup">CGI_lookup()</a> looks up a name in a
+    CGI_varlist and returns its first (or only) value.</li>
+
+    <li><a href="#CGI_first_name">CGI_first_name()</a> returns the
+    first name in a CGI_varlist.</li>
+
+    <li><a href="#CGI_next_name">CGI_next_name()</a> returns the
+    next name in a CGI_varlist.</li>
+
+    <li><a href="#CGI_free_varlist">CGI_free_varlist()</a> frees
+    memory used by a CGI_varlist.</li>
+
+    <li><a href="#CGI_encode_query">CGI_encode_query()</a> URL
+    encodes a list of strings into a <a href="#query">query
+    string</a>.</li>
+
+    <li><a href="#CGI_encode_varlist">CGI_encode_varlist()</a> URL
+    encodes a CGI_varlist into a <a href="#query">query
+    string</a>.</li>
+
+    <li><a href="#CGI_encrypt">CGI_encrypt()</a> encrypts data
+    bytes into a secure string.</li>
+
+    <li><a href="#CGI_decrypt">CGI_decrypt()</a> decrypts a secure
+    string and verifies the contents.</li>
+
+    <li><a href="#CGI_decode_url">CGI_decode_url()</a> decodes a
+    URL encoded string.</li>
+
+    <li><a href="#CGI_encode_url">CGI_encode_url()</a> URL encodes
+    a string.</li>
+
+    <li><a href="#CGI_encode_entity">CGI_encode_entity()</a> HTML
+    entity encodes a string.</li>
+
+    <li><a href="#CGI_encode_base64">CGI_encode_base64()</a> base64
+    encodes data bytes.</li>
+
+    <li><a href="#CGI_decode_base64">CGI_decode_base64()</a>
+    decodes a base64 encoded string.</li>
+
+    <li><a href="#CGI_encode_hex">CGI_encode_hex()</a> hexadecimal
+    encodes data bytes.</li>
+
+    <li><a href="#CGI_decode_hex">CGI_decode_hex()</a> decodes a
+    hexadecimal encoded string.</li>
+
+    <li><a href="#CGI_prefork_server">CGI_prefork_server()</a>
+    implements a pre forking SCGI server.</li>
+  </ul>
+
+  <p>Except for <i>CGI_prefork_server()</i>, the C CGI library
+  functions are reentrant because they do not modify any global
+  variables or use any static local variables, so you can use these
+  functions with threads.</p>
+
+  <p>Some functions accept null terminated string parameters of
+  type <i>const&nbsp;char&nbsp;*</i>. These functions make copies
+  of strings as necessary so that after the function returns you
+  can safely do anything you want with any string that you have
+  passed as a parameter. Some functions return null terminated
+  strings of type <i>const&nbsp;char&nbsp;*</i> and you should not
+  modify these strings.</p>
+
+  <dl>
+    <dt><a name="CGI_get_query" id="CGI_get_query"></a> CGI_varlist
+    *CGI_get_query (CGI_varlist *varlist);</dt>
+
+    <dd><i>CGI_get_query()</i> decodes CGI variables in the
+    <i>QUERY_STRING</i> environment variable and adds them to
+    variable list <i>varlist</i>. <i>QUERY_STRING</i> is presumed
+    to be in <a href="#query">application/x-www-form-urlencoded</a>
+    format. If <i>varlist</i> is null then a new variable list is
+    created and returned, otherwise <i>varlist</i> is returned.
+    Null is returned if <i>varlist</i> is null and
+    <i>QUERY_STRING</i> does not exist or contains no CGI
+    variables.</dd>
+
+    <dt><a name="CGI_get_post" id="CGI_get_post"></a> CGI_varlist
+    *CGI_get_post(CGI_varlist *varlist, const char *template);</dt>
+
+    <dd><i>CGI_get_post()</i> reads and decodes CGI variables from
+    standard input and adds them to variable list <i>varlist</i>.
+    If <i>varlist</i> is null then a new variable list is created
+    and returned, otherwise <i>varlist</i> is returned. Null is
+    returned if <i>varlist</i> is null and standard input is empty
+    or contains no CGI variables. The <i>template</i> parameter
+    (which may be null) is a file name template string that is
+    passed to the standard C library function <i>mkstemp()</i> when
+    uploading a file. (See the <a href="#upload">file upload</a>
+    section for more information.) <i>CGI_get_post()</i> checks the
+    <i>CONTENT_TYPE</i> environment variable to get the data
+    encoding, which is either <a href=
+    "#query">application/x-www-form-urlencoded</a> or
+    <i>multipart/form-data</i>.</dd>
+
+    <dt><a name="CGI_get_cookie" id="CGI_get_cookie"></a>
+    CGI_varlist *CGI_get_cookie(CGI_varlist *varlist);</dt>
+
+    <dd><i>CGI_get_cookie()</i> parses HTTP cookies from the
+    <i>HTTP_COOKIE</i> environment variable and adds them to
+    variable list <i>varlist</i>. If <i>varlist</i> is null then a
+    new variable list is created and returned, otherwise
+    <i>varlist</i> is returned. Returns null if <i>varlist</i> is
+    null and <i>HTTP_COOKIE</i> does not exist or contains no
+    cookies.</dd>
+
+    <dt><a name="CGI_get_all" id="CGI_get_all"></a> CGI_varlist
+    *CGI_get_all(const char *template);</dt>
+
+    <dd><i>CGI_get_all()</i> calls <a href=
+    "#CGI_get_cookie">CGI_get_cookie()</a>, <a href=
+    "#CGI_get_query">CGI_get_query()</a> and <a href=
+    "#CGI_get_post">CGI_get_post()</a>, returning all of the CGI
+    variables and cookies in one variable list. The <i>template</i>
+    parameter (which may be null) is passed on to
+    <i>CGI_get_post()</i>.</dd>
+
+    <dt><a name="CGI_decode_query" id="CGI_decode_query"></a>
+    CGI_varlist *CGI_decode_query(CGI_varlist *varlist, const char
+    *query);</dt>
+
+    <dd><i>CGI_decode_query()</i> decodes CGI variables in null
+    terminated <a href="#query">query string</a> <i>query</i>
+    (which is in <i>application/x-www-urlencoded</i> format) and
+    adds the CGI variables to <i>varlist</i>. If <i>varlist</i> is
+    null then a new variable list is created and returned,
+    otherwise <i>varlist</i> is returned. Returns null if
+    <i>varlist</i> is null and <i>query</i> is null or has no CGI
+    variables.</dd>
+
+    <dt><a name="CGI_add_var" id="CGI_add_var"></a> CGI_varlist
+    *CGI_add_var(CGI_varlist *varlist, const char *name, const char
+    *value);</dt>
+
+    <dd><i>CGI_add_var()</i> adds an entry named <i>name</i> with
+    value <i>value</i> to variable list <i>varlist</i>. If
+    <i>varlist</i> is null, then a new variable list is created and
+    returned, otherwise <i>varlist</i> is returned. If the variable
+    list already has an entry named <i>name</i>, then the value is
+    added to that entry. This function is provided so that you can
+    add data to a variable list by hand, or create a variable list
+    for other purposes.</dd>
+
+    <dt><a name="CGI_lookup_all" id="CGI_lookup_all"></a> CGI_value
+    *CGI_lookup_all(CGI_varlist *varlist, const char *name);</dt>
+
+    <dd><i>CGI_lookup_all()</i> searches <i>varlist</i> for an
+    entry whose name matches <i>name</i> case sensitively and
+    returns all the values of the entry, or returns null if no
+    entry is found. If <i>name</i> is null, then the values of the
+    entry most recently visited by <a href=
+    "#CGI_first_name">CGI_first_name()</a> or <a href=
+    "#CGI_next_name">CGI_next_name()</a> are returned. The return
+    value is a null terminated array of pointers to null terminated
+    strings. The array and strings are stored in memory allocated
+    to <i>varlist</i>, which you should not modify. The return type
+    <i>CGI_value&nbsp;*</i>
+    (<i>const&nbsp;char&nbsp;*&nbsp;const&nbsp;*</i>) declares the
+    array and strings to be read only to discourage
+    modification.</dd>
+
+    <dt><a name="CGI_lookup" id="CGI_lookup"></a> const char
+    *CGI_lookup(CGI_varlist *varlist, const char *name);</dt>
+
+    <dd><i>CGI_lookup()</i> searches <i>varlist</i> for an entry
+    whose name matches <i>name</i> case sensitively and returns the
+    first (or only) value of the entry, or returns null if no entry
+    is found. If <i>name</i> is null, then the first value of the
+    entry most recently visited by <a href=
+    "#CGI_first_name">CGI_first_name()</a> or <a href=
+    "#CGI_next_name">CGI_next_name()</a> is returned. If you expect
+    an entry to have a single value, then this function is easier
+    to use than <i>CGI_lookup_all()</i> and it is more efficient
+    because it doesn't construct an array to return multiple
+    values. You should not modify the string returned by this
+    function.</dd>
+
+    <dt><a name="CGI_first_name" id="CGI_first_name"></a> const
+    char *CGI_first_name(CGI_varlist *varlist);</dt>
+
+    <dd><i>CGI_first_name()</i> begins an iteration of
+    <i>varlist</i> and returns the name of the first entry, or
+    returns null if <i>varlist</i> is null. You can get all the
+    values of this entry with
+    <i>CGI_lookup_all(varlist,&nbsp;0);</i> You should not modify
+    the string returned by this function.</dd>
+
+    <dt><a name="CGI_next_name" id="CGI_next_name"></a> const char
+    *CGI_next_name(CGI_varlist *varlist);</dt>
+
+    <dd><i>CGI_next_name()</i> continues an iteration of
+    <i>varlist</i> and returns the name of the next entry. You can
+    get all the values of this entry with
+    <i>CGI_lookup_all(varlist,&nbsp;0);</i> Returns null if 1)
+    there are no more entries, or 2) <i>varlist</i> is null, or 3)
+    no iteration was started with <i>CGI_first_name()</i>, or 4)
+    new data was added to <i>varlist</i> during the iteration. You
+    should not modify the string returned by this function.</dd>
+
+    <dt><a name="CGI_free_varlist" id="CGI_free_varlist"></a> void
+    CGI_free_varlist(CGI_varlist *varlist);</dt>
+
+    <dd><i>CGI_free_varlist()</i> frees all memory used by variable
+    list <i>varlist</i>.</dd>
+
+    <dt><a name="CGI_encode_query" id="CGI_encode_query"></a> char
+    *CGI_encode_query(const char *keep, const char *name1, const
+    char *value1, ..., (char *)0);</dt>
+
+    <dd><i>CGI_encode_query()</i> returns a query string in
+    <a href="#query">application/x-www-form-urlencoded</a> format
+    that is built from a null terminated list of null terminated
+    string arguments. The first argument <i>keep</i> (which may be
+    null) is a null terminated string that specifies characters
+    that you do not want to <a href="#query">URL encode</a> with
+    <b>%xx</b>. You do not need to specify letters or digits
+    because they are never encoded. The first two arguments after
+    <i>keep</i> are a name and value pair, the next two are a
+    second name and value pair, etc. <b>Be sure to terminate the
+    argument list with (char *)0</b>. (When passing a variable
+    length argument list, the C compiler does not automatically
+    cast <b>0</b> to <b>(char *)0</b>, which is necessary
+    on 64 bit platforms.)  In the result the names
+    and values are URL encoded and separated with literal
+    <b>&amp;</b> and <b>=</b> characters like this:
+    <b>name1=value1&amp;name2=value2</b>&nbsp;... Memory is
+    allocated with <i>malloc()</i> to hold the result, which you
+    should free with <i>free()</i>.</dd>
+
+    <dt><a name="CGI_encode_varlist" id="CGI_encode_varlist"></a>
+    char *CGI_encode_varlist(CGI_varlist *varlist, const char
+    *keep);</dt>
+
+    <dd><i>CGI_encode_varlist()</i> returns a query string in
+    <a href="#query">application/x-www-form-urlencoded</a> format
+    that is built from CGI_varlist <i>varlist</i>. The argument
+    <i>keep</i> (which may be null) is a null terminated string
+    that specifies characters that you do not want to <a href=
+    "#query">URL encode</a> with <b>%xx</b>. You do not need to
+    specify letters or digits because they are never encoded. The
+    names and values in <i>varlist</i> are URL encoded and
+    separated with literal <b>&amp;</b> and <b>=</b> characters
+    like this: <b>name1=value1&amp;name2=value2</b>&nbsp;... Memory
+    is allocated with <i>malloc()</i> to hold the result, which you
+    should free with <i>free()</i>. You can use <a href=
+    "#CGI_add_var">CGI_add_var()</a> to build <i>varlist</i>.</dd>
+
+    <dt><a name="CGI_encrypt" id="CGI_encrypt"></a> char
+    *CGI_encrypt(const void *p, int len, const char
+    *password);</dt>
+
+    <dd><i>CGI_encrypt()</i> encrypts input <i>p</i> of length
+    <i>len</i> bytes using <i>password</i> to generate the cipher
+    key. Also computes a <i>message digest</i> using the input
+    data. Returns the encrypted digest and encrypted data in a
+    base64 encoded string, which must be decrypted with <a href=
+    "#CGI_decrypt">CGI_decrypt()</a> and the same password. Returns
+    null if <i>p</i> is null or if <i>len</i> is less than one or
+    if <i>password</i> is null or zero length. Memory is allocated
+    with <i>malloc()</i> to hold the result, which you should free
+    with <i>free()</i>. (See the <a href="#crypto">cryptography</a>
+    section for more information.)</dd>
+
+    <dt><a name="CGI_decrypt" id="CGI_decrypt"></a> void
+    *CGI_decrypt(const char *p, int *len, const char
+    *password);</dt>
+
+    <dd><i>CGI_decrypt()</i> decrypts input <i>p</i>, which was
+    encrypted with <a href="#CGI_encrypt">CGI_encrypt()</a>, using
+    <i>password</i> to generate the cipher key. The output is a
+    <i>message digest</i> and decrypted data bytes. Verifies the
+    data using the message digest and returns the data. Returns the
+    length of the data in <i>*len</i>. Returns null if <i>p</i>
+    cannot be decrypted and verified. Also returns null if <i>p</i>
+    or <i>password</i> is null or zero length. Memory is allocated
+    with <i>malloc()</i> to hold the result, which you should free
+    with <i>free()</i>. (See the <a href="#crypto">cryptography</a>
+    section for more information.)</dd>
+
+    <dt><a name="CGI_decode_url" id="CGI_decode_url"></a> char
+    *CGI_decode_url(const char *p);</dt>
+
+    <dd><i>CGI_decode_url()</i> returns a <a href="#query">URL
+    decoded</a> copy of input string <i>p</i>. Memory is allocated
+    with <i>malloc()</i> to hold the result, which you should free
+    with <i>free()</i>.</dd>
+
+    <dt><a name="CGI_encode_url" id="CGI_encode_url"></a> char
+    *CGI_encode_url(const char *p, const char *keep);</dt>
+
+    <dd><i>CGI_encode_url()</i> returns a <a href="#query">URL
+    encoded</a> copy of input string <i>p</i>. Memory is allocated
+    with <i>malloc()</i> to hold the result, which you should free
+    with <i>free()</i>. The <i>keep</i> argument (which may be
+    null) is a null terminated string that specifies characters
+    that you do not want to URL encode with <b>%xx</b>. You do not
+    need to specify letters or digits because they are never
+    encoded.</dd>
+
+    <dt><a name="CGI_encode_entity" id="CGI_encode_entity"></a>
+    char *CGI_encode_entity(const char *p);</dt>
+
+    <dd><i>CGI_encode_entity()</i> returns a HTTP entity encoded
+    copy of input string <i>p</i>. Memory is allocated with
+    <i>malloc()</i> to hold the result, which you should free with
+    <i>free()</i>. <i>CGI_encode_entity()</i> makes the following
+    conversions: <b>&lt;</b> becomes <b>&amp;lt;</b>, <b>&gt;</b>
+    becomes <b>&amp;gt;</b>, <b>&amp;</b> becomes <b>&amp;amp;</b>,
+    <b>"</b> becomes <b>&amp;quot;</b>, <b>'</b> becomes
+    <b>&amp;#39;</b>, <i>newline</i> becomes <b>&amp;#10;</b>, and
+    <i>return</i> becomes <b>&amp;#13;</b>.</dd>
+
+    <dt><a name="CGI_encode_base64" id="CGI_encode_base64"></a>
+    char *CGI_encode_base64(const void *p, int len);</dt>
+
+    <dd><i>CGI_encode_base64()</i> encodes input <i>p</i> of length
+    <i>len</i> bytes, and returns the result, which is a null
+    terminated base64 encoded string. Memory is allocated for the
+    result with <i>malloc()</i>, which you should free with
+    <i>free()</i>. Base64 is a commonly used encoding that
+    represents arbitrary bytes of data using the following
+    printable characters: upper case, lower case, digits, <b>+</b>,
+    <b>/</b>, and <b>=</b>.</dd>
+
+    <dt><a name="CGI_decode_base64" id="CGI_decode_base64"></a>
+    void *CGI_decode_base64(const char *p, int *len);</dt>
+
+    <dd><i>CGI_decode_base64()</i> decodes <i>p</i>, which is a
+    null terminated base64 encoded string, and returns the result.
+    The length of the result is stored in <i>*len</i> and a null
+    byte is written just after the last byte of the result. Memory
+    is allocated with <i>malloc()</i> to hold the result, which you
+    should free with <i>free()</i>.</dd>
+
+    <dt><a name="CGI_encode_hex" id="CGI_encode_hex"></a> char
+    *CGI_encode_hex(const void *p, int len);</dt>
+
+    <dd><i>CGI_encode_hex()</i> encodes input <i>p</i>, of length
+    <i>len</i> bytes, and returns the result, which is a null
+    terminated hexadecimal encoded string. Memory is allocated for
+    the result with <i>malloc()</i>, which you should free with
+    <i>free()</i>. Hexadecimal is a commonly used encoding that
+    represents arbitrary bytes of data using two hexadecimal digits
+    for each byte.</dd>
+
+    <dt><a name="CGI_decode_hex" id="CGI_decode_hex"></a> void
+    *CGI_decode_hex(const char *p, int *len);</dt>
+
+    <dd><i>CGI_decode_hex()</i> decodes <i>p</i>, which is a null
+    terminated hexadecimal encoded string, and returns the result.
+    The length of the result is stored in <i>*len</i> and a null
+    byte is written just after the last byte of the result. Memory
+    is allocated with <i>malloc()</i> to hold the result, which you
+    should free with <i>free()</i>. Returns null if <i>p</i> is
+    null, or if the length of <i>p</i> is odd, or if <i>p</i>
+    contains characters other than hexadecimal digits.</dd>
+
+    <dt><a name="CGI_prefork_server" id="CGI_prefork_server"></a>
+    void CGI_prefork_server(const char *host, int port, const char
+    *pidfile, int maxproc, int minidle, int maxidle, int maxreq,
+    void (*callback)(void));</dt>
+
+    <dd><i>CGI_prefork_server()</i> implements a <a href=
+    "http://www.mems-exchange.org/software/scgi/">SCGI</a> (Simple
+    CGI) pre forking server. The <i>host</i> specifies a local
+    network address, either by hostname or dotted decimal IP
+    address, and <i>port</i> specifies a TCP port number. The SCGI
+    server listens for requests on the specified address and port.
+    If <i>host</i> is null, then the server listens on all local
+    addresses. The <i>pidfile</i> (which may be null) is an
+    optional file name where the server writes its process ID. The
+    SCGI server forks up to <i>maxproc</i> child processes to
+    handle requests. It forks and destroys processes to maintain
+    between <i>minidle</i> and <i>maxidle</i> idle processes. Each
+    process exits after handling <i>maxreq</i> requests. If
+    <i>maxreq</i> is less than one, then it is unlimited. You
+    provide the <i>callback</i> function, which the SCGI server
+    calls to process each web request. <i>CGI_prefork_server()</i>
+    does not return unless it fails. (See the <a href=
+    "#prefork">SCGI server</a> section for more information.)</dd>
+  </dl>
+
+  <h2><a name="using" id="using"></a>Using the C CGI Library</h2>
+
+  <p>Here is an example program that outputs all of its CGI data.
+  In your C source, include <i>ccgi.h</i> and link your program
+  with <i>libccgi.a</i>. (If you use <i>CGI_encrypt()</i> or
+  <i>CGI_decrypt()</i> then you must also link with the
+  <i>openssl</i> library <i>libcrypto</i>.) The simplest way to
+  obtain your CGI data is with <i>CGI_get_all()</i>. If you are not
+  uploading any files, then just pass it a null argument.</p>
+  <pre>
+#include &lt;stdio.h&gt;
+#include &lt;ccgi.h&gt;
+
+int main(int argc, char **argv) {
+    CGI_varlist *varlist;
+    const char *name;
+    CGI_value  *value;
+    int i;
+
+    fputs("Content-type: text/plain\r\n\r\n", stdout);
+    if ((varlist = CGI_get_all(0)) == 0) {
+        printf("No CGI data received\r\n");
+        return 0;
+    }
+
+    /* output all values of all variables and cookies */
+
+    for (name = CGI_first_name(varlist); name != 0;
+        name = CGI_next_name(varlist))
+    {
+        value = CGI_lookup_all(varlist, 0);
+
+        /* CGI_lookup_all(varlist, name) could also be used */
+
+        for (i = 0; value[i] != 0; i++) {
+            printf("%s [%d] = %s\r\n", name, i, value[i]);
+        }
+    }
+    CGI_free_varlist(varlist);  /* free variable list */
+    return 0;
+}
+</pre>
+
+  <h2><a name="upload" id="upload"></a>File Uploads</h2>
+
+  <p>To upload files to your CGI program, your HTML form must use
+  the <i>post</i> method and must specify
+  <i>multipart/form-data</i> encoding, so the form tag looks like
+  this:</p>
+  <pre>
+&lt;form method="POST" enctype="multipart/form-data"
+    action="url-for-your-CGI"&gt;
+</pre>
+
+  <p>Within the HTML form a file upload tag looks like this:</p>
+  <pre>
+&lt;input type="file" name="uploadfield" /&gt;
+</pre>
+
+  <p>Most browsers render this tag with a file browse button and a
+  text field to enter and/or display the name of the file being
+  uploaded.</p>
+
+  <p>When the user submits the form, the browser sends the file
+  data together with any CGI form variables using
+  <i>multipart/form-data</i> encoding. To receive uploaded file
+  data you must call <a href="#CGI_get_post">CGI_get_post()</a> or
+  <a href="#CGI_get_all">CGI_get_all()</a>, and pass a file name
+  template string, a copy of which is passed on to standard C
+  function <i>mkstemp()</i>. The final six characters of the
+  template string must be <b>XXXXXX</b> and <i>mkstemp()</i>
+  replaces these with random characters to create a new file with a
+  unique name. If you pass a null or invalid template string, then
+  uploaded file data is silently discarded.</p>
+
+  <p><i>CGI_get_post()</i> or <i>CGI_get_all()</i> stores two names
+  for the uploaded file in the variable list, which you can
+  retrieve with</p>
+  <pre>
+value = CGI_lookup_all(varlist, "uploadfield");
+</pre>
+
+  <p>This returns an array of two strings (provided no other form
+  input tags are named <i>uploadfield</i>). In <i>value[0]</i> is
+  the name of the uploaded file on the web server, which is derived
+  from the template string. In <i>value[1]</i> is the name of the
+  file specified by the user in the browser. If the user has not
+  uploaded a file, then <i>varlist</i> has no entry named
+  <i>uploadfield</i> and <i>CGI_lookup_all()</i> returns null.</p>
+
+  <p>We use <i>mkstemp()</i> to guarantee unique file names because
+  a form may have multiple file upload fields, resulting in
+  multiple files. Furthermore, multiple users can upload files to
+  multiple instances of the CGI at the same time. Here is an
+  example CGI program that uploads a file.</p>
+  <pre>
+#include &lt;ccgi.h&gt;
+#include &lt;stdio.h&gt;
+
+int main(int argc, char **argv) {
+    CGI_varlist *varlist;
+    CGI_value *value;
+
+    fputs("Content-type: text/plain\r\n\r\n", stdout);
+    varlist = CGI_get_all("/tmp/cgi-upload-XXXXXX");
+    value = CGI_lookup_all(varlist, "uploadfield");
+    if (value == 0 || value[1] == 0) {
+        fputs("No file was uploaded\r\n", stdout);
+    }
+    else {
+        printf("Your file \"%s\" was uploaded to my file \"%s\"\r\n",
+            value[1], value[0]);
+
+        /* Do something with the file here */
+
+        unlink(value[0]);
+    }
+    CGI_free_varlist(varlist);
+    return 0;
+}
+</pre>
+
+  <h2><a name="crypto" id="crypto"></a>Simple Cryptography
+  Support</h2>
+
+  <p>HTML and HTTP provide no native support for protecting and
+  verifying CGI data. Many web applications pass state data to the
+  browser in cookies or form variables. When the browser passes
+  this data back, the web application cannot tell if it has been
+  tampered with. An attacker can easily handcraft a web request
+  that includes forged cookies or forged form data.</p>
+
+  <p>The C CGI Library addresses this problem with <a href=
+  "#CGI_encrypt">CGI_encrypt()</a> and <a href=
+  "#CGI_decrypt">CGI_decrypt()</a>. <i>CGI_encrypt()</i> computes a
+  <i>SHA1 message digest</i> from the input data, encrypts the
+  digest and the input data, and returns the result in a base64
+  encoded string. (Raw encrypted output is binary.)
+  <i>CGI_decrypt()</i> reverses the process. It decrypts the digest
+  and the data, and recomputes the digest. If the two digests
+  match, then it returns the data. Otherwise it returns null to
+  indicate failure. <i>CGI_encrypt()</i> and <i>CGI_decrypt()</i>
+  use a password that you provide, which is a null terminated
+  string of arbitrary length (the longer the better). It is
+  essentially impossible to tamper with the data without knowing
+  the password. If the output of <i>CGI_encrypt()</i> is modified
+  in any way, then <i>CGI_decrypt()</i> computes a message digest
+  that does not match and returns null.</p>
+
+  <p>To protect state data, simply encrypt it with
+  <i>CGI_encrypt()</i> and a password before passing it to the
+  browser. When the browser passes the encrypted data back, decrypt
+  with <i>CGI_decrypt()</i> and the same password. If
+  <i>CGI_decrypt()</i> succeeds, then you know that the data has
+  not changed. Of course the security of the data depends on the
+  security of the password, which should be very difficult to guess
+  and very difficult to steal.</p>
+
+  <p><i>CGI_encrypt()</i> uses the <i>openssl</i> library
+  <i>libcrypto</i> and has these features:</p>
+
+  <ul>
+    <li>Uses the <i>AES-256-CBC</i> cipher.</li>
+
+    <li>Generates the cipher key by feeding the password and a
+    random <i>salt</i> to a hash function. One password results in
+    a huge number of different cipher keys.</li>
+
+    <li>Uses the <i>SHA1</i> message digest algorithm to verify the
+    input data. Feeds the salt, the password, and the input data to
+    <i>SHA1</i> to generate the message digest.</li>
+
+    <li>Encrypts the message digest and the input data. (Does not
+    encrypt the salt because decryption needs it.)</li>
+
+    <li>Returns a base64 encoded string consisting of the salt,
+    encrypted digest and encrypted input data.</li>
+  </ul>
+
+  <h2><a name="prefork" id="prefork"></a>Pre Forking SCGI
+  Server</h2>
+
+  <p>Usually when a web server receives a request for a CGI
+  resource, the web server executes a CGI program, which handles
+  the request and exits. This does not perform well under high
+  load. <a href=
+  "http://www.mems-exchange.org/software/scgi/">SCGI</a> (Simple
+  CGI) is a protocol for running a persistent CGI server. When a
+  web server receives a request for a SCGI resource, the web server
+  connects to a <i>SCGI Server</i> and forwards the request using
+  the SCGI protocol. The SCGI server responds to the web server,
+  which forwards the response back to the user's browser. This is
+  much more efficient than executing a CGI program for each
+  request. To configure the Apache httpd web server to use SCGI,
+  see the <a href=
+  "http://www.mems-exchange.org/software/scgi/">mod_scgi</a>
+  module.</p>
+
+  <p>Under high load a SCGI server must be able to handle multiple
+  requests concurrently. The SCGI server provided here <i>pre
+  forks</i> a specified number of child processes that all wait for
+  requests. The parent process monitors how many child processes
+  are busy and creates more if necessary. If too many processes are
+  idle, then the parent terminates some of them.</p>
+
+  <p>You provide the code that handles web requests in a
+  <i>callback</i> function, which is called once for each request.
+  The environment, standard input, and standard output are set up
+  so that your <i>callback</i> can be written very much like a
+  traditional CGI program. All the functions in the C CGI library
+  work as specified when using the SCGI server.</p>
+
+  <p>To start the SCGI server, call <a href=
+  "#CGI_prefork_server">CGI_prefork_server()</a> and pass it a
+  pointer to your <i>callback</i> function. The SCGI server puts
+  itself into the background, and forks child processes to handle
+  web requests. If <i>CGI_prefork_server()</i> returns, then it has
+  failed. The web server does not automatically start the SCGI
+  server program, so you must start it. You control which user
+  account runs the SCGI server and what privileges it has.</p>
+
+  <p>To terminate the SCGI server, send the <i>SIGTERM</i> signal
+  to the parent process and it sends the signal on to its child
+  processes and exits. The parent process writes its process ID in
+  a file if you pass the file name to <a href=
+  "#CGI_prefork_server">CGI_prefork_server()</a> in
+  <i>pidfile</i>.</p>
+
+  <p>The <i>callback</i> function operates very much like a
+  traditional CGI program, except that it gets called multiple
+  times. When writing your <i>callback</i> consider the
+  following.</p>
+
+  <ul>
+    <li>The <i>callback</i> function should not call <i>exit()</i>
+    (unless it encounters a serious error). You defeat the purpose
+    of a persistent process if you exit. The parent process
+    replaces exited children, so calling <i>exit()</i> does not
+    cause the SCGI server to fail.</li>
+
+    <li>Be careful to free memory that you have allocated and close
+    files that you have opened inside the <i>callback</i> function.
+    Otherwise the process will consume memory and/or file
+    descriptors with each call to <i>callback</i>, and eventually
+    fail. It may be too difficult to track down all memory leaks.
+    You can call <a href=
+    "#CGI_prefork_server">CGI_prefork_server()</a> with
+    <i>maxreq</i> greater than zero, which causes the child process
+    to exit after handling <i>maxreq</i> requests, which releases
+    all its resources.</li>
+
+    <li>You may need to handle initialization code differently.
+    Initializations made before you call
+    <i>CGI_prefork_server()</i> are inherited by all child
+    processes. If you open any files or sockets, then the
+    corresponding file descriptors are inherited and shared. You
+    may not get the behavior you want when multiple processes share
+    a file descriptor.</li>
+
+    <li>To initialize each child process individually, place
+    initialization code in <i>callback</i> inside an <i>if</i>
+    statement that executes the first time <i>callback</i> is
+    called. The <i>if</i> statement can test a <i>static</i>
+    variable and reset it to prevent executing the body of the
+    <i>if</i> statement again.</li>
+
+    <li>Each SCGI request includes a full set of environment
+    variables. The SCGI server replaces the entire environment with
+    these variables before each call to <i>callback</i>. If you
+    need anything from the original environment, then you should
+    save it before calling <i>CGI_prefork_server()</i>. If you need
+    to manipulate the environment, then the standard C function
+    <i>putenv()</i> allows you to add or modify environment
+    variables, and the global C variable
+    <i>extern&nbsp;char&nbsp;**environ;</i> is a pointer to the
+    current environment.</li>
+
+    <li>If you read standard input directly (rather than using
+    <i>CGI_get_all()</i> or <i>CGI_get_post()</i>) then use
+    <i>stdio</i> library functions. In particular you should not
+    use the <i>read()</i> system call because the SCGI server reads
+    environment data from standard input using <i>stdio</i> before
+    calling <i>callback</i>. Use <i>fread()</i> instead.</li>
+
+    <li>The SCGI server uses <i>syslog()</i> to log error messages.
+    If you do not want the default syslog parameters, then
+    initialize the logging system with <i>openlog()</i> before
+    calling <i>CGI_prefork_server()</i>. Use <i>syslog()</i> inside
+    <i>callback</i> to log any errors.</li>
+  </ul>
+
+  <p>Here is an example SCGI server.</p>
+  <pre>
+#include &lt;ccgi.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;syslog.h&gt;
+
+static void
+cgi_callback() {
+    static int first_call = 1;
+    CGI_varlist *varlist;
+
+    if (first_call) {
+        first_call = 0;
+
+        /* initializations for each child process go here */
+
+    }
+    varlist = CGI_get_all(0);
+
+    fputs("Content-type: text/html\r\n\r\n", stdout);
+
+    /* write the rest of the web response to stdout */
+
+    /* free memory and close open files */
+
+    CGI_free_varlist(varlist);
+}
+
+int
+main(int argc, char **argv) {
+
+    /* initializations before forking child processes go here */
+
+    openlog("my-scgi-server", 0, LOG_DAEMON);
+
+    CGI_prefork_server("localhost", 4000, "/var/run/my-scgi-server.pid",
+        /* maxproc */ 100,  /* minidle */ 8,  /* maxidle */ 16,
+        /* maxreq */ 1000, cgi_callback);
+
+    /* if CGI_prefork_server() returns, then it failed */
+
+    return 0;
+}
+</pre>
+</body>
+</html>

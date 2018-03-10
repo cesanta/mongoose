@@ -1,0 +1,9 @@
+dump.html is a sample web form that POSTs to dump.cgi.
+
+dump.cgi displays all the form data and uploads
+files to /tmp/cgi-upload-*
+
+To build dump.cgi: make
+
+Install dump.cgi and dump.html on a web server and
+browse dump.html.
