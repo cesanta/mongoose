@@ -2051,6 +2051,44 @@ static const char *test_http(void) {
   return NULL;
 }
 
+static void http_pipeline_handler(struct mg_connection *c, int ev,
+                                  void *ev_data) {
+  (void) ev_data;
+  int *status = (int *) c->mgr->user_data;
+  if (ev == MG_EV_HTTP_REQUEST) {
+    /* Server request handler */
+    mg_send_response_line(c, 200, "Content-Type: text/plain\r\n");
+    mg_printf(c, "Hello");
+    c->flags |= MG_F_SEND_AND_CLOSE;
+    *status = *status + 1;
+  } else if (ev == MG_EV_HTTP_REPLY) {
+    /* Client reply handler */
+    *status = *status + 10;
+    c->flags |= MG_F_CLOSE_IMMEDIATELY;
+  }
+}
+
+static const char *test_http_pipeline(void) {
+  struct mg_mgr mgr;
+  struct mg_connection *lc, *nc1, *nc2;
+  const char *local_addr = "127.0.0.1:7777";
+  int status = 0;
+
+  mg_mgr_init(&mgr, (void *) &status);
+  ASSERT(lc = mg_bind(&mgr, local_addr, http_pipeline_handler));
+  mg_set_protocol_http_websocket(lc);
+  ASSERT(nc1 = mg_connect(&mgr, local_addr, http_pipeline_handler));
+  mg_set_protocol_http_websocket(nc1);
+  mg_printf(nc1, "GET / HTTP/1.1\r\n\r\n");
+  ASSERT(nc2 = mg_connect(&mgr, local_addr, http_pipeline_handler));
+  mg_set_protocol_http_websocket(nc2);
+  mg_printf(nc2, "GET / HTTP/1.1\r\n\r\n");
+  poll_until(&mgr, 1, c_int_eq, &status, (void *) 22);
+  ASSERT_EQ(status, 22);
+  mg_mgr_free(&mgr);
+  return NULL;
+}
+
 static const char *test_http_send_redirect(void) {
   struct mg_connection nc;
   init_test_connection(&nc);
@@ -5461,6 +5499,7 @@ const char *tests_run(const char *filter) {
   RUN_TEST(test_http_serve_file);
   RUN_TEST(test_http_serve_file_streaming);
   RUN_TEST(test_http);
+  RUN_TEST(test_http_pipeline);
   RUN_TEST(test_http_send_redirect);
   RUN_TEST(test_http_digest_auth);
   RUN_TEST(test_http_errors);
