@@ -6159,6 +6159,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
     }
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
 
+  again:
     req_len = mg_parse_http(io->buf, io->len, hm, is_req);
 
     if (req_len > 0 &&
@@ -6252,7 +6253,10 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       /* Whole HTTP message is fully buffered, call event handler */
       mg_http_call_endpoint_handler(nc, trigger_ev, hm);
       mbuf_remove(io, hm->message.len);
-      pd->rcvd = 0;
+      pd->rcvd -= hm->message.len;
+      if (io->len > 0) {
+        goto again;
+      }
     }
   }
 }
