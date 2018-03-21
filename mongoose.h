@@ -1963,6 +1963,14 @@ extern "C" {
 #define MBUF_SIZE_MULTIPLIER 1.5
 #endif
 
+#ifndef MBUF_SIZE_MAX_HEADROOM
+#ifdef BUFSIZ
+#define MBUF_SIZE_MAX_HEADROOM BUFSIZ
+#else
+#define MBUF_SIZE_MAX_HEADROOM 1024
+#endif
+#endif
+
 /* Memory buffer descriptor */
 struct mbuf {
   char *buf;   /* Buffer pointer */

@@ -1470,10 +1470,21 @@ size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
     }
     a->len += len;
   } else {
-    size_t new_size = (size_t)((a->len + len) * MBUF_SIZE_MULTIPLIER);
-    if ((p = (char *) MBUF_REALLOC(a->buf, new_size)) != NULL) {
+    size_t min_size = (a->len + len);
+    size_t new_size = (size_t)(min_size * MBUF_SIZE_MULTIPLIER);
+    if (new_size - min_size > MBUF_SIZE_MAX_HEADROOM) {
+      new_size = min_size + MBUF_SIZE_MAX_HEADROOM;
+    }
+    p = (char *) MBUF_REALLOC(a->buf, new_size);
+    if (p == NULL && new_size != min_size) {
+      new_size = min_size;
+      p = (char *) MBUF_REALLOC(a->buf, new_size);
+    }
+    if (p != NULL) {
       a->buf = p;
-      memmove(a->buf + off + len, a->buf + off, a->len - off);
+      if (off != a->len) {
+        memmove(a->buf + off + len, a->buf + off, a->len - off);
+      }
       if (buf != NULL) memcpy(a->buf + off, buf, len);
       a->len += len;
       a->size = new_size;
