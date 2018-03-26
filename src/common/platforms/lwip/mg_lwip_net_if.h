@@ -30,9 +30,9 @@ struct mg_lwip_conn_state {
   /* Last SSL write size, for retries. */
   int last_ssl_write_size;
   /* Whether MG_SIG_RECV is already pending for this connection */
-  int recv_pending : 1;
+  int recv_pending;
   /* Whether the connection is about to close, just `rx_chain` needs to drain */
-  int draining_rx_chain : 1;
+  int draining_rx_chain;
 };
 
 enum mg_sig_type {

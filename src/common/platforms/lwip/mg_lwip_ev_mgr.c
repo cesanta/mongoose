@@ -50,15 +50,7 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
     if (nc->iface == NULL || nc->mgr == NULL) continue;
     switch (sig) {
       case MG_SIG_CONNECT_RESULT: {
-#if MG_ENABLE_SSL
-        if (cs->err == 0 && (nc->flags & MG_F_SSL) &&
-            !(nc->flags & MG_F_SSL_HANDSHAKE_DONE)) {
-          mg_lwip_ssl_do_hs(nc);
-        } else
-#endif
-        {
-          mg_if_connect_cb(nc, cs->err);
-        }
+        mg_if_connect_cb(nc, cs->err);
         break;
       }
       case MG_SIG_CLOSE_CONN: {
@@ -68,11 +60,8 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
       }
       case MG_SIG_RECV: {
         cs->recv_pending = 0;
-        if (nc->flags & MG_F_UDP) {
-          mg_lwip_handle_recv_udp(nc);
-        } else {
-          mg_lwip_handle_recv_tcp(nc);
-        }
+        mg_if_can_recv_cb(nc);
+        mbuf_trim(&nc->recv_mbuf);
         break;
       }
       case MG_SIG_TOMBSTONE: {
@@ -87,7 +76,8 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
 }
 
 void mg_lwip_if_init(struct mg_iface *iface) {
-  LOG(LL_INFO, ("%p Mongoose init", iface));
+  LOG(LL_INFO, ("Mongoose %s, LwIP %u.%u.%u", MG_VERSION, LWIP_VERSION_MAJOR,
+                LWIP_VERSION_MINOR, LWIP_VERSION_REVISION));
   iface->data = MG_CALLOC(1, sizeof(struct mg_ev_mgr_lwip_data));
 }
 
@@ -126,42 +116,7 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
     struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
     tmp = nc->next;
     n++;
-    if ((nc->flags & MG_F_CLOSE_IMMEDIATELY) ||
-        ((nc->flags & MG_F_SEND_AND_CLOSE) && (nc->flags & MG_F_UDP) &&
-         (nc->send_mbuf.len == 0))) {
-      mg_close_conn(nc);
-      continue;
-    }
-    mg_if_poll(nc, now);
-    mg_if_timer(nc, now);
-#if MG_ENABLE_SSL
-    if ((nc->flags & MG_F_SSL) && cs != NULL && cs->pcb.tcp != NULL &&
-        cs->pcb.tcp->state == ESTABLISHED) {
-      if (((nc->flags & MG_F_WANT_WRITE) ||
-           ((nc->send_mbuf.len > 0) &&
-            (nc->flags & MG_F_SSL_HANDSHAKE_DONE))) &&
-          cs->pcb.tcp->snd_buf > 0) {
-        /* Can write more. */
-        if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
-          if (!(nc->flags & MG_F_CONNECTING)) mg_lwip_ssl_send(nc);
-        } else {
-          mg_lwip_ssl_do_hs(nc);
-        }
-      }
-      if (cs->rx_chain != NULL || (nc->flags & MG_F_WANT_READ)) {
-        if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
-          if (!(nc->flags & MG_F_CONNECTING)) mg_lwip_ssl_recv(nc);
-        } else {
-          mg_lwip_ssl_do_hs(nc);
-        }
-      }
-    } else
-#endif /* MG_ENABLE_SSL */
-    {
-      if (nc->send_mbuf.len > 0 && !(nc->flags & MG_F_CONNECTING)) {
-        mg_lwip_send_more(nc);
-      }
-    }
+    if (!mg_if_poll(nc, now)) continue;
     if (nc->sock != INVALID_SOCKET &&
         !(nc->flags & (MG_F_UDP | MG_F_LISTENING)) && cs->pcb.tcp != NULL &&
         cs->pcb.tcp->unsent != NULL) {
@@ -175,14 +130,17 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
     }
 
     if (nc->sock != INVALID_SOCKET) {
-      /* Try to consume data from cs->rx_chain */
-      mg_lwip_consume_rx_chain_tcp(nc);
-
-      /*
-       * If the connection is about to close, and rx_chain is finally empty,
-       * send the MG_SIG_CLOSE_CONN signal
-       */
-      if (cs->draining_rx_chain && cs->rx_chain == NULL) {
+      if (mg_lwip_if_can_send(nc, cs)) {
+        mg_if_can_send_cb(nc);
+        mbuf_trim(&nc->send_mbuf);
+      }
+      if (cs->rx_chain != NULL) {
+        mg_if_can_recv_cb(nc);
+      } else if (cs->draining_rx_chain) {
+        /*
+         * If the connection is about to close, and rx_chain is finally empty,
+         * send the MG_SIG_CLOSE_CONN signal
+         */
         mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
       }
     }
@@ -210,21 +168,9 @@ uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
       }
       num_timers++;
     }
-    if (nc->send_mbuf.len > 0
-#if MG_ENABLE_SSL
-        || (nc->flags & MG_F_WANT_WRITE)
-#endif
-            ) {
-      int can_send = 0;
-      /* We have stuff to send, but can we? */
-      if (nc->flags & MG_F_UDP) {
-        /* UDP is always ready for sending. */
-        can_send = (cs->pcb.udp != NULL);
-      } else {
-        can_send = (cs->pcb.tcp != NULL && cs->pcb.tcp->snd_buf > 0);
-      }
-      /* We want and can send, request a poll immediately. */
-      if (can_send) return 0;
+    /* We want and can send data, request a poll immediately. */
+    if (nc->sock != INVALID_SOCKET && mg_lwip_if_can_send(nc, cs)) {
+      return 0;
     }
   }
   uint32_t timeout_ms = ~0;
