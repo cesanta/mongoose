@@ -1145,7 +1145,7 @@ static const char *test_timer(void) {
   ASSERT((c = mg_connect(&m, "awful.sad:1234", ev_timer_handler)) != NULL);
   c->user_data = &n;
   mg_set_timer(c, 1);
-  mg_mgr_poll(&m, 1);
+  poll_until(&m, 1, c_int_eq, &n, (void *) 101);
   ASSERT_EQ(n, 101);
 
   mg_mgr_free(&m);
@@ -2019,6 +2019,7 @@ static const char *test_http(void) {
   ASSERT((nc = mg_connect(&mgr, local_addr, cb7)) != NULL);
   mg_set_protocol_http_websocket(nc);
   nc->user_data = status;
+  mbuf_resize(&nc->recv_mbuf, 10000000);
 
   /* Wine and GDB set argv0 to full path: strip the dir component */
   if ((this_binary = strrchr(g_argv_0, '\\')) != NULL) {
@@ -5454,11 +5455,13 @@ static const char *test_socks(void) {
     this_binary = g_argv_0;
   }
   mg_printf(c, "GET /%s HTTP/1.0\n\n", this_binary);
+  mbuf_resize(&c->recv_mbuf, 10000000);
 
   /* Run event loop. Use more cycles to let file download complete. */
-  poll_until(&mgr, 5, c_str_ne, status, (void *) "");
-  mg_mgr_free(&mgr);
+  poll_until(&mgr, 10, c_str_ne, status, (void *) "");
   ASSERT_STREQ(status, "success");
+
+  mg_mgr_free(&mgr);
 
   return NULL;
 }

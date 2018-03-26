@@ -3245,10 +3245,12 @@ struct mg_iface_vtable {
   void (*connect_udp)(struct mg_connection *nc);
 
   /* Send functions for TCP and UDP. Sent data is copied before return. */
-  void (*tcp_send)(struct mg_connection *nc, const void *buf, size_t len);
-  void (*udp_send)(struct mg_connection *nc, const void *buf, size_t len);
+  int (*tcp_send)(struct mg_connection *nc, const void *buf, size_t len);
+  int (*udp_send)(struct mg_connection *nc, const void *buf, size_t len);
 
-  void (*recved)(struct mg_connection *nc, size_t len);
+  int (*tcp_recv)(struct mg_connection *nc, void *buf, size_t len);
+  int (*udp_recv)(struct mg_connection *nc, void *buf, size_t len,
+                  union socket_address *sa, size_t *sa_len);
 
   /* Perform interface-related connection initialization. Return 1 on ok. */
   int (*create_conn)(struct mg_connection *nc);
@@ -3289,19 +3291,15 @@ void mg_if_accept_tcp_cb(struct mg_connection *nc, union socket_address *sa,
 
 /* Callback invoked by connect methods. err = 0 -> ok, != 0 -> error. */
 void mg_if_connect_cb(struct mg_connection *nc, int err);
-/* Callback that reports that data has been put on the wire. */
-void mg_if_sent_cb(struct mg_connection *nc, int num_sent);
 /*
- * Receive callback.
- * if `own` is true, buf must be heap-allocated and ownership is transferred
- * to the core.
- * Core will acknowledge consumption by calling iface::recved.
+ * Callback that tells the core that data can be received.
+ * Core will use tcp/udp_recv to retrieve the data.
  */
-void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len, int own);
+void mg_if_can_recv_cb(struct mg_connection *nc);
+void mg_if_can_send_cb(struct mg_connection *nc);
 /*
  * Receive callback.
  * buf must be heap-allocated and ownership is transferred to the core.
- * Core will acknowledge consumption by calling iface::recved.
  */
 void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
                        union socket_address *sa, size_t sa_len);
@@ -3309,10 +3307,7 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
 /* void mg_if_close_conn(struct mg_connection *nc); */
 
 /* Deliver a POLL event to the connection. */
-void mg_if_poll(struct mg_connection *nc, time_t now);
-
-/* Deliver a TIMER event to the connection. */
-void mg_if_timer(struct mg_connection *c, double now);
+int mg_if_poll(struct mg_connection *nc, double now);
 
 #ifdef __cplusplus
 }

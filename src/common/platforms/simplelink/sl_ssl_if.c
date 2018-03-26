@@ -54,6 +54,31 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
   return MG_SSL_OK;
 }
 
+enum mg_ssl_if_result mg_ssl_if_conn_accept(struct mg_connection *nc,
+                                            struct mg_connection *lc) {
+  /* SimpleLink does everything for us, nothing for us to do. */
+  (void) nc;
+  (void) lc;
+  return MG_SSL_OK;
+}
+
+enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
+  /* SimpleLink has already performed the handshake, nothing to do. */
+  return MG_SSL_OK;
+}
+
+int mg_ssl_if_read(struct mg_connection *nc, void *buf, size_t len) {
+  /* SimpelLink handles TLS, so this is just a pass-through. */
+  int n = nc->iface->vtable->tcp_recv(nc, buf, len);
+  if (n == 0) nc->flags |= MG_F_WANT_READ;
+  return n;
+}
+
+int mg_ssl_if_write(struct mg_connection *nc, const void *buf, size_t len) {
+  /* SimpelLink handles TLS, so this is just a pass-through. */
+  return nc->iface->vtable->tcp_send(nc, buf, len);
+}
+
 void mg_ssl_if_conn_close_notify(struct mg_connection *nc) {
   /* Nothing to do */
   (void) nc;
@@ -154,56 +179,59 @@ int sl_set_ssl_opts(int sock, struct mg_connection *nc) {
   const struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
   DBG(("%p ssl ctx: %p", nc, ctx));
 
-  if (ctx != NULL) {
-    DBG(("%p %s,%s,%s,%s", nc, (ctx->ssl_cert ? ctx->ssl_cert : "-"),
-         (ctx->ssl_key ? ctx->ssl_cert : "-"),
-         (ctx->ssl_ca_cert ? ctx->ssl_ca_cert : "-"),
-         (ctx->ssl_server_name ? ctx->ssl_server_name : "-")));
-    if (ctx->ssl_cert != NULL && ctx->ssl_key != NULL) {
-      char *ssl_cert = sl_pem2der(ctx->ssl_cert);
-      char *ssl_key = sl_pem2der(ctx->ssl_key);
-      if (ssl_cert != NULL && ssl_key != NULL) {
-        err = sl_SetSockOpt(sock, SL_SOL_SOCKET,
-                            SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME, ssl_cert,
-                            strlen(ssl_cert));
-        LOG(LL_INFO, ("CERTIFICATE_FILE_NAME %s -> %d", ssl_cert, err));
+  if (ctx == NULL) return 0;
+  DBG(("%p %s,%s,%s,%s", nc, (ctx->ssl_cert ? ctx->ssl_cert : "-"),
+       (ctx->ssl_key ? ctx->ssl_cert : "-"),
+       (ctx->ssl_ca_cert ? ctx->ssl_ca_cert : "-"),
+       (ctx->ssl_server_name ? ctx->ssl_server_name : "-")));
+  if (ctx->ssl_cert != NULL && ctx->ssl_key != NULL) {
+    char *ssl_cert = sl_pem2der(ctx->ssl_cert), *ssl_key = NULL;
+    if (ssl_cert != NULL) {
+      err = sl_SetSockOpt(sock, SL_SOL_SOCKET,
+                          SL_SO_SECURE_FILES_CERTIFICATE_FILE_NAME, ssl_cert,
+                          strlen(ssl_cert));
+      MG_FREE(ssl_cert);
+      LOG(LL_DEBUG, ("CERTIFICATE_FILE_NAME %s -> %d", ssl_cert, err));
+      ssl_key = sl_pem2der(ctx->ssl_key);
+      if (ssl_key != NULL) {
         err = sl_SetSockOpt(sock, SL_SOL_SOCKET,
                             SL_SO_SECURE_FILES_PRIVATE_KEY_FILE_NAME, ssl_key,
                             strlen(ssl_key));
-        LOG(LL_INFO, ("PRIVATE_KEY_FILE_NAME %s -> %d", ssl_key, err));
+        MG_FREE(ssl_key);
+        LOG(LL_DEBUG, ("PRIVATE_KEY_FILE_NAME %s -> %d", ssl_key, err));
       } else {
         err = -1;
       }
-      MG_FREE(ssl_cert);
-      MG_FREE(ssl_key);
+    } else {
+      err = -1;
+    }
+    if (err != 0) return err;
+  }
+  if (ctx->ssl_ca_cert != NULL) {
+    if (ctx->ssl_ca_cert[0] != '\0') {
+      char *ssl_ca_cert = sl_pem2der(ctx->ssl_ca_cert);
+      if (ssl_ca_cert != NULL) {
+        err =
+            sl_SetSockOpt(sock, SL_SOL_SOCKET, SL_SO_SECURE_FILES_CA_FILE_NAME,
+                          ssl_ca_cert, strlen(ssl_ca_cert));
+        LOG(LL_DEBUG, ("CA_FILE_NAME %s -> %d", ssl_ca_cert, err));
+      } else {
+        err = -1;
+      }
+      MG_FREE(ssl_ca_cert);
       if (err != 0) return err;
     }
-    if (ctx->ssl_ca_cert != NULL) {
-      if (ctx->ssl_ca_cert[0] != '\0') {
-        char *ssl_ca_cert = sl_pem2der(ctx->ssl_ca_cert);
-        if (ssl_ca_cert != NULL) {
-          err = sl_SetSockOpt(sock, SL_SOL_SOCKET,
-                              SL_SO_SECURE_FILES_CA_FILE_NAME, ssl_ca_cert,
-                              strlen(ssl_ca_cert));
-          LOG(LL_INFO, ("CA_FILE_NAME %s -> %d", ssl_ca_cert, err));
-        } else {
-          err = -1;
-        }
-        MG_FREE(ssl_ca_cert);
-        if (err != 0) return err;
-      }
-    }
-    if (ctx->ssl_server_name != NULL) {
-      err = sl_SetSockOpt(sock, SL_SOL_SOCKET,
-                          SL_SO_SECURE_DOMAIN_NAME_VERIFICATION,
-                          ctx->ssl_server_name, strlen(ctx->ssl_server_name));
-      DBG(("DOMAIN_NAME_VERIFICATION %s -> %d", ctx->ssl_server_name, err));
-      /* Domain name verificationw as added in a NWP service pack, older
-       * versions return SL_ERROR_BSD_ENOPROTOOPT. There isn't much we can do
-       * about it,
-       * so we ignore the error. */
-      if (err != 0 && err != SL_ERROR_BSD_ENOPROTOOPT) return err;
-    }
+  }
+  if (ctx->ssl_server_name != NULL) {
+    err = sl_SetSockOpt(sock, SL_SOL_SOCKET,
+                        SL_SO_SECURE_DOMAIN_NAME_VERIFICATION,
+                        ctx->ssl_server_name, strlen(ctx->ssl_server_name));
+    DBG(("DOMAIN_NAME_VERIFICATION %s -> %d", ctx->ssl_server_name, err));
+    /* Domain name verificationw as added in a NWP service pack, older
+     * versions return SL_ERROR_BSD_ENOPROTOOPT. There isn't much we can do
+     * about it,
+     * so we ignore the error. */
+    if (err != 0 && err != SL_ERROR_BSD_ENOPROTOOPT) return err;
   }
   return 0;
 }

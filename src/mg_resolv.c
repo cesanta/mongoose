@@ -148,7 +148,6 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev,
   time_t now = (time_t) mg_time();
   struct mg_resolve_async_request *req;
   struct mg_dns_message *msg;
-  int first = 0;
 #if !MG_ENABLE_CALLBACK_USERDATA
   void *user_data = nc->user_data;
 #endif
@@ -162,17 +161,16 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev,
   }
 
   switch (ev) {
-    case MG_EV_CONNECT:
-      /* don't depend on timer not being at epoch for sending out first req */
-      first = 1;
-    /* fallthrough */
     case MG_EV_POLL:
       if (req->retries > req->max_retries) {
         req->err = MG_RESOLVE_EXCEEDED_RETRY_COUNT;
         nc->flags |= MG_F_CLOSE_IMMEDIATELY;
         break;
       }
-      if (first || now - req->last_time >= req->timeout) {
+      if (nc->flags & MG_F_CONNECTING) break;
+    /* fallthrough */
+    case MG_EV_CONNECT:
+      if (req->retries == 0 || now - req->last_time >= req->timeout) {
         mg_send_dns_query(nc, req->name, req->query);
         req->last_time = now;
         req->retries++;
