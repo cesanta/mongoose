@@ -57,7 +57,7 @@ parser.add_argument('--norel', action='store_true',
                     help="do not try to compute a friendly relative path")
 parser.add_argument('--exportable-headers', dest="export", action='store_true',
                     help='allow exporting internal headers')
-parser.add_argument('-I', default=".", dest='include_path', help='include path')
+parser.add_argument('-I', default=['.'], dest='include_path', help='include path', action='append')
 parser.add_argument('sources', nargs='*', help='sources')
 
 class File(object):
@@ -97,10 +97,13 @@ def resolve(path, parent_name):
     elif path_from_parent != None and os.path.exists(path_from_parent):
         p = path_from_parent
     else:
-        p = os.path.join(args.include_path, path)
+        for ip in args.include_path:
+            p = os.path.join(ip, path)
+            if os.path.exists(p):
+                break
     if os.path.exists(p) and not args.norel:
         p = os.path.realpath(p).replace('%s%s' % (os.getcwd(), os.sep), '')
-    # print >>sys.stderr, '%s -> %s (cwd %s)' % (path, p, os.getcwd())
+    # print >>sys.stderr, '%s %s -> %s (cwd %s)' % (path, parent_name, p, os.getcwd())
     return p.replace(os.sep, '/')
 
 def emit_line_directive(out, name, parent_name):
