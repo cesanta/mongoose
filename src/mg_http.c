@@ -127,7 +127,6 @@ enum mg_http_multipart_stream_state {
   MPS_BEGIN,
   MPS_WAITING_FOR_BOUNDARY,
   MPS_WAITING_FOR_CHUNK,
-  MPS_GOT_CHUNK,
   MPS_GOT_BOUNDARY,
   MPS_FINALIZE,
   MPS_FINISHED
@@ -139,7 +138,6 @@ struct mg_http_multipart_stream {
   const char *var_name;
   const char *file_name;
   void *user_data;
-  int prev_io_len;
   enum mg_http_multipart_stream_state state;
   int processing_part;
 };
@@ -975,19 +973,6 @@ static void mg_http_multipart_call_handler(struct mg_connection *c, int ev,
   pd->mp_stream.user_data = mp.user_data;
 }
 
-static int mg_http_multipart_got_chunk(struct mg_connection *c) {
-  struct mg_http_proto_data *pd = mg_http_get_proto_data(c);
-  struct mbuf *io = &c->recv_mbuf;
-
-  mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_DATA, io->buf,
-                                 pd->mp_stream.prev_io_len);
-  mbuf_remove(io, pd->mp_stream.prev_io_len);
-  pd->mp_stream.prev_io_len = 0;
-  pd->mp_stream.state = MPS_WAITING_FOR_CHUNK;
-
-  return 0;
-}
-
 static int mg_http_multipart_finalize(struct mg_connection *c) {
   struct mg_http_proto_data *pd = mg_http_get_proto_data(c);
 
@@ -1122,19 +1107,18 @@ static int mg_http_multipart_continue_wait_for_chunk(struct mg_connection *c) {
   }
 
   boundary = c_strnstr(io->buf, pd->mp_stream.boundary, io->len);
-  if (boundary == NULL && pd->mp_stream.prev_io_len == 0) {
-    pd->mp_stream.prev_io_len = io->len;
+  if (boundary == NULL) {
+    int data_size = (io->len - (pd->mp_stream.boundary_len + 6));
+    if (data_size > 0) {
+      mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_DATA, io->buf,
+                                     data_size);
+      mbuf_remove(io, data_size);
+    }
     return 0;
-  } else if (boundary == NULL &&
-             (int) io->len >
-                 pd->mp_stream.prev_io_len + pd->mp_stream.boundary_len + 4) {
-    pd->mp_stream.state = MPS_GOT_CHUNK;
-    return 1;
   } else if (boundary != NULL) {
     int data_size = (boundary - io->buf - 4);
     mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_DATA, io->buf, data_size);
     mbuf_remove(io, (boundary - io->buf));
-    pd->mp_stream.prev_io_len = 0;
     pd->mp_stream.state = MPS_WAITING_FOR_BOUNDARY;
     return 1;
   } else {
@@ -1164,12 +1148,6 @@ static void mg_http_multipart_continue(struct mg_connection *c) {
       }
       case MPS_WAITING_FOR_CHUNK: {
         if (mg_http_multipart_continue_wait_for_chunk(c) == 0) {
-          return;
-        }
-        break;
-      }
-      case MPS_GOT_CHUNK: {
-        if (mg_http_multipart_got_chunk(c) == 0) {
           return;
         }
         break;
