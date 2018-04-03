@@ -1,20 +1,18 @@
 /*
- * Copyright (c) 2014-2016 Cesanta Software Limited
+ * Copyright (c) 2014-2018 Cesanta Software Limited
  * All rights reserved
  *
- * Spiffy flasher. Implements strong checksums (MD5) and can use higher
- * baud rates. Actual max baud rate will differe from device to device,
- * but 921K seems to be common.
+ * Licensed under the Apache License, Version 2.0 (the ""License"");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SLIP protocol is used for communication.
- * First packet is a single byte - command number.
- * After that, a packet with a variable number of 32-bit (LE) arguments,
- * depending on command.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Then command produces variable number of packets of output, but first
- * packet of length 1 is the response code: 0 for success, non-zero - error.
- *
- * See individual command description below.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an ""AS IS"" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include "stub_flasher.h"
