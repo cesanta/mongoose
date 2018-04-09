@@ -4973,7 +4973,7 @@ static const char *test_buffer_limit(void) {
 
 static const char *test_http_parse_header(void) {
   static struct mg_str h = MG_MK_STR(
-      "xx=1 kl yy, ert=234 kl=123, "
+      "xx=1 kl yy, ert=234 kl=123, qq=ww;"
       "uri=\"/?naii=x,y\";ii=\"12\\\"34\" zz='aa bb',tt=2,gf=\"xx d=1234");
   char buf[20];
   char *buf2;
@@ -5021,6 +5021,9 @@ static const char *test_http_parse_header(void) {
   ASSERT_EQ(mg_http_parse_header(&h, "tt", buf, sizeof(buf)), 1);
   ASSERT_STREQ(buf, "2");
   ASSERT(mg_http_parse_header(&h, "uri", buf, sizeof(buf)) > 0);
+  ASSERT_STREQ(buf, "/?naii=x,y");
+  ASSERT(mg_http_parse_header(&h, "qq", buf, sizeof(buf)) > 0);
+  ASSERT_STREQ(buf, "ww");
 
   return NULL;
 }
