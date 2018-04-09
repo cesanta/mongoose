@@ -1644,7 +1644,7 @@ void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...) {
 static void mg_http_parse_header_internal(struct mg_str *hdr,
                                           const char *var_name,
                                           struct altbuf *ab) {
-  int ch = ' ', ch1 = ',', n = strlen(var_name);
+  int ch = ' ', ch1 = ',', ch2 = ';', n = strlen(var_name);
   const char *p, *end = hdr ? hdr->p + hdr->len : NULL, *s = NULL;
 
   /* Find where variable starts */
@@ -1657,10 +1657,10 @@ static void mg_http_parse_header_internal(struct mg_str *hdr,
   if (s != NULL && &s[n + 1] < end) {
     s += n + 1;
     if (*s == '"' || *s == '\'') {
-      ch = ch1 = *s++;
+      ch = ch1 = ch2 = *s++;
     }
     p = s;
-    while (p < end && p[0] != ch && p[0] != ch1) {
+    while (p < end && p[0] != ch && p[0] != ch1 && p[0] != ch2) {
       if (ch != ' ' && p[0] == '\\' && p[1] == ch) p++;
       altbuf_append(ab, *p++);
     }
