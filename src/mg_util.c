@@ -313,17 +313,21 @@ void mg_basic_auth_header(const struct mg_str user, const struct mg_str pass,
   mbuf_append(buf, header_suffix, strlen(header_suffix));
 }
 
-struct mg_str mg_url_encode(const struct mg_str src) {
-  static const char *dont_escape = "._-$,;~()/";
-  static const char *hex = "0123456789abcdef";
+struct mg_str mg_url_encode_opt(const struct mg_str src,
+                                const struct mg_str safe, unsigned int flags) {
+  const char *hex =
+      (flags & MG_URL_ENCODE_F_UPPERCASE_HEX ? "0123456789ABCDEF"
+                                             : "0123456789abcdef");
   size_t i = 0;
   struct mbuf mb;
   mbuf_init(&mb, src.len);
 
   for (i = 0; i < src.len; i++) {
     const unsigned char c = *((const unsigned char *) src.p + i);
-    if (isalnum(c) || strchr(dont_escape, c) != NULL) {
+    if (isalnum(c) || mg_strchr(safe, c) != NULL) {
       mbuf_append(&mb, &c, 1);
+    } else if (c == ' ' && (flags & MG_URL_ENCODE_F_SPACE_AS_PLUS)) {
+      mbuf_append(&mb, "+", 1);
     } else {
       mbuf_append(&mb, "%", 1);
       mbuf_append(&mb, &hex[c >> 4], 1);
@@ -333,4 +337,8 @@ struct mg_str mg_url_encode(const struct mg_str src) {
   mbuf_append(&mb, "", 1);
   mbuf_trim(&mb);
   return mg_mk_str_n(mb.buf, mb.len - 1);
+}
+
+struct mg_str mg_url_encode(const struct mg_str src) {
+  return mg_url_encode_opt(src, mg_mk_str("._-$,;~()/"), 0);
 }
