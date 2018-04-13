@@ -115,11 +115,7 @@ void cs_log_set_file(FILE *file);
  * Prints log to the current log file, appends "\n" in the end and flushes the
  * stream.
  */
-void cs_log_printf(const char *fmt, ...)
-#ifdef __GNUC__
-    __attribute__((format(printf, 1, 2)))
-#endif
-    ;
+void cs_log_printf(const char *fmt, ...) PRINTF_LIKE(1, 2);
 
 /*
  * Format and print message `x` with the given level `l`. Example:
