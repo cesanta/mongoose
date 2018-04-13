@@ -2095,8 +2095,6 @@ double cs_timegm(const struct tm *tm);
 
 #include <stddef.h>
 
-/* Amalgamated: #include "common/platform.h" */
-
 #ifdef __cplusplus
 extern "C" {
 #endif
