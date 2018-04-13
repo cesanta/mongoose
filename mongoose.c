@@ -1636,6 +1636,7 @@ void mbuf_remove(struct mbuf *mb, size_t n) {
 
 /* Amalgamated: #include "common/mg_mem.h" */
 /* Amalgamated: #include "common/mg_str.h" */
+/* Amalgamated: #include "common/platform.h" */
 
 #include <stdlib.h>
 #include <string.h>
