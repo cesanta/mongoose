@@ -128,8 +128,18 @@
 
 /* Common stuff */
 
+#if !defined(PRINTF_LIKE)
+#if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
+#define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
+#else
+#define PRINTF_LIKE(f, a)
+#endif
+#endif
+
 #if !defined(WEAK)
-#if (defined(__GNUC__) || defined(__TI_COMPILER_VERSION__)) && !defined(_WIN32)
+#if (defined(__GNUC__) || defined(__clang__) || \
+     defined(__TI_COMPILER_VERSION__)) &&       \
+    !defined(_WIN32)
 #define WEAK __attribute__((weak))
 #else
 #define WEAK
@@ -2397,7 +2407,8 @@ size_t c_strnlen(const char *s, size_t maxlen);
 /*
  * Equivalent of standard `snprintf()`.
  */
-int c_snprintf(char *buf, size_t buf_size, const char *format, ...);
+int c_snprintf(char *buf, size_t buf_size, const char *format, ...)
+    PRINTF_LIKE(3, 4);
 
 /*
  * Equivalent of standard `vsnprintf()`.
@@ -2465,7 +2476,8 @@ int mg_casecmp(const char *s1, const char *s2);
  *
  * The purpose of this is to avoid malloc-ing if generated strings are small.
  */
-int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
+int mg_asprintf(char **buf, size_t size, const char *fmt, ...)
+    PRINTF_LIKE(3, 4);
 
 /* Same as mg_asprintf, but takes varargs list. */
 int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap);

@@ -92,8 +92,18 @@
 
 /* Common stuff */
 
+#if !defined(PRINTF_LIKE)
+#if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
+#define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
+#else
+#define PRINTF_LIKE(f, a)
+#endif
+#endif
+
 #if !defined(WEAK)
-#if (defined(__GNUC__) || defined(__TI_COMPILER_VERSION__)) && !defined(_WIN32)
+#if (defined(__GNUC__) || defined(__clang__) || \
+     defined(__TI_COMPILER_VERSION__)) &&       \
+    !defined(_WIN32)
 #define WEAK __attribute__((weak))
 #else
 #define WEAK
