@@ -3525,6 +3525,7 @@ struct mg_connection {
 #define MG_F_WEBSOCKET_NO_DEFRAG (1 << 12) /* Websocket specific */
 #define MG_F_DELETE_CHUNK (1 << 13)        /* HTTP specific */
 #define MG_F_ENABLE_BROADCAST (1 << 14)    /* Allow broadcast address usage */
+#define MG_F_SEND_IMMEDIATELY (1 << 15)    /* Send immediately if won't block */
 
 #define MG_F_USER_1 (1 << 20) /* Flags left for application */
 #define MG_F_USER_2 (1 << 21)

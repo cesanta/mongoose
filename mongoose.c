@@ -81,6 +81,9 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm);
 extern void *(*test_malloc)(size_t size);
 extern void *(*test_calloc)(size_t count, size_t size);
 
+void mg_add_to_set(sock_t sock, fd_set *set, sock_t *max_fd);
+static void mg_write_to_socket(struct mg_connection *nc);
+
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
@@ -2671,12 +2674,41 @@ void mg_if_accept_tcp_cb(struct mg_connection *nc, union socket_address *sa,
   mg_call(nc, NULL, nc->user_data, MG_EV_ACCEPT, &nc->sa);
 }
 
+#define _MG_F_FD_CAN_READ 1
+#define _MG_F_FD_CAN_WRITE 1 << 1
+#define _MG_F_FD_ERROR 1 << 2
+
 void mg_send(struct mg_connection *nc, const void *buf, int len) {
   nc->last_io_time = (time_t) mg_time();
   if (nc->flags & MG_F_UDP) {
     nc->iface->vtable->udp_send(nc, buf, len);
   } else {
     nc->iface->vtable->tcp_send(nc, buf, len);
+  }
+
+  if (!(nc->flags & MG_F_SEND_IMMEDIATELY) ||
+      (nc->flags & MG_F_CLOSE_IMMEDIATELY) ||
+      nc->sock == INVALID_SOCKET ||
+      nc->send_mbuf.len == 0)
+      return;
+
+  struct timeval tv;
+  fd_set read_set, write_set, err_set;
+  sock_t max_fd = INVALID_SOCKET;
+  int num_ev;
+
+  FD_ZERO(&read_set);
+  FD_ZERO(&write_set);
+  FD_ZERO(&err_set);
+  mg_add_to_set(nc->sock, &write_set, &max_fd);
+  tv.tv_sec = 0;
+  tv.tv_usec = 0;
+  num_ev = select((int) max_fd + 1, &read_set, &write_set, &err_set, &tv);
+#if 0
+  DBG(("select in mg_send num_ev=%d", num_ev));
+#endif
+  if (num_ev > 0 && FD_ISSET(nc->sock, &write_set)) {
+      mg_write_to_socket(nc);
   }
 }
 
@@ -3661,10 +3693,6 @@ static void mg_ssl_begin(struct mg_connection *nc) {
   }
 }
 #endif /* MG_ENABLE_SSL */
-
-#define _MG_F_FD_CAN_READ 1
-#define _MG_F_FD_CAN_WRITE 1 << 1
-#define _MG_F_FD_ERROR 1 << 2
 
 void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
   int worth_logging =
