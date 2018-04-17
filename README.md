@@ -62,7 +62,7 @@ the functionality:
 # Contributions
 
 To submit contributions, sign [Cesanta CLA](https://cesanta.com/cla.html)
-and send GitHub pull request. You retain the copyright on your contributions.
+and send GitHub pull request.
 
 # Looking for a pre-compiled Mongoose web server Windows or Mac binary?
 - [Download pre-compiled Mongoose web server binary.](https://www.cesanta.com/binary.html)
