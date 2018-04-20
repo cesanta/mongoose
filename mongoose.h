@@ -3242,8 +3242,8 @@ struct mg_iface_vtable {
   void (*connect_udp)(struct mg_connection *nc);
 
   /* Send functions for TCP and UDP. Sent data is copied before return. */
-  void (*tcp_send)(struct mg_connection *nc, const void *buf, size_t len);
-  void (*udp_send)(struct mg_connection *nc, const void *buf, size_t len);
+  size_t (*tcp_send)(struct mg_connection *nc, const void *buf, size_t len);
+  size_t (*udp_send)(struct mg_connection *nc, const void *buf, size_t len);
 
   void (*recved)(struct mg_connection *nc, size_t len);
 
@@ -3872,7 +3872,7 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
  * They just append data to the output buffer. MG_EV_SEND will be delivered when
  * the data has actually been pushed out.
  */
-void mg_send(struct mg_connection *, const void *buf, int len);
+size_t mg_send(struct mg_connection *, const void *buf, int len);
 
 /* Enables format string warnings for mg_printf */
 #if defined(__GNUC__)

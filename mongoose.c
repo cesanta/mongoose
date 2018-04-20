@@ -2678,19 +2678,20 @@ void mg_if_accept_tcp_cb(struct mg_connection *nc, union socket_address *sa,
 #define _MG_F_FD_CAN_WRITE 1 << 1
 #define _MG_F_FD_ERROR 1 << 2
 
-void mg_send(struct mg_connection *nc, const void *buf, int len) {
+size_t mg_send(struct mg_connection *nc, const void *buf, int len) {
   nc->last_io_time = (time_t) mg_time();
   if (nc->flags & MG_F_UDP) {
-    nc->iface->vtable->udp_send(nc, buf, len);
+    len = nc->iface->vtable->udp_send(nc, buf, len);
   } else {
-    nc->iface->vtable->tcp_send(nc, buf, len);
+    len = nc->iface->vtable->tcp_send(nc, buf, len);
   }
 
   if (!(nc->flags & MG_F_SEND_IMMEDIATELY) ||
       (nc->flags & MG_F_CLOSE_IMMEDIATELY) ||
       nc->sock == INVALID_SOCKET ||
-      nc->send_mbuf.len == 0)
-      return;
+      nc->send_mbuf.len == 0 ||
+      len == 0)
+      return len;
 
   struct timeval tv;
   fd_set read_set, write_set, err_set;
@@ -2710,6 +2711,7 @@ void mg_send(struct mg_connection *nc, const void *buf, int len) {
   if (num_ev > 0 && FD_ISSET(nc->sock, &write_set)) {
       mg_write_to_socket(nc);
   }
+  return len;
 }
 
 void mg_if_sent_cb(struct mg_connection *nc, int num_sent) {
@@ -3427,14 +3429,14 @@ int mg_socket_if_listen_udp(struct mg_connection *nc,
   return 0;
 }
 
-void mg_socket_if_tcp_send(struct mg_connection *nc, const void *buf,
+size_t mg_socket_if_tcp_send(struct mg_connection *nc, const void *buf,
                            size_t len) {
-  mbuf_append(&nc->send_mbuf, buf, len);
+  return mbuf_append(&nc->send_mbuf, buf, len);
 }
 
-void mg_socket_if_udp_send(struct mg_connection *nc, const void *buf,
+size_t mg_socket_if_udp_send(struct mg_connection *nc, const void *buf,
                            size_t len) {
-  mbuf_append(&nc->send_mbuf, buf, len);
+  return mbuf_append(&nc->send_mbuf, buf, len);
 }
 
 void mg_socket_if_recved(struct mg_connection *nc, size_t len) {
