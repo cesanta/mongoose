@@ -603,10 +603,6 @@ typedef struct stat cs_stat_t;
 #define __cdecl
 #define _FILE_OFFSET_BITS 32
 
-#if !defined(RTOS_SDK) && !defined(__cplusplus)
-#define fileno(x) -1
-#endif
-
 #define MG_LWIP 1
 
 /* struct timeval is defined in sys/time.h. */
