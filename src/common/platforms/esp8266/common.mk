@@ -68,7 +68,7 @@ C_CXX_FLAGS  = -W -Wall -Werror -Wundef -Wno-comment -Wno-variadic-macros -Wpoin
                -DCS_PLATFORM=3 \
                -ffunction-sections -fdata-sections
 
-CFLAGS = -std=c99 $(C_CXX_FLAGS)
+CFLAGS = -std=gnu99 $(C_CXX_FLAGS)
 CXXFLAGS = -std=gnu++11 -fno-exceptions $(C_CXX_FLAGS)
 
 # linker flags used to generate the main object file
