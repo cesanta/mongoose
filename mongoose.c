@@ -2495,7 +2495,7 @@ static int mg_resolve2(const char *host, struct in_addr *ina) {
   }
   for (p = servinfo; p != NULL; p = p->ai_next) {
     memcpy(&h, &p->ai_addr, sizeof(struct sockaddr_in *));
-    memcpy(ina, &h->sin_addr, sizeof(ina));
+    memcpy(ina, &h->sin_addr, sizeof(*ina));
   }
   freeaddrinfo(servinfo);
   return 1;
