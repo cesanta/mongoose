@@ -2621,9 +2621,11 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
        * try to resolve it using `gethostbyname` and do not try
        * to resolve it via DNS server if gethostbyname has failed too
        */
+#if !(MG_ENABLE_SYNC_RESOLVER && MG_ENABLE_GETADDRINFO)
       if (mg_ncasecmp(host, "localhost", 9) != 0) {
         return 0;
       }
+#endif
 
 #if MG_ENABLE_SYNC_RESOLVER
       if (!mg_resolve2(host, &sa->sin.sin_addr)) {
