@@ -57,7 +57,7 @@ NO_Os_FLAGS= -fno-expensive-optimizations -fno-thread-jumps \
              -fno-tree-pre -fno-tree-vrp
 
 C_CXX_FLAGS  = -W -Wall -Werror -Wundef -Wno-comment -Wno-variadic-macros -Wpointer-arith \
-               -Os $(NO_Os_FLAGS) -g3 \
+               -pipe -Os $(NO_Os_FLAGS) -g3 \
                -Wl,-EL -fno-inline-functions \
                -D_XOPEN_SOURCE=500 \
                -nostdlib -mlongcalls -mtext-section-literals -D__ets__ -DSTATIC=static \
