@@ -1311,8 +1311,11 @@ const char *mg_status_message(int status_code) {
 
 void mg_send_response_line_s(struct mg_connection *nc, int status_code,
                              const struct mg_str extra_headers) {
-  mg_printf(nc, "HTTP/1.1 %d %s\r\nServer: %s\r\n", status_code,
-            mg_status_message(status_code), mg_version_header);
+  mg_printf(nc, "HTTP/1.1 %d %s\r\n", status_code,
+            mg_status_message(status_code));
+#ifndef MG_HIDE_SERVER_INFO
+  mg_printf(nc, "Server: %s\r\n", mg_version_header);
+#endif
   if (extra_headers.len > 0) {
     mg_printf(nc, "%.*s\r\n", (int) extra_headers.len, extra_headers.p);
   }
