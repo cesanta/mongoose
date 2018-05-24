@@ -1464,19 +1464,75 @@ void cs_hmac_sha1(const unsigned char *key, size_t keylen,
 #define MBUF_FREE free
 #endif
 
+#if MG_ENABLE_THREADSAFE_CONN_MBUFS
+
+void mbuf_create_mutex(struct mbuf *mbuf) WEAK;
+void mbuf_create_mutex(struct mbuf *mbuf) {
+  assert(pthread_mutex_init(&mbuf->mutex, NULL) == 0);
+}
+
+void mbuf_destroy_mutex(struct mbuf *mbuf) WEAK;
+void mbuf_destroy_mutex(struct mbuf *mbuf) {
+  if (mbuf->mutex) {
+    pthread_mutex_destroy(&mbuf->mutex);
+  }
+}
+
+#define MBUF_LOCK(mbuf)     if ((mbuf)->mutex) { pthread_mutex_lock(&(mbuf)->mutex); }
+#define MBUF_UNLOCK(mbuf)   if ((mbuf)->mutex) { pthread_mutex_unlock(&(mbuf)->mutex); }
+
+static void _mbuf_resize(struct mbuf *a, size_t new_size) {
+  if (new_size > a->size || (new_size < a->size && new_size >= a->len)) {
+    char *buf = (char *) MBUF_REALLOC(a->buf, new_size);
+    /*
+     * In case realloc fails, there's not much we can do, except keep things as
+     * they are. Note that NULL is a valid return value from realloc when
+     * size == 0, but that is covered too.
+     */
+    if (buf == NULL && new_size != 0) return;
+    a->buf = buf;
+    a->size = new_size;
+  }
+}
+void mbuf_resize(struct mbuf *a, size_t new_size) WEAK;
+void mbuf_resize(struct mbuf *a, size_t new_size) {
+  MBUF_LOCK(a);
+  _mbuf_resize(a, new_size);
+  MBUF_UNLOCK(a);
+}
+
+static void _mbuf_init(struct mbuf *mbuf, size_t initial_size) {
+  mbuf->len = mbuf->size = 0;
+  mbuf->buf = NULL;
+  _mbuf_resize(mbuf, initial_size);
+}
+void mbuf_init(struct mbuf *mbuf, size_t initial_size) WEAK;
+void mbuf_init(struct mbuf *mbuf, size_t initial_size) {
+  mbuf->mutex = 0;
+  _mbuf_init(mbuf, initial_size);
+}
+
+void mbuf_free(struct mbuf *mbuf) WEAK;
+void mbuf_free(struct mbuf *mbuf) {
+  MBUF_LOCK(mbuf);
+  if (mbuf->buf != NULL) {
+    MBUF_FREE(mbuf->buf);
+    _mbuf_init(mbuf, 0);
+  }
+  MBUF_UNLOCK(mbuf);
+}
+
+
+#else // !MG_ENABLE_THREADSAFE_CONN_MBUFS
+
+#define MBUF_LOCK(mbuf)
+#define MBUF_UNLOCK(mbuf)
+
 void mbuf_init(struct mbuf *mbuf, size_t initial_size) WEAK;
 void mbuf_init(struct mbuf *mbuf, size_t initial_size) {
   mbuf->len = mbuf->size = 0;
   mbuf->buf = NULL;
   mbuf_resize(mbuf, initial_size);
-}
-
-void mbuf_free(struct mbuf *mbuf) WEAK;
-void mbuf_free(struct mbuf *mbuf) {
-  if (mbuf->buf != NULL) {
-    MBUF_FREE(mbuf->buf);
-    mbuf_init(mbuf, 0);
-  }
 }
 
 void mbuf_resize(struct mbuf *a, size_t new_size) WEAK;
@@ -1494,6 +1550,16 @@ void mbuf_resize(struct mbuf *a, size_t new_size) {
   }
 }
 
+void mbuf_free(struct mbuf *mbuf) WEAK;
+void mbuf_free(struct mbuf *mbuf) {
+  if (mbuf->buf != NULL) {
+    MBUF_FREE(mbuf->buf);
+    mbuf_init(mbuf, 0);
+  }
+}
+
+#endif // MG_ENABLE_THREADSAFE_CONN_MBUFS
+
 void mbuf_trim(struct mbuf *mbuf) WEAK;
 void mbuf_trim(struct mbuf *mbuf) {
   mbuf_resize(mbuf, mbuf->len);
@@ -1503,12 +1569,16 @@ size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t) WEAK;
 size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
   char *p = NULL;
 
+  MBUF_LOCK(a);
   assert(a != NULL);
   assert(a->len <= a->size);
   assert(off <= a->len);
 
   /* check overflow */
-  if (~(size_t) 0 - (size_t) a->buf < len) return 0;
+  if (~(size_t) 0 - (size_t) a->buf < len) {
+    MBUF_UNLOCK(a);
+    return 0;
+  }
 
   if (a->len + len <= a->size) {
     memmove(a->buf + off + len, a->buf + off, a->len - off);
@@ -1529,6 +1599,7 @@ size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
     }
   }
 
+  MBUF_UNLOCK(a);
   return len;
 }
 
@@ -1539,10 +1610,12 @@ size_t mbuf_append(struct mbuf *a, const void *buf, size_t len) {
 
 void mbuf_remove(struct mbuf *mb, size_t n) WEAK;
 void mbuf_remove(struct mbuf *mb, size_t n) {
+  MBUF_LOCK(mb);
   if (n > 0 && n <= mb->len) {
     memmove(mb->buf, mb->buf + n, mb->len - n);
     mb->len -= n;
   }
+  MBUF_UNLOCK(mb);
 }
 
 #endif /* EXCLUDE_COMMON */
@@ -2334,6 +2407,10 @@ void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
 #endif
   mbuf_free(&conn->recv_mbuf);
   mbuf_free(&conn->send_mbuf);
+#if MG_ENABLE_THREADSAFE_CONN_MBUFS
+  mbuf_destroy_mutex(&conn->recv_mbuf);
+  mbuf_destroy_mutex(&conn->send_mbuf);
+#endif
 
   memset(conn, 0, sizeof(*conn));
   MG_FREE(conn);
@@ -2537,6 +2614,10 @@ MG_INTERNAL struct mg_connection *mg_create_connection_base(
      * doesn't compile with pedantic ansi flags.
      */
     conn->recv_mbuf_limit = ~0;
+#if MG_ENABLE_THREADSAFE_CONN_MBUFS
+    mbuf_create_mutex(&conn->recv_mbuf);
+    mbuf_create_mutex(&conn->send_mbuf);
+#endif
   } else {
     MG_SET_PTRPTR(opts.error_string, "failed to create connection");
   }
@@ -5467,6 +5548,7 @@ struct altbuf {
  * Initializes altbuf; `buf`, `buf_size` is the client-provided buffer.
  */
 MG_INTERNAL void altbuf_init(struct altbuf *ab, char *buf, size_t buf_size) {
+  memset(ab, 0, sizeof(*ab));
   mbuf_init(&ab->m, 0);
   ab->user_buf = buf;
   ab->user_buf_size = buf_size;

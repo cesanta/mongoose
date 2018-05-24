@@ -513,6 +513,7 @@ typedef struct stat cs_stat_t;
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <esp_log.h>
+#include <pthread.h>
 
 #define SIZE_T_FMT "u"
 typedef struct stat cs_stat_t;
@@ -1973,7 +1974,18 @@ struct mbuf {
   char *buf;   /* Buffer pointer */
   size_t len;  /* Data length. Data is located between offset 0 and len. */
   size_t size; /* Buffer size allocated by realloc(1). Must be >= len */
+#if MG_ENABLE_THREADSAFE_CONN_MBUFS
+  pthread_mutex_t mutex;
+#endif
 };
+
+#if MG_ENABLE_THREADSAFE_CONN_MBUFS
+/*
+ * Create/destroy Mbuf mutex.
+ */
+void mbuf_create_mutex(struct mbuf *);
+void mbuf_destroy_mutex(struct mbuf *);
+#endif
 
 /*
  * Initialises an Mbuf.
