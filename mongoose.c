@@ -1464,79 +1464,24 @@ void cs_hmac_sha1(const unsigned char *key, size_t keylen,
 #define MBUF_FREE free
 #endif
 
-#if MG_ENABLE_THREADSAFE_CONN_MBUFS
+// Implementation:
 
-void mbuf_create_mutex(struct mbuf *mbuf) WEAK;
-void mbuf_create_mutex(struct mbuf *mbuf) {
-  assert(pthread_mutex_init(&mbuf->mutex, NULL) == 0);
-}
+inline void _mbuf_resize(struct mbuf *a, size_t new_size);
 
-void mbuf_destroy_mutex(struct mbuf *mbuf) WEAK;
-void mbuf_destroy_mutex(struct mbuf *mbuf) {
-  if (mbuf->mutex) {
-    pthread_mutex_destroy(&mbuf->mutex);
-  }
-}
-
-#define MBUF_LOCK(mbuf)     if ((mbuf)->mutex) { pthread_mutex_lock(&(mbuf)->mutex); }
-#define MBUF_UNLOCK(mbuf)   if ((mbuf)->mutex) { pthread_mutex_unlock(&(mbuf)->mutex); }
-
-static void _mbuf_resize(struct mbuf *a, size_t new_size) {
-  if (new_size > a->size || (new_size < a->size && new_size >= a->len)) {
-    char *buf = (char *) MBUF_REALLOC(a->buf, new_size);
-    /*
-     * In case realloc fails, there's not much we can do, except keep things as
-     * they are. Note that NULL is a valid return value from realloc when
-     * size == 0, but that is covered too.
-     */
-    if (buf == NULL && new_size != 0) return;
-    a->buf = buf;
-    a->size = new_size;
-  }
-}
-void mbuf_resize(struct mbuf *a, size_t new_size) WEAK;
-void mbuf_resize(struct mbuf *a, size_t new_size) {
-  MBUF_LOCK(a);
-  _mbuf_resize(a, new_size);
-  MBUF_UNLOCK(a);
-}
-
-static void _mbuf_init(struct mbuf *mbuf, size_t initial_size) {
+inline void _mbuf_init(struct mbuf *mbuf, size_t initial_size) {
   mbuf->len = mbuf->size = 0;
   mbuf->buf = NULL;
   _mbuf_resize(mbuf, initial_size);
 }
-void mbuf_init(struct mbuf *mbuf, size_t initial_size) WEAK;
-void mbuf_init(struct mbuf *mbuf, size_t initial_size) {
-  mbuf->mutex = 0;
-  _mbuf_init(mbuf, initial_size);
-}
 
-void mbuf_free(struct mbuf *mbuf) WEAK;
-void mbuf_free(struct mbuf *mbuf) {
-  MBUF_LOCK(mbuf);
+inline void _mbuf_free(struct mbuf *mbuf) {
   if (mbuf->buf != NULL) {
     MBUF_FREE(mbuf->buf);
     _mbuf_init(mbuf, 0);
   }
-  MBUF_UNLOCK(mbuf);
 }
 
-
-#else // !MG_ENABLE_THREADSAFE_CONN_MBUFS
-
-#define MBUF_LOCK(mbuf)
-#define MBUF_UNLOCK(mbuf)
-
-void mbuf_init(struct mbuf *mbuf, size_t initial_size) WEAK;
-void mbuf_init(struct mbuf *mbuf, size_t initial_size) {
-  mbuf->len = mbuf->size = 0;
-  mbuf->buf = NULL;
-  mbuf_resize(mbuf, initial_size);
-}
-
-void mbuf_resize(struct mbuf *a, size_t new_size) WEAK;
-void mbuf_resize(struct mbuf *a, size_t new_size) {
+inline void _mbuf_resize(struct mbuf *a, size_t new_size) {
   if (new_size > a->size || (new_size < a->size && new_size >= a->len)) {
     char *buf = (char *) MBUF_REALLOC(a->buf, new_size);
     /*
@@ -1550,33 +1495,19 @@ void mbuf_resize(struct mbuf *a, size_t new_size) {
   }
 }
 
-void mbuf_free(struct mbuf *mbuf) WEAK;
-void mbuf_free(struct mbuf *mbuf) {
-  if (mbuf->buf != NULL) {
-    MBUF_FREE(mbuf->buf);
-    mbuf_init(mbuf, 0);
-  }
+inline void _mbuf_trim(struct mbuf *mbuf) {
+  _mbuf_resize(mbuf, mbuf->len);
 }
 
-#endif // MG_ENABLE_THREADSAFE_CONN_MBUFS
-
-void mbuf_trim(struct mbuf *mbuf) WEAK;
-void mbuf_trim(struct mbuf *mbuf) {
-  mbuf_resize(mbuf, mbuf->len);
-}
-
-size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t) WEAK;
-size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
+inline size_t _mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
   char *p = NULL;
 
-  MBUF_LOCK(a);
   assert(a != NULL);
   assert(a->len <= a->size);
   assert(off <= a->len);
 
   /* check overflow */
   if (~(size_t) 0 - (size_t) a->buf < len) {
-    MBUF_UNLOCK(a);
     return 0;
   }
 
@@ -1599,22 +1530,98 @@ size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
     }
   }
 
-  MBUF_UNLOCK(a);
   return len;
+}
+
+inline size_t _mbuf_append(struct mbuf *a, const void *buf, size_t len) {
+  return _mbuf_insert(a, a->len, buf, len);
+}
+
+inline void _mbuf_remove(struct mbuf *mb, size_t n) {
+  if (n > 0 && n <= mb->len) {
+    memmove(mb->buf, mb->buf + n, mb->len - n);
+    mb->len -= n;
+  }
+}
+
+// API:
+
+#if MG_ENABLE_THREADSAFE_CONN_MBUFS
+
+void mbuf_create_mutex(struct mbuf *mbuf) WEAK;
+void mbuf_create_mutex(struct mbuf *mbuf) {
+  assert(pthread_mutex_init(&mbuf->mutex, NULL) == 0);
+}
+
+void mbuf_destroy_mutex(struct mbuf *mbuf) WEAK;
+void mbuf_destroy_mutex(struct mbuf *mbuf) {
+  if (mbuf->mutex) {
+    pthread_mutex_destroy(&mbuf->mutex);
+  }
+}
+
+#define MBUF_LOCK(mbuf)     if ((mbuf)->mutex) { pthread_mutex_lock(&(mbuf)->mutex); }
+#define MBUF_UNLOCK(mbuf)   if ((mbuf)->mutex) { pthread_mutex_unlock(&(mbuf)->mutex); }
+
+void mbuf_init(struct mbuf *mbuf, size_t initial_size) WEAK;
+void mbuf_init(struct mbuf *mbuf, size_t initial_size) {
+  mbuf->mutex = 0; // no mutex by default
+  _mbuf_init(mbuf, initial_size);
+}
+
+#else // !MG_ENABLE_THREADSAFE_CONN_MBUFS
+
+#define MBUF_LOCK(mbuf)
+#define MBUF_UNLOCK(mbuf)
+
+void mbuf_init(struct mbuf *mbuf, size_t initial_size) WEAK;
+void mbuf_init(struct mbuf *mbuf, size_t initial_size) {
+  _mbuf_init(mbuf, initial_size);
+}
+
+#endif
+
+void mbuf_free(struct mbuf *mbuf) WEAK;
+void mbuf_free(struct mbuf *mbuf) {
+  MBUF_LOCK(mbuf);
+  _mbuf_free(mbuf);
+  MBUF_UNLOCK(mbuf);
+}
+
+void mbuf_resize(struct mbuf *a, size_t new_size) WEAK;
+void mbuf_resize(struct mbuf *a, size_t new_size) {
+  MBUF_LOCK(a);
+  _mbuf_resize(a, new_size);
+  MBUF_UNLOCK(a);
+}
+
+void mbuf_trim(struct mbuf *mbuf) WEAK;
+void mbuf_trim(struct mbuf *mbuf) {
+  MBUF_LOCK(mbuf);
+  _mbuf_resize(mbuf, mbuf->len);
+  MBUF_UNLOCK(mbuf);
+}
+
+size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t) WEAK;
+size_t mbuf_insert(struct mbuf *a, size_t off, const void *buf, size_t len) {
+  MBUF_LOCK(a);
+  size_t rlen = _mbuf_insert(a, off, buf, len);
+  MBUF_UNLOCK(a);
+  return rlen;
 }
 
 size_t mbuf_append(struct mbuf *a, const void *buf, size_t len) WEAK;
 size_t mbuf_append(struct mbuf *a, const void *buf, size_t len) {
-  return mbuf_insert(a, a->len, buf, len);
+  MBUF_LOCK(a);
+  size_t rlen = _mbuf_insert(a, a->len, buf, len);
+  MBUF_UNLOCK(a);
+  return rlen;
 }
 
 void mbuf_remove(struct mbuf *mb, size_t n) WEAK;
 void mbuf_remove(struct mbuf *mb, size_t n) {
   MBUF_LOCK(mb);
-  if (n > 0 && n <= mb->len) {
-    memmove(mb->buf, mb->buf + n, mb->len - n);
-    mb->len -= n;
-  }
+  _mbuf_remove(mb, n);
   MBUF_UNLOCK(mb);
 }
 
