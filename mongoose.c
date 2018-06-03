@@ -496,7 +496,7 @@ void cs_log_set_filter(const char *pattern);
  * Clients should typically just use `LOG()` macro.
  */
 int cs_log_print_prefix(enum cs_log_level level, const char *func,
-                        const char *filename);
+                        const char *filename, int line);
 
 extern enum cs_log_level cs_log_threshold;
 
@@ -527,7 +527,7 @@ void cs_log_printf(const char *fmt, ...)
  */
 #define LOG(l, x)                                                    \
   do {                                                               \
-    if (cs_log_print_prefix(l, __func__, __FILE__)) cs_log_printf x; \
+    if (cs_log_print_prefix(l, __func__, __FILE__, __LINE__)) cs_log_printf x; \
   } while (0)
 
 #ifndef CS_NDEBUG
@@ -605,10 +605,10 @@ void cs_log_set_filter(const char *pattern) {
   }
 }
 
-int cs_log_print_prefix(enum cs_log_level, const char *, const char *) WEAK;
+int cs_log_print_prefix(enum cs_log_level, const char *, const char *, int) WEAK;
 int cs_log_print_prefix(enum cs_log_level level, const char *func,
-                        const char *filename) {
-  char prefix[21];
+                        const char *filename, int line) {
+  char prefix[32];
 
   if (level > cs_log_threshold) return 0;
   if (s_filter_pattern != NULL &&
@@ -617,11 +617,12 @@ int cs_log_print_prefix(enum cs_log_level level, const char *func,
     return 0;
   }
 
-  strncpy(prefix, func, 20);
-  prefix[20] = '\0';
+  memset(prefix, 0, sizeof(prefix));
+  snprintf(prefix, sizeof(prefix), "%s:%d", func, line);
+  prefix[sizeof(prefix) - 1] = '\0';
   if (cs_log_file == NULL) cs_log_file = stderr;
   cs_log_cur_msg_level = level;
-  fprintf(cs_log_file, "%-20s ", prefix);
+  fprintf(cs_log_file, "%-32s ", prefix);
 #if CS_LOG_ENABLE_TS_DIFF
   {
     double now = cs_time();
