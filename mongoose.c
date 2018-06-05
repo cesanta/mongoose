@@ -3549,6 +3549,7 @@ static void mg_handle_tcp_read(struct mg_connection *conn) {
   {
     while ((n = MG_RECV_FUNC(conn->sock, buf,
                            recv_avail_size(conn, MG_TCP_RECV_BUFFER_SIZE), 0)) > 0) {
+      DBG(("%p %d bytes (PLAIN) <- %d", conn, n, conn->sock));
       mg_if_recv_tcp_cb(conn, buf, n, 1 /* own */);
       /* buf has been freed, we need a new one. */
       buf = (char *) MG_MALLOC(MG_TCP_RECV_BUFFER_SIZE);
