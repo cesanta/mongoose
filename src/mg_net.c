@@ -176,6 +176,11 @@ void mg_close_conn(struct mg_connection *conn) {
     mg_ssl_if_conn_close_notify(conn);
   }
 #endif
+  /*
+   * Clearly mark the connection as going away (if not already).
+   * Some net_if impls (LwIP) need this for cleanly handling half-dead conns.
+   */
+  conn->flags |= MG_F_CLOSE_IMMEDIATELY;
   mg_remove_conn(conn);
   conn->iface->vtable->destroy_conn(conn);
   mg_call(conn, NULL, conn->user_data, MG_EV_CLOSE, NULL);
