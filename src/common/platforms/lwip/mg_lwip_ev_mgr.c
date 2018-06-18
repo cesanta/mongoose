@@ -53,10 +53,11 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
       (struct mg_ev_mgr_lwip_data *) mgr->ifaces[MG_MAIN_IFACE]->data;
   while (md->sig_queue_len > 0) {
     mgos_lock();
-    int sig = md->sig_queue[md->start_index].sig;
-    struct mg_connection *nc = md->sig_queue[md->start_index].nc;
+    int i = md->start_index;
+    int sig = md->sig_queue[i].sig;
+    struct mg_connection *nc = md->sig_queue[i].nc;
     struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
-    md->start_index = (md->start_index + 1) % MG_SIG_QUEUE_LEN;
+    md->start_index = (i + 1) % MG_SIG_QUEUE_LEN;
     md->sig_queue_len--;
     mgos_unlock();
     if (nc->iface == NULL || nc->mgr == NULL) continue;

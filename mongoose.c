@@ -2466,6 +2466,11 @@ void mg_close_conn(struct mg_connection *conn) {
     mg_ssl_if_conn_close_notify(conn);
   }
 #endif
+  /*
+   * Clearly mark the connection as going away (if not already).
+   * Some net_if impls (LwIP) need this for cleanly handling half-dead conns.
+   */
+  conn->flags |= MG_F_CLOSE_IMMEDIATELY;
   mg_remove_conn(conn);
   conn->iface->vtable->destroy_conn(conn);
   mg_call(conn, NULL, conn->user_data, MG_EV_CLOSE, NULL);
@@ -14901,7 +14906,7 @@ static err_t mg_lwip_tcp_conn_cb(void *arg, struct tcp_pcb *tpcb, err_t err) {
 static void mg_lwip_tcp_error_cb(void *arg, err_t err) {
   struct mg_connection *nc = (struct mg_connection *) arg;
   DBG(("%p conn error %d", nc, err));
-  if (nc == NULL) return;
+  if (nc == NULL || (nc->flags & MG_F_CLOSE_IMMEDIATELY)) return;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   cs->pcb.tcp = NULL; /* Has already been deallocated */
   if (nc->flags & MG_F_CONNECTING) {
@@ -15538,10 +15543,11 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
       (struct mg_ev_mgr_lwip_data *) mgr->ifaces[MG_MAIN_IFACE]->data;
   while (md->sig_queue_len > 0) {
     mgos_lock();
-    int sig = md->sig_queue[md->start_index].sig;
-    struct mg_connection *nc = md->sig_queue[md->start_index].nc;
+    int i = md->start_index;
+    int sig = md->sig_queue[i].sig;
+    struct mg_connection *nc = md->sig_queue[i].nc;
     struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
-    md->start_index = (md->start_index + 1) % MG_SIG_QUEUE_LEN;
+    md->start_index = (i + 1) % MG_SIG_QUEUE_LEN;
     md->sig_queue_len--;
     mgos_unlock();
     if (nc->iface == NULL || nc->mgr == NULL) continue;
