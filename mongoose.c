@@ -8279,8 +8279,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
     case MG_EV_HTTP_PART_BEGIN: {
       struct mg_http_multipart_part *mp =
           (struct mg_http_multipart_part *) ev_data;
-      struct file_upload_state *fus =
-          (struct file_upload_state *) MG_CALLOC(1, sizeof(*fus));
+      struct file_upload_state *fus;
       struct mg_str lfn = local_name_fn(nc, mg_mk_str(mp->file_name));
       mp->user_data = NULL;
       if (lfn.p == NULL || lfn.len == 0) {
@@ -8292,6 +8291,11 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
                   "Not allowed to upload %s\r\n",
                   mp->file_name);
         nc->flags |= MG_F_SEND_AND_CLOSE;
+        return;
+      }
+      fus = (struct file_upload_state *) MG_CALLOC(1, sizeof(*fus));
+      if (fus == NULL) {
+        nc->flags |= MG_F_CLOSE_IMMEDIATELY;
         return;
       }
       fus->lfn = (char *) MG_MALLOC(lfn.len + 1);
@@ -8365,12 +8369,6 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
       if (mp->status >= 0 && fus->fp != NULL) {
         LOG(LL_DEBUG, ("%p Uploaded %s (%s), %d bytes", nc, mp->file_name,
                        fus->lfn, (int) fus->num_recd));
-        mg_printf(nc,
-                  "HTTP/1.1 200 OK\r\n"
-                  "Content-Type: text/plain\r\n"
-                  "Connection: close\r\n\r\n"
-                  "Ok, %s - %d bytes.\r\n",
-                  mp->file_name, (int) fus->num_recd);
       } else {
         LOG(LL_ERROR, ("Failed to store %s (%s)", mp->file_name, fus->lfn));
         /*
@@ -8382,6 +8380,15 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
       MG_FREE(fus->lfn);
       MG_FREE(fus);
       mp->user_data = NULL;
+      /* Don't close the connection yet, there may be more files to come. */
+      break;
+    }
+    case MG_EV_HTTP_MULTIPART_REQUEST_END: {
+      mg_printf(nc,
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "Connection: close\r\n\r\n"
+                "Ok.\r\n");
       nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
     }

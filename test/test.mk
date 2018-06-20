@@ -28,7 +28,7 @@
 # OSX clang doesn't build ASAN. Use brew:
 #  $ brew tap homebrew/versions
 #  $ brew install llvm36 --with-clang --with-asan
-CLANG:=clang-3.6
+CLANG:=clang
 
 PEDANTIC=$(shell gcc --version 2>/dev/null | grep -q clang && echo -pedantic)
 
