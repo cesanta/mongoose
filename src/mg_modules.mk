@@ -8,6 +8,7 @@ HEADERS = mg_common.h \
           $(COMMON)/platforms/platform_esp8266.h \
           $(COMMON)/platforms/platform_cc3100.h \
           $(COMMON)/platforms/platform_cc3200.h \
+          $(COMMON)/platforms/platform_cc3220.h \
           $(COMMON)/platforms/platform_msp432.h \
           $(COMMON)/platforms/platform_tm4c129.h \
           $(COMMON)/platforms/platform_mbed.h \
