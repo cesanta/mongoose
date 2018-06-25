@@ -4164,6 +4164,40 @@ static const char *test_http_multipart_check_res(struct mbuf *res) {
   return NULL;
 }
 
+static const char *test_http_multipart_check_two_res(struct mbuf *res) {
+  const char *ptr = res->buf;
+  int i;
+
+  for (i = 0; i < 2; i++)
+  {
+    ASSERT_STREQ_NZ(ptr, "<MPRQ/test");
+    ptr += 10;
+    ASSERT_STREQ_NZ(ptr, "afoo");
+    ptr += 4;
+    ASSERT_STREQ_NZ(ptr, b1);
+    ptr += sizeof(b1) - 1;
+    ASSERT_STREQ_NZ(ptr, "afooFIN");
+    ptr += 7;
+    /* No file_name for second part */
+    ASSERT_STREQ_NZ(ptr, "b");
+    ptr++;
+    ASSERT_STREQ_NZ(ptr, b2);
+    ptr += sizeof(b2) - 1;
+    ASSERT_STREQ_NZ(ptr, "bFIN");
+    ptr += 4;
+    ASSERT_STREQ_NZ(ptr, "cbar");
+    ptr += 4;
+    ASSERT_STREQ_NZ(ptr, b4);
+    ptr += sizeof(b4) - 1;
+    ASSERT_STREQ_NZ(ptr, "cbarFIN");
+    ptr += 7;
+    ASSERT_STREQ_NZ(ptr, "+11MPRQ>");
+    ptr += 8;
+  }
+  ASSERT_EQ((size_t)(ptr - res->buf), res->len);
+  return NULL;
+}
+
 static const char *test_http_multipart2(void) {
   struct mg_mgr mgr;
   struct mg_connection *nc_listen;
@@ -4316,6 +4350,70 @@ static const char *test_http_multipart2(void) {
     mg_mgr_poll(&mgr, 1);
   }
 
+  mg_mgr_free(&mgr);
+
+  return NULL;
+}
+
+static const char *test_http_multipart3(void) {
+  struct mg_mgr mgr;
+  struct mg_connection *nc_listen;
+
+  const char multi_part_req_fmt[] =
+      "%s"
+      "Content-Disposition: form-data; name=\"a\"; filename=\"foo\"\r\n"
+      "\r\n"
+      "%s"
+      "\r\n--Asrf456BGe4h\r\n"
+      "Content-Disposition: form-data; name=\"b\"\r\n"
+      "\r\n"
+      "%s"
+      "\r\n--Asrf456BGe4h\r\n"
+      "Content-Disposition: form-data; name=\"c\"; filename=\"bar\"\r\n"
+      "\r\n"
+      "%s"
+      "\r\n--Asrf456BGe4h--\r\n"
+      "\r\n";
+
+  char multi_part_req[1024 * 5];
+  struct mg_connection *c;
+  const char *r;
+
+  struct cb_mp_srv_data mpd;
+  memset(&mpd, 0, sizeof(mpd));
+  mbuf_init(&mpd.res, 0);
+
+  mg_mgr_init(&mgr, NULL);
+  nc_listen = mg_bind(&mgr, "8765", cb_mp_srv);
+  nc_listen->user_data = &mpd;
+
+  mg_set_protocol_http_websocket(nc_listen);
+
+  snprintf(multi_part_req, sizeof(multi_part_req), multi_part_req_fmt, "\r\n--Asrf456BGe4h\r\n", b1,
+           b2, b4);
+
+
+
+  ASSERT((c = mg_connect_http(&mgr, cb_mp_empty,
+                              "http://127.0.0.1:8765/test",
+                              "Content-Type: "
+                              "multipart/form-data;boundary=Asrf456BGe4h\r\n"
+                              "Connection: keep-alive",
+                              multi_part_req)) != NULL);
+
+  c->user_data = multi_part_req;
+
+
+  mg_printf(c, "POST /test HTTP/1.1\r\n"
+       "Connection: keep-alive\r\n"
+       "Content-Type: multipart/form-data;boundary=Asrf456BGe4h\r\n"
+       "Content-Length: %d\r\n%s", strlen(multi_part_req), multi_part_req);
+
+  poll_until(&mgr, 10, c_int_eq, &mpd.request_end, (void *) 1);
+
+  if ((r = test_http_multipart_check_two_res(&mpd.res)) != NULL) return r;
+
+  mbuf_free(&mpd.res);
   mg_mgr_free(&mgr);
 
   return NULL;
@@ -5632,6 +5730,7 @@ const char *tests_run(const char *filter) {
   RUN_TEST(test_http_multipart);
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
   RUN_TEST(test_http_multipart2);
+  RUN_TEST(test_http_multipart3);
   RUN_TEST(test_http_multipart_upload);
 #endif
   RUN_TEST(test_parse_date_string);
