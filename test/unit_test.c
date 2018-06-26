@@ -4164,7 +4164,7 @@ static const char *test_http_multipart_check_res(struct mbuf *res) {
   return NULL;
 }
 
-static const char *test_http_multipart_check_two_res(struct mbuf *res) {
+static const char *test_http_multipart_check_pipeline_res(struct mbuf *res) {
   const char *ptr = res->buf;
   int i;
 
@@ -4355,7 +4355,7 @@ static const char *test_http_multipart2(void) {
   return NULL;
 }
 
-static const char *test_http_multipart3(void) {
+static const char *test_http_multipart_pipeline(void) {
   struct mg_mgr mgr;
   struct mg_connection *nc_listen;
 
@@ -4411,7 +4411,7 @@ static const char *test_http_multipart3(void) {
 
   poll_until(&mgr, 10, c_int_eq, &mpd.request_end, (void *) 1);
 
-  if ((r = test_http_multipart_check_two_res(&mpd.res)) != NULL) return r;
+  if ((r = test_http_multipart_check_pipeline_res(&mpd.res)) != NULL) return r;
 
   mbuf_free(&mpd.res);
   mg_mgr_free(&mgr);
@@ -5729,8 +5729,8 @@ const char *tests_run(const char *filter) {
   RUN_TEST(test_http_range);
   RUN_TEST(test_http_multipart);
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
-  RUN_TEST(test_http_multipart2);
-  RUN_TEST(test_http_multipart3);
+RUN_TEST(test_http_multipart2);
+  RUN_TEST(test_http_multipart_pipeline);
   RUN_TEST(test_http_multipart_upload);
 #endif
   RUN_TEST(test_parse_date_string);
