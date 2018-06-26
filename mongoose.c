@@ -6725,7 +6725,6 @@ static void mg_http_multipart_continue(struct mg_connection *c) {
         break;
       }
       case MPS_FINISHED: {
-        mbuf_remove(&c->recv_mbuf, c->recv_mbuf.len);
         return;
       }
     }
