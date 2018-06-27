@@ -224,7 +224,7 @@ void mg_mgr_init_opt(struct mg_mgr *m, void *user_data,
     m->num_ifaces = opts.num_ifaces;
     m->ifaces =
         (struct mg_iface **) MG_MALLOC(sizeof(*m->ifaces) * opts.num_ifaces);
-    for (i = 0; i < mg_num_ifaces; i++) {
+    for (i = 0; i < opts.num_ifaces; i++) {
       m->ifaces[i] = mg_if_create_iface(opts.ifaces[i], m);
       m->ifaces[i]->vtable->init(m->ifaces[i]);
     }
