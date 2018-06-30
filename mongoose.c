@@ -8290,6 +8290,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
                   "Not allowed to upload %s\r\n",
                   mp->file_name);
         nc->flags |= MG_F_SEND_AND_CLOSE;
+        MG_FREE(fus);
         return;
       }
       fus = (struct file_upload_state *) MG_CALLOC(1, sizeof(*fus));
