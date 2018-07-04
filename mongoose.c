@@ -10682,18 +10682,13 @@ void mg_set_protocol_mqtt(struct mg_connection *nc) {
   nc->proto_data_destructor = mg_mqtt_proto_data_destructor;
 }
 
-static void mg_mqtt_prepend_header(struct mg_connection *nc, uint8_t cmd,
-                                   uint8_t flags, size_t len) {
+static void mg_send_mqtt_header(struct mg_connection *nc, uint8_t cmd,
+                                uint8_t flags, size_t len) {
   struct mg_mqtt_proto_data *pd = (struct mg_mqtt_proto_data *) nc->proto_data;
-  size_t off = nc->send_mbuf.len - len;
-  uint8_t header = cmd << 4 | (uint8_t) flags;
-
   uint8_t buf[1 + sizeof(size_t)];
   uint8_t *vlen = &buf[1];
 
-  assert(nc->send_mbuf.len >= len);
-
-  buf[0] = header;
+  buf[0] = (cmd << 4) | flags;
 
   /* mqtt variable length encoding */
   do {
@@ -10703,7 +10698,7 @@ static void mg_mqtt_prepend_header(struct mg_connection *nc, uint8_t cmd,
     vlen++;
   } while (len > 0);
 
-  mbuf_insert(&nc->send_mbuf, off, buf, vlen - buf);
+  mg_send(nc, buf, vlen - buf);
   pd->last_control_time = mg_time();
 }
 
@@ -10714,11 +10709,10 @@ void mg_send_mqtt_handshake(struct mg_connection *nc, const char *client_id) {
 
 void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
                                 struct mg_send_mqtt_handshake_opts opts) {
-  uint16_t hlen, nlen, rem_len = 0;
   struct mg_mqtt_proto_data *pd = (struct mg_mqtt_proto_data *) nc->proto_data;
-
-  mg_send(nc, "\00\04MQTT\04", 7);
-  rem_len += 7;
+  uint16_t id_len, will_topic_len = 0, will_message_len = 0, name_len = 0, pw_len = 0;
+  uint16_t netbytes;
+  size_t total_len;
 
   if (opts.user_name != NULL) {
     opts.flags |= MG_MQTT_HAS_USER_NAME;
@@ -10733,49 +10727,54 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
     opts.keep_alive = 60;
   }
 
+  id_len = strlen(client_id);
+  total_len = 7 + 1 + 2 + 2 + id_len;
+
+  if(opts.flags & MG_MQTT_HAS_WILL) {
+    will_topic_len = strlen(opts.will_topic);
+    will_message_len = strlen(opts.will_message);
+    total_len += 2 + will_topic_len + 2 + will_message_len;
+  }
+  if(opts.flags & MG_MQTT_HAS_USER_NAME) {
+    name_len = strlen(opts.user_name);
+    total_len += 2 + name_len;
+  }
+  if(opts.flags & MG_MQTT_HAS_PASSWORD) {
+    pw_len = strlen(opts.password);
+    total_len += 2 + pw_len;
+  }
+
+  mg_send_mqtt_header(nc, MG_MQTT_CMD_CONNECT, 0, total_len);
+  mg_send(nc, "\00\04MQTT\04", 7);
   mg_send(nc, &opts.flags, 1);
-  rem_len += 1;
 
-  nlen = htons(opts.keep_alive);
-  mg_send(nc, &nlen, 2);
-  rem_len += 2;
+  netbytes = htons(opts.keep_alive);
+  mg_send(nc, &netbytes, 2);
 
-  hlen = strlen(client_id);
-  nlen = htons((uint16_t) hlen);
-  mg_send(nc, &nlen, 2);
-  mg_send(nc, client_id, hlen);
-  rem_len += 2 + hlen;
+  netbytes = htons(id_len);
+  mg_send(nc, &netbytes, 2);
+  mg_send(nc, client_id, id_len);
 
   if (opts.flags & MG_MQTT_HAS_WILL) {
-    hlen = strlen(opts.will_topic);
-    nlen = htons((uint16_t) hlen);
-    mg_send(nc, &nlen, 2);
-    mg_send(nc, opts.will_topic, hlen);
-    rem_len += 2 + hlen;
+    netbytes = htons(will_topic_len);
+    mg_send(nc, &netbytes, 2);
+    mg_send(nc, opts.will_topic, will_topic_len);
 
-    hlen = strlen(opts.will_message);
-    nlen = htons((uint16_t) hlen);
-    mg_send(nc, &nlen, 2);
-    mg_send(nc, opts.will_message, hlen);
-    rem_len += 2 + hlen;
+    netbytes = htons(will_message_len);
+    mg_send(nc, &netbytes, 2);
+    mg_send(nc, opts.will_message, will_message_len);
   }
 
   if (opts.flags & MG_MQTT_HAS_USER_NAME) {
-    hlen = strlen(opts.user_name);
-    nlen = htons((uint16_t) hlen);
-    mg_send(nc, &nlen, 2);
-    mg_send(nc, opts.user_name, hlen);
-    rem_len += 2 + hlen;
+    netbytes = htons(name_len);
+    mg_send(nc, &netbytes, 2);
+    mg_send(nc, opts.user_name, name_len);
   }
   if (opts.flags & MG_MQTT_HAS_PASSWORD) {
-    hlen = strlen(opts.password);
-    nlen = htons((uint16_t) hlen);
-    mg_send(nc, &nlen, 2);
-    mg_send(nc, opts.password, hlen);
-    rem_len += 2 + hlen;
+    netbytes = htons(pw_len);
+    mg_send(nc, &netbytes, 2);
+    mg_send(nc, opts.password, pw_len);
   }
-
-  mg_mqtt_prepend_header(nc, MG_MQTT_CMD_CONNECT, 0, rem_len);
 
   if (pd != NULL) {
     pd->keep_alive = opts.keep_alive;
@@ -10785,40 +10784,52 @@ void mg_send_mqtt_handshake_opt(struct mg_connection *nc, const char *client_id,
 void mg_mqtt_publish(struct mg_connection *nc, const char *topic,
                      uint16_t message_id, int flags, const void *data,
                      size_t len) {
-  size_t old_len = nc->send_mbuf.len;
+  uint16_t netbytes;
+  uint16_t topic_len = strlen(topic);
 
-  uint16_t topic_len = htons((uint16_t) strlen(topic));
-  uint16_t message_id_net = htons(message_id);
-
-  mg_send(nc, &topic_len, 2);
-  mg_send(nc, topic, strlen(topic));
-  if (MG_MQTT_GET_QOS(flags) > 0) {
-    mg_send(nc, &message_id_net, 2);
+  size_t total_len = 2 + topic_len + len;
+  if(MG_MQTT_GET_QOS(flags) > 0) {
+    total_len += 2;
   }
-  mg_send(nc, data, len);
 
-  mg_mqtt_prepend_header(nc, MG_MQTT_CMD_PUBLISH, flags,
-                         nc->send_mbuf.len - old_len);
+  mg_send_mqtt_header(nc, MG_MQTT_CMD_PUBLISH, flags, total_len);
+
+  netbytes = htons(topic_len);
+  mg_send(nc, &netbytes, 2);
+  mg_send(nc, topic, topic_len);
+
+  if (MG_MQTT_GET_QOS(flags) > 0) {
+    netbytes = htons(message_id);
+    mg_send(nc, &netbytes, 2);
+  }
+
+  mg_send(nc, data, len);
 }
 
 void mg_mqtt_subscribe(struct mg_connection *nc,
                        const struct mg_mqtt_topic_expression *topics,
                        size_t topics_len, uint16_t message_id) {
-  size_t old_len = nc->send_mbuf.len;
-
-  uint16_t message_id_n = htons(message_id);
+  uint16_t netbytes;
   size_t i;
+  uint16_t topic_len;
+  size_t total_len = 2;
 
-  mg_send(nc, (char *) &message_id_n, 2);
-  for (i = 0; i < topics_len; i++) {
-    uint16_t topic_len_n = htons((uint16_t) strlen(topics[i].topic));
-    mg_send(nc, &topic_len_n, 2);
-    mg_send(nc, topics[i].topic, strlen(topics[i].topic));
-    mg_send(nc, &topics[i].qos, 1);
+  for(i = 0; i < topics_len; i++) {
+    total_len += 2 + strlen(topics[i].topic) + 1;
   }
 
-  mg_mqtt_prepend_header(nc, MG_MQTT_CMD_SUBSCRIBE, MG_MQTT_QOS(1),
-                         nc->send_mbuf.len - old_len);
+  mg_send_mqtt_header(nc, MG_MQTT_CMD_SUBSCRIBE, MG_MQTT_QOS(1), total_len);
+
+  netbytes = htons(message_id);
+  mg_send(nc, (char *) &netbytes, 2);
+
+  for (i = 0; i < topics_len; i++) {
+    topic_len = strlen(topics[i].topic);
+    netbytes = htons(topic_len);
+    mg_send(nc, &netbytes, 2);
+    mg_send(nc, topics[i].topic, topic_len);
+    mg_send(nc, &topics[i].qos, 1);
+  }
 }
 
 int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
@@ -10838,27 +10849,33 @@ int mg_mqtt_next_subscribe_topic(struct mg_mqtt_message *msg,
 
 void mg_mqtt_unsubscribe(struct mg_connection *nc, char **topics,
                          size_t topics_len, uint16_t message_id) {
-  size_t old_len = nc->send_mbuf.len;
-
-  uint16_t message_id_n = htons(message_id);
+  uint16_t netbytes;
   size_t i;
+  uint16_t topic_len;
+  size_t total_len = 2;
 
-  mg_send(nc, (char *) &message_id_n, 2);
-  for (i = 0; i < topics_len; i++) {
-    uint16_t topic_len_n = htons((uint16_t) strlen(topics[i]));
-    mg_send(nc, &topic_len_n, 2);
-    mg_send(nc, topics[i], strlen(topics[i]));
+  for(i = 0; i < topics_len; i++) {
+    total_len += 2 + strlen(topics[i]);
   }
 
-  mg_mqtt_prepend_header(nc, MG_MQTT_CMD_UNSUBSCRIBE, MG_MQTT_QOS(1),
-                         nc->send_mbuf.len - old_len);
+  mg_send_mqtt_header(nc, MG_MQTT_CMD_UNSUBSCRIBE, MG_MQTT_QOS(1), total_len);
+
+  netbytes = htons(message_id);
+  mg_send(nc, (char *) &netbytes, 2);
+
+  for (i = 0; i < topics_len; i++) {
+    topic_len = strlen(topics[i]);
+    netbytes = htons(topic_len);
+    mg_send(nc, &netbytes, 2);
+    mg_send(nc, topics[i], topic_len);
+  }
 }
 
 void mg_mqtt_connack(struct mg_connection *nc, uint8_t return_code) {
   uint8_t unused = 0;
+  mg_send_mqtt_header(nc, MG_MQTT_CMD_CONNACK, 0, 2);
   mg_send(nc, &unused, 1);
   mg_send(nc, &return_code, 1);
-  mg_mqtt_prepend_header(nc, MG_MQTT_CMD_CONNACK, 0, 2);
 }
 
 /*
@@ -10868,10 +10885,13 @@ void mg_mqtt_connack(struct mg_connection *nc, uint8_t return_code) {
  */
 static void mg_send_mqtt_short_command(struct mg_connection *nc, uint8_t cmd,
                                        uint16_t message_id) {
-  uint16_t message_id_net = htons(message_id);
+  uint16_t netbytes;
   uint8_t flags = (cmd == MG_MQTT_CMD_PUBREL ? 2 : 0);
-  mg_send(nc, &message_id_net, 2);
-  mg_mqtt_prepend_header(nc, cmd, flags, 2 /* len */);
+
+  mg_send_mqtt_header(nc, cmd, flags, 2 /* len */);
+
+  netbytes = htons(message_id);
+  mg_send(nc, &netbytes, 2);
 }
 
 void mg_mqtt_puback(struct mg_connection *nc, uint16_t message_id) {
@@ -10893,12 +10913,16 @@ void mg_mqtt_pubcomp(struct mg_connection *nc, uint16_t message_id) {
 void mg_mqtt_suback(struct mg_connection *nc, uint8_t *qoss, size_t qoss_len,
                     uint16_t message_id) {
   size_t i;
-  uint16_t message_id_net = htons(message_id);
-  mg_send(nc, &message_id_net, 2);
+  uint16_t netbytes;
+
+  mg_send_mqtt_header(nc, MG_MQTT_CMD_SUBACK, MG_MQTT_QOS(1), 2 + qoss_len);
+
+  netbytes = htons(message_id);
+  mg_send(nc, &netbytes, 2);
+
   for (i = 0; i < qoss_len; i++) {
     mg_send(nc, &qoss[i], 1);
   }
-  mg_mqtt_prepend_header(nc, MG_MQTT_CMD_SUBACK, MG_MQTT_QOS(1), 2 + qoss_len);
 }
 
 void mg_mqtt_unsuback(struct mg_connection *nc, uint16_t message_id) {
@@ -10906,15 +10930,15 @@ void mg_mqtt_unsuback(struct mg_connection *nc, uint16_t message_id) {
 }
 
 void mg_mqtt_ping(struct mg_connection *nc) {
-  mg_mqtt_prepend_header(nc, MG_MQTT_CMD_PINGREQ, 0, 0);
+  mg_send_mqtt_header(nc, MG_MQTT_CMD_PINGREQ, 0, 0);
 }
 
 void mg_mqtt_pong(struct mg_connection *nc) {
-  mg_mqtt_prepend_header(nc, MG_MQTT_CMD_PINGRESP, 0, 0);
+  mg_send_mqtt_header(nc, MG_MQTT_CMD_PINGRESP, 0, 0);
 }
 
 void mg_mqtt_disconnect(struct mg_connection *nc) {
-  mg_mqtt_prepend_header(nc, MG_MQTT_CMD_DISCONNECT, 0, 0);
+  mg_send_mqtt_header(nc, MG_MQTT_CMD_DISCONNECT, 0, 0);
 }
 
 #endif /* MG_ENABLE_MQTT */
