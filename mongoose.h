@@ -2283,6 +2283,9 @@ int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n);
  */
 const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
 
+/* Strip whitespace at the start and the end of s */
+struct mg_str mg_strstrip(struct mg_str s);
+
 #ifdef __cplusplus
 }
 #endif
