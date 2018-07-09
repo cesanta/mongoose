@@ -13,6 +13,7 @@ signature: |
   #endif
     void *user_data; /* User data */
     int num_ifaces;
+    int num_calls;
     struct mg_iface **ifaces; /* network interfaces */
     const char *nameserver;   /* DNS server to use */
   };

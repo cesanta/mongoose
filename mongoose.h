@@ -2030,7 +2030,6 @@ typedef int sock_t;
 #if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
 struct mg_mgr;
 struct mg_connection;
-uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr);
 void mg_lwip_set_keepalive_params(struct mg_connection *nc, int idle,
                                   int interval, int count);
 #endif
@@ -3718,6 +3717,12 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
 /* Deliver a POLL event to the connection. */
 int mg_if_poll(struct mg_connection *nc, double now);
 
+/*
+ * Return minimal timer value amoung connections in the manager.
+ * Returns 0 if there aren't any timers.
+ */
+double mg_mgr_min_timer(const struct mg_mgr *mgr);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
@@ -3875,6 +3880,7 @@ struct mg_mgr {
 #endif
   void *user_data; /* User data */
   int num_ifaces;
+  int num_calls;
   struct mg_iface **ifaces; /* network interfaces */
   const char *nameserver;   /* DNS server to use */
 };
@@ -3987,17 +3993,17 @@ void mg_mgr_init_opt(struct mg_mgr *mgr, void *user_data,
  *
  * Closes and deallocates all active connections.
  */
-void mg_mgr_free(struct mg_mgr *);
+void mg_mgr_free(struct mg_mgr *mgr);
 
 /*
  * This function performs the actual IO and must be called in a loop
- * (an event loop). It returns the current timestamp.
+ * (an event loop). It returns number of user events generated (except POLLs).
  * `milli` is the maximum number of milliseconds to sleep.
  * `mg_mgr_poll()` checks all connections for IO readiness. If at least one
  * of the connections is IO-ready, `mg_mgr_poll()` triggers the respective
  * event handlers and returns.
  */
-time_t mg_mgr_poll(struct mg_mgr *, int milli);
+int mg_mgr_poll(struct mg_mgr *mgr, int milli);
 
 #if MG_ENABLE_BROADCAST
 /*

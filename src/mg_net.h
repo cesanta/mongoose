@@ -89,6 +89,7 @@ struct mg_mgr {
 #endif
   void *user_data; /* User data */
   int num_ifaces;
+  int num_calls;
   struct mg_iface **ifaces; /* network interfaces */
   const char *nameserver;   /* DNS server to use */
 };
@@ -201,17 +202,17 @@ void mg_mgr_init_opt(struct mg_mgr *mgr, void *user_data,
  *
  * Closes and deallocates all active connections.
  */
-void mg_mgr_free(struct mg_mgr *);
+void mg_mgr_free(struct mg_mgr *mgr);
 
 /*
  * This function performs the actual IO and must be called in a loop
- * (an event loop). It returns the current timestamp.
+ * (an event loop). It returns number of user events generated (except POLLs).
  * `milli` is the maximum number of milliseconds to sleep.
  * `mg_mgr_poll()` checks all connections for IO readiness. If at least one
  * of the connections is IO-ready, `mg_mgr_poll()` triggers the respective
  * event handlers and returns.
  */
-time_t mg_mgr_poll(struct mg_mgr *, int milli);
+int mg_mgr_poll(struct mg_mgr *mgr, int milli);
 
 #if MG_ENABLE_BROADCAST
 /*

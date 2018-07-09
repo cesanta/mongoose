@@ -39,3 +39,15 @@ struct mg_iface *mg_find_iface(struct mg_mgr *mgr,
   }
   return NULL;
 }
+
+double mg_mgr_min_timer(const struct mg_mgr *mgr) {
+  double min_timer = 0;
+  struct mg_connection *nc;
+  for (nc = mgr->active_connections; nc != NULL; nc = nc->next) {
+    if (nc->ev_timer_time <= 0) continue;
+    if (min_timer == 0 || nc->ev_timer_time < min_timer) {
+      min_timer = nc->ev_timer_time;
+    }
+  }
+  return min_timer;
+}

@@ -118,6 +118,12 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
 /* Deliver a POLL event to the connection. */
 int mg_if_poll(struct mg_connection *nc, double now);
 
+/*
+ * Return minimal timer value amoung connections in the manager.
+ * Returns 0 if there aren't any timers.
+ */
+double mg_mgr_min_timer(const struct mg_mgr *mgr);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

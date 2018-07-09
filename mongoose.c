@@ -2408,6 +2408,7 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
                   (nc->flags & _MG_CALLBACK_MODIFIABLE_FLAGS_MASK);
     }
   }
+  if (ev != MG_EV_POLL) nc->mgr->num_calls++;
   if (ev != MG_EV_POLL) {
     DBG(("%p after %s flags=0x%lx rmbl=%d smbl=%d", nc,
          ev_handler == nc->handler ? "user" : "proto", nc->flags,
@@ -2585,19 +2586,14 @@ void mg_mgr_free(struct mg_mgr *m) {
   MG_FREE((char *) m->nameserver);
 }
 
-time_t mg_mgr_poll(struct mg_mgr *m, int timeout_ms) {
-  int i;
-  time_t now = 0; /* oh GCC, seriously ? */
-
-  if (m->num_ifaces == 0) {
-    LOG(LL_ERROR, ("cannot poll: no interfaces"));
-    return 0;
-  }
+int mg_mgr_poll(struct mg_mgr *m, int timeout_ms) {
+  int i, num_calls_before = m->num_calls;
 
   for (i = 0; i < m->num_ifaces; i++) {
-    now = m->ifaces[i]->vtable->poll(m->ifaces[i], timeout_ms);
+    m->ifaces[i]->vtable->poll(m->ifaces[i], timeout_ms);
   }
-  return now;
+
+  return (m->num_calls - num_calls_before);
 }
 
 int mg_vprintf(struct mg_connection *nc, const char *fmt, va_list ap) {
@@ -3584,6 +3580,18 @@ struct mg_iface *mg_find_iface(struct mg_mgr *mgr,
     }
   }
   return NULL;
+}
+
+double mg_mgr_min_timer(const struct mg_mgr *mgr) {
+  double min_timer = 0;
+  struct mg_connection *nc;
+  for (nc = mgr->active_connections; nc != NULL; nc = nc->next) {
+    if (nc->ev_timer_time <= 0) continue;
+    if (min_timer == 0 || nc->ev_timer_time < min_timer) {
+      min_timer = nc->ev_timer_time;
+    }
+  }
+  return min_timer;
 }
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_net_if_socket.c"
@@ -15714,38 +15722,6 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
 #endif
   (void) timeout_ms;
   return now;
-}
-
-uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
-  struct mg_connection *nc;
-  double now;
-  double min_timer = 0;
-  int num_timers = 0;
-  mg_ev_mgr_lwip_process_signals(mgr);
-  for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
-    struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
-    if (nc->ev_timer_time > 0) {
-      if (num_timers == 0 || nc->ev_timer_time < min_timer) {
-        min_timer = nc->ev_timer_time;
-      }
-      num_timers++;
-    }
-    /* We want and can send data, request a poll immediately. */
-    if (nc->sock != INVALID_SOCKET && mg_lwip_if_can_send(nc, cs)) {
-      return 0;
-    }
-  }
-  uint32_t timeout_ms = ~0;
-  now = mg_time();
-  if (num_timers > 0) {
-    /* If we have a timer that is past due, do a poll ASAP. */
-    if (min_timer < now) return 0;
-    double timer_timeout_ms = (min_timer - now) * 1000 + 1 /* rounding */;
-    if (timer_timeout_ms < timeout_ms) {
-      timeout_ms = timer_timeout_ms;
-    }
-  }
-  return timeout_ms;
 }
 
 #endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL */
