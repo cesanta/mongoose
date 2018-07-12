@@ -146,7 +146,9 @@ static int mg_accept_conn(struct mg_connection *lc) {
   /* NOTE(lsm): on Windows, sock is always > FD_SETSIZE */
   sock_t sock = accept(lc->sock, &sa.sa, &sa_len);
   if (sock == INVALID_SOCKET) {
-    if (mg_is_error()) DBG(("%p: failed to accept: %d", lc, mg_get_errno()));
+    if (mg_is_error()) {
+      DBG(("%p: failed to accept: %d", lc, mg_get_errno()));
+    }
     return 0;
   }
   nc = mg_if_accept_new_conn(lc);

@@ -34,6 +34,7 @@ static void mg_ssl_mbed_log(void *ctx, int level, const char *file, int line,
   LOG(cs_level, ("%p %.*s", ctx, (int) (strlen(str) - 1), str));
   (void) file;
   (void) line;
+  (void) cs_level;
 }
 
 struct mg_ssl_if_ctx {

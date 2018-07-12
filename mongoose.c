@@ -549,6 +549,8 @@ void cs_log_set_file(FILE *file);
  */
 void cs_log_printf(const char *fmt, ...) PRINTF_LIKE(1, 2);
 
+#if CS_ENABLE_STDIO
+
 /*
  * Format and print message `x` with the given level `l`. Example:
  *
@@ -561,6 +563,12 @@ void cs_log_printf(const char *fmt, ...) PRINTF_LIKE(1, 2);
   do {                                                               \
     if (cs_log_print_prefix(l, __func__, __FILE__)) cs_log_printf x; \
   } while (0)
+
+#else
+
+#define LOG(l, x) ((void) l)
+
+#endif
 
 #ifndef CS_NDEBUG
 
@@ -623,12 +631,11 @@ enum cs_log_level cs_log_threshold WEAK =
     LL_ERROR;
 #endif
 
+#if CS_ENABLE_STDIO
 static char *s_filter_pattern = NULL;
 static size_t s_filter_pattern_len;
 
 void cs_log_set_filter(const char *pattern) WEAK;
-
-#if CS_ENABLE_STDIO
 
 FILE *cs_log_file WEAK = NULL;
 
@@ -3729,7 +3736,9 @@ static int mg_accept_conn(struct mg_connection *lc) {
   /* NOTE(lsm): on Windows, sock is always > FD_SETSIZE */
   sock_t sock = accept(lc->sock, &sa.sa, &sa_len);
   if (sock == INVALID_SOCKET) {
-    if (mg_is_error()) DBG(("%p: failed to accept: %d", lc, mg_get_errno()));
+    if (mg_is_error()) {
+      DBG(("%p: failed to accept: %d", lc, mg_get_errno()));
+    }
     return 0;
   }
   nc = mg_if_accept_new_conn(lc);
@@ -4837,6 +4846,7 @@ static void mg_ssl_mbed_log(void *ctx, int level, const char *file, int line,
   LOG(cs_level, ("%p %.*s", ctx, (int) (strlen(str) - 1), str));
   (void) file;
   (void) line;
+  (void) cs_level;
 }
 
 struct mg_ssl_if_ctx {
@@ -15299,6 +15309,8 @@ static void mg_lwip_tcp_write_tcpip(void *arg) {
     return;
   }
   ctx->ret = len;
+  (void) unsent;
+  (void) unacked;
 }
 
 int mg_lwip_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
