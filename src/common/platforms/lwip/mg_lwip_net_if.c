@@ -501,6 +501,8 @@ static void mg_lwip_tcp_write_tcpip(void *arg) {
     return;
   }
   ctx->ret = len;
+  (void) unsent;
+  (void) unacked;
 }
 
 int mg_lwip_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {

@@ -117,6 +117,8 @@ void cs_log_set_file(FILE *file);
  */
 void cs_log_printf(const char *fmt, ...) PRINTF_LIKE(1, 2);
 
+#if CS_ENABLE_STDIO
+
 /*
  * Format and print message `x` with the given level `l`. Example:
  *
@@ -129,6 +131,12 @@ void cs_log_printf(const char *fmt, ...) PRINTF_LIKE(1, 2);
   do {                                                               \
     if (cs_log_print_prefix(l, __func__, __FILE__)) cs_log_printf x; \
   } while (0)
+
+#else
+
+#define LOG(l, x) ((void) l)
+
+#endif
 
 #ifndef CS_NDEBUG
 

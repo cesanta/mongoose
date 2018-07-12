@@ -31,12 +31,11 @@ enum cs_log_level cs_log_threshold WEAK =
     LL_ERROR;
 #endif
 
+#if CS_ENABLE_STDIO
 static char *s_filter_pattern = NULL;
 static size_t s_filter_pattern_len;
 
 void cs_log_set_filter(const char *pattern) WEAK;
-
-#if CS_ENABLE_STDIO
 
 FILE *cs_log_file WEAK = NULL;
 
