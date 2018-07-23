@@ -25,7 +25,7 @@ $(Q) $(CC_WRAPPER) $(LD) $(LIBDIRS) -T$(LD_SCRIPT) $(LDFLAGS) -o $@ \
 endef
 
 define compile_params
-$(vecho) "$5    $1 -> $2"
+$(vecho) "$5    $1"
 $(Q) $(CC_WRAPPER) $3 -MD -MP $(INCDIRS) $4 -c $1 -o $2
 endef
 
