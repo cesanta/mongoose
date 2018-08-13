@@ -9140,7 +9140,6 @@ MG_INTERNAL void mg_handle_cgi(struct mg_connection *nc, const char *prog,
 
   if (mg_start_process(opts->cgi_interpreter, prog, blk.buf, blk.vars, dir,
                        fds[1]) != 0) {
-    size_t n = nc->recv_mbuf.len - (hm->message.len - hm->body.len);
     struct mg_connection *cgi_nc =
         mg_add_sock(nc->mgr, fds[0], mg_cgi_ev_handler MG_UD_ARG(nc));
     struct mg_http_proto_data *cgi_pd = mg_http_get_proto_data(nc);
@@ -9150,8 +9149,8 @@ MG_INTERNAL void mg_handle_cgi(struct mg_connection *nc, const char *prog,
 #endif
     nc->flags |= MG_F_HTTP_CGI_PARSE_HEADERS;
     /* Push POST data to the CGI */
-    if (n > 0 && n < nc->recv_mbuf.len) {
-      mg_send(cgi_pd->cgi.cgi_nc, hm->body.p, n);
+    if (hm->body.len > 0) {
+      mg_send(cgi_pd->cgi.cgi_nc, hm->body.p, hm->body.len);
     }
     mbuf_remove(&nc->recv_mbuf, nc->recv_mbuf.len);
   } else {
