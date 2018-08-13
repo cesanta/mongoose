@@ -1,6 +1,18 @@
 /*
- * Copyright (c) 2014-2016 Cesanta Software Limited
+ * Copyright (c) 2014-2018 Cesanta Software Limited
  * All rights reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the ""License"");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an ""AS IS"" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include "common/cs_dbg.h"
@@ -19,12 +31,11 @@ enum cs_log_level cs_log_threshold WEAK =
     LL_ERROR;
 #endif
 
+#if CS_ENABLE_STDIO
 static char *s_filter_pattern = NULL;
 static size_t s_filter_pattern_len;
 
 void cs_log_set_filter(const char *pattern) WEAK;
-
-#if CS_ENABLE_STDIO
 
 FILE *cs_log_file WEAK = NULL;
 

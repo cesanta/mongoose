@@ -23,7 +23,7 @@ LD := $(addprefix $(XTENSA_BINDIR)/,xtensa-lx106-elf-gcc)
 endif
 CC_WRAPPER ?=
 
-CFLAGS    = -Os -O3 -Wpointer-arith -Wundef -Werror -Wl,-EL \
+CFLAGS    = -Os -Wpointer-arith -Wundef -Werror -Wl,-EL \
             -fno-inline-functions -nostdlib -mlongcalls -mtext-section-literals \
             -D__ets__ -DIRAM='__attribute__((section(".fast.text")))' \
             -DNOINSTR='__attribute__((no_instrument_function))' \

@@ -8,6 +8,7 @@ HEADERS = mg_common.h \
           $(COMMON)/platforms/platform_esp8266.h \
           $(COMMON)/platforms/platform_cc3100.h \
           $(COMMON)/platforms/platform_cc3200.h \
+          $(COMMON)/platforms/platform_cc3220.h \
           $(COMMON)/platforms/platform_msp432.h \
           $(COMMON)/platforms/platform_tm4c129.h \
           $(COMMON)/platforms/platform_mbed.h \
@@ -96,7 +97,6 @@ SOURCES = $(COMMON)/mg_mem.h \
           $(COMMON)/platforms/lwip/mg_lwip_net_if.h \
           $(COMMON)/platforms/lwip/mg_lwip_net_if.c \
           $(COMMON)/platforms/lwip/mg_lwip_ev_mgr.c \
-          $(COMMON)/platforms/lwip/mg_lwip_ssl_if.c \
           $(COMMON)/platforms/wince/wince_libc.c \
           $(COMMON)/platforms/pic32/pic32_net_if.h \
           $(COMMON)/platforms/pic32/pic32_net_if.c \

@@ -1,6 +1,18 @@
 /*
- * Copyright (c) 2014-2016 Cesanta Software Limited
+ * Copyright (c) 2014-2018 Cesanta Software Limited
  * All rights reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the ""License"");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an ""AS IS"" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #ifndef CS_COMMON_PLATFORMS_PLATFORM_ESP8266_H_
@@ -29,10 +41,6 @@ typedef struct stat cs_stat_t;
 #define INT64_X_FMT PRIx64
 #define __cdecl
 #define _FILE_OFFSET_BITS 32
-
-#if !defined(RTOS_SDK) && !defined(__cplusplus)
-#define fileno(x) -1
-#endif
 
 #define MG_LWIP 1
 

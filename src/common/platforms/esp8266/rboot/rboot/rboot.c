@@ -160,7 +160,8 @@ static uint8 calc_chksum(uint8 *start, uint8 *end) {
 }
 #endif
 
-#define UART_CLKDIV_26MHZ(B) (52000000 + B / 2) / B
+#define UART_CLKDIV_80MHZ(B) (80000000 + B / 2) / B
+#define UART_CLKDIV_52MHZ(B) (52000000 + B / 2) / B
 
 // prevent this function being placed inline with main
 // to keep main's stack size as small as possible
@@ -182,10 +183,23 @@ uint32 NOINLINE find_image(void) {
 	// delay to slow boot (help see messages when debugging)
 	//ets_delay_us(2000000);
 
-	uart_div_modify(0, UART_CLKDIV_26MHZ(115200));
+	/*
+	 * UART divider depends on the APB frequency. Cold boot starts with 52MHz APB,
+	 * SDK configures PLL, sets it to 80 and it persists across soft reset
+	 * so on soft reset a different divider should be used. What we really want to
+	 * know is if the PLL is running but since that is completely undocumented
+	 * we use CPU frequency bit as a workaround: mos sets CPU to 160 MHz on startup
+	 * so we assume that if frequency is preserved, then it's soft reset, PLL is
+	 * running and APB is at 80 MHz.
+	 */
+	if (READ_PERI_REG(0x3ff00014) & 1) {
+		uart_div_modify(0, UART_CLKDIV_80MHZ(115200));
+	} else {
+		uart_div_modify(0, UART_CLKDIV_52MHZ(115200));
+	}
 	ets_delay_us(1000);
 
-	ets_printf("\r\nrBoot v1.2.1 - richardaburton@gmail.com\r\n");
+	ets_printf("\r\nrBoot v1.2.1-cesanta1 - richardaburton@gmail.com\r\n");
 
 	// read rom header
 	SPIRead(0, header, sizeof(rom_header));

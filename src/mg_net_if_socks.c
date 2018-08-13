@@ -9,18 +9,35 @@ struct socksdata {
   char *proxy_addr;        /* HOST:PORT of the socks5 proxy server */
   struct mg_connection *s; /* Respective connection to the server */
   struct mg_connection *c; /* Connection to the client */
-  struct mbuf tmp;         /* Temporary buffer for sent data */
 };
 
 static void socks_if_disband(struct socksdata *d) {
   LOG(LL_DEBUG, ("disbanding proxy %p %p", d->c, d->s));
-  if (d->c) d->c->flags |= MG_F_SEND_AND_CLOSE;
-  if (d->s) d->s->flags |= MG_F_SEND_AND_CLOSE;
-  d->c = d->s = NULL;
+  if (d->c) {
+    d->c->flags |= MG_F_SEND_AND_CLOSE;
+    d->c->user_data = NULL;
+    d->c = NULL;
+  }
+  if (d->s) {
+    d->s->flags |= MG_F_SEND_AND_CLOSE;
+    d->s->user_data = NULL;
+    d->s = NULL;
+  }
+}
+
+static void socks_if_relay(struct mg_connection *s) {
+  struct socksdata *d = (struct socksdata *) s->user_data;
+  if (d == NULL || d->c == NULL || !(s->flags & MG_SOCKS_CONNECT_DONE) ||
+      d->s == NULL) {
+    return;
+  }
+  if (s->recv_mbuf.len > 0) mg_if_can_recv_cb(d->c);
+  if (d->c->send_mbuf.len > 0 && s->send_mbuf.len == 0) mg_if_can_send_cb(d->c);
 }
 
 static void socks_if_handler(struct mg_connection *c, int ev, void *ev_data) {
   struct socksdata *d = (struct socksdata *) c->user_data;
+  if (d == NULL) return;
   if (ev == MG_EV_CONNECT) {
     int res = *(int *) ev_data;
     if (res == 0) {
@@ -53,6 +70,7 @@ static void socks_if_handler(struct mg_connection *c, int ev, void *ev_data) {
       memcpy(buf + 4, &d->c->sa.sin.sin_addr, 4);
       memcpy(buf + 8, &d->c->sa.sin.sin_port, 2);
       mg_send(c, buf, sizeof(buf));
+      LOG(LL_DEBUG, ("%p Sent connect request", c));
     }
     /* Process connect request */
     if ((c->flags & MG_SOCKS_HANDSHAKE_DONE) &&
@@ -65,17 +83,12 @@ static void socks_if_handler(struct mg_connection *c, int ev, void *ev_data) {
       }
       mbuf_remove(&c->recv_mbuf, 10);
       c->flags |= MG_SOCKS_CONNECT_DONE;
-      /* Connected. Move sent data from client, if any, to server */
-      if (d->s && d->c) {
-        mbuf_append(&d->s->send_mbuf, d->tmp.buf, d->tmp.len);
-        mbuf_free(&d->tmp);
-      }
+      LOG(LL_DEBUG, ("%p Connect done %p", c, d->c));
+      mg_if_connect_cb(d->c, 0);
     }
-    /* All flags are set, we're in relay mode */
-    if ((c->flags & MG_SOCKS_CONNECT_DONE) && d->c && d->s) {
-      mbuf_append(&d->c->recv_mbuf, d->s->recv_mbuf.buf, d->s->recv_mbuf.len);
-      mbuf_remove(&d->s->recv_mbuf, d->s->recv_mbuf.len);
-    }
+    socks_if_relay(c);
+  } else if (ev == MG_EV_SEND || ev == MG_EV_POLL) {
+    socks_if_relay(c);
   }
 }
 
@@ -85,7 +98,7 @@ static void mg_socks_if_connect_tcp(struct mg_connection *c,
   d->c = c;
   d->s = mg_connect(c->mgr, d->proxy_addr, socks_if_handler);
   d->s->user_data = d;
-  LOG(LL_DEBUG, ("%p %s", c, d->proxy_addr));
+  LOG(LL_DEBUG, ("%p %s %p %p", c, d->proxy_addr, d, d->s));
   (void) sa;
 }
 
@@ -107,29 +120,44 @@ static int mg_socks_if_listen_udp(struct mg_connection *c,
   return -1;
 }
 
-static void mg_socks_if_tcp_send(struct mg_connection *c, const void *buf,
-                                 size_t len) {
+static int mg_socks_if_tcp_send(struct mg_connection *c, const void *buf,
+                                size_t len) {
+  int res;
   struct socksdata *d = (struct socksdata *) c->iface->data;
-  LOG(LL_DEBUG, ("%p -> %p %d %d", c, buf, (int) len, (int) c->send_mbuf.len));
-  if (d && d->s && d->s->flags & MG_SOCKS_CONNECT_DONE) {
-    mbuf_append(&d->s->send_mbuf, d->tmp.buf, d->tmp.len);
-    mbuf_append(&d->s->send_mbuf, buf, len);
-    mbuf_free(&d->tmp);
-  } else {
-    mbuf_append(&d->tmp, buf, len);
-  }
+  if (d->s == NULL) return -1;
+  res = (int) mbuf_append(&d->s->send_mbuf, buf, len);
+  DBG(("%p -> %d -> %p", c, res, d->s));
+  return res;
 }
 
-static void mg_socks_if_udp_send(struct mg_connection *c, const void *buf,
-                                 size_t len) {
+static int mg_socks_if_udp_send(struct mg_connection *c, const void *buf,
+                                size_t len) {
   (void) c;
   (void) buf;
   (void) len;
+  return -1;
 }
 
-static void mg_socks_if_recved(struct mg_connection *c, size_t len) {
+int mg_socks_if_tcp_recv(struct mg_connection *c, void *buf, size_t len) {
+  struct socksdata *d = (struct socksdata *) c->iface->data;
+  if (d->s == NULL) return -1;
+  if (len > d->s->recv_mbuf.len) len = d->s->recv_mbuf.len;
+  if (len > 0) {
+    memcpy(buf, d->s->recv_mbuf.buf, len);
+    mbuf_remove(&d->s->recv_mbuf, len);
+  }
+  DBG(("%p <- %d <- %p", c, (int) len, d->s));
+  return len;
+}
+
+int mg_socks_if_udp_recv(struct mg_connection *c, void *buf, size_t len,
+                         union socket_address *sa, size_t *sa_len) {
   (void) c;
+  (void) buf;
   (void) len;
+  (void) sa;
+  (void) sa_len;
+  return -1;
 }
 
 static int mg_socks_if_create_conn(struct mg_connection *c) {
@@ -158,7 +186,6 @@ static void mg_socks_if_free(struct mg_iface *iface) {
   LOG(LL_DEBUG, ("%p", iface));
   if (d != NULL) {
     socks_if_disband(d);
-    mbuf_free(&d->tmp);
     MG_FREE(d->proxy_addr);
     MG_FREE(d);
     iface->data = NULL;
@@ -189,14 +216,15 @@ static void mg_socks_if_get_conn_addr(struct mg_connection *c, int remote,
 }
 
 const struct mg_iface_vtable mg_socks_iface_vtable = {
-    mg_socks_if_init,        mg_socks_if_free,
-    mg_socks_if_add_conn,    mg_socks_if_remove_conn,
-    mg_socks_if_poll,        mg_socks_if_listen_tcp,
-    mg_socks_if_listen_udp,  mg_socks_if_connect_tcp,
-    mg_socks_if_connect_udp, mg_socks_if_tcp_send,
-    mg_socks_if_udp_send,    mg_socks_if_recved,
-    mg_socks_if_create_conn, mg_socks_if_destroy_conn,
-    mg_socks_if_sock_set,    mg_socks_if_get_conn_addr,
+    mg_socks_if_init,          mg_socks_if_free,
+    mg_socks_if_add_conn,      mg_socks_if_remove_conn,
+    mg_socks_if_poll,          mg_socks_if_listen_tcp,
+    mg_socks_if_listen_udp,    mg_socks_if_connect_tcp,
+    mg_socks_if_connect_udp,   mg_socks_if_tcp_send,
+    mg_socks_if_udp_send,      mg_socks_if_tcp_recv,
+    mg_socks_if_udp_recv,      mg_socks_if_create_conn,
+    mg_socks_if_destroy_conn,  mg_socks_if_sock_set,
+    mg_socks_if_get_conn_addr,
 };
 
 struct mg_iface *mg_socks_mk_iface(struct mg_mgr *mgr, const char *proxy_addr) {

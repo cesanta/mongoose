@@ -15,31 +15,32 @@
  * limitations under the License.
  */
 
-#ifndef CS_COMMON_MD5_H_
-#define CS_COMMON_MD5_H_
+.arch armv7e-m
+.syntax unified
+.thumb
 
-#include "common/platform.h"
+/* These are required to satisfy TI linker. */
+.eabi_attribute Tag_ABI_align_needed, 1
+.eabi_attribute Tag_ABI_align_preserved, 1
 
-#ifndef CS_DISABLE_MD5
-#define CS_DISABLE_MD5 0
-#endif
+.global mgos_nsleep100_impl
+.global mgos_nsleep100_loop_count
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
+.section .iram.mgos_nsleep100_impl
+.type mgos_nsleep100_impl, %function
+.align 4
 
-typedef struct {
-  uint32_t buf[4];
-  uint32_t bits[2];
-  unsigned char in[64];
-} cs_md5_ctx;
-
-void cs_md5_init(cs_md5_ctx *c);
-void cs_md5_update(cs_md5_ctx *c, const unsigned char *data, size_t len);
-void cs_md5_final(unsigned char *md, cs_md5_ctx *c);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* CS_COMMON_MD5_H_ */
+mgos_nsleep100_impl:
+      ldr     r3, =mgos_nsleep100_loop_count
+      ldr     r3, [r3]
+      mul     r0, r3
+      mov     r1, #6
+      udiv    r0, r0, r1
+      cbz     r0, xxx
+lxx:
+      subs    r0, #1
+      bne     lxx
+xxx:
+      bx      lr
+.align 4
+.size mgos_nsleep100_impl, . - mgos_nsleep100_impl

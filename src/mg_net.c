@@ -24,6 +24,13 @@
 
 #define MG_MAX_HOST_LEN 200
 
+#ifndef MG_TCP_IO_SIZE
+#define MG_TCP_IO_SIZE 1460
+#endif
+#ifndef MG_UDP_IO_SIZE
+#define MG_UDP_IO_SIZE 1460
+#endif
+
 #define MG_COPY_COMMON_CONNECTION_OPTIONS(dst, src) \
   memcpy(dst, src, sizeof(*dst));
 
@@ -64,8 +71,6 @@ MG_INTERNAL void mg_remove_conn(struct mg_connection *conn) {
 MG_INTERNAL void mg_call(struct mg_connection *nc,
                          mg_event_handler_t ev_handler, void *user_data, int ev,
                          void *ev_data) {
-  static int nesting_level = 0;
-  nesting_level++;
   if (ev_handler == NULL) {
     /*
      * If protocol handler is specified, call it. Otherwise, call user-specified
@@ -74,7 +79,7 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
     ev_handler = nc->proto_handler ? nc->proto_handler : nc->handler;
   }
   if (ev != MG_EV_POLL) {
-    DBG(("%p %s ev=%d ev_data=%p flags=%lu rmbl=%d smbl=%d", nc,
+    DBG(("%p %s ev=%d ev_data=%p flags=0x%lx rmbl=%d smbl=%d", nc,
          ev_handler == nc->handler ? "user" : "proto", ev, ev_data, nc->flags,
          (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
   }
@@ -87,33 +92,24 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
 #endif
   if (ev_handler != NULL) {
     unsigned long flags_before = nc->flags;
-    size_t recv_mbuf_before = nc->recv_mbuf.len, recved;
     ev_handler(nc, ev, ev_data MG_UD_ARG(user_data));
-    recved = (recv_mbuf_before - nc->recv_mbuf.len);
     /* Prevent user handler from fiddling with system flags. */
     if (ev_handler == nc->handler && nc->flags != flags_before) {
       nc->flags = (flags_before & ~_MG_CALLBACK_MODIFIABLE_FLAGS_MASK) |
                   (nc->flags & _MG_CALLBACK_MODIFIABLE_FLAGS_MASK);
     }
-    /* It's important to not double-count recved bytes, and since mg_call can be
-     * called recursively (e.g. proto_handler invokes user handler), we keep
-     * track of recursion and only report received bytes at the top level. */
-    if (nesting_level == 1 && recved > 0 && !(nc->flags & MG_F_UDP)) {
-      nc->iface->vtable->recved(nc, recved);
-    }
   }
   if (ev != MG_EV_POLL) {
-    DBG(("%p after %s flags=%lu rmbl=%d smbl=%d", nc,
+    DBG(("%p after %s flags=0x%lx rmbl=%d smbl=%d", nc,
          ev_handler == nc->handler ? "user" : "proto", nc->flags,
          (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
   }
-  nesting_level--;
 #if !MG_ENABLE_CALLBACK_USERDATA
   (void) user_data;
 #endif
 }
 
-void mg_if_timer(struct mg_connection *c, double now) {
+MG_INTERNAL void mg_timer(struct mg_connection *c, double now) {
   if (c->ev_timer_time > 0 && now >= c->ev_timer_time) {
     double old_value = c->ev_timer_time;
     c->ev_timer_time = 0;
@@ -121,13 +117,45 @@ void mg_if_timer(struct mg_connection *c, double now) {
   }
 }
 
-void mg_if_poll(struct mg_connection *nc, time_t now) {
-  if (!(nc->flags & MG_F_SSL) || (nc->flags & MG_F_SSL_HANDSHAKE_DONE)) {
-    mg_call(nc, NULL, nc->user_data, MG_EV_POLL, &now);
+MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max) {
+  size_t avail;
+  if (conn->recv_mbuf_limit < conn->recv_mbuf.len) return 0;
+  avail = conn->recv_mbuf_limit - conn->recv_mbuf.len;
+  return avail > max ? max : avail;
+}
+
+static int mg_do_recv(struct mg_connection *nc);
+
+int mg_if_poll(struct mg_connection *nc, double now) {
+  if ((nc->flags & MG_F_CLOSE_IMMEDIATELY) ||
+      (nc->send_mbuf.len == 0 && (nc->flags & MG_F_SEND_AND_CLOSE))) {
+    mg_close_conn(nc);
+    return 0;
   }
+#if MG_ENABLE_SSL
+  if ((nc->flags & (MG_F_SSL | MG_F_LISTENING | MG_F_CONNECTING)) == MG_F_SSL) {
+    /* SSL library may have data to be delivered to the app in its buffers,
+     * drain them. */
+    int recved = 0;
+    do {
+      if (nc->flags & (MG_F_WANT_READ | MG_F_WANT_WRITE)) break;
+      if (recv_avail_size(nc, MG_TCP_IO_SIZE) <= 0) break;
+      recved = mg_do_recv(nc);
+    } while (recved > 0);
+  }
+#endif /* MG_ENABLE_SSL */
+  mg_timer(nc, now);
+  {
+    time_t now_t = (time_t) now;
+    mg_call(nc, NULL, nc->user_data, MG_EV_POLL, &now_t);
+  }
+  return 1;
 }
 
 void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
+  if (conn->sock != INVALID_SOCKET) { /* Don't print timer-only conns */
+    LOG(LL_DEBUG, ("%p 0x%lx %d", conn, conn->flags, destroy_if));
+  }
   if (destroy_if) conn->iface->vtable->destroy_conn(conn);
   if (conn->proto_data != NULL && conn->proto_data_destructor != NULL) {
     conn->proto_data_destructor(conn->proto_data);
@@ -143,12 +171,16 @@ void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
 }
 
 void mg_close_conn(struct mg_connection *conn) {
-  DBG(("%p %lu %d", conn, conn->flags, conn->sock));
 #if MG_ENABLE_SSL
   if (conn->flags & MG_F_SSL_HANDSHAKE_DONE) {
     mg_ssl_if_conn_close_notify(conn);
   }
 #endif
+  /*
+   * Clearly mark the connection as going away (if not already).
+   * Some net_if impls (LwIP) need this for cleanly handling half-dead conns.
+   */
+  conn->flags |= MG_F_CLOSE_IMMEDIATELY;
   mg_remove_conn(conn);
   conn->iface->vtable->destroy_conn(conn);
   mg_call(conn, NULL, conn->user_data, MG_EV_CLOSE, NULL);
@@ -180,15 +212,6 @@ void mg_mgr_init_opt(struct mg_mgr *m, void *user_data,
   signal(SIGPIPE, SIG_IGN);
 #endif
 
-#if MG_ENABLE_SSL
-  {
-    static int init_done;
-    if (!init_done) {
-      mg_ssl_if_init();
-      init_done++;
-    }
-  }
-#endif
   {
     int i;
     if (opts.num_ifaces == 0) {
@@ -201,7 +224,7 @@ void mg_mgr_init_opt(struct mg_mgr *m, void *user_data,
     m->num_ifaces = opts.num_ifaces;
     m->ifaces =
         (struct mg_iface **) MG_MALLOC(sizeof(*m->ifaces) * opts.num_ifaces);
-    for (i = 0; i < mg_num_ifaces; i++) {
+    for (i = 0; i < opts.num_ifaces; i++) {
       m->ifaces[i] = mg_if_create_iface(opts.ifaces[i], m);
       m->ifaces[i]->vtable->init(m->ifaces[i]);
     }
@@ -211,6 +234,15 @@ void mg_mgr_init_opt(struct mg_mgr *m, void *user_data,
   }
   DBG(("=================================="));
   DBG(("init mgr=%p", m));
+#if MG_ENABLE_SSL
+  {
+    static int init_done;
+    if (!init_done) {
+      mg_ssl_if_init();
+      init_done++;
+    }
+  }
+#endif
 }
 
 void mg_mgr_free(struct mg_mgr *m) {
@@ -453,6 +485,37 @@ MG_INTERNAL int mg_parse_address(const char *str, union socket_address *sa,
   return port < 0xffffUL && (ch == '\0' || ch == ',' || isspace(ch)) ? len : -1;
 }
 
+#if MG_ENABLE_SSL
+MG_INTERNAL void mg_ssl_handshake(struct mg_connection *nc) {
+  int err = 0;
+  int server_side = (nc->listener != NULL);
+  enum mg_ssl_if_result res;
+  if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) return;
+  res = mg_ssl_if_handshake(nc);
+  LOG(LL_DEBUG, ("%p %d res %d", nc, server_side, res));
+
+  if (res == MG_SSL_OK) {
+    nc->flags |= MG_F_SSL_HANDSHAKE_DONE;
+    nc->flags &= ~(MG_F_WANT_READ | MG_F_WANT_WRITE);
+    if (server_side) {
+      mg_call(nc, NULL, nc->user_data, MG_EV_ACCEPT, &nc->sa);
+    } else {
+      mg_call(nc, NULL, nc->user_data, MG_EV_CONNECT, &err);
+    }
+  } else if (res == MG_SSL_WANT_READ) {
+    nc->flags |= MG_F_WANT_READ;
+  } else if (res == MG_SSL_WANT_WRITE) {
+    nc->flags |= MG_F_WANT_WRITE;
+  } else {
+    if (!server_side) {
+      err = res;
+      mg_call(nc, NULL, nc->user_data, MG_EV_CONNECT, &err);
+    }
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+  }
+}
+#endif /* MG_ENABLE_SSL */
+
 struct mg_connection *mg_if_accept_new_conn(struct mg_connection *lc) {
   struct mg_add_sock_opts opts;
   struct mg_connection *nc;
@@ -466,95 +529,125 @@ struct mg_connection *mg_if_accept_new_conn(struct mg_connection *lc) {
   nc->iface = lc->iface;
   if (lc->flags & MG_F_SSL) nc->flags |= MG_F_SSL;
   mg_add_conn(nc->mgr, nc);
-  DBG(("%p %p %d %d", lc, nc, nc->sock, (int) nc->flags));
+  LOG(LL_DEBUG, ("%p %p %d %d", lc, nc, nc->sock, (int) nc->flags));
   return nc;
 }
 
 void mg_if_accept_tcp_cb(struct mg_connection *nc, union socket_address *sa,
                          size_t sa_len) {
-  (void) sa_len;
+  LOG(LL_DEBUG, ("%p %s://%s:%hu", nc, (nc->flags & MG_F_UDP ? "udp" : "tcp"),
+                 inet_ntoa(sa->sin.sin_addr), ntohs(sa->sin.sin_port)));
   nc->sa = *sa;
-  mg_call(nc, NULL, nc->user_data, MG_EV_ACCEPT, &nc->sa);
+#if MG_ENABLE_SSL
+  if (nc->listener->flags & MG_F_SSL) {
+    nc->flags |= MG_F_SSL;
+    if (mg_ssl_if_conn_accept(nc, nc->listener) == MG_SSL_OK) {
+      mg_ssl_handshake(nc);
+    } else {
+      mg_close_conn(nc);
+    }
+  } else
+#endif
+  {
+    mg_call(nc, NULL, nc->user_data, MG_EV_ACCEPT, &nc->sa);
+  }
+  (void) sa_len;
 }
 
 void mg_send(struct mg_connection *nc, const void *buf, int len) {
   nc->last_io_time = (time_t) mg_time();
+  mbuf_append(&nc->send_mbuf, buf, len);
+}
+
+static int mg_recv_tcp(struct mg_connection *nc, char *buf, size_t len);
+static int mg_recv_udp(struct mg_connection *nc, char *buf, size_t len);
+
+static int mg_do_recv(struct mg_connection *nc) {
+  int res = 0;
+  char *buf = NULL;
+  size_t len = (nc->flags & MG_F_UDP ? MG_UDP_IO_SIZE : MG_TCP_IO_SIZE);
+  if ((nc->flags & (MG_F_CLOSE_IMMEDIATELY | MG_F_CONNECTING)) ||
+      ((nc->flags & MG_F_LISTENING) && !(nc->flags & MG_F_UDP))) {
+    return -1;
+  }
+  len = recv_avail_size(nc, len);
+  if (len == 0) return -2;
+  if (nc->recv_mbuf.size < nc->recv_mbuf.len + len) {
+    mbuf_resize(&nc->recv_mbuf, nc->recv_mbuf.len + len);
+  }
+  buf = nc->recv_mbuf.buf + nc->recv_mbuf.len;
+  len = nc->recv_mbuf.size - nc->recv_mbuf.len;
   if (nc->flags & MG_F_UDP) {
-    nc->iface->vtable->udp_send(nc, buf, len);
+    res = mg_recv_udp(nc, buf, len);
   } else {
-    nc->iface->vtable->tcp_send(nc, buf, len);
+    res = mg_recv_tcp(nc, buf, len);
   }
+  return res;
 }
 
-void mg_if_sent_cb(struct mg_connection *nc, int num_sent) {
-  DBG(("%p %d", nc, num_sent));
-#if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
-  if (nc->mgr && nc->mgr->hexdump_file != NULL) {
-    char *buf = nc->send_mbuf.buf;
-    mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, num_sent, MG_EV_SEND);
-  }
-#endif
-  if (num_sent < 0) {
-    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-  } else {
-    mbuf_remove(&nc->send_mbuf, num_sent);
-    mbuf_trim(&nc->send_mbuf);
-  }
-  mg_call(nc, NULL, nc->user_data, MG_EV_SEND, &num_sent);
+void mg_if_can_recv_cb(struct mg_connection *nc) {
+  mg_do_recv(nc);
 }
 
-MG_INTERNAL void mg_recv_common(struct mg_connection *nc, void *buf, int len,
-                                int own) {
-  DBG(("%p %d %u", nc, len, (unsigned int) nc->recv_mbuf.len));
-
-#if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
-  if (nc->mgr && nc->mgr->hexdump_file != NULL) {
-    mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, len, MG_EV_RECV);
-  }
-#endif
-
-  if (nc->flags & MG_F_CLOSE_IMMEDIATELY) {
-    DBG(("%p discarded %d bytes", nc, len));
-    /*
-     * This connection will not survive next poll. Do not deliver events,
-     * send data to /dev/null without acking.
-     */
-    if (own) {
-      MG_FREE(buf);
+static int mg_recv_tcp(struct mg_connection *nc, char *buf, size_t len) {
+  int n = 0;
+#if MG_ENABLE_SSL
+  if (nc->flags & MG_F_SSL) {
+    if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
+      n = mg_ssl_if_read(nc, buf, len);
+      DBG(("%p <- %d bytes (SSL)", nc, n));
+      if (n < 0) {
+        if (n == MG_SSL_WANT_READ) {
+          nc->flags |= MG_F_WANT_READ;
+          n = 0;
+        } else {
+          nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+        }
+      } else if (n > 0) {
+        nc->flags &= ~MG_F_WANT_READ;
+      }
+    } else {
+      mg_ssl_handshake(nc);
     }
-    return;
+  } else
+#endif
+  {
+    n = nc->iface->vtable->tcp_recv(nc, buf, len);
+    DBG(("%p <- %d bytes", nc, n));
   }
-  nc->last_io_time = (time_t) mg_time();
-  if (!own) {
-    mbuf_append(&nc->recv_mbuf, buf, len);
-  } else if (nc->recv_mbuf.len == 0) {
-    /* Adopt buf as recv_mbuf's backing store. */
-    mbuf_free(&nc->recv_mbuf);
-    nc->recv_mbuf.buf = (char *) buf;
-    nc->recv_mbuf.size = nc->recv_mbuf.len = len;
-  } else {
-    mbuf_append(&nc->recv_mbuf, buf, len);
-    MG_FREE(buf);
+  if (n > 0) {
+    nc->recv_mbuf.len += n;
+    nc->last_io_time = (time_t) mg_time();
+#if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
+    if (nc->mgr && nc->mgr->hexdump_file != NULL) {
+      mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, n, MG_EV_RECV);
+    }
+#endif
+    mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &n);
+  } else if (n < 0) {
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
-  mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &len);
+  return n;
 }
 
-void mg_if_recv_tcp_cb(struct mg_connection *nc, void *buf, int len, int own) {
-  mg_recv_common(nc, buf, len, own);
-}
-
-void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
-                       union socket_address *sa, size_t sa_len) {
-  assert(nc->flags & MG_F_UDP);
-  DBG(("%p %u", nc, (unsigned int) len));
+static int mg_recv_udp(struct mg_connection *nc, char *buf, size_t len) {
+  int n = 0;
+  struct mg_connection *lc = nc;
+  union socket_address sa;
+  size_t sa_len = sizeof(sa);
+  n = nc->iface->vtable->udp_recv(lc, buf, len, &sa, &sa_len);
+  if (n < 0) {
+    lc->flags |= MG_F_CLOSE_IMMEDIATELY;
+    goto out;
+  }
   if (nc->flags & MG_F_LISTENING) {
-    struct mg_connection *lc = nc;
     /*
      * Do we have an existing connection for this source?
      * This is very inefficient for long connection lists.
      */
+    lc = nc;
     for (nc = mg_next(lc->mgr, NULL); nc != NULL; nc = mg_next(lc->mgr, nc)) {
-      if (memcmp(&nc->sa.sa, &sa->sa, sa_len) == 0 && nc->listener == lc) {
+      if (memcmp(&nc->sa.sa, &sa.sa, sa_len) == 0 && nc->listener == lc) {
         break;
       }
     }
@@ -566,7 +659,7 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
       if (nc != NULL) {
         nc->sock = lc->sock;
         nc->listener = lc;
-        nc->sa = *sa;
+        nc->sa = sa;
         nc->proto_handler = lc->proto_handler;
         nc->user_data = lc->user_data;
         nc->recv_mbuf_limit = lc->recv_mbuf_limit;
@@ -585,18 +678,88 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
         nc->flags |= MG_F_SEND_AND_CLOSE;
         mg_add_conn(lc->mgr, nc);
         mg_call(nc, NULL, nc->user_data, MG_EV_ACCEPT, &nc->sa);
-      } else {
-        DBG(("OOM"));
-        /* No return here, we still need to drop on the floor */
       }
     }
   }
   if (nc != NULL) {
-    mg_recv_common(nc, buf, len, 1);
-  } else {
-    /* Drop on the floor. */
-    MG_FREE(buf);
+    DBG(("%p <- %d bytes from %s:%d", nc, n, inet_ntoa(nc->sa.sin.sin_addr),
+         ntohs(nc->sa.sin.sin_port)));
+    if (nc == lc) {
+      nc->recv_mbuf.len += n;
+    } else {
+      mbuf_append(&nc->recv_mbuf, buf, n);
+    }
+    mbuf_trim(&lc->recv_mbuf);
+    lc->last_io_time = nc->last_io_time = (time_t) mg_time();
+#if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
+    if (nc->mgr && nc->mgr->hexdump_file != NULL) {
+      mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, n, MG_EV_RECV);
+    }
+#endif
+    mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &n);
   }
+
+out:
+  mbuf_free(&lc->recv_mbuf);
+  return n;
+}
+
+void mg_if_can_send_cb(struct mg_connection *nc) {
+  int n = 0;
+  const char *buf = nc->send_mbuf.buf;
+  size_t len = nc->send_mbuf.len;
+
+  if (nc->flags & (MG_F_CLOSE_IMMEDIATELY | MG_F_CONNECTING)) {
+    return;
+  }
+  if (!(nc->flags & MG_F_UDP)) {
+    if (nc->flags & MG_F_LISTENING) return;
+    if (len > MG_TCP_IO_SIZE) len = MG_TCP_IO_SIZE;
+  }
+#if MG_ENABLE_SSL
+  if (nc->flags & MG_F_SSL) {
+    if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
+      if (len > 0) {
+        n = mg_ssl_if_write(nc, buf, len);
+        DBG(("%p -> %d bytes (SSL)", nc, n));
+      }
+      if (n < 0) {
+        if (n == MG_SSL_WANT_WRITE) {
+          nc->flags |= MG_F_WANT_WRITE;
+          n = 0;
+        } else {
+          nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+        }
+      } else {
+        nc->flags &= ~MG_F_WANT_WRITE;
+      }
+    } else {
+      mg_ssl_handshake(nc);
+    }
+  } else
+#endif
+  {
+    if (nc->flags & MG_F_UDP) {
+      n = nc->iface->vtable->udp_send(nc, buf, len);
+    } else {
+      n = nc->iface->vtable->tcp_send(nc, buf, len);
+    }
+    DBG(("%p -> %d bytes", nc, n));
+  }
+
+#if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
+  if (n > 0 && nc->mgr && nc->mgr->hexdump_file != NULL) {
+    mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, n, MG_EV_SEND);
+  }
+#endif
+  if (n < 0) {
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+  } else if (n > 0) {
+    nc->last_io_time = (time_t) mg_time();
+    mbuf_remove(&nc->send_mbuf, n);
+    mbuf_trim(&nc->send_mbuf);
+  }
+  if (n != 0) mg_call(nc, NULL, nc->user_data, MG_EV_SEND, &n);
 }
 
 /*
@@ -608,8 +771,8 @@ void mg_if_recv_udp_cb(struct mg_connection *nc, void *buf, int len,
 MG_INTERNAL struct mg_connection *mg_do_connect(struct mg_connection *nc,
                                                 int proto,
                                                 union socket_address *sa) {
-  DBG(("%p %s://%s:%hu", nc, proto == SOCK_DGRAM ? "udp" : "tcp",
-       inet_ntoa(sa->sin.sin_addr), ntohs(sa->sin.sin_port)));
+  LOG(LL_DEBUG, ("%p %s://%s:%hu", nc, proto == SOCK_DGRAM ? "udp" : "tcp",
+                 inet_ntoa(sa->sin.sin_addr), ntohs(sa->sin.sin_port)));
 
   nc->flags |= MG_F_CONNECTING;
   if (proto == SOCK_DGRAM) {
@@ -622,12 +785,21 @@ MG_INTERNAL struct mg_connection *mg_do_connect(struct mg_connection *nc,
 }
 
 void mg_if_connect_cb(struct mg_connection *nc, int err) {
-  DBG(("%p connect, err=%d", nc, err));
+  LOG(LL_DEBUG,
+      ("%p %s://%s:%hu -> %d", nc, (nc->flags & MG_F_UDP ? "udp" : "tcp"),
+       inet_ntoa(nc->sa.sin.sin_addr), ntohs(nc->sa.sin.sin_port), err));
   nc->flags &= ~MG_F_CONNECTING;
   if (err != 0) {
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
-  mg_call(nc, NULL, nc->user_data, MG_EV_CONNECT, &err);
+#if MG_ENABLE_SSL
+  if (err == 0 && (nc->flags & MG_F_SSL)) {
+    mg_ssl_handshake(nc);
+  } else
+#endif
+  {
+    mg_call(nc, NULL, nc->user_data, MG_EV_CONNECT, &err);
+  }
 }
 
 #if MG_ENABLE_ASYNC_RESOLVER
@@ -717,7 +889,8 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
 #endif
 
 #if MG_ENABLE_SSL
-  DBG(("%p %s %s,%s,%s", nc, address, (opts.ssl_cert ? opts.ssl_cert : "-"),
+  LOG(LL_DEBUG,
+      ("%p %s %s,%s,%s", nc, address, (opts.ssl_cert ? opts.ssl_cert : "-"),
        (opts.ssl_key ? opts.ssl_key : "-"),
        (opts.ssl_ca_cert ? opts.ssl_ca_cert : "-")));
 
@@ -963,7 +1136,7 @@ double mg_set_timer(struct mg_connection *c, double timestamp) {
   DBG(("%p %p %d -> %lu", c, c->priv_2, (c->flags & MG_F_RESOLVING ? 1 : 0),
        (unsigned long) timestamp));
   if ((c->flags & MG_F_RESOLVING) && c->priv_2 != NULL) {
-    ((struct mg_connection *) c->priv_2)->ev_timer_time = timestamp;
+    mg_set_timer((struct mg_connection *) c->priv_2, timestamp);
   }
   return result;
 }

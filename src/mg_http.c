@@ -127,7 +127,6 @@ enum mg_http_multipart_stream_state {
   MPS_BEGIN,
   MPS_WAITING_FOR_BOUNDARY,
   MPS_WAITING_FOR_CHUNK,
-  MPS_GOT_CHUNK,
   MPS_GOT_BOUNDARY,
   MPS_FINALIZE,
   MPS_FINISHED
@@ -139,7 +138,6 @@ struct mg_http_multipart_stream {
   const char *var_name;
   const char *file_name;
   void *user_data;
-  int prev_io_len;
   enum mg_http_multipart_stream_state state;
   int processing_part;
 };
@@ -787,6 +785,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
     }
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
 
+  again:
     req_len = mg_parse_http(io->buf, io->len, hm, is_req);
 
     if (req_len > 0 &&
@@ -880,7 +879,10 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       /* Whole HTTP message is fully buffered, call event handler */
       mg_http_call_endpoint_handler(nc, trigger_ev, hm);
       mbuf_remove(io, hm->message.len);
-      pd->rcvd = 0;
+      pd->rcvd -= hm->message.len;
+      if (io->len > 0) {
+        goto again;
+      }
     }
   }
 }
@@ -969,19 +971,6 @@ static void mg_http_multipart_call_handler(struct mg_connection *c, int ev,
   mp.data.len = data_len;
   mg_call(c, pd->endpoint_handler, c->user_data, ev, &mp);
   pd->mp_stream.user_data = mp.user_data;
-}
-
-static int mg_http_multipart_got_chunk(struct mg_connection *c) {
-  struct mg_http_proto_data *pd = mg_http_get_proto_data(c);
-  struct mbuf *io = &c->recv_mbuf;
-
-  mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_DATA, io->buf,
-                                 pd->mp_stream.prev_io_len);
-  mbuf_remove(io, pd->mp_stream.prev_io_len);
-  pd->mp_stream.prev_io_len = 0;
-  pd->mp_stream.state = MPS_WAITING_FOR_CHUNK;
-
-  return 0;
 }
 
 static int mg_http_multipart_finalize(struct mg_connection *c) {
@@ -1118,19 +1107,18 @@ static int mg_http_multipart_continue_wait_for_chunk(struct mg_connection *c) {
   }
 
   boundary = c_strnstr(io->buf, pd->mp_stream.boundary, io->len);
-  if (boundary == NULL && pd->mp_stream.prev_io_len == 0) {
-    pd->mp_stream.prev_io_len = io->len;
+  if (boundary == NULL) {
+    int data_size = (io->len - (pd->mp_stream.boundary_len + 6));
+    if (data_size > 0) {
+      mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_DATA, io->buf,
+                                     data_size);
+      mbuf_remove(io, data_size);
+    }
     return 0;
-  } else if (boundary == NULL &&
-             (int) io->len >
-                 pd->mp_stream.prev_io_len + pd->mp_stream.boundary_len + 4) {
-    pd->mp_stream.state = MPS_GOT_CHUNK;
-    return 1;
   } else if (boundary != NULL) {
     int data_size = (boundary - io->buf - 4);
     mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_DATA, io->buf, data_size);
     mbuf_remove(io, (boundary - io->buf));
-    pd->mp_stream.prev_io_len = 0;
     pd->mp_stream.state = MPS_WAITING_FOR_BOUNDARY;
     return 1;
   } else {
@@ -1164,12 +1152,6 @@ static void mg_http_multipart_continue(struct mg_connection *c) {
         }
         break;
       }
-      case MPS_GOT_CHUNK: {
-        if (mg_http_multipart_got_chunk(c) == 0) {
-          return;
-        }
-        break;
-      }
       case MPS_FINALIZE: {
         if (mg_http_multipart_finalize(c) == 0) {
           return;
@@ -1177,7 +1159,6 @@ static void mg_http_multipart_continue(struct mg_connection *c) {
         break;
       }
       case MPS_FINISHED: {
-        mbuf_remove(&c->recv_mbuf, c->recv_mbuf.len);
         return;
       }
     }
@@ -1329,8 +1310,11 @@ const char *mg_status_message(int status_code) {
 
 void mg_send_response_line_s(struct mg_connection *nc, int status_code,
                              const struct mg_str extra_headers) {
-  mg_printf(nc, "HTTP/1.1 %d %s\r\nServer: %s\r\n", status_code,
-            mg_status_message(status_code), mg_version_header);
+  mg_printf(nc, "HTTP/1.1 %d %s\r\n", status_code,
+            mg_status_message(status_code));
+#ifndef MG_HIDE_SERVER_INFO
+  mg_printf(nc, "Server: %s\r\n", mg_version_header);
+#endif
   if (extra_headers.len > 0) {
     mg_printf(nc, "%.*s\r\n", (int) extra_headers.len, extra_headers.p);
   }
@@ -1662,7 +1646,7 @@ void mg_printf_html_escape(struct mg_connection *nc, const char *fmt, ...) {
 static void mg_http_parse_header_internal(struct mg_str *hdr,
                                           const char *var_name,
                                           struct altbuf *ab) {
-  int ch = ' ', ch1 = ',', n = strlen(var_name);
+  int ch = ' ', ch1 = ',', ch2 = ';', n = strlen(var_name);
   const char *p, *end = hdr ? hdr->p + hdr->len : NULL, *s = NULL;
 
   /* Find where variable starts */
@@ -1675,10 +1659,10 @@ static void mg_http_parse_header_internal(struct mg_str *hdr,
   if (s != NULL && &s[n + 1] < end) {
     s += n + 1;
     if (*s == '"' || *s == '\'') {
-      ch = ch1 = *s++;
+      ch = ch1 = ch2 = *s++;
     }
     p = s;
-    while (p < end && p[0] != ch && p[0] != ch1) {
+    while (p < end && p[0] != ch && p[0] != ch1 && p[0] != ch2) {
       if (ch != ' ' && p[0] == '\\' && p[1] == ch) p++;
       altbuf_append(ab, *p++);
     }
@@ -2042,7 +2026,7 @@ static void mg_scan_directory(struct mg_connection *nc, const char *dir,
                               const struct mg_serve_http_opts *opts,
                               void (*func)(struct mg_connection *, const char *,
                                            cs_stat_t *)) {
-  char path[MG_MAX_PATH];
+  char path[MG_MAX_PATH + 1];
   cs_stat_t st;
   struct dirent *dp;
   DIR *dirp;
@@ -2728,8 +2712,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
     case MG_EV_HTTP_PART_BEGIN: {
       struct mg_http_multipart_part *mp =
           (struct mg_http_multipart_part *) ev_data;
-      struct file_upload_state *fus =
-          (struct file_upload_state *) MG_CALLOC(1, sizeof(*fus));
+      struct file_upload_state *fus;
       struct mg_str lfn = local_name_fn(nc, mg_mk_str(mp->file_name));
       mp->user_data = NULL;
       if (lfn.p == NULL || lfn.len == 0) {
@@ -2741,6 +2724,11 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
                   "Not allowed to upload %s\r\n",
                   mp->file_name);
         nc->flags |= MG_F_SEND_AND_CLOSE;
+        return;
+      }
+      fus = (struct file_upload_state *) MG_CALLOC(1, sizeof(*fus));
+      if (fus == NULL) {
+        nc->flags |= MG_F_CLOSE_IMMEDIATELY;
         return;
       }
       fus->lfn = (char *) MG_MALLOC(lfn.len + 1);
@@ -2814,12 +2802,6 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
       if (mp->status >= 0 && fus->fp != NULL) {
         LOG(LL_DEBUG, ("%p Uploaded %s (%s), %d bytes", nc, mp->file_name,
                        fus->lfn, (int) fus->num_recd));
-        mg_printf(nc,
-                  "HTTP/1.1 200 OK\r\n"
-                  "Content-Type: text/plain\r\n"
-                  "Connection: close\r\n\r\n"
-                  "Ok, %s - %d bytes.\r\n",
-                  mp->file_name, (int) fus->num_recd);
       } else {
         LOG(LL_ERROR, ("Failed to store %s (%s)", mp->file_name, fus->lfn));
         /*
@@ -2831,6 +2813,15 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
       MG_FREE(fus->lfn);
       MG_FREE(fus);
       mp->user_data = NULL;
+      /* Don't close the connection yet, there may be more files to come. */
+      break;
+    }
+    case MG_EV_HTTP_MULTIPART_REQUEST_END: {
+      mg_printf(nc,
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "Connection: close\r\n\r\n"
+                "Ok.\r\n");
       nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
     }

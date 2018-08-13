@@ -15,15 +15,31 @@
  * limitations under the License.
  */
 
-#ifdef _WIN32
+.arch armv7e-m
+.syntax unified
+.thumb
 
-int rmdir(const char *dirname) {
-  return _rmdir(dirname);
-}
+/* These are required to satisfy TI linker. */
+.eabi_attribute Tag_ABI_align_needed, 1
+.eabi_attribute Tag_ABI_align_preserved, 1
 
-unsigned int sleep(unsigned int seconds) {
-  Sleep(seconds * 1000);
-  return 0;
-}
+.global mgos_nsleep100_impl
+.global mgos_nsleep100_loop_count
 
-#endif /* _WIN32 */
+.section .iram.mgos_nsleep100_impl
+.type mgos_nsleep100_impl, %function
+.align 4
+
+mgos_nsleep100_impl:
+      ldr     r3, =mgos_nsleep100_loop_count
+      ldr     r3, [r3]
+      /* Because of speculative fetch, the core loop only takes 1 cycle. */
+      muls    r0, r3
+      cbz     r0, xxx
+lxx:
+      subs    r0, #1
+      bne     lxx
+xxx:
+      bx      lr
+.align 4
+.size mgos_nsleep100_impl, . - mgos_nsleep100_impl

@@ -15,31 +15,20 @@
  * limitations under the License.
  */
 
-#ifndef CS_COMMON_MD5_H_
-#define CS_COMMON_MD5_H_
+#include <math.h>
 
-#include "common/platform.h"
+#include "mgos.h"
+#include "mgos_system.h"
 
-#ifndef CS_DISABLE_MD5
-#define CS_DISABLE_MD5 0
-#endif
+void (*mgos_nsleep100)(uint32_t n);
+uint32_t mgos_nsleep100_loop_count = 0;
+/* Provided by arm_nsleep100_{m4,m7}.S for M4 and M7 respectively. */
+extern void mgos_nsleep100_impl(uint32_t n);
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-typedef struct {
-  uint32_t buf[4];
-  uint32_t bits[2];
-  unsigned char in[64];
-} cs_md5_ctx;
-
-void cs_md5_init(cs_md5_ctx *c);
-void cs_md5_update(cs_md5_ctx *c, const unsigned char *data, size_t len);
-void cs_md5_final(unsigned char *md, cs_md5_ctx *c);
-
-#ifdef __cplusplus
+void mgos_nsleep100_cal(void) {
+  uint32_t cpu_freq = mgos_get_cpu_freq();
+  /* # of instruction cycles per 100 ns */
+  mgos_nsleep100_loop_count =
+      roundf((100.0f / 1000000000.0f) / (1.0f / cpu_freq));
+  mgos_nsleep100 = mgos_nsleep100_impl;
 }
-#endif /* __cplusplus */
-
-#endif /* CS_COMMON_MD5_H_ */

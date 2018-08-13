@@ -196,10 +196,17 @@ void mg_basic_auth_header(const struct mg_str user, const struct mg_str pass,
 
 /*
  * URL-escape the specified string.
- * All non-printable characters are escaped, plus `._-$,;~()/`.
+ * All characters acept letters, numbers and characters listed in
+ * `safe` are escaped. If `hex_upper`is true, `A-F` are used for hex digits.
  * Input need not be NUL-terminated, but the returned string is.
  * Returned string is heap-allocated and must be free()'d.
  */
+#define MG_URL_ENCODE_F_SPACE_AS_PLUS (1 << 0)
+#define MG_URL_ENCODE_F_UPPERCASE_HEX (1 << 1)
+struct mg_str mg_url_encode_opt(const struct mg_str src,
+                                const struct mg_str safe, unsigned int flags);
+
+/* Same as `mg_url_encode_opt(src, "._-$,;~()/", 0)`. */
 struct mg_str mg_url_encode(const struct mg_str src);
 
 #ifdef __cplusplus

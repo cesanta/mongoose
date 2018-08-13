@@ -1,6 +1,18 @@
 /*
- * Copyright (c) 2014-2016 Cesanta Software Limited
+ * Copyright (c) 2014-2018 Cesanta Software Limited
  * All rights reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the ""License"");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an ""AS IS"" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #ifndef CS_COMMON_PLATFORMS_LWIP_MG_NET_IF_LWIP_H_
@@ -30,9 +42,9 @@ struct mg_lwip_conn_state {
   /* Last SSL write size, for retries. */
   int last_ssl_write_size;
   /* Whether MG_SIG_RECV is already pending for this connection */
-  int recv_pending : 1;
+  int recv_pending;
   /* Whether the connection is about to close, just `rx_chain` needs to drain */
-  int draining_rx_chain : 1;
+  int draining_rx_chain;
 };
 
 enum mg_sig_type {

@@ -9,14 +9,8 @@
 #include "mg_internal.h"
 #include "mg_util.h"
 
-#define MG_TCP_RECV_BUFFER_SIZE 1024
-#define MG_UDP_RECV_BUFFER_SIZE 1500
-
 static sock_t mg_open_listening_socket(union socket_address *sa, int type,
                                        int proto);
-#if MG_ENABLE_SSL
-static void mg_ssl_begin(struct mg_connection *nc);
-#endif
 
 void mg_set_non_blocking_mode(sock_t sock) {
 #ifdef _WIN32
@@ -85,27 +79,48 @@ int mg_socket_if_listen_tcp(struct mg_connection *nc,
   return 0;
 }
 
-int mg_socket_if_listen_udp(struct mg_connection *nc,
-                            union socket_address *sa) {
+static int mg_socket_if_listen_udp(struct mg_connection *nc,
+                                   union socket_address *sa) {
   sock_t sock = mg_open_listening_socket(sa, SOCK_DGRAM, 0);
   if (sock == INVALID_SOCKET) return (mg_get_errno() ? mg_get_errno() : 1);
   mg_sock_set(nc, sock);
   return 0;
 }
 
-void mg_socket_if_tcp_send(struct mg_connection *nc, const void *buf,
-                           size_t len) {
-  mbuf_append(&nc->send_mbuf, buf, len);
+static int mg_socket_if_tcp_send(struct mg_connection *nc, const void *buf,
+                                 size_t len) {
+  int n = (int) MG_SEND_FUNC(nc->sock, buf, len, 0);
+  if (n < 0 && !mg_is_error()) n = 0;
+  return n;
 }
 
-void mg_socket_if_udp_send(struct mg_connection *nc, const void *buf,
-                           size_t len) {
-  mbuf_append(&nc->send_mbuf, buf, len);
+static int mg_socket_if_udp_send(struct mg_connection *nc, const void *buf,
+                                 size_t len) {
+  int n = sendto(nc->sock, buf, len, 0, &nc->sa.sa, sizeof(nc->sa.sin));
+  if (n < 0 && !mg_is_error()) n = 0;
+  return n;
 }
 
-void mg_socket_if_recved(struct mg_connection *nc, size_t len) {
-  (void) nc;
-  (void) len;
+static int mg_socket_if_tcp_recv(struct mg_connection *nc, void *buf,
+                                 size_t len) {
+  int n = (int) MG_RECV_FUNC(nc->sock, buf, len, 0);
+  if (n == 0) {
+    /* Orderly shutdown of the socket, try flushing output. */
+    nc->flags |= MG_F_SEND_AND_CLOSE;
+  } else if (n < 0 && !mg_is_error()) {
+    n = 0;
+  }
+  return n;
+}
+
+static int mg_socket_if_udp_recv(struct mg_connection *nc, void *buf,
+                                 size_t len, union socket_address *sa,
+                                 size_t *sa_len) {
+  socklen_t sa_len_st = *sa_len;
+  int n = recvfrom(nc->sock, buf, len, 0, &sa->sa, &sa_len_st);
+  *sa_len = sa_len_st;
+  if (n < 0 && !mg_is_error()) n = 0;
+  return n;
 }
 
 int mg_socket_if_create_conn(struct mg_connection *nc) {
@@ -131,7 +146,9 @@ static int mg_accept_conn(struct mg_connection *lc) {
   /* NOTE(lsm): on Windows, sock is always > FD_SETSIZE */
   sock_t sock = accept(lc->sock, &sa.sa, &sa_len);
   if (sock == INVALID_SOCKET) {
-    if (mg_is_error()) DBG(("%p: failed to accept: %d", lc, mg_get_errno()));
+    if (mg_is_error()) {
+      DBG(("%p: failed to accept: %d", lc, mg_get_errno()));
+    }
     return 0;
   }
   nc = mg_if_accept_new_conn(lc);
@@ -142,14 +159,7 @@ static int mg_accept_conn(struct mg_connection *lc) {
   DBG(("%p conn from %s:%d", nc, inet_ntoa(sa.sin.sin_addr),
        ntohs(sa.sin.sin_port)));
   mg_sock_set(nc, sock);
-#if MG_ENABLE_SSL
-  if (lc->flags & MG_F_SSL) {
-    if (mg_ssl_if_conn_accept(nc, lc) != MG_SSL_OK) mg_close_conn(nc);
-  } else
-#endif
-  {
-    mg_if_accept_tcp_cb(nc, &sa, sa_len);
-  }
+  mg_if_accept_tcp_cb(nc, &sa, sa_len);
   return 1;
 }
 
@@ -200,165 +210,6 @@ static sock_t mg_open_listening_socket(union socket_address *sa, int type,
   return sock;
 }
 
-static void mg_write_to_socket(struct mg_connection *nc) {
-  struct mbuf *io = &nc->send_mbuf;
-  int n = 0;
-
-#if MG_LWIP
-  /* With LWIP we don't know if the socket is ready */
-  if (io->len == 0) return;
-#endif
-
-  assert(io->len > 0);
-
-  if (nc->flags & MG_F_UDP) {
-    int n =
-        sendto(nc->sock, io->buf, io->len, 0, &nc->sa.sa, sizeof(nc->sa.sin));
-    DBG(("%p %d %d %d %s:%hu", nc, nc->sock, n, mg_get_errno(),
-         inet_ntoa(nc->sa.sin.sin_addr), ntohs(nc->sa.sin.sin_port)));
-    mg_if_sent_cb(nc, n);
-    return;
-  }
-
-#if MG_ENABLE_SSL
-  if (nc->flags & MG_F_SSL) {
-    if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) {
-      n = mg_ssl_if_write(nc, io->buf, io->len);
-      DBG(("%p %d bytes -> %d (SSL)", nc, n, nc->sock));
-      if (n < 0) {
-        if (n != MG_SSL_WANT_READ && n != MG_SSL_WANT_WRITE) {
-          nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-        }
-        return;
-      } else {
-        /* Successful SSL operation, clear off SSL wait flags */
-        nc->flags &= ~(MG_F_WANT_READ | MG_F_WANT_WRITE);
-      }
-    } else {
-      mg_ssl_begin(nc);
-      return;
-    }
-  } else
-#endif
-  {
-    n = (int) MG_SEND_FUNC(nc->sock, io->buf, io->len, 0);
-    DBG(("%p %d bytes -> %d", nc, n, nc->sock));
-  }
-
-  mg_if_sent_cb(nc, n);
-}
-
-MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max) {
-  size_t avail;
-  if (conn->recv_mbuf_limit < conn->recv_mbuf.len) return 0;
-  avail = conn->recv_mbuf_limit - conn->recv_mbuf.len;
-  return avail > max ? max : avail;
-}
-
-static void mg_handle_tcp_read(struct mg_connection *conn) {
-  int n = 0;
-  char *buf = (char *) MG_MALLOC(MG_TCP_RECV_BUFFER_SIZE);
-
-  if (buf == NULL) {
-    DBG(("OOM"));
-    return;
-  }
-
-#if MG_ENABLE_SSL
-  if (conn->flags & MG_F_SSL) {
-    if (conn->flags & MG_F_SSL_HANDSHAKE_DONE) {
-      /* SSL library may have more bytes ready to read than we ask to read.
-       * Therefore, read in a loop until we read everything. Without the loop,
-       * we skip to the next select() cycle which can just timeout. */
-      while ((n = mg_ssl_if_read(conn, buf, MG_TCP_RECV_BUFFER_SIZE)) > 0) {
-        DBG(("%p %d bytes <- %d (SSL)", conn, n, conn->sock));
-        mg_if_recv_tcp_cb(conn, buf, n, 1 /* own */);
-        buf = NULL;
-        if (conn->flags & MG_F_CLOSE_IMMEDIATELY) break;
-        /* buf has been freed, we need a new one. */
-        buf = (char *) MG_MALLOC(MG_TCP_RECV_BUFFER_SIZE);
-        if (buf == NULL) break;
-      }
-      MG_FREE(buf);
-      if (n < 0 && n != MG_SSL_WANT_READ) conn->flags |= MG_F_CLOSE_IMMEDIATELY;
-    } else {
-      MG_FREE(buf);
-      mg_ssl_begin(conn);
-      return;
-    }
-  } else
-#endif
-  {
-    n = (int) MG_RECV_FUNC(conn->sock, buf,
-                           recv_avail_size(conn, MG_TCP_RECV_BUFFER_SIZE), 0);
-    DBG(("%p %d bytes (PLAIN) <- %d", conn, n, conn->sock));
-    if (n > 0) {
-      mg_if_recv_tcp_cb(conn, buf, n, 1 /* own */);
-    } else {
-      MG_FREE(buf);
-    }
-    if (n == 0) {
-      /* Orderly shutdown of the socket, try flushing output. */
-      conn->flags |= MG_F_SEND_AND_CLOSE;
-    } else if (n < 0 && mg_is_error()) {
-      conn->flags |= MG_F_CLOSE_IMMEDIATELY;
-    }
-  }
-}
-
-static int mg_recvfrom(struct mg_connection *nc, union socket_address *sa,
-                       socklen_t *sa_len, char **buf) {
-  int n;
-  *buf = (char *) MG_MALLOC(MG_UDP_RECV_BUFFER_SIZE);
-  if (*buf == NULL) {
-    DBG(("Out of memory"));
-    return -ENOMEM;
-  }
-  n = recvfrom(nc->sock, *buf, MG_UDP_RECV_BUFFER_SIZE, 0, &sa->sa, sa_len);
-  if (n <= 0) {
-    DBG(("%p recvfrom: %s", nc, strerror(mg_get_errno())));
-    MG_FREE(*buf);
-  }
-  return n;
-}
-
-static void mg_handle_udp_read(struct mg_connection *nc) {
-  char *buf = NULL;
-  union socket_address sa;
-  socklen_t sa_len = sizeof(sa);
-  int n = mg_recvfrom(nc, &sa, &sa_len, &buf);
-  DBG(("%p %d bytes from %s:%d", nc, n, inet_ntoa(nc->sa.sin.sin_addr),
-       ntohs(nc->sa.sin.sin_port)));
-  mg_if_recv_udp_cb(nc, buf, n, &sa, sa_len);
-}
-
-#if MG_ENABLE_SSL
-static void mg_ssl_begin(struct mg_connection *nc) {
-  int server_side = (nc->listener != NULL);
-  enum mg_ssl_if_result res = mg_ssl_if_handshake(nc);
-  DBG(("%p %d res %d", nc, server_side, res));
-
-  if (res == MG_SSL_OK) {
-    nc->flags |= MG_F_SSL_HANDSHAKE_DONE;
-    nc->flags &= ~(MG_F_WANT_READ | MG_F_WANT_WRITE);
-
-    if (server_side) {
-      union socket_address sa;
-      socklen_t sa_len = sizeof(sa);
-      (void) getpeername(nc->sock, &sa.sa, &sa_len);
-      mg_if_accept_tcp_cb(nc, &sa, sa_len);
-    } else {
-      mg_if_connect_cb(nc, 0);
-    }
-  } else if (res != MG_SSL_WANT_READ && res != MG_SSL_WANT_WRITE) {
-    if (!server_side) {
-      mg_if_connect_cb(nc, res);
-    }
-    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-  }
-}
-#endif /* MG_ENABLE_SSL */
-
 #define _MG_F_FD_CAN_READ 1
 #define _MG_F_FD_CAN_WRITE 1 << 1
 #define _MG_F_FD_ERROR 1 << 2
@@ -367,10 +218,12 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
   int worth_logging =
       fd_flags != 0 || (nc->flags & (MG_F_WANT_READ | MG_F_WANT_WRITE));
   if (worth_logging) {
-    DBG(("%p fd=%d fd_flags=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock,
+    DBG(("%p fd=%d fd_flags=%d nc_flags=0x%lx rmbl=%d smbl=%d", nc, nc->sock,
          fd_flags, nc->flags, (int) nc->recv_mbuf.len,
          (int) nc->send_mbuf.len));
   }
+
+  if (!mg_if_poll(nc, now)) return;
 
   if (nc->flags & MG_F_CONNECTING) {
     if (fd_flags != 0) {
@@ -392,15 +245,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
        */
       err = nc->err;
 #endif
-#if MG_ENABLE_SSL
-      if ((nc->flags & MG_F_SSL) && err == 0) {
-        mg_ssl_begin(nc);
-      } else {
-        mg_if_connect_cb(nc, err);
-      }
-#else
       mg_if_connect_cb(nc, err);
-#endif
     } else if (nc->err != 0) {
       mg_if_connect_cb(nc, nc->err);
     }
@@ -408,7 +253,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
 
   if (fd_flags & _MG_F_FD_CAN_READ) {
     if (nc->flags & MG_F_UDP) {
-      mg_handle_udp_read(nc);
+      mg_if_can_recv_cb(nc);
     } else {
       if (nc->flags & MG_F_LISTENING) {
         /*
@@ -418,22 +263,16 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
          */
         mg_accept_conn(nc);
       } else {
-        mg_handle_tcp_read(nc);
+        mg_if_can_recv_cb(nc);
       }
     }
   }
 
-  if (!(nc->flags & MG_F_CLOSE_IMMEDIATELY)) {
-    if ((fd_flags & _MG_F_FD_CAN_WRITE) && nc->send_mbuf.len > 0) {
-      mg_write_to_socket(nc);
-    }
-    mg_if_poll(nc, (time_t) now);
-    mg_if_timer(nc, now);
-  }
+  if (fd_flags & _MG_F_FD_CAN_WRITE) mg_if_can_send_cb(nc);
 
   if (worth_logging) {
-    DBG(("%p after fd=%d nc_flags=%lu rmbl=%d smbl=%d", nc, nc->sock, nc->flags,
-         (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
+    DBG(("%p after fd=%d nc_flags=0x%lx rmbl=%d smbl=%d", nc, nc->sock,
+         nc->flags, (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
   }
 }
 
@@ -547,8 +386,7 @@ time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
       }
 #endif
 
-      if (!(nc->flags & MG_F_WANT_WRITE) &&
-          nc->recv_mbuf.len < nc->recv_mbuf_limit &&
+      if (nc->recv_mbuf.len < nc->recv_mbuf_limit &&
           (!(nc->flags & MG_F_UDP) || nc->listener == NULL)) {
         mg_add_to_set(nc->sock, &read_set, &max_fd);
       }
@@ -619,14 +457,6 @@ time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
     mg_mgr_handle_conn(nc, fd_flags, now);
   }
 
-  for (nc = mgr->active_connections; nc != NULL; nc = tmp) {
-    tmp = nc->next;
-    if ((nc->flags & MG_F_CLOSE_IMMEDIATELY) ||
-        (nc->send_mbuf.len == 0 && (nc->flags & MG_F_SEND_AND_CLOSE))) {
-      mg_close_conn(nc);
-    }
-  }
-
   return (time_t) now;
 }
 
@@ -652,7 +482,7 @@ mg_socketpair_accept(sock_t sock, union socket_address *sa, socklen_t sa_len) {
 }
 
 int mg_socketpair(sock_t sp[2], int sock_type) {
-  union socket_address sa;
+  union socket_address sa, sa2;
   sock_t sock;
   socklen_t len = sizeof(sa.sin);
   int ret = 0;
@@ -661,18 +491,20 @@ int mg_socketpair(sock_t sp[2], int sock_type) {
 
   (void) memset(&sa, 0, sizeof(sa));
   sa.sin.sin_family = AF_INET;
-  sa.sin.sin_port = htons(0);
   sa.sin.sin_addr.s_addr = htonl(0x7f000001); /* 127.0.0.1 */
+  sa2 = sa;
 
   if ((sock = socket(AF_INET, sock_type, 0)) == INVALID_SOCKET) {
   } else if (bind(sock, &sa.sa, len) != 0) {
   } else if (sock_type == SOCK_STREAM && listen(sock, 1) != 0) {
   } else if (getsockname(sock, &sa.sa, &len) != 0) {
   } else if ((sp[0] = socket(AF_INET, sock_type, 0)) == INVALID_SOCKET) {
-  } else if (connect(sp[0], &sa.sa, len) != 0) {
+  } else if (sock_type == SOCK_STREAM && connect(sp[0], &sa.sa, len) != 0) {
   } else if (sock_type == SOCK_DGRAM &&
-             (getsockname(sp[0], &sa.sa, &len) != 0 ||
-              connect(sock, &sa.sa, len) != 0)) {
+             (bind(sp[0], &sa2.sa, len) != 0 ||
+              getsockname(sp[0], &sa2.sa, &len) != 0 ||
+              connect(sp[0], &sa.sa, len) != 0 ||
+              connect(sock, &sa2.sa, len) != 0)) {
   } else if ((sp[1] = (sock_type == SOCK_DGRAM ? sock : mg_socketpair_accept(
                                                             sock, &sa, len))) ==
              INVALID_SOCKET) {
@@ -733,7 +565,8 @@ void mg_socket_if_get_conn_addr(struct mg_connection *nc, int remote,
     mg_socket_if_connect_udp,                                           \
     mg_socket_if_tcp_send,                                              \
     mg_socket_if_udp_send,                                              \
-    mg_socket_if_recved,                                                \
+    mg_socket_if_tcp_recv,                                              \
+    mg_socket_if_udp_recv,                                              \
     mg_socket_if_create_conn,                                           \
     mg_socket_if_destroy_conn,                                          \
     mg_socket_if_sock_set,                                              \

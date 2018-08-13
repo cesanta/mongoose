@@ -7,9 +7,12 @@
 
 #include <mbedtls/debug.h>
 #include <mbedtls/ecp.h>
+#include <mbedtls/net.h>
 #include <mbedtls/platform.h>
 #include <mbedtls/ssl.h>
+#include <mbedtls/ssl_internal.h>
 #include <mbedtls/x509_crt.h>
+#include <mbedtls/version.h>
 
 static void mg_ssl_mbed_log(void *ctx, int level, const char *file, int line,
                             const char *str) {
@@ -19,6 +22,8 @@ static void mg_ssl_mbed_log(void *ctx, int level, const char *file, int line,
       cs_level = LL_ERROR;
       break;
     case 2:
+      cs_level = LL_INFO;
+      break;
     case 3:
       cs_level = LL_DEBUG;
       break;
@@ -29,6 +34,7 @@ static void mg_ssl_mbed_log(void *ctx, int level, const char *file, int line,
   LOG(cs_level, ("%p %.*s", ctx, (int) (strlen(str) - 1), str));
   (void) file;
   (void) line;
+  (void) cs_level;
 }
 
 struct mg_ssl_if_ctx {
@@ -38,12 +44,14 @@ struct mg_ssl_if_ctx {
   mbedtls_pk_context *key;
   mbedtls_x509_crt *ca_cert;
   struct mbuf cipher_suites;
+  size_t saved_len;
 };
 
 /* Must be provided by the platform. ctx is struct mg_connection. */
 extern int mg_ssl_if_mbed_random(void *ctx, unsigned char *buf, size_t len);
 
 void mg_ssl_if_init() {
+  LOG(LL_INFO, ("%s", MBEDTLS_VERSION_STRING_FULL));
 }
 
 enum mg_ssl_if_result mg_ssl_if_conn_accept(struct mg_connection *nc,
@@ -67,9 +75,11 @@ static enum mg_ssl_if_result mg_use_ca_cert(struct mg_ssl_if_ctx *ctx,
                                             const char *cert);
 static enum mg_ssl_if_result mg_set_cipher_list(struct mg_ssl_if_ctx *ctx,
                                                 const char *ciphers);
+#ifdef MBEDTLS_KEY_EXCHANGE__SOME__PSK_ENABLED
 static enum mg_ssl_if_result mg_ssl_if_mbed_set_psk(struct mg_ssl_if_ctx *ctx,
                                                     const char *identity,
                                                     const char *key);
+#endif
 
 enum mg_ssl_if_result mg_ssl_if_conn_init(
     struct mg_connection *nc, const struct mg_ssl_if_conn_params *params,
@@ -118,11 +128,13 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
     return MG_SSL_ERROR;
   }
 
+#ifdef MBEDTLS_KEY_EXCHANGE__SOME__PSK_ENABLED
   if (mg_ssl_if_mbed_set_psk(ctx, params->psk_identity, params->psk_key) !=
       MG_SSL_OK) {
     MG_SET_PTRPTR(err_msg, "Invalid PSK settings");
     return MG_SSL_ERROR;
   }
+#endif
 
   if (!(nc->flags & MG_F_LISTENING)) {
     ctx->ssl = (mbedtls_ssl_context *) MG_CALLOC(1, sizeof(*ctx->ssl));
@@ -160,40 +172,41 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
   return MG_SSL_OK;
 }
 
-#if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
-int ssl_socket_send(void *ctx, const unsigned char *buf, size_t len);
-int ssl_socket_recv(void *ctx, unsigned char *buf, size_t len);
-#else
-static int ssl_socket_send(void *ctx, const unsigned char *buf, size_t len) {
+static int mg_ssl_if_mbed_send(void *ctx, const unsigned char *buf,
+                               size_t len) {
   struct mg_connection *nc = (struct mg_connection *) ctx;
-  int n = (int) MG_SEND_FUNC(nc->sock, buf, len, 0);
-  LOG(LL_DEBUG, ("%p %d -> %d", nc, (int) len, n));
-  if (n >= 0) return n;
-  n = mg_get_errno();
-  return ((n == EAGAIN || n == EINPROGRESS) ? MBEDTLS_ERR_SSL_WANT_WRITE : -1);
+  int n = nc->iface->vtable->tcp_send(nc, buf, len);
+  if (n > 0) return n;
+  if (n == 0) return MBEDTLS_ERR_SSL_WANT_WRITE;
+  return MBEDTLS_ERR_NET_SEND_FAILED;
 }
 
-static int ssl_socket_recv(void *ctx, unsigned char *buf, size_t len) {
+static int mg_ssl_if_mbed_recv(void *ctx, unsigned char *buf, size_t len) {
   struct mg_connection *nc = (struct mg_connection *) ctx;
-  int n = (int) MG_RECV_FUNC(nc->sock, buf, len, 0);
-  LOG(LL_DEBUG, ("%p %d <- %d", nc, (int) len, n));
-  if (n >= 0) return n;
-  n = mg_get_errno();
-  return ((n == EAGAIN || n == EINPROGRESS) ? MBEDTLS_ERR_SSL_WANT_READ : -1);
+  int n = nc->iface->vtable->tcp_recv(nc, buf, len);
+  if (n > 0) return n;
+  if (n == 0) return MBEDTLS_ERR_SSL_WANT_READ;
+  return MBEDTLS_ERR_NET_RECV_FAILED;
 }
-#endif
 
 static enum mg_ssl_if_result mg_ssl_if_mbed_err(struct mg_connection *nc,
                                                 int ret) {
-  if (ret == MBEDTLS_ERR_SSL_WANT_READ) return MG_SSL_WANT_READ;
-  if (ret == MBEDTLS_ERR_SSL_WANT_WRITE) return MG_SSL_WANT_WRITE;
-  if (ret !=
-      MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) { /* CLOSE_NOTIFY = Normal shutdown */
-    LOG(LL_ERROR, ("%p SSL error: %d", nc, ret));
+  enum mg_ssl_if_result res = MG_SSL_OK;
+  if (ret == MBEDTLS_ERR_SSL_WANT_READ) {
+    res = MG_SSL_WANT_READ;
+  } else if (ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+    res = MG_SSL_WANT_WRITE;
+  } else if (ret == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) {
+    LOG(LL_DEBUG, ("%p TLS connection closed by peer", nc));
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+    res = MG_SSL_OK;
+  } else {
+    LOG(LL_ERROR, ("%p mbedTLS error: -0x%04x", nc, -ret));
+    nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+    res = MG_SSL_ERROR;
   }
   nc->err = ret;
-  nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-  return MG_SSL_ERROR;
+  return res;
 }
 
 static void mg_ssl_if_mbed_free_certs_and_keys(struct mg_ssl_if_ctx *ctx) {
@@ -224,7 +237,8 @@ enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
   int err;
   /* If bio is not yet set, do it now. */
   if (ctx->ssl->p_bio == NULL) {
-    mbedtls_ssl_set_bio(ctx->ssl, nc, ssl_socket_send, ssl_socket_recv, NULL);
+    mbedtls_ssl_set_bio(ctx->ssl, nc, mg_ssl_if_mbed_send, mg_ssl_if_mbed_recv,
+                        NULL);
   }
   err = mbedtls_ssl_handshake(ctx->ssl);
   if (err != 0) return mg_ssl_if_mbed_err(nc, err);
@@ -250,20 +264,35 @@ enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
   return MG_SSL_OK;
 }
 
-int mg_ssl_if_read(struct mg_connection *nc, void *buf, size_t buf_size) {
+int mg_ssl_if_read(struct mg_connection *nc, void *buf, size_t len) {
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
-  int n = mbedtls_ssl_read(ctx->ssl, (unsigned char *) buf, buf_size);
-  DBG(("%p %d -> %d", nc, (int) buf_size, n));
+  int n = mbedtls_ssl_read(ctx->ssl, (unsigned char *) buf, len);
+  DBG(("%p %d -> %d", nc, (int) len, n));
   if (n < 0) return mg_ssl_if_mbed_err(nc, n);
   if (n == 0) nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   return n;
 }
 
-int mg_ssl_if_write(struct mg_connection *nc, const void *data, size_t len) {
+int mg_ssl_if_write(struct mg_connection *nc, const void *buf, size_t len) {
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
-  int n = mbedtls_ssl_write(ctx->ssl, (const unsigned char *) data, len);
-  DBG(("%p %d -> %d", nc, (int) len, n));
-  if (n < 0) return mg_ssl_if_mbed_err(nc, n);
+  /* Per mbedTLS docs, if write returns WANT_READ or WANT_WRITE, the operation
+   * should be retried with the same data and length.
+   * Here we assume that the data being pushed will remain the same but the
+   * amount may grow between calls so we save the length that was used and
+   * retry. The assumption being that the data itself won't change and won't
+   * be removed. */
+  size_t l = len;
+  if (ctx->saved_len > 0 && ctx->saved_len < l) l = ctx->saved_len;
+  int n = mbedtls_ssl_write(ctx->ssl, (const unsigned char *) buf, l);
+  DBG(("%p %d,%d,%d -> %d", nc, (int) len, (int) ctx->saved_len, (int) l, n));
+  if (n < 0) {
+    if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE) {
+      ctx->saved_len = len;
+    }
+    return mg_ssl_if_mbed_err(nc, n);
+  } else if (n > 0) {
+    ctx->saved_len = 0;
+  }
   return n;
 }
 
@@ -416,6 +445,7 @@ static enum mg_ssl_if_result mg_set_cipher_list(struct mg_ssl_if_ctx *ctx,
   return MG_SSL_OK;
 }
 
+#ifdef MBEDTLS_KEY_EXCHANGE__SOME__PSK_ENABLED
 static enum mg_ssl_if_result mg_ssl_if_mbed_set_psk(struct mg_ssl_if_ctx *ctx,
                                                     const char *identity,
                                                     const char *key_str) {
@@ -452,6 +482,7 @@ static enum mg_ssl_if_result mg_ssl_if_mbed_set_psk(struct mg_ssl_if_ctx *ctx,
   }
   return MG_SSL_OK;
 }
+#endif
 
 const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
                        const char *ca_cert) {

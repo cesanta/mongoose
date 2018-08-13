@@ -10,6 +10,9 @@
 #endif
 
 #include <openssl/ssl.h>
+#ifndef KR_VERSION
+#include <openssl/tls1.h>
+#endif
 
 struct mg_ssl_if_ctx {
   SSL *ssl;
@@ -94,14 +97,6 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
     return MG_SSL_ERROR;
   }
 
-  if (params->server_name != NULL) {
-#ifdef KR_VERSION
-    SSL_CTX_kr_set_verify_name(ctx->ssl_ctx, params->server_name);
-#else
-/* TODO(rojer): Implement server name verification on OpenSSL. */
-#endif
-  }
-
   if (mg_set_cipher_list(ctx->ssl_ctx, params->cipher_suites) != MG_SSL_OK) {
     MG_SET_PTRPTR(err_msg, "Invalid cipher suite list");
     return MG_SSL_ERROR;
@@ -118,6 +113,14 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
       (ctx->ssl = SSL_new(ctx->ssl_ctx)) == NULL) {
     MG_SET_PTRPTR(err_msg, "Failed to create SSL session");
     return MG_SSL_ERROR;
+  }
+
+  if (params->server_name != NULL) {
+#ifdef KR_VERSION
+    SSL_CTX_kr_set_verify_name(ctx->ssl_ctx, params->server_name);
+#else
+    SSL_set_tlsext_host_name(ctx->ssl, params->server_name);
+#endif
   }
 
   nc->flags |= MG_F_SSL;

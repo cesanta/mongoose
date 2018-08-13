@@ -25,7 +25,7 @@ $(Q) $(CC_WRAPPER) $(LD) $(LIBDIRS) -T$(LD_SCRIPT) $(LDFLAGS) -o $@ \
 endef
 
 define compile_params
-$(vecho) "$5    $1 -> $2"
+$(vecho) "$5    $1"
 $(Q) $(CC_WRAPPER) $3 -MD -MP $(INCDIRS) $4 -c $1 -o $2
 endef
 
@@ -57,7 +57,8 @@ NO_Os_FLAGS= -fno-expensive-optimizations -fno-thread-jumps \
              -fno-tree-pre -fno-tree-vrp
 
 C_CXX_FLAGS  = -W -Wall -Werror -Wundef -Wno-comment -Wno-variadic-macros -Wpointer-arith \
-               -Os $(NO_Os_FLAGS) -g3 \
+               -Wno-missing-field-initializers \
+               -pipe -Os $(NO_Os_FLAGS) -g3 \
                -Wl,-EL -fno-inline-functions \
                -D_XOPEN_SOURCE=500 \
                -nostdlib -mlongcalls -mtext-section-literals -D__ets__ -DSTATIC=static \
@@ -68,7 +69,7 @@ C_CXX_FLAGS  = -W -Wall -Werror -Wundef -Wno-comment -Wno-variadic-macros -Wpoin
                -DCS_PLATFORM=3 \
                -ffunction-sections -fdata-sections
 
-CFLAGS = -std=c99 $(C_CXX_FLAGS)
+CFLAGS = -std=gnu99 $(C_CXX_FLAGS)
 CXXFLAGS = -std=gnu++11 -fno-exceptions $(C_CXX_FLAGS)
 
 # linker flags used to generate the main object file
