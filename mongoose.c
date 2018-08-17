@@ -903,6 +903,7 @@ typedef int cs_dirent_dummy;
 
 #ifndef _WIN32
 #include <stddef.h>
+#include <netinet/tcp.h>
 /*
  * There is no sys/time.h on ARMCC.
  */
@@ -2346,7 +2347,7 @@ size_t mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
 /* Which flags can be pre-set by the user at connection creation time. */
 #define _MG_ALLOWED_CONNECT_FLAGS_MASK                                   \
   (MG_F_USER_1 | MG_F_USER_2 | MG_F_USER_3 | MG_F_USER_4 | MG_F_USER_5 | \
-   MG_F_USER_6 | MG_F_WEBSOCKET_NO_DEFRAG | MG_F_ENABLE_BROADCAST)
+   MG_F_USER_6 | MG_F_WEBSOCKET_NO_DEFRAG | MG_F_ENABLE_BROADCAST | MG_F_TCP_NODELAY)
 /* Which flags should be modifiable by user's callbacks. */
 #define _MG_CALLBACK_MODIFIABLE_FLAGS_MASK                               \
   (MG_F_USER_1 | MG_F_USER_2 | MG_F_USER_3 | MG_F_USER_4 | MG_F_USER_5 | \
@@ -3741,6 +3742,13 @@ static int mg_accept_conn(struct mg_connection *lc) {
     }
     return 0;
   }
+  if (lc->flags & MG_F_TCP_NODELAY) {
+    int flag = 1;
+    int ret = setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(flag));
+    if (ret == -1) {
+      DBG("setsockopt: TCP_NODELAY failed.");
+    }
+  }  
   nc = mg_if_accept_new_conn(lc);
   if (nc == NULL) {
     closesocket(sock);
@@ -14231,6 +14239,13 @@ static int mg_accept_conn(struct mg_connection *lc) {
     DBG(("%p: failed to accept: %d", lc, sock));
     return 0;
   }
+  if (lc->flags & MG_F_TCP_NODELAY) {
+    int flag = 1;
+    int ret = setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(flag));
+    if (ret == -1) {
+      DBG("setsockopt: TCP_NODELAY failed.");
+    }
+  }  
   nc = mg_if_accept_new_conn(lc);
   if (nc == NULL) {
     sl_Close(sock);
