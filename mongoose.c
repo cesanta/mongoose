@@ -3746,7 +3746,7 @@ static int mg_accept_conn(struct mg_connection *lc) {
     int flag = 1;
     int ret = setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(flag));
     if (ret == -1) {
-      DBG("setsockopt: TCP_NODELAY failed.");
+      DBG(("setsockopt: TCP_NODELAY failed."));
     }
   }  
   nc = mg_if_accept_new_conn(lc);
@@ -14243,7 +14243,7 @@ static int mg_accept_conn(struct mg_connection *lc) {
     int flag = 1;
     int ret = setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(flag));
     if (ret == -1) {
-      DBG("setsockopt: TCP_NODELAY failed.");
+      DBG(("setsockopt: TCP_NODELAY failed."));
     }
   }  
   nc = mg_if_accept_new_conn(lc);
