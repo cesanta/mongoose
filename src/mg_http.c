@@ -2737,7 +2737,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
       if (lfn.p != mp->file_name) MG_FREE((char *) lfn.p);
       LOG(LL_DEBUG,
           ("%p Receiving file %s -> %s", nc, mp->file_name, fus->lfn));
-      fus->fp = mg_fopen(fus->lfn, "w");
+      fus->fp = mg_fopen(fus->lfn, "wb");
       if (fus->fp == NULL) {
         mg_printf(nc,
                   "HTTP/1.1 500 Internal Server Error\r\n"
