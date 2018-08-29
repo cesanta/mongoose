@@ -6760,6 +6760,7 @@ struct file_upload_state {
   char *lfn;
   size_t num_recd;
   FILE *fp;
+  char *localdata;
 };
 
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
@@ -8422,6 +8423,115 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
   (void) user_data;
 #endif
 }
+
+
+char* mg_file_upload_handler_string(struct mg_connection *nc, int ev, void *ev_data) {
+  switch (ev) {
+  case MG_EV_HTTP_PART_BEGIN: {
+    struct mg_http_multipart_part *mp =
+      (struct mg_http_multipart_part *) ev_data;
+    struct file_upload_state *fus;
+    struct mg_str lfn = mg_mk_str(mp->file_name);
+    mp->user_data = NULL;
+
+    fus = (struct file_upload_state *) MG_CALLOC(1, sizeof(*fus));
+    if (fus == NULL) {
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      return;
+    }
+    fus->lfn = (char *)MG_MALLOC(lfn.len + 1);
+    memcpy(fus->lfn, lfn.p, lfn.len);
+    fus->lfn[lfn.len] = '\0';
+    if (lfn.p != mp->file_name) MG_FREE((char *)lfn.p);
+
+    LOG(LL_DEBUG,
+      ("%p Receiving file %s -> %s", nc, mp->file_name, fus->lfn));
+    fus->localdata = malloc(0);
+    fus->num_recd = 0;
+    if (fus->localdata == NULL) {
+      mg_printf(nc,
+        "HTTP/1.1 500 Internal Server Error\r\n"
+        "Content-Type: text/plain\r\n"
+        "Connection: close\r\n\r\n");
+      LOG(LL_ERROR, ("Failed to malloc %s\n", fus->lfn));
+      mg_printf(nc, "Failed to malloc %s\n", fus->lfn);
+      /* Do not close the connection just yet, discard remainder of the data.
+      * This is because at the time of writing some browsers (Chrome) fail to
+      * render response before all the data is sent. */
+    }
+    mp->user_data = (void *)fus;
+    break;
+  }
+  case MG_EV_HTTP_PART_DATA: {
+    struct mg_http_multipart_part *mp =
+      (struct mg_http_multipart_part *) ev_data;
+    struct file_upload_state *fus =
+      (struct file_upload_state *) mp->user_data;
+    if (fus == NULL || fus->localdata == NULL) break;
+
+    fus->localdata = realloc(fus->localdata, fus->num_recd + mp->data.len);
+    if (fus->localdata == NULL) {
+      mg_printf(nc,
+        "HTTP/1.1 500 Internal Server Error\r\n"
+        "Content-Type: text/plain\r\n"
+        "Connection: close\r\n\r\n");
+        mg_printf(nc, "Failed to write to %s: %d, wrote %d", mp->file_name,
+        mg_get_errno(), (int)fus->num_recd);
+      free(fus->localdata);
+      remove(fus->lfn);
+      fus->localdata = NULL;
+      return;
+    }
+
+    memcpy(fus->localdata + fus->num_recd, mp->data.p, mp->data.len);
+    fus->num_recd += mp->data.len;
+    LOG(LL_DEBUG, ("%p rec'd %d bytes, %d total", nc, (int)mp->data.len,
+      (int)fus->num_recd));
+    break;
+  }
+  case MG_EV_HTTP_PART_END: {
+    struct mg_http_multipart_part *mp =
+      (struct mg_http_multipart_part *) ev_data;
+    struct file_upload_state *fus =
+      (struct file_upload_state *) mp->user_data;
+    if (fus == NULL) break;
+    if (mp->status >= 0 && fus->localdata != NULL) {
+      LOG(LL_DEBUG, ("%p Uploaded %s, %d bytes", nc, mp->file_name, (int)fus->num_recd));
+    }
+    else {
+      LOG(LL_ERROR, ("Failed to store %s (%s)", mp->file_name, fus->lfn));
+      /*
+      * mp->status < 0 means connection was terminated, so no reason to send
+      * HTTP reply
+      */
+    }
+    //if (fus->localdata != NULL) free(fus->localdata);
+    MG_FREE(fus->lfn);
+    char* return_data = fus->localdata;
+    return_data = realloc(return_data, fus->num_recd + 1);
+    return_data[fus->num_recd] = '\0';
+    MG_FREE(fus);
+    mp->user_data = NULL;
+    /* Don't close the connection yet, there may be more files to come. */
+    return(return_data);
+  }
+  case MG_EV_HTTP_MULTIPART_REQUEST_END: {
+    mg_printf(nc,
+      "HTTP/1.1 200 OK\r\n"
+      "Content-Type: text/plain\r\n"
+      "Connection: close\r\n\r\n"
+      "Ok.\r\n");
+    nc->flags |= MG_F_SEND_AND_CLOSE;
+    break;
+  }
+  }
+
+#if MG_ENABLE_CALLBACK_USERDATA
+  (void) user_data;
+#endif
+  return NULL;
+}
+
 
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
 #endif /* MG_ENABLE_FILESYSTEM */

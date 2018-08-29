@@ -386,6 +386,17 @@ typedef struct mg_str (*mg_fu_fname_fn)(struct mg_connection *nc,
 void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
                             mg_fu_fname_fn local_name_fn
                                 MG_UD_ARG(void *user_data));
+
+
+
+/*
+* File upload handler - keep in memory.
+* This handler can be used to implement file uploads with minimum code.
+* This handler will process MG_EV_HTTP_PART_* events and return a C string
+*/
+char* mg_file_upload_handler_string(struct mg_connection *nc, int ev, void *ev_data);
+
+
 #endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
 #endif /* MG_ENABLE_FILESYSTEM */
 
