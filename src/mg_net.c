@@ -734,7 +734,7 @@ void mg_if_can_send_cb(struct mg_connection *nc) {
     }
   } else
 #endif
-  {
+      if (len > 0) {
     if (nc->flags & MG_F_UDP) {
       n = nc->iface->vtable->udp_send(nc, buf, len);
     } else {

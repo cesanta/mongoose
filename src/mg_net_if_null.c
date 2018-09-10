@@ -75,7 +75,7 @@ int mg_null_if_udp_recv(struct mg_connection *c, void *buf, size_t len,
 
 static int mg_null_if_create_conn(struct mg_connection *c) {
   (void) c;
-  return -1;
+  return 1;
 }
 
 static void mg_null_if_destroy_conn(struct mg_connection *c) {

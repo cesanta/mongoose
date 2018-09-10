@@ -3043,7 +3043,7 @@ void mg_if_can_send_cb(struct mg_connection *nc) {
     }
   } else
 #endif
-  {
+      if (len > 0) {
     if (nc->flags & MG_F_UDP) {
       n = nc->iface->vtable->udp_send(nc, buf, len);
     } else {
@@ -3673,7 +3673,7 @@ int mg_null_if_udp_recv(struct mg_connection *c, void *buf, size_t len,
 
 static int mg_null_if_create_conn(struct mg_connection *c) {
   (void) c;
-  return -1;
+  return 1;
 }
 
 static void mg_null_if_destroy_conn(struct mg_connection *c) {
