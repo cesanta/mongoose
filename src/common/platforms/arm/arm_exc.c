@@ -95,6 +95,7 @@ void arm_exc_handler_bottom(uint8_t isr_no, struct arm_exc_frame *ef,
                             struct arm_gdb_reg_file *rf) {
   char buf[8];
   const char *name;
+  (void) ef;
   portDISABLE_INTERRUPTS();
   switch (isr_no) {
     case 0:

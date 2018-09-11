@@ -32,6 +32,8 @@ static void mg_ssl_mbed_log(void *ctx, int level, const char *file, int line,
   }
   /* mbedTLS passes strings with \n at the end, strip it. */
   LOG(cs_level, ("%p %.*s", ctx, (int) (strlen(str) - 1), str));
+  (void) ctx;
+  (void) str;
   (void) file;
   (void) line;
   (void) cs_level;

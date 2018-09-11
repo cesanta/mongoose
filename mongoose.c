@@ -4999,6 +4999,8 @@ static void mg_ssl_mbed_log(void *ctx, int level, const char *file, int line,
   }
   /* mbedTLS passes strings with \n at the end, strip it. */
   LOG(cs_level, ("%p %.*s", ctx, (int) (strlen(str) - 1), str));
+  (void) ctx;
+  (void) str;
   (void) file;
   (void) line;
   (void) cs_level;
@@ -11964,7 +11966,9 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev,
   void *user_data = nc->user_data;
 #endif
 
-  if (ev != MG_EV_POLL) DBG(("ev=%d user_data=%p", ev, user_data));
+  if (ev != MG_EV_POLL) {
+    DBG(("ev=%d user_data=%p", ev, user_data));
+  }
 
   req = (struct mg_resolve_async_request *) user_data;
 
