@@ -1,5 +1,5 @@
 ---
-title: "Memory Buffers"
+title: "mbuf.h"
 symbol_kind: "intro"
 decl_name: "mbuf.h"
 items:
