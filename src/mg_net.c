@@ -619,10 +619,12 @@ static int mg_recv_tcp(struct mg_connection *nc, char *buf, size_t len) {
       mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, n, MG_EV_RECV);
     }
 #endif
+    mbuf_trim(&nc->recv_mbuf);
     mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &n);
   } else if (n < 0) {
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
+  mbuf_trim(&nc->recv_mbuf);
   return n;
 }
 
