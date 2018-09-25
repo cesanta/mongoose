@@ -17,17 +17,17 @@ CXXFLAGS += $(TI_C_CXX_FLAGS) $(C_CXX_FLAGS)
 
 # cc flags,file
 define cc
-	$(vecho) "TICC  $2 -> $@"
+	$(vecho) "TICC  $2"
 	$(Q) $(CC_WRAPPER) $(CC) -c --preproc_with_compile -ppd=$@.d $1 --output_file=$@ $2
 endef
 define cxx
-	$(vecho) "TICXX $2 -> $@"
+	$(vecho) "TICXX $2"
 	$(Q) $(CC_WRAPPER) $(CC) -c --preproc_with_compile -ppd=$@.d $1 --output_file=$@ $2
 endef
 
 # asm flags,file
 define asm
-	$(vecho) "TIASM $2 -> $@"
+	$(vecho) "TIASM $2"
 	$(Q) $(CC_WRAPPER) $(CC) -c $1 --output_file=$@ $2
 endef
 
