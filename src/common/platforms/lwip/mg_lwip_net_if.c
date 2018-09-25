@@ -187,6 +187,7 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
   }
   mg_lwip_recv_common(nc, p);
   mgos_unlock();
+  (void) err;
   return ERR_OK;
 }
 
@@ -199,6 +200,7 @@ static err_t mg_lwip_tcp_sent_cb(void *arg, struct tcp_pcb *tpcb,
       nc->send_mbuf.len == 0 && tpcb->unsent == NULL && tpcb->unacked == NULL) {
     mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
   }
+  (void) num_sent;
   return ERR_OK;
 }
 
