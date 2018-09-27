@@ -6311,6 +6311,10 @@ static size_t mg_http_parse_chunk(char *buf, size_t len, char **chunk_data,
     n *= 16;
     n += (s[i] >= '0' && s[i] <= '9') ? s[i] - '0' : tolower(s[i]) - 'a' + 10;
     i++;
+    if (i > 6) {
+      /* Chunk size is unreasonable. */
+      return 0;
+    }
   }
 
   /* Skip new line */
