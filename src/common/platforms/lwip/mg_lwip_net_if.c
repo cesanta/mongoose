@@ -200,6 +200,9 @@ static err_t mg_lwip_tcp_sent_cb(void *arg, struct tcp_pcb *tpcb,
       nc->send_mbuf.len == 0 && tpcb->unsent == NULL && tpcb->unacked == NULL) {
     mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
   }
+  if (nc->send_mbuf.len > 0 || (nc->flags & MG_F_WANT_WRITE)) {
+    mg_lwip_mgr_schedule_poll(nc->mgr);
+  }
   (void) num_sent;
   return ERR_OK;
 }
@@ -562,6 +565,10 @@ static int mg_lwip_if_can_send(struct mg_connection *nc,
       can_send = (cs->pcb.udp != NULL);
     } else {
       can_send = (cs->pcb.tcp != NULL && cs->pcb.tcp->snd_buf > 0);
+/* See comment above. */
+#if CS_PLATFORM == CS_P_ESP8266
+      if (cs->pcb.tcp->unacked != NULL) can_send = 0;
+#endif
     }
   }
   return can_send;
