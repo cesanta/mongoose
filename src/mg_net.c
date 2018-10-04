@@ -488,7 +488,6 @@ MG_INTERNAL void mg_ssl_handshake(struct mg_connection *nc) {
   enum mg_ssl_if_result res;
   if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) return;
   res = mg_ssl_if_handshake(nc);
-  LOG(LL_DEBUG, ("%p %d res %d", nc, server_side, res));
 
   if (res == MG_SSL_OK) {
     nc->flags |= MG_F_SSL_HANDSHAKE_DONE;
