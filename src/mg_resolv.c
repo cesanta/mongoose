@@ -152,7 +152,9 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev,
   void *user_data = nc->user_data;
 #endif
 
-  if (ev != MG_EV_POLL) DBG(("ev=%d user_data=%p", ev, user_data));
+  if (ev != MG_EV_POLL) {
+    DBG(("ev=%d user_data=%p", ev, user_data));
+  }
 
   req = (struct mg_resolve_async_request *) user_data;
 

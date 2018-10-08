@@ -29,11 +29,11 @@ $(SDK_OBJS): CFLAGS += -include common/platform.h
 
 # cc flags,file
 define cc
-	$(vecho) "GCC   $2 -> $@"
+	$(vecho) "GCC   $2"
 	$(Q) $(CC_WRAPPER) $(CC) -c $1 -o $@ $2
 endef
 define cxx
-	$(vecho) "G++   $2 -> $@"
+	$(vecho) "G++   $2"
 	$(Q) $(CC_WRAPPER) $(CXX) -c $1 -o $@ $2
 endef
 

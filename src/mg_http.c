@@ -564,6 +564,10 @@ static size_t mg_http_parse_chunk(char *buf, size_t len, char **chunk_data,
     n *= 16;
     n += (s[i] >= '0' && s[i] <= '9') ? s[i] - '0' : tolower(s[i]) - 'a' + 10;
     i++;
+    if (i > 6) {
+      /* Chunk size is unreasonable. */
+      return 0;
+    }
   }
 
   /* Skip new line */
@@ -869,6 +873,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       }
     } else {
       /* We did receive all HTTP body. */
+      int request_done = 1;
       int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
       char addr[32];
       mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
@@ -880,8 +885,28 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       mg_http_call_endpoint_handler(nc, trigger_ev, hm);
       mbuf_remove(io, hm->message.len);
       pd->rcvd -= hm->message.len;
-      if (io->len > 0) {
-        goto again;
+#if MG_ENABLE_FILESYSTEM
+      /* We don't have a generic mechanism of communicating that we are done
+       * responding to a request (should probably add one). But if we are
+       * serving
+       * a file, we are definitely not done. */
+      if (pd->file.fp != NULL) request_done = 0;
+#endif
+#if MG_ENABLE_HTTP_CGI
+      /* If this is a CGI request, we are not done either. */
+      if (pd->cgi.cgi_nc != NULL) request_done = 0;
+#endif
+      if (request_done) {
+        /* This request is done but we may receive another on this connection.
+         */
+        mg_http_conn_destructor(pd);
+        nc->proto_data = NULL;
+        if (io->len > 0) {
+          /* We already have data for the next one, restart parsing. */
+          pd = mg_http_get_proto_data(nc);
+          pd->rcvd = io->len;
+          goto again;
+        }
       }
     }
   }
@@ -2737,7 +2762,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
       if (lfn.p != mp->file_name) MG_FREE((char *) lfn.p);
       LOG(LL_DEBUG,
           ("%p Receiving file %s -> %s", nc, mp->file_name, fus->lfn));
-      fus->fp = mg_fopen(fus->lfn, "w");
+      fus->fp = mg_fopen(fus->lfn, "wb");
       if (fus->fp == NULL) {
         mg_printf(nc,
                   "HTTP/1.1 500 Internal Server Error\r\n"

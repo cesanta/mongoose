@@ -167,36 +167,4 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
   return now;
 }
 
-uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
-  struct mg_connection *nc;
-  double now;
-  double min_timer = 0;
-  int num_timers = 0;
-  mg_ev_mgr_lwip_process_signals(mgr);
-  for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
-    struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
-    if (nc->ev_timer_time > 0) {
-      if (num_timers == 0 || nc->ev_timer_time < min_timer) {
-        min_timer = nc->ev_timer_time;
-      }
-      num_timers++;
-    }
-    /* We want and can send data, request a poll immediately. */
-    if (nc->sock != INVALID_SOCKET && mg_lwip_if_can_send(nc, cs)) {
-      return 0;
-    }
-  }
-  uint32_t timeout_ms = ~0;
-  now = mg_time();
-  if (num_timers > 0) {
-    /* If we have a timer that is past due, do a poll ASAP. */
-    if (min_timer < now) return 0;
-    double timer_timeout_ms = (min_timer - now) * 1000 + 1 /* rounding */;
-    if (timer_timeout_ms < timeout_ms) {
-      timeout_ms = timer_timeout_ms;
-    }
-  }
-  return timeout_ms;
-}
-
 #endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL */

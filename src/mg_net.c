@@ -99,6 +99,7 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
                   (nc->flags & _MG_CALLBACK_MODIFIABLE_FLAGS_MASK);
     }
   }
+  if (ev != MG_EV_POLL) nc->mgr->num_calls++;
   if (ev != MG_EV_POLL) {
     DBG(("%p after %s flags=0x%lx rmbl=%d smbl=%d", nc,
          ev_handler == nc->handler ? "user" : "proto", nc->flags,
@@ -276,19 +277,14 @@ void mg_mgr_free(struct mg_mgr *m) {
   MG_FREE((char *) m->nameserver);
 }
 
-time_t mg_mgr_poll(struct mg_mgr *m, int timeout_ms) {
-  int i;
-  time_t now = 0; /* oh GCC, seriously ? */
-
-  if (m->num_ifaces == 0) {
-    LOG(LL_ERROR, ("cannot poll: no interfaces"));
-    return 0;
-  }
+int mg_mgr_poll(struct mg_mgr *m, int timeout_ms) {
+  int i, num_calls_before = m->num_calls;
 
   for (i = 0; i < m->num_ifaces; i++) {
-    now = m->ifaces[i]->vtable->poll(m->ifaces[i], timeout_ms);
+    m->ifaces[i]->vtable->poll(m->ifaces[i], timeout_ms);
   }
-  return now;
+
+  return (m->num_calls - num_calls_before);
 }
 
 int mg_vprintf(struct mg_connection *nc, const char *fmt, va_list ap) {
@@ -492,7 +488,6 @@ MG_INTERNAL void mg_ssl_handshake(struct mg_connection *nc) {
   enum mg_ssl_if_result res;
   if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) return;
   res = mg_ssl_if_handshake(nc);
-  LOG(LL_DEBUG, ("%p %d res %d", nc, server_side, res));
 
   if (res == MG_SSL_OK) {
     nc->flags |= MG_F_SSL_HANDSHAKE_DONE;
@@ -623,10 +618,12 @@ static int mg_recv_tcp(struct mg_connection *nc, char *buf, size_t len) {
       mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, n, MG_EV_RECV);
     }
 #endif
+    mbuf_trim(&nc->recv_mbuf);
     mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &n);
   } else if (n < 0) {
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
+  mbuf_trim(&nc->recv_mbuf);
   return n;
 }
 
@@ -738,7 +735,7 @@ void mg_if_can_send_cb(struct mg_connection *nc) {
     }
   } else
 #endif
-  {
+      if (len > 0) {
     if (nc->flags & MG_F_UDP) {
       n = nc->iface->vtable->udp_send(nc, buf, len);
     } else {
