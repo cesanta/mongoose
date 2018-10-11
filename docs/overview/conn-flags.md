@@ -7,7 +7,7 @@ flags are meant to be set only by the user event handler to tell Mongoose how to
 behave.  Below is a list of connection flags that are meant to be set by event
 handlers:
 
-* `MG_F_FINISHED_SENDING_DATA` tells Mongoose that all data has been appended
+* `MG_F_SEND_AND_CLOSE` tells Mongoose that all data has been appended
   to the `send_mbuf`. As soon as Mongoose sends it to the socket, the
   connection will be closed.
 * `MG_F_BUFFER_BUT_DONT_SEND` tells Mongoose to append data to the `send_mbuf`

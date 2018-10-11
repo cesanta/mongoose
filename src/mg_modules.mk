@@ -64,6 +64,7 @@ SOURCES = $(COMMON)/mg_mem.h \
           mg_net_if_socket.h \
           mg_net_if_socks.h \
           mg_net_if.c \
+          mg_net_if_null.c \
           mg_net_if_socket.c \
           mg_net_if_socks.c \
           mg_ssl_if_openssl.c \

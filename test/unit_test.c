@@ -2069,7 +2069,7 @@ static const char *test_http(void) {
   nc->user_data = mime2;
 
   /* Run event loop. Use more cycles to let file download complete. */
-  poll_until(&mgr, 5, c_str_ne, status, (void *) "");
+  poll_until(&mgr, 15, c_str_ne, status, (void *) "");
   mg_mgr_free(&mgr);
 
   /* Check that test buffer has been filled by the callback properly. */

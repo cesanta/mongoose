@@ -2408,6 +2408,7 @@ MG_INTERNAL void mg_call(struct mg_connection *nc,
                   (nc->flags & _MG_CALLBACK_MODIFIABLE_FLAGS_MASK);
     }
   }
+  if (ev != MG_EV_POLL) nc->mgr->num_calls++;
   if (ev != MG_EV_POLL) {
     DBG(("%p after %s flags=0x%lx rmbl=%d smbl=%d", nc,
          ev_handler == nc->handler ? "user" : "proto", nc->flags,
@@ -2585,19 +2586,14 @@ void mg_mgr_free(struct mg_mgr *m) {
   MG_FREE((char *) m->nameserver);
 }
 
-time_t mg_mgr_poll(struct mg_mgr *m, int timeout_ms) {
-  int i;
-  time_t now = 0; /* oh GCC, seriously ? */
-
-  if (m->num_ifaces == 0) {
-    LOG(LL_ERROR, ("cannot poll: no interfaces"));
-    return 0;
-  }
+int mg_mgr_poll(struct mg_mgr *m, int timeout_ms) {
+  int i, num_calls_before = m->num_calls;
 
   for (i = 0; i < m->num_ifaces; i++) {
-    now = m->ifaces[i]->vtable->poll(m->ifaces[i], timeout_ms);
+    m->ifaces[i]->vtable->poll(m->ifaces[i], timeout_ms);
   }
-  return now;
+
+  return (m->num_calls - num_calls_before);
 }
 
 int mg_vprintf(struct mg_connection *nc, const char *fmt, va_list ap) {
@@ -2801,7 +2797,6 @@ MG_INTERNAL void mg_ssl_handshake(struct mg_connection *nc) {
   enum mg_ssl_if_result res;
   if (nc->flags & MG_F_SSL_HANDSHAKE_DONE) return;
   res = mg_ssl_if_handshake(nc);
-  LOG(LL_DEBUG, ("%p %d res %d", nc, server_side, res));
 
   if (res == MG_SSL_OK) {
     nc->flags |= MG_F_SSL_HANDSHAKE_DONE;
@@ -2932,10 +2927,12 @@ static int mg_recv_tcp(struct mg_connection *nc, char *buf, size_t len) {
       mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, n, MG_EV_RECV);
     }
 #endif
+    mbuf_trim(&nc->recv_mbuf);
     mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &n);
   } else if (n < 0) {
     nc->flags |= MG_F_CLOSE_IMMEDIATELY;
   }
+  mbuf_trim(&nc->recv_mbuf);
   return n;
 }
 
@@ -3047,7 +3044,7 @@ void mg_if_can_send_cb(struct mg_connection *nc) {
     }
   } else
 #endif
-  {
+      if (len > 0) {
     if (nc->flags & MG_F_UDP) {
       n = nc->iface->vtable->udp_send(nc, buf, len);
     } else {
@@ -3585,6 +3582,162 @@ struct mg_iface *mg_find_iface(struct mg_mgr *mgr,
   }
   return NULL;
 }
+
+double mg_mgr_min_timer(const struct mg_mgr *mgr) {
+  double min_timer = 0;
+  struct mg_connection *nc;
+  for (nc = mgr->active_connections; nc != NULL; nc = nc->next) {
+    if (nc->ev_timer_time <= 0) continue;
+    if (min_timer == 0 || nc->ev_timer_time < min_timer) {
+      min_timer = nc->ev_timer_time;
+    }
+  }
+  return min_timer;
+}
+#ifdef MG_MODULE_LINES
+#line 1 "mongoose/src/mg_net_if_null.c"
+#endif
+/*
+ * Copyright (c) 2018 Cesanta Software Limited
+ * All rights reserved
+ *
+ * This software is dual-licensed: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation. For the terms of this
+ * license, see <http://www.gnu.org/licenses/>.
+ *
+ * You are free to use this software under the terms of the GNU General
+ * Public License, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * Alternatively, you can license this software under a commercial
+ * license, as set out in <https://www.cesanta.com/license>.
+ */
+
+static void mg_null_if_connect_tcp(struct mg_connection *c,
+                                   const union socket_address *sa) {
+  c->flags |= MG_F_CLOSE_IMMEDIATELY;
+  (void) sa;
+}
+
+static void mg_null_if_connect_udp(struct mg_connection *c) {
+  c->flags |= MG_F_CLOSE_IMMEDIATELY;
+}
+
+static int mg_null_if_listen_tcp(struct mg_connection *c,
+                                 union socket_address *sa) {
+  (void) c;
+  (void) sa;
+  return -1;
+}
+
+static int mg_null_if_listen_udp(struct mg_connection *c,
+                                 union socket_address *sa) {
+  (void) c;
+  (void) sa;
+  return -1;
+}
+
+static int mg_null_if_tcp_send(struct mg_connection *c, const void *buf,
+                               size_t len) {
+  (void) c;
+  (void) buf;
+  (void) len;
+  return -1;
+}
+
+static int mg_null_if_udp_send(struct mg_connection *c, const void *buf,
+                               size_t len) {
+  (void) c;
+  (void) buf;
+  (void) len;
+  return -1;
+}
+
+int mg_null_if_tcp_recv(struct mg_connection *c, void *buf, size_t len) {
+  (void) c;
+  (void) buf;
+  (void) len;
+  return -1;
+}
+
+int mg_null_if_udp_recv(struct mg_connection *c, void *buf, size_t len,
+                        union socket_address *sa, size_t *sa_len) {
+  (void) c;
+  (void) buf;
+  (void) len;
+  (void) sa;
+  (void) sa_len;
+  return -1;
+}
+
+static int mg_null_if_create_conn(struct mg_connection *c) {
+  (void) c;
+  return 1;
+}
+
+static void mg_null_if_destroy_conn(struct mg_connection *c) {
+  (void) c;
+}
+
+static void mg_null_if_sock_set(struct mg_connection *c, sock_t sock) {
+  (void) c;
+  (void) sock;
+}
+
+static void mg_null_if_init(struct mg_iface *iface) {
+  (void) iface;
+}
+
+static void mg_null_if_free(struct mg_iface *iface) {
+  (void) iface;
+}
+
+static void mg_null_if_add_conn(struct mg_connection *c) {
+  c->sock = INVALID_SOCKET;
+  c->flags |= MG_F_CLOSE_IMMEDIATELY;
+}
+
+static void mg_null_if_remove_conn(struct mg_connection *c) {
+  (void) c;
+}
+
+static time_t mg_null_if_poll(struct mg_iface *iface, int timeout_ms) {
+  struct mg_mgr *mgr = iface->mgr;
+  struct mg_connection *nc, *tmp;
+  double now = mg_time();
+  /* We basically just run timers and poll. */
+  for (nc = mgr->active_connections; nc != NULL; nc = tmp) {
+    tmp = nc->next;
+    mg_if_poll(nc, now);
+  }
+  (void) timeout_ms;
+  return (time_t) now;
+}
+
+static void mg_null_if_get_conn_addr(struct mg_connection *c, int remote,
+                                     union socket_address *sa) {
+  (void) c;
+  (void) remote;
+  (void) sa;
+}
+
+#define MG_NULL_IFACE_VTABLE                                                   \
+  {                                                                            \
+    mg_null_if_init, mg_null_if_free, mg_null_if_add_conn,                     \
+        mg_null_if_remove_conn, mg_null_if_poll, mg_null_if_listen_tcp,        \
+        mg_null_if_listen_udp, mg_null_if_connect_tcp, mg_null_if_connect_udp, \
+        mg_null_if_tcp_send, mg_null_if_udp_send, mg_null_if_tcp_recv,         \
+        mg_null_if_udp_recv, mg_null_if_create_conn, mg_null_if_destroy_conn,  \
+        mg_null_if_sock_set, mg_null_if_get_conn_addr,                         \
+  }
+
+const struct mg_iface_vtable mg_null_iface_vtable = MG_NULL_IFACE_VTABLE;
+
+#if MG_NET_IF == MG_NET_IF_NULL
+const struct mg_iface_vtable mg_default_iface_vtable = MG_NULL_IFACE_VTABLE;
+#endif /* MG_NET_IF == MG_NET_IF_NULL */
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_net_if_socket.c"
 #endif
@@ -4847,6 +5000,8 @@ static void mg_ssl_mbed_log(void *ctx, int level, const char *file, int line,
   }
   /* mbedTLS passes strings with \n at the end, strip it. */
   LOG(cs_level, ("%p %.*s", ctx, (int) (strlen(str) - 1), str));
+  (void) ctx;
+  (void) str;
   (void) file;
   (void) line;
   (void) cs_level;
@@ -5036,9 +5191,9 @@ static void mg_ssl_if_mbed_free_certs_and_keys(struct mg_ssl_if_ctx *ctx) {
   if (ctx->ca_cert != NULL) {
     mbedtls_ssl_conf_ca_chain(ctx->conf, NULL, NULL);
 #ifdef MBEDTLS_X509_CA_CHAIN_ON_DISK
-    if (ctx->ca_cert->ca_chain_file != NULL) {
-      MG_FREE((void *) ctx->ca_cert->ca_chain_file);
-      ctx->ca_cert->ca_chain_file = NULL;
+    if (ctx->conf->ca_chain_file != NULL) {
+      MG_FREE((void *) ctx->conf->ca_chain_file);
+      ctx->conf->ca_chain_file = NULL;
     }
 #endif
     mbedtls_x509_crt_free(ctx->ca_cert);
@@ -5145,15 +5300,13 @@ static enum mg_ssl_if_result mg_use_ca_cert(struct mg_ssl_if_ctx *ctx,
   mbedtls_x509_crt_init(ctx->ca_cert);
 #ifdef MBEDTLS_X509_CA_CHAIN_ON_DISK
   ca_cert = strdup(ca_cert);
-  if (mbedtls_x509_crt_set_ca_chain_file(ctx->ca_cert, ca_cert) != 0) {
-    return MG_SSL_ERROR;
-  }
+  mbedtls_ssl_conf_ca_chain_file(ctx->conf, ca_cert, NULL);
 #else
   if (mbedtls_x509_crt_parse_file(ctx->ca_cert, ca_cert) != 0) {
     return MG_SSL_ERROR;
   }
-#endif
   mbedtls_ssl_conf_ca_chain(ctx->conf, ctx->ca_cert, NULL);
+#endif
   mbedtls_ssl_conf_authmode(ctx->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
   return MG_SSL_OK;
 }
@@ -6155,6 +6308,10 @@ static size_t mg_http_parse_chunk(char *buf, size_t len, char **chunk_data,
     n *= 16;
     n += (s[i] >= '0' && s[i] <= '9') ? s[i] - '0' : tolower(s[i]) - 'a' + 10;
     i++;
+    if (i > 6) {
+      /* Chunk size is unreasonable. */
+      return 0;
+    }
   }
 
   /* Skip new line */
@@ -6460,6 +6617,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       }
     } else {
       /* We did receive all HTTP body. */
+      int request_done = 1;
       int trigger_ev = nc->listener ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
       char addr[32];
       mg_sock_addr_to_str(&nc->sa, addr, sizeof(addr),
@@ -6471,8 +6629,28 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       mg_http_call_endpoint_handler(nc, trigger_ev, hm);
       mbuf_remove(io, hm->message.len);
       pd->rcvd -= hm->message.len;
-      if (io->len > 0) {
-        goto again;
+#if MG_ENABLE_FILESYSTEM
+      /* We don't have a generic mechanism of communicating that we are done
+       * responding to a request (should probably add one). But if we are
+       * serving
+       * a file, we are definitely not done. */
+      if (pd->file.fp != NULL) request_done = 0;
+#endif
+#if MG_ENABLE_HTTP_CGI
+      /* If this is a CGI request, we are not done either. */
+      if (pd->cgi.cgi_nc != NULL) request_done = 0;
+#endif
+      if (request_done) {
+        /* This request is done but we may receive another on this connection.
+         */
+        mg_http_conn_destructor(pd);
+        nc->proto_data = NULL;
+        if (io->len > 0) {
+          /* We already have data for the next one, restart parsing. */
+          pd = mg_http_get_proto_data(nc);
+          pd->rcvd = io->len;
+          goto again;
+        }
       }
     }
   }
@@ -8328,7 +8506,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
       if (lfn.p != mp->file_name) MG_FREE((char *) lfn.p);
       LOG(LL_DEBUG,
           ("%p Receiving file %s -> %s", nc, mp->file_name, fus->lfn));
-      fus->fp = mg_fopen(fus->lfn, "w");
+      fus->fp = mg_fopen(fus->lfn, "wb");
       if (fus->fp == NULL) {
         mg_printf(nc,
                   "HTTP/1.1 500 Internal Server Error\r\n"
@@ -11812,7 +11990,9 @@ static void mg_resolve_async_eh(struct mg_connection *nc, int ev,
   void *user_data = nc->user_data;
 #endif
 
-  if (ev != MG_EV_POLL) DBG(("ev=%d user_data=%p", ev, user_data));
+  if (ev != MG_EV_POLL) {
+    DBG(("ev=%d user_data=%p", ev, user_data));
+  }
 
   req = (struct mg_resolve_async_request *) user_data;
 
@@ -15024,6 +15204,7 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
   }
   mg_lwip_recv_common(nc, p);
   mgos_unlock();
+  (void) err;
   return ERR_OK;
 }
 
@@ -15036,6 +15217,10 @@ static err_t mg_lwip_tcp_sent_cb(void *arg, struct tcp_pcb *tpcb,
       nc->send_mbuf.len == 0 && tpcb->unsent == NULL && tpcb->unacked == NULL) {
     mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
   }
+  if (nc->send_mbuf.len > 0 || (nc->flags & MG_F_WANT_WRITE)) {
+    mg_lwip_mgr_schedule_poll(nc->mgr);
+  }
+  (void) num_sent;
   return ERR_OK;
 }
 
@@ -15397,6 +15582,10 @@ static int mg_lwip_if_can_send(struct mg_connection *nc,
       can_send = (cs->pcb.udp != NULL);
     } else {
       can_send = (cs->pcb.tcp != NULL && cs->pcb.tcp->snd_buf > 0);
+/* See comment above. */
+#if CS_PLATFORM == CS_P_ESP8266
+      if (cs->pcb.tcp->unacked != NULL) can_send = 0;
+#endif
     }
   }
   return can_send;
@@ -15714,38 +15903,6 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
 #endif
   (void) timeout_ms;
   return now;
-}
-
-uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr) {
-  struct mg_connection *nc;
-  double now;
-  double min_timer = 0;
-  int num_timers = 0;
-  mg_ev_mgr_lwip_process_signals(mgr);
-  for (nc = mg_next(mgr, NULL); nc != NULL; nc = mg_next(mgr, nc)) {
-    struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
-    if (nc->ev_timer_time > 0) {
-      if (num_timers == 0 || nc->ev_timer_time < min_timer) {
-        min_timer = nc->ev_timer_time;
-      }
-      num_timers++;
-    }
-    /* We want and can send data, request a poll immediately. */
-    if (nc->sock != INVALID_SOCKET && mg_lwip_if_can_send(nc, cs)) {
-      return 0;
-    }
-  }
-  uint32_t timeout_ms = ~0;
-  now = mg_time();
-  if (num_timers > 0) {
-    /* If we have a timer that is past due, do a poll ASAP. */
-    if (min_timer < now) return 0;
-    double timer_timeout_ms = (min_timer - now) * 1000 + 1 /* rounding */;
-    if (timer_timeout_ms < timeout_ms) {
-      timeout_ms = timer_timeout_ms;
-    }
-  }
-  return timeout_ms;
 }
 
 #endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL */

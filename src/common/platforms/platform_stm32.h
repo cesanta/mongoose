@@ -34,7 +34,7 @@
 #include <stm32_sdk_hal.h>
 
 #define to64(x) strtoll(x, NULL, 10)
-#define INT64_FMT PRId64
+#define INT64_FMT "lld"
 #define SIZE_T_FMT "u"
 typedef struct stat cs_stat_t;
 #define DIRSEP '/'
