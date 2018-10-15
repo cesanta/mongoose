@@ -7668,7 +7668,7 @@ int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
                          struct mg_str nc, struct mg_str nonce,
                          struct mg_str auth_domain, FILE *fp) {
   char buf[128], f_user[sizeof(buf)], f_ha1[sizeof(buf)], f_domain[sizeof(buf)];
-  char expected_response[33];
+  char exp_resp[33];
 
   /*
    * Read passwords file line by line. If should have htdigest format,
@@ -7682,11 +7682,10 @@ int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
       /* Username and domain matched, check the password */
       mg_mkmd5resp(method.p, method.len, uri.p, uri.len, f_ha1, strlen(f_ha1),
                    nonce.p, nonce.len, nc.p, nc.len, cnonce.p, cnonce.len,
-                   qop.p, qop.len, expected_response);
-      LOG(LL_DEBUG,
-          ("%.*s %s %.*s %s", (int) username.len, username.p, f_domain,
-           (int) response.len, response.p, expected_response));
-      return mg_ncasecmp(response.p, expected_response, response.len) == 0;
+                   qop.p, qop.len, exp_resp);
+      LOG(LL_DEBUG, ("%.*s %s %.*s %s", (int) username.len, username.p,
+                     f_domain, (int) response.len, response.p, exp_resp));
+      return mg_ncasecmp(response.p, exp_resp, strlen(exp_resp)) == 0;
     }
   }
 
