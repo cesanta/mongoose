@@ -52,10 +52,7 @@ Commercial Projects: [Contact us for commercial license.](https://www.cesanta.co
 # Dashboard Example
 
 Mongoose is often used to implement device dashboards and real-time
-data exchange over Websocket. Here is a dashboard example that illustrates
-the functionality:
-
-![](http://www.cesanta.com/images/dashboard.png)
+data exchange over Websocket.
 
 [Developing a new product? Contact us today to discuss how Mongoose can help.](https://www.cesanta.com/contact.html)
 
