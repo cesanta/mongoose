@@ -2239,6 +2239,8 @@ struct mg_str mg_mk_str_n(const char *s, size_t len);
 /* Macro for initializing mg_str. */
 #define MG_MK_STR(str_literal) \
   { str_literal, sizeof(str_literal) - 1 }
+#define MG_MK_STR_N(str_literal, len) \
+  { str_literal, len }
 #define MG_NULL_STR \
   { NULL, 0 }
 
@@ -2285,6 +2287,9 @@ const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
 
 /* Strip whitespace at the start and the end of s */
 struct mg_str mg_strstrip(struct mg_str s);
+
+/* Returns 1 if s starts with the given prefix. */
+int mg_str_starts_with(struct mg_str s, struct mg_str prefix);
 
 #ifdef __cplusplus
 }
