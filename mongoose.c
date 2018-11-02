@@ -2895,7 +2895,7 @@ static int mg_do_recv(struct mg_connection *nc) {
     } else {
       res = mg_recv_tcp(nc, buf, len);
     }
-  } while (res > 0);
+  } while (res > 0 && !(nc->flags & (MG_F_CLOSE_IMMEDIATELY | MG_F_UDP)));
   return res;
 }
 
@@ -3012,7 +3012,9 @@ static int mg_recv_udp(struct mg_connection *nc, char *buf, size_t len) {
       mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, n, MG_EV_RECV);
     }
 #endif
-    mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &n);
+    if (n != 0) {
+      mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &n);
+    }
   }
 
 out:

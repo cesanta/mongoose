@@ -5665,7 +5665,7 @@ static const char *test_socks(void) {
   mbuf_resize(&c->recv_mbuf, 10000000);
 
   /* Run event loop. Use more cycles to let file download complete. */
-  poll_until(&mgr, 10, c_str_ne, status, (void *) "");
+  poll_until(&mgr, 15, c_str_ne, status, (void *) "");
   ASSERT_STREQ(status, "success");
 
   mg_mgr_free(&mgr);
