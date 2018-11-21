@@ -38,7 +38,9 @@
 /* Amalgamated: #include "mg_http.h" */
 /* Amalgamated: #include "mg_net.h" */
 
+#ifndef MG_CTL_MSG_MESSAGE_SIZE
 #define MG_CTL_MSG_MESSAGE_SIZE 8192
+#endif
 
 /* internals that need to be accessible in unit tests */
 MG_INTERNAL struct mg_connection *mg_do_connect(struct mg_connection *nc,
