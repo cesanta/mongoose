@@ -2388,6 +2388,9 @@ void mbuf_remove(struct mbuf *, size_t data_size);
  */
 void mbuf_resize(struct mbuf *, size_t new_size);
 
+/* Removes all the data from mbuf (if any). */
+void mbuf_clear(struct mbuf *);
+
 /* Shrinks an Mbuf by resizing its `size` to `len`. */
 void mbuf_trim(struct mbuf *);
 

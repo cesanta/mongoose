@@ -1620,6 +1620,11 @@ void mbuf_remove(struct mbuf *mb, size_t n) {
   }
 }
 
+void mbuf_clear(struct mbuf *mb) WEAK;
+void mbuf_clear(struct mbuf *mb) {
+  mb->len = 0;
+}
+
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
 #line 1 "common/mg_str.c"
