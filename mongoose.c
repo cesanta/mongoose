@@ -1612,6 +1612,22 @@ size_t mbuf_append(struct mbuf *a, const void *buf, size_t len) {
   return mbuf_insert(a, a->len, buf, len);
 }
 
+size_t mbuf_append_and_free(struct mbuf *a, void *buf, size_t len) WEAK;
+size_t mbuf_append_and_free(struct mbuf *a, void *data, size_t len) {
+  size_t ret;
+  /* Optimization: if the buffer is currently empty,
+   * take over the user-provided buffer. */
+  if (a->len == 0) {
+    if (a->buf != NULL) free(a->buf);
+    a->buf = (char *) data;
+    a->len = a->size = len;
+    return len;
+  }
+  ret = mbuf_insert(a, a->len, data, len);
+  free(data);
+  return ret;
+}
+
 void mbuf_remove(struct mbuf *mb, size_t n) WEAK;
 void mbuf_remove(struct mbuf *mb, size_t n) {
   if (n > 0 && n <= mb->len) {
@@ -1623,6 +1639,12 @@ void mbuf_remove(struct mbuf *mb, size_t n) {
 void mbuf_clear(struct mbuf *mb) WEAK;
 void mbuf_clear(struct mbuf *mb) {
   mb->len = 0;
+}
+
+void mbuf_move(struct mbuf *from, struct mbuf *to) WEAK;
+void mbuf_move(struct mbuf *from, struct mbuf *to) {
+  memcpy(to, from, sizeof(*to));
+  memset(from, 0, sizeof(*from));
 }
 
 #endif /* EXCLUDE_COMMON */

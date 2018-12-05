@@ -2369,6 +2369,14 @@ void mbuf_free(struct mbuf *);
 size_t mbuf_append(struct mbuf *, const void *data, size_t data_size);
 
 /*
+ * Appends data to the Mbuf and frees it (data must be heap-allocated).
+ *
+ * Returns the number of bytes appended or 0 if out of memory.
+ * data is freed irrespective of return value.
+ */
+size_t mbuf_append_and_free(struct mbuf *, void *data, size_t data_size);
+
+/*
  * Inserts data at a specified offset in the Mbuf.
  *
  * Existing data will be shifted forwards and the buffer will
@@ -2387,6 +2395,9 @@ void mbuf_remove(struct mbuf *, size_t data_size);
  * resize is not performed.
  */
 void mbuf_resize(struct mbuf *, size_t new_size);
+
+/* Moves the state from one mbuf to the other. */
+void mbuf_move(struct mbuf *from, struct mbuf *to);
 
 /* Removes all the data from mbuf (if any). */
 void mbuf_clear(struct mbuf *);
