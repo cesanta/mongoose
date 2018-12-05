@@ -5901,6 +5901,7 @@ struct mg_http_multipart_stream {
   void *user_data;
   enum mg_http_multipart_stream_state state;
   int processing_part;
+  int data_avail;
 };
 
 struct mg_reverse_proxy_data {
@@ -6529,6 +6530,9 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       mg_http_call_endpoint_handler(nc, ev2, hm);
     }
     pd->rcvd = 0;
+    if (pd->endpoint_handler != NULL && pd->endpoint_handler != nc->handler) {
+      mg_call(nc, pd->endpoint_handler, nc->user_data, ev, NULL);
+    }
   }
 
 #if MG_ENABLE_FILESYSTEM
@@ -6539,16 +6543,23 @@ void mg_http_handler(struct mg_connection *nc, int ev,
 
   mg_call(nc, nc->handler, nc->user_data, ev, ev_data);
 
+#if MG_ENABLE_HTTP_STREAMING_MULTIPART
+  if (pd->mp_stream.boundary != NULL &&
+      (ev == MG_EV_RECV || ev == MG_EV_POLL)) {
+    if (ev == MG_EV_RECV) {
+      pd->rcvd += *(int *) ev_data;
+      mg_http_multipart_continue(nc);
+    } else if (pd->mp_stream.data_avail) {
+      /* Try re-delivering the data. */
+      mg_http_multipart_continue(nc);
+    }
+    return;
+  }
+#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
+
   if (ev == MG_EV_RECV) {
     struct mg_str *s;
     pd->rcvd += *(int *) ev_data;
-
-#if MG_ENABLE_HTTP_STREAMING_MULTIPART
-    if (pd->mp_stream.boundary != NULL) {
-      mg_http_multipart_continue(nc);
-      return;
-    }
-#endif /* MG_ENABLE_HTTP_STREAMING_MULTIPART */
 
   again:
     req_len = mg_parse_http(io->buf, io->len, hm, is_req);
@@ -6744,8 +6755,9 @@ exit_mp:
 
 #define CONTENT_DISPOSITION "Content-Disposition: "
 
-static void mg_http_multipart_call_handler(struct mg_connection *c, int ev,
-                                           const char *data, size_t data_len) {
+static size_t mg_http_multipart_call_handler(struct mg_connection *c, int ev,
+                                             const char *data,
+                                             size_t data_len) {
   struct mg_http_multipart_part mp;
   struct mg_http_proto_data *pd = mg_http_get_proto_data(c);
   memset(&mp, 0, sizeof(mp));
@@ -6755,8 +6767,11 @@ static void mg_http_multipart_call_handler(struct mg_connection *c, int ev,
   mp.user_data = pd->mp_stream.user_data;
   mp.data.p = data;
   mp.data.len = data_len;
+  mp.num_data_consumed = data_len;
   mg_call(c, pd->endpoint_handler, c->user_data, ev, &mp);
   pd->mp_stream.user_data = mp.user_data;
+  pd->mp_stream.data_avail = (mp.num_data_consumed != data_len);
+  return mp.num_data_consumed;
 }
 
 static int mg_http_multipart_finalize(struct mg_connection *c) {
@@ -6894,19 +6909,25 @@ static int mg_http_multipart_continue_wait_for_chunk(struct mg_connection *c) {
 
   boundary = c_strnstr(io->buf, pd->mp_stream.boundary, io->len);
   if (boundary == NULL) {
-    int data_size = (io->len - (pd->mp_stream.boundary_len + 6));
-    if (data_size > 0) {
-      mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_DATA, io->buf,
-                                     data_size);
-      mbuf_remove(io, data_size);
+    int data_len = (io->len - (pd->mp_stream.boundary_len + 6));
+    if (data_len > 0) {
+      size_t consumed = mg_http_multipart_call_handler(
+          c, MG_EV_HTTP_PART_DATA, io->buf, (size_t) data_len);
+      mbuf_remove(io, consumed);
     }
     return 0;
   } else if (boundary != NULL) {
-    int data_size = (boundary - io->buf - 4);
-    mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_DATA, io->buf, data_size);
-    mbuf_remove(io, (boundary - io->buf));
-    pd->mp_stream.state = MPS_WAITING_FOR_BOUNDARY;
-    return 1;
+    size_t data_len = ((size_t)(boundary - io->buf) - 4);
+    size_t consumed = mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_DATA,
+                                                     io->buf, data_len);
+    mbuf_remove(io, consumed);
+    if (consumed == data_len) {
+      mbuf_remove(io, 4);
+      pd->mp_stream.state = MPS_WAITING_FOR_BOUNDARY;
+      return 1;
+    } else {
+      return 0;
+    }
   } else {
     return 0;
   }
