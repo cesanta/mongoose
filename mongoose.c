@@ -2474,8 +2474,16 @@ MG_INTERNAL size_t recv_avail_size(struct mg_connection *conn, size_t max) {
 static int mg_do_recv(struct mg_connection *nc);
 
 int mg_if_poll(struct mg_connection *nc, double now) {
-  if ((nc->flags & MG_F_CLOSE_IMMEDIATELY) ||
-      (nc->send_mbuf.len == 0 && (nc->flags & MG_F_SEND_AND_CLOSE))) {
+  if (nc->flags & MG_F_CLOSE_IMMEDIATELY) {
+    mg_close_conn(nc);
+    return 0;
+  } else if (nc->flags & MG_F_SEND_AND_CLOSE) {
+    if (nc->send_mbuf.len == 0) {
+      nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+      mg_close_conn(nc);
+      return 0;
+    }
+  } else if (nc->flags & MG_F_RECV_AND_CLOSE) {
     mg_close_conn(nc);
     return 0;
   }
@@ -2518,6 +2526,13 @@ void mg_destroy_conn(struct mg_connection *conn, int destroy_if) {
 }
 
 void mg_close_conn(struct mg_connection *conn) {
+  /* See if there's any remaining data to deliver. Skip if user completely
+   * throttled the connection there will be no progress anyway. */
+  if (conn->sock != INVALID_SOCKET && mg_do_recv(conn) == -2) {
+    /* Receive is throttled, wait. */
+    conn->flags |= MG_F_RECV_AND_CLOSE;
+    return;
+  }
 #if MG_ENABLE_SSL
   if (conn->flags & MG_F_SSL_HANDSHAKE_DONE) {
     mg_ssl_if_conn_close_notify(conn);
@@ -2608,6 +2623,7 @@ void mg_mgr_free(struct mg_mgr *m) {
 
   for (conn = m->active_connections; conn != NULL; conn = tmp_conn) {
     tmp_conn = conn->next;
+    conn->flags |= MG_F_CLOSE_IMMEDIATELY;
     mg_close_conn(conn);
   }
 
@@ -2913,7 +2929,10 @@ static int mg_do_recv(struct mg_connection *nc) {
   }
   do {
     len = recv_avail_size(nc, len);
-    if (len == 0) return -2;
+    if (len == 0) {
+      res = -2;
+      break;
+    }
     if (nc->recv_mbuf.size < nc->recv_mbuf.len + len) {
       mbuf_resize(&nc->recv_mbuf, nc->recv_mbuf.len + len);
     }
@@ -15866,7 +15885,6 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
         break;
       }
       case MG_SIG_CLOSE_CONN: {
-        nc->flags |= MG_F_SEND_AND_CLOSE;
         mg_close_conn(nc);
         break;
       }
