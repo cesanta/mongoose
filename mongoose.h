@@ -1531,7 +1531,7 @@ int sl_set_ssl_opts(int sock, struct mg_connection *nc);
 
 #endif /* SL_MAJOR_VERSION_NUM < 2 */
 
-int slfs_open(const unsigned char *fname, uint32_t flags);
+int slfs_open(const unsigned char *fname, uint32_t flags, uint32_t *token);
 
 #endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK */
 

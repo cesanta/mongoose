@@ -115,9 +115,9 @@ bool pem_to_der(const char *pem_file, const char *der_file) {
   pf = fopen(pem_file, "r");
   if (pf == NULL) goto clean;
   remove(der_file);
-  fs_slfs_set_new_file_size(der_file + MG_SSL_IF_SIMPLELINK_SLFS_PREFIX_LEN,
-                            2048);
+  fs_slfs_set_file_size(der_file + MG_SSL_IF_SIMPLELINK_SLFS_PREFIX_LEN, 2048);
   df = fopen(der_file, "w");
+  fs_slfs_unset_file_flags(der_file + MG_SSL_IF_SIMPLELINK_SLFS_PREFIX_LEN);
   if (df == NULL) goto clean;
   while (1) {
     char pem_buf[70];

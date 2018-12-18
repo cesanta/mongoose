@@ -31,14 +31,14 @@
 #include "common/mg_mem.h"
 
 #if SL_MAJOR_VERSION_NUM < 2
-int slfs_open(const unsigned char *fname, uint32_t flags) {
+int slfs_open(const unsigned char *fname, uint32_t flags, uint32_t *token) {
   _i32 fh;
-  _i32 r = sl_FsOpen(fname, flags, NULL /* token */, &fh);
+  _i32 r = sl_FsOpen(fname, flags, (unsigned long *) token, &fh);
   return (r < 0 ? r : fh);
 }
 #else /* SL_MAJOR_VERSION_NUM >= 2 */
-int slfs_open(const unsigned char *fname, uint32_t flags) {
-  return sl_FsOpen(fname, flags, NULL /* token */);
+int slfs_open(const unsigned char *fname, uint32_t flags, uint32_t *token) {
+  return sl_FsOpen(fname, flags, (unsigned long *) token);
 }
 #endif
 
@@ -54,9 +54,11 @@ const char *drop_dir(const char *fname, bool *is_slfs);
 #define FS_SLFS_MAX_FILE_SIZE (64 * 1024)
 #endif
 
-struct sl_file_size_hint {
+struct sl_file_open_info {
   char *name;
   size_t size;
+  uint32_t flags;
+  uint32_t *token;
 };
 
 struct sl_fd_info {
@@ -66,7 +68,10 @@ struct sl_fd_info {
 };
 
 static struct sl_fd_info s_sl_fds[MAX_OPEN_SLFS_FILES];
-static struct sl_file_size_hint s_sl_file_size_hints[MAX_OPEN_SLFS_FILES];
+static struct sl_file_open_info s_sl_file_open_infos[MAX_OPEN_SLFS_FILES];
+
+static struct sl_file_open_info *fs_slfs_find_foi(const char *name,
+                                                  bool create);
 
 static int sl_fs_to_errno(_i32 r) {
   DBG(("SL error: %d", (int) r));
@@ -107,7 +112,13 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
   _u32 am = 0;
   fi->size = (size_t) -1;
   int rw = (flags & 3);
-  size_t new_size = FS_SLFS_MAX_FILE_SIZE;
+  size_t new_size = 0;
+  struct sl_file_open_info *foi =
+      fs_slfs_find_foi(pathname, false /* create */);
+  if (foi != NULL) {
+    LOG(LL_DEBUG, ("FOI for %s: %d 0x%x %p", pathname, (int) foi->size,
+                   (unsigned int) foi->flags, foi->token));
+  }
   if (rw == O_RDONLY) {
     SlFsFileInfo_t sl_fi;
     _i32 r = sl_FsGetInfo((const _u8 *) pathname, 0, &sl_fi);
@@ -122,24 +133,27 @@ int fs_slfs_open(const char *pathname, int flags, mode_t mode) {
       return set_errno(ENOTSUP);
     }
     if (flags & O_CREAT) {
-      size_t i;
-      for (i = 0; i < MAX_OPEN_SLFS_FILES; i++) {
-        if (s_sl_file_size_hints[i].name != NULL &&
-            strcmp(s_sl_file_size_hints[i].name, pathname) == 0) {
-          new_size = s_sl_file_size_hints[i].size;
-          MG_FREE(s_sl_file_size_hints[i].name);
-          s_sl_file_size_hints[i].name = NULL;
-          break;
-        }
+      if (foi->size > 0) {
+        new_size = foi->size;
+      } else {
+        new_size = FS_SLFS_MAX_FILE_SIZE;
       }
       am = FS_MODE_OPEN_CREATE(new_size, 0);
     } else {
       am = SL_FS_WRITE;
     }
+#if SL_MAJOR_VERSION_NUM >= 2
+    am |= SL_FS_OVERWRITE;
+#endif
   }
-  fi->fh = slfs_open((_u8 *) pathname, am);
-  LOG(LL_DEBUG, ("sl_FsOpen(%s, 0x%x) sz %u = %d", pathname, (int) am,
-                 (unsigned int) new_size, (int) fi->fh));
+  uint32_t *token = NULL;
+  if (foi != NULL) {
+    am |= foi->flags;
+    token = foi->token;
+  }
+  fi->fh = slfs_open((_u8 *) pathname, am, token);
+  LOG(LL_DEBUG, ("sl_FsOpen(%s, 0x%x, %p) sz %u = %d", pathname, (int) am,
+                 token, (unsigned int) new_size, (int) fi->fh));
   int r;
   if (fi->fh >= 0) {
     fi->pos = 0;
@@ -243,16 +257,46 @@ int fs_slfs_rename(const char *from, const char *to) {
   return set_errno(ENOTSUP);
 }
 
-void fs_slfs_set_new_file_size(const char *name, size_t size) {
-  int i;
+static struct sl_file_open_info *fs_slfs_find_foi(const char *name,
+                                                  bool create) {
+  int i = 0;
   for (i = 0; i < MAX_OPEN_SLFS_FILES; i++) {
-    if (s_sl_file_size_hints[i].name == NULL) {
-      DBG(("File size hint: %s %d", name, (int) size));
-      s_sl_file_size_hints[i].name = strdup(name);
-      s_sl_file_size_hints[i].size = size;
+    if (s_sl_file_open_infos[i].name != NULL &&
+        strcmp(drop_dir(s_sl_file_open_infos[i].name, NULL), name) == 0) {
       break;
     }
   }
+  if (i != MAX_OPEN_SLFS_FILES) return &s_sl_file_open_infos[i];
+  if (!create) return NULL;
+  for (i = 0; i < MAX_OPEN_SLFS_FILES; i++) {
+    if (s_sl_file_open_infos[i].name == NULL) break;
+  }
+  if (i == MAX_OPEN_SLFS_FILES) {
+    i = 0; /* Evict a random slot. */
+  }
+  if (s_sl_file_open_infos[i].name != NULL) {
+    free(s_sl_file_open_infos[i].name);
+  }
+  s_sl_file_open_infos[i].name = strdup(name);
+  return &s_sl_file_open_infos[i];
+}
+
+void fs_slfs_set_file_size(const char *name, size_t size) {
+  struct sl_file_open_info *foi = fs_slfs_find_foi(name, true /* create */);
+  foi->size = size;
+}
+
+void fs_slfs_set_file_flags(const char *name, uint32_t flags, uint32_t *token) {
+  struct sl_file_open_info *foi = fs_slfs_find_foi(name, true /* create */);
+  foi->flags = flags;
+  foi->token = token;
+}
+
+void fs_slfs_unset_file_flags(const char *name) {
+  struct sl_file_open_info *foi = fs_slfs_find_foi(name, false /* create */);
+  if (foi == NULL) return;
+  free(foi->name);
+  memset(foi, 0, sizeof(*foi));
 }
 
 #endif /* defined(MG_FS_SLFS) || defined(CC3200_FS_SLFS) */
