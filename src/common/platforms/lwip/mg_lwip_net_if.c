@@ -581,7 +581,7 @@ struct tcp_recved_ctx {
 
 void tcp_recved_tcpip(void *arg) {
   struct tcp_recved_ctx *ctx = (struct tcp_recved_ctx *) arg;
-  tcp_recved(ctx->tpcb, ctx->len);
+  if (ctx->tpcb != NULL) tcp_recved(ctx->tpcb, ctx->len);
 }
 
 static int mg_lwip_if_tcp_recv(struct mg_connection *nc, void *buf,
