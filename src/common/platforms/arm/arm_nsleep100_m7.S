@@ -26,7 +26,11 @@
 .global mgos_nsleep100_impl
 .global mgos_nsleep100_loop_count
 
+#ifdef STM32
+.section .RamFunc.mgos_nsleep100_impl
+#else
 .section .iram.mgos_nsleep100_impl
+#endif
 .type mgos_nsleep100_impl, %function
 .align 4
 
