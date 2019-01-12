@@ -5,8 +5,10 @@ project('mongoose', 'c',
 mongoose_inc = include_directories('.')
 mongoose_lib = shared_library('mongoose',
     'mongoose.c',
-    include_directories: mongoose_inc
+    include_directories: mongoose_inc,
+    install: true
 )
+install_headers('mongoose.h')
 
 mongoose_dep = declare_dependency(link_with: mongoose_lib,
     include_directories: mongoose_inc)
