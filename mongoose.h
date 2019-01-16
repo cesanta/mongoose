@@ -2281,6 +2281,11 @@ int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
 int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n);
 
 /*
+ * Free the string (assuming it was heap allocated).
+ */
+void mg_strfree(struct mg_str *s);
+
+/*
  * Finds the first occurrence of a substring `needle` in the `haystack`.
  */
 const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);

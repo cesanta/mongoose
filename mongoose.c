@@ -1774,6 +1774,14 @@ int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n) {
   return mg_strcmp(s1, s2);
 }
 
+void mg_strfree(struct mg_str *s) WEAK;
+void mg_strfree(struct mg_str *s) {
+  char *sp = (char *) s->p;
+  s->p = NULL;
+  s->len = 0;
+  if (sp != NULL) free(sp);
+}
+
 const char *mg_strstr(const struct mg_str haystack,
                       const struct mg_str needle) WEAK;
 const char *mg_strstr(const struct mg_str haystack,
