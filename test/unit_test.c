@@ -15,12 +15,12 @@
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-#include "mongoose.h"
-#include "src/mg_internal.h"
 #include "unit_test.h"
+#include "common/cs_md5.h"
 #include "common/test_main.h"
 #include "common/test_util.h"
-#include "common/cs_md5.h"
+#include "mongoose.h"
+#include "src/mg_internal.h"
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ < 199901L && !defined(WIN32)
 #define __func__ ""
@@ -2011,7 +2011,8 @@ static const char *test_http(void) {
   char buf[50] = "", status[100] = "", mime1[20] = "", mime2[100] = "";
   char opt_buf[1024] = "";
   const char *opt_answer =
-      "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, CONNECT, OPTIONS, MKCOL, "
+      "HTTP/1.1 200 OK\r\nServer: Mongoose/" MG_VERSION
+      "\r\nAllow: GET, POST, HEAD, CONNECT, OPTIONS, MKCOL, "
       "PUT, DELETE, PROPFIND, MOVE";
   char url[1000];
 

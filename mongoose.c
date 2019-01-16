@@ -6563,9 +6563,9 @@ void mg_http_handler(struct mg_connection *nc, int ev,
         if (io->len > 0 &&
             (req_len = mg_parse_http(io->buf, io->len, hm, is_req)) > 0) {
       /*
-      * For HTTP messages without Content-Length, always send HTTP message
-      * before MG_EV_CLOSE message.
-      */
+       * For HTTP messages without Content-Length, always send HTTP message
+       * before MG_EV_CLOSE message.
+       */
       int ev2 = is_req ? MG_EV_HTTP_REQUEST : MG_EV_HTTP_REPLY;
       hm->message.len = io->len;
       hm->body.len = io->buf + io->len - hm->body.p;
@@ -8360,9 +8360,11 @@ void mg_http_send_digest_auth_request(struct mg_connection *c,
             domain, (unsigned long) mg_time());
 }
 
-static void mg_http_send_options(struct mg_connection *nc) {
+static void mg_http_send_options(struct mg_connection *nc,
+                                 struct mg_serve_http_opts *opts) {
+  mg_send_response_line(nc, 200, opts->extra_headers);
   mg_printf(nc, "%s",
-            "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, CONNECT, OPTIONS"
+            "Allow: GET, POST, HEAD, CONNECT, OPTIONS"
 #if MG_ENABLE_HTTP_WEBDAV
             ", MKCOL, PUT, DELETE, PROPFIND, MOVE\r\nDAV: 1,2"
 #endif
@@ -8469,7 +8471,7 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
 #endif
 #endif /* MG_ENABLE_HTTP_WEBDAV */
   } else if (!mg_vcmp(&hm->method, "OPTIONS")) {
-    mg_http_send_options(nc);
+    mg_http_send_options(nc, opts);
   } else if (is_directory && index_file == NULL) {
 #if MG_ENABLE_DIRECTORY_LISTING
     if (strcmp(opts->enable_directory_listing, "yes") == 0) {
