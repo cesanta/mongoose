@@ -3380,15 +3380,36 @@ static const char *test_mqtt_parse_mqtt_qos1(void) {
 }
 
 static const char *test_mqtt_match_topic_expression(void) {
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo")), 1);
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo/")), 0);
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo/bar")), 0);
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("/foo", mg_mk_str("/foo")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("+/foo", mg_mk_str("/foo")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foobar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo/")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo//")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo/bar")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo/+")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/bar", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/+", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("+/bar", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("+/+", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/+/bar", mg_mk_str("foo//bar")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("foo/+/+", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/+/#", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("+/foo/bar", mg_mk_str("/foo/bar")));
 
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo")), 0);
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/")), 0);
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/bar")), 1);
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/bar/baz")),
-            1);
+  ASSERT(!mg_mqtt_vmatch_topic_expression("", mg_mk_str("")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("/", mg_mk_str("")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("/", mg_mk_str("/")));
+
+  ASSERT(mg_mqtt_vmatch_topic_expression("#", mg_mk_str("")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("#", mg_mk_str("foo")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("#", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/bar/baz")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("#/foo", mg_mk_str("foo")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("#/foo", mg_mk_str("bar/foo")));
 
   return NULL;
 }
