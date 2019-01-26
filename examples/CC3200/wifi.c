@@ -25,7 +25,7 @@ void SimpleLinkWlanEventHandler(SlWlanEvent_t *e) {
       LOG(LL_INFO, ("WiFi: station disconnected"));
       break;
     default:
-      LOG(LL_INFO, ("WiFi: event %d", e->Event));
+      LOG(LL_INFO, ("WiFi: event %d", (int) e->Event));
   }
 }
 
@@ -39,7 +39,7 @@ void SimpleLinkNetAppEventHandler(SlNetAppEvent_t *e) {
   } else if (e->Event == SL_NETAPP_IP_LEASED_EVENT) {
     LOG(LL_INFO, ("IP leased"));
   } else {
-    LOG(LL_INFO, ("NetApp event %d", e->Event));
+    LOG(LL_INFO, ("NetApp event %d", (int) e->Event));
   }
 }
 

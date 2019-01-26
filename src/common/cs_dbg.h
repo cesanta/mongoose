@@ -28,6 +28,10 @@
 #define CS_ENABLE_DEBUG 0
 #endif
 
+#ifndef CS_LOG_PREFIX_LEN
+#define CS_LOG_PREFIX_LEN 24
+#endif
+
 #ifndef CS_LOG_ENABLE_TS_DIFF
 #define CS_LOG_ENABLE_TS_DIFF 0
 #endif
@@ -58,51 +62,28 @@ enum cs_log_level {
 void cs_log_set_level(enum cs_log_level level);
 
 /*
- * Set log filter. NULL (a default) logs everything.
- * Otherwise, function name and file name will be tested against the given
- * pattern, and only matching messages will be printed.
+ * A comma-separated set of prefix=level.
+ * prefix is matched against the log prefix exactly as printed, including line
+ * number, but partial match is ok. Check stops on first matching entry.
+ * If nothing matches, default level is used.
  *
- * For the pattern syntax, refer to `mg_match_prefix()` in `str_util.h`.
+ * Examples:
+ *   main.c:=4 - everything from main C at verbose debug level.
+ *   mongoose.c=1,mjs.c=1,=4 - everything at verbose debug except mg_* and mjs_*
  *
- * Example:
- * ```c
- * void foo(void) {
- *   LOG(LL_INFO, ("hello from foo"));
- * }
- *
- * void bar(void) {
- *   LOG(LL_INFO, ("hello from bar"));
- * }
- *
- * void test(void) {
- *   cs_log_set_filter(NULL);
- *   foo();
- *   bar();
- *
- *   cs_log_set_filter("f*");
- *   foo();
- *   bar(); // Will NOT print anything
- *
- *   cs_log_set_filter("bar");
- *   foo(); // Will NOT print anything
- *   bar();
- * }
- * ```
  */
-void cs_log_set_filter(const char *pattern);
+void cs_log_set_file_level(const char *file_level);
 
 /*
- * Helper function which prints message prefix with the given `level`, function
- * name `func` and `filename`. If message should be printed (accordingly to the
- * current log level and filter), prints the prefix and returns 1, otherwise
- * returns 0.
+ * Helper function which prints message prefix with the given `level`.
+ * If message should be printed (according to the current log level
+ * and filter), prints the prefix and returns 1, otherwise returns 0.
  *
  * Clients should typically just use `LOG()` macro.
  */
-int cs_log_print_prefix(enum cs_log_level level, const char *func,
-                        const char *filename);
+int cs_log_print_prefix(enum cs_log_level level, const char *fname, int line);
 
-extern enum cs_log_level cs_log_threshold;
+extern enum cs_log_level cs_log_level;
 
 #if CS_ENABLE_STDIO
 
@@ -127,9 +108,11 @@ void cs_log_printf(const char *fmt, ...) PRINTF_LIKE(1, 2);
  * LOG(LL_DEBUG, ("my debug message: %d", 123));
  * ```
  */
-#define LOG(l, x)                                                    \
-  do {                                                               \
-    if (cs_log_print_prefix(l, __func__, __FILE__)) cs_log_printf x; \
+#define LOG(l, x)                                     \
+  do {                                                \
+    if (cs_log_print_prefix(l, __FILE__, __LINE__)) { \
+      cs_log_printf x;                                \
+    }                                                 \
   } while (0)
 
 #else
