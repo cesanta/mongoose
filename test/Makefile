@@ -9,7 +9,9 @@ SRC_DIR = ../src
 COMMON_DIR_PUB = ../src/common
 COMMON_DIR_DEV = ../../common
 
-ifneq ("$(wildcard ../../fw/defs)","")
+# Our dev repo and public mongoose repo have different layouts, so here
+# we make it work on both
+ifneq ("$(wildcard ../../fw)","")
 COMMON_PARENT = ../..
 else
 COMMON_PARENT = $(SRC_DIR)
@@ -19,8 +21,6 @@ TEST_SOURCES = unit_test.c test_util.c test_main.c
 AMALGAMATED_SOURCES = ../mongoose.c
 KRYPTON_PATH = $(REPO_ROOT)/krypton
 
-# Our dev repo and public mongoose repo have different layouts, so here
-# we make it work on both
 VPATH = $(MONGOOSE_DIR) $(SRC_DIR) $(COMMON_DIR_PUB) $(COMMON_DIR_DEV) $(COMMON_PARENT)
 
 # or Krypton, or mbedTLS
