@@ -23,13 +23,13 @@ all: $(STUB_ELF)
 $(STUB_ELF): $(STUB) $(LIBS)
 	@echo "  CC   $^ -> $@"
 	@[ -d $(BUILD_DIR) ] || mkdir $(BUILD_DIR)
-	@docker run --rm -i -v $(CURDIR)/../../../..:/src $(SDK) //bin/bash -c \
+	docker run --rm -i -v $(CURDIR)/../../../..:/src $(SDK) //bin/bash -c \
     "cd /src/common/platforms/esp8266/stubs && \
      $(XT_CC) -std=c99 -Wall -Werror -Os -DESP8266 \
          -mtext-section-literals -mlongcalls -nostdlib -fno-builtin \
-         -I. -I/src/common/platforms/esp \
+         -I. -I/src/common/platforms/esp -I/src/common/platforms/esp8266 \
          -I/opt/Espressif/ESP8266_SDK \
-         -Wl,-static -ffunction-sections -Wl,--gc-sections \
+         -Wl,-static -ffunction-sections -lgcc -Wl,--gc-sections \
          -Tstub.ld $(CFLAGS) -o $@ $^"
 
 wrap: $(STUB_JSON)

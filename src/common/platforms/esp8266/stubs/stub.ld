@@ -41,3 +41,4 @@ INCLUDE "eagle.rom.addr.v6.ld"
 PROVIDE(SPIFlashModeConfig = 0x40004568);
 PROVIDE(SPI_erase_sector = 0x400040c0);
 PROVIDE(SPI_erase_block = 0x40004120);
+PROVIDE(uart_div_modify = 0x400039d8);
