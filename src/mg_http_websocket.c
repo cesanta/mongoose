@@ -478,6 +478,8 @@ void mg_send_websocket_handshake3v(struct mg_connection *nc,
   }
   mg_printf(nc, "\r\n");
 
+  nc->flags |= MG_F_IS_WEBSOCKET;
+
   mbuf_free(&auth);
 }
 

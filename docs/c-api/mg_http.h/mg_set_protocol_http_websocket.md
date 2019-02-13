@@ -30,7 +30,9 @@ The user-defined event handler will receive following extra events:
 - MG_EV_WEBSOCKET_HANDSHAKE_REQUEST: server has received the WebSocket
   handshake request. `ev_data` contains parsed HTTP request.
 - MG_EV_WEBSOCKET_HANDSHAKE_DONE: server has completed the WebSocket
-  handshake. `ev_data` is `NULL`.
+  handshake. `ev_data` is a `struct http_message` containing the
+  client's request (server mode) or server's response (client).
+  In client mode handler can examine `resp_code`, which should be 101.
 - MG_EV_WEBSOCKET_FRAME: new WebSocket frame has arrived. `ev_data` is
   `struct websocket_message *`
 

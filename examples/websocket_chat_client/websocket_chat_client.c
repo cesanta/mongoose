@@ -14,7 +14,6 @@ static int s_done = 0;
 static int s_is_connected = 0;
 
 static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
-  struct websocket_message *wm = (struct websocket_message *) ev_data;
   (void) nc;
 
   switch (ev) {
@@ -26,8 +25,14 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       break;
     }
     case MG_EV_WEBSOCKET_HANDSHAKE_DONE: {
-      printf("-- Connected\n");
-      s_is_connected = 1;
+      struct http_message *hm = (struct http_message *) ev_data;
+      if (hm->resp_code == 101) {
+        printf("-- Connected\n");
+        s_is_connected = 1;
+      } else {
+        printf("-- Connection failed! HTTP code %d\n", hm->resp_code);
+        /* Connection will be closed after this. */
+      }
       break;
     }
     case MG_EV_POLL: {
@@ -66,6 +71,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       break;
     }
     case MG_EV_WEBSOCKET_FRAME: {
+      struct websocket_message *wm = (struct websocket_message *) ev_data;
       printf("%.*s\n", (int) wm->size, wm->data);
       break;
     }

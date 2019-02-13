@@ -6649,16 +6649,23 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       /* Do nothing, request is not yet fully buffered */
     }
 #if MG_ENABLE_HTTP_WEBSOCKET
-    else if (nc->listener == NULL &&
-             mg_get_http_header(hm, "Sec-WebSocket-Accept")) {
+    else if (nc->listener == NULL && (nc->flags & MG_F_IS_WEBSOCKET)) {
       /* We're websocket client, got handshake response from server. */
-      /* TODO(lsm): check the validity of accept Sec-WebSocket-Accept */
-      mbuf_remove(io, req_len);
-      nc->proto_handler = mg_ws_handler;
-      nc->flags |= MG_F_IS_WEBSOCKET;
-      mg_call(nc, nc->handler, nc->user_data, MG_EV_WEBSOCKET_HANDSHAKE_DONE,
-              NULL);
-      mg_ws_handler(nc, MG_EV_RECV, ev_data MG_UD_ARG(user_data));
+      DBG(("%p WebSocket upgrade code %d", nc, hm->resp_code));
+      if (hm->resp_code == 101 &&
+          mg_get_http_header(hm, "Sec-WebSocket-Accept")) {
+        /* TODO(lsm): check the validity of accept Sec-WebSocket-Accept */
+        mg_call(nc, nc->handler, nc->user_data, MG_EV_WEBSOCKET_HANDSHAKE_DONE,
+                hm);
+        mbuf_remove(io, req_len);
+        nc->proto_handler = mg_ws_handler;
+        mg_ws_handler(nc, MG_EV_RECV, ev_data MG_UD_ARG(user_data));
+      } else {
+        mg_call(nc, nc->handler, nc->user_data, MG_EV_WEBSOCKET_HANDSHAKE_DONE,
+                hm);
+        nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+        mbuf_remove(io, req_len);
+      }
     } else if (nc->listener != NULL &&
                (vec = mg_get_http_header(hm, "Sec-WebSocket-Key")) != NULL) {
       struct mg_http_endpoint *ep;
@@ -6689,7 +6696,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
           mg_ws_handshake(nc, vec, hm);
         }
         mg_call(nc, nc->handler, nc->user_data, MG_EV_WEBSOCKET_HANDSHAKE_DONE,
-                NULL);
+                hm);
         mg_ws_handler(nc, MG_EV_RECV, ev_data MG_UD_ARG(user_data));
       }
     }
@@ -10401,6 +10408,8 @@ void mg_send_websocket_handshake3v(struct mg_connection *nc,
     mg_printf(nc, "%.*s", (int) extra_headers.len, extra_headers.p);
   }
   mg_printf(nc, "\r\n");
+
+  nc->flags |= MG_F_IS_WEBSOCKET;
 
   mbuf_free(&auth);
 }
