@@ -91,6 +91,24 @@ enum stub_cmd {
    * Output: arguments.
    */
   CMD_ECHO = 8,
+
+  /*
+   * Read register value.
+   *
+   * Args: register address.
+   * Input: None.
+   * Output: register value.
+   */
+  CMD_READ_REG = 9,
+
+  /*
+   * Write register value.
+   *
+   * Args: register address, value.
+   * Input: None.
+   * Output: None.
+   */
+  CMD_WRITE_REG = 10,
 };
 
 #endif /* CS_COMMON_PLATFORMS_ESP8266_STUBS_STUB_FLASHER_H_ */

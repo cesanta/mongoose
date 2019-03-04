@@ -470,6 +470,27 @@ uint8_t cmd_loop(void) {
         resp = 0;
         break;
       }
+      case CMD_READ_REG: {
+        len = SLIP_recv(args, sizeof(args));
+        if (len == 4) {
+          uint32_t value = READ_PERI_REG((uint32_t *) args[0]);
+          SLIP_send(&value, sizeof(value));
+          resp = 0;
+        } else {
+          resp = 0x91;
+        }
+        break;
+      }
+      case CMD_WRITE_REG: {
+        len = SLIP_recv(args, sizeof(args));
+        if (len == 8) {
+          WRITE_PERI_REG((uint32_t *) args[0], args[1]);
+          resp = 0;
+        } else {
+          resp = 0xa1;
+        }
+        break;
+      }
     }
     SLIP_send(&resp, 1);
   } while (cmd != CMD_BOOT_FW && cmd != CMD_REBOOT);
