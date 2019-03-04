@@ -20,6 +20,7 @@
 
 #include <stdint.h>
 
-void set_baud_rate(uint32_t uart_no, uint32_t baud_rate);
+uint32_t set_baud_rate(uint32_t uart_no, uint32_t old_baud_rate,
+                       uint32_t new_baud_rate);
 
 #endif /* CS_COMMON_PLATFORMS_ESP32_STUBS_UART_H_ */

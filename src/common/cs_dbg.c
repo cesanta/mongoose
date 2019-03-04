@@ -24,7 +24,7 @@
 #include "common/cs_time.h"
 #include "common/str_util.h"
 
-enum cs_log_level cs_log_threshold WEAK =
+enum cs_log_level cs_log_level WEAK =
 #if CS_ENABLE_DEBUG
     LL_VERBOSE_DEBUG;
 #else
@@ -32,10 +32,9 @@ enum cs_log_level cs_log_threshold WEAK =
 #endif
 
 #if CS_ENABLE_STDIO
-static char *s_filter_pattern = NULL;
-static size_t s_filter_pattern_len;
+static char *s_file_level = NULL;
 
-void cs_log_set_filter(const char *pattern) WEAK;
+void cs_log_set_file_level(const char *file_level) WEAK;
 
 FILE *cs_log_file WEAK = NULL;
 
@@ -45,34 +44,62 @@ double cs_log_ts WEAK;
 
 enum cs_log_level cs_log_cur_msg_level WEAK = LL_NONE;
 
-void cs_log_set_filter(const char *pattern) {
-  free(s_filter_pattern);
-  if (pattern != NULL) {
-    s_filter_pattern = strdup(pattern);
-    s_filter_pattern_len = strlen(pattern);
+void cs_log_set_file_level(const char *file_level) {
+  char *fl = s_file_level;
+  if (file_level != NULL) {
+    s_file_level = strdup(file_level);
   } else {
-    s_filter_pattern = NULL;
-    s_filter_pattern_len = 0;
+    s_file_level = NULL;
   }
+  free(fl);
 }
 
-int cs_log_print_prefix(enum cs_log_level, const char *, const char *) WEAK;
-int cs_log_print_prefix(enum cs_log_level level, const char *func,
-                        const char *filename) {
-  char prefix[21];
+int cs_log_print_prefix(enum cs_log_level level, const char *file, int ln) WEAK;
+int cs_log_print_prefix(enum cs_log_level level, const char *file, int ln) {
+  char prefix[CS_LOG_PREFIX_LEN], *q;
+  const char *p;
+  size_t fl = 0, ll = 0, pl = 0;
 
-  if (level > cs_log_threshold) return 0;
-  if (s_filter_pattern != NULL &&
-      mg_match_prefix(s_filter_pattern, s_filter_pattern_len, func) == 0 &&
-      mg_match_prefix(s_filter_pattern, s_filter_pattern_len, filename) == 0) {
-    return 0;
+  if (level > cs_log_level && s_file_level == NULL) return 0;
+
+  p = file + strlen(file);
+
+  while (p != file) {
+    const char c = *(p - 1);
+    if (c == '/' || c == '\\') break;
+    p--;
+    fl++;
   }
 
-  strncpy(prefix, func, 20);
-  prefix[20] = '\0';
+  ll = (ln < 10000 ? (ln < 1000 ? (ln < 100 ? (ln < 10 ? 1 : 2) : 3) : 4) : 5);
+  if (fl > (sizeof(prefix) - ll - 2)) fl = (sizeof(prefix) - ll - 2);
+
+  pl = fl + 1 + ll;
+  memcpy(prefix, p, fl);
+  q = prefix + pl;
+  memset(q, ' ', sizeof(prefix) - pl);
+  do {
+    *(--q) = '0' + (ln % 10);
+    ln /= 10;
+  } while (ln > 0);
+  *(--q) = ':';
+
+  if (s_file_level != NULL) {
+    enum cs_log_level pll = cs_log_level;
+    struct mg_str fl = mg_mk_str(s_file_level), ps = MG_MK_STR_N(prefix, pl);
+    struct mg_str k, v;
+    while ((fl = mg_next_comma_list_entry_n(fl, &k, &v)).p != NULL) {
+      bool yes = !(!mg_str_starts_with(ps, k) || v.len == 0);
+      if (!yes) continue;
+      pll = (enum cs_log_level)(*v.p - '0');
+      break;
+    }
+    if (level > pll) return 0;
+  }
+
   if (cs_log_file == NULL) cs_log_file = stderr;
   cs_log_cur_msg_level = level;
-  fprintf(cs_log_file, "%-20s ", prefix);
+  fwrite(prefix, 1, sizeof(prefix), cs_log_file);
 #if CS_LOG_ENABLE_TS_DIFF
   {
     double now = cs_time();
@@ -101,15 +128,15 @@ void cs_log_set_file(FILE *file) {
 
 #else
 
-void cs_log_set_filter(const char *pattern) {
-  (void) pattern;
+void cs_log_set_file_level(const char *file_level) {
+  (void) file_level;
 }
 
 #endif /* CS_ENABLE_STDIO */
 
 void cs_log_set_level(enum cs_log_level level) WEAK;
 void cs_log_set_level(enum cs_log_level level) {
-  cs_log_threshold = level;
+  cs_log_level = level;
 #if CS_LOG_ENABLE_TS_DIFF && CS_ENABLE_STDIO
   cs_log_ts = cs_time();
 #endif

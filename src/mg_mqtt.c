@@ -196,26 +196,44 @@ static void mg_mqtt_proto_data_destructor(void *proto_data) {
   MG_FREE(proto_data);
 }
 
+static struct mg_str mg_mqtt_next_topic_component(struct mg_str *topic) {
+  struct mg_str res = *topic;
+  const char *c = mg_strchr(*topic, '/');
+  if (c != NULL) {
+    res.len = (c - topic->p);
+    topic->len -= (res.len + 1);
+    topic->p += (res.len + 1);
+  } else {
+    topic->len = 0;
+  }
+  return res;
+}
+
+/* Refernce: https://mosquitto.org/man/mqtt-7.html */
 int mg_mqtt_match_topic_expression(struct mg_str exp, struct mg_str topic) {
-  /* TODO(mkm): implement real matching */
-  if (memchr(exp.p, '#', exp.len)) {
-    /* exp `foo/#` will become `foo/` */
-    exp.len -= 1;
-    /*
-     * topic should be longer than the expression: e.g. topic `foo/bar` does
-     * match `foo/#`, but neither `foo` nor `foo/` do.
-     */
-    if (topic.len <= exp.len) {
+  struct mg_str ec, tc;
+  if (exp.len == 0) return 0;
+  while (1) {
+    ec = mg_mqtt_next_topic_component(&exp);
+    tc = mg_mqtt_next_topic_component(&topic);
+    if (ec.len == 0) {
+      if (tc.len != 0) return 0;
+      if (exp.len == 0) break;
+      continue;
+    }
+    if (mg_vcmp(&ec, "+") == 0) {
+      if (tc.len == 0 && topic.len == 0) return 0;
+      continue;
+    }
+    if (mg_vcmp(&ec, "#") == 0) {
+      /* Must be the last component in the expression or it's invalid. */
+      return (exp.len == 0);
+    }
+    if (mg_strcmp(ec, tc) != 0) {
       return 0;
     }
-
-    /* Truncate topic so that it'll pass the next length check */
-    topic.len = exp.len;
   }
-  if (topic.len != exp.len) {
-    return 0;
-  }
-  return strncmp(topic.p, exp.p, exp.len) == 0;
+  return (tc.len == 0 && topic.len == 0);
 }
 
 int mg_mqtt_vmatch_topic_expression(const char *exp, struct mg_str topic) {

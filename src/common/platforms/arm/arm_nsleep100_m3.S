@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018 Cesanta Software Limited
+ * Copyright (c) 2014-2019 Cesanta Software Limited
  * All rights reserved
  *
  * Licensed under the Apache License, Version 2.0 (the ""License"");
@@ -37,8 +37,9 @@
 mgos_nsleep100_impl:
       ldr     r3, =mgos_nsleep100_loop_count
       ldr     r3, [r3]
-      /* Because of speculative fetch, the core loop only takes 1 cycle. */
-      muls    r0, r3
+      mul     r0, r3
+      mov     r1, #6
+      udiv    r0, r0, r1
       cbz     r0, xxx
 lxx:
       subs    r0, #1

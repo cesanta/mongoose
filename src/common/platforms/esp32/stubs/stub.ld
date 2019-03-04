@@ -42,5 +42,10 @@ SECTIONS {
 INCLUDE "components/esp32/ld/esp32.rom.ld"
 INCLUDE "components/esp32/ld/esp32.rom.spiram_incompatible_fns.ld"
 
+PROVIDE(ets_isr_mask = 0x400067fc);
+PROVIDE(ets_isr_unmask = 0x40006808);
+PROVIDE(MD5Init = 0x4005da7c);
+PROVIDE(MD5Update = 0x4005da9c);
+PROVIDE(MD5Final = 0x4005db1c);
 PROVIDE(esp_rom_spiflash_attach = 0x40062a6c);
 PROVIDE(esp_rom_spiflash_config_clk = 0x40062bc8);

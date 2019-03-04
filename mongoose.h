@@ -23,7 +23,7 @@
 #ifndef CS_MONGOOSE_SRC_COMMON_H_
 #define CS_MONGOOSE_SRC_COMMON_H_
 
-#define MG_VERSION "6.13"
+#define MG_VERSION "6.14"
 
 /* Local tweaks, applied before any of Mongoose's own headers. */
 #ifdef MG_LOCALS
@@ -1531,7 +1531,7 @@ int sl_set_ssl_opts(int sock, struct mg_connection *nc);
 
 #endif /* SL_MAJOR_VERSION_NUM < 2 */
 
-int slfs_open(const unsigned char *fname, uint32_t flags);
+int slfs_open(const unsigned char *fname, uint32_t flags, uint32_t *token);
 
 #endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK */
 
@@ -2239,6 +2239,8 @@ struct mg_str mg_mk_str_n(const char *s, size_t len);
 /* Macro for initializing mg_str. */
 #define MG_MK_STR(str_literal) \
   { str_literal, sizeof(str_literal) - 1 }
+#define MG_MK_STR_N(str_literal, len) \
+  { str_literal, len }
 #define MG_NULL_STR \
   { NULL, 0 }
 
@@ -2279,12 +2281,20 @@ int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
 int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n);
 
 /*
+ * Free the string (assuming it was heap allocated).
+ */
+void mg_strfree(struct mg_str *s);
+
+/*
  * Finds the first occurrence of a substring `needle` in the `haystack`.
  */
 const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
 
 /* Strip whitespace at the start and the end of s */
 struct mg_str mg_strstrip(struct mg_str s);
+
+/* Returns 1 if s starts with the given prefix. */
+int mg_str_starts_with(struct mg_str s, struct mg_str prefix);
 
 #ifdef __cplusplus
 }
@@ -2364,6 +2374,14 @@ void mbuf_free(struct mbuf *);
 size_t mbuf_append(struct mbuf *, const void *data, size_t data_size);
 
 /*
+ * Appends data to the Mbuf and frees it (data must be heap-allocated).
+ *
+ * Returns the number of bytes appended or 0 if out of memory.
+ * data is freed irrespective of return value.
+ */
+size_t mbuf_append_and_free(struct mbuf *, void *data, size_t data_size);
+
+/*
  * Inserts data at a specified offset in the Mbuf.
  *
  * Existing data will be shifted forwards and the buffer will
@@ -2382,6 +2400,12 @@ void mbuf_remove(struct mbuf *, size_t data_size);
  * resize is not performed.
  */
 void mbuf_resize(struct mbuf *, size_t new_size);
+
+/* Moves the state from one mbuf to the other. */
+void mbuf_move(struct mbuf *from, struct mbuf *to);
+
+/* Removes all the data from mbuf (if any). */
+void mbuf_clear(struct mbuf *);
 
 /* Shrinks an Mbuf by resizing its `size` to `len`. */
 void mbuf_trim(struct mbuf *);
@@ -2623,6 +2647,8 @@ const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
 
 /*
  * Like `mg_next_comma_list_entry()`, but takes `list` as `struct mg_str`.
+ * NB: Test return value's .p, not .len. On last itreation that yields result
+ * .len will be 0 but .p will not. When finished, .p will be NULL.
  */
 struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
                                          struct mg_str *eq_val);
@@ -3930,6 +3956,7 @@ struct mg_connection {
 #define MG_F_WANT_READ (1 << 6)          /* SSL specific */
 #define MG_F_WANT_WRITE (1 << 7)         /* SSL specific */
 #define MG_F_IS_WEBSOCKET (1 << 8)       /* Websocket specific */
+#define MG_F_RECV_AND_CLOSE (1 << 9) /* Drain rx and close the connection. */
 
 /* Flags that are settable by user */
 #define MG_F_SEND_AND_CLOSE (1 << 10)      /* Push remaining data and close  */
@@ -4015,7 +4042,7 @@ int mg_mgr_poll(struct mg_mgr *mgr, int milli);
  * `func` callback function will be called by the IO thread for each
  * connection. When called, the event will be `MG_EV_POLL`, and a message will
  * be passed as the `ev_data` pointer. Maximum message size is capped
- * by `MG_CTL_MSG_MESSAGE_SIZE` which is set to 8192 bytes.
+ * by `MG_CTL_MSG_MESSAGE_SIZE` which is set to 8192 bytes by default.
  */
 void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
                   size_t len);
@@ -4753,6 +4780,14 @@ struct mg_http_multipart_part {
   struct mg_str data;
   int status; /* <0 on error */
   void *user_data;
+  /*
+   * User handler can indicate how much of the data was consumed
+   * by setting this variable. By default, it is assumed that all
+   * data has been consumed by the handler.
+   * If not all data was consumed, user's handler will be invoked again later
+   * with the remainder.
+   */
+  size_t num_data_consumed;
 };
 
 /* SSI call context */
@@ -4771,7 +4806,7 @@ struct mg_ssi_call_ctx {
 
 #if MG_ENABLE_HTTP_WEBSOCKET
 #define MG_EV_WEBSOCKET_HANDSHAKE_REQUEST 111 /* struct http_message * */
-#define MG_EV_WEBSOCKET_HANDSHAKE_DONE 112    /* NULL */
+#define MG_EV_WEBSOCKET_HANDSHAKE_DONE 112    /* struct http_message * */
 #define MG_EV_WEBSOCKET_FRAME 113             /* struct websocket_message * */
 #define MG_EV_WEBSOCKET_CONTROL_FRAME 114     /* struct websocket_message * */
 #endif
@@ -4810,7 +4845,9 @@ struct mg_ssi_call_ctx {
  * - MG_EV_WEBSOCKET_HANDSHAKE_REQUEST: server has received the WebSocket
  *   handshake request. `ev_data` contains parsed HTTP request.
  * - MG_EV_WEBSOCKET_HANDSHAKE_DONE: server has completed the WebSocket
- *   handshake. `ev_data` is `NULL`.
+ *   handshake. `ev_data` is a `struct http_message` containing the
+ *   client's request (server mode) or server's response (client).
+ *   In client mode handler can examine `resp_code`, which should be 101.
  * - MG_EV_WEBSOCKET_FRAME: new WebSocket frame has arrived. `ev_data` is
  *   `struct websocket_message *`
  *

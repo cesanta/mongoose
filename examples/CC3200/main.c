@@ -50,7 +50,7 @@
 #define BM222_ADDR 0x18
 #define TMP006_ADDR 0x41
 
-void fs_slfs_set_new_file_size(const char *name, size_t size);
+void fs_slfs_set_file_size(const char *name, size_t size);
 
 static const char *upload_form =
     "\
@@ -70,7 +70,7 @@ static struct mg_str upload_fname(struct mg_connection *nc,
   if (nc->user_data != NULL) {
     intptr_t cl = (intptr_t) nc->user_data;
     if (cl >= 0) {
-      fs_slfs_set_new_file_size(fn + 3, cl);
+      fs_slfs_set_file_size(fn + 3, cl);
     }
   }
   lfn.len = fname.len + 4;

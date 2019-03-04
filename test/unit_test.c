@@ -15,12 +15,12 @@
  * license, as set out in <https://www.cesanta.com/license>.
  */
 
-#include "mongoose.h"
-#include "src/mg_internal.h"
 #include "unit_test.h"
+#include "common/cs_md5.h"
 #include "common/test_main.h"
 #include "common/test_util.h"
-#include "common/cs_md5.h"
+#include "mongoose.h"
+#include "src/mg_internal.h"
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ < 199901L && !defined(WIN32)
 #define __func__ ""
@@ -2011,7 +2011,8 @@ static const char *test_http(void) {
   char buf[50] = "", status[100] = "", mime1[20] = "", mime2[100] = "";
   char opt_buf[1024] = "";
   const char *opt_answer =
-      "HTTP/1.1 200 OK\r\nAllow: GET, POST, HEAD, CONNECT, OPTIONS, MKCOL, "
+      "HTTP/1.1 200 OK\r\nServer: Mongoose/" MG_VERSION
+      "\r\nAllow: GET, POST, HEAD, CONNECT, OPTIONS, MKCOL, "
       "PUT, DELETE, PROPFIND, MOVE";
   char url[1000];
 
@@ -2539,32 +2540,6 @@ static const char *test_http_range(void) {
   return NULL;
 }
 
-static void cb3(struct mg_connection *nc, int ev, void *ev_data) {
-  struct websocket_message *wm = (struct websocket_message *) ev_data;
-
-  if (ev == MG_EV_WEBSOCKET_FRAME) {
-    const char *reply = wm->size == 2 && !memcmp(wm->data, "hi", 2) ? "A" : "B";
-    mg_printf_websocket_frame(nc, WEBSOCKET_OP_TEXT, "%s", reply);
-  }
-}
-
-static void cb4(struct mg_connection *nc, int ev, void *ev_data) {
-  struct websocket_message *wm = (struct websocket_message *) ev_data;
-
-  if (ev == MG_EV_WEBSOCKET_FRAME) {
-    memcpy(nc->user_data, wm->data, wm->size);
-    mg_send_websocket_frame(nc, WEBSOCKET_OP_CLOSE, NULL, 0);
-  } else if (ev == MG_EV_WEBSOCKET_HANDSHAKE_DONE) {
-    /* Send "hi" to server. server must reply "A". */
-    struct mg_str h[2];
-    h[0].p = "h";
-    h[0].len = 1;
-    h[1].p = "i";
-    h[1].len = 1;
-    mg_send_websocket_framev(nc, WEBSOCKET_OP_TEXT, h, 2);
-  }
-}
-
 static void cb_ws_server(struct mg_connection *nc, int ev, void *ev_data) {
   struct websocket_message *wm = (struct websocket_message *) ev_data;
 
@@ -2779,6 +2754,38 @@ static const char *test_websocket(void) {
   return NULL;
 }
 
+static void cb3(struct mg_connection *nc, int ev, void *ev_data) {
+  struct websocket_message *wm = (struct websocket_message *) ev_data;
+  if (ev != MG_EV_WEBSOCKET_FRAME) return;
+  DBG(("server data '%.*s'", (int) wm->size, wm->data));
+  const char *reply = wm->size == 2 && !memcmp(wm->data, "hi", 2) ? "A" : "B";
+  mg_printf_websocket_frame(nc, WEBSOCKET_OP_TEXT, "%s", reply);
+}
+
+static void cb4(struct mg_connection *nc, int ev, void *ev_data) {
+  char *buf = (char *) nc->user_data;
+  if (ev == MG_EV_WEBSOCKET_FRAME) {
+    struct websocket_message *wm = (struct websocket_message *) ev_data;
+    DBG(("client data '%.*s'", (int) wm->size, wm->data));
+    memcpy(buf, wm->data, wm->size);
+    mg_send_websocket_frame(nc, WEBSOCKET_OP_CLOSE, NULL, 0);
+  } else if (ev == MG_EV_WEBSOCKET_HANDSHAKE_DONE) {
+    struct http_message *hm = (struct http_message *) ev_data;
+    DBG(("code %d", hm->resp_code));
+    if (hm->resp_code == 101) {
+      /* Send "hi" to server. server must reply "A". */
+      struct mg_str h[2];
+      h[0].p = "h";
+      h[0].len = 1;
+      h[1].p = "i";
+      h[1].len = 1;
+      mg_send_websocket_framev(nc, WEBSOCKET_OP_TEXT, h, 2);
+    } else {
+      snprintf(buf, 20, "code %d", hm->resp_code);
+    }
+  }
+}
+
 static void cbwep(struct mg_connection *c, int ev, void *ev_data) {
   struct websocket_message *wm = (struct websocket_message *) ev_data;
   char *buf = (char *) c->user_data;
@@ -2786,6 +2793,9 @@ static void cbwep(struct mg_connection *c, int ev, void *ev_data) {
   switch (ev) {
     case MG_EV_WEBSOCKET_HANDSHAKE_REQUEST:
       strcat(buf, "R");
+      if (buf[0] != '0') {
+        mg_http_send_error(c, 403, "I don't like you");
+      }
       break;
     case MG_EV_WEBSOCKET_HANDSHAKE_DONE:
       strcat(buf, "D");
@@ -2802,7 +2812,7 @@ static const char *test_websocket_endpoint(void) {
   struct mg_mgr mgr;
   struct mg_connection *nc;
   const char *local_addr = "127.0.0.1:7798";
-  char buf[20] = "", buf2[20] = "";
+  char buf[20] = "", buf2[20] = "0";
 
   mg_mgr_init(&mgr, NULL);
   /* mgr.hexdump_file = "-"; */
@@ -2817,10 +2827,21 @@ static const char *test_websocket_endpoint(void) {
   nc->user_data = buf;
   mg_send_websocket_handshake(nc, "/boo", NULL);
   poll_until(&mgr, 1, c_str_ne, buf, (void *) "");
-  mg_mgr_free(&mgr);
-
   /* Check that test buffer has been filled by the callback properly. */
-  ASSERT_STREQ(buf, "RDF|hi");
+  ASSERT_STREQ(buf, "0RDF|hi");
+
+  /* Test handshake failure */
+  ASSERT((nc = mg_connect(&mgr, local_addr, cb4)) != NULL);
+  mg_set_protocol_http_websocket(nc);
+  buf[0] = '\0';
+  buf2[0] = '1';
+  buf2[1] = '\0';
+  nc->user_data = buf;
+  mg_send_websocket_handshake(nc, "/boo", NULL);
+  poll_until(&mgr, 1, c_str_ne, buf, (void *) "");
+  ASSERT_STREQ(buf, "code 403");
+
+  mg_mgr_free(&mgr);
 
   return NULL;
 }
@@ -3379,15 +3400,36 @@ static const char *test_mqtt_parse_mqtt_qos1(void) {
 }
 
 static const char *test_mqtt_match_topic_expression(void) {
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo")), 1);
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo/")), 0);
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo/bar")), 0);
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("/foo", mg_mk_str("/foo")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("+/foo", mg_mk_str("/foo")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foobar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo/")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo//")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo/bar")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("foo", mg_mk_str("foo/+")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/bar", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/+", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("+/bar", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("+/+", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/+/bar", mg_mk_str("foo//bar")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("foo/+/+", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/+/#", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("+/foo/bar", mg_mk_str("/foo/bar")));
 
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo")), 0);
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/")), 0);
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/bar")), 1);
-  ASSERT_EQ(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/bar/baz")),
-            1);
+  ASSERT(!mg_mqtt_vmatch_topic_expression("", mg_mk_str("")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("/", mg_mk_str("")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("/", mg_mk_str("/")));
+
+  ASSERT(mg_mqtt_vmatch_topic_expression("#", mg_mk_str("")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("#", mg_mk_str("foo")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("#", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/bar")));
+  ASSERT(mg_mqtt_vmatch_topic_expression("foo/#", mg_mk_str("foo/bar/baz")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("#/foo", mg_mk_str("foo")));
+  ASSERT(!mg_mqtt_vmatch_topic_expression("#/foo", mg_mk_str("bar/foo")));
 
   return NULL;
 }
@@ -5665,7 +5707,7 @@ static const char *test_socks(void) {
   mbuf_resize(&c->recv_mbuf, 10000000);
 
   /* Run event loop. Use more cycles to let file download complete. */
-  poll_until(&mgr, 10, c_str_ne, status, (void *) "");
+  poll_until(&mgr, 15, c_str_ne, status, (void *) "");
   ASSERT_STREQ(status, "success");
 
   mg_mgr_free(&mgr);

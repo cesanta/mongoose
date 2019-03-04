@@ -18,9 +18,15 @@
 #include "uart.h"
 #include "ets_sys.h"
 
-#define UART_CLKDIV_26MHZ(B) (52000000 + B / 2) / B
+#define UART_CLKDIV_M (UART_CLKDIV_CNT << UART_CLKDIV_S)
 
-void set_baud_rate(uint32_t uart_no, uint32_t baud_rate) {
-  uint32_t div = UART_CLKDIV_26MHZ(baud_rate);
-  WRITE_PERI_REG(UART_CLKDIV_REG(uart_no), div & 0xfffff);
+void uart_div_modify(uint8_t uart_no, uint32_t div);
+
+uint32_t set_baud_rate(uint32_t uart_no, uint32_t old_baud_rate,
+                       uint32_t new_baud_rate) {
+  uint32_t uart_reg = READ_PERI_REG(UART_CLKDIV_REG(uart_no));
+  uint32_t uart_div = uart_reg & UART_CLKDIV_M;
+  uint32_t master_freq = uart_div * old_baud_rate;
+  uart_div_modify(uart_no, master_freq / new_baud_rate);
+  return uart_div;
 }

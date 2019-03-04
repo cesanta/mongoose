@@ -140,6 +140,7 @@ struct mg_connection {
 #define MG_F_WANT_READ (1 << 6)          /* SSL specific */
 #define MG_F_WANT_WRITE (1 << 7)         /* SSL specific */
 #define MG_F_IS_WEBSOCKET (1 << 8)       /* Websocket specific */
+#define MG_F_RECV_AND_CLOSE (1 << 9) /* Drain rx and close the connection. */
 
 /* Flags that are settable by user */
 #define MG_F_SEND_AND_CLOSE (1 << 10)      /* Push remaining data and close  */
@@ -225,7 +226,7 @@ int mg_mgr_poll(struct mg_mgr *mgr, int milli);
  * `func` callback function will be called by the IO thread for each
  * connection. When called, the event will be `MG_EV_POLL`, and a message will
  * be passed as the `ev_data` pointer. Maximum message size is capped
- * by `MG_CTL_MSG_MESSAGE_SIZE` which is set to 8192 bytes.
+ * by `MG_CTL_MSG_MESSAGE_SIZE` which is set to 8192 bytes by default.
  */
 void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
                   size_t len);

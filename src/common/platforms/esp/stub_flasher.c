@@ -25,7 +25,7 @@
 #if defined(ESP8266)
 #include "eagle_soc.h"
 #include "ets_sys.h"
-#include "../../../miniz.c"
+#include "miniz.c"
 #elif defined(ESP32)
 #include "rom/efuse.h"
 #include "rom/miniz.h"
@@ -38,7 +38,7 @@
 #include "uart.h"
 
 /* Param: baud rate. */
-uint32_t params[1] __attribute__((section(".params")));
+uint32_t params[2] __attribute__((section(".params")));
 
 #define FLASH_BLOCK_SIZE 65536
 #define FLASH_SECTOR_SIZE 4096
@@ -470,6 +470,27 @@ uint8_t cmd_loop(void) {
         resp = 0;
         break;
       }
+      case CMD_READ_REG: {
+        len = SLIP_recv(args, sizeof(args));
+        if (len == 4) {
+          uint32_t value = READ_PERI_REG((uint32_t *) args[0]);
+          SLIP_send(&value, sizeof(value));
+          resp = 0;
+        } else {
+          resp = 0x91;
+        }
+        break;
+      }
+      case CMD_WRITE_REG: {
+        len = SLIP_recv(args, sizeof(args));
+        if (len == 8) {
+          WRITE_PERI_REG((uint32_t *) args[0], args[1]);
+          resp = 0;
+        } else {
+          resp = 0xa1;
+        }
+        break;
+      }
     }
     SLIP_send(&resp, 1);
   } while (cmd != CMD_BOOT_FW && cmd != CMD_REBOOT);
@@ -477,8 +498,7 @@ uint8_t cmd_loop(void) {
 }
 
 void stub_main1(void) {
-  uint32_t baud_rate = params[0];
-  uint32_t greeting = 0x4941484f; /* OHAI */
+  uint32_t old_baud_rate = params[0], new_baud_rate = params[1];
   uint8_t last_cmd;
 
   /* This points at us right now, reset for next boot. */
@@ -487,6 +507,7 @@ void stub_main1(void) {
 /* Selects SPI functions for flash pins. */
 #if defined(ESP8266)
   SelectSpiFunction();
+  spi_flash_attach();
   SET_PERI_REG_MASK(0x3FF00014, 1); /* Switch to 160 MHz */
 #elif defined(ESP32)
   esp_rom_spiflash_attach(ets_efuse_get_spiconfig(), 0 /* legacy */);
@@ -496,9 +517,10 @@ void stub_main1(void) {
       0 /* deviceId */, 16 * 1024 * 1024 /* chip_size */, FLASH_BLOCK_SIZE,
       FLASH_SECTOR_SIZE, FLASH_PAGE_SIZE, 0xffff /* status_mask */);
 
-  if (baud_rate > 0) {
+  uint32_t old_div = 0;
+  if (new_baud_rate > 0) {
     ets_delay_us(10000);
-    set_baud_rate(0, baud_rate);
+    old_div = set_baud_rate(0, old_baud_rate, new_baud_rate);
   }
 
   /* Give host time to get ready too. */
@@ -509,7 +531,7 @@ void stub_main1(void) {
     WRITE_PERI_REG(UART_FIFO_REG(0), 0x55);
   }
 #else
-  SLIP_send(&greeting, 4);
+  SLIP_send(&old_div, 4);
 #endif
 
   last_cmd = cmd_loop();
@@ -525,7 +547,7 @@ void stub_main1(void) {
      * then jumps to 0x4000108a, then checks strapping bits again (which will
      * not have changed), and then proceeds to 0x400010a8.
      */
-    volatile uint32_t *sp = &baud_rate;
+    volatile uint32_t *sp = &old_baud_rate;
     while (*sp != (uint32_t) 0x40001100) sp++;
     *sp = 0x400010a8;
     /*

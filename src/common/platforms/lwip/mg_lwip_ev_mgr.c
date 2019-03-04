@@ -67,7 +67,6 @@ void mg_ev_mgr_lwip_process_signals(struct mg_mgr *mgr) {
         break;
       }
       case MG_SIG_CLOSE_CONN: {
-        nc->flags |= MG_F_SEND_AND_CLOSE;
         mg_close_conn(nc);
         break;
       }

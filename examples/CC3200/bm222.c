@@ -98,7 +98,8 @@ bool bm222_get_data(struct bm222_ctx *ctx) {
       s->y = v[3];
       s->z = v[5];
       if (d > max_d) max_d = d;
-      LOG(LL_VERBOSE_DEBUG, ("dx %d dy %d dz %d d %d", dx, dy, dz, d));
+      LOG(LL_VERBOSE_DEBUG,
+          ("dx %d dy %d dz %d d %d", (int) dx, (int) dy, (int) dz, (int) d));
     }
   }
   return (overflow ? bm222_fifo_init(ctx) : true); /* Clear the ovf flag. */
