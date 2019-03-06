@@ -975,12 +975,6 @@ static void connect_fail_cb(struct mg_connection *nc, int ev, void *p) {
   }
 }
 
-static void ev_handler_empty(struct mg_connection *nc, int ev, void *p) {
-  (void) nc;
-  (void) ev;
-  (void) p;
-}
-
 static const char *test_connection_errors(void) {
   struct mg_mgr mgr;
   struct mg_bind_opts bopts;
@@ -995,25 +989,21 @@ static const char *test_connection_errors(void) {
   bopts.error_string = &error_string;
 
   ASSERT(mg_bind_opt(&mgr, "blah://12", NULL, bopts) == NULL);
-  ASSERT_STREQ(error_string, "handler is required");
-
-  ASSERT(mg_bind_opt(&mgr, "blah://12", ev_handler_empty, bopts) == NULL);
   ASSERT_STREQ(error_string, "cannot parse address");
 
-  ASSERT(mg_bind_opt(&mgr, "tcp://8.8.8.8:88", ev_handler_empty, bopts) ==
-         NULL);
+  ASSERT(mg_bind_opt(&mgr, "tcp://8.8.8.8:88", NULL, bopts) == NULL);
   ASSERT_STREQ(error_string, "failed to open listener");
 
 #if MG_ENABLE_SSL
   bopts.ssl_cert = S_PEM;
-  ASSERT(mg_bind_opt(&mgr, "udp://:0", ev_handler_empty, bopts) == NULL);
+  ASSERT(mg_bind_opt(&mgr, "udp://:0", NULL, bopts) == NULL);
   ASSERT_STREQ(error_string, "SSL for UDP is not supported");
   bopts.ssl_cert = "no_such_file";
-  ASSERT(mg_bind_opt(&mgr, "tcp://:0", ev_handler_empty, bopts) == NULL);
+  ASSERT(mg_bind_opt(&mgr, "tcp://:0", NULL, bopts) == NULL);
   ASSERT_STREQ(error_string, "Invalid SSL cert");
   bopts.ssl_cert = NULL;
   bopts.ssl_ca_cert = "no_such_file";
-  ASSERT(mg_bind_opt(&mgr, "tcp://:0", ev_handler_empty, bopts) == NULL);
+  ASSERT(mg_bind_opt(&mgr, "tcp://:0", NULL, bopts) == NULL);
   ASSERT_STREQ(error_string, "Invalid SSL CA cert");
 #endif
 
@@ -4135,12 +4125,6 @@ static void cb_mp_send_one_byte(struct mg_connection *nc, int ev, void *p) {
   }
 }
 
-static void cb_mp_empty(struct mg_connection *nc, int ev, void *p) {
-  (void) nc;
-  (void) ev;
-  (void) p;
-}
-
 static const char b1[] =
     "111111111111111111111111111111111111111111111111111111111111111\r\n"
     "111111111111111111111111111111111111111111111111111111111111111\r\n"
@@ -4264,13 +4248,13 @@ static const char *test_http_multipart2(void) {
            "\r\n--Asrf456BGe4h\r\n", b1, b2, b4);
 
   /* Testing delivering to endpoint handler*/
-  nc_listen = mg_bind(&mgr, "8766", cb_mp_empty);
+  nc_listen = mg_bind(&mgr, "8766", NULL);
   nc_listen->user_data = &mpd;
 
   mg_set_protocol_http_websocket(nc_listen);
   mg_register_http_endpoint(nc_listen, "/test", cb_mp_srv MG_UD_ARG(NULL));
 
-  ASSERT((c = mg_connect_http(&mgr, cb_mp_empty, "http://127.0.0.1:8766/test",
+  ASSERT((c = mg_connect_http(&mgr, NULL, "http://127.0.0.1:8766/test",
                               "Connection: keep-alive\r\nContent-Type: "
                               "multipart/form-data; boundary=Asrf456BGe4h",
                               multi_part_req)) != NULL);
@@ -4307,7 +4291,7 @@ static const char *test_http_multipart2(void) {
   /* Test interrupted request */
   multi_part_req[1800] = '\0';
   c = mg_connect_http(
-      &mgr, cb_mp_empty, "http://127.0.0.1:8765",
+      &mgr, NULL, "http://127.0.0.1:8765",
       "Content-Type: multipart/form-data; boundary=Asrf456BGe4h",
       multi_part_req);
 
@@ -4328,7 +4312,7 @@ static const char *test_http_multipart2(void) {
 
   ASSERT(
       mg_connect_http(
-          &mgr, cb_mp_empty, "http://127.0.0.1:8766/test",
+          &mgr, NULL, "http://127.0.0.1:8766/test",
           "Content-Type: multipart/form-data; boundary=Asrf456BGe4h",
           "\r\n--Asrf456BGe4h\r\n"
           "Content-Disposition: form-data; name=\"d\"; filename=\"small\"\r\n"
@@ -4348,7 +4332,7 @@ static const char *test_http_multipart2(void) {
    * See https://github.com/cesanta/dev/issues/6974
    * This request should not lead to crash
    */
-  c = mg_connect(&mgr, "127.0.0.1:8766", cb_mp_empty);
+  c = mg_connect(&mgr, "127.0.0.1:8766", NULL);
   mg_printf(c,
             "POST /test HTTP/1.1\r\n"
             "Connection: keep-alive\r\n"
@@ -4401,7 +4385,7 @@ static const char *test_http_multipart_pipeline(void) {
   snprintf(multi_part_req, sizeof(multi_part_req), multi_part_req_fmt,
            "\r\n--Asrf456BGe4h\r\n", b1, b2, b4);
 
-  ASSERT((c = mg_connect_http(&mgr, cb_mp_empty, "http://127.0.0.1:8765/test",
+  ASSERT((c = mg_connect_http(&mgr, NULL, "http://127.0.0.1:8765/test",
                               "Content-Type: "
                               "multipart/form-data;boundary=Asrf456BGe4h\r\n"
                               "Connection: keep-alive",
@@ -5685,7 +5669,7 @@ static const char *test_socks(void) {
   mg_set_protocol_http_websocket(c);
 
   /* Start socks proxy */
-  ASSERT((c = mg_bind(&mgr, proxy_addr, ev_handler_empty)) != NULL);
+  ASSERT((c = mg_bind(&mgr, proxy_addr, NULL)) != NULL);
   mg_set_protocol_socks(c);
 
   /* Create HTTP client that uses socks proxy */
