@@ -91,7 +91,7 @@
 #include "common/platforms/platform_pic32.h"
 #include "common/platforms/platform_stm32.h"
 #if CS_PLATFORM == CS_P_CUSTOM
-#include "platform_custom.h"
+#include <platform_custom.h>
 #endif
 
 /* Common stuff */
