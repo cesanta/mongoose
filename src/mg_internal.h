@@ -84,6 +84,9 @@ extern void *(*test_calloc)(size_t count, size_t size);
 #if MG_ENABLE_HTTP
 struct mg_serve_http_opts;
 
+MG_INTERNAL struct mg_http_proto_data *mg_http_create_proto_data(
+    struct mg_connection *c);
+
 /*
  * Reassemble the content of the buffer (buf, blen) which should be
  * in the HTTP chunked encoding, by collapsing data chunks to the

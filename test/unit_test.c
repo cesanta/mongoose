@@ -1700,7 +1700,7 @@ static void cb10(struct mg_connection *nc, int ev, void *ev_data) {
   }
 }
 
-static void endpoint_handler(struct mg_connection *nc, int ev, void *ev_data) {
+static void default_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct http_message *hm = (struct http_message *) ev_data;
   (void) ev_data;
 
@@ -1714,7 +1714,8 @@ static void endpoint_handler(struct mg_connection *nc, int ev, void *ev_data) {
     }
   } else if (ev == MG_EV_CLOSE) {
     if (nc->listener != NULL) {
-      (*(int *) nc->listener->user_data) += 100;
+      (*(int *) nc->listener->user_data) += 1;
+      DBG(("%p == default close", nc));
     }
   }
 }
@@ -1727,7 +1728,8 @@ static void handle_hello1(struct mg_connection *nc, int ev, void *ev_data) {
       nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
     case MG_EV_CLOSE:
-      (*(int *) nc->listener->user_data)++;
+      DBG(("%p == hello1 close", nc));
+      (*(int *) nc->listener->user_data) += 10;
       break;
   }
 }
@@ -1740,7 +1742,8 @@ static void handle_hello2(struct mg_connection *nc, int ev, void *ev_data) {
       nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
     case MG_EV_CLOSE:
-      (*(int *) nc->listener->user_data)++;
+      DBG(("%p == hello2 close", nc));
+      (*(int *) nc->listener->user_data) += 100;
       break;
   }
 }
@@ -1753,7 +1756,8 @@ static void handle_hello5(struct mg_connection *nc, int ev, void *ev_data) {
       nc->flags |= MG_F_SEND_AND_CLOSE;
       break;
     case MG_EV_CLOSE:
-      (*(int *) nc->listener->user_data)++;
+      DBG(("%p == hello5 close", nc));
+      (*(int *) nc->listener->user_data) += 1000;
       break;
   }
 }
@@ -1813,7 +1817,7 @@ static const char *test_http_endpoints(void) {
 
   mg_mgr_init(&mgr, NULL);
   /* mgr.hexdump_file = "-"; */
-  ASSERT((nc = mg_bind(&mgr, local_addr, endpoint_handler)) != NULL);
+  ASSERT((nc = mg_bind(&mgr, local_addr, default_handler)) != NULL);
   mg_register_http_endpoint(nc, "/hello1", handle_hello1 MG_UD_ARG(NULL));
   mg_register_http_endpoint(nc, "/hello1/hello2",
                             handle_hello2 MG_UD_ARG(NULL));
@@ -1878,7 +1882,7 @@ static const char *test_http_endpoints(void) {
   poll_until(&mgr, 1, c_str_ne, buf, (void *) "");
   ASSERT_STREQ(buf, "[I am Hello again] 37");
 
-  ASSERT_EQ(close_count, 700);
+  ASSERT_EQ(close_count, 1117);
 
   mg_mgr_free(&mgr);
 
@@ -1987,7 +1991,7 @@ static const char *test_http_serve_file_streaming(void) {
   ASSERT((nc = mg_connect(&mgr, local_addr, srv2)) != NULL);
   mg_set_protocol_http_websocket(nc);
   nc->user_data = &status;
-  mg_printf(nc, "GET / HTTP/1.1\r\n\r\n");
+  mg_printf(nc, "GET / HTTP/1.0\r\n\r\n");
   poll_until(&mgr, 30, c_int_ne, &status, (void *) 0);
   ASSERT_EQ(status, 1);
   mg_mgr_free(&mgr);
@@ -3993,6 +3997,7 @@ static const char *test_http_chunk2(void) {
   nc.mgr = &mgr;
   nc.sock = INVALID_SOCKET;
   nc.handler = eh_chunk2;
+  mg_http_create_proto_data(&nc);
   hm.message.len = hm.body.len = ~0;
 
   s_handle_chunk_event = 0;
