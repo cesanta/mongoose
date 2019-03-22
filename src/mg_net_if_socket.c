@@ -33,7 +33,7 @@ static int mg_is_error(void) {
 void mg_socket_if_connect_tcp(struct mg_connection *nc,
                               const union socket_address *sa) {
   int rc, proto = 0;
-  nc->sock = socket(AF_INET, SOCK_STREAM, proto);
+  nc->sock = socket(sa->sa.sa_family, SOCK_STREAM, proto);
   if (nc->sock == INVALID_SOCKET) {
     nc->err = mg_get_errno() ? mg_get_errno() : 1;
     return;
@@ -41,7 +41,9 @@ void mg_socket_if_connect_tcp(struct mg_connection *nc,
 #if !defined(MG_ESP8266)
   mg_set_non_blocking_mode(nc->sock);
 #endif
-  rc = connect(nc->sock, &sa->sa, sizeof(sa->sin));
+  socklen_t sa_len =
+      (sa->sa.sa_family == AF_INET) ? sizeof(sa->sin) : sizeof(sa->sin6);
+  rc = connect(nc->sock, &sa->sa, sa_len);
   nc->err = rc < 0 && mg_is_error() ? mg_get_errno() : 0;
   DBG(("%p sock %d rc %d errno %d err %d", nc, (int) nc->sock, rc,
       mg_get_errno(), nc->err));
