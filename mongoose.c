@@ -5059,6 +5059,7 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
 #include <mbedtls/ssl_internal.h>
 #include <mbedtls/x509_crt.h>
 #include <mbedtls/version.h>
+#include <mbedtls/ssl_cache.h>
 
 static void mg_ssl_mbed_log(void *ctx, int level, const char *file, int line,
                             const char *str) {
@@ -5091,6 +5092,7 @@ struct mg_ssl_if_ctx {
   mbedtls_x509_crt *cert;
   mbedtls_pk_context *key;
   mbedtls_x509_crt *ca_cert;
+  mbedtls_ssl_cache_context *cache;
   struct mbuf cipher_suites;
   size_t saved_len;
 };
@@ -5144,8 +5146,10 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
   }
   nc->ssl_if_data = ctx;
   ctx->conf = (mbedtls_ssl_config *) MG_CALLOC(1, sizeof(*ctx->conf));
+  ctx->cache = (mbedtls_ssl_cache_context *) MG_CALLOC(1, sizeof(*ctx->cache));
   mbuf_init(&ctx->cipher_suites, 0);
   mbedtls_ssl_config_init(ctx->conf);
+  mbedtls_ssl_cache_init( ctx->cache );
   mbedtls_ssl_conf_dbg(ctx->conf, mg_ssl_mbed_log, nc);
   if (mbedtls_ssl_config_defaults(
           ctx->conf, (nc->flags & MG_F_LISTENING ? MBEDTLS_SSL_IS_SERVER
@@ -5159,7 +5163,7 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
   mbedtls_ssl_conf_min_version(ctx->conf, MBEDTLS_SSL_MAJOR_VERSION_3,
                                MBEDTLS_SSL_MINOR_VERSION_3);
   mbedtls_ssl_conf_rng(ctx->conf, mg_ssl_if_mbed_random, nc);
-
+  mbedtls_ssl_conf_session_cache( ctx->conf, ctx->cache, mbedtls_ssl_cache_get, mbedtls_ssl_cache_set );
   if (params->cert != NULL &&
       mg_use_cert(ctx, params->cert, params->key, err_msg) != MG_SSL_OK) {
     return MG_SSL_ERROR;
@@ -5363,6 +5367,10 @@ void mg_ssl_if_conn_free(struct mg_connection *nc) {
     mbedtls_ssl_config_free(ctx->conf);
     MG_FREE(ctx->conf);
   }
+  if (ctx->cache != NULL) {
+    mbedtls_ssl_cache_free(ctx->cache);
+    MG_FREE(ctx->cache);
+  } 
   mbuf_free(&ctx->cipher_suites);
   memset(ctx, 0, sizeof(*ctx));
   MG_FREE(ctx);
