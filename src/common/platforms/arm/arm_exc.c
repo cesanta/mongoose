@@ -40,7 +40,7 @@ struct arm_exc_frame {
   uint32_t lr;
   uint32_t pc;
   uint32_t xpsr;
-#ifdef ARM_HAVE_FPU
+#if __FPU_PRESENT
   uint32_t s[16];
   uint32_t fpscr;
   uint32_t reserved;
@@ -57,7 +57,7 @@ struct arm_gdb_reg_file {
   uint32_t fpscr;
 } __attribute__((packed));
 
-#if ARM_HAVE_FPU && !defined(MGOS_BOOT_BUILD)
+#if __FPU_PRESENT && !defined(MGOS_BOOT_BUILD)
 static void save_s16_s31(uint32_t *dst) {
   __asm volatile(
       "\
@@ -95,13 +95,14 @@ void arm_exc_handler_bottom(uint8_t isr_no, struct arm_exc_frame *ef,
                             struct arm_gdb_reg_file *rf) {
   char buf[8];
   const char *name;
-  (void) ef;
+#if __MPU_PRESENT
+  MPU->CTRL = 0;  // Disable MPU.
+#endif
   portDISABLE_INTERRUPTS();
   switch (isr_no) {
     case 0:
       name = "ThreadMode";
       break;
-
     case 1:
     case 7:
     case 8:
@@ -110,7 +111,6 @@ void arm_exc_handler_bottom(uint8_t isr_no, struct arm_exc_frame *ef,
     case 13:
       name = "Reserved";
       break;
-
     case 2:
       name = "NMI";
       break;
@@ -160,7 +160,7 @@ void arm_exc_handler_bottom(uint8_t isr_no, struct arm_exc_frame *ef,
     mgos_cd_printf("  PSR: 0x%08lx\n", rf->cpsr);
   }
   memset(rf->d, 0, sizeof(rf->d));
-#if ARM_HAVE_FPU && !defined(MGOS_BOOT_BUILD)
+#if __FPU_PRESENT && !defined(MGOS_BOOT_BUILD)
   rf->fpscr = ef->fpscr;
   memcpy((uint8_t *) rf->d, ef->s, sizeof(ef->s));
   print_fpu_regs((uint32_t *) rf->d, 0, ARRAY_SIZE(ef->s));
@@ -188,4 +188,5 @@ void arm_exc_handler_bottom(uint8_t isr_no, struct arm_exc_frame *ef,
   mgos_cd_printf("Rebooting\n");
   mgos_dev_system_restart();
 #endif
+  (void) ef;
 }

@@ -28,7 +28,7 @@ arm_exc_handler_top:
   mrseq r1, msp
   mrsne r1, psp
   // r1 -> arm_exc_frame prepared for us by the CPU
-#if ARM_HAVE_FPU
+#if __FPU_PRESENT
   add r0, r1, #104  // sizeof(arm_exc_frame)
   sub sp, #328      // sizeof(arm_gdb_reg_file)
 #else
