@@ -26,10 +26,10 @@
 .global mgos_nsleep100_impl
 .global mgos_nsleep100_loop_count
 
-#ifdef STM32
-.section .RamFunc.mgos_nsleep100_impl
-#else
+#if defined(TARGET_IS_CC3200) || defined(TARGET_IS_CC3220)
 .section .iram.mgos_nsleep100_impl
+#else
+.section .text.IRAM.mgos_nsleep100_impl
 #endif
 .type mgos_nsleep100_impl, %function
 .align 4
