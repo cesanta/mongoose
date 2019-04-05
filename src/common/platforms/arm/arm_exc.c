@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#include "arm_exc.h"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,32 +32,6 @@
 #ifndef MGOS_ENABLE_CORE_DUMP
 #define MGOS_ENABLE_CORE_DUMP 1
 #endif
-
-struct arm_exc_frame {
-  uint32_t r0;
-  uint32_t r1;
-  uint32_t r2;
-  uint32_t r3;
-  uint32_t r12;
-  uint32_t lr;
-  uint32_t pc;
-  uint32_t xpsr;
-#if __FPU_PRESENT
-  uint32_t s[16];
-  uint32_t fpscr;
-  uint32_t reserved;
-#endif
-} __attribute__((packed));
-
-struct arm_gdb_reg_file {
-  uint32_t r[13];
-  uint32_t sp;
-  uint32_t lr;
-  uint32_t pc;
-  uint32_t cpsr;
-  uint64_t d[16];
-  uint32_t fpscr;
-} __attribute__((packed));
 
 #if __FPU_PRESENT && !defined(MGOS_BOOT_BUILD)
 static void save_s16_s31(uint32_t *dst) {
@@ -91,6 +67,12 @@ static void print_fpu_regs(const uint32_t *regs, int off, int n) {
 }
 #endif
 
+static struct arm_gdb_reg_file *s_rf = NULL;
+
+void arm_exc_dump_regs(void) {
+  mgos_cd_write_section(MGOS_CORE_DUMP_SECTION_REGS, s_rf, sizeof(*s_rf));
+}
+
 void arm_exc_handler_bottom(uint8_t isr_no, struct arm_exc_frame *ef,
                             struct arm_gdb_reg_file *rf) {
   char buf[8];
@@ -99,6 +81,7 @@ void arm_exc_handler_bottom(uint8_t isr_no, struct arm_exc_frame *ef,
   MPU->CTRL = 0;  // Disable MPU.
 #endif
   portDISABLE_INTERRUPTS();
+  s_rf = rf;
   switch (isr_no) {
     case 0:
       name = "ThreadMode";
@@ -155,12 +138,14 @@ void arm_exc_handler_bottom(uint8_t isr_no, struct arm_exc_frame *ef,
         rf->r[4], 5, rf->r[5], 6, rf->r[6], 7, rf->r[7]);
     mgos_cd_printf("  R8:  0x%08lx  R9:  0x%08lx  R10: 0x%08lx  R11: 0x%08lx\n",
                    rf->r[8], rf->r[9], rf->r[10], rf->r[11]);
-    mgos_cd_printf("  R12: 0x%08lx  SP:  0x%08lx  LR:  0x%08lx  PC:  0x%08lx\n",
+    mgos_cd_printf("  R12: 0x%08lx  SP:  0x%08lx   LR: 0x%08lx  PC:  0x%08lx\n",
                    rf->r[12], rf->sp, rf->lr, rf->pc);
-    mgos_cd_printf("  PSR: 0x%08lx\n", rf->cpsr);
+    mgos_cd_printf("  PSR: 0x%08lx MSP:  0x%08lx  PSP: 0x%08lx\n", rf->xpsr,
+                   rf->msp, rf->psp);
   }
+#if __FPU_PRESENT
   memset(rf->d, 0, sizeof(rf->d));
-#if __FPU_PRESENT && !defined(MGOS_BOOT_BUILD)
+#if !defined(MGOS_BOOT_BUILD)
   rf->fpscr = ef->fpscr;
   memcpy((uint8_t *) rf->d, ef->s, sizeof(ef->s));
   print_fpu_regs((uint32_t *) rf->d, 0, ARRAY_SIZE(ef->s));
@@ -173,11 +158,9 @@ void arm_exc_handler_bottom(uint8_t isr_no, struct arm_exc_frame *ef,
 #else
   rf->fpscr = 0;
 #endif
+#endif
 #if MGOS_ENABLE_CORE_DUMP
-  mgos_cd_emit_header();
-  mgos_cd_emit_section(MGOS_CORE_DUMP_SECTION_REGS, rf, sizeof(*rf));
-  mgos_cd_emit_section("SRAM", (void *) SRAM_BASE_ADDR, SRAM_SIZE);
-  mgos_cd_emit_footer();
+  mgos_cd_write();
 #endif
 #ifdef MGOS_HALT_ON_EXCEPTION
   mgos_cd_printf("Halting\n");

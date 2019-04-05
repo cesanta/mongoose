@@ -30,10 +30,10 @@ arm_exc_handler_top:
   // r1 -> arm_exc_frame prepared for us by the CPU
 #if __FPU_PRESENT
   add r0, r1, #104  // sizeof(arm_exc_frame)
-  sub sp, #328      // sizeof(arm_gdb_reg_file)
+  sub sp, #208      // sizeof(arm_gdb_reg_file)
 #else
   add r0, r1, #32   // sizeof(arm_exc_frame)
-  sub sp, #328      // sizeof(arm_gdb_reg_file)
+  sub sp, #76       // sizeof(arm_gdb_reg_file)
 #endif
   mov r2, sp
   // r0 -> original sp, r2 -> arm_gdb_reg_file to fill
@@ -63,6 +63,17 @@ arm_exc_handler_top:
   str r3,  [r2, #60]
   ldr r3,  [r1, #28]  // xpsr
   str r3,  [r2, #64]
+#if __FPU_PRESENT
+  mrs r3,  msp
+  str r3,  [r2, #200] // msp
+  mrs r3,  psp
+  str r3,  [r2, #204] // psp
+#else
+  mrs r3,  msp
+  str r3,  [r2, #68] // msp
+  mrs r3,  psp
+  str r3,  [r2, #72] // psp
+#endif
 
   mrs r0, ipsr
   b arm_exc_handler_bottom
