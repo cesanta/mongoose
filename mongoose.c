@@ -15231,7 +15231,8 @@ void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
 #include <lwip/tcp.h>
 #include <lwip/tcpip.h>
 #if ((LWIP_VERSION_MAJOR << 8) | LWIP_VERSION_MINOR) >= 0x0105
-#include <lwip/priv/tcp_priv.h> /* For tcp_seg */
+#include <lwip/priv/tcp_priv.h>   /* For tcp_seg */
+#include <lwip/priv/tcpip_priv.h> /* For tcpip_api_call */
 #else
 #include <lwip/tcp_impl.h>
 #endif
@@ -15271,9 +15272,35 @@ void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
 #define SET_ADDR(dst, src) (dst)->sin.sin_addr.s_addr = ip_2_ip4(src)->addr
 #endif
 
-#if NO_SYS
-#define tcpip_callback(fn, arg) (fn)(arg)
-typedef void (*tcpip_callback_fn)(void *arg);
+#if !NO_SYS
+#if LWIP_TCPIP_CORE_LOCKING
+/* With locking tcpip_api_call is just a function call wrapped in lock/unlock,
+ * so we can get away with just casting. */
+void mg_lwip_netif_run_on_tcpip(void (*fn)(void *), void *arg) {
+  tcpip_api_call((tcpip_api_call_fn) fn, (struct tcpip_api_call_data *) arg);
+}
+#else
+static sys_sem_t s_tcpip_call_lock_sem = NULL;
+static sys_sem_t s_tcpip_call_sync_sem = NULL;
+struct mg_lwip_netif_tcpip_call_ctx {
+  void (*fn)(void *);
+  void *arg;
+};
+static void xxx_tcpip(void *arg) {
+  struct mg_lwip_netif_tcpip_call_ctx *ctx =
+      (struct mg_lwip_netif_tcpip_call_ctx *) arg;
+  ctx->fn(ctx->arg);
+  sys_sem_signal(&s_tcpip_call_sync_sem);
+}
+void mg_lwip_netif_run_on_tcpip(void (*fn)(void *), void *arg) {
+  struct mg_lwip_netif_tcpip_call_ctx ctx = {.fn = fn, .arg = arg};
+  sys_arch_sem_wait(&s_tcpip_call_lock_sem, 0);
+  tcpip_send_msg_wait_sem(xxx_tcpip, &ctx, &s_tcpip_call_sync_sem);
+  sys_sem_signal(&s_tcpip_call_lock_sem);
+}
+#endif
+#else
+#define mg_lwip_netif_run_on_tcpip(fn, arg) (fn)(arg)
 #endif
 
 void mg_lwip_if_init(struct mg_iface *iface);
@@ -15451,7 +15478,7 @@ static void mg_lwip_if_connect_tcp_tcpip(void *arg) {
 void mg_lwip_if_connect_tcp(struct mg_connection *nc,
                             const union socket_address *sa) {
   struct mg_lwip_if_connect_tcp_ctx ctx = {.nc = nc, .sa = sa};
-  tcpip_callback(mg_lwip_if_connect_tcp_tcpip, &ctx);
+  mg_lwip_netif_run_on_tcpip(mg_lwip_if_connect_tcp_tcpip, &ctx);
 }
 
 /*
@@ -15544,7 +15571,7 @@ static void mg_lwip_if_connect_udp_tcpip(void *arg) {
 }
 
 void mg_lwip_if_connect_udp(struct mg_connection *nc) {
-  tcpip_callback(mg_lwip_if_connect_udp_tcpip, nc);
+  mg_lwip_netif_run_on_tcpip(mg_lwip_if_connect_udp_tcpip, nc);
 }
 
 static void tcp_close_tcpip(void *arg) {
@@ -15630,7 +15657,7 @@ static void mg_lwip_if_listen_tcp_tcpip(void *arg) {
 
 int mg_lwip_if_listen_tcp(struct mg_connection *nc, union socket_address *sa) {
   struct mg_lwip_if_listen_ctx ctx = {.nc = nc, .sa = sa};
-  tcpip_callback(mg_lwip_if_listen_tcp_tcpip, &ctx);
+  mg_lwip_netif_run_on_tcpip(mg_lwip_if_listen_tcp_tcpip, &ctx);
   return ctx.ret;
 }
 
@@ -15656,7 +15683,7 @@ static void mg_lwip_if_listen_udp_tcpip(void *arg) {
 
 int mg_lwip_if_listen_udp(struct mg_connection *nc, union socket_address *sa) {
   struct mg_lwip_if_listen_ctx ctx = {.nc = nc, .sa = sa};
-  tcpip_callback(mg_lwip_if_listen_udp_tcpip, &ctx);
+  mg_lwip_netif_run_on_tcpip(mg_lwip_if_listen_udp_tcpip, &ctx);
   return ctx.ret;
 }
 
@@ -15681,7 +15708,7 @@ static void mg_lwip_tcp_write_tcpip(void *arg) {
   if (len == 0) {
     DBG(("%p no buf avail %u %u %p %p", tpcb, tpcb->snd_buf, tpcb->snd_queuelen,
          tpcb->unsent, tpcb->unacked));
-    tcpip_callback(tcp_output_tcpip, tpcb);
+    mg_lwip_netif_run_on_tcpip(tcp_output_tcpip, tpcb);
     ctx->ret = 0;
     return;
   }
@@ -15724,7 +15751,7 @@ int mg_lwip_if_tcp_send(struct mg_connection *nc, const void *buf, size_t len) {
   struct tcp_pcb *tpcb = cs->pcb.tcp;
   if (tpcb == NULL) return -1;
   if (tpcb->snd_buf <= 0) return 0;
-  tcpip_callback(mg_lwip_tcp_write_tcpip, &ctx);
+  mg_lwip_netif_run_on_tcpip(mg_lwip_tcp_write_tcpip, &ctx);
   return ctx.ret;
 }
 
@@ -15756,7 +15783,7 @@ static int mg_lwip_if_udp_send(struct mg_connection *nc, const void *data,
   if (p == NULL) return 0;
   memcpy(p->payload, data, len);
   struct udp_sendto_ctx ctx = {.upcb = upcb, .p = p, .ip = &ip, .port = port};
-  tcpip_callback(udp_sendto_tcpip, &ctx);
+  mg_lwip_netif_run_on_tcpip(udp_sendto_tcpip, &ctx);
   cs->err = ctx.ret;
   pbuf_free(p);
   return (cs->err == ERR_OK ? (int) len : -2);
@@ -15817,7 +15844,7 @@ static int mg_lwip_if_tcp_recv(struct mg_connection *nc, void *buf,
   mgos_unlock();
   if (res > 0) {
     struct tcp_recved_ctx ctx = {.tpcb = cs->pcb.tcp, .len = res};
-    tcpip_callback(tcp_recved_tcpip, &ctx);
+    mg_lwip_netif_run_on_tcpip(tcp_recved_tcpip, &ctx);
   }
   return res;
 }
@@ -15844,7 +15871,7 @@ void mg_lwip_if_destroy_conn(struct mg_connection *nc) {
       tcp_arg(tpcb, NULL);
       DBG(("%p tcp_close %p", nc, tpcb));
       tcp_arg(tpcb, NULL);
-      tcpip_callback(tcp_close_tcpip, tpcb);
+      mg_lwip_netif_run_on_tcpip(tcp_close_tcpip, tpcb);
     }
     while (cs->rx_chain != NULL) {
       struct pbuf *seg = cs->rx_chain;
@@ -15858,7 +15885,7 @@ void mg_lwip_if_destroy_conn(struct mg_connection *nc) {
     struct udp_pcb *upcb = cs->pcb.udp;
     if (upcb != NULL) {
       DBG(("%p udp_remove %p", nc, upcb));
-      tcpip_callback(udp_remove_tcpip, upcb);
+      mg_lwip_netif_run_on_tcpip(udp_remove_tcpip, upcb);
     }
     memset(cs, 0, sizeof(*cs));
     MG_FREE(cs);
@@ -16019,6 +16046,10 @@ void mg_lwip_if_init(struct mg_iface *iface) {
   LOG(LL_INFO, ("Mongoose %s, LwIP %u.%u.%u", MG_VERSION, LWIP_VERSION_MAJOR,
                 LWIP_VERSION_MINOR, LWIP_VERSION_REVISION));
   iface->data = MG_CALLOC(1, sizeof(struct mg_ev_mgr_lwip_data));
+#if !NO_SYS && !LWIP_TCPIP_CORE_LOCKING
+  sys_sem_new(&s_tcpip_call_lock_sem, 1);
+  sys_sem_new(&s_tcpip_call_sync_sem, 0);
+#endif
 }
 
 void mg_lwip_if_free(struct mg_iface *iface) {
@@ -16060,7 +16091,7 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
     if (nc->sock != INVALID_SOCKET &&
         !(nc->flags & (MG_F_UDP | MG_F_LISTENING)) && cs->pcb.tcp != NULL &&
         cs->pcb.tcp->unsent != NULL) {
-      tcpip_callback(tcp_output_tcpip, cs->pcb.tcp);
+      mg_lwip_netif_run_on_tcpip(tcp_output_tcpip, cs->pcb.tcp);
     }
     if (nc->ev_timer_time > 0) {
       if (num_timers == 0 || nc->ev_timer_time < min_timer) {
