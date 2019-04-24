@@ -38,17 +38,17 @@ mgos_nsleep100_impl:
       ldr     r3, =mgos_nsleep100_loop_count
       ldr     r3, [r3]
       mul     r0, r3
-#ifdef STM32L4
+#if defined(STM32L4)
       mov     r1, #3
 #else
       mov     r1, #6
 #endif
       udiv    r0, r0, r1
-      cbz     r0, xxx
-lxx:
+      cbz     r0, mgos_nsleep100_impl_out
+mgos_nsleep100_impl_loop:
       subs    r0, #1
-      bne     lxx
-xxx:
+      bne     mgos_nsleep100_impl_loop
+mgos_nsleep100_impl_out:
       bx      lr
 .align 4
 .size mgos_nsleep100_impl, . - mgos_nsleep100_impl
