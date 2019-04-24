@@ -19,6 +19,7 @@ HEADERS = mg_common.h \
           $(COMMON)/platforms/platform_nxp_lpc.h \
           $(COMMON)/platforms/platform_nxp_kinetis.h \
           $(COMMON)/platforms/platform_pic32.h \
+          $(COMMON)/platforms/platform_rs14100.h \
           $(COMMON)/platforms/platform_stm32.h \
           $(COMMON)/platforms/lwip/mg_lwip.h \
           $(COMMON)/cs_md5.h \
