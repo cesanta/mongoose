@@ -103,7 +103,7 @@ void mg_lwip_if_remove_conn(struct mg_connection *nc);
 time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms);
 
 // If compiling for Mongoose OS.
-#ifdef MGOS_HAVE_CORE
+#ifdef MGOS
 extern void mgos_lock();
 extern void mgos_unlock();
 #else
