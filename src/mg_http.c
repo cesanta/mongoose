@@ -177,20 +177,29 @@ struct mg_http_proto_data {
   size_t rcvd; /* How many bytes we have received. */
 };
 
-static void mg_http_conn_destructor(void *proto_data);
+static void mg_http_proto_data_destructor(void *proto_data);
+
 struct mg_connection *mg_connect_http_base(
     struct mg_mgr *mgr, MG_CB(mg_event_handler_t ev_handler, void *user_data),
     struct mg_connect_opts opts, const char *scheme1, const char *scheme2,
     const char *scheme_ssl1, const char *scheme_ssl2, const char *url,
     struct mg_str *path, struct mg_str *user_info, struct mg_str *host);
 
+MG_INTERNAL struct mg_http_proto_data *mg_http_create_proto_data(
+    struct mg_connection *c) {
+  /* If we have proto data from previous connection, flush it. */
+  if (c->proto_data != NULL) {
+    void *pd = c->proto_data;
+    c->proto_data = NULL;
+    mg_http_proto_data_destructor(pd);
+  }
+  c->proto_data = MG_CALLOC(1, sizeof(struct mg_http_proto_data));
+  c->proto_data_destructor = mg_http_proto_data_destructor;
+  return (struct mg_http_proto_data *) c->proto_data;
+}
+
 static struct mg_http_proto_data *mg_http_get_proto_data(
     struct mg_connection *c) {
-  if (c->proto_data == NULL) {
-    c->proto_data = MG_CALLOC(1, sizeof(struct mg_http_proto_data));
-    c->proto_data_destructor = mg_http_conn_destructor;
-  }
-
   return (struct mg_http_proto_data *) c->proto_data;
 }
 
@@ -246,7 +255,7 @@ static void mg_http_free_reverse_proxy_data(struct mg_reverse_proxy_data *rpd) {
   }
 }
 
-static void mg_http_conn_destructor(void *proto_data) {
+static void mg_http_proto_data_destructor(void *proto_data) {
   struct mg_http_proto_data *pd = (struct mg_http_proto_data *) proto_data;
 #if MG_ENABLE_FILESYSTEM
   mg_http_free_proto_data_file(&pd->file);
@@ -519,7 +528,8 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
       /* Rate-limited */
     }
     if (pd->file.sent >= pd->file.cl) {
-      LOG(LL_DEBUG, ("%p done, %d bytes", nc, (int) pd->file.sent));
+      LOG(LL_DEBUG, ("%p done, %d bytes, ka %d", nc, (int) pd->file.sent,
+                     pd->file.keepalive));
       if (!pd->file.keepalive) nc->flags |= MG_F_SEND_AND_CLOSE;
       mg_http_free_proto_data_file(&pd->file);
     }
@@ -655,11 +665,11 @@ struct mg_http_endpoint *mg_http_get_endpoint_handler(struct mg_connection *nc,
   int matched, matched_max = 0;
   struct mg_http_endpoint *ep;
 
-  if (nc == NULL) {
-    return NULL;
-  }
+  if (nc == NULL) return NULL;
 
   pd = mg_http_get_proto_data(nc);
+
+  if (pd == NULL) return NULL;
 
   ep = pd->endpoints;
   while (ep != NULL) {
@@ -732,13 +742,13 @@ void mg_http_handler(struct mg_connection *nc, int ev,
   if (ev == MG_EV_CLOSE) {
 #if MG_ENABLE_HTTP_CGI
     /* Close associated CGI forwarder connection */
-    if (pd->cgi.cgi_nc != NULL) {
+    if (pd != NULL && pd->cgi.cgi_nc != NULL) {
       pd->cgi.cgi_nc->user_data = NULL;
       pd->cgi.cgi_nc->flags |= MG_F_CLOSE_IMMEDIATELY;
     }
 #endif
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
-    if (pd->mp_stream.boundary != NULL) {
+    if (pd != NULL && pd->mp_stream.boundary != NULL) {
       /*
        * Multipart message is in progress, but connection is closed.
        * Finish part and request with an error flag.
@@ -768,14 +778,14 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       deliver_chunk(nc, hm, req_len);
       mg_http_call_endpoint_handler(nc, ev2, hm);
     }
-    pd->rcvd = 0;
-    if (pd->endpoint_handler != NULL && pd->endpoint_handler != nc->handler) {
+    if (pd != NULL && pd->endpoint_handler != NULL &&
+        pd->endpoint_handler != nc->handler) {
       mg_call(nc, pd->endpoint_handler, nc->user_data, ev, NULL);
     }
   }
 
 #if MG_ENABLE_FILESYSTEM
-  if (pd->file.fp != NULL) {
+  if (pd != NULL && pd->file.fp != NULL) {
     mg_http_transfer_file_data(nc);
   }
 #endif
@@ -783,7 +793,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
   mg_call(nc, nc->handler, nc->user_data, ev, ev_data);
 
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
-  if (pd->mp_stream.boundary != NULL &&
+  if (pd != NULL && pd->mp_stream.boundary != NULL &&
       (ev == MG_EV_RECV || ev == MG_EV_POLL)) {
     if (ev == MG_EV_RECV) {
       pd->rcvd += *(int *) ev_data;
@@ -798,10 +808,15 @@ void mg_http_handler(struct mg_connection *nc, int ev,
 
   if (ev == MG_EV_RECV) {
     struct mg_str *s;
-    pd->rcvd += *(int *) ev_data;
 
   again:
     req_len = mg_parse_http(io->buf, io->len, hm, is_req);
+
+    if (req_len > 0) {
+      /* New request - new proto data */
+      pd = mg_http_create_proto_data(nc);
+      pd->rcvd = io->len;
+    }
 
     if (req_len > 0 &&
         (s = mg_get_http_header(hm, "Transfer-Encoding")) != NULL &&
@@ -914,18 +929,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       /* If this is a CGI request, we are not done either. */
       if (pd->cgi.cgi_nc != NULL) request_done = 0;
 #endif
-      if (request_done) {
-        /* This request is done but we may receive another on this connection.
-         */
-        mg_http_conn_destructor(pd);
-        nc->proto_data = NULL;
-        if (io->len > 0) {
-          /* We already have data for the next one, restart parsing. */
-          pd = mg_http_get_proto_data(nc);
-          pd->rcvd = io->len;
-          goto again;
-        }
-      }
+      if (request_done && io->len > 0) goto again;
     }
   }
 }
@@ -3065,6 +3069,7 @@ void mg_register_http_endpoint_opt(struct mg_connection *nc,
   if (new_ep == NULL) return;
 
   pd = mg_http_get_proto_data(nc);
+  if (pd == NULL) pd = mg_http_create_proto_data(nc);
   new_ep->uri_pattern = mg_strdup(mg_mk_str(uri_path));
   if (opts.auth_domain != NULL && opts.auth_file != NULL) {
     new_ep->auth_domain = strdup(opts.auth_domain);

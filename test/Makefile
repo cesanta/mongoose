@@ -11,7 +11,7 @@ COMMON_DIR_DEV = ../../common
 
 # Our dev repo and public mongoose repo have different layouts, so here
 # we make it work on both
-ifneq ("$(wildcard ../../fw)","")
+ifneq ("$(wildcard ../../common.mk)","")
 COMMON_PARENT = ../..
 else
 COMMON_PARENT = $(SRC_DIR)

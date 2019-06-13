@@ -341,8 +341,8 @@ static int mg_resolve2(const char *host, struct in_addr *ina) {
     return 0;
   }
   for (p = servinfo; p != NULL; p = p->ai_next) {
-    memcpy(&h, &p->ai_addr, sizeof(struct sockaddr_in *));
-    memcpy(ina, &h->sin_addr, sizeof(ina));
+    memcpy(&h, &p->ai_addr, sizeof(h));
+    memcpy(ina, &h->sin_addr, sizeof(*ina));
   }
   freeaddrinfo(servinfo);
   return 1;
@@ -877,6 +877,16 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *address,
   return mg_connect_opt(mgr, address, MG_CB(callback, user_data), opts);
 }
 
+void mg_ev_handler_empty(struct mg_connection *c, int ev,
+                         void *ev_data MG_UD_ARG(void *user_data)) {
+  (void) c;
+  (void) ev;
+  (void) ev_data;
+#if MG_ENABLE_CALLBACK_USERDATA
+  (void) user_data;
+#endif
+}
+
 struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
                                      MG_CB(mg_event_handler_t callback,
                                            void *user_data),
@@ -887,6 +897,8 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
   char host[MG_MAX_HOST_LEN];
 
   MG_COPY_COMMON_CONNECTION_OPTIONS(&add_sock_opts, &opts);
+
+  if (callback == NULL) callback = mg_ev_handler_empty;
 
   if ((nc = mg_create_connection(mgr, callback, add_sock_opts)) == NULL) {
     return NULL;
@@ -1001,10 +1013,7 @@ struct mg_connection *mg_bind_opt(struct mg_mgr *mgr, const char *address,
   opts.user_data = user_data;
 #endif
 
-  if (callback == NULL) {
-    MG_SET_PTRPTR(opts.error_string, "handler is required");
-    return NULL;
-  }
+  if (callback == NULL) callback = mg_ev_handler_empty;
 
   MG_COPY_COMMON_CONNECTION_OPTIONS(&add_sock_opts, &opts);
 
