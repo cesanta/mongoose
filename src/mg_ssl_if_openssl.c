@@ -310,7 +310,7 @@ static enum mg_ssl_if_result mg_set_cipher_list(SSL_CTX *ctx, const char *cl) {
               : MG_SSL_ERROR);
 }
 
-#ifndef KR_VERSION
+#if !defined(KR_VERSION) && !defined(LIBRESSL_VERSION_NUMBER)
 static unsigned int mg_ssl_if_ossl_psk_cb(SSL *ssl, const char *hint,
                                           char *identity,
                                           unsigned int max_identity_len,
@@ -376,10 +376,10 @@ static enum mg_ssl_if_result mg_ssl_if_ossl_set_psk(struct mg_ssl_if_ctx *ctx,
   (void) ctx;
   (void) identity;
   (void) key_str;
-  /* Krypton does not support PSK. */
+  /* Krypton / LibreSSL does not support PSK. */
   return MG_SSL_ERROR;
 }
-#endif /* defined(KR_VERSION) */
+#endif /* !defined(KR_VERSION) && !defined(LIBRESSL_VERSION_NUMBER) */
 
 const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
                        const char *ca_cert) {
