@@ -10841,7 +10841,7 @@ static const char *scanto(const char *p, struct mg_str *s) {
 MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   uint8_t header;
   size_t len = 0, len_len = 0;
-  const char *p, *end;
+  const char *p, *end, *eop = &io->buf[io->len];
   unsigned char lc = 0;
   int cmd;
 
@@ -10852,7 +10852,7 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   /* decode mqtt variable length */
   len = len_len = 0;
   p = io->buf + 1;
-  while ((size_t)(p - io->buf) < io->len) {
+  while (p < eop) {
     lc = *((const unsigned char *) p++);
     len += (lc & 0x7f) << 7 * len_len;
     len_len++;
@@ -10861,9 +10861,7 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   }
 
   end = p + len;
-  if (lc & 0x80 || len > (io->len - (p - io->buf))) {
-    return MG_MQTT_ERROR_INCOMPLETE_MSG;
-  }
+  if (lc & 0x80 || end > eop) return MG_MQTT_ERROR_INCOMPLETE_MSG;
 
   mm->cmd = cmd;
   mm->qos = MG_MQTT_GET_QOS(header);
@@ -10917,7 +10915,9 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
     case MG_MQTT_CMD_PUBREL:
     case MG_MQTT_CMD_PUBCOMP:
     case MG_MQTT_CMD_SUBACK:
+      if (end - p < 2) return MG_MQTT_ERROR_MALFORMED_MSG;
       mm->message_id = getu16(p);
+      p += 2;
       break;
     case MG_MQTT_CMD_PUBLISH: {
       p = scanto(p, &mm->topic);
