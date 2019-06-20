@@ -535,8 +535,6 @@ void cs_log_set_file(FILE *file);
  */
 void cs_log_printf(const char *fmt, ...) PRINTF_LIKE(1, 2);
 
-#if CS_ENABLE_STDIO
-
 /*
  * Format and print message `x` with the given level `l`. Example:
  *
@@ -552,11 +550,11 @@ void cs_log_printf(const char *fmt, ...) PRINTF_LIKE(1, 2);
     }                                                 \
   } while (0)
 
-#else
+#else /* CS_ENABLE_STDIO */
 
 #define LOG(l, x) ((void) l)
 
-#endif
+#endif /* CS_ENABLE_STDIO */
 
 #ifndef CS_NDEBUG
 
@@ -565,18 +563,11 @@ void cs_log_printf(const char *fmt, ...) PRINTF_LIKE(1, 2);
  */
 #define DBG(x) LOG(LL_VERBOSE_DEBUG, x)
 
-#else /* NDEBUG */
+#else /* CS_NDEBUG */
 
 #define DBG(x)
 
-#endif
-
-#else /* CS_ENABLE_STDIO */
-
-#define LOG(l, x)
-#define DBG(x)
-
-#endif
+#endif /* CS_NDEBUG */
 
 #ifdef __cplusplus
 }
