@@ -5,7 +5,7 @@ However, when developing Mongoose itself, it can be quite difficult to work with
 Internally, these files are an _amalgamation_ of source an header modules.
 This directory contains utilities to split and re-constitute amalgamated files.
 
-Here's how `mongoose.c` can be split into its consituent parts:
+Here's how `mongoose.c` can be split into its constituent parts:
 ```
 $ tools/unamalgam.py mongoose.c
 => mongoose/src/internal.h
@@ -13,7 +13,7 @@ $ tools/unamalgam.py mongoose.c
 ...
 ```
 
-This produces directories and files under `mongoose/` and `common/` that are easeier to work with.
+This produces directories and files under `mongoose/` and `common/` that are easier to work with.
 It also produces `mongoose.c.manifest` which can later be used to reconstruct the file back:
 ```
 $ tools/amalgam.py --prefix=MG --public-header=mongoose.h $(cat mongoose.c.manifest) > mongoose.c
