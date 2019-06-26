@@ -6590,6 +6590,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       struct mg_http_multipart_part mp;
       memset(&mp, 0, sizeof(mp));
       mp.status = -1;
+      mp.user_data = pd->mp_stream.user_data;
       mp.var_name = pd->mp_stream.var_name;
       mp.file_name = pd->mp_stream.file_name;
       mg_call(nc, (pd->endpoint_handler ? pd->endpoint_handler : nc->handler),
