@@ -20,3 +20,11 @@ $ tools/amalgam.py --prefix=MG --public-header=mongoose.h $(cat mongoose.c.manif
 ```
 
 The same applies to `mongoose.h`, except `--public-header` should be omitted during amalgamation.
+
+## Version
+This produce the mongoose version from the mongoose header file.
+```
+$ tools/version.py
+=> 6.15
+...
+```
