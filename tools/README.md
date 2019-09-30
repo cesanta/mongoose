@@ -2,7 +2,7 @@
 
 Mongoose is distributed as two files, `mongoose.c` and `mongoose.h` for ease of integration.
 However, when developing Mongoose itself, it can be quite difficult to work with them.
-Internally, these files are an _amalgamation_ of source an header modules.
+Internally, these files are an _amalgamation_ of source and header modules.
 This directory contains utilities to split and re-constitute amalgamated files.
 
 Here's how `mongoose.c` can be split into its consituent parts:
