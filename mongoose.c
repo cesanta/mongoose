@@ -6289,7 +6289,7 @@ int mg_parse_http(const char *s, int n, struct http_message *hm, int is_req) {
     }
   } else {
     s = mg_skip(s, end, " ", &hm->proto);
-    if (end - s < 4 || s[3] != ' ') return -1;
+    if (end - s < 4 || s[0] < '0' || s[0] > '9' || s[3] != ' ') return -1;
     hm->resp_code = atoi(s);
     if (hm->resp_code < 100 || hm->resp_code >= 600) return -1;
     s += 4;
@@ -6590,6 +6590,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
       struct mg_http_multipart_part mp;
       memset(&mp, 0, sizeof(mp));
       mp.status = -1;
+      mp.user_data = pd->mp_stream.user_data;
       mp.var_name = pd->mp_stream.var_name;
       mp.file_name = pd->mp_stream.file_name;
       mg_call(nc, (pd->endpoint_handler ? pd->endpoint_handler : nc->handler),

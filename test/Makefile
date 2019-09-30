@@ -17,7 +17,7 @@ else
 COMMON_PARENT = $(SRC_DIR)
 endif
 
-TEST_SOURCES = unit_test.c test_util.c test_main.c
+TEST_SOURCES = unit_test.c test_util.c test_main.c fuzz.c
 AMALGAMATED_SOURCES = ../mongoose.c
 KRYPTON_PATH = $(REPO_ROOT)/krypton
 
@@ -117,6 +117,10 @@ clean: clean_index_cgi
 clean_index_cgi:
 	@echo -e "CLEAN\tindex.cgi"
 	@rm -f data/cgi/index.cgi*
+
+fuzz:
+	$(CC) fuzz.c ../mongoose.c -o /tmp/$@ -fsanitize=fuzzer,address -g -I..
+	/tmp/$@
 
 # Interactive:
 #   docker run -v $(CURDIR)/../..:/cesanta -t -i --entrypoint=/bin/bash cesanta/mongoose_test
