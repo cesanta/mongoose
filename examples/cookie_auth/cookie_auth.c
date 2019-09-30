@@ -58,11 +58,11 @@ static int check_pass(const char *user, const char *pass) {
  * or NULL if not found.
  */
 static struct session *get_session(struct http_message *hm) {
-  struct mg_str *cookie_header = mg_get_http_header(hm, "cookie");
-  if (cookie_header == NULL) goto clean;
   char ssid_buf[21];
   char *ssid = ssid_buf;
   struct session *ret = NULL;
+  struct mg_str *cookie_header = mg_get_http_header(hm, "cookie");
+  if (cookie_header == NULL) goto clean;
   if (!mg_http_parse_header2(cookie_header, SESSION_COOKIE_NAME, &ssid,
                              sizeof(ssid_buf))) {
     goto clean;
