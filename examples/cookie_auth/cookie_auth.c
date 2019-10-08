@@ -135,6 +135,9 @@ static struct session *create_session(const char *user,
  * If requested via POST (form submission), checks password and logs user in.
  */
 static void login_handler(struct mg_connection *nc, int ev, void *p) {
+  if(ev != MG_EV_HTTP_REQUEST){
+    return;
+  }
   struct http_message *hm = (struct http_message *) p;
   if (mg_vcmp(&hm->method, "POST") != 0) {
     /* Serve login.html */
@@ -169,6 +172,9 @@ static void login_handler(struct mg_connection *nc, int ev, void *p) {
  * Removes cookie and any associated session state.
  */
 static void logout_handler(struct mg_connection *nc, int ev, void *p) {
+  if(ev != MG_EV_HTTP_REQUEST){
+    return;
+  }
   struct http_message *hm = (struct http_message *) p;
   char shead[100];
   snprintf(shead, sizeof(shead), "Set-Cookie: %s=", SESSION_COOKIE_NAME);
