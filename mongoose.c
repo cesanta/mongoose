@@ -6034,6 +6034,9 @@ MG_INTERNAL struct mg_http_proto_data *mg_http_create_proto_data(
 
 static struct mg_http_proto_data *mg_http_get_proto_data(
     struct mg_connection *c) {
+  if (c->proto_data == NULL) {
+    return mg_http_create_proto_data(c);
+  }
   return (struct mg_http_proto_data *) c->proto_data;
 }
 
