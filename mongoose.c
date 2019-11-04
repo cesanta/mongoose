@@ -8525,7 +8525,8 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
     mg_http_send_error(nc, 501, NULL);
 #endif
   } else if (mg_is_not_modified(hm, &st)) {
-    mg_http_send_error(nc, 304, "Not Modified");
+    /* Note: not using mg_http_send_error in order to keep connection alive */
+    mg_send_head(nc, 304, 0, NULL);
   } else {
     mg_http_serve_file2(nc, index_file ? index_file : path, hm, opts);
   }
