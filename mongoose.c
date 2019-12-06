@@ -4679,7 +4679,7 @@ struct mg_ssl_if_ctx {
   size_t identity_len;
 };
 
-void mg_ssl_if_init() {
+void mg_ssl_if_init(void) {
   SSL_library_init();
 }
 
@@ -5110,7 +5110,7 @@ struct mg_ssl_if_ctx {
 /* Must be provided by the platform. ctx is struct mg_connection. */
 extern int mg_ssl_if_mbed_random(void *ctx, unsigned char *buf, size_t len);
 
-void mg_ssl_if_init() {
+void mg_ssl_if_init(void) {
   LOG(LL_INFO, ("%s", MBEDTLS_VERSION_STRING_FULL));
 }
 
