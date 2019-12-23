@@ -10841,7 +10841,7 @@ static const char *scanto(const char *p, struct mg_str *s) {
 
 MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   uint8_t header;
-  size_t len = 0, len_len = 0;
+  unsigned int len = 0, len_len = 0;
   const char *p, *end, *eop = &io->buf[io->len];
   unsigned char lc = 0;
   int cmd;
