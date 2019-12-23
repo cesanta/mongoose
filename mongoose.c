@@ -10843,7 +10843,7 @@ static const char *scanto(const char *p, struct mg_str *s) {
 
 MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
   uint8_t header;
-  size_t len = 0, len_len = 0;
+  uint32_t len, len_len; /* must be 32-bit, see #1055 */
   const char *p, *end, *eop = &io->buf[io->len];
   unsigned char lc = 0;
   int cmd;
@@ -10860,7 +10860,7 @@ MG_INTERNAL int parse_mqtt(struct mbuf *io, struct mg_mqtt_message *mm) {
     len += (lc & 0x7f) << 7 * len_len;
     len_len++;
     if (!(lc & 0x80)) break;
-    if (len_len > 4) return MG_MQTT_ERROR_MALFORMED_MSG;
+    if (len_len > sizeof(len)) return MG_MQTT_ERROR_MALFORMED_MSG;
   }
 
   end = p + len;
