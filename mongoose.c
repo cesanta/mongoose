@@ -1764,8 +1764,10 @@ int mg_strcmp(const struct mg_str str1, const struct mg_str str2) WEAK;
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
   size_t i = 0;
   while (i < str1.len && i < str2.len) {
-    if (str1.p[i] < str2.p[i]) return -1;
-    if (str1.p[i] > str2.p[i]) return 1;
+    int c1 = str1.p[i];
+    int c2 = str2.p[i];
+    if (c1 < c2) return -1;
+    if (c1 > c2) return 1;
     i++;
   }
   if (i < str1.len) return 1;
@@ -1785,6 +1787,21 @@ int mg_strncmp(const struct mg_str str1, const struct mg_str str2, size_t n) {
     s2.len = n;
   }
   return mg_strcmp(s1, s2);
+}
+
+int mg_strcasecmp(const struct mg_str str1, const struct mg_str str2) WEAK;
+int mg_strcasecmp(const struct mg_str str1, const struct mg_str str2) {
+  size_t i = 0;
+  while (i < str1.len && i < str2.len) {
+    int c1 = tolower((int) str1.p[i]);
+    int c2 = tolower((int) str2.p[i]);
+    if (c1 < c2) return -1;
+    if (c1 > c2) return 1;
+    i++;
+  }
+  if (i < str1.len) return 1;
+  if (i < str2.len) return -1;
+  return 0;
 }
 
 void mg_strfree(struct mg_str *s) WEAK;
