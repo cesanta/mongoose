@@ -4590,6 +4590,15 @@ static const char *test_dns_encode(void) {
   return NULL;
 }
 
+static const char *test_dns_encode_name(void) {
+  struct mbuf mb;
+  mbuf_init(&mb, 0);
+  ASSERT_EQ(mg_dns_encode_name(&mb, "www.cesanta.com.net.org", 15), 17);
+  ASSERT_STREQ_NZ(mb.buf, "\x03" "www" "\x07" "cesanta" "\x03" "com");
+  mbuf_free(&mb);
+  return NULL;
+}
+
 static const char *test_dns_uncompress(void) {
   /*
    * Order or string constants is important. Names being uncompressed
@@ -5781,6 +5790,7 @@ const char *tests_run(const char *filter) {
   RUN_TEST(test_mqtt_broker);
 #endif
   RUN_TEST(test_dns_encode);
+  RUN_TEST(test_dns_encode_name);
   RUN_TEST(test_dns_uncompress);
   RUN_TEST(test_dns_decode);
   RUN_TEST(test_dns_decode_truncated);

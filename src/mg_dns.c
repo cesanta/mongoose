@@ -85,33 +85,37 @@ int mg_dns_copy_questions(struct mbuf *io, struct mg_dns_message *msg) {
   return mbuf_append(io, begin, end - begin);
 }
 
-int mg_dns_encode_name(struct mbuf *io, const char *name, size_t len) {
+int mg_dns_encode_name_s(struct mbuf *io, struct mg_str name) {
   const char *s;
   unsigned char n;
   size_t pos = io->len;
 
   do {
-    if ((s = strchr(name, '.')) == NULL) {
-      s = name + len;
+    if ((s = mg_strchr(name, '.')) == NULL) {
+      s = name.p + name.len;
     }
 
-    if (s - name > 127) {
+    if (s - name.p > 127) {
       return -1; /* TODO(mkm) cover */
     }
-    n = s - name;           /* chunk length */
+    n = s - name.p;         /* chunk length */
     mbuf_append(io, &n, 1); /* send length */
-    mbuf_append(io, name, n);
+    mbuf_append(io, name.p, n);
 
-    if (*s == '.') {
+    if (n < name.len && *s == '.') {
       n++;
     }
 
-    name += n;
-    len -= n;
-  } while (*s != '\0');
+    name.p += n;
+    name.len -= n;
+  } while (name.len > 0);
   mbuf_append(io, "\0", 1); /* Mark end of host name */
 
   return io->len - pos;
+}
+
+int mg_dns_encode_name(struct mbuf *io, const char *name, size_t len) {
+  return mg_dns_encode_name_s(io, mg_mk_str_n(name, len));
 }
 
 int mg_dns_encode_record(struct mbuf *io, struct mg_dns_resource_record *rr,

@@ -124,6 +124,7 @@ int mg_dns_encode_record(struct mbuf *io, struct mg_dns_resource_record *rr,
  * Encodes a DNS name.
  */
 int mg_dns_encode_name(struct mbuf *io, const char *name, size_t len);
+int mg_dns_encode_name_s(struct mbuf *io, struct mg_str name);
 
 /* Low-level: parses a DNS response. */
 int mg_parse_dns(const char *buf, int len, struct mg_dns_message *msg);
