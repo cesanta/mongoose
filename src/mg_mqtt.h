@@ -101,10 +101,10 @@ struct mg_mqtt_proto_data {
 
 /* Message flags */
 #define MG_MQTT_RETAIN 0x1
-#define MG_MQTT_DUP 0x4
 #define MG_MQTT_QOS(qos) ((qos) << 1)
 #define MG_MQTT_GET_QOS(flags) (((flags) &0x6) >> 1)
 #define MG_MQTT_SET_QOS(flags, qos) (flags) = ((flags) & ~0x6) | ((qos) << 1)
+#define MG_MQTT_DUP 0x8
 
 /* Connection flags */
 #define MG_MQTT_CLEAN_SESSION 0x02

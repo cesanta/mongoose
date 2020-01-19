@@ -1,11 +1,26 @@
+/*
+ * Copyright (c) 2004-2013 Sergey Lyubka
+ * Copyright (c) 2013-2020 Cesanta Software Limited
+ * All rights reserved
+ *
+ * This software is dual-licensed: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation. For the terms of this
+ * license, see <http://www.gnu.org/licenses/>.
+ *
+ * You are free to use this software under the terms of the GNU General
+ * Public License, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * Alternatively, you can license this software under a commercial
+ * license, as set out in <https://www.cesanta.com/license>.
+ */
+
 #include "mongoose.h"
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_internal.h"
 #endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 #ifndef CS_MONGOOSE_SRC_INTERNAL_H_
 #define CS_MONGOOSE_SRC_INTERNAL_H_
@@ -167,22 +182,6 @@ MG_INTERNAL int mg_sntp_parse_reply(const char *buf, int len,
 #ifdef MG_MODULE_LINES
 #line 1 "common/mg_mem.h"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef CS_COMMON_MG_MEM_H_
 #define CS_COMMON_MG_MEM_H_
@@ -215,22 +214,6 @@ extern "C" {
 #ifdef MG_MODULE_LINES
 #line 1 "common/cs_base64.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef EXCLUDE_COMMON
 
@@ -435,22 +418,6 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/cs_dbg.h"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef CS_COMMON_CS_DBG_H_
 #define CS_COMMON_CS_DBG_H_
@@ -586,22 +553,6 @@ void cs_log_printf(const char *fmt, ...) PRINTF_LIKE(1, 2);
 #ifdef MG_MODULE_LINES
 #line 1 "common/cs_dbg.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 /* Amalgamated: #include "common/cs_dbg.h" */
 
@@ -732,22 +683,6 @@ void cs_log_set_level(enum cs_log_level level) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/cs_dirent.h"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef CS_COMMON_CS_DIRENT_H_
 #define CS_COMMON_CS_DIRENT_H_
@@ -786,22 +721,6 @@ struct dirent *readdir(DIR *dir);
 #ifdef MG_MODULE_LINES
 #line 1 "common/cs_dirent.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef EXCLUDE_COMMON
 
@@ -897,22 +816,6 @@ typedef int cs_dirent_dummy;
 #ifdef MG_MODULE_LINES
 #line 1 "common/cs_time.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 /* Amalgamated: #include "common/cs_time.h" */
 
@@ -995,22 +898,6 @@ double cs_timegm(const struct tm *tm) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/cs_endian.h"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef CS_COMMON_CS_ENDIAN_H_
 #define CS_COMMON_CS_ENDIAN_H_
@@ -1512,22 +1399,6 @@ void cs_hmac_sha1(const unsigned char *key, size_t keylen,
 #ifdef MG_MODULE_LINES
 #line 1 "common/mbuf.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef EXCLUDE_COMMON
 
@@ -1666,22 +1537,6 @@ void mbuf_move(struct mbuf *from, struct mbuf *to) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/mg_str.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 /* Amalgamated: #include "common/mg_mem.h" */
 /* Amalgamated: #include "common/mg_str.h" */
@@ -1847,22 +1702,6 @@ int mg_str_starts_with(struct mg_str s, struct mg_str prefix) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/str_util.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef EXCLUDE_COMMON
 
@@ -2382,23 +2221,6 @@ size_t mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_net.c"
 #endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- *
- * This software is dual-licensed: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation. For the terms of this
- * license, see <http://www.gnu.org/licenses/>.
- *
- * You are free to use this software under the terms of the GNU General
- * Public License, but WITHOUT ANY WARRANTY; without even the implied
- * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU General Public License for more details.
- *
- * Alternatively, you can license this software under a commercial
- * license, as set out in <https://www.cesanta.com/license>.
- */
 
 /* Amalgamated: #include "common/cs_time.h" */
 /* Amalgamated: #include "mg_dns.h" */
@@ -3595,10 +3417,6 @@ double mg_time(void) {
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_net_if_socket.h"
 #endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
 
 #ifndef CS_MONGOOSE_SRC_NET_IF_SOCKET_H_
 #define CS_MONGOOSE_SRC_NET_IF_SOCKET_H_
@@ -3623,10 +3441,6 @@ extern const struct mg_iface_vtable mg_socket_iface_vtable;
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_net_if_socks.h"
 #endif
-/*
-* Copyright (c) 2014-2017 Cesanta Software Limited
-* All rights reserved
-*/
 
 #ifndef CS_MONGOOSE_SRC_NET_IF_SOCKS_H_
 #define CS_MONGOOSE_SRC_NET_IF_SOCKS_H_
@@ -3704,23 +3518,6 @@ double mg_mgr_min_timer(const struct mg_mgr *mgr) {
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_net_if_null.c"
 #endif
-/*
- * Copyright (c) 2018 Cesanta Software Limited
- * All rights reserved
- *
- * This software is dual-licensed: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation. For the terms of this
- * license, see <http://www.gnu.org/licenses/>.
- *
- * You are free to use this software under the terms of the GNU General
- * Public License, but WITHOUT ANY WARRANTY; without even the implied
- * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU General Public License for more details.
- *
- * Alternatively, you can license this software under a commercial
- * license, as set out in <https://www.cesanta.com/license>.
- */
 
 static void mg_null_if_connect_tcp(struct mg_connection *c,
                                    const union socket_address *sa) {
@@ -3848,10 +3645,6 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_NULL_IFACE_VTABLE;
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_net_if_socket.c"
 #endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_NET_IF_SOCKET
 
@@ -4433,10 +4226,6 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_SOCKET_IFACE_VTABLE;
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_net_if_socks.c"
 #endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_SOCKS
 
@@ -4673,10 +4462,6 @@ struct mg_iface *mg_socks_mk_iface(struct mg_mgr *mgr, const char *proxy_addr) {
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_ssl_if_openssl.c"
 #endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_OPENSSL
 
@@ -5073,10 +4858,6 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_ssl_if_mbedtls.c"
 #endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_MBEDTLS
 
@@ -5585,10 +5366,6 @@ int mg_ssl_if_mbed_random(void *ctx, unsigned char *buf, size_t len) {
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_uri.c"
 #endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 /* Amalgamated: #include "mg_internal.h" */
 /* Amalgamated: #include "mg_uri.h" */
@@ -5849,10 +5626,6 @@ out:
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_http.c"
 #endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_HTTP
 
@@ -8982,10 +8755,6 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_http_cgi.c"
 #endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
 
 #ifndef _WIN32
 #include <signal.h>
@@ -9498,10 +9267,6 @@ MG_INTERNAL void mg_http_free_proto_data_cgi(struct mg_http_proto_data_cgi *d) {
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_http_ssi.c"
 #endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_HTTP && MG_ENABLE_HTTP_SSI && MG_ENABLE_FILESYSTEM
 
@@ -9694,10 +9459,6 @@ MG_INTERNAL void mg_handle_ssi_request(struct mg_connection *nc,
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_http_webdav.c"
 #endif
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBDAV
 
@@ -9966,10 +9727,6 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_http_websocket.c"
 #endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBSOCKET
 
@@ -10488,10 +10245,6 @@ struct mg_connection *mg_connect_ws(
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_util.c"
 #endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 /* Amalgamated: #include "common/cs_base64.h" */
 /* Amalgamated: #include "mg_internal.h" */
@@ -10835,10 +10588,6 @@ struct mg_str mg_url_encode(const struct mg_str src) {
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_mqtt.c"
 #endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_MQTT
 
@@ -11349,10 +11098,6 @@ void mg_mqtt_disconnect(struct mg_connection *nc) {
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_mqtt_server.c"
 #endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 /* Amalgamated: #include "mg_internal.h" */
 /* Amalgamated: #include "mg_mqtt_server.h" */
@@ -11546,10 +11291,6 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_dns.c"
 #endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_DNS
 
@@ -11930,10 +11671,6 @@ void mg_set_protocol_dns(struct mg_connection *nc) {
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_dns_server.c"
 #endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_DNS_SERVER
 
@@ -12004,10 +11741,6 @@ int mg_dns_reply_record(struct mg_dns_reply *reply,
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_resolv.c"
 #endif
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_ASYNC_RESOLVER
 
@@ -12299,22 +12032,6 @@ void mg_set_nameserver(struct mg_mgr *mgr, const char *nameserver) {
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_coap.c"
 #endif
-/*
- * Copyright (c) 2015 Cesanta Software Limited
- * All rights reserved
- * This software is dual-licensed: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation. For the terms of this
- * license, see <http://www.gnu.org/licenses/>.
- *
- * You are free to use this software under the terms of the GNU General
- * Public License, but WITHOUT ANY WARRANTY; without even the implied
- * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU General Public License for more details.
- *
- * Alternatively, you can license this software under a commercial
- * license, as set out in <https://www.cesanta.com/license>.
- */
 
 /* Amalgamated: #include "mg_internal.h" */
 /* Amalgamated: #include "mg_coap.h" */
@@ -12899,10 +12616,6 @@ int mg_set_protocol_coap(struct mg_connection *nc) {
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_sntp.c"
 #endif
-/*
- * Copyright (c) 2016 Cesanta Software Limited
- * All rights reserved
- */
 
 /* Amalgamated: #include "mg_internal.h" */
 /* Amalgamated: #include "mg_sntp.h" */
@@ -13190,10 +12903,6 @@ struct mg_connection *mg_sntp_get_time(struct mg_mgr *mgr,
 #ifdef MG_MODULE_LINES
 #line 1 "mongoose/src/mg_socks.c"
 #endif
-/*
- * Copyright (c) 2017 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_SOCKS
 
@@ -13352,22 +13061,6 @@ void mg_set_protocol_socks(struct mg_connection *c) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/cc3200/cc3200_libc.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #if CS_PLATFORM == CS_P_CC3200
 
@@ -13470,22 +13163,6 @@ int _isatty(int fd) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/msp432/msp432_libc.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #if CS_PLATFORM == CS_P_MSP432
 
@@ -13503,22 +13180,6 @@ int gettimeofday(struct timeval *tp, void *tzp) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/nrf5/nrf5_libc.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #if (CS_PLATFORM == CS_P_NRF51 || CS_PLATFORM == CS_P_NRF52) && \
     defined(__ARMCC_VERSION)
@@ -13532,22 +13193,6 @@ int gettimeofday(struct timeval *tp, void *tzp) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_fs_slfs.h"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef CS_COMMON_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_
 #define CS_COMMON_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_
@@ -13583,22 +13228,6 @@ void fs_slfs_unset_file_flags(const char *name);
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_fs_slfs.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 /* Standard libc interface to TI SimpleLink FS. */
 
@@ -13888,22 +13517,6 @@ void fs_slfs_unset_file_flags(const char *name) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_fs.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #if MG_NET_IF == MG_NET_IF_SIMPLELINK && \
     (defined(MG_FS_SLFS) || defined(MG_FS_SPIFFS))
@@ -14314,22 +13927,6 @@ int sl_fs_init(void) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_socket.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #if MG_NET_IF == MG_NET_IF_SIMPLELINK
 
@@ -14432,22 +14029,6 @@ void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_net_if.h"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef CS_COMMON_PLATFORMS_SIMPLELINK_SL_NET_IF_H_
 #define CS_COMMON_PLATFORMS_SIMPLELINK_SL_NET_IF_H_
@@ -14472,22 +14053,6 @@ extern const struct mg_iface_vtable mg_simplelink_iface_vtable;
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_net_if.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 /* Amalgamated: #include "common/platforms/simplelink/sl_net_if.h" */
 
@@ -14907,22 +14472,6 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_SL_IFACE_VTABLE;
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/simplelink/sl_ssl_if.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #if MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_SIMPLELINK
 
@@ -15161,22 +14710,6 @@ int sl_set_ssl_opts(int sock, struct mg_connection *nc) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip_net_if.h"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef CS_COMMON_PLATFORMS_LWIP_MG_NET_IF_LWIP_H_
 #define CS_COMMON_PLATFORMS_LWIP_MG_NET_IF_LWIP_H_
@@ -15229,22 +14762,6 @@ void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip_net_if.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #if MG_ENABLE_NET_IF_LWIP_LOW_LEVEL
 
@@ -15978,22 +15495,6 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_LWIP_IFACE_VTABLE;
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/lwip/mg_lwip_ev_mgr.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
 
@@ -16154,22 +15655,6 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/wince/wince_libc.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifdef WINCE
 
@@ -16243,22 +15728,6 @@ static void mg_gmt_time_string(char *buf, size_t buf_len, time_t *t) {
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/pic32/pic32_net_if.h"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifndef CS_COMMON_PLATFORMS_PIC32_NET_IF_H_
 #define CS_COMMON_PLATFORMS_PIC32_NET_IF_H_
@@ -16283,22 +15752,6 @@ extern const struct mg_iface_vtable mg_pic32_iface_vtable;
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/pic32/pic32_net_if.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #if MG_ENABLE_NET_IF_PIC32
 
@@ -16590,22 +16043,6 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_PIC32_IFACE_VTABLE;
 #ifdef MG_MODULE_LINES
 #line 1 "common/platforms/windows/windows_direct.c"
 #endif
-/*
- * Copyright (c) 2014-2018 Cesanta Software Limited
- * All rights reserved
- *
- * Licensed under the Apache License, Version 2.0 (the ""License"");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an ""AS IS"" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #ifdef _WIN32
 

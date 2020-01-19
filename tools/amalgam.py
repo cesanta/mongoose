@@ -59,6 +59,7 @@ parser.add_argument('--exportable-headers', dest="export", action='store_true',
                     help='allow exporting internal headers')
 parser.add_argument('-I', default=['.'], dest='include_path', help='include path', action='append')
 parser.add_argument('sources', nargs='*', help='sources')
+parser.add_argument('--license', dest="license", help='License file')
 
 class File(object):
     def __init__(self, name, parent_name):
@@ -121,7 +122,22 @@ def emit_body(out, name, parent_name):
         return
 
     with open(resolved_name) as f:
+        in_comment = False
+        comment = ''
         for l in f:
+            if in_comment:
+                comment += l
+                if re.match('\s*\*/$', l):
+                    in_comment = False
+                    if not re.match('.*Copyright.*Cesanta', comment, re.M | re.S):
+                        print >>out, comment,
+                continue
+
+            if re.match('/\*$', l):
+                in_comment = True
+                comment = l
+                continue
+
             match = re.match('( *#include "(.*)")', l)
             if match:
                 all, path_to_include = match.groups()
@@ -154,6 +170,11 @@ if args.first:
 if sys.platform == "win32":
     import os, msvcrt
     msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+
+
+if args.license:
+    with open(args.license) as f:
+        print f.read()
 
 if args.public:
     print '#include "%s"' % (args.public)
