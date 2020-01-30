@@ -3590,9 +3590,6 @@ struct mg_connection {
   struct mbuf send_mbuf;   /* Data scheduled for sending */
   time_t last_io_time;     /* Timestamp of the last socket IO */
   double ev_timer_time;    /* Timestamp of the future MG_EV_TIMER */
-#if MG_ENABLE_SSL
-  void *ssl_if_data; /* SSL library data. */
-#endif
   mg_event_handler_t proto_handler; /* Protocol-specific event handler */
   void *proto_data;                 /* Protocol-specific data */
   void (*proto_data_destructor)(void *proto_data);
@@ -3635,6 +3632,10 @@ struct mg_connection {
 #define MG_F_USER_4 (1 << 23)
 #define MG_F_USER_5 (1 << 24)
 #define MG_F_USER_6 (1 << 25)
+
+#if MG_ENABLE_SSL
+  void *ssl_if_data; /* SSL library data. */
+#endif
 };
 
 /*
