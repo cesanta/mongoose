@@ -328,37 +328,53 @@ static const struct {
     MIME_ENTRY("asf", "video/x-ms-asf"),
     MIME_ENTRY("avi", "video/x-msvideo"),
     MIME_ENTRY("bmp", "image/bmp"),
-    {NULL, 0, NULL}};
+    {NULL, 0, NULL},
+};
 
-static struct mg_str mg_get_mime_type(const char *path, const char *dflt,
-                                      const struct mg_serve_http_opts *opts) {
+static struct mg_str mg_get_mime_types_entry(struct mg_str path) {
+  size_t i;
+  for (i = 0; mg_static_builtin_mime_types[i].extension != NULL; i++) {
+    if (path.len < mg_static_builtin_mime_types[i].ext_len + 1) continue;
+    struct mg_str ext = MG_MK_STR_N(mg_static_builtin_mime_types[i].extension,
+                                    mg_static_builtin_mime_types[i].ext_len);
+    struct mg_str pext = MG_MK_STR_N(path.p + (path.len - ext.len), ext.len);
+    if (pext.p[-1] == '.' && mg_strcasecmp(ext, pext) == 0) {
+      return mg_mk_str(mg_static_builtin_mime_types[i].mime_type);
+    }
+  }
+  return mg_mk_str(NULL);
+}
+
+MG_INTERNAL int mg_get_mime_type_encoding(
+    struct mg_str path, struct mg_str *type, struct mg_str *encoding,
+    const struct mg_serve_http_opts *opts) {
   const char *ext, *overrides;
-  size_t i, path_len;
-  struct mg_str r, k, v;
-
-  path_len = strlen(path);
+  struct mg_str k, v;
 
   overrides = opts->custom_mime_types;
   while ((overrides = mg_next_comma_list_entry(overrides, &k, &v)) != NULL) {
-    ext = path + (path_len - k.len);
-    if (path_len > k.len && mg_vcasecmp(&k, ext) == 0) {
-      return v;
+    ext = path.p + (path.len - k.len);
+    if (path.len > k.len && mg_vcasecmp(&k, ext) == 0) {
+      *type = v;
+      return 1;
     }
   }
 
-  for (i = 0; mg_static_builtin_mime_types[i].extension != NULL; i++) {
-    ext = path + (path_len - mg_static_builtin_mime_types[i].ext_len);
-    if (path_len > mg_static_builtin_mime_types[i].ext_len && ext[-1] == '.' &&
-        mg_casecmp(ext, mg_static_builtin_mime_types[i].extension) == 0) {
-      r.p = mg_static_builtin_mime_types[i].mime_type;
-      r.len = strlen(r.p);
-      return r;
+  *type = mg_get_mime_types_entry(path);
+
+  /* Check for .html.gz, .js.gz, etc. */
+  if (mg_vcmp(type, "application/x-gunzip") == 0) {
+    struct mg_str path2 = mg_mk_str_n(path.p, path.len - 3);
+    struct mg_str type2 = mg_get_mime_types_entry(path2);
+    LOG(LL_ERROR, ("'%.*s' '%.*s' '%.*s'", (int) path.len, path.p,
+                   (int) path2.len, path2.p, (int) type2.len, type2.p));
+    if (type2.len > 0) {
+      *type = type2;
+      *encoding = mg_mk_str("gzip");
     }
   }
 
-  r.p = dflt;
-  r.len = strlen(r.p);
-  return r;
+  return (type->len > 0);
 }
 #endif
 
@@ -1458,12 +1474,15 @@ static int mg_http_parse_range_header(const struct mg_str *header, int64_t *a,
   return result;
 }
 
-void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
-                        const char *path, const struct mg_str mime_type,
-                        const struct mg_str extra_headers) {
+void mg_http_serve_file_internal(struct mg_connection *nc,
+                                 struct http_message *hm, const char *path,
+                                 struct mg_str mime_type,
+                                 struct mg_str encoding,
+                                 struct mg_str extra_headers) {
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   cs_stat_t st;
-  LOG(LL_DEBUG, ("%p [%s] %.*s", nc, path, (int) mime_type.len, mime_type.p));
+  LOG(LL_DEBUG, ("%p [%s] %.*s %.*s", nc, path, (int) mime_type.len,
+                 mime_type.p, (int) encoding.len, encoding.p));
   if (mg_stat(path, &st) != 0 || (pd->file.fp = mg_fopen(path, "rb")) == NULL) {
     int code, err = mg_get_errno();
     switch (err) {
@@ -1502,8 +1521,9 @@ void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
       } else {
         status_code = 206;
         cl = r2 - r1 + 1;
-        snprintf(range, sizeof(range), "Content-Range: bytes %" INT64_FMT
-                                       "-%" INT64_FMT "/%" INT64_FMT "\r\n",
+        snprintf(range, sizeof(range),
+                 "Content-Range: bytes %" INT64_FMT "-%" INT64_FMT
+                 "/%" INT64_FMT "\r\n",
                  r1, r1 + cl - 1, (int64_t) st.st_size);
 #if _FILE_OFFSET_BITS == 64 || _POSIX_C_SOURCE >= 200112L || \
     _XOPEN_SOURCE >= 600
@@ -1528,13 +1548,6 @@ void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
     mg_http_construct_etag(etag, sizeof(etag), &st);
     mg_gmt_time_string(current_time, sizeof(current_time), &t);
     mg_gmt_time_string(last_modified, sizeof(last_modified), &st.st_mtime);
-    /*
-     * Content length casted to size_t because:
-     * 1) that's the maximum buffer size anyway
-     * 2) ESP8266 RTOS SDK newlib vprintf cannot contain a 64bit arg at non-last
-     *    position
-     * TODO(mkm): fix ESP8266 RTOS SDK
-     */
     mg_send_response_line_s(nc, status_code, extra_headers);
     mg_printf(nc,
               "Date: %s\r\n"
@@ -1544,15 +1557,27 @@ void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
               "Connection: %s\r\n"
               "Content-Length: %" SIZE_T_FMT
               "\r\n"
-              "%sEtag: %s\r\n\r\n",
+              "%s"
+              "Etag: %s\r\n",
               current_time, last_modified, (int) mime_type.len, mime_type.p,
               (pd->file.keepalive ? "keep-alive" : "close"), (size_t) cl, range,
               etag);
-
+    if (encoding.len > 0) {
+      mg_printf(nc, "Content-Encoding: %.*s\r\n", (int) encoding.len,
+                encoding.p);
+    }
+    mg_send(nc, "\r\n", 2);
     pd->file.cl = cl;
     pd->file.type = DATA_FILE;
     mg_http_transfer_file_data(nc);
   }
+}
+
+void mg_http_serve_file(struct mg_connection *nc, struct http_message *hm,
+                        const char *path, const struct mg_str mime_type,
+                        const struct mg_str extra_headers) {
+  mg_http_serve_file_internal(nc, hm, path, mime_type, mg_mk_str(NULL),
+                              extra_headers);
 }
 
 static void mg_http_serve_file2(struct mg_connection *nc, const char *path,
@@ -1564,8 +1589,12 @@ static void mg_http_serve_file2(struct mg_connection *nc, const char *path,
     return;
   }
 #endif
-  mg_http_serve_file(nc, hm, path, mg_get_mime_type(path, "text/plain", opts),
-                     mg_mk_str(opts->extra_headers));
+  struct mg_str type = MG_NULL_STR, encoding = MG_NULL_STR;
+  if (!mg_get_mime_type_encoding(mg_mk_str(path), &type, &encoding, opts)) {
+    type = mg_mk_str("text/plain");
+  }
+  mg_http_serve_file_internal(nc, hm, path, type, encoding,
+                              mg_mk_str(opts->extra_headers));
 }
 
 #endif
@@ -1841,7 +1870,7 @@ void cs_md5(char buf[33], ...) {
   va_list ap;
 
   va_start(ap, buf);
-  while ((p = va_arg(ap, const unsigned char *) ) != NULL) {
+  while ((p = va_arg(ap, const unsigned char *)) != NULL) {
     msgs[num_msgs] = p;
     msg_lens[num_msgs] = va_arg(ap, size_t);
     num_msgs++;
@@ -2472,13 +2501,13 @@ MG_INTERNAL int mg_uri_to_local_path(struct http_message *hm,
           *p++ = DIRSEP;
           /* No NULs and DIRSEPs in the component (percent-encoded). */
           for (i = 0; i < component.len; i++, p++) {
-            if (*p == '\0' || *p == DIRSEP
+            if (*p == '\0' ||
+                *p == DIRSEP
 #ifdef _WIN32
                 /* On Windows, "/" is also accepted, so check for that too. */
-                ||
-                *p == '/'
+                || *p == '/'
 #endif
-                ) {
+            ) {
               ok = 0;
               break;
             }
@@ -2826,7 +2855,7 @@ void mg_file_upload_handler(struct mg_connection *nc, int ev, void *ev_data,
 #ifdef SPIFFS_ERR_FULL
             || mg_get_errno() == SPIFFS_ERR_FULL
 #endif
-            ) {
+        ) {
           mg_printf(nc,
                     "HTTP/1.1 413 Payload Too Large\r\n"
                     "Content-Type: text/plain\r\n"
@@ -2985,8 +3014,9 @@ struct mg_connection *mg_connect_http_opt(
   if (path.len == 0) path = mg_mk_str("/");
   if (host.len == 0) host = mg_mk_str("");
 
-  mg_printf(nc, "%s %.*s HTTP/1.1\r\nHost: %.*s\r\nContent-Length: %" SIZE_T_FMT
-                "\r\n%.*s%s\r\n%s",
+  mg_printf(nc,
+            "%s %.*s HTTP/1.1\r\nHost: %.*s\r\nContent-Length: %" SIZE_T_FMT
+            "\r\n%.*s%s\r\n%s",
             (post_data[0] == '\0' ? "GET" : "POST"), (int) path.len, path.p,
             (int) (path.p - host.p), host.p, strlen(post_data), (int) auth.len,
             (auth.buf == NULL ? "" : auth.buf), extra_headers, post_data);
@@ -3095,7 +3125,7 @@ static void mg_http_call_endpoint_handler(struct mg_connection *nc, int ev,
 #if MG_ENABLE_HTTP_STREAMING_MULTIPART
       || ev == MG_EV_HTTP_MULTIPART_REQUEST
 #endif
-      ) {
+  ) {
     struct mg_http_endpoint *ep =
         mg_http_get_endpoint_handler(nc->listener, &hm->uri);
     if (ep != NULL) {
