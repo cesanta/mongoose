@@ -3635,6 +3635,8 @@ struct mg_connection {
 
 #if MG_ENABLE_SSL
   void *ssl_if_data; /* SSL library data. */
+#else
+  void *unused_ssl_if_data; /* To keep the size of the structure the same. */
 #endif
 };
 
