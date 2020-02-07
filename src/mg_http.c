@@ -2073,7 +2073,7 @@ static void mg_print_dir_entry(struct mg_connection *nc, const char *file_name,
   href = mg_url_encode(mg_mk_str(file_name));
   mg_printf_http_chunk(nc,
                        "<tr><td><a href=\"%s%s\">%s%s</a></td>"
-                       "<td>%s</td><td name=%" INT64_FMT ">%s</td></tr>\n",
+                       "<td>%s</td><td name=\"%" INT64_FMT "\">%s</td></tr>\n",
                        href.p, slash, path, slash, mod, is_dir ? -1 : fsize,
                        size);
   free((void *) href.p);
@@ -2142,20 +2142,21 @@ static void mg_send_directory_listing(struct mg_connection *nc, const char *dir,
       "<html><head><title>Index of %.*s</title>%s%s"
       "<style>th,td {text-align: left; padding-right: 1em; "
       "font-family: monospace; }</style></head>\n"
-      "<body><h1>Index of %.*s</h1>\n<table cellpadding=0><thead>"
-      "<tr><th><a href=# rel=0>Name</a></th><th>"
-      "<a href=# rel=1>Modified</a</th>"
-      "<th><a href=# rel=2>Size</a></th></tr>"
-      "<tr><td colspan=3><hr></td></tr>\n"
-      "</thead>\n"
-      "<tbody id=tb>",
+      "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
+      "<tr><th><a href=\"#\" rel=\"0\">Name</a></th><th>"
+      "<a href=\"#\" rel=\"1\">Modified</a></th>"
+      "<th><a href=\"#\" rel=\"2\">Size</a></th></tr>"
+      "<tr><td colspan=\"3\"><hr></td></tr>"
+      "</thead>"
+      "<tbody id=\"tb\">",
       (int) hm->uri.len, hm->uri.p, sort_js_code, sort_js_code2,
       (int) hm->uri.len, hm->uri.p);
   mg_scan_directory(nc, dir, opts, mg_print_dir_entry);
   mg_printf_http_chunk(nc,
-                       "</tbody><tr><td colspan=3><hr></td></tr>\n"
-                       "</table>\n"
-                       "<address>%s</address>\n"
+                       "</tbody>"
+                       "<tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
+                       "</table>"
+                       "<address>%s</address>"
                        "</body></html>",
                        mg_version_header);
   mg_send_http_chunk(nc, "", 0);
