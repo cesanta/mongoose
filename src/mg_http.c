@@ -2073,7 +2073,7 @@ static void mg_print_dir_entry(struct mg_connection *nc, const char *file_name,
   href = mg_url_encode(mg_mk_str(file_name));
   mg_printf_http_chunk(nc,
                        "<tr><td><a href=\"%s%s\">%s%s</a></td>"
-                       "<td>%s</td><td name=\"%" INT64_FMT "\">%s</td></tr>\n",
+                       "<td>%s</td><td name=\"%" INT64_FMT "\">%s</td></tr>",
                        href.p, slash, path, slash, mod, is_dir ? -1 : fsize,
                        size);
   free((void *) href.p);
@@ -2141,7 +2141,7 @@ static void mg_send_directory_listing(struct mg_connection *nc, const char *dir,
       nc,
       "<html><head><title>Index of %.*s</title>%s%s"
       "<style>th,td {text-align: left; padding-right: 1em; "
-      "font-family: monospace; }</style></head>\n"
+      "font-family: monospace; }</style></head>"
       "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
       "<tr><th><a href=\"#\" rel=\"0\">Name</a></th><th>"
       "<a href=\"#\" rel=\"1\">Modified</a></th>"
