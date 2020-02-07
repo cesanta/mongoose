@@ -2139,7 +2139,7 @@ static void mg_send_directory_listing(struct mg_connection *nc, const char *dir,
 
   mg_printf_http_chunk(
       nc,
-      "<html><head><title>Index of %.*s</title>%s%s"
+      "<!DOCTYPE html><html><head><title>Index of %.*s</title>%s%s"
       "<style>th,td {text-align: left; padding-right: 1em; "
       "font-family: monospace; }</style></head>"
       "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
