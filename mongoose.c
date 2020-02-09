@@ -3746,7 +3746,7 @@ static int mg_socket_if_udp_send(struct mg_connection *nc, const void *buf,
 
 static int mg_socket_if_tcp_recv(struct mg_connection *nc, void *buf,
                                  size_t len) {
-  int n = (int) MG_RECV_FUNC(nc->sock, buf, len, 0);
+  int n = (int) MG_RECV_FUNC(nc->sock, buf, len, MSG_DONTWAIT);
   if (n == 0) {
     /* Orderly shutdown of the socket, try flushing output. */
     nc->flags |= MG_F_SEND_AND_CLOSE;
@@ -3922,8 +3922,8 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
 #if MG_ENABLE_BROADCAST
 static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
   struct ctl_msg ctl_msg;
-  int len =
-      (int) MG_RECV_FUNC(mgr->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg), 0);
+  int len = (int) MG_RECV_FUNC(mgr->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg),
+                               MSG_DONTWAIT);
   size_t dummy = MG_SEND_FUNC(mgr->ctl[1], ctl_msg.message, 1, 0);
   DBG(("read %d from ctl socket", len));
   (void) dummy; /* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25509 */
@@ -5965,7 +5965,8 @@ static struct mg_str mg_get_mime_types_entry(struct mg_str path) {
   size_t i;
   for (i = 0; mg_static_builtin_mime_types[i].extension != NULL; i++) {
     if (path.len < mg_static_builtin_mime_types[i].ext_len + 1) continue;
-    struct mg_str ext = MG_MK_STR_N(mg_static_builtin_mime_types[i].extension, mg_static_builtin_mime_types[i].ext_len);
+    struct mg_str ext = MG_MK_STR_N(mg_static_builtin_mime_types[i].extension,
+                                    mg_static_builtin_mime_types[i].ext_len);
     struct mg_str pext = MG_MK_STR_N(path.p + (path.len - ext.len), ext.len);
     if (pext.p[-1] == '.' && mg_strcasecmp(ext, pext) == 0) {
       return mg_mk_str(mg_static_builtin_mime_types[i].mime_type);
@@ -5974,9 +5975,9 @@ static struct mg_str mg_get_mime_types_entry(struct mg_str path) {
   return mg_mk_str(NULL);
 }
 
-static int mg_get_mime_type_encoding(struct mg_str path, struct mg_str *type,
-                                     struct mg_str *encoding,
-                                     const struct mg_serve_http_opts *opts) {
+MG_INTERNAL int mg_get_mime_type_encoding(
+    struct mg_str path, struct mg_str *type, struct mg_str *encoding,
+    const struct mg_serve_http_opts *opts) {
   const char *ext, *overrides;
   struct mg_str k, v;
 
@@ -5995,7 +5996,8 @@ static int mg_get_mime_type_encoding(struct mg_str path, struct mg_str *type,
   if (mg_vcmp(type, "application/x-gunzip") == 0) {
     struct mg_str path2 = mg_mk_str_n(path.p, path.len - 3);
     struct mg_str type2 = mg_get_mime_types_entry(path2);
-    LOG(LL_ERROR, ("'%.*s' '%.*s' '%.*s'", (int) path.len, path.p, (int) path2.len, path2.p, (int) type2.len, type2.p));
+    LOG(LL_ERROR, ("'%.*s' '%.*s' '%.*s'", (int) path.len, path.p,
+                   (int) path2.len, path2.p, (int) type2.len, type2.p));
     if (type2.len > 0) {
       *type = type2;
       *encoding = mg_mk_str("gzip");
@@ -9477,7 +9479,8 @@ MG_INTERNAL void mg_handle_ssi_request(struct mg_connection *nc,
   } else {
     mg_set_close_on_exec((sock_t) fileno(fp));
 
-    if (!mg_get_mime_type_encoding(mg_mk_str(path), &mime_type, &encoding, opts)) {
+    if (!mg_get_mime_type_encoding(mg_mk_str(path), &mime_type, &encoding,
+                                   opts)) {
       mime_type = mg_mk_str("text/plain");
     }
     mg_send_response_line(nc, 200, opts->extra_headers);
@@ -9486,7 +9489,8 @@ MG_INTERNAL void mg_handle_ssi_request(struct mg_connection *nc,
               "Connection: close\r\n",
               (int) mime_type.len, mime_type.p);
     if (encoding.len > 0) {
-      mg_printf(nc, "Content-Encoding: %.*s\r\n", (int) encoding.len, encoding.p);
+      mg_printf(nc, "Content-Encoding: %.*s\r\n", (int) encoding.len,
+                encoding.p);
     }
     mg_send(nc, "\r\n", 2);
     mg_send_ssi_file(nc, hm, path, fp, 0, opts);
@@ -10636,6 +10640,8 @@ struct mg_str mg_url_encode(const struct mg_str src) {
 /* Amalgamated: #include "mg_internal.h" */
 /* Amalgamated: #include "mg_mqtt.h" */
 
+#define MG_F_MQTT_PING_PENDING MG_F_PROTO_1
+
 static uint16_t getu16(const char *p) {
   const uint8_t *up = (const uint8_t *) p;
   return (up[0] << 8) + up[1];
@@ -10798,6 +10804,10 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
           }
           break;
         }
+        if (mm.cmd == MG_MQTT_CMD_PINGRESP) {
+          LOG(LL_DEBUG, ("Recv PINGRESP"));
+          nc->flags &= ~MG_F_MQTT_PING_PENDING;
+        }
 
         nc->handler(nc, MG_MQTT_EVENT_BASE + mm.cmd, &mm MG_UD_ARG(user_data));
         mbuf_remove(io, len);
@@ -10808,10 +10818,26 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
       struct mg_mqtt_proto_data *pd =
           (struct mg_mqtt_proto_data *) nc->proto_data;
       double now = mg_time();
-      if (pd->keep_alive > 0 && pd->last_control_time > 0 &&
-          (now - pd->last_control_time) > pd->keep_alive) {
-        LOG(LL_DEBUG, ("Send PINGREQ"));
-        mg_mqtt_ping(nc);
+      if (pd->keep_alive > 0 && pd->last_control_time > 0) {
+        double diff = (now - pd->last_control_time);
+        if (diff > pd->keep_alive) {
+          if (diff < 1500000000) {
+            if (!(nc->flags & MG_F_MQTT_PING_PENDING)) {
+              LOG(LL_DEBUG, ("Send PINGREQ"));
+              nc->flags |= MG_F_MQTT_PING_PENDING;
+              mg_mqtt_ping(nc);
+            } else {
+              LOG(LL_DEBUG, ("Ping timeout"));
+              nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+            }
+          } else {
+            /* Wall time has just been set. Avoid immediate ping,
+             * more likely than not it is not needed. The standard allows for
+             * 1.5X interval for ping requests, so even if were just about to
+             * send one, we should be ok waiting 0.4X more. */
+            pd->last_control_time = now - pd->keep_alive * 0.6;
+          }
+        }
       }
       break;
     }

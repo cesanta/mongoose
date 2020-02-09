@@ -3622,11 +3622,14 @@ struct mg_connection {
 /* Flags that are settable by user */
 #define MG_F_SEND_AND_CLOSE (1 << 10)      /* Push remaining data and close  */
 #define MG_F_CLOSE_IMMEDIATELY (1 << 11)   /* Disconnect */
-#define MG_F_WEBSOCKET_NO_DEFRAG (1 << 12) /* Websocket specific */
-#define MG_F_DELETE_CHUNK (1 << 13)        /* HTTP specific */
+
+/* Flags for protocol handlers */
+#define MG_F_PROTO_1 (1 << 12)
+#define MG_F_PROTO_2 (1 << 13)
 #define MG_F_ENABLE_BROADCAST (1 << 14)    /* Allow broadcast address usage */
 
-#define MG_F_USER_1 (1 << 20) /* Flags left for application */
+/* Flags left for application */
+#define MG_F_USER_1 (1 << 20)
 #define MG_F_USER_2 (1 << 21)
 #define MG_F_USER_3 (1 << 22)
 #define MG_F_USER_4 (1 << 23)
@@ -4367,8 +4370,8 @@ struct mg_str mg_url_encode(const struct mg_str src);
 
 #if MG_ENABLE_HTTP
 
-/* Amalgamated: #include "mg_net.h" */
 /* Amalgamated: #include "common/mg_str.h" */
+/* Amalgamated: #include "mg_net.h" */
 
 #ifdef __cplusplus
 extern "C" {
@@ -4474,6 +4477,9 @@ struct mg_ssi_call_ctx {
 /* struct mg_http_multipart_part */
 #define MG_EV_HTTP_MULTIPART_REQUEST_END 125
 #endif
+
+#define MG_F_WEBSOCKET_NO_DEFRAG MG_F_PROTO_1
+#define MG_F_DELETE_CHUNK MG_F_PROTO_2
 
 /*
  * Attaches a built-in HTTP event handler to the given connection.

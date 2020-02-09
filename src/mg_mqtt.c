@@ -10,6 +10,8 @@
 #include "mg_internal.h"
 #include "mg_mqtt.h"
 
+#define MG_F_MQTT_PING_PENDING MG_F_PROTO_1
+
 static uint16_t getu16(const char *p) {
   const uint8_t *up = (const uint8_t *) p;
   return (up[0] << 8) + up[1];
@@ -172,6 +174,10 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
           }
           break;
         }
+        if (mm.cmd == MG_MQTT_CMD_PINGRESP) {
+          LOG(LL_DEBUG, ("Recv PINGRESP"));
+          nc->flags &= ~MG_F_MQTT_PING_PENDING;
+        }
 
         nc->handler(nc, MG_MQTT_EVENT_BASE + mm.cmd, &mm MG_UD_ARG(user_data));
         mbuf_remove(io, len);
@@ -182,10 +188,26 @@ static void mqtt_handler(struct mg_connection *nc, int ev,
       struct mg_mqtt_proto_data *pd =
           (struct mg_mqtt_proto_data *) nc->proto_data;
       double now = mg_time();
-      if (pd->keep_alive > 0 && pd->last_control_time > 0 &&
-          (now - pd->last_control_time) > pd->keep_alive) {
-        LOG(LL_DEBUG, ("Send PINGREQ"));
-        mg_mqtt_ping(nc);
+      if (pd->keep_alive > 0 && pd->last_control_time > 0) {
+        double diff = (now - pd->last_control_time);
+        if (diff > pd->keep_alive) {
+          if (diff < 1500000000) {
+            if (!(nc->flags & MG_F_MQTT_PING_PENDING)) {
+              LOG(LL_DEBUG, ("Send PINGREQ"));
+              nc->flags |= MG_F_MQTT_PING_PENDING;
+              mg_mqtt_ping(nc);
+            } else {
+              LOG(LL_DEBUG, ("Ping timeout"));
+              nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+            }
+          } else {
+            /* Wall time has just been set. Avoid immediate ping,
+             * more likely than not it is not needed. The standard allows for
+             * 1.5X interval for ping requests, so even if were just about to
+             * send one, we should be ok waiting 0.4X more. */
+            pd->last_control_time = now - pd->keep_alive * 0.6;
+          }
+        }
       }
       break;
     }

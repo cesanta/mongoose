@@ -103,7 +103,7 @@ static int mg_socket_if_udp_send(struct mg_connection *nc, const void *buf,
 
 static int mg_socket_if_tcp_recv(struct mg_connection *nc, void *buf,
                                  size_t len) {
-  int n = (int) MG_RECV_FUNC(nc->sock, buf, len, 0);
+  int n = (int) MG_RECV_FUNC(nc->sock, buf, len, MSG_DONTWAIT);
   if (n == 0) {
     /* Orderly shutdown of the socket, try flushing output. */
     nc->flags |= MG_F_SEND_AND_CLOSE;
@@ -279,8 +279,8 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
 #if MG_ENABLE_BROADCAST
 static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
   struct ctl_msg ctl_msg;
-  int len =
-      (int) MG_RECV_FUNC(mgr->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg), 0);
+  int len = (int) MG_RECV_FUNC(mgr->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg),
+                               MSG_DONTWAIT);
   size_t dummy = MG_SEND_FUNC(mgr->ctl[1], ctl_msg.message, 1, 0);
   DBG(("read %d from ctl socket", len));
   (void) dummy; /* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25509 */

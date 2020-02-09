@@ -48,11 +48,14 @@ signature: |
   /* Flags that are settable by user */
   #define MG_F_SEND_AND_CLOSE (1 << 10)      /* Push remaining data and close  */
   #define MG_F_CLOSE_IMMEDIATELY (1 << 11)   /* Disconnect */
-  #define MG_F_WEBSOCKET_NO_DEFRAG (1 << 12) /* Websocket specific */
-  #define MG_F_DELETE_CHUNK (1 << 13)        /* HTTP specific */
+  
+  /* Flags for protocol handlers */
+  #define MG_F_PROTO_1 (1 << 12)
+  #define MG_F_PROTO_2 (1 << 13)
   #define MG_F_ENABLE_BROADCAST (1 << 14)    /* Allow broadcast address usage */
   
-  #define MG_F_USER_1 (1 << 20) /* Flags left for application */
+  /* Flags left for application */
+  #define MG_F_USER_1 (1 << 20)
   #define MG_F_USER_2 (1 << 21)
   #define MG_F_USER_3 (1 << 22)
   #define MG_F_USER_4 (1 << 23)
