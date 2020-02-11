@@ -2746,7 +2746,7 @@ struct mg_connection *mg_if_accept_new_conn(struct mg_connection *lc) {
   nc->iface = lc->iface;
   if (lc->flags & MG_F_SSL) nc->flags |= MG_F_SSL;
   mg_add_conn(nc->mgr, nc);
-  LOG(LL_DEBUG, ("%p %p %d %d", lc, nc, nc->sock, (int) nc->flags));
+  LOG(LL_DEBUG, ("%p %p %d %#x", lc, nc, (int) nc->sock, (int) nc->flags));
   return nc;
 }
 
@@ -3690,8 +3690,8 @@ void mg_socket_if_connect_tcp(struct mg_connection *nc,
 #endif
   rc = connect(nc->sock, &sa->sa, sizeof(sa->sin));
   nc->err = rc < 0 && mg_is_error() ? mg_get_errno() : 0;
-  DBG(("%p sock %d rc %d errno %d err %d", nc, nc->sock, rc, mg_get_errno(),
-       nc->err));
+  DBG(("%p sock %d rc %d errno %d err %d", nc, (int) nc->sock, rc,
+      mg_get_errno(), nc->err));
 }
 
 void mg_socket_if_connect_udp(struct mg_connection *nc) {
@@ -3746,7 +3746,7 @@ static int mg_socket_if_udp_send(struct mg_connection *nc, const void *buf,
 
 static int mg_socket_if_tcp_recv(struct mg_connection *nc, void *buf,
                                  size_t len) {
-  int n = (int) MG_RECV_FUNC(nc->sock, buf, len, MSG_DONTWAIT);
+  int n = (int) MG_RECV_FUNC(nc->sock, buf, len, 0);
   if (n == 0) {
     /* Orderly shutdown of the socket, try flushing output. */
     nc->flags |= MG_F_SEND_AND_CLOSE;
@@ -3861,8 +3861,8 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
   int worth_logging =
       fd_flags != 0 || (nc->flags & (MG_F_WANT_READ | MG_F_WANT_WRITE));
   if (worth_logging) {
-    DBG(("%p fd=%d fd_flags=%d nc_flags=0x%lx rmbl=%d smbl=%d", nc, nc->sock,
-         fd_flags, nc->flags, (int) nc->recv_mbuf.len,
+    DBG(("%p fd=%d fd_flags=%d nc_flags=0x%lx rmbl=%d smbl=%d", nc,
+         (int) nc->sock, fd_flags, nc->flags, (int) nc->recv_mbuf.len,
          (int) nc->send_mbuf.len));
   }
 
@@ -3914,7 +3914,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
   if (fd_flags & _MG_F_FD_CAN_WRITE) mg_if_can_send_cb(nc);
 
   if (worth_logging) {
-    DBG(("%p after fd=%d nc_flags=0x%lx rmbl=%d smbl=%d", nc, nc->sock,
+    DBG(("%p after fd=%d nc_flags=0x%lx rmbl=%d smbl=%d", nc, (int) nc->sock,
          nc->flags, (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
   }
 }
@@ -3922,8 +3922,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
 #if MG_ENABLE_BROADCAST
 static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
   struct ctl_msg ctl_msg;
-  int len = (int) MG_RECV_FUNC(mgr->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg),
-                               MSG_DONTWAIT);
+  int len = (int) MG_RECV_FUNC(mgr->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg), 0);
   size_t dummy = MG_SEND_FUNC(mgr->ctl[1], ctl_msg.message, 1, 0);
   DBG(("read %d from ctl socket", len));
   (void) dummy; /* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25509 */
@@ -3942,7 +3941,7 @@ void mg_socket_if_sock_set(struct mg_connection *nc, sock_t sock) {
   mg_set_non_blocking_mode(sock);
   mg_set_close_on_exec(sock);
   nc->sock = sock;
-  DBG(("%p %d", nc, sock));
+  DBG(("%p %d", nc, (int) sock));
 }
 
 void mg_socket_if_init(struct mg_iface *iface) {
