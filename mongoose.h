@@ -23,11 +23,7 @@
 #ifndef CS_MONGOOSE_SRC_COMMON_H_
 #define CS_MONGOOSE_SRC_COMMON_H_
 
-<<<<<<< HEAD
-#define MG_VERSION "6.16"
-=======
 #define MG_VERSION "6.17"
->>>>>>> origin/dev
 
 /* Local tweaks, applied before any of Mongoose's own headers. */
 #ifdef MG_LOCALS
