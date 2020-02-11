@@ -540,7 +540,7 @@ struct mg_connection *mg_if_accept_new_conn(struct mg_connection *lc) {
   nc->iface = lc->iface;
   if (lc->flags & MG_F_SSL) nc->flags |= MG_F_SSL;
   mg_add_conn(nc->mgr, nc);
-  LOG(LL_DEBUG, ("%p %p %d %d", lc, nc, nc->sock, (int) nc->flags));
+  LOG(LL_DEBUG, ("%p %p %d %#x", lc, nc, (int) nc->sock, (int) nc->flags));
   return nc;
 }
 

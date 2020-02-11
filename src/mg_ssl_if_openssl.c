@@ -21,7 +21,7 @@ struct mg_ssl_if_ctx {
   size_t identity_len;
 };
 
-void mg_ssl_if_init() {
+void mg_ssl_if_init(void) {
   SSL_library_init();
 }
 

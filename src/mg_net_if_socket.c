@@ -47,8 +47,8 @@ void mg_socket_if_connect_tcp(struct mg_connection *nc,
 #endif
   rc = connect(nc->sock, &sa->sa, sizeof(sa->sin));
   nc->err = rc < 0 && mg_is_error() ? mg_get_errno() : 0;
-  DBG(("%p sock %d rc %d errno %d err %d", nc, nc->sock, rc, mg_get_errno(),
-       nc->err));
+  DBG(("%p sock %d rc %d errno %d err %d", nc, (int) nc->sock, rc,
+      mg_get_errno(), nc->err));
 }
 
 void mg_socket_if_connect_udp(struct mg_connection *nc) {
@@ -218,8 +218,8 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
   int worth_logging =
       fd_flags != 0 || (nc->flags & (MG_F_WANT_READ | MG_F_WANT_WRITE));
   if (worth_logging) {
-    DBG(("%p fd=%d fd_flags=%d nc_flags=0x%lx rmbl=%d smbl=%d", nc, nc->sock,
-         fd_flags, nc->flags, (int) nc->recv_mbuf.len,
+    DBG(("%p fd=%d fd_flags=%d nc_flags=0x%lx rmbl=%d smbl=%d", nc,
+         (int) nc->sock, fd_flags, nc->flags, (int) nc->recv_mbuf.len,
          (int) nc->send_mbuf.len));
   }
 
@@ -271,7 +271,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
   if (fd_flags & _MG_F_FD_CAN_WRITE) mg_if_can_send_cb(nc);
 
   if (worth_logging) {
-    DBG(("%p after fd=%d nc_flags=0x%lx rmbl=%d smbl=%d", nc, nc->sock,
+    DBG(("%p after fd=%d nc_flags=0x%lx rmbl=%d smbl=%d", nc, (int) nc->sock,
          nc->flags, (int) nc->recv_mbuf.len, (int) nc->send_mbuf.len));
   }
 }
@@ -279,8 +279,7 @@ void mg_mgr_handle_conn(struct mg_connection *nc, int fd_flags, double now) {
 #if MG_ENABLE_BROADCAST
 static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
   struct ctl_msg ctl_msg;
-  int len =
-      (int) MG_RECV_FUNC(mgr->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg), 0);
+  int len = (int) MG_RECV_FUNC(mgr->ctl[1], (char *) &ctl_msg, sizeof(ctl_msg), 0);
   size_t dummy = MG_SEND_FUNC(mgr->ctl[1], ctl_msg.message, 1, 0);
   DBG(("read %d from ctl socket", len));
   (void) dummy; /* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25509 */
@@ -299,7 +298,7 @@ void mg_socket_if_sock_set(struct mg_connection *nc, sock_t sock) {
   mg_set_non_blocking_mode(sock);
   mg_set_close_on_exec(sock);
   nc->sock = sock;
-  DBG(("%p %d", nc, sock));
+  DBG(("%p %d", nc, (int) sock));
 }
 
 void mg_socket_if_init(struct mg_iface *iface) {

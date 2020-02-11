@@ -44,7 +44,11 @@ struct mg_ssl_if_ctx {
   mbedtls_ssl_context *ssl;
   mbedtls_x509_crt *cert;
   mbedtls_pk_context *key;
+#ifdef MBEDTLS_X509_CA_CHAIN_ON_DISK
+  char *ca_chain_file;
+#else
   mbedtls_x509_crt *ca_cert;
+#endif
   struct mbuf cipher_suites;
   size_t saved_len;
 };
@@ -52,7 +56,7 @@ struct mg_ssl_if_ctx {
 /* Must be provided by the platform. ctx is struct mg_connection. */
 extern int mg_ssl_if_mbed_random(void *ctx, unsigned char *buf, size_t len);
 
-void mg_ssl_if_init() {
+void mg_ssl_if_init(void) {
   LOG(LL_INFO, ("%s", MBEDTLS_VERSION_STRING_FULL));
 }
 
@@ -220,18 +224,17 @@ static void mg_ssl_if_mbed_free_certs_and_keys(struct mg_ssl_if_ctx *ctx) {
     MG_FREE(ctx->key);
     ctx->key = NULL;
   }
+#ifdef MBEDTLS_X509_CA_CHAIN_ON_DISK
+  MG_FREE(ctx->ca_chain_file);
+  ctx->ca_chain_file = NULL;
+#else
   if (ctx->ca_cert != NULL) {
     mbedtls_ssl_conf_ca_chain(ctx->conf, NULL, NULL);
-#ifdef MBEDTLS_X509_CA_CHAIN_ON_DISK
-    if (ctx->conf->ca_chain_file != NULL) {
-      MG_FREE((void *) ctx->conf->ca_chain_file);
-      ctx->conf->ca_chain_file = NULL;
-    }
-#endif
     mbedtls_x509_crt_free(ctx->ca_cert);
     MG_FREE(ctx->ca_cert);
     ctx->ca_cert = NULL;
   }
+#endif
 }
 
 enum mg_ssl_if_result mg_ssl_if_handshake(struct mg_connection *nc) {
@@ -312,11 +315,11 @@ void mg_ssl_if_conn_free(struct mg_connection *nc) {
     mbedtls_ssl_free(ctx->ssl);
     MG_FREE(ctx->ssl);
   }
-  mg_ssl_if_mbed_free_certs_and_keys(ctx);
   if (ctx->conf != NULL) {
     mbedtls_ssl_config_free(ctx->conf);
     MG_FREE(ctx->conf);
   }
+  mg_ssl_if_mbed_free_certs_and_keys(ctx);
   mbuf_free(&ctx->cipher_suites);
   memset(ctx, 0, sizeof(*ctx));
   MG_FREE(ctx);
@@ -328,12 +331,15 @@ static enum mg_ssl_if_result mg_use_ca_cert(struct mg_ssl_if_ctx *ctx,
     mbedtls_ssl_conf_authmode(ctx->conf, MBEDTLS_SSL_VERIFY_NONE);
     return MG_SSL_OK;
   }
+#ifdef MBEDTLS_X509_CA_CHAIN_ON_DISK
+  ctx->ca_chain_file = strdup(ca_cert);
+  if (ctx->ca_chain_file == NULL) return MG_SSL_ERROR;
+  if (mbedtls_ssl_conf_ca_chain_file(ctx->conf, ctx->ca_chain_file, NULL) != 0) {
+    return MG_SSL_ERROR;
+  }
+#else
   ctx->ca_cert = (mbedtls_x509_crt *) MG_CALLOC(1, sizeof(*ctx->ca_cert));
   mbedtls_x509_crt_init(ctx->ca_cert);
-#ifdef MBEDTLS_X509_CA_CHAIN_ON_DISK
-  ca_cert = strdup(ca_cert);
-  mbedtls_ssl_conf_ca_chain_file(ctx->conf, ca_cert, NULL);
-#else
   if (mbedtls_x509_crt_parse_file(ctx->ca_cert, ca_cert) != 0) {
     return MG_SSL_ERROR;
   }
