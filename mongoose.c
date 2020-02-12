@@ -5083,16 +5083,24 @@ static enum mg_ssl_if_result mg_use_ca_cert(struct mg_ssl_if_ctx *ctx,
   }
   ctx->ca_cert = (mbedtls_x509_crt *) MG_CALLOC(1, sizeof(*ctx->ca_cert));
   mbedtls_x509_crt_init(ctx->ca_cert);
+
+  if (strncmp(ca_cert,"-----",5) == 0) {
+    if (mbedtls_x509_crt_parse(ctx->ca_cert, (const unsigned char *)ca_cert, strlen(ca_cert)+1) != 0)
+    return MG_SSL_ERROR;
+    }
+  else {
 #ifdef MBEDTLS_X509_CA_CHAIN_ON_DISK
-  ca_cert = strdup(ca_cert);
-  if (mbedtls_x509_crt_set_ca_chain_file(ctx->ca_cert, ca_cert) != 0) {
-    return MG_SSL_ERROR;
-  }
+    ca_cert = strdup(ca_cert);
+    if (mbedtls_x509_crt_set_ca_chain_file(ctx->ca_cert, ca_cert) != 0) {
+      return MG_SSL_ERROR;
+    }
 #else
-  if (mbedtls_x509_crt_parse_file(ctx->ca_cert, ca_cert) != 0) {
-    return MG_SSL_ERROR;
+    if (mbedtls_x509_crt_parse_file(ctx->ca_cert, ca_cert) != 0) {
+      return MG_SSL_ERROR;
+    }
   }
 #endif
+
   mbedtls_ssl_conf_ca_chain(ctx->conf, ctx->ca_cert, NULL);
   mbedtls_ssl_conf_authmode(ctx->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
   return MG_SSL_OK;
