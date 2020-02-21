@@ -5865,7 +5865,7 @@ static void mg_http_free_proto_data_endpoints(struct mg_http_endpoint **ep) {
     current = tmp;
   }
 
-  ep = NULL;
+  *ep = NULL;
 }
 
 static void mg_http_free_reverse_proxy_data(struct mg_reverse_proxy_data *rpd) {
