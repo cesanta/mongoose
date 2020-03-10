@@ -837,7 +837,7 @@ void mg_http_handler(struct mg_connection *nc, int ev,
     /* TODO(alashkin): refactor this ifelseifelseifelseifelse */
     if ((req_len < 0 ||
          (req_len == 0 && io->len >= MG_MAX_HTTP_REQUEST_SIZE))) {
-#if MG_ENABLE_HTTP_IGNORE_INVALID
+#if MG_ENABLE_HTTP_IGNORE_INVALID_REQUESTS
       mbuf_remove(io, io->len);
 #else
       DBG(("invalid request"));
