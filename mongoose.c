@@ -3060,7 +3060,7 @@ struct mg_connection *mg_connect_opt(struct mg_mgr *mgr, const char *address,
         if (strcmp(opts.ssl_server_name, "*") != 0) {
           params.server_name = opts.ssl_server_name;
         }
-      } else if (rc == 0) { /* If it's a DNS name, use host. */
+      } else if (isalpha((int)host[0])) { /* If it's a DNS name, use host. */
         params.server_name = host;
       }
     }
