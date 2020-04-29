@@ -4469,6 +4469,7 @@ struct mg_iface *mg_socks_mk_iface(struct mg_mgr *mgr, const char *proxy_addr) {
 #endif
 
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 #ifndef KR_VERSION
 #include <openssl/tls1.h>
 #endif
@@ -4591,6 +4592,17 @@ static enum mg_ssl_if_result mg_ssl_if_ssl_err(struct mg_connection *nc,
                                                int res) {
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
   int err = SSL_get_error(ctx->ssl, res);
+  /*
+   * We've just fetched the last error from the queue.
+   * Now we need to clear the error queue. If we do not, then the following
+   * can happen (actually reported):
+   *  - A new connection is accept()-ed with cert error (e.g. self-signed cert)
+   *  - Since all accept()-ed connections share listener's context,
+   *  - *ALL* SSL accepted connection report read error on the next poll cycle.
+   *    Thus a single errored connection can close all the rest, unrelated ones.
+   * Clearing the error keeps the shared SSL_CTX in an OK state.
+   */
+  ERR_clear_error();
   if (err == SSL_ERROR_WANT_READ) return MG_SSL_WANT_READ;
   if (err == SSL_ERROR_WANT_WRITE) return MG_SSL_WANT_WRITE;
   DBG(("%p %p SSL error: %d %d", nc, ctx->ssl_ctx, res, err));
