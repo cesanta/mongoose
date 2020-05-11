@@ -4474,6 +4474,8 @@ struct mg_iface *mg_socks_mk_iface(struct mg_mgr *mgr, const char *proxy_addr) {
 #include <openssl/tls1.h>
 #endif
 
+static const char *mg_default_session_id_context = "mongoose";
+
 struct mg_ssl_if_ctx {
   SSL *ssl;
   SSL_CTX *ssl_ctx;
@@ -4535,6 +4537,9 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2);
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv3);
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1);
+  SSL_CTX_set_session_id_context(ctx->ssl_ctx,
+                                 (void *) mg_default_session_id_context,
+                                 strlen(mg_default_session_id_context));
 #ifdef MG_SSL_OPENSSL_NO_COMPRESSION
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_COMPRESSION);
 #endif
