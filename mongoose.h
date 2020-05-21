@@ -23,7 +23,7 @@
 #ifndef CS_MONGOOSE_SRC_COMMON_H_
 #define CS_MONGOOSE_SRC_COMMON_H_
 
-#define MG_VERSION "6.17"
+#define MG_VERSION "6.18"
 
 /* Local tweaks, applied before any of Mongoose's own headers. */
 #ifdef MG_LOCALS
@@ -228,7 +228,7 @@
 #include <windows.h>
 #include <process.h>
 
-#if _MSC_VER < 1700
+#if defined(_MSC_VER) && (_MSC_VER < 1700)
 typedef int bool;
 #else
 #include <stdbool.h>

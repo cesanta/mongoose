@@ -4469,9 +4469,12 @@ struct mg_iface *mg_socks_mk_iface(struct mg_mgr *mgr, const char *proxy_addr) {
 #endif
 
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 #ifndef KR_VERSION
 #include <openssl/tls1.h>
 #endif
+
+static const char *mg_default_session_id_context = "mongoose";
 
 struct mg_ssl_if_ctx {
   SSL *ssl;
@@ -4534,6 +4537,9 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2);
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv3);
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1);
+  SSL_CTX_set_session_id_context(ctx->ssl_ctx,
+                                 (void *) mg_default_session_id_context,
+                                 strlen(mg_default_session_id_context));
 #ifdef MG_SSL_OPENSSL_NO_COMPRESSION
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_COMPRESSION);
 #endif
@@ -4591,6 +4597,17 @@ static enum mg_ssl_if_result mg_ssl_if_ssl_err(struct mg_connection *nc,
                                                int res) {
   struct mg_ssl_if_ctx *ctx = (struct mg_ssl_if_ctx *) nc->ssl_if_data;
   int err = SSL_get_error(ctx->ssl, res);
+  /*
+   * We've just fetched the last error from the queue.
+   * Now we need to clear the error queue. If we do not, then the following
+   * can happen (actually reported):
+   *  - A new connection is accept()-ed with cert error (e.g. self-signed cert)
+   *  - Since all accept()-ed connections share listener's context,
+   *  - *ALL* SSL accepted connection report read error on the next poll cycle.
+   *    Thus a single errored connection can close all the rest, unrelated ones.
+   * Clearing the error keeps the shared SSL_CTX in an OK state.
+   */
+  ERR_clear_error();
   if (err == SSL_ERROR_WANT_READ) return MG_SSL_WANT_READ;
   if (err == SSL_ERROR_WANT_WRITE) return MG_SSL_WANT_WRITE;
   DBG(("%p %p SSL error: %d %d", nc, ctx->ssl_ctx, res, err));
@@ -5865,7 +5882,7 @@ static void mg_http_free_proto_data_endpoints(struct mg_http_endpoint **ep) {
     current = tmp;
   }
 
-  ep = NULL;
+  *ep = NULL;
 }
 
 static void mg_http_free_reverse_proxy_data(struct mg_reverse_proxy_data *rpd) {
@@ -7731,7 +7748,7 @@ static void mg_print_dir_entry(struct mg_connection *nc, const char *file_name,
   href = mg_url_encode(mg_mk_str(file_name));
   mg_printf_http_chunk(nc,
                        "<tr><td><a href=\"%s%s\">%s%s</a></td>"
-                       "<td>%s</td><td name=%" INT64_FMT ">%s</td></tr>\n",
+                       "<td>%s</td><td name=\"%" INT64_FMT "\">%s</td></tr>",
                        href.p, slash, path, slash, mod, is_dir ? -1 : fsize,
                        size);
   free((void *) href.p);
@@ -7797,23 +7814,24 @@ static void mg_send_directory_listing(struct mg_connection *nc, const char *dir,
 
   mg_printf_http_chunk(
       nc,
-      "<html><head><title>Index of %.*s</title>%s%s"
+      "<!DOCTYPE html><html><head><title>Index of %.*s</title>%s%s"
       "<style>th,td {text-align: left; padding-right: 1em; "
-      "font-family: monospace; }</style></head>\n"
-      "<body><h1>Index of %.*s</h1>\n<table cellpadding=0><thead>"
-      "<tr><th><a href=# rel=0>Name</a></th><th>"
-      "<a href=# rel=1>Modified</a</th>"
-      "<th><a href=# rel=2>Size</a></th></tr>"
-      "<tr><td colspan=3><hr></td></tr>\n"
-      "</thead>\n"
-      "<tbody id=tb>",
+      "font-family: monospace; }</style></head>"
+      "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
+      "<tr><th><a href=\"#\" rel=\"0\">Name</a></th><th>"
+      "<a href=\"#\" rel=\"1\">Modified</a></th>"
+      "<th><a href=\"#\" rel=\"2\">Size</a></th></tr>"
+      "<tr><td colspan=\"3\"><hr></td></tr>"
+      "</thead>"
+      "<tbody id=\"tb\">",
       (int) hm->uri.len, hm->uri.p, sort_js_code, sort_js_code2,
       (int) hm->uri.len, hm->uri.p);
   mg_scan_directory(nc, dir, opts, mg_print_dir_entry);
   mg_printf_http_chunk(nc,
-                       "</tbody><tr><td colspan=3><hr></td></tr>\n"
-                       "</table>\n"
-                       "<address>%s</address>\n"
+                       "</tbody>"
+                       "<tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
+                       "</table>"
+                       "<address>%s</address>"
                        "</body></html>",
                        mg_version_header);
   mg_send_http_chunk(nc, "", 0);

@@ -50,7 +50,7 @@
 #include <windows.h>
 #include <process.h>
 
-#if _MSC_VER < 1700
+#if defined(_MSC_VER) && (_MSC_VER < 1700)
 typedef int bool;
 #else
 #include <stdbool.h>
