@@ -4537,9 +4537,10 @@ enum mg_ssl_if_result mg_ssl_if_conn_init(
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2);
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv3);
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1);
-  SSL_CTX_set_session_id_context(ctx->ssl_ctx,
-                                 (void *) mg_default_session_id_context,
-                                 strlen(mg_default_session_id_context));
+  SSL_CTX_set_session_id_context(
+      ctx->ssl_ctx,
+      (const unsigned char *) mg_default_session_id_context,
+      strlen(mg_default_session_id_context));
 #ifdef MG_SSL_OPENSSL_NO_COMPRESSION
   SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_COMPRESSION);
 #endif
@@ -9376,13 +9377,15 @@ static void mg_do_ssi_include(struct mg_connection *nc, struct http_message *hm,
    */
   if (sscanf(tag, " virtual=\"%[^\"]\"", file_name) == 1) {
     /* File name is relative to the webserver root */
-    snprintf(path, sizeof(path), "%s/%s", opts->document_root, file_name);
+    if (snprintf(path, sizeof(path), "%s/%s", opts->document_root, file_name) < 0) {
+      return;
+    }
   } else if (sscanf(tag, " abspath=\"%[^\"]\"", file_name) == 1) {
     /*
      * File name is relative to the webserver working directory
      * or it is absolute system path
      */
-    snprintf(path, sizeof(path), "%s", file_name);
+    if (snprintf(path, sizeof(path), "%s", file_name) < 0) return;
   } else if (sscanf(tag, " file=\"%[^\"]\"", file_name) == 1 ||
              sscanf(tag, " \"%[^\"]\"", file_name) == 1) {
     /* File name is relative to the currect document */
