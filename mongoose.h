@@ -23,7 +23,7 @@
 #ifndef CS_MONGOOSE_SRC_COMMON_H_
 #define CS_MONGOOSE_SRC_COMMON_H_
 
-#define MG_VERSION "6.17"
+#define MG_VERSION "6.18"
 
 /* Local tweaks, applied before any of Mongoose's own headers. */
 #ifdef MG_LOCALS
@@ -4420,7 +4420,15 @@ struct http_message {
   /* Headers */
   struct mg_str header_names[MG_MAX_HTTP_HEADERS];
   struct mg_str header_values[MG_MAX_HTTP_HEADERS];
+
+  /*
+   * Value of the Content-Length header if present,
+   * otherwise MG_HTTP_CONTENT_LENGTH_UNKNOWN.
+   */
+  size_t content_length;
 };
+
+#define MG_HTTP_CONTENT_LENGTH_UNKNOWN ((size_t) -1)
 
 #if MG_ENABLE_HTTP_WEBSOCKET
 /* WebSocket message */
