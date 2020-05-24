@@ -16,6 +16,7 @@
  */
 
 #include "unit_test.h"
+
 #include "common/cs_md5.h"
 #include "common/test_main.h"
 #include "common/test_util.h"
@@ -197,20 +198,17 @@ static const char *test_mgr_with_ssl(int use_ssl) {
   struct mg_connection *nc;
   struct mg_bind_opts bopts;
   int port, port2;
-#if !MG_ENABLE_SSL
-  (void) use_ssl;
-#endif
 
   mg_mgr_init(&mgr, NULL);
   /* mgr.hexdump_file = "-"; */
 
   memset(&bopts, 0, sizeof(bopts));
-#if MG_ENABLE_SSL
   if (use_ssl) {
+#if MG_ENABLE_SSL
     bopts.ssl_cert = S_PEM;
     bopts.ssl_ca_cert = CA_PEM;
-  }
 #endif
+  }
   ASSERT((nc = mg_bind_opt(&mgr, addr, eh1, bopts)) != NULL);
   port2 = htons(nc->sa.sin.sin_port);
   ASSERT(port2 > 0);
@@ -781,9 +779,16 @@ static const char *test_parse_address(void) {
   };
   static const char *need_lookup[] = {"udp://a.com:53", "locl_host:12", NULL};
   static const char *invalid[] = {
-      "99999", "1k", "1.2.3", "1.2.3.4:", "1.2.3.4:2p", "blah://12", ":123x",
+      "99999",
+      "1k",
+      "1.2.3",
+      "1.2.3.4:",
+      "1.2.3.4:2p",
+      "blah://12",
+      ":123x",
       "veeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeery.long:12345",
-      "udp://missingport", NULL};
+      "udp://missingport",
+      NULL};
   char host[50];
   union socket_address sa;
   int i, proto;
@@ -1492,7 +1497,8 @@ static const char *test_parse_http_message(void) {
   static const char *a = "GET / HTTP/1.0\n\n";
   static const char *b = "GET /blah HTTP/1.0\r\nFoo:  bar  \r\n\r\n";
   static const char *c = "get b c\nz:  k \nb: t\nvvv\n\n xx";
-  static const char *d = "a b c\nContent-Length: 21 \nb: t\nvvv\n\n";
+  static const char *d =
+      "a b c\r\nContent-Length: 21 \r\nb: t\r\nvvv\r\n\r\nabc";
   static const char *e = "GET /foo?a=b&c=d HTTP/1.0\n\n";
   static const char *f = "POST /x HTTP/1.0\n\n";
   static const char *g = "WOHOO /x HTTP/1.0\n\n";
@@ -1537,14 +1543,19 @@ static const char *test_parse_http_message(void) {
   ASSERT_EQ(memcmp(req.header_values[1].p, "t", 1), 0);
   ASSERT_EQ(req.header_names[1].len, 1);
   ASSERT_EQ(req.body.len, 0);
+  ASSERT_EQ64(req.content_length, MG_HTTP_CONTENT_LENGTH_UNKNOWN);
 
-  ASSERT_EQ(mg_parse_http(d, strlen(d), &req, 1), (int) strlen(d));
+  ASSERT_EQ(mg_parse_http(d, strlen(d), &req, 1), (int) strlen(d) - 3);
   ASSERT_EQ(req.body.len, 21);
-  ASSERT_EQ(req.message.len, 21 + strlen(d));
+  ASSERT_EQ(req.content_length, 21);
+  ASSERT_EQ(req.message.len, 21 + strlen(d) - 3);
   ASSERT(mg_get_http_header(&req, "foo") == NULL);
   ASSERT((v = mg_get_http_header(&req, "contENT-Length")) != NULL);
   ASSERT_EQ(v->len, 2);
   ASSERT_STREQ_NZ(v->p, "21");
+  ASSERT((v = mg_get_http_header(&req, "B")) != NULL);
+  ASSERT_EQ(v->len, 1);
+  ASSERT_STREQ_NZ(v->p, "t");
 
   ASSERT_EQ(mg_parse_http(e, strlen(e), &req, 1), (int) strlen(e));
   ASSERT_EQ(mg_vcmp(&req.uri, "/foo"), 0);
@@ -1830,7 +1841,7 @@ static const char *test_http_endpoints(void) {
                                "0123456789")) != NULL);
   memset(buf, 0, sizeof(buf));
   nc->user_data = buf;
-  DBG(("== WAIT =="));
+  DBG(("== WAIT 1 =="));
   poll_until(&mgr, 1, c_str_ne, buf, (void *) "");
   ASSERT_STREQ(buf, "[/ 10] 25");
 
@@ -1838,7 +1849,7 @@ static const char *test_http_endpoints(void) {
                                "0123456789")) != NULL);
   memset(buf, 0, sizeof(buf));
   nc->user_data = buf;
-  DBG(("== WAIT =="));
+  DBG(("== WAIT 2 =="));
   poll_until(&mgr, 1, c_str_ne, buf, (void *) "");
   ASSERT_STREQ(buf, "[/ 10] 25");
 
@@ -1846,7 +1857,7 @@ static const char *test_http_endpoints(void) {
                                "foo")) != NULL);
   memset(buf, 0, sizeof(buf));
   nc->user_data = buf;
-  DBG(("== WAIT =="));
+  DBG(("== WAIT 3 =="));
   poll_until(&mgr, 1, c_str_ne, buf, (void *) "");
   ASSERT_STREQ(buf, "[/foo?a=b 3] 31");
 
@@ -1854,7 +1865,7 @@ static const char *test_http_endpoints(void) {
                                "0123456789")) != NULL);
   memset(buf, 0, sizeof(buf));
   nc->user_data = buf;
-  DBG(("== WAIT =="));
+  DBG(("== WAIT 4 =="));
   poll_until(&mgr, 1, c_str_ne, buf, (void *) "");
   ASSERT_STREQ(buf, "[/foo 10] 28");
 
@@ -1862,7 +1873,7 @@ static const char *test_http_endpoints(void) {
                                "0123456789")) != NULL);
   memset(buf, 0, sizeof(buf));
   nc->user_data = buf;
-  DBG(("== WAIT =="));
+  DBG(("== WAIT 5 =="));
   poll_until(&mgr, 1, c_str_ne, buf, (void *) "");
   ASSERT_STREQ(buf, "[I am Hello1] 32");
 
@@ -1870,7 +1881,7 @@ static const char *test_http_endpoints(void) {
                                NULL, "0123456789")) != NULL);
   memset(buf, 0, sizeof(buf));
   nc->user_data = buf;
-  DBG(("== WAIT =="));
+  DBG(("== WAIT 6 =="));
   poll_until(&mgr, 1, c_str_ne, buf, (void *) "");
   ASSERT_STREQ(buf, "[I am Hello two] 35");
 
@@ -1879,6 +1890,7 @@ static const char *test_http_endpoints(void) {
   memset(buf, 0, sizeof(buf));
   nc->user_data = buf;
 
+  DBG(("== WAIT 7 =="));
   poll_until(&mgr, 1, c_str_ne, buf, (void *) "");
   ASSERT_STREQ(buf, "[I am Hello again] 37");
 
@@ -1894,6 +1906,7 @@ static const char *serve_file_verify(struct http_message *hm) {
   char *data = read_file("unit_test.c", &size);
   if (data == NULL || size != hm->body.len ||
       memcmp(hm->body.p, data, size) != 0) {
+    DBG(("%d %d", (int) size, (int) hm->body.len));
     return "wrong data";
   }
   free(data);
@@ -1946,35 +1959,59 @@ static const char *test_http_serve_file(void) {
   return NULL;
 }
 
-static void srv1(struct mg_connection *c, int ev, void *ev_data) {
+static void file_srv(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_REQUEST) {
     mg_http_serve_file(c, (struct http_message *) ev_data, "unit_test.c",
                        mg_mk_str("text/plain"), mg_mk_str(""));
   }
 }
 
-static void srv2(struct mg_connection *c, int ev, void *ev_data) {
+struct chunk_clt_ctx {
+  int seq;
+  int status;
+  size_t num_chunks;
+  size_t chunks_rcvd;
+  size_t content_length;
+};
+
+static void chunk_clt(struct mg_connection *c, int ev, void *ev_data) {
   static cs_md5_ctx c1, c2;
   struct http_message *hm = (struct http_message *) ev_data;
+  struct chunk_clt_ctx *ctx = (struct chunk_clt_ctx *) c->user_data;
 
   switch (ev) {
     case MG_EV_CONNECT:
       cs_md5_init(&c1);
-      cs_md5_init(&c2);
       break;
     case MG_EV_HTTP_CHUNK:
       cs_md5_update(&c1, (const unsigned char *) hm->body.p, hm->body.len);
+      ctx->chunks_rcvd += hm->body.len;
+      DBG(("%p = seq %d, chunk %d bytes, %d", c, ctx->seq, (int) hm->body.len,
+           (int) ctx->chunks_rcvd));
+      ctx->num_chunks++;
+      ctx->content_length = hm->content_length;
       c->flags |= MG_F_DELETE_CHUNK;
       break;
     case MG_EV_HTTP_REPLY: {
       unsigned char sig1[16], sig2[sizeof(sig1)];
       size_t size;
       char *data = read_file("unit_test.c", &size);
+      cs_md5_final(sig1, &c1);
+      cs_md5_init(&c2);
       if (data != NULL) cs_md5_update(&c2, (const unsigned char *) data, size);
       free(data);
-      cs_md5_final(sig1, &c1);
       cs_md5_final(sig2, &c2);
-      *(int *) c->user_data = (memcmp(sig1, sig2, sizeof(sig1)) == 0) ? 1 : 2;
+      DBG(("%p = seq %d, reply", c, ctx->seq));
+      if (size != ctx->content_length) {
+        DBG(("%p: want %d, got %d", c, (int) size, (int) ctx->content_length));
+        ctx->status = 3;
+      } else if (size != ctx->chunks_rcvd) {
+        DBG(("%p: want %d, got %d", c, (int) size, (int) ctx->chunks_rcvd));
+        ctx->status = 4;
+      } else {
+        ctx->status = (memcmp(sig1, sig2, sizeof(sig1)) == 0) ? 1 : 2;
+      }
+      cs_md5_init(&c1);
       break;
     }
   }
@@ -1984,16 +2021,27 @@ static const char *test_http_serve_file_streaming(void) {
   struct mg_mgr mgr;
   struct mg_connection *lc, *nc;
   const char *local_addr = "127.0.0.1:7732";
-  int status = 0;
+  struct chunk_clt_ctx ctx = {0, 0, 0, 0, 0};
+
   mg_mgr_init(&mgr, NULL);
-  ASSERT((lc = mg_bind(&mgr, local_addr, srv1)) != NULL);
+  ASSERT((lc = mg_bind(&mgr, local_addr, file_srv)) != NULL);
   mg_set_protocol_http_websocket(lc);
-  ASSERT((nc = mg_connect(&mgr, local_addr, srv2)) != NULL);
+  ASSERT((nc = mg_connect(&mgr, local_addr, chunk_clt)) != NULL);
   mg_set_protocol_http_websocket(nc);
-  nc->user_data = &status;
-  mg_printf(nc, "GET / HTTP/1.0\r\n\r\n");
-  poll_until(&mgr, 30, c_int_ne, &status, (void *) 0);
-  ASSERT_EQ(status, 1);
+  nc->user_data = &ctx;
+  mg_printf(nc,
+            "GET / HTTP/1.0\r\n"
+            "Content-Length: 0\r\n"
+            "Connection: keep-alive\r\n"
+            "\r\n");
+  poll_until(&mgr, 5, c_int_ne, &ctx.status, (void *) 0);
+  ASSERT_EQ(ctx.status, 1);
+  ASSERT_EQ(nc->flags & (MG_F_CLOSE_IMMEDIATELY | MG_F_SEND_AND_CLOSE), 0);
+  memset(&ctx, 0, sizeof(ctx));
+  ctx.seq = 1;
+  mg_printf(nc, "GET / HTTP/1.1\r\nConnection: close\r\n\r\n");
+  poll_until(&mgr, 5, c_int_ne, &ctx.status, (void *) 0);
+  ASSERT_EQ(ctx.status, 1);
   mg_mgr_free(&mgr);
   return NULL;
 }
@@ -2005,9 +2053,11 @@ static const char *test_http(void) {
   char buf[50] = "", status[100] = "", mime1[20] = "", mime2[100] = "";
   char opt_buf[1024] = "";
   const char *opt_answer =
-      "HTTP/1.1 200 OK\r\nServer: Mongoose/" MG_VERSION
-      "\r\nAllow: GET, POST, HEAD, CONNECT, OPTIONS, MKCOL, "
-      "PUT, DELETE, PROPFIND, MOVE";
+      "HTTP/1.1 200 OK\r\n"
+      "Server: Mongoose/" MG_VERSION
+      "\r\n"
+      "Allow: GET, POST, HEAD, CONNECT, OPTIONS, MKCOL, PUT, DELETE, PROPFIND, "
+      "MOVE";
   char url[1000];
 
   mg_mgr_init(&mgr, NULL);
@@ -2085,6 +2135,7 @@ static void http_pipeline_handler(struct mg_connection *c, int ev,
                           "Content-Type: text/plain\r\nContent-Length: 5\r\n");
     mg_printf(c, "Hello");
     *status = *status + 1;
+    c->flags |= MG_F_SEND_AND_CLOSE;
   } else if (ev == MG_EV_HTTP_REPLY) {
     /* Client reply handler */
     *status = *status + 10;
@@ -2102,7 +2153,12 @@ static const char *test_http_pipeline(void) {
   mg_set_protocol_http_websocket(lc);
   ASSERT(nc1 = mg_connect(&mgr, local_addr, http_pipeline_handler));
   mg_set_protocol_http_websocket(nc1);
-  mg_printf(nc1, "GET / HTTP/1.1\r\n\r\nGET / HTTP/1.1\r\n\r\n");
+  mg_printf(nc1,
+            "GET /foo HTTP/1.1\r\n"
+            "Content-Length: 0\r\n"
+            "\r\n"
+            "GET /bar HTTP/1.1\r\n"
+            "\r\n");
   poll_until(&mgr, 1, c_int_eq, &status, (void *) 22);
   ASSERT_EQ(status, 22);
   mg_mgr_free(&mgr);
@@ -4225,6 +4281,7 @@ static const char *test_http_multipart2(void) {
   mbuf_init(&mpd.res, 0);
 
   mg_mgr_init(&mgr, NULL);
+  /* mgr.hexdump_file = "-"; */
   nc_listen = mg_bind(&mgr, "8765", cb_mp_srv);
   nc_listen->user_data = &mpd;
 
@@ -4276,10 +4333,12 @@ static const char *test_http_multipart2(void) {
   mbuf_init(&mpd.res, 0);
 
   mg_printf(c,
-            "POST /test HTTP/1.1\r\nHost: 127.0.0.1:8766\r\nContent-Length: "
-            "%" SIZE_T_FMT
-            "\r\nConnection: keep-alive\r\nContent-Type: multipart/form-data; "
-            "boundary=Asrf456BGe4h\r\n%s",
+            "POST /test HTTP/1.1\r\n"
+            "Host: 127.0.0.1:8766\r\n"
+            "Content-Length: %" SIZE_T_FMT
+            "\r\n"
+            "Connection: keep-alive\r\n"
+            "Content-Type: multipart/form-data; boundary=Asrf456BGe4h\r\n%s",
             strlen(multi_part_req), multi_part_req);
 
   poll_until(&mgr, 3, c_int_eq, &mpd.request_end, (void *) 1);
@@ -4594,7 +4653,13 @@ static const char *test_dns_encode_name(void) {
   struct mbuf mb;
   mbuf_init(&mb, 0);
   ASSERT_EQ(mg_dns_encode_name(&mb, "www.cesanta.com.net.org", 15), 17);
-  ASSERT_STREQ_NZ(mb.buf, "\x03" "www" "\x07" "cesanta" "\x03" "com");
+  ASSERT_STREQ_NZ(mb.buf,
+                  "\x03"
+                  "www"
+                  "\x07"
+                  "cesanta"
+                  "\x03"
+                  "com");
   mbuf_free(&mb);
   return NULL;
 }
@@ -5670,9 +5735,7 @@ static const char *test_socks(void) {
   char status[100] = "";
 
   mg_mgr_init(&mgr, NULL);
-#if 0
-  mgr.hexdump_file = "-";
-#endif
+  /* mgr.hexdump_file = "-"; */
 
 #if 1
   cs_log_set_level(LL_INFO);
