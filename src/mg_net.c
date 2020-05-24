@@ -707,13 +707,13 @@ static int mg_recv_udp(struct mg_connection *nc, char *buf, size_t len) {
     } else {
       mbuf_append(&nc->recv_mbuf, buf, n);
     }
+    mbuf_trim(&lc->recv_mbuf);
     lc->last_io_time = nc->last_io_time = (time_t) mg_time();
 #if !defined(NO_LIBC) && MG_ENABLE_HEXDUMP
     if (nc->mgr && nc->mgr->hexdump_file != NULL) {
       mg_hexdump_connection(nc, nc->mgr->hexdump_file, buf, n, MG_EV_RECV);
     }
 #endif
-    mbuf_trim(&lc->recv_mbuf);
     if (n != 0) {
       mg_call(nc, NULL, nc->user_data, MG_EV_RECV, &n);
     }
