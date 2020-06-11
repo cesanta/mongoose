@@ -6859,7 +6859,7 @@ static int mg_http_multipart_continue_wait_for_chunk(struct mg_connection *c) {
       mbuf_remove(io, consumed);
     }
     return 0;
-  } else {
+  } else if (boundary != NULL) {
     size_t data_len = ((size_t)(boundary - io->buf) - 4);
     size_t consumed = mg_http_multipart_call_handler(c, MG_EV_HTTP_PART_DATA,
                                                      io->buf, data_len);
@@ -6871,6 +6871,8 @@ static int mg_http_multipart_continue_wait_for_chunk(struct mg_connection *c) {
     } else {
       return 0;
     }
+  } else {
+    return 0;
   }
 }
 
