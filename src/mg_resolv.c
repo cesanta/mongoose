@@ -52,30 +52,32 @@ static int mg_get_ip_address_of_nameserver(char *name, size_t name_len) {
                         NULL) != ERROR_SUCCESS) {
         break;
       }
-      if (RegOpenKeyExW(hKey, subkey, 0, KEY_READ, &hSub) == ERROR_SUCCESS &&
-          ((RegQueryValueExW(hSub, L"NameServer", 0, &type, (void *) value,
-                             &len) == ERROR_SUCCESS &&
-            value[0] != '\0') ||
-           (RegQueryValueExW(hSub, L"DhcpNameServer", 0, &type, (void *) value,
-                             &len) == ERROR_SUCCESS &&
-            value[0] != '\0'))) {
-        /*
-         * See https://github.com/cesanta/mongoose/issues/176
-         * The value taken from the registry can be empty, a single
-         * IP address, or multiple IP addresses separated by comma.
-         * If it's empty, check the next interface.
-         * If it's multiple IP addresses, take the first one.
-         */
-        wchar_t *comma = wcschr(value, ',');
-        if (comma != NULL) {
-          *comma = '\0';
-        }
-        /* %S will convert wchar_t -> char */
-        snprintf(name, name_len, "%S", value);
-        ret = 0;
-        RegCloseKey(hSub);
-        break;
-      }
+      if (RegOpenKeyExW(hKey, subkey, 0, KEY_READ, &hSub) == ERROR_SUCCESS) {
+          if (((RegQueryValueExW(hSub, L"NameServer", 0, &type, (void*)value,
+              &len) == ERROR_SUCCESS &&
+              value[0] != '\0') ||
+              (RegQueryValueExW(hSub, L"DhcpNameServer", 0, &type, (void*)value,
+                  &len) == ERROR_SUCCESS &&
+                  value[0] != '\0'))) {
+              /*
+               * See https://github.com/cesanta/mongoose/issues/176
+               * The value taken from the registry can be empty, a single
+               * IP address, or multiple IP addresses separated by comma.
+               * If it's empty, check the next interface.
+               * If it's multiple IP addresses, take the first one.
+               */
+              wchar_t* comma = wcschr(value, ',');
+              if (comma != NULL) {
+                  *comma = '\0';
+              }
+              /* %S will convert wchar_t -> char */
+              snprintf(name, name_len, "%S", value);
+              ret = 0;
+              RegCloseKey(hSub);
+              break;
+          }
+          RegCloseKey(hSub);
+      }      
     }
     RegCloseKey(hKey);
   }
