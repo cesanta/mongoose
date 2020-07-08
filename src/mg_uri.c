@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 #include "mg_internal.h"
 #include "mg_uri.h"

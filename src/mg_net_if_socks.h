@@ -1,7 +1,3 @@
-/*
-* Copyright (c) 2014-2017 Cesanta Software Limited
-* All rights reserved
-*/
 
 #ifndef CS_MONGOOSE_SRC_NET_IF_SOCKS_H_
 #define CS_MONGOOSE_SRC_NET_IF_SOCKS_H_

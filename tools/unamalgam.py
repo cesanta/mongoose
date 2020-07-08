@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import sys
 import re
 import os
@@ -33,11 +33,11 @@ with open(fname) as f:
 
             # open next file for writing
             ofile = open(cur_src, "w")
-            print >>sys.stderr, '=> %s' % cur_src
+            print('=> %s' % cur_src, file=sys.stderr)
             manifest.append(cur_src)
             next(f)
         elif ofile:
             ofile.write(clean(l))
 
-m = open('%s.manifest' % os.path.basename(fname), 'w')
-print >>m, '\n'.join(manifest)
+with open('src/%s.manifest' % os.path.basename(fname), 'w') as m:
+    print('\n'.join(manifest), file=m)

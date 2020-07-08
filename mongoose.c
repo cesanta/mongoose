@@ -19,7 +19,7 @@
 
 #include "mongoose.h"
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_internal.h"
+#line 1 "src/mg_internal.h"
 #endif
 
 #ifndef CS_MONGOOSE_SRC_INTERNAL_H_
@@ -180,7 +180,7 @@ MG_INTERNAL int mg_sntp_parse_reply(const char *buf, int len,
 
 #endif /* CS_MONGOOSE_SRC_INTERNAL_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/mg_mem.h"
+#line 1 "src/common/mg_mem.h"
 #endif
 
 #ifndef CS_COMMON_MG_MEM_H_
@@ -212,7 +212,7 @@ extern "C" {
 
 #endif /* CS_COMMON_MG_MEM_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/cs_base64.c"
+#line 1 "src/common/cs_base64.c"
 #endif
 
 #ifndef EXCLUDE_COMMON
@@ -416,7 +416,7 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
-#line 1 "common/cs_dbg.h"
+#line 1 "src/common/cs_dbg.h"
 #endif
 
 #ifndef CS_COMMON_CS_DBG_H_
@@ -551,7 +551,7 @@ void cs_log_printf(const char *fmt, ...) PRINTF_LIKE(1, 2);
 
 #endif /* CS_COMMON_CS_DBG_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/cs_dbg.c"
+#line 1 "src/common/cs_dbg.c"
 #endif
 
 /* Amalgamated: #include "common/cs_dbg.h" */
@@ -681,7 +681,7 @@ void cs_log_set_level(enum cs_log_level level) {
 #endif
 }
 #ifdef MG_MODULE_LINES
-#line 1 "common/cs_dirent.h"
+#line 1 "src/common/cs_dirent.h"
 #endif
 
 #ifndef CS_COMMON_CS_DIRENT_H_
@@ -719,7 +719,7 @@ struct dirent *readdir(DIR *dir);
 
 #endif /* CS_COMMON_CS_DIRENT_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/cs_dirent.c"
+#line 1 "src/common/cs_dirent.c"
 #endif
 
 #ifndef EXCLUDE_COMMON
@@ -814,7 +814,7 @@ struct dirent *readdir(DIR *d) {
 /* ISO C requires a translation unit to contain at least one declaration */
 typedef int cs_dirent_dummy;
 #ifdef MG_MODULE_LINES
-#line 1 "common/cs_time.c"
+#line 1 "src/common/cs_time.c"
 #endif
 
 /* Amalgamated: #include "common/cs_time.h" */
@@ -896,7 +896,7 @@ double cs_timegm(const struct tm *tm) {
   return rt < 0 ? -1 : (double) rt;
 }
 #ifdef MG_MODULE_LINES
-#line 1 "common/cs_endian.h"
+#line 1 "src/common/cs_endian.h"
 #endif
 
 #ifndef CS_COMMON_CS_ENDIAN_H_
@@ -927,7 +927,7 @@ extern "C" {
 
 #endif /* CS_COMMON_CS_ENDIAN_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/cs_md5.c"
+#line 1 "src/common/cs_md5.c"
 #endif
 /*
  * This code implements the MD5 message-digest algorithm.
@@ -1141,7 +1141,7 @@ void cs_md5_final(unsigned char digest[16], cs_md5_ctx *ctx) {
 #endif /* CS_DISABLE_MD5 */
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
-#line 1 "common/cs_sha1.c"
+#line 1 "src/common/cs_sha1.c"
 #endif
 /* Copyright(c) By Steve Reid <steve@edmweb.com> */
 /* 100% Public Domain */
@@ -1397,7 +1397,7 @@ void cs_hmac_sha1(const unsigned char *key, size_t keylen,
 
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
-#line 1 "common/mbuf.c"
+#line 1 "src/common/mbuf.c"
 #endif
 
 #ifndef EXCLUDE_COMMON
@@ -1535,7 +1535,7 @@ void mbuf_move(struct mbuf *from, struct mbuf *to) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
-#line 1 "common/mg_str.c"
+#line 1 "src/common/mg_str.c"
 #endif
 
 /* Amalgamated: #include "common/mg_mem.h" */
@@ -1700,7 +1700,7 @@ int mg_str_starts_with(struct mg_str s, struct mg_str prefix) {
   return (mg_strcmp(sp, prefix) == 0);
 }
 #ifdef MG_MODULE_LINES
-#line 1 "common/str_util.c"
+#line 1 "src/common/str_util.c"
 #endif
 
 #ifndef EXCLUDE_COMMON
@@ -2219,7 +2219,7 @@ size_t mg_match_prefix(const char *pattern, int pattern_len, const char *str) {
 
 #endif /* EXCLUDE_COMMON */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_net.c"
+#line 1 "src/mg_net.c"
 #endif
 
 /* Amalgamated: #include "common/cs_time.h" */
@@ -3415,7 +3415,7 @@ double mg_time(void) {
   return cs_time();
 }
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_net_if_socket.h"
+#line 1 "src/mg_net_if_socket.h"
 #endif
 
 #ifndef CS_MONGOOSE_SRC_NET_IF_SOCKET_H_
@@ -3439,7 +3439,7 @@ extern const struct mg_iface_vtable mg_socket_iface_vtable;
 
 #endif /* CS_MONGOOSE_SRC_NET_IF_SOCKET_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_net_if_socks.h"
+#line 1 "src/mg_net_if_socks.h"
 #endif
 
 #ifndef CS_MONGOOSE_SRC_NET_IF_SOCKS_H_
@@ -3460,7 +3460,7 @@ extern const struct mg_iface_vtable mg_socks_iface_vtable;
 #endif /* MG_ENABLE_SOCKS */
 #endif /* CS_MONGOOSE_SRC_NET_IF_SOCKS_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_net_if.c"
+#line 1 "src/mg_net_if.c"
 #endif
 /* Amalgamated: #include "mg_net_if.h" */
 /* Amalgamated: #include "mg_internal.h" */
@@ -3516,7 +3516,7 @@ double mg_mgr_min_timer(const struct mg_mgr *mgr) {
   return min_timer;
 }
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_net_if_null.c"
+#line 1 "src/mg_net_if_null.c"
 #endif
 
 static void mg_null_if_connect_tcp(struct mg_connection *c,
@@ -3643,7 +3643,7 @@ const struct mg_iface_vtable mg_null_iface_vtable = MG_NULL_IFACE_VTABLE;
 const struct mg_iface_vtable mg_default_iface_vtable = MG_NULL_IFACE_VTABLE;
 #endif /* MG_NET_IF == MG_NET_IF_NULL */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_net_if_socket.c"
+#line 1 "src/mg_net_if_socket.c"
 #endif
 
 #if MG_ENABLE_NET_IF_SOCKET
@@ -4223,7 +4223,7 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_SOCKET_IFACE_VTABLE;
 
 #endif /* MG_ENABLE_NET_IF_SOCKET */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_net_if_socks.c"
+#line 1 "src/mg_net_if_socks.c"
 #endif
 
 #if MG_ENABLE_SOCKS
@@ -4459,7 +4459,7 @@ struct mg_iface *mg_socks_mk_iface(struct mg_mgr *mgr, const char *proxy_addr) {
 
 #endif
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_ssl_if_openssl.c"
+#line 1 "src/mg_ssl_if_openssl.c"
 #endif
 
 #if MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_OPENSSL
@@ -4873,7 +4873,7 @@ const char *mg_set_ssl(struct mg_connection *nc, const char *cert,
 
 #endif /* MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_OPENSSL */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_ssl_if_mbedtls.c"
+#line 1 "src/mg_ssl_if_mbedtls.c"
 #endif
 
 #if MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_MBEDTLS
@@ -5387,7 +5387,7 @@ int mg_ssl_if_mbed_random(void *ctx, unsigned char *buf, size_t len) {
 
 #endif /* MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_MBEDTLS */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_uri.c"
+#line 1 "src/mg_uri.c"
 #endif
 
 /* Amalgamated: #include "mg_internal.h" */
@@ -5647,7 +5647,7 @@ out:
   return result;
 }
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_http.c"
+#line 1 "src/mg_http.c"
 #endif
 
 #if MG_ENABLE_HTTP
@@ -8836,7 +8836,7 @@ void mg_register_http_endpoint(struct mg_connection *nc, const char *uri_path,
 
 #endif /* MG_ENABLE_HTTP */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_http_cgi.c"
+#line 1 "src/mg_http_cgi.c"
 #endif
 
 #ifndef _WIN32
@@ -9348,7 +9348,7 @@ MG_INTERNAL void mg_http_free_proto_data_cgi(struct mg_http_proto_data_cgi *d) {
 
 #endif /* MG_ENABLE_HTTP && MG_ENABLE_HTTP_CGI */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_http_ssi.c"
+#line 1 "src/mg_http_ssi.c"
 #endif
 
 #if MG_ENABLE_HTTP && MG_ENABLE_HTTP_SSI && MG_ENABLE_FILESYSTEM
@@ -9550,7 +9550,7 @@ MG_INTERNAL void mg_handle_ssi_request(struct mg_connection *nc,
 
 #endif /* MG_ENABLE_HTTP_SSI && MG_ENABLE_HTTP && MG_ENABLE_FILESYSTEM */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_http_webdav.c"
+#line 1 "src/mg_http_webdav.c"
 #endif
 
 #if MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBDAV
@@ -9818,7 +9818,7 @@ MG_INTERNAL void mg_handle_put(struct mg_connection *nc, const char *path,
 
 #endif /* MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBDAV */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_http_websocket.c"
+#line 1 "src/mg_http_websocket.c"
 #endif
 
 #if MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBSOCKET
@@ -10336,7 +10336,7 @@ struct mg_connection *mg_connect_ws(
 }
 #endif /* MG_ENABLE_HTTP && MG_ENABLE_HTTP_WEBSOCKET */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_util.c"
+#line 1 "src/mg_util.c"
 #endif
 
 /* Amalgamated: #include "common/cs_base64.h" */
@@ -10679,7 +10679,7 @@ struct mg_str mg_url_encode(const struct mg_str src) {
   return mg_url_encode_opt(src, mg_mk_str("._-$,;~()/"), 0);
 }
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_mqtt.c"
+#line 1 "src/mg_mqtt.c"
 #endif
 
 #if MG_ENABLE_MQTT
@@ -11211,7 +11211,7 @@ void mg_mqtt_disconnect(struct mg_connection *nc) {
 
 #endif /* MG_ENABLE_MQTT */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_mqtt_server.c"
+#line 1 "src/mg_mqtt_server.c"
 #endif
 
 /* Amalgamated: #include "mg_internal.h" */
@@ -11404,7 +11404,7 @@ struct mg_mqtt_session *mg_mqtt_next(struct mg_mqtt_broker *brk,
 
 #endif /* MG_ENABLE_MQTT_BROKER */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_dns.c"
+#line 1 "src/mg_dns.c"
 #endif
 
 #if MG_ENABLE_DNS
@@ -11784,7 +11784,7 @@ void mg_set_protocol_dns(struct mg_connection *nc) {
 
 #endif /* MG_ENABLE_DNS */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_dns_server.c"
+#line 1 "src/mg_dns_server.c"
 #endif
 
 #if MG_ENABLE_DNS_SERVER
@@ -11854,7 +11854,7 @@ int mg_dns_reply_record(struct mg_dns_reply *reply,
 
 #endif /* MG_ENABLE_DNS_SERVER */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_resolv.c"
+#line 1 "src/mg_resolv.c"
 #endif
 
 #if MG_ENABLE_ASYNC_RESOLVER
@@ -12145,7 +12145,7 @@ void mg_set_nameserver(struct mg_mgr *mgr, const char *nameserver) {
 
 #endif /* MG_ENABLE_ASYNC_RESOLVER */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_coap.c"
+#line 1 "src/mg_coap.c"
 #endif
 
 /* Amalgamated: #include "mg_internal.h" */
@@ -12729,7 +12729,7 @@ int mg_set_protocol_coap(struct mg_connection *nc) {
 
 #endif /* MG_ENABLE_COAP */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_sntp.c"
+#line 1 "src/mg_sntp.c"
 #endif
 
 /* Amalgamated: #include "mg_internal.h" */
@@ -13016,7 +13016,7 @@ struct mg_connection *mg_sntp_get_time(struct mg_mgr *mgr,
 
 #endif /* MG_ENABLE_SNTP */
 #ifdef MG_MODULE_LINES
-#line 1 "mongoose/src/mg_socks.c"
+#line 1 "src/mg_socks.c"
 #endif
 
 #if MG_ENABLE_SOCKS
@@ -13174,7 +13174,7 @@ void mg_set_protocol_socks(struct mg_connection *c) {
 }
 #endif
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/cc3200/cc3200_libc.c"
+#line 1 "src/common/platforms/cc3200/cc3200_libc.c"
 #endif
 
 #if CS_PLATFORM == CS_P_CC3200
@@ -13276,7 +13276,7 @@ int _isatty(int fd) {
 
 #endif /* CS_PLATFORM == CS_P_CC3200 */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/msp432/msp432_libc.c"
+#line 1 "src/common/platforms/msp432/msp432_libc.c"
 #endif
 
 #if CS_PLATFORM == CS_P_MSP432
@@ -13293,7 +13293,7 @@ int gettimeofday(struct timeval *tp, void *tzp) {
 
 #endif /* CS_PLATFORM == CS_P_MSP432 */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/nrf5/nrf5_libc.c"
+#line 1 "src/common/platforms/nrf5/nrf5_libc.c"
 #endif
 
 #if (CS_PLATFORM == CS_P_NRF51 || CS_PLATFORM == CS_P_NRF52) && \
@@ -13306,7 +13306,7 @@ int gettimeofday(struct timeval *tp, void *tzp) {
 }
 #endif
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/simplelink/sl_fs_slfs.h"
+#line 1 "src/common/platforms/simplelink/sl_fs_slfs.h"
 #endif
 
 #ifndef CS_COMMON_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_
@@ -13341,7 +13341,7 @@ void fs_slfs_unset_file_flags(const char *name);
 
 #endif /* CS_COMMON_PLATFORMS_SIMPLELINK_SL_FS_SLFS_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/simplelink/sl_fs_slfs.c"
+#line 1 "src/common/platforms/simplelink/sl_fs_slfs.c"
 #endif
 
 /* Standard libc interface to TI SimpleLink FS. */
@@ -13630,7 +13630,7 @@ void fs_slfs_unset_file_flags(const char *name) {
 
 #endif /* defined(MG_FS_SLFS) || defined(CC3200_FS_SLFS) */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/simplelink/sl_fs.c"
+#line 1 "src/common/platforms/simplelink/sl_fs.c"
 #endif
 
 #if MG_NET_IF == MG_NET_IF_SIMPLELINK && \
@@ -14040,7 +14040,7 @@ int sl_fs_init(void) {
 #endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK && (defined(MG_FS_SLFS) || \
           defined(MG_FS_SPIFFS)) */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/simplelink/sl_socket.c"
+#line 1 "src/common/platforms/simplelink/sl_socket.c"
 #endif
 
 #if MG_NET_IF == MG_NET_IF_SIMPLELINK
@@ -14087,7 +14087,7 @@ int inet_pton(int af, const char *src, void *dst) {
 
 #endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/simplelink/sl_mg_task.c"
+#line 1 "src/common/platforms/simplelink/sl_mg_task.c"
 #endif
 #if MG_NET_IF == MG_NET_IF_SIMPLELINK && !defined(MG_SIMPLELINK_NO_OSI)
 
@@ -14142,7 +14142,7 @@ void mg_run_in_task(void (*cb)(struct mg_mgr *mgr, void *arg), void *cb_arg) {
 #endif /* MG_NET_IF == MG_NET_IF_SIMPLELINK && !defined(MG_SIMPLELINK_NO_OSI) \
           */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/simplelink/sl_net_if.h"
+#line 1 "src/common/platforms/simplelink/sl_net_if.h"
 #endif
 
 #ifndef CS_COMMON_PLATFORMS_SIMPLELINK_SL_NET_IF_H_
@@ -14166,7 +14166,7 @@ extern const struct mg_iface_vtable mg_simplelink_iface_vtable;
 
 #endif /* CS_COMMON_PLATFORMS_SIMPLELINK_SL_NET_IF_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/simplelink/sl_net_if.c"
+#line 1 "src/common/platforms/simplelink/sl_net_if.c"
 #endif
 
 /* Amalgamated: #include "common/platforms/simplelink/sl_net_if.h" */
@@ -14585,7 +14585,7 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_SL_IFACE_VTABLE;
 
 #endif /* MG_ENABLE_NET_IF_SIMPLELINK */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/simplelink/sl_ssl_if.c"
+#line 1 "src/common/platforms/simplelink/sl_ssl_if.c"
 #endif
 
 #if MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_SIMPLELINK
@@ -14823,7 +14823,7 @@ int sl_set_ssl_opts(int sock, struct mg_connection *nc) {
 
 #endif /* MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_SIMPLELINK */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/lwip/mg_lwip_net_if.h"
+#line 1 "src/common/platforms/lwip/mg_lwip_net_if.h"
 #endif
 
 #ifndef CS_COMMON_PLATFORMS_LWIP_MG_NET_IF_LWIP_H_
@@ -14875,7 +14875,7 @@ void mg_lwip_mgr_schedule_poll(struct mg_mgr *mgr);
 
 #endif /* CS_COMMON_PLATFORMS_LWIP_MG_NET_IF_LWIP_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/lwip/mg_lwip_net_if.c"
+#line 1 "src/common/platforms/lwip/mg_lwip_net_if.c"
 #endif
 
 #if MG_ENABLE_NET_IF_LWIP_LOW_LEVEL
@@ -15608,7 +15608,7 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_LWIP_IFACE_VTABLE;
 
 #endif /* MG_ENABLE_NET_IF_LWIP_LOW_LEVEL */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/lwip/mg_lwip_ev_mgr.c"
+#line 1 "src/common/platforms/lwip/mg_lwip_ev_mgr.c"
 #endif
 
 #if MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL
@@ -15768,7 +15768,7 @@ time_t mg_lwip_if_poll(struct mg_iface *iface, int timeout_ms) {
 
 #endif /* MG_NET_IF == MG_NET_IF_LWIP_LOW_LEVEL */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/wince/wince_libc.c"
+#line 1 "src/common/platforms/wince/wince_libc.c"
 #endif
 
 #ifdef WINCE
@@ -15841,7 +15841,7 @@ static void mg_gmt_time_string(char *buf, size_t buf_len, time_t *t) {
 
 #endif
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/pic32/pic32_net_if.h"
+#line 1 "src/common/platforms/pic32/pic32_net_if.h"
 #endif
 
 #ifndef CS_COMMON_PLATFORMS_PIC32_NET_IF_H_
@@ -15865,7 +15865,7 @@ extern const struct mg_iface_vtable mg_pic32_iface_vtable;
 
 #endif /* CS_COMMON_PLATFORMS_PIC32_NET_IF_H_ */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/pic32/pic32_net_if.c"
+#line 1 "src/common/platforms/pic32/pic32_net_if.c"
 #endif
 
 #if MG_ENABLE_NET_IF_PIC32
@@ -16156,7 +16156,7 @@ const struct mg_iface_vtable mg_default_iface_vtable = MG_PIC32_IFACE_VTABLE;
 
 #endif /* MG_ENABLE_NET_IF_PIC32 */
 #ifdef MG_MODULE_LINES
-#line 1 "common/platforms/windows/windows_direct.c"
+#line 1 "src/common/platforms/windows/windows_direct.c"
 #endif
 
 #ifdef _WIN32

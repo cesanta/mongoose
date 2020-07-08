@@ -172,8 +172,11 @@ if sys.platform == "win32":
 
 
 if args.license:
-    with open(args.license) as f:
-        print(f.read())
+    print('/*')
+    for l in open(args.license):
+        print((' * %s' % l.rstrip()).rstrip())
+    print(' */')
+    print('')
 
 if args.public:
     print('#include "%s"' % args.public)

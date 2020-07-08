@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2016 Cesanta Software Limited
- * All rights reserved
- */
 
 #include "mg_internal.h"
 #include "mg_sntp.h"

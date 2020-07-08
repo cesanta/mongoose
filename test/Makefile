@@ -4,24 +4,11 @@ PROG = unit_test
 
 MONGOOSE_DIR = ..
 
-SRC_DIR = ../src
-
-COMMON_DIR_PUB = ../src/common
-COMMON_DIR_DEV = ../../common
-
-# Our dev repo and public mongoose repo have different layouts, so here
-# we make it work on both
-ifneq ("$(wildcard ../../common.mk)","")
-COMMON_PARENT = ../..
-else
-COMMON_PARENT = $(SRC_DIR)
-endif
-
 TEST_SOURCES = unit_test.c test_util.c test_main.c fuzz.c
 AMALGAMATED_SOURCES = ../mongoose.c
 KRYPTON_PATH = $(REPO_ROOT)/krypton
 
-VPATH = $(MONGOOSE_DIR) $(SRC_DIR) $(COMMON_DIR_PUB) $(COMMON_DIR_DEV) $(COMMON_PARENT)
+VPATH = $(MONGOOSE_DIR)
 
 # or Krypton, or mbedTLS
 SSL ?= OpenSSL
@@ -49,7 +36,7 @@ UNIX_FEATURE_FLAGS=-DMG_ENABLE_IPV6 -DMG_ENABLE_SSL
 # `mg_http_parse_header()` is removed from mongoose.
 CFLAGS = -W -Wall -Wundef -Werror -Wno-deprecated-declarations -g -O0 -Wno-multichar -D__USE_MISC \
 	 $(COMMON_FEATURE_FLAGS) $(UNIX_FEATURE_FLAGS) \
-	 $(patsubst %,-I%,$(subst :, ,$(VPATH))) \
+	 -I$(MONGOOSE_DIR) -I../src \
 	 -include unit_test.h -pthread $(CFLAGS_EXTRA)
 
 LDFLAGS = -lm
@@ -67,7 +54,6 @@ LDFLAGS += -lmbedcrypto -lmbedtls -lmbedx509
 endif
 
 include test.mk
-include $(SRC_DIR)/mg_modules.mk
 
 # http://crossgcc.rts-software.org/doku.php?id=compiling_for_win32
 MINGW_GCC=/usr/local/gcc-4.8.0-qt-4.8.4-for-mingw32/win32-gcc/bin/i586-mingw32-gcc
