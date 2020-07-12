@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2014 Cesanta Software Limited
- * All rights reserved
- */
 
 #include "common/cs_base64.h"
 #include "mg_internal.h"

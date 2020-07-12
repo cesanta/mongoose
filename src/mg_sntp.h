@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2016 Cesanta Software Limited
- * All rights reserved
- */
 
 #ifndef CS_MONGOOSE_SRC_SNTP_H_
 #define CS_MONGOOSE_SRC_SNTP_H_

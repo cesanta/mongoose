@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2017 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_SOCKS
 

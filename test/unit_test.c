@@ -17,11 +17,12 @@
 
 #include "unit_test.h"
 
-#include "common/cs_md5.h"
-#include "common/test_main.h"
-#include "common/test_util.h"
 #include "mongoose.h"
-#include "src/mg_internal.h"
+
+#include "common/cs_md5.h"
+#include "../src/mg_internal.h"
+#include "test_main.h"
+#include "test_util.h"
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ < 199901L && !defined(WIN32)
 #define __func__ ""

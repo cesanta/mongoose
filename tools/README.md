@@ -8,8 +8,8 @@ This directory contains utilities to split and re-constitute amalgamated files.
 Here's how `mongoose.c` can be split into its consituent parts:
 ```
 $ tools/unamalgam.py mongoose.c
-=> mongoose/src/internal.h
-=> common/cs_dbg.h
+=> src/mg_internal.h
+=> src/common/mg_mem.h
 ...
 ```
 
@@ -20,3 +20,5 @@ $ tools/amalgam.py --prefix=MG --public-header=mongoose.h $(cat mongoose.c.manif
 ```
 
 The same applies to `mongoose.h`, except `--public-header` should be omitted during amalgamation.
+
+`tools/amalgam.sh` can be used to assemble `mongoose.c` and `mongoose.h`.

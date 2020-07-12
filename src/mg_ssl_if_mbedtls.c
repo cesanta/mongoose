@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2014-2016 Cesanta Software Limited
- * All rights reserved
- */
 
 #if MG_ENABLE_SSL && MG_SSL_IF == MG_SSL_IF_MBEDTLS
 
