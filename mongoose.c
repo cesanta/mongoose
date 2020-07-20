@@ -1560,6 +1560,10 @@ void mbuf_free(struct mbuf *mbuf) {
 
 void mbuf_resize(struct mbuf *a, size_t new_size) WEAK;
 void mbuf_resize(struct mbuf *a, size_t new_size) {
+  /*
+   *In case realloc(buf, 0) error; some compiler will call free(buf), then get double freed.
+   */
+  if(!new_size) return;
   if (new_size > a->size || (new_size < a->size && new_size >= a->len)) {
     char *buf = (char *) MBUF_REALLOC(a->buf, new_size);
     /*
