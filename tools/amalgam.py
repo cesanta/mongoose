@@ -121,9 +121,14 @@ def emit_body(out, name, parent_name):
         return
 
     with open(resolved_name) as f:
+        leading_spaces = True
         in_comment = False
         comment = ''
         for l in f:
+            if leading_spaces:
+                if not l.strip():
+                    continue
+                leading_spaces = False
             if in_comment:
                 comment += l
                 if re.match('\s*\*/$', l):
