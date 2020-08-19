@@ -1522,7 +1522,7 @@ void mg_http_serve_file_internal(struct mg_connection *nc,
     };
     mg_http_send_error(nc, code, "Open failed");
   } else {
-    char etag[50], current_time[50], last_modified[50], range[70];
+    char etag[50], current_time[50], last_modified[50], range[76];
     time_t t = (time_t) mg_time();
     int64_t r1 = 0, r2 = 0, cl = st.st_size;
     struct mg_str *range_hdr = mg_get_http_header(hm, "Range");
