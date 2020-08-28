@@ -578,6 +578,15 @@ double cs_log_ts WEAK;
 
 enum cs_log_level cs_log_cur_msg_level WEAK = LL_NONE;
 
+/* In implementations that require locking, these can be overridden. */
+void cs_log_lock(void) WEAK;
+void cs_log_lock(void) {
+}
+
+void cs_log_unlock(void) WEAK;
+void cs_log_unlock(void) {
+}
+
 void cs_log_set_file_level(const char *file_level) {
   char *fl = s_file_level;
   if (file_level != NULL) {
@@ -631,6 +640,7 @@ int cs_log_print_prefix(enum cs_log_level level, const char *file, int ln) {
     if (level > pll) return 0;
   }
 
+  cs_log_lock();
   if (cs_log_file == NULL) cs_log_file = stderr;
   cs_log_cur_msg_level = level;
   fwrite(prefix, 1, sizeof(prefix), cs_log_file);
@@ -653,6 +663,7 @@ void cs_log_printf(const char *fmt, ...) {
   fputc('\n', cs_log_file);
   fflush(cs_log_file);
   cs_log_cur_msg_level = LL_NONE;
+  cs_log_unlock();
 }
 
 void cs_log_set_file(FILE *file) WEAK;
