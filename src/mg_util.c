@@ -338,3 +338,53 @@ struct mg_str mg_url_encode_opt(const struct mg_str src,
 struct mg_str mg_url_encode(const struct mg_str src) {
   return mg_url_encode_opt(src, mg_mk_str("._-$,;~()/"), 0);
 }
+
+int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
+                  int is_form_url_encoded) {
+  struct mg_str srcs = MG_MK_STR_N(src, (size_t) src_len);
+  struct mg_str dsts = MG_MK_STR_N(dst, (size_t) dst_len);
+  int res = mg_url_decode_n(srcs, &dsts, is_form_url_encoded);
+  if (res >= 0) {
+    if (res < dst_len) {
+      dst[res] = '\0';
+    } else {
+      res = -1; /* Not enough space for NUL-temrination. */
+    }
+  }
+  return res;
+}
+
+#define HEXTOI(x) (isdigit(x) ? x - '0' : x - 'W')
+int mg_url_decode_n(struct mg_str srcs, struct mg_str *dsts,
+                    int is_form_url_encoded) {
+  int i, j, a, b, src_len, dst_len;
+  const char *src = srcs.p;
+  char *dst;
+  if (dsts == NULL) return -1;
+  dst = (char *) dsts->p;
+  src_len = (int) srcs.len;
+  dst_len = (int) dsts->len;
+
+  for (i = j = 0; i < src_len && j < dst_len; i++, j++) {
+    if (src[i] == '%') {
+      if (i < src_len - 2 && isxdigit(*(const unsigned char *) (src + i + 1)) &&
+          isxdigit(*(const unsigned char *) (src + i + 2))) {
+        a = tolower(*(const unsigned char *) (src + i + 1));
+        b = tolower(*(const unsigned char *) (src + i + 2));
+        dst[j] = (char) ((HEXTOI(a) << 4) | HEXTOI(b));
+        i += 2;
+      } else {
+        break;
+      }
+    } else if (is_form_url_encoded && src[i] == '+') {
+      dst[j] = ' ';
+    } else {
+      dst[j] = src[i];
+    }
+  }
+  dsts->len = (size_t) j;
+
+  return i == src_len ? j : -1;
+}
+#undef HEXTOI
+

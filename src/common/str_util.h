@@ -149,6 +149,14 @@ struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
                                          struct mg_str *eq_val);
 
 /*
+ * Helper for parsing query strings.
+ * Parses '&' and '=' entries. Does not perform unescaping.
+ */
+struct mg_str mg_next_query_string_entry_n(struct mg_str list,
+                                           struct mg_str *val,
+                                           struct mg_str *eq_val);
+
+/*
  * Matches 0-terminated string (mg_match_prefix) or string with given length
  * mg_match_prefix_n against a glob pattern. Glob syntax:
  * ```

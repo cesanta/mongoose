@@ -2116,6 +2116,43 @@ int mg_avprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   return len;
 }
 
+static struct mg_str mg_next_list_entry_n(struct mg_str list, char sep1,
+                                          struct mg_str *val1, char sep2,
+                                          struct mg_str *val2) {
+  if (list.len == 0) {
+    /* End of the list */
+    list = mg_mk_str(NULL);
+  } else {
+    const char *chr = NULL;
+    *val1 = list;
+
+    if ((chr = mg_strchr(*val1, sep1)) != NULL) {
+      /* Comma found. Store length and shift the list ptr */
+      val1->len = chr - val1->p;
+      chr++;
+      list.len -= (chr - list.p);
+      list.p = chr;
+    } else {
+      /* This value is the last one */
+      list = mg_mk_str_n(list.p + list.len, 0);
+    }
+
+    if (val2 != NULL) {
+      /* Value has form "x=y", adjust pointers and lengths */
+      /* so that val points to "x", and eq_val points to "y". */
+      val2->len = 0;
+      val2->p = (const char *) memchr(val1->p, sep2, val1->len);
+      if (val2->p != NULL) {
+        val2->p++; /* Skip over sep2 character */
+        val2->len = val1->p + val1->len - val2->p;
+        val1->len = (val2->p - val1->p) - 1;
+      }
+    }
+  }
+
+  return list;
+}
+
 const char *mg_next_comma_list_entry(const char *, struct mg_str *,
                                      struct mg_str *) WEAK;
 const char *mg_next_comma_list_entry(const char *list, struct mg_str *val,
@@ -2128,38 +2165,16 @@ struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
                                          struct mg_str *eq_val) WEAK;
 struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
                                          struct mg_str *eq_val) {
-  if (list.len == 0) {
-    /* End of the list */
-    list = mg_mk_str(NULL);
-  } else {
-    const char *chr = NULL;
-    *val = list;
+  return mg_next_list_entry_n(list, ',', val, '=', eq_val);
+}
 
-    if ((chr = mg_strchr(*val, ',')) != NULL) {
-      /* Comma found. Store length and shift the list ptr */
-      val->len = chr - val->p;
-      chr++;
-      list.len -= (chr - list.p);
-      list.p = chr;
-    } else {
-      /* This value is the last one */
-      list = mg_mk_str_n(list.p + list.len, 0);
-    }
-
-    if (eq_val != NULL) {
-      /* Value has form "x=y", adjust pointers and lengths */
-      /* so that val points to "x", and eq_val points to "y". */
-      eq_val->len = 0;
-      eq_val->p = (const char *) memchr(val->p, '=', val->len);
-      if (eq_val->p != NULL) {
-        eq_val->p++; /* Skip over '=' character */
-        eq_val->len = val->p + val->len - eq_val->p;
-        val->len = (eq_val->p - val->p) - 1;
-      }
-    }
-  }
-
-  return list;
+struct mg_str mg_next_query_string_entry_n(struct mg_str list,
+                                           struct mg_str *val,
+                                           struct mg_str *eq_val) WEAK;
+struct mg_str mg_next_query_string_entry_n(struct mg_str list,
+                                           struct mg_str *val,
+                                           struct mg_str *eq_val) {
+  return mg_next_list_entry_n(list, '&', val, '=', eq_val);
 }
 
 size_t mg_match_prefix_n(const struct mg_str, const struct mg_str) WEAK;
@@ -7264,34 +7279,6 @@ static void mg_http_serve_file2(struct mg_connection *nc, const char *path,
 
 #endif
 
-int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
-                  int is_form_url_encoded) {
-  int i, j, a, b;
-#define HEXTOI(x) (isdigit(x) ? x - '0' : x - 'W')
-
-  for (i = j = 0; i < src_len && j < dst_len - 1; i++, j++) {
-    if (src[i] == '%') {
-      if (i < src_len - 2 && isxdigit(*(const unsigned char *) (src + i + 1)) &&
-          isxdigit(*(const unsigned char *) (src + i + 2))) {
-        a = tolower(*(const unsigned char *) (src + i + 1));
-        b = tolower(*(const unsigned char *) (src + i + 2));
-        dst[j] = (char) ((HEXTOI(a) << 4) | HEXTOI(b));
-        i += 2;
-      } else {
-        return -1;
-      }
-    } else if (is_form_url_encoded && src[i] == '+') {
-      dst[j] = ' ';
-    } else {
-      dst[j] = src[i];
-    }
-  }
-
-  dst[j] = '\0'; /* Null-terminate the destination */
-
-  return i >= src_len ? j : -1;
-}
-
 int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
                     size_t dst_len) {
   const char *p, *e, *s;
@@ -10662,6 +10649,56 @@ struct mg_str mg_url_encode_opt(const struct mg_str src,
 struct mg_str mg_url_encode(const struct mg_str src) {
   return mg_url_encode_opt(src, mg_mk_str("._-$,;~()/"), 0);
 }
+
+int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
+                  int is_form_url_encoded) {
+  struct mg_str srcs = MG_MK_STR_N(src, (size_t) src_len);
+  struct mg_str dsts = MG_MK_STR_N(dst, (size_t) dst_len);
+  int res = mg_url_decode_n(srcs, &dsts, is_form_url_encoded);
+  if (res >= 0) {
+    if (res < dst_len) {
+      dst[res] = '\0';
+    } else {
+      res = -1; /* Not enough space for NUL-temrination. */
+    }
+  }
+  return res;
+}
+
+#define HEXTOI(x) (isdigit(x) ? x - '0' : x - 'W')
+int mg_url_decode_n(struct mg_str srcs, struct mg_str *dsts,
+                    int is_form_url_encoded) {
+  int i, j, a, b, src_len, dst_len;
+  const char *src = srcs.p;
+  char *dst;
+  if (dsts == NULL) return -1;
+  dst = (char *) dsts->p;
+  src_len = (int) srcs.len;
+  dst_len = (int) dsts->len;
+
+  for (i = j = 0; i < src_len && j < dst_len; i++, j++) {
+    if (src[i] == '%') {
+      if (i < src_len - 2 && isxdigit(*(const unsigned char *) (src + i + 1)) &&
+          isxdigit(*(const unsigned char *) (src + i + 2))) {
+        a = tolower(*(const unsigned char *) (src + i + 1));
+        b = tolower(*(const unsigned char *) (src + i + 2));
+        dst[j] = (char) ((HEXTOI(a) << 4) | HEXTOI(b));
+        i += 2;
+      } else {
+        break;
+      }
+    } else if (is_form_url_encoded && src[i] == '+') {
+      dst[j] = ' ';
+    } else {
+      dst[j] = src[i];
+    }
+  }
+  dsts->len = (size_t) j;
+
+  return i == src_len ? j : -1;
+}
+#undef HEXTOI
+
 #ifdef MG_MODULE_LINES
 #line 1 "src/mg_mqtt.c"
 #endif

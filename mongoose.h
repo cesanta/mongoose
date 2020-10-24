@@ -2324,6 +2324,14 @@ struct mg_str mg_next_comma_list_entry_n(struct mg_str list, struct mg_str *val,
                                          struct mg_str *eq_val);
 
 /*
+ * Helper for parsing query strings.
+ * Parses '&' and '=' entries. Does not perform unescaping.
+ */
+struct mg_str mg_next_query_string_entry_n(struct mg_str list,
+                                           struct mg_str *val,
+                                           struct mg_str *eq_val);
+
+/*
  * Matches 0-terminated string (mg_match_prefix) or string with given length
  * mg_match_prefix_n against a glob pattern. Glob syntax:
  * ```
@@ -4325,6 +4333,27 @@ struct mg_str mg_url_encode_opt(const struct mg_str src,
 /* Same as `mg_url_encode_opt(src, "._-$,;~()/", 0)`. */
 struct mg_str mg_url_encode(const struct mg_str src);
 
+/*
+ * Decodes a URL-encoded string.
+ *
+ * Source string is specified by (`src`, `src_len`), and destination is
+ * (`dst`, `dst_len`). If `is_form_url_encoded` is non-zero, then
+ * `+` character is decoded as a blank space character. This function
+ * guarantees to NUL-terminate the destination. If destination is too small,
+ * then the source string is partially decoded and `-1` is returned.
+ * Otherwise, the length of the decoded string is returned,
+ * not counting final NUL.
+ */
+int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
+                  int is_form_url_encoded);
+
+/*
+ * mg_str variant of mg_url_decode. Does not NUL-terminate dst.
+ * It is ok for src and dst to be the same.
+ */
+int mg_url_decode_n(struct mg_str src, struct mg_str *dst,
+                    int is_form_url_encoded);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
@@ -4661,20 +4690,6 @@ void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
 #define WEBSOCKET_DONT_FIN 0x100
 
 #endif /* MG_ENABLE_HTTP_WEBSOCKET */
-
-/*
- * Decodes a URL-encoded string.
- *
- * Source string is specified by (`src`, `src_len`), and destination is
- * (`dst`, `dst_len`). If `is_form_url_encoded` is non-zero, then
- * `+` character is decoded as a blank space character. This function
- * guarantees to NUL-terminate the destination. If destination is too small,
- * then the source string is partially decoded and `-1` is returned.
- *Otherwise,
- * a length of the decoded string is returned, not counting final NUL.
- */
-int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
-                  int is_form_url_encoded);
 
 extern void mg_hash_md5_v(size_t num_msgs, const uint8_t *msgs[],
                           const size_t *msg_lens, uint8_t *digest);

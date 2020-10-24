@@ -329,20 +329,6 @@ void mg_printf_websocket_frame(struct mg_connection *nc, int op_and_flags,
 
 #endif /* MG_ENABLE_HTTP_WEBSOCKET */
 
-/*
- * Decodes a URL-encoded string.
- *
- * Source string is specified by (`src`, `src_len`), and destination is
- * (`dst`, `dst_len`). If `is_form_url_encoded` is non-zero, then
- * `+` character is decoded as a blank space character. This function
- * guarantees to NUL-terminate the destination. If destination is too small,
- * then the source string is partially decoded and `-1` is returned.
- *Otherwise,
- * a length of the decoded string is returned, not counting final NUL.
- */
-int mg_url_decode(const char *src, int src_len, char *dst, int dst_len,
-                  int is_form_url_encoded);
-
 extern void mg_hash_md5_v(size_t num_msgs, const uint8_t *msgs[],
                           const size_t *msg_lens, uint8_t *digest);
 extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
