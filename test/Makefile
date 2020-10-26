@@ -112,3 +112,7 @@ fuzz:
 #   docker run -v $(CURDIR)/../..:/cesanta -t -i --entrypoint=/bin/bash cesanta/mongoose_test
 docker:
 	docker run --rm -v $(CURDIR)/../..:/cesanta cesanta/mongoose_test
+
+amalgam:
+	cd .. && tools/amalgam.py --prefix=MG --public-header=mongoose.h --license=LICENSE `cat src/mongoose.c.manifest` > mongoose.c
+	cd .. && tools/amalgam.py --prefix=MG --license=LICENSE `cat src/mongoose.h.manifest` > mongoose.h

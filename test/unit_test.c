@@ -19,8 +19,8 @@
 
 #include "mongoose.h"
 
-#include "common/cs_md5.h"
 #include "../src/mg_internal.h"
+#include "common/cs_md5.h"
 #include "test_main.h"
 #include "test_util.h"
 
@@ -856,6 +856,106 @@ static const char *test_mg_normalize_uri_path(void) {
   return NULL;
 }
 
+static const char *test_mg_next_list_entry(void) {
+  struct mg_str val1, val2;
+  {
+    struct mg_str l = MG_NULL_STR;
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p == NULL);
+    ASSERT_EQ(l.len, 0);
+  }
+  {
+    struct mg_str l = MG_MK_STR("a");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p != NULL);
+    ASSERT_EQ(l.len, 0);
+    ASSERT_MG_STREQ(val1, "a");
+    ASSERT_MG_STREQ(val2, "");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p == NULL);
+    ASSERT_EQ(l.len, 0);
+  }
+  {
+    struct mg_str l = MG_MK_STR("a=1");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p != NULL);
+    ASSERT_EQ(l.len, 0);
+    ASSERT_MG_STREQ(val1, "a");
+    ASSERT_MG_STREQ(val2, "1");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p == NULL);
+    ASSERT_EQ(l.len, 0);
+  }
+  {
+    struct mg_str l = MG_MK_STR("a=");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p != NULL);
+    ASSERT_EQ(l.len, 0);
+    ASSERT_MG_STREQ(val1, "a");
+    ASSERT_MG_STREQ(val2, "");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p == NULL);
+    ASSERT_EQ(l.len, 0);
+  }
+  {
+    struct mg_str l = MG_MK_STR("a=,");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p != NULL);
+    ASSERT_EQ(l.len, 0);
+    ASSERT_MG_STREQ(val1, "a");
+    ASSERT_MG_STREQ(val2, "");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p == NULL);
+    ASSERT_EQ(l.len, 0);
+  }
+  {
+    struct mg_str l = MG_MK_STR("a=123,b=456");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_MG_STREQ(l, "b=456");
+    ASSERT_MG_STREQ(val1, "a");
+    ASSERT_MG_STREQ(val2, "123");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p != NULL);
+    ASSERT_EQ(l.len, 0);
+    ASSERT_MG_STREQ(val1, "b");
+    ASSERT_MG_STREQ(val2, "456");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p == NULL);
+    ASSERT_EQ(l.len, 0);
+  }
+  {
+    struct mg_str l = MG_MK_STR("a,b=456");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_MG_STREQ(l, "b=456");
+    ASSERT_MG_STREQ(val1, "a");
+    ASSERT_MG_STREQ(val2, "");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p != NULL);
+    ASSERT_EQ(l.len, 0);
+    ASSERT_MG_STREQ(val1, "b");
+    ASSERT_MG_STREQ(val2, "456");
+    l = mg_next_comma_list_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p == NULL);
+    ASSERT_EQ(l.len, 0);
+  }
+  {
+    struct mg_str l = MG_MK_STR("a,b&c=4+5%206");
+    l = mg_next_query_string_entry_n(l, &val1, &val2);
+    ASSERT_MG_STREQ(l, "c=4+5%206");
+    ASSERT_MG_STREQ(val1, "a,b");
+    ASSERT_MG_STREQ(val2, "");
+    l = mg_next_query_string_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p != NULL);
+    ASSERT_EQ(l.len, 0);
+    ASSERT_MG_STREQ(val1, "c");
+    ASSERT_MG_STREQ(val2, "4+5%206");
+    l = mg_next_query_string_entry_n(l, &val1, &val2);
+    ASSERT_TRUE(l.p == NULL);
+    ASSERT_EQ(l.len, 0);
+  }
+  return NULL;
+}
+
 #define CHECK_U2LP(u, exp_rv, exp_lp, exp_rem)      \
   do {                                              \
     int rv;                                         \
@@ -931,21 +1031,25 @@ static const char *test_mg_uri_to_local_path(void) {
   return NULL;
 }
 
-static const char *test_mg_url_encode(void) {
-  const struct mg_str encode_me =
-      MG_MK_STR("I'm a.little_tea-pot,here's$my;spout~oink(oink)oink/!");
+static const char *test_mg_url_encode_decode(void) {
+#define ENCODE_ME "I'm a.little_tea-po+,here's$my;spout~oink(oink)oink/!"
+  struct mg_str encode_me = MG_MK_STR(ENCODE_ME "XXX");
+  encode_me.len -= 3; /* Not nul-terminated on purpose */
   {
     struct mg_str encoded = mg_url_encode(encode_me);
     ASSERT_MG_STREQ(
         encoded,
-        "I%27m%20a.little_tea-pot,here%27s$my;spout~oink(oink)oink/%21");
+        "I%27m%20a.little_tea-po%2b,here%27s$my;spout~oink(oink)oink/%21");
+    ASSERT_EQ(mg_url_decode_n(encoded, &encoded, 1), encode_me.len);
+    ASSERT_MG_STREQ(encoded, ENCODE_ME);
     free((void *) encoded.p);
   }
   {
     struct mg_str encoded = mg_url_encode_opt(encode_me, mg_mk_str(NULL), 0);
     ASSERT_MG_STREQ(encoded,
-                    "I%27m%20a%2elittle%5ftea%2dpot%2chere%27s%24my%3bspout%"
+                    "I%27m%20a%2elittle%5ftea%2dpo%2b%2chere%27s%24my%3bspout%"
                     "7eoink%28oink%29oink%2f%21");
+    ASSERT_EQ(mg_url_decode_n(encoded, &encoded, 0), encode_me.len);
     free((void *) encoded.p);
   }
   {
@@ -953,8 +1057,10 @@ static const char *test_mg_url_encode(void) {
                                               MG_URL_ENCODE_F_UPPERCASE_HEX);
     ASSERT_MG_STREQ(encoded,
                     "I%27m "
-                    "a%2Elittle%5Ftea%2Dpot%2Chere%27s%24my%3Bspout%7Eoink%"
+                    "a%2Elittle%5Ftea%2Dpo%2B%2Chere%27s%24my%3Bspout%7Eoink%"
                     "28oink%29oink/!");
+    ASSERT_EQ(mg_url_decode_n(encoded, &encoded, 0), encode_me.len);
+    ASSERT_MG_STREQ(encoded, ENCODE_ME);
     free((void *) encoded.p);
   }
   {
@@ -962,9 +1068,50 @@ static const char *test_mg_url_encode(void) {
         encode_me, mg_mk_str("/!"),
         MG_URL_ENCODE_F_SPACE_AS_PLUS | MG_URL_ENCODE_F_UPPERCASE_HEX);
     ASSERT_MG_STREQ(encoded,
-                    "I%27m+a%2Elittle%5Ftea%2Dpot%2Chere%27s%24my%3Bspout%"
+                    "I%27m+a%2Elittle%5Ftea%2Dpo%2B%2Chere%27s%24my%3Bspout%"
                     "7Eoink%28oink%29oink/!");
+    ASSERT_EQ(mg_url_decode_n(encoded, &encoded, 1), encode_me.len);
+    ASSERT_MG_STREQ(encoded, ENCODE_ME);
     free((void *) encoded.p);
+  }
+  {
+    struct mg_str in = MG_MK_STR("a%20b%20c");
+    char outbuf[6] = {'X', 'X', 'X', 'X', 'X', 'X'};
+    struct mg_str out = MG_MK_STR_N(outbuf, sizeof(outbuf)), out1 = out;
+    ASSERT_EQ(mg_url_decode_n(in, &out, 0), 5);
+    ASSERT_MG_STREQ(out, "a b c");
+    ASSERT_MG_STREQ(out1, "a b cX");
+  }
+  {
+    struct mg_str in = MG_MK_STR("a%20b%20c");
+    char outbuf[6] = {'X', 'X', 'X', 'X', 'X', 'X'};
+    ASSERT_EQ(mg_url_decode(in.p, (int) in.len, outbuf, sizeof(outbuf), 0), 5);
+    /* NUL-terminated for her pleasure. */
+    ASSERT_MG_STREQ(mg_mk_str(outbuf), "a b c");
+  }
+  {
+    struct mg_str in = MG_MK_STR("a%20b%20c");
+    char outbuf[6] = {'X', 'X', 'X', 'X', 'X', 'X'};
+    struct mg_str out = MG_MK_STR_N(outbuf, 4);
+    ASSERT_EQ(mg_url_decode_n(in, &out, 0), -1);
+    ASSERT_MG_STREQ(out, "a b ");
+    ASSERT_MG_STREQ(mg_mk_str_n(outbuf, sizeof(outbuf)), "a b XX");
+  }
+  {
+    struct mg_str in = MG_MK_STR("a%20b%20c");
+    char outbuf[6] = {'X', 'X', 'X', 'X', 'X', 'X'};
+    ASSERT_EQ(mg_url_decode(in.p, (int) in.len, outbuf, 5, 0), -1);
+    /* Not enough space to NUL-terminate. */
+    struct mg_str out1 = MG_MK_STR_N(outbuf, sizeof(outbuf));
+    ASSERT_MG_STREQ(out1, "a b cX");
+  }
+  {
+    struct mg_str in = MG_MK_STR("a%20b%YYc");
+    char outbuf[6] = {'X', 'X', 'X', 'X', 'X', 'X'};
+    struct mg_str out = MG_MK_STR_N(outbuf, sizeof(outbuf)), out1 = out;
+    ASSERT_EQ(mg_url_decode_n(in, &out, 0), -1);
+    ASSERT_MG_STREQ(out, "a b");
+    ASSERT_MG_STREQ(out1, "a bXXX");
   }
   return NULL;
 }
@@ -5788,8 +5935,9 @@ const char *tests_run(const char *filter) {
   RUN_TEST(test_assemble_uri);
   RUN_TEST(test_parse_address);
   RUN_TEST(test_mg_normalize_uri_path);
+  RUN_TEST(test_mg_next_list_entry);
   RUN_TEST(test_mg_uri_to_local_path);
-  RUN_TEST(test_mg_url_encode);
+  RUN_TEST(test_mg_url_encode_decode);
   RUN_TEST(test_check_ip_acl);
   RUN_TEST(test_connect_opts);
   RUN_TEST(test_connect_opts_error_string);

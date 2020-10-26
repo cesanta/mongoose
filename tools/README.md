@@ -21,4 +21,4 @@ $ tools/amalgam.py --prefix=MG --public-header=mongoose.h $(cat mongoose.c.manif
 
 The same applies to `mongoose.h`, except `--public-header` should be omitted during amalgamation.
 
-`tools/amalgam.sh` can be used to assemble `mongoose.c` and `mongoose.h`.
+`tools/amalgam.py` can be used to assemble `mongoose.c` and `mongoose.h`.
