@@ -507,7 +507,7 @@ size_t mg_match_prefix_n(const struct mg_str pattern, const struct mg_str str) {
         const struct mg_str pstr = {pattern.p + i, pattern.len - i};
         const struct mg_str sstr = {str.p + j + len, str.len - j - len};
         res = mg_match_prefix_n(pstr, sstr);
-      } while (res == 0 && len != 0 && len-- > 0);
+      } while (res == 0 && len != 0 && --len > 0);
       return res == 0 ? 0 : j + res + len;
     } else if (str_util_lowercase(&pattern.p[i]) !=
                str_util_lowercase(&str.p[j])) {
