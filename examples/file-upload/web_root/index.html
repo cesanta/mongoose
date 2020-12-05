@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>example</title>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      #container { margin-right: auto; margin-left: auto; max-width: 480px; }
+      #info { background: #e0f0f0; border-radius: .5em; padding: 2em;  }
+      #wrapper { margin-top: 1em; }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <div id="info">
+        Mongoose always buffers a full HTTP message before invoking
+        MG_EV_HTTP_MSG event. Big POST request require of lot
+        of RAM to buffer everything. Therefore, in order to upload large
+        files on memory-constrained system, a large file should be send
+        in small chunks.
+        <br/><br/>
+        In this example, JavaScript code on this page sends uploaded
+        file in 2k chunks using an <code>/upload</code> endpoint.
+        Uploaded file is stored in <code>/tmp</code> directory by the helper
+				API function <code>mg_http_upload()</code>
+      </div>
+      <div id="wrapper">
+        <input type="file" id="el1" style="display: none"/>
+        <button id="el2">choose file...</button>
+        <div id="el3"></div>
+      </div>
+    </div>
+  </body>
+  <script src="app.js"></script>
+</html>

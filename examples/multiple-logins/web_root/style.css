@@ -1,0 +1,6 @@
+html, body { margin: 0; padding: 0; height: 100%; }
+select, input, label::before, textarea { outline: none; box-shadow:none !important; border: 1px solid #ccc !important; }
+.btn:focus,.btn:active:focus,.btn.active:focus,
+.btn.focus,.btn:active.focus,.btn.active.focus { outline: none; box-shadow:none !important; }
+.dropdown.autoexpand:hover>.dropdown-menu { display: block; }
+.pointer { cursor: pointer; }

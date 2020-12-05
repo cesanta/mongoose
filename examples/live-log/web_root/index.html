@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>example</title>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      #container { margin-right: auto; margin-left: auto; max-width: 480px; }
+      #info { background: #e0f0f0; border-radius: .5em; padding: 2em;  }
+      #static, #live { background: #f0f0f0; border-radius: .5em; padding: 0.5em; max-height: 10em; overflow: auto; height: 100%; }
+      #wrapper { display: flex; justify-content: flex-evenly; margin-top: 1em; }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <div id="info">
+        A div below shows file log.txt, which is produced by the server.
+        The server appends a new log message to that file every second,
+        and a div below also shows that, implementing a "live log" feature.
+        JS code on this page first fetches /api/log/static that returns
+        log.txt contents, then fetches /api/log/live that does not return,
+        but feeds chunks of data as they arrive (live log).
+        <br/><br/>
+        You can also use <code>curl</code> command-line utility to see
+        live logs:
+        <br/><code>curl localhost:8000/api/log/live</code>
+      </div>
+      <div id="wrapper">
+        <div style="width: 50%"><b>Static</b><pre id="static"></pre></div>
+        <div style="width: 1em;"></div>
+        <div style="width: 50%"><b>Live</b><pre id="live"></pre></div>
+      </div>
+    </div>
+  </body>
+  <script>
+    var f = function(r) {
+      return r.read().then(function(result) {
+        var data = String.fromCharCode.apply(null, result.value);
+        document.getElementById('live').innerText += data;  // Append live log
+        if (!result.done) f(r);  // Read next chunk
+      });
+    };
+    window.onload = ev => fetch('/api/log/static')
+      .then(r => r.text())
+      .then(r => { document.getElementById('static').innerText = r; })
+      .then(r => fetch('/api/log/live'))
+      .then(r => r.body.getReader())
+      .then(f);
+  </script>
+</html>
