@@ -5,42 +5,41 @@
 Mongoose is ideal for embedded environments. It has been designed
 for connecting devices and bringing them online. On the market since 2004,
 used by vast number of open source and
-commercial products - it even runs on the International Space station!
+commercial products - it even runs on the International Space Station!
 Mongoose makes embedded network programming fast, robust, and easy.
 
 - [Download Mongoose Source Code here](https://www.cesanta.com/download.html)
 
-Connectivity is vital for software and embedded devices, but there are many pitfalls to consider when embedding a web server. 
-This white paper breaks down on the top 9 things to avoid when embedding a web server.
+Connectivity is vital for software and embedded devices, but there are many
+pitfalls to consider when embedding a web server.  This white paper breaks down
+on the top 9 things to avoid when embedding a web server.
 
 - [Download “9 Things NOT to do when embedding a web server” white paper here](https://www.cesanta.com/whitepaper.html)
 
-Looking for a complete IoT firmware solution?
-
-Check out [Mongoose OS](https://mongoose-os.com) - open source embedded operating system for low-power connected microcontrollers. Secure, designed for Internet of Things, complete environment for prototyping, development and managing.
+Looking for a complete IoT solution? Check out
+- [Mongoose OS](https://mongoose-os.com) - open source embedded operating system for low-power connected microcontrollers. Secure, designed for commercial Internet of Things products
+- [VCON](https://vcon.io) - Arduino compatible MCU modules with built-in firmware OTA updates
 
 # Support
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
 - [Read User Guide and API reference](https://cesanta.com/docs/overview/intro.html)
-- [Support Forum - ask your technical questions here](https://community.mongoose-os.com/)
+- [Support Forum - ask your technical questions here](https://forum.cesanta.com/c/mongoose-library/6)
 - [Commercial licensing and support available](https://www.cesanta.com/licensing.html)
 - [Check our latest releases](https://github.com/cesanta/mongoose/releases)
 
 # Features
 
 * Cross-platform: works on Linux/UNIX, MacOS, QNX, eCos, Windows, Android,
-  iPhone, FreeRTOS (TI CC3200, ESP8266), etc
+  iPhone, FreeRTOS, etc
 * Supported hardware platforms: TI CC3200, TI MSP432, NRF52, STM32, PIC32, ESP8266, ESP32 and more
 * Builtin protocols:
    - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
    - HTTP client, HTTP server
    - WebSocket client, WebSocket server
-   - MQTT client, MQTT broker
-   - CoAP client, CoAP server
-   - DNS client, DNS server, async DNS resolver
+   - MQTT client
+   - DNS client, async DNS resolver
 * Single-threaded, asynchronous, non-blocking core with simple event-based API
-* Native support for [PicoTCP embedded TCP/IP stack](http://www.picotcp.com),
-  [LWIP embedded TCP/IP stack](https://en.wikipedia.org/wiki/LwIP)
+* Native support for [LWIP embedded TCP/IP stack](https://en.wikipedia.org/wiki/LwIP)
 * Tiny static and run-time footprint
 * Source code is both ISO C and ISO C++ compliant
 * Very easy to integrate: just copy
