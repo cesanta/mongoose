@@ -1,6 +1,8 @@
 # Mongoose - Embedded Web Server / Embedded Networking Library
 
-![](https://img.shields.io/badge/license-GPL_2-green.svg "License")
+![License: GPLv2](https://img.shields.io/badge/license-GPL_2-green.svg "License")
+[![Build Status](https://travis-ci.org/cesanta/mongoose.svg?branch=7.0)](https://travis-ci.org/cesanta/mongoose)
+[![Code Coverage](https://codecov.io/gh/cesanta/mongoose/branch/7.0/graph/badge.svg)](https://codecov.io/gh/cesanta/mongoose)
 
 Mongoose is ideal for embedded environments. It has been designed
 for connecting devices and bringing them online. On the market since 2004,
