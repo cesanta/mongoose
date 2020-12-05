@@ -40,37 +40,37 @@ cpp: unamalgamated
 
 # Make sure we can build from an unamalgamated sources
 unamalgamated: $(SRCS) $(HDRS) Makefile
-	$(CLANG) src/*.c tests/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
+	$(CLANG) src/*.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
 
-fuzz: mongoose.c mongoose.h Makefile tests/fuzz.c
-	$(CLANG) mongoose.c tests/fuzz.c $(CFLAGS) -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address $(LDFLAGS) -g -o fuzzer
+fuzz: mongoose.c mongoose.h Makefile test/fuzz.c
+	$(CLANG) mongoose.c test/fuzz.c $(CFLAGS) -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address $(LDFLAGS) -g -o fuzzer
 	$(DEBUGGER) ./fuzzer
 
 # make CC=/usr/local/opt/llvm\@8/bin/clang DEBUGGER=ASAN_OPTIONS=detect_leaks=1
 test: CFLAGS += -DMG_ENABLE_IPV6=1 -fsanitize=address#,undefined
-test: mongoose.c mongoose.h  clean Makefile tests/unit_test.c
-	$(CLANG) mongoose.c tests/unit_test.c $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
+test: mongoose.c mongoose.h  clean Makefile test/unit_test.c
+	$(CLANG) mongoose.c test/unit_test.c $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
 	ASAN_OPTIONS=detect_leaks=1 $(DEBUGGER) ./unit_test
 
 coverage: test
 	gcov -l -n *.gcno | sed '/^$$/d' | sed 'N;s/\n/ /'
 
 infer:
-	infer run -- cc tests/unit_test.c -c -W -Wall -Werror -Isrc -I. -O2 -DMG_ENABLE_MBEDTLS=1 -DMG_ENABLE_LINES -I/usr/local/Cellar/mbedtls/2.23.0/include  -DMG_ENABLE_IPV6=1 -g -o /dev/null
+	infer run -- cc test/unit_test.c -c -W -Wall -Werror -Isrc -I. -O2 -DMG_ENABLE_MBEDTLS=1 -DMG_ENABLE_LINES -I/usr/local/Cellar/mbedtls/2.23.0/include  -DMG_ENABLE_IPV6=1 -g -o /dev/null
 
 #vc98: VCFLAGS += -DMG_ENABLE_IPV6=1
-vc98: clean Makefile mongoose.c mongoose.h tests/unit_test.c
-	$(VC98) wine cl mongoose.c tests/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
+vc98: clean Makefile mongoose.c mongoose.h test/unit_test.c
+	$(VC98) wine cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(VC98) wine $@.exe
 
 vc2017: CFLAGS += -DMG_ENABLE_IPV6=1
-vc2017: clean Makefile mongoose.c mongoose.h tests/unit_test.c
-	$(VC2017) wine64 cl mongoose.c tests/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
+vc2017: clean Makefile mongoose.c mongoose.h test/unit_test.c
+	$(VC2017) wine64 cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(VC2017) wine64 $@.exe
 
 linux: CFLAGS += -DMG_ENABLE_IPV6=1 -fsanitize=address,undefined
-linux: clean Makefile mongoose.c mongoose.h tests/unit_test.c
-	$(GCC) gcc mongoose.c tests/unit_test.c $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
+linux: clean Makefile mongoose.c mongoose.h test/unit_test.c
+	$(GCC) gcc mongoose.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
 	$(GCC) ./unit_test_gcc
 
 mongoose.c: $(SRCS) Makefile
