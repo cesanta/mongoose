@@ -340,7 +340,7 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     } else if (mg_http_match_uri(hm, "/badroot")) {
       mg_http_serve_dir(c, hm, "/BAAADDD!");
     } else {
-      mg_http_serve_dir(c, hm, "./tests/data");
+      mg_http_serve_dir(c, hm, "./test/data");
     }
   }
 }
@@ -395,11 +395,11 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   if (mg_url_is_ssl(url)) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));
-    opts.ca = "./tests/data/ca.pem";
+    opts.ca = "./test/data/ca.pem";
     if (strstr(url, "127.0.0.1") != NULL) {
       // Local connection, use self-signed certificates
-      opts.ca = "./tests/data/ss_ca.pem";
-      opts.cert = "./tests/data/ss_client.pem";
+      opts.ca = "./test/data/ss_ca.pem";
+      opts.cert = "./test/data/ss_client.pem";
     }
     mg_tls_init(c, &opts);
     // c->is_hexdumping = 1;
@@ -436,7 +436,7 @@ static void test_http_server(void) {
   {
     extern char *mg_http_etag(char *, size_t, struct stat *);
     char etag[100];
-    ASSERT(stat("./tests/data/a.txt", &st) == 0);
+    ASSERT(stat("./test/data/a.txt", &st) == 0);
     ASSERT(mg_http_etag(etag, sizeof(etag), &st) == etag);
     ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nIf-None-Match: %s\n\n",
                  etag) == 304);
@@ -460,7 +460,7 @@ static void test_http_server(void) {
 #endif
 
   {
-    char *data = mg_file_read("./tests/data/ca.pem");
+    char *data = mg_file_read("./test/data/ca.pem");
     ASSERT(fetch(&mgr, buf, url, "GET /ca.pem HTTP/1.0\r\n\n") == 200);
     ASSERT(cmpbody(data, buf) == 0);
     free(data);
@@ -476,8 +476,8 @@ static void test_http_server(void) {
 
 static void test_tls(void) {
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-  struct mg_tls_opts opts = {.ca = "./tests/data/ss_ca.pem",
-                             .cert = "./tests/data/ss_server.pem"};
+  struct mg_tls_opts opts = {.ca = "./test/data/ss_ca.pem",
+                             .cert = "./test/data/ss_server.pem"};
   struct mg_mgr mgr;
   struct mg_connection *c;
   const char *url = "https://127.0.0.1:12347";
@@ -526,7 +526,7 @@ static void test_http_client(void) {
   ok = 0;
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
   {
-    struct mg_tls_opts opts = {.ca = "./tests/data/ca.pem"};
+    struct mg_tls_opts opts = {.ca = "./test/data/ca.pem"};
     c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
     ASSERT(c != NULL);
     mg_tls_init(c, &opts);

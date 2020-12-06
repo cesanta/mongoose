@@ -4,7 +4,7 @@ after_success: bash <(curl -s https://codecov.io/bash)
 os:
   - linux
   - osx
-  - windows
+# - windows
 compiler:
   - clang
   - gcc

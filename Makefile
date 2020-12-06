@@ -8,7 +8,8 @@ VC98 = docker run --rm -e WINEDEBUG=-all -v $(CDIR):$(CDIR) -w $(CDIR) docker.io
 VC2017 = docker run --rm -e WINEDEBUG=-all -v $(CDIR):$(CDIR) -w $(CDIR) docker.io/mdashnet/vc2017
 GCC = docker run --rm -v $(CDIR):$(CDIR) -w $(CDIR) mdashnet/cc2
 VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
-CLANG ?= /usr/local/opt/llvm\@9/bin/clang  #-L/usr/local/opt/llvm\@8/lib
+CLANG ?= clang # /usr/local/opt/llvm\@9/bin/clang
+ASAN_OPTIONS ?=
 EXAMPLES := $(wildcard examples/*)
 EXAMPLE_TARGET ?= example
 .PHONY: $(EXAMPLES)
@@ -46,11 +47,11 @@ fuzz: mongoose.c mongoose.h Makefile test/fuzz.c
 	$(CLANG) mongoose.c test/fuzz.c $(CFLAGS) -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address $(LDFLAGS) -g -o fuzzer
 	$(DEBUGGER) ./fuzzer
 
-# make CC=/usr/local/opt/llvm\@8/bin/clang DEBUGGER=ASAN_OPTIONS=detect_leaks=1
+# make CLANG=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
 test: CFLAGS += -DMG_ENABLE_IPV6=1 -fsanitize=address#,undefined
 test: mongoose.c mongoose.h  clean Makefile test/unit_test.c
 	$(CLANG) mongoose.c test/unit_test.c $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
-	ASAN_OPTIONS=detect_leaks=1 $(DEBUGGER) ./unit_test
+	ASAN_OPTIONS=$(ASAN_OPTIONS) $(DEBUGGER) ./unit_test
 
 coverage: test
 	gcov -l -n *.gcno | sed '/^$$/d' | sed 'N;s/\n/ /'
