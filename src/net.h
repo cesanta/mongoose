@@ -42,8 +42,8 @@ struct mg_connection {
   unsigned is_udp : 1;         // UDP connection
   unsigned is_websocket : 1;   // WebSocket connection
   unsigned is_hexdumping : 1;  // Hexdump in/out traffic
-  unsigned is_draining : 1;    // Send remaining data, then deallocate
-  unsigned is_closing : 1;     // Deallocate connection
+  unsigned is_draining : 1;    // Send remaining data, then close and free
+  unsigned is_closing : 1;     // Close and free the connection immediately
   unsigned is_readable : 1;    // Connection is ready to read
   unsigned is_writable : 1;    // Connection is ready to write
 };

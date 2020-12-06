@@ -4,11 +4,12 @@
 [![Build Status](https://travis-ci.org/cesanta/mongoose.svg?branch=7.0)](https://travis-ci.org/cesanta/mongoose)
 [![Code Coverage](https://codecov.io/gh/cesanta/mongoose/branch/7.0/graph/badge.svg)](https://codecov.io/gh/cesanta/mongoose)
 
-Mongoose is ideal for embedded environments. It has been designed
-for connecting devices and bringing them online. On the market since 2004,
-used by vast number of open source and
-commercial products - it even runs on the International Space Station!
-Mongoose makes embedded network programming fast, robust, and easy.
+Mongoose is a networking library for C/C++. It implements event-driven
+non-blocking APIs for TCP, UDP, HTTP, WebSocket, MQTT.  It has been designed
+for connecting devices and bringing them online. On the market since 2004, used
+by vast number of open source and commercial products - it even runs on the
+International Space Station!  Mongoose makes embedded network programming fast,
+robust, and easy.
 
 - [Download Mongoose Source Code here](https://www.cesanta.com/download.html)
 
