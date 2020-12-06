@@ -1,0 +1,19 @@
+language: c
+sudo: false
+after_success: bash <(curl -s https://codecov.io/bash)
+os:
+  - linux
+  - osx
+  - windows
+compiler:
+  - clang
+  - gcc
+script: make mg_prefix cpp test ex
+matrix:
+  include:
+    - os: linux
+      compiler: msvc98
+      script: make vc98 vc2017
+      sudo: required
+      services:
+        - docker
