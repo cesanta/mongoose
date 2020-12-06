@@ -17,3 +17,8 @@ matrix:
       sudo: required
       services:
         - docker
+addons:
+  apt:
+    packages: libmbedtls-dev
+  homebrew:
+    packages: mbedtls
