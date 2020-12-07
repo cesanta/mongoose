@@ -2595,7 +2595,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
 bool mg_socketpair(int *s1, int *s2) {
 #if MG_ARCH == MG_ARCH_UNIX
   int sp[2], ret = 0;
-  if (socketpair(AF_INET, SOCK_DGRAM, 0) == 0) {
+  if (socketpair(AF_INET, SOCK_DGRAM, 0, sp) == 0) {
     *s1 = sp[0], *s2 = sp[1], ret = 1;
   }
   return ret;
