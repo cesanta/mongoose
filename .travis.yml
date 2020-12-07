@@ -15,6 +15,9 @@ matrix:
     - os: osx
       compiler: clang
       script: make mg_prefix
+    - os: osx
+      compiler: clang
+      script: ls -l /usr/include/mbedtls
     - os: linux
       compiler: msvc98
       script: make vc98 vc2017
