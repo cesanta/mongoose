@@ -6,7 +6,7 @@ struct mg_str mg_str(const char *s) {
   return str;
 }
 
-struct mg_str mg_str_n(const char *s, int n) {
+struct mg_str mg_str_n(const char *s, size_t n) {
   struct mg_str str = {s, n};
   return str;
 }

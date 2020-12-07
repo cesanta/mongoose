@@ -1648,7 +1648,8 @@ struct mqtt_message {
 
 static void mqtt_send_header(struct mg_connection *c, uint8_t cmd,
                              uint8_t flags, uint32_t len) {
-  uint8_t buf[1 + sizeof(len)] = {(cmd << 4) | flags}, *vlen = &buf[1];
+  uint8_t buf[1 + sizeof(len)], *vlen = &buf[1];
+  buf[0] = (cmd << 4) | flags;
   do {
     *vlen = len % 0x80;
     len /= 0x80;
@@ -2781,7 +2782,7 @@ struct mg_str mg_str(const char *s) {
   return str;
 }
 
-struct mg_str mg_str_n(const char *s, int n) {
+struct mg_str mg_str_n(const char *s, size_t n) {
   struct mg_str str = {s, n};
   return str;
 }

@@ -12,7 +12,7 @@ struct mg_str {
   { NULL, 0 }
 
 struct mg_str mg_str(const char *s);
-struct mg_str mg_str_n(const char *s, int n);
+struct mg_str mg_str_n(const char *s, size_t n);
 int mg_lower(const char *s);
 int mg_ncasecmp(const char *s1, const char *s2, size_t len);
 int mg_casecmp(const char *s1, const char *s2);

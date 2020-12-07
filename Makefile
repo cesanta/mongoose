@@ -25,7 +25,7 @@ CFLAGS += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSLDIR)/include
 LDFLAGS ?= -L$(OPENSSLDIR)/lib -lssl -lcrypto
 endif
 
-all: mg_prefix cpp test ex vc98 vc2017 linux infer fuzz
+all: mg_prefix test test++ ex vc98 vc2017 linux linux++ infer fuzz
 
 ex:
 	@for X in $(EXAMPLES); do $(MAKE) -C $$X $(EXAMPLE_TARGET); done
@@ -35,8 +35,8 @@ mg_prefix: mongoose.c mongoose.h
 	$(CLANG) mongoose.c $(CFLAGS) -c -o /tmp/x.o && nm /tmp/x.o | grep ' T' | grep -v 'mg_' ; test $$? = 1
 
 # C++ build
-cpp: CLANG = g++ -Wno-deprecated
-cpp: unamalgamated
+test++: CLANG = g++ -Wno-deprecated
+test++: unamalgamated
 
 # Make sure we can build from an unamalgamated sources
 unamalgamated: $(SRCS) $(HDRS) Makefile
@@ -70,8 +70,12 @@ vc2017: clean Makefile mongoose.c mongoose.h test/unit_test.c
 
 linux: CFLAGS += -DMG_ENABLE_IPV6=1 -fsanitize=address,undefined
 linux: clean Makefile mongoose.c mongoose.h test/unit_test.c
-	$(GCC) gcc mongoose.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
+	$(GCC) $(CC) mongoose.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
 	$(GCC) ./unit_test_gcc
+
+linux++: CC=g++
+linux++: CFLAGS += -Wno-missing-field-initializers
+linux++: linux
 
 mongoose.c: $(SRCS) Makefile
 	(cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/private.h src/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@
@@ -80,6 +84,6 @@ mongoose.h: $(HDRS) Makefile
 	(cat src/license.h src/version.h ; cat src/arch.h src/arch_*.h src/config.h src/str.h src/log.h src/timer.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/tls.h src/ws.h src/sntp.h src/mqtt.h src/dns.h | sed -e 's,#include ".*,,' -e 's,^#pragma once,,')> $@
 
 clean: EXAMPLE_TARGET = clean
-clean: $(EXAMPLES)
+clean: ex
 	rm -rf $(PROG) *.o *.dSYM unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out
 

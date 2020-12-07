@@ -10,7 +10,7 @@ os:
 compiler:
   - clang
   - gcc
-script: make mg_prefix cpp test ex
+script: make mg_prefix test test++ ex
 matrix:
   include:
     - os: linux
