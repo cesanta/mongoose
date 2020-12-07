@@ -58,31 +58,10 @@ int mg_base64_final(char *to, int n) {
 }
 
 int mg_base64_encode(const unsigned char *p, int n, char *to) {
-#if 0
-  char buf[4];
-  int i, j, len = 0;
-  for (i = 0; i < n; i += 3) {
-    int a = p[i], b = i + 1 < n ? p[i + 1] : 0, c = i + 2 < n ? p[i + 2] : 0;
-    buf[0] = mg_b64idx(a >> 2);
-    buf[1] = mg_b64idx((a & 3) << 4 | (b >> 4));
-    buf[2] = mg_b64idx((b & 15) << 2 | (c >> 6));
-    buf[3] = mg_b64idx(c & 63);
-    j = 0;
-    if (i + 1 >= n) buf[2] = '=', j++;
-    if (i + 2 >= n) buf[3] = '=', j++;
-    memcpy(to + len, buf, sizeof(buf));
-    len += sizeof(buf);
-  }
-  to[len] = '\0';
-  printf("%d[%.*s] -> %d[%.*s]\n", n, n, p, len, len, to);
-  return len;
-#else
   int i, len = 0;
   for (i = 0; i < n; i++) len = mg_base64_update(p[i], to, len);
   len = mg_base64_final(to, len);
-  // printf("%d[%.*s] -> %d[%.*s]\n", n, n, p, len, len, to);
   return len;
-#endif
 }
 
 int mg_base64_decode(const char *src, int n, char *dst) {

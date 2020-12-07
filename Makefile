@@ -15,9 +15,11 @@ EXAMPLE_TARGET ?= example
 .PHONY: ex test
 
 ifeq "$(SSL)" "MBEDTLS"
-MBEDTLSDIR ?= $(shell "$(brew --cellar mbedtls)/$(brew info mbedtls --json | jq -j .[0].installed[0].version)")
-CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLSDIR)/include -I/usr/include
-LDFLAGS ?= -L$(MBEDTLSDIR)/lib -lmbedtls -lmbedcrypto -lmbedx509
+MBEDTLS_DIR ?= $(shell brew --cellar mbedtls)
+MBEDTLS_VER ?= $(shell brew info mbedtls --json | jq -j .[0].installed[0].version)
+MBEDTLS ?= $(MBEDTLS_DIR)/$(MBEDTLS_VER)
+CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS)/include -I/usr/include
+LDFLAGS ?= -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
 endif
 ifeq "$(SSL)" "OPENSSL"
 OPENSSLDIR ?= $(shell "$(brew --cellar openssl)/$(brew info openssl --json | jq -j .[0].installed[0].version)")
