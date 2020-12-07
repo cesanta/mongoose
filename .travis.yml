@@ -17,7 +17,7 @@ matrix:
       script: make mg_prefix
     - os: linux
       compiler: clang
-      script: ls -l /usr/include/mbedtls
+      script: cat  /usr/include/mbedtls/version.h ; grep -r mbedtls_net_send /usr/include/mbedtls/
     - os: linux
       compiler: msvc98
       script: make vc98 vc2017
