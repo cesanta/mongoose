@@ -12,11 +12,11 @@ CLANG ?= clang # /usr/local/opt/llvm\@9/bin/clang
 ASAN_OPTIONS ?=
 EXAMPLES := $(wildcard examples/*)
 EXAMPLE_TARGET ?= example
-.PHONY: $(EXAMPLES)
+.PHONY: ex #$(EXAMPLES)
 
 ifeq "$(SSL)" "MBEDTLS"
 MBEDTLSDIR ?= $(shell "$(brew --cellar mbedtls)/$(brew info mbedtls --json | jq -j .[0].installed[0].version)")
-CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLSDIR)/include -I/usr/include/mbedtls
+CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLSDIR)/include -I/usr/include
 LDFLAGS ?= -L$(MBEDTLSDIR)/lib -lmbedtls -lmbedcrypto -lmbedx509
 endif
 ifeq "$(SSL)" "OPENSSL"
@@ -27,9 +27,8 @@ endif
 
 all: mg_prefix cpp test ex vc98 vc2017 linux infer fuzz
 
-ex: $(EXAMPLES)
-$(EXAMPLES):
-	@$(MAKE) -C $@ $(EXAMPLE_TARGET)
+ex:
+	@for X in $(EXAMPLES); do $(MAKE) -C $$X $(EXAMPLE_TARGET); done
 
 # Check that all external (exported) symbols have "mg_" prefix
 mg_prefix: mongoose.c mongoose.h
