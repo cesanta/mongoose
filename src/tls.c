@@ -8,7 +8,7 @@
 #include <mbedtls/debug.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/version.h>
-#if MBEDTLS_VERSION_MINOR > 22
+#if MBEDTLS_VERSION_NUMBER > 0x02070000
 #include <mbedtls/net_sockets.h>
 #else
 #include <mbedtls/net.h>
