@@ -10,6 +10,8 @@
 #include <mbedtls/version.h>
 #if MBEDTLS_VERSION_MINOR > 22
 #include <mbedtls/net_sockets.h>
+#else
+#include <mbedtls/net.h>
 #endif
 
 struct mg_tls {
