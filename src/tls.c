@@ -6,8 +6,11 @@
 #include "util.h"
 
 #include <mbedtls/debug.h>
-//#include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>
+#include <mbedtls/version.h>
+#if MBEDTLS_VERSION_MINOR > 22
+#include <mbedtls/net_sockets.h>
+#endif
 
 struct mg_tls {
   char *cafile;             // CA certificate path
