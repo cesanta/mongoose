@@ -15,12 +15,12 @@ EXAMPLE_TARGET ?= example
 .PHONY: $(EXAMPLES)
 
 ifeq "$(SSL)" "MBEDTLS"
-MBEDTLSDIR ?= /usr/local/Cellar/mbedtls/2.23.0
-CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLSDIR)/include
+MBEDTLSDIR ?= $(shell "$(brew --cellar mbedtls)/$(brew info mbedtls --json | jq -j .[0].installed[0].version)")
+CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLSDIR)/include -I/usr/include/mbedtls
 LDFLAGS ?= -L$(MBEDTLSDIR)/lib -lmbedtls -lmbedcrypto -lmbedx509
 endif
 ifeq "$(SSL)" "OPENSSL"
-OPENSSLDIR ?= /usr/local/Cellar/openssl@1.1/1.1.1g
+OPENSSLDIR ?= $(shell "$(brew --cellar openssl)/$(brew info openssl --json | jq -j .[0].installed[0].version)")
 CFLAGS += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSLDIR)/include
 LDFLAGS ?= -L$(OPENSSLDIR)/lib -lssl -lcrypto
 endif

@@ -21,4 +21,4 @@ addons:
   apt:
     packages: libmbedtls-dev
   homebrew:
-    packages: mbedtls
+    packages: mbedtls jq
