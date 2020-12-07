@@ -12,7 +12,7 @@ CLANG ?= clang # /usr/local/opt/llvm\@9/bin/clang
 ASAN_OPTIONS ?=
 EXAMPLES := $(wildcard examples/*)
 EXAMPLE_TARGET ?= example
-.PHONY: ex #$(EXAMPLES)
+.PHONY: ex test
 
 ifeq "$(SSL)" "MBEDTLS"
 MBEDTLSDIR ?= $(shell "$(brew --cellar mbedtls)/$(brew info mbedtls --json | jq -j .[0].installed[0].version)")
@@ -84,4 +84,4 @@ mongoose.h: $(HDRS) Makefile
 
 clean: EXAMPLE_TARGET = clean
 clean: ex
-	rm -rf $(PROG) *.o *.dSYM unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out
+	rm -rf $(PROG) *.o *.dSYM unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt

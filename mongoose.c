@@ -3503,7 +3503,8 @@ int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
     // eCos and Windows are not standard-compliant and return -1 when
     // the buffer is too small. Keep allocating larger buffers until we
     // succeed or out of memory.
-    *buf = NULL;  // LCOV_EXCL_START
+    // LCOV_EXCL_START
+    *buf = NULL;
     while (len < 0) {
       free(*buf);
       if (size == 0) size = 5;
@@ -3519,7 +3520,7 @@ int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
     // Microsoft version of vsnprintf() is not always null-terminated, so put
     // the terminator manually
     (*buf)[len] = 0;
-    /// LCOV_EXCL_STOP
+    // LCOV_EXCL_STOP
   } else if (len >= (int) size) {
     /// Standard-compliant code path. Allocate a buffer that is large enough
     if ((*buf = (char *) malloc(len + 1)) == NULL) {

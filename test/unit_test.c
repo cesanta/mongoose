@@ -839,8 +839,31 @@ static void test_timer(void) {
   ASSERT(g_timers == NULL);
 }
 
+static void test_str(void) {
+  struct mg_str s = mg_strdup(mg_str("a"));
+  ASSERT(mg_strcmp(s, mg_str("a")) == 0);
+  free((void *) s.ptr);
+  ASSERT(mg_strcmp(mg_str(""), mg_str(NULL)) == 0);
+  ASSERT(mg_strcmp(mg_str("a"), mg_str("b")) < 0);
+  ASSERT(mg_strcmp(mg_str("b"), mg_str("a")) > 0);
+  ASSERT(mg_strstr(mg_str("abc"), mg_str("d")) == NULL);
+  ASSERT(mg_strstr(mg_str("abc"), mg_str("b")) != NULL);
+  ASSERT(mg_strcmp(mg_str("hi"), mg_strstrip(mg_str(" \thi\r\n"))) == 0);
+}
+
+static void test_util(void) {
+  char buf[100], *s = mg_hexdump("abc", 3);
+  ASSERT(s != NULL);
+  free(s);
+  ASSERT(mg_file_write("data.txt", "%s", "hi") == 2);
+  ASSERT(strcmp(mg_ntoa(0x100007f, buf, sizeof(buf)), "127.0.0.1") == 0);
+  ASSERT(strcmp(mg_hex("abc", 3, buf), "616263") == 0);
+}
+
 int main(void) {
   mg_log_set("3");
+  test_str();
+  test_util();
   test_timer();
   test_http_range();
   test_url();
