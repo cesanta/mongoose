@@ -48,7 +48,7 @@ fuzz: mongoose.c mongoose.h Makefile test/fuzz.c
 
 # make CLANG=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
 test: CFLAGS += -DMG_ENABLE_IPV6=1 -fsanitize=address#,undefined
-test: mongoose.c mongoose.h  clean Makefile test/unit_test.c
+test: mongoose.c mongoose.h  Makefile test/unit_test.c
 	$(CLANG) mongoose.c test/unit_test.c $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(DEBUGGER) ./unit_test
 
@@ -59,17 +59,17 @@ infer:
 	infer run -- cc test/unit_test.c -c -W -Wall -Werror -Isrc -I. -O2 -DMG_ENABLE_MBEDTLS=1 -DMG_ENABLE_LINES -I/usr/local/Cellar/mbedtls/2.23.0/include  -DMG_ENABLE_IPV6=1 -g -o /dev/null
 
 #vc98: VCFLAGS += -DMG_ENABLE_IPV6=1
-vc98: clean Makefile mongoose.c mongoose.h test/unit_test.c
+vc98: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(VC98) wine cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(VC98) wine $@.exe
 
 vc2017: CFLAGS += -DMG_ENABLE_IPV6=1
-vc2017: clean Makefile mongoose.c mongoose.h test/unit_test.c
+vc2017: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(VC2017) wine64 cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(VC2017) wine64 $@.exe
 
 linux: CFLAGS += -DMG_ENABLE_IPV6=1 -fsanitize=address,undefined
-linux: clean Makefile mongoose.c mongoose.h test/unit_test.c
+linux: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(GCC) $(CC) mongoose.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
 	$(GCC) ./unit_test_gcc
 
@@ -85,4 +85,3 @@ mongoose.h: $(HDRS) Makefile
 clean: EXAMPLE_TARGET = clean
 clean: ex
 	rm -rf $(PROG) *.o *.dSYM unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out
-

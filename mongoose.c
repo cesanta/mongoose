@@ -2923,12 +2923,16 @@ void mg_timer_poll(unsigned long now_ms) {
 
 #include <mbedtls/debug.h>
 #include <mbedtls/ssl.h>
-#include <mbedtls/version.h>
-#if MBEDTLS_VERSION_NUMBER > 0x02070000
-#include <mbedtls/net_sockets.h>
+
+// Different versions have those in different files, so declare here
+#ifdef __cplusplus
+#define EXTERN_C extern "C"
 #else
-#include <mbedtls/net.h>
+#define EXTERN_C
 #endif
+
+EXTERN_C int mbedtls_net_recv(void *, unsigned char *, size_t);
+EXTERN_C int mbedtls_net_send(void *, const unsigned char *, size_t);
 
 struct mg_tls {
   char *cafile;             // CA certificate path

@@ -9,8 +9,14 @@
 #include <mbedtls/ssl.h>
 
 // Different versions have those in different files, so declare here
-int mbedtls_net_recv(void *ctx, unsigned char *buf, size_t len);
-int mbedtls_net_send(void *ctx, const unsigned char *buf, size_t len);
+#ifdef __cplusplus
+#define EXTERN_C extern "C"
+#else
+#define EXTERN_C
+#endif
+
+EXTERN_C int mbedtls_net_recv(void *, unsigned char *, size_t);
+EXTERN_C int mbedtls_net_send(void *, const unsigned char *, size_t);
 
 struct mg_tls {
   char *cafile;             // CA certificate path
