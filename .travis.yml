@@ -6,13 +6,15 @@ install:
 os:
   - linux
   - osx
-# - windows
 compiler:
   - clang
   - gcc
-script: make mg_prefix test test++ ex
+script: make test test++ ex
 matrix:
   include:
+    - os: osx
+      compiler: clang
+      script: make mg_prefix
     - os: linux
       compiler: msvc98
       script: make vc98 vc2017
