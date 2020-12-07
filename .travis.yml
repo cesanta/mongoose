@@ -1,6 +1,8 @@
 language: c
 sudo: false
 after_success: bash <(curl -s https://codecov.io/bash)
+install:
+  - if test "$TRAVIS_OS_NAME" = linux; then sudo apt-get install libmbedtls-dev; else brew install jq mbedtls; fi
 os:
   - linux
   - osx
@@ -17,8 +19,3 @@ matrix:
       sudo: required
       services:
         - docker
-addons:
-  apt:
-    packages: libmbedtls-dev
-  homebrew:
-    packages: mbedtls jq
