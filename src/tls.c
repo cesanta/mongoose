@@ -7,12 +7,10 @@
 
 #include <mbedtls/debug.h>
 #include <mbedtls/ssl.h>
-#include <mbedtls/version.h>
-#if MBEDTLS_VERSION_NUMBER > 0x02070000
-#include <mbedtls/net_sockets.h>
-#else
-#include <mbedtls/net.h>
-#endif
+
+// Different versions have those in different files, so declare here
+int mbedtls_net_recv(void *ctx, unsigned char *buf, size_t len);
+int mbedtls_net_send(void *ctx, const unsigned char *buf, size_t len);
 
 struct mg_tls {
   char *cafile;             // CA certificate path
