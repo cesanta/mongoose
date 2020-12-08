@@ -20,12 +20,12 @@ on the top 9 things to avoid when embedding a web server.
 - [Download “9 Things NOT to do when embedding a web server” white paper here](https://www.cesanta.com/whitepaper.html)
 
 Looking for a complete IoT solution? Check out
-- [Mongoose OS](https://mongoose-os.com) - open source embedded operating system for low-power connected microcontrollers. Secure, designed for commercial Internet of Things products
 - [VCON](https://vcon.io) - Arduino compatible MCU modules with built-in firmware OTA updates
+- [Mongoose OS](https://mongoose-os.com) - open source embedded operating system for low-power connected microcontrollers. Secure, designed for commercial Internet of Things products
 
 # Support
 - [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
-- [Read User Guide and API reference](https://cesanta.com/docs/overview/intro.html)
+- [Read User Guide and API reference](https://cesanta.com/docs/)
 - [Support Forum - ask your technical questions here](https://forum.cesanta.com/c/mongoose-library/6)
 - [Commercial licensing and support available](https://www.cesanta.com/licensing.html)
 - [Check our latest releases](https://github.com/cesanta/mongoose/releases)

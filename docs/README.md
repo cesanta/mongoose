@@ -1,8 +1,11 @@
 # User Guide
 
+
 ## Introduction
 
-Mongoose is a networking library for C/C++. It implements event-driven
+<img alt="mongoose" src="../images/mongoose.png" class="float-right mx-5" style="width: 140px;" />
+
+Mongoose is a networking library for C/C++. It implements an event-driven,
 non-blocking APIs for TCP, UDP, HTTP, WebSocket, MQTT.  It has been designed
 for connecting devices and bringing them online. On the market since 2004, used
 by vast number of open source and commercial products - it even runs on the
@@ -285,7 +288,7 @@ int main(int argc, char *argv[]) {
 ### struct mg_mgr
 
 ```c
-struct mg\_mgr {
+struct mg_mgr {
   struct mg_connection *conns;  // List of active connections
   struct mg_connection *dnsc;   // DNS resolver connection
   const char *dnsserver;        // DNS server URL
