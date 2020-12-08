@@ -1051,9 +1051,7 @@ struct mg_connection *mg_http_listen(struct mg_mgr *mgr, const char *url,
 
 void mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
   if (new_size == 0) {
-    free(io->buf);
-    io->buf = NULL;
-    io->len = io->size = 0;
+    mg_iobuf_free(io);
   } else if (new_size != io->size) {
     // NOTE(lsm): do not use realloc here. Use malloc/free only, to ease the
     // porting to some obscure platforms like FreeRTOS
