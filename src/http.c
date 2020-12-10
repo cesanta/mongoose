@@ -5,6 +5,7 @@
 #include "net.h"
 #include "private.h"
 #include "util.h"
+#include "version.h"
 #include "ws.h"
 
 struct http_data {

@@ -367,6 +367,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 
 
 
+
 struct http_data {
   void *old_pfn_data;  // Previous pfn_data
   FILE *fp;            // For static file serving
