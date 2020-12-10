@@ -265,7 +265,8 @@ static void test_mqtt(void) {
   struct mg_str topic = mg_str("x/f12"), data = mg_str("hi");
   struct mg_connection *c;
   struct mg_mqtt_opts opts;
-  const char *url = "mqtt://mqtt.eclipse.org:1883";
+  // const char *url = "mqtt://mqtt.eclipse.org:1883";
+  const char *url = "mqtt://broker.hivemq.com:1883";
   int i;
   mg_mgr_init(&mgr);
 
