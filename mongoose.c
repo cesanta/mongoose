@@ -733,7 +733,7 @@ int gettimeofday(struct timeval *tv, void *tz) {
     tmpres <<= 32;
     tmpres |= ft.dwLowDateTime;
     tmpres /= 10;  // convert into microseconds
-    tmpres -= 11644473600000000ULL;
+    tmpres -= (int64_t) 11644473600000000;
     tv->tv_sec = (long) (tmpres / 1000000UL);
     tv->tv_usec = (long) (tmpres % 1000000UL);
   }
@@ -1051,7 +1051,9 @@ struct mg_connection *mg_http_listen(struct mg_mgr *mgr, const char *url,
 
 void mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
   if (new_size == 0) {
-    mg_iobuf_free(io);
+    free(io->buf);
+    io->buf = NULL;
+    io->len = io->size = 0;
   } else if (new_size != io->size) {
     // NOTE(lsm): do not use realloc here. Use malloc/free only, to ease the
     // porting to some obscure platforms like FreeRTOS

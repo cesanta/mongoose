@@ -373,7 +373,7 @@ int gettimeofday(struct timeval *tv, void *tz) {
     tmpres <<= 32;
     tmpres |= ft.dwLowDateTime;
     tmpres /= 10;  // convert into microseconds
-    tmpres -= 11644473600000000ULL;
+    tmpres -= (int64_t) 11644473600000000;
     tv->tv_sec = (long) (tmpres / 1000000UL);
     tv->tv_usec = (long) (tmpres % 1000000UL);
   }
