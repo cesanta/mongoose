@@ -64,6 +64,7 @@ int main(int argc, char *argv[]) {
   if (mg_casecmp(s_enable_hexdump, "yes") == 0) c->is_hexdumping = 1;
 
   // Start infinite event loop
+  LOG(LL_INFO, ("Starting Mongoose web server v%s", MG_VERSION));
   for (;;) mg_mgr_poll(&mgr, 1000);
   mg_mgr_free(&mgr);
   return 0;
