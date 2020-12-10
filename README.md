@@ -12,6 +12,7 @@ International Space Station!  Mongoose makes embedded network programming fast,
 robust, and easy.
 
 - [Download Mongoose Source Code here](https://www.cesanta.com/download.html)
+- [Read Mongoose documentation](https://cesanta.com/docs/)
 
 Connectivity is vital for software and embedded devices, but there are many
 pitfalls to consider when embedding a web server.  This white paper breaks down
@@ -24,11 +25,10 @@ Looking for a complete IoT solution? Check out
 - [Mongoose OS](https://mongoose-os.com) - open source embedded operating system for low-power connected microcontrollers. Secure, designed for commercial Internet of Things products
 
 # Support
-- [Study mongoose example code](https://github.com/cesanta/mongoose/tree/master/examples)
-- [Read User Guide and API reference](https://cesanta.com/docs/)
+- [Study Mongoose examples](https://github.com/cesanta/mongoose/tree/master/examples)
 - [Support Forum - ask your technical questions here](https://forum.cesanta.com/c/mongoose-library/6)
 - [Commercial licensing and support available](https://www.cesanta.com/licensing.html)
-- [Check our latest releases](https://github.com/cesanta/mongoose/releases)
+- [Check out latest releases](https://github.com/cesanta/mongoose/releases)
 
 # Features
 
