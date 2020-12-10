@@ -3,8 +3,6 @@
 
 ## Introduction
 
-<img alt="mongoose" src="../images/mongoose.png" class="float-right mx-5" style="width: 140px;" />
-
 Mongoose is a networking library for C/C++. It implements an event-driven,
 non-blocking APIs for TCP, UDP, HTTP, WebSocket, MQTT.  It has been designed
 for connecting devices and bringing them online. On the market since 2004, used
@@ -52,35 +50,35 @@ Mongoose's internals.
 An application that uses mongoose should follow a standard pattern of
 event-driven application:
 
-- Declare and initialise an event manager:
+1. Declare and initialise an event manager:
 
-```c
-struct mg_mgr mgr;
-mg_mgr_init(&mgr);
-```
+  ```c
+  struct mg_mgr mgr;
+  mg_mgr_init(&mgr);
+  ```
 
-- Create connections. For example, a server application should create listening
+2. Create connections. For example, a server application should create listening
   connections. When any connection is created (listening or outgoing), an
   event handler function must be specified. An event handler function defines
   connection's behavior.
 
-```c
-struct mg_connection *c = mg_http_listen(&mgr, "0.0.0.0:8000", fn, arg);
-```
+  ```c
+  struct mg_connection *c = mg_http_listen(&mgr, "0.0.0.0:8000", fn, arg);
+  ```
 
-- Create an event loop by calling `mg_mgr_poll()`:
+3. Create an event loop by calling `mg_mgr_poll()`:
 
-```c
- for (;;) {
-   mg_mgr_poll(&mgr, 1000);
- }
-```
+  ```c
+   for (;;) {
+     mg_mgr_poll(&mgr, 1000);
+   }
+  ```
 
 `mg_mgr_poll()` iterates over all sockets, accepts new connections, sends and
 receives data, closes connections and calls event handler functions for the
 respective events. 
 
-Since the Mongoose's core is not protected against the concurrent access,
+Since the Mongoose's core is not protected against concurrent accesses,
 make sure that all `mg_*` API functions are called from the same thread
 or RTOS task.
 
@@ -116,17 +114,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 - `struct mg_connection *c` - a connection that received an event
 - `int ev` - an event number, defined in mongoose.h. For example, when data
-  arrives on an inbound connection, ev would be `MG_EV_RECV`.
+  arrives on an inbound connection, ev would be `MG_EV_RECV`
 - `void *ev_data` - points to the event-specific data, and it has a different
   meaning for different events. For example, for an `MG_EV_RECV` event,
   `ev_data`
   is an `int *` pointing to the number of bytes received from a remote
   peer and saved into the `c->recv` IO buffer. The exact meaning of `ev_data` is
   described for each event. Protocol-specific events usually have `ev_data`
-  pointing to structures that hold protocol-specific information.
+  pointing to structures that hold protocol-specific information
 - `void *fn_data` - a user-defined pointer for the connection, which is a
-  placeholder for application-specific data. Mongoose does not use that
-  pointer. An event handler can store any kind of information there
+  placeholder for application-specific data
 
 ## Events
 
