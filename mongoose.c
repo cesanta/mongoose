@@ -165,7 +165,7 @@ void mg_resolve_cancel(struct mg_mgr *mgr, struct mg_connection *c) {
 static size_t mg_dns_parse_name(const uint8_t *s, const uint8_t *e, size_t off,
                                 char *to, size_t tolen, int depth) {
   size_t i = 0, j = 0;
-  // if (depth > 5) return 0;
+  if (depth > 5) return 0;
   while (&s[off + i + 1] < e && s[off + i] > 0) {
     size_t n = s[off + i];
     if (n & 0xc0) {
@@ -194,9 +194,9 @@ static size_t mg_dns_parse_name(const uint8_t *s, const uint8_t *e, size_t off,
 int mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
   struct mg_dns_header *h = (struct mg_dns_header *) buf;
   const uint8_t *s = buf + sizeof(*h), *e = &buf[len];
-  size_t i, j, n, ok = 0;
+  size_t i, j = 0, n, ok = 0;
   if (len < sizeof(*h)) return ok;
-  for (i = j = 0; i < mg_ntohs(h->num_questions); i++) {
+  for (i = 0; i < mg_ntohs(h->num_questions); i++) {
     j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 5;
     // LOG(LL_INFO, ("QUE [%s]", name));
   }
@@ -2687,6 +2687,24 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 #endif
 }
 
+static void connect_conn(struct mg_connection *c) {
+  int rc = 0;
+  socklen_t len = sizeof(rc);
+  if (getsockopt(FD(c), SOL_SOCKET, SO_ERROR, (char *) &rc, &len)) rc = 1;
+  if (rc == EAGAIN || rc == EWOULDBLOCK) rc = 0;
+  c->is_connecting = 0;
+  if (rc) {
+    mg_call(c, MG_EV_ERROR, "connect error");
+    c->is_closing = 1;
+  } else {
+    if (c->is_tls_hs && mg_tls_handshake(c)) {
+      c->is_tls_hs = 0;
+      mg_call(c, MG_EV_CONNECT, NULL);
+    }
+    if (c->is_tls == 0) mg_call(c, MG_EV_CONNECT, NULL);
+  }
+}
+
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   struct mg_connection *c, *tmp;
   unsigned long now;
@@ -2713,12 +2731,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 #endif
     } else if (c->is_connecting) {
       if (c->is_readable || c->is_writable) {
-        c->is_connecting = 0;
-        if (c->is_tls_hs && mg_tls_handshake(c)) {
-          c->is_tls_hs = 0;
-          mg_call(c, MG_EV_CONNECT, NULL);
-        }
-        if (c->is_tls == 0) mg_call(c, MG_EV_CONNECT, NULL);
+        connect_conn(c);
       }
     } else if (c->is_tls_hs) {
       if ((c->is_readable || c->is_writable) && mg_tls_handshake(c)) {

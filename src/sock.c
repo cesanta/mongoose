@@ -468,6 +468,24 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 #endif
 }
 
+static void connect_conn(struct mg_connection *c) {
+  int rc = 0;
+  socklen_t len = sizeof(rc);
+  if (getsockopt(FD(c), SOL_SOCKET, SO_ERROR, (char *) &rc, &len)) rc = 1;
+  if (rc == EAGAIN || rc == EWOULDBLOCK) rc = 0;
+  c->is_connecting = 0;
+  if (rc) {
+    mg_call(c, MG_EV_ERROR, "connect error");
+    c->is_closing = 1;
+  } else {
+    if (c->is_tls_hs && mg_tls_handshake(c)) {
+      c->is_tls_hs = 0;
+      mg_call(c, MG_EV_CONNECT, NULL);
+    }
+    if (c->is_tls == 0) mg_call(c, MG_EV_CONNECT, NULL);
+  }
+}
+
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   struct mg_connection *c, *tmp;
   unsigned long now;
@@ -494,12 +512,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 #endif
     } else if (c->is_connecting) {
       if (c->is_readable || c->is_writable) {
-        c->is_connecting = 0;
-        if (c->is_tls_hs && mg_tls_handshake(c)) {
-          c->is_tls_hs = 0;
-          mg_call(c, MG_EV_CONNECT, NULL);
-        }
-        if (c->is_tls == 0) mg_call(c, MG_EV_CONNECT, NULL);
+        connect_conn(c);
       }
     } else if (c->is_tls_hs) {
       if ((c->is_readable || c->is_writable) && mg_tls_handshake(c)) {

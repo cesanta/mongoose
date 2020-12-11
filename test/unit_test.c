@@ -432,6 +432,11 @@ static int cmpbody(const char *buf, const char *str) {
   return strncmp(hm.body.ptr, str, hm.body.len);
 }
 
+static void eh9(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_ERROR) *(void **) fn_data = ev_data;
+  (void) c;
+}
+
 static void test_http_server(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12346";
@@ -475,6 +480,15 @@ static void test_http_server(void) {
     ASSERT(fetch(&mgr, buf, url, "GET /ca.pem HTTP/1.0\r\n\n") == 200);
     ASSERT(cmpbody(data, buf) == 0);
     free(data);
+  }
+
+  {
+    // Test connection refused
+    char *msg = NULL;
+    int i;
+    mg_connect(&mgr, "tcp://127.0.0.1:55117", eh9, &msg);
+    for (i = 0; i < 10; i++) mg_mgr_poll(&mgr, 1);
+    ASSERT(msg != NULL && strcmp(msg, "connect error") == 0);
   }
 
   // HEAD request
@@ -888,7 +902,6 @@ int main(void) {
   test_util();
   test_sntp();
   test_dns();
-  test_mqtt();
   test_str();
   test_timer();
   test_http_range();
@@ -905,6 +918,7 @@ int main(void) {
   test_http_client();
   test_http_no_content_length();
   test_http_pipeline();
+  test_mqtt();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return EXIT_SUCCESS;
 }
