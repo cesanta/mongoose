@@ -864,7 +864,10 @@ static void test_str(void) {
 
 static void test_dns(void) {
   struct mg_dns_message dm;
+  char *data = mg_file_read("data.txt");
   ASSERT(mg_dns_parse(NULL, 0, &dm) == 0);
+  ASSERT(mg_dns_parse((uint8_t *) data, strlen(data), &dm) == 0);
+  free(data);
 }
 
 static void test_util(void) {

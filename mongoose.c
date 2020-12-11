@@ -165,11 +165,12 @@ void mg_resolve_cancel(struct mg_mgr *mgr, struct mg_connection *c) {
 static size_t mg_dns_parse_name(const uint8_t *s, const uint8_t *e, size_t off,
                                 char *to, size_t tolen, int depth) {
   size_t i = 0, j = 0;
+  // if (depth > 5) return 0;
   while (&s[off + i + 1] < e && s[off + i] > 0) {
     size_t n = s[off + i];
     if (n & 0xc0) {
       size_t ptr = (((n & 0x3f) << 8) | s[off + i + 1]) - 12;  // 12 is hdr len
-      if (&s[ptr + 1] < e && (s[ptr] & 0xc0) == 0 && depth < 5) {
+      if (&s[ptr + 1] < e && (s[ptr] & 0xc0) == 0) {
         j = mg_dns_parse_name(s, e, ptr, to, tolen, depth + 1);
       }
       i++;
