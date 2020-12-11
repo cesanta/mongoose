@@ -433,9 +433,10 @@ int mg_http_get_var(const struct mg_str *buf, const char *name, char *dst,
 int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
                   int is_form_url_encoded) {
   size_t i, j;
-  for (i = j = 0; i < src_len && j < dst_len - 1; i++, j++) {
+  for (i = j = 0; i < src_len && j + 1 < dst_len; i++, j++) {
     if (src[i] == '%') {
-      if (i < src_len - 2 && isxdigit(*(const unsigned char *) (src + i + 1)) &&
+      // Use `i + 2 < src_len`, not `i < src_len - 2`, note small src_len
+      if (i + 2 < src_len && isxdigit(*(const unsigned char *) (src + i + 1)) &&
           isxdigit(*(const unsigned char *) (src + i + 2))) {
         mg_unhex(src + i + 1, 2, (uint8_t *) &dst[j]);
         i += 2;
@@ -448,7 +449,7 @@ int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
       dst[j] = src[i];
     }
   }
-  dst[j] = '\0';  // Null-terminate the destination
+  if (j < dst_len) dst[j] = '\0';  // Null-terminate the destination
   return i >= src_len ? (int) j : -1;
 }
 
@@ -1735,7 +1736,7 @@ static int parse(const uint8_t *in, size_t inlen, struct mqtt_message *m) {
     len += (lc & 0x7f) << 7 * len_len;
     len_len++;
     if (!(lc & 0x80)) break;
-    if (len_len > 4) return MQTT_MALFORMED;
+    if (len_len >= 4) return MQTT_MALFORMED;
   }
 
   end = p + len;

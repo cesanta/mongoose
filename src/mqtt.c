@@ -150,7 +150,7 @@ static int parse(const uint8_t *in, size_t inlen, struct mqtt_message *m) {
     len += (lc & 0x7f) << 7 * len_len;
     len_len++;
     if (!(lc & 0x80)) break;
-    if (len_len > 4) return MQTT_MALFORMED;
+    if (len_len >= 4) return MQTT_MALFORMED;
   }
 
   end = p + len;

@@ -92,6 +92,8 @@ static void test_http_get_var(void) {
   body = mg_str("key=broken%2x");
   ASSERT(mg_http_get_var(&body, "key", buf, sizeof(buf)) == -3);
   ASSERT(mg_http_get_var(&body, "inexistent", buf, sizeof(buf)) == -4);
+  body = mg_str("key=%");
+  ASSERT(mg_http_get_var(&body, "key", buf, sizeof(buf)) == -3);
 }
 
 static int vcmp(struct mg_str s1, const char *s2) {
@@ -269,6 +271,12 @@ static void test_mqtt(void) {
   const char *url = "mqtt://broker.hivemq.com:1883";
   int i;
   mg_mgr_init(&mgr);
+
+  {
+    uint8_t bad[] = " \xff\xff\xff\xff ";
+    struct mg_mqtt_message mm;
+    mg_mqtt_parse(bad, sizeof(bad), &mm);
+  }
 
   // Connect with empty client ID
   c = mg_mqtt_connect(&mgr, url, NULL, mqtt_cb, buf);
@@ -859,12 +867,17 @@ static void test_util(void) {
   ASSERT(mg_file_write("data.txt", "%s", "hi") == 2);
   ASSERT(strcmp(mg_ntoa(0x100007f, buf, sizeof(buf)), "127.0.0.1") == 0);
   ASSERT(strcmp(mg_hex("abc", 3, buf), "616263") == 0);
+  {
+    char bad[] = {'a', '=', '%'};
+    ASSERT(mg_url_decode(bad, sizeof(bad), buf, sizeof(buf), 0) < 0);
+  }
 }
 
 int main(void) {
   mg_log_set("3");
-  test_str();
   test_util();
+  test_mqtt();
+  test_str();
   test_timer();
   test_http_range();
   test_url();
@@ -875,7 +888,6 @@ int main(void) {
   test_http_get_var();
   test_tls();
   test_ws();
-  test_mqtt();
   test_http_parse();
   test_http_server();
   test_http_client();
