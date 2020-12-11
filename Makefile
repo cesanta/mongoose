@@ -56,6 +56,7 @@ test: mongoose.c mongoose.h  Makefile test/unit_test.c
 
 coverage: test
 	gcov -l -n *.gcno | sed '/^$$/d' | sed 'N;s/\n/ /'
+	gcov mongoose.gcno >/dev/null
 
 infer:
 	infer run -- cc test/unit_test.c -c -W -Wall -Werror -Isrc -I. -O2 -DMG_ENABLE_MBEDTLS=1 -DMG_ENABLE_LINES -I/usr/local/Cellar/mbedtls/2.23.0/include  -DMG_ENABLE_IPV6=1 -g -o /dev/null

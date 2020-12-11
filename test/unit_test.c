@@ -433,7 +433,10 @@ static int cmpbody(const char *buf, const char *str) {
 }
 
 static void eh9(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_ERROR) *(void **) fn_data = ev_data;
+  if (ev == MG_EV_ERROR) {
+    ASSERT(!strcmp((char *) ev_data, "error connecting to 127.0.0.1:55117"));
+    *(int *) fn_data = 7;
+  }
   (void) c;
 }
 
@@ -484,11 +487,10 @@ static void test_http_server(void) {
 
   {
     // Test connection refused
-    char *msg = NULL;
-    int i;
-    mg_connect(&mgr, "tcp://127.0.0.1:55117", eh9, &msg);
-    for (i = 0; i < 10; i++) mg_mgr_poll(&mgr, 1);
-    ASSERT(msg != NULL && strcmp(msg, "connect error") == 0);
+    int i, errored = 0;
+    mg_connect(&mgr, "tcp://127.0.0.1:55117", eh9, &errored);
+    for (i = 0; i < 10 && errored == 0; i++) mg_mgr_poll(&mgr, 1);
+    ASSERT(errored == 7);
   }
 
   // HEAD request
@@ -711,6 +713,19 @@ static void test_http_parse(void) {
     ASSERT((v = mg_http_get_header(&req, "e")) != NULL);
     ASSERT(mg_vcmp(v, "5") == 0);
     ASSERT((v = mg_http_get_header(&req, "f")) == NULL);
+  }
+
+  {
+    struct mg_connection c;
+    struct mg_str s,
+        res = mg_str("GET /\r\nAuthorization: Basic Zm9vOmJhcg==\r\n\r\n");
+    memset(&c, 0, sizeof(c));
+    mg_printf(&c, "%s", "GET /\r\n");
+    mg_http_bauth(&c, "foo", "bar");
+    mg_printf(&c, "%s", "\r\n");
+    s = mg_str_n((char *) c.send.buf, c.send.len);
+    ASSERT(mg_strcmp(s, res) == 0);
+    mg_iobuf_free(&c.send);
   }
 }
 

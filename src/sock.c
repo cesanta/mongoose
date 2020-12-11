@@ -475,8 +475,8 @@ static void connect_conn(struct mg_connection *c) {
   if (rc == EAGAIN || rc == EWOULDBLOCK) rc = 0;
   c->is_connecting = 0;
   if (rc) {
-    mg_call(c, MG_EV_ERROR, (void *) "connect error");
-    c->is_closing = 1;
+    char buf[40];
+    mg_error(c, "error connecting to %s", mg_straddr(c, buf, sizeof(buf)));
   } else {
     if (c->is_tls_hs && mg_tls_handshake(c)) {
       c->is_tls_hs = 0;
