@@ -247,6 +247,8 @@ static void test_sntp(void) {
     ASSERT(tm->tm_sec == 21);
     ASSERT(mg_sntp_parse(bad_good, sizeof(bad_good), &tv) == -1);
   }
+
+  ASSERT(mg_sntp_parse(NULL, 0, &tv) == -1);
 }
 
 static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
@@ -860,6 +862,11 @@ static void test_str(void) {
   ASSERT(mg_strcmp(mg_str("hi"), mg_strstrip(mg_str(" \thi\r\n"))) == 0);
 }
 
+static void test_dns(void) {
+  struct mg_dns_message dm;
+  ASSERT(mg_dns_parse(NULL, 0, &dm) == 0);
+}
+
 static void test_util(void) {
   char buf[100], *s = mg_hexdump("abc", 3);
   ASSERT(s != NULL);
@@ -876,6 +883,8 @@ static void test_util(void) {
 int main(void) {
   mg_log_set("3");
   test_util();
+  test_sntp();
+  test_dns();
   test_mqtt();
   test_str();
   test_timer();
@@ -893,7 +902,6 @@ int main(void) {
   test_http_client();
   test_http_no_content_length();
   test_http_pipeline();
-  test_sntp();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return EXIT_SUCCESS;
 }

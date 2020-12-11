@@ -10,7 +10,7 @@
 static unsigned long s_sntmp_next;
 
 int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv) {
-  int mode = buf[0] & 7, res = -1;
+  int mode = len > 0 ? buf[0] & 7 : 0, res = -1;
   if (len < 48) {
     LOG(LL_ERROR, ("%s", "corrupt packet"));
   } else if ((buf[0] & 0x38) >> 3 != 4) {
