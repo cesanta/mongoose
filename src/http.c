@@ -549,10 +549,10 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
     bool is_index = false;
     size_t n = snprintf(path, sizeof(path), "%s%.*s", root, (int) hm->uri.len,
                         hm->uri.ptr);
-    while (n > 0 && n < sizeof(path) && path[n - 1] == MG_DIRSEP) path[--n] = 0;
+    while (n > 0 && n < sizeof(path) && path[n - 1] == '/') path[--n] = 0;
     if (realpath(path, real) == NULL)
-      LOG(LL_DEBUG, ("realpath(%s): %d", dir, errno));
-    // LOG(LL_INFO, ("PATH: [%s] REAL: [%s]", path, real));
+      LOG(LL_DEBUG, ("realpath(%s): %d", path, errno));
+    // LOG(LL_INFO, ("[%s] [%s] [%s] [%s]", dir, root, path, real));
     if (mg_is_dir(real)) {
       strncat(real, "/index.html", sizeof(real) - strlen(real) - 1);
       is_index = true;

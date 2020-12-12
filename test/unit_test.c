@@ -314,26 +314,6 @@ static void test_mqtt(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void ws_echo(struct mg_connection *c, int ev, void *evd, void *fnd) {
-  // LOG(LL_INFO, ("ws_echo %d", id));
-  if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) evd;
-    // LOG(LL_INFO, ("ws_echo ws key len: %d", hm->wskey.len));
-    if (mg_http_get_header(hm, "Sec-Websocket-Key") == NULL) {
-      mg_http_reply(c, 500, "WS expected");
-      c->is_draining = 1;
-    } else {
-      mg_ws_upgrade(c, hm);
-      // mg_fn_add(c, ws_echo, NULL);
-    }
-  } else if (ev == MG_EV_WS_MSG) {
-    struct mg_ws_message *wm = (struct mg_ws_message *) evd;
-    LOG(LL_INFO, ("[%.*s]", (int) wm->data.len, wm->data.ptr));
-  } else if (ev == MG_EV_CLOSE) {
-  }
-  (void) fnd;
-}
-
 static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   struct mg_tls_opts *opts = (struct mg_tls_opts *) fn_data;
   if (ev == MG_EV_ACCEPT && opts != NULL) mg_tls_init(c, opts);
@@ -345,36 +325,53 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (mg_http_match_uri(hm, "/foo/*")) {
       mg_http_reply(c, 200, "uri: %.*s", hm->uri.len - 5, hm->uri.ptr + 5);
     } else if (mg_http_match_uri(hm, "/ws")) {
-      ws_echo(c, ev, ev_data, NULL);
+      mg_ws_upgrade(c, hm);
     } else if (mg_http_match_uri(hm, "/body")) {
       mg_http_reply(c, 200, "%.*s", (int) hm->body.len, hm->body.ptr);
     } else if (mg_http_match_uri(hm, "/bar")) {
       mg_http_reply(c, 404, "not found");
     } else if (mg_http_match_uri(hm, "/badroot")) {
       mg_http_serve_dir(c, hm, "/BAAADDD!");
+    } else if (mg_http_match_uri(hm, "/creds")) {
+      char user[100], pass[100];
+      mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
+      mg_http_reply(c, 200, "[%s]:[%s]", user, pass);
+    } else if (mg_http_match_uri(hm, "/upload")) {
+      mg_http_upload(c, hm, ".");
+    } else if (mg_http_match_uri(hm, "/test/")) {
+      mg_http_serve_dir(c, hm, ".");
     } else {
       mg_http_serve_dir(c, hm, "./test/data");
     }
+  } else if (ev == MG_EV_WS_MSG) {
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_BINARY);
+  }
+}
+
+static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_WS_OPEN) {
+    mg_ws_send(c, "boo", 3, WEBSOCKET_OP_BINARY);
+    mg_ws_send(c, "", 0, WEBSOCKET_OP_PING);
+  } else if (ev == MG_EV_WS_MSG) {
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    ASSERT(mg_strstr(wm->data, mg_str("boo")));
+    mg_ws_send(c, "", 0, WEBSOCKET_OP_CLOSE);  // Ask server to close
+    *(int *) fn_data = 1;
+  } else if (ev == MG_EV_CLOSE) {
+    *(int *) fn_data = 2;
   }
 }
 
 static void test_ws(void) {
   struct mg_mgr mgr;
-  struct mg_connection *c, *c1 = NULL;
-  int i;
+  int i, done = 0;
 
   mg_mgr_init(&mgr);
-  c1 = mg_http_listen(&mgr, "http://127.0.0.1:12345", eh1, NULL);
-  for (i = 0; i < 5; i++) mg_mgr_poll(&mgr, 1);
-  ASSERT(c1 != NULL);
-
-  c = mg_ws_connect(&mgr, "ws://127.0.0.1:12345/ws", NULL, NULL, NULL);
-  for (i = 0; i < 5; i++) mg_mgr_poll(&mgr, 1);
-  mg_ws_send(c, "boo", 3, WEBSOCKET_OP_BINARY);
-  // for (i = 0; i < 5; i++) mg_mgr_poll(&mgr, 1);
-  // for (i = 0; i < 5; i++) mg_mgr_poll(&mgr, 1);
-  // ASSERT(c->flags & MG_FL_WS);
-  // mg_ws_send(c, WEBSOCKET_OP_TEXT, "hi!", 3);
+  mg_http_listen(&mgr, "http://127.0.0.1:12345", eh1, NULL);
+  mg_ws_connect(&mgr, "ws://127.0.0.1:12345/ws", wcb, &done, "%s", "");
+  for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(done == 2);
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
@@ -493,6 +490,60 @@ static void test_http_server(void) {
     mg_connect(&mgr, "tcp://127.0.0.1:55117", eh9, &errored);
     for (i = 0; i < 10 && errored == 0; i++) mg_mgr_poll(&mgr, 1);
     ASSERT(errored == 7);
+  }
+
+  // Directory listing
+  fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n");
+  LOG(LL_INFO, ("000[%s]", buf));
+  ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
+  ASSERT(mg_strstr(mg_str(buf), mg_str(">Index of /test/<")) != NULL);
+  ASSERT(mg_strstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
+
+  {
+    // Credentials
+    struct mg_http_message hm;
+    ASSERT(fetch(&mgr, buf, url, "%s",
+                 "GET /creds?access_token=x HTTP/1.0\r\n\r\n") == 200);
+    mg_http_parse(buf, strlen(buf), &hm);
+    ASSERT(mg_strcmp(hm.body, mg_str("[]:[x]")) == 0);
+
+    ASSERT(fetch(&mgr, buf, url, "%s",
+                 "GET /creds HTTP/1.0\r\n"
+                 "Authorization: Bearer x\r\n\r\n") == 200);
+    mg_http_parse(buf, strlen(buf), &hm);
+    ASSERT(mg_strcmp(hm.body, mg_str("[]:[x]")) == 0);
+
+    ASSERT(fetch(&mgr, buf, url, "%s",
+                 "GET /creds HTTP/1.0\r\n"
+                 "Authorization: Basic Zm9vOmJhcg==\r\n\r\n") == 200);
+    mg_http_parse(buf, strlen(buf), &hm);
+    ASSERT(mg_strcmp(hm.body, mg_str("[foo]:[bar]")) == 0);
+
+    ASSERT(fetch(&mgr, buf, url, "%s",
+                 "GET /creds HTTP/1.0\r\n"
+                 "Cookie: blah; access_token=hello\r\n\r\n") == 200);
+    mg_http_parse(buf, strlen(buf), &hm);
+    ASSERT(mg_strcmp(hm.body, mg_str("[]:[hello]")) == 0);
+  }
+
+  {
+    // Test upload
+    char *p;
+    remove("uploaded.txt");
+    ASSERT((p = mg_file_read("uploaded.txt")) == NULL);
+
+    ASSERT(fetch(&mgr, buf, url,
+                 "POST /upload HTTP/1.0\n"
+                 "Content-Length: 1\n\nx") == 400);
+
+    ASSERT(fetch(&mgr, buf, url,
+                 "POST /upload?name=uploaded.txt HTTP/1.0\r\n"
+                 "Content-Length: 5\r\n"
+                 "\r\nhello") == 200);
+    ASSERT((p = mg_file_read("uploaded.txt")) != NULL);
+    ASSERT(strcmp(p, "hello") == 0);
+    free(p);
+    remove("uploaded.txt");
   }
 
   // HEAD request
