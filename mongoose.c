@@ -2245,6 +2245,10 @@ typedef int SOCKET;
 #define FD(C_) ((SOCKET)(long) (C_)->fd)
 #endif
 
+#ifndef MSG_NONBLOCKING
+#define MSG_NONBLOCKING 0
+#endif
+
 union usa {
   struct sockaddr sa;
   struct sockaddr_in sin;
@@ -2297,7 +2301,7 @@ static int mg_sock_recv(struct mg_connection *c, void *buf, int len,
       c->peer.port = usa.sin.sin_port;
     }
   } else {
-    n = recv(FD(c), buf, len, 0);
+    n = recv(FD(c), buf, len, MSG_NONBLOCKING);
   }
   *fail = (n == 0) || (n < 0 && mg_sock_failed());
   return n;
@@ -2310,7 +2314,7 @@ static int mg_sock_send(struct mg_connection *c, const void *buf, int len,
     union usa usa = tousa(&c->peer);
     n = sendto(FD(c), buf, len, 0, &usa.sa, sizeof(usa.sin));
   } else {
-    n = send(FD(c), buf, len, 0);
+    n = send(FD(c), buf, len, MSG_NONBLOCKING);
   }
   *fail = (n == 0) || (n < 0 && mg_sock_failed());
   return n;
