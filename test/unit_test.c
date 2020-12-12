@@ -94,6 +94,8 @@ static void test_http_get_var(void) {
   ASSERT(mg_http_get_var(&body, "inexistent", buf, sizeof(buf)) == -4);
   body = mg_str("key=%");
   ASSERT(mg_http_get_var(&body, "key", buf, sizeof(buf)) == -3);
+  body = mg_str("&&&kEy=%");
+  ASSERT(mg_http_get_var(&body, "kEy", buf, sizeof(buf)) == -3);
 }
 
 static int vcmp(struct mg_str s1, const char *s2) {
@@ -906,10 +908,8 @@ static void test_util(void) {
   ASSERT(mg_file_write("data.txt", "%s", "hi") == 2);
   ASSERT(strcmp(mg_ntoa(0x100007f, buf, sizeof(buf)), "127.0.0.1") == 0);
   ASSERT(strcmp(mg_hex("abc", 3, buf), "616263") == 0);
-  {
-    char bad[] = {'a', '=', '%'};
-    ASSERT(mg_url_decode(bad, sizeof(bad), buf, sizeof(buf), 0) < 0);
-  }
+  ASSERT(mg_url_decode("a=%", 3, buf, sizeof(buf), 0) < 0);
+  ASSERT(mg_url_decode("&&&a=%", 6, buf, sizeof(buf), 0) < 0);
 }
 
 int main(void) {
