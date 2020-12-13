@@ -494,7 +494,6 @@ static void test_http_server(void) {
 
   // Directory listing
   fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n");
-  LOG(LL_INFO, ("000[%s]", buf));
   ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">Index of /test/<")) != NULL);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
