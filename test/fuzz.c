@@ -1,5 +1,8 @@
 #include "mongoose.h"
 
+#ifdef __cplusplus
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t *, size_t);
+#endif
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   struct mg_dns_message dm;
