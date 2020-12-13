@@ -13,6 +13,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   struct mg_str body = mg_str_n((const char *) data, size);
   char tmp[256];
   mg_http_get_var(&body, "key", tmp, sizeof(tmp));
+  mg_http_get_var(&body, "key", NULL, 0);
   mg_url_decode((char *) data, size, tmp, sizeof(tmp), 1);
   mg_url_decode((char *) data, size, tmp, 1, 1);
   mg_url_decode(NULL, 0, tmp, 1, 1);
