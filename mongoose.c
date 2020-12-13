@@ -6395,30 +6395,17 @@ static void deliver_chunk(struct mg_connection *c, struct http_message *hm,
   }
 }
 
-/*
- * lx106 compiler has a bug (TODO(mkm) report and insert tracking bug here)
- * If a big structure is declared in a big function, lx106 gcc will make it
- * even bigger (round up to 4k, from 700 bytes of actual size).
- */
-#ifdef __xtensa__
-static void mg_http_handler2(struct mg_connection *nc, int ev,
-                             void *ev_data MG_UD_ARG(void *user_data),
-                             struct http_message *hm) __attribute__((noinline));
-
 void mg_http_handler(struct mg_connection *nc, int ev,
                      void *ev_data MG_UD_ARG(void *user_data)) {
-  struct http_message hm;
-  mg_http_handler2(nc, ev, ev_data MG_UD_ARG(user_data), &hm);
-}
-
-static void mg_http_handler2(struct mg_connection *nc, int ev,
-                             void *ev_data MG_UD_ARG(void *user_data),
-                             struct http_message *hm) {
-#else  /* !__XTENSA__ */
-void mg_http_handler(struct mg_connection *nc, int ev,
-                     void *ev_data MG_UD_ARG(void *user_data)) {
+/* On ESP8266 stack is especially limited (4K).
+ * Since Mongoose is single-threaded, we can use the same struct
+ * and save ~400 bytes. This may not seem like much but in fact it's the
+ * difference between overflowing and not (when serving files). */
+#if CS_PLATFORM == CS_P_ESP8266
+  static struct http_message shm, *hm = &shm;
+#else
   struct http_message shm, *hm = &shm;
-#endif /* __XTENSA__ */
+#endif
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
   struct mbuf *io = &nc->recv_mbuf;
   int req_len;
