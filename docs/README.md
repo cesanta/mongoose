@@ -712,8 +712,33 @@ int mg_http_upload(struct mg_connection *, struct mg_http_message *hm,
                    const char *dir);
 ```
 
-Handle file upload. See file upload example.
+Handle file upload. See [file upload example](https://github.com/cesanta/mongoose/tree/master/examples/file-upload).
 
+This function sets up a built-in event handler that expects a series of
+POST requests with file data. POST requests should be like this:
+
+```
+POST /whatever_uri?name=myfile.txt&offset=1234 HTTP/1.0
+Content-Length: 5
+
+hello
+```
+
+- `name` - a mandatory query string parameter, specifies a file name. It it
+  created in the `dir` directory
+- `offset` - an optional parameter, default `0`. If it set to `0`, or omitted,
+  then a file gets truncated before write. Otherwise, the body of
+  the POST request gets appended to the file
+
+So, the expected usage of this API function is this:
+- A client splits a file into small enough chunks, to ensure that a chunk
+  fits into the server's RAM
+- Then, each chunk is POST-ed to the server with using URI like
+  `/some_uri?name=FILENAME&offset=OFFSET`
+- Initial OFFSET is `0`, and subsequent offsets are non-zero
+- Each chunk gets appended to the file
+- When the last chunk is POSTed, upload finishes
+- POST data must not be encoded in any way, it it saved as-is
 
 ### mg\_http\_bauth()
 
