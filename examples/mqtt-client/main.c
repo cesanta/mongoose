@@ -18,7 +18,7 @@ static const char *s_topic = "mg/test";
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ERROR) {
     // On error, log error message
-    LOG(LL_ERROR, ("%p %s", c->fd, ev_data));
+    LOG(LL_ERROR, ("%p %s", c->fd, (char *) ev_data));
   } else if (ev == MG_EV_CONNECT) {
     // If target URL is SSL/TLS, command client connection to use TLS
     if (mg_url_is_ssl(s_url)) {

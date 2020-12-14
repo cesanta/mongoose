@@ -82,7 +82,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     }
   } else if (ev == MG_EV_POLL && c->fn_data != NULL) {
     // On each poll iteration, try to receive response data
-    int sock = (int) c->fn_data;
+    int sock = (int) (long) c->fn_data;
     struct response response = {NULL, 0};
     if (recv(sock, (void *) &response, sizeof(response), 0) ==
         sizeof(response)) {
