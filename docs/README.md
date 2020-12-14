@@ -714,9 +714,8 @@ int mg_http_upload(struct mg_connection *, struct mg_http_message *hm,
 
 Handle file upload. See [file upload example](https://github.com/cesanta/mongoose/tree/master/examples/file-upload).
 
-This function sets up a built-in event handler that expects a series of
-POST requests with file data. POST requests should have `name` and `offset`
-query string parameters set:
+This function  expects a series of POST requests with file data. POST requests
+should have `name` and `offset` query string parameters set:
 
 ```text
 POST /whatever_uri?name=myfile.txt&offset=1234 HTTP/1.0
