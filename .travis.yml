@@ -12,8 +12,8 @@ compiler:
 script: make test test++
 matrix:
   include:
-    - os: osx
-      compiler: clang
+    - os: linux
+      compiler: gcc
       script: make mg_prefix vc98 vc2017 ex
       sudo: required
       services:
