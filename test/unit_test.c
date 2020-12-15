@@ -485,6 +485,16 @@ static void test_http_server(void) {
   }
 
   {
+    // Test mime type
+    struct mg_http_message hm;
+    ASSERT(fetch(&mgr, buf, url, "GET /empty.js HTTP/1.0\r\n\n") == 200);
+    mg_http_parse(buf, strlen(buf), &hm);
+    ASSERT(mg_http_get_header(&hm, "Content-Type") != NULL);
+    ASSERT(mg_strcmp(*mg_http_get_header(&hm, "Content-Type"),
+                     mg_str("text/javascript")) == 0);
+  }
+
+  {
     // Test connection refused
     int i, errored = 0;
     mg_connect(&mgr, "tcp://127.0.0.1:55117", eh9, &errored);

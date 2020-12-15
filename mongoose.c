@@ -655,10 +655,64 @@ static void static_cb(struct mg_connection *c, int ev, void *ev_data,
 }
 
 static const char *guess_content_type(const char *filename) {
-  int n = (int) strlen(filename);
-  if (mg_globmatch("#.html", 6, filename, n)) return "text/html";
-  if (mg_globmatch("#.css", 5, filename, n)) return "text/css";
-  if (mg_globmatch("#.js", 4, filename, n)) return "text/javascript";
+  size_t n = strlen(filename);
+#define MIME_ENTRY(_ext, _type) \
+  { _ext, sizeof(_ext) - 1, _type }
+  const struct {
+    const char *ext;
+    size_t ext_len;
+    const char *type;
+  } * t, types[] = {
+             MIME_ENTRY("html", "text/html"),
+             MIME_ENTRY("shtml", "text/html"),
+             MIME_ENTRY("css", "text/css"),
+             MIME_ENTRY("js", "text/javascript"),
+             MIME_ENTRY("mjs", "text/javascript"),
+             MIME_ENTRY("json", "application/json"),
+             MIME_ENTRY("ico", "image/x-icon"),
+             MIME_ENTRY("gif", "image/gif"),
+             MIME_ENTRY("jpg", "image/jpeg"),
+             MIME_ENTRY("jpeg", "image/jpeg"),
+             MIME_ENTRY("png", "image/png"),
+             MIME_ENTRY("svg", "image/svg+xml"),
+             MIME_ENTRY("txt", "text/plain"),
+             MIME_ENTRY("torrent", "application/x-bittorrent"),
+             MIME_ENTRY("wav", "audio/wav"),
+             MIME_ENTRY("mp3", "audio/mpeg"),
+             MIME_ENTRY("mid", "audio/mid"),
+             MIME_ENTRY("ogg", "application/ogg"),
+             MIME_ENTRY("xml", "application/xml"),
+             MIME_ENTRY("ttf", "font/ttf"),
+             MIME_ENTRY("json", "application/json"),
+             MIME_ENTRY("xsl", "application/xml"),
+             MIME_ENTRY("doc", "application/msword"),
+             MIME_ENTRY("exe", "application/octet-stream"),
+             MIME_ENTRY("zip", "application/zip"),
+             MIME_ENTRY("xls", "application/excel"),
+             MIME_ENTRY("tgz", "application/tar-gz"),
+             MIME_ENTRY("tar", "application/tar"),
+             MIME_ENTRY("gz", "application/gzip"),
+             MIME_ENTRY("rar", "application/rar"),
+             MIME_ENTRY("rtf", "application/rtf"),
+             MIME_ENTRY("pdf", "application/pdf"),
+             MIME_ENTRY("mpg", "video/mpeg"),
+             MIME_ENTRY("webm", "video/webm"),
+             MIME_ENTRY("mpeg", "video/mpeg"),
+             MIME_ENTRY("mov", "video/quicktime"),
+             MIME_ENTRY("mp4", "video/mp4"),
+             MIME_ENTRY("m4v", "video/x-m4v"),
+             MIME_ENTRY("asf", "video/x-ms-asf"),
+             MIME_ENTRY("avi", "video/x-msvideo"),
+             MIME_ENTRY("bmp", "image/bmp"),
+             MIME_ENTRY("wasm", "application/wasm"),
+             {NULL, 0, NULL},
+         };
+
+  for (t = types; t->ext != NULL; t++) {
+    if (n < t->ext_len + 2) continue;
+    if (mg_ncasecmp(t->ext, &filename[n - t->ext_len], t->ext_len)) continue;
+    return t->type;
+  }
   return "text/plain";
 }
 
