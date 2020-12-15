@@ -562,23 +562,23 @@ void mg_call(struct mg_connection *c, int ev, void *ev_data);
 void mg_error(struct mg_connection *c, const char *fmt, ...);
 
 enum {
-  MG_EV_ERROR,     // Error                        char *error_message
-  MG_EV_POLL,      // mg_mgr_poll iteration        unsigned long *millis
-  MG_EV_RESOLVE,   // Host name is resolved        NULL
-  MG_EV_CONNECT,   // Connection established       NULL
-  MG_EV_ACCEPT,    // Connection accepted          NULL
-  MG_EV_READ,      // Data received from socket    struct mg_str *
-  MG_EV_WRITE,     // Data written to socket       int *num_bytes_written
-  MG_EV_CLOSE,     // Connection closed            NULL
-  MG_EV_HTTP_MSG,  // HTTP request/response        struct mg_http_message *
+  MG_EV_ERROR,      // Error                        char *error_message
+  MG_EV_POLL,       // mg_mgr_poll iteration        unsigned long *millis
+  MG_EV_RESOLVE,    // Host name is resolved        NULL
+  MG_EV_CONNECT,    // Connection established       NULL
+  MG_EV_ACCEPT,     // Connection accepted          NULL
+  MG_EV_READ,       // Data received from socket    struct mg_str *
+  MG_EV_WRITE,      // Data written to socket       int *num_bytes_written
+  MG_EV_CLOSE,      // Connection closed            NULL
+  MG_EV_HTTP_MSG,   // HTTP request/response        struct mg_http_message *
   MG_EV_WS_OPEN,    // Websocket handshake done     NULL
   MG_EV_WS_MSG,     // Websocket message received   struct mg_ws_message *
-  MG_EV_MQTT_MSG,   // MQTT message                 struct mg_mqtt_message *
+  MG_EV_MQTT_CMD,   // MQTT low-level command       struct mg_mqtt_message *
+  MG_EV_MQTT_MSG,   // MQTT PUBLISH received        struct mg_mqtt_message *
   MG_EV_MQTT_OPEN,  // MQTT CONNACK received        int *connack_status_code
   MG_EV_SNTP_TIME,  // SNTP time received           struct timeval *
   MG_EV_USER,       // Starting ID for user events
 };
-
 
 
 
@@ -739,6 +739,25 @@ int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv);
 
 
 
+#define MQTT_CMD_CONNECT 1
+#define MQTT_CMD_CONNACK 2
+#define MQTT_CMD_PUBLISH 3
+#define MQTT_CMD_PUBACK 4
+#define MQTT_CMD_PUBREC 5
+#define MQTT_CMD_PUBREL 6
+#define MQTT_CMD_PUBCOMP 7
+#define MQTT_CMD_SUBSCRIBE 8
+#define MQTT_CMD_SUBACK 9
+#define MQTT_CMD_UNSUBSCRIBE 10
+#define MQTT_CMD_UNSUBACK 11
+#define MQTT_CMD_PINGREQ 12
+#define MQTT_CMD_PINGRESP 13
+#define MQTT_CMD_DISCONNECT 14
+
+#define MQTT_QOS(qos) ((qos) << 1)
+#define MQTT_GET_QOS(flags) (((flags) &0x6) >> 1)
+#define MQTT_SET_QOS(flags, qos) (flags) = ((flags) & ~0x6) | ((qos) << 1)
+
 struct mg_mqtt_opts {
   struct mg_str client_id;
   struct mg_str will_topic;
@@ -750,17 +769,28 @@ struct mg_mqtt_opts {
 };
 
 struct mg_mqtt_message {
-  struct mg_str topic;
-  struct mg_str data;
+  struct mg_str topic;    // Parsed topic
+  struct mg_str data;     // Parsed message
+  struct mg_str dgram;    // Whole MQTT datagram, including headers
+  uint16_t id;  // Set for PUBACK, PUBREC, PUBREL, PUBCOMP, SUBACK, PUBLISH
+  uint8_t cmd;  // MQTT command, one of MQTT_CMD_*
+  uint8_t qos;  // Quality of service
+  uint8_t ack;  // Connack return code. 0 - success
 };
 
 struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
                                       struct mg_mqtt_opts *opts,
                                       mg_event_handler_t fn, void *fn_data);
+struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
+                                     mg_event_handler_t fn, void *fn_data);
 void mg_mqtt_pub(struct mg_connection *, struct mg_str *topic,
                  struct mg_str *data);
 void mg_mqtt_sub(struct mg_connection *, struct mg_str *topic);
 int mg_mqtt_parse(const unsigned char *buf, int len, struct mg_mqtt_message *m);
+void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,
+                         uint32_t len);
+int mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
+                     uint8_t *qos, int pos);
 
 
 
