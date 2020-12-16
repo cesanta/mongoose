@@ -31,4 +31,4 @@ A main dashboard page shows internal data, live video stream, and a form
 
 A live log page shows live log stream coming from device
 
-![](screenshots/dashboard.png)
+![](screenshots/logs.png)
