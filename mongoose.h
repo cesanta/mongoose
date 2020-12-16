@@ -786,7 +786,7 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 void mg_mqtt_pub(struct mg_connection *, struct mg_str *topic,
                  struct mg_str *data);
 void mg_mqtt_sub(struct mg_connection *, struct mg_str *topic);
-int mg_mqtt_parse(const unsigned char *buf, int len, struct mg_mqtt_message *m);
+int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m);
 void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,
                          uint32_t len);
 int mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
