@@ -39,25 +39,28 @@ void mg_resolve_cancel(struct mg_mgr *mgr, struct mg_connection *c) {
 static size_t mg_dns_parse_name(const uint8_t *s, const uint8_t *e, size_t off,
                                 char *to, size_t tolen, int depth) {
   size_t i = 0, j = 0;
+  if (tolen > 0) to[0] = '\0';
   if (depth > 5) return 0;
   while (&s[off + i + 1] < e && s[off + i] > 0) {
     size_t n = s[off + i];
     if (n & 0xc0) {
       size_t ptr = (((n & 0x3f) << 8) | s[off + i + 1]) - 12;  // 12 is hdr len
       if (&s[ptr + 1] < e && (s[ptr] & 0xc0) == 0) {
-        j = mg_dns_parse_name(s, e, ptr, to, tolen, depth + 1);
+        mg_dns_parse_name(s, e, ptr, to, tolen, depth + 1);
       }
       i++;
       break;
     }
     if (&s[off + i + n + 1] >= e) break;
-    if (j > 0 && j < tolen) to[j++] = '.';
-    if (j + n < tolen) memcpy(&to[j], &s[off + i + 1], n);
+    if (j + n + 1 >= tolen) return 0;  // Error - overflow
+    if (j > 0) to[j++] = '.';
+    memcpy(&to[j], &s[off + i + 1], n);
     j += n;
     i += n + 1;
+    to[j] = '\0';  // Zero-terminate this chunk
+    LOG(LL_DEBUG, ("-- %zu/%zu %zu %zu", i, e - s, j, n));
   }
-  if (j < tolen) to[j] = '\0';  // Zero-terminate the name
-  to[tolen - 1] = '\0';         // Just in case
+  if (tolen > 0) to[tolen - 1] = '\0';  // Make sure make sure it is nul-term
   return i;
 }
 
@@ -69,14 +72,17 @@ int mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
   struct mg_dns_header *h = (struct mg_dns_header *) buf;
   const uint8_t *s = buf + sizeof(*h), *e = &buf[len];
   size_t i, j = 0, n, ok = 0;
-  if (len < sizeof(*h)) return ok;
+  if (len < sizeof(*h)) return ok;  // Too small, headers dont fit
+  if (len > 512) return ok;         //  Too large, we don't expect that
+  if (mg_ntohs(h->num_questions) > 2) return 0;  // Sanity
+  if (mg_ntohs(h->num_answers) > 5) return 0;    // Sanity
   for (i = 0; i < mg_ntohs(h->num_questions); i++) {
     j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 5;
-    // LOG(LL_INFO, ("QUE [%s]", name));
+    LOG(LL_INFO, ("QUE %zu %zu [%s]", i, j, dm->name));
   }
   for (i = 0; i < mg_ntohs(h->num_answers); i++) {
     j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 9;
-    // LOG(LL_DEBUG, ("NAME %s", name));
+    LOG(LL_DEBUG, ("NAME %s", dm->name));
     if (&s[j] + 2 > e) break;
     n = ((int) s[j] << 8) | s[j + 1];
     if (&s[j] + 2 + n > e) break;

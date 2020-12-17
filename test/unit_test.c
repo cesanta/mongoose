@@ -964,8 +964,6 @@ static void test_dns(void) {
                     0x74, 0x61, 0x03, 0x63, 0x6f, 0x6d, 0,    0,    1,
                     0,    1,    0xc0, 0x0c, 0,    1,    0,    1,    0,
                     0,    2,    0x57, 0,    4,    0x94, 0xfb, 0x36, 0xec};
-  // char *data = mg_file_read("dns.bin");
-  // ASSERT(data != NULL);
   ASSERT(mg_dns_parse(NULL, 0, &dm) == 0);
   ASSERT(mg_dns_parse(data, sizeof(data), &dm) == 1);
   ASSERT(strcmp(dm.name, "cesanta.com") == 0);
@@ -973,8 +971,15 @@ static void test_dns(void) {
   memset(&dm, 0, sizeof(dm));
   ASSERT(mg_dns_parse(data, sizeof(data), &dm) == 1);
   ASSERT(strcmp(dm.name, "") == 0);
-  // ASSERT(mg_dns_parse((uint8_t *) data, strlen(data), &dm) == 0);
-  // free(data);
+
+#if 0
+  {
+    char *data = mg_file_read("dns.bin");
+    ASSERT(data != NULL);
+    ASSERT(mg_dns_parse((uint8_t *) data, mg_file_size("dns.bin"), &dm) == 0);
+    free(data);
+  }
+#endif
 }
 
 static void test_util(void) {
