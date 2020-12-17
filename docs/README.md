@@ -227,6 +227,10 @@ Here is a list of build constants and their default values:
 |`MG_MAX_RECV_BUF_SIZE` | (3 * 1024 * 1024) | Maximum recv buffer size |
 |`MG_MAX_HTTP_HEADERS` | 40 | Maximum number of HTTP headers |
 
+NOTE: `MG_IO_SIZE` controls the maximum UDP message size, see
+https://github.com/cesanta/mongoose/issues/907 for details. If application
+uses large UDP messages, increase the `MG_IO_SIZE` limit accordingly.
+
 ## Minimal HTTP server
 
 This example is a simple static HTTP server that serves current directory:
