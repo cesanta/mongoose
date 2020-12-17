@@ -10,7 +10,7 @@
 // Event handler for an accepted connection
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
-    mg_http_reply(c, 200, "Hello from ESP32!");
+    mg_http_reply(c, 200, "", "Hello from ESP32!");
   }
 }
 

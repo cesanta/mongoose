@@ -24,7 +24,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_ws_upgrade(c, hm);
     } else if (mg_http_match_uri(hm, "/rest")) {
       // Serve REST response
-      mg_http_reply(c, 200, "{\"result\": %d}\n", 123);
+      mg_http_reply(c, 200, "", "{\"result\": %d}\n", 123);
     } else {
       // Serve static files
       mg_http_serve_dir(c, ev_data, s_web_directory);

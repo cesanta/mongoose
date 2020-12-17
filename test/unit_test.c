@@ -323,19 +323,19 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
         ("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.ptr,
          (int) hm->uri.len, hm->uri.ptr, (int) hm->message.len));
     if (mg_http_match_uri(hm, "/foo/*")) {
-      mg_http_reply(c, 200, "uri: %.*s", hm->uri.len - 5, hm->uri.ptr + 5);
+      mg_http_reply(c, 200, "", "uri: %.*s", hm->uri.len - 5, hm->uri.ptr + 5);
     } else if (mg_http_match_uri(hm, "/ws")) {
       mg_ws_upgrade(c, hm);
     } else if (mg_http_match_uri(hm, "/body")) {
-      mg_http_reply(c, 200, "%.*s", (int) hm->body.len, hm->body.ptr);
+      mg_http_reply(c, 200, "", "%.*s", (int) hm->body.len, hm->body.ptr);
     } else if (mg_http_match_uri(hm, "/bar")) {
-      mg_http_reply(c, 404, "not found");
+      mg_http_reply(c, 404, "", "not found");
     } else if (mg_http_match_uri(hm, "/badroot")) {
       mg_http_serve_dir(c, hm, "/BAAADDD!");
     } else if (mg_http_match_uri(hm, "/creds")) {
       char user[100], pass[100];
       mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
-      mg_http_reply(c, 200, "[%s]:[%s]", user, pass);
+      mg_http_reply(c, 200, "", "[%s]:[%s]", user, pass);
     } else if (mg_http_match_uri(hm, "/upload")) {
       mg_http_upload(c, hm, ".");
     } else if (mg_http_match_uri(hm, "/test/")) {
@@ -470,10 +470,10 @@ static void test_http_server(void) {
   ASSERT(cmpbody(buf, "kuku") == 0);
 
   ASSERT(fetch(&mgr, buf, url, "GET /badroot HTTP/1.0\r\n\n") == 400);
-  // LOG(LL_INFO, ("--> [%s]", buf));
 #if MG_ARCH == MG_ARCH_WIN32
   ASSERT(cmpbody(buf, "Bad web root [Z:\\BAAADDD!]\n") == 0);
 #else
+  LOG(LL_INFO, ("--> [%s]", buf));
   ASSERT(cmpbody(buf, "Bad web root [/BAAADDD!]\n") == 0);
 #endif
 

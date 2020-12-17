@@ -648,11 +648,18 @@ Serve static file.
 ### mg\_http\_reply()
 
 ```c
-void mg_http_reply(struct mg_connection *c, int code, const char *fmt, ...);
+void mg_http_reply(struct mg_connection *c, int status_code, const char *headers,
+                   const char *body_fmt, ...);
 ```
 
-Send simple HTTP response using `printf()` semantic. 
-`code` is HTTP response code, `fmt` is format for the HTTP body.
+Send simple HTTP response using `printf()` semantic. This function formats
+response body according to a `body_fmt`, and automatically appends a correct
+`Content-Length` header. Extra headers could be passed via `headers`
+parameter.
+
+- `status_code` - an HTTP response code
+- `headers` - extra headers, default NULL. If not NULL, must end with `\r\n`
+- `fmt` - a format string for the HTTP body, in a printf semantics
 
 
 ### mg\_http\_header()

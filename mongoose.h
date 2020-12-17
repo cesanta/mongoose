@@ -676,7 +676,8 @@ void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
                        const char *path);
 void mg_http_serve_file(struct mg_connection *, struct mg_http_message *,
                         const char *, const char *mime);
-void mg_http_reply(struct mg_connection *c, int code, const char *fmt, ...);
+void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
+                   const char *body_fmt, ...);
 struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
 void mg_http_event_handler(struct mg_connection *c, int ev);
 int mg_http_get_var(const struct mg_str *, const char *name, char *, int);

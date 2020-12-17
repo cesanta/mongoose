@@ -14,9 +14,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/f1")) {
-      mg_http_reply(c, 200, "{\"result\": %d}\n", 123);  // Serve REST response
+      mg_http_reply(c, 200, "", "{\"result\": %d}\n", 123);  // Serve REST
     } else if (mg_http_match_uri(hm, "/api/f2/*")) {
-      mg_http_reply(c, 200, "{\"result\": \"%.*s\"}\n", (int) hm->uri.len,
+      mg_http_reply(c, 200, "", "{\"result\": \"%.*s\"}\n", (int) hm->uri.len,
                     hm->uri.ptr);
     } else {
       mg_http_serve_dir(c, ev_data, s_web_directory);  // Serve static files

@@ -586,17 +586,16 @@ void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len) {
   mg_send(c, "\r\n", 2);
 }
 
-void mg_http_reply(struct mg_connection *c, int code, const char *fmt, ...) {
+void mg_http_reply(struct mg_connection *c, int code, const char *headers,
+                   const char *fmt, ...) {
   char mem[100], *buf = mem;
   va_list ap;
   int len;
   va_start(ap, fmt);
   len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
   va_end(ap);
-  mg_printf(c,
-            "HTTP/1.1 %d OK\r\nContent-Type: text/plain\r\n"
-            "Content-Length: %d\r\n\r\n",
-            code, len);
+  mg_printf(c, "HTTP/1.1 %d OK\r\n%sContent-Length: %d\r\n\r\n", code,
+            headers == NULL ? "" : headers, len);
   mg_send(c, buf, len);
   if (buf != mem) free(buf);
 }
@@ -623,7 +622,7 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
   mg_http_get_var(&hm->query, "offset", offset, sizeof(offset));
   mg_http_get_var(&hm->query, "name", name, sizeof(name));
   if (name[0] == '\0') {
-    mg_http_reply(c, 400, "%s", "name required");
+    mg_http_reply(c, 400, "", "%s", "name required");
     return -1;
   } else {
     FILE *fp;
@@ -632,12 +631,12 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
     LOG(LL_DEBUG,
         ("%p %d bytes @ %d [%s]", c->fd, (int) hm->body.len, (int) oft, name));
     if ((fp = fopen(path, oft == 0 ? "wb" : "a")) == NULL) {
-      mg_http_reply(c, 400, "fopen(%s): %d", name, errno);
+      mg_http_reply(c, 400, "", "fopen(%s): %d", name, errno);
       return -2;
     } else {
       fwrite(hm->body.ptr, 1, hm->body.len, fp);
       fclose(fp);
-      mg_http_reply(c, 200, "");
+      mg_http_reply(c, 200, "", "");
       return hm->body.len;
     }
   }
@@ -730,7 +729,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   char etag[64];
   if (fp == NULL || stat(path, &st) != 0 ||
       mg_http_etag(etag, sizeof(etag), &st) != etag) {
-    mg_http_reply(c, 404, "%s", "Not found\n");
+    mg_http_reply(c, 404, "", "%s", "Not found\n");
   } else if (inm != NULL && mg_vcasecmp(inm, etag) == 0) {
     mg_printf(c, "HTTP/1.1 304 Not Modified\r\nContent-Length: 0\r\n\r\n");
   } else {
@@ -950,7 +949,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
         MG_VERSION);
     mg_http_write_chunk(c, "", 0);
   } else {
-    mg_http_reply(c, 400, "Cannot open dir");
+    mg_http_reply(c, 400, "", "Cannot open dir");
     LOG(LL_DEBUG, ("%p opendir(%s) -> %d", c->fd, dir, errno));
   }
 }
@@ -963,7 +962,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   if (realpath(dir, root) == NULL)
     LOG(LL_DEBUG, ("realpath(%s): %d", dir, errno));
   if (!mg_is_dir(root)) {
-    mg_http_reply(c, 400, "Bad web root [%s]\n", root);
+    mg_http_reply(c, 400, "", "Bad web root [%s]\n", root);
   } else {
     // NOTE(lsm): Xilinx snprintf does not 0-terminate the detination for
     // the %.*s specifier, if the length is zero. Make sure hm->uri.len > 0
@@ -979,7 +978,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
       is_index = true;
     }
     if (strlen(real) < strlen(root) || memcmp(real, root, strlen(root)) != 0) {
-      mg_http_reply(c, 404, "Not found %.*s\n", hm->uri.len, hm->uri.ptr);
+      mg_http_reply(c, 404, "", "Not found %.*s\n", hm->uri.len, hm->uri.ptr);
     } else {
         FILE *fp = fopen(real, "r");
 #if MG_ENABLE_HTTP_DEBUG_ENDPOINT
@@ -989,7 +988,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
 #if MG_ENABLE_DIRECTORY_LISTING
         listdir(c, hm, real);
 #else
-        mg_http_reply(c, 403, "%s", "Directory listing not supported");
+        mg_http_reply(c, 403, "", "%s", "Directory listing not supported");
 #endif
       } else {
         mg_http_serve_file(c, hm, real, guess_content_type(real));
