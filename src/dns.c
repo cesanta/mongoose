@@ -71,30 +71,29 @@ static size_t mg_dns_parse_name(const uint8_t *s, const uint8_t *e, size_t off,
 int mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
   struct mg_dns_header *h = (struct mg_dns_header *) buf;
   const uint8_t *s = buf + sizeof(*h), *e = &buf[len];
-  size_t i, j = 0, n, ok = 0;
-  if (len < sizeof(*h)) return ok;  // Too small, headers dont fit
-  if (len > 512) return ok;         //  Too large, we don't expect that
+  size_t i, j = 0, n;
+  if (len < sizeof(*h)) return 0;  // Too small, headers dont fit
+  if (len > 512) return 0;         //  Too large, we don't expect that
   if (mg_ntohs(h->num_questions) > 2) return 0;  // Sanity
   if (mg_ntohs(h->num_answers) > 5) return 0;    // Sanity
   for (i = 0; i < mg_ntohs(h->num_questions); i++) {
     j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 5;
-    LOG(LL_INFO, ("QUE %zu %zu [%s]", i, j, dm->name));
+    // LOG(LL_INFO, ("QUE %zu %zu [%s]", i, j, dm->name));
   }
   for (i = 0; i < mg_ntohs(h->num_answers); i++) {
     j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 9;
-    LOG(LL_DEBUG, ("NAME %s", dm->name));
+    // LOG(LL_DEBUG, ("NAME %s", dm->name));
     if (&s[j] + 2 > e) break;
     n = ((int) s[j] << 8) | s[j + 1];
     if (&s[j] + 2 + n > e) break;
     if (n == 4) {
       dm->txnid = mg_ntohs(h->transaction_id);
       memcpy(&dm->ipaddr, &s[j + 2], 4);
-      ok = 1;
-      break;
+      return 1;  // Return success
     }
     j += 2 + n;
   }
-  return ok;
+  return 0;
 }
 
 static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
