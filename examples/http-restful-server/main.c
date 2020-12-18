@@ -1,7 +1,13 @@
 // Copyright (c) 2020 Cesanta Software Limited
 // All rights reserved
 //
-// To enable SSL/TLS,
+// HTTP server example. This server serves both static and dynamic content.
+// It implements the following endpoints:
+//    /api/f1 - respond with JSON string {"result": 123}
+//    /api/f2/:id - wildcard example, respond with JSON string {"result": "URI"}
+//    any other URI serves static files from s_web_directory
+//
+// To enable SSL/TLS (using self-signed certificates in PEM files),
 //    1. Change s_listen_on from http:// to https://
 //    2. make MBEDTLS_DIR=/path/to/your/mbedtls/installation
 //    3. curl -k https://127.0.0.1:8000
@@ -11,10 +17,6 @@
 static const char *s_listen_on = "https://localhost:8000";
 static const char *s_web_directory = ".";
 
-// This RESTful server implements the following endpoints:
-//   /api/f1 - respond with JSON string {"result": 123}
-//   /api/f2/:id - wildcard example, respond with JSON string {"result": "URI"}
-//   any other URI serves static files from s_web_directory
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ACCEPT && mg_url_is_ssl(s_listen_on)) {
     // If s_listen_on URL is https://, tell listening connection to use TLS
