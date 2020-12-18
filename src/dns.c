@@ -58,7 +58,7 @@ static size_t mg_dns_parse_name(const uint8_t *s, const uint8_t *e, size_t off,
     j += n;
     i += n + 1;
     to[j] = '\0';  // Zero-terminate this chunk
-    LOG(LL_DEBUG, ("-- %zu/%zu %zu %zu", i, e - s, j, n));
+    // LOG(LL_DEBUG, ("-- %zu/%zu %zu %zu", i, e - s, j, n));
   }
   if (tolen > 0) to[tolen - 1] = '\0';  // Make sure make sure it is nul-term
   return i;

@@ -514,13 +514,11 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
       if (mg_tls_handshake(c)) c->is_tls_hs = 0;
 #endif
     } else if (c->is_connecting) {
-      if (c->is_readable || c->is_writable) {
-        connect_conn(c);
-      }
+      if (c->is_readable || c->is_writable) connect_conn(c);
     } else if (c->is_tls_hs) {
       if ((c->is_readable || c->is_writable) && mg_tls_handshake(c)) {
         c->is_tls_hs = 0;
-        mg_call(c, MG_EV_CONNECT, NULL);
+        if (c->is_connecting) mg_call(c, MG_EV_CONNECT, NULL);
       }
     } else {
       if (c->is_readable) read_conn(c, ll_read);

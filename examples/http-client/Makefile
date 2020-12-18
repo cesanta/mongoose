@@ -1,5 +1,4 @@
 PROG ?= example
-ARGS ?= http://www.ladyada.net/
 MBEDTLS_DIR ?=
 
 ifeq "$(MBEDTLS_DIR)" ""
