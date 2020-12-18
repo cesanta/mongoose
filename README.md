@@ -1,7 +1,7 @@
 # Mongoose - Embedded Web Server / Embedded Networking Library
 
 ![License: GPLv2](https://img.shields.io/badge/license-GPL_2-green.svg "License")
-![Build Status]( https://github.com/cesanta/mongoose/workflows/build/badge.svg)
+[![Build Status]( https://github.com/cesanta/mongoose/workflows/build/badge.svg)](https://github.com/cesanta/mongoose/actions)
 [![Code Coverage](https://codecov.io/gh/cesanta/mongoose/branch/master/graph/badge.svg)](https://codecov.io/gh/cesanta/mongoose)
 
 Mongoose is a networking library for C/C++. It implements event-driven
