@@ -5,5 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - name: Install packages
+      run: sudo apt-get install libmbedtls-dev
     - name: make
       run: make test test++
