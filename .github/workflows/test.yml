@@ -22,5 +22,5 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: make
-      run: make make mg_prefix vc98 vc2017 ex
+      run: make mg_prefix vc98 vc2017 ex
 
