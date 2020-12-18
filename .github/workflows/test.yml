@@ -1,4 +1,4 @@
-name: tester
+name: build
 on: [push]
 jobs:
   linux:

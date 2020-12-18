@@ -2,7 +2,7 @@
 
 ![License: GPLv2](https://img.shields.io/badge/license-GPL_2-green.svg "License")
 [![CircleCI Status](https://travis-ci.org/cesanta/mongoose.svg?branch=master)](https://travis-ci.org/cesanta/mongoose)
-![Build Status]( https://github.com/cesanta/mongoose/workflows/tester/badge.svg)
+![Build Status]( https://github.com/cesanta/mongoose/workflows/build/badge.svg)
 [![Code Coverage](https://codecov.io/gh/cesanta/mongoose/branch/master/graph/badge.svg)](https://codecov.io/gh/cesanta/mongoose)
 
 Mongoose is a networking library for C/C++. It implements event-driven
