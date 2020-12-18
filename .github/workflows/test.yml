@@ -1,11 +1,19 @@
 name: unit tester
 on: [push]
 jobs:
-  build:
+  linux:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - name: Install packages
       run: sudo apt-get install libmbedtls-dev
+    - name: make
+      run: make test test++
+  macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install packages
+      run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls
     - name: make
       run: make test test++
