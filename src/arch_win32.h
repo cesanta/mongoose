@@ -20,11 +20,9 @@ enum { false = 0, true = 1 };
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #define strdup(x) _strdup(x)
-#define sleep(x) Sleep((x) *1000)
 typedef int socklen_t;
 #define PATH_MAX MAX_PATH
 #define MG_DIRSEP '\\'
-#define inline __inline
 #ifndef EINPROGRESS
 #define EINPROGRESS WSAEINPROGRESS
 #endif
