@@ -9,8 +9,7 @@
 
 #include "mongoose.h"
 
-// static const char *s_url = "http://www.ladyada.net";
-static const char *s_url = "https://github.com";
+static const char *s_url = "https://cesanta.com";
 
 // Print HTTP response and signal that we're done
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {

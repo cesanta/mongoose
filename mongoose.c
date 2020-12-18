@@ -2748,11 +2748,8 @@ static void connect_conn(struct mg_connection *c) {
     char buf[40];
     mg_error(c, "error connecting to %s", mg_straddr(c, buf, sizeof(buf)));
   } else {
-    if (c->is_tls_hs && mg_tls_handshake(c)) {
-      c->is_tls_hs = 0;
-      mg_call(c, MG_EV_CONNECT, NULL);
-    }
-    if (c->is_tls == 0) mg_call(c, MG_EV_CONNECT, NULL);
+    if (c->is_tls_hs) mg_tls_handshake(c);
+    mg_call(c, MG_EV_CONNECT, NULL);
   }
 }
 
@@ -2776,17 +2773,10 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
       // Do nothing
     } else if (c->is_listening) {
       if (c->is_readable) accept_conn(mgr, c);
-#if 0
-    } else if (c->is_accepted && c->is_tls_hs) {
-      if (mg_tls_handshake(c)) c->is_tls_hs = 0;
-#endif
     } else if (c->is_connecting) {
       if (c->is_readable || c->is_writable) connect_conn(c);
     } else if (c->is_tls_hs) {
-      if ((c->is_readable || c->is_writable) && mg_tls_handshake(c)) {
-        c->is_tls_hs = 0;
-        if (c->is_connecting) mg_call(c, MG_EV_CONNECT, NULL);
-      }
+      if ((c->is_readable || c->is_writable)) mg_tls_handshake(c);
     } else {
       if (c->is_readable) read_conn(c, ll_read);
       if (c->is_writable) write_conn(c);
@@ -3001,7 +2991,8 @@ int mg_tls_handshake(struct mg_connection *c) {
   mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mbedtls_net_send, mbedtls_net_recv, 0);
   rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
-    LOG(LL_DEBUG, ("%p succes", c->fd));
+    LOG(LL_DEBUG, ("%p success", c->fd));
+    c->is_tls_hs = 0;
   } else if (rc == MBEDTLS_ERR_SSL_WANT_READ ||
              rc == MBEDTLS_ERR_SSL_WANT_WRITE) {  // Still pending
     LOG(LL_VERBOSE_DEBUG, ("%p pending, %d%d %d (-%#x)", c->fd,
@@ -3094,7 +3085,9 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   c->tls = tls;
   c->is_tls = 1;
   c->is_tls_hs = 1;
-  if (c->is_client && !c->is_connecting) mg_tls_handshake(c);
+  if (c->is_client && c->is_resolving == 0 && c->is_connecting == 0) {
+    mg_tls_handshake(c);
+  }
   return 1;
 fail:
   c->is_closing = 1;
@@ -3222,7 +3215,9 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   c->tls = tls;
   c->is_tls = 1;
   c->is_tls_hs = 1;
-  if (c->is_client && !c->is_connecting) mg_tls_handshake(c);
+  if (c->is_client && c->is_resolving == 0 && c->is_connecting == 0) {
+    mg_tls_handshake(c);
+  }
   return 1;
 fail:
   c->is_closing = 1;

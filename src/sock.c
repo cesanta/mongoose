@@ -481,11 +481,8 @@ static void connect_conn(struct mg_connection *c) {
     char buf[40];
     mg_error(c, "error connecting to %s", mg_straddr(c, buf, sizeof(buf)));
   } else {
-    if (c->is_tls_hs && mg_tls_handshake(c)) {
-      c->is_tls_hs = 0;
-      mg_call(c, MG_EV_CONNECT, NULL);
-    }
-    if (c->is_tls == 0) mg_call(c, MG_EV_CONNECT, NULL);
+    if (c->is_tls_hs) mg_tls_handshake(c);
+    mg_call(c, MG_EV_CONNECT, NULL);
   }
 }
 
@@ -509,17 +506,10 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
       // Do nothing
     } else if (c->is_listening) {
       if (c->is_readable) accept_conn(mgr, c);
-#if 0
-    } else if (c->is_accepted && c->is_tls_hs) {
-      if (mg_tls_handshake(c)) c->is_tls_hs = 0;
-#endif
     } else if (c->is_connecting) {
       if (c->is_readable || c->is_writable) connect_conn(c);
     } else if (c->is_tls_hs) {
-      if ((c->is_readable || c->is_writable) && mg_tls_handshake(c)) {
-        c->is_tls_hs = 0;
-        if (c->is_connecting) mg_call(c, MG_EV_CONNECT, NULL);
-      }
+      if ((c->is_readable || c->is_writable)) mg_tls_handshake(c);
     } else {
       if (c->is_readable) read_conn(c, ll_read);
       if (c->is_writable) write_conn(c);
