@@ -21,8 +21,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 int main(int argc, char *argv[]) {
-  struct mg_mgr mgr;                            // Event manager
-  mg_mgr_init(&mgr);                            // Initialise event manager
+  struct mg_mgr mgr;  // Event manager
+  mg_mgr_init(&mgr);  // Initialise event manager
 
   if (argc != 2) {
     fprintf(stderr, "Usage: %s URL\n", argv[0]);  // Print error
@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
     struct mg_connection *c = mg_http_connect(&mgr, argv[1], fn, &done);
     if (c != NULL) {
       mg_printf(c, "GET %s HTTP/1.0\r\n\r\n", mg_url_uri(argv[1]));
-      // If target URL is SSL/TLS, command client connection to use TLS
+      // If target URL is https://, tell client connection to use TLS
       if (mg_url_is_ssl(argv[1])) {
         struct mg_tls_opts opts = {.ca = "ca.pem"};
         mg_tls_init(c, &opts);

@@ -1,5 +1,11 @@
 PROG ?= example
 
+ifeq "$(MBEDTLS_DIR)" ""
+else
+CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS_DIR)/include -I/usr/include
+CFLAGS += -L$(MBEDTLS_DIR)/lib -lmbedtls -lmbedcrypto -lmbedx509
+endif
+
 all: $(PROG)
 	$(DEBUGGER) ./$(PROG) $(ARGS)
 

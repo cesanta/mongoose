@@ -2597,8 +2597,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   socklen_t sa_len = sizeof(usa.sin);
   SOCKET fd = accept(FD(lsn), &usa.sa, &sa_len);
   if (fd == INVALID_SOCKET) {
-    LOG(LL_ERROR,
-        ("%p accept(%d) failed, errno %d", lsn->fd, FD(lsn), MG_SOCK_ERRNO));
+    LOG(LL_ERROR, ("%p accept failed, errno %d", lsn->fd, MG_SOCK_ERRNO));
 #if !defined(_WIN32)
   } else if (fd >= FD_SETSIZE) {
     LOG(LL_ERROR, ("%ld > %ld", (long) fd, (long) FD_SETSIZE));
