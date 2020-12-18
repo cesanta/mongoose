@@ -16,7 +16,7 @@ jobs:
     - name: Install packages
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls
     - name: make
-      run: make test test++
+      run: make test++ upload-coverage
   windows:
     runs-on: ubuntu-latest
     steps:
