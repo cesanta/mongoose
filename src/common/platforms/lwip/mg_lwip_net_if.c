@@ -138,9 +138,10 @@ static err_t mg_lwip_tcp_conn_cb(void *arg, struct tcp_pcb *tpcb, err_t err) {
 static void mg_lwip_tcp_error_cb(void *arg, err_t err) {
   struct mg_connection *nc = (struct mg_connection *) arg;
   DBG(("%p conn error %d", nc, (int) err));
-  if (nc == NULL || (nc->flags & MG_F_CLOSE_IMMEDIATELY)) return;
+  if (nc == NULL) return;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   cs->pcb.tcp = NULL; /* Has already been deallocated */
+  if (nc->flags & MG_F_CLOSE_IMMEDIATELY) return;
   if (nc->flags & MG_F_CONNECTING) {
     cs->err = err;
     mg_lwip_post_signal(MG_SIG_CONNECT_RESULT, nc);
