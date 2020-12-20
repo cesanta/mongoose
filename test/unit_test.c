@@ -623,6 +623,17 @@ static void test_http_client(void) {
     ASSERT(ok == 200);
   }
 #endif
+
+#if MG_ENABLE_IPV6
+  ok = 0;
+  c = mg_http_connect(&mgr, "http://ipv6.google.com", f3, &ok);
+  ASSERT(c != NULL);
+  for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+    // ASSERT(ok == 200);
+    // LOG(LL_DEBUG, (""));
+    // exit(0);
+#endif
+
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
@@ -984,10 +995,19 @@ static void test_dns(void) {
 
 static void test_util(void) {
   char buf[100], *s = mg_hexdump("abc", 3);
+  struct mg_addr a;
   ASSERT(s != NULL);
   free(s);
+  memset(&a, 0, sizeof(a));
   ASSERT(mg_file_write("data.txt", "%s", "hi") == 2);
-  ASSERT(strcmp(mg_ntoa(0x100007f, buf, sizeof(buf)), "127.0.0.1") == 0);
+  ASSERT(mg_aton(mg_str("0"), &a) == false);
+  ASSERT(mg_aton(mg_str("0.0.0."), &a) == false);
+  ASSERT(mg_aton(mg_str("0.0.0.256"), &a) == false);
+  ASSERT(mg_aton(mg_str("0.0.0.-1"), &a) == false);
+  ASSERT(mg_aton(mg_str("127.0.0.1"), &a) == true);
+  ASSERT(a.is_ip6 == 0);
+  ASSERT(a.ip == 0x100007f);
+  ASSERT(strcmp(mg_ntoa(&a, buf, sizeof(buf)), "127.0.0.1") == 0);
   ASSERT(strcmp(mg_hex("abc", 3, buf), "616263") == 0);
   ASSERT(mg_url_decode("a=%", 3, buf, sizeof(buf), 0) < 0);
   ASSERT(mg_url_decode("&&&a=%", 6, buf, sizeof(buf), 0) < 0);

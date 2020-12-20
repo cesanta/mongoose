@@ -1126,16 +1126,16 @@ Parse 64-bit integer value held by string `s`.
 ### mg\_aton()
 
 ```
-bool mg_aton(const char *s, uint32_t *ipaddr);
+bool mg_aton(struct mg_str str, uint32_t *ipaddr);
 ```
 
-Parse IP address held by `s` and store it in `ipaddr`. Return true on success.
+Parse IP address held by `str` and store it in `ipaddr`. Return true on success.
 
 
 ### mg\_ntoa()
 
 ```c
-char *mg_ntoa(uint32_t ipaddr, char *buf, size_t len);
+char *mg_ntoa(const struct mg_addr *, char *buf, size_t len);
 ```
 
 Stringify IP address `ipaddr` into a buffer `buf`, `len`. Return `buf`.

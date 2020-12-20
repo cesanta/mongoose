@@ -157,15 +157,20 @@ SOCKET mg_open_listener(const char *ip, uint16_t port, int is_udp) {
   int on = 1;
   int proto = is_udp ? IPPROTO_UDP : IPPROTO_TCP;
   int type = is_udp ? SOCK_DGRAM : SOCK_STREAM;
+  struct mg_addr addr;
   SOCKET fd;
 
   memset(&usa, 0, sizeof(usa));
   usa.sin.sin_family = AF_INET;
   usa.sin.sin_port = mg_htons(port);
+  mg_aton(mg_url_host(ip), &addr);
+  *(uint32_t *) &usa.sin.sin_addr = addr.ip;
+#if 0
   mg_aton(ip, (uint32_t *) &usa.sin.sin_addr);
   if (!mg_casecmp(ip, "localhost")) {
     *(uint32_t *) &usa.sin.sin_addr = mg_htonl(0x7f000001);
   }
+#endif
 
   if ((fd = socket(AF_INET, type, proto)) != INVALID_SOCKET &&
 #if !defined(_WIN32) || !defined(SO_EXCLUSIVEADDRUSE)

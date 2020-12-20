@@ -227,23 +227,6 @@ int64_t mg_to64(const char *s) {
   return result * neg;
 }
 
-bool mg_aton(const char *s, uint32_t *ip) {
-  uint8_t data[4] = {0, 0, 0, 0}, ok = 0;
-  if (s != NULL && sscanf(s, "%hhu.%hhu.%hhu.%hhu", &data[0], &data[1],
-                          &data[2], &data[3]) == 4) {
-    memcpy(ip, data, sizeof(data));
-    ok = 1;
-  }
-  return ok;
-}
-
-char *mg_ntoa(uint32_t ipaddr, char *buf, size_t len) {
-  uint8_t p[4];
-  memcpy(p, &ipaddr, sizeof(p));
-  snprintf(buf, len, "%hhu.%hhu.%hhu.%hhu", p[0], p[1], p[2], p[3]);
-  return buf;
-}
-
 double mg_time(void) {
 #if MG_ARCH == MG_ARCH_WIN32
   SYSTEMTIME sysnow;

@@ -428,8 +428,6 @@ unsigned long mg_unhexn(const char *s, int len);
 int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
 int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
 int64_t mg_to64(const char *s);
-bool mg_aton(const char *s, uint32_t *ipaddr);
-char *mg_ntoa(uint32_t ipaddr, char *buf, size_t len);
 double mg_time(void);
 unsigned long mg_millis(void);
 void mg_usleep(unsigned long usecs);
@@ -594,8 +592,10 @@ struct mg_mgr {
 };
 
 struct mg_addr {
-  uint16_t port;  // TCP or UDP port in network byte order
-  uint32_t ip;    // IP address in network byte order
+  uint16_t port;    // TCP or UDP port in network byte order
+  uint32_t ip;      // IP address in network byte order
+  uint8_t ip6[16];  // IPv6 address
+  bool is_ip6;      // True when address is IPv6 address
 };
 
 struct mg_connection {
@@ -640,6 +640,8 @@ int mg_printf(struct mg_connection *, const char *fmt, ...);
 int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 char *mg_straddr(struct mg_connection *, char *, size_t);
 bool mg_socketpair(int *s1, int *s2);
+bool mg_aton(struct mg_str str, struct mg_addr *addr);
+char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
 
 
 
@@ -797,10 +799,11 @@ int mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
 
 struct mg_dns_message {
   uint16_t txnid;   // Transaction ID
+  bool resolved;    // Resolve successful, ipaddr is set
   uint32_t ipaddr;  // Resolved IPv4 address
   char name[256];   // Host name
 };
 
 void mg_resolve(struct mg_mgr *, struct mg_connection *, struct mg_str *, int);
 void mg_resolve_cancel(struct mg_mgr *, struct mg_connection *);
-int mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
+bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);

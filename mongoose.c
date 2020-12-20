@@ -194,32 +194,43 @@ static size_t mg_dns_parse_name(const uint8_t *s, const uint8_t *e, size_t off,
 // 0000  00 01 81 80 00 01 00 01 00 00 00 00 07 63 65 73  .............ces
 // 0010  61 6e 74 61 03 63 6f 6d 00 00 01 00 01 c0 0c 00  anta.com........
 // 0020  01 00 01 00 00 02 57 00 04 94 fb 36 ec           ......W....6.
-int mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
+bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
   struct mg_dns_header *h = (struct mg_dns_header *) buf;
   const uint8_t *s = buf + sizeof(*h), *e = &buf[len];
+  uint16_t atype, aclass;
   size_t i, j = 0, n;
+  memset(dm, 0, sizeof(*dm));
   if (len < sizeof(*h)) return 0;  // Too small, headers dont fit
   if (len > 512) return 0;         //  Too large, we don't expect that
   if (mg_ntohs(h->num_questions) > 2) return 0;  // Sanity
   if (mg_ntohs(h->num_answers) > 5) return 0;    // Sanity
+  dm->txnid = mg_ntohs(h->transaction_id);
+  {
+    // char *s = mg_hexdump(buf, len);
+    // LOG(LL_DEBUG, ("--\n%s\n--\n", s));
+    // free(s);
+  }
   for (i = 0; i < mg_ntohs(h->num_questions); i++) {
     j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 5;
     // LOG(LL_INFO, ("QUE %zu %zu [%s]", i, j, dm->name));
   }
   for (i = 0; i < mg_ntohs(h->num_answers); i++) {
     j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 9;
-    // LOG(LL_DEBUG, ("NAME %s", dm->name));
     if (&s[j] + 2 > e) break;
+    atype = ((int) s[j - 8] << 8) | s[j - 7];
+    aclass = ((int) s[j - 6] << 8) | s[j - 5];
     n = ((int) s[j] << 8) | s[j + 1];
+    // LOG(LL_DEBUG,
+    //("NAME %s, IP len %zu t: %hu, c: %hu", dm->name, n, atype, aclass));
     if (&s[j] + 2 + n > e) break;
-    if (n == 4) {
-      dm->txnid = mg_ntohs(h->transaction_id);
+    if (n == 4 && atype == 1 && aclass == 1) {
       memcpy(&dm->ipaddr, &s[j + 2], 4);
-      return 1;  // Return success
+      dm->resolved = true;
+      break;  // Return success
     }
     j += 2 + n;
   }
-  return 0;
+  return true;
 }
 
 static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
@@ -235,15 +246,23 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
   } else if (ev == MG_EV_READ) {
     struct mg_dns_message dm;
     int resolved = 0;
-    if (mg_dns_parse(c->recv.buf, c->recv.len, &dm)) {
+    if (mg_dns_parse(c->recv.buf, c->recv.len, &dm) == false) {
+      char *s = mg_hexdump(c->recv.buf, c->recv.len);
+      LOG(LL_ERROR, ("Unexpected DNS response:\n%s\n", s));
+      free(s);
+    } else {
       for (d = (struct dns_data *) c->pfn_data; d != NULL; d = tmp) {
         tmp = d->next;
-        // LOG(LL_INFO, ("d %p %p", d, tmp));
+        // LOG(LL_INFO, ("d %p %hu %hu", d, d->txnid, dm.txnid));
         if (dm.txnid != d->txnid) continue;
         if (d->c->is_resolving) {
           d->c->is_resolving = 0;
-          d->c->peer.ip = dm.ipaddr;
-          mg_connect_resolved(d->c);
+          if (dm.resolved) {
+            d->c->peer.ip = dm.ipaddr;
+            mg_connect_resolved(d->c);
+          } else {
+            mg_error(d->c, "%s DNS lookup failed", dm.name);
+          }
           mg_dns_free(head, d);
         } else {
           LOG(LL_ERROR, ("%p already resolved", d->c->fd));
@@ -271,7 +290,7 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   memset(&pkt, 0, sizeof(pkt));
   pkt.header.transaction_id = mg_htons(txnid);
   pkt.header.flags = mg_htons(0x100);
-  pkt.header.num_questions = mg_htons(1);
+  pkt.header.num_questions = mg_htons(2);
   for (i = n = 0; i < sizeof(pkt.data) - 5; i++) {
     if (name->ptr[i] == '.' || i >= name->len) {
       pkt.data[n] = (uint8_t)(i - n);
@@ -282,6 +301,8 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   }
   memcpy(&pkt.data[n], "\x00\x00\x01\x00\x01", 5);  // A query
   n += 5;
+  memcpy(&pkt.data[n], "\xc0\x0c\x00\x1c\x00\x01", 6);  // AAAA query
+  n += 6;
   mg_send(c, &pkt, sizeof(pkt.header) + n);
 #if 0
   // Immediately after A query, send AAAA query. Whatever reply comes first,
@@ -295,15 +316,7 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
 void mg_resolve(struct mg_mgr *mgr, struct mg_connection *c,
                 struct mg_str *name, int ms) {
   struct dns_data *d = NULL;
-  int resolved = mg_aton(name->ptr, &c->peer.ip);
-
-  // Try to parse name as IP address
-  if (mg_vcmp(name, "localhost") == 0) {
-    resolved = 1;
-    c->peer.ip = mg_htonl(0x7f000001);
-  }
-
-  if (resolved) {
+  if (mg_aton(*name, &c->peer)) {
     // name is an IP address, do not fire name resolution
     mg_connect_resolved(c);
   } else {
@@ -1928,6 +1941,44 @@ char *mg_straddr(struct mg_connection *c, char *buf, size_t len) {
   return buf;
 }
 
+char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {
+  uint8_t p[4];
+  memcpy(p, &addr->ip, sizeof(p));
+  snprintf(buf, len, "%hhu.%hhu.%hhu.%hhu", p[0], p[1], p[2], p[3]);
+  return buf;
+}
+
+bool mg_aton(struct mg_str str, struct mg_addr *addr) {
+  uint8_t data[4] = {0, 0, 0, 0};
+  // LOG(LL_INFO, ("[%.*s]", (int) str.len, str.ptr));
+  if (!mg_casecmp(str.ptr, "localhost")) {
+    addr->ip = mg_htonl(0x7f000001);
+    return true;
+  } else if (addr->is_ip6) {
+    return false;
+  } else {
+    size_t i, num_octets = 0;
+    // LOG(LL_DEBUG, ("[%.*s]", (int) str.len, str.ptr));
+    for (i = 0; i < str.len; i++) {
+      // LOG(LL_DEBUG,
+      //("  %c %zu %hhu %zu", str.ptr[i], i, data[num_octets], num_octets));
+      if (str.ptr[i] >= '0' && str.ptr[i] <= '9') {
+        int octet = data[num_octets] * 10 + (str.ptr[i] - '0');
+        if (octet > 255) return false;
+        data[num_octets] = octet;
+      } else if (str.ptr[i] == '.') {
+        if (num_octets >= 3 || i == 0 || str.ptr[i - 1] == '.') return false;
+        num_octets++;
+      } else {
+        return false;
+      }
+    }
+    if (num_octets != 3 || str.ptr[i - 1] == '.') return false;
+    memcpy(&addr->ip, data, sizeof(data));
+    return true;
+  }
+}
+
 #ifdef MG_ENABLE_LINES
 #line 1 "src/sha1.c"
 #endif
@@ -2424,15 +2475,20 @@ SOCKET mg_open_listener(const char *ip, uint16_t port, int is_udp) {
   int on = 1;
   int proto = is_udp ? IPPROTO_UDP : IPPROTO_TCP;
   int type = is_udp ? SOCK_DGRAM : SOCK_STREAM;
+  struct mg_addr addr;
   SOCKET fd;
 
   memset(&usa, 0, sizeof(usa));
   usa.sin.sin_family = AF_INET;
   usa.sin.sin_port = mg_htons(port);
+  mg_aton(mg_url_host(ip), &addr);
+  *(uint32_t *) &usa.sin.sin_addr = addr.ip;
+#if 0
   mg_aton(ip, (uint32_t *) &usa.sin.sin_addr);
   if (!mg_casecmp(ip, "localhost")) {
     *(uint32_t *) &usa.sin.sin_addr = mg_htonl(0x7f000001);
   }
+#endif
 
   if ((fd = socket(AF_INET, type, proto)) != INVALID_SOCKET &&
 #if !defined(_WIN32) || !defined(SO_EXCLUSIVEADDRUSE)
@@ -3605,23 +3661,6 @@ int64_t mg_to64(const char *s) {
     s++;
   }
   return result * neg;
-}
-
-bool mg_aton(const char *s, uint32_t *ip) {
-  uint8_t data[4] = {0, 0, 0, 0}, ok = 0;
-  if (s != NULL && sscanf(s, "%hhu.%hhu.%hhu.%hhu", &data[0], &data[1],
-                          &data[2], &data[3]) == 4) {
-    memcpy(ip, data, sizeof(data));
-    ok = 1;
-  }
-  return ok;
-}
-
-char *mg_ntoa(uint32_t ipaddr, char *buf, size_t len) {
-  uint8_t p[4];
-  memcpy(p, &ipaddr, sizeof(p));
-  snprintf(buf, len, "%hhu.%hhu.%hhu.%hhu", p[0], p[1], p[2], p[3]);
-  return buf;
 }
 
 double mg_time(void) {

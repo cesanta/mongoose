@@ -68,32 +68,43 @@ static size_t mg_dns_parse_name(const uint8_t *s, const uint8_t *e, size_t off,
 // 0000  00 01 81 80 00 01 00 01 00 00 00 00 07 63 65 73  .............ces
 // 0010  61 6e 74 61 03 63 6f 6d 00 00 01 00 01 c0 0c 00  anta.com........
 // 0020  01 00 01 00 00 02 57 00 04 94 fb 36 ec           ......W....6.
-int mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
+bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
   struct mg_dns_header *h = (struct mg_dns_header *) buf;
   const uint8_t *s = buf + sizeof(*h), *e = &buf[len];
+  uint16_t atype, aclass;
   size_t i, j = 0, n;
+  memset(dm, 0, sizeof(*dm));
   if (len < sizeof(*h)) return 0;  // Too small, headers dont fit
   if (len > 512) return 0;         //  Too large, we don't expect that
   if (mg_ntohs(h->num_questions) > 2) return 0;  // Sanity
   if (mg_ntohs(h->num_answers) > 5) return 0;    // Sanity
+  dm->txnid = mg_ntohs(h->transaction_id);
+  {
+    // char *s = mg_hexdump(buf, len);
+    // LOG(LL_DEBUG, ("--\n%s\n--\n", s));
+    // free(s);
+  }
   for (i = 0; i < mg_ntohs(h->num_questions); i++) {
     j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 5;
     // LOG(LL_INFO, ("QUE %zu %zu [%s]", i, j, dm->name));
   }
   for (i = 0; i < mg_ntohs(h->num_answers); i++) {
     j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 9;
-    // LOG(LL_DEBUG, ("NAME %s", dm->name));
     if (&s[j] + 2 > e) break;
+    atype = ((int) s[j - 8] << 8) | s[j - 7];
+    aclass = ((int) s[j - 6] << 8) | s[j - 5];
     n = ((int) s[j] << 8) | s[j + 1];
+    // LOG(LL_DEBUG,
+    //("NAME %s, IP len %zu t: %hu, c: %hu", dm->name, n, atype, aclass));
     if (&s[j] + 2 + n > e) break;
-    if (n == 4) {
-      dm->txnid = mg_ntohs(h->transaction_id);
+    if (n == 4 && atype == 1 && aclass == 1) {
       memcpy(&dm->ipaddr, &s[j + 2], 4);
-      return 1;  // Return success
+      dm->resolved = true;
+      break;  // Return success
     }
     j += 2 + n;
   }
-  return 0;
+  return true;
 }
 
 static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
@@ -109,15 +120,23 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
   } else if (ev == MG_EV_READ) {
     struct mg_dns_message dm;
     int resolved = 0;
-    if (mg_dns_parse(c->recv.buf, c->recv.len, &dm)) {
+    if (mg_dns_parse(c->recv.buf, c->recv.len, &dm) == false) {
+      char *s = mg_hexdump(c->recv.buf, c->recv.len);
+      LOG(LL_ERROR, ("Unexpected DNS response:\n%s\n", s));
+      free(s);
+    } else {
       for (d = (struct dns_data *) c->pfn_data; d != NULL; d = tmp) {
         tmp = d->next;
-        // LOG(LL_INFO, ("d %p %p", d, tmp));
+        // LOG(LL_INFO, ("d %p %hu %hu", d, d->txnid, dm.txnid));
         if (dm.txnid != d->txnid) continue;
         if (d->c->is_resolving) {
           d->c->is_resolving = 0;
-          d->c->peer.ip = dm.ipaddr;
-          mg_connect_resolved(d->c);
+          if (dm.resolved) {
+            d->c->peer.ip = dm.ipaddr;
+            mg_connect_resolved(d->c);
+          } else {
+            mg_error(d->c, "%s DNS lookup failed", dm.name);
+          }
           mg_dns_free(head, d);
         } else {
           LOG(LL_ERROR, ("%p already resolved", d->c->fd));
@@ -145,7 +164,7 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   memset(&pkt, 0, sizeof(pkt));
   pkt.header.transaction_id = mg_htons(txnid);
   pkt.header.flags = mg_htons(0x100);
-  pkt.header.num_questions = mg_htons(1);
+  pkt.header.num_questions = mg_htons(2);
   for (i = n = 0; i < sizeof(pkt.data) - 5; i++) {
     if (name->ptr[i] == '.' || i >= name->len) {
       pkt.data[n] = (uint8_t)(i - n);
@@ -156,6 +175,8 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   }
   memcpy(&pkt.data[n], "\x00\x00\x01\x00\x01", 5);  // A query
   n += 5;
+  memcpy(&pkt.data[n], "\xc0\x0c\x00\x1c\x00\x01", 6);  // AAAA query
+  n += 6;
   mg_send(c, &pkt, sizeof(pkt.header) + n);
 #if 0
   // Immediately after A query, send AAAA query. Whatever reply comes first,
@@ -169,15 +190,7 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
 void mg_resolve(struct mg_mgr *mgr, struct mg_connection *c,
                 struct mg_str *name, int ms) {
   struct dns_data *d = NULL;
-  int resolved = mg_aton(name->ptr, &c->peer.ip);
-
-  // Try to parse name as IP address
-  if (mg_vcmp(name, "localhost") == 0) {
-    resolved = 1;
-    c->peer.ip = mg_htonl(0x7f000001);
-  }
-
-  if (resolved) {
+  if (mg_aton(*name, &c->peer)) {
     // name is an IP address, do not fire name resolution
     mg_connect_resolved(c);
   } else {

@@ -18,8 +18,6 @@ unsigned long mg_unhexn(const char *s, int len);
 int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
 int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
 int64_t mg_to64(const char *s);
-bool mg_aton(const char *s, uint32_t *ipaddr);
-char *mg_ntoa(uint32_t ipaddr, char *buf, size_t len);
 double mg_time(void);
 unsigned long mg_millis(void);
 void mg_usleep(unsigned long usecs);

@@ -15,8 +15,10 @@ struct mg_mgr {
 };
 
 struct mg_addr {
-  uint16_t port;  // TCP or UDP port in network byte order
-  uint32_t ip;    // IP address in network byte order
+  uint16_t port;    // TCP or UDP port in network byte order
+  uint32_t ip;      // IP address in network byte order
+  uint8_t ip6[16];  // IPv6 address
+  bool is_ip6;      // True when address is IPv6 address
 };
 
 struct mg_connection {
@@ -61,3 +63,5 @@ int mg_printf(struct mg_connection *, const char *fmt, ...);
 int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 char *mg_straddr(struct mg_connection *, char *, size_t);
 bool mg_socketpair(int *s1, int *s2);
+bool mg_aton(struct mg_str str, struct mg_addr *addr);
+char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
