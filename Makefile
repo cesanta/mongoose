@@ -22,9 +22,9 @@ CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS)/include -I/usr/include
 LDFLAGS ?= -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
 endif
 ifeq "$(SSL)" "OPENSSL"
-OPENSSLDIR ?= $(shell "$(brew --cellar openssl)/$(brew info openssl --json | jq -j .[0].installed[0].version)")
-CFLAGS += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSLDIR)/include
-LDFLAGS ?= -L$(OPENSSLDIR)/lib -lssl -lcrypto
+OPENSSL_DIR ?= $(shell "$(brew --cellar openssl)/$(brew info openssl --json | jq -j .[0].installed[0].version)")
+CFLAGS += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL_DIR)/include
+LDFLAGS ?= -L$(OPENSSL_DIR)/lib -lssl -lcrypto
 endif
 
 all: mg_prefix test test++ ex vc98 vc2017 linux linux++ infer fuzz

@@ -566,7 +566,8 @@ static void test_http_server(void) {
 static void test_tls(void) {
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
   struct mg_tls_opts opts = {.ca = "./test/data/ss_ca.pem",
-                             .cert = "./test/data/ss_server.pem"};
+                             .cert = "./test/data/ss_server.pem",
+                             .certkey = "./test/data/ss_server.pem"};
   struct mg_mgr mgr;
   struct mg_connection *c;
   const char *url = "https://127.0.0.1:12347";

@@ -260,6 +260,8 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   if (c->is_client && c->is_resolving == 0 && c->is_connecting == 0) {
     mg_tls_handshake(c);
   }
+  c->is_hexdumping = 1;
+  LOG(LL_INFO, ("SSL SETUP OK, %s", c->is_accepted ? "accepted" : "client"));
   return 1;
 fail:
   c->is_closing = 1;
@@ -270,10 +272,11 @@ fail:
 int mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
-  // if (SSL_get_fd(tls->ssl) == -1)
   SSL_set_fd(tls->ssl, (int) c->fd);
   rc = c->is_client ? SSL_connect(tls->ssl) : SSL_accept(tls->ssl);
   if (rc == 1) {
+    LOG(LL_DEBUG, ("%p success", c->fd));
+    c->is_tls_hs = 0;
     return 1;
   } else {
     ERR_print_errors_fp(stderr);

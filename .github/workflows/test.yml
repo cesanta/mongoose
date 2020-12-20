@@ -9,14 +9,18 @@ jobs:
       run: sudo apt-get install libmbedtls-dev
     - name: make
       run: make test test++
+    - name: openssl
+      run: make test SSL=OPENSSL
   macos:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v2
     - name: Install packages
-      run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls
+      run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
     - name: make
       run: make test++ upload-coverage
+    - name: openssl
+      run: make test SSL=OPENSSL
   windows:
     runs-on: ubuntu-latest
     steps:
