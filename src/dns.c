@@ -23,7 +23,6 @@ struct dns_data {
 
 static void mg_dns_free(struct dns_data **head, struct dns_data *d) {
   LIST_DELETE(struct dns_data, head, d);
-  // LOG(LL_INFO, ("--> %p %p %d", d, d->c, d->c->fd));
   free(d);
 }
 
@@ -137,10 +136,10 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
           } else {
             mg_error(d->c, "%s DNS lookup failed", dm.name);
           }
-          mg_dns_free(head, d);
         } else {
-          LOG(LL_ERROR, ("%p already resolved", d->c->fd));
+          LOG(LL_ERROR, ("%lu already resolved", d->c->id));
         }
+        mg_dns_free(head, d);
         resolved = 1;
       }
     }
@@ -216,7 +215,7 @@ void mg_resolve(struct mg_mgr *mgr, struct mg_connection *c,
       d->expire = mg_millis() + ms;
       d->c = c;
       c->is_resolving = 1;
-      LOG(LL_DEBUG, ("%p resolving %.*s, txnid %hu", c->fd, (int) name->len,
+      LOG(LL_DEBUG, ("%lu resolving %.*s, txnid %hu", c->id, (int) name->len,
                      name->ptr, d->txnid));
       mg_dns_send(mgr->dnsc, name, d->txnid);
     }

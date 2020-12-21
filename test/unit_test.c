@@ -418,7 +418,6 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   mg_vprintf(c, fmt, ap);
   va_end(ap);
   buf[0] = '\0';
-  LOG(LL_DEBUG, ("FD %p %p %p", c->fd, &fd, fd.buf));
   for (i = 0; i < 250 && buf[0] == '\0'; i++) mg_mgr_poll(mgr, 1);
   if (!fd.closed) c->is_closing = 1;
   mg_mgr_poll(mgr, 1);
@@ -473,7 +472,7 @@ static void test_http_server(void) {
 #if MG_ARCH == MG_ARCH_WIN32
   ASSERT(cmpbody(buf, "Bad web root [Z:\\BAAADDD!]\n") == 0);
 #else
-  LOG(LL_INFO, ("--> [%s]", buf));
+  // LOG(LL_INFO, ("--> [%s]", buf));
   ASSERT(cmpbody(buf, "Bad web root [/BAAADDD!]\n") == 0);
 #endif
 

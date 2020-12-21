@@ -66,6 +66,7 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, int is_client,
     c->is_client = is_client;
     c->fd = (void *) (long) fd;
     c->mgr = mgr;
+    c->id = ++mgr->nextid;
   }
   return c;
 }
@@ -105,12 +106,12 @@ static int ll_read(struct mg_connection *c, void *buf, int len, int *fail) {
   int n = c->is_tls ? mg_tls_recv(c, buf, len, fail)
                     : mg_sock_recv(c, buf, len, fail);
   LOG(*fail ? LL_DEBUG : LL_VERBOSE_DEBUG,
-      ("%p %c%c%c %d/%d %d %d", c->fd, c->is_tls ? 'T' : 't',
+      ("%lu %c%c%c %d/%d %d %d", c->id, c->is_tls ? 'T' : 't',
        c->is_udp ? 'U' : 'u', c->is_connecting ? 'C' : 'c', n, len,
        MG_SOCK_ERRNO, *fail));
   if (n > 0 && c->is_hexdumping) {
     char *s = mg_hexdump(buf, len);
-    LOG(LL_INFO, ("\n-- %p %s %s %d\n%s--", c->fd, c->label, "<-", len, s));
+    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "<-", len, s));
     free(s);
   }
   return n;
@@ -121,12 +122,12 @@ static int ll_write(struct mg_connection *c, const void *buf, int len,
   int n = c->is_tls ? mg_tls_send(c, buf, len, fail)
                     : mg_sock_send(c, buf, len, fail);
   LOG(*fail ? LL_ERROR : LL_VERBOSE_DEBUG,
-      ("%p %c%c%c %d/%d %d", c->fd, c->is_tls ? 'T' : 't',
+      ("%lu %c%c%c %d/%d %d", c->id, c->is_tls ? 'T' : 't',
        c->is_udp ? 'U' : 'u', c->is_connecting ? 'C' : 'c', n, len,
        MG_SOCK_ERRNO));
   if (n > 0 && c->is_hexdumping) {
     char *s = mg_hexdump(buf, len);
-    LOG(LL_INFO, ("\n-- %p %s %s %d\n%s--", c->fd, c->label, "->", len, s));
+    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "->", len, s));
     free(s);
   }
   return n;
@@ -165,12 +166,6 @@ SOCKET mg_open_listener(const char *ip, uint16_t port, int is_udp) {
   usa.sin.sin_port = mg_htons(port);
   mg_aton(mg_url_host(ip), &addr);
   *(uint32_t *) &usa.sin.sin_addr = addr.ip;
-#if 0
-  mg_aton(ip, (uint32_t *) &usa.sin.sin_addr);
-  if (!mg_casecmp(ip, "localhost")) {
-    *(uint32_t *) &usa.sin.sin_addr = mg_htonl(0x7f000001);
-  }
-#endif
 
   if ((fd = socket(AF_INET, type, proto)) != INVALID_SOCKET &&
 #if !defined(_WIN32) || !defined(SO_EXCLUSIVEADDRUSE)
@@ -248,7 +243,7 @@ static void close_conn(struct mg_mgr *mgr, struct mg_connection *c) {
   mg_resolve_cancel(mgr, c);
   mg_call(c, MG_EV_CLOSE, NULL);
   // while (c->callbacks != NULL) mg_fn_del(c, c->callbacks->fn);
-  LOG(LL_DEBUG, ("%p closed", c->fd));
+  LOG(LL_DEBUG, ("%lu closed", c->id));
   if (FD(c) != INVALID_SOCKET) {
     closesocket(FD(c));
 #if MG_ARCH == MG_ARCH_FREERTOS
@@ -290,9 +285,17 @@ static void setsockopts(struct mg_connection *c) {
 void mg_connect_resolved(struct mg_connection *c) {
   char buf[40];
   int type = c->is_udp ? SOCK_DGRAM : SOCK_STREAM;
-  mg_call(c, MG_EV_RESOLVE, NULL);
   mg_straddr(c, buf, sizeof(buf));
-  LOG(LL_DEBUG, ("%p resolved: %s", c->fd, buf));
+  c->fd = (void *) (long) socket(AF_INET, type, 0);
+  LOG(LL_DEBUG, ("%lu resolved, sock %p -> %s, tosend %d", c->id, c->fd, buf,
+                 (int) c->send.len));
+  if (FD(c) == INVALID_SOCKET) {
+    mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
+    return;
+  }
+
+  mg_set_non_blocking_mode(FD(c));
+  mg_call(c, MG_EV_RESOLVE, NULL);
   if (type == SOCK_STREAM) {
     union usa usa = tousa(&c->peer);
     int rc = connect(FD(c), &usa.sa, sizeof(usa.sin));
@@ -309,20 +312,16 @@ void mg_connect_resolved(struct mg_connection *c) {
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
                                  mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = NULL;
-  int fd, type = strncmp(url, "udp:", 4) == 0 ? SOCK_DGRAM : SOCK_STREAM;
-  if ((fd = socket(AF_INET, type, 0)) == INVALID_SOCKET) {
-    LOG(LL_ERROR, ("socket(): %d", MG_SOCK_ERRNO));
-  } else if ((c = alloc_conn(mgr, 1, fd)) == NULL) {
-    LOG(LL_ERROR, ("%p OOM", c->fd));
+  if ((c = alloc_conn(mgr, 1, INVALID_SOCKET)) == NULL) {
+    LOG(LL_ERROR, ("OOM"));
   } else {
     struct mg_str host = mg_url_host(url);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
-    mg_set_non_blocking_mode(FD(c));
-    c->is_udp = type == SOCK_DGRAM;
+    c->is_udp = (strncmp(url, "udp:", 4) == 0);
     c->peer.port = mg_htons(mg_url_port(url));
     c->fn = fn;
     c->fn_data = fn_data;
-    LOG(LL_DEBUG, ("%p -> %s", c->fd, url));
+    LOG(LL_DEBUG, ("%lu -> %s", c->id, url));
     mg_resolve(mgr, c, &host, mgr->dnstimeout);
   }
   return c;
@@ -334,21 +333,21 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   socklen_t sa_len = sizeof(usa.sin);
   SOCKET fd = accept(FD(lsn), &usa.sa, &sa_len);
   if (fd == INVALID_SOCKET) {
-    LOG(LL_ERROR, ("%p accept failed, errno %d", lsn->fd, MG_SOCK_ERRNO));
+    LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
 #if !defined(_WIN32)
   } else if (fd >= FD_SETSIZE) {
     LOG(LL_ERROR, ("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
 #endif
   } else if ((c = alloc_conn(mgr, 0, fd)) == NULL) {
-    LOG(LL_ERROR, ("%p OOM", lsn->fd));
+    LOG(LL_ERROR, ("%lu OOM", lsn->id));
     closesocket(fd);
   } else {
     char buf[40];
     c->peer.port = usa.sin.sin_port;
     memcpy(&c->peer.ip, &usa.sin.sin_addr, sizeof(c->peer.ip));
     mg_straddr(c, buf, sizeof(buf));
-    LOG(LL_DEBUG, ("%p accepted %s", c->fd, buf));
+    LOG(LL_DEBUG, ("%lu accepted %s", c->id, buf));
     mg_set_non_blocking_mode(FD(c));
     setsockopts(c);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
@@ -419,7 +418,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fn = fn;
     c->fn_data = fn_data;
-    LOG(LL_INFO, ("%p accepting on %s", c->fd, url));
+    LOG(LL_INFO, ("%lu accepting on %s", c->id, url));
   }
   return c;
 }
@@ -457,7 +456,6 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     if (FD(c) > maxfd) maxfd = FD(c);
     if (c->is_connecting || (c->send.len > 0 && c->is_tls_hs == 0))
       FD_SET(FD(c), &wset);
-    // LOG(LL_INFO, ("%d %d", c->fd, FD_ISSET(c->fd, &wset)));
   }
 
   if ((rc = select(maxfd + 1, &rset, &wset, NULL, &tv)) < 0) {
@@ -503,7 +501,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     tmp = c->next;
     mg_call(c, MG_EV_POLL, &now);
     LOG(LL_VERBOSE_DEBUG,
-        ("%p %c%c %c%c%c%c%c", c->fd, c->is_readable ? 'r' : '-',
+        ("%lu %c%c %c%c%c%c%c", c->id, c->is_readable ? 'r' : '-',
          c->is_writable ? 'w' : '-', c->is_tls ? 'T' : 't',
          c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
          c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c'));
@@ -523,30 +521,5 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
     if (c->is_closing) close_conn(mgr, c);
   }
-}
-
-void mg_mgr_free(struct mg_mgr *mgr) {
-  struct mg_connection *c;
-  for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
-  mg_mgr_poll(mgr, 0);
-#if MG_ARCH == MG_ARCH_FREERTOS
-  FreeRTOS_DeleteSocketSet(mgr->ss);
-#endif
-  LOG(LL_INFO, ("All connections closed"));
-}
-
-void mg_mgr_init(struct mg_mgr *mgr) {
-#ifdef _WIN32
-  WSADATA data;
-  WSAStartup(MAKEWORD(2, 2), &data);
-#elif MG_ARCH == MG_ARCH_FREERTOS
-  mgr->ss = FreeRTOS_CreateSocketSet();
-#elif defined(__unix) || defined(__unix__) || defined(__APPLE__)
-  // Ignore SIGPIPE signal, so if client cancels the request, it
-  // won't kill the whole process.
-  signal(SIGPIPE, SIG_IGN);
-#endif
-  memset(mgr, 0, sizeof(*mgr));
-  mgr->dnstimeout = 3000;
 }
 #endif

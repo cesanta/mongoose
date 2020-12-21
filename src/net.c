@@ -34,7 +34,6 @@ char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {
 }
 
 bool mg_aton(struct mg_str str, struct mg_addr *addr) {
-  uint8_t data[4] = {0, 0, 0, 0};
   // LOG(LL_INFO, ("[%.*s]", (int) str.len, str.ptr));
   if (!mg_casecmp(str.ptr, "localhost")) {
     addr->ip = mg_htonl(0x7f000001);
@@ -42,6 +41,7 @@ bool mg_aton(struct mg_str str, struct mg_addr *addr) {
   } else if (addr->is_ip6) {
     return false;
   } else {
+    uint8_t data[4] = {0, 0, 0, 0};
     size_t i, num_octets = 0;
     // LOG(LL_DEBUG, ("[%.*s]", (int) str.len, str.ptr));
     for (i = 0; i < str.len; i++) {
@@ -62,4 +62,29 @@ bool mg_aton(struct mg_str str, struct mg_addr *addr) {
     memcpy(&addr->ip, data, sizeof(data));
     return true;
   }
+}
+
+void mg_mgr_free(struct mg_mgr *mgr) {
+  struct mg_connection *c;
+  for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
+  mg_mgr_poll(mgr, 0);
+#if MG_ARCH == MG_ARCH_FREERTOS
+  FreeRTOS_DeleteSocketSet(mgr->ss);
+#endif
+  LOG(LL_INFO, ("All connections closed"));
+}
+
+void mg_mgr_init(struct mg_mgr *mgr) {
+#ifdef _WIN32
+  WSADATA data;
+  WSAStartup(MAKEWORD(2, 2), &data);
+#elif MG_ARCH == MG_ARCH_FREERTOS
+  mgr->ss = FreeRTOS_CreateSocketSet();
+#elif defined(__unix) || defined(__unix__) || defined(__APPLE__)
+  // Ignore SIGPIPE signal, so if client cancels the request, it
+  // won't kill the whole process.
+  signal(SIGPIPE, SIG_IGN);
+#endif
+  memset(mgr, 0, sizeof(*mgr));
+  mgr->dnstimeout = 3000;
 }

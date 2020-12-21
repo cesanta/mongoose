@@ -586,6 +586,7 @@ struct mg_mgr {
   struct mg_connection *dnsc;   // DNS resolver connection
   const char *dnsserver;        // DNS server URL
   int dnstimeout;               // DNS resolve timeout in milliseconds
+  unsigned long nextid;         // Next connection ID
 #if MG_ARCH == MG_ARCH_FREERTOS
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
 #endif
@@ -603,6 +604,7 @@ struct mg_connection {
   struct mg_mgr *mgr;          // Our container
   struct mg_addr peer;         // Remote peer address
   void *fd;                    // Connected socket, or LWIP data
+  unsigned long id;            // Auto-incrementing unique connection ID
   struct mg_iobuf recv;        // Incoming data
   struct mg_iobuf send;        // Outgoing data
   mg_event_handler_t fn;       // User-specified event handler function

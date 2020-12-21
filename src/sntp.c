@@ -1,7 +1,7 @@
-#include "sntp.h"
 #include "arch.h"
 #include "event.h"
 #include "log.h"
+#include "sntp.h"
 #include "util.h"
 
 #define SNTP_INTERVAL_SEC (3600)
@@ -49,7 +49,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
 
 void mg_sntp_send(struct mg_connection *c, unsigned long utc) {
   if (c->is_resolving) {
-    LOG(LL_ERROR, ("%p wait until resolved", c->fd));
+    LOG(LL_ERROR, ("%lu wait until resolved", c->id));
   } else if (utc > s_sntmp_next) {
     uint8_t buf[48] = {0};
     s_sntmp_next = utc + SNTP_INTERVAL_SEC;

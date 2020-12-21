@@ -1,6 +1,6 @@
-#include "http.h"
 #include "arch.h"
 #include "base64.h"
+#include "http.h"
 #include "log.h"
 #include "net.h"
 #include "private.h"
@@ -34,7 +34,7 @@ void mg_http_bauth(struct mg_connection *c, const char *user,
     c->send.len += 21 + n + 2;
     memcpy(&c->send.buf[c->send.len - 2], "\r\n", 2);
   } else {
-    LOG(LL_ERROR, ("%p %s cannot resize iobuf %d->%d ", c->fd, c->label,
+    LOG(LL_ERROR, ("%lu %s cannot resize iobuf %d->%d ", c->id, c->label,
                    (int) c->send.size, (int) need));
   }
 }
@@ -551,7 +551,6 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
   DIR *dirp;
 
   while (p > dir && *p != '/') *p-- = '\0';
-  // LOG(LL_DEBUG, ("%p [%s]", c->fd, dir));
   if ((dirp = (opendir(dir))) != NULL) {
     mg_printf(c, "%s\r\n", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n");
     mg_http_printf_chunk(
@@ -569,7 +568,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
       if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) continue;
       snprintf(path, sizeof(path), "%s/%s", dir, dp->d_name);
       if (stat(path, &st) != 0) {
-        LOG(LL_ERROR, ("%p stat(%s): %d", c->fd, path, errno));
+        LOG(LL_ERROR, ("%lu stat(%s): %d", c->id, path, errno));
         continue;
       }
       printdirentry(c, hm, dp->d_name, &st);
@@ -583,7 +582,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
     mg_http_write_chunk(c, "", 0);
   } else {
     mg_http_reply(c, 400, "", "Cannot open dir");
-    LOG(LL_DEBUG, ("%p opendir(%s) -> %d", c->fd, dir, errno));
+    LOG(LL_DEBUG, ("%lu opendir(%s) -> %d", c->id, dir, errno));
   }
 }
 #endif
@@ -613,7 +612,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
     if (strlen(real) < strlen(root) || memcmp(real, root, strlen(root)) != 0) {
       mg_http_reply(c, 404, "", "Not found %.*s\n", hm->uri.len, hm->uri.ptr);
     } else {
-        FILE *fp = fopen(real, "r");
+      FILE *fp = fopen(real, "r");
 #if MG_ENABLE_HTTP_DEBUG_ENDPOINT
       snprintf(c->label, sizeof(c->label) - 1, "<-F %s", real);
 #endif
@@ -676,7 +675,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data,
         hm.body.len = hm.message.len - (hm.body.ptr - hm.message.ptr);
       }
       if (n < 0 && ev == MG_EV_READ) {
-        LOG(LL_ERROR, ("%p HTTP parse error", c->fd));
+        LOG(LL_ERROR, ("%lu HTTP parse error", c->id));
         c->is_closing = 1;
         break;
       } else if (n > 0 && (size_t) c->recv.len >= hm.message.len) {

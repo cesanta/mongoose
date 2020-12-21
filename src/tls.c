@@ -33,11 +33,11 @@ int mg_tls_handshake(struct mg_connection *c) {
   mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mbedtls_net_send, mbedtls_net_recv, 0);
   rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
-    LOG(LL_DEBUG, ("%p success", c->fd));
+    LOG(LL_DEBUG, ("%lu success", c->id));
     c->is_tls_hs = 0;
   } else if (rc == MBEDTLS_ERR_SSL_WANT_READ ||
              rc == MBEDTLS_ERR_SSL_WANT_WRITE) {  // Still pending
-    LOG(LL_VERBOSE_DEBUG, ("%p pending, %d%d %d (-%#x)", c->fd,
+    LOG(LL_VERBOSE_DEBUG, ("%lu pending, %d%d %d (-%#x)", c->id,
                            c->is_connecting, c->is_tls_hs, rc, -rc));
   } else {
     mg_error(c, "TLS handshake: -%#x", -rc);  // Error
@@ -62,7 +62,7 @@ static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
 int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   int rc = 0;
-  LOG(LL_DEBUG, ("%p Setting TLS, CA: %s, cert: %s, key: %s", c->fd,
+  LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id,
                  opts->ca == NULL ? "null" : opts->ca,
                  opts->cert == NULL ? "null" : opts->cert,
                  opts->certkey == NULL ? "null" : opts->certkey));
@@ -200,7 +200,7 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     SSL_library_init();
     s_initialised++;
   }
-  LOG(LL_DEBUG, ("%p Setting TLS, CA: %s, cert: %s, key: %s", c->fd,
+  LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id,
                  opts->ca == NULL ? "null" : opts->ca,
                  opts->cert == NULL ? "null" : opts->cert,
                  opts->certkey == NULL ? "null" : opts->certkey));
@@ -275,7 +275,7 @@ int mg_tls_handshake(struct mg_connection *c) {
   SSL_set_fd(tls->ssl, (int) c->fd);
   rc = c->is_client ? SSL_connect(tls->ssl) : SSL_accept(tls->ssl);
   if (rc == 1) {
-    LOG(LL_DEBUG, ("%p success", c->fd));
+    LOG(LL_DEBUG, ("%lu success", c->id));
     c->is_tls_hs = 0;
     return 1;
   } else {

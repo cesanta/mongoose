@@ -1,8 +1,8 @@
-#include "mqtt.h"
 #include "arch.h"
 #include "base64.h"
 #include "event.h"
 #include "log.h"
+#include "mqtt.h"
 #include "private.h"
 #include "url.h"
 #include "util.h"
@@ -85,7 +85,7 @@ void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
                  struct mg_str *data) {
   uint8_t flags = MQTT_QOS(1);
   uint32_t total_len = 2 + (uint32_t) topic->len + (uint32_t) data->len;
-  LOG(LL_DEBUG, ("%p [%.*s] -> [%.*s]", c->fd, (int) topic->len,
+  LOG(LL_DEBUG, ("%lu [%.*s] -> [%.*s]", c->id, (int) topic->len,
                  (char *) topic->ptr, (int) data->len, (char *) data->ptr));
   if (MQTT_GET_QOS(flags) > 0) total_len += 2;
   mg_mqtt_send_header(c, MQTT_CMD_PUBLISH, flags, total_len);
@@ -197,7 +197,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
       struct mg_mqtt_message mm;
       int rc = mg_mqtt_parse(c->recv.buf, c->recv.len, &mm);
       if (rc == MQTT_MALFORMED) {
-        LOG(LL_ERROR, ("%p MQTT malformed message", c->fd));
+        LOG(LL_ERROR, ("%lu MQTT malformed message", c->id));
         c->is_closing = 1;
         break;
       } else if (rc == MQTT_OK) {
@@ -208,14 +208,14 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
           case MQTT_CMD_CONNACK:
             mg_call(c, MG_EV_MQTT_OPEN, &mm.ack);
             if (mm.ack == 0) {
-              LOG(LL_INFO, ("%p Connected", c->fd));
+              LOG(LL_INFO, ("%lu Connected", c->id));
             } else {
-              LOG(LL_ERROR, ("%p MQTT auth failed, code %d", c->fd, mm.ack));
+              LOG(LL_ERROR, ("%lu MQTT auth failed, code %d", c->id, mm.ack));
               c->is_closing = 1;
             }
             break;
           case MQTT_CMD_PUBLISH: {
-            LOG(LL_DEBUG, ("%p [%.*s] -> [%.*s]", c->fd, (int) mm.topic.len,
+            LOG(LL_DEBUG, ("%lu [%.*s] -> [%.*s]", c->id, (int) mm.topic.len,
                            mm.topic.ptr, (int) mm.data.len, mm.data.ptr));
             mg_call(c, MG_EV_MQTT_MSG, &mm);
             break;

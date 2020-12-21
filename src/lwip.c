@@ -87,7 +87,7 @@ int mg_send(struct mg_connection *c, const void *buf, size_t len) {
       err_t err = udp_send(pcb, p);
       pbuf_free(p);
       LOG(LL_DEBUG,
-          ("%p UDP %d bytes -> %x:%hu, err %ld", c->fd, (int) len,
+          ("%lu UDP %d bytes -> %x:%hu, err %ld", c->id, (int) len,
            (unsigned) *(uint32_t *) &pcb->remote_ip, pcb->remote_port, err));
       if (err != ERR_OK) mg_error(c, "%p err %d", c->fd, err);
     } else {
@@ -146,7 +146,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     tcp_bind(c->fd, IP_ADDR_ANY, 0);
     tcp_nagle_disable((struct tcp_pcb *) c->fd);
   }
-  LOG(LL_DEBUG, ("%p -> %s %s", c->fd, url, c->is_udp ? "UDP" : "TCP"));
+  LOG(LL_DEBUG, ("%lu -> %s %s", c->id, url, c->is_udp ? "UDP" : "TCP"));
   mg_resolve(mgr, c, &host, mgr->dnstimeout);
   return c;
 }
@@ -156,7 +156,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   ip_addr_t ipaddr;
   memcpy(&ipaddr, &c->peer.ip, sizeof(ipaddr));
   mg_call(c, MG_EV_RESOLVE, NULL);
-  LOG(LL_DEBUG, ("%p resolved to %s", c->fd, mg_straddr(c, buf, sizeof(buf))));
+  LOG(LL_DEBUG, ("%lu resolved to %s", c->id, mg_straddr(c, buf, sizeof(buf))));
   err_t err = c->is_udp ? udp_connect((struct udp_pcb *) c->fd, &ipaddr,
                                       mg_ntohs(c->peer.port))
                         : tcp_connect((struct tcp_pcb *) c->fd, &ipaddr,
@@ -193,9 +193,5 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   LOG(LL_DEBUG, ("%p %d", mgr, ms));
   mg_usleep(200 * 1000);
   mg_timer_poll(mg_millis());
-}
-
-void mg_mgr_init(struct mg_mgr *mgr) {
-  (void) mgr;
 }
 #endif

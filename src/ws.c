@@ -113,7 +113,8 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
         c->is_closing = 1;  // Some just, not an HTTP request
       } else if (n > 0) {
         if (n < 15 || memcmp(c->recv.buf + 9, "101", 3) != 0) {
-          LOG(LL_ERROR, ("%p WS handshake error: %.*s", c->fd, 15, c->recv.buf));
+          LOG(LL_ERROR,
+              ("%lu WS handshake error: %.*s", c->id, 15, c->recv.buf));
           c->is_closing = 1;
         } else {
           c->is_websocket = 1;
@@ -137,7 +138,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
           break;
         case WEBSOCKET_OP_CLOSE: {
           struct mg_ws_message evd = {{s, msg.data_len}, msg.flags};
-          LOG(LL_ERROR, ("%p Got WS CLOSE", c->fd));
+          LOG(LL_ERROR, ("%lu Got WS CLOSE", c->id));
           mg_call(c, MG_EV_WS_MSG, &evd);
           c->is_closing = 1;
           return;
