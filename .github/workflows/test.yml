@@ -24,9 +24,7 @@ jobs:
     - name: openssl
       run: make test SSL=OPENSSL
     - name: exports
-      run: make prefix
-    - name: examples
-      run: make ex
+      run: make mg_prefix
   windows:
     runs-on: ubuntu-latest
     steps:
