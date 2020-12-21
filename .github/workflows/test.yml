@@ -11,6 +11,8 @@ jobs:
       run: make test test++
     - name: openssl
       run: make test SSL=OPENSSL
+    - name: examples
+      run: make ex
   macos:
     runs-on: macos-latest
     steps:
@@ -21,10 +23,16 @@ jobs:
       run: make test++ upload-coverage
     - name: openssl
       run: make test SSL=OPENSSL
+    - name: exports
+      run: make prefix
+    - name: examples
+      run: make ex
   windows:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: make
-      run: make mg_prefix vc98 vc2017 ex
+    - name: vc98
+      run: make vc2017
+    - name: vc2017
+      run: make vc2017
 
