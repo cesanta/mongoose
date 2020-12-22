@@ -564,6 +564,15 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   ASSERT(fetch(&mgr, buf, url, "HEAD /a.txt HTTP/1.0\n\n") == 200);
 
+#if MG_ENABLE_IPV6
+  {
+    const char *url6 = "http://[::1]:12346";
+    ASSERT(mg_http_listen(&mgr, url6, eh1, NULL) != NULL);
+    ASSERT(fetch(&mgr, buf, url6, "GET /a.txt HTTP/1.0\n\n") == 200);
+    ASSERT(cmpbody(buf, "hello\n") == 0);
+  }
+#endif
+
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }

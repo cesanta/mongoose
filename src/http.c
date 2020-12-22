@@ -730,7 +730,7 @@ struct mg_connection *mg_http_listen(struct mg_mgr *mgr, const char *url,
   struct mg_connection *c = mg_listen(mgr, url, fn, fn_data);
   if (c != NULL) c->pfn = http_cb, c->pfn_data = mgr;
 #if MG_ENABLE_HTTP_DEBUG_ENDPOINT
-  snprintf(c->label, sizeof(c->label) - 1, "<-LSN");
+  if (c != NULL) snprintf(c->label, sizeof(c->label) - 1, "<-LSN");
 #endif
   return c;
 }

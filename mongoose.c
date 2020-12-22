@@ -1129,7 +1129,7 @@ struct mg_connection *mg_http_listen(struct mg_mgr *mgr, const char *url,
   struct mg_connection *c = mg_listen(mgr, url, fn, fn_data);
   if (c != NULL) c->pfn = http_cb, c->pfn_data = mgr;
 #if MG_ENABLE_HTTP_DEBUG_ENDPOINT
-  snprintf(c->label, sizeof(c->label) - 1, "<-LSN");
+  if (c != NULL) snprintf(c->label, sizeof(c->label) - 1, "<-LSN");
 #endif
   return c;
 }
@@ -2581,45 +2581,49 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 #endif
 }
 
-SOCKET mg_open_listener(const char *ip, uint16_t port, int is_udp) {
-  union usa usa;
-  int on = 1;
-  int proto = is_udp ? IPPROTO_UDP : IPPROTO_TCP;
-  int type = is_udp ? SOCK_DGRAM : SOCK_STREAM;
+SOCKET mg_open_listener(const char *url) {
   struct mg_addr addr;
-  SOCKET fd;
+  SOCKET fd = INVALID_SOCKET;
 
-  memset(&usa, 0, sizeof(usa));
-  usa.sin.sin_family = AF_INET;
-  usa.sin.sin_port = mg_htons(port);
-  mg_aton(mg_url_host(ip), &addr);
-  *(uint32_t *) &usa.sin.sin_addr = addr.ip;
+  memset(&addr, 0, sizeof(addr));
+  addr.port = mg_htons(mg_url_port(url));
+  if (!mg_aton(mg_url_host(url), &addr)) {
+    LOG(LL_ERROR, ("invalid listening URL: %s", url));
+  } else {
+    union usa usa = tousa(&addr);
+    int on = 1, af = AF_INET;
+    int type = strncmp(url, "udp:", 4) == 0 ? SOCK_DGRAM : SOCK_STREAM;
+    int proto = type == SOCK_DGRAM ? IPPROTO_UDP : IPPROTO_TCP;
+    socklen_t slen = sizeof(usa.sin);
+#if MG_ENABLE_IPV6
+    if (addr.is_ip6) af = AF_INET6, slen = sizeof(usa.sin6);
+#endif
 
-  if ((fd = socket(AF_INET, type, proto)) != INVALID_SOCKET &&
+    if ((fd = socket(af, type, proto)) != INVALID_SOCKET &&
 #if !defined(_WIN32) || !defined(SO_EXCLUSIVEADDRUSE)
-      // SO_RESUSEADDR is not enabled on Windows because the semantics of
-      // SO_REUSEADDR on UNIX and Windows is different. On Windows,
-      // SO_REUSEADDR allows to bind a socket to a port without error even if
-      // the port is already open by another program. This is not the behavior
-      // SO_REUSEADDR was designed for, and leads to hard-to-track failure
-      // scenarios. Therefore, SO_REUSEADDR was disabled on Windows unless
-      // SO_EXCLUSIVEADDRUSE is supported and set on a socket.
-      !setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) &&
+        // SO_RESUSEADDR is not enabled on Windows because the semantics of
+        // SO_REUSEADDR on UNIX and Windows is different. On Windows,
+        // SO_REUSEADDR allows to bind a socket to a port without error even if
+        // the port is already open by another program. This is not the behavior
+        // SO_REUSEADDR was designed for, and leads to hard-to-track failure
+        // scenarios. Therefore, SO_REUSEADDR was disabled on Windows unless
+        // SO_EXCLUSIVEADDRUSE is supported and set on a socket.
+        !setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) &&
 #endif
 #if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
-      // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
-      !setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (void *) &on,
-                  sizeof(on)) &&
+        // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
+        !setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (void *) &on,
+                    sizeof(on)) &&
 #endif
-      bind(fd, &usa.sa, sizeof(usa.sin)) == 0 &&
-      // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
-      (type == SOCK_DGRAM || listen(fd, 128) == 0)) {
-    mg_set_non_blocking_mode(fd);
-  } else if (fd >= 0) {
-    LOG(LL_ERROR,
-        ("Failed to listen on %s:%hu, errno %d", ip, port, MG_SOCK_ERRNO));
-    closesocket(fd);
-    fd = INVALID_SOCKET;
+        bind(fd, &usa.sa, slen) == 0 &&
+        // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
+        (type == SOCK_DGRAM || listen(fd, 128) == 0)) {
+      mg_set_non_blocking_mode(fd);
+    } else if (fd >= 0) {
+      LOG(LL_ERROR, ("Failed to listen on %s, errno %d", url, MG_SOCK_ERRNO));
+      closesocket(fd);
+      fd = INVALID_SOCKET;
+    }
   }
 
   return fd;
@@ -2836,8 +2840,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
                                 mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = NULL;
   int is_udp = strncmp(url, "udp:", 4) == 0;
-  struct mg_str host = mg_url_host(url);
-  SOCKET fd = mg_open_listener(host.ptr, mg_url_port(url), is_udp);
+  SOCKET fd = mg_open_listener(url);
   if (fd == INVALID_SOCKET) {
   } else if ((c = alloc_conn(mgr, 0, fd)) == NULL) {
     LOG(LL_ERROR, ("OOM %s", url));

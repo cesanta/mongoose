@@ -9,6 +9,7 @@ VC2017 = docker run --rm -e WINEDEBUG=-all -v $(CDIR):$(CDIR) -w $(CDIR) docker.
 GCC = docker run --rm -v $(CDIR):$(CDIR) -w $(CDIR) mdashnet/cc2
 VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
 CLANG ?= clang # /usr/local/opt/llvm\@9/bin/clang
+IPV6 ?= 1
 ASAN_OPTIONS ?=
 EXAMPLES := $(wildcard examples/*)
 EXAMPLE_TARGET ?= example
@@ -51,7 +52,7 @@ fuzz: mongoose.c mongoose.h Makefile test/fuzz.c
 	$(DEBUGGER) ./fuzzer
 
 # make CLANG=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
-test: CFLAGS += -DMG_ENABLE_IPV6=1 -fsanitize=address#,undefined
+test: CFLAGS += -DMG_ENABLE_IPV6=$(IPV6) -fsanitize=address#,undefined
 test: mongoose.c mongoose.h  Makefile test/unit_test.c
 	$(CLANG) mongoose.c test/unit_test.c $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(DEBUGGER) ./unit_test
@@ -76,7 +77,8 @@ vc2017: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(VC2017) wine64 cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(VC2017) wine64 $@.exe
 
-linux: CFLAGS += -DMG_ENABLE_IPV6=1 -fsanitize=address,undefined
+#linux: CFLAGS += -DMG_ENABLE_IPV6=$(IPV6)
+linux: CFLAGS += -fsanitize=address,undefined
 linux: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(GCC) $(CC) mongoose.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
 	$(GCC) ./unit_test_gcc

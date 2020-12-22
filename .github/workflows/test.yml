@@ -8,9 +8,9 @@ jobs:
     - name: Install packages
       run: sudo apt-get install libmbedtls-dev
     - name: make
-      run: make test test++
+      run: make test test++ IPV6=0
     - name: openssl
-      run: make test SSL=OPENSSL
+      run: make test SSL=OPENSSL IPV6=0
     - name: examples
       run: make ex
   macos:
@@ -20,9 +20,9 @@ jobs:
     - name: Install packages
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
     - name: make
-      run: make test++ upload-coverage
+      run: make test++ upload-coverage IPV6=0
     - name: openssl
-      run: make test SSL=OPENSSL
+      run: make test SSL=OPENSSL IPV6=0
     - name: exports
       run: make mg_prefix
   windows:
