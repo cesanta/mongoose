@@ -15511,6 +15511,11 @@ static void udp_remove_tcpip(void *arg) {
 void mg_lwip_if_destroy_conn(struct mg_connection *nc) {
   if (nc->sock == INVALID_SOCKET) return;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
+  nc->sock = INVALID_SOCKET;
+  /* Do not close "ephemeral" UDP conns */
+  if ((nc->flags & MG_F_UDP) && nc->listener != NULL) {
+    return;
+  }
   if (!(nc->flags & MG_F_UDP)) {
     struct tcp_pcb *tpcb = cs->pcb.tcp;
     if (tpcb != NULL) {
@@ -15519,24 +15524,20 @@ void mg_lwip_if_destroy_conn(struct mg_connection *nc) {
       tcp_arg(tpcb, NULL);
       mg_lwip_netif_run_on_tcpip(tcp_close_tcpip, tpcb);
     }
-    while (cs->rx_chain != NULL) {
-      struct pbuf *seg = cs->rx_chain;
-      cs->rx_chain = pbuf_dechain(cs->rx_chain);
-      pbuf_free(seg);
-    }
-    memset(cs, 0, sizeof(*cs));
-    MG_FREE(cs);
-  } else if (nc->listener == NULL) {
-    /* Only close outgoing UDP pcb or listeners. */
+  } else {
     struct udp_pcb *upcb = cs->pcb.udp;
     if (upcb != NULL) {
       DBG(("%p udp_remove %p", nc, upcb));
       mg_lwip_netif_run_on_tcpip(udp_remove_tcpip, upcb);
     }
-    memset(cs, 0, sizeof(*cs));
-    MG_FREE(cs);
   }
-  nc->sock = INVALID_SOCKET;
+  while (cs->rx_chain != NULL) {
+    struct pbuf *seg = cs->rx_chain;
+    cs->rx_chain = pbuf_dechain(cs->rx_chain);
+    pbuf_free(seg);
+  }
+  memset(cs, 0, sizeof(*cs));
+  MG_FREE(cs);
 }
 
 void mg_lwip_if_get_conn_addr(struct mg_connection *nc, int remote,
