@@ -4,15 +4,9 @@
 #include "event.h"
 #include "iobuf.h"
 
-struct mg_mgr {
-  struct mg_connection *conns;  // List of active connections
-  struct mg_connection *dnsc;   // DNS resolver connection
-  const char *dnsserver;        // DNS server URL
-  int dnstimeout;               // DNS resolve timeout in milliseconds
-  unsigned long nextid;         // Next connection ID
-#if MG_ARCH == MG_ARCH_FREERTOS
-  SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
-#endif
+struct mg_dns {
+  const char *url;          // DNS server URL
+  struct mg_connection *c;  // DNS server connection
 };
 
 struct mg_addr {
@@ -20,6 +14,17 @@ struct mg_addr {
   uint32_t ip;      // IP address in network byte order
   uint8_t ip6[16];  // IPv6 address
   bool is_ip6;      // True when address is IPv6 address
+};
+
+struct mg_mgr {
+  struct mg_connection *conns;  // List of active connections
+  struct mg_dns dns4;           // DNS for IPv4
+  struct mg_dns dns6;           // DNS for IPv6
+  int dnstimeout;               // DNS resolve timeout in milliseconds
+  unsigned long nextid;         // Next connection ID
+#if MG_ARCH == MG_ARCH_FREERTOS
+  SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
+#endif
 };
 
 struct mg_connection {

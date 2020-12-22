@@ -14,6 +14,7 @@ enum { false = 0, true = 1 };
 #else
 #include <stdbool.h>
 #include <stdint.h>
+#include <ws2tcpip.h>
 #endif
 
 #include <winsock2.h>

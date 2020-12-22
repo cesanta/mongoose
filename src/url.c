@@ -1,5 +1,5 @@
-#include "url.h"
 #include <stdlib.h>
+#include "url.h"
 
 struct url {
   int key, user, pass, host, port, uri, end;
@@ -19,6 +19,8 @@ static struct url urlparse(const char *url) {
     if (i > 0 && url[i - 1] == '/' && url[i] == '/') {
       u.host = i + 1;
       u.port = 0;
+    } else if (url[i] == ']') {
+      u.port = 0;  // IPv6 URLs, like http://[::1]/bar
     } else if (url[i] == ':') {
       u.port = i + 1;
     } else if (url[i] == '@') {
@@ -41,7 +43,12 @@ struct mg_str mg_url_host(const char *url) {
   struct url u = urlparse(url);
   int n =
       u.port ? u.port - u.host - 1 : u.uri ? u.uri - u.host : u.end - u.host;
-  return mg_str_n(url + u.host, n);
+  struct mg_str s = mg_str_n(url + u.host, n);
+  if (s.len > 2 && s.ptr[0] == '[' && s.ptr[s.len - 1] == ']') {
+    s.len -= 2;
+    s.ptr++;
+  }
+  return s;
 }
 
 const char *mg_url_uri(const char *url) {

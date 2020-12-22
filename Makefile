@@ -71,7 +71,7 @@ vc98: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(VC98) wine cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(VC98) wine $@.exe
 
-vc2017: CFLAGS += -DMG_ENABLE_IPV6=1
+#vc2017: VCFLAGS += -DMG_ENABLE_IPV6=1
 vc2017: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(VC2017) wine64 cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(VC2017) wine64 $@.exe

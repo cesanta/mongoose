@@ -250,6 +250,7 @@ enum { false = 0, true = 1 };
 #else
 #include <stdbool.h>
 #include <stdint.h>
+#include <ws2tcpip.h>
 #endif
 
 #include <winsock2.h>
@@ -421,7 +422,7 @@ bool mg_globmatch(const char *pattern, int plen, const char *s, int n);
 bool mg_next_comma_entry(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
-char *mg_hexdump(const void *buf, int len);
+char *mg_hexdump(const void *buf, size_t len);
 char *mg_hex(const void *buf, int len, char *dst);
 void mg_unhex(const char *buf, int len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, int len);
@@ -581,15 +582,9 @@ enum {
 
 
 
-struct mg_mgr {
-  struct mg_connection *conns;  // List of active connections
-  struct mg_connection *dnsc;   // DNS resolver connection
-  const char *dnsserver;        // DNS server URL
-  int dnstimeout;               // DNS resolve timeout in milliseconds
-  unsigned long nextid;         // Next connection ID
-#if MG_ARCH == MG_ARCH_FREERTOS
-  SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
-#endif
+struct mg_dns {
+  const char *url;          // DNS server URL
+  struct mg_connection *c;  // DNS server connection
 };
 
 struct mg_addr {
@@ -597,6 +592,17 @@ struct mg_addr {
   uint32_t ip;      // IP address in network byte order
   uint8_t ip6[16];  // IPv6 address
   bool is_ip6;      // True when address is IPv6 address
+};
+
+struct mg_mgr {
+  struct mg_connection *conns;  // List of active connections
+  struct mg_dns dns4;           // DNS for IPv4
+  struct mg_dns dns6;           // DNS for IPv6
+  int dnstimeout;               // DNS resolve timeout in milliseconds
+  unsigned long nextid;         // Next connection ID
+#if MG_ARCH == MG_ARCH_FREERTOS
+  SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
+#endif
 };
 
 struct mg_connection {
@@ -799,13 +805,17 @@ int mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
 
 
 
+// Mongoose sends DNS queries that contain only one question:
+// either A (IPv4) or AAAA (IPv6) address lookup.
+// Therefore, we expect zero or one answer.
+// If `resolved` is true, then `addr` contains resolved IPv4 or IPV6 address.
 struct mg_dns_message {
-  uint16_t txnid;   // Transaction ID
-  bool resolved;    // Resolve successful, ipaddr is set
-  uint32_t ipaddr;  // Resolved IPv4 address
-  char name[256];   // Host name
+  uint16_t txnid;       // Transaction ID
+  bool resolved;        // Resolve successful, addr is set
+  struct mg_addr addr;  // Resolved address
+  char name[256];       // Host name
 };
 
-void mg_resolve(struct mg_mgr *, struct mg_connection *, struct mg_str *, int);
-void mg_resolve_cancel(struct mg_mgr *, struct mg_connection *);
+void mg_resolve(struct mg_connection *, struct mg_str *, int);
+void mg_resolve_cancel(struct mg_connection *);
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);

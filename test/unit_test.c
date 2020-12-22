@@ -118,6 +118,8 @@ static void test_url(void) {
   ASSERT(vcmp(mg_url_host("p://bar:1234/a"), "bar"));
   ASSERT(vcmp(mg_url_host("p://u@bar:1234/a"), "bar"));
   ASSERT(vcmp(mg_url_host("p://u:p@bar:1234/a"), "bar"));
+  ASSERT(vcmp(mg_url_host("p://u:p@[::1]:1234/a"), "::1"));
+  ASSERT(vcmp(mg_url_host("p://u:p@[1:2::3]:1234/a"), "1:2::3"));
 
   // Port
   ASSERT(mg_url_port("foo:1234") == 1234);
@@ -134,6 +136,8 @@ static void test_url(void) {
   ASSERT(mg_url_port("wss://u:p@bar:123") == 123);
   ASSERT(mg_url_port("wss://u:p@bar:123/") == 123);
   ASSERT(mg_url_port("wss://u:p@bar:123/abc") == 123);
+  ASSERT(mg_url_port("http://u:p@[::1]/abc") == 80);
+  ASSERT(mg_url_port("http://u:p@[::1]:2121/abc") == 2121);
 
   // User / pass
   ASSERT(vcmp(mg_url_user("p://foo"), ""));
@@ -155,6 +159,8 @@ static void test_url(void) {
   ASSERT(strcmp(mg_url_uri("p://foo:12/"), "/") == 0);
   ASSERT(strcmp(mg_url_uri("p://foo:12/abc"), "/abc") == 0);
   ASSERT(strcmp(mg_url_uri("p://foo:12/a/b/c"), "/a/b/c") == 0);
+  ASSERT(strcmp(mg_url_uri("p://[::1]:12/a/b/c"), "/a/b/c") == 0);
+  ASSERT(strcmp(mg_url_uri("p://[ab::1]:12/a/b/c"), "/a/b/c") == 0);
 }
 
 static void test_base64(void) {
@@ -587,7 +593,8 @@ static void f3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   // LOG(LL_INFO, ("%d", ev));
   if (ev == MG_EV_CONNECT) {
     // c->is_hexdumping = 1;
-    mg_printf(c, "GET / HTTP/1.0\r\nHost: cesanta.com\r\n\r\n");
+    mg_printf(c, "GET / HTTP/1.0\r\nHost: %s\r\n\r\n",
+              c->peer.is_ip6 ? "ipv6.google.com" : "cesanta.com");
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     // LOG(LL_INFO, ("-->[%.*s]", (int) hm->message.len, hm->message.ptr));
@@ -626,12 +633,12 @@ static void test_http_client(void) {
 
 #if MG_ENABLE_IPV6
   ok = 0;
+  // ipv6.google.com does not have IPv4 address, only IPv6, therefore
+  // it is guaranteed to hit IPv6 resolution path.
   c = mg_http_connect(&mgr, "http://ipv6.google.com", f3, &ok);
   ASSERT(c != NULL);
   for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
-    // ASSERT(ok == 200);
-    // LOG(LL_DEBUG, (""));
-    // exit(0);
+  ASSERT(ok == 200);
 #endif
 
   mg_mgr_free(&mgr);
@@ -1005,9 +1012,49 @@ static void test_util(void) {
   ASSERT(mg_aton(mg_str("0.0.0.256"), &a) == false);
   ASSERT(mg_aton(mg_str("0.0.0.-1"), &a) == false);
   ASSERT(mg_aton(mg_str("127.0.0.1"), &a) == true);
-  ASSERT(a.is_ip6 == 0);
+  ASSERT(a.is_ip6 == false);
   ASSERT(a.ip == 0x100007f);
   ASSERT(strcmp(mg_ntoa(&a, buf, sizeof(buf)), "127.0.0.1") == 0);
+
+  ASSERT(mg_aton(mg_str("1:2:3:4:5:6:7:8"), &a) == true);
+  ASSERT(a.is_ip6 == true);
+  ASSERT(
+      memcmp(a.ip6,
+             "\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08",
+             sizeof(a.ip6)) == 0);
+
+  memset(a.ip6, 0xaa, sizeof(a.ip6));
+  ASSERT(mg_aton(mg_str("1::1"), &a) == true);
+  ASSERT(a.is_ip6 == true);
+  ASSERT(
+      memcmp(a.ip6,
+             "\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01",
+             sizeof(a.ip6)) == 0);
+
+  memset(a.ip6, 0xaa, sizeof(a.ip6));
+  ASSERT(mg_aton(mg_str("::1"), &a) == true);
+  ASSERT(a.is_ip6 == true);
+  ASSERT(
+      memcmp(a.ip6,
+             "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01",
+             sizeof(a.ip6)) == 0);
+
+  memset(a.ip6, 0xaa, sizeof(a.ip6));
+  ASSERT(mg_aton(mg_str("1::"), &a) == true);
+  ASSERT(a.is_ip6 == true);
+  ASSERT(
+      memcmp(a.ip6,
+             "\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+             sizeof(a.ip6)) == 0);
+
+  memset(a.ip6, 0xaa, sizeof(a.ip6));
+  ASSERT(mg_aton(mg_str("2001:4860:4860::8888"), &a) == true);
+  ASSERT(a.is_ip6 == true);
+  ASSERT(
+      memcmp(a.ip6,
+             "\x20\x01\x48\x60\x48\x60\x00\x00\x00\x00\x00\x00\x00\x00\x88\x88",
+             sizeof(a.ip6)) == 0);
+
   ASSERT(strcmp(mg_hex("abc", 3, buf), "616263") == 0);
   ASSERT(mg_url_decode("a=%", 3, buf, sizeof(buf), 0) < 0);
   ASSERT(mg_url_decode("&&&a=%", 6, buf, sizeof(buf), 0) < 0);

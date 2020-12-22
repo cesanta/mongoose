@@ -107,16 +107,16 @@ uint16_t mg_ntohs(uint16_t net) {
   return ((uint16_t) data[1] << 0) | ((uint32_t) data[0] << 8);
 }
 
-char *mg_hexdump(const void *buf, int len) {
+char *mg_hexdump(const void *buf, size_t len) {
   const unsigned char *p = (const unsigned char *) buf;
-  int i, idx, n = 0, ofs = 0, dlen = len * 5 + 100;
+  size_t i, idx, n = 0, ofs = 0, dlen = len * 5 + 100;
   char ascii[17] = "", *dst = (char *) malloc(dlen);
   if (dst == NULL) return dst;
   for (i = 0; i < len; i++) {
     idx = i % 16;
     if (idx == 0) {
       if (i > 0 && dlen > n) n += snprintf(dst + n, dlen - n, "  %s\n", ascii);
-      if (dlen > n) n += snprintf(dst + n, dlen - n, "%04x ", i + ofs);
+      if (dlen > n) n += snprintf(dst + n, dlen - n, "%04x ", (int) (i + ofs));
     }
     if (dlen < n) break;
     n += snprintf(dst + n, dlen - n, " %02x", p[i]);

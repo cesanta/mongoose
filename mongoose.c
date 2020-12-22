@@ -147,17 +147,21 @@ struct dns_data {
   uint16_t txnid;
 };
 
-static void mg_dns_free(struct dns_data **head, struct dns_data *d) {
-  LIST_DELETE(struct dns_data, head, d);
+static struct dns_data *s_reqs;  // Active DNS requests
+
+static void mg_sendnsreq(struct mg_connection *, struct mg_str *, int,
+                         struct mg_dns *, bool);
+
+static void mg_dns_free(struct dns_data *d) {
+  LIST_DELETE(struct dns_data, &s_reqs, d);
   free(d);
 }
 
-void mg_resolve_cancel(struct mg_mgr *mgr, struct mg_connection *c) {
-  struct dns_data *tmp, *d, **head;
-  head = mgr->dnsc == NULL ? NULL : (struct dns_data **) &mgr->dnsc->pfn_data;
-  for (d = head == NULL ? NULL : *head; d != NULL; d = tmp) {
+void mg_resolve_cancel(struct mg_connection *c) {
+  struct dns_data *tmp, *d;
+  for (d = s_reqs; d != NULL; d = tmp) {
     tmp = d->next;
-    if (d->c == c) mg_dns_free(head, d);
+    if (d->c == c) mg_dns_free(d);
   }
 }
 
@@ -219,11 +223,16 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
     atype = ((int) s[j - 8] << 8) | s[j - 7];
     aclass = ((int) s[j - 6] << 8) | s[j - 5];
     n = ((int) s[j] << 8) | s[j + 1];
-    // LOG(LL_DEBUG,
-    //("NAME %s, IP len %zu t: %hu, c: %hu", dm->name, n, atype, aclass));
+    LOG(LL_DEBUG, ("%s %d %hu %hu", dm->name, (int) n, atype, aclass));
     if (&s[j] + 2 + n > e) break;
     if (n == 4 && atype == 1 && aclass == 1) {
-      memcpy(&dm->ipaddr, &s[j + 2], 4);
+      dm->addr.is_ip6 = false;
+      memcpy(&dm->addr.ip, &s[j + 2], n);
+      dm->resolved = true;
+      break;  // Return success
+    } else if (n == 16 && atype == 28 && aclass == 1) {
+      dm->addr.is_ip6 = true;
+      memcpy(&dm->addr.ip6, &s[j + 2], n);
       dm->resolved = true;
       break;  // Return success
     }
@@ -234,7 +243,7 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
 
 static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
                    void *fn_data) {
-  struct dns_data *d, *tmp, **head = (struct dns_data **) &c->pfn_data;
+  struct dns_data *d, *tmp;
   if (ev == MG_EV_POLL) {
     unsigned long now = *(unsigned long *) ev_data;
     for (d = (struct dns_data *) fn_data; d != NULL; d = tmp) {
@@ -250,37 +259,44 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
       LOG(LL_ERROR, ("Unexpected DNS response:\n%s\n", s));
       free(s);
     } else {
-      for (d = (struct dns_data *) c->pfn_data; d != NULL; d = tmp) {
+      LOG(LL_DEBUG, ("%s %d", dm.name, dm.resolved));
+      for (d = s_reqs; d != NULL; d = tmp) {
         tmp = d->next;
         // LOG(LL_INFO, ("d %p %hu %hu", d, d->txnid, dm.txnid));
         if (dm.txnid != d->txnid) continue;
         if (d->c->is_resolving) {
           d->c->is_resolving = 0;
           if (dm.resolved) {
-            d->c->peer.ip = dm.ipaddr;
+            dm.addr.port = d->c->peer.port;  // Save port
+            d->c->peer = dm.addr;            // Copy resolved address
             mg_connect_resolved(d->c);
+#if MG_ENABLE_IPV6
+          } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0') {
+            struct mg_str x = mg_str(dm.name);
+            mg_sendnsreq(d->c, &x, c->mgr->dnstimeout, &c->mgr->dns6, true);
+#endif
           } else {
             mg_error(d->c, "%s DNS lookup failed", dm.name);
           }
         } else {
           LOG(LL_ERROR, ("%lu already resolved", d->c->id));
         }
-        mg_dns_free(head, d);
+        mg_dns_free(d);
         resolved = 1;
       }
     }
     if (!resolved) LOG(LL_ERROR, ("stray DNS reply"));
     c->recv.len = 0;
   } else if (ev == MG_EV_CLOSE) {
-    for (d = *head; d != NULL; d = tmp) {
+    for (d = s_reqs; d != NULL; d = tmp) {
       tmp = d->next;
-      mg_dns_free(head, d);
+      mg_dns_free(d);
     }
   }
 }
 
 void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
-                 uint16_t txnid) {
+                 uint16_t txnid, bool ipv6) {
   struct {
     struct mg_dns_header header;
     uint8_t data[256];
@@ -289,7 +305,7 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   memset(&pkt, 0, sizeof(pkt));
   pkt.header.transaction_id = mg_htons(txnid);
   pkt.header.flags = mg_htons(0x100);
-  pkt.header.num_questions = mg_htons(2);
+  pkt.header.num_questions = mg_htons(1);
   for (i = n = 0; i < sizeof(pkt.data) - 5; i++) {
     if (name->ptr[i] == '.' || i >= name->len) {
       pkt.data[n] = (uint8_t)(i - n);
@@ -300,8 +316,9 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   }
   memcpy(&pkt.data[n], "\x00\x00\x01\x00\x01", 5);  // A query
   n += 5;
-  memcpy(&pkt.data[n], "\xc0\x0c\x00\x1c\x00\x01", 6);  // AAAA query
-  n += 6;
+  if (ipv6) pkt.data[n - 3] = 0x1c;  // AAAA query
+  // memcpy(&pkt.data[n], "\xc0\x0c\x00\x1c\x00\x01", 6);  // AAAA query
+  // n += 6;
   mg_send(c, &pkt, sizeof(pkt.header) + n);
 #if 0
   // Immediately after A query, send AAAA query. Whatever reply comes first,
@@ -312,39 +329,43 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
 #endif
 }
 
-void mg_resolve(struct mg_mgr *mgr, struct mg_connection *c,
-                struct mg_str *name, int ms) {
+static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
+                         struct mg_dns *dnsc, bool ipv6) {
   struct dns_data *d = NULL;
+  if (dnsc->url == NULL) {
+    mg_error(c, "DNS server URL is NULL. Call mg_mgr_init()");
+  } else if (dnsc->c == NULL) {
+    dnsc->c = mg_connect(c->mgr, dnsc->url, NULL, NULL);
+    if (dnsc->c != NULL) {
+      dnsc->c->pfn = dns_cb;
+      snprintf(dnsc->c->label, sizeof(dnsc->c->label), "%s", "DNS");
+      // dnsc->c->is_hexdumping = 1;
+    }
+  }
+  if (dnsc->c == NULL) {
+    mg_error(c, "resolver");
+  } else if ((d = (struct dns_data *) calloc(1, sizeof(*d))) == NULL) {
+    mg_error(c, "resolve OOM");
+  } else {
+    d->txnid = s_reqs ? s_reqs->txnid + 1 : 1;
+    d->next = s_reqs;
+    s_reqs = d;
+    d->expire = mg_millis() + ms;
+    d->c = c;
+    c->is_resolving = 1;
+    LOG(LL_DEBUG, ("%lu resolving %.*s, txnid %hu", c->id, (int) name->len,
+                   name->ptr, d->txnid));
+    mg_dns_send(dnsc->c, name, d->txnid, ipv6);
+  }
+}
+
+void mg_resolve(struct mg_connection *c, struct mg_str *name, int ms) {
   if (mg_aton(*name, &c->peer)) {
     // name is an IP address, do not fire name resolution
     mg_connect_resolved(c);
   } else {
     // name is not an IP, send DNS resolution request
-    if (mgr->dnsc == NULL) {
-      const char *srv = mgr->dnsserver ? mgr->dnsserver : "udp://8.8.8.8:53";
-      mgr->dnsc = mg_connect(mgr, srv, NULL, NULL);
-      if (mgr->dnsc != NULL) {
-        mgr->dnsc->pfn = dns_cb;
-        // mgr->dnsc->is_hexdumping = 1;
-        snprintf(mgr->dnsc->label, sizeof(mgr->dnsc->label), "%s", "RESOLVER");
-      }
-    }
-    if (mgr->dnsc == NULL) {
-      mg_error(c, "resolver");
-    } else if ((d = (struct dns_data *) calloc(1, sizeof(*d))) == NULL) {
-      mg_error(c, "resolve OOM");
-    } else {
-      struct dns_data **head = (struct dns_data **) &mgr->dnsc->pfn_data;
-      d->txnid = *head ? (*head)->txnid + 1 : 1;
-      d->next = *head;
-      *head = d;
-      d->expire = mg_millis() + ms;
-      d->c = c;
-      c->is_resolving = 1;
-      LOG(LL_DEBUG, ("%lu resolving %.*s, txnid %hu", c->id, (int) name->len,
-                     name->ptr, d->txnid));
-      mg_dns_send(mgr->dnsc, name, d->txnid);
-    }
+    mg_sendnsreq(c, name, ms, &c->mgr->dns4, false);
   }
 }
 
@@ -1929,9 +1950,18 @@ int mg_printf(struct mg_connection *c, const char *fmt, ...) {
 }
 
 char *mg_straddr(struct mg_connection *c, char *buf, size_t len) {
-  unsigned char *p = (unsigned char *) &c->peer.ip;
-  snprintf(buf, len, "%d.%d.%d.%d:%hu", p[0], p[1], p[2], p[3],
-           mg_ntohs(c->peer.port));
+  if (c->peer.is_ip6) {
+    uint16_t *p = (uint16_t *) c->peer.ip6;
+    snprintf(buf, len, "[%x:%x:%x:%x:%x:%x:%x:%x]:%hu", mg_htons(p[0]),
+             mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]), mg_htons(p[4]),
+             mg_htons(p[5]), mg_htons(p[6]), mg_htons(p[7]),
+             mg_ntohs(c->peer.port));
+
+  } else {
+    unsigned char *p = (unsigned char *) &c->peer.ip;
+    snprintf(buf, len, "%d.%d.%d.%d:%hu", p[0], p[1], p[2], p[3],
+             mg_ntohs(c->peer.port));
+  }
   return buf;
 }
 
@@ -1942,35 +1972,73 @@ char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {
   return buf;
 }
 
+static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
+  if (mg_casecmp(str.ptr, "localhost") != 0) return false;
+  addr->ip = mg_htonl(0x7f000001);
+  addr->is_ip6 = false;
+  return true;
+}
+
+static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
+  uint8_t data[4] = {0, 0, 0, 0};
+  size_t i, num_dots = 0;
+  for (i = 0; i < str.len; i++) {
+    if (str.ptr[i] >= '0' && str.ptr[i] <= '9') {
+      int octet = data[num_dots] * 10 + (str.ptr[i] - '0');
+      if (octet > 255) return false;
+      data[num_dots] = octet;
+    } else if (str.ptr[i] == '.') {
+      if (num_dots >= 3 || i == 0 || str.ptr[i - 1] == '.') return false;
+      num_dots++;
+    } else {
+      return false;
+    }
+  }
+  if (num_dots != 3 || str.ptr[i - 1] == '.') return false;
+  memcpy(&addr->ip, data, sizeof(data));
+  addr->is_ip6 = false;
+  return true;
+}
+
+static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
+  size_t i, j = 0, n = 0, dc = 42;
+  for (i = 0; i < str.len; i++) {
+    if ((str.ptr[i] >= '0' && str.ptr[i] <= '9') ||
+        (str.ptr[i] >= 'a' && str.ptr[i] <= 'f') ||
+        (str.ptr[i] >= 'A' && str.ptr[i] <= 'F')) {
+      unsigned long val;
+      if (i > j + 3) return false;
+      // LOG(LL_DEBUG, ("%zu %zu [%.*s]", i, j, (int) (i - j + 1),
+      // &str.ptr[j]));
+      val = mg_unhexn(&str.ptr[j], i - j + 1);
+      addr->ip6[n] = (uint8_t)((val >> 8) & 255);
+      addr->ip6[n + 1] = (uint8_t)(val & 255);
+    } else if (str.ptr[i] == ':') {
+      j = i + 1;
+      if (i > 0 && str.ptr[i - 1] == ':') {
+        dc = n;  // Double colon
+        if (i > 1 && str.ptr[i - 2] == ':') return false;
+      } else if (i > 0) {
+        n += 2;
+      }
+      if (n > 14) return false;
+      addr->ip6[n] = addr->ip6[n + 1] = 0;  // For trailing ::
+    } else {
+      return false;
+    }
+  }
+  if (n < 14 && dc == 42) return false;
+  if (n < 14) {
+    memmove(&addr->ip6[dc + (14 - n)], &addr->ip6[dc], n - dc + 2);
+    memset(&addr->ip6[dc], 0, 14 - n);
+  }
+  addr->is_ip6 = true;
+  return true;
+}
+
 bool mg_aton(struct mg_str str, struct mg_addr *addr) {
   // LOG(LL_INFO, ("[%.*s]", (int) str.len, str.ptr));
-  if (!mg_casecmp(str.ptr, "localhost")) {
-    addr->ip = mg_htonl(0x7f000001);
-    return true;
-  } else if (addr->is_ip6) {
-    return false;
-  } else {
-    uint8_t data[4] = {0, 0, 0, 0};
-    size_t i, num_octets = 0;
-    // LOG(LL_DEBUG, ("[%.*s]", (int) str.len, str.ptr));
-    for (i = 0; i < str.len; i++) {
-      // LOG(LL_DEBUG,
-      //("  %c %zu %hhu %zu", str.ptr[i], i, data[num_octets], num_octets));
-      if (str.ptr[i] >= '0' && str.ptr[i] <= '9') {
-        int octet = data[num_octets] * 10 + (str.ptr[i] - '0');
-        if (octet > 255) return false;
-        data[num_octets] = octet;
-      } else if (str.ptr[i] == '.') {
-        if (num_octets >= 3 || i == 0 || str.ptr[i - 1] == '.') return false;
-        num_octets++;
-      } else {
-        return false;
-      }
-    }
-    if (num_octets != 3 || str.ptr[i - 1] == '.') return false;
-    memcpy(&addr->ip, data, sizeof(data));
-    return true;
-  }
+  return mg_atonl(str, addr) || mg_aton4(str, addr) || mg_aton6(str, addr);
 }
 
 void mg_mgr_free(struct mg_mgr *mgr) {
@@ -1996,6 +2064,8 @@ void mg_mgr_init(struct mg_mgr *mgr) {
 #endif
   memset(mgr, 0, sizeof(*mgr));
   mgr->dnstimeout = 3000;
+  mgr->dns4.url = "udp://8.8.8.8:53";
+  mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
 }
 
 #ifdef MG_ENABLE_LINES
@@ -2381,6 +2451,13 @@ static union usa tousa(struct mg_addr *a) {
   usa.sin.sin_family = AF_INET;
   usa.sin.sin_port = a->port;
   *(uint32_t *) &usa.sin.sin_addr = a->ip;
+#if MG_ENABLE_IPV6
+  if (a->is_ip6) {
+    usa.sin.sin_family = AF_INET6;
+    usa.sin6.sin6_port = a->port;
+    memcpy(&usa.sin6.sin6_addr, a->ip6, sizeof(a->ip6));
+  }
+#endif
   return usa;
 }
 
@@ -2414,10 +2491,20 @@ static int mg_sock_recv(struct mg_connection *c, void *buf, int len,
   if (c->is_udp) {
     union usa usa;
     socklen_t slen = sizeof(usa.sin);
+#if MG_ENABLE_IPV6
+    if (c->peer.is_ip6) slen = sizeof(usa.sin6);
+#endif
     n = recvfrom(FD(c), buf, len, 0, &usa.sa, &slen);
     if (n > 0) {
-      c->peer.ip = *(uint32_t *) &usa.sin.sin_addr;
-      c->peer.port = usa.sin.sin_port;
+      if (c->peer.is_ip6) {
+#if MG_ENABLE_IPV6
+        memcpy(c->peer.ip6, &usa.sin6.sin6_addr, sizeof(c->peer.ip6));
+        c->peer.port = usa.sin6.sin6_port;
+#endif
+      } else {
+        c->peer.ip = *(uint32_t *) &usa.sin.sin_addr;
+        c->peer.port = usa.sin.sin_port;
+      }
     }
   } else {
     n = recv(FD(c), buf, len, MSG_NONBLOCKING);
@@ -2431,7 +2518,11 @@ static int mg_sock_send(struct mg_connection *c, const void *buf, int len,
   int n = 0;
   if (c->is_udp) {
     union usa usa = tousa(&c->peer);
-    n = sendto(FD(c), buf, len, 0, &usa.sa, sizeof(usa.sin));
+    socklen_t slen = sizeof(usa.sin);
+#if MG_ENABLE_IPV6
+    if (c->peer.is_ip6) slen = sizeof(usa.sin6);
+#endif
+    n = sendto(FD(c), buf, len, 0, &usa.sa, slen);
   } else {
     n = send(FD(c), buf, len, MSG_NONBLOCKING);
   }
@@ -2447,8 +2538,8 @@ static int ll_read(struct mg_connection *c, void *buf, int len, int *fail) {
        c->is_udp ? 'U' : 'u', c->is_connecting ? 'C' : 'c', n, len,
        MG_SOCK_ERRNO, *fail));
   if (n > 0 && c->is_hexdumping) {
-    char *s = mg_hexdump(buf, len);
-    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "<-", len, s));
+    char *s = mg_hexdump(buf, n);
+    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "<-", n, s));
     free(s);
   }
   return n;
@@ -2569,22 +2660,19 @@ static int write_conn(struct mg_connection *c) {
   return rc;
 }
 
-static void close_conn(struct mg_mgr *mgr, struct mg_connection *c) {
+static void close_conn(struct mg_connection *c) {
   // Unlink this connection from the list
-  LIST_DELETE(struct mg_connection, &mgr->conns, c);
-#if 0
-  struct mg_connection **head = &mgr->conns;
-  while (*head != c) head = &(*head)->next;
-  *head = c->next;
-#endif
-  mg_resolve_cancel(mgr, c);
+  LIST_DELETE(struct mg_connection, &c->mgr->conns, c);
+  mg_resolve_cancel(c);
+  if (c == c->mgr->dns4.c) c->mgr->dns4.c = NULL;
+  if (c == c->mgr->dns6.c) c->mgr->dns6.c = NULL;
   mg_call(c, MG_EV_CLOSE, NULL);
   // while (c->callbacks != NULL) mg_fn_del(c, c->callbacks->fn);
   LOG(LL_DEBUG, ("%lu closed", c->id));
   if (FD(c) != INVALID_SOCKET) {
     closesocket(FD(c));
 #if MG_ARCH == MG_ARCH_FREERTOS
-    FreeRTOS_FD_CLR(c->fd, mgr->ss, eSELECT_ALL);
+    FreeRTOS_FD_CLR(c->fd, c->mgr->ss, eSELECT_ALL);
 #endif
   }
   mg_tls_free(c);
@@ -2592,7 +2680,6 @@ static void close_conn(struct mg_mgr *mgr, struct mg_connection *c) {
   free(c->send.buf);
   memset(c, 0, sizeof(*c));
   free(c);
-  if (c == mgr->dnsc) mgr->dnsc = NULL;
 }
 
 static void setsockopts(struct mg_connection *c) {
@@ -2622,10 +2709,13 @@ static void setsockopts(struct mg_connection *c) {
 void mg_connect_resolved(struct mg_connection *c) {
   char buf[40];
   int type = c->is_udp ? SOCK_DGRAM : SOCK_STREAM;
+  int af = AF_INET;
+#if MG_ENABLE_IPV6
+  if (c->peer.is_ip6) af = AF_INET6;
+#endif
   mg_straddr(c, buf, sizeof(buf));
-  c->fd = (void *) (long) socket(AF_INET, type, 0);
-  LOG(LL_DEBUG, ("%lu resolved, sock %p -> %s, tosend %d", c->id, c->fd, buf,
-                 (int) c->send.len));
+  c->fd = (void *) (long) socket(af, type, 0);
+  LOG(LL_DEBUG, ("%lu resolved, sock %p -> %s", c->id, c->fd, buf));
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
     return;
@@ -2635,7 +2725,12 @@ void mg_connect_resolved(struct mg_connection *c) {
   mg_call(c, MG_EV_RESOLVE, NULL);
   if (type == SOCK_STREAM) {
     union usa usa = tousa(&c->peer);
-    int rc = connect(FD(c), &usa.sa, sizeof(usa.sin));
+    socklen_t slen =
+#if MG_ENABLE_IPV6
+        c->peer.is_ip6 ? sizeof(usa.sin6) :
+#endif
+                       sizeof(usa.sin);
+    int rc = connect(FD(c), &usa.sa, slen);
     int fail = rc < 0 && mg_sock_failed() ? MG_SOCK_ERRNO : 0;
     if (fail) {
       mg_error(c, "connect: %d", MG_SOCK_ERRNO);
@@ -2659,7 +2754,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     c->fn = fn;
     c->fn_data = fn_data;
     LOG(LL_DEBUG, ("%lu -> %s", c->id, url));
-    mg_resolve(mgr, c, &host, mgr->dnstimeout);
+    mg_resolve(c, &host, mgr->dnstimeout);
   }
   return c;
 }
@@ -2856,7 +2951,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     }
 
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
-    if (c->is_closing) close_conn(mgr, c);
+    if (c->is_closing) close_conn(c);
   }
 }
 #endif
@@ -3344,8 +3439,8 @@ int mg_tls_send(struct mg_connection *c, const void *buf, size_t len,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/url.c"
 #endif
-
 #include <stdlib.h>
+
 
 struct url {
   int key, user, pass, host, port, uri, end;
@@ -3365,6 +3460,8 @@ static struct url urlparse(const char *url) {
     if (i > 0 && url[i - 1] == '/' && url[i] == '/') {
       u.host = i + 1;
       u.port = 0;
+    } else if (url[i] == ']') {
+      u.port = 0;  // IPv6 URLs, like http://[::1]/bar
     } else if (url[i] == ':') {
       u.port = i + 1;
     } else if (url[i] == '@') {
@@ -3387,7 +3484,12 @@ struct mg_str mg_url_host(const char *url) {
   struct url u = urlparse(url);
   int n =
       u.port ? u.port - u.host - 1 : u.uri ? u.uri - u.host : u.end - u.host;
-  return mg_str_n(url + u.host, n);
+  struct mg_str s = mg_str_n(url + u.host, n);
+  if (s.len > 2 && s.ptr[0] == '[' && s.ptr[s.len - 1] == ']') {
+    s.len -= 2;
+    s.ptr++;
+  }
+  return s;
 }
 
 const char *mg_url_uri(const char *url) {
@@ -3538,16 +3640,16 @@ uint16_t mg_ntohs(uint16_t net) {
   return ((uint16_t) data[1] << 0) | ((uint32_t) data[0] << 8);
 }
 
-char *mg_hexdump(const void *buf, int len) {
+char *mg_hexdump(const void *buf, size_t len) {
   const unsigned char *p = (const unsigned char *) buf;
-  int i, idx, n = 0, ofs = 0, dlen = len * 5 + 100;
+  size_t i, idx, n = 0, ofs = 0, dlen = len * 5 + 100;
   char ascii[17] = "", *dst = (char *) malloc(dlen);
   if (dst == NULL) return dst;
   for (i = 0; i < len; i++) {
     idx = i % 16;
     if (idx == 0) {
       if (i > 0 && dlen > n) n += snprintf(dst + n, dlen - n, "  %s\n", ascii);
-      if (dlen > n) n += snprintf(dst + n, dlen - n, "%04x ", i + ofs);
+      if (dlen > n) n += snprintf(dst + n, dlen - n, "%04x ", (int) (i + ofs));
     }
     if (dlen < n) break;
     n += snprintf(dst + n, dlen - n, " %02x", p[i]);
