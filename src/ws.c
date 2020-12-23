@@ -72,7 +72,7 @@ size_t mg_ws_send(struct mg_connection *c, const char *buf, size_t len,
   if (len < 126) {
     header[1] = (unsigned char) len;
     header_len = 2;
-  } else if (len < 65535) {
+  } else if (len < 65536) {
     uint16_t tmp = mg_htons((uint16_t) len);
     header[1] = 126;
     memcpy(&header[2], &tmp, sizeof(tmp));
