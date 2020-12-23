@@ -18,9 +18,15 @@ enum { false = 0, true = 1 };
 #endif
 
 #include <winsock2.h>
+
+// Protect from calls like std::snprintf in app code
+// See https://github.com/cesanta/mongoose/issues/1047
+#ifndef __cplusplus
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #define strdup(x) _strdup(x)
+#endif
+
 typedef int socklen_t;
 #define PATH_MAX MAX_PATH
 #define MG_DIRSEP '\\'
