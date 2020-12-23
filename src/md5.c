@@ -1,5 +1,5 @@
-#include "md5.h"
 #include <string.h>
+#include "md5.h"
 
 #if MG_ENABLE_MD5
 #if !defined(BYTE_ORDER) && defined(__BYTE_ORDER)
@@ -50,7 +50,7 @@ void mg_md5_init(mg_md5_ctx *ctx) {
 }
 
 static void mg_md5_transform(uint32_t buf[4], uint32_t const in[16]) {
-  register uint32_t a, b, c, d;
+  uint32_t a, b, c, d;
 
   a = buf[0];
   b = buf[1];

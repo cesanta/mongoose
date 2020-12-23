@@ -255,6 +255,7 @@ enum { false = 0, true = 1 };
 
 #include <winsock2.h>
 
+// Protect from calls like std::snprintf in app code
 // See https://github.com/cesanta/mongoose/issues/1047
 #ifndef __cplusplus
 #define snprintf _snprintf

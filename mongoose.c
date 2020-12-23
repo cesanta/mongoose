@@ -1469,8 +1469,8 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/md5.c"
 #endif
-
 #include <string.h>
+
 
 #if MG_ENABLE_MD5
 #if !defined(BYTE_ORDER) && defined(__BYTE_ORDER)
@@ -1521,7 +1521,7 @@ void mg_md5_init(mg_md5_ctx *ctx) {
 }
 
 static void mg_md5_transform(uint32_t buf[4], uint32_t const in[16]) {
-  register uint32_t a, b, c, d;
+  uint32_t a, b, c, d;
 
   a = buf[0];
   b = buf[1];
