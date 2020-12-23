@@ -128,24 +128,23 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
 
     while (ws_process(c->recv.buf, c->recv.len, &msg) > 0) {
       char *s = (char *) c->recv.buf + msg.header_len;
+      struct mg_ws_message m = {{s, msg.data_len}, msg.flags};
       switch (msg.flags & WEBSOCKET_FLAGS_MASK_OP) {
         case WEBSOCKET_OP_PING:
           LOG(LL_DEBUG, ("%s", "WS PONG"));
           mg_ws_send(c, s, msg.data_len, WEBSOCKET_OP_PONG);
+          mg_call(c, MG_EV_WS_CTL, &m);
           break;
         case WEBSOCKET_OP_PONG:
-          // Ignore
+          mg_call(c, MG_EV_WS_CTL, &m);
           break;
-        case WEBSOCKET_OP_CLOSE: {
-          struct mg_ws_message evd = {{s, msg.data_len}, msg.flags};
+        case WEBSOCKET_OP_CLOSE:
           LOG(LL_ERROR, ("%lu Got WS CLOSE", c->id));
-          mg_call(c, MG_EV_WS_MSG, &evd);
+          mg_call(c, MG_EV_WS_CTL, &m);
           c->is_closing = 1;
           return;
-        }
         default: {
-          struct mg_ws_message evd = {{s, msg.data_len}, msg.flags};
-          mg_call(c, MG_EV_WS_MSG, &evd);
+          mg_call(c, MG_EV_WS_MSG, &m);
           break;
         }
       }

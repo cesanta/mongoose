@@ -568,7 +568,7 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   mg_http_parse_headers(s, end, hm->headers,
                         sizeof(hm->headers) / sizeof(hm->headers[0]));
   if ((cl = mg_http_get_header(hm, "Content-Length")) != NULL) {
-    hm->body.len = (size_t) mg_to64(cl->ptr);
+    hm->body.len = (size_t) mg_to64(*cl);
     hm->message.len = req_len + hm->body.len;
   }
 
@@ -3751,14 +3751,15 @@ int mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
   return ret;
 }
 
-int64_t mg_to64(const char *s) {
+int64_t mg_to64(struct mg_str str) {
   int64_t result = 0, neg = 1;
-  while (*s && isspace((unsigned char) *s)) s++;
-  if (*s == '-') neg = -1, s++;
-  while (isdigit((unsigned char) *s)) {
+  size_t i = 0;
+  while (i < str.len && (str.ptr[i] == ' ' || str.ptr[i] == '\t')) i++;
+  if (i < str.len && str.ptr[i] == '-') neg = -1, i++;
+  while (i < str.len && str.ptr[i] >= '0' && str.ptr[i] <= '9') {
     result *= 10;
-    result += (*s - '0');
-    s++;
+    result += (str.ptr[i] - '0');
+    i++;
   }
   return result * neg;
 }
@@ -3947,24 +3948,23 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
 
     while (ws_process(c->recv.buf, c->recv.len, &msg) > 0) {
       char *s = (char *) c->recv.buf + msg.header_len;
+      struct mg_ws_message m = {{s, msg.data_len}, msg.flags};
       switch (msg.flags & WEBSOCKET_FLAGS_MASK_OP) {
         case WEBSOCKET_OP_PING:
           LOG(LL_DEBUG, ("%s", "WS PONG"));
           mg_ws_send(c, s, msg.data_len, WEBSOCKET_OP_PONG);
+          mg_call(c, MG_EV_WS_CTL, &m);
           break;
         case WEBSOCKET_OP_PONG:
-          // Ignore
+          mg_call(c, MG_EV_WS_CTL, &m);
           break;
-        case WEBSOCKET_OP_CLOSE: {
-          struct mg_ws_message evd = {{s, msg.data_len}, msg.flags};
+        case WEBSOCKET_OP_CLOSE:
           LOG(LL_ERROR, ("%lu Got WS CLOSE", c->id));
-          mg_call(c, MG_EV_WS_MSG, &evd);
+          mg_call(c, MG_EV_WS_CTL, &m);
           c->is_closing = 1;
           return;
-        }
         default: {
-          struct mg_ws_message evd = {{s, msg.data_len}, msg.flags};
-          mg_call(c, MG_EV_WS_MSG, &evd);
+          mg_call(c, MG_EV_WS_MSG, &m);
           break;
         }
       }

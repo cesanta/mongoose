@@ -215,14 +215,15 @@ int mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
   return ret;
 }
 
-int64_t mg_to64(const char *s) {
+int64_t mg_to64(struct mg_str str) {
   int64_t result = 0, neg = 1;
-  while (*s && isspace((unsigned char) *s)) s++;
-  if (*s == '-') neg = -1, s++;
-  while (isdigit((unsigned char) *s)) {
+  size_t i = 0;
+  while (i < str.len && (str.ptr[i] == ' ' || str.ptr[i] == '\t')) i++;
+  if (i < str.len && str.ptr[i] == '-') neg = -1, i++;
+  while (i < str.len && str.ptr[i] >= '0' && str.ptr[i] <= '9') {
     result *= 10;
-    result += (*s - '0');
-    s++;
+    result += (str.ptr[i] - '0');
+    i++;
   }
   return result * neg;
 }

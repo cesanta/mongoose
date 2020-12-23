@@ -169,7 +169,7 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   mg_http_parse_headers(s, end, hm->headers,
                         sizeof(hm->headers) / sizeof(hm->headers[0]));
   if ((cl = mg_http_get_header(hm, "Content-Length")) != NULL) {
-    hm->body.len = (size_t) mg_to64(cl->ptr);
+    hm->body.len = (size_t) mg_to64(*cl);
     hm->message.len = req_len + hm->body.len;
   }
 

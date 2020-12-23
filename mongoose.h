@@ -428,7 +428,7 @@ void mg_unhex(const char *buf, int len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, int len);
 int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
 int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
-int64_t mg_to64(const char *s);
+int64_t mg_to64(struct mg_str str);
 double mg_time(void);
 unsigned long mg_millis(void);
 void mg_usleep(unsigned long usecs);
@@ -570,6 +570,7 @@ enum {
   MG_EV_HTTP_MSG,   // HTTP request/response        struct mg_http_message *
   MG_EV_WS_OPEN,    // Websocket handshake done     NULL
   MG_EV_WS_MSG,     // Websocket message received   struct mg_ws_message *
+  MG_EV_WS_CTL,     // Websocket control message    struct mg_ws_message *
   MG_EV_MQTT_CMD,   // MQTT low-level command       struct mg_mqtt_message *
   MG_EV_MQTT_MSG,   // MQTT PUBLISH received        struct mg_mqtt_message *
   MG_EV_MQTT_OPEN,  // MQTT CONNACK received        int *connack_status_code
