@@ -582,6 +582,7 @@ enum {
 
 
 
+
 struct mg_dns {
   const char *url;          // DNS server URL
   struct mg_connection *c;  // DNS server connection

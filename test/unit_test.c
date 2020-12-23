@@ -374,8 +374,8 @@ static void test_ws(void) {
   int i, done = 0;
 
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, "http://127.0.0.1:12345", eh1, NULL);
-  mg_ws_connect(&mgr, "ws://127.0.0.1:12345/ws", wcb, &done, "%s", "");
+  ASSERT(mg_http_listen(&mgr, "ws://LOCALHOST:12345", eh1, NULL) != NULL);
+  mg_ws_connect(&mgr, "ws://localhost:12345/ws", wcb, &done, "%s", "");
   for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(done == 2);
 

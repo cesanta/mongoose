@@ -3,6 +3,7 @@
 #include "arch.h"
 #include "event.h"
 #include "iobuf.h"
+#include "str.h"
 
 struct mg_dns {
   const char *url;          // DNS server URL
