@@ -1968,7 +1968,8 @@ char *mg_straddr(struct mg_connection *c, char *buf, size_t len) {
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {
   uint8_t p[4];
   memcpy(p, &addr->ip, sizeof(p));
-  snprintf(buf, len, "%hhu.%hhu.%hhu.%hhu", p[0], p[1], p[2], p[3]);
+  snprintf(buf, len, "%d.%d.%d.%d", (int) p[0], (int) p[1], (int) p[2],
+           (int) p[3]);
   return buf;
 }
 

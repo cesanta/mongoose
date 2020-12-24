@@ -28,8 +28,10 @@ enum { false = 0, true = 1 };
 #endif
 
 typedef int socklen_t;
-#define PATH_MAX MAX_PATH
 #define MG_DIRSEP '\\'
+#ifndef PATH_MAX
+#define PATH_MAX MAX_PATH
+#endif
 #ifndef EINPROGRESS
 #define EINPROGRESS WSAEINPROGRESS
 #endif
@@ -44,7 +46,6 @@ typedef int socklen_t;
 #define va_copy(x, y) (x) = (y)
 #endif
 #endif
-
 #ifndef S_ISDIR
 #define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
 #endif
