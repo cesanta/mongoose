@@ -592,6 +592,13 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
     hm->message.len = req_len;
   }
 
+  // The 204 (No content) responses also have 0 body length
+  if (hm->body.len == (size_t) ~0 && is_response &&
+      mg_vcasecmp(&hm->uri, "204") == 0) {
+    hm->body.len = 0;
+    hm->message.len = req_len;
+  }
+
   return req_len;
 }
 
