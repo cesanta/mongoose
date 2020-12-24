@@ -35,7 +35,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_base64_encode(data, size, buf);
   mg_base64_encode(NULL, 0, buf);
 
-  char *hexdump = mg_hexdump(data, len);
+  char *hexdump = mg_hexdump(data, size);
   free(hexdump);
 
   mg_globmatch((char *) data, size, (char *) data, size);
