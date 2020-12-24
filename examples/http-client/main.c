@@ -9,19 +9,23 @@
 
 #include "mongoose.h"
 
-static const char *s_url = "https://cesanta.com";
+// The very first web page in history
+static const char *s_url = "http://info.cern.ch";
 
 // Print HTTP response and signal that we're done
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_CONNECT) {
     // Connected to server
+    struct mg_str host = mg_url_host(s_url);
+
     if (mg_url_is_ssl(s_url)) {
       // If s_url is https://, tell client connection to use TLS
       struct mg_tls_opts opts = {.ca = "ca.pem"};
       mg_tls_init(c, &opts);
     }
     // Send request
-    mg_printf(c, "GET %s HTTP/1.0\r\n\r\n", mg_url_uri(s_url));
+    mg_printf(c, "GET %s HTTP/1.0\r\nHost: %.*s\r\n\r\n", mg_url_uri(s_url),
+              (int) host.len, host.ptr);
   } else if (ev == MG_EV_HTTP_MSG) {
     // Response is received. Print it
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;

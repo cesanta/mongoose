@@ -223,7 +223,7 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
     atype = ((int) s[j - 8] << 8) | s[j - 7];
     aclass = ((int) s[j - 6] << 8) | s[j - 5];
     n = ((int) s[j] << 8) | s[j + 1];
-    LOG(LL_DEBUG, ("%s %d %hu %hu", dm->name, (int) n, atype, aclass));
+    LOG(LL_VERBOSE_DEBUG, ("%s %d %hu %hu", dm->name, (int) n, atype, aclass));
     if (&s[j] + 2 + n > e) break;
     if (n == 4 && atype == 1 && aclass == 1) {
       dm->addr.is_ip6 = false;
@@ -259,7 +259,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
       LOG(LL_ERROR, ("Unexpected DNS response:\n%s\n", s));
       free(s);
     } else {
-      LOG(LL_DEBUG, ("%s %d", dm.name, dm.resolved));
+      LOG(LL_VERBOSE_DEBUG, ("%s %d", dm.name, dm.resolved));
       for (d = s_reqs; d != NULL; d = tmp) {
         tmp = d->next;
         // LOG(LL_INFO, ("d %p %hu %hu", d, d->txnid, dm.txnid));
