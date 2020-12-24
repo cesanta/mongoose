@@ -816,6 +816,14 @@ static void test_http_parse(void) {
     ASSERT(mg_strcmp(s, res) == 0);
     mg_iobuf_free(&c.send);
   }
+
+  {
+    struct mg_http_message hm;
+    const char *req = "GET /foo?bar=baz HTTP/1.0\n\n ";
+    ASSERT(mg_http_parse(req, strlen(req), &hm) == (int) strlen(req) - 1);
+    ASSERT(mg_strcmp(hm.uri, mg_str("/foo")) == 0);
+    ASSERT(mg_strcmp(hm.query, mg_str("bar=baz")) == 0);
+  }
 }
 
 static void test_http_range(void) {
