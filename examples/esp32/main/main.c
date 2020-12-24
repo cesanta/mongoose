@@ -3,23 +3,41 @@
 
 #include "mongoose.h"
 
-#define WIFI_SSID "MY_WIFI_NETWORK"
-#define WIFI_PASS "MY_WIFI_PASSWORD"
-#define LISTENING_ADDR "http://0.0.0.0:80"
+#define WIFI_SSID "VMDF554B9"     // SET THIS!
+#define WIFI_PASS "Mp7wjmamPafa"  // SET THIS!
 
-// Event handler for an accepted connection
+#define SERVER_URL "http://0.0.0.0:80"
+#define CLIENT_URL "http://info.cern.ch"
+
+// Event handler for an server (accepted) connection
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
-    mg_http_reply(c, 200, "", "Hello from ESP32!");
+    mg_http_reply(c, 200, "", "Hello from ESP32!\n");
+  }
+}
+
+// Event handler for a client connection - fetch the first web page in history
+// To enable TLS for HTTP,
+//   1. Copy "ca.pem" file to the ESP32 flash FS
+//   2. Add TLS init snippet for the connection, see examples/http-client
+static void cb2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_CONNECT) {
+    struct mg_str s = mg_url_host(CLIENT_URL);
+    mg_printf(c, "GET / HTTP/1.0\r\nHost: %.*s\r\n\r\n", (int) s.len, s.ptr);
+  } else if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = ev_data;  // Print HTTP response
+    LOG(LL_INFO, ("Fetched:\n%.*s", (int) hm->message.len, hm->message.ptr));
+    c->is_closing = 1;
   }
 }
 
 // Called after we're connected to WiFi network
-static void start_server(void) {
+static void run_mongoose(void) {
   struct mg_mgr mgr;
   mg_log_set("3");
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, LISTENING_ADDR, cb, &mgr);
+  mg_http_listen(&mgr, SERVER_URL, cb, &mgr);    // Listening server
+  mg_http_connect(&mgr, CLIENT_URL, cb2, &mgr);  // Example client
   LOG(LL_INFO, ("Starting Mongoose web server v%s", MG_VERSION));
   for (;;) mg_mgr_poll(&mgr, 1000);
   mg_mgr_free(&mgr);
@@ -32,5 +50,5 @@ void app_main(void) {
   wifi_init(WIFI_SSID, WIFI_PASS);
 
   // Done connecting to WiFi, now start HTTP server
-  start_server();
+  run_mongoose();
 }

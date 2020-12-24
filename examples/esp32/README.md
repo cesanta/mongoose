@@ -17,3 +17,12 @@ To build this application, follow these steps:
   make
   ```
 
+# Flashing built firmware
+
+If you have a real board to flash to, you can flash a built firmware.
+First, make sure to have `esptool.py` script installed on your workstation.
+Then, connect the board to your workstation and run the following command:
+
+```sh
+make flash COMPORT=YOUR_USB_PORT
+```
