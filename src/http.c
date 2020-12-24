@@ -240,6 +240,7 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
   if (buf != mem) free(buf);
 }
 
+#if MG_ENABLE_FS
 static void http_cb(struct mg_connection *, int, void *, void *);
 static void restore_http_cb(struct mg_connection *c) {
   struct http_data *d = (struct http_data *) c->pfn_data;
@@ -249,7 +250,6 @@ static void restore_http_cb(struct mg_connection *c) {
   free(d);
 }
 
-#if MG_ENABLE_FS
 char *mg_http_etag(char *buf, size_t len, struct stat *st) {
   snprintf(buf, len, "\"%lx.%lu\"", (unsigned long) st->st_mtime,
            (unsigned long) st->st_size);
