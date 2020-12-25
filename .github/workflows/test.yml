@@ -30,7 +30,11 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: vc98
-      run: make vc2017
+      run: make vc98
     - name: vc2017
       run: make vc2017
+    - name: mingw
+      run: make mingw
+    - name: mingw++
+      run: make mingw++
 
