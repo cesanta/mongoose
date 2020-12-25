@@ -79,14 +79,9 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
   memset(dm, 0, sizeof(*dm));
   if (len < sizeof(*h)) return 0;  // Too small, headers dont fit
   if (len > 512) return 0;         //  Too large, we don't expect that
-  if (mg_ntohs(h->num_questions) > 2) return 0;  // Sanity
-  if (mg_ntohs(h->num_answers) > 5) return 0;    // Sanity
+  if (mg_ntohs(h->num_questions) > 1) return 0;  // Sanity
+  if (mg_ntohs(h->num_answers) > 10) return 0;   // Sanity
   dm->txnid = mg_ntohs(h->transaction_id);
-  {
-    // char *s = mg_hexdump(buf, len);
-    // LOG(LL_DEBUG, ("--\n%s\n--\n", s));
-    // free(s);
-  }
   for (i = 0; i < mg_ntohs(h->num_questions); i++) {
     j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 5;
     // LOG(LL_INFO, ("QUE %zu %zu [%s]", i, j, dm->name));
