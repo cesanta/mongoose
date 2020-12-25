@@ -6,6 +6,7 @@ SSL ?= MBEDTLS
 CDIR ?= $(realpath $(CURDIR))
 VC98 = docker run --rm -e WINEDEBUG=-all -v $(CDIR):$(CDIR) -w $(CDIR) docker.io/mdashnet/vc98
 VC2017 = docker run --rm -e WINEDEBUG=-all -v $(CDIR):$(CDIR) -w $(CDIR) docker.io/mdashnet/vc2017
+MINGW = docker run --rm -v $(CDIR):$(CDIR) -w $(CDIR) docker.io/mdashnet/mingw
 GCC = docker run --rm -v $(CDIR):$(CDIR) -w $(CDIR) mdashnet/cc2
 VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
 CLANG ?= clang # /usr/local/opt/llvm\@9/bin/clang
@@ -30,7 +31,7 @@ CFLAGS += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
-all: mg_prefix test test++ ex vc98 vc2017 linux linux++ infer fuzz
+all: mg_prefix test test++ ex vc98 vc2017 mingw mingw++ linux linux++ infer fuzz
 
 ex:
 	@for X in $(EXAMPLES); do $(MAKE) -C $$X $(EXAMPLE_TARGET); done
@@ -76,6 +77,14 @@ vc98: Makefile mongoose.c mongoose.h test/unit_test.c
 vc2017: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(VC2017) wine64 cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(VC2017) wine64 $@.exe
+
+mingw: Makefile mongoose.c mongoose.h test/unit_test.c
+	$(MINGW) i686-w64-mingw32-gcc mongoose.c test/unit_test.c -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
+	$(VC98) wine test.exe
+
+mingw++: Makefile mongoose.c mongoose.h test/unit_test.c
+	$(MINGW) i686-w64-mingw32-g++ mongoose.c test/unit_test.c -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
+  # Note: for some reason, a binary built with mingw g++, fails to run
 
 #linux: CFLAGS += -DMG_ENABLE_IPV6=$(IPV6)
 linux: CFLAGS += -fsanitize=address,undefined

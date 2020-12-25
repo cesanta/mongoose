@@ -821,7 +821,6 @@ typedef struct win32_dir {
 int gettimeofday(struct timeval *tv, void *tz) {
   FILETIME ft;
   unsigned __int64 tmpres = 0;
-  static int tzflag = 0;
 
   if (tv != NULL) {
     GetSystemTimeAsFileTime(&ft);
@@ -833,6 +832,7 @@ int gettimeofday(struct timeval *tv, void *tz) {
     tv->tv_sec = (long) (tmpres / 1000000UL);
     tv->tv_usec = (long) (tmpres % 1000000UL);
   }
+  (void) tz;
   return 0;
 }
 
@@ -864,7 +864,7 @@ DIR *opendir(const char *name) {
 
   if (name == NULL) {
     SetLastError(ERROR_BAD_ARGUMENTS);
-  } else if ((d = malloc(sizeof(*d))) == NULL) {
+  } else if ((d = (DIR *) malloc(sizeof(*d))) == NULL) {
     SetLastError(ERROR_NOT_ENOUGH_MEMORY);
   } else {
     to_wchar(name, wpath, sizeof(wpath) / sizeof(wpath[0]));
@@ -2496,7 +2496,7 @@ static int mg_sock_recv(struct mg_connection *c, void *buf, int len,
 #if MG_ENABLE_IPV6
     if (c->peer.is_ip6) slen = sizeof(usa.sin6);
 #endif
-    n = recvfrom(FD(c), buf, len, 0, &usa.sa, &slen);
+    n = recvfrom(FD(c), (char *) buf, len, 0, &usa.sa, &slen);
     if (n > 0) {
       if (c->peer.is_ip6) {
 #if MG_ENABLE_IPV6
@@ -2509,7 +2509,7 @@ static int mg_sock_recv(struct mg_connection *c, void *buf, int len,
       }
     }
   } else {
-    n = recv(FD(c), buf, len, MSG_NONBLOCKING);
+    n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
   *fail = (n == 0) || (n < 0 && mg_sock_failed());
   return n;
@@ -2524,9 +2524,9 @@ static int mg_sock_send(struct mg_connection *c, const void *buf, int len,
 #if MG_ENABLE_IPV6
     if (c->peer.is_ip6) slen = sizeof(usa.sin6);
 #endif
-    n = sendto(FD(c), buf, len, 0, &usa.sa, slen);
+    n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
   } else {
-    n = send(FD(c), buf, len, MSG_NONBLOCKING);
+    n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
   *fail = (n == 0) || (n < 0 && mg_sock_failed());
   return n;
@@ -2610,18 +2610,18 @@ SOCKET mg_open_listener(const char *url) {
         // SO_REUSEADDR was designed for, and leads to hard-to-track failure
         // scenarios. Therefore, SO_REUSEADDR was disabled on Windows unless
         // SO_EXCLUSIVEADDRUSE is supported and set on a socket.
-        !setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on)) &&
+        !setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) &&
 #endif
 #if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
         // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
-        !setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (void *) &on,
+        !setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on,
                     sizeof(on)) &&
 #endif
         bind(fd, &usa.sa, slen) == 0 &&
         // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
         (type == SOCK_DGRAM || listen(fd, 128) == 0)) {
       mg_set_non_blocking_mode(fd);
-    } else if (fd >= 0) {
+    } else if (fd != INVALID_SOCKET) {
       LOG(LL_ERROR, ("Failed to listen on %s, errno %d", url, MG_SOCK_ERRNO));
       closesocket(fd);
       fd = INVALID_SOCKET;
@@ -2692,22 +2692,25 @@ static void setsockopts(struct mg_connection *c) {
 #if MG_ARCH == MG_ARCH_FREERTOS
   FreeRTOS_FD_SET(c->fd, c->mgr->ss, eSELECT_READ | eSELECT_EXCEPT);
 #else
-  int on = 1, cnt = 3, intvl = 20;
+  int on = 1;
 #if !defined(SOL_TCP)
 #define SOL_TCP IPPROTO_TCP
 #endif
-  setsockopt(FD(c), SOL_TCP, TCP_NODELAY, (void *) &on, sizeof(on));
+  setsockopt(FD(c), SOL_TCP, TCP_NODELAY, (char *) &on, sizeof(on));
 #if defined(TCP_QUICKACK)
-  setsockopt(FD(c), SOL_TCP, TCP_QUICKACK, (void *) &on, sizeof(on));
+  setsockopt(FD(c), SOL_TCP, TCP_QUICKACK, (char *) &on, sizeof(on));
 #endif
-  setsockopt(FD(c), SOL_SOCKET, SO_KEEPALIVE, (void *) &on, sizeof(on));
+  setsockopt(FD(c), SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on));
 #if ESP32 || ESP8266 || defined(__linux__)
   int idle = 60;
   setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
 #endif
 #ifndef _WIN32
-  setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt));
-  setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl));
+  {
+    int cnt = 3, intvl = 20;
+    setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt));
+    setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl));
+  }
 #endif
 #endif
 }

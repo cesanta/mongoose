@@ -427,7 +427,6 @@ typedef struct win32_dir {
 int gettimeofday(struct timeval *tv, void *tz) {
   FILETIME ft;
   unsigned __int64 tmpres = 0;
-  static int tzflag = 0;
 
   if (tv != NULL) {
     GetSystemTimeAsFileTime(&ft);
@@ -439,6 +438,7 @@ int gettimeofday(struct timeval *tv, void *tz) {
     tv->tv_sec = (long) (tmpres / 1000000UL);
     tv->tv_usec = (long) (tmpres % 1000000UL);
   }
+  (void) tz;
   return 0;
 }
 
@@ -470,7 +470,7 @@ DIR *opendir(const char *name) {
 
   if (name == NULL) {
     SetLastError(ERROR_BAD_ARGUMENTS);
-  } else if ((d = malloc(sizeof(*d))) == NULL) {
+  } else if ((d = (DIR *) malloc(sizeof(*d))) == NULL) {
     SetLastError(ERROR_NOT_ENOUGH_MEMORY);
   } else {
     to_wchar(name, wpath, sizeof(wpath) / sizeof(wpath[0]));
