@@ -42,10 +42,10 @@
 #define MG_ARCH MG_ARCH_NXP_KINETIS
 #elif defined(PIC32)
 #define MG_ARCH MG_ARCH_PIC32
-#elif defined(ESP_PLATFORM)
-#define MG_ARCH MG_ARCH_ESP32
 #elif defined(ICACHE_FLASH) || defined(ICACHE_RAM_ATTR)
 #define MG_ARCH MG_ARCH_ESP8266
+#elif defined(ESP_PLATFORM)
+#define MG_ARCH MG_ARCH_ESP32
 #elif defined(TARGET_IS_TM4C129_RA0) || defined(TARGET_IS_TM4C129_RA1) || \
     defined(TARGET_IS_TM4C129_RA2)
 #define MG_ARCH MG_ARCH_TM4C129

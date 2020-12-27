@@ -61,10 +61,10 @@
 #define MG_ARCH MG_ARCH_NXP_KINETIS
 #elif defined(PIC32)
 #define MG_ARCH MG_ARCH_PIC32
-#elif defined(ESP_PLATFORM)
-#define MG_ARCH MG_ARCH_ESP32
 #elif defined(ICACHE_FLASH) || defined(ICACHE_RAM_ATTR)
 #define MG_ARCH MG_ARCH_ESP8266
+#elif defined(ESP_PLATFORM)
+#define MG_ARCH MG_ARCH_ESP32
 #elif defined(TARGET_IS_TM4C129_RA0) || defined(TARGET_IS_TM4C129_RA1) || \
     defined(TARGET_IS_TM4C129_RA2)
 #define MG_ARCH MG_ARCH_TM4C129
@@ -128,26 +128,11 @@
 #if MG_ARCH == MG_ARCH_ESP8266
 
 #include <dirent.h>
+#include <esp_system.h>
+#include <netdb.h>
 #include <stdbool.h>
 #include <sys/time.h>
-#include <user_interface.h>
-
 #define MG_DIRSEP '/'
-#ifndef PATH_MAX
-#define PATH_MAX 128
-#endif
-#define MG_ENABLE_LWIP 1
-#define LWIP_TIMEVAL_PRIVATE 0  // struct timeval is defined in sys/time.h
-
-#if LWIP_SOCKET
-#include <lwip/sockets.h>
-#else
-#undef LWIP_SOCKET
-#define LWIP_SOCKET 1
-#include <lwip/sockets.h>  // Source sockaddr_in anyway
-#undef LWIP_SOCKET
-#define LWIP_SOCKET 0
-#endif
 
 #endif
 
