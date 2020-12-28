@@ -5,15 +5,6 @@
 #include "timer.h"
 #include "util.h"
 
-struct mg_dns_header {
-  uint16_t transaction_id;
-  uint16_t flags;
-  uint16_t num_questions;
-  uint16_t num_answers;
-  uint16_t num_authority_prs;
-  uint16_t num_other_prs;
-};
-
 struct dns_data {
   struct dns_data *next;
   struct mg_connection *c;
@@ -39,73 +30,103 @@ void mg_resolve_cancel(struct mg_connection *c) {
   }
 }
 
-static size_t mg_dns_parse_name(const uint8_t *s, const uint8_t *e, size_t off,
-                                char *to, size_t tolen, int depth) {
+static size_t mg_dns_parse_name_depth(const uint8_t *s, size_t len, size_t ofs,
+                                      char *to, size_t tolen, int depth) {
   size_t i = 0, j = 0;
   if (tolen > 0) to[0] = '\0';
   if (depth > 5) return 0;
-  while (&s[off + i + 1] < e && s[off + i] > 0) {
-    size_t n = s[off + i];
-    if (n & 0xc0) {
-      size_t ptr = (((n & 0x3f) << 8) | s[off + i + 1]) - 12;  // 12 is hdr len
-      if (&s[ptr + 1] < e && (s[ptr] & 0xc0) == 0) {
-        mg_dns_parse_name(s, e, ptr, to, tolen, depth + 1);
-      }
+  while (ofs + i + 1 < len) {
+    size_t n = s[ofs + i];
+    if (n == 0) {
       i++;
       break;
     }
-    if (&s[off + i + n + 1] >= e) break;
-    if (j + n + 1 >= tolen) return 0;  // Error - overflow
-    if (j > 0) to[j++] = '.';
-    memcpy(&to[j], &s[off + i + 1], n);
+    if (n & 0xc0) {
+      size_t ptr = (((n & 0x3f) << 8) | s[ofs + i + 1]);  // 12 is hdr len
+      if (ptr + 1 < len && (s[ptr] & 0xc0) == 0 &&
+          mg_dns_parse_name_depth(s, len, ptr, to, tolen, depth + 1) == 0)
+        return 0;
+      i += 2;
+      break;
+    }
+    if (ofs + i + n + 1 >= len) return 0;
+    if (j > 0) {
+      if (j < tolen) to[j] = '.';
+      j++;
+    }
+    if (j + n < tolen) memcpy(&to[j], &s[ofs + i + 1], n);
     j += n;
     i += n + 1;
-    to[j] = '\0';  // Zero-terminate this chunk
-    // LOG(LL_DEBUG, ("-- %zu/%zu %zu %zu", i, e - s, j, n));
+    if (j < tolen) to[j] = '\0';  // Zero-terminate this chunk
   }
   if (tolen > 0) to[tolen - 1] = '\0';  // Make sure make sure it is nul-term
   return i;
 }
 
-//       txid  flags numQ  numA  numAP numOP
-// 0000  00 01 81 80 00 01 00 01 00 00 00 00 07 63 65 73  .............ces
-// 0010  61 6e 74 61 03 63 6f 6d 00 00 01 00 01 c0 0c 00  anta.com........
-// 0020  01 00 01 00 00 02 57 00 04 94 fb 36 ec           ......W....6.
-bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
-  struct mg_dns_header *h = (struct mg_dns_header *) buf;
-  const uint8_t *s = buf + sizeof(*h), *e = &buf[len];
-  uint16_t atype, aclass;
-  size_t i, j = 0, n;
-  memset(dm, 0, sizeof(*dm));
+size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs, char *dst,
+                         size_t dstlen) {
+  return mg_dns_parse_name_depth(s, n, ofs, dst, dstlen, 0);
+}
+
+size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
+                       bool is_question, struct mg_dns_rr *rr) {
+  const struct mg_dns_header *h = (struct mg_dns_header *) buf;
+  const uint8_t *s = buf + ofs, *e = &buf[len];
+
+  memset(rr, 0, sizeof(*rr));
   if (len < sizeof(*h)) return 0;  // Too small, headers dont fit
   if (len > 512) return 0;         //  Too large, we don't expect that
+  if (s >= e) return 0;            //  Overflow
+
+  if ((rr->nlen = mg_dns_parse_name(buf, len, ofs, NULL, 0)) == 0) return 0;
+  // LOG(LL_INFO, ("%zu %zu %hu %d", ofs, len, rr->nlen, is_question));
+  s += rr->nlen + 4;
+  if (s > e) return 0;
+  rr->atype = ((uint16_t) s[-4] << 8) | s[-3];
+  rr->aclass = ((uint16_t) s[-2] << 8) | s[-1];
+  if (is_question) return rr->nlen + 4;
+
+  s += 6;
+  if (s > e) return 0;
+  rr->alen = ((uint16_t) s[-2] << 8) | s[-1];
+  if (s + rr->alen > e) return 0;
+  return rr->nlen + rr->alen + 10;
+}
+
+bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
+  const struct mg_dns_header *h = (struct mg_dns_header *) buf;
+  struct mg_dns_rr rr;
+  size_t i, n, ofs = sizeof(*h);
+  memset(dm, 0, sizeof(*dm));
+
+  if (len < sizeof(*h)) return 0;                // Too small, headers dont fit
   if (mg_ntohs(h->num_questions) > 1) return 0;  // Sanity
   if (mg_ntohs(h->num_answers) > 10) return 0;   // Sanity
-  dm->txnid = mg_ntohs(h->transaction_id);
+  dm->txnid = mg_ntohs(h->txnid);
+
   for (i = 0; i < mg_ntohs(h->num_questions); i++) {
-    j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 5;
-    // LOG(LL_INFO, ("QUE %zu %zu [%s]", i, j, dm->name));
+    if ((n = mg_dns_parse_rr(buf, len, ofs, true, &rr)) == 0) return false;
+    // LOG(LL_INFO, ("Q %zu %zu", ofs, n));
+    ofs += n;
   }
   for (i = 0; i < mg_ntohs(h->num_answers); i++) {
-    j += mg_dns_parse_name(s, e, j, dm->name, sizeof(dm->name), 0) + 9;
-    if (&s[j] + 2 > e) break;
-    atype = ((int) s[j - 8] << 8) | s[j - 7];
-    aclass = ((int) s[j - 6] << 8) | s[j - 5];
-    n = ((int) s[j] << 8) | s[j + 1];
-    LOG(LL_VERBOSE_DEBUG, ("%s %d %hu %hu", dm->name, (int) n, atype, aclass));
-    if (&s[j] + 2 + n > e) break;
-    if (n == 4 && atype == 1 && aclass == 1) {
+    // LOG(LL_INFO, ("A -- %zu %zu %s", ofs, n, dm->name));
+    if ((n = mg_dns_parse_rr(buf, len, ofs, false, &rr)) == 0) return false;
+    mg_dns_parse_name(buf, len, ofs, dm->name, sizeof(dm->name));
+    LOG(LL_INFO, ("A %zu %zu %s", ofs, n, dm->name));
+    ofs += n;
+
+    if (rr.alen == 4 && rr.atype == 1 && rr.aclass == 1) {
       dm->addr.is_ip6 = false;
-      memcpy(&dm->addr.ip, &s[j + 2], n);
+      memcpy(&dm->addr.ip, &buf[ofs - 4], 4);
       dm->resolved = true;
       break;  // Return success
-    } else if (n == 16 && atype == 28 && aclass == 1) {
+    } else if (rr.alen == 16 && rr.atype == 28 && rr.aclass == 1) {
       dm->addr.is_ip6 = true;
-      memcpy(&dm->addr.ip6, &s[j + 2], n);
+      memcpy(&dm->addr.ip6, &buf[ofs - 16], 16);
       dm->resolved = true;
       break;  // Return success
     }
-    j += 2 + n;
   }
   return true;
 }
@@ -172,7 +193,7 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   } pkt;
   size_t i, n;
   memset(&pkt, 0, sizeof(pkt));
-  pkt.header.transaction_id = mg_htons(txnid);
+  pkt.header.txnid = mg_htons(txnid);
   pkt.header.flags = mg_htons(0x100);
   pkt.header.num_questions = mg_htons(1);
   for (i = n = 0; i < sizeof(pkt.data) - 5; i++) {

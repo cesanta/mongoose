@@ -538,7 +538,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
          c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c'));
     if (c->is_resolving || c->is_closing) {
       // Do nothing
-    } else if (c->is_listening) {
+    } else if (c->is_listening && c->is_udp == 0) {
       if (c->is_readable) accept_conn(mgr, c);
     } else if (c->is_connecting) {
       if (c->is_readable || c->is_writable) connect_conn(c);
