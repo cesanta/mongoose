@@ -132,7 +132,7 @@ static int ll_read(struct mg_connection *c, void *buf, int len, int *fail) {
        MG_SOCK_ERRNO, *fail));
   if (n > 0 && c->is_hexdumping) {
     char *s = mg_hexdump(buf, n);
-    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "<-", n, s));
+    // LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "<-", n, s));
     free(s);
   }
   return n;
@@ -148,7 +148,7 @@ static int ll_write(struct mg_connection *c, const void *buf, int len,
        MG_SOCK_ERRNO));
   if (n > 0 && c->is_hexdumping) {
     char *s = mg_hexdump(buf, len);
-    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "->", len, s));
+    // LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "->", len, s));
     free(s);
   }
   return n;

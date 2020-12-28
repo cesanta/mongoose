@@ -204,8 +204,8 @@ size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
   if (len > 512) return 0;         //  Too large, we don't expect that
   if (s >= e) return 0;            //  Overflow
 
-  if ((rr->nlen = mg_dns_parse_name(buf, len, ofs, NULL, 0)) == 0) return 0;
-  // LOG(LL_INFO, ("%zu %zu %hu %d", ofs, len, rr->nlen, is_question));
+  if ((rr->nlen = (uint16_t) mg_dns_parse_name(buf, len, ofs, NULL, 0)) == 0)
+    return 0;
   s += rr->nlen + 4;
   if (s > e) return 0;
   rr->atype = ((uint16_t) s[-4] << 8) | s[-3];
@@ -239,7 +239,6 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
     // LOG(LL_INFO, ("A -- %zu %zu %s", ofs, n, dm->name));
     if ((n = mg_dns_parse_rr(buf, len, ofs, false, &rr)) == 0) return false;
     mg_dns_parse_name(buf, len, ofs, dm->name, sizeof(dm->name));
-    LOG(LL_INFO, ("A %zu %zu %s", ofs, n, dm->name));
     ofs += n;
 
     if (rr.alen == 4 && rr.atype == 1 && rr.aclass == 1) {
@@ -2562,7 +2561,7 @@ static int ll_read(struct mg_connection *c, void *buf, int len, int *fail) {
        MG_SOCK_ERRNO, *fail));
   if (n > 0 && c->is_hexdumping) {
     char *s = mg_hexdump(buf, n);
-    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "<-", n, s));
+    // LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "<-", n, s));
     free(s);
   }
   return n;
@@ -2578,7 +2577,7 @@ static int ll_write(struct mg_connection *c, const void *buf, int len,
        MG_SOCK_ERRNO));
   if (n > 0 && c->is_hexdumping) {
     char *s = mg_hexdump(buf, len);
-    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "->", len, s));
+    // LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "->", len, s));
     free(s);
   }
   return n;
