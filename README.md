@@ -38,7 +38,6 @@ Looking for a complete IoT solution? Check out
 * Builtin protocols: plain TCP/UDP, HTTP, MQTT, Websocket
 * SSL/TLS support: mbedTLS, OpenSSL or custom via API
 * Asynchronous DNS resolver
-* Single-threaded, asynchronous, non-blocking core with simple event-based API
 * Tiny static and run-time footprint
 * Source code is both ISO C and ISO C++ compliant
 * Very easy to integrate: just copy
