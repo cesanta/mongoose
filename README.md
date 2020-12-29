@@ -34,15 +34,11 @@ Looking for a complete IoT solution? Check out
 
 * Cross-platform: works on Linux/UNIX, MacOS, QNX, eCos, Windows, Android,
   iPhone, FreeRTOS, etc
-* Supported hardware platforms: TI CC3200, TI MSP432, NRF52, STM32, PIC32, ESP8266, ESP32 and more
-* Builtin protocols:
-   - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
-   - HTTP client, HTTP server
-   - WebSocket client, WebSocket server
-   - MQTT client
-   - DNS client, async DNS resolver
+* Supported embedded architectures: ESP32, ESP8266, TI CC3200, TI MSP432, NRF52, STM32, PIC32, NXP, and more
+* Builtin protocols: plain TCP/UDP, HTTP, MQTT, Websocket
+* SSL/TLS support: mbedTLS, OpenSSL or custom via API
+* Asynchronous DNS resolver
 * Single-threaded, asynchronous, non-blocking core with simple event-based API
-* Native support for [LWIP embedded TCP/IP stack](https://en.wikipedia.org/wiki/LwIP)
 * Tiny static and run-time footprint
 * Source code is both ISO C and ISO C++ compliant
 * Very easy to integrate: just copy
