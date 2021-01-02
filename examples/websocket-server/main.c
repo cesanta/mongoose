@@ -27,7 +27,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_reply(c, 200, "", "{\"result\": %d}\n", 123);
     } else {
       // Serve static files
-      mg_http_serve_dir(c, ev_data, s_web_directory);
+      struct mg_http_serve_opts opts = {.root_dir = s_web_directory};
+      mg_http_serve_dir(c, ev_data, &opts);
     }
   } else if (ev == MG_EV_WS_MSG) {
     // Got websocket frame. Received data is wm->data. Echo it back!

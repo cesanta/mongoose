@@ -1,0 +1,3 @@
+this is nested
+<!--#include virtual="/notexist.txt"-->
+<!--#include virtual="/ssi/f1.txt"-->

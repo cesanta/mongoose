@@ -8,11 +8,13 @@ static const char *s_web_root_dir = ".";
 static const char *s_listening_address = "http://localhost:8000";
 static const char *s_enable_hexdump = "no";
 static const char *s_rewrites = "";
+static const char *s_ssi_pattern = "#.shtml";
 
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
-    // struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_http_serve_dir(c, ev_data, s_web_root_dir);
+    struct mg_http_serve_opts opts = {.root_dir = s_web_root_dir,
+                                      .ssi_pattern = s_ssi_pattern};
+    mg_http_serve_dir(c, ev_data, &opts);
   }
   (void) fn_data;
 }
@@ -23,11 +25,12 @@ static void usage(const char *prog) {
           "\nUsage: %s OPTIONS\n"
           "  -D LEVEL  - debug level, from 0 to 4, default: '%s'\n"
           "  -H yes|no - enable traffic hexdump, default: '%s'\n"
+          "  -S GLOB   - glob pattern for SSI files, default: '%s'\n"
           "  -d DIR    - directory to serve, default: '%s'\n"
           "  -l ADDR   - listening address, default: '%s'\n"
           "  -r LIST   - list of URI=DIR,... URI rewrites, default: '%s'\n",
-          MG_VERSION, prog, s_debug_level, s_enable_hexdump, s_web_root_dir,
-          s_listening_address, s_rewrites);
+          MG_VERSION, prog, s_debug_level, s_enable_hexdump, s_ssi_pattern,
+          s_web_root_dir, s_listening_address, s_rewrites);
   exit(EXIT_FAILURE);
 }
 
@@ -44,6 +47,8 @@ int main(int argc, char *argv[]) {
       s_debug_level = argv[++i];
     } else if (strcmp(argv[i], "-H") == 0) {
       s_enable_hexdump = argv[++i];
+    } else if (strcmp(argv[i], "-S") == 0) {
+      s_ssi_pattern = argv[++i];
     } else if (strcmp(argv[i], "-l") == 0) {
       s_listening_address = argv[++i];
     } else if (strcmp(argv[i], "-r") == 0) {

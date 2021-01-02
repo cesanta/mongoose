@@ -1,6 +1,6 @@
 SRCS = $(wildcard src/*.c)
 HDRS = $(wildcard src/*.h)
-DEFS ?= -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_HTTP_DEBUG_ENDPOINT=1 -DMG_ENABLE_DIRECTORY_LISTING=1
+DEFS ?= -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_HTTP_DEBUG_ENDPOINT=1 -DMG_ENABLE_DIRECTORY_LISTING=1 -DMG_ENABLE_SSI=1
 CFLAGS ?= -W -Wall -Werror -Isrc -I. -O0 -g $(DEFS) $(TFLAGS) $(EXTRA)
 SSL ?= MBEDTLS
 CDIR ?= $(realpath $(CURDIR))
@@ -99,7 +99,7 @@ mongoose.c: $(SRCS) Makefile
 	(cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/private.h src/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@
 
 mongoose.h: $(HDRS) Makefile
-	(cat src/license.h src/version.h ; cat src/arch.h src/arch_*.h src/config.h src/str.h src/log.h src/timer.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/tls.h src/ws.h src/sntp.h src/mqtt.h src/dns.h | sed -e 's,#include ".*,,' -e 's,^#pragma once,,')> $@
+	(cat src/license.h src/version.h ; cat src/arch.h src/arch_*.h src/config.h src/str.h src/log.h src/timer.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/ws.h src/sntp.h src/mqtt.h src/dns.h | sed -e 's,#include ".*,,' -e 's,^#pragma once,,')> $@
 
 clean: EXAMPLE_TARGET = clean
 clean: ex

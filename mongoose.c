@@ -422,6 +422,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 
 
 
+
 struct http_data {
   void *old_pfn_data;  // Previous pfn_data
   FILE *fp;            // For static file serving
@@ -1009,7 +1010,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
 #endif
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
-                       const struct mg_http_serve_opts *opts) {
+                       struct mg_http_serve_opts *opts) {
   char path[PATH_MAX + 2], root[sizeof(path) - 2], real[sizeof(path) - 2];
   path[0] = root[0] = real[0] = '\0';
   if (realpath(opts->root_dir, root) == NULL)
@@ -1028,12 +1029,22 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
     // LOG(LL_INFO, ("[%s] [%s] [%s] [%s]", dir, root, path, real));
     if (mg_is_dir(real)) {
       strncat(real, "/index.html", sizeof(real) - strlen(real) - 1);
+      real[sizeof(real) - 1] = '\0';
       is_index = true;
     }
     if (strlen(real) < strlen(root) || memcmp(real, root, strlen(root)) != 0) {
       mg_http_reply(c, 404, "", "Not found %.*s\n", hm->uri.len, hm->uri.ptr);
     } else {
       FILE *fp = fopen(real, "r");
+#if MG_ENABLE_SSI
+      if (is_index && fp == NULL) {
+        char *p = real + strlen(real);
+        while (p > real && p[-1] != '/') p--;
+        strncpy(p, "index.shtml", &real[sizeof(real)] - p - 2);
+        real[sizeof(real) - 1] = '\0';
+        fp = fopen(real, "r");
+      }
+#endif
 #if MG_ENABLE_HTTP_DEBUG_ENDPOINT
       snprintf(c->label, sizeof(c->label) - 1, "<-F %s", real);
 #endif
@@ -1042,6 +1053,12 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
         listdir(c, hm, real);
 #else
         mg_http_reply(c, 403, "", "%s", "Directory listing not supported");
+#endif
+#if MG_ENABLE_SSI
+      } else if (opts->ssi_pattern != NULL &&
+                 mg_globmatch(opts->ssi_pattern, strlen(opts->ssi_pattern),
+                              real, strlen(real))) {
+        mg_http_serve_ssi(c, root, real);
 #endif
       } else {
         mg_http_serve_file(c, hm, real, guess_content_type(real));
@@ -2981,6 +2998,93 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
     if (c->is_closing) close_conn(c);
   }
+}
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/ssi.c"
+#endif
+
+
+
+#ifndef MG_MAX_SSI_DEPTH
+#define MG_MAX_SSI_DEPTH 5
+#endif
+
+#if MG_ENABLE_SSI
+static char *mg_ssi(const char *path, const char *root, int depth) {
+  struct mg_iobuf b = {NULL, 0, 0};
+  FILE *fp = fopen(path, "rb");
+  if (fp != NULL) {
+    char buf[BUFSIZ], arg[sizeof(buf)];
+    int ch, intag = 0;
+    size_t len = 0, align = MG_IO_SIZE;
+    while ((ch = fgetc(fp)) != EOF) {
+      if (intag && ch == '>' && buf[len - 1] == '-' && buf[len - 2] == '-') {
+        buf[len++] = ch & 0xff;
+        if (sscanf(buf, "<!--#include file=\"%[^\"]", arg)) {
+          char tmp[PATH_MAX], *p = (char *) path + strlen(path), *data;
+          while (p > path && p[-1] != MG_DIRSEP && p[-1] != '/') p--;
+          snprintf(tmp, sizeof(tmp), "%.*s%s", (int) (p - path), path, arg);
+          if (depth < MG_MAX_SSI_DEPTH &&
+              (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
+            mg_iobuf_append(&b, data, strlen(data), align);
+            free(data);
+          } else {
+            LOG(LL_ERROR, ("%s: file=%s error or too deep", path, arg));
+          }
+        } else if (sscanf(buf, "<!--#include virtual=\"%[^\"]", arg)) {
+          char tmp[PATH_MAX], *data;
+          snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
+          if (depth < MG_MAX_SSI_DEPTH &&
+              (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
+            mg_iobuf_append(&b, data, strlen(data), align);
+            free(data);
+          } else {
+            LOG(LL_ERROR, ("%s: virtual=%s error or too deep", path, arg));
+          }
+        } else {
+          // Unknown SSI tag
+          LOG(LL_INFO, ("Unknown SSI tag: %.*s", (int) len, buf));
+          mg_iobuf_append(&b, buf, len, align);
+        }
+        intag = 0;
+        len = 0;
+      } else if (ch == '<') {
+        intag = 1;
+        if (len > 0) mg_iobuf_append(&b, buf, len, align);
+        len = 0;
+        buf[len++] = ch & 0xff;
+      } else if (intag) {
+        if (len == 5 && strncmp(buf, "<!--#", 5) != 0) {
+          intag = 0;
+        } else if (len >= sizeof(buf) - 2) {
+          LOG(LL_ERROR, ("%s: SSI tag is too large", path));
+          len = 0;
+        }
+        buf[len++] = ch & 0xff;
+      } else {
+        buf[len++] = ch & 0xff;
+        if (len >= sizeof(buf)) {
+          mg_iobuf_append(&b, buf, len, align);
+          len = 0;
+        }
+      }
+    }
+    if (len > 0) mg_iobuf_append(&b, buf, len, align);
+    if (b.len > 0) mg_iobuf_append(&b, "", 1, align);  // nul-terminate
+    fclose(fp);
+  }
+  (void) depth;
+  (void) root;
+  return (char *) b.buf;
+}
+
+void mg_http_serve_ssi(struct mg_connection *c, const char *root,
+                       const char *fullpath) {
+  char *data = mg_ssi(fullpath, root, 0);
+  mg_http_reply(c, 200, "", "%s", data == NULL ? "" : data);
+  free(data);
 }
 #endif
 

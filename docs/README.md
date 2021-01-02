@@ -223,6 +223,7 @@ Here is a list of build constants and their default values:
 |`MG_ENABLE_DIRECTORY_LISTING` | 0 | Enable directory listing for HTTP server |
 |`MG_ENABLE_HTTP_DEBUG_ENDPOINT` | 0 | Enable `/debug/info` debug URI |
 |`MG_ENABLE_SOCKETPAIR` | 0 | Enable `mg_socketpair()` for multi-threading |
+|`MG_ENABLE_SSI` | 0 | Enable serving SSI files by `mg_http_serve_dir()` |
 |`MG_IO_SIZE` | 512 | Granularity of the send/recv IO buffer growth |
 |`MG_MAX_RECV_BUF_SIZE` | (3 * 1024 * 1024) | Maximum recv buffer size |
 |`MG_MAX_HTTP_HEADERS` | 40 | Maximum number of HTTP headers |
@@ -242,7 +243,8 @@ static const char *s_web_root_dir = ".";
 static const char *s_listening_address = "http://localhost:8000";
 
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) mg_http_serve_dir(c, ev_data, s_web_root_dir);
+  struct mg_http_serve_opts opts = {.root_dir = s_web_root_dir};
+  if (ev == MG_EV_HTTP_MSG) mg_http_serve_dir(c, ev_data, &opts);
 }
 
 int main(int argc, char *argv[]) {
@@ -628,11 +630,16 @@ Write a chunk of data in chunked encoding format.
 ### mg\_serve\_dir()
 
 ```c
+struct mg_http_serve_opts {
+  const char *root_dir;     // Web root directory, must be non-NULL
+  const char *ssi_pattern;  // SSI filename pattern, e.g. #.shtml
+};
 void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
-                       const char *path);
+                       const struct mg_http_serve_opts *opts);
 ```
 
-Serve static files using `path` as a root directory.
+Serve static files according to the given options. Note that in order to
+enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
 
 
 ### mg\_serve\_file()

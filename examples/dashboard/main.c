@@ -66,7 +66,8 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       c->label[0] = 'W';  // Mark ourselves as a config watcher
       mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
     } else {
-      mg_http_serve_dir(c, ev_data, "web_root");
+      struct mg_http_serve_opts opts = {.root_dir = "web_root"};
+      mg_http_serve_dir(c, ev_data, &opts);
     }
   }
 }

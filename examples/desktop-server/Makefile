@@ -1,6 +1,6 @@
 PROG ?= example
 ROOT ?= $(realpath $(CURDIR)/../..)
-DEFS ?= -DMG_ENABLE_LINES=1 -DMG_ENABLE_DIRECTORY_LISTING=1
+DEFS ?= -DMG_ENABLE_LINES=1 -DMG_ENABLE_DIRECTORY_LISTING=1 -DMG_ENABLE_SSI=1
 CFLAGS ?= -I../.. -W -Wall -DMG_ENABLE_IPV6=1 $(DEFS) $(EXTRA)
 VCFLAGS = /nologo /W3 /O2 /I../.. $(DEFS) $(EXTRA)
 VC98 = docker run --rm -e WINEDEBUG=-all -v $(ROOT):$(ROOT) -w $(CURDIR) docker.io/mdashnet/vc98

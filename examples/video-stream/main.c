@@ -18,7 +18,8 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
           "Pragma: no-cache\r\nExpires: Thu, 01 Dec 1994 16:00:00 GMT\r\n"
           "Content-Type: multipart/x-mixed-replace; boundary=--foo\r\n\r\n");
     } else {
-      mg_http_serve_dir(c, ev_data, "web_root");
+      struct mg_http_serve_opts opts = {.root_dir = "web_root"};
+      mg_http_serve_dir(c, ev_data, &opts);
     }
   }
 }
@@ -35,7 +36,7 @@ static void broadcast_mjpeg_frame(struct mg_mgr *mgr) {
   char *data = mg_file_read(path);  // Read next file
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->label[0] != 'S') continue;      // Skip non-stream connections
+    if (c->label[0] != 'S') continue;         // Skip non-stream connections
     if (data == NULL || size == 0) continue;  // Skip on file read error
     mg_printf(c,
               "--foo\r\nContent-Type: image/jpeg\r\n"

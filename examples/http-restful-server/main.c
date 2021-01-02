@@ -34,7 +34,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_reply(c, 200, "", "{\"result\": \"%.*s\"}\n", (int) hm->uri.len,
                     hm->uri.ptr);
     } else {
-      mg_http_serve_dir(c, ev_data, s_web_directory);  // Serve static files
+      struct mg_http_serve_opts opts = {.root_dir = s_web_directory};
+      mg_http_serve_dir(c, ev_data, &opts);
     }
   }
   (void) fn_data;

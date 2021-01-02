@@ -349,7 +349,7 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       struct mg_http_serve_opts opts = {".", NULL};
       mg_http_serve_dir(c, hm, &opts);
     } else {
-      struct mg_http_serve_opts opts = {"./test/data", NULL};
+      struct mg_http_serve_opts opts = {"./test/data", "#.shtml"};
       mg_http_serve_dir(c, hm, &opts);
     }
   } else if (ev == MG_EV_WS_MSG) {
@@ -476,6 +476,17 @@ static void test_http_server(void) {
                "POST /body HTTP/1.1\r\n"
                "Content-Length: 4\r\n\r\nkuku") == 200);
   ASSERT(cmpbody(buf, "kuku") == 0);
+
+  ASSERT(fetch(&mgr, buf, url, "GET /ssi HTTP/1.1\r\n\r\n") == 200);
+  ASSERT(cmpbody(buf,
+                 "this is index\n"
+                 "this is nested\n\n"
+                 "this is f1\n\n\n\n"
+                 "recurse\n\n"
+                 "recurse\n\n"
+                 "recurse\n\n"
+                 "recurse\n\n"
+                 "recurse\n\n") == 0);
 
   ASSERT(fetch(&mgr, buf, url, "GET /badroot HTTP/1.0\r\n\n") == 400);
 #if MG_ARCH == MG_ARCH_WIN32

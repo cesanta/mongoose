@@ -22,6 +22,10 @@
 #define MG_ENABLE_FS 1
 #endif
 
+#ifndef MG_ENABLE_SSI
+#define MG_ENABLE_SSI 0
+#endif
+
 #ifndef MG_ENABLE_IPV6
 #define MG_ENABLE_IPV6 0
 #endif

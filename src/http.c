@@ -4,6 +4,7 @@
 #include "log.h"
 #include "net.h"
 #include "private.h"
+#include "ssi.h"
 #include "util.h"
 #include "version.h"
 #include "ws.h"
@@ -595,7 +596,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
 #endif
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
-                       const struct mg_http_serve_opts *opts) {
+                       struct mg_http_serve_opts *opts) {
   char path[PATH_MAX + 2], root[sizeof(path) - 2], real[sizeof(path) - 2];
   path[0] = root[0] = real[0] = '\0';
   if (realpath(opts->root_dir, root) == NULL)
@@ -614,12 +615,22 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
     // LOG(LL_INFO, ("[%s] [%s] [%s] [%s]", dir, root, path, real));
     if (mg_is_dir(real)) {
       strncat(real, "/index.html", sizeof(real) - strlen(real) - 1);
+      real[sizeof(real) - 1] = '\0';
       is_index = true;
     }
     if (strlen(real) < strlen(root) || memcmp(real, root, strlen(root)) != 0) {
       mg_http_reply(c, 404, "", "Not found %.*s\n", hm->uri.len, hm->uri.ptr);
     } else {
       FILE *fp = fopen(real, "r");
+#if MG_ENABLE_SSI
+      if (is_index && fp == NULL) {
+        char *p = real + strlen(real);
+        while (p > real && p[-1] != '/') p--;
+        strncpy(p, "index.shtml", &real[sizeof(real)] - p - 2);
+        real[sizeof(real) - 1] = '\0';
+        fp = fopen(real, "r");
+      }
+#endif
 #if MG_ENABLE_HTTP_DEBUG_ENDPOINT
       snprintf(c->label, sizeof(c->label) - 1, "<-F %s", real);
 #endif
@@ -628,6 +639,12 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
         listdir(c, hm, real);
 #else
         mg_http_reply(c, 403, "", "%s", "Directory listing not supported");
+#endif
+#if MG_ENABLE_SSI
+      } else if (opts->ssi_pattern != NULL &&
+                 mg_globmatch(opts->ssi_pattern, strlen(opts->ssi_pattern),
+                              real, strlen(real))) {
+        mg_http_serve_ssi(c, root, real);
 #endif
       } else {
         mg_http_serve_file(c, hm, real, guess_content_type(real));

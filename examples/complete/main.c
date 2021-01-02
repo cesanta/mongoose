@@ -129,7 +129,8 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
                            u->token);
       mg_http_printf_chunk(c, "");
     } else {
-      mg_http_serve_dir(c, ev_data, "web_root");
+      struct mg_http_serve_opts opts = {.root_dir = "web_root"};
+      mg_http_serve_dir(c, ev_data, &opts);
     }
   }
 }
@@ -146,7 +147,7 @@ static void broadcast_mjpeg_frame(struct mg_mgr *mgr) {
   char *data = mg_file_read(path);  // Read next file
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->label[0] != 'S') continue;      // Skip non-stream connections
+    if (c->label[0] != 'S') continue;         // Skip non-stream connections
     if (data == NULL || size == 0) continue;  // Skip on file read error
     mg_printf(c,
               "--foo\r\nContent-Type: image/jpeg\r\n"

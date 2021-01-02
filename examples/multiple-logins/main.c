@@ -71,7 +71,8 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
                            u->token);
       mg_http_printf_chunk(c, "");
     } else {
-      mg_http_serve_dir(c, ev_data, "web_root");
+      struct mg_http_serve_opts opts = {.root_dir = "web_root"};
+      mg_http_serve_dir(c, ev_data, &opts);
     }
   }
 }
