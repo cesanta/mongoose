@@ -1009,11 +1009,11 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
 #endif
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
-                       const char *dir) {
+                       const struct mg_http_serve_opts *opts) {
   char path[PATH_MAX + 2], root[sizeof(path) - 2], real[sizeof(path) - 2];
   path[0] = root[0] = real[0] = '\0';
-  if (realpath(dir, root) == NULL)
-    LOG(LL_DEBUG, ("realpath(%s): %d", dir, errno));
+  if (realpath(opts->root_dir, root) == NULL)
+    LOG(LL_DEBUG, ("realpath(%s): %d", opts->root_dir, errno));
   if (!mg_is_dir(root)) {
     mg_http_reply(c, 400, "", "Bad web root [%s]\n", root);
   } else {

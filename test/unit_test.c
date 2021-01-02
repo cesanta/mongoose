@@ -337,7 +337,8 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     } else if (mg_http_match_uri(hm, "/bar")) {
       mg_http_reply(c, 404, "", "not found");
     } else if (mg_http_match_uri(hm, "/badroot")) {
-      mg_http_serve_dir(c, hm, "/BAAADDD!");
+      struct mg_http_serve_opts opts = {"/BAAADDD!", NULL};
+      mg_http_serve_dir(c, hm, &opts);
     } else if (mg_http_match_uri(hm, "/creds")) {
       char user[100], pass[100];
       mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
@@ -345,9 +346,11 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     } else if (mg_http_match_uri(hm, "/upload")) {
       mg_http_upload(c, hm, ".");
     } else if (mg_http_match_uri(hm, "/test/")) {
-      mg_http_serve_dir(c, hm, ".");
+      struct mg_http_serve_opts opts = {".", NULL};
+      mg_http_serve_dir(c, hm, &opts);
     } else {
-      mg_http_serve_dir(c, hm, "./test/data");
+      struct mg_http_serve_opts opts = {"./test/data", NULL};
+      mg_http_serve_dir(c, hm, &opts);
     }
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
