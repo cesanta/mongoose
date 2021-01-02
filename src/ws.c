@@ -95,7 +95,7 @@ size_t mg_ws_send(struct mg_connection *c, const char *buf, size_t len,
   }
   LOG(LL_VERBOSE_DEBUG, ("WS out: %d [%.*s]", (int) len, (int) len, buf));
   mg_send(c, buf, len);
-  if (c->is_client) {
+  if (c->is_client && c->send.buf != NULL) {
     uint8_t *p = c->send.buf + c->send.len - len;
     for (i = 0; i < len; i++) p[i] ^= mask[i & 3];
   }
