@@ -372,6 +372,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
       mg_http_etag(etag, sizeof(etag), &st) != etag) {
     mg_http_reply(c, 404, "", "%s", "Not found\n");
   } else if (inm != NULL && mg_vcasecmp(inm, etag) == 0) {
+    fclose(fp);
     mg_printf(c, "HTTP/1.1 304 Not Modified\r\nContent-Length: 0\r\n\r\n");
   } else {
     mg_printf(c,
