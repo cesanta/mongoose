@@ -4,15 +4,14 @@
 #include "mongoose.h"
 
 static const char *s_debug_level = "2";
-static const char *s_web_root_dir = ".";
+static const char *s_root_dir = ".";
 static const char *s_listening_address = "http://localhost:8000";
 static const char *s_enable_hexdump = "no";
-static const char *s_rewrites = "";
 static const char *s_ssi_pattern = "#.shtml";
 
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_serve_opts opts = {.root_dir = s_web_root_dir,
+    struct mg_http_serve_opts opts = {.root_dir = s_root_dir,
                                       .ssi_pattern = s_ssi_pattern};
     mg_http_serve_dir(c, ev_data, &opts);
   }
@@ -27,10 +26,9 @@ static void usage(const char *prog) {
           "  -H yes|no - enable traffic hexdump, default: '%s'\n"
           "  -S GLOB   - glob pattern for SSI files, default: '%s'\n"
           "  -d DIR    - directory to serve, default: '%s'\n"
-          "  -l ADDR   - listening address, default: '%s'\n"
-          "  -r LIST   - list of URI=DIR,... URI rewrites, default: '%s'\n",
-          MG_VERSION, prog, s_debug_level, s_enable_hexdump, s_ssi_pattern,
-          s_web_root_dir, s_listening_address, s_rewrites);
+          "  -l ADDR   - listening address, default: '%s'\n" MG_VERSION,
+          prog, s_debug_level, s_enable_hexdump, s_ssi_pattern, s_root_dir,
+          s_listening_address);
   exit(EXIT_FAILURE);
 }
 
@@ -42,7 +40,7 @@ int main(int argc, char *argv[]) {
   // Parse command-line flags
   for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-d") == 0) {
-      s_web_root_dir = argv[++i];
+      s_root_dir = argv[++i];
     } else if (strcmp(argv[i], "-D") == 0) {
       s_debug_level = argv[++i];
     } else if (strcmp(argv[i], "-H") == 0) {
