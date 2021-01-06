@@ -5686,8 +5686,12 @@ extern "C" {
 #define MG_DNS_ANY_RECORD 0xff
 #define MG_DNS_NSEC_RECORD 0x2f
 
+#ifndef MG_MAX_DNS_QUESTIONS
 #define MG_MAX_DNS_QUESTIONS 32
+#endif
+#ifndef MG_MAX_DNS_ANSWERS
 #define MG_MAX_DNS_ANSWERS 32
+#endif
 
 #define MG_DNS_MESSAGE 100 /* High-level DNS message event */
 
