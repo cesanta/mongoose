@@ -650,7 +650,12 @@ void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
                         const char *extra_headers);
 ```
 
-Serve static file.
+Serve static file. Note that the `extra_headers` must end with `\r\n`. Here
+is an example call:
+
+```c
+mg_http_serve_file(c, hm, "a.png", "image/png", "AA: bb\r\nCC: dd\r\n");
+```
 
 
 ### mg\_http\_reply()
