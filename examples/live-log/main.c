@@ -11,7 +11,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/log/static")) {
-      mg_http_serve_file(c, hm, "log.txt", "text/plain");
+      mg_http_serve_file(c, hm, "log.txt", "text/plain", "");
     } else if (mg_http_match_uri(hm, "/api/log/live")) {
       c->label[0] = 'L';  // Mark that connection as live log listener
       mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");

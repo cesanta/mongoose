@@ -363,7 +363,7 @@ static const char *guess_content_type(const char *filename) {
 }
 
 void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
-                        const char *path, const char *mime) {
+                        const char *path, const char *mime, const char *hdrs) {
   struct mg_str *inm = mg_http_get_header(hm, "If-None-Match");
   struct stat st;
   FILE *fp = fopen(path, "rb");
@@ -377,8 +377,8 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   } else {
     mg_printf(c,
               "HTTP/1.1 200 OK\r\nContent-Type: %s\r\n"
-              "Etag: %s\r\nContent-Length: %lu\r\n\r\n",
-              mime, etag, (unsigned long) st.st_size);
+              "Etag: %s\r\nContent-Length: %lu\r\n%s\r\n",
+              mime, etag, (unsigned long) st.st_size, hdrs ? hdrs : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       fclose(fp);
     } else {
@@ -648,7 +648,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
         mg_http_serve_ssi(c, root, real);
 #endif
       } else {
-        mg_http_serve_file(c, hm, real, guess_content_type(real));
+        mg_http_serve_file(c, hm, real, guess_content_type(real), NULL);
       }
       if (fp != NULL) fclose(fp);
     }

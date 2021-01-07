@@ -646,7 +646,8 @@ enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
 
 ```c
 void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
-                        const char *path, const char *mimetype);
+                        const char *path, const char *mimetype,
+                        const char *extra_headers);
 ```
 
 Serve static file.
