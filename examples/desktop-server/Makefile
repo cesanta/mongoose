@@ -7,9 +7,9 @@ VC98 = docker run --rm -e WINEDEBUG=-all -v $(ROOT):$(ROOT) -w $(CURDIR) docker.
 GCC = docker run --rm -v $(ROOT):$(ROOT) -w $(CURDIR) mdashnet/cc2
 
 all: $(PROG)
-	$(DEBUGGER) ./$(PROG)
+	$(DEBUGGER) ./$(PROG) $(ARGS)
 
-$(PROG):
+$(PROG): main.c Makefile
 	$(CC) ../../mongoose.c main.c -I../.. $(CFLAGS) $(EXTRA) -o $@
 
 mongoose_mac: $(PROG)
