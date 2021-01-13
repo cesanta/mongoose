@@ -16,7 +16,7 @@ mongoose_mac: $(PROG)
 	cp $(PROG) $@
 
 mongoose_linux: main.c
-	$(GCC) $(CC) ../../mongoose.c main.c $(CFLAGS) -s -static -o $@
+	$(GCC) $(CC) ../../mongoose.c main.c $(CFLAGS) -s -o $@
 
 mongoose.exe: main.c
 	$(VC98) wine rc /fomongoose.res win32/res.rc
