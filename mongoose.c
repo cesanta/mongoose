@@ -2458,9 +2458,6 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
 
 #if MG_ENABLE_SOCKET
 #if defined(_WIN32)
-#ifndef SO_EXCLUSIVEADDRUSE
-#define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
-#endif
 #define MG_SOCK_ERRNO WSAGetLastError()
 #define FD(C_) ((SOCKET)(C_)->fd)
 #elif MG_ARCH == MG_ARCH_FREERTOS

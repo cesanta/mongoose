@@ -102,13 +102,11 @@ static void ccb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void timer_fn(void *arg) {
   struct mg_connection *c =
       mg_http_connect(&s_mgr, "http://cesanta.com", ccb, NULL);
-  if (c) {
-    c->is_hexdumping = 1;
+  if (c != NULL)
     mg_printf(c, "%s",
               "GET /downloads/mws/version.json HTTP/1.0\r\n"
               "Host: cesanta.com\r\n"
               "\r\n");
-  }
   (void) arg;
 }
 
