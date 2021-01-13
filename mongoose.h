@@ -16,7 +16,7 @@
 // license, as set out in <https://www.cesanta.com/license>.
 
 #pragma once
-#define MG_VERSION "7.0"
+#define MG_VERSION "7.1"
 
 
 #define MG_ARCH_CUSTOM 0

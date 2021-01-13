@@ -2458,6 +2458,9 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
 
 #if MG_ENABLE_SOCKET
 #if defined(_WIN32)
+#ifndef SO_EXCLUSIVEADDRUSE
+#define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
+#endif
 #define MG_SOCK_ERRNO WSAGetLastError()
 #define FD(C_) ((SOCKET)(C_)->fd)
 #elif MG_ARCH == MG_ARCH_FREERTOS
@@ -2654,6 +2657,7 @@ SOCKET mg_open_listener(const char *url) {
         // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
         !setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on,
                     sizeof(on)) &&
+        !setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (char *) &on, sizeof(on)) &&
 #endif
         bind(fd, &usa.sa, slen) == 0 &&
         // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
