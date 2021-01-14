@@ -259,16 +259,19 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
 static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
                    void *fn_data) {
   struct dns_data *d, *tmp;
-  if (ev == MG_EV_POLL) {
-    unsigned long now = *(unsigned long *) ev_data;
-    for (d = (struct dns_data *) fn_data; d != NULL; d = tmp) {
-      tmp = d->next;
-      // LOG(LL_DEBUG, ("%lu %lu dns poll", d->expire, now));
-      if (now > d->expire) mg_error(d->c, "DNS timeout");
-    }
+  if (ev == MG_EV_POLL) {	
+	  if (!c->is_closing) {
+		  unsigned long now = *(unsigned long *)ev_data;
+		  for (d = (struct dns_data *) fn_data; d != NULL; d = tmp) {
+			  tmp = d->next;
+			  // LOG(LL_DEBUG, ("%lu %lu dns poll", d->expire, now));
+			  if (now > d->expire) mg_error(d->c, "DNS timeout");
+		  }
+	  }
   } else if (ev == MG_EV_READ) {
     struct mg_dns_message dm;
     int resolved = 0;
+	c->pfn_data = NULL;
     if (mg_dns_parse(c->recv.buf, c->recv.len, &dm) == false) {
       char *s = mg_hexdump(c->recv.buf, c->recv.len);
       LOG(LL_ERROR, ("Unexpected DNS response:\n%s\n", s));
@@ -306,6 +309,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
     for (d = s_reqs; d != NULL; d = tmp) {
       tmp = d->next;
       mg_dns_free(d);
+	  c->pfn_data = NULL;
     }
   }
 }
@@ -368,6 +372,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->expire = mg_millis() + ms;
     d->c = c;
     c->is_resolving = 1;
+	dnsc->c->pfn_data = s_reqs;
     LOG(LL_DEBUG, ("%lu resolving %.*s, txnid %hu", c->id, (int) name->len,
                    name->ptr, d->txnid));
     mg_dns_send(dnsc->c, name, d->txnid, ipv6);
