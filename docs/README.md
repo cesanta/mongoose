@@ -806,10 +806,13 @@ Create client Websocket connection.
 ### mg\_ws\_upgrade()
 
 ```c
-void mg_ws_upgrade(struct mg_connection *, struct mg_http_message *);
+void mg_ws_upgrade(struct mg_connection *, struct mg_http_message *,
+                   const char *fmt, ...);
 ```
 
-Upgrade given HTTP connection to Websocket.
+Upgrade given HTTP connection to Websocket. The `fmt` is a printf-like
+format string for the extra HTTP headers returned to the client in a
+Websocket handshake. Set `fmt` to `NULL` if no extra headers needs to be passed.
 
 
 ### mg\_ws\_send()

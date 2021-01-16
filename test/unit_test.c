@@ -331,7 +331,7 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (mg_http_match_uri(hm, "/foo/*")) {
       mg_http_reply(c, 200, "", "uri: %.*s", hm->uri.len - 5, hm->uri.ptr + 5);
     } else if (mg_http_match_uri(hm, "/ws")) {
-      mg_ws_upgrade(c, hm);
+      mg_ws_upgrade(c, hm, NULL);
     } else if (mg_http_match_uri(hm, "/body")) {
       mg_http_reply(c, 200, "", "%.*s", (int) hm->body.len, hm->body.ptr);
     } else if (mg_http_match_uri(hm, "/bar")) {

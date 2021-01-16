@@ -18,7 +18,7 @@ static const char *s_listen_on = "http://localhost:8000";
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_ws_upgrade(c, hm);
+    mg_ws_upgrade(c, hm, NULL);
   } else if (ev == MG_EV_WS_MSG) {
     // Got websocket frame. Received data is wm->data. Echo it back!
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
@@ -42,9 +42,9 @@ static void timer_fn(void *arg) {
 }
 
 int main(void) {
-  struct mg_mgr mgr;                            // Event manager
-  struct mg_timer t1;                           // Timer
-  mg_mgr_init(&mgr);                            // Initialise event manager
+  struct mg_mgr mgr;   // Event manager
+  struct mg_timer t1;  // Timer
+  mg_mgr_init(&mgr);   // Initialise event manager
   mg_timer_init(&t1, 300, MG_TIMER_REPEAT, timer_fn, &mgr);  // Init timer
   mg_http_listen(&mgr, s_listen_on, fn, NULL);  // Create HTTP listener
   for (;;) mg_mgr_poll(&mgr, 1000);             // Infinite event loop

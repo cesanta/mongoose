@@ -15,25 +15,27 @@ struct ws_msg {
 };
 
 static void ws_handshake(struct mg_connection *c, const char *key,
-                         size_t key_len) {
+                         size_t key_len, const char *fmt, va_list ap) {
   const char *magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
   unsigned char sha[20], b64_sha[30];
-  // mem[256], *buf = mem;
-  // int len = 0;
+  char mem[128], *buf = mem;
+
   mg_sha1_ctx sha_ctx;
   mg_sha1_init(&sha_ctx);
   mg_sha1_update(&sha_ctx, (unsigned char *) key, key_len);
   mg_sha1_update(&sha_ctx, (unsigned char *) magic, 36);
   mg_sha1_final(sha, &sha_ctx);
   mg_base64_encode(sha, sizeof(sha), (char *) b64_sha);
+  buf[0] = '\0';
+  if (fmt != NULL) mg_vasprintf(&buf, sizeof(mem), fmt, ap);
   mg_printf(c,
             "HTTP/1.1 101 Switching Protocols\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: %s\r\n\r\n",
-            b64_sha);
-  // mg_send(c, buf, len);
-  // if (buf != mem) free(buf);
+            "Sec-WebSocket-Accept: %s\r\n"
+            "%s\r\n",
+            b64_sha, buf);
+  if (buf != mem) free(buf);
 }
 
 static size_t ws_process(uint8_t *buf, size_t len, struct ws_msg *msg) {
@@ -193,9 +195,15 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
   return c;
 }
 
-void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm) {
+void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
+                   const char *fmt, ...) {
   struct mg_str *wskey = mg_http_get_header(hm, "Sec-WebSocket-Key");
   c->pfn = mg_ws_cb;
-  if (wskey != NULL) ws_handshake(c, wskey->ptr, wskey->len);
+  if (wskey != NULL) {
+    va_list ap;
+    va_start(ap, fmt);
+    ws_handshake(c, wskey->ptr, wskey->len, fmt, ap);
+    va_end(ap);
+  }
   c->is_websocket = 1;
 }
