@@ -629,7 +629,7 @@ void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
 Write a chunk of data in chunked encoding format.
 
 
-### mg\_serve\_dir()
+### mg\_http\_serve\_dir()
 
 ```c
 struct mg_http_serve_opts {
@@ -644,7 +644,7 @@ Serve static files according to the given options. Note that in order to
 enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
 
 
-### mg\_serve\_file()
+### mg\_http\_serve\_file()
 
 ```c
 void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
