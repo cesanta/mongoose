@@ -119,8 +119,10 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
               ("%lu WS handshake error: %.*s", c->id, 15, c->recv.buf));
           c->is_closing = 1;
         } else {
+          struct mg_http_message hm;
+          mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
           c->is_websocket = 1;
-          mg_call(c, MG_EV_WS_OPEN, NULL);
+          mg_call(c, MG_EV_WS_OPEN, &hm);
         }
         mg_iobuf_delete(&c->recv, n);
       } else {
