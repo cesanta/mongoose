@@ -234,6 +234,58 @@ NOTE: `MG_IO_SIZE` controls the maximum UDP message size, see
 https://github.com/cesanta/mongoose/issues/907 for details. If application
 uses large UDP messages, increase the `MG_IO_SIZE` limit accordingly.
 
+## Custom build
+
+It is possible to use Mongoose on an architecture that is not yet supported
+by the current codebase. In order to do so, follow these steps:
+
+1. Create a file called `mongoose_custom.h`, with defines and includes that
+are relevant to your platform. Mongoose uses `bool` type, `MG_DIRSEP` define,
+and optionally other structures like `DIR *` depending on the functionality
+you have enabled - see previous section. Below is an example:
+
+```c
+#include <dirent.h>             // For DIR *
+#include <stdbool.h>            // For bool
+#include <sys/time.h>           // For gettimeofday()
+#include <unistd.h>             // For usleep()
+#define MG_DIRSEP '/'
+#define MG_ENABLE_SOCKET 0      // Disable BSD socket API, implement your own
+```
+
+2. Add `-DMG_ARCH=MG_ARCH_CUSTOM` to your build flags.
+
+3. This step is optional. If you have disabled BSD socket API, your build is
+going to fail due to several undefined symbols. Create `mongoose_custom.c`
+and implement the following functions (take a look at `src/sock.c` for the
+reference implementation):
+
+```c
+struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
+                                 mg_event_handler_t fn, void *fn_data) {
+  // implement this!
+}
+
+void mg_connect_resolved(struct mg_connection *c) {
+  // implement this!
+}
+
+
+struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
+                                mg_event_handler_t fn, void *fn_data) {
+  // implement this!
+}
+
+void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
+  // implement this!
+}
+
+int mg_send(struct mg_connection *c, const void *buf, size_t len) {
+  // implement this!
+}
+```
+
+
 ## Minimal HTTP server
 
 This example is a simple static HTTP server that serves current directory:
