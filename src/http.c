@@ -546,10 +546,11 @@ static void printdirentry(struct mg_connection *c, struct mg_http_message *hm,
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&stp->st_mtime));
   // mg_escape(file_name, path, sizeof(path));
   // href = mg_url_encode(mg_mk_str(file_name));
-  mg_http_printf_chunk(
-      c,
-      "<tr><td><a href=\"%.*s%s%s\">%s%s</a></td><td>%s</td><td>%s</td></tr>",
-      (int) hm->uri.len, hm->uri.ptr, name, slash, name, slash, mod, size);
+  mg_http_printf_chunk(c,
+                       "  <tr><td><a href=\"%.*s%s%s\">%s%s</a></td>"
+                       "<td>%s</td><td>%s</td></tr>\n",
+                       (int) hm->uri.len, hm->uri.ptr, name, slash, name, slash,
+                       mod, size);
   // free((void *) href.p);
 }
 
@@ -569,7 +570,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
         "font-family: monospace; }</style></head>"
         "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
         "<tr><th>Name</th><th>Modified</th><th>Size</th></tr>"
-        "<tr><td colspan=\"3\"><hr></td></tr></thead><tbody>",
+        "<tr><td colspan=\"3\"><hr></td></tr></thead><tbody>\n",
         (int) hm->uri.len, hm->uri.ptr, (int) hm->uri.len, hm->uri.ptr);
     while ((dp = readdir(dirp)) != NULL) {
       struct stat st;
@@ -586,7 +587,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
     mg_http_printf_chunk(
         c,
         "</tbody><tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
-        "</table><address>Mongoose v.%s</address></body></html>",
+        "</table><address>Mongoose v.%s</address></body></html>\n",
         MG_VERSION);
     mg_http_write_chunk(c, "", 0);
   } else {

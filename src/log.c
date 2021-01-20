@@ -7,6 +7,7 @@
 static void mg_log_stdout(const void *buf, int len, void *userdata) {
   (void) userdata;
   fwrite(buf, 1, len, stdout);
+  fflush(stdout);
 }
 
 static const char *s_spec = "2";
@@ -14,7 +15,7 @@ static void (*s_fn)(const void *, int, void *) = mg_log_stdout;
 static void *s_fn_param = NULL;
 
 void mg_log_set(const char *spec) {
-  LOG(LL_INFO, ("Setting log level to %s", spec));
+  LOG(LL_DEBUG, ("Setting log level to %s", spec));
   s_spec = spec;
 }
 

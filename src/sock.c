@@ -13,6 +13,9 @@
 #if defined(_WIN32)
 #define MG_SOCK_ERRNO WSAGetLastError()
 #define FD(C_) ((SOCKET)(C_)->fd)
+#ifndef SO_EXCLUSIVEADDRUSE
+#define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
+#endif
 #elif MG_ARCH == MG_ARCH_FREERTOS
 #define MG_SOCK_ERRNO errno
 typedef Socket_t SOCKET;
@@ -205,9 +208,10 @@ SOCKET mg_open_listener(const char *url) {
 #endif
 #if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
         // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
+        //! setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (char *) &on, sizeof(on))
+        //! &&
         !setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on,
                     sizeof(on)) &&
-        !setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (char *) &on, sizeof(on)) &&
 #endif
         bind(fd, &usa.sa, slen) == 0 &&
         // NOTE(lsm): FreeRTOS uses backlog value as a connection limit

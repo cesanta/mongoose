@@ -6,7 +6,7 @@
 
 #if MG_ENABLE_LWIP
 #define MG_ENABLE_SOCKET 0
-#else
+#elif !defined(MG_ENABLE_SOCKET)
 #define MG_ENABLE_SOCKET 1
 #endif
 

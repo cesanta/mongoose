@@ -960,10 +960,11 @@ static void printdirentry(struct mg_connection *c, struct mg_http_message *hm,
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&stp->st_mtime));
   // mg_escape(file_name, path, sizeof(path));
   // href = mg_url_encode(mg_mk_str(file_name));
-  mg_http_printf_chunk(
-      c,
-      "<tr><td><a href=\"%.*s%s%s\">%s%s</a></td><td>%s</td><td>%s</td></tr>",
-      (int) hm->uri.len, hm->uri.ptr, name, slash, name, slash, mod, size);
+  mg_http_printf_chunk(c,
+                       "  <tr><td><a href=\"%.*s%s%s\">%s%s</a></td>"
+                       "<td>%s</td><td>%s</td></tr>\n",
+                       (int) hm->uri.len, hm->uri.ptr, name, slash, name, slash,
+                       mod, size);
   // free((void *) href.p);
 }
 
@@ -983,7 +984,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
         "font-family: monospace; }</style></head>"
         "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
         "<tr><th>Name</th><th>Modified</th><th>Size</th></tr>"
-        "<tr><td colspan=\"3\"><hr></td></tr></thead><tbody>",
+        "<tr><td colspan=\"3\"><hr></td></tr></thead><tbody>\n",
         (int) hm->uri.len, hm->uri.ptr, (int) hm->uri.len, hm->uri.ptr);
     while ((dp = readdir(dirp)) != NULL) {
       struct stat st;
@@ -1000,7 +1001,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
     mg_http_printf_chunk(
         c,
         "</tbody><tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
-        "</table><address>Mongoose v.%s</address></body></html>",
+        "</table><address>Mongoose v.%s</address></body></html>\n",
         MG_VERSION);
     mg_http_write_chunk(c, "", 0);
   } else {
@@ -1244,6 +1245,7 @@ void mg_iobuf_free(struct mg_iobuf *io) {
 static void mg_log_stdout(const void *buf, int len, void *userdata) {
   (void) userdata;
   fwrite(buf, 1, len, stdout);
+  fflush(stdout);
 }
 
 static const char *s_spec = "2";
@@ -1251,7 +1253,7 @@ static void (*s_fn)(const void *, int, void *) = mg_log_stdout;
 static void *s_fn_param = NULL;
 
 void mg_log_set(const char *spec) {
-  LOG(LL_INFO, ("Setting log level to %s", spec));
+  LOG(LL_DEBUG, ("Setting log level to %s", spec));
   s_spec = spec;
 }
 
@@ -2460,6 +2462,9 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
 #if defined(_WIN32)
 #define MG_SOCK_ERRNO WSAGetLastError()
 #define FD(C_) ((SOCKET)(C_)->fd)
+#ifndef SO_EXCLUSIVEADDRUSE
+#define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
+#endif
 #elif MG_ARCH == MG_ARCH_FREERTOS
 #define MG_SOCK_ERRNO errno
 typedef Socket_t SOCKET;
@@ -2652,9 +2657,10 @@ SOCKET mg_open_listener(const char *url) {
 #endif
 #if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
         // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
+        //! setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (char *) &on, sizeof(on))
+        //! &&
         !setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on,
                     sizeof(on)) &&
-        !setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (char *) &on, sizeof(on)) &&
 #endif
         bind(fd, &usa.sa, slen) == 0 &&
         // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
