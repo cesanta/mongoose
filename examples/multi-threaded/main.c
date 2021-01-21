@@ -31,20 +31,11 @@ struct response {
 #define SLEEP_TIME 3  // Seconds to sleep to simulate calculation
 #endif
 
-static void thread_function(void *param) {
-  int sock = (long) param;                   // Grab our blocking socket
-  struct response r = {strdup("hello"), 5};  // Create response
-  sleep(SLEEP_TIME);                         // Simulate long execution
-  send(sock, (void *) &r, sizeof(r), 0);     // Send to request handler
-  close(sock);                               // Done, close socket, end thread
-}
-
 static void start_thread(void (*f)(void *), void *p) {
-#ifdef WINCE
-  CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) f, p, 0, NULL);
-#elif defined(_WIN32)
+#ifdef _WIN32
   _beginthread((void(__cdecl *)(void *)) f, 0, p);
 #else
+#define closesocket(x) close(x)
 #include <pthread.h>
   pthread_t thread_id = (pthread_t) 0;
   pthread_attr_t attr;
@@ -53,6 +44,15 @@ static void start_thread(void (*f)(void *), void *p) {
   pthread_create(&thread_id, &attr, (void *(*) (void *) ) f, p);
   pthread_attr_destroy(&attr);
 #endif
+}
+
+static void thread_function(void *param) {
+  int sock = (long) param;                     // Grab our blocking socket
+  struct response r = {strdup("hello\n"), 6};  // Create response
+  mg_usleep(SLEEP_TIME * 1000000);             // Simulate long execution
+  LOG(LL_INFO, ("got sock %d", sock));         // For debugging
+  send(sock, (void *) &r, sizeof(r), 0);       // Send to request handler
+  closesocket(sock);                           // Done, close socket, end thread
 }
 
 // HTTP request callback
@@ -70,7 +70,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
                 "Content-Length: 3\r\n\r\n"  // Set to allow keep-alive
                 "hi\n");
     } else {
-      int blocking, non_blocking;
+      int blocking = -1, non_blocking = -1;
       mg_socketpair(&blocking, &non_blocking);  // Create connected pair
 
       // Pass blocking socket to the thread_function.
@@ -90,7 +90,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_printf(c, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n\r\n%.*s",
                 response.len, response.len, response.data);
       free(response.data);  // We can free produced data now
-      close(sock);          // And close our end of the socket pair
+      closesocket(sock);    // And close our end of the socket pair
       c->fn_data = NULL;
     }
   }

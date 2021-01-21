@@ -2849,17 +2849,20 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
 
 #if MG_ENABLE_SOCKETPAIR
 bool mg_socketpair(int *s1, int *s2) {
-#if MG_ARCH == MG_ARCH_UNIX
+#ifdef MG_ENABLE_NATIVE_SOCKETPAIR
+  // For some reason, native socketpair() call fails on Macos
+  // Enable this codepath only when MG_ENABLE_NATIVE_SOCKETPAIR is defined
   int sp[2], ret = 0;
-  if (socketpair(AF_INET, SOCK_DGRAM, 0, sp) == 0) {
+  if (socketpair(AF_INET, SOCK_DGRAM, IPPROTO_UDP, sp) == 0) {
     *s1 = sp[0], *s2 = sp[1], ret = 1;
   }
+  LOG(LL_INFO, ("errno %d", errno));
   return ret;
 #else
   union usa sa, sa2;
   SOCKET sp[2] = {INVALID_SOCKET, INVALID_SOCKET};
   socklen_t len = sizeof(sa.sin);
-  int ret = 0, res[2] = {-1, -1};
+  int ret = 0;
 
   (void) memset(&sa, 0, sizeof(sa));
   sa.sin.sin_family = AF_INET;
