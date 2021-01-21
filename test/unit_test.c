@@ -1029,13 +1029,12 @@ static void test_dns(void) {
   {
     // Test timeout
     struct mg_mgr mgr;
-    struct mg_connection *c;
     char buf[100] = "";
     int i;
     mg_mgr_init(&mgr);
     mgr.dns4.url = "udp://127.0.0.1:12345";
     mgr.dnstimeout = 10;
-    c = mg_http_connect(&mgr, "http://google.com", fn1, buf);
+    mg_http_connect(&mgr, "http://google.com", fn1, buf);
     for (i = 0; i < 50 && buf[0] == '\0'; i++) mg_mgr_poll(&mgr, 1);
     mg_mgr_free(&mgr);
     ASSERT(strcmp(buf, "DNS timeout") == 0);
