@@ -1,4 +1,5 @@
 PROG ?= example
+CFLAGS ?= -DMG_ENABLE_LINES $(CFLAGS_EXTRA)
 MBEDTLS_DIR ?=
 
 ifeq "$(MBEDTLS_DIR)" ""

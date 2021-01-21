@@ -1002,6 +1002,11 @@ static void test_str(void) {
   ASSERT(mg_strcmp(mg_str("hi"), mg_strstrip(mg_str(" \thi\r\n"))) == 0);
 }
 
+static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_ERROR) sprintf((char *) fn_data, "%s", (char *) ev_data);
+  (void) c;
+}
+
 static void test_dns(void) {
   struct mg_dns_message dm;
   //       txid  flags numQ  numA  numAP numOP
@@ -1021,14 +1026,20 @@ static void test_dns(void) {
   ASSERT(mg_dns_parse(data, sizeof(data), &dm) == 1);
   ASSERT(strcmp(dm.name, "") == 0);
 
-#if 0
   {
-    char *data = mg_file_read("dns.bin");
-    ASSERT(data != NULL);
-    ASSERT(mg_dns_parse((uint8_t *) data, mg_file_size("dns.bin"), &dm) == 0);
-    free(data);
+    // Test timeout
+    struct mg_mgr mgr;
+    struct mg_connection *c;
+    char buf[100] = "";
+    int i;
+    mg_mgr_init(&mgr);
+    mgr.dns4.url = "udp://127.0.0.1:12345";
+    mgr.dnstimeout = 10;
+    c = mg_http_connect(&mgr, "http://google.com", fn1, buf);
+    for (i = 0; i < 50 && buf[0] == '\0'; i++) mg_mgr_poll(&mgr, 1);
+    mg_mgr_free(&mgr);
+    ASSERT(strcmp(buf, "DNS timeout") == 0);
   }
-#endif
 }
 
 static void test_util(void) {

@@ -261,7 +261,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
   struct dns_data *d, *tmp;
   if (ev == MG_EV_POLL) {
     unsigned long now = *(unsigned long *) ev_data;
-    for (d = (struct dns_data *) fn_data; d != NULL; d = tmp) {
+    for (d = s_reqs; d != NULL; d = tmp) {
       tmp = d->next;
       // LOG(LL_DEBUG, ("%lu %lu dns poll", d->expire, now));
       if (now > d->expire) mg_error(d->c, "DNS timeout");
@@ -308,6 +308,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
       mg_dns_free(d);
     }
   }
+  (void) fn_data;
 }
 
 void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
