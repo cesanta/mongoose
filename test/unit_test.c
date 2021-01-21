@@ -459,6 +459,9 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
 
+  ASSERT(fetch(&mgr, buf, url, "GET /%%61.txt HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hello\n") == 0);
+
   {
     extern char *mg_http_etag(char *, size_t, struct stat *);
     char etag[100];

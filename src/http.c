@@ -606,11 +606,13 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   if (!mg_is_dir(root)) {
     mg_http_reply(c, 400, "", "Bad web root [%s]\n", root);
   } else {
+    char dec[PATH_MAX];
     // NOTE(lsm): Xilinx snprintf does not 0-terminate the detination for
     // the %.*s specifier, if the length is zero. Make sure hm->uri.len > 0
     bool is_index = false;
-    size_t n = snprintf(path, sizeof(path), "%s%.*s", root, (int) hm->uri.len,
-                        hm->uri.ptr);
+    int ndec = mg_url_decode(hm->uri.ptr, hm->uri.len, dec, sizeof(dec), 0);
+    size_t n =
+        snprintf(path, sizeof(path), "%s%.*s", root, ndec < 0 ? 0 : ndec, dec);
     while (n > 0 && n < sizeof(path) && path[n - 1] == '/') path[--n] = 0;
     if (realpath(path, real) == NULL)
       LOG(LL_DEBUG, ("realpath(%s): %d", path, errno));
