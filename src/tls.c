@@ -166,9 +166,10 @@ int mg_tls_free(struct mg_connection *c) {
 }
 #elif MG_ENABLE_OPENSSL  ///////////////////////////////////////// OPENSSL
 
-#include <openssl/bio.h>
-#include <openssl/err.h>
 #include <openssl/ssl.h>
+
+extern void ERR_clear_error(void);          // Defined in openssl/err.h, but
+extern void ERR_print_errors_fp(FILE *fp);  // declare here for krypton
 
 struct mg_tls {
   SSL_CTX *ctx;
