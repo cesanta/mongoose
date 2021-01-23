@@ -422,7 +422,7 @@ protocol-specific handler is called before user-specific handler.  It parses
 incoming data and may invoke protocol-specific events like `MG_EV_HTTP_MSG`.
 
 
-### mh\_mgr\_free()
+### mg\_mgr\_free()
 
 ```c
 void mg_mgr_free(struct mg_mgr *mgr);
