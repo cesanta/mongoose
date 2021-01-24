@@ -282,8 +282,11 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         if (d->c->is_resolving) {
           d->c->is_resolving = 0;
           if (dm.resolved) {
+            char buf[100];
             dm.addr.port = d->c->peer.port;  // Save port
             d->c->peer = dm.addr;            // Copy resolved address
+            LOG(LL_DEBUG, ("%lu %s resolved to %s", d->c->id, dm.name,
+                           mg_ntoa(&d->c->peer, buf, sizeof(buf))));
             mg_connect_resolved(d->c);
 #if MG_ENABLE_IPV6
           } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0') {
@@ -369,8 +372,8 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->expire = mg_millis() + ms;
     d->c = c;
     c->is_resolving = 1;
-    LOG(LL_DEBUG, ("%lu resolving %.*s, txnid %hu", c->id, (int) name->len,
-                   name->ptr, d->txnid));
+    LOG(LL_VERBOSE_DEBUG, ("%lu resolving %.*s, txnid %hu", c->id,
+                           (int) name->len, name->ptr, d->txnid));
     mg_dns_send(dnsc->c, name, d->txnid, ipv6);
   }
 }
@@ -2772,7 +2775,6 @@ void mg_connect_resolved(struct mg_connection *c) {
 #endif
   mg_straddr(c, buf, sizeof(buf));
   c->fd = (void *) (long) socket(af, type, 0);
-  LOG(LL_DEBUG, ("%lu resolved, sock %p -> %s", c->id, c->fd, buf));
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
     return;
@@ -3414,6 +3416,9 @@ int mg_tls_free(struct mg_connection *c) {
 #elif MG_ENABLE_OPENSSL  ///////////////////////////////////////// OPENSSL
 
 #include <openssl/ssl.h>
+#if defined(_MSC_VER) && _MSC_VER < 1700
+typedef long ssize_t;
+#endif
 
 extern void ERR_clear_error(void);          // Defined in openssl/err.h, but
 extern void ERR_print_errors_fp(FILE *fp);  // declare here for krypton
@@ -3470,13 +3475,13 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   SSL_set_options(tls->ssl, SSL_OP_CIPHER_SERVER_PREFERENCE);
 #endif
 
+  SSL_set_verify(tls->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+                 0);
   if (opts->ca != NULL && opts->ca[0] != '\0') {
     if ((rc = SSL_CTX_load_verify_locations(tls->ctx, opts->ca, NULL)) != 1) {
       mg_error(c, "parse(%s): err %d", opts->ca, mg_tls_err(tls, rc));
       goto fail;
     }
-    SSL_set_verify(tls->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
-                   0);
   }
   if (opts->cert != NULL && opts->cert[0] != '\0') {
     const char *key = opts->certkey;
@@ -3509,7 +3514,7 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     mg_tls_handshake(c);
   }
   c->is_hexdumping = 1;
-  LOG(LL_INFO, ("SSL SETUP OK, %s", c->is_accepted ? "accepted" : "client"));
+  LOG(LL_DEBUG, ("%lu SSL %s OK", c->id, c->is_accepted ? "accept" : "client"));
   return 1;
 fail:
   c->is_closing = 1;
@@ -3527,8 +3532,9 @@ int mg_tls_handshake(struct mg_connection *c) {
     c->is_tls_hs = 0;
     return 1;
   } else {
+    int code;
     ERR_print_errors_fp(stderr);
-    int code = mg_tls_err(tls, rc);
+    code = mg_tls_err(tls, rc);
     if (code != 0) mg_error(c, "tls hs: rc %d, err %d", rc, code);
     return 0;
   }

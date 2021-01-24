@@ -320,7 +320,6 @@ void mg_connect_resolved(struct mg_connection *c) {
 #endif
   mg_straddr(c, buf, sizeof(buf));
   c->fd = (void *) (long) socket(af, type, 0);
-  LOG(LL_DEBUG, ("%lu resolved, sock %p -> %s", c->id, c->fd, buf));
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
     return;
