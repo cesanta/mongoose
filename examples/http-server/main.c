@@ -21,11 +21,11 @@ static void usage(const char *prog) {
   fprintf(stderr,
           "Mongoose v.%s, built " __DATE__ " " __TIME__
           "\nUsage: %s OPTIONS\n"
-          "  -D LEVEL  - debug level, from 0 to 4, default: '%s'\n"
           "  -H yes|no - enable traffic hexdump, default: '%s'\n"
           "  -S GLOB   - glob pattern for SSI files, default: '%s'\n"
           "  -d DIR    - directory to serve, default: '%s'\n"
-          "  -l ADDR   - listening address, default: '%s'\n",
+          "  -l ADDR   - listening address, default: '%s'\n"
+          "  -v LEVEL  - debug level, from 0 to 4, default: '%s'\n",
           MG_VERSION, prog, s_debug_level, s_enable_hexdump, s_ssi_pattern,
           s_root_dir, s_listening_address);
   exit(EXIT_FAILURE);
@@ -40,14 +40,14 @@ int main(int argc, char *argv[]) {
   for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-d") == 0) {
       s_root_dir = argv[++i];
-    } else if (strcmp(argv[i], "-D") == 0) {
-      s_debug_level = argv[++i];
     } else if (strcmp(argv[i], "-H") == 0) {
       s_enable_hexdump = argv[++i];
     } else if (strcmp(argv[i], "-S") == 0) {
       s_ssi_pattern = argv[++i];
     } else if (strcmp(argv[i], "-l") == 0) {
       s_listening_address = argv[++i];
+    } else if (strcmp(argv[i], "-v") == 0) {
+      s_debug_level = argv[++i];
     } else {
       usage(argv[0]);
     }
