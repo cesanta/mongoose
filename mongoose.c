@@ -2821,7 +2821,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
 static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   struct mg_connection *c = NULL;
   union usa usa;
-  socklen_t sa_len = sizeof(usa.sin);
+  socklen_t sa_len = sizeof(usa);
   SOCKET fd = accept(FD(lsn), &usa.sa, &sa_len);
   if (fd == INVALID_SOCKET) {
     LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
@@ -2837,6 +2837,13 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     char buf[40];
     c->peer.port = usa.sin.sin_port;
     memcpy(&c->peer.ip, &usa.sin.sin_addr, sizeof(c->peer.ip));
+#if MG_ENABLE_IPV6
+    if (sa_len == sizeof(usa.sin6)) {
+      memcpy(c->peer.ip6, &usa.sin6.sin6_addr, sizeof(c->peer.ip6));
+      c->peer.port = usa.sin6.sin6_port;
+      c->peer.is_ip6 = 1;
+    }
+#endif
     mg_straddr(c, buf, sizeof(buf));
     LOG(LL_DEBUG, ("%lu accepted %s", c->id, buf));
     mg_set_non_blocking_mode(FD(c));
@@ -3250,7 +3257,6 @@ void mg_timer_poll(unsigned long now_ms) {
 
 
 #if MG_ENABLE_MBEDTLS  ///////////////////////////////////////// MBEDTLS
-
 
 
 
