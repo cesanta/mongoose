@@ -89,25 +89,6 @@ static void fn2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   (void) fn_data;
 }
 
-#if 0
-static void serv_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_CLOSE) {
-    disband(c);
-  } else if (ev == MG_EV_RECV) {
-    relay_data(c);
-  } else if (ev == MG_EV_CONNECT) {
-    int res = *(int *) ev_data;
-    if (res != 0) LOG(LL_ERROR, ("connect error: %d", res));
-  }
-}
-
-static void mg_socks5_connect(struct mg_connection *c, const char *addr) {
-  struct mg_connection *serv = mg_connect(c->mgr, addr, serv_ev_handler);
-  serv->user_data = c;
-  c->user_data = serv;
-}
-#endif
-
 //  Request, https://www.ietf.org/rfc/rfc1928.txt paragraph 4
 //  +----+-----+-------+------+----------+----------+
 //  |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
