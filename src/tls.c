@@ -9,10 +9,12 @@
 #include <mbedtls/ssl.h>
 
 // Different versions have those in different files, so declare here
+#ifndef EXTERN_C
 #ifdef __cplusplus
 #define EXTERN_C extern "C"
 #else
 #define EXTERN_C
+#endif
 #endif
 
 EXTERN_C int mbedtls_net_recv(void *, unsigned char *, size_t);
