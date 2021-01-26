@@ -3711,6 +3711,7 @@ struct mg_str mg_url_pass(const char *url) {
 #endif
 
 
+#if MG_ENABLE_FS
 size_t mg_file_size(const char *path) {
 #if MG_ARCH == MG_ARCH_FREERTOS
   struct FF_STAT st;
@@ -3781,6 +3782,7 @@ void mg_random(void *buf, size_t len) {
   }
   if (fp != NULL) fclose(fp);
 }
+#endif
 
 bool mg_globmatch(const char *s1, int n1, const char *s2, int n2) {
   int i = 0, j = 0, ni = 0, nj = 0;
