@@ -8,5 +8,6 @@
 #include <stdbool.h>
 #include <sys/time.h>
 #define MG_DIRSEP '/'
+#define MG_INT64_FMT "%lld"
 
 #endif

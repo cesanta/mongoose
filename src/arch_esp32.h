@@ -5,5 +5,6 @@
 #include <dirent.h>
 #include <netdb.h>
 #define MG_DIRSEP '/'
+#define MG_INT64_FMT "%lld"
 
 #endif

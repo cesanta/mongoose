@@ -451,7 +451,7 @@ static void test_http_server(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12346";
   char buf[FETCH_BUF_SIZE];
-  struct stat st;
+  mg_stat_t st;
 
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, eh1, NULL);
@@ -463,9 +463,9 @@ static void test_http_server(void) {
   ASSERT(cmpbody(buf, "hello\n") == 0);
 
   {
-    extern char *mg_http_etag(char *, size_t, struct stat *);
+    extern char *mg_http_etag(char *, size_t, mg_stat_t *);
     char etag[100];
-    ASSERT(stat("./test/data/a.txt", &st) == 0);
+    ASSERT(mg_stat("./test/data/a.txt", &st) == 0);
     ASSERT(mg_http_etag(etag, sizeof(etag), &st) == etag);
     ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nIf-None-Match: %s\n\n",
                  etag) == 304);

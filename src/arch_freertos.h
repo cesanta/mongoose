@@ -9,6 +9,7 @@
 #include <FreeRTOS_Sockets.h>
 #include <stdbool.h>
 
+#define MG_INT64_FMT "%lld"
 #define MG_DIRSEP '/'
 #define IPPROTO_TCP FREERTOS_IPPROTO_TCP
 #define IPPROTO_UDP FREERTOS_IPPROTO_UDP

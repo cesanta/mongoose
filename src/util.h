@@ -23,6 +23,16 @@ double mg_time(void);
 unsigned long mg_millis(void);
 void mg_usleep(unsigned long usecs);
 
+#if MG_ENABLE_FS
+#ifdef _WIN32
+typedef struct _stati64 mg_stat_t;
+#define mg_stat(a, b) _stati64((a), (b))
+#else
+typedef struct stat mg_stat_t;
+#define mg_stat(a, b) stat((a), (b))
+#endif
+#endif
+
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
 

@@ -251,9 +251,9 @@ static void restore_http_cb(struct mg_connection *c) {
   free(d);
 }
 
-char *mg_http_etag(char *buf, size_t len, struct stat *st) {
-  snprintf(buf, len, "\"%lx.%lu\"", (unsigned long) st->st_mtime,
-           (unsigned long) st->st_size);
+char *mg_http_etag(char *buf, size_t len, mg_stat_t *st) {
+  snprintf(buf, len, "\"%lx." MG_INT64_FMT "\"", (unsigned long) st->st_mtime,
+           (int64_t) st->st_size);
   return buf;
 }
 
@@ -365,10 +365,10 @@ static const char *guess_content_type(const char *filename) {
 void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path, const char *mime, const char *hdrs) {
   struct mg_str *inm = mg_http_get_header(hm, "If-None-Match");
-  struct stat st;
+  mg_stat_t st;
   FILE *fp = fopen(path, "rb");
   char etag[64];
-  if (fp == NULL || stat(path, &st) != 0 ||
+  if (fp == NULL || mg_stat(path, &st) != 0 ||
       mg_http_etag(etag, sizeof(etag), &st) != etag) {
     mg_http_reply(c, 404, "", "%s", "Not found\n");
   } else if (inm != NULL && mg_vcasecmp(inm, etag) == 0) {
@@ -377,8 +377,8 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   } else {
     mg_printf(c,
               "HTTP/1.1 200 OK\r\nContent-Type: %s\r\n"
-              "Etag: %s\r\nContent-Length: %lu\r\n%s\r\n",
-              mime, etag, (unsigned long) st.st_size, hdrs ? hdrs : "");
+              "Etag: %s\r\nContent-Length: " MG_INT64_FMT "\r\n%s\r\n",
+              mime, etag, (int64_t) st.st_size, hdrs ? hdrs : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       fclose(fp);
     } else {
@@ -529,7 +529,7 @@ struct dirent *readdir(DIR *d) {
 #endif
 
 static void printdirentry(struct mg_connection *c, struct mg_http_message *hm,
-                          const char *name, struct stat *stp) {
+                          const char *name, mg_stat_t *stp) {
   char size[64], mod[64];  //, path[PATH_MAX];
   int is_dir = S_ISDIR(stp->st_mode);
   const char *slash = is_dir ? "/" : "";
@@ -577,11 +577,11 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
         "<tr><td colspan=\"3\"><hr></td></tr></thead><tbody>\n",
         (int) hm->uri.len, hm->uri.ptr, (int) hm->uri.len, hm->uri.ptr);
     while ((dp = readdir(dirp)) != NULL) {
-      struct stat st;
+      mg_stat_t st;
       // Do not show current dir and hidden files
       if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) continue;
       snprintf(path, sizeof(path), "%s/%s", dir, dp->d_name);
-      if (stat(path, &st) != 0) {
+      if (mg_stat(path, &st) != 0) {
         LOG(LL_ERROR, ("%lu stat(%s): %d", c->id, path, errno));
         continue;
       }

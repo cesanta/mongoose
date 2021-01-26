@@ -52,4 +52,6 @@ typedef int socklen_t;
 #define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
 #endif
 
+#define MG_INT64_FMT "%I64d"
+
 #endif

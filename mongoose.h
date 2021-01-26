@@ -121,6 +121,7 @@
 #include <dirent.h>
 #include <netdb.h>
 #define MG_DIRSEP '/'
+#define MG_INT64_FMT "%lld"
 
 #endif
 
@@ -133,6 +134,7 @@
 #include <stdbool.h>
 #include <sys/time.h>
 #define MG_DIRSEP '/'
+#define MG_INT64_FMT "%lld"
 
 #endif
 
@@ -146,6 +148,7 @@
 #include <FreeRTOS_Sockets.h>
 #include <stdbool.h>
 
+#define MG_INT64_FMT "%lld"
 #define MG_DIRSEP '/'
 #define IPPROTO_TCP FREERTOS_IPPROTO_TCP
 #define IPPROTO_UDP FREERTOS_IPPROTO_UDP
@@ -206,6 +209,7 @@ static inline int ff_vfprintf(FF_FILE *fp, const char *fmt, va_list ap) {
 
 #include <arpa/inet.h>
 #include <dirent.h>
+#include <inttypes.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
 #include <signal.h>
@@ -217,6 +221,7 @@ static inline int ff_vfprintf(FF_FILE *fp, const char *fmt, va_list ap) {
 #include <unistd.h>
 #define MG_DIRSEP '/'
 #define MG_ENABLE_POSIX 1
+#define MG_INT64_FMT "%" PRId64
 
 #endif
 
@@ -272,6 +277,8 @@ typedef int socklen_t;
 #ifndef S_ISDIR
 #define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
 #endif
+
+#define MG_INT64_FMT "%I64d"
 
 #endif
 
@@ -431,6 +438,16 @@ int64_t mg_to64(struct mg_str str);
 double mg_time(void);
 unsigned long mg_millis(void);
 void mg_usleep(unsigned long usecs);
+
+#if MG_ENABLE_FS
+#ifdef _WIN32
+typedef struct _stati64 mg_stat_t;
+#define mg_stat(a, b) _stati64((a), (b))
+#else
+typedef struct stat mg_stat_t;
+#define mg_stat(a, b) stat((a), (b))
+#endif
+#endif
 
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
