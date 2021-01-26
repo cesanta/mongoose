@@ -29,22 +29,36 @@ char *mg_file_read(const char *path) {
   return data;
 }
 
-int mg_file_write(const char *path, const char *fmt, ...) {
-  char tmp[100];
-  int written = 0;
+bool mg_file_write(const char *path, const void *buf, size_t len) {
+  bool result = false;
   FILE *fp;
+  char tmp[PATH_MAX];
   snprintf(tmp, sizeof(tmp), "%s.%d", path, rand());
   fp = fopen(tmp, "wb");
   if (fp != NULL) {
-    va_list ap;
-    va_start(ap, fmt);
-    written = vfprintf(fp, fmt, ap);
-    va_end(ap);
+    result = fwrite(buf, 1, len, fp) == len;
     fclose(fp);
-    remove(path);
-    rename(tmp, path);
+    if (result) {
+      remove(path);
+      rename(tmp, path);
+    } else {
+      remove(tmp);
+    }
   }
-  return written;
+  return result;
+}
+
+bool mg_file_printf(const char *path, const char *fmt, ...) {
+  char tmp[256], *buf = tmp;
+  bool result;
+  size_t len;
+  va_list ap;
+  va_start(ap, fmt);
+  len = mg_vasprintf(&buf, sizeof(tmp), fmt, ap);
+  va_end(ap);
+  result = mg_file_write(path, buf, len);
+  if (buf != tmp) free(buf);
+  return result;
 }
 
 void mg_random(void *buf, size_t len) {

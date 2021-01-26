@@ -1045,12 +1045,16 @@ static void test_dns(void) {
 }
 
 static void test_util(void) {
-  char buf[100], *s = mg_hexdump("abc", 3);
+  char buf[100], *s = mg_hexdump("abc", 3), *p;
   struct mg_addr a;
   ASSERT(s != NULL);
   free(s);
   memset(&a, 0, sizeof(a));
-  ASSERT(mg_file_write("data.txt", "%s", "hi") == 2);
+  ASSERT(mg_file_printf("data.txt", "%s", "hi") == true);
+  ASSERT((p = mg_file_read("data.txt")) != NULL);
+  ASSERT(strcmp(p, "hi") == 0);
+  free(p);
+  remove("data.txt");
   ASSERT(mg_aton(mg_str("0"), &a) == false);
   ASSERT(mg_aton(mg_str("0.0.0."), &a) == false);
   ASSERT(mg_aton(mg_str("0.0.0.256"), &a) == false);

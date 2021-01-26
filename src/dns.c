@@ -156,7 +156,9 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         if (d->c->is_resolving) {
           d->c->is_resolving = 0;
           if (dm.resolved) {
+#if MG_ENABLE_LOG
             char buf[100];
+#endif
             dm.addr.port = d->c->peer.port;  // Save port
             d->c->peer = dm.addr;            // Copy resolved address
             LOG(LL_DEBUG, ("%lu %s resolved to %s", d->c->id, dm.name,

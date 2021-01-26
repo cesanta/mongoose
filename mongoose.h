@@ -16,7 +16,7 @@
 // license, as set out in <https://www.cesanta.com/license>.
 
 #pragma once
-#define MG_VERSION "7.1"
+#define MG_VERSION "7.2"
 
 
 #define MG_ARCH_CUSTOM 0
@@ -414,7 +414,8 @@ void mg_timer_poll(unsigned long uptime_ms);
 
 char *mg_file_read(const char *path);
 size_t mg_file_size(const char *path);
-int mg_file_write(const char *path, const char *fmt, ...);
+bool mg_file_write(const char *path, const void *buf, size_t len);
+bool mg_file_printf(const char *path, const char *fmt, ...);
 void mg_random(void *buf, size_t len);
 bool mg_globmatch(const char *pattern, int plen, const char *s, int n);
 bool mg_next_comma_entry(struct mg_str *s, struct mg_str *k, struct mg_str *v);

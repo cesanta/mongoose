@@ -1049,14 +1049,26 @@ size_t mg_file_size(const char *path);
 
 Return file size, or 0 on failure. Empty files also report 0 length.
 
-
 ### mg\_file\_write()
 
 ```c
-int mg_file_write(const char *path, const char *fmt, ...);
+bool mg_file_write(const char *path, const void *buf, size_t len);
 ```
 
-Write into a file `path` using `printf()` semantics. Return number of bytes written.
+Write data to a file, return `true` if written, `false` otherwise.
+The write is atomic, i.e. data gets written to a temporary file first,
+then `rename()-ed` to a destination file name.
+
+
+### mg\_file\_printf()
+
+```c
+int mg_file_printf(const char *path, const char *fmt, ...);
+```
+
+Write into a file `path` using `printf()` semantics.
+Return `true` on success, `false` otherwise. This function prints data to
+a temporary in-memory buffer first, then calls `mg_file_write()`.
 
 
 ### mg\_random()
