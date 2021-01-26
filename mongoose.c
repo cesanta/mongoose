@@ -801,10 +801,14 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
       fclose(fp);
     } else {
       struct http_data *d = (struct http_data *) calloc(1, sizeof(*d));
-      d->fp = fp;
-      d->old_pfn_data = c->pfn_data;
-      c->pfn = static_cb;
-      c->pfn_data = d;
+      if (d == NULL) {
+        mg_error(c, "static HTTP OOM");
+      } else {
+        d->fp = fp;
+        d->old_pfn_data = c->pfn_data;
+        c->pfn = static_cb;
+        c->pfn_data = d;
+      }
     }
   }
 }
@@ -3320,6 +3324,10 @@ static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
 int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   int rc = 0;
+  if (tls == NULL) {
+    mg_error(c, "TLS OOM");
+    goto fail;
+  }
   LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id,
                  opts->ca == NULL ? "null" : opts->ca,
                  opts->cert == NULL ? "null" : opts->cert,
@@ -3458,6 +3466,12 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   const char *id = "mongoose";
   static unsigned char s_initialised = 0;
   int rc;
+
+  if (tls == NULL) {
+    mg_error(c, "TLS OOM");
+    goto fail;
+  }
+
   if (!s_initialised) {
     SSL_library_init();
     s_initialised++;

@@ -383,10 +383,14 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
       fclose(fp);
     } else {
       struct http_data *d = (struct http_data *) calloc(1, sizeof(*d));
-      d->fp = fp;
-      d->old_pfn_data = c->pfn_data;
-      c->pfn = static_cb;
-      c->pfn_data = d;
+      if (d == NULL) {
+        mg_error(c, "static HTTP OOM");
+      } else {
+        d->fp = fp;
+        d->old_pfn_data = c->pfn_data;
+        c->pfn = static_cb;
+        c->pfn_data = d;
+      }
     }
   }
 }

@@ -64,6 +64,10 @@ static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
 int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   int rc = 0;
+  if (tls == NULL) {
+    mg_error(c, "TLS OOM");
+    goto fail;
+  }
   LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id,
                  opts->ca == NULL ? "null" : opts->ca,
                  opts->cert == NULL ? "null" : opts->cert,
@@ -202,6 +206,12 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   const char *id = "mongoose";
   static unsigned char s_initialised = 0;
   int rc;
+
+  if (tls == NULL) {
+    mg_error(c, "TLS OOM");
+    goto fail;
+  }
+
   if (!s_initialised) {
     SSL_library_init();
     s_initialised++;
