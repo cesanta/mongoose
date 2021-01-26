@@ -1,3 +1,4 @@
+#include "config.h"
 #include "util.h"
 
 #if MG_ENABLE_FS
