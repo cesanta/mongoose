@@ -8,7 +8,6 @@
 #include <mbedtls/debug.h>
 #include <mbedtls/ssl.h>
 
-// Different versions have those in different files, so declare here
 #ifndef EXTERN_C
 #ifdef __cplusplus
 #define EXTERN_C extern "C"
@@ -17,6 +16,7 @@
 #endif
 #endif
 
+// Different versions have those in different files, so declare here
 EXTERN_C int mbedtls_net_recv(void *, unsigned char *, size_t);
 EXTERN_C int mbedtls_net_send(void *, const unsigned char *, size_t);
 
@@ -172,13 +172,8 @@ int mg_tls_free(struct mg_connection *c) {
 }
 #elif MG_ENABLE_OPENSSL  ///////////////////////////////////////// OPENSSL
 
+#include <openssl/err.h>
 #include <openssl/ssl.h>
-#if defined(_MSC_VER) && _MSC_VER < 1700
-typedef long ssize_t;
-#endif
-
-extern void ERR_clear_error(void);          // Defined in openssl/err.h, but
-extern void ERR_print_errors_fp(FILE *fp);  // declare here for krypton
 
 struct mg_tls {
   SSL_CTX *ctx;
@@ -288,7 +283,7 @@ fail:
 int mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
-  SSL_set_fd(tls->ssl, (ssize_t) c->fd);
+  SSL_set_fd(tls->ssl, (long) c->fd);
   rc = c->is_client ? SSL_connect(tls->ssl) : SSL_accept(tls->ssl);
   if (rc == 1) {
     LOG(LL_DEBUG, ("%lu success", c->id));
