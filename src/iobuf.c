@@ -3,7 +3,8 @@
 
 #include <string.h>
 
-void mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
+int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
+  int ok = 1;
   if (new_size == 0) {
     free(io->buf);
     io->buf = NULL;
@@ -18,16 +19,20 @@ void mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
       io->buf = (unsigned char *) p;
       io->size = new_size;
     } else {
+      ok = 0;
       LOG(LL_ERROR,
           ("%lu->%lu", (unsigned long) io->size, (unsigned long) new_size));
     }
   }
+  return ok;
 }
 
-void mg_iobuf_init(struct mg_iobuf *io, size_t size) {
+int mg_iobuf_init(struct mg_iobuf *io, size_t size) {
+  int ok = 1;
   io->buf = NULL;
   io->len = io->size = 0;
-  if (size > 0) mg_iobuf_resize(io, size);
+  if (size > 0) ok = mg_iobuf_resize(io, size);
+  return ok;
 }
 
 size_t mg_iobuf_append(struct mg_iobuf *io, const void *buf, size_t len,

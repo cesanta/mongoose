@@ -528,21 +528,23 @@ by `buf`, and `len` specifies number of bytes currently stored.
 ### mg\_iobuf\_init()
 
 ```c
-void mg_iobuf_init(struct mg_iobuf *io, size_t size);
+int mg_iobuf_init(struct mg_iobuf *io, size_t size);
 ```
 
-Initialise IO buffer, allocate `size` bytes.
+Initialise IO buffer, allocate `size` bytes. Return 1 on success,
+0 on allocation failure.
 
 
 ### mg\_iobuf\_resize()
 
 ```c
-void mg_iobuf_resize(struct mg_iobuf *io, size_t size);
+int mg_iobuf_resize(struct mg_iobuf *io, size_t size);
 ```
 
 Resize IO buffer, set the new size to `size`. The `io->buf` pointer could
 change after this, for example if the buffer grows. If `size` is 0, then the
 `io->buf` is freed and set to NULL, and both `size` and `len` are set to 0.
+Return 1 on success, 0 on allocation failure.
 
 
 ### mg\_iobuf\_free()

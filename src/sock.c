@@ -161,6 +161,7 @@ int mg_send(struct mg_connection *c, const void *buf, size_t len) {
   int fail, n = c->is_udp
                     ? ll_write(c, buf, (SOCKET) len, &fail)
                     : (int) mg_iobuf_append(&c->send, buf, len, MG_IO_SIZE);
+  if (len > 0 && n == 0) fail = 1;
   return n;
 }
 
@@ -235,8 +236,9 @@ static void read_conn(struct mg_connection *c,
   // NOTE(lsm): do only one iteration of reads, cause some systems
   // (e.g. FreeRTOS stack) return 0 instead of -1/EWOULDBLOCK when no data
   if (c->recv.size - c->recv.len < MG_IO_SIZE &&
-      c->recv.size < MG_MAX_RECV_BUF_SIZE) {
-    mg_iobuf_resize(&c->recv, c->recv.size + MG_IO_SIZE);
+      c->recv.size < MG_MAX_RECV_BUF_SIZE &&
+      !mg_iobuf_resize(&c->recv, c->recv.size + MG_IO_SIZE)) {
+    c->is_closing = 1;
   }
   buf = c->recv.buf + c->recv.len;
   len = (int) (c->recv.size - c->recv.len);
