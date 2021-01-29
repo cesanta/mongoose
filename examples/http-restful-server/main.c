@@ -14,7 +14,7 @@
 
 #include "mongoose.h"
 
-static const char *s_listen_on = "https://localhost:8000";
+static const char *s_listen_on = "http://0.0.0.0:8000";
 static const char *s_web_directory = ".";
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
