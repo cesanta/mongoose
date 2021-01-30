@@ -9,12 +9,8 @@
 
 #include "mongoose.h"
 
-#if MG_ENABLE_OPENSSL
-static const char *s_url = "https://example.com";
-#else
 // The very first web page in history
 static const char *s_url = "http://info.cern.ch";
-#endif
 
 // Print HTTP response and signal that we're done
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
