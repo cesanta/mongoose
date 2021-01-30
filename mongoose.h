@@ -726,11 +726,11 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 
 
 struct mg_tls_opts {
-  const char *ca;        // CA certificate file. For both listeners and clients
-  const char *cert;      // Certificate
-  const char *certkey;   // Certificate key
-  const char *ciphers;   // Cipher list
-  const char *srvname;   // If not NULL, enables server name verification
+  const char *ca;         // CA certificate file. For both listeners and clients
+  const char *cert;       // Certificate
+  const char *certkey;    // Certificate key
+  const char *ciphers;    // Cipher list
+  struct mg_str srvname;  // If not empty, enables server name verification
 };
 
 int mg_tls_init(struct mg_connection *, struct mg_tls_opts *);

@@ -1,11 +1,14 @@
 PROG ?= example
-CFLAGS ?= -DMG_ENABLE_LINES $(CFLAGS_EXTRA)
-MBEDTLS_DIR ?=
+CFLAGS ?= -DMG_ENABLE_LINES $(EXTRA)
 
-ifeq "$(MBEDTLS_DIR)" ""
-else
+ifneq ($(MBEDTLS),)
 CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS_DIR)/include -I/usr/include
 CFLAGS += -L$(MBEDTLS_DIR)/lib -lmbedtls -lmbedcrypto -lmbedx509
+endif
+
+ifneq ($(OPENSSL),)
+CFLAGS += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
+CFLAGS += -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
 all: $(PROG)

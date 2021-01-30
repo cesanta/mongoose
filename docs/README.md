@@ -952,7 +952,7 @@ Subscribe to topic `topic`.
 
 ## TLS
 
-### struct mg\_tls\_opts
+### mg\_tls\_init()
 
 ```c
 struct mg_tls_opts {
@@ -960,20 +960,12 @@ struct mg_tls_opts {
   const char *cert;      // Certificate
   const char *certkey;   // Certificate key
   const char *ciphers;   // Cipher list
-  const char *srvname;   // If not NULL, enables server name verification
+  struct mg_str srvname; // If not empty, enables server name verification
 };
-```
-
-Describes TLS parameters
-
-
-### mg\_tls\_init()
-
-```c
 int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts);
 ```
 
-Turns on TLS on a given connection.
+Initialise TLS on a given connection.
 
 
 ## Timers

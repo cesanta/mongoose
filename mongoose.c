@@ -3374,6 +3374,11 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     }
     mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, NULL);
 #endif
+    if (opts->srvname.len > 0) {
+      char buf[opts->srvname.len + 1];
+      sprintf(buf, "%.*s", (int) opts->srvname.len, opts->srvname.ptr);
+      mbedtls_ssl_set_hostname(&tls->ssl, buf);
+    }
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
   }
   if (opts->cert != NULL && opts->cert[0] != '\0') {
@@ -3502,9 +3507,9 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   SSL_set_options(tls->ssl, SSL_OP_CIPHER_SERVER_PREFERENCE);
 #endif
 
-  SSL_set_verify(tls->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
-                 0);
   if (opts->ca != NULL && opts->ca[0] != '\0') {
+    SSL_set_verify(tls->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+                   NULL);
     if ((rc = SSL_CTX_load_verify_locations(tls->ctx, opts->ca, NULL)) != 1) {
       mg_error(c, "parse(%s): err %d", opts->ca, mg_tls_err(tls, rc));
       goto fail;
@@ -3533,7 +3538,11 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     }
   }
   if (opts->ciphers != NULL) SSL_set_cipher_list(tls->ssl, opts->ciphers);
-  if (opts->srvname != NULL) SSL_set_tlsext_host_name(tls->ssl, opts->srvname);
+  if (opts->srvname.len > 0) {
+    char buf[opts->srvname.len + 1];
+    sprintf(buf, "%.*s", (int) opts->srvname.len, opts->srvname.ptr);
+    SSL_set_tlsext_host_name(tls->ssl, buf);
+  }
   c->tls = tls;
   c->is_tls = 1;
   c->is_tls_hs = 1;
