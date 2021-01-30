@@ -3,6 +3,7 @@ CFLAGS ?= -DMG_ENABLE_LINES $(CFLAGS_EXTRA)
 MBEDTLS_DIR ?=
 
 ifeq "$(MBEDTLS_DIR)" ""
+CFLAGS += -DMG_ENABLE_OPENSSL -lssl -lcrypto
 else
 CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS_DIR)/include -I/usr/include
 CFLAGS += -L$(MBEDTLS_DIR)/lib -lmbedtls -lmbedcrypto -lmbedx509

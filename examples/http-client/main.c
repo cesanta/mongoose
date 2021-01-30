@@ -9,8 +9,12 @@
 
 #include "mongoose.h"
 
+#if MG_ENABLE_OPENSSL
+static const char *s_url = "https://example.com";
+#else
 // The very first web page in history
 static const char *s_url = "http://info.cern.ch";
+#endif
 
 // Print HTTP response and signal that we're done
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -20,8 +24,13 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
     if (mg_url_is_ssl(s_url)) {
       // If s_url is https://, tell client connection to use TLS
-      struct mg_tls_opts opts = {.ca = "ca.pem"};
+      char * host_c_str = strndup (host.ptr, host.len);
+      struct mg_tls_opts opts = {
+        .ca = "ca.pem",
+        .srvname = host_c_str, /* SNI */
+      };
       mg_tls_init(c, &opts);
+      free (host_c_str);
     }
     // Send request
     mg_printf(c, "GET %s HTTP/1.0\r\nHost: %.*s\r\n\r\n", mg_url_uri(s_url),
