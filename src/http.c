@@ -530,9 +530,10 @@ struct dirent *readdir(DIR *d) {
 
 static void printdirentry(struct mg_connection *c, struct mg_http_message *hm,
                           const char *name, mg_stat_t *stp) {
-  char size[64], mod[64];  //, path[PATH_MAX];
+  char size[64], mod[64];
   int is_dir = S_ISDIR(stp->st_mode);
   const char *slash = is_dir ? "/" : "";
+  const char *es = hm->uri.ptr[hm->uri.len - 1] != '/' ? "/" : "";
 
   if (is_dir) {
     snprintf(size, sizeof(size), "%s", "[DIR]");
@@ -548,34 +549,32 @@ static void printdirentry(struct mg_connection *c, struct mg_http_message *hm,
     }
   }
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&stp->st_mtime));
-  // mg_escape(file_name, path, sizeof(path));
-  // href = mg_url_encode(mg_mk_str(file_name));
-  mg_http_printf_chunk(c,
-                       "  <tr><td><a href=\"%.*s%s%s\">%s%s</a></td>"
-                       "<td>%s</td><td>%s</td></tr>\n",
-                       (int) hm->uri.len, hm->uri.ptr, name, slash, name, slash,
-                       mod, size);
-  // free((void *) href.p);
+  mg_printf(c,
+            "  <tr><td><a href=\"%.*s%s%s%s\">%s%s</a></td>"
+            "<td>%s</td><td>%s</td></tr>\n",
+            (int) hm->uri.len, hm->uri.ptr, es, name, slash, name, slash, mod,
+            size);
 }
 
 static void listdir(struct mg_connection *c, struct mg_http_message *hm,
                     char *dir) {
-  char path[PATH_MAX + 1], *p = &dir[strlen(dir) - 1];
+  char path[PATH_MAX + 1], *p = &dir[strlen(dir) - 1], tmp[10];
   struct dirent *dp;
   DIR *dirp;
 
   while (p > dir && *p != '/') *p-- = '\0';
   if ((dirp = (opendir(dir))) != NULL) {
-    mg_printf(c, "%s\r\n", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n");
-    mg_http_printf_chunk(
-        c,
-        "<!DOCTYPE html><html><head><title>Index of %.*s</title>"
-        "<style>th,td {text-align: left; padding-right: 1em; "
-        "font-family: monospace; }</style></head>"
-        "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
-        "<tr><th>Name</th><th>Modified</th><th>Size</th></tr>"
-        "<tr><td colspan=\"3\"><hr></td></tr></thead><tbody>\n",
-        (int) hm->uri.len, hm->uri.ptr, (int) hm->uri.len, hm->uri.ptr);
+    size_t off, n;
+    mg_printf(c, "%s\r\n", "HTTP/1.1 200 OK\r\nContent-Length:         \r\n");
+    off = c->send.len;  // Start of body
+    mg_printf(c,
+              "<!DOCTYPE html><html><head><title>Index of %.*s</title>"
+              "<style>th,td {text-align: left; padding-right: 1em; "
+              "font-family: monospace; }</style></head>"
+              "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
+              "<tr><th>Name</th><th>Modified</th><th>Size</th></tr>"
+              "<tr><td colspan=\"3\"><hr></td></tr></thead><tbody>\n",
+              (int) hm->uri.len, hm->uri.ptr, (int) hm->uri.len, hm->uri.ptr);
     while ((dp = readdir(dirp)) != NULL) {
       mg_stat_t st;
       // Do not show current dir and hidden files
@@ -588,12 +587,12 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
       printdirentry(c, hm, dp->d_name, &st);
     }
     closedir(dirp);
-    mg_http_printf_chunk(
-        c,
-        "</tbody><tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
-        "</table><address>Mongoose v.%s</address></body></html>\n",
-        MG_VERSION);
-    mg_http_write_chunk(c, "", 0);
+    mg_printf(c,
+              "</tbody><tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
+              "</table><address>Mongoose v.%s</address></body></html>\n",
+              MG_VERSION);
+    n = snprintf(tmp, sizeof(tmp), "%lu", (unsigned long) (c->send.len - off));
+    memcpy(c->send.buf + off - 10, tmp, n);  // Set content length
   } else {
     mg_http_reply(c, 400, "", "Cannot open dir");
     LOG(LL_DEBUG, ("%lu opendir(%s) -> %d", c->id, dir, errno));
