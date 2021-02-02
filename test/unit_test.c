@@ -574,8 +574,12 @@ static void test_http_server(void) {
                  "POST /upload?name=uploaded.txt HTTP/1.0\r\n"
                  "Content-Length: 5\r\n"
                  "\r\nhello") == 200);
+    ASSERT(fetch(&mgr, buf, url,
+                 "POST /upload?name=uploaded.txt&offset=5 HTTP/1.0\r\n"
+                 "Content-Length: 6\r\n"
+                 "\r\n\nworld") == 200);
     ASSERT((p = mg_file_read("uploaded.txt")) != NULL);
-    ASSERT(strcmp(p, "hello") == 0);
+    ASSERT(strcmp(p, "hello\nworld") == 0);
     free(p);
     remove("uploaded.txt");
   }
