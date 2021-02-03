@@ -159,10 +159,10 @@ enum {
 they can be either 0 or 1.  Some flags are set by Mongoose and must be not
 changed by an application code, for example `is_udp` flag tells application if
 that connection is UDP or not.  Some flags can be changed by application, for
-example, `is_drainig` flag, if set by an application, tells Mongoose to send
+example, `is_draining` flag, if set by an application, tells Mongoose to send
 the remaining data to peer, and when everything is sent, close the connection.
 
-User-changeable flags are: `is_hexdumping`, `is_drainig`, `is_closing`.
+User-changeable flags are: `is_hexdumping`, `is_draining`, `is_closing`.
 
 This is taken from `mongoose.h` as-is:
 
