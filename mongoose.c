@@ -483,7 +483,7 @@ int mg_http_get_var(const struct mg_str *buf, const char *name, char *dst,
         s = (const char *) memchr(p, '&', (size_t)(e - p));
         if (s == NULL) s = e;
         len = mg_url_decode(p, (size_t)(s - p), dst, dst_len, 1);
-        if (len == -1) len = -3;  // Failed to decode
+        if (len < 0) len = -3;  // Failed to decode
         break;
       }
     }
@@ -511,7 +511,7 @@ int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
     }
   }
   if (j < dst_len) dst[j] = '\0';  // Null-terminate the destination
-  return i >= src_len ? (int) j : -1;
+  return i >= src_len && j < dst_len ? (int) j : -1;
 }
 
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len) {
@@ -819,21 +819,23 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     MG_ARCH == MG_ARCH_FREERTOS
 char *realpath(const char *src, char *dst) {
   int len = strlen(src);
-  if (len > PATH_MAX - 1) len = PATH_MAX - 1;
+  if (len > MG_PATH_MAX - 1) len = MG_PATH_MAX - 1;
   strncpy(dst, src, len);
   dst[len] = '\0';
+  LOG(LL_DEBUG, ("[%s] -> [%s]", src, dst));
   return dst;
 }
 #endif
 
-// Try to avoid dirent API
-static int mg_is_dir(const char *path) {
+// Allow user to override this function
+bool mg_is_dir(const char *path) WEAK;
+bool mg_is_dir(const char *path) {
 #if MG_ARCH == MG_ARCH_FREERTOS
   struct FF_STAT st;
   return (ff_stat(path, &st) == 0) && (st.st_mode & FF_IFDIR);
 #else
-  struct stat st;
-  return (stat(path, &st) == 0) && (st.st_mode & S_IFDIR);
+  mg_stat_t st;
+  return mg_stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 #endif
 }
 
@@ -978,7 +980,7 @@ static void printdirentry(struct mg_connection *c, struct mg_http_message *hm,
 
 static void listdir(struct mg_connection *c, struct mg_http_message *hm,
                     char *dir) {
-  char path[PATH_MAX + 1], *p = &dir[strlen(dir) - 1], tmp[10];
+  char path[MG_PATH_MAX], *p = &dir[strlen(dir) - 1], tmp[10];
   struct dirent *dp;
   DIR *dirp;
 
@@ -997,14 +999,17 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
               (int) hm->uri.len, hm->uri.ptr, (int) hm->uri.len, hm->uri.ptr);
     while ((dp = readdir(dirp)) != NULL) {
       mg_stat_t st;
+      const char *sep = dp->d_name[0] == MG_DIRSEP ? "/" : "";
       // Do not show current dir and hidden files
       if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) continue;
-      snprintf(path, sizeof(path), "%s/%s", dir, dp->d_name);
-      if (mg_stat(path, &st) != 0) {
+      // SPIFFS can report "/foo.txt" in the dp->d_name
+      if (snprintf(path, sizeof(path), "%s%s%s", dir, sep, dp->d_name) < 0) {
+        LOG(LL_ERROR, ("%s truncated", dp->d_name));
+      } else if (mg_stat(path, &st) != 0) {
         LOG(LL_ERROR, ("%lu stat(%s): %d", c->id, path, errno));
-        continue;
+      } else {
+        printdirentry(c, hm, dp->d_name, &st);
       }
-      printdirentry(c, hm, dp->d_name, &st);
     }
     closedir(dirp);
     mg_printf(c,
@@ -1022,59 +1027,70 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        struct mg_http_serve_opts *opts) {
-  char path[PATH_MAX + 2], root[sizeof(path) - 2], real[sizeof(path) - 2];
-  path[0] = root[0] = real[0] = '\0';
-  if (realpath(opts->root_dir, root) == NULL)
-    LOG(LL_DEBUG, ("realpath(%s): %d", opts->root_dir, errno));
-  if (!mg_is_dir(root)) {
-    mg_http_reply(c, 400, "", "Bad web root [%s]\n", root);
+  char t1[MG_PATH_MAX], t2[sizeof(t1)];
+  t1[0] = t2[0] = '\0';
+
+  if (realpath(opts->root_dir, t1) == NULL)
+    LOG(LL_ERROR, ("realpath(%s): %d", opts->root_dir, errno));
+
+  LOG(LL_DEBUG, ("realpath(%s) -> [%s] %zu", opts->root_dir, t1, sizeof(t1)));
+
+  if (!mg_is_dir(t1)) {
+    mg_http_reply(c, 400, "", "Bad web root [%s]\n", t1);
   } else {
-    char dec[PATH_MAX];
     // NOTE(lsm): Xilinx snprintf does not 0-terminate the detination for
     // the %.*s specifier, if the length is zero. Make sure hm->uri.len > 0
     bool is_index = false;
-    int ndec = mg_url_decode(hm->uri.ptr, hm->uri.len, dec, sizeof(dec), 0);
-    size_t n =
-        snprintf(path, sizeof(path), "%s%.*s", root, ndec < 0 ? 0 : ndec, dec);
-    while (n > 0 && n < sizeof(path) && path[n - 1] == '/') path[--n] = 0;
-    if (realpath(path, real) == NULL)
-      LOG(LL_DEBUG, ("realpath(%s): %d", path, errno));
-    // LOG(LL_INFO, ("[%s] [%s] [%s] [%s]", dir, root, path, real));
-    if (mg_is_dir(real)) {
-      strncat(real, "/index.html", sizeof(real) - strlen(real) - 1);
-      real[sizeof(real) - 1] = '\0';
+    size_t n1 = strlen(t1), n2;
+
+    mg_url_decode(hm->uri.ptr, hm->uri.len, t1 + n1, sizeof(t1) - n1, 0);
+    t1[sizeof(t1) - 1] = '\0';
+    n2 = strlen(t1);
+    while (n2 > 0 && t1[n2 - 1] == '/') t1[--n2] = 0;
+
+    if (realpath(t1, t2) == NULL)
+      LOG(LL_ERROR, ("realpath(%s): %d", t1, errno));
+
+    if (mg_is_dir(t2)) {
+      strncat(t2, "/index.html", sizeof(t2) - strlen(t2) - 1);
+      t2[sizeof(t2) - 1] = '\0';
       is_index = true;
     }
-    if (strlen(real) < strlen(root) || memcmp(real, root, strlen(root)) != 0) {
+
+    LOG(LL_DEBUG, (" --> [%s] [%s] %zu", t1, t2, sizeof(t1)));
+
+    if (strlen(t2) < n1 || memcmp(t1, t2, n1) != 0) {
+      // Requested file is located outside root directory, fail
       mg_http_reply(c, 404, "", "Not found %.*s\n", hm->uri.len, hm->uri.ptr);
     } else {
-      FILE *fp = fopen(real, "r");
+      FILE *fp = fopen(t2, "r");
 #if MG_ENABLE_SSI
       if (is_index && fp == NULL) {
-        char *p = real + strlen(real);
-        while (p > real && p[-1] != '/') p--;
-        strncpy(p, "index.shtml", &real[sizeof(real)] - p - 2);
-        real[sizeof(real) - 1] = '\0';
-        fp = fopen(real, "r");
+        char *p = t2 + strlen(t2);
+        while (p > t2 && p[-1] != '/') p--;
+        strncpy(p, "index.shtml", &t2[sizeof(t2)] - p - 2);
+        t2[sizeof(t2) - 1] = '\0';
+        fp = fopen(t2, "r");
       }
 #endif
 #if MG_ENABLE_HTTP_DEBUG_ENDPOINT
-      snprintf(c->label, sizeof(c->label) - 1, "<-F %s", real);
+      snprintf(c->label, sizeof(c->label) - 1, "<-F %s", t2);
 #endif
       if (is_index && fp == NULL) {
 #if MG_ENABLE_DIRECTORY_LISTING
-        listdir(c, hm, real);
+        listdir(c, hm, t2);
 #else
         mg_http_reply(c, 403, "", "%s", "Directory listing not supported");
 #endif
 #if MG_ENABLE_SSI
       } else if (opts->ssi_pattern != NULL &&
-                 mg_globmatch(opts->ssi_pattern, strlen(opts->ssi_pattern),
-                              real, strlen(real))) {
-        mg_http_serve_ssi(c, root, real);
+                 mg_globmatch(opts->ssi_pattern, strlen(opts->ssi_pattern), t2,
+                              strlen(t2))) {
+        t1[n1] = '\0';
+        mg_http_serve_ssi(c, t1, t2);
 #endif
       } else {
-        mg_http_serve_file(c, hm, real, guess_content_type(real), NULL);
+        mg_http_serve_file(c, hm, t2, guess_content_type(t2), NULL);
       }
       if (fp != NULL) fclose(fp);
     }
@@ -3058,7 +3074,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
       if (intag && ch == '>' && buf[len - 1] == '-' && buf[len - 2] == '-') {
         buf[len++] = ch & 0xff;
         if (sscanf(buf, "<!--#include file=\"%[^\"]", arg)) {
-          char tmp[PATH_MAX], *p = (char *) path + strlen(path), *data;
+          char tmp[MG_PATH_MAX], *p = (char *) path + strlen(path), *data;
           while (p > path && p[-1] != MG_DIRSEP && p[-1] != '/') p--;
           snprintf(tmp, sizeof(tmp), "%.*s%s", (int) (p - path), path, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
@@ -3069,7 +3085,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
             LOG(LL_ERROR, ("%s: file=%s error or too deep", path, arg));
           }
         } else if (sscanf(buf, "<!--#include virtual=\"%[^\"]", arg)) {
-          char tmp[PATH_MAX], *data;
+          char tmp[MG_PATH_MAX], *data;
           snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
@@ -3755,7 +3771,7 @@ char *mg_file_read(const char *path) {
 bool mg_file_write(const char *path, const void *buf, size_t len) {
   bool result = false;
   FILE *fp;
-  char tmp[PATH_MAX];
+  char tmp[MG_PATH_MAX];
   snprintf(tmp, sizeof(tmp), "%s.%d", path, rand());
   fp = fopen(tmp, "wb");
   if (fp != NULL) {

@@ -120,8 +120,12 @@
 
 #include <dirent.h>
 #include <netdb.h>
+#include <sys/stat.h>
 #define MG_DIRSEP '/'
 #define MG_INT64_FMT "%lld"
+#ifndef MG_PATH_MAX
+#define MG_PATH_MAX 128
+#endif
 
 #endif
 
@@ -349,6 +353,10 @@ typedef int socklen_t;
 
 #ifndef MG_MAX_HTTP_HEADERS
 #define MG_MAX_HTTP_HEADERS 40
+#endif
+
+#ifndef MG_PATH_MAX
+#define MG_PATH_MAX PATH_MAX
 #endif
 
 

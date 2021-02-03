@@ -67,3 +67,7 @@
 #ifndef MG_MAX_HTTP_HEADERS
 #define MG_MAX_HTTP_HEADERS 40
 #endif
+
+#ifndef MG_PATH_MAX
+#define MG_PATH_MAX PATH_MAX
+#endif

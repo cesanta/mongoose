@@ -34,7 +34,7 @@ char *mg_file_read(const char *path) {
 bool mg_file_write(const char *path, const void *buf, size_t len) {
   bool result = false;
   FILE *fp;
-  char tmp[PATH_MAX];
+  char tmp[MG_PATH_MAX];
   snprintf(tmp, sizeof(tmp), "%s.%d", path, rand());
   fp = fopen(tmp, "wb");
   if (fp != NULL) {
