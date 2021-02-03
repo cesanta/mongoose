@@ -1020,7 +1020,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
     memcpy(c->send.buf + off - 10, tmp, n);  // Set content length
   } else {
     mg_http_reply(c, 400, "", "Cannot open dir");
-    LOG(LL_DEBUG, ("%lu opendir(%s) -> %d", c->id, dir, errno));
+    LOG(LL_ERROR, ("%lu opendir(%s) -> %d", c->id, dir, errno));
   }
 }
 #endif
@@ -1032,8 +1032,6 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
 
   if (realpath(opts->root_dir, t1) == NULL)
     LOG(LL_ERROR, ("realpath(%s): %d", opts->root_dir, errno));
-
-  LOG(LL_DEBUG, ("realpath(%s) -> [%s] %zu", opts->root_dir, t1, sizeof(t1)));
 
   if (!mg_is_dir(t1)) {
     mg_http_reply(c, 400, "", "Bad web root [%s]\n", t1);
@@ -1056,8 +1054,6 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
       t2[sizeof(t2) - 1] = '\0';
       is_index = true;
     }
-
-    LOG(LL_DEBUG, (" --> [%s] [%s] %zu", t1, t2, sizeof(t1)));
 
     if (strlen(t2) < n1 || memcmp(t1, t2, n1) != 0) {
       // Requested file is located outside root directory, fail
