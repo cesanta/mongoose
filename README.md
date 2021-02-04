@@ -33,11 +33,10 @@ Looking for a complete IoT solution? Check out
 
 # Features
 
-* Cross-platform: works on Linux/UNIX, MacOS, QNX, eCos, Windows, Android,
-  iPhone, FreeRTOS, etc
-* Supported embedded architectures: ESP32, ESP8266, TI CC3200, TI MSP432, NRF52, STM32, PIC32, NXP, and more
+* Cross-platform: works on Linux/UNIX, MacOS, Windows, Android, FreeRTOS, etc
+* Supported embedded architectures: ESP32, ESP8266, TI, NRF52, STM32, PIC32, NXP, and more
 * Builtin protocols: plain TCP/UDP, HTTP, MQTT, Websocket
-* SSL/TLS support: mbedTLS, OpenSSL or custom via API
+* SSL/TLS support: mbedTLS, OpenSSL or custom (via API)
 * Asynchronous DNS resolver
 * Tiny static and run-time footprint
 * Source code is both ISO C and ISO C++ compliant
