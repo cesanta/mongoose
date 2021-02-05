@@ -21,6 +21,9 @@ on the top 9 things to avoid when embedding a web server.
 
 - [Download “9 Things NOT to do when embedding a web server” white paper here](https://www.cesanta.com/whitepaper.html)
 
+# Looking for a pre-compiled Mongoose web server Windows or Mac binary?
+- [Download pre-compiled Mongoose web server binary.](https://www.cesanta.com/binary.html)
+
 Looking for a complete IoT solution? Check out
 - [VCON](https://vcon.io) - Arduino compatible MCU modules with built-in firmware OTA updates
 - [Mongoose OS](https://mongoose-os.com) - open source embedded operating system for low-power connected microcontrollers. Secure, designed for commercial Internet of Things products
@@ -69,5 +72,4 @@ Contributions are welcome! Please follow the guidelines below:
 - When making pull requests, please make sure that it has only one commit,
  and imlements/fixes only one piece of functionality
 
-# Looking for a pre-compiled Mongoose web server Windows or Mac binary?
-- [Download pre-compiled Mongoose web server binary.](https://www.cesanta.com/binary.html)
+
