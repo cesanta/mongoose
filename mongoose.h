@@ -3871,6 +3871,15 @@ struct mg_connect_opts {
    */
   const char *ssl_psk_identity;
   const char *ssl_psk_key;
+#else
+  /* Ensure struct size remains the same. */
+  const char *unused_ssl_cert;
+  const char *unused_ssl_key;
+  const char *unused_ssl_ca_cert;
+  const char *unused_ssl_cipher_suites;
+  const char *unused_ssl_server_name;
+  const char *unused_ssl_psk_identity;
+  const char *unused_ssl_psk_key;
 #endif
 };
 
