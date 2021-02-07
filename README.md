@@ -22,7 +22,7 @@ on the top 9 things to avoid when embedding a web server.
 - [Download “9 Things NOT to do when embedding a web server” white paper here](https://www.cesanta.com/whitepaper.html)
 
 # Looking for a pre-compiled Mongoose web server Windows or Mac binary?
-- [Download pre-compiled Mongoose web server binary.](https://www.cesanta.com/binary.html)
+- [Download pre-compiled Mongoose web server binary](https://mongoose.ws/)
 
 # Looking for a complete IoT solution? Check out
 - [VCON](https://vcon.io) - Arduino compatible MCU modules with built-in firmware OTA updates
