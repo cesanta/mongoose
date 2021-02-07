@@ -271,7 +271,7 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
     snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, name);
     LOG(LL_DEBUG,
         ("%p %d bytes @ %d [%s]", c->fd, (int) hm->body.len, (int) oft, name));
-    if ((fp = fopen(path, oft == 0 ? "wb" : "ab")) == NULL) {
+    if ((fp = mg_fopen(path, oft == 0 ? "wb" : "ab")) == NULL) {
       mg_http_reply(c, 400, "", "fopen(%s): %d", name, errno);
       return -2;
     } else {
@@ -309,9 +309,9 @@ static const char *guess_content_type(const char *filename) {
     size_t ext_len;
     const char *type;
   } * t, types[] = {
-             MIME_ENTRY("html", "text/html"),
-             MIME_ENTRY("htm", "text/html"),
-             MIME_ENTRY("shtml", "text/html"),
+             MIME_ENTRY("html", "text/html; charset=utf-8"),
+             MIME_ENTRY("htm", "text/html; charset=utf-8"),
+             MIME_ENTRY("shtml", "text/html; charset=utf-8"),
              MIME_ENTRY("css", "text/css"),
              MIME_ENTRY("js", "text/javascript"),
              MIME_ENTRY("mjs", "text/javascript"),
@@ -322,7 +322,7 @@ static const char *guess_content_type(const char *filename) {
              MIME_ENTRY("jpeg", "image/jpeg"),
              MIME_ENTRY("png", "image/png"),
              MIME_ENTRY("svg", "image/svg+xml"),
-             MIME_ENTRY("txt", "text/plain"),
+             MIME_ENTRY("txt", "text/plain; charset=utf-8"),
              MIME_ENTRY("wav", "audio/wav"),
              MIME_ENTRY("mp3", "audio/mpeg"),
              MIME_ENTRY("mid", "audio/mid"),
@@ -359,18 +359,21 @@ static const char *guess_content_type(const char *filename) {
     if (mg_ncasecmp(t->ext, &filename[n - t->ext_len], t->ext_len)) continue;
     return t->type;
   }
-  return "text/plain";
+  return "text/plain; charset=utf-8";
 }
 
 void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path, const char *mime, const char *hdrs) {
   struct mg_str *inm = mg_http_get_header(hm, "If-None-Match");
   mg_stat_t st;
-  FILE *fp = fopen(path, "rb");
   char etag[64];
+  FILE *fp = mg_fopen(path, "rb");
   if (fp == NULL || mg_stat(path, &st) != 0 ||
       mg_http_etag(etag, sizeof(etag), &st) != etag) {
+    LOG(LL_DEBUG,
+        ("404 [%.*s] [%s] %p", (int) hm->uri.len, hm->uri.ptr, path, fp));
     mg_http_reply(c, 404, "", "%s", "Not found\n");
+    if (fp != NULL) fclose(fp);
   } else if (inm != NULL && mg_vcasecmp(inm, etag) == 0) {
     fclose(fp);
     mg_printf(c, "HTTP/1.1 304 Not Modified\r\nContent-Length: 0\r\n\r\n");
@@ -530,12 +533,34 @@ struct dirent *readdir(DIR *d) {
 }
 #endif
 
-static void printdirentry(struct mg_connection *c, struct mg_http_message *hm,
-                          const char *name, mg_stat_t *stp) {
-  char size[64], mod[64];
+static bool mg_is_safe(int c) {
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+         (c >= 'A' && c <= 'Z') || strchr("._-$,;~()/", c) != NULL;
+}
+
+static int mg_url_encode(const char *s, char *buf, size_t len) {
+  int i, n = 0;
+  for (i = 0; s[i] != '\0'; i++) {
+    int c = *((const unsigned char *) (s + i));
+    if ((size_t) n + 4 >= len) return 0;
+    if (mg_is_safe(c)) {
+      buf[n++] = s[i];
+    } else {
+      buf[n++] = '%';
+      mg_hex(&s[i], 1, &buf[n]);
+      n += 2;
+    }
+  }
+  return n;
+}
+
+static void printdirentry(struct mg_connection *c, const char *name,
+                          mg_stat_t *stp) {
+  char size[64], mod[64], path[MG_PATH_MAX];
   int is_dir = S_ISDIR(stp->st_mode);
   const char *slash = is_dir ? "/" : "";
-  const char *es = hm->uri.ptr[hm->uri.len - 1] != '/' ? "/" : "";
+  // const char *es = hm->uri.ptr[hm->uri.len - 1] != '/' ? "/" : "";
+  int n = 0;
 
   if (is_dir) {
     snprintf(size, sizeof(size), "%s", "[DIR]");
@@ -551,11 +576,11 @@ static void printdirentry(struct mg_connection *c, struct mg_http_message *hm,
     }
   }
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&stp->st_mtime));
+  n = mg_url_encode(name, path, sizeof(path));
   mg_printf(c,
-            "  <tr><td><a href=\"%.*s%s%s%s\">%s%s</a></td>"
+            "  <tr><td><a href=\"%.*s%s\">%s%s</a></td>"
             "<td>%s</td><td>%s</td></tr>\n",
-            (int) hm->uri.len, hm->uri.ptr, es, name, slash, name, slash, mod,
-            size);
+            n, path, slash, name, slash, mod, size);
 }
 
 static void listdir(struct mg_connection *c, struct mg_http_message *hm,
@@ -563,20 +588,52 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
   char path[MG_PATH_MAX], *p = &dir[strlen(dir) - 1], tmp[10];
   struct dirent *dp;
   DIR *dirp;
+  static const char *sort_js_code =
+      "<script>function srt(tb, sc, so, d) {"
+      "var tr = Array.prototype.slice.call(tb.rows, 0),"
+      "tr = tr.sort(function (a, b) { var c1 = a.cells[sc], c2 = b.cells[sc],"
+      "n1 = c1.getAttribute('name'), n2 = c2.getAttribute('name'), "
+      "t1 = a.cells[2].getAttribute('name'), "
+      "t2 = b.cells[2].getAttribute('name'); "
+      "return so * (t1 < 0 && t2 >= 0 ? -1 : t2 < 0 && t1 >= 0 ? 1 : "
+      "n1 ? parseInt(n2) - parseInt(n1) : "
+      "c1.textContent.trim().localeCompare(c2.textContent.trim())); });";
+  static const char *sort_js_code2 =
+      "for (var i = 0; i < tr.length; i++) tb.appendChild(tr[i]); "
+      "if (!d) window.location.hash = ('sc=' + sc + '&so=' + so); "
+      "};"
+      "window.onload = function() {"
+      "var tb = document.getElementById('tb');"
+      "var m = /sc=([012]).so=(1|-1)/.exec(window.location.hash) || [0, 2, 1];"
+      "var sc = m[1], so = m[2]; document.onclick = function(ev) { "
+      "var c = ev.target.rel; if (c) {if (c == sc) so *= -1; srt(tb, c, so); "
+      "sc = c; ev.preventDefault();}};"
+      "srt(tb, sc, so, true);"
+      "}"
+      "</script>";
 
   while (p > dir && *p != '/') *p-- = '\0';
   if ((dirp = (opendir(dir))) != NULL) {
     size_t off, n;
-    mg_printf(c, "%s\r\n", "HTTP/1.1 200 OK\r\nContent-Length:         \r\n");
+    mg_printf(c, "%s\r\n",
+              "HTTP/1.1 200 OK\r\n"
+              "Content-Type: text/html; charset=utf-8\r\n"
+              "Content-Length:         \r\n");
     off = c->send.len;  // Start of body
     mg_printf(c,
-              "<!DOCTYPE html><html><head><title>Index of %.*s</title>"
+              "<!DOCTYPE html><html><head><title>Index of %.*s</title>%s%s"
               "<style>th,td {text-align: left; padding-right: 1em; "
               "font-family: monospace; }</style></head>"
               "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
-              "<tr><th>Name</th><th>Modified</th><th>Size</th></tr>"
-              "<tr><td colspan=\"3\"><hr></td></tr></thead><tbody>\n",
-              (int) hm->uri.len, hm->uri.ptr, (int) hm->uri.len, hm->uri.ptr);
+              "<tr><th><a href=\"#\" rel=\"0\">Name</a></th><th>"
+              "<a href=\"#\" rel=\"1\">Modified</a></th>"
+              "<th><a href=\"#\" rel=\"2\">Size</a></th></tr>"
+              "<tr><td colspan=\"3\"><hr></td></tr>"
+              "</thead>"
+              "<tbody id=\"tb\">\n",
+              (int) hm->uri.len, hm->uri.ptr, sort_js_code, sort_js_code2,
+              (int) hm->uri.len, hm->uri.ptr);
+
     while ((dp = readdir(dirp)) != NULL) {
       mg_stat_t st;
       const char *sep = dp->d_name[0] == MG_DIRSEP ? "/" : "";
@@ -588,7 +645,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
       } else if (mg_stat(path, &st) != 0) {
         LOG(LL_ERROR, ("%lu stat(%s): %d", c->id, path, errno));
       } else {
-        printdirentry(c, hm, dp->d_name, &st);
+        printdirentry(c, dp->d_name, &st);
       }
     }
     closedir(dirp);
@@ -622,6 +679,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
     size_t n1 = strlen(t1), n2;
 
     mg_url_decode(hm->uri.ptr, hm->uri.len, t1 + n1, sizeof(t1) - n1, 0);
+    LOG(LL_DEBUG, ("SERVE: [%s]", t1 + n1));
     t1[sizeof(t1) - 1] = '\0';
     n2 = strlen(t1);
     while (n2 > 0 && t1[n2 - 1] == '/') t1[--n2] = 0;
@@ -637,16 +695,17 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
 
     if (strlen(t2) < n1 || memcmp(t1, t2, n1) != 0) {
       // Requested file is located outside root directory, fail
-      mg_http_reply(c, 404, "", "Not found %.*s\n", hm->uri.len, hm->uri.ptr);
+      mg_http_reply(c, 404, "", "Not found %.*s\n", (int) hm->uri.len,
+                    hm->uri.ptr);
     } else {
-      FILE *fp = fopen(t2, "r");
+      FILE *fp = mg_fopen(t2, "r");
 #if MG_ENABLE_SSI
       if (is_index && fp == NULL) {
         char *p = t2 + strlen(t2);
         while (p > t2 && p[-1] != '/') p--;
         strncpy(p, "index.shtml", &t2[sizeof(t2)] - p - 2);
         t2[sizeof(t2) - 1] = '\0';
-        fp = fopen(t2, "r");
+        fp = mg_fopen(t2, "r");
       }
 #endif
 #if MG_ENABLE_HTTP_DEBUG_ENDPOINT

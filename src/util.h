@@ -4,7 +4,7 @@
 #include "str.h"
 
 char *mg_file_read(const char *path);
-size_t mg_file_size(const char *path);
+int64_t mg_file_size(const char *path);
 bool mg_file_write(const char *path, const void *buf, size_t len);
 bool mg_file_printf(const char *path, const char *fmt, ...);
 void mg_random(void *buf, size_t len);
@@ -26,11 +26,11 @@ void mg_usleep(unsigned long usecs);
 #if MG_ENABLE_FS
 #ifdef _WIN32
 typedef struct _stati64 mg_stat_t;
-#define mg_stat(a, b) _stati64((a), (b))
 #else
 typedef struct stat mg_stat_t;
-#define mg_stat(a, b) stat((a), (b))
 #endif
+int mg_stat(const char *path, mg_stat_t *);
+FILE *mg_fopen(const char *fp, const char *mode);
 #endif
 
 #define mg_htons(x) mg_ntohs(x)

@@ -2,21 +2,42 @@
 #include "util.h"
 
 #if MG_ENABLE_FS
-size_t mg_file_size(const char *path) {
+int mg_stat(const char *path, mg_stat_t *st) {
+#ifdef _WIN32
+  wchar_t tmp[MG_PATH_MAX];
+  MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
+  return _wstati64(tmp, st);
+#else
+  return stat(path, st);
+#endif
+}
+
+FILE *mg_fopen(const char *path, const char *mode) {
+#ifdef _WIN32
+  wchar_t b1[MG_PATH_MAX], b2[10];
+  MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
+  MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
+  return _wfopen(b1, b2);
+#else
+  return fopen(path, mode);
+#endif
+}
+
+int64_t mg_file_size(const char *path) {
 #if MG_ARCH == MG_ARCH_FREERTOS
   struct FF_STAT st;
   return ff_stat(path, &st) == 0 ? st.st_size : 0;
 #else
-  struct stat st;
-  return stat(path, &st) == 0 ? st.st_size : 0;
+  mg_stat_t st;
+  return mg_stat(path, &st) == 0 ? st.st_size : 0;
 #endif
 }
 
 char *mg_file_read(const char *path) {
   FILE *fp;
   char *data = NULL;
-  size_t size = mg_file_size(path);
-  if ((fp = fopen(path, "rb")) != NULL) {
+  size_t size = (size_t) mg_file_size(path);
+  if ((fp = mg_fopen(path, "rb")) != NULL) {
     data = (char *) malloc(size + 1);
     if (data != NULL) {
       if (fread(data, 1, size, fp) != size) {
@@ -36,7 +57,7 @@ bool mg_file_write(const char *path, const void *buf, size_t len) {
   FILE *fp;
   char tmp[MG_PATH_MAX];
   snprintf(tmp, sizeof(tmp), "%s.%d", path, rand());
-  fp = fopen(tmp, "wb");
+  fp = mg_fopen(tmp, "wb");
   if (fp != NULL) {
     result = fwrite(buf, 1, len, fp) == len;
     fclose(fp);
@@ -64,7 +85,7 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
 }
 
 void mg_random(void *buf, size_t len) {
-  FILE *fp = fopen("/dev/urandom", "rb");
+  FILE *fp = mg_fopen("/dev/urandom", "rb");
   size_t i, n = 0;
   if (fp != NULL) n = fread(buf, 1, len, fp);
   if (fp == NULL || n <= 0) {

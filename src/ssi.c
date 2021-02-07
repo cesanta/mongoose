@@ -1,5 +1,6 @@
-#include "log.h"
 #include "ssi.h"
+#include "log.h"
+#include "util.h"
 
 #ifndef MG_MAX_SSI_DEPTH
 #define MG_MAX_SSI_DEPTH 5
@@ -8,7 +9,7 @@
 #if MG_ENABLE_SSI
 static char *mg_ssi(const char *path, const char *root, int depth) {
   struct mg_iobuf b = {NULL, 0, 0};
-  FILE *fp = fopen(path, "rb");
+  FILE *fp = mg_fopen(path, "rb");
   if (fp != NULL) {
     char buf[BUFSIZ], arg[sizeof(buf)];
     int ch, intag = 0;
