@@ -88,20 +88,11 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
 void mg_random(void *buf, size_t len) {
   bool done = false;
 #if MG_ENABLE_FS
-  if (!done) {
-    FILE *fp = mg_fopen("/dev/urandom", "rb");
-    if (fp != NULL) {
-      fread(buf, 1, len, fp);
-      fclose(fp);
-      done = true;
-    }
-  }
-#endif
-#if MG_ENABLE_MBEDTLS
-  extern int mbedtls_entropy_func(void *, void *, size_t);
-  if (!done && mbedtls_entropy_func(NULL, buf, len) == 0) {
+  FILE *fp = mg_fopen("/dev/urandom", "rb");
+  if (fp != NULL) {
+    fread(buf, 1, len, fp);
+    fclose(fp);
     done = true;
-    LOG(LL_DEBUG, ("RAND %d", done));
   }
 #endif
   if (!done) {

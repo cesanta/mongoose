@@ -679,7 +679,6 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
     size_t n1 = strlen(t1), n2;
 
     mg_url_decode(hm->uri.ptr, hm->uri.len, t1 + n1, sizeof(t1) - n1, 0);
-    LOG(LL_DEBUG, ("SERVE: [%s]", t1 + n1));
     t1[sizeof(t1) - 1] = '\0';
     n2 = strlen(t1);
     while (n2 > 0 && t1[n2 - 1] == '/') t1[--n2] = 0;

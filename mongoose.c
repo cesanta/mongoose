@@ -1099,7 +1099,6 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
     size_t n1 = strlen(t1), n2;
 
     mg_url_decode(hm->uri.ptr, hm->uri.len, t1 + n1, sizeof(t1) - n1, 0);
-    LOG(LL_DEBUG, ("SERVE: [%s]", t1 + n1));
     t1[sizeof(t1) - 1] = '\0';
     n2 = strlen(t1);
     while (n2 > 0 && t1[n2 - 1] == '/') t1[--n2] = 0;
@@ -3887,19 +3886,11 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
 void mg_random(void *buf, size_t len) {
   bool done = false;
 #if MG_ENABLE_FS
-  if (!done) {
-    FILE *fp = mg_fopen("/dev/urandom", "rb");
-    if (fp != NULL) {
-      fread(buf, 1, len, fp);
-      fclose(fp);
-      done = true;
-    }
-  }
-#endif
-#if MG_ENABLE_MBEDTLS
-  if (!done && mbedtls_entropy_func(NULL, buf, len) == 0) {
+  FILE *fp = mg_fopen("/dev/urandom", "rb");
+  if (fp != NULL) {
+    fread(buf, 1, len, fp);
+    fclose(fp);
     done = true;
-    LOG(LL_DEBUG, ("RAND %d", done));
   }
 #endif
   if (!done) {
