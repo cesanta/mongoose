@@ -83,17 +83,33 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
   if (buf != tmp) free(buf);
   return result;
 }
+#endif
 
 void mg_random(void *buf, size_t len) {
-  FILE *fp = mg_fopen("/dev/urandom", "rb");
-  size_t i, n = 0;
-  if (fp != NULL) n = fread(buf, 1, len, fp);
-  if (fp == NULL || n <= 0) {
+  bool done = false;
+#if MG_ENABLE_FS
+  if (!done) {
+    FILE *fp = mg_fopen("/dev/urandom", "rb");
+    if (fp != NULL) {
+      fread(buf, 1, len, fp);
+      fclose(fp);
+      done = true;
+    }
+  }
+#endif
+#if MG_ENABLE_MBEDTLS
+  extern int mbedtls_entropy_func(void *, void *, size_t);
+  if (!done && mbedtls_entropy_func(NULL, buf, len) == 0) {
+    done = true;
+    LOG(LL_DEBUG, ("RAND %d", done));
+  }
+#endif
+  if (!done) {
+    // Fallback to a pseudo random gen
+    size_t i;
     for (i = 0; i < len; i++) ((unsigned char *) buf)[i] = rand() % 0xff;
   }
-  if (fp != NULL) fclose(fp);
 }
-#endif
 
 bool mg_globmatch(const char *s1, int n1, const char *s2, int n2) {
   int i = 0, j = 0, ni = 0, nj = 0;

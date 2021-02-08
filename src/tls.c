@@ -64,12 +64,14 @@ static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
 int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   int rc = 0;
+  const char *ca = opts->ca == NULL     ? "-"
+                   : opts->ca[0] == '-' ? "(emb)"
+                                        : opts->ca;
   if (tls == NULL) {
     mg_error(c, "TLS OOM");
     goto fail;
   }
-  LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id,
-                 opts->ca == NULL ? "null" : opts->ca,
+  LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id, ca,
                  opts->cert == NULL ? "null" : opts->cert,
                  opts->certkey == NULL ? "null" : opts->certkey));
   mbedtls_ssl_init(&tls->ssl);
@@ -94,13 +96,17 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     tls->cafile = strdup(opts->ca);
     rc = mbedtls_ssl_conf_ca_chain_file(&tls->conf, tls->cafile, NULL);
     if (rc != 0) {
-      mg_error(c, "parse on-disk chain(%s) err %#x", opts->ca, -rc);
+      mg_error(c, "parse on-disk chain(%s) err %#x", ca, -rc);
       goto fail;
     }
 #else
     mbedtls_x509_crt_init(&tls->ca);
-    if ((rc = mbedtls_x509_crt_parse_file(&tls->ca, opts->ca)) != 0) {
-      mg_error(c, "parse(%s) err %#x", opts->ca, -rc);
+    rc = opts->ca[0] == '-'
+             ? mbedtls_x509_crt_parse(&tls->ca, (uint8_t *) opts->ca,
+                                      strlen(opts->ca) + 1)
+             : mbedtls_x509_crt_parse_file(&tls->ca, opts->ca);
+    if (rc != 0) {
+      mg_error(c, "parse(%s) err %#x", ca, -rc);
       goto fail;
     }
     mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, NULL);
