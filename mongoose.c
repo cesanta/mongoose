@@ -1331,7 +1331,6 @@ void mg_iobuf_free(struct mg_iobuf *io) {
 static void mg_log_stdout(const void *buf, int len, void *userdata) {
   (void) userdata;
   fwrite(buf, 1, len, stdout);
-  fflush(stdout);
 }
 
 static const char *s_spec = "2";
