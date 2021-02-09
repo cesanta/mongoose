@@ -848,6 +848,16 @@ static void test_http_parse(void) {
     ASSERT(mg_strcmp(hm.uri, mg_str("/foo")) == 0);
     ASSERT(mg_strcmp(hm.query, mg_str("bar=baz")) == 0);
   }
+
+  {
+    struct mg_http_message hm;
+    const char *req = "a b c\n\n";
+    ASSERT(mg_http_parse(req, strlen(req), &hm) == (int) strlen(req));
+    req = "a b\nc\n\n";
+    ASSERT(mg_http_parse(req, strlen(req), &hm) < 0);
+    req = "a\nb\nc\n\n";
+    ASSERT(mg_http_parse(req, strlen(req), &hm) < 0);
+  }
 }
 
 static void test_http_range(void) {
@@ -860,7 +870,8 @@ static void test_http_range(void) {
   mg_http_listen(&mgr, url, eh1, NULL);
 
   ASSERT(fetch(&mgr, buf, url, "GET /range.txt HTTP/1.0\n\n") == 200);
-  mg_http_parse(buf, strlen(buf), &hm);
+  ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
+  LOG(LL_INFO, ("----%d\n[%s]", (int) hm.body.len, buf));
   ASSERT(hm.body.len == 312);
   // ASSERT(strlen(buf) == 312);
 
@@ -1117,6 +1128,7 @@ static void test_util(void) {
 
 int main(void) {
   mg_log_set("3");
+  test_http_parse();
   test_util();
   test_sntp();
   test_dns();
@@ -1131,7 +1143,6 @@ int main(void) {
   test_http_get_var();
   test_tls();
   test_ws();
-  test_http_parse();
   test_http_server();
   test_http_client();
   test_http_no_content_length();

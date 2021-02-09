@@ -106,12 +106,12 @@ int mg_http_get_request_len(const unsigned char *buf, size_t buf_len) {
   return 0;
 }
 
-static const char *skip(const char *s, const char *end, const char *delims,
+static const char *skip(const char *s, const char *e, const char *d,
                         struct mg_str *v) {
   v->ptr = s;
-  while (s < end && strchr(delims, *(unsigned char *) s) == NULL) s++;
+  while (s < e && *s != '\n' && strchr(d, *s) == NULL) s++;
   v->len = s - v->ptr;
-  while (s < end && strchr(delims, *(unsigned char *) s) != NULL) s++;
+  while (s < e && strchr(d, *s) != NULL) s++;
   return s;
 }
 
@@ -159,7 +159,9 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   s = skip(s, end, " ", &hm->method);
   s = skip(s, end, " ", &hm->uri);
   s = skip(s, end, "\r\n", &hm->proto);
-  if (hm->uri.ptr <= hm->method.ptr || hm->proto.ptr <= hm->uri.ptr) return -1;
+
+  // Sanity check
+  if (hm->method.len == 0 || hm->uri.len == 0 || hm->proto.len == 0) return -1;
 
   // If URI contains '?' character, setup query string
   if ((qs = (const char *) memchr(hm->uri.ptr, '?', hm->uri.len)) != NULL) {
