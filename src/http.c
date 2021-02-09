@@ -150,8 +150,9 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   memset(hm, 0, sizeof(*hm));
   if (req_len <= 0) return req_len;
 
-  hm->message.ptr = s;
-  hm->body.ptr = s + req_len;
+  hm->message.ptr = hm->head.ptr = s;
+  hm->body.ptr = end;
+  hm->head.len = req_len;
   hm->message.len = hm->body.len = (size_t) ~0;  // Set body length to infinite
 
   // Parse request line
