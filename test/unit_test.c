@@ -496,7 +496,7 @@ static void test_http_server(void) {
 
   ASSERT(fetch(&mgr, buf, url, "GET /badroot HTTP/1.0\r\n\n") == 400);
 #if MG_ARCH == MG_ARCH_WIN32
-  ASSERT(cmpbody(buf, "Bad web root [Z:\\BAAADDD!]\n") == 0);
+  ASSERT(cmpbody(buf, "Invalid web root [Z:\\BAAADDD!]\n") == 0);
 #else
   // LOG(LL_INFO, ("--> [%s]", buf));
   ASSERT(cmpbody(buf, "Bad web root [/BAAADDD!]\n") == 0);

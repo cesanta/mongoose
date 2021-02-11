@@ -40,7 +40,7 @@ typedef int socklen_t;
 #ifndef EWOULDBLOCK
 #define EWOULDBLOCK WSAEWOULDBLOCK
 #endif
-#define realpath(a, b) _fullpath((b), (a), 512)
+#define realpath(a, b) _fullpath((b), (a), MG_PATH_MAX)
 #ifndef va_copy
 #ifdef __va_copy
 #define va_copy __va_copy
