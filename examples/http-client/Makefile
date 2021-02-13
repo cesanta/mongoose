@@ -2,8 +2,8 @@ PROG ?= example
 CFLAGS ?= -DMG_ENABLE_LINES $(EXTRA)
 
 ifneq ($(MBEDTLS),)
-CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS_DIR)/include -I/usr/include
-CFLAGS += -L$(MBEDTLS_DIR)/lib -lmbedtls -lmbedcrypto -lmbedx509
+CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS)/include -I/usr/include
+CFLAGS += -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
 endif
 
 ifneq ($(OPENSSL),)
