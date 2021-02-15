@@ -536,34 +536,11 @@ struct dirent *readdir(DIR *d) {
 }
 #endif
 
-static bool mg_is_safe(int c) {
-  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
-         (c >= 'A' && c <= 'Z') || strchr("._-$,;~()/", c) != NULL;
-}
-
-static int mg_url_encode(const char *s, char *buf, size_t len) {
-  int i, n = 0;
-  for (i = 0; s[i] != '\0'; i++) {
-    int c = *((const unsigned char *) (s + i));
-    if ((size_t) n + 4 >= len) return 0;
-    if (mg_is_safe(c)) {
-      buf[n++] = s[i];
-    } else {
-      buf[n++] = '%';
-      mg_hex(&s[i], 1, &buf[n]);
-      n += 2;
-    }
-  }
-  return n;
-}
-
 static void printdirentry(struct mg_connection *c, const char *name,
                           mg_stat_t *stp) {
   char size[64], mod[64], path[MG_PATH_MAX];
-  int is_dir = S_ISDIR(stp->st_mode);
+  int is_dir = S_ISDIR(stp->st_mode), n = 0;
   const char *slash = is_dir ? "/" : "";
-  // const char *es = hm->uri.ptr[hm->uri.len - 1] != '/' ? "/" : "";
-  int n = 0;
 
   if (is_dir) {
     snprintf(size, sizeof(size), "%s", "[DIR]");
@@ -579,7 +556,7 @@ static void printdirentry(struct mg_connection *c, const char *name,
     }
   }
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&stp->st_mtime));
-  n = mg_url_encode(name, path, sizeof(path));
+  n = mg_url_encode(name, strlen(name), path, sizeof(path));
   mg_printf(c,
             "  <tr><td><a href=\"%.*s%s\">%s%s</a></td>"
             "<td>%s</td><td>%s</td></tr>\n",
@@ -737,6 +714,27 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   }
 }
 #endif
+
+static bool mg_is_url_safe(int c) {
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+         (c >= 'A' && c <= 'Z') || c == '.' || c == '_' || c == '-' || c == '~';
+}
+
+int mg_url_encode(const char *s, size_t sl, char *buf, size_t len) {
+  size_t i, n = 0;
+  for (i = 0; i < sl; i++) {
+    int c = *(unsigned char *) &s[i];
+    if (n + 4 >= len) return 0;
+    if (mg_is_url_safe(c)) {
+      buf[n++] = s[i];
+    } else {
+      buf[n++] = '%';
+      mg_hex(&s[i], 1, &buf[n]);
+      n += 2;
+    }
+  }
+  return n;
+}
 
 void mg_http_creds(struct mg_http_message *hm, char *user, int userlen,
                    char *pass, int passlen) {

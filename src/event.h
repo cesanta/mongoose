@@ -3,17 +3,6 @@
 struct mg_connection;
 typedef void (*mg_event_handler_t)(struct mg_connection *, int ev,
                                    void *ev_data, void *fn_data);
-#if 0
-struct mg_fn {
-  struct mg_fn *next;
-  mg_event_handler_t fn;
-  void *fn_data;
-};
-
-void mg_fn_add(struct mg_connection *c, mg_event_handler_t fn, void *fn_data);
-void mg_fn_del(struct mg_connection *c, mg_event_handler_t fn);
-#endif
-
 void mg_call(struct mg_connection *c, int ev, void *ev_data);
 void mg_error(struct mg_connection *c, const char *fmt, ...);
 

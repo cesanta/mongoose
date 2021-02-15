@@ -956,34 +956,11 @@ struct dirent *readdir(DIR *d) {
 }
 #endif
 
-static bool mg_is_safe(int c) {
-  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
-         (c >= 'A' && c <= 'Z') || strchr("._-$,;~()/", c) != NULL;
-}
-
-static int mg_url_encode(const char *s, char *buf, size_t len) {
-  int i, n = 0;
-  for (i = 0; s[i] != '\0'; i++) {
-    int c = *((const unsigned char *) (s + i));
-    if ((size_t) n + 4 >= len) return 0;
-    if (mg_is_safe(c)) {
-      buf[n++] = s[i];
-    } else {
-      buf[n++] = '%';
-      mg_hex(&s[i], 1, &buf[n]);
-      n += 2;
-    }
-  }
-  return n;
-}
-
 static void printdirentry(struct mg_connection *c, const char *name,
                           mg_stat_t *stp) {
   char size[64], mod[64], path[MG_PATH_MAX];
-  int is_dir = S_ISDIR(stp->st_mode);
+  int is_dir = S_ISDIR(stp->st_mode), n = 0;
   const char *slash = is_dir ? "/" : "";
-  // const char *es = hm->uri.ptr[hm->uri.len - 1] != '/' ? "/" : "";
-  int n = 0;
 
   if (is_dir) {
     snprintf(size, sizeof(size), "%s", "[DIR]");
@@ -999,7 +976,7 @@ static void printdirentry(struct mg_connection *c, const char *name,
     }
   }
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&stp->st_mtime));
-  n = mg_url_encode(name, path, sizeof(path));
+  n = mg_url_encode(name, strlen(name), path, sizeof(path));
   mg_printf(c,
             "  <tr><td><a href=\"%.*s%s\">%s%s</a></td>"
             "<td>%s</td><td>%s</td></tr>\n",
@@ -1158,6 +1135,27 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
 }
 #endif
 
+static bool mg_is_url_safe(int c) {
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+         (c >= 'A' && c <= 'Z') || c == '.' || c == '_' || c == '-' || c == '~';
+}
+
+int mg_url_encode(const char *s, size_t sl, char *buf, size_t len) {
+  size_t i, n = 0;
+  for (i = 0; i < sl; i++) {
+    int c = *(unsigned char *) &s[i];
+    if (n + 4 >= len) return 0;
+    if (mg_is_url_safe(c)) {
+      buf[n++] = s[i];
+    } else {
+      buf[n++] = '%';
+      mg_hex(&s[i], 1, &buf[n]);
+      n += 2;
+    }
+  }
+  return n;
+}
+
 void mg_http_creds(struct mg_http_message *hm, char *user, int userlen,
                    char *pass, int passlen) {
   struct mg_str *v = mg_http_get_header(hm, "Authorization");
@@ -1295,11 +1293,7 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
 }
 
 int mg_iobuf_init(struct mg_iobuf *io, size_t size) {
-  int ok = 1;
-  io->buf = NULL;
-  io->len = io->size = 0;
-  if (size > 0) ok = mg_iobuf_resize(io, size);
-  return ok;
+  return mg_iobuf_resize(io, size);
 }
 
 size_t mg_iobuf_append(struct mg_iobuf *io, const void *buf, size_t len,
@@ -1321,8 +1315,7 @@ size_t mg_iobuf_delete(struct mg_iobuf *io, size_t len) {
 }
 
 void mg_iobuf_free(struct mg_iobuf *io) {
-  free(io->buf);
-  mg_iobuf_init(io, 0);
+  mg_iobuf_resize(io, 0);
 }
 
 #ifdef MG_ENABLE_LINES
@@ -2675,7 +2668,7 @@ static int ll_read(struct mg_connection *c, void *buf, int len, int *fail) {
        MG_SOCK_ERRNO, *fail));
   if (n > 0 && c->is_hexdumping) {
     char *s = mg_hexdump(buf, n);
-    // LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "<-", n, s));
+    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "<-", n, s));
     free(s);
   }
   return n;
@@ -2691,7 +2684,7 @@ static int ll_write(struct mg_connection *c, const void *buf, int len,
        MG_SOCK_ERRNO));
   if (n > 0 && c->is_hexdumping) {
     char *s = mg_hexdump(buf, len);
-    // LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "->", len, s));
+    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "->", len, s));
     free(s);
   }
   return n;

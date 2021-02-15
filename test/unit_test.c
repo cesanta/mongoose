@@ -1124,6 +1124,31 @@ static void test_util(void) {
   ASSERT(strcmp(mg_hex("abc", 3, buf), "616263") == 0);
   ASSERT(mg_url_decode("a=%", 3, buf, sizeof(buf), 0) < 0);
   ASSERT(mg_url_decode("&&&a=%", 6, buf, sizeof(buf), 0) < 0);
+
+  {
+    char buf[100];
+    int n;
+    ASSERT((n = mg_url_encode("", 0, buf, sizeof(buf))) == 0);
+    ASSERT((n = mg_url_encode("a", 1, buf, 0)) == 0);
+    ASSERT((n = mg_url_encode("a", 1, buf, sizeof(buf))) == 1);
+    ASSERT(strncmp(buf, "a", n) == 0);
+    ASSERT((n = mg_url_encode("._-~", 4, buf, sizeof(buf))) == 4);
+    ASSERT(strncmp(buf, "._-~", n) == 0);
+    ASSERT((n = mg_url_encode("a@%>", 4, buf, sizeof(buf))) == 10);
+    ASSERT(strncmp(buf, "a%40%25%3e", n) == 0);
+    ASSERT((n = mg_url_encode("a@b.c", 5, buf, sizeof(buf))) == 7);
+    ASSERT(strncmp(buf, "a%40b.c", n) == 0);
+  }
+
+  {
+    char buf[100], *s = buf;
+    mg_asprintf(&s, sizeof(buf), "%s", "%3d", 123);
+    ASSERT(s == buf);
+    ASSERT(strcmp(buf, "%3d") == 0);
+    mg_asprintf(&s, sizeof(buf), "%.*s", 7, "a%40b.c");
+    ASSERT(s == buf);
+    ASSERT(strcmp(buf, "a%40b.c") == 0);
+  }
 }
 
 int main(void) {
