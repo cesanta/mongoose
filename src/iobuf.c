@@ -28,11 +28,7 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
 }
 
 int mg_iobuf_init(struct mg_iobuf *io, size_t size) {
-  int ok = 1;
-  io->buf = NULL;
-  io->len = io->size = 0;
-  if (size > 0) ok = mg_iobuf_resize(io, size);
-  return ok;
+  return mg_iobuf_resize(io, size);
 }
 
 size_t mg_iobuf_append(struct mg_iobuf *io, const void *buf, size_t len,
@@ -54,6 +50,5 @@ size_t mg_iobuf_delete(struct mg_iobuf *io, size_t len) {
 }
 
 void mg_iobuf_free(struct mg_iobuf *io) {
-  free(io->buf);
-  mg_iobuf_init(io, 0);
+  mg_iobuf_resize(io, 0);
 }
