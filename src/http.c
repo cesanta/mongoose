@@ -665,7 +665,8 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
 
     if (realpath(t1, t2) == NULL) {
       LOG(LL_ERROR, ("realpath(%s): %d", t1, errno));
-      mg_http_reply(c, 400, "", "Error serving [%s]\n", t1);
+      mg_http_reply(c, 404, "", "Not found [%.*s]\n", (int) hm->uri.len,
+                    hm->uri.ptr);
       return;
     }
 
