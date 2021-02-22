@@ -2152,7 +2152,7 @@ void cs_base64_init(struct cs_base64_ctx *ctx, cs_base64_putc_t putc,
 void cs_base64_update(struct cs_base64_ctx *ctx, const char *str, size_t len);
 void cs_base64_finish(struct cs_base64_ctx *ctx);
 
-void cs_base64_encode(const unsigned char *src, int src_len, char *dst);
+void cs_base64_encode(const unsigned char *src, int src_len, char *dst, int *enc_len);
 void cs_fprint_base64(FILE *f, const unsigned char *src, int src_len);
 
 /*

@@ -314,24 +314,18 @@ void cs_base64_finish(struct cs_base64_ctx *ctx) {
   while (j % 4 != 0) {                                                    \
     BASE64_OUT('=');                                                      \
   }                                                                       \
-  BASE64_FLUSH()
 
 #define BASE64_OUT(ch) \
   do {                 \
     dst[j++] = (ch);   \
   } while (0)
 
-#define BASE64_FLUSH() \
-  do {                 \
-    dst[j++] = '\0';   \
-  } while (0)
-
-void cs_base64_encode(const unsigned char *src, int src_len, char *dst) {
+void cs_base64_encode(const unsigned char *src, int src_len, char *dst, int *enc_len) {
   BASE64_ENCODE_BODY;
+  if (enc_len != NULL) *enc_len = j;
 }
 
 #undef BASE64_OUT
-#undef BASE64_FLUSH
 
 #if CS_ENABLE_STDIO
 #define BASE64_OUT(ch)      \
@@ -340,14 +334,11 @@ void cs_base64_encode(const unsigned char *src, int src_len, char *dst) {
     j++;                    \
   } while (0)
 
-#define BASE64_FLUSH()
-
 void cs_fprint_base64(FILE *f, const unsigned char *src, int src_len) {
   BASE64_ENCODE_BODY;
 }
 
 #undef BASE64_OUT
-#undef BASE64_FLUSH
 #endif /* CS_ENABLE_STDIO */
 
 /* Convert one byte of encoded base64 input stream to 6-bit chunk */
@@ -406,7 +397,6 @@ int cs_base64_decode(const unsigned char *s, int len, char *dst, int *dec_len) {
     if (d == 200) break;
     *dst++ = c << 6 | d;
   }
-  *dst = 0;
   if (dec_len != NULL) *dec_len = (dst - orig_dst);
   return orig_len - len;
 }
@@ -10357,11 +10347,16 @@ size_t mg_fwrite(const void *ptr, size_t size, size_t count, FILE *f) {
 #endif
 
 void mg_base64_encode(const unsigned char *src, int src_len, char *dst) {
-  cs_base64_encode(src, src_len, dst);
+  int enc_len = 0;
+  cs_base64_encode(src, src_len, dst, &enc_len);
+  dst[enc_len] = '\0';
 }
 
 int mg_base64_decode(const unsigned char *s, int len, char *dst) {
-  return cs_base64_decode(s, len, dst, NULL);
+  int dec_len = 0;
+  int res = cs_base64_decode(s, len, dst, &dec_len);
+  dst[dec_len] = '\0';
+  return res;
 }
 
 #if MG_ENABLE_THREADS

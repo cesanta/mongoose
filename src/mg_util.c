@@ -60,11 +60,16 @@ size_t mg_fwrite(const void *ptr, size_t size, size_t count, FILE *f) {
 #endif
 
 void mg_base64_encode(const unsigned char *src, int src_len, char *dst) {
-  cs_base64_encode(src, src_len, dst);
+  int enc_len = 0;
+  cs_base64_encode(src, src_len, dst, &enc_len);
+  dst[enc_len] = '\0';
 }
 
 int mg_base64_decode(const unsigned char *s, int len, char *dst) {
-  return cs_base64_decode(s, len, dst, NULL);
+  int dec_len = 0;
+  int res = cs_base64_decode(s, len, dst, &dec_len);
+  dst[dec_len] = '\0';
+  return res;
 }
 
 #if MG_ENABLE_THREADS
