@@ -23,6 +23,7 @@ struct mg_mgr {
   struct mg_dns dns6;           // DNS for IPv6
   int dnstimeout;               // DNS resolve timeout in milliseconds
   unsigned long nextid;         // Next connection ID
+  void *userdata;               // Arbitrary user data pointer
 #if MG_ARCH == MG_ARCH_FREERTOS
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
 #endif
