@@ -2837,7 +2837,7 @@ static void setsockopts(struct mg_connection *c) {
   int idle = 60;
   setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
 #endif
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__QNX__)
   {
     int cnt = 3, intvl = 20;
     setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt));
