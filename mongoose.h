@@ -467,7 +467,7 @@ FILE *mg_fopen(const char *fp, const char *mode);
 #if !defined(WEAK)
 #if (defined(__GNUC__) || defined(__clang__) || \
      defined(__TI_COMPILER_VERSION__)) &&       \
-    !defined(_WIN32)
+    !defined(_WIN32) && !defined(__CYGWIN__)
 #define WEAK __attribute__((weak))
 #else
 #define WEAK
