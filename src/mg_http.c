@@ -521,8 +521,7 @@ struct mg_str *mg_get_http_header(struct http_message *hm, const char *name) {
 #if MG_ENABLE_FILESYSTEM
 static void mg_http_transfer_file_data(struct mg_connection *nc) {
   struct mg_http_proto_data *pd = mg_http_get_proto_data(nc);
-  char buf[MG_MAX_HTTP_SEND_MBUF];
-  size_t n = 0, to_read = 0, left = (size_t)(pd->file.cl - pd->file.sent);
+  size_t to_read = 0, left = (size_t)(pd->file.cl - pd->file.sent);
 
   if (pd->file.type == DATA_FILE) {
     struct mbuf *io = &nc->send_mbuf;
@@ -535,11 +534,16 @@ static void mg_http_transfer_file_data(struct mg_connection *nc) {
       to_read = left;
     }
     if (to_read > 0) {
-      n = mg_fread(buf, 1, to_read, pd->file.fp);
-      if (n > 0) {
-        mg_send(nc, buf, n);
-        pd->file.sent += n;
-        DBG(("%p sent %d (total %d)", nc, (int) n, (int) pd->file.sent));
+      size_t new_size = io->len + to_read;
+      mbuf_resize(io, new_size);
+      if (io->size == new_size) {
+        char *buf = io->buf + io->len;
+        size_t n = mg_fread(buf, 1, to_read, pd->file.fp);
+        if (n > 0) {
+          io->len += n;
+          pd->file.sent += n;
+          DBG(("%p sent %d (total %d)", nc, (int) n, (int) pd->file.sent));
+        }
       }
     } else {
       /* Rate-limited */
