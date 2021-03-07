@@ -429,11 +429,6 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 
 
 
-struct http_data {
-  void *old_pfn_data;  // Previous pfn_data
-  FILE *fp;            // For static file serving
-};
-
 // Multipart POST example:
 // https://gist.github.com/cpq/b8dd247571e6ee9c54ef7e8dfcfecf48
 
@@ -573,6 +568,7 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   hm->message.ptr = hm->head.ptr = s;
   hm->body.ptr = end;
   hm->head.len = req_len;
+  hm->chunk.ptr = end;
   hm->message.len = hm->body.len = (size_t) ~0;  // Set body length to infinite
 
   // Parse request line
@@ -667,11 +663,9 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
 #if MG_ENABLE_FS
 static void http_cb(struct mg_connection *, int, void *, void *);
 static void restore_http_cb(struct mg_connection *c) {
-  struct http_data *d = (struct http_data *) c->pfn_data;
-  if (d->fp != NULL) fclose(d->fp);
-  c->pfn_data = d->old_pfn_data;
+  if (c->pfn_data != NULL) fclose((FILE *) c->pfn_data);
+  c->pfn_data = NULL;
   c->pfn = http_cb;
-  free(d);
 }
 
 char *mg_http_etag(char *buf, size_t len, mg_stat_t *st) {
@@ -709,12 +703,12 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
 static void static_cb(struct mg_connection *c, int ev, void *ev_data,
                       void *fn_data) {
   if (ev == MG_EV_WRITE || ev == MG_EV_POLL) {
-    struct http_data *d = (struct http_data *) fn_data;
+    FILE *fp = (FILE *) fn_data;
     // Read to send IO buffer directly, avoid extra on-stack buffer
     size_t n, max = 2 * MG_IO_SIZE;
     if (c->send.size < max) mg_iobuf_resize(&c->send, max);
     if (c->send.len >= c->send.size) return;  // Rate limit
-    n = fread(c->send.buf + c->send.len, 1, c->send.size - c->send.len, d->fp);
+    n = fread(c->send.buf + c->send.len, 1, c->send.size - c->send.len, fp);
     if (n > 0) c->send.len += n;
     if (c->send.len < c->send.size) restore_http_cb(c);
   } else if (ev == MG_EV_CLOSE) {
@@ -808,15 +802,8 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       fclose(fp);
     } else {
-      struct http_data *d = (struct http_data *) calloc(1, sizeof(*d));
-      if (d == NULL) {
-        mg_error(c, "static HTTP OOM");
-      } else {
-        d->fp = fp;
-        d->old_pfn_data = c->pfn_data;
-        c->pfn = static_cb;
-        c->pfn_data = d;
-      }
+      c->pfn = static_cb;
+      c->pfn_data = fp;
     }
   }
 }
@@ -1244,7 +1231,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data,
 struct mg_connection *mg_http_connect(struct mg_mgr *mgr, const char *url,
                                       mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = mg_connect(mgr, url, fn, fn_data);
-  if (c != NULL) c->pfn = http_cb, c->pfn_data = mgr;
+  if (c != NULL) c->pfn = http_cb;
 #if MG_ENABLE_HTTP_DEBUG_ENDPOINT
   snprintf(c->label, sizeof(c->label) - 1, "->%s", url);
 #endif
@@ -1254,7 +1241,7 @@ struct mg_connection *mg_http_connect(struct mg_mgr *mgr, const char *url,
 struct mg_connection *mg_http_listen(struct mg_mgr *mgr, const char *url,
                                      mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = mg_listen(mgr, url, fn, fn_data);
-  if (c != NULL) c->pfn = http_cb, c->pfn_data = mgr;
+  if (c != NULL) c->pfn = http_cb;
 #if MG_ENABLE_HTTP_DEBUG_ENDPOINT
   if (c != NULL) snprintf(c->label, sizeof(c->label) - 1, "<-LSN");
 #endif
