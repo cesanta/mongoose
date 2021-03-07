@@ -232,6 +232,18 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
   (void) fn_data;
 }
 
+void mg_mqtt_ping(struct mg_connection *nc) {
+  mg_mqtt_send_header(nc, MQTT_CMD_PINGREQ, 0, 0);
+}
+
+void mg_mqtt_pong(struct mg_connection *nc) {
+  mg_mqtt_send_header(nc, MQTT_CMD_PINGRESP, 0, 0);
+}
+
+void mg_mqtt_disconnect(struct mg_connection *nc) {
+  mg_mqtt_send_header(nc, MQTT_CMD_DISCONNECT, 0, 0);
+}
+
 struct mg_connection *mg_mqtt_connect(struct mg_mgr *mgr, const char *url,
                                       struct mg_mqtt_opts *opts,
                                       mg_event_handler_t fn, void *fn_data) {
