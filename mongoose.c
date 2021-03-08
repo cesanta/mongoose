@@ -2010,6 +2010,19 @@ int mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
   return new_pos;
 }
 
+int mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic, int pos) {
+	unsigned char *buf = (unsigned char *) msg->dgram.ptr + pos;
+	int new_pos;
+	if ((size_t) pos >= msg->dgram.len) return -1;
+
+	topic->len = buf[0] << 8 | buf[1];
+	topic->ptr = (char *) buf + 2;
+	new_pos = pos + 2 + topic->len + 0;
+	if ((size_t) new_pos > msg->dgram.len) return -1;
+	//*qos = buf[2 + topic->len];
+	return new_pos;
+}
+
 static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
                     void *fn_data) {
   if (ev == MG_EV_READ) {
