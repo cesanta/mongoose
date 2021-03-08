@@ -12,6 +12,7 @@ bool mg_globmatch(const char *pattern, int plen, const char *s, int n);
 bool mg_next_comma_entry(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
+uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 char *mg_hexdump(const void *buf, size_t len);
 char *mg_hex(const void *buf, int len, char *dst);
 void mg_unhex(const char *buf, int len, unsigned char *to);
