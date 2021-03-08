@@ -1217,14 +1217,14 @@ static void eh5(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     uint32_t *crc = (uint32_t *) c->label;
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
-    LOG(LL_INFO, ("CHUNK [%.*s]", (int) hm->chunk.len, hm->chunk.ptr));
+    // LOG(LL_INFO, ("CHUNK [%.*s]", (int) hm->chunk.len, hm->chunk.ptr));
     mg_http_delete_chunk(c, hm);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     uint32_t *crc = (uint32_t *) c->label;
     c->is_closing = 1;
     *(int *) fn_data = mg_crc32(*crc, hm->body.ptr, hm->body.len);
-    LOG(LL_INFO, ("MSG [%.*s]", (int) hm->body.len, hm->body.ptr));
+    // LOG(LL_INFO, ("MSG [%.*s]", (int) hm->body.len, hm->body.ptr));
   }
   (void) ev_data;
 }
@@ -1277,7 +1277,6 @@ static void test_http_chunked(void) {
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
-  exit(0);
 }
 
 int main(void) {
