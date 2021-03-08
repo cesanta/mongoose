@@ -333,10 +333,6 @@ typedef int socklen_t;
 #define MG_ENABLE_DIRECTORY_LISTING 0
 #endif
 
-#ifndef MG_ENABLE_HTTP_DEBUG_ENDPOINT
-#define MG_ENABLE_HTTP_DEBUG_ENDPOINT 0
-#endif
-
 #ifndef MG_ENABLE_SOCKETPAIR
 #define MG_ENABLE_SOCKETPAIR 0
 #endif
@@ -436,6 +432,7 @@ bool mg_globmatch(const char *pattern, int plen, const char *s, int n);
 bool mg_next_comma_entry(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
+uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 char *mg_hexdump(const void *buf, size_t len);
 char *mg_hex(const void *buf, int len, char *dst);
 void mg_unhex(const char *buf, int len, unsigned char *to);
@@ -572,23 +569,24 @@ void mg_call(struct mg_connection *c, int ev, void *ev_data);
 void mg_error(struct mg_connection *c, const char *fmt, ...);
 
 enum {
-  MG_EV_ERROR,      // Error                        char *error_message
-  MG_EV_POLL,       // mg_mgr_poll iteration        unsigned long *millis
-  MG_EV_RESOLVE,    // Host name is resolved        NULL
-  MG_EV_CONNECT,    // Connection established       NULL
-  MG_EV_ACCEPT,     // Connection accepted          NULL
-  MG_EV_READ,       // Data received from socket    struct mg_str *
-  MG_EV_WRITE,      // Data written to socket       int *num_bytes_written
-  MG_EV_CLOSE,      // Connection closed            NULL
-  MG_EV_HTTP_MSG,   // HTTP request/response        struct mg_http_message *
-  MG_EV_WS_OPEN,    // Websocket handshake done     struct mg_http_message *
-  MG_EV_WS_MSG,     // Websocket msg, text or bin   struct mg_ws_message *
-  MG_EV_WS_CTL,     // Websocket control msg        struct mg_ws_message *
-  MG_EV_MQTT_CMD,   // MQTT low-level command       struct mg_mqtt_message *
-  MG_EV_MQTT_MSG,   // MQTT PUBLISH received        struct mg_mqtt_message *
-  MG_EV_MQTT_OPEN,  // MQTT CONNACK received        int *connack_status_code
-  MG_EV_SNTP_TIME,  // SNTP time received           struct timeval *
-  MG_EV_USER,       // Starting ID for user events
+  MG_EV_ERROR,       // Error                        char *error_message
+  MG_EV_POLL,        // mg_mgr_poll iteration        unsigned long *millis
+  MG_EV_RESOLVE,     // Host name is resolved        NULL
+  MG_EV_CONNECT,     // Connection established       NULL
+  MG_EV_ACCEPT,      // Connection accepted          NULL
+  MG_EV_READ,        // Data received from socket    struct mg_str *
+  MG_EV_WRITE,       // Data written to socket       int *num_bytes_written
+  MG_EV_CLOSE,       // Connection closed            NULL
+  MG_EV_HTTP_MSG,    // HTTP request/response        struct mg_http_message *
+  MG_EV_HTTP_CHUNK,  // HTTP chunk (partial msg)     struct mg_http_message *
+  MG_EV_WS_OPEN,     // Websocket handshake done     struct mg_http_message *
+  MG_EV_WS_MSG,      // Websocket msg, text or bin   struct mg_ws_message *
+  MG_EV_WS_CTL,      // Websocket control msg        struct mg_ws_message *
+  MG_EV_MQTT_CMD,    // MQTT low-level command       struct mg_mqtt_message *
+  MG_EV_MQTT_MSG,    // MQTT PUBLISH received        struct mg_mqtt_message *
+  MG_EV_MQTT_OPEN,   // MQTT CONNACK received        int *connack_status_code
+  MG_EV_SNTP_TIME,   // SNTP time received           struct timeval *
+  MG_EV_USER,        // Starting ID for user events
 };
 
 
@@ -699,6 +697,7 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *);
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len);
 void mg_http_printf_chunk(struct mg_connection *cnn, const char *fmt, ...);
 void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
+void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm);
 struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
 struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,

@@ -1151,8 +1151,139 @@ static void test_util(void) {
   }
 }
 
+static void test_crc32(void) {
+  //  echo -n aaa | cksum -o3
+  ASSERT(mg_crc32(0, 0, 0) == 0);
+  ASSERT(mg_crc32(0, "a", 1) == 3904355907);
+  ASSERT(mg_crc32(0, "abc", 3) == 891568578);
+  ASSERT(mg_crc32(mg_crc32(0, "ab", 2), "c", 1) == 891568578);
+}
+
+// Streaming server event handler.
+// Send one chunk immediately, then drain, then send two chunks in one go
+static void eh2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+    mg_http_printf_chunk(c, "chunk 0");
+    c->label[0] = 1;
+  } else if (ev == MG_EV_POLL) {
+    if (c->label[0] > 0 && c->send.len == 0) c->label[0]++;
+    if (c->label[0] > 10 && c->label[0] != 'x') {
+      mg_http_printf_chunk(c, "chunk 1");
+      mg_http_printf_chunk(c, "chunk 2");
+      mg_http_printf_chunk(c, "");
+      c->label[0] = 'x';
+    }
+  }
+  (void) ev_data;
+  (void) fn_data;
+}
+
+// Non-streaming client event handler. Make sure we've got full body
+static void eh3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_CONNECT) {
+    mg_printf(c, "GET / HTTP/1.0\n\n");
+  } else if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    // LOG(LL_INFO, ("----> [%.*s]", (int) hm->body.len, hm->body.ptr));
+    c->is_closing = 1;
+    *(uint32_t *) fn_data = mg_crc32(0, hm->body.ptr, hm->body.len);
+  }
+}
+
+// Streaming client event handler. Make sure we've got all chunks
+static void eh4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_CONNECT) {
+    mg_printf(c, "GET / HTTP/1.0\n\n");
+  } else if (ev == MG_EV_HTTP_CHUNK) {
+    uint32_t *crc = (uint32_t *) c->label;
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
+  } else if (ev == MG_EV_HTTP_MSG) {
+    uint32_t *crc = (uint32_t *) c->label;
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    // LOG(LL_INFO, ("MSG [%.*s]", (int) hm->body.len, hm->body.ptr));
+    c->is_closing = 1;
+    *(int *) fn_data = mg_crc32(*crc, hm->body.ptr, hm->body.len);
+  }
+  (void) ev_data;
+}
+
+// Streaming client event handler. Delete chunks as they arrive
+static void eh5(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_CONNECT) {
+    mg_printf(c, "GET / HTTP/1.0\n\n");
+  } else if (ev == MG_EV_HTTP_CHUNK) {
+    uint32_t *crc = (uint32_t *) c->label;
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
+    LOG(LL_INFO, ("CHUNK [%.*s]", (int) hm->chunk.len, hm->chunk.ptr));
+    mg_http_delete_chunk(c, hm);
+  } else if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    uint32_t *crc = (uint32_t *) c->label;
+    c->is_closing = 1;
+    *(int *) fn_data = mg_crc32(*crc, hm->body.ptr, hm->body.len);
+    LOG(LL_INFO, ("MSG [%.*s]", (int) hm->body.len, hm->body.ptr));
+  }
+  (void) ev_data;
+}
+
+static void test_http_chunked(void) {
+  struct mg_mgr mgr;
+  const char *url = "http://127.0.0.1:12344";
+  uint32_t i, done = 0;
+  mg_mgr_init(&mgr);
+  mg_http_listen(&mgr, url, eh2, NULL);
+
+  mg_http_connect(&mgr, url, eh3, &done);
+  for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(i < 50);
+  {
+    const char *data =
+        "7\r\nchunk 0\r\n"
+        "7\r\nchunk 1\r\n"
+        "7\r\nchunk 2\r\n"
+        "0\r\n\r\n";
+    ASSERT(done == mg_crc32(0, data, strlen(data)));
+  }
+
+  done = 0;
+  mg_http_connect(&mgr, url, eh4, &done);
+  for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
+  {
+    const char *data =
+        "chunk 0"
+        "chunk 0"
+        "chunk 1"
+        "chunk 2"
+        "7\r\nchunk 0\r\n"
+        "7\r\nchunk 1\r\n"
+        "7\r\nchunk 2\r\n"
+        "0\r\n\r\n";
+    ASSERT(done == mg_crc32(0, data, strlen(data)));
+  }
+
+  done = 0;
+  mg_http_connect(&mgr, url, eh5, &done);
+  for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
+  {
+    const char *data =
+        "chunk 0"
+        "chunk 1"
+        "chunk 2";
+    ASSERT(done == mg_crc32(0, data, strlen(data)));
+  }
+
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+  exit(0);
+}
+
 int main(void) {
   mg_log_set("3");
+  test_crc32();
+  test_http_chunked();
   test_http_parse();
   test_util();
   test_sntp();

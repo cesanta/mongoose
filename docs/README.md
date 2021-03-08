@@ -223,7 +223,6 @@ Here is a list of build constants and their default values:
 |`MG_ENABLE_LOG` | 1 | Enable `LOG()` macro |
 |`MG_ENABLE_MD5` | 0 | Use native MD5 implementation |
 |`MG_ENABLE_DIRECTORY_LISTING` | 0 | Enable directory listing for HTTP server |
-|`MG_ENABLE_HTTP_DEBUG_ENDPOINT` | 0 | Enable `/debug/info` debug URI |
 |`MG_ENABLE_SOCKETPAIR` | 0 | Enable `mg_socketpair()` for multi-threading |
 |`MG_ENABLE_SSI` | 0 | Enable serving SSI files by `mg_http_serve_dir()` |
 |`MG_IO_SIZE` | 512 | Granularity of the send/recv IO buffer growth |
@@ -1241,3 +1240,12 @@ void mg_usleep(unsigned long usecs);
 ```
 
 Block for a given number of microseconds.
+
+### mg\_crc32()
+
+```c
+uint32_t mg_crc32(uint32_t crc, const uint8_t *buf, size_t len);
+```
+
+Calculate CRC32 checksum for a given buffer. An initial `crc` value should
+be `0`.
