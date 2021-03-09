@@ -15,7 +15,7 @@
 // Alternatively, you can license this software under a commercial
 // license, as set out in <https://www.cesanta.com/license>.
 #pragma once
-#define MG_VERSION "7.2"
+#define MG_VERSION "7.3"
 
 
 #define MG_ARCH_CUSTOM 0
