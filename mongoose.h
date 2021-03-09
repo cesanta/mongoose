@@ -827,6 +827,8 @@ void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,
                          uint32_t len);
 int mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
                      uint8_t *qos, int pos);
+int mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic,
+                       int pos);
 void mg_mqtt_ping(struct mg_connection *);
 void mg_mqtt_pong(struct mg_connection *);
 void mg_mqtt_disconnect(struct mg_connection *);

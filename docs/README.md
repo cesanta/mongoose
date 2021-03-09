@@ -948,6 +948,41 @@ void mg_mqtt_sub(struct mg_connection *, struct mg_str *topic);
 
 Subscribe to topic `topic`.
 
+### mg\_mqtt\_next\_sub()
+
+```c
+int mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
+                     uint8_t *qos, int pos);
+```
+
+Traverse list of subscribed topics. 
+Used to implement MQTT server when `MQTT_CMD_SUBSCRIBE` is received.
+Return next position. Initial position `pos` should be 4. Example:
+
+```c
+if (ev == MG_EV_MQTT_CMD) {
+  struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
+  if (mm->cmd == MQTT_CMD_SUBSCRIBE) {
+    int pos = 4;
+    uint8_t qos;
+    struct mg_str topic;
+    while ((pos = mg_mqtt_next_sub(mm, &topic, &qos, pos)) > 0) {
+      LOG(LL_INFO, ("SUB [%.*s]", c->id, (int) topic.len, topic.ptr));
+    }
+  }
+}
+```
+
+### mg\_mqtt\_next\_unsub()
+
+```c
+int mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic,
+                       int pos);
+```
+
+Same as `mg_mqtt_next_sub()`, but for unsubscribed topics. The difference
+is that there is no QoS in unsubscribe request.
+
 
 ## TLS
 
