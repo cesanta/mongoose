@@ -176,18 +176,29 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m) {
   return MQTT_OK;
 }
 
-int mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
-                     uint8_t *qos, int pos) {
+static int mg_mqtt_next_topic(struct mg_mqtt_message *msg, struct mg_str *topic,
+                              uint8_t *qos, int pos) {
   unsigned char *buf = (unsigned char *) msg->dgram.ptr + pos;
   int new_pos;
   if ((size_t) pos >= msg->dgram.len) return -1;
 
   topic->len = buf[0] << 8 | buf[1];
   topic->ptr = (char *) buf + 2;
-  new_pos = pos + 2 + topic->len + 1;
+  new_pos = pos + 2 + topic->len + (qos == NULL ? 0 : 1);
   if ((size_t) new_pos > msg->dgram.len) return -1;
-  *qos = buf[2 + topic->len];
+  if (qos != NULL) *qos = buf[2 + topic->len];
   return new_pos;
+}
+
+int mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
+                     uint8_t *qos, int pos) {
+  uint8_t tmp;
+  return mg_mqtt_next_topic(msg, topic, qos == NULL ? &tmp : qos, pos);
+}
+
+int mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic,
+                       int pos) {
+  return mg_mqtt_next_topic(msg, topic, NULL, pos);
 }
 
 static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
