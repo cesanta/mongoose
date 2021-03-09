@@ -770,7 +770,7 @@ static size_t get_chunk_length(const char *buf, size_t len, size_t *ll) {
 static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
                        int reqlen) {
   size_t off = 0, bl, ll;
-  while (off < c->recv.len - reqlen) {
+  while (off + reqlen < c->recv.len) {
     char *buf = (char *) &c->recv.buf[reqlen];
     size_t memo = c->recv.len;
     size_t cl = get_chunk_length(&buf[off], memo - reqlen - off, &ll);
@@ -783,7 +783,7 @@ static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
     if (cl <= 5) {
       // Zero chunk - last one. Prepare body - cut off chunk lengths
       off = bl = 0;
-      while (off < c->recv.len - reqlen) {
+      while (off + reqlen < c->recv.len) {
         char *buf = (char *) &c->recv.buf[reqlen];
         size_t memo = c->recv.len;
         size_t cl = get_chunk_length(&buf[off], memo - reqlen - off, &ll);
