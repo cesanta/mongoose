@@ -967,7 +967,7 @@ if (ev == MG_EV_MQTT_CMD) {
     uint8_t qos;
     struct mg_str topic;
     while ((pos = mg_mqtt_next_sub(mm, &topic, &qos, pos)) > 0) {
-      LOG(LL_INFO, ("SUB [%.*s]", c->id, (int) topic.len, topic.ptr));
+      LOG(LL_INFO, ("SUB [%.*s]", (int) topic.len, topic.ptr));
     }
   }
 }
