@@ -769,7 +769,7 @@ static size_t get_chunk_length(const char *buf, size_t len, size_t *ll) {
 // an MG_EV_HTTP_CHUNK event.
 static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
                        int reqlen) {
-  size_t off = 0, ll;
+  size_t off = 0, bl, ll;
   while (off < c->recv.len - reqlen) {
     char *buf = (char *) &c->recv.buf[reqlen];
     size_t memo = c->recv.len;
@@ -781,10 +781,22 @@ static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
     // Increase offset only if user has not deleted this chunk
     if (memo == c->recv.len) off += cl;
     if (cl <= 5) {
-      // Zero chunk - last one. Set message length to indicate we've received
+      // Zero chunk - last one. Prepare body - cut off chunk lengths
+      off = bl = 0;
+      while (off < c->recv.len - reqlen) {
+        char *buf = (char *) &c->recv.buf[reqlen];
+        size_t memo = c->recv.len;
+        size_t cl = get_chunk_length(&buf[off], memo - reqlen - off, &ll);
+        size_t n = cl < ll + 2 ? 0 : cl - ll - 2;
+        if (cl <= 5) break;
+        memmove(buf + bl, buf + off + ll, n);
+        bl += n;
+        off += cl;
+      }
+      // Set message length to indicate we've received
       // everything, to fire MG_EV_HTTP_MSG
-      hm->message.len = off + reqlen;
-      hm->body.len = off;
+      hm->message.len = bl + reqlen;
+      hm->body.len = bl;
       break;
     }
   }

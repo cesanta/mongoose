@@ -1231,7 +1231,7 @@ static void eh5(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 static void test_http_chunked(void) {
   struct mg_mgr mgr;
-  const char *url = "http://127.0.0.1:12344";
+  const char *data, *url = "http://127.0.0.1:12344";
   uint32_t i, done = 0;
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, eh2, NULL);
@@ -1239,41 +1239,20 @@ static void test_http_chunked(void) {
   mg_http_connect(&mgr, url, eh3, &done);
   for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(i < 50);
-  {
-    const char *data =
-        "7\r\nchunk 0\r\n"
-        "7\r\nchunk 1\r\n"
-        "7\r\nchunk 2\r\n"
-        "0\r\n\r\n";
-    ASSERT(done == mg_crc32(0, data, strlen(data)));
-  }
+  data = "chunk 0chunk 1chunk 2";
+  ASSERT(done == mg_crc32(0, data, strlen(data)));
 
   done = 0;
   mg_http_connect(&mgr, url, eh4, &done);
   for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
-  {
-    const char *data =
-        "chunk 0"
-        "chunk 0"
-        "chunk 1"
-        "chunk 2"
-        "7\r\nchunk 0\r\n"
-        "7\r\nchunk 1\r\n"
-        "7\r\nchunk 2\r\n"
-        "0\r\n\r\n";
-    ASSERT(done == mg_crc32(0, data, strlen(data)));
-  }
+  data = "chunk 0chunk 0chunk 1chunk 2chunk 0chunk 1chunk 2";
+  ASSERT(done == mg_crc32(0, data, strlen(data)));
 
   done = 0;
   mg_http_connect(&mgr, url, eh5, &done);
   for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
-  {
-    const char *data =
-        "chunk 0"
-        "chunk 1"
-        "chunk 2";
-    ASSERT(done == mg_crc32(0, data, strlen(data)));
-  }
+  data = "chunk 0chunk 1chunk 2";
+  ASSERT(done == mg_crc32(0, data, strlen(data)));
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
