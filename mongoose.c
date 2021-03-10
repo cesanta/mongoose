@@ -970,7 +970,7 @@ static void printdirentry(struct mg_connection *c, const char *name,
 }
 
 static void listdir(struct mg_connection *c, struct mg_http_message *hm,
-                    char *dir) {
+                    struct mg_http_serve_opts *opts, char *dir) {
   char path[MG_PATH_MAX], *p = &dir[strlen(dir) - 1], tmp[10];
   struct dirent *dp;
   DIR *dirp;
@@ -1001,10 +1001,12 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
   while (p > dir && *p != '/') *p-- = '\0';
   if ((dirp = (opendir(dir))) != NULL) {
     size_t off, n;
-    mg_printf(c, "%s\r\n",
+    mg_printf(c,
               "HTTP/1.1 200 OK\r\n"
               "Content-Type: text/html; charset=utf-8\r\n"
-              "Content-Length:         \r\n");
+              "%s"
+              "Content-Length:         \r\n\r\n",
+              opts->extra_headers == NULL ? "" : opts->extra_headers);
     off = c->send.len;  // Start of body
     mg_printf(c,
               "<!DOCTYPE html><html><head><title>Index of %.*s</title>%s%s"
@@ -1099,7 +1101,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
 #endif
       if (is_index && fp == NULL) {
 #if MG_ENABLE_DIRECTORY_LISTING
-        listdir(c, hm, t2);
+        listdir(c, hm, opts, t2);
 #else
         mg_http_reply(c, 403, "", "%s", "Directory listing not supported");
 #endif
@@ -1111,7 +1113,8 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
         mg_http_serve_ssi(c, t1, t2);
 #endif
       } else {
-        mg_http_serve_file(c, hm, t2, guess_content_type(t2), NULL);
+        mg_http_serve_file(c, hm, t2, guess_content_type(t2),
+                           opts->extra_headers);
       }
       if (fp != NULL) fclose(fp);
     }

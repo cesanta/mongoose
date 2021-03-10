@@ -11,7 +11,7 @@ static const char *s_ssi_pattern = "#.shtml";
 
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_serve_opts opts = {s_root_dir, s_ssi_pattern};
+    struct mg_http_serve_opts opts = {s_root_dir, s_ssi_pattern, NULL};
     mg_http_serve_dir(c, ev_data, &opts);
   }
   (void) fn_data;

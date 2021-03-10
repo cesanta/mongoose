@@ -686,8 +686,9 @@ Write a chunk of data in chunked encoding format.
 
 ```c
 struct mg_http_serve_opts {
-  const char *root_dir;     // Web root directory, must be non-NULL
-  const char *ssi_pattern;  // SSI filename pattern, e.g. #.shtml
+  const char *root_dir;       // Web root directory, must be non-NULL
+  const char *ssi_pattern;    // SSI filename pattern, e.g. #.shtml
+  const char *extra_headers;  // Extra HTTP headers to add in responses
 };
 void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *opts);
