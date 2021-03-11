@@ -407,7 +407,7 @@ struct mg_timer {
 #define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
 #define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
   void (*fn)(void *);       // Function to call
-  void *arg;                // Function agrument
+  void *arg;                // Function argument
   unsigned long expire;     // Expiration timestamp in milliseconds
   struct mg_timer *next;    // Linkage in g_timers list
 };
@@ -627,7 +627,7 @@ struct mg_connection {
   struct mg_iobuf recv;        // Incoming data
   struct mg_iobuf send;        // Outgoing data
   mg_event_handler_t fn;       // User-specified event handler function
-  void *fn_data;               // User-speficied function parameter
+  void *fn_data;               // User-specified function parameter
   mg_event_handler_t pfn;      // Protocol-specific handler function
   void *pfn_data;              // Protocol-specific function parameter
   char label[50];              // Arbitrary label
@@ -635,7 +635,7 @@ struct mg_connection {
   unsigned is_listening : 1;   // Listening connection
   unsigned is_client : 1;      // Outbound (client) connection
   unsigned is_accepted : 1;    // Accepted (server) connection
-  unsigned is_resolving : 1;   // Non-blocking DNS resolv is in progress
+  unsigned is_resolving : 1;   // Non-blocking DNS resolution is in progress
   unsigned is_connecting : 1;  // Non-blocking connect is in progress
   unsigned is_tls : 1;         // TLS-enabled connection
   unsigned is_tls_hs : 1;      // TLS handshake is in progress
@@ -689,7 +689,7 @@ struct mg_http_message {
 // Parameter for mg_http_serve_dir()
 struct mg_http_serve_opts {
   const char *root_dir;       // Web root directory, must be non-NULL
-  const char *ssi_pattern;    // SSI filename pattern, e.g. #.shtml
+  const char *ssi_pattern;    // SSI file name pattern, e.g. #.shtml
   const char *extra_headers;  // Extra HTTP headers to add in responses
 };
 
