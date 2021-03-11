@@ -13,7 +13,7 @@ International Space Station!  Mongoose makes embedded network programming fast,
 robust, and easy.
 
 Are you a company working on a connected product or software in a commercial
-setup? [Schedule a conversation with Mongoose Library authors](https://calendly.com/cesanta/mongoose-library-remote-control-for-connected-devices)
+setup? [Schedule a conversation with Mongoose Library authors](https://calendly.com/cesanta/mongoose-library-remote-control-for-connected-devices).
 
 Source code and documentation:
 
