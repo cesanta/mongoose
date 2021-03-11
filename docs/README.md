@@ -6,17 +6,17 @@
 Mongoose is a networking library for C/C++. It implements an event-driven,
 non-blocking APIs for TCP, UDP, HTTP, WebSocket, MQTT.  It has been designed
 for connecting devices and bringing them online. On the market since 2004, used
-by vast number of open source and commercial products - it even runs on the
-International Space Station!  Mongoose makes embedded network programming fast,
+by a vast number of open source and commercial products - it even runs on the
+International Space Station! Mongoose makes embedded network programming fast,
 robust, and easy.
 
 
 ## Features
 
 * Cross-platform: works on Linux/UNIX, MacOS, QNX, eCos, Windows, Android,
-  iPhone, FreeRTOS, etc
+  iPhone, FreeRTOS, etc.
 * Supported hardware platforms: TI CC3200, TI MSP432, NRF52, STM32, PIC32, ESP8266, ESP32 and more
-* Builtin protocols:
+* Built-in protocols:
    - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
    - HTTP client, HTTP server
    - WebSocket client, WebSocket server
@@ -50,7 +50,7 @@ Mongoose's internals.
 An application that uses mongoose should follow a standard pattern of
 event-driven application:
 
-1. Declare and initialise an event manager:
+1. Declare and initialize an event manager:
 
   ```c
   struct mg_mgr mgr;
@@ -106,7 +106,7 @@ what an event handler function looks like:
 ```c
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   switch (ev) {
-    /* Event handler code that defines behavior of the connection */
+    /* Event handler code that defines behaviour of the connection */
     ...
   }
 }
@@ -127,7 +127,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 ## Events
 
-Below is the list of events trigged by Mongoose, taken as-is from `mongoose.h`.
+Below is the list of events triggered by Mongoose, taken as-is from `mongoose.h`.
 For each event, a comment describes a meaning of the `ev_data` pointer passed
 to an event handler:
 
@@ -366,7 +366,7 @@ struct mg_connection {
   struct mg_iobuf recv;        // Incoming data
   struct mg_iobuf send;        // Outgoing data
   mg_event_handler_t fn;       // User-specified event handler function
-  void *fn_data;               // User-speficied function parameter
+  void *fn_data;               // User-specified function parameter
   mg_event_handler_t pfn;      // Protocol-specific handler function
   void *pfn_data;              // Protocol-specific function parameter
   char label[32];              // Arbitrary label
@@ -374,7 +374,7 @@ struct mg_connection {
   unsigned is_listening : 1;   // Listening connection
   unsigned is_client : 1;      // Outbound (client) connection
   unsigned is_accepted : 1;    // Accepted (server) connection
-  unsigned is_resolving : 1;   // Non-blocking DNS resolv is in progress
+  unsigned is_resolving : 1;   // Non-blocking DNS resolve is in progress
   unsigned is_connecting : 1;  // Non-blocking connect is in progress
   unsigned is_tls : 1;         // TLS-enabled connection
   unsigned is_tls_hs : 1;      // TLS handshake is in progress
@@ -389,7 +389,7 @@ struct mg_connection {
 ```
 
 A connection - either a listening connection, or an accepted connection,
-or an outbout connection.
+or an outbound connection.
 
 ### mg\_mgr_init()
 
@@ -397,7 +397,7 @@ or an outbout connection.
 void mg_mgr_init(struct mg_mgr *);
 ```
 
-Initialise event manager structure: set a list of active connections to NULL,
+Initialize event manager structure: set a list of active connections to NULL,
 set DNS server and timeout to their default values, etc.
 
 
@@ -454,7 +454,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
                                  mg_event_handler_t fn, void *fn_data);
 ```
 
-Create an outbout connection, append this connection to `mgr->conns`.
+Create an outbound connection, append this connection to `mgr->conns`.
 - `url` - specifies remote IP address/port to connect to, e.g. `http://a.com`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
@@ -530,7 +530,7 @@ by `buf`, and `len` specifies number of bytes currently stored.
 int mg_iobuf_init(struct mg_iobuf *io, size_t size);
 ```
 
-Initialise IO buffer, allocate `size` bytes. Return 1 on success,
+Initialize IO buffer, allocate `size` bytes. Return 1 on success,
 0 on allocation failure.
 
 
@@ -687,7 +687,7 @@ Write a chunk of data in chunked encoding format.
 ```c
 struct mg_http_serve_opts {
   const char *root_dir;       // Web root directory, must be non-NULL
-  const char *ssi_pattern;    // SSI filename pattern, e.g. #.shtml
+  const char *ssi_pattern;    // SSI file name pattern, e.g. #.shtml
   const char *extra_headers;  // Extra HTTP headers to add in responses
 };
 void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
@@ -1015,7 +1015,7 @@ struct mg_timer {
 #define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
 #define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
   void (*fn)(void *);       // Function to call
-  void *arg;                // Function agrument
+  void *arg;                // Function argument
   unsigned long expire;     // Expiration timestamp in milliseconds
   struct mg_timer *next;    // Linkage in g_timers list
 };
@@ -1035,7 +1035,7 @@ Setup a timer.
 - `fn` - function to invoke
 - `fn_data` - function argument
 
-A timer gets initialised and linked into the `g_timers` list:
+A timer gets initialized and linked into the `g_timers` list:
 
 ```c
 struct mg_timer *g_timers;
@@ -1121,7 +1121,7 @@ The glob pattern matching rules are as follows:
 - `?` matches any single character 
 - `*` matches zero or more characters except `/`
 - `#` matches zero or more characters
-- any other caracter matches itself
+- any other character matches itself
 
 
 ### mg\_next\_comma\_entry()
@@ -1179,7 +1179,7 @@ char *mg_hex(const void *buf, int len, char *dst);
 
 Hex-encode binary data `buf`, `len` into a buffer `dst` and nul-terminate it.
 The output buffer must be at least 2 x `len` + 1 big.
-Return value: `dst` pointer. The encoded characters are lowecase,
+Return value: `dst` pointer. The encoded characters are lowercase,
 for example `mg_hex("hi", 2, buf)` outputs `6869` and 0 byte, 5 bytes overall.
 
 
