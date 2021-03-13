@@ -477,7 +477,6 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     c->fd = sock2ptr(fd);
     c->is_listening = 1;
     c->is_udp = is_udp;
-    setsockopts(c);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fn = fn;
     c->fn_data = fn_data;
