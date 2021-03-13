@@ -64,19 +64,13 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
-// Standard C headers
-#include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <time.h>
+#if !defined(PRINTF_LIKE)
+#if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
+#define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
+#else
+#define PRINTF_LIKE(f, a)
+#endif
+#endif
 
 #if MG_ARCH == MG_ARCH_CUSTOM
 #include <mongoose_custom.h>
@@ -87,11 +81,3 @@
 #include "arch_freertos.h"
 #include "arch_unix.h"
 #include "arch_win32.h"
-
-#if !defined(PRINTF_LIKE)
-#if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
-#define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
-#else
-#define PRINTF_LIKE(f, a)
-#endif
-#endif

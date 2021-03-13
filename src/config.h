@@ -4,9 +4,7 @@
 #define MG_ENABLE_LWIP 0
 #endif
 
-#if MG_ENABLE_LWIP
-#define MG_ENABLE_SOCKET 0
-#elif !defined(MG_ENABLE_SOCKET)
+#ifndef MG_ENABLE_SOCKET
 #define MG_ENABLE_SOCKET 1
 #endif
 
@@ -40,6 +38,11 @@
 
 #ifndef MG_ENABLE_MD5
 #define MG_ENABLE_MD5 0
+#endif
+
+// Set MG_ENABLE_WINSOCK=0 for Win32 builds with external IP stack (like LWIP)
+#ifndef MG_ENABLE_WINSOCK
+#define MG_ENABLE_WINSOCK 1
 #endif
 
 #ifndef MG_ENABLE_DIRECTORY_LISTING

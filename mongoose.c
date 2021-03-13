@@ -2236,7 +2236,7 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 }
 
 void mg_mgr_init(struct mg_mgr *mgr) {
-#ifdef _WIN32
+#if defined(_WIN32) && MG_ENABLE_WINSOCK
   WSADATA data;
   WSAStartup(MAKEWORD(2, 2), &data);
 #elif MG_ARCH == MG_ARCH_FREERTOS
@@ -2601,24 +2601,40 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
 
 
 #if MG_ENABLE_SOCKET
-#if defined(_WIN32)
+#if defined(_WIN32) && MG_ENABLE_WINSOCK
 #define MG_SOCK_ERRNO WSAGetLastError()
-#define FD(C_) ((SOCKET)(C_)->fd)
 #ifndef SO_EXCLUSIVEADDRUSE
 #define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
 #endif
 #elif MG_ARCH == MG_ARCH_FREERTOS
 #define MG_SOCK_ERRNO errno
 typedef Socket_t SOCKET;
-#define FD(C_) ((long) (C_)->fd)
 #define INVALID_SOCKET FREERTOS_INVALID_SOCKET
 #else
 #define MG_SOCK_ERRNO errno
+#ifndef closesocket
 #define closesocket(x) close(x)
+#endif
 #define INVALID_SOCKET (-1)
 typedef int SOCKET;
-#define FD(C_) ((SOCKET)(long) (C_)->fd)
 #endif
+
+union _su {
+  SOCKET s;
+  void *ptr;
+};
+#define FD(c_) ptr2sock((c_)->fd)
+
+static SOCKET ptr2sock(void *ptr) {
+  union _su u = {0};
+  u.ptr = ptr;
+  return u.s;
+}
+
+static void *sock2ptr(SOCKET s) {
+  union _su u = {s};
+  return u.ptr;
+}
 
 #ifndef MSG_NONBLOCKING
 #define MSG_NONBLOCKING 0
@@ -2654,7 +2670,7 @@ static int mg_sock_failed(void) {
 #ifndef WINCE
          && err != EAGAIN && err != EINTR
 #endif
-#ifdef _WIN32
+#if defined(_WIN32) && MG_ENABLE_WINSOCK
          && err != WSAEINTR && err != WSAEWOULDBLOCK
 #endif
       ;
@@ -2665,7 +2681,7 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, int is_client,
   struct mg_connection *c = (struct mg_connection *) calloc(1, sizeof(*c));
   if (c != NULL) {
     c->is_client = is_client;
-    c->fd = (void *) (long) fd;
+    c->fd = sock2ptr(fd);
     c->mgr = mgr;
     c->id = ++mgr->nextid;
   }
@@ -2757,7 +2773,7 @@ int mg_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 static void mg_set_non_blocking_mode(SOCKET fd) {
-#ifdef _WIN32
+#if defined(_WIN32) && MG_ENABLE_WINSOCK
   unsigned long on = 1;
   ioctlsocket(fd, FIONBIO, &on);
 #elif MG_ARCH == MG_ARCH_FREERTOS
@@ -2912,7 +2928,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   if (c->peer.is_ip6) af = AF_INET6;
 #endif
   mg_straddr(c, buf, sizeof(buf));
-  c->fd = (void *) (long) socket(af, type, 0);
+  c->fd = sock2ptr(socket(af, type, 0));
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
     return;
@@ -3049,7 +3065,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     LOG(LL_ERROR, ("OOM %s", url));
     closesocket(fd);
   } else {
-    c->fd = (void *) (long) fd;
+    c->fd = sock2ptr(fd);
     c->is_listening = 1;
     c->is_udp = is_udp;
     setsockopts(c);

@@ -2,6 +2,19 @@
 
 #if MG_ARCH == MG_ARCH_WIN32
 
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
+
 #if defined(_MSC_VER) && _MSC_VER < 1700
 #define __func__ ""
 typedef __int64 int64_t;

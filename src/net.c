@@ -122,7 +122,7 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 }
 
 void mg_mgr_init(struct mg_mgr *mgr) {
-#ifdef _WIN32
+#if defined(_WIN32) && MG_ENABLE_WINSOCK
   WSADATA data;
   WSAStartup(MAKEWORD(2, 2), &data);
 #elif MG_ARCH == MG_ARCH_FREERTOS

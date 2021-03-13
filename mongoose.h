@@ -82,7 +82,80 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
-// Standard C headers
+#if !defined(PRINTF_LIKE)
+#if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
+#define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
+#else
+#define PRINTF_LIKE(f, a)
+#endif
+#endif
+
+#if MG_ARCH == MG_ARCH_CUSTOM
+#include <mongoose_custom.h>
+#endif
+
+
+
+
+
+
+
+
+#if MG_ARCH == MG_ARCH_ESP32
+
+#include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <netdb.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
+
+#define MG_DIRSEP '/'
+#define MG_INT64_FMT "%lld"
+#ifndef MG_PATH_MAX
+#define MG_PATH_MAX 128
+#endif
+
+#endif
+
+
+#if MG_ARCH == MG_ARCH_ESP8266
+
+#include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <netdb.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <time.h>
+
+#include <esp_system.h>
+
+#define MG_DIRSEP '/'
+#define MG_INT64_FMT "%lld"
+
+#endif
+
+
+#if MG_ARCH == MG_ARCH_FREERTOS
+
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -96,53 +169,6 @@
 #include <sys/types.h>
 #include <time.h>
 
-#if MG_ARCH == MG_ARCH_CUSTOM
-#include <mongoose_custom.h>
-#endif
-
-
-
-
-
-
-
-#if !defined(PRINTF_LIKE)
-#if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
-#define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
-#else
-#define PRINTF_LIKE(f, a)
-#endif
-#endif
-
-
-#if MG_ARCH == MG_ARCH_ESP32
-
-#include <dirent.h>
-#include <netdb.h>
-#include <sys/stat.h>
-#define MG_DIRSEP '/'
-#define MG_INT64_FMT "%lld"
-#ifndef MG_PATH_MAX
-#define MG_PATH_MAX 128
-#endif
-
-#endif
-
-
-#if MG_ARCH == MG_ARCH_ESP8266
-
-#include <dirent.h>
-#include <esp_system.h>
-#include <netdb.h>
-#include <stdbool.h>
-#include <sys/time.h>
-#define MG_DIRSEP '/'
-#define MG_INT64_FMT "%lld"
-
-#endif
-
-
-#if MG_ARCH == MG_ARCH_FREERTOS
 #include <FreeRTOS.h>
 
 #include <task.h>
@@ -211,17 +237,30 @@ static inline int ff_vfprintf(FF_FILE *fp, const char *fmt, va_list ap) {
 #define _DARWIN_UNLIMITED_SELECT 1
 
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
+
 #define MG_DIRSEP '/'
 #define MG_ENABLE_POSIX 1
 #define MG_INT64_FMT "%" PRId64
@@ -230,6 +269,19 @@ static inline int ff_vfprintf(FF_FILE *fp, const char *fmt, va_list ap) {
 
 
 #if MG_ARCH == MG_ARCH_WIN32
+
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
 
 #if defined(_MSC_VER) && _MSC_VER < 1700
 #define __func__ ""
@@ -290,9 +342,7 @@ typedef int socklen_t;
 #define MG_ENABLE_LWIP 0
 #endif
 
-#if MG_ENABLE_LWIP
-#define MG_ENABLE_SOCKET 0
-#elif !defined(MG_ENABLE_SOCKET)
+#ifndef MG_ENABLE_SOCKET
 #define MG_ENABLE_SOCKET 1
 #endif
 
@@ -326,6 +376,11 @@ typedef int socklen_t;
 
 #ifndef MG_ENABLE_MD5
 #define MG_ENABLE_MD5 0
+#endif
+
+// Set MG_ENABLE_WINSOCK=0 for Win32 builds with external IP stack (like LWIP)
+#ifndef MG_ENABLE_WINSOCK
+#define MG_ENABLE_WINSOCK 1
 #endif
 
 #ifndef MG_ENABLE_DIRECTORY_LISTING
