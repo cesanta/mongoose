@@ -1064,11 +1064,12 @@ past the timer's expiration time.
 ### mg\_file\_read()
 
 ```c
-char *mg_file_read(const char *path);
+char *mg_file_read(const char *path, size_t *sizep);
 ```
 
 Read file contents into a nul-terminated malloc-ed string. It is a caller's
-responsibility to free() a returned pointer.
+responsibility to free() a returned pointer. If `sizep` is not NULL, it will
+return a file size in bytes.
 
 ### mg\_file\_size()
 
