@@ -28,6 +28,13 @@ struct mg_http_serve_opts {
   const char *extra_headers;  // Extra HTTP headers to add in responses
 };
 
+// Parameter for mg_http_next_multipart
+struct mg_http_part {
+  struct mg_str name;      // Form field name
+  struct mg_str filename;  // Filename for file uploads
+  struct mg_str part;      // Part contents
+};
+
 int mg_http_parse(const char *s, size_t len, struct mg_http_message *);
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len);
 void mg_http_printf_chunk(struct mg_connection *cnn, const char *fmt, ...);
@@ -53,3 +60,4 @@ bool mg_http_match_uri(const struct mg_http_message *, const char *glob);
 int mg_http_upload(struct mg_connection *, struct mg_http_message *hm,
                    const char *dir);
 void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
+int mg_http_next_multipart(struct mg_str, int, struct mg_http_part *);

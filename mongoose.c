@@ -430,6 +430,12 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 
 // Multipart POST example:
 // https://gist.github.com/cpq/b8dd247571e6ee9c54ef7e8dfcfecf48
+int mg_http_next_multipart(struct mg_str body, int offset,
+                           struct mg_http_part *part) {
+  (void) body;
+  (void) part;
+  return offset;
+}
 
 void mg_http_bauth(struct mg_connection *c, const char *user,
                    const char *pass) {
