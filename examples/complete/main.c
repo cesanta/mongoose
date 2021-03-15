@@ -143,8 +143,8 @@ static void broadcast_mjpeg_frame(struct mg_mgr *mgr) {
   size_t nfiles = sizeof(files) / sizeof(files[0]);
   static size_t i;
   const char *path = files[i++ % nfiles];
-  size_t size = mg_file_size(path);
-  char *data = mg_file_read(path);  // Read next file
+  size_t size = 0;
+  char *data = mg_file_read(path, &size);  // Read next file
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
     if (c->label[0] != 'S') continue;         // Skip non-stream connections

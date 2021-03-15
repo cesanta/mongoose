@@ -503,7 +503,7 @@ static void test_http_server(void) {
 #endif
 
   {
-    char *data = mg_file_read("./test/data/ca.pem");
+    char *data = mg_file_read("./test/data/ca.pem", NULL);
     ASSERT(fetch(&mgr, buf, url, "GET /ca.pem HTTP/1.0\r\n\n") == 200);
     ASSERT(cmpbody(data, buf) == 0);
     free(data);
@@ -564,7 +564,7 @@ static void test_http_server(void) {
     // Test upload
     char *p;
     remove("uploaded.txt");
-    ASSERT((p = mg_file_read("uploaded.txt")) == NULL);
+    ASSERT((p = mg_file_read("uploaded.txt", NULL)) == NULL);
 
     ASSERT(fetch(&mgr, buf, url,
                  "POST /upload HTTP/1.0\n"
@@ -578,7 +578,7 @@ static void test_http_server(void) {
                  "POST /upload?name=uploaded.txt&offset=5 HTTP/1.0\r\n"
                  "Content-Length: 6\r\n"
                  "\r\n\nworld") == 200);
-    ASSERT((p = mg_file_read("uploaded.txt")) != NULL);
+    ASSERT((p = mg_file_read("uploaded.txt", NULL)) != NULL);
     ASSERT(strcmp(p, "hello\nworld") == 0);
     free(p);
     remove("uploaded.txt");
@@ -1069,7 +1069,7 @@ static void test_util(void) {
   free(s);
   memset(&a, 0, sizeof(a));
   ASSERT(mg_file_printf("data.txt", "%s", "hi") == true);
-  ASSERT((p = mg_file_read("data.txt")) != NULL);
+  ASSERT((p = mg_file_read("data.txt", NULL)) != NULL);
   ASSERT(strcmp(p, "hi") == 0);
   free(p);
   remove("data.txt");

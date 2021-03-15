@@ -33,7 +33,7 @@ int64_t mg_file_size(const char *path) {
 #endif
 }
 
-char *mg_file_read(const char *path) {
+char *mg_file_read(const char *path, size_t *sizep) {
   FILE *fp;
   char *data = NULL;
   size_t size = (size_t) mg_file_size(path);
@@ -45,6 +45,7 @@ char *mg_file_read(const char *path) {
         data = NULL;
       } else {
         data[size] = '\0';
+        if (sizep != NULL) *sizep = size;
       }
     }
     fclose(fp);
