@@ -187,16 +187,6 @@ static err_t mg_lwip_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb,
   mgos_lock();
   if (cs->rx_chain == NULL) {
     cs->rx_offset = 0;
-  } else if (pbuf_clen(cs->rx_chain) >= 4) {
-    /* ESP SDK has a limited pool of 5 pbufs. We must not hog them all or RX
-     * will be completely blocked. We already have at least 4 in the chain,
-     * this one is the last, so we have to make a copy and release this one. */
-    struct pbuf *np = pbuf_alloc(PBUF_RAW, p->tot_len, PBUF_RAM);
-    if (np != NULL) {
-      pbuf_copy(np, p);
-      pbuf_free(p);
-      p = np;
-    }
   }
   mg_lwip_recv_common(nc, p);
   mgos_unlock();
