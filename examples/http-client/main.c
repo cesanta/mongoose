@@ -32,6 +32,28 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
               "Host: %.*s\r\n"
               "\r\n",
               mg_url_uri(s_url), (int) host.len, host.ptr);
+
+    // If you want to upload a file, create a form upload request like this:
+    // size_t file_size = 0;
+    // char tmp[256], *file_data = mg_file_read("my_file.txt", &file_size);
+    // const char *boundary = "--f912dec";
+    // snprintf(tmp, sizeof(tmp), "%s\r\n%s\r\n%s\r\n\r\n",
+    //          boundary,
+    //          "Content-Disposition: form-data; name=file; filename=a.txt",
+    //          "Content-Type: application/octet-stream");
+    // mg_printf(c,
+    //          "POST %s HTTP/1.0\r\n"
+    //          "Host: %.*s\r\n"
+    //          "Content-Length: %lu\r\n"
+    //          "Content-Type: multipart/form-data; boundary=%s\r\n"
+    //          "\r\n",
+    //          mg_url_uri(s_url), (int) host.len, host.ptr,
+    //          (unsigned long) (size + strlen(tmp) + strlen(boundary) + 2),
+    //          boundary);
+    // mg_printf(c, "%s", tmp);
+    // mg_send(c, file_data, size);
+    // mg_printf(c, "%s\r\n", boundary);
+    // free(file_data);
   } else if (ev == MG_EV_HTTP_MSG) {
     // Response is received. Print it
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
