@@ -752,7 +752,7 @@ struct mg_http_serve_opts {
 struct mg_http_part {
   struct mg_str name;      // Form field name
   struct mg_str filename;  // Filename for file uploads
-  struct mg_str part;      // Part contents
+  struct mg_str body;      // Part contents
 };
 
 int mg_http_parse(const char *s, size_t len, struct mg_http_message *);
@@ -780,7 +780,8 @@ bool mg_http_match_uri(const struct mg_http_message *, const char *glob);
 int mg_http_upload(struct mg_connection *, struct mg_http_message *hm,
                    const char *dir);
 void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
-int mg_http_next_multipart(struct mg_str, int, struct mg_http_part *);
+struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v);
+size_t mg_http_next_multipart(struct mg_str, size_t, struct mg_http_part *);
 
 
 void mg_http_serve_ssi(struct mg_connection *c, const char *root,

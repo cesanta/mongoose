@@ -829,6 +829,45 @@ void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
 
 Write a Basic `Authorization` header to the output buffer.
 
+### mg\_http\_next_\multipart()
+
+```c
+// Parameter for mg_http_next_multipart
+struct mg_http_part {
+  struct mg_str name;      // Form field name
+  struct mg_str filename;  // Filename for file uploads
+  struct mg_str body;      // Part contents
+};
+
+size_t mg_http_next_multipart(struct mg_str body, size_t offset, struct mg_http_part *part);
+```
+
+Parse the multipart chunk in the `body` at a given `offset`. An initial
+`offset` should be 0. Fill up parameters in the provided `part`, which could be
+NULL. Return offset to the next chunk, or 0 if there are no more chunks.
+
+Usage example:
+
+```c
+static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_http_match_uri(hm, "/upload")) {
+      struct mg_http_part part;
+      size_t ofs = 0;
+      while ((ofs = mg_http_next_multipart(ev->body, ofs, &part)) > 0) {
+        LOG(LL_INFO, ("Name: [%.*s] Filename: [%.*s] Body: [%.*s]",
+             (int) part.name.len, part.name.ptr,
+             (int) part.filename.len, part.filename.ptr,
+             (int) part.body.len, part.body.ptr));
+      }
+    } else {
+      struct mg_http_serve_opts opts = {.root_dir = "web_root"};
+      mg_http_serve_dir(c, ev_data, &opts);
+    }
+  }
+}
+```
 
 ## Websocket
 
