@@ -67,13 +67,18 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   const char *ca = opts->ca == NULL     ? "-"
                    : opts->ca[0] == '-' ? "(emb)"
                                         : opts->ca;
+  const char *cert = opts->cert == NULL     ? "-"
+                     : opts->cert[0] == '-' ? "(emb)"
+                                            : opts->cert;
+  const char *certkey = opts->certkey == NULL     ? "-"
+                        : opts->certkey[0] == '-' ? "(emb)"
+                                                  : opts->certkey;
   if (tls == NULL) {
     mg_error(c, "TLS OOM");
     goto fail;
   }
   LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id, ca,
-                 opts->cert == NULL ? "null" : opts->cert,
-                 opts->certkey == NULL ? "null" : opts->certkey));
+                 cert, certkey));
   mbedtls_ssl_init(&tls->ssl);
   mbedtls_ssl_config_init(&tls->conf);
   mbedtls_ssl_conf_dbg(&tls->conf, debug_cb, c);
@@ -120,15 +125,26 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   }
   if (opts->cert != NULL && opts->cert[0] != '\0') {
     const char *key = opts->certkey;
-    if (key == NULL) key = opts->cert;
+    if (key == NULL) {
+      key = opts->cert;
+      certkey = cert;
+    }
     mbedtls_x509_crt_init(&tls->cert);
     mbedtls_pk_init(&tls->pk);
-    if ((rc = mbedtls_x509_crt_parse_file(&tls->cert, opts->cert)) != 0) {
-      mg_error(c, "parse(%s) err %#x", opts->cert, -rc);
+    rc = opts->cert[0] == '-'
+             ? mbedtls_x509_crt_parse(&tls->cert, (uint8_t *) opts->cert,
+                                      strlen(opts->cert) + 1)
+             : mbedtls_x509_crt_parse_file(&tls->cert, opts->cert);
+    if (rc != 0) {
+      mg_error(c, "parse(%s) err %#x", cert, -rc);
       goto fail;
     }
-    if ((rc = mbedtls_pk_parse_keyfile(&tls->pk, key, NULL)) != 0) {
-      mg_error(c, "tls key(%s) %#x", key, -rc);
+    rc = key[0] == '-'
+             ? mbedtls_pk_parse_key(&tls->pk, (uint8_t *) key,
+                                    strlen(key) + 1, NULL, 0)
+             : mbedtls_pk_parse_keyfile(&tls->pk, key, NULL);
+    if (rc != 0) {
+      mg_error(c, "tls key(%s) %#x", certkey, -rc);
       goto fail;
     }
     rc = mbedtls_ssl_conf_own_cert(&tls->conf, &tls->cert, &tls->pk);
