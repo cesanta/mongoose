@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>example</title>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      #container { margin-right: auto; margin-left: auto; max-width: 480px; }
+      #info { background: #e0f0f0; border-radius: .5em; padding: 2em;  }
+      #wrapper { margin-top: 1em; }
+      form * { margin: 0.2em 0; }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <div id="info">
+        Mongoose always buffers a full HTTP message before invoking
+        MG_EV_HTTP_MSG event. Big POST request require of lot
+        of RAM to buffer everything. Therefore, standard form uploads
+        should be used only when Mongoose runs on a system with lots of RAM.
+        Otherwise, please see <code>file-updload</code> example, how
+        a big file could be uploaded to a device with little RAM.
+        <br/><br/>
+        In this example, a standard HTML form upload is used, which uses
+        <code>multipart-form-data</code> encoding with
+        several variables and file upload. On a server side, a
+        <code>mg_http_next_multipart()</code> API is used to iterate over
+        all submitted form elements and print their payload.
+      </div>
+      <div id="wrapper">
+        <form action="/upload" method="post" enctype="multipart/form-data">
+          <input type="text" name="field1" value="type some text here" /> <br/>
+          <input type="file" name="file1" /> </br>
+          <button type="submit">submit form</button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>

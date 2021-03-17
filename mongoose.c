@@ -470,8 +470,8 @@ size_t mg_http_next_multipart(struct mg_str body, size_t ofs,
     h1 = h2 = h2 + 2;
   }
   b1 = b2 = h2 + 2;
-  while (b2 + 2 + (b - ofs) + 2 < max && s[b2] != '\r' && s[b2 + 1] != '\n' &&
-         memcmp(&s[b2 + 2], s, b - ofs) != 0)
+  while (b2 + 2 + (b - ofs) + 2 < max && !(s[b2] == '\r' && s[b2 + 1] == '\n' &&
+                                           memcmp(&s[b2 + 2], s, b - ofs) == 0))
     b2++;
 
   if (b2 + 2 >= max) return 0;
@@ -1224,9 +1224,12 @@ struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v) {
   size_t i;
   for (i = 0; i + v.len + 2 < s.len; i++) {
     if (s.ptr[i + v.len] == '=' && memcmp(&s.ptr[i], v.ptr, v.len) == 0) {
-      const char *p2 = &s.ptr[i + v.len + 1], *p3 = p2;
-      while (p2 < &s.ptr[s.len] && p2[0] != ';' && p2[0] != ' ') p2++;
-      return stripquotes(mg_str_n(p3, p2 - p3));
+      const char *p = &s.ptr[i + v.len + 1], *b = p, *x = &s.ptr[s.len];
+      int q = p < x && *p == '"' ? 1 : 0;
+      while (p < x && (q ? p == b || *p != '"' : *p != ';' && *p != ' ')) p++;
+      // LOG(LL_INFO, ("[%.*s] [%.*s] [%.*s]", (int) s.len, s.ptr, (int) v.len,
+      // v.ptr, (int) (p - b), b));
+      return stripquotes(mg_str_n(b, p - b + q));
     }
   }
   return mg_str_n(NULL, 0);
