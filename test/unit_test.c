@@ -1274,11 +1274,11 @@ static void test_multipart(void) {
       "\r\n"
       "--xyz--\r\n";
   ASSERT(mg_http_next_multipart(mg_str(""), 0, NULL) == 0);
-  ASSERT((ofs = mg_http_next_multipart(mg_str(s), 0, &part)) >= 0);
+  ASSERT((ofs = mg_http_next_multipart(mg_str(s), 0, &part)) > 0);
   ASSERT(mg_strcmp(part.name, mg_str("val")) == 0);
   ASSERT(mg_strcmp(part.body, mg_str("abcdef")) == 0);
   ASSERT(part.filename.len == 0);
-  ASSERT((ofs = mg_http_next_multipart(mg_str(s), ofs, &part)) >= 0);
+  ASSERT((ofs = mg_http_next_multipart(mg_str(s), ofs, &part)) > 0);
   ASSERT(mg_strcmp(part.name, mg_str("foo")) == 0);
   ASSERT(mg_strcmp(part.filename, mg_str("a.txt")) == 0);
   ASSERT(mg_strcmp(part.body, mg_str("hello world")) == 0);
