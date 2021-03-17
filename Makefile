@@ -92,7 +92,7 @@ linux: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(GCC) $(CC) mongoose.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
 	$(GCC) ./unit_test_gcc
 
-linux++: CC = g++ -Wno-missing-field-initializers
+linux++: CC = g++ -Wno-missing-field-initializers -Wno-error=format-truncation
 linux++: linux
 
 mongoose.c: $(SRCS) Makefile
