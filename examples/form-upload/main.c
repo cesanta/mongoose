@@ -6,18 +6,27 @@
 // HTTP request handler function. It implements the following endpoints:
 //   /upload - prints all submitted form elements
 //   all other URI - serves web_root/ directory
+//
+// /////////////////           IMPORTANT        //////////////////////////
+//
+// Mongoose has a limit on input buffer, which also limits maximum upload size.
+// It is controlled by the MG_MAX_RECV_BUF_SIZE constant, which is set by
+// default to (3 * 1024 * 1024), i.e. 3 megabytes.
+// Use -DMG_MAX_RECV_BUF_SIZE=NEW_LIMIT to override it.
+//
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    LOG(LL_INFO, ("New request to: [%.*s]", (int) hm->uri.len, hm->uri.ptr));
+    LOG(LL_INFO, ("New request to: [%.*s], body size: %lu", (int) hm->uri.len,
+                  hm->uri.ptr, (unsigned long) hm->body.len));
     if (mg_http_match_uri(hm, "/upload")) {
       struct mg_http_part part;
       size_t ofs = 0;
       while ((ofs = mg_http_next_multipart(hm->body, ofs, &part)) > 0) {
         LOG(LL_INFO,
-            ("Name: [%.*s] Filename: [%.*s] Body: [%.*s]", (int) part.name.len,
-             part.name.ptr, (int) part.filename.len, part.filename.ptr,
-             (int) part.body.len, part.body.ptr));
+            ("Chunk name: [%.*s] filename: [%.*s] length: %lu bytes",
+             (int) part.name.len, part.name.ptr, (int) part.filename.len,
+             part.filename.ptr, (unsigned long) part.body.len));
       }
       mg_http_reply(c, 200, "", "Thank you!");
     } else {
