@@ -854,11 +854,13 @@ static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
         size_t memo = c->recv.len;
         size_t cl = get_chunk_length(&buf[off], memo - reqlen - off, &ll);
         size_t n = cl < ll + 2 ? 0 : cl - ll - 2;
-        if (cl <= 5) break;
         memmove(buf + bl, buf + off + ll, n);
         bl += n;
         off += cl;
+        if (cl <= 5) break;
       }
+      // LOG(LL_INFO, ("BL->%d del %d off %d", (int) bl, (int) del, (int) off));
+      c->recv.len -= off - bl;
       // Set message length to indicate we've received
       // everything, to fire MG_EV_HTTP_MSG
       hm->message.len = bl + reqlen;
@@ -906,8 +908,7 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
       // LOG(LL_INFO,
       //("---->%d %d\n%.*s", n, is_chunked, (int) c->recv.len, c->recv.buf));
       if (n < 0 && ev == MG_EV_READ) {
-        LOG(LL_ERROR, ("%lu HTTP parse error", c->id));
-        c->is_closing = 1;
+        mg_error(c, "HTTP parse:\n%.*s", (int) c->recv.len, c->recv.buf);
         break;
       } else if (n > 0 && (size_t) c->recv.len >= hm.message.len) {
         mg_call(c, MG_EV_HTTP_MSG, &hm);
