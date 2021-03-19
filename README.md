@@ -12,8 +12,7 @@ by vast number of open source and commercial products - it even runs on the
 International Space Station!  Mongoose makes embedded network programming fast,
 robust, and easy.
 
-Are you a company working on a connected product or software in a commercial
-setup? [Schedule a conversation with Mongoose Library authors](https://calendly.com/cesanta/mongoose-library-remote-control-for-connected-devices).
+Are you a company working on a connected product or software? We can offer you assistance to guarantee your integration success. [Book a free call with our experienced engineer for the initial integration development session.](https://calendly.com/cesanta/mongoose-library-remote-control-for-connected-devices).
 
 Source code and documentation:
 
