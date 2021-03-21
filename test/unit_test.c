@@ -1149,6 +1149,10 @@ static void test_util(void) {
     ASSERT(s == buf);
     ASSERT(strcmp(buf, "a%40b.c") == 0);
   }
+
+  ASSERT(mg_to64(mg_str("-9223372036854775809")) == 0);
+  ASSERT(mg_to64(mg_str("9223372036854775800")) == 0);
+  ASSERT(mg_to64(mg_str("9223372036854775700")) > 0);
 }
 
 static void test_crc32(void) {
