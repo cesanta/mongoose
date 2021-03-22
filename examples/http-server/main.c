@@ -1,6 +1,7 @@
 // Copyright (c) 2020 Cesanta Software Limited
 // All rights reserved
 
+#include <signal.h>
 #include "mongoose.h"
 
 static const char *s_debug_level = "2";
@@ -9,6 +10,14 @@ static const char *s_listening_address = "http://localhost:8000";
 static const char *s_enable_hexdump = "no";
 static const char *s_ssi_pattern = "#.shtml";
 
+// Handle interrupts, like Ctrl-C
+static int s_signo;
+static void signal_handler(int signo) {
+  s_signo = signo;
+}
+
+// Event handler for the listening connection.
+// Simply serve static files from `s_root_dir`
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_serve_opts opts = {s_root_dir, s_ssi_pattern, NULL};
@@ -54,6 +63,8 @@ int main(int argc, char *argv[]) {
   }
 
   // Initialise stuff
+  signal(SIGINT, signal_handler);
+  signal(SIGTERM, signal_handler);
   mg_log_set(s_debug_level);
   mg_mgr_init(&mgr);
   if ((c = mg_http_listen(&mgr, s_listening_address, cb, &mgr)) == NULL) {
@@ -65,7 +76,8 @@ int main(int argc, char *argv[]) {
 
   // Start infinite event loop
   LOG(LL_INFO, ("Starting Mongoose v%s, serving [%s]", MG_VERSION, s_root_dir));
-  for (;;) mg_mgr_poll(&mgr, 1000);
+  while (s_signo == 0) mg_mgr_poll(&mgr, 1000);
   mg_mgr_free(&mgr);
+  LOG(LL_INFO, ("Exiting on signal %d", s_signo));
   return 0;
 }
