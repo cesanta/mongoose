@@ -91,9 +91,8 @@ void mg_random(void *buf, size_t len) {
 #if MG_ENABLE_FS
   FILE *fp = mg_fopen("/dev/urandom", "rb");
   if (fp != NULL) {
-    fread(buf, 1, len, fp);
+    if (fread(buf, 1, len, fp) == len) done = true;
     fclose(fp);
-    done = true;
   }
 #endif
   if (!done) {
