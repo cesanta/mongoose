@@ -14,7 +14,8 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
     // porting to some obscure platforms like FreeRTOS
     void *p = malloc(new_size);
     if (p != NULL) {
-      memcpy(p, io->buf, io->size < new_size ? io->size : new_size);
+      size_t len = new_size < io->len ? new_size : io->len;
+      if (len > 0) memcpy(p, io->buf, len);
       free(io->buf);
       io->buf = (unsigned char *) p;
       io->size = new_size;
