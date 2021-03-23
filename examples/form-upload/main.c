@@ -14,6 +14,8 @@
 // default to (3 * 1024 * 1024), i.e. 3 megabytes.
 // Use -DMG_MAX_RECV_BUF_SIZE=NEW_LIMIT to override it.
 //
+// Also, consider changing -DMG_IO_SIZE=SOME_BIG_VALUE to increase IO buffer
+// increment when reading data.
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
