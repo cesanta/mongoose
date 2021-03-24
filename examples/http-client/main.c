@@ -12,7 +12,7 @@
 #include "mongoose.h"
 
 // The very first web page in history. You can replace it from command line
-static const char *s_url = "http://info.cern.ch";
+static const char *s_url = "http://info.cern.ch//foo";
 
 // Print HTTP response and signal that we're done
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {

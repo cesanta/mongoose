@@ -113,6 +113,11 @@ static void test_url(void) {
   ASSERT(vcmp(mg_url_host("p://foo"), "foo"));
   ASSERT(vcmp(mg_url_host("p://foo/"), "foo"));
   ASSERT(vcmp(mg_url_host("p://foo/x"), "foo"));
+  ASSERT(vcmp(mg_url_host("p://foo/x/"), "foo"));
+  ASSERT(vcmp(mg_url_host("p://foo/x//"), "foo"));
+  ASSERT(vcmp(mg_url_host("p://foo//x"), "foo"));
+  ASSERT(vcmp(mg_url_host("p://foo///x"), "foo"));
+  ASSERT(vcmp(mg_url_host("p://foo///x//"), "foo"));
   ASSERT(vcmp(mg_url_host("p://bar:1234"), "bar"));
   ASSERT(vcmp(mg_url_host("p://bar:1234/"), "bar"));
   ASSERT(vcmp(mg_url_host("p://bar:1234/a"), "bar"));
@@ -128,6 +133,7 @@ static void test_url(void) {
   ASSERT(mg_url_port("x://foo:1234/xx") == 1234);
   ASSERT(mg_url_port("x://foo:1234") == 1234);
   ASSERT(mg_url_port("p://bar:1234/a") == 1234);
+  ASSERT(mg_url_port("p://bar:1234/a:b") == 1234);
   ASSERT(mg_url_port("http://bar") == 80);
   ASSERT(mg_url_port("http://localhost:1234") == 1234);
   ASSERT(mg_url_port("https://bar") == 443);
@@ -138,6 +144,7 @@ static void test_url(void) {
   ASSERT(mg_url_port("wss://u:p@bar:123/abc") == 123);
   ASSERT(mg_url_port("http://u:p@[::1]/abc") == 80);
   ASSERT(mg_url_port("http://u:p@[::1]:2121/abc") == 2121);
+  ASSERT(mg_url_port("http://u:p@[::1]:2121/abc/cd:ef") == 2121);
 
   // User / pass
   ASSERT(vcmp(mg_url_user("p://foo"), ""));
@@ -152,6 +159,7 @@ static void test_url(void) {
   ASSERT(vcmp(mg_url_pass("p://:p@foo"), "p"));
   ASSERT(vcmp(mg_url_user("p://u:p@foo"), "u"));
   ASSERT(vcmp(mg_url_pass("p://u:p@foo"), "p"));
+  ASSERT(vcmp(mg_url_pass("p://u:p@foo//a@b"), "p"));
 
   // URI
   ASSERT(strcmp(mg_url_uri("p://foo"), "/") == 0);
