@@ -12,18 +12,52 @@ by vast number of open source and commercial products - it even runs on the
 International Space Station!  Mongoose makes embedded network programming fast,
 robust, and easy.
 
-Are you a company working on a connected product or software? We can offer you assistance to guarantee your integration success. [Book a free call with our experienced engineer for the initial integration development session.](https://calendly.com/cesanta/mongoose-library-remote-control-for-connected-devices)
-
 Source code and documentation:
 
 - [Download Mongoose Source Code here](https://www.cesanta.com/download.html)
 - [Read Mongoose documentation](https://cesanta.com/docs/)
 
-Connectivity is vital for software and embedded devices, but there are many
-pitfalls to consider when embedding a web server.  This white paper breaks down
+Are you a company working on a connected product or software? 
+We can offer you assistance to guarantee your integration success. [Book a free call with our experienced engineer for the initial integration development session.](https://calendly.com/cesanta/mongoose-library-remote-control-for-connected-devices)
+
+# Why Mongoose?
+Mongoose provides a high level of assurance in terms of reliability and security:
+- Reliable and tested with time: over 16 years of track record.
+- Proven track record: deployed to tens of millions devices in production environments worldwide.
+- Trusted by hundreds of companies big and small: Bosch, Siemens, Samsung, HP, Dell, Google, Intel, Qualcomm, Caterpillar and many others.
+- Secure: the fact that the Mongoose Library is used by NASA aboard the International Space Station is the best confirmation to it.
+
+# Mongoose is used to implement
+Mongoose is embedded in the software, machinery, devices, appliances to implement:
+- Web UI interface on devices
+- RESTful API services
+- Telemetry data exchange
+- Remote control for a product
+- Remote software updates
+- Remote monitoring
+The Mongoose ecosystem is very dynamic and ever increasing.
+
+Connectivity is vital for software and embedded devices, but there are many pitfalls to consider when embedding a web server.  This white paper breaks down
 on the top 9 things to avoid when embedding a web server.
 
 - [Download “9 Things NOT to do when embedding a web server” white paper here](https://www.cesanta.com/whitepaper.html)
+
+# Case Studies and Testimonials:
+
+Testimonials:
+- "Performance and stability of Mongoose Web Server are very good! We had no noticeable issues whatsoever!" - Linus Nuber, Software Architect, Schenck Process Europe GmbH
+- "We could not have dreamed of any better results and are very happy with the decision we made to implement Mongoose Embedded Web Server into our product." - Bram Mariën, Product Manager, Mabo Engineering & Automation NV
+- "We looked through many different libraries and solutions, but with the Mongoose Web Server Library just within a couple of hours, we built a proof of concept. Everything just works, we faced no problems with Mongoose." Samuel Remy, Project Engineer, HAENNI Instruments Inc.
+
+[See Testimonials](https://www.cesanta.com/testimonials.html)
+
+Case Studies:
+
+- Schenck Process integrated Mongoose Web Server Library in the “DISOMAT Tersus” weighing terminal, to provide SSL-enabled web interface.
+- HAENNI Instruments used Mongoose to enable communication with the "HAENNI Wheel Load Scales" - a low weight, robust, long lasting wheel load scales.
+- EFR GmbH uses Mongoose to enable connectivity for the Secure Smart Grid Hub - a highly secure smart meter communication gateway.
+
+[See Case Studies](https://www.cesanta.com/case-studies.html)
 
 # Looking for a pre-compiled Mongoose web server Windows or Mac binary?
 - [Download pre-compiled Mongoose web server binary](https://mongoose.ws/)
