@@ -3,9 +3,25 @@
 
 #include <string.h>
 
+#ifdef MG_SECURE_MEMORY
+static void *memset_secure(void *v, int c, size_t n)
+{
+  if (v != NULL) {
+    volatile unsigned char *p = (volatile unsigned char *)(v);
+    while (n--) {
+      *p++ = c;
+    }
+  }
+  return v;
+}
+#endif
+
 int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
   int ok = 1;
   if (new_size == 0) {
+#ifdef MG_SECURE_MEMORY
+    memset_secure(io->buf, 0, io->size);
+#endif
     free(io->buf);
     io->buf = NULL;
     io->len = io->size = 0;
@@ -16,6 +32,9 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
     if (p != NULL) {
       size_t len = new_size < io->len ? new_size : io->len;
       if (len > 0) memcpy(p, io->buf, len);
+#ifdef MG_SECURE_MEMORY
+      memset_secure(io->buf, 0, io->size);
+#endif
       free(io->buf);
       io->buf = (unsigned char *) p;
       io->size = new_size;
@@ -46,6 +65,9 @@ size_t mg_iobuf_append(struct mg_iobuf *io, const void *buf, size_t len,
 size_t mg_iobuf_delete(struct mg_iobuf *io, size_t len) {
   if (len > io->len) len = 0;
   memmove(io->buf, io->buf + len, io->len - len);
+#ifdef MG_SECURE_MEMORY
+  memset_secure(io->buf + io->len - len, 0, len);
+#endif
   io->len -= len;
   return len;
 }
