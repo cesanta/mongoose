@@ -282,8 +282,8 @@ static int write_conn(struct mg_connection *c) {
 
 static void close_conn(struct mg_connection *c) {
   // Unlink this connection from the list
-  LIST_DELETE(struct mg_connection, &c->mgr->conns, c);
   mg_resolve_cancel(c);
+  LIST_DELETE(struct mg_connection, &c->mgr->conns, c);
   if (c == c->mgr->dns4.c) c->mgr->dns4.c = NULL;
   if (c == c->mgr->dns6.c) c->mgr->dns6.c = NULL;
   mg_call(c, MG_EV_CLOSE, NULL);

@@ -37,10 +37,9 @@ FILE *mg_fopen(const char *fp, const char *mode);
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
 
-#define MG_SWAP16(x) ((((x) >> 8) & 255) | ((x & 255) << 8))
-#define MG_SWAP32(x) \
-  (((x) >> 24) | (((x) &0xff0000) >> 8) | (((x) &0xff00) << 8) | ((x) << 24))
-
+// WEAK symbol makes it possible to define a "default" function implementation,
+// which could be overridden by the user who can define a function with the
+// same name without linking conflict
 #if !defined(WEAK)
 #if (defined(__GNUC__) || defined(__clang__) || \
      defined(__TI_COMPILER_VERSION__)) &&       \
@@ -58,7 +57,12 @@ FILE *mg_fopen(const char *fp, const char *mode);
 #else
 #define MG_STRINGIFY_LITERAL(x) #x
 #endif
+// Expands to a string representation of its argument, which can be a macro:
+// #define FOO 123
+// MG_STRINGIFY_MACRO(FOO)  // Expands to 123
+#define MG_STRINGIFY_MACRO(x) MG_STRINGIFY_LITERAL(x)
 
+// Linked list management macros
 #define LIST_ADD_HEAD(type_, head_, elem_) \
   do {                                     \
     (elem_)->next = (*head_);              \
@@ -79,7 +83,3 @@ FILE *mg_fopen(const char *fp, const char *mode);
     *h = (elem_)->next;                    \
   } while (0)
 
-// Expands to a string representation of its argument, which can be a macro:
-// #define FOO 123
-// MG_STRINGIFY_MACRO(FOO)  // Expands to 123
-#define MG_STRINGIFY_MACRO(x) MG_STRINGIFY_LITERAL(x)
