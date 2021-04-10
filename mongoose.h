@@ -4704,6 +4704,8 @@ extern void mg_hash_md5_v(size_t num_msgs, const uint8_t *msgs[],
                           const size_t *msg_lens, uint8_t *digest);
 extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
                            const size_t *msg_lens, uint8_t *digest);
+extern void mg_hash_sha256_v(size_t num_msgs, const uint8_t *msgs[],
+                             const size_t *msg_lens, uint8_t *digest);
 
 /*
  * Flags for `mg_http_is_authorized()`.
@@ -4711,6 +4713,7 @@ extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
 #define MG_AUTH_FLAG_IS_DIRECTORY (1 << 0)
 #define MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE (1 << 1)
 #define MG_AUTH_FLAG_ALLOW_MISSING_FILE (1 << 2)
+#define MG_AUTH_FLAG_ALGO(algo) ((((int) algo) & 3) << 8)
 
 /*
  * Checks whether an http request is authorized. `domain` is the authentication
@@ -4722,12 +4725,6 @@ extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
 int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
                           const char *domain, const char *passwords_file,
                           int flags);
-
-/*
- * Sends 401 Unauthorized response.
- */
-void mg_http_send_digest_auth_request(struct mg_connection *c,
-                                      const char *domain);
 
 #ifdef __cplusplus
 }
@@ -4879,6 +4876,14 @@ size_t mg_parse_multipart(const char *buf, size_t buf_len, char *var_name,
 int mg_get_http_var(const struct mg_str *buf, const char *name, char *dst,
                     size_t dst_len);
 
+/*
+ * Supported digest auth algorithms.
+ */
+enum mg_auth_algo {
+  MG_AUTH_ALGO_MD5 = 0,
+  MG_AUTH_ALGO_SHA256 = 1,
+};
+
 #if MG_ENABLE_FILESYSTEM
 /*
  * This structure defines how `mg_serve_http()` works.
@@ -4914,6 +4919,11 @@ struct mg_serve_http_opts {
    * is located outside document root to prevent people fetching it.
    */
   const char *global_auth_file;
+
+  /*
+   * Password hashing algorithm used by the password files.
+   */
+  enum mg_auth_algo auth_algo;
 
   /* Set to "no" to disable directory listing. Enabled by default. */
   const char *enable_directory_listing;
@@ -5166,6 +5176,7 @@ struct mg_http_endpoint_opts {
   /* Authorization domain (realm) */
   const char *auth_domain;
   const char *auth_file;
+  enum mg_auth_algo auth_algo;
 };
 
 void mg_register_http_endpoint_opt(struct mg_connection *nc,
@@ -5174,11 +5185,22 @@ void mg_register_http_endpoint_opt(struct mg_connection *nc,
                                    struct mg_http_endpoint_opts opts);
 
 /*
+ * Sends 401 Unauthorized response.
+ */
+void mg_http_send_digest_auth_request(struct mg_connection *c,
+                                      const char *domain);
+void mg_http_send_digest_auth_request_algo(struct mg_connection *c,
+                                           const char *domain,
+                                           enum mg_auth_algo algo);
+
+/*
  * Authenticates a HTTP request against an opened password file.
  * Returns 1 if authenticated, 0 otherwise.
  */
 int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
                               FILE *fp);
+int mg_http_check_digest_auth_algo(struct http_message *hm, const char *auth_domain,
+                              enum mg_auth_algo fp_algo, FILE *fp);
 
 /*
  * Authenticates given response params against an opened password file.
@@ -5191,6 +5213,12 @@ int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
                          struct mg_str response, struct mg_str qop,
                          struct mg_str nc, struct mg_str nonce,
                          struct mg_str auth_domain, FILE *fp);
+int mg_check_digest_auth_algo(struct mg_str method, struct mg_str uri,
+                              struct mg_str username, struct mg_str cnonce,
+                              struct mg_str response, struct mg_str qop,
+                              struct mg_str nc, struct mg_str nonce,
+                              struct mg_str auth_domain, enum mg_auth_algo algo,
+                              FILE *fp);
 
 /*
  * Sends buffer `buf` of size `len` to the client using chunked HTTP encoding.
@@ -5360,6 +5388,12 @@ int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
                                       const char *method, const char *uri,
                                       const char *auth_domain, const char *user,
                                       const char *passwd, const char *nonce);
+int mg_http_create_digest_auth_header_algo(char *buf, size_t buf_len,
+                                           const char *method, const char *uri,
+                                           const char *auth_domain,
+                                           const char *user, const char *passwd,
+                                           const char *nonce,
+                                           enum mg_auth_algo algo);
 
 #ifdef __cplusplus
 }

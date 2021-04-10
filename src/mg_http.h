@@ -333,6 +333,8 @@ extern void mg_hash_md5_v(size_t num_msgs, const uint8_t *msgs[],
                           const size_t *msg_lens, uint8_t *digest);
 extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
                            const size_t *msg_lens, uint8_t *digest);
+extern void mg_hash_sha256_v(size_t num_msgs, const uint8_t *msgs[],
+                             const size_t *msg_lens, uint8_t *digest);
 
 /*
  * Flags for `mg_http_is_authorized()`.
@@ -340,6 +342,7 @@ extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
 #define MG_AUTH_FLAG_IS_DIRECTORY (1 << 0)
 #define MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE (1 << 1)
 #define MG_AUTH_FLAG_ALLOW_MISSING_FILE (1 << 2)
+#define MG_AUTH_FLAG_ALGO(algo) ((((int) algo) & 3) << 8)
 
 /*
  * Checks whether an http request is authorized. `domain` is the authentication
@@ -351,12 +354,6 @@ extern void mg_hash_sha1_v(size_t num_msgs, const uint8_t *msgs[],
 int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
                           const char *domain, const char *passwords_file,
                           int flags);
-
-/*
- * Sends 401 Unauthorized response.
- */
-void mg_http_send_digest_auth_request(struct mg_connection *c,
-                                      const char *domain);
 
 #ifdef __cplusplus
 }

@@ -112,6 +112,7 @@ struct mg_http_endpoint {
   struct mg_str uri_pattern; /* owned */
   char *auth_domain;         /* owned */
   char *auth_file;           /* owned */
+  enum mg_auth_algo auth_algo;
 
   mg_event_handler_t handler;
 #if MG_ENABLE_CALLBACK_USERDATA
@@ -1850,10 +1851,10 @@ extern void mg_hash_md5_v(size_t num_msgs, const uint8_t *msgs[],
                           const size_t *msg_lens, uint8_t *digest);
 #endif
 
-void cs_md5(char buf[33], ...) {
-  unsigned char hash[16];
-  const uint8_t *msgs[20], *p;
-  size_t msg_lens[20];
+static void cs_digest(enum mg_auth_algo algo, char buf[65], ...) {
+  unsigned char hash[32];
+  const uint8_t *msgs[16], *p;
+  size_t msg_lens[16];
   size_t num_msgs = 0;
   va_list ap;
 
@@ -1865,44 +1866,61 @@ void cs_md5(char buf[33], ...) {
   }
   va_end(ap);
 
-  mg_hash_md5_v(num_msgs, msgs, msg_lens, hash);
-  cs_to_hex(buf, hash, sizeof(hash));
+  if (algo == MG_AUTH_ALGO_MD5) {
+    mg_hash_md5_v(num_msgs, msgs, msg_lens, hash);
+    cs_to_hex(buf, hash, 16);
+  } else {
+    mg_hash_sha256_v(num_msgs, msgs, msg_lens, hash);
+    cs_to_hex(buf, hash, 32);
+  }
 }
 
-static void mg_mkmd5resp(const char *method, size_t method_len, const char *uri,
-                         size_t uri_len, const char *ha1, size_t ha1_len,
-                         const char *nonce, size_t nonce_len, const char *nc,
-                         size_t nc_len, const char *cnonce, size_t cnonce_len,
-                         const char *qop, size_t qop_len, char *resp) {
-  static const char colon[] = ":";
-  static const size_t one = 1;
-  char ha2[33];
-  cs_md5(ha2, method, method_len, colon, one, uri, uri_len, NULL);
-  cs_md5(resp, ha1, ha1_len, colon, one, nonce, nonce_len, colon, one, nc,
-         nc_len, colon, one, cnonce, cnonce_len, colon, one, qop, qop_len,
-         colon, one, ha2, sizeof(ha2) - 1, NULL);
+static void mg_mk_digest_resp(const char *method, size_t method_len,
+                              const char *uri, size_t uri_len, const char *ha1,
+                              size_t ha1_len, const char *nonce,
+                              size_t nonce_len, const char *nc, size_t nc_len,
+                              const char *cnonce, size_t cnonce_len,
+                              const char *qop, size_t qop_len,
+                              enum mg_auth_algo algo, char *resp) {
+  size_t one = 1;
+  char ha2[65];
+  size_t ha2_size = (algo == MG_AUTH_ALGO_MD5 ? 32 : 64);
+  cs_digest(algo, ha2, method, method_len, ":", one, uri, uri_len, NULL);
+  cs_digest(algo, resp, ha1, ha1_len, ":", one, nonce, nonce_len, ":", one, nc,
+         nc_len, ":", one, cnonce, cnonce_len, ":", one, qop, qop_len,
+         ":", one, ha2, ha2_size, NULL);
+}
+
+int mg_http_create_digest_auth_header_algo(char *buf, size_t buf_len,
+                                      const char *method, const char *uri,
+                                      const char *auth_domain, const char *user,
+                                      const char *passwd, const char *nonce,
+                                      enum mg_auth_algo algo) {
+  const char qop[] = "auth";
+  const size_t one = 1;
+  char ha1[65], resp[65], cnonce[40];
+
+  size_t ha1_size = (algo == MG_AUTH_ALGO_MD5 ? 32 : 64);
+  snprintf(cnonce, sizeof(cnonce), "%lx", (unsigned long) mg_time());
+  cs_digest(algo, ha1, user, (size_t) strlen(user), ":", one, auth_domain,
+         (size_t) strlen(auth_domain), ":", one, passwd,
+         (size_t) strlen(passwd), NULL);
+  mg_mk_digest_resp(method, strlen(method), uri, strlen(uri), ha1, ha1_size,
+               nonce, strlen(nonce), "1", one, cnonce, strlen(cnonce), qop,
+               sizeof(qop) - 1, algo, resp);
+  return snprintf(buf, buf_len,
+                  "Authorization: Digest username=\"%s\","
+                  "realm=\"%s\",uri=\"%s\",qop=%s,nc=1,cnonce=%s,"
+                  "nonce=%s,response=%s,algorithm=%s\r\n",
+                  user, auth_domain, uri, qop, cnonce, nonce, resp,
+                  (algo == MG_AUTH_ALGO_MD5 ? "MD5" : "SHA-256"));
 }
 
 int mg_http_create_digest_auth_header(char *buf, size_t buf_len,
                                       const char *method, const char *uri,
                                       const char *auth_domain, const char *user,
                                       const char *passwd, const char *nonce) {
-  static const char colon[] = ":", qop[] = "auth";
-  static const size_t one = 1;
-  char ha1[33], resp[33], cnonce[40];
-
-  snprintf(cnonce, sizeof(cnonce), "%lx", (unsigned long) mg_time());
-  cs_md5(ha1, user, (size_t) strlen(user), colon, one, auth_domain,
-         (size_t) strlen(auth_domain), colon, one, passwd,
-         (size_t) strlen(passwd), NULL);
-  mg_mkmd5resp(method, strlen(method), uri, strlen(uri), ha1, sizeof(ha1) - 1,
-               nonce, strlen(nonce), "1", one, cnonce, strlen(cnonce), qop,
-               sizeof(qop) - 1, resp);
-  return snprintf(buf, buf_len,
-                  "Authorization: Digest username=\"%s\","
-                  "realm=\"%s\",uri=\"%s\",qop=%s,nc=1,cnonce=%s,"
-                  "nonce=%s,response=%s\r\n",
-                  user, auth_domain, uri, qop, cnonce, nonce, resp);
+  return mg_http_create_digest_auth_header_algo(buf, buf_len, method, uri, auth_domain, user, passwd, nonce, MG_AUTH_ALGO_MD5);
 }
 
 /*
@@ -1917,15 +1935,17 @@ static int mg_check_nonce(const char *nonce) {
   return (now >= val) && (now - val < 60 * 60);
 }
 
-int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
-                              FILE *fp) {
+int mg_http_check_digest_auth_algo(struct http_message *hm, const char *auth_domain,
+                              enum mg_auth_algo fp_algo, FILE *fp) {
   int ret = 0;
   struct mg_str *hdr;
-  char username_buf[50], cnonce_buf[64], response_buf[40], uri_buf[200],
-      qop_buf[20], nc_buf[20], nonce_buf[16];
+  char username_buf[50], cnonce_buf[64], response_buf[64], uri_buf[200],
+      qop_buf[20], nc_buf[20], nonce_buf[16], algo_buf[16];
 
   char *username = username_buf, *cnonce = cnonce_buf, *response = response_buf,
-       *uri = uri_buf, *qop = qop_buf, *nc = nc_buf, *nonce = nonce_buf;
+       *uri = uri_buf, *qop = qop_buf, *nc = nc_buf, *nonce = nonce_buf, *algo = algo_buf;
+
+  enum mg_auth_algo hm_algo = MG_AUTH_ALGO_MD5;
 
   /* Parse "Authorization:" header, fail fast on parse error */
   if (hm == NULL || fp == NULL ||
@@ -1944,16 +1964,30 @@ int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
     goto clean;
   }
 
+  if (mg_http_parse_header2(hdr, "algorithm", &algo, sizeof(algo_buf)) != 0) {
+    if (strcmp(algo, "MD5") == 0) {
+      hm_algo = MG_AUTH_ALGO_MD5;
+    } else if (strcmp(algo, "SHA-256") == 0) {
+      hm_algo = MG_AUTH_ALGO_SHA256;
+    } else {
+      goto clean;
+    }
+  }
+
+  if (hm_algo != fp_algo) {
+    goto clean;
+  }
+
   /* NOTE(lsm): due to a bug in MSIE, we do not compare URIs */
 
-  ret = mg_check_digest_auth(
+  ret = mg_check_digest_auth_algo(
       hm->method,
       mg_mk_str_n(
           hm->uri.p,
           hm->uri.len + (hm->query_string.len ? hm->query_string.len + 1 : 0)),
       mg_mk_str(username), mg_mk_str(cnonce), mg_mk_str(response),
       mg_mk_str(qop), mg_mk_str(nc), mg_mk_str(nonce), mg_mk_str(auth_domain),
-      fp);
+      fp_algo, fp);
 
 clean:
   if (username != username_buf) MG_FREE(username);
@@ -1963,17 +1997,23 @@ clean:
   if (qop != qop_buf) MG_FREE(qop);
   if (nc != nc_buf) MG_FREE(nc);
   if (nonce != nonce_buf) MG_FREE(nonce);
+  if (algo != algo_buf) MG_FREE(algo);
 
   return ret;
 }
 
-int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
+int mg_http_check_digest_auth(struct http_message *hm, const char *auth_domain,
+                              FILE *fp) {
+  return mg_http_check_digest_auth_algo(hm, auth_domain, MG_AUTH_ALGO_MD5, fp);
+}
+
+int mg_check_digest_auth_algo(struct mg_str method, struct mg_str uri,
                          struct mg_str username, struct mg_str cnonce,
                          struct mg_str response, struct mg_str qop,
                          struct mg_str nc, struct mg_str nonce,
-                         struct mg_str auth_domain, FILE *fp) {
+                         struct mg_str auth_domain, enum mg_auth_algo algo, FILE *fp) {
   char buf[128], f_user[sizeof(buf)], f_ha1[sizeof(buf)], f_domain[sizeof(buf)];
-  char exp_resp[33];
+  char exp_resp[65] = {0};
 
   /*
    * Read passwords file line by line. If should have htdigest format,
@@ -1985,9 +2025,9 @@ int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
         mg_vcmp(&username, f_user) == 0 &&
         mg_vcmp(&auth_domain, f_domain) == 0) {
       /* Username and domain matched, check the password */
-      mg_mkmd5resp(method.p, method.len, uri.p, uri.len, f_ha1, strlen(f_ha1),
-                   nonce.p, nonce.len, nc.p, nc.len, cnonce.p, cnonce.len,
-                   qop.p, qop.len, exp_resp);
+      mg_mk_digest_resp(method.p, method.len, uri.p, uri.len, f_ha1, strlen(f_ha1),
+                        nonce.p, nonce.len, nc.p, nc.len, cnonce.p, cnonce.len,
+                   qop.p, qop.len, algo, exp_resp);
       LOG(LL_DEBUG, ("%.*s %s %.*s %s", (int) username.len, username.p,
                      f_domain, (int) response.len, response.p, exp_resp));
       return mg_ncasecmp(response.p, exp_resp, strlen(exp_resp)) == 0;
@@ -1998,6 +2038,16 @@ int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
   return 0;
 }
 
+int mg_check_digest_auth(struct mg_str method, struct mg_str uri,
+                         struct mg_str username, struct mg_str cnonce,
+                         struct mg_str response, struct mg_str qop,
+                         struct mg_str nc, struct mg_str nonce,
+                         struct mg_str auth_domain, FILE *fp) {
+  return mg_check_digest_auth_algo(
+      method, uri, username, cnonce, response, qop, nc, nonce, auth_domain,
+      MG_AUTH_ALGO_MD5, fp);
+}
+
 int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
                           const char *domain, const char *passwords_file,
                           int flags) {
@@ -2006,27 +2056,30 @@ int mg_http_is_authorized(struct http_message *hm, struct mg_str path,
   FILE *fp;
   int authorized = 1;
 
-  if (domain != NULL && passwords_file != NULL) {
-    if (flags & MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE) {
-      fp = mg_fopen(passwords_file, "r");
-    } else if (flags & MG_AUTH_FLAG_IS_DIRECTORY) {
-      snprintf(buf, sizeof(buf), "%.*s%c%s", (int) path.len, path.p, DIRSEP,
-               passwords_file);
-      fp = mg_fopen(buf, "r");
-    } else {
-      p = strrchr(path.p, DIRSEP);
-      if (p == NULL) p = path.p;
-      snprintf(buf, sizeof(buf), "%.*s%c%s", (int) (p - path.p), path.p, DIRSEP,
-               passwords_file);
-      fp = mg_fopen(buf, "r");
-    }
+  if (domain == NULL || passwords_file == NULL) {
+    return 1;
+  }
 
-    if (fp != NULL) {
-      authorized = mg_http_check_digest_auth(hm, domain, fp);
-      fclose(fp);
-    } else if (!(flags & MG_AUTH_FLAG_ALLOW_MISSING_FILE)) {
-      authorized = 0;
-    }
+  if (flags & MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE) {
+    fp = mg_fopen(passwords_file, "r");
+  } else if (flags & MG_AUTH_FLAG_IS_DIRECTORY) {
+    snprintf(buf, sizeof(buf), "%.*s%c%s", (int) path.len, path.p, DIRSEP,
+             passwords_file);
+    fp = mg_fopen(buf, "r");
+  } else {
+    p = strrchr(path.p, DIRSEP);
+    if (p == NULL) p = path.p;
+    snprintf(buf, sizeof(buf), "%.*s%c%s", (int) (p - path.p), path.p, DIRSEP,
+             passwords_file);
+    fp = mg_fopen(buf, "r");
+  }
+
+  if (fp != NULL) {
+    enum mg_auth_algo fp_algo = (enum mg_auth_algo) ((flags >> 8) & 3);
+    authorized = mg_http_check_digest_auth_algo(hm, domain, fp_algo, fp);
+    fclose(fp);
+  } else if (!(flags & MG_AUTH_FLAG_ALLOW_MISSING_FILE)) {
+    authorized = 0;
   }
 
   LOG(LL_DEBUG, ("%.*s %s %x %d", (int) path.len, path.p,
@@ -2576,14 +2629,21 @@ MG_INTERNAL int mg_is_not_modified(struct http_message *hm, cs_stat_t *st) {
   }
 }
 
-void mg_http_send_digest_auth_request(struct mg_connection *c,
-                                      const char *domain) {
+void mg_http_send_digest_auth_request_algo(struct mg_connection *c,
+                                      const char *domain,
+                                      enum mg_auth_algo algo) {
   mg_printf(c,
             "HTTP/1.1 401 Unauthorized\r\n"
             "WWW-Authenticate: Digest qop=\"auth\", "
-            "realm=\"%s\", nonce=\"%lx\"\r\n"
+            "realm=\"%s\", nonce=\"%lx\", algorithm=%s\r\n"
             "Content-Length: 0\r\n\r\n",
-            domain, (unsigned long) mg_time());
+            domain, (unsigned long) mg_time(),
+            (algo == MG_AUTH_ALGO_MD5 ? "MD5" : "SHA-256"));
+}
+
+void mg_http_send_digest_auth_request(struct mg_connection *c,
+                                      const char *domain) {
+  mg_http_send_digest_auth_request_algo(c, domain, MG_AUTH_ALGO_MD5);
 }
 
 static void mg_http_send_options(struct mg_connection *nc,
@@ -2652,13 +2712,15 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
                  hm, mg_mk_str(path), opts->auth_domain, opts->global_auth_file,
                  ((is_directory ? MG_AUTH_FLAG_IS_DIRECTORY : 0) |
                   MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE |
-                  MG_AUTH_FLAG_ALLOW_MISSING_FILE)) ||
+                  MG_AUTH_FLAG_ALLOW_MISSING_FILE |
+                  MG_AUTH_FLAG_ALGO(opts->auth_algo))) ||
              !mg_http_is_authorized(
                  hm, mg_mk_str(path), opts->auth_domain,
                  opts->per_directory_auth_file,
                  ((is_directory ? MG_AUTH_FLAG_IS_DIRECTORY : 0) |
-                  MG_AUTH_FLAG_ALLOW_MISSING_FILE))) {
-    mg_http_send_digest_auth_request(nc, opts->auth_domain);
+                  MG_AUTH_FLAG_ALLOW_MISSING_FILE |
+                  MG_AUTH_FLAG_ALGO(opts->auth_algo)))) {
+    mg_http_send_digest_auth_request_algo(nc, opts->auth_domain, opts->auth_algo);
   } else if (is_cgi) {
 #if MG_ENABLE_HTTP_CGI
     mg_handle_cgi(nc, index_file ? index_file : path, path_info, hm, opts);
@@ -2681,7 +2743,7 @@ MG_INTERNAL void mg_send_http_file(struct mg_connection *nc, char *path,
                    ((is_directory ? MG_AUTH_FLAG_IS_DIRECTORY : 0) |
                     MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE |
                     MG_AUTH_FLAG_ALLOW_MISSING_FILE))))) {
-    mg_http_send_digest_auth_request(nc, opts->auth_domain);
+    mg_http_send_digest_auth_request_algo(nc, opts->auth_domain, opts->aith_algo);
 #endif
   } else if (!mg_vcmp(&hm->method, "MKCOL")) {
     mg_handle_mkcol(nc, path, hm);
@@ -2743,9 +2805,6 @@ void mg_serve_http(struct mg_connection *nc, struct http_message *hm,
 
   if (opts.document_root == NULL) {
     opts.document_root = ".";
-  }
-  if (opts.per_directory_auth_file == NULL) {
-    opts.per_directory_auth_file = ".htpasswd";
   }
   if (opts.enable_directory_listing == NULL) {
     opts.enable_directory_listing = "yes";
@@ -3096,6 +3155,7 @@ void mg_register_http_endpoint_opt(struct mg_connection *nc,
   if (opts.auth_domain != NULL && opts.auth_file != NULL) {
     new_ep->auth_domain = strdup(opts.auth_domain);
     new_ep->auth_file = strdup(opts.auth_file);
+    new_ep->auth_algo = opts.auth_algo;
   }
   new_ep->handler = handler;
 #if MG_ENABLE_CALLBACK_USERDATA
@@ -3120,8 +3180,9 @@ static void mg_http_call_endpoint_handler(struct mg_connection *nc, int ev,
     if (ep != NULL) {
 #if MG_ENABLE_FILESYSTEM && !MG_DISABLE_HTTP_DIGEST_AUTH
       if (!mg_http_is_authorized(hm, hm->uri, ep->auth_domain, ep->auth_file,
-                                 MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE)) {
-        mg_http_send_digest_auth_request(nc, ep->auth_domain);
+                                 (MG_AUTH_FLAG_IS_GLOBAL_PASS_FILE |
+                                  MG_AUTH_FLAG_ALGO(ep->auth_algo)))) {
+        mg_http_send_digest_auth_request_algo(nc, ep->auth_domain, ep->auth_algo);
         return;
       }
 #endif
