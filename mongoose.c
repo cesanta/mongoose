@@ -3084,7 +3084,7 @@ bool mg_socketpair(int *s1, int *s2) {
   // For some reason, native socketpair() call fails on Macos
   // Enable this codepath only when MG_ENABLE_NATIVE_SOCKETPAIR is defined
   int sp[2], ret = 0;
-  if (socketpair(AF_INET, SOCK_DGRAM, IPPROTO_UDP, sp) == 0) {
+  if (socketpair(AF_UNIX, SOCK_STREAM, IPPROTO_UDP, sp) == 0) {
     *s1 = sp[0], *s2 = sp[1], ret = 1;
   }
   LOG(LL_INFO, ("errno %d", errno));
