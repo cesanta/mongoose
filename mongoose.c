@@ -195,11 +195,10 @@ size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs, char *dst,
 
 size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
                        bool is_question, struct mg_dns_rr *rr) {
-  const struct mg_dns_header *h = (struct mg_dns_header *) buf;
   const uint8_t *s = buf + ofs, *e = &buf[len];
 
   memset(rr, 0, sizeof(*rr));
-  if (len < sizeof(*h)) return 0;  // Too small, headers dont fit
+  if (len < sizeof(struct mg_dns_header)) return 0;  // Too small
   if (len > 512) return 0;         //  Too large, we don't expect that
   if (s >= e) return 0;            //  Overflow
 
