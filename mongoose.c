@@ -1445,6 +1445,7 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   int max = LL_INFO;
   struct mg_str k, v, s = mg_str(s_spec);
   const char *p = strrchr(file, '/');
+  if (p == NULL) p = strrchr(file, '\\');
   p = p == NULL ? file : p + 1;
 
   if (s_fn == NULL) return false;
