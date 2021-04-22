@@ -366,14 +366,18 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
   } else if ((d = (struct dns_data *) calloc(1, sizeof(*d))) == NULL) {
     mg_error(c, "resolve OOM");
   } else {
+#if MG_ENABLE_LOG
+    char buf[100];
+#endif
     d->txnid = s_reqs ? s_reqs->txnid + 1 : 1;
     d->next = s_reqs;
     s_reqs = d;
     d->expire = mg_millis() + ms;
     d->c = c;
     c->is_resolving = 1;
-    LOG(LL_VERBOSE_DEBUG, ("%lu resolving %.*s, txnid %hu", c->id,
-                           (int) name->len, name->ptr, d->txnid));
+    LOG(LL_VERBOSE_DEBUG,
+        ("%lu resolving %.*s @ %s, txnid %hu", c->id, (int) name->len,
+         name->ptr, mg_ntoa(&dnsc->c->peer, buf, sizeof(buf)), d->txnid));
     mg_dns_send(dnsc->c, name, d->txnid, ipv6);
   }
 }
@@ -3557,10 +3561,13 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
                  cert, certkey));
   mbedtls_ssl_init(&tls->ssl);
   mbedtls_ssl_config_init(&tls->conf);
+  mbedtls_x509_crt_init(&tls->ca);
+  mbedtls_x509_crt_init(&tls->cert);
+  mbedtls_pk_init(&tls->pk);
   mbedtls_ssl_conf_dbg(&tls->conf, debug_cb, c);
-#if !defined(ESP_PLATFORM)
-  mbedtls_debug_set_threshold(5);
-#endif
+  //#if !defined(ESP_PLATFORM)
+  // mbedtls_debug_set_threshold(5);
+  //#endif
   if ((rc = mbedtls_ssl_config_defaults(
            &tls->conf,
            c->is_client ? MBEDTLS_SSL_IS_CLIENT : MBEDTLS_SSL_IS_SERVER,
@@ -3581,7 +3588,6 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
       goto fail;
     }
 #else
-    mbedtls_x509_crt_init(&tls->ca);
     rc = opts->ca[0] == '-'
              ? mbedtls_x509_crt_parse(&tls->ca, (uint8_t *) opts->ca,
                                       strlen(opts->ca) + 1)
@@ -3606,8 +3612,6 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
       key = opts->cert;
       certkey = cert;
     }
-    mbedtls_x509_crt_init(&tls->cert);
-    mbedtls_pk_init(&tls->pk);
     rc = opts->cert[0] == '-'
              ? mbedtls_x509_crt_parse(&tls->cert, (uint8_t *) opts->cert,
                                       strlen(opts->cert) + 1)
@@ -3666,12 +3670,13 @@ int mg_tls_free(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   if (tls == NULL) return 0;
   free(tls->cafile);
-  mbedtls_x509_crt_free(&tls->ca);
-  mbedtls_x509_crt_free(&tls->cert);
   mbedtls_ssl_free(&tls->ssl);
   mbedtls_pk_free(&tls->pk);
+  mbedtls_x509_crt_free(&tls->ca);
+  mbedtls_x509_crt_free(&tls->cert);
   mbedtls_ssl_config_free(&tls->conf);
   free(tls);
+  c->tls = NULL;
   return 1;
 }
 #elif MG_ENABLE_OPENSSL  ///////////////////////////////////////// OPENSSL
@@ -3813,6 +3818,7 @@ int mg_tls_free(struct mg_connection *c) {
   SSL_free(tls->ssl);
   SSL_CTX_free(tls->ctx);
   free(tls);
+  c->tls = NULL;
   return 1;
 }
 
