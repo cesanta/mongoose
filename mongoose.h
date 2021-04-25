@@ -5185,6 +5185,27 @@ void mg_register_http_endpoint_opt(struct mg_connection *nc,
                                    struct mg_http_endpoint_opts opts);
 
 /*
+ * HTTP endpoint descriptor.
+ */
+struct mg_http_endpoint {
+  struct mg_http_endpoint *next;
+  struct mg_str uri_pattern; /* owned */
+  char *auth_domain;         /* owned */
+  char *auth_file;           /* owned */
+  enum mg_auth_algo auth_algo;
+
+  mg_event_handler_t handler;
+#if MG_ENABLE_CALLBACK_USERDATA
+  void *user_data;
+#endif
+};
+
+/*
+ * Returns first registered endpoint.
+ */
+struct mg_http_endpoint *mg_get_http_endpoints(struct mg_connection *nc);
+
+/*
  * Sends 401 Unauthorized response.
  */
 void mg_http_send_digest_auth_request(struct mg_connection *c,

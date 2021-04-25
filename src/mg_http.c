@@ -107,19 +107,6 @@ struct mg_http_proto_data_chuncked {
   int64_t body_len; /* How many bytes of chunked body was reassembled. */
 };
 
-struct mg_http_endpoint {
-  struct mg_http_endpoint *next;
-  struct mg_str uri_pattern; /* owned */
-  char *auth_domain;         /* owned */
-  char *auth_file;           /* owned */
-  enum mg_auth_algo auth_algo;
-
-  mg_event_handler_t handler;
-#if MG_ENABLE_CALLBACK_USERDATA
-  void *user_data;
-#endif
-};
-
 enum mg_http_multipart_stream_state {
   MPS_BEGIN,
   MPS_WAITING_FOR_BOUNDARY,
@@ -223,6 +210,13 @@ static void mg_http_free_proto_data_file(struct mg_http_proto_data_file *d) {
   }
 }
 #endif
+
+struct mg_http_endpoint *mg_get_http_endpoints(struct mg_connection *nc) {
+  if (nc == NULL) return NULL;
+  struct mg_http_proto_data *pd = (struct mg_http_proto_data *) nc->proto_data;
+  if (pd == NULL) return NULL;
+  return pd->endpoints;
+}
 
 static void mg_http_free_proto_data_endpoints(struct mg_http_endpoint **ep) {
   struct mg_http_endpoint *current = *ep;
