@@ -1244,12 +1244,17 @@ bool mg_http_match_uri(const struct mg_http_message *hm, const char *glob) {
 
 static size_t get_chunk_length(const char *buf, size_t len, size_t *ll) {
   size_t i = 0, n;
-  while (i < len && buf[i] != '\r' && i != '\n') i++;
-  n = mg_unhexn((char *) buf, i);
-  while (i < len && (buf[i] == '\r' || i == '\n')) i++;
-  // LOG(LL_INFO, ("len %zu i %zu n %zu ", len, i, n));
-  if (ll != NULL) *ll = i + 1;
-  if (i < len && i + n + 2 < len) return i + n + 3;
+  while (i < len && buf[i] != '\r' && buf[i] != '\n') i++;
+  if (i < len && (buf[i] == '\r')) {
+	  n = mg_unhexn((char *) buf, i);
+	  i++;
+	  if (i < len && (buf[i] == '\n')) {
+		  i++;
+		  // LOG(LL_INFO, ("len %zu i %zu n %zu ", len, i, n));
+		  if (ll != NULL) *ll = i;
+		  if (i < len && i + n + 2 <= len) return i + n + 2;
+	  }
+  }
   return 0;
 }
 
