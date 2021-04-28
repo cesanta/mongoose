@@ -54,7 +54,7 @@ Testimonials:
 Case Studies:
 - Schneider Electric integrated Mongoose Web Server Library in “Automation Runtimes” - a specialized distributed control system.
 - Schenck Process integrated Mongoose Web Server Library in the “DISOMAT Tersus” weighing terminal.
-- HAENNI Instruments used Mongoose to enable communication with the "HAENNI Wheel Load Scales" - a low weight, robust, long lasting wheel load scales.
+- HAENNI Instruments used Mongoose to enable communication with the "HAENNI Wheel Load Scales".
 
 [See Case Studies](https://www.cesanta.com/case-studies.html)
 
