@@ -45,17 +45,16 @@ on the top 9 things to avoid when embedding a web server.
 # Case Studies and Testimonials:
 
 Testimonials:
+- "Easily, Mongoose is one of the best web servers on the market. It has helped us to achieve the required level of performance with the seamless integration. It is very stable and we have not encountered any significant bugs." - Santhosh Kumar P.B, Lead Architect, Schneider Electric
 - "Performance and stability of Mongoose Web Server are very good! We had no noticeable issues whatsoever!" - Linus Nuber, Software Architect, Schenck Process Europe GmbH
-- "We could not have dreamed of any better results and are very happy with the decision we made to implement Mongoose Embedded Web Server into our product." - Bram Mariën, Product Manager, Mabo Engineering & Automation NV
 - "We looked through many different libraries and solutions, but with the Mongoose Web Server Library just within a couple of hours, we built a proof of concept. Everything just works, we faced no problems with Mongoose." Samuel Remy, Project Engineer, HAENNI Instruments Inc.
 
 [See Testimonials](https://www.cesanta.com/testimonials.html)
 
 Case Studies:
-
-- Schenck Process integrated Mongoose Web Server Library in the “DISOMAT Tersus” weighing terminal, to provide SSL-enabled web interface.
+- Schneider Electric integrated Mongoose Web Server Library in “Automation Runtimes” - a specialized distributed control system.
+- Schenck Process integrated Mongoose Web Server Library in the “DISOMAT Tersus” weighing terminal.
 - HAENNI Instruments used Mongoose to enable communication with the "HAENNI Wheel Load Scales" - a low weight, robust, long lasting wheel load scales.
-- EFR GmbH uses Mongoose to enable connectivity for the Secure Smart Grid Hub - a highly secure smart meter communication gateway.
 
 [See Case Studies](https://www.cesanta.com/case-studies.html)
 
