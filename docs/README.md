@@ -1021,6 +1021,11 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts);
 
 Initialise TLS on a given connection.
 
+IMPORTANT: mbedTLS implementation uses `mg_random` as RNG. The `mg_random`
+is defined as weak, therefore it is possible to override Mongoose's `mg_random`
+with a custom implementation. Just create your own `mg_random` function:
+`void mg_random(void *buf, size_t len)`.
+
 
 ## Timers
 

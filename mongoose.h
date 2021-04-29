@@ -477,11 +477,24 @@ void mg_timer_poll(unsigned long uptime_ms);
 
 
 
+// WEAK symbol makes it possible to define a "default" function implementation,
+// which could be overridden by the user who can define a function with the
+// same name without linking conflict
+#if !defined(WEAK)
+#if (defined(__GNUC__) || defined(__clang__) || \
+     defined(__TI_COMPILER_VERSION__)) &&       \
+    !defined(_WIN32) && !defined(__CYGWIN__)
+#define WEAK __attribute__((weak))
+#else
+#define WEAK
+#endif
+#endif
+
 char *mg_file_read(const char *path, size_t *size);
 int64_t mg_file_size(const char *path);
 bool mg_file_write(const char *path, const void *buf, size_t len);
 bool mg_file_printf(const char *path, const char *fmt, ...);
-void mg_random(void *buf, size_t len);
+void mg_random(void *buf, size_t len) WEAK;
 bool mg_globmatch(const char *pattern, int plen, const char *s, int n);
 bool mg_next_comma_entry(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 uint16_t mg_ntohs(uint16_t net);
@@ -510,19 +523,6 @@ FILE *mg_fopen(const char *fp, const char *mode);
 
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
-
-// WEAK symbol makes it possible to define a "default" function implementation,
-// which could be overridden by the user who can define a function with the
-// same name without linking conflict
-#if !defined(WEAK)
-#if (defined(__GNUC__) || defined(__clang__) || \
-     defined(__TI_COMPILER_VERSION__)) &&       \
-    !defined(_WIN32) && !defined(__CYGWIN__)
-#define WEAK __attribute__((weak))
-#else
-#define WEAK
-#endif
-#endif
 
 // Expands to a string representation of its argument: e.g.
 // MG_STRINGIFY_LITERAL(5) expands to "5"
