@@ -3,9 +3,18 @@
 
 #include <string.h>
 
+// Not using memset for zeroing memory, cause it can be dropped by compiler
+// See https://github.com/cesanta/mongoose/pull/1265
+static void zeromem(volatile unsigned char *buf, size_t len) {
+  if (buf != NULL) {
+    while (len--) *buf++ = 0;
+  }
+}
+
 int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
   int ok = 1;
   if (new_size == 0) {
+    zeromem(io->buf, io->size);
     free(io->buf);
     io->buf = NULL;
     io->len = io->size = 0;
@@ -16,6 +25,7 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
     if (p != NULL) {
       size_t len = new_size < io->len ? new_size : io->len;
       if (len > 0) memcpy(p, io->buf, len);
+      zeromem(io->buf, io->size);
       free(io->buf);
       io->buf = (unsigned char *) p;
       io->size = new_size;
@@ -46,6 +56,7 @@ size_t mg_iobuf_append(struct mg_iobuf *io, const void *buf, size_t len,
 size_t mg_iobuf_delete(struct mg_iobuf *io, size_t len) {
   if (len > io->len) len = 0;
   memmove(io->buf, io->buf + len, io->len - len);
+  zeromem(io->buf + io->len - len, len);
   io->len -= len;
   return len;
 }
