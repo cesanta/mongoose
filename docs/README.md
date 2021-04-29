@@ -731,7 +731,7 @@ parameter.
 - `fmt` - a format string for the HTTP body, in a printf semantics
 
 
-### mg\_http\_header()
+### mg\_http\_get\_header()
 
 ```c
 struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
