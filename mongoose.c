@@ -901,6 +901,26 @@ static const char *guess_content_type(const char *filename) {
   return "text/plain; charset=utf-8";
 }
 
+static int getrange(struct mg_str *s, int64_t *a, int64_t *b) {
+  int i, numparsed = 0;
+  LOG(LL_INFO, ("%.*s", (int) s->len, s->ptr));
+  for (i = 0; i + 6 < (int) s->len; i++) {
+    if (memcmp(&s->ptr[i], "bytes=", 6) == 0) {
+      struct mg_str p = mg_str_n(s->ptr + i + 6, s->len - i - 6);
+      if (p.len > 0 && p.ptr[0] >= '0' && p.ptr[0] <= '9') numparsed++;
+      *a = mg_to64(p);
+      // LOG(LL_INFO, ("PPP [%.*s] %d", (int) p.len, p.ptr, numparsed));
+      while (p.len && p.ptr[0] >= '0' && p.ptr[0] <= '9') p.ptr++, p.len--;
+      if (p.len && p.ptr[0] == '-') p.ptr++, p.len--;
+      *b = mg_to64(p);
+      if (p.len > 0 && p.ptr[0] >= '0' && p.ptr[0] <= '9') numparsed++;
+      // LOG(LL_INFO, ("PPP [%.*s] %d", (int) p.len, p.ptr, numparsed));
+      break;
+    }
+  }
+  return numparsed;
+}
+
 void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path, const char *mime, const char *hdrs) {
   struct mg_str *inm = mg_http_get_header(hm, "If-None-Match");
@@ -917,10 +937,42 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     fclose(fp);
     mg_printf(c, "HTTP/1.1 304 Not Modified\r\nContent-Length: 0\r\n\r\n");
   } else {
+    int n, status = 200;
+    char range[70] = "";
+    int64_t r1 = 0, r2 = 0, cl = st.st_size;
+
+    // Handle Range header
+    struct mg_str *rh = mg_http_get_header(hm, "Range");
+    if (rh != NULL && (n = getrange(rh, &r1, &r2)) > 0 && r1 >= 0 && r2 >= 0) {
+      // If range is specified like "400-", set second limit to content len
+      if (n == 1) r2 = cl - 1;
+      if (r1 > r2 || r2 >= cl) {
+        status = 416;
+        cl = 0;
+        snprintf(range, sizeof(range),
+                 "Content-Range: bytes */" MG_INT64_FMT "\r\n",
+                 (int64_t) st.st_size);
+      } else {
+        status = 206;
+        cl = r2 - r1 + 1;
+        snprintf(range, sizeof(range),
+                 "Content-Range: bytes " MG_INT64_FMT "-" MG_INT64_FMT
+                 "/" MG_INT64_FMT "\r\n",
+                 r1, r1 + cl - 1, (int64_t) st.st_size);
+#if _FILE_OFFSET_BITS == 64 || _POSIX_C_SOURCE >= 200112L || \
+    _XOPEN_SOURCE >= 600
+        fseeko(fp, r1, SEEK_SET);
+#else
+        fseek(fp, (long) r1, SEEK_SET);
+#endif
+      }
+    }
+
     mg_printf(c,
-              "HTTP/1.1 200 OK\r\nContent-Type: %s\r\n"
-              "Etag: %s\r\nContent-Length: " MG_INT64_FMT "\r\n%s\r\n",
-              mime, etag, (int64_t) st.st_size, hdrs ? hdrs : "");
+              "HTTP/1.1 %d %s\r\nContent-Type: %s\r\n"
+              "Etag: %s\r\nContent-Length: " MG_INT64_FMT "\r\n%s%s\r\n",
+              status, mg_http_status_code_str(status), mime, etag, cl, range,
+              hdrs ? hdrs : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       fclose(fp);
     } else {

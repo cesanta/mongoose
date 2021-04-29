@@ -868,6 +868,15 @@ static void test_http_parse(void) {
   }
 }
 
+static void ehr(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    struct mg_http_serve_opts opts = {"./test/data", NULL, NULL};
+    mg_http_serve_dir(c, hm, &opts);
+  }
+  (void) fn_data;
+}
+
 static void test_http_range(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12349";
@@ -875,40 +884,39 @@ static void test_http_range(void) {
   char buf[FETCH_BUF_SIZE];
 
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, url, eh1, NULL);
+  mg_http_listen(&mgr, url, ehr, NULL);
 
   ASSERT(fetch(&mgr, buf, url, "GET /range.txt HTTP/1.0\n\n") == 200);
   ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
-  LOG(LL_INFO, ("----%d\n[%s]", (int) hm.body.len, buf));
   ASSERT(hm.body.len == 312);
-  // ASSERT(strlen(buf) == 312);
 
-#if 0
-  ASSERT(fetch(&mgr, buf, url, "%s",
-               "GET /data/range.txt HTTP/1.0\nRange: bytes=5-10\n\n") == 206);
-  ASSERT(strcmp(buf, "\r\n of co") == 0);
-  ASSERT_STREQ_NZ(buf, "HTTP/1.1 206 Partial Content");
-  ASSERT(strstr(buf, "Content-Length: 6\r\n") != 0);
-  ASSERT(strstr(buf, "Content-Range: bytes 5-10/312\r\n") != 0);
-  ASSERT_STREQ(buf + strlen(buf) - 8, "\r\n of co");
+  fetch(&mgr, buf, url, "%s", "GET /range.txt HTTP/1.0\nRange: bytes=5-10\n\n");
+  ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
+  ASSERT(mg_strcmp(hm.uri, mg_str("206")) == 0);
+  ASSERT(mg_strcmp(hm.proto, mg_str("Partial Content")) == 0);
+  ASSERT(mg_strcmp(hm.body, mg_str(" of co")) == 0);
+  ASSERT(mg_strcmp(*mg_http_get_header(&hm, "Content-Range"),
+                   mg_str("bytes 5-10/312")) == 0);
 
-  /* Fetch till EOF */
-  fetch_http(buf, "%s", "GET /data/range.txt HTTP/1.0\nRange: bytes=300-\n\n");
-  ASSERT_STREQ_NZ(buf, "HTTP/1.1 206 Partial Content");
-  ASSERT(strstr(buf, "Content-Length: 12\r\n") != 0);
-  ASSERT(strstr(buf, "Content-Range: bytes 300-311/312\r\n") != 0);
-  ASSERT_STREQ(buf + strlen(buf) - 14, "\r\nis disease.\n");
+  // Fetch till EOF
+  fetch(&mgr, buf, url, "%s", "GET /range.txt HTTP/1.0\nRange: bytes=300-\n\n");
+  ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
+  ASSERT(mg_strcmp(hm.uri, mg_str("206")) == 0);
+  ASSERT(mg_strcmp(hm.body, mg_str("is disease.\n")) == 0);
+  // LOG(LL_INFO, ("----%d\n[%s]", (int) hm.body.len, buf));
 
-  /* Fetch past EOF, must trigger 416 response */
-  fetch_http(buf, "%s", "GET /data/range.txt HTTP/1.0\nRange: bytes=1000-\n\n");
-  ASSERT_STREQ_NZ(buf, "HTTP/1.1 416");
-  ASSERT(strstr(buf, "Content-Length: 0\r\n") != 0);
-  ASSERT(strstr(buf, "Content-Range: bytes */312\r\n") != 0);
+  // Fetch past EOF, must trigger 416 response
+  fetch(&mgr, buf, url, "%s", "GET /range.txt HTTP/1.0\nRange: bytes=999-\n\n");
+  ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
+  ASSERT(mg_strcmp(hm.uri, mg_str("416")) == 0);
+  ASSERT(hm.body.len == 0);
+  ASSERT(mg_strcmp(*mg_http_get_header(&hm, "Content-Range"),
+                   mg_str("bytes */312")) == 0);
 
-  /* Request range past EOF, must trigger 416 response */
-  fetch_http(buf, "%s", "GET /data/range.txt HTTP/1.0\nRange: bytes=0-312\n\n");
-  ASSERT_STREQ_NZ(buf, "HTTP/1.1 416");
-#endif
+  fetch(&mgr, buf, url, "%s",
+        "GET /range.txt HTTP/1.0\nRange: bytes=0-312\n\n");
+  ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
+  ASSERT(mg_strcmp(hm.uri, mg_str("416")) == 0);
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
