@@ -35,7 +35,7 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   if (level <= max) {
     char timebuf[21], buf[50] = "";
     time_t t = time(NULL);
-    struct tm *tm = gmtime(&t);
+    struct tm tmp, *tm = gmtime_r(&t, &tmp);
     int n, tag;
     strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm);
     tag = level == LL_ERROR ? 'E' : level == LL_INFO ? 'I' : ' ';

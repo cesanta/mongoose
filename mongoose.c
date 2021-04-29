@@ -1070,6 +1070,7 @@ static void printdirentry(struct mg_connection *c, const char *name,
   char size[64], mod[64], path[MG_PATH_MAX];
   int is_dir = S_ISDIR(stp->st_mode), n = 0;
   const char *slash = is_dir ? "/" : "";
+  struct tm t;
 
   if (is_dir) {
     snprintf(size, sizeof(size), "%s", "[DIR]");
@@ -1084,7 +1085,7 @@ static void printdirentry(struct mg_connection *c, const char *name,
       snprintf(size, sizeof(size), "%.1fG", (double) stp->st_size / 1073741824);
     }
   }
-  strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&stp->st_mtime));
+  strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime_r(&stp->st_mtime, &t));
   n = mg_url_encode(name, strlen(name), path, sizeof(path));
   mg_printf(c,
             "  <tr><td><a href=\"%.*s%s\">%s%s</a></td>"
@@ -1543,7 +1544,7 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   if (level <= max) {
     char timebuf[21], buf[50] = "";
     time_t t = time(NULL);
-    struct tm *tm = gmtime(&t);
+    struct tm tmp, *tm = gmtime_r(&t, &tmp);
     int n, tag;
     strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm);
     tag = level == LL_ERROR ? 'E' : level == LL_INFO ? 'I' : ' ';
