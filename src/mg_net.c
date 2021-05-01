@@ -680,10 +680,13 @@ static int mg_recv_udp(struct mg_connection *nc, char *buf, size_t len) {
         mg_call(nc, NULL, nc->user_data, MG_EV_ACCEPT, &nc->sa);
       }
     }
+    /* Copy input interface address. */
+    if (nc != NULL) nc->priv_2 = lc->priv_2;
   }
   if (nc != NULL) {
-    DBG(("%p <- %d bytes from %s:%d", nc, n, inet_ntoa(nc->sa.sin.sin_addr),
-         ntohs(nc->sa.sin.sin_port)));
+    DBG(("%p <- %d bytes from %s:%d ia %#x", nc, n,
+         inet_ntoa(nc->sa.sin.sin_addr), ntohs(nc->sa.sin.sin_port),
+         (int) (intptr_t) nc->priv_2));
     if (nc == lc) {
       nc->recv_mbuf.len += n;
     } else {

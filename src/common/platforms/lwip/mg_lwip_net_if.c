@@ -250,6 +250,11 @@ void mg_lwip_if_connect_tcp(struct mg_connection *nc,
   mg_lwip_netif_run_on_tcpip(mg_lwip_if_connect_tcp_tcpip, &ctx);
 }
 
+struct udp_info {
+  union socket_address remote_addr;
+  uint32_t local_ip4;
+};
+
 /*
  * Lwip included in the SDKs for nRF5x chips has different type for the
  * callback of `udp_recv()`
@@ -266,18 +271,22 @@ static void mg_lwip_udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,
   DBG(("%p %s:%u %p %u %u", nc, IPADDR_NTOA(addr), port, p, p->ref, p->len));
   /* Put address in a separate pbuf and tack it onto the packet. */
   struct pbuf *sap =
-      pbuf_alloc(PBUF_RAW, sizeof(union socket_address), PBUF_RAM);
+      pbuf_alloc(PBUF_RAW, sizeof(struct udp_info), PBUF_RAM);
   if (sap == NULL) {
     pbuf_free(p);
     return;
   }
-  union socket_address *sa = (union socket_address *) sap->payload;
+  struct udp_info *ui = (struct udp_info *) sap->payload;
+  struct netif *nif = ip_current_netif();
 #if ((LWIP_VERSION_MAJOR << 8) | LWIP_VERSION_MINOR) >= 0x0105
-  sa->sin.sin_addr.s_addr = ip_2_ip4(addr)->addr;
+  ui->remote_addr.sin.sin_addr.s_addr = ip_2_ip4(addr)->addr;
+  ui->local_ip4 = ip_2_ip4(&nif->ip_addr)->addr;
 #else
-  sa->sin.sin_addr.s_addr = addr->addr;
+  ui->remote_addr.sin.sin_addr.s_addr = addr->addr;
+  ui->local_ip4 = nif->ip_addr.addr;
 #endif
-  sa->sin.sin_port = htons(port);
+  ui->remote_addr.sin.sin_port = htons(port);
+
   /* Logic in the recv handler requires that there be exactly one data pbuf. */
   p = pbuf_coalesce(p, PBUF_RAW);
   pbuf_chain(sap, p);
@@ -317,6 +326,13 @@ static int mg_lwip_if_udp_recv(struct mg_connection *nc, void *buf, size_t len,
     res = MIN(dp->len, len);
     pbuf_copy_partial(dp, buf, res, 0);
     pbuf_free(dp);
+    const struct udp_info *ui = (struct udp_info *) ap->payload;
+    *sa = ui->remote_addr;
+    /* Store local interface address for incoming packets.
+     * Only for listener because outgoing connections may use priv_2 for DNS. */
+    if (nc->listener == NULL) {
+      nc->priv_2 = (void *) (uintptr_t) ui->local_ip4;
+    }
     pbuf_copy_partial(ap, sa, MIN(*sa_len, ap->len), 0);
     pbuf_free(ap);
   }
@@ -530,11 +546,19 @@ struct udp_sendto_ctx {
   struct pbuf *p;
   ip_addr_t *ip;
   uint16_t port;
+  uint32_t mcast_ip4;
   int ret;
 };
 
 static void udp_sendto_tcpip(void *arg) {
   struct udp_sendto_ctx *ctx = (struct udp_sendto_ctx *) arg;
+  if (ctx->mcast_ip4 != 0) {
+#if LWIP_VERSION_MAJOR > 1 && LWIP_MULTICAST_TX_OPTIONS
+    ctx->upcb->mcast_ip4.addr = ctx->mcast_ip4;
+#elif LWIP_VERSION_MAJOR == 1 && LWIP_IGMP
+    ctx->upcb->multicast_ip.addr = ctx->mcast_ip4;
+#endif
+  }
   ctx->ret = udp_sendto(ctx->upcb, ctx->p, ctx->ip, ctx->port);
 }
 
@@ -553,8 +577,13 @@ static int mg_lwip_if_udp_send(struct mg_connection *nc, const void *data,
   if (p == NULL) return 0;
   memcpy(p->payload, data, len);
   struct udp_sendto_ctx ctx = {.upcb = upcb, .p = p, .ip = &ip, .port = port};
+  if (ip_addr_ismulticast(&ip)) {
+    ctx.mcast_ip4 = (uint32_t) (uintptr_t) nc->priv_2;
+  }
   mg_lwip_netif_run_on_tcpip(udp_sendto_tcpip, &ctx);
   cs->err = ctx.ret;
+  DBG(("%p udp_sendto %x mc4 %x res %d", nc, (int) ip_2_ip4(ctx.ip)->addr,
+       (int) ctx.mcast_ip4, (int) cs->err));
   pbuf_free(p);
   return (cs->err == ERR_OK ? (int) len : -2);
 }
