@@ -60,7 +60,7 @@ We take security seriously:
   [Compass Security](https://www.compass-security.com/en/) and others.
   In case of the vulnerability found, we act according to the industry best
   practice: hold on to the publication, fix the software and notify all our
-  customers that have appropriate subscrition
+  customers that have an appropriate subscription
 4. Some of our customers (for example, NASA)
   have specific security requirements and run independent security audits,
   of which we get notified and in case of any issue, act similar to (3).
