@@ -36,7 +36,8 @@ robust, and easy. Features include:
   integrated Mongoose in their commercial products
 - We provide [commercial licensing](https://cesanta.com/licensing.html),
   [support](https://cesanta.com/support.html), consultancy and integration
-  assistance. [Contact us](https://www.cesanta.com/contact.html)
+  assistance - don't hesitate to
+  [contact us](https://www.cesanta.com/contact.html)
 
 
 # Security
