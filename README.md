@@ -1,112 +1,90 @@
 # Mongoose - Embedded Web Server / Embedded Networking Library
 
-![License: GPLv2](https://img.shields.io/badge/license-GPL_2-green.svg "License")
+[![License: GPLv2/Commercial](https://img.shields.io/badge/License-GPLv2%20or%20Commercial-green.svg)](https://opensource.org/licenses/gpl-2.0.php)
 [![Build Status]( https://github.com/cesanta/mongoose/workflows/build/badge.svg)](https://github.com/cesanta/mongoose/actions)
 [![Code Coverage](https://codecov.io/gh/cesanta/mongoose/branch/master/graph/badge.svg)](https://codecov.io/gh/cesanta/mongoose)
 [![Fuzzing Status](https://oss-fuzz-build-logs.storage.googleapis.com/badges/mongoose.svg)](https://bugs.chromium.org/p/oss-fuzz/issues/list?sort=-opened&can=1&q=proj:mongoose)
 
 Mongoose is a networking library for C/C++. It implements event-driven
-non-blocking APIs for TCP, UDP, HTTP, WebSocket, MQTT.  It has been designed
-for connecting devices and bringing them online. On the market since 2004, used
-by vast number of open source and commercial products - it even runs on the
+non-blocking APIs for TCP, UDP, HTTP, WebSocket, MQTT.  It is designed for
+connecting devices and bringing them online. On the market since 2004, used by
+vast number of open source and commercial products - it even runs on the
 International Space Station!  Mongoose makes embedded network programming fast,
-robust, and easy.
+robust, and easy. Features include:
 
-Source code and documentation:
+- Cross-platform: works on Linux/UNIX, MacOS, Windows, Android, FreeRTOS, etc
+- Supported embedded architectures: ESP32, NRF52, STM32, NXP, and more
+- Builtin protocols: plain TCP/UDP, HTTP, MQTT, Websocket
+- SSL/TLS support: mbedTLS, OpenSSL or custom (via API)
+- Asynchronous DNS resolver
+- Tiny static and run-time footprint
+- Source code is both ISO C and ISO C++ compliant
+- Very easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your build tree
 
-- [Download Mongoose Source Code here](https://www.cesanta.com/download.html)
-- [Read Mongoose documentation](https://cesanta.com/docs/)
 
-Are you a company working on a connected product or software? 
-We can offer you assistance to guarantee your integration success. [Book a free call with our experienced engineer for the initial integration development session.](https://calendly.com/cesanta/mongoose-library-remote-control-for-connected-devices)
+# Commercial use
+- Mongoose is used by hundreds of businesses, from Fortune 500 giants like
+  Bosch, Samsung, Qualcomm, Caterpillar - to tiny startups
+- Used to solve a wide range of business needs, like implementing Web UI
+  interface on devices, RESTful API services, telemetry data exchange, remote
+  control for a product, remote software updates, remote monitoring, and others
+- Deployed to tens of millions devices in production environment worldwide
+- See [Case Studies](https://cesanta.com/case-studies.html) from our respected
+  customers like Schneder Electric (industrial automation), iXBlue S.A.S.
+  (defence & space), and others
+- See [Testimonials](https://cesanta.com/testimonials.html) from engineers that
+  integrated Mongoose in their commercial products
+- We provide [commercial licensing](https://cesanta.com/licensing.html),
+  [support](https://cesanta.com/support.html), consultancy and integration
+  assistance. [Contact us](https://www.cesanta.com/contact.html)
 
-# Why Mongoose?
-Mongoose provides a high level of assurance in terms of reliability and security:
-- Reliable and tested with time: over 16 years of track record.
-- Proven track record: deployed to tens of millions devices in production environments worldwide.
-- Trusted by hundreds of companies big and small: Bosch, Siemens, Samsung, HP, Dell, Google, Intel, Qualcomm, Caterpillar and many others.
-- Secure: the fact that the Mongoose Library is used by NASA aboard the International Space Station is the best confirmation to it.
 
-# Mongoose is used to implement
-Mongoose is embedded in the software, machinery, devices, appliances to implement:
-- Web UI interface on devices
-- RESTful API services
-- Telemetry data exchange
-- Remote control for a product
-- Remote software updates
-- Remote monitoring
-The Mongoose ecosystem is very dynamic and ever increasing.
+# Security
 
-Connectivity is vital for software and embedded devices, but there are many pitfalls to consider when embedding a web server.  This white paper breaks down
-on the top 9 things to avoid when embedding a web server.
+We take security seriously:
+1. Mongoose repository runs a
+  [continuous integration test powered by GitHub](https://github.com/cesanta/mongoose/actions),
+  which runs through hundreds of unit tests on every commit to the repository.
+  Our [unit tests](https://github.com/cesanta/mongoose/tree/master/test)
+  are built with modern address sanitizer technologies, which help to find
+  security vulnerabilities early
+2. Mongoose repository is integrated into Google's
+  [oss-fuzz continuous fuzzer](https://bugs.chromium.org/p/oss-fuzz/issues/list?sort=-opened&can=1&q=proj:mongoose)
+  which scans for potential vulnerabilities continuously
+3.  We receive periodic vulnerability reports from the independent security
+  groups like
+  [Cisco Talos](https://www.cisco.com/c/en/us/products/security/talos.html),
+  [Microsoft Security Response Center](https://www.microsoft.com/en-us/msrc),
+  [MITRE Corporation](https://www.mitre.org/),
+  [Compass Security](https://www.compass-security.com/en/) and others.
+  In case of the vulnerability found, we act according to the industry best
+  practice: hold on to the publication, fix the software and notify all our
+  customers that have appropriate subscrition
+4. Some of our customers (for example, NASA)
+  have specific security requirements and run independent security audits,
+  of which we get notified and in case of any issue, act similar to (3).
 
-- [Download “9 Things NOT to do when embedding a web server” white paper here](https://www.cesanta.com/whitepaper.html)
+# Supplement software
 
-# Case Studies and Testimonials:
+This software is often used together with Mongoose:
+- [mjson](https://github.com/cesanta/mjson) - a JSON parser. Used to implement
+  RESTful APIs that use JSON, or implement data exchange (e.g. over MQTT
+  or Websocket) that use JSON for data encapsulation
+- [elk](https://github.com/cesanta/elk) - a tiny JavaScript interpreter.
+  Used to implement scripting support for customers
 
-Testimonials:
-- "Easily, Mongoose is one of the best web servers on the market. It has helped us to achieve the required level of performance with the seamless integration. It is very stable and we have not encountered any significant bugs." - Santhosh Kumar P.B, Lead Architect, Schneider Electric
-- "Performance and stability of Mongoose Web Server are very good! We had no noticeable issues whatsoever!" - Linus Nuber, Software Architect, Schenck Process Europe GmbH
-- "We looked through many different libraries and solutions, but with the Mongoose Web Server Library just within a couple of hours, we built a proof of concept. Everything just works, we faced no problems with Mongoose." Samuel Remy, Project Engineer, HAENNI Instruments Inc.
 
-[See Testimonials](https://www.cesanta.com/testimonials.html)
+# Precompiled web server binary
 
-Case Studies:
-- Schneider Electric integrated Mongoose Web Server Library in “Automation Runtimes” - a specialized distributed control system.
-- Schenck Process integrated Mongoose Web Server Library in the “DISOMAT Tersus” weighing terminal.
-- HAENNI Instruments used Mongoose to enable communication with the "HAENNI Wheel Load Scales".
+We have built a ready-to-go, precompiled web server binary for Windows
+and Mac. It is a great tool for sharing your files or website. It has
+a unique feature - an ability to share your local files via a global URL.
 
-[See Case Studies](https://www.cesanta.com/case-studies.html)
-
-# Looking for a pre-compiled Mongoose web server Windows or Mac binary?
-- [Download pre-compiled Mongoose web server binary](https://mongoose.ws/)
-
-# Looking for a complete IoT solution? Check out
-- [VCON](https://vcon.io) - Arduino compatible MCU modules with built-in firmware OTA updates
-- [Mongoose OS](https://mongoose-os.com) - open source embedded operating system for low-power connected microcontrollers. Secure, designed for commercial Internet of Things products
-
-# Support
-- [Study Mongoose examples](https://github.com/cesanta/mongoose/tree/master/examples)
-- [Support Forum - ask your technical questions here](https://forum.cesanta.com/c/mongoose-library/6)
-- [Commercial licensing and support available](https://www.cesanta.com/licensing.html)
-- [Check out latest releases](https://github.com/cesanta/mongoose/releases)
-
-# Features
-
-* Cross-platform: works on Linux/UNIX, MacOS, Windows, Android, FreeRTOS, etc
-* Supported embedded architectures: ESP32, ESP8266, TI, NRF52, STM32, PIC32, NXP, and more
-* Builtin protocols: plain TCP/UDP, HTTP, MQTT, Websocket
-* SSL/TLS support: mbedTLS, OpenSSL or custom (via API)
-* Asynchronous DNS resolver
-* Tiny static and run-time footprint
-* Source code is both ISO C and ISO C++ compliant
-* Very easy to integrate: just copy
-  [mongoose.c](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.c) and
-  [mongoose.h](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.h)
-  files to your build tree
-
-# Licensing
-
-Mongoose is released under Commercial and [GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html) open source licenses.
-
-Commercial Projects: [Contact us for commercial license.](https://www.cesanta.com/contact.html)
-
-# Dashboard Example
-
-Mongoose is often used to implement device dashboards and real-time
-data exchange over Websocket. Here is a dashboard example that illustrates
-the functionality:
-
-![](http://www.cesanta.com/images/dashboard.png)
-
-[Developing a new product? Contact us today to discuss how Mongoose can help.](https://www.cesanta.com/contact.html)
+Interested? Go to [donwload](https://mongoose.ws/)
 
 # Contributions
 
 Contributions are welcome! Please follow the guidelines below:
 
 - Sign [Cesanta CLA](https://cesanta.com/cla.html) and send GitHub pull request
-- When making pull requests, please make sure that it has only one commit,
- and imlements/fixes only one piece of functionality
-
-
+- Make sure that PRs have only one commit, and deal with one issue only
