@@ -23,8 +23,8 @@ robust, and easy. Features include:
 
 
 # Commercial use
-- Mongoose is used by hundreds of businesses, from Fortune 500 giants like
-  Siemens, Bosch, Google, Samsung, Qualcomm, Caterpillar, to the small businesses
+- Mongoose is used by hundreds of businesses, from Fortune500 giants like
+  Siemens, Bosch, Google, Samsung, Qualcomm, Caterpillar to the small businesses
 - Used to solve a wide range of business needs, like implementing Web UI
   interface on devices, RESTful API services, telemetry data exchange, remote
   control for a product, remote software updates, remote monitoring, and others
