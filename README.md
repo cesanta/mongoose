@@ -14,7 +14,7 @@ robust, and easy. Features include:
 
 - Cross-platform: works on Linux/UNIX, MacOS, Windows, Android, FreeRTOS, etc
 - Supported embedded architectures: ESP32, NRF52, STM32, NXP, and more
-- Builtin protocols: plain TCP/UDP, HTTP, MQTT, Websocket
+- Built-in protocols: plain TCP/UDP, HTTP, MQTT, Websocket
 - SSL/TLS support: mbedTLS, OpenSSL or custom (via API)
 - Asynchronous DNS resolver
 - Tiny static and run-time footprint
@@ -24,7 +24,7 @@ robust, and easy. Features include:
 
 # Commercial use
 - Mongoose is used by hundreds of businesses, from Fortune 500 giants like
-  Siemens, Bosch, Google, Samsung, Qualcomm, Caterpillar - to tiny startups
+  Siemens, Bosch, Google, Samsung, Qualcomm, Caterpillar, to the small businesses
 - Used to solve a wide range of business needs, like implementing Web UI
   interface on devices, RESTful API services, telemetry data exchange, remote
   control for a product, remote software updates, remote monitoring, and others
@@ -61,7 +61,7 @@ We take security seriously:
   In case of the vulnerability found, we act according to the industry best
   practice: hold on to the publication, fix the software and notify all our
   customers that have an appropriate subscription
-4. Some of our customers (for example, NASA)
+4. Some of our customers (for example NASA)
   have specific security requirements and run independent security audits,
   of which we get notified and in case of any issue, act similar to (3).
 
@@ -81,7 +81,7 @@ We have built a ready-to-go, precompiled web server binary for Windows
 and Mac. It is a great tool for sharing your files or website. It has
 a unique feature - an ability to share your local files via a global URL.
 
-Interested? Go to [donwload](https://mongoose.ws/)
+Interested? Go to [download](https://mongoose.ws/)
 
 # Contributions
 
