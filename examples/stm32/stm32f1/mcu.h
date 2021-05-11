@@ -15,6 +15,8 @@ static inline void setreg(volatile uint32_t *r, uint32_t clear_mask, uint32_t se
 // RCC registers, TRM section 7.3, memory map section 3.3
 struct rcc { volatile uint32_t CR, CFGR, CIR, APB2RSTR, APB1RSTR, AHBENR, APB2ENR, APB1ENR, BDCR, CSR; };
 #define RCC ((struct rcc *) 0x40021000)
+enum {RCC_CR_HSEON = BIT(16), RCC_CR_HSERDY = BIT(17), RCC_CR_PLLON = BIT(24), RCC_CR_PLLRDY = BIT(25)};
+enum {RCC_CFGR_SW = 3, RCC_CFGR_SW_HSI = 0, RCC_CFGR_SW_HSE = 1, RCC_CFGR_SW_PLL = 2, RCC_CFGR_PLLMULL = (15U << 18), RCC_CFGR_PLLMULL9 = (7U << 18)};
 
 static inline void init_ram(void) {
   extern uint32_t _bss_start, _bss_end;
