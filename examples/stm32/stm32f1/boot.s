@@ -1,4 +1,4 @@
-.cpu cortex-m0
+.cpu cortex-m3
 .thumb
 
 .word   _estack     /* stack top address */

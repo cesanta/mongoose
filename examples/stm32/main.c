@@ -33,7 +33,8 @@ static void fn(void *args) {
   // int delay_ms = *(int *) args;
   for (;;) {
     led_toggle();
-    vTaskDelay(pdMS_TO_TICKS(300));
+    spin(500000);
+    // vTaskDelay(pdMS_TO_TICKS(0));
   };
   (void) args;
 }
@@ -41,7 +42,8 @@ static void fn(void *args) {
 int main(void) {
   init_ram();
   init_hardware();
-  xTaskCreate(fn, "server", 512, NULL, configMAX_PRIORITIES - 1, NULL);
-  vTaskStartScheduler();
+  fn(NULL);
+  // xTaskCreate(fn, "server", 512, NULL, configMAX_PRIORITIES - 1, NULL);
+  // vTaskStartScheduler();
   return 0;
 }
