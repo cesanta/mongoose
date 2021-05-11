@@ -23,54 +23,17 @@
 #define MG_ARCH_WIN32 2
 #define MG_ARCH_ESP32 3
 #define MG_ARCH_ESP8266 4
-#define MG_ARCH_CC3100 5
-#define MG_ARCH_CC3200 6
-#define MG_ARCH_CC3220 7
-#define MG_ARCH_MSP432 8
-#define MG_ARCH_TM4C129 9
-#define MG_ARCH_MBED 10
-#define MG_ARCH_WINCE 11
-#define MG_ARCH_NXP_LPC 12
-#define MG_ARCH_NXP_KINETIS 13
-#define MG_ARCH_NRF51 14
-#define MG_ARCH_NRF52 15
-#define MG_ARCH_PIC32 16
-#define MG_ARCH_RS14100 17
-#define MG_ARCH_STM32 18
-#define MG_ARCH_FREERTOS 19
+#define MG_ARCH_FREERTOS_TCP 5
 
 #if !defined(MG_ARCH)
-#if defined(TARGET_IS_MSP432P4XX) || defined(__MSP432P401R__)
-#define MG_ARCH MG_ARCH_MSP432
-#elif defined(cc3200) || defined(TARGET_IS_CC3200)
-#define MG_ARCH MG_ARCH_CC3200
-#elif defined(cc3220) || defined(TARGET_IS_CC3220)
-#define MG_ARCH MG_ARCH_CC3220
-#elif defined(__unix__) || defined(__APPLE__)
+#if defined(__unix__) || defined(__APPLE__)
 #define MG_ARCH MG_ARCH_UNIX
-#elif defined(WINCE)
-#define MG_ARCH MG_ARCH_WINCE
 #elif defined(_WIN32)
 #define MG_ARCH MG_ARCH_WIN32
-#elif defined(__MBED__)
-#define MG_ARCH MG_ARCH_MBED
-#elif defined(__USE_LPCOPEN)
-#define MG_ARCH MG_ARCH_NXP_LPC
-#elif defined(FRDM_K64F) || defined(FREEDOM)
-#define MG_ARCH MG_ARCH_NXP_KINETIS
-#elif defined(PIC32)
-#define MG_ARCH MG_ARCH_PIC32
 #elif defined(ICACHE_FLASH) || defined(ICACHE_RAM_ATTR)
 #define MG_ARCH MG_ARCH_ESP8266
 #elif defined(ESP_PLATFORM)
 #define MG_ARCH MG_ARCH_ESP32
-#elif defined(TARGET_IS_TM4C129_RA0) || defined(TARGET_IS_TM4C129_RA1) || \
-    defined(TARGET_IS_TM4C129_RA2)
-#define MG_ARCH MG_ARCH_TM4C129
-#elif defined(RS14100)
-#define MG_ARCH MG_ARCH_RS14100
-#elif defined(STM32)
-#define MG_ARCH MG_ARCH_STM32
 #endif
 
 #if !defined(MG_ARCH)
@@ -154,31 +117,32 @@
 #endif
 
 
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP
 
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <FreeRTOS.h>
-
-#include <task.h>
-
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
-#include <stdbool.h>
+#include <task.h>
 
 #define MG_INT64_FMT "%lld"
 #define MG_DIRSEP '/'
+
 #define IPPROTO_TCP FREERTOS_IPPROTO_TCP
 #define IPPROTO_UDP FREERTOS_IPPROTO_UDP
 #define AF_INET FREERTOS_AF_INET
@@ -206,12 +170,11 @@ struct sockaddr {
 #define closesocket(x) FreeRTOS_closesocket(x)
 #define gethostbyname(x) FreeRTOS_gethostbyname(x)
 
+#ifdef MG_ENABLE_FF
 #include <ff_stdio.h>
 
 #undef FILE
 #define FILE FF_FILE
-//#define SEEK_SET FF_SEEK_SET
-//#define SEEK_END FF_SEEK_END
 #define stat(a, b) ff_stat((a), (b))
 #define fopen(a, b) ff_fopen((a), (b))
 #define fclose(a) ff_fclose(a)
@@ -228,8 +191,9 @@ static inline int ff_vfprintf(FF_FILE *fp, const char *fmt, va_list ap) {
   if (buf != NULL) ff_fwrite(buf, 1, n, fp), free(buf);
   return n;
 }
+#endif  // MG_ENABLE_FF
 
-#endif
+#endif  // MG_ARCH == MG_ARCH_FREERTOS_TCP
 
 
 #if MG_ARCH == MG_ARCH_UNIX
@@ -679,7 +643,7 @@ struct mg_mgr {
   int dnstimeout;               // DNS resolve timeout in milliseconds
   unsigned long nextid;         // Next connection ID
   void *userdata;               // Arbitrary user data pointer
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
 #endif
 };

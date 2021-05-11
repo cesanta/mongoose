@@ -15,7 +15,7 @@
 #ifndef SO_EXCLUSIVEADDRUSE
 #define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
 #endif
-#elif MG_ARCH == MG_ARCH_FREERTOS
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
 #define MG_SOCK_ERRNO errno
 typedef Socket_t SOCKET;
 #define INVALID_SOCKET FREERTOS_INVALID_SOCKET
@@ -185,7 +185,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 #if defined(_WIN32) && MG_ENABLE_WINSOCK
   unsigned long on = 1;
   ioctlsocket(fd, FIONBIO, &on);
-#elif MG_ARCH == MG_ARCH_FREERTOS
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
   const BaseType_t off = 0;
   setsockopt(fd, 0, FREERTOS_SO_RCVTIMEO, &off, sizeof(off));
   setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off));
@@ -291,7 +291,7 @@ static void close_conn(struct mg_connection *c) {
   LOG(LL_DEBUG, ("%lu closed", c->id));
   if (FD(c) != INVALID_SOCKET) {
     closesocket(FD(c));
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP
     FreeRTOS_FD_CLR(c->fd, c->mgr->ss, eSELECT_ALL);
 #endif
   }
@@ -303,7 +303,7 @@ static void close_conn(struct mg_connection *c) {
 }
 
 static void setsockopts(struct mg_connection *c) {
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP
   FreeRTOS_FD_SET(c->fd, c->mgr->ss, eSELECT_READ | eSELECT_EXCEPT);
 #else
   int on = 1;
@@ -486,7 +486,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
 }
 
 static void mg_iotest(struct mg_mgr *mgr, int ms) {
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
     FreeRTOS_FD_CLR(c->fd, mgr->ss, eSELECT_WRITE);

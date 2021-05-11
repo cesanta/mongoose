@@ -22,7 +22,7 @@
 #endif
 void mg_connect_resolved(struct mg_connection *);
 
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP
 static inline void *mg_calloc(int cnt, size_t size) {
   void *p = pvPortMalloc(size);
   if (p != NULL) memset(p, 0, size);
@@ -983,7 +983,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
 }
 
 #if MG_ARCH == MG_ARCH_ESP32 || MG_ARCH == MG_ARCH_ESP8266 || \
-    MG_ARCH == MG_ARCH_FREERTOS
+    MG_ARCH == MG_ARCH_FREERTOS_TCP
 char *realpath(const char *src, char *dst) {
   int len = strlen(src);
   if (len > MG_PATH_MAX - 1) len = MG_PATH_MAX - 1;
@@ -997,7 +997,7 @@ char *realpath(const char *src, char *dst) {
 // Allow user to override this function
 bool mg_is_dir(const char *path) WEAK;
 bool mg_is_dir(const char *path) {
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP && defined(MG_ENABLE_FF)
   struct FF_STAT st;
   return (ff_stat(path, &st) == 0) && (st.st_mode & FF_IFDIR);
 #else
@@ -2810,7 +2810,7 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
 #ifndef SO_EXCLUSIVEADDRUSE
 #define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
 #endif
-#elif MG_ARCH == MG_ARCH_FREERTOS
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
 #define MG_SOCK_ERRNO errno
 typedef Socket_t SOCKET;
 #define INVALID_SOCKET FREERTOS_INVALID_SOCKET
@@ -2980,7 +2980,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 #if defined(_WIN32) && MG_ENABLE_WINSOCK
   unsigned long on = 1;
   ioctlsocket(fd, FIONBIO, &on);
-#elif MG_ARCH == MG_ARCH_FREERTOS
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
   const BaseType_t off = 0;
   setsockopt(fd, 0, FREERTOS_SO_RCVTIMEO, &off, sizeof(off));
   setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off));
@@ -3086,7 +3086,7 @@ static void close_conn(struct mg_connection *c) {
   LOG(LL_DEBUG, ("%lu closed", c->id));
   if (FD(c) != INVALID_SOCKET) {
     closesocket(FD(c));
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP
     FreeRTOS_FD_CLR(c->fd, c->mgr->ss, eSELECT_ALL);
 #endif
   }
@@ -3098,7 +3098,7 @@ static void close_conn(struct mg_connection *c) {
 }
 
 static void setsockopts(struct mg_connection *c) {
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP
   FreeRTOS_FD_SET(c->fd, c->mgr->ss, eSELECT_READ | eSELECT_EXCEPT);
 #else
   int on = 1;
@@ -3281,7 +3281,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
 }
 
 static void mg_iotest(struct mg_mgr *mgr, int ms) {
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
     FreeRTOS_FD_CLR(c->fd, mgr->ss, eSELECT_WRITE);
@@ -4118,7 +4118,7 @@ FILE *mg_fopen(const char *path, const char *mode) {
 }
 
 int64_t mg_file_size(const char *path) {
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP && defined(MG_ENABLE_FF)
   struct FF_STAT st;
   return ff_stat(path, &st) == 0 ? st.st_size : 0;
 #else
@@ -4288,8 +4288,9 @@ unsigned long mg_unhexn(const char *s, int len) {
   for (i = 0; i < (unsigned long) len; i++) {
     int c = s[i];
     if (i > 0) v <<= 4;
-    v |= (c >= '0' && c <= '9') ? c - '0'
-                                : (c >= 'A' && c <= 'F') ? c - '7' : c - 'W';
+    v |= (c >= '0' && c <= '9')   ? c - '0'
+         : (c >= 'A' && c <= 'F') ? c - '7'
+                                  : c - 'W';
   }
   return v;
 }
@@ -4421,7 +4422,7 @@ unsigned long mg_millis(void) {
 #elif MG_ARCH == MG_ARCH_ESP8266
   // return system_get_time() / 1000;
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
-#elif MG_ARCH == MG_ARCH_FREERTOS
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #else
   struct timespec ts;

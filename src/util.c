@@ -1,5 +1,5 @@
-#include "config.h"
 #include "util.h"
+#include "config.h"
 
 #if MG_ENABLE_FS
 int mg_stat(const char *path, mg_stat_t *st) {
@@ -24,7 +24,7 @@ FILE *mg_fopen(const char *path, const char *mode) {
 }
 
 int64_t mg_file_size(const char *path) {
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP && defined(MG_ENABLE_FF)
   struct FF_STAT st;
   return ff_stat(path, &st) == 0 ? st.st_size : 0;
 #else
@@ -194,8 +194,9 @@ unsigned long mg_unhexn(const char *s, int len) {
   for (i = 0; i < (unsigned long) len; i++) {
     int c = s[i];
     if (i > 0) v <<= 4;
-    v |= (c >= '0' && c <= '9') ? c - '0'
-                                : (c >= 'A' && c <= 'F') ? c - '7' : c - 'W';
+    v |= (c >= '0' && c <= '9')   ? c - '0'
+         : (c >= 'A' && c <= 'F') ? c - '7'
+                                  : c - 'W';
   }
   return v;
 }
@@ -327,7 +328,7 @@ unsigned long mg_millis(void) {
 #elif MG_ARCH == MG_ARCH_ESP8266
   // return system_get_time() / 1000;
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
-#elif MG_ARCH == MG_ARCH_FREERTOS
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #else
   struct timespec ts;
