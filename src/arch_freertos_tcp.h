@@ -1,30 +1,31 @@
 #pragma once
 
-#if MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP
 
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <FreeRTOS.h>
-
-#include <task.h>
-
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
-#include <stdbool.h>
+#include <task.h>
 
 #define MG_INT64_FMT "%lld"
 #define MG_DIRSEP '/'
+
 #define IPPROTO_TCP FREERTOS_IPPROTO_TCP
 #define IPPROTO_UDP FREERTOS_IPPROTO_UDP
 #define AF_INET FREERTOS_AF_INET
@@ -35,9 +36,7 @@
 #define SOL_SOCKET 0
 #define SO_REUSEADDR 0
 #define sockaddr_in freertos_sockaddr
-struct sockaddr {
-  uint8_t sa_len, sa_family;
-};
+#define sockaddr freertos_sockaddr
 #define accept(a, b, c) FreeRTOS_accept((a), (b), (c))
 #define connect(a, b, c) FreeRTOS_connect((a), (b), (c))
 #define bind(a, b, c) FreeRTOS_bind((a), (b), (c))
@@ -52,12 +51,11 @@ struct sockaddr {
 #define closesocket(x) FreeRTOS_closesocket(x)
 #define gethostbyname(x) FreeRTOS_gethostbyname(x)
 
+#ifdef MG_ENABLE_FF
 #include <ff_stdio.h>
 
 #undef FILE
 #define FILE FF_FILE
-//#define SEEK_SET FF_SEEK_SET
-//#define SEEK_END FF_SEEK_END
 #define stat(a, b) ff_stat((a), (b))
 #define fopen(a, b) ff_fopen((a), (b))
 #define fclose(a) ff_fclose(a)
@@ -74,5 +72,6 @@ static inline int ff_vfprintf(FF_FILE *fp, const char *fmt, va_list ap) {
   if (buf != NULL) ff_fwrite(buf, 1, n, fp), free(buf);
   return n;
 }
+#endif  // MG_ENABLE_FF
 
-#endif
+#endif  // MG_ARCH == MG_ARCH_FREERTOS_TCP

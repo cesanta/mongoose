@@ -5,54 +5,17 @@
 #define MG_ARCH_WIN32 2
 #define MG_ARCH_ESP32 3
 #define MG_ARCH_ESP8266 4
-#define MG_ARCH_CC3100 5
-#define MG_ARCH_CC3200 6
-#define MG_ARCH_CC3220 7
-#define MG_ARCH_MSP432 8
-#define MG_ARCH_TM4C129 9
-#define MG_ARCH_MBED 10
-#define MG_ARCH_WINCE 11
-#define MG_ARCH_NXP_LPC 12
-#define MG_ARCH_NXP_KINETIS 13
-#define MG_ARCH_NRF51 14
-#define MG_ARCH_NRF52 15
-#define MG_ARCH_PIC32 16
-#define MG_ARCH_RS14100 17
-#define MG_ARCH_STM32 18
-#define MG_ARCH_FREERTOS 19
+#define MG_ARCH_FREERTOS_TCP 5
 
 #if !defined(MG_ARCH)
-#if defined(TARGET_IS_MSP432P4XX) || defined(__MSP432P401R__)
-#define MG_ARCH MG_ARCH_MSP432
-#elif defined(cc3200) || defined(TARGET_IS_CC3200)
-#define MG_ARCH MG_ARCH_CC3200
-#elif defined(cc3220) || defined(TARGET_IS_CC3220)
-#define MG_ARCH MG_ARCH_CC3220
-#elif defined(__unix__) || defined(__APPLE__)
+#if defined(__unix__) || defined(__APPLE__)
 #define MG_ARCH MG_ARCH_UNIX
-#elif defined(WINCE)
-#define MG_ARCH MG_ARCH_WINCE
 #elif defined(_WIN32)
 #define MG_ARCH MG_ARCH_WIN32
-#elif defined(__MBED__)
-#define MG_ARCH MG_ARCH_MBED
-#elif defined(__USE_LPCOPEN)
-#define MG_ARCH MG_ARCH_NXP_LPC
-#elif defined(FRDM_K64F) || defined(FREEDOM)
-#define MG_ARCH MG_ARCH_NXP_KINETIS
-#elif defined(PIC32)
-#define MG_ARCH MG_ARCH_PIC32
 #elif defined(ICACHE_FLASH) || defined(ICACHE_RAM_ATTR)
 #define MG_ARCH MG_ARCH_ESP8266
 #elif defined(ESP_PLATFORM)
 #define MG_ARCH MG_ARCH_ESP32
-#elif defined(TARGET_IS_TM4C129_RA0) || defined(TARGET_IS_TM4C129_RA1) || \
-    defined(TARGET_IS_TM4C129_RA2)
-#define MG_ARCH MG_ARCH_TM4C129
-#elif defined(RS14100)
-#define MG_ARCH MG_ARCH_RS14100
-#elif defined(STM32)
-#define MG_ARCH MG_ARCH_STM32
 #endif
 
 #if !defined(MG_ARCH)
@@ -78,6 +41,6 @@
 
 #include "arch_esp32.h"
 #include "arch_esp8266.h"
-#include "arch_freertos.h"
+#include "arch_freertos_tcp.h"
 #include "arch_unix.h"
 #include "arch_win32.h"

@@ -82,4 +82,3 @@ FILE *mg_fopen(const char *fp, const char *mode);
     while (*h != (elem_)) h = &(*h)->next; \
     *h = (elem_)->next;                    \
   } while (0)
-
