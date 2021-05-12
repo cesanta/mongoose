@@ -258,13 +258,8 @@ and optionally other structures like `DIR *` depending on the functionality
 you have enabled - see previous section. Below is an example for FreeRTOS+LWIP:
 
 ```c
-#include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -276,6 +271,8 @@ you have enabled - see previous section. Below is an example for FreeRTOS+LWIP:
 
 #include <FreeRTOS.h>
 #include <task.h>
+
+#include <lwip/sockets.h>
 
 #define MG_INT64_FMT "%lld"
 #define MG_DIRSEP '/'
