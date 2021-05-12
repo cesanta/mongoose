@@ -303,6 +303,8 @@ double mg_time(void) {
                     ((int64_t) ftime.dwHighDateTime << 32)) /
                    10000000.0) -
          11644473600;
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+  return mg_millis() / 1000.0;
 #else
   struct timeval tv;
   if (gettimeofday(&tv, NULL /* tz */) != 0) return 0;
@@ -315,6 +317,8 @@ void mg_usleep(unsigned long usecs) {
   Sleep(usecs / 1000);
 #elif MG_ARCH == MG_ARCH_ESP8266
   ets_delay_us(usecs);
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+  vTaskDelay(pdMS_TO_TICKS(usecs / 1000));
 #else
   usleep(usecs);
 #endif
@@ -326,7 +330,6 @@ unsigned long mg_millis(void) {
 #elif MG_ARCH == MG_ARCH_ESP32
   return esp_timer_get_time() / 1000;
 #elif MG_ARCH == MG_ARCH_ESP8266
-  // return system_get_time() / 1000;
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP
   return xTaskGetTickCount() * portTICK_PERIOD_MS;

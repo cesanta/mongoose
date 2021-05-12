@@ -10,12 +10,11 @@ else ifeq "$(ARCH)" "stm32f7"
 MCU = -mcpu=cortex-m7 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard
 endif
 INCS = -I$(ARCH) -I. -I../.. -Ifreertos-kernel/include -Ifreertos-tcp/include -Ifreertos-tcp/portable/Compiler/GCC
-CFLAGS = -W -Wall -Os -g $(MCU) -fdata-sections -ffunction-sections $(INCS) $(MONGOOSE_OPTS) $(EXTRA)
-LDFLAGS = $(MCU) -specs=nano.specs -Tobj/link.ld -nostartfiles -nostdlib -lc -lm -lnosys -lgcc #-Wl,-Map=obj/$(PROG).map,--cref -Wl,--gc-sections
-SRCS = main.c # $(wildcard freertos-tcp/*.c)
+CFLAGS = -W -Wall -Werror -Wno-format -Wno-address-of-packed-member -Os -g $(MCU) -fdata-sections -ffunction-sections $(INCS) $(MONGOOSE_OPTS) $(EXTRA)
+LDFLAGS = $(MCU) -specs=nano.specs -Tobj/link.ld -nostartfiles -lgcc #-Wl,-Map=obj/$(PROG).map,--cref -Wl,--gc-sections
+SRCS = main.c $(wildcard freertos-tcp/*.c) $(wildcard freertos-kernel/*.c)
 SRCS += freertos-kernel/portable/MemMang/heap_4.c $(ARCH)/port.c
-SRCS += freertos-kernel/list.c freertos-kernel/tasks.c freertos-kernel/queue.c
-OBJS = obj/boot.o $(SRCS:%.c=obj/%.o) #obj/mongoose.o  # ORDER MATTERS - boot (vector table) first!
+OBJS = obj/boot.o $(SRCS:%.c=obj/%.o) obj/mongoose.o  # ORDER MATTERS - boot (vector table) first!
 
 all: $(PROG).hex
 

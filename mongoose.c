@@ -24,7 +24,7 @@ void mg_connect_resolved(struct mg_connection *);
 
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
 static inline void *mg_calloc(int cnt, size_t size) {
-  void *p = pvPortMalloc(size);
+  void *p = pvPortMalloc(cnt * size);
   if (p != NULL) memset(p, 0, size);
   return p;
 }
@@ -2440,17 +2440,17 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 }
 
 void mg_mgr_init(struct mg_mgr *mgr) {
+  memset(mgr, 0, sizeof(*mgr));
 #if defined(_WIN32) && MG_ENABLE_WINSOCK
   WSADATA data;
   WSAStartup(MAKEWORD(2, 2), &data);
-#elif MG_ARCH == MG_ARCH_FREERTOS
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
   mgr->ss = FreeRTOS_CreateSocketSet();
 #elif defined(__unix) || defined(__unix__) || defined(__APPLE__)
   // Ignore SIGPIPE signal, so if client cancels the request, it
   // won't kill the whole process.
   signal(SIGPIPE, SIG_IGN);
 #endif
-  memset(mgr, 0, sizeof(*mgr));
   mgr->dnstimeout = 3000;
   mgr->dns4.url = "udp://8.8.8.8:53";
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
@@ -2970,7 +2970,7 @@ static int ll_write(struct mg_connection *c, const void *buf, int len,
 
 int mg_send(struct mg_connection *c, const void *buf, size_t len) {
   int fail, n = c->is_udp
-                    ? ll_write(c, buf, (SOCKET) len, &fail)
+                    ? ll_write(c, buf, len, &fail)
                     : (int) mg_iobuf_append(&c->send, buf, len, MG_IO_SIZE);
   if (len > 0 && n == 0) fail = 1;
   return n;
@@ -3064,7 +3064,7 @@ static void read_conn(struct mg_connection *c,
 }
 
 static int write_conn(struct mg_connection *c) {
-  int fail, rc = ll_write(c, c->send.buf, (SOCKET) c->send.len, &fail);
+  int fail, rc = ll_write(c, c->send.buf, c->send.len, &fail);
   if (rc > 0) {
     mg_iobuf_delete(&c->send, rc);
     if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
@@ -3184,7 +3184,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   if (fd == INVALID_SOCKET) {
     LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
 #if !defined(_WIN32)
-  } else if (fd >= FD_SETSIZE) {
+  } else if ((long) fd >= FD_SETSIZE) {
     LOG(LL_ERROR, ("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
 #endif
@@ -3333,8 +3333,10 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 
 static void connect_conn(struct mg_connection *c) {
   int rc = 0;
+#if MG_ARCH != MG_ARCH_FREERTOS_TCP
   socklen_t len = sizeof(rc);
   if (getsockopt(FD(c), SOL_SOCKET, SO_ERROR, (char *) &rc, &len)) rc = 1;
+#endif
   if (rc == EAGAIN || rc == EWOULDBLOCK) rc = 0;
   c->is_connecting = 0;
   if (rc) {
@@ -4397,6 +4399,8 @@ double mg_time(void) {
                     ((int64_t) ftime.dwHighDateTime << 32)) /
                    10000000.0) -
          11644473600;
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+  return mg_millis() / 1000.0;
 #else
   struct timeval tv;
   if (gettimeofday(&tv, NULL /* tz */) != 0) return 0;
@@ -4409,6 +4413,8 @@ void mg_usleep(unsigned long usecs) {
   Sleep(usecs / 1000);
 #elif MG_ARCH == MG_ARCH_ESP8266
   ets_delay_us(usecs);
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+  vTaskDelay(pdMS_TO_TICKS(usecs / 1000));
 #else
   usleep(usecs);
 #endif
@@ -4420,7 +4426,6 @@ unsigned long mg_millis(void) {
 #elif MG_ARCH == MG_ARCH_ESP32
   return esp_timer_get_time() / 1000;
 #elif MG_ARCH == MG_ARCH_ESP8266
-  // return system_get_time() / 1000;
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP
   return xTaskGetTickCount() * portTICK_PERIOD_MS;

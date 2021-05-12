@@ -175,7 +175,7 @@ static int ll_write(struct mg_connection *c, const void *buf, int len,
 
 int mg_send(struct mg_connection *c, const void *buf, size_t len) {
   int fail, n = c->is_udp
-                    ? ll_write(c, buf, (SOCKET) len, &fail)
+                    ? ll_write(c, buf, len, &fail)
                     : (int) mg_iobuf_append(&c->send, buf, len, MG_IO_SIZE);
   if (len > 0 && n == 0) fail = 1;
   return n;
@@ -269,7 +269,7 @@ static void read_conn(struct mg_connection *c,
 }
 
 static int write_conn(struct mg_connection *c) {
-  int fail, rc = ll_write(c, c->send.buf, (SOCKET) c->send.len, &fail);
+  int fail, rc = ll_write(c, c->send.buf, c->send.len, &fail);
   if (rc > 0) {
     mg_iobuf_delete(&c->send, rc);
     if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
@@ -389,7 +389,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   if (fd == INVALID_SOCKET) {
     LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
 #if !defined(_WIN32)
-  } else if (fd >= FD_SETSIZE) {
+  } else if ((long) fd >= FD_SETSIZE) {
     LOG(LL_ERROR, ("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
 #endif
@@ -538,8 +538,10 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 
 static void connect_conn(struct mg_connection *c) {
   int rc = 0;
+#if MG_ARCH != MG_ARCH_FREERTOS_TCP
   socklen_t len = sizeof(rc);
   if (getsockopt(FD(c), SOL_SOCKET, SO_ERROR, (char *) &rc, &len)) rc = 1;
+#endif
   if (rc == EAGAIN || rc == EWOULDBLOCK) rc = 0;
   c->is_connecting = 0;
   if (rc) {
