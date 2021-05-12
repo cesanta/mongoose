@@ -311,10 +311,6 @@ static __inline struct tm *localtime_r(time_t *t, struct tm *tm) {
 #endif
 
 
-#ifndef MG_ENABLE_LWIP
-#define MG_ENABLE_LWIP 0
-#endif
-
 #ifndef MG_ENABLE_SOCKET
 #define MG_ENABLE_SOCKET 1
 #endif
@@ -341,10 +337,6 @@ static __inline struct tm *localtime_r(time_t *t, struct tm *tm) {
 
 #ifndef MG_ENABLE_LOG
 #define MG_ENABLE_LOG 1
-#endif
-
-#ifndef MG_ENABLE_MGOS
-#define MG_ENABLE_MGOS 0
 #endif
 
 #ifndef MG_ENABLE_MD5
@@ -410,9 +402,6 @@ const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
 
 
 
-#if MG_ENABLE_MGOS
-#include <common/cs_dbg.h>
-#else
 #if MG_ENABLE_LOG
 #define LOG(level, args)                                                   \
   do {                                                                     \
@@ -425,7 +414,6 @@ void mg_log_set(const char *spec);
 void mg_log_set_callback(void (*fn)(const void *, int, void *), void *param);
 #else
 #define LOG(level, args)
-#endif
 #endif
 
 

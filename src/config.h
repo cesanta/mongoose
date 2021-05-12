@@ -1,9 +1,5 @@
 #pragma once
 
-#ifndef MG_ENABLE_LWIP
-#define MG_ENABLE_LWIP 0
-#endif
-
 #ifndef MG_ENABLE_SOCKET
 #define MG_ENABLE_SOCKET 1
 #endif
@@ -30,10 +26,6 @@
 
 #ifndef MG_ENABLE_LOG
 #define MG_ENABLE_LOG 1
-#endif
-
-#ifndef MG_ENABLE_MGOS
-#define MG_ENABLE_MGOS 0
 #endif
 
 #ifndef MG_ENABLE_MD5
