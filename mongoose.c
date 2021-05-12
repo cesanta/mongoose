@@ -2442,8 +2442,9 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
 #if defined(_WIN32) && MG_ENABLE_WINSOCK
-  WSADATA data;
-  WSAStartup(MAKEWORD(2, 2), &data);
+  // clang-format off
+  { WSADATA data; WSAStartup(MAKEWORD(2, 2), &data); }
+  // clang-format on
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP
   mgr->ss = FreeRTOS_CreateSocketSet();
 #elif defined(__unix) || defined(__unix__) || defined(__APPLE__)
@@ -4097,6 +4098,7 @@ struct mg_str mg_url_pass(const char *url) {
 
 
 
+
 #if MG_ENABLE_FS
 int mg_stat(const char *path, mg_stat_t *st) {
 #ifdef _WIN32
@@ -4180,7 +4182,7 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
   if (buf != tmp) free(buf);
   return result;
 }
-#endif
+#endif  // MG_ENABLE_FS
 
 void mg_random(void *buf, size_t len) {
   bool done = false;

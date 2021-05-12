@@ -37,9 +37,6 @@
 #define SO_REUSEADDR 0
 #define sockaddr_in freertos_sockaddr
 #define sockaddr freertos_sockaddr
-// struct sockaddr {
-//   uint8_t sa_len, sa_family;
-// };
 #define accept(a, b, c) FreeRTOS_accept((a), (b), (c))
 #define connect(a, b, c) FreeRTOS_connect((a), (b), (c))
 #define bind(a, b, c) FreeRTOS_bind((a), (b), (c))

@@ -41,6 +41,6 @@
 
 #include "arch_esp32.h"
 #include "arch_esp8266.h"
-#include "arch_freertos.h"
+#include "arch_freertos_tcp.h"
 #include "arch_unix.h"
 #include "arch_win32.h"

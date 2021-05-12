@@ -1,5 +1,6 @@
+#include "config.h"  // Must go first - important for test++
+
 #include "util.h"
-#include "config.h"
 
 #if MG_ENABLE_FS
 int mg_stat(const char *path, mg_stat_t *st) {
@@ -84,7 +85,7 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
   if (buf != tmp) free(buf);
   return result;
 }
-#endif
+#endif  // MG_ENABLE_FS
 
 void mg_random(void *buf, size_t len) {
   bool done = false;
