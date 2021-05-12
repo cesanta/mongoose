@@ -13,17 +13,16 @@ robust, and easy.
 
 ## Features
 
-* Cross-platform: works on Linux/UNIX, MacOS, QNX, eCos, Windows, Android,
-  iPhone, FreeRTOS, etc.
-* Supported hardware platforms: TI CC3200, TI MSP432, NRF52, STM32, PIC32, ESP8266, ESP32 and more
+* Works on Linux/UNIX, MacOS, Windows, QNX, eCos, Android and other
+* Works on embedded hardware: STM32, ESP32, NXP, Xilinx, and other
 * Built-in protocols:
    - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
    - HTTP client, HTTP server
    - WebSocket client, WebSocket server
-   - MQTT client
+   - MQTT client, MQTT server
    - DNS client, async DNS resolver
 * Single-threaded, asynchronous, non-blocking core with simple event-based API
-* Native support for [LWIP embedded TCP/IP stack](https://en.wikipedia.org/wiki/LwIP)
+* Support for LWIP and FreeRTOS-Plus-TCP stacks
 * Tiny static and run-time footprint
 * Source code is both ISO C and ISO C++ compliant
 * Very easy to integrate: just copy
@@ -214,7 +213,6 @@ Here is a list of build constants and their default values:
 
 | Name | Default | Description |
 | ---- | ------- | ----------- |
-|`MG_ENABLE_LWIP` | 0 | Use LWIP low-level API instead of BSD sockets |
 |`MG_ENABLE_SOCKET` | 1 | Use BSD socket low-level API |
 |`MG_ENABLE_MBEDTLS` | 0 | Enable Mbed TLS library |
 |`MG_ENABLE_OPENSSL` | 0 | Enable OpenSSL library |
@@ -229,30 +227,69 @@ Here is a list of build constants and their default values:
 |`MG_MAX_RECV_BUF_SIZE` | (3 * 1024 * 1024) | Maximum recv buffer size |
 |`MG_MAX_HTTP_HEADERS` | 40 | Maximum number of HTTP headers |
 
+
 NOTE: `MG_IO_SIZE` controls the maximum UDP message size, see
 https://github.com/cesanta/mongoose/issues/907 for details. If application
 uses large UDP messages, increase the `MG_IO_SIZE` limit accordingly.
 
 ## Custom build
 
-It is possible to use Mongoose on an architecture that is not yet supported
-by the current codebase. In order to do so, follow these steps:
+The list of supported architectures is defined in the
+[arch.h](https://github.com/cesanta/mongoose/blob/master/src/arch.h) header
+file. Normally, there is no need to explicitly specify the architecture.
+The architecture is guessed during the build, so a simple compilation like
+`cc main.c mongoose.c` should work fine in most cases.
 
-1. Create a file called `mongoose_custom.h`, with defines and includes that
+However if you're building on embedded system like STM32, NXP, Xilinx or other,
+an architecture should be specified explicitly:
+- `-DMG_ARCH=MG_ARCH_FREERTOS_TCP` - for environments with FreeRTOS and
+  FreeRTOS-TCP stack
+- `-DMG_ARCH=MG_ARCH_CUSTOM` for all other cases, for example on systems with
+  FreeRTOS+LWIP, or bare metal + custom IP stack
+
+Below is the guide for building with `MG_ARCH_CUSTOM` architecture:
+
+
+1. Add `-DMG_ARCH=MG_ARCH_CUSTOM` to your build flags.
+
+2. Create a file called `mongoose_custom.h`, with defines and includes that
 are relevant to your platform. Mongoose uses `bool` type, `MG_DIRSEP` define,
 and optionally other structures like `DIR *` depending on the functionality
-you have enabled - see previous section. Below is an example:
+you have enabled - see previous section. Below is an example for FreeRTOS+LWIP:
 
 ```c
-#include <dirent.h>             // For DIR *
-#include <stdbool.h>            // For bool
-#include <sys/time.h>           // For gettimeofday()
-#include <unistd.h>             // For usleep()
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
+
+#include <FreeRTOS.h>
+#include <task.h>
+
+#define MG_INT64_FMT "%lld"
 #define MG_DIRSEP '/'
-#define MG_ENABLE_SOCKET 0      // Disable BSD socket API, implement your own
 ```
 
-2. Add `-DMG_ARCH=MG_ARCH_CUSTOM` to your build flags.
+And this one is for bare metal and custom TCP/IP stack:
+
+```c
+#include <stdbool.h>            // For bool
+#include <MySystem.h>
+#define MG_DIRSEP '/'
+#define MG_INT64_FMT "%lld"
+#define MG_ENABLE_SOCKET 0      // Disable BSD socket API, implement your own
+```
 
 3. This step is optional. If you have disabled BSD socket API, your build is
 going to fail due to several undefined symbols. Create `mongoose_custom.c`
