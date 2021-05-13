@@ -1,6 +1,13 @@
 #pragma once
 #define FREERTOS_IP_CONFIG_H
 
+#define ipconfigETHERNET_DRIVER_FILTERS_FRAME_TYPES 1
+#define ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM 1
+#define ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM 1
+#define ipconfigZERO_COPY_RX_DRIVER 1
+#define ipconfigZERO_COPY_TX_DRIVER 1
+#define ipconfigUSE_LINKED_RX_MESSAGES 1
+
 extern void vLoggingPrintf(const char *pcFormatString, ...);
 #define ipconfigHAS_DEBUG_PRINTF 0
 #if (ipconfigHAS_DEBUG_PRINTF == 1)
@@ -13,7 +20,6 @@ extern void vLoggingPrintf(const char *pcFormatString, ...);
 #endif
 
 #define ipconfigBYTE_ORDER pdFREERTOS_LITTLE_ENDIAN
-#define ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM 1
 #define ipconfigSOCK_DEFAULT_RECEIVE_BLOCK_TIME (2000)
 #define ipconfigSOCK_DEFAULT_SEND_BLOCK_TIME (5000)
 #define ipconfigUSE_LLMNR (0)
@@ -24,9 +30,8 @@ extern void vLoggingPrintf(const char *pcFormatString, ...);
 #define ipconfigDNS_REQUEST_ATTEMPTS (2)
 #define ipconfigIP_TASK_PRIORITY (configMAX_PRIORITIES - 2)
 #define ipconfigIP_TASK_STACK_SIZE_WORDS (configMINIMAL_STACK_SIZE * 5)
-extern UBaseType_t uxRand();
 #define ipconfigRAND32() uxRand()
-#define ipconfigUSE_NETWORK_EVENT_HOOK 1
+#define ipconfigUSE_NETWORK_EVENT_HOOK 0
 #define ipconfigUDP_MAX_SEND_BLOCK_TIME_TICKS (5000 / portTICK_PERIOD_MS)
 #define ipconfigUSE_DHCP 0
 #define ipconfigMAXIMUM_DISCOVER_TX_PERIOD (120000 / portTICK_PERIOD_MS)
@@ -48,7 +53,6 @@ extern UBaseType_t uxRand();
 #define ipconfigSUPPORT_OUTGOING_PINGS 0
 #define ipconfigSUPPORT_SELECT_FUNCTION 1
 #define ipconfigFILTER_OUT_NON_ETHERNET_II_FRAMES 1
-#define ipconfigETHERNET_DRIVER_FILTERS_FRAME_TYPES 1
 #define configWINDOWS_MAC_INTERRUPT_SIMULATOR_DELAY (20 / portTICK_PERIOD_MS)
 #define ipconfigPACKET_FILLER_SIZE 2
 #define ipconfigTCP_WIN_SEG_COUNT 240

@@ -9,9 +9,9 @@ SECTIONS {
   .rodata : { *(.rodata*) } > rom
 
   .bss : {
-    _bss_start = .;
+    __bss_start__ = .;
     *(.bss SORT(.bss.*) COMMON)
-    _bss_end = .;
+    __bss_end__ = .;
   } > ram
 
   .data : {
@@ -21,3 +21,5 @@ SECTIONS {
   } > ram AT > rom
   _data_flash_start = LOADADDR(.data);
 }
+__end__ = _data_end;
+end = _data_end;

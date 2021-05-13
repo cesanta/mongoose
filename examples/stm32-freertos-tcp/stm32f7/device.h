@@ -51,9 +51,9 @@ static inline void gpio_init(uint16_t pin, uint8_t state) {
 }
 
 static inline void init_ram(void) {
-  extern uint32_t _bss_start, _bss_end;
+  extern uint32_t __bss_start__, __bss_end__;
   extern uint32_t _data_start, _data_end, _data_flash_start;
-  memset(&_bss_start, 0, ((char *) &_bss_end - (char *) &_bss_start));
+  memset(&__bss_start__, 0, ((char *) &__bss_end__ - (char *) &__bss_start__));
   memcpy(&_data_start, &_data_flash_start,
          ((char *) &_data_end - (char *) &_data_start));
 }
