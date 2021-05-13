@@ -26,16 +26,19 @@ static void server(void *args) {
 }
 
 static void blinker(void *args) {
-  while (args == NULL) {
-    led_toggle();
-    vTaskDelay(pdMS_TO_TICKS(1000));
+  uint16_t pin = ((char *) args)[0] == '1' ? LED2 : LED3;
+  int ms = pin == LED2 ? 750 : 1500;
+  for (;;) {
+    gpio_toggle(pin);
+    vTaskDelay(pdMS_TO_TICKS(ms));
   }
 }
 
 int main(void) {
   init_hardware();
   xTaskCreate(server, "server", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
-  xTaskCreate(blinker, "blinker", 128, NULL, configMAX_PRIORITIES - 1, NULL);
+  xTaskCreate(blinker, "blinker", 128, "1", configMAX_PRIORITIES - 1, NULL);
+  xTaskCreate(blinker, "blinker", 128, "2", configMAX_PRIORITIES - 1, NULL);
   vTaskStartScheduler();  // This blocks
   return 0;               // Unreachable
 }
