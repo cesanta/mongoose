@@ -28,14 +28,13 @@ static void server(void *args) {
 static void blinker(void *args) {
   while (args == NULL) {
     led_toggle();
-    vTaskDelay(pdMS_TO_TICKS(300));
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
 int main(void) {
-  init_ram();
   init_hardware();
-  xTaskCreate(server, "server", 1024, NULL, configMAX_PRIORITIES - 1, NULL);
+  xTaskCreate(server, "server", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
   xTaskCreate(blinker, "blinker", 128, NULL, configMAX_PRIORITIES - 1, NULL);
   vTaskStartScheduler();  // This blocks
   return 0;               // Unreachable

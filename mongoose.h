@@ -413,7 +413,8 @@ void mg_log(const char *fmt, ...) PRINTF_LIKE(1, 2);
 void mg_log_set(const char *spec);
 void mg_log_set_callback(void (*fn)(const void *, int, void *), void *param);
 #else
-#define LOG(level, args)
+#define LOG(level, args) (void) 0
+#define mg_log_set(x) (void) (x)
 #endif
 
 

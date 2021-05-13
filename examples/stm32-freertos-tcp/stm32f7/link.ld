@@ -1,9 +1,9 @@
 ENTRY(_reset);
 MEMORY {
-  ram(rwx)  : ORIGIN = 0x20000000, LENGTH = RAM_SIZE
-  rom(rx)   : ORIGIN = 0x08000000, LENGTH = ROM_SIZE
+  ram(rwx)  : ORIGIN = 0x20000000, LENGTH = 320k
+  rom(rx)   : ORIGIN = 0x08000000, LENGTH = 1024k
 }
-_estack = 0x20000000 + RAM_SIZE;
+_estack = 0x20000000 + 320k;
 SECTIONS {
   .text : { *(.text*) } > rom
   .rodata : { *(.rodata*) } > rom
