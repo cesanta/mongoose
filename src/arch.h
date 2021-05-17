@@ -16,6 +16,8 @@
 #define MG_ARCH MG_ARCH_ESP8266
 #elif defined(ESP_PLATFORM)
 #define MG_ARCH MG_ARCH_ESP32
+#elif defined(FREERTOS_IP_H)
+#define MG_ARCH MG_ARCH_FREERTOS_TCP
 #endif
 
 #if !defined(MG_ARCH)

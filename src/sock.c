@@ -235,10 +235,12 @@ SOCKET mg_open_listener(const char *url) {
         (type == SOCK_DGRAM || listen(fd, 128) == 0)) {
       mg_set_non_blocking_mode(fd);
     } else if (fd != INVALID_SOCKET) {
-      LOG(LL_ERROR, ("Failed to listen on %s, errno %d", url, MG_SOCK_ERRNO));
       closesocket(fd);
       fd = INVALID_SOCKET;
     }
+  }
+  if (fd == INVALID_SOCKET) {
+    LOG(LL_ERROR, ("Failed to listen on %s, errno %d", url, MG_SOCK_ERRNO));
   }
 
   return fd;

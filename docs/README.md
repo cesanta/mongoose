@@ -192,40 +192,60 @@ Mongoose source code ships in two files:
 - [mongoose.c](https://github.com/cesanta/mongoose/blob/master/mongoose.c) - implementation
 
 Therefore to integrate Mongoose into an application, simply copy these two
-files to the application's source tree.
+files to the application's source tree. The `mongoose.c` and `mongoose.h` files
+are, actually, an amalgamation - a non-amalgamated sources can be found at
+https://github.com/cesanta/mongoose/tree/master/src
 
-The `mongoose.c` and `mongoose.h` files are, actually, an amalgamation -
-a non-amalgamated sources can be found at https://github.com/cesanta/mongoose/tree/master/src
-
-Mongoose source code uses a bunch of build constants defined at
-https://github.com/cesanta/mongoose/blob/master/src/config.h, together with
-their default values.
-
-In order to change the constant during build time, use the `-D
-<PREPROCESSOR_FLAG>` compiler option. For example, to disable both MQTT,
-compile the application `my_app.c` like this (assumed UNIX system):
+Mongoose have two types of build constants (preprocessor definitions) that
+affect the build: a target architecture, and tunables. In order to set the
+option during build time, use the `-D OPTION` compiler flag:
 
 ```sh
-$ cc my_app.c mongoose.c -D MG_MQTT_ENABLE=0
+$ cc app0.c mongoose.c                                        # Use defaults!
+$ cc app1.c mongoose.c -D MG_ENABLE_IPV6=1                    # Build with IPv6 enabled
+$ cc app2.c mongoose.c -D MG_ARCH=MG_ARCH_UNIX                # Set UNIX architecture
+$ cc app3.c mongoose.c -D MG_ENABLE_FS=0 -D MG_ENABLE_LOG=0   # Multiple options
 ```
+
+The list of supported
+architectures is defined in the
+[arch.h](https://github.com/cesanta/mongoose/blob/master/src/arch.h) header
+file. Normally, there is no need to explicitly specify the architecture.  The
+architecture is guessed during the build, so setting it is not usually required.
+
+| Name | Description |
+| ---- | ----------- |
+|MG_ARCH_UNIX | All UNIX-like systems like Linux, MacOS, FreeBSD, etc |
+|MG_ARCH_WIN32 | Windows systems |
+|MG_ARCH_ESP32 | Espressif's ESP32 |
+|MG_ARCH_ESP8266 | Espressif's ESP8266 |
+|MG_ARCH_FREERTOS_TCP | All systems with FreeRTOS kernel and FreeRTOS-Plus-TCP IP stack |
+|MG_ARCH_CUSTOM | A custom architecture, discussed in the next section |
+
+
+The other class of build constants is defined in
+[src/config.h](https://github.com/cesanta/mongoose/blob/master/src/config.h)
+together with their default values. They are tunables that include/exclude
+a certain functionality or change relevant parameters.
+
 
 Here is a list of build constants and their default values:
 
 | Name | Default | Description |
 | ---- | ------- | ----------- |
-|`MG_ENABLE_SOCKET` | 1 | Use BSD socket low-level API |
-|`MG_ENABLE_MBEDTLS` | 0 | Enable Mbed TLS library |
-|`MG_ENABLE_OPENSSL` | 0 | Enable OpenSSL library |
-|`MG_ENABLE_FS` | 1 | Enable API that use filesystem, like `mg_http_send_file()` |
-|`MG_ENABLE_IPV6` | 0 | Enable IPv6 |
-|`MG_ENABLE_LOG` | 1 | Enable `LOG()` macro |
-|`MG_ENABLE_MD5` | 0 | Use native MD5 implementation |
-|`MG_ENABLE_DIRECTORY_LISTING` | 0 | Enable directory listing for HTTP server |
-|`MG_ENABLE_SOCKETPAIR` | 0 | Enable `mg_socketpair()` for multi-threading |
-|`MG_ENABLE_SSI` | 0 | Enable serving SSI files by `mg_http_serve_dir()` |
-|`MG_IO_SIZE` | 512 | Granularity of the send/recv IO buffer growth |
-|`MG_MAX_RECV_BUF_SIZE` | (3 * 1024 * 1024) | Maximum recv buffer size |
-|`MG_MAX_HTTP_HEADERS` | 40 | Maximum number of HTTP headers |
+|MG_ENABLE_SOCKET | 1 | Use BSD socket low-level API |
+|MG_ENABLE_MBEDTLS | 0 | Enable Mbed TLS library |
+|MG_ENABLE_OPENSSL | 0 | Enable OpenSSL library |
+|MG_ENABLE_FS | 1 | Enable API that use filesystem, like `mg_http_send_file()` |
+|MG_ENABLE_IPV6 | 0 | Enable IPv6 |
+|MG_ENABLE_LOG | 1 | Enable `LOG()` macro |
+|MG_ENABLE_MD5 | 0 | Use native MD5 implementation |
+|MG_ENABLE_DIRECTORY_LISTING | 0 | Enable directory listing for HTTP server |
+|MG_ENABLE_SOCKETPAIR | 0 | Enable `mg_socketpair()` for multi-threading |
+|MG_ENABLE_SSI | 0 | Enable serving SSI files by `mg_http_serve_dir()` |
+|MG_IO_SIZE | 512 | Granularity of the send/recv IO buffer growth |
+|MG_MAX_RECV_BUF_SIZE | (3 * 1024 * 1024) | Maximum recv buffer size |
+|MG_MAX_HTTP_HEADERS | 40 | Maximum number of HTTP headers |
 
 
 NOTE: `MG_IO_SIZE` controls the maximum UDP message size, see
@@ -234,21 +254,10 @@ uses large UDP messages, increase the `MG_IO_SIZE` limit accordingly.
 
 ## Custom build
 
-The list of supported architectures is defined in the
-[arch.h](https://github.com/cesanta/mongoose/blob/master/src/arch.h) header
-file. Normally, there is no need to explicitly specify the architecture.
-The architecture is guessed during the build, so a simple compilation like
-`cc main.c mongoose.c` should work fine in most cases.
-
-However if you're building on embedded system like STM32, NXP, Xilinx or other,
-an architecture should be specified explicitly:
-- `-DMG_ARCH=MG_ARCH_FREERTOS_TCP` - for environments with FreeRTOS and
-  FreeRTOS-TCP stack
-- `-DMG_ARCH=MG_ARCH_CUSTOM` for all other cases, for example on systems with
-  FreeRTOS+LWIP, or bare metal + custom IP stack
-
-Below is the guide for building with `MG_ARCH_CUSTOM` architecture:
-
+A custom build should be used for cases which is not covered by the
+existing architecture options. For example, an embedded architecture that
+uses some proprietary RTOS and network stack. In order to build on such
+systems, follow the guideline outlined below:
 
 1. Add `-DMG_ARCH=MG_ARCH_CUSTOM` to your build flags.
 

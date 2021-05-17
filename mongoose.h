@@ -34,6 +34,8 @@
 #define MG_ARCH MG_ARCH_ESP8266
 #elif defined(ESP_PLATFORM)
 #define MG_ARCH MG_ARCH_ESP32
+#elif defined(FREERTOS_IP_H)
+#define MG_ARCH MG_ARCH_FREERTOS_TCP
 #endif
 
 #if !defined(MG_ARCH)
@@ -143,6 +145,8 @@
 #define MG_INT64_FMT "%lld"
 #define MG_DIRSEP '/'
 
+// Why FreeRTOS-TCP did not implement a clean BSD API, but its own thing
+// with FreeRTOS_ prefix, is beyond me
 #define IPPROTO_TCP FREERTOS_IPPROTO_TCP
 #define IPPROTO_UDP FREERTOS_IPPROTO_UDP
 #define AF_INET FREERTOS_AF_INET
@@ -168,6 +172,17 @@
 #define closesocket(x) FreeRTOS_closesocket(x)
 #define gethostbyname(x) FreeRTOS_gethostbyname(x)
 
+// Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
+static inline void *mg_calloc(int cnt, size_t size) {
+  void *p = pvPortMalloc(cnt * size);
+  if (p != NULL) memset(p, 0, size);
+  return p;
+}
+#define calloc(a, b) mg_calloc((a), (b))
+#define free(a) vPortFree(a)
+#define malloc(a) pvPortMalloc(a)
+
+// Again, why not a clean retarget, but instead this..
 #ifdef MG_ENABLE_FF
 #include <ff_stdio.h>
 

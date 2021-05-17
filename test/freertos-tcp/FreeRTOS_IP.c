@@ -411,6 +411,7 @@ static void prvIPTask( void * pvParameters )
         /* Wait until there is something to do. If the following call exits
          * due to a time out rather than a message being received, set a
          * 'NoEvent' value. */
+        // printf("foo %x %x\n", xNetworkEventQueue, xNextIPSleep);
         if( xQueueReceive( xNetworkEventQueue, ( void * ) &xReceivedEvent, xNextIPSleep ) == pdFALSE )
         {
             xReceivedEvent.eEventType = eNoEvent;

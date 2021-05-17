@@ -4,6 +4,7 @@
 // Memory map: 2.2.2
 
 #include "stm32f746xx.h"
+//#include "stm32f7xx_hal.h"
 #include "string.h"
 
 #define BIT(x) ((uint32_t) 1 << (x))
@@ -24,22 +25,14 @@ static inline void gpio_off(uint16_t pin) {
 static inline void gpio_toggle(uint16_t pin) {
   gpio_bank(pin)->ODR ^= BIT(pin & 255);
 }
-enum { GPIO_MODE_IN, GPIO_MODE_OUT, GPIO_MODE_AF, GPIO_MODE_ANALOG };
-enum { GPIO_TYPE_PP, GPIO_TYPE_OD };
+enum { GPIO_IN, GPIO_OUT, GPIO_AF, GPIO_ANALOG };
+enum { GPIO_PP, GPIO_OD };
 enum { GPIO_SPEED_LOW, GPIO_SPEED_MEDIUM, GPIO_SPEED_HIGH, GPIO_SPEED_INSANE };
 enum { GPIO_PULL_NONE, GPIO_PULL_UP, GPIO_PULL_DOWN };
-enum {
-  OUTPUT = GPIO_MODE_OUT | (GPIO_TYPE_PP << 2) | (GPIO_SPEED_MEDIUM << 3) |
-           (GPIO_PULL_NONE << 5),
-  INPUT = GPIO_MODE_IN | (GPIO_TYPE_PP << 2) | (GPIO_SPEED_MEDIUM << 3) |
-          (GPIO_PULL_NONE << 5),
-  INPUT_PULLUP = GPIO_MODE_IN | (GPIO_TYPE_PP << 2) | (GPIO_SPEED_MEDIUM << 3) |
-                 (GPIO_PULL_UP << 5),
-};
-static inline void gpio_init(uint16_t pin, uint8_t state) {
+static inline void gpio_init(uint16_t pin, uint8_t mode, uint8_t type,
+                             uint8_t speed, uint8_t pull, uint8_t af) {
   GPIO_TypeDef *gpio = gpio_bank(pin);
-  uint8_t n = pin & 255, mode = state & 3, type = (state >> 2) & 1,
-          speed = (state >> 3) & 3, pupdr = (state >> 5) & 3;
+  uint8_t n = pin & 255;
   gpio->MODER &= ~(3 << (n * 2));
   gpio->MODER |= (mode << (n * 2));
   gpio->OTYPER &= ~(1 << n);
@@ -47,15 +40,14 @@ static inline void gpio_init(uint16_t pin, uint8_t state) {
   gpio->OSPEEDR &= ~(3 << (n * 2));
   gpio->OSPEEDR |= (speed << (n * 2));
   gpio->PUPDR &= ~(3 << (n * 2));
-  gpio->PUPDR |= (pupdr << (n * 2));
-}
-
-static inline void init_ram(void) {
-  extern uint32_t __bss_start__, __bss_end__;
-  extern uint32_t _data_start, _data_end, _data_flash_start;
-  memset(&__bss_start__, 0, ((char *) &__bss_end__ - (char *) &__bss_start__));
-  memcpy(&_data_start, &_data_flash_start,
-         ((char *) &_data_end - (char *) &_data_start));
+  gpio->PUPDR |= (pull << (n * 2));
+  if (n < 8) {
+    gpio->AFR[0] &= 15 << (n * 4);
+    gpio->AFR[0] |= af << (n * 4);
+  } else {
+    gpio->AFR[1] &= 15 << (n * 4);
+    gpio->AFR[1] |= af << (n * 4);
+  }
 }
 
 static inline void init_clock(void) {
@@ -83,6 +75,11 @@ static inline void init_clock(void) {
   RCC->CFGR &= ~RCC_CFGR_SW;     // Select the main PLL
   RCC->CFGR |= RCC_CFGR_SW_PLL;  // as system clock source
   while ((RCC->CFGR & RCC_CFGR_SWS) == 0) (void) 0;
+
+  // Ethernet clock
+  RCC->AHB1ENR |= RCC_AHB1ENR_ETHMACEN;
+  RCC->AHB1ENR |= RCC_AHB1ENR_ETHMACTXEN;
+  RCC->AHB1ENR |= RCC_AHB1ENR_ETHMACRXEN;
 }
 
 #define delay(ms) vTaskDelay(pdMS_TO_TICKS(ms))
@@ -95,11 +92,44 @@ static inline void led_toggle(void) {
   gpio_toggle(LED2);
 }
 
+static inline void init_ram(void) {
+  extern uint32_t _sbss, _ebss;
+  extern uint32_t _sdata, _edata, _sidata;
+  memset(&_sbss, 0, ((char *) &_ebss - (char *) &_sbss));
+  memcpy(&_sdata, &_sidata, ((char *) &_edata - (char *) &_sdata));
+}
+
 static inline void init_hardware(void) {
   init_ram();
   init_clock();
-  RCC->AHB1ENR |= BIT(0) | BIT(1) | BIT(2);  // Init GPIO banks A,B,C
-  gpio_init(LED1, OUTPUT);
-  gpio_init(LED2, OUTPUT);
-  gpio_init(LED3, OUTPUT);
+  RCC->AHB1ENR |= BIT(0) | BIT(1) | BIT(2) | BIT(6);  // Init GPIO banks A,B,C,G
+  gpio_init(LED1, GPIO_OUT, GPIO_PP, GPIO_SPEED_LOW, GPIO_PULL_NONE, 0);
+  gpio_init(LED2, GPIO_OUT, GPIO_PP, GPIO_SPEED_LOW, GPIO_PULL_NONE, 0);
+  gpio_init(LED3, GPIO_OUT, GPIO_PP, GPIO_SPEED_LOW, GPIO_PULL_NONE, 0);
+  gpio_on(LED2);
+#if 0
+  uint16_t a1 = PIN('A', 1), a2 = PIN('A', 2), a7 = PIN('A', 7);
+  gpio_init(a1, GPIO_AF, GPIO_PP, GPIO_SPEED_INSANE, GPIO_PULL_NONE, 11);
+  gpio_init(a2, GPIO_AF, GPIO_PP, GPIO_SPEED_INSANE, GPIO_PULL_NONE, 11);
+  gpio_init(a7, GPIO_AF, GPIO_PP, GPIO_SPEED_INSANE, GPIO_PULL_NONE, 11);
+
+  uint16_t b13 = PIN('B', 13);
+  gpio_init(b13, GPIO_AF, GPIO_PP, GPIO_SPEED_INSANE, GPIO_PULL_NONE, 11);
+
+  uint16_t c1 = PIN('C', 1), c4 = PIN('C', 4), c5 = PIN('C', 5);
+  gpio_init(c1, GPIO_AF, GPIO_PP, GPIO_SPEED_INSANE, GPIO_PULL_NONE, 11);
+  gpio_init(c4, GPIO_AF, GPIO_PP, GPIO_SPEED_INSANE, GPIO_PULL_NONE, 11);
+  gpio_init(c5, GPIO_AF, GPIO_PP, GPIO_SPEED_INSANE, GPIO_PULL_NONE, 11);
+
+  uint16_t g2 = PIN('G', 2), g11 = PIN('G', 11), g13 = PIN('G', 13),
+           g14 = PIN('G', 14);
+  gpio_init(g2, GPIO_AF, GPIO_PP, GPIO_SPEED_INSANE, GPIO_PULL_NONE, 11);
+  gpio_init(g11, GPIO_AF, GPIO_PP, GPIO_SPEED_INSANE, GPIO_PULL_NONE, 11);
+  gpio_init(g13, GPIO_AF, GPIO_PP, GPIO_SPEED_INSANE, GPIO_PULL_NONE, 11);
+  gpio_init(g14, GPIO_AF, GPIO_PP, GPIO_SPEED_INSANE, GPIO_PULL_NONE, 11);
+
+  HAL_Init();
+  HAL_NVIC_SetPriority(ETH_IRQn, 0x7, 0);
+  HAL_NVIC_EnableIRQ(ETH_IRQn);
+#endif
 }

@@ -39,7 +39,7 @@ char *mg_file_read(const char *path, size_t *sizep) {
   char *data = NULL;
   size_t size = (size_t) mg_file_size(path);
   if ((fp = mg_fopen(path, "rb")) != NULL) {
-    data = (char *) malloc(size + 1);
+    data = (char *) calloc(1, size + 1);
     if (data != NULL) {
       if (fread(data, 1, size, fp) != size) {
         free(data);
@@ -156,7 +156,7 @@ uint16_t mg_ntohs(uint16_t net) {
 char *mg_hexdump(const void *buf, size_t len) {
   const unsigned char *p = (const unsigned char *) buf;
   size_t i, idx, n = 0, ofs = 0, dlen = len * 5 + 100;
-  char ascii[17] = "", *dst = (char *) malloc(dlen);
+  char ascii[17] = "", *dst = (char *) calloc(1, dlen);
   if (dst == NULL) return dst;
   for (i = 0; i < len; i++) {
     idx = i % 16;
@@ -227,7 +227,7 @@ int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
       free(*buf);
       if (size == 0) size = 5;
       size *= 2;
-      if ((*buf = (char *) malloc(size)) == NULL) {
+      if ((*buf = (char *) calloc(1, size)) == NULL) {
         len = -1;
         break;
       }
@@ -241,7 +241,7 @@ int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
     // LCOV_EXCL_STOP
   } else if (len >= (int) size) {
     /// Standard-compliant code path. Allocate a buffer that is large enough
-    if ((*buf = (char *) malloc(len + 1)) == NULL) {
+    if ((*buf = (char *) calloc(1, len + 1)) == NULL) {
       len = -1;  // LCOV_EXCL_LINE
     } else {     // LCOV_EXCL_LINE
       va_copy(ap_copy, ap);

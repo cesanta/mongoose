@@ -643,7 +643,7 @@ DIR *opendir(const char *name) {
 
   if (name == NULL) {
     SetLastError(ERROR_BAD_ARGUMENTS);
-  } else if ((d = (DIR *) malloc(sizeof(*d))) == NULL) {
+  } else if ((d = (DIR *) calloc(1, sizeof(*d))) == NULL) {
     SetLastError(ERROR_NOT_ENOUGH_MEMORY);
   } else {
     to_wchar(name, wpath, sizeof(wpath) / sizeof(wpath[0]));
