@@ -21,7 +21,7 @@ robust, and easy. Features include:
 - Source code is both ISO C and ISO C++ compliant
 - Works with any network stack with socket API, like LwIP or FreeRTOS-Plus-TCP
 - Very easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your build tree
-- Detailed [documentation](https://cesanta.com/docs/) available
+- Detailed [documentation](https://cesanta.com/docs/)
 
 
 # Commercial use
