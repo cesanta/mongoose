@@ -123,7 +123,6 @@
 
 #include <ctype.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -131,11 +130,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/types.h>
 #include <time.h>
-#include <unistd.h>
 
 #include <FreeRTOS.h>
 #include <FreeRTOS_IP.h>
@@ -182,29 +177,29 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #define free(a) vPortFree(a)
 #define malloc(a) pvPortMalloc(a)
 
-// Again, why not a clean retarget, but instead this..
-#ifdef MG_ENABLE_FF
-#include <ff_stdio.h>
+#define gmtime_r(a, b) gmtime(a)
 
-#undef FILE
-#define FILE FF_FILE
-#define stat(a, b) ff_stat((a), (b))
-#define fopen(a, b) ff_fopen((a), (b))
-#define fclose(a) ff_fclose(a)
-#define fread(a, b, c, d) ff_fread((a), (b), (c), (d))
-#define fwrite(a, b, c, d) ff_fwrite((a), (b), (c), (d))
-#define vfprintf ff_vfprintf
-#define fprintf ff_fprintf
-#define remove(a) ff_remove(a)
-#define rename(a, b) ff_rename((a), (b), 1)
+#if !defined(__GNUC__)
+// copied from GCC on ARM; for some reason useconds are signed
+typedef long suseconds_t;
+struct timeval {
+  time_t tv_sec;
+  suseconds_t tv_usec;
+};
+#endif
 
-static inline int ff_vfprintf(FF_FILE *fp, const char *fmt, va_list ap) {
-  char *buf = NULL;
-  int n = mg_vasprintf(&buf, 0, fmt, ap);
-  if (buf != NULL) ff_fwrite(buf, 1, n, fp), free(buf);
-  return n;
-}
-#endif  // MG_ENABLE_FF
+#ifndef EINPROGRESS
+#define EINPROGRESS pdFREERTOS_ERRNO_EINPROGRESS
+#endif
+#ifndef EWOULDBLOCK
+#define EWOULDBLOCK pdFREERTOS_ERRNO_EWOULDBLOCK
+#endif
+#ifndef EAGAIN
+#define EAGAIN pdFREERTOS_ERRNO_EAGAIN
+#endif
+#ifndef EINTR
+#define EINTR pdFREERTOS_ERRNO_EINTR
+#endif
 
 #endif  // MG_ARCH == MG_ARCH_FREERTOS_TCP
 

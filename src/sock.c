@@ -306,7 +306,7 @@ static void close_conn(struct mg_connection *c) {
 
 static void setsockopts(struct mg_connection *c) {
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
-  FreeRTOS_FD_SET(c->fd, c->mgr->ss, eSELECT_READ | eSELECT_EXCEPT);
+  (void) c;
 #else
   int on = 1;
 #if !defined(SOL_TCP)
@@ -390,7 +390,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   SOCKET fd = accept(FD(lsn), &usa.sa, &sa_len);
   if (fd == INVALID_SOCKET) {
     LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
-#if !defined(_WIN32)
+#if (!defined(_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP))
   } else if ((long) fd >= FD_SETSIZE) {
     LOG(LL_ERROR, ("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
@@ -491,7 +491,8 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
-    FreeRTOS_FD_CLR(c->fd, mgr->ss, eSELECT_WRITE);
+    if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) continue;
+    FreeRTOS_FD_SET(c->fd, mgr->ss, eSELECT_READ | eSELECT_EXCEPT);
     if (c->is_connecting || (c->send.len > 0 && c->is_tls_hs == 0))
       FreeRTOS_FD_SET(c->fd, mgr->ss, eSELECT_WRITE);
   }
@@ -500,6 +501,8 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     EventBits_t bits = FreeRTOS_FD_ISSET(c->fd, mgr->ss);
     c->is_readable = bits & (eSELECT_READ | eSELECT_EXCEPT) ? 1 : 0;
     c->is_writable = bits & eSELECT_WRITE ? 1 : 0;
+    FreeRTOS_FD_CLR(c->fd, mgr->ss,
+                    eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
   }
 #else
   struct timeval tv = {ms / 1000, (ms % 1000) * 1000};
