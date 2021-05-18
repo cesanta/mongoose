@@ -89,7 +89,7 @@ Each connection has a send and receive buffer:
 - `struct mg_connection::recv` - data received from a peer
 
 When data arrives, Mongoose appends received data to the `recv` and triggers an
-`MG_EV_RECV` event. The user may send data back by calling one of the output
+`MG_EV_READ` event. The user may send data back by calling one of the output
 functions, like `mg_send()` or `mg_printf()`. Output functions append data to
 the `send` buffer.  When Mongoose successfully writes data to the socket, it
 discards data from struct `mg_connection::send` and sends an `MG_EV_SEND`
@@ -113,9 +113,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 - `struct mg_connection *c` - a connection that received an event
 - `int ev` - an event number, defined in mongoose.h. For example, when data
-  arrives on an inbound connection, ev would be `MG_EV_RECV`
+  arrives on an inbound connection, ev would be `MG_EV_READ`
 - `void *ev_data` - points to the event-specific data, and it has a different
-  meaning for different events. For example, for an `MG_EV_RECV` event,
+  meaning for different events. For example, for an `MG_EV_READ` event,
   `ev_data`
   is an `int *` pointing to the number of bytes received from a remote
   peer and saved into the `c->recv` IO buffer. The exact meaning of `ev_data` is
@@ -363,7 +363,7 @@ This example is a simple TCP echo server that listens on port 1234:
 static const char *s_listening_address = "tcp://0.0.0.0:1234";
 
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_RECV) {
+  if (ev == MG_EV_READ) {
     mg_send(c, c->recv.buf, c->recv.len);     // Echo received data back
     mg_iobuf_delete(&c->recv, c->recv.len);   // And discard it
   }
@@ -406,13 +406,14 @@ struct mg_connection {
   struct mg_mgr *mgr;          // Our container
   struct mg_addr peer;         // Remote peer address
   void *fd;                    // Connected socket, or LWIP data
+  unsigned long id;            // Auto-incrementing unique connection ID
   struct mg_iobuf recv;        // Incoming data
   struct mg_iobuf send;        // Outgoing data
   mg_event_handler_t fn;       // User-specified event handler function
   void *fn_data;               // User-specified function parameter
   mg_event_handler_t pfn;      // Protocol-specific handler function
   void *pfn_data;              // Protocol-specific function parameter
-  char label[32];              // Arbitrary label
+  char label[50];              // Arbitrary label
   void *tls;                   // TLS specific data
   unsigned is_listening : 1;   // Listening connection
   unsigned is_client : 1;      // Outbound (client) connection
@@ -451,7 +452,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms);
 ```
 
 Perform a single poll iteration. For each connection in the `mgr->conns` list,
-- See if there is incoming data. If it is, read it into the `c->recv` buffer, send `MG_EV_RECV` event
+- See if there is incoming data. If it is, read it into the `c->recv` buffer, send `MG_EV_READ` event
 - See if there is data in the `c->send` buffer, and write it, send `MG_EV_WRITE` event
 - If a connection is listening, accept an incoming connection if any, and send `MG_EV_ACCEPT` event to it
 - Send `MG_EV_POLL` event
