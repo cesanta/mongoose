@@ -10,7 +10,12 @@ static const char *s_listening_address = "http://0.0.0.0:80";
 // Event handler for the listening connection.
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
+#if MG_ENABLE_FS
+    struct mg_http_serve_opts opts = {.root_dir = "/"};
+    mg_http_serve_dir(c, ev_data, &opts);
+#else
     mg_http_reply(c, 200, "", "hello, %s!\n", "world");
+#endif
   }
   (void) fn_data;
   (void) ev_data;
@@ -33,7 +38,6 @@ static void blinker(void *args) {
     gpio_toggle(pin);
     vTaskDelay(pdMS_TO_TICKS(ms));
     LOG(LL_INFO, ("blink %s,  RAM: %u", (char *) args, xPortGetFreeHeapSize()));
-    // printf("blink %s,  RAM: %u\n", (char *) args, xPortGetFreeHeapSize());
   }
 }
 
@@ -88,8 +92,6 @@ uint32_t SystemCoreClock = 216000000;
 uint32_t HAL_RCC_GetHCLKFreq(void) {
   return SystemCoreClock;
 }
-// void assert_failed(void) {
-//}
 
 uint32_t HAL_GetTick(void) {
   return configTICK_RATE_HZ;

@@ -132,6 +132,10 @@
 #include <string.h>
 #include <time.h>
 
+#if MG_ENABLE_FS
+#include <sys/stat.h>
+#endif
+
 #include <FreeRTOS.h>
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
