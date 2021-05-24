@@ -1,18 +1,18 @@
-### Issue
+# Issue
 
-_please add your issue description_
+- My goal is: _describe_
+- My actions were: _describe_
+- My expectation was: _describe_
+- The result I saw: _provide logs or description_
+- My question is: _your question_
 
-### Meta-Info
+# Meta-Info
 
 - mongoose version: _X.Y_
-- custom changes?: _y/n_ (if yes, what is the latest mainline commit?)
+- custom changes?: _y/n_
+  - If yes, provide the diff below, and the releavant commit:
 - build environment:
   - OS: _?_
   - Compiler/IDE: _?_
-- duplicate?
-  - Please check the (closed) [GitHub issues](https://github.com/cesanta/mongoose/issues?q=is%3Aissue+).   
-    You can also search the issues with Google in your favorite browser, e.g. for the IPv6 related issues:
-    `site:https://github.com/cesanta/mongoose/issues?q=is%3Aissue+ IPv6`
-- if you have a question, did you first try to find an answer in:
-  - the [official documentation](https://cesanta.com/docs/)?
-  - the working [examples](https://github.com/cesanta/mongoose/tree/master/examples)?
+- relevant [example](https://github.com/cesanta/mongoose/tree/master/examples) is: _?_
+- relevant [documentation](https://cesanta.com/docs/) topic is: _?_
