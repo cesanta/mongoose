@@ -1,12 +1,10 @@
-# Issue
-
 - My goal is: _describe_
 - My actions were: _describe_
 - My expectation was: _describe_
 - The result I saw: _provide logs or description_
 - My question is: _your question_
 
-# Meta-Info
+# Environment
 
 - mongoose version: _X.Y_
 - custom changes?: _y/n_
@@ -14,5 +12,5 @@
 - build environment:
   - OS: _?_
   - Compiler/IDE: _?_
-- relevant [example](https://github.com/cesanta/mongoose/tree/master/examples) is: _?_
-- relevant [documentation](https://cesanta.com/docs/) topic is: _?_
+- relevant example (see https://github.com/cesanta/mongoose/tree/master/examples) is: _?_
+- relevant documentation topic (see https://cesanta.com/docs/) is: _?_
