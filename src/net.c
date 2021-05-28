@@ -5,7 +5,7 @@
 int mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
   char mem[256], *buf = mem;
   int len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
-  len = mg_send(c, buf, len);
+  len = mg_send(c, buf, len > 0 ? (size_t) len : 0);
   if (buf != mem) free(buf);
   return len;
 }
@@ -56,7 +56,7 @@ static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
     if (str.ptr[i] >= '0' && str.ptr[i] <= '9') {
       int octet = data[num_dots] * 10 + (str.ptr[i] - '0');
       if (octet > 255) return false;
-      data[num_dots] = octet;
+      data[num_dots] = (uint8_t) octet;
     } else if (str.ptr[i] == '.') {
       if (num_dots >= 3 || i == 0 || str.ptr[i - 1] == '.') return false;
       num_dots++;

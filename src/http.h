@@ -52,10 +52,10 @@ void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
                    const char *body_fmt, ...);
 struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
 void mg_http_event_handler(struct mg_connection *c, int ev);
-int mg_http_get_var(const struct mg_str *, const char *name, char *, int);
+int mg_http_get_var(const struct mg_str *, const char *name, char *, size_t);
 int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
-int mg_url_encode(const char *s, size_t n, char *buf, size_t len);
-void mg_http_creds(struct mg_http_message *, char *user, int, char *pass, int);
+size_t mg_url_encode(const char *s, size_t n, char *buf, size_t len);
+void mg_http_creds(struct mg_http_message *, char *, size_t, char *, size_t);
 bool mg_http_match_uri(const struct mg_http_message *, const char *glob);
 int mg_http_upload(struct mg_connection *, struct mg_http_message *hm,
                    const char *dir);

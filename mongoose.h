@@ -286,6 +286,7 @@ typedef enum { false = 0, true = 1 } bool;
 #define strdup(x) _strdup(x)
 #endif
 
+typedef unsigned suseconds_t;
 typedef int socklen_t;
 #define MG_DIRSEP '\\'
 #ifndef PATH_MAX
@@ -425,7 +426,7 @@ enum { LL_NONE, LL_ERROR, LL_INFO, LL_DEBUG, LL_VERBOSE_DEBUG };
 bool mg_log_prefix(int ll, const char *file, int line, const char *fname);
 void mg_log(const char *fmt, ...) PRINTF_LIKE(1, 2);
 void mg_log_set(const char *spec);
-void mg_log_set_callback(void (*fn)(const void *, int, void *), void *param);
+void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *param);
 #else
 #define LOG(level, args) (void) 0
 #define mg_log_set(x) (void) (x)
@@ -433,8 +434,8 @@ void mg_log_set_callback(void (*fn)(const void *, int, void *), void *param);
 
 
 struct mg_timer {
-  int period_ms;            // Timer period in milliseconds
-  int flags;                // Possible flags values below
+  unsigned long period_ms;  // Timer period in milliseconds
+  unsigned flags;           // Possible flags values below
 #define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
 #define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
   void (*fn)(void *);       // Function to call
@@ -445,7 +446,8 @@ struct mg_timer {
 
 extern struct mg_timer *g_timers;  // Global list of timers
 
-void mg_timer_init(struct mg_timer *, int ms, int, void (*fn)(void *), void *);
+void mg_timer_init(struct mg_timer *, unsigned long ms, unsigned,
+                   void (*fn)(void *), void *);
 void mg_timer_free(struct mg_timer *);
 void mg_timer_poll(unsigned long uptime_ms);
 
@@ -471,15 +473,15 @@ int64_t mg_file_size(const char *path);
 bool mg_file_write(const char *path, const void *buf, size_t len);
 bool mg_file_printf(const char *path, const char *fmt, ...);
 void mg_random(void *buf, size_t len) WEAK;
-bool mg_globmatch(const char *pattern, int plen, const char *s, int n);
+bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
 bool mg_next_comma_entry(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 char *mg_hexdump(const void *buf, size_t len);
-char *mg_hex(const void *buf, int len, char *dst);
-void mg_unhex(const char *buf, int len, unsigned char *to);
-unsigned long mg_unhexn(const char *s, int len);
+char *mg_hex(const void *buf, size_t len, char *dst);
+void mg_unhex(const char *buf, size_t len, unsigned char *to);
+unsigned long mg_unhexn(const char *s, size_t len);
 int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
 int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
 int64_t mg_to64(struct mg_str str);
@@ -604,7 +606,7 @@ enum {
   MG_EV_CONNECT,     // Connection established       NULL
   MG_EV_ACCEPT,      // Connection accepted          NULL
   MG_EV_READ,        // Data received from socket    struct mg_str *
-  MG_EV_WRITE,       // Data written to socket       int *num_bytes_written
+  MG_EV_WRITE,       // Data written to socket       long *bytes_written
   MG_EV_CLOSE,       // Connection closed            NULL
   MG_EV_HTTP_MSG,    // HTTP request/response        struct mg_http_message *
   MG_EV_HTTP_CHUNK,  // HTTP chunk (partial msg)     struct mg_http_message *
@@ -686,7 +688,7 @@ struct mg_connection *mg_listen(struct mg_mgr *, const char *url,
                                 mg_event_handler_t fn, void *fn_data);
 struct mg_connection *mg_connect(struct mg_mgr *, const char *url,
                                  mg_event_handler_t fn, void *fn_data);
-int mg_send(struct mg_connection *, const void *, size_t);
+bool mg_send(struct mg_connection *, const void *, size_t);
 int mg_printf(struct mg_connection *, const char *fmt, ...);
 int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 char *mg_straddr(struct mg_connection *, char *, size_t);
@@ -747,10 +749,10 @@ void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
                    const char *body_fmt, ...);
 struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
 void mg_http_event_handler(struct mg_connection *c, int ev);
-int mg_http_get_var(const struct mg_str *, const char *name, char *, int);
+int mg_http_get_var(const struct mg_str *, const char *name, char *, size_t);
 int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
-int mg_url_encode(const char *s, size_t n, char *buf, size_t len);
-void mg_http_creds(struct mg_http_message *, char *user, int, char *pass, int);
+size_t mg_url_encode(const char *s, size_t n, char *buf, size_t len);
+void mg_http_creds(struct mg_http_message *, char *, size_t, char *, size_t);
 bool mg_http_match_uri(const struct mg_http_message *, const char *glob);
 int mg_http_upload(struct mg_connection *, struct mg_http_message *hm,
                    const char *dir);
@@ -772,11 +774,11 @@ struct mg_tls_opts {
   struct mg_str srvname;  // If not empty, enables server name verification
 };
 
-int mg_tls_init(struct mg_connection *, struct mg_tls_opts *);
-int mg_tls_free(struct mg_connection *);
-int mg_tls_send(struct mg_connection *, const void *buf, size_t len, int *fail);
-int mg_tls_recv(struct mg_connection *, void *buf, size_t len, int *fail);
-int mg_tls_handshake(struct mg_connection *);
+void mg_tls_init(struct mg_connection *, struct mg_tls_opts *);
+void mg_tls_free(struct mg_connection *);
+long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
+long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
+void mg_tls_handshake(struct mg_connection *);
 
 
 #define WEBSOCKET_OP_CONTINUE 0
@@ -865,10 +867,10 @@ void mg_mqtt_sub(struct mg_connection *, struct mg_str *topic);
 int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m);
 void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,
                          uint32_t len);
-int mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
-                     uint8_t *qos, int pos);
-int mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic,
-                       int pos);
+size_t mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
+                        uint8_t *qos, size_t pos);
+size_t mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic,
+                          size_t pos);
 void mg_mqtt_ping(struct mg_connection *);
 void mg_mqtt_pong(struct mg_connection *);
 void mg_mqtt_disconnect(struct mg_connection *);

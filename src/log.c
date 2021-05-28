@@ -4,13 +4,13 @@
 #if MG_ENABLE_MGOS
 #else
 #if MG_ENABLE_LOG
-static void mg_log_stdout(const void *buf, int len, void *userdata) {
+static void mg_log_stdout(const void *buf, size_t len, void *userdata) {
   (void) userdata;
   fwrite(buf, 1, len, stdout);
 }
 
 static const char *s_spec = "2";
-static void (*s_fn)(const void *, int, void *) = mg_log_stdout;
+static void (*s_fn)(const void *, size_t, void *) = mg_log_stdout;
 static void *s_fn_param = NULL;
 
 void mg_log_set(const char *spec) {
@@ -23,10 +23,12 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   int max = LL_INFO;
   struct mg_str k, v, s = mg_str(s_spec);
   const char *p = strrchr(file, '/');
+
+  if (s_fn == NULL) return false;
+
   if (p == NULL) p = strrchr(file, '\\');
   p = p == NULL ? file : p + 1;
 
-  if (s_fn == NULL) return false;
   while (mg_next_comma_entry(&s, &k, &v)) {
     if (v.len == 0) max = atoi(k.ptr);
     if (v.len > 0 && strncmp(p, k.ptr, k.len) == 0) max = atoi(v.ptr);
@@ -57,14 +59,14 @@ void mg_log(const char *fmt, ...) {
   va_start(ap, fmt);
   len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
   va_end(ap);
-  s_fn(buf, len, s_fn_param);
+  s_fn(buf, len > 0 ? (size_t) len : 0, s_fn_param);
   s_fn("\n", 1, s_fn_param);
   if (buf != mem) free(buf);
 }
 
-void mg_log_set_callback(void (*fn)(const void *, int, void *), void *param) {
+void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd) {
   s_fn = fn;
-  s_fn_param = param;
+  s_fn_param = fnd;
 }
 #endif
 #endif

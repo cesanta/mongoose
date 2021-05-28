@@ -33,14 +33,14 @@ static int mg_b64rev(int c) {
 int mg_base64_update(unsigned char ch, char *to, int n) {
   unsigned char rem = (n & 3) % 3;
   if (rem == 0) {
-    to[n] = mg_b64idx(ch >> 2);
-    to[++n] = (ch & 3) << 4;
+    to[n] = (char) mg_b64idx(ch >> 2);
+    to[++n] = (char) ((ch & 3) << 4);
   } else if (rem == 1) {
-    to[n] = mg_b64idx(to[n] | (ch >> 4));
-    to[++n] = (ch & 15) << 2;
+    to[n] = (char) mg_b64idx(to[n] | (ch >> 4));
+    to[++n] = (char) ((ch & 15) << 2);
   } else {
-    to[n] = mg_b64idx(to[n] | (ch >> 6));
-    to[++n] = mg_b64idx(ch & 63);
+    to[n] = (char) mg_b64idx(to[n] | (ch >> 6));
+    to[++n] = (char) mg_b64idx(ch & 63);
     n++;
   }
   return n;
@@ -71,10 +71,10 @@ int mg_base64_decode(const char *src, int n, char *dst) {
     int a = mg_b64rev(src[0]), b = mg_b64rev(src[1]), c = mg_b64rev(src[2]),
         d = mg_b64rev(src[3]);
     if (a == 64 || a < 0 || b == 64 || b < 0 || c < 0 || d < 0) return 0;
-    dst[len++] = (a << 2) | (b >> 4);
+    dst[len++] = (char) ((a << 2) | (b >> 4));
     if (src[2] != '=') {
-      dst[len++] = (b << 4) | (c >> 2);
-      if (src[3] != '=') dst[len++] = (c << 6) | d;
+      dst[len++] = (char) ((b << 4) | (c >> 2));
+      if (src[3] != '=') dst[len++] = (char) ((c << 6) | d);
     }
     src += 4;
   }

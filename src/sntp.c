@@ -22,8 +22,8 @@ int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv) {
   } else {
     uint32_t *data = (uint32_t *) &buf[40];
     tv->tv_sec = mg_ntohl(data[0]) - SNTP_TIME_OFFSET;
-    tv->tv_usec = mg_ntohl(data[1]);
-    s_sntmp_next = tv->tv_sec + SNTP_INTERVAL_SEC;
+    tv->tv_usec = (suseconds_t) mg_ntohl(data[1]);
+    s_sntmp_next = (unsigned long) (tv->tv_sec + SNTP_INTERVAL_SEC);
     res = 0;
   }
   return res;
@@ -39,7 +39,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     }
     c->recv.len = 0;  // Clear receive buffer
   } else if (ev == MG_EV_RESOLVE) {
-    mg_sntp_send(c, time(NULL));
+    mg_sntp_send(c, (unsigned long) time(NULL));
   } else if (ev == MG_EV_CLOSE) {
     // mg_fn_del(c, sntp_cb);
   }

@@ -29,7 +29,7 @@ struct mg_tls {
   mbedtls_pk_context pk;    // Private key context
 };
 
-int mg_tls_handshake(struct mg_connection *c) {
+void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
   mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mbedtls_net_send, mbedtls_net_recv, 0);
@@ -44,7 +44,6 @@ int mg_tls_handshake(struct mg_connection *c) {
   } else {
     mg_error(c, "TLS handshake: -%#x", -rc);  // Error
   }
-  return rc == 0;
 }
 
 static int mbed_rng(void *ctx, unsigned char *buf, size_t len) {
@@ -54,14 +53,14 @@ static int mbed_rng(void *ctx, unsigned char *buf, size_t len) {
 }
 
 static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
-  n = strlen(s2) - 1;
+  n = (int) strlen(s2) - 1;
   LOG(LL_VERBOSE_DEBUG, ("%p %.*s", ((struct mg_connection *) c)->fd, n, s2));
   (void) s;
   (void) c;
   (void) lev;
 }
 
-int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   int rc = 0;
   const char *ca = opts->ca == NULL     ? "-"
@@ -164,31 +163,27 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   if (c->is_client && c->is_resolving == 0 && c->is_connecting == 0) {
     mg_tls_handshake(c);
   }
-  return 1;
+  return;
 fail:
   c->is_closing = 1;
   free(tls);
-  return 0;
 }
 
-int mg_tls_recv(struct mg_connection *c, void *buf, size_t len, int *fail) {
+long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  int n = mbedtls_ssl_read(&tls->ssl, (unsigned char *) buf, len);
-  *fail = (n == 0) || (n < 0 && n != MBEDTLS_ERR_SSL_WANT_READ);
-  return n;
+  long n = mbedtls_ssl_read(&tls->ssl, (unsigned char *) buf, len);
+  return n == 0 ? -1 : n == MBEDTLS_ERR_SSL_WANT_READ ? 0 : n;
 }
 
-int mg_tls_send(struct mg_connection *c, const void *buf, size_t len,
-                int *fail) {
+long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  int n = mbedtls_ssl_write(&tls->ssl, (unsigned char *) buf, len);
-  *fail = (n == 0) || (n < 0 && n != MBEDTLS_ERR_SSL_WANT_WRITE);
-  return n;
+  long n = mbedtls_ssl_write(&tls->ssl, (unsigned char *) buf, len);
+  return n == 0 ? -1 : n == MBEDTLS_ERR_SSL_WANT_WRITE ? 0 : n;
 }
 
-int mg_tls_free(struct mg_connection *c) {
+void mg_tls_free(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  if (tls == NULL) return 0;
+  if (tls == NULL) return;
   free(tls->cafile);
   mbedtls_ssl_free(&tls->ssl);
   mbedtls_pk_free(&tls->pk);
@@ -197,7 +192,6 @@ int mg_tls_free(struct mg_connection *c) {
   mbedtls_ssl_config_free(&tls->conf);
   free(tls);
   c->tls = NULL;
-  return 1;
 }
 #elif MG_ENABLE_OPENSSL  ///////////////////////////////////////// OPENSSL
 
@@ -225,7 +219,7 @@ static int mg_tls_err(struct mg_tls *tls, int res) {
   return err;
 }
 
-int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   const char *id = "mongoose";
   static unsigned char s_initialised = 0;
@@ -250,7 +244,8 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     mg_error(c, "SSL_new");
     goto fail;
   }
-  SSL_set_session_id_context(tls->ssl, (const uint8_t *) id, strlen(id));
+  SSL_set_session_id_context(tls->ssl, (const uint8_t *) id,
+                             (unsigned) strlen(id));
   // Disable deprecated protocols
   SSL_set_options(tls->ssl, SSL_OP_NO_SSLv2);
   SSL_set_options(tls->ssl, SSL_OP_NO_SSLv3);
@@ -307,76 +302,65 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   }
   c->is_hexdumping = 1;
   LOG(LL_DEBUG, ("%lu SSL %s OK", c->id, c->is_accepted ? "accept" : "client"));
-  return 1;
+  return;
 fail:
   c->is_closing = 1;
   free(tls);
-  return 0;
 }
 
-int mg_tls_handshake(struct mg_connection *c) {
+void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
-  SSL_set_fd(tls->ssl, (long) c->fd);
+  SSL_set_fd(tls->ssl, (int) (long) c->fd);
   rc = c->is_client ? SSL_connect(tls->ssl) : SSL_accept(tls->ssl);
   if (rc == 1) {
     LOG(LL_DEBUG, ("%lu success", c->id));
     c->is_tls_hs = 0;
-    return 1;
   } else {
     int code;
     ERR_print_errors_fp(stderr);
     code = mg_tls_err(tls, rc);
     if (code != 0) mg_error(c, "tls hs: rc %d, err %d", rc, code);
-    return 0;
   }
 }
 
-int mg_tls_free(struct mg_connection *c) {
+void mg_tls_free(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  if (tls == NULL) return 0;
+  if (tls == NULL) return;
   SSL_free(tls->ssl);
   SSL_CTX_free(tls->ctx);
   free(tls);
   c->tls = NULL;
-  return 1;
 }
 
-int mg_tls_recv(struct mg_connection *c, void *buf, size_t len, int *fail) {
+long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  int n = SSL_read(tls->ssl, buf, len);
-  *fail = (n == 0) || (n < 0 && mg_tls_err(tls, n) != 0);
-  return n;
+  int n = SSL_read(tls->ssl, buf, (int) len);
+  return n == 0 ? -1 : n < 0 && mg_tls_err(tls, n) == 0 ? 0 : n;
 }
 
-int mg_tls_send(struct mg_connection *c, const void *buf, size_t len,
-                int *fail) {
+long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  int n = SSL_write(tls->ssl, buf, len);
-  *fail = (n == 0) || (n < 0 && mg_tls_err(tls, n) != 0);
-  return n;
+  int n = SSL_write(tls->ssl, buf, (int) len);
+  return n == 0 ? -1 : n < 0 && mg_tls_err(tls, n) == 0 ? 0 : n;
 }
 
 #else  //////////////////////////////////////////   NO TLS
 
-int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   (void) opts;
   mg_error(c, "TLS is not enabled");
-  return 0;
 }
-int mg_tls_handshake(struct mg_connection *c) {
-  return c != NULL;
+void mg_tls_handshake(struct mg_connection *c) {
+  (void) c;
 }
-int mg_tls_free(struct mg_connection *c) {
-  return c != NULL;
+void mg_tls_free(struct mg_connection *c) {
+  (void) c;
 }
-int mg_tls_recv(struct mg_connection *c, void *buf, size_t len, int *fail) {
-  *fail = 1;
+long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   return c == NULL || buf == NULL || len == 0 ? 0 : -1;
 }
-int mg_tls_send(struct mg_connection *c, const void *buf, size_t len,
-                int *fail) {
-  *fail = 1;
+long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   return c == NULL || buf == NULL || len == 0 ? 0 : -1;
 }
 

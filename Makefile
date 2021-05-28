@@ -1,13 +1,17 @@
 SRCS = $(wildcard src/*.c)
 HDRS = $(wildcard src/*.h)
 DEFS ?= -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=1 -DMG_ENABLE_SSI=1
-CFLAGS ?= -W -Wall -Werror -Isrc -I. -O0 -g $(DEFS) $(TFLAGS) $(EXTRA)
+WARN ?= -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion
+OPTS ?= -O3 -g3
+INCS ?= -Isrc -I.
+CFLAGS ?= $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) $(EXTRA)
 SSL ?= MBEDTLS
 CDIR ?= $(realpath $(CURDIR))
 VC98 = docker run --rm -e WINEDEBUG=-all -v $(CDIR):$(CDIR) -w $(CDIR) docker.io/mdashnet/vc98
 VC2017 = docker run --rm -e WINEDEBUG=-all -v $(CDIR):$(CDIR) -w $(CDIR) docker.io/mdashnet/vc2017
 MINGW = docker run --rm -v $(CDIR):$(CDIR) -w $(CDIR) docker.io/mdashnet/mingw
 GCC = docker run --rm -v $(CDIR):$(CDIR) -w $(CDIR) mdashnet/cc2
+ARM = docker run -v $(CDIR):$(CDIR) -w $(CDIR) mdashnet/armgcc
 VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
 CLANG ?= clang # /usr/local/opt/llvm\@9/bin/clang
 IPV6 ?= 1
@@ -94,6 +98,9 @@ linux: Makefile mongoose.c mongoose.h test/unit_test.c
 
 linux++: CC = g++ -Wno-missing-field-initializers
 linux++: linux
+
+arm: Makefile mongoose.c mongoose.h test/unit_test.c
+	$(ARM) arm-none-eabi-gcc mongoose.c -c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=0 -DMG_ENABLE_SSI=1
 
 mongoose.c: $(SRCS) Makefile
 	(cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/private.h src/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@

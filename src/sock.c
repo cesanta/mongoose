@@ -73,19 +73,19 @@ static union usa tousa(struct mg_addr *a) {
   return usa;
 }
 
-static int mg_sock_failed(void) {
+static bool mg_sock_would_block(void) {
   int err = MG_SOCK_ERRNO;
-  return err != EINPROGRESS && err != EWOULDBLOCK
+  return err == EINPROGRESS || err == EWOULDBLOCK
 #ifndef WINCE
-         && err != EAGAIN && err != EINTR
+         || err == EAGAIN || err == EINTR
 #endif
 #if defined(_WIN32) && MG_ENABLE_WINSOCK
-         && err != WSAEINTR && err != WSAEWOULDBLOCK
+         || err == WSAEINTR || err == WSAEWOULDBLOCK
 #endif
       ;
 }
 
-static struct mg_connection *alloc_conn(struct mg_mgr *mgr, int is_client,
+static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
                                         SOCKET fd) {
   struct mg_connection *c = (struct mg_connection *) calloc(1, sizeof(*c));
   if (c != NULL) {
@@ -97,37 +97,8 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, int is_client,
   return c;
 }
 
-static int mg_sock_recv(struct mg_connection *c, void *buf, int len,
-                        int *fail) {
-  int n = 0;
-  if (c->is_udp) {
-    union usa usa;
-    socklen_t slen = sizeof(usa.sin);
-#if MG_ENABLE_IPV6
-    if (c->peer.is_ip6) slen = sizeof(usa.sin6);
-#endif
-    n = recvfrom(FD(c), (char *) buf, len, 0, &usa.sa, &slen);
-    if (n > 0) {
-      if (c->peer.is_ip6) {
-#if MG_ENABLE_IPV6
-        memcpy(c->peer.ip6, &usa.sin6.sin6_addr, sizeof(c->peer.ip6));
-        c->peer.port = usa.sin6.sin6_port;
-#endif
-      } else {
-        c->peer.ip = *(uint32_t *) &usa.sin.sin_addr;
-        c->peer.port = usa.sin.sin_port;
-      }
-    }
-  } else {
-    n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
-  }
-  *fail = (n == 0) || (n < 0 && mg_sock_failed());
-  return n;
-}
-
-static int mg_sock_send(struct mg_connection *c, const void *buf, int len,
-                        int *fail) {
-  int n = 0;
+static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
+  long n = 0;
   if (c->is_udp) {
     union usa usa = tousa(&c->peer);
     socklen_t slen = sizeof(usa.sin);
@@ -138,47 +109,12 @@ static int mg_sock_send(struct mg_connection *c, const void *buf, int len,
   } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
-  *fail = (n == 0) || (n < 0 && mg_sock_failed());
-  return n;
+  return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
 
-static int ll_read(struct mg_connection *c, void *buf, int len, int *fail) {
-  int n = c->is_tls ? mg_tls_recv(c, buf, len, fail)
-                    : mg_sock_recv(c, buf, len, fail);
-  LOG(*fail ? LL_DEBUG : LL_VERBOSE_DEBUG,
-      ("%lu %c%c%c %d/%d %d %d", c->id, c->is_tls ? 'T' : 't',
-       c->is_udp ? 'U' : 'u', c->is_connecting ? 'C' : 'c', n, len,
-       MG_SOCK_ERRNO, *fail));
-  if (n > 0 && c->is_hexdumping) {
-    char *s = mg_hexdump(buf, n);
-    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "<-", n, s));
-    free(s);
-  }
-  return n;
-}
-
-static int ll_write(struct mg_connection *c, const void *buf, int len,
-                    int *fail) {
-  int n = c->is_tls ? mg_tls_send(c, buf, len, fail)
-                    : mg_sock_send(c, buf, len, fail);
-  LOG(*fail ? LL_ERROR : LL_VERBOSE_DEBUG,
-      ("%lu %c%c%c %d/%d %d", c->id, c->is_tls ? 'T' : 't',
-       c->is_udp ? 'U' : 'u', c->is_connecting ? 'C' : 'c', n, len,
-       MG_SOCK_ERRNO));
-  if (n > 0 && c->is_hexdumping) {
-    char *s = mg_hexdump(buf, len);
-    LOG(LL_INFO, ("\n-- %lu %s %s %d\n%s--", c->id, c->label, "->", len, s));
-    free(s);
-  }
-  return n;
-}
-
-int mg_send(struct mg_connection *c, const void *buf, size_t len) {
-  int fail, n = c->is_udp
-                    ? ll_write(c, buf, len, &fail)
-                    : (int) mg_iobuf_append(&c->send, buf, len, MG_IO_SIZE);
-  if (len > 0 && n == 0) fail = 1;
-  return n;
+bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
+  return c->is_udp ? mg_sock_send(c, buf, len) > 0
+                   : mg_iobuf_append(&c->send, buf, len, MG_IO_SIZE);
 }
 
 static void mg_set_non_blocking_mode(SOCKET fd) {
@@ -246,40 +182,95 @@ SOCKET mg_open_listener(const char *url) {
   return fd;
 }
 
-static void read_conn(struct mg_connection *c,
-                      int (*fn)(struct mg_connection *, void *, int, int *)) {
-  unsigned char *buf;
-  int rc, len, fail;
-
-  // NOTE(lsm): do only one iteration of reads, cause some systems
-  // (e.g. FreeRTOS stack) return 0 instead of -1/EWOULDBLOCK when no data
-  if (c->recv.size - c->recv.len < MG_IO_SIZE &&
-      c->recv.size < MG_MAX_RECV_BUF_SIZE &&
-      !mg_iobuf_resize(&c->recv, c->recv.size + MG_IO_SIZE)) {
-    c->is_closing = 1;
-  }
-  buf = c->recv.buf + c->recv.len;
-  len = (int) (c->recv.size - c->recv.len);
-  rc = fn(c, buf, len, &fail);
-  if (rc > 0) {
-    struct mg_str evd = mg_str_n((char *) buf, rc);
-    c->recv.len += rc;
-    mg_call(c, MG_EV_READ, &evd);
+static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
+  long n = 0;
+  if (c->is_udp) {
+    union usa usa;
+    socklen_t slen = sizeof(usa.sin);
+#if MG_ENABLE_IPV6
+    if (c->peer.is_ip6) slen = sizeof(usa.sin6);
+#endif
+    n = recvfrom(FD(c), (char *) buf, len, 0, &usa.sa, &slen);
+    if (n > 0) {
+      if (c->peer.is_ip6) {
+#if MG_ENABLE_IPV6
+        memcpy(c->peer.ip6, &usa.sin6.sin6_addr, sizeof(c->peer.ip6));
+        c->peer.port = usa.sin6.sin6_port;
+#endif
+      } else {
+        c->peer.ip = *(uint32_t *) &usa.sin.sin_addr;
+        c->peer.port = usa.sin.sin_port;
+      }
+    }
   } else {
-    if (fail) c->is_closing = 1;
+    n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+  }
+  return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
+}
+
+// NOTE(lsm): do only one iteration of reads, cause some systems
+// (e.g. FreeRTOS stack) return 0 instead of -1/EWOULDBLOCK when no data
+static void read_conn(struct mg_connection *c) {
+  if (c->recv.len >= MG_MAX_RECV_BUF_SIZE) {
+    mg_error(c, "max_recv_buf_size reached");
+  } else if (c->recv.size - c->recv.len < MG_IO_SIZE &&
+             !mg_iobuf_resize(&c->recv, c->recv.size + MG_IO_SIZE)) {
+    mg_error(c, "oom");
+  } else {
+    char *buf = (char *) &c->recv.buf[c->recv.len];
+    size_t len = c->recv.size - c->recv.len;
+    long n = c->is_tls ? mg_tls_recv(c, buf, len) : mg_sock_recv(c, buf, len);
+    LOG(n > 0 ? LL_VERBOSE_DEBUG : LL_DEBUG,
+        ("%-3lu %d%d%d%d%d%d%d%d%d%d%d%d%d%d %7ld %ld/%ld err %d", c->id,
+         c->is_listening, c->is_client, c->is_accepted, c->is_resolving,
+         c->is_connecting, c->is_tls, c->is_tls_hs, c->is_udp, c->is_websocket,
+         c->is_hexdumping, c->is_draining, c->is_closing, c->is_readable,
+         c->is_writable, (long) c->recv.len, n, (long) len, MG_SOCK_ERRNO));
+    if (n == 0) {
+      // Do nothing
+    } else if (n < 0) {
+      c->is_closing = 1;  // Error, or normal termination
+    } else if (n > 0) {
+      struct mg_str evd = mg_str_n(buf, (size_t) n);
+      if (c->is_hexdumping) {
+        char *s = mg_hexdump(buf, (size_t) n);
+        LOG(LL_INFO, ("\n-- %lu %s %s %ld\n%s", c->id, c->label, "<-", n, s));
+        free(s);
+      }
+      c->recv.len += (size_t) n;
+      mg_call(c, MG_EV_READ, &evd);
+    }
   }
 }
 
-static int write_conn(struct mg_connection *c) {
-  int fail, rc = ll_write(c, c->send.buf, c->send.len, &fail);
-  if (rc > 0) {
-    mg_iobuf_delete(&c->send, rc);
+static void write_conn(struct mg_connection *c) {
+  char *buf = (char *) c->send.buf;
+  size_t len = c->send.len;
+  long n = c->is_tls ? mg_tls_send(c, buf, len) : mg_sock_send(c, buf, len);
+
+  LOG(n > 0 ? LL_VERBOSE_DEBUG : LL_DEBUG,
+      ("%-3lu %d%d%d%d%d%d%d%d%d%d%d%d%d%d %7ld %ld err %d", c->id,
+       c->is_listening, c->is_client, c->is_accepted, c->is_resolving,
+       c->is_connecting, c->is_tls, c->is_tls_hs, c->is_udp, c->is_websocket,
+       c->is_hexdumping, c->is_draining, c->is_closing, c->is_readable,
+       c->is_writable, (long) c->send.len, n, MG_SOCK_ERRNO));
+
+  if (n == 0) {
+    // Do nothing
+  } else if (n < 0) {
+    c->is_closing = 1;  // Error, or normal termination
+  } else if (n > 0) {
+    // Hexdump before deleting
+    if (c->is_hexdumping) {
+      char *s = mg_hexdump(buf, (size_t) n);
+      LOG(LL_INFO, ("\n-- %lu %s %s %ld\n%s", c->id, c->label, "<-", n, s));
+      free(s);
+    }
+    mg_iobuf_delete(&c->send, (size_t) n);
     if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
-    mg_call(c, MG_EV_WRITE, &rc);
-  } else if (fail) {
-    c->is_closing = 1;
+    mg_call(c, MG_EV_WRITE, &n);
+    // if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
   }
-  return rc;
 }
 
 static void close_conn(struct mg_connection *c) {
@@ -334,7 +325,7 @@ static void setsockopts(struct mg_connection *c) {
 void mg_connect_resolved(struct mg_connection *c) {
   char buf[40];
   int type = c->is_udp ? SOCK_DGRAM : SOCK_STREAM;
-  int af = AF_INET;
+  int rc, af = AF_INET;
 #if MG_ENABLE_IPV6
   if (c->peer.is_ip6) af = AF_INET6;
 #endif
@@ -349,19 +340,16 @@ void mg_connect_resolved(struct mg_connection *c) {
   mg_call(c, MG_EV_RESOLVE, NULL);
   if (type == SOCK_STREAM) {
     union usa usa = tousa(&c->peer);
-    socklen_t slen =
+    socklen_t slen = sizeof(usa.sin);
 #if MG_ENABLE_IPV6
-        c->peer.is_ip6 ? sizeof(usa.sin6) :
+    if (c->peer.is_ip6) slen = sizeof(usa.sin6);
 #endif
-                       sizeof(usa.sin);
-    int rc = connect(FD(c), &usa.sa, slen);
-    int fail = rc < 0 && mg_sock_failed() ? MG_SOCK_ERRNO : 0;
-    if (fail) {
-      mg_error(c, "connect: %d", MG_SOCK_ERRNO);
-    } else {
+    if ((rc = connect(FD(c), &usa.sa, slen)) == 0 || mg_sock_would_block()) {
       setsockopts(c);
+      if (rc != 0) c->is_connecting = 1;
+    } else {
+      mg_error(c, "connect: %d", MG_SOCK_ERRNO);
     }
-    if (rc < 0) c->is_connecting = 1;
   }
 }
 
@@ -469,7 +457,7 @@ bool mg_socketpair(int *s1, int *s2) {
 struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
                                 mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = NULL;
-  int is_udp = strncmp(url, "udp:", 4) == 0;
+  bool is_udp = strncmp(url, "udp:", 4) == 0;
   SOCKET fd = mg_open_listener(url);
   if (fd == INVALID_SOCKET) {
   } else if ((c = alloc_conn(mgr, 0, fd)) == NULL) {
@@ -583,7 +571,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     } else if (c->is_tls_hs) {
       if ((c->is_readable || c->is_writable)) mg_tls_handshake(c);
     } else {
-      if (c->is_readable) read_conn(c, ll_read);
+      if (c->is_readable) read_conn(c);
       if (c->is_writable) write_conn(c);
     }
 

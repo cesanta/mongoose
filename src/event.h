@@ -13,7 +13,7 @@ enum {
   MG_EV_CONNECT,     // Connection established       NULL
   MG_EV_ACCEPT,      // Connection accepted          NULL
   MG_EV_READ,        // Data received from socket    struct mg_str *
-  MG_EV_WRITE,       // Data written to socket       int *num_bytes_written
+  MG_EV_WRITE,       // Data written to socket       long *bytes_written
   MG_EV_CLOSE,       // Connection closed            NULL
   MG_EV_HTTP_MSG,    // HTTP request/response        struct mg_http_message *
   MG_EV_HTTP_CHUNK,  // HTTP chunk (partial msg)     struct mg_http_message *

@@ -37,4 +37,9 @@ jobs:
       run: make mingw
     - name: mingw++
       run: make mingw++
-
+  arm:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: arm
+      run: make arm

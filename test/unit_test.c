@@ -249,11 +249,11 @@ static void test_sntp(void) {
         "\xc9\xd6\xa2\xdb\xde\xea\x30\x91\x86\xb7\x10\xdb\xde"
         "\xed\x98\x00\x00\x00\xde\xdb\xde\xed\x99\x0a\xe2\xc7"
         "\x96\xdb\xde\xed\x99\x0a\xe4\x6b\xda";
-    struct timeval tv = {0, 0};
+    struct timeval tv2 = {0, 0};
     struct tm *tm;
     time_t t;
-    ASSERT(mg_sntp_parse(sntp_good, sizeof(sntp_good), &tv) == 0);
-    t = tv.tv_sec;
+    ASSERT(mg_sntp_parse(sntp_good, sizeof(sntp_good), &tv2) == 0);
+    t = tv2.tv_sec;
     tm = gmtime(&t);
     ASSERT(tm->tm_year == 116);
     ASSERT(tm->tm_mon == 10);
@@ -261,7 +261,7 @@ static void test_sntp(void) {
     ASSERT(tm->tm_hour == 16);
     ASSERT(tm->tm_min == 15);
     ASSERT(tm->tm_sec == 21);
-    ASSERT(mg_sntp_parse(bad_good, sizeof(bad_good), &tv) == -1);
+    ASSERT(mg_sntp_parse(bad_good, sizeof(bad_good), &tv2) == -1);
   }
 
   ASSERT(mg_sntp_parse(NULL, 0, &tv) == -1);
@@ -329,8 +329,8 @@ static void test_mqtt(void) {
 }
 
 static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_tls_opts *opts = (struct mg_tls_opts *) fn_data;
-  if (ev == MG_EV_ACCEPT && opts != NULL) mg_tls_init(c, opts);
+  struct mg_tls_opts *topts = (struct mg_tls_opts *) fn_data;
+  if (ev == MG_EV_ACCEPT && topts != NULL) mg_tls_init(c, topts);
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     LOG(LL_INFO,
@@ -345,8 +345,8 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     } else if (mg_http_match_uri(hm, "/bar")) {
       mg_http_reply(c, 404, "", "not found");
     } else if (mg_http_match_uri(hm, "/badroot")) {
-      struct mg_http_serve_opts opts = {"/BAAADDD!", NULL, NULL};
-      mg_http_serve_dir(c, hm, &opts);
+      struct mg_http_serve_opts sopts = {"/BAAADDD!", NULL, NULL};
+      mg_http_serve_dir(c, hm, &sopts);
     } else if (mg_http_match_uri(hm, "/creds")) {
       char user[100], pass[100];
       mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
@@ -354,11 +354,11 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     } else if (mg_http_match_uri(hm, "/upload")) {
       mg_http_upload(c, hm, ".");
     } else if (mg_http_match_uri(hm, "/test/")) {
-      struct mg_http_serve_opts opts = {".", NULL, "A: B\r\nC: D\r\n"};
-      mg_http_serve_dir(c, hm, &opts);
+      struct mg_http_serve_opts sopts = {".", NULL, "A: B\r\nC: D\r\n"};
+      mg_http_serve_dir(c, hm, &sopts);
     } else {
-      struct mg_http_serve_opts opts = {"./test/data", "#.shtml", "C: D\r\n"};
-      mg_http_serve_dir(c, hm, &opts);
+      struct mg_http_serve_opts sopts = {"./test/data", "#.shtml", "C: D\r\n"};
+      mg_http_serve_dir(c, hm, &sopts);
     }
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
@@ -851,20 +851,20 @@ static void test_http_parse(void) {
 
   {
     struct mg_http_message hm;
-    const char *req = "GET /foo?bar=baz HTTP/1.0\n\n ";
-    ASSERT(mg_http_parse(req, strlen(req), &hm) == (int) strlen(req) - 1);
+    const char *s = "GET /foo?bar=baz HTTP/1.0\n\n ";
+    ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s) - 1);
     ASSERT(mg_strcmp(hm.uri, mg_str("/foo")) == 0);
     ASSERT(mg_strcmp(hm.query, mg_str("bar=baz")) == 0);
   }
 
   {
     struct mg_http_message hm;
-    const char *req = "a b c\n\n";
-    ASSERT(mg_http_parse(req, strlen(req), &hm) == (int) strlen(req));
-    req = "a b\nc\n\n";
-    ASSERT(mg_http_parse(req, strlen(req), &hm) < 0);
-    req = "a\nb\nc\n\n";
-    ASSERT(mg_http_parse(req, strlen(req), &hm) < 0);
+    const char *s = "a b c\n\n";
+    ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
+    s = "a b\nc\n\n";
+    ASSERT(mg_http_parse(s, strlen(s), &hm) < 0);
+    s = "a\nb\nc\n\n";
+    ASSERT(mg_http_parse(s, strlen(s), &hm) < 0);
   }
 }
 
@@ -1142,8 +1142,7 @@ static void test_util(void) {
   ASSERT(mg_url_decode("&&&a=%", 6, buf, sizeof(buf), 0) < 0);
 
   {
-    char buf[100];
-    int n;
+    size_t n;
     ASSERT((n = mg_url_encode("", 0, buf, sizeof(buf))) == 0);
     ASSERT((n = mg_url_encode("a", 1, buf, 0)) == 0);
     ASSERT((n = mg_url_encode("a", 1, buf, sizeof(buf))) == 1);
@@ -1157,7 +1156,7 @@ static void test_util(void) {
   }
 
   {
-    char buf[100], *s = buf;
+    s = buf;
     mg_asprintf(&s, sizeof(buf), "%s", "%3d", 123);
     ASSERT(s == buf);
     ASSERT(strcmp(buf, "%3d") == 0);
@@ -1213,37 +1212,37 @@ static void eh3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 // Streaming client event handler. Make sure we've got all chunks
 static void eh4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  uint32_t *crc = (uint32_t *) c->label;
   if (ev == MG_EV_CONNECT) {
     mg_printf(c, "GET / HTTP/1.0\n\n");
   } else if (ev == MG_EV_HTTP_CHUNK) {
-    uint32_t *crc = (uint32_t *) c->label;
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
   } else if (ev == MG_EV_HTTP_MSG) {
-    uint32_t *crc = (uint32_t *) c->label;
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    *crc = mg_crc32(*crc, hm->body.ptr, hm->body.len);
     // LOG(LL_INFO, ("MSG [%.*s]", (int) hm->body.len, hm->body.ptr));
     c->is_closing = 1;
-    *(int *) fn_data = mg_crc32(*crc, hm->body.ptr, hm->body.len);
+    *(uint32_t *) fn_data = *crc;
   }
   (void) ev_data;
 }
 
 // Streaming client event handler. Delete chunks as they arrive
 static void eh5(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  uint32_t *crc = (uint32_t *) c->label;
   if (ev == MG_EV_CONNECT) {
     mg_printf(c, "GET / HTTP/1.0\n\n");
   } else if (ev == MG_EV_HTTP_CHUNK) {
-    uint32_t *crc = (uint32_t *) c->label;
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
     // LOG(LL_INFO, ("CHUNK [%.*s]", (int) hm->chunk.len, hm->chunk.ptr));
     mg_http_delete_chunk(c, hm);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    uint32_t *crc = (uint32_t *) c->label;
+    *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
     c->is_closing = 1;
-    *(int *) fn_data = mg_crc32(*crc, hm->body.ptr, hm->body.len);
+    *(uint32_t *) fn_data = *crc;
     // LOG(LL_INFO, ("MSG [%.*s]", (int) hm->body.len, hm->body.ptr));
   }
   (void) ev_data;

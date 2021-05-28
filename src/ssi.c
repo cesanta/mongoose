@@ -16,7 +16,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
     size_t len = 0, align = MG_IO_SIZE;
     while ((ch = fgetc(fp)) != EOF) {
       if (intag && ch == '>' && buf[len - 1] == '-' && buf[len - 2] == '-') {
-        buf[len++] = ch & 0xff;
+        buf[len++] = (char) (ch & 0xff);
         if (sscanf(buf, "<!--#include file=\"%[^\"]", arg)) {
           char tmp[MG_PATH_MAX + BUFSIZ + 10],
               *p = (char *) path + strlen(path), *data;
@@ -50,7 +50,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
         intag = 1;
         if (len > 0) mg_iobuf_append(&b, buf, len, align);
         len = 0;
-        buf[len++] = ch & 0xff;
+        buf[len++] = (char) (ch & 0xff);
       } else if (intag) {
         if (len == 5 && strncmp(buf, "<!--#", 5) != 0) {
           intag = 0;
@@ -58,9 +58,9 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           LOG(LL_ERROR, ("%s: SSI tag is too large", path));
           len = 0;
         }
-        buf[len++] = ch & 0xff;
+        buf[len++] = (char) (ch & 0xff);
       } else {
-        buf[len++] = ch & 0xff;
+        buf[len++] = (char) (ch & 0xff);
         if (len >= sizeof(buf)) {
           mg_iobuf_append(&b, buf, len, align);
           len = 0;

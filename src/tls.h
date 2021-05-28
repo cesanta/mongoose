@@ -9,8 +9,8 @@ struct mg_tls_opts {
   struct mg_str srvname;  // If not empty, enables server name verification
 };
 
-int mg_tls_init(struct mg_connection *, struct mg_tls_opts *);
-int mg_tls_free(struct mg_connection *);
-int mg_tls_send(struct mg_connection *, const void *buf, size_t len, int *fail);
-int mg_tls_recv(struct mg_connection *, void *buf, size_t len, int *fail);
-int mg_tls_handshake(struct mg_connection *);
+void mg_tls_init(struct mg_connection *, struct mg_tls_opts *);
+void mg_tls_free(struct mg_connection *);
+long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
+long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
+void mg_tls_handshake(struct mg_connection *);

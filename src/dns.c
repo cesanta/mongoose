@@ -81,15 +81,15 @@ size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
     return 0;
   s += rr->nlen + 4;
   if (s > e) return 0;
-  rr->atype = ((uint16_t) s[-4] << 8) | s[-3];
-  rr->aclass = ((uint16_t) s[-2] << 8) | s[-1];
+  rr->atype = (uint16_t)(((uint16_t) s[-4] << 8) | s[-3]);
+  rr->aclass = (uint16_t)(((uint16_t) s[-2] << 8) | s[-1]);
   if (is_question) return rr->nlen + 4;
 
   s += 6;
   if (s > e) return 0;
-  rr->alen = ((uint16_t) s[-2] << 8) | s[-1];
+  rr->alen = (uint16_t)(((uint16_t) s[-2] << 8) | s[-1]);
   if (s + rr->alen > e) return 0;
-  return rr->nlen + rr->alen + 10;
+  return (size_t)(rr->nlen + rr->alen + 10);
 }
 
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
@@ -247,7 +247,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->txnid = s_reqs ? s_reqs->txnid + 1 : 1;
     d->next = s_reqs;
     s_reqs = d;
-    d->expire = mg_millis() + ms;
+    d->expire = mg_millis() + (unsigned long) ms;
     d->c = c;
     c->is_resolving = 1;
     LOG(LL_VERBOSE_DEBUG,

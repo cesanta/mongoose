@@ -42,6 +42,7 @@ typedef enum { false = 0, true = 1 } bool;
 #define strdup(x) _strdup(x)
 #endif
 
+typedef unsigned suseconds_t;
 typedef int socklen_t;
 #define MG_DIRSEP '\\'
 #ifndef PATH_MAX
