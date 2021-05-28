@@ -45,8 +45,8 @@ mg_prefix: mongoose.c mongoose.h
 	$(CLANG) mongoose.c $(CFLAGS) -c -o /tmp/x.o && nm /tmp/x.o | grep ' T' | grep -v 'mg_' ; test $$? = 1
 
 # C++ build
-test++: CLANG = g++ -Wno-deprecated
-test++: WARN += -Wno-shadow
+test++: CLANG = g++
+test++: WARN += -Wno-shadow -Wno-missing-field-initializers -Wno-deprecated
 test++: unamalgamated
 
 # Make sure we can build from an unamalgamated sources

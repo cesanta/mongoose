@@ -3846,7 +3846,7 @@ unsigned short mg_url_port(const char *url) {
   if (memcmp(url, "wss:", 4) == 0 || memcmp(url, "https:", 6) == 0) port = 443;
   if (memcmp(url, "mqtt:", 5) == 0) port = 1883;
   if (memcmp(url, "mqtts:", 6) == 0) port = 8883;
-  if (u.port) port = (uint16_t) atoi(url + u.port);
+  if (u.port) port = (unsigned short) atoi(url + u.port);
   return port;
 }
 
