@@ -11,6 +11,12 @@ jobs:
       run: make test test++ IPV6=0
     - name: openssl
       run: make test SSL=OPENSSL IPV6=0
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install packages
+      run: sudo apt-get install libmbedtls-dev
     - name: examples
       run: make ex
   macos:
