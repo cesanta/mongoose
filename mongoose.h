@@ -24,6 +24,7 @@
 #define MG_ARCH_ESP32 3
 #define MG_ARCH_ESP8266 4
 #define MG_ARCH_FREERTOS_TCP 5
+#define MG_ARCH_FREERTOS_LWIP 6
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -58,6 +59,7 @@
 #if MG_ARCH == MG_ARCH_CUSTOM
 #include <mongoose_custom.h>
 #endif
+
 
 
 
@@ -117,6 +119,41 @@
 #define MG_INT64_FMT "%lld"
 
 #endif
+
+
+#if MG_ARCH == MG_ARCH_FREERTOS_LWIP
+
+#include <errno.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <sys/time.h>
+
+#if MG_ENABLE_FS
+#include <sys/stat.h>
+#endif
+
+#include <FreeRTOS.h>
+#include <task.h>
+
+#include <lwip/sockets.h>
+
+#define MG_INT64_FMT "%lld"
+#define MG_DIRSEP '/'
+
+// Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
+static inline void *mg_calloc(int cnt, size_t size) {
+  void *p = pvPortMalloc(cnt * size);
+  if (p != NULL) memset(p, 0, size);
+  return p;
+}
+#define calloc(a, b) mg_calloc((a), (b))
+#define free(a) vPortFree(a)
+#define malloc(a) pvPortMalloc(a)
+
+#define gmtime_r(a, b) gmtime(a)
+
+#endif  // MG_ARCH == MG_ARCH_FREERTOS_LWIP
 
 
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP

@@ -6,6 +6,7 @@
 #define MG_ARCH_ESP32 3
 #define MG_ARCH_ESP8266 4
 #define MG_ARCH_FREERTOS_TCP 5
+#define MG_ARCH_FREERTOS_LWIP 6
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -43,6 +44,7 @@
 
 #include "arch_esp32.h"
 #include "arch_esp8266.h"
+#include "arch_freertos_lwip.h"
 #include "arch_freertos_tcp.h"
 #include "arch_unix.h"
 #include "arch_win32.h"

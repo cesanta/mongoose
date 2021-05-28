@@ -203,7 +203,7 @@ option during build time, use the `-D OPTION` compiler flag:
 ```sh
 $ cc app0.c mongoose.c                                        # Use defaults!
 $ cc app1.c mongoose.c -D MG_ENABLE_IPV6=1                    # Build with IPv6 enabled
-$ cc app2.c mongoose.c -D MG_ARCH=MG_ARCH_UNIX                # Set UNIX architecture
+$ cc app2.c mongoose.c -D MG_ARCH=MG_ARCH_FREERTOS_LWIP       # Set architecture
 $ cc app3.c mongoose.c -D MG_ENABLE_FS=0 -D MG_ENABLE_LOG=0   # Multiple options
 ```
 
@@ -219,6 +219,7 @@ architecture is guessed during the build, so setting it is not usually required.
 |MG_ARCH_WIN32 | Windows systems |
 |MG_ARCH_ESP32 | Espressif's ESP32 |
 |MG_ARCH_ESP8266 | Espressif's ESP8266 |
+|MG_ARCH_FREERTOS_LWIP | All systems with FreeRTOS kernel and LwIP IP stack |
 |MG_ARCH_FREERTOS_TCP | All systems with FreeRTOS kernel and FreeRTOS-Plus-TCP IP stack |
 |MG_ARCH_CUSTOM | A custom architecture, discussed in the next section |
 
@@ -264,34 +265,12 @@ systems, follow the guideline outlined below:
 2. Create a file called `mongoose_custom.h`, with defines and includes that
 are relevant to your platform. Mongoose uses `bool` type, `MG_DIRSEP` define,
 and optionally other structures like `DIR *` depending on the functionality
-you have enabled - see previous section. Below is an example for FreeRTOS+LWIP:
-
-```c
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <time.h>
-#include <unistd.h>
-
-#include <FreeRTOS.h>
-#include <task.h>
-
-#include <lwip/sockets.h>
-
-#define MG_INT64_FMT "%lld"
-#define MG_DIRSEP '/'
-```
-
-And this one is for bare metal and custom TCP/IP stack:
+you have enabled - see previous section. Below is an example:
 
 ```c
 #include <stdbool.h>            // For bool
-#include <MySystem.h>
+#include <stdarg.h>
+
 #define MG_DIRSEP '/'
 #define MG_INT64_FMT "%lld"
 #define MG_ENABLE_SOCKET 0      // Disable BSD socket API, implement your own
