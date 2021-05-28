@@ -31,7 +31,7 @@ static int mg_b64rev(int c) {
 }
 
 int mg_base64_update(unsigned char ch, char *to, int n) {
-  unsigned char rem = (n & 3) % 3;
+  int rem = (n & 3) % 3;
   if (rem == 0) {
     to[n] = (char) mg_b64idx(ch >> 2);
     to[++n] = (char) ((ch & 3) << 4);

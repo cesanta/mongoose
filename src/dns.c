@@ -83,7 +83,7 @@ size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
   if (s > e) return 0;
   rr->atype = (uint16_t)(((uint16_t) s[-4] << 8) | s[-3]);
   rr->aclass = (uint16_t)(((uint16_t) s[-2] << 8) | s[-1]);
-  if (is_question) return rr->nlen + 4;
+  if (is_question) return (size_t)(rr->nlen + 4);
 
   s += 6;
   if (s > e) return 0;
@@ -244,7 +244,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
 #if MG_ENABLE_LOG
     char buf[100];
 #endif
-    d->txnid = s_reqs ? s_reqs->txnid + 1 : 1;
+    d->txnid = s_reqs ? (uint16_t)(s_reqs->txnid + 1) : 1;
     d->next = s_reqs;
     s_reqs = d;
     d->expire = mg_millis() + (unsigned long) ms;

@@ -96,7 +96,8 @@ linux: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(GCC) $(CC) mongoose.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
 	$(GCC) ./unit_test_gcc
 
-linux++: CC = g++ -Wno-missing-field-initializers
+linux++: CC = g++
+linux++: WARN += -Wno-shadow  # Ignore "hides constructor for 'struct mg_str'"
 linux++: linux
 
 arm: Makefile mongoose.c mongoose.h test/unit_test.c
