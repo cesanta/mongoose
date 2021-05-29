@@ -1535,9 +1535,9 @@ size_t mg_iobuf_append(struct mg_iobuf *io, const void *buf, size_t len,
                        size_t chunk_size) {
   size_t new_size = io->len + len;
   if (new_size > io->size) {
-    new_size += chunk_size;
-    new_size -= new_size % chunk_size;
-    if (new_size != io->size) mg_iobuf_resize(io, new_size);
+    new_size += chunk_size;             // Make sure that io->size
+    new_size -= new_size % chunk_size;  // is aligned by chunk_size boundary
+    mg_iobuf_resize(io, new_size);      // Attempt to realloc
     if (new_size != io->size) len = 0;  // Realloc failure, append nothing
   }
   if (buf != NULL) memmove(io->buf + io->len, buf, len);
