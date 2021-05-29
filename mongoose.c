@@ -1533,10 +1533,13 @@ int mg_iobuf_init(struct mg_iobuf *io, size_t size) {
 
 size_t mg_iobuf_append(struct mg_iobuf *io, const void *buf, size_t len,
                        size_t chunk_size) {
-  size_t new_size = io->len + len + chunk_size;
-  new_size -= new_size % chunk_size;
-  if (new_size != io->size) mg_iobuf_resize(io, new_size);
-  if (new_size != io->size) len = 0;  // Realloc failure, append nothing
+  size_t new_size = io->len + len;
+  if (new_size > io->size) {
+    new_size += chunk_size;
+    new_size -= new_size % chunk_size;
+    if (new_size != io->size) mg_iobuf_resize(io, new_size);
+    if (new_size != io->size) len = 0;  // Realloc failure, append nothing
+  }
   if (buf != NULL) memmove(io->buf + io->len, buf, len);
   io->len += len;
   return len;

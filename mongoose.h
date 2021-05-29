@@ -127,7 +127,16 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
+
+#if defined(__GNUC__)
 #include <sys/time.h>
+#else
+typedef long suseconds_t;
+struct timeval {
+  time_t tv_sec;
+  suseconds_t tv_usec;
+};
+#endif
 
 #if MG_ENABLE_FS
 #include <sys/stat.h>
