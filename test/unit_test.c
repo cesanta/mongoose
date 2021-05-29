@@ -344,6 +344,8 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_reply(c, 200, "", "%.*s", (int) hm->body.len, hm->body.ptr);
     } else if (mg_http_match_uri(hm, "/bar")) {
       mg_http_reply(c, 404, "", "not found");
+    } else if (mg_http_match_uri(hm, "/no_reason")) {
+      mg_printf(c, "%s", "HTTP/1.0 200\r\nContent-Length: 2\r\n\r\nok");
     } else if (mg_http_match_uri(hm, "/badroot")) {
       struct mg_http_serve_opts sopts = {"/BAAADDD!", NULL, NULL};
       mg_http_serve_dir(c, hm, &sopts);
@@ -472,6 +474,10 @@ static void test_http_server(void) {
 
   ASSERT(fetch(&mgr, buf, url, "GET /%%61.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
+
+  // Responses with missing reason phrase must also work
+  ASSERT(fetch(&mgr, buf, url, "GET /no_reason HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "ok") == 0);
 
   {
     extern char *mg_http_etag(char *, size_t, mg_stat_t *);
@@ -862,7 +868,7 @@ static void test_http_parse(void) {
     const char *s = "a b c\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
     s = "a b\nc\n\n";
-    ASSERT(mg_http_parse(s, strlen(s), &hm) < 0);
+    ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
     s = "a\nb\nc\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &hm) < 0);
   }
