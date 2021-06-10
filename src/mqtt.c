@@ -1,8 +1,8 @@
+#include "mqtt.h"
 #include "arch.h"
 #include "base64.h"
 #include "event.h"
 #include "log.h"
-#include "mqtt.h"
 #include "private.h"
 #include "url.h"
 #include "util.h"
@@ -81,9 +81,9 @@ static void mqtt_login(struct mg_connection *c, const char *url,
   }
 }
 
-void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
-                 struct mg_str *data) {
-  uint8_t flags = MQTT_QOS(1);
+void mg_mqtt_pubex(struct mg_connection *c, struct mg_str *topic,
+                   struct mg_str *data, int qos, bool retain) {
+  uint8_t flags = (uint8_t)((qos & 3) << 1) | (retain ? 1 : 0);
   uint32_t total_len = 2 + (uint32_t) topic->len + (uint32_t) data->len;
   LOG(LL_DEBUG, ("%lu [%.*s] -> [%.*s]", c->id, (int) topic->len,
                  (char *) topic->ptr, (int) data->len, (char *) data->ptr));
@@ -97,6 +97,11 @@ void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
     mg_send_u16(c, mg_htons(s_id));
   }
   mg_send(c, data->ptr, data->len);
+}
+
+void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
+                 struct mg_str *data) {
+  mg_mqtt_pubex(c, topic, data, 1, false);
 }
 
 void mg_mqtt_sub(struct mg_connection *c, struct mg_str *topic) {

@@ -33,9 +33,9 @@ struct mg_mqtt_opts {
 };
 
 struct mg_mqtt_message {
-  struct mg_str topic;    // Parsed topic
-  struct mg_str data;     // Parsed message
-  struct mg_str dgram;    // Whole MQTT datagram, including headers
+  struct mg_str topic;  // Parsed topic
+  struct mg_str data;   // Parsed message
+  struct mg_str dgram;  // Whole MQTT datagram, including headers
   uint16_t id;  // Set for PUBACK, PUBREC, PUBREL, PUBCOMP, SUBACK, PUBLISH
   uint8_t cmd;  // MQTT command, one of MQTT_CMD_*
   uint8_t qos;  // Quality of service
@@ -49,6 +49,8 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
 void mg_mqtt_pub(struct mg_connection *, struct mg_str *topic,
                  struct mg_str *data);
+void mg_mqtt_pubex(struct mg_connection *c, struct mg_str *topic,
+                   struct mg_str *data, int qos, bool retain);
 void mg_mqtt_sub(struct mg_connection *, struct mg_str *topic);
 int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m);
 void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,

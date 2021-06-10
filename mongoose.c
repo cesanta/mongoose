@@ -1921,9 +1921,9 @@ static void mqtt_login(struct mg_connection *c, const char *url,
   }
 }
 
-void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
-                 struct mg_str *data) {
-  uint8_t flags = MQTT_QOS(1);
+void mg_mqtt_pubex(struct mg_connection *c, struct mg_str *topic,
+                   struct mg_str *data, int qos, bool retain) {
+  uint8_t flags = (uint8_t)((qos & 3) << 1) | (retain ? 1 : 0);
   uint32_t total_len = 2 + (uint32_t) topic->len + (uint32_t) data->len;
   LOG(LL_DEBUG, ("%lu [%.*s] -> [%.*s]", c->id, (int) topic->len,
                  (char *) topic->ptr, (int) data->len, (char *) data->ptr));
@@ -1937,6 +1937,11 @@ void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
     mg_send_u16(c, mg_htons(s_id));
   }
   mg_send(c, data->ptr, data->len);
+}
+
+void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
+                 struct mg_str *data) {
+  mg_mqtt_pubex(c, topic, data, 1, false);
 }
 
 void mg_mqtt_sub(struct mg_connection *c, struct mg_str *topic) {
@@ -4364,6 +4369,9 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
       char *s = (char *) c->recv.buf + msg.header_len;
       struct mg_ws_message m = {{s, msg.data_len}, msg.flags};
       switch (msg.flags & WEBSOCKET_FLAGS_MASK_OP) {
+        case WEBSOCKET_OP_CONTINUE:
+          mg_call(c, MG_EV_WS_CTL, &m);
+          break;
         case WEBSOCKET_OP_PING:
           LOG(LL_DEBUG, ("%s", "WS PONG"));
           mg_ws_send(c, s, msg.data_len, WEBSOCKET_OP_PONG);
@@ -4372,15 +4380,19 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
         case WEBSOCKET_OP_PONG:
           mg_call(c, MG_EV_WS_CTL, &m);
           break;
+        case WEBSOCKET_OP_TEXT:
+        case WEBSOCKET_OP_BINARY:
+          mg_call(c, MG_EV_WS_MSG, &m);
+          break;
         case WEBSOCKET_OP_CLOSE:
           LOG(LL_ERROR, ("%lu Got WS CLOSE", c->id));
           mg_call(c, MG_EV_WS_CTL, &m);
           c->is_closing = 1;
-          return;
-        default: {
-          mg_call(c, MG_EV_WS_MSG, &m);
           break;
-        }
+        default:
+          // Per RFC6455, close conn when an unknown op is recvd
+          mg_error(c, "unknown WS op %d", msg.flags & WEBSOCKET_FLAGS_MASK_OP);
+          break;
       }
       mg_iobuf_delete(&c->recv, msg.header_len + msg.data_len);
     }
