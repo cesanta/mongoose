@@ -300,8 +300,8 @@ static void test_mqtt(void) {
   c = mg_mqtt_connect(&mgr, url, NULL, mqtt_cb, buf);
   for (i = 0; i < 100 && buf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(buf[0] == 'X');
-  mg_mqtt_sub(c, &topic);
-  mg_mqtt_pub(c, &topic, &data);
+  mg_mqtt_sub(c, &topic, 1);
+  mg_mqtt_pub(c, &topic, &data, 1, false);
   for (i = 0; i < 100 && buf[1] == 0; i++) mg_mgr_poll(&mgr, 10);
   // LOG(LL_INFO, ("[%s]", buf));
   ASSERT(strcmp(buf, "Xx/f12/hi") == 0);
@@ -319,8 +319,8 @@ static void test_mqtt(void) {
   c = mg_mqtt_connect(&mgr, url, &opts, mqtt_cb, buf);
   for (i = 0; i < 100 && buf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(buf[0] == 'X');
-  mg_mqtt_sub(c, &topic);
-  mg_mqtt_pub(c, &topic, &data);
+  mg_mqtt_sub(c, &topic, 1);
+  mg_mqtt_pub(c, &topic, &data, 1, false);
   for (i = 0; i < 100 && buf[1] == 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(strcmp(buf, "Xx/f12/hi") == 0);
 

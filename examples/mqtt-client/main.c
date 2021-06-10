@@ -29,9 +29,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // MQTT connect is successful
     struct mg_str topic = mg_str(s_topic), data = mg_str("hello");
     LOG(LL_INFO, ("CONNECTED to %s", s_url));
-    mg_mqtt_sub(c, &topic);
+    mg_mqtt_sub(c, &topic, 1);
     LOG(LL_INFO, ("SUBSCRIBED to %.*s", (int) topic.len, topic.ptr));
-    mg_mqtt_pub(c, &topic, &data);
+    mg_mqtt_pub(c, &topic, &data, 1, false);
     LOG(LL_INFO, ("PUBSLISHED %.*s -> %.*s", (int) data.len, data.ptr,
                   (int) topic.len, topic.ptr));
   } else if (ev == MG_EV_MQTT_MSG) {
@@ -47,16 +47,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 int main(void) {
-  struct mg_mgr mgr;         // Event manager
-  struct mg_mqtt_opts opts;  // MQTT connection options
-  bool done = false;         // Event handler flips it to true when done
-  mg_mgr_init(&mgr);         // Initialise event manager
-  memset(&opts, 0, sizeof(opts));                 // Set MQTT options
-  opts.qos = 1;                                   // Set QoS to 1
-  opts.will_topic = mg_str(s_topic);              // Set last will topic
-  opts.will_message = mg_str("goodbye");          // And last will message
+  struct mg_mgr mgr;               // Event manager
+  struct mg_mqtt_opts opts;        // MQTT connection options
+  bool done = false;               // Event handler flips it to true when done
+  mg_mgr_init(&mgr);               // Initialise event manager
+  memset(&opts, 0, sizeof(opts));  // Set MQTT options
+  opts.qos = 1;                    // Set QoS to 1
+  opts.will_topic = mg_str(s_topic);               // Set last will topic
+  opts.will_message = mg_str("goodbye");           // And last will message
   mg_mqtt_connect(&mgr, s_url, &opts, fn, &done);  // Create client connection
-  while (done == false) mg_mgr_poll(&mgr, 1000);  // Event loop
-  mg_mgr_free(&mgr);                              // Finished, cleanup
+  while (done == false) mg_mgr_poll(&mgr, 1000);   // Event loop
+  mg_mgr_free(&mgr);                               // Finished, cleanup
   return 0;
 }

@@ -977,28 +977,18 @@ Create client MQTT connection.
 
 ```c
 void mg_mqtt_pub(struct mg_connection *, struct mg_str *topic,
-                 struct mg_str *data);
+                 struct mg_str *data, int qos, bool retain);
 ```
 
-Publish message `data` to the topic `topic`.
-
-### mg\_mqtt\_pubex()
-
-```c
-void mg_mqtt_pubex(struct mg_connection *, struct mg_str *topic,
-                   struct mg_str *data, int qos, bool retain);
-```
-
-Like `mg_mqtt_pub()` but also allows to set QoS and retain flag.
-
+Publish message `data` to the topic `topic` with given QoS and retain flag.
 
 ### mg\_mqtt\_sub()
 
 ```c
-void mg_mqtt_sub(struct mg_connection *, struct mg_str *topic);
+void mg_mqtt_sub(struct mg_connection *, struct mg_str *topic, int qos);
 ```
 
-Subscribe to topic `topic`.
+Subscribe to topic `topic` with given QoS.
 
 ### mg\_mqtt\_next\_sub()
 

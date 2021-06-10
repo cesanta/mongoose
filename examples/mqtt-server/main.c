@@ -55,7 +55,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
                       mm->data.ptr, (int) mm->topic.len, mm->topic.ptr));
         for (struct sub *sub = s_subs; sub != NULL; sub = sub->next) {
           if (mg_strcmp(mm->topic, sub->topic) != 0) continue;
-          mg_mqtt_pub(sub->c, &mm->topic, &mm->data);
+          mg_mqtt_pub(sub->c, &mm->topic, &mm->data, 1, false);
         }
         break;
       }

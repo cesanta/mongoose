@@ -1921,8 +1921,8 @@ static void mqtt_login(struct mg_connection *c, const char *url,
   }
 }
 
-void mg_mqtt_pubex(struct mg_connection *c, struct mg_str *topic,
-                   struct mg_str *data, int qos, bool retain) {
+void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
+                 struct mg_str *data, int qos, bool retain) {
   uint8_t flags = (uint8_t)((qos & 3) << 1) | (retain ? 1 : 0);
   uint32_t total_len = 2 + (uint32_t) topic->len + (uint32_t) data->len;
   LOG(LL_DEBUG, ("%lu [%.*s] -> [%.*s]", c->id, (int) topic->len,
@@ -1939,22 +1939,17 @@ void mg_mqtt_pubex(struct mg_connection *c, struct mg_str *topic,
   mg_send(c, data->ptr, data->len);
 }
 
-void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
-                 struct mg_str *data) {
-  mg_mqtt_pubex(c, topic, data, 1, false);
-}
-
-void mg_mqtt_sub(struct mg_connection *c, struct mg_str *topic) {
+void mg_mqtt_sub(struct mg_connection *c, struct mg_str *topic, int qos) {
   static uint16_t s_id;
-  uint8_t qos = 1;
+  uint8_t qos_ = qos & 3;
   uint32_t total_len = 2 + (uint32_t) topic->len + 2 + 1;
-  mg_mqtt_send_header(c, MQTT_CMD_SUBSCRIBE, (uint8_t) MQTT_QOS(qos),
+  mg_mqtt_send_header(c, MQTT_CMD_SUBSCRIBE, (uint8_t) MQTT_QOS(qos_),
                       total_len);
   if (++s_id == 0) ++s_id;
   mg_send_u16(c, mg_htons(s_id));
   mg_send_u16(c, mg_htons((uint16_t) topic->len));
   mg_send(c, topic->ptr, topic->len);
-  mg_send(c, &qos, sizeof(qos));
+  mg_send(c, &qos_, sizeof(qos_));
 }
 
 int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m) {
