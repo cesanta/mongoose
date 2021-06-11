@@ -33,6 +33,7 @@ with open(fname) as f:
 
             # open next file for writing
             ofile = open(cur_src, "w")
+            ofile.write('\n')
             print('=> %s' % cur_src, file=sys.stderr)
             manifest.append(cur_src)
             next(f)

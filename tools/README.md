@@ -16,9 +16,11 @@ $ tools/unamalgam.py mongoose.c
 This produces directories and files under `mongoose/` and `common/` that are easeier to work with.
 It also produces `mongoose.c.manifest` which can later be used to reconstruct the file back:
 ```
-$ tools/amalgam.py --prefix=MG --public-header=mongoose.h $(cat mongoose.c.manifest) > mongoose.c
+$ tools/amalgam.py --prefix=MG --license=LICENSE --public-header=mongoose.h $(cat src/mongoose.c.manifest) > mongoose.c
 ```
 
-The same applies to `mongoose.h`, except `--public-header` should be omitted during amalgamation.
+The same applies to `mongoose.h`, except `--public-header` should be omitted during amalgamation:
 
-`tools/amalgam.py` can be used to assemble `mongoose.c` and `mongoose.h`.
+```
+$ tools/amalgam.py --prefix=MG --license=LICENSE $(cat src/mongoose.h.manifest) > mongoose.h
+```

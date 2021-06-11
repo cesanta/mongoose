@@ -1,3 +1,4 @@
+
 #ifndef CS_COMMON_PLATFORM_H_
 #define CS_COMMON_PLATFORM_H_
 
