@@ -18,6 +18,8 @@ IPV6 ?= 1
 ASAN_OPTIONS ?=
 EXAMPLES := $(wildcard examples/*)
 EXAMPLE_TARGET ?= example
+PREFIX ?= /usr/local
+SOVERSION = 7.2
 .PHONY: ex test
 
 ifeq "$(SSL)" "MBEDTLS"
@@ -100,6 +102,19 @@ linux: Makefile mongoose.c mongoose.h test/unit_test.c
 linux++: CC = g++
 linux++: WARN += -Wno-shadow  # Ignore "hides constructor for 'struct mg_str'"
 linux++: linux
+
+linux-libs: CFLAGS += -fPIC
+linux-libs: mongoose.o
+	$(CC) mongoose.o $(LDFLAGS) -shared -o libmongoose.so.$(SOVERSION)
+	$(AR) rcs libmongoose.a mongoose.o
+
+install: linux-libs
+	install -Dm644 libmongoose.a libmongoose.so.$(SOVERSION) $(DESTDIR)${PREFIX}/lib
+	ln -s libmongoose.so.$(SOVERSION) $(DESTDIR)${PREFIX}/lib/libmongoose.so 
+	install -Dm644 mongoose.h $(DESTDIR)${PREFIX}/include/mongoose.h
+
+uninstall:
+	rm -rf $(DESTDIR)${PREFIX}/lib/libmongoose.a $(DESTDIR)${PREFIX}/lib/libmongoose.so.$(SOVERSION) $(DESTDIR)${PREFIX}/include/mongoose.h $(DESTDIR)${PREFIX}/lib/libmongoose.so
 
 arm: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(ARM) arm-none-eabi-gcc mongoose.c -c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=0 -DMG_ENABLE_SSI=1
