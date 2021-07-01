@@ -26,13 +26,13 @@ robust, and easy. Features include:
 
 # Commercial use
 - Mongoose is used by hundreds of businesses, from Fortune500 giants like
-  Siemens, Bosch, Google, Samsung, Qualcomm, Caterpillar to the small businesses
+  Siemens, Schneider Electric, Broadcom, Bosch, Google, Samsung, Qualcomm, Caterpillar to the small businesses
 - Used to solve a wide range of business needs, like implementing Web UI
   interface on devices, RESTful API services, telemetry data exchange, remote
   control for a product, remote software updates, remote monitoring, and others
 - Deployed to hundreds of millions devices in production environment worldwide
 - See [Case Studies](https://cesanta.com/case-studies.html) from our respected
-  customers like Schneider Electric (industrial automation), Schenck Process
+  customers like Schneider Electric (industrial automation), Broadcom (semiconductors), Schenck Process
   (industrial engineering), and others
 - See [Testimonials](https://cesanta.com/testimonials.html) from engineers that
   integrated Mongoose in their commercial products
