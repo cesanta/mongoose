@@ -12,7 +12,7 @@ vast number of open source and commercial products - it even runs on the
 International Space Station!  Mongoose makes embedded network programming fast,
 robust, and easy. Features include:
 
-- Cross-platform: works on Linux/UNIX, MacOS, Windows, Android, FreeRTOS, etc
+- Cross-platform: works on Linux/UNIX, MacOS, Windows, Android, FreeRTOS, etc.
 - Supported embedded architectures: ESP32, NRF52, STM32, NXP, and more
 - Built-in protocols: plain TCP/UDP, HTTP, MQTT, Websocket
 - SSL/TLS support: mbedTLS, OpenSSL or custom (via API)
