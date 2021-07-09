@@ -45,7 +45,9 @@
 #endif  // !defined(MG_ARCH)
 
 #define WIN32_LEAN_AND_MEAN
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #if !defined(PRINTF_LIKE)
