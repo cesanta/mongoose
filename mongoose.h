@@ -15,6 +15,11 @@
 // Alternatively, you can license this software under a commercial
 // license, as set out in <https://www.cesanta.com/license>.
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define MG_VERSION "7.3"
 
 
@@ -959,3 +964,7 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
 size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
                        bool is_question, struct mg_dns_rr *);
 size_t mg_dns_decode_name(const uint8_t *, size_t, size_t, char *, size_t);
+
+#ifdef __cplusplus
+}
+#endif // extern "C"
