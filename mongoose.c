@@ -3701,7 +3701,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     } else if ((rc = SSL_use_PrivateKey_file(tls->ssl, key, 1)) != 1) {
       mg_error(c, "Invalid SSL key, err %d", mg_tls_err(tls, rc));
       goto fail;
-#if OPENSSL_VERSION_NUMBER > 0x10002000L
+#if OPENSSL_VERSION_NUMBER > 0x10100000L
     } else if ((rc = SSL_use_certificate_chain_file(tls->ssl, opts->cert)) !=
                1) {
       mg_error(c, "Invalid CA, err %d", mg_tls_err(tls, rc));
