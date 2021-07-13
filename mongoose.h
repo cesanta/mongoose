@@ -17,6 +17,10 @@
 #pragma once
 #define MG_VERSION "7.3"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 #define MG_ARCH_CUSTOM 0
 #define MG_ARCH_UNIX 1
@@ -959,3 +963,7 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
 size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
                        bool is_question, struct mg_dns_rr *);
 size_t mg_dns_decode_name(const uint8_t *, size_t, size_t, char *, size_t);
+
+#ifdef __cplusplus
+}
+#endif
