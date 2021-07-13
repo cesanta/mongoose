@@ -89,19 +89,20 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
 
 void mg_random(void *buf, size_t len) {
   bool done = false;
-#if MG_ENABLE_FS
+  unsigned char *p = buf;
+#if MG_ARCH == MG_ARCH_ESP32
+  while (len--) *p++ = (unsigned char) (esp_random() & 255);
+#elif MG_ARCH == MG_ARCH_WIN32
+#elif MG_ARCH_UNIX && MG_ENABLE_FS
   FILE *fp = mg_fopen("/dev/urandom", "rb");
   if (fp != NULL) {
     if (fread(buf, 1, len, fp) == len) done = true;
     fclose(fp);
   }
 #endif
-  if (!done) {
     // Fallback to a pseudo random gen
-    size_t i;
-    for (i = 0; i < len; i++) {
-      ((unsigned char *) buf)[i] = (unsigned char) (rand() % 0xff);
-    }
+  if (!done) {
+    while (len--) *p++ = (unsigned char) (rand() & 255);
   }
 }
 

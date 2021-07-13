@@ -16,6 +16,12 @@
 #endif
 #endif
 
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+#define RNG , rng_get, NULL
+#else
+#define RNG
+#endif
+
 // Different versions have those in different files, so declare here
 EXTERN_C int mbedtls_net_recv(void *, unsigned char *, size_t);
 EXTERN_C int mbedtls_net_send(void *, const unsigned char *, size_t);
@@ -59,6 +65,14 @@ static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
   (void) c;
   (void) lev;
 }
+
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+static int rng_get(void *p_rng, unsigned char *buf, size_t len) {
+  (void) p_rng;
+  mg_random(buf, len);
+  return 0;
+}
+#endif
 
 void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
@@ -139,10 +153,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
       mg_error(c, "parse(%s) err %#x", cert, -rc);
       goto fail;
     }
-    rc = key[0] == '-'
-             ? mbedtls_pk_parse_key(&tls->pk, (uint8_t *) key,
-                                    strlen(key) + 1, NULL, 0)
-             : mbedtls_pk_parse_keyfile(&tls->pk, key, NULL);
+    rc = key[0] == '-' ? mbedtls_pk_parse_key(&tls->pk, (uint8_t *) key,
+                                              strlen(key) + 1, NULL, 0 RNG)
+                       : mbedtls_pk_parse_keyfile(&tls->pk, key, NULL RNG);
     if (rc != 0) {
       mg_error(c, "tls key(%s) %#x", certkey, -rc);
       goto fail;

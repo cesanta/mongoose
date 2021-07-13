@@ -23,17 +23,13 @@ SOVERSION = 7.2
 .PHONY: ex test
 
 ifeq "$(SSL)" "MBEDTLS"
-MBEDTLS_DIR ?= $(shell brew --cellar mbedtls)
-MBEDTLS_VER ?= $(shell brew info mbedtls --json | jq -j .[0].installed[0].version)
-MBEDTLS ?= $(MBEDTLS_DIR)/$(MBEDTLS_VER)
-CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS)/include -I/usr/include
+MBEDTLS ?= /usr
+CFLAGS  += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS)/include -I/usr/include
 LDFLAGS ?= -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
 endif
 ifeq "$(SSL)" "OPENSSL"
-OPENSSL_DIR ?= $(shell brew --cellar openssl)
-OPENSSL_VER ?= $(shell brew info openssl --json | jq -j .[0].installed[0].version)
-OPENSSL ?= $(OPENSSL_DIR)/$(OPENSSL_VER)
-CFLAGS += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
+OPENSSL ?= /usr
+CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 

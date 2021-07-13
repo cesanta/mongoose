@@ -3430,6 +3430,12 @@ void mg_timer_poll(unsigned long now_ms) {
 #endif
 #endif
 
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+#define RNG , rng_get, NULL
+#else
+#define RNG
+#endif
+
 // Different versions have those in different files, so declare here
 EXTERN_C int mbedtls_net_recv(void *, unsigned char *, size_t);
 EXTERN_C int mbedtls_net_send(void *, const unsigned char *, size_t);
@@ -3473,6 +3479,14 @@ static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
   (void) c;
   (void) lev;
 }
+
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+static int rng_get(void *p_rng, unsigned char *buf, size_t len) {
+  (void) p_rng;
+  mg_random(buf, len);
+  return 0;
+}
+#endif
 
 void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
@@ -3553,10 +3567,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
       mg_error(c, "parse(%s) err %#x", cert, -rc);
       goto fail;
     }
-    rc = key[0] == '-'
-             ? mbedtls_pk_parse_key(&tls->pk, (uint8_t *) key,
-                                    strlen(key) + 1, NULL, 0)
-             : mbedtls_pk_parse_keyfile(&tls->pk, key, NULL);
+    rc = key[0] == '-' ? mbedtls_pk_parse_key(&tls->pk, (uint8_t *) key,
+                                              strlen(key) + 1, NULL, 0 RNG)
+                       : mbedtls_pk_parse_keyfile(&tls->pk, key, NULL RNG);
     if (rc != 0) {
       mg_error(c, "tls key(%s) %#x", certkey, -rc);
       goto fail;
@@ -3967,19 +3980,20 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
 
 void mg_random(void *buf, size_t len) {
   bool done = false;
-#if MG_ENABLE_FS
+  unsigned char *p = buf;
+#if MG_ARCH == MG_ARCH_ESP32
+  while (len--) *p++ = (unsigned char) (esp_random() & 255);
+#elif MG_ARCH == MG_ARCH_WIN32
+#elif MG_ARCH_UNIX && MG_ENABLE_FS
   FILE *fp = mg_fopen("/dev/urandom", "rb");
   if (fp != NULL) {
     if (fread(buf, 1, len, fp) == len) done = true;
     fclose(fp);
   }
 #endif
-  if (!done) {
     // Fallback to a pseudo random gen
-    size_t i;
-    for (i = 0; i < len; i++) {
-      ((unsigned char *) buf)[i] = (unsigned char) (rand() % 0xff);
-    }
+  if (!done) {
+    while (len--) *p++ = (unsigned char) (rand() & 255);
   }
 }
 
