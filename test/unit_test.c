@@ -530,7 +530,7 @@ static void test_http_server(void) {
     mg_http_parse(buf, strlen(buf), &hm);
     ASSERT(mg_http_get_header(&hm, "Content-Type") != NULL);
     ASSERT(mg_strcmp(*mg_http_get_header(&hm, "Content-Type"),
-                     mg_str("text/javascript")) == 0);
+                     mg_str("text/javascript; charset=utf-8")) == 0);
   }
 
   {
