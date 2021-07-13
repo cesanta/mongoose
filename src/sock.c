@@ -126,7 +126,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
   setsockopt(fd, 0, FREERTOS_SO_RCVTIMEO, &off, sizeof(off));
   setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off));
 #else
-  fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK | FD_CLOEXEC);
+  fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, FD_CLOEXEC);
 #endif
 }
 
