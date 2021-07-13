@@ -48,10 +48,6 @@ extern "C" {
 #endif
 #endif  // !defined(MG_ARCH)
 
-#define WIN32_LEAN_AND_MEAN
-#define _CRT_SECURE_NO_WARNINGS
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
-
 #if !defined(PRINTF_LIKE)
 #if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
 #define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
@@ -295,6 +291,18 @@ struct timeval {
 
 
 #if MG_ARCH == MG_ARCH_WIN32
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
+#ifndef _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#endif
 
 #include <ctype.h>
 #include <errno.h>

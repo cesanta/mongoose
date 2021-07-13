@@ -26,10 +26,6 @@
 #endif
 #endif  // !defined(MG_ARCH)
 
-#define WIN32_LEAN_AND_MEAN
-#define _CRT_SECURE_NO_WARNINGS
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
-
 #if !defined(PRINTF_LIKE)
 #if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
 #define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
