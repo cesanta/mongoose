@@ -3980,7 +3980,7 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
 
 void mg_random(void *buf, size_t len) {
   bool done = false;
-  unsigned char *p = buf;
+  unsigned char *p = (unsigned char *) buf;
 #if MG_ARCH == MG_ARCH_ESP32
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
 #elif MG_ARCH == MG_ARCH_WIN32
