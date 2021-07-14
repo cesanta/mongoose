@@ -929,8 +929,8 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   FILE *fp = mg_fopen(path, "rb");
   if (fp == NULL || mg_stat(path, &st) != 0 ||
       mg_http_etag(etag, sizeof(etag), &st) != etag) {
-    LOG(LL_DEBUG,
-        ("404 [%.*s] [%s] %p", (int) hm->uri.len, hm->uri.ptr, path, fp));
+    LOG(LL_DEBUG, ("404 [%.*s] [%s] %p", (int) hm->uri.len, hm->uri.ptr, path,
+                   (void *) fp));
     mg_http_reply(c, 404, "", "%s", "Not found\n");
     if (fp != NULL) fclose(fp);
   } else if (inm != NULL && mg_vcasecmp(inm, etag) == 0) {

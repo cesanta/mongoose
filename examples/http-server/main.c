@@ -28,8 +28,8 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 static void usage(const char *prog) {
   fprintf(stderr,
-          "Mongoose v.%s, built " __DATE__ " " __TIME__
-          "\nUsage: %s OPTIONS\n"
+          "Mongoose v.%s\n"
+          "Usage: %s OPTIONS\n"
           "  -H yes|no - enable traffic hexdump, default: '%s'\n"
           "  -S GLOB   - glob pattern for SSI files, default: '%s'\n"
           "  -d DIR    - directory to serve, default: '%s'\n"
