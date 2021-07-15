@@ -50,7 +50,6 @@ test++: test
 # Make sure we can build from an unamalgamated sources
 unamalgamated: $(SRCS) $(HDRS) Makefile
 	$(CLANG) src/*.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
-
 fuzz: mongoose.c mongoose.h Makefile test/fuzz.c
 	$(CLANG) mongoose.c test/fuzz.c $(CFLAGS) -DMG_ENABLE_LINES -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address $(LDFLAGS) -g -o fuzzer
 	$(DEBUGGER) ./fuzzer
@@ -96,7 +95,7 @@ linux: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(GCC) ./unit_test_gcc
 
 linux++: CC = g++
-linux++: WARN += -Wno-shadow  # Ignore "hides constructor for 'struct mg_str'"
+linux++: WARN += -Wno-missing-field-initializers
 linux++: linux
 
 linux-libs: CFLAGS += -fPIC

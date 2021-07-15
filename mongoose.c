@@ -3282,7 +3282,7 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 
 #include <stdlib.h>
 
-struct mg_str mg_str(const char *s) {
+struct mg_str mg_str_s(const char *s) {
   struct mg_str str = {s, s == NULL ? 0 : strlen(s)};
   return str;
 }

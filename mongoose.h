@@ -459,6 +459,9 @@ struct mg_str {
 #define MG_NULL_STR \
   { NULL, 0 }
 
+// Using macro to avoid shadowing C++ struct constructor, see #1298
+#define mg_str(s) mg_str_s(s)
+
 struct mg_str mg_str(const char *s);
 struct mg_str mg_str_n(const char *s, size_t n);
 int mg_lower(const char *s);
