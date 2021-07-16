@@ -3684,6 +3684,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   SSL_set_options(tls->ssl, SSL_OP_NO_SSLv2);
   SSL_set_options(tls->ssl, SSL_OP_NO_SSLv3);
   SSL_set_options(tls->ssl, SSL_OP_NO_TLSv1);
+  SSL_set_options(tls->ssl, SSL_OP_NO_TLSv1_1);
 #ifdef MG_ENABLE_OPENSSL_NO_COMPRESSION
   SSL_set_options(tls->ssl, SSL_OP_NO_COMPRESSION);
 #endif
