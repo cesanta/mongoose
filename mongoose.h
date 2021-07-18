@@ -14,7 +14,10 @@
 //
 // Alternatively, you can license this software under a commercial
 // license, as set out in <https://www.cesanta.com/license>.
+#ifndef MONGOOSE_H
+#define MONGOOSE_H
 #pragma once
+
 #define MG_VERSION "7.3"
 
 #ifdef __cplusplus
@@ -978,3 +981,5 @@ size_t mg_dns_decode_name(const uint8_t *, size_t, size_t, char *, size_t);
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* MONGOOSE_H */
