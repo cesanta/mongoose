@@ -130,22 +130,20 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 #endif
 }
 
-SOCKET mg_open_listener(const char *url) {
-  struct mg_addr addr;
+SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
   SOCKET fd = INVALID_SOCKET;
-
-  memset(&addr, 0, sizeof(addr));
-  addr.port = mg_htons(mg_url_port(url));
-  if (!mg_aton(mg_url_host(url), &addr)) {
+  memset(addr, 0, sizeof(*addr));
+  addr->port = mg_htons(mg_url_port(url));
+  if (!mg_aton(mg_url_host(url), addr)) {
     LOG(LL_ERROR, ("invalid listening URL: %s", url));
   } else {
-    union usa usa = tousa(&addr);
+    union usa usa = tousa(addr);
     int on = 1, af = AF_INET;
     int type = strncmp(url, "udp:", 4) == 0 ? SOCK_DGRAM : SOCK_STREAM;
     int proto = type == SOCK_DGRAM ? IPPROTO_UDP : IPPROTO_TCP;
     socklen_t slen = sizeof(usa.sin);
 #if MG_ENABLE_IPV6
-    if (addr.is_ip6) af = AF_INET6, slen = sizeof(usa.sin6);
+    if (addr->is_ip6) af = AF_INET6, slen = sizeof(usa.sin6);
 #endif
 
     if ((fd = socket(af, type, proto)) != INVALID_SOCKET &&
@@ -169,6 +167,13 @@ SOCKET mg_open_listener(const char *url) {
         bind(fd, &usa.sa, slen) == 0 &&
         // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
         (type == SOCK_DGRAM || listen(fd, 128) == 0)) {
+      // In case port was set to 0, get the real port number
+      if (getsockname(fd, &usa.sa, &slen) == 0) {
+        addr->port = usa.sin.sin_port;
+#if MG_ENABLE_IPV6
+        if (addr->is_ip6) addr->port = usa.sin6.sin6_port;
+#endif
+      }
       mg_set_non_blocking_mode(fd);
     } else if (fd != INVALID_SOCKET) {
       closesocket(fd);
@@ -458,19 +463,22 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
                                 mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = NULL;
   bool is_udp = strncmp(url, "udp:", 4) == 0;
-  SOCKET fd = mg_open_listener(url);
+  struct mg_addr addr;
+  SOCKET fd = mg_open_listener(url, &addr);
   if (fd == INVALID_SOCKET) {
   } else if ((c = alloc_conn(mgr, 0, fd)) == NULL) {
     LOG(LL_ERROR, ("OOM %s", url));
     closesocket(fd);
   } else {
+    memcpy(&c->peer, &addr, sizeof(struct mg_addr));
     c->fd = sock2ptr(fd);
     c->is_listening = 1;
     c->is_udp = is_udp;
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fn = fn;
     c->fn_data = fn_data;
-    LOG(LL_INFO, ("%lu accepting on %s", c->id, url));
+    LOG(LL_INFO,
+        ("%lu accepting on %s (port %u)", c->id, url, mg_ntohs(c->peer.port)));
   }
   return c;
 }
