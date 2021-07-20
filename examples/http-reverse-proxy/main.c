@@ -64,7 +64,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_tls_init(c, &opts);
     }
   } else if (ev == MG_EV_CLOSE) {
-    if (c2 != NULL) c2->is_closing = 1;
+    if (c->label[0] != 'B' && c2 != NULL) c2->is_closing = 1;
     c->fn_data = NULL;
   }
 }
