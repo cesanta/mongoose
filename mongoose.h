@@ -14,6 +14,7 @@
 //
 // Alternatively, you can license this software under a commercial
 // license, as set out in <https://www.cesanta.com/license>.
+
 #ifndef MONGOOSE_H
 #define MONGOOSE_H
 

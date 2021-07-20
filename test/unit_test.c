@@ -507,6 +507,14 @@ static void test_http_server(void) {
                  "recurse\n\n"
                  "recurse\n\n"
                  "recurse\n\n") == 0);
+  {
+    struct mg_http_message hm;
+    mg_http_parse(buf, strlen(buf), &hm);
+    ASSERT(mg_http_get_header(&hm, "Content-Length") != NULL);
+    ASSERT(mg_http_get_header(&hm, "Content-Type") != NULL);
+    ASSERT(mg_strcmp(*mg_http_get_header(&hm, "Content-Type"),
+                     mg_str("text/html; charset=utf-8")) == 0);
+  }
 
   ASSERT(fetch(&mgr, buf, url, "GET /badroot HTTP/1.0\r\n\n") == 400);
 #if MG_ARCH == MG_ARCH_WIN32
