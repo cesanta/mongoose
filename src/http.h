@@ -23,9 +23,10 @@ struct mg_http_message {
 
 // Parameter for mg_http_serve_dir()
 struct mg_http_serve_opts {
-  const char *root_dir;       // Web root directory, must be non-NULL
-  const char *ssi_pattern;    // SSI file name pattern, e.g. #.shtml
-  const char *extra_headers;  // Extra HTTP headers to add in responses
+  const char *root_dir;        // Web root directory, must be non-NULL
+  const char *ssi_pattern;     // SSI file name pattern, e.g. #.shtml
+  const char *extra_headers;   // Extra HTTP headers to add in responses
+  const char *enable_dirlist;  // Enable dir listing. Set to "no" to disable
 };
 
 // Parameter for mg_http_next_multipart

@@ -347,7 +347,9 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     } else if (mg_http_match_uri(hm, "/no_reason")) {
       mg_printf(c, "%s", "HTTP/1.0 200\r\nContent-Length: 2\r\n\r\nok");
     } else if (mg_http_match_uri(hm, "/badroot")) {
-      struct mg_http_serve_opts sopts = {"/BAAADDD!", NULL, NULL};
+      struct mg_http_serve_opts sopts;
+      memset(&sopts, 0, sizeof(sopts));
+      sopts.root_dir = "/BAAADDD!";
       mg_http_serve_dir(c, hm, &sopts);
     } else if (mg_http_match_uri(hm, "/creds")) {
       char user[100], pass[100];
@@ -356,10 +358,18 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     } else if (mg_http_match_uri(hm, "/upload")) {
       mg_http_upload(c, hm, ".");
     } else if (mg_http_match_uri(hm, "/test/")) {
-      struct mg_http_serve_opts sopts = {".", NULL, "A: B\r\nC: D\r\n"};
+      struct mg_http_serve_opts sopts;
+      memset(&sopts, 0, sizeof(sopts));
+      sopts.root_dir = ".";
+      sopts.extra_headers = "A: B\r\nC: D\r\n";
       mg_http_serve_dir(c, hm, &sopts);
     } else {
-      struct mg_http_serve_opts sopts = {"./test/data", "#.shtml", "C: D\r\n"};
+      struct mg_http_serve_opts sopts;
+      memset(&sopts, 0, sizeof(sopts));
+      sopts.root_dir = "./test/data";
+      sopts.ssi_pattern = "#.shtml";
+      sopts.extra_headers = "C: D\r\n";
+      sopts.enable_dirlist = "no";
       mg_http_serve_dir(c, hm, &sopts);
     }
   } else if (ev == MG_EV_WS_MSG) {
@@ -554,6 +564,10 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">Index of /test/<")) != NULL);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
+
+  // Directory listing denied
+  ASSERT(fetch(&mgr, buf, url, "GET /secret/ HTTP/1.0\n\n") == 403);
+  ASSERT(cmpbody(buf, "Denied\n") == 0);
 
   {
     // Credentials
@@ -885,7 +899,9 @@ static void test_http_parse(void) {
 static void ehr(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    struct mg_http_serve_opts opts = {"./test/data", NULL, NULL};
+    struct mg_http_serve_opts opts;
+    memset(&opts, 0, sizeof(opts));
+    opts.root_dir = "./test/data";
     mg_http_serve_dir(c, hm, &opts);
   }
   (void) fn_data;

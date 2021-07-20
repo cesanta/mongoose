@@ -868,7 +868,11 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
 #endif
       if (is_index && fp == NULL) {
 #if MG_ENABLE_DIRECTORY_LISTING
-        listdir(c, hm, opts, t2);
+        if (opts->enable_dirlist && strcmp(opts->enable_dirlist, "no") == 0) {
+          mg_http_reply(c, 403, "", "%s", "Denied");
+        } else {
+          listdir(c, hm, opts, t2);
+        }
 #else
         mg_http_reply(c, 403, "", "%s", "Directory listing not supported");
 #endif
