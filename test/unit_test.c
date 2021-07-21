@@ -369,7 +369,6 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       sopts.root_dir = "./test/data";
       sopts.ssi_pattern = "#.shtml";
       sopts.extra_headers = "C: D\r\n";
-      sopts.enable_dirlist = "no";
       mg_http_serve_dir(c, hm, &sopts);
     }
   } else if (ev == MG_EV_WS_MSG) {
@@ -564,10 +563,6 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">Index of /test/<")) != NULL);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
-
-  // Directory listing denied
-  ASSERT(fetch(&mgr, buf, url, "GET /secret/ HTTP/1.0\n\n") == 403);
-  ASSERT(cmpbody(buf, "Denied\n") == 0);
 
   {
     // Credentials
