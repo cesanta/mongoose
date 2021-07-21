@@ -7,10 +7,5 @@
 # Environment
 
 - mongoose version: _X.Y_
-- custom changes?: _y/n_
-  - If yes, provide the diff below, and the releavant commit:
-- build environment:
-  - OS: _?_
-  - Compiler/IDE: _?_
-- relevant example (see https://github.com/cesanta/mongoose/tree/master/examples) is: _?_
-- relevant documentation topic (see https://cesanta.com/docs/) is: _?_
+- OS: _?_
+- Compiler/IDE: _?_
