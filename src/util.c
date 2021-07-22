@@ -13,17 +13,6 @@ int mg_stat(const char *path, mg_stat_t *st) {
 #endif
 }
 
-FILE *mg_fopen(const char *path, const char *mode) {
-#ifdef _WIN32
-  wchar_t b1[MG_PATH_MAX], b2[10];
-  MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
-  MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
-  return _wfopen(b1, b2);
-#else
-  return fopen(path, mode);
-#endif
-}
-
 int64_t mg_file_size(const char *path) {
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP && defined(MG_ENABLE_FF)
   struct FF_STAT st;
@@ -38,7 +27,7 @@ char *mg_file_read(const char *path, size_t *sizep) {
   FILE *fp;
   char *data = NULL;
   size_t size = (size_t) mg_file_size(path);
-  if ((fp = mg_fopen(path, "rb")) != NULL) {
+  if ((fp = fopen(path, "rb")) != NULL) {
     data = (char *) calloc(1, size + 1);
     if (data != NULL) {
       if (fread(data, 1, size, fp) != size) {
@@ -59,7 +48,7 @@ bool mg_file_write(const char *path, const void *buf, size_t len) {
   FILE *fp;
   char tmp[MG_PATH_MAX];
   snprintf(tmp, sizeof(tmp), "%s.%d", path, rand());
-  fp = mg_fopen(tmp, "wb");
+  fp = fopen(tmp, "wb");
   if (fp != NULL) {
     result = fwrite(buf, 1, len, fp) == len;
     fclose(fp);
@@ -94,7 +83,7 @@ void mg_random(void *buf, size_t len) {
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
 #elif MG_ARCH == MG_ARCH_WIN32
 #elif MG_ARCH_UNIX && MG_ENABLE_FS
-  FILE *fp = mg_fopen("/dev/urandom", "rb");
+  FILE *fp = fopen("/dev/urandom", "rb");
   if (fp != NULL) {
     if (fread(buf, 1, len, fp) == len) done = true;
     fclose(fp);

@@ -67,6 +67,7 @@ typedef int socklen_t;
 #define EWOULDBLOCK WSAEWOULDBLOCK
 #endif
 #define realpath(a, b) _fullpath((b), (a), MG_PATH_MAX)
+#define fopen(a, b) mg_fopen((a), (b))
 #ifndef va_copy
 #ifdef __va_copy
 #define va_copy __va_copy
@@ -79,6 +80,13 @@ typedef int socklen_t;
 #endif
 
 #define MG_INT64_FMT "%I64d"
+
+static __inline FILE *mg_fopen(const char *path, const char *mode) {
+  wchar_t b1[PATH_MAX], b2[10];
+  MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
+  MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
+  return _wfopen(b1, b2);
+}
 
 // https://lgtm.com/rules/2154840805/ -gmtime, localtime, ctime and asctime
 static __inline struct tm *gmtime_r(time_t *t, struct tm *tm) {

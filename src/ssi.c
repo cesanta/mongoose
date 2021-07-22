@@ -9,7 +9,7 @@
 #if MG_ENABLE_SSI
 static char *mg_ssi(const char *path, const char *root, int depth) {
   struct mg_iobuf b = {NULL, 0, 0};
-  FILE *fp = mg_fopen(path, "rb");
+  FILE *fp = fopen(path, "rb");
   if (fp != NULL) {
     char buf[BUFSIZ], arg[sizeof(buf)];
     int ch, intag = 0;

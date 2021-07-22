@@ -44,7 +44,6 @@ typedef struct _stati64 mg_stat_t;
 typedef struct stat mg_stat_t;
 #endif
 int mg_stat(const char *path, mg_stat_t *);
-FILE *mg_fopen(const char *fp, const char *mode);
 #endif
 
 #define mg_htons(x) mg_ntohs(x)

@@ -392,7 +392,7 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
     snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, name);
     LOG(LL_DEBUG,
         ("%p %d bytes @ %d [%s]", c->fd, (int) hm->body.len, (int) oft, name));
-    if ((fp = mg_fopen(path, oft == 0 ? "wb" : "ab")) == NULL) {
+    if ((fp = fopen(path, oft == 0 ? "wb" : "ab")) == NULL) {
       mg_http_reply(c, 400, "", "fopen(%s): %d", name, errno);
       return -2;
     } else {
@@ -515,7 +515,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   struct mg_str *inm = mg_http_get_header(hm, "If-None-Match");
   mg_stat_t st;
   char etag[64];
-  FILE *fp = mg_fopen(path, "rb");
+  FILE *fp = fopen(path, "rb");
   if (fp == NULL || mg_stat(path, &st) != 0 ||
       mg_http_etag(etag, sizeof(etag), &st) != etag) {
     LOG(LL_DEBUG, ("404 [%.*s] [%s] %p", (int) hm->uri.len, hm->uri.ptr, path,
@@ -856,14 +856,14 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
       mg_http_reply(c, 404, "", "Invalid URI [%.*s]\n", (int) hm->uri.len,
                     hm->uri.ptr);
     } else {
-      FILE *fp = mg_fopen(t2, "r");
+      FILE *fp = fopen(t2, "r");
 #if MG_ENABLE_SSI
       if (is_index && fp == NULL) {
         char *p = t2 + strlen(t2);
         while (p > t2 && p[-1] != '/') p--;
         strncpy(p, "index.shtml", (size_t)(&t2[sizeof(t2)] - p - 2));
         t2[sizeof(t2) - 1] = '\0';
-        fp = mg_fopen(t2, "r");
+        fp = fopen(t2, "r");
       }
 #endif
       if (is_index && fp == NULL) {
