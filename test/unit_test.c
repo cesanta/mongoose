@@ -488,6 +488,10 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /no_reason HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "ok") == 0);
 
+  // Fetch file with unicode chars in filename
+  ASSERT(fetch(&mgr, buf, url, "GET /київ.txt HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "є\n") == 0);
+
   {
     extern char *mg_http_etag(char *, size_t, mg_stat_t *);
     char etag[100];
