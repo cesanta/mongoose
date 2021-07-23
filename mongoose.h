@@ -141,7 +141,7 @@ struct timeval {
 };
 #endif
 
-#if MG_ENABLE_FS
+#if MG_ENABLE_STDIO
 #include <sys/stat.h>
 #endif
 
@@ -181,7 +181,7 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #include <string.h>
 #include <time.h>
 
-#if MG_ENABLE_FS
+#if MG_ENABLE_STDIO
 #include <sys/stat.h>
 #endif
 
@@ -407,8 +407,8 @@ static __inline struct tm *localtime_r(time_t *t, struct tm *tm) {
 #define MG_ENABLE_OPENSSL 0
 #endif
 
-#ifndef MG_ENABLE_FS
-#define MG_ENABLE_FS 1
+#ifndef MG_ENABLE_STDIO
+#define MG_ENABLE_STDIO 1
 #endif
 
 #ifndef MG_ENABLE_SSI
@@ -561,7 +561,7 @@ double mg_time(void);
 unsigned long mg_millis(void);
 void mg_usleep(unsigned long usecs);
 
-#if MG_ENABLE_FS
+#if MG_ENABLE_STDIO
 #ifdef _WIN32
 typedef struct _stati64 mg_stat_t;
 #else

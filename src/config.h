@@ -12,8 +12,8 @@
 #define MG_ENABLE_OPENSSL 0
 #endif
 
-#ifndef MG_ENABLE_FS
-#define MG_ENABLE_FS 1
+#ifndef MG_ENABLE_STDIO
+#define MG_ENABLE_STDIO 1
 #endif
 
 #ifndef MG_ENABLE_SSI

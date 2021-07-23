@@ -364,7 +364,7 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
   if (buf != mem) free(buf);
 }
 
-#if MG_ENABLE_FS
+#if MG_ENABLE_STDIO
 static void http_cb(struct mg_connection *, int, void *, void *);
 static void restore_http_cb(struct mg_connection *c) {
   if (c->pfn_data != NULL) fclose((FILE *) c->pfn_data);

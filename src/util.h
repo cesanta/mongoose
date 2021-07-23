@@ -37,7 +37,7 @@ double mg_time(void);
 unsigned long mg_millis(void);
 void mg_usleep(unsigned long usecs);
 
-#if MG_ENABLE_FS
+#if MG_ENABLE_STDIO
 #ifdef _WIN32
 typedef struct _stati64 mg_stat_t;
 #else

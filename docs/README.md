@@ -204,7 +204,7 @@ option during build time, use the `-D OPTION` compiler flag:
 $ cc app0.c mongoose.c                                        # Use defaults!
 $ cc app1.c mongoose.c -D MG_ENABLE_IPV6=1                    # Build with IPv6 enabled
 $ cc app2.c mongoose.c -D MG_ARCH=MG_ARCH_FREERTOS_LWIP       # Set architecture
-$ cc app3.c mongoose.c -D MG_ENABLE_FS=0 -D MG_ENABLE_LOG=0   # Multiple options
+$ cc app3.c mongoose.c -D MG_ENABLE_STDIO=0 -D MG_ENABLE_LOG=0   # Multiple options
 ```
 
 The list of supported
@@ -237,7 +237,7 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_SOCKET | 1 | Use BSD socket low-level API |
 |MG_ENABLE_MBEDTLS | 0 | Enable Mbed TLS library |
 |MG_ENABLE_OPENSSL | 0 | Enable OpenSSL library |
-|MG_ENABLE_FS | 1 | Enable API that use filesystem, like `mg_http_send_file()` |
+|MG_ENABLE_STDIO | 1 | Enable API that use filesystem, like `mg_http_send_file()` |
 |MG_ENABLE_IPV6 | 0 | Enable IPv6 |
 |MG_ENABLE_LOG | 1 | Enable `LOG()` macro |
 |MG_ENABLE_MD5 | 0 | Use native MD5 implementation |

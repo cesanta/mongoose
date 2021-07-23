@@ -17,7 +17,7 @@ struct timeval {
 };
 #endif
 
-#if MG_ENABLE_FS
+#if MG_ENABLE_STDIO
 #include <sys/stat.h>
 #endif
 

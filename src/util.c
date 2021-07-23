@@ -2,7 +2,7 @@
 
 #include "util.h"
 
-#if MG_ENABLE_FS
+#if MG_ENABLE_STDIO
 int mg_stat(const char *path, mg_stat_t *st) {
 #ifdef _WIN32
   wchar_t tmp[MG_PATH_MAX];
@@ -74,7 +74,7 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
   if (buf != tmp) free(buf);
   return result;
 }
-#endif  // MG_ENABLE_FS
+#endif  // MG_ENABLE_STDIO
 
 void mg_random(void *buf, size_t len) {
   bool done = false;
@@ -82,14 +82,14 @@ void mg_random(void *buf, size_t len) {
 #if MG_ARCH == MG_ARCH_ESP32
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
 #elif MG_ARCH == MG_ARCH_WIN32
-#elif MG_ARCH_UNIX && MG_ENABLE_FS
+#elif MG_ARCH_UNIX && MG_ENABLE_STDIO
   FILE *fp = fopen("/dev/urandom", "rb");
   if (fp != NULL) {
     if (fread(buf, 1, len, fp) == len) done = true;
     fclose(fp);
   }
 #endif
-    // Fallback to a pseudo random gen
+  // Fallback to a pseudo random gen
   if (!done) {
     while (len--) *p++ = (unsigned char) (rand() & 255);
   }
@@ -186,9 +186,10 @@ char *mg_hex(const void *buf, size_t len, char *to) {
 }
 
 static unsigned char mg_unhex_nimble(unsigned char c) {
-  return (c >= '0' && c <= '9')   ? (unsigned char) (c - '0')
-         : (c >= 'A' && c <= 'F') ? (unsigned char) (c - '7')
-                                  : (unsigned char) (c - 'W');
+  return (c >= '0' && c <= '9')
+             ? (unsigned char) (c - '0')
+             : (c >= 'A' && c <= 'F') ? (unsigned char) (c - '7')
+                                      : (unsigned char) (c - 'W');
 }
 
 unsigned long mg_unhexn(const char *s, size_t len) {

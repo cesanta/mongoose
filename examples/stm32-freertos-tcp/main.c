@@ -10,7 +10,7 @@ static const char *s_listening_address = "http://0.0.0.0:80";
 // Event handler for the listening connection.
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
-#if MG_ENABLE_FS
+#if MG_ENABLE_STDIO
     struct mg_http_serve_opts opts = {.root_dir = "/"};
     mg_http_serve_dir(c, ev_data, &opts);
 #else
@@ -99,32 +99,33 @@ uint32_t HAL_GetTick(void) {
 
 #include "stm32f7xx_hal_conf.h"
 #include "stm32fxx_hal_eth.h"
-void HAL_ETH_MspInit( ETH_HandleTypeDef* heth ) {
-    GPIO_InitTypeDef GPIO_InitStructure;
-    if (heth->Instance == ETH) {
-        __HAL_RCC_GPIOA_CLK_ENABLE();
-        __HAL_RCC_GPIOC_CLK_ENABLE();
-        __HAL_RCC_GPIOG_CLK_ENABLE();
+void HAL_ETH_MspInit(ETH_HandleTypeDef *heth) {
+  GPIO_InitTypeDef GPIO_InitStructure;
+  if (heth->Instance == ETH) {
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOG_CLK_ENABLE();
 
-        GPIO_InitStructure.Speed = GPIO_SPEED_HIGH;
-        GPIO_InitStructure.Mode = GPIO_MODE_AF_PP;
-        GPIO_InitStructure.Pull = GPIO_NOPULL; 
-        GPIO_InitStructure.Alternate = GPIO_AF11_ETH;
-        GPIO_InitStructure.Pin = GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_7;
-        HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);
+    GPIO_InitStructure.Speed = GPIO_SPEED_HIGH;
+    GPIO_InitStructure.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStructure.Pull = GPIO_NOPULL;
+    GPIO_InitStructure.Alternate = GPIO_AF11_ETH;
+    GPIO_InitStructure.Pin = GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_7;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-        GPIO_InitStructure.Pin = GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5;
-        HAL_GPIO_Init(GPIOC, &GPIO_InitStructure);
+    GPIO_InitStructure.Pin = GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStructure);
 
-        GPIO_InitStructure.Pin =  GPIO_PIN_2 | GPIO_PIN_11 | GPIO_PIN_13 | GPIO_PIN_14;
-        HAL_GPIO_Init(GPIOG, &GPIO_InitStructure);
+    GPIO_InitStructure.Pin =
+        GPIO_PIN_2 | GPIO_PIN_11 | GPIO_PIN_13 | GPIO_PIN_14;
+    HAL_GPIO_Init(GPIOG, &GPIO_InitStructure);
 
-        HAL_NVIC_SetPriority(ETH_IRQn, 0x7, 0);
-        HAL_NVIC_EnableIRQ(ETH_IRQn);
-        
-        __HAL_RCC_ETH_CLK_ENABLE();
-        HAL_NVIC_SetPriorityGrouping( NVIC_PRIORITYGROUP_4 );
-    }
+    HAL_NVIC_SetPriority(ETH_IRQn, 0x7, 0);
+    HAL_NVIC_EnableIRQ(ETH_IRQn);
+
+    __HAL_RCC_ETH_CLK_ENABLE();
+    HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
+  }
 }
 
 int vLoggingPrintf(const char *fmt, ...) {
