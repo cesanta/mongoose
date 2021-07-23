@@ -3921,21 +3921,14 @@ int mg_stat(const char *path, mg_stat_t *st) {
 #endif
 }
 
-int64_t mg_file_size(const char *path) {
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP && defined(MG_ENABLE_FF)
-  struct FF_STAT st;
-  return ff_stat(path, &st) == 0 ? st.st_size : 0;
-#else
-  mg_stat_t st;
-  return mg_stat(path, &st) == 0 ? st.st_size : 0;
-#endif
-}
-
 char *mg_file_read(const char *path, size_t *sizep) {
   FILE *fp;
   char *data = NULL;
-  size_t size = (size_t) mg_file_size(path);
+  size_t size = 0;
   if ((fp = fopen(path, "rb")) != NULL) {
+    fseek(fp, 0, SEEK_END);
+    size = (size_t) ftell(fp);
+    rewind(fp);
     data = (char *) calloc(1, size + 1);
     if (data != NULL) {
       if (fread(data, 1, size, fp) != size) {

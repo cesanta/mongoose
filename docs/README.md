@@ -1115,14 +1115,6 @@ Read file contents into a nul-terminated malloc-ed string. It is a caller's
 responsibility to free() a returned pointer. If `sizep` is not NULL, it will
 return a file size in bytes.
 
-### mg\_file\_size()
-
-```c
-size_t mg_file_size(const char *path);
-```
-
-Return file size, or 0 on failure. Empty files also report 0 length.
-
 ### mg\_file\_write()
 
 ```c
