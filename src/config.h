@@ -12,6 +12,10 @@
 #define MG_ENABLE_OPENSSL 0
 #endif
 
+#ifndef MG_ENABLE_PACKED_FS
+#define MG_ENABLE_PACKED_FS 0
+#endif
+
 #ifndef MG_ENABLE_STDIO
 #define MG_ENABLE_STDIO 1
 #endif

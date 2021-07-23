@@ -17,6 +17,7 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp);
 
 #define MG_DIRSEP '/'
 #define MG_INT64_FMT "%lld"
+#undef MG_PATH_MAX
 #define MG_PATH_MAX 100
+#undef MG_ENABLE_SOCKET
 #define MG_ENABLE_SOCKET 0
-
