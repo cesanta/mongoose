@@ -780,9 +780,6 @@ struct mg_http_header {
 };
 
 struct mg_http_message {
-  //        GET /foo/bar/baz?aa=b&cc=ddd HTTP/1.1
-  // method |-| |----uri---| |--query--| |proto-|
-
   struct mg_str method, uri, query, proto;             // Request/response line
   struct mg_http_header headers[MG_MAX_HTTP_HEADERS];  // Headers
   struct mg_str body;                                  // Body
@@ -793,9 +790,9 @@ struct mg_http_message {
 
 // Parameter for mg_http_serve_dir()
 struct mg_http_serve_opts {
-  const char *root_dir;        // Web root directory, must be non-NULL
-  const char *ssi_pattern;     // SSI file name pattern, e.g. #.shtml
-  const char *extra_headers;   // Extra HTTP headers to add in responses
+  const char *root_dir;       // Web root directory, must be non-NULL
+  const char *ssi_pattern;    // SSI file name pattern, e.g. #.shtml
+  const char *extra_headers;  // Extra HTTP headers to add in responses
 };
 
 // Parameter for mg_http_next_multipart
@@ -821,7 +818,6 @@ void mg_http_serve_file(struct mg_connection *, struct mg_http_message *,
 void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
                    const char *body_fmt, ...);
 struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
-void mg_http_event_handler(struct mg_connection *c, int ev);
 int mg_http_get_var(const struct mg_str *, const char *name, char *, size_t);
 int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
 size_t mg_url_encode(const char *s, size_t n, char *buf, size_t len);
