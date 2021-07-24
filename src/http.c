@@ -819,70 +819,72 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        struct mg_http_serve_opts *opts) {
-  char t1[MG_PATH_MAX], t2[sizeof(t1)];
-  t1[0] = t2[0] = '\0';
+  char root_dir[MG_PATH_MAX], full_path[sizeof(root_dir)];
+  root_dir[0] = full_path[0] = '\0';
 
-  if (realpath(opts->root_dir, t1) == NULL) {
+  if (realpath(opts->root_dir, root_dir) == NULL) {
     LOG(LL_ERROR, ("realpath(%s): %d", opts->root_dir, errno));
     mg_http_reply(c, 400, "", "Bad web root [%s]\n", opts->root_dir);
-  } else if (!mg_is_dir(t1)) {
-    mg_http_reply(c, 400, "", "Invalid web root [%s]\n", t1);
+  } else if (!mg_is_dir(root_dir)) {
+    mg_http_reply(c, 400, "", "Invalid web root [%s]\n", root_dir);
   } else {
     // NOTE(lsm): Xilinx snprintf does not 0-terminate the detination for
     // the %.*s specifier, if the length is zero. Make sure hm->uri.len > 0
     bool is_index = false;
-    size_t n1 = strlen(t1), n2;
+    size_t n1 = strlen(root_dir), n2;
 
-    mg_url_decode(hm->uri.ptr, hm->uri.len, t1 + n1, sizeof(t1) - n1, 0);
-    t1[sizeof(t1) - 1] = '\0';
-    n2 = strlen(t1);
-    while (n2 > 0 && t1[n2 - 1] == '/') t1[--n2] = 0;
+    mg_url_decode(hm->uri.ptr, hm->uri.len, root_dir + n1,
+                  sizeof(root_dir) - n1, 0);
+    root_dir[sizeof(root_dir) - 1] = '\0';
+    n2 = strlen(root_dir);
+    while (n2 > 0 && root_dir[n2 - 1] == '/') root_dir[--n2] = 0;
 
-    if (realpath(t1, t2) == NULL) {
-      LOG(LL_ERROR, ("realpath(%s): %d", t1, errno));
+    if (realpath(root_dir, full_path) == NULL) {
+      LOG(LL_ERROR, ("realpath(%s): %d", root_dir, errno));
       mg_http_reply(c, 404, "", "Not found [%.*s]\n", (int) hm->uri.len,
                     hm->uri.ptr);
-      return;
-    }
-
-    if (mg_is_dir(t2)) {
-      strncat(t2, "/index.html", sizeof(t2) - strlen(t2) - 1);
-      t2[sizeof(t2) - 1] = '\0';
-      is_index = true;
-    }
-
-    if (strlen(t2) < n1 || memcmp(t1, t2, n1) != 0) {
-      // Requested file is located outside root directory, fail
-      mg_http_reply(c, 404, "", "Invalid URI [%.*s]\n", (int) hm->uri.len,
-                    hm->uri.ptr);
     } else {
-      struct stat st;
-      int res = stat(t2, &st);
-#if MG_ENABLE_SSI
-      if (is_index && res != 0) {
-        char *p = t2 + strlen(t2);
-        while (p > t2 && p[-1] != '/') p--;
-        strncpy(p, "index.shtml", (size_t)(&t2[sizeof(t2)] - p - 2));
-        t2[sizeof(t2) - 1] = '\0';
-        res = stat(t2, &st);
+      if (mg_is_dir(full_path)) {
+        strncat(full_path, "/index.html",
+                sizeof(full_path) - strlen(full_path) - 1);
+        full_path[sizeof(full_path) - 1] = '\0';
+        is_index = true;
       }
+
+      if (strlen(full_path) < n1 || memcmp(root_dir, full_path, n1) != 0) {
+        // Requested file is located outside root directory, fail
+        mg_http_reply(c, 404, "", "Invalid URI [%.*s]\n", (int) hm->uri.len,
+                      hm->uri.ptr);
+      } else {
+        struct stat st;
+        int res = stat(full_path, &st);
+#if MG_ENABLE_SSI
+        if (is_index && res != 0) {
+          char *p = full_path + strlen(full_path);
+          while (p > full_path && p[-1] != '/') p--;
+          strncpy(p, "index.shtml",
+                  (size_t)(&full_path[sizeof(full_path)] - p - 2));
+          full_path[sizeof(full_path) - 1] = '\0';
+          res = stat(full_path, &st);
+        }
 #endif
-      if (is_index && res != 0) {
+        if (is_index && res != 0) {
 #if MG_ENABLE_DIRECTORY_LISTING
-        listdir(c, hm, opts, t2);
+          listdir(c, hm, opts, full_path);
 #else
-        mg_http_reply(c, 403, "", "%s", "Directory listing not supported");
+          mg_http_reply(c, 403, "", "%s", "Directory listing not supported");
 #endif
 #if MG_ENABLE_SSI
-      } else if (opts->ssi_pattern != NULL &&
-                 mg_globmatch(opts->ssi_pattern, strlen(opts->ssi_pattern), t2,
-                              strlen(t2))) {
-        t1[n1] = '\0';
-        mg_http_serve_ssi(c, t1, t2);
+        } else if (opts->ssi_pattern != NULL &&
+                   mg_globmatch(opts->ssi_pattern, strlen(opts->ssi_pattern),
+                                full_path, strlen(full_path))) {
+          root_dir[n1] = '\0';
+          mg_http_serve_ssi(c, root_dir, full_path);
 #endif
-      } else {
-        mg_http_serve_file(c, hm, t2, guess_content_type(t2),
-                           opts->extra_headers);
+        } else {
+          mg_http_serve_file(c, hm, full_path, guess_content_type(full_path),
+                             opts->extra_headers);
+        }
       }
     }
   }
