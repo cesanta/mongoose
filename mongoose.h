@@ -314,7 +314,8 @@ struct timeval {
 
 #if MG_ARCH == MG_ARCH_UNIX
 
-#define _DARWIN_UNLIMITED_SELECT 1
+#define _DARWIN_UNLIMITED_SELECT 1  // No limit on file descriptors
+#define _GNU_SOURCE                 // For fopencookie() on Linux
 
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -415,6 +416,16 @@ typedef int socklen_t;
 #endif
 #define realpath(a, b) _fullpath((b), (a), MG_PATH_MAX)
 #define fopen(a, b) mg_fopen((a), (b))
+
+// Later windows define _stati64 macro, older do not
+#ifdef _stati64
+#define stat _stat64
+#define _stat64(a, b) mg_stat((a), (b))
+#else
+#define stat _stati64
+#define _stati64(a, b) mg_stat((a), (b))
+#endif
+
 #ifndef va_copy
 #ifdef __va_copy
 #define va_copy __va_copy
@@ -429,10 +440,16 @@ typedef int socklen_t;
 #define MG_INT64_FMT "%I64d"
 
 static __inline FILE *mg_fopen(const char *path, const char *mode) {
-  wchar_t b1[PATH_MAX], b2[10];
+  wchar_t b1[MAX_PATH], b2[10];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
   MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
   return _wfopen(b1, b2);
+}
+
+static __inline int mg_stat(const char *path, struct stat *st) {
+  wchar_t tmp[MAX_PATH];
+  MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
+  return _wstati64(tmp, st);
 }
 
 // https://lgtm.com/rules/2154840805/ -gmtime, localtime, ctime and asctime
@@ -589,12 +606,7 @@ void mg_usleep(unsigned long usecs);
 
 
 
-#ifdef _WIN32
-typedef struct _stati64 mg_stat_t;
-#else
-typedef struct stat mg_stat_t;
-#endif
-int mg_stat(const char *path, mg_stat_t *);
+FILE *fopen_packed(const char *path, const char *mode);
 
 
 

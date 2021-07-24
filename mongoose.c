@@ -411,15 +411,8 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 #endif
 
 
-int mg_stat(const char *path, mg_stat_t *st) {
-#ifdef _WIN32
-  wchar_t tmp[MG_PATH_MAX];
-  MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
-  return _wstati64(tmp, st);
-#else
-  return stat(path, st);
-#endif
-}
+// FILE *fopen_packed(const char *path, const char *mode) {
+//}
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/http.c"
@@ -797,7 +790,7 @@ static void restore_http_cb(struct mg_connection *c) {
   c->pfn = http_cb;
 }
 
-char *mg_http_etag(char *buf, size_t len, mg_stat_t *st) {
+char *mg_http_etag(char *buf, size_t len, struct stat *st) {
   snprintf(buf, len, "\"%lx." MG_INT64_FMT "\"", (unsigned long) st->st_mtime,
            (int64_t) st->st_size);
   return buf;
@@ -938,10 +931,10 @@ static int getrange(struct mg_str *s, int64_t *a, int64_t *b) {
 void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path, const char *mime, const char *hdrs) {
   struct mg_str *inm = mg_http_get_header(hm, "If-None-Match");
-  mg_stat_t st;
+  struct stat st;
   char etag[64];
   FILE *fp = fopen(path, "rb");
-  if (fp == NULL || mg_stat(path, &st) != 0 ||
+  if (fp == NULL || stat(path, &st) != 0 ||
       mg_http_etag(etag, sizeof(etag), &st) != etag) {
     LOG(LL_DEBUG, ("404 [%.*s] [%s] %p", (int) hm->uri.len, hm->uri.ptr, path,
                    (void *) fp));
@@ -1015,8 +1008,8 @@ bool mg_is_dir(const char *path) {
   struct FF_STAT st;
   return (ff_stat(path, &st) == 0) && (st.st_mode & FF_IFDIR);
 #else
-  mg_stat_t st;
-  return mg_stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+  struct stat st;
+  return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 #endif
 }
 
@@ -1132,7 +1125,7 @@ struct dirent *readdir(DIR *d) {
 #endif
 
 static void printdirentry(struct mg_connection *c, const char *name,
-                          mg_stat_t *stp) {
+                          struct stat *stp) {
   char size[64], mod[64], path[MG_PATH_MAX];
   int is_dir = S_ISDIR(stp->st_mode), n = 0;
   const char *slash = is_dir ? "/" : "";
@@ -1213,14 +1206,14 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
               (int) hm->uri.len, hm->uri.ptr);
 
     while ((dp = readdir(dirp)) != NULL) {
-      mg_stat_t st;
+      struct stat st;
       const char *sep = dp->d_name[0] == MG_DIRSEP ? "/" : "";
       // Do not show current dir and hidden files
       if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) continue;
       // SPIFFS can report "/foo.txt" in the dp->d_name
       if (snprintf(path, sizeof(path), "%s%s%s", dir, sep, dp->d_name) < 0) {
         LOG(LL_ERROR, ("%s truncated", dp->d_name));
-      } else if (mg_stat(path, &st) != 0) {
+      } else if (stat(path, &st) != 0) {
         LOG(LL_ERROR, ("%lu stat(%s): %d", c->id, path, errno));
       } else {
         printdirentry(c, dp->d_name, &st);
