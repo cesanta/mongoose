@@ -856,17 +856,18 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
       mg_http_reply(c, 404, "", "Invalid URI [%.*s]\n", (int) hm->uri.len,
                     hm->uri.ptr);
     } else {
-      FILE *fp = fopen(t2, "r");
+      struct stat st;
+      int res = stat(t2, &st);
 #if MG_ENABLE_SSI
-      if (is_index && fp == NULL) {
+      if (is_index && res != 0) {
         char *p = t2 + strlen(t2);
         while (p > t2 && p[-1] != '/') p--;
         strncpy(p, "index.shtml", (size_t)(&t2[sizeof(t2)] - p - 2));
         t2[sizeof(t2) - 1] = '\0';
-        fp = fopen(t2, "r");
+        res = stat(t2, &st);
       }
 #endif
-      if (is_index && fp == NULL) {
+      if (is_index && res != 0) {
 #if MG_ENABLE_DIRECTORY_LISTING
         listdir(c, hm, opts, t2);
 #else
@@ -883,7 +884,6 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
         mg_http_serve_file(c, hm, t2, guess_content_type(t2),
                            opts->extra_headers);
       }
-      if (fp != NULL) fclose(fp);
     }
   }
 }
