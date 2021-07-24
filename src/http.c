@@ -547,8 +547,9 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                  "Content-Range: bytes " MG_INT64_FMT "-" MG_INT64_FMT
                  "/" MG_INT64_FMT "\r\n",
                  r1, r1 + cl - 1, (int64_t) st.st_size);
-#if _FILE_OFFSET_BITS == 64 || _POSIX_C_SOURCE >= 200112L || \
-    _XOPEN_SOURCE >= 600
+#if defined(_FILE_OFFSET_BITS) &&                             \
+    (_FILE_OFFSET_BITS == 64 || _POSIX_C_SOURCE >= 200112L || \
+     _XOPEN_SOURCE >= 600)
         fseeko(fp, (off_t) r1, SEEK_SET);
 #else
         fseek(fp, (long) r1, SEEK_SET);

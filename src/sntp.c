@@ -1,11 +1,11 @@
+#include "sntp.h"
 #include "arch.h"
 #include "event.h"
 #include "log.h"
-#include "sntp.h"
 #include "util.h"
 
 #define SNTP_INTERVAL_SEC (3600)
-#define SNTP_TIME_OFFSET 2208988800
+#define SNTP_TIME_OFFSET 2208988800UL
 
 static unsigned long s_sntmp_next;
 
@@ -21,7 +21,7 @@ int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv) {
     LOG(LL_ERROR, ("%s", "server sent a kiss of death"));
   } else {
     uint32_t *data = (uint32_t *) &buf[40];
-    tv->tv_sec = mg_ntohl(data[0]) - SNTP_TIME_OFFSET;
+    tv->tv_sec = (time_t)(mg_ntohl(data[0]) - SNTP_TIME_OFFSET);
     tv->tv_usec = (suseconds_t) mg_ntohl(data[1]);
     s_sntmp_next = (unsigned long) (tv->tv_sec + SNTP_INTERVAL_SEC);
     res = 0;

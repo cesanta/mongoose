@@ -1,8 +1,6 @@
 #include "log.h"
 #include "util.h"
 
-#if MG_ENABLE_MGOS
-#else
 #if MG_ENABLE_LOG
 static void mg_log_stdout(const void *buf, size_t len, void *userdata) {
   (void) userdata;
@@ -68,5 +66,4 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd) {
   s_fn = fn;
   s_fn_param = fnd;
 }
-#endif
 #endif

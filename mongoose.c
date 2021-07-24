@@ -966,8 +966,9 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                  "Content-Range: bytes " MG_INT64_FMT "-" MG_INT64_FMT
                  "/" MG_INT64_FMT "\r\n",
                  r1, r1 + cl - 1, (int64_t) st.st_size);
-#if _FILE_OFFSET_BITS == 64 || _POSIX_C_SOURCE >= 200112L || \
-    _XOPEN_SOURCE >= 600
+#if defined(_FILE_OFFSET_BITS) &&                             \
+    (_FILE_OFFSET_BITS == 64 || _POSIX_C_SOURCE >= 200112L || \
+     _XOPEN_SOURCE >= 600)
         fseeko(fp, (off_t) r1, SEEK_SET);
 #else
         fseek(fp, (long) r1, SEEK_SET);
@@ -1576,8 +1577,6 @@ void mg_iobuf_free(struct mg_iobuf *io) {
 
 
 
-#if MG_ENABLE_MGOS
-#else
 #if MG_ENABLE_LOG
 static void mg_log_stdout(const void *buf, size_t len, void *userdata) {
   (void) userdata;
@@ -1643,7 +1642,6 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd) {
   s_fn = fn;
   s_fn_param = fnd;
 }
-#endif
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -2544,7 +2542,7 @@ void mg_hmac_sha1(const unsigned char *key, size_t keylen,
 
 
 #define SNTP_INTERVAL_SEC (3600)
-#define SNTP_TIME_OFFSET 2208988800
+#define SNTP_TIME_OFFSET 2208988800UL
 
 static unsigned long s_sntmp_next;
 
@@ -2560,7 +2558,7 @@ int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv) {
     LOG(LL_ERROR, ("%s", "server sent a kiss of death"));
   } else {
     uint32_t *data = (uint32_t *) &buf[40];
-    tv->tv_sec = mg_ntohl(data[0]) - SNTP_TIME_OFFSET;
+    tv->tv_sec = (time_t)(mg_ntohl(data[0]) - SNTP_TIME_OFFSET);
     tv->tv_usec = (suseconds_t) mg_ntohl(data[1]);
     s_sntmp_next = (unsigned long) (tv->tv_sec + SNTP_INTERVAL_SEC);
     res = 0;
