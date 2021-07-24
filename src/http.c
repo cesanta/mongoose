@@ -817,11 +817,12 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
 }
 #endif
 
-void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
-                       struct mg_http_serve_opts *opts) {
-  char root_dir[MG_PATH_MAX], full_path[sizeof(root_dir)];
-  root_dir[0] = full_path[0] = '\0';
-
+static bool uri_to_local_path(struct mg_connection *c,
+                              struct mg_http_message *hm,
+                              struct mg_http_serve_opts *opts, char *root_dir,
+                              size_t rlen, char *path, size_t path_len,
+                              bool *is_index) {
+  bool success = false;
   if (realpath(opts->root_dir, root_dir) == NULL) {
     LOG(LL_ERROR, ("realpath(%s): %d", opts->root_dir, errno));
     mg_http_reply(c, 400, "", "Bad web root [%s]\n", opts->root_dir);
@@ -830,63 +831,74 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   } else {
     // NOTE(lsm): Xilinx snprintf does not 0-terminate the detination for
     // the %.*s specifier, if the length is zero. Make sure hm->uri.len > 0
-    bool is_index = false;
     size_t n1 = strlen(root_dir), n2;
+    *is_index = false;
 
-    mg_url_decode(hm->uri.ptr, hm->uri.len, root_dir + n1,
-                  sizeof(root_dir) - n1, 0);
-    root_dir[sizeof(root_dir) - 1] = '\0';
+    mg_url_decode(hm->uri.ptr, hm->uri.len, root_dir + n1, rlen - n1, 0);
+    root_dir[rlen - 1] = '\0';
     n2 = strlen(root_dir);
     while (n2 > 0 && root_dir[n2 - 1] == '/') root_dir[--n2] = 0;
 
-    if (realpath(root_dir, full_path) == NULL) {
+    if (realpath(root_dir, path) == NULL) {
       LOG(LL_ERROR, ("realpath(%s): %d", root_dir, errno));
       mg_http_reply(c, 404, "", "Not found [%.*s]\n", (int) hm->uri.len,
                     hm->uri.ptr);
     } else {
-      if (mg_is_dir(full_path)) {
-        strncat(full_path, "/index.html",
-                sizeof(full_path) - strlen(full_path) - 1);
-        full_path[sizeof(full_path) - 1] = '\0';
-        is_index = true;
+      if (mg_is_dir(path)) {
+        strncat(path, "/index.html", path_len - strlen(path) - 1);
+        path[path_len - 1] = '\0';
+        *is_index = true;
       }
 
-      if (strlen(full_path) < n1 || memcmp(root_dir, full_path, n1) != 0) {
+      if (strlen(path) < n1 || memcmp(root_dir, path, n1) != 0) {
         // Requested file is located outside root directory, fail
         mg_http_reply(c, 404, "", "Invalid URI [%.*s]\n", (int) hm->uri.len,
                       hm->uri.ptr);
       } else {
-        struct stat st;
-        int res = stat(full_path, &st);
-#if MG_ENABLE_SSI
-        if (is_index && res != 0) {
-          char *p = full_path + strlen(full_path);
-          while (p > full_path && p[-1] != '/') p--;
-          strncpy(p, "index.shtml",
-                  (size_t)(&full_path[sizeof(full_path)] - p - 2));
-          full_path[sizeof(full_path) - 1] = '\0';
-          res = stat(full_path, &st);
-        }
-#endif
-        if (is_index && res != 0) {
-#if MG_ENABLE_DIRECTORY_LISTING
-          listdir(c, hm, opts, full_path);
-#else
-          mg_http_reply(c, 403, "", "%s", "Directory listing not supported");
-#endif
-#if MG_ENABLE_SSI
-        } else if (opts->ssi_pattern != NULL &&
-                   mg_globmatch(opts->ssi_pattern, strlen(opts->ssi_pattern),
-                                full_path, strlen(full_path))) {
-          root_dir[n1] = '\0';
-          mg_http_serve_ssi(c, root_dir, full_path);
-#endif
-        } else {
-          mg_http_serve_file(c, hm, full_path, guess_content_type(full_path),
-                             opts->extra_headers);
-        }
+        root_dir[n1] = '\0';
+        success = true;
       }
     }
+  }
+  return success;
+}
+
+void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
+                       struct mg_http_serve_opts *opts) {
+  char root_dir[MG_PATH_MAX], full_path[sizeof(root_dir)];
+  bool is_index = false, exists;
+  struct stat st;
+  root_dir[0] = full_path[0] = '\0';
+
+  if (!uri_to_local_path(c, hm, opts, root_dir, sizeof(root_dir), full_path,
+                         sizeof(full_path), &is_index))
+    return;
+
+  exists = stat(full_path, &st) == 0;
+#if MG_ENABLE_SSI
+  if (is_index && !exists) {
+    char *p = full_path + strlen(full_path);
+    while (p > full_path && p[-1] != '/') p--;
+    strncpy(p, "index.shtml", (size_t)(&full_path[sizeof(full_path)] - p - 2));
+    full_path[sizeof(full_path) - 1] = '\0';
+    exists = stat(full_path, &st) == 0;
+  }
+#endif
+  if (is_index && !exists) {
+#if MG_ENABLE_DIRECTORY_LISTING
+    listdir(c, hm, opts, full_path);
+#else
+    mg_http_reply(c, 403, "", "%s", "Directory listing not supported");
+#endif
+#if MG_ENABLE_SSI
+  } else if (opts->ssi_pattern != NULL &&
+             mg_globmatch(opts->ssi_pattern, strlen(opts->ssi_pattern),
+                          full_path, strlen(full_path))) {
+    mg_http_serve_ssi(c, root_dir, full_path);
+#endif
+  } else {
+    mg_http_serve_file(c, hm, full_path, guess_content_type(full_path),
+                       opts->extra_headers);
   }
 }
 
