@@ -36,7 +36,7 @@ endif
 all: mg_prefix test test++ ex vc98 vc2017 mingw mingw++ linux linux++ infer fuzz
 
 ex:
-	@for X in $(EXAMPLES); do $(MAKE) -C $$X $(EXAMPLE_TARGET); done
+	@for X in $(EXAMPLES); do $(MAKE) -C $$X $(EXAMPLE_TARGET) || break; done
 
 # Check that all external (exported) symbols have "mg_" prefix
 mg_prefix: mongoose.c mongoose.h

@@ -52,7 +52,7 @@ SOURCES += $(FREERTOS_PLUS_TCP_PATH)/portable/NetworkInterface/STM32Fxx/stm32fxx
 
 OBJECTS = obj/boot.o $(SOURCES:%.c=obj/%.o)
 
-all: $(PROG).hex
+example: $(PROG).hex
 
 $(PROG).bin: $(PROG).elf
 	$(DOCKER) arm-none-eabi-objcopy -O binary $< $@
