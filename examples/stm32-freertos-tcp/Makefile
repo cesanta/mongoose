@@ -6,7 +6,7 @@ DOCKER ?= docker run -it --rm -v $(PROJECT_ROOT_PATH):$(PROJECT_ROOT_PATH) -w $(
 FREERTOS_KERNEL_PATH ?= $(PROJECT_ROOT_PATH)/test/freertos-kernel
 FREERTOS_PLUS_TCP_PATH ?= $(PROJECT_ROOT_PATH)/test/freertos-tcp
 
-MONGOOSE_FLAGS = -DMG_ARCH=MG_ARCH_FREERTOS_TCP -DMG_ENABLE_STDIO=1
+MONGOOSE_FLAGS = -DMG_ARCH=MG_ARCH_FREERTOS_TCP
 MCU_FLAGS = -mcpu=cortex-m7 -mthumb -mfloat-abi=softfp -mfpu=vfpv4 
 #-mcpu=cortex-m7 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard
 

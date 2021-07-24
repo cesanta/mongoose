@@ -11,11 +11,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-
-#if MG_ENABLE_STDIO
 #include <sys/stat.h>
-#endif
+#include <time.h>
 
 #include <FreeRTOS.h>
 #include <FreeRTOS_IP.h>
@@ -51,6 +48,7 @@
   FreeRTOS_recvfrom((a), (b), (c), (d), (e), (f))
 #define closesocket(x) FreeRTOS_closesocket(x)
 #define gethostbyname(x) FreeRTOS_gethostbyname(x)
+#define getsockname(a, b, c) (-1)
 
 // Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
 static inline void *mg_calloc(int cnt, size_t size) {

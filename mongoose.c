@@ -407,6 +407,21 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 }
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/fs.c"
+#endif
+
+
+int mg_stat(const char *path, mg_stat_t *st) {
+#ifdef _WIN32
+  wchar_t tmp[MG_PATH_MAX];
+  MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
+  return _wstati64(tmp, st);
+#else
+  return stat(path, st);
+#endif
+}
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/http.c"
 #endif
 
@@ -775,7 +790,6 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
   if (buf != mem) free(buf);
 }
 
-#if MG_ENABLE_STDIO
 static void http_cb(struct mg_connection *, int, void *, void *);
 static void restore_http_cb(struct mg_connection *c) {
   if (c->pfn_data != NULL) fclose((FILE *) c->pfn_data);
@@ -1298,7 +1312,6 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
     }
   }
 }
-#endif
 
 static bool mg_is_url_safe(int c) {
   return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
@@ -3910,17 +3923,6 @@ struct mg_str mg_url_pass(const char *url) {
 
 
 
-#if MG_ENABLE_STDIO
-int mg_stat(const char *path, mg_stat_t *st) {
-#ifdef _WIN32
-  wchar_t tmp[MG_PATH_MAX];
-  MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
-  return _wstati64(tmp, st);
-#else
-  return stat(path, st);
-#endif
-}
-
 char *mg_file_read(const char *path, size_t *sizep) {
   FILE *fp;
   char *data = NULL;
@@ -3975,7 +3977,6 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
   if (buf != tmp) free(buf);
   return result;
 }
-#endif  // MG_ENABLE_STDIO
 
 void mg_random(void *buf, size_t len) {
   bool done = false;
@@ -3983,7 +3984,7 @@ void mg_random(void *buf, size_t len) {
 #if MG_ARCH == MG_ARCH_ESP32
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
 #elif MG_ARCH == MG_ARCH_WIN32
-#elif MG_ARCH_UNIX && MG_ENABLE_STDIO
+#elif MG_ARCH_UNIX
   FILE *fp = fopen("/dev/urandom", "rb");
   if (fp != NULL) {
     if (fread(buf, 1, len, fp) == len) done = true;

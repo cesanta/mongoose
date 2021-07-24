@@ -36,15 +36,6 @@ double mg_time(void);
 unsigned long mg_millis(void);
 void mg_usleep(unsigned long usecs);
 
-#if MG_ENABLE_STDIO
-#ifdef _WIN32
-typedef struct _stati64 mg_stat_t;
-#else
-typedef struct stat mg_stat_t;
-#endif
-int mg_stat(const char *path, mg_stat_t *);
-#endif
-
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
 

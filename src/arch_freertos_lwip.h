@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #if defined(__GNUC__)
+#include <sys/stat.h>
 #include <sys/time.h>
 #else
 typedef long suseconds_t;
@@ -15,10 +16,6 @@ struct timeval {
   time_t tv_sec;
   suseconds_t tv_usec;
 };
-#endif
-
-#if MG_ENABLE_STDIO
-#include <sys/stat.h>
 #endif
 
 #include <FreeRTOS.h>

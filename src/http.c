@@ -364,7 +364,6 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
   if (buf != mem) free(buf);
 }
 
-#if MG_ENABLE_STDIO
 static void http_cb(struct mg_connection *, int, void *, void *);
 static void restore_http_cb(struct mg_connection *c) {
   if (c->pfn_data != NULL) fclose((FILE *) c->pfn_data);
@@ -887,7 +886,6 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
     }
   }
 }
-#endif
 
 static bool mg_is_url_safe(int c) {
   return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||

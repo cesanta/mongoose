@@ -10,12 +10,7 @@ static const char *s_listening_address = "http://0.0.0.0:80";
 // Event handler for the listening connection.
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
-#if MG_ENABLE_STDIO
-    struct mg_http_serve_opts opts = {.root_dir = "/"};
-    mg_http_serve_dir(c, ev_data, &opts);
-#else
     mg_http_reply(c, 200, "", "hello, %s!\n", "world");
-#endif
   }
   (void) fn_data;
   (void) ev_data;

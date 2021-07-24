@@ -37,14 +37,6 @@ extern "C" {
 #define MG_ENABLE_OPENSSL 0
 #endif
 
-#ifndef MG_ENABLE_PACKED_FS
-#define MG_ENABLE_PACKED_FS 0
-#endif
-
-#ifndef MG_ENABLE_STDIO
-#define MG_ENABLE_STDIO 1
-#endif
-
 #ifndef MG_ENABLE_SSI
 #define MG_ENABLE_SSI 0
 #endif
@@ -200,6 +192,7 @@ extern "C" {
 #include <stdint.h>
 
 #if defined(__GNUC__)
+#include <sys/stat.h>
 #include <sys/time.h>
 #else
 typedef long suseconds_t;
@@ -207,10 +200,6 @@ struct timeval {
   time_t tv_sec;
   suseconds_t tv_usec;
 };
-#endif
-
-#if MG_ENABLE_STDIO
-#include <sys/stat.h>
 #endif
 
 #include <FreeRTOS.h>
@@ -247,11 +236,8 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-
-#if MG_ENABLE_STDIO
 #include <sys/stat.h>
-#endif
+#include <time.h>
 
 #include <FreeRTOS.h>
 #include <FreeRTOS_IP.h>
@@ -287,6 +273,7 @@ static inline void *mg_calloc(int cnt, size_t size) {
   FreeRTOS_recvfrom((a), (b), (c), (d), (e), (f))
 #define closesocket(x) FreeRTOS_closesocket(x)
 #define gethostbyname(x) FreeRTOS_gethostbyname(x)
+#define getsockname(a, b, c) (-1)
 
 // Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
 static inline void *mg_calloc(int cnt, size_t size) {
@@ -563,15 +550,6 @@ double mg_time(void);
 unsigned long mg_millis(void);
 void mg_usleep(unsigned long usecs);
 
-#if MG_ENABLE_STDIO
-#ifdef _WIN32
-typedef struct _stati64 mg_stat_t;
-#else
-typedef struct stat mg_stat_t;
-#endif
-int mg_stat(const char *path, mg_stat_t *);
-#endif
-
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
 
@@ -607,6 +585,16 @@ int mg_stat(const char *path, mg_stat_t *);
     while (*h != (elem_)) h = &(*h)->next; \
     *h = (elem_)->next;                    \
   } while (0)
+
+
+
+
+#ifdef _WIN32
+typedef struct _stati64 mg_stat_t;
+#else
+typedef struct stat mg_stat_t;
+#endif
+int mg_stat(const char *path, mg_stat_t *);
 
 
 
@@ -793,6 +781,7 @@ struct mg_http_serve_opts {
   const char *root_dir;       // Web root directory, must be non-NULL
   const char *ssi_pattern;    // SSI file name pattern, e.g. #.shtml
   const char *extra_headers;  // Extra HTTP headers to add in responses
+  bool use_packed_fs;         // Serve files embedded into binary
 };
 
 // Parameter for mg_http_next_multipart
