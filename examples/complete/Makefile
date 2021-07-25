@@ -9,7 +9,7 @@ all: $(PROG)
 $(PROG):
 	$(CC) pack.c -o pack
 	./pack $(FILES_TO_EMBED) > fs.c
-	$(CC) -W -Wall -Wextra -O3 -g3 $(CFLAGS) -o $(PROG) $(SOURCES)
+	$(CC) -W -Wall -Wextra -Os -g3 $(CFLAGS) -o $(PROG) $(SOURCES)
 
 ROOT ?= $(realpath $(CURDIR)/../..)
 DOCKER ?= docker run -it --rm -e Tmp=. -e WINEDEBUG=-all -v $(ROOT):$(ROOT) -w $(CURDIR) mdashnet/vc98 wine
