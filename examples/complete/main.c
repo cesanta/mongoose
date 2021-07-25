@@ -36,13 +36,13 @@ static bool update_config(struct mg_http_message *hm, struct config *cfg) {
   char buf[256];
   double dv;
   if (mjson_get_number(hm->body.ptr, hm->body.len, "$.value1", &dv)) {
-    s_config.value1 = dv;
+    cfg->value1 = dv;
     changed = true;
   }
   if (mjson_get_string(hm->body.ptr, hm->body.len, "$.value2", buf,
                        sizeof(buf)) > 0) {
-    free(s_config.value2);
-    s_config.value2 = strdup(buf);
+    free(cfg->value2);
+    cfg->value2 = strdup(buf);
     changed = true;
   }
   return changed;
@@ -129,7 +129,8 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
                            u->token);
       mg_http_printf_chunk(c, "");
     } else {
-      struct mg_http_serve_opts opts = {.root_dir = "web_root"};
+      struct mg_http_serve_opts opts = {0};
+      opts.root_dir = "web_root";
       mg_http_serve_dir(c, ev_data, &opts);
     }
   }
