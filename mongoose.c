@@ -417,8 +417,8 @@ struct packed_file {
   size_t pos;
 };
 
-const char *unpack(const char *, size_t *) WEAK;
-const char *unpack(const char *path, size_t *size) {
+const char *mg_unpack(const char *, size_t *) WEAK;
+const char *mg_unpack(const char *path, size_t *size) {
   (void) path, (void) size;
   return NULL;
 }
