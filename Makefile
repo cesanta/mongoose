@@ -6,19 +6,15 @@ OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
 CFLAGS ?= $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) $(EXTRA)
 SSL ?= MBEDTLS
-CDIR ?= $(realpath $(CURDIR))
-VC98 = docker run --rm -e WINEDEBUG=-all -v $(CDIR):$(CDIR) -w $(CDIR) docker.io/mdashnet/vc98
-VC2017 = docker run --rm -e WINEDEBUG=-all -v $(CDIR):$(CDIR) -w $(CDIR) docker.io/mdashnet/vc2017
-MINGW = docker run --rm -v $(CDIR):$(CDIR) -w $(CDIR) docker.io/mdashnet/mingw
-GCC = docker run --rm -v $(CDIR):$(CDIR) -w $(CDIR) mdashnet/cc2
-ARM = docker run -v $(CDIR):$(CDIR) -w $(CDIR) mdashnet/armgcc
+CWD ?= $(realpath $(CURDIR))
+DOCKER ?= docker run -it --rm -e Tmp=. -e WINEDEBUG=-all -v $(CWD):$(CWD) -w $(CWD)
 VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN_OPTIONS ?=
 EXAMPLES := $(wildcard examples/*)
 EXAMPLE_TARGET ?= example
 PREFIX ?= /usr/local
-SOVERSION = 7.2
+SOVERSION = 7.4
 .PHONY: ex test
 
 ifeq "$(SSL)" "MBEDTLS"
@@ -32,7 +28,7 @@ CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
-all: mg_prefix test test++ ex vc98 vc2017 mingw mingw++ linux linux++ infer fuzz
+all: mg_prefix test test++ arm ex vc98 vc2017 mingw mingw++ linux linux++ fuzz
 
 ex:
 	@for X in $(EXAMPLES); do $(MAKE) -C $$X $(EXAMPLE_TARGET) || break; done
@@ -53,15 +49,18 @@ test++: test
 # Make sure we can build from an unamalgamated sources
 unamalgamated: $(HDRS) Makefile
 	$(CC) src/*.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
-fuzz: mongoose.c mongoose.h Makefile test/fuzz.c
-	$(CC) mongoose.c test/fuzz.c $(CFLAGS) -DMG_ENABLE_LINES -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address $(LDFLAGS) -g -o fuzzer
-	$(DEBUGGER) ./fuzzer
+
+fuzzer: mongoose.c mongoose.h Makefile test/fuzz.c
+	clang mongoose.c test/fuzz.c $(CFLAGS) -DMG_ENABLE_LINES -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address $(LDFLAGS) -g -o $@
+
+fuzz: fuzzer
+	$(RUN) ./fuzzer
 
 # make CC=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
 test: CFLAGS += -DMG_ENABLE_IPV6=$(IPV6) -fsanitize=address#,undefined
 test: mongoose.h  Makefile $(SRCS)
 	$(CC) $(SRCS) $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
-	ASAN_OPTIONS=$(ASAN_OPTIONS) $(DEBUGGER) ./unit_test
+	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
 
 coverage: test
 	gcov -l -n *.gcno | sed '/^$$/d' | sed 'N;s/\n/ /'
@@ -73,29 +72,35 @@ upload-coverage: coverage
 infer:
 	infer run -- cc test/unit_test.c -c -W -Wall -Werror -Isrc -I. -O2 -DMG_ENABLE_MBEDTLS=1 -DMG_ENABLE_LINES -I/usr/local/Cellar/mbedtls/2.23.0/include  -DMG_ENABLE_IPV6=1 -g -o /dev/null
 
+arm: mongoose.h $(SRCS)
+	$(DOCKER) mdashnet/armgcc arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=0 -DMG_ENABLE_SSI=1 -o unit_test -nostartfiles --specs nosys.specs -e 0
+
+riscv: mongoose.h $(SRCS)
+	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=0 -DMG_ENABLE_SSI=1 -o unit_test
+
 #vc98: VCFLAGS += -DMG_ENABLE_IPV6=1
 vc98: Makefile mongoose.c mongoose.h test/unit_test.c
-	$(VC98) wine cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
-	$(VC98) wine $@.exe
+	$(DOCKER) mdashnet/vc98 wine cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
+	$(DOCKER) mdashnet/vc98 wine $@.exe
 
 #vc2017: VCFLAGS += -DMG_ENABLE_IPV6=1
 vc2017: Makefile mongoose.c mongoose.h test/unit_test.c
-	$(VC2017) wine64 cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
-	$(VC2017) wine64 $@.exe
+	$(DOCKER) mdashnet/vc2017 wine64 cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
+	$(DOCKER) mdashnet/vc2017 wine64 $@.exe
 
 mingw: Makefile mongoose.c mongoose.h test/unit_test.c
-	$(MINGW) i686-w64-mingw32-gcc mongoose.c test/unit_test.c -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
-	$(VC98) wine test.exe
+	$(DOCKER) mdashnet/mingw i686-w64-mingw32-gcc mongoose.c test/unit_test.c -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
+	$(DOCKER) mdashnet/vc98 wine test.exe
 
 mingw++: Makefile mongoose.c mongoose.h test/unit_test.c
-	$(MINGW) i686-w64-mingw32-g++ mongoose.c test/unit_test.c -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
+	$(DOCKER) mdashnet/mingw i686-w64-mingw32-g++ mongoose.c test/unit_test.c -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
   # Note: for some reason, a binary built with mingw g++, fails to run
 
 #linux: CFLAGS += -DMG_ENABLE_IPV6=$(IPV6)
 linux: CFLAGS += -fsanitize=address,undefined
 linux: Makefile mongoose.c mongoose.h test/unit_test.c
-	$(GCC) $(CC) mongoose.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
-	$(GCC) ./unit_test_gcc
+	$(DOCKER) mdashnet/cc2 gcc mongoose.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
+	$(DOCKER) mdashnet/cc2 ./unit_test_gcc
 
 linux++: CC = g++
 linux++: WARN += -Wno-missing-field-initializers
@@ -113,9 +118,6 @@ install: linux-libs
 
 uninstall:
 	rm -rf $(DESTDIR)$(PREFIX)/lib/libmongoose.a $(DESTDIR)$(PREFIX)/lib/libmongoose.so.$(SOVERSION) $(DESTDIR)$(PREFIX)/include/mongoose.h $(DESTDIR)$(PREFIX)/lib/libmongoose.so
-
-arm: Makefile mongoose.c mongoose.h test/unit_test.c
-	$(ARM) arm-none-eabi-gcc mongoose.c -c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=0 -DMG_ENABLE_SSI=1
 
 mongoose.c: Makefile $(wildcard src/*)
 	(cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/private.h src/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@

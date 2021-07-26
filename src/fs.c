@@ -12,7 +12,7 @@ const char *mg_unpack(const char *path, size_t *size) {
   return NULL;
 }
 
-#if defined(__linux__) && defined(GCC)
+#if defined(MG_FOPENCOOKIE)
 ssize_t packed_read(void *cookie, char *buf, size_t size) {
   struct packed_file *fp = (struct packed_file *) cookie;
   if (size > fp->size - fp->pos) size = fp->size - fp->pos;

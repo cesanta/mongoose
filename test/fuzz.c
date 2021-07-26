@@ -30,9 +30,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_sntp_parse(NULL, 0, &tv);
 
   char buf[size * 4 / 3 + 5];  // At least 4 chars and nul termination
-  mg_base64_decode((char *) data, size, buf);
+  mg_base64_decode((char *) data, (int) size, buf);
   mg_base64_decode(NULL, 0, buf);
-  mg_base64_encode(data, size, buf);
+  mg_base64_encode(data, (int) size, buf);
   mg_base64_encode(NULL, 0, buf);
 
   char *hexdump = mg_hexdump(data, size);
