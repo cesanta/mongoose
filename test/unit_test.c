@@ -1335,8 +1335,21 @@ static void test_multipart(void) {
   ASSERT(mg_http_next_multipart(mg_str(s), ofs, &part) == 0);
 }
 
+static void test_packed(void) {
+  FILE *fp = fopen_packed("Makefile", "r");
+#if defined(__linux__) && defined(GCC)
+  ASSERT(fp != NULL);
+  fseek(fp, 0, SEEK_END);
+  ASSERT(ftell(fp) > 0);
+  fclose(fp);
+#else
+  ASSERT(fp == NULL);
+#endif
+}
+
 int main(void) {
   mg_log_set("3");
+  test_packed();
   test_crc32();
   test_multipart();
   test_http_chunked();

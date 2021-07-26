@@ -1,4 +1,4 @@
-SRCS = $(wildcard src/*.c)
+SRCS = mongoose.c test/unit_test.c test/packed_fs.c
 HDRS = $(wildcard src/*.h)
 DEFS ?= -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=1 -DMG_ENABLE_SSI=1
 WARN ?= -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion
@@ -13,7 +13,6 @@ MINGW = docker run --rm -v $(CDIR):$(CDIR) -w $(CDIR) docker.io/mdashnet/mingw
 GCC = docker run --rm -v $(CDIR):$(CDIR) -w $(CDIR) mdashnet/cc2
 ARM = docker run -v $(CDIR):$(CDIR) -w $(CDIR) mdashnet/armgcc
 VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
-CLANG ?= clang # /usr/local/opt/llvm\@9/bin/clang
 IPV6 ?= 1
 ASAN_OPTIONS ?=
 EXAMPLES := $(wildcard examples/*)
@@ -38,26 +37,30 @@ all: mg_prefix test test++ ex vc98 vc2017 mingw mingw++ linux linux++ infer fuzz
 ex:
 	@for X in $(EXAMPLES); do $(MAKE) -C $$X $(EXAMPLE_TARGET) || break; done
 
+test/packed_fs.c:
+	$(CC) $(CFLAGS) examples/complete/pack.c -o pack
+	./pack Makefile > $@
+
 # Check that all external (exported) symbols have "mg_" prefix
 mg_prefix: mongoose.c mongoose.h
-	$(CLANG) mongoose.c $(CFLAGS) -c -o /tmp/x.o && nm /tmp/x.o | grep ' T' | grep -v 'mg_' ; test $$? = 1
+	$(CC) mongoose.c $(CFLAGS) -c -o /tmp/x.o && nm /tmp/x.o | grep ' T' | grep -v 'mg_' ; test $$? = 1
 
 # C++ build
-test++: CLANG = g++
+test++: CC = g++
 test++: WARN += -Wno-shadow -Wno-missing-field-initializers -Wno-deprecated
 test++: test
 
 # Make sure we can build from an unamalgamated sources
-unamalgamated: $(SRCS) $(HDRS) Makefile
-	$(CLANG) src/*.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
+unamalgamated: $(HDRS) Makefile
+	$(CC) src/*.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
 fuzz: mongoose.c mongoose.h Makefile test/fuzz.c
-	$(CLANG) mongoose.c test/fuzz.c $(CFLAGS) -DMG_ENABLE_LINES -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address $(LDFLAGS) -g -o fuzzer
+	$(CC) mongoose.c test/fuzz.c $(CFLAGS) -DMG_ENABLE_LINES -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address $(LDFLAGS) -g -o fuzzer
 	$(DEBUGGER) ./fuzzer
 
-# make CLANG=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
+# make CC=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
 test: CFLAGS += -DMG_ENABLE_IPV6=$(IPV6) -fsanitize=address#,undefined
-test: mongoose.c mongoose.h  Makefile test/unit_test.c
-	$(CLANG) mongoose.c test/unit_test.c $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
+test: mongoose.h  Makefile $(SRCS)
+	$(CC) $(SRCS) $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(DEBUGGER) ./unit_test
 
 coverage: test
@@ -114,7 +117,7 @@ uninstall:
 arm: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(ARM) arm-none-eabi-gcc mongoose.c -c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=0 -DMG_ENABLE_SSI=1
 
-mongoose.c: $(SRCS) Makefile
+mongoose.c: Makefile
 	(cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/private.h src/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@
 
 mongoose.h: $(HDRS) Makefile
@@ -122,4 +125,4 @@ mongoose.h: $(HDRS) Makefile
 
 clean: EXAMPLE_TARGET = clean
 clean: ex
-	rm -rf $(PROG) *.o *.dSYM unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-*
+	rm -rf $(PROG) *.o *.dSYM unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack

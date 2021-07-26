@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
         printf(" // %.*s\n", j, ascii);
         j = 0;
       }
-      ascii[j] = (ch >= ' ' && ch <= '~' && ch != '\\') ? ch : '.';
+      ascii[j] = (char) ((ch >= ' ' && ch <= '~' && ch != '\\') ? ch : '.');
       printf(" %3u,", ch);
     }
     // Append zero byte at the end, to make text files appear in memory
