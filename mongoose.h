@@ -606,7 +606,7 @@ void mg_usleep(unsigned long usecs);
 
 
 
-FILE *fopen_packed(const char *path, const char *mode);
+FILE *mg_fopen_packed(const char *path, const char *mode);
 
 
 

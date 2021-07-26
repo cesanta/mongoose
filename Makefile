@@ -117,7 +117,7 @@ uninstall:
 arm: Makefile mongoose.c mongoose.h test/unit_test.c
 	$(ARM) arm-none-eabi-gcc mongoose.c -c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=0 -DMG_ENABLE_SSI=1
 
-mongoose.c: Makefile
+mongoose.c: Makefile $(wildcard src/*)
 	(cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/private.h src/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@
 
 mongoose.h: $(HDRS) Makefile

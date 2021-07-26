@@ -13,7 +13,7 @@
 //      ./pack file1.data file2.data > fs.c
 //
 //   3. In your application code, you can access files using this function:
-//      const char *unpack(const char *file_name, size_t *size);
+//      const char *mg_unpack(const char *file_name, size_t *size);
 //
 //   4. Build your app with fs.c:
 //      cc -o my_app my_app.c fs.c
@@ -22,9 +22,9 @@
 #include <stdlib.h>
 
 static const char *code =
-    "const char *unpack(const char *name, size_t *size) {\n"
+    "const char *mg_unpack(const char *name, size_t *size) {\n"
     "  const struct packed_file *p;\n"
-    "  for (p = g_packed_files; p->name != NULL; p++) {\n"
+    "  for (p = packed_files; p->name != NULL; p++) {\n"
     "    if (strcmp(p->name, name) != 0) continue;\n"
     "    if (size != NULL) *size = p->size - 1;\n"
     "    return (const char *) p->data;\n"
@@ -60,11 +60,11 @@ int main(int argc, char *argv[]) {
     fclose(fp);
   }
 
-  printf("%s", "\nconst struct packed_file {\n");
+  printf("%s", "\nstatic const struct packed_file {\n");
   printf("%s", "  const char *name;\n");
   printf("%s", "  const unsigned char *data;\n");
   printf("%s", "  size_t size;\n");
-  printf("%s", "} g_packed_files[] = {\n");
+  printf("%s", "} packed_files[] = {\n");
 
   for (i = 1; i < argc; i++) {
     printf("  {\"%s\", v%d, sizeof(v%d) },\n", argv[i], i, i);

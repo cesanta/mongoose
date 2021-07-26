@@ -41,7 +41,7 @@ int packed_close(void *cookie) {
   return 0;
 }
 
-FILE *fopen_packed(const char *path, const char *mode) {
+FILE *mg_fopen_packed(const char *path, const char *mode) {
   cookie_io_functions_t funcs = {
       .read = packed_read,
       .write = packed_write,
@@ -58,7 +58,7 @@ FILE *fopen_packed(const char *path, const char *mode) {
   return fopencookie(cookie, mode, funcs);
 }
 #else
-FILE *fopen_packed(const char *path, const char *mode) {
+FILE *mg_fopen_packed(const char *path, const char *mode) {
   (void) path, (void) mode;
   return NULL;
 }

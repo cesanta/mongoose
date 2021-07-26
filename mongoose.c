@@ -423,7 +423,7 @@ const char *unpack(const char *path, size_t *size) {
   return NULL;
 }
 
-#if defined(__linux__)
+#if defined(__linux__) && defined(GCC)
 ssize_t packed_read(void *cookie, char *buf, size_t size) {
   struct packed_file *fp = (struct packed_file *) cookie;
   if (size > fp->size - fp->pos) size = fp->size - fp->pos;
@@ -452,7 +452,7 @@ int packed_close(void *cookie) {
   return 0;
 }
 
-FILE *fopen_packed(const char *path, const char *mode) {
+FILE *mg_fopen_packed(const char *path, const char *mode) {
   cookie_io_functions_t funcs = {
       .read = packed_read,
       .write = packed_write,
@@ -469,7 +469,7 @@ FILE *fopen_packed(const char *path, const char *mode) {
   return fopencookie(cookie, mode, funcs);
 }
 #else
-FILE *fopen_packed(const char *path, const char *mode) {
+FILE *mg_fopen_packed(const char *path, const char *mode) {
   (void) path, (void) mode;
   return NULL;
 }

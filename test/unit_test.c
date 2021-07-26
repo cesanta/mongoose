@@ -1336,7 +1336,7 @@ static void test_multipart(void) {
 }
 
 static void test_packed(void) {
-  FILE *fp = fopen_packed("Makefile", "r");
+  FILE *fp = mg_fopen_packed("Makefile", "r");
 #if defined(__linux__) && defined(GCC)
   ASSERT(fp != NULL);
   fseek(fp, 0, SEEK_END);
