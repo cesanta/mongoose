@@ -7,7 +7,7 @@ INCS ?= -Isrc -I.
 CFLAGS ?= $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) $(EXTRA)
 SSL ?= MBEDTLS
 CWD ?= $(realpath $(CURDIR))
-DOCKER ?= docker run -it --rm -e Tmp=. -e WINEDEBUG=-all -v $(CWD):$(CWD) -w $(CWD)
+DOCKER ?= docker run --rm -e Tmp=. -e WINEDEBUG=-all -v $(CWD):$(CWD) -w $(CWD)
 VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN_OPTIONS ?=
