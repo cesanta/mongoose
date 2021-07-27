@@ -437,13 +437,13 @@ ssize_t packed_write(void *cookie, const char *buf, size_t size) {
   return -1;
 }
 
-int packed_seek(void *cookie, off64_t *offset, int whence) {
+int packed_seek(void *cookie, long *offset, int whence) {
   struct packed_file *fp = (struct packed_file *) cookie;
   if (whence == SEEK_SET) fp->pos = (size_t) *offset;
-  if (whence == SEEK_END) fp->pos = (size_t)((off64_t) fp->size + *offset);
-  if (whence == SEEK_CUR) fp->pos = (size_t)((off64_t) fp->pos + *offset);
+  if (whence == SEEK_END) fp->pos = (size_t)((long) fp->size + *offset);
+  if (whence == SEEK_CUR) fp->pos = (size_t)((long) fp->pos + *offset);
   if (fp->pos > fp->size) fp->pos = fp->size;
-  *offset = (off64_t) fp->pos;
+  *offset = (long) fp->pos;
   return 0;
 }
 
@@ -461,7 +461,7 @@ FILE *mg_fopen_packed(const char *path, const char *mode) {
   };
   struct packed_file *cookie = NULL;
   size_t size = 0;
-  const char *data = unpack(path, &size);
+  const char *data = mg_unpack(path, &size);
   if (data == NULL) return NULL;
   if ((cookie = calloc(1, sizeof(*cookie))) == NULL) return NULL;
   cookie->data = data;

@@ -1336,11 +1336,14 @@ static void test_multipart(void) {
 }
 
 static void test_packed(void) {
-  FILE *fp = mg_fopen_packed("Makefile", "r");
-#if defined(__linux__) && defined(GCC)
+  const char *path = "Makefile";
+  FILE *fp = mg_fopen_packed(path, "r");
+#if MG_ENABLE_PACKED_FS
+  struct stat st;
+  ASSERT(stat(path, &st) == 0);
   ASSERT(fp != NULL);
   fseek(fp, 0, SEEK_END);
-  ASSERT(ftell(fp) > 0);
+  ASSERT(ftell(fp) == st.st_size);
   fclose(fp);
 #else
   ASSERT(fp == NULL);
