@@ -1,6 +1,8 @@
 // Required by the test ARM build
 #pragma once
 
+#define _GNU_SOURCE  // For fopencookie()
+
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
