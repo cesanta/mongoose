@@ -22,6 +22,4 @@
 #undef MG_ENABLE_SOCKET
 #define MG_ENABLE_SOCKET 0
 
-#define realpath(a, b) (a)
-
 int clock_gettime(clockid_t clock_id, struct timespec *tp);

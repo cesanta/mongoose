@@ -407,7 +407,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 }
 
 #ifdef MG_ENABLE_LINES
-#line 1 "src/fs.c"
+#line 1 "src/fs_packed.c"
 #endif
 
 
@@ -423,57 +423,201 @@ const char *mg_unpack(const char *path, size_t *size) {
   return NULL;
 }
 
-#if defined(MG_FOPENCOOKIE)
-ssize_t packed_read(void *cookie, char *buf, size_t size) {
-  struct packed_file *fp = (struct packed_file *) cookie;
-  if (size > fp->size - fp->pos) size = fp->size - fp->pos;
-  memcpy(buf, &fp->data[fp->pos], size);
-  fp->pos += size;
-  return (ssize_t) size;
+static char *packed_realpath(const char *path, char *resolved_path) {
+  if (resolved_path == NULL) resolved_path = malloc(strlen(path) + 1);
+  strcpy(resolved_path, path);
+  return resolved_path;
 }
 
-ssize_t packed_write(void *cookie, const char *buf, size_t size) {
-  (void) cookie, (void) buf, (void) size;
-  return -1;
+static int packed_stat(const char *path, size_t *size, unsigned *mtime) {
+  const char *data = mg_unpack(path, size);
+  if (mtime) *mtime = 0;
+  return data == NULL ? 0 : MG_FS_READ;
 }
 
-int packed_seek(void *cookie, long *offset, int whence) {
-  struct packed_file *fp = (struct packed_file *) cookie;
-  if (whence == SEEK_SET) fp->pos = (size_t) *offset;
-  if (whence == SEEK_END) fp->pos = (size_t)((long) fp->size + *offset);
-  if (whence == SEEK_CUR) fp->pos = (size_t)((long) fp->pos + *offset);
-  if (fp->pos > fp->size) fp->pos = fp->size;
-  *offset = (long) fp->pos;
-  return 0;
+static void packed_list(const char *path, void (*fn)(const char *, void *),
+                        void *userdata) {
+  (void) path, (void) fn, (void) userdata;
 }
 
-int packed_close(void *cookie) {
-  free(cookie);
-  return 0;
-}
-
-FILE *mg_fopen_packed(const char *path, const char *mode) {
-  cookie_io_functions_t funcs = {
-      .read = packed_read,
-      .write = packed_write,
-      .seek = packed_seek,
-      .close = packed_close,
-  };
-  struct packed_file *cookie = NULL;
+static struct mg_fd *packed_open(const char *path, int flags) {
   size_t size = 0;
   const char *data = mg_unpack(path, &size);
+  struct packed_file *fp = NULL;
+  struct mg_fd *fd = NULL;
   if (data == NULL) return NULL;
-  if ((cookie = calloc(1, sizeof(*cookie))) == NULL) return NULL;
-  cookie->data = data;
-  cookie->size = size;
-  return fopencookie(cookie, mode, funcs);
+  if (flags & MG_FS_WRITE) return NULL;
+  fp = calloc(1, sizeof(*fp));
+  fd = calloc(1, sizeof(*fd));
+  fp->size = size;
+  fp->data = data;
+  fd->fd = fp;
+  fd->fs = &mg_fs_packed;
+  return fd;
+}
+
+static void packed_close(struct mg_fd *fd) {
+  if (fd) free(fd->fd), free(fd);
+}
+
+static size_t packed_read(void *fd, void *buf, size_t len) {
+  struct packed_file *fp = (struct packed_file *) fd;
+  if (fp->pos + len > fp->size) len = fp->size - fp->pos;
+  memcpy(buf, &fp->data[fp->pos], len);
+  fp->pos += len;
+  return len;
+}
+
+static size_t packed_write(void *fd, const void *buf, size_t len) {
+  (void) fd, (void) buf, (void) len;
+  return 0;
+}
+
+static size_t packed_seek(void *fd, size_t offset) {
+  struct packed_file *fp = (struct packed_file *) fd;
+  fp->pos = offset;
+  if (fp->pos > fp->size) fp->pos = fp->size;
+  return fp->pos;
+}
+
+struct mg_fs mg_fs_packed = {packed_realpath, packed_stat,  packed_list,
+                             packed_open,     packed_close, packed_read,
+                             packed_write,    packed_seek};
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/fs_posix.c"
+#endif
+
+
+#if defined(O_READ)
+static char *posix_realpath(const char *path, char *resolved_path) {
+#ifdef _WIN32
+  return _fullpath(path, resolved_path, PATH_MAX);
+#else
+  return realpath(path, resolved_path);
+#endif
+}
+
+static int posix_stat(const char *path, size_t *size, unsigned *mtime) {
+#ifdef _WIN32
+  struct _stati64 st;
+  wchar_t tmp[PATH_MAX];
+  MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
+  if (_wstati64(tmp, &st) != 0) return 0;
+#else
+  struct stat st;
+  if (stat(path, &st) != 0) return 0;
+#endif
+  if (size) *size = (size_t) st.st_size;
+  if (mtime) *mtime = (unsigned) st.st_mtime;
+  return MG_FS_READ | MG_FS_WRITE | (S_ISDIR(st.st_mode) ? MG_FS_DIR : 0);
+}
+
+static void posix_list(const char *dir, void (*fn)(const char *, void *),
+                       void *userdata) {
+  // char path[MG_PATH_MAX], *p = &dir[strlen(dir) - 1], tmp[10];
+  struct dirent *dp;
+  DIR *dirp;
+
+  // while (p > dir && *p != '/') *p-- = '\0';
+  if ((dirp = (opendir(dir))) != NULL) {
+    size_t off, n;
+    while ((dp = readdir(dirp)) != NULL) {
+      // Do not show current dir and hidden files
+      if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) continue;
+      fn(dp->d_name, &st);
+    }
+    closedir(dirp);
+  }
+}
+
+static struct mg_fd *posix_open(const char *path, int flags) {
+  const char *mode =
+      flags & (MG_FS_READ | MG_FS_WRITE)
+          ? "r+b"
+          : flags & MG_FS_READ ? "rb" : flags & MG_FS_WRITE ? "wb" : "";
+  void *fp = NULL;
+  struct mg_fd *fd = NULL;
+#ifdef _WIN32
+  wchar_t b1[PATH_MAX], b2[10];
+  MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
+  MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
+  fp = (void *) _wfopen(b1, b2);
+#else
+  fp = (void *) fopen(path, mode);
+#endif
+  if (fp == NULL) return NULL;
+  fd = calloc(1, sizeof(*fd));
+  fd->fd = fp;
+  fd->fs = &mg_fs_posix;
+  return fd;
+}
+
+static void posix_close(struct mg_fd *fd) {
+  if (fd) fclose((FILE *) fd->fd), free(fd);
+}
+
+static size_t posix_read(void *fp, void *buf, size_t len) {
+  return fread(buf, 1, len, (FILE *) fp);
+}
+
+static size_t posix_write(void *fp, const void *buf, size_t len) {
+  return fwrite(buf, 1, len, (FILE *) fp);
+}
+
+static size_t posix_seek(void *fp, size_t offset) {
+#if _FILE_OFFSET_BITS == 64 || _POSIX_C_SOURCE >= 200112L || \
+    _XOPEN_SOURCE >= 600
+  fseeko((FILE *) fp, (off_t) offset, SEEK_SET);
+#else
+  fseek((FILE *) fp, (long) offset, SEEK_SET);
+#endif
+  return (size_t) ftell((FILE *) fp);
 }
 #else
-FILE *mg_fopen_packed(const char *path, const char *mode) {
-  (void) path, (void) mode;
+static char *posix_realpath(const char *path, char *resolved_path) {
+  (void) path, (void) resolved_path;
   return NULL;
 }
+
+static int posix_stat(const char *path, size_t *size, unsigned *mtime) {
+  (void) path, (void) size, (void) mtime;
+  return 0;
+}
+
+static void posix_list(const char *path, void (*fn)(const char *, void *),
+                       void *userdata) {
+  (void) path, (void) fn, (void) userdata;
+}
+
+static struct mg_fd *posix_open(const char *path, int flags) {
+  (void) path, (void) flags;
+  return NULL;
+}
+
+static void posix_close(struct mg_fd *fd) {
+  (void) fd;
+}
+
+static size_t posix_read(void *fd, void *buf, size_t len) {
+  (void) fd, (void) buf, (void) len;
+  return 0;
+}
+
+static size_t posix_write(void *fd, const void *buf, size_t len) {
+  (void) fd, (void) buf, (void) len;
+  return 0;
+}
+
+static size_t posix_seek(void *fd, size_t offset) {
+  (void) fd, (void) offset;
+  return (size_t) ~0;
+}
 #endif
+
+struct mg_fs mg_fs_posix = {posix_realpath, posix_stat,  posix_list,
+                            posix_open,     posix_close, posix_read,
+                            posix_write,    posix_seek};
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/http.c"
@@ -900,73 +1044,83 @@ static void static_cb(struct mg_connection *c, int ev, void *ev_data,
   (void) ev_data;
 }
 
-static const char *guess_content_type(const char *filename) {
-  size_t n = strlen(filename);
-#define MIME_ENTRY(_ext, _type) \
-  { _ext, sizeof(_ext) - 1, _type }
-  const struct {
-    const char *ext;
-    size_t ext_len;
-    const char *type;
-  } * t, types[] = {
-             MIME_ENTRY("html", "text/html; charset=utf-8"),
-             MIME_ENTRY("htm", "text/html; charset=utf-8"),
-             MIME_ENTRY("css", "text/css; charset=utf-8"),
-             MIME_ENTRY("js", "text/javascript; charset=utf-8"),
-             MIME_ENTRY("gif", "image/gif"),
-             MIME_ENTRY("png", "image/png"),
-             MIME_ENTRY("woff", "font/woff"),
-             MIME_ENTRY("ttf", "font/ttf"),
-             MIME_ENTRY("aac", "audio/aac"),
-             MIME_ENTRY("avi", "video/x-msvideo"),
-             MIME_ENTRY("azw", "application/vnd.amazon.ebook"),
-             MIME_ENTRY("bin", "application/octet-stream"),
-             MIME_ENTRY("bmp", "image/bmp"),
-             MIME_ENTRY("bz", "application/x-bzip"),
-             MIME_ENTRY("bz2", "application/x-bzip2"),
-             MIME_ENTRY("csv", "text/csv"),
-             MIME_ENTRY("doc", "application/msword"),
-             MIME_ENTRY("epub", "application/epub+zip"),
-             MIME_ENTRY("exe", "application/octet-stream"),
-             MIME_ENTRY("gz", "application/gzip"),
-             MIME_ENTRY("ico", "image/x-icon"),
-             MIME_ENTRY("json", "application/json"),
-             MIME_ENTRY("mid", "audio/mid"),
-             MIME_ENTRY("mjs", "text/javascript"),
-             MIME_ENTRY("mov", "video/quicktime"),
-             MIME_ENTRY("mp3", "audio/mpeg"),
-             MIME_ENTRY("mp4", "video/mp4"),
-             MIME_ENTRY("mpeg", "video/mpeg"),
-             MIME_ENTRY("mpg", "video/mpeg"),
-             MIME_ENTRY("ogg", "application/ogg"),
-             MIME_ENTRY("pdf", "application/pdf"),
-             MIME_ENTRY("rar", "application/rar"),
-             MIME_ENTRY("rtf", "application/rtf"),
-             MIME_ENTRY("shtml", "text/html; charset=utf-8"),
-             MIME_ENTRY("svg", "image/svg+xml"),
-             MIME_ENTRY("tar", "application/tar"),
-             MIME_ENTRY("tgz", "application/tar-gz"),
-             MIME_ENTRY("txt", "text/plain; charset=utf-8"),
-             MIME_ENTRY("wasm", "application/wasm"),
-             MIME_ENTRY("wav", "audio/wav"),
-             MIME_ENTRY("weba", "audio/webm"),
-             MIME_ENTRY("webm", "video/webm"),
-             MIME_ENTRY("webp", "image/webp"),
-             MIME_ENTRY("xls", "application/excel"),
-             MIME_ENTRY("xml", "application/xml"),
-             MIME_ENTRY("xsl", "application/xml"),
-             MIME_ENTRY("zip", "application/zip"),
-             MIME_ENTRY("3gp", "video/3gpp"),
-             MIME_ENTRY("7z", "application/x-7z-compressed"),
-             {NULL, 0, NULL},
-         };
+static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
+  // clang-format off
+  struct mimeentry { struct mg_str extension, value; };
+  #define MIME_ENTRY(a, b) {{a, sizeof(a) - 1 }, { b, sizeof(b) - 1 }}
+  // clang-format on
+  const struct mimeentry tab[] = {
+      MIME_ENTRY("html", "text/html; charset=utf-8"),
+      MIME_ENTRY("htm", "text/html; charset=utf-8"),
+      MIME_ENTRY("css", "text/css; charset=utf-8"),
+      MIME_ENTRY("js", "text/javascript; charset=utf-8"),
+      MIME_ENTRY("gif", "image/gif"),
+      MIME_ENTRY("png", "image/png"),
+      MIME_ENTRY("woff", "font/woff"),
+      MIME_ENTRY("ttf", "font/ttf"),
+      MIME_ENTRY("aac", "audio/aac"),
+      MIME_ENTRY("avi", "video/x-msvideo"),
+      MIME_ENTRY("azw", "application/vnd.amazon.ebook"),
+      MIME_ENTRY("bin", "application/octet-stream"),
+      MIME_ENTRY("bmp", "image/bmp"),
+      MIME_ENTRY("bz", "application/x-bzip"),
+      MIME_ENTRY("bz2", "application/x-bzip2"),
+      MIME_ENTRY("csv", "text/csv"),
+      MIME_ENTRY("doc", "application/msword"),
+      MIME_ENTRY("epub", "application/epub+zip"),
+      MIME_ENTRY("exe", "application/octet-stream"),
+      MIME_ENTRY("gz", "application/gzip"),
+      MIME_ENTRY("ico", "image/x-icon"),
+      MIME_ENTRY("json", "application/json"),
+      MIME_ENTRY("mid", "audio/mid"),
+      MIME_ENTRY("mjs", "text/javascript"),
+      MIME_ENTRY("mov", "video/quicktime"),
+      MIME_ENTRY("mp3", "audio/mpeg"),
+      MIME_ENTRY("mp4", "video/mp4"),
+      MIME_ENTRY("mpeg", "video/mpeg"),
+      MIME_ENTRY("mpg", "video/mpeg"),
+      MIME_ENTRY("ogg", "application/ogg"),
+      MIME_ENTRY("pdf", "application/pdf"),
+      MIME_ENTRY("rar", "application/rar"),
+      MIME_ENTRY("rtf", "application/rtf"),
+      MIME_ENTRY("shtml", "text/html; charset=utf-8"),
+      MIME_ENTRY("svg", "image/svg+xml"),
+      MIME_ENTRY("tar", "application/tar"),
+      MIME_ENTRY("tgz", "application/tar-gz"),
+      MIME_ENTRY("txt", "text/plain; charset=utf-8"),
+      MIME_ENTRY("wasm", "application/wasm"),
+      MIME_ENTRY("wav", "audio/wav"),
+      MIME_ENTRY("weba", "audio/webm"),
+      MIME_ENTRY("webm", "video/webm"),
+      MIME_ENTRY("webp", "image/webp"),
+      MIME_ENTRY("xls", "application/excel"),
+      MIME_ENTRY("xml", "application/xml"),
+      MIME_ENTRY("xsl", "application/xml"),
+      MIME_ENTRY("zip", "application/zip"),
+      MIME_ENTRY("3gp", "video/3gpp"),
+      MIME_ENTRY("7z", "application/x-7z-compressed"),
+      MIME_ENTRY("7z", "application/x-7z-compressed"),
+      {{0, 0}, {0, 0}},
+  };
+  size_t i = 0;
+  struct mg_str k, v, s = mg_str(extra);
 
-  for (t = types; t->ext != NULL; t++) {
-    if (n < t->ext_len + 2) continue;
-    if (mg_ncasecmp(t->ext, &filename[n - t->ext_len], t->ext_len)) continue;
-    return t->type;
+  // Shrink path to its extension only
+  while (i < path.len && path.ptr[path.len - i - 1] != '.') i++;
+  path.ptr += path.len - i;
+  path.len = i;
+
+  // Process user-provided mime type overrides, if any
+  while (mg_next_comma_entry(&s, &k, &v)) {
+    if (mg_strcmp(path, k) == 0) return v;
   }
-  return "text/plain; charset=utf-8";
+
+  // Process built-in mime types
+  for (i = 0; tab[i].extension.ptr != NULL; i++) {
+    if (mg_strcmp(path, tab[i].extension) == 0) return tab[i].value;
+  }
+
+  return mg_str("text/plain; charset=utf-8");
 }
 
 static int getrange(struct mg_str *s, int64_t *a, int64_t *b) {
@@ -990,7 +1144,7 @@ static int getrange(struct mg_str *s, int64_t *a, int64_t *b) {
 }
 
 void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
-                        const char *path, const char *mime, const char *hdrs) {
+                        const char *path, struct mg_http_serve_opts *opts) {
   struct mg_str *inm = mg_http_get_header(hm, "If-None-Match");
   struct stat st;
   char etag[64];
@@ -1008,6 +1162,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     int n, status = 200;
     char range[100] = "";
     int64_t r1 = 0, r2 = 0, cl = st.st_size;
+    struct mg_str mime = guess_content_type(mg_str(path), opts->mime_types);
 
     // Handle Range header
     struct mg_str *rh = mg_http_get_header(hm, "Range");
@@ -1038,10 +1193,10 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     }
 
     mg_printf(c,
-              "HTTP/1.1 %d %s\r\nContent-Type: %s\r\n"
+              "HTTP/1.1 %d %s\r\nContent-Type: %.*s\r\n"
               "Etag: %s\r\nContent-Length: " MG_INT64_FMT "\r\n%s%s\r\n",
-              status, mg_http_status_code_str(status), mime, etag, cl, range,
-              hdrs ? hdrs : "");
+              status, mg_http_status_code_str(status), (int) mime.len, mime.ptr,
+              etag, cl, range, opts->extra_headers ? opts->extra_headers : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       fclose(fp);
     } else {
@@ -1345,40 +1500,39 @@ static bool uri_to_local_path(struct mg_connection *c,
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        struct mg_http_serve_opts *opts) {
-  char root_dir[MG_PATH_MAX], full_path[sizeof(root_dir)];
+  char root_dir[MG_PATH_MAX], path[sizeof(root_dir)];
   bool is_index = false, exists;
   struct stat st;
-  root_dir[0] = full_path[0] = '\0';
+  root_dir[0] = path[0] = '\0';
 
-  if (!uri_to_local_path(c, hm, opts, root_dir, sizeof(root_dir), full_path,
-                         sizeof(full_path), &is_index))
+  if (!uri_to_local_path(c, hm, opts, root_dir, sizeof(root_dir), path,
+                         sizeof(path), &is_index))
     return;
 
-  exists = stat(full_path, &st) == 0;
+  exists = stat(path, &st) == 0;
 #if MG_ENABLE_SSI
   if (is_index && !exists) {
-    char *p = full_path + strlen(full_path);
-    while (p > full_path && p[-1] != '/') p--;
-    strncpy(p, "index.shtml", (size_t)(&full_path[sizeof(full_path)] - p - 2));
-    full_path[sizeof(full_path) - 1] = '\0';
-    exists = stat(full_path, &st) == 0;
+    char *p = path + strlen(path);
+    while (p > path && p[-1] != '/') p--;
+    strncpy(p, "index.shtml", (size_t)(&path[sizeof(path)] - p - 2));
+    path[sizeof(path) - 1] = '\0';
+    exists = stat(path, &st) == 0;
   }
 #endif
   if (is_index && !exists) {
 #if MG_ENABLE_DIRECTORY_LISTING
-    listdir(c, hm, opts, full_path);
+    listdir(c, hm, opts, path);
 #else
     mg_http_reply(c, 403, "", "%s", "Directory listing not supported");
 #endif
 #if MG_ENABLE_SSI
   } else if (opts->ssi_pattern != NULL &&
-             mg_globmatch(opts->ssi_pattern, strlen(opts->ssi_pattern),
-                          full_path, strlen(full_path))) {
-    mg_http_serve_ssi(c, root_dir, full_path);
+             mg_globmatch(opts->ssi_pattern, strlen(opts->ssi_pattern), path,
+                          strlen(path))) {
+    mg_http_serve_ssi(c, root_dir, path);
 #endif
   } else {
-    mg_http_serve_file(c, hm, full_path, guess_content_type(full_path),
-                       opts->extra_headers);
+    mg_http_serve_file(c, hm, path, opts);
   }
 }
 

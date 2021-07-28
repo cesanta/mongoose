@@ -363,6 +363,16 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       sopts.root_dir = ".";
       sopts.extra_headers = "A: B\r\nC: D\r\n";
       mg_http_serve_dir(c, hm, &sopts);
+    } else if (mg_http_match_uri(hm, "/packed/#")) {
+      struct mg_http_serve_opts sopts;
+      memset(&sopts, 0, sizeof(sopts));
+      sopts.root_dir = ".";
+      mg_http_serve_dir(c, hm, &sopts);
+    } else if (mg_http_match_uri(hm, "/servefile")) {
+      struct mg_http_serve_opts sopts;
+      memset(&sopts, 0, sizeof(sopts));
+      sopts.mime_types = "foo=a/b,txt=c/d";
+      mg_http_serve_file(c, hm, "test/data/a.txt", &sopts);
     } else {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
@@ -499,6 +509,17 @@ static void test_http_server(void) {
     ASSERT(mg_http_etag(etag, sizeof(etag), &st) == etag);
     ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nIf-None-Match: %s\n\n",
                  etag) == 304);
+  }
+
+  // Text mime type override
+  ASSERT(fetch(&mgr, buf, url, "GET /servefile HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hello\n") == 0);
+  {
+    struct mg_http_message hm;
+    mg_http_parse(buf, strlen(buf), &hm);
+    ASSERT(mg_http_get_header(&hm, "Content-Type") != NULL);
+    ASSERT(mg_strcmp(*mg_http_get_header(&hm, "Content-Type"), mg_str("c/d")) ==
+           0);
   }
 
   ASSERT(fetch(&mgr, buf, url, "GET /foo/1 HTTP/1.0\r\n\n") == 200);
@@ -1336,18 +1357,14 @@ static void test_multipart(void) {
 }
 
 static void test_packed(void) {
-  const char *path = "Makefile";
-  FILE *fp = mg_fopen_packed(path, "r");
-#if MG_ENABLE_PACKED_FS
-  struct stat st;
-  ASSERT(stat(path, &st) == 0);
-  ASSERT(fp != NULL);
-  fseek(fp, 0, SEEK_END);
-  ASSERT(ftell(fp) == st.st_size);
-  fclose(fp);
-#else
-  ASSERT(fp == NULL);
-#endif
+  struct mg_mgr mgr;
+  const char *url = "http://127.0.0.1:12351";
+  char buf[FETCH_BUF_SIZE];
+  mg_mgr_init(&mgr);
+  mg_http_listen(&mgr, url, eh1, NULL);
+  ASSERT(fetch(&mgr, buf, url, "GET /packed/ HTTP/1.0\n\n") == 404);
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
 }
 
 int main(void) {

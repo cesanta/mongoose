@@ -606,14 +606,28 @@ void mg_usleep(unsigned long usecs);
 
 
 
-FILE *mg_fopen_packed(const char *path, const char *mode);
+enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
 
-#if (defined(__linux__) && defined(__GNUC__)) || defined(__NEWLIB__)
-#define MG_ENABLE_PACKED_FS 1
-#define MG_FOPENCOOKIE
-#else
-#define MG_ENABLE_PACKED_FS 0
-#endif
+// Filesystem API functions
+struct mg_fs {
+  char *(*realpath)(const char *path, char *resolved_path);
+  int (*stat)(const char *path, size_t *size, unsigned *mtime);
+  void (*list)(const char *path, void (*fn)(const char *, void *), void *);
+  struct mg_fd *(*open)(const char *path, int flags);
+  void (*close)(struct mg_fd *fd);
+  size_t (*read)(void *fd, void *buf, size_t len);
+  size_t (*write)(void *fd, const void *buf, size_t len);
+  size_t (*seek)(void *fd, size_t offset);
+};
+
+// File descriptor
+struct mg_fd {
+  void *fd;
+  struct mg_fs *fs;
+};
+
+extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
+extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/complete
 
 
 
@@ -781,6 +795,7 @@ char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
 
 
 
+
 struct mg_http_header {
   struct mg_str name;
   struct mg_str value;
@@ -800,7 +815,8 @@ struct mg_http_serve_opts {
   const char *root_dir;       // Web root directory, must be non-NULL
   const char *ssi_pattern;    // SSI file name pattern, e.g. #.shtml
   const char *extra_headers;  // Extra HTTP headers to add in responses
-  bool use_packed_fs;         // Serve files embedded into binary
+  const char *mime_types;     // Extra mime types, ext1=type1,ext2=type2,..
+  struct mg_fs *fs;           // Filesystem implementation. Use NULL for POSIX
 };
 
 // Parameter for mg_http_next_multipart
@@ -820,9 +836,9 @@ struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
 struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
 void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
-                       struct mg_http_serve_opts *);
-void mg_http_serve_file(struct mg_connection *, struct mg_http_message *,
-                        const char *, const char *mime, const char *headers);
+                       struct mg_http_serve_opts *opts);
+void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
+                        const char *path, struct mg_http_serve_opts *opts);
 void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
                    const char *body_fmt, ...);
 struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
