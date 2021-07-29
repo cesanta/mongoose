@@ -11,6 +11,12 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp) {
   return 0;
 }
 
+char *realpath(const char *path, char *resolved_path) {
+  if (resolved_path == NULL) resolved_path = malloc(strlen(path) + 1);
+  strcpy(resolved_path, path);
+  return resolved_path;
+}
+
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
                                  mg_event_handler_t fn, void *fn_data) {
   (void) mgr, (void) url, (void) fn, (void) fn_data;

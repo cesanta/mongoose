@@ -38,7 +38,7 @@ extern "C" {
 #endif
 
 #ifndef MG_ENABLE_SSI
-#define MG_ENABLE_SSI 0
+#define MG_ENABLE_SSI 1
 #endif
 
 #ifndef MG_ENABLE_IPV6
@@ -58,8 +58,8 @@ extern "C" {
 #define MG_ENABLE_WINSOCK 1
 #endif
 
-#ifndef MG_ENABLE_DIRECTORY_LISTING
-#define MG_ENABLE_DIRECTORY_LISTING 0
+#ifndef MG_ENABLE_DIRLIST
+#define MG_ENABLE_DIRLIST 0
 #endif
 
 #ifndef MG_ENABLE_SOCKETPAIR
@@ -68,7 +68,7 @@ extern "C" {
 
 // Granularity of the send/recv IO buffer growth
 #ifndef MG_IO_SIZE
-#define MG_IO_SIZE 512
+#define MG_IO_SIZE 2048
 #endif
 
 // Maximum size of the recv IO buffer
@@ -153,6 +153,8 @@ extern "C" {
 #ifndef MG_PATH_MAX
 #define MG_PATH_MAX 128
 #endif
+#undef MG_ENABLE_DIRLIST
+#define MG_ENABLE_DIRLIST 1
 
 #endif
 
@@ -344,6 +346,8 @@ struct timeval {
 
 #define MG_DIRSEP '/'
 #define MG_INT64_FMT "%" PRId64
+#undef MG_ENABLE_DIRLIST
+#define MG_ENABLE_DIRLIST 1
 
 #endif
 
@@ -414,17 +418,6 @@ typedef int socklen_t;
 #ifndef EWOULDBLOCK
 #define EWOULDBLOCK WSAEWOULDBLOCK
 #endif
-#define realpath(a, b) _fullpath((b), (a), MG_PATH_MAX)
-#define fopen(a, b) mg_fopen((a), (b))
-
-// Later windows define _stati64 macro, older do not
-#ifdef _stati64
-#define stat _stat64
-#define _stat64(a, b) mg_stat((a), (b))
-#else
-#define stat _stati64
-#define _stati64(a, b) mg_stat((a), (b))
-#endif
 
 #ifndef va_copy
 #ifdef __va_copy
@@ -439,18 +432,8 @@ typedef int socklen_t;
 
 #define MG_INT64_FMT "%I64d"
 
-static __inline FILE *mg_fopen(const char *path, const char *mode) {
-  wchar_t b1[MAX_PATH], b2[10];
-  MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
-  MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
-  return _wfopen(b1, b2);
-}
-
-static __inline int mg_stat(const char *path, struct stat *st) {
-  wchar_t tmp[MAX_PATH];
-  MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
-  return _wstati64(tmp, st);
-}
+#undef MG_ENABLE_DIRLIST
+#define MG_ENABLE_DIRLIST 1
 
 // https://lgtm.com/rules/2154840805/ -gmtime, localtime, ctime and asctime
 static __inline struct tm *gmtime_r(time_t *t, struct tm *tm) {
@@ -611,7 +594,7 @@ enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
 // Filesystem API functions
 struct mg_fs {
   char *(*realpath)(const char *path, char *resolved_path);
-  int (*stat)(const char *path, size_t *size, unsigned *mtime);
+  int (*stat)(const char *path, size_t *size, time_t *mtime);
   void (*list)(const char *path, void (*fn)(const char *, void *), void *);
   struct mg_fd *(*open)(const char *path, int flags);
   void (*close)(struct mg_fd *fd);

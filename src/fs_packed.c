@@ -13,15 +13,15 @@ const char *mg_unpack(const char *path, size_t *size) {
 }
 
 static char *packed_realpath(const char *path, char *resolved_path) {
-  if (resolved_path == NULL) resolved_path = malloc(strlen(path) + 1);
+  if (resolved_path == NULL) resolved_path = (char *) malloc(strlen(path) + 1);
   strcpy(resolved_path, path);
   return resolved_path;
 }
 
-static int packed_stat(const char *path, size_t *size, unsigned *mtime) {
+static int packed_stat(const char *path, size_t *size, time_t *mtime) {
   const char *data = mg_unpack(path, size);
   if (mtime) *mtime = 0;
-  return data == NULL ? 0 : MG_FS_READ;
+  return data == NULL ? MG_FS_DIR : MG_FS_READ;
 }
 
 static void packed_list(const char *path, void (*fn)(const char *, void *),
@@ -36,8 +36,8 @@ static struct mg_fd *packed_open(const char *path, int flags) {
   struct mg_fd *fd = NULL;
   if (data == NULL) return NULL;
   if (flags & MG_FS_WRITE) return NULL;
-  fp = calloc(1, sizeof(*fp));
-  fd = calloc(1, sizeof(*fd));
+  fp = (struct packed_file *) calloc(1, sizeof(*fp));
+  fd = (struct mg_fd *) calloc(1, sizeof(*fd));
   fp->size = size;
   fp->data = data;
   fd->fd = fp;

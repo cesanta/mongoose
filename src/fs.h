@@ -7,7 +7,7 @@ enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
 // Filesystem API functions
 struct mg_fs {
   char *(*realpath)(const char *path, char *resolved_path);
-  int (*stat)(const char *path, size_t *size, unsigned *mtime);
+  int (*stat)(const char *path, size_t *size, time_t *mtime);
   void (*list)(const char *path, void (*fn)(const char *, void *), void *);
   struct mg_fd *(*open)(const char *path, int flags);
   void (*close)(struct mg_fd *fd);

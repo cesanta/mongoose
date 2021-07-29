@@ -18,7 +18,7 @@ jobs:
     - name: Install packages
       run: sudo apt-get install libmbedtls-dev
     - name: examples
-      run: make ex
+      run: make clean examples
   macos:
     runs-on: macos-latest
     steps:
@@ -49,3 +49,21 @@ jobs:
     - uses: actions/checkout@v2
     - name: arm
       run: make arm
+  esp32:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: esp32
+      run: make -C examples/esp32 build
+  esp8266:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: esp8266
+      run: make -C examples/esp8266 build
+  stm32-freertos-tcp:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: stm32-freertos-tcp
+      run: make -C examples/stm32-freertos-tcp build

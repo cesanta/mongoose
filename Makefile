@@ -1,6 +1,6 @@
 SRCS = mongoose.c test/unit_test.c test/packed_fs.c
 HDRS = $(wildcard src/*.h)
-DEFS ?= -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=1 -DMG_ENABLE_SSI=1
+DEFS ?= -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES
 WARN ?= -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
@@ -12,10 +12,9 @@ VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN_OPTIONS ?=
 EXAMPLES := $(wildcard examples/*)
-EXAMPLE_TARGET ?= example
 PREFIX ?= /usr/local
 SOVERSION = 7.4
-.PHONY: ex test
+.PHONY: examples test
 
 ifeq "$(SSL)" "MBEDTLS"
 MBEDTLS ?= /usr
@@ -28,10 +27,10 @@ CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
-all: mg_prefix test test++ arm ex vc98 vc2017 mingw mingw++ linux linux++ fuzz
+all: mg_prefix test test++ arm examples vc98 vc2017 mingw mingw++ linux linux++ fuzz
 
-ex:
-	@for X in $(EXAMPLES); do $(MAKE) -C $$X $(EXAMPLE_TARGET) || break; done
+examples:
+	@for X in $(EXAMPLES); do $(MAKE) -C $$X example || break; done
 
 test/packed_fs.c:
 	$(CC) $(CFLAGS) examples/complete/pack.c -o pack
@@ -73,10 +72,10 @@ infer:
 	infer run -- cc test/unit_test.c -c -W -Wall -Werror -Isrc -I. -O2 -DMG_ENABLE_MBEDTLS=1 -DMG_ENABLE_LINES -I/usr/local/Cellar/mbedtls/2.23.0/include  -DMG_ENABLE_IPV6=1 -g -o /dev/null
 
 arm: mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/armgcc arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=0 -DMG_ENABLE_SSI=1 -o unit_test -nostartfiles --specs nosys.specs -e 0
+	$(DOCKER) mdashnet/armgcc arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES=1 -o unit_test -nostartfiles --specs nosys.specs -e 0
 
 riscv: mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING=0 -DMG_ENABLE_SSI=1 -o unit_test
+	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES=1 -o unit_test
 
 #vc98: VCFLAGS += -DMG_ENABLE_IPV6=1
 vc98: Makefile mongoose.c mongoose.h test/unit_test.c
@@ -125,6 +124,6 @@ mongoose.c: Makefile $(wildcard src/*)
 mongoose.h: $(HDRS) Makefile
 	(cat src/license.h src/version.h ; cat src/config.h src/arch.h src/arch_*.h src/str.h src/log.h src/timer.h src/util.h src/fs.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/ws.h src/sntp.h src/mqtt.h src/dns.h | sed -e 's,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
 
-clean: EXAMPLE_TARGET = clean
-clean: ex
+clean:
 	rm -rf $(PROG) *.o *.dSYM unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack
+	@for X in $(EXAMPLES); do $(MAKE) -C $$X clean; done

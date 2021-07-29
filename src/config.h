@@ -13,7 +13,7 @@
 #endif
 
 #ifndef MG_ENABLE_SSI
-#define MG_ENABLE_SSI 0
+#define MG_ENABLE_SSI 1
 #endif
 
 #ifndef MG_ENABLE_IPV6
@@ -33,8 +33,8 @@
 #define MG_ENABLE_WINSOCK 1
 #endif
 
-#ifndef MG_ENABLE_DIRECTORY_LISTING
-#define MG_ENABLE_DIRECTORY_LISTING 0
+#ifndef MG_ENABLE_DIRLIST
+#define MG_ENABLE_DIRLIST 0
 #endif
 
 #ifndef MG_ENABLE_SOCKETPAIR
@@ -43,7 +43,7 @@
 
 // Granularity of the send/recv IO buffer growth
 #ifndef MG_IO_SIZE
-#define MG_IO_SIZE 512
+#define MG_IO_SIZE 2048
 #endif
 
 // Maximum size of the recv IO buffer

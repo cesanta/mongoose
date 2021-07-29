@@ -20,4 +20,4 @@ windows:
 	$(DOCKER) $(PROG).exe
 
 clean:
-	rm -rf $(PROG) *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb log.txt fs.c pack
+	rm -rf $(PROG) *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb log.txt packed_fs.c pack

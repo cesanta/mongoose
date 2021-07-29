@@ -83,4 +83,10 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
   mg_http_reply(c, 200, headers, "%s", data == NULL ? "" : data);
   free(data);
 }
+#else
+void mg_http_serve_ssi(struct mg_connection *c, const char *root,
+                       const char *fullpath) {
+  mg_http_reply(c, 501, NULL, "SSI not enabled");
+  (void) root, (void) fullpath;
+}
 #endif

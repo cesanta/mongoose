@@ -204,7 +204,7 @@ option during build time, use the `-D OPTION` compiler flag:
 $ cc app0.c mongoose.c                                        # Use defaults!
 $ cc app1.c mongoose.c -D MG_ENABLE_IPV6=1                    # Build with IPv6 enabled
 $ cc app2.c mongoose.c -D MG_ARCH=MG_ARCH_FREERTOS_LWIP       # Set architecture
-$ cc app3.c mongoose.c -D MG_ENABLE_SSI=1 -D MG_ENABLE_LOG=0  # Multiple options
+$ cc app3.c mongoose.c -D MG_ENABLE_SSI=0 -D MG_ENABLE_LOG=0  # Multiple options
 ```
 
 The list of supported
@@ -240,12 +240,13 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_IPV6 | 0 | Enable IPv6 |
 |MG_ENABLE_LOG | 1 | Enable `LOG()` macro |
 |MG_ENABLE_MD5 | 0 | Use native MD5 implementation |
-|MG_ENABLE_DIRECTORY_LISTING | 0 | Enable directory listing for HTTP server |
 |MG_ENABLE_SOCKETPAIR | 0 | Enable `mg_socketpair()` for multi-threading |
-|MG_ENABLE_SSI | 0 | Enable serving SSI files by `mg_http_serve_dir()` |
-|MG_IO_SIZE | 512 | Granularity of the send/recv IO buffer growth |
+|MG_ENABLE_SSI | 1 | Enable serving SSI files by `mg_http_serve_dir()` |
+|MG_ENABLE_DIRLIST | 0 | Enable directory listing |
+|MG_IO_SIZE | 2048 | Granularity of the send/recv IO buffer growth |
 |MG_MAX_RECV_BUF_SIZE | (3 * 1024 * 1024) | Maximum recv buffer size |
 |MG_MAX_HTTP_HEADERS | 40 | Maximum number of HTTP headers |
+|MG_ENABLE_LINES | undefined | If defined, show source file names in logs |
 
 
 NOTE: `MG_IO_SIZE` controls the maximum UDP message size, see
@@ -724,16 +725,18 @@ enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
 
 ```c
 void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
-                        const char *path, const char *mimetype,
-                        const char *extra_headers);
+                        const char *path, struct mg_http_serve_opts *opts);
 ```
 
 Serve static file. Note that the `extra_headers` must end with `\r\n`. Here
 is an example call:
 
 ```c
-mg_http_serve_file(c, hm, "a.png", "image/png", "AA: bb\r\nCC: dd\r\n");
+struct mg_http_serve_opts opts = {.mime_types = "png=image/png", 
+                                  .extra_headers = "AA: bb\r\nCC: dd\r\n"};
+mg_http_serve_file(c, hm, "a.png", &opts);
 ```
+
 
 
 ### mg\_http\_reply()

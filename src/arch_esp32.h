@@ -22,5 +22,7 @@
 #ifndef MG_PATH_MAX
 #define MG_PATH_MAX 128
 #endif
+#undef MG_ENABLE_DIRLIST
+#define MG_ENABLE_DIRLIST 1
 
 #endif

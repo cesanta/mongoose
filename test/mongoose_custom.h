@@ -1,7 +1,7 @@
 // Required by the test ARM build
 #pragma once
 
-#define _GNU_SOURCE  // For fopencookie()
+#define _POSIX_TIMERS
 
 #include <errno.h>
 #include <stdarg.h>
@@ -21,5 +21,3 @@
 #define MG_PATH_MAX 100
 #undef MG_ENABLE_SOCKET
 #define MG_ENABLE_SOCKET 0
-
-int clock_gettime(clockid_t clock_id, struct timespec *tp);

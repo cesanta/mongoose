@@ -363,11 +363,6 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       sopts.root_dir = ".";
       sopts.extra_headers = "A: B\r\nC: D\r\n";
       mg_http_serve_dir(c, hm, &sopts);
-    } else if (mg_http_match_uri(hm, "/packed/#")) {
-      struct mg_http_serve_opts sopts;
-      memset(&sopts, 0, sizeof(sopts));
-      sopts.root_dir = ".";
-      mg_http_serve_dir(c, hm, &sopts);
     } else if (mg_http_match_uri(hm, "/servefile")) {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
@@ -502,11 +497,12 @@ static void test_http_server(void) {
   ASSERT(cmpbody(buf, "є\n") == 0);
 
   {
-    extern char *mg_http_etag(char *, size_t, struct stat *);
-    struct stat st;
+    extern char *mg_http_etag(char *, size_t, size_t, time_t);
     char etag[100];
-    ASSERT(stat("./test/data/a.txt", &st) == 0);
-    ASSERT(mg_http_etag(etag, sizeof(etag), &st) == etag);
+    size_t size = 0;
+    time_t mtime = 0;
+    ASSERT(mg_fs_posix.stat("./test/data/a.txt", &size, &mtime) != 0);
+    ASSERT(mg_http_etag(etag, sizeof(etag), size, mtime) == etag);
     ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nIf-None-Match: %s\n\n",
                  etag) == 304);
   }
@@ -586,6 +582,7 @@ static void test_http_server(void) {
   // Directory listing
   fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n");
   ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
+  printf("-------\n%s\n", buf);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">Index of /test/<")) != NULL);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
 
@@ -1356,20 +1353,34 @@ static void test_multipart(void) {
   ASSERT(mg_http_next_multipart(mg_str(s), ofs, &part) == 0);
 }
 
+static void eh7(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    struct mg_http_serve_opts sopts;
+    memset(&sopts, 0, sizeof(sopts));
+    sopts.root_dir = ".";
+    sopts.fs = &mg_fs_packed;
+    mg_http_serve_dir(c, hm, &sopts);
+  }
+  (void) ev_data, (void) fn_data;
+}
+
 static void test_packed(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12351";
-  char buf[FETCH_BUF_SIZE];
+  char buf[FETCH_BUF_SIZE] = "";
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, url, eh1, NULL);
-  ASSERT(fetch(&mgr, buf, url, "GET /packed/ HTTP/1.0\n\n") == 404);
+  mg_http_listen(&mgr, url, eh7, NULL);
+  // ASSERT(fetch(&mgr, buf, url, "GET /packed/ HTTP/1.0\n\n") == 404);
+  // fetch(&mgr, buf, url, "GET / HTTP/1.0\n\n");
+  fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n");
+  printf("--------\n%s\n", buf);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
 
 int main(void) {
   mg_log_set("3");
-  test_packed();
   test_crc32();
   test_multipart();
   test_http_chunked();
@@ -1379,7 +1390,6 @@ int main(void) {
   test_dns();
   test_str();
   test_timer();
-  test_http_range();
   test_url();
   test_iobuf();
   test_commalist();
@@ -1392,6 +1402,8 @@ int main(void) {
   test_http_client();
   test_http_no_content_length();
   test_http_pipeline();
+  test_http_range();
+  test_packed();
   test_mqtt();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return EXIT_SUCCESS;
