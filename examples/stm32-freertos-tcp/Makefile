@@ -2,7 +2,7 @@
 PROG = firmware
 ARCH = stm32f7
 PROJECT_ROOT_PATH = $(realpath $(CURDIR)/../..)
-DOCKER ?= docker run -it --rm -v $(PROJECT_ROOT_PATH):$(PROJECT_ROOT_PATH) -w $(CURDIR) mdashnet/armgcc
+DOCKER ?= docker run --rm -v $(PROJECT_ROOT_PATH):$(PROJECT_ROOT_PATH) -w $(CURDIR) mdashnet/armgcc
 FREERTOS_KERNEL_PATH ?= $(PROJECT_ROOT_PATH)/test/freertos-kernel
 FREERTOS_PLUS_TCP_PATH ?= $(PROJECT_ROOT_PATH)/test/freertos-tcp
 
