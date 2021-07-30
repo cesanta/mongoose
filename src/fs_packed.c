@@ -22,14 +22,14 @@ const char *mg_unlist(size_t no) {
 
 static char *packed_realpath(const char *path, char *resolved_path) {
   if (resolved_path == NULL) resolved_path = (char *) malloc(strlen(path) + 1);
-  while (*path == '.' || *path == '/') path++;
+  // while (*path == '.' || *path == '/') path++;
   strcpy(resolved_path, path);
   return resolved_path;
 }
 
 static int is_dir_prefix(const char *prefix, size_t n, const char *path) {
-  return n < strlen(path) && memcmp(prefix, path, n) == 0 &&
-         (n == 0 || path[n] == MG_DIRSEP);
+  return n < strlen(path) && memcmp(prefix, path, n) == 0 && path[n] == '/';
+  //(n == 0 || path[n] == MG_DIRSEP);
 }
 
 static int packed_stat(const char *path, size_t *size, time_t *mtime) {
@@ -43,12 +43,24 @@ static int packed_stat(const char *path, size_t *size, time_t *mtime) {
   return 0;
 }
 
-static void packed_list(const char *path, void (*fn)(const char *, void *),
+static void packed_list(const char *dir, void (*fn)(const char *, void *),
                         void *userdata) {
-  const char *p;
-  size_t i, n = strlen(path);
-  for (i = 0; (p = mg_unlist(i)) != NULL; i++) {
-    if (is_dir_prefix(path, n, p)) fn(&p[n], userdata);
+  char buf[256], tmp[sizeof(buf)];
+  const char *path, *begin, *end;
+  size_t i, n = strlen(dir);
+  tmp[0] = '\0';  // Previously listed entry
+  for (i = 0; (path = mg_unlist(i)) != NULL; i++) {
+    if (!is_dir_prefix(dir, n, path)) continue;
+    begin = &path[n + 1];
+    end = strchr(begin, '/');
+    if (end == NULL) end = begin + strlen(begin);
+    snprintf(buf, sizeof(buf), "%.*s", (int) (end - begin), begin);
+    buf[sizeof(buf) - 1] = '\0';
+    // If this entry has been already listed, skip
+    // NOTE: we're assuming that file list is sorted alphabetically
+    if (strcmp(buf, tmp) == 0) continue;
+    fn(buf, userdata);  // Not yet listed, call user function
+    strcpy(tmp, buf);   // And save this entry as listed
   }
 }
 

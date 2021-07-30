@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
   for (i = 1; i < argc; i++) {
     struct stat st;
     stat(argv[i], &st);
-    printf("  {\"%s\", v%d, sizeof(v%d), %lu},\n", argv[i], i, i, st.st_mtime);
+    printf("  {\"/%s\", v%d, sizeof(v%d), %lu},\n", argv[i], i, i, st.st_mtime);
   }
   printf("%s", "  {NULL, NULL, 0, 0}\n");
   printf("%s", "};\n\n");

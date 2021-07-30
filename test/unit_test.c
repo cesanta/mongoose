@@ -582,7 +582,6 @@ static void test_http_server(void) {
   // Directory listing
   fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n");
   ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
-  printf("-------\n%s\n", buf);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">Index of /test/<")) != NULL);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
 
@@ -1358,7 +1357,7 @@ static void eh7(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts sopts;
     memset(&sopts, 0, sizeof(sopts));
-    sopts.root_dir = ".";
+    sopts.root_dir = "";
     sopts.fs = &mg_fs_packed;
     mg_http_serve_dir(c, hm, &sopts);
   }
@@ -1371,12 +1370,26 @@ static void test_packed(void) {
   char buf[FETCH_BUF_SIZE] = "", *data = mg_file_read("Makefile", NULL);
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, eh7, NULL);
+
+  // Load top level file directly
   ASSERT(fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, data) == 0);
   free(data);
+
+  // Load file deeper in the FS tree directly
+  data = mg_file_read("src/ssi.h", NULL);
+  ASSERT(fetch(&mgr, buf, url, "GET /src/ssi.h HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, data) == 0);
+  free(data);
+
+  // List root dir
   ASSERT(fetch(&mgr, buf, url, "GET / HTTP/1.0\n\n") == 200);
   // printf("--------\n%s\n", buf);
-  // exit(0);
+
+  // List nested dir
+  ASSERT(fetch(&mgr, buf, url, "GET /test HTTP/1.0\n\n") == 200);
+  // printf("--------\n%s\n", buf);
+
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
