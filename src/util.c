@@ -57,6 +57,8 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
   return result;
 }
 
+#if MG_ENABLE_CUSTOM_RANDOM
+#else
 void mg_random(void *buf, size_t len) {
   bool done = false;
   unsigned char *p = (unsigned char *) buf;
@@ -75,6 +77,7 @@ void mg_random(void *buf, size_t len) {
     while (len--) *p++ = (unsigned char) (rand() & 255);
   }
 }
+#endif
 
 bool mg_globmatch(const char *s1, size_t n1, const char *s2, size_t n2) {
   size_t i = 0, j = 0, ni = 0, nj = 0;

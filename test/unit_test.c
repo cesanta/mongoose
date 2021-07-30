@@ -1368,19 +1368,22 @@ static void eh7(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void test_packed(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12351";
-  char buf[FETCH_BUF_SIZE] = "";
+  char buf[FETCH_BUF_SIZE] = "", *data = mg_file_read("Makefile", NULL);
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, eh7, NULL);
-  // ASSERT(fetch(&mgr, buf, url, "GET /packed/ HTTP/1.0\n\n") == 404);
-  // fetch(&mgr, buf, url, "GET / HTTP/1.0\n\n");
-  fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n");
-  printf("--------\n%s\n", buf);
+  ASSERT(fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, data) == 0);
+  free(data);
+  ASSERT(fetch(&mgr, buf, url, "GET / HTTP/1.0\n\n") == 200);
+  // printf("--------\n%s\n", buf);
+  // exit(0);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
 
 int main(void) {
   mg_log_set("3");
+  test_packed();
   test_crc32();
   test_multipart();
   test_http_chunked();
@@ -1403,7 +1406,6 @@ int main(void) {
   test_http_no_content_length();
   test_http_pipeline();
   test_http_range();
-  test_packed();
   test_mqtt();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return EXIT_SUCCESS;

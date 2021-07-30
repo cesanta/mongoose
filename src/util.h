@@ -3,23 +3,10 @@
 #include "arch.h"
 #include "str.h"
 
-// WEAK symbol makes it possible to define a "default" function implementation,
-// which could be overridden by the user who can define a function with the
-// same name without linking conflict
-#if !defined(WEAK)
-#if (defined(__GNUC__) || defined(__clang__) || \
-     defined(__TI_COMPILER_VERSION__)) &&       \
-    !defined(_WIN32) && !defined(__CYGWIN__)
-#define WEAK __attribute__((weak))
-#else
-#define WEAK
-#endif
-#endif
-
 char *mg_file_read(const char *path, size_t *size);
 bool mg_file_write(const char *path, const void *buf, size_t len);
 bool mg_file_printf(const char *path, const char *fmt, ...);
-void mg_random(void *buf, size_t len) WEAK;
+void mg_random(void *buf, size_t len);
 bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
 bool mg_next_comma_entry(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 uint16_t mg_ntohs(uint16_t net);

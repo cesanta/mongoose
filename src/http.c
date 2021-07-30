@@ -596,7 +596,7 @@ static void printdirentry(const char *name, void *userdata) {
   char path[MG_PATH_MAX], sz[64], mod[64];
   int flags, n = 0;
 
-  if (snprintf(path, sizeof(path), "%s%c%s", d->dir, MG_DIRSEP, name) < 0) {
+  if (snprintf(path, sizeof(path), "%s%c%s", d->dir, '/', name) < 0) {
     LOG(LL_ERROR, ("%s truncated", name));
   } else if ((flags = fs->stat(path, &size, &mtime)) == 0) {
     LOG(LL_ERROR, ("%lu stat(%s): %d", d->c->id, path, errno));

@@ -1,6 +1,6 @@
 SRCS = mongoose.c test/unit_test.c test/packed_fs.c
 HDRS = $(wildcard src/*.h)
-DEFS ?= -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES
+DEFS ?= -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1
 WARN ?= -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
@@ -27,14 +27,14 @@ CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
-all: mg_prefix test test++ arm examples vc98 vc2017 mingw mingw++ linux linux++ fuzz
+all: mg_prefix unpacked test test++ arm examples vc98 vc2017 mingw mingw++ linux linux++ fuzz
 
 examples:
 	@for X in $(EXAMPLES); do $(MAKE) -C $$X example || break; done
 
-test/packed_fs.c:
-	$(CC) $(CFLAGS) examples/complete/pack.c -o pack
-	./pack Makefile > $@
+test/packed_fs.c: Makefile src/fs.h src/ssi.h test/fuzz.c test/data/a.txt
+	$(CC) $(CFLAGS) test/pack.c -o pack
+	./pack $? > $@
 
 # Check that all external (exported) symbols have "mg_" prefix
 mg_prefix: mongoose.c mongoose.h
@@ -49,8 +49,11 @@ test++: test
 unamalgamated: $(HDRS) Makefile
 	$(CC) src/*.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
 
+unpacked:
+	$(CC) -I. mongoose.c test/unit_test.c -o unit_test
+
 fuzzer: mongoose.c mongoose.h Makefile test/fuzz.c
-	clang mongoose.c test/fuzz.c $(CFLAGS) -DMG_ENABLE_LINES -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address $(LDFLAGS) -g -o $@
+	clang mongoose.c test/fuzz.c $(WARN) $(INCS) -DMG_ENABLE_LINES -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address -g -o $@
 
 fuzz: fuzzer
 	$(RUN) ./fuzzer
@@ -72,33 +75,33 @@ infer:
 	infer run -- cc test/unit_test.c -c -W -Wall -Werror -Isrc -I. -O2 -DMG_ENABLE_MBEDTLS=1 -DMG_ENABLE_LINES -I/usr/local/Cellar/mbedtls/2.23.0/include  -DMG_ENABLE_IPV6=1 -g -o /dev/null
 
 arm: mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/armgcc arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES=1 -o unit_test -nostartfiles --specs nosys.specs -e 0
+	$(DOCKER) mdashnet/armgcc arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) $(DEFS) -o unit_test -nostartfiles --specs nosys.specs -e 0
 
 riscv: mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES=1 -o unit_test
+	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_CUSTOM $(OPTS) $(WARN) $(INCS) $(DEFS) -o unit_test
 
 #vc98: VCFLAGS += -DMG_ENABLE_IPV6=1
-vc98: Makefile mongoose.c mongoose.h test/unit_test.c
-	$(DOCKER) mdashnet/vc98 wine cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
+vc98: Makefile mongoose.h $(SRCS)
+	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(DOCKER) mdashnet/vc98 wine $@.exe
 
 #vc2017: VCFLAGS += -DMG_ENABLE_IPV6=1
-vc2017: Makefile mongoose.c mongoose.h test/unit_test.c
-	$(DOCKER) mdashnet/vc2017 wine64 cl mongoose.c test/unit_test.c $(VCFLAGS) ws2_32.lib /Fe$@.exe
+vc2017: Makefile mongoose.h $(SRCS)
+	$(DOCKER) mdashnet/vc2017 wine64 cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(DOCKER) mdashnet/vc2017 wine64 $@.exe
 
-mingw: Makefile mongoose.c mongoose.h test/unit_test.c
-	$(DOCKER) mdashnet/mingw i686-w64-mingw32-gcc mongoose.c test/unit_test.c -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
+mingw: Makefile mongoose.h $(SRCS)
+	$(DOCKER) mdashnet/mingw i686-w64-mingw32-gcc $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
 	$(DOCKER) mdashnet/vc98 wine test.exe
 
-mingw++: Makefile mongoose.c mongoose.h test/unit_test.c
-	$(DOCKER) mdashnet/mingw i686-w64-mingw32-g++ mongoose.c test/unit_test.c -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
+mingw++: Makefile mongoose.h $(SRCS)
+	$(DOCKER) mdashnet/mingw i686-w64-mingw32-g++ $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
   # Note: for some reason, a binary built with mingw g++, fails to run
 
 #linux: CFLAGS += -DMG_ENABLE_IPV6=$(IPV6)
 linux: CFLAGS += -fsanitize=address,undefined
-linux: Makefile mongoose.c mongoose.h test/unit_test.c
-	$(DOCKER) mdashnet/cc2 gcc mongoose.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
+linux: Makefile mongoose.h $(SRCS)
+	$(DOCKER) mdashnet/cc2 gcc $(SRCS) $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
 	$(DOCKER) mdashnet/cc2 ./unit_test_gcc
 
 linux++: CC = g++

@@ -20,13 +20,18 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 static const char *code =
-    "const char *mg_unpack(const char *name, size_t *size) {\n"
+    "const char *mg_unlist(size_t no) {\n"
+    "  return packed_files[no].name;\n"
+    "}\n"
+    "const char *mg_unpack(const char *name, size_t *size, time_t *mtime) {\n"
     "  const struct packed_file *p;\n"
     "  for (p = packed_files; p->name != NULL; p++) {\n"
     "    if (strcmp(p->name, name) != 0) continue;\n"
     "    if (size != NULL) *size = p->size - 1;\n"
+    "    if (mtime != NULL) *mtime = p->mtime;\n"
     "    return (const char *) p->data;\n"
     "  }\n"
     "  return NULL;\n"
@@ -37,12 +42,13 @@ int main(int argc, char *argv[]) {
 
   printf("%s", "#include <stddef.h>\n");
   printf("%s", "#include <string.h>\n");
+  printf("%s", "#include <time.h>\n");
   printf("%s", "\n");
 
   for (i = 1; i < argc; i++) {
-    FILE *fp = fopen(argv[i], "rb");
     char ascii[12];
-    if (fp == NULL) exit(EXIT_FAILURE);
+    FILE *fp = fopen(argv[i], "rb");
+    if (fp == NULL) printf("Cannot open %s\n", argv[i]), exit(EXIT_FAILURE);
 
     printf("static const unsigned char v%d[] = {\n", i);
     for (j = 0; (ch = fgetc(fp)) != EOF; j++) {
@@ -64,12 +70,15 @@ int main(int argc, char *argv[]) {
   printf("%s", "  const char *name;\n");
   printf("%s", "  const unsigned char *data;\n");
   printf("%s", "  size_t size;\n");
+  printf("%s", "  time_t mtime;\n");
   printf("%s", "} packed_files[] = {\n");
 
   for (i = 1; i < argc; i++) {
-    printf("  {\"%s\", v%d, sizeof(v%d) },\n", argv[i], i, i);
+    struct stat st;
+    stat(argv[i], &st);
+    printf("  {\"%s\", v%d, sizeof(v%d), %lu},\n", argv[i], i, i, st.st_mtime);
   }
-  printf("%s", "  {NULL, NULL, 0}\n");
+  printf("%s", "  {NULL, NULL, 0, 0}\n");
   printf("%s", "};\n\n");
   printf("%s", code);
 

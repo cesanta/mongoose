@@ -119,7 +119,8 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
           "Pragma: no-cache\r\nExpires: Thu, 01 Dec 1994 16:00:00 GMT\r\n"
           "Content-Type: multipart/x-mixed-replace; boundary=--foo\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/log/static")) {
-      struct mg_http_serve_opts opts = {.root_dir = NULL};
+      struct mg_http_serve_opts opts;
+      memset(&opts, 0, sizeof(opts));
       mg_http_serve_file(c, hm, "log.txt", &opts);
     } else if (mg_http_match_uri(hm, "/api/log/live")) {
       c->label[0] = 'L';  // Mark that connection as live log listener

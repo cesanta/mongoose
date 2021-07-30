@@ -41,6 +41,14 @@
 #define MG_ENABLE_SOCKETPAIR 0
 #endif
 
+#ifndef MG_ENABLE_CUSTOM_RANDOM
+#define MG_ENABLE_CUSTOM_RANDOM 0
+#endif
+
+#ifndef MG_ENABLE_PACKED_FS
+#define MG_ENABLE_PACKED_FS 0
+#endif
+
 // Granularity of the send/recv IO buffer growth
 #ifndef MG_IO_SIZE
 #define MG_IO_SIZE 2048

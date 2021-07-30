@@ -243,6 +243,8 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_SOCKETPAIR | 0 | Enable `mg_socketpair()` for multi-threading |
 |MG_ENABLE_SSI | 1 | Enable serving SSI files by `mg_http_serve_dir()` |
 |MG_ENABLE_DIRLIST | 0 | Enable directory listing |
+|MG_ENABLE_CUSTOM_RANDOM | 0 | Provide custom RNG function `mg_random()` |
+|MG_ENABLE_PACKED_FS | 0 | Enable embedded FS support |
 |MG_IO_SIZE | 2048 | Granularity of the send/recv IO buffer growth |
 |MG_MAX_RECV_BUF_SIZE | (3 * 1024 * 1024) | Maximum recv buffer size |
 |MG_MAX_HTTP_HEADERS | 40 | Maximum number of HTTP headers |
@@ -755,6 +757,28 @@ parameter.
 - `headers` - extra headers, default NULL. If not NULL, must end with `\r\n`
 - `fmt` - a format string for the HTTP body, in a printf semantics
 
+Example - send a simple JSON respose:
+  ```c
+  mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"result\": %d}", 123);
+  ```
+
+Example - send JSON response using [mjson](https://github.com/cesanta/mjson) library:
+  ```c
+  char *json = NULL;
+  mjson_printf(mjson_print_dynamic_buf, &json, "{%Q:%d}", "name", 123);
+  mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", json);
+  free(json);
+  ```
+
+Example - send a 302 redirect:
+  ```c
+  mg_http_reply(c, 302, "Location: /\r\n", "");
+  ```
+
+Example - send error:
+  ```c
+  mg_http_reply(c, 403, "", "%s", "Not Authorised\n");
+  ```
 
 ### mg\_http\_get\_header()
 

@@ -6,32 +6,55 @@ struct packed_file {
   size_t pos;
 };
 
-const char *mg_unpack(const char *, size_t *) WEAK;
-const char *mg_unpack(const char *path, size_t *size) {
-  (void) path, (void) size;
+const char *mg_unpack(const char *path, size_t *size, time_t *mtime);
+const char *mg_unlist(size_t no);
+#if MG_ENABLE_PACKED_FS
+#else
+const char *mg_unpack(const char *path, size_t *size, time_t *mtime) {
+  (void) path, (void) size, (void) mtime;
   return NULL;
 }
+const char *mg_unlist(size_t no) {
+  (void) no;
+  return NULL;
+}
+#endif
 
 static char *packed_realpath(const char *path, char *resolved_path) {
   if (resolved_path == NULL) resolved_path = (char *) malloc(strlen(path) + 1);
+  while (*path == '.' || *path == '/') path++;
   strcpy(resolved_path, path);
   return resolved_path;
 }
 
+static int is_dir_prefix(const char *prefix, size_t n, const char *path) {
+  return n < strlen(path) && memcmp(prefix, path, n) == 0 &&
+         (n == 0 || path[n] == MG_DIRSEP);
+}
+
 static int packed_stat(const char *path, size_t *size, time_t *mtime) {
-  const char *data = mg_unpack(path, size);
-  if (mtime) *mtime = 0;
-  return data == NULL ? MG_FS_DIR : MG_FS_READ;
+  const char *p;
+  size_t i, n = strlen(path);
+  if (mg_unpack(path, size, mtime)) return MG_FS_READ;  // Regular file
+  // Scan all files. If `path` is a dir prefix for any of them, it's a dir
+  for (i = 0; (p = mg_unlist(i)) != NULL; i++) {
+    if (is_dir_prefix(path, n, p)) return MG_FS_DIR;
+  }
+  return 0;
 }
 
 static void packed_list(const char *path, void (*fn)(const char *, void *),
                         void *userdata) {
-  (void) path, (void) fn, (void) userdata;
+  const char *p;
+  size_t i, n = strlen(path);
+  for (i = 0; (p = mg_unlist(i)) != NULL; i++) {
+    if (is_dir_prefix(path, n, p)) fn(&p[n], userdata);
+  }
 }
 
 static struct mg_fd *packed_open(const char *path, int flags) {
   size_t size = 0;
-  const char *data = mg_unpack(path, &size);
+  const char *data = mg_unpack(path, &size, NULL);
   struct packed_file *fp = NULL;
   struct mg_fd *fd = NULL;
   if (data == NULL) return NULL;
