@@ -325,7 +325,6 @@ struct timeval {
 #if MG_ARCH == MG_ARCH_UNIX
 
 #define _DARWIN_UNLIMITED_SELECT 1  // No limit on file descriptors
-#define _GNU_SOURCE                 // For fopencookie() on Linux
 
 #include <arpa/inet.h>
 #include <ctype.h>

@@ -2854,22 +2854,8 @@ typedef Socket_t SOCKET;
 typedef int SOCKET;
 #endif
 
-union _su {
-  SOCKET s;
-  void *ptr;
-};
-#define FD(c_) ptr2sock((c_)->fd)
-
-static SOCKET ptr2sock(void *ptr) {
-  union _su u = {0};
-  u.ptr = ptr;
-  return u.s;
-}
-
-static void *sock2ptr(SOCKET s) {
-  union _su u = {s};
-  return u.ptr;
-}
+#define FD(c_) ((SOCKET)(size_t)(c_)->fd)
+#define S2PTR(s_) ((void *) (size_t)(s_))
 
 #ifndef MSG_NONBLOCKING
 #define MSG_NONBLOCKING 0
@@ -2916,7 +2902,7 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
   struct mg_connection *c = (struct mg_connection *) calloc(1, sizeof(*c));
   if (c != NULL) {
     c->is_client = is_client;
-    c->fd = sock2ptr(fd);
+    c->fd = S2PTR(fd);
     c->mgr = mgr;
     c->id = ++mgr->nextid;
   }
@@ -3161,7 +3147,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   if (c->peer.is_ip6) af = AF_INET6;
 #endif
   mg_straddr(c, buf, sizeof(buf));
-  c->fd = sock2ptr(socket(af, type, 0));
+  c->fd = S2PTR(socket(af, type, 0));
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
     return;
@@ -3297,7 +3283,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     closesocket(fd);
   } else {
     memcpy(&c->peer, &addr, sizeof(struct mg_addr));
-    c->fd = sock2ptr(fd);
+    c->fd = S2PTR(fd);
     c->is_listening = 1;
     c->is_udp = is_udp;
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
@@ -3337,9 +3323,6 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   FD_ZERO(&wset);
 
   for (c = mgr->conns; c != NULL; c = c->next) {
-    // c->is_writable = 0;
-    // TLS might have stuff buffered, so dig everything
-    // c->is_readable = c->is_tls && c->is_readable ? 1 : 0;
     if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) continue;
     FD_SET(FD(c), &rset);
     if (FD(c) > maxfd) maxfd = FD(c);
@@ -3347,7 +3330,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
       FD_SET(FD(c), &wset);
   }
 
-  if ((rc = select(maxfd + 1, &rset, &wset, NULL, &tv)) < 0) {
+  if ((rc = select((int) maxfd + 1, &rset, &wset, NULL, &tv)) < 0) {
     LOG(LL_DEBUG, ("select: %d %d", rc, MG_SOCK_ERRNO));
     FD_ZERO(&rset);
     FD_ZERO(&wset);
@@ -3733,21 +3716,19 @@ static int rng_get(void *p_rng, unsigned char *buf, size_t len) {
 void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   int rc = 0;
-  const char *ca = opts->ca == NULL     ? "-"
-                   : opts->ca[0] == '-' ? "(emb)"
-                                        : opts->ca;
-  const char *cert = opts->cert == NULL     ? "-"
-                     : opts->cert[0] == '-' ? "(emb)"
-                                            : opts->cert;
-  const char *certkey = opts->certkey == NULL     ? "-"
-                        : opts->certkey[0] == '-' ? "(emb)"
-                                                  : opts->certkey;
+  const char *ca =
+      opts->ca == NULL ? "-" : opts->ca[0] == '-' ? "(emb)" : opts->ca;
+  const char *cert =
+      opts->cert == NULL ? "-" : opts->cert[0] == '-' ? "(emb)" : opts->cert;
+  const char *certkey = opts->certkey == NULL
+                            ? "-"
+                            : opts->certkey[0] == '-' ? "(emb)" : opts->certkey;
   if (tls == NULL) {
     mg_error(c, "TLS OOM");
     goto fail;
   }
-  LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id, ca,
-                 cert, certkey));
+  LOG(LL_DEBUG,
+      ("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id, ca, cert, certkey));
   mbedtls_ssl_init(&tls->ssl);
   mbedtls_ssl_config_init(&tls->conf);
   mbedtls_x509_crt_init(&tls->ca);
@@ -3789,7 +3770,8 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
 #endif
     if (opts->srvname.len > 0) {
       char mem[128], *buf = mem;
-      mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len, opts->srvname.ptr);
+      mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
+                  opts->srvname.ptr);
       mbedtls_ssl_set_hostname(&tls->ssl, buf);
       if (buf != mem) free(buf);
     }
@@ -3960,7 +3942,8 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   if (opts->ciphers != NULL) SSL_set_cipher_list(tls->ssl, opts->ciphers);
   if (opts->srvname.len > 0) {
     char mem[128], *buf = mem;
-    mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len, opts->srvname.ptr);
+    mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
+                opts->srvname.ptr);
     SSL_set_tlsext_host_name(tls->ssl, buf);
     if (buf != mem) free(buf);
   }
@@ -3981,7 +3964,7 @@ fail:
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
-  SSL_set_fd(tls->ssl, (int) (long) c->fd);
+  SSL_set_fd(tls->ssl, (int) (size_t) c->fd);
   rc = c->is_client ? SSL_connect(tls->ssl) : SSL_accept(tls->ssl);
   if (rc == 1) {
     LOG(LL_DEBUG, ("%lu success", c->id));

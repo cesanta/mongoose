@@ -28,22 +28,8 @@ typedef Socket_t SOCKET;
 typedef int SOCKET;
 #endif
 
-union _su {
-  SOCKET s;
-  void *ptr;
-};
-#define FD(c_) ptr2sock((c_)->fd)
-
-static SOCKET ptr2sock(void *ptr) {
-  union _su u = {0};
-  u.ptr = ptr;
-  return u.s;
-}
-
-static void *sock2ptr(SOCKET s) {
-  union _su u = {s};
-  return u.ptr;
-}
+#define FD(c_) ((SOCKET)(size_t)(c_)->fd)
+#define S2PTR(s_) ((void *) (size_t)(s_))
 
 #ifndef MSG_NONBLOCKING
 #define MSG_NONBLOCKING 0
@@ -90,7 +76,7 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
   struct mg_connection *c = (struct mg_connection *) calloc(1, sizeof(*c));
   if (c != NULL) {
     c->is_client = is_client;
-    c->fd = sock2ptr(fd);
+    c->fd = S2PTR(fd);
     c->mgr = mgr;
     c->id = ++mgr->nextid;
   }
@@ -335,7 +321,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   if (c->peer.is_ip6) af = AF_INET6;
 #endif
   mg_straddr(c, buf, sizeof(buf));
-  c->fd = sock2ptr(socket(af, type, 0));
+  c->fd = S2PTR(socket(af, type, 0));
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
     return;
@@ -471,7 +457,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     closesocket(fd);
   } else {
     memcpy(&c->peer, &addr, sizeof(struct mg_addr));
-    c->fd = sock2ptr(fd);
+    c->fd = S2PTR(fd);
     c->is_listening = 1;
     c->is_udp = is_udp;
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
@@ -511,9 +497,6 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   FD_ZERO(&wset);
 
   for (c = mgr->conns; c != NULL; c = c->next) {
-    // c->is_writable = 0;
-    // TLS might have stuff buffered, so dig everything
-    // c->is_readable = c->is_tls && c->is_readable ? 1 : 0;
     if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) continue;
     FD_SET(FD(c), &rset);
     if (FD(c) > maxfd) maxfd = FD(c);
@@ -521,7 +504,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
       FD_SET(FD(c), &wset);
   }
 
-  if ((rc = select(maxfd + 1, &rset, &wset, NULL, &tv)) < 0) {
+  if ((rc = select((int) maxfd + 1, &rset, &wset, NULL, &tv)) < 0) {
     LOG(LL_DEBUG, ("select: %d %d", rc, MG_SOCK_ERRNO));
     FD_ZERO(&rset);
     FD_ZERO(&wset);
