@@ -1,7 +1,7 @@
 # A complete device dashboard
 
 This example is a demonstration of how Mongoose Library could be integrated
-into an embedded device and provide a complete device dashbord with the
+into an embedded device and provide a complete device dashboard with the
 following features:
 
 - Multiple logins with different permissions (admin and user)
@@ -14,7 +14,7 @@ following features:
 - Live video stream
 
 
-In essense, this example is a combination of several other examples
+In essence, this example is a combination of several other examples
 pulled together (multiple-logins, dashboard, live-log, video-stream).
 
 # Screenshots

@@ -697,7 +697,7 @@ static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
   } else if (!(fs->stat(root_dir, NULL, NULL) & MG_FS_DIR)) {
     mg_http_reply(c, 400, "", "Invalid web root [%s]\n", root_dir);
   } else {
-    // NOTE(lsm): Xilinx snprintf does not 0-terminate the detination for
+    // NOTE(lsm): Xilinx snprintf does not 0-terminate the destination for
     // the %.*s specifier, if the length is zero. Make sure hm->uri.len > 0
     size_t n1 = strlen(root_dir), n2;
     // Temporarily append URI to the root_dir: that is the unresolved path
