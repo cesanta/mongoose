@@ -34,8 +34,8 @@ static void mg_send_u16(struct mg_connection *c, uint16_t value) {
   mg_send(c, &value, sizeof(value));
 }
 
-static void mqtt_login(struct mg_connection *c, const char *url,
-                       struct mg_mqtt_opts *opts) {
+void mg_mqtt_login(struct mg_connection *c, const char *url,
+                   struct mg_mqtt_opts *opts) {
   uint32_t total_len = 7 + 1 + 2 + 2;
   uint16_t flags = (uint16_t)(((uint16_t) opts->qos & 3) << 3);
   struct mg_str user = mg_url_user(url);
@@ -263,7 +263,7 @@ struct mg_connection *mg_mqtt_connect(struct mg_mgr *mgr, const char *url,
   if (c != NULL) {
     struct mg_mqtt_opts empty;
     memset(&empty, 0, sizeof(empty));
-    mqtt_login(c, url, opts == NULL ? &empty : opts);
+    mg_mqtt_login(c, url, opts == NULL ? &empty : opts);
     c->pfn = mqtt_cb;
   }
   return c;

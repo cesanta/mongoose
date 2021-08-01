@@ -2101,8 +2101,8 @@ static void mg_send_u16(struct mg_connection *c, uint16_t value) {
   mg_send(c, &value, sizeof(value));
 }
 
-static void mqtt_login(struct mg_connection *c, const char *url,
-                       struct mg_mqtt_opts *opts) {
+void mg_mqtt_login(struct mg_connection *c, const char *url,
+                   struct mg_mqtt_opts *opts) {
   uint32_t total_len = 7 + 1 + 2 + 2;
   uint16_t flags = (uint16_t)(((uint16_t) opts->qos & 3) << 3);
   struct mg_str user = mg_url_user(url);
@@ -2330,7 +2330,7 @@ struct mg_connection *mg_mqtt_connect(struct mg_mgr *mgr, const char *url,
   if (c != NULL) {
     struct mg_mqtt_opts empty;
     memset(&empty, 0, sizeof(empty));
-    mqtt_login(c, url, opts == NULL ? &empty : opts);
+    mg_mqtt_login(c, url, opts == NULL ? &empty : opts);
     c->pfn = mqtt_cb;
   }
   return c;
@@ -4510,41 +4510,50 @@ static size_t ws_process(uint8_t *buf, size_t len, struct ws_msg *msg) {
   return msg->header_len + msg->data_len;
 }
 
-size_t mg_ws_send(struct mg_connection *c, const char *buf, size_t len,
-                  int op) {
-  unsigned char header[10], mask[4];
-  size_t i, header_len = 0;
-  header[0] = (uint8_t)(op | WEBSOCKET_FLAGS_MASK_FIN);
+static size_t mkhdr(size_t len, int op, bool is_client, uint8_t *buf) {
+  size_t n = 0;
+  buf[0] = (uint8_t)(op | WEBSOCKET_FLAGS_MASK_FIN);
   if (len < 126) {
-    header[1] = (unsigned char) len;
-    header_len = 2;
+    buf[1] = (unsigned char) len;
+    n = 2;
   } else if (len < 65536) {
     uint16_t tmp = mg_htons((uint16_t) len);
-    header[1] = 126;
-    memcpy(&header[2], &tmp, sizeof(tmp));
-    header_len = 4;
+    buf[1] = 126;
+    memcpy(&buf[2], &tmp, sizeof(tmp));
+    n = 4;
   } else {
     uint32_t tmp;
-    header[1] = 127;
+    buf[1] = 127;
     tmp = mg_htonl((uint32_t)((uint64_t) len >> 32));
-    memcpy(&header[2], &tmp, sizeof(tmp));
+    memcpy(&buf[2], &tmp, sizeof(tmp));
     tmp = mg_htonl((uint32_t)(len & 0xffffffff));
-    memcpy(&header[6], &tmp, sizeof(tmp));
-    header_len = 10;
+    memcpy(&buf[6], &tmp, sizeof(tmp));
+    n = 10;
   }
-  if (c->is_client) header[1] |= 1 << 7;  // Set masking flag
-  mg_send(c, header, header_len);
-  if (c->is_client) {
-    mg_random(mask, sizeof(mask));
-    mg_send(c, mask, sizeof(mask));
-    header_len += sizeof(mask);
+  if (is_client) {
+    buf[1] |= 1 << 7;  // Set masking flag
+    mg_random(&buf[n], 4);
+    n += 4;
   }
-  LOG(LL_VERBOSE_DEBUG, ("WS out: %d [%.*s]", (int) len, (int) len, buf));
-  mg_send(c, buf, len);
+  return n;
+}
+
+static void mg_ws_mask(struct mg_connection *c, size_t len) {
   if (c->is_client && c->send.buf != NULL) {
-    uint8_t *p = c->send.buf + c->send.len - len;
+    size_t i;
+    uint8_t *p = c->send.buf + c->send.len - len, *mask = p - 4;
     for (i = 0; i < len; i++) p[i] ^= mask[i & 3];
   }
+}
+
+size_t mg_ws_send(struct mg_connection *c, const char *buf, size_t len,
+                  int op) {
+  uint8_t header[14];
+  size_t header_len = mkhdr(len, op, c->is_client, header);
+  mg_send(c, header, header_len);
+  LOG(LL_VERBOSE_DEBUG, ("WS out: %d [%.*s]", (int) len, (int) len, buf));
+  mg_send(c, buf, len);
+  mg_ws_mask(c, len);
   return header_len + len;
 }
 
@@ -4659,4 +4668,18 @@ void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
     va_end(ap);
   }
   c->is_websocket = 1;
+}
+
+size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
+  uint8_t header[14], *p;
+  size_t header_len = mkhdr(len, op, c->is_client, header);
+
+  // NOTE: order of operations is important!
+  mg_iobuf_append(&c->send, NULL, header_len, MG_IO_SIZE);  // Add header space
+  p = &c->send.buf[c->send.len - len];                      // p points to data
+  memmove(p, p - header_len, len);                          // Shift data
+  memcpy(p - header_len, header, header_len);               // Prepend header
+  mg_ws_mask(c, len);                                       // Mask data
+
+  return c->send.len;
 }
