@@ -383,34 +383,6 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   }
 }
 
-static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_WS_OPEN) {
-    mg_ws_send(c, "boo", 3, WEBSOCKET_OP_BINARY);
-    mg_ws_send(c, "", 0, WEBSOCKET_OP_PING);
-  } else if (ev == MG_EV_WS_MSG) {
-    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    ASSERT(mg_strstr(wm->data, mg_str("boo")));
-    mg_ws_send(c, "", 0, WEBSOCKET_OP_CLOSE);  // Ask server to close
-    *(int *) fn_data = 1;
-  } else if (ev == MG_EV_CLOSE) {
-    *(int *) fn_data = 2;
-  }
-}
-
-static void test_ws(void) {
-  struct mg_mgr mgr;
-  int i, done = 0;
-
-  mg_mgr_init(&mgr);
-  ASSERT(mg_http_listen(&mgr, "ws://LOCALHOST:12345", eh1, NULL) != NULL);
-  mg_ws_connect(&mgr, "ws://localhost:12345/ws", wcb, &done, "%s", "");
-  for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
-  ASSERT(done == 2);
-
-  mg_mgr_free(&mgr);
-  ASSERT(mgr.conns == NULL);
-}
-
 struct fetch_data {
   char *buf;
   int code, closed;
@@ -465,6 +437,39 @@ static int cmpbody(const char *buf, const char *str) {
   struct mg_http_message hm;
   mg_http_parse(buf, strlen(buf), &hm);
   return strncmp(hm.body.ptr, str, hm.body.len);
+}
+
+static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_WS_OPEN) {
+    mg_ws_send(c, "boo", 3, WEBSOCKET_OP_BINARY);
+    mg_ws_send(c, "", 0, WEBSOCKET_OP_PING);
+  } else if (ev == MG_EV_WS_MSG) {
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    ASSERT(mg_strstr(wm->data, mg_str("boo")));
+    mg_ws_send(c, "", 0, WEBSOCKET_OP_CLOSE);  // Ask server to close
+    *(int *) fn_data = 1;
+  } else if (ev == MG_EV_CLOSE) {
+    *(int *) fn_data = 2;
+  }
+}
+
+static void test_ws(void) {
+  char buf[FETCH_BUF_SIZE];
+  const char *url = "ws://LOCALHOST:12343";
+  struct mg_mgr mgr;
+  int i, done = 0;
+
+  mg_mgr_init(&mgr);
+  ASSERT(mg_http_listen(&mgr, url, eh1, NULL) != NULL);
+  mg_ws_connect(&mgr, url, wcb, &done, "%s", "");
+  for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(done == 2);
+
+  // Test that non-WS requests fail
+  ASSERT(fetch(&mgr, buf, url, "GET /ws HTTP/1.0\r\n\n") == 426);
+
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
 }
 
 static void eh9(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {

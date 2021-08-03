@@ -4661,13 +4661,16 @@ void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
                    const char *fmt, ...) {
   struct mg_str *wskey = mg_http_get_header(hm, "Sec-WebSocket-Key");
   c->pfn = mg_ws_cb;
-  if (wskey != NULL) {
+  if (wskey == NULL) {
+    mg_http_reply(c, 426, "", "WS upgrade expected\n");
+    c->is_draining = 1;
+  } else {
     va_list ap;
     va_start(ap, fmt);
     ws_handshake(c, wskey->ptr, wskey->len, fmt, ap);
     va_end(ap);
+    c->is_websocket = 1;
   }
-  c->is_websocket = 1;
 }
 
 size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
