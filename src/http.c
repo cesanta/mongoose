@@ -740,7 +740,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   int flags = uri_to_path(c, hm, opts, root, sizeof(root), path, sizeof(path));
 
   if (flags == 0) return;
-  LOG(LL_DEBUG, ("root [%s], path [%s] %d", root, path, flags));
+  // LOG(LL_DEBUG, ("root [%s], path [%s] %d", root, path, flags));
   if (flags & MG_FS_DIR) {
     listdir(c, hm, opts, path);
   } else if (opts->ssi_pattern != NULL &&

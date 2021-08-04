@@ -1,6 +1,6 @@
 SRCS = mongoose.c test/unit_test.c test/packed_fs.c
 HDRS = $(wildcard src/*.h)
-DEFS ?= -DMG_MAX_HTTP_HEADERS=5 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1
+DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1
 WARN ?= -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.

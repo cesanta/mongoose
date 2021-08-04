@@ -377,6 +377,8 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       sopts.extra_headers = "C: D\r\n";
       mg_http_serve_dir(c, hm, &sopts);
     }
+  } else if (ev == MG_EV_WS_OPEN) {
+    mg_ws_send(c, "opened", 6, WEBSOCKET_OP_BINARY);
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_BINARY);
@@ -441,29 +443,34 @@ static int cmpbody(const char *buf, const char *str) {
 
 static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_WS_OPEN) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    struct mg_str *wsproto = mg_http_get_header(hm, "Sec-WebSocket-Protocol");
+    ASSERT(wsproto != NULL);
     mg_ws_send(c, "boo", 3, WEBSOCKET_OP_BINARY);
     mg_ws_send(c, "", 0, WEBSOCKET_OP_PING);
+    ((int *) fn_data)[0] += 100;
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    ASSERT(mg_strstr(wm->data, mg_str("boo")));
-    mg_ws_send(c, "", 0, WEBSOCKET_OP_CLOSE);  // Ask server to close
-    *(int *) fn_data = 1;
+    if (mg_strstr(wm->data, mg_str("boo")))
+      mg_ws_send(c, "", 0, WEBSOCKET_OP_CLOSE);
+    ((int *) fn_data)[0]++;
   } else if (ev == MG_EV_CLOSE) {
-    *(int *) fn_data = 2;
+    ((int *) fn_data)[0] += 10;
   }
 }
 
 static void test_ws(void) {
   char buf[FETCH_BUF_SIZE];
-  const char *url = "ws://LOCALHOST:12343";
+  const char *url = "ws://LOCALHOST:12343/ws";
   struct mg_mgr mgr;
   int i, done = 0;
 
   mg_mgr_init(&mgr);
   ASSERT(mg_http_listen(&mgr, url, eh1, NULL) != NULL);
-  mg_ws_connect(&mgr, url, wcb, &done, "%s", "");
-  for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
-  ASSERT(done == 2);
+  mg_ws_connect(&mgr, url, wcb, &done, "%s", "Sec-WebSocket-Protocol: meh\r\n");
+  for (i = 0; i < 30; i++) mg_mgr_poll(&mgr, 1);
+  // LOG(LL_INFO, ("--> %d", done));
+  ASSERT(done == 112);
 
   // Test that non-WS requests fail
   ASSERT(fetch(&mgr, buf, url, "GET /ws HTTP/1.0\r\n\n") == 426);
@@ -879,11 +886,11 @@ static void test_http_parse(void) {
   }
 
   {
-    static const char *s = "a b c\na:1\nb:2\nc:3\nd:4\ne:5\nf:6\n\n";
+    static const char *s = "a b c\na:1\nb:2\nc:3\nd:4\ne:5\nf:6\ng:7\nh:8\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&req, "e")) != NULL);
     ASSERT(mg_vcmp(v, "5") == 0);
-    ASSERT((v = mg_http_get_header(&req, "f")) == NULL);
+    ASSERT((v = mg_http_get_header(&req, "h")) == NULL);
   }
 
   {
