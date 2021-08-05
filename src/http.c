@@ -573,6 +573,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               status, mg_http_status_code_str(status), (int) mime.len, mime.ptr,
               etag, cl, range, opts->extra_headers ? opts->extra_headers : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
+      c->is_draining = 1;
       fs->close(fd);
     } else {
       c->pfn = static_cb;
