@@ -28,8 +28,8 @@ typedef Socket_t SOCKET;
 typedef int SOCKET;
 #endif
 
-#define FD(c_) ((SOCKET)(size_t)(c_)->fd)
-#define S2PTR(s_) ((void *) (size_t)(s_))
+#define FD(c_) ((SOCKET) (size_t) (c_)->fd)
+#define S2PTR(s_) ((void *) (size_t) (s_))
 
 #ifndef MSG_NONBLOCKING
 #define MSG_NONBLOCKING 0
@@ -404,9 +404,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   }
 }
 
-#if MG_ENABLE_SOCKETPAIR
 bool mg_socketpair(int *s1, int *s2) {
-#ifdef MG_ENABLE_NATIVE_SOCKETPAIR
+#if MG_ENABLE_NATIVE_SOCKETPAIR
   // For some reason, native socketpair() call fails on Macos
   // Enable this codepath only when MG_ENABLE_NATIVE_SOCKETPAIR is defined
   int sp[2], ret = 0;
@@ -415,7 +414,7 @@ bool mg_socketpair(int *s1, int *s2) {
   }
   LOG(LL_INFO, ("errno %d", errno));
   return ret;
-#else
+#elif MG_ENABLE_SOCKETPAIR
   union usa sa, sa2;
   SOCKET sp[2] = {INVALID_SOCKET, INVALID_SOCKET};
   socklen_t len = sizeof(sa.sin);
@@ -442,9 +441,11 @@ bool mg_socketpair(int *s1, int *s2) {
   }
 
   return ret;
+#else
+  *s1 = *s2 = INVALID_SOCKET;
+  return false;
 #endif
 }
-#endif
 
 struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
                                 mg_event_handler_t fn, void *fn_data) {

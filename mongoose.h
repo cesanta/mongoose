@@ -66,6 +66,10 @@ extern "C" {
 #define MG_ENABLE_SOCKETPAIR 0
 #endif
 
+#ifndef MG_ENABLE_NATIVE_SOCKETPAIR
+#define MG_ENABLE_NATIVE_SOCKETPAIR 0
+#endif
+
 #ifndef MG_ENABLE_CUSTOM_RANDOM
 #define MG_ENABLE_CUSTOM_RANDOM 0
 #endif

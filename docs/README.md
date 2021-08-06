@@ -241,6 +241,7 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_LOG | 1 | Enable `LOG()` macro |
 |MG_ENABLE_MD5 | 0 | Use native MD5 implementation |
 |MG_ENABLE_SOCKETPAIR | 0 | Enable `mg_socketpair()` for multi-threading |
+|MG_ENABLE_NATIVE_SOCKETPAIR | 0 | Use native `socketpair()` syscall for `mg_socketpair()`|
 |MG_ENABLE_SSI | 1 | Enable serving SSI files by `mg_http_serve_dir()` |
 |MG_ENABLE_DIRLIST | 0 | Enable directory listing |
 |MG_ENABLE_CUSTOM_RANDOM | 0 | Provide custom RNG function `mg_random()` |
