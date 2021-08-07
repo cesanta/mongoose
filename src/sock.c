@@ -35,6 +35,10 @@ typedef int SOCKET;
 #define MSG_NONBLOCKING 0
 #endif
 
+#ifndef AF_INET6
+#define AF_INET6 10
+#endif
+
 union usa {
   struct sockaddr sa;
   struct sockaddr_in sin;
@@ -393,7 +397,7 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
 
   (void) memset(&usa[0], 0, sizeof(usa[0]));
   usa[0].sin.sin_family = AF_INET;
-  usa[0].sin.sin_addr.s_addr = htonl(0x7f000001);  // 127.0.0.1
+  *(uint32_t *) &usa->sin.sin_addr = mg_htonl(0x7f000001);  // 127.0.0.1
   usa[1] = usa[0];
 
   if ((sp[0] = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET &&
