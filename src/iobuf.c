@@ -57,7 +57,7 @@ size_t mg_iobuf_append(struct mg_iobuf *io, const void *buf, size_t len,
 }
 
 size_t mg_iobuf_delete(struct mg_iobuf *io, size_t len) {
-  if (len > io->len) len = 0;
+  if (len > io->len) len = io->len;
   memmove(io->buf, io->buf + len, io->len - len);
   zeromem(io->buf + io->len - len, len);
   io->len -= len;

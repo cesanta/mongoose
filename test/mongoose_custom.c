@@ -42,5 +42,14 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   return 0;
 }
 
+void mg_rmpipe(struct mg_connection *c) {
+  (void) c;
+}
+
+bool mg_mkpipe(struct mg_connection *c, struct mg_connection *pc[2]) {
+  (void) c, (void) pc;
+  return false;
+}
+
 void _fini(void) {
 }

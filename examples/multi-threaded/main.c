@@ -6,8 +6,6 @@
 // some time to simulate long processing time, produces an output and
 // hands over that output to the request handler function.
 //
-// IMPORTANT: this program must be compiled with -DMG_ENABLE_SOCKETPAIR=1
-//
 // The following procedure is used to benchmark the multi-threaded codepath
 // against the single-threaded codepath on MacOS:
 //   $ make clean all CFLAGS="-DSLEEP_TIME=0 -DMG_ENABLE_SOCKETPAIR=1"
@@ -21,14 +19,8 @@
 
 #include "mongoose.h"
 
-// thread_function() sends this structure back to the request handler
-struct response {
-  char *data;
-  int len;
-};
-
 #ifndef SLEEP_TIME
-#define SLEEP_TIME 3  // Seconds to sleep to simulate calculation
+#define SLEEP_TIME 2  // Seconds to sleep to simulate calculation
 #endif
 
 static void start_thread(void (*f)(void *), void *p) {
@@ -47,12 +39,13 @@ static void start_thread(void (*f)(void *), void *p) {
 }
 
 static void thread_function(void *param) {
-  int sock = (long) param;                     // Grab our blocking socket
-  struct response r = {strdup("hello\n"), 6};  // Create response
-  mg_usleep(SLEEP_TIME * 1000000);             // Simulate long execution
-  LOG(LL_INFO, ("got sock %d", sock));         // For debugging
-  send(sock, (void *) &r, sizeof(r), 0);       // Send to request handler
-  closesocket(sock);                           // Done, close socket, end thread
+  struct mg_connection *c = param;  // Pipe connection
+  LOG(LL_INFO, ("Thread started, pipe %lu/%ld", c->id, (long) (size_t) c->fd));
+  LOG(LL_INFO, ("Sleeping for %d sec...", SLEEP_TIME));
+  mg_usleep(SLEEP_TIME * 1000000);  // Simulate long execution
+  LOG(LL_INFO, ("Sending data..."));
+  mg_http_reply(c, 200, "Host: foo.com\r\n", "hi\n");
+  mg_rmpipe(c);
 }
 
 // HTTP request callback
@@ -61,46 +54,34 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // Incoming request. Create socket pair.
     // Pass blocking socket to the thread, and keep the non-blocking socket.
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-
     if (mg_http_match_uri(hm, "/fast")) {
-      // The /fast URI is for performance impact of the multithreading codepath
-      mg_printf(c,
-                "HTTP/1.1 200 OK\r\n"        // Reply success
-                "Host: foo\r\n"              // Mandatory header
-                "Content-Length: 3\r\n\r\n"  // Set to allow keep-alive
-                "hi\n");
+      // The /fast URI responds immediately without hitting a multi-threaded
+      // codepath. It is for measuing performance impact
+      mg_http_reply(c, 200, "Host: foo.com\r\n", "hi\n");
     } else {
-      int blocking = -1, non_blocking = -1;
-      mg_socketpair(&blocking, &non_blocking);  // Create connected pair
-
-      // Pass blocking socket to the thread_function.
-      start_thread(thread_function, (void *) (long) blocking);
-
-      // Non-blocking is ours.   Store it in the fn_data, in
-      // order to use it in the subsequent invocations
-      c->fn_data = (void *) (long) non_blocking;
+      // Multithreading code path. Create "pipe" connection.
+      // Pipe connection is safe to pass to a different task/thread.
+      // Spawn a thread and pass created pipe connection to it.
+      // Save a receiving end of the pipe into c->fn_data, in order to
+      // close it when this (client) connection closes.
+      struct mg_connection *pc[2];           // pc[0]: send, pc[1]: recv
+      mg_mkpipe(c, pc);                      // Create pipe
+      start_thread(thread_function, pc[0]);  // Spawn a task, pass pc[0] there
+      c->fn_data = pc[1];                    // And save recv end for later
     }
-  } else if (ev == MG_EV_POLL && c->fn_data != NULL) {
-    // On each poll iteration, try to receive response data
-    int sock = (int) (long) c->fn_data;
-    struct response response = {NULL, 0};
-    if (recv(sock, (void *) &response, sizeof(response), 0) ==
-        sizeof(response)) {
-      // Yeah! Got the response.
-      mg_printf(c, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n\r\n%.*s",
-                response.len, response.len, response.data);
-      free(response.data);  // We can free produced data now
-      closesocket(sock);    // And close our end of the socket pair
-      c->fn_data = NULL;
-    }
+  } else if (ev == MG_EV_CLOSE) {
+    // Tell the receiving end of the pipe to close
+    struct mg_connection *pc = (struct mg_connection *) fn_data;
+    if (pc) pc->is_closing = 1, pc->fn_data = NULL;
   }
 }
 
 int main(void) {
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
+  mg_log_set("3");
   mg_http_listen(&mgr, "http://localhost:8000", cb, NULL);
-  for (;;) mg_mgr_poll(&mgr, 50);
+  for (;;) mg_mgr_poll(&mgr, 1000);
   mg_mgr_free(&mgr);
   return 0;
 }

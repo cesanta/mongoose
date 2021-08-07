@@ -108,9 +108,9 @@ int mg_http_get_var(const struct mg_str *buf, const char *name, char *dst,
       if ((p == buf->ptr || p[-1] == '&') && p[name_len] == '=' &&
           !mg_ncasecmp(name, p, name_len)) {
         p += name_len + 1;
-        s = (const char *) memchr(p, '&', (size_t)(e - p));
+        s = (const char *) memchr(p, '&', (size_t) (e - p));
         if (s == NULL) s = e;
-        len = mg_url_decode(p, (size_t)(s - p), dst, dst_len, 1);
+        len = mg_url_decode(p, (size_t) (s - p), dst, dst_len, 1);
         if (len < 0) len = -3;  // Failed to decode
         break;
       }
@@ -158,7 +158,7 @@ static const char *skip(const char *s, const char *e, const char *d,
                         struct mg_str *v) {
   v->ptr = s;
   while (s < e && *s != '\n' && strchr(d, *s) == NULL) s++;
-  v->len = (size_t)(s - v->ptr);
+  v->len = (size_t) (s - v->ptr);
   while (s < e && strchr(d, *s) != NULL) s++;
   return s;
 }
@@ -215,8 +215,8 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   // If URI contains '?' character, setup query string
   if ((qs = (const char *) memchr(hm->uri.ptr, '?', hm->uri.len)) != NULL) {
     hm->query.ptr = qs + 1;
-    hm->query.len = (size_t)(&hm->uri.ptr[hm->uri.len] - (qs + 1));
-    hm->uri.len = (size_t)(qs - hm->uri.ptr);
+    hm->query.len = (size_t) (&hm->uri.ptr[hm->uri.len] - (qs + 1));
+    hm->uri.len = (size_t) (qs - hm->uri.ptr);
   }
 
   mg_http_parse_headers(s, end, hm->headers,
@@ -352,7 +352,7 @@ static const char *mg_http_status_code_str(int status_code) {
 
 void mg_http_reply(struct mg_connection *c, int code, const char *headers,
                    const char *fmt, ...) {
-  char mem[100], *buf = mem;
+  char mem[256], *buf = mem;
   va_list ap;
   int len;
   va_start(ap, fmt);
@@ -811,7 +811,7 @@ struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v) {
       while (p < x && (q ? p == b || *p != '"' : *p != ';' && *p != ' ')) p++;
       // LOG(LL_INFO, ("[%.*s] [%.*s] [%.*s]", (int) s.len, s.ptr, (int) v.len,
       // v.ptr, (int) (p - b), b));
-      return stripquotes(mg_str_n(b, (size_t)(p - b + q)));
+      return stripquotes(mg_str_n(b, (size_t) (p - b + q)));
     }
   }
   return mg_str_n(NULL, 0);
@@ -886,9 +886,9 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
   }
   {
     const char *end = &ch.ptr[ch.len];
-    size_t n = (size_t)(end - (char *) c->recv.buf);
+    size_t n = (size_t) (end - (char *) c->recv.buf);
     if (c->recv.len > n) {
-      memmove((char *) ch.ptr, end, (size_t)(c->recv.len - n));
+      memmove((char *) ch.ptr, end, (size_t) (c->recv.len - n));
     }
     // LOG(LL_INFO, ("DELETING CHUNK: %zu %zu %zu\n%.*s", c->recv.len, n,
     // ch.len, (int) ch.len, ch.ptr));
@@ -904,7 +904,7 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
       bool is_chunked = n > 0 && mg_is_chunked(&hm);
       if (ev == MG_EV_CLOSE) {
         hm.message.len = c->recv.len;
-        hm.body.len = hm.message.len - (size_t)(hm.body.ptr - hm.message.ptr);
+        hm.body.len = hm.message.len - (size_t) (hm.body.ptr - hm.message.ptr);
       } else if (is_chunked && n > 0) {
         walkchunks(c, &hm, (size_t) n);
       }

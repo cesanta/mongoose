@@ -240,8 +240,6 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_IPV6 | 0 | Enable IPv6 |
 |MG_ENABLE_LOG | 1 | Enable `LOG()` macro |
 |MG_ENABLE_MD5 | 0 | Use native MD5 implementation |
-|MG_ENABLE_SOCKETPAIR | 0 | Enable `mg_socketpair()` for multi-threading |
-|MG_ENABLE_NATIVE_SOCKETPAIR | 0 | Use native `socketpair()` syscall for `mg_socketpair()`|
 |MG_ENABLE_SSI | 1 | Enable serving SSI files by `mg_http_serve_dir()` |
 |MG_ENABLE_DIRLIST | 0 | Enable directory listing |
 |MG_ENABLE_CUSTOM_RANDOM | 0 | Provide custom RNG function `mg_random()` |
@@ -524,16 +522,27 @@ int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 Same as `mg_printf()`, but takes `va_list` argument as a parameter.
 
 
-### mg\_socketpair()
+### mg\_mkpipe()
 
 ```c
-bool mg_socketpair(int *blocking, int *non_blocking);
+bool mg_mkpipe(struct mg_connection *c, struct mg_connection *pc[2]);
+void mg_rmpipe(struct mg_connection *c);
 ```
 
-Create a socket pair for exchanging data in multi-threaded environment. The
-`blocking` socket is blocking - it should be passed to the processing task.
-The `non_blocking` socket is non blocking, it should be used by an event
-handler function. Return value: true on success, false on error.
+Create a pair of connected connections using UDP socketpair.
+A sending connection, `pc[0]`, is safe to give to a different task,
+and send data to it. A receiving connection `pc[1]`, forwards all received
+data to `c`. A `pc[0]` is not added to event manager, therefore it must be
+manually cleaned up by calling `mg_rmpipe()` when sending task is done.
+A receiving side, `pc[1]` is added to the event manager, therefore it wakes
+up a manager each time data gets sent.
+
+NOTE: if there is a limit on the local UDP message size, do not send more
+than that limit in one call.
+
+See examples/multi-threaded for a usage example.
+
+Return value: true on success, false on error.
 
 
 ## IO buffers

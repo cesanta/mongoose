@@ -437,8 +437,11 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
 
 static int cmpbody(const char *buf, const char *str) {
   struct mg_http_message hm;
-  mg_http_parse(buf, strlen(buf), &hm);
-  return strncmp(hm.body.ptr, str, hm.body.len);
+  struct mg_str s = mg_str(str);
+  size_t len = strlen(buf);
+  mg_http_parse(buf, len, &hm);
+  if (hm.body.len > len) hm.body.len = len - (size_t) (hm.body.ptr - buf);
+  return mg_strcmp(hm.body, s);
 }
 
 static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -570,7 +573,7 @@ static void test_http_server(void) {
   {
     char *data = mg_file_read("./test/data/ca.pem", NULL);
     ASSERT(fetch(&mgr, buf, url, "GET /ca.pem HTTP/1.0\r\n\n") == 200);
-    ASSERT(cmpbody(data, buf) == 0);
+    ASSERT(cmpbody(buf, data) == 0);
     free(data);
   }
 
@@ -1407,8 +1410,35 @@ static void test_packed(void) {
   ASSERT(mgr.conns == NULL);
 }
 
+static void eh6(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    struct mg_connection *pc[2];
+    mg_mkpipe(c, pc);
+    mg_http_reply(pc[0], 200, "", "hi, %.*s", (int) hm->uri.len, hm->uri.ptr);
+    mg_rmpipe(pc[0]);
+    c->fn_data = pc[1];
+  } else if (ev == MG_EV_CLOSE) {
+    struct mg_connection *pc = (struct mg_connection *) fn_data;
+    if (pc) pc->is_closing = 1, pc->fn_data = NULL;
+  }
+}
+
+static void test_pipe(void) {
+  struct mg_mgr mgr;
+  const char *url = "http://127.0.0.1:12352";
+  char buf[FETCH_BUF_SIZE];
+  mg_mgr_init(&mgr);
+  mg_http_listen(&mgr, url, eh6, NULL);
+  ASSERT(fetch(&mgr, buf, url, "GET /foo HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hi, /foo") == 0);
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+}
+
 int main(void) {
   mg_log_set("3");
+  test_pipe();
   test_packed();
   test_crc32();
   test_multipart();

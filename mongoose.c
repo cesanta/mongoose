@@ -879,9 +879,9 @@ int mg_http_get_var(const struct mg_str *buf, const char *name, char *dst,
       if ((p == buf->ptr || p[-1] == '&') && p[name_len] == '=' &&
           !mg_ncasecmp(name, p, name_len)) {
         p += name_len + 1;
-        s = (const char *) memchr(p, '&', (size_t)(e - p));
+        s = (const char *) memchr(p, '&', (size_t) (e - p));
         if (s == NULL) s = e;
-        len = mg_url_decode(p, (size_t)(s - p), dst, dst_len, 1);
+        len = mg_url_decode(p, (size_t) (s - p), dst, dst_len, 1);
         if (len < 0) len = -3;  // Failed to decode
         break;
       }
@@ -929,7 +929,7 @@ static const char *skip(const char *s, const char *e, const char *d,
                         struct mg_str *v) {
   v->ptr = s;
   while (s < e && *s != '\n' && strchr(d, *s) == NULL) s++;
-  v->len = (size_t)(s - v->ptr);
+  v->len = (size_t) (s - v->ptr);
   while (s < e && strchr(d, *s) != NULL) s++;
   return s;
 }
@@ -986,8 +986,8 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   // If URI contains '?' character, setup query string
   if ((qs = (const char *) memchr(hm->uri.ptr, '?', hm->uri.len)) != NULL) {
     hm->query.ptr = qs + 1;
-    hm->query.len = (size_t)(&hm->uri.ptr[hm->uri.len] - (qs + 1));
-    hm->uri.len = (size_t)(qs - hm->uri.ptr);
+    hm->query.len = (size_t) (&hm->uri.ptr[hm->uri.len] - (qs + 1));
+    hm->uri.len = (size_t) (qs - hm->uri.ptr);
   }
 
   mg_http_parse_headers(s, end, hm->headers,
@@ -1123,7 +1123,7 @@ static const char *mg_http_status_code_str(int status_code) {
 
 void mg_http_reply(struct mg_connection *c, int code, const char *headers,
                    const char *fmt, ...) {
-  char mem[100], *buf = mem;
+  char mem[256], *buf = mem;
   va_list ap;
   int len;
   va_start(ap, fmt);
@@ -1582,7 +1582,7 @@ struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v) {
       while (p < x && (q ? p == b || *p != '"' : *p != ';' && *p != ' ')) p++;
       // LOG(LL_INFO, ("[%.*s] [%.*s] [%.*s]", (int) s.len, s.ptr, (int) v.len,
       // v.ptr, (int) (p - b), b));
-      return stripquotes(mg_str_n(b, (size_t)(p - b + q)));
+      return stripquotes(mg_str_n(b, (size_t) (p - b + q)));
     }
   }
   return mg_str_n(NULL, 0);
@@ -1657,9 +1657,9 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
   }
   {
     const char *end = &ch.ptr[ch.len];
-    size_t n = (size_t)(end - (char *) c->recv.buf);
+    size_t n = (size_t) (end - (char *) c->recv.buf);
     if (c->recv.len > n) {
-      memmove((char *) ch.ptr, end, (size_t)(c->recv.len - n));
+      memmove((char *) ch.ptr, end, (size_t) (c->recv.len - n));
     }
     // LOG(LL_INFO, ("DELETING CHUNK: %zu %zu %zu\n%.*s", c->recv.len, n,
     // ch.len, (int) ch.len, ch.ptr));
@@ -1675,7 +1675,7 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
       bool is_chunked = n > 0 && mg_is_chunked(&hm);
       if (ev == MG_EV_CLOSE) {
         hm.message.len = c->recv.len;
-        hm.body.len = hm.message.len - (size_t)(hm.body.ptr - hm.message.ptr);
+        hm.body.len = hm.message.len - (size_t) (hm.body.ptr - hm.message.ptr);
       } else if (is_chunked && n > 0) {
         walkchunks(c, &hm, (size_t) n);
       }
@@ -1777,7 +1777,7 @@ size_t mg_iobuf_append(struct mg_iobuf *io, const void *buf, size_t len,
 }
 
 size_t mg_iobuf_delete(struct mg_iobuf *io, size_t len) {
-  if (len > io->len) len = 0;
+  if (len > io->len) len = io->len;
   memmove(io->buf, io->buf + len, io->len - len);
   zeromem(io->buf + io->len - len, len);
   io->len -= len;
@@ -2870,20 +2870,33 @@ union usa {
 #endif
 };
 
-static union usa tousa(struct mg_addr *a) {
-  union usa usa;
-  memset(&usa, 0, sizeof(usa));
-  usa.sin.sin_family = AF_INET;
-  usa.sin.sin_port = a->port;
-  *(uint32_t *) &usa.sin.sin_addr = a->ip;
+static socklen_t tousa(struct mg_addr *a, union usa *usa) {
+  socklen_t len = sizeof(usa->sin);
+  memset(usa, 0, sizeof(*usa));
+  usa->sin.sin_family = AF_INET;
+  usa->sin.sin_port = a->port;
+  *(uint32_t *) &usa->sin.sin_addr = a->ip;
 #if MG_ENABLE_IPV6
   if (a->is_ip6) {
-    usa.sin.sin_family = AF_INET6;
-    usa.sin6.sin6_port = a->port;
-    memcpy(&usa.sin6.sin6_addr, a->ip6, sizeof(a->ip6));
+    usa->sin.sin_family = AF_INET6;
+    usa->sin6.sin6_port = a->port;
+    memcpy(&usa->sin6.sin6_addr, a->ip6, sizeof(a->ip6));
+    len = sizeof(usa->sin6);
   }
 #endif
-  return usa;
+  return len;
+}
+
+static void tomgaddr(union usa *usa, struct mg_addr *a, bool is_ip6) {
+  a->is_ip6 = is_ip6;
+  a->port = usa->sin.sin_port;
+  memcpy(&a->ip, &usa->sin.sin_addr, sizeof(a->ip));
+#if MG_ENABLE_IPV6
+  if (is_ip6) {
+    memcpy(a->ip6, &usa->sin6.sin6_addr, sizeof(a->ip6));
+    a->port = usa->sin6.sin6_port;
+  }
+#endif
 }
 
 static bool mg_sock_would_block(void) {
@@ -2913,11 +2926,8 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
 static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
   long n = 0;
   if (c->is_udp) {
-    union usa usa = tousa(&c->peer);
-    socklen_t slen = sizeof(usa.sin);
-#if MG_ENABLE_IPV6
-    if (c->peer.is_ip6) slen = sizeof(usa.sin6);
-#endif
+    union usa usa;
+    socklen_t slen = tousa(&c->peer, &usa);
     n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
   } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
@@ -2950,14 +2960,11 @@ SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
   if (!mg_aton(mg_url_host(url), addr)) {
     LOG(LL_ERROR, ("invalid listening URL: %s", url));
   } else {
-    union usa usa = tousa(addr);
-    int on = 1, af = AF_INET;
+    union usa usa;
+    socklen_t slen = tousa(addr, &usa);
+    int on = 1, af = addr->is_ip6 ? AF_INET6 : AF_INET;
     int type = strncmp(url, "udp:", 4) == 0 ? SOCK_DGRAM : SOCK_STREAM;
     int proto = type == SOCK_DGRAM ? IPPROTO_UDP : IPPROTO_TCP;
-    socklen_t slen = sizeof(usa.sin);
-#if MG_ENABLE_IPV6
-    if (addr->is_ip6) af = AF_INET6, slen = sizeof(usa.sin6);
-#endif
 
     if ((fd = socket(af, type, proto)) != INVALID_SOCKET &&
 #if !defined(_WIN32) || !defined(SO_EXCLUSIVEADDRUSE)
@@ -3004,22 +3011,9 @@ static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
   long n = 0;
   if (c->is_udp) {
     union usa usa;
-    socklen_t slen = sizeof(usa.sin);
-#if MG_ENABLE_IPV6
-    if (c->peer.is_ip6) slen = sizeof(usa.sin6);
-#endif
+    socklen_t slen = tousa(&c->peer, &usa);
     n = recvfrom(FD(c), (char *) buf, len, 0, &usa.sa, &slen);
-    if (n > 0) {
-      if (c->peer.is_ip6) {
-#if MG_ENABLE_IPV6
-        memcpy(c->peer.ip6, &usa.sin6.sin6_addr, sizeof(c->peer.ip6));
-        c->peer.port = usa.sin6.sin6_port;
-#endif
-      } else {
-        c->peer.ip = *(uint32_t *) &usa.sin.sin_addr;
-        c->peer.port = usa.sin.sin_port;
-      }
-    }
+    if (n > 0) tomgaddr(&usa, &c->peer, slen != sizeof(usa.sin));
   } else {
     n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
@@ -3158,11 +3152,8 @@ void mg_connect_resolved(struct mg_connection *c) {
   mg_set_non_blocking_mode(FD(c));
   mg_call(c, MG_EV_RESOLVE, NULL);
   if (type == SOCK_STREAM) {
-    union usa usa = tousa(&c->peer);
-    socklen_t slen = sizeof(usa.sin);
-#if MG_ENABLE_IPV6
-    if (c->peer.is_ip6) slen = sizeof(usa.sin6);
-#endif
+    union usa usa;
+    socklen_t slen = tousa(&c->peer, &usa);
     if ((rc = connect(FD(c), &usa.sa, slen)) == 0 || mg_sock_would_block()) {
       setsockopts(c);
       if (rc != 0) c->is_connecting = 1;
@@ -3207,15 +3198,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     closesocket(fd);
   } else {
     char buf[40];
-    c->peer.port = usa.sin.sin_port;
-    memcpy(&c->peer.ip, &usa.sin.sin_addr, sizeof(c->peer.ip));
-#if MG_ENABLE_IPV6
-    if (sa_len == sizeof(usa.sin6)) {
-      memcpy(c->peer.ip6, &usa.sin6.sin6_addr, sizeof(c->peer.ip6));
-      c->peer.port = usa.sin6.sin6_port;
-      c->peer.is_ip6 = 1;
-    }
-#endif
+    tomgaddr(&usa, &c->peer, sa_len != sizeof(usa.sin));
     mg_straddr(c, buf, sizeof(buf));
     LOG(LL_DEBUG, ("%lu accepted %s", c->id, buf));
     mg_set_non_blocking_mode(FD(c));
@@ -3231,47 +3214,78 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   }
 }
 
-bool mg_socketpair(int *s1, int *s2) {
-#if MG_ENABLE_NATIVE_SOCKETPAIR
-  // For some reason, native socketpair() call fails on Macos
-  // Enable this codepath only when MG_ENABLE_NATIVE_SOCKETPAIR is defined
-  int sp[2], ret = 0;
-  if (socketpair(AF_INET, SOCK_DGRAM, IPPROTO_UDP, sp) == 0) {
-    *s1 = sp[0], *s2 = sp[1], ret = 1;
-  }
-  LOG(LL_INFO, ("errno %d", errno));
-  return ret;
-#elif MG_ENABLE_SOCKETPAIR
-  union usa sa, sa2;
-  SOCKET sp[2] = {INVALID_SOCKET, INVALID_SOCKET};
-  socklen_t len = sizeof(sa.sin);
-  int ret = 0;
+static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
+  socklen_t n = sizeof(usa[0].sin);
+  bool result = false;
 
-  (void) memset(&sa, 0, sizeof(sa));
-  sa.sin.sin_family = AF_INET;
-  sa.sin.sin_addr.s_addr = htonl(0x7f000001); /* 127.0.0.1 */
-  sa2 = sa;
+  (void) memset(&usa[0], 0, sizeof(usa[0]));
+  usa[0].sin.sin_family = AF_INET;
+  usa[0].sin.sin_addr.s_addr = htonl(0x7f000001);  // 127.0.0.1
+  usa[1] = usa[0];
 
   if ((sp[0] = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET &&
       (sp[1] = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET &&
-      bind(sp[0], &sa.sa, len) == 0 && bind(sp[1], &sa2.sa, len) == 0 &&
-      getsockname(sp[0], &sa.sa, &len) == 0 &&
-      getsockname(sp[1], &sa2.sa, &len) == 0 &&
-      connect(sp[0], &sa2.sa, len) == 0 && connect(sp[1], &sa.sa, len) == 0) {
-    mg_set_non_blocking_mode(sp[1]);
-    *s1 = sp[0];
-    *s2 = sp[1];
-    ret = 1;
+      bind(sp[0], &usa[0].sa, n) == 0 && bind(sp[1], &usa[1].sa, n) == 0 &&
+      getsockname(sp[0], &usa[0].sa, &n) == 0 &&
+      getsockname(sp[1], &usa[1].sa, &n) == 0 &&
+      connect(sp[0], &usa[1].sa, n) == 0 &&
+      connect(sp[1], &usa[0].sa, n) == 0) {
+    mg_set_non_blocking_mode(sp[1]);  // Set close-on-exec
+    result = true;
   } else {
     if (sp[0] != INVALID_SOCKET) closesocket(sp[0]);
     if (sp[1] != INVALID_SOCKET) closesocket(sp[1]);
+    sp[0] = sp[1] = INVALID_SOCKET;
   }
 
-  return ret;
-#else
-  *s1 = *s2 = INVALID_SOCKET;
+  return result;
+}
+
+// Event handler function for the receiving end of the pipe connection
+// Read data from another task and send it to the remote peer
+static void pf1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  struct mg_connection *cc = (struct mg_connection *) fn_data;
+  if (ev == MG_EV_READ) {
+    struct mg_str *s = (struct mg_str *) ev_data;
+    // LOG(LL_INFO, ("got %d [%.*s]", (int) s->len, (int) s->len, s->ptr));
+    mg_send(cc, s->ptr, s->len);
+    c->recv.len = 0;
+  } else if (ev == MG_EV_CLOSE) {
+    if (cc) cc->is_draining = 1, cc->fn_data = NULL;
+  }
+}
+
+void mg_rmpipe(struct mg_connection *c) {
+  LOG(LL_DEBUG, ("%lu send pipe closed", c->id));
+  mg_send(c, "", 0);   // Signal receiver, 0-length packet means we're done
+  closesocket(FD(c));  // We're not managed by c->mgr, close manually
+  free(c);             // No buffers to clear - just free up
+}
+
+bool mg_mkpipe(struct mg_connection *c, struct mg_connection *pc[2]) {
+  union usa usa[2];
+  SOCKET sp[2] = {INVALID_SOCKET, INVALID_SOCKET};
+  if (!mg_socketpair(sp, usa)) goto fail;
+  if ((pc[0] = alloc_conn(c->mgr, true, sp[0])) == NULL) goto fail;
+  if ((pc[1] = alloc_conn(c->mgr, false, sp[1])) == NULL) goto fail;
+  tomgaddr(&usa[0], &pc[1]->peer, false);
+  tomgaddr(&usa[1], &pc[0]->peer, false);
+  pc[0]->is_udp = 1;
+  pc[1]->is_udp = 1;
+  pc[1]->is_accepted = 1;
+  pc[1]->fn = pf1;
+  pc[1]->fn_data = c;
+  LIST_ADD_HEAD(struct mg_connection, &c->mgr->conns, pc[1]);
+  // LOG(LL_DEBUG, ("%lu/%ld %lu/%ld", pc[0]->id, (long) (size_t) pc[0]->fd,
+  //               pc[1]->id, (long) (size_t) pc[1]->fd));
+  return true;
+fail:
+  free(pc[0]);
+  free(pc[1]);
+  if (sp[0] != INVALID_SOCKET) closesocket(sp[0]);
+  if (sp[1] != INVALID_SOCKET) closesocket(sp[1]);
+  pc[0] = pc[1] = NULL;
   return false;
-#endif
 }
 
 struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,

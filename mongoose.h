@@ -62,14 +62,6 @@ extern "C" {
 #define MG_ENABLE_DIRLIST 0
 #endif
 
-#ifndef MG_ENABLE_SOCKETPAIR
-#define MG_ENABLE_SOCKETPAIR 0
-#endif
-
-#ifndef MG_ENABLE_NATIVE_SOCKETPAIR
-#define MG_ENABLE_NATIVE_SOCKETPAIR 0
-#endif
-
 #ifndef MG_ENABLE_CUSTOM_RANDOM
 #define MG_ENABLE_CUSTOM_RANDOM 0
 #endif
@@ -767,9 +759,11 @@ bool mg_send(struct mg_connection *, const void *, size_t);
 int mg_printf(struct mg_connection *, const char *fmt, ...);
 int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 char *mg_straddr(struct mg_connection *, char *, size_t);
-bool mg_socketpair(int *s1, int *s2);
 bool mg_aton(struct mg_str str, struct mg_addr *addr);
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
+
+bool mg_mkpipe(struct mg_connection *c, struct mg_connection *pc[2]);
+void mg_rmpipe(struct mg_connection *c);
 
 
 
