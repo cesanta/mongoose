@@ -1133,6 +1133,8 @@ static void test_dns(void) {
     mg_mgr_init(&mgr);
     mgr.dns4.url = "udp://127.0.0.1:12345";
     mgr.dnstimeout = 10;
+    LOG(LL_DEBUG, ("opening dummy DNS listener..."));
+    mg_listen(&mgr, mgr.dns4.url, NULL, NULL);  // Just discard our queries
     mg_http_connect(&mgr, "http://google.com", fn1, buf);
     for (i = 0; i < 50 && buf[0] == '\0'; i++) mg_mgr_poll(&mgr, 1);
     mg_mgr_free(&mgr);
@@ -1436,8 +1438,34 @@ static void test_pipe(void) {
   ASSERT(mgr.conns == NULL);
 }
 
+static void u1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_CONNECT) {
+    ((int *) fn_data)[0] += 1;
+    mg_send(c, "hi", 2);
+  } else if (ev == MG_EV_READ) {
+    ((int *) fn_data)[0] += 10;
+    mg_iobuf_free(&c->recv);
+  }
+  (void) ev_data;
+}
+
+static void test_udp(void) {
+  struct mg_mgr mgr;
+  const char *url = "udp://127.0.0.1:12353";
+  int i, done = 0;
+  mg_mgr_init(&mgr);
+  mg_listen(&mgr, url, u1, (void *) &done);
+  mg_connect(&mgr, url, u1, (void *) &done);
+  for (i = 0; i < 5; i++) mg_mgr_poll(&mgr, 1);
+  // LOG(LL_INFO, ("%d", done));
+  ASSERT(done == 11);
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+}
+
 int main(void) {
   mg_log_set("3");
+  test_udp();
   test_pipe();
   test_packed();
   test_crc32();

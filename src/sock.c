@@ -101,14 +101,7 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
 }
 
 static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
-  long n = 0;
-  if (c->is_udp) {
-    union usa usa;
-    socklen_t slen = tousa(&c->peer, &usa);
-    n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
-  } else {
-    n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
-  }
+  long n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
 
@@ -315,25 +308,21 @@ static void setsockopts(struct mg_connection *c) {
 void mg_connect_resolved(struct mg_connection *c) {
   char buf[40];
   int type = c->is_udp ? SOCK_DGRAM : SOCK_STREAM;
-  int rc, af = AF_INET;
-#if MG_ENABLE_IPV6
-  if (c->peer.is_ip6) af = AF_INET6;
-#endif
+  int rc, af = c->peer.is_ip6 ? AF_INET6 : AF_INET;
   mg_straddr(c, buf, sizeof(buf));
   c->fd = S2PTR(socket(af, type, 0));
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
-    return;
-  }
-
-  mg_set_non_blocking_mode(FD(c));
-  mg_call(c, MG_EV_RESOLVE, NULL);
-  if (type == SOCK_STREAM) {
+  } else {
     union usa usa;
     socklen_t slen = tousa(&c->peer, &usa);
-    if ((rc = connect(FD(c), &usa.sa, slen)) == 0 || mg_sock_would_block()) {
-      setsockopts(c);
-      if (rc != 0) c->is_connecting = 1;
+    if (c->is_udp == 0) mg_set_non_blocking_mode(FD(c));
+    if (c->is_udp == 0) setsockopts(c);
+    mg_call(c, MG_EV_RESOLVE, NULL);
+    if ((rc = connect(FD(c), &usa.sa, slen)) == 0) {
+      mg_call(c, MG_EV_CONNECT, NULL);
+    } else if (mg_sock_would_block()) {
+      c->is_connecting = 1;
     } else {
       mg_error(c, "connect: %d", MG_SOCK_ERRNO);
     }
@@ -472,6 +461,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
   struct mg_addr addr;
   SOCKET fd = mg_open_listener(url, &addr);
   if (fd == INVALID_SOCKET) {
+    LOG(LL_ERROR, ("Failed: %s, errno %d", url, MG_SOCK_ERRNO));
   } else if ((c = alloc_conn(mgr, 0, fd)) == NULL) {
     LOG(LL_ERROR, ("OOM %s", url));
     closesocket(fd);

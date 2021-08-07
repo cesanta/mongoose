@@ -21,7 +21,7 @@ int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv) {
     LOG(LL_ERROR, ("%s", "server sent a kiss of death"));
   } else {
     uint32_t *data = (uint32_t *) &buf[40];
-    tv->tv_sec = (time_t)(mg_ntohl(data[0]) - SNTP_TIME_OFFSET);
+    tv->tv_sec = (time_t) (mg_ntohl(data[0]) - SNTP_TIME_OFFSET);
     tv->tv_usec = (suseconds_t) mg_ntohl(data[1]);
     s_sntmp_next = (unsigned long) (tv->tv_sec + SNTP_INTERVAL_SEC);
     res = 0;
@@ -38,10 +38,9 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
                      (unsigned) tv.tv_usec, s_sntmp_next));
     }
     c->recv.len = 0;  // Clear receive buffer
-  } else if (ev == MG_EV_RESOLVE) {
+  } else if (ev == MG_EV_CONNECT) {
     mg_sntp_send(c, (unsigned long) time(NULL));
   } else if (ev == MG_EV_CLOSE) {
-    // mg_fn_del(c, sntp_cb);
   }
   (void) fnd;
   (void) evd;
