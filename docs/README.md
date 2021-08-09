@@ -529,18 +529,23 @@ bool mg_mkpipe(struct mg_connection *c, struct mg_connection *pc[2]);
 void mg_rmpipe(struct mg_connection *c);
 ```
 
-Create a pair of connected connections using UDP socketpair.
-A sending connection, `pc[0]`, is safe to give to a different task,
-and send data to it. A receiving connection `pc[1]`, forwards all received
-data to `c`. A `pc[0]` is not added to event manager, therefore it must be
-manually cleaned up by calling `mg_rmpipe()` when sending task is done.
-A receiving side, `pc[1]` is added to the event manager, therefore it wakes
-up a manager each time data gets sent.
+Create a pair of connected connections using UDP socketpair. A sending side of
+the pair is `pc[0]`, a receiving side is `pc[1]`. This API is indended for a
+multi-threaded usage only. 
 
-NOTE: if there is a limit on the local UDP message size, do not send more
-than that limit in one call.
+A sending connection `pc[0]` should be passed to another task (thread) - in
+fact, it is the only data structure that is safe to pass to another task.
+`pc[0]` is not added to an event manager, therefore its callback function and
+flags are ignored. A task function must write to `pc[0]` using any of the
+existing `mg_*` API, then call `mg_rmpipe()` when done.  Writing to `pc[0]`
+wakes up an event manager, because the receiving side of the pipe `pc[1]` is
+added to an event manager.
 
-See examples/multi-threaded for a usage example.
+A receiving side `pc[1]` forwards all received data to `c`. NOTE: if
+there is a limit on the local UDP message size, do not send more than that
+limit in one call.
+
+See [examples/multi-threaded](../examples/multi-threaded) for a usage example.
 
 Return value: true on success, false on error.
 
