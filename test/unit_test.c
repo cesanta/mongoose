@@ -378,6 +378,8 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, hm, &sopts);
     }
   } else if (ev == MG_EV_WS_OPEN) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    ASSERT(mg_strcmp(hm->uri, mg_str("/ws")) == 0);
     mg_ws_send(c, "opened", 6, WEBSOCKET_OP_BINARY);
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;

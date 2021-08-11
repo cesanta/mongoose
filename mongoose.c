@@ -4514,7 +4514,7 @@ static size_t ws_process(uint8_t *buf, size_t len, struct ws_msg *msg) {
     } else if (len >= 10 + mask_len) {
       msg->header_len = 10 + mask_len;
       msg->data_len =
-          (size_t)(((uint64_t) mg_ntohl(*(uint32_t *) &buf[2])) << 32) +
+          (size_t) (((uint64_t) mg_ntohl(*(uint32_t *) &buf[2])) << 32) +
           mg_ntohl(*(uint32_t *) &buf[6]);
     }
   }
@@ -4528,7 +4528,7 @@ static size_t ws_process(uint8_t *buf, size_t len, struct ws_msg *msg) {
 
 static size_t mkhdr(size_t len, int op, bool is_client, uint8_t *buf) {
   size_t n = 0;
-  buf[0] = (uint8_t)(op | WEBSOCKET_FLAGS_MASK_FIN);
+  buf[0] = (uint8_t) (op | WEBSOCKET_FLAGS_MASK_FIN);
   if (len < 126) {
     buf[1] = (unsigned char) len;
     n = 2;
@@ -4540,9 +4540,9 @@ static size_t mkhdr(size_t len, int op, bool is_client, uint8_t *buf) {
   } else {
     uint32_t tmp;
     buf[1] = 127;
-    tmp = mg_htonl((uint32_t)((uint64_t) len >> 32));
+    tmp = mg_htonl((uint32_t) ((uint64_t) len >> 32));
     memcpy(&buf[2], &tmp, sizeof(tmp));
-    tmp = mg_htonl((uint32_t)(len & 0xffffffff));
+    tmp = mg_htonl((uint32_t) (len & 0xffffffff));
     memcpy(&buf[6], &tmp, sizeof(tmp));
     n = 10;
   }
@@ -4687,7 +4687,7 @@ void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
     ws_handshake(c, wskey, wsproto, fmt, ap);
     va_end(ap);
     c->is_websocket = 1;
-    mg_call(c, MG_EV_WS_OPEN, &hm);
+    mg_call(c, MG_EV_WS_OPEN, hm);
   }
 }
 
