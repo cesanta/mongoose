@@ -530,8 +530,20 @@ void mg_mgr_wakeup(struct mg_connection *pipe);
 ```
 
 Create a "pipe" connection which is safe to pass to a different task/thread,
-and which is used to wake up event manager from a different task. These two
-functions are designed to implement multi-threaded support, to handle
+and which is used to wake up event manager from a different task. These 
+functions are designed to implement multi-threaded support, to handle two
+common use cases:
+
+- There are multiple consumer connections, e.g. connected websocket clients.
+  A server constantly pushes some data to all of them. In this case, a data
+  producer task should call `mg_mgr_wakeup()` as soon as more data is produced.
+  A pipe's event handler should push data to all client connection.
+  Use `c->label` to mark client connections.
+- In order to serve a request, a long blocking operation should be performed.
+  In this case, request handler assignes some marker to `c->label` and then
+  spawns a handler task and gives a pipe to a
+  handler task. A handler does its job, and when data is ready, wakes up a
+  manager. A pipe's event handler pushes data to a marked connection.
 
 Another task can wake up a sleeping event manager (in `mg_mgr_poll()` call)
 using `mg_mgr_wakeup()`. When an event manager is woken up, a pipe
