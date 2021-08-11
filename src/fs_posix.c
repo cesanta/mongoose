@@ -5,7 +5,7 @@ static char *posix_realpath(const char *path, char *resolved_path) {
 #ifdef _WIN32
   return _fullpath(resolved_path, path, _MAX_PATH);
 #elif MG_ARCH == MG_ARCH_ESP32 || MG_ARCH == MG_ARCH_ESP8266 || \
-    MG_ARCH == MG_ARCH_FREERTOS_TCP
+    MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
   if (resolved_path == NULL) resolved_path = malloc(strlen(path) + 1);
   strcpy(resolved_path, path);
   return resolved_path;

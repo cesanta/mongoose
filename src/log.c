@@ -37,6 +37,7 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
     time_t t = time(NULL);
     struct tm tmp, *tm = gmtime_r(&t, &tmp);
     int n, tag;
+    (void)tmp;
     strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm);
     tag = level == LL_ERROR ? 'E' : level == LL_INFO ? 'I' : ' ';
     n = snprintf(buf, sizeof(buf), "%s  %c %s:%d:%s", timebuf, tag, p, line,

@@ -118,6 +118,8 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
   const BaseType_t off = 0;
   setsockopt(fd, 0, FREERTOS_SO_RCVTIMEO, &off, sizeof(off));
   setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off));
+#elif MG_ARCH == MG_ARCH_FREERTOS_LWIP
+  lwip_fcntl(fd, F_SETFL, O_NONBLOCK);  
 #else
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, FD_CLOEXEC);
 #endif
@@ -135,16 +137,21 @@ SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
     int on = 1, af = addr->is_ip6 ? AF_INET6 : AF_INET;
     int type = strncmp(url, "udp:", 4) == 0 ? SOCK_DGRAM : SOCK_STREAM;
     int proto = type == SOCK_DGRAM ? IPPROTO_UDP : IPPROTO_TCP;
+    (void)on;
 
     if ((fd = socket(af, type, proto)) != INVALID_SOCKET &&
-#if !defined(_WIN32) || !defined(SO_EXCLUSIVEADDRUSE)
-        // SO_RESUSEADDR is not enabled on Windows because the semantics of
-        // SO_REUSEADDR on UNIX and Windows is different. On Windows,
-        // SO_REUSEADDR allows to bind a socket to a port without error even if
-        // the port is already open by another program. This is not the behavior
-        // SO_REUSEADDR was designed for, and leads to hard-to-track failure
-        // scenarios. Therefore, SO_REUSEADDR was disabled on Windows unless
-        // SO_EXCLUSIVEADDRUSE is supported and set on a socket.
+#if (!defined(_WIN32) || !defined(SO_EXCLUSIVEADDRUSE)) \
+    && (!defined(LWIP_SOCKET) || (defined(LWIP_SOCKET) && SO_REUSE == 1))
+        // 1. SO_RESUSEADDR is not enabled on Windows because the semantics of
+        //    SO_REUSEADDR on UNIX and Windows is different. On Windows,
+        //    SO_REUSEADDR allows to bind a socket to a port without error even if
+        //    the port is already open by another program. This is not the behavior
+        //    SO_REUSEADDR was designed for, and leads to hard-to-track failure
+        //    scenarios. Therefore, SO_REUSEADDR was disabled on Windows unless
+        //    SO_EXCLUSIVEADDRUSE is supported and set on a socket.
+        // 2. In case of LWIP, SO_REUSEADDR should be explicitly enabled, by defining   
+        //    SO_REUSE (in lwipopts.h), otherwise the code below will compile
+        //    but won't work! (setsockopt will return EINVAL)  
         !setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) &&
 #endif
 #if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
