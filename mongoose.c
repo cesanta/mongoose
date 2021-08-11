@@ -3233,51 +3233,38 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
   return result;
 }
 
-// Event handler function for the receiving end of the pipe connection
-// Read data from another task and send it to the remote peer
+void mg_mgr_wakeup(struct mg_connection *c) {
+  LOG(LL_INFO, ("skt: %p", c->pfn_data));
+  send((SOCKET) (size_t) c->pfn_data, "\x01", 1, MSG_NONBLOCKING);
+}
+
 static void pf1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_connection *cc = (struct mg_connection *) fn_data;
-  if (ev == MG_EV_READ) {
-    struct mg_str *s = (struct mg_str *) ev_data;
-    // LOG(LL_INFO, ("got %d [%.*s]", (int) s->len, (int) s->len, s->ptr));
-    mg_send(cc, s->ptr, s->len);
-    c->recv.len = 0;
-  } else if (ev == MG_EV_CLOSE) {
-    if (cc) cc->is_draining = 1, cc->fn_data = NULL;
-  }
+  if (ev == MG_EV_READ) mg_iobuf_free(&c->recv);
+  (void) ev_data, (void) fn_data;
 }
 
-void mg_rmpipe(struct mg_connection *c) {
-  LOG(LL_DEBUG, ("%lu send pipe closed", c->id));
-  mg_send(c, "", 0);   // Signal receiver, 0-length packet means we're done
-  closesocket(FD(c));  // We're not managed by c->mgr, close manually
-  free(c);             // No buffers to clear - just free up
-}
-
-bool mg_mkpipe(struct mg_connection *c, struct mg_connection *pc[2]) {
+struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
+                                void *fn_data) {
   union usa usa[2];
   SOCKET sp[2] = {INVALID_SOCKET, INVALID_SOCKET};
-  if (!mg_socketpair(sp, usa)) goto fail;
-  if ((pc[0] = alloc_conn(c->mgr, true, sp[0])) == NULL) goto fail;
-  if ((pc[1] = alloc_conn(c->mgr, false, sp[1])) == NULL) goto fail;
-  tomgaddr(&usa[0], &pc[1]->peer, false);
-  tomgaddr(&usa[1], &pc[0]->peer, false);
-  pc[0]->is_udp = 1;
-  pc[1]->is_udp = 1;
-  pc[1]->is_accepted = 1;
-  pc[1]->fn = pf1;
-  pc[1]->fn_data = c;
-  LIST_ADD_HEAD(struct mg_connection, &c->mgr->conns, pc[1]);
-  // LOG(LL_DEBUG, ("%lu/%ld %lu/%ld", pc[0]->id, (long) (size_t) pc[0]->fd,
-  //               pc[1]->id, (long) (size_t) pc[1]->fd));
-  return true;
-fail:
-  free(pc[0]);
-  free(pc[1]);
-  if (sp[0] != INVALID_SOCKET) closesocket(sp[0]);
-  if (sp[1] != INVALID_SOCKET) closesocket(sp[1]);
-  pc[0] = pc[1] = NULL;
-  return false;
+  struct mg_connection *c = NULL;
+  if (!mg_socketpair(sp, usa)) {
+    LOG(LL_ERROR, ("Cannot create socket pair"));
+  } else if ((c = alloc_conn(mgr, false, sp[1])) == NULL) {
+    closesocket(sp[0]);
+    closesocket(sp[1]);
+    LOG(LL_ERROR, ("OOM"));
+  } else {
+    LOG(LL_INFO, ("pipe %lu", (unsigned long) sp[0]));
+    tomgaddr(&usa[0], &c->peer, false);
+    c->is_udp = 1;
+    c->pfn = pf1;
+    c->pfn_data = (void *) (size_t) sp[0];
+    c->fn = fn;
+    c->fn_data = fn_data;
+    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+  }
+  return c;
 }
 
 struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,

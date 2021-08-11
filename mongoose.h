@@ -762,8 +762,8 @@ char *mg_straddr(struct mg_connection *, char *, size_t);
 bool mg_aton(struct mg_str str, struct mg_addr *addr);
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
 
-bool mg_mkpipe(struct mg_connection *c, struct mg_connection *pc[2]);
-void mg_rmpipe(struct mg_connection *c);
+struct mg_connection *mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *);
+void mg_mgr_wakeup(struct mg_connection *pipe);
 
 
 

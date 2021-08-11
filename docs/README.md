@@ -522,32 +522,22 @@ int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 Same as `mg_printf()`, but takes `va_list` argument as a parameter.
 
 
-### mg\_mkpipe()
+### mg\_mkpipe(), mg\_mgr\_wakeup()
 
 ```c
-bool mg_mkpipe(struct mg_connection *c, struct mg_connection *pc[2]);
-void mg_rmpipe(struct mg_connection *c);
+struct mg_connection *mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *);
+void mg_mgr_wakeup(struct mg_connection *pipe);
 ```
 
-Create a pair of connected connections using UDP socketpair. A sending side of
-the pair is `pc[0]`, a receiving side is `pc[1]`. This API is indended for a
-multi-threaded usage only. 
+Create a "pipe" connection which is safe to pass to a different task/thread,
+and which is used to wake up event manager from a different task. These two
+functions are designed to implement multi-threaded support, to handle
 
-A sending connection `pc[0]` should be passed to another task (thread) - in
-fact, it is the only data structure that is safe to pass to another task.
-`pc[0]` is not added to an event manager, therefore its callback function and
-flags are ignored. A task function must write to `pc[0]` using any of the
-existing `mg_*` API, then call `mg_rmpipe()` when done.  Writing to `pc[0]`
-wakes up an event manager, because the receiving side of the pipe `pc[1]` is
-added to an event manager.
-
-A receiving side `pc[1]` forwards all received data to `c`. NOTE: if
-there is a limit on the local UDP message size, do not send more than that
-limit in one call.
+Another task can wake up a sleeping event manager (in `mg_mgr_poll()` call)
+using `mg_mgr_wakeup()`. When an event manager is woken up, a pipe
+connection event handler function receives `MG_EV_READ` event.
 
 See [examples/multi-threaded](../examples/multi-threaded) for a usage example.
-
-Return value: true on success, false on error.
 
 
 ## IO buffers

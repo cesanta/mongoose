@@ -42,13 +42,14 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   return 0;
 }
 
-void mg_rmpipe(struct mg_connection *c) {
+void mg_mgr_wakeup(struct mg_connection *c) {
   (void) c;
 }
 
-bool mg_mkpipe(struct mg_connection *c, struct mg_connection *pc[2]) {
-  (void) c, (void) pc;
-  return false;
+struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
+                                void *fn_data) {
+  (void) mgr, (void) fn, (void) fn_data;
+  return NULL;
 }
 
 void _fini(void) {

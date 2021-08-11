@@ -19,10 +19,6 @@
 
 #include "mongoose.h"
 
-#ifndef SLEEP_TIME
-#define SLEEP_TIME 2  // Seconds to sleep to simulate calculation
-#endif
-
 static void start_thread(void (*f)(void *), void *p) {
 #ifdef _WIN32
   _beginthread((void(__cdecl *)(void *)) f, 0, p);
@@ -40,48 +36,46 @@ static void start_thread(void (*f)(void *), void *p) {
 
 static void thread_function(void *param) {
   struct mg_connection *c = param;  // Pipe connection
-  LOG(LL_INFO, ("Thread started, pipe %lu/%ld", c->id, (long) (size_t) c->fd));
-  LOG(LL_INFO, ("Sleeping for %d sec...", SLEEP_TIME));
-  mg_usleep(SLEEP_TIME * 1000000);  // Simulate long execution
-  LOG(LL_INFO, ("Sending data..."));
-  mg_http_reply(c, 200, "Host: foo.com\r\n", "hi\n");
-  mg_rmpipe(c);
+  mg_usleep(2 * 1000000);           // Simulate long execution
+  mg_mgr_wakeup(c);                 // Wakeup event manager
 }
 
 // HTTP request callback
-static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
-    // Incoming request. Create socket pair.
-    // Pass blocking socket to the thread, and keep the non-blocking socket.
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/fast")) {
-      // The /fast URI responds immediately without hitting a multi-threaded
-      // codepath. It is for measuing performance impact
+      // Single-threaded code path, for performance comparison
+      // The /fast URI responds immediately
       mg_http_reply(c, 200, "Host: foo.com\r\n", "hi\n");
     } else {
-      // Multithreading code path. Create "pipe" connection.
-      // Pipe connection is safe to pass to a different task/thread.
-      // Spawn a thread and pass created pipe connection to it.
-      // Save a receiving end of the pipe into c->fn_data, in order to
-      // close it when this (client) connection closes.
-      struct mg_connection *pc[2];           // pc[0]: send, pc[1]: recv
-      mg_mkpipe(c, pc);                      // Create pipe
-      start_thread(thread_function, pc[0]);  // Spawn a task, pass pc[0] there
-      c->fn_data = pc[1];                    // And save recv end for later
+      // Multithreading code path
+      c->label[0] = 'W';                       // Mark us as waiting for data
+      start_thread(thread_function, fn_data);  // Start handling thread
     }
-  } else if (ev == MG_EV_CLOSE) {
-    // Tell the receiving end of the pipe to close
-    struct mg_connection *pc = (struct mg_connection *) fn_data;
-    if (pc) pc->is_closing = 1, pc->fn_data = NULL;
+  }
+}
+
+// Pipe event handler
+static void pcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_READ) {
+    struct mg_connection *t;
+    for (t = c->mgr->conns; t != NULL; t = t->next) {
+      if (t->label[0] != 'W') continue;  // Ignore un-marked connections
+      mg_http_reply(t, 200, "Host: foo.com\r\n", "hi\n");  // Respond!
+      t->label[0] = 0;                                     // Clear mark
+    }
   }
 }
 
 int main(void) {
   struct mg_mgr mgr;
+  struct mg_connection *pipe;  // Used to wake up event manager
   mg_mgr_init(&mgr);
   mg_log_set("3");
-  mg_http_listen(&mgr, "http://localhost:8000", cb, NULL);
-  for (;;) mg_mgr_poll(&mgr, 1000);
-  mg_mgr_free(&mgr);
+  pipe = mg_mkpipe(&mgr, pcb, NULL);                        // Create pipe
+  mg_http_listen(&mgr, "http://localhost:8000", fn, pipe);  // Create listener
+  for (;;) mg_mgr_poll(&mgr, 1000);                         // Event loop
+  mg_mgr_free(&mgr);                                        // Cleanup
   return 0;
 }

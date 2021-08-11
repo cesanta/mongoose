@@ -1415,27 +1415,19 @@ static void test_packed(void) {
 }
 
 static void eh6(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    struct mg_connection *pc[2];
-    mg_mkpipe(c, pc);
-    mg_http_reply(pc[0], 200, "", "hi, %.*s", (int) hm->uri.len, hm->uri.ptr);
-    mg_rmpipe(pc[0]);
-    c->fn_data = pc[1];
-  } else if (ev == MG_EV_CLOSE) {
-    struct mg_connection *pc = (struct mg_connection *) fn_data;
-    if (pc) pc->is_closing = 1, pc->fn_data = NULL;
-  }
+  if (ev == MG_EV_READ) *(int *) fn_data = 1;
+  (void) c, (void) ev_data;
 }
 
 static void test_pipe(void) {
   struct mg_mgr mgr;
-  const char *url = "http://127.0.0.1:12352";
-  char buf[FETCH_BUF_SIZE];
+  struct mg_connection *c;
+  int i, done = 0;
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, url, eh6, NULL);
-  ASSERT(fetch(&mgr, buf, url, "GET /foo HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf, "hi, /foo") == 0);
+  ASSERT((c = mg_mkpipe(&mgr, eh6, (void *) &done)) != NULL);
+  mg_mgr_wakeup(c);
+  for (i = 0; i < 10 && done == 0; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(done == 1);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
