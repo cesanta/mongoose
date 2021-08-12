@@ -369,9 +369,11 @@ int main(int argc, char *argv[]) {
 ```c
 struct mg_mgr {
   struct mg_connection *conns;  // List of active connections
-  struct mg_connection *dnsc;   // DNS resolver connection
-  const char *dnsserver;        // DNS server URL
+  struct mg_dns dns4;           // DNS for IPv4
+  struct mg_dns dns6;           // DNS for IPv6
   int dnstimeout;               // DNS resolve timeout in milliseconds
+  unsigned long nextid;         // Next connection ID
+  void *userdata;               // Arbitrary user data pointer
 };
 ```
 Event management structure that holds a list of active connections, together
@@ -418,11 +420,26 @@ or an outbound connection.
 ### mg\_mgr_init()
 
 ```c
-void mg_mgr_init(struct mg_mgr *);
+void mg_mgr_init(struct mg_mgr *mgr);
 ```
 
-Initialize event manager structure: set a list of active connections to NULL,
-set DNS server and timeout to their default values, etc.
+Initialize event manager structure:
+- Set a list of active connections to NULL
+- Set default DNS servers for IPv4 and IPv6
+- Set default DNS lookup timeout
+
+Parameters:
+- `mgr` - a pointer to `struct mg_mgr` that needs to be initialised
+
+Return value: none
+
+Usage example:
+
+```c
+struct mg_mgr mgr;
+mg_mgr_init(&mgr);
+```
+
 
 
 ### mg\_mgr_poll()
@@ -522,11 +539,10 @@ int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 Same as `mg_printf()`, but takes `va_list` argument as a parameter.
 
 
-### mg\_mkpipe(), mg\_mgr\_wakeup()
+### mg\_mkpipe()
 
 ```c
 struct mg_connection *mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *);
-void mg_mgr_wakeup(struct mg_connection *pipe);
 ```
 
 Create a "pipe" connection which is safe to pass to a different task/thread,
@@ -550,6 +566,19 @@ using `mg_mgr_wakeup()`. When an event manager is woken up, a pipe
 connection event handler function receives `MG_EV_READ` event.
 
 See [examples/multi-threaded](../examples/multi-threaded) for a usage example.
+
+### mg\_mgr_wakeup()
+
+```c
+void mg_mgr_wakeup(struct mg_connection *pipe);
+```
+
+Wake up an event manager that sleeps in `mg_mgr_poll()` call. This function
+must be called from a separate task/thread. Parameters:
+
+- `pipe` - a special connection created by the `mg_mkpipe()` call
+
+Return values: none
 
 
 ## IO buffers
