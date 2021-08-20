@@ -103,10 +103,11 @@ Mongoose application, since it defines the connection's behaviour. This is
 what an event handler function looks like:
 
 ```c
+// Event handler function defines connection's behavior
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  switch (ev) {
-    /* Event handler code that defines behaviour of the connection */
-    ...
+  if (ev == MG_EV_READ) {
+    mg_send(c, c->recv.buf, c->recv.len);   // Implement echo server
+    c->recv.len = 0;                        // Delete received data
   }
 }
 ```
@@ -250,9 +251,11 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_LINES | undefined | If defined, show source file names in logs |
 
 
-NOTE: `MG_IO_SIZE` controls the maximum UDP message size, see
-https://github.com/cesanta/mongoose/issues/907 for details. If application
-uses large UDP messages, increase the `MG_IO_SIZE` limit accordingly.
+<span class="badge bg-danger">NOTE:</span> the `MG_IO_SIZE` constant also sets
+maximum UDP message size, see
+[issues/907](https://github.com/cesanta/mongoose/issues/907) for details. If
+application uses large UDP messages, increase the `MG_IO_SIZE` limit
+accordingly.
 
 ## Custom build
 
