@@ -19,6 +19,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     mg_ws_upgrade(c, hm, NULL);
+    c->label[0] = 'W';  // Set some unique mark on a connection
   } else if (ev == MG_EV_WS_MSG) {
     // Got websocket frame. Received data is wm->data. Echo it back!
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
@@ -30,14 +31,11 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
-  struct mg_connection *c;
   // Broadcast "hi" message to all connected websocket clients.
   // Traverse over all connections
-  for (c = mgr->conns; c != NULL; c = c->next) {
-    // Send only to accepted websocket connections
-    if (c->is_accepted && c->is_websocket) {
-      mg_ws_send(c, "hi", 2, WEBSOCKET_OP_TEXT);
-    }
+  for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
+    // Send only to marked connections
+    if (c->label[0] == 'W') mg_ws_send(c, "hi", 2, WEBSOCKET_OP_TEXT);
   }
 }
 

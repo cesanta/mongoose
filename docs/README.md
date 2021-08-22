@@ -10,26 +10,6 @@ by a vast number of open source and commercial products - it even runs on the
 International Space Station! Mongoose makes embedded network programming fast,
 robust, and easy.
 
-
-## Features
-
-* Works on Linux/UNIX, MacOS, Windows, QNX, eCos, Android and other
-* Works on embedded hardware: STM32, ESP32, NXP, Xilinx, and other
-* Built-in protocols:
-   - plain TCP, plain UDP, SSL/TLS (over TCP, one-way or two-way)
-   - HTTP client, HTTP server
-   - WebSocket client, WebSocket server
-   - MQTT client, MQTT server
-   - DNS client, async DNS resolver
-* Single-threaded, asynchronous, non-blocking core with simple event-based API
-* Support for LWIP and FreeRTOS-Plus-TCP stacks
-* Tiny static and run-time footprint
-* Source code is both ISO C and ISO C++ compliant
-* Very easy to integrate: just copy
-  [mongoose.c](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.c) and
-  [mongoose.h](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.h)
-  files to your build tree
-
 ## Concept
 
 Mongoose has three basic data structures:
@@ -49,14 +29,14 @@ Mongoose's internals.
 An application that uses mongoose should follow a standard pattern of
 event-driven application:
 
-1. Declare and initialize an event manager:
+**Step 1.** Declare and initialize an event manager:
 
   ```c
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
   ```
 
-2. Create connections. For example, a server application should create listening
+**Step 2.** Create connections. For example, a server application should create listening
   connections. When any connection is created (listening or outgoing), an
   event handler function must be specified. An event handler function defines
   connection's behavior.
@@ -65,7 +45,7 @@ event-driven application:
   struct mg_connection *c = mg_http_listen(&mgr, "0.0.0.0:8000", fn, arg);
   ```
 
-3. Create an event loop by calling `mg_mgr_poll()`:
+**Step 3.** Create an event loop by calling `mg_mgr_poll()`:
 
   ```c
    for (;;) {
@@ -318,20 +298,17 @@ This example is a simple static HTTP server that serves current directory:
 ```c
 #include "mongoose.h"
 
-static const char *s_web_root_dir = ".";
-static const char *s_listening_address = "http://localhost:8000";
-
-static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_http_serve_opts opts = {.root_dir = s_web_root_dir};
+static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  struct mg_http_serve_opts opts = {.root_dir = "."};   // Serve local dir
   if (ev == MG_EV_HTTP_MSG) mg_http_serve_dir(c, ev_data, &opts);
 }
 
 int main(int argc, char *argv[]) {
   struct mg_mgr mgr;
-  mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, s_listening_address, cb, &mgr);
-  for (;;) mg_mgr_poll(&mgr, 1000);
-  mg_mgr_free(&mgr);
+  mg_mgr_init(&mgr);                                        // Init manager
+  mg_http_listen(&mgr, "http://localhost:8000", fn, &mgr);  // Setup listener
+  for (;;) mg_mgr_poll(&mgr, 1000);                         // Event loop
+  mg_mgr_free(&mgr);                                        // Cleanup
   return 0;
 }
 ```
@@ -343,8 +320,6 @@ This example is a simple TCP echo server that listens on port 1234:
 ```c
 #include "mongoose.h"
 
-static const char *s_listening_address = "tcp://0.0.0.0:1234";
-
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_READ) {
     mg_send(c, c->recv.buf, c->recv.len);     // Echo received data back
@@ -355,7 +330,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 int main(int argc, char *argv[]) {
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
-  mg_listen(&mgr, s_listening_address, cb, &mgr);
+  mg_listen(&mgr, "tcp://0.0.0.0:1234", cb, &mgr);
   for (;;) mg_mgr_poll(&mgr, 1000);
   mg_mgr_free(&mgr);
   return 0;
@@ -927,7 +902,7 @@ void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
 
 Write a Basic `Authorization` header to the output buffer.
 
-### mg\_http\_next_\multipart()
+### mg\_http\_next\_multipart()
 
 ```c
 // Parameter for mg_http_next_multipart
@@ -1131,16 +1106,18 @@ with a custom implementation. Just create your own `mg_random` function:
 struct mg_timer {
   int period_ms;            // Timer period in milliseconds
   int flags;                // Possible flags values below
-#define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
-#define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
   void (*fn)(void *);       // Function to call
   void *arg;                // Function argument
   unsigned long expire;     // Expiration timestamp in milliseconds
   struct mg_timer *next;    // Linkage in g_timers list
 };
+
+#define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
+#define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
 ```
 
-Timer structure.
+Timer structure. Describes a software timer. Timer granularity is the same
+as the `mg_mgr_poll()` timeout argument in the main event loop.
 
 ### mg\_timer\_init()
 
