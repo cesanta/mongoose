@@ -1207,12 +1207,14 @@ static void test_crc32(void) {
   ASSERT(mg_crc32(mg_crc32(0, "ab", 2), "c", 1) == 891568578);
 }
 
+#define LONG_CHUNK "chunk with length taking up more than two hex digits"
+
 // Streaming server event handler.
 // Send one chunk immediately, then drain, then send two chunks in one go
 static void eh2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
-    mg_http_printf_chunk(c, "chunk 0");
+    mg_http_printf_chunk(c, LONG_CHUNK);
     c->label[0] = 1;
   } else if (ev == MG_EV_POLL) {
     if (c->label[0] > 0 && c->send.len == 0) c->label[0]++;
@@ -1287,24 +1289,26 @@ static void test_http_chunked(void) {
   mg_http_connect(&mgr, url, eh3, &done);
   for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(i < 50);
-  data = "chunk 0chunk 1chunk 2";
+  data = LONG_CHUNK "chunk 1chunk 2";
   ASSERT(done == mg_crc32(0, data, strlen(data)));
 
   done = 0;
   mg_http_connect(&mgr, url, eh4, &done);
   for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
-  data = "chunk 0chunk 0chunk 1chunk 2chunk 0chunk 1chunk 2";
+  data = LONG_CHUNK LONG_CHUNK "chunk 1chunk 2" LONG_CHUNK "chunk 1chunk 2";
   ASSERT(done == mg_crc32(0, data, strlen(data)));
 
   done = 0;
   mg_http_connect(&mgr, url, eh5, &done);
   for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
-  data = "chunk 0chunk 1chunk 2";
+  data = LONG_CHUNK "chunk 1chunk 2";
   ASSERT(done == mg_crc32(0, data, strlen(data)));
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
+
+#undef LONG_CHUNK
 
 static void test_multipart(void) {
   struct mg_http_part part;
