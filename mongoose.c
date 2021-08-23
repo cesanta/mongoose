@@ -1625,7 +1625,7 @@ static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
         char *buf2 = (char *) &c->recv.buf[reqlen];
         size_t memo2 = c->recv.len;
         size_t cl2 = get_chunk_length(&buf2[off], memo2 - reqlen - off, &ll);
-        size_t n = cl < ll + 2 ? 0 : cl2 - ll - 2;
+        size_t n = cl2 < ll + 2 ? 0 : cl2 - ll - 2;
         memmove(buf2 + bl, buf2 + off + ll, n);
         bl += n;
         off += cl2;
