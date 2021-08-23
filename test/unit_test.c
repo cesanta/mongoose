@@ -41,28 +41,28 @@ static void test_globmatch(void) {
 static void test_commalist(void) {
   struct mg_str k, v, s1 = mg_str(""), s2 = mg_str("a"), s3 = mg_str("a,b");
   struct mg_str s4 = mg_str("a=123"), s5 = mg_str("a,b=123");
-  ASSERT(mg_next_comma_entry(&s1, &k, &v) == false);
+  ASSERT(mg_comma(&s1, &k, &v) == false);
 
-  ASSERT(mg_next_comma_entry(&s2, &k, &v) == true);
+  ASSERT(mg_comma(&s2, &k, &v) == true);
   ASSERT(v.len == 0 && mg_vcmp(&k, "a") == 0);
-  ASSERT(mg_next_comma_entry(&s2, &k, &v) == false);
+  ASSERT(mg_comma(&s2, &k, &v) == false);
 
-  ASSERT(mg_next_comma_entry(&s3, &k, &v) == true);
+  ASSERT(mg_comma(&s3, &k, &v) == true);
   ASSERT(v.len == 0 && mg_vcmp(&k, "a") == 0);
-  ASSERT(mg_next_comma_entry(&s3, &k, &v) == true);
+  ASSERT(mg_comma(&s3, &k, &v) == true);
   ASSERT(v.len == 0 && mg_vcmp(&k, "b") == 0);
-  ASSERT(mg_next_comma_entry(&s3, &k, &v) == false);
+  ASSERT(mg_comma(&s3, &k, &v) == false);
 
-  ASSERT(mg_next_comma_entry(&s4, &k, &v) == true);
+  ASSERT(mg_comma(&s4, &k, &v) == true);
   ASSERT(mg_vcmp(&k, "a") == 0 && mg_vcmp(&v, "123") == 0);
-  ASSERT(mg_next_comma_entry(&s4, &k, &v) == false);
-  ASSERT(mg_next_comma_entry(&s4, &k, &v) == false);
+  ASSERT(mg_comma(&s4, &k, &v) == false);
+  ASSERT(mg_comma(&s4, &k, &v) == false);
 
-  ASSERT(mg_next_comma_entry(&s5, &k, &v) == true);
+  ASSERT(mg_comma(&s5, &k, &v) == true);
   ASSERT(v.len == 0 && mg_vcmp(&k, "a") == 0);
-  ASSERT(mg_next_comma_entry(&s5, &k, &v) == true);
+  ASSERT(mg_comma(&s5, &k, &v) == true);
   ASSERT(mg_vcmp(&k, "b") == 0 && mg_vcmp(&v, "123") == 0);
-  ASSERT(mg_next_comma_entry(&s4, &k, &v) == false);
+  ASSERT(mg_comma(&s4, &k, &v) == false);
 }
 
 static void test_http_get_var(void) {

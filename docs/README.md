@@ -1216,7 +1216,7 @@ The glob pattern matching rules are as follows:
 ### mg\_next\_comma\_entry()
 
 ```c
-bool mg_next_comma_entry(struct mg_str *s, struct mg_str *k, struct mg_str *v);
+bool mg_comma(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 ```
 
 Parse string `s`, which is a comma-separated list of entries. An entry could be
@@ -1228,7 +1228,7 @@ example:
 
 ```c
 struct mg_str k, v, s = mg_str("a=333,b=777");
-while (mg_next_comma_entry(&s, &k, &v))               // This loop output:
+while (mg_comma(&s, &k, &v))               // This loop output:
   printf("[%.*s] set to [%.*s]\n",                    // [a] set to [333]
          (int) k.len, k.ptr, (int) v.len, v.ptr);     // [b] set to [777]
 ```

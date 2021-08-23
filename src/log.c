@@ -27,7 +27,7 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   if (p == NULL) p = strrchr(file, '\\');
   p = p == NULL ? file : p + 1;
 
-  while (mg_next_comma_entry(&s, &k, &v)) {
+  while (mg_comma(&s, &k, &v)) {
     if (v.len == 0) max = atoi(k.ptr);
     if (v.len > 0 && strncmp(p, k.ptr, k.len) == 0) max = atoi(v.ptr);
   }

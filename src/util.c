@@ -108,7 +108,7 @@ static size_t mg_nce(const char *s, size_t n, size_t ofs, size_t *koff,
   return ofs > n ? n : ofs;
 }
 
-bool mg_next_comma_entry(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
+bool mg_comma(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
   size_t koff = 0, klen = 0, voff = 0, vlen = 0;
   size_t off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen);
   if (k != NULL) *k = mg_str_n(s->ptr + koff, klen);
