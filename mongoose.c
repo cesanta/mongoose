@@ -4249,7 +4249,7 @@ uint32_t mg_ntohl(uint32_t net) {
 uint16_t mg_ntohs(uint16_t net) {
   uint8_t data[2] = {0, 0};
   memcpy(&data, &net, sizeof(data));
-  return (uint16_t)((uint16_t) data[1] | (((uint16_t) data[0]) << 8));
+  return (uint16_t) ((uint16_t) data[1] | (((uint16_t) data[0]) << 8));
 }
 
 char *mg_hexdump(const void *buf, size_t len) {
@@ -4292,10 +4292,9 @@ char *mg_hex(const void *buf, size_t len, char *to) {
 }
 
 static unsigned char mg_unhex_nimble(unsigned char c) {
-  return (c >= '0' && c <= '9')
-             ? (unsigned char) (c - '0')
-             : (c >= 'A' && c <= 'F') ? (unsigned char) (c - '7')
-                                      : (unsigned char) (c - 'W');
+  return (c >= '0' && c <= '9')   ? (unsigned char) (c - '0')
+         : (c >= 'A' && c <= 'F') ? (unsigned char) (c - '7')
+                                  : (unsigned char) (c - 'W');
 }
 
 unsigned long mg_unhexn(const char *s, size_t len) {
@@ -4386,6 +4385,36 @@ uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len) {
     for (i = 0; i < 8; i++) crc = crc & 1 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
   }
   return ~crc;
+}
+
+static int isbyte(int n) {
+  return n >= 0 && n <= 255;
+}
+
+static int parse_net(const char *spec, uint32_t *net, uint32_t *mask) {
+  int n, a, b, c, d, slash = 32, len = 0;
+  if ((sscanf(spec, "%d.%d.%d.%d/%d%n", &a, &b, &c, &d, &slash, &n) == 5 ||
+       sscanf(spec, "%d.%d.%d.%d%n", &a, &b, &c, &d, &n) == 4) &&
+      isbyte(a) && isbyte(b) && isbyte(c) && isbyte(d) && slash >= 0 &&
+      slash < 33) {
+    len = n;
+    *net = ((uint32_t) a << 24) | ((uint32_t) b << 16) | ((uint32_t) c << 8) |
+           (uint32_t) d;
+    *mask = slash ? (uint32_t) (0xffffffffU << (32 - slash)) : (uint32_t) 0;
+  }
+  return len;
+}
+
+int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip) {
+  struct mg_str k, v;
+  int allowed = acl.len == 0 ? '+' : '-';  // If any ACL is set, deny by default
+  while (mg_comma(&acl, &k, &v)) {
+    uint32_t net, mask;
+    if (k.ptr[0] != '+' && k.ptr[0] != '-') return -1;
+    if (parse_net(&k.ptr[1], &net, &mask) == 0) return -2;
+    if ((remote_ip & mask) == net) allowed = k.ptr[0];
+  }
+  return allowed == '+';
 }
 
 double mg_time(void) {

@@ -10,8 +10,6 @@ by a vast number of open source and commercial products - it even runs on the
 International Space Station! Mongoose makes embedded network programming fast,
 robust, and easy.
 
-## Concept
-
 Mongoose has three basic data structures:
 
 - `struct mg_mgr` - an event manager that holds all active connections
@@ -1213,7 +1211,7 @@ The glob pattern matching rules are as follows:
 - any other character matches itself
 
 
-### mg\_next\_comma\_entry()
+### mg\_comma()
 
 ```c
 bool mg_comma(struct mg_str *s, struct mg_str *k, struct mg_str *v);
@@ -1374,3 +1372,25 @@ uint32_t mg_crc32(uint32_t crc, const uint8_t *buf, size_t len);
 
 Calculate CRC32 checksum for a given buffer. An initial `crc` value should
 be `0`.
+
+### mg\_check\_ip\_acl()
+
+```c
+int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
+```
+
+Check IPv4 address `remote_ip` against the IP ACL `acl`. Parameters:
+
+- `acl` - an ACL string, e.g. `-0.0.0.0/0,+1.2.3.4`
+- `remote_ip` - IPv4 address in network byte order
+
+Return value: 1 if `remote_ip` is allowed, 0 if not, and <0 if `acl` is
+invalid.
+
+Usage example:
+
+```
+  if (mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.2.3.4"), c->peer.ip) != 1) {
+    LOG(LL_INFO, ("NOT ALLOWED!"));
+  }
+```

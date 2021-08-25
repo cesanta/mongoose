@@ -512,13 +512,14 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *param);
 struct mg_timer {
   unsigned long period_ms;  // Timer period in milliseconds
   unsigned flags;           // Possible flags values below
-#define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
-#define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
   void (*fn)(void *);       // Function to call
   void *arg;                // Function argument
   unsigned long expire;     // Expiration timestamp in milliseconds
   struct mg_timer *next;    // Linkage in g_timers list
 };
+
+#define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
+#define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
 
 extern struct mg_timer *g_timers;  // Global list of timers
 
@@ -547,6 +548,7 @@ unsigned long mg_unhexn(const char *s, size_t len);
 int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
 int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
 int64_t mg_to64(struct mg_str str);
+int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
 double mg_time(void);
 unsigned long mg_millis(void);
 void mg_usleep(unsigned long usecs);
