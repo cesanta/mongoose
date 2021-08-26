@@ -1389,7 +1389,7 @@ invalid.
 
 Usage example:
 
-```
+```c
   if (mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.2.3.4"), c->peer.ip) != 1) {
     LOG(LL_INFO, ("NOT ALLOWED!"));
   }
