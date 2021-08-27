@@ -7,9 +7,6 @@
 #define WEBSOCKET_OP_PING 9
 #define WEBSOCKET_OP_PONG 10
 
-#define WEBSOCKET_FLAGS_MASK_FIN 128
-#define WEBSOCKET_FLAGS_MASK_OP 15
-
 #include "http.h"
 
 struct mg_ws_message {

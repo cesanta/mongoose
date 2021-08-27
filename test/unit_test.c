@@ -1474,6 +1474,62 @@ static void test_check_ip_acl(void) {
   ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.0.0.0/16"), ip) == 0);
 }
 
+static void w3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  LOG(LL_INFO, ("ev %d", ev));
+  if (ev == MG_EV_WS_OPEN) {
+    mg_ws_send(c, "hi there!", 9, WEBSOCKET_OP_TEXT);
+  } else if (ev == MG_EV_WS_MSG) {
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    ASSERT(mg_strcmp(wm->data, mg_str("lebowski")) == 0);
+    ((int *) fn_data)[0]++;
+  } else if (ev == MG_EV_CLOSE) {
+    ((int *) fn_data)[0] += 10;
+  }
+}
+
+static void w2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  struct mg_str msg = mg_str_n("lebowski", 8);
+  if (ev == MG_EV_HTTP_MSG) {
+    mg_ws_upgrade(c, (struct mg_http_message *) ev_data, NULL);
+  } else if (ev == MG_EV_WS_OPEN) {
+    mg_ws_send(c, "x", 1, WEBSOCKET_OP_PONG);
+  } else if (ev == MG_EV_POLL && c->is_websocket) {
+    size_t ofs, n = (size_t) fn_data;
+    if (n < msg.len) {
+      // Send "msg" char by char using fragmented frames
+      // mg_ws_send() sets the FIN flag in the WS header. Clean it
+      // to send fragmented packet. Insert PONG messages between frames
+      uint8_t op = n == 0 ? WEBSOCKET_OP_TEXT : WEBSOCKET_OP_CONTINUE;
+      mg_ws_send(c, ":->", 3, WEBSOCKET_OP_PING);
+      ofs = c->send.len;
+      mg_ws_send(c, &msg.ptr[n], 1, op);
+      if (n < msg.len - 1) c->send.buf[ofs] = op;  // Clear FIN flag
+      c->fn_data = (void *) (n + 1);               // Point to the next char
+    } else {
+      mg_ws_send(c, "", 0, WEBSOCKET_OP_CLOSE);
+    }
+  } else if (ev == MG_EV_WS_MSG) {
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    ASSERT(mg_strcmp(wm->data, mg_str("hi there!")) == 0);
+  }
+}
+
+static void test_ws_fragmentation(void) {
+  const char *url = "ws://localhost:12357/ws";
+  struct mg_mgr mgr;
+  int i, done = 0;
+
+  mg_mgr_init(&mgr);
+  ASSERT(mg_http_listen(&mgr, url, w2, NULL) != NULL);
+  mg_ws_connect(&mgr, url, w3, &done, "%s", "Sec-WebSocket-Protocol: echo\r\n");
+  for (i = 0; i < 25; i++) mg_mgr_poll(&mgr, 1);
+  // LOG(LL_INFO, ("--> %d", done));
+  ASSERT(done == 11);
+
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+}
+
 int main(void) {
   mg_log_set("3");
   test_check_ip_acl();
@@ -1497,6 +1553,7 @@ int main(void) {
   test_http_get_var();
   test_tls();
   test_ws();
+  test_ws_fragmentation();
   test_http_server();
   test_http_client();
   test_http_no_content_length();

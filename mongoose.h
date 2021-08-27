@@ -636,7 +636,8 @@ int mg_iobuf_init(struct mg_iobuf *, size_t);
 int mg_iobuf_resize(struct mg_iobuf *, size_t);
 void mg_iobuf_free(struct mg_iobuf *);
 size_t mg_iobuf_append(struct mg_iobuf *, const void *, size_t, size_t);
-size_t mg_iobuf_delete(struct mg_iobuf *, size_t);
+size_t mg_iobuf_delete(struct mg_iobuf *, size_t len);
+size_t mg_iobuf_del(struct mg_iobuf *, size_t ofs, size_t len);
 
 int mg_base64_update(unsigned char p, char *to, int len);
 int mg_base64_final(char *to, int len);
@@ -868,9 +869,6 @@ void mg_tls_handshake(struct mg_connection *);
 #define WEBSOCKET_OP_CLOSE 8
 #define WEBSOCKET_OP_PING 9
 #define WEBSOCKET_OP_PONG 10
-
-#define WEBSOCKET_FLAGS_MASK_FIN 128
-#define WEBSOCKET_FLAGS_MASK_OP 15
 
 
 
