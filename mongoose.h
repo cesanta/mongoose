@@ -740,6 +740,8 @@ struct mg_connection {
   struct mg_iobuf send;        // Outgoing data
   mg_event_handler_t fn;       // User-specified event handler function
   void *fn_data;               // User-specified function parameter
+  void *conn_data;             // pointer to arbitrary User-speficied 
+                               // data attached to connection
   mg_event_handler_t pfn;      // Protocol-specific handler function
   void *pfn_data;              // Protocol-specific function parameter
   char label[50];              // Arbitrary label
