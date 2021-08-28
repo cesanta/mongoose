@@ -8,7 +8,7 @@ bool mg_file_write(const char *path, const void *buf, size_t len);
 bool mg_file_printf(const char *path, const char *fmt, ...);
 void mg_random(void *buf, size_t len);
 bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
-bool mg_comma(struct mg_str *s, struct mg_str *k, struct mg_str *v);
+bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);

@@ -489,7 +489,7 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
   path.len = i;
 
   // Process user-provided mime type overrides, if any
-  while (mg_comma(&s, &k, &v)) {
+  while (mg_commalist(&s, &k, &v)) {
     if (mg_strcmp(path, k) == 0) return v;
   }
 

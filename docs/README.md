@@ -1152,7 +1152,47 @@ void mg_timer_poll(unsigned long uptime_ms);
 Traverse list of timers, and call them if current timestamp `uptime_ms` is
 past the timer's expiration time.
 
-## Utility functions
+## String
+
+### mg\_globmatch()
+
+```c
+bool mg_globmatch(const char *pattern, int plen, const char *s, int n);
+```
+
+Return true if string `s`, `n` matches glob pattern `pattern`, `plen`.
+The glob pattern matching rules are as follows:
+
+- `?` matches any single character 
+- `*` matches zero or more characters except `/`
+- `#` matches zero or more characters
+- any other character matches itself
+
+
+### mg\_commalist()
+
+```c
+bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
+```
+
+Parse string `s`, which is a comma-separated list of entries. An entry could be
+either an arbitrary string, which gets stored in `v`, or a `KEY=VALUE` which
+gets stored in `k` and `v` respectively.
+
+IMPORTANT: this function modifies `s` by pointing to the next entry. Usage
+example:
+
+```c
+struct mg_str k, v, s = mg_str("a=333,b=777");
+while (mg_commalist(&s, &k, &v))               // This loop output:
+  printf("[%.*s] set to [%.*s]\n",                    // [a] set to [333]
+         (int) k.len, k.ptr, (int) v.len, v.ptr);     // [b] set to [777]
+```
+
+
+
+
+## Utility
 
 
 ### mg\_file\_read()
@@ -1195,41 +1235,6 @@ void mg_random(void *buf, size_t len);
 
 Fill in buffer `buf`, `len` with random data.
 
-
-### mg\_globmatch()
-
-```c
-bool mg_globmatch(const char *pattern, int plen, const char *s, int n);
-```
-
-Return true if string `s`, `n` matches glob pattern `pattern`, `plen`.
-The glob pattern matching rules are as follows:
-
-- `?` matches any single character 
-- `*` matches zero or more characters except `/`
-- `#` matches zero or more characters
-- any other character matches itself
-
-
-### mg\_comma()
-
-```c
-bool mg_comma(struct mg_str *s, struct mg_str *k, struct mg_str *v);
-```
-
-Parse string `s`, which is a comma-separated list of entries. An entry could be
-either an arbitrary string, which gets stored in `v`, or a `KEY=VALUE` which
-gets stored in `k` and `v` respectively.
-
-IMPORTANT: this function modifies `s` by pointing to the next entry. Usage
-example:
-
-```c
-struct mg_str k, v, s = mg_str("a=333,b=777");
-while (mg_comma(&s, &k, &v))               // This loop output:
-  printf("[%.*s] set to [%.*s]\n",                    // [a] set to [333]
-         (int) k.len, k.ptr, (int) v.len, v.ptr);     // [b] set to [777]
-```
 
 ### mg\_ntohs()
 

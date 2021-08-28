@@ -1260,7 +1260,7 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
   path.len = i;
 
   // Process user-provided mime type overrides, if any
-  while (mg_comma(&s, &k, &v)) {
+  while (mg_commalist(&s, &k, &v)) {
     if (mg_strcmp(path, k) == 0) return v;
   }
 
@@ -1825,7 +1825,7 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   if (p == NULL) p = strrchr(file, '\\');
   p = p == NULL ? file : p + 1;
 
-  while (mg_comma(&s, &k, &v)) {
+  while (mg_commalist(&s, &k, &v)) {
     if (v.len == 0) max = atoi(k.ptr);
     if (v.len > 0 && strncmp(p, k.ptr, k.len) == 0) max = atoi(v.ptr);
   }
@@ -4235,7 +4235,7 @@ static size_t mg_nce(const char *s, size_t n, size_t ofs, size_t *koff,
   return ofs > n ? n : ofs;
 }
 
-bool mg_comma(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
+bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
   size_t koff = 0, klen = 0, voff = 0, vlen = 0;
   size_t off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen);
   if (k != NULL) *k = mg_str_n(s->ptr + koff, klen);
@@ -4413,7 +4413,7 @@ static int parse_net(const char *spec, uint32_t *net, uint32_t *mask) {
 int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip) {
   struct mg_str k, v;
   int allowed = acl.len == 0 ? '+' : '-';  // If any ACL is set, deny by default
-  while (mg_comma(&acl, &k, &v)) {
+  while (mg_commalist(&acl, &k, &v)) {
     uint32_t net, mask;
     if (k.ptr[0] != '+' && k.ptr[0] != '-') return -1;
     if (parse_net(&k.ptr[1], &net, &mask) == 0) return -2;
