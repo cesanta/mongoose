@@ -24,7 +24,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           snprintf(tmp, sizeof(tmp), "%.*s%s", (int) (p - path), path, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
-            mg_iobuf_append(&b, data, strlen(data), align);
+            mg_iobuf_add(&b, b.len, data, strlen(data), align);
             free(data);
           } else {
             LOG(LL_ERROR, ("%s: file=%s error or too deep", path, arg));
@@ -34,7 +34,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
-            mg_iobuf_append(&b, data, strlen(data), align);
+            mg_iobuf_add(&b, b.len, data, strlen(data), align);
             free(data);
           } else {
             LOG(LL_ERROR, ("%s: virtual=%s error or too deep", path, arg));
@@ -42,13 +42,13 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
         } else {
           // Unknown SSI tag
           LOG(LL_INFO, ("Unknown SSI tag: %.*s", (int) len, buf));
-          mg_iobuf_append(&b, buf, len, align);
+          mg_iobuf_add(&b, b.len, buf, len, align);
         }
         intag = 0;
         len = 0;
       } else if (ch == '<') {
         intag = 1;
-        if (len > 0) mg_iobuf_append(&b, buf, len, align);
+        if (len > 0) mg_iobuf_add(&b, b.len, buf, len, align);
         len = 0;
         buf[len++] = (char) (ch & 0xff);
       } else if (intag) {
@@ -62,13 +62,13 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
       } else {
         buf[len++] = (char) (ch & 0xff);
         if (len >= sizeof(buf)) {
-          mg_iobuf_append(&b, buf, len, align);
+          mg_iobuf_add(&b, b.len, buf, len, align);
           len = 0;
         }
       }
     }
-    if (len > 0) mg_iobuf_append(&b, buf, len, align);
-    if (b.len > 0) mg_iobuf_append(&b, "", 1, align);  // nul-terminate
+    if (len > 0) mg_iobuf_add(&b, b.len, buf, len, align);
+    if (b.len > 0) mg_iobuf_add(&b, b.len, "", 1, align);  // nul-terminate
     fclose(fp);
   }
   (void) depth;

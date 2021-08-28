@@ -1762,8 +1762,8 @@ int mg_iobuf_init(struct mg_iobuf *io, size_t size) {
   return mg_iobuf_resize(io, size);
 }
 
-size_t mg_iobuf_append(struct mg_iobuf *io, const void *buf, size_t len,
-                       size_t chunk_size) {
+size_t mg_iobuf_add(struct mg_iobuf *io, size_t ofs, const void *buf,
+                    size_t len, size_t chunk_size) {
   size_t new_size = io->len + len;
   if (new_size > io->size) {
     new_size += chunk_size;             // Make sure that io->size
@@ -1771,7 +1771,9 @@ size_t mg_iobuf_append(struct mg_iobuf *io, const void *buf, size_t len,
     mg_iobuf_resize(io, new_size);      // Attempt to realloc
     if (new_size != io->size) len = 0;  // Realloc failure, append nothing
   }
-  if (buf != NULL) memmove(io->buf + io->len, buf, len);
+  if (ofs < io->len) memmove(io->buf + ofs + len, io->buf + ofs, io->len - ofs);
+  if (buf != NULL) memmove(io->buf + ofs, buf, len);
+  if (ofs > io->len) io->len += ofs - io->len;
   io->len += len;
   return len;
 }
@@ -2935,7 +2937,7 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
 
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   return c->is_udp ? mg_sock_send(c, buf, len) > 0
-                   : mg_iobuf_append(&c->send, buf, len, MG_IO_SIZE);
+                   : mg_iobuf_add(&c->send, c->send.len, buf, len, MG_IO_SIZE);
 }
 
 static void mg_set_non_blocking_mode(SOCKET fd) {
@@ -3434,7 +3436,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           snprintf(tmp, sizeof(tmp), "%.*s%s", (int) (p - path), path, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
-            mg_iobuf_append(&b, data, strlen(data), align);
+            mg_iobuf_add(&b, b.len, data, strlen(data), align);
             free(data);
           } else {
             LOG(LL_ERROR, ("%s: file=%s error or too deep", path, arg));
@@ -3444,7 +3446,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
-            mg_iobuf_append(&b, data, strlen(data), align);
+            mg_iobuf_add(&b, b.len, data, strlen(data), align);
             free(data);
           } else {
             LOG(LL_ERROR, ("%s: virtual=%s error or too deep", path, arg));
@@ -3452,13 +3454,13 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
         } else {
           // Unknown SSI tag
           LOG(LL_INFO, ("Unknown SSI tag: %.*s", (int) len, buf));
-          mg_iobuf_append(&b, buf, len, align);
+          mg_iobuf_add(&b, b.len, buf, len, align);
         }
         intag = 0;
         len = 0;
       } else if (ch == '<') {
         intag = 1;
-        if (len > 0) mg_iobuf_append(&b, buf, len, align);
+        if (len > 0) mg_iobuf_add(&b, b.len, buf, len, align);
         len = 0;
         buf[len++] = (char) (ch & 0xff);
       } else if (intag) {
@@ -3472,13 +3474,13 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
       } else {
         buf[len++] = (char) (ch & 0xff);
         if (len >= sizeof(buf)) {
-          mg_iobuf_append(&b, buf, len, align);
+          mg_iobuf_add(&b, b.len, buf, len, align);
           len = 0;
         }
       }
     }
-    if (len > 0) mg_iobuf_append(&b, buf, len, align);
-    if (b.len > 0) mg_iobuf_append(&b, "", 1, align);  // nul-terminate
+    if (len > 0) mg_iobuf_add(&b, b.len, buf, len, align);
+    if (b.len > 0) mg_iobuf_add(&b, b.len, "", 1, align);  // nul-terminate
     fclose(fp);
   }
   (void) depth;
@@ -4749,11 +4751,11 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
   size_t header_len = mkhdr(len, op, c->is_client, header);
 
   // NOTE: order of operations is important!
-  mg_iobuf_append(&c->send, NULL, header_len, MG_IO_SIZE);  // Add header space
-  p = &c->send.buf[c->send.len - len];                      // p points to data
-  memmove(p, p - header_len, len);                          // Shift data
-  memcpy(p - header_len, header, header_len);               // Prepend header
-  mg_ws_mask(c, len);                                       // Mask data
+  mg_iobuf_add(&c->send, c->send.len, NULL, header_len, MG_IO_SIZE);
+  p = &c->send.buf[c->send.len - len];         // p points to data
+  memmove(p, p - header_len, len);             // Shift data
+  memcpy(p - header_len, header, header_len);  // Prepend header
+  mg_ws_mask(c, len);                          // Mask data
 
   return c->send.len;
 }

@@ -107,7 +107,7 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
 
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   return c->is_udp ? mg_sock_send(c, buf, len) > 0
-                   : mg_iobuf_append(&c->send, buf, len, MG_IO_SIZE);
+                   : mg_iobuf_add(&c->send, c->send.len, buf, len, MG_IO_SIZE);
 }
 
 static void mg_set_non_blocking_mode(SOCKET fd) {

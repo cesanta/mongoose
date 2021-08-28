@@ -603,21 +603,20 @@ Free memory pointed by `io->buf` and set to NULL. Both `size` and `len` are set
 to 0.
 
 
-### mg\_iobuf\_append()
+### mg\_iobuf\_add()
 
 ```c
-size_t mg_iobuf_append(struct mg_iobuf *io, const void *data, size_t data_size, size_t granularity);
+size_t mg_iobuf_add(struct mg_iobuf *io, size_t offset, const void *buf, size_t len, size_t granularity);
 ```
 
-Append `data` bytes of size `data_size` to the end of the buffer. The buffer
-is expanded if `data_size` is greater than `io->size - io->len`. If that
-happens, the `io->buf` can change. The resulting `io->size` is always
-set to the `granularity` byte boundary. Example:
+Insert data buffer `buf`, `len` at offset `offset`. The iobuf gets
+is expanded if required. The resulting `io->size` is always
+aligned to the `granularity` byte boundary. Example:
 
 ```c
 struct mg_iobuf io;
-mg_iobuf_init(&io, 0);                // Empty buffer
-mg_iobuf_append(&io, "hi", 2, 1024);  // io->len is 2, io->size is 1024
+mg_iobuf_init(&io, 0);               // Empty buffer
+mg_iobuf_add(&io, 0, "hi", 2, 512);  // io->len is 2, io->size is 512
 ```
 
 ### mg\_iobuf\_del()
