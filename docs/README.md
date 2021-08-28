@@ -1110,7 +1110,7 @@ int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts);
 
 Initialise TLS on a given connection.
 
-IMPORTANT: mbedTLS implementation uses `mg_random` as RNG. The `mg_random`
+<span class="badge bg-danger">NOTE:</span> mbedTLS implementation uses `mg_random` as RNG. The `mg_random`
 can be overridden by setting `MG_ENABLE_CUSTOM_RANDOM` and defining
 your own `mg_random()` implementation.
 
