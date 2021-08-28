@@ -24,7 +24,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // Got websocket frame. Received data is wm->data. Echo it back!
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_TEXT);
-    mg_iobuf_delete(&c->recv, c->recv.len);
+    mg_iobuf_del(&c->recv, 0, c->recv.len);
   }
   (void) fn_data;
 }

@@ -1686,7 +1686,7 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
         break;
       } else if (n > 0 && (size_t) c->recv.len >= hm.message.len) {
         mg_call(c, MG_EV_HTTP_MSG, &hm);
-        mg_iobuf_delete(&c->recv, hm.message.len);
+        mg_iobuf_del(&c->recv, 0, hm.message.len);
       } else {
         if (n > 0 && !is_chunked) {
           hm.chunk =
@@ -1783,10 +1783,6 @@ size_t mg_iobuf_del(struct mg_iobuf *io, size_t ofs, size_t len) {
   zeromem(io->buf + ofs + io->len - len, len);
   io->len -= len;
   return len;
-}
-
-size_t mg_iobuf_delete(struct mg_iobuf *io, size_t len) {
-  return mg_iobuf_del(io, 0, len);
 }
 
 void mg_iobuf_free(struct mg_iobuf *io) {
@@ -2094,14 +2090,14 @@ enum { MQTT_OK, MQTT_INCOMPLETE, MQTT_MALFORMED };
 void mg_mqtt_send_header(struct mg_connection *c, uint8_t cmd, uint8_t flags,
                          uint32_t len) {
   uint8_t buf[1 + sizeof(len)], *vlen = &buf[1];
-  buf[0] = (uint8_t)((cmd << 4) | flags);
+  buf[0] = (uint8_t) ((cmd << 4) | flags);
   do {
     *vlen = len % 0x80;
     len /= 0x80;
     if (len > 0) *vlen |= 0x80;
     vlen++;
   } while (len > 0 && vlen < &buf[sizeof(buf)]);
-  mg_send(c, buf, (size_t)(vlen - buf));
+  mg_send(c, buf, (size_t) (vlen - buf));
 }
 
 static void mg_send_u16(struct mg_connection *c, uint16_t value) {
@@ -2111,7 +2107,7 @@ static void mg_send_u16(struct mg_connection *c, uint16_t value) {
 void mg_mqtt_login(struct mg_connection *c, const char *url,
                    struct mg_mqtt_opts *opts) {
   uint32_t total_len = 7 + 1 + 2 + 2;
-  uint16_t flags = (uint16_t)(((uint16_t) opts->qos & 3) << 3);
+  uint16_t flags = (uint16_t) (((uint16_t) opts->qos & 3) << 3);
   struct mg_str user = mg_url_user(url);
   struct mg_str pass = mg_url_pass(url);
 
@@ -2157,7 +2153,7 @@ void mg_mqtt_login(struct mg_connection *c, const char *url,
 
 void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
                  struct mg_str *data, int qos, bool retain) {
-  uint8_t flags = (uint8_t)(((qos & 3) << 1) | (retain ? 1 : 0));
+  uint8_t flags = (uint8_t) (((qos & 3) << 1) | (retain ? 1 : 0));
   uint32_t total_len = 2 + (uint32_t) topic->len + (uint32_t) data->len;
   LOG(LL_DEBUG, ("%lu [%.*s] -> [%.*s]", c->id, (int) topic->len,
                  (char *) topic->ptr, (int) data->len, (char *) data->ptr));
@@ -2193,21 +2189,21 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m) {
   memset(m, 0, sizeof(*m));
   m->dgram.ptr = (char *) buf;
   if (len < 2) return MQTT_INCOMPLETE;
-  m->cmd = (uint8_t)(buf[0] >> 4);
+  m->cmd = (uint8_t) (buf[0] >> 4);
   m->qos = (buf[0] >> 1) & 3;
 
   n = len_len = 0;
   p = (uint8_t *) buf + 1;
-  while ((size_t)(p - buf) < len) {
+  while ((size_t) (p - buf) < len) {
     lc = *((uint8_t *) p++);
-    n += (uint32_t)((lc & 0x7f) << 7 * len_len);
+    n += (uint32_t) ((lc & 0x7f) << 7 * len_len);
     len_len++;
     if (!(lc & 0x80)) break;
     if (len_len >= 4) return MQTT_MALFORMED;
   }
   end = p + n;
   if (lc & 0x80 || end > buf + len) return MQTT_INCOMPLETE;
-  m->dgram.len = (size_t)(end - buf);
+  m->dgram.len = (size_t) (end - buf);
 
   switch (m->cmd) {
     case MQTT_CMD_CONNACK:
@@ -2220,28 +2216,28 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m) {
     case MQTT_CMD_PUBCOMP:
     case MQTT_CMD_SUBACK:
       if (p + 2 > end) return MQTT_MALFORMED;
-      m->id = (uint16_t)((((uint16_t) p[0]) << 8) | p[1]);
+      m->id = (uint16_t) ((((uint16_t) p[0]) << 8) | p[1]);
       break;
     case MQTT_CMD_SUBSCRIBE: {
       if (p + 2 > end) return MQTT_MALFORMED;
-      m->id = (uint16_t)((((uint16_t) p[0]) << 8) | p[1]);
+      m->id = (uint16_t) ((((uint16_t) p[0]) << 8) | p[1]);
       p += 2;
       break;
     }
     case MQTT_CMD_PUBLISH: {
       if (p + 2 > end) return MQTT_MALFORMED;
-      m->topic.len = (uint16_t)((((uint16_t) p[0]) << 8) | p[1]);
+      m->topic.len = (uint16_t) ((((uint16_t) p[0]) << 8) | p[1]);
       m->topic.ptr = (char *) p + 2;
       p += 2 + m->topic.len;
       if (p > end) return MQTT_MALFORMED;
       if (m->qos > 0) {
         if (p + 2 > end) return MQTT_MALFORMED;
-        m->id = (uint16_t)((((uint16_t) p[0]) << 8) | p[1]);
+        m->id = (uint16_t) ((((uint16_t) p[0]) << 8) | p[1]);
         p += 2;
       }
       if (p > end) return MQTT_MALFORMED;
       m->data.ptr = (char *) p;
-      m->data.len = (size_t)(end - p);
+      m->data.len = (size_t) (end - p);
       break;
     }
     default:
@@ -2257,7 +2253,7 @@ static size_t mg_mqtt_next_topic(struct mg_mqtt_message *msg,
   size_t new_pos;
   if (pos >= msg->dgram.len) return 0;
 
-  topic->len = (size_t)(((unsigned) buf[0]) << 8 | buf[1]);
+  topic->len = (size_t) (((unsigned) buf[0]) << 8 | buf[1]);
   topic->ptr = (char *) buf + 2;
   new_pos = pos + 2 + topic->len + (qos == NULL ? 0 : 1);
   if ((size_t) new_pos > msg->dgram.len) return 0;
@@ -2308,7 +2304,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
           }
         }
         mg_call(c, MG_EV_MQTT_CMD, &mm);
-        mg_iobuf_delete(&c->recv, mm.dgram.len);
+        mg_iobuf_del(&c->recv, 0, mm.dgram.len);
       } else {
         break;
       }
@@ -2951,7 +2947,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
   setsockopt(fd, 0, FREERTOS_SO_RCVTIMEO, &off, sizeof(off));
   setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off));
 #elif MG_ARCH == MG_ARCH_FREERTOS_LWIP
-  lwip_fcntl(fd, F_SETFL, O_NONBLOCK);  
+  lwip_fcntl(fd, F_SETFL, O_NONBLOCK);
 #else
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, FD_CLOEXEC);
 #endif
@@ -2969,21 +2965,22 @@ SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
     int on = 1, af = addr->is_ip6 ? AF_INET6 : AF_INET;
     int type = strncmp(url, "udp:", 4) == 0 ? SOCK_DGRAM : SOCK_STREAM;
     int proto = type == SOCK_DGRAM ? IPPROTO_UDP : IPPROTO_TCP;
-    (void)on;
+    (void) on;
 
     if ((fd = socket(af, type, proto)) != INVALID_SOCKET &&
-#if (!defined(_WIN32) || !defined(SO_EXCLUSIVEADDRUSE)) \
-    && (!defined(LWIP_SOCKET) || (defined(LWIP_SOCKET) && SO_REUSE == 1))
+#if (!defined(_WIN32) || !defined(SO_EXCLUSIVEADDRUSE)) && \
+    (!defined(LWIP_SOCKET) || (defined(LWIP_SOCKET) && SO_REUSE == 1))
         // 1. SO_RESUSEADDR is not enabled on Windows because the semantics of
         //    SO_REUSEADDR on UNIX and Windows is different. On Windows,
-        //    SO_REUSEADDR allows to bind a socket to a port without error even if
-        //    the port is already open by another program. This is not the behavior
-        //    SO_REUSEADDR was designed for, and leads to hard-to-track failure
-        //    scenarios. Therefore, SO_REUSEADDR was disabled on Windows unless
-        //    SO_EXCLUSIVEADDRUSE is supported and set on a socket.
-        // 2. In case of LWIP, SO_REUSEADDR should be explicitly enabled, by defining   
+        //    SO_REUSEADDR allows to bind a socket to a port without error even
+        //    if the port is already open by another program. This is not the
+        //    behavior SO_REUSEADDR was designed for, and leads to hard-to-track
+        //    failure scenarios. Therefore, SO_REUSEADDR was disabled on Windows
+        //    unless SO_EXCLUSIVEADDRUSE is supported and set on a socket.
+        // 2. In case of LWIP, SO_REUSEADDR should be explicitly enabled, by
+        // defining
         //    SO_REUSE (in lwipopts.h), otherwise the code below will compile
-        //    but won't work! (setsockopt will return EINVAL)  
+        //    but won't work! (setsockopt will return EINVAL)
         !setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) &&
 #endif
 #if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
@@ -3087,7 +3084,7 @@ static void write_conn(struct mg_connection *c) {
       LOG(LL_INFO, ("\n-- %lu %s %s %ld\n%s", c->id, c->label, "<-", n, s));
       free(s);
     }
-    mg_iobuf_delete(&c->send, (size_t) n);
+    mg_iobuf_del(&c->send, 0, (size_t) n);
     if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
     mg_call(c, MG_EV_WRITE, &n);
     // if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
@@ -4624,7 +4621,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
           c->is_websocket = 1;
           mg_call(c, MG_EV_WS_OPEN, &hm);
         }
-        mg_iobuf_delete(&c->recv, (size_t) n);
+        mg_iobuf_del(&c->recv, 0, (size_t) n);
       } else {
         return;  // A request is not yet received
       }

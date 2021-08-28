@@ -39,7 +39,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       connected = true;
       LOG(LL_DEBUG,
           ("Connected to proxy, status: %.*s", (int) hm.uri.len, hm.uri.ptr));
-      mg_iobuf_delete(&c->recv, n);
+      mg_iobuf_del(&c->recv, 0, n);
       // Send request to the target server
       mg_printf(c, "GET / HTTP/1.0\r\nHost: %.*s\r\n\r\n", (int) host.len,
                 host.ptr);

@@ -56,7 +56,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (c->label[0] == 'B' && c2 != NULL) {
       // All incoming data from the backend, forward to the client
       mg_send(c2, c->recv.buf, c->recv.len);
-      mg_iobuf_delete(&c->recv, c->recv.len);
+      mg_iobuf_del(&c->recv, 0, c->recv.len);
     }
   } else if (ev == MG_EV_CONNECT) {
     if (mg_url_is_ssl(s_backend_url)) {

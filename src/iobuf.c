@@ -65,10 +65,6 @@ size_t mg_iobuf_del(struct mg_iobuf *io, size_t ofs, size_t len) {
   return len;
 }
 
-size_t mg_iobuf_delete(struct mg_iobuf *io, size_t len) {
-  return mg_iobuf_del(io, 0, len);
-}
-
 void mg_iobuf_free(struct mg_iobuf *io) {
   mg_iobuf_resize(io, 0);
 }

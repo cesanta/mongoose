@@ -36,7 +36,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       memcpy(buf + sizeof(*h) + n, answer, sizeof(answer));   // And answer
       mg_send(c, buf, sizeof(buf));                           // And send it!
     }
-    mg_iobuf_delete(&c->recv, c->recv.len);
+    mg_iobuf_del(&c->recv, 0, c->recv.len);
   }
   (void) fn_data;
   (void) ev_data;

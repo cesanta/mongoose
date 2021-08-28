@@ -141,7 +141,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
           c->is_websocket = 1;
           mg_call(c, MG_EV_WS_OPEN, &hm);
         }
-        mg_iobuf_delete(&c->recv, (size_t) n);
+        mg_iobuf_del(&c->recv, 0, (size_t) n);
       } else {
         return;  // A request is not yet received
       }

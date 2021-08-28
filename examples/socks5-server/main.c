@@ -53,7 +53,7 @@ static void handshake(struct mg_connection *c) {
       // TODO(lsm): support other auth methods
       if (r->buf[i] == HANDSHAKE_NOAUTH) reply[1] = r->buf[i];
     }
-    mg_iobuf_delete(r, 2 + r->buf[1]);
+    mg_iobuf_del(r, 0, 2 + r->buf[1]);
     mg_send(c, reply, sizeof(reply));
     c->label[0] = STATE_REQUEST;
   }
@@ -73,7 +73,7 @@ static void exchange(struct mg_connection *c) {
   struct mg_connection *c2 = (struct mg_connection *) c->fn_data;
   if (c2 != NULL) {
     mg_send(c2, c->recv.buf, c->recv.len);
-    mg_iobuf_delete(&c->recv, c->recv.len);
+    mg_iobuf_del(&c->recv, 0, c->recv.len);
   } else {
     c->is_draining = 1;
   }
@@ -145,7 +145,7 @@ static void request(struct mg_connection *c) {
     mg_send(c, buf, sizeof(buf));
   }
   mg_send(c, r->buf + 3, addr_len + 1 + 2);
-  mg_iobuf_delete(r, 6 + addr_len);  // Remove request from the input stream
+  mg_iobuf_del(r, 0, 6 + addr_len);  // Remove request from the input stream
   c->label[0] = STATE_ESTABLISHED;   // Mark ourselves as connected
 }
 

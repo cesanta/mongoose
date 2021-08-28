@@ -321,7 +321,7 @@ This example is a simple TCP echo server that listens on port 1234:
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_READ) {
     mg_send(c, c->recv.buf, c->recv.len);     // Echo received data back
-    mg_iobuf_delete(&c->recv, c->recv.len);   // And discard it
+    mg_iobuf_del(&c->recv, 0, c->recv.len);   // And discard it
   }
 }
 
@@ -620,14 +620,14 @@ mg_iobuf_init(&io, 0);                // Empty buffer
 mg_iobuf_append(&io, "hi", 2, 1024);  // io->len is 2, io->size is 1024
 ```
 
-### mg\_iobuf\_delete()
+### mg\_iobuf\_del()
 
 ```c
-size_t mg_iobuf_delete(struct mg_iobuf *io, size_t len);
+size_t mg_iobuf_del(struct mg_iobuf *io, size_t offset, size_t len);
 ```
 
-Discard `len` bytes from the beginning of the buffer, and shift the remaining
-bytes to the beginning. If `len` is greater than `io->len`, nothing happens,
+Delete `len` bytes starting from `offset`, and shift the remaining
+bytes. If `len` is greater than `io->len`, nothing happens,
 so such call is silently ignored.
 
 
@@ -1189,71 +1189,6 @@ while (mg_commalist(&s, &k, &v))               // This loop output:
          (int) k.len, k.ptr, (int) v.len, v.ptr);     // [b] set to [777]
 ```
 
-
-
-
-## Utility
-
-
-### mg\_file\_read()
-
-```c
-char *mg_file_read(const char *path, size_t *sizep);
-```
-
-Read file contents into a nul-terminated malloc-ed string. It is a caller's
-responsibility to free() a returned pointer. If `sizep` is not NULL, it will
-return a file size in bytes.
-
-### mg\_file\_write()
-
-```c
-bool mg_file_write(const char *path, const void *buf, size_t len);
-```
-
-Write data to a file, return `true` if written, `false` otherwise.
-The write is atomic, i.e. data gets written to a temporary file first,
-then `rename()-ed` to a destination file name.
-
-
-### mg\_file\_printf()
-
-```c
-int mg_file_printf(const char *path, const char *fmt, ...);
-```
-
-Write into a file `path` using `printf()` semantics.
-Return `true` on success, `false` otherwise. This function prints data to
-a temporary in-memory buffer first, then calls `mg_file_write()`.
-
-
-### mg\_random()
-
-```c
-void mg_random(void *buf, size_t len);
-```
-
-Fill in buffer `buf`, `len` with random data.
-
-
-### mg\_ntohs()
-
-```c
-uint16_t mg_ntohs(uint16_t net);
-```
-
-Convert `uint16_t` value to host order.
-
-
-### mg\_ntohl()
-
-```c
-uint32_t mg_ntohl(uint32_t net);
-```
-
-Convert `uint32_t` value to host order.
-
-
 ### mg\_hexdump()
 
 ```c
@@ -1342,6 +1277,70 @@ char *mg_ntoa(const struct mg_addr *, char *buf, size_t len);
 ```
 
 Stringify IP address `ipaddr` into a buffer `buf`, `len`. Return `buf`.
+
+
+
+## Utility
+
+
+### mg\_file\_read()
+
+```c
+char *mg_file_read(const char *path, size_t *sizep);
+```
+
+Read file contents into a nul-terminated malloc-ed string. It is a caller's
+responsibility to free() a returned pointer. If `sizep` is not NULL, it will
+return a file size in bytes.
+
+### mg\_file\_write()
+
+```c
+bool mg_file_write(const char *path, const void *buf, size_t len);
+```
+
+Write data to a file, return `true` if written, `false` otherwise.
+The write is atomic, i.e. data gets written to a temporary file first,
+then `rename()-ed` to a destination file name.
+
+
+### mg\_file\_printf()
+
+```c
+int mg_file_printf(const char *path, const char *fmt, ...);
+```
+
+Write into a file `path` using `printf()` semantics.
+Return `true` on success, `false` otherwise. This function prints data to
+a temporary in-memory buffer first, then calls `mg_file_write()`.
+
+
+### mg\_random()
+
+```c
+void mg_random(void *buf, size_t len);
+```
+
+Fill in buffer `buf`, `len` with random data.
+
+
+### mg\_ntohs()
+
+```c
+uint16_t mg_ntohs(uint16_t net);
+```
+
+Convert `uint16_t` value to host order.
+
+
+### mg\_ntohl()
+
+```c
+uint32_t mg_ntohl(uint32_t net);
+```
+
+Convert `uint32_t` value to host order.
+
 
 ### mg\_time()
 
