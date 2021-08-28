@@ -557,79 +557,6 @@ must be called from a separate task/thread. Parameters:
 Return values: none
 
 
-## IO buffers
-
-### struct mg\_iobuf
-
-```c
-struct mg_iobuf {
-  unsigned char *buf;
-  size_t size, len;
-};
-```
-
-Generic IO buffer. The `size` specifies an allocation size of the data pointed
-by `buf`, and `len` specifies number of bytes currently stored.
-
-### mg\_iobuf\_init()
-
-```c
-int mg_iobuf_init(struct mg_iobuf *io, size_t size);
-```
-
-Initialize IO buffer, allocate `size` bytes. Return 1 on success,
-0 on allocation failure.
-
-
-### mg\_iobuf\_resize()
-
-```c
-int mg_iobuf_resize(struct mg_iobuf *io, size_t size);
-```
-
-Resize IO buffer, set the new size to `size`. The `io->buf` pointer could
-change after this, for example if the buffer grows. If `size` is 0, then the
-`io->buf` is freed and set to NULL, and both `size` and `len` are set to 0.
-Return 1 on success, 0 on allocation failure.
-
-
-### mg\_iobuf\_free()
-
-```c
-void mg_iobuf_free(struct mg_iobuf *io);
-```
-
-Free memory pointed by `io->buf` and set to NULL. Both `size` and `len` are set
-to 0.
-
-
-### mg\_iobuf\_add()
-
-```c
-size_t mg_iobuf_add(struct mg_iobuf *io, size_t offset, const void *buf, size_t len, size_t granularity);
-```
-
-Insert data buffer `buf`, `len` at offset `offset`. The iobuf gets
-is expanded if required. The resulting `io->size` is always
-aligned to the `granularity` byte boundary. Example:
-
-```c
-struct mg_iobuf io;
-mg_iobuf_init(&io, 0);               // Empty buffer
-mg_iobuf_add(&io, 0, "hi", 2, 512);  // io->len is 2, io->size is 512
-```
-
-### mg\_iobuf\_del()
-
-```c
-size_t mg_iobuf_del(struct mg_iobuf *io, size_t offset, size_t len);
-```
-
-Delete `len` bytes starting from `offset`, and shift the remaining
-bytes. If `len` is greater than `io->len`, nothing happens,
-so such call is silently ignored.
-
-
 ## HTTP
 
 ### struct mg\_http\_header
@@ -1115,7 +1042,7 @@ can be overridden by setting `MG_ENABLE_CUSTOM_RANDOM` and defining
 your own `mg_random()` implementation.
 
 
-## Timers
+## Time
 
 
 ### struct mg\_timer
@@ -1171,6 +1098,34 @@ void mg_timer_poll(unsigned long uptime_ms);
 
 Traverse list of timers, and call them if current timestamp `uptime_ms` is
 past the timer's expiration time.
+
+### mg\_time()
+
+```
+double mg_time(void);
+```
+
+Return current time as UNIX epoch, using `double` value for sub-second accuracy.
+
+
+### mg\_millis()
+
+```c
+unsigned long mg_millis(void);
+```
+
+Return current uptime in milliseconds.
+
+
+### mg\_usleep()
+
+```c
+void mg_usleep(unsigned long usecs);
+```
+
+Block for a given number of microseconds.
+
+
 
 ## String
 
@@ -1362,32 +1317,6 @@ uint32_t mg_ntohl(uint32_t net);
 Convert `uint32_t` value to host order.
 
 
-### mg\_time()
-
-```
-double mg_time(void);
-```
-
-Return current time as UNIX epoch, using `double` value for sub-second accuracy.
-
-
-### mg\_millis()
-
-```c
-unsigned long mg_millis(void);
-```
-
-Return current uptime in milliseconds.
-
-
-### mg\_usleep()
-
-```c
-void mg_usleep(unsigned long usecs);
-```
-
-Block for a given number of microseconds.
-
 ### mg\_crc32()
 
 ```c
@@ -1418,3 +1347,76 @@ Usage example:
     LOG(LL_INFO, ("NOT ALLOWED!"));
   }
 ```
+
+## IO Buffers
+
+### struct mg\_iobuf
+
+```c
+struct mg_iobuf {
+  unsigned char *buf;
+  size_t size, len;
+};
+```
+
+Generic IO buffer. The `size` specifies an allocation size of the data pointed
+by `buf`, and `len` specifies number of bytes currently stored.
+
+### mg\_iobuf\_init()
+
+```c
+int mg_iobuf_init(struct mg_iobuf *io, size_t size);
+```
+
+Initialize IO buffer, allocate `size` bytes. Return 1 on success,
+0 on allocation failure.
+
+
+### mg\_iobuf\_resize()
+
+```c
+int mg_iobuf_resize(struct mg_iobuf *io, size_t size);
+```
+
+Resize IO buffer, set the new size to `size`. The `io->buf` pointer could
+change after this, for example if the buffer grows. If `size` is 0, then the
+`io->buf` is freed and set to NULL, and both `size` and `len` are set to 0.
+Return 1 on success, 0 on allocation failure.
+
+
+### mg\_iobuf\_free()
+
+```c
+void mg_iobuf_free(struct mg_iobuf *io);
+```
+
+Free memory pointed by `io->buf` and set to NULL. Both `size` and `len` are set
+to 0.
+
+
+### mg\_iobuf\_add()
+
+```c
+size_t mg_iobuf_add(struct mg_iobuf *io, size_t offset, const void *buf, size_t len, size_t granularity);
+```
+
+Insert data buffer `buf`, `len` at offset `offset`. The iobuf gets
+is expanded if required. The resulting `io->size` is always
+aligned to the `granularity` byte boundary. Example:
+
+```c
+struct mg_iobuf io;
+mg_iobuf_init(&io, 0);               // Empty buffer
+mg_iobuf_add(&io, 0, "hi", 2, 512);  // io->len is 2, io->size is 512
+```
+
+### mg\_iobuf\_del()
+
+```c
+size_t mg_iobuf_del(struct mg_iobuf *io, size_t offset, size_t len);
+```
+
+Delete `len` bytes starting from `offset`, and shift the remaining
+bytes. If `len` is greater than `io->len`, nothing happens,
+so such call is silently ignored.
+
