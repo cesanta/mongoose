@@ -100,7 +100,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   described for each event. Protocol-specific events usually have `ev_data`
   pointing to structures that hold protocol-specific information
 - `void *fn_data` - a user-defined pointer for the connection, which is a
-  placeholder for application-specific data
+  placeholder for application-specific data. This `fn_data` pointer is set
+  during the `*_listen()` or `*_connect()` call, and it is stored in the
+  `c->fn_data`. Listening connections copy the value of `c->fn_data` to the
+  newly accepted connection, so all accepted connections initially share the
+  same `fn_data` pointer. It is fine to update/replace that pointer for
+  any connection at any time by setting `c->fn_data = new_value;`
 
 ## Events
 
