@@ -10,11 +10,10 @@ by a vast number of open source and commercial products - it even runs on the
 International Space Station! Mongoose makes embedded network programming fast,
 robust, and easy.
 
-Mongoose has three basic data structures:
+Mongoose has two basic data structures:
 
 - `struct mg_mgr` - an event manager that holds all active connections
-- `struct mg_connection` - describes a connection
-- `struct mg_iobuf` - describes data buffer (received or sent data)
+- `struct mg_connection` - a single connection descriptor
 
 Connections could be either listening, outbound or inbound. Outbound
 connections are created by the `mg_connect()` call. Listening connections are
