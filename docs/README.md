@@ -1397,12 +1397,13 @@ to 0.
 ### mg\_iobuf\_add()
 
 ```c
-size_t mg_iobuf_add(struct mg_iobuf *io, size_t offset, const void *buf, size_t len, size_t granularity);
+size_t mg_iobuf_add(struct mg_iobuf *io, size_t offset, const void *buf, size_t len, size_t align);
 ```
 
 Insert data buffer `buf`, `len` at offset `offset`. The iobuf gets
 is expanded if required. The resulting `io->size` is always
-aligned to the `granularity` byte boundary. Example:
+aligned to the `align` byte boundary - therefore, to avoid memory fragmentation
+and frequent reallocations, set `align` to a higher value. Example:
 
 ```c
 struct mg_iobuf io;
