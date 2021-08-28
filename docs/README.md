@@ -1073,7 +1073,7 @@ is that there is no QoS in unsubscribe request.
 
 ## TLS
 
-### mg\_tls\_init()
+### struct mg\_tls\_opts
 
 ```c
 struct mg_tls_opts {
@@ -1083,6 +1083,28 @@ struct mg_tls_opts {
   const char *ciphers;   // Cipher list
   struct mg_str srvname; // If not empty, enables server name verification
 };
+```
+
+TLS initialisation structure:
+- `ca` - Certificate Authority. Can be a filename, or a string. Used to verify
+  a certificate that other end sends to us. If NULL, then certificate checking
+  is disabled
+- `cert` - our own certificate. Can be a filename, or a string. If NULL, then
+  we don't authenticate with the other peer
+- `certkey` - a key for a `cert`. Sometimes, a certificate and its key are
+  bundled in a single .pem file, in which case the values for `cert` and
+  `certkey` could be the same
+- `ciphers` - a list of allowed ciphers
+- `srvname` - enable server name verification
+
+
+NOTE: if both `ca` and `cert` are set, then so-called two-way TLS is enabled,
+when both sides authenticate with each other. Usually, server-side connections
+set both `ca` and `cert`, whilst client-side - only `ca`.
+
+### mg\_tls\_init()
+
+```c
 int mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts);
 ```
 
