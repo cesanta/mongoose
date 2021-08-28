@@ -1234,7 +1234,7 @@ Same as `mg_asprintf()` but uses `va_list` argument.
 
 ### mg\_to64()
 
-```
+```c
 int64_t mg_to64(const char *s);
 ```
 
@@ -1242,7 +1242,7 @@ Parse 64-bit integer value held by string `s`.
 
 ### mg\_aton()
 
-```
+```c
 bool mg_aton(struct mg_str str, uint32_t *ipaddr);
 ```
 
