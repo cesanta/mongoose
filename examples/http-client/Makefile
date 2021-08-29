@@ -14,7 +14,7 @@ CFLAGS += -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
 all: $(PROG)
-	$(DEBUGGER) ./$(PROG) $(ARGS)
+	$(RUN) ./$(PROG) $(ARGS)
 
 $(PROG): main.c
 	$(CC) ../../mongoose.c -I../.. -W -Wall $(CFLAGS) -o $(PROG) main.c
@@ -22,7 +22,7 @@ $(PROG): main.c
 linux: all
 linux: CFLAGS += -O2 -g -fsanitize=address,undefined,shift,null,return,bounds,alignment,object-size,bool,enum -static-libasan
 linux: CC = $(LIN) cc
-linux: DEBUGGER = $(LIN)
+linux: RUN = $(LIN)
 
 clean:
 	rm -rf $(PROG) *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb

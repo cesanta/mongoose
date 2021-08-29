@@ -77,13 +77,15 @@ static int rng_get(void *p_rng, unsigned char *buf, size_t len) {
 void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   int rc = 0;
-  const char *ca =
-      opts->ca == NULL ? "-" : opts->ca[0] == '-' ? "(emb)" : opts->ca;
-  const char *cert =
-      opts->cert == NULL ? "-" : opts->cert[0] == '-' ? "(emb)" : opts->cert;
-  const char *certkey = opts->certkey == NULL
-                            ? "-"
-                            : opts->certkey[0] == '-' ? "(emb)" : opts->certkey;
+  const char *ca = opts->ca == NULL     ? "-"
+                   : opts->ca[0] == '-' ? "(emb)"
+                                        : opts->ca;
+  const char *cert = opts->cert == NULL     ? "-"
+                     : opts->cert[0] == '-' ? "(emb)"
+                                            : opts->cert;
+  const char *certkey = opts->certkey == NULL     ? "-"
+                        : opts->certkey[0] == '-' ? "(emb)"
+                                                  : opts->certkey;
   if (tls == NULL) {
     mg_error(c, "TLS OOM");
     goto fail;
@@ -331,9 +333,8 @@ void mg_tls_handshake(struct mg_connection *c) {
     LOG(LL_DEBUG, ("%lu success", c->id));
     c->is_tls_hs = 0;
   } else {
-    int code;
+    int code = mg_tls_err(tls, rc);
     ERR_print_errors_fp(stderr);
-    code = mg_tls_err(tls, rc);
     if (code != 0) mg_error(c, "tls hs: rc %d, err %d", rc, code);
   }
 }
