@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 struct mg_iobuf {
-  unsigned char *buf;  // Data
+  unsigned char *buf;  // Pointer to stored data
   size_t size;         // Total size available
   size_t len;          // Current number of bytes
 };

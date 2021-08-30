@@ -1354,12 +1354,17 @@ Usage example:
 
 ## IO Buffers
 
+IO buffer, described by the `struct mg_iobuf`, is a simple data structure
+that insert or delete chunks of data at arbitrary offsets and grow/shrink
+automatically.
+
 ### struct mg\_iobuf
 
 ```c
 struct mg_iobuf {
-  unsigned char *buf;
-  size_t size, len;
+  unsigned char *buf;  // Pointer to stored data
+  size_t size;         // Total size available
+  size_t len;          // Current number of bytes
 };
 ```
 
