@@ -227,6 +227,8 @@ static int mg_tls_err(struct mg_tls *tls, int res) {
   //  - *ALL* SSL accepted connection report read error on the next poll cycle.
   //    Thus a single errored connection can close all the rest, unrelated ones.
   // Clearing the error keeps the shared SSL_CTX in an OK state.
+
+  if (err != 0) ERR_print_errors_fp(stderr);
   ERR_clear_error();
   if (err == SSL_ERROR_WANT_READ) return 0;
   if (err == SSL_ERROR_WANT_WRITE) return 0;
@@ -334,7 +336,6 @@ void mg_tls_handshake(struct mg_connection *c) {
     c->is_tls_hs = 0;
   } else {
     int code = mg_tls_err(tls, rc);
-    ERR_print_errors_fp(stderr);
     if (code != 0) mg_error(c, "tls hs: rc %d, err %d", rc, code);
   }
 }
