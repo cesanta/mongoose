@@ -24,11 +24,12 @@ struct mg_lwip_conn_state {
   struct pbuf *rx_chain; /* Chain of incoming data segments. */
   size_t rx_offset; /* Offset within the first pbuf (if partially consumed) */
   /* Last SSL write size, for retries. */
-  int last_ssl_write_size;
+  unsigned int last_ssl_write_size : 16;
+  unsigned int rx_chain_len : 8;
   /* Whether MG_SIG_RECV is already pending for this connection */
-  int recv_pending;
+  unsigned int recv_pending : 1;
   /* Whether the connection is about to close, just `rx_chain` needs to drain */
-  int draining_rx_chain;
+  unsigned int draining_rx_chain : 1;
 };
 
 enum mg_sig_type {
