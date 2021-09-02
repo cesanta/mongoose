@@ -155,10 +155,10 @@ static void posix_list(const char *dir, void (*fn)(const char *, void *),
 }
 
 static struct mg_fd *posix_open(const char *path, int flags) {
-  const char *mode =
-      flags & (MG_FS_READ | MG_FS_WRITE)
-          ? "r+b"
-          : flags & MG_FS_READ ? "rb" : flags & MG_FS_WRITE ? "wb" : "";
+  const char *mode = flags == (MG_FS_READ | MG_FS_WRITE) ? "r+b"
+                     : flags & MG_FS_READ                ? "rb"
+                     : flags & MG_FS_WRITE               ? "wb"
+                                                         : "";
   void *fp = NULL;
   struct mg_fd *fd = NULL;
 #ifdef _WIN32
