@@ -506,7 +506,7 @@ Return value: created connection, or `NULL` on error.
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 // Processing Mongoose events
 }
@@ -537,7 +537,7 @@ Return value: created connection, or `NULL` on error.
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 // Processing Mongoose events
 }
@@ -670,7 +670,7 @@ struct mg_mgr mgr;
 // Mgr initialization
 // ...
 
-// Mongoose event handler
+// Mongoose events handler
 static void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 // Processing Mongoose events
 }
@@ -775,7 +775,7 @@ struct mg_mgr mgr;
 // Mgr initialization
 // ...
 
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 // Processing Mongoose events
 }
@@ -877,7 +877,7 @@ Remove chunk specified by `hm` from input buffer.
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_CHUNK) { // Chunk received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -904,7 +904,7 @@ enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) { // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -928,7 +928,7 @@ Serve static file. Note that the `extra_headers` must end with `\r\n`.
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) { // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -992,6 +992,7 @@ Return value of `name` HTTP header, or NULL if not found.
 Usage example:
 
 ```c
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) { // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -1045,7 +1046,7 @@ If none is found, then both user and pass are set to empty nul-terminated string
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) { // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -1066,7 +1067,7 @@ Return true if HTTP request matches a given glob pattern; false otherwise.
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {  // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -1117,7 +1118,7 @@ So, the expected usage of this API function is this:
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) { // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -1205,7 +1206,7 @@ Create client Websocket connection.
 Usage example: 
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 // Processing Mongoose events
 }
@@ -1235,7 +1236,7 @@ Websocket handshake. Set `fmt` to `NULL` if no extra headers needs to be passed.
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {  // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -1264,7 +1265,7 @@ Send `buf` (`len` size) to the websocket peer. `op` is the Websocket message typ
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_WS_OPEN) {  // WS connection opened
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -1315,7 +1316,7 @@ struct mg_mgr mgr;
 // Mgr initialization
 // ...
 
-// Mongoose event handler
+// Mongoose events handler
 static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_SNTP_TIME) { SNTP message received
     // Time received
@@ -1398,7 +1399,7 @@ struct mg_mgr mgr;
 // Mgr initialization
 // ...
 
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *evd, void *fnd) {
   char *buf = (char *) fnd;
   if (ev == MG_EV_MQTT_OPEN) {
@@ -1451,7 +1452,7 @@ Send MQTT login request.
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *evd, void *fnd) {
   char *buf = (char *) fnd;
   if (ev == MG_EV_MQTT_OPEN) {  // MQTT connection open
@@ -1515,7 +1516,7 @@ Return next position, or 0 when done. Initial position `pos` should be 4. Exampl
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_MQTT_CMD) { // MQTT command received
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
@@ -1543,7 +1544,7 @@ is that there is no QoS in unsubscribe request.
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_MQTT_CMD) { // MQTT command received
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
@@ -1587,7 +1588,7 @@ Send MQTT command header. Useful in MQTT server implementation. Command can be o
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_MQTT_CMD) { // MQTT command received
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
@@ -2275,7 +2276,7 @@ Send `ev` event to `c` event handler. This function is useful then implementing 
 Usage example:
 
 ```c
-// Mongoose event handler
+// Mongoose events handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_WS_MSG) { Websocket Message received
     // ...
