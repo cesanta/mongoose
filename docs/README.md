@@ -332,10 +332,10 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 int main(int argc, char *argv[]) {
   struct mg_mgr mgr;
-  mg_mgr_init(&mgr);
-  mg_listen(&mgr, "tcp://0.0.0.0:1234", cb, &mgr);
-  for (;;) mg_mgr_poll(&mgr, 1000);
-  mg_mgr_free(&mgr);
+  mg_mgr_init(&mgr);                                // Init manager
+  mg_listen(&mgr, "tcp://0.0.0.0:1234", cb, &mgr);  // Setup listener
+  for (;;) mg_mgr_poll(&mgr, 1000);                 // Event loop
+  mg_mgr_free(&mgr);                                // Cleanup    
   return 0;
 }
 ```
@@ -356,7 +356,7 @@ struct mg_addr {
 };
 ```
 
-Mongoose equivalent for sockets `sockaddr` structure.
+This structure contains network address, it can be considered as a Mongoose equivalent for sockets `sockaddr` structure.
  
 ### struct mg\_mgr
 
@@ -411,7 +411,7 @@ struct mg_connection {
 A connection - either a listening connection, or an accepted connection,
 or an outbound connection.
 
-### mg\_mgr_init()
+### mg\_mgr\_init()
 
 ```c
 void mg_mgr_init(struct mg_mgr *mgr);
@@ -436,7 +436,7 @@ mg_mgr_init(&mgr);
 
 
 
-### mg\_mgr_poll()
+### mg\_mgr\_poll()
 
 ```c
 void mg_mgr_poll(struct mg_mgr *mgr, int ms);
@@ -479,8 +479,10 @@ Usage example:
 
 ```c
 struct mg_mgr mgr;
-...
+// App code here
+// ...
 
+// Time to cleanup
 mg_mgr_free(&mgr);
 ```
 
@@ -504,12 +506,14 @@ Return value: created connection, or `NULL` on error.
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  ...
+// Processing Mongoose events
 }
 
 struct mg_mgr mgr;
-...
+// Initialization
+// ...
 
 struct mg_connection *lc = mg_listen(&mgr, "tcp://127.0.0.1:8080", handler, NULL); 
 ```
@@ -533,12 +537,14 @@ Return value: created connection, or `NULL` on error.
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  ...
+// Processing Mongoose events
 }
 
 struct mg_mgr mgr;
-...
+// Initialization
+// ...
 
 struct mg_connection *c = mg_connect(&mgr, "http://example.org", handler, NULL); 
 ```
@@ -560,7 +566,9 @@ Usage example:
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 char data="Hello, world!";
 mg_send(c, data, sizeof(data) - 1); // Add "Hello, world!" to output buffer
 ```
@@ -578,7 +586,9 @@ Usage example:
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 mg_printf(c, "Hello, %s!", "world"); // Add "Hello, world!" to output buffer
 ```
 
@@ -594,15 +604,16 @@ Usage example:
 
 ```c
 void foo(struct mg_connection *c, const char *fmt, ...) {
-      va_list ap;
-      va_start(ap, fmt);
-      mg_vprintf(c, fmt, ap);
-      va_end(ap);
+  va_list ap;
+  va_start(ap, fmt);
+  mg_vprintf(c, fmt, ap);
+  va_end(ap);
 }
 
-...
-struct mg_connection *c
-...
+// ...
+struct mg_connection *c;
+// Connection initialization
+// ...
 
 foo(c, "Hello, %s!", "world"); // Add "Hello, world!" to output buffer
 ```
@@ -619,10 +630,11 @@ Usage example:
 
 ```c
 struct mg_connection *c;
+// Connection initialization
+// ...
 
-...
 char buf[1024];
-mg_straddr(c, buf, sizeof(buf)); // buf is now IP address string, like "127.0.0.1:8080"
+mg_straddr(c, buf, sizeof(buf)); // `buf` is now IP address string, like "127.0.0.1:8080"
 ```
 
 ### mg\_mkpipe()
@@ -655,12 +667,15 @@ Usage example:
 
 ```c
 struct mg_mgr mgr;
-...
+// Mgr initialization
+// ...
+
+// Mongoose event handler
 static void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-...
+// Processing Mongoose events
 }
 
-...
+// ...
 
 struct mg_connection *c = mg_mkpipe(&mgr, handler, NULL);
 
@@ -679,8 +694,6 @@ must be called from a separate task/thread. Parameters:
 
 - `pipe` - a special connection created by the `mg_mkpipe()` call
 
-Return values: none
-
 Usage example:
 
 ```c
@@ -695,8 +708,8 @@ mg_mgr_wakeup(c);
 
 ```c
 struct mg_http_header {
-  struct mg_str name;   // header name
-  struct mg_str value;  // header value
+  struct mg_str name;   // Header name
+  struct mg_str value;  // Header value
 };
 ```
 
@@ -707,10 +720,10 @@ struct mg_http_message {
   //        GET /foo/bar/baz?aa=b&cc=ddd HTTP/1.1
   // method |-| |----uri---| |--query--| |proto-|
 
-  struct mg_str method, uri, query, proto;  // Request/response line
+  struct mg_str method, uri, query, proto;             // Request/response line
   struct mg_http_header headers[MG_MAX_HTTP_HEADERS];  // Headers
-  struct mg_str body;                       // Body
-  struct mg_str message;                    // Request line + headers + body
+  struct mg_str body;                                  // Body
+  struct mg_str message;                               // Request line + headers + body
 };
 ```
 
@@ -731,9 +744,13 @@ Create HTTP listener.
 Usage example:
 
 ```c
+struct mg_mgr mgr;
+// Mgr initialization
+// ...
+
 struct mg_connection *c = mg_http_listen(&mgr, "0.0.0.0:8000", fn, arg); 
 if (c != NULL) {
-  // Successfully started listening on port 8000
+// Successfully started listening on port 8000
 }
 ```
 
@@ -755,14 +772,19 @@ Usage example:
 
 ```c
 struct mg_mgr mgr;
-...
+// Mgr initialization
+// ...
+
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  //...
+// Processing Mongoose events
 }
-...
+
+// ...
+
 struct mg_connection *c = mg_http_connect(&mgr, "http://google.com", handler, NULL);
 if (c != NULL) {
-  // Connection created successfully 
+// Connection created successfully 
 }
 ```
 
@@ -773,18 +795,17 @@ if (c != NULL) {
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len);
 ```
 
-Return value: -1 on error,
-0 if a message is incomplete, or the length of request. The length of
-request is a number of bytes till the end of HTTP headers. It does not include
-length of HTTP body.
+Return length of request in `buf` (with maximum len `buf_len`).
+
+The length of request is a number of bytes till the end of HTTP headers. It does not include length of HTTP body. 
+Return value: -1 on error, 0 if a message is incomplete, or the length of request. 
 
 Usage example:
 
 ```c
 char buf[1024]; // Input buffer, for ex: "GET /test \n\nGET /test \n\nGET /test \n\n"
 size_t buf_len; // Input buffer size
-..
-struct mg_http_message hm;
+// ... 
 int req_len = mg_http_get_request_len(buf, buf_len); // req_len is now 12
 ```
 
@@ -794,15 +815,14 @@ int req_len = mg_http_get_request_len(buf, buf_len); // req_len is now 12
 int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm);
 ```
 
-Parse string `s`, `len` into a structure `hm`. Return request length - see
-`mg_http_get_request_len()`.
+Parse string `s` (with maximum size `len`) into a structure `hm`. Return request length - see `mg_http_get_request_len()`.
 
 Usage example:
 
 ```c
 char req[1024]; // Received request, for ex: "GET /test HTTP/1.0\r\nFoo:  bar  \r\n\r\n"
 size_t req_len; // Received request len
-..
+// ...
 struct mg_http_message hm;
 if(mg_http_parse(req, req_len, &hm) > 0) {
   // Parsed successfully 
@@ -821,7 +841,9 @@ Usage example:
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 mg_http_printf_chunk(c, "Hello, %s!", "world"); // Encoded "Hello, world!" is added to output buffer
 ```
 
@@ -837,24 +859,27 @@ Usage example:
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 char data[] = "Hello, world!";
 mg_http_write_chunk(c, data, sizeof(data) - 1); // Encoded "Hello, world!" is added to output buffer
 ```
 
-### mg\_http\_delete\_chunk
+### mg\_http\_delete\_chunk()
 
 ```c
 void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm);
 ```
 
-Remove chunk from input buffer.
+Remove chunk specified by `hm` from input buffer.
 
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_CHUNK) {
+  if (ev == MG_EV_HTTP_CHUNK) { // Chunk received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     mg_http_delete_chunk(c, hm); // Remove received chunk
   }
@@ -879,13 +904,14 @@ enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_MSG) { // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts sopts;
     memset(&sopts, 0, sizeof(sopts));
     sopts.root_dir = "/my_root";
-    mg_http_serve_dir(c, hm, &sopts);    
+    mg_http_serve_dir(c, hm, &sopts); // Send directory information 
   }
 }
 ```
@@ -902,12 +928,13 @@ Serve static file. Note that the `extra_headers` must end with `\r\n`.
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_MSG) { // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts opts = {.mime_types = "png=image/png", 
                                   .extra_headers = "AA: bb\r\nCC: dd\r\n"};
-    mg_http_serve_file(c, hm, "a.png", &opts);   
+    mg_http_serve_file(c, hm, "a.png", &opts);  // Send file information
   }
 }
 ```
@@ -915,8 +942,8 @@ void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_http\_reply()
 
 ```c
-void mg_http_reply(struct mg_connection *c, int status_code, const char *headers,
-                   const char *body_fmt, ...);
+void mg_http_reply(struct mg_connection *c, int status_code, 
+                   const char *headers, const char *body_fmt, ...);
 ```
 
 Send simple HTTP response using `printf()` semantic. This function formats
@@ -928,12 +955,15 @@ parameter.
 - `headers` - extra headers, default NULL. If not NULL, must end with `\r\n`
 - `fmt` - a format string for the HTTP body, in a printf semantics
 
-Example - send a simple JSON respose:
+Usage examples:
+
+
+Send a simple JSON respose:
 ```c
 mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"result\": %d}", 123);
 ```
 
-Example - send JSON response using [mjson](https://github.com/cesanta/mjson) library:
+Send JSON response using [mjson](https://github.com/cesanta/mjson) library:
 ```c
 char *json = NULL;
 mjson_printf(mjson_print_dynamic_buf, &json, "{%Q:%d}", "name", 123);
@@ -941,14 +971,14 @@ mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", json);
 free(json);
 ```
 
-Example - send a 302 redirect:
+Send a 302 redirect:
 ```c
 mg_http_reply(c, 302, "Location: /\r\n", "");
 ```
 
-Example - send error:
+Send error:
 ```c
-mg_http_reply(c, 403, "", "%s", "Not Authorised\n");
+mg_http_reply(c, 403, "", "%s", "Not Authorized\n");
 ```
 
 ### mg\_http\_get\_header()
@@ -957,14 +987,15 @@ mg_http_reply(c, 403, "", "%s", "Not Authorised\n");
 struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
 ```
 
-Return value of HTTP header, or NULL if not found.
+Return value of `name` HTTP header, or NULL if not found.
 
 Usage example:
 
 ```c
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_MSG) { // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    // Get "X-Extra-Header" header value 
     struct mg_str *header = mg_http_get_header(hm, "X-Extra-Header");
     if(header != NULL) {
       // Use header
@@ -986,21 +1017,13 @@ Usage example:
 
 ```c
 struct mg_str body; // request body
+// ...
+
 char buf[256];
 if(mg_http_get_var(&body, "key1", buf, sizeof(buf)) {
   // "key1" value successfully retrieved 
 }
 ```
-
-### mg\_url\_decode()
-
-```c
-int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
-```
-
-URL-decode string `s`, `n` unto a buffer `buf`, `len`. Return decoded length.
-If `form` is non-zero, then `+` is decoded as whitespace.
-
 
 ### mg\_http\_creds()
 
@@ -1022,11 +1045,12 @@ If none is found, then both user and pass are set to empty nul-terminated string
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_MSG) { // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     char user[100], pass[100];
-    mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass)); // user is now user name and pass is now password  
+    mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass)); // "user" is now user name and "pass" is now password from request
   }
 }
 ```
@@ -1042,11 +1066,13 @@ Return true if HTTP request matches a given glob pattern; false otherwise.
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_MSG) {  // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/test_uri")) {
+    if (mg_http_match_uri(hm, "/test_uri")) { 
       // HTTP request to /test_uri
+      // ...
     }
   }
 }
@@ -1091,8 +1117,9 @@ So, the expected usage of this API function is this:
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_MSG) { // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     mg_http_upload(c, hm, "."); // Upload to current folder 
   }
@@ -1109,9 +1136,11 @@ Write a Basic `Authorization` header to the output buffer.
 Usage example:
 
 ```c
-  struct mg_connection *c;
-  ...
-  mg_http_bauth(c, "user_name", "password") // user_name:password is now in output buffer
+struct mg_connection *c;
+// Connection initialization
+// ...
+
+mg_http_bauth(c, "user_name", "password") // "user_name:password" is now in output buffer
 ```
 
 ### mg\_http\_next\_multipart()
@@ -1128,16 +1157,16 @@ size_t mg_http_next_multipart(struct mg_str body, size_t offset, struct mg_http_
 ```
 
 Parse the multipart chunk in the `body` at a given `offset`. An initial
-`offset` should be 0. Fill up parameters in the provided `part`, which could be
-NULL. Return offset to the next chunk, or 0 if there are no more chunks.
+`offset` should be 0. Fill up parameters in the provided `part`, which could be NULL. Return offset to the next chunk, or 0 if there are no more chunks.
 
-See `form-upload` example for a usage example.
+See [examples/form-upload](../examples/form-upload) for full usage example.
 
 Usage example:
 
 ```c
 struct mg_str *body; // received body
-...
+// ...
+
 struct mg_http_part part;
 if(mg_http_next_multipart(body, 0 /* begin */, &part)) {
   // Use part
@@ -1150,7 +1179,7 @@ if(mg_http_next_multipart(body, 0 /* begin */, &part)) {
 
 ```c
 struct mg_ws_message {
-  struct mg_str data; // Message data
+  struct mg_str data; // Websocket message data
   uint8_t flags;      // Websocket message flags
 };
 ```
@@ -1176,16 +1205,19 @@ Create client Websocket connection.
 Usage example: 
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-...
+// Processing Mongoose events
 }
-...
+// ...
 struct mg_mgr mgr;
-...
-struct mg_connection *c = mg_ws_connect(&mgr, "ws://test_ws_server.com:1000", handler, NULL,
-                                        "%s", "Sec-WebSocket-Protocol: echo\r\n");
+// Mgr initialization
+// ...
+
+struct mg_connection *c = mg_ws_connect(&mgr, "ws://test_ws_server.com:1000", 
+                                        handler, NULL, "%s", "Sec-WebSocket-Protocol: echo\r\n");
 if(c != NULL) {
-  // Connection created successfully 
+// Connection created successfully 
 }
 ```
 
@@ -1203,10 +1235,11 @@ Websocket handshake. Set `fmt` to `NULL` if no extra headers needs to be passed.
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_MSG) {  // HTTP message received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_ws_upgrade(c, hm, NULL);
+    mg_ws_upgrade(c, hm, NULL);  // Upgrade HTTP to WS
   }
 }
 ```
@@ -1217,7 +1250,7 @@ void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 size_t mg_ws_send(struct mg_connection *, const char *buf, size_t len, int op);
 ```
 
-Send `buf`, `len` to the websocket peer. `op` is the Websocket message type:
+Send `buf` (`len` size) to the websocket peer. `op` is the Websocket message type:
 
 ```c
 #define WEBSOCKET_OP_CONTINUE 0
@@ -1231,33 +1264,36 @@ Send `buf`, `len` to the websocket peer. `op` is the Websocket message type:
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_WS_OPEN) {
+  if (ev == MG_EV_WS_OPEN) {  // WS connection opened
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     mg_ws_send(c, "opened", 6, WEBSOCKET_OP_BINARY);  // Send "opened" to web socket connection
   }
 }
 ```
 
-### mg\_ws\_wrap
+### mg\_ws\_wrap()
 
 ```c
 size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op)
 ```
 
 Convert data in output buffer to WebSocket format. Useful then implementing protocol over WebSocket
-See mongoose/examples/mqtt-over-ws-client for full example.
+See [examples/mqtt-over-ws-client](../examples/mqtt-over-ws-client) for full example.
 
 Usage example:
 
 ```c
 struct mg_connection *c;
-...
-struct mg_mqtt_opts opts
+// Connection initialization
+// ...
 
 size_t len = c->send.len;         // Store output buffer len
+struct mg_mqtt_opts opts
 mg_mqtt_login(c, s_url, &opts);  // Prepare output buffer data
-mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY); // Convert output buffer into binary websocket format
+
+mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY); // Convert output buffer to binary websocket format
 ```
 
 ## SNTP
@@ -1269,17 +1305,19 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
                                       mg_event_handler_t fn, void *fn_data)
 ```
 
-Connect SNTP server pointed by `url` or `time.google.com` if NULL.
+Connect SNTP server specified by `url` or `time.google.com` if NULL.
 Return pointer to created connection or `NULL` on error.
 
 Usage example:
 
 ```c
 struct mg_mgr mgr;
-...
+// Mgr initialization
+// ...
 
+// Mongoose event handler
 static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
-  if (ev == MG_EV_SNTP_TIME) {
+  if (ev == MG_EV_SNTP_TIME) { SNTP message received
     // Time received
     struct timeval *tv = (struct timeval *tv)evd;
   }
@@ -1288,7 +1326,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
 struct mg_connection *c = mg_sntp_connect(mgr&, NULL /* connect to time.google.com */,
                                           sntp_cb, NULL);
 if (c != NULL) {
-  // Connection created
+  // Connection successfully created
 }                                          
 ```
 
@@ -1299,14 +1337,16 @@ void mg_sntp_send(struct mg_connection *c, unsigned long utc)
 ```
 
 Send time request to SNTP server. Note, that app can't send SNTP request more often than every 1 hour.
-`utc` is a current time - used to indicate if new request is possible.
+`utc` is a current time, used to indicate if new request is possible.
 
 Usage example:
 
 ```c
 struct mg_connection *c;
-...
- mg_sntp_send(c, (unsigned long) time(NULL));
+// Connection initialization
+// ...
+
+mg_sntp_send(c, (unsigned long) time(NULL));
 ```
 
 ## MQTT
@@ -1354,6 +1394,11 @@ Create client MQTT connection.
 Usage example:
 
 ```c
+struct mg_mgr mgr;
+// Mgr initialization
+// ...
+
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *evd, void *fnd) {
   char *buf = (char *) fnd;
   if (ev == MG_EV_MQTT_OPEN) {
@@ -1384,6 +1429,10 @@ Create MQTT listener.
 Usage example:
 
 ```c
+struct mg_mgr mgr;
+// Mgr initialization
+// ...
+
 struct mg_connection *c = mg_mqtt_listen(&mgr, "0.0.0.0:1883", fn, arg); 
 if (c != NULL) {
   // Successfully started listening on port 1833
@@ -1402,9 +1451,10 @@ Send MQTT login request.
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *evd, void *fnd) {
   char *buf = (char *) fnd;
-  if (ev == MG_EV_MQTT_OPEN) {
+  if (ev == MG_EV_MQTT_OPEN) {  // MQTT connection open
     struct mg_mqtt_opts opts = {.qos = 1,
                                 .will_topic = mg_str("my topic"),
                                 .will_message = mg_str("goodbye")};
@@ -1426,7 +1476,9 @@ Usage example:
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 struct mg_str topic = mg_str("topic");
 struct mg_str data = mg_str("data");
 
@@ -1443,7 +1495,9 @@ Subscribe to topic `topic` with given QoS.
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 struct mg_str topic = mg_str("topic");
 mg_mqtt_sub(c, &topic, 1);
 ```
@@ -1461,14 +1515,17 @@ Return next position, or 0 when done. Initial position `pos` should be 4. Exampl
 Usage example:
 
 ```c
-if (ev == MG_EV_MQTT_CMD) {
-  struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-  if (mm->cmd == MQTT_CMD_SUBSCRIBE) {
-    size_t pos = 4;
-    uint8_t qos;
-    struct mg_str topic;
-    while ((pos = mg_mqtt_next_sub(mm, &topic, &qos, pos)) > 0) {
-      LOG(LL_INFO, ("SUB [%.*s]", (int) topic.len, topic.ptr));
+// Mongoose event handler
+void handler(struct mg_connection *c, int ev, void *evd, void *fnd) {
+  if (ev == MG_EV_MQTT_CMD) { // MQTT command received
+    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
+    if (mm->cmd == MQTT_CMD_SUBSCRIBE) { // "Subscribe" command
+      size_t pos = 4;
+      uint8_t qos;
+      struct mg_str topic;
+      while ((pos = mg_mqtt_next_sub(mm, &topic, &qos, pos)) > 0) { // Traverse subscribed topics
+        LOG(LL_INFO, ("SUB [%.*s]", (int) topic.len, topic.ptr)); 
+      }
     }
   }
 }
@@ -1486,19 +1543,24 @@ is that there is no QoS in unsubscribe request.
 Usage example:
 
 ```c
-if (ev == MG_EV_MQTT_CMD) {
-  struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-  if (mm->cmd == MQTT_CMD_UNSUBSCRIBE) {
-    size_t pos = 4;
-    struct mg_str topic;
-    while ((pos = mg_mqtt_next_unsub(mm, &topic, pos)) > 0) {
-      LOG(LL_INFO, ("SUB [%.*s]", (int) topic.len, topic.ptr));
-    }
+// Mongoose event handler
+void handler(struct mg_connection *c, int ev, void *evd, void *fnd) {
+  if (ev == MG_EV_MQTT_CMD) { // MQTT command received
+    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
+    if (mm->cmd == MQTT_CMD_UNSUBSCRIBE) {  // "Unsubscribe" command
+      size_t pos = 4;
+      struct mg_str topic;
+      if (mm->cmd == MQTT_CMD_UNSUBSCRIBE) {  // "Unsubscribe" command
+        while ((pos = mg_mqtt_next_unsub(mm, &topic, pos)) > 0) { // Traverse unsubscribed topics
+          LOG(LL_INFO, ("SUB [%.*s]", (int) topic.len, topic.ptr));
+        }
+      }
+   }
   }
 }
 ```
 
-### mg\_mqtt\_send_header
+### mg\_mqtt\_send_header()
 
 ```c
 void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags, uint32_t len);
@@ -1525,12 +1587,13 @@ Send MQTT command header. Useful in MQTT server implementation. Command can be o
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_MQTT_CMD) {
+  if (ev == MG_EV_MQTT_CMD) { // MQTT command received
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    if (mm->cmd == MQTT_CMD_CONNECT) {
+    if (mm->cmd == MQTT_CMD_CONNECT) {  Connect request
         uint8_t response[] = {0, 0};
-        mg_mqtt_send_header(c, MQTT_CMD_CONNACK, 0, sizeof(response));
+        mg_mqtt_send_header(c, MQTT_CMD_CONNACK, 0, sizeof(response));  // Send acknowledgement
         mg_send(c, response, sizeof(response));
     }
   }
@@ -1549,7 +1612,9 @@ Usage example:
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 mg_mqtt_ping(c);
 ```
 
@@ -1565,7 +1630,9 @@ Usage example:
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 mg_mqtt_pong(c);
 ```
 
@@ -1581,7 +1648,9 @@ Usage example:
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 mg_mqtt_disconnect(c);
 ```
 
@@ -1591,7 +1660,7 @@ mg_mqtt_disconnect(c);
 int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m);
 ```
 
-Parse buffer and fill `mg_mqtt_message` struct if buffer contain MQTT message.
+Parse buffer and fill `m` struct if buffer contain MQTT message.
 Return `MQTT_OK` if message succesfully parsed, `MQTT_INCOMPLETE` if message isn't fully receives and `MQTT_MALFORMED` is message has wrong format.
 
 Usage example:
@@ -1599,7 +1668,7 @@ Usage example:
 ```c
 uint8_t buf[1024]; // Received buffer
 size_t buf_len; // Received data len
-...
+// ...
 struct mg_mqtt_message m;
 if(mg_mqtt_parse(buf, buf_len, &m) == MQTT_OK) {
   // Message received
@@ -2588,10 +2657,11 @@ Usage example:
 ### mg\_url\_decode
 
 ```c
-int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int is_form_url_encoded);
+int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
 ```
 
-Decode URL-encoded string `s` and write it into `to` buffer. `is_form_url_encoded` should be set to non-zero if `s` is form url encoded (affects "+" sign decoding)
+Decode URL-encoded string `s` and write it into `to` buffer. 
+If `form` is non-zero, then `+` is decoded as whitespace.
 
 Usage example:
 

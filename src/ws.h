@@ -10,8 +10,8 @@
 #include "http.h"
 
 struct mg_ws_message {
-  struct mg_str data;
-  uint8_t flags;  // Websocket message flags
+  struct mg_str data; // Websocket message data
+  uint8_t flags;      // Websocket message flags
 };
 
 struct mg_connection *mg_ws_connect(struct mg_mgr *, const char *url,

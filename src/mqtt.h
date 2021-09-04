@@ -23,13 +23,13 @@
 #define MQTT_SET_QOS(flags, qos) (flags) = ((flags) & ~0x6) | ((qos) << 1)
 
 struct mg_mqtt_opts {
-  struct mg_str client_id;
-  struct mg_str will_topic;
-  struct mg_str will_message;
-  uint8_t qos;         // Quality of service
-  bool will_retain;    // Retain last will
-  bool clean;          // Use clean session, 0 or 1
-  uint16_t keepalive;  // Keep-alive timer in seconds
+  struct mg_str client_id;    // Client ID
+  struct mg_str will_topic;   // Will topic
+  struct mg_str will_message; // Will message
+  uint8_t qos;                // Quality of service
+  bool will_retain;           // Retain last will
+  bool clean;                 // Use clean session, 0 or 1
+  uint16_t keepalive;         // Keep-alive timer in seconds
 };
 
 struct mg_mqtt_message {
