@@ -1722,9 +1722,11 @@ Usage example:
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 struct mg_tls_opts opts = {0};
-opts.cert = get_my_cert();
+opts.cert = get_my_cert();  // Read cert (app specific)
 mg_tls_init(c, &opts);
 ```
 
@@ -1784,7 +1786,8 @@ Free timer, remove it from the internal timers list.
 Usage example:
 ```c
   struct mg_timer timer;
-  ...
+  // ...
+
   mg_timer_free(&timer);
 ```
 
@@ -1802,8 +1805,8 @@ Note, that `mg_mgr_poll` function internally calls `mg_timer_poll`, therefore, i
 Usage example:
 
 ```c
-  unsigned long now = mg_millis();
-  mg_timer_poll(now);
+unsigned long now = mg_millis();
+mg_timer_poll(now);
 ```
 
 ## Time
@@ -1819,7 +1822,7 @@ Return current time as UNIX epoch, using `double` value for sub-second accuracy.
 Usage example:
 
 ```c
-  double now = mg_time()
+double now = mg_time()
 ```
 
 ### mg\_millis()
@@ -1833,7 +1836,7 @@ Return current uptime in milliseconds.
 Usage example:
 
 ```c
-  unsigned long uptime = mg_millis();
+unsigned long uptime = mg_millis();
 ```
 
 ### mg\_usleep()
@@ -1847,14 +1850,14 @@ Block for a given number of microseconds.
 Usage example:
 
 ```c
-  mg_usleep(1000000 /* 1 sec */)
+mg_usleep(1000000 /* 1 sec */)
 ```
 
 ## String
 
 ### mg\_str
 
-In most cases, Mongoose uses mg_str struct for string representation rather than NULL-terminated C-strings.
+In most cases, Mongoose uses `mg_str` struct for string representation rather than NULL-terminated C-strings.
 
 ```
 struct mg_str {
@@ -1863,139 +1866,186 @@ struct mg_str {
 };
 ```
 
-Note, that in general, `ptr` points to non-NULL terminated string, so, do not use functions from C standard library
+Note, that in general, `ptr` points to non-NULL terminated string, so, do not use functions from C standard library on it.
 
+### mg\_str()
 
-### struct mg_str mg\_str(const char *s)
+```c
+struct mg_str mg_str(const char *s)
+```
 
 Create Mongoose string from NULL-terminated C-string. This function doesn't duplicate provided string, but stores pointer within created `mg_str` structure.  
 
-Note, that is you have problems (constructor shadowing) in C++, there is `mg_str_s` synonym for this function.
+Note, that is you have problems in C++ (constructor shadowing) C++, there is `mg_str_s` synonym for this function.
 
 Usage example:
+
 ```c
-  struct mg_str str = mg_str("Hello, world!);
+struct mg_str str = mg_str("Hello, world!);
 ```
 
-### struct mg_str mg\_str\_n(const char *s, size_t n)
+### mg\_str\_n()
+
+```c
+struct mg_str mg\_str\_n(const char *s, size_t n);
+```
 
 Create Mongoose string from C-string (can be non-NULL terminated). This function doesn't duplicate provided string, but stores pointer within created `mg_str` structure.  
 
 Usage example:
+
 ```c
-  char raw_str[] = "Hello, world!";
-  struct mg_str str = mg_str_n(raw_str, sizeof(raw_str));
+char raw_str[] = "Hello, world!";
+struct mg_str str = mg_str_n(raw_str, sizeof(raw_str));
 ```
 
-### int mg\_casecmp(const char *s1, const char *s2)
+### mg\_casecmp()
 
-Case insensitive compare two NULL-terminated strings
+```c
+int mg\_casecmp(const char *s1, const char *s2);
+```
+
+Case insensitive compare two NULL-terminated strings.
 Return value is 0 if strings are equal, more than zero if first argument is greater then second and less than zero otherwise.
 
 Usage example:
+
 ```c
-  if(mg_casecmp("hello", "HELLO") == 0) {
-    // Strings are equal
-  }
+if(mg_casecmp("hello", "HELLO") == 0) {
+  // Strings are equal
+}
 ```
 
-### int mg\_ncasecmp(const char *s1, const char *s2, size_t len)
+### mg\_ncasecmp()
+
+```c
+int mg\_ncasecmp(const char *s1, const char *s2, size_t len);
+```
 
 Case insensitive compare two C-strings, not more than `len` symbols or until meet `\0` symbol.
 
 Return value is 0 if strings are equal, more than zero if first argument is greater then second and less than zero otherwise.
 
 Usage example:
+
 ```c
-  if(mg_ncasecmp("hello1", "HELLO2", 5) == 0) {
-    // Strings are equal
-  }
+if(mg_ncasecmp("hello1", "HELLO2", 5) == 0) {
+  // Strings are equal
+}
 ```
 
-### int mg\_vcmp(const struct mg_str *s1, const char *s2)
+### mg\_vcmp()
+
+```c
+int mg\_vcmp(const struct mg_str *s1, const char *s2);
+```
 
 Сompare mongoose string and C-string.
 
 Return value is 0 if strings are equal, more than zero if first argument is greater then second and less than zero otherwise.
 
 Usage example:
+
 ```c
-  struct mg_str str = mg_str("hello");
-  if(mg_vcmp(str, "hello") == 0) {
-    // Strings are equal
-  }
+struct mg_str str = mg_str("hello");
+if(mg_vcmp(str, "hello") == 0) {
+  // Strings are equal
+}
 ```
 
-### int mg\_vcasecmp(const struct mg_str *str1, const char *str2)
+### mg\_vcasecmp()
+
+```c
+int mg\_vcasecmp(const struct mg_str *str1, const char *str2);
+```
 
 Case insensitive compare mongoose string and C-string.
 
 Return value is 0 if strings are equal, more than zero if first argument is greater then second and less than zero otherwise.
 
 Usage example:
+
 ```c
-  struct mg_str str = mg_str("hello");
-  if(mg_vcasecmp(str, "HELLO") == 0) {
-    // Strings are equal
-  }
+struct mg_str str = mg_str("hello");
+if(mg_vcasecmp(str, "HELLO") == 0) {
+  // Strings are equal
+}
 ```
 
-### int mg\_strcmp(const struct mg_str str1, const struct mg_str str2)
+### mg\_strcmp()
+
+```c
+int mg\_strcmp(const struct mg_str str1, const struct mg_str str2);
+```
 
 Сompare two mongoose strings.
 
 Return value is 0 if strings are equal, more than zero if first argument is greater then second and less than zero otherwise.
 
 Usage example:
-```c
-  struct mg_str str1 = mg_str("hello");
-  struct mg_str str2 = mg_str("hello");
 
-  if(mg_strcmp(str1, str2) == 0) {
-    // Strings are equal
-  }
+```c
+struct mg_str str1 = mg_str("hello");
+struct mg_str str2 = mg_str("hello");
+
+if(mg_strcmp(str1, str2) == 0) {
+  // Strings are equal
+}
 ```
 
-### struct mg_str mg\_strdup(const struct mg_str s)
+### mg\_strdup()
+
+```c
+struct mg_str mg\_strdup(const struct mg_str s);
+```
 
 Duplicate provided string. Return new string or `MG_NULL_STR` on error.
 Note: this function allocates memory for returned string. You may need to free it using `free` function.
 
 Usage example:
+
 ```c
-  struct mg_str str1 = mg_str("hello");
-  struct mg_str str2 = mg_strdup(str1);
-  //...
-  free(str1.ptr);
+struct mg_str str1 = mg_str("hello");
+struct mg_str str2 = mg_strdup(str1);
+//...
+free(str1.ptr);
 ```
 
 
-### const char *mg\_strstr(const struct mg_str haystack, const struct mg_str needle)
+### mg\_strstr()
 
-Look for `needle` substring in `haystack` string. Return pointer to `needle` occurrence within `haystack` or `NULL` if not found. 
+```c
+const char *mg\_strstr(const struct mg_str haystack, const struct mg_str needle)
+```
+
+Search for `needle` substring in `haystack` string. Return pointer to `needle` occurrence within `haystack` or `NULL` if not found. 
 
 Usage example:
+
 ```c
-  struct mg_str str = mg_str("Hello, world");
-  struct mg_str sub_str = mg_str("world");
+struct mg_str str = mg_str("Hello, world");
+struct mg_str sub_str = mg_str("world");
 
-  if(mg_strstr(str, sub_str) != NULL) {
-    // Found
-  }
-
+if(mg_strstr(str, sub_str) != NULL) {
+  // Found
+}
 ```
  
-### struct mg_str mg\_strstrip(struct mg_str s)
+### mg\_strstrip()
 
-Remove heading and trailing whitespace from mongoose string
+```c
+struct mg_str mg\_strstrip(struct mg_str s)
+```
+
+Remove heading and trailing whitespace from mongoose string `s`.
 
 Usage example:
-```c
-  struct mg_str str = mg_strstrip(mg_str("   Hello, world   "));
-  if(mg_vcmp(str, "Hello, world") == 0) {
-    // Strings are equal
-  }
 
+```c
+struct mg_str str = mg_strstrip(mg_str("   Hello, world   "));
+if(mg_vcmp(str, "Hello, world") == 0) {
+  // Strings are equal
+}
 ```
 
 ### mg\_globmatch()
@@ -2013,13 +2063,14 @@ The glob pattern matching rules are as follows:
 - any other character matches itself
 
 Usage example:
-```c
-  char pattern[] = "Hello, ?????";
-  char s[] = "Hello, world";
 
-  if(mg_globmatch(pattern, sizeof(pattern) - 1, s, sizeof(s) - 1)) {
-    // Match found
-  }
+```c
+char pattern[] = "Hello, ?????";
+char s[] = "Hello, world";
+
+if(mg_globmatch(pattern, sizeof(pattern) - 1, s, sizeof(s) - 1)) {
+  // Match found
+}
 ```
 
 ### mg\_commalist()
@@ -2032,8 +2083,9 @@ Parse string `s`, which is a comma-separated list of entries. An entry could be
 either an arbitrary string, which gets stored in `v`, or a `KEY=VALUE` which
 gets stored in `k` and `v` respectively.
 
-IMPORTANT: this function modifies `s` by pointing to the next entry. Usage
-example:
+IMPORTANT: this function modifies `s` by pointing to the next entry.
+
+Usage example:
 
 ```c
 struct mg_str k, v, s = mg_str("a=333,b=777");
@@ -2054,10 +2106,10 @@ It is a caller's responsibility to free() returned pointer.
 Usage example:
 
 ```c
-  char arr[] = "\0x1\0x2\0x3";
-  char *hex = mg_hexdump(arr, sizeof(arr));
-  LOG(LL_INFO, ("%s", hex)); // Output "0000  01 02 03 00";
-  free(hex);
+char arr[] = "\0x1\0x2\0x3";
+char *hex = mg_hexdump(arr, sizeof(arr));
+LOG(LL_INFO, ("%s", hex)); // Output "0000  01 02 03 00";
+free(hex);
 ```
 
 ### mg\_hex()
@@ -2071,12 +2123,13 @@ The output buffer must be at least 2 x `len` + 1 big.
 Return value: `dst` pointer. The encoded characters are lowercase.
 
 Usage example:
+
 ```c
-  char data[] = "\x1\x2\x3";
-  char buf[sizeof(data)*2];
-  char *hex = mg_hex(data, sizeof(data) - 1, buf);
-  LOG(LL_INFO, ("%s", hex)); // Output "010203";
-  free(hex);
+char data[] = "\x1\x2\x3";
+char buf[sizeof(data)*2];
+char *hex = mg_hex(data, sizeof(data) - 1, buf);
+LOG(LL_INFO, ("%s", hex)); // Output "010203";
+free(hex);
 ```
 
 ### mg\_unhex()
@@ -2089,11 +2142,12 @@ Hex-decode string `buf`, `len` into a buffer `to`. The `to` buffer should be
 at least `lsn` / 2 big.
 
 Usage example:
+
 ```c
-  char data[] = "010203";
-  char *buf[sizeof(data)/2];
-  char *hex = mg_unhex(data, sizeof(data) - 1, buf); // buf is now [1,2,3]
-  free(hex);
+char data[] = "010203";
+char *buf[sizeof(data)/2];
+char *hex = mg_unhex(data, sizeof(data) - 1, buf); // buf is now [1,2,3]
+free(hex);
 ```
 
 ### mg\_unhexn()
@@ -2107,10 +2161,11 @@ The maximum value of `len` is the width of the `long` x 2, for example
 on 32-bit platforms it is 8.
 
 Usage example:
+
 ```c
-  char data[] = "010203";
-  char *buf[sizeof(data)/2];
-  unsigned long val = mg_unhex(data, sizeof(data) - 1); // val is now 123
+char data[] = "010203";
+char *buf[sizeof(data)/2];
+unsigned long val = mg_unhex(data, sizeof(data) - 1); // val is now 123
 ```
 
 
@@ -2127,9 +2182,10 @@ a large enough buffer is allocated to hold a message, and `buf` is changed to
 point to that buffer. Return value: number of bytes printed.
 
 Usage example:
+
 ```c
-  char buf[1024], *pbuf = &buf;
-  mg_asprintf(&pbuf, sizeof(buf), "Hello, %s!", "world"); // buf is now "Hello, world!" 
+char buf[1024], *pbuf = &buf;
+mg_asprintf(&pbuf, sizeof(buf), "Hello, %s!", "world"); // buf is now "Hello, world!" 
 ```
 
 ### mg\_vasprintf()
@@ -2143,18 +2199,18 @@ Same as `mg_asprintf()` but uses `va_list` argument.
 Usage example:
 ```c
 void foo(const char *fmt, ...) {
-      va_list ap;
-      va_start(ap, fmt);
-      char buf[1024], *pbuf = buf;
-      mg_vasprintf(&pbuf, sizeof(buf), fmt, ap);
-      va_end(ap);
+  va_list ap;
+  va_start(ap, fmt);
+  char buf[1024], *pbuf = buf;
+  mg_vasprintf(&pbuf, sizeof(buf), fmt, ap);
+  va_end(ap);
 
-      printf("%s\n", buf);
+  printf("%s\n", buf);
 }
 
-...
+// ...
 
-  foo("Hello, %s!", "world"); // Print "Hello, world!
+foo("Hello, %s!", "world"); // Print "Hello, world!
 
 ```
 
@@ -2169,7 +2225,7 @@ Parse 64-bit integer value held by string `s`.
 Usage example:
 
 ```c
-  int64_t val = mg_to64(mg_str("123")); // Val is now 123
+int64_t val = mg_to64(mg_str("123")); // Val is now 123
 ```
 
 ### mg\_aton()
@@ -2183,10 +2239,10 @@ Parse IP address held by `str` and store it in `addr`. Return true on success.
 Usage example:
 
 ```c
-  struct mg_addr addr;
-  if(mg_aton(mg_str("127.0.0.1"), &addr)) {
-    // addr is now binary representation of 127.0.0.1 IP address
-  }
+struct mg_addr addr;
+if(mg_aton(mg_str("127.0.0.1"), &addr)) {
+  // addr is now binary representation of 127.0.0.1 IP address
+}
 ```
 
 ### mg\_ntoa()
@@ -2200,10 +2256,10 @@ Stringify IP address `ipaddr` into a buffer `buf`, `len`. Return `buf`.
 Usage example:
 
 ```c
-  struct mg_addr addr;
-  char buf[1024];
-  ...
-  mg_ntoa(&addr, buf, sizeof(buf)); // buf is now contains string representation of addr
+struct mg_addr addr;
+char buf[1024];
+// ...
+mg_ntoa(&addr, buf, sizeof(buf)); // buf is now contains string representation of addr
 ```
 
 ## Utility
@@ -2219,9 +2275,10 @@ Send `ev` event to `c` event handler. This function is useful then implementing 
 Usage example:
 
 ```c
+// Mongoose event handler
 void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_WS_MSG) {
-    //...
+  if (ev == MG_EV_WS_MSG) { Websocket Message received
+    // ...
     mg_call(c, MG_MY_PROTO_MSG); // Send some custom event (MG_MY_PROTO_MSG) to connection event handler
   }
 }
@@ -2233,13 +2290,15 @@ void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 void mg_error(struct mg_connection *c, const char *fmt, ...);
 ```
 
-Send `MG_EV_ERROR` to connection event handler with error message fornmatted using printf semantics.
+Send `MG_EV_ERROR` to connection event handler with error message formatted using printf semantics.
 
 Usage example:
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 mg_error(c, "Operation failed, error code: %d", errno);
 ```
 
@@ -2263,14 +2322,15 @@ mg_md5_init(&ctx)
 ```c
 void mg_md5_update(mg_md5_ctx *c, const unsigned char *data, size_t len);
 ```
-
-MD5 hash `len` bytes of data pointed by `data`
+Hash `len` bytes of data pointed by `data` using MD5 algorithm.
 
 Usage example:
 
 ```c
 mg_md5_ctx ctx;
-...
+// Context initialization
+// ...
+
 mg_md5_update(&ctx, "data", 4);
 mg_md5_update(&ctx, "more data", 9);
 ```
@@ -2285,11 +2345,13 @@ Get current MD5 hash for context.
 
 Usage example:
 
-```
+```c
 mg_md5_ctx ctx;
-...
+// Context initialization
+// ...
+
 unsigned char buf[16];
-mg_md5_final(&ctx, buf);  // buf is now MD5 hash
+mg_md5_final(&ctx, buf);  // `buf` is now MD5 hash
 ```
 
 ### mg\_sha1\_init()
@@ -2313,15 +2375,17 @@ mg_sha1_init(&ctx);
 void mg_sha1_update(mg_sha1_ctx *, const unsigned char *data, size_t len);
 ```
 
-SHA1 hash `len` bytes of `data`
+Hash `len` bytes of `data` using SHA1 algorithm.
 
 Usage example:
 
 ```c
 mg_sha1_ctx ctx;
-...
-mg_sha1_update(&ctx, "data", 4);
-mg_sha1_update(&ctx, "more data", 9);
+// Context initialization
+// ...
+
+mg_sha1_update(&ctx, "data", 4);      // hash "data" string
+mg_sha1_update(&ctx, "more data", 9); // hash "more data" string
 ```
 
 ### mg\_sha1\_final()
@@ -2336,18 +2400,20 @@ Usage example:
 
 ```c
 mg_sha1_ctx ctx;
-...
+// Context initialization
+// ...
+
 unsigned char buf[20];
-mg_sha1_final(buf, &ctx); // buf is now SHA1 hash
+mg_sha1_final(buf, &ctx); // `buf` is now SHA1 hash
 ```
 
-### mg\_base64\_update
+### mg\_base64\_update()
 
 ```c
 int mg_base64_update(unsigned char p, char *out, int pos);
 ```
 
-Encode `p` into base64 and write to `out` buffer starting with `pos` position.
+Encode `p` byte to base64 and write result into `out` buffer starting with `pos` position.
 Return new position for futher operations.
 
 Usage example:
@@ -2357,7 +2423,7 @@ char buf[10];
 mg_base64_update((unsigned char)"a", buf, 0); // Encode "a" into base64 and write it to the beginning of buf 
 ```
 
-### mg\_base64\_final
+### mg\_base64\_final()
 
 ```c
 int mg_base64_final(char *buf, int pos);
@@ -2368,11 +2434,12 @@ Add base64 finish mark and `\0` symbol to `buf` at `pos` position.
 ```c
 char buf[10];
 int pos;
-...
+// ...
+
 mg_base64_final(buf, pos);
 ```
 
-### mg\_base64\_encode
+### mg\_base64\_encode()
 
 ```c
 int mg_base64_encode(const unsigned char *p, int n, char *to);
@@ -2387,7 +2454,7 @@ char buf[128];
 mg_base64_encode((uint8_t *) "abcde", 5, buf); // buf is now YWJjZGU=
 ```
 
-### mg\_base64\_decode
+### mg\_base64\_decode()
 
 ```c
 int mg_base64_decode(const char *src, int n, char *dst);
@@ -2408,7 +2475,7 @@ mg_base64_decode("Q2VzYW50YQ==", 12, buf); // buf is now "Cesanta"
 unsigned short mg_url_port(const char *url);
 ```
 
-Return port for given `url`, or `0` if url doesn't contain port and there isn't default port for url protocol.
+Return port for given `url` or `0` if url doesn't contain port and there isn't default port for url protocol.
 
 Usage example:
 
@@ -2481,13 +2548,13 @@ struct mg_str pwd = mg_url_user("https://user@password@my.example.org"); // pwd 
 const char *mg_url_uri(const char *url);
 ```
 
-Extract URI from given URL. Return `/` if not URI found.
+Extract URI from given URL. Return `/` if no URI found.
 Note, that function returns pointer within `url`, no need to free() it explicitly.
 
 Usage example:
 
 ```c
-const char *uri = mg_url_uri("https://example.org/subdir/subsubdir"); // uri is now pointer to "subdir/subsubdir" 
+const char *uri = mg_url_uri("https://example.org/subdir/subsubdir"); // `uri` is now pointer to "subdir/subsubdir" 
 ```
 
 ### mg\_file\_read()
@@ -2496,19 +2563,18 @@ const char *uri = mg_url_uri("https://example.org/subdir/subsubdir"); // uri is 
 char *mg_file_read(const char *path, size_t *sizep);
 ```
 
-Read file contents into a nul-terminated malloc-ed string. It is a caller's
-responsibility to free() a returned pointer. If `sizep` is not NULL, it will
+Read file contents into a nul-terminated malloc-ed string. It is a caller's responsibility to free() a returned pointer. If `sizep` is not NULL, it will
 return a file size in bytes. Return `NULL` on error.
 
 Usage example:
 
 ```c
-  size_t file_size;
-  char* data = mg_file_read("myfile.txt", &file_size);
-  if (data != NULL) {
-    // Data is now pointer to information readen from file and file_size is it size.
-  }
-  free(data);
+size_t file_size;
+char* data = mg_file_read("myfile.txt", &file_size);
+if (data != NULL) {
+  // `data` is now pointer to information readen from file and `file_size` is it size.
+}
+free(data);
 ```
 
 ### mg\_file\_write()
@@ -2518,16 +2584,15 @@ bool mg_file_write(const char *path, const void *buf, size_t len);
 ```
 
 Write data to a file, return `true` if written, `false` otherwise.
-The write is atomic, i.e. data gets written to a temporary file first,
-then `rename()-ed` to a destination file name.
+The write is atomic, i.e. data gets written to a temporary file first, then `rename()-ed` to a destination file name.
 
 Usage example:
 
 ```c
-  char data[] = "Hello, world!";
-  if(mg_file_write("my_file.txt", data, sizeof(data) - 1)) {
-    // File contains "Hello, world!" string 
-  }
+char data[] = "Hello, world!";
+if(mg_file_write("my_file.txt", data, sizeof(data) - 1)) {
+  // File contains "Hello, world!" string 
+}
 ```
 
 ### mg\_file\_printf()
@@ -2537,13 +2602,12 @@ int mg_file_printf(const char *path, const char *fmt, ...);
 ```
 
 Write into a file `path` using `printf()` semantics.
-Return `true` on success, `false` otherwise. This function prints data to
-a temporary in-memory buffer first, then calls `mg_file_write()`.
+Return `true` on success, `false` otherwise. This function prints data to a temporary in-memory buffer first, then calls `mg_file_write()`.
 
 ```c
-  if(mg_file_printf("my_file.txt", "Hello, %s!", "world") {
-    // File contains "Hello, world!" string 
-  }
+if(mg_file_printf("my_file.txt", "Hello, %s!", "world") {
+  // File contains "Hello, world!" string 
+}
 ```
 
 ### mg\_random()
@@ -2556,8 +2620,8 @@ Fill in buffer `buf`, `len` with random data.
 
 Usage example:
 ```c
-  char buf[10];
-  mg_random(buf, sizeof(buf));
+char buf[10];
+mg_random(buf, sizeof(buf)); // `buf` is now random bytes
 ```
 
 ### mg\_ntohs()
@@ -2571,7 +2635,7 @@ Convert `uint16_t` value to host order.
 Usage example:
 
 ```c
-  uint16_t val = mg_ntohs(0x1234);
+uint16_t val = mg_ntohs(0x1234);
 ```
 
 ### mg\_ntohl()
@@ -2585,7 +2649,7 @@ Convert `uint32_t` value to host order.
 Usage example:
 
 ```c
-  uint32_t val = mg_ntohl(0x12345678);
+uint32_t val = mg_ntohl(0x12345678);
 ```
 
 ### mg\_ntohs()
@@ -2599,7 +2663,7 @@ Convert `uint16_t` value to network order.
 Usage example:
 
 ```c
-  uint16_t val = mg_htons(0x1234);
+uint16_t val = mg_htons(0x1234);
 ```
 
 ### mg\_htonl()
@@ -2613,7 +2677,7 @@ Convert `uint32_t` value to network order.
 Usage example:
 
 ```c
-  uint32_t val = mg_htonl(0x12345678);
+uint32_t val = mg_htonl(0x12345678);
 ```
 
 ### mg\_crc32()
@@ -2622,14 +2686,13 @@ Usage example:
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 ```
 
-Calculate CRC32 checksum for a given buffer. An initial `crc` value should
-be `0`.
+Calculate CRC32 checksum for a given buffer. An initial `crc` value should be `0`.
 
 Usage example:
 
 ```c
-  char data[] = "hello";
-  uint32_t crc = mg_crc32(0, data, sizeof(data));
+char data[] = "hello";
+uint32_t crc = mg_crc32(0, data, sizeof(data));
 ```
 
 ### mg\_check\_ip\_acl()
@@ -2643,18 +2706,17 @@ Check IPv4 address `remote_ip` against the IP ACL `acl`. Parameters:
 - `acl` - an ACL string, e.g. `-0.0.0.0/0,+1.2.3.4`
 - `remote_ip` - IPv4 address in network byte order
 
-Return value: 1 if `remote_ip` is allowed, 0 if not, and <0 if `acl` is
-invalid.
+Return value: 1 if `remote_ip` is allowed, 0 if not, and <0 if `acl` is invalid.
 
 Usage example:
 
 ```c
-  if (mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.2.3.4"), c->peer.ip) != 1) {
-    LOG(LL_INFO, ("NOT ALLOWED!"));
-  }
+if (mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.2.3.4"), c->peer.ip) != 1) {
+  LOG(LL_INFO, ("NOT ALLOWED!"));
+}
 ```
 
-### mg\_url\_decode
+### mg\_url\_decode()
 
 ```c
 int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
@@ -2677,7 +2739,7 @@ mg_url_encode(url, sizeof(url) - 1, buf, sizeof(buf), 0); // buf is now "example
 size_t mg_url_encode(const char *s, size_t n, char *buf, size_t len);
 ```
 
-Encode `s` string to URL-encoding and write encoded string into `buf`
+Encode `s` string to URL-encoding and write encoded string into `buf`.
 Return number of characters written to `buf`
 
 Usage example:
@@ -2713,8 +2775,7 @@ by `buf`, and `len` specifies number of bytes currently stored.
 int mg_iobuf_init(struct mg_iobuf *io, size_t size);
 ```
 
-Initialize IO buffer, allocate `size` bytes. Return 1 on success,
-0 on allocation failure.
+Initialize IO buffer, allocate `size` bytes. Return 1 on success, 0 on allocation failure.
 
 Usage example:
 
@@ -2724,7 +2785,6 @@ if(mg_iobuf_init(&io)) {
   // io successfully initialized 
 }
 ```
-
 
 ### mg\_iobuf\_resize()
 
@@ -2741,7 +2801,9 @@ Usage example:
 
 ```c
 struct mg_iobuf io;
-...
+// IO buffer initialization
+// ...
+
 if(mg_iobuf_resize(&io, 1024)) {
   // New io size is 1024 bytes
 }
@@ -2753,14 +2815,16 @@ if(mg_iobuf_resize(&io, 1024)) {
 void mg_iobuf_free(struct mg_iobuf *io);
 ```
 
-Free memory pointed by `io->buf` and set to NULL. Both `size` and `len` are set
-to 0.
+Free memory pointed by `io->buf` and set to NULL. Both `size` and `len` are set to 0.
 
 Usage example:
 
 ```c
 struct mg_iobuf io;
-...
+// IO buffer initialization
+// ...
+
+// Time to cleanup
 mg_iobuf_free(&io);
 ```
 
@@ -2770,10 +2834,7 @@ mg_iobuf_free(&io);
 size_t mg_iobuf_add(struct mg_iobuf *io, size_t offset, const void *buf, size_t len, size_t align);
 ```
 
-Insert data buffer `buf`, `len` at offset `offset`. The iobuf gets
-is expanded if required. The resulting `io->size` is always
-aligned to the `align` byte boundary - therefore, to avoid memory fragmentation
-and frequent reallocations, set `align` to a higher value. Example:
+Insert data buffer `buf`, `len` at offset `offset`. The iobuf gets is expanded if required. The resulting `io->size` is always aligned to the `align` byte boundary - therefore, to avoid memory fragmentation and frequent reallocations, set `align` to a higher value.
 
 Usage example:
 
@@ -2789,9 +2850,7 @@ mg_iobuf_add(&io, 0, "hi", 2, 512);  // io->len is 2, io->size is 512
 size_t mg_iobuf_del(struct mg_iobuf *io, size_t offset, size_t len);
 ```
 
-Delete `len` bytes starting from `offset`, and shift the remaining
-bytes. If `len` is greater than `io->len`, nothing happens,
-so such call is silently ignored.
+Delete `len` bytes starting from `offset`, and shift the remaining bytes. If `len` is greater than `io->len`, nothing happens, so such call is silently ignored.
 
 Usage example:
 
@@ -2799,7 +2858,7 @@ Usage example:
 struct mg_iobuf io;
 mg_iobuf_init(&io, 0);               // Empty buffer
 mg_iobuf_add(&io, 0, "hi", 2, 512);  // io->len is 2, io->size is 512
-...
+// ...
 mg_iobuf_del(&io, 0, "hi", 2, 512);  // io->len is 0, io->size is still 512
 
 ```
@@ -2808,7 +2867,11 @@ mg_iobuf_del(&io, 0, "hi", 2, 512);  // io->len is 0, io->size is still 512
 
 Mongoose provides a set of functions and macroses intented for logging. Application can use these functions for its own purposes as well as the rest of Mongoose API.
 
-### LOG(level, args) 
+### LOG() 
+
+```c
+#define LOG(level, args) 
+```
 
 General way to log is using `LOG` macro. 
 `LOG` prints to log only is `MG_ENABLE_LOG` macro defined, otherwise is does nothing.
@@ -2825,9 +2888,14 @@ Usage example:
 LOG(LL_ERROR, ("Hello %s!", "world"));  // Output "Hello, world"
 ```
 
-### void mg\_log\_set(const char *spec)
+### mg\_log\_set()
 
-Set mongoose log level. `spec` is a string, containing log level, can be one of the following value:
+```c
+void mg\_log\_set(const char *spec);
+```
+
+Set mongoose logging level. `spec` is a string, containing log level, can be one of the following value:
+
 ```
 "0" - none
 "1" - error
@@ -2841,7 +2909,11 @@ Usage example:
 mg_log_set("3"); // Set log level to debug
 ```
 
-### void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd) 
+### mg\_log\_set\_callback() 
+
+```c
+void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd);
+```
 
 By default, `LOG` writes to standard output stream (aka `stdout`), but this behaviour can be changes via `mg_log_set_callback`. This function allows to set callback, which called once mongoose (or host application) calls `LOG`
 
@@ -2853,18 +2925,17 @@ void log_via_printf(const void *buf, size_t len, void *userdata) {
   printf("*.%s", buf, len);
 }
 
-...
-
+// ...
 mg_log_set_callback(&log_via_printf, NULL);
 ```
 
 ## Filesystem
 
-Mongoose allows to override file i/o operation in order to support different storages, like programmable flash, no-filesystem devices etc etc.
+Mongoose allows to override file i/o operations in order to support different storages, like programmable flash, no-filesystem devices etc.
 
-In order to accomplish this, instead of using File API directly Mongoose uses wrappers and allows to provide application specific wrappers as well as several standard.
+In order to accomplish this, Mongoose uses wrappers, instead of using File API directly, and allows to provide application specific wrappers or to use one of standard.
 
-Wrapper actually is an istance of the following structure with members assigned to actual file functions.
+Wrapper is an istance of the following structure with members assigned to actual files functions.
 
 ```c
 struct mg_fs {
@@ -2910,22 +2981,25 @@ mg_http_serve_dir(c, hm, &opts);
 ## Packed filesystem
 
 Packed filesystem allow to "pack" filesystem into single file, for example, into flashed binary itself. This is useful, for example, for implementation of HTTP-server on devices without filesystem.
+
 In order to use packed filesystem do the following:
-1. Compile this file:
+
+1. Compile file test\pack.c:<br>
    cc -o pack pack.c
 
-2. Convert list of files into single .c:
+2. Convert list of files into single .c:<br>
    ./pack file1.data file2.data > fs.c
 
-3. In your application code, you can access files using this function:
-   const char *mg_unpack(const char *file_name, size_t *size);
-   or by specifying `mg_fs_packed` in serve parameters:
+3. In your application code, you can access files using this function:<br>
+   `const char *mg_unpack(const char *file_name, size_t *size)`
+   
+4. Build your app with fs.c:
+   cc -o my_app my_app.c fs.c
+
+Note, that app can also force `mg_http_serve_dir` func to use packed file system:
 
 ```c
 struct mg_http_serve_opts opts;
-opts.fs = &mg_fs_packed;
+opts.fs = &mg_fs_packed; // Set packed ds as a file system
 mg_http_serve_dir(c, hm, &opts);
 ```
-
-4. Build your app with fs.c:
-   cc -o my_app my_app.c fs.c
