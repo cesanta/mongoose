@@ -727,6 +727,8 @@ struct mg_http_message {
 };
 ```
 
+<img src=".\pics\mg_http_message.png">
+
 ### mg\_http\_listen()
 
 ```c
@@ -955,6 +957,8 @@ parameter.
 - `headers` - extra headers, default NULL. If not NULL, must end with `\r\n`
 - `fmt` - a format string for the HTTP body, in a printf semantics
 
+<img src=".\pics\mg_http_reply.png">
+
 Usage examples:
 
 
@@ -1153,7 +1157,11 @@ struct mg_http_part {
   struct mg_str filename;  // Filename for file uploads
   struct mg_str body;      // Part contents
 };
+```
 
+<img src=".\pics\mg_http_part.png">
+
+```c
 size_t mg_http_next_multipart(struct mg_str body, size_t offset, struct mg_http_part *part);
 ```
 
@@ -1161,6 +1169,8 @@ Parse the multipart chunk in the `body` at a given `offset`. An initial
 `offset` should be 0. Fill up parameters in the provided `part`, which could be NULL. Return offset to the next chunk, or 0 if there are no more chunks.
 
 See [examples/form-upload](../examples/form-upload) for full usage example.
+
+<img src=".\pics\mg_http_next_multipart.png">
 
 Usage example:
 
@@ -2086,6 +2096,8 @@ gets stored in `k` and `v` respectively.
 
 IMPORTANT: this function modifies `s` by pointing to the next entry.
 
+<img src=".\pics\mg_commalist.png">
+
 Usage example:
 
 ```c
@@ -2770,6 +2782,8 @@ struct mg_iobuf {
 Generic IO buffer. The `size` specifies an allocation size of the data pointed
 by `buf`, and `len` specifies number of bytes currently stored.
 
+<img src=".\pics\mg_iobuf.png">
+
 ### mg\_iobuf\_init()
 
 ```c
@@ -2845,6 +2859,8 @@ mg_iobuf_init(&io, 0);               // Empty buffer
 mg_iobuf_add(&io, 0, "hi", 2, 512);  // io->len is 2, io->size is 512
 ```
 
+<img src=".\pics\mg_iobuf_add.png">
+
 ### mg\_iobuf\_del()
 
 ```c
@@ -2863,6 +2879,8 @@ mg_iobuf_add(&io, 0, "hi", 2, 512);  // io->len is 2, io->size is 512
 mg_iobuf_del(&io, 0, "hi", 2, 512);  // io->len is 0, io->size is still 512
 
 ```
+
+<img src=".\pics\mg_iobug_del.png">
 
 ## Logging
 
