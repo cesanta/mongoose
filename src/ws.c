@@ -64,6 +64,9 @@ static size_t ws_process(uint8_t *buf, size_t len, struct ws_msg *msg) {
           mg_ntohl(*(uint32_t *) &buf[6]);
     }
   }
+  // Sanity check, and integer overflow protection for the boundary check below
+  // data_len should not be larger than 1 Gb
+  // if (msg->data_len > 1024 * 1024 * 1024) return 0;
   if (msg->header_len + msg->data_len > len) return 0;
   if (mask_len > 0) {
     uint8_t *p = buf + msg->header_len, *m = p - mask_len;
