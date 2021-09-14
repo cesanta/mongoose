@@ -62,3 +62,7 @@
 #ifndef MG_PATH_MAX
 #define MG_PATH_MAX PATH_MAX
 #endif
+
+#ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 128
+#endif

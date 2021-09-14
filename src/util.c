@@ -313,7 +313,7 @@ double mg_time(void) {
                     ((int64_t) ftime.dwHighDateTime << 32)) /
                    10000000.0) -
          11644473600;
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS
   return mg_millis() / 1000.0;
 #else
   struct timeval tv;
@@ -329,6 +329,8 @@ void mg_usleep(unsigned long usecs) {
   ets_delay_us(usecs);
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
   vTaskDelay(pdMS_TO_TICKS(usecs / 1000));
+#elif MG_ARCH == MG_ARCH_AZURERTOS
+  tx_thread_sleep((usecs / 1000) * TX_TIMER_TICKS_PER_SECOND);
 #else
   usleep((useconds_t) usecs);
 #endif
@@ -343,6 +345,8 @@ unsigned long mg_millis(void) {
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
+#elif MG_ARCH == MG_ARCH_AZURERTOS
+  return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
 #else
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
