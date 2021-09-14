@@ -11,6 +11,8 @@ jobs:
       run: make test test++ IPV6=0
     - name: openssl
       run: make test SSL=OPENSSL IPV6=0
+    - name: unamalgamated
+      run: make unamalgamated
   examples:
     runs-on: ubuntu-latest
     steps:

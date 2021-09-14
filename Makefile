@@ -46,8 +46,8 @@ test++: WARN += -Wno-shadow -Wno-missing-field-initializers -Wno-deprecated
 test++: test
 
 # Make sure we can build from an unamalgamated sources
-unamalgamated: $(HDRS) Makefile
-	$(CC) src/*.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
+unamalgamated: $(HDRS) Makefile test/packed_fs.c
+	$(CC) src/*.c test/packed_fs.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
 
 unpacked:
 	$(CC) -I. mongoose.c test/unit_test.c -o unit_test
@@ -125,7 +125,7 @@ mongoose.c: Makefile $(wildcard src/*)
 	(cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/private.h src/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@
 
 mongoose.h: $(HDRS) Makefile
-	(cat src/license.h src/version.h ; cat src/config.h src/arch.h src/arch_*.h src/str.h src/log.h src/timer.h src/util.h src/fs.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/ws.h src/sntp.h src/mqtt.h src/dns.h | sed -e 's,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
+	(cat src/license.h; echo; echo '#ifndef MONGOOSE_H'; echo '#define MONGOOSE_H'; echo; cat src/version.h ; echo; echo '#ifdef __cplusplus'; echo 'extern "C" {'; echo '#endif'; cat src/config.h src/arch.h src/arch_*.h src/str.h src/log.h src/timer.h src/util.h src/fs.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/ws.h src/sntp.h src/mqtt.h src/dns.h | sed -e 's,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
 
 clean:
 	rm -rf $(PROG) *.o *.dSYM unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack
