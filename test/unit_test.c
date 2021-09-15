@@ -36,6 +36,18 @@ static void test_globmatch(void) {
   ASSERT(mg_globmatch("/api/*", 6, "/api/foo", 8) == 1);
   ASSERT(mg_globmatch("/api/*", 6, "/api/log/static", 15) == 0);
   ASSERT(mg_globmatch("/api/#", 6, "/api/log/static", 15) == 1);
+  ASSERT(mg_globmatch("#.shtml", 7, "/ssi/index.shtml", 16) == 1);
+  ASSERT(mg_globmatch("#.c", 3, ".c", 2) == 1);
+  ASSERT(mg_globmatch("abc", 3, "ab", 2) == 0);
+  ASSERT(mg_globmatch("#.c", 3, "a.c", 3) == 1);
+  ASSERT(mg_globmatch("#.c", 3, "..c", 3) == 1);
+  ASSERT(mg_globmatch("#.c", 3, "/.c", 3) == 1);
+  ASSERT(mg_globmatch("#.c", 3, "//a.c", 5) == 1);
+  ASSERT(mg_globmatch("#.c", 3, "x/a.c", 5) == 1);
+  ASSERT(mg_globmatch("#.c", 3, "./a.c", 5) == 1);
+  ASSERT(mg_globmatch("#.shtml", 7, "./ssi/index.shtml", 17) == 1);
+  ASSERT(mg_globmatch("#aa#bb#", 7, "caabba", 6) == 1);
+  ASSERT(mg_globmatch("#aa#bb#", 7, "caabxa", 6) == 0);
 }
 
 static void test_commalist(void) {
@@ -575,12 +587,7 @@ static void test_http_server(void) {
   }
 
   ASSERT(fetch(&mgr, buf, url, "GET /badroot HTTP/1.0\r\n\n") == 400);
-#if MG_ARCH == MG_ARCH_WIN32
-  ASSERT(cmpbody(buf, "Invalid web root [Z:\\BAAADDD!]\n") == 0);
-#else
-  // LOG(LL_INFO, ("--> [%s]", buf));
-  ASSERT(cmpbody(buf, "Bad web root [/BAAADDD!]\n") == 0);
-#endif
+  ASSERT(cmpbody(buf, "Invalid web root [/BAAADDD!]\n") == 0);
 
   {
     char *data = mg_file_read("./test/data/ca.pem", NULL);

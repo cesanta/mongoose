@@ -1,19 +1,6 @@
 #include "fs.h"
 
 #if defined(FOPEN_MAX)
-static char *posix_realpath(const char *path, char *resolved_path) {
-#ifdef _WIN32
-  return _fullpath(resolved_path, path, _MAX_PATH);
-#elif MG_ARCH == MG_ARCH_ESP32 || MG_ARCH == MG_ARCH_ESP8266 || \
-    MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
-  if (resolved_path == NULL) resolved_path = malloc(strlen(path) + 1);
-  strcpy(resolved_path, path);
-  return resolved_path;
-#else
-  return realpath(path, resolved_path);
-#endif
-}
-
 static int posix_stat(const char *path, size_t *size, time_t *mtime) {
 #ifdef _WIN32
   struct _stati64 st;
@@ -238,6 +225,5 @@ static size_t posix_seek(void *fd, size_t offset) {
 }
 #endif
 
-struct mg_fs mg_fs_posix = {posix_realpath, posix_stat,  posix_list,
-                            posix_open,     posix_close, posix_read,
-                            posix_write,    posix_seek};
+struct mg_fs mg_fs_posix = {posix_stat, posix_list,  posix_open, posix_close,
+                            posix_read, posix_write, posix_seek};

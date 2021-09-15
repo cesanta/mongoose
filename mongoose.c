@@ -431,13 +431,6 @@ const char *mg_unlist(size_t no) {
 }
 #endif
 
-static char *packed_realpath(const char *path, char *resolved_path) {
-  if (resolved_path == NULL) resolved_path = (char *) malloc(strlen(path) + 1);
-  // while (*path == '.' || *path == '/') path++;
-  strcpy(resolved_path, path);
-  return resolved_path;
-}
-
 static int is_dir_prefix(const char *prefix, size_t n, const char *path) {
   return n < strlen(path) && memcmp(prefix, path, n) == 0 && path[n] == '/';
   //(n == 0 || path[n] == MG_DIRSEP);
@@ -515,9 +508,9 @@ static size_t packed_seek(void *fd, size_t offset) {
   return fp->pos;
 }
 
-struct mg_fs mg_fs_packed = {packed_realpath, packed_stat,  packed_list,
-                             packed_open,     packed_close, packed_read,
-                             packed_write,    packed_seek};
+struct mg_fs mg_fs_packed = {packed_stat,  packed_list, packed_open,
+                             packed_close, packed_read, packed_write,
+                             packed_seek};
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/fs_posix.c"
@@ -525,19 +518,6 @@ struct mg_fs mg_fs_packed = {packed_realpath, packed_stat,  packed_list,
 
 
 #if defined(FOPEN_MAX)
-static char *posix_realpath(const char *path, char *resolved_path) {
-#ifdef _WIN32
-  return _fullpath(resolved_path, path, _MAX_PATH);
-#elif MG_ARCH == MG_ARCH_ESP32 || MG_ARCH == MG_ARCH_ESP8266 || \
-    MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
-  if (resolved_path == NULL) resolved_path = malloc(strlen(path) + 1);
-  strcpy(resolved_path, path);
-  return resolved_path;
-#else
-  return realpath(path, resolved_path);
-#endif
-}
-
 static int posix_stat(const char *path, size_t *size, time_t *mtime) {
 #ifdef _WIN32
   struct _stati64 st;
@@ -762,9 +742,8 @@ static size_t posix_seek(void *fd, size_t offset) {
 }
 #endif
 
-struct mg_fs mg_fs_posix = {posix_realpath, posix_stat,  posix_list,
-                            posix_open,     posix_close, posix_read,
-                            posix_write,    posix_seek};
+struct mg_fs mg_fs_posix = {posix_stat, posix_list,  posix_open, posix_close,
+                            posix_read, posix_write, posix_seek};
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/http.c"
@@ -1458,49 +1437,50 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
   memcpy(c->send.buf + off - 10, tmp, n);  // Set content length
 }
 
-static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
-                       struct mg_http_serve_opts *opts, char *root_dir,
-                       size_t rlen, char *path, size_t plen) {
-  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  int flags = 0, tmp;
-  if (fs->realpath(opts->root_dir, root_dir) == NULL) {
-    LOG(LL_ERROR, ("realpath(%s): %d", opts->root_dir, errno));
-    mg_http_reply(c, 400, "", "Bad web root [%s]\n", opts->root_dir);
-  } else if (!(fs->stat(root_dir, NULL, NULL) & MG_FS_DIR)) {
-    mg_http_reply(c, 400, "", "Invalid web root [%s]\n", root_dir);
-  } else {
-    // NOTE(lsm): Xilinx snprintf does not 0-terminate the destination for
-    // the %.*s specifier, if the length is zero. Make sure hm->uri.len > 0
-    size_t n1 = strlen(root_dir), n2;
-    // Temporarily append URI to the root_dir: that is the unresolved path
-    mg_url_decode(hm->uri.ptr, hm->uri.len, root_dir + n1, rlen - n1, 0);
-    root_dir[rlen - 1] = '\0';
-    n2 = strlen(root_dir);
-    while (n2 > 0 && root_dir[n2 - 1] == '/') root_dir[--n2] = 0;
-    // Try to resolve it...
-    if (fs->realpath(root_dir, path) == NULL ||
-        (flags = fs->stat(path, NULL, NULL)) == 0) {
-      mg_http_reply(c, 404, "", "Not found\n");
-    } else {
-      // Path is resolved successfully. It it is a directory, try to
-      // serve index.html in it
-      root_dir[n1] = '\0';  // Restore root_dir - remove appended URI
-      n2 = strlen(path);    // Memorise path length
-      if ((flags & MG_FS_DIR) &&
-          ((snprintf(path + n2, plen - n2, "/index.html") > 0 &&
-            (tmp = fs->stat(path, NULL, NULL)) != 0) ||
-           (snprintf(path + n2, plen - n2, "/index.shtml") > 0 &&
-            (tmp = fs->stat(path, NULL, NULL)) != 0))) {
-        flags = tmp;
-      } else {
-        path[n2] = '\0';  // Remove appended index file name
+static void remove_double_dots(char *s) {
+  char *p = s;
+  while (*s != '\0') {
+    *p++ = *s++;
+    if (s[-1] == '/' || s[-1] == '\\') {
+      while (s[0] != '\0') {
+        if (s[0] == '/' || s[0] == '\\') {
+          s++;
+        } else if (s[0] == '.' && s[1] == '.') {
+          s += 2;
+        } else {
+          break;
+        }
       }
     }
-    // Check that the resolved file is located inside root directory
-    if (strlen(path) < n1 || memcmp(root_dir, path, n1) != 0) {
-      mg_http_reply(c, 404, "", "Invalid URI [%.*s]\n", (int) hm->uri.len,
-                    hm->uri.ptr);
-      flags = 0;
+  }
+  *p = '\0';
+}
+
+// Resolve requested file into `path` and return its fs->stat() result
+static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
+                       struct mg_http_serve_opts *opts, char *path,
+                       size_t path_size) {
+  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
+  int flags = 0, tmp;
+  // Append URI to the root_dir, and sanitize it
+  size_t n = (size_t) snprintf(path, path_size, "%s", opts->root_dir);
+  if (n > path_size) n = path_size;
+  mg_url_decode(hm->uri.ptr, hm->uri.len, path + n, path_size - n, 0);
+  path[path_size - 1] = '\0';  // Double-check
+  remove_double_dots(path);
+  n = strlen(path);
+  while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Strip trailing slashes
+  flags = fs->stat(path, NULL, NULL);                 // Does it exist?
+  if (flags == 0) {
+    mg_http_reply(c, 404, "", "Not found\n");  // Does not exist, doh
+  } else if (flags & MG_FS_DIR) {
+    if (((snprintf(path + n, path_size - n, "/index.html") > 0 &&
+          (tmp = fs->stat(path, NULL, NULL)) != 0) ||
+         (snprintf(path + n, path_size - n, "/index.shtml") > 0 &&
+          (tmp = fs->stat(path, NULL, NULL)) != 0))) {
+      flags = tmp;
+    } else {
+      path[n] = '\0';  // Remove appended index file name
     }
   }
   return flags;
@@ -1508,19 +1488,22 @@ static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        struct mg_http_serve_opts *opts) {
-  char root[MG_PATH_MAX] = "", path[sizeof(root)] = "";
-  int flags = uri_to_path(c, hm, opts, root, sizeof(root), path, sizeof(path));
-
-  if (flags == 0) return;
-  // LOG(LL_DEBUG, ("root [%s], path [%s] %d", root, path, flags));
-  if (flags & MG_FS_DIR) {
-    listdir(c, hm, opts, path);
-  } else if (opts->ssi_pattern != NULL &&
-             mg_globmatch(opts->ssi_pattern, strlen(opts->ssi_pattern), path,
-                          strlen(path))) {
-    mg_http_serve_ssi(c, root, path);
+  char path[MG_PATH_MAX] = "";
+  const char *sp = opts->ssi_pattern;
+  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
+  if ((fs->stat(opts->root_dir, NULL, NULL) & MG_FS_DIR) == 0) {
+    mg_http_reply(c, 400, "", "Invalid web root [%s]\n", opts->root_dir);
   } else {
-    mg_http_serve_file(c, hm, path, opts);
+    int flags = uri_to_path(c, hm, opts, path, sizeof(path));
+    if (flags == 0) return;
+    LOG(LL_DEBUG, ("%.*s %s %d", (int) hm->uri.len, hm->uri.ptr, path, flags));
+    if (flags & MG_FS_DIR) {
+      listdir(c, hm, opts, path);
+    } else if (sp != NULL && mg_globmatch(sp, strlen(sp), path, strlen(path))) {
+      mg_http_serve_ssi(c, opts->root_dir, path);
+    } else {
+      mg_http_serve_file(c, hm, path, opts);
+    }
   }
 }
 
@@ -4213,9 +4196,10 @@ bool mg_globmatch(const char *s1, size_t n1, const char *s2, size_t n2) {
       i++, j++;
     } else if (i < n1 && (s1[i] == '*' || s1[i] == '#')) {
       ni = i, nj = j + 1, i++;
-    } else if (nj > 0 && nj <= n2 && (s1[i - 1] == '#' || s2[j] != '/')) {
+    } else if (nj > 0 && nj <= n2 && (s1[ni] == '#' || s2[j] != '/')) {
       i = ni, j = nj;
     } else {
+      // printf(">>: [%s] [%s] %d %d %d %d\n", s1, s2, i, j, ni, nj);
       return false;
     }
   }

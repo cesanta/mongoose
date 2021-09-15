@@ -214,13 +214,14 @@ struct timeval {
 #include <lwip/sockets.h>
 
 #if LWIP_SOCKET != 1
-// Sockets support disabled in LWIP by default 
+// Sockets support disabled in LWIP by default
 #error Set LWIP_SOCKET variable to 1 (in lwipopts.h)
 #endif
 
 #if LWIP_POSIX_SOCKETS_IO_NAMES != 0
-// LWIP_POSIX_SOCKETS_IO_NAMES must be disabled in posix-compatible OS enviroment
-// (freertos mimics to one) otherwise names like `read` and `write` conflict
+// LWIP_POSIX_SOCKETS_IO_NAMES must be disabled in posix-compatible OS
+// enviroment (freertos mimics to one) otherwise names like `read` and `write`
+// conflict
 #error LWIP_POSIX_SOCKETS_IO_NAMES must be set to 0 (in lwipopts.h) for FreeRTOS
 #endif
 
@@ -467,8 +468,8 @@ static __inline struct tm *localtime_r(time_t *t, struct tm *tm) {
 #include <string.h>
 
 struct mg_str {
-  const char *ptr;
-  size_t len;
+  const char *ptr;  // Pointer to string data
+  size_t len;       // String len
 };
 
 #define MG_NULL_STR \
@@ -596,13 +597,25 @@ enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
 
 // Filesystem API functions
 struct mg_fs {
-  char *(*realpath)(const char *path, char *resolved_path);
+  // Return MG_FS_* flags, and populate file size and modification time
   int (*stat)(const char *path, size_t *size, time_t *mtime);
+
+  // Enumerates objects in directory
   void (*list)(const char *path, void (*fn)(const char *, void *), void *);
+
+  // Open file
   struct mg_fd *(*open)(const char *path, int flags);
+
+  // Close file
   void (*close)(struct mg_fd *fd);
+
+  // Read file
   size_t (*read)(void *fd, void *buf, size_t len);
+
+  // Write file
   size_t (*write)(void *fd, const void *buf, size_t len);
+
+  // Seek file
   size_t (*seek)(void *fd, size_t offset);
 };
 
@@ -786,8 +799,8 @@ void mg_mgr_wakeup(struct mg_connection *pipe);
 
 
 struct mg_http_header {
-  struct mg_str name;
-  struct mg_str value;
+  struct mg_str name;   // Header name
+  struct mg_str value;  // Header value
 };
 
 struct mg_http_message {
@@ -873,8 +886,8 @@ void mg_tls_handshake(struct mg_connection *);
 
 
 struct mg_ws_message {
-  struct mg_str data;
-  uint8_t flags;  // Websocket message flags
+  struct mg_str data;  // Websocket message data
+  uint8_t flags;       // Websocket message flags
 };
 
 struct mg_connection *mg_ws_connect(struct mg_mgr *, const char *url,
@@ -917,13 +930,13 @@ int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv);
 #define MQTT_SET_QOS(flags, qos) (flags) = ((flags) & ~0x6) | ((qos) << 1)
 
 struct mg_mqtt_opts {
-  struct mg_str client_id;
-  struct mg_str will_topic;
-  struct mg_str will_message;
-  uint8_t qos;         // Quality of service
-  bool will_retain;    // Retain last will
-  bool clean;          // Use clean session, 0 or 1
-  uint16_t keepalive;  // Keep-alive timer in seconds
+  struct mg_str client_id;     // Client ID
+  struct mg_str will_topic;    // Will topic
+  struct mg_str will_message;  // Will message
+  uint8_t qos;                 // Quality of service
+  bool will_retain;            // Retain last will
+  bool clean;                  // Use clean session, 0 or 1
+  uint16_t keepalive;          // Keep-alive timer in seconds
 };
 
 struct mg_mqtt_message {

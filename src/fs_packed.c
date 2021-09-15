@@ -20,13 +20,6 @@ const char *mg_unlist(size_t no) {
 }
 #endif
 
-static char *packed_realpath(const char *path, char *resolved_path) {
-  if (resolved_path == NULL) resolved_path = (char *) malloc(strlen(path) + 1);
-  // while (*path == '.' || *path == '/') path++;
-  strcpy(resolved_path, path);
-  return resolved_path;
-}
-
 static int is_dir_prefix(const char *prefix, size_t n, const char *path) {
   return n < strlen(path) && memcmp(prefix, path, n) == 0 && path[n] == '/';
   //(n == 0 || path[n] == MG_DIRSEP);
@@ -104,6 +97,6 @@ static size_t packed_seek(void *fd, size_t offset) {
   return fp->pos;
 }
 
-struct mg_fs mg_fs_packed = {packed_realpath, packed_stat,  packed_list,
-                             packed_open,     packed_close, packed_read,
-                             packed_write,    packed_seek};
+struct mg_fs mg_fs_packed = {packed_stat,  packed_list, packed_open,
+                             packed_close, packed_read, packed_write,
+                             packed_seek};

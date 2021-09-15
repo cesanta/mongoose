@@ -4,8 +4,8 @@
 #include <string.h>
 
 struct mg_str {
-  const char *ptr;
-  size_t len;
+  const char *ptr;  // Pointer to string data
+  size_t len;       // String len
 };
 
 #define MG_NULL_STR \
