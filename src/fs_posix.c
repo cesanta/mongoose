@@ -1,7 +1,7 @@
 #include "fs.h"
 
 #if defined(FOPEN_MAX)
-static int posix_stat(const char *path, size_t *size, time_t *mtime) {
+static int p_stat(const char *path, size_t *size, time_t *mtime) {
 #ifdef _WIN32
   struct _stati64 st;
   wchar_t tmp[PATH_MAX];
@@ -125,8 +125,8 @@ struct dirent *readdir(DIR *d) {
 }
 #endif
 
-static void posix_list(const char *dir, void (*fn)(const char *, void *),
-                       void *userdata) {
+static void p_list(const char *dir, void (*fn)(const char *, void *),
+                   void *userdata) {
 #if MG_ENABLE_DIRLIST
   struct dirent *dp;
   DIR *dirp;
@@ -141,7 +141,7 @@ static void posix_list(const char *dir, void (*fn)(const char *, void *),
 #endif
 }
 
-static struct mg_fd *posix_open(const char *path, int flags) {
+static struct mg_fd *p_open(const char *path, int flags) {
   const char *mode = flags == (MG_FS_READ | MG_FS_WRITE) ? "r+b"
                      : flags & MG_FS_READ                ? "rb"
                      : flags & MG_FS_WRITE               ? "wb"
@@ -163,19 +163,19 @@ static struct mg_fd *posix_open(const char *path, int flags) {
   return fd;
 }
 
-static void posix_close(struct mg_fd *fd) {
+static void p_close(struct mg_fd *fd) {
   if (fd != NULL) fclose((FILE *) fd->fd), free(fd);
 }
 
-static size_t posix_read(void *fp, void *buf, size_t len) {
+static size_t p_read(void *fp, void *buf, size_t len) {
   return fread(buf, 1, len, (FILE *) fp);
 }
 
-static size_t posix_write(void *fp, const void *buf, size_t len) {
+static size_t p_write(void *fp, const void *buf, size_t len) {
   return fwrite(buf, 1, len, (FILE *) fp);
 }
 
-static size_t posix_seek(void *fp, size_t offset) {
+static size_t p_seek(void *fp, size_t offset) {
 #if _FILE_OFFSET_BITS == 64 || _POSIX_C_SOURCE >= 200112L || \
     _XOPEN_SOURCE >= 600
   fseeko((FILE *) fp, (off_t) offset, SEEK_SET);
@@ -185,45 +185,45 @@ static size_t posix_seek(void *fp, size_t offset) {
   return (size_t) ftell((FILE *) fp);
 }
 #else
-static char *posix_realpath(const char *path, char *resolved_path) {
+static char *p_realpath(const char *path, char *resolved_path) {
   (void) path, (void) resolved_path;
   return NULL;
 }
 
-static int posix_stat(const char *path, size_t *size, time_t *mtime) {
+static int p_stat(const char *path, size_t *size, time_t *mtime) {
   (void) path, (void) size, (void) mtime;
   return 0;
 }
 
-static void posix_list(const char *path, void (*fn)(const char *, void *),
-                       void *userdata) {
+static void p_list(const char *path, void (*fn)(const char *, void *),
+                   void *userdata) {
   (void) path, (void) fn, (void) userdata;
 }
 
-static struct mg_fd *posix_open(const char *path, int flags) {
+static struct mg_fd *p_open(const char *path, int flags) {
   (void) path, (void) flags;
   return NULL;
 }
 
-static void posix_close(struct mg_fd *fd) {
+static void p_close(struct mg_fd *fd) {
   (void) fd;
 }
 
-static size_t posix_read(void *fd, void *buf, size_t len) {
+static size_t p_read(void *fd, void *buf, size_t len) {
   (void) fd, (void) buf, (void) len;
   return 0;
 }
 
-static size_t posix_write(void *fd, const void *buf, size_t len) {
+static size_t p_write(void *fd, const void *buf, size_t len) {
   (void) fd, (void) buf, (void) len;
   return 0;
 }
 
-static size_t posix_seek(void *fd, size_t offset) {
+static size_t p_seek(void *fd, size_t offset) {
   (void) fd, (void) offset;
   return (size_t) ~0;
 }
 #endif
 
-struct mg_fs mg_fs_posix = {posix_stat, posix_list,  posix_open, posix_close,
-                            posix_read, posix_write, posix_seek};
+struct mg_fs mg_fs_posix = {p_stat, p_list,  p_open, p_close,
+                            p_read, p_write, p_seek};
