@@ -419,7 +419,7 @@ Initialize event manager structure:
 - Set default DNS lookup timeout
 
 Parameters:
-- `mgr` - a pointer to `struct mg_mgr` that needs to be initialised
+- `mgr` - a pointer to `mg_mgr` structure that needs to be initialized
 
 Return value: none
 
@@ -451,6 +451,12 @@ protocol-specific handler function that is set implicitly. For example, a
 protocol-specific handler is called before user-specific handler.  It parses
 incoming data and may invoke protocol-specific events like `MG_EV_HTTP_MSG`.
 
+Parameters:
+- `mgr` - event manager to use
+- `ms` - timeout (maximum time to block current thread), milliseconds
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -464,6 +470,11 @@ void mg_mgr_free(struct mg_mgr *mgr);
 ```
 
 Close all connections, and free all resources.
+
+Parameters:
+- `mgr` - event manager to free
+
+Return value: none
 
 Usage example:
 
@@ -482,6 +493,9 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
 ```
 
 Create a listening connection, append this connection to `mgr->conns`.
+
+Parameters:
+- `mgr` - event manager to use
 - `url` - specifies local IP address and port to listen on, e.g.
   `tcp://127.0.0.1:1234` or `udp://0.0.0.0:9000`
 - `fn` - an event handler function
@@ -505,6 +519,9 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
 ```
 
 Create an outbound connection, append this connection to `mgr->conns`.
+
+Parameters:
+- `mgr` - event manager to use
 - `url` - specifies remote IP address/port to connect to, e.g. `http://a.com`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
@@ -536,6 +553,13 @@ Note: this function does not push data to the network! It only appends data to
 the output buffer.  The data is being sent when `mg_mgr_poll()` is called. If
 `mg_send()` is called multiple times, the output buffer grows.
 
+Parameters:
+- `c` - connection to use
+- `data` - data to append
+- `size` - size of data
+
+Return value: `true` if data appended successfully and `false` otherwise
+
 Usage example:
 
 ```c
@@ -551,6 +575,12 @@ int mg_printf(struct mg_connection *, const char *fmt, ...);
 Same as `mg_send()`, but formats data using `printf()` semantics. Return
 number of bytes appended to the output buffer.
 
+Parameters:
+- `c` - connection to use
+- `fmt` - format string in `printf` semantics
+
+Return value: number of bytes appended to the output buffer.
+
 Usage example:
 
 ```c
@@ -564,6 +594,13 @@ int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 ```
 
 Same as `mg_printf()`, but takes `va_list` argument as a parameter.
+
+Parameters:
+- `c` - connection to use
+- `fmt` - format string in `printf` semantics
+- `ap` - arguments list
+
+Return value: number of bytes appended to the output buffer.
 
 Usage example:
 
@@ -583,6 +620,13 @@ char *mg_straddr(struct mg_connection *c, char *buf, size_t len);
 ```
 
 Write stringified IP address, associated with given connection to `buf` (maximum size `len`)
+
+Parameters:
+- `c` - connection to use
+- `buf` - buffer to write data
+- `len` - buffer (`buf`) size
+
+Return value: `buf` value
 
 Usage example:
 
@@ -617,6 +661,13 @@ Another task can wake up a sleeping event manager (in `mg_mgr_poll()` call)
 using `mg_mgr_wakeup()`. When an event manager is woken up, a pipe
 connection event handler function receives `MG_EV_READ` event.
 
+Parameters:
+- `mgr` - event manager to use
+- `fn` - pointer to event handler function
+- `ud` - user data, which will be passed to `fn`
+
+Return value: pointer to created connection or `NULL` in case of error
+
 Usage example: see [examples/multi-threaded](../examples/multi-threaded).
 
 ### mg\_mgr\_wakeup()
@@ -628,7 +679,10 @@ void mg_mgr_wakeup(struct mg_connection *pipe);
 Wake up an event manager that sleeps in `mg_mgr_poll()` call. This function
 must be called from a separate task/thread. Parameters:
 
+Parameters:
 - `pipe` - a special connection created by the `mg_mkpipe()` call
+
+Return value: none
 
 Usage example: see [examples/multi-threaded](../examples/multi-threaded).
 
@@ -665,17 +719,21 @@ Structure represents the HTTP message.
 ### mg\_http\_listen()
 
 ```c
-struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
+struct mg_connection *mg_http_listen(struct mg_mgr *mgr, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
 ```
 
 Create HTTP listener.
 
+Parameters:
+- `mgr` - event manager to use
 - `url` - specifies local IP address and port to listen on, e.g. `http://0.0.0.0:8000`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
+
+Return value: pointer to created connection or `NULL` in case of error
 
 Usage example:
 
@@ -692,15 +750,20 @@ struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
 ```
 
 Create HTTP client connection.
+
+Note: this function does not connect to peer, it allocates required resources and
+starts connect process. Once peer is really connected `MG_EV_CONNECT` event is
+sent to connection event handler.
+
+Parameters:
+- `mgr` - event manager to use
 - `url` - specifies remote URL, e.g. `http://google.com`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
 
-Note: this function does not connect to peer, it allocates required resources and
-starts connect process. Once peer is really connected `MG_EV_CONNECT` event is
-sent to connection event handler.
+Return value: pointer to created connection or `NULL` in case of error
 
 Usage example:
 
@@ -716,10 +779,15 @@ if (c == NULL) fatal_error("Cannot create connection");
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len);
 ```
 
-Return length of request in `buf` (with maximum len `buf_len`).
+Get length of request.
 
 The length of request is a number of bytes till the end of HTTP headers. It does
 not include length of HTTP body.
+
+Parameters:
+- `buf` - pointer to buffer with request
+- `buf_len` - maximum request length
+
 Return value: -1 on error, 0 if a message is incomplete, or the length of request.
 
 Usage example:
@@ -737,8 +805,14 @@ int req_len = mg_http_get_request_len(buf, strlen(buf));  // req_len == 12
 int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm);
 ```
 
-Parse string `s` (with maximum size `len`) into a structure `hm`. Return request
- length - see `mg_http_get_request_len()`.
+Parse string request into `mg_http_message` structure
+
+Parameters:
+- `s` - request string
+- `len` - maximum request length
+- `hm` - pointer to `mg_http_message` structure to receive result
+
+Return value: request length (see `mg_http_get_request_len()`).
 
 Usage example:
 
@@ -756,6 +830,12 @@ void mg_http_printf_chunk(struct mg_connection *c, const char *fmt, ...);
 
 Write a chunk of data in chunked encoding format, using `printf()` semantic.
 
+Parameters:
+- `c` - connection to use
+- `fmt` - format string in `printf` semantics
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -770,6 +850,13 @@ void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
 
 Write a chunk of data in chunked encoding format.
 
+Parameters:
+- `c` - connection to use
+- `buf` - data to write
+- `len` - number of bytes to write
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -782,7 +869,13 @@ mg_http_write_chunk(c, "hi", 2);
 void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm);
 ```
 
-Remove chunk specified by `hm` from input buffer.
+Remove chunk specified from input buffer.
+
+Parameters:
+- `c` - connection to use
+- `hm` - chunk to delete
+
+Return value: none
 
 Usage example:
 
@@ -804,12 +897,19 @@ struct mg_http_serve_opts {
   const char *ssi_pattern;    // SSI file name pattern, e.g. #.shtml
   const char *extra_headers;  // Extra HTTP headers to add in responses
 };
-void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
+void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *opts);
 ```
 
 Serve static files according to the given options. Note that in order to
 enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
+
+Parameters:
+- `c` - connection to use
+- `hm` - http message, that should be served
+- `opts` - serve options
+
+Return value: none
 
 Usage example:
 
@@ -829,11 +929,19 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_http\_serve\_file()
 
 ```c
-void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
+void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path, struct mg_http_serve_opts *opts);
 ```
 
 Serve static file. Note that the `extra_headers` must end with `\r\n`.
+
+Parameters:
+- `c` - connection to use
+- `hm` - http message to serve
+- `path` - path to file to serve
+- `opts` - serve options
+
+Return value: none
 
 Usage example:
 
@@ -860,9 +968,13 @@ Send simple HTTP response using `printf()` semantic. This function formats
 response body according to a `body_fmt`, and automatically appends a correct
 `Content-Length` header. Extra headers could be passed via `headers` parameter.
 
+Parameters:
+- `c` - connection to use
 - `status_code` - an HTTP response code
 - `headers` - extra headers, default NULL. If not NULL, must end with `\r\n`
 - `fmt` - a format string for the HTTP body, in a printf semantics
+
+Return value: none
 
 <img src="images/mg_http_reply.png">
 
@@ -894,10 +1006,16 @@ mg_http_reply(c, 403, "", "%s", "Not Authorized\n");
 ### mg\_http\_get\_header()
 
 ```c
-struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
+struct mg_str *mg_http_get_header(struct mg_http_message *hm, const char *name);
 ```
 
-Return value of `name` HTTP header, or NULL if not found.
+Get HTTP header value
+
+Parameters:
+- `hm` - HTTP message to look for header
+- `name` - header name
+
+Return value: HTTP header value or `NULL` if not found
 
 Usage example:
 
@@ -919,11 +1037,18 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_http\_get\_var()
 
 ```c
-int mg_http_get_var(const struct mg_str *, const char *name, char *buf, int len);
+int mg_http_get_var(const struct mg_str *var, const char *name, char *buf, int len);
 ```
 
-Decode HTTP variable `name` into a given buffer. Return length of decoded
-variable. Zero or negative value means error.
+Decode HTTP variable
+
+Parameters:
+- `var` - HTTP request body
+- `name` - variable name
+- `buf` - buffer to write decoded variable
+- `len` - buffer size
+
+Return value: length of decoded variable. Zero or negative value means error.
 
 Usage example:
 
@@ -935,7 +1060,7 @@ mg_http_get_var(&hm->body, "key1", buf, sizeof(buf)) {
 ### mg\_http\_creds()
 
 ```c
-void mg_http_creds(struct mg_http_message *, char *user, size_t userlen,
+void mg_http_creds(struct mg_http_message *hm, char *user, size_t userlen,
                    char *pass, size_t passlen);
 ```
 
@@ -949,6 +1074,15 @@ up in the following order:
 - from the `?access_token=...` query string parameter, fills pass
 
 If none is found, then both user and pass are set to empty nul-terminated strings.
+
+Parameters:
+- `hm` - HTTP message to look for credentials
+- `user` - buffer to receive user name
+- `userlen` - size of `user` buffer
+- `pass` - buffer to receive password
+- `passlen` - size of `pass` buffer
+
+Return value: none
 
 Usage example:
 
@@ -966,10 +1100,16 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_http\_match\_uri()
 
 ```c
-bool mg_http_match_uri(const struct mg_http_message *, const char *glob);
+bool mg_http_match_uri(const struct mg_http_message *hm, const char *glob);
 ```
 
-Return true if HTTP request matches a given glob pattern; false otherwise.
+Check if HTTP request matches a given glob pattern.
+
+Parameters:
+- `hm` - HTTP message to match
+- `glob` - pattern
+
+Return value: true if HTTP request matches a given glob pattern; false otherwise.
 
 Usage example:
 
@@ -990,7 +1130,7 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_http\_upload()
 
 ```c
-int mg_http_upload(struct mg_connection *, struct mg_http_message *hm,
+int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                    const char *dir);
 ```
 
@@ -1023,6 +1163,13 @@ So, the expected usage of this API function is this:
 - When the last chunk is POSTed, upload finishes
 - POST data must not be encoded in any way, it it saved as-is
 
+Parameters:
+- `c` - connection to use
+- `hm` - POST message, containing parameters described above
+- `dir` - path to directory
+
+Return value: request body len or negative value on error
+
 Usage example:
 
 ```c
@@ -1037,10 +1184,17 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_http\_bauth()
 
 ```c
-void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
+void mg_http_bauth(struct mg_connection *c, const char *user, const char *pass);
 ```
 
 Write a Basic `Authorization` header to the output buffer.
+
+Parameters:
+- `c` - connection to use
+- `user` - user name
+- `pass` - password
+
+Return value: none
 
 Usage example:
 
@@ -1068,6 +1222,13 @@ size_t mg_http_next_multipart(struct mg_str body, size_t offset, struct mg_http_
 Parse the multipart chunk in the `body` at a given `offset`. An initial
 `offset` should be 0. Fill up parameters in the provided `part`, which could be
 NULL. Return offset to the next chunk, or 0 if there are no more chunks.
+
+Parameters:
+- `body`- message body
+- `offset` - start offset
+- `part` - pointer to `struct mg_http_part` to fill
+
+Return value: offset to the next chunk, or 0 if there are no more chunks.
 
 See [examples/form-upload](../examples/form-upload) for full usage example.
 
@@ -1098,12 +1259,19 @@ Structure represents the WebSocket message.
 ### mg\_ws\_connect()
 
 ```c
-struct mg_connection *mg_ws_connect(struct mg_mgr *, const char *url,
+struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
                                     mg_event_handler_t fn, void *fn_data,
                                     const char *fmt, ...);
 ```
 
 Create client Websocket connection.
+
+Note: this function does not connect to peer, it allocates required resources and
+ starts connect process. Once peer is really connected `MG_EV_CONNECT` event is
+ sent to connection event handler.
+
+Parameters:
+- `mgr` - event manager to use
 - `url` - specifies remote URL, e.g. `http://google.com`
 - `opts` - MQTT options, with client ID, qos, etc
 - `fn` - an event handler function
@@ -1112,9 +1280,7 @@ Create client Websocket connection.
   structure as `c->fn_data`
 - `fmt` - printf-like format string for additional HTTP headers, or NULL
 
-Note: this function does not connect to peer, it allocates required resources and
- starts connect process. Once peer is really connected `MG_EV_CONNECT` event is
- sent to connection event handler.
+Return value: pointer to created connection or `NULL` on error
 
 Usage example:
 
@@ -1127,13 +1293,20 @@ if(c == NULL) fatal("Cannot create connection");
 ### mg\_ws\_upgrade()
 
 ```c
-void mg_ws_upgrade(struct mg_connection *, struct mg_http_message *,
+void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *,
                    const char *fmt, ...);
 ```
 
 Upgrade given HTTP connection to Websocket. The `fmt` is a printf-like
 format string for the extra HTTP headers returned to the client in a
 Websocket handshake. Set `fmt` to `NULL` if no extra headers needs to be passed.
+
+Parameters:
+- `c` - connection to use
+- `hm` - HTTP message
+- `fmt` - printf-like format string for additional HTTP headers, or NULL
+
+Return value: none
 
 Usage example:
 
@@ -1150,10 +1323,20 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_ws\_send()
 
 ```c
-size_t mg_ws_send(struct mg_connection *, const char *buf, size_t len, int op);
+size_t mg_ws_send(struct mg_connection *c, const char *buf, size_t len, int op);
 ```
 
-Send `buf` (`len` size) to the websocket peer. `op` is the Websocket message type:
+Send data to websocket peer
+
+Parameters:
+- `c` - connection to use
+- `buf` - data to send
+- `len` - data size
+- `op` - Websocket message type
+
+Return value: sent bytes count
+
+Possible Websocket message type:
 
 ```c
 #define WEBSOCKET_OP_CONTINUE 0
@@ -1185,6 +1368,13 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op)
 Convert data in output buffer to WebSocket format. Useful then implementing protocol over WebSocket
 See [examples/mqtt-over-ws-client](../examples/mqtt-over-ws-client) for full example.
 
+Parameters:
+- `c` - connection to use
+- `len` - bytes count to convert
+- `op` - Websocket message type (see `mg_ws_send`)
+
+Return value: new size of connection output buffer
+
 Usage example:
 
 ```c
@@ -1202,8 +1392,17 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
                                       mg_event_handler_t fn, void *fn_data)
 ```
 
-Connect SNTP server specified by `url` or `time.google.com` if NULL.
-Return pointer to created connection or `NULL` on error.
+Connect SNTP server.
+
+Parameters:
+- `mgr` - event manager to use
+- `url` - specifies remote URL, `time.google.com` if NULL.
+- `fn` - an event handler function
+- `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
+  event handler is called. This pointer is also stored in a connection
+  structure as `c->fn_data`
+
+Return value: pointer to created connection or `NULL` on error.
 
 Usage example:
 
@@ -1225,7 +1424,12 @@ void mg_sntp_send(struct mg_connection *c, unsigned long utc)
 ```
 
 Send time request to SNTP server. Note, that app can't send SNTP request more often than every 1 hour.
-`utc` is a current time, used to verify if new request is possible.
+
+Parameters:
+- `c` - connection to use
+- `utc` - current time, used to verify if new request is possible.
+
+Return value: none
 
 Usage example:
 
@@ -1265,12 +1469,19 @@ Structure represents the MQTT message.
 ### mg\_mqtt\_connect()
 
 ```c
-struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
+struct mg_connection *mg_mqtt_connect(struct mg_mgr *mgr, const char *url,
                                       struct mg_mqtt_opts *opts,
                                       mg_event_handler_t fn, void *fn_data);
 ```
 
 Create client MQTT connection.
+
+Note: this function does not connect to peer, it allocates required resources and
+starts connect process. Once peer is really connected `MG_EV_CONNECT` event is
+sent to connection event handler.
+
+Parameters:
+- `mgr` - event manager to use
 - `url` - specifies remote URL, e.g. `http://google.com`
 - `opts` - MQTT options, with client ID, qos, etc
 - `fn` - an event handler function
@@ -1278,9 +1489,7 @@ Create client MQTT connection.
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
 
-Note: this function does not connect to peer, it allocates required resources and
-starts connect process. Once peer is really connected `MG_EV_CONNECT` event is
-sent to connection event handler.
+Return value: pointer to created connection or `NULL` on error
 
 Usage example:
 
@@ -1304,11 +1513,15 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 Create MQTT listener.
 
+Parameters:
+- `mgr` - event manager to use
 - `url` - specifies local IP address and port to listen on, e.g. `mqtt://0.0.0.0:1883`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
+
+Return value: pointer to created connection or `NULL` on error
 
 Usage example:
 
@@ -1325,6 +1538,13 @@ void mg_mqtt_login(struct mg_connection *c, const char *url,
 ```
 
 Send MQTT login request.
+
+Parameters:
+- `c` - connection to use
+- `url` - url, containing user name and password to use
+- `opts` - request options
+
+Return value: none
 
 Usage example:
 
@@ -1344,11 +1564,20 @@ void fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
 ### mg\_mqtt\_pub()
 
 ```c
-void mg_mqtt_pub(struct mg_connection *, struct mg_str *topic,
+void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
                  struct mg_str *data, int qos, bool retain);
 ```
 
-Publish message `data` to the topic `topic` with given QoS and retain flag.
+Publish message.
+
+Parameters:
+- `c` - connection to use
+- `topic` - topic to publish data
+- `data` - data to publish
+- `qos` - required QoS
+- `retain` - retain flag
+
+Return value: none
 
 Usage example:
 
@@ -1361,10 +1590,17 @@ mg_mqtt_pub(c, &topic, &data, 1, false);
 ### mg\_mqtt\_sub()
 
 ```c
-void mg_mqtt_sub(struct mg_connection *, struct mg_str *topic, int qos);
+void mg_mqtt_sub(struct mg_connection *c, struct mg_str *topic, int qos);
 ```
 
-Subscribe to topic `topic` with given QoS.
+Subscribe to topic.
+
+Parameters:
+- `c` - connection to use
+- `topic` - topic to subscribe
+- `qos` - required Qos
+
+Return value: none
 
 ```c
 struct mg_str topic = mg_str("topic");
@@ -1379,7 +1615,15 @@ size_t mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic, uint8
 
 Traverse list of subscribed topics.
 Used to implement MQTT server when `MQTT_CMD_SUBSCRIBE` is received.
-Return next position, or 0 when done. Initial position `pos` should be 4. Example:
+Initial position `pos` should be 4.
+
+Parameters:
+- `mgs` - MQTT message
+- `topic` - pointer to `mg_str` to receive topic
+- `qos` - pointer to `uint8_t` to receive qos
+- `pos` - position to list from
+
+Return value: next position, or 0 when done.
 
 Usage example:
 
@@ -1410,6 +1654,13 @@ size_t mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic, siz
 Same as `mg_mqtt_next_sub()`, but for unsubscribed topics. The difference
 is that there is no QoS in unsubscribe request.
 
+Parameters:
+- `mgs` - MQTT message
+- `topic` - pointer to `mg_str` to receive topic
+- `pos` - position to list from
+
+Return value: next position, or 0 when done.
+
 Usage example:
 
 ```c
@@ -1434,7 +1685,7 @@ void fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
 ### mg\_mqtt\_send_header()
 
 ```c
-void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags, uint32_t len);
+void mg_mqtt_send_header(struct mg_connection *c, uint8_t cmd, uint8_t flags, uint32_t len);
 ```
 Send MQTT command header. Useful in MQTT server implementation. Command can be one of the following value:
 
@@ -1455,6 +1706,14 @@ Send MQTT command header. Useful in MQTT server implementation. Command can be o
 #define MQTT_CMD_DISCONNECT 14
 ```
 
+Parameters:
+- `c` - connection to use
+- `cmd` - command (see above)
+- `flags` - command flags
+- `len` - size of the following command
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -1474,10 +1733,15 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_mqtt\_ping()
 
 ```c
-void mg_mqtt_ping(struct mg_connection *);
+void mg_mqtt_ping(struct mg_connection *c);
 ```
 
 Send `MQTT_CMD_PINGREQ` command via `mg_mqtt_send_header`
+
+Parameters:
+- `c` - connection to use
+
+Return value: none
 
 Usage example:
 
@@ -1497,8 +1761,14 @@ static void timer_fn(void *arg) {
 int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m);
 ```
 
-Parse buffer and fill `m` if buffer contain MQTT message.
-Return `MQTT_OK` if message succesfully parsed, `MQTT_INCOMPLETE` if message
+Parse buffer and fill `mg_mqtt_message` structure if buffer contain MQTT message.
+
+Parameters:
+- `buf` - buffer with MQTT message to parse
+- `len` - buffer size
+- `m` - pointer to `mg_mqtt_message` structure to receive parsed message
+
+Return value: `MQTT_OK` if message successfully parsed, `MQTT_INCOMPLETE` if message
 isn't fully receives and `MQTT_MALFORMED` is message has wrong format.
 
 Usage example:
@@ -1559,6 +1829,12 @@ Initialise TLS on a given connection.
 as RNG. The `mg_random` can be overridden by setting `MG_ENABLE_CUSTOM_RANDOM`
 and defining your own `mg_random()` implementation.
 
+Parameters:
+- `c` - connection, for which TLS should be initialized
+- `opts` - TLS initialization parameters
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -1590,17 +1866,20 @@ as the `mg_mgr_poll()` timeout argument in the main event loop.
 ### mg\_timer\_init()
 
 ```c
-void mg_timer_init(struct mg_timer *, unsigned long ms, unsigned flags,
+void mg_timer_init(struct mg_timer *t, unsigned long ms, unsigned flags,
                    void (*fn)(void *), void *fn_data);
 ```
 
 Setup a timer.
+
+Parameters:
+- `t` - pointer to `mg_timer` that should be initialized
 - `ms` - an interval in milliseconds
 - `flags` - timer flags bitmask, `MG_TIMER_REPEAT` and `MG_TIMER_RUN_NOW`
 - `fn` - function to invoke
 - `fn_data` - function argument
 
-A timer gets initialized and linked into the internal timers list:
+Return value: none
 
 Usage example:
 ```c
@@ -1610,15 +1889,20 @@ void timer_fn(void *data) {
 
 struct mg_timer timer;
 mg_timer_init(&timer, 1000 /* 1sec */, MG_TIMER_REPEAT, timer_fn, NULL);
+// A timer gets initialized and linked into the internal timers list
 ```
 
 ### mg\_timer\_free()
 
 ```c
-void mg_timer_free(struct mg_timer *);
+void mg_timer_free(struct mg_timer *t);
 ```
-
 Free timer, remove it from the internal timers list.
+
+Parameters:
+- `t` - timer to free
+
+Return value: none
 
 Usage example:
 ```c
@@ -1639,6 +1923,11 @@ past the timer's expiration time.
 Note, that `mg_mgr_poll` function internally calls `mg_timer_poll`, therefore,
 in most cases it is unnecessary to call it explicitly.
 
+Parameters:
+- `uptime_ms` - current timestamp
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -1656,6 +1945,10 @@ double mg_time(void);
 
 Return current time as UNIX epoch, using `double` value for sub-second accuracy.
 
+Parameters: none
+
+Return value: current time
+
 Usage example:
 
 ```c
@@ -1670,6 +1963,10 @@ unsigned long mg_millis(void);
 
 Return current uptime in milliseconds.
 
+Parameters: none
+
+Return value: current uptime
+
 Usage example:
 
 ```c
@@ -1683,6 +1980,11 @@ void mg_usleep(unsigned long usecs);
 ```
 
 Block thread execution for a given number of microseconds.
+
+Parameters:
+- `usecs` - number of microseconds to block thread
+
+Return value: none
 
 Usage example:
 
@@ -1717,6 +2019,11 @@ duplicate provided string, and stores pointer within created `mg_str` structure.
 Note, that is you have problems in C++ (constructor shadowing), there is `mg_str_s`
 synonym for this function.
 
+Parameters:
+- `s` - pointer to NULL-terminated string to store in created mg_str
+
+Return value: created Mongoose string
+
 Usage example:
 
 ```c
@@ -1732,6 +2039,12 @@ struct mg_str mg_str_n(const char *s, size_t n);
 Create Mongoose string from C-string `s` (can be non-NULL terminated, len is specified in `n`). <br>
 Note: this function doesn't duplicate provided string, but stores pointer within created `mg_str` structure.
 
+Parameters:
+- `s` - pointer to string to store in created `mg_str`
+- `n` - string len
+
+Return value: created Mongoose string
+
 Usage example:
 
 ```c
@@ -1745,7 +2058,11 @@ int mg_casecmp(const char *s1, const char *s2);
 ```
 
 Case insensitive compare two NULL-terminated strings.
-Return value is 0 if strings are equal, more than zero if first argument is greater then second, and less than zero otherwise.
+
+Parameters:
+- `s1`, `s2` - pointers to strings to compare
+
+Return value: 0 if strings are equal, more than zero if first argument is greater then second, and less than zero otherwise.
 
 Usage example:
 
@@ -1763,7 +2080,11 @@ int mg_ncasecmp(const char *s1, const char *s2, size_t len);
 
 Case insensitive compare two C-strings, not more than `len` symbols or until meet `\0` symbol.
 
-Return value is 0 if strings are equal, more than zero if first argument is
+Parameters:
+- `s1`, `s2` - pointers to strings to compare
+- `len` - maximum length to compare
+
+Return value: 0 if strings are equal, more than zero if first argument is
 greater then second and less than zero otherwise.
 
 Usage example:
@@ -1782,7 +2103,11 @@ int mg_vcmp(const struct mg_str *s1, const char *s2);
 
 Сompare mongoose string and C-string.
 
-Return value is 0 if strings are equal, more than zero if first argument is
+Parameters:
+- `s1` - pointer to Mongoose string to compare
+- `s2` - pointer to C-string to compare
+
+Return value: 0 if strings are equal, more than zero if first argument is
 greater then second and less than zero otherwise.
 
 Usage example:
@@ -1802,7 +2127,11 @@ int mg_vcasecmp(const struct mg_str *str1, const char *str2);
 
 Case insensitive compare mongoose string and C-string.
 
-Return value is 0 if strings are equal, more than zero if first argument is
+Parameters:
+- `str1` - Mongoose string to compare
+- `str2` - C-string to compare
+
+Return value: 0 if strings are equal, more than zero if first argument is
 greater then second and less than zero otherwise.
 
 Usage example:
@@ -1822,7 +2151,10 @@ int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
 
 Сompare two mongoose strings.
 
-Return value is 0 if strings are equal, more than zero if first argument is
+Parameters:
+- `str1`, `str2` - pointers to Mongoose strings to compare
+
+Return value: 0 if strings are equal, more than zero if first argument is
 greater then second and less than zero otherwise.
 
 Usage example:
@@ -1844,6 +2176,11 @@ struct mg_str mg_strdup(const struct mg_str s);
 Duplicate provided string. Return new string or `MG_NULL_STR` on error.
 Note: this function allocates memory for returned string. You may need to free it using `free` function.
 
+Parameters:
+- `s` - Mongoose string to duplicate
+
+Return value: duplicated string
+
 Usage example:
 
 ```c
@@ -1860,7 +2197,13 @@ free(str1.ptr);
 const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle)
 ```
 
-Search for `needle` substring in `haystack` string. Return pointer to `needle`
+Search for `needle` substring in `haystack` string.
+
+Parameters:
+- `haystack` - Mongoose sting to search for substring
+- `needle` - Mongoose string to search
+
+Return value: pointer to `needle`
 occurrence within `haystack` or `NULL` if not found.
 
 Usage example:
@@ -1882,6 +2225,11 @@ struct mg_str mg_strstrip(struct mg_str s)
 
 Remove heading and trailing whitespace from mongoose string `s`.
 
+Paramaters:
+- `s` - Mongoose string for trimming
+
+Return value: input string
+
 Usage example:
 
 ```c
@@ -1897,13 +2245,21 @@ if (mg_vcmp(str, "Hello, world") == 0) {
 bool mg_globmatch(const char *pattern, size_t p_len, const char *s, size_t s_len);
 ```
 
-Return true if string `s` (limited to `s_len` symbols) matches glob pattern `pattern`, (limited to `p_len` symbols).
+Check if string `s` (limited to `s_len` symbols) matches glob pattern `pattern`, (limited to `p_len` symbols).
 The glob pattern matching rules are as follows:
 
 - `?` matches any single character
 - `*` matches zero or more characters except `/`
 - `#` matches zero or more characters
 - any other character matches itself
+
+Parameters:
+- `pattern` - pattern to match for
+- `p_len` - pattetn lenght
+- `s` - string to match
+- `s_len` - string lenght
+
+Return value: `true` is matches, `false` otherwise
 
 Usage example:
 
@@ -1928,6 +2284,13 @@ gets stored in `k` and `v` respectively.
 
 IMPORTANT: this function modifies `s` by pointing to the next entry.
 
+Parameters:
+- `s` - string to search for entry
+- `k` - pointer to `mg_str` to receive entry key
+- `v` - pointer to `mg_str` to receive entry value
+
+Return value: `true` if entry is found, `false` otherwise
+
 <img src="images/mg_commalist.png">
 
 Usage example:
@@ -1948,6 +2311,12 @@ char *mg_hexdump(const void *buf, int len);
 Hexdump binary data `buf`, `len` into malloc-ed buffer and return it.
 It is a caller's responsibility to free() returned pointer.
 
+Parameters:
+- `buf` - data to hexdump
+- `len` - data lenght
+
+Return value: malloc-ed buffer with hexdumped data
+
 Usage example:
 
 ```c
@@ -1965,6 +2334,12 @@ char *mg_hex(const void *buf, size_t len, char *dst);
 
 Hex-encode binary data `buf`, `len` into a buffer `dst` and nul-terminate it.
 The output buffer must be at least 2 x `len` + 1 big.
+
+Parameters:
+- `buf` - data to hex-encode
+- `len` - data length
+- `dst` - pointer to output buffer
+
 Return value: `dst` pointer. The encoded characters are lowercase.
 
 Usage example:
@@ -1986,6 +2361,13 @@ void mg_unhex(const char *buf, size_t len, unsigned char *to);
 Hex-decode string `buf`, `len` into a buffer `to`. The `to` buffer should be
 at least `lsn` / 2 big.
 
+Parameters:
+- `buf` - data to hex-decode
+- `len` - data length
+- `to` - pointer to output buffer
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -2001,9 +2383,15 @@ free(hex);
 unsigned long mg_unhexn(const char *s, size_t len);
 ```
 
-Parse `len` characters of the hex-encoded string `s`, return parsed value.
+Parse `len` characters of the hex-encoded string `s`.
 The maximum value of `len` is the width of the `long` x 2, for example
 on 32-bit platforms it is 8.
+
+Parameters:
+- `s` - string to parse
+- `len` - string length
+
+Return value: return parsed value
 
 Usage example:
 
@@ -2024,7 +2412,14 @@ Print message specified by printf-like format string `fmt` into a buffer
 pointed by `buf` of size `size`. If `size` is large enough to hold the whole
 message, then a message is stored in `*buf`. If it does not fit, then a large
 enough buffer is allocated to hold a message, and `buf` is changed to point to
-that buffer. Return value: number of bytes printed.
+that buffer.
+
+Parameters:
+- `buf` - pointer to pointer to output buffer
+- `size` - pre-allocated buffer size
+- `fmt` - printf-like format string
+
+Return value: number of bytes printed.
 
 Usage example:
 
@@ -2040,6 +2435,14 @@ int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
 ```
 
 Same as `mg_asprintf()` but uses `va_list` argument.
+
+Parameters:
+- `buf` - pointer to pointer to output buffer
+- `size` - pre-allocated buffer size
+- `fmt` - printf-like format string
+- `ap` - parameters list
+
+Return value: number of bytes printed.
 
 Usage example:
 ```c
@@ -2067,6 +2470,11 @@ int64_t mg_to64(struct mg_str str);
 
 Parse 64-bit integer value held by string `s`.
 
+Parameters:
+- `str` - string to parse
+
+Return value: parsed value
+
 Usage example:
 
 ```c
@@ -2079,7 +2487,13 @@ int64_t val = mg_to64(mg_str("123")); // Val is now 123
 bool mg_aton(struct mg_str str, struct mg_addr *addr);
 ```
 
-Parse IP address held by `str` and store it in `addr`. Return true on success.
+Parse IP address held by `str` and store it in `addr`.
+
+Parameters:
+- `str` - string to parse
+- `addr` - pointer to `mg_addr` string to receive parsed value
+
+Return value: `true` on success, `false` otherwise.
 
 Usage example:
 
@@ -2096,7 +2510,14 @@ if (mg_aton(mg_str("127.0.0.1"), &addr)) {
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
 ```
 
-Stringify IP address `ipaddr` into a buffer `buf`, `len`. Return `buf`.
+Stringify IP address `ipaddr` into a buffer `buf`, `len`.
+
+Parameters:
+- `addr` - address to stringify
+- `buf` - pointer to output buffer
+- `len` - output buffer size
+
+Return value: `buf` value
 
 Usage example:
 
@@ -2115,6 +2536,13 @@ void mg_call(struct mg_connection *c, int ev, void *ev_data);
 
 Send `ev` event to `c` event handler. This function is useful then implementing
 your own protocol.
+
+Parameters:
+- `c` - connection to send event
+- `ev` - event to send
+- `ev_data` - additional event parameter
+
+Return value: none
 
 Usage example:
 
@@ -2136,6 +2564,12 @@ void mg_error(struct mg_connection *c, const char *fmt, ...);
 
 Send `MG_EV_ERROR` to connection event handler with error message formatted using printf semantics.
 
+Parameters:
+- `c` - connection to send event
+- `fmt` - format string in `printf` semantics
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -2149,6 +2583,11 @@ void mg_md5_init(mg_md5_ctx *c);
 ```
 
 Initialize context for MD5 hashing.
+
+Parameters:
+- `c` - pointer to `mg_md5_ctx` structure to initialize
+
+Return value: none
 
 Usage example:
 
@@ -2164,6 +2603,13 @@ void mg_md5_update(mg_md5_ctx *c, const unsigned char *data, size_t len);
 ```
 Hash `len` bytes of data pointed by `data` using MD5 algorithm.
 
+Parameters:
+- `c` - md5 context
+- `data` - data to hash
+- `len` - data length
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -2178,10 +2624,16 @@ mg_md5_update(&ctx, "more data", 9);  // hash "more data" string
 ### mg\_md5\_final()
 
 ```c
-void mg_md5_final(mg_md5_ctx *c, unsigned char[16]);
+void mg_md5_final(mg_md5_ctx *c, unsigned char buf[16]);
 ```
 
 Get current MD5 hash for context.
+
+Parameters:
+- `c` - md5 context
+- `buf` - pointer to buffer to write MD5 hash value
+
+Return value: none
 
 Usage example:
 
@@ -2197,10 +2649,15 @@ mg_md5_final(&ctx, buf);  // `buf` is now MD5 hash
 ### mg\_sha1\_init()
 
 ```c
-void mg_sha1_init(mg_sha1_ctx *);
+void mg_sha1_init(mg_sha1_ctx *c);
 ```
 
 Initialize context for calculating SHA1 hash
+
+Parameters:
+- `c` - pointer to `mg_sha1_ctx` structure to initialize
+
+Return value: none
 
 Usage example:
 
@@ -2212,10 +2669,17 @@ mg_sha1_init(&ctx);
 ### mg\_sha1\_update()
 
 ```c
-void mg_sha1_update(mg_sha1_ctx *, const unsigned char *data, size_t len);
+void mg_sha1_update(mg_sha1_ctx *c, const unsigned char *data, size_t len);
 ```
 
 Hash `len` bytes of `data` using SHA1 algorithm.
+
+Parameters:
+- `c` - sha1 context
+- `data` - data to hash
+- `len` - data length
+
+Return value: none
 
 Usage example:
 
@@ -2231,10 +2695,16 @@ mg_sha1_update(&ctx, "more data", 9); // hash "more data" string
 ### mg\_sha1\_final()
 
 ```c
-void mg_sha1_final(unsigned char digest[20], mg_sha1_ctx *);
+void mg_sha1_final(unsigned char digest[20], mg_sha1_ctx *c);
 ```
 
 Get current SHA1 hash for context.
+
+Parameters:
+- `c` - sha1 context
+- `digest` - pointer to buffer to receive hash value
+
+Return value: none
 
 Usage example:
 
@@ -2254,7 +2724,13 @@ int mg_base64_update(unsigned char p, char *out, int pos);
 ```
 
 Encode `p` byte to base64 and write result into `out` buffer starting with `pos` position.
-Return new position for futher operations.
+
+Parameters:
+- `p` - byte to encode
+- `out` - pointer to buffer to write result
+- `pos` - position in output buffer to write result
+
+Return value: new position for futher operations.
 
 Usage example:
 
@@ -2271,6 +2747,12 @@ int mg_base64_final(char *buf, int pos);
 
 Add base64 finish mark and `\0` symbol to `buf` at `pos` position.
 
+Parameters:
+- `buf` - pointer to buffer to write finish mark
+- `pos` - position to write
+
+Return value: new position for futher operations.
+
 ```c
 char buf[10];
 int pos;
@@ -2285,7 +2767,14 @@ mg_base64_final(buf, pos);
 int mg_base64_encode(const unsigned char *p, int n, char *to);
 ```
 
-Encode `n` bytes data pointed by `p` using base64 and write result into `to`. Return written symbols number.
+Encode `n` bytes data pointed by `p` using base64 and write result into `to`.
+
+Parameters:
+- `p` - pointer to data to encode
+- `n` - data length
+- `to` - pointer to buffer to write result
+
+Return value: written symbols number.
 
 Usage example:
 
@@ -2300,7 +2789,14 @@ mg_base64_encode((uint8_t *) "abcde", 5, buf); // buf is now YWJjZGU=
 int mg_base64_decode(const char *src, int n, char *dst);
 ```
 
-Decode `n` bytes of base64-ed `src` and write it to `dst`. Return number of written symbols.
+Decode `n` bytes of base64-ed `src` and write it to `dst`.
+
+Parameters:
+- `src` - data to decode
+- `n` - data length
+- `dst` - pointer to output buffer
+
+Return value: number of written symbols.
 
 Usage example:
 
@@ -2319,6 +2815,12 @@ Read file contents into a nul-terminated malloc-ed string. It is a caller's
 responsibility to free() a returned pointer. If `sizep` is not NULL, it will
 return a file size in bytes. Return `NULL` on error.
 
+Parameters:
+- `path` - path to file to read
+- `sizep` - pointer to `size_t` to receive file size
+
+Return value: file contents, see function description
+
 Usage example:
 
 ```c
@@ -2335,9 +2837,15 @@ free(data);
 ```c
 bool mg_file_write(const char *path, const void *buf, size_t len);
 ```
-
-Write data to a file, return `true` if written, `false` otherwise.
+Write data to a file.
 The write is atomic, i.e. data gets written to a temporary file first, then `rename()-ed` to a destination file name.
+
+Parameters:
+- `path` - path to file
+- `buf` - data to write
+- `len` - data length
+
+Return value: `true` if written, `false` otherwise.
 
 Usage example:
 
@@ -2355,8 +2863,14 @@ int mg_file_printf(const char *path, const char *fmt, ...);
 ```
 
 Write into a file `path` using `printf()` semantics.
-Return `true` on success, `false` otherwise. This function prints data to a
+This function prints data to a
 temporary in-memory buffer first, then calls `mg_file_write()`.
+
+Parameters:
+- `path`- path to file
+- `fmt` - format string in `printf()` semantics
+
+Return value: `true` on success, `false` otherwise.
 
 ```c
 if (mg_file_printf("my_file.txt", "Hello, %s!", "world") {
@@ -2375,6 +2889,12 @@ function for TLS and some other routines that require RNG (random number
 generator). It is possible to override a built-in `mg_random()` by specifying
 a `MG_ENABLE_CUSTOM_RANDOM=1` build preprocessor constant.
 
+Parameters:
+- `buf` - pointer to buffer to receive random data
+- `len` - buffer size
+
+Return value: none
+
 Usage example:
 ```c
 char buf[10];
@@ -2388,6 +2908,11 @@ uint16_t mg_ntohs(uint16_t net);
 ```
 
 Convert `uint16_t` value to host order.
+
+Parameters:
+- `net` - 16-bit value in network order
+
+Return value: 16-bit value in host order
 
 Usage example:
 
@@ -2403,6 +2928,11 @@ uint32_t mg_ntohl(uint32_t net);
 
 Convert `uint32_t` value to host order.
 
+Parameters:
+- `net` - 32-bit value in network order
+
+Return value: 32-bit value in host order
+
 Usage example:
 
 ```c
@@ -2412,10 +2942,15 @@ uint32_t val = mg_ntohl(0x12345678);
 ### mg\_ntohs()
 
 ```c
-uint16_t mg_htons(uint16_t net);
+uint16_t mg_htons(uint16_t h);
 ```
 
 Convert `uint16_t` value to network order.
+
+Parameters:
+- `h` - 16-bit value in host order
+
+Return value: 16-bit value in network order
 
 Usage example:
 
@@ -2426,10 +2961,15 @@ uint16_t val = mg_htons(0x1234);
 ### mg\_htonl()
 
 ```c
-uint32_t mg_ntohl(uint32_t net);
+uint32_t mg_ntohl(uint32_t h);
 ```
 
 Convert `uint32_t` value to network order.
+
+Parameters:
+- `h` - 32-bit value in host order
+
+Return value: 32-bit value in network order
 
 Usage example:
 
@@ -2444,6 +2984,13 @@ uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 ```
 
 Calculate CRC32 checksum for a given buffer. An initial `crc` value should be `0`.
+
+Parameters:
+- `crc` - initial crc value
+- `buf` - data to calculate CRC32
+- `len` - data size
+
+Return value: calculated CRC32 checksum
 
 Usage example:
 
@@ -2460,6 +3007,7 @@ int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
 
 Check IPv4 address `remote_ip` against the IP ACL `acl`. Parameters:
 
+Parameters:
 - `acl` - an ACL string, e.g. `-0.0.0.0/0,+1.2.3.4`
 - `remote_ip` - IPv4 address in network byte order
 
@@ -2480,7 +3028,15 @@ int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
 ```
 
 Decode URL-encoded string `s` and write it into `to` buffer.
-If `form` is non-zero, then `+` is decoded as whitespace.
+
+Parameters:
+- `s` - string to encode
+- `n` - string to encode lenght
+- `to` - pointer to output buffer
+- `to_len` - output buffer size
+- `form` - if non-zero, then `+` is decoded as whitespace.
+
+Return value: decoded bytes count or negative value on error
 
 Usage example:
 
@@ -2497,7 +3053,14 @@ size_t mg_url_encode(const char *s, size_t n, char *buf, size_t len);
 ```
 
 Encode `s` string to URL-encoding and write encoded string into `buf`.
-Return number of characters written to `buf`
+
+Parameters:
+- `s` - string to encode
+- `n` - string to encode length
+- `buf` - output buffer
+- `len` - output buffer size
+
+Return value: number of characters written to `buf`
 
 Usage example:
 
@@ -2534,7 +3097,13 @@ by `buf`, and `len` specifies number of bytes currently stored.
 int mg_iobuf_init(struct mg_iobuf *io, size_t size);
 ```
 
-Initialize IO buffer, allocate `size` bytes. Return 1 on success, 0 on allocation failure.
+Initialize IO buffer, allocate `size` bytes.
+
+Parameters:
+- `io` - pointer to `mg_iobuf` structure to initialize
+- `size` - amount of bytes to allocate
+
+Return value: 1 on success, 0 on allocation failure.
 
 Usage example:
 
@@ -2554,7 +3123,12 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t size);
 Resize IO buffer, set the new size to `size`. The `io->buf` pointer could
 change after this, for example if the buffer grows. If `size` is 0, then the
 `io->buf` is freed and set to NULL, and both `size` and `len` are set to 0.
-Return 1 on success, 0 on allocation failure.
+
+Parameters:
+- `io` - iobuf to resize
+- `size` - new size
+
+Return value: 1 on success, 0 on allocation failure
 
 Usage example:
 
@@ -2575,6 +3149,11 @@ void mg_iobuf_free(struct mg_iobuf *io);
 ```
 
 Free memory pointed by `io->buf` and set to NULL. Both `size` and `len` are set to 0.
+
+Parameters:
+- `io` - iobuf to free
+
+Return value: none
 
 Usage example:
 
@@ -2597,6 +3176,15 @@ Insert data buffer `buf`, `len` at offset `offset`. The iobuf gets is expanded
 if required. The resulting `io->size` is always aligned to the `align` byte boundary - therefore,
 to avoid memory fragmentation and frequent reallocations, set `align` to a higher value.
 
+Parameters:
+- `io` - iobuf to add data
+- `offset` - offswt to add data
+- `buf` - data to add
+- `len` - data lenth
+- `align` - align boundary
+
+Return value: new `io` len
+
 Usage example:
 
 ```c
@@ -2615,6 +3203,13 @@ size_t mg_iobuf_del(struct mg_iobuf *io, size_t offset, size_t len);
 
 Delete `len` bytes starting from `offset`, and shift the remaining bytes.
 If `len` is greater than `io->len`, nothing happens, so such call is silently ignored.
+
+Parameters:
+- `io` - iobuf to delete data
+- `offset` - start offset
+- `len` - amount of bytes to delete
+
+Return value: new `io` len
 
 Usage example:
 
@@ -2637,7 +3232,12 @@ mg_iobuf_del(&io, 0, "hi", 2, 512);  // io->len is 0, io->size is still 512
 unsigned short mg_url_port(const char *url);
 ```
 
-Return port for given `url` or `0` if url doesn't contain port and there isn't default port for url protocol.
+Return port for given URL
+
+Parameters:
+- `url` - URL to extract port
+
+Return value: port for given url or `0` if url doesn't contain port and there isn't default port for url protocol.
 
 Usage example:
 
@@ -2652,7 +3252,12 @@ unsigned short port2 = mg_url_port("127.0.0.1:567") // port2 is now 567
 int mg_url_is_ssl(const char *url);
 ```
 
-Return `0` is given URL uses encrypted scheme and non-zero otherwise.
+Check if given URL uses encrypted scheme
+
+Parameters:
+- `url` - URL to check
+
+Return value: `0` is given URL uses encrypted scheme and non-zero otherwise.
 
 Usage example:
 
@@ -2670,6 +3275,11 @@ struct mg_str mg_url_host(const char *url);
 
 Extract host name from given URL.
 
+Parameters:
+- `url` - URL to extract host
+
+Return value: host name
+
 Usage example:
 
 ```c
@@ -2684,6 +3294,11 @@ struct mg_str mg_url_user(const char *url);
 
 Extract user name from given URL.
 
+Parameters:
+- `url` - URL to extract user name
+
+Return value: user name or empty string if not found
+
 Usage example:
 
 ```c
@@ -2696,7 +3311,12 @@ struct mg_str user_name = mg_url_user("https://user@password@my.example.org"); /
 struct mg_str mg_url_pass(const char *url);
 ```
 
-Extract user name from given URL.
+Extract password from given URL.
+
+Parameters:
+- `url` - URL to extract password
+
+Return value: password or empty string if not found
 
 Usage example:
 
@@ -2710,8 +3330,13 @@ struct mg_str pwd = mg_url_user("https://user@password@my.example.org"); // pwd 
 const char *mg_url_uri(const char *url);
 ```
 
-Extract URI from given URL. Return `/` if no URI found.
+Extract URI from given URL.
 Note, that function returns pointer within `url`, no need to free() it explicitly.
+
+Parameters:
+- `url` - URL to extract URI
+
+Return value: URI or `\` if not found
 
 Usage example:
 
@@ -2742,6 +3367,12 @@ Log levels defined as:
 enum { LL_NONE, LL_ERROR, LL_INFO, LL_DEBUG, LL_VERBOSE_DEBUG };
 ```
 
+Parameters:
+- `level` - log level, see levels above
+- `args` - information to log
+
+Return value: none
+
 Usage example:
 ```c
 LOG(LL_ERROR, ("Hello %s!", "world"));  // Output "Hello, world"
@@ -2753,13 +3384,18 @@ LOG(LL_ERROR, ("Hello %s!", "world"));  // Output "Hello, world"
 void mg_log_set(const char *spec);
 ```
 
-Set mongoose logging level. `spec` is a string, containing log level, can be one of the following values:
+Set mongoose logging level.
+
+Parameters:
+- `spec` - string, containing log level, can be one of the following values:
 
 - `0` - disable logging
 - `1` - log errors only
 - `2` - log errors and info messages
 - `3` - log errors, into and debug messages
 - `4` - log everything
+
+Return value: none
 
 It is possible to override log level per source file basis. For example, if
 there is a file called `foo.c`, and you'd like to set a global level to `2`
@@ -2781,6 +3417,12 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd);
 By default, `LOG` writes to standard output stream (aka `stdout`), but this behaviour
 can be changes via `mg_log_set_callback`. This function allows to set callback,
 which called once mongoose (or host application) calls `LOG`
+
+Parameters:
+- `fn` - callback function, should be called on logging
+- `fnd` - user parameter to pass to `fn`
+
+Return value: none
 
 Usage example:
 
