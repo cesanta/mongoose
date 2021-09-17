@@ -1281,7 +1281,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   struct mg_str *inm = NULL;
 
   if (fd == NULL || fs->stat(path, &size, &mtime) == 0) {
-    LOG(LL_DEBUG, ("404 [%.*s] %p", (int) hm->uri.len, hm->uri.ptr, fd));
+    LOG(LL_DEBUG, ("404 [%s] %p", path, (void *) fd));
     mg_http_reply(c, 404, "", "%s", "Not found\n");
     fs->close(fd);
     // NOTE: mg_http_etag() call should go first!
