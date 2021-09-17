@@ -27,15 +27,21 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     LOG(LL_DEBUG, ("cmd %d qos %d", mm->cmd, mm->qos));
     switch (mm->cmd) {
       case MQTT_CMD_CONNECT: {
-        // Client connects. Return success, do not check user/password
-        uint8_t response[] = {0, 0};
-        mg_mqtt_send_header(c, MQTT_CMD_CONNACK, 0, sizeof(response));
-        mg_send(c, response, sizeof(response));
+        // Client connects
+        if (mm->dgram.len < 9) {
+          mg_error(c, "Malformed MQTT frame");
+        } else if (mm->dgram.ptr[8] != 4) {
+          mg_error(c, "Unsupported MQTT version %d", mm->dgram.ptr[8]);
+        } else {
+          uint8_t response[] = {0, 0};
+          mg_mqtt_send_header(c, MQTT_CMD_CONNACK, 0, sizeof(response));
+          mg_send(c, response, sizeof(response));
+        }
         break;
       }
       case MQTT_CMD_SUBSCRIBE: {
         // Client subscribes
-        int pos = 4;  // Initial topic offset, where ID ends
+        size_t pos = 4;  // Initial topic offset, where ID ends
         uint8_t qos;
         struct mg_str topic;
         while ((pos = mg_mqtt_next_sub(mm, &topic, &qos, pos)) > 0) {
@@ -60,6 +66,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
         break;
       }
     }
+  } else if (ev == MG_EV_ACCEPT) {
+    // c->is_hexdumping = 1;
   } else if (ev == MG_EV_CLOSE) {
     // Client disconnects. Remove from the subscription list
     for (struct sub *next, *sub = s_subs; sub != NULL; sub = next) {
