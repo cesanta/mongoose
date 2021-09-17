@@ -23,43 +23,51 @@ structure, which has a number of fields. All fields are exposed to the
 application by design, to give an application a full visibility into the
 Mongoose's internals.
 
-An application that uses mongoose should follow a standard pattern of
-event-driven application:
+## 2-minute intergration guide
 
-**Step 1.** Declare and initialize an event manager:
+In order to integrate Mongoose into an existing C/C++ aplicaction or firmware,
+please follow these steps:
 
-```c
-struct mg_mgr mgr;
-mg_mgr_init(&mgr);
-```
+**Step 1.** Copy
+[mongoose.c](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.c)
+and
+[mongoose.h](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.h)
+into the source code tree
 
-**Step 2.** Create connections. For example, a server application should create listening
-  connections. When any connection is created (listening or outgoing), an
-  event handler function must be specified. An event handler function defines
-  connection's behavior.
+**Step 2.** Add the following lines in your `main.c` file:
 
 ```c
+#include "mongoose.h"
+...
+
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-// ...
+  struct mg_http_serve_opts opts = {.root_dir = "."};   // Serve local dir
+  if (ev == MG_EV_HTTP_MSG) mg_http_serve_dir(c, ev_data, &opts);
 }
+...
 
-struct mg_connection *c = mg_http_listen(&mgr, "0.0.0.0:8000", fn, arg);
+int main() {
+  ...
+
+  struct mg_mgr mgr;                                
+  mg_mgr_init(&mgr);
+  mg_http_listen(&mgr, "0.0.0.0:8000", fn, NULL);     // Create listening connection
+  for (;;) mg_mgr_poll(&mgr, 1000);                   // Block forever
+}
 ```
 
-**Step 3.** Create an event loop by calling `mg_mgr_poll()`:
+**Step 3.** Add `mongoose.c` to the build and recompile - and that's it!
 
-```c
-  for (;;) {
-    mg_mgr_poll(&mgr, 1000);
-  }
-```
 
 `mg_mgr_poll()` iterates over all connections, accepts new connections, sends and
 receives data, closes connections and calls event handler functions for the
 respective events.
 
-<span class="badge bg-danger">NOTE: </span>Since the Mongoose's core is not protected against concurrent accesses,
-make sure that all `mg_*` API functions are called from the same thread or RTOS task.
+
+<span class="badge bg-danger">NOTE:</span>
+Since the Mongoose's core is not protected against concurrent accesses, make
+sure that all `mg_*` API functions are called from the same thread or RTOS
+task.
 
 ## Send and receive buffers
 
