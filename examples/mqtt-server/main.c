@@ -42,8 +42,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       case MQTT_CMD_SUBSCRIBE: {
         // Client subscribes
         size_t pos = 4;  // Initial topic offset, where ID ends
-        uint8_t qos;
+        uint8_t qos, resp[256];
         struct mg_str topic;
+        int num_topics = 0;
         while ((pos = mg_mqtt_next_sub(mm, &topic, &qos, pos)) > 0) {
           struct sub *sub = calloc(1, sizeof(*sub));
           sub->c = c;
@@ -52,7 +53,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
           LIST_ADD_HEAD(struct sub, &s_subs, sub);
           LOG(LL_INFO,
               ("SUB %p [%.*s]", c->fd, (int) sub->topic.len, sub->topic.ptr));
+          resp[num_topics++] = qos;
         }
+        mg_mqtt_send_header(c, MQTT_CMD_SUBACK, 0, num_topics + 2);
+        uint16_t id = mg_htons(mm->id);
+        mg_send(c, &id, 2);
+        mg_send(c, resp, num_topics);
         break;
       }
       case MQTT_CMD_PUBLISH: {
