@@ -1197,6 +1197,14 @@ static void test_util(void) {
              sizeof(a.ip6)) == 0);
 
   memset(a.ip6, 0xaa, sizeof(a.ip6));
+  ASSERT(mg_aton(mg_str("::fFff:1.2.3.4"), &a) == true);
+  ASSERT(a.is_ip6 == true);
+  ASSERT(memcmp(a.ip6,
+                "\x00\x00\x00\x00\x00\x00\x00\x00"
+                "\x00\x00\xff\xff\x01\x02\x03\x04",
+                sizeof(a.ip6)) == 0);
+
+  memset(a.ip6, 0xaa, sizeof(a.ip6));
   ASSERT(mg_aton(mg_str("::1"), &a) == true);
   ASSERT(a.is_ip6 == true);
   ASSERT(

@@ -2405,8 +2405,24 @@ static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
   return true;
 }
 
+static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
+  int i;
+  if (str.len < 14) return false;
+  if (str.ptr[0] != ':' || str.ptr[1] != ':' || str.ptr[6] != ':') return false;
+  for (i = 2; i < 6; i++) {
+    if (str.ptr[i] != 'f' && str.ptr[i] != 'F') return false;
+  }
+  if (!mg_aton4(mg_str_n(&str.ptr[7], str.len - 7), addr)) return false;
+  memset(addr->ip6, 0, sizeof(addr->ip6));
+  addr->ip6[10] = addr->ip6[11] = 255;
+  memcpy(&addr->ip6[12], &addr->ip, 4);
+  addr->is_ip6 = true;
+  return true;
+}
+
 static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
   size_t i, j = 0, n = 0, dc = 42;
+  if (mg_v4mapped(str, addr)) return true;
   for (i = 0; i < str.len; i++) {
     if ((str.ptr[i] >= '0' && str.ptr[i] <= '9') ||
         (str.ptr[i] >= 'a' && str.ptr[i] <= 'f') ||
@@ -2416,8 +2432,8 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
       // LOG(LL_DEBUG, ("%zu %zu [%.*s]", i, j, (int) (i - j + 1),
       // &str.ptr[j]));
       val = mg_unhexn(&str.ptr[j], i - j + 1);
-      addr->ip6[n] = (uint8_t)((val >> 8) & 255);
-      addr->ip6[n + 1] = (uint8_t)(val & 255);
+      addr->ip6[n] = (uint8_t) ((val >> 8) & 255);
+      addr->ip6[n + 1] = (uint8_t) (val & 255);
     } else if (str.ptr[i] == ':') {
       j = i + 1;
       if (i > 0 && str.ptr[i - 1] == ':') {
