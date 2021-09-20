@@ -1512,12 +1512,6 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        struct mg_http_serve_opts *opts) {
   char path[MG_PATH_MAX] = "";
   const char *sp = opts->ssi_pattern;
-#if 0
-  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  if ((fs->stat(opts->root_dir, NULL, NULL) & MG_FS_DIR) == 0) {
-    mg_http_reply(c, 400, "", "Invalid web root [%s]\n", opts->root_dir);
-  } else {
-#endif
   int flags = uri_to_path(c, hm, opts, path, sizeof(path));
   if (flags == 0) return;
   LOG(LL_DEBUG, ("%.*s %s %d", (int) hm->uri.len, hm->uri.ptr, path, flags));
@@ -1528,9 +1522,6 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   } else {
     mg_http_serve_file(c, hm, path, opts);
   }
-#if 0
-  }
-#endif
 }
 
 static bool mg_is_url_safe(int c) {
