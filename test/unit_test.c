@@ -1555,8 +1555,38 @@ static void test_ws_fragmentation(void) {
   ASSERT(mgr.conns == NULL);
 }
 
+static void h7(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    struct mg_http_serve_opts opts;
+    memset(&opts, 0, sizeof(opts));
+    opts.root_dir = "./test/data,/foo=./src";
+    mg_http_serve_dir(c, hm, &opts);
+  }
+  (void) fn_data;
+}
+
+static void test_rewrites(void) {
+  char buf[FETCH_BUF_SIZE];
+  const char *url = "http://LOCALHOST:12358";
+  const char *expected = "#define MG_VERSION \"" MG_VERSION "\"\n";
+  struct mg_mgr mgr;
+  mg_mgr_init(&mgr);
+  ASSERT(mg_http_listen(&mgr, url, h7, NULL) != NULL);
+  ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hello\n") == 0);
+  ASSERT(fetch(&mgr, buf, url, "GET /foo/version.h HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, expected) == 0);
+  ASSERT(fetch(&mgr, buf, url, "GET /foo HTTP/1.0\n\n") == 200);
+  // printf("-->[%s]\n", buf);
+  // exit(0);
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+}
+
 int main(void) {
   mg_log_set("3");
+  test_rewrites();
   test_check_ip_acl();
   test_udp();
   test_pipe();

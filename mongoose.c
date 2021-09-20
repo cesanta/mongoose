@@ -1457,54 +1457,80 @@ static void remove_double_dots(char *s) {
 }
 
 // Resolve requested file into `path` and return its fs->stat() result
+static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
+                        struct mg_fs *fs, struct mg_str url, struct mg_str dir,
+                        char *path, size_t path_size) {
+  int flags = 0, tmp;
+  // Append URI to the root_dir, and sanitize it
+  size_t n = (size_t) snprintf(path, path_size, "%.*s", (int) dir.len, dir.ptr);
+  if (n > path_size) n = path_size;
+  path[path_size - 1] = '\0';
+  if ((fs->stat(path, NULL, NULL) & MG_FS_DIR) == 0) {
+    mg_http_reply(c, 400, "", "Invalid web root [%.*s]\n", (int) dir.len,
+                  dir.ptr);
+  } else {
+    if (n + 2 < path_size) path[n++] = '/', path[n] = '\0';
+    mg_url_decode(hm->uri.ptr + url.len, hm->uri.len - url.len, path + n,
+                  path_size - n, 0);
+    path[path_size - 1] = '\0';  // Double-check
+    remove_double_dots(path);
+    n = strlen(path);
+    LOG(LL_DEBUG, ("--> %s", path));
+    while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
+    flags = fs->stat(path, NULL, NULL);                 // Does it exist?
+    if (flags == 0) {
+      mg_http_reply(c, 404, "", "Not found\n");  // Does not exist, doh
+    } else if (flags & MG_FS_DIR) {
+      if (((snprintf(path + n, path_size - n, "/index.html") > 0 &&
+            (tmp = fs->stat(path, NULL, NULL)) != 0) ||
+           (snprintf(path + n, path_size - n, "/index.shtml") > 0 &&
+            (tmp = fs->stat(path, NULL, NULL)) != 0))) {
+        flags = tmp;
+      } else {
+        path[n] = '\0';  // Remove appended index file name
+      }
+    }
+  }
+  return flags;
+}
+
 static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
                        struct mg_http_serve_opts *opts, char *path,
                        size_t path_size) {
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  int flags = 0, tmp;
-  // Append URI to the root_dir, and sanitize it
-  size_t n = (size_t) snprintf(path, path_size, "%s", opts->root_dir);
-  if (n > path_size) n = path_size;
-  mg_url_decode(hm->uri.ptr, hm->uri.len, path + n, path_size - n, 0);
-  path[path_size - 1] = '\0';  // Double-check
-  remove_double_dots(path);
-  n = strlen(path);
-  while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Strip trailing slashes
-  flags = fs->stat(path, NULL, NULL);                 // Does it exist?
-  if (flags == 0) {
-    mg_http_reply(c, 404, "", "Not found\n");  // Does not exist, doh
-  } else if (flags & MG_FS_DIR) {
-    if (((snprintf(path + n, path_size - n, "/index.html") > 0 &&
-          (tmp = fs->stat(path, NULL, NULL)) != 0) ||
-         (snprintf(path + n, path_size - n, "/index.shtml") > 0 &&
-          (tmp = fs->stat(path, NULL, NULL)) != 0))) {
-      flags = tmp;
-    } else {
-      path[n] = '\0';  // Remove appended index file name
-    }
+  struct mg_str k, v, s = mg_str(opts->root_dir), u = {0, 0}, p = {0, 0};
+  while (mg_commalist(&s, &k, &v)) {
+    if (v.len == 0) v = k, k = mg_str("/");
+    if (hm->uri.len < k.len) continue;
+    if (mg_strcmp(k, mg_str_n(hm->uri.ptr, k.len)) != 0) continue;
+    u = k, p = v;
   }
-  return flags;
+  return uri_to_path2(c, hm, fs, u, p, path, path_size);
 }
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        struct mg_http_serve_opts *opts) {
   char path[MG_PATH_MAX] = "";
   const char *sp = opts->ssi_pattern;
+#if 0
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   if ((fs->stat(opts->root_dir, NULL, NULL) & MG_FS_DIR) == 0) {
     mg_http_reply(c, 400, "", "Invalid web root [%s]\n", opts->root_dir);
   } else {
-    int flags = uri_to_path(c, hm, opts, path, sizeof(path));
-    if (flags == 0) return;
-    LOG(LL_DEBUG, ("%.*s %s %d", (int) hm->uri.len, hm->uri.ptr, path, flags));
-    if (flags & MG_FS_DIR) {
-      listdir(c, hm, opts, path);
-    } else if (sp != NULL && mg_globmatch(sp, strlen(sp), path, strlen(path))) {
-      mg_http_serve_ssi(c, opts->root_dir, path);
-    } else {
-      mg_http_serve_file(c, hm, path, opts);
-    }
+#endif
+  int flags = uri_to_path(c, hm, opts, path, sizeof(path));
+  if (flags == 0) return;
+  LOG(LL_DEBUG, ("%.*s %s %d", (int) hm->uri.len, hm->uri.ptr, path, flags));
+  if (flags & MG_FS_DIR) {
+    listdir(c, hm, opts, path);
+  } else if (sp != NULL && mg_globmatch(sp, strlen(sp), path, strlen(path))) {
+    mg_http_serve_ssi(c, opts->root_dir, path);
+  } else {
+    mg_http_serve_file(c, hm, path, opts);
   }
+#if 0
+  }
+#endif
 }
 
 static bool mg_is_url_safe(int c) {

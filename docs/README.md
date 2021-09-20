@@ -915,7 +915,8 @@ enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
 Parameters:
 - `c` - connection to use
 - `hm` - http message, that should be served
-- `opts` - serve options
+- `opts` - serve options. Note that `opts.root_dir` can optionally accept
+  extra comma-separated `uri=path` pairs, see example below
 
 Return value: none
 
@@ -928,7 +929,7 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts opts;
     memset(&opts, 0, sizeof(opts));
-    opts.root_dir = "/my_root";
+    opts.root_dir = "/var/www,/conf=/etc";  // Serve /var/www. URIs starting with /conf are served from /etc
     mg_http_serve_dir(c, hm, &opts);
   }
 }
