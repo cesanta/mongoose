@@ -1,5 +1,5 @@
-#include <stdlib.h>
 #include "url.h"
+#include <stdlib.h>
 
 struct url {
   size_t key, user, pass, host, port, uri, end;
@@ -45,10 +45,6 @@ struct mg_str mg_url_host(const char *url) {
              : u.uri ? u.uri - u.host
                      : u.end - u.host;
   struct mg_str s = mg_str_n(url + u.host, n);
-  if (s.len > 2 && s.ptr[0] == '[' && s.ptr[s.len - 1] == ']') {
-    s.len -= 2;
-    s.ptr++;
-  }
   return s;
 }
 

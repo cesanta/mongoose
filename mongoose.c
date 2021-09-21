@@ -2439,6 +2439,7 @@ static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
 
 static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
   size_t i, j = 0, n = 0, dc = 42;
+  if (str.len > 2 && str.ptr[0] == '[') str.ptr++, str.len -= 2;
   if (mg_v4mapped(str, addr)) return true;
   for (i = 0; i < str.len; i++) {
     if ((str.ptr[i] >= '0' && str.ptr[i] <= '9') ||
@@ -4048,8 +4049,8 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/url.c"
 #endif
-#include <stdlib.h>
 
+#include <stdlib.h>
 
 struct url {
   size_t key, user, pass, host, port, uri, end;
@@ -4095,10 +4096,6 @@ struct mg_str mg_url_host(const char *url) {
              : u.uri ? u.uri - u.host
                      : u.end - u.host;
   struct mg_str s = mg_str_n(url + u.host, n);
-  if (s.len > 2 && s.ptr[0] == '[' && s.ptr[s.len - 1] == ']') {
-    s.len -= 2;
-    s.ptr++;
-  }
   return s;
 }
 

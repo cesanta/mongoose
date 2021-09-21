@@ -87,6 +87,7 @@ static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
 
 static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
   size_t i, j = 0, n = 0, dc = 42;
+  if (str.len > 2 && str.ptr[0] == '[') str.ptr++, str.len -= 2;
   if (mg_v4mapped(str, addr)) return true;
   for (i = 0; i < str.len; i++) {
     if ((str.ptr[i] >= '0' && str.ptr[i] <= '9') ||

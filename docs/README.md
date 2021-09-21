@@ -2499,7 +2499,7 @@ bool mg_aton(struct mg_str str, struct mg_addr *addr);
 Parse IP address held by `str` and store it in `addr`.
 
 Parameters:
-- `str` - string to parse
+- `str` - string to parse, for example `1.2.3.4`, `[::1]`, `01:02::03`
 - `addr` - pointer to `mg_addr` string to receive parsed value
 
 Return value: `true` on success, `false` otherwise.
@@ -3285,14 +3285,15 @@ struct mg_str mg_url_host(const char *url);
 Extract host name from given URL.
 
 Parameters:
-- `url` - URL to extract host
+- `url` - a URL string
 
 Return value: host name
 
 Usage example:
 
 ```c
-struct mg_str host = mg_url_host("https://my.example.org:1234"); // host is now "my.example.org"
+struct mg_str a = mg_url_host("https://my.example.org:1234"); // a == "my.example.org"
+struct mg_str b = mg_url_host("tcp://[::1]"); // b == "[::1]"
 ```
 
 ### mg\_url\_user()
