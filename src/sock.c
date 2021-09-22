@@ -181,7 +181,7 @@ SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
     }
   }
   if (fd == INVALID_SOCKET) {
-    if (s_err = 0) s_err = MG_SOCK_ERRNO;
+    if (s_err == 0) s_err = MG_SOCK_ERRNO;
     LOG(LL_ERROR, ("Failed to listen on %s, errno %d", url, s_err));
   }
 
