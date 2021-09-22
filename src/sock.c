@@ -127,6 +127,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 
 SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
   SOCKET fd = INVALID_SOCKET;
+  int s_err = 0;  // Memoized socket error, in case closesocket() overrides it
   memset(addr, 0, sizeof(*addr));
   addr->port = mg_htons(mg_url_port(url));
   if (!mg_aton(mg_url_host(url), addr)) {
@@ -174,12 +175,14 @@ SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
       }
       mg_set_non_blocking_mode(fd);
     } else if (fd != INVALID_SOCKET) {
+      s_err = MG_SOCK_ERRNO;
       closesocket(fd);
       fd = INVALID_SOCKET;
     }
   }
   if (fd == INVALID_SOCKET) {
-    LOG(LL_ERROR, ("Failed to listen on %s, errno %d", url, MG_SOCK_ERRNO));
+    if (s_err = 0) s_err = MG_SOCK_ERRNO;
+    LOG(LL_ERROR, ("Failed to listen on %s, errno %d", url, s_err));
   }
 
   return fd;
