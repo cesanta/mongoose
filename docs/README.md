@@ -63,6 +63,13 @@ int main() {
 receives data, closes connections and calls event handler functions for the
 respective events.
 
+Each connection has two event handler functions: `c->fn` and `c->pfn`.  The
+`c->fn` is a user-specified event handler function. The `c->pfn` is a
+protocol-specific handler function that is set implicitly. For example, a
+`mg_http_listen()` sets `c->pfn` to a Mongoose's HTTP event handler.  A
+protocol-specific handler is called before user-specific handler.  It parses
+incoming data and may invoke protocol-specific events like `MG_EV_HTTP_MSG`.
+
 
 <span class="badge bg-danger">NOTE:</span>
 Since the Mongoose's core is not protected against concurrent accesses, make
@@ -452,16 +459,9 @@ Perform a single poll iteration. For each connection in the `mgr->conns` list,
 - If a connection is listening, accept an incoming connection if any, and send `MG_EV_ACCEPT` event to it
 - Send `MG_EV_POLL` event
 
-Each connection has two event handler functions: `c->fn` and `c->pfn`.  The
-`c->fn` is a user-specified event handler function. The `c->pfn` is a
-protocol-specific handler function that is set implicitly. For example, a
-`mg_http_listen()` sets `c->pfn` to a Mongoose's HTTP event handler.  A
-protocol-specific handler is called before user-specific handler.  It parses
-incoming data and may invoke protocol-specific events like `MG_EV_HTTP_MSG`.
-
 Parameters:
-- `mgr` - event manager to use
-- `ms` - timeout (maximum time to block current thread), milliseconds
+- `mgr` - an event manager to use
+- `ms` - a timeout in milliseconds
 
 Return value: none
 
@@ -480,7 +480,7 @@ void mg_mgr_free(struct mg_mgr *mgr);
 Close all connections, and free all resources.
 
 Parameters:
-- `mgr` - event manager to free
+- `mgr` - an event manager to cleanup
 
 Return value: none
 
@@ -503,8 +503,8 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
 Create a listening connection, append this connection to `mgr->conns`.
 
 Parameters:
-- `mgr` - event manager to use
-- `url` - specifies local IP address and port to listen on, e.g.
+- `mgr` - an event manager to use
+- `url` - a URL. Specifies local IP address and port to listen on, e.g.
   `tcp://127.0.0.1:1234` or `udp://0.0.0.0:9000`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
@@ -529,8 +529,8 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
 Create an outbound connection, append this connection to `mgr->conns`.
 
 Parameters:
-- `mgr` - event manager to use
-- `url` - specifies remote IP address/port to connect to, e.g. `http://a.com`
+- `mgr` - an event manager to use
+- `url` - a URL, specifies remote IP address/port to connect to, e.g. `http://a.com`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
@@ -562,9 +562,9 @@ the output buffer.  The data is being sent when `mg_mgr_poll()` is called. If
 `mg_send()` is called multiple times, the output buffer grows.
 
 Parameters:
-- `c` - connection to use
-- `data` - data to append
-- `size` - size of data
+- `c` - a connection pointer
+- `data` - a pointer to data to append to the send buffer
+- `size` - a data size
 
 Return value: `true` if data appended successfully and `false` otherwise
 
@@ -584,8 +584,8 @@ Same as `mg_send()`, but formats data using `printf()` semantics. Return
 number of bytes appended to the output buffer.
 
 Parameters:
-- `c` - connection to use
-- `fmt` - format string in `printf` semantics
+- `c` - a connection pointer
+- `fmt` - a format string in `printf` semantics
 
 Return value: number of bytes appended to the output buffer.
 
@@ -604,9 +604,9 @@ int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 Same as `mg_printf()`, but takes `va_list` argument as a parameter.
 
 Parameters:
-- `c` - connection to use
-- `fmt` - format string in `printf` semantics
-- `ap` - arguments list
+- `c` - a connection pointer
+- `fmt` - a format string in `printf` semantics
+- `ap` - an arguments list
 
 Return value: number of bytes appended to the output buffer.
 
@@ -630,9 +630,9 @@ char *mg_straddr(struct mg_connection *c, char *buf, size_t len);
 Write stringified IP address, associated with given connection to `buf` (maximum size `len`)
 
 Parameters:
-- `c` - connection to use
-- `buf` - buffer to write data
-- `len` - buffer (`buf`) size
+- `c` - a connection pointer
+- `buf` - a pointer to a buffer that will hold stringified address
+- `len` - a buffer size
 
 Return value: `buf` value
 
@@ -670,9 +670,9 @@ using `mg_mgr_wakeup()`. When an event manager is woken up, a pipe
 connection event handler function receives `MG_EV_READ` event.
 
 Parameters:
-- `mgr` - event manager to use
-- `fn` - pointer to event handler function
-- `ud` - user data, which will be passed to `fn`
+- `mgr` - an event manager
+- `fn` - a pointer to event handler function
+- `ud` - a user data pointer. It will be passed to `fn` as `fn_data` parameter
 
 Return value: pointer to created connection or `NULL` in case of error
 
@@ -734,8 +734,8 @@ struct mg_connection *mg_http_listen(struct mg_mgr *mgr, const char *url,
 Create HTTP listener.
 
 Parameters:
-- `mgr` - event manager to use
-- `url` - specifies local IP address and port to listen on, e.g. `http://0.0.0.0:8000`
+- `mgr` - an event manager
+- `url` - a URL, specifies local IP address and port to listen on, e.g. `http://0.0.0.0:8000`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
@@ -764,8 +764,8 @@ starts connect process. Once peer is really connected `MG_EV_CONNECT` event is
 sent to connection event handler.
 
 Parameters:
-- `mgr` - event manager to use
-- `url` - specifies remote URL, e.g. `http://google.com`
+- `mgr` - an event manager
+- `url` - a URL, specifies remote URL, e.g. `http://google.com`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
@@ -793,8 +793,8 @@ The length of request is a number of bytes till the end of HTTP headers. It does
 not include length of HTTP body.
 
 Parameters:
-- `buf` - pointer to buffer with request
-- `buf_len` - maximum request length
+- `buf` - a pointer to a buffer with request
+- `buf_len` - buffer length
 
 Return value: -1 on error, 0 if a message is incomplete, or the length of request.
 
@@ -816,9 +816,9 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm);
 Parse string request into `mg_http_message` structure
 
 Parameters:
-- `s` - request string
-- `len` - maximum request length
-- `hm` - pointer to `mg_http_message` structure to receive result
+- `s` - a request string
+- `len` - a request string length
+- `hm` - a pointer to a structure to store parsed request
 
 Return value: request length (see `mg_http_get_request_len()`).
 
@@ -839,8 +839,8 @@ void mg_http_printf_chunk(struct mg_connection *c, const char *fmt, ...);
 Write a chunk of data in chunked encoding format, using `printf()` semantic.
 
 Parameters:
-- `c` - connection to use
-- `fmt` - format string in `printf` semantics
+- `c` - a connection pointer
+- `fmt` - a string, format specified in `printf` semantics
 
 Return value: none
 
@@ -859,9 +859,9 @@ void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
 Write a chunk of data in chunked encoding format.
 
 Parameters:
-- `c` - connection to use
+- `c` - a connection pointer
 - `buf` - data to write
-- `len` - number of bytes to write
+- `len` - data length
 
 Return value: none
 
@@ -880,7 +880,7 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm);
 Remove chunk specified from input buffer.
 
 Parameters:
-- `c` - connection to use
+- `c` - a connection pointer
 - `hm` - chunk to delete
 
 Return value: none
