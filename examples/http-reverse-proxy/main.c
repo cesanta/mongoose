@@ -32,28 +32,10 @@ static void forward_request(struct mg_http_message *hm,
                  (int) hm->uri.len, hm->uri.ptr));
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void forward_fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   struct mg_connection *c2 = fn_data;
-  if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (c->label[0] != 'B' && c2 == NULL) {
-      // Client request, create backend connection Note that we're passing
-      // client connection `c` as fn_data for the created backend connection.
-      // This way, we tie together these two connections via `fn_data` pointer:
-      // client's c->fn_data points to the backend connection, and backend's
-      // c->fn_data points to the client connection
-      c2 = mg_connect(c->mgr, s_backend_url, fn, c);
-      c->fn_data = c2;
-      if (c2 != NULL) {
-        c2->is_hexdumping = 1;
-        c2->label[0] = 'B';  // Mark this connection as backend
-      } else {
-        c->is_closing = 1;
-      }
-    }
-    if (c2 != NULL && c2->label[0] == 'B') forward_request(hm, c2);
-  } else if (ev == MG_EV_READ) {
-    if (c->label[0] == 'B' && c2 != NULL) {
+  if (ev == MG_EV_READ) {
+    if (c2 != NULL) {
       // All incoming data from the backend, forward to the client
       mg_send(c2, c->recv.buf, c->recv.len);
       mg_iobuf_del(&c->recv, 0, c->recv.len);
@@ -63,8 +45,31 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       struct mg_tls_opts opts = {.ca = "ca.pem"};
       mg_tls_init(c, &opts);
     }
+  }
+  (void)ev_data;
+}
+
+static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  struct mg_connection *c2 = fn_data;
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    // Client request, create backend connection Note that we're passing
+    // client connection `c` as fn_data for the created backend connection.
+    c2 = mg_connect(c->mgr, s_backend_url, forward_fn, c);
+    c->fn_data = c2;
+	
+    if (c2 != NULL) {
+      forward_request(hm, c2);
+    } else {
+      c->is_closing = 1;
+    }
+  } else if (ev == MG_EV_CONNECT) {
+    if (mg_url_is_ssl(s_backend_url)) {
+      struct mg_tls_opts opts = {.ca = "ca.pem"};
+      mg_tls_init(c, &opts);
+    }
   } else if (ev == MG_EV_CLOSE) {
-    if (c->label[0] != 'B' && c2 != NULL) c2->is_closing = 1;
+    if (c2 != NULL) c2->is_closing = 1;
     c->fn_data = NULL;
   }
 }
