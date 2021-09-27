@@ -2966,6 +2966,8 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
   setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off));
 #elif MG_ARCH == MG_ARCH_FREERTOS_LWIP
   lwip_fcntl(fd, F_SETFL, O_NONBLOCK);
+#elif MG_ARCH == MG_ARCH_AZURERTOS
+  fcntl(fd, F_SETFL, O_NONBLOCK);
 #else
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, FD_CLOEXEC);
 #endif
@@ -3011,7 +3013,7 @@ SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
 #endif
         bind(fd, &usa.sa, slen) == 0 &&
         // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
-        (type == SOCK_DGRAM || listen(fd, 128) == 0)) {
+        (type == SOCK_DGRAM || listen(fd, MG_SOCK_LISTEN_BACKLOG_SIZE) == 0)) {
       // In case port was set to 0, get the real port number
       if (getsockname(fd, &usa.sa, &slen) == 0) {
         addr->port = usa.sin.sin_port;
@@ -3136,7 +3138,7 @@ static void close_conn(struct mg_connection *c) {
 }
 
 static void setsockopts(struct mg_connection *c) {
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS
   (void) c;
 #else
   int on = 1;
@@ -3210,6 +3212,12 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   socklen_t sa_len = sizeof(usa);
   SOCKET fd = accept(FD(lsn), &usa.sa, &sa_len);
   if (fd == INVALID_SOCKET) {
+#if MG_ARCH == MG_ARCH_AZURERTOS
+  // AzureRTOS, in non-block socket mode can mark listening socket readable
+  // even it is not. See comment for 'select' func implementation in nx_bsd.c
+  // That's not an error, just should try later
+	if (MG_SOCK_ERRNO != EAGAIN)
+#endif
     LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
 #if (!defined(_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP))
   } else if ((long) fd >= FD_SETSIZE) {
@@ -4457,7 +4465,7 @@ double mg_time(void) {
                     ((int64_t) ftime.dwHighDateTime << 32)) /
                    10000000.0) -
          11644473600;
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS
   return mg_millis() / 1000.0;
 #else
   struct timeval tv;
@@ -4473,6 +4481,8 @@ void mg_usleep(unsigned long usecs) {
   ets_delay_us(usecs);
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
   vTaskDelay(pdMS_TO_TICKS(usecs / 1000));
+#elif MG_ARCH == MG_ARCH_AZURERTOS
+  tx_thread_sleep((usecs / 1000) * TX_TIMER_TICKS_PER_SECOND);
 #else
   usleep((useconds_t) usecs);
 #endif
@@ -4487,6 +4497,8 @@ unsigned long mg_millis(void) {
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
+#elif MG_ARCH == MG_ARCH_AZURERTOS
+  return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
 #else
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
