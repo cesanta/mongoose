@@ -51,7 +51,9 @@ typedef enum { false = 0, true = 1 } bool;
 #ifndef __cplusplus
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
+#ifndef strdup  // For MSVC with _DEBUG, see #1359
 #define strdup(x) _strdup(x)
+#endif
 #endif
 
 typedef unsigned suseconds_t;
