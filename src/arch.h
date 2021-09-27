@@ -7,6 +7,7 @@
 #define MG_ARCH_ESP8266 4
 #define MG_ARCH_FREERTOS_TCP 5
 #define MG_ARCH_FREERTOS_LWIP 6
+#define MG_ARCH_AZURERTOS 7
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -19,6 +20,8 @@
 #define MG_ARCH MG_ARCH_ESP32
 #elif defined(FREERTOS_IP_H)
 #define MG_ARCH MG_ARCH_FREERTOS_TCP
+#elif defined(AZURE_RTOS_THREADX)
+#define MG_ARCH MG_ARCH_AZURERTOS
 #endif
 
 #if !defined(MG_ARCH)

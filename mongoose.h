@@ -88,6 +88,10 @@ extern "C" {
 #define MG_PATH_MAX PATH_MAX
 #endif
 
+#ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 128
+#endif
+
 
 #define MG_ARCH_CUSTOM 0
 #define MG_ARCH_UNIX 1
@@ -96,6 +100,7 @@ extern "C" {
 #define MG_ARCH_ESP8266 4
 #define MG_ARCH_FREERTOS_TCP 5
 #define MG_ARCH_FREERTOS_LWIP 6
+#define MG_ARCH_AZURERTOS 7
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -108,6 +113,8 @@ extern "C" {
 #define MG_ARCH MG_ARCH_ESP32
 #elif defined(FREERTOS_IP_H)
 #define MG_ARCH MG_ARCH_FREERTOS_TCP
+#elif defined(AZURE_RTOS_THREADX)
+#define MG_ARCH MG_ARCH_AZURERTOS
 #endif
 
 #if !defined(MG_ARCH)
@@ -133,6 +140,44 @@ extern "C" {
 
 
 
+
+
+#if MG_ARCH == MG_ARCH_AZURERTOS
+
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <time.h>
+#include <stdio.h>
+ 
+#include <tx_api.h>
+#include <fx_api.h>
+
+#include <tx_port.h>
+#include <nx_port.h>
+#include <nx_api.h>
+#include <nx_bsd.h>
+
+#ifdef __REDLIB__
+#define va_copy(d,s)__builtin_va_copy(d,s)
+#endif
+
+#define PATH_MAX FX_MAXIMUM_PATH
+#define MG_DIRSEP '\\'
+
+#define socklen_t int
+#define closesocket(x) soc_close(x)
+#define gmtime_r(a, b) gmtime(a)
+#define MG_INT64_FMT "%lld"
+
+static __inline struct tm *localtime_r(time_t *t, struct tm *tm) {
+  (void) tm;
+  return localtime(t);
+}
+
+#undef FOPEN_MAX
+
+#endif
 
 
 #if MG_ARCH == MG_ARCH_ESP32
