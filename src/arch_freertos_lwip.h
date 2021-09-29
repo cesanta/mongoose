@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 #if defined(__GNUC__)
 #include <sys/stat.h>
