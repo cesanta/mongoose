@@ -13,7 +13,7 @@ IPV6 ?= 1
 ASAN_OPTIONS ?=
 EXAMPLES := $(wildcard examples/*)
 PREFIX ?= /usr/local
-SOVERSION = 7.4
+VERSION ?= $(shell cut -d'"' -f2 src/version.h)
 .PHONY: examples test
 
 ifeq "$(SSL)" "MBEDTLS"
@@ -110,16 +110,16 @@ linux++: linux
 
 linux-libs: CFLAGS += -fPIC
 linux-libs: mongoose.o
-	$(CC) mongoose.o $(LDFLAGS) -shared -o libmongoose.so.$(SOVERSION)
+	$(CC) mongoose.o $(LDFLAGS) -shared -o libmongoose.so.$(VERSION)
 	$(AR) rcs libmongoose.a mongoose.o
 
 install: linux-libs
-	install -Dm644 libmongoose.a libmongoose.so.$(SOVERSION) $(DESTDIR)$(PREFIX)/lib
-	ln -s libmongoose.so.$(SOVERSION) $(DESTDIR)$(PREFIX)/lib/libmongoose.so
+	install -Dm644 libmongoose.a libmongoose.so.$(VERSION) $(DESTDIR)$(PREFIX)/lib
+	ln -s libmongoose.so.$(VERSION) $(DESTDIR)$(PREFIX)/lib/libmongoose.so
 	install -Dm644 mongoose.h $(DESTDIR)$(PREFIX)/include/mongoose.h
 
 uninstall:
-	rm -rf $(DESTDIR)$(PREFIX)/lib/libmongoose.a $(DESTDIR)$(PREFIX)/lib/libmongoose.so.$(SOVERSION) $(DESTDIR)$(PREFIX)/include/mongoose.h $(DESTDIR)$(PREFIX)/lib/libmongoose.so
+	rm -rf $(DESTDIR)$(PREFIX)/lib/libmongoose.a $(DESTDIR)$(PREFIX)/lib/libmongoose.so.$(VERSION) $(DESTDIR)$(PREFIX)/include/mongoose.h $(DESTDIR)$(PREFIX)/lib/libmongoose.so
 
 mongoose.c: Makefile $(wildcard src/*)
 	(cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/private.h src/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@
