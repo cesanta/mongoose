@@ -22,7 +22,8 @@ robust, and easy. Features include:
 - Source code is both ISO C and ISO C++ compliant
 - Works with any network stack with socket API, like LwIP or FreeRTOS-Plus-TCP
 - Very easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your build tree
-- Detailed [documentation](https://cesanta.com/docs/)
+- Detailed [documentation](https://mongoose.ws/documentation/) and
+  [tutorials](https://mongoose.ws/tutorials/)
 
 
 # Commercial use
@@ -71,11 +72,12 @@ We take security seriously:
 # Supplement software
 
 This software is often used together with Mongoose:
-- [mjson](https://github.com/cesanta/mjson) - a JSON parser. Used to implement
+- [mjson](https://github.com/cesanta/mjson) - a JSON parser, emitter and
+  JSON-RPC engine. Used to implement
   RESTful APIs that use JSON, or implement data exchange (e.g. over MQTT
   or Websocket) that use JSON for data encapsulation
-- [elk](https://github.com/cesanta/elk) - a tiny JavaScript interpreter.
-  Used to implement scripting support for customers
+- [elk](https://github.com/cesanta/elk) - a tiny JavaScript engine.
+  Used to implement scripting support
 
 
 # Precompiled web server binary
