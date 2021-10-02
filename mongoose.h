@@ -241,6 +241,7 @@ static __inline struct tm *localtime_r(time_t *t, struct tm *tm) {
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 #if defined(__GNUC__)
 #include <sys/stat.h>
