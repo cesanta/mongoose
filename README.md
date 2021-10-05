@@ -33,15 +33,11 @@ robust, and easy. Features include:
   interface on devices, RESTful API services, telemetry data exchange, remote
   control for a product, remote software updates, remote monitoring, and others
 - Deployed to hundreds of millions devices in production environment worldwide
-- See [Case Studies](https://cesanta.com/case-studies.html) from our respected
-  customers like Schneider Electric (industrial automation), Broadcom (semiconductors), Schenck Process
-  (industrial engineering), and others
-- See [Testimonials](https://cesanta.com/testimonials.html) from engineers that
-  integrated Mongoose in their commercial products
-- We provide [commercial licensing](https://cesanta.com/licensing.html),
-  [support](https://cesanta.com/support.html), consultancy and integration
-  assistance - don't hesitate to
-  [contact us](https://www.cesanta.com/contact.html)
+- See [Case Studies](https://mongoose.ws/case-studies/) from our respected
+  customers like [Schneider Electric](https://mongoose.ws/case-studies/schneider-electric/) (industrial automation), [Broadcom](https://mongoose.ws/case-studies/broadcom/) (semiconductors), [Pilz](https://mongoose.ws/case-studies/pilz/) (industrial automation), and others
+- See [Testimonials](https://mongoose.ws/testimonials/) from engineers that integrated Mongoose in their commercial products
+- We provide [commercial licensing](https://mongoose.ws/licensing/), [support](https://mongoose.ws/support/), consultancy and integration
+  assistance - don't hesitate to [contact us](https://mongoose.ws/contact/)
 
 
 # Security
@@ -92,7 +88,7 @@ It is a great tool for sharing your files, or for local web or game
 development. It has a unique feature - an ability to share your local files via
 a global URL.
 
-Visit [download page](https://mongoose.ws/) to try it out.
+Visit [download page](https://mongoose.ws/desktop-app/) to try it out.
 
 # Contributions
 
