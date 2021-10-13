@@ -1,3 +1,4 @@
+#include "base64.h"
 #include <string.h>
 
 static int mg_b64idx(int c) {

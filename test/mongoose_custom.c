@@ -23,6 +23,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
   return NULL;
 }
 
+void mg_connect_resolved(struct mg_connection *c);
 void mg_connect_resolved(struct mg_connection *c) {
   (void) c;
 }
@@ -52,5 +53,6 @@ struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
   return NULL;
 }
 
+void _fini(void);
 void _fini(void) {
 }
