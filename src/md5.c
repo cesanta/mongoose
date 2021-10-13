@@ -1,7 +1,7 @@
 #include <string.h>
 #include "md5.h"
 
-#if MG_ENABLE_MD5
+#if defined(MG_ENABLE_MD5) && MG_ENABLE_MD5
 #if !defined(BYTE_ORDER) && defined(__BYTE_ORDER)
 #define BYTE_ORDER __BYTE_ORDER
 #ifndef LITTLE_ENDIAN

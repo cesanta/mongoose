@@ -693,8 +693,9 @@ static size_t p_write(void *fp, const void *buf, size_t len) {
 }
 
 static size_t p_seek(void *fp, size_t offset) {
-#if _FILE_OFFSET_BITS == 64 || _POSIX_C_SOURCE >= 200112L || \
-    _XOPEN_SOURCE >= 600
+#if (defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64) || \
+  (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || \
+  (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 600)
   fseeko((FILE *) fp, (off_t) offset, SEEK_SET);
 #else
   fseek((FILE *) fp, (long) offset, SEEK_SET);
@@ -1870,7 +1871,7 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd) {
 #include <string.h>
 
 
-#if MG_ENABLE_MD5
+#if defined(MG_ENABLE_MD5) && MG_ENABLE_MD5
 #if !defined(BYTE_ORDER) && defined(__BYTE_ORDER)
 #define BYTE_ORDER __BYTE_ORDER
 #ifndef LITTLE_ENDIAN
@@ -3150,7 +3151,7 @@ static void setsockopts(struct mg_connection *c) {
   setsockopt(FD(c), SOL_TCP, TCP_QUICKACK, (char *) &on, sizeof(on));
 #endif
   setsockopt(FD(c), SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on));
-#if ESP32 || ESP8266 || defined(__linux__)
+#if (defined(ESP32) && ESP32) || (defined(ESP8266) && ESP8266) || defined(__linux__)
   int idle = 60;
   setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
 #endif
@@ -3691,7 +3692,7 @@ void mg_timer_poll(unsigned long now_ms) {
 #endif
 #endif
 
-#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
 #define RNG , rng_get, NULL
 #else
 #define RNG
@@ -3741,7 +3742,7 @@ static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
   (void) lev;
 }
 
-#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
 static int rng_get(void *p_rng, unsigned char *buf, size_t len) {
   (void) p_rng;
   mg_random(buf, len);

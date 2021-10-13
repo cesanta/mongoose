@@ -16,7 +16,7 @@
 #endif
 #endif
 
-#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
 #define RNG , rng_get, NULL
 #else
 #define RNG
@@ -66,7 +66,7 @@ static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
   (void) lev;
 }
 
-#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
 static int rng_get(void *p_rng, unsigned char *buf, size_t len) {
   (void) p_rng;
   mg_random(buf, len);
