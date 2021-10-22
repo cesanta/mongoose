@@ -3712,6 +3712,7 @@ EXTERN_C int mbedtls_net_send(void *, const unsigned char *, size_t);
 struct mg_tls {
   char *cafile;             // CA certificate path
   mbedtls_x509_crt ca;      // Parsed CA certificate
+  mbedtls_x509_crl crl;     // Parsed Certificate Revocation List
   mbedtls_x509_crt cert;    // Parsed certificate
   mbedtls_ssl_context ssl;  // SSL/TLS context
   mbedtls_ssl_config conf;  // SSL-TLS config
@@ -3763,6 +3764,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   const char *ca = opts->ca == NULL     ? "-"
                    : opts->ca[0] == '-' ? "(emb)"
                                         : opts->ca;
+  const char *crl = opts->crl == NULL    ? "-"
+                   : opts->crl[0] == '-' ? "(emb)"
+                                         : opts->crl;
   const char *cert = opts->cert == NULL     ? "-"
                      : opts->cert[0] == '-' ? "(emb)"
                                             : opts->cert;
@@ -3773,11 +3777,12 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     mg_error(c, "TLS OOM");
     goto fail;
   }
-  LOG(LL_DEBUG,
-      ("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id, ca, cert, certkey));
+  LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, CRL: %s, cert: %s, key: %s", c->id,
+                 ca, crl, cert, certkey));
   mbedtls_ssl_init(&tls->ssl);
   mbedtls_ssl_config_init(&tls->conf);
   mbedtls_x509_crt_init(&tls->ca);
+  mbedtls_x509_crl_init(&tls->crl);
   mbedtls_x509_crt_init(&tls->cert);
   mbedtls_pk_init(&tls->pk);
   mbedtls_ssl_conf_dbg(&tls->conf, debug_cb, c);
@@ -3796,9 +3801,19 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_NONE);
   }
   if (opts->ca != NULL && opts->ca[0] != '\0') {
+    if (opts->crl != NULL && opts->crl[0] != '\0') {
+      rc = opts->crl[0] == '-'
+               ? mbedtls_x509_crl_parse(&tls->crl, (uint8_t *) opts->crl,
+                                        strlen(opts->crl) + 1)
+               : mbedtls_x509_crl_parse_file(&tls->crl, opts->crl);
+      if (rc != 0) {
+        mg_error(c, "parse(%s) err %#x", crl, -rc);
+        goto fail;
+      }
+    }
 #if defined(MBEDTLS_X509_CA_CHAIN_ON_DISK)
     tls->cafile = strdup(opts->ca);
-    rc = mbedtls_ssl_conf_ca_chain_file(&tls->conf, tls->cafile, NULL);
+    rc = mbedtls_ssl_conf_ca_chain_file(&tls->conf, tls->cafile, &tls->crl);
     if (rc != 0) {
       mg_error(c, "parse on-disk chain(%s) err %#x", ca, -rc);
       goto fail;
@@ -3812,7 +3827,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
       mg_error(c, "parse(%s) err %#x", ca, -rc);
       goto fail;
     }
-    mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, NULL);
+    mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, &tls->crl);
 #endif
     if (opts->srvname.len > 0) {
       char mem[128], *buf = mem;
@@ -3885,6 +3900,7 @@ void mg_tls_free(struct mg_connection *c) {
   mbedtls_ssl_free(&tls->ssl);
   mbedtls_pk_free(&tls->pk);
   mbedtls_x509_crt_free(&tls->ca);
+  mbedtls_x509_crl_free(&tls->crl);
   mbedtls_x509_crt_free(&tls->cert);
   mbedtls_ssl_config_free(&tls->conf);
   free(tls);

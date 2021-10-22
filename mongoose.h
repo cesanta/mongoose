@@ -901,6 +901,7 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 
 struct mg_tls_opts {
   const char *ca;         // CA certificate file. For both listeners and clients
+  const char *crl;        // Certificate Revocation List. For clients
   const char *cert;       // Certificate
   const char *certkey;    // Certificate key
   const char *ciphers;    // Cipher list

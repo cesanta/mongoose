@@ -1802,6 +1802,7 @@ while ((mg_mqtt_parse(buf, len, &mm)) == 0) {
 ```c
 struct mg_tls_opts {
   const char *ca;        // CA certificate file. For both listeners and clients
+  const char *crl;       // Certificate Revocation List. For clients
   const char *cert;      // Certificate
   const char *certkey;   // Certificate key
   const char *ciphers;   // Cipher list
@@ -1813,6 +1814,9 @@ TLS initialisation structure:
 - `ca` - Certificate Authority. Can be a filename or a string. Used to verify
   a certificate that the other end sends to us. If NULL, then certificate checking
   is disabled
+- `crl` - Certificate Revocation List. Can be a filename or a string. Used to
+  verify a certificate that the other end sends to us. If NULL, then certificate
+  revocation checking is disabled
 - `cert` - Our own certificate. Can be a filename, or a string. If NULL, then
   we don't authenticate with the other peer
 - `certkey` - A key for a `cert`. Sometimes, a certificate and its key are
