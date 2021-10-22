@@ -68,25 +68,25 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: stm32-freertos-tcp
-      run: make -C examples/stm32-freertos-tcp build
+      run: make -C examples/stm32/stm32-freertos-tcp build
   stm32-nucleo-f746z:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - name: stm32-nucleo-f746z
-      run: make -C examples/stm32-nucleo-f746z build
+      run: make -C examples/stm32/stm32-nucleo-f746z build
   stm32-nucleo-f429z:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - name: stm32-nucleo-f429z
-      run: make -C examples/stm32-nucleo-f429z build
+      run: make -C examples/stm32/stm32-nucleo-f429z build
   stm32-nucleo-h743z:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - name: stm32-nucleo-h743z
-      run: make -C examples/stm32-nucleo-h743z build
+      run: make -C examples/stm32/stm32-nucleo-h743z build
   nxp-mimxrt1020-azurertos:
     runs-on: ubuntu-latest
     steps:

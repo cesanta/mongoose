@@ -1,13 +1,13 @@
 # FreeRTOS/{FreeRTOS-Kernel V10.4.3,FreeRTOS-Plus-TCP V2.3.2}
 PROG = firmware
 ARCH = stm32f7
-PROJECT_ROOT_PATH = $(realpath $(CURDIR)/../..)
+PROJECT_ROOT_PATH = $(realpath $(CURDIR)/../../..)
 DOCKER ?= docker run --rm -v $(PROJECT_ROOT_PATH):$(PROJECT_ROOT_PATH) -w $(CURDIR) mdashnet/armgcc
 FREERTOS_KERNEL_PATH ?= $(PROJECT_ROOT_PATH)/test/freertos-kernel
 FREERTOS_PLUS_TCP_PATH ?= $(PROJECT_ROOT_PATH)/test/freertos-tcp
 
 MONGOOSE_FLAGS = -DMG_ARCH=MG_ARCH_FREERTOS_TCP
-MCU_FLAGS = -mcpu=cortex-m7 -mthumb -mfloat-abi=softfp -mfpu=vfpv4 
+MCU_FLAGS = -mcpu=cortex-m7 -mthumb -mfloat-abi=softfp -mfpu=vfpv4
 #-mcpu=cortex-m7 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard
 
 INCLUDES = -I$(PROJECT_ROOT_PATH) -I$(ARCH) -I$(FREERTOS_KERNEL_PATH)/include -I$(FREERTOS_PLUS_TCP_PATH)/include
@@ -36,19 +36,19 @@ SOURCES += $(FREERTOS_KERNEL_PATH)/portable/MemMang/heap_5.c
 SOURCES += $(FREERTOS_KERNEL_PATH)/portable/GCC/ARM_CM7/r0p1/port.c
 
 # FreeRTOS TCP stack sources
-SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_ARP.c 
-SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_DHCP.c 
-SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_DNS.c 
-SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_IP.c 
-SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_Sockets.c 
-SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_Stream_Buffer.c 
+SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_ARP.c
+SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_DHCP.c
+SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_DNS.c
+SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_IP.c
+SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_Sockets.c
+SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_Stream_Buffer.c
 SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_TCP_IP.c
-SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_TCP_WIN.c 
-SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_UDP_IP.c 
+SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_TCP_WIN.c
+SOURCES += $(FREERTOS_PLUS_TCP_PATH)/FreeRTOS_UDP_IP.c
 SOURCES += $(FREERTOS_PLUS_TCP_PATH)/portable/NetworkInterface/Common/phyHandling.c
 SOURCES += $(FREERTOS_PLUS_TCP_PATH)/portable/BufferManagement/BufferAllocation_1.c
 SOURCES += $(FREERTOS_PLUS_TCP_PATH)/portable/NetworkInterface/STM32Fxx/NetworkInterface.c
-SOURCES += $(FREERTOS_PLUS_TCP_PATH)/portable/NetworkInterface/STM32Fxx/stm32fxx_hal_eth.c 
+SOURCES += $(FREERTOS_PLUS_TCP_PATH)/portable/NetworkInterface/STM32Fxx/stm32fxx_hal_eth.c
 
 OBJECTS = obj/boot.o $(SOURCES:%.c=obj/%.o)
 
