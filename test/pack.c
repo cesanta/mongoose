@@ -23,9 +23,11 @@
 #include <sys/stat.h>
 
 static const char *code =
+    "const char *mg_unlist(size_t no);\n"
     "const char *mg_unlist(size_t no) {\n"
     "  return packed_files[no].name;\n"
     "}\n"
+    "const char *mg_unpack(const char *name, size_t *size, time_t *mtime);\n"
     "const char *mg_unpack(const char *name, size_t *size, time_t *mtime) {\n"
     "  const struct packed_file *p;\n"
     "  for (p = packed_files; p->name != NULL; p++) {\n"

@@ -172,7 +172,7 @@ struct mg_str *mg_http_get_header(struct mg_http_message *h, const char *name) {
   return NULL;
 }
 
-void mg_http_parse_headers(const char *s, const char *end,
+static void mg_http_parse_headers(const char *s, const char *end,
                            struct mg_http_header *h, int max_headers) {
   int i;
   for (i = 0; i < max_headers; i++) {
@@ -372,6 +372,7 @@ static void restore_http_cb(struct mg_connection *c) {
   c->pfn = http_cb;
 }
 
+char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime);
 char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime) {
   snprintf(buf, len, "\"%lx." MG_INT64_FMT "\"", (unsigned long) mtime,
            (int64_t) size);

@@ -62,7 +62,7 @@ static uint32_t blk0(union char64long16 *block, int i) {
   z += (w ^ x ^ y) + blk(i) + 0xCA62C1D6 + rol(v, 5); \
   w = rol(w, 30);
 
-void mg_sha1_transform(uint32_t state[5], const unsigned char buffer[64]) {
+static void mg_sha1_transform(uint32_t state[5], const unsigned char buffer[64]) {
   uint32_t a, b, c, d, e;
   union char64long16 block[1];
 

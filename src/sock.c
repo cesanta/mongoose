@@ -139,7 +139,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 #endif
 }
 
-SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
+static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
   SOCKET fd = INVALID_SOCKET;
   int s_err = 0;  // Memoized socket error, in case closesocket() overrides it
   memset(addr, 0, sizeof(*addr));

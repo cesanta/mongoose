@@ -177,7 +177,7 @@ static size_t mg_dns_parse_name_depth(const uint8_t *s, size_t len, size_t ofs,
   return i;
 }
 
-size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs, char *dst,
+static size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs, char *dst,
                          size_t dstlen) {
   return mg_dns_parse_name_depth(s, n, ofs, dst, dstlen, 0);
 }
@@ -303,7 +303,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
   (void) fn_data;
 }
 
-void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
+static void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
                  uint16_t txnid, bool ipv6) {
   struct {
     struct mg_dns_header header;
@@ -922,7 +922,7 @@ struct mg_str *mg_http_get_header(struct mg_http_message *h, const char *name) {
   return NULL;
 }
 
-void mg_http_parse_headers(const char *s, const char *end,
+static void mg_http_parse_headers(const char *s, const char *end,
                            struct mg_http_header *h, int max_headers) {
   int i;
   for (i = 0; i < max_headers; i++) {
@@ -1122,6 +1122,7 @@ static void restore_http_cb(struct mg_connection *c) {
   c->pfn = http_cb;
 }
 
+char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime);
 char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime) {
   snprintf(buf, len, "\"%lx." MG_INT64_FMT "\"", (unsigned long) mtime,
            (int64_t) size);
@@ -2575,7 +2576,7 @@ static uint32_t blk0(union char64long16 *block, int i) {
   z += (w ^ x ^ y) + blk(i) + 0xCA62C1D6 + rol(v, 5); \
   w = rol(w, 30);
 
-void mg_sha1_transform(uint32_t state[5], const unsigned char buffer[64]) {
+static void mg_sha1_transform(uint32_t state[5], const unsigned char buffer[64]) {
   uint32_t a, b, c, d, e;
   union char64long16 block[1];
 
@@ -2984,7 +2985,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 #endif
 }
 
-SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
+static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
   SOCKET fd = INVALID_SOCKET;
   int s_err = 0;  // Memoized socket error, in case closesocket() overrides it
   memset(addr, 0, sizeof(*addr));
