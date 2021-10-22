@@ -188,22 +188,22 @@ size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
 
   memset(rr, 0, sizeof(*rr));
   if (len < sizeof(struct mg_dns_header)) return 0;  // Too small
-  if (len > 512) return 0;         //  Too large, we don't expect that
-  if (s >= e) return 0;            //  Overflow
+  if (len > 512) return 0;  //  Too large, we don't expect that
+  if (s >= e) return 0;     //  Overflow
 
   if ((rr->nlen = (uint16_t) mg_dns_parse_name(buf, len, ofs, NULL, 0)) == 0)
     return 0;
   s += rr->nlen + 4;
   if (s > e) return 0;
-  rr->atype = (uint16_t)(((uint16_t) s[-4] << 8) | s[-3]);
-  rr->aclass = (uint16_t)(((uint16_t) s[-2] << 8) | s[-1]);
-  if (is_question) return (size_t)(rr->nlen + 4);
+  rr->atype = (uint16_t) (((uint16_t) s[-4] << 8) | s[-3]);
+  rr->aclass = (uint16_t) (((uint16_t) s[-2] << 8) | s[-1]);
+  if (is_question) return (size_t) (rr->nlen + 4);
 
   s += 6;
   if (s > e) return 0;
-  rr->alen = (uint16_t)(((uint16_t) s[-2] << 8) | s[-1]);
+  rr->alen = (uint16_t) (((uint16_t) s[-2] << 8) | s[-1]);
   if (s + rr->alen > e) return 0;
-  return (size_t)(rr->nlen + rr->alen + 10);
+  return (size_t) (rr->nlen + rr->alen + 10);
 }
 
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
@@ -316,7 +316,7 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   pkt.header.num_questions = mg_htons(1);
   for (i = n = 0; i < sizeof(pkt.data) - 5; i++) {
     if (name->ptr[i] == '.' || i >= name->len) {
-      pkt.data[n] = (uint8_t)(i - n);
+      pkt.data[n] = (uint8_t) (i - n);
       memcpy(&pkt.data[n + 1], name->ptr + n, i - n);
       n = i + 1;
     }
@@ -358,7 +358,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
 #if MG_ENABLE_LOG
     char buf[100];
 #endif
-    d->txnid = s_reqs ? (uint16_t)(s_reqs->txnid + 1) : 1;
+    d->txnid = s_reqs ? (uint16_t) (s_reqs->txnid + 1) : 1;
     d->next = s_reqs;
     s_reqs = d;
     d->expire = mg_millis() + (unsigned long) ms;
@@ -1475,7 +1475,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
     path[path_size - 1] = '\0';  // Double-check
     remove_double_dots(path);
     n = strlen(path);
-    LOG(LL_DEBUG, ("--> %s", path));
+    LOG(LL_VERBOSE_DEBUG, ("%lu %s", c->id, path));
     while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
     flags = fs->stat(path, NULL, NULL);                 // Does it exist?
     if (flags == 0) {
@@ -2828,8 +2828,7 @@ void mg_sntp_send(struct mg_connection *c, unsigned long utc) {
     s_sntmp_next = utc + SNTP_INTERVAL_SEC;
     buf[0] = (3 << 6) | (4 << 3) | 3;
     mg_send(c, buf, sizeof(buf));
-    LOG(LL_DEBUG,
-        ("%p request sent, ct %lu, next at %lu", c->fd, utc, s_sntmp_next));
+    LOG(LL_DEBUG, ("%lu ct %lu, next at %lu", c->id, utc, s_sntmp_next));
   }
 }
 
@@ -2947,7 +2946,14 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
 }
 
 static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
-  long n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+  long n;
+  if (c->is_udp) {
+    union usa usa;
+    socklen_t slen = tousa(&c->peer, &usa);
+    n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
+  } else {
+    n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+  }
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
 
@@ -3213,12 +3219,12 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   SOCKET fd = accept(FD(lsn), &usa.sa, &sa_len);
   if (fd == INVALID_SOCKET) {
 #if MG_ARCH == MG_ARCH_AZURERTOS
-  // AzureRTOS, in non-block socket mode can mark listening socket readable
-  // even it is not. See comment for 'select' func implementation in nx_bsd.c
-  // That's not an error, just should try later
-	if (MG_SOCK_ERRNO != EAGAIN)
+    // AzureRTOS, in non-block socket mode can mark listening socket readable
+    // even it is not. See comment for 'select' func implementation in nx_bsd.c
+    // That's not an error, just should try later
+    if (MG_SOCK_ERRNO != EAGAIN)
 #endif
-    LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
+      LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
 #if (!defined(_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP))
   } else if ((long) fd >= FD_SETSIZE) {
     LOG(LL_ERROR, ("%ld > %ld", (long) fd, (long) FD_SETSIZE));

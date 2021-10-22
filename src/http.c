@@ -725,7 +725,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
     path[path_size - 1] = '\0';  // Double-check
     remove_double_dots(path);
     n = strlen(path);
-    LOG(LL_DEBUG, ("--> %s", path));
+    LOG(LL_VERBOSE_DEBUG, ("%lu %s", c->id, path));
     while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
     flags = fs->stat(path, NULL, NULL);                 // Does it exist?
     if (flags == 0) {

@@ -54,8 +54,7 @@ void mg_sntp_send(struct mg_connection *c, unsigned long utc) {
     s_sntmp_next = utc + SNTP_INTERVAL_SEC;
     buf[0] = (3 << 6) | (4 << 3) | 3;
     mg_send(c, buf, sizeof(buf));
-    LOG(LL_DEBUG,
-        ("%p request sent, ct %lu, next at %lu", c->fd, utc, s_sntmp_next));
+    LOG(LL_DEBUG, ("%lu ct %lu, next at %lu", c->id, utc, s_sntmp_next));
   }
 }
 
