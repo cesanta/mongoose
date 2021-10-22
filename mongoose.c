@@ -5,7 +5,7 @@
 // This software is dual-licensed: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 2 as
 // published by the Free Software Foundation. For the terms of this
-// license, see <http://www.gnu.org/licenses/>.
+// license, see http://www.gnu.org/licenses/
 //
 // You are free to use this software under the terms of the GNU General
 // Public License, but WITHOUT ANY WARRANTY; without even the implied
@@ -13,18 +13,14 @@
 // See the GNU General Public License for more details.
 //
 // Alternatively, you can license this software under a commercial
-// license, as set out in <https://www.cesanta.com/license>.
+// license, as set out in https://www.mongoose.ws/licensing/
 
 #include "mongoose.h"
 
 #ifdef MG_ENABLE_LINES
-#line 1 "src/private.h"
-#endif
-void mg_connect_resolved(struct mg_connection *);
-
-#ifdef MG_ENABLE_LINES
 #line 1 "src/base64.c"
 #endif
+
 #include <string.h>
 
 static int mg_b64idx(int c) {
@@ -177,7 +173,7 @@ static size_t mg_dns_parse_name_depth(const uint8_t *s, size_t len, size_t ofs,
   return i;
 }
 
-size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs, char *dst,
+static size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs, char *dst,
                          size_t dstlen) {
   return mg_dns_parse_name_depth(s, n, ofs, dst, dstlen, 0);
 }
@@ -188,22 +184,22 @@ size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
 
   memset(rr, 0, sizeof(*rr));
   if (len < sizeof(struct mg_dns_header)) return 0;  // Too small
-  if (len > 512) return 0;         //  Too large, we don't expect that
-  if (s >= e) return 0;            //  Overflow
+  if (len > 512) return 0;  //  Too large, we don't expect that
+  if (s >= e) return 0;     //  Overflow
 
   if ((rr->nlen = (uint16_t) mg_dns_parse_name(buf, len, ofs, NULL, 0)) == 0)
     return 0;
   s += rr->nlen + 4;
   if (s > e) return 0;
-  rr->atype = (uint16_t)(((uint16_t) s[-4] << 8) | s[-3]);
-  rr->aclass = (uint16_t)(((uint16_t) s[-2] << 8) | s[-1]);
-  if (is_question) return (size_t)(rr->nlen + 4);
+  rr->atype = (uint16_t) (((uint16_t) s[-4] << 8) | s[-3]);
+  rr->aclass = (uint16_t) (((uint16_t) s[-2] << 8) | s[-1]);
+  if (is_question) return (size_t) (rr->nlen + 4);
 
   s += 6;
   if (s > e) return 0;
-  rr->alen = (uint16_t)(((uint16_t) s[-2] << 8) | s[-1]);
+  rr->alen = (uint16_t) (((uint16_t) s[-2] << 8) | s[-1]);
   if (s + rr->alen > e) return 0;
-  return (size_t)(rr->nlen + rr->alen + 10);
+  return (size_t) (rr->nlen + rr->alen + 10);
 }
 
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
@@ -303,7 +299,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
   (void) fn_data;
 }
 
-void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
+static void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
                  uint16_t txnid, bool ipv6) {
   struct {
     struct mg_dns_header header;
@@ -316,7 +312,7 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   pkt.header.num_questions = mg_htons(1);
   for (i = n = 0; i < sizeof(pkt.data) - 5; i++) {
     if (name->ptr[i] == '.' || i >= name->len) {
-      pkt.data[n] = (uint8_t)(i - n);
+      pkt.data[n] = (uint8_t) (i - n);
       memcpy(&pkt.data[n + 1], name->ptr + n, i - n);
       n = i + 1;
     }
@@ -358,7 +354,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
 #if MG_ENABLE_LOG
     char buf[100];
 #endif
-    d->txnid = s_reqs ? (uint16_t)(s_reqs->txnid + 1) : 1;
+    d->txnid = s_reqs ? (uint16_t) (s_reqs->txnid + 1) : 1;
     d->next = s_reqs;
     s_reqs = d;
     d->expire = mg_millis() + (unsigned long) ms;
@@ -923,7 +919,7 @@ struct mg_str *mg_http_get_header(struct mg_http_message *h, const char *name) {
   return NULL;
 }
 
-void mg_http_parse_headers(const char *s, const char *end,
+static void mg_http_parse_headers(const char *s, const char *end,
                            struct mg_http_header *h, int max_headers) {
   int i;
   for (i = 0; i < max_headers; i++) {
@@ -1123,6 +1119,7 @@ static void restore_http_cb(struct mg_connection *c) {
   c->pfn = http_cb;
 }
 
+char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime);
 char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime) {
   snprintf(buf, len, "\"%lx." MG_INT64_FMT "\"", (unsigned long) mtime,
            (int64_t) size);
@@ -1476,7 +1473,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
     path[path_size - 1] = '\0';  // Double-check
     remove_double_dots(path);
     n = strlen(path);
-    LOG(LL_DEBUG, ("--> %s", path));
+    LOG(LL_VERBOSE_DEBUG, ("%lu %s", c->id, path));
     while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
     flags = fs->stat(path, NULL, NULL);                 // Does it exist?
     if (flags == 0) {
@@ -2576,7 +2573,7 @@ static uint32_t blk0(union char64long16 *block, int i) {
   z += (w ^ x ^ y) + blk(i) + 0xCA62C1D6 + rol(v, 5); \
   w = rol(w, 30);
 
-void mg_sha1_transform(uint32_t state[5], const unsigned char buffer[64]) {
+static void mg_sha1_transform(uint32_t state[5], const unsigned char buffer[64]) {
   uint32_t a, b, c, d, e;
   union char64long16 block[1];
 
@@ -2829,8 +2826,7 @@ void mg_sntp_send(struct mg_connection *c, unsigned long utc) {
     s_sntmp_next = utc + SNTP_INTERVAL_SEC;
     buf[0] = (3 << 6) | (4 << 3) | 3;
     mg_send(c, buf, sizeof(buf));
-    LOG(LL_DEBUG,
-        ("%p request sent, ct %lu, next at %lu", c->fd, utc, s_sntmp_next));
+    LOG(LL_DEBUG, ("%lu ct %lu, next at %lu", c->id, utc, s_sntmp_next));
   }
 }
 
@@ -2948,7 +2944,19 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
 }
 
 static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
-  long n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+  long n;
+#if defined(_WIN32)
+  // See #1338, #1382. On Windows, UDP send() can fail despite connected.
+  // Use sendto() instead. But not UNIX: e.g. on Mac we'll get EISCONN
+  if (c->is_udp) {
+    union usa usa;
+    socklen_t slen = tousa(&c->peer, &usa);
+    n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
+  } else
+#endif
+  {
+    n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+  }
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
 
@@ -2974,7 +2982,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 #endif
 }
 
-SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
+static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
   SOCKET fd = INVALID_SOCKET;
   int s_err = 0;  // Memoized socket error, in case closesocket() overrides it
   memset(addr, 0, sizeof(*addr));
@@ -3214,12 +3222,12 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   SOCKET fd = accept(FD(lsn), &usa.sa, &sa_len);
   if (fd == INVALID_SOCKET) {
 #if MG_ARCH == MG_ARCH_AZURERTOS
-  // AzureRTOS, in non-block socket mode can mark listening socket readable
-  // even it is not. See comment for 'select' func implementation in nx_bsd.c
-  // That's not an error, just should try later
-	if (MG_SOCK_ERRNO != EAGAIN)
+    // AzureRTOS, in non-block socket mode can mark listening socket readable
+    // even it is not. See comment for 'select' func implementation in nx_bsd.c
+    // That's not an error, just should try later
+    if (MG_SOCK_ERRNO != EAGAIN)
 #endif
-    LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
+      LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
 #if (!defined(_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP))
   } else if ((long) fd >= FD_SETSIZE) {
     LOG(LL_ERROR, ("%ld > %ld", (long) fd, (long) FD_SETSIZE));

@@ -340,11 +340,11 @@ static void test_mqtt(void) {
   opts.will_topic = mg_str("mg_will_topic");
   opts.will_message = mg_str("mg_will_messsage");
   c = mg_mqtt_connect(&mgr, url, &opts, mqtt_cb, buf);
-  for (i = 0; i < 100 && buf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
+  for (i = 0; i < 200 && buf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(buf[0] == 'X');
   mg_mqtt_sub(c, &topic, 1);
   mg_mqtt_pub(c, &topic, &data, 1, false);
-  for (i = 0; i < 100 && buf[1] == 0; i++) mg_mgr_poll(&mgr, 10);
+  for (i = 0; i < 200 && buf[1] == 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(strcmp(buf, "Xx/f12/hi") == 0);
 
   mg_mgr_free(&mgr);

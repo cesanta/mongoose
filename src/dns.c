@@ -63,7 +63,7 @@ static size_t mg_dns_parse_name_depth(const uint8_t *s, size_t len, size_t ofs,
   return i;
 }
 
-size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs, char *dst,
+static size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs, char *dst,
                          size_t dstlen) {
   return mg_dns_parse_name_depth(s, n, ofs, dst, dstlen, 0);
 }
@@ -74,22 +74,22 @@ size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
 
   memset(rr, 0, sizeof(*rr));
   if (len < sizeof(struct mg_dns_header)) return 0;  // Too small
-  if (len > 512) return 0;         //  Too large, we don't expect that
-  if (s >= e) return 0;            //  Overflow
+  if (len > 512) return 0;  //  Too large, we don't expect that
+  if (s >= e) return 0;     //  Overflow
 
   if ((rr->nlen = (uint16_t) mg_dns_parse_name(buf, len, ofs, NULL, 0)) == 0)
     return 0;
   s += rr->nlen + 4;
   if (s > e) return 0;
-  rr->atype = (uint16_t)(((uint16_t) s[-4] << 8) | s[-3]);
-  rr->aclass = (uint16_t)(((uint16_t) s[-2] << 8) | s[-1]);
-  if (is_question) return (size_t)(rr->nlen + 4);
+  rr->atype = (uint16_t) (((uint16_t) s[-4] << 8) | s[-3]);
+  rr->aclass = (uint16_t) (((uint16_t) s[-2] << 8) | s[-1]);
+  if (is_question) return (size_t) (rr->nlen + 4);
 
   s += 6;
   if (s > e) return 0;
-  rr->alen = (uint16_t)(((uint16_t) s[-2] << 8) | s[-1]);
+  rr->alen = (uint16_t) (((uint16_t) s[-2] << 8) | s[-1]);
   if (s + rr->alen > e) return 0;
-  return (size_t)(rr->nlen + rr->alen + 10);
+  return (size_t) (rr->nlen + rr->alen + 10);
 }
 
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
@@ -189,7 +189,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
   (void) fn_data;
 }
 
-void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
+static void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
                  uint16_t txnid, bool ipv6) {
   struct {
     struct mg_dns_header header;
@@ -202,7 +202,7 @@ void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   pkt.header.num_questions = mg_htons(1);
   for (i = n = 0; i < sizeof(pkt.data) - 5; i++) {
     if (name->ptr[i] == '.' || i >= name->len) {
-      pkt.data[n] = (uint8_t)(i - n);
+      pkt.data[n] = (uint8_t) (i - n);
       memcpy(&pkt.data[n + 1], name->ptr + n, i - n);
       n = i + 1;
     }
@@ -244,7 +244,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
 #if MG_ENABLE_LOG
     char buf[100];
 #endif
-    d->txnid = s_reqs ? (uint16_t)(s_reqs->txnid + 1) : 1;
+    d->txnid = s_reqs ? (uint16_t) (s_reqs->txnid + 1) : 1;
     d->next = s_reqs;
     s_reqs = d;
     d->expire = mg_millis() + (unsigned long) ms;

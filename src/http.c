@@ -172,7 +172,7 @@ struct mg_str *mg_http_get_header(struct mg_http_message *h, const char *name) {
   return NULL;
 }
 
-void mg_http_parse_headers(const char *s, const char *end,
+static void mg_http_parse_headers(const char *s, const char *end,
                            struct mg_http_header *h, int max_headers) {
   int i;
   for (i = 0; i < max_headers; i++) {
@@ -372,6 +372,7 @@ static void restore_http_cb(struct mg_connection *c) {
   c->pfn = http_cb;
 }
 
+char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime);
 char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime) {
   snprintf(buf, len, "\"%lx." MG_INT64_FMT "\"", (unsigned long) mtime,
            (int64_t) size);
@@ -725,7 +726,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
     path[path_size - 1] = '\0';  // Double-check
     remove_double_dots(path);
     n = strlen(path);
-    LOG(LL_DEBUG, ("--> %s", path));
+    LOG(LL_VERBOSE_DEBUG, ("%lu %s", c->id, path));
     while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
     flags = fs->stat(path, NULL, NULL);                 // Does it exist?
     if (flags == 0) {

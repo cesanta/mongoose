@@ -101,7 +101,19 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
 }
 
 static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
-  long n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+  long n;
+#if defined(_WIN32)
+  // See #1338, #1382. On Windows, UDP send() can fail despite connected.
+  // Use sendto() instead. But not UNIX: e.g. on Mac we'll get EISCONN
+  if (c->is_udp) {
+    union usa usa;
+    socklen_t slen = tousa(&c->peer, &usa);
+    n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
+  } else
+#endif
+  {
+    n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+  }
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
 
@@ -127,7 +139,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 #endif
 }
 
-SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
+static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
   SOCKET fd = INVALID_SOCKET;
   int s_err = 0;  // Memoized socket error, in case closesocket() overrides it
   memset(addr, 0, sizeof(*addr));
@@ -367,12 +379,12 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   SOCKET fd = accept(FD(lsn), &usa.sa, &sa_len);
   if (fd == INVALID_SOCKET) {
 #if MG_ARCH == MG_ARCH_AZURERTOS
-  // AzureRTOS, in non-block socket mode can mark listening socket readable
-  // even it is not. See comment for 'select' func implementation in nx_bsd.c
-  // That's not an error, just should try later
-	if (MG_SOCK_ERRNO != EAGAIN)
+    // AzureRTOS, in non-block socket mode can mark listening socket readable
+    // even it is not. See comment for 'select' func implementation in nx_bsd.c
+    // That's not an error, just should try later
+    if (MG_SOCK_ERRNO != EAGAIN)
 #endif
-    LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
+      LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
 #if (!defined(_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP))
   } else if ((long) fd >= FD_SETSIZE) {
     LOG(LL_ERROR, ("%ld > %ld", (long) fd, (long) FD_SETSIZE));
