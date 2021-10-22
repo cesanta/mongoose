@@ -92,22 +92,118 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: nxp-mimxrt1020-azurertos
-      run: make -C examples/nxp-mimxrt1020-azurertos build
+      run: make -C examples/nxp/nxp-mimxrt1020-azurertos build
   nxp-frdmk66f-freertos:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - name: nxp-frdmk66f-freertos
-      run: make -C examples/nxp-frdmk66f-freertos build
+      run: make -C examples/nxp/nxp-frdmk66f-freertos build
   nxp-lpcxpresso54s018m-freertos:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - name: nxp-lpcxpresso54s018m-freertos
-      run: make -C examples/nxp-lpcxpresso54s018m-freertos build
+      run: make -C examples/nxp/nxp-lpcxpresso54s018m-freertos build
   nxp-mimxrt1020-freertos:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - name: nxp-mimxrt1020-freertos
-      run: make -C examples/nxp-mimxrt1020-freertos build
+      run: make -C examples/nxp/nxp-mimxrt1020-freertos build
+  nxp-evkbimxrt1050-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-evkbimxrt1050-lwip-freertos
+      run: make -C examples/nxp/nxp-evkbimxrt1050-lwip-freertos build
+  nxp-evkmimxrt1020-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-evkmimxrt1020-lwip-freertos
+      run: make -C examples/nxp/nxp-evkmimxrt1020-lwip-freertos build
+  nxp-evkmimxrt1024-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-evkmimxrt1024-lwip-freertos
+      run: make -C examples/nxp/nxp-evkmimxrt1024-lwip-freertos build
+  nxp-evkmimxrt1060-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-evkmimxrt1060-lwip-freertos
+      run: make -C examples/nxp/nxp-evkmimxrt1060-lwip-freertos build
+  nxp-evkmimxrt1064-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-evkmimxrt1064-lwip-freertos
+      run: make -C examples/nxp/nxp-evkmimxrt1064-lwip-freertos build
+  nxp-evkmimxrt1160-cm7-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-evkmimxrt1160-cm7-lwip-freertos
+      run: make -C examples/nxp/nxp-evkmimxrt1160-cm7-lwip-freertos build
+  nxp-evkmimxrt1170-cm4-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-evkmimxrt1170-cm4-lwip-freertos
+      run: make -C examples/nxp/nxp-evkmimxrt1170-cm4-lwip-freertos build
+  nxp-evkmimxrt1170-cm7-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-evkmimxrt1170-cm7-lwip-freertos
+      run: make -C examples/nxp/nxp-evkmimxrt1170-cm7-lwip-freertos build
+  nxp-frdmk64f-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-frdmk64f-lwip-freertos
+      run: make -C examples/nxp/nxp-frdmk64f-lwip-freertos build
+  nxp-frdmk66f-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-frdmk66f-lwip-freertos
+      run: make -C examples/nxp/nxp-frdmk66f-lwip-freertos build
+  nxp-lpcxpresso54018-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-lpcxpresso54018-lwip-freertos
+      run: make -C examples/nxp/nxp-lpcxpresso54018-lwip-freertos build
+  nxp-lpcxpresso54608-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-lpcxpresso54608-lwip-freertos
+      run: make -C examples/nxp/nxp-lpcxpresso54608-lwip-freertos build
+  nxp-lpcxpresso54618-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-lpcxpresso54618-lwip-freertos
+      run: make -C examples/nxp/nxp-lpcxpresso54618-lwip-freertos build
+  nxp-lpcxpresso54628-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-lpcxpresso54628-lwip-freertos
+      run: make -C examples/nxp/nxp-lpcxpresso54628-lwip-freertos build
+  nxp-twrk65f180m-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-twrk65f180m-lwip-freertos
+      run: make -C examples/nxp/nxp-twrk65f180m-lwip-freertos build
+  nxp-twrkv58f220m-lwip-freertos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: nxp-twrkv58f220m-lwip-freertos
+      run: make -C examples/nxp/nxp-twrkv58f220m-lwip-freertos build
