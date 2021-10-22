@@ -9,6 +9,14 @@
 #define WIFI_PASS "WIFI_PASSWORD"  // SET THIS!
 #define FS_ROOT "/spiffs"
 
+// SPIFFS is flat, so tell Mongoose that the FS root is a directory
+// This cludge is not required for filesystems with directory support
+static int my_stat(const char *path, size_t *size, time_t *mtime) {
+  int flags = mg_fs_posix.stat(path, size, mtime);
+  if (strcmp(path, FS_ROOT) == 0) flags |= MG_FS_DIR;
+  return flags;
+}
+
 // Event handler for an server (accepted) connection. Implemented endpoints:
 //    /api/stats  - return JSON object with ESP32 stats (free RAM)
 //    any other   - serve files from the filesystem
@@ -18,16 +26,15 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (mg_http_match_uri(hm, "/api/stats")) {
       mg_http_reply(c, 200, "", "{\"ram\": %lu}\n", xPortGetFreeHeapSize());
     } else {
-      struct mg_http_serve_opts opts = {.root_dir = FS_ROOT};
+      // mg_http_reply(c, 404, "", "Not found: %d\n", MG_PATH_MAX);
+      // return;
+      struct mg_fs fs = mg_fs_posix;
+      fs.stat = my_stat;
+      struct mg_http_serve_opts opts = {.root_dir = FS_ROOT, .fs = &fs};
+      // opts.fs = NULL;
       mg_http_serve_dir(c, hm, &opts);
     }
   }
-}
-
-// SPIFFS is flat, so tell Mongoose that the FS root is a directory
-// This cludge is not required for filesystems with directory support
-bool mg_is_dir(const char *path) {
-  return strcmp(path, FS_ROOT) == 0;
 }
 
 void app_main(void) {

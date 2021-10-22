@@ -199,9 +199,8 @@ static __inline struct tm *localtime_r(time_t *t, struct tm *tm) {
 
 #define MG_DIRSEP '/'
 #define MG_INT64_FMT "%lld"
-#ifndef MG_PATH_MAX
+#undef MG_PATH_MAX
 #define MG_PATH_MAX 128
-#endif
 #undef MG_ENABLE_DIRLIST
 #define MG_ENABLE_DIRLIST 1
 
