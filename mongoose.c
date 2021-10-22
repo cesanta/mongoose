@@ -18,11 +18,6 @@
 #include "mongoose.h"
 
 #ifdef MG_ENABLE_LINES
-#line 1 "src/private.h"
-#endif
-void mg_connect_resolved(struct mg_connection *);
-
-#ifdef MG_ENABLE_LINES
 #line 1 "src/base64.c"
 #endif
 
