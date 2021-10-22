@@ -3,7 +3,6 @@
 #include "base64.h"
 #include "log.h"
 #include "net.h"
-#include "private.h"
 #include "ssi.h"
 #include "util.h"
 #include "version.h"

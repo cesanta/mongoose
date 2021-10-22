@@ -1,6 +1,5 @@
 #include "dns.h"
 #include "log.h"
-#include "private.h"
 #include "str.h"
 #include "timer.h"
 #include "util.h"
@@ -63,8 +62,8 @@ static size_t mg_dns_parse_name_depth(const uint8_t *s, size_t len, size_t ofs,
   return i;
 }
 
-static size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs, char *dst,
-                         size_t dstlen) {
+static size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs,
+                                char *dst, size_t dstlen) {
   return mg_dns_parse_name_depth(s, n, ofs, dst, dstlen, 0);
 }
 
@@ -190,7 +189,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
 }
 
 static void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
-                 uint16_t txnid, bool ipv6) {
+                        uint16_t txnid, bool ipv6) {
   struct {
     struct mg_dns_header header;
     uint8_t data[256];

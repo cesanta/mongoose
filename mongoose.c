@@ -114,7 +114,6 @@ int mg_base64_decode(const char *src, int n, char *dst) {
 
 
 
-
 struct dns_data {
   struct dns_data *next;
   struct mg_connection *c;
@@ -173,8 +172,8 @@ static size_t mg_dns_parse_name_depth(const uint8_t *s, size_t len, size_t ofs,
   return i;
 }
 
-static size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs, char *dst,
-                         size_t dstlen) {
+static size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs,
+                                char *dst, size_t dstlen) {
   return mg_dns_parse_name_depth(s, n, ofs, dst, dstlen, 0);
 }
 
@@ -300,7 +299,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
 }
 
 static void mg_dns_send(struct mg_connection *c, const struct mg_str *name,
-                 uint16_t txnid, bool ipv6) {
+                        uint16_t txnid, bool ipv6) {
   struct {
     struct mg_dns_header header;
     uint8_t data[256];
@@ -745,7 +744,6 @@ struct mg_fs mg_fs_posix = {p_stat, p_list,  p_open, p_close,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/http.c"
 #endif
-
 
 
 
@@ -2077,7 +2075,6 @@ void mg_md5_final(mg_md5_ctx *ctx, unsigned char digest[16]) {
 
 
 
-
 #define MQTT_CLEAN_SESSION 0x02
 #define MQTT_HAS_WILL 0x04
 #define MQTT_WILL_RETAIN 0x20
@@ -2853,7 +2850,6 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
 
 
 
-
 #if MG_ENABLE_SOCKET
 #if defined(_WIN32) && MG_ENABLE_WINSOCK
 #define MG_SOCK_ERRNO WSAGetLastError()
@@ -3161,7 +3157,8 @@ static void setsockopts(struct mg_connection *c) {
   setsockopt(FD(c), SOL_TCP, TCP_QUICKACK, (char *) &on, sizeof(on));
 #endif
   setsockopt(FD(c), SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on));
-#if (defined(ESP32) && ESP32) || (defined(ESP8266) && ESP8266) || defined(__linux__)
+#if (defined(ESP32) && ESP32) || (defined(ESP8266) && ESP8266) || \
+    defined(__linux__)
   int idle = 60;
   setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
 #endif
@@ -4539,7 +4536,6 @@ unsigned long mg_millis(void) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ws.c"
 #endif
-
 
 
 

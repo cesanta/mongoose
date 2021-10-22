@@ -2,7 +2,6 @@
 #include "event.h"
 #include "log.h"
 #include "net.h"
-#include "private.h"
 #include "str.h"
 #include "timer.h"
 #include "tls.h"
@@ -316,7 +315,8 @@ static void setsockopts(struct mg_connection *c) {
   setsockopt(FD(c), SOL_TCP, TCP_QUICKACK, (char *) &on, sizeof(on));
 #endif
   setsockopt(FD(c), SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on));
-#if (defined(ESP32) && ESP32) || (defined(ESP8266) && ESP8266) || defined(__linux__)
+#if (defined(ESP32) && ESP32) || (defined(ESP8266) && ESP8266) || \
+    defined(__linux__)
   int idle = 60;
   setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
 #endif

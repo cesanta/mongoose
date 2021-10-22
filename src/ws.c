@@ -3,7 +3,6 @@
 #include "base64.h"
 #include "http.h"
 #include "log.h"
-#include "private.h"
 #include "sha1.h"
 #include "url.h"
 #include "util.h"
