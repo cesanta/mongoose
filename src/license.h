@@ -2,6 +2,8 @@
 // Copyright (c) 2013-2021 Cesanta Software Limited
 // All rights reserved
 //
+// SPDX-License-Identifier: GPL-2.0-only OR LicenseRef-Cesanta
+//
 // This software is dual-licensed: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 2 as
 // published by the Free Software Foundation. For the terms of this
