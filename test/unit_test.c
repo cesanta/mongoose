@@ -1333,10 +1333,38 @@ static void eh5(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     mg_http_delete_chunk(c, hm);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
+    ASSERT(hm->body.len == 0);
     c->is_closing = 1;
     *(uint32_t *) fn_data = *crc;
     // LOG(LL_INFO, ("MSG [%.*s]", (int) hm->body.len, hm->body.ptr));
+  }
+  (void) ev_data;
+}
+
+// Streaming client event read handler.
+static void eh6(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  uint32_t *crc = (uint32_t *) c->label;
+  size_t *offset = (size_t *) c->label + 4;
+  if (ev == MG_EV_CONNECT) {
+    mg_printf(c, "GET / HTTP/1.0\n\n");
+  } else if (ev == MG_EV_HTTP_CHUNK && c->label[8] != 'W') {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
+    offset = &hm->head.len;
+    mg_http_delete_chunk(c, hm);
+    c->label[8] = 'W';
+  } else if (ev == MG_EV_READ) {
+    unsigned char *recv = c->recv.buf + *offset;
+    size_t len = c->recv.len + *offset;
+    if (len == 29) {
+      *crc = mg_crc32(*crc, (char *) recv + 3, 7);
+      mg_iobuf_del(&c->recv, *offset, 12);
+      *crc = mg_crc32(*crc, (char *) recv + 3, 7);
+      mg_iobuf_del(&c->recv, *offset, 17);
+      c->is_closing = 1;
+    }
+  } else if (ev == MG_EV_CLOSE) {
+    *(uint32_t *) fn_data = *crc;
   }
   (void) ev_data;
 }
@@ -1362,6 +1390,12 @@ static void test_http_chunked(void) {
 
   done = 0;
   mg_http_connect(&mgr, url, eh5, &done);
+  for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
+  data = LONG_CHUNK "chunk 1chunk 2";
+  ASSERT(done == mg_crc32(0, data, strlen(data)));
+
+  done = 0;
+  mg_http_connect(&mgr, url, eh6, &done);
   for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
   data = LONG_CHUNK "chunk 1chunk 2";
   ASSERT(done == mg_crc32(0, data, strlen(data)));
@@ -1443,7 +1477,7 @@ static void test_packed(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void eh6(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void eh8(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_READ) *(int *) fn_data = 1;
   (void) c, (void) ev_data;
 }
@@ -1453,7 +1487,7 @@ static void test_pipe(void) {
   struct mg_connection *c;
   int i, done = 0;
   mg_mgr_init(&mgr);
-  ASSERT((c = mg_mkpipe(&mgr, eh6, (void *) &done)) != NULL);
+  ASSERT((c = mg_mkpipe(&mgr, eh8, (void *) &done)) != NULL);
   mg_mgr_wakeup(c);
   for (i = 0; i < 10 && done == 0; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(done == 1);

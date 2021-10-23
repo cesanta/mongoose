@@ -938,7 +938,8 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
         break;
       } else if (n > 0 && (size_t) c->recv.len >= hm.message.len) {
         mg_call(c, MG_EV_HTTP_MSG, &hm);
-        mg_iobuf_del(&c->recv, 0, hm.message.len);
+        c->recv_del += hm.message.len;
+        break;
       } else {
         if (n > 0 && !is_chunked) {
           hm.chunk =

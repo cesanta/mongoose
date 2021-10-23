@@ -233,7 +233,8 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
           }
         }
         mg_call(c, MG_EV_MQTT_CMD, &mm);
-        mg_iobuf_del(&c->recv, 0, mm.dgram.len);
+        c->recv_del = mm.dgram.len;
+        break;
       } else {
         break;
       }

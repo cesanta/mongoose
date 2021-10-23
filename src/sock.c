@@ -239,13 +239,23 @@ static long read_conn(struct mg_connection *c) {
       c->is_closing = 1;  // Error, or normal termination
     } else if (n > 0) {
       struct mg_str evd = mg_str_n(buf, (size_t) n);
+      bool del_recv = false;
       if (c->is_hexdumping) {
         char *s = mg_hexdump(buf, (size_t) n);
         LOG(LL_INFO, ("\n-- %lu %s %s %ld\n%s", c->id, c->label, "<-", n, s));
         free(s);
       }
       c->recv.len += (size_t) n;
-      mg_call(c, MG_EV_READ, &evd);
+      do {
+        mg_call(c, MG_EV_READ, &evd);
+        if (c->recv_del) {
+          mg_iobuf_del(&c->recv, 0, c->recv_del);
+          c->recv_del -= c->recv_del;
+          del_recv = true;
+        } else {
+          del_recv = false;
+        }
+      } while (del_recv);
     }
   }
   return n;
