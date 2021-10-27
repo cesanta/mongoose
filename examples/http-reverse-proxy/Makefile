@@ -1,5 +1,5 @@
 PROG ?= example
-CFLAGS ?= -DMG_IO_SIZE=8192
+CFLAGS ?= -DMG_IO_SIZE=64
 MBEDTLS_DIR ?=
 
 ifeq "$(MBEDTLS_DIR)" ""
