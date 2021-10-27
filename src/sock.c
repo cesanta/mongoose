@@ -216,7 +216,8 @@ static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
 
 // NOTE(lsm): do only one iteration of reads, cause some systems
 // (e.g. FreeRTOS stack) return 0 instead of -1/EWOULDBLOCK when no data
-static void read_conn(struct mg_connection *c) {
+static long read_conn(struct mg_connection *c) {
+  long n = -1;
   if (c->recv.len >= MG_MAX_RECV_BUF_SIZE) {
     mg_error(c, "max_recv_buf_size reached");
   } else if (c->recv.size - c->recv.len < MG_IO_SIZE &&
@@ -225,7 +226,7 @@ static void read_conn(struct mg_connection *c) {
   } else {
     char *buf = (char *) &c->recv.buf[c->recv.len];
     size_t len = c->recv.size - c->recv.len;
-    long n = c->is_tls ? mg_tls_recv(c, buf, len) : mg_sock_recv(c, buf, len);
+    n = c->is_tls ? mg_tls_recv(c, buf, len) : mg_sock_recv(c, buf, len);
     LOG(n > 0 ? LL_VERBOSE_DEBUG : LL_DEBUG,
         ("%-3lu %d%d%d%d%d%d%d%d%d%d%d%d%d%d %7ld %ld/%ld err %d", c->id,
          c->is_listening, c->is_client, c->is_accepted, c->is_resolving,
@@ -247,6 +248,7 @@ static void read_conn(struct mg_connection *c) {
       mg_call(c, MG_EV_READ, &evd);
     }
   }
+  return n;
 }
 
 static void write_conn(struct mg_connection *c) {
@@ -540,9 +542,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 
   for (c = mgr->conns; c != NULL; c = c->next) {
     // TLS might have stuff buffered, so dig everything
-    c->is_readable = c->is_tls && c->is_readable
-                         ? 1
-                         : FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &rset);
+    c->is_readable = FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &rset);
     c->is_writable = FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &wset);
   }
 #endif
@@ -592,6 +592,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     } else {
       if (c->is_readable) read_conn(c);
       if (c->is_writable) write_conn(c);
+      while (c->is_tls && read_conn(c) > 0) (void) 0;  // Read buffered TLS data
     }
 
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
