@@ -76,20 +76,6 @@ This software is often used together with Mongoose:
   Used to implement scripting support
 
 
-# Precompiled web server binary
-
-We have built a ready-to-go, precompiled web server executable application for
-Windows and Mac. It requires no installation and no configuration to start.
-Simply copy `mongoose.exe` to any directory you want to serve, and double-click
-on `mongoose.exe` to start it.  Mongoose will iconify to a system tray and
-start serving your directory to a local network. 
-
-It is a great tool for sharing your files, or for local web or game
-development. It has a unique feature - an ability to share your local files via
-a global URL.
-
-Visit [download page](https://mongoose.ws/desktop-app/) to try it out.
-
 # Contributions
 
 Contributions are welcome! Please follow the guidelines below:
