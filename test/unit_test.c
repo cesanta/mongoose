@@ -468,6 +468,15 @@ static int cmpbody(const char *buf, const char *str) {
   return mg_strcmp(hm.body, s);
 }
 
+static bool cmpheader(const char *buf, const char *name, const char *value) {
+  struct mg_http_message hm;
+  struct mg_str *h;
+  size_t len = strlen(buf);
+  mg_http_parse(buf, len, &hm);
+  h = mg_http_get_header(&hm, name);
+  return h != NULL && mg_strcmp(*h, mg_str(value)) == 0;
+}
+
 static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_WS_OPEN) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -536,6 +545,22 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /київ.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "є\n") == 0);
 
+  ASSERT(fetch(&mgr, buf, url, "GET /../fuzz.c HTTP/1.0\n\n") == 404);
+  ASSERT(fetch(&mgr, buf, url, "GET /.%%2e/fuzz.c HTTP/1.0\n\n") == 404);
+  ASSERT(fetch(&mgr, buf, url, "GET /.%%2e%%2ffuzz.c HTTP/1.0\n\n") == 404);
+  ASSERT(fetch(&mgr, buf, url, "GET /..%%2f%%20fuzz.c HTTP/1.0\n\n") == 404);
+  ASSERT(fetch(&mgr, buf, url, "GET /..%%2ffuzz.c%%20 HTTP/1.0\n\n") == 404);
+
+  ASSERT(fetch(&mgr, buf, url, "GET /dredir HTTP/1.0\n\n") == 301);
+  ASSERT(cmpheader(buf, "Location", "/dredir/"));
+
+  ASSERT(fetch(&mgr, buf, url, "GET /dredir/ HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hi\n") == 0);
+
+  ASSERT(fetch(&mgr, buf, url, "GET /..ddot HTTP/1.0\n\n") == 301);
+  ASSERT(fetch(&mgr, buf, url, "GET /..ddot/ HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hi\n") == 0);
+
   {
     extern char *mg_http_etag(char *, size_t, size_t, time_t);
     char etag[100];
@@ -567,7 +592,8 @@ static void test_http_server(void) {
                "Content-Length: 4\r\n\r\nkuku") == 200);
   ASSERT(cmpbody(buf, "kuku") == 0);
 
-  ASSERT(fetch(&mgr, buf, url, "GET /ssi HTTP/1.1\r\n\r\n") == 200);
+  ASSERT(fetch(&mgr, buf, url, "GET /ssi HTTP/1.1\r\n\r\n") == 301);
+  ASSERT(fetch(&mgr, buf, url, "GET /ssi/ HTTP/1.1\r\n\r\n") == 200);
   ASSERT(cmpbody(buf,
                  "this is index\n"
                  "this is nested\n\n"
@@ -1436,7 +1462,8 @@ static void test_packed(void) {
   // printf("--------\n%s\n", buf);
 
   // List nested dir
-  ASSERT(fetch(&mgr, buf, url, "GET /test HTTP/1.0\n\n") == 200);
+  ASSERT(fetch(&mgr, buf, url, "GET /test HTTP/1.0\n\n") == 301);
+  ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
   // printf("--------\n%s\n", buf);
 
   mg_mgr_free(&mgr);
@@ -1577,7 +1604,8 @@ static void test_rewrites(void) {
   ASSERT(cmpbody(buf, "hello\n") == 0);
   ASSERT(fetch(&mgr, buf, url, "GET /foo/version.h HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, expected) == 0);
-  ASSERT(fetch(&mgr, buf, url, "GET /foo HTTP/1.0\n\n") == 200);
+  ASSERT(fetch(&mgr, buf, url, "GET /foo HTTP/1.0\n\n") == 301);
+  ASSERT(fetch(&mgr, buf, url, "GET /foo/ HTTP/1.0\n\n") == 200);
   // printf("-->[%s]\n", buf);
   // exit(0);
   mg_mgr_free(&mgr);

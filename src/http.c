@@ -695,7 +695,8 @@ static void remove_double_dots(char *s) {
       while (s[0] != '\0') {
         if (s[0] == '/' || s[0] == '\\') {
           s++;
-        } else if (s[0] == '.' && s[1] == '.') {
+        } else if (s[0] == '.' && s[1] == '.' &&
+                   (s[2] == '/' || s[2] == '\\')) {
           s += 2;
         } else {
           break;
@@ -725,11 +726,21 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
     path[path_size - 1] = '\0';  // Double-check
     remove_double_dots(path);
     n = strlen(path);
-    LOG(LL_VERBOSE_DEBUG, ("%lu %s", c->id, path));
+    LOG(LL_VERBOSE_DEBUG,
+        ("%lu %.*s -> %s", c->id, (int) hm->uri.len, hm->uri.ptr, path));
     while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
     flags = fs->stat(path, NULL, NULL);                 // Does it exist?
     if (flags == 0) {
       mg_http_reply(c, 404, "", "Not found\n");  // Does not exist, doh
+    } else if ((flags & MG_FS_DIR) && hm->uri.len &&
+               hm->uri.ptr[hm->uri.len - 1] != '/') {
+      mg_printf(c,
+                "HTTP/1.1 301 Moved\r\n"
+                "Location: %.*s/\r\n"
+                "Content-Length: 0\r\n"
+                "\r\n",
+                (int) hm->uri.len, hm->uri.ptr);
+      flags = 0;
     } else if (flags & MG_FS_DIR) {
       if (((snprintf(path + n, path_size - n, "/index.html") > 0 &&
             (tmp = fs->stat(path, NULL, NULL)) != 0) ||
