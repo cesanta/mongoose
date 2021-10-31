@@ -732,7 +732,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
     flags = fs->stat(path, NULL, NULL);                 // Does it exist?
     if (flags == 0) {
       mg_http_reply(c, 404, "", "Not found\n");  // Does not exist, doh
-    } else if ((flags & MG_FS_DIR) && hm->uri.len &&
+    } else if ((flags & MG_FS_DIR) && hm->uri.len > 0 &&
                hm->uri.ptr[hm->uri.len - 1] != '/') {
       mg_printf(c,
                 "HTTP/1.1 301 Moved\r\n"
