@@ -33,19 +33,16 @@ static void mg_send_u16(struct mg_connection *c, uint16_t value) {
   mg_send(c, &value, sizeof(value));
 }
 
-void mg_mqtt_login(struct mg_connection *c, const char *url,
-                   struct mg_mqtt_opts *opts) {
+void mg_mqtt_login(struct mg_connection *c, struct mg_mqtt_opts *opts) {
   uint32_t total_len = 7 + 1 + 2 + 2;
   uint16_t flags = (uint16_t) (((uint16_t) opts->qos & 3) << 3);
-  struct mg_str user = mg_url_user(url);
-  struct mg_str pass = mg_url_pass(url);
 
-  if (user.len > 0) {
-    total_len += 2 + (uint32_t) user.len;
+  if (opts->user.len > 0) {
+    total_len += 2 + (uint32_t) opts->user.len;
     flags |= MQTT_HAS_USER_NAME;
   }
-  if (pass.len > 0) {
-    total_len += 2 + (uint32_t) pass.len;
+  if (opts->pass.len > 0) {
+    total_len += 2 + (uint32_t) opts->pass.len;
     flags |= MQTT_HAS_PASSWORD;
   }
   if (opts->will_topic.len > 0 && opts->will_message.len > 0) {
@@ -70,13 +67,13 @@ void mg_mqtt_login(struct mg_connection *c, const char *url,
     mg_send_u16(c, mg_htons((uint16_t) opts->will_message.len));
     mg_send(c, opts->will_message.ptr, opts->will_message.len);
   }
-  if (user.len > 0) {
-    mg_send_u16(c, mg_htons((uint16_t) user.len));
-    mg_send(c, user.ptr, user.len);
+  if (opts->user.len > 0) {
+    mg_send_u16(c, mg_htons((uint16_t) opts->user.len));
+    mg_send(c, opts->user.ptr, opts->user.len);
   }
-  if (pass.len > 0) {
-    mg_send_u16(c, mg_htons((uint16_t) pass.len));
-    mg_send(c, pass.ptr, pass.len);
+  if (opts->pass.len > 0) {
+    mg_send_u16(c, mg_htons((uint16_t) opts->pass.len));
+    mg_send(c, opts->pass.ptr, opts->pass.len);
   }
 }
 
@@ -262,7 +259,7 @@ struct mg_connection *mg_mqtt_connect(struct mg_mgr *mgr, const char *url,
   if (c != NULL) {
     struct mg_mqtt_opts empty;
     memset(&empty, 0, sizeof(empty));
-    mg_mqtt_login(c, url, opts == NULL ? &empty : opts);
+    mg_mqtt_login(c, opts == NULL ? &empty : opts);
     c->pfn = mqtt_cb;
   }
   return c;

@@ -974,6 +974,8 @@ int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv);
 #define MQTT_SET_QOS(flags, qos) (flags) = ((flags) & ~0x6) | ((qos) << 1)
 
 struct mg_mqtt_opts {
+  struct mg_str user;          // Username, can be empty
+  struct mg_str pass;          // Password, can be empty
   struct mg_str client_id;     // Client ID
   struct mg_str will_topic;    // Will topic
   struct mg_str will_message;  // Will message
@@ -998,8 +1000,7 @@ struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
 struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
-void mg_mqtt_login(struct mg_connection *c, const char *url,
-                   struct mg_mqtt_opts *opts);
+void mg_mqtt_login(struct mg_connection *c, struct mg_mqtt_opts *opts);
 void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
                  struct mg_str *data, int qos, bool retain);
 void mg_mqtt_sub(struct mg_connection *, struct mg_str *topic, int qos);
