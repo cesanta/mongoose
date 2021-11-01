@@ -737,6 +737,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...);
 
 enum {
   MG_EV_ERROR,       // Error                        char *error_message
+  MG_EV_OPEN,        // Connection created           NULL
   MG_EV_POLL,        // mg_mgr_poll iteration        unsigned long *millis
   MG_EV_RESOLVE,     // Host name is resolved        NULL
   MG_EV_CONNECT,     // Connection established       NULL
@@ -968,10 +969,6 @@ int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv);
 #define MQTT_CMD_PINGREQ 12
 #define MQTT_CMD_PINGRESP 13
 #define MQTT_CMD_DISCONNECT 14
-
-#define MQTT_QOS(qos) ((qos) << 1)
-#define MQTT_GET_QOS(flags) (((flags) &0x6) >> 1)
-#define MQTT_SET_QOS(flags, qos) (flags) = ((flags) & ~0x6) | ((qos) << 1)
 
 struct mg_mqtt_opts {
   struct mg_str user;          // Username, can be empty

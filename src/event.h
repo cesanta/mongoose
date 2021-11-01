@@ -8,6 +8,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...);
 
 enum {
   MG_EV_ERROR,       // Error                        char *error_message
+  MG_EV_OPEN,        // Connection created           NULL
   MG_EV_POLL,        // mg_mgr_poll iteration        unsigned long *millis
   MG_EV_RESOLVE,     // Host name is resolved        NULL
   MG_EV_CONNECT,     // Connection established       NULL

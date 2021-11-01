@@ -369,6 +369,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     c->fn = fn;
     c->fn_data = fn_data;
     LOG(LL_DEBUG, ("%lu -> %s", c->id, url));
+    mg_call(c, MG_EV_OPEN, NULL);
     mg_resolve(c, &host, mgr->dnstimeout);
   }
   return c;
@@ -409,6 +410,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
+    mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
   }
 }
@@ -469,6 +471,7 @@ struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
     c->pfn_data = (void *) (size_t) sp[0];
     c->fn = fn;
     c->fn_data = fn_data;
+    mg_call(c, MG_EV_OPEN, NULL);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
   }
   return c;
@@ -493,7 +496,8 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fn = fn;
     c->fn_data = fn_data;
-    LOG(LL_INFO,
+    mg_call(c, MG_EV_OPEN, NULL);
+    LOG(LL_DEBUG,
         ("%lu accepting on %s (port %u)", c->id, url, mg_ntohs(c->peer.port)));
   }
   return c;

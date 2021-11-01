@@ -17,7 +17,9 @@ static const char *s_topic = "mg/mq-clnt-test";
 static int s_qos = 1;
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_ERROR) {
+  if (ev == MG_EV_OPEN) {
+    // c->is_hexdumping = 1;
+  } else if (ev == MG_EV_ERROR) {
     // On error, log error message
     LOG(LL_ERROR, ("%p %s", c->fd, (char *) ev_data));
   } else if (ev == MG_EV_CONNECT) {
@@ -30,9 +32,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // MQTT connect is successful
     struct mg_str topic = mg_str(s_topic), data = mg_str("hello");
     LOG(LL_INFO, ("CONNECTED to %s", s_url));
-    mg_mqtt_sub(c, &topic, 1);
+    mg_mqtt_sub(c, &topic, s_qos);
     LOG(LL_INFO, ("SUBSCRIBED to %.*s", (int) topic.len, topic.ptr));
-    mg_mqtt_pub(c, &topic, &data, 1, false);
+    mg_mqtt_pub(c, &topic, &data, s_qos, false);
     LOG(LL_INFO, ("PUBSLISHED %.*s -> %.*s", (int) data.len, data.ptr,
                   (int) topic.len, topic.ptr));
   } else if (ev == MG_EV_MQTT_MSG) {
@@ -43,6 +45,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   }
 
   if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE || ev == MG_EV_MQTT_MSG) {
+    LOG(LL_INFO, ("Got event %d, stopping...", ev));
     *(bool *) fn_data = true;  // Signal that we're done
   }
 }

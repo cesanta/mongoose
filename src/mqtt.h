@@ -18,10 +18,6 @@
 #define MQTT_CMD_PINGRESP 13
 #define MQTT_CMD_DISCONNECT 14
 
-#define MQTT_QOS(qos) ((qos) << 1)
-#define MQTT_GET_QOS(flags) (((flags) &0x6) >> 1)
-#define MQTT_SET_QOS(flags, qos) (flags) = ((flags) & ~0x6) | ((qos) << 1)
-
 struct mg_mqtt_opts {
   struct mg_str user;          // Username, can be empty
   struct mg_str pass;          // Password, can be empty
