@@ -477,7 +477,6 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
       MIME_ENTRY("zip", "application/zip"),
       MIME_ENTRY("3gp", "video/3gpp"),
       MIME_ENTRY("7z", "application/x-7z-compressed"),
-      MIME_ENTRY("7z", "application/x-7z-compressed"),
       {{0, 0}, {0, 0}},
   };
   size_t i = 0;
