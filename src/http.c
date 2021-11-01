@@ -627,6 +627,14 @@ static void printdirentry(const char *name, void *userdata) {
 
 static void listdir(struct mg_connection *c, struct mg_http_message *hm,
                     struct mg_http_serve_opts *opts, char *dir) {
+  char decoded_uri[MG_PATH_MAX] = "";
+  char *decoded_uri_ptr = decoded_uri;
+  int decoded_uri_len = mg_url_decode(hm->uri.ptr, hm->uri.len, decoded_uri_ptr, MG_PATH_MAX, 0);
+  if (decoded_uri_len < 0) {
+    mg_printf(c, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
+    return;
+  }
+
   static const char *sort_js_code =
       "<script>function srt(tb, sc, so, d) {"
       "var tr = Array.prototype.slice.call(tb.rows, 0),"
@@ -673,8 +681,8 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             "<tr><td colspan=\"3\"><hr></td></tr>"
             "</thead>"
             "<tbody id=\"tb\">\n",
-            (int) hm->uri.len, hm->uri.ptr, sort_js_code, sort_js_code2,
-            (int) hm->uri.len, hm->uri.ptr);
+            decoded_uri_len, decoded_uri, sort_js_code, sort_js_code2,
+            decoded_uri_len, decoded_uri);
 
   fs->list(dir, printdirentry, &d);
   mg_printf(c,
