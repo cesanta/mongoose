@@ -13,7 +13,8 @@
 #include "mongoose.h"
 
 static const char *s_url = "mqtt://broker.hivemq.com:1883";
-static const char *s_topic = "mg/test";
+static const char *s_topic = "mg/mq-clnt-test";
+static int s_qos = 1;
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ERROR) {
@@ -47,16 +48,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 int main(void) {
-  struct mg_mgr mgr;               // Event manager
-  struct mg_mqtt_opts opts;        // MQTT connection options
-  bool done = false;               // Event handler flips it to true when done
-  mg_mgr_init(&mgr);               // Initialise event manager
-  memset(&opts, 0, sizeof(opts));  // Set MQTT options
-  opts.qos = 1;                    // Set QoS to 1
-  opts.will_topic = mg_str(s_topic);               // Set last will topic
-  opts.will_message = mg_str("goodbye");           // And last will message
+  struct mg_mgr mgr;
+  struct mg_mqtt_opts opts = {.qos = s_qos,
+                              .will_topic = mg_str(s_topic),
+                              .will_message = mg_str("goodbye")};
+  bool done = false;  // Event handler sets this to true
+
+  mg_mgr_init(&mgr);                               // Initialise event manager
   mg_mqtt_connect(&mgr, s_url, &opts, fn, &done);  // Create client connection
-  while (done == false) mg_mgr_poll(&mgr, 1000);   // Event loop
+  while (done == false) mg_mgr_poll(&mgr, 1000);   // Loop until done
   mg_mgr_free(&mgr);                               // Finished, cleanup
+
   return 0;
 }
