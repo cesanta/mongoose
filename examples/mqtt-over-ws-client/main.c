@@ -32,7 +32,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
                                 .will_topic = mg_str(s_topic),
                                 .will_message = mg_str("goodbye")};
     size_t len = c->send.len;
-    mg_mqtt_login(c, s_url, &opts);
+    mg_mqtt_login(c, &opts);
     mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_mqtt_message mm;
