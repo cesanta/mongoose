@@ -632,8 +632,10 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
       "</script>";
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   struct printdirentrydata d = {c, hm, opts, dir};
-  char tmp[10];
+  char tmp[10], buf[MG_PATH_MAX];
   size_t off, n;
+  int len = mg_url_decode(hm->uri.ptr, hm->uri.len, buf, sizeof(buf), 0);
+  struct mg_str uri = len > 0 ? mg_str_n(buf, (size_t) len) : hm->uri;
 
   mg_printf(c,
             "HTTP/1.1 200 OK\r\n"
@@ -653,8 +655,8 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             "<tr><td colspan=\"3\"><hr></td></tr>"
             "</thead>"
             "<tbody id=\"tb\">\n",
-            (int) hm->uri.len, hm->uri.ptr, sort_js_code, sort_js_code2,
-            (int) hm->uri.len, hm->uri.ptr);
+            (int) uri.len, uri.ptr, sort_js_code, sort_js_code2, (int) uri.len,
+            uri.ptr);
 
   fs->list(dir, printdirentry, &d);
   mg_printf(c,
