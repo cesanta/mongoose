@@ -76,7 +76,9 @@ int main(int argc, char *argv[]) {
   if (mg_casecmp(s_enable_hexdump, "yes") == 0) c->is_hexdumping = 1;
 
   // Start infinite event loop
-  LOG(LL_INFO, ("Starting Mongoose v%s, serving [%s]", MG_VERSION, s_root_dir));
+  LOG(LL_INFO, ("Mongoose version : v%s", MG_VERSION));
+  LOG(LL_INFO, ("Listening on     : %s", s_listening_address));
+  LOG(LL_INFO, ("Web root         : [%s]", s_root_dir));
   while (s_signo == 0) mg_mgr_poll(&mgr, 1000);
   mg_mgr_free(&mgr);
   LOG(LL_INFO, ("Exiting on signal %d", s_signo));
