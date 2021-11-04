@@ -2007,18 +2007,29 @@ mg_usleep(1000000 /* 1 sec */)
 
 ## String
 
-### mg\_str
+### struct mg\_str
 
-In most cases, Mongoose uses `mg_str` struct for string representation rather than NULL-terminated C-strings.
-
-```
+```c
 struct mg_str {
   const char *ptr;  // Pointer to string data
   size_t len;       // String len
 };
 ```
 
-Note, that in general, `ptr` points to non-NULL terminated string, so do not use functions from C standard library on it.
+This structure represent an arbitrary chunk of memory, not necessarily
+zero-terminated. This is a "mongoose string", and it gets used extensively
+in the codebase instead of C zero-terminated strings.
+
+For example, when an HTTP request is received, Mongoose created a
+`struct mg_http_message` which has a collection of `struct mg_str` poiting
+to request method, URI, headers, and so on. This way, Mongoose avoids
+any heap allocations and does not modify the received buffer - instead, it
+uses `struct mg_str` to describe various parts of HTTP request.
+
+Same goes with many other cases.
+
+NOTE: since `ptr` is not necessarily zero-terminated, do not use libc string
+functions agaist it - like `strlen()` or `sscanf()`.
 
 ### mg\_str()
 
