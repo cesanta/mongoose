@@ -1239,7 +1239,7 @@ Parameters:
 
 Return value: offset to the next chunk, or 0 if there are no more chunks.
 
-See [examples/form-upload](../examples/form-upload) for full usage example.
+See [File upload tutorial](../tutorials/file-upload) for full usage example.
 
 <img src="images/mg_http_next_multipart.png">
 

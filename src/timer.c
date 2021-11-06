@@ -8,7 +8,7 @@ struct mg_timer *g_timers;
 
 void mg_timer_init(struct mg_timer *t, unsigned long ms, unsigned flags,
                    void (*fn)(void *), void *arg) {
-  struct mg_timer tmp = {ms, flags, fn, arg, 0UL, g_timers};
+  struct mg_timer tmp = {ms, 0UL, flags, fn, arg, g_timers};
   *t = tmp;
   g_timers = t;
   if (flags & MG_TIMER_RUN_NOW) fn(arg);
