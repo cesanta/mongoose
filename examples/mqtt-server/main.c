@@ -20,6 +20,12 @@ struct sub {
 };
 static struct sub *s_subs = NULL;
 
+// Handle interrupts, like Ctrl-C
+static int s_signo;
+static void signal_handler(int signo) {
+  s_signo = signo;
+}
+
 // Event handler function
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_MQTT_CMD) {
@@ -88,10 +94,13 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 int main(void) {
-  struct mg_mgr mgr;                            // Event manager
-  mg_mgr_init(&mgr);                            // Initialise event manager
-  mg_mqtt_listen(&mgr, s_listen_on, fn, NULL);  // Create MQTT listener
-  for (;;) mg_mgr_poll(&mgr, 1000);             // Infinite event loop
-  mg_mgr_free(&mgr);
+  struct mg_mgr mgr;                // Event manager
+  signal(SIGINT, signal_handler);   // Setup signal handlers - exist event
+  signal(SIGTERM, signal_handler);  // manager loop on SIGINT and SIGTERM
+  mg_mgr_init(&mgr);                // Initialise event manager
+  LOG(LL_INFO, ("Starting on %s", s_listen_on));  // Inform that we're starting
+  mg_mqtt_listen(&mgr, s_listen_on, fn, NULL);    // Create MQTT listener
+  while (s_signo == 0) mg_mgr_poll(&mgr, 1000);   // Event loop, 1s timeout
+  mg_mgr_free(&mgr);                              // Cleanup
   return 0;
 }
