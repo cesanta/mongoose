@@ -19,6 +19,12 @@ static const char *s_pub_topic = "mg/clnt/test";
 static int s_qos = 1;
 static struct mg_connection *s_conn;
 
+// Handle interrupts, like Ctrl-C
+static int s_signo;
+static void signal_handler(int signo) {
+  s_signo = signo;
+}
+
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
     LOG(LL_INFO, ("CREATED"));
@@ -70,9 +76,12 @@ int main(void) {
   struct mg_timer timer;
   int topts = MG_TIMER_REPEAT | MG_TIMER_RUN_NOW;
 
+  signal(SIGINT, signal_handler);   // Setup signal handlers - exist event
+  signal(SIGTERM, signal_handler);  // manager loop on SIGINT and SIGTERM
+
   mg_mgr_init(&mgr);                                   // Init event manager
   mg_timer_init(&timer, 3000, topts, timer_fn, &mgr);  // Init timer
-  for (;;) mg_mgr_poll(&mgr, 1000);                    // Event loop, 1s timeout
+  while (s_signo == 0) mg_mgr_poll(&mgr, 1000);        // Event loop, 1s timeout
   mg_mgr_free(&mgr);                                   // Finished, cleanup
   mg_timer_free(&timer);                               // Free timer resources
 
