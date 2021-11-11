@@ -26,12 +26,9 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (mg_http_match_uri(hm, "/api/stats")) {
       mg_http_reply(c, 200, "", "{\"ram\": %lu}\n", xPortGetFreeHeapSize());
     } else {
-      // mg_http_reply(c, 404, "", "Not found: %d\n", MG_PATH_MAX);
-      // return;
       struct mg_fs fs = mg_fs_posix;
       fs.stat = my_stat;
       struct mg_http_serve_opts opts = {.root_dir = FS_ROOT, .fs = &fs};
-      // opts.fs = NULL;
       mg_http_serve_dir(c, hm, &opts);
     }
   }
