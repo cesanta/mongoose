@@ -59,6 +59,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
           LIST_ADD_HEAD(struct sub, &s_subs, sub);
           LOG(LL_INFO,
               ("SUB %p [%.*s]", c->fd, (int) sub->topic.len, sub->topic.ptr));
+          // Change '+' to '*' for topic matching using mg_globmatch
+          for (size_t i = 0; i < sub->topic.len; i++) {
+            if (sub->topic.ptr[i] == '+') ((char *) sub->topic.ptr)[i] = '*';
+          }
           resp[num_topics++] = qos;
         }
         mg_mqtt_send_header(c, MQTT_CMD_SUBACK, 0, num_topics + 2);
@@ -72,8 +76,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
         LOG(LL_INFO, ("PUB %p [%.*s] -> [%.*s]", c->fd, (int) mm->data.len,
                       mm->data.ptr, (int) mm->topic.len, mm->topic.ptr));
         for (struct sub *sub = s_subs; sub != NULL; sub = sub->next) {
-          if (mg_strcmp(mm->topic, sub->topic) != 0) continue;
-          mg_mqtt_pub(sub->c, &mm->topic, &mm->data, 1, false);
+          if (mg_globmatch(sub->topic.ptr, sub->topic.len, mm->topic.ptr,
+                           mm->topic.len)) {
+            mg_mqtt_pub(sub->c, &mm->topic, &mm->data, 1, false);
+          }
         }
         break;
       }
