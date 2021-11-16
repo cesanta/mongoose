@@ -5,7 +5,7 @@
 
 Mongoose is a networking library for C/C++. It implements event-driven,
 non-blocking APIs for TCP, UDP, HTTP, WebSocket, MQTT.  It connects devices
-and brings them online. Since 2004, a number of open source and commerical
+and brings them online. Since 2004, a number of open source and commercial
 products have utilized it. It even runs on the
 International Space Station! Mongoose makes embedded network programming fast,
 robust, and easy.
@@ -23,9 +23,9 @@ structure, which has a number of fields. All fields are exposed to the
 application by design, to give an application full visibility into
 Mongoose's internals.
 
-## 2-minute intergration guide
+## 2-minute integration guide
 
-In order to integrate Mongoose into an existing C/C++ aplicaction or firmware,
+In order to integrate Mongoose into an existing C/C++ application or firmware,
 please use the following steps:
 
 **Step 1.** Copy
@@ -94,7 +94,7 @@ and sends an `MG_EV_SEND` event.
 Each connection has an event handler function associated with it, which
 must be implemented by the user. Event handler is the key element of
 Mongoose, since it defines the connection's behavior. See below
-for an example of an event handler funcion:
+for an example of an event handler function:
 
 ```c
 // Event handler function defines connection's behavior
@@ -108,7 +108,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 - `struct mg_connection *c` - A connection that received an event
 - `int ev` - An event number, defined in mongoose.h. For example, when data
-  arrives on an inbound connection, ev would be `MG_EV_READ`
+  arrives on an inbound connection, `ev` would be `MG_EV_READ`
 - `void *ev_data` - Points to the event-specific data, and it has a different
   meaning for different events. For example, for an `MG_EV_READ` event,
   `ev_data`
@@ -232,7 +232,7 @@ Here is a list of build constants and their default values:
 | Name | Default | Description |
 | ---- | ------- | ----------- |
 |MG_ENABLE_SOCKET | 1 | Use BSD socket low-level API |
-|MG_ENABLE_MBEDTLS | 0 | Enable Mbed TLS library |
+|MG_ENABLE_MBEDTLS | 0 | Enable mbedTLS library |
 |MG_ENABLE_OPENSSL | 0 | Enable OpenSSL library |
 |MG_ENABLE_IPV6 | 0 | Enable IPv6 |
 |MG_ENABLE_LOG | 1 | Enable `LOG()` macro |
@@ -660,7 +660,7 @@ common use cases:
   A pipe's event handler should push data to all client connection.
   Use `c->label` to mark client connections.
 - In order to serve a request, a long blocking operation should be performed.
-  In this case, request handler assignes some marker to `c->label` and then
+  In this case, request handler assigns some marker to `c->label` and then
   spawns a handler task and gives a pipe to a
   handler task. A handler does its job, and when data is ready, wakes up a
   manager. A pipe's event handler pushes data to a marked connection.
@@ -676,7 +676,7 @@ Parameters:
 
 Return value: Pointer to created connection or `NULL` in case of error
 
-Usage example: see [examples/multi-threaded](../examples/multi-threaded).
+Usage example: see [examples/multi-threaded](https://github.com/cesanta/mongoose/tree/master/examples/multi-threaded).
 
 ### mg\_mgr\_wakeup()
 
@@ -692,7 +692,7 @@ Parameters:
 
 Return value: None
 
-Usage example: see [examples/multi-threaded](../examples/multi-threaded).
+Usage example: see [examples/multi-threaded](https://github.com/cesanta/mongoose/tree/master/examples/multi-threaded).
 
 
 ## HTTP
@@ -989,7 +989,7 @@ Return value: None
 
 Usage examples:
 
-Send a simple JSON respose:
+Send a simple JSON response:
 ```c
 mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"result\": %d}", 123);
 ```
@@ -1177,7 +1177,7 @@ Parameters:
 - `hm` - POST message, containing parameters described above
 - `dir` - Path to directory
 
-Return value: Request body len or negative value on error
+Return value: Request body length or negative value on error
 
 Usage example:
 
@@ -1239,7 +1239,7 @@ Parameters:
 
 Return value: offset to the next chunk, or 0 if there are no more chunks.
 
-See [File upload tutorial](../tutorials/file-upload) for full usage example.
+See [File upload tutorial](../tutorials/file-uploads/) for full usage example.
 
 <img src="images/mg_http_next_multipart.png">
 
@@ -1282,7 +1282,7 @@ Note: this function does not connect to peer, it allocates required resources an
 Parameters:
 - `mgr` - Event manager to use
 - `url` - Specifies remote URL, e.g. `http://google.com`
-- `opts` - MQTT options, with client ID, qos, etc
+- `opts` - MQTT options, with client ID, QoS, etc
 - `fn` - An event handler function
 - `fn_data` - An arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
@@ -1607,7 +1607,7 @@ Subscribe to topic.
 Parameters:
 - `c` - Connection to use
 - `topic` - Topic to subscribe
-- `qos` - Required Qos
+- `qos` - Required QoS
 
 Return value: none
 
@@ -1629,7 +1629,7 @@ Initial position `pos` should be 4.
 Parameters:
 - `mgs` - MQTT message
 - `topic` - Pointer to `mg_str` to receive topic
-- `qos` - Pointer to `uint8_t` to receive qos
+- `qos` - Pointer to `uint8_t` to receive QoS
 - `pos` - Position to list from
 
 Return value: Next position, or 0 when done
@@ -2021,7 +2021,7 @@ zero-terminated. This is a "mongoose string", and it gets used extensively
 in the codebase instead of C zero-terminated strings.
 
 For example, when an HTTP request is received, Mongoose created a
-`struct mg_http_message` which has a collection of `struct mg_str` poiting
+`struct mg_http_message` which has a collection of `struct mg_str` pointing
 to request method, URI, headers, and so on. This way, Mongoose avoids
 any heap allocations and does not modify the received buffer - instead, it
 uses `struct mg_str` to describe various parts of HTTP request.
@@ -2029,7 +2029,7 @@ uses `struct mg_str` to describe various parts of HTTP request.
 Same goes with many other cases.
 
 NOTE: since `ptr` is not necessarily zero-terminated, do not use libc string
-functions agaist it - like `strlen()` or `sscanf()`.
+functions against it - like `strlen()` or `sscanf()`.
 
 ### mg\_str()
 
@@ -2060,12 +2060,13 @@ struct mg_str str = mg_str("Hello, world!);
 struct mg_str mg_str_n(const char *s, size_t n);
 ```
 
-Create Mongoose string from C-string `s` (can be non-NULL terminated, len is specified in `n`). <br>
-Note: This function doesn't duplicate provided string, but stores pointer within created `mg_str` structure.
+Create Mongoose string from C-string `s` (can be non-NULL terminated, length is
+specified in `n`). Note: This function doesn't duplicate provided string,
+but stores pointer within created `mg_str` structure.
 
 Parameters:
 - `s` - Pointer to string to store in created `mg_str`
-- `n` - String len
+- `n` - String length
 
 Return value: Created Mongoose string
 
@@ -2125,7 +2126,7 @@ if (mg_ncasecmp("hello1", "HELLO2", 5) == 0) {
 int mg_vcmp(const struct mg_str *s1, const char *s2);
 ```
 
-Сompare mongoose string and C-string.
+Compare mongoose string and C-string.
 
 Parameters:
 - `s1` - Pointer to Mongoose string to compare
@@ -2173,7 +2174,7 @@ if (mg_vcasecmp(str, "HELLO") == 0) {
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
 ```
 
-Сompare two mongoose strings.
+Compare two mongoose strings.
 
 Parameters:
 - `str1`, `str2` - Pointers to Mongoose strings to compare
@@ -2249,7 +2250,7 @@ struct mg_str mg_strstrip(struct mg_str s)
 
 Remove heading and trailing whitespace from mongoose string `s`.
 
-Paramaters:
+Parameters:
 - `s` - Mongoose string for trimming
 
 Return value: Input string
@@ -2279,9 +2280,9 @@ The glob pattern matching rules are as follows:
 
 Parameters:
 - `pattern` - Pattern to match for
-- `p_len` - Pattetn lenght
+- `p_len` - Pattern length
 - `s` - String to match
-- `s_len` - String lenght
+- `s_len` - String length
 
 Return value: `true` if matches, `false` otherwise
 
@@ -2337,7 +2338,7 @@ It is a caller's responsibility to free() returned pointer.
 
 Parameters:
 - `buf` - Data to hexdump
-- `len` - Data lenght
+- `len` - Data length
 
 Return value: malloc-ed buffer with hexdumped data
 
@@ -2699,7 +2700,7 @@ void mg_sha1_update(mg_sha1_ctx *c, const unsigned char *data, size_t len);
 Hash `len` bytes of `data` using SHA1 algorithm.
 
 Parameters:
-- `c` - Sha1 context
+- `c` - SHA1 context
 - `data` - Data to hash
 - `len` - Data length
 
@@ -2754,7 +2755,7 @@ Parameters:
 - `out` - Pointer to buffer to write result
 - `pos` - Position in output buffer to write result
 
-Return value: New position for futher operations
+Return value: New position for further operations
 
 Usage example:
 
@@ -2775,7 +2776,7 @@ Parameters:
 - `buf` - Pointer to buffer to write finish mark
 - `pos` - Position to write
 
-Return value: New position for futher operations
+Return value: New position for further operations
 
 ```c
 char buf[10];
@@ -2891,7 +2892,7 @@ This function prints data to a
 temporary in-memory buffer first, then calls `mg_file_write()`.
 
 Parameters:
-- `path`- ath to file
+- `path`- path to file
 - `fmt` - Format string in `printf()` semantics
 
 Return value: `true` on success, `false` otherwise
@@ -3010,7 +3011,7 @@ uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 Calculate CRC32 checksum for a given buffer. An initial `crc` value should be `0`.
 
 Parameters:
-- `crc` - Initial crc value
+- `crc` - Initial CRC value
 - `buf` - Data to calculate CRC32
 - `len` - Data size
 
@@ -3055,7 +3056,7 @@ Decode URL-encoded string `s` and write it into `to` buffer.
 
 Parameters:
 - `s` - String to encode
-- `n` - String to encode lenght
+- `n` - String to encode length
 - `to` - Pointer to output buffer
 - `to_len` - Output buffer size
 - `form` - If non-zero, then `+` is decoded as whitespace.
@@ -3204,10 +3205,10 @@ Parameters:
 - `io` - iobuf to add data
 - `offset` - Offset to add data
 - `buf` - Data to add
-- `len` - Data lenth
+- `len` - Data length
 - `align` - Align boundary
 
-Return value: new `io` len
+Return value: new `io` length
 
 Usage example:
 
@@ -3233,7 +3234,7 @@ Parameters:
 - `offset` - Start offset
 - `len` - Amount of bytes to delete
 
-Return value: New `io` len
+Return value: New `io` length
 
 Usage example:
 
@@ -3261,7 +3262,8 @@ Return port for given URL
 Parameters:
 - `url` - URL to extract port
 
-Return value: Port for given url or `0` if url doesn't contain port and there isn't default port for url protocol
+Return value: Port for given URL or `0` if URL doesn't contain port and there
+isn't default port for URL protocol
 
 Usage example:
 
