@@ -1143,7 +1143,7 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                    const char *dir);
 ```
 
-Handle file upload. See [file upload example](https://github.com/cesanta/mongoose/tree/master/examples/file-upload).
+Handle file upload. See [file upload example](https://github.com/cesanta/mongoose/tree/master/examples/file-uploads/).
 
 This function  expects a series of POST requests with file data. POST requests
 should have `name` and `offset` query string parameters set:
@@ -1375,7 +1375,7 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op)
 ```
 
 Convert data in output buffer to WebSocket format. Useful then implementing protocol over WebSocket
-See [examples/mqtt-over-ws-client](../examples/mqtt-over-ws-client) for full example.
+See [examples/mqtt-over-ws-client](https://github.com/cesanta/mongoose/tree/master/examples/mqtt-over-ws-client) for full example.
 
 Parameters:
 - `c` - Connection to use
