@@ -1,10 +1,7 @@
 // Copyright (c) 2020 Cesanta Software Limited
 // All rights reserved
 //
-// Example Websocket server. Usage:
-//  1. Start this server, type `make`
-//  2. Open https://www.websocket.org/echo.html in your browser
-//  3. In the "Location" text field, type ws://127.0.0.1:8000/websocket
+// Example Websocket server. See https://mongoose.ws/tutorials/websocket-server/
 
 #include "mongoose.h"
 
