@@ -25,7 +25,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_dns_rr rr;  // Parse first question, offset 12 is header size
     size_t n = mg_dns_parse_rr(c->recv.buf, c->recv.len, 12, true, &rr);
     if (n > 0) {
-      char buf[12 + n + sizeof(answer)];
+      char buf[512];
       struct mg_dns_header *h = (struct mg_dns_header *) buf;
       memset(buf, 0, sizeof(buf));  // Clear the whole datagram
       h->txnid = ((struct mg_dns_header *) c->recv.buf)->txnid;  // Copy tnxid
