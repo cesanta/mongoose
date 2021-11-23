@@ -101,9 +101,9 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
 
 static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
   long n;
-#if defined(_WIN32)
+#if !defined(__APPLE__)
   // See #1338, #1382. On Windows, UDP send() can fail despite connected.
-  // Use sendto() instead. But not UNIX: e.g. on Mac we'll get EISCONN
+  // Use sendto() instead. But not on Mac - we'll get EISCONN
   if (c->is_udp) {
     union usa usa;
     socklen_t slen = tousa(&c->peer, &usa);
@@ -113,6 +113,7 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
   {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
+  LOG(LL_INFO, ("%ld %d %s", n, errno, strerror(errno)));
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
 

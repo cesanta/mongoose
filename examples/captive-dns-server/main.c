@@ -21,9 +21,12 @@ uint8_t answer[] = {
 };
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_READ) {
+  if (ev == MG_EV_OPEN) {
+    c->is_hexdumping = 1;
+  } else if (ev == MG_EV_READ) {
     struct mg_dns_rr rr;  // Parse first question, offset 12 is header size
     size_t n = mg_dns_parse_rr(c->recv.buf, c->recv.len, 12, true, &rr);
+    LOG(LL_INFO, ("DNS request parsed, result=%d", (int) n));
     if (n > 0) {
       char buf[512];
       struct mg_dns_header *h = (struct mg_dns_header *) buf;
@@ -34,7 +37,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       h->flags = mg_htons(0x8400);     // Authoritative response
       memcpy(buf + sizeof(*h), c->recv.buf + sizeof(*h), n);  // Copy question
       memcpy(buf + sizeof(*h) + n, answer, sizeof(answer));   // And answer
-      mg_send(c, buf, sizeof(buf));                           // And send it!
+      mg_send(c, buf, 12 + n + sizeof(answer));               // And send it!
     }
     mg_iobuf_del(&c->recv, 0, c->recv.len);
   }
