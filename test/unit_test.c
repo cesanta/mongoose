@@ -257,7 +257,7 @@ static void test_sntp(void) {
   ASSERT(c != NULL);
   ASSERT(c->is_udp == 1);
   mg_sntp_send(c, (unsigned long) time(NULL));
-  for (i = 0; i < 200 && tv.tv_sec == 0; i++) mg_mgr_poll(&mgr, 10);
+  for (i = 0; i < 300 && tv.tv_sec == 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(tv.tv_sec > 0);
   mg_mgr_free(&mgr);
 
