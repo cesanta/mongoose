@@ -912,6 +912,10 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
 Serve static files according to the given options. Note that in order to
 enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
 
+<span class="badge bg-danger">NOTE: </span> Avoid double dots `..` in
+the `root_dir`. If you need to
+reference an upper-level directory, use absolute path.
+
 Parameters:
 - `c` - Connection to use
 - `hm` - HTTP message, that should be served
