@@ -113,7 +113,6 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
   {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
-  LOG(LL_INFO, ("%ld %d %s", n, errno, strerror(errno)));
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
 
