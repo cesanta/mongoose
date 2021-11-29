@@ -49,6 +49,13 @@ static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
   return true;
 }
 
+static bool mg_atone(struct mg_str str, struct mg_addr *addr) {
+  if (str.len > 0) return false;
+  addr->ip = 0;
+  addr->is_ip6 = false;
+  return true;
+}
+
 static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
   uint8_t data[4] = {0, 0, 0, 0};
   size_t i, num_dots = 0;
@@ -125,7 +132,8 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
 
 bool mg_aton(struct mg_str str, struct mg_addr *addr) {
   // LOG(LL_INFO, ("[%.*s]", (int) str.len, str.ptr));
-  return mg_atonl(str, addr) || mg_aton4(str, addr) || mg_aton6(str, addr);
+  return mg_atone(str, addr) || mg_atonl(str, addr) || mg_aton4(str, addr) ||
+         mg_aton6(str, addr);
 }
 
 void mg_mgr_free(struct mg_mgr *mgr) {

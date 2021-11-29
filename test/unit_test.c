@@ -121,6 +121,7 @@ static void test_url(void) {
   ASSERT(vcmp(mg_url_host("foo"), "foo"));
   ASSERT(vcmp(mg_url_host("//foo"), "foo"));
   ASSERT(vcmp(mg_url_host("foo:1234"), "foo"));
+  ASSERT(vcmp(mg_url_host(":1234"), ""));
   ASSERT(vcmp(mg_url_host("//foo:1234"), "foo"));
   ASSERT(vcmp(mg_url_host("p://foo"), "foo"));
   ASSERT(vcmp(mg_url_host("p://foo/"), "foo"));
@@ -141,6 +142,7 @@ static void test_url(void) {
 
   // Port
   ASSERT(mg_url_port("foo:1234") == 1234);
+  ASSERT(mg_url_port(":1234") == 1234);
   ASSERT(mg_url_port("x://foo:1234") == 1234);
   ASSERT(mg_url_port("x://foo:1234/") == 1234);
   ASSERT(mg_url_port("x://foo:1234/xx") == 1234);
