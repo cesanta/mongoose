@@ -34,8 +34,8 @@ static void usage(const char *prog) {
           "  -d DIR    - directory to serve, default: '%s'\n"
           "  -l ADDR   - listening address, default: '%s'\n"
           "  -v LEVEL  - debug level, from 0 to 4, default: '%s'\n",
-          MG_VERSION, prog, s_debug_level, s_enable_hexdump, s_root_dir,
-          s_listening_address);
+          MG_VERSION, prog, s_enable_hexdump, s_root_dir, s_listening_address,
+          s_debug_level);
   exit(EXIT_FAILURE);
 }
 
