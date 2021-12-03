@@ -1047,6 +1047,33 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 ```
 
+### mg\_http\_get\_header\_var()
+
+```c
+struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v);
+```
+
+Parse HTTP header (e.g. Cookie header) which has form
+`name1=value1; name2=value2; ...` and fetch a given variable.
+
+Parameters:
+- `s` - HTTP header
+- `name` - variable name name
+
+Return value: a requested variable, or an empty string.
+
+Usage example:
+
+```c
+struct mg_str *cookie = mg_http_get_header(hm, "Cookie");
+struct mg_str token = mg_str("");
+
+if (cookie != NULL) {
+  token = mg_http_get_header_var(*cookie, mg_str("access_token"));
+}
+```
+
+
 ### mg\_http\_get\_var()
 
 ```c
