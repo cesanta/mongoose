@@ -4103,7 +4103,6 @@ void mg_tls_handshake(struct mg_connection *c) {
 }
 void mg_tls_set_config_cb(void (*fn)(void *)) {
     (void) fn;
-    mg_error(c, "TLS is not enabled");
 }
 void mg_tls_free(struct mg_connection *c) {
   (void) c;
