@@ -1886,6 +1886,26 @@ struct mg_tls_opts opts = {.cert = "ca.pem"};
 mg_tls_init(c, &opts);
 ```
 
+### mg\_tls\_set\_config\_cb()
+
+```c
+void mg_tls_set_config_cb(void (*fn)(void *data))
+```
+
+By default, `mg_tls_init` initialises TLS for a given connection with a standard security
+configuration depending on the crypto library used. `mg_tl_set_config_cb` can be used
+to define a custom callback that can modify the security configuration.
+This callback will be called before starting the TLS handshake.
+
+If mbedTLS library is used, `data` will point to the corresponding mbedtls
+config and will be of type `mbedtls_ssl_config *`.
+
+If OpenSSl library is used, `data` will point ot the corresponding SSL object
+and will be of type `SSL *`.
+
+Parameters:
+- `fn` - callback function, will be called before starting the TLS handshake
+
 ## Timer
 
 ### struct mg\_timer

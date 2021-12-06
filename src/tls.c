@@ -36,6 +36,8 @@ struct mg_tls {
   mbedtls_pk_context pk;    // Private key context
 };
 
+static void (*s_config_cb)(void *) = NULL;
+
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
@@ -182,6 +184,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
       goto fail;
     }
   }
+  if (s_config_cb != NULL) {
+      s_config_cb(&tls->conf);
+  }
   if ((rc = mbedtls_ssl_setup(&tls->ssl, &tls->conf)) != 0) {
     mg_error(c, "setup err %#x", -rc);
     goto fail;
@@ -196,6 +201,10 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
 fail:
   c->is_closing = 1;
   free(tls);
+}
+
+void mg_tls_set_config_cb(void (*fn)(void *)) {
+    s_config_cb = fn;
 }
 
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
@@ -232,6 +241,8 @@ struct mg_tls {
   SSL_CTX *ctx;
   SSL *ssl;
 };
+
+static void (*s_config_cb)(void *) = NULL;
 
 static int mg_tls_err(struct mg_tls *tls, int res) {
   int err = SSL_get_error(tls->ssl, res);
@@ -328,6 +339,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     SSL_set_tlsext_host_name(tls->ssl, buf);
     if (buf != mem) free(buf);
   }
+  if (s_config_cb != NULL) {
+      s_config_cb(tls->ssl);
+  }
   c->tls = tls;
   c->is_tls = 1;
   c->is_tls_hs = 1;
@@ -340,6 +354,10 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
 fail:
   c->is_closing = 1;
   free(tls);
+}
+
+void mg_tls_set_config_cb(void (*fn)(void *)) {
+    s_config_cb = fn;
 }
 
 void mg_tls_handshake(struct mg_connection *c) {
@@ -382,6 +400,10 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   (void) opts;
   mg_error(c, "TLS is not enabled");
+}
+void mg_tls_set_config_cb(void (*fn)(void *)) {
+    (void) fn;
+    mg_error(c, "TLS is not enabled");
 }
 void mg_tls_handshake(struct mg_connection *c) {
   (void) c;
