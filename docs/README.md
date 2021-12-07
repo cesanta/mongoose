@@ -1838,6 +1838,7 @@ struct mg_tls_opts {
   const char *certkey;   // Certificate key
   const char *ciphers;   // Cipher list
   struct mg_str srvname; // If not empty, enables server name verification
+  void (*cfn)(void *);   // Configuration-specific callback function
 };
 ```
 
@@ -1855,6 +1856,13 @@ TLS initialisation structure:
   `certkey` could be the same
 - `ciphers` - A list of allowed ciphers
 - `srvname` - Enable server name verification
+- `cfn` - Function to modify the default TLS configuration. 
+  If NULL, the default configuration of the TLS library will be used.
+  If set, `cfn` will be invoked after the default configuration has been set
+  and before the TLS handshake. In case of mbedTLS, the argument of `cfn`
+  will be a pointer to the coresponding `mbedtls_ssl_config` configuration.
+  In case of OpenSSL the argument of `cfn` will be a pointer to the coresponding
+  `SSL` object.
 
 
 NOTE: if both `ca` and `cert` are set, then so-called two-way TLS is enabled,

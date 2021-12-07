@@ -182,6 +182,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
       goto fail;
     }
   }
+  if (opts->cfn != NULL) {
+      opts->cfn(&tls->conf);
+  }
   if ((rc = mbedtls_ssl_setup(&tls->ssl, &tls->conf)) != 0) {
     mg_error(c, "setup err %#x", -rc);
     goto fail;
@@ -327,6 +330,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
                 opts->srvname.ptr);
     SSL_set_tlsext_host_name(tls->ssl, buf);
     if (buf != mem) free(buf);
+  }
+  if (opts->cfn != NULL) {
+      opts->cfn(tls->ssl);
   }
   c->tls = tls;
   c->is_tls = 1;

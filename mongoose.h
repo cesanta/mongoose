@@ -911,6 +911,7 @@ struct mg_tls_opts {
   const char *certkey;    // Certificate key
   const char *ciphers;    // Cipher list
   struct mg_str srvname;  // If not empty, enables server name verification
+  void (*cfn)(void *);    // Configuration-specific callback function
 };
 
 void mg_tls_init(struct mg_connection *, struct mg_tls_opts *);
