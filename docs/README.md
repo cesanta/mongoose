@@ -1893,7 +1893,7 @@ void mg_tls_set_config_cb(void (*fn)(void *data))
 ```
 
 By default, `mg_tls_init` initialises TLS for a given connection with a standard security
-configuration depending on the crypto library used. `mg_tl_set_config_cb` can be used
+configuration depending on the crypto library used. `mg_tls_set_config_cb` can be used
 to define a custom callback that can modify the security configuration.
 This callback will be called before starting the TLS handshake.
 
