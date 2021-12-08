@@ -75,7 +75,8 @@ static int rng_get(void *p_rng, unsigned char *buf, size_t len) {
 }
 #endif
 
-void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+static void mg_tls_init_core(struct mg_connection *c, struct mg_tls_opts *opts,
+                             void (*fn)(void *)) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   int rc = 0;
   const char *ca = opts->ca == NULL     ? "-"
@@ -182,6 +183,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
       goto fail;
     }
   }
+  if (fn != NULL) {
+    fn(&tls->conf);
+  }
   if ((rc = mbedtls_ssl_setup(&tls->ssl, &tls->conf)) != 0) {
     mg_error(c, "setup err %#x", -rc);
     goto fail;
@@ -196,6 +200,15 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
 fail:
   c->is_closing = 1;
   free(tls);
+}
+
+void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+  return mg_tls_init_core(c, opts, NULL);
+}
+
+void mg_tls_init_modify_conf(struct mg_connection *c, struct mg_tls_opts *opts,
+                             void (*fn)(void *)) {
+  return mg_tls_init_core(c, opts, fn);
 }
 
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
@@ -251,7 +264,8 @@ static int mg_tls_err(struct mg_tls *tls, int res) {
   return err;
 }
 
-void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+static void mg_tls_init_core(struct mg_connection *c, struct mg_tls_opts *opts,
+                             void (*fn)(void *)) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   const char *id = "mongoose";
   static unsigned char s_initialised = 0;
@@ -328,6 +342,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     SSL_set_tlsext_host_name(tls->ssl, buf);
     if (buf != mem) free(buf);
   }
+  if (fn != NULL) {
+    fn(tls->ssl);
+  }
   c->tls = tls;
   c->is_tls = 1;
   c->is_tls_hs = 1;
@@ -340,6 +357,15 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
 fail:
   c->is_closing = 1;
   free(tls);
+}
+
+void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+  return mg_tls_init_core(c, opts, NULL);
+}
+
+void mg_tls_init_modify_conf(struct mg_connection *c, struct mg_tls_opts *opts,
+                             void (*fn)(void *)) {
+  return mg_tls_init_core(c, opts, fn);
 }
 
 void mg_tls_handshake(struct mg_connection *c) {
@@ -382,6 +408,12 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   (void) opts;
   mg_error(c, "TLS is not enabled");
+}
+void mg_tls_init_modify_conf(struct mg_connection *c, struct mg_tls_opts *opts,
+                             void (*fn)(void *)) {
+    (void) opts;
+    (void) fn;
+    mg_error(c, "TLS is not enabled");
 }
 void mg_tls_handshake(struct mg_connection *c) {
   (void) c;

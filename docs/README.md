@@ -1886,6 +1886,27 @@ struct mg_tls_opts opts = {.cert = "ca.pem"};
 mg_tls_init(c, &opts);
 ```
 
+### mg\_tls\_init\_modify\_conf()
+
+```c
+void mg_tls_init_modify_conf(struct mg_connection *c, struct mg_tls_opts *opts, void (*fn)(void *));
+```
+
+Same as `mg_tls_init()` but with the possibility to modify the default configuration of the TLS library.
+
+Parameters:
+- `c` - Connection, for which TLS should be initialized
+- `opts` - TLS initialization parameters
+- `fn` - Function to modify the default configuration of the TLS library. 
+  If NULL, the default configuration of the TLS library will be used as in `mg_tls_init()`.
+  If set, `fn` will be invoked after the default configuration has been applied
+  and before the TLS handshake. In case of mbedTLS, the argument of `fn`
+  will be a pointer to the coresponding `mbedtls_ssl_config` configuration.
+  In case of OpenSSL the argument of `fn` will be a pointer to the coresponding
+  `SSL` object.
+
+Return value: None
+
 ## Timer
 
 ### struct mg\_timer

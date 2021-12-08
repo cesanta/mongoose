@@ -11,6 +11,8 @@ struct mg_tls_opts {
 };
 
 void mg_tls_init(struct mg_connection *, struct mg_tls_opts *);
+void mg_tls_init_modify_conf(struct mg_connection *, struct mg_tls_opts *,
+                             void (*fn)(void *));
 void mg_tls_free(struct mg_connection *);
 long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
 long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
