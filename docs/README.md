@@ -1247,7 +1247,7 @@ Usage example which uses Basic auth to create Stripe subscription:
 
   mg_http_printf_chunk(c, "&customer=%s", customer_id);   // Set customer
   mg_http_printf_chunk(c, "&items[0][price]=%s", price);  // And price
-  mg_http_printf_chunk(c, "");
+  mg_http_printf_chunk(c, "");                            // End request
 ```
 
 ### mg\_http\_next\_multipart()
