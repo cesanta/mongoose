@@ -1236,10 +1236,18 @@ Parameters:
 
 Return value: None
 
-Usage example:
+Usage example which uses Basic auth to create Stripe subscription:
 
 ```c
-mg_http_bauth(c, "user_name", "password") // "user_name:password" is now in output buffer
+  mg_printf(c, "POST /v1/subscriptions HTTP/1.1\r\n"
+               "Host: api.stripe.com\r\n"
+               "Transfer-Encoding: chunked\r\n");
+  mg_http_bauth(c, stripe_private_key, NULL);     // Add Basic auth header
+  mg_printf(c, "%s", "\r\n");                     // End HTTP headers
+
+  mg_http_printf_chunk(c, "&customer=%s", customer_id);   // Set customer
+  mg_http_printf_chunk(c, "&items[0][price]=%s", price);  // And price
+  mg_http_printf_chunk(c, "");
 ```
 
 ### mg\_http\_next\_multipart()
