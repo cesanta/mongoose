@@ -3694,38 +3694,35 @@ void mg_timer_poll(unsigned long now_ms) {
 }
 
 #ifdef MG_ENABLE_LINES
-#line 1 "src/tls.c"
+#line 1 "src/tls_dummy.c"
 #endif
 
 
-#if MG_ENABLE_MBEDTLS  ///////////////////////////////////////// MBEDTLS
-
-
-
-
-#include <mbedtls/debug.h>
-#include <mbedtls/ssl.h>
-
-#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
-#define RNG , rng_get, NULL
-#else
-#define RNG
+#if !MG_ENABLE_MBEDTLS && !MG_ENABLE_OPENSSL && !MG_ENABLE_CUSTOM_TLS
+void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+  (void) opts;
+  mg_error(c, "TLS is not enabled");
+}
+void mg_tls_handshake(struct mg_connection *c) {
+  (void) c;
+}
+void mg_tls_free(struct mg_connection *c) {
+  (void) c;
+}
+long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
+  return c == NULL || buf == NULL || len == 0 ? 0 : -1;
+}
+long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
+  return c == NULL || buf == NULL || len == 0 ? 0 : -1;
+}
 #endif
 
-// Different versions have those in different files, so declare here
-EXTERN_C int mbedtls_net_recv(void *, unsigned char *, size_t);
-EXTERN_C int mbedtls_net_send(void *, const unsigned char *, size_t);
+#ifdef MG_ENABLE_LINES
+#line 1 "src/tls_mbed.c"
+#endif
 
-struct mg_tls {
-  char *cafile;             // CA certificate path
-  mbedtls_x509_crt ca;      // Parsed CA certificate
-  mbedtls_x509_crl crl;     // Parsed Certificate Revocation List
-  mbedtls_x509_crt cert;    // Parsed certificate
-  mbedtls_ssl_context ssl;  // SSL/TLS context
-  mbedtls_ssl_config conf;  // SSL-TLS config
-  mbedtls_pk_context pk;    // Private key context
-};
 
+#if MG_ENABLE_MBEDTLS
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
@@ -3913,16 +3910,14 @@ void mg_tls_free(struct mg_connection *c) {
   free(tls);
   c->tls = NULL;
 }
-#elif MG_ENABLE_OPENSSL  ///////////////////////////////////////// OPENSSL
+#endif
 
-#include <openssl/err.h>
-#include <openssl/ssl.h>
+#ifdef MG_ENABLE_LINES
+#line 1 "src/tls_openssl.c"
+#endif
 
-struct mg_tls {
-  SSL_CTX *ctx;
-  SSL *ssl;
-};
 
+#if MG_ENABLE_OPENSSL
 static int mg_tls_err(struct mg_tls *tls, int res) {
   int err = SSL_get_error(tls->ssl, res);
   // We've just fetched the last error from the queue.
@@ -4066,26 +4061,6 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   int n = SSL_write(tls->ssl, buf, (int) len);
   return n == 0 ? -1 : n < 0 && mg_tls_err(tls, n) == 0 ? 0 : n;
 }
-
-#else  //////////////////////////////////////////   NO TLS
-
-void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
-  (void) opts;
-  mg_error(c, "TLS is not enabled");
-}
-void mg_tls_handshake(struct mg_connection *c) {
-  (void) c;
-}
-void mg_tls_free(struct mg_connection *c) {
-  (void) c;
-}
-long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
-  return c == NULL || buf == NULL || len == 0 ? 0 : -1;
-}
-long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
-  return c == NULL || buf == NULL || len == 0 ? 0 : -1;
-}
-
 #endif
 
 #ifdef MG_ENABLE_LINES

@@ -1,5 +1,8 @@
 #pragma once
+
 #include "net.h"
+#include "tls_mbed.h"
+#include "tls_openssl.h"
 
 struct mg_tls_opts {
   const char *ca;         // CA certificate file. For both listeners and clients

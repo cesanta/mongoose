@@ -234,6 +234,7 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_SOCKET | 1 | Use BSD socket low-level API |
 |MG_ENABLE_MBEDTLS | 0 | Enable mbedTLS library |
 |MG_ENABLE_OPENSSL | 0 | Enable OpenSSL library |
+|MG_ENABLE_CUSTOM_TLS | 0 | Enable custom TLS library |
 |MG_ENABLE_IPV6 | 0 | Enable IPv6 |
 |MG_ENABLE_LOG | 1 | Enable `LOG()` macro |
 |MG_ENABLE_MD5 | 0 | Use native MD5 implementation |
@@ -244,6 +245,7 @@ Here is a list of build constants and their default values:
 |MG_IO_SIZE | 2048 | Granularity of the send/recv IO buffer growth |
 |MG_MAX_RECV_BUF_SIZE | (3 * 1024 * 1024) | Maximum recv buffer size |
 |MG_MAX_HTTP_HEADERS | 40 | Maximum number of HTTP headers |
+|MG_HTTP_INDEX | "index.html" | Index file for HTML directory |
 |MG_ENABLE_LINES | undefined | If defined, show source file names in logs |
 
 <span class="badge bg-danger">NOTE:</span> the `MG_IO_SIZE` constant also sets

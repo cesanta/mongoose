@@ -12,6 +12,10 @@
 #define MG_ENABLE_OPENSSL 0
 #endif
 
+#ifndef MG_ENABLE_CUSTOM_TLS
+#define MG_ENABLE_CUSTOM_TLS 0
+#endif
+
 #ifndef MG_ENABLE_SSI
 #define MG_ENABLE_SSI 1
 #endif
@@ -57,6 +61,10 @@
 
 #ifndef MG_MAX_HTTP_HEADERS
 #define MG_MAX_HTTP_HEADERS 40
+#endif
+
+#ifndef MG_HTTP_INDEX
+#define MG_HTTP_INDEX "index.html"
 #endif
 
 #ifndef MG_PATH_MAX
