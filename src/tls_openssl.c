@@ -28,6 +28,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   if (tls == NULL) {
     mg_error(c, "TLS OOM");
     goto fail;
+  } else if (opts->ifn != NULL && opts->ifn(opts) != 0) {
+    mg_error(c, "TLS custom init failed");
+    goto fail;
   }
 
   if (!s_initialised) {
