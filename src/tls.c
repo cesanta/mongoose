@@ -8,14 +8,6 @@
 #include <mbedtls/debug.h>
 #include <mbedtls/ssl.h>
 
-#ifndef EXTERN_C
-#ifdef __cplusplus
-#define EXTERN_C extern "C"
-#else
-#define EXTERN_C
-#endif
-#endif
-
 #if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
 #define RNG , rng_get, NULL
 #else
@@ -81,9 +73,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   const char *ca = opts->ca == NULL     ? "-"
                    : opts->ca[0] == '-' ? "(emb)"
                                         : opts->ca;
-  const char *crl = opts->crl == NULL    ? "-"
-                   : opts->crl[0] == '-' ? "(emb)"
-                                         : opts->crl;
+  const char *crl = opts->crl == NULL     ? "-"
+                    : opts->crl[0] == '-' ? "(emb)"
+                                          : opts->crl;
   const char *cert = opts->cert == NULL     ? "-"
                      : opts->cert[0] == '-' ? "(emb)"
                                             : opts->cert;
