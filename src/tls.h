@@ -11,7 +11,7 @@ struct mg_tls_opts {
   const char *certkey;    // Certificate key
   const char *ciphers;    // Cipher list
   struct mg_str srvname;  // If not empty, enables server name verification
-  int (*ifn)(struct mg_tls_opts *);  // Custom init func. Return 0 on success
+  int (*custom_init)(struct mg_connection *, struct mg_tls_opts *, void *tls);
 };
 
 void mg_tls_init(struct mg_connection *, struct mg_tls_opts *);
