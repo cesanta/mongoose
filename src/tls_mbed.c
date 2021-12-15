@@ -58,10 +58,6 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   if (tls == NULL) {
     mg_error(c, "TLS OOM");
     goto fail;
-  } else if (opts->custom_init != NULL &&
-             opts->custom_init(c, opts, tls) != 0) {
-    mg_error(c, "TLS custom init failed");
-    goto fail;
   }
   LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, CRL: %s, cert: %s, key: %s", c->id,
                  ca, crl, cert, certkey));
