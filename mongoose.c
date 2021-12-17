@@ -1474,7 +1474,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
                 (int) hm->uri.len, hm->uri.ptr);
       flags = 0;
     } else if (flags & MG_FS_DIR) {
-      if (((snprintf(path + n, path_size - n, "/index.html") > 0 &&
+      if (((snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX) > 0 &&
             (tmp = fs->stat(path, NULL, NULL)) != 0) ||
            (snprintf(path + n, path_size - n, "/index.shtml") > 0 &&
             (tmp = fs->stat(path, NULL, NULL)) != 0))) {
