@@ -162,7 +162,8 @@ that connection is UDP or not.  Some flags can be changed by application, for
 example, the `is_draining` flag, if set by an application, tells Mongoose to send
 the remaining data to a peer, and when everything is sent, close the connection.
 
-<span class="badge bg-danger">NOTE: </span>User-changeable flags are: `is_hexdumping`, `is_draining`, `is_closing`.
+<span class="badge bg-danger me-1"> NOTE: </span>User-changeable flags are:
+`is_hexdumping`, `is_draining`, `is_closing`.
 
 This is taken from `mongoose.h` as-is:
 
