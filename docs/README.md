@@ -1992,24 +1992,6 @@ mg_timer_poll(now);
 
 ## Time
 
-### mg\_time()
-
-```
-double mg_time(void);
-```
-
-Return current time as UNIX epoch, using `double` value for sub-second accuracy.
-
-Parameters: None
-
-Return value: Current time
-
-Usage example:
-
-```c
-double now = mg_time()
-```
-
 ### mg\_millis()
 
 ```c
@@ -2026,25 +2008,6 @@ Usage example:
 
 ```c
 unsigned long uptime = mg_millis();
-```
-
-### mg\_usleep()
-
-```c
-void mg_usleep(unsigned long usecs);
-```
-
-Block thread execution for a given number of microseconds.
-
-Parameters:
-- `usecs` - number of microseconds to block thread
-
-Return value: None
-
-Usage example:
-
-```c
-mg_usleep(1000000 /* 1 sec */)
 ```
 
 ## String

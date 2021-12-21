@@ -301,47 +301,6 @@ int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip) {
   return allowed == '+';
 }
 
-double mg_time(void) {
-#if MG_ARCH == MG_ARCH_WIN32
-  SYSTEMTIME sysnow;
-  FILETIME ftime;
-  GetLocalTime(&sysnow);
-  SystemTimeToFileTime(&sysnow, &ftime);
-  /*
-   * 1. VC 6.0 doesn't support conversion uint64 -> double, so, using int64
-   * This should not cause a problems in this (21th) century
-   * 2. Windows FILETIME is a number of 100-nanosecond intervals since January
-   * 1, 1601 while time_t is a number of _seconds_ since January 1, 1970 UTC,
-   * thus, we need to convert to seconds and adjust amount (subtract 11644473600
-   * seconds)
-   */
-  return (double) (((int64_t) ftime.dwLowDateTime +
-                    ((int64_t) ftime.dwHighDateTime << 32)) /
-                   10000000.0) -
-         11644473600;
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS
-  return mg_millis() / 1000.0;
-#else
-  struct timeval tv;
-  if (gettimeofday(&tv, NULL /* tz */) != 0) return 0;
-  return (double) tv.tv_sec + (((double) tv.tv_usec) / 1000000.0);
-#endif /* _WIN32 */
-}
-
-void mg_usleep(unsigned long usecs) {
-#if MG_ARCH == MG_ARCH_WIN32
-  Sleep(usecs / 1000);
-#elif MG_ARCH == MG_ARCH_ESP8266
-  ets_delay_us(usecs);
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
-  vTaskDelay(pdMS_TO_TICKS(usecs / 1000));
-#elif MG_ARCH == MG_ARCH_AZURERTOS
-  tx_thread_sleep((usecs / 1000) * TX_TIMER_TICKS_PER_SECOND);
-#else
-  usleep((useconds_t) usecs);
-#endif
-}
-
 unsigned long mg_millis(void) {
 #if MG_ARCH == MG_ARCH_WIN32
   return GetTickCount();
