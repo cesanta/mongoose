@@ -1,5 +1,3 @@
-#include "config.h"  // Must go first - important for test++
-
 #include "util.h"
 
 #if MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)

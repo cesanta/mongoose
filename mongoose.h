@@ -330,7 +330,10 @@ struct timeval {
 #include <unistd.h>
 
 #define MG_INT64_FMT "%" PRId64
+
+#ifndef MG_ENABLE_DIRLIST
 #define MG_ENABLE_DIRLIST 1
+#endif
 
 #endif
 
@@ -384,6 +387,7 @@ typedef enum { false = 0, true = 1 } bool;
 // Protect from calls like std::snprintf in app code
 // See https://github.com/cesanta/mongoose/issues/1047
 #ifndef __cplusplus
+#define sleep(x) Sleep(x)
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #ifndef strdup  // For MSVC with _DEBUG, see #1359
@@ -417,8 +421,9 @@ typedef int socklen_t;
 
 #define MG_INT64_FMT "%I64d"
 
-#undef MG_ENABLE_DIRLIST
+#ifndef MG_ENABLE_DIRLIST
 #define MG_ENABLE_DIRLIST 1
+#endif
 
 // https://lgtm.com/rules/2154840805/ -gmtime, localtime, ctime and asctime
 static __inline struct tm *gmtime_r(time_t *t, struct tm *tm) {
@@ -598,6 +603,7 @@ void mg_timer_poll(unsigned long current_time_ms);
 
 
 
+
 char *mg_file_read(const char *path, size_t *size);
 bool mg_file_write(const char *path, const void *buf, size_t len);
 bool mg_file_printf(const char *path, const char *fmt, ...);
@@ -660,6 +666,7 @@ unsigned long mg_millis(void);
     while (*h != (elem_)) h = &(*h)->next; \
     *h = (elem_)->next;                    \
   } while (0)
+
 
 
 
@@ -853,6 +860,7 @@ char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
 
 struct mg_connection *mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *);
 void mg_mgr_wakeup(struct mg_connection *pipe);
+
 
 
 

@@ -49,6 +49,7 @@ typedef enum { false = 0, true = 1 } bool;
 // Protect from calls like std::snprintf in app code
 // See https://github.com/cesanta/mongoose/issues/1047
 #ifndef __cplusplus
+#define sleep(x) Sleep(x)
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #ifndef strdup  // For MSVC with _DEBUG, see #1359
@@ -82,8 +83,9 @@ typedef int socklen_t;
 
 #define MG_INT64_FMT "%I64d"
 
-#undef MG_ENABLE_DIRLIST
+#ifndef MG_ENABLE_DIRLIST
 #define MG_ENABLE_DIRLIST 1
+#endif
 
 // https://lgtm.com/rules/2154840805/ -gmtime, localtime, ctime and asctime
 static __inline struct tm *gmtime_r(time_t *t, struct tm *tm) {

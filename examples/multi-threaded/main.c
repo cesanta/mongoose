@@ -36,7 +36,7 @@ static void start_thread(void (*f)(void *), void *p) {
 
 static void thread_function(void *param) {
   struct mg_connection *c = param;  // Pipe connection
-  mg_usleep(2 * 1000000);           // Simulate long execution
+  sleep(2);                         // Simulate long execution
   mg_mgr_wakeup(c);                 // Wakeup event manager
 }
 

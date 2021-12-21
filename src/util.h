@@ -1,6 +1,7 @@
 #pragma once
 
 #include "arch.h"
+#include "config.h"
 #include "str.h"
 
 char *mg_file_read(const char *path, size_t *size);

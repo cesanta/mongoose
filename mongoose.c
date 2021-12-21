@@ -700,11 +700,8 @@ static size_t p_seek(void *fp, size_t offset) {
 #endif
   return (size_t) ftell((FILE *) fp);
 }
+
 #else
-static char *p_realpath(const char *path, char *resolved_path) {
-  (void) path, (void) resolved_path;
-  return NULL;
-}
 
 static int p_stat(const char *path, size_t *size, time_t *mtime) {
   (void) path, (void) size, (void) mtime;
@@ -4159,8 +4156,6 @@ struct mg_str mg_url_pass(const char *url) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/util.c"
 #endif
-
-
 
 
 #if MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)

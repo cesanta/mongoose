@@ -1,6 +1,7 @@
 #pragma once
 
 #include "arch.h"
+#include "config.h"
 
 enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
 

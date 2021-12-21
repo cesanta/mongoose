@@ -30,6 +30,9 @@
 #include <unistd.h>
 
 #define MG_INT64_FMT "%" PRId64
+
+#ifndef MG_ENABLE_DIRLIST
 #define MG_ENABLE_DIRLIST 1
+#endif
 
 #endif
