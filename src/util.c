@@ -317,7 +317,7 @@ int64_t mg_millis(void) {
   double ticks_to_nanos = (double) timebase.numer / timebase.denom;
   uint64_t uptime_nanos = (uint64_t) (ticks_to_nanos * ticks);
   return (int64_t) (uptime_nanos / 1000000);
-#else
+#elif MG_ARCH == MG_ARCH_UNIX
   struct timespec ts;
 #ifdef _POSIX_MONOTONIC_CLOCK
 #ifdef CLOCK_MONOTONIC_RAW
@@ -329,5 +329,7 @@ int64_t mg_millis(void) {
   clock_gettime(CLOCK_REALTIME, &ts);
 #endif
   return ((int64_t) ts.tv_sec * 1000 + (int64_t) ts.tv_nsec / 1000000);
+#else
+  return time(NULL) * 1000;
 #endif
 }
