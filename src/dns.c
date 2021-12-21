@@ -7,7 +7,7 @@
 struct dns_data {
   struct dns_data *next;
   struct mg_connection *c;
-  unsigned long expire;
+  int64_t expire;
   uint16_t txnid;
 };
 
@@ -132,7 +132,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
                    void *fn_data) {
   struct dns_data *d, *tmp;
   if (ev == MG_EV_POLL) {
-    unsigned long now = *(unsigned long *) ev_data;
+    int64_t now = *(int64_t *) ev_data;
     for (d = s_reqs; d != NULL; d = tmp) {
       tmp = d->next;
       // LOG(LL_DEBUG, ("%lu %lu dns poll", d->expire, now));
@@ -246,7 +246,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->txnid = s_reqs ? (uint16_t) (s_reqs->txnid + 1) : 1;
     d->next = s_reqs;
     s_reqs = d;
-    d->expire = mg_millis() + (unsigned long) ms;
+    d->expire = mg_millis() + (int64_t) ms;
     d->c = c;
     c->is_resolving = 1;
     LOG(LL_VERBOSE_DEBUG,

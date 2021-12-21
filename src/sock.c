@@ -572,7 +572,7 @@ static void connect_conn(struct mg_connection *c) {
 
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   struct mg_connection *c, *tmp;
-  unsigned long now;
+  int64_t now;
 
   mg_iotest(mgr, ms);
   now = mg_millis();

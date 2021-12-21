@@ -4,13 +4,14 @@
 #include "log.h"
 #include "util.h"
 
-#define SNTP_INTERVAL_SEC (3600)
+#define SNTP_INTERVAL_SEC 3600
 #define SNTP_TIME_OFFSET 2208988800UL
 
 static unsigned long s_sntmp_next;
 
-int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv) {
-  int mode = len > 0 ? buf[0] & 7 : 0, res = -1;
+int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
+  int64_t res = -1;
+  int mode = len > 0 ? buf[0] & 7 : 0;
   if (len < 48) {
     LOG(LL_ERROR, ("%s", "corrupt packet"));
   } else if ((buf[0] & 0x38) >> 3 != 4) {
@@ -21,21 +22,22 @@ int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv) {
     LOG(LL_ERROR, ("%s", "server sent a kiss of death"));
   } else {
     uint32_t *data = (uint32_t *) &buf[40];
-    tv->tv_sec = (time_t) (mg_ntohl(data[0]) - SNTP_TIME_OFFSET);
-    tv->tv_usec = (suseconds_t) mg_ntohl(data[1]);
-    s_sntmp_next = (unsigned long) (tv->tv_sec + SNTP_INTERVAL_SEC);
-    res = 0;
+    unsigned long seconds = mg_ntohl(data[0]) - SNTP_TIME_OFFSET;
+    unsigned long useconds = mg_ntohl(data[1]);
+    // LOG(LL_DEBUG, ("%lu %lu %lu", time(0), seconds, useconds));
+    res = ((int64_t) seconds) * 1000 + (int64_t) ((useconds / 1000) % 1000);
+    s_sntmp_next = seconds + SNTP_INTERVAL_SEC;
   }
   return res;
 }
 
 static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_READ) {
-    struct timeval tv = {0, 0};
-    if (mg_sntp_parse(c->recv.buf, c->recv.len, &tv) == 0) {
-      mg_call(c, MG_EV_SNTP_TIME, &tv);
-      LOG(LL_DEBUG, ("%u.%u, next at %lu", (unsigned) tv.tv_sec,
-                     (unsigned) tv.tv_usec, s_sntmp_next));
+    int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
+    if (milliseconds > 0) {
+      mg_call(c, MG_EV_SNTP_TIME, &milliseconds);
+      LOG(LL_DEBUG, ("%u.%u, next at %lu", (unsigned) (milliseconds / 1000),
+                     (unsigned) (milliseconds % 1000), s_sntmp_next));
     }
     c->recv.len = 0;  // Clear receive buffer
   } else if (ev == MG_EV_CONNECT) {

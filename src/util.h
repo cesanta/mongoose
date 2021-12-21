@@ -19,9 +19,9 @@ void mg_unhex(const char *buf, size_t len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, size_t len);
 int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
 int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
-int64_t mg_to64(struct mg_str str);
 int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
-unsigned long mg_millis(void);
+int64_t mg_to64(struct mg_str str);
+int64_t mg_millis(void);
 
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)

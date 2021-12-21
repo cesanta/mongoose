@@ -133,7 +133,7 @@ to an event handler:
 ```c
 enum {
   MG_EV_ERROR,      // Error                        char *error_message
-  MG_EV_POLL,       // mg_mgr_poll iteration        unsigned long *millis
+  MG_EV_POLL,       // mg_mgr_poll iteration        int64_t *milliseconds
   MG_EV_RESOLVE,    // Host name is resolved        NULL
   MG_EV_CONNECT,    // Connection established       NULL
   MG_EV_ACCEPT,     // Connection accepted          NULL
@@ -148,7 +148,7 @@ enum {
   MG_EV_MQTT_CMD,   // MQTT low-level command       struct mg_mqtt_message *
   MG_EV_MQTT_MSG,   // MQTT PUBLISH received        struct mg_mqtt_message *
   MG_EV_MQTT_OPEN,  // MQTT CONNACK received        int *connack_status_code
-  MG_EV_SNTP_TIME,  // SNTP time received           struct timeval *
+  MG_EV_SNTP_TIME,  // SNTP time received           int64_t *milliseconds
   MG_EV_USER,       // Starting ID for user events
 };
 ```
@@ -1903,16 +1903,15 @@ mg_tls_init(c, &opts);
 
 ```c
 struct mg_timer {
-  int period_ms;            // Timer period in milliseconds
-  int flags;                // Possible flags values below
-  void (*fn)(void *);       // Function to call
-  void *arg;                // Function argument
-  unsigned long expire;     // Expiration timestamp in milliseconds
-  struct mg_timer *next;    // Linkage in g_timers list
-};
-
+  int64_t period_ms;        // Timer period in milliseconds
+  int64_t expire;           // Expiration timestamp in milliseconds
+  unsigned flags;           // Possible flags values below
 #define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
 #define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
+  void (*fn)(void *);       // Function to call
+  void *arg;                // Function argument
+  struct mg_timer *next;    // Linkage in g_timers list
+};
 ```
 
 Timer structure. Describes a software timer. Timer granularity is the same
@@ -1921,7 +1920,7 @@ as the `mg_mgr_poll()` timeout argument in the main event loop.
 ### mg\_timer\_init()
 
 ```c
-void mg_timer_init(struct mg_timer *t, unsigned long ms, unsigned flags,
+void mg_timer_init(struct mg_timer *t, int64_t period_ms, unsigned flags,
                    void (*fn)(void *), void *fn_data);
 ```
 
@@ -1969,7 +1968,7 @@ mg_timer_free(&timer);
 ### mg\_timer\_poll()
 
 ```c
-void mg_timer_poll(unsigned long uptime_ms);
+void mg_timer_poll(int64_t uptime_ms);
 ```
 
 Traverse list of timers and call them if current timestamp `uptime_ms` is
@@ -1986,7 +1985,7 @@ Return value: None
 Usage example:
 
 ```c
-unsigned long now = mg_millis();
+int64_t now = mg_millis();
 mg_timer_poll(now);
 ```
 
@@ -1995,7 +1994,7 @@ mg_timer_poll(now);
 ### mg\_millis()
 
 ```c
-unsigned long mg_millis(void);
+int64_t mg_millis(void);
 ```
 
 Return current uptime in milliseconds.
@@ -2007,7 +2006,7 @@ Return value: Current uptime
 Usage example:
 
 ```c
-unsigned long uptime = mg_millis();
+int64_t uptime = mg_millis();
 ```
 
 ## String

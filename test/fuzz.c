@@ -27,9 +27,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_mqtt_parse(data, size, &mm);
   mg_mqtt_parse(NULL, 0, &mm);
 
-  struct timeval tv;
-  mg_sntp_parse(data, size, &tv);
-  mg_sntp_parse(NULL, 0, &tv);
+  mg_sntp_parse(data, size);
+  mg_sntp_parse(NULL, 0);
 
   char buf[size * 4 / 3 + 5];  // At least 4 chars and nul termination
   mg_base64_decode((char *) data, (int) size, buf);

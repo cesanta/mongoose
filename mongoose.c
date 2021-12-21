@@ -117,7 +117,7 @@ int mg_base64_decode(const char *src, int n, char *dst) {
 struct dns_data {
   struct dns_data *next;
   struct mg_connection *c;
-  unsigned long expire;
+  int64_t expire;
   uint16_t txnid;
 };
 
@@ -242,7 +242,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
                    void *fn_data) {
   struct dns_data *d, *tmp;
   if (ev == MG_EV_POLL) {
-    unsigned long now = *(unsigned long *) ev_data;
+    int64_t now = *(int64_t *) ev_data;
     for (d = s_reqs; d != NULL; d = tmp) {
       tmp = d->next;
       // LOG(LL_DEBUG, ("%lu %lu dns poll", d->expire, now));
@@ -356,7 +356,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->txnid = s_reqs ? (uint16_t) (s_reqs->txnid + 1) : 1;
     d->next = s_reqs;
     s_reqs = d;
-    d->expire = mg_millis() + (unsigned long) ms;
+    d->expire = mg_millis() + (int64_t) ms;
     d->c = c;
     c->is_resolving = 1;
     LOG(LL_VERBOSE_DEBUG,
@@ -2785,13 +2785,14 @@ void mg_hmac_sha1(const unsigned char *key, size_t keylen,
 
 
 
-#define SNTP_INTERVAL_SEC (3600)
+#define SNTP_INTERVAL_SEC 3600
 #define SNTP_TIME_OFFSET 2208988800UL
 
 static unsigned long s_sntmp_next;
 
-int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv) {
-  int mode = len > 0 ? buf[0] & 7 : 0, res = -1;
+int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
+  int64_t res = -1;
+  int mode = len > 0 ? buf[0] & 7 : 0;
   if (len < 48) {
     LOG(LL_ERROR, ("%s", "corrupt packet"));
   } else if ((buf[0] & 0x38) >> 3 != 4) {
@@ -2802,21 +2803,22 @@ int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv) {
     LOG(LL_ERROR, ("%s", "server sent a kiss of death"));
   } else {
     uint32_t *data = (uint32_t *) &buf[40];
-    tv->tv_sec = (time_t) (mg_ntohl(data[0]) - SNTP_TIME_OFFSET);
-    tv->tv_usec = (suseconds_t) mg_ntohl(data[1]);
-    s_sntmp_next = (unsigned long) (tv->tv_sec + SNTP_INTERVAL_SEC);
-    res = 0;
+    unsigned long seconds = mg_ntohl(data[0]) - SNTP_TIME_OFFSET;
+    unsigned long useconds = mg_ntohl(data[1]);
+    // LOG(LL_DEBUG, ("%lu %lu %lu", time(0), seconds, useconds));
+    res = ((int64_t) seconds) * 1000 + (int64_t) ((useconds / 1000) % 1000);
+    s_sntmp_next = seconds + SNTP_INTERVAL_SEC;
   }
   return res;
 }
 
 static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_READ) {
-    struct timeval tv = {0, 0};
-    if (mg_sntp_parse(c->recv.buf, c->recv.len, &tv) == 0) {
-      mg_call(c, MG_EV_SNTP_TIME, &tv);
-      LOG(LL_DEBUG, ("%u.%u, next at %lu", (unsigned) tv.tv_sec,
-                     (unsigned) tv.tv_usec, s_sntmp_next));
+    int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
+    if (milliseconds > 0) {
+      mg_call(c, MG_EV_SNTP_TIME, &milliseconds);
+      LOG(LL_DEBUG, ("%u.%u, next at %lu", (unsigned) (milliseconds / 1000),
+                     (unsigned) (milliseconds % 1000), s_sntmp_next));
     }
     c->recv.len = 0;  // Clear receive buffer
   } else if (ev == MG_EV_CONNECT) {
@@ -3424,7 +3426,7 @@ static void connect_conn(struct mg_connection *c) {
 
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   struct mg_connection *c, *tmp;
-  unsigned long now;
+  int64_t now;
 
   mg_iotest(mgr, ms);
   now = mg_millis();
@@ -3657,7 +3659,7 @@ struct mg_str mg_strstrip(struct mg_str s) {
 
 struct mg_timer *g_timers;
 
-void mg_timer_init(struct mg_timer *t, unsigned long ms, unsigned flags,
+void mg_timer_init(struct mg_timer *t, int64_t ms, unsigned flags,
                    void (*fn)(void *), void *arg) {
   struct mg_timer tmp = {ms, 0UL, flags, fn, arg, g_timers};
   *t = tmp;
@@ -3671,11 +3673,11 @@ void mg_timer_free(struct mg_timer *t) {
   if (*head) *head = t->next;
 }
 
-void mg_timer_poll(unsigned long now_ms) {
+void mg_timer_poll(int64_t now_ms) {
   // If time goes back (wrapped around), reset timers
   struct mg_timer *t, *tmp;
-  static unsigned long oldnow;  // Timestamp in a previous invocation
-  if (oldnow > now_ms) {        // If it is wrapped, reset timers
+  static int64_t oldnow;  // Timestamp in a previous invocation
+  if (oldnow > now_ms) {  // If it is wrapped, reset timers
     for (t = g_timers; t != NULL; t = t->next) t->expire = 0;
   }
   oldnow = now_ms;
@@ -3687,9 +3689,8 @@ void mg_timer_poll(unsigned long now_ms) {
     t->fn(t->arg);
     // Try to tick timers with the given period as accurate as possible,
     // even if this polling function is called with some random period.
-    t->expire = now_ms - t->expire > (unsigned long) t->period_ms
-                    ? now_ms + t->period_ms
-                    : t->expire + t->period_ms;
+    t->expire = now_ms - t->expire > t->period_ms ? now_ms + t->period_ms
+                                                  : t->expire + t->period_ms;
     if (!(t->flags & MG_TIMER_REPEAT)) mg_timer_free(t);
   }
 }
@@ -4457,7 +4458,7 @@ int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip) {
   return allowed == '+';
 }
 
-unsigned long mg_millis(void) {
+int64_t mg_millis(void) {
 #if MG_ARCH == MG_ARCH_WIN32
   return GetTickCount();
 #elif MG_ARCH == MG_ARCH_ESP32
@@ -4474,7 +4475,7 @@ unsigned long mg_millis(void) {
   mach_timebase_info(&timebase);
   double ticks_to_nanos = (double) timebase.numer / timebase.denom;
   uint64_t uptime_nanos = (uint64_t) (ticks_to_nanos * ticks);
-  return (unsigned long) (uptime_nanos / 1000000);
+  return (int64_t) (uptime_nanos / 1000000);
 #else
   struct timespec ts;
 #ifdef _POSIX_MONOTONIC_CLOCK
@@ -4486,8 +4487,7 @@ unsigned long mg_millis(void) {
 #else
   clock_gettime(CLOCK_REALTIME, &ts);
 #endif
-  return (unsigned long) ((uint64_t) ts.tv_sec * 1000 +
-                          (uint64_t) ts.tv_nsec / 1000000);
+  return ((int64_t) ts.tv_sec * 1000 + (int64_t) ts.tv_nsec / 1000000);
 #endif
 }
 

@@ -427,13 +427,15 @@ typedef int socklen_t;
 
 // https://lgtm.com/rules/2154840805/ -gmtime, localtime, ctime and asctime
 static __inline struct tm *gmtime_r(time_t *t, struct tm *tm) {
-  (void) tm;
-  return gmtime(t);
+  struct tm *x = gmtime(t);
+  *tm = *x;
+  return tm;
 }
 
 static __inline struct tm *localtime_r(time_t *t, struct tm *tm) {
-  (void) tm;
-  return localtime(t);
+  struct tm *x = localtime(t);
+  *tm = *x;
+  return tm;
 }
 
 #endif
@@ -581,9 +583,11 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *param);
 #endif
 
 
+
+
 struct mg_timer {
-  unsigned long period_ms;  // Timer period in milliseconds
-  unsigned long expire;     // Expiration timestamp in milliseconds
+  int64_t period_ms;        // Timer period in milliseconds
+  int64_t expire;           // Expiration timestamp in milliseconds
   unsigned flags;           // Possible flags values below
 #define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
 #define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
@@ -594,10 +598,10 @@ struct mg_timer {
 
 extern struct mg_timer *g_timers;  // Global list of timers
 
-void mg_timer_init(struct mg_timer *, unsigned long ms, unsigned,
-                   void (*fn)(void *), void *);
+void mg_timer_init(struct mg_timer *, int64_t, unsigned, void (*)(void *),
+                   void *);
 void mg_timer_free(struct mg_timer *);
-void mg_timer_poll(unsigned long current_time_ms);
+void mg_timer_poll(int64_t current_time_ms);
 
 
 
@@ -619,9 +623,9 @@ void mg_unhex(const char *buf, size_t len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, size_t len);
 int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
 int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
-int64_t mg_to64(struct mg_str str);
 int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
-unsigned long mg_millis(void);
+int64_t mg_to64(struct mg_str str);
+int64_t mg_millis(void);
 
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
@@ -763,7 +767,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...);
 enum {
   MG_EV_ERROR,       // Error                        char *error_message
   MG_EV_OPEN,        // Connection created           NULL
-  MG_EV_POLL,        // mg_mgr_poll iteration        unsigned long *millis
+  MG_EV_POLL,        // mg_mgr_poll iteration        int64_t *milliseconds
   MG_EV_RESOLVE,     // Host name is resolved        NULL
   MG_EV_CONNECT,     // Connection established       NULL
   MG_EV_ACCEPT,      // Connection accepted          NULL
@@ -778,7 +782,7 @@ enum {
   MG_EV_MQTT_CMD,    // MQTT low-level command       struct mg_mqtt_message *
   MG_EV_MQTT_MSG,    // MQTT PUBLISH received        struct mg_mqtt_message *
   MG_EV_MQTT_OPEN,   // MQTT CONNACK received        int *connack_status_code
-  MG_EV_SNTP_TIME,   // SNTP time received           struct timeval *
+  MG_EV_SNTP_TIME,   // SNTP time received           int64_t *milliseconds
   MG_EV_USER,        // Starting ID for user events
 };
 
@@ -1020,7 +1024,7 @@ size_t mg_ws_wrap(struct mg_connection *, size_t len, int op);
 struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
 void mg_sntp_send(struct mg_connection *c, unsigned long utc);
-int mg_sntp_parse(const unsigned char *buf, size_t len, struct timeval *tv);
+int64_t mg_sntp_parse(const unsigned char *buf, size_t len);
 
 
 
