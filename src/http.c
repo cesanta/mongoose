@@ -378,6 +378,7 @@ char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime) {
   return buf;
 }
 
+#if MG_ENABLE_FILE
 int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                    const char *dir) {
   char offset[40] = "", name[200] = "", path[256];
@@ -403,6 +404,7 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
     }
   }
 }
+#endif
 
 static void static_cb(struct mg_connection *c, int ev, void *ev_data,
                       void *fn_data) {

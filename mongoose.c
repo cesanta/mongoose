@@ -515,7 +515,7 @@ struct mg_fs mg_fs_packed = {packed_stat,  packed_list, packed_open,
 #endif
 
 
-#if defined(FOPEN_MAX)
+#if MG_ENABLE_FILE
 static int p_stat(const char *path, size_t *size, time_t *mtime) {
 #ifdef _WIN32
   struct _stati64 st;
@@ -691,9 +691,9 @@ static size_t p_write(void *fp, const void *buf, size_t len) {
 }
 
 static size_t p_seek(void *fp, size_t offset) {
-#if (defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64) || \
-  (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || \
-  (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 600)
+#if (defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64) ||  \
+    (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || \
+    (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 600)
   fseeko((FILE *) fp, (off_t) offset, SEEK_SET);
 #else
   fseek((FILE *) fp, (long) offset, SEEK_SET);
@@ -1127,6 +1127,7 @@ char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime) {
   return buf;
 }
 
+#if MG_ENABLE_FILE
 int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                    const char *dir) {
   char offset[40] = "", name[200] = "", path[256];
@@ -1152,6 +1153,7 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
     }
   }
 }
+#endif
 
 static void static_cb(struct mg_connection *c, int ev, void *ev_data,
                       void *fn_data) {
@@ -1796,7 +1798,9 @@ void mg_iobuf_free(struct mg_iobuf *io) {
 #if MG_ENABLE_LOG
 static void mg_log_stdout(const void *buf, size_t len, void *userdata) {
   (void) userdata;
+#if MG_ENABLE_FILE
   fwrite(buf, 1, len, stdout);
+#endif
 }
 
 static const char *s_spec = "2";
@@ -4163,6 +4167,7 @@ struct mg_str mg_url_pass(const char *url) {
 #include <mach/mach_time.h>
 #endif
 
+#if MG_ENABLE_FILE
 char *mg_file_read(const char *path, size_t *sizep) {
   FILE *fp;
   char *data = NULL;
@@ -4204,6 +4209,7 @@ bool mg_file_write(const char *path, const void *buf, size_t len) {
   }
   return result;
 }
+#endif
 
 bool mg_file_printf(const char *path, const char *fmt, ...) {
   char tmp[256], *buf = tmp;
@@ -4512,8 +4518,8 @@ unsigned long mg_millis(void) {
   uint64_t ticks = mach_absolute_time();
   static mach_timebase_info_data_t timebase;
   mach_timebase_info(&timebase);
-  double ticks_to_nanos = (double)timebase.numer / timebase.denom;
-  uint64_t uptime_nanos = (uint64_t)(ticks_to_nanos * ticks);
+  double ticks_to_nanos = (double) timebase.numer / timebase.denom;
+  uint64_t uptime_nanos = (uint64_t) (ticks_to_nanos * ticks);
   return (unsigned long) (uptime_nanos / 1000000);
 #else
   struct timespec ts;

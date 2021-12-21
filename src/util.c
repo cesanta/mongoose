@@ -6,6 +6,7 @@
 #include <mach/mach_time.h>
 #endif
 
+#if MG_ENABLE_FILE
 char *mg_file_read(const char *path, size_t *sizep) {
   FILE *fp;
   char *data = NULL;
@@ -47,6 +48,7 @@ bool mg_file_write(const char *path, const void *buf, size_t len) {
   }
   return result;
 }
+#endif
 
 bool mg_file_printf(const char *path, const char *fmt, ...) {
   char tmp[256], *buf = tmp;
@@ -355,8 +357,8 @@ unsigned long mg_millis(void) {
   uint64_t ticks = mach_absolute_time();
   static mach_timebase_info_data_t timebase;
   mach_timebase_info(&timebase);
-  double ticks_to_nanos = (double)timebase.numer / timebase.denom;
-  uint64_t uptime_nanos = (uint64_t)(ticks_to_nanos * ticks);
+  double ticks_to_nanos = (double) timebase.numer / timebase.denom;
+  uint64_t uptime_nanos = (uint64_t) (ticks_to_nanos * ticks);
   return (unsigned long) (uptime_nanos / 1000000);
 #else
   struct timespec ts;

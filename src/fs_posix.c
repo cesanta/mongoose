@@ -1,6 +1,6 @@
 #include "fs.h"
 
-#if defined(FOPEN_MAX)
+#if MG_ENABLE_FILE
 static int p_stat(const char *path, size_t *size, time_t *mtime) {
 #ifdef _WIN32
   struct _stati64 st;
@@ -176,9 +176,9 @@ static size_t p_write(void *fp, const void *buf, size_t len) {
 }
 
 static size_t p_seek(void *fp, size_t offset) {
-#if (defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64) || \
-  (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || \
-  (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 600)
+#if (defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64) ||  \
+    (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || \
+    (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 600)
   fseeko((FILE *) fp, (off_t) offset, SEEK_SET);
 #else
   fseek((FILE *) fp, (long) offset, SEEK_SET);

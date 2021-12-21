@@ -19,9 +19,6 @@
 #include <FreeRTOS_Sockets.h>
 #include <task.h>
 
-#define MG_INT64_FMT "%lld"
-#define MG_DIRSEP '/'
-
 // Why FreeRTOS-TCP did not implement a clean BSD API, but its own thing
 // with FreeRTOS_ prefix, is beyond me
 #define IPPROTO_TCP FREERTOS_IPPROTO_TCP

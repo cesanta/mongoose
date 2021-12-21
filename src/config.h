@@ -68,9 +68,29 @@
 #endif
 
 #ifndef MG_PATH_MAX
+#ifdef PATH_MAX
 #define MG_PATH_MAX PATH_MAX
+#else
+#define MG_PATH_MAX 128
+#endif
 #endif
 
 #ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
 #define MG_SOCK_LISTEN_BACKLOG_SIZE 128
+#endif
+
+#ifndef MG_DIRSEP
+#define MG_DIRSEP '/'
+#endif
+
+#ifndef MG_INT64_FMT
+#define MG_INT64_FMT "%lld"
+#endif
+
+#ifndef MG_ENABLE_FILE
+#if defined(FOPEN_MAX)
+#define MG_ENABLE_FILE 1
+#else
+#define MG_ENABLE_FILE 0
+#endif
 #endif

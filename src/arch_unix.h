@@ -29,9 +29,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define MG_DIRSEP '/'
 #define MG_INT64_FMT "%" PRId64
-#undef MG_ENABLE_DIRLIST
 #define MG_ENABLE_DIRLIST 1
 
 #endif

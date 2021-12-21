@@ -15,9 +15,5 @@
 #include <time.h>
 #include <unistd.h>
 
-#define MG_DIRSEP '/'
-#define MG_INT64_FMT "%lld"
-#undef MG_PATH_MAX
 #define MG_PATH_MAX 100
-#undef MG_ENABLE_SOCKET
 #define MG_ENABLE_SOCKET 0
