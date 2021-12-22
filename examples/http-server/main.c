@@ -5,7 +5,7 @@
 #include "mongoose.h"
 
 static const char *s_debug_level = "2";
-static const char *s_root_dir = ".";  // Attention: avoid double-dots, `..` !
+static const char *s_root_dir = NULL;
 static const char *s_listening_address = "http://localhost:8000";
 static const char *s_enable_hexdump = "no";
 static const char *s_ssi_pattern = "#.html";
@@ -43,6 +43,8 @@ static void usage(const char *prog) {
 }
 
 int main(int argc, char *argv[]) {
+  char path[MG_PATH_MAX] = ".";
+  const char *root_dir = ".";
   struct mg_mgr mgr;
   struct mg_connection *c;
   int i;
@@ -50,7 +52,7 @@ int main(int argc, char *argv[]) {
   // Parse command-line flags
   for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-d") == 0) {
-      s_root_dir = argv[++i];
+      root_dir = argv[++i];
     } else if (strcmp(argv[i], "-H") == 0) {
       s_enable_hexdump = argv[++i];
     } else if (strcmp(argv[i], "-S") == 0) {
@@ -63,6 +65,10 @@ int main(int argc, char *argv[]) {
       usage(argv[0]);
     }
   }
+
+  // Root directory must not contain double dots. Make it absolute
+  realpath(root_dir, path);
+  s_root_dir = path;
 
   // Initialise stuff
   signal(SIGINT, signal_handler);
