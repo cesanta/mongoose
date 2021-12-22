@@ -2103,7 +2103,7 @@ void mg_mqtt_login(struct mg_connection *c, struct mg_mqtt_opts *opts) {
   char rnd[9], client_id[16];
   struct mg_str cid = opts->client_id;
   uint32_t total_len = 7 + 1 + 2 + 2;
-  uint8_t connflag = (uint8_t) ((opts->qos & 3) << 1);
+  uint8_t connflag = (uint8_t) ((opts->qos & 3) << 3);
 
   if (cid.len == 0) {
     mg_random(rnd, sizeof(rnd));
