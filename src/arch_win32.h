@@ -49,7 +49,6 @@ typedef enum { false = 0, true = 1 } bool;
 // Protect from calls like std::snprintf in app code
 // See https://github.com/cesanta/mongoose/issues/1047
 #ifndef __cplusplus
-#define sleep(x) Sleep(x)
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #ifndef strdup  // For MSVC with _DEBUG, see #1359
@@ -69,6 +68,9 @@ typedef int socklen_t;
 #ifndef EWOULDBLOCK
 #define EWOULDBLOCK WSAEWOULDBLOCK
 #endif
+
+#define realpath(a, b) _fullpath((b), (a), MG_PATH_MAX)
+#define sleep(x) Sleep(x)
 
 #ifndef va_copy
 #ifdef __va_copy
