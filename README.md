@@ -36,7 +36,7 @@ robust, and easy. Features include:
 - See [Case Studies](https://mongoose.ws/case-studies/) from our respected
   customers like [Schneider Electric](https://mongoose.ws/case-studies/schneider-electric/) (industrial automation), [Broadcom](https://mongoose.ws/case-studies/broadcom/) (semiconductors), [Pilz](https://mongoose.ws/case-studies/pilz/) (industrial automation), and others
 - See [Testimonials](https://mongoose.ws/testimonials/) from engineers that integrated Mongoose in their commercial products
-- We provide [commercial licensing](https://mongoose.ws/licensing/), [support](https://mongoose.ws/support/), consultancy and integration
+- We provide [Evaluation and Commercial licensing](https://mongoose.ws/licensing/), [support](https://mongoose.ws/support/), consultancy and integration
   assistance - don't hesitate to [contact us](https://mongoose.ws/contact/)
 
 
