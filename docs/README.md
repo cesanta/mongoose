@@ -1498,7 +1498,7 @@ struct mg_mqtt_opts {
   struct mg_str client_id;    // Client id
   struct mg_str will_topic;   // Will Topic
   struct mg_str will_message; // Will Message
-  uint8_t qos;                // Quality of service
+  uint8_t will_qos;           // Will message quality of service
   bool will_retain;           // Retain last will
   bool clean;                 // Use clean session, 0 or 1
   uint16_t keepalive;         // Keep-alive timer in seconds
