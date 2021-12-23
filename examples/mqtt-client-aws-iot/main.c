@@ -80,7 +80,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 int main(void) {
   struct mg_mgr mgr;
-  struct mg_mqtt_opts opts = {.qos = s_qos};
+  struct mg_mqtt_opts opts = {.clean = true};
   bool done = false;
   mg_mgr_init(&mgr);                               // Initialise event manager
   LOG(LL_INFO, ("Connecting to %s", s_url));       // Inform that we're starting

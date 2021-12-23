@@ -333,8 +333,8 @@ static void test_mqtt(void) {
   // Set params
   memset(buf, 0, sizeof(buf));
   memset(&opts, 0, sizeof(opts));
-  opts.qos = 1;
   opts.clean = true;
+  opts.will_qos = 1;
   opts.will_retain = true;
   opts.keepalive = 20;
   opts.client_id = mg_str("mg_client");

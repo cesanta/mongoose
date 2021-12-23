@@ -65,7 +65,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 // Timer function - recreate client connection if it is closed
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
-  struct mg_mqtt_opts opts = {.qos = s_qos,
+  struct mg_mqtt_opts opts = {.clean = true,
+                              .will_qos = s_qos,
                               .will_topic = mg_str(s_pub_topic),
                               .will_message = mg_str("goodbye")};
   if (s_conn == NULL) s_conn = mg_mqtt_connect(mgr, s_url, &opts, fn, NULL);

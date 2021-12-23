@@ -28,7 +28,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_WS_OPEN) {
     // WS connection established. Perform MQTT login
     LOG(LL_INFO, ("Connected to WS. Logging in to MQTT..."));
-    struct mg_mqtt_opts opts = {.qos = 1,
+    struct mg_mqtt_opts opts = {.will_qos = 1,
                                 .will_topic = mg_str(s_topic),
                                 .will_message = mg_str("goodbye")};
     size_t len = c->send.len;
