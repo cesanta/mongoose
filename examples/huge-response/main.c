@@ -19,8 +19,7 @@ static const char *s_root_dir = "web_root";
 
 #define DATA_SIZE 10000         // Total number of elements
 #define CHUNK_SIZE 1000         // Max number returned in one API call
-static int s_data[DATA_SIZE];   // Simulate some complex big dataMax number
-                                // returned in one API call
+static int s_data[DATA_SIZE];   // Simulate some complex big data
 static unsigned s_version = 0;  // Data "version"
 
 static double getparam(struct mg_http_message *hm, const char *json_path) {
