@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>example</title>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      #container { margin-right: auto; margin-left: auto; max-width: 480px; }
+      #info { background: #e0f0f0; border-radius: .5em; padding: 2em; margin-bottom: 1em; }
+      #result { margin-top: 1em; }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <div id="info">
+        On devices with limited RAM, it is important to limit the response size
+        of API calls. This example demonstrates how to fetch a large
+        data in smaller chunks, and guarantee its integrity.
+        Data gets returned in a series of request/response transactions,
+        where each response is small enough to fit into available device RAM.
+        <br/><br/>
+        Data integrity is implemented by versioning.
+        The idea is that the first response includes the current "version" of the
+        data, and that version is passed to all subsequent requests.
+        If data version changes in the middle of the request series,
+        client fails with 'wrong version' error.
+      </div>
+      <button id="btn">fetch data</button>
+      <div id="result"></div>
+    </div>
+  </body>
+  <script>
+    const getchunk = (start, version) =>
+      fetch('/api/data', {method: 'POST', body:JSON.stringify({start, version})})
+        .then(r => r.json());
+    document.getElementById('btn').onclick = function() {
+      var data = [], version = 0;
+      const load = offset => getchunk(offset, version)
+        .then(r => {
+          // console.log(r);
+          if (r.error) {
+            document.getElementById('result').innerText = 'Error: ' + r.error;
+          } else {
+            version = r.version;
+            data = data.concat(r.data);
+            if (r.data.length == 0) {
+              document.getElementById('result').innerText = 'Version: ' +
+                version + ', data: \n' +
+                JSON.stringify(data, null, 2);
+            } else {
+              load(offset + r.data.length, version);
+            }
+          }
+        });
+      load(0);
+    };
+  </script>
+</html>
