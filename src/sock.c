@@ -99,6 +99,36 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
   return c;
 }
 
+static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
+  LOG(n > 0 ? LL_VERBOSE_DEBUG : LL_DEBUG,
+      ("%-3lu %d%d%d%d%d%d%d%d%d%d%d%d%d%d %d:%d %ld err %d", c->id,
+       c->is_listening, c->is_client, c->is_accepted, c->is_resolving,
+       c->is_connecting, c->is_tls, c->is_tls_hs, c->is_udp, c->is_websocket,
+       c->is_hexdumping, c->is_draining, c->is_closing, c->is_readable,
+       c->is_writable, (int) c->send.len, (int) c->recv.len, n, MG_SOCK_ERRNO));
+  if (n == 0) {
+    // Do nothing
+  } else if (n < 0) {
+    c->is_closing = 1;  // Error, or normal termination
+  } else if (n > 0) {
+    if (c->is_hexdumping) {
+      char *s = mg_hexdump(buf, (size_t) n);
+      LOG(LL_INFO,
+          ("\n-- %lu %s %s %ld\n%s", c->id, c->label, r ? "<-" : "->", n, s));
+      free(s);
+    }
+    if (r) {
+      struct mg_str evd = mg_str_n(buf, (size_t) n);
+      c->recv.len += (size_t) n;
+      mg_call(c, MG_EV_READ, &evd);
+    } else {
+      mg_iobuf_del(&c->send, 0, (size_t) n);
+      if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
+      mg_call(c, MG_EV_WRITE, &n);
+    }
+  }
+}
+
 static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
   long n;
 #if !defined(__APPLE__)
@@ -117,8 +147,13 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
-  return c->is_udp ? mg_sock_send(c, buf, len) > 0
-                   : mg_iobuf_add(&c->send, c->send.len, buf, len, MG_IO_SIZE);
+  if (c->is_udp) {
+    long n = mg_sock_send(c, buf, len);
+    iolog(c, (char *) buf, n, false);
+    return n > 0;
+  } else {
+    return mg_iobuf_add(&c->send, c->send.len, buf, len, MG_IO_SIZE);
+  }
 }
 
 static void mg_set_non_blocking_mode(SOCKET fd) {
@@ -228,26 +263,7 @@ static long read_conn(struct mg_connection *c) {
     char *buf = (char *) &c->recv.buf[c->recv.len];
     size_t len = c->recv.size - c->recv.len;
     n = c->is_tls ? mg_tls_recv(c, buf, len) : mg_sock_recv(c, buf, len);
-    LOG(n > 0 ? LL_VERBOSE_DEBUG : LL_DEBUG,
-        ("%-3lu %d%d%d%d%d%d%d%d%d%d%d%d%d%d %7ld %ld/%ld err %d", c->id,
-         c->is_listening, c->is_client, c->is_accepted, c->is_resolving,
-         c->is_connecting, c->is_tls, c->is_tls_hs, c->is_udp, c->is_websocket,
-         c->is_hexdumping, c->is_draining, c->is_closing, c->is_readable,
-         c->is_writable, (long) c->recv.len, n, (long) len, MG_SOCK_ERRNO));
-    if (n == 0) {
-      // Do nothing
-    } else if (n < 0) {
-      c->is_closing = 1;  // Error, or normal termination
-    } else if (n > 0) {
-      struct mg_str evd = mg_str_n(buf, (size_t) n);
-      if (c->is_hexdumping) {
-        char *s = mg_hexdump(buf, (size_t) n);
-        LOG(LL_INFO, ("\n-- %lu %s %s %ld\n%s", c->id, c->label, "<-", n, s));
-        free(s);
-      }
-      c->recv.len += (size_t) n;
-      mg_call(c, MG_EV_READ, &evd);
-    }
+    iolog(c, buf, n, true);
   }
   return n;
 }
@@ -256,30 +272,7 @@ static void write_conn(struct mg_connection *c) {
   char *buf = (char *) c->send.buf;
   size_t len = c->send.len;
   long n = c->is_tls ? mg_tls_send(c, buf, len) : mg_sock_send(c, buf, len);
-
-  LOG(n > 0 ? LL_VERBOSE_DEBUG : LL_DEBUG,
-      ("%-3lu %d%d%d%d%d%d%d%d%d%d%d%d%d%d %7ld %ld err %d", c->id,
-       c->is_listening, c->is_client, c->is_accepted, c->is_resolving,
-       c->is_connecting, c->is_tls, c->is_tls_hs, c->is_udp, c->is_websocket,
-       c->is_hexdumping, c->is_draining, c->is_closing, c->is_readable,
-       c->is_writable, (long) c->send.len, n, MG_SOCK_ERRNO));
-
-  if (n == 0) {
-    // Do nothing
-  } else if (n < 0) {
-    c->is_closing = 1;  // Error, or normal termination
-  } else if (n > 0) {
-    // Hexdump before deleting
-    if (c->is_hexdumping) {
-      char *s = mg_hexdump(buf, (size_t) n);
-      LOG(LL_INFO, ("\n-- %lu %s %s %ld\n%s", c->id, c->label, "<-", n, s));
-      free(s);
-    }
-    mg_iobuf_del(&c->send, 0, (size_t) n);
-    if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
-    mg_call(c, MG_EV_WRITE, &n);
-    // if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
-  }
+  iolog(c, buf, n, false);
 }
 
 static void close_conn(struct mg_connection *c) {

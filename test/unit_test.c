@@ -1493,6 +1493,8 @@ static void u1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_CONNECT) {
     ((int *) fn_data)[0] += 1;
     mg_send(c, "hi", 2);
+  } else if (ev == MG_EV_WRITE) {
+    ((int *) fn_data)[0] += 100;
   } else if (ev == MG_EV_READ) {
     ((int *) fn_data)[0] += 10;
     mg_iobuf_free(&c->recv);
@@ -1509,9 +1511,10 @@ static void test_udp(void) {
   mg_connect(&mgr, url, u1, (void *) &done);
   for (i = 0; i < 5; i++) mg_mgr_poll(&mgr, 1);
   // LOG(LL_INFO, ("%d", done));
-  ASSERT(done == 11);
+  ASSERT(done == 111);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
+  exit(0);
 }
 
 static void test_check_ip_acl(void) {
