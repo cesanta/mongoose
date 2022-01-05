@@ -112,9 +112,18 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
     c->is_closing = 1;  // Error, or normal termination
   } else if (n > 0) {
     if (c->is_hexdumping) {
+      union usa usa;
+      char t1[50] = "", t2[50] = "";
+      socklen_t slen = sizeof(usa.sin);
       char *s = mg_hexdump(buf, (size_t) n);
-      LOG(LL_INFO,
-          ("\n-- %lu %s %s %ld\n%s", c->id, c->label, r ? "<-" : "->", n, s));
+      struct mg_addr a;
+      memset(&usa, 0, sizeof(usa));
+      memset(&a, 0, sizeof(a));
+      getsockname(FD(c), &usa.sa, &slen);
+      tomgaddr(&usa, &a, c->peer.is_ip6);
+      LOG(LL_INFO, ("\n-- %lu %s %s %s %s %ld\n%s", c->id,
+                    mg_addr_to_str(&a, t1, sizeof(t1)), r ? "<-" : "->",
+                    mg_addr_to_str(&c->peer, t2, sizeof(t2)), c->label, n, s));
       free(s);
     }
     if (r) {
