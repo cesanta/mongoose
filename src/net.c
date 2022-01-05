@@ -19,16 +19,12 @@ int mg_printf(struct mg_connection *c, const char *fmt, ...) {
   return len;
 }
 
-char *mg_addr_to_str(struct mg_addr *a, char *buf, size_t len) {
+char *mg_straddr(struct mg_addr *a, char *buf, size_t len) {
   char tmp[30];
   const char *fmt = a->is_ip6 ? "[%s]:%d" : "%s:%d";
   mg_ntoa(a, tmp, sizeof(tmp));
   snprintf(buf, len, fmt, tmp, (int) mg_ntohs(a->port));
   return buf;
-}
-
-char *mg_straddr(struct mg_connection *c, char *buf, size_t len) {
-  return mg_addr_to_str(&c->peer, buf, len);
 }
 
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {

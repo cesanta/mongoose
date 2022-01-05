@@ -2375,16 +2375,12 @@ int mg_printf(struct mg_connection *c, const char *fmt, ...) {
   return len;
 }
 
-char *mg_addr_to_str(struct mg_addr *a, char *buf, size_t len) {
+char *mg_straddr(struct mg_addr *a, char *buf, size_t len) {
   char tmp[30];
   const char *fmt = a->is_ip6 ? "[%s]:%d" : "%s:%d";
   mg_ntoa(a, tmp, sizeof(tmp));
   snprintf(buf, len, fmt, tmp, (int) mg_ntohs(a->port));
   return buf;
-}
-
-char *mg_straddr(struct mg_connection *c, char *buf, size_t len) {
-  return mg_addr_to_str(&c->peer, buf, len);
 }
 
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {
@@ -2985,8 +2981,8 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       getsockname(FD(c), &usa.sa, &slen);
       tomgaddr(&usa, &a, c->peer.is_ip6);
       LOG(LL_INFO, ("\n-- %lu %s %s %s %s %ld\n%s", c->id,
-                    mg_addr_to_str(&a, t1, sizeof(t1)), r ? "<-" : "->",
-                    mg_addr_to_str(&c->peer, t2, sizeof(t2)), c->label, n, s));
+                    mg_straddr(&a, t1, sizeof(t1)), r ? "<-" : "->",
+                    mg_straddr(&c->peer, t2, sizeof(t2)), c->label, n, s));
       free(s);
       (void) t1, (void) t2;  // Silence warnings for MG_ENABLE_LOG=0
     }
@@ -3200,10 +3196,10 @@ static void setsockopts(struct mg_connection *c) {
 }
 
 void mg_connect_resolved(struct mg_connection *c) {
-  char buf[40];
+  // char buf[40];
   int type = c->is_udp ? SOCK_DGRAM : SOCK_STREAM;
   int rc, af = c->peer.is_ip6 ? AF_INET6 : AF_INET;
-  mg_straddr(c, buf, sizeof(buf));
+  // mg_straddr(&c->peer, buf, sizeof(buf));
   c->fd = S2PTR(socket(af, type, 0));
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
@@ -3266,7 +3262,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   } else {
     char buf[40];
     tomgaddr(&usa, &c->peer, sa_len != sizeof(usa.sin));
-    mg_straddr(c, buf, sizeof(buf));
+    mg_straddr(&c->peer, buf, sizeof(buf));
     LOG(LL_DEBUG, ("%lu accepted %s", c->id, buf));
     mg_set_non_blocking_mode(FD(c));
     setsockopts(c);
@@ -3428,8 +3424,9 @@ static void connect_conn(struct mg_connection *c) {
   if (rc == EAGAIN || rc == EWOULDBLOCK) rc = 0;
   c->is_connecting = 0;
   if (rc) {
-    char buf[40];
-    mg_error(c, "error connecting to %s", mg_straddr(c, buf, sizeof(buf)));
+    char buf[50];
+    mg_error(c, "error connecting to %s",
+             mg_straddr(&c->peer, buf, sizeof(buf)));
   } else {
     if (c->is_tls_hs) mg_tls_handshake(c);
     mg_call(c, MG_EV_CONNECT, NULL);

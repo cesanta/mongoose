@@ -628,13 +628,13 @@ void foo(struct mg_connection *c, const char *fmt, ...) {
 ### mg\_straddr
 
 ```c
-char *mg_straddr(struct mg_connection *c, char *buf, size_t len);
+char *mg_straddr(struct mg_addr *addr, char *buf, size_t len);
 ```
 
 Write stringified IP address, associated with given connection to `buf` (maximum size `len`)
 
 Parameters:
-- `c` - A connection pointer
+- `addr` - A address pointer
 - `buf` - A pointer to a buffer that will hold stringified address
 - `len` - A buffer size
 
@@ -643,8 +643,8 @@ Return value: `buf` value
 Usage example:
 
 ```c
-char buf[1024];
-mg_straddr(c, buf, sizeof(buf)); // `buf` is now IP address string, like "127.0.0.1:8080"
+char buf[100];
+LOG(LL_INFO, ("%s", mg_straddr(&c->peer, buf, sizeof(buf))));
 ```
 
 ### mg\_mkpipe()
