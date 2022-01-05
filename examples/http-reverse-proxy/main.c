@@ -33,10 +33,13 @@ static void forward_request(struct mg_http_message *hm,
 }
 
 static void fn2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_READ && fn_data != NULL) {
+  struct mg_connection *c2 = fn_data;
+  if (ev == MG_EV_READ) {
     // All incoming data from the backend, forward to the client
-    mg_send((struct mg_connection *) fn_data, c->recv.buf, c->recv.len);
+    if (c2 != NULL) mg_send(c2, c->recv.buf, c->recv.len);
     mg_iobuf_del(&c->recv, 0, c->recv.len);
+  } else if (ev == MG_EV_CLOSE) {
+    if (c2 != NULL) c2->fn_data = NULL;
   }
   (void) ev_data;
 }
@@ -57,11 +60,11 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       }
       c->fn_data = c2;
       forward_request(hm, c2);
-      // c2->is_hexdumping = 1;
+      c2->is_hexdumping = 1;
     }
   } else if (ev == MG_EV_CLOSE) {
     if (c2 != NULL) c2->is_closing = 1;
-    c->fn_data = NULL;
+    if (c2 != NULL) c2->fn_data = NULL;
   }
 }
 
