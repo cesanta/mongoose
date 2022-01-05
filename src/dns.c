@@ -231,7 +231,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     dnsc->c = mg_connect(c->mgr, dnsc->url, NULL, NULL);
     if (dnsc->c != NULL) {
       dnsc->c->pfn = dns_cb;
-      snprintf(dnsc->c->label, sizeof(dnsc->c->label), "%s", "DNS");
+      // snprintf(dnsc->c->label, sizeof(dnsc->c->label), "%s", "DNS");
       // dnsc->c->is_hexdumping = 1;
     }
   }
