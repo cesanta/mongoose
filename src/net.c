@@ -34,7 +34,7 @@ char *mg_straddr(struct mg_connection *c, char *buf, size_t len) {
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {
   if (addr->is_ip6) {
     uint16_t *p = (uint16_t *) addr->ip6;
-    snprintf(buf, len, "%x:%x:%x:%x:%x:%x:%x:%x", mg_htons(p[0]),
+    snprintf(buf, len, "%hx:%hx:%hx:%hx:%hx:%hx:%hx:%hx", mg_htons(p[0]),
              mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]), mg_htons(p[4]),
              mg_htons(p[5]), mg_htons(p[6]), mg_htons(p[7]));
   } else {

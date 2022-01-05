@@ -2390,7 +2390,7 @@ char *mg_straddr(struct mg_connection *c, char *buf, size_t len) {
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {
   if (addr->is_ip6) {
     uint16_t *p = (uint16_t *) addr->ip6;
-    snprintf(buf, len, "%x:%x:%x:%x:%x:%x:%x:%x", mg_htons(p[0]),
+    snprintf(buf, len, "%hx:%hx:%hx:%hx:%hx:%hx:%hx:%hx", mg_htons(p[0]),
              mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]), mg_htons(p[4]),
              mg_htons(p[5]), mg_htons(p[6]), mg_htons(p[7]));
   } else {
@@ -2988,6 +2988,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
                     mg_addr_to_str(&a, t1, sizeof(t1)), r ? "<-" : "->",
                     mg_addr_to_str(&c->peer, t2, sizeof(t2)), c->label, n, s));
       free(s);
+      (void) t1, (void) t2;  // Silence warnings for MG_ENABLE_LOG=0
     }
     if (r) {
       struct mg_str evd = mg_str_n(buf, (size_t) n);

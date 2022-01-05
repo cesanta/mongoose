@@ -125,6 +125,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
                     mg_addr_to_str(&a, t1, sizeof(t1)), r ? "<-" : "->",
                     mg_addr_to_str(&c->peer, t2, sizeof(t2)), c->label, n, s));
       free(s);
+      (void) t1, (void) t2;  // Silence warnings for MG_ENABLE_LOG=0
     }
     if (r) {
       struct mg_str evd = mg_str_n(buf, (size_t) n);

@@ -1514,7 +1514,6 @@ static void test_udp(void) {
   ASSERT(done == 111);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
-  exit(0);
 }
 
 static void test_check_ip_acl(void) {
