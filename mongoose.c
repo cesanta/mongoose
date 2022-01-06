@@ -3203,11 +3203,14 @@ void mg_connect_resolved(struct mg_connection *c) {
   c->fd = S2PTR(socket(af, type, 0));
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
+  } else if (c->is_udp) {
+    mg_call(c, MG_EV_RESOLVE, NULL);
+    mg_call(c, MG_EV_CONNECT, NULL);
   } else {
     union usa usa;
     socklen_t slen = tousa(&c->peer, &usa);
-    if (c->is_udp == 0) mg_set_non_blocking_mode(FD(c));
-    if (c->is_udp == 0) setsockopts(c);
+    mg_set_non_blocking_mode(FD(c));
+    setsockopts(c);
     mg_call(c, MG_EV_RESOLVE, NULL);
     if ((rc = connect(FD(c), &usa.sa, slen)) == 0) {
       mg_call(c, MG_EV_CONNECT, NULL);
