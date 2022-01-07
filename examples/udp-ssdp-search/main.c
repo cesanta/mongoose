@@ -6,17 +6,25 @@
 static const char *s_ssdp_url = "udp://239.255.255.250:1900";
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_OPEN) c->is_hexdumping = 1;
   LOG(LL_DEBUG, ("%p got event: %d %p %p", c, ev, ev_data, fn_data));
+  if (ev == MG_EV_OPEN) {
+    c->is_hexdumping = 1;
+  } else if (ev == MG_EV_RESOLVE) {
+    // c->peer gets populated with multicast address. Store it in c->label
+    memcpy(c->label, &c->peer, sizeof(c->peer));
+  } else if (ev == MG_EV_READ) {
+    // Each response to the SSDP socket will change c->peer.
+    // We can now do mg_printf(c, "haha"); to respond back to the remote side.
+    // But in our case, we should restore the multicast address in order
+    // to have next search to go to the multicast address
+    memcpy(&c->peer, c->label, sizeof(c->peer));
+  }
 }
 
 static void tfn(void *param) {
   struct mg_connection *c = param;
   if (c == NULL) return;
   LOG(LL_INFO, ("Sending M-SEARCH"));
-  // Each response to the SSDP socket will change c->peer, so re-initialise
-  // c->peer to the multicast address before each search request
-  mg_resolve(c, s_ssdp_url);
   mg_printf(c, "%s",
             "M-SEARCH * HTTP/1.1\r\n"
             "HOST: 239.255.255.250:1900\r\n"
