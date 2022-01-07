@@ -2,6 +2,7 @@
 #include "log.h"
 #include "str.h"
 #include "timer.h"
+#include "url.h"
 #include "util.h"
 
 struct dns_data {
