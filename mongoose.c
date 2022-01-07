@@ -3003,16 +3003,11 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
 
 static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
   long n;
-#if !defined(__APPLE__)
-  // See #1338, #1382. On Windows, UDP send() can fail despite connected.
-  // Use sendto() instead. But not on Mac - we'll get EISCONN
   if (c->is_udp) {
     union usa usa;
     socklen_t slen = tousa(&c->peer, &usa);
     n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
-  } else
-#endif
-  {
+  } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
