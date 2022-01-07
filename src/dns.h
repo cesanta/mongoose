@@ -31,7 +31,7 @@ struct mg_dns_rr {
   uint16_t alen;    // Address length
 };
 
-void mg_resolve(struct mg_connection *, struct mg_str *, int);
+void mg_resolve(struct mg_connection *, const char *url);
 void mg_resolve_cancel(struct mg_connection *);
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
 size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,

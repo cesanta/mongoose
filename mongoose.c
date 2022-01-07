@@ -366,13 +366,15 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
   }
 }
 
-void mg_resolve(struct mg_connection *c, struct mg_str *name, int ms) {
-  if (mg_aton(*name, &c->peer)) {
-    // name is an IP address, do not fire name resolution
+void mg_resolve(struct mg_connection *c, const char *url) {
+  struct mg_str host = mg_url_host(url);
+  c->peer.port = mg_htons(mg_url_port(url));
+  if (mg_aton(host, &c->peer)) {
+    // host is an IP address, do not fire name resolution
     mg_connect_resolved(c);
   } else {
-    // name is not an IP, send DNS resolution request
-    mg_sendnsreq(c, name, ms, &c->mgr->dns4, false);
+    // host is not an IP, send DNS resolution request
+    mg_sendnsreq(c, &host, c->mgr->dnstimeout, &c->mgr->dns4, false);
   }
 }
 
@@ -3228,15 +3230,13 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
   if ((c = alloc_conn(mgr, 1, INVALID_SOCKET)) == NULL) {
     LOG(LL_ERROR, ("OOM"));
   } else {
-    struct mg_str host = mg_url_host(url);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->is_udp = (strncmp(url, "udp:", 4) == 0);
-    c->peer.port = mg_htons(mg_url_port(url));
     c->fn = fn;
     c->fn_data = fn_data;
     LOG(LL_DEBUG, ("%lu -> %s", c->id, url));
     mg_call(c, MG_EV_OPEN, NULL);
-    mg_resolve(c, &host, mgr->dnstimeout);
+    mg_resolve(c, url);
   }
   return c;
 }
