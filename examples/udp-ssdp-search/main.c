@@ -14,6 +14,9 @@ static void tfn(void *param) {
   struct mg_connection *c = param;
   if (c == NULL) return;
   LOG(LL_INFO, ("Sending M-SEARCH"));
+  // Each response to the SSDP socket will change c->peer, so re-initialise
+  // c->peer to the multicast address before each search request
+  mg_resolve(c, s_ssdp_url);
   mg_printf(c, "%s",
             "M-SEARCH * HTTP/1.1\r\n"
             "HOST: 239.255.255.250:1900\r\n"
