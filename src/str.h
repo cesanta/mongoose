@@ -1,7 +1,6 @@
 #pragma once
 
-#include <ctype.h>
-#include <string.h>
+#include "arch.h"
 
 struct mg_str {
   const char *ptr;  // Pointer to string data

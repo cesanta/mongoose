@@ -539,8 +539,7 @@ static __inline struct tm *localtime_r(time_t *t, struct tm *tm) {
 #endif
 
 
-#include <ctype.h>
-#include <string.h>
+
 
 struct mg_str {
   const char *ptr;  // Pointer to string data
