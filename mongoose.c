@@ -519,6 +519,15 @@ struct mg_fs mg_fs_packed = {packed_stat,  packed_list, packed_open,
 
 
 #if MG_ENABLE_FILE
+
+#ifndef MG_STAT_STRUCT
+#define MG_STAT_STRUCT stat
+#endif
+
+#ifndef MG_STAT_FUNC
+#define MG_STAT_FUNC stat
+#endif
+
 static int p_stat(const char *path, size_t *size, time_t *mtime) {
 #if !defined(S_ISDIR)
   LOG(LL_ERROR, ("stat() API is not supported. %p %p %p", path, size, mtime));
@@ -530,8 +539,8 @@ static int p_stat(const char *path, size_t *size, time_t *mtime) {
   MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
   if (_wstati64(tmp, &st) != 0) return 0;
 #else
-  struct stat st;
-  if (stat(path, &st) != 0) return 0;
+  struct MG_STAT_STRUCT st;
+  if (MG_STAT_FUNC(path, &st) != 0) return 0;
 #endif
   if (size) *size = (size_t) st.st_size;
   if (mtime) *mtime = st.st_mtime;
