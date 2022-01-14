@@ -70,7 +70,7 @@ void mg_random(void *buf, size_t len) {
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
   done = true;
 #elif MG_ARCH == MG_ARCH_WIN32
-#elif MG_ARCH_UNIX
+#elif MG_ARCH == MG_ARCH_UNIX
   FILE *fp = fopen("/dev/urandom", "rb");
   if (fp != NULL) {
     if (fread(buf, 1, len, fp) == len) done = true;
