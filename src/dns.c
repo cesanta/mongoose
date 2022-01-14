@@ -183,6 +183,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
   } else if (ev == MG_EV_CLOSE) {
     for (d = s_reqs; d != NULL; d = tmp) {
       tmp = d->next;
+      mg_error(d->c, "DNS error");
       mg_dns_free(d);
     }
   }

@@ -361,7 +361,9 @@ void mg_connect_resolved(struct mg_connection *c) {
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
                                  mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = NULL;
-  if ((c = alloc_conn(mgr, 1, INVALID_SOCKET)) == NULL) {
+  if (url == NULL || url[0] == '\0') {
+    LOG(LL_ERROR, ("null url"));
+  } else if ((c = alloc_conn(mgr, 1, INVALID_SOCKET)) == NULL) {
     LOG(LL_ERROR, ("OOM"));
   } else {
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
