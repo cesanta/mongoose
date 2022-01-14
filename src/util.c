@@ -46,7 +46,6 @@ bool mg_file_write(const char *path, const void *buf, size_t len) {
   }
   return result;
 }
-#endif
 
 bool mg_file_printf(const char *path, const char *fmt, ...) {
   char tmp[256], *buf = tmp;
@@ -60,6 +59,7 @@ bool mg_file_printf(const char *path, const char *fmt, ...) {
   if (buf != tmp) free(buf);
   return result;
 }
+#endif
 
 #if MG_ENABLE_CUSTOM_RANDOM
 #else
