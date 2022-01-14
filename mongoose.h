@@ -168,17 +168,16 @@ static __inline struct tm *localtime_r(const time_t *t, struct tm *tm) {
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
 #if defined(__GNUC__)
 #include <sys/stat.h>
 #include <sys/time.h>
 #else
-typedef long suseconds_t;
 struct timeval {
   time_t tv_sec;
-  suseconds_t tv_usec;
+  long tv_usec;
 };
 #endif
 
@@ -278,10 +277,9 @@ static inline void *mg_calloc(int cnt, size_t size) {
 
 #if !defined(__GNUC__)
 // copied from GCC on ARM; for some reason useconds are signed
-typedef long suseconds_t;
 struct timeval {
   time_t tv_sec;
-  suseconds_t tv_usec;
+  long tv_usec;
 };
 #endif
 
@@ -395,7 +393,6 @@ typedef enum { false = 0, true = 1 } bool;
 #endif
 #endif
 
-typedef unsigned suseconds_t;
 typedef int socklen_t;
 #define MG_DIRSEP '\\'
 #ifndef PATH_MAX

@@ -61,10 +61,9 @@ static inline void *mg_calloc(int cnt, size_t size) {
 
 #if !defined(__GNUC__)
 // copied from GCC on ARM; for some reason useconds are signed
-typedef long suseconds_t;
 struct timeval {
   time_t tv_sec;
-  suseconds_t tv_usec;
+  long tv_usec;
 };
 #endif
 

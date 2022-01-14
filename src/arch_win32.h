@@ -56,7 +56,6 @@ typedef enum { false = 0, true = 1 } bool;
 #endif
 #endif
 
-typedef unsigned suseconds_t;
 typedef int socklen_t;
 #define MG_DIRSEP '\\'
 #ifndef PATH_MAX

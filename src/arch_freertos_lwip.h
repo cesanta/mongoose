@@ -5,17 +5,16 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
 #if defined(__GNUC__)
 #include <sys/stat.h>
 #include <sys/time.h>
 #else
-typedef long suseconds_t;
 struct timeval {
   time_t tv_sec;
-  suseconds_t tv_usec;
+  long tv_usec;
 };
 #endif
 
