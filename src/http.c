@@ -919,7 +919,7 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
 static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_READ || ev == MG_EV_CLOSE) {
     struct mg_http_message hm;
-    for (;;) {
+    while (c->recv.buf != NULL && c->recv.len > 0) {
       int n = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
       bool is_chunked = n > 0 && mg_is_chunked(&hm);
       if (ev == MG_EV_CLOSE) {
