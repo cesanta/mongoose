@@ -7,8 +7,10 @@ jobs:
     - uses: actions/checkout@v2
     - name: Install packages
       run: sudo apt-get install libmbedtls-dev
-    - name: make
-      run: make test test++ IPV6=0
+    - name: gcc
+      run: make test test++ IPV6=0 CC=gcc
+    - name: clang
+      run: make test test++ IPV6=0 CC=clang
     - name: openssl
       run: make test SSL=OPENSSL IPV6=0
     - name: unamalgamated
