@@ -59,7 +59,7 @@ fuzz: fuzzer
 	$(RUN) ./fuzzer
 
 # make CC=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
-test: CFLAGS += -DMG_ENABLE_IPV6=$(IPV6) -fsanitize=address#,undefined
+test: CFLAGS += -DMG_ENABLE_IPV6=$(IPV6) -fsanitize=address,undefined
 test: mongoose.h  Makefile $(SRCS)
 	$(CC) $(SRCS) $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test

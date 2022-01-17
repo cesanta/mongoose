@@ -679,7 +679,6 @@ static void test_http_server(void) {
     char *p;
     remove("uploaded.txt");
     ASSERT((p = mg_file_read("uploaded.txt", NULL)) == NULL);
-
     ASSERT(fetch(&mgr, buf, url,
                  "POST /upload HTTP/1.0\n"
                  "Content-Length: 1\n\nx") == 400);
@@ -694,6 +693,21 @@ static void test_http_server(void) {
                  "\r\n\nworld") == 200);
     ASSERT((p = mg_file_read("uploaded.txt", NULL)) != NULL);
     ASSERT(strcmp(p, "hello\nworld") == 0);
+    free(p);
+    remove("uploaded.txt");
+  }
+
+  {
+    // Test upload directory traversal
+    char *p;
+    remove("uploaded.txt");
+    ASSERT((p = mg_file_read("uploaded.txt", NULL)) == NULL);
+    ASSERT(fetch(&mgr, buf, url,
+                 "POST /upload?name=../uploaded.txt HTTP/1.0\r\n"
+                 "Content-Length: 5\r\n"
+                 "\r\nhello") == 200);
+    ASSERT((p = mg_file_read("uploaded.txt", NULL)) != NULL);
+    ASSERT(strcmp(p, "hello") == 0);
     free(p);
     remove("uploaded.txt");
   }
