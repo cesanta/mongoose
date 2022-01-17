@@ -409,6 +409,31 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 }
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/fs.c"
+#endif
+
+
+struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
+  struct mg_fd *fd = (struct mg_fd *) calloc(1, sizeof(*fd));
+  if (fd != NULL) {
+    fd->fd = fs->open(path, flags);
+    fd->fs = fs;
+    if (fd->fd == NULL) {
+      free(fd);
+      fd = NULL;
+    }
+  }
+  return fd;
+}
+
+void mg_fs_close(struct mg_fd *fd) {
+  if (fd != NULL) {
+    fd->fs->close(fd->fd);
+    free(fd);
+  }
+}
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/fs_packed.c"
 #endif
 
@@ -470,24 +495,20 @@ static void packed_list(const char *dir, void (*fn)(const char *, void *),
   }
 }
 
-static struct mg_fd *packed_open(const char *path, int flags) {
+static void *packed_open(const char *path, int flags) {
   size_t size = 0;
   const char *data = mg_unpack(path, &size, NULL);
   struct packed_file *fp = NULL;
-  struct mg_fd *fd = NULL;
   if (data == NULL) return NULL;
   if (flags & MG_FS_WRITE) return NULL;
   fp = (struct packed_file *) calloc(1, sizeof(*fp));
-  fd = (struct mg_fd *) calloc(1, sizeof(*fd));
   fp->size = size;
   fp->data = data;
-  fd->fd = fp;
-  fd->fs = &mg_fs_packed;
-  return fd;
+  return (void *) fp;
 }
 
-static void packed_close(struct mg_fd *fd) {
-  if (fd) free(fd->fd), free(fd);
+static void packed_close(void *fp) {
+  if (fp != NULL) free(fp);
 }
 
 static size_t packed_read(void *fd, void *buf, size_t len) {
@@ -674,30 +695,23 @@ static void p_list(const char *dir, void (*fn)(const char *, void *),
 #endif
 }
 
-static struct mg_fd *p_open(const char *path, int flags) {
+static void *p_open(const char *path, int flags) {
   const char *mode = flags == (MG_FS_READ | MG_FS_WRITE) ? "r+b"
                      : flags & MG_FS_READ                ? "rb"
                      : flags & MG_FS_WRITE               ? "wb"
                                                          : "";
-  void *fp = NULL;
-  struct mg_fd *fd = NULL;
 #ifdef _WIN32
   wchar_t b1[PATH_MAX], b2[10];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
   MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
-  fp = (void *) _wfopen(b1, b2);
+  return (void *) _wfopen(b1, b2);
 #else
-  fp = (void *) fopen(path, mode);
+  return (void *) fopen(path, mode);
 #endif
-  if (fp == NULL) return NULL;
-  fd = (struct mg_fd *) calloc(1, sizeof(*fd));
-  fd->fd = fp;
-  fd->fs = &mg_fs_posix;
-  return fd;
 }
 
-static void p_close(struct mg_fd *fd) {
-  if (fd != NULL) fclose((FILE *) fd->fd), free(fd);
+static void p_close(void *fp) {
+  if (fp != NULL) fclose((FILE *) fp);
 }
 
 static size_t p_read(void *fp, void *buf, size_t len) {
@@ -1129,8 +1143,7 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
 
 static void http_cb(struct mg_connection *, int, void *, void *);
 static void restore_http_cb(struct mg_connection *c) {
-  struct mg_fd *fd = (struct mg_fd *) c->pfn_data;
-  if (fd != NULL) fd->fs->close(fd);
+  mg_fs_close((struct mg_fd *) c->pfn_data);
   c->pfn_data = NULL;
   c->pfn = http_cb;
 }
@@ -1243,7 +1256,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path, struct mg_http_serve_opts *opts) {
   char etag[64];
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  struct mg_fd *fd = fs->open(path, MG_FS_READ);
+  struct mg_fd *fd = mg_fs_open(fs, path, MG_FS_READ);
   size_t size = 0;
   time_t mtime = 0;
   struct mg_str *inm = NULL;
@@ -1251,12 +1264,12 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   if (fd == NULL || fs->stat(path, &size, &mtime) == 0) {
     LOG(LL_DEBUG, ("404 [%s] %p", path, (void *) fd));
     mg_http_reply(c, 404, "", "%s", "Not found\n");
-    fs->close(fd);
+    mg_fs_close(fd);
     // NOTE: mg_http_etag() call should go first!
   } else if (mg_http_etag(etag, sizeof(etag), size, mtime) != NULL &&
              (inm = mg_http_get_header(hm, "If-None-Match")) != NULL &&
              mg_vcasecmp(inm, etag) == 0) {
-    fs->close(fd);
+    mg_fs_close(fd);
     mg_printf(c, "HTTP/1.1 304 Not Modified\r\nContent-Length: 0\r\n\r\n");
   } else {
     int n, status = 200;
@@ -1292,7 +1305,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               etag, cl, range, opts->extra_headers ? opts->extra_headers : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       c->is_draining = 1;
-      fs->close(fd);
+      mg_fs_close(fd);
     } else {
       c->pfn = static_cb;
       c->pfn_data = fd;

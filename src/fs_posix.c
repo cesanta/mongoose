@@ -155,30 +155,23 @@ static void p_list(const char *dir, void (*fn)(const char *, void *),
 #endif
 }
 
-static struct mg_fd *p_open(const char *path, int flags) {
+static void *p_open(const char *path, int flags) {
   const char *mode = flags == (MG_FS_READ | MG_FS_WRITE) ? "r+b"
                      : flags & MG_FS_READ                ? "rb"
                      : flags & MG_FS_WRITE               ? "wb"
                                                          : "";
-  void *fp = NULL;
-  struct mg_fd *fd = NULL;
 #ifdef _WIN32
   wchar_t b1[PATH_MAX], b2[10];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
   MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
-  fp = (void *) _wfopen(b1, b2);
+  return (void *) _wfopen(b1, b2);
 #else
-  fp = (void *) fopen(path, mode);
+  return (void *) fopen(path, mode);
 #endif
-  if (fp == NULL) return NULL;
-  fd = (struct mg_fd *) calloc(1, sizeof(*fd));
-  fd->fd = fp;
-  fd->fs = &mg_fs_posix;
-  return fd;
 }
 
-static void p_close(struct mg_fd *fd) {
-  if (fd != NULL) fclose((FILE *) fd->fd), free(fd);
+static void p_close(void *fp) {
+  if (fp != NULL) fclose((FILE *) fp);
 }
 
 static size_t p_read(void *fp, void *buf, size_t len) {
