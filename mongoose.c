@@ -436,6 +436,8 @@ void mg_fs_close(struct mg_fd *fd) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/fs_fat.c"
 #endif
+
+
 #if MG_ENABLE_FATFS
 #include <ff.h>
 

@@ -1,3 +1,5 @@
+#include "fs.h"
+
 #if MG_ENABLE_FATFS
 #include <ff.h>
 

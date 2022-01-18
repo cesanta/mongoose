@@ -163,11 +163,6 @@ static __inline struct tm *localtime_r(const time_t *t, struct tm *tm) {
 #endif
 
 
-#if defined(MG_ENABLE_FF) && MG_ENABLE_FF == 1
-#include <ff.h>
-#endif
-
-
 #if MG_ARCH == MG_ARCH_FREERTOS_LWIP
 
 #include <stdarg.h>
