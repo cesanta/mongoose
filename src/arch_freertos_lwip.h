@@ -47,7 +47,7 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #define calloc(a, b) mg_calloc((a), (b))
 #define free(a) vPortFree(a)
 #define malloc(a) pvPortMalloc(a)
-
 #define gmtime_r(a, b) gmtime(a)
+#define mkdir(a, b) (-1)
 
 #endif  // MG_ARCH == MG_ARCH_FREERTOS_LWIP
