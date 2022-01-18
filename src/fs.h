@@ -18,6 +18,7 @@ struct mg_fs {
   size_t (*seek)(void *fd, size_t offset);                 // Set file position
   bool (*rename)(const char *from, const char *to);        // Rename
   bool (*remove)(const char *path);                        // Delete file
+  bool (*mkdir)(const char *path);                         // Create directory
 };
 
 // File descriptor

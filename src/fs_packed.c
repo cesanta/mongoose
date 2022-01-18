@@ -103,6 +103,11 @@ static bool packed_remove(const char *path) {
   return false;
 }
 
-struct mg_fs mg_fs_packed = {packed_stat,  packed_list,   packed_open,
-                             packed_close, packed_read,   packed_write,
-                             packed_seek,  packed_rename, packed_remove};
+static bool packed_mkdir(const char *path) {
+  (void) path;
+  return false;
+}
+
+struct mg_fs mg_fs_packed = {
+    packed_stat,  packed_list, packed_open,   packed_close,  packed_read,
+    packed_write, packed_seek, packed_rename, packed_remove, packed_mkdir};

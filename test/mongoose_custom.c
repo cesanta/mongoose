@@ -1,20 +1,8 @@
 #include "mongoose.h"
 
-int usleep(useconds_t us) {
-  for (useconds_t i = 0; i < us * 99; i++) asm("nop");
-  return 0;
-}
-
-int clock_gettime(clockid_t clock_id, struct timespec *tp) {
-  (void) clock_id;
-  memset(tp, 0, sizeof(*tp));
-  return 0;
-}
-
-char *realpath(const char *path, char *resolved_path) {
-  if (resolved_path == NULL) resolved_path = malloc(strlen(path) + 1);
-  strcpy(resolved_path, path);
-  return resolved_path;
+int mkdir(const char *path, mode_t mode) {
+  (void) path, (void) mode;
+  return -1;
 }
 
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
@@ -53,6 +41,5 @@ struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
   return NULL;
 }
 
-void _fini(void);
 void _fini(void) {
 }

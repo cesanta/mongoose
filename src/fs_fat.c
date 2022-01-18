@@ -73,13 +73,17 @@ static size_t ff_seek(void *fp, size_t offset) {
 }
 
 static bool ff_rename(const char *from, const char *to) {
-  return ff_rename(from, to) == FR_OK;
+  return f_rename(from, to) == FR_OK;
 }
 
 static bool ff_remove(const char *path) {
-  return ff_remove(path) == 0;
+  return f_unlink(path) == FR_OK;
 }
 
-struct mg_fs mg_fs_fat = {ff_stat,  ff_list, ff_open,   ff_close, ff_read,
-                          ff_write, ff_seek, ff_rename, ff_remove};
+static bool ff_mkdir(const char *path) {
+  return f_mkdir(path) == FR_OK;
+}
+
+struct mg_fs mg_fs_fat = {ff_stat,  ff_list, ff_open,   ff_close,  ff_read,
+                          ff_write, ff_seek, ff_rename, ff_remove, ff_mkdir};
 #endif

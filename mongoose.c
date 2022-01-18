@@ -565,15 +565,19 @@ static size_t ff_seek(void *fp, size_t offset) {
 }
 
 static bool ff_rename(const char *from, const char *to) {
-  return ff_rename(from, to) == FR_OK;
+  return f_rename(from, to) == FR_OK;
 }
 
 static bool ff_remove(const char *path) {
-  return ff_remove(path) == 0;
+  return f_unlink(path) == FR_OK;
 }
 
-struct mg_fs mg_fs_fat = {ff_stat,  ff_list, ff_open,   ff_close, ff_read,
-                          ff_write, ff_seek, ff_rename, ff_remove};
+static bool ff_mkdir(const char *path) {
+  return f_mkdir(path) == FR_OK;
+}
+
+struct mg_fs mg_fs_fat = {ff_stat,  ff_list, ff_open,   ff_close,  ff_read,
+                          ff_write, ff_seek, ff_rename, ff_remove, ff_mkdir};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -684,9 +688,14 @@ static bool packed_remove(const char *path) {
   return false;
 }
 
-struct mg_fs mg_fs_packed = {packed_stat,  packed_list,   packed_open,
-                             packed_close, packed_read,   packed_write,
-                             packed_seek,  packed_rename, packed_remove};
+static bool packed_mkdir(const char *path) {
+  (void) path;
+  return false;
+}
+
+struct mg_fs mg_fs_packed = {
+    packed_stat,  packed_list, packed_open,   packed_close,  packed_read,
+    packed_write, packed_seek, packed_rename, packed_remove, packed_mkdir};
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/fs_posix.c"
@@ -891,37 +900,39 @@ static bool p_remove(const char *path) {
   return remove(path) == 0;
 }
 
+static bool p_mkdir(const char *path) {
+#if defined(__MINGW32__) || defined(__MINGW64__)
+  return mkdir(path) == 0;
+#else
+  return mkdir(path, 0775) == 0;
+#endif
+}
+
 #else
 
 static int p_stat(const char *path, size_t *size, time_t *mtime) {
   (void) path, (void) size, (void) mtime;
   return 0;
 }
-
 static void p_list(const char *path, void (*fn)(const char *, void *),
                    void *userdata) {
   (void) path, (void) fn, (void) userdata;
 }
-
-static struct mg_fd *p_open(const char *path, int flags) {
+static void *p_open(const char *path, int flags) {
   (void) path, (void) flags;
   return NULL;
 }
-
-static void p_close(struct mg_fd *fd) {
-  (void) fd;
+static void p_close(void *fp) {
+  (void) fp;
 }
-
 static size_t p_read(void *fd, void *buf, size_t len) {
   (void) fd, (void) buf, (void) len;
   return 0;
 }
-
 static size_t p_write(void *fd, const void *buf, size_t len) {
   (void) fd, (void) buf, (void) len;
   return 0;
 }
-
 static size_t p_seek(void *fd, size_t offset) {
   (void) fd, (void) offset;
   return (size_t) ~0;
@@ -934,10 +945,14 @@ static bool p_remove(const char *path) {
   (void) path;
   return false;
 }
+static bool p_mkdir(const char *path) {
+  (void) path;
+  return false;
+}
 #endif
 
-struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close, p_read,
-                            p_write, p_seek, p_rename, p_remove};
+struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
+                            p_write, p_seek, p_rename, p_remove, p_mkdir};
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/http.c"
