@@ -244,10 +244,12 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_DIRLIST | 0 | Enable directory listing |
 |MG_ENABLE_CUSTOM_RANDOM | 0 | Provide custom RNG function `mg_random()` |
 |MG_ENABLE_PACKED_FS | 0 | Enable embedded FS support |
+|MG_ENABLE_FATFS | 0 | Enable embedded FAT FS support |
 |MG_IO_SIZE | 2048 | Granularity of the send/recv IO buffer growth |
 |MG_MAX_RECV_BUF_SIZE | (3 * 1024 * 1024) | Maximum recv buffer size |
 |MG_MAX_HTTP_HEADERS | 40 | Maximum number of HTTP headers |
 |MG_HTTP_INDEX | "index.html" | Index file for HTML directory |
+|MG_FATFS_ROOT | "/" | FAT FS root directory |
 |MG_ENABLE_LINES | undefined | If defined, show source file names in logs |
 
 <span class="badge bg-danger">NOTE:</span> the `MG_IO_SIZE` constant also sets

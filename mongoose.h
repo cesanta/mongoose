@@ -163,6 +163,11 @@ static __inline struct tm *localtime_r(const time_t *t, struct tm *tm) {
 #endif
 
 
+#if defined(MG_ENABLE_FF) && MG_ENABLE_FF == 1
+#include <ff.h>
+#endif
+
+
 #if MG_ARCH == MG_ARCH_FREERTOS_LWIP
 
 #include <stdarg.h>
@@ -441,6 +446,10 @@ static __inline struct tm *localtime_r(const time_t *t, struct tm *tm) {
 #endif
 
 
+#ifndef MG_ENABLE_FATFS
+#define MG_ENABLE_FATFS 0
+#endif
+
 #ifndef MG_ENABLE_SOCKET
 #define MG_ENABLE_SOCKET 1
 #endif
@@ -699,6 +708,7 @@ void mg_fs_close(struct mg_fd *fd);
 
 extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
 extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/complete
+extern struct mg_fs mg_fs_fat;     // FAT FS
 
 
 
