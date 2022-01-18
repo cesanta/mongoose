@@ -93,6 +93,16 @@ static size_t packed_seek(void *fd, size_t offset) {
   return fp->pos;
 }
 
-struct mg_fs mg_fs_packed = {packed_stat,  packed_list, packed_open,
-                             packed_close, packed_read, packed_write,
-                             packed_seek};
+static bool packed_rename(const char *from, const char *to) {
+  (void) from, (void) to;
+  return false;
+}
+
+static bool packed_remove(const char *path) {
+  (void) path;
+  return false;
+}
+
+struct mg_fs mg_fs_packed = {packed_stat,  packed_list,   packed_open,
+                             packed_close, packed_read,   packed_write,
+                             packed_seek,  packed_rename, packed_remove};

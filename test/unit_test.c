@@ -380,7 +380,7 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
       mg_http_reply(c, 200, "", "[%s]:[%s]", user, pass);
     } else if (mg_http_match_uri(hm, "/upload")) {
-      mg_http_upload(c, hm, ".");
+      mg_http_upload(c, hm, &mg_fs_posix, ".");
     } else if (mg_http_match_uri(hm, "/test/")) {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
@@ -416,9 +416,9 @@ struct fetch_data {
 };
 
 static void fcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  struct fetch_data *fd = (struct fetch_data *) fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    struct fetch_data *fd = (struct fetch_data *) fn_data;
     snprintf(fd->buf, FETCH_BUF_SIZE, "%.*s", (int) hm->message.len,
              hm->message.ptr);
     fd->code = atoi(hm->uri.ptr);
@@ -448,6 +448,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
       opts.srvname = host;
     }
     mg_tls_init(c, &opts);
+    if (c->tls == NULL) fd.closed = 1;
     // c->is_hexdumping = 1;
   }
   va_start(ap, fmt);
@@ -617,7 +618,7 @@ static void test_http_server(void) {
   ASSERT(cmpbody(buf, "Invalid web root [/BAAADDD!]\n") == 0);
 
   {
-    char *data = mg_file_read("./test/data/ca.pem", NULL);
+    char *data = mg_file_read(&mg_fs_posix, "./test/data/ca.pem", NULL);
     ASSERT(fetch(&mgr, buf, url, "GET /ca.pem HTTP/1.0\r\n\n") == 200);
     ASSERT(cmpbody(buf, data) == 0);
     free(data);
@@ -678,7 +679,7 @@ static void test_http_server(void) {
     // Test upload
     char *p;
     remove("uploaded.txt");
-    ASSERT((p = mg_file_read("uploaded.txt", NULL)) == NULL);
+    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) == NULL);
     ASSERT(fetch(&mgr, buf, url,
                  "POST /upload HTTP/1.0\n"
                  "Content-Length: 1\n\nx") == 400);
@@ -691,7 +692,7 @@ static void test_http_server(void) {
                  "POST /upload?name=uploaded.txt&offset=5 HTTP/1.0\r\n"
                  "Content-Length: 6\r\n"
                  "\r\n\nworld") == 200);
-    ASSERT((p = mg_file_read("uploaded.txt", NULL)) != NULL);
+    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) != NULL);
     ASSERT(strcmp(p, "hello\nworld") == 0);
     free(p);
     remove("uploaded.txt");
@@ -701,12 +702,12 @@ static void test_http_server(void) {
     // Test upload directory traversal
     char *p;
     remove("uploaded.txt");
-    ASSERT((p = mg_file_read("uploaded.txt", NULL)) == NULL);
+    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) == NULL);
     ASSERT(fetch(&mgr, buf, url,
                  "POST /upload?name=../uploaded.txt HTTP/1.0\r\n"
                  "Content-Length: 5\r\n"
                  "\r\nhello") == 200);
-    ASSERT((p = mg_file_read("uploaded.txt", NULL)) != NULL);
+    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) != NULL);
     ASSERT(strcmp(p, "hello") == 0);
     free(p);
     remove("uploaded.txt");
@@ -1213,8 +1214,9 @@ static void test_util(void) {
   ASSERT(s != NULL);
   free(s);
   memset(&a, 0, sizeof(a));
-  ASSERT(mg_file_printf("data.txt", "%s", "hi") == true);
-  ASSERT((p = mg_file_read("data.txt", NULL)) != NULL);
+  ASSERT(mg_file_printf(&mg_fs_posix, "data.txt", "%s", "hi") == true);
+  if (system("ls -l") != 0) (void) 0;
+  ASSERT((p = mg_file_read(&mg_fs_posix, "data.txt", NULL)) != NULL);
   ASSERT(strcmp(p, "hi") == 0);
   free(p);
   remove("data.txt");
@@ -1462,7 +1464,8 @@ static void eh7(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void test_packed(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12351";
-  char buf[FETCH_BUF_SIZE] = "", *data = mg_file_read("Makefile", NULL);
+  char buf[FETCH_BUF_SIZE] = "",
+       *data = mg_file_read(&mg_fs_posix, "Makefile", NULL);
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, eh7, NULL);
 
@@ -1472,7 +1475,7 @@ static void test_packed(void) {
   free(data);
 
   // Load file deeper in the FS tree directly
-  data = mg_file_read("src/ssi.h", NULL);
+  data = mg_file_read(&mg_fs_posix, "src/ssi.h", NULL);
   ASSERT(fetch(&mgr, buf, url, "GET /src/ssi.h HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, data) == 0);
   free(data);

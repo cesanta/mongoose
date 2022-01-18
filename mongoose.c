@@ -413,6 +413,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 #endif
 
 
+
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
   struct mg_fd *fd = (struct mg_fd *) calloc(1, sizeof(*fd));
   if (fd != NULL) {
@@ -431,6 +432,59 @@ void mg_fs_close(struct mg_fd *fd) {
     fd->fs->close(fd->fd);
     free(fd);
   }
+}
+
+char *mg_file_read(struct mg_fs *fs, const char *path, size_t *sizep) {
+  struct mg_fd *fd;
+  char *data = NULL;
+  size_t size = 0;
+  fs->stat(path, &size, NULL);
+  if ((fd = mg_fs_open(fs, path, MG_FS_READ)) != NULL) {
+    data = (char *) calloc(1, size + 1);
+    if (data != NULL) {
+      if (fs->read(fd->fd, data, size) != size) {
+        free(data);
+        data = NULL;
+      } else {
+        data[size] = '\0';
+        if (sizep != NULL) *sizep = size;
+      }
+    }
+    mg_fs_close(fd);
+  }
+  return data;
+}
+
+bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
+                   size_t len) {
+  bool result = false;
+  struct mg_fd *fd;
+  char tmp[MG_PATH_MAX];
+  snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
+  if ((fd = mg_fs_open(fs, tmp, MG_FS_WRITE)) != NULL) {
+    result = fs->write(fd->fd, buf, len) == len;
+    mg_fs_close(fd);
+    if (result) {
+      fs->remove(path);
+      fs->rename(tmp, path);
+    } else {
+      fs->remove(tmp);
+    }
+  }
+  return result;
+}
+
+bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
+  char tmp[256], *buf = tmp;
+  bool result;
+  int len;
+  va_list ap;
+  va_start(ap, fmt);
+  len = mg_vasprintf(&buf, sizeof(tmp), fmt, ap);
+  va_end(ap);
+  result = mg_file_write(fs, path, buf, len > 0 ? (size_t) len : 0);
+  if (buf != tmp) free(buf);
+  return result;
 }
 
 #ifdef MG_ENABLE_LINES
@@ -475,10 +529,8 @@ static void ff_list(const char *dir, void (*fn)(const char *, void *),
 
 static void *ff_open(const char *path, int flags) {
   FIL f;
-  const char mode = flags == (MG_FS_READ | MG_FS_WRITE) ? FA_READ | FA_WRITE
-                    : flags & MG_FS_READ                ? FA_READ
-                    : flags & MG_FS_WRITE               ? FA_WRITE
-                                                        : 0;
+  unsigned char mode =
+      flags == MG_FS_READ ? FA_READ : FA_READ | FA_WRITE | FA_OPEN_APPEND;
   if (f_open(&f, path, mode) == 0) {
     FIL *fp = calloc(1, sizeof(*fp));
     *fp = f;
@@ -512,8 +564,16 @@ static size_t ff_seek(void *fp, size_t offset) {
   return offset;
 }
 
-struct mg_fs mg_fs_fat = {ff_stat, ff_list,  ff_open, ff_close,
-                          ff_read, ff_write, ff_seek};
+static bool ff_rename(const char *from, const char *to) {
+  return ff_rename(from, to) == FR_OK;
+}
+
+static bool ff_remove(const char *path) {
+  return ff_remove(path) == 0;
+}
+
+struct mg_fs mg_fs_fat = {ff_stat,  ff_list, ff_open,   ff_close, ff_read,
+                          ff_write, ff_seek, ff_rename, ff_remove};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -614,9 +674,19 @@ static size_t packed_seek(void *fd, size_t offset) {
   return fp->pos;
 }
 
-struct mg_fs mg_fs_packed = {packed_stat,  packed_list, packed_open,
-                             packed_close, packed_read, packed_write,
-                             packed_seek};
+static bool packed_rename(const char *from, const char *to) {
+  (void) from, (void) to;
+  return false;
+}
+
+static bool packed_remove(const char *path) {
+  (void) path;
+  return false;
+}
+
+struct mg_fs mg_fs_packed = {packed_stat,  packed_list,   packed_open,
+                             packed_close, packed_read,   packed_write,
+                             packed_seek,  packed_rename, packed_remove};
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/fs_posix.c"
@@ -779,10 +849,7 @@ static void p_list(const char *dir, void (*fn)(const char *, void *),
 }
 
 static void *p_open(const char *path, int flags) {
-  const char *mode = flags == (MG_FS_READ | MG_FS_WRITE) ? "r+b"
-                     : flags & MG_FS_READ                ? "rb"
-                     : flags & MG_FS_WRITE               ? "wb"
-                                                         : "";
+  const char *mode = flags == MG_FS_READ ? "rb" : "a+b";
 #ifdef _WIN32
   wchar_t b1[PATH_MAX], b2[10];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
@@ -794,7 +861,7 @@ static void *p_open(const char *path, int flags) {
 }
 
 static void p_close(void *fp) {
-  if (fp != NULL) fclose((FILE *) fp);
+  fclose((FILE *) fp);
 }
 
 static size_t p_read(void *fp, void *buf, size_t len) {
@@ -814,6 +881,14 @@ static size_t p_seek(void *fp, size_t offset) {
   fseek((FILE *) fp, (long) offset, SEEK_SET);
 #endif
   return (size_t) ftell((FILE *) fp);
+}
+
+static bool p_rename(const char *from, const char *to) {
+  return rename(from, to) == 0;
+}
+
+static bool p_remove(const char *path) {
+  return remove(path) == 0;
 }
 
 #else
@@ -851,10 +926,18 @@ static size_t p_seek(void *fd, size_t offset) {
   (void) fd, (void) offset;
   return (size_t) ~0;
 }
+static bool p_rename(const char *from, const char *to) {
+  (void) from, (void) to;
+  return false;
+}
+static bool p_remove(const char *path) {
+  (void) path;
+  return false;
+}
 #endif
 
-struct mg_fs mg_fs_posix = {p_stat, p_list,  p_open, p_close,
-                            p_read, p_write, p_seek};
+struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close, p_read,
+                            p_write, p_seek, p_rename, p_remove};
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/http.c"
@@ -1748,9 +1831,8 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
   c->recv.len -= ch.len;
 }
 
-#if MG_ENABLE_FILE
 int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
-                   const char *dir) {
+                   struct mg_fs *fs, const char *dir) {
   char offset[40] = "", name[200] = "", path[256];
   mg_http_get_var(&hm->query, "offset", offset, sizeof(offset));
   mg_http_get_var(&hm->query, "name", name, sizeof(name));
@@ -1758,23 +1840,23 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
     mg_http_reply(c, 400, "", "%s", "name required");
     return -1;
   } else {
-    FILE *fp;
+    struct mg_fd *fd;
     long oft = strtol(offset, NULL, 0);
     snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, name);
     remove_double_dots(path);
     LOG(LL_DEBUG, ("%d bytes @ %ld [%s]", (int) hm->body.len, oft, path));
-    if ((fp = fopen(path, oft == 0 ? "wb" : "ab")) == NULL) {
-      mg_http_reply(c, 400, "", "fopen(%s): %d", path, errno);
+    if (oft == 0) fs->remove(path);
+    if ((fd = mg_fs_open(fs, path, MG_FS_WRITE)) == NULL) {
+      mg_http_reply(c, 400, "", "open(%s): %d", path, errno);
       return -2;
     } else {
-      fwrite(hm->body.ptr, 1, hm->body.len, fp);
-      fclose(fp);
+      fs->write(fd->fd, hm->body.ptr, hm->body.len);
+      mg_fs_close(fd);
       mg_http_reply(c, 200, "", "");
       return (int) hm->body.len;
     }
   }
 }
-#endif
 
 static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_READ || ev == MG_EV_CLOSE) {
@@ -3840,11 +3922,55 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 #endif
 
 
+
 #if MG_ENABLE_MBEDTLS
+
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
+#define MGRNG , rng_get, NULL
+#else
+#define MGRNG
+#endif
+
+void mg_tls_free(struct mg_connection *c) {
+  struct mg_tls *tls = (struct mg_tls *) c->tls;
+  if (tls != NULL) {
+    free(tls->cafile);
+    mbedtls_ssl_free(&tls->ssl);
+    mbedtls_pk_free(&tls->pk);
+    mbedtls_x509_crt_free(&tls->ca);
+    mbedtls_x509_crl_free(&tls->crl);
+    mbedtls_x509_crt_free(&tls->cert);
+    mbedtls_ssl_config_free(&tls->conf);
+    free(tls);
+    c->tls = NULL;
+  }
+}
+
+static bool mg_wouldblock(int n) {
+  return n < 0 &&
+         (errno == EINPROGRESS || errno == EAGAIN || errno == EWOULDBLOCK);
+}
+
+static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
+  int fd = *(int *) ctx;
+  int n = (int) send(fd, buf, len, 0);
+  if (n > 0) return n;
+  if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_WRITE;
+  return MBEDTLS_ERR_NET_SEND_FAILED;
+}
+
+static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
+  int fd = *(int *) ctx;
+  int n = (int) recv(fd, buf, len, 0);
+  if (n > 0) return n;
+  if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_READ;
+  return MBEDTLS_ERR_NET_RECV_FAILED;
+}
+
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
-  mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mbedtls_net_send, mbedtls_net_recv, 0);
+  mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mg_net_send, mg_net_recv, 0);
   rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
     LOG(LL_DEBUG, ("%lu success", c->id));
@@ -3880,27 +4006,23 @@ static int rng_get(void *p_rng, unsigned char *buf, size_t len) {
 }
 #endif
 
+static struct mg_str mg_loadfile(struct mg_fs *fs, const char *path) {
+  size_t n = 0;
+  if (path[0] == '-') return mg_str(path);
+  char *p = mg_file_read(fs, path, &n);
+  return mg_str_n(p, n);
+}
+
 void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   int rc = 0;
-  const char *ca = opts->ca == NULL     ? "-"
-                   : opts->ca[0] == '-' ? "(emb)"
-                                        : opts->ca;
-  const char *crl = opts->crl == NULL     ? "-"
-                    : opts->crl[0] == '-' ? "(emb)"
-                                          : opts->crl;
-  const char *cert = opts->cert == NULL     ? "-"
-                     : opts->cert[0] == '-' ? "(emb)"
-                                            : opts->cert;
-  const char *certkey = opts->certkey == NULL     ? "-"
-                        : opts->certkey[0] == '-' ? "(emb)"
-                                                  : opts->certkey;
-  if (tls == NULL) {
+  c->tls = tls;
+  if (c->tls == NULL) {
     mg_error(c, "TLS OOM");
     goto fail;
   }
-  LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, CRL: %s, cert: %s, key: %s", c->id,
-                 ca, crl, cert, certkey));
+  LOG(LL_DEBUG, ("%lu Setting TLS", c->id));
   mbedtls_ssl_init(&tls->ssl);
   mbedtls_ssl_config_init(&tls->conf);
   mbedtls_x509_crt_init(&tls->ca);
@@ -3908,9 +4030,6 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   mbedtls_x509_crt_init(&tls->cert);
   mbedtls_pk_init(&tls->pk);
   mbedtls_ssl_conf_dbg(&tls->conf, debug_cb, c);
-  //#if !defined(ESP_PLATFORM)
-  // mbedtls_debug_set_threshold(5);
-  //#endif
   if ((rc = mbedtls_ssl_config_defaults(
            &tls->conf,
            c->is_client ? MBEDTLS_SSL_IS_CLIENT : MBEDTLS_SSL_IS_SERVER,
@@ -3921,15 +4040,13 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   mbedtls_ssl_conf_rng(&tls->conf, mbed_rng, c);
   if (opts->ca == NULL || strcmp(opts->ca, "*") == 0) {
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_NONE);
-  }
-  if (opts->ca != NULL && opts->ca[0] != '\0') {
+  } else if (opts->ca != NULL && opts->ca[0] != '\0') {
     if (opts->crl != NULL && opts->crl[0] != '\0') {
-      rc = opts->crl[0] == '-'
-               ? mbedtls_x509_crl_parse(&tls->crl, (uint8_t *) opts->crl,
-                                        strlen(opts->crl) + 1)
-               : mbedtls_x509_crl_parse_file(&tls->crl, opts->crl);
+      struct mg_str s = mg_loadfile(fs, opts->crl);
+      rc = mbedtls_x509_crl_parse(&tls->crl, (uint8_t *) s.ptr, s.len + 1);
+      if (opts->crl[0] != '-') free((char *) s.ptr);
       if (rc != 0) {
-        mg_error(c, "parse(%s) err %#x", crl, -rc);
+        mg_error(c, "parse(%s) err %#x", opts->crl, -rc);
         goto fail;
       }
     }
@@ -3941,12 +4058,12 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
       goto fail;
     }
 #else
-    rc = opts->ca[0] == '-'
-             ? mbedtls_x509_crt_parse(&tls->ca, (uint8_t *) opts->ca,
-                                      strlen(opts->ca) + 1)
-             : mbedtls_x509_crt_parse_file(&tls->ca, opts->ca);
+    struct mg_str s = mg_loadfile(fs, opts->ca);
+    rc = mbedtls_x509_crt_parse(&tls->ca, (uint8_t *) s.ptr, s.len + 1);
+    if (opts->ca[0] != '-') free((char *) s.ptr);
+    LOG(LL_INFO, ("%s %d", opts->ca, (int) s.len));
     if (rc != 0) {
-      mg_error(c, "parse(%s) err %#x", ca, -rc);
+      mg_error(c, "parse(%s) err %#x", opts->ca, -rc);
       goto fail;
     }
     mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, &tls->crl);
@@ -3961,24 +4078,20 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
   }
   if (opts->cert != NULL && opts->cert[0] != '\0') {
-    const char *key = opts->certkey;
-    if (key == NULL) {
-      key = opts->cert;
-      certkey = cert;
-    }
-    rc = opts->cert[0] == '-'
-             ? mbedtls_x509_crt_parse(&tls->cert, (uint8_t *) opts->cert,
-                                      strlen(opts->cert) + 1)
-             : mbedtls_x509_crt_parse_file(&tls->cert, opts->cert);
+    struct mg_str s = mg_loadfile(fs, opts->cert);
+    const char *key = opts->certkey == NULL ? opts->cert : opts->certkey;
+    rc = mbedtls_x509_crt_parse(&tls->cert, (uint8_t *) s.ptr, s.len + 1);
+    if (opts->cert[0] != '-') free((char *) s.ptr);
     if (rc != 0) {
-      mg_error(c, "parse(%s) err %#x", cert, -rc);
+      mg_error(c, "parse(%s) err %#x", opts->cert, -rc);
       goto fail;
     }
-    rc = key[0] == '-' ? mbedtls_pk_parse_key(&tls->pk, (uint8_t *) key,
-                                              strlen(key) + 1, NULL, 0 RNG)
-                       : mbedtls_pk_parse_keyfile(&tls->pk, key, NULL RNG);
+    s = mg_loadfile(fs, key);
+    rc = mbedtls_pk_parse_key(&tls->pk, (uint8_t *) s.ptr, s.len + 1, NULL,
+                              0 MGRNG);
+    if (key[0] != '-') free((char *) s.ptr);
     if (rc != 0) {
-      mg_error(c, "tls key(%s) %#x", certkey, -rc);
+      mg_error(c, "tls key(%s) %#x", key, -rc);
       goto fail;
     }
     rc = mbedtls_ssl_conf_own_cert(&tls->conf, &tls->cert, &tls->pk);
@@ -3999,8 +4112,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   }
   return;
 fail:
-  c->is_closing = 1;
-  free(tls);
+  mg_tls_free(c);
 }
 
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
@@ -4013,20 +4125,6 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   long n = mbedtls_ssl_write(&tls->ssl, (unsigned char *) buf, len);
   return n == 0 ? -1 : n == MBEDTLS_ERR_SSL_WANT_WRITE ? 0 : n;
-}
-
-void mg_tls_free(struct mg_connection *c) {
-  struct mg_tls *tls = (struct mg_tls *) c->tls;
-  if (tls == NULL) return;
-  free(tls->cafile);
-  mbedtls_ssl_free(&tls->ssl);
-  mbedtls_pk_free(&tls->pk);
-  mbedtls_x509_crt_free(&tls->ca);
-  mbedtls_x509_crl_free(&tls->crl);
-  mbedtls_x509_crt_free(&tls->cert);
-  mbedtls_ssl_config_free(&tls->conf);
-  free(tls);
-  c->tls = NULL;
 }
 #endif
 
@@ -4277,63 +4375,6 @@ struct mg_str mg_url_pass(const char *url) {
 
 #if MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
 #include <mach/mach_time.h>
-#endif
-
-#if MG_ENABLE_FILE
-char *mg_file_read(const char *path, size_t *sizep) {
-  FILE *fp;
-  char *data = NULL;
-  size_t size = 0;
-  if ((fp = fopen(path, "rb")) != NULL) {
-    fseek(fp, 0, SEEK_END);
-    size = (size_t) ftell(fp);
-    rewind(fp);
-    data = (char *) calloc(1, size + 1);
-    if (data != NULL) {
-      if (fread(data, 1, size, fp) != size) {
-        free(data);
-        data = NULL;
-      } else {
-        data[size] = '\0';
-        if (sizep != NULL) *sizep = size;
-      }
-    }
-    fclose(fp);
-  }
-  return data;
-}
-
-bool mg_file_write(const char *path, const void *buf, size_t len) {
-  bool result = false;
-  FILE *fp;
-  char tmp[MG_PATH_MAX];
-  snprintf(tmp, sizeof(tmp), "%s.%d", path, rand());
-  fp = fopen(tmp, "wb");
-  if (fp != NULL) {
-    result = fwrite(buf, 1, len, fp) == len;
-    fclose(fp);
-    if (result) {
-      remove(path);
-      rename(tmp, path);
-    } else {
-      remove(tmp);
-    }
-  }
-  return result;
-}
-
-bool mg_file_printf(const char *path, const char *fmt, ...) {
-  char tmp[256], *buf = tmp;
-  bool result;
-  int len;
-  va_list ap;
-  va_start(ap, fmt);
-  len = mg_vasprintf(&buf, sizeof(tmp), fmt, ap);
-  va_end(ap);
-  result = mg_file_write(path, buf, len > 0 ? (size_t) len : 0);
-  if (buf != tmp) free(buf);
-  return result;
-}
 #endif
 
 #if MG_ENABLE_CUSTOM_RANDOM

@@ -37,10 +37,8 @@ static void ff_list(const char *dir, void (*fn)(const char *, void *),
 
 static void *ff_open(const char *path, int flags) {
   FIL f;
-  const char mode = flags == (MG_FS_READ | MG_FS_WRITE) ? FA_READ | FA_WRITE
-                    : flags & MG_FS_READ                ? FA_READ
-                    : flags & MG_FS_WRITE               ? FA_WRITE
-                                                        : 0;
+  unsigned char mode =
+      flags == MG_FS_READ ? FA_READ : FA_READ | FA_WRITE | FA_OPEN_APPEND;
   if (f_open(&f, path, mode) == 0) {
     FIL *fp = calloc(1, sizeof(*fp));
     *fp = f;
@@ -74,6 +72,14 @@ static size_t ff_seek(void *fp, size_t offset) {
   return offset;
 }
 
-struct mg_fs mg_fs_fat = {ff_stat, ff_list,  ff_open, ff_close,
-                          ff_read, ff_write, ff_seek};
+static bool ff_rename(const char *from, const char *to) {
+  return ff_rename(from, to) == FR_OK;
+}
+
+static bool ff_remove(const char *path) {
+  return ff_remove(path) == 0;
+}
+
+struct mg_fs mg_fs_fat = {ff_stat,  ff_list, ff_open,   ff_close, ff_read,
+                          ff_write, ff_seek, ff_rename, ff_remove};
 #endif

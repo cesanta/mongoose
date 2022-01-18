@@ -156,10 +156,7 @@ static void p_list(const char *dir, void (*fn)(const char *, void *),
 }
 
 static void *p_open(const char *path, int flags) {
-  const char *mode = flags == (MG_FS_READ | MG_FS_WRITE) ? "r+b"
-                     : flags & MG_FS_READ                ? "rb"
-                     : flags & MG_FS_WRITE               ? "wb"
-                                                         : "";
+  const char *mode = flags == MG_FS_READ ? "rb" : "a+b";
 #ifdef _WIN32
   wchar_t b1[PATH_MAX], b2[10];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
@@ -171,7 +168,7 @@ static void *p_open(const char *path, int flags) {
 }
 
 static void p_close(void *fp) {
-  if (fp != NULL) fclose((FILE *) fp);
+  fclose((FILE *) fp);
 }
 
 static size_t p_read(void *fp, void *buf, size_t len) {
@@ -191,6 +188,14 @@ static size_t p_seek(void *fp, size_t offset) {
   fseek((FILE *) fp, (long) offset, SEEK_SET);
 #endif
   return (size_t) ftell((FILE *) fp);
+}
+
+static bool p_rename(const char *from, const char *to) {
+  return rename(from, to) == 0;
+}
+
+static bool p_remove(const char *path) {
+  return remove(path) == 0;
 }
 
 #else
@@ -228,7 +233,15 @@ static size_t p_seek(void *fd, size_t offset) {
   (void) fd, (void) offset;
   return (size_t) ~0;
 }
+static bool p_rename(const char *from, const char *to) {
+  (void) from, (void) to;
+  return false;
+}
+static bool p_remove(const char *path) {
+  (void) path;
+  return false;
+}
 #endif
 
-struct mg_fs mg_fs_posix = {p_stat, p_list,  p_open, p_close,
-                            p_read, p_write, p_seek};
+struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close, p_read,
+                            p_write, p_seek, p_rename, p_remove};

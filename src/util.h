@@ -4,9 +4,6 @@
 #include "config.h"
 #include "str.h"
 
-char *mg_file_read(const char *path, size_t *size);
-bool mg_file_write(const char *path, const void *buf, size_t len);
-bool mg_file_printf(const char *path, const char *fmt, ...);
 void mg_random(void *buf, size_t len);
 bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
 bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);

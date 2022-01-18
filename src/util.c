@@ -4,63 +4,6 @@
 #include <mach/mach_time.h>
 #endif
 
-#if MG_ENABLE_FILE
-char *mg_file_read(const char *path, size_t *sizep) {
-  FILE *fp;
-  char *data = NULL;
-  size_t size = 0;
-  if ((fp = fopen(path, "rb")) != NULL) {
-    fseek(fp, 0, SEEK_END);
-    size = (size_t) ftell(fp);
-    rewind(fp);
-    data = (char *) calloc(1, size + 1);
-    if (data != NULL) {
-      if (fread(data, 1, size, fp) != size) {
-        free(data);
-        data = NULL;
-      } else {
-        data[size] = '\0';
-        if (sizep != NULL) *sizep = size;
-      }
-    }
-    fclose(fp);
-  }
-  return data;
-}
-
-bool mg_file_write(const char *path, const void *buf, size_t len) {
-  bool result = false;
-  FILE *fp;
-  char tmp[MG_PATH_MAX];
-  snprintf(tmp, sizeof(tmp), "%s.%d", path, rand());
-  fp = fopen(tmp, "wb");
-  if (fp != NULL) {
-    result = fwrite(buf, 1, len, fp) == len;
-    fclose(fp);
-    if (result) {
-      remove(path);
-      rename(tmp, path);
-    } else {
-      remove(tmp);
-    }
-  }
-  return result;
-}
-
-bool mg_file_printf(const char *path, const char *fmt, ...) {
-  char tmp[256], *buf = tmp;
-  bool result;
-  int len;
-  va_list ap;
-  va_start(ap, fmt);
-  len = mg_vasprintf(&buf, sizeof(tmp), fmt, ap);
-  va_end(ap);
-  result = mg_file_write(path, buf, len > 0 ? (size_t) len : 0);
-  if (buf != tmp) free(buf);
-  return result;
-}
-#endif
-
 #if MG_ENABLE_CUSTOM_RANDOM
 #else
 void mg_random(void *buf, size_t len) {

@@ -16,6 +16,8 @@ struct mg_fs {
   size_t (*read)(void *fd, void *buf, size_t len);         // Read file
   size_t (*write)(void *fd, const void *buf, size_t len);  // Write file
   size_t (*seek)(void *fd, size_t offset);                 // Set file position
+  bool (*rename)(const char *from, const char *to);        // Rename
+  bool (*remove)(const char *path);                        // Delete file
 };
 
 // File descriptor
@@ -23,8 +25,12 @@ struct mg_fd {
   void *fd;
   struct mg_fs *fs;
 };
+
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags);
 void mg_fs_close(struct mg_fd *fd);
+char *mg_file_read(struct mg_fs *fs, const char *path, size_t *size);
+bool mg_file_write(struct mg_fs *fs, const char *path, const void *, size_t);
+bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
 
 extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
 extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/complete

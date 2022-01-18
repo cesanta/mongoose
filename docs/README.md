@@ -1177,7 +1177,7 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 ```c
 int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
-                   const char *dir);
+                   struct mg_fs *fs, const char *dir);
 ```
 
 Handle file upload. See [file upload example](https://github.com/cesanta/mongoose/tree/master/examples/file-uploads/).
@@ -1212,6 +1212,7 @@ The expected usage of this API function follows:
 Parameters:
 - `c` - Connection to use
 - `hm` - POST message, containing parameters described above
+- `fs` - Filesystem to use
 - `dir` - Path to directory
 
 Return value: Request body length or negative value on error
@@ -1223,7 +1224,7 @@ Usage example:
 void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_http_upload(c, hm, "."); // Upload to current folder
+    mg_http_upload(c, hm, &mg_fs_posix, "."); // Upload to current folder
   }
 ```
 
@@ -1852,6 +1853,7 @@ struct mg_tls_opts {
   const char *certkey;   // Certificate key
   const char *ciphers;   // Cipher list
   struct mg_str srvname; // If not empty, enables server name verification
+  struct mg_fs *fs;      // FS API for reading certificate files
 };
 ```
 
@@ -2840,7 +2842,7 @@ mg_base64_decode("Q2VzYW50YQ==", 12, buf); // buf is now "Cesanta"
 ### mg\_file\_read()
 
 ```c
-char *mg_file_read(const char *path, size_t *sizep);
+char *mg_file_read(struct mg_fs *fs, const char *path, size_t *sizep);
 ```
 
 Read file contents into a nul-terminated malloc-ed string. It is a caller's
@@ -2848,6 +2850,7 @@ responsibility to free() a returned pointer. If `sizep` is not NULL, it will
 return a file size in bytes. Return `NULL` on error.
 
 Parameters:
+- `fs` - Filesystem to use
 - `path` - Path to file to read
 - `sizep` - Pointer to `size_t` to receive file size
 
@@ -2857,7 +2860,7 @@ Usage example:
 
 ```c
 size_t file_size;
-char* data = mg_file_read("myfile.txt", &file_size);
+char* data = mg_file_read(&mg_fs_posix, "myfile.txt", &file_size);
 if (data != NULL) {
   // `data` is now pointer to information readen from file and `file_size` is it size.
 }
@@ -2867,12 +2870,13 @@ free(data);
 ### mg\_file\_write()
 
 ```c
-bool mg_file_write(const char *path, const void *buf, size_t len);
+bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf, size_t len);
 ```
 Write data to a file.
 The write is atomic, i.e. data gets written to a temporary file first, then `rename()-ed` to a destination file name.
 
 Parameters:
+- `fs` - Filesystem to use
 - `path` - Path to file
 - `buf` - Data to write
 - `len` - Data length
@@ -2883,7 +2887,7 @@ Usage example:
 
 ```c
 char data[] = "Hello, world!";
-if(mg_file_write("my_file.txt", data, sizeof(data) - 1)) {
+if(mg_file_write(&mg_fs_posix, "my_file.txt", data, sizeof(data) - 1)) {
   // File contains "Hello, world!" string
 }
 ```
@@ -2891,7 +2895,7 @@ if(mg_file_write("my_file.txt", data, sizeof(data) - 1)) {
 ### mg\_file\_printf()
 
 ```c
-int mg_file_printf(const char *path, const char *fmt, ...);
+bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
 ```
 
 Write into a file `path` using `printf()` semantics.
@@ -2899,13 +2903,14 @@ This function prints data to a
 temporary in-memory buffer first, then calls `mg_file_write()`.
 
 Parameters:
+- `fs` - Filesystem to use
 - `path`- path to file
 - `fmt` - Format string in `printf()` semantics
 
 Return value: `true` on success, `false` otherwise
 
 ```c
-if (mg_file_printf("my_file.txt", "Hello, %s!", "world") {
+if (mg_file_printf(&mg_fs_posix, "my_file.txt", "Hello, %s!", "world") {
   // File contains "Hello, world!" string
 }
 ```

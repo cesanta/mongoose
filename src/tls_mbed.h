@@ -6,17 +6,8 @@
 #include "util.h"
 
 #include <mbedtls/debug.h>
+#include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>
-
-#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
-#define RNG , rng_get, NULL
-#else
-#define RNG
-#endif
-
-// Different versions have those in different files, so declare here
-EXTERN_C int mbedtls_net_recv(void *, unsigned char *, size_t);
-EXTERN_C int mbedtls_net_send(void *, const unsigned char *, size_t);
 
 struct mg_tls {
   char *cafile;             // CA certificate path
