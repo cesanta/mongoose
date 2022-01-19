@@ -139,7 +139,6 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     struct mg_str s = mg_loadfile(fs, opts->ca);
     rc = mbedtls_x509_crt_parse(&tls->ca, (uint8_t *) s.ptr, s.len + 1);
     if (opts->ca[0] != '-') free((char *) s.ptr);
-    LOG(LL_INFO, ("%s %d", opts->ca, (int) s.len));
     if (rc != 0) {
       mg_error(c, "parse(%s) err %#x", opts->ca, -rc);
       goto fail;

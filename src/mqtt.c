@@ -222,7 +222,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
           case MQTT_CMD_CONNACK:
             mg_call(c, MG_EV_MQTT_OPEN, &mm.ack);
             if (mm.ack == 0) {
-              LOG(LL_INFO, ("%lu Connected", c->id));
+              LOG(LL_DEBUG, ("%lu Connected", c->id));
             } else {
               LOG(LL_ERROR, ("%lu MQTT auth failed, code %d", c->id, mm.ack));
               c->is_closing = 1;
