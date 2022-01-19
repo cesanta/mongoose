@@ -1622,8 +1622,8 @@ void fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
 ### mg\_mqtt\_pub()
 
 ```c
-void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
-                 struct mg_str *data, int qos, bool retain);
+void mg_mqtt_pub(struct mg_connection *c, struct mg_str topic,
+                 struct mg_str data, int qos, bool retain);
 ```
 
 Publish message.
@@ -1640,15 +1640,13 @@ Return value: None
 Usage example:
 
 ```c
-struct mg_str topic = mg_str("topic");
-struct mg_str data = mg_str("data");
-mg_mqtt_pub(c, &topic, &data, 1, false);
+mg_mqtt_pub(c, mg_str("topic"), mg_str("my data"), 1, false);
 ```
 
 ### mg\_mqtt\_sub()
 
 ```c
-void mg_mqtt_sub(struct mg_connection *c, struct mg_str *topic, int qos);
+void mg_mqtt_sub(struct mg_connection *c, struct mg_str topic, int qos);
 ```
 
 Subscribe to topic.
@@ -1661,8 +1659,7 @@ Parameters:
 Return value: none
 
 ```c
-struct mg_str topic = mg_str("topic");
-mg_mqtt_sub(c, &topic, 1);
+mg_mqtt_sub(c, mg_str("my/topic"), 1);
 ```
 
 ### mg\_mqtt\_next\_sub()

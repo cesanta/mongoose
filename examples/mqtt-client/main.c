@@ -43,10 +43,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_str subt = mg_str(s_sub_topic);
     struct mg_str pubt = mg_str(s_pub_topic), data = mg_str("hello");
     LOG(LL_INFO, ("CONNECTED to %s", s_url));
-    mg_mqtt_sub(c, &subt, s_qos);
+    mg_mqtt_sub(c, subt, s_qos);
     LOG(LL_INFO, ("SUBSCRIBED to %.*s", (int) subt.len, subt.ptr));
 
-    mg_mqtt_pub(c, &pubt, &data, s_qos, false);
+    mg_mqtt_pub(c, pubt, data, s_qos, false);
     LOG(LL_INFO, ("PUBSLISHED %.*s -> %.*s", (int) data.len, data.ptr,
                   (int) pubt.len, pubt.ptr));
   } else if (ev == MG_EV_MQTT_MSG) {
