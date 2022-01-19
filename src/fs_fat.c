@@ -3,10 +3,6 @@
 #if MG_ENABLE_FATFS
 #include <ff.h>
 
-#if !defined(MG_FATFS_ROOT)
-#define MG_FATFS_ROOT "/"
-#endif
-
 static int ff_stat(const char *path, size_t *size, time_t *mtime) {
   FILINFO fi;
   if (path[0] == '\0' || strcmp(path, MG_FATFS_ROOT) == 0) {
@@ -62,9 +58,14 @@ static size_t ff_read(void *fp, void *buf, size_t len) {
 }
 
 static size_t ff_write(void *fp, const void *buf, size_t len) {
-  unsigned n = 0;
-  f_write((FIL *) fp, buf, len, &n);
-  return n;
+  unsigned n, sum = 0, bs = MG_FATFS_BSIZE;
+  while ((size_t) sum < len &&
+         f_write((FIL *) fp, (char *) buf + sum,
+                 sum + bs > len ? len - sum : bs, &n) == FR_OK &&
+         n > 0) {
+    sum += n;
+  }
+  return sum;
 }
 
 static size_t ff_seek(void *fp, size_t offset) {

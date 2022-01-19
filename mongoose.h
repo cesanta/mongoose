@@ -446,6 +446,14 @@ static __inline struct tm *localtime_r(const time_t *t, struct tm *tm) {
 #define MG_ENABLE_FATFS 0
 #endif
 
+#ifndef MG_FATFS_ROOT
+#define MG_FATFS_ROOT "/"
+#endif
+
+#ifndef MG_FATFS_BSIZE
+#define MG_FATFS_BSIZE 64
+#endif
+
 #ifndef MG_ENABLE_SOCKET
 #define MG_ENABLE_SOCKET 1
 #endif
@@ -626,7 +634,7 @@ struct mg_fs {
   size_t (*seek)(void *fd, size_t offset);                 // Set file position
   bool (*rename)(const char *from, const char *to);        // Rename
   bool (*remove)(const char *path);                        // Delete file
-  bool (*mkdir)(const char *path);                         // Create directory
+  bool (*mkd)(const char *path);                           // Create directory
 };
 
 // File descriptor

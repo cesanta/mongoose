@@ -906,9 +906,9 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
       mg_http_reply(c, 400, "", "open(%s): %d", path, errno);
       return -2;
     } else {
-      fs->write(fd->fd, hm->body.ptr, hm->body.len);
+      int written = (int) fs->write(fd->fd, hm->body.ptr, hm->body.len);
       mg_fs_close(fd);
-      mg_http_reply(c, 200, "", "");
+      mg_http_reply(c, 200, "", "%d", written);
       return (int) hm->body.len;
     }
   }
