@@ -76,4 +76,4 @@ bool mg_aton(struct mg_str str, struct mg_addr *addr);
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
 
 struct mg_connection *mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *);
-void mg_mgr_wakeup(struct mg_connection *pipe);
+void mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_t len);

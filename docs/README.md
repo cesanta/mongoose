@@ -687,14 +687,17 @@ Usage example: see [examples/multi-threaded](https://github.com/cesanta/mongoose
 ### mg\_mgr\_wakeup()
 
 ```c
-void mg_mgr_wakeup(struct mg_connection *pipe);
+void mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_len len);
 ```
 
 Wake up an event manager that sleeps in `mg_mgr_poll()` call. This function
-must be called from a separate task/thread. Parameters:
+must be called from a separate task/thread. A calling thread can pass
+some specific data to the IO thread via `buf`, `len`. Parameters:
 
 Parameters:
 - `pipe` - a special connection created by the `mg_mkpipe()` call
+- `buf` - a data to send to the pipe connection. Use `""` if there is no data 
+- `len` - a data length
 
 Return value: None
 

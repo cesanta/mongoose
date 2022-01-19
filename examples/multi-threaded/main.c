@@ -37,7 +37,7 @@ static void start_thread(void (*f)(void *), void *p) {
 static void thread_function(void *param) {
   struct mg_connection *c = param;  // Pipe connection
   sleep(2);                         // Simulate long execution
-  mg_mgr_wakeup(c);                 // Wakeup event manager
+  mg_mgr_wakeup(c, "hi", 2);        // Wakeup event manager
 }
 
 // HTTP request callback
@@ -62,8 +62,9 @@ static void pcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_connection *t;
     for (t = c->mgr->conns; t != NULL; t = t->next) {
       if (t->label[0] != 'W') continue;  // Ignore un-marked connections
-      mg_http_reply(t, 200, "Host: foo.com\r\n", "hi\n");  // Respond!
-      t->label[0] = 0;                                     // Clear mark
+      mg_http_reply(t, 200, "Host: foo.com\r\n", "%.*s\n", c->recv.len,
+                    c->recv.buf);  // Respond!
+      t->label[0] = 0;             // Clear mark
     }
   }
 }

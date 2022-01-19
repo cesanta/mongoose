@@ -637,6 +637,10 @@ struct mg_fs {
   bool (*mkd)(const char *path);                           // Create directory
 };
 
+extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
+extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/complete
+extern struct mg_fs mg_fs_fat;     // FAT FS
+
 // File descriptor
 struct mg_fd {
   void *fd;
@@ -648,10 +652,6 @@ void mg_fs_close(struct mg_fd *fd);
 char *mg_file_read(struct mg_fs *fs, const char *path, size_t *size);
 bool mg_file_write(struct mg_fs *fs, const char *path, const void *, size_t);
 bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
-
-extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
-extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/complete
-extern struct mg_fs mg_fs_fat;     // FAT FS
 
 
 
@@ -882,7 +882,7 @@ bool mg_aton(struct mg_str str, struct mg_addr *addr);
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
 
 struct mg_connection *mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *);
-void mg_mgr_wakeup(struct mg_connection *pipe);
+void mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_t len);
 
 
 

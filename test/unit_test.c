@@ -1504,7 +1504,7 @@ static void test_pipe(void) {
   int i, done = 0;
   mg_mgr_init(&mgr);
   ASSERT((c = mg_mkpipe(&mgr, eh6, (void *) &done)) != NULL);
-  mg_mgr_wakeup(c);
+  mg_mgr_wakeup(c, "", 1);
   for (i = 0; i < 10 && done == 0; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(done == 1);
   mg_mgr_free(&mgr);

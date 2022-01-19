@@ -444,13 +444,17 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
   return result;
 }
 
-void mg_mgr_wakeup(struct mg_connection *c) {
+void mg_mgr_wakeup(struct mg_connection *c, const void *buf, size_t len) {
   LOG(LL_INFO, ("skt: %p", c->pfn_data));
-  send((SOCKET) (size_t) c->pfn_data, "\x01", 1, MSG_NONBLOCKING);
+  send((SOCKET) (size_t) c->pfn_data, (const char *) buf, len, MSG_NONBLOCKING);
 }
 
 static void pf1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_READ) mg_iobuf_free(&c->recv);
+  if (ev == MG_EV_READ) {
+    mg_iobuf_free(&c->recv);
+  } else if (ev == MG_EV_CLOSE) {
+    closesocket((SOCKET) (size_t) c->pfn_data);
+  }
   (void) ev_data, (void) fn_data;
 }
 
