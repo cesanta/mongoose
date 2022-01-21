@@ -199,11 +199,7 @@ static bool p_remove(const char *path) {
 }
 
 static bool p_mkdir(const char *path) {
-#if defined(__MINGW32__) || defined(__MINGW64__)
-  return mkdir(path) == 0;
-#else
   return mkdir(path, 0775) == 0;
-#endif
 }
 
 #else

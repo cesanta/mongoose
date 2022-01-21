@@ -902,11 +902,7 @@ static bool p_remove(const char *path) {
 }
 
 static bool p_mkdir(const char *path) {
-#if defined(__MINGW32__) || defined(__MINGW64__)
-  return mkdir(path) == 0;
-#else
   return mkdir(path, 0775) == 0;
-#endif
 }
 
 #else
@@ -3511,7 +3507,7 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
 }
 
 void mg_mgr_wakeup(struct mg_connection *c, const void *buf, size_t len) {
-  LOG(LL_INFO, ("skt: %p", c->pfn_data));
+  if (buf == NULL || len == 0) buf = (void *) "", len = 1;
   send((SOCKET) (size_t) c->pfn_data, (const char *) buf, len, MSG_NONBLOCKING);
 }
 
