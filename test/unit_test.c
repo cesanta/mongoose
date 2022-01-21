@@ -1539,7 +1539,7 @@ static void test_udp(void) {
 }
 
 static void test_check_ip_acl(void) {
-  uint32_t ip = 0x01020304;
+  uint32_t ip = mg_htonl(0x01020304);
   ASSERT(mg_check_ip_acl(mg_str(NULL), ip) == 1);
   ASSERT(mg_check_ip_acl(mg_str(""), ip) == 1);
   ASSERT(mg_check_ip_acl(mg_str("invalid"), ip) == -1);

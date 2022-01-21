@@ -4630,7 +4630,7 @@ int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip) {
     uint32_t net, mask;
     if (k.ptr[0] != '+' && k.ptr[0] != '-') return -1;
     if (parse_net(&k.ptr[1], &net, &mask) == 0) return -2;
-    if ((remote_ip & mask) == net) allowed = k.ptr[0];
+    if ((mg_ntohl(remote_ip) & mask) == net) allowed = k.ptr[0];
   }
   return allowed == '+';
 }
