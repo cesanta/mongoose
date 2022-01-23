@@ -32,7 +32,7 @@ jobs:
     - name: make
       run: make test++ upload-coverage IPV6=0 ASAN_OPTIONS=
     - name: openssl
-      run: make test SSL=OPENSSL IPV6=0 OPENSSL=`echo /usr/local/Cellar/openssl*/*`
+      run: make test SSL=OPENSSL IPV6=0 ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
     - name: exports
       run: make mg_prefix
   windows:
