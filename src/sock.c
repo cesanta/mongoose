@@ -100,12 +100,25 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
 }
 
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
-  LOG(n > 0 ? LL_VERBOSE_DEBUG : LL_DEBUG,
-      ("%-3lu %d%d%d%d%d%d%d%d%d%d%d%d%d%d %d:%d %ld err %d", c->id,
-       c->is_listening, c->is_client, c->is_accepted, c->is_resolving,
-       c->is_connecting, c->is_tls, c->is_tls_hs, c->is_udp, c->is_websocket,
-       c->is_hexdumping, c->is_draining, c->is_closing, c->is_readable,
-       c->is_writable, (int) c->send.len, (int) c->recv.len, n, MG_SOCK_ERRNO));
+  int log_level = n > 0 ? LL_VERBOSE_DEBUG : LL_DEBUG;
+  char flags[] = {(char) ('0' + c->is_listening),
+                  (char) ('0' + c->is_client),
+                  (char) ('0' + c->is_accepted),
+                  (char) ('0' + c->is_resolving),
+                  (char) ('0' + c->is_connecting),
+                  (char) ('0' + c->is_tls),
+                  (char) ('0' + c->is_tls_hs),
+                  (char) ('0' + c->is_udp),
+                  (char) ('0' + c->is_websocket),
+                  (char) ('0' + c->is_hexdumping),
+                  (char) ('0' + c->is_draining),
+                  (char) ('0' + c->is_closing),
+                  (char) ('0' + c->is_readable),
+                  (char) ('0' + c->is_writable),
+                  '\0'};
+  LOG(log_level,
+      ("%-3lu %s %d:%d %ld err %d (%s)", c->id, flags, (int) c->send.len,
+       (int) c->recv.len, n, MG_SOCK_ERRNO, strerror(errno)));
   if (n == 0) {
     // Do nothing
   } else if (n < 0) {

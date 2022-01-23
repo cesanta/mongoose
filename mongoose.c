@@ -265,9 +265,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         if (d->c->is_resolving) {
           d->c->is_resolving = 0;
           if (dm.resolved) {
-#if MG_ENABLE_LOG
             char buf[100];
-#endif
             dm.addr.port = d->c->peer.port;  // Save port
             d->c->peer = dm.addr;            // Copy resolved address
             LOG(LL_DEBUG, ("%lu %s resolved to %s", d->c->id, dm.name,
@@ -352,9 +350,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
   } else if ((d = (struct dns_data *) calloc(1, sizeof(*d))) == NULL) {
     mg_error(c, "resolve OOM");
   } else {
-#if MG_ENABLE_LOG
     char buf[100];
-#endif
     d->txnid = s_reqs ? (uint16_t) (s_reqs->txnid + 1) : 1;
     d->next = s_reqs;
     s_reqs = d;
@@ -1352,45 +1348,44 @@ static void static_cb(struct mg_connection *c, int ev, void *ev_data,
 }
 
 static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
-  // clang-format off
-  struct mimeentry { struct mg_str extension, value; };
-  #define MIME_ENTRY(a, b) {{a, sizeof(a) - 1 }, { b, sizeof(b) - 1 }}
-  // clang-format on
-  const struct mimeentry tab[] = {
-      MIME_ENTRY("html", "text/html; charset=utf-8"),
-      MIME_ENTRY("htm", "text/html; charset=utf-8"),
-      MIME_ENTRY("css", "text/css; charset=utf-8"),
-      MIME_ENTRY("js", "text/javascript; charset=utf-8"),
-      MIME_ENTRY("gif", "image/gif"),
-      MIME_ENTRY("png", "image/png"),
-      MIME_ENTRY("jpg", "image/jpeg"),
-      MIME_ENTRY("jpeg", "image/jpeg"),
-      MIME_ENTRY("woff", "font/woff"),
-      MIME_ENTRY("ttf", "font/ttf"),
-      MIME_ENTRY("svg", "image/svg+xml"),
-      MIME_ENTRY("txt", "text/plain; charset=utf-8"),
-      MIME_ENTRY("avi", "video/x-msvideo"),
-      MIME_ENTRY("csv", "text/csv"),
-      MIME_ENTRY("doc", "application/msword"),
-      MIME_ENTRY("exe", "application/octet-stream"),
-      MIME_ENTRY("gz", "application/gzip"),
-      MIME_ENTRY("ico", "image/x-icon"),
-      MIME_ENTRY("json", "application/json"),
-      MIME_ENTRY("mov", "video/quicktime"),
-      MIME_ENTRY("mp3", "audio/mpeg"),
-      MIME_ENTRY("mp4", "video/mp4"),
-      MIME_ENTRY("mpeg", "video/mpeg"),
-      MIME_ENTRY("pdf", "application/pdf"),
-      MIME_ENTRY("shtml", "text/html; charset=utf-8"),
-      MIME_ENTRY("tgz", "application/tar-gz"),
-      MIME_ENTRY("wav", "audio/wav"),
-      MIME_ENTRY("webp", "image/webp"),
-      MIME_ENTRY("zip", "application/zip"),
-      MIME_ENTRY("3gp", "video/3gpp"),
-      {{0, 0}, {0, 0}},
-  };
-  size_t i = 0;
   struct mg_str k, v, s = mg_str(extra);
+  size_t i = 0;
+
+  // clang-format off
+  struct mg_str tab[] = {
+      MG_C_STR("html"), MG_C_STR("text/html; charset=utf-8"),
+      MG_C_STR("htm"), MG_C_STR("text/html; charset=utf-8"),
+      MG_C_STR("css"), MG_C_STR("text/css; charset=utf-8"),
+      MG_C_STR("js"), MG_C_STR("text/javascript; charset=utf-8"),
+      MG_C_STR("gif"), MG_C_STR("image/gif"),
+      MG_C_STR("png"), MG_C_STR("image/png"),
+      MG_C_STR("jpg"), MG_C_STR("image/jpeg"),
+      MG_C_STR("jpeg"), MG_C_STR("image/jpeg"),
+      MG_C_STR("woff"), MG_C_STR("font/woff"),
+      MG_C_STR("ttf"), MG_C_STR("font/ttf"),
+      MG_C_STR("svg"), MG_C_STR("image/svg+xml"),
+      MG_C_STR("txt"), MG_C_STR("text/plain; charset=utf-8"),
+      MG_C_STR("avi"), MG_C_STR("video/x-msvideo"),
+      MG_C_STR("csv"), MG_C_STR("text/csv"),
+      MG_C_STR("doc"), MG_C_STR("application/msword"),
+      MG_C_STR("exe"), MG_C_STR("application/octet-stream"),
+      MG_C_STR("gz"), MG_C_STR("application/gzip"),
+      MG_C_STR("ico"), MG_C_STR("image/x-icon"),
+      MG_C_STR("json"), MG_C_STR("application/json"),
+      MG_C_STR("mov"), MG_C_STR("video/quicktime"),
+      MG_C_STR("mp3"), MG_C_STR("audio/mpeg"),
+      MG_C_STR("mp4"), MG_C_STR("video/mp4"),
+      MG_C_STR("mpeg"), MG_C_STR("video/mpeg"),
+      MG_C_STR("pdf"), MG_C_STR("application/pdf"),
+      MG_C_STR("shtml"), MG_C_STR("text/html; charset=utf-8"),
+      MG_C_STR("tgz"), MG_C_STR("application/tar-gz"),
+      MG_C_STR("wav"), MG_C_STR("audio/wav"),
+      MG_C_STR("webp"), MG_C_STR("image/webp"),
+      MG_C_STR("zip"), MG_C_STR("application/zip"),
+      MG_C_STR("3gp"), MG_C_STR("video/3gpp"),
+      {0, 0},
+  };
+  // clang-format on
 
   // Shrink path to its extension only
   while (i < path.len && path.ptr[path.len - i - 1] != '.') i++;
@@ -1403,8 +1398,8 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
   }
 
   // Process built-in mime types
-  for (i = 0; tab[i].extension.ptr != NULL; i++) {
-    if (mg_strcmp(path, tab[i].extension) == 0) return tab[i].value;
+  for (i = 0; tab[i].ptr != NULL; i += 2) {
+    if (mg_strcmp(path, tab[i]) == 0) return tab[i + 1];
   }
 
   return mg_str("text/plain; charset=utf-8");
@@ -3162,12 +3157,25 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
 }
 
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
-  LOG(n > 0 ? LL_VERBOSE_DEBUG : LL_DEBUG,
-      ("%-3lu %d%d%d%d%d%d%d%d%d%d%d%d%d%d %d:%d %ld err %d", c->id,
-       c->is_listening, c->is_client, c->is_accepted, c->is_resolving,
-       c->is_connecting, c->is_tls, c->is_tls_hs, c->is_udp, c->is_websocket,
-       c->is_hexdumping, c->is_draining, c->is_closing, c->is_readable,
-       c->is_writable, (int) c->send.len, (int) c->recv.len, n, MG_SOCK_ERRNO));
+  int log_level = n > 0 ? LL_VERBOSE_DEBUG : LL_DEBUG;
+  char flags[] = {(char) ('0' + c->is_listening),
+                  (char) ('0' + c->is_client),
+                  (char) ('0' + c->is_accepted),
+                  (char) ('0' + c->is_resolving),
+                  (char) ('0' + c->is_connecting),
+                  (char) ('0' + c->is_tls),
+                  (char) ('0' + c->is_tls_hs),
+                  (char) ('0' + c->is_udp),
+                  (char) ('0' + c->is_websocket),
+                  (char) ('0' + c->is_hexdumping),
+                  (char) ('0' + c->is_draining),
+                  (char) ('0' + c->is_closing),
+                  (char) ('0' + c->is_readable),
+                  (char) ('0' + c->is_writable),
+                  '\0'};
+  LOG(log_level,
+      ("%-3lu %s %d:%d %ld err %d (%s)", c->id, flags, (int) c->send.len,
+       (int) c->recv.len, n, MG_SOCK_ERRNO, strerror(errno)));
   if (n == 0) {
     // Do nothing
   } else if (n < 0) {

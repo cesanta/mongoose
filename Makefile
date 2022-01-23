@@ -4,16 +4,17 @@ DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1
 WARN ?= -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
-CFLAGS ?= $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) $(EXTRA)
 SSL ?= MBEDTLS
 CWD ?= $(realpath $(CURDIR))
 DOCKER ?= docker run --rm -e Tmp=. -e WINEDEBUG=-all -v $(CWD):$(CWD) -w $(CWD)
 VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
-ASAN_OPTIONS ?=
+ASAN ?= -fsanitize=address,undefined
+ASAN_OPTIONS ?= detect_leaks=1
 EXAMPLES := $(wildcard examples/*)
 PREFIX ?= /usr/local
 VERSION ?= $(shell cut -d'"' -f2 src/version.h)
+CFLAGS ?= $(OPTS) $(WARN) $(INCS) $(DEFS) $(ASAN) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS) $(EXTRA)
 .PHONY: examples test
 
 ifeq "$(SSL)" "MBEDTLS"
@@ -59,7 +60,6 @@ fuzz: fuzzer
 	$(RUN) ./fuzzer
 
 # make CC=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
-test: CFLAGS += -DMG_ENABLE_IPV6=$(IPV6) -fsanitize=address,undefined
 test: mongoose.h  Makefile $(SRCS)
 	$(CC) $(SRCS) $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
@@ -98,8 +98,6 @@ mingw++: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/mingw i686-w64-mingw32-g++ $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
   # Note: for some reason, a binary built with mingw g++, fails to run
 
-#linux: CFLAGS += -DMG_ENABLE_IPV6=$(IPV6)
-linux: CFLAGS += -fsanitize=address,undefined
 linux: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/cc2 gcc $(SRCS) $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
 	$(DOCKER) mdashnet/cc2 ./unit_test_gcc

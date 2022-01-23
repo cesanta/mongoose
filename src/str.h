@@ -10,6 +10,9 @@ struct mg_str {
 #define MG_NULL_STR \
   { NULL, 0 }
 
+#define MG_C_STR(a) \
+  { (a), sizeof(a) - 1 }
+
 // Using macro to avoid shadowing C++ struct constructor, see #1298
 #define mg_str(s) mg_str_s(s)
 

@@ -155,9 +155,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         if (d->c->is_resolving) {
           d->c->is_resolving = 0;
           if (dm.resolved) {
-#if MG_ENABLE_LOG
             char buf[100];
-#endif
             dm.addr.port = d->c->peer.port;  // Save port
             d->c->peer = dm.addr;            // Copy resolved address
             LOG(LL_DEBUG, ("%lu %s resolved to %s", d->c->id, dm.name,
@@ -242,9 +240,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
   } else if ((d = (struct dns_data *) calloc(1, sizeof(*d))) == NULL) {
     mg_error(c, "resolve OOM");
   } else {
-#if MG_ENABLE_LOG
     char buf[100];
-#endif
     d->txnid = s_reqs ? (uint16_t) (s_reqs->txnid + 1) : 1;
     d->next = s_reqs;
     s_reqs = d;
