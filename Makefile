@@ -18,12 +18,12 @@ CFLAGS ?= $(OPTS) $(WARN) $(INCS) $(DEFS) $(ASAN) -DMG_ENABLE_IPV6=$(IPV6) $(TFL
 .PHONY: examples test
 
 ifeq "$(SSL)" "MBEDTLS"
-MBEDTLS ?= /usr
+MBEDTLS ?= /usr/local
 CFLAGS  += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS)/include -I/usr/include
 LDFLAGS ?= -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
 endif
 ifeq "$(SSL)" "OPENSSL"
-OPENSSL ?= /usr
+OPENSSL ?= /usr/local
 CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif

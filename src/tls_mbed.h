@@ -1,10 +1,11 @@
 #pragma once
 
-#if MG_ENABLE_MBEDTLS
+#include "config.h"
 #include "log.h"
 #include "url.h"
 #include "util.h"
 
+#if MG_ENABLE_MBEDTLS
 #include <mbedtls/debug.h>
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>
