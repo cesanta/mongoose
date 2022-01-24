@@ -127,4 +127,4 @@ mongoose.h: $(HDRS) Makefile
 
 clean:
 	rm -rf $(PROG) *.o *.dSYM unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack
-	@for X in $(EXAMPLES); do $(MAKE) -C $$X clean; done
+	@for X in $(EXAMPLES); do test -f $$X/Makefile && $(MAKE) -C $$X clean; done
