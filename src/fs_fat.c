@@ -33,8 +33,8 @@ static void ff_list(const char *dir, void (*fn)(const char *, void *),
 
 static void *ff_open(const char *path, int flags) {
   FIL f;
-  unsigned char mode =
-      flags == MG_FS_READ ? FA_READ : FA_READ | FA_WRITE | FA_OPEN_APPEND;
+  unsigned char mode = FA_READ;
+  if (flags & MG_FS_WRITE) mode |= FA_WRITE | FA_CREATE_ALWAYS | FA_OPEN_APPEND;
   if (f_open(&f, path, mode) == 0) {
     FIL *fp = calloc(1, sizeof(*fp));
     *fp = f;
