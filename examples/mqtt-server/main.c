@@ -78,7 +78,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
         for (struct sub *sub = s_subs; sub != NULL; sub = sub->next) {
           if (mg_globmatch(sub->topic.ptr, sub->topic.len, mm->topic.ptr,
                            mm->topic.len)) {
-            mg_mqtt_pub(sub->c, &mm->topic, &mm->data, 1, false);
+            mg_mqtt_pub(sub->c, mm->topic, mm->data, 1, false);
           }
         }
         break;
