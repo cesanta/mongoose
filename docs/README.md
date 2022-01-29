@@ -2281,9 +2281,10 @@ bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
 
 Check if string `str` matches glob pattern `pattern`, and optionally capture
 wildcards into the provided array `caps`.
-<span class="badge bg-danger">NOTE: </span> If `caps` is not NULL, then it
+
+<span class="badge bg-danger">NOTE: </span> If `caps` is not NULL, then the
 `caps` array size must be at least the number of wildcard symbols in `pattern`
-plus 1. Last cap will be initialized to an empty string.
+plus 1. The last cap will be initialized to an empty string.
 The glob pattern matching rules are as follows:
 
 - `?` matches any single character
@@ -2302,7 +2303,7 @@ Usage example:
 
 ```c
 // Assume that hm->uri holds /foo/bar. Then we can match the requested URI:
-struct mg_str caps[2];
+struct mg_str caps[3];  // Two wildcard symbols '*' plus 1
 if (mg_match(hm->uri, mg_str("/*/*"))) {
   // caps[0] holds `foo`, caps[1] holds `bar`.
 }
