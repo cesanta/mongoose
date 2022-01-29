@@ -2285,6 +2285,7 @@ wildcards into the provided array `caps`.
 <span class="badge bg-danger">NOTE: </span> If `caps` is not NULL, then the
 `caps` array size must be at least the number of wildcard symbols in `pattern`
 plus 1. The last cap will be initialized to an empty string.
+
 The glob pattern matching rules are as follows:
 
 - `?` matches any single character
