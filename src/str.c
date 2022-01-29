@@ -86,3 +86,62 @@ struct mg_str mg_strstrip(struct mg_str s) {
   while (s.len > 0 && isspace((int) *(s.ptr + s.len - 1))) s.len--;
   return s;
 }
+
+bool mg_match(struct mg_str s, struct mg_str p, struct mg_str *caps) {
+  size_t i = 0, j = 0, ni = 0, nj = 0;
+  if (caps) caps->ptr = NULL, caps->len = 0;
+  while (i < p.len || j < s.len) {
+    if (i < p.len && j < s.len && (p.ptr[i] == '?' || s.ptr[j] == p.ptr[i])) {
+      if (caps == NULL) {
+      } else if (p.ptr[i] == '?') {
+        caps->ptr = &s.ptr[j], caps->len = 1;     // Finalize `?` cap
+        caps++, caps->ptr = NULL, caps->len = 0;  // Init next cap
+      } else if (caps->ptr != NULL && caps->len == 0) {
+        caps->len = (size_t) (&s.ptr[j] - caps->ptr);  // Finalize current cap
+        caps++, caps->len = 0, caps->ptr = NULL;       // Init next cap
+      }
+      i++, j++;
+    } else if (i < p.len && (p.ptr[i] == '*' || p.ptr[i] == '#')) {
+      if (caps && !caps->ptr) caps->len = 0, caps->ptr = &s.ptr[j];  // Init cap
+      ni = i++, nj = j + 1;
+    } else if (nj > 0 && nj <= s.len && (p.ptr[ni] == '#' || s.ptr[j] != '/')) {
+      i = ni, j = nj;
+      if (caps && caps->ptr == NULL && caps->len == 0) {
+        caps--, caps->len = 0;  // Restart previous cap
+      }
+    } else {
+      return false;
+    }
+  }
+  if (caps && caps->ptr && caps->len == 0) {
+    caps->len = (size_t) (&s.ptr[j] - caps->ptr);
+  }
+  return true;
+}
+
+bool mg_globmatch(const char *s1, size_t n1, const char *s2, size_t n2) {
+  return mg_match(mg_str_n(s2, n2), mg_str_n(s1, n1), NULL);
+}
+
+static size_t mg_nce(const char *s, size_t n, size_t ofs, size_t *koff,
+                     size_t *klen, size_t *voff, size_t *vlen) {
+  size_t kvlen, kl;
+  for (kvlen = 0; ofs + kvlen < n && s[ofs + kvlen] != ',';) kvlen++;
+  for (kl = 0; kl < kvlen && s[ofs + kl] != '=';) kl++;
+  if (koff != NULL) *koff = ofs;
+  if (klen != NULL) *klen = kl;
+  if (voff != NULL) *voff = kl < kvlen ? ofs + kl + 1 : 0;
+  if (vlen != NULL) *vlen = kl < kvlen ? kvlen - kl - 1 : 0;
+  ofs += kvlen + 1;
+  return ofs > n ? n : ofs;
+}
+
+bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
+  size_t koff = 0, klen = 0, voff = 0, vlen = 0, off = 0;
+  if (s->ptr == NULL || s->len == 0) return 0;
+  off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen);
+  if (k != NULL) *k = mg_str_n(s->ptr + koff, klen);
+  if (v != NULL) *v = mg_str_n(s->ptr + voff, vlen);
+  *s = mg_str_n(s->ptr + off, s->len - off);
+  return off > 0;
+}

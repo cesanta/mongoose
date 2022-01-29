@@ -580,6 +580,9 @@ int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
 struct mg_str mg_strstrip(struct mg_str s);
 struct mg_str mg_strdup(const struct mg_str s);
 const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
+bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
+bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
+bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 
 
 
@@ -676,8 +679,6 @@ bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
 
 
 void mg_random(void *buf, size_t len);
-bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
-bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);

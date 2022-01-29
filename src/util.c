@@ -25,46 +25,6 @@ void mg_random(void *buf, size_t len) {
 }
 #endif
 
-bool mg_globmatch(const char *s1, size_t n1, const char *s2, size_t n2) {
-  size_t i = 0, j = 0, ni = 0, nj = 0;
-  while (i < n1 || j < n2) {
-    if (i < n1 && j < n2 && (s1[i] == '?' || s2[j] == s1[i])) {
-      i++, j++;
-    } else if (i < n1 && (s1[i] == '*' || s1[i] == '#')) {
-      ni = i, nj = j + 1, i++;
-    } else if (nj > 0 && nj <= n2 && (s1[ni] == '#' || s2[j] != '/')) {
-      i = ni, j = nj;
-    } else {
-      // printf(">>: [%s] [%s] %d %d %d %d\n", s1, s2, i, j, ni, nj);
-      return false;
-    }
-  }
-  return true;
-}
-
-static size_t mg_nce(const char *s, size_t n, size_t ofs, size_t *koff,
-                     size_t *klen, size_t *voff, size_t *vlen) {
-  size_t kvlen, kl;
-  for (kvlen = 0; ofs + kvlen < n && s[ofs + kvlen] != ',';) kvlen++;
-  for (kl = 0; kl < kvlen && s[ofs + kl] != '=';) kl++;
-  if (koff != NULL) *koff = ofs;
-  if (klen != NULL) *klen = kl;
-  if (voff != NULL) *voff = kl < kvlen ? ofs + kl + 1 : 0;
-  if (vlen != NULL) *vlen = kl < kvlen ? kvlen - kl - 1 : 0;
-  ofs += kvlen + 1;
-  return ofs > n ? n : ofs;
-}
-
-bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
-  size_t koff = 0, klen = 0, voff = 0, vlen = 0, off = 0;
-  if (s->ptr == NULL || s->len == 0) return 0;
-  off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen);
-  if (k != NULL) *k = mg_str_n(s->ptr + koff, klen);
-  if (v != NULL) *v = mg_str_n(s->ptr + voff, vlen);
-  *s = mg_str_n(s->ptr + off, s->len - off);
-  return off > 0;
-}
-
 uint32_t mg_ntohl(uint32_t net) {
   uint8_t data[4] = {0, 0, 0, 0};
   memcpy(&data, &net, sizeof(data));

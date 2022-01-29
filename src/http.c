@@ -808,7 +808,7 @@ struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v) {
 }
 
 bool mg_http_match_uri(const struct mg_http_message *hm, const char *glob) {
-  return mg_globmatch(glob, strlen(glob), hm->uri.ptr, hm->uri.len);
+  return mg_match(hm->uri, mg_str(glob), NULL);
 }
 
 static size_t get_chunk_length(const char *buf, size_t len, size_t *ll) {

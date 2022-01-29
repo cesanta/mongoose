@@ -2273,13 +2273,17 @@ if (mg_vcmp(str, "Hello, world") == 0) {
 }
 ```
 
-### mg\_globmatch()
+### mg\_match()
 
 ```c
-bool mg_globmatch(const char *pattern, size_t p_len, const char *s, size_t s_len);
+bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
 ```
 
-Check if string `s` (limited to `s_len` symbols) matches glob pattern `pattern`, (limited to `p_len` symbols).
+Check if string `str` matches glob pattern `pattern`, and optionally capture
+wildcards into the provided array `caps`.
+<span class="badge bg-danger">NOTE: </span> If `caps` is not NULL, then it
+`caps` array size must be at least the number of wildcard symbols in `pattern`
+plus 1. Last cap will be initialized to an empty string.
 The glob pattern matching rules are as follows:
 
 - `?` matches any single character
@@ -2288,21 +2292,19 @@ The glob pattern matching rules are as follows:
 - any other character matches itself
 
 Parameters:
-- `pattern` - Pattern to match for
-- `p_len` - Pattern length
-- `s` - String to match
-- `s_len` - String length
+- `str` - a string to match
+- `pattern` - a pattern to match against
+- `caps` - an optional array of captures for wildcard symbols `?`, `*`, '#'
 
 Return value: `true` if matches, `false` otherwise
 
 Usage example:
 
 ```c
-struct mg_str pattern = mg_str("#, ?????");
-struct mg_str s = mg_str("Hello, world");
-
-if (mg_globmatch(pattern.ptr, pattern.len, s.otr, s.len)) {
-  // Match
+// Assume that hm->uri holds /foo/bar. Then we can match the requested URI:
+struct mg_str caps[2];
+if (mg_match(hm->uri, mg_str("/*/*"))) {
+  // caps[0] holds `foo`, caps[1] holds `bar`.
 }
 ```
 

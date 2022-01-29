@@ -48,6 +48,47 @@ static void test_globmatch(void) {
   ASSERT(mg_globmatch("#.shtml", 7, "./ssi/index.shtml", 17) == 1);
   ASSERT(mg_globmatch("#aa#bb#", 7, "caabba", 6) == 1);
   ASSERT(mg_globmatch("#aa#bb#", 7, "caabxa", 6) == 0);
+  ASSERT(mg_globmatch("a*b*c", 5, "a__b_c", 6) == 1);
+
+  {
+    struct mg_str caps[3];
+    ASSERT(mg_match(mg_str("//a.c"), mg_str("#.c"), NULL) == true);
+    ASSERT(mg_match(mg_str("a"), mg_str("#"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("a")) == 0);
+    ASSERT(mg_match(mg_str("//a.c"), mg_str("#.c"), caps) == true);
+    ASSERT(mg_match(mg_str("a_b_c_"), mg_str("a*b*c"), caps) == false);
+    ASSERT(mg_match(mg_str("a__b_c"), mg_str("a*b*c"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("__")) == 0);
+    ASSERT(mg_strcmp(caps[1], mg_str("_")) == 0);
+    ASSERT(mg_match(mg_str("a_b_c__c"), mg_str("a*b*c"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("_")) == 0);
+    ASSERT(mg_strcmp(caps[1], mg_str("_c__")) == 0);
+    ASSERT(mg_match(mg_str("a_xb_.c__c"), mg_str("a*b*c"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("_x")) == 0);
+    ASSERT(mg_strcmp(caps[1], mg_str("_.c__")) == 0);
+    ASSERT(mg_match(mg_str("a"), mg_str("#a"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("")) == 0);
+
+    ASSERT(mg_match(mg_str(".aa..b...b"), mg_str("#a#b"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str(".")) == 0);
+    ASSERT(mg_strcmp(caps[1], mg_str("a..b...")) == 0);
+    ASSERT(mg_strcmp(caps[2], mg_str("")) == 0);
+
+    ASSERT(mg_match(mg_str("/foo/bar"), mg_str("/*/*"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("foo")) == 0);
+    ASSERT(mg_strcmp(caps[1], mg_str("bar")) == 0);
+    ASSERT(mg_strcmp(caps[2], mg_str("")) == 0);
+
+    ASSERT(mg_match(mg_str("/foo/"), mg_str("/*/*"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("foo")) == 0);
+    ASSERT(mg_strcmp(caps[1], mg_str("")) == 0);
+    ASSERT(mg_strcmp(caps[2], mg_str("")) == 0);
+
+    ASSERT(mg_match(mg_str("abc"), mg_str("?#"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("a")) == 0);
+    ASSERT(mg_strcmp(caps[1], mg_str("bc")) == 0);
+    ASSERT(mg_strcmp(caps[2], mg_str("")) == 0);
+  }
 }
 
 static void test_commalist(void) {
@@ -1655,6 +1696,7 @@ static void test_get_header_var(void) {
 
 int main(void) {
   mg_log_set("3");
+  test_globmatch();
   test_get_header_var();
   test_rewrites();
   test_check_ip_acl();
@@ -1674,7 +1716,6 @@ int main(void) {
   test_iobuf();
   test_commalist();
   test_base64();
-  test_globmatch();
   test_http_get_var();
   test_tls();
   test_ws();
