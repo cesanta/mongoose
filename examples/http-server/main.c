@@ -52,7 +52,6 @@ static void usage(const char *prog) {
 
 int main(int argc, char *argv[]) {
   char path[MG_PATH_MAX] = ".";
-  const char *root_dir = ".";
   struct mg_mgr mgr;
   struct mg_connection *c;
   int i;
@@ -60,7 +59,7 @@ int main(int argc, char *argv[]) {
   // Parse command-line flags
   for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-d") == 0) {
-      root_dir = argv[++i];
+      s_root_dir = argv[++i];
     } else if (strcmp(argv[i], "-H") == 0) {
       s_enable_hexdump = argv[++i];
     } else if (strcmp(argv[i], "-S") == 0) {
@@ -75,8 +74,11 @@ int main(int argc, char *argv[]) {
   }
 
   // Root directory must not contain double dots. Make it absolute
-  realpath(root_dir, path);
-  s_root_dir = path;
+  // Do the conversion only if the root dir spec does not contain overrides
+  if (strchr(s_root_dir, ',') == NULL) {
+    realpath(s_root_dir, path);
+    s_root_dir = path;
+  }
 
   // Initialise stuff
   signal(SIGINT, signal_handler);
