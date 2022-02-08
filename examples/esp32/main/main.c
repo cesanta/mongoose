@@ -12,7 +12,7 @@
 // SPIFFS is flat, so tell Mongoose that the FS root is a directory
 // This cludge is not required for filesystems with directory support
 static int my_stat(const char *path, size_t *size, time_t *mtime) {
-  int flags = mg_fs_posix.stat(path, size, mtime);
+  int flags = mg_fs_posix.st(path, size, mtime);
   if (strcmp(path, FS_ROOT) == 0) flags |= MG_FS_DIR;
   return flags;
 }
