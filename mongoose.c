@@ -413,7 +413,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
   struct mg_fd *fd = (struct mg_fd *) calloc(1, sizeof(*fd));
   if (fd != NULL) {
-    fd->fd = fs->open(path, flags);
+    fd->fd = fs->op(path, flags);
     fd->fs = fs;
     if (fd->fd == NULL) {
       free(fd);
@@ -425,7 +425,7 @@ struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
 
 void mg_fs_close(struct mg_fd *fd) {
   if (fd != NULL) {
-    fd->fs->close(fd->fd);
+    fd->fs->cl(fd->fd);
     free(fd);
   }
 }
@@ -434,11 +434,11 @@ char *mg_file_read(struct mg_fs *fs, const char *path, size_t *sizep) {
   struct mg_fd *fd;
   char *data = NULL;
   size_t size = 0;
-  fs->stat(path, &size, NULL);
+  fs->st(path, &size, NULL);
   if ((fd = mg_fs_open(fs, path, MG_FS_READ)) != NULL) {
     data = (char *) calloc(1, size + 1);
     if (data != NULL) {
-      if (fs->read(fd->fd, data, size) != size) {
+      if (fs->rd(fd->fd, data, size) != size) {
         free(data);
         data = NULL;
       } else {
@@ -458,13 +458,13 @@ bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
   char tmp[MG_PATH_MAX];
   snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
   if ((fd = mg_fs_open(fs, tmp, MG_FS_WRITE)) != NULL) {
-    result = fs->write(fd->fd, buf, len) == len;
+    result = fs->wr(fd->fd, buf, len) == len;
     mg_fs_close(fd);
     if (result) {
-      fs->remove(path);
-      fs->rename(tmp, path);
+      fs->rm(path);
+      fs->mv(tmp, path);
     } else {
-      fs->remove(tmp);
+      fs->rm(tmp);
     }
   }
   return result;
@@ -1337,8 +1337,8 @@ static void static_cb(struct mg_connection *c, int ev, void *ev_data,
     size_t n, max = 2 * MG_IO_SIZE;
     if (c->send.size < max) mg_iobuf_resize(&c->send, max);
     if (c->send.len >= c->send.size) return;  // Rate limit
-    n = fd->fs->read(fd->fd, c->send.buf + c->send.len,
-                     c->send.size - c->send.len);
+    n = fd->fs->rd(fd->fd, c->send.buf + c->send.len,
+                   c->send.size - c->send.len);
     if (n > 0) c->send.len += n;
     if (c->send.len < c->send.size) restore_http_cb(c);
   } else if (ev == MG_EV_CLOSE) {
@@ -1434,7 +1434,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   time_t mtime = 0;
   struct mg_str *inm = NULL;
 
-  if (fd == NULL || fs->stat(path, &size, &mtime) == 0) {
+  if (fd == NULL || fs->st(path, &size, &mtime) == 0) {
     LOG(LL_DEBUG, ("404 [%s] %p", path, (void *) fd));
     mg_http_reply(c, 404, "", "%s", "Not found\n");
     mg_fs_close(fd);
@@ -1467,7 +1467,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                  "Content-Range: bytes " MG_INT64_FMT "-" MG_INT64_FMT
                  "/" MG_INT64_FMT "\r\n",
                  r1, r1 + cl - 1, (int64_t) size);
-        fs->seek(fd->fd, (size_t) r1);
+        fs->sk(fd->fd, (size_t) r1);
       }
     }
 
@@ -1504,7 +1504,7 @@ static void printdirentry(const char *name, void *userdata) {
   // LOG(LL_DEBUG, ("[%s] [%s]", d->dir, name));
   if (snprintf(path, sizeof(path), "%s%c%s", d->dir, '/', name) < 0) {
     LOG(LL_ERROR, ("%s truncated", name));
-  } else if ((flags = fs->stat(path, &size, &t)) == 0) {
+  } else if ((flags = fs->st(path, &size, &t)) == 0) {
     LOG(LL_ERROR, ("%lu stat(%s): %d", d->c->id, path, errno));
   } else {
     const char *slash = flags & MG_FS_DIR ? "/" : "";
@@ -1583,7 +1583,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             (int) uri.len, uri.ptr, sort_js_code, sort_js_code2, (int) uri.len,
             uri.ptr);
 
-  fs->list(dir, printdirentry, &d);
+  fs->ls(dir, printdirentry, &d);
   mg_printf(c,
             "</tbody><tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
             "</table><address>Mongoose v.%s</address></body></html>\n",
@@ -1614,7 +1614,7 @@ static void remove_double_dots(char *s) {
   *p = '\0';
 }
 
-// Resolve requested file into `path` and return its fs->stat() result
+// Resolve requested file into `path` and return its fs->st() result
 static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
                         struct mg_fs *fs, struct mg_str url, struct mg_str dir,
                         char *path, size_t path_size) {
@@ -1623,7 +1623,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
   size_t n = (size_t) snprintf(path, path_size, "%.*s", (int) dir.len, dir.ptr);
   if (n > path_size) n = path_size;
   path[path_size - 1] = '\0';
-  if ((fs->stat(path, NULL, NULL) & MG_FS_DIR) == 0) {
+  if ((fs->st(path, NULL, NULL) & MG_FS_DIR) == 0) {
     mg_http_reply(c, 400, "", "Invalid web root [%.*s]\n", (int) dir.len,
                   dir.ptr);
   } else {
@@ -1636,7 +1636,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
     LOG(LL_VERBOSE_DEBUG,
         ("%lu %.*s -> %s", c->id, (int) hm->uri.len, hm->uri.ptr, path));
     while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
-    flags = fs->stat(path, NULL, NULL);                 // Does it exist?
+    flags = fs->st(path, NULL, NULL);                   // Does it exist?
     if (flags == 0) {
       mg_http_reply(c, 404, "", "Not found\n");  // Does not exist, doh
     } else if ((flags & MG_FS_DIR) && hm->uri.len > 0 &&
@@ -1650,9 +1650,9 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
       flags = 0;
     } else if (flags & MG_FS_DIR) {
       if (((snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX) > 0 &&
-            (tmp = fs->stat(path, NULL, NULL)) != 0) ||
+            (tmp = fs->st(path, NULL, NULL)) != 0) ||
            (snprintf(path + n, path_size - n, "/index.shtml") > 0 &&
-            (tmp = fs->stat(path, NULL, NULL)) != 0))) {
+            (tmp = fs->st(path, NULL, NULL)) != 0))) {
         flags = tmp;
       } else {
         path[n] = '\0';  // Remove appended index file name
@@ -1852,12 +1852,12 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
     snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, name);
     remove_double_dots(path);
     LOG(LL_DEBUG, ("%d bytes @ %ld [%s]", (int) hm->body.len, oft, path));
-    if (oft == 0) fs->remove(path);
+    if (oft == 0) fs->rm(path);
     if ((fd = mg_fs_open(fs, path, MG_FS_WRITE)) == NULL) {
       mg_http_reply(c, 400, "", "open(%s): %d", path, errno);
       return -2;
     } else {
-      int written = (int) fs->write(fd->fd, hm->body.ptr, hm->body.len);
+      int written = (int) fs->wr(fd->fd, hm->body.ptr, hm->body.len);
       mg_fs_close(fd);
       mg_http_reply(c, 200, "", "%d", written);
       return (int) hm->body.len;

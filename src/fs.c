@@ -4,7 +4,7 @@
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
   struct mg_fd *fd = (struct mg_fd *) calloc(1, sizeof(*fd));
   if (fd != NULL) {
-    fd->fd = fs->open(path, flags);
+    fd->fd = fs->op(path, flags);
     fd->fs = fs;
     if (fd->fd == NULL) {
       free(fd);
@@ -16,7 +16,7 @@ struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
 
 void mg_fs_close(struct mg_fd *fd) {
   if (fd != NULL) {
-    fd->fs->close(fd->fd);
+    fd->fs->cl(fd->fd);
     free(fd);
   }
 }
@@ -25,11 +25,11 @@ char *mg_file_read(struct mg_fs *fs, const char *path, size_t *sizep) {
   struct mg_fd *fd;
   char *data = NULL;
   size_t size = 0;
-  fs->stat(path, &size, NULL);
+  fs->st(path, &size, NULL);
   if ((fd = mg_fs_open(fs, path, MG_FS_READ)) != NULL) {
     data = (char *) calloc(1, size + 1);
     if (data != NULL) {
-      if (fs->read(fd->fd, data, size) != size) {
+      if (fs->rd(fd->fd, data, size) != size) {
         free(data);
         data = NULL;
       } else {
@@ -49,13 +49,13 @@ bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
   char tmp[MG_PATH_MAX];
   snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
   if ((fd = mg_fs_open(fs, tmp, MG_FS_WRITE)) != NULL) {
-    result = fs->write(fd->fd, buf, len) == len;
+    result = fs->wr(fd->fd, buf, len) == len;
     mg_fs_close(fd);
     if (result) {
-      fs->remove(path);
-      fs->rename(tmp, path);
+      fs->rm(path);
+      fs->mv(tmp, path);
     } else {
-      fs->remove(tmp);
+      fs->rm(tmp);
     }
   }
   return result;

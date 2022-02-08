@@ -2,6 +2,7 @@
 
 #if MG_ARCH == MG_ARCH_FREERTOS_LWIP
 
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>

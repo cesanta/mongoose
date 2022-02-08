@@ -609,7 +609,7 @@ static void test_http_server(void) {
     char etag[100];
     size_t size = 0;
     time_t mtime = 0;
-    ASSERT(mg_fs_posix.stat("./test/data/a.txt", &size, &mtime) != 0);
+    ASSERT(mg_fs_posix.st("./test/data/a.txt", &size, &mtime) != 0);
     ASSERT(mg_http_etag(etag, sizeof(etag), size, mtime) == etag);
     ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nIf-None-Match: %s\n\n",
                  etag) == 304);
