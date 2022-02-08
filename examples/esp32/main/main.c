@@ -27,7 +27,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_reply(c, 200, "", "{\"ram\": %lu}\n", xPortGetFreeHeapSize());
     } else {
       struct mg_fs fs = mg_fs_posix;
-      fs.stat = my_stat;
+      fs.st = my_stat;
       struct mg_http_serve_opts opts = {.root_dir = FS_ROOT, .fs = &fs};
       mg_http_serve_dir(c, hm, &opts);
     }
