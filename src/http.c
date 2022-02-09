@@ -455,7 +455,7 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
 
 static int getrange(struct mg_str *s, int64_t *a, int64_t *b) {
   size_t i, numparsed = 0;
-  LOG(LL_INFO, ("%.*s", (int) s->len, s->ptr));
+  // LOG(LL_INFO, ("%.*s", (int) s->len, s->ptr));
   for (i = 0; i + 6 < s->len; i++) {
     if (memcmp(&s->ptr[i], "bytes=", 6) == 0) {
       struct mg_str p = mg_str_n(s->ptr + i + 6, s->len - i - 6);
@@ -621,7 +621,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             "<!DOCTYPE html><html><head><title>Index of %.*s</title>%s%s"
             "<style>th,td {text-align: left; padding-right: 1em; "
             "font-family: monospace; }</style></head>"
-            "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
+            "<body><h1>Innex of %.*s</h1><table cellpadding=\"0\"><thead>"
             "<tr><th><a href=\"#\" rel=\"0\">Name</a></th><th>"
             "<a href=\"#\" rel=\"1\">Modified</a></th>"
             "<th><a href=\"#\" rel=\"2\">Size</a></th></tr>"
@@ -869,21 +869,17 @@ static bool mg_is_chunked(struct mg_http_message *hm) {
 
 void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
   struct mg_str ch = hm->chunk;
-  if (mg_is_chunked(hm)) {
-    ch.len += 4;  // \r\n before and after the chunk
-    ch.ptr -= 2;
+  const char *end = (char *) &c->recv.buf[c->recv.len], *ce;
+  bool chunked = mg_is_chunked(hm);
+  if (!mg_is_chunked(hm)) return;
+  if (chunked) {
+    ch.len += 4, ch.ptr -= 2;  // \r\n before and after the chunk
     while (ch.ptr > hm->body.ptr && *ch.ptr != '\n') ch.ptr--, ch.len++;
   }
-  {
-    const char *end = &ch.ptr[ch.len];
-    size_t n = (size_t) (end - (char *) c->recv.buf);
-    if (c->recv.len > n) {
-      memmove((char *) ch.ptr, end, (size_t) (c->recv.len - n));
-    }
-    // LOG(LL_INFO, ("DELETING CHUNK: %zu %zu %zu\n%.*s", c->recv.len, n,
-    // ch.len, (int) ch.len, ch.ptr));
-  }
+  ce = &ch.ptr[ch.len];
+  if (ce < end) memmove((void *) ch.ptr, ce, (size_t) (end - ce));
   c->recv.len -= ch.len;
+  if (c->pfn_data == NULL) c->pfn_data = (char *) c->pfn_data - ch.len;
 }
 
 int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
@@ -937,7 +933,16 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
         if (n > 0 && !is_chunked) {
           hm.chunk =
               mg_str_n((char *) &c->recv.buf[n], c->recv.len - (size_t) n);
+          // Store remaining body length in c->pfn_data
+          if (c->pfn_data == NULL)
+            c->pfn_data = (void *) (hm.message.len - (size_t) n);
           mg_call(c, MG_EV_HTTP_CHUNK, &hm);
+          if (c->pfn_data == NULL) {
+            hm.chunk.len = 0;                   // Last chunk!
+            mg_call(c, MG_EV_HTTP_CHUNK, &hm);  // Lest user know
+            memmove(c->recv.buf, c->recv.buf + n, c->recv.len - (size_t) n);
+            c->recv.len -= (size_t) n;
+          }
         }
         break;
       }

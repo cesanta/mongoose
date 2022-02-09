@@ -1176,61 +1176,6 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 ```
 
-### mg\_http\_upload()
-
-```c
-int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
-                   struct mg_fs *fs, const char *dir);
-```
-
-Handle file upload. See [file upload example](https://github.com/cesanta/mongoose/tree/master/examples/file-uploads/).
-
-This function  expects a series of POST requests with file data. POST requests
-should have `name` and `offset` query string parameters set:
-
-```text
-POST /whatever_uri?name=myfile.txt&offset=1234 HTTP/1.0
-Content-Length: 5
-
-hello
-```
-
-- `name` - A mandatory query string parameter, specifies a file name. It it
-  created in the `dir` directory
-- `offset` - An optional parameter, default `0`. If it set to `0`, or omitted,
-  then a file gets truncated before write. Otherwise, the body of
-  the POST request gets appended to the file
-- Server must call `mg_http_upload()` when `/whatever_uri` is hit
-
-The expected usage of this API function follows:
-- A client splits a file into small enough chunks, to ensure that a chunk
-  fits into the server's RAM
-- Then, each chunk is POST-ed to the server with using URI, like
-  `/some_uri?name=FILENAME&offset=OFFSET`
-- Initial OFFSET is `0`, and subsequent offsets are non-zero
-- Each chunk gets appended to the file
-- When the last chunk is POST-ed, upload finishes
-- POST data must not be encoded in any way; it it saved as-is
-
-Parameters:
-- `c` - Connection to use
-- `hm` - POST message, containing parameters described above
-- `fs` - Filesystem to use
-- `dir` - Path to directory
-
-Return value: Request body length or negative value on error
-
-Usage example:
-
-```c
-// Mongoose events handler
-void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_http_upload(c, hm, &mg_fs_posix, "."); // Upload to current folder
-  }
-```
-
 ### mg\_http\_bauth()
 
 ```c

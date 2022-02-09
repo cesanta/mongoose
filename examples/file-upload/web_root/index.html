@@ -16,21 +16,49 @@
       <div id="info">
         Mongoose always buffers a full HTTP message before invoking
         MG_EV_HTTP_MSG event. Big POST request require of lot
-        of RAM to buffer everything. Therefore, in order to upload large
-        files on memory-constrained system, a large file should be send
-        in small chunks.
-        <br/><br/>
-        In this example, JavaScript code on this page sends uploaded
-        file in 2k chunks using an <code>/upload</code> endpoint.
-        Uploaded file is stored in <code>/tmp</code> directory by the helper
-				API function <code>mg_http_upload()</code>
+        of RAM to buffer everything.
+        <br><br>
+        In order to upload large files to a memory-constrained system, use
+        <code>MG_EV_HTTP_CHUNK</code> on a server side. It fires when
+        a partial HTTP message has been received (or a chunk-encoded chunk).
+        Use <code>mg_http_delete_chunk()</code> to release chunk memory.
+        When 0-sized chunk is received, that's the end of the message.
+        Use <code>MG_MAX_RECV_BUF_SIZE</code> build constant to limit
+        maximum chunk size on a server side.
+        <br><br>
+        In this example, JavaScript code uses "fetch()" browser API.
+        Uploaded file is not saved, but rather printed by server side.
       </div>
       <div id="wrapper">
         <input type="file" id="el1" style="display: none"/>
         <button id="el2">choose file...</button>
-        <div id="el3"></div>
+        <div id="el3" style="margin-top: 1em;"></div>
       </div>
     </div>
   </body>
-  <script src="app.js"></script>
+  <script>
+
+    // When user clicks on a button, trigger file selection dialog
+    document.getElementById('el2').onclick = function(ev) {
+      document.getElementById('el1').click();
+    };
+
+    // If user selected a file, read it into memory and trigger sendFileData()
+    document.getElementById('el1').onchange = function(ev) {
+      if (!ev.target.files[0]) return;
+      var f = ev.target.files[0], r = new FileReader();
+      r.readAsArrayBuffer(f);
+      r.onload = function() {
+        ev.target.value = '';
+        document.getElementById('el3').innerText = 'Uploading...';
+        fetch('/upload?name=' + encodeURIComponent(f.name), {
+          method: 'POST',
+          body: r.result,
+        }).then(function(res) {
+          document.getElementById('el3').innerText = 'Uploaded ' + r.result.byteLength + ' bytes';
+        });
+      };
+    };
+
+  </script>
 </html>
