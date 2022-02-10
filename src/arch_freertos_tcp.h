@@ -58,8 +58,6 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #define malloc(a) pvPortMalloc(a)
 #define mkdir(a, b) (-1)
 
-#define gmtime_r(a, b) gmtime(a)
-
 #if !defined(__GNUC__)
 // copied from GCC on ARM; for some reason useconds are signed
 struct timeval {

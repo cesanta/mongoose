@@ -47,7 +47,7 @@ bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
   bool result = false;
   struct mg_fd *fd;
   char tmp[MG_PATH_MAX];
-  snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
+  mg_snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
   if ((fd = mg_fs_open(fs, tmp, MG_FS_WRITE)) != NULL) {
     result = fs->wr(fd->fd, buf, len) == len;
     mg_fs_close(fd);

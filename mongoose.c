@@ -341,7 +341,6 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     dnsc->c = mg_connect(c->mgr, dnsc->url, NULL, NULL);
     if (dnsc->c != NULL) {
       dnsc->c->pfn = dns_cb;
-      // snprintf(dnsc->c->label, sizeof(dnsc->c->label), "%s", "DNS");
       // dnsc->c->is_hexdumping = 1;
     }
   }
@@ -456,7 +455,7 @@ bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
   bool result = false;
   struct mg_fd *fd;
   char tmp[MG_PATH_MAX];
-  snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
+  mg_snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
   if ((fd = mg_fs_open(fs, tmp, MG_FS_WRITE)) != NULL) {
     result = fs->wr(fd->fd, buf, len) == len;
     mg_fs_close(fd);
@@ -491,6 +490,42 @@ bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
 #if MG_ENABLE_FATFS
 #include <ff.h>
 
+static int mg_days_from_epoch(int y, int m, int d) {
+  y -= m <= 2;
+  int era = y / 400;
+  int yoe = y - era * 400;
+  int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return era * 146097 + doe - 719468;
+}
+
+static time_t mg_timegm(struct tm const *t) {
+  int year = t->tm_year + 1900;
+  int month = t->tm_mon;  // 0-11
+  if (month > 11) {
+    year += month / 12;
+    month %= 12;
+  } else if (month < 0) {
+    int years_diff = (11 - month) / 12;
+    year -= years_diff;
+    month += 12 * years_diff;
+  }
+  int x = mg_days_from_epoch(year, month + 1, t->tm_mday);
+  return 60 * (60 * (24L * x + t->tm_hour) + t->tm_min) + t->tm_sec;
+}
+
+static time_t ff_time_to_epoch(uint16_t fdate, uint16_t ftime) {
+  struct tm tm;
+  memset(&tm, 0, sizeof(struct tm));
+  tm.tm_sec = (ftime << 1) & 0x3e;
+  tm.tm_min = ((ftime >> 5) & 0x3f);
+  tm.tm_hour = ((ftime >> 11) & 0x1f);
+  tm.tm_mday = (fdate & 0x1f);
+  tm.tm_mon = ((fdate >> 5) & 0x0f) - 1;
+  tm.tm_year = ((fdate >> 9) & 0x7f) + 80;
+  return mg_timegm(&tm);
+}
+
 static int ff_stat(const char *path, size_t *size, time_t *mtime) {
   FILINFO fi;
   if (path[0] == '\0' || strcmp(path, MG_FATFS_ROOT) == 0) {
@@ -499,7 +534,7 @@ static int ff_stat(const char *path, size_t *size, time_t *mtime) {
     return MG_FS_DIR;
   } else if (f_stat(path, &fi) == 0) {
     if (size) *size = (size_t) fi.fsize;
-    if (mtime) *mtime = (fi.fdate << 16) | fi.ftime;
+    if (mtime) *mtime = ff_time_to_epoch(fi.fdate, fi.ftime);
     return MG_FS_READ | MG_FS_WRITE | ((fi.fattrib & AM_DIR) ? MG_FS_DIR : 0);
   } else {
     return 0;
@@ -582,6 +617,7 @@ struct mg_fs mg_fs_fat = {ff_stat,  ff_list, ff_open,   ff_close,  ff_read,
 #endif
 
 
+
 struct packed_file {
   const char *data;
   size_t size;
@@ -629,7 +665,7 @@ static void packed_list(const char *dir, void (*fn)(const char *, void *),
     begin = &path[n + 1];
     end = strchr(begin, '/');
     if (end == NULL) end = begin + strlen(begin);
-    snprintf(buf, sizeof(buf), "%.*s", (int) (end - begin), begin);
+    mg_snprintf(buf, sizeof(buf), "%.*s", (int) (end - begin), begin);
     buf[sizeof(buf) - 1] = '\0';
     // If this entry has been already listed, skip
     // NOTE: we're assuming that file list is sorted alphabetically
@@ -1324,8 +1360,7 @@ static void restore_http_cb(struct mg_connection *c) {
 
 char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime);
 char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime) {
-  snprintf(buf, len, "\"%lx." MG_INT64_FMT "\"", (unsigned long) mtime,
-           (int64_t) size);
+  mg_snprintf(buf, len, "\"%lld.%lld\"", (int64_t) mtime, (int64_t) size);
   return buf;
 }
 
@@ -1446,7 +1481,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     mg_printf(c, "HTTP/1.1 304 Not Modified\r\nContent-Length: 0\r\n\r\n");
   } else {
     int n, status = 200;
-    char range[100] = "";
+    char range[100] = "", tmp[50];
     int64_t r1 = 0, r2 = 0, cl = (int64_t) size;
     struct mg_str mime = guess_content_type(mg_str(path), opts->mime_types);
 
@@ -1458,24 +1493,24 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
       if (r1 > r2 || r2 >= cl) {
         status = 416;
         cl = 0;
-        snprintf(range, sizeof(range),
-                 "Content-Range: bytes */" MG_INT64_FMT "\r\n", (int64_t) size);
+        mg_snprintf(range, sizeof(range), "Content-Range: bytes */%lld\r\n",
+                    (int64_t) size);
       } else {
         status = 206;
         cl = r2 - r1 + 1;
-        snprintf(range, sizeof(range),
-                 "Content-Range: bytes " MG_INT64_FMT "-" MG_INT64_FMT
-                 "/" MG_INT64_FMT "\r\n",
-                 r1, r1 + cl - 1, (int64_t) size);
+        mg_snprintf(range, sizeof(range),
+                    "Content-Range: bytes %lld-%lld/%lld\r\n", r1, r1 + cl - 1,
+                    (int64_t) size);
         fs->sk(fd->fd, (size_t) r1);
       }
     }
-
+    mg_snprintf(tmp, sizeof(tmp), "Content-Length: %lld\r\n", cl);
+    LOG(LL_INFO, ("TMP: [%s]", tmp));
     mg_printf(c,
               "HTTP/1.1 %d %s\r\nContent-Type: %.*s\r\n"
-              "Etag: %s\r\nContent-Length: " MG_INT64_FMT "\r\n%s%s\r\n",
+              "Etag: %s\r\n%s%s%s\r\n",
               status, mg_http_status_code_str(status), (int) mime.len, mime.ptr,
-              etag, cl, range, opts->extra_headers ? opts->extra_headers : "");
+              etag, tmp, range, opts->extra_headers ? opts->extra_headers : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       c->is_draining = 1;
       mg_fs_close(fd);
@@ -1498,29 +1533,23 @@ static void printdirentry(const char *name, void *userdata) {
   struct mg_fs *fs = d->opts->fs == NULL ? &mg_fs_posix : d->opts->fs;
   size_t size = 0;
   time_t t = 0;
-  char path[MG_PATH_MAX], sz[64], mod[64];
+  char path[MG_PATH_MAX], sz[40], mod[40];
   int flags, n = 0;
 
   // LOG(LL_DEBUG, ("[%s] [%s]", d->dir, name));
-  if (snprintf(path, sizeof(path), "%s%c%s", d->dir, '/', name) < 0) {
+  if (mg_snprintf(path, sizeof(path), "%s%c%s", d->dir, '/', name) >
+      sizeof(path)) {
     LOG(LL_ERROR, ("%s truncated", name));
   } else if ((flags = fs->st(path, &size, &t)) == 0) {
     LOG(LL_ERROR, ("%lu stat(%s): %d", d->c->id, path, errno));
   } else {
     const char *slash = flags & MG_FS_DIR ? "/" : "";
-    struct tm tm;
     if (flags & MG_FS_DIR) {
-      snprintf(sz, sizeof(sz), "%s", "[DIR]");
-    } else if (size < 1024) {
-      snprintf(sz, sizeof(sz), "%d", (int) size);
-    } else if (size < 0x100000) {
-      snprintf(sz, sizeof(sz), "%.1fk", (double) size / 1024.0);
-    } else if (size < 0x40000000) {
-      snprintf(sz, sizeof(sz), "%.1fM", (double) size / 1048576);
+      mg_snprintf(sz, sizeof(sz), "%s", "[DIR]");
     } else {
-      snprintf(sz, sizeof(sz), "%.1fG", (double) size / 1073741824);
+      mg_snprintf(sz, sizeof(sz), "%llx", (uint64_t) size);
     }
-    strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime_r(&t, &tm));
+    mg_snprintf(mod, sizeof(mod), "%lx", (unsigned long) t);
     n = (int) mg_url_encode(name, strlen(name), path, sizeof(path));
     mg_printf(d->c,
               "  <tr><td><a href=\"%.*s%s\">%s%s</a></td>"
@@ -1588,8 +1617,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             "</tbody><tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
             "</table><address>Mongoose v.%s</address></body></html>\n",
             MG_VERSION);
-  n = (size_t) snprintf(tmp, sizeof(tmp), "%lu",
-                        (unsigned long) (c->send.len - off));
+  n = mg_snprintf(tmp, sizeof(tmp), "%lu", (unsigned long) (c->send.len - off));
   if (n > sizeof(tmp)) n = 0;
   memcpy(c->send.buf + off - 10, tmp, n);  // Set content length
 }
@@ -1620,7 +1648,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
                         char *path, size_t path_size) {
   int flags = 0, tmp;
   // Append URI to the root_dir, and sanitize it
-  size_t n = (size_t) snprintf(path, path_size, "%.*s", (int) dir.len, dir.ptr);
+  size_t n = mg_snprintf(path, path_size, "%.*s", (int) dir.len, dir.ptr);
   if (n > path_size) n = path_size;
   path[path_size - 1] = '\0';
   if ((fs->st(path, NULL, NULL) & MG_FS_DIR) == 0) {
@@ -1649,9 +1677,9 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
                 (int) hm->uri.len, hm->uri.ptr);
       flags = 0;
     } else if (flags & MG_FS_DIR) {
-      if (((snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX) > 0 &&
+      if (((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX) > 0 &&
             (tmp = fs->st(path, NULL, NULL)) != 0) ||
-           (snprintf(path + n, path_size - n, "/index.shtml") > 0 &&
+           (mg_snprintf(path + n, path_size - n, "/index.shtml") > 0 &&
             (tmp = fs->st(path, NULL, NULL)) != 0))) {
         flags = tmp;
       } else {
@@ -1723,14 +1751,14 @@ void mg_http_creds(struct mg_http_message *hm, char *user, size_t userlen,
     int n = mg_base64_decode(v->ptr + 6, (int) v->len - 6, buf);
     const char *p = (const char *) memchr(buf, ':', n > 0 ? (size_t) n : 0);
     if (p != NULL) {
-      snprintf(user, userlen, "%.*s", (int) (p - buf), buf);
-      snprintf(pass, passlen, "%.*s", n - (int) (p - buf) - 1, p + 1);
+      mg_snprintf(user, userlen, "%.*s", (int) (p - buf), buf);
+      mg_snprintf(pass, passlen, "%.*s", n - (int) (p - buf) - 1, p + 1);
     }
   } else if (v != NULL && v->len > 7 && memcmp(v->ptr, "Bearer ", 7) == 0) {
-    snprintf(pass, passlen, "%.*s", (int) v->len - 7, v->ptr + 7);
+    mg_snprintf(pass, passlen, "%.*s", (int) v->len - 7, v->ptr + 7);
   } else if ((v = mg_http_get_header(hm, "Cookie")) != NULL) {
     struct mg_str t = mg_http_get_header_var(*v, mg_str_n("access_token", 12));
-    if (t.len > 0) snprintf(pass, passlen, "%.*s", (int) t.len, t.ptr);
+    if (t.len > 0) mg_snprintf(pass, passlen, "%.*s", (int) t.len, t.ptr);
   } else {
     mg_http_get_var(&hm->query, "access_token", pass, passlen);
   }
@@ -1845,7 +1873,7 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
   } else {
     struct mg_fd *fd;
     long oft = strtol(offset, NULL, 0);
-    snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, name);
+    mg_snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, name);
     remove_double_dots(path);
     LOG(LL_DEBUG, ("%d bytes @ %ld [%s]", (int) hm->body.len, oft, path));
     if (oft == 0) fs->rm(path);
@@ -2034,16 +2062,11 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   }
 
   if (level <= max) {
-    char timebuf[21], buf[50] = "";
-    time_t t = time(NULL);
-    struct tm tmp, *tm = gmtime_r(&t, &tmp);
-    int n;
-    (void) tmp;
-    strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm);
-    n = snprintf(buf, sizeof(buf), "%s %d %s:%d:%s", timebuf, level, p, line,
-                 fname);
-    if (n < 0 || n > (int) sizeof(buf) - 2) n = sizeof(buf) - 2;
-    while (n < (int) sizeof(buf) - 1) buf[n++] = ' ';
+    char buf[40];
+    size_t n = mg_snprintf(buf, sizeof(buf), "%llx %d %s:%d:%s", mg_millis(),
+                           level, p, line, fname);
+    if (n > sizeof(buf) - 2) n = sizeof(buf) - 2;
+    while (n < sizeof(buf) - 1) buf[n++] = ' ';
     s_fn(buf, sizeof(buf) - 1, s_fn_param);
     return true;
   } else {
@@ -2410,7 +2433,7 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m) {
     if (len_len >= 4) return MQTT_MALFORMED;
   }
   end = p + n;
-  if (lc & 0x80 || end > buf + len) return MQTT_INCOMPLETE;
+  if ((lc & 0x80) || (end > buf + len)) return MQTT_INCOMPLETE;
   m->dgram.len = (size_t) (end - buf);
 
   switch (m->cmd) {
@@ -2582,21 +2605,21 @@ char *mg_straddr(struct mg_addr *a, char *buf, size_t len) {
   char tmp[30];
   const char *fmt = a->is_ip6 ? "[%s]:%d" : "%s:%d";
   mg_ntoa(a, tmp, sizeof(tmp));
-  snprintf(buf, len, fmt, tmp, (int) mg_ntohs(a->port));
+  mg_snprintf(buf, len, fmt, tmp, (int) mg_ntohs(a->port));
   return buf;
 }
 
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {
   if (addr->is_ip6) {
     uint16_t *p = (uint16_t *) addr->ip6;
-    snprintf(buf, len, "%hx:%hx:%hx:%hx:%hx:%hx:%hx:%hx", mg_htons(p[0]),
-             mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]), mg_htons(p[4]),
-             mg_htons(p[5]), mg_htons(p[6]), mg_htons(p[7]));
+    mg_snprintf(buf, len, "%x:%x:%x:%x:%x:%x:%x:%x", mg_htons(p[0]),
+                mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]), mg_htons(p[4]),
+                mg_htons(p[5]), mg_htons(p[6]), mg_htons(p[7]));
   } else {
     uint8_t p[4];
     memcpy(p, &addr->ip, sizeof(p));
-    snprintf(buf, len, "%d.%d.%d.%d", (int) p[0], (int) p[1], (int) p[2],
-             (int) p[3]);
+    mg_snprintf(buf, len, "%d.%d.%d.%d", (int) p[0], (int) p[1], (int) p[2],
+                (int) p[3]);
   }
   return buf;
 }
@@ -3713,7 +3736,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           char tmp[MG_PATH_MAX + BUFSIZ + 10],
               *p = (char *) path + strlen(path), *data;
           while (p > path && p[-1] != MG_DIRSEP && p[-1] != '/') p--;
-          snprintf(tmp, sizeof(tmp), "%.*s%s", (int) (p - path), path, arg);
+          mg_snprintf(tmp, sizeof(tmp), "%.*s%s", (int) (p - path), path, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
             mg_iobuf_add(&b, b.len, data, strlen(data), align);
@@ -3723,7 +3746,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           }
         } else if (sscanf(buf, "<!--#include virtual=\"%[^\"]", arg)) {
           char tmp[MG_PATH_MAX + BUFSIZ + 10], *data;
-          snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
+          mg_snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
             mg_iobuf_add(&b, b.len, data, strlen(data), align);
@@ -3932,6 +3955,225 @@ bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
   if (v != NULL) *v = mg_str_n(s->ptr + voff, vlen);
   *s = mg_str_n(s->ptr + off, s->len - off);
   return off > 0;
+}
+
+size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex) {
+  const char *letters = "0123456789abcdef";
+  uint64_t v = (uint64_t) val;
+  size_t s = 0, n, i;
+  if (is_signed && val < 0) buf[s++] = '-', v = (uint64_t) (-val);
+  // This loop prints a number in reverse order. I guess this is because we
+  // write numbers from right to left: least significant digit comes last.
+  // Maybe because we use Arabic numbers, and Arabs write RTL?
+  if (is_hex) {
+    for (n = 0; v; v >>= 4) buf[s + n++] = letters[v & 15];
+  } else {
+    for (n = 0; v; v /= 10) buf[s + n++] = letters[v % 10];
+  }
+  // Reverse a string
+  for (i = 0; i < n / 2; i++) {
+    char t = buf[s + i];
+    buf[s + i] = buf[s + n - i - 1], buf[s + n - i - 1] = t;
+  }
+  if (val == 0) buf[n++] = '0';  // Handle special case
+  return n + s;
+}
+
+static size_t mg_copys(char *buf, size_t len, size_t n, char *p, size_t k) {
+  size_t j = 0;
+  for (j = 0; j < k && j + n < len && p[j]; j++) buf[n + j] = p[j];
+  return j;
+}
+
+size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
+  size_t i = 0, n = 0;
+  while (fmt[i] != '\0') {
+    if (fmt[i] == '%') {
+      size_t j, k, is_long = 0, w = 0 /* width */, pr = 0 /* precision */;
+      char pad = ' ', c = fmt[++i];
+      if (c == '0') pad = '0', c = fmt[++i];
+      while (isdigit(c)) w *= 10, w += (size_t) (c - '0'), c = fmt[++i];
+      if (c == '.') {
+        c = fmt[++i];
+        if (c == '*') {
+          pr = (size_t) va_arg(ap, int);
+          c = fmt[++i];
+        } else {
+          while (isdigit(c)) pr *= 10, pr += (size_t) (c - '0'), c = fmt[++i];
+        }
+      }
+      if (c == 'l') {
+        is_long++, c = fmt[++i];
+        if (c == 'l') is_long++, c = fmt[++i];
+      }
+      if (c == 'd' || c == 'u' || c == 'x') {
+        bool s = (c == 'd'), h = (c == 'x');
+        char tmp[30];
+        if (is_long == 2) {
+          int64_t v = va_arg(ap, int64_t);
+          k = mg_lld(tmp, v, s, h);
+        } else if (is_long == 1) {
+          long v = va_arg(ap, long);
+          k = mg_lld(tmp, s ? (int64_t) v : (int64_t) (unsigned long) v, s, h);
+        } else {
+          int v = va_arg(ap, int);
+          k = mg_lld(tmp, s ? (int64_t) v : (int64_t) (unsigned) v, s, h);
+        }
+        for (j = 0; n < len && k < w && j + k < w; j++) buf[n++] = pad;
+        mg_copys(buf, len, n, tmp, k);
+        n += k;
+      } else if (c == 'c') {
+        int p = va_arg(ap, int);
+        if (n < len) buf[n] = (char) p;
+        n++;
+      } else if (c == 's') {
+        char *p = va_arg(ap, char *);
+        if (pr == 0) pr = p == NULL ? 0 : strlen(p);
+        for (j = 0; n < len && pr < w && j + pr < w; j++) buf[n++] = pad;
+        n += mg_copys(buf, len, n, p, pr);
+      }
+      i++;
+    } else {
+      if (n < len) buf[n] = fmt[i];
+      n++, i++;
+    }
+  }
+  if (n < len) buf[n] = '\0';
+  return n;
+}
+
+size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
+  va_list ap;
+  size_t n;
+  va_start(ap, fmt);
+  n = mg_vsnprintf(buf, len, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
+char *mg_hexdump(const void *buf, size_t len) {
+  const unsigned char *p = (const unsigned char *) buf;
+  size_t i, idx, n = 0, ofs = 0, dlen = len * 5 + 100;
+  char ascii[17] = "", *dst = (char *) calloc(1, dlen);
+  if (dst == NULL) return dst;
+  for (i = 0; i < len; i++) {
+    idx = i % 16;
+    if (idx == 0) {
+      if (i > 0 && dlen > n)
+        n += mg_snprintf(dst + n, dlen - n, "  %s\n", ascii);
+      if (dlen > n)
+        n += mg_snprintf(dst + n, dlen - n, "%04x ", (int) (i + ofs));
+    }
+    if (dlen < n) break;
+    n += mg_snprintf(dst + n, dlen - n, " %02x", p[i]);
+    ascii[idx] = (char) (p[i] < 0x20 || p[i] > 0x7e ? '.' : p[i]);
+    ascii[idx + 1] = '\0';
+  }
+  while (i++ % 16) {
+    if (n < dlen) n += mg_snprintf(dst + n, dlen - n, "%s", "   ");
+  }
+  if (n < dlen) n += mg_snprintf(dst + n, dlen - n, "  %s\n", ascii);
+  if (n > dlen - 1) n = dlen - 1;
+  dst[n] = '\0';
+  return dst;
+}
+
+char *mg_hex(const void *buf, size_t len, char *to) {
+  const unsigned char *p = (const unsigned char *) buf;
+  static const char *hex = "0123456789abcdef";
+  size_t i = 0;
+  for (; len--; p++) {
+    to[i++] = hex[p[0] >> 4];
+    to[i++] = hex[p[0] & 0x0f];
+  }
+  to[i] = '\0';
+  return to;
+}
+
+static unsigned char mg_unhex_nimble(unsigned char c) {
+  return (c >= '0' && c <= '9')   ? (unsigned char) (c - '0')
+         : (c >= 'A' && c <= 'F') ? (unsigned char) (c - '7')
+                                  : (unsigned char) (c - 'W');
+}
+
+unsigned long mg_unhexn(const char *s, size_t len) {
+  unsigned long i = 0, v = 0;
+  for (i = 0; i < len; i++) v <<= 4, v |= mg_unhex_nimble(((uint8_t *) s)[i]);
+  return v;
+}
+
+void mg_unhex(const char *buf, size_t len, unsigned char *to) {
+  size_t i;
+  for (i = 0; i < len; i += 2) {
+    to[i >> 1] = (unsigned char) mg_unhexn(&buf[i], 2);
+  }
+}
+
+int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
+  va_list ap_copy;
+  int len;
+
+  va_copy(ap_copy, ap);
+  len = vsnprintf(*buf, size, fmt, ap_copy);
+  va_end(ap_copy);
+
+  if (len < 0) {
+    // eCos and Windows are not standard-compliant and return -1 when
+    // the buffer is too small. Keep allocating larger buffers until we
+    // succeed or out of memory.
+    // LCOV_EXCL_START
+    *buf = NULL;
+    while (len < 0) {
+      free(*buf);
+      if (size == 0) size = 5;
+      size *= 2;
+      if ((*buf = (char *) calloc(1, size)) == NULL) {
+        len = -1;
+        break;
+      }
+      va_copy(ap_copy, ap);
+      len = vsnprintf(*buf, size - 1, fmt, ap_copy);
+      va_end(ap_copy);
+    }
+    // Microsoft version of vsnprintf() is not always null-terminated, so put
+    // the terminator manually
+    if (*buf != NULL) (*buf)[len] = 0;
+    // LCOV_EXCL_STOP
+  } else if (len >= (int) size) {
+    /// Standard-compliant code path. Allocate a buffer that is large enough
+    if ((*buf = (char *) calloc(1, (size_t) len + 1)) == NULL) {
+      len = -1;  // LCOV_EXCL_LINE
+    } else {     // LCOV_EXCL_LINE
+      va_copy(ap_copy, ap);
+      len = vsnprintf(*buf, (size_t) len + 1, fmt, ap_copy);
+      va_end(ap_copy);
+    }
+  }
+
+  return len;
+}
+
+int mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
+  int ret;
+  va_list ap;
+  va_start(ap, fmt);
+  ret = mg_vasprintf(buf, size, fmt, ap);
+  va_end(ap);
+  return ret;
+}
+
+int64_t mg_to64(struct mg_str str) {
+  int64_t result = 0, neg = 1, max = 922337203685477570 /* INT64_MAX/10-10 */;
+  size_t i = 0;
+  while (i < str.len && (str.ptr[i] == ' ' || str.ptr[i] == '\t')) i++;
+  if (i < str.len && str.ptr[i] == '-') neg = -1, i++;
+  while (i < str.len && str.ptr[i] >= '0' && str.ptr[i] <= '9') {
+    if (result > max) return 0;
+    result *= 10;
+    result += (str.ptr[i] - '0');
+    i++;
+  }
+  return result * neg;
 }
 
 #ifdef MG_ENABLE_LINES
@@ -4496,131 +4738,6 @@ uint16_t mg_ntohs(uint16_t net) {
   uint8_t data[2] = {0, 0};
   memcpy(&data, &net, sizeof(data));
   return (uint16_t) ((uint16_t) data[1] | (((uint16_t) data[0]) << 8));
-}
-
-char *mg_hexdump(const void *buf, size_t len) {
-  const unsigned char *p = (const unsigned char *) buf;
-  size_t i, idx, n = 0, ofs = 0, dlen = len * 5 + 100;
-  char ascii[17] = "", *dst = (char *) calloc(1, dlen);
-  if (dst == NULL) return dst;
-  for (i = 0; i < len; i++) {
-    idx = i % 16;
-    if (idx == 0) {
-      if (i > 0 && dlen > n)
-        n += (size_t) snprintf(dst + n, dlen - n, "  %s\n", ascii);
-      if (dlen > n)
-        n += (size_t) snprintf(dst + n, dlen - n, "%04x ", (int) (i + ofs));
-    }
-    if (dlen < n) break;
-    n += (size_t) snprintf(dst + n, dlen - n, " %02x", p[i]);
-    ascii[idx] = (char) (p[i] < 0x20 || p[i] > 0x7e ? '.' : p[i]);
-    ascii[idx + 1] = '\0';
-  }
-  while (i++ % 16) {
-    if (n < dlen) n += (size_t) snprintf(dst + n, dlen - n, "%s", "   ");
-  }
-  if (n < dlen) n += (size_t) snprintf(dst + n, dlen - n, "  %s\n", ascii);
-  if (n > dlen - 1) n = dlen - 1;
-  dst[n] = '\0';
-  return dst;
-}
-
-char *mg_hex(const void *buf, size_t len, char *to) {
-  const unsigned char *p = (const unsigned char *) buf;
-  static const char *hex = "0123456789abcdef";
-  size_t i = 0;
-  for (; len--; p++) {
-    to[i++] = hex[p[0] >> 4];
-    to[i++] = hex[p[0] & 0x0f];
-  }
-  to[i] = '\0';
-  return to;
-}
-
-static unsigned char mg_unhex_nimble(unsigned char c) {
-  return (c >= '0' && c <= '9')   ? (unsigned char) (c - '0')
-         : (c >= 'A' && c <= 'F') ? (unsigned char) (c - '7')
-                                  : (unsigned char) (c - 'W');
-}
-
-unsigned long mg_unhexn(const char *s, size_t len) {
-  unsigned long i = 0, v = 0;
-  for (i = 0; i < len; i++) v <<= 4, v |= mg_unhex_nimble(((uint8_t *) s)[i]);
-  return v;
-}
-
-void mg_unhex(const char *buf, size_t len, unsigned char *to) {
-  size_t i;
-  for (i = 0; i < len; i += 2) {
-    to[i >> 1] = (unsigned char) mg_unhexn(&buf[i], 2);
-  }
-}
-
-int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
-  va_list ap_copy;
-  int len;
-
-  va_copy(ap_copy, ap);
-  len = vsnprintf(*buf, size, fmt, ap_copy);
-  va_end(ap_copy);
-
-  if (len < 0) {
-    // eCos and Windows are not standard-compliant and return -1 when
-    // the buffer is too small. Keep allocating larger buffers until we
-    // succeed or out of memory.
-    // LCOV_EXCL_START
-    *buf = NULL;
-    while (len < 0) {
-      free(*buf);
-      if (size == 0) size = 5;
-      size *= 2;
-      if ((*buf = (char *) calloc(1, size)) == NULL) {
-        len = -1;
-        break;
-      }
-      va_copy(ap_copy, ap);
-      len = vsnprintf(*buf, size - 1, fmt, ap_copy);
-      va_end(ap_copy);
-    }
-    // Microsoft version of vsnprintf() is not always null-terminated, so put
-    // the terminator manually
-    if (*buf != NULL) (*buf)[len] = 0;
-    // LCOV_EXCL_STOP
-  } else if (len >= (int) size) {
-    /// Standard-compliant code path. Allocate a buffer that is large enough
-    if ((*buf = (char *) calloc(1, (size_t) len + 1)) == NULL) {
-      len = -1;  // LCOV_EXCL_LINE
-    } else {     // LCOV_EXCL_LINE
-      va_copy(ap_copy, ap);
-      len = vsnprintf(*buf, (size_t) len + 1, fmt, ap_copy);
-      va_end(ap_copy);
-    }
-  }
-
-  return len;
-}
-
-int mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
-  int ret;
-  va_list ap;
-  va_start(ap, fmt);
-  ret = mg_vasprintf(buf, size, fmt, ap);
-  va_end(ap);
-  return ret;
-}
-
-int64_t mg_to64(struct mg_str str) {
-  int64_t result = 0, neg = 1, max = 922337203685477570 /* INT64_MAX/10-10 */;
-  size_t i = 0;
-  while (i < str.len && (str.ptr[i] == ' ' || str.ptr[i] == '\t')) i++;
-  if (i < str.len && str.ptr[i] == '-') neg = -1, i++;
-  while (i < str.len && str.ptr[i] >= '0' && str.ptr[i] <= '9') {
-    if (result > max) return 0;
-    result *= 10;
-    result += (str.ptr[i] - '0');
-    i++;
-  }
-  return result * neg;
 }
 
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len) {

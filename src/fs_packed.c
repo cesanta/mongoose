@@ -1,4 +1,5 @@
 #include "fs.h"
+#include "str.h"
 
 struct packed_file {
   const char *data;
@@ -47,7 +48,7 @@ static void packed_list(const char *dir, void (*fn)(const char *, void *),
     begin = &path[n + 1];
     end = strchr(begin, '/');
     if (end == NULL) end = begin + strlen(begin);
-    snprintf(buf, sizeof(buf), "%.*s", (int) (end - begin), begin);
+    mg_snprintf(buf, sizeof(buf), "%.*s", (int) (end - begin), begin);
     buf[sizeof(buf) - 1] = '\0';
     // If this entry has been already listed, skip
     // NOTE: we're assuming that file list is sorted alphabetically

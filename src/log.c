@@ -35,16 +35,11 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   }
 
   if (level <= max) {
-    char timebuf[21], buf[50] = "";
-    time_t t = time(NULL);
-    struct tm tmp, *tm = gmtime_r(&t, &tmp);
-    int n;
-    (void) tmp;
-    strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm);
-    n = snprintf(buf, sizeof(buf), "%s %d %s:%d:%s", timebuf, level, p, line,
-                 fname);
-    if (n < 0 || n > (int) sizeof(buf) - 2) n = sizeof(buf) - 2;
-    while (n < (int) sizeof(buf) - 1) buf[n++] = ' ';
+    char buf[40];
+    size_t n = mg_snprintf(buf, sizeof(buf), "%llx %d %s:%d:%s", mg_millis(),
+                           level, p, line, fname);
+    if (n > sizeof(buf) - 2) n = sizeof(buf) - 2;
+    while (n < sizeof(buf) - 1) buf[n++] = ' ';
     s_fn(buf, sizeof(buf) - 1, s_fn_param);
     return true;
   } else {

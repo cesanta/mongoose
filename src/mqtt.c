@@ -134,7 +134,7 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m) {
     if (len_len >= 4) return MQTT_MALFORMED;
   }
   end = p + n;
-  if (lc & 0x80 || end > buf + len) return MQTT_INCOMPLETE;
+  if ((lc & 0x80) || (end > buf + len)) return MQTT_INCOMPLETE;
   m->dgram.len = (size_t) (end - buf);
 
   switch (m->cmd) {

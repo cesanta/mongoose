@@ -99,14 +99,6 @@ extern "C" {
 
 #define socklen_t int
 #define closesocket(x) soc_close(x)
-#define gmtime_r(a, b) gmtime(a)
-#define MG_INT64_FMT "%lld"
-
-static __inline struct tm *localtime_r(const time_t *t, struct tm *tm) {
-  struct tm *x = localtime(t);
-  *tm = *x;
-  return tm;
-}
 
 #undef FOPEN_MAX
 
@@ -192,16 +184,6 @@ struct timeval {
 #error Set LWIP_SOCKET variable to 1 (in lwipopts.h)
 #endif
 
-#if LWIP_POSIX_SOCKETS_IO_NAMES != 0
-// LWIP_POSIX_SOCKETS_IO_NAMES must be disabled in posix-compatible OS
-// enviroment (freertos mimics to one) otherwise names like `read` and `write`
-// conflict
-#error LWIP_POSIX_SOCKETS_IO_NAMES must be set to 0 (in lwipopts.h) for FreeRTOS
-#endif
-
-#define MG_INT64_FMT "%lld"
-#define MG_DIRSEP '/'
-
 // Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
 static inline void *mg_calloc(int cnt, size_t size) {
   void *p = pvPortMalloc(cnt * size);
@@ -211,7 +193,6 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #define calloc(a, b) mg_calloc((a), (b))
 #define free(a) vPortFree(a)
 #define malloc(a) pvPortMalloc(a)
-#define gmtime_r(a, b) gmtime(a)
 #define mkdir(a, b) (-1)
 
 #endif  // MG_ARCH == MG_ARCH_FREERTOS_LWIP
@@ -275,8 +256,6 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #define malloc(a) pvPortMalloc(a)
 #define mkdir(a, b) (-1)
 
-#define gmtime_r(a, b) gmtime(a)
-
 #if !defined(__GNUC__)
 // copied from GCC on ARM; for some reason useconds are signed
 struct timeval {
@@ -330,8 +309,6 @@ struct timeval {
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-
-#define MG_INT64_FMT "%" PRId64
 
 #ifndef MG_ENABLE_DIRLIST
 #define MG_ENABLE_DIRLIST 1
@@ -429,19 +406,6 @@ typedef int socklen_t;
 #ifndef MG_ENABLE_DIRLIST
 #define MG_ENABLE_DIRLIST 1
 #endif
-
-// https://lgtm.com/rules/2154840805/ -gmtime, localtime, ctime and asctime
-static __inline struct tm *gmtime_r(const time_t *t, struct tm *tm) {
-  struct tm *x = gmtime(t);
-  *tm = *x;
-  return tm;
-}
-
-static __inline struct tm *localtime_r(const time_t *t, struct tm *tm) {
-  struct tm *x = localtime(t);
-  *tm = *x;
-  return tm;
-}
 
 #endif
 
@@ -584,6 +548,17 @@ const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
 bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
 bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
 bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
+bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
+size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap);
+size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...);
+char *mg_hexdump(const void *buf, size_t len);
+char *mg_hex(const void *buf, size_t len, char *dst);
+void mg_unhex(const char *buf, size_t len, unsigned char *to);
+unsigned long mg_unhexn(const char *s, size_t len);
+int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
+int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
+int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
+int64_t mg_to64(struct mg_str str);
 
 
 
@@ -687,14 +662,6 @@ void mg_random(void *buf, size_t len);
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
-char *mg_hexdump(const void *buf, size_t len);
-char *mg_hex(const void *buf, size_t len, char *dst);
-void mg_unhex(const char *buf, size_t len, unsigned char *to);
-unsigned long mg_unhexn(const char *s, size_t len);
-int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
-int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
-int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
-int64_t mg_to64(struct mg_str str);
 int64_t mg_millis(void);
 
 #define mg_htons(x) mg_ntohs(x)

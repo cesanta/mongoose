@@ -315,10 +315,10 @@ static void test_sntp(void) {
         "\xc9\xd6\xa2\xdb\xde\xea\x30\x91\x86\xb7\x10\xdb\xde"
         "\xed\x98\x00\x00\x00\xde\xdb\xde\xed\x99\x0a\xe2\xc7"
         "\x96\xdb\xde\xed\x99\x0a\xe4\x6b\xda";
-    struct tm tm;
-    time_t t;
     ASSERT((ms = mg_sntp_parse(sntp_good, sizeof(sntp_good))) > 0);
-    t = (time_t) (ms / 1000);
+#if MG_ARCH == MG_ARCH_UNIX
+    time_t t = (time_t) (ms / 1000);
+    struct tm tm;
     gmtime_r(&t, &tm);
     ASSERT(tm.tm_year == 116);
     ASSERT(tm.tm_mon == 10);
@@ -326,6 +326,7 @@ static void test_sntp(void) {
     ASSERT(tm.tm_hour == 16);
     ASSERT(tm.tm_min == 15);
     ASSERT(tm.tm_sec == 21);
+#endif
     ASSERT(mg_sntp_parse(bad_good, sizeof(bad_good)) < 0);
   }
 
@@ -1192,6 +1193,7 @@ static void test_timer(void) {
 }
 
 static void test_str(void) {
+  char buf[100];
   struct mg_str s = mg_strdup(mg_str("a"));
   ASSERT(mg_strcmp(s, mg_str("a")) == 0);
   free((void *) s.ptr);
@@ -1201,6 +1203,38 @@ static void test_str(void) {
   ASSERT(mg_strstr(mg_str("abc"), mg_str("d")) == NULL);
   ASSERT(mg_strstr(mg_str("abc"), mg_str("b")) != NULL);
   ASSERT(mg_strcmp(mg_str("hi"), mg_strstrip(mg_str(" \thi\r\n"))) == 0);
+
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%d", 0) == 1 && !strcmp(buf, "0"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%d", 1) == 1 && !strcmp(buf, "1"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%d", -1) == 2 && !strcmp(buf, "-1"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%.*s", 1, "ab") == 1 &&
+         !strcmp(buf, "a"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%.1s", "ab") == 1 && !strcmp(buf, "a"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%.99s", "a") == 1 && !strcmp(buf, "a"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%11s", "a") == 11 &&
+         !strcmp(buf, "          a"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%s", "a\0b") == 1 && !strcmp(buf, "a"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%2s", "a") == 2 && !strcmp(buf, " a"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%.*s", 3, "a\0b") == 1 &&
+         !strcmp(buf, "a"));
+  memset(buf, 'x', sizeof(buf));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%d", 7) == 1 && !strcmp(buf, "7"));
+  memset(buf, 0, sizeof(buf));
+  ASSERT(mg_snprintf(buf, 0, "%d", 123) == 3 && buf[0] == '\0');
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%lld", (uint64_t) 0xffffffffff) == 13 &&
+         !strcmp(buf, "1099511627775"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%llx", (uint64_t) 0xffffffffff) == 10 &&
+         !strcmp(buf, "ffffffffff"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%lx", (unsigned long) 0x6204d754) ==
+             8 &&
+         !strcmp(buf, "6204d754"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "ab") == 2 && !strcmp(buf, "ab"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%dx", 1) == 2 && !strcmp(buf, "1x"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%sx", "a") == 2 && !strcmp(buf, "ax"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%cx", 32) == 2 && !strcmp(buf, " x"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%x", 15) == 1 && !strcmp(buf, "f"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%2x", 15) == 2 && !strcmp(buf, " f"));
+  ASSERT(mg_snprintf(buf, sizeof(buf), "%02x", 15) == 2 && !strcmp(buf, "0f"));
 }
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -1696,6 +1730,7 @@ static void test_get_header_var(void) {
 
 int main(void) {
   mg_log_set("3");
+  test_str();
   test_globmatch();
   test_get_header_var();
   test_rewrites();
@@ -1710,7 +1745,6 @@ int main(void) {
   test_util();
   test_sntp();
   test_dns();
-  test_str();
   test_timer();
   test_url();
   test_iobuf();

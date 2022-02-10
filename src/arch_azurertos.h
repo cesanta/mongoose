@@ -25,14 +25,6 @@
 
 #define socklen_t int
 #define closesocket(x) soc_close(x)
-#define gmtime_r(a, b) gmtime(a)
-#define MG_INT64_FMT "%lld"
-
-static __inline struct tm *localtime_r(const time_t *t, struct tm *tm) {
-  struct tm *x = localtime(t);
-  *tm = *x;
-  return tm;
-}
 
 #undef FOPEN_MAX
 

@@ -4,8 +4,7 @@
 // Streaming upload example. Demonstrates how to use chunked encoding
 // to send large payload in smaller chunks. To test, use curl utility:
 //
-// curl http://localhost:8000/upload \
-//  --data-binary @my_large_file.txt -H 'Transfer-Encoding: chunked'
+// curl http://localhost:8000/upload?name=a.txt --data-binary @large_file.txt
 
 #include "mongoose.h"
 

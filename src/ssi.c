@@ -21,7 +21,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           char tmp[MG_PATH_MAX + BUFSIZ + 10],
               *p = (char *) path + strlen(path), *data;
           while (p > path && p[-1] != MG_DIRSEP && p[-1] != '/') p--;
-          snprintf(tmp, sizeof(tmp), "%.*s%s", (int) (p - path), path, arg);
+          mg_snprintf(tmp, sizeof(tmp), "%.*s%s", (int) (p - path), path, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
             mg_iobuf_add(&b, b.len, data, strlen(data), align);
@@ -31,7 +31,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           }
         } else if (sscanf(buf, "<!--#include virtual=\"%[^\"]", arg)) {
           char tmp[MG_PATH_MAX + BUFSIZ + 10], *data;
-          snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
+          mg_snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
             mg_iobuf_add(&b, b.len, data, strlen(data), align);

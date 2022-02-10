@@ -29,16 +29,6 @@ struct timeval {
 #error Set LWIP_SOCKET variable to 1 (in lwipopts.h)
 #endif
 
-#if LWIP_POSIX_SOCKETS_IO_NAMES != 0
-// LWIP_POSIX_SOCKETS_IO_NAMES must be disabled in posix-compatible OS
-// enviroment (freertos mimics to one) otherwise names like `read` and `write`
-// conflict
-#error LWIP_POSIX_SOCKETS_IO_NAMES must be set to 0 (in lwipopts.h) for FreeRTOS
-#endif
-
-#define MG_INT64_FMT "%lld"
-#define MG_DIRSEP '/'
-
 // Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
 static inline void *mg_calloc(int cnt, size_t size) {
   void *p = pvPortMalloc(cnt * size);
@@ -48,7 +38,6 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #define calloc(a, b) mg_calloc((a), (b))
 #define free(a) vPortFree(a)
 #define malloc(a) pvPortMalloc(a)
-#define gmtime_r(a, b) gmtime(a)
 #define mkdir(a, b) (-1)
 
 #endif  // MG_ARCH == MG_ARCH_FREERTOS_LWIP
