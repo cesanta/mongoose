@@ -258,8 +258,8 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
 static void mg_http_vprintf_chunk(struct mg_connection *c, const char *fmt,
                                   va_list ap) {
   char mem[256], *buf = mem;
-  int len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
-  mg_printf(c, "%X\r\n", len);
+  size_t len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
+  mg_printf(c, "%lx\r\n", (unsigned long) len);
   mg_send(c, buf, len > 0 ? (size_t) len : 0);
   mg_send(c, "\r\n", 2);
   if (buf != mem) free(buf);
@@ -273,7 +273,7 @@ void mg_http_printf_chunk(struct mg_connection *c, const char *fmt, ...) {
 }
 
 void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len) {
-  mg_printf(c, "%lX\r\n", (unsigned long) len);
+  mg_printf(c, "%lx\r\n", (unsigned long) len);
   mg_send(c, buf, len);
   mg_send(c, "\r\n", 2);
 }
@@ -353,13 +353,13 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
                    const char *fmt, ...) {
   char mem[256], *buf = mem;
   va_list ap;
-  int len;
+  size_t len;
   va_start(ap, fmt);
   len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
   va_end(ap);
   mg_printf(c, "HTTP/1.1 %d %s\r\n%sContent-Length: %d\r\n\r\n", code,
             mg_http_status_code_str(code), headers == NULL ? "" : headers, len);
-  mg_send(c, buf, len > 0 ? (size_t) len : 0);
+  mg_send(c, buf, len > 0 ? len : 0);
   if (buf != mem) free(buf);
 }
 
@@ -493,7 +493,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     mg_printf(c, "HTTP/1.1 304 Not Modified\r\nContent-Length: 0\r\n\r\n");
   } else {
     int n, status = 200;
-    char range[100] = "", tmp[50];
+    char range[100] = "";
     int64_t r1 = 0, r2 = 0, cl = (int64_t) size;
     struct mg_str mime = guess_content_type(mg_str(path), opts->mime_types);
 
@@ -516,13 +516,14 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
         fs->sk(fd->fd, (size_t) r1);
       }
     }
-    mg_snprintf(tmp, sizeof(tmp), "Content-Length: %lld\r\n", cl);
-    LOG(LL_INFO, ("TMP: [%s]", tmp));
     mg_printf(c,
-              "HTTP/1.1 %d %s\r\nContent-Type: %.*s\r\n"
-              "Etag: %s\r\n%s%s%s\r\n",
+              "HTTP/1.1 %d %s\r\n"
+              "Content-Type: %.*s\r\n"
+              "Etag: %s\r\n"
+              "Content-Length: %llu\r\n"
+              "%s%s\r\n",
               status, mg_http_status_code_str(status), (int) mime.len, mime.ptr,
-              etag, tmp, range, opts->extra_headers ? opts->extra_headers : "");
+              etag, cl, range, opts->extra_headers ? opts->extra_headers : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       c->is_draining = 1;
       mg_fs_close(fd);
@@ -559,13 +560,13 @@ static void printdirentry(const char *name, void *userdata) {
     if (flags & MG_FS_DIR) {
       mg_snprintf(sz, sizeof(sz), "%s", "[DIR]");
     } else {
-      mg_snprintf(sz, sizeof(sz), "%llx", (uint64_t) size);
+      mg_snprintf(sz, sizeof(sz), "%lld", (uint64_t) size);
     }
-    mg_snprintf(mod, sizeof(mod), "%lx", (unsigned long) t);
+    mg_snprintf(mod, sizeof(mod), "%ld", (unsigned long) t);
     n = (int) mg_url_encode(name, strlen(name), path, sizeof(path));
     mg_printf(d->c,
               "  <tr><td><a href=\"%.*s%s\">%s%s</a></td>"
-              "<td name=%lu>%s</td><td name=" MG_INT64_FMT ">%s</td></tr>\n",
+              "<td name=%lu>%s</td><td name=%lld>%s</td></tr>\n",
               n, path, slash, name, slash, (unsigned long) t, mod,
               flags & MG_FS_DIR ? (int64_t) -1 : (int64_t) size, sz);
   }
@@ -614,7 +615,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             "<!DOCTYPE html><html><head><title>Index of %.*s</title>%s%s"
             "<style>th,td {text-align: left; padding-right: 1em; "
             "font-family: monospace; }</style></head>"
-            "<body><h1>Innex of %.*s</h1><table cellpadding=\"0\"><thead>"
+            "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
             "<tr><th><a href=\"#\" rel=\"0\">Name</a></th><th>"
             "<a href=\"#\" rel=\"1\">Modified</a></th>"
             "<th><a href=\"#\" rel=\"2\">Size</a></th></tr>"
@@ -623,6 +624,9 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             "<tbody id=\"tb\">\n",
             (int) uri.len, uri.ptr, sort_js_code, sort_js_code2, (int) uri.len,
             uri.ptr);
+  mg_printf(c, "%s",
+            "  <tr><td><a href=\"..\">..</a></td>"
+            "<td name=-1></td><td name=-1>[DIR]</td></tr>\n");
 
   fs->ls(dir, printdirentry, &d);
   mg_printf(c,

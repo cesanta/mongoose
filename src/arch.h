@@ -29,12 +29,10 @@
 #endif
 #endif  // !defined(MG_ARCH)
 
-#if !defined(PRINTF_LIKE)
-#if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
+#if defined(__GNUC__) && defined(__arm__)
 #define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
 #else
 #define PRINTF_LIKE(f, a)
-#endif
 #endif
 
 #if MG_ARCH == MG_ARCH_CUSTOM

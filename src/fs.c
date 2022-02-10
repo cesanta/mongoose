@@ -64,7 +64,7 @@ bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
 bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
   char tmp[256], *buf = tmp;
   bool result;
-  int len;
+  size_t len;
   va_list ap;
   va_start(ap, fmt);
   len = mg_vasprintf(&buf, sizeof(tmp), fmt, ap);

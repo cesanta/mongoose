@@ -580,14 +580,17 @@ Usage example:
 mg_send(c, "hi", 2);  // Append string "hi" to the output buffer
 ```
 
-### mg\_printf()
+### mg\_printf(), mg\_vprintf()
 
 ```c
 int mg_printf(struct mg_connection *, const char *fmt, ...);
+int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 ```
 
 Same as `mg_send()`, but formats data using `printf()` semantics. Return
 number of bytes appended to the output buffer.
+<span class="badge bg-danger">NOTE: </span> See [mg\_snprintf](#mg_snprintf-mg_vsnprintf)
+for the list of supported format specifiers
 
 Parameters:
 - `c` - a connection pointer
@@ -599,32 +602,6 @@ Usage example:
 
 ```c
 mg_printf(c, "Hello, %s!", "world"); // Add "Hello, world!" to output buffer
-```
-
-### mg\_vprintf()
-
-```c
-int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
-```
-
-Same as `mg_printf()`, but takes `va_list` argument as a parameter.
-
-Parameters:
-- `c` - A connection pointer
-- `fmt` - A format string in `printf` semantics
-- `ap` - An arguments list
-
-Return value: Number of bytes appended to the output buffer.
-
-Usage example:
-
-```c
-void foo(struct mg_connection *c, const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  mg_vprintf(c, fmt, ap);
-  va_end(ap);
-}
 ```
 
 ### mg\_straddr
@@ -2385,10 +2362,11 @@ unsigned long val = mg_unhex(data, sizeof(data) - 1); // val is now 123
 ```
 
 
-### mg\_asprintf()
+### mg\_asprintf(), mg\_vasprintf()
 
 ```c
 int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
+int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
 ```
 
 Print message specified by printf-like format string `fmt` into a buffer
@@ -2411,38 +2389,42 @@ char buf[1024], *pbuf = &buf;
 mg_asprintf(&pbuf, sizeof(buf), "Hello, %s!", "world"); // buf is now "Hello, world!"
 ```
 
-### mg\_vasprintf()
-
+### mg\_snprintf(), mg\_vsnprintf()
 ```c
-int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
+size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...);
+size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap);
+size_t mg_asprintf(char **buf, size_t len, const char *fmt, ...);
+size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
 ```
 
-Same as `mg_asprintf()` but uses `va_list` argument.
+Print formatted string into a string buffer, just like `snprintf()`
+standard function does, but in a predictable way that does not depend on
+the C library or the build environment. The return value can be larger
+than the buffer length `len`, in which case the overflow bytes are not printed.
 
 Parameters:
 - `buf` - Pointer to pointer to output buffer
-- `size` - Pre-allocated buffer size
+- `len` - Buffer size
 - `fmt` - printf-like format string
-- `ap` - Parameters list
+
+Supported format specifiers:
+- `hhd`, `hd`, `d`, `ld`, `lld` - for `char`, `short`, `int`, `long`, `int64_t`
+- `hhu`, `hu`, `u`, `lu`, `llu` - same but for unsigned variants
+- `hhx`, `hx`, `x`, `lx`, `llx` - same, unsigned and hex output
+- `s` - `for char *`
+- `p` - for any pointer, prints `0x.....` hex value
+- `%X.Y` - optional width and precision modifiers
+- `%.*` - optional precision modifier specified as `int` argument
 
 Return value: Number of bytes printed
 
 Usage example:
+
 ```c
-void foo(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  char buf[1024], *pbuf = buf;
-  mg_vasprintf(&pbuf, sizeof(buf), fmt, ap);
-  va_end(ap);
-
-  printf("%s\n", buf);
-}
-
-// ...
-
-foo("Hello, %s!", "world"); // Print "Hello, world!
-
+mg_snprintf(buf, sizeof(buf), "%lld", (int64_t) 123);   // 123
+mg_snprintf(buf, sizeof(buf), "%.2s", "abcdef");        // ab
+mg_snprintf(buf, sizeof(buf), "%.*s", 2, "abcdef");     // ab
+mg_snprintf(buf, sizeof(buf), "%05x", 123);             // 00123
 ```
 
 ### mg\_to64()

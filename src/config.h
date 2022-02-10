@@ -95,10 +95,6 @@
 #define MG_DIRSEP '/'
 #endif
 
-#ifndef MG_INT64_FMT
-#define MG_INT64_FMT "%lld"
-#endif
-
 #ifndef MG_ENABLE_FILE
 #if defined(FOPEN_MAX)
 #define MG_ENABLE_FILE 1

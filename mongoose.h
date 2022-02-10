@@ -54,12 +54,10 @@ extern "C" {
 #endif
 #endif  // !defined(MG_ARCH)
 
-#if !defined(PRINTF_LIKE)
-#if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
+#if defined(__GNUC__) && defined(__arm__)
 #define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
 #else
 #define PRINTF_LIKE(f, a)
-#endif
 #endif
 
 #if MG_ARCH == MG_ARCH_CUSTOM
@@ -401,8 +399,6 @@ typedef int socklen_t;
 #define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
 #endif
 
-#define MG_INT64_FMT "%I64d"
-
 #ifndef MG_ENABLE_DIRLIST
 #define MG_ENABLE_DIRLIST 1
 #endif
@@ -505,10 +501,6 @@ typedef int socklen_t;
 #define MG_DIRSEP '/'
 #endif
 
-#ifndef MG_INT64_FMT
-#define MG_INT64_FMT "%lld"
-#endif
-
 #ifndef MG_ENABLE_FILE
 #if defined(FOPEN_MAX)
 #define MG_ENABLE_FILE 1
@@ -550,13 +542,13 @@ bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
 bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap);
-size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...);
+size_t mg_snprintf(char *, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
 char *mg_hexdump(const void *buf, size_t len);
 char *mg_hex(const void *buf, size_t len, char *dst);
 void mg_unhex(const char *buf, size_t len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, size_t len);
-int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
-int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
+size_t mg_asprintf(char **, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
+size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
 int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
 int64_t mg_to64(struct mg_str str);
 
@@ -865,8 +857,8 @@ struct mg_connection *mg_connect(struct mg_mgr *, const char *url,
                                  mg_event_handler_t fn, void *fn_data);
 void mg_connect_resolved(struct mg_connection *);
 bool mg_send(struct mg_connection *, const void *, size_t);
-int mg_printf(struct mg_connection *, const char *fmt, ...);
-int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
+size_t mg_printf(struct mg_connection *, const char *fmt, ...);
+size_t mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 char *mg_straddr(struct mg_addr *, char *, size_t);
 bool mg_aton(struct mg_str str, struct mg_addr *addr);
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);

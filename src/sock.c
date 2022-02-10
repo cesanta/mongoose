@@ -117,7 +117,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
                   (char) ('0' + c->is_writable),
                   '\0'};
   LOG(log_level,
-      ("%-3lu %s %d:%d %ld err %d (%s)", c->id, flags, (int) c->send.len,
+      ("%3lu %s %d:%d %ld err %d (%s)", c->id, flags, (int) c->send.len,
        (int) c->recv.len, n, MG_SOCK_ERRNO, strerror(errno)));
   if (n == 0) {
     // Do nothing

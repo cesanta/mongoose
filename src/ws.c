@@ -216,7 +216,7 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
   if (c != NULL) {
     char nonce[16], key[30], mem1[128], mem2[256], *buf1 = mem1, *buf2 = mem2;
     struct mg_str host = mg_url_host(url);
-    int n1 = 0, n2 = 0;
+    size_t n1 = 0, n2 = 0;
     if (fmt != NULL) {
       va_list ap;
       va_start(ap, fmt);
@@ -238,7 +238,7 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
                      "Sec-WebSocket-Key: %s\r\n"
                      "\r\n",
                      mg_url_uri(url), (int) host.len, host.ptr, n1, buf1, key);
-    mg_send(c, buf2, n2 > 0 ? (size_t) n2 : 0);
+    mg_send(c, buf2, n2 > 0 ? n2 : 0);
     if (buf1 != mem1) free(buf1);
     if (buf2 != mem2) free(buf2);
     c->pfn = mg_ws_cb;

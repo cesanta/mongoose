@@ -170,7 +170,8 @@ size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex) {
 
 static size_t mg_copys(char *buf, size_t len, size_t n, char *p, size_t k) {
   size_t j = 0;
-  for (j = 0; j < k && j + n < len && p[j]; j++) buf[n + j] = p[j];
+  for (j = 0; j < k && p[j]; j++)
+    if (j + n < len) buf[n + j] = p[j];
   return j;
 }
 
@@ -178,8 +179,9 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
   size_t i = 0, n = 0;
   while (fmt[i] != '\0') {
     if (fmt[i] == '%') {
-      size_t j, k, is_long = 0, w = 0 /* width */, pr = 0 /* precision */;
+      size_t j, k, x = 0, is_long = 0, w = 0 /* width */, pr = 0 /* prec */;
       char pad = ' ', c = fmt[++i];
+      if (c == '#') x++, c = fmt[++i];
       if (c == '0') pad = '0', c = fmt[++i];
       while (isdigit(c)) w *= 10, w += (size_t) (c - '0'), c = fmt[++i];
       if (c == '.') {
@@ -191,12 +193,14 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
           while (isdigit(c)) pr *= 10, pr += (size_t) (c - '0'), c = fmt[++i];
         }
       }
+      while (c == 'h') c = fmt[++i];  // Treat h and hh as int
       if (c == 'l') {
         is_long++, c = fmt[++i];
         if (c == 'l') is_long++, c = fmt[++i];
       }
-      if (c == 'd' || c == 'u' || c == 'x') {
-        bool s = (c == 'd'), h = (c == 'x');
+      if (c == 'p') x = 1, is_long = 1;
+      if (c == 'd' || c == 'u' || c == 'x' || c == 'X' || c == 'p') {
+        bool s = (c == 'd'), h = (c == 'x' || c == 'X' || c == 'p');
         char tmp[30];
         if (is_long == 2) {
           int64_t v = va_arg(ap, int64_t);
@@ -208,7 +212,9 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
           int v = va_arg(ap, int);
           k = mg_lld(tmp, s ? (int64_t) v : (int64_t) (unsigned) v, s, h);
         }
-        for (j = 0; n < len && k < w && j + k < w; j++) buf[n++] = pad;
+        for (j = 0; k < w && j + k < w; j++)
+          mg_copys(buf, len, n, &pad, 1), n++;
+        if (x) mg_copys(buf, len, n, (char *) "0x", 2), n += 2;
         mg_copys(buf, len, n, tmp, k);
         n += k;
       } else if (c == 'c') {
@@ -218,8 +224,14 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
       } else if (c == 's') {
         char *p = va_arg(ap, char *);
         if (pr == 0) pr = p == NULL ? 0 : strlen(p);
-        for (j = 0; n < len && pr < w && j + pr < w; j++) buf[n++] = pad;
+        for (j = 0; pr < w && j + pr < w; j++)
+          mg_copys(buf, len, n, &pad, 1), n++;
         n += mg_copys(buf, len, n, p, pr);
+      } else if (c == '%') {
+        if (n < len) buf[n] = '%';
+        n++;
+      } else {
+        abort();  // Unsupported format specifier
       }
       i++;
     } else {
@@ -298,43 +310,21 @@ void mg_unhex(const char *buf, size_t len, unsigned char *to) {
   }
 }
 
-int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
+size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   va_list ap_copy;
-  int len;
+  size_t len;
 
   va_copy(ap_copy, ap);
-  len = vsnprintf(*buf, size, fmt, ap_copy);
+  len = mg_vsnprintf(*buf, size, fmt, ap_copy);
   va_end(ap_copy);
 
-  if (len < 0) {
-    // eCos and Windows are not standard-compliant and return -1 when
-    // the buffer is too small. Keep allocating larger buffers until we
-    // succeed or out of memory.
-    // LCOV_EXCL_START
-    *buf = NULL;
-    while (len < 0) {
-      free(*buf);
-      if (size == 0) size = 5;
-      size *= 2;
-      if ((*buf = (char *) calloc(1, size)) == NULL) {
-        len = -1;
-        break;
-      }
+  if (len >= size) {
+    //  Allocate a buffer that is large enough
+    if ((*buf = (char *) calloc(1, len + 1)) == NULL) {
+      len = 0;
+    } else {
       va_copy(ap_copy, ap);
-      len = vsnprintf(*buf, size - 1, fmt, ap_copy);
-      va_end(ap_copy);
-    }
-    // Microsoft version of vsnprintf() is not always null-terminated, so put
-    // the terminator manually
-    if (*buf != NULL) (*buf)[len] = 0;
-    // LCOV_EXCL_STOP
-  } else if (len >= (int) size) {
-    /// Standard-compliant code path. Allocate a buffer that is large enough
-    if ((*buf = (char *) calloc(1, (size_t) len + 1)) == NULL) {
-      len = -1;  // LCOV_EXCL_LINE
-    } else {     // LCOV_EXCL_LINE
-      va_copy(ap_copy, ap);
-      len = vsnprintf(*buf, (size_t) len + 1, fmt, ap_copy);
+      len = mg_vsnprintf(*buf, len + 1, fmt, ap_copy);
       va_end(ap_copy);
     }
   }
@@ -342,8 +332,8 @@ int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   return len;
 }
 
-int mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
-  int ret;
+size_t mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
+  size_t ret;
   va_list ap;
   va_start(ap, fmt);
   ret = mg_vasprintf(buf, size, fmt, ap);

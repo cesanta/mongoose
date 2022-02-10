@@ -1194,6 +1194,7 @@ static void test_timer(void) {
 
 static void test_str(void) {
   char buf[100];
+  size_t n = sizeof(buf);
   struct mg_str s = mg_strdup(mg_str("a"));
   ASSERT(mg_strcmp(s, mg_str("a")) == 0);
   free((void *) s.ptr);
@@ -1204,37 +1205,47 @@ static void test_str(void) {
   ASSERT(mg_strstr(mg_str("abc"), mg_str("b")) != NULL);
   ASSERT(mg_strcmp(mg_str("hi"), mg_strstrip(mg_str(" \thi\r\n"))) == 0);
 
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%d", 0) == 1 && !strcmp(buf, "0"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%d", 1) == 1 && !strcmp(buf, "1"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%d", -1) == 2 && !strcmp(buf, "-1"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%.*s", 1, "ab") == 1 &&
-         !strcmp(buf, "a"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%.1s", "ab") == 1 && !strcmp(buf, "a"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%.99s", "a") == 1 && !strcmp(buf, "a"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%11s", "a") == 11 &&
-         !strcmp(buf, "          a"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%s", "a\0b") == 1 && !strcmp(buf, "a"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%2s", "a") == 2 && !strcmp(buf, " a"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%.*s", 3, "a\0b") == 1 &&
-         !strcmp(buf, "a"));
-  memset(buf, 'x', sizeof(buf));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%d", 7) == 1 && !strcmp(buf, "7"));
-  memset(buf, 0, sizeof(buf));
+  ASSERT(mg_snprintf(buf, n, "%d", 0) == 1 && !strcmp(buf, "0"));
+  ASSERT(mg_snprintf(buf, n, "%d", 1) == 1 && !strcmp(buf, "1"));
+  ASSERT(mg_snprintf(buf, n, "%d", -1) == 2 && !strcmp(buf, "-1"));
+  ASSERT(mg_snprintf(buf, n, "%.*s", 1, "ab") == 1 && !strcmp(buf, "a"));
+  ASSERT(mg_snprintf(buf, n, "%.1s", "ab") == 1 && !strcmp(buf, "a"));
+  ASSERT(mg_snprintf(buf, n, "%.99s", "a") == 1 && !strcmp(buf, "a"));
+  ASSERT(mg_snprintf(buf, n, "%11s", "a") == 11 && !strcmp(buf, "          a"));
+  ASSERT(mg_snprintf(buf, n, "%s", "a\0b") == 1 && !strcmp(buf, "a"));
+  ASSERT(mg_snprintf(buf, n, "%2s", "a") == 2 && !strcmp(buf, " a"));
+  ASSERT(mg_snprintf(buf, n, "%.*s", 3, "a\0b") == 1 && !strcmp(buf, "a"));
+  memset(buf, 'x', n);
+  ASSERT(mg_snprintf(buf, n, "%d", 7) == 1 && !strcmp(buf, "7"));
+  memset(buf, 0, n);
   ASSERT(mg_snprintf(buf, 0, "%d", 123) == 3 && buf[0] == '\0');
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%lld", (uint64_t) 0xffffffffff) == 13 &&
+  ASSERT(mg_snprintf(buf, n, "%lld", (uint64_t) 0xffffffffff) == 13 &&
          !strcmp(buf, "1099511627775"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%llx", (uint64_t) 0xffffffffff) == 10 &&
+  ASSERT(mg_snprintf(buf, n, "%llx", (uint64_t) 0xffffffffff) == 10 &&
          !strcmp(buf, "ffffffffff"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%lx", (unsigned long) 0x6204d754) ==
-             8 &&
+  ASSERT(mg_snprintf(buf, n, "%lx", (unsigned long) 0x6204d754) == 8 &&
          !strcmp(buf, "6204d754"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "ab") == 2 && !strcmp(buf, "ab"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%dx", 1) == 2 && !strcmp(buf, "1x"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%sx", "a") == 2 && !strcmp(buf, "ax"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%cx", 32) == 2 && !strcmp(buf, " x"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%x", 15) == 1 && !strcmp(buf, "f"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%2x", 15) == 2 && !strcmp(buf, " f"));
-  ASSERT(mg_snprintf(buf, sizeof(buf), "%02x", 15) == 2 && !strcmp(buf, "0f"));
+  ASSERT(mg_snprintf(buf, n, "ab") == 2 && !strcmp(buf, "ab"));
+  ASSERT(mg_snprintf(buf, n, "%dx", 1) == 2 && !strcmp(buf, "1x"));
+  ASSERT(mg_snprintf(buf, n, "%sx", "a") == 2 && !strcmp(buf, "ax"));
+  ASSERT(mg_snprintf(buf, n, "%cx", 32) == 2 && !strcmp(buf, " x"));
+  ASSERT(mg_snprintf(buf, n, "%x", 15) == 1 && !strcmp(buf, "f"));
+  ASSERT(mg_snprintf(buf, n, "%2x", 15) == 2 && !strcmp(buf, " f"));
+  ASSERT(mg_snprintf(buf, n, "%02x", 15) == 2 && !strcmp(buf, "0f"));
+  ASSERT(mg_snprintf(buf, n, "%p", (void *) (size_t) 7) == 3 &&
+         !strcmp(buf, "0x7"));
+  ASSERT(mg_snprintf(buf, n, "%hx:%hhx", (short) 1, (char) 2) == 3 &&
+         !strcmp(buf, "1:2"));
+  ASSERT(mg_snprintf(buf, n, "%hx:%hhx", (short) 1, (char) 2) == 3 &&
+         !strcmp(buf, "1:2"));
+  ASSERT(mg_snprintf(buf, n, "%%") == 1 && !strcmp(buf, "%"));
+  ASSERT(mg_snprintf(buf, 10, "%s %s", "a", "b") == 3 && !strcmp(buf, "a b"));
+  ASSERT(mg_snprintf(buf, 10, "%s %s", "a", "b") == 3 && !strcmp(buf, "a b"));
+  buf[0] = '\0';
+  ASSERT(mg_snprintf(0, 0, "ab%dc", 123) == 6 && buf[0] == '\0');
+  ASSERT(mg_snprintf(0, 0, "%s ", "a") == 2 && buf[0] == '\0');
+  ASSERT(mg_snprintf(0, 0, "%s %s", "a", "b") == 3 && buf[0] == '\0');
+  ASSERT(mg_snprintf(0, 0, "%2s %s", "a", "b") == 4 && buf[0] == '\0');
 }
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -1371,9 +1382,9 @@ static void test_util(void) {
 
   {
     s = buf;
-    mg_asprintf(&s, sizeof(buf), "%s", "%3d", 123);
+    mg_asprintf(&s, sizeof(buf), "%3d", 123);
     ASSERT(s == buf);
-    ASSERT(strcmp(buf, "%3d") == 0);
+    ASSERT(strcmp(buf, "123") == 0);
     mg_asprintf(&s, sizeof(buf), "%.*s", 7, "a%40b.c");
     ASSERT(s == buf);
     ASSERT(strcmp(buf, "a%40b.c") == 0);
@@ -1729,7 +1740,10 @@ static void test_get_header_var(void) {
 }
 
 int main(void) {
-  mg_log_set("3");
+  const char *debug_level = getenv("V");
+  if (debug_level == NULL) debug_level = "3";
+  mg_log_set(debug_level);
+
   test_str();
   test_globmatch();
   test_get_header_var();
