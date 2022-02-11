@@ -35,12 +35,13 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   }
 
   if (level <= max) {
-    char buf[40];
+    char buf[41];
     size_t n = mg_snprintf(buf, sizeof(buf), "%llx %d %s:%d:%s", mg_millis(),
                            level, p, line, fname);
     if (n > sizeof(buf) - 2) n = sizeof(buf) - 2;
-    while (n < sizeof(buf) - 1) buf[n++] = ' ';
-    s_fn(buf, sizeof(buf) - 1, s_fn_param);
+    while (n < sizeof(buf)) buf[n++] = ' ';
+    buf[sizeof(buf) - 1] = '\0';
+    s_fn(buf, n - 1, s_fn_param);
     return true;
   } else {
     return false;
@@ -50,11 +51,11 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
 void mg_log(const char *fmt, ...) {
   char mem[256], *buf = mem;
   va_list ap;
-  size_t len = 0;
+  size_t len;
   va_start(ap, fmt);
   len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
   va_end(ap);
-  s_fn(buf, len > 0 ? len : 0, s_fn_param);
+  s_fn(buf, len, s_fn_param);
   s_fn("\n", 1, s_fn_param);
   if (buf != mem) free(buf);
 }

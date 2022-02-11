@@ -383,11 +383,11 @@ static void static_cb(struct mg_connection *c, int ev, void *ev_data,
     // Read to send IO buffer directly, avoid extra on-stack buffer
     size_t n, max = 2 * MG_IO_SIZE;
     if (c->send.size < max) mg_iobuf_resize(&c->send, max);
-    if (c->send.len >= c->send.size) return;  // Rate limit
+    if (c->send.len > 0) return;  // Wait until drained: for some LWIP setups
     n = fd->fs->rd(fd->fd, c->send.buf + c->send.len,
                    c->send.size - c->send.len);
-    if (n > 0) c->send.len += n;
-    if (c->send.len < c->send.size) restore_http_cb(c);
+    c->send.len += n;
+    if (n == 0) restore_http_cb(c);
   } else if (ev == MG_EV_CLOSE) {
     restore_http_cb(c);
   }

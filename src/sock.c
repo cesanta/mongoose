@@ -146,7 +146,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       mg_call(c, MG_EV_READ, &evd);
     } else {
       mg_iobuf_del(&c->send, 0, (size_t) n);
-      if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
+      // if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
       mg_call(c, MG_EV_WRITE, &n);
     }
   }

@@ -1239,6 +1239,13 @@ static void test_str(void) {
   ASSERT(mg_snprintf(buf, n, "%hx:%hhx", (short) 1, (char) 2) == 3 &&
          !strcmp(buf, "1:2"));
   ASSERT(mg_snprintf(buf, n, "%%") == 1 && !strcmp(buf, "%"));
+  ASSERT(mg_snprintf(buf, n, "%x", 15) == 1 && !strcmp(buf, "f"));
+  ASSERT(mg_snprintf(buf, n, "%#x", 15) == 3 && !strcmp(buf, "0xf"));
+  ASSERT(mg_snprintf(buf, n, "%#6x", 15) == 6 && !strcmp(buf, "   0xf"));
+  ASSERT(mg_snprintf(buf, n, "%#06x", 15) == 6 && !strcmp(buf, "0x000f"));
+  ASSERT(mg_snprintf(buf, n, "%#-6x", 15) > 0);
+  ASSERT(mg_snprintf(buf, n, "%#-6x", 15) == 6 && !strcmp(buf, "0xf   "));
+  ASSERT(mg_snprintf(buf, n, "%-2s!", "a") == 3 && !strcmp(buf, "a !"));
   ASSERT(mg_snprintf(buf, 10, "%s %s", "a", "b") == 3 && !strcmp(buf, "a b"));
   ASSERT(mg_snprintf(buf, 10, "%s %s", "a", "b") == 3 && !strcmp(buf, "a b"));
   buf[0] = '\0';

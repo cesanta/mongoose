@@ -575,8 +575,14 @@ static void ff_close(void *fp) {
 }
 
 static size_t ff_read(void *fp, void *buf, size_t len) {
-  unsigned n = 0;
-  f_read((FIL *) fp, buf, len, &n);
+  unsigned n = 0, misalign = ((size_t) buf) & 3;
+  if (misalign) {
+    char aligned[4];
+    f_read((FIL *) fp, aligned, len > misalign ? misalign : len, &n);
+    memcpy(buf, aligned, n);
+  } else {
+    f_read((FIL *) fp, buf, len, &n);
+  }
   return n;
 }
 
@@ -1371,11 +1377,11 @@ static void static_cb(struct mg_connection *c, int ev, void *ev_data,
     // Read to send IO buffer directly, avoid extra on-stack buffer
     size_t n, max = 2 * MG_IO_SIZE;
     if (c->send.size < max) mg_iobuf_resize(&c->send, max);
-    if (c->send.len >= c->send.size) return;  // Rate limit
+    if (c->send.len > 0) return;  // Wait until drained: for some LWIP setups
     n = fd->fs->rd(fd->fd, c->send.buf + c->send.len,
                    c->send.size - c->send.len);
-    if (n > 0) c->send.len += n;
-    if (c->send.len < c->send.size) restore_http_cb(c);
+    c->send.len += n;
+    if (n == 0) restore_http_cb(c);
   } else if (ev == MG_EV_CLOSE) {
     restore_http_cb(c);
   }
@@ -2066,12 +2072,13 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   }
 
   if (level <= max) {
-    char buf[40];
+    char buf[41];
     size_t n = mg_snprintf(buf, sizeof(buf), "%llx %d %s:%d:%s", mg_millis(),
                            level, p, line, fname);
     if (n > sizeof(buf) - 2) n = sizeof(buf) - 2;
-    while (n < sizeof(buf) - 1) buf[n++] = ' ';
-    s_fn(buf, sizeof(buf) - 1, s_fn_param);
+    while (n < sizeof(buf)) buf[n++] = ' ';
+    buf[sizeof(buf) - 1] = '\0';
+    s_fn(buf, n - 1, s_fn_param);
     return true;
   } else {
     return false;
@@ -2081,11 +2088,11 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
 void mg_log(const char *fmt, ...) {
   char mem[256], *buf = mem;
   va_list ap;
-  size_t len = 0;
+  size_t len;
   va_start(ap, fmt);
   len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
   va_end(ap);
-  s_fn(buf, len > 0 ? len : 0, s_fn_param);
+  s_fn(buf, len, s_fn_param);
   s_fn("\n", 1, s_fn_param);
   if (buf != mem) free(buf);
 }
@@ -3235,7 +3242,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       mg_call(c, MG_EV_READ, &evd);
     } else {
       mg_iobuf_del(&c->send, 0, (size_t) n);
-      if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
+      // if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
       mg_call(c, MG_EV_WRITE, &n);
     }
   }
@@ -3961,103 +3968,6 @@ bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
   return off > 0;
 }
 
-size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex) {
-  const char *letters = "0123456789abcdef";
-  uint64_t v = (uint64_t) val;
-  size_t s = 0, n, i;
-  if (is_signed && val < 0) buf[s++] = '-', v = (uint64_t) (-val);
-  // This loop prints a number in reverse order. I guess this is because we
-  // write numbers from right to left: least significant digit comes last.
-  // Maybe because we use Arabic numbers, and Arabs write RTL?
-  if (is_hex) {
-    for (n = 0; v; v >>= 4) buf[s + n++] = letters[v & 15];
-  } else {
-    for (n = 0; v; v /= 10) buf[s + n++] = letters[v % 10];
-  }
-  // Reverse a string
-  for (i = 0; i < n / 2; i++) {
-    char t = buf[s + i];
-    buf[s + i] = buf[s + n - i - 1], buf[s + n - i - 1] = t;
-  }
-  if (val == 0) buf[n++] = '0';  // Handle special case
-  return n + s;
-}
-
-static size_t mg_copys(char *buf, size_t len, size_t n, char *p, size_t k) {
-  size_t j = 0;
-  for (j = 0; j < k && p[j]; j++)
-    if (j + n < len) buf[n + j] = p[j];
-  return j;
-}
-
-size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
-  size_t i = 0, n = 0;
-  while (fmt[i] != '\0') {
-    if (fmt[i] == '%') {
-      size_t j, k, x = 0, is_long = 0, w = 0 /* width */, pr = 0 /* prec */;
-      char pad = ' ', c = fmt[++i];
-      if (c == '#') x++, c = fmt[++i];
-      if (c == '0') pad = '0', c = fmt[++i];
-      while (isdigit(c)) w *= 10, w += (size_t) (c - '0'), c = fmt[++i];
-      if (c == '.') {
-        c = fmt[++i];
-        if (c == '*') {
-          pr = (size_t) va_arg(ap, int);
-          c = fmt[++i];
-        } else {
-          while (isdigit(c)) pr *= 10, pr += (size_t) (c - '0'), c = fmt[++i];
-        }
-      }
-      while (c == 'h') c = fmt[++i];  // Treat h and hh as int
-      if (c == 'l') {
-        is_long++, c = fmt[++i];
-        if (c == 'l') is_long++, c = fmt[++i];
-      }
-      if (c == 'p') x = 1, is_long = 1;
-      if (c == 'd' || c == 'u' || c == 'x' || c == 'X' || c == 'p') {
-        bool s = (c == 'd'), h = (c == 'x' || c == 'X' || c == 'p');
-        char tmp[30];
-        if (is_long == 2) {
-          int64_t v = va_arg(ap, int64_t);
-          k = mg_lld(tmp, v, s, h);
-        } else if (is_long == 1) {
-          long v = va_arg(ap, long);
-          k = mg_lld(tmp, s ? (int64_t) v : (int64_t) (unsigned long) v, s, h);
-        } else {
-          int v = va_arg(ap, int);
-          k = mg_lld(tmp, s ? (int64_t) v : (int64_t) (unsigned) v, s, h);
-        }
-        for (j = 0; k < w && j + k < w; j++)
-          mg_copys(buf, len, n, &pad, 1), n++;
-        if (x) mg_copys(buf, len, n, (char *) "0x", 2), n += 2;
-        mg_copys(buf, len, n, tmp, k);
-        n += k;
-      } else if (c == 'c') {
-        int p = va_arg(ap, int);
-        if (n < len) buf[n] = (char) p;
-        n++;
-      } else if (c == 's') {
-        char *p = va_arg(ap, char *);
-        if (pr == 0) pr = p == NULL ? 0 : strlen(p);
-        for (j = 0; pr < w && j + pr < w; j++)
-          mg_copys(buf, len, n, &pad, 1), n++;
-        n += mg_copys(buf, len, n, p, pr);
-      } else if (c == '%') {
-        if (n < len) buf[n] = '%';
-        n++;
-      } else {
-        abort();  // Unsupported format specifier
-      }
-      i++;
-    } else {
-      if (n < len) buf[n] = fmt[i];
-      n++, i++;
-    }
-  }
-  if (n < len) buf[n] = '\0';
-  return n;
-}
-
 size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
   va_list ap;
   size_t n;
@@ -4168,6 +4078,111 @@ int64_t mg_to64(struct mg_str str) {
     i++;
   }
   return result * neg;
+}
+
+size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex) {
+  const char *letters = "0123456789abcdef";
+  uint64_t v = (uint64_t) val;
+  size_t s = 0, n, i;
+  if (is_signed && val < 0) buf[s++] = '-', v = (uint64_t) (-val);
+  // This loop prints a number in reverse order. I guess this is because we
+  // write numbers from right to left: least significant digit comes last.
+  // Maybe because we use Arabic numbers, and Arabs write RTL?
+  if (is_hex) {
+    for (n = 0; v; v >>= 4) buf[s + n++] = letters[v & 15];
+  } else {
+    for (n = 0; v; v /= 10) buf[s + n++] = letters[v % 10];
+  }
+  // Reverse a string
+  for (i = 0; i < n / 2; i++) {
+    char t = buf[s + i];
+    buf[s + i] = buf[s + n - i - 1], buf[s + n - i - 1] = t;
+  }
+  if (val == 0) buf[n++] = '0';  // Handle special case
+  return n + s;
+}
+
+static size_t mg_copys(char *buf, size_t len, size_t n, char *p, size_t k) {
+  size_t j = 0;
+  for (j = 0; j < k && p[j]; j++)
+    if (j + n < len) buf[n + j] = p[j];
+  return j;
+}
+
+size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
+  size_t i = 0, n = 0;
+  while (fmt[i] != '\0') {
+    if (fmt[i] == '%') {
+      size_t j, k, x = 0, is_long = 0, w = 0 /* width */, pr = 0 /* prec */;
+      char pad = ' ', minus = 0, c = fmt[++i];
+      if (c == '#') x++, c = fmt[++i];
+      if (c == '-') minus++, c = fmt[++i];
+      if (c == '0') pad = '0', c = fmt[++i];
+      while (isdigit(c)) w *= 10, w += (size_t) (c - '0'), c = fmt[++i];
+      if (c == '.') {
+        c = fmt[++i];
+        if (c == '*') {
+          pr = (size_t) va_arg(ap, int);
+          c = fmt[++i];
+        } else {
+          while (isdigit(c)) pr *= 10, pr += (size_t) (c - '0'), c = fmt[++i];
+        }
+      }
+      while (c == 'h') c = fmt[++i];  // Treat h and hh as int
+      if (c == 'l') {
+        is_long++, c = fmt[++i];
+        if (c == 'l') is_long++, c = fmt[++i];
+      }
+      if (c == 'p') x = 1, is_long = 1;
+      if (c == 'd' || c == 'u' || c == 'x' || c == 'X' || c == 'p') {
+        bool s = (c == 'd'), h = (c == 'x' || c == 'X' || c == 'p');
+        char tmp[30];
+        size_t xl = x ? 2 : 0;
+        if (is_long == 2) {
+          int64_t v = va_arg(ap, int64_t);
+          k = mg_lld(tmp, v, s, h);
+        } else if (is_long == 1) {
+          long v = va_arg(ap, long);
+          k = mg_lld(tmp, s ? (int64_t) v : (int64_t) (unsigned long) v, s, h);
+        } else {
+          int v = va_arg(ap, int);
+          k = mg_lld(tmp, s ? (int64_t) v : (int64_t) (unsigned) v, s, h);
+        }
+        for (j = 0; j < xl && w > 0; j++) w--;
+        for (j = 0; pad == ' ' && !minus && k < w && j + k < w; j++)
+          n += mg_copys(buf, len, n, &pad, 1);
+        n += mg_copys(buf, len, n, (char *) "0x", xl);
+        for (j = 0; pad == '0' && k < w && j + k < w; j++)
+          n += mg_copys(buf, len, n, &pad, 1);
+        n += mg_copys(buf, len, n, tmp, k);
+        for (j = 0; pad == ' ' && minus && k < w && j + k < w; j++)
+          n += mg_copys(buf, len, n, &pad, 1);
+      } else if (c == 'c') {
+        int p = va_arg(ap, int);
+        if (n < len) buf[n] = (char) p;
+        n++;
+      } else if (c == 's') {
+        char *p = va_arg(ap, char *);
+        if (pr == 0) pr = p == NULL ? 0 : strlen(p);
+        for (j = 0; !minus && pr < w && j + pr < w; j++)
+          n += mg_copys(buf, len, n, &pad, 1);
+        n += mg_copys(buf, len, n, p, pr);
+        for (j = 0; minus && pr < w && j + pr < w; j++)
+          n += mg_copys(buf, len, n, &pad, 1);
+      } else if (c == '%') {
+        if (n < len) buf[n] = '%';
+        n++;
+      } else {
+        abort();  // Unsupported format specifier
+      }
+      i++;
+    } else {
+      if (n < len) buf[n] = fmt[i];
+      n++, i++;
+    }
+  }
+  if (n < len) buf[n] = '\0';
+  return n;
 }
 
 #ifdef MG_ENABLE_LINES

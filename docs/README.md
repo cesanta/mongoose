@@ -2412,6 +2412,8 @@ Supported format specifiers:
 - `hhu`, `hu`, `u`, `lu`, `llu` - same but for unsigned variants
 - `hhx`, `hx`, `x`, `lx`, `llx` - same, unsigned and hex output
 - `s` - `for char *`
+- `c` - `for char`
+- `%` - `the `%` character itself
 - `p` - for any pointer, prints `0x.....` hex value
 - `%X.Y` - optional width and precision modifiers
 - `%.*` - optional precision modifier specified as `int` argument
@@ -2425,6 +2427,7 @@ mg_snprintf(buf, sizeof(buf), "%lld", (int64_t) 123);   // 123
 mg_snprintf(buf, sizeof(buf), "%.2s", "abcdef");        // ab
 mg_snprintf(buf, sizeof(buf), "%.*s", 2, "abcdef");     // ab
 mg_snprintf(buf, sizeof(buf), "%05x", 123);             // 00123
+mg_snprintf(buf, sizeof(buf), "%%-%3s", "a");           // %-  a
 ```
 
 ### mg\_to64()
