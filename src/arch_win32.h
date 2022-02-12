@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -45,6 +46,7 @@ typedef enum { false = 0, true = 1 } bool;
 #include <ws2tcpip.h>
 #endif
 
+#include <process.h>
 #include <winsock2.h>
 
 // Protect from calls like std::snprintf in app code
