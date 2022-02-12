@@ -905,6 +905,10 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
   }
 }
 
+int mg_http_status(const struct mg_http_message *hm) {
+  return atoi(hm->uri.ptr);
+}
+
 static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_READ || ev == MG_EV_CLOSE) {
     struct mg_http_message hm;

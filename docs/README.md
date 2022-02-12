@@ -766,6 +766,17 @@ struct mg_connection *c = mg_http_connect(&mgr, "http://google.com", fn, NULL);
 if (c == NULL) fatal_error("Cannot create connection");
 ```
 
+### mg\_http\_status()
+
+```c
+int mg_http_status(const struct mg_http_message *hm);
+```
+
+Get status code of the HTTP response.
+Parameters:
+- `hm` - Parsed HTTP response
+
+Return value: status code, e.g. `200` for success.
 
 ### mg\_http\_get\_request\_len()
 
