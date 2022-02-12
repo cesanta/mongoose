@@ -875,7 +875,7 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
   ce = &ch.ptr[ch.len];
   if (ce < end) memmove((void *) ch.ptr, ce, (size_t) (end - ce));
   c->recv.len -= ch.len;
-  if (c->pfn_data == NULL) c->pfn_data = (char *) c->pfn_data - ch.len;
+  if (c->pfn_data != NULL) c->pfn_data = (char *) c->pfn_data - ch.len;
 }
 
 int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,

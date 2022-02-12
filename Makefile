@@ -33,9 +33,9 @@ all: mg_prefix unamalgamated unpacked test test++ arm examples vc98 vc2017 mingw
 examples:
 	@for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
 
-test/packed_fs.c: Makefile src/fs.h src/ssi.h test/fuzz.c test/data/a.txt
+test/packed_fs.c:
 	$(CC) $(CFLAGS) test/pack.c -o pack
-	./pack $? > $@
+	./pack Makefile src/ssi.h test/fuzz.c test/data/a.txt -z 'gzip -c' test/data/range.txt > $@
 
 # Check that all external (exported) symbols have "mg_" prefix
 mg_prefix: mongoose.c mongoose.h
