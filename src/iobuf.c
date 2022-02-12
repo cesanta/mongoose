@@ -31,8 +31,7 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
       io->size = new_size;
     } else {
       ok = 0;
-      LOG(LL_ERROR,
-          ("%lu->%lu", (unsigned long) io->size, (unsigned long) new_size));
+      MG_ERROR(("%lld->%lld", (uint64_t) io->size, (uint64_t) new_size));
     }
   }
   return ok;

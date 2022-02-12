@@ -20,7 +20,7 @@ static void server(void *args) {
   struct mg_mgr mgr;
   mg_log_set(s_debug_level);
   mg_mgr_init(&mgr);
-  LOG(LL_INFO, ("Starting Mongoose v%s", MG_VERSION));  // Tell the world
+  MG_INFO(("Starting Mongoose v%s", MG_VERSION));       // Tell the world
   mg_http_listen(&mgr, s_listening_address, cb, &mgr);  // Web listener
   while (args == NULL) mg_mgr_poll(&mgr, 1000);         // Infinite event loop
   mg_mgr_free(&mgr);                                    // Unreachable
@@ -32,14 +32,14 @@ static void blinker(void *args) {
   for (;;) {
     gpio_toggle(pin);
     vTaskDelay(pdMS_TO_TICKS(ms));
-    LOG(LL_INFO, ("blink %s,  RAM: %u", (char *) args, xPortGetFreeHeapSize()));
+    MG_INFO(("blink %s,  RAM: %u", (char *) args, xPortGetFreeHeapSize()));
   }
 }
 
 // Start Mongoose server when network is ready
 void vApplicationIPNetworkEventHook(eIPCallbackEvent_t ev) {
   static bool mongoose_started = false;
-  LOG(LL_INFO, ("FreeRTOS net event %d, up: %d", ev, eNetworkUp));
+  MG_INFO(("FreeRTOS net event %d, up: %d", ev, eNetworkUp));
   if (ev == eNetworkUp && mongoose_started == false) {
     xTaskCreate(server, "server", 8192, NULL, configMAX_PRIORITIES - 1, NULL);
     mongoose_started = true;
@@ -49,7 +49,7 @@ void vApplicationIPNetworkEventHook(eIPCallbackEvent_t ev) {
 static void init_heap(void) {
   extern uint32_t _end, _estack;
   uint8_t *ptr = (uint8_t *) ((((uint32_t) &_end) + 7) & ~7U);
-  uint32_t len = (uint32_t)((char *) &_estack - (char *) &_end);
+  uint32_t len = (uint32_t) ((char *) &_estack - (char *) &_end);
   HeapRegion_t regions[] = {{ptr, len}, {NULL, 0}};
   vPortDefineHeapRegions(regions);
 }

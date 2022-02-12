@@ -51,12 +51,12 @@ void mg_tls_handshake(struct mg_connection *c) {
   mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mg_net_send, mg_net_recv, 0);
   rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
-    LOG(LL_DEBUG, ("%lu success", c->id));
+    MG_DEBUG(("%lu success", c->id));
     c->is_tls_hs = 0;
   } else if (rc == MBEDTLS_ERR_SSL_WANT_READ ||
              rc == MBEDTLS_ERR_SSL_WANT_WRITE) {  // Still pending
-    LOG(LL_VERBOSE_DEBUG, ("%lu pending, %d%d %d (-%#x)", c->id,
-                           c->is_connecting, c->is_tls_hs, rc, -rc));
+    MG_VERBOSE(("%lu pending, %d%d %d (-%#x)", c->id, c->is_connecting,
+                c->is_tls_hs, rc, -rc));
   } else {
     mg_error(c, "TLS handshake: -%#x", -rc);  // Error
   }
@@ -70,7 +70,7 @@ static int mbed_rng(void *ctx, unsigned char *buf, size_t len) {
 
 static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
   n = (int) strlen(s2) - 1;
-  LOG(LL_VERBOSE_DEBUG, ("%p %.*s", ((struct mg_connection *) c)->fd, n, s2));
+  MG_VERBOSE(("%p %.*s", ((struct mg_connection *) c)->fd, n, s2));
   (void) s;
   (void) c;
   (void) lev;
@@ -100,7 +100,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     mg_error(c, "TLS OOM");
     goto fail;
   }
-  LOG(LL_DEBUG, ("%lu Setting TLS", c->id));
+  MG_DEBUG(("%lu Setting TLS", c->id));
   mbedtls_ssl_init(&tls->ssl);
   mbedtls_ssl_config_init(&tls->conf);
   mbedtls_x509_crt_init(&tls->ca);

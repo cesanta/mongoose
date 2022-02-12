@@ -14,13 +14,13 @@ static void (*s_fn)(const void *, size_t, void *) = mg_log_stdout;
 static void *s_fn_param = NULL;
 
 void mg_log_set(const char *spec) {
-  LOG(LL_DEBUG, ("Setting log level to %s", spec));
+  MG_DEBUG(("Setting log level to %s", spec));
   s_spec = spec;
 }
 
 bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   // static unsigned long seq;
-  int max = LL_INFO;
+  int max = MG_LL_INFO;
   struct mg_str k, v, s = mg_str(s_spec);
   const char *p = strrchr(file, '/');
 

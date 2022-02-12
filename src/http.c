@@ -32,7 +32,7 @@ size_t mg_http_next_multipart(struct mg_str body, size_t ofs,
   // Skip boundary
   while (b + 2 < max && s[b] != '\r' && s[b + 1] != '\n') b++;
   if (b <= ofs || b + 2 >= max) return 0;
-  // LOG(LL_INFO, ("B: %zu %zu [%.*s]", ofs, b - ofs, (int) (b - ofs), s));
+  // MG_INFO(("B: %zu %zu [%.*s]", ofs, b - ofs, (int) (b - ofs), s));
 
   // Skip headers
   h1 = h2 = b + 2;
@@ -40,7 +40,7 @@ size_t mg_http_next_multipart(struct mg_str body, size_t ofs,
     while (h2 + 2 < max && s[h2] != '\r' && s[h2 + 1] != '\n') h2++;
     if (h2 == h1) break;
     if (h2 + 2 >= max) return 0;
-    // LOG(LL_INFO, ("Header: [%.*s]", (int) (h2 - h1), &s[h1]));
+    // MG_INFO(("Header: [%.*s]", (int) (h2 - h1), &s[h1]));
     if (part != NULL && h1 + cd.len + 2 < h2 && s[h1 + cd.len] == ':' &&
         mg_ncasecmp(&s[h1], cd.ptr, cd.len) == 0) {
       struct mg_str v = mg_str_n(&s[h1 + cd.len + 2], h2 - (h1 + cd.len + 2));
@@ -56,7 +56,7 @@ size_t mg_http_next_multipart(struct mg_str body, size_t ofs,
 
   if (b2 + 2 >= max) return 0;
   if (part != NULL) part->body = mg_str_n(&s[b1], b2 - b1);
-  // LOG(LL_INFO, ("Body: [%.*s]", (int) (b2 - b1), &s[b1]));
+  // MG_INFO(("Body: [%.*s]", (int) (b2 - b1), &s[b1]));
   return b2 + 2;
 }
 
@@ -82,8 +82,8 @@ void mg_http_bauth(struct mg_connection *c, const char *user,
     c->send.len += 21 + (size_t) n + 2;
     memcpy(&c->send.buf[c->send.len - 2], "\r\n", 2);
   } else {
-    LOG(LL_ERROR, ("%lu %s cannot resize iobuf %d->%d ", c->id, c->label,
-                   (int) c->send.size, (int) need));
+    MG_ERROR(("%lu %s cannot resize iobuf %d->%d ", c->id, c->label,
+              (int) c->send.size, (int) need));
   }
 }
 
@@ -182,7 +182,7 @@ static void mg_http_parse_headers(const char *s, const char *end,
     if (k.len == tmp.len) continue;
     while (v.len > 0 && v.ptr[v.len - 1] == ' ') v.len--;  // Trim spaces
     if (k.len == 0) break;
-    // LOG(LL_INFO, ("--HH [%.*s] [%.*s] [%.*s]", (int) tmp.len - 1, tmp.ptr,
+    // MG_INFO(("--HH [%.*s] [%.*s] [%.*s]", (int) tmp.len - 1, tmp.ptr,
     //(int) k.len, k.ptr, (int) v.len, v.ptr));
     h[i].name = k;
     h[i].value = v;
@@ -454,18 +454,18 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
 
 static int getrange(struct mg_str *s, int64_t *a, int64_t *b) {
   size_t i, numparsed = 0;
-  // LOG(LL_INFO, ("%.*s", (int) s->len, s->ptr));
+  // MG_INFO(("%.*s", (int) s->len, s->ptr));
   for (i = 0; i + 6 < s->len; i++) {
     if (memcmp(&s->ptr[i], "bytes=", 6) == 0) {
       struct mg_str p = mg_str_n(s->ptr + i + 6, s->len - i - 6);
       if (p.len > 0 && p.ptr[0] >= '0' && p.ptr[0] <= '9') numparsed++;
       *a = mg_to64(p);
-      // LOG(LL_INFO, ("PPP [%.*s] %d", (int) p.len, p.ptr, numparsed));
+      // MG_INFO(("PPP [%.*s] %d", (int) p.len, p.ptr, numparsed));
       while (p.len && p.ptr[0] >= '0' && p.ptr[0] <= '9') p.ptr++, p.len--;
       if (p.len && p.ptr[0] == '-') p.ptr++, p.len--;
       *b = mg_to64(p);
       if (p.len > 0 && p.ptr[0] >= '0' && p.ptr[0] <= '9') numparsed++;
-      // LOG(LL_INFO, ("PPP [%.*s] %d", (int) p.len, p.ptr, numparsed));
+      // MG_INFO(("PPP [%.*s] %d", (int) p.len, p.ptr, numparsed));
       break;
     }
   }
@@ -482,7 +482,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   struct mg_str *inm = NULL;
 
   if (fd == NULL || fs->st(path, &size, &mtime) == 0) {
-    LOG(LL_DEBUG, ("404 [%s] %p", path, (void *) fd));
+    MG_DEBUG(("404 [%s] %p", path, (void *) fd));
     mg_http_reply(c, 404, "", "%s", "Not found\n");
     mg_fs_close(fd);
     // NOTE: mg_http_etag() call should go first!
@@ -549,12 +549,12 @@ static void printdirentry(const char *name, void *userdata) {
   char path[MG_PATH_MAX], sz[40], mod[40];
   int flags, n = 0;
 
-  // LOG(LL_DEBUG, ("[%s] [%s]", d->dir, name));
+  // MG_DEBUG(("[%s] [%s]", d->dir, name));
   if (mg_snprintf(path, sizeof(path), "%s%c%s", d->dir, '/', name) >
       sizeof(path)) {
-    LOG(LL_ERROR, ("%s truncated", name));
+    MG_ERROR(("%s truncated", name));
   } else if ((flags = fs->st(path, &size, &t)) == 0) {
-    LOG(LL_ERROR, ("%lu stat(%s): %d", d->c->id, path, errno));
+    MG_ERROR(("%lu stat(%s): %d", d->c->id, path, errno));
   } else {
     const char *slash = flags & MG_FS_DIR ? "/" : "";
     if (flags & MG_FS_DIR) {
@@ -677,8 +677,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
     path[path_size - 1] = '\0';  // Double-check
     remove_double_dots(path);
     n = strlen(path);
-    LOG(LL_VERBOSE_DEBUG,
-        ("%lu %.*s -> %s", c->id, (int) hm->uri.len, hm->uri.ptr, path));
+    MG_VERBOSE(("%lu %.*s -> %s", c->id, (int) hm->uri.len, hm->uri.ptr, path));
     while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
     flags = fs->st(path, NULL, NULL);                   // Does it exist?
     if (flags == 0) {
@@ -726,8 +725,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   const char *sp = opts->ssi_pattern;
   int flags = uri_to_path(c, hm, opts, path, sizeof(path));
   if (flags == 0) return;
-  LOG(LL_VERBOSE_DEBUG,
-      ("%.*s %s %d", (int) hm->uri.len, hm->uri.ptr, path, flags));
+  MG_VERBOSE(("%.*s %s %d", (int) hm->uri.len, hm->uri.ptr, path, flags));
   if (flags & MG_FS_DIR) {
     listdir(c, hm, opts, path);
   } else if (sp != NULL && mg_globmatch(sp, strlen(sp), path, strlen(path))) {
@@ -795,7 +793,7 @@ struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v) {
       while (p < x &&
              (q ? p == b || *p != '"' : *p != ';' && *p != ' ' && *p != ','))
         p++;
-      // LOG(LL_INFO, ("[%.*s] [%.*s] [%.*s]", (int) s.len, s.ptr, (int) v.len,
+      // MG_INFO(("[%.*s] [%.*s] [%.*s]", (int) s.len, s.ptr, (int) v.len,
       // v.ptr, (int) (p - b), b));
       return stripquotes(mg_str_n(b, (size_t) (p - b + q)));
     }
@@ -812,7 +810,7 @@ static size_t get_chunk_length(const char *buf, size_t len, size_t *ll) {
   while (i < len && buf[i] != '\r' && i != '\n') i++;
   n = mg_unhexn((char *) buf, i);
   while (i < len && (buf[i] == '\r' || i == '\n')) i++;
-  // LOG(LL_INFO, ("len %zu i %zu n %zu ", len, i, n));
+  // MG_INFO(("len %zu i %zu n %zu ", len, i, n));
   if (ll != NULL) *ll = i + 1;
   if (i < len && i + n + 2 < len) return i + n + 3;
   return 0;
@@ -827,7 +825,7 @@ static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
     char *buf = (char *) &c->recv.buf[reqlen];
     size_t memo = c->recv.len;
     size_t cl = get_chunk_length(&buf[off], memo - reqlen - off, &ll);
-    // LOG(LL_INFO, ("len %zu off %zu cl %zu ll %zu", len, off, cl, ll));
+    // MG_INFO(("len %zu off %zu cl %zu ll %zu", len, off, cl, ll));
     if (cl == 0) break;
     hm->chunk = mg_str_n(&buf[off + ll], cl < ll + 2 ? 0 : cl - ll - 2);
     mg_call(c, MG_EV_HTTP_CHUNK, hm);
@@ -846,7 +844,7 @@ static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
         off += cl2;
         if (cl2 <= 5) break;
       }
-      // LOG(LL_INFO, ("BL->%d del %d off %d", (int) bl, (int) del, (int) off));
+      // MG_INFO(("BL->%d del %d off %d", (int) bl, (int) del, (int) off));
       c->recv.len -= off - bl;
       // Set message length to indicate we've received
       // everything, to fire MG_EV_HTTP_MSG
@@ -891,7 +889,7 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
     long oft = strtol(offset, NULL, 0);
     mg_snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, name);
     remove_double_dots(path);
-    LOG(LL_DEBUG, ("%d bytes @ %ld [%s]", (int) hm->body.len, oft, path));
+    MG_DEBUG(("%d bytes @ %ld [%s]", (int) hm->body.len, oft, path));
     if (oft == 0) fs->rm(path);
     if ((fd = mg_fs_open(fs, path, MG_FS_WRITE)) == NULL) {
       mg_http_reply(c, 400, "", "open(%s): %d", path, errno);
@@ -921,8 +919,8 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
       } else if (is_chunked && n > 0) {
         walkchunks(c, &hm, (size_t) n);
       }
-      // LOG(LL_INFO,
-      //("---->%d %d\n%.*s", n, is_chunked, (int) c->recv.len, c->recv.buf));
+      // MG_INFO(("---->%d %d\n%.*s", n, is_chunked, (int) c->recv.len,
+      // c->recv.buf));
       if (n < 0 && ev == MG_EV_READ) {
         mg_error(c, "HTTP parse:\n%.*s", (int) c->recv.len, c->recv.buf);
         break;

@@ -100,7 +100,7 @@ static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
 }
 
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
-  int log_level = n > 0 ? LL_VERBOSE_DEBUG : LL_DEBUG;
+  int log_level = n > 0 ? MG_LL_VERBOSE : MG_LL_DEBUG;
   char flags[] = {(char) ('0' + c->is_listening),
                   (char) ('0' + c->is_client),
                   (char) ('0' + c->is_accepted),
@@ -116,9 +116,9 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
                   (char) ('0' + c->is_readable),
                   (char) ('0' + c->is_writable),
                   '\0'};
-  LOG(log_level,
-      ("%3lu %s %d:%d %ld err %d (%s)", c->id, flags, (int) c->send.len,
-       (int) c->recv.len, n, MG_SOCK_ERRNO, strerror(errno)));
+  MG_LOG(log_level,
+         ("%3lu %s %d:%d %ld err %d (%s)", c->id, flags, (int) c->send.len,
+          (int) c->recv.len, n, MG_SOCK_ERRNO, strerror(errno)));
   if (n == 0) {
     // Do nothing
   } else if (n < 0) {
@@ -134,9 +134,9 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       memset(&a, 0, sizeof(a));
       getsockname(FD(c), &usa.sa, &slen);
       tomgaddr(&usa, &a, c->peer.is_ip6);
-      LOG(LL_INFO, ("\n-- %lu %s %s %s %s %ld\n%s", c->id,
-                    mg_straddr(&a, t1, sizeof(t1)), r ? "<-" : "->",
-                    mg_straddr(&c->peer, t2, sizeof(t2)), c->label, n, s));
+      MG_INFO(("\n-- %lu %s %s %s %s %ld\n%s", c->id,
+               mg_straddr(&a, t1, sizeof(t1)), r ? "<-" : "->",
+               mg_straddr(&c->peer, t2, sizeof(t2)), c->label, n, s));
       free(s);
       (void) t1, (void) t2;  // Silence warnings for MG_ENABLE_LOG=0
     }
@@ -198,7 +198,7 @@ static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
   memset(addr, 0, sizeof(*addr));
   addr->port = mg_htons(mg_url_port(url));
   if (!mg_aton(mg_url_host(url), addr)) {
-    LOG(LL_ERROR, ("invalid listening URL: %s", url));
+    MG_ERROR(("invalid listening URL: %s", url));
   } else {
     union usa usa;
     socklen_t slen = tousa(addr, &usa);
@@ -249,7 +249,7 @@ static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
   }
   if (fd == INVALID_SOCKET) {
     if (s_err == 0) s_err = MG_SOCK_ERRNO;
-    LOG(LL_ERROR, ("Failed to listen on %s, errno %d", url, s_err));
+    MG_ERROR(("Failed to listen on %s, errno %d", url, s_err));
   }
 
   return fd;
@@ -301,7 +301,7 @@ static void close_conn(struct mg_connection *c) {
   // Order of operations is important. `MG_EV_CLOSE` event must be fired
   // before we deallocate received data, see #1331
   mg_call(c, MG_EV_CLOSE, NULL);
-  LOG(LL_DEBUG, ("%lu closed", c->id));
+  MG_DEBUG(("%lu closed", c->id));
   if (FD(c) != INVALID_SOCKET) {
     closesocket(FD(c));
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
@@ -375,15 +375,15 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
                                  mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = NULL;
   if (url == NULL || url[0] == '\0') {
-    LOG(LL_ERROR, ("null url"));
+    MG_ERROR(("null url"));
   } else if ((c = alloc_conn(mgr, 1, INVALID_SOCKET)) == NULL) {
-    LOG(LL_ERROR, ("OOM"));
+    MG_ERROR(("OOM"));
   } else {
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->is_udp = (strncmp(url, "udp:", 4) == 0);
     c->fn = fn;
     c->fn_data = fn_data;
-    LOG(LL_DEBUG, ("%lu -> %s", c->id, url));
+    MG_DEBUG(("%lu -> %s", c->id, url));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_resolve(c, url);
   }
@@ -402,20 +402,20 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     // That's not an error, just should try later
     if (MG_SOCK_ERRNO != EAGAIN)
 #endif
-      LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
+      MG_ERROR(("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
 #if ((MG_ARCH != MG_ARCH_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP))
   } else if ((long) fd >= FD_SETSIZE) {
-    LOG(LL_ERROR, ("%ld > %ld", (long) fd, (long) FD_SETSIZE));
+    MG_ERROR(("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
 #endif
   } else if ((c = alloc_conn(mgr, 0, fd)) == NULL) {
-    LOG(LL_ERROR, ("%lu OOM", lsn->id));
+    MG_ERROR(("%lu OOM", lsn->id));
     closesocket(fd);
   } else {
     char buf[40];
     tomgaddr(&usa, &c->peer, sa_len != sizeof(usa.sin));
     mg_straddr(&c->peer, buf, sizeof(buf));
-    LOG(LL_DEBUG, ("%lu accepted %s", c->id, buf));
+    MG_DEBUG(("%lu accepted %s", c->id, buf));
     mg_set_non_blocking_mode(FD(c));
     setsockopts(c);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
@@ -477,13 +477,13 @@ struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
   SOCKET sp[2] = {INVALID_SOCKET, INVALID_SOCKET};
   struct mg_connection *c = NULL;
   if (!mg_socketpair(sp, usa)) {
-    LOG(LL_ERROR, ("Cannot create socket pair"));
+    MG_ERROR(("Cannot create socket pair"));
   } else if ((c = alloc_conn(mgr, false, sp[1])) == NULL) {
     closesocket(sp[0]);
     closesocket(sp[1]);
-    LOG(LL_ERROR, ("OOM"));
+    MG_ERROR(("OOM"));
   } else {
-    LOG(LL_INFO, ("pipe %lu", (unsigned long) sp[0]));
+    MG_DEBUG(("pipe %lu", (unsigned long) sp[0]));
     tomgaddr(&usa[0], &c->peer, false);
     c->is_udp = 1;
     c->pfn = pf1;
@@ -503,9 +503,9 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
   struct mg_addr addr;
   SOCKET fd = mg_open_listener(url, &addr);
   if (fd == INVALID_SOCKET) {
-    LOG(LL_ERROR, ("Failed: %s, errno %d", url, MG_SOCK_ERRNO));
+    MG_ERROR(("Failed: %s, errno %d", url, MG_SOCK_ERRNO));
   } else if ((c = alloc_conn(mgr, 0, fd)) == NULL) {
-    LOG(LL_ERROR, ("OOM %s", url));
+    MG_ERROR(("OOM %s", url));
     closesocket(fd);
   } else {
     memcpy(&c->peer, &addr, sizeof(struct mg_addr));
@@ -516,8 +516,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     c->fn = fn;
     c->fn_data = fn_data;
     mg_call(c, MG_EV_OPEN, NULL);
-    LOG(LL_DEBUG,
-        ("%lu accepting on %s (port %u)", c->id, url, mg_ntohs(c->peer.port)));
+    MG_DEBUG(("%lu %s port %u", c->id, url, mg_ntohs(c->peer.port)));
   }
   return c;
 }
@@ -558,7 +557,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   }
 
   if ((rc = select((int) maxfd + 1, &rset, &wset, NULL, &tv)) < 0) {
-    LOG(LL_DEBUG, ("select: %d %d", rc, MG_SOCK_ERRNO));
+    MG_DEBUG(("select: %d %d", rc, MG_SOCK_ERRNO));
     FD_ZERO(&rset);
     FD_ZERO(&wset);
   }
@@ -600,11 +599,10 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
     mg_call(c, MG_EV_POLL, &now);
-    LOG(LL_VERBOSE_DEBUG,
-        ("%lu %c%c %c%c%c%c%c", c->id, c->is_readable ? 'r' : '-',
-         c->is_writable ? 'w' : '-', c->is_tls ? 'T' : 't',
-         c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
-         c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c'));
+    MG_VERBOSE(("%lu %c%c %c%c%c%c%c", c->id, c->is_readable ? 'r' : '-',
+                c->is_writable ? 'w' : '-', c->is_tls ? 'T' : 't',
+                c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
+                c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c'));
     if (c->is_resolving || c->is_closing) {
       // Do nothing
     } else if (c->is_listening && c->is_udp == 0) {

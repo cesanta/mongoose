@@ -27,7 +27,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
             mg_iobuf_add(&b, b.len, data, strlen(data), align);
             free(data);
           } else {
-            LOG(LL_ERROR, ("%s: file=%s error or too deep", path, arg));
+            MG_ERROR(("%s: file=%s error or too deep", path, arg));
           }
         } else if (sscanf(buf, "<!--#include virtual=\"%[^\"]", arg)) {
           char tmp[MG_PATH_MAX + BUFSIZ + 10], *data;
@@ -37,11 +37,11 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
             mg_iobuf_add(&b, b.len, data, strlen(data), align);
             free(data);
           } else {
-            LOG(LL_ERROR, ("%s: virtual=%s error or too deep", path, arg));
+            MG_ERROR(("%s: virtual=%s error or too deep", path, arg));
           }
         } else {
           // Unknown SSI tag
-          LOG(LL_INFO, ("Unknown SSI tag: %.*s", (int) len, buf));
+          MG_ERROR(("Unknown SSI tag: %.*s", (int) len, buf));
           mg_iobuf_add(&b, b.len, buf, len, align);
         }
         intag = 0;
@@ -55,7 +55,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
         if (len == 5 && strncmp(buf, "<!--#", 5) != 0) {
           intag = 0;
         } else if (len >= sizeof(buf) - 2) {
-          LOG(LL_ERROR, ("%s: SSI tag is too large", path));
+          MG_ERROR(("%s: SSI tag is too large", path));
           len = 0;
         }
         buf[len++] = (char) (ch & 0xff);

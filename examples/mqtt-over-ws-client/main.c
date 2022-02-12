@@ -18,7 +18,7 @@ static const char *s_topic = "mg/test";
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ERROR) {
     // On error, log error message
-    LOG(LL_ERROR, ("%p %s", c->fd, (char *) ev_data));
+    MG_ERROR(("%p %s", c->fd, (char *) ev_data));
   } else if (ev == MG_EV_CONNECT) {
     // If target URL is SSL/TLS, command client connection to use TLS
     if (mg_url_is_ssl(s_url)) {
@@ -27,7 +27,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     }
   } else if (ev == MG_EV_WS_OPEN) {
     // WS connection established. Perform MQTT login
-    LOG(LL_INFO, ("Connected to WS. Logging in to MQTT..."));
+    MG_INFO(("Connected to WS. Logging in to MQTT..."));
     struct mg_mqtt_opts opts = {.will_qos = 1,
                                 .will_topic = mg_str(s_topic),
                                 .will_message = mg_str("goodbye")};
@@ -37,7 +37,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_mqtt_message mm;
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    LOG(LL_INFO, ("GOT %d bytes WS msg", (int) wm->data.len));
+    MG_INFO(("GOT %d bytes WS msg", (int) wm->data.len));
     while ((mg_mqtt_parse((uint8_t *) wm->data.ptr, wm->data.len, &mm)) == 0) {
       switch (mm.cmd) {
         case MQTT_CMD_CONNACK:
@@ -45,24 +45,24 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
           if (mm.ack == 0) {
             struct mg_str topic = mg_str(s_topic), data = mg_str("hello");
             size_t len = c->send.len;
-            LOG(LL_INFO, ("CONNECTED to %s", s_url));
+            MG_INFO(("CONNECTED to %s", s_url));
             mg_mqtt_sub(c, topic, 1);
             mg_ws_wrap(c, len, WEBSOCKET_OP_BINARY);
-            LOG(LL_INFO, ("SUBSCRIBED to %.*s", (int) topic.len, topic.ptr));
+            MG_INFO(("SUBSCRIBED to %.*s", (int) topic.len, topic.ptr));
             mg_mqtt_pub(c, topic, data, 1, false);
-            LOG(LL_INFO, ("PUBSLISHED %.*s -> %.*s", (int) data.len, data.ptr,
-                          (int) topic.len, topic.ptr));
+            MG_INFO(("PUBSLISHED %.*s -> %.*s", (int) data.len, data.ptr,
+                     (int) topic.len, topic.ptr));
             len = mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
           } else {
-            LOG(LL_ERROR, ("%lu MQTT auth failed, code %d", c->id, mm.ack));
+            MG_ERROR(("%lu MQTT auth failed, code %d", c->id, mm.ack));
             c->is_closing = 1;
           }
           break;
         case MQTT_CMD_PUBLISH: {
-          LOG(LL_DEBUG, ("%lu [%.*s] -> [%.*s]", c->id, (int) mm.topic.len,
-                         mm.topic.ptr, (int) mm.data.len, mm.data.ptr));
-          LOG(LL_INFO, ("RECEIVED %.*s <- %.*s", (int) mm.data.len, mm.data.ptr,
-                        (int) mm.topic.len, mm.topic.ptr));
+          MG_DEBUG(("%lu [%.*s] -> [%.*s]", c->id, (int) mm.topic.len,
+                    mm.topic.ptr, (int) mm.data.len, mm.data.ptr));
+          MG_INFO(("RECEIVED %.*s <- %.*s", (int) mm.data.len, mm.data.ptr,
+                   (int) mm.topic.len, mm.topic.ptr));
           c->is_closing = 1;
           break;
         }

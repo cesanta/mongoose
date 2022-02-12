@@ -35,14 +35,14 @@ static void event_handler(void *arg, esp_event_base_t event_base,
     if (s_retry_num < 3) {
       esp_wifi_connect();
       s_retry_num++;
-      LOG(LL_INFO, ("retry to connect to the AP"));
+      MG_INFO(("retry to connect to the AP"));
     } else {
       xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
     }
-    LOG(LL_ERROR, ("connect to the AP fail"));
+    MG_ERROR(("connect to the AP fail"));
   } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
-    LOG(LL_INFO, ("got ip:" IPSTR, IP2STR(&event->ip_info.ip)));
+    MG_INFO(("got ip:" IPSTR, IP2STR(&event->ip_info.ip)));
     s_retry_num = 0;
     xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
   }
@@ -81,18 +81,18 @@ void wifi_init(const char *ssid, const char *pass) {
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &c));
   ESP_ERROR_CHECK(esp_wifi_start());
-  LOG(LL_DEBUG, ("wifi_init_sta finished."));
+  MG_DEBUG(("wifi_init_sta finished."));
 
   EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
                                          WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
                                          pdFALSE, pdFALSE, portMAX_DELAY);
 
   if (bits & WIFI_CONNECTED_BIT) {
-    LOG(LL_INFO, ("connected to ap SSID:%s password:%s", ssid, pass));
+    MG_INFO(("connected to ap SSID:%s password:%s", ssid, pass));
   } else if (bits & WIFI_FAIL_BIT) {
-    LOG(LL_ERROR, ("Failed to connect to SSID:%s, password:%s", ssid, pass));
+    MG_ERROR(("Failed to connect to SSID:%s, password:%s", ssid, pass));
   } else {
-    LOG(LL_ERROR, ("UNEXPECTED EVENT"));
+    MG_ERROR(("UNEXPECTED EVENT"));
   }
 
   /* The event will not be processed after unregister */

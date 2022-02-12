@@ -49,7 +49,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     char *response = NULL;
     jsonrpc_process(req.ptr, req.len, mjson_print_dynamic_buf, &response, NULL);
     mg_ws_send(c, response, strlen(response), WEBSOCKET_OP_TEXT);
-    LOG(LL_INFO, ("[%.*s] -> [%s]", (int) req.len, req.ptr, response));
+    MG_INFO(("[%.*s] -> [%s]", (int) req.len, req.ptr, response));
     free(response);
   }
   (void) fn_data;

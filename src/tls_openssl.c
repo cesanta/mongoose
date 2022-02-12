@@ -34,10 +34,10 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     SSL_library_init();
     s_initialised++;
   }
-  LOG(LL_DEBUG, ("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id,
-                 opts->ca == NULL ? "null" : opts->ca,
-                 opts->cert == NULL ? "null" : opts->cert,
-                 opts->certkey == NULL ? "null" : opts->certkey));
+  MG_DEBUG(("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id,
+            opts->ca == NULL ? "null" : opts->ca,
+            opts->cert == NULL ? "null" : opts->cert,
+            opts->certkey == NULL ? "null" : opts->certkey));
   tls->ctx = c->is_client ? SSL_CTX_new(SSLv23_client_method())
                           : SSL_CTX_new(SSLv23_server_method());
   if ((tls->ssl = SSL_new(tls->ctx)) == NULL) {
@@ -102,7 +102,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   if (c->is_client && c->is_resolving == 0 && c->is_connecting == 0) {
     mg_tls_handshake(c);
   }
-  LOG(LL_DEBUG, ("%lu SSL %s OK", c->id, c->is_accepted ? "accept" : "client"));
+  MG_DEBUG(("%lu SSL %s OK", c->id, c->is_accepted ? "accept" : "client"));
   return;
 fail:
   c->is_closing = 1;
@@ -115,7 +115,7 @@ void mg_tls_handshake(struct mg_connection *c) {
   SSL_set_fd(tls->ssl, (int) (size_t) c->fd);
   rc = c->is_client ? SSL_connect(tls->ssl) : SSL_accept(tls->ssl);
   if (rc == 1) {
-    LOG(LL_DEBUG, ("%lu success", c->id));
+    MG_DEBUG(("%lu success", c->id));
     c->is_tls_hs = 0;
   } else {
     int code = mg_tls_err(tls, rc);

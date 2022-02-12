@@ -26,7 +26,7 @@ static void cb2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     mg_printf(c, "GET / HTTP/1.0\r\nHost: %.*s\r\n\r\n", (int) s.len, s.ptr);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = ev_data;  // Print HTTP response
-    LOG(LL_INFO, ("Fetched:\n%.*s", (int) hm->message.len, hm->message.ptr));
+    MG_INFO(("Fetched:\n%.*s", (int) hm->message.len, hm->message.ptr));
     c->is_closing = 1;
   }
 }
@@ -38,7 +38,7 @@ static void run_mongoose(void) {
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, SERVER_URL, cb, &mgr);    // Listening server
   mg_http_connect(&mgr, CLIENT_URL, cb2, &mgr);  // Example client
-  LOG(LL_INFO, ("Starting Mongoose web server v%s", MG_VERSION));
+  MG_INFO(("Starting Mongoose web server v%s", MG_VERSION));
   for (;;) mg_mgr_poll(&mgr, 1000);
   mg_mgr_free(&mgr);
 }

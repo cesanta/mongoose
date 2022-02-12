@@ -115,7 +115,7 @@ size_t mg_ws_send(struct mg_connection *c, const char *buf, size_t len,
   uint8_t header[14];
   size_t header_len = mkhdr(len, op, c->is_client, header);
   mg_send(c, header, header_len);
-  LOG(LL_VERBOSE_DEBUG, ("WS out: %d [%.*s]", (int) len, (int) len, buf));
+  MG_VERBOSE(("WS out: %d [%.*s]", (int) len, (int) len, buf));
   mg_send(c, buf, len);
   mg_ws_mask(c, len);
   return header_len + len;
@@ -134,8 +134,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
         c->is_closing = 1;  // Some just, not an HTTP request
       } else if (n > 0) {
         if (n < 15 || memcmp(c->recv.buf + 9, "101", 3) != 0) {
-          LOG(LL_ERROR,
-              ("%lu WS handshake error: %.*s", c->id, 15, c->recv.buf));
+          MG_ERROR(("%lu WS handshake error: %.*s", c->id, 15, c->recv.buf));
           c->is_closing = 1;
         } else {
           struct mg_http_message hm;
@@ -154,14 +153,14 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
       struct mg_ws_message m = {{s, msg.data_len}, msg.flags};
       size_t len = msg.header_len + msg.data_len;
       uint8_t final = msg.flags & 128, op = msg.flags & 15;
-      // LOG(LL_VERBOSE_DEBUG, ("fin %d op %d len %d [%.*s]", final, op,
+      // MG_VERBOSE ("fin %d op %d len %d [%.*s]", final, op,
       //                       (int) m.data.len, (int) m.data.len, m.data.ptr));
       switch (op) {
         case WEBSOCKET_OP_CONTINUE:
           mg_call(c, MG_EV_WS_CTL, &m);
           break;
         case WEBSOCKET_OP_PING:
-          LOG(LL_DEBUG, ("%s", "WS PONG"));
+          MG_DEBUG(("%s", "WS PONG"));
           mg_ws_send(c, s, msg.data_len, WEBSOCKET_OP_PONG);
           mg_call(c, MG_EV_WS_CTL, &m);
           break;
@@ -173,7 +172,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
           if (final) mg_call(c, MG_EV_WS_MSG, &m);
           break;
         case WEBSOCKET_OP_CLOSE:
-          LOG(LL_DEBUG, ("%lu Got WS CLOSE", c->id));
+          MG_DEBUG(("%lu Got WS CLOSE", c->id));
           mg_call(c, MG_EV_WS_CTL, &m);
           c->is_closing = 1;
           break;
@@ -190,7 +189,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
         len -= msg.header_len;
         ofs += len;
         c->pfn_data = (void *) ofs;
-        // LOG(LL_INFO, ("FRAG %d [%.*s]", (int) ofs, (int) ofs, c->recv.buf));
+        // MG_INFO(("FRAG %d [%.*s]", (int) ofs, (int) ofs, c->recv.buf));
       }
       // Remove non-fragmented frame
       if (final && op) mg_iobuf_del(&c->recv, ofs, len);
@@ -227,7 +226,6 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
     // mg_url_host(url, host, sizeof(host));
     mg_random(nonce, sizeof(nonce));
     mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key);
-    // LOG(LL_DEBUG, "%p [%s]", uri, uri == NULL ? "???" : uri);
     n2 = mg_asprintf(&buf2, sizeof(mem2),
                      "GET %s HTTP/1.1\r\n"
                      "Upgrade: websocket\r\n"

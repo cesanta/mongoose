@@ -43,7 +43,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_ERROR) {
     // On error, log error message
-    LOG(LL_ERROR, ("%p %s", c->fd, (char *) ev_data));
+    MG_ERROR(("%p %s", c->fd, (char *) ev_data));
   } else if (ev == MG_EV_CONNECT) {
     // Set up 2-way TLS that is required by AWS IoT
     struct mg_tls_opts opts = {
@@ -52,28 +52,28 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_MQTT_OPEN) {
     // MQTT connect is successful
     struct mg_str topic = mg_str(s_rx_topic);
-    LOG(LL_INFO, ("Connected to %s", s_url));
-    LOG(LL_INFO, ("Subscribing to %s", s_rx_topic));
+    MG_INFO(("Connected to %s", s_url));
+    MG_INFO(("Subscribing to %s", s_rx_topic));
     mg_mqtt_sub(c, topic, s_qos);
     c->label[0] = 'X';  // Set a label that we're logged in
   } else if (ev == MG_EV_MQTT_MSG) {
     // When we receive MQTT message, print it
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    LOG(LL_INFO, ("Received on %.*s : %.*s", (int) mm->topic.len, mm->topic.ptr,
-                  (int) mm->data.len, mm->data.ptr));
+    MG_INFO(("Received on %.*s : %.*s", (int) mm->topic.len, mm->topic.ptr,
+             (int) mm->data.len, mm->data.ptr));
   } else if (ev == MG_EV_POLL && c->label[0] == 'X') {
     static unsigned long prev_second;
     unsigned long now_second = (*(unsigned long *) ev_data) / 1000;
     if (now_second != prev_second) {
       struct mg_str topic = mg_str(s_tx_topic), data = mg_str("{\"a\":123}");
-      LOG(LL_INFO, ("Publishing to %s", s_tx_topic));
+      MG_INFO(("Publishing to %s", s_tx_topic));
       mg_mqtt_pub(c, topic, data, s_qos, false);
       prev_second = now_second;
     }
   }
 
   if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE) {
-    LOG(LL_INFO, ("Got event %d, stopping...", ev));
+    MG_INFO(("Got event %d, stopping...", ev));
     *(bool *) fn_data = true;  // Signal that we're done
   }
 }
@@ -83,7 +83,7 @@ int main(void) {
   struct mg_mqtt_opts opts = {.clean = true};
   bool done = false;
   mg_mgr_init(&mgr);                               // Initialise event manager
-  LOG(LL_INFO, ("Connecting to %s", s_url));       // Inform that we're starting
+  MG_INFO(("Connecting to %s", s_url));            // Inform that we're starting
   mg_mqtt_connect(&mgr, s_url, &opts, fn, &done);  // Create client connection
   while (!done) mg_mgr_poll(&mgr, 1000);           // Loop until done
   mg_mgr_free(&mgr);                               // Finished, cleanup

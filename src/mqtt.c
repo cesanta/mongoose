@@ -88,8 +88,8 @@ void mg_mqtt_pub(struct mg_connection *c, struct mg_str topic,
                  struct mg_str data, int qos, bool retain) {
   uint8_t flags = (uint8_t) (((qos & 3) << 1) | (retain ? 1 : 0));
   uint32_t total_len = 2 + (uint32_t) topic.len + (uint32_t) data.len;
-  LOG(LL_DEBUG, ("%lu [%.*s] -> [%.*s]", c->id, (int) topic.len,
-                 (char *) topic.ptr, (int) data.len, (char *) data.ptr));
+  MG_DEBUG(("%lu [%.*s] -> [%.*s]", c->id, (int) topic.len, (char *) topic.ptr,
+            (int) data.len, (char *) data.ptr));
   if (qos > 0) total_len += 2;
   mg_mqtt_send_header(c, MQTT_CMD_PUBLISH, flags, total_len);
   mg_send_u16(c, mg_htons((uint16_t) topic.len));
@@ -211,26 +211,25 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
       struct mg_mqtt_message mm;
       int rc = mg_mqtt_parse(c->recv.buf, c->recv.len, &mm);
       if (rc == MQTT_MALFORMED) {
-        LOG(LL_ERROR, ("%lu MQTT malformed message", c->id));
+        MG_ERROR(("%lu MQTT malformed message", c->id));
         c->is_closing = 1;
         break;
       } else if (rc == MQTT_OK) {
-        LOG(LL_VERBOSE_DEBUG,
-            ("%p MQTT CMD %d len %d [%.*s]", c->fd, mm.cmd, (int) mm.dgram.len,
-             (int) mm.data.len, mm.data.ptr));
+        MG_VERBOSE(("%p MQTT CMD %d len %d [%.*s]", c->fd, mm.cmd,
+                    (int) mm.dgram.len, (int) mm.data.len, mm.data.ptr));
         switch (mm.cmd) {
           case MQTT_CMD_CONNACK:
             mg_call(c, MG_EV_MQTT_OPEN, &mm.ack);
             if (mm.ack == 0) {
-              LOG(LL_DEBUG, ("%lu Connected", c->id));
+              MG_DEBUG(("%lu Connected", c->id));
             } else {
-              LOG(LL_ERROR, ("%lu MQTT auth failed, code %d", c->id, mm.ack));
+              MG_ERROR(("%lu MQTT auth failed, code %d", c->id, mm.ack));
               c->is_closing = 1;
             }
             break;
           case MQTT_CMD_PUBLISH: {
-            LOG(LL_DEBUG, ("%lu [%.*s] -> [%.*s]", c->id, (int) mm.topic.len,
-                           mm.topic.ptr, (int) mm.data.len, mm.data.ptr));
+            MG_DEBUG(("%lu [%.*s] -> [%.*s]", c->id, (int) mm.topic.len,
+                      mm.topic.ptr, (int) mm.data.len, mm.data.ptr));
             mg_call(c, MG_EV_MQTT_MSG, &mm);
             break;
           }

@@ -6,7 +6,7 @@
 static const char *s_ssdp_url = "udp://239.255.255.250:1900";
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  LOG(LL_DEBUG, ("%p got event: %d %p %p", c, ev, ev_data, fn_data));
+  MG_DEBUG(("%p got event: %d %p %p", c, ev, ev_data, fn_data));
   if (ev == MG_EV_OPEN) {
     c->is_hexdumping = 1;
   } else if (ev == MG_EV_RESOLVE) {
@@ -24,7 +24,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void tfn(void *param) {
   struct mg_connection *c = param;
   if (c == NULL) return;
-  LOG(LL_INFO, ("Sending M-SEARCH"));
+  MG_INFO(("Sending M-SEARCH"));
   mg_printf(c, "%s",
             "M-SEARCH * HTTP/1.1\r\n"
             "HOST: 239.255.255.250:1900\r\n"

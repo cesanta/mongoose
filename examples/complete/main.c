@@ -89,7 +89,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = getuser(hm);
-    // LOG(LL_INFO, ("%p [%.*s] auth %s", c->fd, (int) hm->uri.len, hm->uri.ptr,
+    // MG_INFO(("%p [%.*s] auth %s", c->fd, (int) hm->uri.len, hm->uri.ptr,
     // u ? u->name : "NULL"));
     if (u == NULL && mg_http_match_uri(hm, "/api/#")) {
       // All URIs starting with /api/ must be authenticated

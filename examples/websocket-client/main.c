@@ -13,7 +13,7 @@ static const char *s_url = "ws://localhost:8000/websocket";
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ERROR) {
     // On error, log error message
-    LOG(LL_ERROR, ("%p %s", c->fd, (char *) ev_data));
+    MG_ERROR(("%p %s", c->fd, (char *) ev_data));
   } else if (ev == MG_EV_WS_OPEN) {
     // When websocket handshake is successful, send message
     mg_ws_send(c, "hello", 5, WEBSOCKET_OP_TEXT);

@@ -81,7 +81,7 @@ int main(void) {
   srand(time(NULL));
   mg_timer_init(&t1, 1000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, NULL);
   mg_http_listen(&mgr, s_listen_on, fn, NULL);
-  LOG(LL_INFO, ("Listening on %s", s_listen_on));
+  MG_INFO(("Listening on %s", s_listen_on));
   for (;;) mg_mgr_poll(&mgr, 1000);
   mg_timer_free(&t1);
   mg_mgr_free(&mgr);

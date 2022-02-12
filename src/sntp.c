@@ -13,18 +13,18 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
   int64_t res = -1;
   int mode = len > 0 ? buf[0] & 7 : 0;
   if (len < 48) {
-    LOG(LL_ERROR, ("%s", "corrupt packet"));
+    MG_ERROR(("%s", "corrupt packet"));
   } else if ((buf[0] & 0x38) >> 3 != 4) {
-    LOG(LL_ERROR, ("%s", "wrong version"));
+    MG_ERROR(("%s", "wrong version"));
   } else if (mode != 4 && mode != 5) {
-    LOG(LL_ERROR, ("%s", "not a server reply"));
+    MG_ERROR(("%s", "not a server reply"));
   } else if (buf[1] == 0) {
-    LOG(LL_ERROR, ("%s", "server sent a kiss of death"));
+    MG_ERROR(("%s", "server sent a kiss of death"));
   } else {
     uint32_t *data = (uint32_t *) &buf[40];
     unsigned long seconds = mg_ntohl(data[0]) - SNTP_TIME_OFFSET;
     unsigned long useconds = mg_ntohl(data[1]);
-    // LOG(LL_DEBUG, ("%lu %lu %lu", time(0), seconds, useconds));
+    // MG_DEBUG(("%lu %lu %lu", time(0), seconds, useconds));
     res = ((int64_t) seconds) * 1000 + (int64_t) ((useconds / 1000) % 1000);
     s_sntmp_next = seconds + SNTP_INTERVAL_SEC;
   }
@@ -36,8 +36,8 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
     if (milliseconds > 0) {
       mg_call(c, MG_EV_SNTP_TIME, &milliseconds);
-      LOG(LL_DEBUG, ("%u.%u, next at %lu", (unsigned) (milliseconds / 1000),
-                     (unsigned) (milliseconds % 1000), s_sntmp_next));
+      MG_DEBUG(("%u.%u, next at %lu", (unsigned) (milliseconds / 1000),
+                (unsigned) (milliseconds % 1000), s_sntmp_next));
     }
     c->recv.len = 0;  // Clear receive buffer
   } else if (ev == MG_EV_CONNECT) {
@@ -50,13 +50,13 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
 
 void mg_sntp_send(struct mg_connection *c, unsigned long utc) {
   if (c->is_resolving) {
-    LOG(LL_ERROR, ("%lu wait until resolved", c->id));
+    MG_ERROR(("%lu wait until resolved", c->id));
   } else if (utc > s_sntmp_next) {
     uint8_t buf[48] = {0};
     s_sntmp_next = utc + SNTP_INTERVAL_SEC;
     buf[0] = (0 << 6) | (4 << 3) | 3;
     mg_send(c, buf, sizeof(buf));
-    LOG(LL_DEBUG, ("%lu ct %lu, next at %lu", c->id, utc, s_sntmp_next));
+    MG_DEBUG(("%lu ct %lu, next at %lu", c->id, utc, s_sntmp_next));
   }
 }
 

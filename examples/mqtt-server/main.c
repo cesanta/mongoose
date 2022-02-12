@@ -30,7 +30,7 @@ static void signal_handler(int signo) {
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_MQTT_CMD) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    LOG(LL_DEBUG, ("cmd %d qos %d", mm->cmd, mm->qos));
+    MG_DEBUG(("cmd %d qos %d", mm->cmd, mm->qos));
     switch (mm->cmd) {
       case MQTT_CMD_CONNECT: {
         // Client connects
@@ -57,7 +57,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
           sub->topic = mg_strdup(topic);
           sub->qos = qos;
           LIST_ADD_HEAD(struct sub, &s_subs, sub);
-          LOG(LL_INFO,
+          MG_INFO(
               ("SUB %p [%.*s]", c->fd, (int) sub->topic.len, sub->topic.ptr));
           // Change '+' to '*' for topic matching using mg_match
           for (size_t i = 0; i < sub->topic.len; i++) {
@@ -73,8 +73,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       }
       case MQTT_CMD_PUBLISH: {
         // Client published message. Push to all subscribed channels
-        LOG(LL_INFO, ("PUB %p [%.*s] -> [%.*s]", c->fd, (int) mm->data.len,
-                      mm->data.ptr, (int) mm->topic.len, mm->topic.ptr));
+        MG_INFO(("PUB %p [%.*s] -> [%.*s]", c->fd, (int) mm->data.len,
+                 mm->data.ptr, (int) mm->topic.len, mm->topic.ptr));
         for (struct sub *sub = s_subs; sub != NULL; sub = sub->next) {
           if (mg_match(mm->topic, sub->topic, NULL)) {
             mg_mqtt_pub(sub->c, mm->topic, mm->data, 1, false);
@@ -90,8 +90,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     for (struct sub *next, *sub = s_subs; sub != NULL; sub = next) {
       next = sub->next;
       if (c != sub->c) continue;
-      LOG(LL_INFO,
-          ("UNSUB %p [%.*s]", c->fd, (int) sub->topic.len, sub->topic.ptr));
+      MG_INFO(("UNSUB %p [%.*s]", c->fd, (int) sub->topic.len, sub->topic.ptr));
       LIST_DELETE(struct sub, &s_subs, sub);
     }
   }
@@ -103,9 +102,9 @@ int main(void) {
   signal(SIGINT, signal_handler);   // Setup signal handlers - exist event
   signal(SIGTERM, signal_handler);  // manager loop on SIGINT and SIGTERM
   mg_mgr_init(&mgr);                // Initialise event manager
-  LOG(LL_INFO, ("Starting on %s", s_listen_on));  // Inform that we're starting
-  mg_mqtt_listen(&mgr, s_listen_on, fn, NULL);    // Create MQTT listener
-  while (s_signo == 0) mg_mgr_poll(&mgr, 1000);   // Event loop, 1s timeout
-  mg_mgr_free(&mgr);                              // Cleanup
+  MG_INFO(("Starting on %s", s_listen_on));      // Inform that we're starting
+  mg_mqtt_listen(&mgr, s_listen_on, fn, NULL);   // Create MQTT listener
+  while (s_signo == 0) mg_mgr_poll(&mgr, 1000);  // Event loop, 1s timeout
+  mg_mgr_free(&mgr);                             // Cleanup
   return 0;
 }

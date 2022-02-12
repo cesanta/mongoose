@@ -27,11 +27,11 @@ static void signal_handler(int signo) {
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
-    LOG(LL_INFO, ("CREATED"));
+    MG_INFO(("CREATED"));
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_ERROR) {
     // On error, log error message
-    LOG(LL_ERROR, ("%p %s", c->fd, (char *) ev_data));
+    MG_ERROR(("%p %s", c->fd, (char *) ev_data));
   } else if (ev == MG_EV_CONNECT) {
     // If target URL is SSL/TLS, command client connection to use TLS
     if (mg_url_is_ssl(s_url)) {
@@ -42,21 +42,21 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // MQTT connect is successful
     struct mg_str subt = mg_str(s_sub_topic);
     struct mg_str pubt = mg_str(s_pub_topic), data = mg_str("hello");
-    LOG(LL_INFO, ("CONNECTED to %s", s_url));
+    MG_INFO(("CONNECTED to %s", s_url));
     mg_mqtt_sub(c, subt, s_qos);
-    LOG(LL_INFO, ("SUBSCRIBED to %.*s", (int) subt.len, subt.ptr));
+    MG_INFO(("SUBSCRIBED to %.*s", (int) subt.len, subt.ptr));
 
     mg_mqtt_pub(c, pubt, data, s_qos, false);
-    LOG(LL_INFO, ("PUBSLISHED %.*s -> %.*s", (int) data.len, data.ptr,
-                  (int) pubt.len, pubt.ptr));
+    MG_INFO(("PUBSLISHED %.*s -> %.*s", (int) data.len, data.ptr,
+             (int) pubt.len, pubt.ptr));
   } else if (ev == MG_EV_MQTT_MSG) {
     // When we get echo response, print it
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    LOG(LL_INFO, ("RECEIVED %.*s <- %.*s", (int) mm->data.len, mm->data.ptr,
-                  (int) mm->topic.len, mm->topic.ptr));
+    MG_INFO(("RECEIVED %.*s <- %.*s", (int) mm->data.len, mm->data.ptr,
+             (int) mm->topic.len, mm->topic.ptr));
     c->is_closing = 1;
   } else if (ev == MG_EV_CLOSE) {
-    LOG(LL_INFO, ("CLOSED"));
+    MG_INFO(("CLOSED"));
     s_conn = NULL;  // Mark that we're closed
   }
   (void) fn_data;

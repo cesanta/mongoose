@@ -102,8 +102,7 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
         (str.ptr[i] >= 'A' && str.ptr[i] <= 'F')) {
       unsigned long val;
       if (i > j + 3) return false;
-      // LOG(LL_DEBUG, ("%zu %zu [%.*s]", i, j, (int) (i - j + 1),
-      // &str.ptr[j]));
+      // MG_DEBUG(("%zu %zu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
       val = mg_unhexn(&str.ptr[j], i - j + 1);
       addr->ip6[n] = (uint8_t) ((val >> 8) & 255);
       addr->ip6[n + 1] = (uint8_t) (val & 255);
@@ -131,7 +130,7 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
 }
 
 bool mg_aton(struct mg_str str, struct mg_addr *addr) {
-  // LOG(LL_INFO, ("[%.*s]", (int) str.len, str.ptr));
+  // MG_INFO(("[%.*s]", (int) str.len, str.ptr));
   return mg_atone(str, addr) || mg_atonl(str, addr) || mg_aton4(str, addr) ||
          mg_aton6(str, addr);
 }
@@ -143,7 +142,7 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
   FreeRTOS_DeleteSocketSet(mgr->ss);
 #endif
-  LOG(LL_INFO, ("All connections closed"));
+  MG_DEBUG(("All connections closed"));
 }
 
 void mg_mgr_init(struct mg_mgr *mgr) {

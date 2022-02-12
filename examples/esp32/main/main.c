@@ -39,7 +39,7 @@ void app_main(void) {
   esp_vfs_spiffs_conf_t conf = {
       .base_path = FS_ROOT, .max_files = 20, .format_if_mount_failed = true};
   int res = esp_vfs_spiffs_register(&conf);
-  LOG(res == ESP_OK ? LL_INFO : LL_ERROR, ("FS %s, %d", conf.base_path, res));
+  MG_INFO(("FS %s, %d", conf.base_path, res));
   mg_file_printf(&mg_fs_posix, FS_ROOT "/hello.txt", "%s", "hello from ESP");
 
   // Setup wifi. This function is implemented in wifi.c
@@ -52,6 +52,6 @@ void app_main(void) {
   mg_log_set("3");
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, "http://0.0.0.0:80", cb, &mgr);  // Listening server
-  LOG(LL_INFO, ("Starting Mongoose web server v%s", MG_VERSION));
+  MG_INFO(("Starting Mongoose web server v%s", MG_VERSION));
   for (;;) mg_mgr_poll(&mgr, 1000);  // Infinite event loop
 }

@@ -105,11 +105,11 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
 
   for (i = 0; i < mg_ntohs(h->num_questions); i++) {
     if ((n = mg_dns_parse_rr(buf, len, ofs, true, &rr)) == 0) return false;
-    // LOG(LL_INFO, ("Q %zu %zu", ofs, n));
+    // MG_INFO(("Q %zu %zu", ofs, n));
     ofs += n;
   }
   for (i = 0; i < mg_ntohs(h->num_answers); i++) {
-    // LOG(LL_INFO, ("A -- %zu %zu %s", ofs, n, dm->name));
+    // MG_INFO(("A -- %zu %zu %s", ofs, n, dm->name));
     if ((n = mg_dns_parse_rr(buf, len, ofs, false, &rr)) == 0) return false;
     mg_dns_parse_name(buf, len, ofs, dm->name, sizeof(dm->name));
     ofs += n;
@@ -136,7 +136,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
     int64_t now = *(int64_t *) ev_data;
     for (d = s_reqs; d != NULL; d = tmp) {
       tmp = d->next;
-      // LOG(LL_DEBUG, ("%lu %lu dns poll", d->expire, now));
+      // MG_DEBUG ("%lu %lu dns poll", d->expire, now));
       if (now > d->expire) mg_error(d->c, "DNS timeout");
     }
   } else if (ev == MG_EV_READ) {
@@ -144,13 +144,13 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
     int resolved = 0;
     if (mg_dns_parse(c->recv.buf, c->recv.len, &dm) == false) {
       char *s = mg_hexdump(c->recv.buf, c->recv.len);
-      LOG(LL_ERROR, ("Unexpected DNS response:\n%s\n", s));
+      MG_ERROR(("Unexpected DNS response:\n%s\n", s));
       free(s);
     } else {
-      LOG(LL_VERBOSE_DEBUG, ("%s %d", dm.name, dm.resolved));
+      MG_VERBOSE(("%s %d", dm.name, dm.resolved));
       for (d = s_reqs; d != NULL; d = tmp) {
         tmp = d->next;
-        // LOG(LL_INFO, ("d %p %hu %hu", d, d->txnid, dm.txnid));
+        // MG_INFO(("d %p %hu %hu", d, d->txnid, dm.txnid));
         if (dm.txnid != d->txnid) continue;
         if (d->c->is_resolving) {
           d->c->is_resolving = 0;
@@ -158,8 +158,8 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
             char buf[100];
             dm.addr.port = d->c->peer.port;  // Save port
             d->c->peer = dm.addr;            // Copy resolved address
-            LOG(LL_DEBUG, ("%lu %s resolved to %s", d->c->id, dm.name,
-                           mg_ntoa(&d->c->peer, buf, sizeof(buf))));
+            MG_DEBUG(("%lu %s resolved to %s", d->c->id, dm.name,
+                      mg_ntoa(&d->c->peer, buf, sizeof(buf))));
             mg_connect_resolved(d->c);
 #if MG_ENABLE_IPV6
           } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0') {
@@ -170,13 +170,13 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
             mg_error(d->c, "%s DNS lookup failed", dm.name);
           }
         } else {
-          LOG(LL_ERROR, ("%lu already resolved", d->c->id));
+          MG_ERROR(("%lu already resolved", d->c->id));
         }
         mg_dns_free(d);
         resolved = 1;
       }
     }
-    if (!resolved) LOG(LL_ERROR, ("stray DNS reply"));
+    if (!resolved) MG_ERROR(("stray DNS reply"));
     c->recv.len = 0;
   } else if (ev == MG_EV_CLOSE) {
     for (d = s_reqs; d != NULL; d = tmp) {
@@ -246,9 +246,9 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->expire = mg_millis() + (int64_t) ms;
     d->c = c;
     c->is_resolving = 1;
-    LOG(LL_VERBOSE_DEBUG,
-        ("%lu resolving %.*s @ %s, txnid %hu", c->id, (int) name->len,
-         name->ptr, mg_ntoa(&dnsc->c->peer, buf, sizeof(buf)), d->txnid));
+    MG_VERBOSE(("%lu resolving %.*s @ %s, txnid %hu", c->id, (int) name->len,
+                name->ptr, mg_ntoa(&dnsc->c->peer, buf, sizeof(buf)),
+                d->txnid));
     mg_dns_send(dnsc->c, name, d->txnid, ipv6);
   }
 }

@@ -28,8 +28,8 @@ static void forward_request(struct mg_http_message *hm,
   }
   mg_send(c, "\r\n", 2);
   mg_send(c, hm->body.ptr, hm->body.len);
-  LOG(LL_DEBUG, ("FORWARDING: %.*s %.*s", (int) hm->method.len, hm->method.ptr,
-                 (int) hm->uri.len, hm->uri.ptr));
+  MG_DEBUG(("FORWARDING: %.*s %.*s", (int) hm->method.len, hm->method.ptr,
+            (int) hm->uri.len, hm->uri.ptr));
 }
 
 static void fn2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {

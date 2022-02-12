@@ -26,7 +26,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_READ) {
     struct mg_dns_rr rr;  // Parse first question, offset 12 is header size
     size_t n = mg_dns_parse_rr(c->recv.buf, c->recv.len, 12, true, &rr);
-    LOG(LL_INFO, ("DNS request parsed, result=%d", (int) n));
+    MG_INFO(("DNS request parsed, result=%d", (int) n));
     if (n > 0) {
       char buf[512];
       struct mg_dns_header *h = (struct mg_dns_header *) buf;

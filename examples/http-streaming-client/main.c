@@ -38,13 +38,13 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
               mg_url_uri(s_url), (int) host.len, host.ptr);
   } else if (ev == MG_EV_HTTP_CHUNK) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    LOG(LL_INFO, ("%.*s", (int) hm->chunk.len, hm->chunk.ptr));
+    MG_INFO(("%.*s", (int) hm->chunk.len, hm->chunk.ptr));
     mg_http_delete_chunk(c, hm);
     if (hm->chunk.len == 0) *(bool *) fn_data = true;  // Last chunk
   } else if (ev == MG_EV_HTTP_MSG) {
     // Response is received. Print it
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    LOG(LL_INFO, ("%.*s", (int) hm->body.len, hm->body.ptr));
+    MG_INFO(("%.*s", (int) hm->body.len, hm->body.ptr));
     c->is_closing = 1;         // Tell mongoose to close this connection
     *(bool *) fn_data = true;  // Tell event loop to stop
   } else if (ev == MG_EV_ERROR) {

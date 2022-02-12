@@ -37,7 +37,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       struct mg_str host = mg_url_host(url);
       // CONNECT response - tunnel is established
       connected = true;
-      LOG(LL_DEBUG,
+      MG_DEBUG(
           ("Connected to proxy, status: %.*s", (int) hm.uri.len, hm.uri.ptr));
       mg_iobuf_del(&c->recv, 0, n);
       // Send request to the target server

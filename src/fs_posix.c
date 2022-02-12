@@ -12,7 +12,7 @@
 
 static int p_stat(const char *path, size_t *size, time_t *mtime) {
 #if !defined(S_ISDIR)
-  LOG(LL_ERROR, ("stat() API is not supported. %p %p %p", path, size, mtime));
+  MG_ERROR(("stat() API is not supported. %p %p %p", path, size, mtime));
   return 0;
 #else
 #if MG_ARCH == MG_ARCH_WIN32
