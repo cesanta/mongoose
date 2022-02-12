@@ -15,7 +15,7 @@ static int p_stat(const char *path, size_t *size, time_t *mtime) {
   LOG(LL_ERROR, ("stat() API is not supported. %p %p %p", path, size, mtime));
   return 0;
 #else
-#if defined(_WIN32)
+#if MG_ARCH == MG_ARCH_WIN32
   struct _stati64 st;
   wchar_t tmp[PATH_MAX];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
@@ -30,7 +30,7 @@ static int p_stat(const char *path, size_t *size, time_t *mtime) {
 #endif
 }
 
-#ifdef _WIN32
+#if MG_ARCH == MG_ARCH_WIN32
 struct dirent {
   char d_name[MAX_PATH];
 };
@@ -157,7 +157,7 @@ static void p_list(const char *dir, void (*fn)(const char *, void *),
 
 static void *p_open(const char *path, int flags) {
   const char *mode = flags == MG_FS_READ ? "rb" : "a+b";
-#ifdef _WIN32
+#if MG_ARCH == MG_ARCH_WIN32
   wchar_t b1[PATH_MAX], b2[10];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
   MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));

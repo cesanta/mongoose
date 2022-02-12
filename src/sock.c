@@ -9,7 +9,7 @@
 #include "util.h"
 
 #if MG_ENABLE_SOCKET
-#if defined(_WIN32) && MG_ENABLE_WINSOCK
+#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
 #define MG_SOCK_ERRNO WSAGetLastError()
 #ifndef SO_EXCLUSIVEADDRUSE
 #define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
@@ -81,7 +81,7 @@ static bool mg_sock_would_block(void) {
 #ifndef WINCE
          || err == EAGAIN || err == EINTR
 #endif
-#if defined(_WIN32) && MG_ENABLE_WINSOCK
+#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
          || err == WSAEINTR || err == WSAEWOULDBLOCK
 #endif
       ;
@@ -175,7 +175,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 static void mg_set_non_blocking_mode(SOCKET fd) {
-#if defined(_WIN32) && MG_ENABLE_WINSOCK
+#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
   unsigned long on = 1;
   ioctlsocket(fd, FIONBIO, &on);
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP
@@ -208,7 +208,7 @@ static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
     (void) on;
 
     if ((fd = socket(af, type, proto)) != INVALID_SOCKET &&
-#if (!defined(_WIN32) || !defined(SO_EXCLUSIVEADDRUSE)) && \
+#if (MG_ARCH != MG_ARCH_WIN32 || !defined(SO_EXCLUSIVEADDRUSE)) && \
     (!defined(LWIP_SOCKET) || (defined(LWIP_SOCKET) && SO_REUSE == 1))
         // 1. SO_RESUSEADDR is not enabled on Windows because the semantics of
         //    SO_REUSEADDR on UNIX and Windows is different. On Windows,
@@ -223,7 +223,7 @@ static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
         //    but won't work! (setsockopt will return EINVAL)
         !setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) &&
 #endif
-#if defined(_WIN32) && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
+#if MG_ARCH == MG_ARCH_WIN32 && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
         // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
         //! setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (char *) &on, sizeof(on))
         //! &&
@@ -334,7 +334,7 @@ static void setsockopts(struct mg_connection *c) {
   int idle = 60;
   setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
 #endif
-#if !defined(_WIN32) && !defined(__QNX__)
+#if MG_ARCH != MG_ARCH_WIN32 && !defined(__QNX__)
   {
     int cnt = 3, intvl = 20;
     setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt));
@@ -403,7 +403,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     if (MG_SOCK_ERRNO != EAGAIN)
 #endif
       LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
-#if (!defined(_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP))
+#if ((MG_ARCH != MG_ARCH_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP))
   } else if ((long) fd >= FD_SETSIZE) {
     LOG(LL_ERROR, ("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
