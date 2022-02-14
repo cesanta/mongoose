@@ -37,6 +37,14 @@ test/packed_fs.c:
 	$(CC) $(CFLAGS) test/pack.c -o pack
 	./pack Makefile src/ssi.h test/fuzz.c test/data/a.txt -z 'gzip -c' test/data/range.txt > $@
 
+DIR ?= test/data/
+OUT ?= gui.c
+ZIP ?= -z 'gzip -c'
+mkfs:
+	$(CC) $(CFLAGS) test/pack.c -o pack
+	./pack $(ZIP) -s $(DIR) `find $(DIR) -type f` > $(OUT)
+#	find $(DIR) -type f | sed -e s,^$(DIR),,g -e s,^/,,g
+
 # Check that all external (exported) symbols have "mg_" prefix
 mg_prefix: mongoose.c mongoose.h
 	$(CC) mongoose.c $(CFLAGS) -c -o /tmp/x.o && nm /tmp/x.o | grep ' T' | grep -v 'mg_' ; test $$? = 1
@@ -62,7 +70,7 @@ fuzz: fuzzer
 # make CC=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
 test: mongoose.h  Makefile $(SRCS)
 	$(CC) $(SRCS) $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
-	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
+	ASAN1OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
 
 coverage: test
 	gcov -l -n *.gcno | sed '/^$$/d' | sed 'N;s/\n/ /'

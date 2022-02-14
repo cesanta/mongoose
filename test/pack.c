@@ -28,7 +28,6 @@ static const char *code =
     "const char *mg_unlist(size_t no) {\n"
     "  return packed_files[no].name;\n"
     "}\n"
-    "const char *mg_unpack(const char *name, size_t *size, time_t *mtime);\n"
     "const char *mg_unpack(const char *name, size_t *size, time_t *mtime) {\n"
     "  const struct packed_file *p;\n"
     "  for (p = packed_files; p->name != NULL; p++) {\n"
@@ -42,7 +41,7 @@ static const char *code =
 
 int main(int argc, char *argv[]) {
   int i, j, ch;
-  const char *zip_cmd = NULL;
+  const char *zip_cmd = NULL, *strip_prefix = "";
 
   printf("%s", "#include <stddef.h>\n");
   printf("%s", "#include <string.h>\n");
@@ -52,6 +51,12 @@ int main(int argc, char *argv[]) {
   for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-z") == 0 && i + 1 < argc) {
       zip_cmd = argv[++i];
+    } else if (strcmp(argv[i], "-s") == 0) {
+      strip_prefix = argv[++i];
+    } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+      fprintf(stderr, "Usage: %s [-z ZIP_CMD] [-s STRIP_PREFIX] files...\n",
+              argv[0]);
+      exit(EXIT_FAILURE);
     } else {
       char ascii[12], cmd[2048];
       FILE *fp;
@@ -96,10 +101,16 @@ int main(int argc, char *argv[]) {
 
   for (i = 1; i < argc; i++) {
     struct stat st;
-    if (strcmp(argv[i], "-z") == 0 && ++i + 1 < argc) continue;
+    const char *name = argv[i];
+    size_t n = strlen(strip_prefix);
+    if (strcmp(argv[i], "-z") == 0 || strcmp(argv[i], "-s") == 0) {
+      i++;
+      continue;
+    }
     stat(argv[i], &st);
-    printf("  {\"/%s\", v%d, sizeof(v%d), %lu, %d},\n", argv[i], i, i,
-           st.st_mtime, zip_cmd == NULL ? 0 : 1);
+    if (strncmp(name, strip_prefix, n) == 0) name += n;
+    printf("  {\"/%s\", v%d, sizeof(v%d), %lu, %d},\n", name, i, i, st.st_mtime,
+           zip_cmd == NULL ? 0 : 1);
   }
   printf("%s", "  {NULL, NULL, 0, 0, 0}\n");
   printf("%s", "};\n\n");

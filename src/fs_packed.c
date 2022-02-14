@@ -22,8 +22,9 @@ const char *mg_unlist(size_t no) {
 #endif
 
 static int is_dir_prefix(const char *prefix, size_t n, const char *path) {
-  return n < strlen(path) && memcmp(prefix, path, n) == 0 && path[n] == '/';
-  //(n == 0 || path[n] == MG_DIRSEP);
+  // MG_INFO(("[%.*s] [%s] %c", (int) n, prefix, path, path[n]));
+  return n < strlen(path) && strncmp(prefix, path, n) == 0 &&
+         (n == 0 || path[n] == '/' || path[n - 1] == '/');
 }
 
 static int packed_stat(const char *path, size_t *size, time_t *mtime) {
