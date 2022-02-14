@@ -30,4 +30,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifndef MG_ENABLE_DIRLIST
+#define MG_ENABLE_DIRLIST 1
+#endif
+
 #endif

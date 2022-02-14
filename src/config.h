@@ -50,7 +50,7 @@
 #endif
 
 #ifndef MG_ENABLE_DIRLIST
-#define MG_ENABLE_DIRLIST 1
+#define MG_ENABLE_DIRLIST 0
 #endif
 
 #ifndef MG_ENABLE_CUSTOM_RANDOM

@@ -50,8 +50,6 @@ SOURCES += $(FREERTOS_PLUS_TCP_PATH)/portable/BufferManagement/BufferAllocation_
 SOURCES += $(FREERTOS_PLUS_TCP_PATH)/portable/NetworkInterface/STM32Fxx/NetworkInterface.c
 SOURCES += $(FREERTOS_PLUS_TCP_PATH)/portable/NetworkInterface/STM32Fxx/stm32fxx_hal_eth.c
 
-OBJECTS = obj/boot.o $(SOURCES:%.c=obj/%.o)
-
 example:
 	true
 
@@ -63,17 +61,10 @@ $(PROG).bin: $(PROG).elf
 $(PROG).hex: $(PROG).bin
 	$(DOCKER) arm-none-eabi-objcopy -I binary -O ihex --change-address 0x8000000 $< $@
 
-$(PROG).elf: $(OBJECTS) Makefile
-	$(DOCKER) arm-none-eabi-gcc $(OBJECTS) $(LINKFLAGS) -o $@
+$(PROG).elf: Makefile
+	@mkdir -p $(dir $@)
+	$(DOCKER) arm-none-eabi-gcc $(SOURCES) $(ARCH)/boot.s $(CFLAGS) $(LINKFLAGS) -o $@
 	$(DOCKER) arm-none-eabi-size -A $@
-
-obj/%.o: %.c
-	@mkdir -p $(dir $@)
-	$(DOCKER) arm-none-eabi-gcc $(CFLAGS) -c $< -o $@
-
-obj/boot.o: $(ARCH)/boot.s
-	@mkdir -p $(dir $@)
-	$(DOCKER) arm-none-eabi-as -g3 --warn --fatal-warnings $(MCU_FLAGS) $< -o $@
 
 flash: $(PROG).bin
 	st-flash --reset write $< 0x8000000
@@ -95,4 +86,4 @@ gdb: #$(PROG).elf
         $(ELF)
 
 clean:
-	@rm -rf *.{bin,elf,map,lst,tgz,zip,hex} obj
+	@rm -rf firmware.*

@@ -86,4 +86,8 @@ typedef int socklen_t;
 #define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
 #endif
 
+#ifndef MG_ENABLE_DIRLIST
+#define MG_ENABLE_DIRLIST 1
+#endif
+
 #endif
