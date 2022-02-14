@@ -81,9 +81,17 @@ const char *mg_strstr(const struct mg_str haystack,
   return NULL;
 }
 
+static bool is_digit(int c) {
+  return c >= '0' && c <= '9';
+}
+
+static bool is_space(int c) {
+  return c == ' ' || c == '\r' || c == '\n' || c == '\t';
+}
+
 struct mg_str mg_strstrip(struct mg_str s) {
-  while (s.len > 0 && isspace((int) *s.ptr)) s.ptr++, s.len--;
-  while (s.len > 0 && isspace((int) *(s.ptr + s.len - 1))) s.len--;
+  while (s.len > 0 && is_space((int) *s.ptr)) s.ptr++, s.len--;
+  while (s.len > 0 && is_space((int) *(s.ptr + s.len - 1))) s.len--;
   return s;
 }
 
@@ -296,14 +304,14 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
       if (c == '#') x++, c = fmt[++i];
       if (c == '-') minus++, c = fmt[++i];
       if (c == '0') pad = '0', c = fmt[++i];
-      while (isdigit(c)) w *= 10, w += (size_t) (c - '0'), c = fmt[++i];
+      while (is_digit(c)) w *= 10, w += (size_t) (c - '0'), c = fmt[++i];
       if (c == '.') {
         c = fmt[++i];
         if (c == '*') {
           pr = (size_t) va_arg(ap, int);
           c = fmt[++i];
         } else {
-          while (isdigit(c)) pr *= 10, pr += (size_t) (c - '0'), c = fmt[++i];
+          while (is_digit(c)) pr *= 10, pr += (size_t) (c - '0'), c = fmt[++i];
         }
       }
       while (c == 'h') c = fmt[++i];  // Treat h and hh as int
@@ -351,7 +359,10 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
         if (n < len) buf[n] = '%';
         n++;
       } else {
-        abort();  // Unsupported format specifier
+        if (n < len) buf[n] = '%';
+        n++;
+        if (n < len) buf[n] = c;
+        n++;
       }
       i++;
     } else {

@@ -241,7 +241,6 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_LOG | 1 | Enable `LOG()` macro |
 |MG_ENABLE_MD5 | 0 | Use native MD5 implementation |
 |MG_ENABLE_SSI | 1 | Enable serving SSI files by `mg_http_serve_dir()` |
-|MG_ENABLE_DIRLIST | 0 | Enable directory listing |
 |MG_ENABLE_CUSTOM_RANDOM | 0 | Provide custom RNG function `mg_random()` |
 |MG_ENABLE_PACKED_FS | 0 | Enable embedded FS support |
 |MG_ENABLE_FATFS | 0 | Enable embedded FAT FS support |

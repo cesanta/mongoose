@@ -121,7 +121,6 @@ extern "C" {
 #include <time.h>
 
 #define MG_PATH_MAX 128
-#define MG_ENABLE_DIRLIST 1
 
 #endif
 
@@ -148,7 +147,6 @@ extern "C" {
 #include <esp_system.h>
 
 #define MG_PATH_MAX 128
-#define MG_ENABLE_DIRLIST 1
 
 #endif
 
@@ -316,10 +314,6 @@ struct timeval {
 #include <time.h>
 #include <unistd.h>
 
-#ifndef MG_ENABLE_DIRLIST
-#define MG_ENABLE_DIRLIST 1
-#endif
-
 #endif
 
 
@@ -409,10 +403,6 @@ typedef int socklen_t;
 #define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
 #endif
 
-#ifndef MG_ENABLE_DIRLIST
-#define MG_ENABLE_DIRLIST 1
-#endif
-
 #endif
 
 
@@ -466,7 +456,7 @@ typedef int socklen_t;
 #endif
 
 #ifndef MG_ENABLE_DIRLIST
-#define MG_ENABLE_DIRLIST 0
+#define MG_ENABLE_DIRLIST 1
 #endif
 
 #ifndef MG_ENABLE_CUSTOM_RANDOM
