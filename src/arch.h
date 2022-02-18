@@ -8,6 +8,7 @@
 #define MG_ARCH_FREERTOS_TCP 5
 #define MG_ARCH_FREERTOS_LWIP 6
 #define MG_ARCH_AZURERTOS 7
+#define MG_ARCH_RTX_LWIP 8
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)

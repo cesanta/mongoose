@@ -209,3 +209,9 @@ jobs:
     - uses: actions/checkout@v2
     - name: nxp-twrkv58f220m-lwip-freertos
       run: make -C examples/nxp/nxp-twrkv58f220m-lwip-freertos build
+  infineon-xmc4700_4800-lwip-rtx-rtos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: infineon-xmc4700_4800-lwip-rtx-rtos
+      run: make -C examples/infineon/infineon-xmc4700_4800-lwip-rtx-rtos build
