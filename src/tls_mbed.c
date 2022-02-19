@@ -34,6 +34,7 @@ static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   int n = (int) send(fd, buf, len, 0);
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_WRITE;
+  MG_DEBUG(("n=%d, errno=%d", n, errno));
   return MBEDTLS_ERR_NET_SEND_FAILED;
 }
 
@@ -42,6 +43,7 @@ static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
   int n = (int) recv(fd, buf, len, 0);
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_READ;
+  MG_DEBUG(("n=%d, errno=%d", n, errno));
   return MBEDTLS_ERR_NET_RECV_FAILED;
 }
 
@@ -70,10 +72,8 @@ static int mbed_rng(void *ctx, unsigned char *buf, size_t len) {
 
 static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
   n = (int) strlen(s2) - 1;
-  MG_VERBOSE(("%p %.*s", ((struct mg_connection *) c)->fd, n, s2));
+  MG_VERBOSE(("%lu %d %.*s", ((struct mg_connection *) c)->id, lev, n, s2));
   (void) s;
-  (void) c;
-  (void) lev;
 }
 
 #if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
@@ -108,6 +108,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   mbedtls_x509_crt_init(&tls->cert);
   mbedtls_pk_init(&tls->pk);
   mbedtls_ssl_conf_dbg(&tls->conf, debug_cb, c);
+#if defined(MG_MBEDTLS_DEBUG_LEVEL)
+  mbedtls_debug_set_threshold(MG_MBEDTLS_DEBUG_LEVEL);
+#endif
   if ((rc = mbedtls_ssl_config_defaults(
            &tls->conf,
            c->is_client ? MBEDTLS_SSL_IS_CLIENT : MBEDTLS_SSL_IS_SERVER,
@@ -132,7 +135,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     tls->cafile = strdup(opts->ca);
     rc = mbedtls_ssl_conf_ca_chain_file(&tls->conf, tls->cafile, &tls->crl);
     if (rc != 0) {
-      mg_error(c, "parse on-disk chain(%s) err %#x", ca, -rc);
+      mg_error(c, "parse on-disk chain(%s) err %#x", tls->cafile, -rc);
       goto fail;
     }
 #else
