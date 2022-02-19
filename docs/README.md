@@ -668,9 +668,8 @@ void mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_len len);
 
 Wake up an event manager that sleeps in `mg_mgr_poll()` call. This function
 must be called from a separate task/thread. A calling thread can pass
-some specific data to the IO thread via `buf`, `len`. There is a limitation
-on the data size that can be sent: first, it is `MG_IO_MAX` build constant,
-and second, it is a maximum UDP datagram size, which is 64KiB. If you need
+some specific data to the IO thread via `buf`, `len`. The maximum value
+of `len` is limited by a maximum UDP datagram size, which is 64KiB. If you need
 to send a large data to the Mongoose thread, `malloc()` the data and send
 a pointer to it, not the data itself. The receiving event handler can receive
 a pointer, send a response, and call `free()`. Parameters:
