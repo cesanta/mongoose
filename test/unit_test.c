@@ -803,7 +803,7 @@ static void f3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // MG_INFO(("-->[%.*s]", (int) hm->message.len, hm->message.ptr));
     // ASSERT(mg_vcmp(&hm->method, "HTTP/1.1") == 0);
     // ASSERT(mg_vcmp(&hm->uri, "301") == 0);
-    *ok = atoi(hm->uri.ptr);
+    *ok = mg_http_status(hm);
   } else if (ev == MG_EV_CLOSE) {
     if (*ok == 0) *ok = 888;
   } else if (ev == MG_EV_ERROR) {
