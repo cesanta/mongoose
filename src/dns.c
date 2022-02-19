@@ -153,7 +153,6 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         // MG_INFO(("d %p %hu %hu", d, d->txnid, dm.txnid));
         if (dm.txnid != d->txnid) continue;
         if (d->c->is_resolving) {
-          d->c->is_resolving = 0;
           if (dm.resolved) {
             char buf[100];
             dm.addr.port = d->c->peer.port;  // Save port

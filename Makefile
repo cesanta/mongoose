@@ -106,6 +106,7 @@ mingw++: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/mingw i686-w64-mingw32-g++ $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
   # Note: for some reason, a binary built with mingw g++, fails to run
 
+linux: IPV6=0
 linux: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/cc2 gcc $(SRCS) $(CFLAGS) $(LDFLAGS) -o unit_test_gcc
 	$(DOCKER) mdashnet/cc2 ./unit_test_gcc

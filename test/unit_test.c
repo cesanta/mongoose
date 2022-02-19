@@ -760,7 +760,7 @@ static void test_http_server(void) {
 
 #if MG_ENABLE_IPV6
   {
-    const char *url6 = "http://[::1]:12346";
+    const char *url6 = "http://[::1]:12366";
     ASSERT(mg_http_listen(&mgr, url6, eh1, NULL) != NULL);
     ASSERT(fetch(&mgr, buf, url6, "GET /a.txt HTTP/1.0\n\n") == 200);
     ASSERT(cmpbody(buf, "hello\n") == 0);
@@ -1787,8 +1787,8 @@ int main(void) {
   test_tls();
   test_ws();
   test_ws_fragmentation();
-  test_http_server();
   test_http_client();
+  test_http_server();
   test_http_no_content_length();
   test_http_pipeline();
   test_http_range();

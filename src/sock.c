@@ -249,7 +249,7 @@ static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
   }
   if (fd == INVALID_SOCKET) {
     if (s_err == 0) s_err = MG_SOCK_ERRNO;
-    MG_ERROR(("Failed to listen on %s, errno %d", url, s_err));
+    MG_ERROR(("failed %s, errno %d (%s)", url, s_err, strerror(s_err)));
   }
 
   return fd;
@@ -350,6 +350,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   int rc, af = c->peer.is_ip6 ? AF_INET6 : AF_INET;
   // mg_straddr(&c->peer, buf, sizeof(buf));
   c->fd = S2PTR(socket(af, type, 0));
+  c->is_resolving = 0;
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
   } else if (c->is_udp) {
