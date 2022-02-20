@@ -498,26 +498,55 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 struct fetch_data {
-  char *buf;
-  int code, closed;
+  struct mg_iobuf *buf;
+  int code, closed, done;
 };
 
 static void fcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   struct fetch_data *fd = (struct fetch_data *) fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    snprintf(fd->buf, FETCH_BUF_SIZE, "%.*s", (int) hm->message.len,
-             hm->message.ptr);
+    if (fd->buf->len == 0) {
+      size_t n;
+      n = fd->buf->size - fd->buf->len;
+      if (hm->message.len <= n)
+        n = hm->message.len;
+      mg_iobuf_add(fd->buf, fd->buf->len, hm->message.ptr, n, MG_IO_SIZE);
+    }
     fd->code = atoi(hm->uri.ptr);
     fd->closed = 1;
+    fd->done = 1;
     c->is_closing = 1;
+    fd->buf->buf[fd->buf->len] = '\0';
     (void) c;
+  } else if (ev == MG_EV_HTTP_CHUNK) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    size_t n;
+    if (fd->buf->len == 0) {
+      fd->code = atoi(hm->uri.ptr);
+      n = fd->buf->size - fd->buf->len;
+      if (hm->head.len <= n)
+        n = hm->head.len;
+      mg_iobuf_add(fd->buf, fd->buf->len, hm->head.ptr, n, MG_IO_SIZE);
+    }
+    n = fd->buf->size - fd->buf->len;
+    if (hm->chunk.len <= n)
+      n = hm->chunk.len;
+    mg_iobuf_add(fd->buf, fd->buf->len, hm->chunk.ptr, n, MG_IO_SIZE);
+    mg_iobuf_del(&c->recv, c->recv.len - n, c->recv.len);
+    if (fd->buf->len >= hm->message.len) {
+      fd->closed = 1;
+      fd->done = 1;
+      c->is_closing = 1;
+      fd->buf->buf[fd->buf->len] = '\0';
+    }
   }
 }
 
 static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
                  const char *fmt, ...) {
-  struct fetch_data fd = {buf, 0, 0};
+  struct mg_iobuf io_buf = {(unsigned char *)buf, FETCH_BUF_SIZE, 0};
+  struct fetch_data fd = {&io_buf, 0, 0, 0};
   int i;
   struct mg_connection *c = mg_http_connect(mgr, url, fcb, &fd);
   va_list ap;
@@ -542,7 +571,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   mg_vprintf(c, fmt, ap);
   va_end(ap);
   buf[0] = '\0';
-  for (i = 0; i < 250 && buf[0] == '\0'; i++) mg_mgr_poll(mgr, 1);
+  for (i = 0; i < 250 && fd.done == 0; i++) mg_mgr_poll(mgr, 1);
   if (!fd.closed) c->is_closing = 1;
   mg_mgr_poll(mgr, 1);
   return fd.code;
@@ -922,6 +951,9 @@ static void f3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // ASSERT(mg_vcmp(&hm->method, "HTTP/1.1") == 0);
     // ASSERT(mg_vcmp(&hm->uri, "301") == 0);
     *ok = mg_http_status(hm);
+  } else if (ev == MG_EV_HTTP_CHUNK) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    mg_http_delete_chunk(c, hm);
   } else if (ev == MG_EV_CLOSE) {
     if (*ok == 0) *ok = 888;
   } else if (ev == MG_EV_ERROR) {
@@ -1796,6 +1828,97 @@ static void test_invalid_listen_addr(void) {
   ASSERT(mgr.conns == NULL);
 }
 
+struct stream_status {
+  uint32_t polls;
+  size_t sent;
+  size_t received;
+  uint32_t send_crc;
+  uint32_t recv_crc;
+};
+
+// Consume recv buffer after letting it reach MG_MAX_RECV_SIZE
+static void eh8(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  struct stream_status *status = (struct stream_status *) fn_data;
+  if (c->is_listening)
+    return;
+
+  ASSERT(c->recv.len <= MG_MAX_RECV_SIZE);
+
+  if (ev == MG_EV_ACCEPT) {
+    // Optimize recv buffer size near max to speed up test
+    mg_iobuf_resize(&c->recv, MG_MAX_RECV_SIZE - MG_IO_SIZE);
+    status->received = 0;
+    status->recv_crc = 0;
+  }
+
+  if (ev == MG_EV_CLOSE) {
+    ASSERT(status->received == status->sent);
+  }
+
+  // Let buffer fill up and start consuming after 10 full buffer poll events
+  if (status->polls >= 10 && ev == MG_EV_POLL) {
+    // consume at most a third of MG_MAX_RECV_SIZE on each poll
+    size_t consume;
+    if (MG_MAX_RECV_SIZE / 3 >= c->recv.len)
+      consume = c->recv.len;
+    else
+      consume = MG_MAX_RECV_SIZE / 3;
+    status->received += consume;
+    status->recv_crc = mg_crc32(status->recv_crc, (const char *) c->recv.buf, consume);
+    mg_iobuf_del(&c->recv, 0, consume);
+  }
+
+  // count polls with full buffer
+  if (ev == MG_EV_BUFFER_FULL) {
+    long *error = (long *) ev_data;
+    ASSERT(*error == -1);
+    *error = 0;
+    status->polls += 1;
+  }
+  (void) ev_data;
+}
+
+// Send buffer larger than MG_MAX_RECV_SIZE to server
+static void eh10(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  struct stream_status *status = (struct stream_status *) fn_data;
+  if (ev == MG_EV_CONNECT) {
+    size_t len = MG_MAX_RECV_SIZE * 2;
+    struct mg_iobuf buf = {NULL, 0, 0};
+    mg_iobuf_init(&buf, len);
+    mg_random(buf.buf, buf.size);
+    buf.len = buf.size;
+    mg_send(c, buf.buf, buf.len);
+    status->sent = buf.len;
+    status->send_crc = mg_crc32(0, (const char *) buf.buf, buf.len);
+    mg_iobuf_free(&buf);
+  }
+  (void) ev_data;
+  (void) fn_data;
+}
+
+static void test_http_stream_buffer(void) {
+  struct mg_mgr mgr;
+  const char *url = "tcp://127.0.0.1:12344";
+  uint32_t i;
+  struct stream_status status;
+  mg_mgr_init(&mgr);
+  mg_listen(&mgr, url, eh8, &status);
+
+  status.polls = 0;
+  mg_connect(&mgr, url, eh10, &status);
+  for (i = 0; i < (MG_MAX_RECV_SIZE / MG_IO_SIZE) * 50; i++) {
+    mg_mgr_poll(&mgr, 1);
+    if (status.polls >= 10 && status.sent == status.received) break;
+  }
+  ASSERT(status.sent == status.received);
+  ASSERT(status.send_crc == status.recv_crc);
+
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+}
+
+#undef LONG_CHUNK
+
 static void test_multipart(void) {
   struct mg_http_part part;
   size_t ofs;
@@ -2072,6 +2195,7 @@ int main(void) {
   test_invalid_listen_addr();
   test_http_chunked();
   test_http_upload();
+  test_http_stream_buffer();
   test_http_parse();
   test_util();
   test_sntp();

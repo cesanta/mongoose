@@ -933,6 +933,7 @@ enum {
   MG_EV_MQTT_MSG,    // MQTT PUBLISH received        struct mg_mqtt_message *
   MG_EV_MQTT_OPEN,   // MQTT CONNACK received        int *connack_status_code
   MG_EV_SNTP_TIME,   // SNTP time received           uint64_t *milliseconds
+  MG_EV_BUFFER_FULL, // MG_MAX_RECV_SIZE reached     long *error
   MG_EV_USER,        // Starting ID for user events
 };
 
@@ -982,6 +983,7 @@ struct mg_connection {
   unsigned long id;            // Auto-incrementing unique connection ID
   struct mg_iobuf recv;        // Incoming data
   struct mg_iobuf send;        // Outgoing data
+  size_t recv_max;             // Max recv buffer size
   mg_event_handler_t fn;       // User-specified event handler function
   void *fn_data;               // User-specified function parameter
   mg_event_handler_t pfn;      // Protocol-specific handler function

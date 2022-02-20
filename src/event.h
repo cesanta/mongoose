@@ -25,5 +25,6 @@ enum {
   MG_EV_MQTT_MSG,    // MQTT PUBLISH received        struct mg_mqtt_message *
   MG_EV_MQTT_OPEN,   // MQTT CONNACK received        int *connack_status_code
   MG_EV_SNTP_TIME,   // SNTP time received           uint64_t *milliseconds
+  MG_EV_BUFFER_FULL, // MG_MAX_RECV_SIZE reached     long *error
   MG_EV_USER,        // Starting ID for user events
 };
