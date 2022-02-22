@@ -1212,6 +1212,17 @@ static bool sn(const char *fmt, ...) {
   return result;
 }
 
+static bool sccmp(const char *s1, const char *s2) {
+  int n1 = mg_casecmp(s1, s2);
+#if MG_ARCH == MG_ARCH_UNIX
+  int n2 = strcasecmp(s1, s2);
+#else
+  int n2 = mg_casecmp(s1, s2);  // On MSVC98, _stricmp() is buggy
+#endif
+  MG_INFO(("[%s] [%s] %d %d", s1, s2, n1, n2));
+  return n1 == n2;
+}
+
 static void test_str(void) {
   struct mg_str s = mg_strdup(mg_str("a"));
   ASSERT(mg_strcmp(s, mg_str("a")) == 0);
@@ -1222,6 +1233,12 @@ static void test_str(void) {
   ASSERT(mg_strstr(mg_str("abc"), mg_str("d")) == NULL);
   ASSERT(mg_strstr(mg_str("abc"), mg_str("b")) != NULL);
   ASSERT(mg_strcmp(mg_str("hi"), mg_strstrip(mg_str(" \thi\r\n"))) == 0);
+
+  ASSERT(sccmp("", ""));
+  ASSERT(sccmp("", "1"));
+  ASSERT(sccmp("a", "A"));
+  ASSERT(sccmp("a1", "A"));
+  ASSERT(sccmp("a", "A1"));
 
   ASSERT(sn("%d", 0));
   ASSERT(sn("%d", 1));

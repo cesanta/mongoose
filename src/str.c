@@ -12,7 +12,9 @@ struct mg_str mg_str_n(const char *s, size_t n) {
 }
 
 int mg_lower(const char *s) {
-  return tolower(*(const unsigned char *) s);
+  int c = *s;
+  if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+  return c;
 }
 
 int mg_ncasecmp(const char *s1, const char *s2, size_t len) {

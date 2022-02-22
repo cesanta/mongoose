@@ -118,14 +118,18 @@ int mg_http_get_var(const struct mg_str *buf, const char *name, char *dst,
   return len;
 }
 
+static bool isx(int c) {
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+         (c >= 'A' && c <= 'F');
+}
+
 int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
                   int is_form_url_encoded) {
   size_t i, j;
   for (i = j = 0; i < src_len && j + 1 < dst_len; i++, j++) {
     if (src[i] == '%') {
       // Use `i + 2 < src_len`, not `i < src_len - 2`, note small src_len
-      if (i + 2 < src_len && isxdigit(*(const unsigned char *) (src + i + 1)) &&
-          isxdigit(*(const unsigned char *) (src + i + 2))) {
+      if (i + 2 < src_len && isx(src[i + 1]) && isx(src[i + 2])) {
         mg_unhex(src + i + 1, 2, (uint8_t *) &dst[j]);
         i += 2;
       } else {
@@ -141,11 +145,14 @@ int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
   return i >= src_len && j < dst_len ? (int) j : -1;
 }
 
+static bool isok(uint8_t c) {
+  return c == '\n' || c == '\r' || c >= ' ';
+}
+
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len) {
   size_t i;
   for (i = 0; i < buf_len; i++) {
-    if (!isprint(buf[i]) && buf[i] != '\r' && buf[i] != '\n' && buf[i] < 128)
-      return -1;
+    if (!isok(buf[i])) return -1;
     if ((i > 0 && buf[i] == '\n' && buf[i - 1] == '\n') ||
         (i > 3 && buf[i] == '\n' && buf[i - 1] == '\r' && buf[i - 2] == '\n'))
       return (int) i + 1;

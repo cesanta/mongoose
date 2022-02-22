@@ -1114,14 +1114,18 @@ int mg_http_get_var(const struct mg_str *buf, const char *name, char *dst,
   return len;
 }
 
+static bool isx(int c) {
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+         (c >= 'A' && c <= 'F');
+}
+
 int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
                   int is_form_url_encoded) {
   size_t i, j;
   for (i = j = 0; i < src_len && j + 1 < dst_len; i++, j++) {
     if (src[i] == '%') {
       // Use `i + 2 < src_len`, not `i < src_len - 2`, note small src_len
-      if (i + 2 < src_len && isxdigit(*(const unsigned char *) (src + i + 1)) &&
-          isxdigit(*(const unsigned char *) (src + i + 2))) {
+      if (i + 2 < src_len && isx(src[i + 1]) && isx(src[i + 2])) {
         mg_unhex(src + i + 1, 2, (uint8_t *) &dst[j]);
         i += 2;
       } else {
@@ -1137,11 +1141,14 @@ int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
   return i >= src_len && j < dst_len ? (int) j : -1;
 }
 
+static bool isok(uint8_t c) {
+  return c == '\n' || c == '\r' || c >= ' ';
+}
+
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len) {
   size_t i;
   for (i = 0; i < buf_len; i++) {
-    if (!isprint(buf[i]) && buf[i] != '\r' && buf[i] != '\n' && buf[i] < 128)
-      return -1;
+    if (!isok(buf[i])) return -1;
     if ((i > 0 && buf[i] == '\n' && buf[i - 1] == '\n') ||
         (i > 3 && buf[i] == '\n' && buf[i - 1] == '\r' && buf[i - 2] == '\n'))
       return (int) i + 1;
@@ -2043,7 +2050,7 @@ void mg_iobuf_free(struct mg_iobuf *io) {
 
 #if MG_ENABLE_LOG
 static void mg_log_stdout(const void *buf, size_t len, void *userdata) {
-  (void) userdata;
+  (void) userdata, (void) buf, (void) len;
 #if MG_ENABLE_FILE
   fwrite(buf, 1, len, stdout);
 #endif
@@ -3031,8 +3038,6 @@ void mg_hmac_sha1(const unsigned char *key, size_t keylen,
 #define SNTP_INTERVAL_SEC 3600
 #define SNTP_TIME_OFFSET 2208988800UL
 
-static unsigned long s_sntmp_next;
-
 int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
   int64_t res = -1;
   int mode = len > 0 ? buf[0] & 7 : 0;
@@ -3050,7 +3055,6 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
     unsigned long useconds = mg_ntohl(data[1]);
     // MG_DEBUG(("%lu %lu %lu", time(0), seconds, useconds));
     res = ((int64_t) seconds) * 1000 + (int64_t) ((useconds / 1000) % 1000);
-    s_sntmp_next = seconds + SNTP_INTERVAL_SEC;
   }
   return res;
 }
@@ -3060,12 +3064,12 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
     if (milliseconds > 0) {
       mg_call(c, MG_EV_SNTP_TIME, &milliseconds);
-      MG_DEBUG(("%u.%u, next at %lu", (unsigned) (milliseconds / 1000),
-                (unsigned) (milliseconds % 1000), s_sntmp_next));
+      MG_DEBUG(("%u.%u", (unsigned) (milliseconds / 1000),
+                (unsigned) (milliseconds % 1000)));
     }
     c->recv.len = 0;  // Clear receive buffer
   } else if (ev == MG_EV_CONNECT) {
-    mg_sntp_send(c, (unsigned long) time(NULL));
+    mg_sntp_send(c, (unsigned long) 0);
   } else if (ev == MG_EV_CLOSE) {
   }
   (void) fnd;
@@ -3075,12 +3079,11 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
 void mg_sntp_send(struct mg_connection *c, unsigned long utc) {
   if (c->is_resolving) {
     MG_ERROR(("%lu wait until resolved", c->id));
-  } else if (utc > s_sntmp_next) {
+  } else {
     uint8_t buf[48] = {0};
-    s_sntmp_next = utc + SNTP_INTERVAL_SEC;
     buf[0] = (0 << 6) | (4 << 3) | 3;
     mg_send(c, buf, sizeof(buf));
-    MG_DEBUG(("%lu ct %lu, next at %lu", c->id, utc, s_sntmp_next));
+    MG_DEBUG(("%lu ct %lu", c->id, utc));
   }
 }
 
@@ -3834,7 +3837,9 @@ struct mg_str mg_str_n(const char *s, size_t n) {
 }
 
 int mg_lower(const char *s) {
-  return tolower(*(const unsigned char *) s);
+  int c = *s;
+  if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+  return c;
 }
 
 int mg_ncasecmp(const char *s1, const char *s2, size_t len) {
