@@ -1,4 +1,5 @@
 #include "net.h"
+#include "dns.h"
 #include "log.h"
 #include "util.h"
 

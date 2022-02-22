@@ -285,11 +285,6 @@ to fail due to several undefined symbols. Create `mongoose_custom.c` and impleme
 the following functions (take a look at `src/sock.c` for the reference implementation):
 
 ```c
-struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
-                                 mg_event_handler_t fn, void *fn_data) {
-  // implement this!
-}
-
 void mg_connect_resolved(struct mg_connection *c) {
   // implement this!
 }

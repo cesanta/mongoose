@@ -2604,6 +2604,7 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 
 
+
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
   char mem[256], *buf = mem;
   size_t len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);

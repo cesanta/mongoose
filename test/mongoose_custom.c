@@ -5,13 +5,6 @@ int mkdir(const char *path, mode_t mode) {
   return -1;
 }
 
-struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
-                                 mg_event_handler_t fn, void *fn_data) {
-  (void) mgr, (void) url, (void) fn, (void) fn_data;
-  return NULL;
-}
-
-void mg_connect_resolved(struct mg_connection *c);
 void mg_connect_resolved(struct mg_connection *c) {
   (void) c;
 }
