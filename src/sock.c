@@ -87,18 +87,6 @@ static bool mg_sock_would_block(void) {
       ;
 }
 
-static struct mg_connection *alloc_conn(struct mg_mgr *mgr, bool is_client,
-                                        SOCKET fd) {
-  struct mg_connection *c = (struct mg_connection *) calloc(1, sizeof(*c));
-  if (c != NULL) {
-    c->is_client = is_client;
-    c->fd = S2PTR(fd);
-    c->mgr = mgr;
-    c->id = ++mgr->nextid;
-  }
-  return c;
-}
-
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   int log_level = n > 0 ? MG_LL_VERBOSE : MG_LL_DEBUG;
   char flags[] = {(char) ('0' + c->is_listening),
@@ -377,7 +365,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
   struct mg_connection *c = NULL;
   if (url == NULL || url[0] == '\0') {
     MG_ERROR(("null url"));
-  } else if ((c = alloc_conn(mgr, 1, INVALID_SOCKET)) == NULL) {
+  } else if ((c = mg_alloc_conn(mgr, true, S2PTR(INVALID_SOCKET))) == NULL) {
     MG_ERROR(("OOM"));
   } else {
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
@@ -409,7 +397,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     MG_ERROR(("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
 #endif
-  } else if ((c = alloc_conn(mgr, 0, fd)) == NULL) {
+  } else if ((c = mg_alloc_conn(mgr, false, S2PTR(fd))) == NULL) {
     MG_ERROR(("%lu OOM", lsn->id));
     closesocket(fd);
   } else {
@@ -479,7 +467,7 @@ struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
   struct mg_connection *c = NULL;
   if (!mg_socketpair(sp, usa)) {
     MG_ERROR(("Cannot create socket pair"));
-  } else if ((c = alloc_conn(mgr, false, sp[1])) == NULL) {
+  } else if ((c = mg_alloc_conn(mgr, false, S2PTR(sp[1]))) == NULL) {
     closesocket(sp[0]);
     closesocket(sp[1]);
     MG_ERROR(("OOM"));
@@ -505,7 +493,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
   SOCKET fd = mg_open_listener(url, &addr);
   if (fd == INVALID_SOCKET) {
     MG_ERROR(("Failed: %s, errno %d", url, MG_SOCK_ERRNO));
-  } else if ((c = alloc_conn(mgr, 0, fd)) == NULL) {
+  } else if ((c = mg_alloc_conn(mgr, false, S2PTR(fd))) == NULL) {
     MG_ERROR(("OOM %s", url));
     closesocket(fd);
   } else {
