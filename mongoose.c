@@ -267,10 +267,10 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         if (d->c->is_resolving) {
           if (dm.resolved) {
             char buf[100];
-            dm.addr.port = d->c->peer.port;  // Save port
-            d->c->peer = dm.addr;            // Copy resolved address
+            dm.addr.port = d->c->rem.port;  // Save port
+            d->c->rem = dm.addr;            // Copy resolved address
             MG_DEBUG(("%lu %s resolved to %s", d->c->id, dm.name,
-                      mg_ntoa(&d->c->peer, buf, sizeof(buf))));
+                      mg_ntoa(&d->c->rem, buf, sizeof(buf))));
             mg_connect_resolved(d->c);
 #if MG_ENABLE_IPV6
           } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0') {
@@ -358,16 +358,15 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->c = c;
     c->is_resolving = 1;
     MG_VERBOSE(("%lu resolving %.*s @ %s, txnid %hu", c->id, (int) name->len,
-                name->ptr, mg_ntoa(&dnsc->c->peer, buf, sizeof(buf)),
-                d->txnid));
+                name->ptr, mg_ntoa(&dnsc->c->rem, buf, sizeof(buf)), d->txnid));
     mg_dns_send(dnsc->c, name, d->txnid, ipv6);
   }
 }
 
 void mg_resolve(struct mg_connection *c, const char *url) {
   struct mg_str host = mg_url_host(url);
-  c->peer.port = mg_htons(mg_url_port(url));
-  if (mg_aton(host, &c->peer)) {
+  c->rem.port = mg_htons(mg_url_port(url));
+  if (mg_aton(host, &c->rem)) {
     // host is an IP address, do not fire name resolution
     mg_connect_resolved(c);
   } else {
@@ -3251,10 +3250,10 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       memset(&usa, 0, sizeof(usa));
       memset(&a, 0, sizeof(a));
       getsockname(FD(c), &usa.sa, &slen);
-      tomgaddr(&usa, &a, c->peer.is_ip6);
+      tomgaddr(&usa, &a, c->rem.is_ip6);
       MG_INFO(("\n-- %lu %s %s %s %s %ld\n%s", c->id,
                mg_straddr(&a, t1, sizeof(t1)), r ? "<-" : "->",
-               mg_straddr(&c->peer, t2, sizeof(t2)), c->label, n, s));
+               mg_straddr(&c->rem, t2, sizeof(t2)), c->label, n, s));
       free(s);
       (void) t1, (void) t2;  // Silence warnings for MG_ENABLE_LOG=0
     }
@@ -3274,7 +3273,7 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
   long n;
   if (c->is_udp) {
     union usa usa;
-    socklen_t slen = tousa(&c->peer, &usa);
+    socklen_t slen = tousa(&c->rem, &usa);
     n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
   } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
@@ -3377,9 +3376,9 @@ static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
   long n = 0;
   if (c->is_udp) {
     union usa usa;
-    socklen_t slen = tousa(&c->peer, &usa);
+    socklen_t slen = tousa(&c->rem, &usa);
     n = recvfrom(FD(c), (char *) buf, len, 0, &usa.sa, &slen);
-    if (n > 0) tomgaddr(&usa, &c->peer, slen != sizeof(usa.sin));
+    if (n > 0) tomgaddr(&usa, &c->rem, slen != sizeof(usa.sin));
   } else {
     n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
@@ -3465,8 +3464,8 @@ static void setsockopts(struct mg_connection *c) {
 void mg_connect_resolved(struct mg_connection *c) {
   // char buf[40];
   int type = c->is_udp ? SOCK_DGRAM : SOCK_STREAM;
-  int rc, af = c->peer.is_ip6 ? AF_INET6 : AF_INET;
-  // mg_straddr(&c->peer, buf, sizeof(buf));
+  int rc, af = c->rem.is_ip6 ? AF_INET6 : AF_INET;
+  // mg_straddr(&c->rem, buf, sizeof(buf));
   c->fd = S2PTR(socket(af, type, 0));
   c->is_resolving = 0;
   if (FD(c) == INVALID_SOCKET) {
@@ -3476,7 +3475,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     mg_call(c, MG_EV_CONNECT, NULL);
   } else {
     union usa usa;
-    socklen_t slen = tousa(&c->peer, &usa);
+    socklen_t slen = tousa(&c->rem, &usa);
     mg_set_non_blocking_mode(FD(c));
     setsockopts(c);
     mg_call(c, MG_EV_RESOLVE, NULL);
@@ -3513,8 +3512,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     closesocket(fd);
   } else {
     char buf[40];
-    tomgaddr(&usa, &c->peer, sa_len != sizeof(usa.sin));
-    mg_straddr(&c->peer, buf, sizeof(buf));
+    tomgaddr(&usa, &c->rem, sa_len != sizeof(usa.sin));
+    mg_straddr(&c->rem, buf, sizeof(buf));
     MG_DEBUG(("%lu accepted %s", c->id, buf));
     mg_set_non_blocking_mode(FD(c));
     setsockopts(c);
@@ -3522,6 +3521,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     c->is_accepted = 1;
     c->is_hexdumping = lsn->is_hexdumping;
     c->pfn = lsn->pfn;
+    c->loc = lsn->loc;
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
@@ -3584,7 +3584,7 @@ struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
     MG_ERROR(("OOM"));
   } else {
     MG_DEBUG(("pipe %lu", (unsigned long) sp[0]));
-    tomgaddr(&usa[0], &c->peer, false);
+    tomgaddr(&usa[0], &c->rem, false);
     c->is_udp = 1;
     c->pfn = pf1;
     c->pfn_data = (void *) (size_t) sp[0];
@@ -3608,7 +3608,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     MG_ERROR(("OOM %s", url));
     closesocket(fd);
   } else {
-    memcpy(&c->peer, &addr, sizeof(struct mg_addr));
+    memcpy(&c->loc, &addr, sizeof(struct mg_addr));
     c->fd = S2PTR(fd);
     c->is_listening = 1;
     c->is_udp = is_udp;
@@ -3616,7 +3616,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     c->fn = fn;
     c->fn_data = fn_data;
     mg_call(c, MG_EV_OPEN, NULL);
-    MG_DEBUG(("%lu %s port %u", c->id, url, mg_ntohs(c->peer.port)));
+    MG_DEBUG(("%lu %s port %u", c->id, url, mg_ntohs(c->rem.port)));
   }
   return c;
 }
@@ -3681,7 +3681,7 @@ static void connect_conn(struct mg_connection *c) {
   if (rc) {
     char buf[50];
     mg_error(c, "error connecting to %s",
-             mg_straddr(&c->peer, buf, sizeof(buf)));
+             mg_straddr(&c->rem, buf, sizeof(buf)));
   } else {
     if (c->is_tls_hs) mg_tls_handshake(c);
     mg_call(c, MG_EV_CONNECT, NULL);

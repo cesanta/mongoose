@@ -10,14 +10,14 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
     c->is_hexdumping = 1;
   } else if (ev == MG_EV_RESOLVE) {
-    // c->peer gets populated with multicast address. Store it in c->label
-    memcpy(c->label, &c->peer, sizeof(c->peer));
+    // c->rem gets populated with multicast address. Store it in c->label
+    memcpy(c->label, &c->rem, sizeof(c->rem));
   } else if (ev == MG_EV_READ) {
-    // Each response to the SSDP socket will change c->peer.
+    // Each response to the SSDP socket will change c->rem.
     // We can now do mg_printf(c, "haha"); to respond back to the remote side.
     // But in our case, we should restore the multicast address in order
     // to have next search to go to the multicast address
-    memcpy(&c->peer, c->label, sizeof(c->peer));
+    memcpy(&c->rem, c->label, sizeof(c->rem));
   }
 }
 

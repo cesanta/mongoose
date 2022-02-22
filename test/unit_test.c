@@ -797,7 +797,7 @@ static void f3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_CONNECT) {
     // c->is_hexdumping = 1;
     mg_printf(c, "GET / HTTP/1.0\r\nHost: %s\r\n\r\n",
-              c->peer.is_ip6 ? "ipv6.google.com" : "cesanta.com");
+              c->rem.is_ip6 ? "ipv6.google.com" : "cesanta.com");
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     // MG_INFO(("-->[%.*s]", (int) hm->message.len, hm->message.ptr));

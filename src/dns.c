@@ -155,10 +155,10 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         if (d->c->is_resolving) {
           if (dm.resolved) {
             char buf[100];
-            dm.addr.port = d->c->peer.port;  // Save port
-            d->c->peer = dm.addr;            // Copy resolved address
+            dm.addr.port = d->c->rem.port;  // Save port
+            d->c->rem = dm.addr;            // Copy resolved address
             MG_DEBUG(("%lu %s resolved to %s", d->c->id, dm.name,
-                      mg_ntoa(&d->c->peer, buf, sizeof(buf))));
+                      mg_ntoa(&d->c->rem, buf, sizeof(buf))));
             mg_connect_resolved(d->c);
 #if MG_ENABLE_IPV6
           } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0') {
@@ -246,16 +246,15 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->c = c;
     c->is_resolving = 1;
     MG_VERBOSE(("%lu resolving %.*s @ %s, txnid %hu", c->id, (int) name->len,
-                name->ptr, mg_ntoa(&dnsc->c->peer, buf, sizeof(buf)),
-                d->txnid));
+                name->ptr, mg_ntoa(&dnsc->c->rem, buf, sizeof(buf)), d->txnid));
     mg_dns_send(dnsc->c, name, d->txnid, ipv6);
   }
 }
 
 void mg_resolve(struct mg_connection *c, const char *url) {
   struct mg_str host = mg_url_host(url);
-  c->peer.port = mg_htons(mg_url_port(url));
-  if (mg_aton(host, &c->peer)) {
+  c->rem.port = mg_htons(mg_url_port(url));
+  if (mg_aton(host, &c->rem)) {
     // host is an IP address, do not fire name resolution
     mg_connect_resolved(c);
   } else {
