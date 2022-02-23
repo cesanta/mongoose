@@ -2604,6 +2604,7 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 
 
+
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
   char mem[256], *buf = mem;
   size_t len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
@@ -2747,6 +2748,24 @@ struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr, bool clnt, void *fd) {
   }
   return c;
 }
+
+void mg_close_conn(struct mg_connection *c) {
+  mg_resolve_cancel(c);  // Close any pending DNS query
+  LIST_DELETE(struct mg_connection, &c->mgr->conns, c);
+  if (c == c->mgr->dns4.c) c->mgr->dns4.c = NULL;
+  if (c == c->mgr->dns6.c) c->mgr->dns6.c = NULL;
+  // Order of operations is important. `MG_EV_CLOSE` event must be fired
+  // before we deallocate received data, see #1331
+  mg_call(c, MG_EV_CLOSE, NULL);
+  MG_DEBUG(("%lu closed", c->id));
+
+  mg_tls_free(c);
+  mg_iobuf_free(&c->recv);
+  mg_iobuf_free(&c->send);
+  memset(c, 0, sizeof(*c));
+  free(c);
+}
+
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
                                  mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = NULL;
@@ -2762,6 +2781,26 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     MG_DEBUG(("%lu -> %s", c->id, url));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_resolve(c, url);
+  }
+  return c;
+}
+
+struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
+                                mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = NULL;
+  if ((c = mg_alloc_conn(mgr, false, NULL)) == NULL) {
+    MG_ERROR(("OOM %s", url));
+  } else if (!mg_open_listener(c, url)) {
+    MG_ERROR(("Failed: %s, errno %d", url, errno));
+    free(c);
+  } else {
+    c->is_listening = 1;
+    c->is_udp = strncmp(url, "udp:", 4) == 0;
+    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+    c->fn = fn;
+    c->fn_data = fn_data;
+    mg_call(c, MG_EV_OPEN, NULL);
+    MG_DEBUG(("%lu %s port %u", c->id, url, mg_ntohs(c->rem.port)));
   }
   return c;
 }
@@ -3309,17 +3348,16 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 #endif
 }
 
-static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
+bool mg_open_listener(struct mg_connection *c, const char *url) {
   SOCKET fd = INVALID_SOCKET;
   int s_err = 0;  // Memoized socket error, in case closesocket() overrides it
-  memset(addr, 0, sizeof(*addr));
-  addr->port = mg_htons(mg_url_port(url));
-  if (!mg_aton(mg_url_host(url), addr)) {
+  c->loc.port = mg_htons(mg_url_port(url));
+  if (!mg_aton(mg_url_host(url), &c->loc)) {
     MG_ERROR(("invalid listening URL: %s", url));
   } else {
     union usa usa;
-    socklen_t slen = tousa(addr, &usa);
-    int on = 1, af = addr->is_ip6 ? AF_INET6 : AF_INET;
+    socklen_t slen = tousa(&c->loc, &usa);
+    int on = 1, af = c->loc.is_ip6 ? AF_INET6 : AF_INET;
     int type = strncmp(url, "udp:", 4) == 0 ? SOCK_DGRAM : SOCK_STREAM;
     int proto = type == SOCK_DGRAM ? IPPROTO_UDP : IPPROTO_TCP;
     (void) on;
@@ -3352,9 +3390,9 @@ static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
         (type == SOCK_DGRAM || listen(fd, MG_SOCK_LISTEN_BACKLOG_SIZE) == 0)) {
       // In case port was set to 0, get the real port number
       if (getsockname(fd, &usa.sa, &slen) == 0) {
-        addr->port = usa.sin.sin_port;
+        c->loc.port = usa.sin.sin_port;
 #if MG_ENABLE_IPV6
-        if (addr->is_ip6) addr->port = usa.sin6.sin6_port;
+        if (c->loc.is_ip6) c->loc.port = usa.sin6.sin6_port;
 #endif
       }
       mg_set_non_blocking_mode(fd);
@@ -3364,12 +3402,12 @@ static SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
       fd = INVALID_SOCKET;
     }
   }
+  c->fd = S2PTR(fd);
   if (fd == INVALID_SOCKET) {
     if (s_err == 0) s_err = MG_SOCK_ERRNO;
     MG_ERROR(("failed %s, errno %d (%s)", url, s_err, strerror(s_err)));
   }
-
-  return fd;
+  return fd != INVALID_SOCKET;
 }
 
 static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
@@ -3411,26 +3449,14 @@ static void write_conn(struct mg_connection *c) {
 }
 
 static void close_conn(struct mg_connection *c) {
-  mg_resolve_cancel(c);  // Close any pending DNS query
-  LIST_DELETE(struct mg_connection, &c->mgr->conns, c);
-  if (c == c->mgr->dns4.c) c->mgr->dns4.c = NULL;
-  if (c == c->mgr->dns6.c) c->mgr->dns6.c = NULL;
-  // Order of operations is important. `MG_EV_CLOSE` event must be fired
-  // before we deallocate received data, see #1331
-  mg_call(c, MG_EV_CLOSE, NULL);
-  MG_DEBUG(("%lu closed", c->id));
   if (FD(c) != INVALID_SOCKET) {
     closesocket(FD(c));
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
     FreeRTOS_FD_CLR(c->fd, c->mgr->ss, eSELECT_ALL);
 #endif
-    c->fd = S2PTR(INVALID_SOCKET);
+    c->fd = NULL;
   }
-  mg_tls_free(c);
-  mg_iobuf_free(&c->recv);
-  mg_iobuf_free(&c->send);
-  memset(c, 0, sizeof(*c));
-  free(c);
+  mg_close_conn(c);
 }
 
 static void setsockopts(struct mg_connection *c) {
@@ -3592,31 +3618,6 @@ struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
     c->fn_data = fn_data;
     mg_call(c, MG_EV_OPEN, NULL);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
-  }
-  return c;
-}
-
-struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
-                                mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = NULL;
-  bool is_udp = strncmp(url, "udp:", 4) == 0;
-  struct mg_addr addr;
-  SOCKET fd = mg_open_listener(url, &addr);
-  if (fd == INVALID_SOCKET) {
-    MG_ERROR(("Failed: %s, errno %d", url, MG_SOCK_ERRNO));
-  } else if ((c = mg_alloc_conn(mgr, false, S2PTR(fd))) == NULL) {
-    MG_ERROR(("OOM %s", url));
-    closesocket(fd);
-  } else {
-    memcpy(&c->loc, &addr, sizeof(struct mg_addr));
-    c->fd = S2PTR(fd);
-    c->is_listening = 1;
-    c->is_udp = is_udp;
-    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
-    c->fn = fn;
-    c->fn_data = fn_data;
-    mg_call(c, MG_EV_OPEN, NULL);
-    MG_DEBUG(("%lu %s port %u", c->id, url, mg_ntohs(c->rem.port)));
   }
   return c;
 }

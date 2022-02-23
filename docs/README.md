@@ -289,9 +289,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   // implement this!
 }
 
-
-struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
-                                mg_event_handler_t fn, void *fn_data) {
+bool mg_open_listener(struct mg_connection *c, const char *url) {
   // implement this!
 }
 

@@ -1,6 +1,7 @@
 #include "net.h"
 #include "dns.h"
 #include "log.h"
+#include "tls.h"
 #include "util.h"
 
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
@@ -146,6 +147,24 @@ struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr, bool clnt, void *fd) {
   }
   return c;
 }
+
+void mg_close_conn(struct mg_connection *c) {
+  mg_resolve_cancel(c);  // Close any pending DNS query
+  LIST_DELETE(struct mg_connection, &c->mgr->conns, c);
+  if (c == c->mgr->dns4.c) c->mgr->dns4.c = NULL;
+  if (c == c->mgr->dns6.c) c->mgr->dns6.c = NULL;
+  // Order of operations is important. `MG_EV_CLOSE` event must be fired
+  // before we deallocate received data, see #1331
+  mg_call(c, MG_EV_CLOSE, NULL);
+  MG_DEBUG(("%lu closed", c->id));
+
+  mg_tls_free(c);
+  mg_iobuf_free(&c->recv);
+  mg_iobuf_free(&c->send);
+  memset(c, 0, sizeof(*c));
+  free(c);
+}
+
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
                                  mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = NULL;
@@ -161,6 +180,26 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     MG_DEBUG(("%lu -> %s", c->id, url));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_resolve(c, url);
+  }
+  return c;
+}
+
+struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
+                                mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = NULL;
+  if ((c = mg_alloc_conn(mgr, false, NULL)) == NULL) {
+    MG_ERROR(("OOM %s", url));
+  } else if (!mg_open_listener(c, url)) {
+    MG_ERROR(("Failed: %s, errno %d", url, errno));
+    free(c);
+  } else {
+    c->is_listening = 1;
+    c->is_udp = strncmp(url, "udp:", 4) == 0;
+    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+    c->fn = fn;
+    c->fn_data = fn_data;
+    mg_call(c, MG_EV_OPEN, NULL);
+    MG_DEBUG(("%lu %s port %u", c->id, url, mg_ntohs(c->rem.port)));
   }
   return c;
 }
