@@ -365,7 +365,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     MG_ERROR(("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
 #endif
-  } else if ((c = mg_alloc_conn(mgr, false, S2PTR(fd))) == NULL) {
+  } else if ((c = mg_alloc_conn(mgr)) == NULL) {
     MG_ERROR(("%lu OOM", lsn->id));
     closesocket(fd);
   } else {
@@ -376,6 +376,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     mg_set_non_blocking_mode(FD(c));
     setsockopts(c);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+    c->fd = S2PTR(fd);
     c->is_accepted = 1;
     c->is_hexdumping = lsn->is_hexdumping;
     c->pfn = lsn->pfn;
@@ -436,13 +437,14 @@ struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
   struct mg_connection *c = NULL;
   if (!mg_socketpair(sp, usa)) {
     MG_ERROR(("Cannot create socket pair"));
-  } else if ((c = mg_alloc_conn(mgr, false, S2PTR(sp[1]))) == NULL) {
+  } else if ((c = mg_alloc_conn(mgr)) == NULL) {
     closesocket(sp[0]);
     closesocket(sp[1]);
     MG_ERROR(("OOM"));
   } else {
     MG_DEBUG(("pipe %lu", (unsigned long) sp[0]));
     tomgaddr(&usa[0], &c->rem, false);
+    c->fd = S2PTR(sp[1]);
     c->is_udp = 1;
     c->pfn = pf1;
     c->pfn_data = (void *) (size_t) sp[0];

@@ -80,6 +80,6 @@ struct mg_connection *mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *);
 void mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_t len);
 
 // These functions are used to integrate with custom network stacks
-struct mg_connection *mg_alloc_conn(struct mg_mgr *, bool is_client, void *fd);
+struct mg_connection *mg_alloc_conn(struct mg_mgr *);
 void mg_close_conn(struct mg_connection *c);
 bool mg_open_listener(struct mg_connection *c, const char *url);

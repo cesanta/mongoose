@@ -137,11 +137,9 @@ bool mg_aton(struct mg_str str, struct mg_addr *addr) {
          mg_aton6(str, addr);
 }
 
-struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr, bool clnt, void *fd) {
+struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
   struct mg_connection *c = (struct mg_connection *) calloc(1, sizeof(*c));
   if (c != NULL) {
-    c->is_client = clnt;
-    c->fd = fd;
     c->mgr = mgr;
     c->id = ++mgr->nextid;
   }
@@ -170,12 +168,13 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
   struct mg_connection *c = NULL;
   if (url == NULL || url[0] == '\0') {
     MG_ERROR(("null url"));
-  } else if ((c = mg_alloc_conn(mgr, true, NULL)) == NULL) {
+  } else if ((c = mg_alloc_conn(mgr)) == NULL) {
     MG_ERROR(("OOM"));
   } else {
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->is_udp = (strncmp(url, "udp:", 4) == 0);
     c->fn = fn;
+    c->is_client = true;
     c->fn_data = fn_data;
     MG_DEBUG(("%lu -> %s", c->id, url));
     mg_call(c, MG_EV_OPEN, NULL);
@@ -187,7 +186,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
 struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
                                 mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = NULL;
-  if ((c = mg_alloc_conn(mgr, false, NULL)) == NULL) {
+  if ((c = mg_alloc_conn(mgr)) == NULL) {
     MG_ERROR(("OOM %s", url));
   } else if (!mg_open_listener(c, url)) {
     MG_ERROR(("Failed: %s, errno %d", url, errno));
