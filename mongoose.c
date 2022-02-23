@@ -3287,7 +3287,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       struct mg_addr a;
       memset(&usa, 0, sizeof(usa));
       memset(&a, 0, sizeof(a));
-      getsockname(FD(c), &usa.sa, &slen);
+      if (getsockname(FD(c), &usa.sa, &slen) < 0) (void) 0;  // Ignore result
       tomgaddr(&usa, &a, c->rem.is_ip6);
       MG_INFO(("\n-- %lu %s %s %s %s %ld\n%s", c->id,
                mg_straddr(&a, t1, sizeof(t1)), r ? "<-" : "->",
