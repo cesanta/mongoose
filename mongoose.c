@@ -3335,8 +3335,8 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
   ioctlsocket(fd, FIONBIO, &on);
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP
   const BaseType_t off = 0;
-  setsockopt(fd, 0, FREERTOS_SO_RCVTIMEO, &off, sizeof(off));
-  setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off));
+  if (setsockopt(fd, 0, FREERTOS_SO_RCVTIMEO, &off, sizeof(off)) != 0) (void) 0;
+  if (setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off)) != 0) (void) 0;
 #elif MG_ARCH == MG_ARCH_FREERTOS_LWIP
   lwip_fcntl(fd, F_SETFL, O_NONBLOCK);
 #elif MG_ARCH == MG_ARCH_AZURERTOS
@@ -3466,21 +3466,29 @@ static void setsockopts(struct mg_connection *c) {
 #if !defined(SOL_TCP)
 #define SOL_TCP IPPROTO_TCP
 #endif
-  setsockopt(FD(c), SOL_TCP, TCP_NODELAY, (char *) &on, sizeof(on));
+  if (setsockopt(FD(c), SOL_TCP, TCP_NODELAY, (char *) &on, sizeof(on)) != 0)
+    (void) 0;
 #if defined(TCP_QUICKACK)
-  setsockopt(FD(c), SOL_TCP, TCP_QUICKACK, (char *) &on, sizeof(on));
+  if (setsockopt(FD(c), SOL_TCP, TCP_QUICKACK, (char *) &on, sizeof(on)) != 0)
+    (void) 0;
 #endif
-  setsockopt(FD(c), SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on));
+  if (setsockopt(FD(c), SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on)) !=
+      0)
+    (void) 0;
 #if (defined(ESP32) && ESP32) || (defined(ESP8266) && ESP8266) || \
     defined(__linux__)
   int idle = 60;
-  setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
+  if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) != 0)
+    (void) 0;
 #endif
 #if MG_ARCH != MG_ARCH_WIN32 && !defined(__QNX__)
   {
     int cnt = 3, intvl = 20;
-    setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt));
-    setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl));
+    if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt)) != 0)
+      (void) 0;
+    if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl)) !=
+        0)
+      (void) 0;
   }
 #endif
 #endif
