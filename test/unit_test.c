@@ -1212,7 +1212,7 @@ static bool sn(const char *fmt, ...) {
   return result;
 }
 
-static bool sccmp(const char *s1, const char *s2) {
+static bool sccmp(const char *s1, const char *s2, bool strict) {
   int n1 = mg_casecmp(s1, s2);
 #if MG_ARCH == MG_ARCH_UNIX
   int n2 = strcasecmp(s1, s2);
@@ -1220,6 +1220,8 @@ static bool sccmp(const char *s1, const char *s2) {
   int n2 = mg_casecmp(s1, s2);  // On MSVC98, _stricmp() is buggy
 #endif
   MG_INFO(("[%s] [%s] %d %d", s1, s2, n1, n2));
+  if (!strict && n1 && n2)
+    return true;
   return n1 == n2;
 }
 
@@ -1234,11 +1236,11 @@ static void test_str(void) {
   ASSERT(mg_strstr(mg_str("abc"), mg_str("b")) != NULL);
   ASSERT(mg_strcmp(mg_str("hi"), mg_strstrip(mg_str(" \thi\r\n"))) == 0);
 
-  ASSERT(sccmp("", ""));
-  ASSERT(sccmp("", "1"));
-  ASSERT(sccmp("a", "A"));
-  ASSERT(sccmp("a1", "A"));
-  ASSERT(sccmp("a", "A1"));
+  ASSERT(sccmp("", "", true));
+  ASSERT(sccmp("", "1", false));
+  ASSERT(sccmp("a", "A", true));
+  ASSERT(sccmp("a1", "A", false));
+  ASSERT(sccmp("a", "A1", false));
 
   ASSERT(sn("%d", 0));
   ASSERT(sn("%d", 1));
