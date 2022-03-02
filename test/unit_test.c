@@ -1337,7 +1337,7 @@ static void test_util(void) {
   free(s);
   memset(&a, 0, sizeof(a));
   ASSERT(mg_file_printf(&mg_fs_posix, "data.txt", "%s", "hi") == true);
-  if (system("ls -l") != 0) (void) 0;
+  ASSERT(system("test -f data.txt") == 0);
   ASSERT((p = mg_file_read(&mg_fs_posix, "data.txt", NULL)) != NULL);
   ASSERT(strcmp(p, "hi") == 0);
   free(p);
