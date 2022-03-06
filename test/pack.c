@@ -25,6 +25,8 @@
 #include <sys/stat.h>
 
 static const char *code =
+    "const char *mg_unpack(const char *path, size_t *size, time_t *mtime);\n"
+    "const char *mg_unlist(size_t no);\n"
     "const char *mg_unlist(size_t no) {\n"
     "  return packed_files[no].name;\n"
     "}\n"

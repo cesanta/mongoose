@@ -33,5 +33,6 @@ struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
   return NULL;
 }
 
+void _fini(void);
 void _fini(void) {
 }

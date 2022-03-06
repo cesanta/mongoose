@@ -562,6 +562,7 @@ size_t mg_asprintf(char **, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
 size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
 int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
 int64_t mg_to64(struct mg_str str);
+size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex);
 
 
 
@@ -1141,7 +1142,6 @@ void mg_resolve_cancel(struct mg_connection *);
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
 size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
                        bool is_question, struct mg_dns_rr *);
-size_t mg_dns_decode_name(const uint8_t *, size_t, size_t, char *, size_t);
 
 #ifdef __cplusplus
 }

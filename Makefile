@@ -1,7 +1,7 @@
 SRCS = mongoose.c test/unit_test.c test/packed_fs.c
 HDRS = $(wildcard src/*.h)
 DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1
-WARN ?= -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef
+WARN ?= -W -Wall -Werror -Wshadow -Wdouble-promotion -Wmissing-prototypes -Wstrict-prototypes -fno-common -Wconversion -Wundef
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
 SSL ?= MBEDTLS
@@ -62,7 +62,7 @@ unpacked:
 	$(CC) -I. mongoose.c test/unit_test.c -o unit_test
 
 fuzzer: mongoose.c mongoose.h Makefile test/fuzz.c
-	clang mongoose.c test/fuzz.c $(WARN) $(INCS) -DMG_ENABLE_LINES -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address -g -o $@
+	clang++ mongoose.c test/fuzz.c $(WARN) $(INCS) $(TFLAGS) $(EXTRA) -DMG_ENABLE_LINES -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address -Wno-deprecated -o $@
 
 fuzz: fuzzer
 	$(RUN) ./fuzzer
