@@ -30,8 +30,8 @@ typedef int SOCKET;
 #define FD(c_) ((SOCKET) (size_t) (c_)->fd)
 #define S2PTR(s_) ((void *) (size_t) (s_))
 
-#ifndef MSG_NONBLOCKING
-#define MSG_NONBLOCKING 0
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT 0
 #endif
 
 #ifndef AF_INET6
@@ -147,7 +147,7 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
     socklen_t slen = tousa(&c->rem, &usa);
     n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
   } else {
-    n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+    n = send(FD(c), (char *) buf, len, MSG_DONTWAIT);
   }
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
@@ -250,7 +250,7 @@ static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
     n = recvfrom(FD(c), (char *) buf, len, 0, &usa.sa, &slen);
     if (n > 0) tomgaddr(&usa, &c->rem, slen != sizeof(usa.sin));
   } else {
-    n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+    n = recv(FD(c), (char *) buf, len, MSG_DONTWAIT);
   }
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
@@ -427,7 +427,7 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
 void mg_mgr_wakeup(struct mg_connection *c, const void *buf, size_t len) {
   if (buf == NULL || len == 0) buf = (void *) "", len = 1;
   if ((size_t) send((SOCKET) (size_t) c->pfn_data, (const char *) buf, len,
-                    MSG_NONBLOCKING) != len)
+                    MSG_DONTWAIT) != len)
     (void) 0;
 }
 

@@ -9,6 +9,10 @@
 #define MGRNG
 #endif
 
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT 0
+#endif
+
 void mg_tls_free(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   if (tls != NULL) {
@@ -31,7 +35,7 @@ static bool mg_wouldblock(int n) {
 
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   int fd = *(int *) ctx;
-  int n = (int) send(fd, buf, len, 0);
+  int n = (int) send(fd, buf, len, MSG_DONTWAIT);
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_WRITE;
   MG_DEBUG(("n=%d, errno=%d", n, errno));
@@ -40,7 +44,7 @@ static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
 
 static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
   int fd = *(int *) ctx;
-  int n = (int) recv(fd, buf, len, 0);
+  int n = (int) recv(fd, buf, len, MSG_DONTWAIT);
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_READ;
   MG_DEBUG(("n=%d, errno=%d", n, errno));
@@ -50,7 +54,7 @@ static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
-  mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mg_net_send, mg_net_recv, 0);
+  mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mg_net_send, mg_net_recv, NULL);
   rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
     MG_DEBUG(("%lu success", c->id));

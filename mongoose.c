@@ -3198,8 +3198,8 @@ typedef int SOCKET;
 #define FD(c_) ((SOCKET) (size_t) (c_)->fd)
 #define S2PTR(s_) ((void *) (size_t) (s_))
 
-#ifndef MSG_NONBLOCKING
-#define MSG_NONBLOCKING 0
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT 0
 #endif
 
 #ifndef AF_INET6
@@ -3315,7 +3315,7 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
     socklen_t slen = tousa(&c->rem, &usa);
     n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
   } else {
-    n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+    n = send(FD(c), (char *) buf, len, MSG_DONTWAIT);
   }
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
@@ -3418,7 +3418,7 @@ static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
     n = recvfrom(FD(c), (char *) buf, len, 0, &usa.sa, &slen);
     if (n > 0) tomgaddr(&usa, &c->rem, slen != sizeof(usa.sin));
   } else {
-    n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+    n = recv(FD(c), (char *) buf, len, MSG_DONTWAIT);
   }
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
@@ -3595,7 +3595,7 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
 void mg_mgr_wakeup(struct mg_connection *c, const void *buf, size_t len) {
   if (buf == NULL || len == 0) buf = (void *) "", len = 1;
   if ((size_t) send((SOCKET) (size_t) c->pfn_data, (const char *) buf, len,
-                    MSG_NONBLOCKING) != len)
+                    MSG_DONTWAIT) != len)
     (void) 0;
 }
 
@@ -4298,6 +4298,10 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 #define MGRNG
 #endif
 
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT 0
+#endif
+
 void mg_tls_free(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   if (tls != NULL) {
@@ -4320,7 +4324,7 @@ static bool mg_wouldblock(int n) {
 
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   int fd = *(int *) ctx;
-  int n = (int) send(fd, buf, len, 0);
+  int n = (int) send(fd, buf, len, MSG_DONTWAIT);
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_WRITE;
   MG_DEBUG(("n=%d, errno=%d", n, errno));
@@ -4329,7 +4333,7 @@ static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
 
 static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
   int fd = *(int *) ctx;
-  int n = (int) recv(fd, buf, len, 0);
+  int n = (int) recv(fd, buf, len, MSG_DONTWAIT);
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_READ;
   MG_DEBUG(("n=%d, errno=%d", n, errno));
@@ -4339,7 +4343,7 @@ static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
-  mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mg_net_send, mg_net_recv, 0);
+  mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mg_net_send, mg_net_recv, NULL);
   rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
     MG_DEBUG(("%lu success", c->id));
@@ -4614,6 +4618,7 @@ fail:
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
+  mg_set_non_blocking_mode(FD(c));
   SSL_set_fd(tls->ssl, (int) (size_t) c->fd);
   rc = c->is_client ? SSL_connect(tls->ssl) : SSL_accept(tls->ssl);
   if (rc == 1) {
