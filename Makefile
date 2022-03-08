@@ -9,7 +9,7 @@ CWD ?= $(realpath $(CURDIR))
 DOCKER ?= docker run --rm -e Tmp=. -e WINEDEBUG=-all -v $(CWD):$(CWD) -w $(CWD)
 VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
-ASAN ?= -fsanitize=address,undefined
+ASAN ?= -fsanitize=address,undefined -fno-sanitize-recover
 ASAN_OPTIONS ?= detect_leaks=1
 EXAMPLES := $(wildcard examples/*)
 PREFIX ?= /usr/local
