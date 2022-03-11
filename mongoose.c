@@ -1868,7 +1868,7 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
   struct mg_str ch = hm->chunk;
   const char *end = (char *) &c->recv.buf[c->recv.len], *ce;
   bool chunked = mg_is_chunked(hm);
-  if (!mg_is_chunked(hm)) return;
+  // if (!mg_is_chunked(hm)) return;
   if (chunked) {
     ch.len += 4, ch.ptr -= 2;  // \r\n before and after the chunk
     while (ch.ptr > hm->body.ptr && *ch.ptr != '\n') ch.ptr--, ch.len++;
