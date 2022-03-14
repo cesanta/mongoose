@@ -2026,8 +2026,8 @@ size_t mg_iobuf_add(struct mg_iobuf *io, size_t ofs, const void *buf,
 size_t mg_iobuf_del(struct mg_iobuf *io, size_t ofs, size_t len) {
   if (ofs > io->len) ofs = io->len;
   if (ofs + len > io->len) len = io->len - ofs;
-  memmove(io->buf + ofs, io->buf + ofs + len, io->len - ofs - len);
-  zeromem(io->buf + io->len - len, len);
+  if (io->buf) memmove(io->buf + ofs, io->buf + ofs + len, io->len - ofs - len);
+  if (io->buf) zeromem(io->buf + io->len - len, len);
   io->len -= len;
   return len;
 }
@@ -3543,10 +3543,10 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     tomgaddr(&usa, &c->rem, sa_len != sizeof(usa.sin));
     mg_straddr(&c->rem, buf, sizeof(buf));
     MG_DEBUG(("%lu accepted %s", c->id, buf));
-    mg_set_non_blocking_mode(FD(c));
-    setsockopts(c);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fd = S2PTR(fd);
+    mg_set_non_blocking_mode(FD(c));
+    setsockopts(c);
     c->is_accepted = 1;
     c->is_hexdumping = lsn->is_hexdumping;
     c->pfn = lsn->pfn;
@@ -3721,8 +3721,6 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     } else {
       if (c->is_readable) read_conn(c);
       if (c->is_writable) write_conn(c);
-      // while (c->is_tls && read_conn(c) > 0) (void) 0;  // Read buffered TLS
-      // data
     }
 
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
@@ -4314,18 +4312,20 @@ static bool mg_wouldblock(int n) {
 }
 
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
-  int fd = *(int *) ctx;
+  struct mg_connection *c = (struct mg_connection *) ctx;
+  int fd = (int) (size_t) c->fd;
   int n = (int) send(fd, buf, len, 0);
-  MG_VERBOSE(("n=%d, errno=%d", n, errno));
+  MG_VERBOSE(("%lu n=%d, errno=%d", c->id, n, errno));
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_WRITE;
   return MBEDTLS_ERR_NET_SEND_FAILED;
 }
 
 static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
-  int fd = *(int *) ctx;
-  int n = (int) recv(fd, buf, len, 0);
-  MG_VERBOSE(("n=%d, errno=%d", n, errno));
+  struct mg_connection *c = (struct mg_connection *) ctx;
+  int n, fd = (int) (size_t) c->fd;
+  n = (int) recv(fd, buf, len, 0);
+  MG_VERBOSE(("%lu n=%d, errno=%d", c->id, n, errno));
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_READ;
   return MBEDTLS_ERR_NET_RECV_FAILED;
@@ -4334,7 +4334,7 @@ static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
-  mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mg_net_send, mg_net_recv, 0);
+  mbedtls_ssl_set_bio(&tls->ssl, c, mg_net_send, mg_net_recv, 0);
   rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
     MG_DEBUG(("%lu success", c->id));

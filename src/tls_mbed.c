@@ -30,18 +30,20 @@ static bool mg_wouldblock(int n) {
 }
 
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
-  int fd = *(int *) ctx;
+  struct mg_connection *c = (struct mg_connection *) ctx;
+  int fd = (int) (size_t) c->fd;
   int n = (int) send(fd, buf, len, 0);
-  MG_VERBOSE(("n=%d, errno=%d", n, errno));
+  MG_VERBOSE(("%lu n=%d, errno=%d", c->id, n, errno));
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_WRITE;
   return MBEDTLS_ERR_NET_SEND_FAILED;
 }
 
 static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
-  int fd = *(int *) ctx;
-  int n = (int) recv(fd, buf, len, 0);
-  MG_VERBOSE(("n=%d, errno=%d", n, errno));
+  struct mg_connection *c = (struct mg_connection *) ctx;
+  int n, fd = (int) (size_t) c->fd;
+  n = (int) recv(fd, buf, len, 0);
+  MG_VERBOSE(("%lu n=%d, errno=%d", c->id, n, errno));
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_READ;
   return MBEDTLS_ERR_NET_RECV_FAILED;
@@ -50,7 +52,7 @@ static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
-  mbedtls_ssl_set_bio(&tls->ssl, &c->fd, mg_net_send, mg_net_recv, 0);
+  mbedtls_ssl_set_bio(&tls->ssl, c, mg_net_send, mg_net_recv, 0);
   rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
     MG_DEBUG(("%lu success", c->id));

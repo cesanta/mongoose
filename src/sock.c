@@ -381,10 +381,10 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     tomgaddr(&usa, &c->rem, sa_len != sizeof(usa.sin));
     mg_straddr(&c->rem, buf, sizeof(buf));
     MG_DEBUG(("%lu accepted %s", c->id, buf));
-    mg_set_non_blocking_mode(FD(c));
-    setsockopts(c);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fd = S2PTR(fd);
+    mg_set_non_blocking_mode(FD(c));
+    setsockopts(c);
     c->is_accepted = 1;
     c->is_hexdumping = lsn->is_hexdumping;
     c->pfn = lsn->pfn;
@@ -559,8 +559,6 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     } else {
       if (c->is_readable) read_conn(c);
       if (c->is_writable) write_conn(c);
-      // while (c->is_tls && read_conn(c) > 0) (void) 0;  // Read buffered TLS
-      // data
     }
 
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
