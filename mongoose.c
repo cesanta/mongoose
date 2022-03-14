@@ -499,7 +499,7 @@ static int mg_days_from_epoch(int y, int m, int d) {
   return era * 146097 + doe - 719468;
 }
 
-static time_t mg_timegm(struct tm const *t) {
+static time_t mg_timegm(const struct tm *t) {
   int year = t->tm_year + 1900;
   int month = t->tm_mon;  // 0-11
   if (month > 11) {
@@ -557,7 +557,7 @@ static void ff_list(const char *dir, void (*fn)(const char *, void *),
 static void *ff_open(const char *path, int flags) {
   FIL f;
   unsigned char mode = FA_READ;
-  if (flags & MG_FS_WRITE) mode |= FA_WRITE | FA_CREATE_ALWAYS | FA_OPEN_APPEND;
+  if (flags & MG_FS_WRITE) mode |= FA_WRITE | FA_OPEN_ALWAYS | FA_OPEN_APPEND;
   if (f_open(&f, path, mode) == 0) {
     FIL *fp = calloc(1, sizeof(*fp));
     *fp = f;
@@ -587,14 +587,8 @@ static size_t ff_read(void *fp, void *buf, size_t len) {
 }
 
 static size_t ff_write(void *fp, const void *buf, size_t len) {
-  unsigned n, sum = 0, bs = MG_FATFS_BSIZE;
-  while ((size_t) sum < len &&
-         f_write((FIL *) fp, (char *) buf + sum,
-                 sum + bs > len ? len - sum : bs, &n) == FR_OK &&
-         n > 0) {
-    sum += n;
-  }
-  return sum;
+  unsigned n = 0;
+  return f_write((FIL *) fp, (char *) buf, len, &n) == FR_OK ? n : 0;
 }
 
 static size_t ff_seek(void *fp, size_t offset) {
@@ -1868,7 +1862,6 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
   struct mg_str ch = hm->chunk;
   const char *end = (char *) &c->recv.buf[c->recv.len], *ce;
   bool chunked = mg_is_chunked(hm);
-  // if (!mg_is_chunked(hm)) return;
   if (chunked) {
     ch.len += 4, ch.ptr -= 2;  // \r\n before and after the chunk
     while (ch.ptr > hm->body.ptr && *ch.ptr != '\n') ch.ptr--, ch.len++;
@@ -1882,12 +1875,13 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
 int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                    struct mg_fs *fs, const char *dir) {
   char offset[40] = "", name[200] = "", path[256];
+  int res = 0;
   mg_http_get_var(&hm->query, "offset", offset, sizeof(offset));
   mg_http_get_var(&hm->query, "name", name, sizeof(name));
   if (name[0] == '\0') {
     mg_http_reply(c, 400, "", "%s", "name required");
-    return -1;
-  } else {
+    res = -1;
+  } else if (hm->body.len > 0) {
     struct mg_fd *fd;
     long oft = strtol(offset, NULL, 0);
     mg_snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, name);
@@ -1896,14 +1890,14 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
     if (oft == 0) fs->rm(path);
     if ((fd = mg_fs_open(fs, path, MG_FS_WRITE)) == NULL) {
       mg_http_reply(c, 400, "", "open(%s): %d", path, errno);
-      return -2;
+      res = -2;
     } else {
-      int written = (int) fs->wr(fd->fd, hm->body.ptr, hm->body.len);
+      res = (int) fs->wr(fd->fd, hm->body.ptr, hm->body.len);
       mg_fs_close(fd);
-      mg_http_reply(c, 200, "", "%d", written);
-      return (int) hm->body.len;
+      mg_http_reply(c, 200, "", "%d", res);
     }
   }
+  return res;
 }
 
 int mg_http_status(const struct mg_http_message *hm) {
@@ -3727,7 +3721,8 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     } else {
       if (c->is_readable) read_conn(c);
       if (c->is_writable) write_conn(c);
-      while (c->is_tls && read_conn(c) > 0) (void) 0;  // Read buffered TLS data
+      // while (c->is_tls && read_conn(c) > 0) (void) 0;  // Read buffered TLS
+      // data
     }
 
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
@@ -4321,18 +4316,18 @@ static bool mg_wouldblock(int n) {
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   int fd = *(int *) ctx;
   int n = (int) send(fd, buf, len, 0);
+  MG_VERBOSE(("n=%d, errno=%d", n, errno));
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_WRITE;
-  MG_DEBUG(("n=%d, errno=%d", n, errno));
   return MBEDTLS_ERR_NET_SEND_FAILED;
 }
 
 static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
   int fd = *(int *) ctx;
   int n = (int) recv(fd, buf, len, 0);
+  MG_VERBOSE(("n=%d, errno=%d", n, errno));
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_READ;
-  MG_DEBUG(("n=%d, errno=%d", n, errno));
   return MBEDTLS_ERR_NET_RECV_FAILED;
 }
 

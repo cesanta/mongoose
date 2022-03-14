@@ -885,12 +885,13 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
 int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                    struct mg_fs *fs, const char *dir) {
   char offset[40] = "", name[200] = "", path[256];
+  int res = 0;
   mg_http_get_var(&hm->query, "offset", offset, sizeof(offset));
   mg_http_get_var(&hm->query, "name", name, sizeof(name));
   if (name[0] == '\0') {
     mg_http_reply(c, 400, "", "%s", "name required");
-    return -1;
-  } else {
+    res = -1;
+  } else if (hm->body.len > 0) {
     struct mg_fd *fd;
     long oft = strtol(offset, NULL, 0);
     mg_snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, name);
@@ -899,14 +900,14 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
     if (oft == 0) fs->rm(path);
     if ((fd = mg_fs_open(fs, path, MG_FS_WRITE)) == NULL) {
       mg_http_reply(c, 400, "", "open(%s): %d", path, errno);
-      return -2;
+      res = -2;
     } else {
-      int written = (int) fs->wr(fd->fd, hm->body.ptr, hm->body.len);
+      res = (int) fs->wr(fd->fd, hm->body.ptr, hm->body.len);
       mg_fs_close(fd);
-      mg_http_reply(c, 200, "", "%d", written);
-      return (int) hm->body.len;
+      mg_http_reply(c, 200, "", "%d", res);
     }
   }
+  return res;
 }
 
 int mg_http_status(const struct mg_http_message *hm) {

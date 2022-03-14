@@ -12,7 +12,7 @@ static int mg_days_from_epoch(int y, int m, int d) {
   return era * 146097 + doe - 719468;
 }
 
-static time_t mg_timegm(struct tm const *t) {
+static time_t mg_timegm(const struct tm *t) {
   int year = t->tm_year + 1900;
   int month = t->tm_mon;  // 0-11
   if (month > 11) {
@@ -70,7 +70,7 @@ static void ff_list(const char *dir, void (*fn)(const char *, void *),
 static void *ff_open(const char *path, int flags) {
   FIL f;
   unsigned char mode = FA_READ;
-  if (flags & MG_FS_WRITE) mode |= FA_WRITE | FA_CREATE_ALWAYS | FA_OPEN_APPEND;
+  if (flags & MG_FS_WRITE) mode |= FA_WRITE | FA_OPEN_ALWAYS | FA_OPEN_APPEND;
   if (f_open(&f, path, mode) == 0) {
     FIL *fp = calloc(1, sizeof(*fp));
     *fp = f;
@@ -100,14 +100,8 @@ static size_t ff_read(void *fp, void *buf, size_t len) {
 }
 
 static size_t ff_write(void *fp, const void *buf, size_t len) {
-  unsigned n, sum = 0, bs = MG_FATFS_BSIZE;
-  while ((size_t) sum < len &&
-         f_write((FIL *) fp, (char *) buf + sum,
-                 sum + bs > len ? len - sum : bs, &n) == FR_OK &&
-         n > 0) {
-    sum += n;
-  }
-  return sum;
+  unsigned n = 0;
+  return f_write((FIL *) fp, (char *) buf, len, &n) == FR_OK ? n : 0;
 }
 
 static size_t ff_seek(void *fp, size_t offset) {

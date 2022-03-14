@@ -559,7 +559,8 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     } else {
       if (c->is_readable) read_conn(c);
       if (c->is_writable) write_conn(c);
-      while (c->is_tls && read_conn(c) > 0) (void) 0;  // Read buffered TLS data
+      // while (c->is_tls && read_conn(c) > 0) (void) 0;  // Read buffered TLS
+      // data
     }
 
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;

@@ -32,18 +32,18 @@ static bool mg_wouldblock(int n) {
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   int fd = *(int *) ctx;
   int n = (int) send(fd, buf, len, 0);
+  MG_VERBOSE(("n=%d, errno=%d", n, errno));
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_WRITE;
-  MG_DEBUG(("n=%d, errno=%d", n, errno));
   return MBEDTLS_ERR_NET_SEND_FAILED;
 }
 
 static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
   int fd = *(int *) ctx;
   int n = (int) recv(fd, buf, len, 0);
+  MG_VERBOSE(("n=%d, errno=%d", n, errno));
   if (n > 0) return n;
   if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_READ;
-  MG_DEBUG(("n=%d, errno=%d", n, errno));
   return MBEDTLS_ERR_NET_RECV_FAILED;
 }
 
