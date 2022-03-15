@@ -13,6 +13,7 @@
 
 // The very first web page in history. You can replace it from command line
 static const char *s_url = "http://info.cern.ch/";
+static const char *s_post = NULL;  // POST data
 
 // Print HTTP response and signal that we're done
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -27,11 +28,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     }
 
     // Send request
+    int content_length = s_post ? strlen(s_post) : 0;
     mg_printf(c,
-              "GET %s HTTP/1.0\r\n"
+              "%s %s HTTP/1.0\r\n"
               "Host: %.*s\r\n"
+              "Content-Type: octet-stream\r\n"
+              "Content-Length: %d\r\n"
               "\r\n",
-              mg_url_uri(s_url), (int) host.len, host.ptr);
+              s_post ? "POST" : "GET", mg_url_uri(s_url), (int) host.len,
+              host.ptr, content_length);
+    mg_send(c, s_post, content_length);
   } else if (ev == MG_EV_HTTP_MSG) {
     // Response is received. Print it
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -44,9 +50,20 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 int main(int argc, char *argv[]) {
-  struct mg_mgr mgr;                        // Event manager
-  bool done = false;                        // Event handler flips it to true
-  if (argc > 1) s_url = argv[1];            // Use URL from command line
+  struct mg_mgr mgr;  // Event manager
+  bool done = false;  // Event handler flips it to true
+  int i;
+
+  // Parse command-line flags
+  for (i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "-d") == 0) {
+      s_post = argv[++i];
+    } else {
+      break;
+    }
+  }
+  if (i < argc) s_url = argv[i];
+
   mg_log_set("3");                          // Set to 0 to disable debug
   mg_mgr_init(&mgr);                        // Initialise event manager
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
