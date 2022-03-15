@@ -20,7 +20,7 @@ static void signal_handler(int signo) {
 // Simply serve static files from `s_root_dir`
 static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = ev_data, tmp = {};
+    struct mg_http_message *hm = ev_data, tmp = {0};
     struct mg_str unknown = mg_str_n("?", 1), *cl;
     struct mg_http_serve_opts opts = {0};
     opts.root_dir = s_root_dir;
