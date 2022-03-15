@@ -47,6 +47,7 @@ typedef enum { false = 0, true = 1 } bool;
 #endif
 
 #include <process.h>
+#include <winerror.h>
 #include <winsock2.h>
 
 // Protect from calls like std::snprintf in app code
