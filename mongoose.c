@@ -4602,7 +4602,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
                 opts->srvname.ptr);
     SSL_set_tlsext_host_name(tls->ssl, buf);
-    enable_hostname_validation(tls->ssl, buf);
+	if (c->is_client) enable_hostname_validation(tls->ssl, buf);
     if (buf != mem) free(buf);
   }
   c->tls = tls;
