@@ -4516,6 +4516,17 @@ static int mg_tls_err(struct mg_tls *tls, int res) {
   return err;
 }
 
+void enable_hostname_validation(SSL* ssl, const char* hostname)
+{
+    X509_VERIFY_PARAM* param;
+    param = SSL_get0_param(ssl);
+
+    X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+    if (!X509_VERIFY_PARAM_set1_host(param, hostname, 0)) {
+        ERR_print_errors_fp(stderr);
+    }
+}
+
 void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   const char *id = "mongoose";
@@ -4591,6 +4602,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
     mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
                 opts->srvname.ptr);
     SSL_set_tlsext_host_name(tls->ssl, buf);
+    enable_hostname_validation(tls->ssl, buf);
     if (buf != mem) free(buf);
   }
   c->tls = tls;

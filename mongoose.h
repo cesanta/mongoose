@@ -1007,7 +1007,7 @@ struct mg_tls {
 
 #include <openssl/err.h>
 #include <openssl/ssl.h>
-
+#include <openssl/x509v3.h>
 struct mg_tls {
   SSL_CTX *ctx;
   SSL *ssl;
