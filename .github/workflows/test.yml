@@ -6,7 +6,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Install packages
-      run: sudo apt-get install libmbedtls-dev valgrind
+      run: sudo apt-get update ; sudo apt-get install libmbedtls-dev valgrind
     - name: gcc
       run: make test test++ IPV6=0 CC=gcc
     - name: clang
