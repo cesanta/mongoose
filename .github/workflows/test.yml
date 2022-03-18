@@ -16,7 +16,7 @@ jobs:
     - name: unamalgamated
       run: make unamalgamated
     - name: valgrind
-      run: make valgrind
+      run: make valgrind IPV6=0
   examples:
     runs-on: ubuntu-latest
     steps:
