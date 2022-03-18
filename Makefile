@@ -1,21 +1,26 @@
 SRCS = mongoose.c test/unit_test.c test/packed_fs.c
 HDRS = $(wildcard src/*.h)
 DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1
-WARN ?= -W -Wall -Werror -Wshadow -Wdouble-promotion -Wmissing-prototypes -Wstrict-prototypes -fno-common -Wconversion -Wundef
+C_WARN ?= -Wmissing-prototypes -Wstrict-prototypes
+WARN ?= -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef $(C_WARN)
 OPTS ?= -O3 -g3
+VALGRIND_OPTS ?= -O0 -g3
 INCS ?= -Isrc -I.
 SSL ?= MBEDTLS
 CWD ?= $(realpath $(CURDIR))
 DOCKER ?= docker run --rm -e Tmp=. -e WINEDEBUG=-all -v $(CWD):$(CWD) -w $(CWD)
 VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
-ASAN ?= -fsanitize=address,undefined -fno-sanitize-recover
+ASAN ?= -fsanitize=address,undefined -fno-sanitize-recover=all
 ASAN_OPTIONS ?= detect_leaks=1
 EXAMPLES := $(wildcard examples/*)
 PREFIX ?= /usr/local
 VERSION ?= $(shell cut -d'"' -f2 src/version.h)
-CFLAGS ?= $(OPTS) $(WARN) $(INCS) $(DEFS) $(ASAN) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS) $(EXTRA)
-.PHONY: examples test
+COMMON_CFLAGS ?= $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS) $(EXTRA)
+CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
+VALGRIND_CFLAGS ?= $(VALGRIND_OPTS) $(COMMON_CFLAGS)
+VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes
+.PHONY: examples test valgrind
 
 ifeq "$(SSL)" "MBEDTLS"
 MBEDTLS ?= /usr/local
@@ -51,6 +56,7 @@ mg_prefix: mongoose.c mongoose.h
 
 # C++ build
 test++: CC = g++
+test++: C_WARN =
 test++: WARN += -Wno-shadow -Wno-missing-field-initializers -Wno-deprecated
 test++: test
 
@@ -67,9 +73,11 @@ fuzzer: mongoose.c mongoose.h Makefile test/fuzz.c
 fuzz: fuzzer
 	$(RUN) ./fuzzer
 
-# make CC=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
-test: mongoose.h  Makefile $(SRCS)
+unit_test: Makefile mongoose.h $(SRCS)
 	$(CC) $(SRCS) $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
+
+# make CC=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
+test: unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
 
 coverage: test
@@ -79,9 +87,11 @@ coverage: test
 upload-coverage: coverage
 	curl -s https://codecov.io/bash | /bin/bash
 
-valgrind: ASAN =
-valgrind: RUN = valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes
-valgrind: test
+valgrind_unit_test: Makefile mongoose.h $(SRCS)
+	$(CC) $(SRCS) $(VALGRIND_CFLAGS) -coverage $(LDFLAGS) -g -o valgrind_unit_test
+
+valgrind: valgrind_unit_test
+	$(VALGRIND_RUN) ./valgrind_unit_test
 
 infer:
 	infer run -- cc test/unit_test.c -c -W -Wall -Werror -Isrc -I. -O2 -DMG_ENABLE_MBEDTLS=1 -DMG_ENABLE_LINES -I/usr/local/Cellar/mbedtls/2.23.0/include  -DMG_ENABLE_IPV6=1 -g -o /dev/null
@@ -139,5 +149,5 @@ mongoose.h: $(HDRS) Makefile
 	(cat src/license.h; echo; echo '#ifndef MONGOOSE_H'; echo '#define MONGOOSE_H'; echo; cat src/version.h ; echo; echo '#ifdef __cplusplus'; echo 'extern "C" {'; echo '#endif'; cat src/arch.h src/arch_*.h src/config.h src/str.h src/log.h src/timer.h src/fs.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/tls_mbed.h src/tls_openssl.h src/ws.h src/sntp.h src/mqtt.h src/dns.h | sed -e 's,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
 
 clean:
-	rm -rf $(PROG) *.o *.dSYM unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack
+	rm -rf $(PROG) *.o *.dSYM unit_test* valgrind_unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack
 	@for X in $(EXAMPLES); do test -f $$X/Makefile && $(MAKE) -C $$X clean; done
