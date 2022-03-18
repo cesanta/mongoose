@@ -70,7 +70,7 @@ fuzz: fuzzer
 # make CC=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
 test: mongoose.h  Makefile $(SRCS)
 	$(CC) $(SRCS) $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
-	ASAN1OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
+	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
 
 coverage: test
 	gcov -l -n *.gcno | sed '/^$$/d' | sed 'N;s/\n/ /'
@@ -78,6 +78,10 @@ coverage: test
 
 upload-coverage: coverage
 	curl -s https://codecov.io/bash | /bin/bash
+
+valgrind: ASAN =
+valgrind: RUN = valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes
+valgrind: test
 
 infer:
 	infer run -- cc test/unit_test.c -c -W -Wall -Werror -Isrc -I. -O2 -DMG_ENABLE_MBEDTLS=1 -DMG_ENABLE_LINES -I/usr/local/Cellar/mbedtls/2.23.0/include  -DMG_ENABLE_IPV6=1 -g -o /dev/null
