@@ -43,6 +43,7 @@ static size_t mg_dns_parse_name_depth(const uint8_t *s, size_t len, size_t ofs,
     }
     if (n & 0xc0) {
       size_t ptr = (((n & 0x3f) << 8) | s[ofs + i + 1]);  // 12 is hdr len
+      // MG_INFO(("PTR %lu", (unsigned long) ptr));
       if (ptr + 1 < len && (s[ptr] & 0xc0) == 0 &&
           mg_dns_parse_name_depth(s, len, ptr, to, tolen, depth + 1) == 0)
         return 0;
