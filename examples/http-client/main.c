@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
   struct mg_mgr mgr;              // Event manager
   bool done = false;              // Event handler flips it to true
   if (argc > 1) s_url = argv[1];  // Use URL provided in the command line
-  mg_log_set("3");                // Set to 0 to disable debug
+  mg_log_set("4");                // Set to 0 to disable debug
   mg_mgr_init(&mgr);              // Initialise event manager
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
   while (!done) mg_mgr_poll(&mgr, 50);      // Infinite event loop
