@@ -24,10 +24,7 @@ void mg_tls_free(struct mg_connection *c) {
   }
 }
 
-static bool mg_wouldblock(int n) {
-  return n < 0 &&
-         (errno == EINPROGRESS || errno == EAGAIN || errno == EWOULDBLOCK);
-}
+bool mg_sock_would_block(void);
 
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   struct mg_connection *c = (struct mg_connection *) ctx;
@@ -35,7 +32,7 @@ static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   int n = (int) send(fd, buf, len, 0);
   MG_VERBOSE(("%lu n=%d, errno=%d", c->id, n, errno));
   if (n > 0) return n;
-  if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_WRITE;
+  if (n < 0 && mg_sock_would_block()) return MBEDTLS_ERR_SSL_WANT_WRITE;
   return MBEDTLS_ERR_NET_SEND_FAILED;
 }
 
@@ -45,7 +42,7 @@ static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
   n = (int) recv(fd, buf, len, 0);
   MG_VERBOSE(("%lu n=%d, errno=%d", c->id, n, errno));
   if (n > 0) return n;
-  if (mg_wouldblock(n)) return MBEDTLS_ERR_SSL_WANT_READ;
+  if (n < 0 && mg_sock_would_block()) return MBEDTLS_ERR_SSL_WANT_READ;
   return MBEDTLS_ERR_NET_RECV_FAILED;
 }
 
