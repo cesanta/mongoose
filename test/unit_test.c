@@ -1342,10 +1342,9 @@ static void test_dns(void) {
         0x00, 0x04, 0x57, 0xf8, 0x64, 0xd8, 0xc0, 0x45, 0x00, 0x01, 0x00,
         0x01, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x04, 0x57, 0xf8, 0x64, 0xd7,
     };
-    MG_INFO(("--------------"));
     ASSERT(mg_dns_parse(d, sizeof(d), &dm) == 1);
-    MG_INFO(("[%s]", dm.name));
-    ASSERT(strcmp(dm.name, "com") == 0);  // TODO(lsm): fix this
+    // MG_INFO(("[%s]", dm.name));
+    ASSERT(strcmp(dm.name, "new-fp-shed.wg1.b.yahoo.com") == 0);
   }
 
   test_dns_timeout("udp://127.0.0.1:12345", "DNS timeout");

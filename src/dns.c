@@ -31,10 +31,12 @@ void mg_resolve_cancel(struct mg_connection *c) {
 }
 
 static size_t mg_dns_parse_name_depth(const uint8_t *s, size_t len, size_t ofs,
-                                      char *to, size_t tolen, int depth) {
-  size_t i = 0, j = 0;
-  if (tolen > 0) to[0] = '\0';
+                                      char *to, size_t tolen, size_t j,
+                                      int depth) {
+  size_t i = 0;
+  if (tolen > 0 && depth == 0) to[0] = '\0';
   if (depth > 5) return 0;
+  // MG_INFO(("ofs %lx %x %x", (unsigned long) ofs, s[ofs], s[ofs + 1]));
   while (ofs + i + 1 < len) {
     size_t n = s[ofs + i];
     if (n == 0) {
@@ -43,9 +45,9 @@ static size_t mg_dns_parse_name_depth(const uint8_t *s, size_t len, size_t ofs,
     }
     if (n & 0xc0) {
       size_t ptr = (((n & 0x3f) << 8) | s[ofs + i + 1]);  // 12 is hdr len
-      // MG_INFO(("PTR %lu", (unsigned long) ptr));
+      // MG_INFO(("PTR %lx", (unsigned long) ptr));
       if (ptr + 1 < len && (s[ptr] & 0xc0) == 0 &&
-          mg_dns_parse_name_depth(s, len, ptr, to, tolen, depth + 1) == 0)
+          mg_dns_parse_name_depth(s, len, ptr, to, tolen, j, depth + 1) == 0)
         return 0;
       i += 2;
       break;
@@ -59,6 +61,7 @@ static size_t mg_dns_parse_name_depth(const uint8_t *s, size_t len, size_t ofs,
     j += n;
     i += n + 1;
     if (j < tolen) to[j] = '\0';  // Zero-terminate this chunk
+    // MG_INFO(("--> [%s]", to));
   }
   if (tolen > 0) to[tolen - 1] = '\0';  // Make sure make sure it is nul-term
   return i;
@@ -66,7 +69,7 @@ static size_t mg_dns_parse_name_depth(const uint8_t *s, size_t len, size_t ofs,
 
 static size_t mg_dns_parse_name(const uint8_t *s, size_t n, size_t ofs,
                                 char *dst, size_t dstlen) {
-  return mg_dns_parse_name_depth(s, n, ofs, dst, dstlen, 0);
+  return mg_dns_parse_name_depth(s, n, ofs, dst, dstlen, 0, 0);
 }
 
 size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
@@ -106,12 +109,13 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
 
   for (i = 0; i < mg_ntohs(h->num_questions); i++) {
     if ((n = mg_dns_parse_rr(buf, len, ofs, true, &rr)) == 0) return false;
-    // MG_INFO(("Q %zu %zu", ofs, n));
+    // MG_INFO(("Q %lu %lu %hu/%hu", ofs, n, rr.atype, rr.aclass));
     ofs += n;
   }
   for (i = 0; i < mg_ntohs(h->num_answers); i++) {
-    // MG_INFO(("A -- %zu %zu %s", ofs, n, dm->name));
     if ((n = mg_dns_parse_rr(buf, len, ofs, false, &rr)) == 0) return false;
+    // MG_INFO(("A -- %lu %lu %hu/%hu %s", ofs, n, rr.atype, rr.aclass,
+    // dm->name));
     mg_dns_parse_name(buf, len, ofs, dm->name, sizeof(dm->name));
     ofs += n;
 
