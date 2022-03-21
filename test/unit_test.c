@@ -1345,8 +1345,7 @@ static void test_dns(void) {
     MG_INFO(("--------------"));
     ASSERT(mg_dns_parse(d, sizeof(d), &dm) == 1);
     MG_INFO(("[%s]", dm.name));
-    ASSERT(strcmp(dm.name, "com") == 0);
-    exit(0);
+    ASSERT(strcmp(dm.name, "com") == 0);  // TODO(lsm): fix this
   }
 
   test_dns_timeout("udp://127.0.0.1:12345", "DNS timeout");

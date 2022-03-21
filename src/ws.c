@@ -216,6 +216,7 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
     char nonce[16], key[30], mem1[128], mem2[256], *buf1 = mem1, *buf2 = mem2;
     struct mg_str host = mg_url_host(url);
     size_t n1 = 0, n2 = 0;
+    nonce[0] = key[0] = mem1[0] = mem2[0] = '\0';
     if (fmt != NULL) {
       va_list ap;
       va_start(ap, fmt);
@@ -223,7 +224,6 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
       va_end(ap);
     }
     // Send handshake request
-    // mg_url_host(url, host, sizeof(host));
     mg_random(nonce, sizeof(nonce));
     mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key);
     n2 = mg_asprintf(&buf2, sizeof(mem2),
@@ -235,8 +235,9 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
                      "Sec-WebSocket-Version: 13\r\n"
                      "Sec-WebSocket-Key: %s\r\n"
                      "\r\n",
-                     mg_url_uri(url), (int) host.len, host.ptr, n1, buf1, key);
-    mg_send(c, buf2, n2 > 0 ? n2 : 0);
+                     mg_url_uri(url), (int) host.len, host.ptr, (int) n1, buf1,
+                     key);
+    mg_send(c, buf2, n2);
     if (buf1 != mem1) free(buf1);
     if (buf2 != mem2) free(buf2);
     c->pfn = mg_ws_cb;
