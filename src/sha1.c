@@ -62,7 +62,8 @@ static uint32_t blk0(union char64long16 *block, int i) {
   z += (w ^ x ^ y) + blk(i) + 0xCA62C1D6 + rol(v, 5); \
   w = rol(w, 30);
 
-static void mg_sha1_transform(uint32_t state[5], const unsigned char buffer[64]) {
+static void mg_sha1_transform(uint32_t state[5],
+                              const unsigned char buffer[64]) {
   uint32_t a, b, c, d, e;
   union char64long16 block[1];
 
@@ -183,7 +184,7 @@ void mg_sha1_update(mg_sha1_ctx *context, const unsigned char *data,
 
   j = context->count[0];
   if ((context->count[0] += (uint32_t) len << 3) < j) context->count[1]++;
-  context->count[1] += (uint32_t)(len >> 29);
+  context->count[1] += (uint32_t) (len >> 29);
   j = (j >> 3) & 63;
   if ((j + len) > 63) {
     memcpy(&context->buffer[j], data, (i = 64 - j));
@@ -219,39 +220,4 @@ void mg_sha1_final(unsigned char digest[20], mg_sha1_ctx *context) {
   }
   memset(context, '\0', sizeof(*context));
   memset(&finalcount, '\0', sizeof(finalcount));
-}
-
-void mg_hmac_sha1(const unsigned char *key, size_t keylen,
-                  const unsigned char *data, size_t datalen,
-                  unsigned char out[20]) {
-  mg_sha1_ctx ctx;
-  unsigned char buf1[64], buf2[64], tmp_key[20], i;
-
-  if (keylen > sizeof(buf1)) {
-    mg_sha1_init(&ctx);
-    mg_sha1_update(&ctx, key, keylen);
-    mg_sha1_final(tmp_key, &ctx);
-    key = tmp_key;
-    keylen = sizeof(tmp_key);
-  }
-
-  memset(buf1, 0, sizeof(buf1));
-  memset(buf2, 0, sizeof(buf2));
-  memcpy(buf1, key, keylen);
-  memcpy(buf2, key, keylen);
-
-  for (i = 0; i < sizeof(buf1); i++) {
-    buf1[i] ^= 0x36;
-    buf2[i] ^= 0x5c;
-  }
-
-  mg_sha1_init(&ctx);
-  mg_sha1_update(&ctx, buf1, sizeof(buf1));
-  mg_sha1_update(&ctx, data, datalen);
-  mg_sha1_final(out, &ctx);
-
-  mg_sha1_init(&ctx);
-  mg_sha1_update(&ctx, buf2, sizeof(buf2));
-  mg_sha1_update(&ctx, out, 20);
-  mg_sha1_final(out, &ctx);
 }
