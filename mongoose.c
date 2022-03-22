@@ -4588,6 +4588,13 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
 #endif
     }
   }
+  if (opts->srvname.len > 0) {
+    char mem[128], *buf = mem;
+    size_t len = mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
+                             opts->srvname.ptr);
+    X509_VERIFY_PARAM_set1_host(SSL_get0_param(tls->ssl), buf, len);
+    if (buf != mem) free(buf);
+  }
   if (opts->ciphers != NULL) SSL_set_cipher_list(tls->ssl, opts->ciphers);
   if (opts->srvname.len > 0) {
     char mem[128], *buf = mem;
