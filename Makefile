@@ -82,7 +82,7 @@ test: unit_test
 
 coverage: test
 	gcov -l -n *.gcno | sed '/^$$/d' | sed 'N;s/\n/ /'
-	gcov mongoose.gcno >/dev/null
+	gcov -t mongoose.c > mongoose.gcov
 
 upload-coverage: coverage
 	curl -s https://codecov.io/bash | /bin/bash
