@@ -833,6 +833,15 @@ static void test_http_client(void) {
     mg_tls_init(c, &opts);
     for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
     ASSERT(ok == 200);
+
+    // Test failed host validation
+    ok = 0;
+    opts.srvname = mg_str("dummy");
+    c = mg_http_connect(&mgr, url, f3, &ok);
+    ASSERT(c != NULL);
+    mg_tls_init(c, &opts);
+    for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+    ASSERT(ok == 777);
   }
 #endif
 
