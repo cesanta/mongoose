@@ -825,8 +825,10 @@ static void test_http_client(void) {
   ok = 0;
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
   {
-    struct mg_tls_opts opts = {.ca = "./test/data/ca.pem"};
-    c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
+    const char *url = "https://cesanta.com";
+    struct mg_str host = mg_url_host(url);
+    struct mg_tls_opts opts = {.ca = "./test/data/ca.pem", .srvname = host};
+    c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
     mg_tls_init(c, &opts);
     for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
