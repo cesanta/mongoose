@@ -60,6 +60,11 @@ test++: C_WARN =
 test++: WARN += -Wno-shadow -Wno-missing-field-initializers -Wno-deprecated
 test++: test
 
+musl: test
+musl: ASAN =
+musl: WARN += -Wno-sign-conversion
+musl: CC = $(DOCKER) mdashnet/cc1 gcc
+
 # Make sure we can build from an unamalgamated sources
 unamalgamated: $(HDRS) Makefile test/packed_fs.c
 	$(CC) src/*.c test/packed_fs.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
