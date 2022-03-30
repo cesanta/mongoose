@@ -9,6 +9,7 @@
 #define MG_ARCH_FREERTOS_LWIP 6
 #define MG_ARCH_AZURERTOS 7
 #define MG_ARCH_RTX_LWIP 8
+#define MG_ARCH_ZEPHYR 9
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -23,6 +24,8 @@
 #define MG_ARCH MG_ARCH_FREERTOS_TCP
 #elif defined(AZURE_RTOS_THREADX)
 #define MG_ARCH MG_ARCH_AZURERTOS
+#elif defined(__ZEPHYR__)
+#define MG_ARCH MG_ARCH_ZEPHYR
 #endif
 
 #if !defined(MG_ARCH)
@@ -46,3 +49,4 @@
 #include "arch_freertos_tcp.h"
 #include "arch_unix.h"
 #include "arch_win32.h"
+#include "arch_zephyr.h"

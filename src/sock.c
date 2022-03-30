@@ -315,7 +315,7 @@ static void setsockopts(struct mg_connection *c) {
   if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) != 0)
     (void) 0;
 #endif
-#if MG_ARCH != MG_ARCH_WIN32 && !defined(__QNX__)
+#if MG_ARCH != MG_ARCH_WIN32 && !defined(__QNX__) && MG_ARCH != MG_ARCH_ZEPHYR
   {
     int cnt = 3, intvl = 20;
     if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt)) != 0)

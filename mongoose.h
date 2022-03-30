@@ -36,6 +36,7 @@ extern "C" {
 #define MG_ARCH_FREERTOS_LWIP 6
 #define MG_ARCH_AZURERTOS 7
 #define MG_ARCH_RTX_LWIP 8
+#define MG_ARCH_ZEPHYR 9
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -50,6 +51,8 @@ extern "C" {
 #define MG_ARCH MG_ARCH_FREERTOS_TCP
 #elif defined(AZURE_RTOS_THREADX)
 #define MG_ARCH MG_ARCH_AZURERTOS
+#elif defined(__ZEPHYR__)
+#define MG_ARCH MG_ARCH_ZEPHYR
 #endif
 
 #if !defined(MG_ARCH)
@@ -66,6 +69,7 @@ extern "C" {
 #if MG_ARCH == MG_ARCH_CUSTOM
 #include <mongoose_custom.h>
 #endif
+
 
 
 
@@ -455,6 +459,33 @@ typedef int socklen_t;
 #ifndef MG_ENABLE_DIRLIST
 #define MG_ENABLE_DIRLIST 1
 #endif
+
+#endif
+
+
+#if MG_ARCH == MG_ARCH_ZEPHYR
+
+#include <zephyr.h>
+
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <net/socket.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <time.h>
+
+#define strerror(x) zsock_gai_strerror(x)
+#define FD_CLOEXEC 0
+#define F_SETFD 0
+
+int rand(void);
+int sscanf(const char *, const char *, ...);
 
 #endif
 
