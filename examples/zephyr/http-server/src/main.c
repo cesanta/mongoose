@@ -8,6 +8,8 @@ static const char *s_root_dir = ".";
 static const char *s_listening_address = "http://0.0.0.0:8000";
 static time_t s_boot_timestamp = 0;
 static struct mg_connection *s_sntp_conn = NULL;
+static struct net_mgmt_event_callback mgmt4_cb;
+static bool s_network_initialised = false;
 
 // Event handler for the listening connection.
 // Simply serve static files from `s_root_dir`
@@ -52,6 +54,7 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
+  return;
   if (s_sntp_conn == NULL) s_sntp_conn = mg_sntp_connect(mgr, NULL, sfn, NULL);
   if (s_boot_timestamp < 9999) mg_sntp_send(s_sntp_conn, time(NULL));
 }
@@ -60,11 +63,32 @@ static void logfn(const void *ptr, size_t len, void *userdata) {
   printk("%.*s", (int) len, (char *) ptr);
 }
 
+static void netcb(struct net_mgmt_event_callback *cb, uint32_t mgmt_event,
+                  struct net_if *iface) {
+  char hr_addr[NET_IPV4_ADDR_LEN];
+  if (mgmt_event == NET_EVENT_IPV4_ADDR_ADD) {
+    for (int i = 0; i < NET_IF_MAX_IPV4_ADDR; i++) {
+      struct net_if_addr *if_addr = &iface->config.ip.ipv4->unicast[i];
+      if (if_addr->addr_type != NET_ADDR_DHCP || !if_addr->is_used) continue;
+      MG_INFO(
+          ("IPv4 address: %s", net_addr_ntop(AF_INET, &if_addr->address.in_addr,
+                                             hr_addr, NET_IPV4_ADDR_LEN)));
+      s_network_initialised = true;
+      break;
+    }
+  }
+}
+
 int main(int argc, char *argv[]) {
   struct mg_mgr mgr;
 
   mg_log_set(s_debug_level);
   mg_log_set_callback(logfn, NULL);
+
+  // Wait until network is initialised
+  net_mgmt_init_event_callback(&mgmt4_cb, netcb, NET_EVENT_IPV4_ADDR_ADD);
+  net_mgmt_add_event_callback(&mgmt4_cb);
+  while (!s_network_initialised) k_sleep(K_MSEC(100));
 
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, s_listening_address, cb, &mgr);
