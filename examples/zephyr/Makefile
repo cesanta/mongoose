@@ -10,3 +10,6 @@ build:
 
 flash:
 	cd $(ZEPHYR_DIR) && west flash
+
+clean:
+	true
