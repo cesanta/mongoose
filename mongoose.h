@@ -483,6 +483,7 @@ typedef int socklen_t;
 #define strerror(x) zsock_gai_strerror(x)
 #define FD_CLOEXEC 0
 #define F_SETFD 0
+#define MG_ENABLE_SSI 0
 
 int rand(void);
 int sscanf(const char *, const char *, ...);
@@ -1063,7 +1064,6 @@ void mg_tls_handshake(struct mg_connection *);
 struct mg_tls {
   char *cafile;             // CA certificate path
   mbedtls_x509_crt ca;      // Parsed CA certificate
-  mbedtls_x509_crl crl;     // Parsed Certificate Revocation List
   mbedtls_x509_crt cert;    // Parsed certificate
   mbedtls_ssl_context ssl;  // SSL/TLS context
   mbedtls_ssl_config conf;  // SSL-TLS config

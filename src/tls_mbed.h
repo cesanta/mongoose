@@ -13,7 +13,6 @@
 struct mg_tls {
   char *cafile;             // CA certificate path
   mbedtls_x509_crt ca;      // Parsed CA certificate
-  mbedtls_x509_crl crl;     // Parsed Certificate Revocation List
   mbedtls_x509_crt cert;    // Parsed certificate
   mbedtls_ssl_context ssl;  // SSL/TLS context
   mbedtls_ssl_config conf;  // SSL-TLS config
