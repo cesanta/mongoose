@@ -3439,9 +3439,11 @@ static void setsockopts(struct mg_connection *c) {
   if (setsockopt(FD(c), SOL_TCP, TCP_QUICKACK, (char *) &on, sizeof(on)) != 0)
     (void) 0;
 #endif
+#if MG_ARCH != MG_ARCH_ZEPHYR
   if (setsockopt(FD(c), SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on)) !=
       0)
     (void) 0;
+#endif
 #if (defined(ESP32) && ESP32) || (defined(ESP8266) && ESP8266) || \
     defined(__linux__)
   int idle = 60;
