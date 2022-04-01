@@ -4,33 +4,32 @@
 #include "mongoose.h"
 
 static const char *s_debug_level = "3";
-static const char *s_root_dir = ".";
-static const char *s_listening_address = "http://0.0.0.0:8000";
+static const char *s_web_dir = "/";
+static const char *s_http_addr = "http://0.0.0.0:8000";
+static const char *s_https_addr = "https://0.0.0.0:8443";
+static const char *s_cert = "cert.pem";
+static const char *s_key = "key.pem";
 static time_t s_boot_timestamp = 0;
 static struct mg_connection *s_sntp_conn = NULL;
 
-// Event handler for the listening connection.
-// Simply serve static files from `s_root_dir`
-static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
-    mg_http_reply(c, 200, NULL, "hi\n");
-#if 0
-    struct mg_http_message *hm = ev_data, tmp = {0};
-    struct mg_str unknown = mg_str_n("?", 1), *cl;
-    struct mg_http_serve_opts opts = {0};
-    opts.root_dir = s_root_dir;
-    mg_http_serve_dir(c, hm, &opts);
-    mg_http_parse((char *) c->send.buf, c->send.len, &tmp);
-    cl = mg_http_get_header(&tmp, "Content-Length");
-    if (cl == NULL) cl = &unknown;
-    MG_INFO(("%.*s %.*s %.*s %.*s", (int) hm->method.len, hm->method.ptr,
-             (int) hm->uri.len, hm->uri.ptr, (int) tmp.uri.len, tmp.uri.ptr,
-             (int) cl->len, cl->ptr));
-#endif
+// Event handler for the listening HTTP/HTTPS connection.
+static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_ACCEPT && fn_data != NULL) {
+    struct mg_tls_opts opts = {.cert = s_cert, .certkey = s_key};
+    mg_tls_init(c, &opts);
+  } else if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = ev_data;
+    MG_INFO(("%.*s %.*s %ld", (int) hm->method.len, hm->method.ptr,
+             (int) hm->uri.len, hm->uri.ptr, (long) hm->body.len));
+    if (mg_http_match_uri(hm, "/api/#")) {  // REST API requests
+      mg_http_reply(c, 200, NULL, "hi\n");  // Construct dynamic response
+    } else {
+      struct mg_http_serve_opts opts = {.root_dir = s_web_dir};  // Serve
+      mg_http_serve_dir(c, hm, &opts);                           // static files
+    }
   } else if (ev == MG_EV_OPEN) {
     c->is_hexdumping = 1;
   }
-  (void) fn_data;
 }
 
 // We have no valid system time(), and we need it for TLS. Implement it
@@ -40,6 +39,7 @@ time_t time(time_t *tp) {
   return t;
 }
 
+// SNTP callback. Modifies s_boot_timestamp, to make time() correct
 static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_SNTP_TIME) {
     int64_t t = *(int64_t *) ev_data;
@@ -50,12 +50,14 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   }
 }
 
+// Periodic timer syncs time via SNTP
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
   if (s_sntp_conn == NULL) s_sntp_conn = mg_sntp_connect(mgr, NULL, sfn, NULL);
   if (s_boot_timestamp < 9999) mg_sntp_send(s_sntp_conn, time(NULL));
 }
 
+// Use Zephyr's printk() for Mongooose MG_* logging
 static void logfn(const void *ptr, size_t len, void *userdata) {
   printk("%.*s", (int) len, (char *) ptr);
 }
@@ -67,15 +69,17 @@ int main(int argc, char *argv[]) {
   mg_log_set_callback(logfn, NULL);
 
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, s_listening_address, cb, &mgr);
+  mg_http_listen(&mgr, s_http_addr, wcb, NULL);
+  mg_http_listen(&mgr, s_https_addr, wcb, &mgr);
 
   struct mg_timer t;
   mg_timer_init(&t, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
 
   // Start infinite event loop
   MG_INFO(("Mongoose version : v%s", MG_VERSION));
-  MG_INFO(("Listening on     : %s", s_listening_address));
-  MG_INFO(("Web root         : [%s]", s_root_dir));
+  MG_INFO(("Listening on     : %s", s_http_addr));
+  MG_INFO(("Listening on     : %s", s_https_addr));
+  MG_INFO(("Web root         : [%s]", s_web_dir));
   for (;;) mg_mgr_poll(&mgr, 1000);
   mg_mgr_free(&mgr);
   return 0;
