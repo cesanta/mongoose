@@ -20,6 +20,7 @@
 #define strerror(x) zsock_gai_strerror(x)
 #define FD_CLOEXEC 0
 #define F_SETFD 0
+#define MG_ENABLE_SSI 0
 
 int rand(void);
 int sscanf(const char *, const char *, ...);
