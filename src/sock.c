@@ -88,6 +88,16 @@ bool mg_sock_would_block(void) {
       ;
 }
 
+bool mg_sock_conn_reset(void);
+bool mg_sock_conn_reset(void) {
+  int err = MG_SOCK_ERRNO;
+#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
+  return err == WSAECONNRESET;
+#else
+  return err == EPIPE || err == ECONNRESET;
+#endif
+}
+
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   if (n == 0) {
     // Do nothing

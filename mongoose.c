@@ -3217,6 +3217,16 @@ bool mg_sock_would_block(void) {
       ;
 }
 
+bool mg_sock_conn_reset(void);
+bool mg_sock_conn_reset(void) {
+  int err = MG_SOCK_ERRNO;
+#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
+  return err == WSAECONNRESET;
+#else
+  return err == EPIPE || err == ECONNRESET;
+#endif
+}
+
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   if (n == 0) {
     // Do nothing
@@ -4264,15 +4274,19 @@ void mg_tls_free(struct mg_connection *c) {
 }
 
 bool mg_sock_would_block(void);
+bool mg_sock_conn_reset(void);
 
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   struct mg_connection *c = (struct mg_connection *) ctx;
   int fd = (int) (size_t) c->fd;
   int n = (int) send(fd, buf, len, 0);
   MG_VERBOSE(("%lu n=%d, errno=%d", c->id, n, errno));
-  if (n > 0) return n;
-  if (n < 0 && mg_sock_would_block()) return MBEDTLS_ERR_SSL_WANT_WRITE;
-  return MBEDTLS_ERR_NET_SEND_FAILED;
+  if (n < 0) {
+    if (mg_sock_would_block()) return MBEDTLS_ERR_SSL_WANT_WRITE;
+    if (mg_sock_conn_reset()) return MBEDTLS_ERR_NET_CONN_RESET;
+    return MBEDTLS_ERR_NET_SEND_FAILED;
+  }
+  return n;
 }
 
 static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
@@ -4280,9 +4294,12 @@ static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
   int n, fd = (int) (size_t) c->fd;
   n = (int) recv(fd, buf, len, 0);
   MG_VERBOSE(("%lu n=%d, errno=%d", c->id, n, errno));
-  if (n > 0) return n;
-  if (n < 0 && mg_sock_would_block()) return MBEDTLS_ERR_SSL_WANT_READ;
-  return MBEDTLS_ERR_NET_RECV_FAILED;
+  if (n < 0) {
+    if (mg_sock_would_block()) return MBEDTLS_ERR_SSL_WANT_READ;
+    if (mg_sock_conn_reset()) return MBEDTLS_ERR_NET_CONN_RESET;
+    return MBEDTLS_ERR_NET_RECV_FAILED;
+  }
+  return n;
 }
 
 void mg_tls_handshake(struct mg_connection *c) {
