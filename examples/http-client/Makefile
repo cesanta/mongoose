@@ -32,10 +32,11 @@ WFLAGS = /nologo -O2 -I. -I../.. ws2_32.lib advapi32.lib /link /out:$(PROG).exe
 WSRCS = ../../mongoose.c main.c mbedtls/library/*.c
 $(PROG).exe: main.c mbedtls
 	$(DOCKER) mdashnet/vc2017 wine cl $(WSRCS) $(WDEFS) $(WFLAGS)
+vc2017: ARGS = https://cesanta.com
 vc2017: $(PROG).exe
 	$(DOCKER) mdashnet/vc2017 wine $(PROG).exe $(ARGS)
 mbedtls:
 	git clone --depth 1 -b v3.1.0 https://github.com/ARMmbed/mbedtls
 
 clean:
-	rm -rf $(PROG) _CL* *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb
+	rm -rf $(PROG) _CL* *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb mbedtls

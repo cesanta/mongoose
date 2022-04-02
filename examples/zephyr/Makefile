@@ -12,4 +12,4 @@ flash:
 	cd $(ZEPHYR_DIR) && west flash
 
 clean:
-	true
+	rm -rf */*/mongoose.*
