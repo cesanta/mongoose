@@ -657,7 +657,7 @@ Usage example: see [examples/multi-threaded](https://github.com/cesanta/mongoose
 ### mg\_mgr\_wakeup()
 
 ```c
-void mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_len len);
+bool mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_len len);
 ```
 
 Wake up an event manager that sleeps in `mg_mgr_poll()` call. This function
@@ -673,7 +673,7 @@ Parameters:
 - `buf` - a data to send to the pipe connection. Use `""` if there is no data 
 - `len` - a data length
 
-Return value: None
+Return value: `true` if data has been sent, `false` otherwise
 
 Usage example: see [examples/multi-threaded](https://github.com/cesanta/mongoose/tree/master/examples/multi-threaded).
 

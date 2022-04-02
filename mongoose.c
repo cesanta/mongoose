@@ -3542,11 +3542,10 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
   return result;
 }
 
-void mg_mgr_wakeup(struct mg_connection *c, const void *buf, size_t len) {
+bool mg_mgr_wakeup(struct mg_connection *c, const void *buf, size_t len) {
   if (buf == NULL || len == 0) buf = (void *) "", len = 1;
-  if ((size_t) send((SOCKET) (size_t) c->pfn_data, (const char *) buf, len,
-                    MSG_NONBLOCKING) != len)
-    (void) 0;
+  return (size_t) send((SOCKET) (size_t) c->pfn_data, (const char *) buf, len,
+                       MSG_NONBLOCKING) == len;
 }
 
 static void pf1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
