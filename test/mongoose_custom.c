@@ -23,8 +23,9 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   return 0;
 }
 
-void mg_mgr_wakeup(struct mg_connection *c, const void *buf, size_t len) {
+bool mg_mgr_wakeup(struct mg_connection *c, const void *buf, size_t len) {
   (void) c, (void) buf, (void) len;
+  return 0;
 }
 
 struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
