@@ -548,6 +548,10 @@ int sscanf(const char *, const char *, ...);
 #define MG_ENABLE_CUSTOM_RANDOM 0
 #endif
 
+#ifndef MG_ENABLE_CUSTOM_MILLIS
+#define MG_ENABLE_CUSTOM_MILLIS 0
+#endif
+
 #ifndef MG_ENABLE_PACKED_FS
 #define MG_ENABLE_PACKED_FS 0
 #endif

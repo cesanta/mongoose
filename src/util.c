@@ -78,6 +78,8 @@ int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip) {
   return allowed == '+';
 }
 
+#if MG_ENABLE_CUSTOM_MILLIS
+#else
 int64_t mg_millis(void) {
 #if MG_ARCH == MG_ARCH_WIN32
   return GetTickCount();
@@ -112,3 +114,4 @@ int64_t mg_millis(void) {
   return time(NULL) * 1000;
 #endif
 }
+#endif

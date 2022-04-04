@@ -236,12 +236,13 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_SOCKET | 1 | Use BSD socket low-level API |
 |MG_ENABLE_MBEDTLS | 0 | Enable mbedTLS library |
 |MG_ENABLE_OPENSSL | 0 | Enable OpenSSL library |
-|MG_ENABLE_CUSTOM_TLS | 0 | Enable custom TLS library |
 |MG_ENABLE_IPV6 | 0 | Enable IPv6 |
 |MG_ENABLE_LOG | 1 | Enable `LOG()` macro |
 |MG_ENABLE_MD5 | 0 | Use native MD5 implementation |
 |MG_ENABLE_SSI | 1 | Enable serving SSI files by `mg_http_serve_dir()` |
 |MG_ENABLE_CUSTOM_RANDOM | 0 | Provide custom RNG function `mg_random()` |
+|MG_ENABLE_CUSTOM_TLS | 0 | Enable custom TLS library |
+|MG_ENABLE_CUSTOM_MILLIS | 0 | Enable custom `mg_millis()` function |
 |MG_ENABLE_PACKED_FS | 0 | Enable embedded FS support |
 |MG_ENABLE_FATFS | 0 | Enable embedded FAT FS support |
 |MG_IO_SIZE | 2048 | Granularity of the send/recv IO buffer growth |
