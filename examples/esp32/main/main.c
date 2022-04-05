@@ -5,17 +5,9 @@
 #include "freertos/FreeRTOS.h"
 #include "mongoose.h"
 
-#define WIFI_SSID "WIFI_NETWORK"   // SET THIS!
-#define WIFI_PASS "WIFI_PASSWORD"  // SET THIS!
+#define WIFI_SSID "VMDF554B9"     // SET THIS!
+#define WIFI_PASS "Mp7wjmamPafa"  // SET THIS!
 #define FS_ROOT "/spiffs"
-
-// SPIFFS is flat, so tell Mongoose that the FS root is a directory
-// This cludge is not required for filesystems with directory support
-static int my_stat(const char *path, size_t *size, time_t *mtime) {
-  int flags = mg_fs_posix.st(path, size, mtime);
-  if (strcmp(path, FS_ROOT) == 0) flags |= MG_FS_DIR;
-  return flags;
-}
 
 // Event handler for an server (accepted) connection. Implemented endpoints:
 //    /api/stats  - return JSON object with ESP32 stats (free RAM)
@@ -26,9 +18,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (mg_http_match_uri(hm, "/api/stats")) {
       mg_http_reply(c, 200, "", "{\"ram\": %lu}\n", xPortGetFreeHeapSize());
     } else {
-      struct mg_fs fs = mg_fs_posix;
-      fs.st = my_stat;
-      struct mg_http_serve_opts opts = {.root_dir = FS_ROOT, .fs = &fs};
+      struct mg_http_serve_opts opts = {.root_dir = FS_ROOT};
       mg_http_serve_dir(c, hm, &opts);
     }
   }
@@ -49,7 +39,7 @@ void app_main(void) {
 
   // Connected to WiFi, now start HTTP server
   struct mg_mgr mgr;
-  mg_log_set("3");
+  mg_log_set("4");
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, "http://0.0.0.0:80", cb, &mgr);  // Listening server
   MG_INFO(("Starting Mongoose web server v%s", MG_VERSION));

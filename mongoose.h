@@ -495,14 +495,6 @@ int sscanf(const char *, const char *, ...);
 #define MG_ENABLE_FATFS 0
 #endif
 
-#ifndef MG_FATFS_ROOT
-#define MG_FATFS_ROOT "/"
-#endif
-
-#ifndef MG_FATFS_BSIZE
-#define MG_FATFS_BSIZE 64
-#endif
-
 #ifndef MG_ENABLE_SOCKET
 #define MG_ENABLE_SOCKET 1
 #endif

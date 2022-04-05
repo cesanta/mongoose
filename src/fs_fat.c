@@ -41,7 +41,7 @@ static time_t ff_time_to_epoch(uint16_t fdate, uint16_t ftime) {
 
 static int ff_stat(const char *path, size_t *size, time_t *mtime) {
   FILINFO fi;
-  if (path[0] == '\0' || strcmp(path, MG_FATFS_ROOT) == 0) {
+  if (path[0] == '\0') {
     if (size) *size = 0;
     if (mtime) *mtime = 0;
     return MG_FS_DIR;
