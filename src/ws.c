@@ -174,7 +174,8 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
         case WEBSOCKET_OP_CLOSE:
           MG_DEBUG(("%lu Got WS CLOSE", c->id));
           mg_call(c, MG_EV_WS_CTL, &m);
-          c->is_closing = 1;
+          mg_ws_send(c, "", 0, WEBSOCKET_OP_CLOSE);
+          c->is_draining = 1;
           break;
         default:
           // Per RFC6455, close conn when an unknown op is recvd
