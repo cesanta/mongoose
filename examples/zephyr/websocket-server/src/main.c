@@ -6,29 +6,36 @@
 
 static const char *s_debug_level = "3";
 static const char *s_web_dir = "/";
-static const char *s_http_addr = "http://0.0.0.0:8000";
-static const char *s_https_addr = "https://0.0.0.0:8443";
+static const char *s_ws_addr = "ws://0.0.0.0:8000";
+static const char *s_wss_addr = "wss://0.0.0.0:8443";
 static time_t s_boot_timestamp = 0;
 static struct mg_connection *s_sntp_conn = NULL;
 
-// Event handler for the listening HTTP/HTTPS connection.
-static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_ACCEPT && fn_data != NULL) {
+// This RESTful server implements the following endpoints:
+//   /websocket - upgrade to Websocket, and implement websocket echo server
+//   /api/rest - respond with JSON string {"result": 123}
+static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_OPEN) {
+    c->is_hexdumping = 1;
+  } else if (ev == MG_EV_ACCEPT && fn_data != NULL) {
     struct mg_tls_opts opts = {.cert = s_ssl_cert, .certkey = s_ssl_key};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = ev_data;
-    MG_INFO(("%.*s %.*s %ld", (int) hm->method.len, hm->method.ptr,
-             (int) hm->uri.len, hm->uri.ptr, (long) hm->body.len));
-    if (mg_http_match_uri(hm, "/api/#")) {  // REST API requests
-      mg_http_reply(c, 200, NULL, "hi\n");  // Construct dynamic response
-    } else {
-      struct mg_http_serve_opts opts = {.root_dir = s_web_dir};  // Serve
-      mg_http_serve_dir(c, hm, &opts);                           // static files
-    }
-  } else if (ev == MG_EV_OPEN) {
-    c->is_hexdumping = 1;
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_http_match_uri(hm, "/websocket")) {
+      // Upgrade to websocket. From now on, a connection is a full-duplex
+      // Websocket connection, which will receive MG_EV_WS_MSG events.
+      mg_ws_upgrade(c, hm, NULL);
+    } else if (mg_http_match_uri(hm, "/rest")) {
+      // Serve REST response
+      mg_http_reply(c, 200, "", "{\"result\": %d}\n", 123);
+    } 
+  } else if (ev == MG_EV_WS_MSG) {
+    // Got websocket frame. Received data is wm->data. Echo it back!
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_TEXT);
   }
+  (void) fn_data;
 }
 
 // We have no valid system time(), and we need it for TLS. Implement it
@@ -68,15 +75,16 @@ int main(int argc, char *argv[]) {
   mg_log_set_callback(logfn, NULL);
 
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, s_http_addr, wcb, NULL);
-  mg_http_listen(&mgr, s_https_addr, wcb, &mgr);
+  mg_http_listen(&mgr, s_ws_addr, fn, NULL);
+  mg_http_listen(&mgr, s_wss_addr, fn, &mgr);
 
-  mg_timer_add(&mgr, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
+  struct mg_timer t;
+  mg_timer_init(&t, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
 
   // Start infinite event loop
   MG_INFO(("Mongoose version : v%s", MG_VERSION));
-  MG_INFO(("Listening on     : %s", s_http_addr));
-  MG_INFO(("Listening on     : %s", s_https_addr));
+  MG_INFO(("Listening on     : %s", s_ws_addr));
+  MG_INFO(("Listening on     : %s", s_wss_addr));
   MG_INFO(("Web root         : [%s]", s_web_dir));
   for (;;) mg_mgr_poll(&mgr, 1000);
   mg_mgr_free(&mgr);
