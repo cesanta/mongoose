@@ -673,8 +673,8 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *param);
 
 
 struct mg_timer {
-  int64_t period_ms;        // Timer period in milliseconds
-  int64_t expire;           // Expiration timestamp in milliseconds
+  uint64_t period_ms;       // Timer period in milliseconds
+  uint64_t expire;          // Expiration timestamp in milliseconds
   unsigned flags;           // Possible flags values below
 #define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
 #define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
@@ -685,10 +685,10 @@ struct mg_timer {
 
 extern struct mg_timer *g_timers;  // Global list of timers
 
-void mg_timer_init(struct mg_timer *, int64_t, unsigned, void (*)(void *),
+void mg_timer_init(struct mg_timer *, uint64_t, unsigned, void (*)(void *),
                    void *);
 void mg_timer_free(struct mg_timer *);
-void mg_timer_poll(int64_t current_time_ms);
+void mg_timer_poll(uint64_t current_time_ms);
 
 
 
@@ -741,7 +741,7 @@ void mg_random(void *buf, size_t len);
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
-int64_t mg_millis(void);
+uint64_t mg_millis(void);
 
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
@@ -852,7 +852,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...);
 enum {
   MG_EV_ERROR,       // Error                        char *error_message
   MG_EV_OPEN,        // Connection created           NULL
-  MG_EV_POLL,        // mg_mgr_poll iteration        int64_t *milliseconds
+  MG_EV_POLL,        // mg_mgr_poll iteration        uint64_t *milliseconds
   MG_EV_RESOLVE,     // Host name is resolved        NULL
   MG_EV_CONNECT,     // Connection established       NULL
   MG_EV_ACCEPT,      // Connection accepted          NULL
@@ -867,7 +867,7 @@ enum {
   MG_EV_MQTT_CMD,    // MQTT low-level command       struct mg_mqtt_message *
   MG_EV_MQTT_MSG,    // MQTT PUBLISH received        struct mg_mqtt_message *
   MG_EV_MQTT_OPEN,   // MQTT CONNACK received        int *connack_status_code
-  MG_EV_SNTP_TIME,   // SNTP time received           int64_t *milliseconds
+  MG_EV_SNTP_TIME,   // SNTP time received           uint64_t *milliseconds
   MG_EV_USER,        // Starting ID for user events
 };
 

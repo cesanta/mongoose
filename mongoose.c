@@ -120,7 +120,7 @@ int mg_base64_decode(const char *src, int n, char *dst) {
 struct dns_data {
   struct dns_data *next;
   struct mg_connection *c;
-  int64_t expire;
+  uint64_t expire;
   uint16_t txnid;
 };
 
@@ -250,7 +250,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
                    void *fn_data) {
   struct dns_data *d, *tmp;
   if (ev == MG_EV_POLL) {
-    int64_t now = *(int64_t *) ev_data;
+    uint64_t now = *(uint64_t *) ev_data;
     for (d = s_reqs; d != NULL; d = tmp) {
       tmp = d->next;
       // MG_DEBUG ("%lu %lu dns poll", d->expire, now));
@@ -352,7 +352,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->txnid = s_reqs ? (uint16_t) (s_reqs->txnid + 1) : 1;
     d->next = s_reqs;
     s_reqs = d;
-    d->expire = mg_millis() + (int64_t) ms;
+    d->expire = mg_millis() + (uint64_t) ms;
     d->c = c;
     c->is_resolving = 1;
     MG_VERBOSE(("%lu resolving %.*s @ %s, txnid %hu", c->id, (int) name->len,
@@ -3086,7 +3086,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_READ) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
     if (milliseconds > 0) {
-      mg_call(c, MG_EV_SNTP_TIME, &milliseconds);
+      mg_call(c, MG_EV_SNTP_TIME, (uint64_t *) &milliseconds);
       MG_DEBUG(("%u.%u", (unsigned) (milliseconds / 1000),
                 (unsigned) (milliseconds % 1000)));
     }
@@ -3655,7 +3655,7 @@ static void connect_conn(struct mg_connection *c) {
 
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   struct mg_connection *c, *tmp;
-  int64_t now;
+  uint64_t now;
 
   mg_iotest(mgr, ms);
   now = mg_millis();
@@ -4179,7 +4179,7 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
 
 struct mg_timer *g_timers;
 
-void mg_timer_init(struct mg_timer *t, int64_t ms, unsigned flags,
+void mg_timer_init(struct mg_timer *t, uint64_t ms, unsigned flags,
                    void (*fn)(void *), void *arg) {
   struct mg_timer tmp = {ms, 0UL, flags, fn, arg, g_timers};
   *t = tmp;
@@ -4193,11 +4193,11 @@ void mg_timer_free(struct mg_timer *t) {
   if (*head) *head = t->next;
 }
 
-void mg_timer_poll(int64_t now_ms) {
+void mg_timer_poll(uint64_t now_ms) {
   // If time goes back (wrapped around), reset timers
   struct mg_timer *t, *tmp;
-  static int64_t oldnow;  // Timestamp in a previous invocation
-  if (oldnow > now_ms) {  // If it is wrapped, reset timers
+  static uint64_t oldnow;  // Timestamp in a previous invocation
+  if (oldnow > now_ms) {   // If it is wrapped, reset timers
     for (t = g_timers; t != NULL; t = t->next) t->expire = 0;
   }
   oldnow = now_ms;
@@ -4781,7 +4781,7 @@ int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip) {
 
 #if MG_ENABLE_CUSTOM_MILLIS
 #else
-int64_t mg_millis(void) {
+uint64_t mg_millis(void) {
 #if MG_ARCH == MG_ARCH_WIN32
   return GetTickCount();
 #elif MG_ARCH == MG_ARCH_ESP32
@@ -4798,7 +4798,7 @@ int64_t mg_millis(void) {
   mach_timebase_info(&timebase);
   double ticks_to_nanos = (double) timebase.numer / timebase.denom;
   uint64_t uptime_nanos = (uint64_t) (ticks_to_nanos * ticks);
-  return (int64_t) (uptime_nanos / 1000000);
+  return (uint64_t) (uptime_nanos / 1000000);
 #elif MG_ARCH == MG_ARCH_UNIX
   struct timespec ts;
 #ifdef _POSIX_MONOTONIC_CLOCK
@@ -4810,7 +4810,7 @@ int64_t mg_millis(void) {
 #else
   clock_gettime(CLOCK_REALTIME, &ts);
 #endif
-  return ((int64_t) ts.tv_sec * 1000 + (int64_t) ts.tv_nsec / 1000000);
+  return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
 #else
   return time(NULL) * 1000;
 #endif

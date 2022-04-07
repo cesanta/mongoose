@@ -3,8 +3,8 @@
 #include "arch.h"
 
 struct mg_timer {
-  int64_t period_ms;        // Timer period in milliseconds
-  int64_t expire;           // Expiration timestamp in milliseconds
+  uint64_t period_ms;       // Timer period in milliseconds
+  uint64_t expire;          // Expiration timestamp in milliseconds
   unsigned flags;           // Possible flags values below
 #define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
 #define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
@@ -15,7 +15,7 @@ struct mg_timer {
 
 extern struct mg_timer *g_timers;  // Global list of timers
 
-void mg_timer_init(struct mg_timer *, int64_t, unsigned, void (*)(void *),
+void mg_timer_init(struct mg_timer *, uint64_t, unsigned, void (*)(void *),
                    void *);
 void mg_timer_free(struct mg_timer *);
-void mg_timer_poll(int64_t current_time_ms);
+void mg_timer_poll(uint64_t current_time_ms);

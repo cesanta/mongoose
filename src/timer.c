@@ -6,7 +6,7 @@
 
 struct mg_timer *g_timers;
 
-void mg_timer_init(struct mg_timer *t, int64_t ms, unsigned flags,
+void mg_timer_init(struct mg_timer *t, uint64_t ms, unsigned flags,
                    void (*fn)(void *), void *arg) {
   struct mg_timer tmp = {ms, 0UL, flags, fn, arg, g_timers};
   *t = tmp;
@@ -20,11 +20,11 @@ void mg_timer_free(struct mg_timer *t) {
   if (*head) *head = t->next;
 }
 
-void mg_timer_poll(int64_t now_ms) {
+void mg_timer_poll(uint64_t now_ms) {
   // If time goes back (wrapped around), reset timers
   struct mg_timer *t, *tmp;
-  static int64_t oldnow;  // Timestamp in a previous invocation
-  if (oldnow > now_ms) {  // If it is wrapped, reset timers
+  static uint64_t oldnow;  // Timestamp in a previous invocation
+  if (oldnow > now_ms) {   // If it is wrapped, reset timers
     for (t = g_timers; t != NULL; t = t->next) t->expire = 0;
   }
   oldnow = now_ms;
