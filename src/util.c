@@ -111,7 +111,7 @@ uint64_t mg_millis(void) {
 #endif
   return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
 #else
-  return time(NULL) * 1000;
+  return (uint64_t) (time(NULL) * 1000);
 #endif
 }
 #endif
