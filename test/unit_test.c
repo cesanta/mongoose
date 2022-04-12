@@ -833,7 +833,8 @@ static void f3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   // MG_INFO(("%d", ev));
   if (ev == MG_EV_CONNECT) {
     // c->is_hexdumping = 1;
-    mg_printf(c, "GET / HTTP/1.0\r\nHost: %s\r\n\r\n",
+    mg_printf(c, "GET /%s HTTP/1.0\r\nHost: %s\r\n\r\n",
+              c->rem.is_ip6 ? "" : "/robots.txt",
               c->rem.is_ip6 ? "ipv6.google.com" : "cesanta.com");
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -868,8 +869,10 @@ static void test_http_client(void) {
     c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
     mg_tls_init(c, &opts);
-    for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+    for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1000);
     ASSERT(ok == 200);
+    c->is_closing = 1;
+    mg_mgr_poll(&mgr, 1);
 
     // Test failed host validation
     ok = 0;
@@ -879,6 +882,7 @@ static void test_http_client(void) {
     mg_tls_init(c, &opts);
     for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
     ASSERT(ok == 777);
+    mg_mgr_poll(&mgr, 1);
   }
 #endif
 
@@ -887,7 +891,6 @@ static void test_http_client(void) {
   // ipv6.google.com does not have IPv4 address, only IPv6, therefore
   // it is guaranteed to hit IPv6 resolution path.
   c = mg_http_connect(&mgr, "http://ipv6.google.com", f3, &ok);
-  ASSERT(c != NULL);
   for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(ok == 200);
 #endif

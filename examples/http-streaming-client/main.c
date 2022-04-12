@@ -32,7 +32,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
     // Send request
     mg_printf(c,
-              "GET %s HTTP/1.0\r\n"
+              "GET %s HTTP/1.1\r\n"
+              "Connection: keep-alive\r\n"
+              "Keep-Alive: timeout=60\r\n"
               "Host: %.*s\r\n"
               "\r\n",
               mg_url_uri(s_url), (int) host.len, host.ptr);

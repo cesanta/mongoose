@@ -17,4 +17,8 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   return c == NULL || buf == NULL || len == 0 ? 0 : -1;
 }
+size_t mg_tls_pending(struct mg_connection *c) {
+  (void) c;
+  return 0;
+}
 #endif

@@ -190,6 +190,11 @@ fail:
   mg_tls_free(c);
 }
 
+size_t mg_tls_pending(struct mg_connection *c) {
+  struct mg_tls *tls = (struct mg_tls *) c->tls;
+  return tls == NULL ? 0 : mbedtls_ssl_get_bytes_avail(&tls->ssl);
+}
+
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   long n = mbedtls_ssl_read(&tls->ssl, (unsigned char *) buf, len);

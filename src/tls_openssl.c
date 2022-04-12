@@ -141,6 +141,11 @@ void mg_tls_free(struct mg_connection *c) {
   c->tls = NULL;
 }
 
+size_t mg_tls_pending(struct mg_connection *c) {
+  struct mg_tls *tls = (struct mg_tls *) c->tls;
+  return tls == NULL ? 0 : SSL_pending(tls->ssl);
+}
+
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int n = SSL_read(tls->ssl, buf, (int) len);

@@ -2724,7 +2724,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     c->is_client = true;
     c->fd = (void *) (size_t) -1;  // Set to invalid socket
     c->fn_data = fn_data;
-    MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
+    MG_DEBUG(("%lu -1 %s", c->id, url));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_resolve(c, url);
   }
@@ -3191,7 +3191,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   if (n == 0) {
     // Do nothing
   } else if (n < 0) {
-    c->is_closing = 1;  // Error, or normal termination
+    mg_error(c, "IO error");
   } else if (n > 0) {
     if (c->is_hexdumping) {
       union usa usa;
@@ -3571,7 +3571,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
                     eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
   }
 #else
-  struct timeval tv = {ms / 1000, (ms % 1000) * 1000};
+  struct timeval tv = {ms / 1000, (ms % 1000) * 1000}, tv_zero = {0, 0};
   struct mg_connection *c;
   fd_set rset, wset;
   SOCKET maxfd = 0;
@@ -3586,6 +3586,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     if (FD(c) > maxfd) maxfd = FD(c);
     if (c->is_connecting || (c->send.len > 0 && c->is_tls_hs == 0))
       FD_SET(FD(c), &wset);
+    if (mg_tls_pending(c) > 0) tv = tv_zero;
   }
 
   if ((rc = select((int) maxfd + 1, &rset, &wset, NULL, &tv)) < 0) {
@@ -3597,6 +3598,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   for (c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &rset);
     c->is_writable = FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &wset);
+    if (mg_tls_pending(c) > 0) c->is_readable = 1;
   }
 #endif
 }
@@ -4208,6 +4210,10 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   return c == NULL || buf == NULL || len == 0 ? 0 : -1;
 }
+size_t mg_tls_pending(struct mg_connection *c) {
+  (void) c;
+  return 0;
+}
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -4405,6 +4411,11 @@ fail:
   mg_tls_free(c);
 }
 
+size_t mg_tls_pending(struct mg_connection *c) {
+  struct mg_tls *tls = (struct mg_tls *) c->tls;
+  return tls == NULL ? 0 : mbedtls_ssl_get_bytes_avail(&tls->ssl);
+}
+
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   long n = mbedtls_ssl_read(&tls->ssl, (unsigned char *) buf, len);
@@ -4562,6 +4573,11 @@ void mg_tls_free(struct mg_connection *c) {
   SSL_CTX_free(tls->ctx);
   free(tls);
   c->tls = NULL;
+}
+
+size_t mg_tls_pending(struct mg_connection *c) {
+  struct mg_tls *tls = (struct mg_tls *) c->tls;
+  return tls == NULL ? 0 : SSL_pending(tls->ssl);
 }
 
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {

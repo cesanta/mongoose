@@ -102,7 +102,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   if (n == 0) {
     // Do nothing
   } else if (n < 0) {
-    c->is_closing = 1;  // Error, or normal termination
+    mg_error(c, "IO error");
   } else if (n > 0) {
     if (c->is_hexdumping) {
       union usa usa;
@@ -482,7 +482,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
                     eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
   }
 #else
-  struct timeval tv = {ms / 1000, (ms % 1000) * 1000};
+  struct timeval tv = {ms / 1000, (ms % 1000) * 1000}, tv_zero = {0, 0};
   struct mg_connection *c;
   fd_set rset, wset;
   SOCKET maxfd = 0;
@@ -497,6 +497,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     if (FD(c) > maxfd) maxfd = FD(c);
     if (c->is_connecting || (c->send.len > 0 && c->is_tls_hs == 0))
       FD_SET(FD(c), &wset);
+    if (mg_tls_pending(c) > 0) tv = tv_zero;
   }
 
   if ((rc = select((int) maxfd + 1, &rset, &wset, NULL, &tv)) < 0) {
@@ -508,6 +509,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   for (c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &rset);
     c->is_writable = FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &wset);
+    if (mg_tls_pending(c) > 0) c->is_readable = 1;
   }
 #endif
 }
