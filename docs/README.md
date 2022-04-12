@@ -2442,6 +2442,7 @@ mg_snprintf(buf, sizeof(buf), "%%-%3s", "a");           // %-  a
 
 ```c
 int64_t mg_to64(struct mg_str str);
+uint64_t mg_tou64(struct mg_str str);
 ```
 
 Parse 64-bit integer value held by string `s`.

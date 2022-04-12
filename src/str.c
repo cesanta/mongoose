@@ -254,6 +254,19 @@ size_t mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
   return ret;
 }
 
+uint64_t mg_tou64(struct mg_str str) {
+  uint64_t result = 0;
+  size_t i = 0;
+  while (i < str.len && (str.ptr[i] == ' ' || str.ptr[i] == '\t')) i++;
+  while (i < str.len && str.ptr[i] >= '0' && str.ptr[i] <= '9') {
+    result *= 10;
+    result += (unsigned) (str.ptr[i] - '0');
+    MG_INFO(("[%.*s] %llu", (int) str.len, str.ptr, result));
+    i++;
+  }
+  return result;
+}
+
 int64_t mg_to64(struct mg_str str) {
   int64_t result = 0, neg = 1, max = 922337203685477570 /* INT64_MAX/10-10 */;
   size_t i = 0;

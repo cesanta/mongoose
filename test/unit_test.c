@@ -1499,6 +1499,11 @@ static void test_util(void) {
   ASSERT(mg_to64(mg_str("-9223372036854775809")) == 0);
   ASSERT(mg_to64(mg_str("9223372036854775800")) == 0);
   ASSERT(mg_to64(mg_str("9223372036854775700")) > 0);
+  ASSERT(mg_tou64(mg_str("0")) == 0);
+  ASSERT(mg_tou64(mg_str("123")) == 123);
+  ASSERT(mg_tou64(mg_str("")) == 0);
+  ASSERT(mg_tou64(mg_str("-")) == 0);
+  ASSERT(mg_tou64(mg_str("18446744073709551615")) == 18446744073709551615U);
 }
 
 static void test_crc32(void) {
