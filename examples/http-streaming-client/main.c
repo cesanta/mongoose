@@ -38,13 +38,14 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
               mg_url_uri(s_url), (int) host.len, host.ptr);
   } else if (ev == MG_EV_HTTP_CHUNK) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    MG_INFO(("%.*s", (int) hm->chunk.len, hm->chunk.ptr));
+    fwrite(hm->chunk.ptr, 1, hm->chunk.len, stdout);
+    // fprintf(stderr, "c %u\n", (unsigned) hm->chunk.len);
     mg_http_delete_chunk(c, hm);
     if (hm->chunk.len == 0) *(bool *) fn_data = true;  // Last chunk
   } else if (ev == MG_EV_HTTP_MSG) {
     // Response is received. Print it
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    MG_INFO(("%.*s", (int) hm->body.len, hm->body.ptr));
+    fwrite(hm->body.ptr, 1, hm->body.len, stdout);
     c->is_closing = 1;         // Tell mongoose to close this connection
     *(bool *) fn_data = true;  // Tell event loop to stop
   } else if (ev == MG_EV_ERROR) {
@@ -55,8 +56,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 int main(int argc, char *argv[]) {
   struct mg_mgr mgr;                        // Event manager
   bool done = false;                        // Event handler flips it to true
+  const char *log_level = getenv("V");      // Log level
+  if (log_level == NULL) log_level = "3";   // If not set, set to DEBUG
+  mg_log_set(log_level);                    // Set to 0 to disable debug log
   if (argc > 1) s_url = argv[1];            // Use URL from command line
-  mg_log_set("3");                          // Set to 0 to disable debug
   mg_mgr_init(&mgr);                        // Initialise event manager
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
   while (!done) mg_mgr_poll(&mgr, 1000);    // Infinite event loop
