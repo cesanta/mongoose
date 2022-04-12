@@ -2151,7 +2151,7 @@ Usage example:
 struct mg_str str1 = mg_str("hello");
 struct mg_str str2 = mg_strdup(str1);
 //...
-free(str1.ptr);
+free(str2.ptr);
 ```
 
 
