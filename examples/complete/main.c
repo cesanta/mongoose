@@ -192,15 +192,12 @@ static void log_cb(void *arg) {
 
 int main(void) {
   struct mg_mgr mgr;
-  struct mg_timer t1, t2;
 
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, "http://localhost:8000", cb, &mgr);
-  mg_timer_init(&t1, 500, MG_TIMER_REPEAT, mjpeg_cb, &mgr);
-  mg_timer_init(&t2, 1000, MG_TIMER_REPEAT, log_cb, &mgr);
+  mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, mjpeg_cb, &mgr);
+  mg_timer_add(&mgr, 1000, MG_TIMER_REPEAT, log_cb, &mgr);
   for (;;) mg_mgr_poll(&mgr, 50);
-  mg_timer_free(&t1);
-  mg_timer_free(&t2);
   mg_mgr_free(&mgr);
 
   return 0;

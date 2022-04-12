@@ -675,6 +675,7 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *param);
 
 struct mg_timer {
   uint64_t period_ms;       // Timer period in milliseconds
+  uint64_t prev_ms;         // Timestamp of a previous poll
   uint64_t expire;          // Expiration timestamp in milliseconds
   unsigned flags;           // Possible flags values below
 #define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
@@ -686,10 +687,11 @@ struct mg_timer {
 
 extern struct mg_timer *g_timers;  // Global list of timers
 
-void mg_timer_init(struct mg_timer *, uint64_t, unsigned, void (*)(void *),
-                   void *);
-void mg_timer_free(struct mg_timer *);
-void mg_timer_poll(uint64_t current_time_ms);
+void mg_timer_init(struct mg_timer **head, struct mg_timer *timer,
+                   uint64_t milliseconds, unsigned flags, void (*fn)(void *),
+                   void *arg);
+void mg_timer_free(struct mg_timer **head, struct mg_timer *);
+void mg_timer_poll(struct mg_timer **head, uint64_t new_ms);
 
 
 
@@ -878,6 +880,7 @@ enum {
 
 
 
+
 struct mg_dns {
   const char *url;          // DNS server URL
   struct mg_connection *c;  // DNS server connection
@@ -897,6 +900,9 @@ struct mg_mgr {
   int dnstimeout;               // DNS resolve timeout in milliseconds
   unsigned long nextid;         // Next connection ID
   void *userdata;               // Arbitrary user data pointer
+  uint16_t mqtt_id;             // MQTT IDs for pub/sub
+  void *active_dns_requests;    // DNS requests in progress
+  struct mg_timer *timers;      // Active timers
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
 #endif
@@ -956,6 +962,8 @@ bool mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_t len);
 struct mg_connection *mg_alloc_conn(struct mg_mgr *);
 void mg_close_conn(struct mg_connection *c);
 bool mg_open_listener(struct mg_connection *c, const char *url);
+struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
+                              unsigned flags, void (*fn)(void *), void *arg);
 
 
 

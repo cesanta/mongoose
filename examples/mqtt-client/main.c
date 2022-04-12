@@ -74,17 +74,15 @@ static void timer_fn(void *arg) {
 
 int main(void) {
   struct mg_mgr mgr;
-  struct mg_timer timer;
   int topts = MG_TIMER_REPEAT | MG_TIMER_RUN_NOW;
 
   signal(SIGINT, signal_handler);   // Setup signal handlers - exist event
   signal(SIGTERM, signal_handler);  // manager loop on SIGINT and SIGTERM
 
-  mg_mgr_init(&mgr);                                   // Init event manager
-  mg_timer_init(&timer, 3000, topts, timer_fn, &mgr);  // Init timer
-  while (s_signo == 0) mg_mgr_poll(&mgr, 1000);        // Event loop, 1s timeout
-  mg_mgr_free(&mgr);                                   // Finished, cleanup
-  mg_timer_free(&timer);                               // Free timer resources
+  mg_mgr_init(&mgr);                                // Init event manager
+  mg_timer_add(&mgr, 3000, topts, timer_fn, &mgr);  // Init timer
+  while (s_signo == 0) mg_mgr_poll(&mgr, 1000);     // Event loop, 1s timeout
+  mg_mgr_free(&mgr);                                // Finished, cleanup
 
   return 0;
 }

@@ -67,11 +67,10 @@ static void timer_fn(void *arg) {
 }
 
 int main(void) {
-  struct mg_mgr mgr;   // Event manager
-  struct mg_timer t1;  // Timer
+  struct mg_mgr mgr;  // Event manager
 
   mg_mgr_init(&mgr);  // Init event manager
-  mg_timer_init(&t1, 5000, MG_TIMER_REPEAT, timer_fn, &mgr);  // Init timer
+  mg_timer_add(&mgr, 5000, MG_TIMER_REPEAT, timer_fn, &mgr);  // Init timer
 
   jsonrpc_init(NULL, NULL);         // Init JSON-RPC instance
   jsonrpc_export("sum", sum);       // And export a couple
@@ -80,7 +79,6 @@ int main(void) {
   printf("Starting WS listener on %s/websocket\n", s_listen_on);
   mg_http_listen(&mgr, s_listen_on, fn, NULL);  // Create HTTP listener
   for (;;) mg_mgr_poll(&mgr, 1000);             // Infinite event loop
-  mg_timer_free(&t1);                           // Free timer resources
   mg_mgr_free(&mgr);                            // Deallocate event manager
   return 0;
 }

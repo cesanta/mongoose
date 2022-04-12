@@ -4,33 +4,26 @@
 #include "timer.h"
 #include "arch.h"
 
-struct mg_timer *g_timers;
-
-void mg_timer_init(struct mg_timer *t, uint64_t ms, unsigned flags,
-                   void (*fn)(void *), void *arg) {
-  struct mg_timer tmp = {ms, 0UL, flags, fn, arg, g_timers};
+void mg_timer_init(struct mg_timer **head, struct mg_timer *t, uint64_t ms,
+                   unsigned flags, void (*fn)(void *), void *arg) {
+  struct mg_timer tmp = {ms, 0U, 0U, flags, fn, arg, *head};
   *t = tmp;
-  g_timers = t;
+  *head = t;
   if (flags & MG_TIMER_RUN_NOW) fn(arg);
 }
 
-void mg_timer_free(struct mg_timer *t) {
-  struct mg_timer **head = &g_timers;
+void mg_timer_free(struct mg_timer **head, struct mg_timer *t) {
   while (*head && *head != t) head = &(*head)->next;
   if (*head) *head = t->next;
 }
 
-void mg_timer_poll(uint64_t now_ms) {
+void mg_timer_poll(struct mg_timer **head, uint64_t now_ms) {
   // If time goes back (wrapped around), reset timers
   struct mg_timer *t, *tmp;
-  static uint64_t oldnow;  // Timestamp in a previous invocation
-  if (oldnow > now_ms) {   // If it is wrapped, reset timers
-    for (t = g_timers; t != NULL; t = t->next) t->expire = 0;
-  }
-  oldnow = now_ms;
-
-  for (t = g_timers; t != NULL; t = tmp) {
+  for (t = *head; t != NULL; t = tmp) {
     tmp = t->next;
+    if (t->prev_ms > now_ms) t->expire = 0;  // Handle time wrap
+    t->prev_ms = now_ms;
     if (t->expire == 0) t->expire = now_ms + t->period_ms;
     if (t->expire > now_ms) continue;
     t->fn(t->arg);
@@ -38,6 +31,6 @@ void mg_timer_poll(uint64_t now_ms) {
     // even if this polling function is called with some random period.
     t->expire = now_ms - t->expire > t->period_ms ? now_ms + t->period_ms
                                                   : t->expire + t->period_ms;
-    if (!(t->flags & MG_TIMER_REPEAT)) mg_timer_free(t);
+    if (!(t->flags & MG_TIMER_REPEAT)) mg_timer_free(head, t);
   }
 }

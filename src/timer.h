@@ -4,6 +4,7 @@
 
 struct mg_timer {
   uint64_t period_ms;       // Timer period in milliseconds
+  uint64_t prev_ms;         // Timestamp of a previous poll
   uint64_t expire;          // Expiration timestamp in milliseconds
   unsigned flags;           // Possible flags values below
 #define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
@@ -15,7 +16,8 @@ struct mg_timer {
 
 extern struct mg_timer *g_timers;  // Global list of timers
 
-void mg_timer_init(struct mg_timer *, uint64_t, unsigned, void (*)(void *),
-                   void *);
-void mg_timer_free(struct mg_timer *);
-void mg_timer_poll(uint64_t current_time_ms);
+void mg_timer_init(struct mg_timer **head, struct mg_timer *timer,
+                   uint64_t milliseconds, unsigned flags, void (*fn)(void *),
+                   void *arg);
+void mg_timer_free(struct mg_timer **head, struct mg_timer *);
+void mg_timer_poll(struct mg_timer **head, uint64_t new_ms);

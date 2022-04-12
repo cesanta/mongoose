@@ -72,8 +72,7 @@ int main(int argc, char *argv[]) {
   mg_http_listen(&mgr, s_http_addr, wcb, NULL);
   mg_http_listen(&mgr, s_https_addr, wcb, &mgr);
 
-  struct mg_timer t;
-  mg_timer_init(&t, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
+  mg_timer_add(&mgr, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
 
   // Start infinite event loop
   MG_INFO(("Mongoose version : v%s", MG_VERSION));

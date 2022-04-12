@@ -124,21 +124,20 @@ struct dns_data {
   uint16_t txnid;
 };
 
-static struct dns_data *s_reqs;  // Active DNS requests
-
 static void mg_sendnsreq(struct mg_connection *, struct mg_str *, int,
                          struct mg_dns *, bool);
 
-static void mg_dns_free(struct dns_data *d) {
-  LIST_DELETE(struct dns_data, &s_reqs, d);
+static void mg_dns_free(struct mg_connection *c, struct dns_data *d) {
+  LIST_DELETE(struct dns_data,
+              (struct dns_data **) &c->mgr->active_dns_requests, d);
   free(d);
 }
 
 void mg_resolve_cancel(struct mg_connection *c) {
-  struct dns_data *tmp, *d;
-  for (d = s_reqs; d != NULL; d = tmp) {
+  struct dns_data *tmp, *d = (struct dns_data *) c->mgr->active_dns_requests;
+  for (; d != NULL; d = tmp) {
     tmp = d->next;
-    if (d->c == c) mg_dns_free(d);
+    if (d->c == c) mg_dns_free(c, d);
   }
 }
 
@@ -251,7 +250,8 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
   struct dns_data *d, *tmp;
   if (ev == MG_EV_POLL) {
     uint64_t now = *(uint64_t *) ev_data;
-    for (d = s_reqs; d != NULL; d = tmp) {
+    for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
+         d = tmp) {
       tmp = d->next;
       // MG_DEBUG ("%lu %lu dns poll", d->expire, now));
       if (now > d->expire) mg_error(d->c, "DNS timeout");
@@ -265,7 +265,8 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
       free(s);
     } else {
       MG_VERBOSE(("%s %d", dm.name, dm.resolved));
-      for (d = s_reqs; d != NULL; d = tmp) {
+      for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
+           d = tmp) {
         tmp = d->next;
         // MG_INFO(("d %p %hu %hu", d, d->txnid, dm.txnid));
         if (dm.txnid != d->txnid) continue;
@@ -288,17 +289,18 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         } else {
           MG_ERROR(("%lu already resolved", d->c->id));
         }
-        mg_dns_free(d);
+        mg_dns_free(c, d);
         resolved = 1;
       }
     }
     if (!resolved) MG_ERROR(("stray DNS reply"));
     c->recv.len = 0;
   } else if (ev == MG_EV_CLOSE) {
-    for (d = s_reqs; d != NULL; d = tmp) {
+    for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
+         d = tmp) {
       tmp = d->next;
       mg_error(d->c, "DNS error");
-      mg_dns_free(d);
+      mg_dns_free(c, d);
     }
   }
   (void) fn_data;
@@ -348,10 +350,11 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
   } else if ((d = (struct dns_data *) calloc(1, sizeof(*d))) == NULL) {
     mg_error(c, "resolve OOM");
   } else {
+    struct dns_data *reqs = (struct dns_data *) c->mgr->active_dns_requests;
     char buf[100];
-    d->txnid = s_reqs ? (uint16_t) (s_reqs->txnid + 1) : 1;
-    d->next = s_reqs;
-    s_reqs = d;
+    d->txnid = reqs ? (uint16_t) (reqs->txnid + 1) : 1;
+    d->next = (struct dns_data *) c->mgr->active_dns_requests;
+    c->mgr->active_dns_requests = d;
     d->expire = mg_millis() + (uint64_t) ms;
     d->c = c;
     c->is_resolving = 1;
@@ -1279,68 +1282,20 @@ void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len) {
 static const char *mg_http_status_code_str(int status_code) {
   switch (status_code) {
     case 100: return "Continue";
-    case 101: return "Switching Protocols";
-    case 102: return "Processing";
-    case 200: return "OK";
     case 201: return "Created";
     case 202: return "Accepted";
-    case 203: return "Non-authoritative Information";
     case 204: return "No Content";
-    case 205: return "Reset Content";
     case 206: return "Partial Content";
-    case 207: return "Multi-Status";
-    case 208: return "Already Reported";
-    case 226: return "IM Used";
-    case 300: return "Multiple Choices";
     case 301: return "Moved Permanently";
     case 302: return "Found";
-    case 303: return "See Other";
     case 304: return "Not Modified";
-    case 305: return "Use Proxy";
-    case 307: return "Temporary Redirect";
-    case 308: return "Permanent Redirect";
     case 400: return "Bad Request";
     case 401: return "Unauthorized";
-    case 402: return "Payment Required";
     case 403: return "Forbidden";
     case 404: return "Not Found";
-    case 405: return "Method Not Allowed";
-    case 406: return "Not Acceptable";
-    case 407: return "Proxy Authentication Required";
-    case 408: return "Request Timeout";
-    case 409: return "Conflict";
-    case 410: return "Gone";
-    case 411: return "Length Required";
-    case 412: return "Precondition Failed";
-    case 413: return "Payload Too Large";
-    case 414: return "Request-URI Too Long";
-    case 415: return "Unsupported Media Type";
-    case 416: return "Requested Range Not Satisfiable";
-    case 417: return "Expectation Failed";
     case 418: return "I'm a teapot";
-    case 421: return "Misdirected Request";
-    case 422: return "Unprocessable Entity";
-    case 423: return "Locked";
-    case 424: return "Failed Dependency";
-    case 426: return "Upgrade Required";
-    case 428: return "Precondition Required";
-    case 429: return "Too Many Requests";
-    case 431: return "Request Header Fields Too Large";
-    case 444: return "Connection Closed Without Response";
-    case 451: return "Unavailable For Legal Reasons";
-    case 499: return "Client Closed Request";
     case 500: return "Internal Server Error";
     case 501: return "Not Implemented";
-    case 502: return "Bad Gateway";
-    case 503: return "Service Unavailable";
-    case 504: return "Gateway Timeout";
-    case 505: return "HTTP Version Not Supported";
-    case 506: return "Variant Also Negotiates";
-    case 507: return "Insufficient Storage";
-    case 508: return "Loop Detected";
-    case 510: return "Not Extended";
-    case 511: return "Network Authentication Required";
-    case 599: return "Network Connect Timeout Error";
     default: return "OK";
   }
 }
@@ -1572,7 +1527,7 @@ static void printdirentry(const char *name, void *userdata) {
 
 static void listdir(struct mg_connection *c, struct mg_http_message *hm,
                     const struct mg_http_serve_opts *opts, char *dir) {
-  static const char *sort_js_code =
+  const char *sort_js_code =
       "<script>function srt(tb, sc, so, d) {"
       "var tr = Array.prototype.slice.call(tb.rows, 0),"
       "tr = tr.sort(function (a, b) { var c1 = a.cells[sc], c2 = b.cells[sc],"
@@ -1582,7 +1537,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
       "return so * (t1 < 0 && t2 >= 0 ? -1 : t2 < 0 && t1 >= 0 ? 1 : "
       "n1 ? parseInt(n2) - parseInt(n1) : "
       "c1.textContent.trim().localeCompare(c2.textContent.trim())); });";
-  static const char *sort_js_code2 =
+  const char *sort_js_code2 =
       "for (var i = 0; i < tr.length; i++) tb.appendChild(tr[i]); "
       "if (!d) window.location.hash = ('sc=' + sc + '&so=' + so); "
       "};"
@@ -2406,20 +2361,18 @@ void mg_mqtt_pub(struct mg_connection *c, struct mg_str topic,
   mg_send_u16(c, mg_htons((uint16_t) topic.len));
   mg_send(c, topic.ptr, topic.len);
   if (qos > 0) {
-    static uint16_t s_id;
-    if (++s_id == 0) s_id++;
-    mg_send_u16(c, mg_htons(s_id));
+    if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
+    mg_send_u16(c, mg_htons(c->mgr->mqtt_id));
   }
   mg_send(c, data.ptr, data.len);
 }
 
 void mg_mqtt_sub(struct mg_connection *c, struct mg_str topic, int qos) {
-  static uint16_t s_id;
   uint8_t qos_ = qos & 3;
   uint32_t total_len = 2 + (uint32_t) topic.len + 2 + 1;
   mg_mqtt_send_header(c, MQTT_CMD_SUBSCRIBE, 2, total_len);
-  if (++s_id == 0) ++s_id;
-  mg_send_u16(c, mg_htons(s_id));
+  if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
+  mg_send_u16(c, mg_htons(c->mgr->mqtt_id));
   mg_send_u16(c, mg_htons((uint16_t) topic.len));
   mg_send(c, topic.ptr, topic.len);
   mg_send(c, &qos_, sizeof(qos_));
@@ -2591,6 +2544,7 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/net.c"
 #endif
+
 
 
 
@@ -2797,8 +2751,17 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
   return c;
 }
 
+struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
+                              unsigned flags, void (*fn)(void *), void *arg) {
+  struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
+  mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
+  return t;
+}
+
 void mg_mgr_free(struct mg_mgr *mgr) {
   struct mg_connection *c;
+  struct mg_timer *tmp, *t = mgr->timers;
+  while (t != NULL) tmp = t->next, free(t), t = tmp;
   for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
   mg_mgr_poll(mgr, 0);
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
@@ -3662,7 +3625,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 
   mg_iotest(mgr, ms);
   now = mg_millis();
-  mg_timer_poll(now);
+  mg_timer_poll(&mgr->timers, now);
 
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
@@ -3989,7 +3952,7 @@ char *mg_hexdump(const void *buf, size_t len) {
 
 char *mg_hex(const void *buf, size_t len, char *to) {
   const unsigned char *p = (const unsigned char *) buf;
-  static const char *hex = "0123456789abcdef";
+  const char *hex = "0123456789abcdef";
   size_t i = 0;
   for (; len--; p++) {
     to[i++] = hex[p[0] >> 4];
@@ -4056,7 +4019,6 @@ uint64_t mg_tou64(struct mg_str str) {
   while (i < str.len && str.ptr[i] >= '0' && str.ptr[i] <= '9') {
     result *= 10;
     result += (unsigned) (str.ptr[i] - '0');
-    MG_INFO(("[%.*s] %llu", (int) str.len, str.ptr, result));
     i++;
   }
   return result;
@@ -4193,33 +4155,26 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
 
 
 
-struct mg_timer *g_timers;
-
-void mg_timer_init(struct mg_timer *t, uint64_t ms, unsigned flags,
-                   void (*fn)(void *), void *arg) {
-  struct mg_timer tmp = {ms, 0UL, flags, fn, arg, g_timers};
+void mg_timer_init(struct mg_timer **head, struct mg_timer *t, uint64_t ms,
+                   unsigned flags, void (*fn)(void *), void *arg) {
+  struct mg_timer tmp = {ms, 0U, 0U, flags, fn, arg, *head};
   *t = tmp;
-  g_timers = t;
+  *head = t;
   if (flags & MG_TIMER_RUN_NOW) fn(arg);
 }
 
-void mg_timer_free(struct mg_timer *t) {
-  struct mg_timer **head = &g_timers;
+void mg_timer_free(struct mg_timer **head, struct mg_timer *t) {
   while (*head && *head != t) head = &(*head)->next;
   if (*head) *head = t->next;
 }
 
-void mg_timer_poll(uint64_t now_ms) {
+void mg_timer_poll(struct mg_timer **head, uint64_t now_ms) {
   // If time goes back (wrapped around), reset timers
   struct mg_timer *t, *tmp;
-  static uint64_t oldnow;  // Timestamp in a previous invocation
-  if (oldnow > now_ms) {   // If it is wrapped, reset timers
-    for (t = g_timers; t != NULL; t = t->next) t->expire = 0;
-  }
-  oldnow = now_ms;
-
-  for (t = g_timers; t != NULL; t = tmp) {
+  for (t = *head; t != NULL; t = tmp) {
     tmp = t->next;
+    if (t->prev_ms > now_ms) t->expire = 0;  // Handle time wrap
+    t->prev_ms = now_ms;
     if (t->expire == 0) t->expire = now_ms + t->period_ms;
     if (t->expire > now_ms) continue;
     t->fn(t->arg);
@@ -4227,7 +4182,7 @@ void mg_timer_poll(uint64_t now_ms) {
     // even if this polling function is called with some random period.
     t->expire = now_ms - t->expire > t->period_ms ? now_ms + t->period_ms
                                                   : t->expire + t->period_ms;
-    if (!(t->flags & MG_TIMER_REPEAT)) mg_timer_free(t);
+    if (!(t->flags & MG_TIMER_REPEAT)) mg_timer_free(head, t);
   }
 }
 

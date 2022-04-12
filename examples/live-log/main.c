@@ -49,14 +49,12 @@ static void timer_fn(void *arg) {
 
 int main(void) {
   struct mg_mgr mgr;
-  struct mg_timer t1;
 
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, "http://localhost:8000", cb, NULL);
-  mg_timer_init(&t1, 1000, MG_TIMER_REPEAT, timer_fn, &mgr);
+  mg_timer_add(&mgr, 1000, MG_TIMER_REPEAT, timer_fn, &mgr);
 
   for (;;) mg_mgr_poll(&mgr, 50);
-  mg_timer_free(&t1);
   mg_mgr_free(&mgr);
 
   return 0;

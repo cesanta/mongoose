@@ -4,6 +4,7 @@
 #include "event.h"
 #include "iobuf.h"
 #include "str.h"
+#include "timer.h"
 
 struct mg_dns {
   const char *url;          // DNS server URL
@@ -24,6 +25,9 @@ struct mg_mgr {
   int dnstimeout;               // DNS resolve timeout in milliseconds
   unsigned long nextid;         // Next connection ID
   void *userdata;               // Arbitrary user data pointer
+  uint16_t mqtt_id;             // MQTT IDs for pub/sub
+  void *active_dns_requests;    // DNS requests in progress
+  struct mg_timer *timers;      // Active timers
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
 #endif
@@ -83,3 +87,5 @@ bool mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_t len);
 struct mg_connection *mg_alloc_conn(struct mg_mgr *);
 void mg_close_conn(struct mg_connection *c);
 bool mg_open_listener(struct mg_connection *c, const char *url);
+struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
+                              unsigned flags, void (*fn)(void *), void *arg);

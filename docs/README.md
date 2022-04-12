@@ -1835,6 +1835,40 @@ mg_tls_init(c, &opts);
 
 ## Timer
 
+### mg\_timer\_add()
+
+```c
+struct timer *mg_timer_add(struct mg_mgr *mgr,
+                           uint64_t period_ms, unsigned flags,
+                           void (*fn)(void *), void *fn_data);
+```
+
+Setup a timer. This is a high-level timer API that allows to add a software
+timer to the event manager. This function `calloc()`s a new timer and
+adds it to the `mgr->timers` list. All added timers are polled when
+`mg_mgr_poll()` is called, and called if expired.
+
+<span class="badge bg-danger">NOTE: </span> Make sure that the timer
+interval is equal or more to the `mg_mgr_poll()` timeout.
+
+Parameters:
+- `mgr` - Pointer to `mg_mgr` event manager structure
+- `ms` - An interval in milliseconds
+- `flags` - Timer flags bitmask, `MG_TIMER_REPEAT` and `MG_TIMER_RUN_NOW`
+- `fn` - Function to invoke
+- `fn_data` - Function argument
+
+Return value: None
+
+Usage example:
+```c
+void timer_fn(void *data) {
+  // ...
+}
+
+mg_timer_add(mgr, 1000, MG_TIMER_REPEAT, timer_fn, NULL);
+```
+
 ### struct mg\_timer
 
 ```c
@@ -1856,13 +1890,15 @@ as the `mg_mgr_poll()` timeout argument in the main event loop.
 ### mg\_timer\_init()
 
 ```c
-void mg_timer_init(struct mg_timer *t, uint64_t period_ms, unsigned flags,
+void mg_timer_init(struct mg_timer **head,
+                   struct mg_timer *t, uint64_t period_ms, unsigned flags,
                    void (*fn)(void *), void *fn_data);
 ```
 
 Setup a timer.
 
 Parameters:
+- `head` - Pointer to `mg_timer` list head
 - `t` - Pointer to `mg_timer` that should be initialized
 - `ms` - An interval in milliseconds
 - `flags` - Timer flags bitmask, `MG_TIMER_REPEAT` and `MG_TIMER_RUN_NOW`
@@ -1877,19 +1913,19 @@ void timer_fn(void *data) {
   // ...
 }
 
-struct mg_timer timer;
-mg_timer_init(&timer, 1000 /* 1sec */, MG_TIMER_REPEAT, timer_fn, NULL);
-// A timer gets initialized and linked into the internal timers list
+struct mg_timer timer, *head = NULL;
+mg_timer_init(&head, &timer, 1000, MG_TIMER_REPEAT, timer_fn, NULL);
 ```
 
 ### mg\_timer\_free()
 
 ```c
-void mg_timer_free(struct mg_timer *t);
+void mg_timer_free(struct mg_timer **head, struct mg_timer *t);
 ```
 Free timer, remove it from the internal timers list.
 
 Parameters:
+- `head` - Pointer to `mg_timer` list head
 - `t` - Timer to free
 
 Return value: None
@@ -1904,7 +1940,7 @@ mg_timer_free(&timer);
 ### mg\_timer\_poll()
 
 ```c
-void mg_timer_poll(uint64_t uptime_ms);
+void mg_timer_poll(struct mg_timer **head, uint64_t uptime_ms);
 ```
 
 Traverse list of timers and call them if current timestamp `uptime_ms` is
@@ -1914,6 +1950,7 @@ Note, that `mg_mgr_poll` function internally calls `mg_timer_poll`; therefore,
 in most cases it is unnecessary to call it explicitly.
 
 Parameters:
+- `head` - Pointer to `mg_timer` list head
 - `uptime_ms` - current timestamp
 
 Return value: None

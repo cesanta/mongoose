@@ -536,7 +536,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 
   mg_iotest(mgr, ms);
   now = mg_millis();
-  mg_timer_poll(now);
+  mg_timer_poll(&mgr->timers, now);
 
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;

@@ -39,7 +39,6 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 int main(void) {
   struct mg_mgr mgr;
-  struct mg_timer t1;
 
   mg_mgr_init(&mgr);
   mg_log_set("3");

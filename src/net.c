@@ -1,6 +1,7 @@
 #include "net.h"
 #include "dns.h"
 #include "log.h"
+#include "timer.h"
 #include "tls.h"
 #include "util.h"
 
@@ -204,8 +205,17 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
   return c;
 }
 
+struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
+                              unsigned flags, void (*fn)(void *), void *arg) {
+  struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
+  mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
+  return t;
+}
+
 void mg_mgr_free(struct mg_mgr *mgr) {
   struct mg_connection *c;
+  struct mg_timer *tmp, *t = mgr->timers;
+  while (t != NULL) tmp = t->next, free(t), t = tmp;
   for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
   mg_mgr_poll(mgr, 0);
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP

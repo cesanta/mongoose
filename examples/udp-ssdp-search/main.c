@@ -36,11 +36,10 @@ static void tfn(void *param) {
 
 int main(void) {
   struct mg_mgr mgr;
-  struct mg_timer timer;
   static struct mg_connection *c;
   mg_mgr_init(&mgr);
   c = mg_connect(&mgr, s_ssdp_url, fn, NULL);
-  mg_timer_init(&timer, 2000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, tfn, c);
+  mg_timer_add(&mgr, 2000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, tfn, c);
   while (true) mg_mgr_poll(&mgr, 200);
   mg_mgr_free(&mgr);
   return 0;

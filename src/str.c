@@ -194,7 +194,7 @@ char *mg_hexdump(const void *buf, size_t len) {
 
 char *mg_hex(const void *buf, size_t len, char *to) {
   const unsigned char *p = (const unsigned char *) buf;
-  static const char *hex = "0123456789abcdef";
+  const char *hex = "0123456789abcdef";
   size_t i = 0;
   for (; len--; p++) {
     to[i++] = hex[p[0] >> 4];
@@ -261,7 +261,6 @@ uint64_t mg_tou64(struct mg_str str) {
   while (i < str.len && str.ptr[i] >= '0' && str.ptr[i] <= '9') {
     result *= 10;
     result += (unsigned) (str.ptr[i] - '0');
-    MG_INFO(("[%.*s] %llu", (int) str.len, str.ptr, result));
     i++;
   }
   return result;
