@@ -19,7 +19,7 @@ static int mg_tls_err(struct mg_tls *tls, int res) {
   return err;
 }
 
-void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   const char *id = "mongoose";
   static unsigned char s_initialised = 0;

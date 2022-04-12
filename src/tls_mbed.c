@@ -96,7 +96,7 @@ static struct mg_str mg_loadfile(struct mg_fs *fs, const char *path) {
   return mg_str_n(p, n);
 }
 
-void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   int rc = 0;

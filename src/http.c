@@ -480,7 +480,8 @@ static int getrange(struct mg_str *s, int64_t *a, int64_t *b) {
 }
 
 void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
-                        const char *path, struct mg_http_serve_opts *opts) {
+                        const char *path,
+                        const struct mg_http_serve_opts *opts) {
   char etag[64];
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   struct mg_fd *fd = mg_fs_open(fs, path, MG_FS_READ);
@@ -544,7 +545,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
 struct printdirentrydata {
   struct mg_connection *c;
   struct mg_http_message *hm;
-  struct mg_http_serve_opts *opts;
+  const struct mg_http_serve_opts *opts;
   const char *dir;
 };
 
@@ -580,7 +581,7 @@ static void printdirentry(const char *name, void *userdata) {
 }
 
 static void listdir(struct mg_connection *c, struct mg_http_message *hm,
-                    struct mg_http_serve_opts *opts, char *dir) {
+                    const struct mg_http_serve_opts *opts, char *dir) {
   static const char *sort_js_code =
       "<script>function srt(tb, sc, so, d) {"
       "var tr = Array.prototype.slice.call(tb.rows, 0),"
@@ -708,7 +709,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
 }
 
 static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
-                       struct mg_http_serve_opts *opts, char *path,
+                       const struct mg_http_serve_opts *opts, char *path,
                        size_t path_size) {
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   struct mg_str k, v, s = mg_str(opts->root_dir), u = {0, 0}, p = {0, 0};
@@ -722,7 +723,7 @@ static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
 }
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
-                       struct mg_http_serve_opts *opts) {
+                       const struct mg_http_serve_opts *opts) {
   char path[MG_PATH_MAX] = "";
   const char *sp = opts->ssi_pattern;
   int flags = uri_to_path(c, hm, opts, path, sizeof(path));

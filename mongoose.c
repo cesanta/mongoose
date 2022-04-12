@@ -1470,7 +1470,8 @@ static int getrange(struct mg_str *s, int64_t *a, int64_t *b) {
 }
 
 void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
-                        const char *path, struct mg_http_serve_opts *opts) {
+                        const char *path,
+                        const struct mg_http_serve_opts *opts) {
   char etag[64];
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   struct mg_fd *fd = mg_fs_open(fs, path, MG_FS_READ);
@@ -1534,7 +1535,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
 struct printdirentrydata {
   struct mg_connection *c;
   struct mg_http_message *hm;
-  struct mg_http_serve_opts *opts;
+  const struct mg_http_serve_opts *opts;
   const char *dir;
 };
 
@@ -1570,7 +1571,7 @@ static void printdirentry(const char *name, void *userdata) {
 }
 
 static void listdir(struct mg_connection *c, struct mg_http_message *hm,
-                    struct mg_http_serve_opts *opts, char *dir) {
+                    const struct mg_http_serve_opts *opts, char *dir) {
   static const char *sort_js_code =
       "<script>function srt(tb, sc, so, d) {"
       "var tr = Array.prototype.slice.call(tb.rows, 0),"
@@ -1698,7 +1699,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
 }
 
 static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
-                       struct mg_http_serve_opts *opts, char *path,
+                       const struct mg_http_serve_opts *opts, char *path,
                        size_t path_size) {
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   struct mg_str k, v, s = mg_str(opts->root_dir), u = {0, 0}, p = {0, 0};
@@ -1712,7 +1713,7 @@ static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
 }
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
-                       struct mg_http_serve_opts *opts) {
+                       const struct mg_http_serve_opts *opts) {
   char path[MG_PATH_MAX] = "";
   const char *sp = opts->ssi_pattern;
   int flags = uri_to_path(c, hm, opts, path, sizeof(path));
@@ -2341,7 +2342,7 @@ static void mg_send_u16(struct mg_connection *c, uint16_t value) {
   mg_send(c, &value, sizeof(value));
 }
 
-void mg_mqtt_login(struct mg_connection *c, struct mg_mqtt_opts *opts) {
+void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
   char rnd[9], client_id[16];
   struct mg_str cid = opts->client_id;
   uint32_t total_len = 7 + 1 + 2 + 2;
@@ -2568,7 +2569,7 @@ void mg_mqtt_disconnect(struct mg_connection *nc) {
 }
 
 struct mg_connection *mg_mqtt_connect(struct mg_mgr *mgr, const char *url,
-                                      struct mg_mqtt_opts *opts,
+                                      const struct mg_mqtt_opts *opts,
                                       mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = mg_connect(mgr, url, fn, fn_data);
   if (c != NULL) {
@@ -4223,7 +4224,7 @@ void mg_timer_poll(uint64_t now_ms) {
 
 
 #if !MG_ENABLE_MBEDTLS && !MG_ENABLE_OPENSSL && !MG_ENABLE_CUSTOM_TLS
-void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   (void) opts;
   mg_error(c, "TLS is not enabled");
 }
@@ -4342,7 +4343,7 @@ static struct mg_str mg_loadfile(struct mg_fs *fs, const char *path) {
   return mg_str_n(p, n);
 }
 
-void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   int rc = 0;
@@ -4473,7 +4474,7 @@ static int mg_tls_err(struct mg_tls *tls, int res) {
   return err;
 }
 
-void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts) {
+void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   const char *id = "mongoose";
   static unsigned char s_initialised = 0;

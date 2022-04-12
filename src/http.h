@@ -46,9 +46,9 @@ struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
 struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
 void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
-                       struct mg_http_serve_opts *opts);
+                       const struct mg_http_serve_opts *);
 void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
-                        const char *path, struct mg_http_serve_opts *opts);
+                        const char *path, const struct mg_http_serve_opts *);
 void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
                    const char *body_fmt, ...);
 struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);

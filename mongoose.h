@@ -1003,9 +1003,9 @@ struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
 struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
 void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
-                       struct mg_http_serve_opts *opts);
+                       const struct mg_http_serve_opts *);
 void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
-                        const char *path, struct mg_http_serve_opts *opts);
+                        const char *path, const struct mg_http_serve_opts *);
 void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
                    const char *body_fmt, ...);
 struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
@@ -1040,7 +1040,7 @@ struct mg_tls_opts {
   struct mg_fs *fs;       // FS API for reading certificate files
 };
 
-void mg_tls_init(struct mg_connection *, struct mg_tls_opts *);
+void mg_tls_init(struct mg_connection *, const struct mg_tls_opts *);
 void mg_tls_free(struct mg_connection *);
 long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
 long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
@@ -1152,11 +1152,11 @@ struct mg_mqtt_message {
 };
 
 struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
-                                      struct mg_mqtt_opts *opts,
+                                      const struct mg_mqtt_opts *opts,
                                       mg_event_handler_t fn, void *fn_data);
 struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
-void mg_mqtt_login(struct mg_connection *c, struct mg_mqtt_opts *opts);
+void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts);
 void mg_mqtt_pub(struct mg_connection *c, struct mg_str topic,
                  struct mg_str data, int qos, bool retain);
 void mg_mqtt_sub(struct mg_connection *, struct mg_str topic, int qos);
