@@ -38,6 +38,8 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
 }
 
 int mg_iobuf_init(struct mg_iobuf *io, size_t size) {
+  io->buf = NULL;
+  io->size = io->len = 0;
   return mg_iobuf_resize(io, size);
 }
 
