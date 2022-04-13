@@ -1,8 +1,8 @@
 // Copyright (c) 2020 Cesanta Software Limited
 // All rights reserved
 
-#include "mongoose.h"
 #include "certs.h"
+#include "mongoose.h"
 
 static const char *s_debug_level = "3";
 static time_t s_boot_timestamp = 0;
@@ -29,7 +29,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
     // If s_url is https://, tell client connection to use TLS
     if (mg_url_is_ssl(s_url)) {
-      struct mg_tls_opts opts = {.ca = s_ca, .srvname = host };
+      struct mg_tls_opts opts = {.ca = s_ca, .srvname = host};
       mg_tls_init(c, &opts);
     }
 
@@ -71,7 +71,7 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
     // We need correct time in order to get HTTPs working, therefore,
     // making https request from SMTP callback
-    if(!s_connected) {
+    if (!s_connected) {
       MG_INFO(("Connecting to    : [%s]", s_url));
       mg_http_connect(&s_mgr, s_url, fn, NULL);  // Create client connection
       s_connected = 1;
@@ -98,9 +98,8 @@ int main(int argc, char *argv[]) {
   mg_log_set_callback(logfn, NULL);
 
   mg_mgr_init(&s_mgr);
-
-  struct mg_timer t;
-  mg_timer_init(&t, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &s_mgr);
+  mg_timer_add(&s_mgr, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn,
+               &s_mgr);
 
   // Start infinite event loop
   MG_INFO(("Mongoose version : v%s", MG_VERSION));

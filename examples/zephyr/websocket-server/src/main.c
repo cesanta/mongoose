@@ -1,8 +1,8 @@
 // Copyright (c) 2020 Cesanta Software Limited
 // All rights reserved
 
-#include "mongoose.h"
 #include "certs.h"
+#include "mongoose.h"
 
 static const char *s_debug_level = "3";
 static const char *s_web_dir = "/";
@@ -29,7 +29,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     } else if (mg_http_match_uri(hm, "/rest")) {
       // Serve REST response
       mg_http_reply(c, 200, "", "{\"result\": %d}\n", 123);
-    } 
+    }
   } else if (ev == MG_EV_WS_MSG) {
     // Got websocket frame. Received data is wm->data. Echo it back!
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
@@ -77,9 +77,7 @@ int main(int argc, char *argv[]) {
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, s_ws_addr, fn, NULL);
   mg_http_listen(&mgr, s_wss_addr, fn, &mgr);
-
-  struct mg_timer t;
-  mg_timer_init(&t, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
+  mg_timer_add(&mgr, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
 
   // Start infinite event loop
   MG_INFO(("Mongoose version : v%s", MG_VERSION));

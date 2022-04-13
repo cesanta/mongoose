@@ -1,15 +1,16 @@
 // Copyright (c) 2020 Cesanta Software Limited
 // All rights reserved
 
-#include "mongoose.h"
 #include "certs.h"
+#include "mongoose.h"
 
 struct mg_mgr mgr;
 
 static const char *s_debug_level = "3";
 static time_t s_boot_timestamp = 0;
 static struct mg_connection *s_sntp_conn = NULL;
-static const char *s_url = "mqtts://a3nkain3cvvy7l-ats.iot.us-east-1.amazonaws.com";
+static const char *s_url =
+    "mqtts://a3nkain3cvvy7l-ats.iot.us-east-1.amazonaws.com";
 
 static const char *s_rx_topic = "d/rx";
 static const char *s_tx_topic = "d/tx";
@@ -24,8 +25,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_ERROR(("%p %s", c->fd, (char *) ev_data));
   } else if (ev == MG_EV_CONNECT) {
     // Set up 2-way TLS that is required by AWS IoT
-    struct mg_tls_opts opts = {
-        .ca = s_ca, .cert = s_cert, .certkey = s_key};
+    struct mg_tls_opts opts = {.ca = s_ca, .cert = s_cert, .certkey = s_key};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_MQTT_OPEN) {
     // MQTT connect is successful
@@ -67,10 +67,11 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
     // We need correct time in order to get HTTPs working, therefore,
     // making https request from SMTP callback
-    if(!s_connected) {
+    if (!s_connected) {
       MG_INFO(("Connecting to    : [%s]", s_url));
       struct mg_mqtt_opts opts = {.clean = true};
-      mg_mqtt_connect(&mgr, s_url, &opts, fn, NULL);  // Create client connection
+      mg_mqtt_connect(&mgr, s_url, &opts, fn,
+                      NULL);  // Create client connection
       s_connected = 1;
     }
   } else if (ev == MG_EV_CLOSE) {
@@ -95,9 +96,7 @@ int main(int argc, char *argv[]) {
   mg_log_set_callback(logfn, NULL);
 
   mg_mgr_init(&mgr);
-
-  struct mg_timer t;
-  mg_timer_init(&t, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
+  mg_timer_add(&mgr, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
 
   // Start infinite event loop
   MG_INFO(("Mongoose version : v%s", MG_VERSION));
