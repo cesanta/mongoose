@@ -558,20 +558,23 @@ static bool cmpheader(const char *buf, const char *name, const char *value) {
 }
 
 static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  int *p = (int *) fn_data;
   if (ev == MG_EV_WS_OPEN) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_str *wsproto = mg_http_get_header(hm, "Sec-WebSocket-Protocol");
     ASSERT(wsproto != NULL);
     mg_ws_send(c, "boo", 3, WEBSOCKET_OP_BINARY);
+    mg_ws_send(c, "foobar", 6, WEBSOCKET_OP_BINARY);
     mg_ws_send(c, "", 0, WEBSOCKET_OP_PING);
-    ((int *) fn_data)[0] += 100;
+    p[0] += 100;
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    if (mg_strstr(wm->data, mg_str("boo")))
+    if (mg_strstr(wm->data, mg_str("foobar")))
       mg_ws_send(c, "", 0, WEBSOCKET_OP_CLOSE);
-    ((int *) fn_data)[0]++;
+    if (mg_strstr(wm->data, mg_str("boo"))) p[0] += 2;
+    if (mg_strstr(wm->data, mg_str("foobar"))) p[0] += 3;
   } else if (ev == MG_EV_CLOSE) {
-    ((int *) fn_data)[0] += 10;
+    p[0] += 10;
   }
 }
 
@@ -586,7 +589,7 @@ static void test_ws(void) {
   mg_ws_connect(&mgr, url, wcb, &done, "%s", "Sec-WebSocket-Protocol: meh\r\n");
   for (i = 0; i < 30; i++) mg_mgr_poll(&mgr, 1);
   // MG_INFO(("--> %d", done));
-  ASSERT(done == 112);
+  ASSERT(done == 115);
 
   // Test that non-WS requests fail
   ASSERT(fetch(&mgr, buf, url, "GET /ws HTTP/1.0\r\n\n") == 426);
