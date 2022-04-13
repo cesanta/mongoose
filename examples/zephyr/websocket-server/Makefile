@@ -1,5 +1,5 @@
 CWD = $(realpath $(CURDIR))
-ZEPHYR_DIR ?= $(realpath ../../../../zephyrproject)
+ZEPHYR_DIR ?= $(realpath ../../../../../../zephyrproject)
 BOARD ?= nucleo_h743zi
 
 example:
