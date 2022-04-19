@@ -3192,7 +3192,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   if (n == 0) {
     // Do nothing
   } else if (n < 0) {
-    mg_error(c, "IO error");
+    c->is_closing = 1;  // Termination. Don't call mg_error(): #1529
   } else if (n > 0) {
     if (c->is_hexdumping) {
       union usa usa;
