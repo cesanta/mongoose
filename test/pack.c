@@ -24,6 +24,15 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#if defined(_WIN32)
+#undef popen
+#undef pclose
+#undef snprintf
+#define snprintf _snprintf
+#define popen(a, b) _popen((a), (b))
+#define pclose(a) _pclose(a)
+#endif
+
 static const char *code =
     "const char *mg_unpack(const char *path, size_t *size, time_t *mtime);\n"
     "const char *mg_unlist(size_t no);\n"
