@@ -25,7 +25,7 @@ mingw:
 vc98:
 	$(VC98) cl.exe /nologo $(CFLAGS) ../../test/pack.c /Fepack.exe
 	$(VC98) cmd /c 'pack.exe $(FILES_TO_EMBED) > packed_fs.c'
-	$(VC98) cl.exe /nologo /O2 $(CFLAGS) $(SOURCES) ws2_32.lib -o $(PROG).exe
+	$(VC98) cl.exe /nologo /O2 $(CFLAGS) $(SOURCES) /Fe$(PROG).exe
 	$(VC98) $(PROG).exe
 
 clean:

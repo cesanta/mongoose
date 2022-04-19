@@ -3102,6 +3102,7 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
 #define MG_SOCK_ERRNO WSAGetLastError()
 #ifndef SO_EXCLUSIVEADDRUSE
 #define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
+#pragma comment(lib, "ws2_32.lib")
 #endif
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP
 #define MG_SOCK_ERRNO errno
