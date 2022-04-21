@@ -906,19 +906,26 @@ static void f4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     mg_printf(c, "HTTP/1.0 200 OK\n\n%.*s/%s", (int) hm->uri.len, hm->uri.ptr,
-              fn_data);
+              "abcdef");
+    strcat((char *) fn_data, "m");
     c->is_draining = 1;
+  } else if (ev == MG_EV_HTTP_CHUNK) {
+    strcat((char *) fn_data, "f");
+  } else if (ev == MG_EV_CLOSE) {
+    strcat((char *) fn_data, "c");
   }
 }
 
 static void test_http_no_content_length(void) {
+  char messages[10] = {0};
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12348";
   char buf[FETCH_BUF_SIZE];
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, url, f4, (void *) "baz");
+  mg_http_listen(&mgr, url, f4, (void *) messages);
   ASSERT(fetch(&mgr, buf, url, "GET /foo/bar HTTP/1.0\r\n\n") == 200);
-  ASSERT(cmpbody(buf, "/foo/bar/baz") == 0);
+  ASSERT(cmpbody(buf, "/foo/bar/abcdef") == 0);
+  ASSERT(strcmp(messages, "mc") == 0);  // Check that EV_CLOSE comes last
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
