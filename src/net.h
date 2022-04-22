@@ -23,6 +23,7 @@ struct mg_mgr {
   struct mg_dns dns4;           // DNS for IPv4
   struct mg_dns dns6;           // DNS for IPv6
   int dnstimeout;               // DNS resolve timeout in milliseconds
+  bool use_dns6;                // Use DNS6 server by default, see #1532
   unsigned long nextid;         // Next connection ID
   void *userdata;               // Arbitrary user data pointer
   uint16_t mqtt_id;             // MQTT IDs for pub/sub
