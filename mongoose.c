@@ -3593,7 +3593,11 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   }
 
   if ((rc = select((int) maxfd + 1, &rset, &wset, NULL, &tv)) < 0) {
+#if MG_ARCH == MG_ARCH_WIN32
+    if (maxfd == 0) Sleep(ms);  // On Windows, select fails if no sockets
+#else
     MG_ERROR(("select: %d %d", rc, MG_SOCK_ERRNO));
+#endif
     FD_ZERO(&rset);
     FD_ZERO(&wset);
   }
