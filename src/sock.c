@@ -355,11 +355,19 @@ void mg_connect_resolved(struct mg_connection *c) {
   MG_DEBUG(("%lu %p", c->id, c->fd));
 }
 
+static SOCKET raccept(SOCKET sock, union usa *usa, socklen_t len) {
+  SOCKET s = INVALID_SOCKET;
+  do {
+    s = accept(sock, &usa->sa, &len);
+  } while (s == INVALID_SOCKET && errno == EINTR);
+  return s;
+}
+
 static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   struct mg_connection *c = NULL;
   union usa usa;
   socklen_t sa_len = sizeof(usa);
-  SOCKET fd = accept(FD(lsn), &usa.sa, &sa_len);
+  SOCKET fd = raccept(FD(lsn), &usa, sa_len);
   if (fd == INVALID_SOCKET) {
 #if MG_ARCH == MG_ARCH_AZURERTOS
     // AzureRTOS, in non-block socket mode can mark listening socket readable
@@ -398,71 +406,48 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
 }
 
 static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
-  socklen_t n = sizeof(usa[0].sin);
-  bool result = false;
+  SOCKET sock;
+  socklen_t len = sizeof(usa[0].sin);
+  bool success = false;
 
+  sock = sp[0] = sp[1] = INVALID_SOCKET;
   (void) memset(&usa[0], 0, sizeof(usa[0]));
   usa[0].sin.sin_family = AF_INET;
-  *(uint32_t *) &usa->sin.sin_addr = mg_htonl(0x7f000001);  // 127.0.0.1
+  *(uint32_t *) &usa->sin.sin_addr = mg_htonl(0x7f000001U);  // 127.0.0.1
   usa[1] = usa[0];
 
-  if ((sp[0] = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET &&
-      (sp[1] = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET &&
-      bind(sp[0], &usa[0].sa, n) == 0 && bind(sp[1], &usa[1].sa, n) == 0 &&
-      getsockname(sp[0], &usa[0].sa, &n) == 0 &&
-      getsockname(sp[1], &usa[1].sa, &n) == 0 &&
-      connect(sp[0], &usa[1].sa, n) == 0 &&
-      connect(sp[1], &usa[0].sa, n) == 0) {
-    mg_set_non_blocking_mode(sp[1]);  // Set close-on-exec
-    result = true;
+  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
+      bind(sock, &usa[0].sa, len) == 0 && listen(sock, 3) == 0 &&
+      getsockname(sock, &usa[0].sa, &len) == 0 &&
+      (sp[0] = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
+      connect(sp[0], &usa[0].sa, len) == 0 &&
+      (sp[1] = raccept(sock, &usa[1], len)) != INVALID_SOCKET) {
+    mg_set_non_blocking_mode(sp[1]);
+    success = true;
   } else {
     if (sp[0] != INVALID_SOCKET) closesocket(sp[0]);
     if (sp[1] != INVALID_SOCKET) closesocket(sp[1]);
     sp[0] = sp[1] = INVALID_SOCKET;
   }
-
-  return result;
+  if (sock != INVALID_SOCKET) closesocket(sock);
+  return success;
 }
 
-bool mg_mgr_wakeup(struct mg_connection *c, const void *buf, size_t len) {
-  if (buf == NULL || len == 0) buf = (void *) "", len = 1;
-  return (size_t) send((SOCKET) (size_t) c->pfn_data, (const char *) buf, len,
-                       MSG_NONBLOCKING) == len;
-}
-
-static void pf1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_READ) {
-    mg_iobuf_free(&c->recv);
-  } else if (ev == MG_EV_CLOSE) {
-    closesocket((SOCKET) (size_t) c->pfn_data);
-  }
-  (void) ev_data, (void) fn_data;
-}
-
-struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
-                                void *fn_data) {
+int mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data) {
   union usa usa[2];
   SOCKET sp[2] = {INVALID_SOCKET, INVALID_SOCKET};
   struct mg_connection *c = NULL;
   if (!mg_socketpair(sp, usa)) {
     MG_ERROR(("Cannot create socket pair"));
-  } else if ((c = mg_alloc_conn(mgr)) == NULL) {
+  } else if ((c = mg_wrapfd(mgr, (int) sp[1], fn, fn_data)) == NULL) {
     closesocket(sp[0]);
     closesocket(sp[1]);
-    MG_ERROR(("OOM"));
+    sp[0] = sp[1] = INVALID_SOCKET;
   } else {
-    MG_DEBUG(("pipe %lu", (unsigned long) sp[0]));
     tomgaddr(&usa[0], &c->rem, false);
-    c->fd = S2PTR(sp[1]);
-    c->is_udp = 1;
-    c->pfn = pf1;
-    c->pfn_data = (void *) (size_t) sp[0];
-    c->fn = fn;
-    c->fn_data = fn_data;
-    mg_call(c, MG_EV_OPEN, NULL);
-    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+    MG_DEBUG(("%lu %p pipe %lu", c->id, c->fd, (unsigned long) sp[0]));
   }
-  return c;
+  return (int) sp[0];
 }
 
 static void mg_iotest(struct mg_mgr *mgr, int ms) {

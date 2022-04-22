@@ -1720,13 +1720,20 @@ static void eh6(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   (void) c, (void) ev_data;
 }
 
+#ifdef __arm__
+int send(int sock, const void *buf, size_t len, int flags);
+int send(int sock, const void *buf, size_t len, int flags) {
+  (void) sock, (void) buf, (void) len, (void) flags;
+  return -1;
+}
+#endif
+
 static void test_pipe(void) {
   struct mg_mgr mgr;
-  struct mg_connection *c;
-  int i, done = 0;
+  int i, sock, done = 0;
   mg_mgr_init(&mgr);
-  ASSERT((c = mg_mkpipe(&mgr, eh6, (void *) &done)) != NULL);
-  mg_mgr_wakeup(c, "", 1);
+  ASSERT((sock = mg_mkpipe(&mgr, eh6, (void *) &done)) >= 0);
+  ASSERT(send(sock, "hi", 2, 0) == 2);
   for (i = 0; i < 10 && done == 0; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(done == 1);
   mg_mgr_free(&mgr);

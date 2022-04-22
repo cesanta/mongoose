@@ -35,9 +35,36 @@ static void start_thread(void (*f)(void *), void *p) {
 }
 
 static void thread_function(void *param) {
-  struct mg_connection *c = param;  // Pipe connection
+  int sock = (int) (size_t) param;  // Paired socket. We own it
   sleep(2);                         // Simulate long execution
-  mg_mgr_wakeup(c, "hi", 2);        // Wakeup event manager
+  send(sock, "hi", 2, 2);           // Wakeup event manager
+  close(sock);                      // Close the connection
+}
+
+static void link_conns(struct mg_connection *c1, struct mg_connection *c2) {
+  c1->fn_data = c2;
+  c2->fn_data = c1;
+}
+
+static void unlink_conns(struct mg_connection *c1, struct mg_connection *c2) {
+  c1->fn_data = c2->fn_data = NULL;
+}
+
+// Pipe event handler
+static void pcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  struct mg_connection *parent = (struct mg_connection *) fn_data;
+  MG_INFO(("%lu %p %d %p", c->id, c->fd, ev, parent));
+  if (parent == NULL) {  // If parent connection closed, close too
+    c->is_closing = 1;
+  } else if (ev == MG_EV_READ) {  // Got data from the worker thread
+    mg_http_reply(parent, 200, "Host: foo.com\r\n", "%.*s\n", c->recv.len,
+                  c->recv.buf);  // Respond!
+    c->recv.len = 0;             // Tell Mongoose we've consumed data
+  } else if (ev == MG_EV_OPEN) {
+    link_conns(c, parent);
+  } else if (ev == MG_EV_CLOSE) {
+    unlink_conns(c, parent);
+  }
 }
 
 // HTTP request callback
@@ -50,32 +77,19 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_reply(c, 200, "Host: foo.com\r\n", "hi\n");
     } else {
       // Multithreading code path
-      c->label[0] = 'W';                       // Mark us as waiting for data
-      start_thread(thread_function, fn_data);  // Start handling thread
+      int sock = mg_mkpipe(c->mgr, pcb, c);                   // Create pipe
+      start_thread(thread_function, (void *) (size_t) sock);  // Start thread
     }
-  }
-}
-
-// Pipe event handler
-static void pcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_READ) {
-    struct mg_connection *t;
-    for (t = c->mgr->conns; t != NULL; t = t->next) {
-      if (t->label[0] != 'W') continue;  // Ignore un-marked connections
-      mg_http_reply(t, 200, "Host: foo.com\r\n", "%.*s\n", c->recv.len,
-                    c->recv.buf);  // Respond!
-      t->label[0] = 0;             // Clear mark
-    }
+  } else if (ev == MG_EV_CLOSE) {
+    if (c->fn_data != NULL) unlink_conns(c, c->fn_data);
   }
 }
 
 int main(void) {
   struct mg_mgr mgr;
-  struct mg_connection *pipe;  // Used to wake up event manager
   mg_mgr_init(&mgr);
   mg_log_set("3");
-  pipe = mg_mkpipe(&mgr, pcb, NULL);                        // Create pipe
-  mg_http_listen(&mgr, "http://localhost:8000", fn, pipe);  // Create listener
+  mg_http_listen(&mgr, "http://localhost:8000", fn, NULL);  // Create listener
   for (;;) mg_mgr_poll(&mgr, 1000);                         // Event loop
   mg_mgr_free(&mgr);                                        // Cleanup
   return 0;

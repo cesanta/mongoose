@@ -677,38 +677,45 @@ char buf[100];
 LOG(LL_INFO, ("%s", mg_straddr(&c->peer, buf, sizeof(buf))));
 ```
 
-### mg\_mkpipe()
+### mg\_wrapfd()
 
 ```c
-struct mg_connection *mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *);
+struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
+                                mg_event_handler_t fn, void *fn_data);
 ```
 
-Create a "pipe" connection which is safe to pass to a different task/thread
-and used to wake up event manager from a different task. These
-functions are designed to implement multi-threaded support, to handle two
-common use cases:
-
-- There are multiple consumer connections, e.g. connected websocket clients.
-  A server constantly pushes some data to all of them. In this case, a data
-  producer task should call `mg_mgr_wakeup()` as soon as more data is produced.
-  A pipe's event handler should push data to all client connection.
-  Use `c->label` to mark client connections.
-- In order to serve a request, a long blocking operation should be performed.
-  In this case, request handler assigns some marker to `c->label` and then
-  spawns a handler task and gives a pipe to a
-  handler task. A handler does its job, and when data is ready, wakes up a
-  manager. A pipe's event handler pushes data to a marked connection.
-
-Another task can wake up a sleeping event manager (in `mg_mgr_poll()` call)
-using `mg_mgr_wakeup()`. When an event manager is woken up, a pipe
-connection event handler function receives `MG_EV_READ` event.
+Wrap a given file descriptor `fd` into a connection, and add that connection
+to the event manager. An `fd` descriptor must suport `send()`, `recv()`,
+`select()` syscalls, and be non-blocking. Mongoose will treat it as a TCP
+socket. The `c->rem` and `c->loc` addresses will be empty.
 
 Parameters:
+- `fd` - A file descriptor to wrap
 - `mgr` - An event manager
 - `fn` - A pointer to event handler function
 - `ud` - A user data pointer. It will be passed to `fn` as `fn_data` parameter
 
-Return value: Pointer to created connection or `NULL` in case of error
+Return value: Pointer to the created connection or `NULL` in case of error
+
+### mg\_mkpipe()
+
+```c
+int mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data);
+```
+
+Create two interconnected sockets for inter-thread communication. One socket
+is wrapped into a Mongoose connection and is added to the event manager.
+Another socket is returned, and supposed to be passed to a worker thread.
+When a worker thread `send()`s to socket any data, that wakes up `mgr` and
+`fn` event handler reveives `MG_EV_READ` event. Also, `fn` can send any
+data to a worker thread, which can be `recv()`ed by a worker thread.
+
+Parameters:
+- `mgr` - An event manager
+- `fn` - A pointer to event handler function
+- `fn_data` - A user data pointer. It will be passed to `fn` as `fn_data` parameter
+
+Return value: created socket, or `-1` on error
 
 Usage example: see [examples/multi-threaded](https://github.com/cesanta/mongoose/tree/master/examples/multi-threaded).
 

@@ -205,6 +205,19 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
   return c;
 }
 
+struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
+                                mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = mg_alloc_conn(mgr);
+  if (c != NULL) {
+    c->fd = (void *) (size_t) fd;
+    c->fn = fn;
+    c->fn_data = fn_data;
+    mg_call(c, MG_EV_OPEN, NULL);
+    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+  }
+  return c;
+}
+
 struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg) {
   struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));

@@ -20,18 +20,12 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   (void) c, (void) buf, (void) len;
-  return 0;
+  return false;
 }
 
-bool mg_mgr_wakeup(struct mg_connection *c, const void *buf, size_t len) {
-  (void) c, (void) buf, (void) len;
-  return 0;
-}
-
-struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
-                                void *fn_data) {
+int mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data) {
   (void) mgr, (void) fn, (void) fn_data;
-  return NULL;
+  return -1;
 }
 
 void _fini(void);
