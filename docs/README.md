@@ -188,6 +188,41 @@ struct mg_connection {
 };
 ```
 
+## Best practices
+
+- If you need to perform any sort of initialisation of your connection,
+  do it by catching `MG_EV_OPEN` event. That event is sent immediately
+  after a connection has been allocated and added to the event manager,
+  but before anything else:
+  ```c
+  static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+    if (ev == MG_EV_OPEN) {
+      ... // Do your initialisation
+    }
+  ```
+- If you need to keep some connection-specific data, you have two options.
+  First, use `c->fn_data` pointer. That pointer is passed to the event handler
+  as last parameter. Another option is to use `c->label` buffer, which can
+  hold some amount of connection-specific data without extra memory allocation.
+- If you need to close the connection, set `c->draining = 1;` flag in your
+  event handler function. That tells the event manager to send all remaining
+  data in a send buffer, then close the connection. If you need to close
+  the connection immediately without sending data, use `c->is_closing = 1;`
+- Use `mg_http_reply()` function to create HTTP responses. That function
+  properly sets the `Content-Length` header, which is important. Of course
+  you can create responses manually, e.g. with `mg_printf()` function,
+  but be sure to set the `Content-Length` header:
+  ```c
+  mg_printf(c, "HTTP/1.1 200 OK\r\Content-Length: %d\r\n\r\n%s", 2, "hi");
+  ```
+  Alternatively, use chunked transfer enconding:
+  ```c
+  mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+  mg_http_printf_chunk(c, "%s", "foo");
+  mg_http_printf_chunk(c, "%s", "bar");
+  mg_http_printf_chunk(c, "");  // Don't forget the last empty chunk
+  ```
+
 ## Build options
 
 Mongoose source code ships in two files:
