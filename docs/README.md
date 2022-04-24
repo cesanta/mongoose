@@ -213,9 +213,9 @@ struct mg_connection {
     ...
   }
 
-  // Every accepted connection inherit `my_data` pointer, but we change
+  // Every accepted connection inherit NULL pointer as c->fn_data, but we change
   // it per-connection to something else
-  mg_http_listen(&mgr, "http://localhost:1234", fn, my_data);
+  mg_http_listen(&mgr, "http://localhost:1234", fn, NULL);
   ```
   Another option is to use `c->label` buffer, which can
   hold some amount of connection-specific data without extra memory allocation:
