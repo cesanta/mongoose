@@ -225,10 +225,11 @@ struct mg_connection {
       c->label[0] = 'W'; // Established websocket connection, store something
       ...
   ```
-- If you need to close the connection, set `c->draining = 1;` flag in your
+- If you need to close the connection, set `c->is_draining = 1;` in your
   event handler function. That tells the event manager to send all remaining
-  data in a send buffer, then close the connection. If you need to close
-  the connection immediately without sending data, use `c->is_closing = 1;`
+  data in a send buffer ("drain" the connection), then close the connection.
+  If you need to close
+  the connection immediately without draining, use `c->is_closing = 1;`
 - Use `mg_http_reply()` function to create HTTP responses. That function
   properly sets the `Content-Length` header, which is important. Of course
   you can create responses manually, e.g. with `mg_printf()` function,
