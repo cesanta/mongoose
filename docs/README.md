@@ -195,15 +195,36 @@ struct mg_connection {
   after a connection has been allocated and added to the event manager,
   but before anything else:
   ```c
-  static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (ev == MG_EV_OPEN) {
       ... // Do your initialisation
     }
   ```
 - If you need to keep some connection-specific data, you have two options.
   First, use `c->fn_data` pointer. That pointer is passed to the event handler
-  as last parameter. Another option is to use `c->label` buffer, which can
-  hold some amount of connection-specific data without extra memory allocation.
+  as last parameter:
+  ```c
+  static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+    if (ev == MG_EV_OPEN) {
+      c->fn_data = malloc(123);       // Change our fn_data
+    } else if (ev == MG_EV_CLOSE) {
+      free(fn_data);  // Don't forget to free!
+    }
+    ...
+  }
+
+  // Every accepted connection inherit `my_data` pointer, but we change
+  // it per-connection to something else
+  mg_http_listen(&mgr, "http://localhost:1234", fn, my_data);
+  ```
+  Another option is to use `c->label` buffer, which can
+  hold some amount of connection-specific data without extra memory allocation:
+  ```c
+  static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+    if (ev == MG_EV_WS_OPEN) {
+      c->label[0] = 'W'; // Established websocket connection, store something
+      ...
+  ```
 - If you need to close the connection, set `c->draining = 1;` flag in your
   event handler function. That tells the event manager to send all remaining
   data in a send buffer, then close the connection. If you need to close
