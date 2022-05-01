@@ -24,21 +24,12 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#if defined(_WIN32)
-#undef popen
-#undef pclose
-#undef snprintf
-#define snprintf _snprintf
-#define popen(a, b) _popen((a), (b))
-#define pclose(a) _pclose(a)
-#endif
-
 static const char *code =
-    "const char *mg_unpack(const char *path, size_t *size, time_t *mtime);\n"
     "const char *mg_unlist(size_t no);\n"
     "const char *mg_unlist(size_t no) {\n"
     "  return packed_files[no].name;\n"
     "}\n"
+    "const char *mg_unpack(const char *path, size_t *size, time_t *mtime);\n"
     "const char *mg_unpack(const char *name, size_t *size, time_t *mtime) {\n"
     "  const struct packed_file *p;\n"
     "  for (p = packed_files; p->name != NULL; p++) {\n"
@@ -52,7 +43,7 @@ static const char *code =
 
 int main(int argc, char *argv[]) {
   int i, j, ch;
-  const char *zip_cmd = NULL, *strip_prefix = "";
+  const char *strip_prefix = "";
 
   printf("%s", "#include <stddef.h>\n");
   printf("%s", "#include <string.h>\n");
@@ -60,27 +51,16 @@ int main(int argc, char *argv[]) {
   printf("%s", "\n");
 
   for (i = 1; i < argc; i++) {
-    if (strcmp(argv[i], "-z") == 0 && i + 1 < argc) {
-      zip_cmd = argv[++i];
-    } else if (strcmp(argv[i], "-s") == 0) {
+    if (strcmp(argv[i], "-s") == 0) {
       strip_prefix = argv[++i];
     } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-      fprintf(stderr, "Usage: %s [-z ZIP_CMD] [-s STRIP_PREFIX] files...\n",
-              argv[0]);
+      fprintf(stderr, "Usage: %s[-s STRIP_PREFIX] files...\n", argv[0]);
       exit(EXIT_FAILURE);
     } else {
-      char ascii[12], cmd[2048];
-      FILE *fp;
-
-      if (zip_cmd == NULL) {
-        fp = fopen(argv[i], "rb");
-      } else {
-        snprintf(cmd, sizeof(cmd), "%s %s", zip_cmd, argv[i]);
-        fp = popen(cmd, "r");
-      }
+      char ascii[12];
+      FILE *fp = fopen(argv[i], "rb");
       if (fp == NULL) {
-        fprintf(stderr, "Cannot open [%s]: %s\n", zip_cmd ? cmd : argv[i],
-                strerror(errno));
+        fprintf(stderr, "Cannot open [%s]: %s\n", argv[i], strerror(errno));
         exit(EXIT_FAILURE);
       }
 
@@ -97,8 +77,7 @@ int main(int argc, char *argv[]) {
       // as nul-terminated strings.
       // printf(" 0 // %.*s\n", (int) sizeof(ascii), ascii);
       printf(" 0 // %.*s\n};\n", j, ascii);
-      if (zip_cmd == NULL) fclose(fp);
-      if (zip_cmd != NULL) pclose(fp);
+      fclose(fp);
     }
   }
 
@@ -107,7 +86,6 @@ int main(int argc, char *argv[]) {
   printf("%s", "  const unsigned char *data;\n");
   printf("%s", "  size_t size;\n");
   printf("%s", "  time_t mtime;\n");
-  printf("%s", "  int zipped;\n");
   printf("%s", "} packed_files[] = {\n");
 
   for (i = 1; i < argc; i++) {
@@ -120,10 +98,9 @@ int main(int argc, char *argv[]) {
     }
     stat(argv[i], &st);
     if (strncmp(name, strip_prefix, n) == 0) name += n;
-    printf("  {\"/%s\", v%d, sizeof(v%d), %lu, %d},\n", name, i, i, st.st_mtime,
-           zip_cmd == NULL ? 0 : 1);
+    printf("  {\"/%s\", v%d, sizeof(v%d), %lu},\n", name, i, i, st.st_mtime);
   }
-  printf("%s", "  {NULL, NULL, 0, 0, 0}\n");
+  printf("%s", "  {NULL, NULL, 0, 0}\n");
   printf("%s", "};\n\n");
   printf("%s", code);
 

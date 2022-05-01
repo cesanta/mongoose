@@ -10,6 +10,7 @@
 #define MG_ARCH_AZURERTOS 7
 #define MG_ARCH_RTX_LWIP 8
 #define MG_ARCH_ZEPHYR 9
+#define MG_ARCH_NEWLIB 10
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -47,6 +48,7 @@
 #include "arch_esp8266.h"
 #include "arch_freertos_lwip.h"
 #include "arch_freertos_tcp.h"
+#include "arch_newlib.h"
 #include "arch_unix.h"
 #include "arch_win32.h"
 #include "arch_zephyr.h"

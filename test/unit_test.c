@@ -1680,18 +1680,20 @@ static void eh7(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     sopts.fs = &mg_fs_packed;
     mg_http_serve_dir(c, hm, &sopts);
   }
-  (void) ev_data, (void) fn_data;
+  (void) fn_data;
 }
 
 static void test_packed(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12351";
-  char buf[FETCH_BUF_SIZE] = "",
-       *data = mg_file_read(&mg_fs_posix, "Makefile", NULL);
+  char buf[FETCH_BUF_SIZE],
+      *data = mg_file_read(&mg_fs_posix, "Makefile", NULL);
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, eh7, NULL);
 
   // Load top level file directly
+  fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n");
+  printf("---> %s\n", buf);
   ASSERT(fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, data) == 0);
   free(data);
@@ -1720,7 +1722,7 @@ static void eh6(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   (void) c, (void) ev_data;
 }
 
-#ifdef __arm__
+#if defined(__arm__) || defined(__riscv)
 int send(int sock, const void *buf, size_t len, int flags);
 int send(int sock, const void *buf, size_t len, int flags) {
   (void) sock, (void) buf, (void) len, (void) flags;

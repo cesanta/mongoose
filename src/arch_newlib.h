@@ -1,6 +1,6 @@
-// Required by the test ARM build
 #pragma once
 
+#if MG_ARCH == MG_ARCH_NEWLIB
 #define _POSIX_TIMERS
 
 #include <ctype.h>
@@ -19,3 +19,5 @@
 #define MG_PATH_MAX 100
 #define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_DIRLIST 0
+
+#endif

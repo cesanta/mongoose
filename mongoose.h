@@ -37,6 +37,7 @@ extern "C" {
 #define MG_ARCH_AZURERTOS 7
 #define MG_ARCH_RTX_LWIP 8
 #define MG_ARCH_ZEPHYR 9
+#define MG_ARCH_NEWLIB 10
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -69,6 +70,7 @@ extern "C" {
 #if MG_ARCH == MG_ARCH_CUSTOM
 #include <mongoose_custom.h>
 #endif
+
 
 
 
@@ -290,6 +292,29 @@ struct timeval {
 #endif
 
 #endif  // MG_ARCH == MG_ARCH_FREERTOS_TCP
+
+
+#if MG_ARCH == MG_ARCH_NEWLIB
+#define _POSIX_TIMERS
+
+#include <ctype.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
+
+#define MG_PATH_MAX 100
+#define MG_ENABLE_SOCKET 0
+#define MG_ENABLE_DIRLIST 0
+
+#endif
 
 
 #if MG_ARCH == MG_ARCH_RTX_LWIP
@@ -884,6 +909,7 @@ struct mg_mgr {
   uint16_t mqtt_id;             // MQTT IDs for pub/sub
   void *active_dns_requests;    // DNS requests in progress
   struct mg_timer *timers;      // Active timers
+  void *priv;                   // Used by the experimental stack
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
 #endif
