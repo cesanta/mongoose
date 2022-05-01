@@ -13,26 +13,6 @@ uint64_t mg_millis(void);
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
 
-#ifndef EXTERN_C
-#ifdef __cplusplus
-#define EXTERN_C extern "C"
-#else
-#define EXTERN_C
-#endif
-#endif
-
-// Expands to a string representation of its argument: e.g.
-// MG_STRINGIFY_LITERAL(5) expands to "5"
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-#define MG_STRINGIFY_LITERAL(...) #__VA_ARGS__
-#else
-#define MG_STRINGIFY_LITERAL(x) #x
-#endif
-// Expands to a string representation of its argument, which can be a macro:
-// #define FOO 123
-// MG_STRINGIFY_MACRO(FOO)  // Expands to 123
-#define MG_STRINGIFY_MACRO(x) MG_STRINGIFY_LITERAL(x)
-
 // Linked list management macros
 #define LIST_ADD_HEAD(type_, head_, elem_) \
   do {                                     \
