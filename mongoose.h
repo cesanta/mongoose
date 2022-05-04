@@ -910,6 +910,7 @@ struct mg_mgr {
   void *active_dns_requests;    // DNS requests in progress
   struct mg_timer *timers;      // Active timers
   void *priv;                   // Used by the experimental stack
+  size_t extraconnsize;         // Used by the experimental stack
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
 #endif
