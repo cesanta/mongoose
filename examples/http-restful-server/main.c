@@ -4,7 +4,7 @@
 // HTTP server example. This server serves both static and dynamic content.
 // It opens two ports: plain HTTP on port 8000 and HTTP on port 8443.
 // It implements the following endpoints:
-//    /api/f1 - respond with JSON string {"result": 123}
+//    /api/stats - respond with free-formatted stats on current connections
 //    /api/f2/:id - wildcard example, respond with JSON string {"result": "URI"}
 //    any other URI serves static files from s_root_dir
 //
@@ -30,8 +30,21 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/f1")) {
-      mg_http_reply(c, 200, "", "{\"result\": %d}\n", 123);  // Serve REST
+    if (mg_http_match_uri(hm, "/api/stats")) {
+      // Print some statistics about currently established connections
+      mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+      mg_http_printf_chunk(c, "ID PROTO TYPE      LOCAL           REMOTE\n");
+      for (struct mg_connection *t = c->mgr->conns; t != NULL; t = t->next) {
+        char loc[40], rem[40];
+        mg_http_printf_chunk(c, "%-3lu %4s %s %-15s %s\n", t->id,
+                             t->is_udp ? "UDP" : "TCP",
+                             t->is_listening  ? "LISTENING"
+                             : t->is_accepted ? "ACCEPTED "
+                                              : "CONNECTED",
+                             mg_straddr(&t->loc, loc, sizeof(loc)),
+                             mg_straddr(&t->rem, rem, sizeof(rem)));
+      }
+      mg_http_printf_chunk(c, "");  // Don't forget the last empty chunk
     } else if (mg_http_match_uri(hm, "/api/f2/*")) {
       mg_http_reply(c, 200, "", "{\"result\": \"%.*s\"}\n", (int) hm->uri.len,
                     hm->uri.ptr);

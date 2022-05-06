@@ -33,8 +33,8 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
     if (milliseconds > 0) {
       mg_call(c, MG_EV_SNTP_TIME, (uint64_t *) &milliseconds);
-      MG_DEBUG(("%u.%u", (unsigned) (milliseconds / 1000),
-                (unsigned) (milliseconds % 1000)));
+      MG_VERBOSE(("%u.%u", (unsigned) (milliseconds / 1000),
+                  (unsigned) (milliseconds % 1000)));
     }
     c->recv.len = 0;  // Clear receive buffer
   } else if (ev == MG_EV_CONNECT) {
@@ -52,7 +52,7 @@ void mg_sntp_send(struct mg_connection *c, unsigned long utc) {
     uint8_t buf[48] = {0};
     buf[0] = (0 << 6) | (4 << 3) | 3;
     mg_send(c, buf, sizeof(buf));
-    MG_DEBUG(("%lu ct %lu", c->id, utc));
+    (void) utc;
   }
 }
 

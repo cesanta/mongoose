@@ -1,8 +1,8 @@
 // Copyright (c) 2020 Cesanta Software Limited
 // All rights reserved
 
-#include "mongoose.h"
 #include "certs.h"
+#include "mongoose.h"
 
 static const char *s_debug_level = "3";
 static const char *s_web_dir = "/";
@@ -21,7 +21,20 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("%.*s %.*s %ld", (int) hm->method.len, hm->method.ptr,
              (int) hm->uri.len, hm->uri.ptr, (long) hm->body.len));
     if (mg_http_match_uri(hm, "/api/#")) {  // REST API requests
-      mg_http_reply(c, 200, NULL, "hi\n");  // Construct dynamic response
+      // Print some statistics about currently established connections
+      mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+      mg_http_printf_chunk(c, "ID PROTO TYPE      LOCAL           REMOTE\n");
+      for (struct mg_connection *t = c->mgr->conns; t != NULL; t = t->next) {
+        char loc[40], rem[40];
+        mg_http_printf_chunk(c, "%-3lu %4s %s %-15s %s\n", t->id,
+                             t->is_udp ? "UDP" : "TCP",
+                             t->is_listening  ? "LISTENING"
+                             : t->is_accepted ? "ACCEPTED "
+                                              : "CONNECTED",
+                             mg_straddr(&t->loc, loc, sizeof(loc)),
+                             mg_straddr(&t->rem, rem, sizeof(rem)));
+      }
+      mg_http_printf_chunk(c, "");  // Don't forget the last empty chunk
     } else {
       struct mg_http_serve_opts opts = {.root_dir = s_web_dir};  // Serve
       mg_http_serve_dir(c, hm, &opts);                           // static files
