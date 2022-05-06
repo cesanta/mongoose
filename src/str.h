@@ -33,7 +33,6 @@ bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap);
 size_t mg_snprintf(char *, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
-char *mg_hexdump(const void *buf, size_t len);
 char *mg_hex(const void *buf, size_t len, char *dst);
 void mg_unhex(const char *buf, size_t len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, size_t len);

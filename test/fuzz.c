@@ -7,6 +7,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *, size_t);
 #endif
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  mg_log_set("0");
+
   struct mg_dns_message dm;
   mg_dns_parse(data, size, &dm);
   mg_dns_parse(NULL, 0, &dm);
@@ -35,9 +37,6 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_base64_decode(NULL, 0, buf);
   mg_base64_encode(data, (int) size, buf);
   mg_base64_encode(NULL, 0, buf);
-
-  char *hexdump = mg_hexdump(data, size);
-  free(hexdump);
 
   mg_globmatch((char *) data, size, (char *) data, size);
 

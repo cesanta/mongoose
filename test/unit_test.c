@@ -1426,13 +1426,11 @@ static void test_dns(void) {
 }
 
 static void test_util(void) {
-  char buf[100], *s = mg_hexdump("abc", 3), *p;
+  char buf[100], *p, *s;
   struct mg_addr a;
-  ASSERT(s != NULL);
-  free(s);
   memset(&a, 0, sizeof(a));
   ASSERT(mg_file_printf(&mg_fs_posix, "data.txt", "%s", "hi") == true);
-  if (system("ls -l") != 0) (void) 0;
+  // if (system("ls -l") != 0) (void) 0;
   ASSERT((p = mg_file_read(&mg_fs_posix, "data.txt", NULL)) != NULL);
   ASSERT(strcmp(p, "hi") == 0);
   free(p);

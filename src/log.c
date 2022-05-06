@@ -1,11 +1,19 @@
 #include "log.h"
 #include "util.h"
 
-#if MG_ENABLE_LOG
+static void logc(int c) {
+  putchar(c);
+}
+
+static void logs(const char *buf, size_t len) {
+  size_t i;
+  for (i = 0; i < len; i++) logc(buf[i]);
+}
+
 static void mg_log_stdout(const void *buf, size_t len, void *userdata) {
   (void) userdata, (void) buf, (void) len;
 #if MG_ENABLE_FILE
-  fwrite(buf, 1, len, stdout);
+  logs((const char *) buf, len);
 #endif
 }
 
@@ -64,4 +72,28 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd) {
   s_fn = fn;
   s_fn_param = fnd;
 }
-#endif
+
+static unsigned char nibble(unsigned c) {
+  return (unsigned char) (c < 10 ? c + '0' : c + 'W');
+}
+
+#define ISPRINT(x) ((x) >= ' ' && (x) <= '~')
+void mg_hexdump(const void *buf, size_t len) {
+  const unsigned char *p = (const unsigned char *) buf;
+  unsigned char ascii[16], alen = 0;
+  size_t i;
+  for (i = 0; i < len; i++) {
+    if ((i % 16) == 0) {
+      // Print buffered ascii chars
+      if (i > 0) logs("  ", 2), logs((char *) ascii, 16), logc('\n'), alen = 0;
+      // Print hex address, then \t
+      logc(nibble((i >> 12) & 15)), logc(nibble((i >> 8) & 15)),
+          logc(nibble((i >> 4) & 15)), logc('0'), logs("   ", 3);
+    }
+    logc(nibble(p[i] >> 4)), logc(nibble(p[i] & 15));  // Two nibbles, e.g. c5
+    logc(' ');                                         // Space after hex number
+    ascii[alen++] = ISPRINT(p[i]) ? p[i] : '.';        // Add to the ascii buf
+  }
+  while (alen < 16) logs("   ", 3), ascii[alen++] = ' ';
+  logs("  ", 2), logs((char *) ascii, 16), logc('\n');
+}

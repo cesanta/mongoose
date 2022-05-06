@@ -72,7 +72,7 @@ unpacked:
 	$(CC) -I. mongoose.c test/unit_test.c -o $@
 
 fuzzer: mongoose.c mongoose.h Makefile test/fuzz.c
-	clang++ mongoose.c test/fuzz.c $(WARN) $(INCS) $(TFLAGS) $(EXTRA) -DMG_ENABLE_LINES -DMG_ENABLE_LOG=0 -fsanitize=fuzzer,signed-integer-overflow,address -Wno-deprecated -o $@
+	clang++ mongoose.c test/fuzz.c $(WARN) $(INCS) $(TFLAGS) $(EXTRA) -DMG_ENABLE_LINES -fsanitize=fuzzer,signed-integer-overflow,address -Wno-deprecated -o $@
 
 fuzz: fuzzer
 	$(RUN) ./fuzzer

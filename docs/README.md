@@ -264,7 +264,7 @@ option during build time, use the `-D OPTION` compiler flag:
 $ cc app0.c mongoose.c                                        # Use defaults!
 $ cc app1.c mongoose.c -D MG_ENABLE_IPV6=1                    # Build with IPv6 enabled
 $ cc app2.c mongoose.c -D MG_ARCH=MG_ARCH_FREERTOS_LWIP       # Set architecture
-$ cc app3.c mongoose.c -D MG_ENABLE_SSI=0 -D MG_ENABLE_LOG=0  # Multiple options
+$ cc app3.c mongoose.c -D MG_ENABLE_SSI=0 -D MG_IO_SIZE=8192  # Multiple options
 ```
 
 The list of supported architectures is defined in the [arch.h](https://github.com/cesanta/mongoose/blob/master/src/arch.h)
@@ -294,7 +294,6 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_MBEDTLS | 0 | Enable mbedTLS library |
 |MG_ENABLE_OPENSSL | 0 | Enable OpenSSL library |
 |MG_ENABLE_IPV6 | 0 | Enable IPv6 |
-|MG_ENABLE_LOG | 1 | Enable `LOG()` macro |
 |MG_ENABLE_MD5 | 0 | Use native MD5 implementation |
 |MG_ENABLE_SSI | 1 | Enable serving SSI files by `mg_http_serve_dir()` |
 |MG_ENABLE_CUSTOM_RANDOM | 0 | Provide custom RNG function `mg_random()` |
@@ -2371,30 +2370,6 @@ while (mg_commalist(&s, &k, &v))                      // This loop output:
          (int) k.len, k.ptr, (int) v.len, v.ptr);     // [b] set to [777]
 ```
 
-### mg\_hexdump()
-
-```c
-char *mg_hexdump(const void *buf, int len);
-```
-
-Hexdump binary data `buf`, `len` into malloc-ed buffer and return it.
-It is a caller's responsibility to free() returned pointer.
-
-Parameters:
-- `buf` - Data to hexdump
-- `len` - Data length
-
-Return value: malloc-ed buffer with hexdumped data
-
-Usage example:
-
-```c
-char arr[] = "\0x1\0x2\0x3";
-char *hex = mg_hexdump(arr, sizeof(arr));
-LOG(LL_INFO, ("%s", hex)); // Output "0000  01 02 03 00";
-free(hex);
-```
-
 ### mg\_hex()
 
 ```c
@@ -3438,27 +3413,17 @@ use these functions for its own purposes as well as the rest of Mongoose API.
 
 ```c
 #define LOG(level, args)
+#define MG_ERROR(args) MG_LOG(MG_LL_ERROR, args)
+#define MG_INFO(args) MG_LOG(MG_LL_INFO, args)
+#define MG_DEBUG(args) MG_LOG(MG_LL_DEBUG, args)
+#define MG_VERBOSE(args) MG_LOG(MG_LL_VERBOSE, args)
 ```
 
-General way to log is using `LOG` macro.
-`LOG` prints to log only is `MG_ENABLE_LOG` macro defined, otherwise is does nothing.
-
-This macro has two arguments: log level and information to log. The second argument is a printf-alike format string.
-
-Log levels defined as:
-```c
-enum { LL_NONE, LL_ERROR, LL_INFO, LL_DEBUG, LL_VERBOSE_DEBUG };
-```
-
-Parameters:
-- `level` - Log level, see levels above
-- `args` - Information to log
-
-Return value: None
-
+Logging macros.
 Usage example:
+
 ```c
-LOG(LL_ERROR, ("Hello %s!", "world"));  // Output "Hello, world"
+MG_INFO(("Hello %s!", "world"));  // Output "Hello, world"
 ```
 
 ### mg\_log\_set()
@@ -3517,6 +3482,26 @@ void log_via_printf(const void *buf, size_t len, void *userdata) {
 
 // ...
 mg_log_set_callback(&log_via_printf, NULL);
+```
+
+### mg\_hexdump()
+
+```c
+void mg_hexdump(const void *buf, int len);
+```
+
+Log a hex dump of binary data `buf`, `len`.
+
+Parameters:
+- `buf` - Data pointer
+- `len` - Data length
+
+Return value: none
+
+Usage example:
+
+```c
+mg_hexdump(c->recv.buf, c->recv.len);  // Hex dump incoming data
 ```
 
 ## Filesystem
