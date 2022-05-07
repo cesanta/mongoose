@@ -9,11 +9,19 @@ jobs:
         cc: [gcc, clang]
         target: [test, test++, valgrind]
         ssl: [MBEDTLS, OPENSSL]
-    name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
+        include:
+          - cc: gcc
+            target: test
+            ssl: MBEDTLS
+            extra: -DMG_MAX_RECV_BUF_SIZE=4096
+    name: >
+      linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
+      ${{ matrix.extra && format('EXTRA={0}', matrix.extra) || '' }}
     env:
       IPV6: 0
       CC: ${{ matrix.cc }}
       SSL: ${{ matrix.ssl }}
+      EXTRA: ${{ matrix.extra }}
     steps:
     - uses: actions/checkout@v3
     - name: Install packages
