@@ -21,7 +21,7 @@
 #endif
 
 #ifndef MG_ENABLE_SSI
-#define MG_ENABLE_SSI 1
+#define MG_ENABLE_SSI 0
 #endif
 
 #ifndef MG_ENABLE_IPV6
