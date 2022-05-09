@@ -361,6 +361,7 @@ void mg_connect_resolved(struct mg_connection *c) {
 static SOCKET raccept(SOCKET sock, union usa *usa, socklen_t len) {
   SOCKET s = INVALID_SOCKET;
   do {
+    memset(usa, 0, sizeof(*usa));
     s = accept(sock, &usa->sa, &len);
   } while (s == INVALID_SOCKET && errno == EINTR);
   return s;
