@@ -198,7 +198,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
     (void) on;
 
     if ((fd = socket(af, type, proto)) == INVALID_SOCKET) {
-      MG_ERROR(("socket: %s", MG_SOCK_ERRNO));
+      MG_ERROR(("socket: %d", MG_SOCK_ERRNO));
 #if (MG_ARCH != MG_ARCH_WIN32 || !defined(SO_EXCLUSIVEADDRUSE)) && \
     (!defined(LWIP_SOCKET) || (defined(LWIP_SOCKET) && SO_REUSE == 1))
     } else if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
@@ -214,7 +214,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
       // defining
       //    SO_REUSE (in lwipopts.h), otherwise the code below will compile
       //    but won't work! (setsockopt will return EINVAL)
-      MG_ERROR(("reuseaddr: %s", MG_SOCK_ERRNO));
+      MG_ERROR(("reuseaddr: %d", MG_SOCK_ERRNO));
 #endif
 #if MG_ARCH == MG_ARCH_WIN32 && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
     } else if (setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on,
@@ -223,12 +223,12 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
       MG_ERROR(("exclusiveaddruse: %s", MG_SOCK_ERRNO));
 #endif
     } else if (bind(fd, &usa.sa, slen) != 0) {
-      MG_ERROR(("bind: %s", MG_SOCK_ERRNO));
+      MG_ERROR(("bind: %d", MG_SOCK_ERRNO));
     } else if ((type == SOCK_STREAM &&
                 listen(fd, MG_SOCK_LISTEN_BACKLOG_SIZE) != 0)) {
       // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
       // In case port was set to 0, get the real port number
-      MG_ERROR(("listen: %s", MG_SOCK_ERRNO));
+      MG_ERROR(("listen: %d", MG_SOCK_ERRNO));
     } else {
       setlocaddr(fd, &c->loc);
       mg_set_non_blocking_mode(fd);
