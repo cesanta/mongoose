@@ -1262,6 +1262,15 @@ static void test_timer(void) {
 
   mg_timer_free(&head, &t3);
   ASSERT(head == NULL);
+
+  // Test proper timer deallocation, see #1539
+  {
+    struct mg_mgr mgr;
+    mg_mgr_init(&mgr);
+    mg_timer_add(&mgr, 1, MG_TIMER_REPEAT, f1, NULL);
+    mg_mgr_free(&mgr);
+    ASSERT(mgr.conns == NULL);
+  }
 }
 
 static bool sn(const char *fmt, ...) {
