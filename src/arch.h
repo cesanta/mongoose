@@ -41,7 +41,7 @@
 #endif
 
 #if MG_ARCH == MG_ARCH_CUSTOM
-#include <mongoose_custom.h>
+#include "mongoose_custom.h"
 #endif
 
 #include "arch_esp32.h"

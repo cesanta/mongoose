@@ -68,7 +68,7 @@ extern "C" {
 #endif
 
 #if MG_ARCH == MG_ARCH_CUSTOM
-#include <mongoose_custom.h>
+
 #endif
 
 
