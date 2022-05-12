@@ -244,6 +244,11 @@ struct mg_connection {
   mg_http_printf_chunk(c, "%s", "bar");
   mg_http_printf_chunk(c, "");  // Don't forget the last empty chunk
   ```
+- On embedded environment, make sure that serving task has enough stack:
+  give it 2k for simple RESTful serving, or 4-8k for complex dynamic/static
+  serving. In certain environments, it is necessary to adjust heap size, too.
+  By default, IO buffer allocation size `MG_IO_SIZE` is 2048: change it to 512
+  to trim run-time per-connection memory consumption.
 
 ## Build options
 

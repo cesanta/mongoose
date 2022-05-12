@@ -406,7 +406,8 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
   usa[1] = usa[0];
 
   if ((sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
-      bind(sock, &usa[0].sa, len) == 0 && listen(sock, 3) == 0 &&
+      bind(sock, &usa[0].sa, len) == 0 &&
+      listen(sock, MG_SOCK_LISTEN_BACKLOG_SIZE) == 0 &&
       getsockname(sock, &usa[0].sa, &len) == 0 &&
       (sp[0] = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
       connect(sp[0], &usa[0].sa, len) == 0 &&

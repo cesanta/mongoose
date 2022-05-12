@@ -335,6 +335,8 @@ struct timeval {
 
 #include <rl_net.h>
 
+#define MG_IO_SIZE 512
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 1
 #define MG_ENABLE_CUSTOM_MILLIS 1
 typedef int socklen_t;
 #define closesocket(x) closesocket(x)
@@ -629,7 +631,7 @@ int sscanf(const char *, const char *, ...);
 #endif
 
 #ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
-#define MG_SOCK_LISTEN_BACKLOG_SIZE 128
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 3
 #endif
 
 #ifndef MG_DIRSEP
