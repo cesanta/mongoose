@@ -11,6 +11,7 @@
 #define MG_ARCH_RTX_LWIP 8
 #define MG_ARCH_ZEPHYR 9
 #define MG_ARCH_NEWLIB 10
+#define MG_ARCH_RTX 11
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -30,7 +31,7 @@
 #endif
 
 #if !defined(MG_ARCH)
-#error "MG_ARCH is not specified and we couldn't guess it."
+#error "MG_ARCH is not specified and we couldn't guess it. Set -D MG_ARCH=..."
 #endif
 #endif  // !defined(MG_ARCH)
 
@@ -41,7 +42,7 @@
 #endif
 
 #if MG_ARCH == MG_ARCH_CUSTOM
-#include "mongoose_custom.h"
+#include <mongoose_custom.h>
 #endif
 
 #include "arch_esp32.h"
@@ -49,6 +50,8 @@
 #include "arch_freertos_lwip.h"
 #include "arch_freertos_tcp.h"
 #include "arch_newlib.h"
+#include "arch_rtx.h"
+#include "arch_rtx_lwip.h"
 #include "arch_unix.h"
 #include "arch_win32.h"
 #include "arch_zephyr.h"

@@ -166,7 +166,12 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 static void mg_set_non_blocking_mode(SOCKET fd) {
-#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
+#if defined(MG_CUSTOM_NONBLOCK)
+  MG_CUSTOM_NONBLOCK(fd);
+#elif MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
+  unsigned long on = 1;
+  ioctlsocket(fd, FIONBIO, &on);
+#elif MG_ARCH == MG_ARCH_RTX
   unsigned long on = 1;
   ioctlsocket(fd, FIONBIO, &on);
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP
@@ -199,8 +204,8 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 
     if ((fd = socket(af, type, proto)) == INVALID_SOCKET) {
       MG_ERROR(("socket: %d", MG_SOCK_ERRNO));
-#if (MG_ARCH != MG_ARCH_WIN32 || !defined(SO_EXCLUSIVEADDRUSE)) && \
-    (!defined(LWIP_SOCKET) || (defined(LWIP_SOCKET) && SO_REUSE == 1))
+#if ((MG_ARCH == MG_ARCH_WIN32) || (MG_ARCH == MG_ARCH_UNIX) || \
+     (defined(LWIP_SOCKET) && SO_REUSE == 1))
     } else if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
                           sizeof(on)) != 0) {
       // 1. SO_RESUSEADDR is not enabled on Windows because the semantics of
@@ -303,29 +308,9 @@ static void setsockopts(struct mg_connection *c) {
 #endif
   if (setsockopt(FD(c), SOL_TCP, TCP_NODELAY, (char *) &on, sizeof(on)) != 0)
     (void) 0;
-#if defined(TCP_QUICKACK)
-  if (setsockopt(FD(c), SOL_TCP, TCP_QUICKACK, (char *) &on, sizeof(on)) != 0)
-    (void) 0;
-#endif
   if (setsockopt(FD(c), SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on)) !=
       0)
     (void) 0;
-#if (defined(ESP32) && ESP32) || (defined(ESP8266) && ESP8266) || \
-    defined(__linux__)
-  int idle = 60;
-  if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) != 0)
-    (void) 0;
-#endif
-#if MG_ARCH != MG_ARCH_WIN32 && !defined(__QNX__) && MG_ARCH != MG_ARCH_ZEPHYR
-  {
-    int cnt = 3, intvl = 20;
-    if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt)) != 0)
-      (void) 0;
-    if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl)) !=
-        0)
-      (void) 0;
-  }
-#endif
 #endif
 }
 
@@ -510,7 +495,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 
 static void connect_conn(struct mg_connection *c) {
   int rc = 0;
-#if MG_ARCH != MG_ARCH_FREERTOS_TCP
+#if (MG_ARCH != MG_ARCH_FREERTOS_TCP) && (MG_ARCH != MG_ARCH_RTX)
   socklen_t len = sizeof(rc);
   if (getsockopt(FD(c), SOL_SOCKET, SO_ERROR, (char *) &rc, &len)) rc = 1;
 #endif

@@ -38,6 +38,7 @@ extern "C" {
 #define MG_ARCH_RTX_LWIP 8
 #define MG_ARCH_ZEPHYR 9
 #define MG_ARCH_NEWLIB 10
+#define MG_ARCH_RTX 11
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -57,7 +58,7 @@ extern "C" {
 #endif
 
 #if !defined(MG_ARCH)
-#error "MG_ARCH is not specified and we couldn't guess it."
+#error "MG_ARCH is not specified and we couldn't guess it. Set -D MG_ARCH=..."
 #endif
 #endif  // !defined(MG_ARCH)
 
@@ -68,8 +69,10 @@ extern "C" {
 #endif
 
 #if MG_ARCH == MG_ARCH_CUSTOM
-
+#include <mongoose_custom.h>
 #endif
+
+
 
 
 
@@ -313,6 +316,36 @@ struct timeval {
 #define MG_PATH_MAX 100
 #define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_DIRLIST 0
+
+#endif
+
+
+#if MG_ARCH == MG_ARCH_RTX
+
+#include <ctype.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#include <rl_net.h>
+
+#define MG_ENABLE_CUSTOM_MILLIS 1
+typedef int socklen_t;
+#define closesocket(x) closesocket(x)
+#define mkdir(a, b) (-1)
+#define EWOULDBLOCK BSD_EWOULDBLOCK
+#define EAGAIN BSD_EWOULDBLOCK
+#define EINPROGRESS BSD_EWOULDBLOCK
+#define EINTR BSD_EWOULDBLOCK
+#define ECONNRESET BSD_ECONNRESET
+#define EPIPE BSD_ECONNRESET
+#define TCP_NODELAY SO_KEEPALIVE
 
 #endif
 

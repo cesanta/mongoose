@@ -43,7 +43,7 @@ test/packed_fs.c: Makefile src/ssi.h test/fuzz.c test/data/a.txt
 	./pack Makefile src/ssi.h test/fuzz.c test/data/a.txt test/data/range.txt > $@
 
 DIR ?= test/data/
-OUT ?= gui.c
+OUT ?= fs_packed.c
 mkfs:
 	$(CC) $(CFLAGS) test/pack.c -o pack
 	./pack -s $(DIR) `find $(DIR) -type f` > $(OUT)
