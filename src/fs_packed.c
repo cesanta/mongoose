@@ -7,9 +7,6 @@ struct packed_file {
   size_t pos;
 };
 
-const char *mg_unpack(const char *path, size_t *size, time_t *mtime);
-const char *mg_unlist(size_t no);
-
 #if MG_ENABLE_PACKED_FS
 #else
 const char *mg_unpack(const char *path, size_t *size, time_t *mtime) {

@@ -7,15 +7,12 @@ following features:
 - Multiple logins with different permissions (admin and user)
 - Login screen for non-authenticated connections
 - A [preact](https://preactjs.com/)-based dashboard with multiple pages
-- Internal variables
-- A form that changes those variables
+- Web UI is fully embedded into the server/firmware binary, and does not
+  need a filesystem to serve it
+- View and change server settings
 - All changes are propagates to all connected clients
-- Live log stream
-- Live video stream
+- Live interactive chat that demonstrates bi-directional data exchange
 
-
-In essence, this example is a combination of several other examples
-pulled together (multiple-logins, dashboard, live-log, video-stream).
 
 # Screenshots
 

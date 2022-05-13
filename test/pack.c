@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
     struct stat st;
     const char *name = argv[i];
     size_t n = strlen(strip_prefix);
-    if (strcmp(argv[i], "-z") == 0 || strcmp(argv[i], "-s") == 0) {
+    if (strcmp(argv[i], "-s") == 0) {
       i++;
       continue;
     }

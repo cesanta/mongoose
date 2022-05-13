@@ -1,7 +1,6 @@
-// Copyright (c) 2020 Cesanta Software Limited
+// Copyright (c) 2020-2022 Cesanta Software Limited
 // All rights reserved
 
-#include "mjson.h"
 #include "mongoose.h"
 
 // Authenticated user.
@@ -22,25 +21,15 @@ static struct config {
   char *value2;
 } s_config = {123, NULL};
 
-// Stringifies the config. A caller must free() it.
-static char *stringify_config(struct config *cfg) {
-  char *s = NULL;
-  mjson_printf(mjson_print_dynamic_buf, &s, "{%Q:%d,%Q:%Q}", "value1",
-               cfg->value1, "value2", cfg->value2);
-  return s;
-}
-
 // Update config structure. Return true if changed, false otherwise
 static bool update_config(struct mg_http_message *hm, struct config *cfg) {
   bool changed = false;
   char buf[256];
-  double dv;
-  if (mjson_get_number(hm->body.ptr, hm->body.len, "$.value1", &dv)) {
-    cfg->value1 = dv;
+  if (mg_http_get_var(&hm->body, "value1", buf, sizeof(buf)) > 0) {
+    cfg->value1 = atoi(buf);
     changed = true;
   }
-  if (mjson_get_string(hm->body.ptr, hm->body.len, "$.value2", buf,
-                       sizeof(buf)) > 0) {
+  if (mg_http_get_var(&hm->body, "value2", buf, sizeof(buf)) > 0) {
     free(cfg->value2);
     cfg->value2 = strdup(buf);
     changed = true;
@@ -54,7 +43,7 @@ static struct user *getuser(struct mg_http_message *hm) {
   // In this example, user list is kept in RAM. In production, it can
   // be backed by file, database, or some other method.
   static struct user users[] = {
-      {"admin", "admin", "admin_token"},
+      {"admin", "pass0", "admin_token"},
       {"user1", "pass1", "user1_token"},
       {"user2", "pass2", "user2_token"},
       {NULL, NULL, NULL},
@@ -75,17 +64,18 @@ static struct user *getuser(struct mg_http_message *hm) {
 }
 
 // Notify all config watchers about the config change
-static void notify_config_change(struct mg_mgr *mgr) {
+static void send_notification(struct mg_mgr *mgr, const char *name,
+                              const char *data) {
   struct mg_connection *c;
-  char *s = stringify_config(&s_config);
   for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->label[0] == 'W') mg_http_printf_chunk(c, "%s\n", s);
+    if (c->label[0] == 'W')
+      mg_http_printf_chunk(c, "{\"name\": \"%s\", \"data\": \"%s\"}", name,
+                           data == NULL ? "" : data);
   }
-  free(s);
 }
 
 // HTTP request handler function
-static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = getuser(hm);
@@ -95,35 +85,27 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       // All URIs starting with /api/ must be authenticated
       mg_printf(c, "%s", "HTTP/1.1 403 Denied\r\nContent-Length: 0\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/config/get")) {
-      char *s = stringify_config(&s_config);
-      mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s\n",
-                (int) strlen(s) + 1, s);
-      free(s);
+      mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+      mg_http_printf_chunk(c, "{\"%s\":%d,\"%s\":\"%s\"}", "value1",
+                           s_config.value1, "value2", s_config.value2);
+      mg_http_printf_chunk(c, "");
     } else if (mg_http_match_uri(hm, "/api/config/set")) {
       // Admins only
       if (strcmp(u->name, "admin") == 0) {
-        if (update_config(hm, &s_config)) notify_config_change(fn_data);
+        if (update_config(hm, &s_config))
+          send_notification(fn_data, "config", NULL);
         mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
       } else {
         mg_printf(c, "%s", "HTTP/1.1 403 Denied\r\nContent-Length: 0\r\n\r\n");
       }
-    } else if (mg_http_match_uri(hm, "/api/config/watch")) {
-      c->label[0] = 'W';  // Mark ourselves as a config watcher
-      mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
-    } else if (mg_http_match_uri(hm, "/api/video1")) {
-      c->label[0] = 'S';  // Mark that connection as live streamer
-      mg_printf(
-          c, "%s",
-          "HTTP/1.0 200 OK\r\n"
-          "Cache-Control: no-cache\r\n"
-          "Pragma: no-cache\r\nExpires: Thu, 01 Dec 1994 16:00:00 GMT\r\n"
-          "Content-Type: multipart/x-mixed-replace; boundary=--foo\r\n\r\n");
-    } else if (mg_http_match_uri(hm, "/api/log/static")) {
-      struct mg_http_serve_opts opts;
-      memset(&opts, 0, sizeof(opts));
-      mg_http_serve_file(c, hm, "log.txt", &opts);
-    } else if (mg_http_match_uri(hm, "/api/log/live")) {
-      c->label[0] = 'L';  // Mark that connection as live log listener
+    } else if (mg_http_match_uri(hm, "/api/message/send")) {
+      char buf[256];
+      if (mg_http_get_var(&hm->body, "message", buf, sizeof(buf)) > 0) {
+        send_notification(fn_data, "message", buf);
+      }
+      mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
+    } else if (mg_http_match_uri(hm, "/api/watch")) {
+      c->label[0] = 'W';  // Mark ourselves as a event listener
       mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/login")) {
       mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
@@ -132,71 +114,23 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_printf_chunk(c, "");
     } else {
       struct mg_http_serve_opts opts = {0};
+#if 1
+      opts.root_dir = "/web_root";
+      opts.fs = &mg_fs_packed;
+#else
       opts.root_dir = "web_root";
+#endif
       mg_http_serve_dir(c, ev_data, &opts);
     }
   }
 }
 
-// The image stream is simulated by sending MJPEG frames specified by the
-// "files" array of file names.
-static void broadcast_mjpeg_frame(struct mg_mgr *mgr) {
-  const char *files[] = {"images/1.jpg", "images/2.jpg", "images/3.jpg",
-                         "images/4.jpg", "images/5.jpg", "images/6.jpg"};
-  size_t nfiles = sizeof(files) / sizeof(files[0]);
-  static size_t i;
-  const char *path = files[i++ % nfiles];
-  size_t size = 0;
-  char *data = mg_file_read(&mg_fs_posix, path, &size);  // Read next file
-  struct mg_connection *c;
-  for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->label[0] != 'S') continue;         // Skip non-stream connections
-    if (data == NULL || size == 0) continue;  // Skip on file read error
-    mg_printf(c,
-              "--foo\r\nContent-Type: image/jpeg\r\n"
-              "Content-Length: %lu\r\n\r\n",
-              (unsigned long) size);
-    mg_send(c, data, size);
-    mg_send(c, "\r\n", 2);
-  }
-  free(data);
-}
-
-static void mjpeg_cb(void *arg) {
-  broadcast_mjpeg_frame(arg);
-}
-
-static void log_message(const char *filename, const char *message) {
-  FILE *fp = fopen(filename, "a");
-  if (fp != NULL) {
-    fprintf(fp, "%s", message);
-    fclose(fp);
-  }
-}
-
-static void broadcast_message(struct mg_mgr *mgr, const char *message) {
-  struct mg_connection *c;
-  for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->label[0] == 'L') mg_http_printf_chunk(c, "%s", message);
-  }
-}
-
-// Timer function - called periodically.
-// Prepare log message. Save it to a file, and broadcast.
-static void log_cb(void *arg) {
-  char buf[64];
-  snprintf(buf, sizeof(buf), "Time is: %lu\n", (unsigned long) time(NULL));
-  log_message("log.txt", buf);
-  broadcast_message(arg, buf);
-}
-
 int main(void) {
   struct mg_mgr mgr;
+  s_config.value2 = strdup("hello");
 
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, "http://localhost:8000", cb, &mgr);
-  mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, mjpeg_cb, &mgr);
-  mg_timer_add(&mgr, 1000, MG_TIMER_REPEAT, log_cb, &mgr);
+  mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, &mgr);
   for (;;) mg_mgr_poll(&mgr, 50);
   mg_mgr_free(&mgr);
 
