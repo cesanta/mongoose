@@ -1,6 +1,0 @@
-#container { margin-right: auto; margin-left: auto; max-width: 480px; }
-#info { background: #d0f0f0; border-radius: .5em; padding: 2em;  }
-#dashboard { background: #f0f0f0; border-radius: .5em; padding: 0.5em; max-height: 10em; overflow: auto; height: 100%; margin-top: 1em; }
-#form { background: #d0c0f0; border-radius: .5em; padding: 0.5em; max-height: 10em; overflow: auto; height: 100%; margin-top: 1em; }
-button { width: 100%; }
-button, select, input, label::before, textarea { outline: none; box-shadow:none !important; border: 1px solid #ccc !important; }

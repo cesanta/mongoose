@@ -4,15 +4,13 @@ This example is a demonstration of how Mongoose Library could be integrated
 into an embedded device and provide a complete device dashboard with the
 following features:
 
+- Authentication: login-protected dashboard
 - Multiple logins with different permissions (admin and user)
-- Login screen for non-authenticated connections
-- A [preact](https://preactjs.com/)-based dashboard with multiple pages
 - Web UI is fully embedded into the server/firmware binary, and does not
-  need a filesystem to serve it
+  need a filesystem to serve it. UI is resilient to FS problems
 - View and change server settings
 - All changes are propagates to all connected clients
 - Live interactive chat that demonstrates bi-directional data exchange
-
 
 # Screenshots
 
@@ -22,10 +20,6 @@ This is a login screen that prompts for user/password
 
 # Main dashboard
 
-A main dashboard page shows internal data, live video stream, and a form
+A main dashboard page shows device settings form, and live chat
 
 ![](screenshots/dashboard.png)
-
-A live log page shows live log stream coming from device
-
-![](screenshots/logs.png)

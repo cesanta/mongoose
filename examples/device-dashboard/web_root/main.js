@@ -91,24 +91,24 @@ const ChangeSettings = function(props) {
                                   method: 'post',
                                   body: `${name}=${encodeURIComponent(val)}`
                                 }).catch(err => err);
+  const updatevalue1 = ev => update('value1', value1);
+  const updatevalue2 = ev => update('value2', value2);
   return html`
 <div style="margin: 0 0.3em;">
   <h3 style="background: #c03434; color: #fff; padding: 0.4em;">
     Change configuration</h3>
   <div style="margin: 0.5em 0;">
     <span class="addon">value1:</span>
-    <input type="text" value=${value1}
+    <input type="text" value=${value1} onchange=${updatevalue1}
           oninput=${ev => setValue1(ev.target.value)} />
-    <button class="btn" disabled=${!value1}
-      onclick=${ev => update('value1', value1)}
+    <button class="btn" disabled=${!value1} onclick=${updatevalue1}
       style="margin-left: 1em; background: #8aa;">Update</button>
   </div>
   <div style="margin: 0.5em 0;">
     <span class="addon">value2:</span>
-    <input type="text" value=${value2}
+    <input type="text" value=${value2} onchange=${updatevalue2}
           oninput=${ev => setValue2(ev.target.value)} />
-    <button class="btn" disabled=${!value2}
-      onclick=${ev => update('value2', value2)}
+    <button class="btn" disabled=${!value2} onclick=${updatevalue2}
       style="margin-left: 1em; background: #8aa;">Update</button>
   </div>
   <div class="msg">
