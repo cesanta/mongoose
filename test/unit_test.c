@@ -285,6 +285,10 @@ static void test_iobuf(void) {
 static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_SNTP_TIME) {
     *(int64_t *) fnd = *(int64_t *) evd;
+  } else if (ev == MG_EV_POLL) {
+    // For some reason, GA on macos fails often, apparently SNTP request
+    // gets lost. We re-send it each poll
+    if (c->is_resolving == 0) mg_sntp_request(c);
   }
   (void) c;
 }
@@ -299,7 +303,7 @@ static void test_sntp(void) {
   c = mg_sntp_connect(&mgr, NULL, sntp_cb, &ms);
   ASSERT(c != NULL);
   ASSERT(c->is_udp == 1);
-  for (i = 0; i < 500 && ms == 0; i++) mg_mgr_poll(&mgr, 10);
+  for (i = 0; i < 60 && ms == 0; i++) mg_mgr_poll(&mgr, 50);
   MG_DEBUG(("ms: %lld", ms));
   ASSERT(ms > 0);
   mg_mgr_free(&mgr);
