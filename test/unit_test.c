@@ -299,8 +299,7 @@ static void test_sntp(void) {
   c = mg_sntp_connect(&mgr, NULL, sntp_cb, &ms);
   ASSERT(c != NULL);
   ASSERT(c->is_udp == 1);
-  mg_sntp_send(c, (unsigned long) time(NULL));
-  for (i = 0; i < 300 && ms == 0; i++) mg_mgr_poll(&mgr, 10);
+  for (i = 0; i < 500 && ms == 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(ms > 0);
   mg_mgr_free(&mgr);
 

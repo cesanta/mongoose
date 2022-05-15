@@ -1481,24 +1481,23 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
 mg_sntp_connect(mgr&, NULL /* connect to time.google.com */, sntp_cb, NULL);
 ```
 
-### mg_sntp_send()
+### mg_sntp_request()
 
 ```c
-void mg_sntp_send(struct mg_connection *c, unsigned long utc)
+void mg_sntp_request(struct mg_connection *c)
 ```
 
-Send time request to SNTP server. Note: This app can't send SNTP request more often than every one hour.
+Send time request to SNTP server
 
 Parameters:
 - `c` - Connection to use
-- `utc` - Current time, used to verify if new request is possible.
 
 Return value: None
 
 Usage example:
 
 ```c
-mg_sntp_send(c, (unsigned long) time(NULL));
+mg_sntp_request(c);
 ```
 
 ## MQTT

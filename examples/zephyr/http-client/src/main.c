@@ -85,7 +85,7 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
   if (s_sntp_conn == NULL) s_sntp_conn = mg_sntp_connect(mgr, NULL, sfn, NULL);
-  if (s_boot_timestamp < 9999) mg_sntp_send(s_sntp_conn, time(NULL));
+  if (s_boot_timestamp < 9999) mg_sntp_request(s_sntp_conn);
 }
 
 // Use Zephyr's printk() for Mongooose MG_* logging

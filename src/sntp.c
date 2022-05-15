@@ -36,23 +36,22 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
       MG_VERBOSE(("%u.%u", (unsigned) (milliseconds / 1000),
                   (unsigned) (milliseconds % 1000)));
     }
-    c->recv.len = 0;  // Clear receive buffer
+    mg_iobuf_del(&c->recv, 0, c->recv.len);  // Free receive buffer
   } else if (ev == MG_EV_CONNECT) {
-    mg_sntp_send(c, (unsigned long) 0);
+    mg_sntp_request(c);
   } else if (ev == MG_EV_CLOSE) {
   }
   (void) fnd;
   (void) evd;
 }
 
-void mg_sntp_send(struct mg_connection *c, unsigned long utc) {
+void mg_sntp_request(struct mg_connection *c) {
   if (c->is_resolving) {
     MG_ERROR(("%lu wait until resolved", c->id));
   } else {
     uint8_t buf[48] = {0};
     buf[0] = (0 << 6) | (4 << 3) | 3;
     mg_send(c, buf, sizeof(buf));
-    (void) utc;
   }
 }
 
