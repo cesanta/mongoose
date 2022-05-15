@@ -238,7 +238,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
     } else if (setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on,
                           sizeof(on)) != 0) {
       // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
-      MG_ERROR(("exclusiveaddruse: %s", MG_SOCK_ERRNO));
+      MG_ERROR(("exclusiveaddruse: %d", MG_SOCK_ERRNO));
 #endif
     } else if (bind(fd, &usa.sa, slen) != 0) {
       MG_ERROR(("bind: %d", MG_SOCK_ERRNO));
