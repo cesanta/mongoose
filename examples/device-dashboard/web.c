@@ -75,7 +75,8 @@ static void send_notification(struct mg_mgr *mgr, const char *name,
 }
 
 // HTTP request handler function
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
+                         void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = getuser(hm);
@@ -123,11 +124,4 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, ev_data, &opts);
     }
   }
-}
-
-void run_web_server(struct mg_mgr *mgr) {
-  s_config.value2 = strdup("hello");
-  mg_http_listen(mgr, "http://0.0.0.0:8000", fn, mgr);
-  for (;;) mg_mgr_poll(mgr, 1000);
-  mg_mgr_free(mgr);
 }
