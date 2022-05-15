@@ -191,9 +191,9 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
   int status = 0;
   int res = SockStatus(fd, FDSTATUS_SEND, &status);
   if (res == 0 && status > 0) {
-      val = status / 2;
-      int val_size = sizeof(val);
-      res = SockSet(fd, SOL_SOCKET, SO_SNDLOWAT, &val, val_size);
+    val = status / 2;
+    int val_size = sizeof(val);
+    res = SockSet(fd, SOL_SOCKET, SO_SNDLOWAT, &val, val_size);
   }
 #else
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);  // Non-blocking mode
@@ -312,7 +312,8 @@ static void close_conn(struct mg_connection *c) {
 }
 
 static void setsockopts(struct mg_connection *c) {
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS || MG_ARCH == MG_ARCH_TIRTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS || \
+    MG_ARCH == MG_ARCH_TIRTOS
   (void) c;
 #else
   int on = 1;
@@ -348,13 +349,12 @@ void mg_connect_resolved(struct mg_connection *c) {
     if ((rc = connect(FD(c), &usa.sa, slen)) == 0) {
       mg_call(c, MG_EV_CONNECT, NULL);
     } else if (mg_sock_would_block()) {
+      MG_DEBUG(("%lu %p connect in progress...", c->id, c->fd));
       c->is_connecting = 1;
     } else {
       mg_error(c, "connect: %d", MG_SOCK_ERRNO);
     }
   }
-  (void)rc;
-  MG_DEBUG(("%lu %p", c->id, c->fd));
 }
 
 static SOCKET raccept(SOCKET sock, union usa *usa, socklen_t len) {
@@ -379,7 +379,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     if (MG_SOCK_ERRNO != EAGAIN)
 #endif
       MG_ERROR(("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
-#if (MG_ARCH != MG_ARCH_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP) && (MG_ARCH != MG_ARCH_TIRTOS)
+#if (MG_ARCH != MG_ARCH_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP) && \
+    (MG_ARCH != MG_ARCH_TIRTOS)
   } else if ((long) fd >= FD_SETSIZE) {
     MG_ERROR(("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);

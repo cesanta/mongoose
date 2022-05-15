@@ -300,6 +300,7 @@ static void test_sntp(void) {
   ASSERT(c != NULL);
   ASSERT(c->is_udp == 1);
   for (i = 0; i < 500 && ms == 0; i++) mg_mgr_poll(&mgr, 10);
+  MG_DEBUG(("ms: %lld", ms));
   ASSERT(ms > 0);
   mg_mgr_free(&mgr);
 
