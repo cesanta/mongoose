@@ -12,6 +12,7 @@
 #define MG_ARCH_ZEPHYR 9
 #define MG_ARCH_NEWLIB 10
 #define MG_ARCH_RTX 11
+#define MG_ARCH_TIRTOS 12
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)

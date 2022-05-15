@@ -19,6 +19,9 @@
 #define MG_SOCK_ERRNO errno
 typedef Socket_t SOCKET;
 #define INVALID_SOCKET FREERTOS_INVALID_SOCKET
+#elif MG_ARCH == MG_ARCH_TIRTOS
+#define MG_SOCK_ERRNO errno
+#define closesocket(x) close(x)
 #else
 #define MG_SOCK_ERRNO errno
 #ifndef closesocket
@@ -182,6 +185,16 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
   lwip_fcntl(fd, F_SETFL, O_NONBLOCK);
 #elif MG_ARCH == MG_ARCH_AZURERTOS
   fcntl(fd, F_SETFL, O_NONBLOCK);
+#elif MG_ARCH == MG_ARCH_TIRTOS
+  int val = 0;
+  setsockopt(fd, 0, SO_BLOCKING, &val, sizeof(val));
+  int status = 0;
+  int res = SockStatus(fd, FDSTATUS_SEND, &status);
+  if (res == 0 && status > 0) {
+      val = status / 2;
+      int val_size = sizeof(val);
+      res = SockSet(fd, SOL_SOCKET, SO_SNDLOWAT, &val, val_size);
+  }
 #else
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);  // Non-blocking mode
   fcntl(fd, F_SETFD, FD_CLOEXEC);                          // Set close-on-exec
@@ -299,7 +312,7 @@ static void close_conn(struct mg_connection *c) {
 }
 
 static void setsockopts(struct mg_connection *c) {
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS || MG_ARCH == MG_ARCH_TIRTOS
   (void) c;
 #else
   int on = 1;
@@ -340,6 +353,7 @@ void mg_connect_resolved(struct mg_connection *c) {
       mg_error(c, "connect: %d", MG_SOCK_ERRNO);
     }
   }
+  (void)rc;
   MG_DEBUG(("%lu %p", c->id, c->fd));
 }
 
@@ -365,7 +379,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     if (MG_SOCK_ERRNO != EAGAIN)
 #endif
       MG_ERROR(("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
-#if ((MG_ARCH != MG_ARCH_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP))
+#if (MG_ARCH != MG_ARCH_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP) && (MG_ARCH != MG_ARCH_TIRTOS)
   } else if ((long) fd >= FD_SETSIZE) {
     MG_ERROR(("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
