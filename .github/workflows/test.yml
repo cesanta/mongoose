@@ -120,6 +120,8 @@ jobs:
             path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
           - name: zephyr
             path: zephyr
+          - name: ti
+            path: ti/ti-ek-tm4c1294xl-http-server
     name: ${{ matrix.example.name }}
     steps:
       - uses: actions/checkout@v3

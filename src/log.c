@@ -12,9 +12,7 @@ static void logs(const char *buf, size_t len) {
 
 static void mg_log_stdout(const void *buf, size_t len, void *userdata) {
   (void) userdata, (void) buf, (void) len;
-#if MG_ENABLE_FILE
   logs((const char *) buf, len);
-#endif
 }
 
 static const char *s_spec = "2";

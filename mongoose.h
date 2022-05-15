@@ -39,6 +39,7 @@ extern "C" {
 #define MG_ARCH_ZEPHYR 9
 #define MG_ARCH_NEWLIB 10
 #define MG_ARCH_RTX 11
+#define MG_ARCH_TIRTOS 12
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -388,6 +389,27 @@ struct timeval {
 #define MG_PATH_MAX 128
 #endif
 
+
+#endif
+
+
+#if MG_ARCH == MG_ARCH_TIRTOS
+
+#include <stdlib.h>
+#include <ctype.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <time.h>
+#include <errno.h>
+
+#include <sys/socket.h>
+
+extern int SockStatus(SOCKET hSock, int request, int *results );
+extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
 
 #endif
 
