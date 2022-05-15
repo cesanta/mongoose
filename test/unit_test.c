@@ -1171,13 +1171,17 @@ static void test_timer(void) {
   struct mg_timer t1, t2, t3, *head = NULL;
 
   mg_timer_init(&head, &t1, 5, MG_TIMER_REPEAT, f1, &v1);
-  mg_timer_init(&head, &t2, 15, 0, f1, &v2);
+  mg_timer_init(&head, &t2, 15, MG_TIMER_ONCE, f1, &v2);
   mg_timer_init(&head, &t3, 10, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, f1, &v3);
 
   ASSERT(head == &t3);
   ASSERT(head->next == &t2);
 
   mg_timer_poll(&head, 0);
+  ASSERT(v1 == 0);
+  ASSERT(v2 == 0);
+  ASSERT(v3 == 1);
+
   mg_timer_poll(&head, 1);
   ASSERT(v1 == 0);
   ASSERT(v2 == 0);
@@ -1188,18 +1192,11 @@ static void test_timer(void) {
   ASSERT(v2 == 0);
   ASSERT(v3 == 1);
 
-  ASSERT(head == &t3);
-  ASSERT(head->next == &t2);
-
   // Simulate long delay - timers must invalidate expiration times
   mg_timer_poll(&head, 100);
   ASSERT(v1 == 2);
   ASSERT(v2 == 1);
   ASSERT(v3 == 2);
-
-  ASSERT(head == &t3);
-  ASSERT(head->next == &t1);  // t2 should be removed
-  ASSERT(head->next->next == NULL);
 
   mg_timer_poll(&head, 107);
   ASSERT(v1 == 3);
@@ -1216,6 +1213,7 @@ static void test_timer(void) {
   ASSERT(v2 == 1);
   ASSERT(v3 == 3);
 
+  mg_timer_free(&head, &t2);
   mg_timer_init(&head, &t2, 3, 0, f1, &v2);
   ASSERT(head == &t2);
   ASSERT(head->next == &t3);
@@ -1238,10 +1236,6 @@ static void test_timer(void) {
   ASSERT(v2 == 2);
   ASSERT(v3 == 4);
 
-  ASSERT(head == &t3);
-  ASSERT(head->next == &t1);
-  ASSERT(head->next->next == NULL);
-
   mg_timer_poll(&head, 7);
   ASSERT(v1 == 8);
   ASSERT(v2 == 2);
@@ -1253,8 +1247,9 @@ static void test_timer(void) {
   ASSERT(v3 == 5);
 
   mg_timer_free(&head, &t1);
-  ASSERT(head == &t3);
-  ASSERT(head->next == NULL);
+  ASSERT(head == &t2);
+  ASSERT(head->next == &t3);
+  ASSERT(head->next->next == NULL);
 
   mg_timer_free(&head, &t2);
   ASSERT(head == &t3);
@@ -1366,7 +1361,7 @@ static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   (void) c;
 }
 
-static void test_dns_timeout(const char *dns_server_url, const char *errstr) {
+static void test_dns_error(const char *dns_server_url, const char *errstr) {
   // Test timeout
   struct mg_mgr mgr;
   char buf[100] = "";
@@ -1374,12 +1369,12 @@ static void test_dns_timeout(const char *dns_server_url, const char *errstr) {
   mg_mgr_init(&mgr);
   mgr.dns4.url = dns_server_url;
   mgr.dnstimeout = 10;
-  MG_DEBUG(("opening dummy DNS listener..."));
+  MG_DEBUG(("opening dummy DNS listener @ [%s]...", dns_server_url));
   mg_listen(&mgr, mgr.dns4.url, NULL, NULL);  // Just discard our queries
   mg_http_connect(&mgr, "http://google.com", fn1, buf);
   for (i = 0; i < 50 && buf[0] == '\0'; i++) mg_mgr_poll(&mgr, 1);
   mg_mgr_free(&mgr);
-  MG_DEBUG(("buf: [%s]", buf));
+  // MG_DEBUG(("buf: [%s] [%s]", buf, errstr));
   ASSERT(strcmp(buf, errstr) == 0);
 }
 
@@ -1429,9 +1424,9 @@ static void test_dns(void) {
     ASSERT(strcmp(dm.name, "new-fp-shed.wg1.b.yahoo.com") == 0);
   }
 
-  test_dns_timeout("udp://127.0.0.1:12345", "DNS timeout");
-  test_dns_timeout("", "resolver");
-  test_dns_timeout("tcp://0.0.0.0:0", "DNS error");
+  test_dns_error("udp://127.0.0.1:12345", "DNS timeout");
+  test_dns_error("", "resolver");
+  test_dns_error("tcp://0.0.0.0:0", "DNS error");
 }
 
 static void test_util(void) {
