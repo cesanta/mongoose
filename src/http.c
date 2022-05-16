@@ -810,9 +810,9 @@ static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
 }
 
 static bool mg_is_chunked(struct mg_http_message *hm) {
-  struct mg_str needle = mg_str_n("chunked", 7);
+  const char *needle = "chunked";
   struct mg_str *te = mg_http_get_header(hm, "Transfer-Encoding");
-  return te != NULL && mg_strstr(*te, needle) != NULL;
+  return te != NULL && mg_vcasecmp(te, needle) == 0;
 }
 
 void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
