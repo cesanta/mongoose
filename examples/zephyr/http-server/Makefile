@@ -6,6 +6,9 @@ example:
 	true
 
 build:
+	make -C ../ -f docker.mk CWD=$(CWD)
+
+localbuild:
 	cp ../../../mongoose.c ../../../mongoose.h src/
 	cd $(ZEPHYR_DIR) && west build -b $(BOARD) -p auto $(CWD)
 

@@ -1,12 +1,12 @@
 example:
 	true
 
-build:
+localbuild:
 	sh .zephyr_install.sh
-	make -C http-client build
-	make -C http-server build
-	make -C mqtt-aws-client build
-	make -C websocket-server build
+	make -C http-client localbuild
+	make -C http-server localbuild
+	make -C mqtt-aws-client localbuild
+	make -C websocket-server localbuild
 
 clean:
 	rm -rf */*/mongoose.*
