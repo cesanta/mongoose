@@ -133,6 +133,8 @@ extern "C" {
 #include <sys/types.h>
 #include <time.h>
 
+#include <esp_timer.h>
+
 #define MG_PATH_MAX 128
 
 #endif
