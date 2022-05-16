@@ -118,10 +118,16 @@ jobs:
             path: nxp/nxp-twrkv58f220m-lwip-freertos
           - name: infineon-xmc4700_4800-lwip-rtx-rtos
             path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
-          - name: zephyr
-            path: zephyr
           - name: ti
             path: ti/ti-ek-tm4c1294xl-http-server
+          - name: nucleo_f746zg-zephyr-http-client
+            path: zephyr/http-client
+          - name: nucleo_f746zg-zephyr-http-server
+            path: zephyr/http-server
+          - name: nucleo_f746zg-zephyr-mqtt-aws-client
+            path: zephyr/mqtt-aws-client
+          - name: nucleo_f746zg-zephyr-websocket-server
+            path: zephyr/websocket-server             
     name: ${{ matrix.example.name }}
     steps:
       - uses: actions/checkout@v3
