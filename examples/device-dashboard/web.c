@@ -31,7 +31,8 @@ static bool update_config(struct mg_http_message *hm, struct config *cfg) {
   }
   if (mg_http_get_var(&hm->body, "value2", buf, sizeof(buf)) > 0) {
     free(cfg->value2);
-    cfg->value2 = strdup(buf);
+    cfg->value2 = malloc(strlen(buf) + 1);
+    strcpy(cfg->value2, buf);
     changed = true;
   }
   return changed;
@@ -82,7 +83,9 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
     struct user *u = getuser(hm);
     // MG_INFO(("%p [%.*s] auth %s", c->fd, (int) hm->uri.len, hm->uri.ptr,
     // u ? u->name : "NULL"));
-    if (u == NULL && mg_http_match_uri(hm, "/api/#")) {
+    if (mg_http_match_uri(hm, "/api/hi")) {
+      mg_http_reply(c, 200, "", "hi\n");  // Testing endpoint
+    } else if (u == NULL && mg_http_match_uri(hm, "/api/#")) {
       // All URIs starting with /api/ must be authenticated
       mg_printf(c, "%s", "HTTP/1.1 403 Denied\r\nContent-Length: 0\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/config/get")) {

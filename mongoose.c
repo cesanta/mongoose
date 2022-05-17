@@ -3288,6 +3288,9 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
     if (n > 0) setlocaddr(FD(c), &c->loc);
   } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
+#if MG_ARCH == MG_ARCH_RTX
+    if (n == BSD_EWOULDBLOCK) return 0;
+#endif
   }
   return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
 }
