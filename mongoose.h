@@ -575,6 +575,10 @@ int sscanf(const char *, const char *, ...);
 #endif
 
 
+#ifndef MG_ENABLE_MIP
+#define MG_ENABLE_MIP 0
+#endif
+
 #ifndef MG_ENABLE_FATFS
 #define MG_ENABLE_FATFS 0
 #endif
@@ -1265,6 +1269,27 @@ void mg_resolve_cancel(struct mg_connection *);
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
 size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
                        bool is_question, struct mg_dns_rr *);
+
+
+
+
+
+struct mip_driver {
+  void *data;                                       // Driver-specific data
+  void (*init)(void *data);                         // Initialise driver
+  size_t (*tx)(const void *, size_t, void *data);   // Transmit frame
+  size_t (*rx)(void *buf, size_t len, void *data);  // Receive frame (polling)
+  bool (*status)(void *data);                       // Up/down status
+  // Set receive callback for interrupt-driven drivers
+  void (*rxcb)(void (*fn)(void *buf, size_t len, void *rxdata), void *rxdata);
+};
+
+struct mip_ipcfg {
+  uint8_t mac[6];         // MAC address. Must not be 0
+  uint32_t ip, mask, gw;  // IP, netmask, GW. If IP is 0, DHCP is used
+};
+
+void mip_init(struct mg_mgr *, struct mip_ipcfg *, struct mip_driver *);
 
 #ifdef __cplusplus
 }
