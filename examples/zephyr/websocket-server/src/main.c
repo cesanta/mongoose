@@ -63,16 +63,10 @@ static void timer_fn(void *arg) {
   if (s_boot_timestamp < 9999) mg_sntp_request(s_sntp_conn);
 }
 
-// Use Zephyr's printk() for Mongooose MG_* logging
-static void logfn(const void *ptr, size_t len, void *userdata) {
-  printk("%.*s", (int) len, (char *) ptr);
-}
-
 int main(int argc, char *argv[]) {
   struct mg_mgr mgr;
 
   mg_log_set(s_debug_level);
-  mg_log_set_callback(logfn, NULL);
 
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, s_ws_addr, fn, NULL);

@@ -338,8 +338,6 @@ struct timeval {
 
 #include <rl_net.h>
 
-#define MG_IO_SIZE 512
-#define MG_SOCK_LISTEN_BACKLOG_SIZE 1
 #define MG_ENABLE_CUSTOM_MILLIS 1
 typedef int socklen_t;
 #define closesocket(x) closesocket(x)
@@ -564,6 +562,7 @@ typedef int socklen_t;
 #include <sys/types.h>
 #include <time.h>
 
+#define MG_PUTCHAR(x) printk("%c", x)
 #define strerror(x) zsock_gai_strerror(x)
 #define FD_CLOEXEC 0
 #define F_SETFD 0
@@ -674,6 +673,10 @@ int sscanf(const char *, const char *, ...);
 #endif
 #endif
 
+#ifndef MG_PUTCHAR
+#define MG_PUTCHAR(x) putchar(x)
+#endif
+
 
 
 
@@ -726,7 +729,6 @@ enum { MG_LL_NONE, MG_LL_ERROR, MG_LL_INFO, MG_LL_DEBUG, MG_LL_VERBOSE };
 void mg_log(const char *fmt, ...) PRINTF_LIKE(1, 2);
 bool mg_log_prefix(int ll, const char *file, int line, const char *fname);
 void mg_log_set(const char *spec);
-void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *param);
 void mg_hexdump(const void *buf, size_t len);
 
 #define MG_LOG(level, args)                                                \

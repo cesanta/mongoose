@@ -98,3 +98,7 @@
 #define MG_ENABLE_FILE 0
 #endif
 #endif
+
+#ifndef MG_PUTCHAR
+#define MG_PUTCHAR(x) putchar(x)
+#endif
