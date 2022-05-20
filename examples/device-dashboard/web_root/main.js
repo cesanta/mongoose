@@ -187,8 +187,9 @@ const App = function(props) {
   const [user, setUser] = useState('');
   const [config, setConfig] = useState({});
 
-  const refresh = () =>
-      fetch('/api/config/get').then(r => r.json()).then(r => setConfig(r));
+  const refresh = () => fetch('/api/config/get', {headers: {Authorization: ''}})
+                            .then(r => r.json())
+                            .then(r => setConfig(r));
 
   const login = function(u) {
     document.cookie = `access_token=${u.token};path=/;max-age=3600`;
@@ -214,14 +215,14 @@ const App = function(props) {
         if (!result.done) return f(reader);
       });
     };
-    fetch('/api/watch')
+    fetch('/api/watch', {headers: {Authorization: ''}})
         .then(r => r.body.getReader())
         .then(f)
         .catch(e => setTimeout(watch, 1000));
   };
 
   useEffect(() => {
-    fetch('/api/login')
+    fetch('/api/login', {headers: {Authorization: ''}})
         .then(r => r.json())
         .then(r => login(r))
         .catch(err => setUser(''));

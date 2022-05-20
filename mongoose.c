@@ -1997,23 +1997,16 @@ void mg_iobuf_free(struct mg_iobuf *io) {
 
 
 
-static void logc(int c) {
-  putchar(c);
+static const char *s_spec = "2";
+
+static void logc(unsigned char c) {
+  MG_PUTCHAR(c);
 }
 
 static void logs(const char *buf, size_t len) {
   size_t i;
-  for (i = 0; i < len; i++) logc(buf[i]);
+  for (i = 0; i < len; i++) logc(((unsigned char *) buf)[i]);
 }
-
-static void mg_log_stdout(const void *buf, size_t len, void *userdata) {
-  (void) userdata, (void) buf, (void) len;
-  logs((const char *) buf, len);
-}
-
-static const char *s_spec = "2";
-static void (*s_fn)(const void *, size_t, void *) = mg_log_stdout;
-static void *s_fn_param = NULL;
 
 void mg_log_set(const char *spec) {
   MG_DEBUG(("Setting log level to %s", spec));
@@ -2025,8 +2018,6 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   int max = MG_LL_INFO;
   struct mg_str k, v, s = mg_str(s_spec);
   const char *p = strrchr(file, '/');
-
-  if (s_fn == NULL) return false;
 
   if (p == NULL) p = strrchr(file, '\\');
   p = p == NULL ? file : p + 1;
@@ -2042,8 +2033,7 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
                            level, p, line, fname);
     if (n > sizeof(buf) - 2) n = sizeof(buf) - 2;
     while (n < sizeof(buf)) buf[n++] = ' ';
-    buf[sizeof(buf) - 1] = '\0';
-    s_fn(buf, n - 1, s_fn_param);
+    logs(buf, n - 1);
     return true;
   } else {
     return false;
@@ -2057,14 +2047,9 @@ void mg_log(const char *fmt, ...) {
   va_start(ap, fmt);
   len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
   va_end(ap);
-  s_fn(buf, len, s_fn_param);
-  s_fn("\n", 1, s_fn_param);
+  logs(buf, len);
+  logc((unsigned char) '\n');
   if (buf != mem) free(buf);
-}
-
-void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd) {
-  s_fn = fn;
-  s_fn_param = fnd;
 }
 
 static unsigned char nibble(unsigned c) {

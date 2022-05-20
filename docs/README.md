@@ -306,12 +306,13 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_CUSTOM_MILLIS | 0 | Enable custom `mg_millis()` function |
 |MG_ENABLE_PACKED_FS | 0 | Enable embedded FS support |
 |MG_ENABLE_FATFS | 0 | Enable embedded FAT FS support |
+|MG_ENABLE_LINES | undefined | If defined, show source file names in logs |
 |MG_IO_SIZE | 2048 | Granularity of the send/recv IO buffer growth |
 |MG_MAX_RECV_BUF_SIZE | (3 * 1024 * 1024) | Maximum recv buffer size |
 |MG_MAX_HTTP_HEADERS | 40 | Maximum number of HTTP headers |
 |MG_HTTP_INDEX | "index.html" | Index file for HTML directory |
 |MG_FATFS_ROOT | "/" | FAT FS root directory |
-|MG_ENABLE_LINES | undefined | If defined, show source file names in logs |
+|MG_PUTCHAR | putchar | Character output function, used by logging |
 
 <span class="badge bg-danger">NOTE:</span> the `MG_IO_SIZE` constant also sets
 maximum UDP message size, see
@@ -3466,34 +3467,6 @@ Usage example:
 ```c
 mg_log_set("2");                  // Set log level to info
 mg_log_set("2,foo.c=3,bar.c=0");  // Set log level to info, with overrides
-```
-
-### mg\_log\_set\_callback()
-
-```c
-void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd);
-```
-
-By default, `LOG` writes to standard output stream (aka `stdout`), but this behaviour
-can be changes via `mg_log_set_callback`. This function allows to set callback,
-which called once mongoose (or host application) calls `LOG`
-
-Parameters:
-- `fn` - callback function, should be called on logging
-- `fnd` - user parameter to pass to `fn`
-
-Return value: none
-
-Usage example:
-
-```c
-void log_via_printf(const void *buf, size_t len, void *userdata) {
-  (void) userdata;
-  printf("*.%s", buf, len);
-}
-
-// ...
-mg_log_set_callback(&log_via_printf, NULL);
 ```
 
 ### mg\_hexdump()

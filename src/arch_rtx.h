@@ -15,8 +15,6 @@
 
 #include <rl_net.h>
 
-#define MG_IO_SIZE 512
-#define MG_SOCK_LISTEN_BACKLOG_SIZE 1
 #define MG_ENABLE_CUSTOM_MILLIS 1
 typedef int socklen_t;
 #define closesocket(x) closesocket(x)
