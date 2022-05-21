@@ -237,7 +237,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
       //    but won't work! (setsockopt will return EINVAL)
       MG_ERROR(("reuseaddr: %d", MG_SOCK_ERRNO));
 #endif
-#if MG_ARCH == MG_ARCH_WIN32 && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
+#if MG_ARCH == MG_ARCH_WIN32 && !defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
     } else if (setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on,
                           sizeof(on)) != 0) {
       // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
