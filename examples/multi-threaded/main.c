@@ -37,7 +37,7 @@ static void start_thread(void (*f)(void *), void *p) {
 static void thread_function(void *param) {
   int sock = (int) (size_t) param;  // Paired socket. We own it
   sleep(2);                         // Simulate long execution
-  send(sock, "hi", 2, 2);           // Wakeup event manager
+  send(sock, "hi", 2, 0);           // Wakeup event manager
   close(sock);                      // Close the connection
 }
 
