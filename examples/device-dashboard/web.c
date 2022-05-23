@@ -70,15 +70,25 @@ static void send_notification(struct mg_mgr *mgr, const char *name,
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
     if (c->label[0] == 'W')
-      mg_http_printf_chunk(c, "{\"name\": \"%s\", \"data\": \"%s\"}", name,
-                           data == NULL ? "" : data);
+      mg_http_printf_chunk(c, "{\"name\": \"%s\", \"data\": %s}", name, data);
   }
+}
+
+// Send simulated metrics data to the dashboard, for chart rendering
+static void timer_func(void *param) {
+  char buf[50];
+  mg_snprintf(buf, sizeof(buf), "[ %lu, %d ]", (unsigned long) time(NULL),
+              10 + (int) ((double) rand() * 10 / RAND_MAX));
+  // MG_INFO(("%s", buf));
+  send_notification(param, "metrics", buf);
 }
 
 // HTTP request handler function
 void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
                          void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_OPEN && c->is_listening) {
+    mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_func, c->mgr);
+  } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = getuser(hm);
     // MG_INFO(("%p [%.*s] auth %s", c->fd, (int) hm->uri.len, hm->uri.ptr,
@@ -97,14 +107,15 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       // Admins only
       if (strcmp(u->name, "admin") == 0) {
         if (update_config(hm, &s_config))
-          send_notification(fn_data, "config", NULL);
+          send_notification(fn_data, "config", "null");
         mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
       } else {
         mg_printf(c, "%s", "HTTP/1.1 403 Denied\r\nContent-Length: 0\r\n\r\n");
       }
     } else if (mg_http_match_uri(hm, "/api/message/send")) {
       char buf[256];
-      if (mg_http_get_var(&hm->body, "message", buf, sizeof(buf)) > 0) {
+      if (mg_http_get_var(&hm->body, "message", buf + 1, sizeof(buf) - 2) > 0) {
+        buf[0] = buf[strlen(buf)] = '"';
         send_notification(fn_data, "message", buf);
       }
       mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
@@ -118,7 +129,7 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       mg_http_printf_chunk(c, "");
     } else {
       struct mg_http_serve_opts opts = {0};
-#if 1
+#if 0
       opts.root_dir = "/web_root";
       opts.fs = &mg_fs_packed;
 #else

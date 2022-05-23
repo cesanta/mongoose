@@ -9,7 +9,7 @@ INCS ?= -Isrc -I.
 SSL ?= MBEDTLS
 CWD ?= $(realpath $(CURDIR))
 DOCKER ?= docker run --rm -e Tmp=. -e WINEDEBUG=-all -v $(CWD):$(CWD) -w $(CWD)
-VCFLAGS = /nologo /W3 /O2 /I. $(DEFS) $(TFLAGS)
+VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined -fno-sanitize-recover=all
 ASAN_OPTIONS ?= detect_leaks=1
@@ -115,6 +115,10 @@ vc98: Makefile mongoose.h $(SRCS)
 vc2017: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc2017 wine64 cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(DOCKER) mdashnet/vc2017 wine64 $@.exe
+
+vc22: Makefile mongoose.h $(SRCS)
+	$(DOCKER) mdashnet/vc22 wine64 cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
+	$(DOCKER) mdashnet/vc22 wine64 $@.exe
 
 mingw: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/mingw i686-w64-mingw32-gcc $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe

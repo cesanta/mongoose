@@ -1,5 +1,5 @@
 'use strict';
-import {Component, h, html, render, useEffect, useState} from './preact.min.js';
+import {Component, h, html, render, useEffect, useState, useRef} from './preact.min.js';
 
 const Nav = props => html`
 <div style="background: #333; padding: 0.5em; color: #fff;">
@@ -50,7 +50,7 @@ const Hero = props => html`
   <div><code>curl localhost:8000/api/config/get</code> - get current device configuration</div>
   <div><code>curl localhost:8000/api/config/set -d 'value1=7&value2=hello'</code> - set device configuration</div>
   <div><code>curl localhost:8000/api/message/send -d 'msg=hello'</code> - send chat message</div>
-  <div><code>curl localhost:8000/api/watch</code> - get notifications on config changes or chat messages</div>
+  <div><code>curl localhost:8000/api/watch</code> - get notifications: chat, config, metrics</div>
 
 </div>`;
 
@@ -182,8 +182,31 @@ const Chat = function(props) {
 </div>`;
 };
 
+const datefmt = unix => (new Date(unix * 1000)).toISOString().substr(14, 5);
+
+const Chart = function(props) {
+  const chartdiv = useRef(null);
+  const refresh = () => {
+    const labels = props.metrics.map(el => datefmt(el[0]));
+    const series = props.metrics.map(el => el[1]);
+    const options = {low: 0, high: 20, showArea: true};
+    // console.log([labels, [series]]);
+    new Chartist.Line(chartdiv.current, {labels, series: [series]}, options);
+  };
+  useEffect(() => {chartdiv && refresh()}, [props.metrics]);
+
+  return html`
+<div style="margin: 0 0.3em;">
+  <h3 style="background: #ec3; color: #fff; padding: 0.4em;">Data Chart</h3>
+  <div style="height: 14em; overflow: auto; padding: 0.5em; " class="border">
+    <div ref=${chartdiv} style="height: 100%;" />
+  </div>
+</div>`;
+};
+
 const App = function(props) {
   const [messages, setMessages] = useState([]);
+  const [metrics, setMetrics] = useState([]);
   const [user, setUser] = useState('');
   const [config, setConfig] = useState({});
 
@@ -206,12 +229,15 @@ const App = function(props) {
     var f = function(reader) {
       return reader.read().then(function(result) {
         var data = String.fromCharCode.apply(null, result.value);
-        var notification = JSON.parse(data);
-        if (notification.name == 'config') refresh();
-        if (notification.name == 'message') {
-          setMessages(m => m.concat([notification.data]))
+        var msg = JSON.parse(data);
+        if (msg.name == 'config') {
+          refresh();
+        } else if (msg.name == 'message') {
+          setMessages(m => m.concat([msg.data]));
+        } else if (msg.name == 'metrics') {
+          setMetrics(m => m.concat([msg.data]).splice(-10));
         }
-        // console.log(notification);
+        // console.log(msg);
         if (!result.done) return f(reader);
       });
     };
@@ -232,16 +258,16 @@ const App = function(props) {
 
   if (!user) return html`<${Login} login=${login} />`;
   const admin = user == 'admin';
-  const colsize = admin ? 'c4' : 'c6';
   const cs = admin ? html`<${ChangeSettings} config=${config} />` : '';
   return html`
 <${Nav} user=${user} logout=${logout} />
 <div class="container">
   <${Hero} />
   <div class="row">
-    <div class="col ${colsize}"><${ShowSettings} config=${config} /></div>
-    <div class="col ${colsize}">${cs}</div>
-    <div class="col ${colsize}"><${Chat} messages=${messages} /></div>
+    <div class="col c6"><${Chart} metrics=${metrics} /></div>
+    <div class="col c6"><${ShowSettings} config=${config} /></div>
+    <div class="col c6"><${Chat} messages=${messages} /></div>
+    <div class="col c6">${cs}</div>
   </div>
   <${Footer} />
 </div>`;
