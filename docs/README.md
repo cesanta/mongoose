@@ -3545,7 +3545,6 @@ filesystem, or be resilient to filesystem issues:
 In order to use packed filesystem do the following:
 
 1. Build **pack** tool from test/pack.c:
-
 ```sh
 $ cc -o pack pack.c
 ```
@@ -3567,4 +3566,3 @@ opts.fs = &mg_fs_packed;              // Use packed filesystem
 opts.root_dir = "/";                  // Set root directory
 mg_http_serve_dir(c, hm, &opts);      // Serve directory
 ```
-
