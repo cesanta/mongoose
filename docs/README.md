@@ -3496,8 +3496,8 @@ mg_hexdump(c->recv.buf, c->recv.len);  // Hex dump incoming data
 Mongoose allows to override file i/o operations in order to support different
 storages, like programmable flash, no-filesystem devices etc.
 In order to accomplish this, Mongoose provides a `struct mg_fs` API to
-specify a custom filesystem. In addition to this, Mongoose provides two
-built-in APIs - a standard POSIX API, and a "packed FS" API. A packed FS
+specify a custom filesystem. In addition to this, Mongoose provides several
+built-in APIs - a standard POSIX, FatFS, and a "packed FS" API. A packed FS
 allows to embed a filesystem into the application or firmware binary,
 described below.
 
@@ -3531,14 +3531,11 @@ mg_http_serve_dir(c, hm, &opts);
 
 ### Packed filesystem
 
-Mongoose
-has a filesystem abstraction layer. By default, a POSIX filesystem,
-a FatFS filesystem, and a "packed" filesystem are implemented.
-
-A packed filesystem allow to "pack" filesystem into single file, for example,
-into executable or flashable image - and files will be hardcoded into the 
-binary, making it possible to e.g. serve files on devices with no
-filesystem, or be resilient to filesystem issues:
+A packed filesystem allow to "pack" filesystem into a C file which then can
+be compiled into the binary, forming a read-only file system.
+This makes it possible to serve files on devices with no
+filesystem. Even on devices with a filesystem, packing some files like Web UI
+can be beneficial to be resilient to filesystem errors.
 
 <img src="images/packed.svg" alt="packed filesystem" />
 
