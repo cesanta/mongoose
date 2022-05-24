@@ -3564,6 +3564,7 @@ $ cc mongoose.c app.c packed_fs.c -DMG_ENABLE_PACKED_FS=1
 ```c
 struct mg_http_serve_opts opts = {};  // Initialise empty options
 opts.fs = &mg_fs_packed;              // Use packed filesystem
+opts.root_dir = "/";                  // Set root directory
 mg_http_serve_dir(c, hm, &opts);      // Serve directory
 ```
 
