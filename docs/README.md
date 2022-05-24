@@ -3158,7 +3158,7 @@ struct mg_iobuf {
 Generic IO buffer. The `size` specifies an allocation size of the data pointed
 by `buf`, and `len` specifies number of bytes currently stored.
 
-<img src="images/mg_iobuf.png">
+<img src="images/mg_iobuf.svg" alt="struct mg_iobuf diagram" />
 
 ### mg\_iobuf\_init()
 
