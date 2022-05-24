@@ -4,6 +4,10 @@
 #define MG_ENABLE_MIP 0
 #endif
 
+#ifndef MG_ENABLE_POLL
+#define MG_ENABLE_POLL 0
+#endif
+
 #ifndef MG_ENABLE_FATFS
 #define MG_ENABLE_FATFS 0
 #endif

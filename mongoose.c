@@ -4301,7 +4301,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
 #endif
       MG_ERROR(("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
 #if (MG_ARCH != MG_ARCH_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP) && \
-    (MG_ARCH != MG_ARCH_TIRTOS)
+    (MG_ARCH != MG_ARCH_TIRTOS) && !(MG_ENABLE_POLL)
   } else if ((long) fd >= FD_SETSIZE) {
     MG_ERROR(("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
@@ -4392,6 +4392,39 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     c->is_writable = bits & eSELECT_WRITE ? 1 : 0;
     FreeRTOS_FD_CLR(c->fd, mgr->ss,
                     eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
+  }
+#elif MG_ENABLE_POLL
+  size_t i = 0, n = 0;
+  for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) n++;
+  struct pollfd fds[n == 0 ? 1 : n]; // Avoid zero-length VLA
+
+  memset(fds, 0, sizeof(fds));
+  for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next, i++) {
+    if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) {
+      // Socket not valid, ignore
+    } else {
+      fds[i].fd = FD(c);
+      fds[i].events |= POLLIN;
+      if (c->is_connecting || (c->send.len > 0 && c->is_tls_hs == 0)) {
+          fds[i].events |= POLLOUT;
+      }
+    }
+  }
+
+  if (poll(fds, n, ms) < 0) {
+    MG_ERROR(("poll failed, errno: %d", MG_SOCK_ERRNO));
+    return;
+  }
+
+  i = 0;
+  for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next, i++) {
+    if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) {
+      // Socket not valid, ignore
+    } else {
+      c->is_readable = (unsigned)(fds[i].revents & POLLIN ? true : false);
+      c->is_writable = (unsigned)(fds[i].revents & POLLOUT ? true : false);
+      fds[i].revents = 0;
+    }
   }
 #else
   struct timeval tv = {ms / 1000, (ms % 1000) * 1000}, tv_zero = {0, 0};
