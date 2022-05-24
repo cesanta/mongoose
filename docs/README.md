@@ -3531,36 +3531,37 @@ mg_http_serve_dir(c, hm, &opts);
 
 ### Packed filesystem
 
-Packed filesystem allow to "pack" filesystem into single file, for example, into
-executable or flashable image. This is useful, for example, for implementation of HTTP-server on devices without filesystem.
+Mongoose
+has a filesystem abstraction layer. By default, a POSIX filesystem,
+a FatFS filesystem, and a "packed" filesystem are implemented.
+
+A packed filesystem allow to "pack" filesystem into single file, for example,
+into executable or flashable image - and files will be hardcoded into the 
+binary, making it possible to e.g. serve files on devices with no
+filesystem, or be resilient to filesystem issues:
+
+<img src="images/packed.svg" alt="packed filesystem" />
 
 In order to use packed filesystem do the following:
 
-1. Compile file test\pack.c:
-  ```sh
-  $ cc -o pack pack.c
-  ```
-
-2. Convert list of files into single .c:
-  ```sh
-  $ ./pack file1.data file2.data > fs.c
-  ```
-
-3. Build your app with fs.c:
-  ```sh
-  $ cc -o my_app my_app.c fs.c
-  ```
-
-4. In your application code, you can access files using this function:<br>
-   `const char *mg_unpack(const char *file_name, size_t *size)` or app can also
-   force `mg_http_serve_dir` function to use packed file system:
-
-```c
-struct mg_http_serve_opts opts;
-opts.fs = &mg_fs_packed; // Set packed ds as a file system
-mg_http_serve_dir(c, hm, &opts);
+```sh
+$ cc -o pack pack.c   # The pack.c file is test/ repo directory
 ```
 
-<img src="images/packed.png">
+2. Convert list of files into single .c:
+```sh
+$ ./pack index.html style.css > packed_fs.c
+```
 
-<img src="images/packed2.png">
+3. Build your app with `packed_fs.c`:
+```sh
+$ cc mongoose.c app.c packed_fs.c -DMG_ENABLE_PACKED_FS=1
+```
+
+4. In your application code:
+```c
+struct mg_http_serve_opts opts = {};  // Initialise empty options
+opts.fs = &mg_fs_packed;              // Use packed filesystem
+mg_http_serve_dir(c, hm, &opts);      // Serve directory
+```
+
