@@ -3544,8 +3544,10 @@ filesystem, or be resilient to filesystem issues:
 
 In order to use packed filesystem do the following:
 
+1. Build **pack** tool from test/pack.c:
+
 ```sh
-$ cc -o pack pack.c   # The pack.c file is test/ repo directory
+$ cc -o pack pack.c
 ```
 
 2. Convert list of files into single .c:
