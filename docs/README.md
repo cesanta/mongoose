@@ -343,9 +343,11 @@ you have enabled - see previous section. Below is an example:
 #define MG_ENABLE_SOCKET 0      // Disable BSD socket API, implement your own
 ```
 
-3. This step is optional. If you have disabled BSD socket API, your build is going
-to fail due to several undefined symbols. Create `mongoose_custom.c` and implement
-the following functions (take a look at `src/sock.c` for the reference implementation):
+3. This step is optional. If you have disabled BSD socket API, your build is
+   going to fail due to several undefined symbols. Create `mongoose_custom.c`
+   and implement the following functions (take a look at
+   [test/mongoose_custom.c](https://github.com/cesanta/mongoose/blob/master/test/mongoose_custom.c)
+   for the reference implementation that does nothing):
 
 ```c
 void mg_connect_resolved(struct mg_connection *c) {
