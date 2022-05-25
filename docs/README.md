@@ -3449,12 +3449,11 @@ Set Mongoose logging level.
 
 Parameters:
 - `spec` - String, containing log level, can be one of the following values:
-
-- `0` - Disable logging
-- `1` - Log errors only
-- `2` - Log errors and info messages
-- `3` - Log errors, into and debug messages
-- `4` - Log everything
+  - `0` - Disable logging
+  - `1` - Log errors only
+  - `2` - Log errors and info messages
+  - `3` - Log errors, into and debug messages
+  - `4` - Log everything
 
 Return value: None
 
