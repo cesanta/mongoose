@@ -436,7 +436,11 @@ extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if MG_ENABLE_POLL
+#include <poll.h>
+#else
 #include <sys/select.h>
+#endif
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -576,6 +580,10 @@ int sscanf(const char *, const char *, ...);
 
 #ifndef MG_ENABLE_MIP
 #define MG_ENABLE_MIP 0
+#endif
+
+#ifndef MG_ENABLE_POLL
+#define MG_ENABLE_POLL 0
 #endif
 
 #ifndef MG_ENABLE_FATFS

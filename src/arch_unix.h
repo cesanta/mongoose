@@ -22,7 +22,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if MG_ENABLE_POLL
+#include <poll.h>
+#else
 #include <sys/select.h>
+#endif
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
