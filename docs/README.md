@@ -3490,42 +3490,150 @@ mg_hexdump(c->recv.buf, c->recv.len);  // Hex dump incoming data
 
 ## Filesystem
 
-### FS virtualisation
+### struct mg\_fs
 
-Mongoose allows to override file i/o operations in order to support different
+```c
+struct mg_fs {
+  int (*st)(const char *path, size_t *size, time_t *mtime);  // stat file
+  void (*ls)(const char *path, void (*fn)(const char *, void *), void *);
+  void *(*op)(const char *path, int flags);             // Open file
+  void (*cl)(void *fd);                                 // Close file
+  size_t (*rd)(void *fd, void *buf, size_t len);        // Read file
+  size_t (*wr)(void *fd, const void *buf, size_t len);  // Write file
+  size_t (*sk)(void *fd, size_t offset);                // Set file position
+  bool (*mv)(const char *from, const char *to);         // Rename file
+  bool (*rm)(const char *path);                         // Delete file
+  bool (*mkd)(const char *path);                        // Create directory
+};
+
+enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
+```
+
+Filesystem virtualisation layer.
+
+Mongoose allows to override file IO operations in order to support different
 storages, like programmable flash, no-filesystem devices etc.
 In order to accomplish this, Mongoose provides a `struct mg_fs` API to
 specify a custom filesystem. In addition to this, Mongoose provides several
-built-in APIs - a standard POSIX, FatFS, and a "packed FS" API. A packed FS
-allows to embed a filesystem into the application or firmware binary,
-described below.
+built-in APIs - a standard POSIX, FatFS, and a "packed FS" API:
 
 ```c
-enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
+extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
+extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/complete
+extern struct mg_fs mg_fs_fat;     // FAT FS
+```
 
-// Filesystem API functions
-// stat() returns MG_FS_* flags and populates file size and modification time
-// list() calls fn() for every directory entry, allowing to list a directory
-struct mg_fs {
-  int (*stat)(const char *path, size_t *size, time_t *mtime);
-  void (*list)(const char *path, void (*fn)(const char *, void *), void *);
-  struct mg_fd *(*open)(const char *path, int flags);      // Open file
-  void (*close)(struct mg_fd *fd);                         // Close file
-  size_t (*read)(void *fd, void *buf, size_t len);         // Read file
-  size_t (*write)(void *fd, const void *buf, size_t len);  // Write file
-  size_t (*seek)(void *fd, size_t offset);                 // Set file position
+### struct mg\_fd
+
+```c
+struct mg_fd {
+  void *fd;
+  struct mg_fs *fs;
 };
 ```
 
-HTTP server's `struct mg_http_serve_opts` has a `fs` pointer which specifies
-which filesystem to use when serving static files. By default, `fs` is set
-to NULL and therefore a standard POSIX API is used. That could be overridden
-and a packed FS, or any other user-defined custom FS could be used:
+Opened file abstraction.
+
+### mg\_fs\_open()
 
 ```c
-struct mg_http_serve_opts opts;
-opts.fs = &mg_fs_posix;
-mg_http_serve_dir(c, hm, &opts);
+struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags);
+```
+
+Open a file in a given filesystem.
+
+Parameters:
+- `fs` - a filesystem implementation
+- `path` - a file path
+- `flags` - desired flags, a combination of `MG_FS_READ` and `MG_FS_WRITE`
+
+Return value: a non-NULL opened descriptor, or NULL on failure.
+
+Usage example:
+
+```c
+struct mg_fd *fd = mg_fs_open(&mg_fs_posix, "/tmp/data.json", MG_FS_WRITE);
+```
+
+### mg\_fs\_close()
+
+```c
+void mg_fs_close(struct mg_fd *fd);
+```
+
+Close an opened file descriptor.
+
+Parameters:
+- `fd` - an opened file descriptor
+
+Return value: none
+
+### mg\_file\_read()
+
+```c
+char *mg_file_read(struct mg_fs *fs, const char *path, size_t *size);
+```
+
+Read the whole file in memory.
+
+Parameters:
+- `fs` - a filesystem implementation
+- `path` - a file path
+- `size` - if not NULL, will contained the size of the read file
+
+Return value: on success, a pointer to file data, which is guaranteed
+to the 0-terminated. On error, NULL.
+
+Usage example:
+
+```c
+size_t size = 0;
+char *data = mg_file_read(&mg_fs_packed, "/data.json", &size);
+```
+
+### mg\_file\_write()
+
+```c
+bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf, size_t len);
+```
+
+Write a piece of data `buf`, `len` to a file `path`. If the file does not
+exist, it gets created. The previous content, if any, is deleted.
+
+Parameters:
+- `fs` - a filesystem implementation
+- `path` - a file path
+- `buf` - a pointer to data to be written
+- `len` - a data size
+
+Return value: true on success, false on error
+
+Usage example:
+
+```c
+mg_file_write(&mg_fs_fat, "/test.txt", "hi\n", 3);
+```
+
+### mg\_file\_printf()
+
+```c
+bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
+```
+
+Write a printf-formatted data to a file `path`. If the file does not
+exist, it gets created. The previous content, if any, is deleted.
+
+Parameters:
+- `fs` - a filesystem implementation
+- `path` - a file path
+- `fmt` - a [mg_snprintf](#mg-snrpintf) format string
+
+Return value: true on success, false on error
+
+Usage example:
+
+```c
+mg_file_printf(&mg_fs_fat, "/test.txt", "%s\n", "hi");
 ```
 
 ### Packed filesystem
