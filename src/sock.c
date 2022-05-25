@@ -1,4 +1,3 @@
-#include "arch.h"
 #include "dns.h"
 #include "event.h"
 #include "log.h"

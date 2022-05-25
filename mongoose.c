@@ -3926,7 +3926,6 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
 
 
 
-
 #if MG_ENABLE_SOCKET
 #if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
 #define MG_SOCK_ERRNO WSAGetLastError()
