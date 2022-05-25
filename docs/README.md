@@ -3519,7 +3519,7 @@ built-in APIs - a standard POSIX, FatFS, and a "packed FS" API:
 
 ```c
 extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
-extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/complete
+extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/device-dashboard
 extern struct mg_fs mg_fs_fat;     // FAT FS
 ```
 
