@@ -55,8 +55,7 @@ mg_prefix: mongoose.c mongoose.h
 
 # C++ build
 test++: CC = g++
-test++: C_WARN =
-test++: WARN += -Wno-shadow -Wno-missing-field-initializers -Wno-deprecated
+test++: C_WARN = -std=c++20 -Wno-shadow -Wno-missing-field-initializers -Wno-deprecated
 test++: test
 
 musl: test
@@ -72,7 +71,7 @@ unpacked:
 	$(CC) -I. mongoose.c test/unit_test.c -o $@
 
 fuzzer: mongoose.c mongoose.h Makefile test/fuzz.c
-	clang++ mongoose.c test/fuzz.c $(WARN) $(INCS) $(TFLAGS) $(EXTRA) -DMG_ENABLE_LINES -fsanitize=fuzzer,signed-integer-overflow,address -Wno-deprecated -o $@
+	clang++ mongoose.c test/fuzz.c $(WARN) $(INCS) $(TFLAGS) $(EXTRA) -DMG_ENABLE_LINES -fsanitize=fuzzer,signed-integer-overflow,address -Wno-deprecated -Wno-vla-extension -o $@
 
 fuzz: fuzzer
 	$(RUN) ./fuzzer
