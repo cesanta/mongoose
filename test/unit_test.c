@@ -285,30 +285,33 @@ static void test_iobuf(void) {
 static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_SNTP_TIME) {
     *(int64_t *) fnd = *(int64_t *) evd;
-  } else if (ev == MG_EV_POLL) {
-    // For some reason, GA on macos fails often, apparently SNTP request
-    // gets lost. We re-send it each poll
-    if (c->is_resolving == 0) mg_sntp_request(c);
+    MG_DEBUG(("got time: %lld", *(int64_t *) evd));
   }
   (void) c;
 }
 
-static void test_sntp(void) {
+static void test_sntp_server(const char *url) {
   int64_t ms = 0;
   struct mg_mgr mgr;
   struct mg_connection *c = NULL;
   int i;
 
   mg_mgr_init(&mgr);
-  c = mg_sntp_connect(&mgr, NULL, sntp_cb, &ms);
+  c = mg_sntp_connect(&mgr, url, sntp_cb, &ms);
   ASSERT(c != NULL);
   ASSERT(c->is_udp == 1);
   for (i = 0; i < 60 && ms == 0; i++) mg_mgr_poll(&mgr, 50);
-  MG_DEBUG(("ms: %lld", ms));
+  MG_DEBUG(("server: %s, ms: %lld", url ? url : "(default)", ms));
   ASSERT(ms > 0);
   mg_mgr_free(&mgr);
+}
+
+static void test_sntp(void) {
+  test_sntp_server("udp://time.windows.com:123");
+  test_sntp_server(NULL);
 
   {
+    int64_t ms;
     const unsigned char sntp_good[] =
         "\x24\x02\x00\xeb\x00\x00\x00\x1e\x00\x00\x07\xb6\x3e"
         "\xc9\xd6\xa2\xdb\xde\xea\x30\x91\x86\xb7\x10\xdb\xde"
