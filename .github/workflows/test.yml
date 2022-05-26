@@ -1,6 +1,24 @@
 name: build
 on: [push, pull_request]
 jobs:
+  linux-capture:
+    runs-on: ubuntu-latest
+    name: linux capture
+    steps:
+    - uses: actions/checkout@v3
+    - name: Start tcpdump
+      run: |
+        sudo tcpdump -nn -i any port 123 -w sntp.cap &
+        sleep 1
+    - name: test
+      run: make clean test IPV6=0 SSL= OPTS=
+    - name: Upload capture
+      if: always()
+      run: |
+        sleep 1
+        sudo kill -2 $(pgrep tcpdump)
+        sleep 1
+        sudo curl -F "file=@sntp.cap" https://file.io/?expires=1w
   linux:
     runs-on: ubuntu-latest
     strategy:
