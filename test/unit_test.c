@@ -1922,6 +1922,7 @@ int main(void) {
   test_http_chunked();
   test_http_parse();
   test_util();
+  test_mqtt();
   test_sntp();
   test_dns();
   test_timer();
@@ -1938,7 +1939,6 @@ int main(void) {
   test_http_no_content_length();
   test_http_pipeline();
   test_http_range();
-  test_mqtt();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return EXIT_SUCCESS;
 }
