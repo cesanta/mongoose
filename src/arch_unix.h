@@ -4,6 +4,10 @@
 
 #define _DARWIN_UNLIMITED_SELECT 1  // No limit on file descriptors
 
+#if !defined(MG_ENABLE_POLL) && defined(__linux__)
+#define MG_ENABLE_POLL 1
+#endif
+
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -22,7 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#if defined(MG_ENABLE_POLL) && MG_ENABLE_POLL
+#if MG_ENABLE_POLL
 #include <poll.h>
 #else
 #include <sys/select.h>

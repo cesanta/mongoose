@@ -4396,7 +4396,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 #elif MG_ENABLE_POLL
   size_t i = 0, n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) n++;
-  struct pollfd fds[n == 0 ? 1 : n]; // Avoid zero-length VLA
+  struct pollfd fds[n == 0 ? 1 : n];  // Avoid zero-length VLA
 
   memset(fds, 0, sizeof(fds));
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next, i++) {
@@ -4406,24 +4406,25 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
       fds[i].fd = FD(c);
       fds[i].events |= POLLIN;
       if (c->is_connecting || (c->send.len > 0 && c->is_tls_hs == 0)) {
-          fds[i].events |= POLLOUT;
+        fds[i].events |= POLLOUT;
       }
+      if (mg_tls_pending(c) > 0) ms = 0;  // Don't wait if TLS is ready
     }
   }
 
   if (poll(fds, n, ms) < 0) {
     MG_ERROR(("poll failed, errno: %d", MG_SOCK_ERRNO));
-    return;
-  }
-
-  i = 0;
-  for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next, i++) {
-    if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) {
-      // Socket not valid, ignore
-    } else {
-      c->is_readable = (unsigned)(fds[i].revents & POLLIN ? true : false);
-      c->is_writable = (unsigned)(fds[i].revents & POLLOUT ? true : false);
-      fds[i].revents = 0;
+  } else {
+    i = 0;
+    for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next, i++) {
+      if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) {
+        // Socket not valid, ignore
+      } else {
+        c->is_readable = (unsigned) (fds[i].revents & POLLIN ? true : false);
+        c->is_writable = (unsigned) (fds[i].revents & POLLOUT ? true : false);
+        fds[i].revents = 0;
+        if (mg_tls_pending(c) > 0) c->is_readable = 1;
+      }
     }
   }
 #else
