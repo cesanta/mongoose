@@ -440,7 +440,7 @@ extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#if MG_ENABLE_POLL
+#if defined(MG_ENABLE_POLL) && MG_ENABLE_POLL
 #include <poll.h>
 #else
 #include <sys/select.h>
