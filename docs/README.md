@@ -3633,7 +3633,6 @@ This makes it possible to serve files on devices with no
 filesystem. Even on devices with a filesystem, packing some files like Web UI
 can be beneficial to be resilient to filesystem errors.
 
-<img src="images/packed.svg" alt="packed filesystem" />
 
 In order to use packed filesystem do the following:
 
@@ -3651,6 +3650,8 @@ $ ./pack index.html style.css > packed_fs.c
 ```sh
 $ cc mongoose.c app.c packed_fs.c -DMG_ENABLE_PACKED_FS=1
 ```
+
+<img src="images/packed.svg" alt="packed filesystem" />
 
 4. In your application code:
 ```c
