@@ -328,7 +328,6 @@ uses some proprietary RTOS and network stack). In order to build on such
 systems, follow the outline below:
 
 1. Add `-DMG_ARCH=MG_ARCH_CUSTOM` to your build flags.
-
 2. Create a file called `mongoose_custom.h`, with defines and includes that
 are relevant to your platform. Mongoose uses `bool` type, `MG_DIRSEP` define,
 and optionally other structures like `DIR *` depending on the functionality
@@ -340,33 +339,21 @@ you have enabled - see previous section. Below is an example:
 
 #define MG_DIRSEP '/'
 #define MG_INT64_FMT "%lld"
-#define MG_ENABLE_SOCKET 0      // Disable BSD socket API, implement your own
 ```
-
-3. This step is optional. If you have disabled BSD socket API, your build is
-   going to fail due to several undefined symbols. Create `mongoose_custom.c`
-   and implement the following functions (take a look at
-   [test/mongoose_custom.c](https://github.com/cesanta/mongoose/blob/master/test/mongoose_custom.c)
-   for the reference implementation that does nothing):
-
-```c
-void mg_connect_resolved(struct mg_connection *c) {
-  // implement this!
-}
-
-bool mg_open_listener(struct mg_connection *c, const char *url) {
-  // implement this!
-}
-
-void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
-  // implement this!
-}
-
-int mg_send(struct mg_connection *c, const void *buf, size_t len) {
-  // implement this!
-}
-```
-
+3. This step is optional, and only required if you intend to use a custom
+   TCP/IP stack. To do that, you should:
+  * Disable BSD socket API: in the `mongoose_custom.h`, add
+  ```c
+  #define MG_ENABLE_SOCKET 0
+  ```
+  * Add an implementation of several internal API functions, like
+  `mg_send()`, `mg_mgr_poll()`, etc. For the reference, take
+  a look at the stub
+  "do nothing" implementation at
+  [test/mongoose_custom.c](https://github.com/cesanta/mongoose/blob/master/test/mongoose_custom.c)
+  and the experimental builtin bare metal TCP/IP stack implementation
+  at
+  [src/mip.c](https://github.com/cesanta/mongoose/blob/master/src/mip.c)
 
 ## Minimal HTTP server
 
