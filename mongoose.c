@@ -4427,10 +4427,10 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
       } else {
         c->is_readable = (unsigned) (fds[n].revents & POLLIN ? 1 : 0);
         c->is_writable = (unsigned) (fds[n].revents & POLLOUT ? 1 : 0);
-        fds[n].revents = 0;
         if (mg_tls_pending(c) > 0) c->is_readable = 1;
         MG_DEBUG(("  fd=%d events=%d revents=%d", fds[n].fd, fds[n].events,
                   fds[n].revents));
+        fds[n].revents = 0;
         n++;
       }
     }
