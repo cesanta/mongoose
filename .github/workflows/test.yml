@@ -37,7 +37,7 @@ jobs:
     - name: Install packages
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
     - name: make
-      run: make test++ upload-coverage IPV6=0 ASAN_OPTIONS= TFLAGS=-DMG_ENABLE_POLL=1
+      run: make test++ upload-coverage IPV6=0 ASAN_OPTIONS=
     - name: openssl
       run: make test SSL=OPENSSL IPV6=0 ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
     - name: exports

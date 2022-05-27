@@ -418,7 +418,7 @@ extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
 
 #define _DARWIN_UNLIMITED_SELECT 1  // No limit on file descriptors
 
-#if !defined(MG_ENABLE_POLL) && defined(__linux__)
+#if !defined(MG_ENABLE_POLL) && (defined(__linux__) || defined(__APPLE__))
 #define MG_ENABLE_POLL 1
 #endif
 
