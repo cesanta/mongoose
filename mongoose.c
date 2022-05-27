@@ -4414,9 +4414,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     }
   }
 
-  int res = poll(fds, n, ms);
-  MG_DEBUG(("n=%d, ms=%d, errno=%d", n, ms, errno));
-  if (res < 0) {
+  if (poll(fds, n, ms) < 0) {
     MG_ERROR(("poll failed, errno: %d", MG_SOCK_ERRNO));
   } else {
     n = 0;
