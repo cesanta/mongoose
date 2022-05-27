@@ -4395,20 +4395,22 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
                     eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
   }
 #elif MG_ENABLE_POLL
-  size_t i = 0, n = 0;
+  size_t n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) n++;
   struct pollfd fds[n == 0 ? 1 : n];  // Avoid zero-length VLA
 
   memset(fds, 0, sizeof(fds));
-  for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next, i++) {
+  n = 0;
+  for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
     if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) {
       // Socket not valid, ignore
     } else {
-      fds[i].fd = FD(c);
-      fds[i].events |= POLLIN;
+      fds[n].fd = FD(c);
+      fds[n].events = POLLIN;
       if (c->is_connecting || (c->send.len > 0 && c->is_tls_hs == 0)) {
-        fds[i].events |= POLLOUT;
+        fds[n].events |= POLLOUT;
       }
+      n++;
       if (mg_tls_pending(c) > 0) ms = 0;  // Don't wait if TLS is ready
     }
   }
@@ -4418,17 +4420,18 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   if (res < 0) {
     MG_ERROR(("poll failed, errno: %d", MG_SOCK_ERRNO));
   } else {
-    i = 0;
-    for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next, i++) {
+    n = 0;
+    for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
       if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) {
         // Socket not valid, ignore
       } else {
-        c->is_readable = (unsigned) (fds[i].revents & POLLIN ? 1 : 0);
-        c->is_writable = (unsigned) (fds[i].revents & POLLOUT ? 1 : 0);
-        fds[i].revents = 0;
+        c->is_readable = (unsigned) (fds[n].revents & POLLIN ? 1 : 0);
+        c->is_writable = (unsigned) (fds[n].revents & POLLOUT ? 1 : 0);
+        fds[n].revents = 0;
         if (mg_tls_pending(c) > 0) c->is_readable = 1;
-        MG_DEBUG(("  fd=%d events=%d revents=%d", fds[i].fd, fds[i].events,
-                  fds[i].revents));
+        MG_DEBUG(("  fd=%d events=%d revents=%d", fds[n].fd, fds[n].events,
+                  fds[n].revents));
+        n++;
       }
     }
   }

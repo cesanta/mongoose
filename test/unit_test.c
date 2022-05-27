@@ -13,12 +13,6 @@ static int s_num_tests = 0;
 
 #define FETCH_BUF_SIZE (256 * 1024)
 
-#define POLL_UNTIL(_mgr, _timeout, _condition)                        \
-  do {                                                                \
-    uint64_t until = mg_millis() + _timeout;                          \
-    while (mg_millis() < until && (_condition)) mg_mgr_poll(_mgr, 5); \
-  } while (0)
-
 // Important: we use different port numbers for the Windows bug workaround. See
 // https://support.microsoft.com/en-ae/help/3039044/error-10013-wsaeacces-is-returned-when-a-second-bind-to-a-excluded-por
 
@@ -307,7 +301,7 @@ static void test_sntp_server(const char *url) {
   c = mg_sntp_connect(&mgr, url, sntp_cb, &ms);
   ASSERT(c != NULL);
   ASSERT(c->is_udp == 1);
-  POLL_UNTIL(&mgr, 3000, ms == 0);
+  for (int i = 0; i < 60 && ms == 0; i++) mg_mgr_poll(&mgr, 50);
   MG_DEBUG(("server: %s, ms: %lld", url ? url : "(default)", ms));
   ASSERT(ms > 0);
   mg_mgr_free(&mgr);
@@ -316,7 +310,6 @@ static void test_sntp_server(const char *url) {
 static void test_sntp(void) {
   test_sntp_server("udp://time.windows.com:123");
   test_sntp_server(NULL);
-  exit(0);
 
   {
     int64_t ms;
