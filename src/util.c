@@ -99,16 +99,8 @@ uint64_t mg_millis(void) {
   uint64_t uptime_nanos = (uint64_t) (ticks_to_nanos * ticks);
   return (uint64_t) (uptime_nanos / 1000000);
 #elif MG_ARCH == MG_ARCH_UNIX
-  struct timespec ts;
-#ifdef _POSIX_MONOTONIC_CLOCK
-#ifdef CLOCK_MONOTONIC_RAW
-  clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-#else
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-#endif
-#else
+  struct timespec ts = {0, 0};
   clock_gettime(CLOCK_REALTIME, &ts);
-#endif
   return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
 #else
   return (uint64_t) (time(NULL) * 1000);

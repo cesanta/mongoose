@@ -502,8 +502,8 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
       if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) {
         // Socket not valid, ignore
       } else {
-        c->is_readable = (unsigned) (fds[i].revents & POLLIN ? true : false);
-        c->is_writable = (unsigned) (fds[i].revents & POLLOUT ? true : false);
+        c->is_readable = (unsigned) (fds[i].revents & POLLIN ? 1 : 0);
+        c->is_writable = (unsigned) (fds[i].revents & POLLOUT ? 1 : 0);
         fds[i].revents = 0;
         if (mg_tls_pending(c) > 0) c->is_readable = 1;
       }

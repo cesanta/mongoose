@@ -4421,8 +4421,8 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
       if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) {
         // Socket not valid, ignore
       } else {
-        c->is_readable = (unsigned) (fds[i].revents & POLLIN ? true : false);
-        c->is_writable = (unsigned) (fds[i].revents & POLLOUT ? true : false);
+        c->is_readable = (unsigned) (fds[i].revents & POLLIN ? 1 : 0);
+        c->is_writable = (unsigned) (fds[i].revents & POLLOUT ? 1 : 0);
         fds[i].revents = 0;
         if (mg_tls_pending(c) > 0) c->is_readable = 1;
       }
@@ -5630,16 +5630,8 @@ uint64_t mg_millis(void) {
   uint64_t uptime_nanos = (uint64_t) (ticks_to_nanos * ticks);
   return (uint64_t) (uptime_nanos / 1000000);
 #elif MG_ARCH == MG_ARCH_UNIX
-  struct timespec ts;
-#ifdef _POSIX_MONOTONIC_CLOCK
-#ifdef CLOCK_MONOTONIC_RAW
-  clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-#else
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-#endif
-#else
+  struct timespec ts = {0, 0};
   clock_gettime(CLOCK_REALTIME, &ts);
-#endif
   return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
 #else
   return (uint64_t) (time(NULL) * 1000);
