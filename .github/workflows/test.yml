@@ -11,7 +11,7 @@ jobs:
         sudo tcpdump -nn -i any port 123 or port 53 -w sntp.cap &
         sleep 1
     - name: test
-      run: make clean test IPV6=0 SSL= OPTS= V=4
+      run: make clean test IPV6=0 SSL= OPTS= V=4 TFLAGS=-DMG_ENABLE_POLL=1
     - name: Upload capture
       if: always()
       run: |
