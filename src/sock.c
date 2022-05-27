@@ -494,8 +494,9 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     }
   }
 
-  MG_DEBUG(("n=%d ms=%d", n, ms));
-  if (poll(fds, n, ms) < 0) {
+  int res = poll(fds, n, ms);
+  MG_DEBUG(("n=%d ms=%d res=%d errno=%d", n, ms, res, errno));
+  if (res < 0) {
     MG_ERROR(("poll failed, errno: %d", MG_SOCK_ERRNO));
   } else {
     i = 0;
@@ -507,6 +508,8 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
         c->is_writable = (unsigned) (fds[i].revents & POLLOUT ? 1 : 0);
         fds[i].revents = 0;
         if (mg_tls_pending(c) > 0) c->is_readable = 1;
+        MG_DEBUG(("  fd=%d events=%d revents=%d", fds[i].fd, fds[i].events,
+                  fds[i].revents));
       }
     }
   }
