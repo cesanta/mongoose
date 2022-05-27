@@ -4394,7 +4394,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
                     eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
   }
 #elif MG_ENABLE_POLL
-  size_t n = 0;
+  nfds_t n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) n++;
   struct pollfd fds[n == 0 ? 1 : n];  // Avoid zero-length VLA
 
