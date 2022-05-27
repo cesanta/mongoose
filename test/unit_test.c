@@ -286,6 +286,8 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_SNTP_TIME) {
     *(int64_t *) fnd = *(int64_t *) evd;
     MG_DEBUG(("got time: %lld", *(int64_t *) evd));
+  } else if (ev == MG_EV_OPEN) {
+    c->is_hexdumping = 1;
   }
   (void) c;
 }
