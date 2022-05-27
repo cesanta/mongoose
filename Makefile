@@ -55,7 +55,7 @@ mg_prefix: mongoose.c mongoose.h
 
 # C++ build
 test++: CC = g++
-test++: C_WARN = -std=c++2a -Wno-shadow -Wno-missing-field-initializers -Wno-deprecated
+test++: C_WARN = -std=c++2a -Wno-vla -Wno-shadow -Wno-missing-field-initializers -Wno-deprecated
 test++: test
 
 musl: test

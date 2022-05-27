@@ -3875,7 +3875,6 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
   } else {
     MG_ERROR(("unexpected version: %d", version));
   }
-  if (res == -1) mg_hexdump(buf, len);
   return res;
 }
 
@@ -4415,9 +4414,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     }
   }
 
-  int res = poll(fds, n, ms);
-  MG_DEBUG(("n=%d ms=%d res=%d errno=%d", n, ms, res, errno));
-  if (res < 0) {
+  if (poll(fds, n, ms) < 0) {
     MG_ERROR(("poll failed, errno: %d", MG_SOCK_ERRNO));
   } else {
     n = 0;
@@ -4428,8 +4425,6 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
         c->is_readable = (unsigned) (fds[n].revents & POLLIN ? 1 : 0);
         c->is_writable = (unsigned) (fds[n].revents & POLLOUT ? 1 : 0);
         if (mg_tls_pending(c) > 0) c->is_readable = 1;
-        MG_DEBUG(("  fd=%d events=%d revents=%d", fds[n].fd, fds[n].events,
-                  fds[n].revents));
         fds[n].revents = 0;
         n++;
       }

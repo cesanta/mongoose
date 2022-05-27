@@ -25,7 +25,6 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
   } else {
     MG_ERROR(("unexpected version: %d", version));
   }
-  if (res == -1) mg_hexdump(buf, len);
   return res;
 }
 

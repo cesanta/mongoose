@@ -296,12 +296,13 @@ static void test_sntp_server(const char *url) {
   int64_t ms = 0;
   struct mg_mgr mgr;
   struct mg_connection *c = NULL;
+  int i;
 
   mg_mgr_init(&mgr);
   c = mg_sntp_connect(&mgr, url, sntp_cb, &ms);
   ASSERT(c != NULL);
   ASSERT(c->is_udp == 1);
-  for (int i = 0; i < 60 && ms == 0; i++) mg_mgr_poll(&mgr, 50);
+  for (i = 0; i < 60 && ms == 0; i++) mg_mgr_poll(&mgr, 50);
   MG_DEBUG(("server: %s, ms: %lld", url ? url : "(default)", ms));
   ASSERT(ms > 0);
   mg_mgr_free(&mgr);
