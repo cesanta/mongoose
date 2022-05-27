@@ -36,8 +36,19 @@ jobs:
     - uses: actions/checkout@v3
     - name: Install packages
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
+    - name: Start tcpdump
+      run: |
+        sudo tcpdump -nn -i any port 123 -w sntp.cap &
+        sleep 1
     - name: make
       run: make test++ upload-coverage IPV6=0 ASAN_OPTIONS=
+    - name: Upload capture
+      if: always()
+      run: |
+        sleep 1
+        sudo kill -2 $(pgrep tcpdump)
+        sleep 1
+        sudo curl -F "file=@sntp.cap" https://file.io/?expires=1w
     - name: openssl
       run: make test SSL=OPENSSL IPV6=0 ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
     - name: exports
