@@ -91,13 +91,6 @@ uint64_t mg_millis(void) {
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_AZURERTOS
   return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
-#elif MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
-  uint64_t ticks = mach_absolute_time();
-  static mach_timebase_info_data_t timebase;
-  mach_timebase_info(&timebase);
-  double ticks_to_nanos = (double) timebase.numer / timebase.denom;
-  uint64_t uptime_nanos = (uint64_t) (ticks_to_nanos * ticks);
-  return (uint64_t) (uptime_nanos / 1000000);
 #elif MG_ARCH == MG_ARCH_UNIX
   struct timespec ts = {0, 0};
   clock_gettime(CLOCK_REALTIME, &ts);
