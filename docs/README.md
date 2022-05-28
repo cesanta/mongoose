@@ -1651,7 +1651,7 @@ Parameters:
 - `topic` - Topic to subscribe
 - `qos` - Required QoS
 
-Return value: none
+Return value: None
 
 ```c
 mg_mqtt_sub(c, mg_str("my/topic"), 1);
@@ -1902,7 +1902,7 @@ mg_tls_init(c, &opts);
 ### mg\_timer\_add()
 
 ```c
-struct timer *mg_timer_add(struct mg_mgr *mgr,
+struct mg_timer *mg_timer_add(struct mg_mgr *mgr,
                            uint64_t period_ms, unsigned flags,
                            void (*fn)(void *), void *fn_data);
 ```
@@ -1922,7 +1922,7 @@ Parameters:
 - `fn` - Function to invoke
 - `fn_data` - Function argument
 
-Return value: None
+Return value: Pointer to created timer
 
 Usage example:
 ```c
