@@ -2337,7 +2337,7 @@ Usage example:
 ```c
 // Assume that hm->uri holds /foo/bar. Then we can match the requested URI:
 struct mg_str caps[3];  // Two wildcard symbols '*' plus 1
-if (mg_match(hm->uri, mg_str("/*/*"))) {
+if (mg_match(hm->uri, mg_str("/*/*"), caps)) {
   // caps[0] holds `foo`, caps[1] holds `bar`.
 }
 ```
