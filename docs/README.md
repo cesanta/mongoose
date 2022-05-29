@@ -771,7 +771,7 @@ struct mg_http_message {
 
 Structure represents the HTTP message.
 
-<img src="images/mg_http_message.png">
+<img src="images/mg_http_message.svg">
 
 ### mg\_http\_listen()
 
