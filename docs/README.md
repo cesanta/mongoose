@@ -865,7 +865,7 @@ const char *buf = "GET /test \n\nGET /foo\n\n";
 int req_len = mg_http_get_request_len(buf, strlen(buf));  // req_len == 12
 ```
 
-<img src="images/mg_http_get_request_len.png">
+<img src="images/mg_http_get_request_len.svg">
 
 ### mg\_http\_parse()
 
