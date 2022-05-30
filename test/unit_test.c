@@ -663,9 +663,10 @@ static void test_http_server(void) {
     ASSERT(mg_http_etag(etag, sizeof(etag), size, mtime) == etag);
     ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nIf-None-Match: %s\n\n",
                  etag) == 304);
-    mg_http_parse(buf, strlen(buf), &hm);
-    ASSERT(mg_http_get_header(&hm, "A") != NULL);
-    ASSERT(mg_strcmp(*mg_http_get_header(&hm, "A"), mg_str("B")) == 0);
+    ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
+    MG_INFO(("%s", buf));
+    ASSERT(mg_http_get_header(&hm, "C") != NULL);
+    ASSERT(mg_strcmp(*mg_http_get_header(&hm, "C"), mg_str("D")) == 0);
   }
 
   // Text mime type override
@@ -1607,14 +1608,14 @@ static void test_http_upload(void) {
   const char *s2 = "ok (8 foo\nbar\n)\n";
 
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, url, us, &del);
+  mg_http_listen(&mgr, url, us, (void *) &del);
 
-  mg_http_connect(&mgr, url, uc, &s1);
+  mg_http_connect(&mgr, url, uc, (void *) &s1);
   for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 5);
   ASSERT(s1 == NULL);
 
   del = 0;
-  mg_http_connect(&mgr, url, uc, &s2);
+  mg_http_connect(&mgr, url, uc, (void *) &s2);
   for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 5);
   ASSERT(s2 == NULL);
 
@@ -1717,6 +1718,16 @@ static void test_http_chunked(void) {
   data = LONG_CHUNK "chunk 1chunk 2";
   ASSERT(done == mg_crc32(0, data, strlen(data)));
 
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+}
+
+static void test_invalid_listen_addr(void) {
+  struct mg_mgr mgr;
+  struct mg_connection *c;
+  mg_mgr_init(&mgr);
+  c = mg_http_listen(&mgr, "invalid:31:14", eh1, NULL);
+  ASSERT(c == NULL);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
@@ -1989,6 +2000,7 @@ int main(void) {
   test_packed();
   test_crc32();
   test_multipart();
+  test_invalid_listen_addr();
   test_http_chunked();
   test_http_upload();
   test_http_parse();

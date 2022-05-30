@@ -194,6 +194,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
   } else if (!mg_open_listener(c, url)) {
     MG_ERROR(("Failed: %s, errno %d", url, errno));
     free(c);
+    c = NULL;
   } else {
     c->is_listening = 1;
     c->is_udp = strncmp(url, "udp:", 4) == 0;
