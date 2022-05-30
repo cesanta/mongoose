@@ -4918,7 +4918,7 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
   size_t i = 0, n = 0;
   while (fmt[i] != '\0') {
     if (fmt[i] == '%') {
-      size_t j, k, x = 0, is_long = 0, w = 0 /* width */, pr = 0 /* prec */;
+      size_t j, k, x = 0, is_long = 0, w = 0 /* width */, pr = ~0U /* prec */;
       char pad = ' ', minus = 0, c = fmt[++i];
       if (c == '#') x++, c = fmt[++i];
       if (c == '-') minus++, c = fmt[++i];
@@ -4930,6 +4930,7 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
           pr = (size_t) va_arg(ap, int);
           c = fmt[++i];
         } else {
+          pr = 0;
           while (is_digit(c)) pr *= 10, pr += (size_t) (c - '0'), c = fmt[++i];
         }
       }
@@ -4968,7 +4969,7 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
         n++;
       } else if (c == 's') {
         char *p = va_arg(ap, char *);
-        if (pr == 0) pr = p == NULL ? 0 : strlen(p);
+        if (pr == ~0U) pr = p == NULL ? 0 : strlen(p);
         for (j = 0; !minus && pr < w && j + pr < w; j++)
           n += mg_copys(buf, len, n, &pad, 1);
         n += mg_copys(buf, len, n, p, pr);

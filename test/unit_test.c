@@ -1329,6 +1329,7 @@ static void test_str(void) {
   ASSERT(sn("%d", 0));
   ASSERT(sn("%d", 1));
   ASSERT(sn("%d", -1));
+  ASSERT(sn("%.*s", 0, "ab"));
   ASSERT(sn("%.*s", 1, "ab"));
   ASSERT(sn("%.1s", "ab"));
   ASSERT(sn("%.99s", "a"));
