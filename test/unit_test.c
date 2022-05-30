@@ -1550,6 +1550,74 @@ static void test_crc32(void) {
   ASSERT(mg_crc32(mg_crc32(0, "ab", 2), "c", 1) == 891568578);
 }
 
+static void us(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  int delete = *(int *) fn_data;
+  struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+  if (ev == MG_EV_HTTP_CHUNK && mg_http_match_uri(hm, "/upload")) {
+    MG_DEBUG(("Got chunk len %lu", (unsigned long) hm->chunk.len));
+    MG_DEBUG(("Query string: [%.*s]", (int) hm->query.len, hm->query.ptr));
+    // MG_DEBUG(("Chunk data:\n%.*s", (int) hm->chunk.len, hm->chunk.ptr));
+    if (delete) {
+      mg_http_delete_chunk(c, hm);
+      if (hm->chunk.len == 0) {
+        MG_DEBUG(("Last chunk received, sending response"));
+        mg_http_reply(c, 200, "", "ok (chunked)\n");
+      }
+    }
+  } else if (ev == MG_EV_HTTP_MSG && mg_http_match_uri(hm, "/upload")) {
+    MG_DEBUG(("Got all %lu bytes!", (unsigned long) hm->body.len));
+    MG_DEBUG(("Query string: [%.*s]", (int) hm->query.len, hm->query.ptr));
+    // MG_DEBUG(("Body:\n%.*s", (int) hm->body.len, hm->body.ptr));
+    mg_http_reply(c, 200, "", "ok (%d %.*s)\n", (int) hm->body.len,
+                  (int) hm->body.len, hm->body.ptr);
+  } else if (ev == MG_EV_HTTP_MSG) {
+    mg_http_reply(c, 200, "", "ok\n");
+  }
+  (void) fn_data;
+}
+
+static void uc(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  const char **s = (const char **) fn_data;
+  if (ev == MG_EV_OPEN) {
+    c->is_hexdumping = 1;
+  } else if (ev == MG_EV_CONNECT) {
+    mg_printf(c,
+              "POST /upload HTTP/1.0\r\n"
+              "Transfer-Encoding: chunked\r\n\r\n");
+    mg_http_printf_chunk(c, "%s", "foo\n");
+    mg_http_printf_chunk(c, "%s", "bar\n");
+    mg_http_printf_chunk(c, "");
+  } else if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    ASSERT(mg_strcmp(hm->body, mg_str(*s)) == 0);
+    *s = NULL;
+  }
+  (void) fn_data;
+}
+
+static void test_http_upload(void) {
+  struct mg_mgr mgr;
+  const char *url = "http://127.0.0.1:12352";
+  int i, delete = 1;
+  const char *s1 = "ok (chunked)\n";
+  const char *s2 = "ok (8 foo\nbar\n)\n";
+
+  mg_mgr_init(&mgr);
+  mg_http_listen(&mgr, url, us, &delete);
+
+  mg_http_connect(&mgr, url, uc, &s1);
+  for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 5);
+  ASSERT(s1 == NULL);
+
+  delete = 0;
+  mg_http_connect(&mgr, url, uc, &s2);
+  for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 5);
+  ASSERT(s2 == NULL);
+
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+}
+
 #define LONG_CHUNK "chunk with length taking up more than two hex digits"
 
 // Streaming server event handler.
@@ -1612,12 +1680,10 @@ static void eh5(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
     // MG_INFO(("CHUNK [%.*s]", (int) hm->chunk.len, hm->chunk.ptr));
     mg_http_delete_chunk(c, hm);
-  } else if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
-    c->is_closing = 1;
-    *(uint32_t *) fn_data = *crc;
-    // MG_INFO(("MSG [%.*s]", (int) hm->body.len, hm->body.ptr));
+    if (hm->chunk.len == 0) {
+      *(uint32_t *) fn_data = *crc;
+      c->is_closing = 1;
+    }
   }
   (void) ev_data;
 }
@@ -1650,8 +1716,6 @@ static void test_http_chunked(void) {
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
-
-#undef LONG_CHUNK
 
 static void test_multipart(void) {
   struct mg_http_part part;
@@ -1922,6 +1986,7 @@ int main(void) {
   test_crc32();
   test_multipart();
   test_http_chunked();
+  test_http_upload();
   test_http_parse();
   test_util();
   test_sntp();

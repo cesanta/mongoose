@@ -774,7 +774,7 @@ static size_t get_chunk_length(const char *buf, size_t len, size_t *ll) {
 
 // Walk through all chunks in the chunked body. For each chunk, fire
 // an MG_EV_HTTP_CHUNK event.
-static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
+static bool walkchunks(struct mg_connection *c, struct mg_http_message *hm,
                        size_t reqlen) {
   size_t off = 0, bl, ll;
   while (off + reqlen < c->recv.len) {
@@ -789,6 +789,7 @@ static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
     if (memo == c->recv.len) off += cl;
     if (cl <= 5) {
       // Zero chunk - last one. Prepare body - cut off chunk lengths
+      if (memo != c->recv.len) return true;  // Tell caller to cleanup
       off = bl = 0;
       while (off + reqlen < c->recv.len) {
         char *buf2 = (char *) &c->recv.buf[reqlen];
@@ -806,9 +807,11 @@ static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
       // everything, to fire MG_EV_HTTP_MSG
       hm->message.len = bl + reqlen;
       hm->body.len = bl;
+      // If user was deleting chunks, send nothing
       break;
     }
   }
+  return false;
 }
 
 static bool mg_is_chunked(struct mg_http_message *hm) {
@@ -872,8 +875,11 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
       if (ev == MG_EV_CLOSE) {
         hm.message.len = c->recv.len;
         hm.body.len = hm.message.len - (size_t) (hm.body.ptr - hm.message.ptr);
-      } else if (is_chunked && n > 0) {
-        walkchunks(c, &hm, (size_t) n);
+      } else if (is_chunked && n > 0 && walkchunks(c, &hm, (size_t) n)) {
+        // walkchunks told us to cleanup the request
+        if (n > (int) c->recv.len) n = (int) c->recv.len;
+        mg_iobuf_del(&c->recv, 0, (size_t) n);
+        break;
       }
       // MG_INFO(("---->%d %d\n%.*s", n, is_chunked, (int) c->recv.len,
       // c->recv.buf));
