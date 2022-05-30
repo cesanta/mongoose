@@ -1551,13 +1551,13 @@ static void test_crc32(void) {
 }
 
 static void us(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  int delete = *(int *) fn_data;
+  int del = *(int *) fn_data;
   struct mg_http_message *hm = (struct mg_http_message *) ev_data;
   if (ev == MG_EV_HTTP_CHUNK && mg_http_match_uri(hm, "/upload")) {
     MG_DEBUG(("Got chunk len %lu", (unsigned long) hm->chunk.len));
     MG_DEBUG(("Query string: [%.*s]", (int) hm->query.len, hm->query.ptr));
     // MG_DEBUG(("Chunk data:\n%.*s", (int) hm->chunk.len, hm->chunk.ptr));
-    if (delete) {
+    if (del) {
       mg_http_delete_chunk(c, hm);
       if (hm->chunk.len == 0) {
         MG_DEBUG(("Last chunk received, sending response"));
@@ -1598,18 +1598,18 @@ static void uc(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void test_http_upload(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12352";
-  int i, delete = 1;
+  int i, del = 1;
   const char *s1 = "ok (chunked)\n";
   const char *s2 = "ok (8 foo\nbar\n)\n";
 
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, url, us, &delete);
+  mg_http_listen(&mgr, url, us, &del);
 
   mg_http_connect(&mgr, url, uc, &s1);
   for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 5);
   ASSERT(s1 == NULL);
 
-  delete = 0;
+  del = 0;
   mg_http_connect(&mgr, url, uc, &s2);
   for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 5);
   ASSERT(s2 == NULL);
