@@ -1445,7 +1445,8 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
              (inm = mg_http_get_header(hm, "If-None-Match")) != NULL &&
              mg_vcasecmp(inm, etag) == 0) {
     mg_fs_close(fd);
-    mg_printf(c, "HTTP/1.1 304 Not Modified\r\nContent-Length: 0\r\n\r\n");
+    mg_printf(c, "HTTP/1.1 304 Not Modified\r\n%sContent-Length: 0\r\n\r\n",
+              opts->extra_headers ? opts->extra_headers : "");
   } else {
     int n, status = 200;
     char range[100] = "";

@@ -655,6 +655,7 @@ static void test_http_server(void) {
 
   {
     extern char *mg_http_etag(char *, size_t, size_t, time_t);
+    struct mg_http_message hm;
     char etag[100];
     size_t size = 0;
     time_t mtime = 0;
@@ -662,6 +663,9 @@ static void test_http_server(void) {
     ASSERT(mg_http_etag(etag, sizeof(etag), size, mtime) == etag);
     ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nIf-None-Match: %s\n\n",
                  etag) == 304);
+    mg_http_parse(buf, strlen(buf), &hm);
+    ASSERT(mg_http_get_header(&hm, "A") != NULL);
+    ASSERT(mg_strcmp(*mg_http_get_header(&hm, "A"), mg_str("B")) == 0);
   }
 
   // Text mime type override
