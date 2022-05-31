@@ -959,14 +959,25 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 ```
 
-### mg\_http\_serve\_dir()
+### struct mg\_http\_serve\_opts
 
 ```c
 struct mg_http_serve_opts {
   const char *root_dir;       // Web root directory, must be non-NULL
   const char *ssi_pattern;    // SSI file name pattern, e.g. #.shtml
   const char *extra_headers;  // Extra HTTP headers to add in responses
+  const char *mime_types;     // Extra mime types, ext1=type1,ext2=type2,..
+  const char *page404;        // Path to the 404 page, or NULL by default
+  struct mg_fs *fs;           // Filesystem implementation. Use NULL for POSIX
 };
+```
+
+A structure passed to `mg_http_serve_dir()` and `mg_http_serve_file()`, which
+drives the behavior of those two functions.
+
+### mg\_http\_serve\_dir()
+
+```c
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *opts);
 ```

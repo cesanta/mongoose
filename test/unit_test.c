@@ -825,6 +825,59 @@ static void test_http_server(void) {
   ASSERT(mgr.conns == NULL);
 }
 
+static void h4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.ptr,
+             (int) hm->uri.len, hm->uri.ptr, (int) hm->message.len));
+    if (mg_http_match_uri(hm, "/a/#")) {
+      struct mg_http_serve_opts opts;
+      memset(&opts, 0, sizeof(opts));
+      opts.root_dir = "/a=./test/data";
+      opts.page404 = "./test/data/404.html";  // existing 404 page
+      mg_http_serve_dir(c, hm, &opts);
+    } else if (mg_http_match_uri(hm, "/b/#")) {
+      struct mg_http_serve_opts opts;
+      memset(&opts, 0, sizeof(opts));
+      opts.root_dir = "/b=./test/data";
+      opts.page404 = "./test/data/nooooo.html";  // non-existing 404 page
+      mg_http_serve_dir(c, hm, &opts);
+    } else {  // null 404 page
+      struct mg_http_serve_opts opts;
+      memset(&opts, 0, sizeof(opts));
+      opts.root_dir = "./test/data";
+      mg_http_serve_dir(c, hm, &opts);
+    }
+  }
+  (void) fn_data;
+}
+
+static void test_http_404(void) {
+  struct mg_mgr mgr;
+  const char *url = "http://127.0.0.1:22343";
+  char buf[FETCH_BUF_SIZE];
+
+  mg_mgr_init(&mgr);
+  mg_http_listen(&mgr, url, h4, NULL);
+
+  ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hello\n") == 0);
+  ASSERT(fetch(&mgr, buf, url, "GET /a/a.txt HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hello\n") == 0);
+  ASSERT(fetch(&mgr, buf, url, "GET /b/a.txt HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hello\n") == 0);
+
+  ASSERT(fetch(&mgr, buf, url, "GET /xx.txt HTTP/1.0\n\n") == 404);
+  ASSERT(cmpbody(buf, "Not found\n") == 0);
+  ASSERT(fetch(&mgr, buf, url, "GET /a/xx.txt HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "boo\n") == 0);
+  ASSERT(fetch(&mgr, buf, url, "GET /b/xx.txt HTTP/1.0\n\n") == 404);
+  ASSERT(cmpbody(buf, "Not found\n") == 0);
+
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+}
+
 static void test_tls(void) {
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
   struct mg_tls_opts opts = {.ca = "./test/data/ss_ca.pem",
@@ -2024,6 +2077,7 @@ int main(void) {
   test_ws_fragmentation();
   test_http_client();
   test_http_server();
+  test_http_404();
   test_http_no_content_length();
   test_http_pipeline();
   test_http_range();

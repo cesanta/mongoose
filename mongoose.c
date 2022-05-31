@@ -1431,14 +1431,14 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const struct mg_http_serve_opts *opts) {
   char etag[64];
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  struct mg_fd *fd = mg_fs_open(fs, path, MG_FS_READ);
+  struct mg_fd *fd = path == NULL ? NULL : mg_fs_open(fs, path, MG_FS_READ);
   size_t size = 0;
   time_t mtime = 0;
   struct mg_str *inm = NULL;
 
   if (fd == NULL || fs->st(path, &size, &mtime) == 0) {
-    MG_DEBUG(("404 [%s] %p", path, (void *) fd));
-    mg_http_reply(c, 404, "", "%s", "Not found\n");
+    // MG_DEBUG(("404 [%s] %p", path, (void *) fd));
+    mg_http_reply(c, 404, opts->extra_headers, "Not found\n");
     mg_fs_close(fd);
     // NOTE: mg_http_etag() call should go first!
   } else if (mg_http_etag(etag, sizeof(etag), size, mtime) != NULL &&
@@ -1634,7 +1634,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
   while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
   flags = mg_vcmp(&hm->uri, "/") == 0 ? MG_FS_DIR : fs->st(path, NULL, NULL);
   if (flags == 0) {
-    mg_http_reply(c, 404, "", "Not found\n");  // Does not exist, doh
+    // Do nothing - let's caller decide
   } else if ((flags & MG_FS_DIR) && hm->uri.len > 0 &&
              hm->uri.ptr[hm->uri.len - 1] != '/') {
     mg_printf(c,
@@ -1643,7 +1643,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
               "Content-Length: 0\r\n"
               "\r\n",
               (int) hm->uri.len, hm->uri.ptr);
-    flags = 0;
+    flags = -1;
   } else if (flags & MG_FS_DIR) {
     if (((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX) > 0 &&
           (tmp = fs->st(path, NULL, NULL)) != 0) ||
@@ -1676,8 +1676,11 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   char path[MG_PATH_MAX] = "";
   const char *sp = opts->ssi_pattern;
   int flags = uri_to_path(c, hm, opts, path, sizeof(path));
-  if (flags == 0) return;
-  if (flags & MG_FS_DIR) {
+  if (flags < 0) {
+    // Do nothing: the response has already been sent by uri_to_path()
+  } else if (flags == 0) {
+    mg_http_serve_file(c, hm, opts->page404, opts);
+  } else if (flags & MG_FS_DIR) {
     listdir(c, hm, opts, path);
   } else if (sp != NULL && mg_globmatch(sp, strlen(sp), path, strlen(path))) {
     mg_http_serve_ssi(c, opts->root_dir, path);
