@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 869.2 331.2" style="enable-background:new 0 0 869.2 331.2;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#576174;}
+	.st1{fill:#67748A;}
+	.st2{fill:#FFFFFF;}
+	.st3{font-family:'Courier'; font-weight: bold;}
+	.st4{font-size:16.7604px;}
+	.st5{font-family:'Arial'; font-weight: bold;}
+	.st6{font-size:24px;}
+	.st7{fill:none;stroke:#45CFFF;stroke-width:2.7934;stroke-linecap:round;stroke-linejoin:round;}
+	.st8{fill:#45CFFF;}
+	.st9{fill:none;stroke:#EA5B0C;stroke-width:2.793;stroke-linecap:round;stroke-linejoin:round;}
+	.st10{fill:#EA5B0C;}
+	.st11{fill:none;stroke:#EA5B0C;stroke-width:2.7934;stroke-linecap:round;stroke-linejoin:round;}
+	.st12{fill:none;stroke:#00CF4F;stroke-width:2.7934;stroke-linecap:round;stroke-linejoin:round;}
+	.st13{fill:#00CF4F;}
+</style>
+<path class="st0" d="M553.8,184.2H20.9c-4.7,0-8.5-3.8-8.5-8.5V54.8c0-4.7,3.8-8.5,8.5-8.5h532.9c4.7,0,8.5,3.8,8.5,8.5v120.9
+	C562.3,180.4,558.5,184.2,553.8,184.2z"/>
+<g>
+	<path class="st1" d="M841.6,315.5h-370c-4.7,0-8.5-3.8-8.5-8.5V157c0-4.7,3.8-8.5,8.5-8.5h370c4.7,0,8.5,3.8,8.5,8.5v150
+		C850.2,311.7,846.3,315.5,841.6,315.5z"/>
+	<g>
+		<text transform="matrix(1 0 0 1 502.9807 184.0905)" class="st2 st3 st4">HTTP/1.1 200 OK</text>
+		<text transform="matrix(1 0 0 1 502.9807 204.1905)" class="st2 st3 st4">Content-Length; 13</text>
+		<text transform="matrix(1 0 0 1 502.9807 224.2905)" class="st2 st3 st4">X-Header-1: additional value 1</text>
+		<text transform="matrix(1 0 0 1 502.9807 244.3905)" class="st2 st3 st4">X-Header-2: additional value 2</text>
+		<text transform="matrix(1 0 0 1 503.2368 293.1559)" class="st2 st3 st4">Hello, World!</text>
+	</g>
+</g>
+<text transform="matrix(1 0 0 1 681.8747 137.3383)" class="st5 st6">HTTP message</text>
+<g>
+	<g>
+		<text transform="matrix(1 0 0 1 33.1042 85.1617)" class="st2 st3 st4">mg_http_reply(c, 200</text>
+		<text transform="matrix(1 0 0 1 171.9368 113.7079)" class="st2 st3 st4">"X-Header-1: additional value 1\r\n"</text>
+		<text transform="matrix(1 0 0 1 171.9368 133.8079)" class="st2 st3 st4">"X-Header-1: additional value 2\r\n",</text>
+		<text transform="matrix(1 0 0 1 171.9368 153.9079)" class="st2 st3 st4">"Hello, %s!", "world");</text>
+	</g>
+</g>
+<g>
+	<polyline class="st7" points="375.3,159 375.3,163 179.7,163 179.7,159 	"/>
+	<g>
+		<polyline class="st7" points="278.3,256.6 564.5,256.7 564.5,264.4 		"/>
+		<g>
+			<line class="st7" x1="278.2" y1="174.4" x2="278.2" y2="256.6"/>
+			<path class="st8" d="M278.2,170.3c-1.8,0-3.2,1.4-3.3,3.2c0,1.8,1.4,3.2,3.2,3.3c1.8,0,3.2-1.4,3.3-3.2l0,0
+				C281.4,171.8,279.9,170.3,278.2,170.3z"/>
+		</g>
+	</g>
+	<path class="st8" d="M564.6,261.6c-1.8,0-3.2,1.4-3.3,3.2c0,1.8,1.4,3.2,3.2,3.3c1.8,0,3.2-1.4,3.3-3.2l0,0
+		C567.8,263.1,566.4,261.6,564.6,261.6z"/>
+</g>
+<g>
+	<g>
+		<g>
+			<polyline class="st9" points="218.7,53.6 218.8,37.6 608.8,38.7 608.9,161.3 			"/>
+			<path class="st10" d="M215.6,54.6c0,1.8,1.4,3.2,3.2,3.3c1.8,0,3.2-1.4,3.3-3.2c0-1.8-1.4-3.2-3.2-3.3l0,0
+				C217,51.4,215.6,52.8,215.6,54.6z"/>
+		</g>
+		<path class="st10" d="M612.2,164c0-1.8-1.4-3.2-3.2-3.3c-1.8,0-3.2,1.4-3.3,3.2c0,1.8,1.4,3.2,3.2,3.3l0,0
+			C610.7,167.2,612.2,165.8,612.2,164z"/>
+	</g>
+	<polyline class="st11" points="204.8,69.2 204.8,65.2 232.6,65.2 232.6,69.2 	"/>
+</g>
+<text transform="matrix(1 0 0 1 12.3709 35.0037)" class="st5 st6">Source Code</text>
+<g>
+	<polyline class="st12" points="172.5,135.9 168.4,135.9 168.4,100.1 172.5,100.1 	"/>
+	<g>
+		<line class="st12" x1="136.3" y1="231" x2="482.1" y2="231"/>
+		<polyline class="st12" points="157.1,117.2 136.2,117.2 136.1,230.8 		"/>
+		<path class="st13" d="M160.2,117.2c0-1.8-1.4-3.2-3.2-3.3c-1.8,0-3.2,1.4-3.3,3.2c0,1.8,1.4,3.2,3.2,3.3l0,0
+			C158.7,120.4,160.2,119,160.2,117.2z"/>
+		<path class="st13" d="M487.2,230.8c0-1.8-1.4-3.2-3.2-3.3c-1.8,0-3.2,1.4-3.3,3.2c0,1.8,1.4,3.2,3.2,3.3l0,0
+			C485.8,234,487.2,232.5,487.2,230.8z"/>
+	</g>
+</g>
+<polyline class="st7" points="501.4,279.6 501.4,275.6 633,275.6 633,279.6 "/>
+<polyline class="st12" points="500,248.3 496,248.3 496,211.5 500,211.5 "/>
+</svg>

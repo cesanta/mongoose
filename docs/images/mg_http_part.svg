@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 957 480.6" style="enable-background:new 0 0 957 480.6;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#67748A;}
+	.st1{fill:#8B9CBA;}
+	.st2{enable-background:new    ;}
+	.st3{fill:#FFFFFF;}
+	.st4{font-family:'Courier'; font-weight: bold; }
+	.st5{font-size:16.7604px;}
+	.st6{font-family:'Arial'; font-weight: bold; }
+	.st7{font-size:24px;}
+	.st8{fill:#576174;}
+	.st9{fill:none;stroke:#45CFFF;stroke-width:2.7934;stroke-linecap:round;stroke-linejoin:round;}
+	.st10{fill:#45CFFF;}
+	.st11{fill:none;stroke:#EA5B0C;stroke-width:2.793;stroke-linecap:round;stroke-linejoin:round;}
+	.st12{fill:#EA5B0C;}
+	.st13{fill:none;stroke:#EA5B0C;stroke-width:2.7934;stroke-linecap:round;stroke-linejoin:round;}
+	.st14{fill:none;stroke:#FFDE00;stroke-width:2.793;stroke-linecap:round;stroke-linejoin:round;}
+	.st15{fill:#FFDE00;}
+</style>
+<g>
+	<path class="st0" d="M935.4,454.9H299c-4.7,0-8.5-3.8-8.5-8.5V216c0-4.7,3.8-8.5,8.5-8.5h636.4c4.7,0,8.5,3.8,8.5,8.5v230.4
+		C943.9,451.1,940.1,454.9,935.4,454.9z"/>
+	<g>
+		<path class="st1" d="M925.6,430.8H311.7c-4.7,0-8.5-3.8-8.5-8.5V315.9c0-4.7,3.8-8.5,8.5-8.5h613.9c4.7,0,8.5,3.8,8.5,8.5v106.5
+			C934.1,427,930.3,430.8,925.6,430.8z"/>
+		<text transform="matrix(1 0 0 1 322.3688 243.086)" class="st2"><tspan x="0" y="0" class="st3 st4 st5">POST /upload HTTP/1.1 </tspan><tspan x="0" y="20.1" class="st3 st4 st5">Content-Type: multipart/form-data: boundary="--xyz"</tspan><tspan x="0" y="60.3" class="st3 st4 st5">--xyz</tspan><tspan x="0" y="80.5" class="st3 st4 st5">Content-Disposition: form-data; name="foo"; filename="a.txt"</tspan><tspan x="0" y="100.6" class="st3 st4 st5">Content-Type: text/plain</tspan><tspan x="0" y="140.8" class="st3 st4 st5">hello world</tspan><tspan x="0" y="181" class="st3 st4 st5">--xyz---</tspan></text>
+	</g>
+</g>
+<text x="740" y="400" style="font-family: Arial; font-weight: bold; font-size: 32px; fill: #c0c0c0;">HTTP part</text>
+<text transform="matrix(1 0 0 1 752.2764 193.4307)" class="st6 st7">HTTP message</text>
+<path class="st8" d="M331.9,198H35.5c-4.7,0-8.5-3.8-8.5-8.5V64.8c0-4.7,3.8-8.5,8.5-8.5h296.5c4.7,0,8.5,3.8,8.5,8.5v124.7
+	C340.4,194.2,336.6,198,331.9,198z"/>
+<g>
+	<g>
+		<text transform="matrix(1 0 0 1 52.2409 91.1617)" class="st3 st4 st5">struct mg_http_part {</text>
+		<text transform="matrix(1 0 0 1 74.0734 113.7079)" class="st2"><tspan x="0" y="0" class="st3 st4 st5">struct mg_str name;</tspan><tspan x="0" y="20.1" class="st3 st4 st5">strucy mg_str filename;</tspan><tspan x="0" y="40.2" class="st3 st4 st5">struct mg_str body;</tspan></text>
+	</g>
+</g>
+<g>
+	<polyline class="st9" points="264.4,159 264.4,163 212.8,163 212.8,159 	"/>
+	<g>
+		<polyline class="st9" points="238.7,348.3 376.5,348.4 376.5,355.6 		"/>
+		<g>
+			<line class="st9" x1="238.6" y1="174.4" x2="238.6" y2="348.1"/>
+			<path class="st10" d="M238.6,170.3c-1.8,0-3.2,1.4-3.3,3.2c0,1.8,1.4,3.2,3.2,3.3c1.8,0,3.2-1.4,3.3-3.2c0,0,0,0,0,0
+				C241.8,171.8,240.4,170.3,238.6,170.3z"/>
+		</g>
+	</g>
+	<path class="st10" d="M376.6,353.6c-1.8,0-3.2,1.4-3.3,3.2s1.4,3.2,3.2,3.3c1.8,0,3.2-1.4,3.3-3.2c0,0,0,0,0,0
+		C379.8,355.1,378.4,353.6,376.6,353.6z"/>
+	<polyline class="st9" points="264.4,159 264.4,163 212.8,163 212.8,159 	"/>
+	<polyline class="st9" points="434.3,371.1 434.3,367.1 320.3,367.1 320.3,371.1 	"/>
+</g>
+<g>
+	<g>
+		<g>
+			<polyline class="st11" points="720.7,291.6 720.7,277.7 307.7,278.8 307.5,109.4 275.3,109.4 			"/>
+			<path class="st12" d="M723.9,293.6c0,1.8-1.4,3.2-3.2,3.3c-1.8,0-3.2-1.4-3.3-3.2c0-1.8,1.4-3.2,3.2-3.3c0,0,0,0,0,0
+				C722.4,290.4,723.9,291.9,723.9,293.6z"/>
+		</g>
+		<path class="st12" d="M270.9,109.5c0-1.8,1.4-3.2,3.2-3.3c1.8,0,3.2,1.4,3.3,3.2c0,1.8-1.4,3.2-3.2,3.3c0,0,0,0,0,0
+			C272.3,112.7,270.9,111.3,270.9,109.5z"/>
+	</g>
+	<polyline class="st13" points="734.6,309.2 734.6,305.2 706.9,305.2 706.9,309.2 	"/>
+</g>
+<text transform="matrix(1 0 0 1 27.8627 37.8099)" class="st6 st7">Source Code</text>
+<text transform="matrix(1 0 0 1 52.2408 177.7241)" class="st3 st4 st5">};</text>
+<g>
+	<g>
+		<g>
+			<polyline class="st14" points="890.8,291.5 890.7,218.6 356.7,218.7 356.6,130.3 325.4,130.3 			"/>
+			<path class="st15" d="M894.1,293.6c0,1.8-1.4,3.2-3.2,3.3c-1.8,0-3.2-1.4-3.3-3.2c0-1.8,1.4-3.2,3.2-3.3c0,0,0,0,0,0
+				C892.6,290.3,894.1,291.8,894.1,293.6z"/>
+		</g>
+		<path class="st15" d="M320,130.1c0-1.8,1.4-3.2,3.2-3.3c1.8,0,3.2,1.4,3.3,3.2c0,1.8-1.4,3.2-3.2,3.3c0,0,0,0,0,0
+			C321.4,133.3,320,131.9,320,130.1z"/>
+	</g>
+	<polyline class="st14" points="915.7,309.1 915.7,305.1 865.9,305.1 865.9,309.1 	"/>
+</g>
+</svg>
