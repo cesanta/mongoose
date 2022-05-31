@@ -30,7 +30,7 @@ const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
 bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
 bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
 bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
-bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
+bool mg_split(struct mg_str *s, struct mg_str *k, struct mg_str *v, char delim);
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap);
 size_t mg_snprintf(char *, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
 char *mg_hex(const void *buf, size_t len, char *dst);

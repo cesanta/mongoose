@@ -134,9 +134,9 @@ bool mg_globmatch(const char *s1, size_t n1, const char *s2, size_t n2) {
 }
 
 static size_t mg_nce(const char *s, size_t n, size_t ofs, size_t *koff,
-                     size_t *klen, size_t *voff, size_t *vlen) {
+                     size_t *klen, size_t *voff, size_t *vlen, char delim) {
   size_t kvlen, kl;
-  for (kvlen = 0; ofs + kvlen < n && s[ofs + kvlen] != ',';) kvlen++;
+  for (kvlen = 0; ofs + kvlen < n && s[ofs + kvlen] != delim;) kvlen++;
   for (kl = 0; kl < kvlen && s[ofs + kl] != '=';) kl++;
   if (koff != NULL) *koff = ofs;
   if (klen != NULL) *klen = kl;
@@ -146,14 +146,18 @@ static size_t mg_nce(const char *s, size_t n, size_t ofs, size_t *koff,
   return ofs > n ? n : ofs;
 }
 
-bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
+bool mg_split(struct mg_str *s, struct mg_str *k, struct mg_str *v, char delim) {
   size_t koff = 0, klen = 0, voff = 0, vlen = 0, off = 0;
   if (s->ptr == NULL || s->len == 0) return 0;
-  off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen);
+  off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen, delim);
   if (k != NULL) *k = mg_str_n(s->ptr + koff, klen);
   if (v != NULL) *v = mg_str_n(s->ptr + voff, vlen);
   *s = mg_str_n(s->ptr + off, s->len - off);
   return off > 0;
+}
+
+bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
+  return mg_split(s, k, v, ',');
 }
 
 size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
