@@ -701,7 +701,7 @@ Return value: Pointer to the created connection or `NULL` in case of error
 ### mg\_mkpipe()
 
 ```c
-int mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data);
+int mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data, bool udp);
 ```
 
 Create two interconnected sockets for inter-thread communication. One socket
@@ -710,11 +710,13 @@ Another socket is returned, and supposed to be passed to a worker thread.
 When a worker thread `send()`s to socket any data, that wakes up `mgr` and
 `fn` event handler reveives `MG_EV_READ` event. Also, `fn` can send any
 data to a worker thread, which can be `recv()`ed by a worker thread.
+If a socketpair is UDP, then it is guaranteed to send a
 
 Parameters:
-- `mgr` - An event manager
-- `fn` - A pointer to event handler function
-- `fn_data` - A user data pointer. It will be passed to `fn` as `fn_data` parameter
+- `mgr` - an event manager
+- `fn` - a pointer to event handler function
+- `fn_data` - a user data pointer. It will be passed to `fn` as `fn_data` parameter
+- `udp` - tells to create UDP or TCP socketpair.
 
 Return value: created socket, or `-1` on error
 

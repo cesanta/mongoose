@@ -77,7 +77,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_reply(c, 200, "Host: foo.com\r\n", "hi\n");
     } else {
       // Multithreading code path
-      int sock = mg_mkpipe(c->mgr, pcb, c);                   // Create pipe
+      int sock = mg_mkpipe(c->mgr, pcb, c, true);             // Create pipe
       start_thread(thread_function, (void *) (size_t) sock);  // Start thread
     }
   } else if (ev == MG_EV_CLOSE) {

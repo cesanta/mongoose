@@ -1821,16 +1821,21 @@ int send(int sock, const void *buf, size_t len, int flags) {
 }
 #endif
 
-static void test_pipe(void) {
+static void test_pipe_proto(bool is_udp) {
   struct mg_mgr mgr;
   int i, sock, done = 0;
   mg_mgr_init(&mgr);
-  ASSERT((sock = mg_mkpipe(&mgr, eh6, (void *) &done)) >= 0);
+  ASSERT((sock = mg_mkpipe(&mgr, eh6, (void *) &done, is_udp)) >= 0);
   ASSERT(send(sock, "hi", 2, 0) == 2);
   for (i = 0; i < 10 && done == 0; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(done == 1);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
+}
+
+static void test_pipe(void) {
+  test_pipe_proto(true);
+  test_pipe_proto(false);
 }
 
 static void u1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {

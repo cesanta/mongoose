@@ -412,9 +412,9 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   }
 }
 
-static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
+static bool mg_socketpair(SOCKET sp[2], union usa usa[2], bool udp) {
   SOCKET sock;
-  socklen_t len = sizeof(usa[0].sin);
+  socklen_t n = sizeof(usa[0].sin);
   bool success = false;
 
   sock = sp[0] = sp[1] = INVALID_SOCKET;
@@ -423,15 +423,26 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
   *(uint32_t *) &usa->sin.sin_addr = mg_htonl(0x7f000001U);  // 127.0.0.1
   usa[1] = usa[0];
 
-  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
-      bind(sock, &usa[0].sa, len) == 0 &&
-      listen(sock, MG_SOCK_LISTEN_BACKLOG_SIZE) == 0 &&
-      getsockname(sock, &usa[0].sa, &len) == 0 &&
-      (sp[0] = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
-      connect(sp[0], &usa[0].sa, len) == 0 &&
-      (sp[1] = raccept(sock, &usa[1], len)) != INVALID_SOCKET) {
-    mg_set_non_blocking_mode(sp[1]);
+  if (udp && (sp[0] = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET &&
+      (sp[1] = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET &&
+      bind(sp[0], &usa[0].sa, n) == 0 && bind(sp[1], &usa[1].sa, n) == 0 &&
+      getsockname(sp[0], &usa[0].sa, &n) == 0 &&
+      getsockname(sp[1], &usa[1].sa, &n) == 0 &&
+      connect(sp[0], &usa[1].sa, n) == 0 &&
+      connect(sp[1], &usa[0].sa, n) == 0) {
     success = true;
+  } else if (!udp &&
+             (sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
+             bind(sock, &usa[0].sa, n) == 0 &&
+             listen(sock, MG_SOCK_LISTEN_BACKLOG_SIZE) == 0 &&
+             getsockname(sock, &usa[0].sa, &n) == 0 &&
+             (sp[0] = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
+             connect(sp[0], &usa[0].sa, n) == 0 &&
+             (sp[1] = raccept(sock, &usa[1], n)) != INVALID_SOCKET) {
+    success = true;
+  }
+  if (success) {
+    mg_set_non_blocking_mode(sp[1]);
   } else {
     if (sp[0] != INVALID_SOCKET) closesocket(sp[0]);
     if (sp[1] != INVALID_SOCKET) closesocket(sp[1]);
@@ -441,11 +452,12 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
   return success;
 }
 
-int mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data) {
+int mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data,
+              bool udp) {
   union usa usa[2];
   SOCKET sp[2] = {INVALID_SOCKET, INVALID_SOCKET};
   struct mg_connection *c = NULL;
-  if (!mg_socketpair(sp, usa)) {
+  if (!mg_socketpair(sp, usa, udp)) {
     MG_ERROR(("Cannot create socket pair"));
   } else if ((c = mg_wrapfd(mgr, (int) sp[1], fn, fn_data)) == NULL) {
     closesocket(sp[0]);

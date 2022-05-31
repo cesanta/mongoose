@@ -785,9 +785,4 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   }
   return res;
 }
-
-int mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data) {
-  (void) mgr, (void) fn, (void) fn_data;
-  return -1;
-}
 #endif  // MG_ENABLE_MIP

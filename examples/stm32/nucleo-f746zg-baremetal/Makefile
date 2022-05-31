@@ -13,7 +13,7 @@ LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs \
 SOURCES = boot.c main.c syscalls.c $(ROOT)/drivers/mip_driver_stm32.c \
 					$(ROOT)/mongoose.c
 
-all build: $(TARGET).bin
+all build example: $(TARGET).bin
 
 $(TARGET).bin: $(TARGET).elf
 	$(DOCKER) $(CROSS)-objcopy -O binary $< $@

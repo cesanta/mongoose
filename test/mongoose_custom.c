@@ -23,8 +23,8 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   return false;
 }
 
-int mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data) {
-  (void) mgr, (void) fn, (void) fn_data;
+int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {
+  (void) m, (void) fn, (void) d, (void) udp;
   return -1;
 }
 

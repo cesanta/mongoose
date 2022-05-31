@@ -13,7 +13,7 @@ VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined -fno-sanitize-recover=all
 ASAN_OPTIONS ?= detect_leaks=1
-EXAMPLES := $(dir $(wildcard examples/*/Makefile))
+EXAMPLES := $(dir $(wildcard examples/*/Makefile)) examples/stm32/nucleo-f746zg-baremetal
 PREFIX ?= /usr/local
 VERSION ?= $(shell cut -d'"' -f2 src/version.h)
 COMMON_CFLAGS ?= $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS) $(EXTRA)
