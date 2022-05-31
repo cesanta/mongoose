@@ -1049,7 +1049,7 @@ Parameters:
 
 Return value: None
 
-<img src="images/mg_http_reply.png">
+<img src="images/mg_http_reply.svg">
 
 Usage examples:
 
@@ -1256,7 +1256,7 @@ Usage example which uses Basic auth to create Stripe subscription:
   mg_http_printf_chunk(c, "");                            // End request
 ```
 
-### mg\_http\_next\_multipart()
+### struct mg\_http\_part
 
 ```c
 // Parameter for mg_http_next_multipart
@@ -1267,7 +1267,11 @@ struct mg_http_part {
 };
 ```
 
-<img src="images/mg_http_part.png">
+Structure that describes a single part of a HTTP multipart message.
+
+<img src="images/mg_http_part.svg">
+
+### mg\_http\_next\_multipart()
 
 ```c
 size_t mg_http_next_multipart(struct mg_str body, size_t offset, struct mg_http_part *part);
