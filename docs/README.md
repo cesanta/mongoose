@@ -87,7 +87,7 @@ When data arrives, Mongoose appends received data to the `recv` and triggers a
 functions, like `mg_send()`, `mg_printf()` or a protocol-specific function like
 `mg_ws_send`. Output functions append data to the `send` buffer.  When Mongoose
 successfully writes data to the socket, it discards data from struct `mg_connection::send`
-and sends an `MG_EV_SEND` event.
+and sends an `MG_EV_WRITE` event.
 
 ## Event handler function
 
