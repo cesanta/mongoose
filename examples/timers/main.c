@@ -13,13 +13,20 @@
 #include "mongoose.h"
 
 static const char *s_listen_on = "http://localhost:8000";
+static const char *s_web_root = "web_root";
 
 // This RESTful server implements the following endpoints:
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_ws_upgrade(c, hm, NULL);
-    c->label[0] = 'W';  // Set some unique mark on a connection
+    if (mg_http_match_uri(hm, "/websocket")) {
+      mg_ws_upgrade(c, hm, NULL);
+      c->label[0] = 'W';  // Set some unique mark on a connection
+    } else {
+      // Serve static files
+      struct mg_http_serve_opts opts = {.root_dir = s_web_root};
+      mg_http_serve_dir(c, ev_data, &opts);
+    }
   } else if (ev == MG_EV_WS_MSG) {
     // Got websocket frame. Received data is wm->data. Echo it back!
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;

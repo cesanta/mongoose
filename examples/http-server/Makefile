@@ -19,7 +19,7 @@ mingw:
 	gcc ../../mongoose.c main.c -I../.. -W -Wall -DMG_ENABLE_IPV6=1 -DMG_ENABLE_LINES=1 -D_POSIX_C_SOURCE=200000L -lws2_32 -o mongoose.exe
 
 linux: example
-linux: CFLAGS += -O2 
+#linux: CFLAGS += -O2 -fsanitize=address,undefined,shift,null,return,bounds,alignment,object-size,bool,enum -static-libasan
 linux: CC = $(LIN) cc
 
 clean:
