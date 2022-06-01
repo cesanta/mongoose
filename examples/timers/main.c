@@ -4,11 +4,6 @@
 // Example Websocket server with timers. This is a simple Websocket echo
 // server, which sends a message to all connected clients periodically,
 // using timer API.
-//
-//  1. Start this server, type `make`
-//  2. Open https://www.websocket.org/echo.html in your browser
-//  3. In the "Location" text field, type ws://127.0.0.1:8000/websocket
-//  4. See "hi" messages appearing periodically
 
 #include "mongoose.h"
 
@@ -20,8 +15,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/websocket")) {
-      mg_ws_upgrade(c, hm, NULL);
-      c->label[0] = 'W';  // Set some unique mark on a connection
+      mg_ws_upgrade(c, hm, NULL);  // Upgrade HTTP to Websocket
+      c->label[0] = 'W';           // Set some unique mark on a connection
     } else {
       // Serve static files
       struct mg_http_serve_opts opts = {.root_dir = s_web_root};
@@ -49,7 +44,8 @@ static void timer_fn(void *arg) {
 int main(void) {
   struct mg_mgr mgr;  // Event manager
   mg_mgr_init(&mgr);  // Initialise event manager
-  mg_timer_add(&mgr, 300, MG_TIMER_REPEAT, timer_fn, &mgr);  // Init timer
+  mg_log_set("3");    // Set debug log level
+  mg_timer_add(&mgr, 300, MG_TIMER_REPEAT, timer_fn, &mgr);
   mg_http_listen(&mgr, s_listen_on, fn, NULL);  // Create HTTP listener
   for (;;) mg_mgr_poll(&mgr, 1000);             // Infinite event loop
   mg_mgr_free(&mgr);                            // Free manager resources
