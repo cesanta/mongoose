@@ -1679,6 +1679,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   if (flags < 0) {
     // Do nothing: the response has already been sent by uri_to_path()
   } else if (flags == 0) {
+    // File not found - serve 404
     mg_http_serve_file(c, hm, opts->page404, opts);
   } else if (flags & MG_FS_DIR) {
     listdir(c, hm, opts, path);
