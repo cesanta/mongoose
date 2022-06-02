@@ -16,7 +16,7 @@ ASAN_OPTIONS ?= detect_leaks=1
 EXAMPLES := $(dir $(wildcard examples/*/Makefile)) examples/stm32/nucleo-f746zg-baremetal
 PREFIX ?= /usr/local
 VERSION ?= $(shell cut -d'"' -f2 src/version.h)
-COMMON_CFLAGS ?= $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS) $(EXTRA)
+COMMON_CFLAGS ?= $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS)
 CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
 VALGRIND_CFLAGS ?= $(VALGRIND_OPTS) $(COMMON_CFLAGS)
 VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes
@@ -71,7 +71,7 @@ unpacked:
 	$(CC) -I. mongoose.c test/unit_test.c -o $@
 
 fuzzer: mongoose.c mongoose.h Makefile test/fuzz.c
-	clang++ mongoose.c test/fuzz.c $(WARN) $(INCS) $(TFLAGS) $(EXTRA) -DMG_ENABLE_LINES -fsanitize=fuzzer,signed-integer-overflow,address -Wno-deprecated -Wno-vla-extension -o $@
+	clang++ mongoose.c test/fuzz.c $(WARN) $(INCS) $(TFLAGS) -DMG_ENABLE_LINES -fsanitize=fuzzer,signed-integer-overflow,address -Wno-deprecated -Wno-vla-extension -o $@
 
 fuzz: fuzzer
 	$(RUN) ./fuzzer
