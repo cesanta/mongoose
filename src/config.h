@@ -67,8 +67,8 @@
 #endif
 
 // Maximum size of the recv IO buffer
-#ifndef MG_MAX_RECV_BUF_SIZE
-#define MG_MAX_RECV_BUF_SIZE (3 * 1024 * 1024)
+#ifndef MG_MAX_RECV_SIZE
+#define MG_MAX_RECV_SIZE (3 * 1024 * 1024)
 #endif
 
 #ifndef MG_MAX_HTTP_HEADERS

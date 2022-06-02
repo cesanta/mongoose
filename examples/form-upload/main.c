@@ -10,9 +10,9 @@
 // /////////////////           IMPORTANT        //////////////////////////
 //
 // Mongoose has a limit on input buffer, which also limits maximum upload size.
-// It is controlled by the MG_MAX_RECV_BUF_SIZE constant, which is set by
+// It is controlled by the MG_MAX_RECV_SIZE constant, which is set by
 // default to (3 * 1024 * 1024), i.e. 3 megabytes.
-// Use -DMG_MAX_RECV_BUF_SIZE=NEW_LIMIT to override it.
+// Use -DMG_MAX_BUF_SIZE=NEW_LIMIT to override it.
 //
 // Also, consider changing -DMG_IO_SIZE=SOME_BIG_VALUE to increase IO buffer
 // increment when reading data.
