@@ -773,7 +773,7 @@ struct mg_http_message {
 
 Structure represents the HTTP message.
 
-<img src="images/mg_http_message.svg">
+<img src="images/mg_http_message.svg" alt="HTTP message" />
 
 ### mg\_http\_listen()
 
@@ -867,7 +867,7 @@ const char *buf = "GET /test \n\nGET /foo\n\n";
 int req_len = mg_http_get_request_len(buf, strlen(buf));  // req_len == 12
 ```
 
-<img src="images/mg_http_get_request_len.svg">
+<img src="images/mg_http_get_request_len.svg" alt="Function mg_http_get_request_len()" />
 
 ### mg\_http\_parse()
 
@@ -1062,7 +1062,7 @@ Parameters:
 
 Return value: None
 
-<img src="images/mg_http_reply.svg">
+<img src="images/mg_http_reply.svg" alt="Function mg_http_reply()" />
 
 Usage examples:
 
@@ -1282,7 +1282,7 @@ struct mg_http_part {
 
 Structure that describes a single part of a HTTP multipart message.
 
-<img src="images/mg_http_part.svg">
+<img src="images/mg_http_part.svg" alt="HTTP part" />
 
 ### mg\_http\_next\_multipart()
 
@@ -1303,7 +1303,7 @@ Return value: offset to the next chunk, or 0 if there are no more chunks.
 
 See [File upload tutorial](../tutorials/file-uploads/) for full usage example.
 
-<img src="images/mg_http_next_multipart.png">
+<img src="images/mg_http_next_multipart.png" alt="Function mg_http_next_multipart()" />
 
 Usage example:
 
@@ -2378,7 +2378,7 @@ Parameters:
 
 Return value: `true` if entry is found, `false` otherwise
 
-<img src="images/mg_commalist.png">
+<img src="images/mg_commalist.png" alt="Function mg_commalist()" />
 
 Usage example:
 
@@ -3268,7 +3268,7 @@ mg_iobuf_init(&io, 0);               // Empty buffer
 mg_iobuf_add(&io, 0, "hi", 2, 512);  // io->len is 2, io->size is 512
 ```
 
-<img src="images/mg_iobuf_add.png">
+<img src="images/mg_iobuf_add.png" alt="Function mg_iobuf_add()" />
 
 ### mg\_iobuf\_del()
 
@@ -3297,7 +3297,7 @@ mg_iobuf_del(&io, 0, "hi", 2, 512);  // io->len is 0, io->size is still 512
 
 ```
 
-<img src="images/mg_iobug_del.png">
+<img src="images/mg_iobug_del.png" alt="Function mg_iobug_del()" />
 
 ## URL
 
