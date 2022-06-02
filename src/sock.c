@@ -276,7 +276,7 @@ static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
 
 // NOTE(lsm): do only one iteration of reads, cause some systems
 // (e.g. FreeRTOS stack) return 0 instead of -1/EWOULDBLOCK when no data
-static long read_conn(struct mg_connection *c) {
+static void read_conn(struct mg_connection *c) {
   long n = -1;
   if (c->recv.len >= MG_MAX_RECV_SIZE) {
     mg_error(c, "max_recv_buf_size reached");
@@ -291,7 +291,6 @@ static long read_conn(struct mg_connection *c) {
               (int) c->recv.len, n, MG_SOCK_ERRNO, strerror(errno)));
     iolog(c, buf, n, true);
   }
-  return n;
 }
 
 static void write_conn(struct mg_connection *c) {
