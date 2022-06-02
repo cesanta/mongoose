@@ -812,6 +812,16 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   ASSERT(fetch(&mgr, buf, url, "HEAD /a.txt HTTP/1.0\n\n") == 200);
 
+  // Pre-compressed files
+  {
+    struct mg_http_message hm;
+    ASSERT(fetch(&mgr, buf, url, "HEAD /hello.txt HTTP/1.0\n\n") == 200);
+    mg_http_parse(buf, strlen(buf), &hm);
+    ASSERT(mg_http_get_header(&hm, "Content-Encoding") != NULL);
+    ASSERT(mg_strcmp(*mg_http_get_header(&hm, "Content-Encoding"),
+                     mg_str("gzip")) == 0);
+  }
+
 #if MG_ENABLE_IPV6
   {
     const char *url6 = "http://[::1]:12366";

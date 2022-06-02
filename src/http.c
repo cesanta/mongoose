@@ -435,15 +435,33 @@ static int getrange(struct mg_str *s, int64_t *a, int64_t *b) {
 void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path,
                         const struct mg_http_serve_opts *opts) {
-  char etag[64];
+  char etag[64], tmp[MG_PATH_MAX];
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   struct mg_fd *fd = path == NULL ? NULL : mg_fs_open(fs, path, MG_FS_READ);
   size_t size = 0;
   time_t mtime = 0;
   struct mg_str *inm = NULL;
+  struct mg_str mime = guess_content_type(mg_str(path), opts->mime_types);
+  bool gzip = false;
+
+  // If file does not exist, we try to open file PATH.gz - and if such
+  // pre-compressed .gz file exists, serve it with the Content-Encoding: gzip
+  // Note - we ignore Accept-Encoding, cause we don't have a choice
+  if (fd == NULL) {
+    MG_DEBUG(("NULL [%s]", path));
+    mg_snprintf(tmp, sizeof(tmp), "%s.gz", path);
+    if ((fd = mg_fs_open(fs, tmp, MG_FS_READ)) != NULL) {
+      gzip = true;
+      path = tmp;
+    } else if (opts->page404 != NULL) {
+      // No precompressed file, serve 404
+      fd = mg_fs_open(fs, opts->page404, MG_FS_READ);
+      mime = guess_content_type(mg_str(path), opts->mime_types);
+      path = opts->page404;
+    }
+  }
 
   if (fd == NULL || fs->st(path, &size, &mtime) == 0) {
-    // MG_DEBUG(("404 [%s] %p", path, (void *) fd));
     mg_http_reply(c, 404, opts->extra_headers, "Not found\n");
     mg_fs_close(fd);
     // NOTE: mg_http_etag() call should go first!
@@ -457,7 +475,6 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     int n, status = 200;
     char range[100] = "";
     int64_t r1 = 0, r2 = 0, cl = (int64_t) size;
-    struct mg_str mime = guess_content_type(mg_str(path), opts->mime_types);
 
     // Handle Range header
     struct mg_str *rh = mg_http_get_header(hm, "Range");
@@ -483,9 +500,10 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               "Content-Type: %.*s\r\n"
               "Etag: %s\r\n"
               "Content-Length: %llu\r\n"
-              "%s%s\r\n",
+              "%s%s%s\r\n",
               status, mg_http_status_code_str(status), (int) mime.len, mime.ptr,
-              etag, cl, range, opts->extra_headers ? opts->extra_headers : "");
+              etag, cl, gzip ? "Content-Encoding: gzip\r\n" : "", range,
+              opts->extra_headers ? opts->extra_headers : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       c->is_draining = 1;
       mg_fs_close(fd);
@@ -636,9 +654,10 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
   path[path_size - 1] = '\0';  // Double-check
   remove_double_dots(path);
   n = strlen(path);
-  MG_VERBOSE(("%lu %.*s -> %s", c->id, (int) hm->uri.len, hm->uri.ptr, path));
   while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
   flags = mg_vcmp(&hm->uri, "/") == 0 ? MG_FS_DIR : fs->st(path, NULL, NULL);
+  MG_VERBOSE(("%lu %.*s -> %s %d", c->id, (int) hm->uri.len, hm->uri.ptr, path,
+              flags));
   if (flags == 0) {
     // Do nothing - let's caller decide
   } else if ((flags & MG_FS_DIR) && hm->uri.len > 0 &&
@@ -684,12 +703,10 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   int flags = uri_to_path(c, hm, opts, path, sizeof(path));
   if (flags < 0) {
     // Do nothing: the response has already been sent by uri_to_path()
-  } else if (flags == 0) {
-    // File not found - serve 404
-    mg_http_serve_file(c, hm, opts->page404, opts);
   } else if (flags & MG_FS_DIR) {
     listdir(c, hm, opts, path);
-  } else if (sp != NULL && mg_globmatch(sp, strlen(sp), path, strlen(path))) {
+  } else if (flags && sp != NULL &&
+             mg_globmatch(sp, strlen(sp), path, strlen(path))) {
     mg_http_serve_ssi(c, opts->root_dir, path);
   } else {
     mg_http_serve_file(c, hm, path, opts);
