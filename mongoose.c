@@ -2758,7 +2758,7 @@ static void rx_udp(struct mip_if *ifp, struct pkt *pkt) {
   } else if (c != NULL) {
     c->rem.port = pkt->udp->sport;
     c->rem.ip = pkt->ip->src;
-    if (c->recv.len >= MG_MAX_RECV_SIZE) {
+    if (c->recv.len >= c->recv_max) {
       mg_error(c, "max_recv_buf_size reached");
     } else if (c->recv.size - c->recv.len < pkt->pay.len &&
                !mg_iobuf_resize(&c->recv, c->recv.len + pkt->pay.len)) {
@@ -2827,6 +2827,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   c->pfn_data = lsn->pfn_data;
   c->fn = lsn->fn;
   c->fn_data = lsn->fn_data;
+  c->recv_max = MG_MAX_RECV_SIZE;
   mg_call(c, MG_EV_OPEN, NULL);
   mg_call(c, MG_EV_ACCEPT, NULL);
   return c;
@@ -3563,6 +3564,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     c->is_client = true;
     c->fd = (void *) (size_t) -1;  // Set to invalid socket
     c->fn_data = fn_data;
+    c->recv_max = MG_MAX_RECV_SIZE;
     MG_DEBUG(("%lu -1 %s", c->id, url));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_resolve(c, url);
@@ -3585,6 +3587,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fn = fn;
     c->fn_data = fn_data;
+    c->recv_max = MG_MAX_RECV_SIZE;
     mg_call(c, MG_EV_OPEN, NULL);
     MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
   }
@@ -3598,6 +3601,7 @@ struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
     c->fd = (void *) (size_t) fd;
     c->fn = fn;
     c->fn_data = fn_data;
+    c->recv_max = MG_MAX_RECV_SIZE;
     mg_call(c, MG_EV_OPEN, NULL);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
   }
@@ -4220,7 +4224,7 @@ static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
 // (e.g. FreeRTOS stack) return 0 instead of -1/EWOULDBLOCK when no data
 static void read_conn(struct mg_connection *c) {
   long n = -1;
-  if (c->recv.len >= MG_MAX_RECV_SIZE) {
+  if (c->recv.len >= c->recv_max) {
     mg_error(c, "max_recv_buf_size reached");
   } else if (c->recv.size <= c->recv.len &&
              !mg_iobuf_resize(&c->recv, c->recv.size + MG_IO_SIZE)) {
@@ -4348,6 +4352,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
+    c->recv_max = MG_MAX_RECV_SIZE;
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
   }

@@ -179,6 +179,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     c->is_client = true;
     c->fd = (void *) (size_t) -1;  // Set to invalid socket
     c->fn_data = fn_data;
+    c->recv_max = MG_MAX_RECV_SIZE;
     MG_DEBUG(("%lu -1 %s", c->id, url));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_resolve(c, url);
@@ -201,6 +202,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fn = fn;
     c->fn_data = fn_data;
+    c->recv_max = MG_MAX_RECV_SIZE;
     mg_call(c, MG_EV_OPEN, NULL);
     MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
   }
@@ -214,6 +216,7 @@ struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
     c->fd = (void *) (size_t) fd;
     c->fn = fn;
     c->fn_data = fn_data;
+    c->recv_max = MG_MAX_RECV_SIZE;
     mg_call(c, MG_EV_OPEN, NULL);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
   }

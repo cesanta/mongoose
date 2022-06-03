@@ -446,7 +446,7 @@ static void rx_udp(struct mip_if *ifp, struct pkt *pkt) {
   } else if (c != NULL) {
     c->rem.port = pkt->udp->sport;
     c->rem.ip = pkt->ip->src;
-    if (c->recv.len >= MG_MAX_RECV_SIZE) {
+    if (c->recv.len >= c->recv_max) {
       mg_error(c, "max_recv_buf_size reached");
     } else if (c->recv.size - c->recv.len < pkt->pay.len &&
                !mg_iobuf_resize(&c->recv, c->recv.len + pkt->pay.len)) {
@@ -515,6 +515,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   c->pfn_data = lsn->pfn_data;
   c->fn = lsn->fn;
   c->fn_data = lsn->fn_data;
+  c->recv_max = MG_MAX_RECV_SIZE;
   mg_call(c, MG_EV_OPEN, NULL);
   mg_call(c, MG_EV_ACCEPT, NULL);
   return c;

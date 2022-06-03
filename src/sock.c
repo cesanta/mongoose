@@ -278,7 +278,7 @@ static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
 // (e.g. FreeRTOS stack) return 0 instead of -1/EWOULDBLOCK when no data
 static void read_conn(struct mg_connection *c) {
   long n = -1;
-  if (c->recv.len >= MG_MAX_RECV_SIZE) {
+  if (c->recv.len >= c->recv_max) {
     mg_error(c, "max_recv_buf_size reached");
   } else if (c->recv.size <= c->recv.len &&
              !mg_iobuf_resize(&c->recv, c->recv.size + MG_IO_SIZE)) {
@@ -406,6 +406,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
+    c->recv_max = MG_MAX_RECV_SIZE;
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
   }
