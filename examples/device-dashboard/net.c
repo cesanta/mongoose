@@ -3,6 +3,10 @@
 
 #include "mongoose.h"
 
+#define MQTT_SERVER "mqtt://broker.hivemq.com:1883"
+#define MQTT_PUBLISH_TOPIC "mg/my_device"
+#define MQTT_SUBSCRIBE_TOPIC "mg/#"
+
 // Authenticated user.
 // A user can be authenticated by:
 //   - a name:pass pair
@@ -17,25 +21,18 @@ struct user {
 
 // This is a configuration structure we're going to show on a dashboard
 static struct config {
-  int value1;
-  char *value2;
-} s_config = {123, NULL};
+  char *url, *pub, *sub;  // MQTT settings
+} s_config;
 
-// Update config structure. Return true if changed, false otherwise
-static bool update_config(struct mg_http_message *hm, struct config *cfg) {
-  bool changed = false;
+static struct mg_connection *s_mqtt = NULL;  // MQTT connection
+
+// Try to update a single configuration value
+static void update_config(struct mg_str *body, const char *name, char **value) {
   char buf[256];
-  if (mg_http_get_var(&hm->body, "value1", buf, sizeof(buf)) > 0) {
-    cfg->value1 = atoi(buf);
-    changed = true;
+  if (mg_http_get_var(body, name, buf, sizeof(buf)) > 0) {
+    free(*value);
+    *value = strdup(buf);
   }
-  if (mg_http_get_var(&hm->body, "value2", buf, sizeof(buf)) > 0) {
-    free(cfg->value2);
-    cfg->value2 = malloc(strlen(buf) + 1);
-    strcpy(cfg->value2, buf);
-    changed = true;
-  }
-  return changed;
 }
 
 // Parse HTTP requests, return authenticated user or NULL
@@ -75,7 +72,7 @@ static void send_notification(struct mg_mgr *mgr, const char *name,
 }
 
 // Send simulated metrics data to the dashboard, for chart rendering
-static void timer_func(void *param) {
+static void timer_metrics_fn(void *param) {
   char buf[50];
   mg_snprintf(buf, sizeof(buf), "[ %lu, %d ]", (unsigned long) time(NULL),
               10 + (int) ((double) rand() * 10 / RAND_MAX));
@@ -83,11 +80,41 @@ static void timer_func(void *param) {
   send_notification(param, "metrics", buf);
 }
 
+// MQTT event handler function
+static void mqtt_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
+  if (ev == MG_EV_MQTT_OPEN) {
+    struct mg_str topic = mg_str(s_config.pub);
+    mg_mqtt_sub(s_mqtt, &topic, 1);
+  } else if (ev == MG_EV_MQTT_MSG) {
+    struct mg_mqtt_message *mm = evd;
+    char buf[256];
+    snprintf(buf, sizeof(buf), "{\"topic\":\"%.*s\",\"data\":\"%.*s\"}",
+             (int) mm->topic.len, mm->topic.ptr, (int) mm->data.len,
+             mm->data.ptr);
+    send_notification(param, "message", buf);
+  } else if (ev == MG_EV_CLOSE) {
+    s_mqtt = NULL;
+  }
+}
+
+// Keep MQTT connection open - reconnect if closed
+static void timer_metrics_fn(void *param) {
+  struct mg_mgr *mgr = (struct mg_mgr *) param;
+  if (s_mqtt == NULL) {
+    struct mg_mqtt_opts opts = {};
+    s_mqtt = mg_mqtt_connect(mgr, s_config.rl, &opts, mqtt_fn, NULL);
+  }
+}
+
 // HTTP request handler function
 void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
                          void *fn_data) {
   if (ev == MG_EV_OPEN && c->is_listening) {
-    mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_func, c->mgr);
+    mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_metrics_fn, c->mgr);
+    mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_mqtt_fn, c->mgr);
+    s_config.url = strdup(MQTT_SERVER);
+    s_config.pub = strdup(MQTT_PUBLISH_TOPIC);
+    s_config.sub = strdup(MQTT_SUBSCRIBE_TOPIC);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = getuser(hm);
@@ -100,14 +127,16 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       mg_printf(c, "%s", "HTTP/1.1 403 Denied\r\nContent-Length: 0\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/config/get")) {
       mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
-      mg_http_printf_chunk(c, "{\"%s\":%d,\"%s\":\"%s\"}", "value1",
-                           s_config.value1, "value2", s_config.value2);
+      mg_http_printf_chunk(c, "{\"url\":\"%s\",\"pub\":\"%s\",\"sub\":\"%s\"}",
+                           s_config.url, s_config.pub, s_config.sub);
       mg_http_printf_chunk(c, "");
     } else if (mg_http_match_uri(hm, "/api/config/set")) {
       // Admins only
       if (strcmp(u->name, "admin") == 0) {
-        if (update_config(hm, &s_config))
-          send_notification(fn_data, "config", "null");
+        update_config(&hm->body, "url", &s_config.url);
+        update_config(&hm->body, "pub", &s_config.pub);
+        update_config(&hm->body, "sub", &s_config.sub);
+        send_notification(fn_data, "config", "null");
         mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
       } else {
         mg_printf(c, "%s", "HTTP/1.1 403 Denied\r\nContent-Length: 0\r\n\r\n");

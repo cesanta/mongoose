@@ -1,6 +1,8 @@
 'use strict';
 import {Component, h, html, render, useEffect, useState, useRef} from './preact.min.js';
 
+const MaxMetricsDataPoints = 50;
+
 const Nav = props => html`
 <div style="background: #333; padding: 0.5em; color: #fff;">
   <div class="container d-flex">
@@ -28,93 +30,77 @@ const Hero = props => html`
 <div style="margin-top: 1em; background: #eee; padding: 1em; border-radius: 0.5em; color: #777; ">
   <h1 style="margin: 0.2em 0;">Interactive Device Dashboard</h1>
 
+  <p>
   This device dashboard is developed with modern and compact Preact framework,
   in order to fit on a very small devices. This is
   a <a href="https://mongoose.ws/tutorials/http-server/">hybrid server</a> which
   provides both static and dynamic content.  Static files, like CSS/JS/HTML
-  or images, are compiled into the server binary. Dynamic content is
-  served via the REST API. 
+  or images, are compiled into the server binary.
 
-  This dashboard shows values kept in server memory. Many clients can open
-  this page.  The JS code that watches state changes, reconnects on network
-  failures.  That means if server restarts, dashboard on all connected clients
-  refresh automatically.
-
-  NOTE: administrators can change settings values, whilst users cannot.
-
-  <p>
-  This UI uses the REST API implemented by the server, which you can examine
+  This UI uses the REST API implemented by the device, which you can examine
   using  <code>curl</code> command-line utility:
   </p>
 
   <div><code>curl localhost:8000/api/config/get</code> - get current device configuration</div>
   <div><code>curl localhost:8000/api/config/set -d 'value1=7&value2=hello'</code> - set device configuration</div>
-  <div><code>curl localhost:8000/api/message/send -d 'msg=hello'</code> - send chat message</div>
-  <div><code>curl localhost:8000/api/watch</code> - get notifications: chat, config, metrics</div>
+  <div><code>curl localhost:8000/api/message/send -d 'msg=hello'</code> - send MQTT message</div>
+  <div><code>curl localhost:8000/api/watch</code> - get notifications: MQTT messages, configuration, sensor data</div>
 
 </div>`;
 
-const ShowSettings = function(props) {
-  return html`
-<div style="margin: 0 0.3em;">
-  <h3 style="background: #59d; color: #fff;padding: 0.4em;">Device configuration</h3>
-  <div style="margin: 0.5em 0;">
-    <span class="addon">value1:</span>
-    <input disabled type="text" class="smooth"
-      value=${(props.config || {}).value1 || ''} />
-  </div>
-  <div style="margin: 0.5em 0;">
-    <span class="addon">value2:</span>
-    <input disabled type="text" class="smooth" 
-      value=${(props.config || {}).value2 || ''} />
-  </div>
-  <div class="msg">
-    Server's corresponding runtime configuration structure:
-    <pre>
-struct config {
-  int value1;
-  char *value2;
-} s_config;
-    </pre>
-  </div>
-</div>`;
-};
 
-const ChangeSettings = function(props) {
-  const [value1, setValue1] = useState('');
-  const [value2, setValue2] = useState('');
+const Configuration = function(props) {
+  const [url, setUrl] = useState('');
+  const [pub, setPub] = useState('');
+  const [sub, setSub] = useState('');
   useEffect(() => {
-    setValue1(props.config.value1);
-    setValue2(props.config.value2);
-  }, [props.config.value1, props.config.value2])
+    setUrl(props.config.url);
+    setPub(props.config.pub);
+    setSub(props.config.sub);
+  }, [props.config.url, props.config.pub, props.config.sub])
   const update = (name, val) => fetch('/api/config/set', {
                                   method: 'post',
                                   body: `${name}=${encodeURIComponent(val)}`
                                 }).catch(err => err);
-  const updatevalue1 = ev => update('value1', value1);
-  const updatevalue2 = ev => update('value2', value2);
+  const updateurl = ev => update('url', url);
+  const updatepub = ev => update('pub', pub);
+  const updatesub = ev => update('sub', sub);
   return html`
 <div style="margin: 0 0.3em;">
   <h3 style="background: #c03434; color: #fff; padding: 0.4em;">
-    Change configuration</h3>
-  <div style="margin: 0.5em 0;">
-    <span class="addon">value1:</span>
-    <input type="text" value=${value1} onchange=${updatevalue1}
-          oninput=${ev => setValue1(ev.target.value)} />
-    <button class="btn" disabled=${!value1} onclick=${updatevalue1}
+    Device Configuration</h3>
+  <div style="margin: 0.5em 0; display: flex;">
+    <span class="addon nowrap">MQTT server:</span>
+    <input type="text" style="flex: 1 100%;"
+          value=${url} onchange=${updateurl}
+          oninput=${ev => setUrl(ev.target.value)} />
+    <button class="btn" disabled=${!url} onclick=${updateurl}
       style="margin-left: 1em; background: #8aa;">Update</button>
   </div>
-  <div style="margin: 0.5em 0;">
-    <span class="addon">value2:</span>
-    <input type="text" value=${value2} onchange=${updatevalue2}
-          oninput=${ev => setValue2(ev.target.value)} />
-    <button class="btn" disabled=${!value2} onclick=${updatevalue2}
+  <div style="margin: 0.5em 0; display: flex; ">
+    <span class="addon nowrap">Subscribe topic:</span>
+    <input type="text" style="flex: 1 100%;"
+        value=${sub} onchange=${updatesub}
+        oninput=${ev => setSub(ev.target.value)} />
+    <button class="btn" disabled=${!sub} onclick=${updatesub}
+      style="margin-left: 1em; background: #8aa;">Update</button>
+  </div>
+  <div style="margin: 0.5em 0; display: flex;">
+    <span class="addon nowrap">Publish topic:</span>
+    <input type="text" style="flex: 1 100%;"
+          value=${pub} onchange=${updatepub}
+          oninput=${ev => setPub(ev.target.value)} />
+    <button class="btn" disabled=${!pub} onclick=${updatepub}
       style="margin-left: 1em; background: #8aa;">Update</button>
   </div>
   <div class="msg">
-    As soon as administrator updates configuration, 
-    server iterates over all connected clients and sends update
-    notifications to all of them - so they update automatically.
+    Device keeps a persistent connection to the configured MQTT server.
+    Changes to this configuration are propagated to all dashboards: try
+    changing them in this dashboard and observe changes in the other opened
+    dashboard.
+  </div><div class="msg">
+    Note: administrators can see this section and can change device
+    configuration, whilst users cannot.
   </div>
 </div>`;
 };
@@ -155,7 +141,7 @@ const Login = function(props) {
 
 const Message = text => html`<div style="margin: 0.5em 0;">${text}</div>`;
 
-const Chat = function(props) {
+const Messages = function(props) {
   const [message, setMessage] = useState('');
   const sendmessage = ev => fetch('/api/message/send', {
                               method: 'post',
@@ -166,40 +152,105 @@ const Chat = function(props) {
       text => html`<div style="margin: 0.5em 0;">${text}</div>`);
   return html`
 <div style="margin: 0 0.3em;">
-  <h3 style="background: #30c040; color: #fff; padding: 0.4em;">User chat</h3>
+  <h3 style="background: #30c040; color: #fff; padding: 0.4em;">MQTT messages</h3>
   <div style="height: 10em; overflow: auto; padding: 0.5em; " class="border">
     ${messages}
   </div>
-  <div style="margin: 0.5em 0;">
-    <input placeholder="type message..." style="width: 100%" value=${message}
-      onchange=${sendmessage}
+  <div style="margin: 0.5em 0; display: flex">
+    <span class="addon nowrap">Publish message:</span>
+    <input placeholder="type and press enter..." style="flex: 1 100%;"
+      value=${message} onchange=${sendmessage}
       oninput=${ev => setMessage(ev.target.value)} />
   </div>
   <div class="msg">
-    Chat demonsrates
-    real-time bidirectional data exchange between many clients and a server.
+    Message gets passed to the device via REST. Then a device sends it to
+    the MQTT server over MQTT. All MQTT messages on a subscribed topic
+    received by a device, are propagated to this dashboard via the
+    /api/watch.
   </div>
 </div>`;
 };
 
-const datefmt = unix => (new Date(unix * 1000)).toISOString().substr(14, 5);
+// Expected arguments:
+// data: timeseries, e.g. [ [1654361352, 19], [1654361353, 18], ... ]
+// width, height, yticks, xticks, ymin, ymax, xmin, xmax
+const SVG = function(props) {
+  //            w
+  //   +---------------------+
+  //   |        h1           |
+  //   |    +-----------+    |
+  //   |    |           |    |  h
+  //   | w1 |           | w2 |
+  //   |    +-----------+    |
+  //   |         h2          |
+  //   +---------------------+
+  //
+  let w = props.width, h = props.height, w1 = 30, w2 = 0, h1 = 8, h2 = 18;
+  let yticks = props.yticks || 4, xticks = props.xticks || 5;
+  let data = props.data || [];
+  let ymin = props.ymin || 0;
+  let ymax = props.ymax || Math.max.apply(null, data.map(p => p[1]));
+  let xmin = props.xmin || Math.min.apply(null, data.map(p => p[0]));
+  let xmax = props.xmax || Math.max.apply(null, data.map(p => p[0]));
+
+  // Y-axis tick lines and labels
+  let yta = (new Array(yticks + 1)).fill(0).map((_, i) => i);  // indices
+  let yti = i => h - h2 - (h - h1 - h2) * i / yticks;          // index's Y
+  let ytv = i => (ymax - ymin) * i / yticks;
+  let ytl = y => html`<line x1=${w1} y1=${y} x2=${w} y2=${y} class="tick"/>`;
+  let ytt = (y, v) => html`<text x=0 y=${y + 5} class="label">${v}</text>`;
+
+  // X-axis tick lines and labels
+  let datefmt = unix => (new Date(unix * 1000)).toISOString().substr(14, 5);
+  let xta = (new Array(xticks + 1)).fill(0).map((_, i) => i);  // indices
+  let xti = i => w1 + (w - w1 - w2) * i / xticks;              // index's X
+  let xtv = i => datefmt(xmin + (xmax - xmin) * i / xticks);
+  let xtl = x => html`<path d="M ${x},${h1} L ${x},${h - h2}" class="tick"/>`;
+  let xtt = (x, v) =>
+      html`<text x=${x - 15} y=${h - 2} class="label">${v}</text>`;
+
+  // Transform data points array into coordinate
+  let dx = v => w1 + (v - xmin) / ((xmax - xmin) || 1) * (w - w1 - w2);
+  let dy = v => h - h2 - (v - ymin) / ((ymax - ymin) || 1) * (h - h1 - h2);
+  let dd = data.map(p => [Math.round(dx(p[0])), Math.round(dy(p[1]))]);
+  let ddl = dd.length;
+  // And plot the data as <path> element
+  let begin0 = ddl ? `M ${dd[0][0]},${dd[0][1]}` : `M 0,0`;
+  let begin = `M ${w1},${h - h2}`;  // Initial point
+  let end = ddl ? `L ${dd[ddl - 1][0]},${h - h2}` : `L ${w1},${h - h2}`;
+  let series = ddl ? dd.map(p => `L ${p[0]} ${p[1]}`) : [];
+
+  return html`
+<svg viewBox="0 0 ${w} ${h}">
+  <style>
+    .axis { stroke: #aaa; fill: none; }
+    .label { stroke: #aaa; font-size: 13px; }
+    .tick { stroke: #ccc; fill: none; stroke-dasharray: 5; }
+    .seriesbg { stroke: none; fill: rgba(200,225,255, 0.25)}
+    .series { stroke: #25a; fill: none; }
+  </style>
+  ${yta.map(i => ytl(yti(i)))}
+  ${yta.map(i => ytt(yti(i), ytv(i)))}
+  ${xta.map(i => xtl(xti(i)))}
+  ${data.length ? xta.map(i => xtt(xti(i), xtv(i))) : ''}
+  <path d="${begin} ${series.join(' ')} ${end}" class="seriesbg" />
+  <path d="${begin0} ${series.join(' ')}" class="series" />
+</svg>`;
+};
+
 
 const Chart = function(props) {
-  const chartdiv = useRef(null);
-  const refresh = () => {
-    const labels = props.metrics.map(el => datefmt(el[0]));
-    const series = props.metrics.map(el => el[1]);
-    const options = {low: 0, high: 20, showArea: true};
-    // console.log([labels, [series]]);
-    new Chartist.Line(chartdiv.current, {labels, series: [series]}, options);
-  };
-  useEffect(() => {chartdiv && refresh()}, [props.metrics]);
-
+  let xmax = 0, missing = MaxMetricsDataPoints - props.metrics.length;
+  if (missing > 0) xmax = Math.round(Date.now() / 1000) + missing;
   return html`
 <div style="margin: 0 0.3em;">
   <h3 style="background: #ec3; color: #fff; padding: 0.4em;">Data Chart</h3>
-  <div style="height: 14em; overflow: auto; padding: 0.5em; " class="border">
-    <div ref=${chartdiv} style="height: 100%;" />
+  <div style="overflow: auto; padding: 0.5em;" class="">
+    <${SVG} height=240 width=600 ymin=0 ymax=20
+      xmax=${xmax} data=${props.metrics} />
+  </div>
+  <div class="msg">
+    This chart plots live sensor data, sent by a device via /api/watch.
   </div>
 </div>`;
 };
@@ -235,7 +286,7 @@ const App = function(props) {
         } else if (msg.name == 'message') {
           setMessages(m => m.concat([msg.data]));
         } else if (msg.name == 'metrics') {
-          setMetrics(m => m.concat([msg.data]).splice(-10));
+          setMetrics(m => m.concat([msg.data]).splice(-MaxMetricsDataPoints));
         }
         // console.log(msg);
         if (!result.done) return f(reader);
@@ -258,16 +309,15 @@ const App = function(props) {
 
   if (!user) return html`<${Login} login=${login} />`;
   const admin = user == 'admin';
-  const cs = admin ? html`<${ChangeSettings} config=${config} />` : '';
+  const cs = admin ? html`<${Configuration} config=${config} />` : '';
   return html`
 <${Nav} user=${user} logout=${logout} />
 <div class="container">
   <${Hero} />
   <div class="row">
     <div class="col c6"><${Chart} metrics=${metrics} /></div>
-    <div class="col c6"><${ShowSettings} config=${config} /></div>
-    <div class="col c6"><${Chat} messages=${messages} /></div>
     <div class="col c6">${cs}</div>
+    <div class="col c6"><${Messages} messages=${messages} /></div>
   </div>
   <${Footer} />
 </div>`;
