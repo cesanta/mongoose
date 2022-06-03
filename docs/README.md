@@ -183,6 +183,7 @@ struct mg_connection {
   unsigned is_hexdumping : 1;  // Hexdump in/out traffic
   unsigned is_draining : 1;    // Send remaining data, then close and free
   unsigned is_closing : 1;     // Close and free the connection immediately
+  unsigned is_full : 1;        // Stop reads, until cleared
   unsigned is_readable : 1;    // Connection is ready to read
   unsigned is_writable : 1;    // Connection is ready to write
 };
@@ -472,6 +473,7 @@ struct mg_connection {
   unsigned is_hexdumping : 1;  // Hexdump in/out traffic
   unsigned is_draining : 1;    // Send remaining data, then close and free
   unsigned is_closing : 1;     // Close and free the connection immediately
+  unsigned is_full : 1;        // Stop reads, until cleared
   unsigned is_readable : 1;    // Connection is ready to read
   unsigned is_writable : 1;    // Connection is ready to write
 };

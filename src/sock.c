@@ -280,7 +280,7 @@ static void read_conn(struct mg_connection *c) {
   long n = -1;
   if (c->recv.len >= MG_MAX_RECV_SIZE) {
     mg_error(c, "max_recv_buf_size reached");
-  } else if (c->recv.size - c->recv.len < MG_IO_SIZE &&
+  } else if (c->recv.size <= c->recv.len &&
              !mg_iobuf_resize(&c->recv, c->recv.size + MG_IO_SIZE)) {
     mg_error(c, "oom");
   } else {
@@ -469,14 +469,27 @@ int mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data,
   return (int) sp[0];
 }
 
+static bool can_read(const struct mg_connection *c) {
+  return c->is_full == false;
+}
+
+static bool can_write(const struct mg_connection *c) {
+  return c->is_connecting || (c->send.len > 0 && c->is_tls_hs == 0);
+}
+
+static bool skip_iotest(const struct mg_connection *c) {
+  return (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) ||
+         (can_read(c) == false && can_write(c) == false);
+}
+
 static void mg_iotest(struct mg_mgr *mgr, int ms) {
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) continue;
-    FreeRTOS_FD_SET(c->fd, mgr->ss, eSELECT_READ | eSELECT_EXCEPT);
-    if (c->is_connecting || (c->send.len > 0 && c->is_tls_hs == 0))
-      FreeRTOS_FD_SET(c->fd, mgr->ss, eSELECT_WRITE);
+    if (skip_iotest(c)) continue;
+    if (can_read(c))
+      FreeRTOS_FD_SET(c->fd, mgr->ss, eSELECT_READ | eSELECT_EXCEPT);
+    if (can_write(c)) FreeRTOS_FD_SET(c->fd, mgr->ss, eSELECT_WRITE);
   }
   FreeRTOS_select(mgr->ss, pdMS_TO_TICKS(ms));
   for (c = mgr->conns; c != NULL; c = c->next) {
@@ -494,14 +507,12 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   memset(fds, 0, sizeof(fds));
   n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
-    if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) {
+    if (skip_iotest(c)) {
       // Socket not valid, ignore
     } else {
       fds[n].fd = FD(c);
-      fds[n].events = POLLIN;
-      if (c->is_connecting || (c->send.len > 0 && c->is_tls_hs == 0)) {
-        fds[n].events |= POLLOUT;
-      }
+      if (can_read(c)) fds[n].events = POLLIN;
+      if (can_write(c)) fds[n].events |= POLLOUT;
       n++;
       if (mg_tls_pending(c) > 0) ms = 0;  // Don't wait if TLS is ready
     }
@@ -512,7 +523,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   } else {
     n = 0;
     for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
-      if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) {
+      if (skip_iotest(c)) {
         // Socket not valid, ignore
       } else {
         c->is_readable = (unsigned) (fds[n].revents & POLLIN ? 1 : 0);
@@ -534,12 +545,11 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   FD_ZERO(&wset);
 
   for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->is_closing || c->is_resolving || FD(c) == INVALID_SOCKET) continue;
-    FD_SET(FD(c), &rset);
-    if (FD(c) > maxfd) maxfd = FD(c);
-    if (c->is_connecting || (c->send.len > 0 && c->is_tls_hs == 0))
-      FD_SET(FD(c), &wset);
+    if (skip_iotest(c)) continue;
+    if (can_read(c)) FD_SET(FD(c), &rset);
+    if (can_write(c)) FD_SET(FD(c), &wset);
     if (mg_tls_pending(c) > 0) tv = tv_zero;
+    if (FD(c) > maxfd) maxfd = FD(c);
   }
 
   if ((rc = select((int) maxfd + 1, &rset, &wset, NULL, &tv)) < 0) {
