@@ -1303,20 +1303,21 @@ Parameters:
 
 Return value: offset to the next chunk, or 0 if there are no more chunks.
 
-See [File upload tutorial](../tutorials/file-uploads/) for full usage example.
+Usage example (or see [form upload tutorial](../tutorials/form-uploads/) ):
+
+```c
+struct mg_http_part part;
+size_t pos = 0;
+
+while ((pos = mg_http_next_multipart(body, pos, &part)) != 0) {
+  // Use part
+}
+```
 
 A diagram below shows how `mg_http_next_multipart()` in action:
 
 <img src="images/mg_http_next_multipart.svg" alt="Function mg_http_next_multipart()" />
 
-Usage example:
-
-```c
-struct mg_http_part part;
-if(mg_http_next_multipart(body, 0 /* begin */, &part)) {
-  // Use part
-}
-```
 
 ## Websocket
 
