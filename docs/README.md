@@ -1305,7 +1305,9 @@ Return value: offset to the next chunk, or 0 if there are no more chunks.
 
 See [File upload tutorial](../tutorials/file-uploads/) for full usage example.
 
-<img src="images/mg_http_next_multipart.png" alt="Function mg_http_next_multipart()" />
+A diagram below shows how `mg_http_next_multipart()` in action:
+
+<img src="images/mg_http_next_multipart.svg" alt="Function mg_http_next_multipart()" />
 
 Usage example:
 

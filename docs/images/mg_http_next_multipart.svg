@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 796.8 703.4" style="enable-background:new 0 0 796.8 703.4;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:none;stroke:#45CFFF;stroke-width:2.7934;stroke-linecap:round;stroke-linejoin:round;}
+	.st1{fill:#45CFFF;}
+	.st2{fill:#576174;}
+	.st4{fill:#FFFFFF;}
+	.st5{font-family:'Courier'; font-weight: bold; }
+	.st6{font-size:16.7604px;}
+	.st7{font-family:'Arial'; font-weight: bold; }
+	.st8{font-size:24px;}
+	.st9{fill:#67748A;}
+	.st10{fill:#8B9CBA; }
+	.st11{fill:none;stroke:#00CF4F;stroke-width:2.7934;stroke-linecap:round;stroke-linejoin:round;}
+	.st12{fill:#00CF4F;}
+	.st13{fill:none;stroke:#EA5B0C;stroke-width:2.793;stroke-linecap:round;stroke-linejoin:round;}
+	.st14{fill:#EA5B0C;}
+	.st15{fill:#414857;}
+</style>
+<g>
+	<polyline class="st0" points="537.8,639.4 537.8,643.4 487.2,643.4 487.2,639.4 	"/>
+	<g>
+		<path class="st0" d="M531.1,860"/>
+		<g>
+			<path class="st1" d="M513.1,651.3c-1.8,0-3.2,1.4-3.3,3.2c0,1.8,1.4,3.2,3.2,3.3c1.8,0,3.2-1.4,3.3-3.2c0,0,0,0,0,0
+				C516.4,652.8,514.9,651.3,513.1,651.3z"/>
+		</g>
+	</g>
+	<path class="st1" d="M336,867.9c-1.8,0-3.2,1.3-3.3,3c0,1.7,1.4,3,3.2,3c1.8,0,3.2-1.3,3.3-3c0,0,0,0,0,0
+		C339.2,869.2,337.8,867.9,336,867.9z"/>
+</g>
+<g>
+	<path class="st2" d="M623.9,214.2H47.8c-4.7,0-8.5-3.8-8.5-8.5V75.9c0-4.7,3.8-8.5,8.5-8.5h576.1c4.7,0,8.5,3.8,8.5,8.5v129.8
+		C632.4,210.4,628.6,214.2,623.9,214.2z"/>
+	<g>
+		<g>
+			<g>
+				<text transform="matrix(1 0 0 1 68 106)" class="st3"><tspan x="0" y="0" class="st4 st5 st6">struct mg_http_part part;</tspan><tspan x="0" y="20.1" class="st4 st5 st6">size_t pos = 0;</tspan><tspan x="0" y="60.3" class="st4 st5 st6">pos = mg_http_next_multipart(&amp;hm-&gt;body, pos, &amp;part);</tspan><tspan x="0" y="80.5" class="st4 st5 st6">pos = mg_http_next_multipart(&amp;hm-&gt;body, pos, &amp;part);</tspan></text>
+			</g>
+		</g>
+	</g>
+	<text transform="matrix(1 0 0 1 40.6738 55.7483)" class="st7 st8">Source Code</text>
+</g>
+<g>
+	<g>
+		<path class="st9" d="M724.8,661.6h-677c-4.7,0-8.5-3.8-8.5-8.5V290.2c0-4.7,3.8-8.5,8.5-8.5h677c4.7,0,8.5,3.8,8.5,8.5v362.9
+			C733.3,657.8,729.5,661.6,724.8,661.6z"/>
+	</g>
+	<path class="st10" d="M689.5,644.6H75.6c-4.7,0-8.5-3.8-8.5-8.5V529.6c0-4.7,3.8-8.5,8.5-8.5h613.9c4.7,0,8.5,3.8,8.5,8.5v106.5
+		C698,640.8,694.1,644.6,689.5,644.6z"
+    transform="matrix(1 0 0 1 -10 0)" />
+	<path class="st10" d="M693.3,506.1H79.4c-4.7,0-8.5-3.8-8.5-8.5V391.1c0-4.7,3.8-8.5,8.5-8.5h613.9c4.7,0,8.5,3.8,8.5,8.5v106.5
+		C701.8,502.3,698,506.1,693.3,506.1z"
+    transform="matrix(1 0 0 1 -10 0)"/>
+	<g>
+		<text transform="matrix(1 0 0 1 39.3299 268.2235)" class="st7 st8">HTTP message</text>
+	</g>
+	<g>
+		<text transform="matrix(1 0 0 1 68 318)" class="st3"><tspan x="0" y="0" class="st4 st5 st6">POST /upload HTTP/1.1 </tspan><tspan x="0" y="20.1" class="st4 st5 st6">Content-Type: multipart/form-data; boundary="--xyz"</tspan><tspan x="0" y="60.3" class="st4 st5 st6">--xyz</tspan><tspan x="0" y="80.5" class="st4 st5 st6">Content-Disposition: form-data; name="foo"; filename="a.txt"</tspan><tspan x="0" y="100.6" class="st4 st5 st6">Content-Type: text/plain</tspan><tspan x="0" y="140.8" class="st4 st5 st6">hello world</tspan><tspan x="0" y="181" class="st4 st5 st6">--xyz---</tspan><tspan x="0" y="221.2" class="st4 st5 st6">Content-Disposition: form-data; name="bar"; filename="b.txt"</tspan><tspan x="0" y="241.4" class="st4 st5 st6">Content-Type: text/plain</tspan><tspan x="0" y="281.6" class="st4 st5 st6">hello world again</tspan><tspan x="0" y="321.8" class="st4 st5 st6">--xyz--</tspan></text>
+	</g>
+</g>
+<g>
+	<g>
+		<polyline class="st11" points="608.8,177.7 613.8,177.7 613.8,191.3 608.8,191.3 		"/>
+		<g>
+			<path class="st0" d="M766.1,408.1"/>
+			<g>
+				<polyline class="st11" points="626.6,184.9 766,184.9 765.9,584.5 723.6,584.5 				"/>
+				<path class="st12" d="M624.3,181.6c-1.8,0-3.2,1.4-3.3,3.2c0,1.8,1.4,3.2,3.2,3.3c1.8,0,3.2-1.4,3.3-3.2c0,0,0,0,0,0
+					C627.5,183.1,626.1,181.6,624.3,181.6z"/>
+			</g>
+		</g>
+		<path class="st12" d="M724.3,581.5c-1.7,0-3,1.3-3,3c0,1.7,1.3,3,3,3c1.7,0,3-1.3,3-3c0,0,0,0,0,0
+			C727.3,582.8,725.9,581.5,724.3,581.5z"/>
+	</g>
+	<polyline class="st11" points="697.2,516.8 713.2,516.8 713.2,649.4 697.2,649.4 	"/>
+</g>
+<g>
+	<g>
+		<polyline class="st13" points="608.8,158.4 613.8,158.4 613.8,172 608.8,172 		"/>
+		<g>
+			<path class="st0" d="M766.1,269.8"/>
+			<g>
+				<polyline class="st13" points="626.6,165.6 750,165.6 749.9,446.2 723.6,446.2 				"/>
+				<path class="st14" d="M624.3,162.3c-1.8,0-3.2,1.4-3.3,3.2s1.4,3.2,3.2,3.3c1.8,0,3.2-1.4,3.3-3.2c0,0,0,0,0,0
+					C627.5,163.8,626.1,162.3,624.3,162.3z"/>
+			</g>
+		</g>
+		<path class="st14" d="M724.3,443.2c-1.7,0-3,1.3-3,3c0,1.7,1.3,3,3,3c1.7,0,3-1.3,3-3c0,0,0,0,0,0
+			C727.3,444.5,725.9,443.2,724.3,443.2z"/>
+	</g>
+	<polyline class="st13" points="697.2,378.5 713.2,378.5 713.2,511.1 697.2,511.1 	"/>
+</g>
+<text transform="matrix(1 0 0 1 577.2671 477.336)" class="st15 st7 st8">Part 1</text>
+<text transform="matrix(1 0 0 1 577.2671 615.6265)" class="st15 st7 st8">Part 2</text>
+</svg>
