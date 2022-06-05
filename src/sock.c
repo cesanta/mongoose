@@ -612,7 +612,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     } else if (c->is_tls_hs) {
       if ((c->is_readable || c->is_writable)) mg_tls_handshake(c);
     } else {
-      if (c->is_readable) read_conn(c);
+      if (c->is_readable && can_read(c)) read_conn(c);
       if (c->is_writable) write_conn(c);
     }
 
