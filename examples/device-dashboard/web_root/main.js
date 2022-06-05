@@ -44,6 +44,7 @@ const Footer = props => html`
 
 
 const Hero = props => html`
+<div class="section">
 <div style="margin-top: 1em; background: #eee; padding: 1em; border-radius: 0.5em; color: #777; ">
   <h1 style="margin: 0.2em 0;">Interactive Device Dashboard</h1>
 
@@ -67,7 +68,7 @@ const Hero = props => html`
   are sent over Websocket at URI <code>curl localhost:8000/api/watch</code>
   as JSON strings <code>{"name": "..", "data": ...}</code>
   </p>
-
+</div>
 </div>`;
 
 const Login = function(props) {
@@ -130,7 +131,7 @@ const Configuration = function(props) {
   const updatesub = ev => update('sub', sub);
 
   return html`
-<div style="margin: 0 0.3em;">
+<div class="section">
   <h3 style="background: #c03434; color: #fff; padding: 0.4em;">
     Device Configuration</h3>
   <div style="margin: 0.5em 0; display: flex;">
@@ -194,7 +195,7 @@ const Messages = function(props) {
                             }).then(r => setTxt(''));
 
   return html`
-<div style="margin: 0 0.3em;">
+<div class="section">
   <h3 style="background: #30c040; color: #fff; padding: 0.4em;">MQTT messages</h3>
   <div>
     MQTT server status: <b>${cfg.connected ? 'connected' : 'diconnected'}</b>
@@ -298,7 +299,7 @@ const Chart = function(props) {
   let xmax = 0, missing = MaxMetricsDataPoints - data.length;
   if (missing > 0) xmax = Math.round(Date.now() / 1000) + missing;
   return html`
-<div style="margin: 0 0.3em;">
+<div class="section">
   <h3 style="background: #ec3; color: #fff; padding: 0.4em;">Data Chart</h3>
   <div style="overflow: auto; padding: 0.5em;" class="">
     <${SVG} height=240 width=600 ymin=0 ymax=20 xmax=${xmax} data=${data} />
