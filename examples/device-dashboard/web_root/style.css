@@ -17,21 +17,24 @@ a, a:visited, a:active { color: #55f; }
 .border { border: 1px solid #ddd; }
 .rounded { border-radius: 0.5em; }
 .nowrap { white-space: nowrap; }
-.msg { background: #def; border-left: 5px solid #59d; padding: 1em; margin: 1em 0; }
-.row { margin: 1% 0; overflow: auto; }
-.col { float: left; }
-.table, .c12 { width: 100%; }
-.c11 { width: 91.66%; }
-.c10 { width: 83.33%; }
-.c9 { width: 75%; }
-.c8 { width: 66.66%; }
-.c7 { width: 58.33%; }
-.c6 { width: 50%; }
-.c5 { width: 41.66%; }
-.c4 { width: 33.33%; }
-.c3 { width: 25%; }
-.c2 { width: 16.66%; }
-.c1 { width: 8.33%; }
+.msg { background: #def; border-left: 5px solid #59d; padding: 0.5em; font-size: 90%; margin: 1em 0; }
+.row { display: flex; flex-wrap: wrap; }
+.col { margin: 0; padding: 0; overflow: auto; }
+.col-12 { width: 100%; }
+.col-11 { width: 91.66%; }
+.col-10 { width: 83.33%; }
+.col-9 { width: 75%; }
+.col-8 { width: 66.66%; }
+.col-7 { width: 58.33%; }
+.col-6 { width: 50%; }
+.col-5 { width: 41.66%; }
+.col-4 { width: 33.33%; }
+.col-3 { width: 25%; }
+.col-2 { width: 16.66%; }
+.col-1 { width: 8.33%; }
+
+.topic { background: #fea; padding: 0.2em 1em; border-radius: 0.4em; }
+.data { background: #aef; padding: 0.2em 1em; border-radius: 0.4em; }
 
 @media (min-width: 1310px) { .container { margin: auto; width: 1270px; } }
-@media (max-width: 870px) { .row .col { width: 100%; } }
+@media (max-width: 920px) { .row .col { width: 100%; } }

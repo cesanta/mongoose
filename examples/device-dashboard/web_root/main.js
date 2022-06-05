@@ -3,6 +3,23 @@ import {Component, h, html, render, useEffect, useState, useRef} from './preact.
 
 const MaxMetricsDataPoints = 50;
 
+// This simple publish/subscribe is used to pass notifications that were
+// received from the server, to all child components of the app.
+var PubSub = (function() {
+  var handlers = {}, id = 0;
+  return {
+    subscribe: function(fn) {
+      handlers[id++] = fn;
+    },
+    unsubscribe: function(id) {
+      delete handlers[id];
+    },
+    publish: function(data) {
+      for (var k in handlers) handlers[k](data);
+    }
+  };
+})();
+
 const Nav = props => html`
 <div style="background: #333; padding: 0.5em; color: #fff;">
   <div class="container d-flex">
@@ -41,23 +58,69 @@ const Hero = props => html`
   using  <code>curl</code> command-line utility:
   </p>
 
-  <div><code>curl localhost:8000/api/config/get</code> - get current device configuration</div>
-  <div><code>curl localhost:8000/api/config/set -d 'value1=7&value2=hello'</code> - set device configuration</div>
-  <div><code>curl localhost:8000/api/message/send -d 'msg=hello'</code> - send MQTT message</div>
-  <div><code>curl localhost:8000/api/watch</code> - get notifications: MQTT messages, configuration, sensor data</div>
+  <div><code>curl localhost:8000/api/config/get</code> </div>
+  <div><code>curl localhost:8000/api/config/set -d 'value1=7&value2=hello'</code> </div>
+  <div><code>curl localhost:8000/api/message/send -d 'msg=hello'</code> </div>
+
+  <p>
+  A device can send notifications to this dashboard at anytime. Notifications
+  are sent over Websocket at URI <code>curl localhost:8000/api/watch</code>
+  as JSON strings <code>{"name": "..", "data": ...}</code>
+  </p>
 
 </div>`;
+
+const Login = function(props) {
+  const [user, setUser] = useState('');
+  const [pass, setPass] = useState('');
+  const login = ev =>
+      fetch(
+          '/api/login',
+          {headers: {Authorization: 'Basic ' + btoa(user + ':' + pass)}})
+          .then(r => r.json())
+          .then(r => r && props.login(r))
+          .catch(err => err);
+  return html`
+<div class="rounded border" style="max-width: 480px; margin: 0 auto; margin-top: 5em; background: #eee; ">
+  <div style="padding: 2em; ">
+    <h1 style="color: #666;">Device Dashboard Login </h1>
+    <div style="margin: 0.5em 0;">
+      <input type='text' placeholder='Name' style="width: 100%;"
+        oninput=${ev => setUser(ev.target.value)} value=${user} />
+    </div>
+    <div style="margin: 0.5em 0;">
+      <input type="password" placeholder="Password" style="width: 100%;"
+        oninput=${ev => setPass(ev.target.value)} value=${pass}
+        onchange=${login} />
+    </div>
+    <div style="margin: 1em 0;">
+      <button class="btn" style="width: 100%; background: #8aa;"
+        disabled=${!user || !pass} onclick=${login}> Login </button>
+    </div>
+    <div style="color: #777; margin-top: 2em;">
+      Valid logins: admin:pass0, user1:pass1, user2:pass2
+    </div>
+  </div>
+</div>`;
+};
 
 
 const Configuration = function(props) {
   const [url, setUrl] = useState('');
   const [pub, setPub] = useState('');
   const [sub, setSub] = useState('');
+
   useEffect(() => {
-    setUrl(props.config.url);
-    setPub(props.config.pub);
-    setSub(props.config.sub);
-  }, [props.config.url, props.config.pub, props.config.sub])
+    const id = PubSub.subscribe(function(msg) {
+      if (msg.name == 'newconfig') {
+        setUrl(msg.data.url);
+        setPub(msg.data.pub);
+        setSub(msg.data.sub);
+      }
+    });
+    return PubSub.unsubscribe(id);
+  }, []);
+
   const update = (name, val) => fetch('/api/config/set', {
                                   method: 'post',
                                   body: `${name}=${encodeURIComponent(val)}`
@@ -65,6 +128,7 @@ const Configuration = function(props) {
   const updateurl = ev => update('url', url);
   const updatepub = ev => update('pub', pub);
   const updatesub = ev => update('sub', sub);
+
   return html`
 <div style="margin: 0 0.3em;">
   <h3 style="background: #c03434; color: #fff; padding: 0.4em;">
@@ -105,62 +169,44 @@ const Configuration = function(props) {
 </div>`;
 };
 
-const Login = function(props) {
-  const [user, setUser] = useState('');
-  const [pass, setPass] = useState('');
-  const login = ev =>
-      fetch(
-          '/api/login',
-          {headers: {Authorization: 'Basic ' + btoa(user + ':' + pass)}})
-          .then(r => r.json())
-          .then(r => r && props.login(r))
-          .catch(err => err);
-  return html`
-<div class="rounded border" style="max-width: 480px; margin: 0 auto; margin-top: 5em; background: #eee; ">
-  <div style="padding: 2em; ">
-    <h1 style="color: #666;">Device Dashboard Login </h1>
-    <div style="margin: 0.5em 0;">
-      <input type='text' placeholder='Name' style="width: 100%;"
-        oninput=${ev => setUser(ev.target.value)} value=${user} />
-    </div>
-    <div style="margin: 0.5em 0;">
-      <input type="password" placeholder="Password" style="width: 100%;"
-        oninput=${ev => setPass(ev.target.value)} value=${pass}
-        onchange=${login} />
-    </div>
-    <div style="margin: 1em 0;">
-      <button class="btn" style="width: 100%; background: #8aa;"
-        disabled=${!user || !pass} onclick=${login}> Login </button>
-    </div>
-    <div style="color: #777; margin-top: 2em;">
-      Valid logins: admin:pass0, user1:pass1, user2:pass2
-    </div>
-  </div>
-</div>`;
-};
 
-const Message = text => html`<div style="margin: 0.5em 0;">${text}</div>`;
+const Message = m => html`<div style="margin: 0.5em 0;">
+  <span class="topic">topic: ${m.message.topic} </span>
+  <span class="data">data: ${m.message.data}</span>
+</div>`;
 
 const Messages = function(props) {
-  const [message, setMessage] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [cfg, setCfg] = useState({});
+  const [txt, setTxt] = useState('');
+
+  useEffect(() => {
+    const id = PubSub.subscribe(function(msg) {
+      if (msg.name == 'newconfig') setCfg(x => msg.data);
+      if (msg.name == 'message') setMessages(x => x.concat([msg.data]));
+    });
+    return PubSub.unsubscribe(id);
+  }, []);
+
   const sendmessage = ev => fetch('/api/message/send', {
                               method: 'post',
-                              body: `message=${encodeURIComponent(message)}`
-                            }).then(r => setMessage(''));
+                              body: `message=${encodeURIComponent(txt)}`
+                            }).then(r => setTxt(''));
 
-  const messages = props.messages.map(
-      text => html`<div style="margin: 0.5em 0;">${text}</div>`);
   return html`
 <div style="margin: 0 0.3em;">
   <h3 style="background: #30c040; color: #fff; padding: 0.4em;">MQTT messages</h3>
+  <div>
+    MQTT server status: <b>${cfg.connected ? 'connected' : 'diconnected'}</b>
+  </div>
   <div style="height: 10em; overflow: auto; padding: 0.5em; " class="border">
-    ${messages}
+    ${messages.map(message => h(Message, {message}))}
   </div>
   <div style="margin: 0.5em 0; display: flex">
     <span class="addon nowrap">Publish message:</span>
     <input placeholder="type and press enter..." style="flex: 1 100%;"
-      value=${message} onchange=${sendmessage}
-      oninput=${ev => setMessage(ev.target.value)} />
+      value=${txt} onchange=${sendmessage}
+      oninput=${ev => setTxt(ev.target.value)} />
   </div>
   <div class="msg">
     Message gets passed to the device via REST. Then a device sends it to
@@ -240,14 +286,22 @@ const SVG = function(props) {
 
 
 const Chart = function(props) {
-  let xmax = 0, missing = MaxMetricsDataPoints - props.metrics.length;
+  const [data, setData] = useState([]);
+  useEffect(() => {
+    const id = PubSub.subscribe(function(msg) {
+      if (msg.name != 'metrics') return;
+      setData(x => x.concat([msg.data]).splice(-MaxMetricsDataPoints));
+    });
+    return PubSub.unsubscribe(id);
+  }, []);
+
+  let xmax = 0, missing = MaxMetricsDataPoints - data.length;
   if (missing > 0) xmax = Math.round(Date.now() / 1000) + missing;
   return html`
 <div style="margin: 0 0.3em;">
   <h3 style="background: #ec3; color: #fff; padding: 0.4em;">Data Chart</h3>
   <div style="overflow: auto; padding: 0.5em;" class="">
-    <${SVG} height=240 width=600 ymin=0 ymax=20
-      xmax=${xmax} data=${props.metrics} />
+    <${SVG} height=240 width=600 ymin=0 ymax=20 xmax=${xmax} data=${data} />
   </div>
   <div class="msg">
     This chart plots live sensor data, sent by a device via /api/watch.
@@ -256,19 +310,17 @@ const Chart = function(props) {
 };
 
 const App = function(props) {
-  const [messages, setMessages] = useState([]);
-  const [metrics, setMetrics] = useState([]);
   const [user, setUser] = useState('');
-  const [config, setConfig] = useState({});
 
-  const refresh = () => fetch('/api/config/get', {headers: {Authorization: ''}})
-                            .then(r => r.json())
-                            .then(r => setConfig(r));
+  const getconfig = () =>
+      fetch('/api/config/get', {headers: {Authorization: ''}})
+          .then(r => r.json())
+          .then(r => PubSub.publish({name: 'newconfig', data: r}));
 
   const login = function(u) {
     document.cookie = `access_token=${u.token};path=/;max-age=3600`;
     setUser(u.user);
-    refresh();
+    return getconfig();
   };
 
   const logout = ev => {
@@ -276,48 +328,50 @@ const App = function(props) {
     setUser('');
   };
 
+  // Watch for notifications. As soon as a notification arrives, pass it on
+  // to all subscribed components
   const watch = function() {
-    var f = function(reader) {
-      return reader.read().then(function(result) {
-        var data = String.fromCharCode.apply(null, result.value);
-        var msg = JSON.parse(data);
-        if (msg.name == 'config') {
-          refresh();
-        } else if (msg.name == 'message') {
-          setMessages(m => m.concat([msg.data]));
-        } else if (msg.name == 'metrics') {
-          setMetrics(m => m.concat([msg.data]).splice(-MaxMetricsDataPoints));
+    var l = window.location, proto = l.protocol.replace('http', 'ws');
+    var tid, wsURI = proto + '//' + l.host + '/api/watch'
+    var reconnect = function() {
+      var ws = new WebSocket(wsURI);
+      ws.onmessage = function(ev) {
+        try {
+          var msg = JSON.parse(ev.data);
+          PubSub.publish(msg);
+          if (msg.name != 'metrics') console.log('ws->', msg);
+        } catch (e) {
+          console.log('Invalid ws frame:', ev.data);  // eslint-disable-line
         }
-        // console.log(msg);
-        if (!result.done) return f(reader);
-      });
+      };
+      ws.onclose = function() {
+        clearTimeout(tid);
+        tid = setTimeout(reconnect, 1000);
+      };
     };
-    fetch('/api/watch', {headers: {Authorization: ''}})
-        .then(r => r.body.getReader())
-        .then(f)
-        .catch(e => setTimeout(watch, 1000));
+    reconnect();
   };
 
   useEffect(() => {
+    // Called once at init time
     fetch('/api/login', {headers: {Authorization: ''}})
         .then(r => r.json())
         .then(r => login(r))
         .catch(err => setUser(''));
-    refresh();
     watch();
+    PubSub.subscribe(msg => msg.name == 'config' && getconfig());
   }, []);
 
   if (!user) return html`<${Login} login=${login} />`;
-  const admin = user == 'admin';
-  const cs = admin ? html`<${Configuration} config=${config} />` : '';
+
   return html`
 <${Nav} user=${user} logout=${logout} />
 <div class="container">
-  <${Hero} />
   <div class="row">
-    <div class="col c6"><${Chart} metrics=${metrics} /></div>
-    <div class="col c6">${cs}</div>
-    <div class="col c6"><${Messages} messages=${messages} /></div>
+    <div class="col col-6"><${Hero} /></div>
+    <div class="col col-6"><${Chart} /></div>
+    <div class="col col-6">${user == 'admin' && h(Configuration)}</div>
+    <div class="col col-6"><${Messages} /></div>
   </div>
   <${Footer} />
 </div>`;

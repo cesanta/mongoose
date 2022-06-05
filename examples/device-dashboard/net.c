@@ -25,6 +25,7 @@ static struct config {
 } s_config;
 
 static struct mg_connection *s_mqtt = NULL;  // MQTT connection
+static bool s_connected = false;             // MQTT connection established
 
 // Try to update a single configuration value
 static void update_config(struct mg_str *body, const char *name, char **value) {
@@ -66,8 +67,10 @@ static void send_notification(struct mg_mgr *mgr, const char *name,
                               const char *data) {
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->label[0] == 'W')
-      mg_http_printf_chunk(c, "{\"name\": \"%s\", \"data\": %s}", name, data);
+    if (c->label[0] != 'W') continue;
+    // c->is_hexdumping = 1;
+    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{\"name\": \"%s\", \"data\": %s}", name,
+                 data);
   }
 }
 
@@ -76,33 +79,40 @@ static void timer_metrics_fn(void *param) {
   char buf[50];
   mg_snprintf(buf, sizeof(buf), "[ %lu, %d ]", (unsigned long) time(NULL),
               10 + (int) ((double) rand() * 10 / RAND_MAX));
-  // MG_INFO(("%s", buf));
   send_notification(param, "metrics", buf);
+  // MG_INFO(("%s", buf));
 }
 
 // MQTT event handler function
 static void mqtt_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_MQTT_OPEN) {
-    struct mg_str topic = mg_str(s_config.pub);
-    mg_mqtt_sub(s_mqtt, &topic, 1);
+    s_connected = true;
+    // c->is_hexdumping = 1;
+    mg_mqtt_sub(s_mqtt, mg_str(s_config.sub), 1);
+    send_notification(c->mgr, "config", "null");
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = evd;
     char buf[256];
     snprintf(buf, sizeof(buf), "{\"topic\":\"%.*s\",\"data\":\"%.*s\"}",
              (int) mm->topic.len, mm->topic.ptr, (int) mm->data.len,
              mm->data.ptr);
-    send_notification(param, "message", buf);
+    send_notification(c->mgr, "message", buf);
   } else if (ev == MG_EV_CLOSE) {
     s_mqtt = NULL;
+    if (s_connected) {
+      s_connected = false;
+      send_notification(c->mgr, "config", "null");
+    }
   }
+  (void) fnd;
 }
 
 // Keep MQTT connection open - reconnect if closed
-static void timer_metrics_fn(void *param) {
+static void timer_mqtt_fn(void *param) {
   struct mg_mgr *mgr = (struct mg_mgr *) param;
   if (s_mqtt == NULL) {
     struct mg_mqtt_opts opts = {};
-    s_mqtt = mg_mqtt_connect(mgr, s_config.rl, &opts, mqtt_fn, NULL);
+    s_mqtt = mg_mqtt_connect(mgr, s_config.url, &opts, mqtt_fn, NULL);
   }
 }
 
@@ -127,8 +137,10 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       mg_printf(c, "%s", "HTTP/1.1 403 Denied\r\nContent-Length: 0\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/config/get")) {
       mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
-      mg_http_printf_chunk(c, "{\"url\":\"%s\",\"pub\":\"%s\",\"sub\":\"%s\"}",
-                           s_config.url, s_config.pub, s_config.sub);
+      mg_http_printf_chunk(
+          c, "{\"url\":\"%s\",\"pub\":\"%s\",\"sub\":\"%s\",\"connected\":%s}",
+          s_config.url, s_config.pub, s_config.sub,
+          s_connected ? "true" : "false");
       mg_http_printf_chunk(c, "");
     } else if (mg_http_match_uri(hm, "/api/config/set")) {
       // Admins only
@@ -136,6 +148,7 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
         update_config(&hm->body, "url", &s_config.url);
         update_config(&hm->body, "pub", &s_config.pub);
         update_config(&hm->body, "sub", &s_config.sub);
+        if (s_mqtt) s_mqtt->is_closing = 1;  // Ask to disconnect from MQTT
         send_notification(fn_data, "config", "null");
         mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
       } else {
@@ -143,14 +156,15 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       }
     } else if (mg_http_match_uri(hm, "/api/message/send")) {
       char buf[256];
-      if (mg_http_get_var(&hm->body, "message", buf + 1, sizeof(buf) - 2) > 0) {
-        buf[0] = buf[strlen(buf)] = '"';
-        send_notification(fn_data, "message", buf);
+      if (s_connected &&
+          mg_http_get_var(&hm->body, "message", buf, sizeof(buf)) > 0) {
+        mg_mqtt_pub(s_mqtt, mg_str(s_config.pub), mg_str(buf), 1, false);
       }
       mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/watch")) {
       c->label[0] = 'W';  // Mark ourselves as a event listener
-      mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+      mg_ws_upgrade(c, hm, NULL);
+      // mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/login")) {
       mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
       mg_http_printf_chunk(c, "{\"user\":\"%s\",\"token\":\"%s\"}\n", u->name,
@@ -158,7 +172,7 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       mg_http_printf_chunk(c, "");
     } else {
       struct mg_http_serve_opts opts = {0};
-#if 0
+#if 1
       opts.root_dir = "/web_root";
       opts.fs = &mg_fs_packed;
 #else
