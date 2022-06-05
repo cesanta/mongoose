@@ -486,6 +486,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
+    c->is_readable = c->is_writable = 0;
     if (skip_iotest(c)) continue;
     if (can_read(c))
       FreeRTOS_FD_SET(c->fd, mgr->ss, eSELECT_READ | eSELECT_EXCEPT);
@@ -507,6 +508,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   memset(fds, 0, sizeof(fds));
   n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
+    c->is_readable = c->is_writable = 0;
     if (skip_iotest(c)) {
       // Socket not valid, ignore
     } else {
@@ -545,6 +547,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   FD_ZERO(&wset);
 
   for (c = mgr->conns; c != NULL; c = c->next) {
+    c->is_readable = c->is_writable = 0;
     if (skip_iotest(c)) continue;
     if (can_read(c)) FD_SET(FD(c), &rset);
     if (can_write(c)) FD_SET(FD(c), &wset);
