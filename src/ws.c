@@ -13,6 +13,24 @@ struct ws_msg {
   size_t data_len;
 };
 
+size_t mg_ws_vprintf(struct mg_connection *c, int op, const char *fmt,
+                     va_list ap) {
+  char mem[256], *buf = mem;
+  size_t len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
+  len = mg_ws_send(c, buf, len, op);
+  if (buf != mem) free(buf);
+  return len;
+}
+
+size_t mg_ws_printf(struct mg_connection *c, int op, const char *fmt, ...) {
+  size_t len = 0;
+  va_list ap;
+  va_start(ap, fmt);
+  len = mg_ws_vprintf(c, op, fmt, ap);
+  va_end(ap);
+  return len;
+}
+
 static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
                          const struct mg_str *wsproto, const char *fmt,
                          va_list ap) {

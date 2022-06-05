@@ -1178,6 +1178,8 @@ void mg_ws_upgrade(struct mg_connection *, struct mg_http_message *,
                    const char *fmt, ...);
 size_t mg_ws_send(struct mg_connection *, const char *buf, size_t len, int op);
 size_t mg_ws_wrap(struct mg_connection *, size_t len, int op);
+size_t mg_ws_printf(struct mg_connection *c, int op, const char *fmt, ...);
+size_t mg_ws_vprintf(struct mg_connection *c, int op, const char *fmt, va_list);
 
 
 
