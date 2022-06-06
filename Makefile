@@ -120,12 +120,11 @@ vc22: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc22 wine64 $@.exe
 
 mingw: Makefile mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/mingw i686-w64-mingw32-gcc $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
-	$(DOCKER) mdashnet/vc98 wine test.exe
+	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-gcc $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o $@.exe
+	$(DOCKER) mdashnet/mingw wine64 $@.exe
 
 mingw++: Makefile mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/mingw i686-w64-mingw32-g++ $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o test.exe
-  # Note: for some reason, a binary built with mingw g++, fails to run
+	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-g++ $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o $@.exe
 
 linux: IPV6=0
 linux: Makefile mongoose.h $(SRCS)
@@ -156,5 +155,5 @@ mongoose.h: $(HDRS) Makefile
 	(cat src/license.h; echo; echo '#ifndef MONGOOSE_H'; echo '#define MONGOOSE_H'; echo; cat src/version.h ; echo; echo '#ifdef __cplusplus'; echo 'extern "C" {'; echo '#endif'; cat src/arch.h src/arch_*.h src/config.h src/str.h src/log.h src/timer.h src/fs.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/tls_mbed.h src/tls_openssl.h src/ws.h src/sntp.h src/mqtt.h src/dns.h src/mip.h | sed -e 's,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
 
 clean:
-	rm -rf $(PROG) *.o *.dSYM unit_test* valgrind_unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack unpacked
+	rm -rf $(PROG) *.exe *.o *.dSYM unit_test* valgrind_unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack unpacked
 	@for X in $(EXAMPLES); do $(MAKE) -C $$X clean; done
