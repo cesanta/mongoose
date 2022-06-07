@@ -616,7 +616,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             MG_VERSION);
   n = mg_snprintf(tmp, sizeof(tmp), "%lu", (unsigned long) (c->send.len - off));
   if (n > sizeof(tmp)) n = 0;
-  memcpy(c->send.buf + off - 10, tmp, n);  // Set content length
+  memcpy(c->send.buf + off - 12, tmp, n);  // Set content length
 }
 
 static void remove_double_dots(char *s) {
