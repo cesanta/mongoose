@@ -1648,7 +1648,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
   path[path_size - 1] = '\0';  // Double-check
   remove_double_dots(path);
   n = strlen(path);
-  while (n > 0 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
+  while (n > 1 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
   flags = mg_vcmp(&hm->uri, "/") == 0 ? MG_FS_DIR : fs->st(path, NULL, NULL);
   MG_VERBOSE(("%lu %.*s -> %s %d", c->id, (int) hm->uri.len, hm->uri.ptr, path,
               flags));
