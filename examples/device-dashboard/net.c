@@ -1,7 +1,6 @@
 // Copyright (c) 2020-2022 Cesanta Software Limited
 // All rights reserved
 
-#include "mjson.h"
 #include "mongoose.h"
 
 #define MQTT_SERVER "mqtt://broker.hivemq.com:1883"
@@ -67,20 +66,17 @@ static struct user *getuser(struct mg_http_message *hm) {
 static void send_notification(struct mg_mgr *mgr, const char *name,
                               const char *data) {
   struct mg_connection *c;
-  char *msg = mjson_aprintf("{%Q:%Q,%Q:%s}", "name", name, "data", data);
   for (c = mgr->conns; c != NULL; c = c->next) {
     if (c->label[0] != 'W') continue;
-    // c->is_hexdumping = 1;
-    mg_ws_send(c, msg, strlen(msg), WEBSOCKET_OP_TEXT);
-    if (strcmp(name, "metrics") != 0) MG_INFO(("%lu -> %s", c->id, msg));
+    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%Q:%Q,%Q:%s}", "name", name, "data",
+                 data);
   }
-  free(msg);
 }
 
 // Send simulated metrics data to the dashboard, for chart rendering
 static void timer_metrics_fn(void *param) {
   char buf[50];
-  mg_snprintf(buf, sizeof(buf), "[ %lu, %d ]", (unsigned long) time(NULL),
+  mg_snprintf(buf, sizeof(buf), "[%lu, %d]", (unsigned long) time(NULL),
               10 + (int) ((double) rand() * 10 / RAND_MAX));
   send_notification(param, "metrics", buf);
 }
@@ -94,11 +90,12 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
     send_notification(c->mgr, "config", "null");
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = ev_data;
-    char *message = mjson_aprintf(
-        "{%Q: %.*Q,%Q:%.*Q,%Q:%d}", "topic", (int) mm->topic.len, mm->topic.ptr,
-        "data", (int) mm->data.len, mm->data.ptr, "qos", mm->qos);
-    send_notification(c->mgr, "message", message);
-    free(message);
+    char buf[100], *p = buf;
+    mg_asprintf(&p, sizeof(buf), "{%Q: %.*Q, %Q: %.*Q, %Q: %d}", "topic",
+                (int) mm->topic.len, mm->topic.ptr, "data", (int) mm->data.len,
+                mm->data.ptr, "qos", (int) mm->qos);
+    send_notification(c->mgr, "message", p);
+    if (p != buf) free(p);
   } else if (ev == MG_EV_MQTT_CMD) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     MG_DEBUG(("cmd %d qos %d", mm->cmd, mm->qos));
@@ -141,11 +138,9 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       // All URIs starting with /api/ must be authenticated
       mg_printf(c, "%s", "HTTP/1.1 403 Denied\r\nContent-Length: 0\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/config/get")) {
-      char *response = mjson_aprintf("{%Q:%Q,%Q:%Q,%Q:%Q,%Q:%B}", "url",
-                                     s_config.url, "pub", s_config.pub, "sub",
-                                     s_config.sub, "connected", s_connected);
-      mg_http_reply(c, 200, NULL, "%s\n", response);
-      free(response);
+      mg_http_reply(c, 200, NULL, "{%Q:%Q,%Q:%Q,%Q:%Q,%Q:%s}\n", "url",
+                    s_config.url, "pub", s_config.pub, "sub", s_config.sub,
+                    "connected", s_connected ? "true" : "false");
     } else if (mg_http_match_uri(hm, "/api/config/set")) {
       // Admins only
       if (strcmp(u->name, "admin") == 0) {
@@ -170,10 +165,8 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       mg_ws_upgrade(c, hm, NULL);
       // mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/login")) {
-      char *response =
-          mjson_aprintf("{%Q:%Q,%Q:%Q}", "user", u->name, "token", u->token);
-      mg_http_reply(c, 200, NULL, "%s\n", response);
-      free(response);
+      mg_http_reply(c, 200, NULL, "{%Q:%Q,%Q:%Q}\n", "user", u->name, "token",
+                    u->token);
     } else {
       struct mg_http_serve_opts opts = {0};
 #if 0

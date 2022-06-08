@@ -1,5 +1,5 @@
 PROG ?= example
-SOURCES ?= ../../mongoose.c main.c net.c mjson.c packed_fs.c
+SOURCES ?= ../../mongoose.c main.c net.c packed_fs.c
 CFLAGS ?= -I../.. -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_LINES=1 $(EXTRA)
 FILES_TO_EMBED ?= $(wildcard web_root/*)
 ROOT ?= $(realpath $(CURDIR)/../../..)

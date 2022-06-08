@@ -2509,6 +2509,8 @@ Print formatted string into a string buffer, just like `snprintf()`
 standard function does, but in a predictable way that does not depend on
 the C library or the build environment. The return value can be larger
 than the buffer length `len`, in which case the overflow bytes are not printed.
+Mongoose library is often used to exchange data in JSON format, therefore a
+non-standard `%Q` specifier for formatting JSON strings is also supported.
 
 Parameters:
 - `buf` - Pointer to pointer to output buffer
@@ -2520,6 +2522,7 @@ Supported format specifiers:
 - `hhu`, `hu`, `u`, `lu`, `llu` - same but for unsigned variants
 - `hhx`, `hx`, `x`, `lx`, `llx` - same, unsigned and hex output
 - `s` - `for char *`
+- `Q` - `for char *`, outputs double-quoted JSON-escaped string (extension)
 - `c` - `for char`
 - `%` - `the `%` character itself
 - `p` - for any pointer, prints `0x.....` hex value

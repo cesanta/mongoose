@@ -1366,9 +1366,22 @@ static bool sn(const char *fmt, ...) {
   return result;
 }
 
+static bool sn2(const char *expect, const char *fmt, ...) {
+  char buf[100];
+  va_list ap;
+  bool result;
+  va_start(ap, fmt);
+  mg_vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+  va_start(ap, fmt);
+  result = strcmp(expect, buf) == 0;
+  if (!result) MG_ERROR(("[%s] != [%s]", expect, buf));
+  return result;
+}
+
 static bool sccmp(const char *s1, const char *s2, int expected) {
   int n1 = mg_casecmp(s1, s2);
-  MG_INFO(("[%s] [%s] %d %d", s1, s2, n1, expected));
+  // MG_INFO(("[%s] [%s] %d %d", s1, s2, n1, expected));
   return n1 == expected;
 }
 
@@ -1432,6 +1445,28 @@ static void test_str(void) {
   ASSERT(sn("%s ", "a"));
   ASSERT(sn("%s %s", "a", "b"));
   ASSERT(sn("%2s %s", "a", "b"));
+
+  // Non-standard formatting
+  {
+    char buf[100];
+    const char *expected;
+
+    expected = "\"\"";
+    mg_snprintf(buf, sizeof(buf), "%Q", "");
+    ASSERT(strcmp(buf, expected) == 0);
+
+    expected = "\"a'b\"";
+    mg_snprintf(buf, sizeof(buf), "%Q", "a'b");
+    ASSERT(strcmp(buf, expected) == 0);
+
+    expected = "\"a\\b\\n\\f\\r\\t\\\"\"";
+    mg_snprintf(buf, sizeof(buf), "%Q", "a\b\n\f\r\t\"");
+    ASSERT(strcmp(buf, expected) == 0);
+
+    expected = "\"abc\"";
+    mg_snprintf(buf, sizeof(buf), "%.*Q", 3, "abcdef");
+    ASSERT(strcmp(buf, expected) == 0);
+  }
 }
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -1807,8 +1842,7 @@ struct stream_status {
 // Consume recv buffer after letting it reach MG_MAX_RECV_SIZE
 static void eh8(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   struct stream_status *status = (struct stream_status *) fn_data;
-  if (c->is_listening)
-    return;
+  if (c->is_listening) return;
 
   ASSERT(c->recv.len <= MG_MAX_RECV_SIZE);
 
@@ -1832,29 +1866,29 @@ static void eh8(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     else
       consume = MG_MAX_RECV_SIZE / 3;
     status->received += consume;
-    status->recv_crc = mg_crc32(status->recv_crc, (const char *) c->recv.buf, consume);
+    status->recv_crc =
+        mg_crc32(status->recv_crc, (const char *) c->recv.buf, consume);
     mg_iobuf_del(&c->recv, 0, consume);
   }
 
   // count polls with full buffer to ensure c->is_full prevents reads
-  if (ev == MG_EV_POLL && c->recv.len == MG_MAX_RECV_SIZE)
-    status->polls += 1;
+  if (ev == MG_EV_POLL && c->recv.len == MG_MAX_RECV_SIZE) status->polls += 1;
   (void) ev_data;
 }
 
 // Toggle c->is_full to prevent max_recv_buf_size reached read errors
-static void eh10(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (c->recv.len >= MG_MAX_RECV_SIZE && ev == MG_EV_READ)
-    c->is_full = true;
+static void eh10(struct mg_connection *c, int ev, void *ev_data,
+                 void *fn_data) {
+  if (c->recv.len >= MG_MAX_RECV_SIZE && ev == MG_EV_READ) c->is_full = true;
 
   eh8(c, ev, ev_data, fn_data);
 
-  if (c->recv.len < MG_MAX_RECV_SIZE && ev == MG_EV_POLL)
-    c->is_full = false;
+  if (c->recv.len < MG_MAX_RECV_SIZE && ev == MG_EV_POLL) c->is_full = false;
 }
 
 // Send buffer larger than MG_MAX_RECV_SIZE to server
-static void eh11(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void eh11(struct mg_connection *c, int ev, void *ev_data,
+                 void *fn_data) {
   struct stream_status *status = (struct stream_status *) fn_data;
   if (ev == MG_EV_CONNECT) {
     size_t len = MG_MAX_RECV_SIZE * 2;

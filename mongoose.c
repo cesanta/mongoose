@@ -4823,10 +4823,10 @@ static size_t mg_nce(const char *s, size_t n, size_t ofs, size_t *koff,
   return ofs > n ? n : ofs;
 }
 
-bool mg_split(struct mg_str *s, struct mg_str *k, struct mg_str *v, char delim) {
+bool mg_split(struct mg_str *s, struct mg_str *k, struct mg_str *v, char sep) {
   size_t koff = 0, klen = 0, voff = 0, vlen = 0, off = 0;
   if (s->ptr == NULL || s->len == 0) return 0;
-  off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen, delim);
+  off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen, sep);
   if (k != NULL) *k = mg_str_n(s->ptr + koff, klen);
   if (v != NULL) *v = mg_str_n(s->ptr + voff, vlen);
   *s = mg_str_n(s->ptr + off, s->len - off);
@@ -4963,6 +4963,36 @@ static size_t mg_copys(char *buf, size_t len, size_t n, char *p, size_t k) {
   return j;
 }
 
+static char mg_esc(int c, bool esc) {
+  const char *p, *esc1 = "\b\f\n\r\t\\\"", *esc2 = "bfnrt\\\"";
+  for (p = esc ? esc1 : esc2; *p != '\0'; p++) {
+    if (*p == c) return esc ? esc2[p - esc1] : esc1[p - esc2];
+  }
+  return 0;
+}
+
+static char mg_escape(int c) {
+  return mg_esc(c, true);
+}
+
+static size_t mg_copyq(char *buf, size_t len, size_t n, char *p, size_t k) {
+  size_t j = 0, extra = 2;
+  if (n < len) buf[n++] = '"';
+  for (j = 0; j < k && p[j]; j++) {
+    char c = mg_escape(p[j]);
+    if (c) {
+      if (j + n < len) buf[n + j] = '\\';
+      n++;
+      extra++;
+      if (j + n < len) buf[n + j] = c;
+    } else {
+      if (j + n < len) buf[n + j] = p[j];
+    }
+  }
+  if (j + n < len) buf[n + j] = '"';
+  return j + extra;
+}
+
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
   size_t i = 0, n = 0;
   while (fmt[i] != '\0') {
@@ -5016,14 +5046,16 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
         int p = va_arg(ap, int);
         if (n < len) buf[n] = (char) p;
         n++;
-      } else if (c == 's') {
+      } else if (c == 's' || c == 'Q') {
         char *p = va_arg(ap, char *);
+        size_t (*fn)(char *, size_t, size_t, char *, size_t) =
+            c == 's' ? mg_copys : mg_copyq;
         if (pr == ~0U) pr = p == NULL ? 0 : strlen(p);
         for (j = 0; !minus && pr < w && j + pr < w; j++)
-          n += mg_copys(buf, len, n, &pad, 1);
-        n += mg_copys(buf, len, n, p, pr);
+          n += fn(buf, len, n, &pad, 1);
+        n += fn(buf, len, n, p, pr);
         for (j = 0; minus && pr < w && j + pr < w; j++)
-          n += mg_copys(buf, len, n, &pad, 1);
+          n += fn(buf, len, n, &pad, 1);
       } else if (c == '%') {
         if (n < len) buf[n] = '%';
         n++;
