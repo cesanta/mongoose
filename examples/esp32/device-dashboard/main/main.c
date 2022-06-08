@@ -2,27 +2,15 @@
 // All rights reserved
 
 #include "esp_spiffs.h"
-#include "freertos/FreeRTOS.h"
+//#include "freertos/FreeRTOS.h"
 #include "mongoose.h"
 
-#define WIFI_SSID "VMDF554B9"     // SET THIS!
-#define WIFI_PASS "Mp7wjmamPafa"  // SET THIS!
-#define FS_ROOT "/spiffs"
+const char *s_listening_url = "http://0.0.0.0:80";
+void device_dashboard_fn(struct mg_connection *, int, void *, void *);
 
-// Event handler for an server (accepted) connection. Implemented endpoints:
-//    /api/stats  - return JSON object with ESP32 stats (free RAM)
-//    any other   - serve files from the filesystem
-static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = ev_data;
-    if (mg_http_match_uri(hm, "/api/stats")) {
-      mg_http_reply(c, 200, "", "{\"ram\": %lu}\n", xPortGetFreeHeapSize());
-    } else {
-      struct mg_http_serve_opts opts = {.root_dir = FS_ROOT};
-      mg_http_serve_dir(c, hm, &opts);
-    }
-  }
-}
+#define WIFI_SSID "YOUR_WIFI_NETWORK_NAME"  // SET THIS!
+#define WIFI_PASS "YOUR_WIFI_PASSWORD"      // SET THIS!
+#define FS_ROOT "/spiffs"
 
 void app_main(void) {
   // Mount filesystem
@@ -39,9 +27,9 @@ void app_main(void) {
 
   // Connected to WiFi, now start HTTP server
   struct mg_mgr mgr;
-  mg_log_set("4");
+  mg_log_set("3");
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, "http://0.0.0.0:80", cb, &mgr);  // Listening server
-  MG_INFO(("Starting Mongoose web server v%s", MG_VERSION));
+  MG_INFO(("Mongoose v%s on %s", MG_VERSION, s_listening_url));
+  mg_http_listen(&mgr, s_listening_url, device_dashboard_fn, &mgr);
   for (;;) mg_mgr_poll(&mgr, 1000);  // Infinite event loop
 }

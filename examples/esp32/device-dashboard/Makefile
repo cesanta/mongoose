@@ -1,5 +1,5 @@
 THISDIR = $(realpath $(CURDIR))
-ROOTDIR = $(realpath $(CURDIR)/../..)
+ROOTDIR = $(realpath $(CURDIR)/../../..)
 
 all: example
 
