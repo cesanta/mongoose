@@ -4,7 +4,7 @@
 #include "config.h"
 
 enum { MG_LL_NONE, MG_LL_ERROR, MG_LL_INFO, MG_LL_DEBUG, MG_LL_VERBOSE };
-void mg_log(const char *fmt, ...) PRINTF_LIKE(1, 2);
+void mg_log(const char *fmt, ...);
 bool mg_log_prefix(int ll, const char *file, int line, const char *fname);
 void mg_log_set(const char *spec);
 void mg_hexdump(const void *buf, size_t len);

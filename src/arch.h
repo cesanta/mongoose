@@ -36,12 +36,6 @@
 #endif
 #endif  // !defined(MG_ARCH)
 
-#if defined(__GNUC__) && defined(__arm__)
-#define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
-#else
-#define PRINTF_LIKE(f, a)
-#endif
-
 #if MG_ARCH == MG_ARCH_CUSTOM
 #include <mongoose_custom.h>
 #endif

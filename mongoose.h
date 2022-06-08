@@ -63,12 +63,6 @@ extern "C" {
 #endif
 #endif  // !defined(MG_ARCH)
 
-#if defined(__GNUC__) && defined(__arm__)
-#define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
-#else
-#define PRINTF_LIKE(f, a)
-#endif
-
 #if MG_ARCH == MG_ARCH_CUSTOM
 #include <mongoose_custom.h>
 #endif
@@ -722,11 +716,11 @@ bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
 bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 bool mg_split(struct mg_str *s, struct mg_str *k, struct mg_str *v, char delim);
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap);
-size_t mg_snprintf(char *, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
+size_t mg_snprintf(char *, size_t, const char *fmt, ...);
 char *mg_hex(const void *buf, size_t len, char *dst);
 void mg_unhex(const char *buf, size_t len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, size_t len);
-size_t mg_asprintf(char **, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
+size_t mg_asprintf(char **, size_t, const char *fmt, ...);
 size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
 int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
 int64_t mg_to64(struct mg_str str);
@@ -738,7 +732,7 @@ size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex);
 
 
 enum { MG_LL_NONE, MG_LL_ERROR, MG_LL_INFO, MG_LL_DEBUG, MG_LL_VERBOSE };
-void mg_log(const char *fmt, ...) PRINTF_LIKE(1, 2);
+void mg_log(const char *fmt, ...);
 bool mg_log_prefix(int ll, const char *file, int line, const char *fname);
 void mg_log_set(const char *spec);
 void mg_hexdump(const void *buf, size_t len);

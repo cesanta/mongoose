@@ -1366,19 +1366,6 @@ static bool sn(const char *fmt, ...) {
   return result;
 }
 
-static bool sn2(const char *expect, const char *fmt, ...) {
-  char buf[100];
-  va_list ap;
-  bool result;
-  va_start(ap, fmt);
-  mg_vsnprintf(buf, sizeof(buf), fmt, ap);
-  va_end(ap);
-  va_start(ap, fmt);
-  result = strcmp(expect, buf) == 0;
-  if (!result) MG_ERROR(("[%s] != [%s]", expect, buf));
-  return result;
-}
-
 static bool sccmp(const char *s1, const char *s2, int expected) {
   int n1 = mg_casecmp(s1, s2);
   // MG_INFO(("[%s] [%s] %d %d", s1, s2, n1, expected));
