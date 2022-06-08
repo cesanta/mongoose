@@ -3192,12 +3192,18 @@ Return value: new `io` length
 Usage example:
 
 ```c
-struct mg_iobuf io;
-mg_iobuf_init(&io, 0);               // Empty buffer
-mg_iobuf_add(&io, 0, "hi", 2, 512);  // io->len is 2, io->size is 512
+struct mg_iobuf io;     // Declare buffer
+mg_iobuf_init(&io, 0);  // Initialise buffer to have 0 allocated bytes
 ```
 
-<img src="images/mg_iobuf_add.png" alt="Function mg_iobuf_add()" />
+<img src="images/mg_iobuf_add1.svg" alt="Function mg_iobuf_init()" />
+
+```c
+mg_iobuf_add(&io, 0, "hello", 5, 512);  // Add "hello" at offset 0
+```
+
+<img src="images/mg_iobuf_add2.svg" alt="Function mg_iobuf_add()" />
+
 
 ### mg\_iobuf\_del()
 
