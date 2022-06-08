@@ -19,8 +19,10 @@ a, a:visited, a:active { color: #55f; }
 .nowrap { white-space: nowrap; }
 .msg { background: #def; border-left: 5px solid #59d; padding: 0.5em; font-size: 90%; margin: 1em 0; }
 .section { margin: 0 1em; }
-.topic { background: #fea; padding: 0.2em 1em; border-radius: 0.4em; }
-.data { background: #aef; padding: 0.2em 1em; border-radius: 0.4em; }
+.topic, .data, .qos {  padding: 0.2em 0.5em; border-radius: 0.4em; margin-right: 0.5em;  }
+.qos { background: #efa; }
+.topic { background: #fea; }
+.data { background: #aef; }
 
 /* Grid */
 .row { display: flex; flex-wrap: wrap; }

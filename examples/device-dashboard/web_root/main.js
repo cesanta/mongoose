@@ -36,12 +36,6 @@ const Nav = props => html`
   </div>
 </div>`;
 
-const Footer = props => html`
-<div style="color: silver; margin-top: 2em; padding-top: 0.5em; border-top: 1px solid #ccc; ">
-  Copyright (c) Your Company
-</div>
-`;
-
 
 const Hero = props => html`
 <div class="section">
@@ -107,20 +101,15 @@ const Login = function(props) {
 
 
 const Configuration = function(props) {
-  const [url, setUrl] = useState('');
-  const [pub, setPub] = useState('');
-  const [sub, setSub] = useState('');
+  const [url, setUrl] = useState(props.config.url || '');
+  const [pub, setPub] = useState(props.config.pub || '');
+  const [sub, setSub] = useState(props.config.sub || '');
 
   useEffect(() => {
-    const id = PubSub.subscribe(function(msg) {
-      if (msg.name == 'newconfig') {
-        setUrl(msg.data.url);
-        setPub(msg.data.pub);
-        setSub(msg.data.sub);
-      }
-    });
-    return PubSub.unsubscribe(id);
-  }, []);
+    setUrl(props.config.url);
+    setPub(props.config.pub);
+    setSub(props.config.sub);
+  }, [props.config]);
 
   const update = (name, val) => fetch('/api/config/set', {
                                   method: 'post',
@@ -130,6 +119,7 @@ const Configuration = function(props) {
   const updatepub = ev => update('pub', pub);
   const updatesub = ev => update('sub', sub);
 
+  console.log(props, [url, pub, sub]);
   return html`
 <div class="section">
   <h3 style="background: #c03434; color: #fff; padding: 0.4em;">
@@ -158,6 +148,10 @@ const Configuration = function(props) {
     <button class="btn" disabled=${!pub} onclick=${updatepub}
       style="margin-left: 1em; background: #8aa;">Update</button>
   </div>
+  <div>
+    You can use <a href="http://www.hivemq.com/demos/websocket-client/">
+    HiveMQ Websocket web client</a> to send messages to this console.
+  </div>
   <div class="msg">
     Device keeps a persistent connection to the configured MQTT server.
     Changes to this configuration are propagated to all dashboards: try
@@ -172,18 +166,17 @@ const Configuration = function(props) {
 
 
 const Message = m => html`<div style="margin: 0.5em 0;">
+  <span class="qos">qos: ${m.message.qos} </span>
   <span class="topic">topic: ${m.message.topic} </span>
   <span class="data">data: ${m.message.data}</span>
 </div>`;
 
 const Messages = function(props) {
   const [messages, setMessages] = useState([]);
-  const [cfg, setCfg] = useState({});
   const [txt, setTxt] = useState('');
 
   useEffect(() => {
     const id = PubSub.subscribe(function(msg) {
-      if (msg.name == 'newconfig') setCfg(x => msg.data);
       if (msg.name == 'message') setMessages(x => x.concat([msg.data]));
     });
     return PubSub.unsubscribe(id);
@@ -193,12 +186,12 @@ const Messages = function(props) {
                               method: 'post',
                               body: `message=${encodeURIComponent(txt)}`
                             }).then(r => setTxt(''));
-
+  const connstatus = props.config.connected ? 'connected' : 'diconnected';
   return html`
 <div class="section">
   <h3 style="background: #30c040; color: #fff; padding: 0.4em;">MQTT messages</h3>
   <div>
-    MQTT server status: <b>${cfg.connected ? 'connected' : 'diconnected'}</b>
+    MQTT server status: <b>${connstatus}</b>
   </div>
   <div style="height: 10em; overflow: auto; padding: 0.5em; " class="border">
     ${messages.map(message => h(Message, {message}))}
@@ -312,11 +305,13 @@ const Chart = function(props) {
 
 const App = function(props) {
   const [user, setUser] = useState('');
+  const [config, setConfig] = useState({});
 
   const getconfig = () =>
       fetch('/api/config/get', {headers: {Authorization: ''}})
           .then(r => r.json())
-          .then(r => PubSub.publish({name: 'newconfig', data: r}));
+          .then(r => setConfig(r))
+          .catch(err => console.log(err));
 
   const login = function(u) {
     document.cookie = `access_token=${u.token};path=/;max-age=3600`;
@@ -336,6 +331,7 @@ const App = function(props) {
     var tid, wsURI = proto + '//' + l.host + '/api/watch'
     var reconnect = function() {
       var ws = new WebSocket(wsURI);
+      ws.onopen = () => console.log('ws connected');
       ws.onmessage = function(ev) {
         try {
           var msg = JSON.parse(ev.data);
@@ -348,6 +344,7 @@ const App = function(props) {
       ws.onclose = function() {
         clearTimeout(tid);
         tid = setTimeout(reconnect, 1000);
+        console.log('ws disconnected');
       };
     };
     reconnect();
@@ -355,12 +352,12 @@ const App = function(props) {
 
   useEffect(() => {
     // Called once at init time
+    PubSub.subscribe(msg => msg.name == 'config' && getconfig());
     fetch('/api/login', {headers: {Authorization: ''}})
         .then(r => r.json())
         .then(r => login(r))
+        .then(watch)
         .catch(err => setUser(''));
-    watch();
-    PubSub.subscribe(msg => msg.name == 'config' && getconfig());
   }, []);
 
   if (!user) return html`<${Login} login=${login} />`;
@@ -371,10 +368,11 @@ const App = function(props) {
   <div class="row">
     <div class="col col-6"><${Hero} /></div>
     <div class="col col-6"><${Chart} /></div>
-    <div class="col col-6">${user == 'admin' && h(Configuration)}</div>
-    <div class="col col-6"><${Messages} /></div>
+    <div class="col col-6">
+      ${user == 'admin' && h(Configuration, {config})}
+    </div>
+    <div class="col col-6"><${Messages} config=${config} /></div>
   </div>
-  <${Footer} />
 </div>`;
 };
 

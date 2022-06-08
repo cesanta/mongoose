@@ -1,6 +1,7 @@
 // Copyright (c) 2020-2022 Cesanta Software Limited
 // All rights reserved
 
+#include "mjson.h"
 #include "mongoose.h"
 
 #define MQTT_SERVER "mqtt://broker.hivemq.com:1883"
@@ -66,12 +67,14 @@ static struct user *getuser(struct mg_http_message *hm) {
 static void send_notification(struct mg_mgr *mgr, const char *name,
                               const char *data) {
   struct mg_connection *c;
+  char *msg = mjson_aprintf("{%Q:%Q,%Q:%s}", "name", name, "data", data);
   for (c = mgr->conns; c != NULL; c = c->next) {
     if (c->label[0] != 'W') continue;
     // c->is_hexdumping = 1;
-    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{\"name\": \"%s\", \"data\": %s}", name,
-                 data);
+    mg_ws_send(c, msg, strlen(msg), WEBSOCKET_OP_TEXT);
+    if (strcmp(name, "metrics") != 0) MG_INFO(("%lu -> %s", c->id, msg));
   }
+  free(msg);
 }
 
 // Send simulated metrics data to the dashboard, for chart rendering
@@ -80,23 +83,25 @@ static void timer_metrics_fn(void *param) {
   mg_snprintf(buf, sizeof(buf), "[ %lu, %d ]", (unsigned long) time(NULL),
               10 + (int) ((double) rand() * 10 / RAND_MAX));
   send_notification(param, "metrics", buf);
-  // MG_INFO(("%s", buf));
 }
 
 // MQTT event handler function
-static void mqtt_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
+static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
   if (ev == MG_EV_MQTT_OPEN) {
     s_connected = true;
-    // c->is_hexdumping = 1;
-    mg_mqtt_sub(s_mqtt, mg_str(s_config.sub), 1);
+    c->is_hexdumping = 1;
+    mg_mqtt_sub(s_mqtt, mg_str(s_config.sub), 2);
     send_notification(c->mgr, "config", "null");
   } else if (ev == MG_EV_MQTT_MSG) {
-    struct mg_mqtt_message *mm = evd;
-    char buf[256];
-    snprintf(buf, sizeof(buf), "{\"topic\":\"%.*s\",\"data\":\"%.*s\"}",
-             (int) mm->topic.len, mm->topic.ptr, (int) mm->data.len,
-             mm->data.ptr);
-    send_notification(c->mgr, "message", buf);
+    struct mg_mqtt_message *mm = ev_data;
+    char *message = mjson_aprintf(
+        "{%Q: %.*Q,%Q:%.*Q,%Q:%d}", "topic", (int) mm->topic.len, mm->topic.ptr,
+        "data", (int) mm->data.len, mm->data.ptr, "qos", mm->qos);
+    send_notification(c->mgr, "message", message);
+    free(message);
+  } else if (ev == MG_EV_MQTT_CMD) {
+    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
+    MG_DEBUG(("cmd %d qos %d", mm->cmd, mm->qos));
   } else if (ev == MG_EV_CLOSE) {
     s_mqtt = NULL;
     if (s_connected) {
@@ -136,12 +141,11 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       // All URIs starting with /api/ must be authenticated
       mg_printf(c, "%s", "HTTP/1.1 403 Denied\r\nContent-Length: 0\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/config/get")) {
-      mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
-      mg_http_printf_chunk(
-          c, "{\"url\":\"%s\",\"pub\":\"%s\",\"sub\":\"%s\",\"connected\":%s}",
-          s_config.url, s_config.pub, s_config.sub,
-          s_connected ? "true" : "false");
-      mg_http_printf_chunk(c, "");
+      char *response = mjson_aprintf("{%Q:%Q,%Q:%Q,%Q:%Q,%Q:%B}", "url",
+                                     s_config.url, "pub", s_config.pub, "sub",
+                                     s_config.sub, "connected", s_connected);
+      mg_http_reply(c, 200, NULL, "%s\n", response);
+      free(response);
     } else if (mg_http_match_uri(hm, "/api/config/set")) {
       // Admins only
       if (strcmp(u->name, "admin") == 0) {
@@ -166,13 +170,13 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       mg_ws_upgrade(c, hm, NULL);
       // mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
     } else if (mg_http_match_uri(hm, "/api/login")) {
-      mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
-      mg_http_printf_chunk(c, "{\"user\":\"%s\",\"token\":\"%s\"}\n", u->name,
-                           u->token);
-      mg_http_printf_chunk(c, "");
+      char *response =
+          mjson_aprintf("{%Q:%Q,%Q:%Q}", "user", u->name, "token", u->token);
+      mg_http_reply(c, 200, NULL, "%s\n", response);
+      free(response);
     } else {
       struct mg_http_serve_opts opts = {0};
-#if 1
+#if 0
       opts.root_dir = "/web_root";
       opts.fs = &mg_fs_packed;
 #else
