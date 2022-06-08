@@ -2771,7 +2771,7 @@ static const struct packed_file {
   time_t mtime;
 } packed_files[] = {
   {"/web_root/index.html", v1, sizeof(v1), 1654437619},
-  {"/web_root/main.js", v2, sizeof(v2), 1654445508},
+  {"/web_root/main.js", v2, sizeof(v2), 1654673323},
   {"/web_root/preact.min.js", v3, sizeof(v3), 1652374364},
   {"/web_root/style.css", v4, sizeof(v4), 1654445635},
   {"/web_root/user.png", v5, sizeof(v5), 1626172939},
