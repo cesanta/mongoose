@@ -77,8 +77,8 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - name: esp32
-            path: esp32
+          - name: esp32/device-dashboard
+            path: esp32/device-dashboard
           - name: esp8266
             path: esp8266
           - name: stm32-freertos-tcp
