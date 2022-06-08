@@ -1610,7 +1610,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             MG_VERSION);
   n = mg_snprintf(tmp, sizeof(tmp), "%lu", (unsigned long) (c->send.len - off));
   if (n > sizeof(tmp)) n = 0;
-  memcpy(c->send.buf + off - 10, tmp, n);  // Set content length
+  memcpy(c->send.buf + off - 12, tmp, n);  // Set content length
 }
 
 static void remove_double_dots(char *s) {
@@ -3332,6 +3332,11 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
           case MQTT_CMD_PUBLISH: {
             MG_DEBUG(("%lu [%.*s] -> [%.*s]", c->id, (int) mm.topic.len,
                       mm.topic.ptr, (int) mm.data.len, mm.data.ptr));
+            if (mm.qos > 0) {
+              uint16_t id = mg_htons(mm.id);
+              mg_mqtt_send_header(c, MQTT_CMD_PUBACK, 0, sizeof(id));
+              mg_send(c, &id, sizeof(id));
+            }
             mg_call(c, MG_EV_MQTT_MSG, &mm);
             break;
           }

@@ -228,6 +228,11 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
           case MQTT_CMD_PUBLISH: {
             MG_DEBUG(("%lu [%.*s] -> [%.*s]", c->id, (int) mm.topic.len,
                       mm.topic.ptr, (int) mm.data.len, mm.data.ptr));
+            if (mm.qos > 0) {
+              uint16_t id = mg_htons(mm.id);
+              mg_mqtt_send_header(c, MQTT_CMD_PUBACK, 0, sizeof(id));
+              mg_send(c, &id, sizeof(id));
+            }
             mg_call(c, MG_EV_MQTT_MSG, &mm);
             break;
           }
