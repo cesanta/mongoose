@@ -2383,8 +2383,6 @@ Parameters:
 
 Return value: `true` if entry is found, `false` otherwise
 
-<img src="images/mg_commalist.png" alt="Function mg_commalist()" />
-
 Usage example:
 
 ```c
@@ -2393,6 +2391,8 @@ while (mg_commalist(&s, &k, &v))                      // This loop output:
   printf("[%.*s] set to [%.*s]\n",                    // [a] set to [333]
          (int) k.len, k.ptr, (int) v.len, v.ptr);     // [b] set to [777]
 ```
+
+<img src="images/mg_commalist.svg" alt="Function mg_commalist()" />
 
 ### mg\_hex()
 
