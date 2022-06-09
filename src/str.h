@@ -42,3 +42,4 @@ int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
 int64_t mg_to64(struct mg_str str);
 uint64_t mg_tou64(struct mg_str str);
 size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex);
+double mg_atod(const char *buf, int len, int *numlen);

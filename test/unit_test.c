@@ -1389,6 +1389,18 @@ static void test_str(void) {
   ASSERT(sccmp("a1", "A", 49));
   ASSERT(sccmp("a", "A1", -49));
 
+  {
+    int n;
+    double tolerance = 1e-14;
+    ASSERT(mg_atod("1.23", 4, &n) == 1.23 && n == 4);
+    ASSERT(mg_atod("1.23", 3, &n) == 1.2 && n == 3);
+    ASSERT(mg_atod("1.23", 2, &n) == 1 && n == 2);
+    ASSERT(mg_atod("1.23 ", 5, &n) - 1.23 < tolerance && n == 4);
+    ASSERT(mg_atod("-0.01 ", 6, &n) + 0.01 < tolerance);
+    ASSERT(mg_atod("-0.5e2", 6, &n) + 50 < tolerance);
+    ASSERT(mg_atod("123e-3", 6, &n) - 0.123 < tolerance);
+  }
+
   ASSERT(sn("%d", 0));
   ASSERT(sn("%d", 1));
   ASSERT(sn("%d", -1));
@@ -2171,11 +2183,108 @@ static void test_get_header_var(void) {
   ASSERT(mg_strcmp(yy, mg_http_get_header_var(header, mg_str("x"))) == 0);
 }
 
+static void test_json(void) {
+  const char *s;
+  const char *s1 = "{\"a\":{},\"b\":7,\"c\":[[],2]}";
+  const char *s2 = "{\"a\":{\"b1\":{}},\"c\":7}";
+  int n, n1 = (int) strlen(s1), n2 = (int) strlen(s2);
+
+  ASSERT(mg_json_get(" true ", 6, "", &n) == MG_JSON_INVALID);
+  ASSERT(mg_json_get(" true ", 6, "$", &n) == 1 && n == 4);
+  ASSERT(mg_json_get("null ", 5, "$", &n) == 0 && n == 4);
+  s = "  \"hi\\nthere\"";
+  ASSERT(mg_json_get(s, (int) strlen(s), "$", &n) == 2 && n == 11);
+  ASSERT(mg_json_get(" { } ", 5, "$", &n) == 1);
+  ASSERT(mg_json_get(" [[]]", 5, "$", &n) == 1);
+  ASSERT(mg_json_get(" [ ]  ", 5, "$", &n) == 1);
+
+  ASSERT(mg_json_get("[1,2]", 5, "$", &n) == 0 && n == 5);
+  ASSERT(mg_json_get("[1,2]", 5, "$[0]", &n) == 1 && n == 1);
+  ASSERT(mg_json_get("[1,2]", 5, "$[1]", &n) == 3 && n == 1);
+  ASSERT(mg_json_get("[1,2]", 5, "$[3]", &n) == MG_JSON_NOT_FOUND);
+
+  s = "{\"a\":[]}";
+  ASSERT(mg_json_get(s, (int) strlen(s), "$.a", &n) == 5);
+  s = "{\"a\":[1,2]}";
+  ASSERT(mg_json_get(s, (int) strlen(s), "$.a", &n) == 5);
+  s = "{\"a\":[1,[1]]}";
+  ASSERT(mg_json_get(s, (int) strlen(s), "$.a", &n) == 5);
+  s = "{\"a\":[[]]}";
+  ASSERT(mg_json_get(s, (int) strlen(s), "$.a", &n) == 5);
+  s = "{\"a\":[[1,2]]}";
+  ASSERT(mg_json_get(s, (int) strlen(s), "$.a", &n) == 5);
+  s = "{\"a\":{}}";
+  ASSERT(mg_json_get(s, (int) strlen(s), "$.a", &n) == 5);
+  s = "{\"a\":{\"a\":{}}}";
+  ASSERT(mg_json_get(s, (int) strlen(s), "$.a", &n) == 5);
+  s = "{\"a\":{\"a\":[]}}";
+  ASSERT(mg_json_get(s, (int) strlen(s), "$.a", &n) == 5);
+
+  ASSERT(mg_json_get("[[1,[2,3]],4]", 13, "$", &n) == 0 && n == 13);
+  ASSERT(mg_json_get("[[1,[2,3]],4]", 13, "$[0]", &n) == 1 && n == 9);
+  ASSERT(mg_json_get("[[1,[2,3]],4]", 13, "$[1]", &n) == 11);
+  ASSERT(mg_json_get("[[1,[2,3]],4]", 13, "$[1]", &n) == 11 && n == 1);
+  ASSERT(mg_json_get("[[1,[2,3]],4]", 13, "$[2]", &n) == MG_JSON_NOT_FOUND);
+  ASSERT(mg_json_get("[[1,[2,3]],4]", 13, "$[0][0]", &n) == 2 && n == 1);
+  ASSERT(mg_json_get("[[1,[2,3]],4]", 13, "$[0][1]", &n) == 4 && n == 5);
+  ASSERT(mg_json_get("[[1,[2,3]],4]", 13, "$[0][2]", &n) == MG_JSON_NOT_FOUND);
+  ASSERT(mg_json_get("[[1,[2,3]],4]", 13, "$[0][1][0]", &n) == 5 && n == 1);
+  ASSERT(mg_json_get("[[1,[2,3]],4]", 13, "$[0][1][1]", &n) == 7 && n == 1);
+
+  ASSERT(mg_json_get("[[1,2],3]", 9, "$", &n) == 0 && n == 9);
+  ASSERT(mg_json_get("[[1,2],3]", 9, "$[0][0]", &n) == 2 && n == 1);
+  ASSERT(mg_json_get("[[1,2],3]", 9, "$[0][1]", &n) == 4 && n == 1);
+  ASSERT(mg_json_get("[[1,2],3]", 9, "$[0][2]", &n) == MG_JSON_NOT_FOUND);
+  ASSERT(mg_json_get("[[1,2],3]", 9, "$[1][0]", &n) == MG_JSON_NOT_FOUND);
+  ASSERT(mg_json_get("[[1,2],3]", 9, "$[1]", &n) == 7 && n == 1);
+  ASSERT(mg_json_get("[[1,2],3]", 9, "$[1][0]", &n) == MG_JSON_NOT_FOUND);
+
+  ASSERT(mg_json_get("[1,[2,3]]", 9, "$", &n) == 0 && n == 9);
+  ASSERT(mg_json_get("[1,[2,3]]", 9, "$[0][1]", &n) == MG_JSON_NOT_FOUND);
+  ASSERT(mg_json_get("[1,[2,3]]", 9, "$[1][0]", &n) == 4 && n == 1);
+
+  ASSERT(mg_json_get(s1, n1, "$.a", &n) == 5 && n == 2);
+  ASSERT(mg_json_get(s1, n1, "$.b", &n) == 12 && n == 1);
+  ASSERT(mg_json_get(s1, n1, "$.c", &n) == 18 && n == 6);
+  ASSERT(mg_json_get(s1, n1, "$.c[0]", &n) == 19 && n == 2);
+  ASSERT(mg_json_get(s1, n1, "$.c[1]", &n) == 22 && n == 1);
+  ASSERT(mg_json_get(s1, n1, "$.c[3]", &n) == MG_JSON_NOT_FOUND);
+
+  ASSERT(mg_json_get(s2, n2, "$.a", &n) == 5 && n == 9);
+  ASSERT(mg_json_get(s2, n2, "$.a.b1", &n) == 11 && n == 2);
+  ASSERT(mg_json_get(s2, n2, "$.a.b2", &n) == MG_JSON_NOT_FOUND);
+  ASSERT(mg_json_get(s2, n2, "$.a.b", &n) == MG_JSON_NOT_FOUND);
+  ASSERT(mg_json_get(s2, n2, "$.a1", &n) == MG_JSON_NOT_FOUND);
+  ASSERT(mg_json_get(s2, n2, "$.c", &n) == 19 && n == 1);
+
+  {
+    double d = 0;
+    bool b = false;
+    const char *json = "{\"a\": \"hi\\nthere\",\"b\": [12345, true]}";
+    char *str = mg_json_get_str(mg_str(json), "$.a");
+
+    ASSERT(str != NULL);
+    ASSERT(strcmp(str, "hi\nthere") == 0);
+    free(str);
+
+    ASSERT(mg_json_get_num(mg_str(json), "$.a", &d) == false);
+    ASSERT(mg_json_get_num(mg_str(json), "$.c", &d) == false);
+    ASSERT(mg_json_get_num(mg_str(json), "$.b[0]", &d) == true);
+    ASSERT(d == 12345);
+
+    ASSERT(mg_json_get_bool(mg_str(json), "$.b", &b) == false);
+    ASSERT(mg_json_get_bool(mg_str(json), "$.b[0]", &b) == false);
+    ASSERT(mg_json_get_bool(mg_str(json), "$.b[1]", &b) == true);
+    ASSERT(b == true);
+  }
+}
+
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
   mg_log_set(debug_level);
 
+  test_json();
   test_str();
   test_globmatch();
   test_get_header_var();
