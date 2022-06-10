@@ -164,7 +164,7 @@ size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
   va_list ap;
   size_t n;
   va_start(ap, fmt);
-  n = mg_vsnprintf(buf, len, fmt, ap);
+  n = mg_vsnprintf(buf, len, fmt, &ap);
   va_end(ap);
   return n;
 }
@@ -205,7 +205,7 @@ size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
   size_t len;
 
   va_copy(ap_copy, ap);
-  len = mg_vsnprintf(*buf, size, fmt, ap_copy);
+  len = mg_vsnprintf(*buf, size, fmt, &ap_copy);
   va_end(ap_copy);
 
   if (len >= size) {
@@ -214,7 +214,7 @@ size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
       len = 0;
     } else {
       va_copy(ap_copy, ap);
-      len = mg_vsnprintf(*buf, len + 1, fmt, ap_copy);
+      len = mg_vsnprintf(*buf, len + 1, fmt, &ap_copy);
       va_end(ap_copy);
     }
   }
@@ -229,6 +229,21 @@ size_t mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
   ret = mg_vasprintf(buf, size, fmt, ap);
   va_end(ap);
   return ret;
+}
+
+char *mg_vmprintf(const char *fmt, va_list ap) {
+  char *s = NULL;
+  mg_vasprintf(&s, 0, fmt, ap);
+  return s;
+}
+
+char *mg_mprintf(const char *fmt, ...) {
+  char *s = NULL;
+  va_list ap;
+  va_start(ap, fmt);
+  mg_vasprintf(&s, 0, fmt, ap);
+  va_end(ap);
+  return s;
 }
 
 uint64_t mg_tou64(struct mg_str str) {
@@ -316,7 +331,9 @@ static size_t mg_copyq(char *buf, size_t len, size_t n, char *p, size_t k) {
   return j + extra;
 }
 
-size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
+typedef size_t (*mg_spfn_t)(char *, size_t, va_list *);
+
+size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
   size_t i = 0, n = 0;
   while (fmt[i] != '\0') {
     if (fmt[i] == '%') {
@@ -329,7 +346,7 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
       if (c == '.') {
         c = fmt[++i];
         if (c == '*') {
-          pr = (size_t) va_arg(ap, int);
+          pr = (size_t) va_arg(*ap, int);
           c = fmt[++i];
         } else {
           pr = 0;
@@ -342,18 +359,23 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
         if (c == 'l') is_long++, c = fmt[++i];
       }
       if (c == 'p') x = 1, is_long = 1;
-      if (c == 'd' || c == 'u' || c == 'x' || c == 'X' || c == 'p') {
+      if (c == 'd' || c == 'u' || c == 'x' || c == 'X' || c == 'p' ||
+          c == 'g') {
         bool s = (c == 'd'), h = (c == 'x' || c == 'X' || c == 'p');
-        char tmp[30];
+        char tmp[40];
         size_t xl = x ? 2 : 0;
-        if (is_long == 2) {
-          int64_t v = va_arg(ap, int64_t);
+        if (c == 'g' || c == 'f') {
+          double v = va_arg(*ap, double);
+          if (pr == ~0U) pr = 6;
+          k = mg_dtoa(tmp, sizeof(tmp), v, (int) pr);
+        } else if (is_long == 2) {
+          int64_t v = va_arg(*ap, int64_t);
           k = mg_lld(tmp, v, s, h);
         } else if (is_long == 1) {
-          long v = va_arg(ap, long);
+          long v = va_arg(*ap, long);
           k = mg_lld(tmp, s ? (int64_t) v : (int64_t) (unsigned long) v, s, h);
         } else {
-          int v = va_arg(ap, int);
+          int v = va_arg(*ap, int);
           k = mg_lld(tmp, s ? (int64_t) v : (int64_t) (unsigned) v, s, h);
         }
         for (j = 0; j < xl && w > 0; j++) w--;
@@ -365,12 +387,15 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
         n += mg_copys(buf, len, n, tmp, k);
         for (j = 0; pad == ' ' && minus && k < w && j + k < w; j++)
           n += mg_copys(buf, len, n, &pad, 1);
+      } else if (c == 'M') {
+        mg_spfn_t fn = va_arg(*ap, mg_spfn_t);
+        n += fn(buf + n, n < len ? len - n : 0, ap);
       } else if (c == 'c') {
-        int p = va_arg(ap, int);
+        int p = va_arg(*ap, int);
         if (n < len) buf[n] = (char) p;
         n++;
       } else if (c == 's' || c == 'Q') {
-        char *p = va_arg(ap, char *);
+        char *p = va_arg(*ap, char *);
         size_t (*fn)(char *, size_t, size_t, char *, size_t) =
             c == 's' ? mg_copys : mg_copyq;
         if (pr == ~0U) pr = p == NULL ? 0 : strlen(p);
@@ -442,4 +467,92 @@ double mg_atod(const char *p, int len, int *numlen) {
 
   if (numlen != NULL) *numlen = i;
   return d;
+}
+
+static int addexp(char *buf, int e, int sign) {
+  int n = 0;
+  buf[n++] = 'e';
+  buf[n++] = (char) sign;
+  if (e > 400) return 0;
+  if (e < 10) buf[n++] = '0';
+  if (e >= 100) buf[n++] = (char) (e / 100 + '0'), e -= 100 * (e / 100);
+  if (e >= 10) buf[n++] = (char) (e / 10 + '0'), e -= 10 * (e / 10);
+  buf[n++] = (char) (e + '0');
+  return n;
+}
+
+static int xisinf(double x) {
+  union {
+    double f;
+    uint64_t u;
+  } ieee754 = {x};
+  return ((unsigned) (ieee754.u >> 32) & 0x7fffffff) == 0x7ff00000 &&
+         ((unsigned) ieee754.u == 0);
+}
+
+static int xisnan(double x) {
+  union {
+    double f;
+    uint64_t u;
+  } ieee754 = {x};
+  return ((unsigned) (ieee754.u >> 32) & 0x7fffffff) +
+             ((unsigned) ieee754.u != 0) >
+         0x7ff00000;
+}
+
+size_t mg_dtoa(char *dst, size_t dstlen, double d, int width) {
+  char buf[40];
+  int i, s = 0, n = 0, e = 0;
+  double t, mul, saved;
+  if (d == 0.0) return mg_snprintf(dst, dstlen, "%s", "0");
+  if (xisinf(d)) return mg_snprintf(dst, dstlen, "%s", d > 0 ? "inf" : "-inf");
+  if (xisnan(d)) return mg_snprintf(dst, dstlen, "%s", "nan");
+  if (d < 0.0) d = -d, buf[s++] = '-';
+
+  // Round
+  saved = d;
+  mul = 1.0;
+  while (d >= 10.0 && d / mul >= 10.0) mul *= 10.0;
+  while (d <= 1.0 && d / mul <= 1.0) mul /= 10.0;
+  for (i = 0, t = mul * 5; i < width; i++) t /= 10.0;
+  d += t;
+  // Calculate exponent, and 'mul' for scientific representation
+  mul = 1.0;
+  while (d >= 10.0 && d / mul >= 10.0) mul *= 10.0, e++;
+  while (d < 1.0 && d / mul < 1.0) mul /= 10.0, e--;
+  // printf(" --> %g %d %g %g\n", saved, e, t, mul);
+
+  if (e >= width) {
+    n = (int) mg_dtoa(buf, sizeof(buf), saved / mul, width);
+    // printf(" --> %.*g %d [%.*s]\n", 10, d / t, e, n, buf);
+    n += addexp(buf + s + n, e, '+');
+    return mg_snprintf(dst, dstlen, "%.*s", n, buf);
+  } else if (e <= -width) {
+    n = (int) mg_dtoa(buf, sizeof(buf), saved / mul, width);
+    // printf(" --> %.*g %d [%.*s]\n", 10, d / mul, e, n, buf);
+    n += addexp(buf + s + n, -e, '-');
+    return mg_snprintf(dst, dstlen, "%.*s", n, buf);
+  } else {
+    for (i = 0, t = mul; t >= 1.0 && s + n < (int) sizeof(buf); i++) {
+      int ch = (int) (d / t);
+      if (n > 0 || ch > 0) buf[s + n++] = (char) (ch + '0');
+      d -= ch * t;
+      t /= 10.0;
+    }
+    // printf(" --> [%g] -> %g %g (%d) [%.*s]\n", saved, d, t, n, s + n, buf);
+    if (n == 0) buf[s++] = '0';
+    while (t >= 1.0 && n + s < (int) sizeof(buf)) buf[n++] = '0', t /= 10.0;
+    if (s + n < (int) sizeof(buf)) buf[n + s++] = '.';
+    // printf(" 1--> [%g] -> [%.*s]\n", saved, s + n, buf);
+    for (i = 0, t = 0.1; s + n < (int) sizeof(buf) && n < width; i++) {
+      int ch = (int) (d / t);
+      buf[s + n++] = (char) (ch + '0');
+      d -= ch * t;
+      t /= 10.0;
+    }
+  }
+  while (n > 0 && buf[s + n - 1] == '0') n--;  // Trim trailing zeros
+  if (n > 0 && buf[s + n - 1] == '.') n--;     // Trim trailing dot
+  buf[s + n] = '\0';
+  return mg_snprintf(dst, dstlen, "%s", buf);
 }

@@ -2469,34 +2469,6 @@ char *buf[sizeof(data)/2];
 unsigned long val = mg_unhex(data, sizeof(data) - 1); // val is now 123
 ```
 
-
-### mg\_asprintf(), mg\_vasprintf()
-
-```c
-int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
-int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
-```
-
-Print message specified by printf-like format string `fmt` into a buffer
-pointed by `buf` of size `size`. If `size` is large enough to hold the whole
-message, then a message is stored in `*buf`. If it does not fit, then a large
-enough buffer is allocated to hold a message, and `buf` is changed to point to
-that buffer.
-
-Parameters:
-- `buf` - Pointer to pointer to output buffer
-- `size` - Pre-allocated buffer size
-- `fmt` - printf-like format string
-
-Return value: Number of bytes printed
-
-Usage example:
-
-```c
-char buf[1024], *pbuf = &buf;
-mg_asprintf(&pbuf, sizeof(buf), "Hello, %s!", "world"); // buf is now "Hello, world!"
-```
-
 ### mg\_snprintf(), mg\_vsnprintf()
 ```c
 size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...);
@@ -2521,10 +2493,12 @@ Supported format specifiers:
 - `hhd`, `hd`, `d`, `ld`, `lld` - for `char`, `short`, `int`, `long`, `int64_t`
 - `hhu`, `hu`, `u`, `lu`, `llu` - same but for unsigned variants
 - `hhx`, `hx`, `x`, `lx`, `llx` - same, unsigned and hex output
-- `s` - `for char *`
-- `Q` - `for char *`, outputs double-quoted JSON-escaped string (extension)
-- `c` - `for char`
-- `%` - `the `%` character itself
+- `s` - for `char *`
+- `Q` - for `char *`, outputs double-quoted JSON-escaped string (extension)
+- `M` - for `size_t (*)(char *, size_t, va_list *)`, calls another print function (extension)
+- `g`, `f` - for `double`
+- `c` - for `char`
+- `%` - the `%` character itself
 - `p` - for any pointer, prints `0x.....` hex value
 - `%X.Y` - optional width and precision modifiers
 - `%.*` - optional precision modifier specified as `int` argument
@@ -2539,6 +2513,64 @@ mg_snprintf(buf, sizeof(buf), "%.2s", "abcdef");        // ab
 mg_snprintf(buf, sizeof(buf), "%.*s", 2, "abcdef");     // ab
 mg_snprintf(buf, sizeof(buf), "%05x", 123);             // 00123
 mg_snprintf(buf, sizeof(buf), "%%-%3s", "a");           // %-  a
+mg_snprintf(buf, sizeof(buf), "hi, %Q", "a");           // hi, "a"
+mg_snprintf(buf, sizeof(buf), "r: %M, %d", f,1,2,7);    // r: 3, 7
+
+// Printing sub-function for %M specifier. Grabs two int parameters
+size_t f(char *buf, size_t len, va_list *ap) {
+  int a = va_arg(*ap, int);
+  int a = va_arg(*ap, int);
+  return mg_snprintf(buf, len, "%d", a + b);
+}
+```
+
+### mg\_asprintf(), mg\_vasprintf()
+
+```c
+int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
+int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
+```
+
+Print message specified by printf-like format string `fmt` into a buffer
+pointed by `buf` of size `size`. If `size` is large enough to hold the whole
+message, then a message is stored in `*buf`. If it does not fit, then a large
+enough buffer is allocated to hold a message, and `buf` is changed to point to
+that buffer.
+
+Parameters:
+- `buf` - Pointer to pointer to output buffer
+- `size` - Pre-allocated buffer size
+- `fmt` - printf-like format string
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+char buf[16], *pbuf = buf;
+mg_asprintf(&pbuf, sizeof(buf), "Hello, %s!", "world"); // buf is now "Hello, world!"
+if (pbuf != buf) free(pbuf);
+```
+
+### mg\_mprintf(), mg\_vmprintf()
+
+```c
+char *mg_mprintf(const char *fmt, ...);
+char *mg_vmprintf(const char *fmt, va_list ap);
+```
+
+Print message into an allocated memory buffer. Caller must free the result.
+
+Parameters:
+- `fmt` - printf-like format string
+
+Return value: allocated memory buffer
+
+Usage example:
+
+```c
+char *msg = mg_mprintf("Double quoted string: %Q!", "hi");
+free(msg);
 ```
 
 ### mg\_to64()

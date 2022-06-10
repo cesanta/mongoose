@@ -1,3 +1,5 @@
+#include "float.h"  // For DBL_EPSILON and HUGE_VAL
+#include "math.h"
 #include "mongoose.h"
 
 static int s_num_tests = 0;
@@ -1354,10 +1356,10 @@ static bool sn(const char *fmt, ...) {
   n = (size_t) vsnprintf(buf2, sizeof(buf2), fmt, ap);
   va_end(ap);
   va_start(ap, fmt);
-  n1 = mg_vsnprintf(buf, sizeof(buf), fmt, ap);
+  n1 = mg_vsnprintf(buf, sizeof(buf), fmt, &ap);
   va_end(ap);
   va_start(ap, fmt);
-  n2 = mg_vsnprintf(tmp, 0, fmt, ap);
+  n2 = mg_vsnprintf(tmp, 0, fmt, &ap);
   va_end(ap);
   result = n1 == n2 && n1 == n && strcmp(buf, buf2) == 0;
   if (!result)
@@ -1370,6 +1372,12 @@ static bool sccmp(const char *s1, const char *s2, int expected) {
   int n1 = mg_casecmp(s1, s2);
   // MG_INFO(("[%s] [%s] %d %d", s1, s2, n1, expected));
   return n1 == expected;
+}
+
+static size_t pf1(char *buf, size_t len, va_list *ap) {
+  int a = va_arg(*ap, int);
+  int b = va_arg(*ap, int);
+  return mg_snprintf(buf, len, "%d", a + b);
 }
 
 static void test_str(void) {
@@ -1447,7 +1455,7 @@ static void test_str(void) {
 
   // Non-standard formatting
   {
-    char buf[100];
+    char buf[100], *p;
     const char *expected;
 
     expected = "\"\"";
@@ -1465,6 +1473,71 @@ static void test_str(void) {
     expected = "\"abc\"";
     mg_snprintf(buf, sizeof(buf), "%.*Q", 3, "abcdef");
     ASSERT(strcmp(buf, expected) == 0);
+
+    p = mg_mprintf("[%s,%M,%s]", "null", pf1, 2, 3, "hi");
+    printf("-> %s\n", p);
+    ASSERT(strcmp(p, "[null,5,hi]") == 0);
+    free(p);
+  }
+
+  {
+    char tmp[40];
+#define DBLWIDTH(a, b) a, b
+#define TESTDOUBLE(fmt_, num_, res_)                                   \
+  do {                                                                 \
+    const char *N = #num_;                                             \
+    size_t n = mg_snprintf(tmp, sizeof(tmp), fmt_, num_);              \
+    printf("[%s] [%s] -> [%s] [%.*s]\n", fmt_, N, res_, (int) n, tmp); \
+    ASSERT(n == strlen(res_));                                         \
+    ASSERT(strcmp(tmp, res_) == 0);                                    \
+  } while (0)
+
+    TESTDOUBLE("%g", 0.0, "0");
+    TESTDOUBLE("%g", 0.123, "0.123");
+    TESTDOUBLE("%g", 0.00123, "0.00123");
+    TESTDOUBLE("%g", 0.123456333, "0.123456");
+    TESTDOUBLE("%g", 123.0, "123");
+    TESTDOUBLE("%g", 11.5454, "11.5454");
+    TESTDOUBLE("%g", 11.0001, "11.0001");
+    TESTDOUBLE("%g", 0.999, "0.999");
+    TESTDOUBLE("%g", 0.999999, "0.999999");
+    TESTDOUBLE("%g", 0.9999999, "1");
+    TESTDOUBLE("%g", 10.9, "10.9");
+    TESTDOUBLE("%g", 10.01, "10.01");
+    TESTDOUBLE("%g", 1.0, "1");
+    TESTDOUBLE("%g", 10.0, "10");
+    TESTDOUBLE("%g", 100.0, "100");
+    TESTDOUBLE("%g", 1000.0, "1000");
+    TESTDOUBLE("%g", 10000.0, "10000");
+    TESTDOUBLE("%g", 100000.0, "100000");
+    TESTDOUBLE("%g", 1000000.0, "1e+06");
+    TESTDOUBLE("%g", 10000000.0, "1e+07");
+    TESTDOUBLE("%g", 100000001.0, "1e+08");
+    TESTDOUBLE("%g", 10.5454, "10.5454");
+    TESTDOUBLE("%g", 999999.0, "999999");
+    TESTDOUBLE("%g", 9999999.0, "1e+07");
+    TESTDOUBLE("%g", 44556677.0, "4.45567e+07");
+    TESTDOUBLE("%g", 1234567.2, "1.23457e+06");
+    TESTDOUBLE("%g", -987.65432, "-987.654");
+    TESTDOUBLE("%g", 0.0000000001, "1e-10");
+    TESTDOUBLE("%g", 2.34567e-57, "2.34567e-57");
+    TESTDOUBLE("%.*g", DBLWIDTH(7, 9999999.0), "9999999");
+    TESTDOUBLE("%.*g", DBLWIDTH(10, 0.123456333), "0.123456333");
+    TESTDOUBLE("%g", 123.456222, "123.456");
+    TESTDOUBLE("%.*g", DBLWIDTH(10, 123.456222), "123.456222");
+    TESTDOUBLE("%g", 600.1234, "600.123");
+    TESTDOUBLE("%g", -600.1234, "-600.123");
+    TESTDOUBLE("%g", 599.1234, "599.123");
+    TESTDOUBLE("%g", -599.1234, "-599.123");
+
+#ifndef _WIN32
+    TESTDOUBLE("%g", (double) INFINITY, "inf");
+    TESTDOUBLE("%g", (double) -INFINITY, "-inf");
+    TESTDOUBLE("%g", (double) NAN, "nan");
+#else
+    TESTDOUBLE("%g", HUGE_VAL, "inf");
+    TESTDOUBLE("%g", -HUGE_VAL, "-inf");
+#endif
   }
 }
 
