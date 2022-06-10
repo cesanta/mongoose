@@ -6,16 +6,6 @@
 // some time to simulate long processing time, produces an output and
 // hands over that output to the request handler function.
 //
-// The following procedure is used to benchmark the multi-threaded codepath
-// against the single-threaded codepath on MacOS:
-//   $ make clean all CFLAGS="-DSLEEP_TIME=0 -DMG_ENABLE_SOCKETPAIR=1"
-//   $ siege -c50 -t5s http://localhost:8000/multi
-//   $ siege -c50 -t5s http://localhost:8000/fast
-//
-// If, during the test, there are socket errors, increase ephemeral port limit:
-//   $ sysctl -a | grep portrange
-//   $ sudo sysctl -w net.inet.ip.portrange.first=32768
-//   $ sudo sysctl -w net.inet.ip.portrange.hifirst=32768
 
 #include "mongoose.h"
 
