@@ -2505,7 +2505,14 @@ Supported format specifiers:
 
 Return value: Number of bytes printed
 
-Usage example:
+Sending JSON HTTP response:
+
+```c
+mg_http_reply(c, 200, "Content-Type: application/json\r\n",
+              "{%Q: %g}", "value", 1.2345);
+```
+
+Example of using more complex format strings:
 
 ```c
 mg_snprintf(buf, sizeof(buf), "%lld", (int64_t) 123);   // 123
@@ -2636,6 +2643,121 @@ Usage example:
 ```c
 char buf[100];
 mg_ntoa(&c->peer, buf, sizeof(buf));
+```
+
+## JSON
+
+
+### mg\_json\_get()
+
+
+```c
+enum { MG_JSON_TOO_DEEP = -1, MG_JSON_INVALID = -2, MG_JSON_NOT_FOUND = -3 };
+int mg_json_get(const char *buf, int len, const char *path, int *toklen);
+```
+
+Parse JSON string `buf`, `len` and return the offset of the element
+specified by the JSON path `path`. The length of the element is stored
+in the `toklen`.
+
+Parameters:
+- `buf` - a string containing valid JSON
+- `len` - a string length
+- `path` - a JSON path. Must start with `$`
+- `toklen` - a placeholder for element length, can be NULL
+
+
+Return value: offset of the element, or negative `MG_JSON_*` on error.
+
+Usage example:
+
+```c
+// Assume we have a buf,len with this string: { "a": 1, "b": [2, 3] }
+int offset, length;
+
+// Lookup "$", which is the whole JSON. Can be used for validation
+offset = mg_json_get(buf, len, "$", &length);    // offset = 0, length = 23
+
+// Lookup attribute "a". Point to value "1"
+offset = mg_json_get(buf, len, "$.a", &length);  // offset = 7, length = 1
+
+// Lookup attribute "b". Point to array [2, 3]
+offset = mg_json_get(buf, len, "$.b", &length);  // offset = 15, length = 6
+
+// Lookup attribute "b[1]". Point to value "3"
+offset = mg_json_get(buf, len, "$.b[1]", &length); // offset = 19, length = 1
+```
+
+### mg\_json\_get\_num()
+
+```c
+bool mg_json_get_num(struct mg_str json, const char *path, double *v);
+```
+
+Fetch numeric (double) value from the json string `json` at JSON path
+`path` into a placeholder `v`. Return true if successful.
+
+Parameters:
+- `json` - a string containing valid JSON
+- `path` - a JSON path. Must start with `$`
+- `v` - a placeholder for value
+
+Return value: true on success, false on error
+
+Usage example:
+
+```c
+double d = 0.0;
+mg_json_get_num(mg_str("[1,2,3]", "$[1]", &d));     // d contains 2
+mg_json_get_num(mg_str("{\"a\":1.23}", "$.a", &d)); // d contains 1.23
+```
+
+### mg\_json\_get\_bool()
+
+```c
+bool mg_json_get_num(struct mg_str json, const char *path, bool *v);
+```
+
+Fetch boolean (bool) value from the json string `json` at JSON path
+`path` into a placeholder `v`. Return true if successful.
+
+Parameters:
+- `json` - a string containing valid JSON
+- `path` - a JSON path. Must start with `$`
+- `v` - a placeholder for value
+
+Return value: true on success, false on error
+
+Usage example:
+
+```c
+bool b = false;
+mg_json_get_num(mg_str("[123]", "$[0]", &b));   // Error. b remains to be false
+mg_json_get_num(mg_str("[true]", "$[0]", &b));  // b is true
+```
+
+### mg\_json\_get\_str()
+
+```c
+char *mg_json_get_num(struct mg_str json, const char *path);
+```
+
+Fetch string value from the json string `json` at JSON path
+`path` into a placeholder `v`. If found, a string is allocated using `calloc()`
+un-escaped, and returned to the caller. It is a caller's responsibility to
+`free()` the returned string.
+
+Parameters:
+- `json` - a string containing valid JSON
+- `path` - a JSON path. Must start with `$`
+
+Return value: non-NULL on success, NULL or error
+
+Usage example:
+
+```c
+char *str = mg_json_get_str(mg_str("{\"a\":\"hi\"}", "$.a"));  // str = "hi"
+free(str);
 ```
 
 ## Utility
