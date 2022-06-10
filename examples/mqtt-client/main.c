@@ -47,7 +47,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("SUBSCRIBED to %.*s", (int) subt.len, subt.ptr));
 
     mg_mqtt_pub(c, pubt, data, s_qos, false);
-    MG_INFO(("PUBSLISHED %.*s -> %.*s", (int) data.len, data.ptr,
+    MG_INFO(("PUBLISHED %.*s -> %.*s", (int) data.len, data.ptr,
              (int) pubt.len, pubt.ptr));
   } else if (ev == MG_EV_MQTT_MSG) {
     // When we get echo response, print it
