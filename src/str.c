@@ -331,6 +331,7 @@ static size_t mg_copyq(char *buf, size_t len, size_t n, char *p, size_t k) {
   return j + extra;
 }
 
+// %M specifier printer function
 typedef size_t (*mg_spfn_t)(char *, size_t, va_list *);
 
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
@@ -388,8 +389,10 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
         for (j = 0; pad == ' ' && minus && k < w && j + k < w; j++)
           n += mg_copys(buf, len, n, &pad, 1);
       } else if (c == 'M') {
+        char *dst = buf ? buf + n : NULL;
+        size_t dstlen = n < len ? len - n : 0;
         mg_spfn_t fn = va_arg(*ap, mg_spfn_t);
-        n += fn(buf + n, n < len ? len - n : 0, ap);
+        n += fn(dst, dstlen, ap);
       } else if (c == 'c') {
         int p = va_arg(*ap, int);
         if (n < len) buf[n] = (char) p;

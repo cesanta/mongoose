@@ -1380,6 +1380,14 @@ static size_t pf1(char *buf, size_t len, va_list *ap) {
   return mg_snprintf(buf, len, "%d", a + b);
 }
 
+static size_t pf2(char *buf, size_t len, va_list *ap) {
+  int cnt = va_arg(*ap, int);
+  size_t n = 0;
+  while (cnt-- > 0)
+    n += mg_snprintf(buf ? buf + n : 0, n < len ? len - n : 0, "%d", cnt);
+  return n;
+}
+
 static void test_str(void) {
   struct mg_str s = mg_strdup(mg_str("a"));
   ASSERT(mg_strcmp(s, mg_str("a")) == 0);
@@ -1475,8 +1483,13 @@ static void test_str(void) {
     ASSERT(strcmp(buf, expected) == 0);
 
     p = mg_mprintf("[%s,%M,%s]", "null", pf1, 2, 3, "hi");
-    printf("-> %s\n", p);
+    // printf("-> %s\n", p);
     ASSERT(strcmp(p, "[null,5,hi]") == 0);
+    free(p);
+
+    p = mg_mprintf("[%M,%d]", pf2, 10, 7);
+    // printf("-> %s\n", p);
+    ASSERT(strcmp(p, "[9876543210,7]") == 0);
     free(p);
   }
 

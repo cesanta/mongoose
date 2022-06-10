@@ -77,12 +77,13 @@ fuzz: fuzzer
 	$(RUN) ./fuzzer
 
 unit_test: Makefile mongoose.h $(SRCS)
-	$(CC) $(SRCS) $(CFLAGS) -coverage $(LDFLAGS) -g -o unit_test
+	$(CC) $(SRCS) $(CFLAGS) $(LDFLAGS) -g -o unit_test
 
 # make CC=/usr/local/opt/llvm\@8/bin/clang ASAN_OPTIONS=detect_leaks=1
 test: unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
 
+coverage: CFLAGS += -coverage
 coverage: test
 	gcov -l -n *.gcno | sed '/^$$/d' | sed 'N;s/\n/ /'
 	gcov -t mongoose.c > mongoose.gcov
@@ -91,7 +92,7 @@ upload-coverage: coverage
 	curl -s https://codecov.io/bash | /bin/bash
 
 valgrind_unit_test: Makefile mongoose.h $(SRCS)
-	$(CC) $(SRCS) $(VALGRIND_CFLAGS) -coverage $(LDFLAGS) -g -o valgrind_unit_test
+	$(CC) $(SRCS) $(VALGRIND_CFLAGS) $(LDFLAGS) -g -o valgrind_unit_test
 
 valgrind: valgrind_unit_test
 	$(VALGRIND_RUN) ./valgrind_unit_test
