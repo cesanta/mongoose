@@ -59,10 +59,13 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 int main(int argc, char *argv[]) {
+  const char *log_level = getenv("LOG_LEVEL");  // Allow user to set log level
+  if (log_level == NULL) log_level = "4";       // Default is verbose
+
   struct mg_mgr mgr;              // Event manager
   bool done = false;              // Event handler flips it to true
   if (argc > 1) s_url = argv[1];  // Use URL provided in the command line
-  mg_log_set("4");                // Set to 0 to disable debug
+  mg_log_set(log_level);          // Set to 0 to disable debug
   mg_mgr_init(&mgr);              // Initialise event manager
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
   while (!done) mg_mgr_poll(&mgr, 50);      // Infinite event loop
