@@ -2756,7 +2756,8 @@ Return value: non-NULL on success, NULL or error
 Usage example:
 
 ```c
-char *str = mg_json_get_str(mg_str("{\"a\":\"hi\"}", "$.a"));  // str = "hi"
+struct mg_str json = mg_str("{\"a\": \"hi\"}");  // json = {"a": "hi"}
+char *str = mg_json_get_str(json, "$.a");        // str = "hi"
 free(str);
 ```
 
