@@ -64,16 +64,6 @@ We take security seriously:
   have specific security requirements and run independent security audits,
   of which we get notified and in case of any issue, act similar to (3).
 
-# Supplement software
-
-This software is often used together with Mongoose:
-- [mjson](https://github.com/cesanta/mjson) - a JSON parser, emitter and
-  JSON-RPC engine. Used to implement
-  RESTful APIs that use JSON, or implement data exchange (e.g. over MQTT
-  or Websocket) that use JSON for data encapsulation
-- [elk](https://github.com/cesanta/elk) - a tiny JavaScript engine.
-  Used to implement scripting support
-
 
 # Contributions
 
