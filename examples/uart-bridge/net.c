@@ -11,6 +11,10 @@ static int s_rx = 4;
 static int s_tx = 5;
 static int s_baud = 115200;
 
+void uart_init(int tx, int rx, int baud);
+int uart_read(char *buf, size_t len);
+void uart_write(const void *buf, size_t len);
+
 // Let users define their own UART API. If they don't, use a dummy one
 #if defined(UART_API_IMPLEMENTED)
 #else

@@ -10,8 +10,7 @@ CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
 						-mcpu=cortex-m7 -mthumb -mfloat-abi=softfp -mfpu=vfpv4 $(EXTRA)
 LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs \
 					 -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
-SOURCES = boot.c main.c syscalls.c $(ROOT)/drivers/mip_driver_stm32.c \
-					$(ROOT)/mongoose.c
+SOURCES = boot.c main.c syscalls.c $(ROOT)/mongoose.c
 
 all build example: $(TARGET).bin
 

@@ -2,8 +2,6 @@
 // All rights reserved
 
 #include "mcu.h"
-
-#include "drivers/mip_driver_stm32.h"
 #include "mongoose.h"
 
 #define LED1 PIN('B', 0)   // On-board LED pin (green)
@@ -138,11 +136,7 @@ int main(void) {
   // For static configuration, specify IP/mask/GW in network byte order
   struct mip_ipcfg ipcfg = {
       .mac = {0xaa, 0xbb, 0xcc, 1, 2, 3}, .ip = 0, .mask = 0, .gw = 0};
-  struct mip_driver stm32_driver = {.init = mip_driver_stm32_init,
-                                    .tx = mip_driver_stm32_tx,
-                                    .rxcb = mip_driver_stm32_setrx,
-                                    .status = mip_driver_stm32_status};
-  mip_init(&mgr, &ipcfg, &stm32_driver);
+  mip_init(&mgr, &ipcfg, &mip_driver_stm32);
   MG_INFO(("Init done, starting main loop"));
 
 #if defined(DASH)

@@ -19,3 +19,5 @@ struct mip_ipcfg {
 };
 
 void mip_init(struct mg_mgr *, struct mip_ipcfg *, struct mip_driver *);
+
+extern struct mip_driver mip_driver_stm32;

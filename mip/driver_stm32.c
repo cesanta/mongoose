@@ -1,12 +1,11 @@
 // Copyright (c) 2022 Cesanta Software Limited
 // All rights reserved
 
-#include "mip_driver_stm32.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
+#include "mip.h"
 
-struct eth {
+#if MG_ENABLE_MIP
+
+struct stm32_eth {
   uint32_t MACCR, MACFFR, MACHTHR, MACHTLR, MACMIIAR, MACMIIDR, MACFCR,
       MACVLANTR, RESERVED0[2], MACRWUFFR, MACPMTCSR, RESERVED1, MACDBGR, MACSR,
       MACIMR, MACA0HR, MACA0LR, MACA1HR, MACA1LR, MACA2HR, MACA2LR, MACA3HR,
@@ -19,9 +18,9 @@ struct eth {
       DMAMFBOCR, DMARSWTR, RESERVED10[8], DMACHTDR, DMACHRDR, DMACHTBAR,
       DMACHRBAR;
 };
-#define ETH ((struct eth *) 0x40028000)
+#define ETH ((struct stm32_eth *) (uintptr_t) 0x40028000)
 
-#define BIT(x) (1UL << (x))
+#define BIT(x) ((uint32_t) 1 << (x))
 #define ETH_PKT_SIZE 1540  // Max frame size
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
@@ -39,7 +38,7 @@ static inline void spin(volatile uint32_t count) {
   while (count--) asm("nop");
 }
 
-uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
+static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMIIAR &= (7 << 2);
   ETH->MACMIIAR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6);
   ETH->MACMIIAR |= BIT(0);
@@ -47,7 +46,7 @@ uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   return ETH->MACMIIDR;
 }
 
-void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
+static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   ETH->MACMIIDR = val;
   ETH->MACMIIAR &= (7 << 2);
   ETH->MACMIIAR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6) | BIT(1);
@@ -55,21 +54,23 @@ void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   while (ETH->MACMIIAR & BIT(0)) spin(1);
 }
 
-void mip_driver_stm32_init(void *userdata) {
+static void mip_driver_stm32_init(void *userdata) {
   s_userdata = userdata;
 
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
-    s_rxdesc[i][0] = BIT(31);                       // Own
-    s_rxdesc[i][1] = sizeof(s_rxbuf[i]) | BIT(14);  // 2nd address chained
-    s_rxdesc[i][2] = (uint32_t) s_rxbuf[i];         // Point to data buffer
-    s_rxdesc[i][3] = (uint32_t) s_rxdesc[(i + 1) % ETH_DESC_CNT];  // Chain
+    s_rxdesc[i][0] = BIT(31);                            // Own
+    s_rxdesc[i][1] = sizeof(s_rxbuf[i]) | BIT(14);       // 2nd address chained
+    s_rxdesc[i][2] = (uint32_t) (uintptr_t) s_rxbuf[i];  // Point to data buffer
+    s_rxdesc[i][3] =
+        (uint32_t) (uintptr_t) s_rxdesc[(i + 1) % ETH_DESC_CNT];  // Chain
   }
 
   // Init TX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
-    s_txdesc[i][2] = (uint32_t) s_txbuf[i];  // Buf pointer
-    s_txdesc[i][3] = (uint32_t) s_txdesc[(i + 1) % ETH_DESC_CNT];  // Chain
+    s_txdesc[i][2] = (uint32_t) (uintptr_t) s_txbuf[i];  // Buf pointer
+    s_txdesc[i][3] =
+        (uint32_t) (uintptr_t) s_txdesc[(i + 1) % ETH_DESC_CNT];  // Chain
   }
 
   ETH->DMABMR |= BIT(0);                        // Software reset
@@ -83,20 +84,21 @@ void mip_driver_stm32_init(void *userdata) {
   ETH->MACFFR = BIT(31);                      // Receive all
   eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));  // Reset PHY
   eth_write_phy(PHY_ADDR, PHY_BCR, BIT(12));  // Set autonegotiation
-  ETH->DMARDLAR = (uint32_t) s_rxdesc;        // RX descriptors
-  ETH->DMATDLAR = (uint32_t) s_txdesc;        // RX descriptors
-  ETH->DMAIER = BIT(6) | BIT(16);             // RIE, NISE
+  ETH->DMARDLAR = (uint32_t) (uintptr_t) s_rxdesc;     // RX descriptors
+  ETH->DMATDLAR = (uint32_t) (uintptr_t) s_txdesc;     // RX descriptors
+  ETH->DMAIER = BIT(6) | BIT(16);                      // RIE, NISE
   ETH->MACCR = BIT(2) | BIT(3) | BIT(11) | BIT(14);    // RE, TE, Duplex, Fast
   ETH->DMAOMR = BIT(1) | BIT(13) | BIT(21) | BIT(25);  // SR, ST, TSF, RSF
 }
 
-void mip_driver_stm32_setrx(void (*rx)(void *, size_t, void *), void *rxdata) {
+static void mip_driver_stm32_setrx(void (*rx)(void *, size_t, void *),
+                                   void *rxdata) {
   s_rx = rx;
   s_rxdata = rxdata;
 }
 
 static uint32_t s_txno;
-size_t mip_driver_stm32_tx(const void *buf, size_t len, void *userdata) {
+static size_t mip_driver_stm32_tx(const void *buf, size_t len, void *userdata) {
   if (len > sizeof(s_txbuf[s_txno])) {
     printf("%s: frame too big, %ld\n", __func__, (long) len);
     len = 0;  // Frame is too big
@@ -113,17 +115,18 @@ size_t mip_driver_stm32_tx(const void *buf, size_t len, void *userdata) {
   uint32_t sr = ETH->DMASR;
   if (sr & BIT(2)) ETH->DMASR = BIT(2), ETH->DMATPDR = 0;  // Resume
   if (sr & BIT(5)) ETH->DMASR = BIT(5), ETH->DMATPDR = 0;  // if busy
-  if (len == 0) printf("E: D0 %lx, DMASR %lx\n", s_txdesc[0][0], sr);
+  if (len == 0) printf("E: D0 %lx SR %lx\n", (long) s_txdesc[0][0], (long) sr);
   return len;
   (void) userdata;
 }
 
-bool mip_driver_stm32_status(void *userdata) {
+static bool mip_driver_stm32_status(void *userdata) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
   return bsr & BIT(2) ? 1 : 0;
   (void) userdata;
 }
 
+void ETH_IRQHandler(void);
 void ETH_IRQHandler(void) {
   volatile uint32_t sr = ETH->DMASR;
   if (sr & BIT(6)) {  // Frame received, loop
@@ -138,3 +141,9 @@ void ETH_IRQHandler(void) {
   if (sr & BIT(7)) ETH->DMARPDR = 0;     // Resume RX
   ETH->DMASR = sr & ~(BIT(2) | BIT(7));  // Clear status
 }
+
+struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
+                                      .tx = mip_driver_stm32_tx,
+                                      .rxcb = mip_driver_stm32_setrx,
+                                      .status = mip_driver_stm32_status};
+#endif  // MG_ENABLE_MIP
