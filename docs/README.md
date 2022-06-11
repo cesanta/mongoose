@@ -3357,7 +3357,7 @@ mg_iobuf_init(&io, 0);  // Initialise buffer to have 0 allocated bytes
 <img src="images/mg_iobuf_add1.svg" alt="Function mg_iobuf_init()" />
 
 ```c
-mg_iobuf_add(&io, 0, "hello", 5, 512);  // Add "hello" at offset 0
+mg_iobuf_add(&io, io.len, "hello", 5, 16);  // Append "hello"
 ```
 
 <img src="images/mg_iobuf_add2.svg" alt="Function mg_iobuf_add()" />
@@ -3390,7 +3390,7 @@ mg_iobuf_del(&io, 0, "hi", 2, 512);  // io->len is 0, io->size is still 512
 
 ```
 
-<img src="images/mg_iobug_del.png" alt="Function mg_iobug_del()" />
+<img src="images/mg_iobug_del.png" alt="Function mg_iobuf_del()" />
 
 ## URL
 
