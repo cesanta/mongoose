@@ -5780,14 +5780,20 @@ struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
 #endif
 
 
-
 #if MG_ENABLE_MIP
+
+#if defined(_MSC_VER)
+#define _Atomic
+#define NET16(x) _byteswap_ushort(x)
+#define NET32(x) _byteswap_ulong(x)
+#else
 #include <stdatomic.h>
-#define MIP_ETHEMERAL_PORT 49152
-#define _packed __attribute__((packed))
-#define U16(ptr) ((((uint16_t) (ptr)[0]) << 8) | (ptr)[1])
 #define NET16(x) __builtin_bswap16(x)
 #define NET32(x) __builtin_bswap32(x)
+#endif
+
+#define MIP_ETHEMERAL_PORT 49152
+#define U16(ptr) ((((uint16_t) (ptr)[0]) << 8) | (ptr)[1])
 #define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
 
 #ifndef MIP_ARP_ENTRIES
@@ -5831,15 +5837,17 @@ struct mip_if {
   struct queue queue;             // Receive queue
 };
 
+#pragma pack(push, 1)
+
 struct lcp {
   uint8_t addr, ctrl, proto[2], code, id, len[2];
-} _packed;
+};
 
 struct eth {
   uint8_t dst[6];  // Destination MAC address
   uint8_t src[6];  // Source MAC address
   uint16_t type;   // Ethernet type
-} _packed;
+};
 
 struct ip {
   uint8_t ver;    // Version
@@ -5852,7 +5860,7 @@ struct ip {
   uint16_t csum;  // Checksum
   uint32_t src;   // Source IP
   uint32_t dst;   // Destination IP
-} _packed;
+};
 
 struct ip6 {
   uint8_t ver;      // Version
@@ -5862,13 +5870,13 @@ struct ip6 {
   uint8_t ttl;      // Time to live
   uint8_t src[16];  // Source IP
   uint8_t dst[16];  // Destination IP
-} _packed;
+};
 
 struct icmp {
   uint8_t type;
   uint8_t code;
   uint16_t csum;
-} _packed;
+};
 
 struct arp {
   uint16_t fmt;    // Format of hardware address
@@ -5880,7 +5888,7 @@ struct arp {
   uint32_t spa;    // Sender protocol address
   uint8_t tha[6];  // Target hardware address
   uint32_t tpa;    // Target protocol address
-} _packed;
+};
 
 struct tcp {
   uint16_t sport;  // Source port
@@ -5900,14 +5908,14 @@ struct tcp {
   uint16_t win;   // Window
   uint16_t csum;  // Checksum
   uint16_t urp;   // Urgent pointer
-} _packed;
+};
 
 struct udp {
   uint16_t sport;  // Source port
   uint16_t dport;  // Destination port
   uint16_t len;    // UDP length
   uint16_t csum;   // UDP checksum
-} _packed;
+};
 
 struct dhcp {
   uint8_t op, htype, hlen, hops;
@@ -5917,7 +5925,9 @@ struct dhcp {
   uint8_t hwaddr[208];
   uint32_t magic;
   uint8_t options[32];
-} _packed;
+};
+
+#pragma pack(pop)
 
 struct pkt {
   struct str raw;  // Raw packet data
@@ -6098,7 +6108,7 @@ void tx_udp(struct mip_if *ifp, uint32_t ip_src, uint16_t sport,
   cs = csumup(cs, buf, len);
   cs = csumup(cs, &ip->src, sizeof(ip->src));
   cs = csumup(cs, &ip->dst, sizeof(ip->dst));
-  cs += ip->proto + sizeof(*udp) + len;
+  cs += (uint32_t) (ip->proto + sizeof(*udp) + len);
   udp->csum = csumfin(cs);
   memmove(udp + 1, buf, len);
   // MG_DEBUG(("UDP LEN %d %d\n", (int) len, (int) ifp->frame_len));
@@ -6312,7 +6322,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   } else if (mg_ntohl(pkt->tcp->seq) != s->ack) {
     mg_error(c, "oob: %x %x", mg_ntohl(pkt->tcp->seq), s->ack);
   } else {
-    s->ack = mg_htonl(pkt->tcp->seq) + pkt->pay.len;
+    s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
     memcpy(&c->recv.buf[c->recv.len], pkt->pay.buf, pkt->pay.len);
     c->recv.len += pkt->pay.len;
     struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
@@ -6522,7 +6532,7 @@ static void write_conn(struct mg_connection *c) {
                 mg_htonl(s->seq), mg_htonl(s->ack), c->send.buf, n);
   if (sent > 0) {
     mg_iobuf_del(&c->send, 0, n);
-    s->seq += n;
+    s->seq += (uint32_t) n;
     mg_call(c, MG_EV_WRITE, &n);
   }
 }
