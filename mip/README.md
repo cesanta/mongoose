@@ -6,4 +6,4 @@ an event-based API tailored for Mongoose Library. As a result, it does not
 need to use synchronisation primitives. It is very fast, and can work
 with or without RTOS.
 
-See example usage at [examples/stm32/nucleo-f746zg/baremetal](../examples/stm32/nucleo-f746zg/baremetal)
+See example usage at [examples/stm32/nucleo-f746zg-baremetal](../examples/stm32/nucleo-f746zg-baremetal)
