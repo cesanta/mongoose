@@ -100,11 +100,13 @@ valgrind: valgrind_unit_test
 infer:
 	infer run -- cc test/unit_test.c -c -W -Wall -Werror -Isrc -I. -O2 -DMG_ENABLE_MBEDTLS=1 -DMG_ENABLE_LINES -I/usr/local/Cellar/mbedtls/2.23.0/include  -DMG_ENABLE_IPV6=1 -g -o /dev/null
 
+arm: DEFS += -DMG_ENABLE_FILE=0 -DMG_ENABLE_MIP=1 -DMG_ARCH=MG_ARCH_NEWLIB 
 arm: mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/armgcc arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_NEWLIB $(OPTS) $(WARN) $(INCS) $(DEFS) -o unit_test -nostartfiles --specs nosys.specs -e 0
+	$(DOCKER) mdashnet/armgcc arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test -nostartfiles --specs nosys.specs -e 0
 
+riscv: DEFS += -DMG_ENABLE_FILE=0 -DMG_ENABLE_MIP=1 -DMG_ARCH=MG_ARCH_NEWLIB 
 riscv: mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) test/mongoose_custom.c -Itest -DMG_ARCH=MG_ARCH_NEWLIB $(OPTS) $(WARN) $(INCS) $(DEFS) -o unit_test
+	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test
 
 #vc98: VCFLAGS += -DMG_ENABLE_IPV6=1
 vc98: Makefile mongoose.h $(SRCS)

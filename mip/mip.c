@@ -316,8 +316,9 @@ static struct ip *tx_ip(struct mip_if *ifp, uint8_t proto, uint32_t ip_src,
   return ip;
 }
 
-void tx_udp(struct mip_if *ifp, uint32_t ip_src, uint16_t sport,
-            uint32_t ip_dst, uint16_t dport, const void *buf, size_t len) {
+static void tx_udp(struct mip_if *ifp, uint32_t ip_src, uint16_t sport,
+                   uint32_t ip_dst, uint16_t dport, const void *buf,
+                   size_t len) {
   struct ip *ip = tx_ip(ifp, 17, ip_src, ip_dst, len + sizeof(struct udp));
   struct udp *udp = (struct udp *) (ip + 1);
   udp->sport = sport;
@@ -438,7 +439,8 @@ static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
   }
 }
 
-struct mg_connection *getpeer(struct mg_mgr *mgr, struct pkt *pkt, bool lsn) {
+static struct mg_connection *getpeer(struct mg_mgr *mgr, struct pkt *pkt,
+                                     bool lsn) {
   struct mg_connection *c = NULL;
   for (c = mgr->conns; c != NULL; c = c->next) {
     if (c->is_udp && pkt->udp && c->loc.port == pkt->udp->dport) break;
@@ -719,6 +721,12 @@ void mip_init(struct mg_mgr *mgr, struct mip_ipcfg *ipcfg,
   if (driver->rxcb) driver->rxcb(on_rx, ifp);
   mgr->priv = ifp;
   mgr->extraconnsize = sizeof(struct tcpstate);
+}
+
+int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {
+  (void) m, (void) fn, (void) d, (void) udp;
+  MG_ERROR(("Not implemented"));
+  return -1;
 }
 
 void mg_connect_resolved(struct mg_connection *c) {

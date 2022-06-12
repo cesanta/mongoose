@@ -9,7 +9,7 @@ static int s_num_tests = 0;
     s_num_tests++;                                              \
     if (!(expr)) {                                              \
       printf("FAILURE %s:%d: %s\n", __FILE__, __LINE__, #expr); \
-      exit(EXIT_FAILURE);                                       \
+      abort();                                                  \
     }                                                           \
   } while (0)
 
@@ -2248,7 +2248,6 @@ static void test_rewrites(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /foo HTTP/1.0\n\n") == 301);
   ASSERT(fetch(&mgr, buf, url, "GET /foo/ HTTP/1.0\n\n") == 200);
   // printf("-->[%s]\n", buf);
-  // exit(0);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
