@@ -1496,13 +1496,13 @@ static void test_str(void) {
   {
     char tmp[40];
 #define DBLWIDTH(a, b) a, b
-#define TESTDOUBLE(fmt_, num_, res_)                                   \
-  do {                                                                 \
-    const char *N = #num_;                                             \
-    size_t n = mg_snprintf(tmp, sizeof(tmp), fmt_, num_);              \
-    printf("[%s] [%s] -> [%s] [%.*s]\n", fmt_, N, res_, (int) n, tmp); \
-    ASSERT(n == strlen(res_));                                         \
-    ASSERT(strcmp(tmp, res_) == 0);                                    \
+#define TESTDOUBLE(fmt_, num_, res_)                                          \
+  do {                                                                        \
+    const char *N = #num_;                                                    \
+    size_t n = mg_snprintf(tmp, sizeof(tmp), fmt_, num_);                     \
+    if (0) printf("[%s] [%s] -> [%s] [%.*s]\n", fmt_, N, res_, (int) n, tmp); \
+    ASSERT(n == strlen(res_));                                                \
+    ASSERT(strcmp(tmp, res_) == 0);                                           \
   } while (0)
 
     TESTDOUBLE("%g", 0.0, "0");
@@ -2062,7 +2062,7 @@ static void test_packed(void) {
 
   // Load top level file directly
   fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n");
-  printf("---> %s\n", buf);
+  // printf("---> %s\n", buf);
   ASSERT(fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, data) == 0);
   free(data);
