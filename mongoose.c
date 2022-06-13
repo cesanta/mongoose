@@ -1859,7 +1859,9 @@ int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
   if (name[0] == '\0') {
     mg_http_reply(c, 400, "", "%s", "name required");
     res = -1;
-  } else if (hm->body.len > 0) {
+  } else if (hm->body.len == 0) {
+    mg_http_reply(c, 200, "", "%d", res);  // Nothing to write
+  } else {
     struct mg_fd *fd;
     long oft = strtol(offset, NULL, 0);
     mg_snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, name);
