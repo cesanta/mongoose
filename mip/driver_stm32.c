@@ -3,7 +3,7 @@
 
 #include "mip.h"
 
-#if MG_ENABLE_MIP
+#if MG_ENABLE_MIP && defined(__arm__)
 
 struct stm32_eth {
   uint32_t MACCR, MACFFR, MACHTHR, MACHTLR, MACMIIAR, MACMIIDR, MACFCR,
