@@ -2695,6 +2695,18 @@ mg_ntoa(&c->peer, buf, sizeof(buf));
 
 ## JSON
 
+Note that Mongoose's printing functions, `mg_snprintf()`, `mg_mprintf()`
+and `mg_asprintf()` support non-standard format specifiers `%Q` and `%M`,
+which allow to print JSON strings easily:
+
+```c
+char *json = mg_mprintf("{%Q:%d}", "value", 123);  // {"value":123}
+free(json);
+```
+
+Therefore, for a full JSON support, a set of parsing functions is required -
+which is described below.
+
 
 ### mg\_json\_get()
 
@@ -2720,8 +2732,9 @@ Return value: offset of the element, or negative `MG_JSON_*` on error.
 Usage example:
 
 ```c
-// Assume we have a buf,len with this string: { "a": 1, "b": [2, 3] }
-int offset, length;
+// Create a json string: { "a": 1, "b": [2, 3] }
+char *buf = mg_mprintf("{ %Q: %d, %Q: [%d, %d] }", "a", 1, "b", 2, 3);
+int offset, length, len = (int) strlen(buf);
 
 // Lookup "$", which is the whole JSON. Can be used for validation
 offset = mg_json_get(buf, len, "$", &length);    // offset = 0, length = 23
@@ -2734,6 +2747,8 @@ offset = mg_json_get(buf, len, "$.b", &length);  // offset = 15, length = 6
 
 // Lookup attribute "b[1]". Point to value "3"
 offset = mg_json_get(buf, len, "$.b[1]", &length); // offset = 19, length = 1
+
+free(buf);
 ```
 
 ### mg\_json\_get\_num()
