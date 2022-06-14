@@ -2778,7 +2778,7 @@ mg_json_get_num(mg_str("{\"a\":1.23}", "$.a", &d)); // d contains 1.23
 ### mg\_json\_get\_bool()
 
 ```c
-bool mg_json_get_num(struct mg_str json, const char *path, bool *v);
+bool mg_json_get_bool(struct mg_str json, const char *path, bool *v);
 ```
 
 Fetch boolean (bool) value from the json string `json` at JSON path
@@ -2795,26 +2795,26 @@ Usage example:
 
 ```c
 bool b = false;
-mg_json_get_num(mg_str("[123]", "$[0]", &b));   // Error. b remains to be false
-mg_json_get_num(mg_str("[true]", "$[0]", &b));  // b is true
+mg_json_get_bool(mg_str("[123]", "$[0]", &b));   // Error. b remains to be false
+mg_json_get_bool(mg_str("[true]", "$[0]", &b));  // b is true
 ```
 
 ### mg\_json\_get\_str()
 
 ```c
-char *mg_json_get_num(struct mg_str json, const char *path);
+char *mg_json_get_str(struct mg_str json, const char *path);
 ```
 
 Fetch string value from the json string `json` at JSON path
-`path` into a placeholder `v`. If found, a string is allocated using `calloc()`
-un-escaped, and returned to the caller. It is a caller's responsibility to
+`path`. If found, a string is allocated using `calloc()`,
+un-escaped, and returned to the caller. It is the caller's responsibility to
 `free()` the returned string.
 
 Parameters:
 - `json` - a string containing valid JSON
 - `path` - a JSON path. Must start with `$`
 
-Return value: non-NULL on success, NULL or error
+Return value: non-NULL on success, NULL on error
 
 Usage example:
 
