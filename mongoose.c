@@ -15290,10 +15290,6 @@ void mg_lwip_if_connect_udp(struct mg_connection *nc) {
   mg_lwip_netif_run_on_tcpip(mg_lwip_if_connect_udp_tcpip, nc);
 }
 
-static void tcp_close_tcpip(void *arg) {
-  tcp_close((struct tcp_pcb *) arg);
-}
-
 void mg_lwip_handle_accept(struct mg_connection *nc) {
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   if (cs->pcb.tcp == NULL) return;
@@ -15423,6 +15419,10 @@ static void mg_lwip_tcp_write_tcpip(void *arg) {
   struct mg_connection *nc = ctx->nc;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
   struct tcp_pcb *tpcb = cs->pcb.tcp;
+  if (tpcb == NULL) {
+    /* Possible if tcp_err cb was invoked while this was queued. */
+    return;
+  }
   size_t len = MIN(tpcb->mss, MIN(ctx->len, tpcb->snd_buf));
   size_t unsent, unacked;
   if (len == 0) {
@@ -15591,6 +15591,27 @@ int mg_lwip_if_create_conn(struct mg_connection *nc) {
   cs->nc = nc;
   nc->sock = (intptr_t) cs;
   return 1;
+}
+
+extern struct tcp_pcb *tcp_active_pcbs;
+
+static void tcp_close_tcpip(void *arg) {
+  /*
+   * A race with tcp error is possible:
+   *  - mg_lwip_if_destroy_conn is called, schedules this function.
+   *  - RST arrives, mg_lwip_tcp_error_cb is invoked and pcb is destroyed.
+   *  - this function runs.
+   * Since tcp_err doesn't get the pcb pointer, I don't see any other way than
+   * walking the list of active connections. It is ostensibly private but
+   * fortunately for us is not declared static.
+   */
+  struct tcp_pcb *pcb;
+  for (pcb = tcp_active_pcbs; pcb != NULL; pcb = pcb->next) {
+    if (pcb == (struct tcp_pcb *) arg) break;
+  }
+  if (pcb != NULL) {
+    tcp_close(pcb);
+  }
 }
 
 static void udp_remove_tcpip(void *arg) {
