@@ -5,10 +5,14 @@
 //    1. Run `make`. This builds and starts a proxy on port 8000
 //    2. Start your browser, go to https://localhost:8000
 //
-// To enable SSL/TLS, build it like this:
-//    make MBEDTLS_DIR=/path/to/your/mbedtls/installation
+// To enable SSL/TLS, add SSL=OPENSSL or SSL=MBEDTLS
 
-static const char *s_backend_url = "https://cesanta.com";
+static const char *s_backend_url = 
+#if defined(MG_ENABLE_MBEDTLS) || defined(MG_ENABLE_OPENSSL)
+                                   "https://cesanta.com";
+#else
+                                   "http://info.cern.ch";
+#endif
 static const char *s_listen_url = "http://localhost:8000";
 
 #include "mongoose.h"
