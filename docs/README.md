@@ -1148,6 +1148,25 @@ if (cookie != NULL) {
 }
 ```
 
+### mg\_http\_var()
+
+```c
+struct mg_str mg_http_var(struct mg_str buf, struct mg_str name);
+```
+
+Fetch an undecoded HTTP variable. Parameters:
+- `buf` - a url-encoded string: HTTP request body or query string
+- `name` - a variable name to fetch
+
+Return value: variable's value. If not found, it it a NULL string.
+
+
+```c
+// We have received a request to /my/uri?a=b&c=d%20
+// The hm->query points to "a=b&c=d%20"
+struct mg_str v = mg_http_var(hm->query, mg_str("c"));  // v = "d%20"
+```
+
 
 ### mg\_http\_get\_var()
 
@@ -1155,7 +1174,7 @@ if (cookie != NULL) {
 int mg_http_get_var(const struct mg_str *var, const char *name, char *buf, int len);
 ```
 
-Decode HTTP variable
+Fetch and decode an HTTP variable
 
 Parameters:
 - `var` - HTTP request body
@@ -1170,6 +1189,8 @@ Usage example:
 ```c
 char buf[100] = "";
 mg_http_get_var(&hm->body, "key1", buf, sizeof(buf)) {
+  ...
+}
 ```
 
 ### mg\_http\_creds()

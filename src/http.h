@@ -53,6 +53,7 @@ void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
 void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
                    const char *body_fmt, ...);
 struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
+struct mg_str mg_http_var(struct mg_str buf, struct mg_str name);
 int mg_http_get_var(const struct mg_str *, const char *name, char *, size_t);
 int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
 size_t mg_url_encode(const char *s, size_t n, char *buf, size_t len);
