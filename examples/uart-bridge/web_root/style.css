@@ -5,7 +5,7 @@ pre { color: #373; font-family: monospace; font-weight: bolder; font-size: small
 textarea, input { border: 1px solid #ccc; padding: 0.3em 0.5em;}
 textarea, input, .addon, .label { font-size: 14px; }
 a, a:visited, a:active { color: #55f; }
-body {background: #455; }
+body {background: #555; }
 .addon { color: #999; min-width: 7.5em;  }
 .label { color: #999; }
 .btn {
