@@ -12,28 +12,16 @@ const App = function(props) {
   const [connected, setConnected] = useState(false);
   const [txt, setTxt] = useState('');
   const [ws, setWs] = useState(null);
-  const [rx, setRx] = useState('');
-  const [tx, setTx] = useState('');
-  const [baud, setBaud] = useState('');
-  const [tcpport, setTcpport] = useState(4001);
-  const [wsport, setWsport] = useState(4002);
-  const [mqtt, setMqtt] = useState('');
 
-  // const tcp_port = cfg.tcp.split(':')[2] || 4001;
-  // const ws_port = cfg.ws.split(':')[2] || 4002;
+  const refresh = () =>
+      fetch('/api/config/get').then(r => r.json()).then(r => setCfg(r));
 
-  const refresh = () => fetch('/api/config/get').then(r => r.json()).then(r => {
-    setTx(r.tx), setRx(r.rx), setBaud(r.baud), setCfg(r);
-    setTcpport(r.tcp.url.split(':')[2] || 4001);
-    setWsport(r.ws.url.split(':')[2] || 4002);
-    setMqtt(r.mqtt.url);
-  });
+  const getport = (url, v) => ((url || '').match(/.*:(\d+)/) || ['', v])[1];
 
   const watchWebsocket = function() {
     // Connect to websocker port, to implement WS console
     var reconnect = function() {
-      var port;
-      setWsport(x => port = x);
+      var port = getport(cfg.ws.url, 4002);
       var l = window.location, proto = l.protocol.replace('http', 'ws');
       var tid, url = `${proto}//${l.hostname}:${port}/ws`;
       // console.log(url);
@@ -68,7 +56,23 @@ const App = function(props) {
     setTxt('');
   };
 
-  const onchange = ev => false;
+  const onchange = ev => fetch('/api/config/set', {
+                           method: 'POST',
+                           headers: {'Content-Type': 'application/json'},
+                           body: JSON.stringify(cfg),
+                         }).then(r => ws && ws.close());
+
+  const set = obj => setCfg(x => Object.assign(x, obj));
+  const setTx = ev => set({tx: parseInt(ev.target.value)});
+  const setRx = ev => set({rx: parseInt(ev.target.value)});
+  const setBaud = ev => set({baud: parseInt(ev.target.value)});
+  const setTcpUrl = ev => set({tcp: {url: `tcp://0.0.0.0:${ev.target.value}`}});
+  const setWsUrl = ev => set({ws: {url: `ws://0.0.0.0:${ev.target.value}`}});
+  const setMqttUrl = ev => set({mqtt: {url: ev.target.value}});
+  const setTcpEna = ev => (set({tcp: {enable: ev.target.checked}}), onchange());
+  const setWsEna = ev => (set({ws: {enable: ev.target.checked}}), onchange());
+  const setMqttEna = ev =>
+      (set({mqtt: {enable: ev.target.checked}}), onchange());
 
   return html`
 <div class="container">
@@ -79,16 +83,16 @@ const App = function(props) {
       <h3>UART configuration</h3>
       <div class="d-flex pr-1 my-1">
         <label class="addon">UART TX pin</label>
-        <input style="width: 5em;" value=${tx} onchange=${onchange}
-          oninput=${ev => setTx(ev.target.value)} />
+        <input style="width: 5em;" value=${cfg.tx} onchange=${onchange}
+          oninput=${setTx} />
       </div><div class="d-flex pr-1 my-1">
         <label class="addon">UART RX pin</label>
-        <input style="width: 5em;" value=${rx} onchange=${onchange}
-          oninput=${ev => setRx(ev.target.value)} />
+        <input style="width: 5em;" value=${cfg.rx} onchange=${onchange}
+          oninput=${setRx} />
       </div><div class="d-flex pr-1 my-y">
         <label class="addon">UART Baud</label>
-        <input style="width: 5em;" value=${baud} onchange=${onchange}
-          oninput=${ev => setBaud(ev.target.value)} />
+        <input style="width: 5em;" value=${cfg.baud} onchange=${onchange}
+          oninput=${setBaud} />
       </div>
     </div>
     <div class="col col-8">
@@ -96,34 +100,34 @@ const App = function(props) {
       <div class="d-flex my-1">
         <label class="addon">Local TCP port</label>
         <input style="min-width: 4em; flex: 1 100%;"
-          value=${tcpport} onchange=${onchange}
-          oninput=${ev => setTcpport(ev.target.value)} />
+          value=${getport(cfg.tcp.url, 4001)} onchange=${onchange}
+          oninput=${setTcpUrl} />
         <label class="ml-1 d-flex label"><input type="checkbox"
-          checked=${cfg.tcp.enable} /> enable</label>
+          checked=${cfg.tcp.enable} onchange=${setTcpEna} /> enable</label>
       </div><div class="d-flex my-1">
         <label class="addon">Local WS port</label>
         <input style="flex: 1 100%;"
-          value=${wsport} onchange=${onchange}
-          oninput=${ev => setWsport(ev.target.value)} />
+          value=${getport(cfg.ws.url, 4002)} onchange=${onchange}
+          oninput=${setWsUrl} />
         <label class="ml-1 d-flex label"><input type="checkbox"
-          checked=${cfg.ws.enable} /> enable</label>
+          checked=${cfg.ws.enable} onchange=${setWsEna} /> enable</label>
       </div><div class="d-flex my-1">
         <label class="addon">Remote MQTT</label>
         <input style="flex: 1 100%;"
-          value=${mqtt} onchange=${onchange}
+          value=${cfg.mqtt.url} onchange=${onchange}
           oninput=${ev => setMqtt(ev.target.value)} />
         <label class="ml-1 d-flex label"><input type="checkbox"
-          checked=${cfg.mqtt.enable} /> enable</label>
+          checked=${cfg.mqtt.enable} onchange=${setMqttEna} /> enable</label>
       </div>
     </div>
   </div>
 
   <div class="msg">
     Note: to connect over MQTT, 
-      go to <a href="http://www.hivemq.com/demos/websocket-client/">
+      open <a href="http://www.hivemq.com/demos/websocket-client/">
         console</a>, subscribe to b/tx and publish to b/rx<br/>
     Note: to connect over TCP, use netcat utility:<br/>
-    $ nc ${location.hostname} ${tcpport}
+    $ nc ${location.hostname} ${getport(cfg.tcp.url, 4001)}
   </div>
 
   <div style="margin-top: 2em;">
