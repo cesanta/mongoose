@@ -24,8 +24,10 @@ struct state {
              .baud = 115200};
 
 void uart_init(int tx, int rx, int baud);
-int uart_read(char *buf, size_t len);
+int uart_read(void *buf, size_t len);
 void uart_write(const void *buf, size_t len);
+char *config_read(void);
+void config_write(struct mg_str config);
 
 // Let users define their own UART API. If they don't, use a dummy one
 #if defined(UART_API_IMPLEMENTED)
@@ -41,7 +43,7 @@ void uart_write(const void *buf, size_t len) {
   fflush(stdout);
 }
 
-int uart_read(char *buf, size_t len) {
+int uart_read(void *buf, size_t len) {
   return read(0, buf, len);  // Read from stdin
 }
 
