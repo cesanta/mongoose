@@ -2259,7 +2259,7 @@ static void default_logger(unsigned char c) {
 static const char *s_spec = "2";
 static void (*s_log_func)(unsigned char) = default_logger;
 
-void mg_log_set_callback(void (*fn)(unsigned char)) {
+void mg_log_set_fn(void (*fn)(unsigned char)) {
   s_log_func = fn;
 }
 
