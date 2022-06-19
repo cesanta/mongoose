@@ -18,7 +18,7 @@ struct state {
   int tx, rx, baud;
 } s_state = {.tcp = {.enable = true},
              .websocket = {.enable = true},
-             .mqtt = {.enable = true},
+             .mqtt = {.enable = false},
              .tx = 5,
              .rx = 4,
              .baud = 115200};

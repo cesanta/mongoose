@@ -3683,12 +3683,12 @@ Usage example: redirecting logs to syslog.
 
 ```c
 static void mylog(uint8_t ch) {
-  static char buf[128];
-  static struct mg_iobuf log = { .buf = buf, .size = sizeof(buf), .len = 0};
-  log.buf[log.len++] = ch;
-  if (ch == '\n' || log.len >= log.size) {
-    syslog(LOG_INFO, "%.*s", (int) log.len, log.buf);
-    log.len = 0;
+  static char buf[256];
+  static size_t len;
+  buf[len++] = ch;
+  if (ch == '\n' || len >= sizeof(buf)) {
+    syslog(LOG_INFO, "%.*s", (int) len, buf); // Send logs
+    len = 0;
   }
 }
 ...

@@ -16,4 +16,4 @@ $(PROG): $(SOURCES) $(FILES_TO_EMBED)
 	$(CC) -W -Wall -Wextra -O0 -g3 $(CFLAGS) -o $(PROG) $(SOURCES)
 
 clean:
-	rm -rf $(PROG) *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb log.txt pack
+	rm -rf $(PROG) *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb log.txt pack config.json
