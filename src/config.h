@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef MG_ENABLE_LOG
+#define MG_ENABLE_LOG 1
+#endif
+
 #ifndef MG_ENABLE_MIP
 #define MG_ENABLE_MIP 0
 #endif
@@ -101,8 +105,4 @@
 #else
 #define MG_ENABLE_FILE 0
 #endif
-#endif
-
-#ifndef MG_PUTCHAR
-#define MG_PUTCHAR(x) putchar(x)
 #endif

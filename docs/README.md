@@ -313,7 +313,6 @@ Here is a list of build constants and their default values:
 |MG_MAX_HTTP_HEADERS | 40 | Maximum number of HTTP headers |
 |MG_HTTP_INDEX | "index.html" | Index file for HTML directory |
 |MG_FATFS_ROOT | "/" | FAT FS root directory |
-|MG_PUTCHAR | putchar | Character output function, used by logging |
 
 <span class="badge bg-danger">NOTE:</span> the `MG_IO_SIZE` constant also sets
 maximum UDP message size, see
@@ -3669,6 +3668,31 @@ Usage example:
 
 ```c
 mg_hexdump(c->recv.buf, c->recv.len);  // Hex dump incoming data
+```
+
+### mg\_log\_set\_fn()
+
+```c
+void mg_log_set_fn(void (*logfunc)(unsigned char ch));
+```
+
+Redirect logs to a custom function. Parameters:
+- `logfunc` - a pointer to a function that logs a single character
+
+Usage example: redirecting logs to syslog.
+
+```c
+static void mylog(uint8_t ch) {
+  static char buf[128];
+  static struct mg_iobuf log = { .buf = buf, .size = sizeof(buf), .len = 0};
+  log.buf[log.len++] = ch;
+  if (ch == '\n' || log.len >= log.size) {
+    syslog(LOG_INFO, "%.*s", (int) log.len, log.buf);
+    log.len = 0;
+  }
+}
+...
+mg_log_set_fn(mylog);
 ```
 
 ## Filesystem

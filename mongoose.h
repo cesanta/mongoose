@@ -576,6 +576,10 @@ int sscanf(const char *, const char *, ...);
 #endif
 
 
+#ifndef MG_ENABLE_LOG
+#define MG_ENABLE_LOG 1
+#endif
+
 #ifndef MG_ENABLE_MIP
 #define MG_ENABLE_MIP 0
 #endif
@@ -679,10 +683,6 @@ int sscanf(const char *, const char *, ...);
 #endif
 #endif
 
-#ifndef MG_PUTCHAR
-#define MG_PUTCHAR(x) putchar(x)
-#endif
-
 
 
 
@@ -740,11 +740,19 @@ void mg_log(const char *fmt, ...);
 bool mg_log_prefix(int ll, const char *file, int line, const char *fname);
 void mg_log_set(const char *spec);
 void mg_hexdump(const void *buf, size_t len);
+void mg_log_set_fn(void (*logfunc)(unsigned char ch));
 
+#if MG_ENABLE_LOG
 #define MG_LOG(level, args)                                                \
   do {                                                                     \
     if (mg_log_prefix((level), __FILE__, __LINE__, __func__)) mg_log args; \
   } while (0)
+#else
+#define MG_LOG(level, args) \
+  do {                      \
+    if (0) mg_log args;     \
+  } while (0)
+#endif
 
 #define MG_ERROR(args) MG_LOG(MG_LL_ERROR, args)
 #define MG_INFO(args) MG_LOG(MG_LL_INFO, args)

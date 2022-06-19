@@ -2252,10 +2252,19 @@ char *mg_json_get_str(struct mg_str json, const char *path) {
 
 
 
+static void default_logger(unsigned char c) {
+  putchar(c);
+}
+
 static const char *s_spec = "2";
+static void (*s_log_func)(unsigned char) = default_logger;
+
+void mg_log_set_callback(void (*fn)(unsigned char)) {
+  s_log_func = fn;
+}
 
 static void logc(unsigned char c) {
-  MG_PUTCHAR(c);
+  s_log_func(c);
 }
 
 static void logs(const char *buf, size_t len) {
