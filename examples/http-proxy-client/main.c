@@ -5,9 +5,8 @@
 //    make
 //    ./example PROXY:PORT http://www.ladyada.net
 //
-// To enable SSL/TLS for this client, build it like this:
-//    make MBEDTLS_DIR=/path/to/your/mbedtls/installation
-
+// To enable SSL/TLS, make SSL=OPENSSL or make SSL=MBEDTLS 
+//
 #include "mongoose.h"
 
 // Print HTTP response and signal that we're done
@@ -41,8 +40,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
           ("Connected to proxy, status: %.*s", (int) hm.uri.len, hm.uri.ptr));
       mg_iobuf_del(&c->recv, 0, n);
       // Send request to the target server
-      mg_printf(c, "GET / HTTP/1.0\r\nHost: %.*s\r\n\r\n", (int) host.len,
-                host.ptr);
+      mg_printf(c, "GET %s HTTP/1.0\r\n"
+                   "Host: %.*s\r\n"
+                   "\r\n",
+                   mg_url_uri(url), (int) host.len, host.ptr);
     }
   }
 }
