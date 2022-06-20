@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
   mg_log_set(log_level);          // Set to 0 to disable debug
   mg_mgr_init(&mgr);              // Initialise event manager
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
-  while (!done) mg_mgr_poll(&mgr, 50);      // Infinite event loop
+  while (!done) mg_mgr_poll(&mgr, 50);      // Event manager loops until 'done'
   mg_mgr_free(&mgr);                        // Free resources
   return 0;
 }

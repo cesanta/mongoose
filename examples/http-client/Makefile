@@ -1,16 +1,15 @@
 PROG ?= example
 ROOT ?= $(realpath $(CURDIR)/../..)
-CFLAGS ?= -DMG_ENABLE_LINES $(EXTRA)
+CFLAGS ?= -DMG_ENABLE_LINES $(EXTRA_CFLAGS)
 LIN = docker run -it --rm -v $(ROOT):$(ROOT) -w $(CURDIR) mdashnet/cc2
+SSL = ?
 
-ifneq ($(MBEDTLS),)
-CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS)/include -I/usr/include
-CFLAGS += -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
+ifeq "$(SSL)" "MBEDTLS"
+CFLAGS += -DMG_ENABLE_MBEDTLS=1 -lmbedtls -lmbedcrypto -lmbedx509
 endif
 
-ifneq ($(OPENSSL),)
-CFLAGS += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
-CFLAGS += -L$(OPENSSL)/lib -lssl -lcrypto
+ifeq "$(SSL)" "OPENSSL"
+CFLAGS += -DMG_ENABLE_OPENSSL=1 -lssl -lcrypto
 endif
 
 all: $(PROG)
