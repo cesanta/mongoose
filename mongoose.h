@@ -192,7 +192,7 @@ struct timeval {
 // Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
 static inline void *mg_calloc(int cnt, size_t size) {
   void *p = pvPortMalloc(cnt * size);
-  if (p != NULL) memset(p, 0, size);
+  if (p != NULL) memset(p, 0, size * cnt);
   return p;
 }
 #define calloc(a, b) mg_calloc((a), (b))
@@ -262,7 +262,7 @@ static inline void *mg_calloc(int cnt, size_t size) {
 // Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
 static inline void *mg_calloc(int cnt, size_t size) {
   void *p = pvPortMalloc(cnt * size);
-  if (p != NULL) memset(p, 0, size);
+  if (p != NULL) memset(p, 0, size * cnt);
   return p;
 }
 #define calloc(a, b) mg_calloc((a), (b))
