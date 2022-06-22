@@ -2846,6 +2846,58 @@ char *str = mg_json_get_str(json, "$.a");        // str = "hi"
 free(str);
 ```
 
+### mg\_json\_get\_hex()
+
+```c
+char *mg_json_get_hex(struct mg_str json, const char *path, int *len);
+```
+
+Fetch hex-encoded buffer from the json string `json` at JSON path
+`path`. If found, a buffer is allocated using `calloc()`, decoded,
+and returned to the caller. It is the caller's responsibility to
+`free()` the returned string. Returned buffer is 0-terminated.
+
+Parameters:
+- `json` - a string containing valid JSON
+- `path` - a JSON path. Must start with `$`
+- `len` - a pointer that receives decoded length. Can be NULL
+
+Return value: non-NULL on success, NULL on error
+
+Usage example:
+
+```c
+struct mg_str json = mg_str("{\"a\": \"6869\"}"); // json = {"a": "6869"}
+char *str = mg_json_get_hex(json, "$.a", NULL);   // str = "hi"
+free(str);
+```
+
+### mg\_json\_get\_b64()
+
+```c
+char *mg_json_get_b4(struct mg_str json, const char *path, int *len);
+```
+
+Fetch base64-encoded buffer from the json string `json` at JSON path
+`path`. If found, a buffer is allocated using `calloc()`, decoded,
+and returned to the caller. It is the caller's responsibility to
+`free()` the returned string. Returned buffer is 0-terminated.
+
+Parameters:
+- `json` - a string containing valid JSON
+- `path` - a JSON path. Must start with `$`
+- `len` - a pointer that receives decoded length. Can be NULL
+
+Return value: non-NULL on success, NULL on error
+
+Usage example:
+
+```c
+struct mg_str json = mg_str("{\"a\": \"YWJj\"}"); // json = {"a": "YWJj"}
+char *str = mg_json_get_b64(json, "$.a", NULL);   // str = "abc"
+free(str);
+```
+
 ## Utility
 
 ### mg\_call()

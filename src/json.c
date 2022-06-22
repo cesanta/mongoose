@@ -1,4 +1,5 @@
 #include "json.h"
+#include "base64.h"
 
 static const char *escapeseq(int esc) {
   return esc ? "\b\f\n\r\t\\\"" : "bfnrt\\\"";
@@ -216,6 +217,31 @@ char *mg_json_get_str(struct mg_str json, const char *path) {
       free(result);
       result = NULL;
     }
+  }
+  return result;
+}
+
+char *mg_json_get_b64(struct mg_str json, const char *path, int *len) {
+  int n, toklen;
+  char *result = NULL;
+  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
+      json.ptr[n] == '"' && toklen > 1 &&
+      (result = (char *) calloc(1, (size_t) toklen)) != NULL) {
+    int k = mg_base64_decode(json.ptr + n + 1, toklen - 2, result);
+    if (len != NULL) *len = k;
+  }
+  return result;
+}
+
+char *mg_json_get_hex(struct mg_str json, const char *path, int *len) {
+  int n, toklen;
+  char *result = NULL;
+  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
+      json.ptr[n] == '"' && toklen > 1 &&
+      (result = (char *) calloc(1, (size_t) toklen / 2)) != NULL) {
+    mg_unhex(json.ptr + n + 1, (size_t) (toklen - 2), (uint8_t *) result);
+    result[(toklen - 2) / 2] = '\0';
+    if (len != NULL) *len = (toklen - 2) / 2;
   }
   return result;
 }

@@ -2363,6 +2363,7 @@ static void test_json(void) {
   {
     double d = 0;
     bool b = false;
+    int len;
     const char *json = "{\"a\": \"hi\\nthere\",\"b\": [12345, true]}";
     char *str = mg_json_get_str(mg_str(json), "$.a");
 
@@ -2379,6 +2380,14 @@ static void test_json(void) {
     ASSERT(mg_json_get_bool(mg_str(json), "$.b[0]", &b) == false);
     ASSERT(mg_json_get_bool(mg_str(json), "$.b[1]", &b) == true);
     ASSERT(b == true);
+
+    json = "[\"YWJj\", \"0100026869\"]";
+    ASSERT((str = mg_json_get_b64(mg_str(json), "$[0]", &len)) != NULL);
+    ASSERT(len == 3 && memcmp(str, "abc", (size_t) len) == 0);
+    free(str);
+    ASSERT((str = mg_json_get_hex(mg_str(json), "$[1]", &len)) != NULL);
+    ASSERT(len == 5 && memcmp(str, "\x01\x00\x02hi", (size_t) len) == 0);
+    free(str);
   }
 }
 
