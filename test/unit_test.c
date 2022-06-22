@@ -1389,9 +1389,12 @@ static size_t pf2(char *buf, size_t len, va_list *ap) {
 }
 
 static void test_str(void) {
-  struct mg_str s = mg_strdup(mg_str("a"));
-  ASSERT(mg_strcmp(s, mg_str("a")) == 0);
-  free((void *) s.ptr);
+  {
+    struct mg_str s = mg_strdup(mg_str("a"));
+    ASSERT(mg_strcmp(s, mg_str("a")) == 0);
+    free((void *) s.ptr);
+  }
+
   ASSERT(mg_strcmp(mg_str(""), mg_str(NULL)) == 0);
   ASSERT(mg_strcmp(mg_str("a"), mg_str("b")) < 0);
   ASSERT(mg_strcmp(mg_str("b"), mg_str("a")) > 0);
@@ -1551,6 +1554,21 @@ static void test_str(void) {
     TESTDOUBLE("%g", HUGE_VAL, "inf");
     TESTDOUBLE("%g", -HUGE_VAL, "-inf");
 #endif
+  }
+
+  {
+    const char *expected = "[\"MA==\",\"MAo=\",\"MAr+\",\"MAr+Zw==\"]";
+    char tmp[100], s[] = "0\n\xfeg";
+    ASSERT(mg_snprintf(tmp, sizeof(tmp), "[%V,%V,%V,%V]", 1, s, 2, s, 3, s, 4,
+                       s) == 33);
+    ASSERT(strcmp(tmp, expected) == 0);
+  }
+
+  {
+    const char *expected = "\"002001200220616263\"";
+    char tmp[100], s[] = "\x00 \x01 \x02 abc";
+    ASSERT(mg_snprintf(tmp, sizeof(tmp), "%H", 9, s) == 20);
+    ASSERT(strcmp(tmp, expected) == 0);
   }
 }
 

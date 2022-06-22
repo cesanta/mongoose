@@ -2550,7 +2550,7 @@ standard function does, but in a predictable way that does not depend on
 the C library or the build environment. The return value can be larger
 than the buffer length `len`, in which case the overflow bytes are not printed.
 Mongoose library is often used to exchange data in JSON format, therefore a
-non-standard `%Q` specifier for formatting JSON strings is also supported.
+non-standard `%Q`, `%V`, `%H` specifiers for formatting JSON strings is also supported.
 
 Parameters:
 - `buf` - Pointer to pointer to output buffer
@@ -2561,13 +2561,15 @@ Supported format specifiers:
 - `hhd`, `hd`, `d`, `ld`, `lld` - for `char`, `short`, `int`, `long`, `int64_t`
 - `hhu`, `hu`, `u`, `lu`, `llu` - same but for unsigned variants
 - `hhx`, `hx`, `x`, `lx`, `llx` - same, unsigned and hex output
-- `s` - for `char *`
-- `Q` - for `char *`, outputs double-quoted JSON-escaped string (extension)
-- `M` - for `size_t (*)(char *, size_t, va_list *)`, calls another print function (extension)
-- `g`, `f` - for `double`
-- `c` - for `char`
-- `%` - the `%` character itself
-- `p` - for any pointer, prints `0x.....` hex value
+- `s` - expect `char *`
+- `Q` - expect `char *`, outputs double-quoted JSON-escaped string (extension)
+- `H` - expect `int`, `void *`, outputs double-quoted hex string (extension)
+- `V` - expect `int`, `void *`, outputs double-quoted base64 string (extension)
+- `M` - expect `size_t (*)(char *, size_t, va_list *)`, calls another print function (extension)
+- `g`, `f` - expect `double`
+- `c` - expect `char`
+- `%` - expect `%` character itself
+- `p` - expect any pointer, prints `0x.....` hex value
 - `%X.Y` - optional width and precision modifiers
 - `%.*` - optional precision modifier specified as `int` argument
 

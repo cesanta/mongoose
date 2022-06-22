@@ -4518,6 +4518,33 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
         int p = va_arg(*ap, int);
         if (n < len) buf[n] = (char) p;
         n++;
+      } else if (c == 'H') {
+        // Print hex-encoded double-quoted string
+        size_t bl = (size_t) va_arg(*ap, int);
+        uint8_t *p = va_arg(*ap, uint8_t *), dquote = '"';
+        const char *hex = "0123456789abcdef";
+        n += mg_copys(buf, len, n, (char *) &dquote, 1);
+        for (j = 0; j < bl; j++) {
+          n += mg_copys(buf, len, n, (char *) &hex[(p[j] >> 4) & 15], 1);
+          n += mg_copys(buf, len, n, (char *) &hex[p[j] & 15], 1);
+        }
+        n += mg_copys(buf, len, n, (char *) &dquote, 1);
+      } else if (c == 'V') {
+        // Print base64-encoded double-quoted string
+        size_t bl = (size_t) va_arg(*ap, int);
+        uint8_t *p = va_arg(*ap, uint8_t *), dquote = '"';
+        const char *t =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        n += mg_copys(buf, len, n, (char *) &dquote, 1);
+        for (j = 0; j < bl; j += 3) {
+          uint8_t c1 = p[j], c2 = j + 1 < bl ? p[j + 1] : 0,
+                  c3 = j + 2 < bl ? p[j + 2] : 0;
+          char tmp[4] = {t[c1 >> 2], t[(c1 & 3) << 4 | (c2 >> 4)], '=', '='};
+          if (j + 1 < bl) tmp[2] = t[(c2 & 15) << 2 | (c3 >> 6)];
+          if (j + 2 < bl) tmp[3] = t[c3 & 63];
+          n += mg_copys(buf, len, n, tmp, sizeof(tmp));
+        }
+        n += mg_copys(buf, len, n, (char *) &dquote, 1);
       } else if (c == 's' || c == 'Q') {
         char *p = va_arg(*ap, char *);
         size_t (*fn)(char *, size_t, size_t, char *, size_t) =
