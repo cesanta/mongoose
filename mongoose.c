@@ -5106,7 +5106,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 #if OPENSSL_VERSION_NUMBER > 0x10100000L
     } else if ((rc = SSL_use_certificate_chain_file(tls->ssl, opts->cert)) !=
                1) {
-      mg_error(c, "Invalid CA, err %d", mg_tls_err(tls, rc));
+      mg_error(c, "Invalid chain, err %d", mg_tls_err(tls, rc));
       goto fail;
 #endif
     } else {
