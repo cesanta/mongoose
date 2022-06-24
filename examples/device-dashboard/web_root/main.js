@@ -312,17 +312,6 @@ const App = function(props) {
           .then(r => setConfig(r))
           .catch(err => console.log(err));
 
-  const login = function(u) {
-    document.cookie = `access_token=${u.token};path=/;max-age=3600`;
-    setUser(u.user);
-    return getconfig();
-  };
-
-  const logout = ev => {
-    document.cookie = `access_token=;path=/;max-age=0`;
-    setUser('');
-  };
-
   // Watch for notifications. As soon as a notification arrives, pass it on
   // to all subscribed components
   const watch = function() {
@@ -349,13 +338,24 @@ const App = function(props) {
     reconnect();
   };
 
+  const login = function(u) {
+    document.cookie = `access_token=${u.token};path=/;max-age=3600`;
+    setUser(u.user);
+    watch();
+    return getconfig();
+  };
+
+  const logout = ev => {
+    document.cookie = `access_token=;path=/;max-age=0`;
+    setUser('');
+  };
+
   useEffect(() => {
     // Called once at init time
     PubSub.subscribe(msg => msg.name == 'config' && getconfig());
     fetch('/api/login', {headers: {Authorization: ''}})
         .then(r => r.json())
         .then(r => login(r))
-        .then(watch)
         .catch(err => setUser(''));
   }, []);
 
