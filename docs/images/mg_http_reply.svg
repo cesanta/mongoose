@@ -28,7 +28,7 @@
 		<text transform="matrix(1 0 0 1 502.9807 204.1905)" class="st2 st3 st4">Content-Length; 13</text>
 		<text transform="matrix(1 0 0 1 502.9807 224.2905)" class="st2 st3 st4">X-Header-1: additional value 1</text>
 		<text transform="matrix(1 0 0 1 502.9807 244.3905)" class="st2 st3 st4">X-Header-2: additional value 2</text>
-		<text transform="matrix(1 0 0 1 503.2368 293.1559)" class="st2 st3 st4">Hello, World!</text>
+		<text transform="matrix(1 0 0 1 503.2368 293.1559)" class="st2 st3 st4">Hello, world!</text>
 	</g>
 </g>
 <text transform="matrix(1 0 0 1 681.8747 137.3383)" class="st5 st6">HTTP message</text>
@@ -36,7 +36,7 @@
 	<g>
 		<text transform="matrix(1 0 0 1 33.1042 85.1617)" class="st2 st3 st4">mg_http_reply(c, 200</text>
 		<text transform="matrix(1 0 0 1 171.9368 113.7079)" class="st2 st3 st4">"X-Header-1: additional value 1\r\n"</text>
-		<text transform="matrix(1 0 0 1 171.9368 133.8079)" class="st2 st3 st4">"X-Header-1: additional value 2\r\n",</text>
+		<text transform="matrix(1 0 0 1 171.9368 133.8079)" class="st2 st3 st4">"X-Header-2: additional value 2\r\n",</text>
 		<text transform="matrix(1 0 0 1 171.9368 153.9079)" class="st2 st3 st4">"Hello, %s!", "world");</text>
 	</g>
 </g>

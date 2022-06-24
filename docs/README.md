@@ -1072,11 +1072,10 @@ Send a simple JSON response:
 mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"result\": %d}", 123);
 ```
 
-Send JSON response using [mjson](https://github.com/cesanta/mjson) library:
+Send JSON response:
 ```c
-char *json = NULL;
-mjson_printf(mjson_print_dynamic_buf, &json, "{%Q:%d}", "name", 123);
-mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", json);
+char *json = mg_mprintf("{%Q:%d}", "name", 123);
+mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s\n", json);
 free(json);
 ```
 
