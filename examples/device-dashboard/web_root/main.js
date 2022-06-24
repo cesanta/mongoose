@@ -43,8 +43,8 @@ const Hero = props => html`
   <h1 style="margin: 0.2em 0;">Interactive Device Dashboard</h1>
 
   <p>
-  This device dashboard is developed with modern and compact Preact framework,
-  in order to fit on a very small devices. This is
+  This device dashboard is developed using the modern and compact Preact framework,
+  in order to fit on very small devices. This is
   a <a href="https://mongoose.ws/tutorials/http-server/">hybrid server</a> which
   provides both static and dynamic content.  Static files, like CSS/JS/HTML
   or images, are compiled into the server binary.
@@ -53,14 +53,14 @@ const Hero = props => html`
   using  <code>curl</code> command-line utility:
   </p>
 
-  <div><code>curl localhost:8000/api/config/get</code> </div>
-  <div><code>curl localhost:8000/api/config/set -d 'value1=7&value2=hello'</code> </div>
-  <div><code>curl localhost:8000/api/message/send -d 'msg=hello'</code> </div>
+  <div><code>curl -u admin:pass0 localhost:8000/api/config/get</code> </div>
+  <div><code>curl -u admin:pass0 localhost:8000/api/config/set -d 'pub=mg/topic'</code> </div>
+  <div><code>curl -u admin:pass0 localhost:8000/api/message/send -d 'message=hello'</code> </div>
 
   <p>
-  A device can send notifications to this dashboard at anytime. Notifications
-  are sent over Websocket at URI <code>curl localhost:8000/api/watch</code>
-  as JSON strings <code>{"name": "..", "data": ...}</code>
+  The device can send notifications to this dashboard at anytime. Notifications
+  are sent over WebSocket at URI <code>/api/watch</code> as JSON strings: <code>{"name": "..", "data": ...}</code>
+  <div>Try <code>wscat --auth user1:pass1 --connect ws://localhost:8000/api/watch</code></div>
   </p>
 </div>
 </div>`;
@@ -153,10 +153,10 @@ const Configuration = function(props) {
     HiveMQ Websocket web client</a> to send messages to this console.
   </div>
   <div class="msg">
-    Device keeps a persistent connection to the configured MQTT server.
+    The device keeps a persistent connection to the configured MQTT server.
     Changes to this configuration are propagated to all dashboards: try
-    changing them in this dashboard and observe changes in the other opened
-    dashboard.
+    changing them in this dashboard and observe changes in other opened
+    dashboards.
   </div><div class="msg">
     Note: administrators can see this section and can change device
     configuration, whilst users cannot.
@@ -186,7 +186,7 @@ const Messages = function(props) {
                               method: 'post',
                               body: `message=${encodeURIComponent(txt)}`
                             }).then(r => setTxt(''));
-  const connstatus = props.config.connected ? 'connected' : 'diconnected';
+  const connstatus = props.config.connected ? 'connected' : 'disconnected';
   return html`
 <div class="section">
   <h3 style="background: #30c040; color: #fff; padding: 0.4em;">MQTT messages</h3>
@@ -203,10 +203,9 @@ const Messages = function(props) {
       oninput=${ev => setTxt(ev.target.value)} />
   </div>
   <div class="msg">
-    Message gets passed to the device via REST. Then a device sends it to
+    The message gets passed to the device via REST. Then the device sends it to
     the MQTT server over MQTT. All MQTT messages on a subscribed topic
-    received by a device, are propagated to this dashboard via the
-    /api/watch.
+    received by the device, are propagated to this dashboard via /api/watch.
   </div>
 </div>`;
 };
@@ -298,7 +297,7 @@ const Chart = function(props) {
     <${SVG} height=240 width=600 ymin=0 ymax=20 xmax=${xmax} data=${data} />
   </div>
   <div class="msg">
-    This chart plots live sensor data, sent by a device via /api/watch.
+    This chart plots live sensor data, sent by the device via /api/watch.
   </div>
 </div>`;
 };
