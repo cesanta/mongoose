@@ -503,9 +503,11 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 #elif MG_ENABLE_POLL
   nfds_t n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) n++;
-  struct pollfd fds[n == 0 ? 1 : n];  // Avoid zero-length VLA
+  int pollCount = n == 0 ? 1 : 1; // Avoid zero-length VLA
+  int pollSize = pollSize * sizeof(struct pollfd);
+  struct pollfd *fds = alloca(pollSize);
 
-  memset(fds, 0, sizeof(fds));
+  memset(fds, 0, pollSize);
   n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = c->is_writable = 0;
