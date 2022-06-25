@@ -504,7 +504,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   nfds_t n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) n++;
   int pollCount = n == 0 ? 1 : 1; // Avoid zero-length VLA
-  int pollSize = pollSize * sizeof(struct pollfd);
+  int pollSize = pollSize * (int) sizeof(struct pollfd);
   struct pollfd *fds = alloca(pollSize);
 
   memset(fds, 0, pollSize);
