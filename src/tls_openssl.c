@@ -62,7 +62,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     SSL_set_verify(tls->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                    NULL);
     if ((rc = SSL_CTX_load_verify_locations(tls->ctx, opts->ca, NULL)) != 1) {
-      mg_error(c, "parse(%s): err %d", opts->ca, mg_tls_err(tls, rc));
+      mg_error(c, "load('%s') %d err %d", opts->ca, rc, mg_tls_err(tls, rc));
       goto fail;
     }
   }
@@ -91,9 +91,9 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 #if OPENSSL_VERSION_NUMBER > 0x10002000L
   if (opts->srvname.len > 0) {
     char mem[128], *buf = mem;
-    size_t len = mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
-                             opts->srvname.ptr);
-    X509_VERIFY_PARAM_set1_host(SSL_get0_param(tls->ssl), buf, len);
+    mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
+                opts->srvname.ptr);
+    SSL_set1_host(tls->ssl, buf);
     if (buf != mem) free(buf);
   }
 #endif
