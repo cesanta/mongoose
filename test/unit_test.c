@@ -1374,17 +1374,16 @@ static bool sccmp(const char *s1, const char *s2, int expected) {
   return n1 == expected;
 }
 
-static size_t pf1(char *buf, size_t len, va_list *ap) {
+static size_t pf1(void (*out)(char, void *), void *ptr, va_list *ap) {
   int a = va_arg(*ap, int);
   int b = va_arg(*ap, int);
-  return mg_snprintf(buf, len, "%d", a + b);
+  return mg_rprintf(out, ptr, "%d", a + b);
 }
 
-static size_t pf2(char *buf, size_t len, va_list *ap) {
+static size_t pf2(void (*out)(char, void *), void *ptr, va_list *ap) {
   int cnt = va_arg(*ap, int);
   size_t n = 0;
-  while (cnt-- > 0)
-    n += mg_snprintf(buf ? buf + n : 0, n < len ? len - n : 0, "%d", cnt);
+  while (cnt-- > 0) n += mg_rprintf(out, ptr, "%d", cnt);
   return n;
 }
 
@@ -1491,7 +1490,13 @@ static void test_str(void) {
     free(p);
 
     p = mg_mprintf("[%M,%d]", pf2, 10, 7);
-    // printf("-> %s\n", p);
+    ASSERT(strcmp(p, "[9876543210,7]") == 0);
+    free(p);
+
+    p = mg_mprintf("[%M", pf2, 10);
+    mg_rprintf(mg_putchar_stralloc, &p, ",");
+    mg_rprintf(mg_putchar_stralloc, &p, "%d]", 7);
+    printf("-> %s\n", p);
     ASSERT(strcmp(p, "[9876543210,7]") == 0);
     free(p);
   }
