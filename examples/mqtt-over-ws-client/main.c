@@ -49,10 +49,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
             size_t len = c->send.len;
             MG_INFO(("CONNECTED to %s", s_url));
             mg_mqtt_sub(c, topic, 1);
-            mg_ws_wrap(c, len, WEBSOCKET_OP_BINARY);
+            len = mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
             MG_INFO(("SUBSCRIBED to %.*s", (int) topic.len, topic.ptr));
             mg_mqtt_pub(c, topic, data, 1, false);
-            MG_INFO(("PUBSLISHED %.*s -> %.*s", (int) data.len, data.ptr,
+            MG_INFO(("PUBLISHED %.*s -> %.*s", (int) data.len, data.ptr,
                      (int) topic.len, topic.ptr));
             len = mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
           } else {
