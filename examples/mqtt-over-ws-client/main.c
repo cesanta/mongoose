@@ -37,8 +37,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_mqtt_message mm;
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    uint8_t version = (uint8_t) (size_t) c->pfn_data;
     MG_INFO(("GOT %d bytes WS msg", (int) wm->data.len));
-    while ((mg_mqtt_parse((uint8_t *) wm->data.ptr, wm->data.len, &mm)) == 0) {
+    while ((mg_mqtt_parse((uint8_t *) wm->data.ptr, wm->data.len, version,
+                          &mm)) == 0) {
       switch (mm.cmd) {
         case MQTT_CMD_CONNACK:
           mg_call(c, MG_EV_MQTT_OPEN, &mm.ack);

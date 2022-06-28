@@ -15,7 +15,7 @@ static void mg_putchar_iobuf(char ch, void *param) {
   if (io->len < io->size) io->buf[io->len++] = (uint8_t) ch;
 }
 
-void mg_putchar_stralloc(char ch, void *param) {
+void mg_putchar_realloc(char ch, void *param) {
   char *s, *buf = *(char **) param;
   size_t len = buf == NULL ? 0 : strlen(buf), chunksize = 256;
   size_t new_size = len + 1 + 1 + chunksize;

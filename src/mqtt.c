@@ -32,43 +32,50 @@ static void mg_send_u16(struct mg_connection *c, uint16_t value) {
 }
 
 void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
-  char rnd[9], client_id[16];
+  char rnd[10], client_id[21], zero = 0;
   struct mg_str cid = opts->client_id;
   uint32_t total_len = 7 + 1 + 2 + 2;
-  uint8_t connflag = (uint8_t) ((opts->will_qos & 3) << 3);
+  uint8_t hdr[8] = {0, 4, 'M', 'Q', 'T', 'T', opts->version, 0};
 
   if (cid.len == 0) {
     mg_random(rnd, sizeof(rnd));
-    mg_base64_encode((unsigned char *) rnd, sizeof(rnd), client_id);
+    mg_hex(rnd, sizeof(rnd), client_id);
     client_id[sizeof(client_id) - 1] = '\0';
     cid = mg_str(client_id);
   }
 
+  if (hdr[6] == 0) hdr[6] = 4;  // If version is not set, use 4 (3.1.1)
+  c->pfn_data = (void *) (size_t) hdr[6];          // Store version
+  hdr[7] = (uint8_t) ((opts->will_qos & 3) << 3);  // Connection flags
   if (opts->user.len > 0) {
     total_len += 2 + (uint32_t) opts->user.len;
-    connflag |= MQTT_HAS_USER_NAME;
+    hdr[7] |= MQTT_HAS_USER_NAME;
   }
   if (opts->pass.len > 0) {
     total_len += 2 + (uint32_t) opts->pass.len;
-    connflag |= MQTT_HAS_PASSWORD;
+    hdr[7] |= MQTT_HAS_PASSWORD;
   }
   if (opts->will_topic.len > 0 && opts->will_message.len > 0) {
     total_len +=
         4 + (uint32_t) opts->will_topic.len + (uint32_t) opts->will_message.len;
-    connflag |= MQTT_HAS_WILL;
+    hdr[7] |= MQTT_HAS_WILL;
   }
-  if (opts->clean || cid.len == 0) connflag |= MQTT_CLEAN_SESSION;
-  if (opts->will_retain) connflag |= MQTT_WILL_RETAIN;
+  if (opts->clean || cid.len == 0) hdr[7] |= MQTT_CLEAN_SESSION;
+  if (opts->will_retain) hdr[7] |= MQTT_WILL_RETAIN;
   total_len += (uint32_t) cid.len;
+  if (opts->version == 5) total_len += 1U + (hdr[7] & MQTT_HAS_WILL ? 1U : 0);
 
   mg_mqtt_send_header(c, MQTT_CMD_CONNECT, 0, total_len);
-  mg_send(c, "\00\04MQTT\04", 7);
-  mg_send(c, &connflag, sizeof(connflag));
+  mg_send(c, hdr, sizeof(hdr));
   // keepalive == 0 means "do not disconnect us!"
   mg_send_u16(c, mg_htons((uint16_t) opts->keepalive));
+
+  if (opts->version == 5) mg_send(c, &zero, sizeof(zero));  // V5 properties
   mg_send_u16(c, mg_htons((uint16_t) cid.len));
   mg_send(c, cid.ptr, cid.len);
-  if (connflag & MQTT_HAS_WILL) {
+
+  if (hdr[7] & MQTT_HAS_WILL) {
+    if (opts->version == 5) mg_send(c, &zero, sizeof(zero));  // will props
     mg_send_u16(c, mg_htons((uint16_t) opts->will_topic.len));
     mg_send(c, opts->will_topic.ptr, opts->will_topic.len);
     mg_send_u16(c, mg_htons((uint16_t) opts->will_message.len));
@@ -87,32 +94,37 @@ void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
 void mg_mqtt_pub(struct mg_connection *c, struct mg_str topic,
                  struct mg_str data, int qos, bool retain) {
   uint8_t flags = (uint8_t) (((qos & 3) << 1) | (retain ? 1 : 0));
-  uint32_t total_len = 2 + (uint32_t) topic.len + (uint32_t) data.len;
+  uint8_t version = (uint8_t) (size_t) c->pfn_data, zero = 0;
+  uint32_t len = 2 + (uint32_t) topic.len + (uint32_t) data.len;
   MG_DEBUG(("%lu [%.*s] -> [%.*s]", c->id, (int) topic.len, (char *) topic.ptr,
             (int) data.len, (char *) data.ptr));
-  if (qos > 0) total_len += 2;
-  mg_mqtt_send_header(c, MQTT_CMD_PUBLISH, flags, total_len);
+  if (qos > 0) len += 2;
+  if (version == 5) len++;
+  mg_mqtt_send_header(c, MQTT_CMD_PUBLISH, flags, len);
   mg_send_u16(c, mg_htons((uint16_t) topic.len));
   mg_send(c, topic.ptr, topic.len);
   if (qos > 0) {
     if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
     mg_send_u16(c, mg_htons(c->mgr->mqtt_id));
   }
+  if (version == 5) mg_send(c, &zero, sizeof(zero));
   mg_send(c, data.ptr, data.len);
 }
 
 void mg_mqtt_sub(struct mg_connection *c, struct mg_str topic, int qos) {
-  uint8_t qos_ = qos & 3;
-  uint32_t total_len = 2 + (uint32_t) topic.len + 2 + 1;
-  mg_mqtt_send_header(c, MQTT_CMD_SUBSCRIBE, 2, total_len);
+  uint8_t qos_ = qos & 3, version = (uint8_t) (size_t) c->pfn_data, zero = 0;
+  uint32_t len = 2 + (uint32_t) topic.len + 2 + 1 + (version == 5 ? 1 : 0);
+  mg_mqtt_send_header(c, MQTT_CMD_SUBSCRIBE, 2, len);
   if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
   mg_send_u16(c, mg_htons(c->mgr->mqtt_id));
+  if (version == 5) mg_send(c, &zero, sizeof(zero));
   mg_send_u16(c, mg_htons((uint16_t) topic.len));
   mg_send(c, topic.ptr, topic.len);
   mg_send(c, &qos_, sizeof(qos_));
 }
 
-int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m) {
+int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
+                  struct mg_mqtt_message *m) {
   uint8_t lc = 0, *p, *end;
   uint32_t n = 0, len_len = 0;
 
@@ -144,16 +156,14 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m) {
     case MQTT_CMD_PUBREC:
     case MQTT_CMD_PUBREL:
     case MQTT_CMD_PUBCOMP:
+    case MQTT_CMD_SUBSCRIBE:
     case MQTT_CMD_SUBACK:
-      if (p + 2 > end) return MQTT_MALFORMED;
-      m->id = (uint16_t) ((((uint16_t) p[0]) << 8) | p[1]);
-      break;
-    case MQTT_CMD_SUBSCRIBE: {
+    case MQTT_CMD_UNSUBSCRIBE:
+    case MQTT_CMD_UNSUBACK:
       if (p + 2 > end) return MQTT_MALFORMED;
       m->id = (uint16_t) ((((uint16_t) p[0]) << 8) | p[1]);
       p += 2;
       break;
-    }
     case MQTT_CMD_PUBLISH: {
       if (p + 2 > end) return MQTT_MALFORMED;
       m->topic.len = (uint16_t) ((((uint16_t) p[0]) << 8) | p[1]);
@@ -165,6 +175,8 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m) {
         m->id = (uint16_t) ((((uint16_t) p[0]) << 8) | p[1]);
         p += 2;
       }
+      if (p >= end) return MQTT_MALFORMED;
+      if (version == 5) p += 1 + p[0];  // Skip options
       if (p > end) return MQTT_MALFORMED;
       m->data.ptr = (char *) p;
       m->data.len = (size_t) (end - p);
@@ -206,8 +218,9 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
                     void *fn_data) {
   if (ev == MG_EV_READ) {
     for (;;) {
+      uint8_t version = (uint8_t) (size_t) c->pfn_data;
       struct mg_mqtt_message mm;
-      int rc = mg_mqtt_parse(c->recv.buf, c->recv.len, &mm);
+      int rc = mg_mqtt_parse(c->recv.buf, c->recv.len, version, &mm);
       if (rc == MQTT_MALFORMED) {
         MG_ERROR(("%lu MQTT malformed message", c->id));
         c->is_closing = 1;

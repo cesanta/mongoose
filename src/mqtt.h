@@ -17,6 +17,7 @@
 #define MQTT_CMD_PINGREQ 12
 #define MQTT_CMD_PINGRESP 13
 #define MQTT_CMD_DISCONNECT 14
+#define MQTT_CMD_AUTH 15
 
 struct mg_mqtt_opts {
   struct mg_str user;          // Username, can be empty
@@ -25,9 +26,10 @@ struct mg_mqtt_opts {
   struct mg_str will_topic;    // Will topic
   struct mg_str will_message;  // Will message
   uint8_t will_qos;            // Will message quality of service
+  uint8_t version;             // Can be 4 (3.1.1), or 5. If 0, assume 4.
+  uint16_t keepalive;          // Keep-alive timer in seconds
   bool will_retain;            // Retain last will
   bool clean;                  // Use clean session, 0 or 1
-  uint16_t keepalive;          // Keep-alive timer in seconds
 };
 
 struct mg_mqtt_message {
@@ -49,7 +51,7 @@ void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts);
 void mg_mqtt_pub(struct mg_connection *c, struct mg_str topic,
                  struct mg_str data, int qos, bool retain);
 void mg_mqtt_sub(struct mg_connection *, struct mg_str topic, int qos);
-int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m);
+int mg_mqtt_parse(const uint8_t *, size_t, uint8_t, struct mg_mqtt_message *);
 void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,
                          uint32_t len);
 size_t mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,

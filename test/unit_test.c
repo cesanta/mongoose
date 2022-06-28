@@ -371,24 +371,16 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   (void) c;
 }
 
-static void test_mqtt(void) {
+static void test_mqtt_ver(uint8_t mqtt_version) {
   char buf[50] = {0};
   struct mqtt_data test_data = {buf, 0, 0};
   struct mg_mgr mgr;
   struct mg_str topic = mg_str("x/f12"), data = mg_str("hi");
   struct mg_connection *c;
   struct mg_mqtt_opts opts;
-  char rnd[9], client_id[16];
-  // const char *url = "mqtt://mqtt.eclipse.org:1883";
   const char *url = "mqtt://broker.hivemq.com:1883";
   int i;
   mg_mgr_init(&mgr);
-
-  {
-    uint8_t bad[] = " \xff\xff\xff\xff ";
-    struct mg_mqtt_message mm;
-    mg_mqtt_parse(bad, sizeof(bad), &mm);
-  }
 
   // Connect with empty client ID
   c = mg_mqtt_connect(&mgr, url, NULL, mqtt_cb, &test_data);
@@ -416,12 +408,10 @@ static void test_mqtt(void) {
   opts.will_qos = 1;
   opts.will_retain = true;
   opts.keepalive = 20;
-  mg_random(rnd, sizeof(rnd));
-  mg_base64_encode((unsigned char *) rnd, sizeof(rnd), client_id);
-  client_id[sizeof(client_id) - 1] = '\0';
-  opts.client_id = mg_str(client_id);
+  opts.version = mqtt_version;
   opts.will_topic = mg_str("mg_will_topic");
   opts.will_message = mg_str("mg_will_messsage");
+  opts.client_id = mg_str("mg_unit_test");
   c = mg_mqtt_connect(&mgr, url, &opts, mqtt_cb, &test_data);
   for (i = 0; i < 300 && buf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
   if (buf[0] != 'X') MG_INFO(("[%s]", buf));
@@ -440,6 +430,11 @@ static void test_mqtt(void) {
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
+}
+
+static void test_mqtt(void) {
+  test_mqtt_ver(5);
+  test_mqtt_ver(4);
 }
 
 static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -1494,8 +1489,8 @@ static void test_str(void) {
     free(p);
 
     p = mg_mprintf("[%M", pf2, 10);
-    mg_rprintf(mg_putchar_stralloc, &p, ",");
-    mg_rprintf(mg_putchar_stralloc, &p, "%d]", 7);
+    mg_rprintf(mg_putchar_realloc, &p, ",");
+    mg_rprintf(mg_putchar_realloc, &p, "%d]", 7);
     printf("-> %s\n", p);
     ASSERT(strcmp(p, "[9876543210,7]") == 0);
     free(p);

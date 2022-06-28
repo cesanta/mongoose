@@ -26,8 +26,10 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_url_decode(NULL, 0, tmp, 1, 1);
 
   struct mg_mqtt_message mm;
-  mg_mqtt_parse(data, size, &mm);
-  mg_mqtt_parse(NULL, 0, &mm);
+  mg_mqtt_parse(data, size, 0, &mm);
+  mg_mqtt_parse(NULL, 0, 0, &mm);
+  mg_mqtt_parse(data, size, 5, &mm);
+  mg_mqtt_parse(NULL, 0, 5, &mm);
 
   mg_sntp_parse(data, size);
   mg_sntp_parse(NULL, 0);
