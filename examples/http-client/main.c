@@ -5,9 +5,7 @@
 // print the response and exit.
 // You can change `s_url` from the command line by executing: ./example YOUR_URL
 //
-// To enable SSL/TLS for this client, build it like this:
-//    make MBEDTLS=/path/to/your/mbedtls/installation
-//    make OPENSSL=/path/to/your/openssl/installation
+// To enable SSL/TLS, make SSL=OPENSSL or make SSL=MBEDTLS 
 
 #include "mongoose.h"
 
