@@ -8,8 +8,7 @@ CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
 						-I. -I$(ROOT) -DMG_ARCH=MG_ARCH_NEWLIB -DMIP_DEBUG=1 \
 						-DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_LINES=1 -DMG_ENABLE_MIP=1 \
 						-mcpu=cortex-m7 -mthumb -mfloat-abi=softfp -mfpu=vfpv4 $(EXTRA)
-LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs \
-					 -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 SOURCES = boot.c main.c syscalls.c $(ROOT)/mongoose.c
 
 all build example: $(TARGET).bin
@@ -19,6 +18,12 @@ $(TARGET).bin: $(TARGET).elf
 
 $(TARGET).elf: $(SOURCES) mcu.h
 	$(DOCKER) $(CROSS)-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
+
+# Build on Windows. Download Win32 Zip from ARM GCC downloads, unzip to c:\armgcc
+ARMGCC ?= c:/armgcc
+windows: $(TARGET).bin
+windows: CROSS = $(ARMGCC)/bin/arm-none-eabi
+windows: DOCKER =
 
 # Build an interactive device dashboard
 dash: $(TARGET).elf

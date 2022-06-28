@@ -1,6 +1,53 @@
 #include "iobuf.h"
 #include "str.h"
 
+size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
+  va_list ap_copy;
+  size_t len;
+
+  va_copy(ap_copy, ap);
+  len = mg_vsnprintf(*buf, size, fmt, &ap_copy);
+  va_end(ap_copy);
+
+  if (len >= size) {
+    //  Allocate a buffer that is large enough
+    if ((*buf = (char *) calloc(1, len + 1)) == NULL) {
+      len = 0;
+    } else {
+      va_copy(ap_copy, ap);
+      len = mg_vsnprintf(*buf, len + 1, fmt, &ap_copy);
+      va_end(ap_copy);
+    }
+  }
+
+  return len;
+}
+
+size_t mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
+  size_t ret;
+  va_list ap;
+  va_start(ap, fmt);
+  ret = mg_vasprintf(buf, size, fmt, ap);
+  va_end(ap);
+  return ret;
+}
+
+char *mg_vmprintf(const char *fmt, va_list ap) {
+  char *s = NULL;
+  mg_vasprintf(&s, 0, fmt, ap);
+  return s;
+}
+
+char *mg_mprintf(const char *fmt, ...) {
+  char *s = NULL;
+  va_list ap;
+  va_start(ap, fmt);
+  mg_vasprintf(&s, 0, fmt, ap);
+  va_end(ap);
+  return s;
+}
+
+
 size_t mg_rprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
   size_t len = 0;
   va_list ap;
@@ -10,26 +57,28 @@ size_t mg_rprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
   return len;
 }
 
-static void mg_putchar_iobuf(char ch, void *param) {
+static void mg_putchar_iobuf_static(char ch, void *param) {
   struct mg_iobuf *io = (struct mg_iobuf *) param;
   if (io->len < io->size) io->buf[io->len++] = (uint8_t) ch;
 }
 
+// We don't use realloc() in mongoose, so resort to inefficient calloc
+// Every new character reallocates the whole string
 void mg_putchar_realloc(char ch, void *param) {
   char *s, *buf = *(char **) param;
-  size_t len = buf == NULL ? 0 : strlen(buf), chunksize = 256;
-  size_t new_size = len + 1 + 1 + chunksize;
-  new_size -= new_size % chunksize;
-  if ((s = (char *) realloc(buf, new_size)) != NULL) {
+  size_t len = buf == NULL ? 0 : strlen(buf);
+  if ((s = (char *) calloc(1, len + 2)) != NULL) {
+    if (buf != NULL) memcpy(s, buf, len);
     s[len] = ch;
     s[len + 1] = '\0';
+    free(buf);
     *(char **) param = s;
   }
 }
 
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
   struct mg_iobuf io = {(uint8_t *) buf, len, 0};
-  size_t n = mg_vrprintf(mg_putchar_iobuf, &io, fmt, ap);
+  size_t n = mg_vrprintf(mg_putchar_iobuf_static, &io, fmt, ap);
   if (n < len) buf[n] = '\0';
   return n;
 }

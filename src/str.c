@@ -196,51 +196,6 @@ void mg_unhex(const char *buf, size_t len, unsigned char *to) {
   }
 }
 
-size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
-  va_list ap_copy;
-  size_t len;
-
-  va_copy(ap_copy, ap);
-  len = mg_vsnprintf(*buf, size, fmt, &ap_copy);
-  va_end(ap_copy);
-
-  if (len >= size) {
-    //  Allocate a buffer that is large enough
-    if ((*buf = (char *) calloc(1, len + 1)) == NULL) {
-      len = 0;
-    } else {
-      va_copy(ap_copy, ap);
-      len = mg_vsnprintf(*buf, len + 1, fmt, &ap_copy);
-      va_end(ap_copy);
-    }
-  }
-
-  return len;
-}
-
-size_t mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
-  size_t ret;
-  va_list ap;
-  va_start(ap, fmt);
-  ret = mg_vasprintf(buf, size, fmt, ap);
-  va_end(ap);
-  return ret;
-}
-
-char *mg_vmprintf(const char *fmt, va_list ap) {
-  char *s = NULL;
-  mg_vasprintf(&s, 0, fmt, ap);
-  return s;
-}
-
-char *mg_mprintf(const char *fmt, ...) {
-  char *s = NULL;
-  va_list ap;
-  va_start(ap, fmt);
-  mg_vasprintf(&s, 0, fmt, ap);
-  va_end(ap);
-  return s;
-}
 
 uint64_t mg_tou64(struct mg_str str) {
   uint64_t result = 0;
