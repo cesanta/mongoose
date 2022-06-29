@@ -1758,45 +1758,47 @@ static void static_cb(struct mg_connection *c, int ev, void *ev_data,
   (void) ev_data;
 }
 
+// Known mime types. Keep it outside guess_content_type() function, since
+// some environments don't like it defined there.
+// clang-format off
+static struct mg_str s_known_types[] = {
+    MG_C_STR("html"), MG_C_STR("text/html; charset=utf-8"),
+    MG_C_STR("htm"), MG_C_STR("text/html; charset=utf-8"),
+    MG_C_STR("css"), MG_C_STR("text/css; charset=utf-8"),
+    MG_C_STR("js"), MG_C_STR("text/javascript; charset=utf-8"),
+    MG_C_STR("gif"), MG_C_STR("image/gif"),
+    MG_C_STR("png"), MG_C_STR("image/png"),
+    MG_C_STR("jpg"), MG_C_STR("image/jpeg"),
+    MG_C_STR("jpeg"), MG_C_STR("image/jpeg"),
+    MG_C_STR("woff"), MG_C_STR("font/woff"),
+    MG_C_STR("ttf"), MG_C_STR("font/ttf"),
+    MG_C_STR("svg"), MG_C_STR("image/svg+xml"),
+    MG_C_STR("txt"), MG_C_STR("text/plain; charset=utf-8"),
+    MG_C_STR("avi"), MG_C_STR("video/x-msvideo"),
+    MG_C_STR("csv"), MG_C_STR("text/csv"),
+    MG_C_STR("doc"), MG_C_STR("application/msword"),
+    MG_C_STR("exe"), MG_C_STR("application/octet-stream"),
+    MG_C_STR("gz"), MG_C_STR("application/gzip"),
+    MG_C_STR("ico"), MG_C_STR("image/x-icon"),
+    MG_C_STR("json"), MG_C_STR("application/json"),
+    MG_C_STR("mov"), MG_C_STR("video/quicktime"),
+    MG_C_STR("mp3"), MG_C_STR("audio/mpeg"),
+    MG_C_STR("mp4"), MG_C_STR("video/mp4"),
+    MG_C_STR("mpeg"), MG_C_STR("video/mpeg"),
+    MG_C_STR("pdf"), MG_C_STR("application/pdf"),
+    MG_C_STR("shtml"), MG_C_STR("text/html; charset=utf-8"),
+    MG_C_STR("tgz"), MG_C_STR("application/tar-gz"),
+    MG_C_STR("wav"), MG_C_STR("audio/wav"),
+    MG_C_STR("webp"), MG_C_STR("image/webp"),
+    MG_C_STR("zip"), MG_C_STR("application/zip"),
+    MG_C_STR("3gp"), MG_C_STR("video/3gpp"),
+    {0, 0},
+};
+// clang-format on
+
 static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
   struct mg_str k, v, s = mg_str(extra);
   size_t i = 0;
-
-  // clang-format off
-  struct mg_str tab[] = {
-      MG_C_STR("html"), MG_C_STR("text/html; charset=utf-8"),
-      MG_C_STR("htm"), MG_C_STR("text/html; charset=utf-8"),
-      MG_C_STR("css"), MG_C_STR("text/css; charset=utf-8"),
-      MG_C_STR("js"), MG_C_STR("text/javascript; charset=utf-8"),
-      MG_C_STR("gif"), MG_C_STR("image/gif"),
-      MG_C_STR("png"), MG_C_STR("image/png"),
-      MG_C_STR("jpg"), MG_C_STR("image/jpeg"),
-      MG_C_STR("jpeg"), MG_C_STR("image/jpeg"),
-      MG_C_STR("woff"), MG_C_STR("font/woff"),
-      MG_C_STR("ttf"), MG_C_STR("font/ttf"),
-      MG_C_STR("svg"), MG_C_STR("image/svg+xml"),
-      MG_C_STR("txt"), MG_C_STR("text/plain; charset=utf-8"),
-      MG_C_STR("avi"), MG_C_STR("video/x-msvideo"),
-      MG_C_STR("csv"), MG_C_STR("text/csv"),
-      MG_C_STR("doc"), MG_C_STR("application/msword"),
-      MG_C_STR("exe"), MG_C_STR("application/octet-stream"),
-      MG_C_STR("gz"), MG_C_STR("application/gzip"),
-      MG_C_STR("ico"), MG_C_STR("image/x-icon"),
-      MG_C_STR("json"), MG_C_STR("application/json"),
-      MG_C_STR("mov"), MG_C_STR("video/quicktime"),
-      MG_C_STR("mp3"), MG_C_STR("audio/mpeg"),
-      MG_C_STR("mp4"), MG_C_STR("video/mp4"),
-      MG_C_STR("mpeg"), MG_C_STR("video/mpeg"),
-      MG_C_STR("pdf"), MG_C_STR("application/pdf"),
-      MG_C_STR("shtml"), MG_C_STR("text/html; charset=utf-8"),
-      MG_C_STR("tgz"), MG_C_STR("application/tar-gz"),
-      MG_C_STR("wav"), MG_C_STR("audio/wav"),
-      MG_C_STR("webp"), MG_C_STR("image/webp"),
-      MG_C_STR("zip"), MG_C_STR("application/zip"),
-      MG_C_STR("3gp"), MG_C_STR("video/3gpp"),
-      {0, 0},
-  };
-  // clang-format on
 
   // Shrink path to its extension only
   while (i < path.len && path.ptr[path.len - i - 1] != '.') i++;
@@ -1809,8 +1811,8 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
   }
 
   // Process built-in mime types
-  for (i = 0; tab[i].ptr != NULL; i += 2) {
-    if (mg_strcmp(path, tab[i]) == 0) return tab[i + 1];
+  for (i = 0; s_known_types[i].ptr != NULL; i += 2) {
+    if (mg_strcmp(path, s_known_types[i]) == 0) return s_known_types[i + 1];
   }
 
   return mg_str("text/plain; charset=utf-8");
