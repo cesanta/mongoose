@@ -615,7 +615,7 @@ static void mg_putchar_iobuf_static(char ch, void *param) {
   }
 }
 
-static void mg_putchar_iobuf(char ch, void *param) {
+void mg_putchar_iobuf(char ch, void *param) {
   struct mg_iobuf *io = (struct mg_iobuf *) param;
   if (io->len + 2 > io->size) mg_iobuf_resize(io, io->size + 64);
   if (io->len + 2 <= io->size) {
@@ -3302,7 +3302,9 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
   size_t old = c->send.len;
-  mg_vrprintf(mg_putchar_iobuf, &c->send, fmt, &ap);
+  va_list copy;
+  va_copy(copy, ap);
+  mg_vrprintf(mg_putchar_iobuf, &c->send, fmt, &copy);
   return c->send.len - old;
 }
 

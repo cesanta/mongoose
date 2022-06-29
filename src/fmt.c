@@ -64,7 +64,7 @@ static void mg_putchar_iobuf_static(char ch, void *param) {
   }
 }
 
-static void mg_putchar_iobuf(char ch, void *param) {
+void mg_putchar_iobuf(char ch, void *param) {
   struct mg_iobuf *io = (struct mg_iobuf *) param;
   if (io->len + 2 > io->size) mg_iobuf_resize(io, io->size + 64);
   if (io->len + 2 <= io->size) {

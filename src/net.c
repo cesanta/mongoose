@@ -7,7 +7,9 @@
 
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
   size_t old = c->send.len;
-  mg_vrprintf(mg_putchar_iobuf, &c->send, fmt, &ap);
+  va_list tmp;
+  va_copy(tmp, ap);
+  mg_vrprintf(mg_putchar_iobuf, &c->send, fmt, &copy);
   return c->send.len - old;
 }
 
