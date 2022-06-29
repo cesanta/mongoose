@@ -728,6 +728,7 @@ size_t mg_dtoa(char *buf, size_t len, double d, int width);
 typedef void (*mg_pc_t)(char, void *);                  // Custom putchar
 typedef size_t (*mg_pm_t)(mg_pc_t, void *, va_list *);  // %M printer
 void mg_putchar_realloc(char ch, void *param);          // Print to malloced str
+void mg_putchar_iobuf(char ch, void *param);            // Print to iobuf
 
 size_t mg_vrprintf(void (*)(char, void *), void *, const char *fmt, va_list *);
 size_t mg_rprintf(void (*fn)(char, void *), void *, const char *fmt, ...);

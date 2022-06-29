@@ -598,7 +598,6 @@ char *mg_mprintf(const char *fmt, ...) {
   return s;
 }
 
-
 size_t mg_rprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
   size_t len = 0;
   va_list ap;
@@ -610,7 +609,19 @@ size_t mg_rprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
 
 static void mg_putchar_iobuf_static(char ch, void *param) {
   struct mg_iobuf *io = (struct mg_iobuf *) param;
-  if (io->len < io->size) io->buf[io->len++] = (uint8_t) ch;
+  if (io->len + 2 <= io->size) {
+    io->buf[io->len++] = (uint8_t) ch;
+    io->buf[io->len] = 0;
+  }
+}
+
+static void mg_putchar_iobuf(char ch, void *param) {
+  struct mg_iobuf *io = (struct mg_iobuf *) param;
+  if (io->len + 2 > io->size) mg_iobuf_resize(io, io->size + 64);
+  if (io->len + 2 <= io->size) {
+    io->buf[io->len++] = (uint8_t) ch;
+    io->buf[io->len] = 0;
+  }
 }
 
 // We don't use realloc() in mongoose, so resort to inefficient calloc
@@ -3290,11 +3301,9 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
-  char mem[256], *buf = mem;
-  size_t len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
-  len = mg_send(c, buf, len);
-  if (buf != mem) free(buf);
-  return len;
+  size_t old = c->send.len;
+  mg_vrprintf(mg_putchar_iobuf, &c->send, fmt, &ap);
+  return c->send.len - old;
 }
 
 size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {

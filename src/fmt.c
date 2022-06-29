@@ -47,7 +47,6 @@ char *mg_mprintf(const char *fmt, ...) {
   return s;
 }
 
-
 size_t mg_rprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
   size_t len = 0;
   va_list ap;
@@ -59,7 +58,19 @@ size_t mg_rprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
 
 static void mg_putchar_iobuf_static(char ch, void *param) {
   struct mg_iobuf *io = (struct mg_iobuf *) param;
-  if (io->len < io->size) io->buf[io->len++] = (uint8_t) ch;
+  if (io->len + 2 <= io->size) {
+    io->buf[io->len++] = (uint8_t) ch;
+    io->buf[io->len] = 0;
+  }
+}
+
+static void mg_putchar_iobuf(char ch, void *param) {
+  struct mg_iobuf *io = (struct mg_iobuf *) param;
+  if (io->len + 2 > io->size) mg_iobuf_resize(io, io->size + 64);
+  if (io->len + 2 <= io->size) {
+    io->buf[io->len++] = (uint8_t) ch;
+    io->buf[io->len] = 0;
+  }
 }
 
 // We don't use realloc() in mongoose, so resort to inefficient calloc

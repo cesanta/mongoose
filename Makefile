@@ -109,16 +109,16 @@ riscv: DEFS += -DMG_ENABLE_FILE=0 -DMG_ENABLE_MIP=1 -DMG_ARCH=MG_ARCH_NEWLIB
 riscv: mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test
 
-#vc98: VCFLAGS += -DMG_ENABLE_IPV6=1
 vc98: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(DOCKER) mdashnet/vc98 wine $@.exe
 
-#vc2017: VCFLAGS += -DMG_ENABLE_IPV6=1
+# vc2017: DEFS += -DMG_ENABLE_IPV6=1
 vc2017: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc2017 wine64 cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(DOCKER) mdashnet/vc2017 wine64 $@.exe
 
+# vc22: DEFS += -DMG_ENABLE_IPV6=$(IPV6)
 vc22: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc22 wine64 cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(DOCKER) mdashnet/vc22 wine64 $@.exe

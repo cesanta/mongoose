@@ -6,11 +6,9 @@
 #include "util.h"
 
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
-  char mem[256], *buf = mem;
-  size_t len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
-  len = mg_send(c, buf, len);
-  if (buf != mem) free(buf);
-  return len;
+  size_t old = c->send.len;
+  mg_vrprintf(mg_putchar_iobuf, &c->send, fmt, &ap);
+  return c->send.len - old;
 }
 
 size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
