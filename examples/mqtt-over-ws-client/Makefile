@@ -1,10 +1,12 @@
 PROG ?= example
-MBEDTLS_DIR ?=
+SSL = ?
 
-ifeq "$(MBEDTLS_DIR)" ""
-else
-CFLAGS += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS_DIR)/include -I/usr/include
-CFLAGS += -L$(MBEDTLS_DIR)/lib -lmbedtls -lmbedcrypto -lmbedx509
+ifeq "$(SSL)" "MBEDTLS"
+CFLAGS += -DMG_ENABLE_MBEDTLS=1 -lmbedtls -lmbedcrypto -lmbedx509
+endif
+
+ifeq "$(SSL)" "OPENSSL"
+CFLAGS += -DMG_ENABLE_OPENSSL=1 -lssl -lcrypto
 endif
 
 all: $(PROG)
@@ -12,7 +14,7 @@ all: $(PROG)
 
 
 $(PROG): main.c
-	$(CC) ../../mongoose.c -I../.. -W -Wall $(CFLAGS) -o $(PROG) main.c
+	$(CC) ../../mongoose.c -I../.. -W -Wall $(CFLAGS) $(EXTRA_CFLAGS) -o $(PROG) main.c
 
 clean:
 	rm -rf $(PROG) *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb

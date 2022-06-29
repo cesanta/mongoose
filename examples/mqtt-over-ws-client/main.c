@@ -7,8 +7,7 @@
 //    3. Publishes message `hello` to the `s_topic`
 //    4. Receives that message back from the subscribed topic and exits
 //
-// To enable SSL/TLS for this client, build it like this:
-//    make MBEDTLS_DIR=/path/to/your/mbedtls/installation
+// To enable SSL/TLS, make SSL=OPENSSL or make SSL=MBEDTLS 
 
 #include "mongoose.h"
 
