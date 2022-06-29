@@ -3302,9 +3302,9 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
   size_t old = c->send.len;
-  va_list copy;
-  va_copy(copy, ap);
-  mg_vrprintf(mg_putchar_iobuf, &c->send, fmt, &copy);
+  va_list tmp;
+  va_copy(tmp, ap);
+  mg_vrprintf(mg_putchar_iobuf, &c->send, fmt, &tmp);
   return c->send.len - old;
 }
 
