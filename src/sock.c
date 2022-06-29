@@ -313,6 +313,19 @@ static void close_conn(struct mg_connection *c) {
   mg_close_conn(c);
 }
 
+static void connect_conn(struct mg_connection *c) {
+  union usa usa;
+  socklen_t n = sizeof(usa);
+  // Use getpeername() to test whether we have connected
+  if (getpeername(FD(c), &usa.sa, &n) == 0) {
+    c->is_connecting = 0;
+    mg_call(c, MG_EV_CONNECT, NULL);
+    if (c->is_tls_hs) mg_tls_handshake(c);
+  } else {
+    mg_error(c, "socket error");
+  }
+}
+
 static void setsockopts(struct mg_connection *c) {
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS || \
     MG_ARCH == MG_ARCH_TIRTOS
@@ -600,11 +613,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     } else if (c->is_listening && c->is_udp == 0) {
       if (c->is_readable) accept_conn(mgr, c);
     } else if (c->is_connecting) {
-      if (c->is_readable || c->is_writable) {
-        c->is_connecting = 0;
-        mg_call(c, MG_EV_CONNECT, NULL);
-        if (c->is_tls_hs) mg_tls_handshake(c);
-      }
+      if (c->is_readable || c->is_writable) connect_conn(c);
     } else if (c->is_tls_hs) {
       if ((c->is_readable || c->is_writable)) mg_tls_handshake(c);
     } else {
