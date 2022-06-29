@@ -544,7 +544,9 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   SOCKET maxfd = 0;
   int rc;
 
-  FD_ZERO(&rset), FD_ZERO(&wset), FD_ZERO(&eset);
+  FD_ZERO(&rset);
+  FD_ZERO(&wset);
+  FD_ZERO(&eset);
   for (c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = c->is_writable = 0;
     if (skip_iotest(c)) continue;
@@ -561,7 +563,9 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 #else
     MG_ERROR(("select: %d %d", rc, MG_SOCK_ERRNO));
 #endif
-    FD_ZERO(&rset), FD_ZERO(&wset), FD_ZERO(&eset);
+    FD_ZERO(&rset);
+    FD_ZERO(&wset);
+    FD_ZERO(&eset);
   }
 
   for (c = mgr->conns; c != NULL; c = c->next) {
