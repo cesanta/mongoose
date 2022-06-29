@@ -26,10 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Install packages
-      run: sudo apt-get install libmbedtls-dev libpcap-dev
-    - name: examples
-      run: make clean examples
+    - run: sudo apt-get install libmbedtls-dev libpcap-dev
+    - run: make clean examples
+    - run: make clean test IPV6=0 MG_ENABLE_POLL=1
   macos:
     runs-on: macos-latest
     steps:
@@ -51,26 +50,21 @@ jobs:
         sudo curl -F "file=@sntp.cap" https://file.io/?expires=1w
     - name: openssl
       run: make test SSL=OPENSSL IPV6=0 ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
-    - name: exports
-      run: make mg_prefix
+    - run: make mg_prefix
   windows:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: vc98
-      run: make vc98
-    - name: vc2017
-      run: make vc2017
-    - name: mingw
-      run: make mingw
-    - name: mingw++
-      run: make mingw++
+    - run: make vc98
+    - run: make vc2017
+    - run: make vc22
+    - run: make mingw
+    - run: make mingw++
   arm:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: arm
-      run: make arm
+    - run: make arm
   matrix_examples:
     runs-on: ubuntu-latest
     strategy:

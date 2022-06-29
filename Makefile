@@ -8,7 +8,8 @@ VALGRIND_OPTS ?= -O0 -g3
 INCS ?= -Isrc -I.
 SSL ?= MBEDTLS
 CWD ?= $(realpath $(CURDIR))
-DOCKER ?= docker run --rm -e Tmp=. -e WINEDEBUG=-all -v $(CWD):$(CWD) -w $(CWD)
+ENV ?=  -e Tmp=. -e WINEDEBUG=-all 
+DOCKER ?= docker run --rm $(ENV) -v $(CWD):$(CWD) -w $(CWD)
 VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined -fno-sanitize-recover=all
@@ -33,7 +34,7 @@ CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
-all: mg_prefix unamalgamated unpacked test test++ valgrind arm examples vc98 vc2017 mingw mingw++ linux linux++ fuzz
+all: mg_prefix unamalgamated unpacked test test++ valgrind arm examples vc98 vc2017 vc22 mingw mingw++ linux linux++ fuzz
 
 examples:
 	@for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done

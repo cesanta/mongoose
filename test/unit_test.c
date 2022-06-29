@@ -1,6 +1,7 @@
+#include "mongoose.h"
+
 #include "float.h"  // For DBL_EPSILON and HUGE_VAL
 #include "math.h"
-#include "mongoose.h"
 
 static int s_num_tests = 0;
 
@@ -606,7 +607,7 @@ static void test_ws(void) {
 
 static void eh9(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ERROR) {
-    ASSERT(!strcmp((char *) ev_data, "error connecting to 127.0.0.1:55117"));
+    ASSERT(!strcmp((char *) ev_data, "socket error"));
     *(int *) fn_data = 7;
   }
   (void) c;

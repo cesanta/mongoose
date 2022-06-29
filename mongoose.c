@@ -4193,7 +4193,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     if ((rc = connect(FD(c), &usa.sa, slen)) == 0) {
       mg_call(c, MG_EV_CONNECT, NULL);
     } else if (mg_sock_would_block()) {
-      MG_DEBUG(("%lu %p connect in progress...", c->id, c->fd));
+      MG_DEBUG(("%lu %p -> %x:%hu pend", c->id, c->fd, c->rem.ip, c->rem.port));
       c->is_connecting = 1;
     } else {
       mg_error(c, "connect: %d", MG_SOCK_ERRNO);
@@ -4355,7 +4355,8 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
       // Socket not valid, ignore
     } else {
       fds[n].fd = FD(c);
-      if (can_read(c)) fds[n].events = POLLIN;
+      fds[n].events = POLLERR;
+      if (can_read(c)) fds[n].events |= POLLIN;
       if (can_write(c)) fds[n].events |= POLLOUT;
       n++;
       if (mg_tls_pending(c) > 0) ms = 0;  // Don't wait if TLS is ready
@@ -4367,70 +4368,54 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   } else {
     n = 0;
     for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
-      if (skip_iotest(c)) {
-        // Socket not valid, ignore
+      if (skip_iotest(c)) continue;
+      if (fds[n].revents & POLLERR) {
+        mg_error(c, "socket error");
       } else {
         c->is_readable = (unsigned) (fds[n].revents & POLLIN ? 1 : 0);
         c->is_writable = (unsigned) (fds[n].revents & POLLOUT ? 1 : 0);
         if (mg_tls_pending(c) > 0) c->is_readable = 1;
-        fds[n].revents = 0;
-        n++;
       }
+      n++;
     }
   }
 #else
   struct timeval tv = {ms / 1000, (ms % 1000) * 1000}, tv_zero = {0, 0};
   struct mg_connection *c;
-  fd_set rset, wset;
+  fd_set rset, wset, eset;
   SOCKET maxfd = 0;
   int rc;
 
-  FD_ZERO(&rset);
-  FD_ZERO(&wset);
-
+  FD_ZERO(&rset), FD_ZERO(&wset), FD_ZERO(&eset);
   for (c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = c->is_writable = 0;
     if (skip_iotest(c)) continue;
+    FD_SET(FD(c), &eset);
     if (can_read(c)) FD_SET(FD(c), &rset);
     if (can_write(c)) FD_SET(FD(c), &wset);
     if (mg_tls_pending(c) > 0) tv = tv_zero;
     if (FD(c) > maxfd) maxfd = FD(c);
   }
 
-  if ((rc = select((int) maxfd + 1, &rset, &wset, NULL, &tv)) < 0) {
+  if ((rc = select((int) maxfd + 1, &rset, &wset, &eset, &tv)) < 0) {
 #if MG_ARCH == MG_ARCH_WIN32
     if (maxfd == 0) Sleep(ms);  // On Windows, select fails if no sockets
 #else
     MG_ERROR(("select: %d %d", rc, MG_SOCK_ERRNO));
 #endif
-    FD_ZERO(&rset);
-    FD_ZERO(&wset);
+    FD_ZERO(&rset), FD_ZERO(&wset), FD_ZERO(&eset);
   }
 
   for (c = mgr->conns; c != NULL; c = c->next) {
-    c->is_readable = FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &rset);
-    c->is_writable = FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &wset);
-    if (mg_tls_pending(c) > 0) c->is_readable = 1;
+    if (FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &eset)) {
+      mg_error(c, "socket error");
+    } else {
+      c->is_readable = FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &rset);
+      c->is_writable = FD(c) != INVALID_SOCKET && FD_ISSET(FD(c), &wset);
+      if (mg_tls_pending(c) > 0) c->is_readable = 1;
+    }
   }
 #endif
-}
-
-static void connect_conn(struct mg_connection *c) {
-  int rc = 0;
-#if (MG_ARCH != MG_ARCH_FREERTOS_TCP) && (MG_ARCH != MG_ARCH_RTX)
-  socklen_t len = sizeof(rc);
-  if (getsockopt(FD(c), SOL_SOCKET, SO_ERROR, (char *) &rc, &len)) rc = 1;
-#endif
-  if (rc == EAGAIN || rc == EWOULDBLOCK) rc = 0;
-  c->is_connecting = 0;
-  if (rc) {
-    char buf[50];
-    mg_error(c, "error connecting to %s",
-             mg_straddr(&c->rem, buf, sizeof(buf)));
-  } else {
-    if (c->is_tls_hs) mg_tls_handshake(c);
-    mg_call(c, MG_EV_CONNECT, NULL);
-  }
 }
 
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
@@ -4453,7 +4438,11 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     } else if (c->is_listening && c->is_udp == 0) {
       if (c->is_readable) accept_conn(mgr, c);
     } else if (c->is_connecting) {
-      if (c->is_readable || c->is_writable) connect_conn(c);
+      if (c->is_readable || c->is_writable) {
+        c->is_connecting = 0;
+        mg_call(c, MG_EV_CONNECT, NULL);
+        if (c->is_tls_hs) mg_tls_handshake(c);
+      }
     } else if (c->is_tls_hs) {
       if ((c->is_readable || c->is_writable)) mg_tls_handshake(c);
     } else {
