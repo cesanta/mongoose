@@ -10,7 +10,14 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/upload")) {
-      mg_http_upload(c, hm, &mg_fs_posix, "/tmp");
+      char path[80], name[64];
+      mg_http_get_var(&hm->query, "name", name, sizeof(name));
+      if (name[0] == '\0') {
+        mg_http_reply(c, 400, "", "%s", "name required");
+      } else {
+        mg_snprintf(path, sizeof(path), "/tmp/%s", name);
+        mg_http_upload(c, hm, &mg_fs_posix, mg_remove_double_dots(path), 99999);
+      }
     } else {
       struct mg_http_serve_opts opts = {.root_dir = "web_root"};
       mg_http_serve_dir(c, ev_data, &opts);

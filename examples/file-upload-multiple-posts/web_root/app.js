@@ -18,12 +18,19 @@ var sendFileData = function(name, data, chunkSize) {
     var chunk = data.subarray(offset, offset + chunkSize) || '';
     var opts = {method: 'POST', body: chunk};
     var url = '/upload?offset=' + offset + '&name=' + encodeURIComponent(name);
+    var ok;
     setStatus(
-        'sending bytes ' + offset + '..' + (offset + chunk.length) + ' of ' +
-        data.length);
-    fetch(url, opts).then(function(res) {
-      if (chunk.length > 0) sendChunk(offset + chunk.length);
-    });
+        'Upoading ' + name + ', bytes ' + offset + '..' +
+        (offset + chunk.length) + ' of ' + data.length);
+    fetch(url, opts)
+        .then(function(res) {
+          if (res.ok && chunk.length > 0) sendChunk(offset + chunk.length);
+          ok = res.ok;
+          return res.text();
+        })
+        .then(function(text) {
+          if (!ok) setStatus('Error: ' + text);
+        });
   };
   sendChunk(0);
 };

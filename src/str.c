@@ -223,7 +223,7 @@ int64_t mg_to64(struct mg_str str) {
 }
 
 char *mg_remove_double_dots(char *s) {
-  char *p = s;
+  char *saved = s, *p = s;
   while (*s != '\0') {
     *p++ = *s++;
     if (s[-1] == '/' || s[-1] == '\\') {
@@ -240,5 +240,5 @@ char *mg_remove_double_dots(char *s) {
     }
   }
   *p = '\0';
-  return s;
+  return saved;
 }

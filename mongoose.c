@@ -2253,31 +2253,37 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
   if (c->pfn_data != NULL) c->pfn_data = (char *) c->pfn_data - ch.len;
 }
 
-int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
-                   struct mg_fs *fs, const char *dir) {
-  char offset[40] = "", name[200] = "", path[256];
-  int res = 0;
-  mg_http_get_var(&hm->query, "offset", offset, sizeof(offset));
-  mg_http_get_var(&hm->query, "name", name, sizeof(name));
-  if (name[0] == '\0') {
-    mg_http_reply(c, 400, "", "%s", "name required");
-    res = -1;
-  } else if (hm->body.len == 0) {
-    mg_http_reply(c, 200, "", "%d", res);  // Nothing to write
+long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
+                    struct mg_fs *fs, const char *path, size_t max_size) {
+  char buf[20] = "";
+  long res = 0, offset;
+  mg_http_get_var(&hm->query, "offset", buf, sizeof(buf));
+  offset = strtol(buf, NULL, 0);
+  if (hm->body.len == 0) {
+    mg_http_reply(c, 200, "", "%ld", res);  // Nothing to write
   } else {
     struct mg_fd *fd;
-    long oft = strtol(offset, NULL, 0);
-    mg_snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, name);
-    mg_remove_double_dots(path);
-    MG_DEBUG(("%d bytes @ %ld [%s]", (int) hm->body.len, oft, path));
-    if (oft == 0) fs->rm(path);
-    if ((fd = mg_fs_open(fs, path, MG_FS_WRITE)) == NULL) {
-      mg_http_reply(c, 400, "", "open(%s): %d", path, errno);
+    size_t current_size = 0;
+    MG_DEBUG(("%s -> %d bytes @ %ld", path, (int) hm->body.len, offset));
+    if (offset == 0) fs->rm(path);  // If offset if 0, truncate file
+    fs->st(path, &current_size, NULL);
+    if (offset < 0) {
+      mg_http_reply(c, 400, "", "offset required");
+      res = -1;
+    } else if (offset > 0 && current_size != (size_t) offset) {
+      mg_http_reply(c, 400, "", "%s: offset mismatch", path);
       res = -2;
+    } else if ((size_t) offset + hm->body.len > max_size) {
+      mg_http_reply(c, 400, "", "%s: over max size of %lu", path,
+                    (unsigned long) max_size);
+      res = -3;
+    } else if ((fd = mg_fs_open(fs, path, MG_FS_WRITE)) == NULL) {
+      mg_http_reply(c, 400, "", "open(%s): %d", path, errno);
+      res = -4;
     } else {
-      res = (int) fs->wr(fd->fd, hm->body.ptr, hm->body.len);
+      res = offset + (long) fs->wr(fd->fd, hm->body.ptr, hm->body.len);
       mg_fs_close(fd);
-      mg_http_reply(c, 200, "", "%d", res);
+      mg_http_reply(c, 200, "", "%ld", res);
     }
   }
   return res;
@@ -4795,7 +4801,7 @@ int64_t mg_to64(struct mg_str str) {
 }
 
 char *mg_remove_double_dots(char *s) {
-  char *p = s;
+  char *saved = s, *p = s;
   while (*s != '\0') {
     *p++ = *s++;
     if (s[-1] == '/' || s[-1] == '\\') {
@@ -4812,7 +4818,7 @@ char *mg_remove_double_dots(char *s) {
     }
   }
   *p = '\0';
-  return s;
+  return saved;
 }
 
 #ifdef MG_ENABLE_LINES
