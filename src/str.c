@@ -196,7 +196,6 @@ void mg_unhex(const char *buf, size_t len, unsigned char *to) {
   }
 }
 
-
 uint64_t mg_tou64(struct mg_str str) {
   uint64_t result = 0;
   size_t i = 0;
@@ -221,4 +220,25 @@ int64_t mg_to64(struct mg_str str) {
     i++;
   }
   return result * neg;
+}
+
+char *mg_remove_double_dots(char *s) {
+  char *p = s;
+  while (*s != '\0') {
+    *p++ = *s++;
+    if (s[-1] == '/' || s[-1] == '\\') {
+      while (s[0] != '\0') {
+        if (s[0] == '/' || s[0] == '\\') {
+          s++;
+        } else if (s[0] == '.' && s[1] == '.' &&
+                   (s[2] == '/' || s[2] == '\\')) {
+          s += 2;
+        } else {
+          break;
+        }
+      }
+    }
+  }
+  *p = '\0';
+  return s;
 }

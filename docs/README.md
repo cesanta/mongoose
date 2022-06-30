@@ -1337,55 +1337,6 @@ A diagram below shows how `mg_http_next_multipart()` in action:
 
 <img src="images/mg_http_next_multipart.svg" alt="Function mg_http_next_multipart()" />
 
-
-### mg\_http\_upload()
-
-```c
-
-int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
-                   struct mg_fs *fs, const char *dir);
-```
-
-This is a helper utility function that is used to upload large files by small
-chunks.
-
-Append HTTP POST data to a file in a specified directory.  A file name and
-file offset are specified by the query string parameters:
-`POST /upload?name=firmware.bin&offset=2048 HTTP/1.1`. If the offset is 0, then the
-file is truncated. It is a client's responsibility to divide a file into a
-smaller chunks and send a sequence of POST requests that will be handled by
-this function.
-
-Parameters:
-- `c`- a connection
-- `hm` - a parsed HTTP message
-- `fs` - a filesystem where to write a file, e.g. `&mg_fs_posix`
-- `dir` - a directory name where a file should be stored
-
-Return value: number of bytes written
-
-Usage example:
-
-```c
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/upload")) {
-      mg_http_upload(c, hm, &mg_fs_posix, "/tmp");
-    } else {
-      struct mg_http_serve_opts opts = {.root_dir = "."};   // Serve
-      mg_http_serve_dir(c, ev_data, &opts);                 // static content
-    }
-  }
-}
-
-```
-
-See [app.js](https://github.com/cesanta/mongoose/blob/7.5/examples/file-upload/web_root/app.js)
-for the example Javascript HTML page code that takes a file and
-sends it by small chunks.
-
-
 ## Websocket
 
 ### struct mg\_ws\_message
@@ -2534,6 +2485,27 @@ Usage example:
 char data[] = "010203";
 char *buf[sizeof(data)/2];
 unsigned long val = mg_unhex(data, sizeof(data) - 1); // val is now 123
+```
+
+### mg\_remove\_double\_dots()
+
+```c
+char *mg_remove_double_dots(char *s);
+```
+
+Modify string `s` in place by removing double dots from it. Used to
+sanitize file names or URIs received from the network.
+
+Parameters:
+- `s` - String to sanitise
+
+Return value: the `s` pointer
+
+Usage example:
+
+```c
+char data[] = "../../a.txt";
+mg_remove_double_dots(data);  // data is /a.txt
 ```
 
 ### mg\_snprintf(), mg\_vsnprintf()
