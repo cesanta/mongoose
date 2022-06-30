@@ -245,3 +245,10 @@ char *mg_json_get_hex(struct mg_str json, const char *path, int *len) {
   }
   return result;
 }
+
+long mg_json_get_long(struct mg_str json, const char *path, long dflt) {
+  double dv;
+  long result = dflt;
+  if (mg_json_get_num(json, path, &dv)) result = (long) dv;
+  return result;
+}

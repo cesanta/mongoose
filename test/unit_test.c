@@ -2373,6 +2373,9 @@ static void test_json(void) {
     ASSERT(strcmp(str, "hi\nthere") == 0);
     free(str);
 
+    ASSERT(mg_json_get_long(mg_str(json), "$.foo", -42) == -42);
+    ASSERT(mg_json_get_long(mg_str(json), "$.b[0]", -42) == 12345);
+
     ASSERT(mg_json_get_num(mg_str(json), "$.a", &d) == false);
     ASSERT(mg_json_get_num(mg_str(json), "$.c", &d) == false);
     ASSERT(mg_json_get_num(mg_str(json), "$.b[0]", &d) == true);

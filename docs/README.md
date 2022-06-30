@@ -2820,6 +2820,29 @@ mg_json_get_bool(mg_str("[123]", "$[0]", &b));   // Error. b remains to be false
 mg_json_get_bool(mg_str("[true]", "$[0]", &b));  // b is true
 ```
 
+### mg\_json\_get\_long()
+
+```c
+long mg_json_get_bool(struct mg_str json, const char *path, long default_val);
+```
+
+Fetch integer numeric (long) value from the json string `json` at JSON path
+`path`. Return it if found, or `default_val` if not found.
+
+Parameters:
+- `json` - a string containing valid JSON
+- `path` - a JSON path. Must start with `$`
+- `default_val` - a default value for the failure case
+
+Return value: found value, or `default_val` value
+
+Usage example:
+
+```c
+long a = mg_json_get_bool(mg_str("[123]", "$a", -1));   // a = -1
+long b = mg_json_get_bool(mg_str("[123]", "$[0]", -1)); // b = 123
+```
+
 ### mg\_json\_get\_str()
 
 ```c
