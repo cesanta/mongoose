@@ -12,8 +12,6 @@
 #define MQTT_HAS_PASSWORD 0x40
 #define MQTT_HAS_USER_NAME 0x80
 
-enum { MQTT_OK, MQTT_INCOMPLETE, MQTT_MALFORMED };
-
 void mg_mqtt_send_header(struct mg_connection *c, uint8_t cmd, uint8_t flags,
                          uint32_t len) {
   uint8_t buf[1 + sizeof(len)], *vlen = &buf[1];
