@@ -43,6 +43,6 @@ input.onchange = function(ev) {
   r.readAsArrayBuffer(f);
   r.onload = function() {
     ev.target.value = '';
-    sendFileData(f.name, new Uint8Array(r.result), 4096);
+    sendFileData(f.name, new Uint8Array(r.result), 2048);
   };
 };

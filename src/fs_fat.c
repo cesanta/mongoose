@@ -88,7 +88,7 @@ static void ff_close(void *fp) {
 }
 
 static size_t ff_read(void *fp, void *buf, size_t len) {
-  unsigned n = 0, misalign = ((size_t) buf) & 3;
+  UINT n = 0, misalign = ((size_t) buf) & 3;
   if (misalign) {
     char aligned[4];
     f_read((FIL *) fp, aligned, len > misalign ? misalign : len, &n);
