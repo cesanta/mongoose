@@ -3,6 +3,7 @@
 
 static void default_logger(unsigned char c) {
   putchar(c);
+  (void) c;
 }
 
 static const char *s_spec = "2";

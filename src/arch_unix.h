@@ -4,6 +4,10 @@
 
 #define _DARWIN_UNLIMITED_SELECT 1  // No limit on file descriptors
 
+#if defined(__APPLE__)
+#include <mach/mach_time.h>
+#endif
+
 #if !defined(MG_ENABLE_POLL) && (defined(__linux__) || defined(__APPLE__))
 #define MG_ENABLE_POLL 1
 #endif

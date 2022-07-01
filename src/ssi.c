@@ -15,12 +15,14 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
   struct mg_iobuf b = {NULL, 0, 0};
   FILE *fp = fopen(path, "rb");
   if (fp != NULL) {
-    char buf[MG_SSI_BUFSIZ] = "", arg[sizeof(buf)] = "";
+    char buf[MG_SSI_BUFSIZ], arg[sizeof(buf)];
     int ch, intag = 0;
     size_t len = 0, align = MG_IO_SIZE;
+    buf[0] = arg[0] = '\0';
     while ((ch = fgetc(fp)) != EOF) {
       if (intag && ch == '>' && buf[len - 1] == '-' && buf[len - 2] == '-') {
         buf[len++] = (char) (ch & 0xff);
+        buf[len] = '\0';
         if (sscanf(buf, "<!--#include file=\"%[^\"]", arg)) {
           char tmp[MG_PATH_MAX + MG_SSI_BUFSIZ + 10],
               *p = (char *) path + strlen(path), *data;

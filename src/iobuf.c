@@ -1,7 +1,6 @@
 #include "iobuf.h"
+#include "arch.h"
 #include "log.h"
-
-#include <string.h>
 
 // Not using memset for zeroing memory, cause it can be dropped by compiler
 // See https://github.com/cesanta/mongoose/pull/1265

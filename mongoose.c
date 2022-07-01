@@ -23,7 +23,7 @@
 #line 1 "src/base64.c"
 #endif
 
-#include <string.h>
+
 
 static int mg_b64idx(int c) {
   if (c < 26) {
@@ -908,8 +908,57 @@ bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
 }
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/fs_dummy.c"
+#endif
+
+
+static int d_stat(const char *path, size_t *size, time_t *mtime) {
+  (void) path, (void) size, (void) mtime;
+  return 0;
+}
+static void d_list(const char *path, void (*fn)(const char *, void *),
+                   void *userdata) {
+  (void) path, (void) fn, (void) userdata;
+}
+static void *d_open(const char *path, int flags) {
+  (void) path, (void) flags;
+  return NULL;
+}
+static void d_close(void *fp) {
+  (void) fp;
+}
+static size_t d_read(void *fd, void *buf, size_t len) {
+  (void) fd, (void) buf, (void) len;
+  return 0;
+}
+static size_t d_write(void *fd, const void *buf, size_t len) {
+  (void) fd, (void) buf, (void) len;
+  return 0;
+}
+static size_t d_seek(void *fd, size_t offset) {
+  (void) fd, (void) offset;
+  return (size_t) ~0;
+}
+static bool d_rename(const char *from, const char *to) {
+  (void) from, (void) to;
+  return false;
+}
+static bool d_remove(const char *path) {
+  (void) path;
+  return false;
+}
+static bool d_mkdir(const char *path) {
+  (void) path;
+  return false;
+}
+
+struct mg_fs mg_fs_dummy = {d_stat,  d_list, d_open,   d_close,  d_read,
+                            d_write, d_seek, d_rename, d_remove, d_mkdir};
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/fs_fat.c"
 #endif
+
 
 
 #if MG_ENABLE_FATFS
@@ -1364,47 +1413,6 @@ static bool p_mkdir(const char *path) {
   return mkdir(path, 0775) == 0;
 }
 
-#else
-
-static int p_stat(const char *path, size_t *size, time_t *mtime) {
-  (void) path, (void) size, (void) mtime;
-  return 0;
-}
-static void p_list(const char *path, void (*fn)(const char *, void *),
-                   void *userdata) {
-  (void) path, (void) fn, (void) userdata;
-}
-static void *p_open(const char *path, int flags) {
-  (void) path, (void) flags;
-  return NULL;
-}
-static void p_close(void *fp) {
-  (void) fp;
-}
-static size_t p_read(void *fd, void *buf, size_t len) {
-  (void) fd, (void) buf, (void) len;
-  return 0;
-}
-static size_t p_write(void *fd, const void *buf, size_t len) {
-  (void) fd, (void) buf, (void) len;
-  return 0;
-}
-static size_t p_seek(void *fd, size_t offset) {
-  (void) fd, (void) offset;
-  return (size_t) ~0;
-}
-static bool p_rename(const char *from, const char *to) {
-  (void) from, (void) to;
-  return false;
-}
-static bool p_remove(const char *path) {
-  (void) path;
-  return false;
-}
-static bool p_mkdir(const char *path) {
-  (void) path;
-  return false;
-}
 #endif
 
 struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
@@ -1890,11 +1898,12 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               opts->extra_headers ? opts->extra_headers : "");
   } else {
     int n, status = 200;
-    char range[100] = "";
+    char range[100];
     int64_t r1 = 0, r2 = 0, cl = (int64_t) size;
 
     // Handle Range header
     struct mg_str *rh = mg_http_get_header(hm, "Range");
+    range[0] = '\0';
     if (rh != NULL && (n = getrange(rh, &r1, &r2)) > 0 && r1 >= 0 && r2 >= 0) {
       // If range is specified like "400-", set second limit to content len
       if (n == 1) r2 = cl - 1;
@@ -2095,7 +2104,7 @@ static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *opts) {
-  char path[MG_PATH_MAX] = "";
+  char path[MG_PATH_MAX];
   const char *sp = opts->ssi_pattern;
   int flags = uri_to_path(c, hm, opts, path, sizeof(path));
   if (flags < 0) {
@@ -2255,7 +2264,7 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
 
 long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                     struct mg_fs *fs, const char *path, size_t max_size) {
-  char buf[20] = "";
+  char buf[20] = "0";
   long res = 0, offset;
   mg_http_get_var(&hm->query, "offset", buf, sizeof(buf));
   offset = strtol(buf, NULL, 0);
@@ -2359,7 +2368,6 @@ struct mg_connection *mg_http_listen(struct mg_mgr *mgr, const char *url,
 
 
 
-#include <string.h>
 
 // Not using memset for zeroing memory, cause it can be dropped by compiler
 // See https://github.com/cesanta/mongoose/pull/1265
@@ -2696,6 +2704,7 @@ long mg_json_get_long(struct mg_str json, const char *path, long dflt) {
 
 static void default_logger(unsigned char c) {
   putchar(c);
+  (void) c;
 }
 
 static const char *s_spec = "2";
@@ -2786,7 +2795,7 @@ void mg_hexdump(const void *buf, size_t len) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/md5.c"
 #endif
-#include <string.h>
+
 
 
 #if defined(MG_ENABLE_MD5) && MG_ENABLE_MD5
@@ -2804,7 +2813,7 @@ static void mg_byte_reverse(unsigned char *buf, unsigned longs) {
 /* Forrest: MD5 expect LITTLE_ENDIAN, swap if BIG_ENDIAN */
 #if BYTE_ORDER == BIG_ENDIAN
   do {
-    uint32_t t = (uint32_t)((unsigned) buf[3] << 8 | buf[2]) << 16 |
+    uint32_t t = (uint32_t) ((unsigned) buf[3] << 8 | buf[2]) << 16 |
                  ((unsigned) buf[1] << 8 | buf[0]);
     *(uint32_t *) buf = t;
     buf += 4;
@@ -3552,7 +3561,7 @@ void mg_mgr_init(struct mg_mgr *mgr) {
 /* Copyright(c) By Steve Reid <steve@edmweb.com> */
 /* 100% Public Domain */
 
-#include <string.h>
+
 
 /*
  * clang with std=-c99 uses __LITTLE_ENDIAN, by default
@@ -3964,7 +3973,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   } else if (n > 0) {
     if (c->is_hexdumping) {
       union usa usa;
-      char t1[50] = "", t2[50] = "";
+      char t1[50], t2[50];
       socklen_t slen = sizeof(usa.sin);
       struct mg_addr a;
       memset(&usa, 0, sizeof(usa));
@@ -4493,12 +4502,14 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
   struct mg_iobuf b = {NULL, 0, 0};
   FILE *fp = fopen(path, "rb");
   if (fp != NULL) {
-    char buf[MG_SSI_BUFSIZ] = "", arg[sizeof(buf)] = "";
+    char buf[MG_SSI_BUFSIZ], arg[sizeof(buf)];
     int ch, intag = 0;
     size_t len = 0, align = MG_IO_SIZE;
+    buf[0] = arg[0] = '\0';
     while ((ch = fgetc(fp)) != EOF) {
       if (intag && ch == '>' && buf[len - 1] == '-' && buf[len - 2] == '-') {
         buf[len++] = (char) (ch & 0xff);
+        buf[len] = '\0';
         if (sscanf(buf, "<!--#include file=\"%[^\"]", arg)) {
           char tmp[MG_PATH_MAX + MG_SSI_BUFSIZ + 10],
               *p = (char *) path + strlen(path), *data;
@@ -4577,7 +4588,6 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 #line 1 "src/str.c"
 #endif
 
-#include <stdlib.h>
 
 struct mg_str mg_str_s(const char *s) {
   struct mg_str str = {s, s == NULL ? 0 : strlen(s)};
@@ -5278,7 +5288,6 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 #line 1 "src/url.c"
 #endif
 
-#include <stdlib.h>
 
 struct url {
   size_t key, user, pass, host, port, uri, end;
@@ -5368,10 +5377,6 @@ struct mg_str mg_url_pass(const char *url) {
 #line 1 "src/util.c"
 #endif
 
-
-#if MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
-#include <mach/mach_time.h>
-#endif
 
 #if MG_ENABLE_CUSTOM_RANDOM
 #else

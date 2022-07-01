@@ -118,7 +118,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   } else if (n > 0) {
     if (c->is_hexdumping) {
       union usa usa;
-      char t1[50] = "", t2[50] = "";
+      char t1[50], t2[50];
       socklen_t slen = sizeof(usa.sin);
       struct mg_addr a;
       memset(&usa, 0, sizeof(usa));

@@ -475,11 +475,12 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               opts->extra_headers ? opts->extra_headers : "");
   } else {
     int n, status = 200;
-    char range[100] = "";
+    char range[100];
     int64_t r1 = 0, r2 = 0, cl = (int64_t) size;
 
     // Handle Range header
     struct mg_str *rh = mg_http_get_header(hm, "Range");
+    range[0] = '\0';
     if (rh != NULL && (n = getrange(rh, &r1, &r2)) > 0 && r1 >= 0 && r2 >= 0) {
       // If range is specified like "400-", set second limit to content len
       if (n == 1) r2 = cl - 1;
@@ -680,7 +681,7 @@ static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
 
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *opts) {
-  char path[MG_PATH_MAX] = "";
+  char path[MG_PATH_MAX];
   const char *sp = opts->ssi_pattern;
   int flags = uri_to_path(c, hm, opts, path, sizeof(path));
   if (flags < 0) {
@@ -840,7 +841,7 @@ void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
 
 long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                     struct mg_fs *fs, const char *path, size_t max_size) {
-  char buf[20] = "";
+  char buf[20] = "0";
   long res = 0, offset;
   mg_http_get_var(&hm->query, "offset", buf, sizeof(buf));
   offset = strtol(buf, NULL, 0);

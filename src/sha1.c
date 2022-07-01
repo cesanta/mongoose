@@ -1,7 +1,7 @@
 /* Copyright(c) By Steve Reid <steve@edmweb.com> */
 /* 100% Public Domain */
 #include "sha1.h"
-#include <string.h>
+#include "arch.h"
 
 /*
  * clang with std=-c99 uses __LITTLE_ENDIAN, by default

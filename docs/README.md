@@ -2840,7 +2840,7 @@ mg_json_get_bool(mg_str("[true]", "$[0]", &b));  // b is true
 ### mg\_json\_get\_long()
 
 ```c
-long mg_json_get_bool(struct mg_str json, const char *path, long default_val);
+long mg_json_get_long(struct mg_str json, const char *path, long default_val);
 ```
 
 Fetch integer numeric (long) value from the json string `json` at JSON path
@@ -2856,8 +2856,8 @@ Return value: found value, or `default_val` value
 Usage example:
 
 ```c
-long a = mg_json_get_bool(mg_str("[123]", "$a", -1));   // a = -1
-long b = mg_json_get_bool(mg_str("[123]", "$[0]", -1)); // b = 123
+long a = mg_json_get_long(mg_str("[123]", "$a", -1));   // a = -1
+long b = mg_json_get_long(mg_str("[123]", "$[0]", -1)); // b = 123
 ```
 
 ### mg\_json\_get\_str()

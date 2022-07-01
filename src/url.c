@@ -1,5 +1,4 @@
 #include "url.h"
-#include <stdlib.h>
 
 struct url {
   size_t key, user, pass, host, port, uri, end;

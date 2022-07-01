@@ -413,6 +413,10 @@ extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
 
 #define _DARWIN_UNLIMITED_SELECT 1  // No limit on file descriptors
 
+#if defined(__APPLE__)
+#include <mach/mach_time.h>
+#endif
+
 #if !defined(MG_ENABLE_POLL) && (defined(__linux__) || defined(__APPLE__))
 #define MG_ENABLE_POLL 1
 #endif
@@ -817,6 +821,7 @@ struct mg_fs {
   bool (*mkd)(const char *path);                        // Create directory
 };
 
+extern struct mg_fs mg_fs_dummy;   // Dummy FS, does nothing
 extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
 extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/device-dashboard
 extern struct mg_fs mg_fs_fat;     // FAT FS
@@ -878,7 +883,7 @@ struct mg_str mg_url_pass(const char *url);
 const char *mg_url_uri(const char *url);
 
 
-#include <stddef.h>
+
 
 struct mg_iobuf {
   unsigned char *buf;  // Pointer to stored data

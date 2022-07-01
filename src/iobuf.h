@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stddef.h>
+#include "arch.h"
 
 struct mg_iobuf {
   unsigned char *buf;  // Pointer to stored data

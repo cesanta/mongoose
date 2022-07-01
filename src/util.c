@@ -1,9 +1,5 @@
 #include "util.h"
 
-#if MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
-#include <mach/mach_time.h>
-#endif
-
 #if MG_ENABLE_CUSTOM_RANDOM
 #else
 void mg_random(void *buf, size_t len) {

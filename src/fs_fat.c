@@ -1,3 +1,4 @@
+#include "arch.h"
 #include "fs.h"
 
 #if MG_ENABLE_FATFS
