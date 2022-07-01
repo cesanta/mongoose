@@ -1012,7 +1012,7 @@ static size_t ff_read(void *fp, void *buf, size_t len) {
 }
 
 static size_t ff_write(void *fp, const void *buf, size_t len) {
-  unsigned n = 0;
+  UINT n = 0;
   return f_write((FIL *) fp, (char *) buf, len, &n) == FR_OK ? n : 0;
 }
 
