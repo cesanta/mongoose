@@ -25,7 +25,6 @@ struct mg_fs {
   bool (*mkd)(const char *path);                        // Create directory
 };
 
-extern struct mg_fs mg_fs_dummy;   // Dummy FS, does nothing
 extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
 extern struct mg_fs mg_fs_packed;  // Packed FS, see examples/device-dashboard
 extern struct mg_fs mg_fs_fat;     // FAT FS
