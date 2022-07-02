@@ -20,7 +20,7 @@ var sendFileData = function(name, data, chunkSize) {
     var url = '/upload?offset=' + offset + '&name=' + encodeURIComponent(name);
     var ok;
     setStatus(
-        'Upoading ' + name + ', bytes ' + offset + '..' +
+        'Uploading ' + name + ', bytes ' + offset + '..' +
         (offset + chunk.length) + ' of ' + data.length);
     fetch(url, opts)
         .then(function(res) {
