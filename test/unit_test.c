@@ -1022,7 +1022,8 @@ static void test_http_no_content_length(void) {
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, f4, (void *) buf1);
   mg_http_connect(&mgr, url, f4c, (void *) buf2);
-  for (i = 0; i < 100 && strchr(buf2, 'c') == NULL; i++) mg_mgr_poll(&mgr, 1);
+  for (i = 0; i < 1000 && strchr(buf2, 'c') == NULL; i++) mg_mgr_poll(&mgr, 10);
+  MG_INFO(("[%s] [%s]", buf1, buf2));
   ASSERT(strcmp(buf1, "mc") == 0);
   ASSERT(strcmp(buf2, "fcm") == 0);  // See #1475
   mg_mgr_free(&mgr);

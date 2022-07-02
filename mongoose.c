@@ -4366,7 +4366,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
                     eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
   }
 #elif MG_ENABLE_POLL
-  size_t n = 0;
+  unsigned long n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) n++;
   struct pollfd *fds = (struct pollfd *) alloca(n * sizeof(fds[0]));
   if (n > 0) memset(fds, 0, sizeof(n * sizeof(fds[0])));
@@ -4375,28 +4375,39 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     c->is_readable = c->is_writable = 0;
     if (skip_iotest(c)) {
       // Socket not valid, ignore
+    } else if (mg_tls_pending(c) > 0) {
+      ms = 1;  // Don't wait if TLS is ready
     } else {
       fds[n].fd = FD(c);
       fds[n].events = POLLERR;
       if (can_read(c)) fds[n].events |= POLLIN;
       if (can_write(c)) fds[n].events |= POLLOUT;
       n++;
-      if (mg_tls_pending(c) > 0) ms = 0;  // Don't wait if TLS is ready
     }
   }
 
+  // MG_INFO(("poll n=%d ms=%d", (int) n, ms));
   if (poll(fds, n, ms) < 0) {
-    MG_ERROR(("poll failed, errno: %d", MG_SOCK_ERRNO));
-  } else {
-    n = 0;
-    for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
-      if (skip_iotest(c)) continue;
+#if MG_ARCH == MG_ARCH_WIN32
+    if (n == 0) Sleep(ms);  // On Windows, poll fails if no sockets
+#endif
+    if (n > 0) memset(fds, 0, sizeof(n * sizeof(fds[0])));
+  }
+  n = 0;
+  for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
+    if (skip_iotest(c)) {
+      // Socket not valid, ignore
+    } else if (mg_tls_pending(c) > 0) {
+      c->is_readable = 1;
+    } else {
       if (fds[n].revents & POLLERR) {
         mg_error(c, "socket error");
       } else {
-        c->is_readable = (unsigned) (fds[n].revents & POLLIN ? 1 : 0);
+        c->is_readable =
+            (unsigned) (fds[n].revents & POLLIN || fds[n].revents & POLLHUP
+                            ? 1
+                            : 0);
         c->is_writable = (unsigned) (fds[n].revents & POLLOUT ? 1 : 0);
-        if (mg_tls_pending(c) > 0) c->is_readable = 1;
       }
       n++;
     }
