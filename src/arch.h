@@ -13,6 +13,7 @@
 #define MG_ARCH_NEWLIB 10
 #define MG_ARCH_RTX 11
 #define MG_ARCH_TIRTOS 12
+#define MG_ARCH_RP2040 13
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -29,6 +30,8 @@
 #define MG_ARCH MG_ARCH_AZURERTOS
 #elif defined(__ZEPHYR__)
 #define MG_ARCH MG_ARCH_ZEPHYR
+#elif defined(PICO_TARGET_NAME)
+#define MG_ARCH MG_ARCH_RP2040
 #endif
 
 #if !defined(MG_ARCH)
