@@ -10,6 +10,7 @@
 
 #if MG_ENABLE_SOCKET
 #if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
+typedef unsigned long nfds_t;
 #define MG_SOCK_ERRNO WSAGetLastError()
 #if defined(_MSC_VER)
 #pragma comment(lib, "ws2_32.lib")
@@ -518,7 +519,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
                     eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
   }
 #elif MG_ENABLE_POLL
-  unsigned long n = 0;
+  nfds_t n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) n++;
   struct pollfd *fds = (struct pollfd *) alloca(n * sizeof(fds[0]));
   if (n > 0) memset(fds, 0, sizeof(n * sizeof(fds[0])));
