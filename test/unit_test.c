@@ -373,7 +373,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
 }
 
 static void test_mqtt_ver(uint8_t mqtt_version) {
-  char buf[50] = {0};
+  char buf[50] = {0}, client_id[16], will_topic[16];
   struct mqtt_data test_data = {buf, 0, 0};
   struct mg_mgr mgr;
   struct mg_str topic = mg_str("x/f12"), data = mg_str("hi");
@@ -410,9 +410,9 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   opts.will_retain = true;
   opts.keepalive = 20;
   opts.version = mqtt_version;
-  opts.will_topic = mg_str("mg_will_topic");
+  opts.will_topic = mg_str(mg_random_str(will_topic, sizeof(will_topic)));
   opts.will_message = mg_str("mg_will_messsage");
-  opts.client_id = mg_str("mg_unit_test");
+  opts.client_id = mg_str(mg_random_str(client_id, sizeof(client_id)));
   c = mg_mqtt_connect(&mgr, url, &opts, mqtt_cb, &test_data);
   for (i = 0; i < 300 && buf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
   if (buf[0] != 'X') MG_INFO(("[%s]", buf));

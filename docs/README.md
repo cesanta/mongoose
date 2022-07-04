@@ -3239,6 +3239,27 @@ char buf[10];
 mg_random(buf, sizeof(buf)); // `buf` is now random bytes
 ```
 
+### mg\_random\_str()
+
+```c
+char *mg_random_str(char *buf, size_t len);
+```
+
+Fill in buffer `buf`, `len` with random alphanumeric characters: `a-zA-Z0-9`.
+A buffer is zero-terminated.
+
+Parameters:
+- `buf` - a pointer to a buffer
+- `len` - a buffer size
+
+Return value: `buf` value.
+
+Usage example:
+```c
+char buf[10];
+printf("Random: %s\n", mg_random_str(buf, sizeof(buf)));
+```
+
 ### mg\_ntohs()
 
 ```c

@@ -5,6 +5,7 @@
 #include "str.h"
 
 void mg_random(void *buf, size_t len);
+char *mg_random_str(char *buf, size_t len);
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
