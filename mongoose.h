@@ -1249,6 +1249,8 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len);
 #define MQTT_CMD_DISCONNECT 14
 #define MQTT_CMD_AUTH 15
 
+enum { MQTT_OK, MQTT_INCOMPLETE, MQTT_MALFORMED };
+
 struct mg_mqtt_opts {
   struct mg_str user;          // Username, can be empty
   struct mg_str pass;          // Password, can be empty
