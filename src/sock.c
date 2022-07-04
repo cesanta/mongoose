@@ -532,7 +532,6 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
       ms = 1;  // Don't wait if TLS is ready
     } else {
       fds[n].fd = FD(c);
-      fds[n].events = POLLERR;
       if (can_read(c)) fds[n].events |= POLLIN;
       if (can_write(c)) fds[n].events |= POLLOUT;
       n++;
@@ -557,9 +556,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
         mg_error(c, "socket error");
       } else {
         c->is_readable =
-            (unsigned) (fds[n].revents & POLLIN || fds[n].revents & POLLHUP
-                            ? 1
-                            : 0);
+            (unsigned) (fds[n].revents & (POLLIN | POLLHUP) ? 1 : 0);
         c->is_writable = (unsigned) (fds[n].revents & POLLOUT ? 1 : 0);
       }
       n++;
