@@ -5488,6 +5488,10 @@ uint64_t mg_millis(void) {
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_AZURERTOS
   return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
+#elif MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
+  // Apple CLOCK_MONOTONIC_RAW is equivalent to CLOCK_BOOTTIME on linux
+  // Apple CLOCK_UPTIME_RAW is equivalent to CLOCK_MONOTONIC_RAW on linux
+  return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000000;
 #elif MG_ARCH == MG_ARCH_UNIX
   struct timespec ts = {0, 0};
   // See #1615 - prefer monotonic clock
