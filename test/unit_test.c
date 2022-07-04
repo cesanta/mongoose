@@ -1758,6 +1758,19 @@ static void test_util(void) {
   ASSERT(mg_tou64(mg_str("")) == 0);
   ASSERT(mg_tou64(mg_str("-")) == 0);
   ASSERT(mg_tou64(mg_str("18446744073709551615")) == 18446744073709551615U);
+
+  {
+    size_t i;
+    memset(buf, ' ', sizeof(buf));
+    mg_random_str(buf, 0);
+    ASSERT(buf[0] == ' ');
+    mg_random_str(buf, 1);
+    ASSERT(buf[0] == '\0');
+    ASSERT(buf[1] == ' ');
+    mg_random_str(buf, sizeof(buf));
+    ASSERT(buf[sizeof(buf) - 1] == '\0');
+    for (i = 0; i < sizeof(buf) - 1; i++) ASSERT(isalnum((uint8_t) buf[i]));
+  }
 }
 
 static void test_crc32(void) {

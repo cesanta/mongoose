@@ -4368,7 +4368,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   nfds_t n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) n++;
   struct pollfd *fds = (struct pollfd *) alloca(n * sizeof(fds[0]));
-  if (n > 0) memset(fds, 0, sizeof(n * sizeof(fds[0])));
+  memset(fds, 0, n * sizeof(fds[0]));
   n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = c->is_writable = 0;
@@ -4390,7 +4390,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 #if MG_ARCH == MG_ARCH_WIN32
     if (n == 0) Sleep(ms);  // On Windows, poll fails if no sockets
 #endif
-    if (n > 0) memset(fds, 0, sizeof(n * sizeof(fds[0])));
+    memset(fds, 0, n * sizeof(fds[0]));
   }
   n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
@@ -5409,7 +5409,7 @@ char *mg_random_str(char *buf, size_t len) {
   size_t i;
   mg_random(buf, len);
   for (i = 0; i < len; i++) {
-    uint8_t c = ((uint8_t *) buf)[i] % 62;
+    uint8_t c = ((uint8_t *) buf)[i] % 62U;
     buf[i] = i == len - 1 ? (char) '\0'            // 0-terminate last byte
              : c < 26     ? (char) ('a' + c)       // lowercase
              : c < 52     ? (char) ('A' + c - 26)  // uppercase
