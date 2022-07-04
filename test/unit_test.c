@@ -739,7 +739,8 @@ static void test_http_server(void) {
     // Test connection refused
     int i, errored = 0;
     mg_connect(&mgr, "tcp://127.0.0.1:55117", eh9, &errored);
-    for (i = 0; i < 10 && errored == 0; i++) mg_mgr_poll(&mgr, 1);
+    // Give it a couple of seconds, see #1605
+    for (i = 0; i < 200 && errored == 0; i++) mg_mgr_poll(&mgr, 10);
     MG_INFO(("errored: %d, expected: 7", errored));
     ASSERT(errored == 7);
   }

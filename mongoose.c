@@ -4214,7 +4214,8 @@ void mg_connect_resolved(struct mg_connection *c) {
     if ((rc = connect(FD(c), &usa.sa, slen)) == 0) {
       mg_call(c, MG_EV_CONNECT, NULL);
     } else if (mg_sock_would_block()) {
-      MG_DEBUG(("%lu %p -> %x:%hu pend", c->id, c->fd, c->rem.ip, c->rem.port));
+      MG_DEBUG(("%lu %p -> %x:%hu pend", c->id, c->fd, mg_ntohl(c->rem.ip),
+                mg_ntohs(c->rem.port)));
       c->is_connecting = 1;
     } else {
       mg_error(c, "connect: %d", MG_SOCK_ERRNO);
