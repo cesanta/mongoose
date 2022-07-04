@@ -1911,7 +1911,7 @@ Usage example:
 ```c
 // Iterate over all MQTT frames contained in buf, len
 struct mg_mqtt_message mm;
-while ((mg_mqtt_parse(buf, len, &mm)) == 0) {
+while ((mg_mqtt_parse(buf, len, &mm)) == MQTT_OK) {
   switch (mm.cmd) {
     case MQTT_CMD_CONNACK:
       ...

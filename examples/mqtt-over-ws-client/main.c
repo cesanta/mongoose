@@ -40,7 +40,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     uint8_t version = c->is_mqtt5 ? 5 : 4;
     MG_INFO(("GOT %d bytes WS msg", (int) wm->data.len));
     while ((mg_mqtt_parse((uint8_t *) wm->data.ptr, wm->data.len, version,
-                          &mm)) == 0) {
+                          &mm)) == MQTT_OK) {
       switch (mm.cmd) {
         case MQTT_CMD_CONNACK:
           mg_call(c, MG_EV_MQTT_OPEN, &mm.ack);
