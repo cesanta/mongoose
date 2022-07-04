@@ -379,6 +379,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   struct mg_str topic = mg_str("x/f12"), data = mg_str("hi");
   struct mg_connection *c;
   struct mg_mqtt_opts opts;
+  char rnd[10], client_id[21], will_topic[21], will_message[21];
   const char *url = "mqtt://broker.hivemq.com:1883";
   int i;
   mg_mgr_init(&mgr);
@@ -410,9 +411,19 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   opts.will_retain = true;
   opts.keepalive = 20;
   opts.version = mqtt_version;
-  opts.will_topic = mg_str("mg_will_topic");
-  opts.will_message = mg_str("mg_will_messsage");
-  opts.client_id = mg_str("mg_unit_test");
+  mg_random(rnd, sizeof(rnd));
+  mg_hex(rnd, sizeof(rnd), will_topic);
+  client_id[sizeof(will_topic) - 1] = '\0';
+  mg_random(rnd, sizeof(rnd));
+  mg_hex(rnd, sizeof(rnd), will_message);
+  client_id[sizeof(will_message) - 1] = '\0';
+  mg_random(rnd, sizeof(rnd));
+  mg_hex(rnd, sizeof(rnd), client_id);
+  client_id[sizeof(client_id) - 1] = '\0';
+  // Must be randomized to prevent conflicts on same mqtt test server
+  opts.will_topic = mg_str(will_topic);
+  opts.will_message = mg_str(will_message);
+  opts.client_id = mg_str(client_id);
   c = mg_mqtt_connect(&mgr, url, &opts, mqtt_cb, &test_data);
   for (i = 0; i < 300 && buf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
   if (buf[0] != 'X') MG_INFO(("[%s]", buf));

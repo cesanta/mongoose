@@ -1,5 +1,11 @@
 #include "util.h"
 
+#if MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
+#include <mach/mach_time.h>
+#elif MG_ARCH == MG_ARCH_UNIX
+#include <time.h>
+#endif
+
 #if MG_ENABLE_CUSTOM_RANDOM
 #else
 void mg_random(void *buf, size_t len) {
@@ -87,9 +93,30 @@ uint64_t mg_millis(void) {
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_AZURERTOS
   return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
+#elif MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
+  // Value of a clock that increments monotonically in tick units
+  uint64_t ticks = mach_absolute_time();
+  static mach_timebase_info_data_t timebase;
+  if ( timebase.denom == 0 ) {
+    mach_timebase_info(&timebase);
+  }
+  uint64_t uptime_nanos = (uint64_t) ((ticks * timebase.numer) / timebase.denom);
+  return (uint64_t) (uptime_nanos / 1000000);
 #elif MG_ARCH == MG_ARCH_UNIX
   struct timespec ts = {0, 0};
+#ifdef _POSIX_MONOTONIC_CLOCK
+#ifdef CLOCK_MONOTONIC_RAW
+  // Raw hardware-based time that is not subject to NTP adjustments
+  clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+#else
+  // Affected by the incremental adjustments performed by adjtime and NTP
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+#endif
+#else
+  // Affected by discontinuous jumps in the system time and by the incremental adjustments performed by adjtime and NTP
   clock_gettime(CLOCK_REALTIME, &ts);
+#endif
+#include <inttypes.h>
   return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
 #else
   return (uint64_t) (time(NULL) * 1000);
