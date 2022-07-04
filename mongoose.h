@@ -330,6 +330,9 @@ struct timeval {
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#include <pico/stdlib.h>
+int mkdir(const char *, mode_t);
 #endif
 
 
