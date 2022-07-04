@@ -7,7 +7,7 @@
 //    3. Publishes message `hello` to the `s_topic`
 //    4. Receives that message back from the subscribed topic and exits
 //
-// To enable SSL/TLS, make SSL=OPENSSL or make SSL=MBEDTLS 
+// To enable SSL/TLS, make SSL=OPENSSL or make SSL=MBEDTLS
 
 #include "mongoose.h"
 
@@ -33,10 +33,11 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     size_t len = c->send.len;
     mg_mqtt_login(c, &opts);
     mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
+    c->is_hexdumping = 1;
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_mqtt_message mm;
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    uint8_t version = (uint8_t) (size_t) c->pfn_data;
+    uint8_t version = c->is_mqtt5 ? 5 : 4;
     MG_INFO(("GOT %d bytes WS msg", (int) wm->data.len));
     while ((mg_mqtt_parse((uint8_t *) wm->data.ptr, wm->data.len, version,
                           &mm)) == 0) {
@@ -82,6 +83,7 @@ int main(void) {
   struct mg_mgr mgr;  // Event manager
   bool done = false;  // Event handler flips it to true when done
   mg_mgr_init(&mgr);  // Initialise event manager
+  mg_log_set("4");    // Set debug log level
   mg_ws_connect(&mgr, s_url, fn, &done, NULL);    // Create client connection
   while (done == false) mg_mgr_poll(&mgr, 1000);  // Event loop
   mg_mgr_free(&mgr);                              // Finished, cleanup

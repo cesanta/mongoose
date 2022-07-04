@@ -1036,6 +1036,7 @@ struct mg_connection {
   unsigned is_tls_hs : 1;      // TLS handshake is in progress
   unsigned is_udp : 1;         // UDP connection
   unsigned is_websocket : 1;   // WebSocket connection
+  unsigned is_mqtt5 : 1;       // For MQTT connection, v5 indicator
   unsigned is_hexdumping : 1;  // Hexdump in/out traffic
   unsigned is_draining : 1;    // Send remaining data, then close and free
   unsigned is_closing : 1;     // Close and free the connection immediately
