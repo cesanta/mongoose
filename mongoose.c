@@ -5465,6 +5465,8 @@ int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip) {
 uint64_t mg_millis(void) {
 #if MG_ARCH == MG_ARCH_WIN32
   return GetTickCount();
+#elif MG_ARCH == MG_ARCH_RP2040
+  return time_us_64() / 1000;
 #elif MG_ARCH == MG_ARCH_ESP32
   return esp_timer_get_time() / 1000;
 #elif MG_ARCH == MG_ARCH_ESP8266
@@ -5475,7 +5477,18 @@ uint64_t mg_millis(void) {
   return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
 #elif MG_ARCH == MG_ARCH_UNIX
   struct timespec ts = {0, 0};
+  // See #1615 - prefer monotonic clock
+#if defined(CLOCK_MONOTONIC_RAW)
+  // Raw hardware-based time that is not subject to NTP adjustment
+  clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+#elif defined(CLOCK_MONOTONIC)
+  // Affected by the incremental adjustments performed by adjtime and NTP
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+#else
+  // Affected by discontinuous jumps in the system time and by the incremental
+  // adjustments performed by adjtime and NTP
   clock_gettime(CLOCK_REALTIME, &ts);
+#endif
   return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
 #else
   return (uint64_t) (time(NULL) * 1000);
