@@ -27,15 +27,14 @@ static long getparam(struct mg_http_message *hm, const char *json_path) {
   return dv;
 }
 
-static size_t printdata(char *buf, size_t len, va_list *ap) {
+static size_t printdata(void (*out)(char, void *), void *ptr, va_list *ap) {
   unsigned start = va_arg(*ap, unsigned);
   unsigned max = start + CHUNK_SIZE;
   const char *comma = "";
   size_t n = 0;
   if (max > DATA_SIZE) max = DATA_SIZE;
   while (start < max) {
-    n += mg_snprintf(buf ? buf + n : 0, len < n ? 0 : len - n, "%s%d", comma,
-                     s_data[start]);
+    n += mg_rprintf(out, ptr, "%s%d", comma, s_data[start]);
     comma = ",";
     start++;
   }
