@@ -8,7 +8,7 @@
 // To enable SSL/TLS, add SSL=OPENSSL or SSL=MBEDTLS
 
 static const char *s_backend_url =
-#if defined(MG_ENABLE_MBEDTLS) || defined(MG_ENABLE_OPENSSL)
+#if defined(MG_ENABLE_MBEDTLS) || defined(MG_ENABLE_OPENSSL) || defined(MG_ENABLE_WOLFSSL)
     "https://cesanta.com";
 #else
     "http://info.cern.ch";
