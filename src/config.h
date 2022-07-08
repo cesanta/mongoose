@@ -32,6 +32,10 @@
 #define MG_ENABLE_OPENSSL 0
 #endif
 
+#ifndef MG_ENABLE_WOLFSSL
+#define MG_ENABLE_WOLFSSL 0
+#endif
+
 #ifndef MG_ENABLE_CUSTOM_TLS
 #define MG_ENABLE_CUSTOM_TLS 0
 #endif
