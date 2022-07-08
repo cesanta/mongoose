@@ -293,7 +293,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     int64_t received = *(int64_t *) evd;
     *(int64_t *) fnd = received;
     MG_DEBUG(("got time: %lld", received));
-#if MG_ARCH == MG_ARCH_UNIX
+#if MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WASM
     struct timeval tv = {0, 0};
     gettimeofday(&tv, 0);
     int64_t ms = (int64_t) tv.tv_sec * 1000 + tv.tv_usec / 1000;
@@ -1472,7 +1472,7 @@ static void test_str(void) {
   ASSERT(sn("%.*s", 3, "a\0b"));
   ASSERT(sn("%d", 7));
   ASSERT(sn("%d", 123));
-#if MG_ARCH == MG_ARCH_UNIX
+#if MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WASM
   ASSERT(sn("%lld", (uint64_t) 0xffffffffff));
   ASSERT(sn("%lld", (uint64_t) -1));
   ASSERT(sn("%llu", (uint64_t) -1));
@@ -2632,18 +2632,18 @@ int main(void) {
   test_str();
   test_globmatch();
   test_get_header_var();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4)
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4 || MG_ARCH == MG_ARCH_WASM)
     test_rewrites();
   test_check_ip_acl();
   test_udp();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4 || MG_ARCH == MG_ARCH_WASM) {
     test_pipe();
     test_packed();
   }
   test_crc32();
   test_multipart();
   test_invalid_listen_addr();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4 || MG_ARCH == MG_ARCH_WASM) {
     test_http_chunked();
     test_http_upload();
     test_http_stream_buffer();
@@ -2658,21 +2658,23 @@ int main(void) {
   test_base64();
   test_http_get_var();
   test_tls();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4 || MG_ARCH == MG_ARCH_WASM) {
     test_ws();
     test_ws_fragmentation();
     test_http_client();
   }
   if (sizeof(void*) != 4)
     test_http_server();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4 || MG_ARCH == MG_ARCH_WASM) {
     test_http_404();
+#ifndef WASM_WORKAROUND_DISABLE_DRAINING
     test_http_no_content_length();
+#endif
     test_http_pipeline();
     test_http_range();
   }
   test_sntp();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4)
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4 || MG_ARCH == MG_ARCH_WASM)
     test_mqtt();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
 

@@ -297,6 +297,7 @@ The architecture is guessed during the build, so setting it is not usually requi
 |MG_ARCH_TIRTOS | TI RTOS |
 |MG_ARCH_RP2040 | RP2040 SDK |
 |MG_ARCH_NEWLIB | Bare ARM GCC |
+|MG_ARCH_WASM | WebAssembly with WASI support, bound to the WAMR runtime socket extension |
 |MG_ARCH_CUSTOM | A custom architecture, discussed in the next section |
 
 The other class of build constants is defined in
@@ -312,6 +313,7 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_MBEDTLS | 0 | Enable mbedTLS library |
 |MG_ENABLE_OPENSSL | 0 | Enable OpenSSL library |
 |MG_ENABLE_WOLFSSL | 0 | Enable WolfSSL library |
+|MG_ENABLE_WOLFSSL_DEBUG | 0 | Enable WolfSSL library debugging messages |
 |MG_ENABLE_IPV6 | 0 | Enable IPv6 |
 |MG_ENABLE_MD5 | 0 | Use native MD5 implementation |
 |MG_ENABLE_SSI | 1 | Enable serving SSI files by `mg_http_serve_dir()` |

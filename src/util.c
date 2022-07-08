@@ -9,7 +9,7 @@ void mg_random(void *buf, size_t len) {
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
   done = true;
 #elif MG_ARCH == MG_ARCH_WIN32
-#elif MG_ARCH == MG_ARCH_UNIX
+#elif MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WASM
   FILE *fp = fopen("/dev/urandom", "rb");
   if (fp != NULL) {
     if (fread(buf, 1, len, fp) == len) done = true;
@@ -108,7 +108,7 @@ uint64_t mg_millis(void) {
   // Apple CLOCK_MONOTONIC_RAW is equivalent to CLOCK_BOOTTIME on linux
   // Apple CLOCK_UPTIME_RAW is equivalent to CLOCK_MONOTONIC_RAW on linux
   return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000000;
-#elif MG_ARCH == MG_ARCH_UNIX
+#elif MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WASM
   struct timespec ts = {0, 0};
   // See #1615 - prefer monotonic clock
 #if defined(CLOCK_MONOTONIC_RAW)

@@ -229,7 +229,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
     if ((fd = socket(af, type, proto)) == INVALID_SOCKET) {
       MG_ERROR(("socket: %d", MG_SOCK_ERRNO));
 #if ((MG_ARCH == MG_ARCH_WIN32) || (MG_ARCH == MG_ARCH_UNIX) || \
-     (defined(LWIP_SOCKET) && SO_REUSE == 1))
+     (MG_ARCH == MG_ARCH_WASM) || (defined(LWIP_SOCKET) && SO_REUSE == 1))
     } else if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
                           sizeof(on)) != 0) {
       // 1. SO_RESUSEADDR is not enabled on Windows because the semantics of

@@ -14,9 +14,12 @@
 #define MG_ARCH_RTX 11
 #define MG_ARCH_TIRTOS 12
 #define MG_ARCH_RP2040 13
+#define MG_ARCH_WASM 14
 
 #if !defined(MG_ARCH)
-#if defined(__unix__) || defined(__APPLE__)
+#if defined(__wasi__)
+#define MG_ARCH MG_ARCH_WASM
+#elif defined(__unix__) || defined(__APPLE__)
 #define MG_ARCH MG_ARCH_UNIX
 #elif defined(_WIN32)
 #define MG_ARCH MG_ARCH_WIN32
@@ -56,3 +59,4 @@
 #include "arch_unix.h"
 #include "arch_win32.h"
 #include "arch_zephyr.h"
+#include "arch_wasm.h"

@@ -266,7 +266,9 @@ void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
   c->pfn_data = NULL;
   if (wskey == NULL) {
     mg_http_reply(c, 426, "", "WS upgrade expected\n");
+#ifndef WASM_WORKAROUND_DISABLE_DRAINING
     c->is_draining = 1;
+#endif
   } else {
     struct mg_str *wsproto = mg_http_get_header(hm, "Sec-WebSocket-Protocol");
     va_list ap;

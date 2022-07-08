@@ -40,6 +40,7 @@ OPENSSL ?= /usr/local
 CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif
+
 ifeq "$(SSL)" "WOLFSSL"
 WOLFSSL ?= /usr/local
 CFLAGS  += -DMG_ENABLE_WOLFSSL=1 -I$(WOLFSSL)/include
@@ -115,6 +116,30 @@ arm: mongoose.h $(SRCS)
 riscv: DEFS += -DMG_ENABLE_FILE=0 -DMG_ENABLE_MIP=1 -DMG_ARCH=MG_ARCH_NEWLIB 
 riscv: mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test
+
+wasm: WASI_SDK_PATH ?= /opt/wasi-sdk
+wasm: WAMR_PATH ?= /opt/wamr
+wasm: ASAN=
+wasm: CFLAGS += -DWOLFSSL_WASM=1
+wasm: INCS += -I$(WAMR_PATH)/core/iwasm/libraries/lib-socket/inc
+wasm: WARN += -Wno-sign-conversion -Wno-unused-variable -Wno-unused-parameter -Wno-sign-compare -Wno-unused-function
+wasm: IPV6 = 0
+wasm: WOLFSSL = ../wolfssl
+wasm: CFLAGS  += -I$(WOLFSSL)
+wasm: LDFLAGS += -L$(WOLFSSL)/IDE/Wasm -lwolfssl
+wasm: Makefile mongoose.h $(SRCS)
+	if [ ! -d "$(WOLFSSL)" ]; then echo "The WOLFSSL variable does not point on a valid folder: $(WOLFSSL)"; exit 1; fi
+	$(WASI_SDK_PATH)/bin/clang \
+		--target=wasm32-wasi \
+		-Wl,--export=malloc -Wl,--export=free \
+		-z stack-size=655360 \
+		--sysroot=$(WASI_SDK_PATH)/share/wasi-sysroot/ \
+		-Wl,--allow-undefined-file=$(WASI_SDK_PATH)/share/wasi-sysroot/share/wasm32-wasi/defined-symbols.txt \
+		-Wl,--strip-all \
+		$(CFLAGS) \
+		$(LDFLAGS) \
+		-o mongoose.wasm \
+		$(SRCS) $(WAMR_PATH)/core/iwasm/libraries/lib-socket/src/wasi/wasi_socket_ext.c
 
 vc98: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
