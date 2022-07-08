@@ -12,6 +12,10 @@ ifeq "$(SSL)" "OPENSSL"
 CFLAGS += -DMG_ENABLE_OPENSSL=1 -lssl -lcrypto
 endif
 
+ifeq "$(SSL)" "WOLFSSL"
+CFLAGS += -DMG_ENABLE_WOLFSSL=1 -lwolfssl
+endif
+
 all: $(PROG)
 	$(RUN) ./$(PROG) $(ARGS)
 
