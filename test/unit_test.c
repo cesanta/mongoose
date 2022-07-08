@@ -532,6 +532,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
       // Local connection, use self-signed certificates
       opts.ca = "./test/data/ss_ca.pem";
       opts.cert = "./test/data/ss_client.pem";
+      opts.certkey = "./test/data/ss_client.key";
     } else {
       opts.srvname = host;
     }
@@ -924,25 +925,42 @@ static void test_http_404(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void test_tls(void) {
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-  struct mg_tls_opts opts = {"./test/data/ss_ca.pem",
-                             NULL,
-                             "./test/data/ss_server.pem",
-                             "./test/data/ss_server.pem",
-                             NULL,
-                             {0, 0},
-                             NULL};
+static void* start_client_async(void* is_client_running) {
   struct mg_mgr mgr;
-  struct mg_connection *c;
   const char *url = "https://127.0.0.1:12347";
   char buf[FETCH_BUF_SIZE];
+
   mg_mgr_init(&mgr);
-  c = mg_http_listen(&mgr, url, eh1, (void *) &opts);
-  ASSERT(c != NULL);
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   // MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "hello\n") == 0);
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+
+  *((int*) is_client_running) = 0;
+  return NULL;
+}
+
+static void test_tls(void) {
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL || MG_ENABLE_WOLFSSL
+  struct mg_tls_opts opts = {.ca = "./test/data/ss_ca.pem",
+                             .cert = "./test/data/ss_server.pem",
+                             .certkey = "./test/data/ss_server.key"};
+  struct mg_mgr mgr;
+  struct mg_connection *c;
+  pthread_t id;
+  int is_client_running = 1;
+  const char *url = "https://127.0.0.1:12347";
+  
+  // Start the server
+  mg_mgr_init(&mgr);
+  c = mg_http_listen(&mgr, url, eh1, (void *) &opts);
+  ASSERT(c != NULL);
+
+  // Start the client in another thread
+  pthread_create(&id, NULL, start_client_async, &is_client_running);
+  while (is_client_running) mg_mgr_poll(&mgr, 10);
+
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 #endif
@@ -981,7 +999,7 @@ static void test_http_client(void) {
   c->is_closing = 1;
   mg_mgr_poll(&mgr, 0);
   ok = 0;
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL //|| MG_ENABLE_WOLFSSL
   {
     const char *url = "https://cesanta.com";
     struct mg_str host = mg_url_host(url);
