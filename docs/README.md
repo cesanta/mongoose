@@ -311,6 +311,7 @@ Here is a list of build constants and their default values:
 |MG_ENABLE_SOCKET | 1 | Use BSD socket low-level API |
 |MG_ENABLE_MBEDTLS | 0 | Enable mbedTLS library |
 |MG_ENABLE_OPENSSL | 0 | Enable OpenSSL library |
+|MG_ENABLE_WOLFSSL | 0 | Enable WolfSSL library |
 |MG_ENABLE_IPV6 | 0 | Enable IPv6 |
 |MG_ENABLE_MD5 | 0 | Use native MD5 implementation |
 |MG_ENABLE_SSI | 1 | Enable serving SSI files by `mg_http_serve_dir()` |
