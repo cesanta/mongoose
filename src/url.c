@@ -14,7 +14,11 @@ static struct url urlparse(const char *url) {
   size_t i;
   struct url u;
   memset(&u, 0, sizeof(u));
+  int param = 0;
   for (i = 0; url[i] != '\0'; i++) {
+    if (url[i] == '?') {
+      param = 1;
+    }
     if (i > 0 && u.host == 0 && url[i - 1] == '/' && url[i] == '/') {
       u.host = i + 1;
       u.port = 0;
@@ -22,7 +26,7 @@ static struct url urlparse(const char *url) {
       u.port = 0;  // IPv6 URLs, like http://[::1]/bar
     } else if (url[i] == ':' && u.port == 0 && u.uri == 0) {
       u.port = i + 1;
-    } else if (url[i] == '@' && u.user == 0 && u.pass == 0) {
+    } else if (url[i] == '@' && u.user == 0 && u.pass == 0 && param == 0) {
       u.user = u.host;
       u.pass = u.port;
       u.host = i + 1;
