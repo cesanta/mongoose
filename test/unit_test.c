@@ -219,6 +219,8 @@ static void test_url(void) {
   ASSERT(vcmp(mg_url_user("p://u:p@foo"), "u"));
   ASSERT(vcmp(mg_url_pass("p://u:p@foo"), "p"));
   ASSERT(vcmp(mg_url_pass("p://u:p@foo//a@b"), "p"));
+  ASSERT(vcmp(mg_url_user("p://foo/q?mail=a@b.c"), ""));
+  ASSERT(vcmp(mg_url_pass("p://foo/q?mail=a@b.c"), ""));
 
   // URI
   ASSERT(strcmp(mg_url_uri("p://foo"), "/") == 0);
@@ -228,6 +230,7 @@ static void test_url(void) {
   ASSERT(strcmp(mg_url_uri("p://foo:12/a/b/c"), "/a/b/c") == 0);
   ASSERT(strcmp(mg_url_uri("p://[::1]:12/a/b/c"), "/a/b/c") == 0);
   ASSERT(strcmp(mg_url_uri("p://[ab::1]:12/a/b/c"), "/a/b/c") == 0);
+  ASSERT(strcmp(mg_url_uri("p://foo/q?mail=a@b.c"), "/q?mail=a@b.c") == 0);
 }
 
 static void test_base64(void) {
