@@ -2581,7 +2581,7 @@ Supported format specifiers:
 - `Q` - expect `char *`, outputs double-quoted JSON-escaped string (extension)
 - `H` - expect `int`, `void *`, outputs double-quoted hex string (extension)
 - `V` - expect `int`, `void *`, outputs double-quoted base64 string (extension)
-- `M` - expect `size_t (*)(char *, size_t, va_list *)`, calls another print function (extension)
+- `M` - expect `size_t (*)(char, void *), void *ptr, va_list *)`, calls another print function (extension)
 - `g`, `f` - expect `double`
 - `c` - expect `char`
 - `%` - expect `%` character itself
@@ -2610,10 +2610,10 @@ mg_snprintf(buf, sizeof(buf), "hi, %Q", "a");           // hi, "a"
 mg_snprintf(buf, sizeof(buf), "r: %M, %d", f,1,2,7);    // r: 3, 7
 
 // Printing sub-function for %M specifier. Grabs two int parameters
-size_t f(char *buf, size_t len, va_list *ap) {
+size_t f(void (*out)(char, void *), void *ptr, va_list *ap) {
   int a = va_arg(*ap, int);
-  int a = va_arg(*ap, int);
-  return mg_snprintf(buf, len, "%d", a + b);
+  int b = va_arg(*ap, int);
+  return mg_rprintf(out, ptr, "%d", a + b);
 }
 ```
 
@@ -2664,6 +2664,31 @@ Usage example:
 ```c
 char *msg = mg_mprintf("Double quoted string: %Q!", "hi");
 free(msg);
+```
+
+### mg\_rprintf(), mg\_vrprintf()
+
+```c
+size_t mg_rprintf(void (*out)(char, void *), void *param, const char *fmt, ...);
+size_t mg_vrprintf(void (*out)(char, void *), void *param, const char *fmt,
+                   va_list *ap);
+```
+
+Print message using a specified character output function
+
+Parameters:
+- `out` - function to be used for printing chars
+- `param` - argument to be passed to `out`
+- `fmt` - printf-like format string
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+void myfn(char c, void *p);
+
+size_t len = mg_rprintf(myfn, myfn_p, "Double quoted string: %Q!", "hi");
 ```
 
 ### mg\_to64()
