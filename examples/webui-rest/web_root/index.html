@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body>
+    <h1>REST basics demo</h1>
+    <div style="height: 0.3em;">&nbsp;</div>
+    <button id="btn1">Call F1</button>
+    <button id="btn2">Call SUM(1, 2)</button>
+    <div style="margin-top: 1em;">Action log:</div>
+    <div id="log" style="background: #eee; height: 10em; padding: 0.5em; overflow:auto;"><div>
+  </body>
+  <script>
+    var E = function(id) { return document.getElementById(id); };
+    var btn1 = E('btn1'), btn2 = E('btn2'), msglog = E('log');
+    var enable = function(en) { btn1.disabled = btn2.disabled = !en; };
+    var log = text => msglog.innerHTML += text + '<br/>\n';
+    
+    enable(true);
+
+    btn1.onclick = ev => fetch('/api/f1')
+      .then(r => r.json())
+      .then(r => {
+        console.log(r);
+        log('GET /api/f1: ' + JSON.stringify(r) + ' -> ' + JSON.stringify(r.result))
+      })
+      .catch(err => console.log(err));
+
+    const getsum = (a, b) =>
+      fetch('/api/sum', {method: 'POST', body:JSON.stringify([a, b])})
+        .then(r => r.json())
+        .catch(err => console.log(err));
+    btn2.onclick = ev => getsum(1, 2)
+      .then(r => {
+        console.log(r);
+        log('POST [1, 2] to /api/sum: ' + JSON.stringify(r) + ' -> ' + JSON.stringify(r.result))
+      })
+      .catch(err => console.log(err));
+  </script>
+</html>
