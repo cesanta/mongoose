@@ -25,6 +25,10 @@
 #include <sys/stat.h>
 
 static const char *code =
+    "static int scmp(const char *a, const char *b) {\n"
+    "  while (*a && (*a == *b)) a++, b++;\n"
+    "  return *(const unsigned char *) a - *(const unsigned char *) b;\n"
+    "}\n"
     "const char *mg_unlist(size_t no);\n"
     "const char *mg_unlist(size_t no) {\n"
     "  return packed_files[no].name;\n"
@@ -33,7 +37,7 @@ static const char *code =
     "const char *mg_unpack(const char *name, size_t *size, time_t *mtime) {\n"
     "  const struct packed_file *p;\n"
     "  for (p = packed_files; p->name != NULL; p++) {\n"
-    "    if (strcmp(p->name, name) != 0) continue;\n"
+    "    if (scmp(p->name, name) != 0) continue;\n"
     "    if (size != NULL) *size = p->size - 1;\n"
     "    if (mtime != NULL) *mtime = p->mtime;\n"
     "    return (const char *) p->data;\n"
