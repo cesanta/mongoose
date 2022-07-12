@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>Basic JavaScript UI demo</h1>
+    <div style="height: 0.3em;">&nbsp;</div>
+    <div class="col col-6">
+      <h3 style="background: #c03434; color: #fff; padding: 0.4em;">
+        Device Configuration</h3>
+      <div style="margin: 0.5em 0; display: flex;">
+        <span class="addon nowrap">MQTT server:</span>
+        <input id="url" type="text" style="flex: 1 100%;" value="" onchange="updateurl()" />
+        <button class="btn" id="btn_url" onclick="updateurl()"
+          style="margin-left: 1em; background: #8aa;">Update</button>
+      </div>
+      <div style="margin: 0.5em 0; display: flex; ">
+        <span class="addon nowrap">Subscribe topic:</span>
+        <input id="sub" type="text" style="flex: 1 100%;" value="" onchange="updatesub()" />
+        <button class="btn" id="btn_sub" onclick="updatesub()"
+          style="margin-left: 1em; background: #8aa;">Update</button>
+      </div>
+      <div style="margin: 0.5em 0; display: flex;">
+        <span class="addon nowrap">Publish topic:</span>
+        <input id="pub" type="text" style="flex: 1 100%;" value="" onchange="updatepub()" />
+        <button class="btn" id="btn_pub" onclick="updatepub()"
+          style="margin-left: 1em; background: #8aa;">Update</button>
+      </div>
+      <button id="btn_get" onclick="getconfig()">Get configuration</button>
+    </div>
+    <div style="height: 0.3em;">&nbsp;</div>
+    <div style="margin-top: 1em;">Action log:</div>
+    <div id="log" style="background: #eee; height: 10em; padding: 0.5em; overflow:auto;"><div>
+  </body>
+  <script>
+    var E = function(id) { return document.getElementById(id); };
+    var inp_url = E('url'), inp_sub = E('sub'), inp_pub = E('pub'), msglog = E('log');;
+    var enable = function(en) { btn_url.disabled = btn_sub.disabled = btn_pub.disabled = !en; };
+    var log = text => msglog.innerHTML += text + '<br/>\n';
+    
+    var showurl = function(val) { inp_url.value = val; };
+    var showsub = function(val) { inp_sub.value = val; };
+    var showpub = function(val) { inp_pub.value = val; };
+
+    const showconfig = function(r) {
+        showurl(r.url);
+        showsub(r.sub);
+        showpub(r.pub);
+      };
+      
+    const getconfig = () =>
+      fetch('/api/config/get')
+          .then(r => r.json())
+          .then(r => {
+            showconfig(r);
+            log('GET /api/config/get: ' + JSON.stringify(r));
+            enable(true);
+          })
+          .catch(err => {
+            console.log(err);
+            enable(false);
+          });
+
+    const update = (name, val) => {
+      const myObj = { [name]: val };
+      log('POST ' + JSON.stringify(myObj) + ' to /api/config/set');
+      fetch('/api/config/set', {method: 'POST',
+                               headers: {
+                                 'Content-Type': 'application/json'},
+                               body:JSON.stringify(myObj)})
+        .catch(err => {
+            console.log(err);
+            enable(false);
+        });
+    };
+
+    const updateurl = ev => update('url', inp_url.value);
+    const updatesub = ev => update('sub', inp_sub.value);
+    const updatepub = ev => update('pub', inp_pub.value);
+
+    enable(false);
+    getconfig();
+
+  </script>
+</html>
