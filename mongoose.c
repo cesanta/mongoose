@@ -3797,8 +3797,8 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
   } else if (version == 4 || version == 3) {
     uint32_t *data = (uint32_t *) &buf[40];
     unsigned long seconds = mg_ntohl(data[0]) - SNTP_TIME_OFFSET;
-    unsigned long useconds = mg_ntohl(data[1]);
-    res = ((int64_t) seconds) * 1000 + (int64_t) ((useconds / 1000) % 1000);
+    unsigned long fracseconds = mg_ntohl(data[1]);
+    res = ((int64_t) seconds) * 1000 + (((int64_t) (fracseconds) * 1000) >> 32);
   } else {
     MG_ERROR(("unexpected version: %d", version));
   }
