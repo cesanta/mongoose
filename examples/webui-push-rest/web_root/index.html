@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body>
+    <h1>Data push using REST demo</h1>
+    <div id="UI" style="background: #fff; border:1px solid black; height: 10em; padding: 0.5em; overflow:auto;"></div>
+    <div style="margin-top: 1em;">Event log:</div>
+    <div id="log" style="background: #eee; height: 10em; padding: 0.5em; overflow:auto;"></div>
+  </body>
+  <script>
+    var ui = document.getElementById('UI');
+    var log = document.getElementById('log');
+    var version = 0;
+
+    const refreshUI = d => ui.innerHTML = JSON.stringify(d, null, 2)
+
+    const watch = function() {
+    var tid;
+
+    fetch('/api/data', {method: 'POST', body:JSON.stringify({version})})
+      .then(r => r.json())
+      .then(r => {
+        if (r.status) {
+          log.innerHTML += 'Status: ' + r.status + '<br/>';
+        } else {
+          version = r.version;
+          log.innerHTML += 'Version: ' + version + '<br/>';
+          refreshUI(r.data);
+        }
+      })
+      .catch(err => console.log(err));
+
+    clearTimeout(tid);
+    tid = setTimeout(watch, 1000);
+    };
+
+    watch();
+
+  </script>
+</html>
