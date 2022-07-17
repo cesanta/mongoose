@@ -3511,6 +3511,7 @@ struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg) {
   struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
   mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
+  t->id = mgr->timerid++;
   return t;
 }
 
@@ -4847,7 +4848,7 @@ char *mg_remove_double_dots(char *s) {
 
 void mg_timer_init(struct mg_timer **head, struct mg_timer *t, uint64_t ms,
                    unsigned flags, void (*fn)(void *), void *arg) {
-  struct mg_timer tmp = {ms, 0U, 0U, flags, fn, arg, *head};
+  struct mg_timer tmp = {0U, ms, 0U, 0U, flags, fn, arg, *head};
   *t = tmp;
   *head = t;
 }

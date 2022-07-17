@@ -224,6 +224,7 @@ struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg) {
   struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
   mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
+  t->id = mgr->timerid++;
   return t;
 }
 

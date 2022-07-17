@@ -3,6 +3,7 @@
 #include "arch.h"
 
 struct mg_timer {
+  unsigned long id;         // Timer ID
   uint64_t period_ms;       // Timer period in milliseconds
   uint64_t prev_ms;         // Timestamp of a previous poll
   uint64_t expire;          // Expiration timestamp in milliseconds
