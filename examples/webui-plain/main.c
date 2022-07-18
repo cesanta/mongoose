@@ -22,6 +22,7 @@ static struct config { char *url, *pub, *sub; } s_config;
 static void update_config(struct mg_str json, const char *path, char **value) {
   char *jval;
   if ((jval = mg_json_get_str(json, path)) != NULL) {
+    free(*value);
     *value = strdup(jval);
   }
 }
