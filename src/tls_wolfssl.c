@@ -1,5 +1,5 @@
 //
-// Link with WolfSSL compiled with './configure --enable-debug --enable-static --with-ecc --enable-ecc --enable-psk --enable-sni --enable-harden --enable-curve25519 --enable-curve448 --enable-ed448 --enable-ed25519 --enable-ecccustcurves'.
+// Link with WolfSSL compiled with './configure --enable-debug --enable-static --with-ecc --enable-ecc --enable-psk --enable-sni --enable-harden --enable-curve25519 --enable-curve448 --enable-ed448 --enable-ed25519 --enable-ecccustcurves --enable-tlsx --enable-dsa CFLAGS="-DFP_MAX_BITS=8192 -DWOLFSSL_ALT_CERT_CHAINS"'.
 // 
 #include "tls.h"
 
@@ -41,16 +41,6 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     goto fail;
   }
 
-#ifdef HAVE_SNI
-  if (opts && opts->srvname.len > 0) {
-    rc = wolfSSL_CTX_UseSNI(tls->ctx, WOLFSSL_SNI_HOST_NAME, opts->srvname.ptr, (word16) opts->srvname.len);
-    if (rc != SSL_SUCCESS) {
-      mg_error(c, "Error in wolfSSL_CTX_UseSNI");
-      goto fail;
-    }
-  }
-#endif
-
   // Disable the verification of the certificates, for debugging purpose only
   //wolfSSL_CTX_set_verify(tls->ctx, WOLFSSL_VERIFY_NONE, 0);
 
@@ -82,10 +72,25 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
 
   tls->ssl = wolfSSL_new(tls->ctx);
-  if (tls->ssl == NULL) {;
+  if (tls->ssl == NULL) {
     mg_error(c, "Error in wolfSSL_new");
     goto fail;
   }
+
+#ifdef HAVE_SNI
+  if (opts && opts->srvname.len > 0) {
+    rc = wolfSSL_UseSNI(tls->ssl, WOLFSSL_SNI_HOST_NAME, opts->srvname.ptr, (word16) opts->srvname.len);
+    if (rc != SSL_SUCCESS) {
+      mg_error(c, "Error in wolfSSL_CTX_UseSNI");
+      goto fail;
+    }
+    rc = wolfSSL_check_domain_name(tls->ssl, opts->srvname.ptr);
+    if (rc != SSL_SUCCESS) {
+      mg_error(c, "Error in wolfSSL_check_domain_name");
+      goto fail;
+    }
+  }
+#endif
 
   c->tls = tls;
   c->is_tls = 1;
@@ -96,6 +101,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   MG_DEBUG(("%lu SSL %s OK", c->id, c->is_accepted ? "accept" : "client"));
   return;
 fail:
+  mg_error(c, "Failure in mg_tls_init");
   c->is_closing = 1;
   free(tls);
 }

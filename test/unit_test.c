@@ -1001,7 +1001,7 @@ static void test_http_client(void) {
   c->is_closing = 1;
   mg_mgr_poll(&mgr, 0);
   ok = 0;
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL //|| MG_ENABLE_WOLFSSL
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL || MG_ENABLE_WOLFSSL
   {
     const char *url = "https://cesanta.com";
     struct mg_str host = mg_url_host(url);
