@@ -5397,7 +5397,7 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 // Link with WolfSSL compiled with './configure --enable-debug --enable-static --with-ecc --enable-ecc --enable-psk --enable-sni --enable-harden --enable-curve25519 --enable-curve448 --enable-ed448 --enable-ed25519 --enable-ecccustcurves --enable-tlsx --enable-dsa CFLAGS="-DFP_MAX_BITS=8192 -DWOLFSSL_ALT_CERT_CHAINS"'.
 // 
 
-
+#define MG_ENABLE_WOLFSSL 1
 #if MG_ENABLE_WOLFSSL
 static int mg_tls_err(struct mg_tls *tls, int res) {
   int err = wolfSSL_get_error(tls->ssl, res);
@@ -5536,7 +5536,14 @@ void mg_tls_handshake(struct mg_connection *c) {
 
 void mg_tls_free(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
+  int ret, err;
   if (tls == NULL) return;
+
+  do {
+    ret = wolfSSL_shutdown(tls->ssl);
+    err = wolfSSL_get_error(tls->ssl, ret);
+  } while (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE);
+
   wolfSSL_free(tls->ssl);
   wolfSSL_CTX_free(tls->ctx);
   free(tls);
@@ -5550,14 +5557,26 @@ size_t mg_tls_pending(struct mg_connection *c) {
 
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  int n = wolfSSL_read(tls->ssl, buf, (int) len);
-  return n == 0 ? -1 : n < 0 && mg_tls_err(tls, n) == 0 ? 0 : n;
+  int ret, err;
+
+  do {
+    ret = wolfSSL_read(tls->ssl, buf, (int) len);
+    err = wolfSSL_get_error(tls->ssl, ret);
+  } while (err == WOLFSSL_ERROR_WANT_READ);
+
+  return ret == 0 ? -1 : ret < 0 && mg_tls_err(tls, ret) == 0 ? 0 : ret;
 }
 
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  int n = wolfSSL_write(tls->ssl, buf, (int) len);
-  return n == 0 ? -1 : n < 0 && mg_tls_err(tls, n) == 0 ? 0 : n;
+  int ret, err;
+
+  do {
+    ret = wolfSSL_write(tls->ssl, buf, (int) len);
+    err = wolfSSL_get_error(tls->ssl, ret);
+  } while (err == WOLFSSL_ERROR_WANT_WRITE);
+
+  return ret == 0 ? -1 : ret < 0 && mg_tls_err(tls, ret) == 0 ? 0 : ret;
 }
 
 #endif
