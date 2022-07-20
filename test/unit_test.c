@@ -925,6 +925,7 @@ static void test_http_404(void) {
   ASSERT(mgr.conns == NULL);
 }
 
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL || MG_ENABLE_WOLFSSL
 static void* start_client_async(void* is_client_running) {
   struct mg_mgr mgr;
   const char *url = "https://127.0.0.1:12347";
@@ -940,6 +941,7 @@ static void* start_client_async(void* is_client_running) {
   *((int*) is_client_running) = 0;
   return NULL;
 }
+#endif
 
 static void test_tls(void) {
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL || MG_ENABLE_WOLFSSL
