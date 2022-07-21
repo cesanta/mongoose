@@ -63,16 +63,16 @@ const App = function(props) {
                          }).then(r => ws && ws.close());
 
   const set = obj => setCfg(x => Object.assign(x, obj));
+  const nset = (n,obj) => setCfg(x => Object.assign(x, {[n]: Object.assign(x[n],obj)}));
   const setTx = ev => set({tx: parseInt(ev.target.value)});
   const setRx = ev => set({rx: parseInt(ev.target.value)});
   const setBaud = ev => set({baud: parseInt(ev.target.value)});
-  const setTcpUrl = ev => set({tcp: {url: `tcp://0.0.0.0:${ev.target.value}`}});
-  const setWsUrl = ev => set({ws: {url: `ws://0.0.0.0:${ev.target.value}`}});
-  const setMqttUrl = ev => set({mqtt: {url: ev.target.value}});
-  const setTcpEna = ev => (set({tcp: {enable: ev.target.checked}}), onchange());
-  const setWsEna = ev => (set({ws: {enable: ev.target.checked}}), onchange());
-  const setMqttEna = ev =>
-      (set({mqtt: {enable: ev.target.checked}}), onchange());
+  const setTcpUrl = ev => nset('tcp', {url: `tcp://0.0.0.0:${ev.target.value}`});
+  const setWsUrl = ev => nset('ws',{url: `ws://0.0.0.0:${ev.target.value}`});
+  const setMqttUrl = ev => nset('mqtt',{url: ev.target.value});
+  const setTcpEna = ev => (nset('tcp',{enable: ev.target.checked}), onchange());
+  const setWsEna = ev => (nset('ws',{enable: ev.target.checked}), onchange());
+  const setMqttEna = ev =>(nset('mqtt', {enable: ev.target.checked}), onchange());
 
   return html`
 <div class="container">
@@ -115,7 +115,7 @@ const App = function(props) {
         <label class="addon">Remote MQTT</label>
         <input style="flex: 1 100%;"
           value=${cfg.mqtt.url} onchange=${onchange}
-          oninput=${ev => setMqtt(ev.target.value)} />
+          oninput=${setMqttUrl} />
         <label class="ml-1 d-flex label"><input type="checkbox"
           checked=${cfg.mqtt.enable} onchange=${setMqttEna} /> enable</label>
       </div>
