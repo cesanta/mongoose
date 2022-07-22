@@ -2317,7 +2317,7 @@ static void test_get_header_var(void) {
 static void test_json(void) {
   const char *s;
   const char *s1 = "{\"a\":{},\"b\":7,\"c\":[[],2]}";
-  const char *s2 = "{\"a\":{\"b1\":{}},\"c\":7}";
+  const char *s2 = "{\"a\":{\"b1\":{}},\"c\":7,\"d\":{\"b2\":{}}}";
   int n, n1 = (int) strlen(s1), n2 = (int) strlen(s2);
 
   ASSERT(mg_json_get(" true ", 6, "", &n) == MG_JSON_INVALID);
