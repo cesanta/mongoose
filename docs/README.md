@@ -1498,6 +1498,32 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 ```
 
+### mg\_ws\_printf(), mg\_ws\_vprintf()
+
+```c
+size_t mg_ws_printf(struct mg_connection *, int op, const char *fmt, ...);
+size_t mg_ws_vprintf(struct mg_connection *, int op, const char *fmt, va_list);
+```
+
+Same as `mg_ws_send()`, but formats data using `printf()` semantics.
+<span class="badge bg-danger">NOTE: </span> See [mg\_ws\_send](#mg_ws_send)
+for the list of possible Websocket message types
+<span class="badge bg-danger">NOTE: </span> See [mg\_snprintf](#mg_snprintf-mg_vsnprintf)
+for the list of supported format specifiers
+
+Parameters:
+- `c` - Connection to use
+- `op` - Websocket message type
+- `fmt` - format string in `printf` semantics
+
+Return value: sent bytes count
+
+Usage example:
+
+```c
+mg_ws_printf(c, WEBSOCKET_OP_TEXT, "Hello, %s!", "world");
+```
+
 ### mg\_ws\_wrap()
 
 ```c
