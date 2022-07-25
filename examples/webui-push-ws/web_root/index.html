@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body>
+    <h1>Data push over WebSocket demo</h1>
+    <div style="margin-top: 1em;">Event log:</div>
+    <div id="log" style="background: #eee; height: 10em; padding: 0.5em; overflow:auto;"></div>
+    </body>
+  <script>
+    var log = document.getElementById('log');
+
+    const watch = function() {
+    var l = window.location, proto = l.protocol.replace('http', 'ws');
+    var tid, wsURI = proto + '//' + l.host + '/api/watch'
+    var reconnect = function() {
+      var ws = new WebSocket(wsURI);
+      ws.onopen = function() { log.innerHTML += 'CONNECTED<br/>'; }
+      ws.onmessage = function(ev) {
+        console.log(ev.data);
+        try {
+          var msg = JSON.parse(ev.data);
+          log.innerHTML += 'RECEIVED: ' + JSON.stringify(msg) + '<br/>';
+        } catch (e) {
+          console.log('Invalid ws frame:', ev.data);
+        }
+      };
+      ws.onclose = function() {
+        clearTimeout(tid);
+        tid = setTimeout(reconnect, 1000);
+        log.innerHTML += 'DISCONNECTED<br/>';
+      };
+      ws.onerror = err => console.log(err);
+    };
+    reconnect();
+  };
+
+  watch();
+
+  </script>
+</html>
