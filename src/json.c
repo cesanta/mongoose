@@ -58,12 +58,12 @@ int mg_json_get(const char *s, int len, const char *path, int *toklen) {
 
 // In the ascii table, the distance between `[` and `]` is 2.
 // Ditto for `{` and `}`. Hence +2 in the code below.
-#define MG_EOO(x)                                            \
-  do {                                                       \
-    if (depth == ed && ci != ei) return MG_JSON_NOT_FOUND;   \
-    if (c != nesting[depth - 1] + 2) return MG_JSON_INVALID; \
-    depth--;                                                 \
-    MG_CHECKRET(x);                                          \
+#define MG_EOO(x)                                                      \
+  do {                                                                 \
+    if (depth == ed && (ci != ei || ci < 0)) return MG_JSON_NOT_FOUND; \
+    if (c != nesting[depth - 1] + 2) return MG_JSON_INVALID;           \
+    depth--;                                                           \
+    MG_CHECKRET(x);                                                    \
   } while (0)
 
   for (i = 0; i < len; i++) {
