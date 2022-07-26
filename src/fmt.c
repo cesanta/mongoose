@@ -64,7 +64,7 @@ static void mg_putchar_iobuf_static(char ch, void *param) {
   }
 }
 
-void mg_putchar_iobuf(char ch, void *param) {
+void mg_pfn_iobuf(char ch, void *param) {
   struct mg_iobuf *io = (struct mg_iobuf *) param;
   if (io->len + 2 > io->size) mg_iobuf_resize(io, io->size + 64);
   if (io->len + 2 <= io->size) {
@@ -75,7 +75,7 @@ void mg_putchar_iobuf(char ch, void *param) {
 
 // We don't use realloc() in mongoose, so resort to inefficient calloc
 // Every new character reallocates the whole string
-void mg_putchar_realloc(char ch, void *param) {
+void mg_pfn_realloc(char ch, void *param) {
   char *s, *buf = *(char **) param;
   size_t len = buf == NULL ? 0 : strlen(buf);
   if ((s = (char *) calloc(1, len + 2)) != NULL) {

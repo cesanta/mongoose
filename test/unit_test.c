@@ -1504,8 +1504,8 @@ static void test_str(void) {
     free(p);
 
     p = mg_mprintf("[%M", pf2, 10);
-    mg_rprintf(mg_putchar_realloc, &p, ",");
-    mg_rprintf(mg_putchar_realloc, &p, "%d]", 7);
+    mg_rprintf(mg_pfn_realloc, &p, ",");
+    mg_rprintf(mg_pfn_realloc, &p, "%d]", 7);
     printf("-> %s\n", p);
     ASSERT(strcmp(p, "[9876543210,7]") == 0);
     free(p);
@@ -2422,12 +2422,61 @@ static void test_json(void) {
   }
 }
 
+static void test_rpc(void) {
+  void *head = NULL;
+  mg_rpc_add(&head, mg_str("rpc.list"), mg_rpc_list, &head);
+
+  {
+    char *s = NULL;
+    const char *req = "{\"method\":\"rpc.list\"}";
+    mg_rpc_process(&head, mg_str(req), mg_pfn_realloc, &s);
+    ASSERT(s == NULL);
+  }
+
+  {
+    char *s = NULL;
+    const char *req = "{\"id\": 1,\"method\":\"rpc.list\"}";
+    const char *resp = "{\"id\":1,\"result\":[\"rpc.list\"]}";
+    mg_rpc_process(&head, mg_str(req), mg_pfn_realloc, &s);
+    MG_INFO(("-> %s", s));
+    ASSERT(strcmp(s, resp) == 0);
+    free(s);
+  }
+
+  {
+    char *s = NULL;
+    const char *req = "{\"id\": true,\"method\":\"foo\"}";
+    const char *resp =
+        "{\"id\":true,\"error\":{\"code\":-32601,\"message\":\"foo not "
+        "found\"}}";
+    mg_rpc_process(&head, mg_str(req), mg_pfn_realloc, &s);
+    MG_INFO(("-> %s", s));
+    ASSERT(strcmp(s, resp) == 0);
+    free(s);
+  }
+
+  {
+    char *s = NULL;
+    const char *req = "haha";
+    const char *resp = "{\"error\":{\"code\":-32700,\"message\":\"haha\"}}";
+    mg_rpc_process(&head, mg_str(req), mg_pfn_realloc, &s);
+    ASSERT(s != NULL);
+    MG_INFO(("-> %s", s));
+    ASSERT(strcmp(s, resp) == 0);
+    free(s);
+  }
+
+  mg_rpc_free(&head);
+  ASSERT(head == NULL);
+}
+
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
   mg_log_set(debug_level);
 
   test_json();
+  test_rpc();
   test_str();
   test_globmatch();
   test_get_header_var();

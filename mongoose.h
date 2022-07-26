@@ -749,10 +749,10 @@ double mg_atod(const char *buf, int len, int *numlen);
 size_t mg_dtoa(char *buf, size_t len, double d, int width);
 char *mg_remove_double_dots(char *s);
 
-typedef void (*mg_pc_t)(char, void *);                  // Custom putchar
-typedef size_t (*mg_pm_t)(mg_pc_t, void *, va_list *);  // %M printer
-void mg_putchar_realloc(char ch, void *param);          // Print to malloced str
-void mg_putchar_iobuf(char ch, void *param);            // Print to iobuf
+typedef void (*mg_pfn_t)(char, void *);                  // Custom putchar
+typedef size_t (*mg_pm_t)(mg_pfn_t, void *, va_list *);  // %M printer
+void mg_pfn_realloc(char ch, void *param);  // Print to malloced str
+void mg_pfn_iobuf(char ch, void *param);    // Print to iobuf
 
 size_t mg_vrprintf(void (*)(char, void *), void *, const char *fmt, va_list *);
 size_t mg_rprintf(void (*fn)(char, void *), void *, const char *fmt, ...);
@@ -1353,6 +1353,28 @@ long mg_json_get_long(struct mg_str json, const char *path, long dflt);
 char *mg_json_get_str(struct mg_str json, const char *path);
 char *mg_json_get_hex(struct mg_str json, const char *path, int *len);
 char *mg_json_get_b64(struct mg_str json, const char *path, int *len);
+
+
+
+// JSON-RPC request descriptor
+struct mg_rpc_req {
+  struct mg_str frame;  // Request, e.g. {"id":1,"method":"add","params":[1,2]}
+  mg_pfn_t pfn;         // Response printing function
+  void *pfn_data;       // Response printing function data
+  void *fn_data;        // Endpoint handler data
+};
+
+void mg_rpc_add(void **head, struct mg_str method_pattern,
+                void (*handler)(struct mg_rpc_req *), void *handler_data);
+void mg_rpc_free(void **head);
+void mg_rpc_process(void **head, struct mg_str json, mg_pfn_t pfn, void *pfnd);
+
+// Helper functions to print result or error frame
+void mg_rpc_ok(struct mg_rpc_req *, const char *fmt, ...);
+void mg_rpc_vok(struct mg_rpc_req *, const char *fmt, va_list *ap);
+void mg_rpc_err(struct mg_rpc_req *, int code, const char *fmt, ...);
+void mg_rpc_verr(struct mg_rpc_req *, int code, const char *fmt, va_list *);
+void mg_rpc_list(struct mg_rpc_req *r);
 
 
 

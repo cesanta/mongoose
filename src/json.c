@@ -119,9 +119,10 @@ int mg_json_get(const char *s, int len, const char *path, int *toklen) {
         if (c == '"') {
           int n = mg_pass_string(&s[i + 1], len - i - 1);
           if (n < 0) return n;
+          if (i + 1 + n >= len) return MG_JSON_NOT_FOUND;
           // printf("K[%.*s] %d %d\n", n, &s[i + 1], depth, ed);
           if (depth == ed && path[pos - 1] == '.' &&
-              memcmp(&s[i + 1], &path[pos], (size_t) n) == 0) {
+              strncmp(&s[i + 1], &path[pos], (size_t) n) == 0) {
             pos += n;
           }
           i += n + 1;
