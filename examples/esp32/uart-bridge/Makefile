@@ -11,9 +11,10 @@ example:
 build: Makefile $(wildcard main/*)
 	docker run --rm $(DA) -v $(MNT):$(MNT) -w $(CWD) espressif/idf idf.py $(CMD)
 
-flash: build
-flash: CMD = flash monitor
+flash:
+flash: CMD = flash
 flash: DA = --device $(PORT)
+flash: build
 
 bridge.hex: build
 	esputil mkhex \
