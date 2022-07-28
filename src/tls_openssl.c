@@ -1,3 +1,4 @@
+#include "fmt.h"
 #include "tls.h"
 
 #if MG_ENABLE_OPENSSL
