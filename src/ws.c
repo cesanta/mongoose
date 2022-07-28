@@ -1,6 +1,7 @@
 #include "ws.h"
 
 #include "base64.h"
+#include "fmt.h"
 #include "http.h"
 #include "log.h"
 #include "sha1.h"

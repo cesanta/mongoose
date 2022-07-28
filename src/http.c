@@ -1,6 +1,7 @@
 #include "http.h"
 #include "arch.h"
 #include "base64.h"
+#include "fmt.h"
 #include "log.h"
 #include "net.h"
 #include "ssi.h"

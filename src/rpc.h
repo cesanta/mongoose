@@ -1,4 +1,5 @@
 #pragma once
+#include "fmt.h"
 #include "json.h"
 
 // JSON-RPC request descriptor

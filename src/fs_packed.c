@@ -1,3 +1,4 @@
+#include "fmt.h"
 #include "fs.h"
 #include "str.h"
 

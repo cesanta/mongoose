@@ -744,15 +744,20 @@ unsigned long mg_unhexn(const char *s, size_t len);
 int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
 int64_t mg_to64(struct mg_str str);
 uint64_t mg_tou64(struct mg_str str);
-size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex);
-double mg_atod(const char *buf, int len, int *numlen);
-size_t mg_dtoa(char *buf, size_t len, double d, int width);
 char *mg_remove_double_dots(char *s);
+
+
+
+
 
 typedef void (*mg_pfn_t)(char, void *);                  // Custom putchar
 typedef size_t (*mg_pm_t)(mg_pfn_t, void *, va_list *);  // %M printer
 void mg_pfn_realloc(char ch, void *param);  // Print to malloced str
 void mg_pfn_iobuf(char ch, void *param);    // Print to iobuf
+
+size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex);
+double mg_atod(const char *buf, int len, int *numlen);
+size_t mg_dtoa(char *buf, size_t len, double d, int width);
 
 size_t mg_vrprintf(void (*)(char, void *), void *, const char *fmt, va_list *);
 size_t mg_rprintf(void (*fn)(char, void *), void *, const char *fmt, ...);
@@ -1353,6 +1358,7 @@ long mg_json_get_long(struct mg_str json, const char *path, long dflt);
 char *mg_json_get_str(struct mg_str json, const char *path);
 char *mg_json_get_hex(struct mg_str json, const char *path, int *len);
 char *mg_json_get_b64(struct mg_str json, const char *path, int *len);
+
 
 
 

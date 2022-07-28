@@ -1,4 +1,6 @@
 #include "log.h"
+#include "fmt.h"
+#include "str.h"
 #include "util.h"
 
 static void default_logger(unsigned char c) {

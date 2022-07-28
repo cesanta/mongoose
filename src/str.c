@@ -155,15 +155,6 @@ bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
   return mg_split(s, k, v, ',');
 }
 
-size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
-  va_list ap;
-  size_t n;
-  va_start(ap, fmt);
-  n = mg_vsnprintf(buf, len, fmt, &ap);
-  va_end(ap);
-  return n;
-}
-
 char *mg_hex(const void *buf, size_t len, char *to) {
   const unsigned char *p = (const unsigned char *) buf;
   const char *hex = "0123456789abcdef";

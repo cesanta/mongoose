@@ -1,5 +1,6 @@
 #include "json.h"
 #include "base64.h"
+#include "fmt.h"
 
 static const char *escapeseq(int esc) {
   return esc ? "\b\f\n\r\t\\\"" : "bfnrt\\\"";

@@ -1,9 +1,9 @@
 #include "net.h"
 #include "dns.h"
+#include "fmt.h"
 #include "log.h"
 #include "timer.h"
 #include "tls.h"
-#include "util.h"
 
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
   size_t old = c->send.len;
