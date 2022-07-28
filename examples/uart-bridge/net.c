@@ -75,7 +75,7 @@ static void ws_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
 
 // Event handler for a connected TCP client
 static void tcp_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
-  if (ev == MG_EV_OPEN) {
+  if (ev == MG_EV_ACCEPT) {
     // c->is_hexdumping = 1;
     c->label[0] = 'T';  // When client is connected, mark us as TCP client
   } else if (ev == MG_EV_READ) {
@@ -98,8 +98,8 @@ static struct mg_str mqtt_topic(const char *name, const char *dflt) {
 static void mq_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
-    c->label[0] = 'M';
   } else if (ev == MG_EV_MQTT_OPEN) {
+    c->label[0] = 'M';
     mg_mqtt_sub(c, mqtt_topic("rx", "b/rx"), 1);  // Subscribe to RX topic
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = evd;        // MQTT message
@@ -139,17 +139,25 @@ static void timer_fn(void *param) {
   }
 }
 
+static void update_string(struct mg_str json, const char *path, char **value) {
+  char *jval;
+  if ((jval = mg_json_get_str(json, path)) != NULL) {
+    free(*value);
+    *value = strdup(jval);
+  }
+}
+
 static void config_apply(struct mg_str s) {
   MG_INFO(("Applying config: %.*s", (int) s.len, s.ptr));
 
-  mg_json_get_bool(s, "$.tcp.enable", &s_state.tcp.enable);
-  mg_json_get_bool(s, "$.ws.enable", &s_state.websocket.enable);
-  mg_json_get_bool(s, "$.mqtt.enable", &s_state.mqtt.enable);
+  bool b;
+  if (mg_json_get_bool(s, "$.tcp.enable", &b)) s_state.tcp.enable = b;
+  if (mg_json_get_bool(s, "$.ws.enable", &b)) s_state.websocket.enable = b;
+  if (mg_json_get_bool(s, "$.mqtt.enable", &b)) s_state.mqtt.enable = b;
 
-  free(s_state.tcp.url), s_state.tcp.url = mg_json_get_str(s, "$.tcp.url");
-  free(s_state.mqtt.url), s_state.mqtt.url = mg_json_get_str(s, "$.mqtt.url");
-  free(s_state.websocket.url),
-      s_state.websocket.url = mg_json_get_str(s, "$.ws.url");
+  update_string(s, "$.tcp.url", &s_state.tcp.url);
+  update_string(s, "$.mqtt.url", &s_state.mqtt.url);
+  update_string(s, "$.ws.url", &s_state.websocket.url);
 
   double v;
   if (mg_json_get_num(s, "$.rx", &v)) s_state.rx = (int) v;
