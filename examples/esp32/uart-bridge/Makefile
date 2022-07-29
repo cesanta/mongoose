@@ -16,6 +16,8 @@ flash: CMD = flash
 flash: DA = --device $(PORT)
 flash: build
 
+.PHONY: flash
+
 bridge.hex: build
 	esputil mkhex \
 		0x8000 build/partition_table/partition-table.bin \
@@ -23,8 +25,8 @@ bridge.hex: build
 		0x100000 build/mongoose-esp32-example.bin > $@
 
 flash2: bridge.hex
-	esputil -b 921600 -fp 0x220 flash bridge.hex
-	esputil monitor
+	esputil -p $(PORT) -b 921600 -fp 0x220 flash bridge.hex
+	esputil -p $(PORT) monitor
 
 clean:
 	rm -rf build
