@@ -2802,18 +2802,17 @@ which is described below.
 
 ```c
 enum { MG_JSON_TOO_DEEP = -1, MG_JSON_INVALID = -2, MG_JSON_NOT_FOUND = -3 };
-int mg_json_get(const char *buf, int len, const char *path, int *toklen);
+int mg_json_get(struct mg_str json, const char *path, int *toklen);
 ```
 
-Parse JSON string `buf`, `len` and return the offset of the element
-specified by the JSON path `path`. The length of the element is stored
+Parse JSON string `json` and return the offset of the element
+specified by the JSON `path`. The length of the element is stored
 in the `toklen`.
 
 Parameters:
-- `buf` - a string containing valid JSON
-- `len` - a string length
-- `path` - a JSON path. Must start with `$`
-- `toklen` - a placeholder for element length, can be NULL
+- `json` - a string containing valid JSON
+- `path` - a JSON path. Must start with `$`, e.g. `$.user`
+- `toklen` - a pointer that receives element's length, can be NULL
 
 
 Return value: offset of the element, or negative `MG_JSON_*` on error.
@@ -2823,19 +2822,20 @@ Usage example:
 ```c
 // Create a json string: { "a": 1, "b": [2, 3] }
 char *buf = mg_mprintf("{ %Q: %d, %Q: [%d, %d] }", "a", 1, "b", 2, 3);
-int offset, length, len = (int) strlen(buf);
+struct mg_str json = mg_str(buf);
+int offset, length;
 
 // Lookup "$", which is the whole JSON. Can be used for validation
-offset = mg_json_get(buf, len, "$", &length);    // offset = 0, length = 23
+offset = mg_json_get(json, "$", &length);    // offset = 0, length = 23
 
 // Lookup attribute "a". Point to value "1"
-offset = mg_json_get(buf, len, "$.a", &length);  // offset = 7, length = 1
+offset = mg_json_get(json, "$.a", &length);  // offset = 7, length = 1
 
 // Lookup attribute "b". Point to array [2, 3]
-offset = mg_json_get(buf, len, "$.b", &length);  // offset = 15, length = 6
+offset = mg_json_get(json, "$.b", &length);  // offset = 15, length = 6
 
 // Lookup attribute "b[1]". Point to value "3"
-offset = mg_json_get(buf, len, "$.b[1]", &length); // offset = 19, length = 1
+offset = mg_json_get(json, "$.b[1]", &length); // offset = 19, length = 1
 
 free(buf);
 ```

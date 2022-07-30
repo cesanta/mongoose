@@ -28,7 +28,9 @@ static int mg_pass_string(const char *s, int len) {
   return MG_JSON_INVALID;
 }
 
-int mg_json_get(const char *s, int len, const char *path, int *toklen) {
+int mg_json_get(struct mg_str json, const char *path, int *toklen) {
+  const char *s = json.ptr;
+  int len = (int) json.len;
   enum { S_VALUE, S_KEY, S_COLON, S_COMMA_OR_EOO } expecting = S_VALUE;
   unsigned char nesting[MG_JSON_MAX_DEPTH];
   int i, j = 0, depth = 0;
@@ -165,7 +167,7 @@ int mg_json_get(const char *s, int len, const char *path, int *toklen) {
 
 bool mg_json_get_num(struct mg_str json, const char *path, double *v) {
   int n, toklen, found = 0;
-  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
+  if ((n = mg_json_get(json, path, &toklen)) >= 0 &&
       (json.ptr[n] == '-' || (json.ptr[n] >= '0' && json.ptr[n] <= '9'))) {
     if (v != NULL) *v = mg_atod(json.ptr + n, toklen, NULL);
     found = 1;
@@ -174,10 +176,9 @@ bool mg_json_get_num(struct mg_str json, const char *path, double *v) {
 }
 
 bool mg_json_get_bool(struct mg_str json, const char *path, bool *v) {
-  int n, toklen, found = 0;
-  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
-      (json.ptr[n] == 't' || json.ptr[n] == 'f')) {
-    if (v != NULL) *v = json.ptr[n] == 't';
+  int found = 0, off = mg_json_get(json, path, NULL);
+  if (off >= 0 && (json.ptr[off] == 't' || json.ptr[off] == 'f')) {
+    if (v != NULL) *v = json.ptr[off] == 't';
     found = 1;
   }
   return found;
@@ -209,13 +210,12 @@ static bool json_unescape(const char *s, size_t len, char *to, size_t n) {
 }
 
 char *mg_json_get_str(struct mg_str json, const char *path) {
-  int n, toklen;
   char *result = NULL;
-  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
-      json.ptr[n] == '"') {
-    if ((result = (char *) calloc(1, (size_t) toklen)) != NULL &&
-        !json_unescape(json.ptr + n + 1, (size_t) (toklen - 2), result,
-                       (size_t) toklen)) {
+  int len = 0, off = mg_json_get(json, path, &len);
+  if (off >= 0 && len > 1 && json.ptr[off] == '"') {
+    if ((result = (char *) calloc(1, (size_t) len)) != NULL &&
+        !json_unescape(json.ptr + off + 1, (size_t) (len - 2), result,
+                       (size_t) len)) {
       free(result);
       result = NULL;
     }
@@ -223,27 +223,25 @@ char *mg_json_get_str(struct mg_str json, const char *path) {
   return result;
 }
 
-char *mg_json_get_b64(struct mg_str json, const char *path, int *len) {
-  int n, toklen;
+char *mg_json_get_b64(struct mg_str json, const char *path, int *slen) {
   char *result = NULL;
-  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
-      json.ptr[n] == '"' && toklen > 1 &&
-      (result = (char *) calloc(1, (size_t) toklen)) != NULL) {
-    int k = mg_base64_decode(json.ptr + n + 1, toklen - 2, result);
-    if (len != NULL) *len = k;
+  int len = 0, off = mg_json_get(json, path, &len);
+  if (off >= 0 && json.ptr[off] == '"' && len > 1 &&
+      (result = (char *) calloc(1, (size_t) len)) != NULL) {
+    int k = mg_base64_decode(json.ptr + off + 1, len - 2, result);
+    if (slen != NULL) *slen = k;
   }
   return result;
 }
 
-char *mg_json_get_hex(struct mg_str json, const char *path, int *len) {
-  int n, toklen;
+char *mg_json_get_hex(struct mg_str json, const char *path, int *slen) {
   char *result = NULL;
-  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
-      json.ptr[n] == '"' && toklen > 1 &&
-      (result = (char *) calloc(1, (size_t) toklen / 2)) != NULL) {
-    mg_unhex(json.ptr + n + 1, (size_t) (toklen - 2), (uint8_t *) result);
-    result[(toklen - 2) / 2] = '\0';
-    if (len != NULL) *len = (toklen - 2) / 2;
+  int len = 0, off = mg_json_get(json, path, &len);
+  if (off >= 0 && json.ptr[off] == '"' && len > 1 &&
+      (result = (char *) calloc(1, (size_t) len / 2)) != NULL) {
+    mg_unhex(json.ptr + off + 1, (size_t) (len - 2), (uint8_t *) result);
+    result[len / 2 - 1] = '\0';
+    if (slen != NULL) *slen = len / 2 - 1;
   }
   return result;
 }

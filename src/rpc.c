@@ -23,26 +23,25 @@ void mg_rpc_free(void **head) {
   }
 }
 
-void mg_rpc_process(void **head, struct mg_str s, mg_pfn_t pfn, void *pfnd) {
-  struct mg_rpc_req req = {{s.ptr, s.len}, pfn, pfnd, NULL};
-  int len, off = mg_json_get(s.ptr, (int) s.len, "$.method", &len);
-  if (off > 0 && s.ptr[off] == '"') {
-    struct mg_str m = mg_str_n(&s.ptr[off + 1], (size_t) len - 2);
-    struct mg_rpc *h = *(struct mg_rpc **) head;
+void mg_rpc_process(struct mg_rpc_req *r) {
+  int len, off = mg_json_get(r->frame, "$.method", &len);
+  if (off > 0 && r->frame.ptr[off] == '"') {
+    struct mg_str m = mg_str_n(&r->frame.ptr[off + 1], (size_t) len - 2);
+    struct mg_rpc *h = *(struct mg_rpc **) r->head;
     while (h != NULL && !mg_match(m, h->method, NULL)) h = h->next;
     if (h != NULL) {
-      req.fn_data = h->fn_data;
-      h->fn(&req);
+      r->handler_data = h->fn_data;
+      h->fn(r);
     } else {
-      mg_rpc_err(&req, -32601, "\"%.*s not found\"", (int) m.len, m.ptr);
+      mg_rpc_err(r, -32601, "\"%.*s not found\"", (int) m.len, m.ptr);
     }
   } else {
-    mg_rpc_err(&req, -32700, "%.*Q", (int) s.len, s.ptr);
+    mg_rpc_err(r, -32700, "%.*Q", (int) r->frame.len, r->frame.ptr);
   }
 }
 
 void mg_rpc_vok(struct mg_rpc_req *r, const char *fmt, va_list *ap) {
-  int len, off = mg_json_get(r->frame.ptr, (int) r->frame.len, "$.id", &len);
+  int len, off = mg_json_get(r->frame, "$.id", &len);
   if (off > 0) {
     mg_rprintf(r->pfn, r->pfn_data, "{%Q:%.*s,%Q:", "id", len,
                &r->frame.ptr[off], "result");
@@ -59,7 +58,7 @@ void mg_rpc_ok(struct mg_rpc_req *r, const char *fmt, ...) {
 }
 
 void mg_rpc_verr(struct mg_rpc_req *r, int code, const char *fmt, va_list *ap) {
-  int len, off = mg_json_get(r->frame.ptr, (int) r->frame.len, "$.id", &len);
+  int len, off = mg_json_get(r->frame, "$.id", &len);
   mg_rprintf(r->pfn, r->pfn_data, "{");
   if (off > 0) {
     mg_rprintf(r->pfn, r->pfn_data, "%Q:%.*s,", "id", len, &r->frame.ptr[off]);
@@ -88,5 +87,5 @@ static size_t print_methods(mg_pfn_t pfn, void *pfn_data, va_list *ap) {
 }
 
 void mg_rpc_list(struct mg_rpc_req *r) {
-  mg_rpc_ok(r, "[%M]", print_methods, r->fn_data);
+  mg_rpc_ok(r, "[%M]", print_methods, r->head);
 }

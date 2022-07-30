@@ -46,8 +46,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // Got websocket frame. Received data is wm->data
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     char *resp = NULL;
-    mg_rpc_process(&s_rpc_head, wm->data, mg_pfn_realloc, &resp);
-    mg_ws_send(c, resp, strlen(resp), WEBSOCKET_OP_TEXT);
+    struct mg_rpc_req r = {&s_rpc_head, mg_pfn_realloc, &resp, 0, 0, wm->data};
+    mg_rpc_process(&r);
+    if (resp) mg_ws_send(c, resp, strlen(resp), WEBSOCKET_OP_TEXT);
     free(resp);
   }
   (void) fn_data;

@@ -2470,7 +2470,9 @@ static int mg_pass_string(const char *s, int len) {
   return MG_JSON_INVALID;
 }
 
-int mg_json_get(const char *s, int len, const char *path, int *toklen) {
+int mg_json_get(struct mg_str json, const char *path, int *toklen) {
+  const char *s = json.ptr;
+  int len = (int) json.len;
   enum { S_VALUE, S_KEY, S_COLON, S_COMMA_OR_EOO } expecting = S_VALUE;
   unsigned char nesting[MG_JSON_MAX_DEPTH];
   int i, j = 0, depth = 0;
@@ -2607,7 +2609,7 @@ int mg_json_get(const char *s, int len, const char *path, int *toklen) {
 
 bool mg_json_get_num(struct mg_str json, const char *path, double *v) {
   int n, toklen, found = 0;
-  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
+  if ((n = mg_json_get(json, path, &toklen)) >= 0 &&
       (json.ptr[n] == '-' || (json.ptr[n] >= '0' && json.ptr[n] <= '9'))) {
     if (v != NULL) *v = mg_atod(json.ptr + n, toklen, NULL);
     found = 1;
@@ -2616,10 +2618,9 @@ bool mg_json_get_num(struct mg_str json, const char *path, double *v) {
 }
 
 bool mg_json_get_bool(struct mg_str json, const char *path, bool *v) {
-  int n, toklen, found = 0;
-  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
-      (json.ptr[n] == 't' || json.ptr[n] == 'f')) {
-    if (v != NULL) *v = json.ptr[n] == 't';
+  int found = 0, off = mg_json_get(json, path, NULL);
+  if (off >= 0 && (json.ptr[off] == 't' || json.ptr[off] == 'f')) {
+    if (v != NULL) *v = json.ptr[off] == 't';
     found = 1;
   }
   return found;
@@ -2651,13 +2652,12 @@ static bool json_unescape(const char *s, size_t len, char *to, size_t n) {
 }
 
 char *mg_json_get_str(struct mg_str json, const char *path) {
-  int n, toklen;
   char *result = NULL;
-  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
-      json.ptr[n] == '"') {
-    if ((result = (char *) calloc(1, (size_t) toklen)) != NULL &&
-        !json_unescape(json.ptr + n + 1, (size_t) (toklen - 2), result,
-                       (size_t) toklen)) {
+  int len = 0, off = mg_json_get(json, path, &len);
+  if (off >= 0 && len > 1 && json.ptr[off] == '"') {
+    if ((result = (char *) calloc(1, (size_t) len)) != NULL &&
+        !json_unescape(json.ptr + off + 1, (size_t) (len - 2), result,
+                       (size_t) len)) {
       free(result);
       result = NULL;
     }
@@ -2665,27 +2665,25 @@ char *mg_json_get_str(struct mg_str json, const char *path) {
   return result;
 }
 
-char *mg_json_get_b64(struct mg_str json, const char *path, int *len) {
-  int n, toklen;
+char *mg_json_get_b64(struct mg_str json, const char *path, int *slen) {
   char *result = NULL;
-  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
-      json.ptr[n] == '"' && toklen > 1 &&
-      (result = (char *) calloc(1, (size_t) toklen)) != NULL) {
-    int k = mg_base64_decode(json.ptr + n + 1, toklen - 2, result);
-    if (len != NULL) *len = k;
+  int len = 0, off = mg_json_get(json, path, &len);
+  if (off >= 0 && json.ptr[off] == '"' && len > 1 &&
+      (result = (char *) calloc(1, (size_t) len)) != NULL) {
+    int k = mg_base64_decode(json.ptr + off + 1, len - 2, result);
+    if (slen != NULL) *slen = k;
   }
   return result;
 }
 
-char *mg_json_get_hex(struct mg_str json, const char *path, int *len) {
-  int n, toklen;
+char *mg_json_get_hex(struct mg_str json, const char *path, int *slen) {
   char *result = NULL;
-  if ((n = mg_json_get(json.ptr, (int) json.len, path, &toklen)) >= 0 &&
-      json.ptr[n] == '"' && toklen > 1 &&
-      (result = (char *) calloc(1, (size_t) toklen / 2)) != NULL) {
-    mg_unhex(json.ptr + n + 1, (size_t) (toklen - 2), (uint8_t *) result);
-    result[(toklen - 2) / 2] = '\0';
-    if (len != NULL) *len = (toklen - 2) / 2;
+  int len = 0, off = mg_json_get(json, path, &len);
+  if (off >= 0 && json.ptr[off] == '"' && len > 1 &&
+      (result = (char *) calloc(1, (size_t) len / 2)) != NULL) {
+    mg_unhex(json.ptr + off + 1, (size_t) (len - 2), (uint8_t *) result);
+    result[len / 2 - 1] = '\0';
+    if (slen != NULL) *slen = len / 2 - 1;
   }
   return result;
 }
@@ -3584,26 +3582,25 @@ void mg_rpc_free(void **head) {
   }
 }
 
-void mg_rpc_process(void **head, struct mg_str s, mg_pfn_t pfn, void *pfnd) {
-  struct mg_rpc_req req = {{s.ptr, s.len}, pfn, pfnd, NULL};
-  int len, off = mg_json_get(s.ptr, (int) s.len, "$.method", &len);
-  if (off > 0 && s.ptr[off] == '"') {
-    struct mg_str m = mg_str_n(&s.ptr[off + 1], (size_t) len - 2);
-    struct mg_rpc *h = *(struct mg_rpc **) head;
+void mg_rpc_process(struct mg_rpc_req *r) {
+  int len, off = mg_json_get(r->frame, "$.method", &len);
+  if (off > 0 && r->frame.ptr[off] == '"') {
+    struct mg_str m = mg_str_n(&r->frame.ptr[off + 1], (size_t) len - 2);
+    struct mg_rpc *h = *(struct mg_rpc **) r->head;
     while (h != NULL && !mg_match(m, h->method, NULL)) h = h->next;
     if (h != NULL) {
-      req.fn_data = h->fn_data;
-      h->fn(&req);
+      r->handler_data = h->fn_data;
+      h->fn(r);
     } else {
-      mg_rpc_err(&req, -32601, "\"%.*s not found\"", (int) m.len, m.ptr);
+      mg_rpc_err(r, -32601, "\"%.*s not found\"", (int) m.len, m.ptr);
     }
   } else {
-    mg_rpc_err(&req, -32700, "%.*Q", (int) s.len, s.ptr);
+    mg_rpc_err(r, -32700, "%.*Q", (int) r->frame.len, r->frame.ptr);
   }
 }
 
 void mg_rpc_vok(struct mg_rpc_req *r, const char *fmt, va_list *ap) {
-  int len, off = mg_json_get(r->frame.ptr, (int) r->frame.len, "$.id", &len);
+  int len, off = mg_json_get(r->frame, "$.id", &len);
   if (off > 0) {
     mg_rprintf(r->pfn, r->pfn_data, "{%Q:%.*s,%Q:", "id", len,
                &r->frame.ptr[off], "result");
@@ -3620,7 +3617,7 @@ void mg_rpc_ok(struct mg_rpc_req *r, const char *fmt, ...) {
 }
 
 void mg_rpc_verr(struct mg_rpc_req *r, int code, const char *fmt, va_list *ap) {
-  int len, off = mg_json_get(r->frame.ptr, (int) r->frame.len, "$.id", &len);
+  int len, off = mg_json_get(r->frame, "$.id", &len);
   mg_rprintf(r->pfn, r->pfn_data, "{");
   if (off > 0) {
     mg_rprintf(r->pfn, r->pfn_data, "%Q:%.*s,", "id", len, &r->frame.ptr[off]);
@@ -3649,7 +3646,7 @@ static size_t print_methods(mg_pfn_t pfn, void *pfn_data, va_list *ap) {
 }
 
 void mg_rpc_list(struct mg_rpc_req *r) {
-  mg_rpc_ok(r, "[%M]", print_methods, r->fn_data);
+  mg_rpc_ok(r, "[%M]", print_methods, r->head);
 }
 
 #ifdef MG_ENABLE_LINES

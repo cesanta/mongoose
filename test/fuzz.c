@@ -46,7 +46,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   while (mg_commalist(&s, &k, &v)) k.len = v.len = 0;
 
   int n;
-  mg_json_get((char *) data, (int) size, "$", &n);
+  mg_json_get(mg_str_n((char *) data, size), "$", &n);
 
   return 0;
 }

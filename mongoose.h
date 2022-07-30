@@ -1350,7 +1350,7 @@ size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
 
 // Error return values - negative. Successful returns are >= 0
 enum { MG_JSON_TOO_DEEP = -1, MG_JSON_INVALID = -2, MG_JSON_NOT_FOUND = -3 };
-int mg_json_get(const char *buf, int len, const char *path, int *toklen);
+int mg_json_get(struct mg_str json, const char *path, int *toklen);
 
 bool mg_json_get_num(struct mg_str json, const char *path, double *v);
 bool mg_json_get_bool(struct mg_str json, const char *path, bool *v);
@@ -1364,16 +1364,18 @@ char *mg_json_get_b64(struct mg_str json, const char *path, int *len);
 
 // JSON-RPC request descriptor
 struct mg_rpc_req {
-  struct mg_str frame;  // Request, e.g. {"id":1,"method":"add","params":[1,2]}
+  void **head;          // List of all RPC handlers
   mg_pfn_t pfn;         // Response printing function
   void *pfn_data;       // Response printing function data
-  void *fn_data;        // Endpoint handler data
+  void *handler_data;   // Endpoint handler data
+  void *process_data;   // Arbitrary user data
+  struct mg_str frame;  // Request, e.g. {"id":1,"method":"add","params":[1,2]}
 };
 
 void mg_rpc_add(void **head, struct mg_str method_pattern,
                 void (*handler)(struct mg_rpc_req *), void *handler_data);
 void mg_rpc_free(void **head);
-void mg_rpc_process(void **head, struct mg_str json, mg_pfn_t pfn, void *pfnd);
+void mg_rpc_process(struct mg_rpc_req *);
 
 // Helper functions to print result or error frame
 void mg_rpc_ok(struct mg_rpc_req *, const char *fmt, ...);
