@@ -2476,7 +2476,7 @@ static void test_rpc(void) {
     free(s), s = NULL;
   }
 
-  mg_rpc_free(&head);
+  mg_rpc_del(&head, NULL);
   ASSERT(head == NULL);
 }
 

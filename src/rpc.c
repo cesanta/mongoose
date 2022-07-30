@@ -14,12 +14,16 @@ void mg_rpc_add(void **head, struct mg_str method,
   rpc->next = (struct mg_rpc *) *head, *head = rpc;
 }
 
-void mg_rpc_free(void **head) {
-  while (head != NULL && *head != NULL) {
-    struct mg_rpc *rpc = *(struct mg_rpc **) head;
-    *head = rpc->next;
-    free((void *) rpc->method.ptr);
-    free(rpc);
+void mg_rpc_del(void **head, void (*fn)(struct mg_rpc_req *)) {
+  struct mg_rpc *r, **h = (struct mg_rpc **) head;
+  while ((r = *h) != NULL) {
+    if (r->fn == fn || fn == NULL) {
+      *h = r->next;
+      free((void *) r->method.ptr);
+      free(r);
+    } else {
+      h = &(*h)->next;
+    }
   }
 }
 

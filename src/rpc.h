@@ -14,7 +14,7 @@ struct mg_rpc_req {
 
 void mg_rpc_add(void **head, struct mg_str method_pattern,
                 void (*handler)(struct mg_rpc_req *), void *handler_data);
-void mg_rpc_free(void **head);
+void mg_rpc_del(void **head, void (*handler)(struct mg_rpc_req *));
 void mg_rpc_process(struct mg_rpc_req *);
 
 // Helper functions to print result or error frame
