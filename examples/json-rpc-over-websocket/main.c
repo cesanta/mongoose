@@ -7,7 +7,7 @@
 
 static const char *s_listen_on = "ws://localhost:8000";
 static const char *s_web_root = "web_root";
-static void *s_rpc_head = NULL;
+static struct mg_rpc *s_rpc_head = NULL;
 
 static void rpc_sum(struct mg_rpc_req *r) {
   double a = 0.0, b = 0.0;
@@ -46,7 +46,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // Got websocket frame. Received data is wm->data
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     char *resp = NULL;
-    struct mg_rpc_req r = {&s_rpc_head, mg_pfn_realloc, &resp, 0, 0, wm->data};
+    struct mg_rpc_req r = {&s_rpc_head, 0, mg_pfn_realloc, &resp, 0, wm->data};
     mg_rpc_process(&r);
     if (resp) mg_ws_send(c, resp, strlen(resp), WEBSOCKET_OP_TEXT);
     free(resp);
@@ -81,6 +81,6 @@ int main(void) {
   mg_http_listen(&mgr, s_listen_on, fn, NULL);  // Create HTTP listener
   for (;;) mg_mgr_poll(&mgr, 1000);             // Infinite event loop
   mg_mgr_free(&mgr);                            // Deallocate event manager
-  mg_rpc_free(&s_rpc_head);                     // Deallocate RPC handlers
+  mg_rpc_del(&s_rpc_head, NULL);                // Deallocate RPC handlers
   return 0;
 }

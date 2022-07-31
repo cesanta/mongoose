@@ -2436,9 +2436,9 @@ static void test_json(void) {
 }
 
 static void test_rpc(void) {
-  void *head = NULL;
+  struct mg_rpc *head = NULL;
   char *s = NULL;
-  struct mg_rpc_req req = {&head, mg_pfn_realloc, &s, 0, 0, {0, 0}};
+  struct mg_rpc_req req = {&head, 0, mg_pfn_realloc, &s, 0, {0, 0}};
   mg_rpc_add(&head, mg_str("rpc.list"), mg_rpc_list, NULL);
 
   {

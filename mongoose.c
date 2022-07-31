@@ -3559,29 +3559,22 @@ void mg_mgr_init(struct mg_mgr *mgr) {
 #endif
 
 
-struct mg_rpc {
-  struct mg_rpc *next;
-  struct mg_str method;
-  void (*fn)(struct mg_rpc_req *);
-  void *fn_data;
-};
-
-void mg_rpc_add(void **head, struct mg_str method,
+void mg_rpc_add(struct mg_rpc **head, struct mg_str method,
                 void (*fn)(struct mg_rpc_req *), void *fn_data) {
   struct mg_rpc *rpc = (struct mg_rpc *) calloc(1, sizeof(*rpc));
   rpc->method = mg_strdup(method), rpc->fn = fn, rpc->fn_data = fn_data;
-  rpc->next = (struct mg_rpc *) *head, *head = rpc;
+  rpc->next = *head, *head = rpc;
 }
 
-void mg_rpc_del(void **head, void (*fn)(struct mg_rpc_req *)) {
-  struct mg_rpc *r, **h = (struct mg_rpc **) head;
-  while ((r = *h) != NULL) {
+void mg_rpc_del(struct mg_rpc **head, void (*fn)(struct mg_rpc_req *)) {
+  struct mg_rpc *r;
+  while ((r = *head) != NULL) {
     if (r->fn == fn || fn == NULL) {
-      *h = r->next;
+      *head = r->next;
       free((void *) r->method.ptr);
       free(r);
     } else {
-      h = &(*h)->next;
+      head = &(*head)->next;
     }
   }
 }
@@ -3593,7 +3586,7 @@ void mg_rpc_process(struct mg_rpc_req *r) {
     struct mg_rpc *h = *(struct mg_rpc **) r->head;
     while (h != NULL && !mg_match(m, h->method, NULL)) h = h->next;
     if (h != NULL) {
-      r->handler_data = h->fn_data;
+      r->rpc = h;
       h->fn(r);
     } else {
       mg_rpc_err(r, -32601, "\"%.*s not found\"", (int) m.len, m.ptr);
