@@ -79,8 +79,8 @@ int main(void) {
   struct mg_mgr mgr;  // Event manager
   struct mg_connection *c;
 
-  mg_log_set("2");    // Set to 0 to disable debug
-  mg_mgr_init(&mgr);  // Initialize event manager
+  mg_log_set(MG_LL_DEBUG);  // Set log level
+  mg_mgr_init(&mgr);        // Initialize event manager
   mg_timer_add(&mgr, 15000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn,
                &mgr);                     // Init timer for demo purposes, 15s
   c = mg_listen(&mgr, s_lsn, sfn, NULL);  // Create server connection

@@ -34,7 +34,7 @@ static void cb2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 // Called after we're connected to WiFi network
 static void run_mongoose(void) {
   struct mg_mgr mgr;
-  mg_log_set("3");
+  mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, SERVER_URL, cb, &mgr);    // Listening server
   mg_http_connect(&mgr, CLIENT_URL, cb2, &mgr);  // Example client

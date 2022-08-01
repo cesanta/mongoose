@@ -41,7 +41,7 @@ int main(void) {
   struct mg_mgr mgr;
 
   mg_mgr_init(&mgr);
-  mg_log_set("3");
+  mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_http_listen(&mgr, "http://localhost:8000", cb, NULL);
 
   for (;;) mg_mgr_poll(&mgr, 50);

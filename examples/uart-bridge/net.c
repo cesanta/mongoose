@@ -181,7 +181,7 @@ void uart_bridge_fn(struct mg_connection *c, int ev, void *ev_data,
     s_state.mqtt.url = strdup(DEFAULT_MQTT);
     mg_timer_add(c->mgr, 20, MG_TIMER_REPEAT, timer_fn, c->mgr);
     uart_init(s_state.tx, s_state.rx, s_state.baud);
-    // mg_log_set("3");
+    // mg_log_set(MG_LL_DEBUG);                  // Set log level
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/hi")) {

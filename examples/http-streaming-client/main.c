@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
   bool done = false;                        // Event handler flips it to true
   const char *log_level = getenv("V");      // Log level
   if (log_level == NULL) log_level = "3";   // If not set, set to DEBUG
-  mg_log_set(log_level);                    // Set to 0 to disable debug log
+  mg_log_set(atoi(log_level));              // Set to 0 to disable debug log
   if (argc > 1) s_url = argv[1];            // Use URL from command line
   mg_mgr_init(&mgr);                        // Initialise event manager
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection

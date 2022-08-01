@@ -4,7 +4,7 @@
 #include "device.h"
 #include "mongoose.h"
 
-static const char *s_debug_level = "4";
+static int s_debug_level = MG_LL_VERBOSE;
 static const char *s_listening_address = "http://0.0.0.0:80";
 
 // Event handler for the listening connection.

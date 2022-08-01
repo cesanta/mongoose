@@ -66,7 +66,7 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 int main(void) {
   struct mg_mgr mgr;
-  mg_log_set("2");  // Set to 3 for debug, to 4 for very verbose level
+  mg_log_set(MG_LL_DEBUG);
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, s_listening_url, fn, &mgr);
   while (mgr.conns != NULL) mg_mgr_poll(&mgr, 500);

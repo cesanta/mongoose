@@ -7,7 +7,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *, size_t);
 #endif
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  mg_log_set("0");
+  mg_log_set(MG_LL_NONE);
 
   struct mg_dns_message dm;
   mg_dns_parse(data, size, &dm);

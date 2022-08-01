@@ -4,7 +4,6 @@
 #include "certs.h"
 #include "mongoose.h"
 
-static const char *s_debug_level = "3";
 static const char *s_web_dir = "/";
 static const char *s_http_addr = "http://0.0.0.0:8000";
 static const char *s_https_addr = "https://0.0.0.0:8443";
@@ -72,7 +71,7 @@ static void timer_fn(void *arg) {
 int main(int argc, char *argv[]) {
   struct mg_mgr mgr;
 
-  mg_log_set(s_debug_level);
+  mg_log_set(MG_LL_DEBUG);
 
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, s_http_addr, wcb, NULL);

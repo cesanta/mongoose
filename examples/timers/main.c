@@ -42,12 +42,12 @@ static void timer_fn(void *arg) {
 }
 
 int main(void) {
-  struct mg_mgr mgr;  // Event manager
-  mg_mgr_init(&mgr);  // Initialise event manager
-  mg_log_set("3");    // Set debug log level
+  struct mg_mgr mgr;        // Event manager
+  mg_mgr_init(&mgr);        // Initialise event manager
+  mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_timer_add(&mgr, 1000, MG_TIMER_REPEAT, timer_fn, &mgr);
   mg_http_listen(&mgr, s_listen_on, fn, NULL);  // Create HTTP listener
-  for (;;) mg_mgr_poll(&mgr, 500);             // Infinite event loop
+  for (;;) mg_mgr_poll(&mgr, 500);              // Infinite event loop
   mg_mgr_free(&mgr);                            // Free manager resources
   return 0;
 }

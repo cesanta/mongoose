@@ -42,9 +42,9 @@ static void timer_fn(void *arg) {
 }
 
 int main(void) {
-  struct mg_mgr mgr;  // Event manager
-  mg_mgr_init(&mgr);  // Initialise event manager
-  mg_log_set("3");    // Set debug log level
+  struct mg_mgr mgr;        // Event manager
+  mg_mgr_init(&mgr);        // Initialise event manager
+  mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_timer_add(&mgr, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
   for (;;) mg_mgr_poll(&mgr, 300);  // Infinite event loop
   mg_mgr_free(&mgr);                // Free manager resources

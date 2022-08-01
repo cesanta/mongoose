@@ -67,9 +67,9 @@ static void timer_fn(void *arg) {
 }
 
 int main(void) {
-  struct mg_mgr mgr;  // Event manager
-  mg_mgr_init(&mgr);  // Init event manager
-  mg_log_set("3");
+  struct mg_mgr mgr;        // Event manager
+  mg_mgr_init(&mgr);        // Init event manager
+  mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_timer_add(&mgr, 5000, MG_TIMER_REPEAT, timer_fn, &mgr);  // Init timer
 
   // Configure JSON-RPC functions we're going to handle

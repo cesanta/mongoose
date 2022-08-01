@@ -78,7 +78,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 int main(void) {
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
-  mg_log_set("3");
+  mg_log_set(MG_LL_DEBUG);  // Set debug log level
   mg_http_listen(&mgr, "http://localhost:8000", fn, NULL);  // Create listener
   for (;;) mg_mgr_poll(&mgr, 1000);                         // Event loop
   mg_mgr_free(&mgr);                                        // Cleanup

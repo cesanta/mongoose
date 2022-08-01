@@ -5,7 +5,7 @@
 // print the response and exit.
 // You can change `s_url` from the command line by executing: ./example YOUR_URL
 //
-// To enable SSL/TLS, make SSL=OPENSSL or make SSL=MBEDTLS 
+// To enable SSL/TLS, make SSL=OPENSSL or make SSL=MBEDTLS
 
 #include "mongoose.h"
 
@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
   struct mg_mgr mgr;              // Event manager
   bool done = false;              // Event handler flips it to true
   if (argc > 1) s_url = argv[1];  // Use URL provided in the command line
-  mg_log_set(log_level);          // Set to 0 to disable debug
+  mg_log_set(atoi(log_level));    // Set to 0 to disable debug
   mg_mgr_init(&mgr);              // Initialise event manager
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
   while (!done) mg_mgr_poll(&mgr, 50);      // Event manager loops until 'done'

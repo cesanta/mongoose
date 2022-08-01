@@ -7,11 +7,11 @@
 //
 // To enable SSL/TLS, add SSL=OPENSSL or SSL=MBEDTLS
 
-static const char *s_backend_url = 
+static const char *s_backend_url =
 #if defined(MG_ENABLE_MBEDTLS) || defined(MG_ENABLE_OPENSSL)
-                                   "https://cesanta.com";
+    "https://cesanta.com";
 #else
-                                   "http://info.cern.ch";
+    "http://info.cern.ch";
 #endif
 static const char *s_listen_url = "http://localhost:8000";
 
@@ -75,7 +75,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 int main(void) {
   struct mg_mgr mgr;
 
-  mg_log_set("3");                               // Set log level
+  mg_log_set(MG_LL_DEBUG);                       // Set log level
   mg_mgr_init(&mgr);                             // Initialise event manager
   mg_http_listen(&mgr, s_listen_url, fn, NULL);  // Start proxy
   for (;;) mg_mgr_poll(&mgr, 1000);              // Event loop

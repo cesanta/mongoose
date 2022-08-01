@@ -164,7 +164,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 int main(void) {
   struct mg_mgr mgr;                     // Event manager
-  mg_log_set("3");                       // Set to 0 to disable debug
+  mg_log_set(MG_LL_DEBUG);               // Set log level
   mg_mgr_init(&mgr);                     // Initialise event manager
   mg_listen(&mgr, s_lsn, fn, NULL);      // Create client connection
   while (true) mg_mgr_poll(&mgr, 1000);  // Infinite event loop

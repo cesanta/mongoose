@@ -6,7 +6,6 @@
 
 struct mg_mgr mgr;
 
-static const char *s_debug_level = "3";
 static time_t s_boot_timestamp = 0;
 static struct mg_connection *s_sntp_conn = NULL;
 static const char *s_url =
@@ -87,7 +86,7 @@ static void timer_fn(void *arg) {
 }
 
 int main(int argc, char *argv[]) {
-  mg_log_set(s_debug_level);
+  mg_log_set(MG_LL_DEBUG);
 
   mg_mgr_init(&mgr);
   mg_timer_add(&mgr, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);

@@ -9,7 +9,7 @@
 //    any other URI serves static files from s_root_dir
 //
 // To enable SSL/TLS (using self-signed certificates in PEM files),
-//    1. make SSL=OPENSSL or make SSL=MBEDTLS 
+//    1. make SSL=OPENSSL or make SSL=MBEDTLS
 //    2. curl -k https://127.0.0.1:8443
 
 #include "mongoose.h"
@@ -58,7 +58,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 int main(void) {
   struct mg_mgr mgr;                            // Event manager
-  mg_log_set("2");                              // Set to 3 to enable debug
+  mg_log_set(MG_LL_DEBUG);                      // Set log level
   mg_mgr_init(&mgr);                            // Initialise event manager
   mg_http_listen(&mgr, s_http_addr, fn, NULL);  // Create HTTP listener
   mg_http_listen(&mgr, s_https_addr, fn, (void *) 1);  // HTTPS listener

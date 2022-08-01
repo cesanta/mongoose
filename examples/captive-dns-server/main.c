@@ -48,7 +48,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 int main(void) {
   struct mg_mgr mgr;
 
-  mg_log_set("3");                          // Set log level
+  mg_log_set(MG_LL_DEBUG);                  // Set log level
   mg_mgr_init(&mgr);                        // Initialise event manager
   mg_listen(&mgr, s_listen_url, fn, NULL);  // Start DNS server
   for (;;) mg_mgr_poll(&mgr, 1000);         // Event loop

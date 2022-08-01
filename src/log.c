@@ -8,7 +8,7 @@ static void default_logger(unsigned char c) {
   (void) c;
 }
 
-static const char *s_spec = "2";
+static int s_level = MG_LL_INFO;
 static void (*s_log_func)(unsigned char) = default_logger;
 
 void mg_log_set_fn(void (*fn)(unsigned char)) {
@@ -24,29 +24,17 @@ static void logs(const char *buf, size_t len) {
   for (i = 0; i < len; i++) logc(((unsigned char *) buf)[i]);
 }
 
-void mg_log_set(const char *spec) {
-  MG_DEBUG(("Setting log level to %s", spec));
-  s_spec = spec;
+void mg_log_set(int log_level) {
+  MG_DEBUG(("Setting log level to %d", log_level));
+  s_level = log_level;
 }
 
 bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
-  // static unsigned long seq;
-  int max = MG_LL_INFO;
-  struct mg_str k, v, s = mg_str(s_spec);
-  const char *p = strrchr(file, '/');
-
-  if (p == NULL) p = strrchr(file, '\\');
-  p = p == NULL ? file : p + 1;
-
-  while (mg_commalist(&s, &k, &v)) {
-    if (v.len == 0) max = atoi(k.ptr);
-    if (v.len > 0 && strncmp(p, k.ptr, k.len) == 0) max = atoi(v.ptr);
-  }
-
-  if (level <= max) {
+  if (level <= s_level) {
+    const char *p = strrchr(file, MG_DIRSEP);
     char buf[41];
     size_t n = mg_snprintf(buf, sizeof(buf), "%llx %d %s:%d:%s", mg_millis(),
-                           level, p, line, fname);
+                           level, p == NULL ? fname : p + 1, line, fname);
     if (n > sizeof(buf) - 2) n = sizeof(buf) - 2;
     while (n < sizeof(buf)) buf[n++] = ' ';
     logs(buf, n - 1);

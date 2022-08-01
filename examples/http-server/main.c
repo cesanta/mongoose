@@ -4,7 +4,7 @@
 #include <signal.h>
 #include "mongoose.h"
 
-static const char *s_debug_level = "2";
+static int s_debug_level = MG_LL_INFO;
 static const char *s_root_dir = ".";
 static const char *s_listening_address = "http://0.0.0.0:8000";
 static const char *s_enable_hexdump = "no";
@@ -44,7 +44,7 @@ static void usage(const char *prog) {
           "  -S PAT    - SSI filename pattern, default: '%s'\n"
           "  -d DIR    - directory to serve, default: '%s'\n"
           "  -l ADDR   - listening address, default: '%s'\n"
-          "  -v LEVEL  - debug level, from 0 to 4, default: '%s'\n",
+          "  -v LEVEL  - debug level, from 0 to 4, default: %d\n",
           MG_VERSION, prog, s_enable_hexdump, s_ssi_pattern, s_root_dir,
           s_listening_address, s_debug_level);
   exit(EXIT_FAILURE);
@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(argv[i], "-l") == 0) {
       s_listening_address = argv[++i];
     } else if (strcmp(argv[i], "-v") == 0) {
-      s_debug_level = argv[++i];
+      s_debug_level = atoi(argv[++i]);
     } else {
       usage(argv[0]);
     }

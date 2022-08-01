@@ -42,7 +42,7 @@ void app_main(void) {
   // Connected to WiFi, now start HTTP server
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
-  mg_log_set("3");
+  mg_log_set(MG_LL_DEBUG);  // Set log level
   MG_INFO(("Mongoose v%s on %s", MG_VERSION, s_listening_url));
   mg_http_listen(&mgr, s_listening_url, uart_bridge_fn, &mgr);
   for (;;) mg_mgr_poll(&mgr, 10);  // Infinite event loop

@@ -71,7 +71,7 @@ void cli(uint8_t input_byte) {
     } else if (strcmp(buf0, "reboot") == 0) {
       esp_restart();
     } else if (strcmp(buf0, "ll") == 0) {
-      mg_log_set(buf1);
+      mg_log_set(atoi(buf1));
     } else if (strcmp(buf0, "wifi") == 0) {
       cli_wifi(buf1, buf2);
     } else {

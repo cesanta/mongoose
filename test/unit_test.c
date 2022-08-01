@@ -2483,7 +2483,7 @@ static void test_rpc(void) {
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
-  mg_log_set(debug_level);
+  mg_log_set(atoi(debug_level));
 
   test_json();
   test_rpc();

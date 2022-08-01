@@ -292,8 +292,9 @@ static void read_conn(struct mg_connection *c) {
     char *buf = (char *) &c->recv.buf[c->recv.len];
     size_t len = c->recv.size - c->recv.len;
     n = c->is_tls ? mg_tls_recv(c, buf, len) : mg_sock_recv(c, buf, len);
-    MG_DEBUG(("%lu %p %d:%d %ld err %d", c->id, c->fd, (int) c->send.len,
-              (int) c->recv.len, n, MG_SOCK_ERRNO));
+    MG_DEBUG(("%lu %p snd %ld/%ld rcv %ld/%ld n=%ld err=%d", c->id, c->fd,
+              (long) c->send.len, (long) c->send.size, (long) c->recv.len,
+              (long) c->recv.size, n, MG_SOCK_ERRNO));
     iolog(c, buf, n, true);
   }
 }
@@ -302,8 +303,9 @@ static void write_conn(struct mg_connection *c) {
   char *buf = (char *) c->send.buf;
   size_t len = c->send.len;
   long n = c->is_tls ? mg_tls_send(c, buf, len) : mg_sock_send(c, buf, len);
-  MG_DEBUG(("%lu %p %d:%d %ld err %d", c->id, c->fd, (int) c->send.len,
-            (int) c->recv.len, n, MG_SOCK_ERRNO));
+  MG_DEBUG(("%lu %p snd %ld/%ld rcv %ld/%ld n=%ld err=%d", c->id, c->fd,
+            (long) c->send.len, (long) c->send.size, (long) c->recv.len,
+            (long) c->recv.size, n, MG_SOCK_ERRNO));
   iolog(c, buf, n, false);
 }
 

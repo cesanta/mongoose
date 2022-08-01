@@ -39,7 +39,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 int main(void) {
   struct mg_mgr mgr;                            // Event manager
-  mg_log_set("2");                              // Set to 3 to enable debug
+  mg_log_set(MG_LL_DEBUG);                      // Set log level
   mg_mgr_init(&mgr);                            // Initialise event manager
   mg_http_listen(&mgr, s_http_addr, fn, NULL);  // Create HTTP listener
   for (;;) mg_mgr_poll(&mgr, 1000);             // Infinite event loop

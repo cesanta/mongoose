@@ -8,7 +8,7 @@ void device_dashboard_fn(struct mg_connection *, int, void *, void *);
 
 int main(void) {
   struct mg_mgr mgr;
-  mg_log_set("2");  // Set to 3 for debug, to 4 for very verbose level
+  mg_log_set(MG_LL_DEBUG);  // Set debug log level
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, s_listening_url, device_dashboard_fn, &mgr);
   MG_INFO(("Listening on %s", s_listening_url));
