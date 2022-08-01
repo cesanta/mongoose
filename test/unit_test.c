@@ -265,18 +265,18 @@ static void test_base64(void) {
 }
 
 static void test_iobuf(void) {
-  struct mg_iobuf io = {0, 0, 0};
+  struct mg_iobuf io = {0, 0, 0, 10};
   ASSERT(io.buf == NULL && io.size == 0 && io.len == 0);
   mg_iobuf_resize(&io, 1);
-  ASSERT(io.buf != NULL && io.size == 1 && io.len == 0);
+  ASSERT(io.buf != NULL && io.size == 10 && io.len == 0);
   ASSERT(memcmp(io.buf, "\x00", 1) == 0);
-  mg_iobuf_add(&io, 3, "hi", 2, 10);
+  mg_iobuf_add(&io, 3, "hi", 2);
   ASSERT(io.buf != NULL && io.size == 10 && io.len == 5);
   ASSERT(memcmp(io.buf, "\x00\x00\x00hi", 5) == 0);
-  mg_iobuf_add(&io, io.len, "!", 1, 10);
+  mg_iobuf_add(&io, io.len, "!", 1);
   ASSERT(io.buf != NULL && io.size == 10 && io.len == 6);
   ASSERT(memcmp(io.buf, "\x00\x00\x00hi!", 6) == 0);
-  mg_iobuf_add(&io, 0, "x", 1, 10);
+  mg_iobuf_add(&io, 0, "x", 1);
   ASSERT(memcmp(io.buf, "x\x00\x00\x00hi!", 7) == 0);
   ASSERT(io.buf != NULL && io.size == 10 && io.len == 7);
   mg_iobuf_del(&io, 1, 3);
@@ -1585,6 +1585,13 @@ static void test_str(void) {
     ASSERT(mg_snprintf(tmp, sizeof(tmp), "%H", 9, s) == 20);
     ASSERT(strcmp(tmp, expected) == 0);
   }
+
+  {
+    char tmp[3];
+    ASSERT(mg_snprintf(tmp, sizeof(tmp), "%s", "0123456789") == 10);
+    ASSERT(strcmp(tmp, "01") == 0);
+    ASSERT(tmp[2] == '\0');
+  }
 }
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -2023,8 +2030,8 @@ static void eh11(struct mg_connection *c, int ev, void *ev_data,
   struct stream_status *status = (struct stream_status *) fn_data;
   if (ev == MG_EV_CONNECT) {
     size_t len = MG_MAX_RECV_SIZE * 2;
-    struct mg_iobuf buf = {NULL, 0, 0};
-    mg_iobuf_init(&buf, len);
+    struct mg_iobuf buf = {NULL, 0, 0, 0};
+    mg_iobuf_init(&buf, len, 0);
     mg_random(buf.buf, buf.size);
     buf.len = buf.size;
     mg_send(c, buf.buf, buf.len);

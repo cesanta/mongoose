@@ -799,7 +799,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     res = true;
   } else {
     // tx_tdp(ifp, ifp->ip, c->loc.port, c->rem.ip, c->rem.port, buf, len);
-    return mg_iobuf_add(&c->send, c->send.len, buf, len, MG_IO_SIZE);
+    return mg_iobuf_add(&c->send, c->send.len, buf, len);
   }
   return res;
 }

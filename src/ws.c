@@ -290,7 +290,7 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
   size_t header_len = mkhdr(len, op, c->is_client, header);
 
   // NOTE: order of operations is important!
-  mg_iobuf_add(&c->send, c->send.len, NULL, header_len, MG_IO_SIZE);
+  mg_iobuf_add(&c->send, c->send.len, NULL, header_len);
   p = &c->send.buf[c->send.len - len];         // p points to data
   memmove(p, p - header_len, len);             // Shift data
   memcpy(p - header_len, header, header_len);  // Prepend header

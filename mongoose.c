@@ -487,7 +487,7 @@ static void mg_putchar_iobuf_static(char ch, void *param) {
 
 void mg_pfn_iobuf(char ch, void *param) {
   struct mg_iobuf *io = (struct mg_iobuf *) param;
-  if (io->len + 2 > io->size) mg_iobuf_resize(io, io->size + 64);
+  if (io->len + 2 > io->size) mg_iobuf_resize(io, io->len + 2);
   if (io->len + 2 <= io->size) {
     io->buf[io->len++] = (uint8_t) ch;
     io->buf[io->len] = 0;
@@ -509,9 +509,10 @@ void mg_pfn_realloc(char ch, void *param) {
 }
 
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
-  struct mg_iobuf io = {(uint8_t *) buf, len, 0};
+  struct mg_iobuf io = {(uint8_t *) buf, len, 0, 0};
   size_t n = mg_vrprintf(mg_putchar_iobuf_static, &io, fmt, ap);
   if (n < len) buf[n] = '\0';
+  // if (len > 0) buf[len - 1] = '\0';  // Guarantee to 0-terminate
   return n;
 }
 
@@ -2376,8 +2377,13 @@ static void zeromem(volatile unsigned char *buf, size_t len) {
   }
 }
 
+static size_t roundup(size_t size, size_t align) {
+  return align == 0 ? size : (size + align - 1) / align * align;
+}
+
 int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
   int ok = 1;
+  new_size = roundup(new_size, io->align);
   if (new_size == 0) {
     zeromem(io->buf, io->size);
     free(io->buf);
@@ -2402,21 +2408,18 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
   return ok;
 }
 
-int mg_iobuf_init(struct mg_iobuf *io, size_t size) {
+int mg_iobuf_init(struct mg_iobuf *io, size_t size, size_t align) {
   io->buf = NULL;
+  io->align = align;
   io->size = io->len = 0;
   return mg_iobuf_resize(io, size);
 }
 
 size_t mg_iobuf_add(struct mg_iobuf *io, size_t ofs, const void *buf,
-                    size_t len, size_t chunk_size) {
-  size_t new_size = io->len + len;
-  if (new_size > io->size) {
-    new_size += chunk_size;             // Make sure that io->size
-    new_size -= new_size % chunk_size;  // is aligned by chunk_size boundary
-    mg_iobuf_resize(io, new_size);      // Attempt to realloc
-    if (new_size != io->size) len = 0;  // Realloc failure, append nothing
-  }
+                    size_t len) {
+  size_t new_size = roundup(io->len + len, io->align);
+  mg_iobuf_resize(io, new_size);      // Attempt to resize
+  if (new_size != io->size) len = 0;  // Resize failure, append nothing
   if (ofs < io->len) memmove(io->buf + ofs + len, io->buf + ofs, io->len - ofs);
   if (buf != NULL) memmove(io->buf + ofs, buf, len);
   if (ofs > io->len) io->len += ofs - io->len;
@@ -3426,6 +3429,7 @@ struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
       (struct mg_connection *) calloc(1, sizeof(*c) + mgr->extraconnsize);
   if (c != NULL) {
     c->mgr = mgr;
+    c->send.align = c->recv.align = MG_IO_SIZE;
     c->id = ++mgr->nextid;
   }
   return c;
@@ -4106,7 +4110,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     iolog(c, (char *) buf, n, false);
     return n > 0;
   } else {
-    return mg_iobuf_add(&c->send, c->send.len, buf, len, MG_IO_SIZE);
+    return mg_iobuf_add(&c->send, c->send.len, buf, len);
   }
 }
 
@@ -4593,12 +4597,12 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 
 #if MG_ENABLE_SSI
 static char *mg_ssi(const char *path, const char *root, int depth) {
-  struct mg_iobuf b = {NULL, 0, 0};
+  struct mg_iobuf b = {NULL, 0, 0, MG_IO_SIZE};
   FILE *fp = fopen(path, "rb");
   if (fp != NULL) {
     char buf[MG_SSI_BUFSIZ], arg[sizeof(buf)];
     int ch, intag = 0;
-    size_t len = 0, align = MG_IO_SIZE;
+    size_t len = 0;
     buf[0] = arg[0] = '\0';
     while ((ch = fgetc(fp)) != EOF) {
       if (intag && ch == '>' && buf[len - 1] == '-' && buf[len - 2] == '-') {
@@ -4611,7 +4615,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           mg_snprintf(tmp, sizeof(tmp), "%.*s%s", (int) (p - path), path, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
-            mg_iobuf_add(&b, b.len, data, strlen(data), align);
+            mg_iobuf_add(&b, b.len, data, strlen(data));
             free(data);
           } else {
             MG_ERROR(("%s: file=%s error or too deep", path, arg));
@@ -4621,7 +4625,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           mg_snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
-            mg_iobuf_add(&b, b.len, data, strlen(data), align);
+            mg_iobuf_add(&b, b.len, data, strlen(data));
             free(data);
           } else {
             MG_ERROR(("%s: virtual=%s error or too deep", path, arg));
@@ -4629,13 +4633,13 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
         } else {
           // Unknown SSI tag
           MG_ERROR(("Unknown SSI tag: %.*s", (int) len, buf));
-          mg_iobuf_add(&b, b.len, buf, len, align);
+          mg_iobuf_add(&b, b.len, buf, len);
         }
         intag = 0;
         len = 0;
       } else if (ch == '<') {
         intag = 1;
-        if (len > 0) mg_iobuf_add(&b, b.len, buf, len, align);
+        if (len > 0) mg_iobuf_add(&b, b.len, buf, len);
         len = 0;
         buf[len++] = (char) (ch & 0xff);
       } else if (intag) {
@@ -4649,13 +4653,13 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
       } else {
         buf[len++] = (char) (ch & 0xff);
         if (len >= sizeof(buf)) {
-          mg_iobuf_add(&b, b.len, buf, len, align);
+          mg_iobuf_add(&b, b.len, buf, len);
           len = 0;
         }
       }
     }
-    if (len > 0) mg_iobuf_add(&b, b.len, buf, len, align);
-    if (b.len > 0) mg_iobuf_add(&b, b.len, "", 1, align);  // nul-terminate
+    if (len > 0) mg_iobuf_add(&b, b.len, buf, len);
+    if (b.len > 0) mg_iobuf_add(&b, b.len, "", 1);  // nul-terminate
     fclose(fp);
   }
   (void) depth;
@@ -5887,7 +5891,7 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
   size_t header_len = mkhdr(len, op, c->is_client, header);
 
   // NOTE: order of operations is important!
-  mg_iobuf_add(&c->send, c->send.len, NULL, header_len, MG_IO_SIZE);
+  mg_iobuf_add(&c->send, c->send.len, NULL, header_len);
   p = &c->send.buf[c->send.len - len];         // p points to data
   memmove(p, p - header_len, len);             // Shift data
   memcpy(p - header_len, header, header_len);  // Prepend header
@@ -6853,7 +6857,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     res = true;
   } else {
     // tx_tdp(ifp, ifp->ip, c->loc.port, c->rem.ip, c->rem.port, buf, len);
-    return mg_iobuf_add(&c->send, c->send.len, buf, len, MG_IO_SIZE);
+    return mg_iobuf_add(&c->send, c->send.len, buf, len);
   }
   return res;
 }

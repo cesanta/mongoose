@@ -75,7 +75,7 @@ static void mg_putchar_iobuf_static(char ch, void *param) {
 
 void mg_pfn_iobuf(char ch, void *param) {
   struct mg_iobuf *io = (struct mg_iobuf *) param;
-  if (io->len + 2 > io->size) mg_iobuf_resize(io, io->size + 64);
+  if (io->len + 2 > io->size) mg_iobuf_resize(io, io->len + 2);
   if (io->len + 2 <= io->size) {
     io->buf[io->len++] = (uint8_t) ch;
     io->buf[io->len] = 0;
@@ -97,9 +97,10 @@ void mg_pfn_realloc(char ch, void *param) {
 }
 
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
-  struct mg_iobuf io = {(uint8_t *) buf, len, 0};
+  struct mg_iobuf io = {(uint8_t *) buf, len, 0, 0};
   size_t n = mg_vrprintf(mg_putchar_iobuf_static, &io, fmt, ap);
   if (n < len) buf[n] = '\0';
+  // if (len > 0) buf[len - 1] = '\0';  // Guarantee to 0-terminate
   return n;
 }
 

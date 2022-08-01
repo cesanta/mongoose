@@ -3493,6 +3493,7 @@ struct mg_iobuf {
   unsigned char *buf;  // Pointer to stored data
   size_t size;         // Total size available
   size_t len;          // Current number of bytes
+  size_t align;        // Alignment during allocation
 };
 ```
 
@@ -3504,7 +3505,7 @@ by `buf`, and `len` specifies number of bytes currently stored.
 ### mg\_iobuf\_init()
 
 ```c
-int mg_iobuf_init(struct mg_iobuf *io, size_t size);
+int mg_iobuf_init(struct mg_iobuf *io, size_t size, size_t align);
 ```
 
 Initialize IO buffer, allocate `size` bytes.
@@ -3512,6 +3513,7 @@ Initialize IO buffer, allocate `size` bytes.
 Parameters:
 - `io` - Pointer to `mg_iobuf` structure to initialize
 - `size` - Amount of bytes to allocate
+- `align` - Align `size` to the `align` mem boundary. `0` means no alignment
 
 Return value: 1 on success, 0 on allocation failure
 
@@ -3519,7 +3521,7 @@ Usage example:
 
 ```c
 struct mg_iobuf io;
-if (mg_iobuf_init(&io)) {
+if (mg_iobuf_init(&io, 0, 64)) {
   // io successfully initialized
 }
 ```
@@ -3533,6 +3535,9 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t size);
 Resize IO buffer, set the new size to `size`. The `io->buf` pointer could
 change after this, for example if the buffer grows. If `size` is 0, then the
 `io->buf` is freed and set to NULL, and both `size` and `len` are set to 0.
+The resulting `io->size` is always aligned to the `io->align` byte boundary;
+therefore, to avoid memory fragmentation and frequent reallocations, set
+`io->align` to a higher value.
 
 Parameters:
 - `io` - iobuf to resize
@@ -3544,11 +3549,10 @@ Usage example:
 
 ```c
 struct mg_iobuf io;
-// IO buffer initialization
-// ...
+mg_iobuf_init(&io, 0, 10);  // An empty buffer with 10-byte alignment
 
-if (mg_iobuf_resize(&io, 1024)) {
-  // New io size is 1024 bytes
+if (mg_iobuf_resize(&io, 1)) {
+  // New io size is 10
 }
 ```
 
@@ -3579,11 +3583,11 @@ mg_iobuf_free(&io);
 ### mg\_iobuf\_add()
 
 ```c
-size_t mg_iobuf_add(struct mg_iobuf *io, size_t offset, const void *buf, size_t len, size_t align);
+size_t mg_iobuf_add(struct mg_iobuf *io, size_t offset, const void *buf, size_t len);
 ```
 
 Insert data buffer `buf`, `len` at offset `offset`. The iobuf is expanded
-if required. The resulting `io->size` is always aligned to the `align` byte boundary; therefore,
+if required. The resulting `io->size` is always aligned to the `io->align` byte boundary; therefore,
 to avoid memory fragmentation and frequent reallocations, set `align` to a higher value.
 
 Parameters:
@@ -3591,21 +3595,20 @@ Parameters:
 - `offset` - Offset to add data
 - `buf` - Data to add
 - `len` - Data length
-- `align` - Align boundary
 
 Return value: new `io` length
 
 Usage example:
 
 ```c
-struct mg_iobuf io;     // Declare buffer
-mg_iobuf_init(&io, 0);  // Initialise buffer to have 0 allocated bytes
+struct mg_iobuf io;         // Declare buffer
+mg_iobuf_init(&io, 0, 16);  // Initialise empty buffer with 16 byte alignment
 ```
 
 <img src="images/mg_iobuf_add1.svg" alt="Function mg_iobuf_init()" />
 
 ```c
-mg_iobuf_add(&io, io.len, "hello", 5, 16);  // Append "hello"
+mg_iobuf_add(&io, io.len, "hello", 5);  // Append "hello"
 ```
 
 <img src="images/mg_iobuf_add2.svg" alt="Function mg_iobuf_add()" />
@@ -3631,11 +3634,9 @@ Usage example:
 
 ```c
 struct mg_iobuf io;
-mg_iobuf_init(&io, 0);               // Empty buffer
-mg_iobuf_add(&io, 0, "hi", 2, 512);  // io->len is 2, io->size is 512
-// ...
-mg_iobuf_del(&io, 0, "hi", 2, 512);  // io->len is 0, io->size is still 512
-
+mg_iobuf_init(&io, 0, 512);     // Empty buffer
+mg_iobuf_add(&io, 0, "hi", 2);  // io->len is 2, io->size is 512
+mg_iobuf_del(&io, 0, "hi", 2);  // io->len is 0, io->size is still 512
 ```
 
 <img src="images/mg_iobug_del.png" alt="Function mg_iobuf_del()" />
