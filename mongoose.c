@@ -1687,12 +1687,17 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
 
 static void mg_http_vprintf_chunk(struct mg_connection *c, const char *fmt,
                                   va_list ap) {
-  char mem[256], *buf = mem;
-  size_t len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
-  mg_printf(c, "%lx\r\n", (unsigned long) len);
-  mg_send(c, buf, len > 0 ? (size_t) len : 0);
+  size_t len = c->send.len;
+  va_list tmp;
+  mg_send(c, "        \r\n", 10);
+  va_copy(tmp, ap);
+  mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, &tmp);
+  va_end(tmp);
+  if (c->send.len >= len + 10) {
+    mg_snprintf((char *) c->send.buf + len, 9, "%08lx", c->send.len - len - 10);
+    c->send.buf[len + 8] = '\r';
+  }
   mg_send(c, "\r\n", 2);
-  if (buf != mem) free(buf);
 }
 
 void mg_http_printf_chunk(struct mg_connection *c, const char *fmt, ...) {
@@ -1733,16 +1738,19 @@ static const char *mg_http_status_code_str(int status_code) {
 
 void mg_http_reply(struct mg_connection *c, int code, const char *headers,
                    const char *fmt, ...) {
-  char mem[256], *buf = mem;
   va_list ap;
   size_t len;
+  mg_printf(c, "HTTP/1.1 %d %s\r\n%sContent-Length:           \r\n\r\n", code,
+            mg_http_status_code_str(code), headers == NULL ? "" : headers);
+  len = c->send.len;
   va_start(ap, fmt);
-  len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
+  mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
   va_end(ap);
-  mg_printf(c, "HTTP/1.1 %d %s\r\n%sContent-Length: %d\r\n\r\n", code,
-            mg_http_status_code_str(code), headers == NULL ? "" : headers, len);
-  mg_send(c, buf, len > 0 ? len : 0);
-  if (buf != mem) free(buf);
+  if (c->send.len > 15) {
+    mg_snprintf((char *) &c->send.buf[len - 14], 11, "%010lu",
+                (unsigned long) (c->send.len - len));
+    c->send.buf[len - 4] = '\r';  // Change ending 0 to space
+  }
 }
 
 static void http_cb(struct mg_connection *, int, void *, void *);
@@ -2209,13 +2217,13 @@ static bool walkchunks(struct mg_connection *c, struct mg_http_message *hm,
     char *buf = (char *) &c->recv.buf[reqlen];
     size_t memo = c->recv.len;
     size_t cl = get_chunk_length(&buf[off], memo - reqlen - off, &ll);
-    // MG_INFO(("len %zu off %zu cl %zu ll %zu", len, off, cl, ll));
+    // MG_INFO(("len %u off %u cl %u ll %u", memo - reqlen, off, cl, ll));
     if (cl == 0) break;
     hm->chunk = mg_str_n(&buf[off + ll], cl < ll + 2 ? 0 : cl - ll - 2);
     mg_call(c, MG_EV_HTTP_CHUNK, hm);
     // Increase offset only if user has not deleted this chunk
     if (memo == c->recv.len) off += cl;
-    if (cl <= 5) {
+    if (ll + 2 >= cl) {
       // Zero chunk - last one. Prepare body - cut off chunk lengths
       if (memo != c->recv.len) return true;  // Tell caller to cleanup
       off = bl = 0;
@@ -2227,7 +2235,7 @@ static bool walkchunks(struct mg_connection *c, struct mg_http_message *hm,
         memmove(buf2 + bl, buf2 + off + ll, n);
         bl += n;
         off += cl2;
-        if (cl2 <= 5) break;
+        if (ll + 2 >= cl2) break;
       }
       // MG_INFO(("BL->%d del %d off %d", (int) bl, (int) del, (int) off));
       c->recv.len -= off - bl;
@@ -2734,10 +2742,12 @@ void mg_log_set(int log_level) {
 
 bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   if (level <= s_level) {
-    const char *p = strrchr(file, MG_DIRSEP);
+    const char *p = strrchr(file, '/');
     char buf[41];
-    size_t n = mg_snprintf(buf, sizeof(buf), "%llx %d %s:%d:%s", mg_millis(),
-                           level, p == NULL ? fname : p + 1, line, fname);
+    size_t n;
+    if (p == NULL) p = strrchr(file, '\\');
+    n = mg_snprintf(buf, sizeof(buf), "%llx %d %s:%d:%s", mg_millis(), level,
+                    p == NULL ? file : p + 1, line, fname);
     if (n > sizeof(buf) - 2) n = sizeof(buf) - 2;
     while (n < sizeof(buf)) buf[n++] = ' ';
     logs(buf, n - 1);

@@ -31,10 +31,12 @@ void mg_log_set(int log_level) {
 
 bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   if (level <= s_level) {
-    const char *p = strrchr(file, MG_DIRSEP);
+    const char *p = strrchr(file, '/');
     char buf[41];
-    size_t n = mg_snprintf(buf, sizeof(buf), "%llx %d %s:%d:%s", mg_millis(),
-                           level, p == NULL ? fname : p + 1, line, fname);
+    size_t n;
+    if (p == NULL) p = strrchr(file, '\\');
+    n = mg_snprintf(buf, sizeof(buf), "%llx %d %s:%d:%s", mg_millis(), level,
+                    p == NULL ? file : p + 1, line, fname);
     if (n > sizeof(buf) - 2) n = sizeof(buf) - 2;
     while (n < sizeof(buf)) buf[n++] = ' ';
     logs(buf, n - 1);
