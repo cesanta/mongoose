@@ -169,7 +169,7 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
                     u->token);
     } else {
       struct mg_http_serve_opts opts = {0};
-#if 0
+#if 1
       opts.root_dir = "/web_root";
       opts.fs = &mg_fs_packed;
 #else
