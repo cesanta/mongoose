@@ -16,7 +16,7 @@ flash: CMD = flash
 flash: DA = --device $(PORT)
 flash: build
 
-.PHONY: flash
+.PHONY: build
 
 bridge.hex: build
 	esputil mkhex \
