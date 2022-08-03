@@ -913,12 +913,14 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
         mg_iobuf_del(&c->recv, 0, hm.message.len);
       } else {
         if (n > 0 && !is_chunked) {
-          hm.chunk =
-              mg_str_n((char *) &c->recv.buf[n], c->recv.len - (size_t) n);
           // Store remaining body length in c->pfn_data
           if (c->pfn_data == NULL)
             c->pfn_data = (void *) (hm.message.len - (size_t) n);
-          mg_call(c, MG_EV_HTTP_CHUNK, &hm);
+          if (c->recv.len - (size_t) n > 0) {
+            hm.chunk =
+                mg_str_n((char *) &c->recv.buf[n], c->recv.len - (size_t) n);
+            mg_call(c, MG_EV_HTTP_CHUNK, &hm);
+          }
           if (c->pfn_data == NULL) {
             hm.chunk.len = 0;                   // Last chunk!
             mg_call(c, MG_EV_HTTP_CHUNK, &hm);  // Lest user know
