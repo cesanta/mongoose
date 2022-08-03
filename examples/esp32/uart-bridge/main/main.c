@@ -32,6 +32,7 @@ void app_main(void) {
   } else {
     // If WiFi is not configured, run CLI until configured
     MG_INFO(("WiFi is not configured, running CLI. Press enter"));
+    cli_init();
     for (;;) {
       uint8_t ch = getchar();
       cli(ch);

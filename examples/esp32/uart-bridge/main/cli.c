@@ -44,12 +44,12 @@ static void cli_rm(const char *fname) {
   remove(path);
 }
 
-void cli(uint8_t input_byte) {
-  static struct mg_iobuf in;
+static struct mg_iobuf in;
 
+void cli(uint8_t input_byte) {
   if (input_byte == 0 || input_byte == 0xff) return;
   if (in.len >= 128) in.len = 0;
-  mg_iobuf_add(&in, in.len, &input_byte, sizeof(input_byte), 32);
+  mg_iobuf_add(&in, in.len, &input_byte, sizeof(input_byte));
 
   if (input_byte == '\n') {
     const char *arrow = "---";
@@ -86,4 +86,8 @@ void cli(uint8_t input_byte) {
     printf("%s %s\n", arrow, "CLI output end");
     in.len = 0;
   }
+}
+
+void cli_init(void) {
+  mg_iobuf_init(&in, 0, 32);
 }
