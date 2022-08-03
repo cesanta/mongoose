@@ -1,4 +1,4 @@
-// Copyright (c) 2004-2013 Sergey Lyubka
+﻿// Copyright (c) 2004-2013 Sergey Lyubka
 // Copyright (c) 2013-2022 Cesanta Software Limited
 // All rights reserved
 //
@@ -4299,11 +4299,15 @@ static void setsockopts(struct mg_connection *c) {
 }
 
 void mg_connect_resolved(struct mg_connection *c) {
+  c->is_client = true;
   // char buf[40];
   int type = c->is_udp ? SOCK_DGRAM : SOCK_STREAM;
   int rc, af = c->rem.is_ip6 ? AF_INET6 : AF_INET;
   // mg_straddr(&c->rem, buf, sizeof(buf));
-  c->fd = S2PTR(socket(af, type, 0));
+  if (!c->fd || INVALID_SOCKET == FD(c))
+  {
+    c->fd = S2PTR(socket(af, type, 0));
+  }
   c->is_resolving = 0;
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
