@@ -1959,6 +1959,51 @@ static void test_http_chunked(void) {
   ASSERT(mgr.conns == NULL);
 }
 
+// Streaming server event handler.
+// Send the header and pause, then send one chunk,
+// then drain, then send two chunks in one go
+static void eh2b(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+      mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: %u\r\n\r\n", strlen(LONG_CHUNK)+7+7);
+    c->label[0] = 1;
+  } else if (ev == MG_EV_POLL) {
+    if (c->label[0] > 0 && c->label[0] != 'x') c->label[0]++;
+    if (c->label[0] == 10) {
+      mg_printf(c, LONG_CHUNK);
+    } else if (c->label[0] > 20 && c->label[0] != 'x') {
+      mg_printf(c, "chunk 1");
+      mg_printf(c, "chunk 2");
+      mg_printf(c, "");
+      c->label[0] = 'x';
+    }
+  }
+  (void) ev_data;
+  (void) fn_data;
+}
+
+static void test_ev_chunk_with_pauses(void) {
+  struct mg_mgr mgr;
+  const char *data, *url = "http://127.0.0.1:12344";
+  uint32_t i, done = 0;
+  mg_mgr_init(&mgr);
+  mg_http_listen(&mgr, url, eh2b, NULL);
+
+  mg_http_connect(&mgr, url, eh3, &done);
+  for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(i < 50);
+  data = LONG_CHUNK "chunk 1chunk 2";
+  ASSERT(done == mg_crc32(0, data, strlen(data)));
+
+  done = 0;
+  mg_http_connect(&mgr, url, eh5, &done);
+  for (i = 0; i < 50 && done == 0; i++) mg_mgr_poll(&mgr, 1);
+  data = LONG_CHUNK "chunk 1chunk 2";
+  ASSERT(done == mg_crc32(0, data, strlen(data)));
+
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+}
+
 static void test_invalid_listen_addr(void) {
   struct mg_mgr mgr;
   struct mg_connection *c;
@@ -2506,6 +2551,7 @@ int main(void) {
   test_multipart();
   test_invalid_listen_addr();
   test_http_chunked();
+  test_ev_chunk_with_pauses();
   test_http_upload();
   test_http_stream_buffer();
   test_http_parse();
