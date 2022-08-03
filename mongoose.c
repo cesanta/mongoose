@@ -10257,7 +10257,7 @@ void mg_send_websocket_handshake3(struct mg_connection *nc, const char *path,
 }
 
 void mg_send_websocket_handshake3v(struct mg_connection *nc,
-                                   const struct mg_str path,
+                                   const struct mg_str path_in,
                                    const struct mg_str host,
                                    const struct mg_str protocol,
                                    const struct mg_str extra_headers,
@@ -10276,6 +10276,7 @@ void mg_send_websocket_handshake3v(struct mg_connection *nc,
   if (user.len > 0) {
     mg_basic_auth_header(user, pass, &auth);
   }
+  const struct mg_str path = (path_in.len > 0 ? path_in : mg_mk_str("/"));
 
   /*
    * NOTE: the  (auth.buf == NULL ? "" : auth.buf) is because cc3200 libc is
