@@ -215,6 +215,7 @@ struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
     c->fd = (void *) (size_t) fd;
     c->fn = fn;
     c->fn_data = fn_data;
+    MG_EPOLL_ADD(c);
     mg_call(c, MG_EV_OPEN, NULL);
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
   }
@@ -240,10 +241,18 @@ void mg_mgr_free(struct mg_mgr *mgr) {
   FreeRTOS_DeleteSocketSet(mgr->ss);
 #endif
   MG_DEBUG(("All connections closed"));
+#if MG_ENABLE_EPOLL
+  if (mgr->epoll_fd >= 0) close(mgr->epoll_fd), mgr->epoll_fd = -1;
+#endif
 }
 
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
+#if MG_ENABLE_EPOLL
+  if ((mgr->epoll_fd = epoll_create1(0)) < 0) MG_ERROR(("epoll: %d", errno));
+#else
+  mgr->epoll_fd = -1;
+#endif
 #if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
   // clang-format off
   { WSADATA data; WSAStartup(MAKEWORD(2, 2), &data); }

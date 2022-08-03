@@ -143,6 +143,9 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
     } else {
       mg_iobuf_del(&c->send, 0, (size_t) n);
       // if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
+      if (c->send.len == 0) {
+        MG_EPOLL_MOD(c, 0);
+      }
       mg_call(c, MG_EV_WRITE, &n);
     }
   }
@@ -259,6 +262,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
       setlocaddr(fd, &c->loc);
       mg_set_non_blocking_mode(fd);
       c->fd = S2PTR(fd);
+      MG_EPOLL_ADD(c);
       success = true;
     }
   }
@@ -311,6 +315,9 @@ static void write_conn(struct mg_connection *c) {
 
 static void close_conn(struct mg_connection *c) {
   if (FD(c) != INVALID_SOCKET) {
+#if MG_ENABLE_EPOLL
+    epoll_ctl(c->mgr->epoll_fd, EPOLL_CTL_DEL, FD(c), NULL);
+#endif
     closesocket(FD(c));
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
     FreeRTOS_FD_CLR(c->fd, c->mgr->ss, eSELECT_ALL);
@@ -327,6 +334,7 @@ static void connect_conn(struct mg_connection *c) {
   if (getpeername(FD(c), &usa.sa, &n) == 0) {
     c->is_connecting = 0;
     mg_call(c, MG_EV_CONNECT, NULL);
+    MG_EPOLL_MOD(c, 0);
     if (c->is_tls_hs) mg_tls_handshake(c);
   } else {
     mg_error(c, "socket error");
@@ -360,6 +368,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
   } else if (c->is_udp) {
+    MG_EPOLL_ADD(c);
     mg_call(c, MG_EV_RESOLVE, NULL);
     mg_call(c, MG_EV_CONNECT, NULL);
   } else {
@@ -367,6 +376,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     socklen_t slen = tousa(&c->rem, &usa);
     mg_set_non_blocking_mode(FD(c));
     setsockopts(c);
+    MG_EPOLL_ADD(c);
     mg_call(c, MG_EV_RESOLVE, NULL);
     if ((rc = connect(FD(c), &usa.sa, slen)) == 0) {
       mg_call(c, MG_EV_CONNECT, NULL);
@@ -418,6 +428,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     MG_DEBUG(("%lu accepted %s", c->id, buf));
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fd = S2PTR(fd);
+    MG_EPOLL_ADD(c);
     mg_set_non_blocking_mode(FD(c));
     setsockopts(c);
     c->is_accepted = 1;
@@ -521,6 +532,28 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     FreeRTOS_FD_CLR(c->fd, mgr->ss,
                     eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
   }
+#elif MG_ENABLE_EPOLL
+  size_t max = 1;
+  for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
+    c->is_readable = c->is_writable = 0;
+    if (mg_tls_pending(c) > 0) ms = 1, c->is_readable = 1;
+    if (can_write(c)) MG_EPOLL_MOD(c, 1);
+    max++;
+  }
+  struct epoll_event *evs = (struct epoll_event *) alloca(max * sizeof(evs[0]));
+  int n = epoll_wait(mgr->epoll_fd, evs, (int) max, ms);
+  for (int i = 0; i < n; i++) {
+    struct mg_connection *c = (struct mg_connection *) evs[i].data.ptr;
+    if (evs[i].events & EPOLLERR) {
+      mg_error(c, "socket error");
+    } else if (c->is_readable == 0) {
+      bool rd = evs[i].events & (EPOLLIN | EPOLLHUP);
+      bool wr = evs[i].events & EPOLLOUT;
+      c->is_readable = can_read(c) && rd ? 1U : 0;
+      c->is_writable = can_write(c) && wr ? 1U : 0;
+    }
+  }
+  (void) skip_iotest;
 #elif MG_ENABLE_POLL
   nfds_t n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) n++;

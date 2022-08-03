@@ -521,6 +521,8 @@ static void fcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     fd->closed = 1;
     c->is_closing = 1;
     (void) c;
+  } else if (ev == MG_EV_CLOSE) {
+    fd->closed = 1;
   }
 }
 
@@ -545,13 +547,13 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
     }
     mg_tls_init(c, &opts);
     if (c->tls == NULL) fd.closed = 1;
-    // c->is_hexdumping = 1;
   }
+  // c->is_hexdumping = 1;
   va_start(ap, fmt);
   mg_vprintf(c, fmt, ap);
   va_end(ap);
   buf[0] = '\0';
-  for (i = 0; i < 250 && buf[0] == '\0'; i++) mg_mgr_poll(mgr, 1);
+  for (i = 0; i < 50 && buf[0] == '\0'; i++) mg_mgr_poll(mgr, 1);
   if (!fd.closed) c->is_closing = 1;
   mg_mgr_poll(mgr, 1);
   return fd.code;

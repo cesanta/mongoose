@@ -435,7 +435,9 @@ extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
 #include <mach/mach_time.h>
 #endif
 
-#if !defined(MG_ENABLE_POLL) && (defined(__linux__) || defined(__APPLE__))
+#if !defined(MG_ENABLE_EPOLL) && defined(__linux__)
+#define MG_ENABLE_EPOLL 1
+#elif !defined(MG_ENABLE_POLL)
 #define MG_ENABLE_POLL 1
 #endif
 
@@ -457,11 +459,15 @@ extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#if defined(MG_ENABLE_POLL) && MG_ENABLE_POLL
+
+#if defined(MG_ENABLE_EPOLL) && MG_ENABLE_EPOLL
+#include <sys/epoll.h>
+#elif defined(MG_ENABLE_POLL) && MG_ENABLE_POLL
 #include <poll.h>
 #else
 #include <sys/select.h>
 #endif
+
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -611,6 +617,10 @@ int sscanf(const char *, const char *, ...);
 #define MG_ENABLE_POLL 0
 #endif
 
+#ifndef MG_ENABLE_EPOLL
+#define MG_ENABLE_EPOLL 0
+#endif
+
 #ifndef MG_ENABLE_FATFS
 #define MG_ENABLE_FATFS 0
 #endif
@@ -704,6 +714,23 @@ int sscanf(const char *, const char *, ...);
 #else
 #define MG_ENABLE_FILE 0
 #endif
+#endif
+
+#if MG_ENABLE_EPOLL
+#define MG_EPOLL_ADD(c)                                                    \
+  do {                                                                     \
+    struct epoll_event ev = {EPOLLIN | EPOLLERR | EPOLLHUP, {c}};          \
+    epoll_ctl(c->mgr->epoll_fd, EPOLL_CTL_ADD, (int) (size_t) c->fd, &ev); \
+  } while (0)
+#define MG_EPOLL_MOD(c, wr)                                                \
+  do {                                                                     \
+    struct epoll_event ev = {EPOLLIN | EPOLLERR | EPOLLHUP, {c}};          \
+    if (wr) ev.events |= EPOLLOUT;                                         \
+    epoll_ctl(c->mgr->epoll_fd, EPOLL_CTL_MOD, (int) (size_t) c->fd, &ev); \
+  } while (0)
+#else
+#define MG_EPOLL_ADD(c)
+#define MG_EPOLL_MOD(c, wr)
 #endif
 
 
@@ -1013,6 +1040,7 @@ struct mg_mgr {
   uint16_t mqtt_id;             // MQTT IDs for pub/sub
   void *active_dns_requests;    // DNS requests in progress
   struct mg_timer *timers;      // Active timers
+  int epoll_fd;                 // Used when MG_EPOLL_ENABLE=1
   void *priv;                   // Used by the MIP stack
   size_t extraconnsize;         // Used by the MIP stack
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP

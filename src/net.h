@@ -30,6 +30,7 @@ struct mg_mgr {
   uint16_t mqtt_id;             // MQTT IDs for pub/sub
   void *active_dns_requests;    // DNS requests in progress
   struct mg_timer *timers;      // Active timers
+  int epoll_fd;                 // Used when MG_EPOLL_ENABLE=1
   void *priv;                   // Used by the MIP stack
   size_t extraconnsize;         // Used by the MIP stack
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
