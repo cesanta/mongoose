@@ -1613,13 +1613,16 @@ mg_sntp_request(c);
 
 ```c
 struct mg_mqtt_opts {
-  struct mg_str client_id;    // Client id
-  struct mg_str will_topic;   // Will Topic
-  struct mg_str will_message; // Will Message
-  uint8_t will_qos;           // Will message quality of service
-  bool will_retain;           // Retain last will
-  bool clean;                 // Use clean session, 0 or 1
-  uint16_t keepalive;         // Keep-alive timer in seconds
+  struct mg_str user;          // Username, can be empty
+  struct mg_str pass;          // Password, can be empty
+  struct mg_str client_id;     // Client ID
+  struct mg_str will_topic;    // Will topic
+  struct mg_str will_message;  // Will message
+  uint8_t will_qos;            // Will message quality of service
+  uint8_t version;             // Can be 4 (3.1.1), or 5. If 0, assume 4.
+  uint16_t keepalive;          // Keep-alive timer in seconds
+  bool will_retain;            // Retain last will
+  bool clean;                  // Use clean session, 0 or 1
 };
 ```
 
@@ -1629,8 +1632,13 @@ Structure used to specify MQTT connection options.
 
 ```c
 struct mg_mqtt_message {
-  struct mg_str topic;  // Topic
-  struct mg_str data;   // Message data
+  struct mg_str topic;  // Parsed topic
+  struct mg_str data;   // Parsed message
+  struct mg_str dgram;  // Whole MQTT datagram, including headers
+  uint16_t id;  // Set for PUBACK, PUBREC, PUBREL, PUBCOMP, SUBACK, PUBLISH
+  uint8_t cmd;  // MQTT command, one of MQTT_CMD_*
+  uint8_t qos;  // Quality of service
+  uint8_t ack;  // Connack return code. 0 - success
 };
 ```
 
