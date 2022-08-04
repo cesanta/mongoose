@@ -34,7 +34,7 @@ CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
-all: mg_prefix unamalgamated unpacked test test++ valgrind arm examples vc98 vc2017 vc22 mingw mingw++ linux linux++ fuzz
+all: mg_prefix unamalgamated unpacked test test++ arm examples vc98 vc2017 vc22 mingw mingw++ linux linux++ fuzz
 
 examples:
 	@for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done

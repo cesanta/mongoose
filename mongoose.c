@@ -1431,6 +1431,9 @@ struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
 
 
 
+// Chunk deletion marker is the MSB in the "processed" counter
+#define MG_DMARK ((size_t) 1 << (sizeof(size_t) * 8 - 1))
+
 // Multipart POST example:
 // --xyz
 // Content-Disposition: form-data; name="val"
@@ -2197,79 +2200,6 @@ bool mg_http_match_uri(const struct mg_http_message *hm, const char *glob) {
   return mg_match(hm->uri, mg_str(glob), NULL);
 }
 
-static size_t get_chunk_length(const char *buf, size_t len, size_t *ll) {
-  size_t i = 0, n;
-  while (i < len && buf[i] != '\r' && i != '\n') i++;
-  n = mg_unhexn((char *) buf, i);
-  while (i < len && (buf[i] == '\r' || i == '\n')) i++;
-  // MG_INFO(("len %zu i %zu n %zu ", len, i, n));
-  if (ll != NULL) *ll = i + 1;
-  if (i < len && i + n + 2 < len) return i + n + 3;
-  return 0;
-}
-
-// Walk through all chunks in the chunked body. For each chunk, fire
-// an MG_EV_HTTP_CHUNK event.
-static bool walkchunks(struct mg_connection *c, struct mg_http_message *hm,
-                       size_t reqlen) {
-  size_t off = 0, bl, ll;
-  while (off + reqlen < c->recv.len) {
-    char *buf = (char *) &c->recv.buf[reqlen];
-    size_t memo = c->recv.len;
-    size_t cl = get_chunk_length(&buf[off], memo - reqlen - off, &ll);
-    // MG_INFO(("len %u off %u cl %u ll %u", memo - reqlen, off, cl, ll));
-    if (cl == 0) break;
-    hm->chunk = mg_str_n(&buf[off + ll], cl < ll + 2 ? 0 : cl - ll - 2);
-    mg_call(c, MG_EV_HTTP_CHUNK, hm);
-    // Increase offset only if user has not deleted this chunk
-    if (memo == c->recv.len) off += cl;
-    if (ll + 2 >= cl) {
-      // Zero chunk - last one. Prepare body - cut off chunk lengths
-      if (memo != c->recv.len) return true;  // Tell caller to cleanup
-      off = bl = 0;
-      while (off + reqlen < c->recv.len) {
-        char *buf2 = (char *) &c->recv.buf[reqlen];
-        size_t memo2 = c->recv.len;
-        size_t cl2 = get_chunk_length(&buf2[off], memo2 - reqlen - off, &ll);
-        size_t n = cl2 < ll + 2 ? 0 : cl2 - ll - 2;
-        memmove(buf2 + bl, buf2 + off + ll, n);
-        bl += n;
-        off += cl2;
-        if (ll + 2 >= cl2) break;
-      }
-      // MG_INFO(("BL->%d del %d off %d", (int) bl, (int) del, (int) off));
-      c->recv.len -= off - bl;
-      // Set message length to indicate we've received
-      // everything, to fire MG_EV_HTTP_MSG
-      hm->message.len = bl + reqlen;
-      hm->body.len = bl;
-      // If user was deleting chunks, send nothing
-      break;
-    }
-  }
-  return false;
-}
-
-static bool mg_is_chunked(struct mg_http_message *hm) {
-  const char *needle = "chunked";
-  struct mg_str *te = mg_http_get_header(hm, "Transfer-Encoding");
-  return te != NULL && mg_vcasecmp(te, needle) == 0;
-}
-
-void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
-  struct mg_str ch = hm->chunk;
-  const char *end = (char *) &c->recv.buf[c->recv.len], *ce;
-  bool chunked = mg_is_chunked(hm);
-  if (chunked) {
-    ch.len += 4, ch.ptr -= 2;  // \r\n before and after the chunk
-    while (ch.ptr > hm->body.ptr && *ch.ptr != '\n') ch.ptr--, ch.len++;
-  }
-  ce = &ch.ptr[ch.len];
-  if (ce < end) memmove((void *) ch.ptr, ce, (size_t) (end - ce));
-  c->recv.len -= ch.len;
-  if (c->pfn_data != NULL) c->pfn_data = (char *) c->pfn_data - ch.len;
-}
-
 long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                     struct mg_fs *fs, const char *path, size_t max_size) {
   char buf[20] = "0";
@@ -2310,50 +2240,126 @@ int mg_http_status(const struct mg_http_message *hm) {
   return atoi(hm->uri.ptr);
 }
 
+// If a server sends data to the client using chunked encoding, Mongoose strips
+// off the chunking prefix (hex length and \r\n) and suffix (\r\n), appends the
+// stripped data to the body, and fires the MG_EV_HTTP_CHUNK event.  When zero
+// chunk is received, it fires MG_EV_HTTP_MSG, and the body is already have all
+// chunking prefixes/suffixes stripped.
+//
+// If a server sends data without chunked encoding, we also fire MG_EV_CHUNK
+// and MG_EV_HTTP_MSG in the end.
+//
+// We track the total processed body length  in the c->pfn_data,
+// by using void * pointer to store size_t value.
+
+static bool getchunk(struct mg_str s, size_t *prefixlen, size_t *datalen) {
+  size_t i = 0, n;
+  while (i < s.len && s.ptr[i] != '\r' && s.ptr[i] != '\n') i++;
+  n = mg_unhexn(s.ptr, i);
+  // MG_INFO(("%d %d", (int) (i + n + 4), (int) s.len));
+  if (s.len < i + n + 4) return false;  // Chunk not yet fully buffered
+  if (s.ptr[i] != '\r' || s.ptr[i + 1] != '\n') return false;
+  if (s.ptr[i + n + 2] != '\r' || s.ptr[i + n + 3] != '\n') return false;
+  *prefixlen = i + 2;
+  *datalen = n;
+  return true;
+}
+
+static bool mg_is_chunked(struct mg_http_message *hm) {
+  const char *needle = "chunked";
+  struct mg_str *te = mg_http_get_header(hm, "Transfer-Encoding");
+  return te != NULL && mg_vcasecmp(te, needle) == 0;
+}
+
+void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
+  size_t ofs = (size_t) (hm->chunk.ptr - (char *) c->recv.buf);
+  mg_iobuf_del(&c->recv, ofs, hm->chunk.len);
+  c->pfn_data = (void *) ((size_t) c->pfn_data | MG_DMARK);
+}
+
 static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_READ || ev == MG_EV_CLOSE) {
     struct mg_http_message hm;
     while (c->recv.buf != NULL && c->recv.len > 0) {
-      int n = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
-      bool is_chunked = n > 0 && mg_is_chunked(&hm);
+      int hlen = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
+      if (hlen < 0) {
+        mg_error(c, "HTTP parse:\n%.*s", (int) c->recv.len, c->recv.buf);
+        break;
+      }
+      if (hlen == 0) break;  // Request is not buffered yet
       if (ev == MG_EV_CLOSE) {
         hm.message.len = c->recv.len;
         hm.body.len = hm.message.len - (size_t) (hm.body.ptr - hm.message.ptr);
-      } else if (is_chunked && n > 0 && walkchunks(c, &hm, (size_t) n)) {
-        // walkchunks told us to cleanup the request
-        if (n > (int) c->recv.len) n = (int) c->recv.len;
-        mg_iobuf_del(&c->recv, 0, (size_t) n);
-        break;
       }
-      // MG_INFO(("---->%d %d\n%.*s", n, is_chunked, (int) c->recv.len,
-      // c->recv.buf));
-      if (n < 0 && ev == MG_EV_READ) {
-        mg_error(c, "HTTP parse:\n%.*s", (int) c->recv.len, c->recv.buf);
-        break;
-      } else if (n > 0 && (size_t) c->recv.len >= hm.message.len) {
-        mg_call(c, MG_EV_HTTP_MSG, &hm);
-        mg_iobuf_del(&c->recv, 0, hm.message.len);
-      } else {
-        if (n > 0 && !is_chunked) {
-          hm.chunk =
-              mg_str_n((char *) &c->recv.buf[n], c->recv.len - (size_t) n);
-          // Store remaining body length in c->pfn_data
-          if (c->pfn_data == NULL)
-            c->pfn_data = (void *) (hm.message.len - (size_t) n);
+
+      // Deliver MG_EV_HTTP_CHUNK
+      if (mg_is_chunked(&hm)) {
+        //  |  ... headers ... | HEXNUM\r\n ..data.. \r\n | ......
+        //  +------------------+--------------------------+----
+        //  |      hlen        |           chunk1         | ......
+        char *buf = (char *) &c->recv.buf[hlen], *p = buf;
+        size_t len = c->recv.len - (size_t) hlen;
+        size_t processed = ((size_t) c->pfn_data) & ~MG_DMARK;
+        size_t mark, pl, dl, del = 0, ofs = 0;
+        bool last = false;
+        if (processed <= len) len -= processed, buf += processed;
+        while (!last && getchunk(mg_str_n(buf + ofs, len - ofs), &pl, &dl)) {
+          size_t saved = c->recv.len;
+          memmove(p + processed, buf + ofs + pl, dl);
+          // MG_INFO(("P2 [%.*s]", (int) (processed + dl), p));
+          hm.chunk = mg_str_n(p + processed, dl);
           mg_call(c, MG_EV_HTTP_CHUNK, &hm);
-          if (c->pfn_data == NULL) {
-            hm.chunk.len = 0;                   // Last chunk!
-            mg_call(c, MG_EV_HTTP_CHUNK, &hm);  // Lest user know
-            memmove(c->recv.buf, c->recv.buf + n, c->recv.len - (size_t) n);
-            c->recv.len -= (size_t) n;
+          ofs += pl + dl + 2, del += pl + 2;  // 2 is for \r\n suffix
+          processed += dl;
+          if (c->recv.len != saved) processed -= dl, buf -= dl;
+          // mg_hexdump(c->recv.buf, (size_t) hlen + processed);
+          last = (dl == 0);
+        }
+        mg_iobuf_del(&c->recv, (size_t) hlen + processed, del);
+        mark = ((size_t) c->pfn_data) & MG_DMARK;
+        c->pfn_data = (void *) (processed | mark);
+        if (last) {
+          hm.body.len = processed;
+          hm.message.len = (size_t) hlen + processed;
+          c->pfn_data = NULL;
+          if (mark) mg_iobuf_del(&c->recv, 0, (size_t) hlen);
+          // MG_INFO(("LAST"));
+          // mg_hexdump(c->recv.buf, c->recv.len);
+        }
+      } else {
+        size_t processed = ((size_t) c->pfn_data) & ~MG_DMARK;
+        bool deleted = ((size_t) c->pfn_data) & MG_DMARK;
+        // if (processed > hm.body.len) processed = hm.body.len;
+        hm.chunk.ptr = (char *) &c->recv.buf[hlen];
+        hm.chunk.len = c->recv.len - (size_t) hlen;
+        if (processed <= hm.chunk.len && !deleted) {
+          hm.chunk.ptr += processed;
+          hm.chunk.len -= processed;
+          if (hm.chunk.len + processed > hm.body.len) {
+            hm.chunk.len = hm.body.len - processed;
           }
         }
-        break;
+        // MG_INFO(("NCL->%d %d", (int) processed, (int) hm.chunk.len));
+        if (hm.chunk.len) mg_call(c, MG_EV_HTTP_CHUNK, &hm);
+        processed += hm.chunk.len;
+        if (processed >= hm.body.len) {  // Last, 0-len chunk
+          hm.chunk.len = 0;
+          mg_call(c, MG_EV_HTTP_CHUNK, &hm);
+          if (processed && deleted) mg_iobuf_del(&c->recv, 0, (size_t) hlen);
+          c->pfn_data = NULL;
+        } else {
+          // MG_EV_HTTP_CHUNK handler may have set MG_DMARK: do not override
+          size_t del = ((size_t) c->pfn_data) & MG_DMARK;
+          c->pfn_data = (void *) (processed | del);
+        }
       }
+      // Chunk events are delivered. If we have full body, deliver MSG
+      if (c->recv.len < hm.message.len) break;
+      mg_call(c, MG_EV_HTTP_MSG, &hm);
+      mg_iobuf_del(&c->recv, 0, hm.message.len);
     }
   }
-  (void) fnd;
-  (void) evd;
+  (void) evd, (void) fnd;
 }
 
 struct mg_connection *mg_http_connect(struct mg_mgr *mgr, const char *url,
