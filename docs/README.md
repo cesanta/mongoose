@@ -1020,7 +1020,11 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path, struct mg_http_serve_opts *opts);
 ```
 
-Serve static file. Note that the `extra_headers` must end with `\r\n`.
+Serve static file. 
+<span class="badge bg-danger">NOTE: </span> `opts->root_dir` settings
+is ignored by this function.
+<span class="badge bg-danger">NOTE: </span> `opts->extra_headers`
+must end with `\r\n`.
 
 Parameters:
 - `c` - Connection to use
@@ -1037,9 +1041,11 @@ Usage example:
 void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    struct mg_http_serve_opts opts = {.mime_types = "png=image/png",
-                                  .extra_headers = "AA: bb\r\nCC: dd\r\n"};
-    mg_http_serve_file(c, hm, "a.png", &opts);  // Send file
+    struct mg_http_serve_opts opts = {
+      .mime_types = "png=image/png",
+      .extra_headers = "AA: bb\r\nCC: dd\r\n"
+    };
+    mg_http_serve_file(c, hm, "a.png", &opts);
   }
 }
 ```
