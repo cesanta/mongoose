@@ -2731,6 +2731,46 @@ void myfn(char c, void *p);
 size_t len = mg_rprintf(myfn, myfn_p, "Double quoted string: %Q!", "hi");
 ```
 
+### mg\_pfn\_realloc()
+
+```c
+void mg_pfn_realloc(char ch, void *param);
+```
+
+Print a character to a malloced str
+
+Parameters:
+- `ch` - char to be printed
+- `param` - Pointer to a `char *`. Memory for the buffer will be reallocated to fit the new char
+
+Usage example:
+
+```c
+char *s = NULL;
+
+mg_rprintf(mg_pfn_realloc, &s, "Hello, %s", world);  // s == "Hello, world"
+mg_rprintf(mg_pfn_realloc, &s, "!");                 // s == "Hello, world!"
+free(s);
+```
+
+### mg\_pfn\_iobuf()
+
+```c
+void mg_pfn_iobuf(char ch, void *param); 
+```
+
+Print a character to a [Generic IO buffer](#struct-mg_iobuf) 
+
+Parameters:
+- `ch` - char to be printed
+- `param` - pointer to a struct mg_iobuf
+
+Usage example:
+
+```c
+mg_rprintf(mg_pfn_iobuf, &c->send, "hi!");
+```
+
 ### mg\_to64()
 
 ```c
@@ -2798,8 +2838,7 @@ mg_ntoa(&c->peer, buf, sizeof(buf));
 
 ## JSON
 
-Note that Mongoose's printing functions, `mg_snprintf()`, `mg_mprintf()`
-and `mg_asprintf()` support non-standard format specifiers `%Q` and `%M`,
+Note that Mongoose's printing functions support non-standard format specifiers `%Q` and `%M`,
 which allow to print JSON strings easily:
 
 ```c
@@ -3001,6 +3040,199 @@ struct mg_str json = mg_str("{\"a\": \"YWJj\"}"); // json = {"a": "YWJj"}
 char *str = mg_json_get_b64(json, "$.a", NULL);   // str = "abc"
 free(str);
 ```
+
+## RPC
+
+Mongoose includes a set of functions to ease server-side processing by means of RPC methods.
+
+### struct mg\_rpc
+
+The RPC method handler structure. Each method has an entry in a linked list, each entry points to a string describing the pattern that will invoke it and the function that will be called to satisfy the method invocation, with a proper function argument.
+
+```c
+struct mg_rpc {
+  struct mg_rpc *next;              // Next in list
+  struct mg_str method;             // Method pattern
+  void (*fn)(struct mg_rpc_req *);  // Handler function
+  void *fn_data;                    // Handler function argument
+};
+```
+
+### struct mg\_rpc\_req
+
+The RPC request descriptor. An invoked method receives a descriptor containing the request, and a pointer to a function to be called to print the output response, with a proper function argument; e.g.: [mg_pfn_realloc()](#mg_pfn_realloc) or [mg_pfn_iobuf()](#mg_pfn_iobuf)
+
+```c
+struct mg_rpc_req {
+  struct mg_rpc **head;  // RPC handlers list head
+  struct mg_rpc *rpc;    // RPC handler being called
+  mg_pfn_t pfn;          // Response printing function
+  void *pfn_data;        // Response printing function data
+  void *req_data;        // Arbitrary request data
+  struct mg_str frame;   // Request, e.g. {"id":1,"method":"add","params":[1,2]}
+};
+```
+
+### mg\_rpc\_add()
+
+```c
+void mg_rpc_add(struct mg_rpc **head, struct mg_str method_pattern,
+                void (*handler)(struct mg_rpc_req *), void *handler_data);
+```
+
+Add the method `method_pattern` to the list `head` of RPC methods. Invoking this method will call `handler` and pass `handler_data` to it with the request (as `r->fn_data` in the usage example below).
+
+Parameters:
+- `head` - the linked list pointer
+- `method_pattern` - the name of the method
+- `handler` - the RPC function performing the action for this method
+- `handler_data` - Arbitrary function data
+
+
+Usage example:
+
+```c
+struct mg_rpc *s_rpc_head = NULL;
+
+static void rpc_sum(struct mg_rpc_req *r) {
+  double a = 0.0, b = 0.0;
+  mg_json_get_num(r->frame, "$.params[0]", &a);
+  mg_json_get_num(r->frame, "$.params[1]", &b);
+  mg_rpc_ok(r, "%g", a + b);
+}
+
+static void rpc_mul(struct mg_rpc_req *r) {//...}
+
+
+  mg_rpc_add(&s_rpc_head, mg_str("sum"), rpc_sum, NULL);
+  mg_rpc_add(&s_rpc_head, mg_str("mul"), rpc_mul, NULL);
+```
+
+### mg\_rpc\_del()
+
+```c
+void mg_rpc_del(struct mg_rpc **head, void (*handler)(struct mg_rpc_req *));
+```
+
+Remove the method with RPC function handler `handler` from the list `head` of RPC methods.
+
+Parameters:
+- `head` - the linked list pointer
+- `handler` - the RPC function performing the action for this method, use NULL to deallocate all
+
+Usage example:
+
+```c
+struct mg_rpc *s_rpc_head = NULL;
+// add methods
+// ...
+
+// Time to cleanup
+mg_rpc_del(&s_rpc_head, rpc_mul);    // Deallocate specific handler
+mg_rpc_del(&s_rpc_head, NULL);       // Deallocate all RPC handlers
+```
+
+### mg\_rpc\_process()
+
+```c
+void mg_rpc_process(struct mg_rpc_req *req);
+```
+
+Invoke the proper method for this request. If the requested method does not exist, `mg_rpc_err()` will be invoked and an error indication will be printed
+
+Parameters:
+- `req` - a request
+
+
+Usage example:
+
+```c
+struct mg_rpc *s_rpc_head = NULL;
+// add methods
+// ...
+
+char *resp = NULL;
+// get a request, pass it into r.frame
+struct mg_rpc_req r = {
+  .head = &s_rpc_head,
+  .rpc = NULL,
+  .pfn = mg_pfn_realloc,
+  .pfn_data = &resp, 
+  .req_data = NULL,
+  .frame = mg_str("{\"id\":1,\"method\":\"sum\",\"params\":[1,2]}")
+};
+
+  mg_rpc_process(&r);
+
+  if (resp) printf("%s\n", resp);
+  free(resp);
+```
+
+### mg\_rpc\_ok(), mg\_rpc\_vok()
+
+```c
+void mg_rpc_ok(struct mg_rpc_req *, const char *fmt, ...);
+void mg_rpc_vok(struct mg_rpc_req *, const char *fmt, va_list *ap);
+```
+
+Helper functions to print result frames
+
+Parameters:
+- `req` - a request
+- `fmt` - printf-like format string
+
+Usage example:
+
+```c
+static void rpc_sum(struct mg_rpc_req *r) {
+  double a = 0.0, b = 0.0;
+  mg_json_get_num(r->frame, "$.params[0]", &a);
+  mg_json_get_num(r->frame, "$.params[1]", &b);
+  mg_rpc_ok(r, "%g", a + b);
+}
+```
+
+### mg\_rpc\_err(), mg\_rpc\_verr()
+
+```c
+void mg_rpc_err(struct mg_rpc_req *, int code, const char *fmt, ...);
+void mg_rpc_verr(struct mg_rpc_req *, int code, const char *fmt, va_list *);
+```
+
+Helper functions to print error frames
+
+Parameters:
+- `req` - a request
+- `fmt` - printf-like format string
+
+Usage example:
+
+```c
+static void rpc_dosome(struct mg_rpc_req *r) {
+  ...
+  mg_rpc_err(r, -32109, "\"%.*s not found\"", len, &r->frame.ptr[offset]);
+}
+```
+
+### mg\_rpc\_list()
+
+```c
+void mg_rpc_list(struct mg_rpc_req *r);
+```
+
+Built-in RPC method to list all registered RPC methods. This function is not usually called directly, but registered as a method.
+
+Parameters:
+- `req` - a request
+
+Usage example:
+
+```c
+mg_rpc_add(&s_rpc_head, mg_str("rpc.list"), mg_rpc_list, &s_rpc_head);
+```
+
+(see also [mg_rpc_add()](#mg_rpc_add))
+
 
 ## Utility
 
