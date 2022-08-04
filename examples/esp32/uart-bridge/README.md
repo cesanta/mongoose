@@ -58,4 +58,4 @@ esputil -p COMPORT -fp 0x220 flash uart-bridge.hex
 ```
 
 For more on possible options for flash parameters, see
-https://github.com/cpq/mdk#flash-parameters
+https://github.com/cpq/esputil#flash-parameters
