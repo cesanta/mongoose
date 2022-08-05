@@ -184,6 +184,7 @@ struct mg_connection {
   unsigned is_draining : 1;    // Send remaining data, then close and free
   unsigned is_closing : 1;     // Close and free the connection immediately
   unsigned is_full : 1;        // Stop reads, until cleared
+  unsigned is_resp : 1;        // Response is still being generated
   unsigned is_readable : 1;    // Connection is ready to read
   unsigned is_writable : 1;    // Connection is ready to write
 };
@@ -245,6 +246,9 @@ struct mg_connection {
   mg_http_printf_chunk(c, "%s", "bar");
   mg_http_printf_chunk(c, "");  // Don't forget the last empty chunk
   ```
+  <span class="badge bg-danger">NOTE:</span> if you are not using
+  `mg_http_reply()` or `mg_http_*_chunk()`, make sure to set
+  `c->is_resp = 0;` when your event handler finished writing response.
 - On embedded environment, make sure that serving task has enough stack:
   give it 2k for simple RESTful serving, or 4-8k for complex dynamic/static
   serving. In certain environments, it is necessary to adjust heap size, too.
@@ -473,6 +477,7 @@ struct mg_connection {
   unsigned is_draining : 1;    // Send remaining data, then close and free
   unsigned is_closing : 1;     // Close and free the connection immediately
   unsigned is_full : 1;        // Stop reads, until cleared
+  unsigned is_resp : 1;        // Response is still being generated
   unsigned is_readable : 1;    // Connection is ready to read
   unsigned is_writable : 1;    // Connection is ready to write
 };
