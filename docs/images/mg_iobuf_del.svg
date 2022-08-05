@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 26.0.2, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 869.6 247.73" style="enable-background:new 0 0 869.6 247.73;" xml:space="preserve">
+<style type="text/css">
+	.st0{opacity:0.2;fill:#00983A;enable-background:new    ;}
+	.st1{fill:#00983A;}
+	.st2{fill:#FF80A4;}
+	.st3{fill:#F2F3F3;}
+	.st4{fill:none;stroke:#7A8387;stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round;}
+	.st5{fill:#F2F3F3;stroke:#7A8387;stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round;}
+	.st6{fill:none;stroke:#576174;stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round;}
+	.st7{fill:none;stroke:#576174;stroke-width:1.2;stroke-linejoin:round;}
+	.st8{fill:none;stroke:#576174;stroke-width:1.2;stroke-linecap:square;stroke-linejoin:round;}
+	.st9{font-family:'Courier-Bold';}
+	.st10{font-size:16.7604px;}
+	.st11{fill:none;stroke:#00983A;stroke-linecap:round;stroke-linejoin:round;}
+	.st12{fill:#7A8387;}
+	.st13{fill:#576174;}
+	.st14{fill:none;stroke:#576174;stroke-linecap:round;stroke-linejoin:round;}
+	.st15{fill:none;stroke:#7A8387;stroke-linecap:round;stroke-linejoin:round;}
+	.st16{fill:#333A45;}
+</style>
+<g>
+	<g>
+		<polyline class="st0" points="577.2,72.8 282.4,72.8 282.4,48 577.2,48 		"/>
+		<g>
+			<g>
+				<g>
+					<rect x="250.9" y="47.7" class="st1" width="32.4" height="24.8"/>
+					<rect x="153.5" y="47.7" class="st2" width="97.3" height="24.8"/>
+					<polyline class="st3" points="122.6,72.8 5.9,72.8 5.9,48 122.6,48 					"/>
+					<polyline class="st4" points="831.51,72.8 5.5,72.8 5.5,48 831.51,48 					"/>
+					<rect x="122.5" y="47.7" class="st1" width="31" height="24.8"/>
+					<line class="st4" x1="122.5" y1="26.6" x2="122.5" y2="87.8"/>
+					<line class="st4" x1="576.8" y1="26.6" x2="576.8" y2="87.8"/>
+					<path class="st5" d="M831.51,72.8"/>
+					<line class="st6" x1="153.5" y1="48.3" x2="153.5" y2="72"/>
+					<line class="st4" x1="36.5" y1="48.3" x2="36.5" y2="72"/>
+					<line class="st4" x1="67.6" y1="48.3" x2="67.6" y2="72"/>
+					<line class="st6" x1="186" y1="48.3" x2="186" y2="72"/>
+					<line class="st6" x1="218.4" y1="48.3" x2="218.4" y2="72"/>
+					<line class="st7" x1="250.9" y1="73" x2="250.81" y2="47.7"/>
+					<line class="st4" x1="315.9" y1="48.3" x2="315.9" y2="72"/>
+					<line class="st4" x1="348.4" y1="48.3" x2="348.4" y2="72"/>
+					<line class="st4" x1="381.2" y1="48.3" x2="381.2" y2="72"/>
+					<line class="st4" x1="413.8" y1="48.3" x2="413.8" y2="72"/>
+					<line class="st4" x1="446.3" y1="48.3" x2="446.3" y2="72"/>
+					<line class="st4" x1="478.9" y1="48.3" x2="478.9" y2="72"/>
+					<line class="st6" x1="511.51" y1="48.3" x2="511.51" y2="72"/>
+					<line class="st4" x1="511.51" y1="48.3" x2="511.51" y2="72"/>
+					<line class="st6" x1="544.01" y1="48.3" x2="544.01" y2="72"/>
+					<line class="st4" x1="544.1" y1="48.3" x2="544.1" y2="72"/>
+					<line class="st8" x1="283.3" y1="73" x2="122.5" y2="72.8"/>
+					<line class="st8" x1="122.5" y1="48" x2="283.3" y2="48.1"/>
+					<path class="st5" d="M385.5,73"/>
+					<path class="st5" d="M385.5,49.3"/>
+					<line class="st4" x1="283.3" y1="26.6" x2="283.3" y2="87.8"/>
+				</g>
+				<g>
+					<text transform="matrix(1 0 0 1 127.5176 105.8013)" class="st1 st9 st10">buf</text>
+				</g>
+				<g>
+					<g>
+						<line class="st11" x1="122.2" y1="105.6" x2="122.2" y2="94.6"/>
+						<g>
+							<polygon class="st1" points="119.8,94.9 124.6,94.9 122.2,92.5 							"/>
+						</g>
+					</g>
+				</g>
+				<g>
+					<text transform="matrix(1 0 0 1 286.6495 105.8008)" class="st1 st9 st10">len=5</text>
+				</g>
+				<g>
+					<g>
+						<line class="st11" x1="283.3" y1="105.6" x2="283.3" y2="94.6"/>
+						<g>
+							<polygon class="st1" points="280.9,94.9 285.8,94.9 283.3,92.5 							"/>
+						</g>
+					</g>
+				</g>
+				<g>
+					<text transform="matrix(1 0 0 1 581.4624 105.8013)" class="st1 st9 st10">size=16</text>
+				</g>
+				<g>
+					<g>
+						<line class="st11" x1="576.9" y1="105.6" x2="576.9" y2="94.6"/>
+						<g>
+							<polygon class="st1" points="574.51,94.9 579.4,94.9 576.9,92.5 							"/>
+						</g>
+					</g>
+				</g>
+				<g>
+					<path class="st12" d="M687.51,60.7c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6S687.51,59.9,687.51,60.7z"/>
+					<path class="st12" d="M701.2,60.7c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6S701.2,59.9,701.2,60.7z"/>
+					<path class="st12" d="M714.9,60.7c0,0.9-0.7,1.6-1.6,1.6c-0.9,0-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6
+						C714.2,59.1,714.9,59.9,714.9,60.7z"/>
+					<path class="st12" d="M728.7,60.7c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6
+						C728.01,59.1,728.7,59.9,728.7,60.7z"/>
+				</g>
+				<g>
+					<path class="st12" d="M82.8,60.7c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6S82.8,59.9,82.8,60.7z"/>
+					<path class="st12" d="M96.5,60.7c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6C95.8,59.1,96.5,59.9,96.5,60.7
+						z"/>
+					<path class="st12" d="M110.2,60.7c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6S110.2,59.9,110.2,60.7z"/>
+				</g>
+				<g>
+					<g>
+						<text transform="matrix(1 0 0 1 180.6541 26.8123)" class="st13 st9 st10">data</text>
+					</g>
+					<g>
+						<text transform="matrix(1 0 0 1 387.363 26.8123)" class="st12 st9 st10">free space</text>
+					</g>
+					<g>
+						<g>
+							<line class="st14" x1="272.2" y1="33.6" x2="133.5" y2="33.6"/>
+							<g>
+								<polygon class="st13" points="271.9,36.2 273.5,33.6 271.9,31.1 271.8,31.1 271.8,36.2 								"/>
+							</g>
+							<g>
+								<polygon class="st13" points="133.8,36.1 133.8,31.2 131.4,33.6 								"/>
+							</g>
+						</g>
+					</g>
+					<g>
+						<g>
+							<line class="st15" x1="563.7" y1="33.6" x2="295.9" y2="33.6"/>
+							<g>
+								<polygon class="st12" points="563.4,36.1 563.4,31.2 565.8,33.6 								"/>
+							</g>
+							<g>
+								<polygon class="st12" points="296.2,36.1 296.2,31.2 293.7,33.6 								"/>
+							</g>
+						</g>
+					</g>
+					<g>
+						<text transform="matrix(1 0 0 1 615.4679 25.1898)" class="st12 st9 st10">non-allocated space</text>
+					</g>
+					<g>
+						<g>
+							<line class="st15" x1="593.7" y1="33.6" x2="829.7" y2="33.6"/>
+							<g>
+								<polygon class="st12" points="829.4,31.2 829.4,36.1 831.8,33.6 								"/>
+							</g>
+						</g>
+					</g>
+					<g>
+						<g>
+							<line class="st15" x1="678.7" y1="33.6" x2="589.7" y2="33.6"/>
+							<g>
+								<polygon class="st12" points="590.01,36.1 590.01,31.2 587.6,33.6 								"/>
+							</g>
+						</g>
+					</g>
+				</g>
+				<g>
+					<g>
+						<text transform="matrix(1 0 0 1 133.1212 64.9593)" class="st16 st9 st10">h</text>
+					</g>
+				</g>
+				<g>
+					<g>
+						<g>
+							<text transform="matrix(1 0 0 1 165.1564 64.9593)" class="st16 st9 st10">e</text>
+						</g>
+					</g>
+				</g>
+				<g>
+					<g>
+						<g>
+							<text transform="matrix(1 0 0 1 196.8744 64.9593)" class="st16 st9 st10">l</text>
+						</g>
+					</g>
+				</g>
+				<g>
+					<g>
+						<g>
+							<text transform="matrix(1 0 0 1 229.8611 64.9593)" class="st16 st9 st10">l</text>
+						</g>
+					</g>
+				</g>
+				<g>
+					<g>
+						<text transform="matrix(1 0 0 1 262.2135 64.9593)" class="st16 st9 st10">o</text>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+	<g>
+		<text transform="matrix(1 0 0 1 1.811981e-04 105.8011)" class="st1 st9 st10">0</text>
+	</g>
+	<line class="st4" x1="5.5" y1="26.4" x2="5.5" y2="87.6"/>
+</g>
+<g>
+	<g>
+		<polyline class="st0" points="577.2,207.99 186.3,207.99 186.3,183.19 577.2,183.19 		"/>
+		<g>
+			<g>
+				<g>
+					<polyline class="st3" points="122.6,207.99 5.9,207.99 5.9,183.19 122.6,183.19 					"/>
+					<polyline class="st4" points="831.51,207.99 5.5,207.99 5.5,183.19 831.51,183.19 					"/>
+					<polyline class="st1" points="186.3,207.69 122.5,207.69 122.5,182.89 186.3,182.89 					"/>
+					<line class="st4" x1="122.5" y1="161.79" x2="122.5" y2="222.99"/>
+					<line class="st4" x1="186" y1="161.79" x2="186" y2="222.99"/>
+					<line class="st4" x1="576.8" y1="161.79" x2="576.8" y2="222.99"/>
+					<path class="st5" d="M831.51,207.99"/>
+					<line class="st6" x1="153.5" y1="183.49" x2="153.5" y2="207.19"/>
+					<line class="st4" x1="36.5" y1="183.49" x2="36.5" y2="207.19"/>
+					<line class="st4" x1="67.6" y1="183.49" x2="67.6" y2="207.19"/>
+					<line class="st6" x1="186" y1="183.49" x2="186" y2="207.99"/>
+					<line class="st4" x1="218.4" y1="183.49" x2="218.4" y2="207.19"/>
+					<line class="st4" x1="250.9" y1="183.49" x2="250.9" y2="207.19"/>
+					<line class="st4" x1="283.3" y1="183.49" x2="283.3" y2="207.19"/>
+					<line class="st4" x1="315.9" y1="183.49" x2="315.9" y2="207.19"/>
+					<line class="st4" x1="348.4" y1="183.49" x2="348.4" y2="207.19"/>
+					<line class="st4" x1="381.2" y1="183.49" x2="381.2" y2="207.19"/>
+					<line class="st4" x1="413.8" y1="183.49" x2="413.8" y2="207.19"/>
+					<line class="st4" x1="446.3" y1="183.49" x2="446.3" y2="207.19"/>
+					<line class="st4" x1="478.9" y1="183.49" x2="478.9" y2="207.19"/>
+					<line class="st6" x1="511.51" y1="183.49" x2="511.51" y2="207.19"/>
+					<line class="st4" x1="511.51" y1="183.49" x2="511.51" y2="207.19"/>
+					<line class="st6" x1="544.01" y1="183.49" x2="544.01" y2="207.19"/>
+					<line class="st4" x1="544.1" y1="183.49" x2="544.1" y2="207.19"/>
+					<line class="st8" x1="186" y1="208.19" x2="122.5" y2="207.99"/>
+					<line class="st8" x1="122.5" y1="183.19" x2="186" y2="183.29"/>
+					<path class="st5" d="M385.5,208.19"/>
+					<path class="st5" d="M385.5,184.49"/>
+				</g>
+				<g>
+					<text transform="matrix(1 0 0 1 127.5176 240.9952)" class="st1 st9 st10">buf</text>
+				</g>
+				<g>
+					<g>
+						<line class="st11" x1="122.2" y1="240.79" x2="122.2" y2="229.79"/>
+						<g>
+							<polygon class="st1" points="119.8,230.09 124.6,230.09 122.2,227.69 							"/>
+						</g>
+					</g>
+				</g>
+				<g>
+					<text transform="matrix(1 0 0 1 189.2273 240.9947)" class="st1 st9 st10">len=2</text>
+				</g>
+				<g>
+					<g>
+						<line class="st11" x1="185.88" y1="240.79" x2="185.88" y2="229.79"/>
+						<g>
+							<polygon class="st1" points="183.48,230.09 188.38,230.09 185.88,227.69 							"/>
+						</g>
+					</g>
+				</g>
+				<g>
+					<text transform="matrix(1 0 0 1 581.4624 240.9952)" class="st1 st9 st10">size=16</text>
+				</g>
+				<g>
+					<g>
+						<line class="st11" x1="576.9" y1="240.79" x2="576.9" y2="229.79"/>
+						<g>
+							<polygon class="st1" points="574.51,230.09 579.4,230.09 576.9,227.69 							"/>
+						</g>
+					</g>
+				</g>
+				<g>
+					<path class="st12" d="M687.51,195.89c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6
+						S687.51,195.09,687.51,195.89z"/>
+					<path class="st12" d="M701.2,195.89c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6S701.2,195.09,701.2,195.89z
+						"/>
+					<path class="st12" d="M714.9,195.89c0,0.9-0.7,1.6-1.6,1.6c-0.9,0-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6
+						S714.9,195.09,714.9,195.89z"/>
+					<path class="st12" d="M728.7,195.89c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6
+						C728.01,194.29,728.7,195.09,728.7,195.89z"/>
+				</g>
+				<g>
+					<path class="st12" d="M82.8,195.89c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6S82.8,195.09,82.8,195.89z"/>
+					<path class="st12" d="M96.5,195.89c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6
+						C95.8,194.29,96.5,195.09,96.5,195.89z"/>
+					<path class="st12" d="M110.2,195.89c0,0.9-0.7,1.6-1.6,1.6s-1.6-0.7-1.6-1.6c0-0.9,0.7-1.6,1.6-1.6S110.2,195.09,110.2,195.89z
+						"/>
+				</g>
+				<g>
+					<g>
+						<text transform="matrix(1 0 0 1 133.6541 162.0062)" class="st13 st9 st10">data</text>
+					</g>
+					<g>
+						<text transform="matrix(1 0 0 1 327.363 162.0062)" class="st12 st9 st10">free space</text>
+					</g>
+					<g>
+						<g>
+							<line class="st14" x1="175.2" y1="168.79" x2="133.5" y2="168.79"/>
+							<g>
+								<polygon class="st13" points="174.9,171.39 176.5,168.79 174.9,166.29 174.8,166.29 174.8,171.39 								"/>
+							</g>
+							<g>
+								<polygon class="st13" points="133.8,171.29 133.8,166.39 131.4,168.79 								"/>
+							</g>
+						</g>
+					</g>
+					<g>
+						<g>
+							<line class="st15" x1="563.7" y1="168.79" x2="197.49" y2="168.79"/>
+							<g>
+								<polygon class="st12" points="563.4,171.29 563.4,166.39 565.8,168.79 								"/>
+							</g>
+							<g>
+								<polygon class="st12" points="197.79,171.29 197.79,166.39 195.29,168.79 								"/>
+							</g>
+						</g>
+					</g>
+					<g>
+						<text transform="matrix(1 0 0 1 615.4679 160.3837)" class="st12 st9 st10">non-allocated space</text>
+					</g>
+					<g>
+						<g>
+							<line class="st15" x1="593.7" y1="168.79" x2="829.7" y2="168.79"/>
+							<g>
+								<polygon class="st12" points="829.4,166.39 829.4,171.29 831.8,168.79 								"/>
+							</g>
+						</g>
+					</g>
+					<g>
+						<g>
+							<line class="st15" x1="678.7" y1="168.79" x2="589.7" y2="168.79"/>
+							<g>
+								<polygon class="st12" points="590.01,171.29 590.01,166.39 587.6,168.79 								"/>
+							</g>
+						</g>
+					</g>
+				</g>
+				<g>
+					<g>
+						<text transform="matrix(1 0 0 1 133.1212 200.1532)" class="st16 st9 st10">h</text>
+					</g>
+				</g>
+				<g>
+					<g>
+						<text transform="matrix(1 0 0 1 165.1565 200.1532)" class="st16 st9 st10">o</text>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+	<g>
+		<text transform="matrix(1 0 0 1 1.811981e-04 240.995)" class="st1 st9 st10">0</text>
+	</g>
+	<line class="st4" x1="5.5" y1="161.59" x2="5.5" y2="222.79"/>
+</g>
+</svg>

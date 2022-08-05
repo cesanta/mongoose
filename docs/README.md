@@ -3890,7 +3890,7 @@ mg_iobuf_add(&io, 0, "hi", 2);  // io->len is 2, io->size is 512
 mg_iobuf_del(&io, 0, "hi", 2);  // io->len is 0, io->size is still 512
 ```
 
-<img src="images/mg_iobug_del.png" alt="Function mg_iobuf_del()" />
+<img src="images/mg_iobuf_del.svg" alt="Function mg_iobuf_del()" />
 
 ## URL
 
