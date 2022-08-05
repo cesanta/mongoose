@@ -113,7 +113,7 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
 static void timer_mqtt_fn(void *param) {
   struct mg_mgr *mgr = (struct mg_mgr *) param;
   if (s_mqtt == NULL) {
-    struct mg_mqtt_opts opts = {};
+    struct mg_mqtt_opts opts = { 0 };
     s_mqtt = mg_mqtt_connect(mgr, s_config.url, &opts, mqtt_fn, NULL);
   }
 }
