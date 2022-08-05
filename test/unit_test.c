@@ -290,8 +290,17 @@ static void test_iobuf(void) {
 
 static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_SNTP_TIME) {
-    *(int64_t *) fnd = *(int64_t *) evd;
-    MG_DEBUG(("got time: %lld", *(int64_t *) evd));
+    int64_t received = *(int64_t *) evd;
+    *(int64_t *) fnd = received;
+    MG_DEBUG(("got time: %lld", received));
+#if MG_ARCH == MG_ARCH_UNIX
+    struct timeval tv = {0, 0};
+    gettimeofday(&tv, 0);
+    int64_t ms = (int64_t) tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    int64_t diff = ms > received ? ms - received : received - ms;
+    MG_DEBUG(("diff: %lld", diff));
+    // ASSERT(diff < 100); // The diff should be less than 300 ms
+#endif
   } else if (ev == MG_EV_OPEN) {
     c->is_hexdumping = 1;
   }
@@ -1041,7 +1050,7 @@ static void test_http_no_content_length(void) {
 static void f5(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_printf(c, "HTTP/1.0 200 OK\n\n%.*s", (int) hm->uri.len, hm->uri.ptr);
+    mg_http_reply(c, 200, "", "%.*s", (int) hm->uri.len, hm->uri.ptr);
     (*(int *) fn_data)++;
   }
 }
@@ -1895,75 +1904,73 @@ static void eY(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     c->label[0]++;
     if (c->label[0] == 10) mg_send(c, "a", 1);
     if (c->label[0] == 12) mg_send(c, "bc", 2);
-    if (c->label[0] == 30) mg_send(c, "d", 1), c->label[0] = 0;
+    if (c->label[0] == 30) mg_send(c, "d", 1), c->is_resp = 0, c->label[0] = 0;
   }
   (void) ev_data, (void) fn_data;
 }
 
 // Do not delete chunks as they arrive
 static void eh4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  uint32_t *crc = (uint32_t *) c->label;
-  if (ev == MG_EV_CONNECT) {
-    mg_printf(c, "GET / HTTP/1.0\n\n");
-  } else if (ev == MG_EV_HTTP_CHUNK) {
+  uint32_t *crc = (uint32_t *) fn_data;
+  if (ev == MG_EV_HTTP_CHUNK) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
     *crc = mg_crc32(*crc, "x", 1);
-    MG_INFO(("C [%.*s]", (int) hm->chunk.len, hm->chunk.ptr));
+    MG_INFO(("%lu C [%.*s]", c->id, (int) hm->chunk.len, hm->chunk.ptr));
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    *(uint32_t *) fn_data = mg_crc32(*crc, hm->body.ptr, hm->body.len);
-    MG_INFO(("M [%.*s]", (int) hm->body.len, hm->body.ptr));
-    c->is_closing = 1;
+    *crc = mg_crc32(*crc, hm->body.ptr, hm->body.len);
+    MG_INFO(("%lu M [%.*s]", c->id, (int) hm->body.len, hm->body.ptr));
   }
 }
 
 // Streaming client event handler. Delete chunks as they arrive
 static void eh5(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  uint32_t *crc = (uint32_t *) c->label;
-  if (ev == MG_EV_CONNECT) {
-    mg_printf(c, "GET / HTTP/1.0\n\n");
-  } else if (ev == MG_EV_HTTP_CHUNK) {
+  uint32_t *crc = (uint32_t *) fn_data;
+  if (ev == MG_EV_HTTP_CHUNK) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
     *crc = mg_crc32(*crc, "x", 1);
-    MG_INFO(("XC [%.*s]", (int) hm->chunk.len, hm->chunk.ptr));
+    MG_INFO(("%lu DELC [%.*s]", c->id, (int) hm->chunk.len, hm->chunk.ptr));
     mg_http_delete_chunk(c, hm);
-    if (hm->chunk.len == 0) {
-      c->is_closing = 1;
-      *(uint32_t *) fn_data = *crc;
-    }
   } else if (ev == MG_EV_HTTP_MSG) {
-    *(uint32_t *) fn_data = 77U;  // Must not be here
-    ASSERT(0);
+    ASSERT(0);  // Must not be here, MSG must not be fired: chunks deleted!
   }
 }
 
 static void test_http_chunked_case(mg_event_handler_t s, mg_event_handler_t c,
-                                   const char *expected) {
+                                   int req_count, const char *expected) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12344";
-  uint32_t i, done = 0;
+  uint32_t i, crc = 0, expected_crc = mg_crc32(0, expected, strlen(expected));
+  struct mg_connection *conn;
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, s, NULL);
-  mg_http_connect(&mgr, url, c, &done);
-  for (i = 0; i < 50 && done == 0; i++) {
+  conn = mg_http_connect(&mgr, url, c, &crc);
+  while (conn != NULL && req_count-- > 0) {
+    mg_printf(conn, "GET / HTTP/1.0\n\n");
+  }
+  for (i = 0; i < 100 && crc != expected_crc; i++) {
     mg_mgr_poll(&mgr, 1);
   }
-  ASSERT(i < 50);
-  ASSERT(done == mg_crc32(0, expected, strlen(expected)));
+  ASSERT(i < 100);
+  ASSERT(crc == expected_crc);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
 
 static void test_http_chunked(void) {
   // Non-chunked encoding
-  test_http_chunked_case(eY, eh4, "axbcxdxxabcd");  // Chunks not deleted
-  test_http_chunked_case(eY, eh5, "axbcxdxx");      // Chunks deleted
+  test_http_chunked_case(eY, eh4, 1, "axbcxdxxabcd");  // Chunks not deleted
+  test_http_chunked_case(eY, eh5, 1, "axbcxdxx");      // Chunks deleted
+  test_http_chunked_case(eY, eh4, 2, "axbcxdxxabcdaxbcxdxxabcd");
+  test_http_chunked_case(eY, eh5, 2, "axbcxdxxaxbcxdxx");
 
   // Chunked encoding
-  test_http_chunked_case(eX, eh4, "axbxcxdxxabcd");  // Chunks not deleted
-  test_http_chunked_case(eX, eh5, "axbxcxdxx");      // Chunks deleted
+  test_http_chunked_case(eX, eh4, 1, "axbxcxdxxabcd");  // Chunks not deleted
+  test_http_chunked_case(eX, eh5, 1, "axbxcxdxx");      // Chunks deleted
+  test_http_chunked_case(eX, eh4, 2, "axbxcxdxxabcdaxbxcxdxxabcd");
+  test_http_chunked_case(eX, eh5, 2, "axbxcxdxxaxbxcxdxx");
 }
 
 static void test_invalid_listen_addr(void) {
@@ -2517,7 +2524,6 @@ int main(void) {
   test_http_stream_buffer();
   test_http_parse();
   test_util();
-  test_sntp();
   test_dns();
   test_timer();
   test_url();
@@ -2534,6 +2540,7 @@ int main(void) {
   test_http_no_content_length();
   test_http_pipeline();
   test_http_range();
+  test_sntp();
   test_mqtt();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return EXIT_SUCCESS;
