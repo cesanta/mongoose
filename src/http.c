@@ -899,7 +899,7 @@ static void deliver_chunked_chunks(struct mg_connection *c, size_t hlen,
 static void deliver_normal_chunks(struct mg_connection *c, size_t hlen,
                                   struct mg_http_message *hm, bool *next) {
   size_t left, processed = ((size_t) c->pfn_data) & ~MG_DMARK;
-  bool deleted = ((size_t) c->pfn_data) & MG_DMARK;
+  size_t deleted = ((size_t) c->pfn_data) & MG_DMARK;
   hm->chunk = mg_str_n((char *) &c->recv.buf[hlen], c->recv.len - hlen);
   if (processed <= hm->chunk.len && !deleted) {
     hm->chunk.len -= processed;
@@ -909,14 +909,14 @@ static void deliver_normal_chunks(struct mg_connection *c, size_t hlen,
   if (hm->chunk.len > left) hm->chunk.len = left;
   if (hm->chunk.len > 0) mg_call(c, MG_EV_HTTP_CHUNK, hm);
   processed += hm->chunk.len;
-  if (processed >= hm->body.len) {     // Last, 0-len chunk
-    hm->chunk.len = 0;                 // Reset length
-    mg_call(c, MG_EV_HTTP_CHUNK, hm);  // Call user handler
-    c->pfn_data = NULL;                // Reset processed counter
+  deleted = ((size_t) c->pfn_data) & MG_DMARK;  // Re-evaluate after user call
+  if (processed >= hm->body.len) {              // Last, 0-len chunk
+    hm->chunk.len = 0;                          // Reset length
+    mg_call(c, MG_EV_HTTP_CHUNK, hm);           // Call user handler
+    c->pfn_data = NULL;                         // Reset processed counter
     if (processed && deleted) mg_iobuf_del(&c->recv, 0, hlen), *next = true;
   } else {
-    size_t del = ((size_t) c->pfn_data) & MG_DMARK;  // Keep deletion marker
-    c->pfn_data = (void *) (processed | del);        // if it is set
+    c->pfn_data = (void *) (processed | deleted);  // if it is set
   }
 }
 

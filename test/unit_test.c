@@ -1909,6 +1909,13 @@ static void eY(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   (void) ev_data, (void) fn_data;
 }
 
+static void eZ(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    mg_http_reply(c, 200, "", "abcd");
+  }
+  (void) ev_data, (void) fn_data;
+}
+
 // Do not delete chunks as they arrive
 static void eh4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   uint32_t *crc = (uint32_t *) fn_data;
@@ -1962,9 +1969,13 @@ static void test_http_chunked_case(mg_event_handler_t s, mg_event_handler_t c,
 static void test_http_chunked(void) {
   // Non-chunked encoding
   test_http_chunked_case(eY, eh4, 1, "axbcxdxxabcd");  // Chunks not deleted
-  test_http_chunked_case(eY, eh5, 1, "axbcxdxx");      // Chunks deleted
   test_http_chunked_case(eY, eh4, 2, "axbcxdxxabcdaxbcxdxxabcd");
+  test_http_chunked_case(eY, eh5, 1, "axbcxdxx");  // Chunks deleted
   test_http_chunked_case(eY, eh5, 2, "axbcxdxxaxbcxdxx");
+  test_http_chunked_case(eZ, eh4, 1, "abcdxxabcd");  // Not deleted
+  test_http_chunked_case(eZ, eh4, 2, "abcdxxabcdabcdxxabcd");
+  test_http_chunked_case(eZ, eh5, 1, "abcdxx");  // Deleted
+  test_http_chunked_case(eZ, eh5, 2, "abcdxxabcdxx");
 
   // Chunked encoding
   test_http_chunked_case(eX, eh4, 1, "axbxcxdxxabcd");  // Chunks not deleted
