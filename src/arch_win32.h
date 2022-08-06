@@ -62,9 +62,11 @@ typedef enum { false = 0, true = 1 } bool;
 
 typedef int socklen_t;
 #define MG_DIRSEP '\\'
-#ifndef PATH_MAX
-#define PATH_MAX MAX_PATH
+
+#ifndef MG_PATH_MAX
+#define MG_PATH_MAX FILENAME_MAX
 #endif
+
 #ifndef EINPROGRESS
 #define EINPROGRESS WSAEINPROGRESS
 #endif
