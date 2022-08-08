@@ -19,6 +19,10 @@ static void cfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("CLIENT has been initialized"));
   } else if (ev == MG_EV_CONNECT) {
     MG_INFO(("CLIENT connected"));
+#if (MG_ENABLE_MBEDTLS == 1) || (MG_ENABLE_OPENSSL == 1)
+    struct mg_tls_opts opts = {.ca = "ss_ca.pem"};
+    mg_tls_init(c, &opts);
+#endif
     *i = 1;  // do something
   } else if (ev == MG_EV_READ) {
     struct mg_iobuf *r = &c->recv;
@@ -49,6 +53,14 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("SERVER is listening"));
   } else if (ev == MG_EV_ACCEPT) {
     MG_INFO(("SERVER accepted a connection"));
+#if (MG_ENABLE_MBEDTLS == 1) || (MG_ENABLE_OPENSSL == 1)
+    struct mg_tls_opts opts = {
+        //.ca = "ss_ca.pem",         // Uncomment to enable two-way SSL
+        .cert = "ss_server.pem",     // Certificate PEM file
+        .certkey = "ss_server.pem",  // This pem contains both cert and key
+    };
+    mg_tls_init(c, &opts);
+#endif
   } else if (ev == MG_EV_READ) {
     struct mg_iobuf *r = &c->recv;
     MG_INFO(("SERVER got data: %.*s", r->len, r->buf));
@@ -79,7 +91,7 @@ int main(void) {
   struct mg_mgr mgr;  // Event manager
   struct mg_connection *c;
 
-  mg_log_set(MG_LL_DEBUG);  // Set log level
+  mg_log_set(MG_LL_INFO);  // Set log level
   mg_mgr_init(&mgr);        // Initialize event manager
   mg_timer_add(&mgr, 15000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn,
                &mgr);                     // Init timer for demo purposes, 15s
