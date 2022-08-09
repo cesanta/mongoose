@@ -65,7 +65,7 @@ void mg_sntp_request(struct mg_connection *c) {
     double frac = ((double) (now % 1000)) / 1000.0;
     buf[0] = (0 << 6) | (4 << 3) | 3;
     t[0] = mg_htonl((uint32_t) (now / 1000) + SNTP_TIME_OFFSET);
-    t[1] = mg_htonl((uint32_t) ((uint32_t) (frac * SNTP_MAX_FRAC)));
+    t[1] = mg_htonl((uint32_t) ((int32_t) (frac * SNTP_MAX_FRAC)));
     mg_send(c, buf, sizeof(buf));
   }
 }
