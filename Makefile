@@ -35,7 +35,7 @@ CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
-all: mg_prefix unamalgamated unpacked test test++ arm examples vc98 vc2017 vc22 mingw mingw++ linux linux++ fuzz
+all: mg_prefix unamalgamated unpacked test test++ arm examples vc98 vc17 vc22 mingw mingw++ linux linux++ fuzz
 
 examples:
 	@for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
@@ -114,10 +114,10 @@ vc98: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(DOCKER) mdashnet/vc98 wine $@.exe
 
-# vc2017: DEFS += -DMG_ENABLE_IPV6=1
-vc2017: Makefile mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/vc2017 wine64 cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
-	$(DOCKER) mdashnet/vc2017 wine64 $@.exe
+# vc17: DEFS += -DMG_ENABLE_IPV6=1
+vc17: Makefile mongoose.h $(SRCS)
+	$(DOCKER) mdashnet/vc17 wine64 cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
+	$(DOCKER) mdashnet/vc17 wine64 $@.exe
 
 # vc22: DEFS += -DMG_ENABLE_IPV6=$(IPV6)
 vc22: Makefile mongoose.h $(SRCS)
