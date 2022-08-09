@@ -3912,8 +3912,8 @@ void mg_sha1_final(unsigned char digest[20], mg_sha1_ctx *context) {
 
 
 
-#define SNTP_TIME_OFFSET 2208988800UL  // (1970 - 1900) in seconds
-#define SNTP_MAX_FRAC 4294967295.0     // 2 ** 32 - 1
+#define SNTP_TIME_OFFSET 2208988800U  // (1970 - 1900) in seconds
+#define SNTP_MAX_FRAC 4294967295.0    // 2 ** 32 - 1
 
 static int64_t gettimestamp(const uint32_t *data) {
   uint32_t sec = mg_ntohl(data[0]), frac = mg_ntohl(data[1]);
@@ -3970,9 +3970,10 @@ void mg_sntp_request(struct mg_connection *c) {
     uint64_t now = mg_millis();
     uint8_t buf[48] = {0};
     uint32_t *t = (uint32_t *) &buf[40];
+    double frac = ((double) (now % 1000)) / 1000.0;
     buf[0] = (0 << 6) | (4 << 3) | 3;
     t[0] = mg_htonl((uint32_t) (now / 1000) + SNTP_TIME_OFFSET);
-    t[1] = mg_htonl((uint32_t) ((now % 1000) / 1000.0 * SNTP_MAX_FRAC));
+    t[1] = mg_htonl((uint32_t) ((uint32_t) (frac * SNTP_MAX_FRAC)));
     mg_send(c, buf, sizeof(buf));
   }
 }
