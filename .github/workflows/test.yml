@@ -42,7 +42,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: make vc98
-    - run: make vc2017
+    - run: make vc17
     - run: make vc22
     - run: make mingw
     - run: make mingw++
