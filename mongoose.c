@@ -3967,7 +3967,7 @@ void mg_sntp_request(struct mg_connection *c) {
   if (c->is_resolving) {
     MG_ERROR(("%lu wait until resolved", c->id));
   } else {
-    uint64_t now = mg_millis();
+    int64_t now = (int64_t) mg_millis();  // Use int64_t, for vc98
     uint8_t buf[48] = {0};
     uint32_t *t = (uint32_t *) &buf[40];
     double frac = ((double) (now % 1000)) / 1000.0 * SNTP_MAX_FRAC;
