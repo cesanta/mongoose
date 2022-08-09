@@ -299,7 +299,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     int64_t ms = (int64_t) tv.tv_sec * 1000 + tv.tv_usec / 1000;
     int64_t diff = ms > received ? ms - received : received - ms;
     MG_DEBUG(("diff: %lld", diff));
-    // ASSERT(diff < 100); // The diff should be less than 300 ms
+    ASSERT(diff < 100);
 #endif
   } else if (ev == MG_EV_OPEN) {
     c->is_hexdumping = 1;
@@ -324,39 +324,18 @@ static void test_sntp_server(const char *url) {
 }
 
 static void test_sntp(void) {
+  const unsigned char bad[] =
+      "\x55\x02\x00\xeb\x00\x00\x00\x1e\x00\x00\x07\xb6\x3e\xc9\xd6\xa2"
+      "\xdb\xde\xea\x30\x91\x86\xb7\x10\xdb\xde\xed\x98\x00\x00\x00\xde"
+      "\xdb\xde\xed\x99\x0a\xe2\xc7\x96\xdb\xde\xed\x99\x0a\xe4\x6b\xda";
+
+  ASSERT(mg_sntp_parse(bad, sizeof(bad)) < 0);
+  ASSERT(mg_sntp_parse(NULL, 0) == -1);
   test_sntp_server("udp://time.windows.com:123");
   // NOTE(cpq): temporarily disabled until Github Actions fix their NTP
   // port blockage issue, https://github.com/actions/runner-images/issues/5615
+  // test_sntp_server("udp://time.apple.com:123");
   // test_sntp_server(NULL);
-
-  {
-    int64_t ms;
-    const unsigned char sntp_good[] =
-        "\x24\x02\x00\xeb\x00\x00\x00\x1e\x00\x00\x07\xb6\x3e"
-        "\xc9\xd6\xa2\xdb\xde\xea\x30\x91\x86\xb7\x10\xdb\xde"
-        "\xed\x98\x00\x00\x00\xde\xdb\xde\xed\x99\x0a\xe2\xc7"
-        "\x96\xdb\xde\xed\x99\x0a\xe4\x6b\xda";
-    const unsigned char bad_good[] =
-        "\x55\x02\x00\xeb\x00\x00\x00\x1e\x00\x00\x07\xb6\x3e"
-        "\xc9\xd6\xa2\xdb\xde\xea\x30\x91\x86\xb7\x10\xdb\xde"
-        "\xed\x98\x00\x00\x00\xde\xdb\xde\xed\x99\x0a\xe2\xc7"
-        "\x96\xdb\xde\xed\x99\x0a\xe4\x6b\xda";
-    ASSERT((ms = mg_sntp_parse(sntp_good, sizeof(sntp_good))) > 0);
-#if MG_ARCH == MG_ARCH_UNIX
-    time_t t = (time_t) (ms / 1000);
-    struct tm tm;
-    gmtime_r(&t, &tm);
-    ASSERT(tm.tm_year == 116);
-    ASSERT(tm.tm_mon == 10);
-    ASSERT(tm.tm_mday == 22);
-    ASSERT(tm.tm_hour == 16);
-    ASSERT(tm.tm_min == 15);
-    ASSERT(tm.tm_sec == 21);
-#endif
-    ASSERT(mg_sntp_parse(bad_good, sizeof(bad_good)) < 0);
-  }
-
-  ASSERT(mg_sntp_parse(NULL, 0) == -1);
 }
 
 struct mqtt_data {
