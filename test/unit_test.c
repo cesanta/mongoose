@@ -650,6 +650,10 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /dredir/ HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hi\n") == 0);
 
+  ASSERT(fetch(&mgr, buf, url, "GET /dredirgz/ HTTP/1.0\n\n") == 200);
+  ASSERT(cmpheader(buf, "Content-Type", "text/html; charset=utf-8"));
+  ASSERT(cmpheader(buf, "Content-Encoding", "gzip"));
+
   ASSERT(fetch(&mgr, buf, url, "GET /..ddot HTTP/1.0\n\n") == 301);
   ASSERT(fetch(&mgr, buf, url, "GET /..ddot/ HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hi\n") == 0);
