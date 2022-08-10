@@ -45,11 +45,11 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_WS_MSG) {
     // Got websocket frame. Received data is wm->data
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    char *resp = NULL;
-    struct mg_rpc_req r = {&s_rpc_head, 0, mg_pfn_realloc, &resp, 0, wm->data};
+    struct mg_iobuf io = {0, 0, 0, 512};
+    struct mg_rpc_req r = {&s_rpc_head, 0, mg_pfn_iobuf, &io, 0, wm->data};
     mg_rpc_process(&r);
-    if (resp) mg_ws_send(c, resp, strlen(resp), WEBSOCKET_OP_TEXT);
-    free(resp);
+    if (io.buf) mg_ws_send(c, (char *) io.buf, io.len, WEBSOCKET_OP_TEXT);
+    mg_iobuf_free(&io);
   }
   (void) fn_data;
 }

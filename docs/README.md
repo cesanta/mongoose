@@ -2623,6 +2623,7 @@ Supported format specifiers:
 - `hhu`, `hu`, `u`, `lu`, `llu` - same but for unsigned variants
 - `hhx`, `hx`, `x`, `lx`, `llx` - same, unsigned and hex output
 - `s` - expect `char *`
+- `q` - expect `char *`, outputs JSON-escaped string (extension)
 - `Q` - expect `char *`, outputs double-quoted JSON-escaped string (extension)
 - `H` - expect `int`, `void *`, outputs double-quoted hex string (extension)
 - `V` - expect `int`, `void *`, outputs double-quoted base64 string (extension)
@@ -2736,28 +2737,6 @@ void myfn(char c, void *p);
 size_t len = mg_rprintf(myfn, myfn_p, "Double quoted string: %Q!", "hi");
 ```
 
-### mg\_pfn\_realloc()
-
-```c
-void mg_pfn_realloc(char ch, void *param);
-```
-
-Print a character to a malloced str
-
-Parameters:
-- `ch` - char to be printed
-- `param` - Pointer to a `char *`. Memory for the buffer will be reallocated to fit the new char
-
-Usage example:
-
-```c
-char *s = NULL;
-
-mg_rprintf(mg_pfn_realloc, &s, "Hello, %s", world);  // s == "Hello, world"
-mg_rprintf(mg_pfn_realloc, &s, "!");                 // s == "Hello, world!"
-free(s);
-```
-
 ### mg\_pfn\_iobuf()
 
 ```c
@@ -2768,12 +2747,12 @@ Print a character to a [Generic IO buffer](#struct-mg_iobuf)
 
 Parameters:
 - `ch` - char to be printed
-- `param` - pointer to a struct mg_iobuf
+- `param` - must be `struct mg_iobuf *`
 
 Usage example:
 
 ```c
-mg_rprintf(mg_pfn_iobuf, &c->send, "hi!");
+mg_rprintf(mg_pfn_iobuf, &c->send, "hi!");  // Append to the output buffer
 ```
 
 ### mg\_to64()

@@ -494,20 +494,6 @@ void mg_pfn_iobuf(char ch, void *param) {
   }
 }
 
-// We don't use realloc() in mongoose, so resort to inefficient calloc
-// Every new character reallocates the whole string
-void mg_pfn_realloc(char ch, void *param) {
-  char *s, *buf = *(char **) param;
-  size_t len = buf == NULL ? 0 : strlen(buf);
-  if ((s = (char *) calloc(1, len + 2)) != NULL) {
-    if (buf != NULL) memcpy(s, buf, len);
-    s[len] = ch;
-    s[len + 1] = '\0';
-    free(buf);
-    *(char **) param = s;
-  }
-}
-
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
   struct mg_iobuf io = {(uint8_t *) buf, len, 0, 0};
   size_t n = mg_vrprintf(mg_putchar_iobuf_static, &io, fmt, ap);
@@ -697,8 +683,7 @@ static char mg_escape(int c) {
 
 static size_t qcpy(void (*out)(char, void *), void *ptr, char *buf,
                    size_t len) {
-  size_t i = 0, extra = 2;
-  out('"', ptr);
+  size_t i = 0, extra = 0;
   for (i = 0; i < len && buf[i] != '\0'; i++) {
     char c = mg_escape(buf[i]);
     if (c) {
@@ -707,8 +692,16 @@ static size_t qcpy(void (*out)(char, void *), void *ptr, char *buf,
       out(buf[i], ptr);
     }
   }
-  out('"', ptr);
   return i + extra;
+}
+
+static size_t Qcpy(void (*out)(char, void *), void *ptr, char *buf,
+                   size_t len) {
+  size_t n = 2;
+  out('"', ptr);
+  n += qcpy(out, ptr, buf, len);
+  out('"', ptr);
+  return n;
 }
 
 static size_t bcpy(void (*out)(char, void *), void *ptr, uint8_t *buf,
@@ -807,10 +800,11 @@ size_t mg_vrprintf(void (*out)(char, void *), void *param, const char *fmt,
         size_t len = (size_t) va_arg(*ap, int);
         uint8_t *buf = va_arg(*ap, uint8_t *);
         n += bcpy(out, param, buf, len);
-      } else if (c == 's' || c == 'Q') {
+      } else if (c == 's' || c == 'Q' || c == 'q') {
         char *p = va_arg(*ap, char *);
-        size_t (*f)(void (*)(char, void *), void *, char *, size_t) =
-            c == 's' ? scpy : qcpy;
+        size_t (*f)(void (*)(char, void *), void *, char *, size_t) = scpy;
+        if (c == 'Q') f = Qcpy;
+        if (c == 'q') f = qcpy;
         if (pr == ~0U) pr = p == NULL ? 0 : strlen(p);
         for (j = 0; !minus && pr < w && j + pr < w; j++)
           n += f(out, param, &pad, 1);

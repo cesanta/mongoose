@@ -785,8 +785,7 @@ char *mg_remove_double_dots(char *s);
 
 typedef void (*mg_pfn_t)(char, void *);                  // Custom putchar
 typedef size_t (*mg_pm_t)(mg_pfn_t, void *, va_list *);  // %M printer
-void mg_pfn_realloc(char ch, void *param);  // Print to malloced str
-void mg_pfn_iobuf(char ch, void *param);    // Print to iobuf
+void mg_pfn_iobuf(char ch, void *param);                 // iobuf printer
 
 size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex);
 double mg_atod(const char *buf, int len, int *numlen);

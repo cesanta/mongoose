@@ -1469,11 +1469,17 @@ static void test_str(void) {
 
   // Non-standard formatting
   {
-    char buf[100], *p;
+    char buf[100], *p = NULL;
+    struct mg_iobuf io = {0, 0, 0, 16};
     const char *expected;
 
     expected = "\"\"";
     mg_snprintf(buf, sizeof(buf), "%Q", "");
+    ASSERT(strcmp(buf, expected) == 0);
+
+    expected = "\"hi, \\\"\"";
+    mg_snprintf(buf, sizeof(buf), "\"hi, %q\"", "\"");
+    MG_INFO(("[%s] [%s]", buf, expected));
     ASSERT(strcmp(buf, expected) == 0);
 
     expected = "\"a'b\"";
@@ -1497,12 +1503,12 @@ static void test_str(void) {
     ASSERT(strcmp(p, "[9876543210,7]") == 0);
     free(p);
 
-    p = mg_mprintf("[%M", pf2, 10);
-    mg_rprintf(mg_pfn_realloc, &p, ",");
-    mg_rprintf(mg_pfn_realloc, &p, "%d]", 7);
-    printf("-> %s\n", p);
-    ASSERT(strcmp(p, "[9876543210,7]") == 0);
-    free(p);
+    mg_rprintf(mg_pfn_iobuf, &io, "[%M", pf2, 10);
+    mg_rprintf(mg_pfn_iobuf, &io, ",");
+    mg_rprintf(mg_pfn_iobuf, &io, "%d]", 7);
+    printf("-> %s\n", io.buf);
+    ASSERT(strcmp((char *) io.buf, "[9876543210,7]") == 0);
+    mg_iobuf_free(&io);
   }
 
   {
@@ -2450,23 +2456,22 @@ static void test_json(void) {
 
 static void test_rpc(void) {
   struct mg_rpc *head = NULL;
-  char *s = NULL;
-  struct mg_rpc_req req = {&head, 0, mg_pfn_realloc, &s, 0, {0, 0}};
+  struct mg_iobuf io = {0, 0, 0, 256};
+  struct mg_rpc_req req = {&head, 0, mg_pfn_iobuf, &io, 0, {0, 0}};
   mg_rpc_add(&head, mg_str("rpc.list"), mg_rpc_list, NULL);
 
   {
     req.frame = mg_str("{\"method\":\"rpc.list\"}");
     mg_rpc_process(&req);
-    ASSERT(s == NULL);
+    ASSERT(io.buf == NULL);
   }
 
   {
     const char *resp = "{\"id\":1,\"result\":[\"rpc.list\"]}";
     req.frame = mg_str("{\"id\": 1,\"method\":\"rpc.list\"}");
     mg_rpc_process(&req);
-    MG_INFO(("-> %s", s));
-    ASSERT(strcmp(s, resp) == 0);
-    free(s), s = NULL;
+    ASSERT(strcmp((char *) io.buf, resp) == 0);
+    mg_iobuf_free(&io);
   }
 
   {
@@ -2475,18 +2480,17 @@ static void test_rpc(void) {
         "found\"}}";
     req.frame = mg_str("{\"id\": true,\"method\":\"foo\"}");
     mg_rpc_process(&req);
-    MG_INFO(("-> %s", s));
-    ASSERT(strcmp(s, resp) == 0);
-    free(s), s = NULL;
+    // MG_INFO(("-> %s", io.buf));
+    ASSERT(strcmp((char *) io.buf, resp) == 0);
+    mg_iobuf_free(&io);
   }
 
   {
     const char *resp = "{\"error\":{\"code\":-32700,\"message\":\"haha\"}}";
     req.frame = mg_str("haha");
     mg_rpc_process(&req);
-    MG_INFO(("-> %s", s));
-    ASSERT(strcmp(s, resp) == 0);
-    free(s), s = NULL;
+    ASSERT(strcmp((char *) io.buf, resp) == 0);
+    mg_iobuf_free(&io);
   }
 
   mg_rpc_del(&head, NULL);
