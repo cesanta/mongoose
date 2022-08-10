@@ -3152,25 +3152,25 @@ Parameters:
 Usage example:
 
 ```c
-struct mg_rpc *s_rpc_head = NULL;
-// add methods
-// ...
+struct mg_rpc *s_rpcs = NULL;                               // Empty RPC list head
+mg_rpc_add(&s_rpcs, mg_str("rpc.list"), mg_rpc_list, NULL); // Add rpc.list
+// ... add more RPC methods
 
-char *resp = NULL;
-// get a request, pass it into r.frame
+// On request, process the incoming frame
+struct mg_str req = mg_str("{\"id\":1,\"method\":\"sum\",\"params\":[1,2]}");
+struct mg_iobuf io = {0, 0, 0, 512};  // Empty IO buf, with 512 realloc granularity
 struct mg_rpc_req r = {
-  .head = &s_rpc_head,
-  .rpc = NULL,
-  .pfn = mg_pfn_realloc,
-  .pfn_data = &resp, 
-  .req_data = NULL,
-  .frame = mg_str("{\"id\":1,\"method\":\"sum\",\"params\":[1,2]}")
+  .head = &s_rpcs,        // RPC list head
+  .rpc = NULL,            // This will be set by mg_rpc_process()
+  .pfn = mg_pfn_iobuf,    // Printing function: print into the io buffer
+  .pfn_data = &io,        // Pass our io buffer as a parameter
+  .req_data = NULL,       // No specific request data
+  .frame = req,           // Specify incoming frame
 };
 
-  mg_rpc_process(&r);
-
-  if (resp) printf("%s\n", resp);
-  free(resp);
+mg_rpc_process(&r);
+if (io.buf != NULL) printf("Response: %s\n", (char *) io.buf);
+mg_iobuf_free(&io);
 ```
 
 ### mg\_rpc\_ok(), mg\_rpc\_vok()
