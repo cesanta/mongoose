@@ -2097,6 +2097,10 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
          (mg_snprintf(path + n, path_size - n, "/index.shtml") > 0 &&
           (tmp = fs->st(path, NULL, NULL)) != 0))) {
       flags = tmp;
+    } else if ((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX ".gz") > 0 &&
+          (tmp = fs->st(path, NULL, NULL)) != 0)) {
+      flags = tmp;
+      path[n + 1 + strlen(MG_HTTP_INDEX)] = '\0';  // Remove appended .gz
     } else {
       path[n] = '\0';  // Remove appended index file name
     }
