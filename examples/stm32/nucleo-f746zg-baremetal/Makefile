@@ -1,13 +1,14 @@
 TARGET  = firmware
 ROOT    ?= $(realpath $(CURDIR)/../../..)
-DOCKER 	?= docker run --rm -v $(ROOT):$(ROOT) -w $(CURDIR) mdashnet/armgcc
+D ?= docker
+DOCKER 	?= $(D) run --rm -v $(ROOT):$(ROOT) -w $(CURDIR) mdashnet/armgcc
 CROSS   ?= arm-none-eabi
 CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
 						-Wformat-truncation -fno-common -Wconversion \
 						-g3 -Os -ffunction-sections -fdata-sections \
 						-I. -I$(ROOT) -DMG_ARCH=MG_ARCH_NEWLIB -DMIP_DEBUG=1 \
 						-DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_LINES=1 -DMG_ENABLE_MIP=1 \
-						-mcpu=cortex-m7 -mthumb -mfloat-abi=softfp -mfpu=vfpv4 $(EXTRA)
+						-mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=auto $(EXTRA_CFLAGS)
 LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 SOURCES = boot.c main.c syscalls.c $(ROOT)/mongoose.c
 

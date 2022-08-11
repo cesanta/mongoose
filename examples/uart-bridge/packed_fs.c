@@ -1812,10 +1812,10 @@ static const struct packed_file {
   size_t size;
   time_t mtime;
 } packed_files[] = {
-  {"/web_root/index.html", v1, sizeof(v1), 1654623573},
-  {"/web_root/main.js", v2, sizeof(v2), 1659000445},
-  {"/web_root/preact.min.js", v3, sizeof(v3), 1654623573},
-  {"/web_root/style.css", v4, sizeof(v4), 1655548336},
+  {"/web_root/index.html", v1, sizeof(v1), 1659483223},
+  {"/web_root/main.js", v2, sizeof(v2), 1659483223},
+  {"/web_root/preact.min.js", v3, sizeof(v3), 1659483223},
+  {"/web_root/style.css", v4, sizeof(v4), 1659483223},
   {NULL, NULL, 0, 0}
 };
 

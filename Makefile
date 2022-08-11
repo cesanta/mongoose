@@ -9,8 +9,8 @@ INCS ?= -Isrc -I.
 SSL ?= MBEDTLS
 CWD ?= $(realpath $(CURDIR))
 ENV ?=  -e Tmp=. -e WINEDEBUG=-all 
-DOCKERCMD ?= docker run --platform=linux/amd64
-DOCKER ?= $(DOCKERCMD) --rm $(ENV) -v $(CWD):$(CWD) -w $(CWD)
+D ?= docker
+DOCKER ?= $(D) run --rm $(ENV) -v $(CWD):$(CWD) -w $(CWD)
 VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined -fno-sanitize-recover=all
