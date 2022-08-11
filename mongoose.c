@@ -5819,7 +5819,7 @@ static void mg_ws_mask(struct mg_connection *c, size_t len) {
   }
 }
 
-size_t mg_ws_send(struct mg_connection *c, const char *buf, size_t len,
+size_t mg_ws_send(struct mg_connection *c, const void *buf, size_t len,
                   int op) {
   uint8_t header[14];
   size_t header_len = mkhdr(len, op, c->is_client, header);
