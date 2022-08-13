@@ -5800,7 +5800,7 @@ static size_t mkhdr(size_t len, int op, bool is_client, uint8_t *buf) {
   } else {
     uint32_t tmp;
     buf[1] = 127;
-    tmp = mg_htonl((uint32_t) (len >> 32));
+    tmp = mg_htonl((uint32_t) (((uint64_t) len) >> 32));
     memcpy(&buf[2], &tmp, sizeof(tmp));
     tmp = mg_htonl((uint32_t) (len & 0xffffffffU));
     memcpy(&buf[6], &tmp, sizeof(tmp));
