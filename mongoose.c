@@ -1904,8 +1904,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
              (inm = mg_http_get_header(hm, "If-None-Match")) != NULL &&
              mg_vcasecmp(inm, etag) == 0) {
     mg_fs_close(fd);
-    mg_printf(c, "HTTP/1.1 304 Not Modified\r\n%sContent-Length: 0\r\n\r\n",
-              opts->extra_headers ? opts->extra_headers : "");
+    mg_http_reply(c, 304, opts->extra_headers, "");
   } else {
     int n, status = 200;
     char range[100];
@@ -1942,6 +1941,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               opts->extra_headers ? opts->extra_headers : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       c->is_draining = 1;
+      c->is_resp = 0;
       mg_fs_close(fd);
     } else {
       c->pfn = static_cb;
@@ -2091,10 +2091,13 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
          (mg_snprintf(path + n, path_size - n, "/index.shtml") > 0 &&
           (tmp = fs->st(path, NULL, NULL)) != 0))) {
       flags = tmp;
-    } else if ((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX ".gz") > 0 &&
-          (tmp = fs->st(path, NULL, NULL)) != 0)) { // check for gzipped index
+    } else if ((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX ".gz") >
+                    0 &&
+                (tmp = fs->st(path, NULL, NULL)) !=
+                    0)) {  // check for gzipped index
       flags = tmp;
-      path[n + 1 + strlen(MG_HTTP_INDEX)] = '\0';  // Remove appended .gz in index file name
+      path[n + 1 + strlen(MG_HTTP_INDEX)] =
+          '\0';  // Remove appended .gz in index file name
     } else {
       path[n] = '\0';  // Remove appended index file name
     }
@@ -5926,33 +5929,25 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
                                     const char *fmt, ...) {
   struct mg_connection *c = mg_connect(mgr, url, fn, fn_data);
   if (c != NULL) {
-    char nonce[16], key[30], mem1[128], mem2[256], *buf1 = mem1, *buf2 = mem2;
+    char nonce[16], key[30];
     struct mg_str host = mg_url_host(url);
-    size_t n1 = 0, n2 = 0;
-    nonce[0] = key[0] = mem1[0] = mem2[0] = '\0';
+    mg_random(nonce, sizeof(nonce));
+    mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key);
+    mg_rprintf(mg_pfn_iobuf, &c->send,
+               "GET %s HTTP/1.1\r\n"
+               "Upgrade: websocket\r\n"
+               "Host: %.*s\r\n"
+               "Connection: Upgrade\r\n"
+               "Sec-WebSocket-Version: 13\r\n"
+               "Sec-WebSocket-Key: %s\r\n",
+               mg_url_uri(url), (int) host.len, host.ptr, key);
     if (fmt != NULL) {
       va_list ap;
       va_start(ap, fmt);
-      n1 = mg_vasprintf(&buf1, sizeof(mem1), fmt, ap);
+      mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
       va_end(ap);
     }
-    // Send handshake request
-    mg_random(nonce, sizeof(nonce));
-    mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key);
-    n2 = mg_asprintf(&buf2, sizeof(mem2),
-                     "GET %s HTTP/1.1\r\n"
-                     "Upgrade: websocket\r\n"
-                     "Host: %.*s\r\n"
-                     "Connection: Upgrade\r\n"
-                     "%.*s"
-                     "Sec-WebSocket-Version: 13\r\n"
-                     "Sec-WebSocket-Key: %s\r\n"
-                     "\r\n",
-                     mg_url_uri(url), (int) host.len, host.ptr, (int) n1, buf1,
-                     key);
-    mg_send(c, buf2, n2);
-    if (buf1 != mem1) free(buf1);
-    if (buf2 != mem2) free(buf2);
+    mg_rprintf(mg_pfn_iobuf, &c->send, "\r\n");
     c->pfn = mg_ws_cb;
     c->pfn_data = NULL;
   }

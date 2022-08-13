@@ -589,21 +589,23 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 static void ew2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  size_t size = 65 * 1024 + 737;
   if (ev == MG_EV_WS_OPEN) {
-    char *msg = mg_file_read(&mg_fs_posix, "mongoose.c", NULL);
+    char *msg = calloc(1, size + 1);
+    memset(msg, 'A', size);
     mg_ws_printf(c, WEBSOCKET_OP_TEXT, "%s", msg);
     free(msg);
-    c->recv.align = 16 * 1024;
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     if (wm->data.len == 6) {
       // Ignore the "opened" message from server
     } else {
-      char *msg = mg_file_read(&mg_fs_posix, "mongoose.c", NULL);
-      // MG_INFO(("%lu %lu", wm->data.len, strlen(msg)));
-      ASSERT(mg_vcmp(&wm->data, msg) == 0);
-      ASSERT(wm->data.len > 70000);  // Message must be > 64k
-      free(msg);
+      size_t ok = 1, i;
+      ASSERT(wm->data.len == size);
+      for (i = 0; i < size; i++) {
+        if (wm->data.ptr[i] != 'A') ok = 0;
+      }
+      ASSERT(ok == 1);
       *(int *) fn_data = 1;
     }
   }
