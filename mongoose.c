@@ -2092,9 +2092,9 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
           (tmp = fs->st(path, NULL, NULL)) != 0))) {
       flags = tmp;
     } else if ((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX ".gz") > 0 &&
-          (tmp = fs->st(path, NULL, NULL)) != 0)) {
+          (tmp = fs->st(path, NULL, NULL)) != 0)) { // check for gzipped index
       flags = tmp;
-      path[n + 1 + strlen(MG_HTTP_INDEX)] = '\0';  // Remove appended .gz
+      path[n + 1 + strlen(MG_HTTP_INDEX)] = '\0';  // Remove appended .gz in index file name
     } else {
       path[n] = '\0';  // Remove appended index file name
     }
@@ -5705,19 +5705,18 @@ struct ws_msg {
 };
 
 size_t mg_ws_vprintf(struct mg_connection *c, int op, const char *fmt,
-                     va_list ap) {
-  char mem[256], *buf = mem;
-  size_t len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
-  len = mg_ws_send(c, buf, len, op);
-  if (buf != mem) free(buf);
-  return len;
+                     va_list *ap) {
+  size_t len = c->send.len;
+  size_t n = mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, ap);
+  mg_ws_wrap(c, c->send.len - len, op);
+  return n;
 }
 
 size_t mg_ws_printf(struct mg_connection *c, int op, const char *fmt, ...) {
   size_t len = 0;
   va_list ap;
   va_start(ap, fmt);
-  len = mg_ws_vprintf(c, op, fmt, ap);
+  len = mg_ws_vprintf(c, op, fmt, &ap);
   va_end(ap);
   return len;
 }
@@ -5752,6 +5751,11 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
   mg_send(c, "\r\n", 2);
 }
 
+static uint32_t be32(const uint8_t *p) {
+  return (((uint32_t) p[3]) << 0) | (((uint32_t) p[2]) << 8) |
+         (((uint32_t) p[1]) << 16) | (((uint32_t) p[0]) << 24);
+}
+
 static size_t ws_process(uint8_t *buf, size_t len, struct ws_msg *msg) {
   size_t i, n = 0, mask_len = 0;
   memset(msg, 0, sizeof(*msg));
@@ -5764,12 +5768,11 @@ static size_t ws_process(uint8_t *buf, size_t len, struct ws_msg *msg) {
       msg->header_len = 2 + mask_len;
     } else if (n == 126 && len >= 4 + mask_len) {
       msg->header_len = 4 + mask_len;
-      msg->data_len = mg_ntohs(*(uint16_t *) &buf[2]);
+      msg->data_len = (((size_t) buf[2]) << 8) | buf[3];
     } else if (len >= 10 + mask_len) {
       msg->header_len = 10 + mask_len;
       msg->data_len =
-          (size_t) (((uint64_t) mg_ntohl(*(uint32_t *) &buf[2])) << 32) +
-          mg_ntohl(*(uint32_t *) &buf[6]);
+          (size_t) (((uint64_t) be32(buf + 2) << 32) + be32(buf + 6));
     }
   }
   // Sanity check, and integer overflow protection for the boundary check below
@@ -5797,9 +5800,9 @@ static size_t mkhdr(size_t len, int op, bool is_client, uint8_t *buf) {
   } else {
     uint32_t tmp;
     buf[1] = 127;
-    tmp = mg_htonl((uint32_t) ((uint64_t) len >> 32));
+    tmp = mg_htonl((uint32_t) (len >> 32));
     memcpy(&buf[2], &tmp, sizeof(tmp));
-    tmp = mg_htonl((uint32_t) (len & 0xffffffff));
+    tmp = mg_htonl((uint32_t) (len & 0xffffffffU));
     memcpy(&buf[6], &tmp, sizeof(tmp));
     n = 10;
   }

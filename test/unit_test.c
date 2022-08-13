@@ -573,8 +573,8 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_str *wsproto = mg_http_get_header(hm, "Sec-WebSocket-Protocol");
     ASSERT(wsproto != NULL);
-    mg_ws_send(c, "boo", 3, WEBSOCKET_OP_BINARY);
-    mg_ws_send(c, "foobar", 6, WEBSOCKET_OP_BINARY);
+    mg_ws_printf(c, WEBSOCKET_OP_BINARY, "%.3s", "boo!!!!");
+    mg_ws_printf(c, WEBSOCKET_OP_BINARY, "%s", "foobar");
     mg_ws_send(c, "", 0, WEBSOCKET_OP_PING);
     p[0] += 100;
   } else if (ev == MG_EV_WS_MSG) {
@@ -585,6 +585,27 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (mg_strstr(wm->data, mg_str("foobar"))) p[0] += 3;
   } else if (ev == MG_EV_CLOSE) {
     p[0] += 10;
+  }
+}
+
+static void ew2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_WS_OPEN) {
+    char *msg = mg_file_read(&mg_fs_posix, "mongoose.c", NULL);
+    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "%s", msg);
+    free(msg);
+    c->recv.align = 16 * 1024;
+  } else if (ev == MG_EV_WS_MSG) {
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    if (wm->data.len == 6) {
+      // Ignore the "opened" message from server
+    } else {
+      char *msg = mg_file_read(&mg_fs_posix, "mongoose.c", NULL);
+      // MG_INFO(("%lu %lu", wm->data.len, strlen(msg)));
+      ASSERT(mg_vcmp(&wm->data, msg) == 0);
+      ASSERT(wm->data.len > 70000);  // Message must be > 64k
+      free(msg);
+      *(int *) fn_data = 1;
+    }
   }
 }
 
@@ -603,6 +624,12 @@ static void test_ws(void) {
 
   // Test that non-WS requests fail
   ASSERT(fetch(&mgr, buf, url, "GET /ws HTTP/1.0\r\n\n") == 426);
+
+  // Test large WS frames, over 64k
+  done = 0;
+  mg_ws_connect(&mgr, url, ew2, &done, NULL);
+  for (i = 0; i < 1000 && done == 0; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(done == 1);
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
@@ -2232,8 +2259,8 @@ static void w3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     memset(buf, 'A', sizeof(buf));
     mg_ws_send(c, "hi there!", 9, WEBSOCKET_OP_TEXT);
     mg_printf(c, "%s", "boo");
-    mg_ws_wrap(c, 3, WEBSOCKET_OP_TEXT),
-        mg_ws_send(c, buf, sizeof(buf), WEBSOCKET_OP_TEXT);
+    mg_ws_wrap(c, 3, WEBSOCKET_OP_TEXT);
+    mg_ws_send(c, buf, sizeof(buf), WEBSOCKET_OP_TEXT);
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     ASSERT(mg_strcmp(wm->data, mg_str("lebowski")) == 0);
@@ -2266,11 +2293,14 @@ static void w2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     }
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    MG_INFO(("Got WS, %lu", wm->data.len));
+    mg_hexdump(wm->data.ptr, wm->data.len);
     if (wm->data.len == 9) {
       ASSERT(mg_strcmp(wm->data, mg_str("hi there!")) == 0);
     } else if (wm->data.len == 3) {
       ASSERT(mg_strcmp(wm->data, mg_str("boo")) == 0);
     } else {
+      MG_INFO(("%lu", wm->data.len));
       ASSERT(wm->data.len == 8192);
     }
   }
