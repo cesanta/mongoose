@@ -488,8 +488,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
              (inm = mg_http_get_header(hm, "If-None-Match")) != NULL &&
              mg_vcasecmp(inm, etag) == 0) {
     mg_fs_close(fd);
-    mg_printf(c, "HTTP/1.1 304 Not Modified\r\n%sContent-Length: 0\r\n\r\n",
-              opts->extra_headers ? opts->extra_headers : "");
+    mg_http_reply(c, 304, opts->extra_headers, "");
   } else {
     int n, status = 200;
     char range[100];
@@ -526,6 +525,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               opts->extra_headers ? opts->extra_headers : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       c->is_draining = 1;
+      c->is_resp = 0;
       mg_fs_close(fd);
     } else {
       c->pfn = static_cb;
@@ -675,10 +675,13 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
          (mg_snprintf(path + n, path_size - n, "/index.shtml") > 0 &&
           (tmp = fs->st(path, NULL, NULL)) != 0))) {
       flags = tmp;
-    } else if ((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX ".gz") > 0 &&
-          (tmp = fs->st(path, NULL, NULL)) != 0)) { // check for gzipped index
+    } else if ((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX ".gz") >
+                    0 &&
+                (tmp = fs->st(path, NULL, NULL)) !=
+                    0)) {  // check for gzipped index
       flags = tmp;
-      path[n + 1 + strlen(MG_HTTP_INDEX)] = '\0';  // Remove appended .gz in index file name
+      path[n + 1 + strlen(MG_HTTP_INDEX)] =
+          '\0';  // Remove appended .gz in index file name
     } else {
       path[n] = '\0';  // Remove appended index file name
     }
