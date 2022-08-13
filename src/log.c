@@ -51,7 +51,7 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
 void mg_log(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  mg_vrprintf(s_log_func, s_log_func_param, fmt, &ap);
+  mg_vxprintf(s_log_func, s_log_func_param, fmt, &ap);
   va_end(ap);
   logc((unsigned char) '\n');
 }

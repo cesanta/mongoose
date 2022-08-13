@@ -17,7 +17,7 @@ struct ws_msg {
 size_t mg_ws_vprintf(struct mg_connection *c, int op, const char *fmt,
                      va_list *ap) {
   size_t len = c->send.len;
-  size_t n = mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, ap);
+  size_t n = mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
   mg_ws_wrap(c, c->send.len - len, op);
   return n;
 }
@@ -43,13 +43,13 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
   mg_sha1_update(&sha_ctx, (unsigned char *) magic, 36);
   mg_sha1_final(sha, &sha_ctx);
   mg_base64_encode(sha, sizeof(sha), (char *) b64_sha);
-  mg_rprintf(mg_pfn_iobuf, &c->send,
+  mg_xprintf(mg_pfn_iobuf, &c->send,
              "HTTP/1.1 101 Switching Protocols\r\n"
              "Upgrade: websocket\r\n"
              "Connection: Upgrade\r\n"
              "Sec-WebSocket-Accept: %s\r\n",
              b64_sha);
-  if (fmt != NULL) mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, ap);
+  if (fmt != NULL) mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
   if (wsproto != NULL) {
     mg_printf(c, "Sec-WebSocket-Protocol: %.*s\r\n", (int) wsproto->len,
               wsproto->ptr);
@@ -236,7 +236,7 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
     struct mg_str host = mg_url_host(url);
     mg_random(nonce, sizeof(nonce));
     mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key);
-    mg_rprintf(mg_pfn_iobuf, &c->send,
+    mg_xprintf(mg_pfn_iobuf, &c->send,
                "GET %s HTTP/1.1\r\n"
                "Upgrade: websocket\r\n"
                "Host: %.*s\r\n"
@@ -247,10 +247,10 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
     if (fmt != NULL) {
       va_list ap;
       va_start(ap, fmt);
-      mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
+      mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
       va_end(ap);
     }
-    mg_rprintf(mg_pfn_iobuf, &c->send, "\r\n");
+    mg_xprintf(mg_pfn_iobuf, &c->send, "\r\n");
     c->pfn = mg_ws_cb;
     c->pfn_data = NULL;
   }

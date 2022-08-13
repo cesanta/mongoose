@@ -30,7 +30,7 @@ static size_t printdata(void (*out)(char, void *), void *ptr, va_list *ap) {
   const char *comma = "";
   size_t n = 0;
   for (int i = 0; i < DATA_SIZE; ++i) {
-    n += mg_rprintf(out, ptr, "%s%d", comma, s_data[i]);
+    n += mg_xprintf(out, ptr, "%s%d", comma, s_data[i]);
     comma = ",";
   }
   return n;

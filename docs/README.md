@@ -2657,7 +2657,7 @@ mg_snprintf(buf, sizeof(buf), "r: %M, %d", f,1,2,7);    // r: 3, 7
 size_t f(void (*out)(char, void *), void *ptr, va_list *ap) {
   int a = va_arg(*ap, int);
   int b = va_arg(*ap, int);
-  return mg_rprintf(out, ptr, "%d", a + b);
+  return mg_xprintf(out, ptr, "%d", a + b);
 }
 ```
 
@@ -2685,8 +2685,8 @@ free(msg);
 ### mg\_rprintf(), mg\_vrprintf()
 
 ```c
-size_t mg_rprintf(void (*out)(char, void *), void *param, const char *fmt, ...);
-size_t mg_vrprintf(void (*out)(char, void *), void *param, const char *fmt,
+size_t mg_xprintf(void (*out)(char, void *), void *param, const char *fmt, ...);
+size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
                    va_list *ap);
 ```
 
@@ -2704,7 +2704,7 @@ Usage example:
 ```c
 void myfn(char c, void *p);
 
-size_t len = mg_rprintf(myfn, myfn_p, "Double quoted string: %Q!", "hi");
+size_t len = mg_xprintf(myfn, myfn_p, "Double quoted string: %Q!", "hi");
 ```
 
 ### mg\_pfn\_iobuf()
@@ -2722,7 +2722,7 @@ Parameters:
 Usage example:
 
 ```c
-mg_rprintf(mg_pfn_iobuf, &c->send, "hi!");  // Append to the output buffer
+mg_xprintf(mg_pfn_iobuf, &c->send, "hi!");  // Append to the output buffer
 ```
 
 ### mg\_to64()

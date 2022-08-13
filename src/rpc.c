@@ -40,10 +40,10 @@ void mg_rpc_process(struct mg_rpc_req *r) {
 void mg_rpc_vok(struct mg_rpc_req *r, const char *fmt, va_list *ap) {
   int len, off = mg_json_get(r->frame, "$.id", &len);
   if (off > 0) {
-    mg_rprintf(r->pfn, r->pfn_data, "{%Q:%.*s,%Q:", "id", len,
+    mg_xprintf(r->pfn, r->pfn_data, "{%Q:%.*s,%Q:", "id", len,
                &r->frame.ptr[off], "result");
-    mg_vrprintf(r->pfn, r->pfn_data, fmt == NULL ? "null" : fmt, ap);
-    mg_rprintf(r->pfn, r->pfn_data, "}");
+    mg_vxprintf(r->pfn, r->pfn_data, fmt == NULL ? "null" : fmt, ap);
+    mg_xprintf(r->pfn, r->pfn_data, "}");
   }
 }
 
@@ -56,14 +56,14 @@ void mg_rpc_ok(struct mg_rpc_req *r, const char *fmt, ...) {
 
 void mg_rpc_verr(struct mg_rpc_req *r, int code, const char *fmt, va_list *ap) {
   int len, off = mg_json_get(r->frame, "$.id", &len);
-  mg_rprintf(r->pfn, r->pfn_data, "{");
+  mg_xprintf(r->pfn, r->pfn_data, "{");
   if (off > 0) {
-    mg_rprintf(r->pfn, r->pfn_data, "%Q:%.*s,", "id", len, &r->frame.ptr[off]);
+    mg_xprintf(r->pfn, r->pfn_data, "%Q:%.*s,", "id", len, &r->frame.ptr[off]);
   }
-  mg_rprintf(r->pfn, r->pfn_data, "%Q:{%Q:%d,%Q:", "error", "code", code,
+  mg_xprintf(r->pfn, r->pfn_data, "%Q:{%Q:%d,%Q:", "error", "code", code,
              "message");
-  mg_vrprintf(r->pfn, r->pfn_data, fmt == NULL ? "null" : fmt, ap);
-  mg_rprintf(r->pfn, r->pfn_data, "}}");
+  mg_vxprintf(r->pfn, r->pfn_data, fmt == NULL ? "null" : fmt, ap);
+  mg_xprintf(r->pfn, r->pfn_data, "}}");
 }
 
 void mg_rpc_err(struct mg_rpc_req *r, int code, const char *fmt, ...) {
@@ -77,7 +77,7 @@ static size_t print_methods(mg_pfn_t pfn, void *pfn_data, va_list *ap) {
   struct mg_rpc *h, **head = (struct mg_rpc **) va_arg(*ap, void **);
   size_t len = 0;
   for (h = *head; h != NULL; h = h->next) {
-    len += mg_rprintf(pfn, pfn_data, "%s%.*Q", h == *head ? "" : ",",
+    len += mg_xprintf(pfn, pfn_data, "%s%.*Q", h == *head ? "" : ",",
                       (int) h->method.len, h->method.ptr);
   }
   return len;

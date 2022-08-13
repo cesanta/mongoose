@@ -791,8 +791,8 @@ size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex);
 double mg_atod(const char *buf, int len, int *numlen);
 size_t mg_dtoa(char *buf, size_t len, double d, int width);
 
-size_t mg_vrprintf(void (*)(char, void *), void *, const char *fmt, va_list *);
-size_t mg_rprintf(void (*fn)(char, void *), void *, const char *fmt, ...);
+size_t mg_vxprintf(void (*)(char, void *), void *, const char *fmt, va_list *);
+size_t mg_xprintf(void (*fn)(char, void *), void *, const char *fmt, ...);
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap);
 size_t mg_snprintf(char *, size_t, const char *fmt, ...);
 char *mg_vmprintf(const char *fmt, va_list *ap);

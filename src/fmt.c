@@ -1,6 +1,32 @@
 #include "fmt.h"
 #include "iobuf.h"
 
+static void mg_pfn_iobuf_private(char ch, void *param, bool expand) {
+  struct mg_iobuf *io = (struct mg_iobuf *) param;
+  if (expand && io->len + 2 > io->size) mg_iobuf_resize(io, io->len + 2);
+  if (io->len + 2 <= io->size) {
+    io->buf[io->len++] = (uint8_t) ch;
+    io->buf[io->len] = 0;
+  } else if (io->len < io->size) {
+    io->buf[io->len++] = 0;  // Guarantee to 0-terminate
+  }
+}
+
+static void mg_putchar_iobuf_static(char ch, void *param) {
+  mg_pfn_iobuf_private(ch, param, false);
+}
+
+void mg_pfn_iobuf(char ch, void *param) {
+  mg_pfn_iobuf_private(ch, param, true);
+}
+
+size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
+  struct mg_iobuf io = {(uint8_t *) buf, len, 0, 0};
+  size_t n = mg_vxprintf(mg_putchar_iobuf_static, &io, fmt, ap);
+  if (n < len) buf[n] = '\0';
+  return n;
+}
+
 size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
   va_list ap;
   size_t n;
@@ -12,7 +38,7 @@ size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
 
 char *mg_vmprintf(const char *fmt, va_list *ap) {
   struct mg_iobuf io = {0, 0, 0, 256};
-  mg_vrprintf(mg_pfn_iobuf, &io, fmt, ap);
+  mg_vxprintf(mg_pfn_iobuf, &io, fmt, ap);
   return (char *) io.buf;
 }
 
@@ -25,38 +51,13 @@ char *mg_mprintf(const char *fmt, ...) {
   return s;
 }
 
-size_t mg_rprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
+size_t mg_xprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
   size_t len = 0;
   va_list ap;
   va_start(ap, fmt);
-  len = mg_vrprintf(out, ptr, fmt, &ap);
+  len = mg_vxprintf(out, ptr, fmt, &ap);
   va_end(ap);
   return len;
-}
-
-static void mg_putchar_iobuf_static(char ch, void *param) {
-  struct mg_iobuf *io = (struct mg_iobuf *) param;
-  if (io->len + 2 <= io->size) {
-    io->buf[io->len++] = (uint8_t) ch;
-    io->buf[io->len] = 0;
-  }
-}
-
-void mg_pfn_iobuf(char ch, void *param) {
-  struct mg_iobuf *io = (struct mg_iobuf *) param;
-  if (io->len + 2 > io->size) mg_iobuf_resize(io, io->len + 2);
-  if (io->len + 2 <= io->size) {
-    io->buf[io->len++] = (uint8_t) ch;
-    io->buf[io->len] = 0;
-  }
-}
-
-size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
-  struct mg_iobuf io = {(uint8_t *) buf, len, 0, 0};
-  size_t n = mg_vrprintf(mg_putchar_iobuf_static, &io, fmt, ap);
-  if (n < len) buf[n] = '\0';
-  // if (len > 0) buf[len - 1] = '\0';  // Guarantee to 0-terminate
-  return n;
 }
 
 static bool is_digit(int c) {
@@ -279,7 +280,7 @@ static size_t bcpy(void (*out)(char, void *), void *ptr, uint8_t *buf,
   return n;
 }
 
-size_t mg_vrprintf(void (*out)(char, void *), void *param, const char *fmt,
+size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
                    va_list *ap) {
   size_t i = 0, n = 0;
   while (fmt[i] != '\0') {

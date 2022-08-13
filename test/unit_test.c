@@ -1414,13 +1414,13 @@ static bool sccmp(const char *s1, const char *s2, int expected) {
 static size_t pf1(void (*out)(char, void *), void *ptr, va_list *ap) {
   int a = va_arg(*ap, int);
   int b = va_arg(*ap, int);
-  return mg_rprintf(out, ptr, "%d", a + b);
+  return mg_xprintf(out, ptr, "%d", a + b);
 }
 
 static size_t pf2(void (*out)(char, void *), void *ptr, va_list *ap) {
   int cnt = va_arg(*ap, int);
   size_t n = 0;
-  while (cnt-- > 0) n += mg_rprintf(out, ptr, "%d", cnt);
+  while (cnt-- > 0) n += mg_xprintf(out, ptr, "%d", cnt);
   return n;
 }
 
@@ -1510,6 +1510,14 @@ static void test_str(void) {
     mg_snprintf(buf, sizeof(buf), "%Q", "");
     ASSERT(strcmp(buf, expected) == 0);
 
+    expected = "";
+    mg_snprintf(buf, 1, "%s", "abc");
+    ASSERT(strcmp(buf, expected) == 0);
+
+    expected = "a";
+    mg_snprintf(buf, 2, "%s", "abc");
+    ASSERT(strcmp(buf, expected) == 0);
+
     expected = "\"hi, \\\"\"";
     mg_snprintf(buf, sizeof(buf), "\"hi, %q\"", "\"");
     MG_INFO(("[%s] [%s]", buf, expected));
@@ -1535,9 +1543,9 @@ static void test_str(void) {
     ASSERT(strcmp(p, "[9876543210,7]") == 0);
     free(p);
 
-    mg_rprintf(mg_pfn_iobuf, &io, "[%M", pf2, 10);
-    mg_rprintf(mg_pfn_iobuf, &io, ",");
-    mg_rprintf(mg_pfn_iobuf, &io, "%d]", 7);
+    mg_xprintf(mg_pfn_iobuf, &io, "[%M", pf2, 10);
+    mg_xprintf(mg_pfn_iobuf, &io, ",");
+    mg_xprintf(mg_pfn_iobuf, &io, "%d]", 7);
     ASSERT(strcmp((char *) io.buf, "[9876543210,7]") == 0);
     mg_iobuf_free(&io);
   }

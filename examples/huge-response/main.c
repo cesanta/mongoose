@@ -34,7 +34,7 @@ static size_t printdata(mg_pfn_t out, void *ptr, va_list *ap) {
   size_t n = 0;
   if (max > DATA_SIZE) max = DATA_SIZE;
   while (start < max) {
-    n += mg_rprintf(out, ptr, "%s%d", comma, s_data[start]);
+    n += mg_xprintf(out, ptr, "%s%d", comma, s_data[start]);
     comma = ",";
     start++;
   }

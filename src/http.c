@@ -272,7 +272,7 @@ static void mg_http_vprintf_chunk(struct mg_connection *c, const char *fmt,
   va_list tmp;
   mg_send(c, "        \r\n", 10);
   va_copy(tmp, ap);
-  mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, &tmp);
+  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &tmp);
   va_end(tmp);
   if (c->send.len >= len + 10) {
     mg_snprintf((char *) c->send.buf + len, 9, "%08lx", c->send.len - len - 10);
@@ -327,7 +327,7 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
             mg_http_status_code_str(code), headers == NULL ? "" : headers);
   len = c->send.len;
   va_start(ap, fmt);
-  mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
+  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
   va_end(ap);
   if (c->send.len > 15) {
     mg_snprintf((char *) &c->send.buf[len - 14], 11, "%010lu",

@@ -412,6 +412,32 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 
 
 
+static void mg_pfn_iobuf_private(char ch, void *param, bool expand) {
+  struct mg_iobuf *io = (struct mg_iobuf *) param;
+  if (expand && io->len + 2 > io->size) mg_iobuf_resize(io, io->len + 2);
+  if (io->len + 2 <= io->size) {
+    io->buf[io->len++] = (uint8_t) ch;
+    io->buf[io->len] = 0;
+  } else if (io->len < io->size) {
+    io->buf[io->len++] = 0;  // Guarantee to 0-terminate
+  }
+}
+
+static void mg_putchar_iobuf_static(char ch, void *param) {
+  mg_pfn_iobuf_private(ch, param, false);
+}
+
+void mg_pfn_iobuf(char ch, void *param) {
+  mg_pfn_iobuf_private(ch, param, true);
+}
+
+size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
+  struct mg_iobuf io = {(uint8_t *) buf, len, 0, 0};
+  size_t n = mg_vxprintf(mg_putchar_iobuf_static, &io, fmt, ap);
+  if (n < len) buf[n] = '\0';
+  return n;
+}
+
 size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
   va_list ap;
   size_t n;
@@ -423,7 +449,7 @@ size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
 
 char *mg_vmprintf(const char *fmt, va_list *ap) {
   struct mg_iobuf io = {0, 0, 0, 256};
-  mg_vrprintf(mg_pfn_iobuf, &io, fmt, ap);
+  mg_vxprintf(mg_pfn_iobuf, &io, fmt, ap);
   return (char *) io.buf;
 }
 
@@ -436,38 +462,13 @@ char *mg_mprintf(const char *fmt, ...) {
   return s;
 }
 
-size_t mg_rprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
+size_t mg_xprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
   size_t len = 0;
   va_list ap;
   va_start(ap, fmt);
-  len = mg_vrprintf(out, ptr, fmt, &ap);
+  len = mg_vxprintf(out, ptr, fmt, &ap);
   va_end(ap);
   return len;
-}
-
-static void mg_putchar_iobuf_static(char ch, void *param) {
-  struct mg_iobuf *io = (struct mg_iobuf *) param;
-  if (io->len + 2 <= io->size) {
-    io->buf[io->len++] = (uint8_t) ch;
-    io->buf[io->len] = 0;
-  }
-}
-
-void mg_pfn_iobuf(char ch, void *param) {
-  struct mg_iobuf *io = (struct mg_iobuf *) param;
-  if (io->len + 2 > io->size) mg_iobuf_resize(io, io->len + 2);
-  if (io->len + 2 <= io->size) {
-    io->buf[io->len++] = (uint8_t) ch;
-    io->buf[io->len] = 0;
-  }
-}
-
-size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
-  struct mg_iobuf io = {(uint8_t *) buf, len, 0, 0};
-  size_t n = mg_vrprintf(mg_putchar_iobuf_static, &io, fmt, ap);
-  if (n < len) buf[n] = '\0';
-  // if (len > 0) buf[len - 1] = '\0';  // Guarantee to 0-terminate
-  return n;
 }
 
 static bool is_digit(int c) {
@@ -690,7 +691,7 @@ static size_t bcpy(void (*out)(char, void *), void *ptr, uint8_t *buf,
   return n;
 }
 
-size_t mg_vrprintf(void (*out)(char, void *), void *param, const char *fmt,
+size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
                    va_list *ap) {
   size_t i = 0, n = 0;
   while (fmt[i] != '\0') {
@@ -1647,7 +1648,7 @@ static void mg_http_vprintf_chunk(struct mg_connection *c, const char *fmt,
   va_list tmp;
   mg_send(c, "        \r\n", 10);
   va_copy(tmp, ap);
-  mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, &tmp);
+  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &tmp);
   va_end(tmp);
   if (c->send.len >= len + 10) {
     mg_snprintf((char *) c->send.buf + len, 9, "%08lx", c->send.len - len - 10);
@@ -1702,7 +1703,7 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
             mg_http_status_code_str(code), headers == NULL ? "" : headers);
   len = c->send.len;
   va_start(ap, fmt);
-  mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
+  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
   va_end(ap);
   if (c->send.len > 15) {
     mg_snprintf((char *) &c->send.buf[len - 14], 11, "%010lu",
@@ -2741,7 +2742,7 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
 void mg_log(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  mg_vrprintf(s_log_func, s_log_func_param, fmt, &ap);
+  mg_vxprintf(s_log_func, s_log_func_param, fmt, &ap);
   va_end(ap);
   logc((unsigned char) '\n');
 }
@@ -3282,7 +3283,7 @@ size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
   size_t old = c->send.len;
   va_list tmp;
   va_copy(tmp, ap);
-  mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, &tmp);
+  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &tmp);
   return c->send.len - old;
 }
 
@@ -3587,10 +3588,10 @@ void mg_rpc_process(struct mg_rpc_req *r) {
 void mg_rpc_vok(struct mg_rpc_req *r, const char *fmt, va_list *ap) {
   int len, off = mg_json_get(r->frame, "$.id", &len);
   if (off > 0) {
-    mg_rprintf(r->pfn, r->pfn_data, "{%Q:%.*s,%Q:", "id", len,
+    mg_xprintf(r->pfn, r->pfn_data, "{%Q:%.*s,%Q:", "id", len,
                &r->frame.ptr[off], "result");
-    mg_vrprintf(r->pfn, r->pfn_data, fmt == NULL ? "null" : fmt, ap);
-    mg_rprintf(r->pfn, r->pfn_data, "}");
+    mg_vxprintf(r->pfn, r->pfn_data, fmt == NULL ? "null" : fmt, ap);
+    mg_xprintf(r->pfn, r->pfn_data, "}");
   }
 }
 
@@ -3603,14 +3604,14 @@ void mg_rpc_ok(struct mg_rpc_req *r, const char *fmt, ...) {
 
 void mg_rpc_verr(struct mg_rpc_req *r, int code, const char *fmt, va_list *ap) {
   int len, off = mg_json_get(r->frame, "$.id", &len);
-  mg_rprintf(r->pfn, r->pfn_data, "{");
+  mg_xprintf(r->pfn, r->pfn_data, "{");
   if (off > 0) {
-    mg_rprintf(r->pfn, r->pfn_data, "%Q:%.*s,", "id", len, &r->frame.ptr[off]);
+    mg_xprintf(r->pfn, r->pfn_data, "%Q:%.*s,", "id", len, &r->frame.ptr[off]);
   }
-  mg_rprintf(r->pfn, r->pfn_data, "%Q:{%Q:%d,%Q:", "error", "code", code,
+  mg_xprintf(r->pfn, r->pfn_data, "%Q:{%Q:%d,%Q:", "error", "code", code,
              "message");
-  mg_vrprintf(r->pfn, r->pfn_data, fmt == NULL ? "null" : fmt, ap);
-  mg_rprintf(r->pfn, r->pfn_data, "}}");
+  mg_vxprintf(r->pfn, r->pfn_data, fmt == NULL ? "null" : fmt, ap);
+  mg_xprintf(r->pfn, r->pfn_data, "}}");
 }
 
 void mg_rpc_err(struct mg_rpc_req *r, int code, const char *fmt, ...) {
@@ -3624,7 +3625,7 @@ static size_t print_methods(mg_pfn_t pfn, void *pfn_data, va_list *ap) {
   struct mg_rpc *h, **head = (struct mg_rpc **) va_arg(*ap, void **);
   size_t len = 0;
   for (h = *head; h != NULL; h = h->next) {
-    len += mg_rprintf(pfn, pfn_data, "%s%.*Q", h == *head ? "" : ",",
+    len += mg_xprintf(pfn, pfn_data, "%s%.*Q", h == *head ? "" : ",",
                       (int) h->method.len, h->method.ptr);
   }
   return len;
@@ -5654,7 +5655,7 @@ struct ws_msg {
 size_t mg_ws_vprintf(struct mg_connection *c, int op, const char *fmt,
                      va_list *ap) {
   size_t len = c->send.len;
-  size_t n = mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, ap);
+  size_t n = mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
   mg_ws_wrap(c, c->send.len - len, op);
   return n;
 }
@@ -5680,13 +5681,13 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
   mg_sha1_update(&sha_ctx, (unsigned char *) magic, 36);
   mg_sha1_final(sha, &sha_ctx);
   mg_base64_encode(sha, sizeof(sha), (char *) b64_sha);
-  mg_rprintf(mg_pfn_iobuf, &c->send,
+  mg_xprintf(mg_pfn_iobuf, &c->send,
              "HTTP/1.1 101 Switching Protocols\r\n"
              "Upgrade: websocket\r\n"
              "Connection: Upgrade\r\n"
              "Sec-WebSocket-Accept: %s\r\n",
              b64_sha);
-  if (fmt != NULL) mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, ap);
+  if (fmt != NULL) mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
   if (wsproto != NULL) {
     mg_printf(c, "Sec-WebSocket-Protocol: %.*s\r\n", (int) wsproto->len,
               wsproto->ptr);
@@ -5873,7 +5874,7 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
     struct mg_str host = mg_url_host(url);
     mg_random(nonce, sizeof(nonce));
     mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key);
-    mg_rprintf(mg_pfn_iobuf, &c->send,
+    mg_xprintf(mg_pfn_iobuf, &c->send,
                "GET %s HTTP/1.1\r\n"
                "Upgrade: websocket\r\n"
                "Host: %.*s\r\n"
@@ -5884,10 +5885,10 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
     if (fmt != NULL) {
       va_list ap;
       va_start(ap, fmt);
-      mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
+      mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
       va_end(ap);
     }
-    mg_rprintf(mg_pfn_iobuf, &c->send, "\r\n");
+    mg_xprintf(mg_pfn_iobuf, &c->send, "\r\n");
     c->pfn = mg_ws_cb;
     c->pfn_data = NULL;
   }
