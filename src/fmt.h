@@ -15,7 +15,5 @@ size_t mg_vrprintf(void (*)(char, void *), void *, const char *fmt, va_list *);
 size_t mg_rprintf(void (*fn)(char, void *), void *, const char *fmt, ...);
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap);
 size_t mg_snprintf(char *, size_t, const char *fmt, ...);
-size_t mg_asprintf(char **, size_t, const char *fmt, ...);
-size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
+char *mg_vmprintf(const char *fmt, va_list *ap);
 char *mg_mprintf(const char *fmt, ...);
-char *mg_vmprintf(const char *fmt, va_list ap);

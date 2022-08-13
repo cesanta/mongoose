@@ -45,31 +45,22 @@ char *mg_file_read(struct mg_fs *fs, const char *path, size_t *sizep) {
 bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
                    size_t len) {
   bool result = false;
-  struct mg_fd *fd;
-  char tmp[MG_PATH_MAX];
-  mg_snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
-  if ((fd = mg_fs_open(fs, tmp, MG_FS_WRITE)) != NULL) {
+  struct mg_fd *fd = mg_fs_open(fs, path, MG_FS_WRITE);
+  if (fd != NULL) {
     result = fs->wr(fd->fd, buf, len) == len;
     mg_fs_close(fd);
-    if (result) {
-      fs->rm(path);
-      fs->mv(tmp, path);
-    } else {
-      fs->rm(tmp);
-    }
   }
   return result;
 }
 
 bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
-  char tmp[256], *buf = tmp;
-  bool result;
-  size_t len;
   va_list ap;
+  char *data;
+  bool result = false;
   va_start(ap, fmt);
-  len = mg_vasprintf(&buf, sizeof(tmp), fmt, ap);
+  data = mg_vmprintf(fmt, &ap);
   va_end(ap);
-  result = mg_file_write(fs, path, buf, len > 0 ? (size_t) len : 0);
-  if (buf != tmp) free(buf);
+  result = mg_file_write(fs, path, data, strlen(data));
+  free(data);
   return result;
 }

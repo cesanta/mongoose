@@ -1,37 +1,6 @@
 #include "fmt.h"
 #include "iobuf.h"
 
-size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
-  va_list ap_copy;
-  size_t len;
-
-  va_copy(ap_copy, ap);
-  len = mg_vsnprintf(*buf, size, fmt, &ap_copy);
-  va_end(ap_copy);
-
-  if (len >= size) {
-    //  Allocate a buffer that is large enough
-    if ((*buf = (char *) calloc(1, len + 1)) == NULL) {
-      len = 0;
-    } else {
-      va_copy(ap_copy, ap);
-      len = mg_vsnprintf(*buf, len + 1, fmt, &ap_copy);
-      va_end(ap_copy);
-    }
-  }
-
-  return len;
-}
-
-size_t mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
-  size_t ret;
-  va_list ap;
-  va_start(ap, fmt);
-  ret = mg_vasprintf(buf, size, fmt, ap);
-  va_end(ap);
-  return ret;
-}
-
 size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
   va_list ap;
   size_t n;
@@ -41,17 +10,17 @@ size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
   return n;
 }
 
-char *mg_vmprintf(const char *fmt, va_list ap) {
-  char *s = NULL;
-  mg_vasprintf(&s, 0, fmt, ap);
-  return s;
+char *mg_vmprintf(const char *fmt, va_list *ap) {
+  struct mg_iobuf io = {0, 0, 0, 256};
+  mg_vrprintf(mg_pfn_iobuf, &io, fmt, ap);
+  return (char *) io.buf;
 }
 
 char *mg_mprintf(const char *fmt, ...) {
-  char *s = NULL;
+  char *s;
   va_list ap;
   va_start(ap, fmt);
-  mg_vasprintf(&s, 0, fmt, ap);
+  s = mg_vmprintf(fmt, &ap);
   va_end(ap);
   return s;
 }

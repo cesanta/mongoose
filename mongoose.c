@@ -396,15 +396,14 @@ void mg_call(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 void mg_error(struct mg_connection *c, const char *fmt, ...) {
-  char mem[256], *buf = mem;
+  char buf[64];
   va_list ap;
   va_start(ap, fmt);
-  mg_vasprintf(&buf, sizeof(mem), fmt, ap);
+  mg_vsnprintf(buf, sizeof(buf), fmt, &ap);
   va_end(ap);
   MG_ERROR(("%lu %p %s", c->id, c->fd, buf));
   c->is_closing = 1;             // Set is_closing before sending MG_EV_CALL
   mg_call(c, MG_EV_ERROR, buf);  // Let user handler to override it
-  if (buf != mem) free(buf);
 }
 
 #ifdef MG_ENABLE_LINES
@@ -412,37 +411,6 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 #endif
 
 
-
-size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap) {
-  va_list ap_copy;
-  size_t len;
-
-  va_copy(ap_copy, ap);
-  len = mg_vsnprintf(*buf, size, fmt, &ap_copy);
-  va_end(ap_copy);
-
-  if (len >= size) {
-    //  Allocate a buffer that is large enough
-    if ((*buf = (char *) calloc(1, len + 1)) == NULL) {
-      len = 0;
-    } else {
-      va_copy(ap_copy, ap);
-      len = mg_vsnprintf(*buf, len + 1, fmt, &ap_copy);
-      va_end(ap_copy);
-    }
-  }
-
-  return len;
-}
-
-size_t mg_asprintf(char **buf, size_t size, const char *fmt, ...) {
-  size_t ret;
-  va_list ap;
-  va_start(ap, fmt);
-  ret = mg_vasprintf(buf, size, fmt, ap);
-  va_end(ap);
-  return ret;
-}
 
 size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
   va_list ap;
@@ -453,17 +421,17 @@ size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
   return n;
 }
 
-char *mg_vmprintf(const char *fmt, va_list ap) {
-  char *s = NULL;
-  mg_vasprintf(&s, 0, fmt, ap);
-  return s;
+char *mg_vmprintf(const char *fmt, va_list *ap) {
+  struct mg_iobuf io = {0, 0, 0, 256};
+  mg_vrprintf(mg_pfn_iobuf, &io, fmt, ap);
+  return (char *) io.buf;
 }
 
 char *mg_mprintf(const char *fmt, ...) {
-  char *s = NULL;
+  char *s;
   va_list ap;
   va_start(ap, fmt);
-  mg_vasprintf(&s, 0, fmt, ap);
+  s = mg_vmprintf(fmt, &ap);
   va_end(ap);
   return s;
 }
@@ -877,32 +845,23 @@ char *mg_file_read(struct mg_fs *fs, const char *path, size_t *sizep) {
 bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
                    size_t len) {
   bool result = false;
-  struct mg_fd *fd;
-  char tmp[MG_PATH_MAX];
-  mg_snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
-  if ((fd = mg_fs_open(fs, tmp, MG_FS_WRITE)) != NULL) {
+  struct mg_fd *fd = mg_fs_open(fs, path, MG_FS_WRITE);
+  if (fd != NULL) {
     result = fs->wr(fd->fd, buf, len) == len;
     mg_fs_close(fd);
-    if (result) {
-      fs->rm(path);
-      fs->mv(tmp, path);
-    } else {
-      fs->rm(tmp);
-    }
   }
   return result;
 }
 
 bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
-  char tmp[256], *buf = tmp;
-  bool result;
-  size_t len;
   va_list ap;
+  char *data;
+  bool result = false;
   va_start(ap, fmt);
-  len = mg_vasprintf(&buf, sizeof(tmp), fmt, ap);
+  data = mg_vmprintf(fmt, &ap);
   va_end(ap);
-  result = mg_file_write(fs, path, buf, len > 0 ? (size_t) len : 0);
-  if (buf != tmp) free(buf);
+  result = mg_file_write(fs, path, data, strlen(data));
+  free(data);
   return result;
 }
 
@@ -2734,20 +2693,22 @@ long mg_json_get_long(struct mg_str json, const char *path, long dflt) {
 
 
 
-static void default_logger(unsigned char c) {
+static void default_logger(char c, void *param) {
   putchar(c);
-  (void) c;
+  (void) c, (void) param;
 }
 
 static int s_level = MG_LL_INFO;
-static void (*s_log_func)(unsigned char) = default_logger;
+static mg_pfn_t s_log_func = default_logger;
+static void *s_log_func_param = NULL;
 
-void mg_log_set_fn(void (*fn)(unsigned char)) {
+void mg_log_set_fn(mg_pfn_t fn, void *param) {
   s_log_func = fn;
+  s_log_func_param = param;
 }
 
 static void logc(unsigned char c) {
-  s_log_func(c);
+  s_log_func((char) c, s_log_func_param);
 }
 
 static void logs(const char *buf, size_t len) {
@@ -2778,15 +2739,11 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
 }
 
 void mg_log(const char *fmt, ...) {
-  char mem[256], *buf = mem;
   va_list ap;
-  size_t len;
   va_start(ap, fmt);
-  len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
+  mg_vrprintf(s_log_func, s_log_func_param, fmt, &ap);
   va_end(ap);
-  logs(buf, len);
   logc((unsigned char) '\n');
-  if (buf != mem) free(buf);
 }
 
 static unsigned char nibble(unsigned c) {
@@ -5238,11 +5195,9 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, NULL);
 #endif
     if (opts->srvname.len > 0) {
-      char mem[128], *buf = mem;
-      mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
-                  opts->srvname.ptr);
-      mbedtls_ssl_set_hostname(&tls->ssl, buf);
-      if (buf != mem) free(buf);
+      char *x = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);
+      mbedtls_ssl_set_hostname(&tls->ssl, x);
+      free(x);
     }
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
   }
@@ -5396,22 +5351,11 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 #endif
     }
   }
-#if OPENSSL_VERSION_NUMBER > 0x10002000L
-  if (opts->srvname.len > 0) {
-    char mem[128], *buf = mem;
-    mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
-                opts->srvname.ptr);
-    SSL_set1_host(tls->ssl, buf);
-    if (buf != mem) free(buf);
-  }
-#endif
   if (opts->ciphers != NULL) SSL_set_cipher_list(tls->ssl, opts->ciphers);
   if (opts->srvname.len > 0) {
-    char mem[128], *buf = mem;
-    mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
-                opts->srvname.ptr);
-    SSL_set_tlsext_host_name(tls->ssl, buf);
-    if (buf != mem) free(buf);
+    char *s = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);
+    SSL_set1_host(tls->ssl, s);
+    free(s);
   }
   c->tls = tls;
   c->is_tls = 1;
@@ -5726,10 +5670,9 @@ size_t mg_ws_printf(struct mg_connection *c, int op, const char *fmt, ...) {
 
 static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
                          const struct mg_str *wsproto, const char *fmt,
-                         va_list ap) {
+                         va_list *ap) {
   const char *magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
   unsigned char sha[20], b64_sha[30];
-  char mem[128], *buf = mem;
 
   mg_sha1_ctx sha_ctx;
   mg_sha1_init(&sha_ctx);
@@ -5737,16 +5680,13 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
   mg_sha1_update(&sha_ctx, (unsigned char *) magic, 36);
   mg_sha1_final(sha, &sha_ctx);
   mg_base64_encode(sha, sizeof(sha), (char *) b64_sha);
-  buf[0] = '\0';
-  if (fmt != NULL) mg_vasprintf(&buf, sizeof(mem), fmt, ap);
-  mg_printf(c,
-            "HTTP/1.1 101 Switching Protocols\r\n"
-            "Upgrade: websocket\r\n"
-            "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: %s\r\n"
-            "%s",
-            b64_sha, buf);
-  if (buf != mem) free(buf);
+  mg_rprintf(mg_pfn_iobuf, &c->send,
+             "HTTP/1.1 101 Switching Protocols\r\n"
+             "Upgrade: websocket\r\n"
+             "Connection: Upgrade\r\n"
+             "Sec-WebSocket-Accept: %s\r\n",
+             b64_sha);
+  if (fmt != NULL) mg_vrprintf(mg_pfn_iobuf, &c->send, fmt, ap);
   if (wsproto != NULL) {
     mg_printf(c, "Sec-WebSocket-Protocol: %.*s\r\n", (int) wsproto->len,
               wsproto->ptr);
@@ -5966,7 +5906,7 @@ void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
     struct mg_str *wsproto = mg_http_get_header(hm, "Sec-WebSocket-Protocol");
     va_list ap;
     va_start(ap, fmt);
-    ws_handshake(c, wskey, wsproto, fmt, ap);
+    ws_handshake(c, wskey, wsproto, fmt, &ap);
     va_end(ap);
     c->is_websocket = 1;
     mg_call(c, MG_EV_WS_OPEN, hm);

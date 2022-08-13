@@ -145,11 +145,9 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, NULL);
 #endif
     if (opts->srvname.len > 0) {
-      char mem[128], *buf = mem;
-      mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
-                  opts->srvname.ptr);
-      mbedtls_ssl_set_hostname(&tls->ssl, buf);
-      if (buf != mem) free(buf);
+      char *x = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);
+      mbedtls_ssl_set_hostname(&tls->ssl, x);
+      free(x);
     }
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
   }

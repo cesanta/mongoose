@@ -3,20 +3,22 @@
 #include "str.h"
 #include "util.h"
 
-static void default_logger(unsigned char c) {
+static void default_logger(char c, void *param) {
   putchar(c);
-  (void) c;
+  (void) c, (void) param;
 }
 
 static int s_level = MG_LL_INFO;
-static void (*s_log_func)(unsigned char) = default_logger;
+static mg_pfn_t s_log_func = default_logger;
+static void *s_log_func_param = NULL;
 
-void mg_log_set_fn(void (*fn)(unsigned char)) {
+void mg_log_set_fn(mg_pfn_t fn, void *param) {
   s_log_func = fn;
+  s_log_func_param = param;
 }
 
 static void logc(unsigned char c) {
-  s_log_func(c);
+  s_log_func((char) c, s_log_func_param);
 }
 
 static void logs(const char *buf, size_t len) {
@@ -47,15 +49,11 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
 }
 
 void mg_log(const char *fmt, ...) {
-  char mem[256], *buf = mem;
   va_list ap;
-  size_t len;
   va_start(ap, fmt);
-  len = mg_vasprintf(&buf, sizeof(mem), fmt, ap);
+  mg_vrprintf(s_log_func, s_log_func_param, fmt, &ap);
   va_end(ap);
-  logs(buf, len);
   logc((unsigned char) '\n');
-  if (buf != mem) free(buf);
 }
 
 static unsigned char nibble(unsigned c) {

@@ -1473,7 +1473,7 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_ws\_send()
 
 ```c
-size_t mg_ws_send(struct mg_connection *c, const char *buf, size_t len, int op);
+size_t mg_ws_send(struct mg_connection *c, const void *buf, size_t len, int op);
 ```
 
 Send data to websocket peer
@@ -1513,7 +1513,7 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 ```c
 size_t mg_ws_printf(struct mg_connection *, int op, const char *fmt, ...);
-size_t mg_ws_vprintf(struct mg_connection *, int op, const char *fmt, va_list);
+size_t mg_ws_vprintf(struct mg_connection *, int op, const char *fmt, va_list *);
 ```
 
 Same as `mg_ws_send()`, but formats data using `printf()` semantics.
@@ -2602,8 +2602,6 @@ mg_remove_double_dots(data);  // data is /a.txt
 ```c
 size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...);
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap);
-size_t mg_asprintf(char **buf, size_t len, const char *fmt, ...);
-size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
 ```
 
 Print formatted string into a string buffer, just like `snprintf()`
@@ -2663,39 +2661,11 @@ size_t f(void (*out)(char, void *), void *ptr, va_list *ap) {
 }
 ```
 
-### mg\_asprintf(), mg\_vasprintf()
-
-```c
-int mg_asprintf(char **buf, size_t size, const char *fmt, ...);
-int mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
-```
-
-Print message specified by printf-like format string `fmt` into a buffer
-pointed by `buf` of size `size`. If `size` is large enough to hold the whole
-message, then a message is stored in `*buf`. If it does not fit, then a large
-enough buffer is allocated to hold a message, and `buf` is changed to point to
-that buffer.
-
-Parameters:
-- `buf` - Pointer to pointer to output buffer
-- `size` - Pre-allocated buffer size
-- `fmt` - printf-like format string
-
-Return value: Number of bytes printed
-
-Usage example:
-
-```c
-char buf[16], *pbuf = buf;
-mg_asprintf(&pbuf, sizeof(buf), "Hello, %s!", "world"); // buf is now "Hello, world!"
-if (pbuf != buf) free(pbuf);
-```
-
 ### mg\_mprintf(), mg\_vmprintf()
 
 ```c
 char *mg_mprintf(const char *fmt, ...);
-char *mg_vmprintf(const char *fmt, va_list ap);
+char *mg_vmprintf(const char *fmt, va_list *ap);
 ```
 
 Print message into an allocated memory buffer. Caller must free the result.

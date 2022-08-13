@@ -89,22 +89,11 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 #endif
     }
   }
-#if OPENSSL_VERSION_NUMBER > 0x10002000L
-  if (opts->srvname.len > 0) {
-    char mem[128], *buf = mem;
-    mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
-                opts->srvname.ptr);
-    SSL_set1_host(tls->ssl, buf);
-    if (buf != mem) free(buf);
-  }
-#endif
   if (opts->ciphers != NULL) SSL_set_cipher_list(tls->ssl, opts->ciphers);
   if (opts->srvname.len > 0) {
-    char mem[128], *buf = mem;
-    mg_asprintf(&buf, sizeof(mem), "%.*s", (int) opts->srvname.len,
-                opts->srvname.ptr);
-    SSL_set_tlsext_host_name(tls->ssl, buf);
-    if (buf != mem) free(buf);
+    char *s = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);
+    SSL_set1_host(tls->ssl, s);
+    free(s);
   }
   c->tls = tls;
   c->is_tls = 1;

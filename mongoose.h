@@ -795,10 +795,9 @@ size_t mg_vrprintf(void (*)(char, void *), void *, const char *fmt, va_list *);
 size_t mg_rprintf(void (*fn)(char, void *), void *, const char *fmt, ...);
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap);
 size_t mg_snprintf(char *, size_t, const char *fmt, ...);
-size_t mg_asprintf(char **, size_t, const char *fmt, ...);
-size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
+char *mg_vmprintf(const char *fmt, va_list *ap);
 char *mg_mprintf(const char *fmt, ...);
-char *mg_vmprintf(const char *fmt, va_list ap);
+
 
 
 
@@ -809,7 +808,7 @@ void mg_log(const char *fmt, ...);
 bool mg_log_prefix(int ll, const char *file, int line, const char *fname);
 void mg_log_set(int log_level);
 void mg_hexdump(const void *buf, size_t len);
-void mg_log_set_fn(void (*logfunc)(unsigned char ch));
+void mg_log_set_fn(mg_pfn_t fn, void *param);
 
 #if MG_ENABLE_LOG
 #define MG_LOG(level, args)                                                \

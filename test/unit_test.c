@@ -1785,13 +1785,9 @@ static void test_util(void) {
   }
 
   {
-    s = buf;
-    mg_asprintf(&s, sizeof(buf), "%3d", 123);
-    ASSERT(s == buf);
-    ASSERT(strcmp(buf, "123") == 0);
-    mg_asprintf(&s, sizeof(buf), "%.*s", 7, "a%40b.c");
-    ASSERT(s == buf);
-    ASSERT(strcmp(buf, "a%40b.c") == 0);
+    s = mg_mprintf("%3d", 123);
+    ASSERT(strcmp(s, "123") == 0);
+    free(s);
   }
 
   ASSERT(mg_to64(mg_str("-9223372036854775809")) == 0);
