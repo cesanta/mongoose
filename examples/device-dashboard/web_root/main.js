@@ -119,7 +119,7 @@ const Configuration = function(props) {
   const updatepub = ev => update('pub', pub);
   const updatesub = ev => update('sub', sub);
 
-  console.log(props, [url, pub, sub]);
+  // console.log(props, [url, pub, sub]);
   return html`
 <div class="section">
   <h3 style="background: #c03434; color: #fff; padding: 0.4em;">
@@ -319,12 +319,12 @@ const App = function(props) {
     var tid, wsURI = proto + '//' + l.host + '/api/watch'
     var reconnect = function() {
       var ws = new WebSocket(wsURI);
-      ws.onopen = () => console.log('ws connected');
+      // ws.onopen = () => console.log('ws connected');
       ws.onmessage = function(ev) {
         try {
           var msg = JSON.parse(ev.data);
           PubSub.publish(msg);
-          if (msg.name != 'metrics') console.log('ws->', msg);
+          // if (msg.name != 'metrics') console.log('ws->', msg);
         } catch (e) {
           console.log('Invalid ws frame:', ev.data);  // eslint-disable-line
         }

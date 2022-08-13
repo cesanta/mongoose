@@ -43,7 +43,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       update_config(json, "$.url", &s_config.url);
       update_config(json, "$.pub", &s_config.pub);
       update_config(json, "$.sub", &s_config.sub);
-      mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
+      mg_http_reply(c, 200, "", "ok\n");
     } else {
       struct mg_http_serve_opts opts = {.root_dir = s_root_dir};
       mg_http_serve_dir(c, ev_data, &opts);

@@ -49,7 +49,7 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct user *u = getuser(hm);
     if (u == NULL && mg_http_match_uri(hm, "/api/#")) {
       // All URIs starting with /api/ must be authenticated
-      mg_printf(c, "%s", "HTTP/1.1 403 Denied\r\nContent-Length: 0\r\n\r\n");
+      mg_http_reply(c, 403, "", "Denied\n");
     } else if (mg_http_match_uri(hm, "/api/data")) {
       mg_http_reply(c, 200, "Content-Type: application/json\r\n",
                     "{%Q:%Q,%Q:%Q}\n", "text", "Hello!", "data", "somedata");
