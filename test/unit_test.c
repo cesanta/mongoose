@@ -591,7 +591,7 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void ew2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   size_t size = 65 * 1024 + 737;
   if (ev == MG_EV_WS_OPEN) {
-    char *msg = calloc(1, size + 1);
+    char *msg = (char *) calloc(1, size + 1);
     memset(msg, 'A', size);
     mg_ws_printf(c, WEBSOCKET_OP_TEXT, "%s", msg);
     free(msg);
