@@ -4039,16 +4039,17 @@ mg_hexdump(c->recv.buf, c->recv.len);  // Hex dump incoming data
 ### mg\_log\_set\_fn()
 
 ```c
-void mg_log_set_fn(void (*logfunc)(unsigned char ch));
+void mg_log_set_fn(mg_pfn_t logfunc, void *param);
 ```
 
 Redirect logs to a custom function. Parameters:
 - `logfunc` - a pointer to a function that logs a single character
+- `param` - a parameter for a logging function
 
 Usage example: redirecting logs to syslog.
 
 ```c
-static void mylog(uint8_t ch) {
+static void mylog(char ch, void *param) {
   static char buf[256];
   static size_t len;
   buf[len++] = ch;
@@ -4058,7 +4059,7 @@ static void mylog(uint8_t ch) {
   }
 }
 ...
-mg_log_set_fn(mylog);
+mg_log_set_fn(mylog, NULL);
 ```
 
 ## Filesystem
