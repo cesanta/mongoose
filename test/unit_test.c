@@ -1528,7 +1528,6 @@ static void test_str(void) {
     ASSERT(strcmp(buf, expected) == 0);
 
     p = mg_mprintf("[%s,%M,%s]", "null", pf1, 2, 3, "hi");
-    // printf("-> %s\n", p);
     ASSERT(strcmp(p, "[null,5,hi]") == 0);
     free(p);
 
@@ -1539,7 +1538,6 @@ static void test_str(void) {
     mg_rprintf(mg_pfn_iobuf, &io, "[%M", pf2, 10);
     mg_rprintf(mg_pfn_iobuf, &io, ",");
     mg_rprintf(mg_pfn_iobuf, &io, "%d]", 7);
-    printf("-> %s\n", io.buf);
     ASSERT(strcmp((char *) io.buf, "[9876543210,7]") == 0);
     mg_iobuf_free(&io);
   }
@@ -2571,5 +2569,6 @@ int main(void) {
   test_sntp();
   test_mqtt();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
+
   return EXIT_SUCCESS;
 }

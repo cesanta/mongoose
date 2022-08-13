@@ -56,14 +56,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
-  char *msg = mg_mprintf("{%Q:%Q,%Q:[%d,%d,%d]}", "method", "notification1",
-                         "params", 1, 2, 3);
   // Broadcast message to all connected websocket clients.
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
-    // Send JSON-RPC notifications to marked connections
-    if (c->label[0] == 'W') mg_ws_send(c, msg, strlen(msg), WEBSOCKET_OP_TEXT);
+    if (c->label[0] != 'W') continue;
+    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%Q:%Q,%Q:[%d,%d,%d]}", "method",
+                 "notification1", "params", 1, 2, 3);
   }
-  free(msg);
 }
 
 int main(void) {
