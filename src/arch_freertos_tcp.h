@@ -15,9 +15,11 @@
 #include <time.h>
 
 #include <FreeRTOS.h>
+#include <list.h>
+#include <task.h>
+
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
-#include <task.h>
 
 // Why FreeRTOS-TCP did not implement a clean BSD API, but its own thing
 // with FreeRTOS_ prefix, is beyond me

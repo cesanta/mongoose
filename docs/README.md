@@ -2682,7 +2682,7 @@ char *msg = mg_mprintf("Double quoted string: %Q!", "hi");
 free(msg);
 ```
 
-### mg\_rprintf(), mg\_vrprintf()
+### mg\_xprintf(), mg\_vxprintf()
 
 ```c
 size_t mg_xprintf(void (*out)(char, void *), void *param, const char *fmt, ...);

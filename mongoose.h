@@ -168,6 +168,7 @@ extern "C" {
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -201,15 +202,10 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #define calloc(a, b) mg_calloc((a), (b))
 #define free(a) vPortFree(a)
 #define malloc(a) pvPortMalloc(a)
-
 #define mkdir(a, b) (-1)
 
 #ifndef MG_IO_SIZE
 #define MG_IO_SIZE 512
-#endif
-
-#ifndef MG_PATH_MAX
-#define MG_PATH_MAX 128
 #endif
 
 #endif  // MG_ARCH == MG_ARCH_FREERTOS_LWIP
@@ -230,9 +226,11 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #include <time.h>
 
 #include <FreeRTOS.h>
+#include <list.h>
+#include <task.h>
+
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
-#include <task.h>
 
 // Why FreeRTOS-TCP did not implement a clean BSD API, but its own thing
 // with FreeRTOS_ prefix, is beyond me
