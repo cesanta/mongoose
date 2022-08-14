@@ -1424,6 +1424,11 @@ static size_t pf2(void (*out)(char, void *), void *ptr, va_list *ap) {
   return n;
 }
 
+static bool chkdbl(struct mg_str s, double val) {
+  double d, tolerance = 1e-14;
+  return mg_json_get_num(s, "$", &d) && fabs(val - d) < tolerance;
+}
+
 static void test_str(void) {
   {
     struct mg_str s = mg_strdup(mg_str("a"));
@@ -1445,15 +1450,11 @@ static void test_str(void) {
   ASSERT(sccmp("a", "A1", -49));
 
   {
-    int n;
-    double tolerance = 1e-14;
-    ASSERT(mg_atod("1.23", 4, &n) == 1.23 && n == 4);
-    ASSERT(mg_atod("1.23", 3, &n) == 1.2 && n == 3);
-    ASSERT(mg_atod("1.23", 2, &n) == 1 && n == 2);
-    ASSERT(mg_atod("1.23 ", 5, &n) - 1.23 < tolerance && n == 4);
-    ASSERT(mg_atod("-0.01 ", 6, &n) + 0.01 < tolerance);
-    ASSERT(mg_atod("-0.5e2", 6, &n) + 50 < tolerance);
-    ASSERT(mg_atod("123e-3", 6, &n) - 0.123 < tolerance);
+    ASSERT(chkdbl(mg_str_n("1.23", 3), 1.2));
+    ASSERT(chkdbl(mg_str("1.23 "), 1.23));
+    ASSERT(chkdbl(mg_str("-0.01 "), -0.01));
+    ASSERT(chkdbl(mg_str("-0.5e2"), -50.0));
+    ASSERT(chkdbl(mg_str("123e-3"), 0.123));
   }
 
   ASSERT(sn("%d", 0));

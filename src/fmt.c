@@ -64,52 +64,6 @@ static bool is_digit(int c) {
   return c >= '0' && c <= '9';
 }
 
-double mg_atod(const char *p, int len, int *numlen) {
-  double d = 0.0;
-  int i = 0, sign = 1;
-
-  // Sign
-  if (i < len && *p == '-') {
-    sign = -1, i++;
-  } else if (i < len && *p == '+') {
-    i++;
-  }
-
-  // Decimal
-  for (; i < len && p[i] >= '0' && p[i] <= '9'; i++) {
-    d *= 10.0;
-    d += p[i] - '0';
-  }
-  d *= sign;
-
-  // Fractional
-  if (i < len && p[i] == '.') {
-    double frac = 0.0, base = 0.1;
-    i++;
-    for (; i < len && p[i] >= '0' && p[i] <= '9'; i++) {
-      frac += base * (p[i] - '0');
-      base /= 10.0;
-    }
-    d += frac * sign;
-  }
-
-  // Exponential
-  if (i < len && (p[i] == 'e' || p[i] == 'E')) {
-    int j, exp = 0, minus = 0;
-    i++;
-    if (i < len && p[i] == '-') minus = 1, i++;
-    if (i < len && p[i] == '+') i++;
-    while (i < len && p[i] >= '0' && p[i] <= '9' && exp < 308)
-      exp = exp * 10 + (p[i++] - '0');
-    if (minus) exp = -exp;
-    for (j = 0; j < exp; j++) d *= 10.0;
-    for (j = 0; j < -exp; j++) d /= 10.0;
-  }
-
-  if (numlen != NULL) *numlen = i;
-  return d;
-}
-
 static int addexp(char *buf, int e, int sign) {
   int n = 0;
   buf[n++] = 'e';
@@ -141,7 +95,7 @@ static int xisnan(double x) {
          0x7ff00000;
 }
 
-size_t mg_dtoa(char *dst, size_t dstlen, double d, int width) {
+static size_t mg_dtoa(char *dst, size_t dstlen, double d, int width) {
   char buf[40];
   int i, s = 0, n = 0, e = 0;
   double t, mul, saved;
@@ -198,7 +152,7 @@ size_t mg_dtoa(char *dst, size_t dstlen, double d, int width) {
   return mg_snprintf(dst, dstlen, "%s", buf);
 }
 
-size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex) {
+static size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex) {
   const char *letters = "0123456789abcdef";
   uint64_t v = (uint64_t) val;
   size_t s = 0, n, i;
