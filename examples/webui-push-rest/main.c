@@ -26,7 +26,7 @@ static long getparam(struct mg_http_message *hm, const char *json_path) {
   return dv;
 }
 
-static size_t printdata(void (*out)(char, void *), void *ptr, va_list *ap) {
+static size_t printdata(mg_pfn_t out, void *ptr, va_list *ap) {
   const char *comma = "";
   size_t n = 0;
   for (int i = 0; i < DATA_SIZE; ++i) {
