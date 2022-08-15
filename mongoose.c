@@ -800,10 +800,18 @@ char *mg_file_read(struct mg_fs *fs, const char *path, size_t *sizep) {
 bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
                    size_t len) {
   bool result = false;
-  struct mg_fd *fd = mg_fs_open(fs, path, MG_FS_WRITE);
-  if (fd != NULL) {
+  struct mg_fd *fd;
+  char tmp[MG_PATH_MAX];
+  mg_snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
+  if ((fd = mg_fs_open(fs, tmp, MG_FS_WRITE)) != NULL) {
     result = fs->wr(fd->fd, buf, len) == len;
     mg_fs_close(fd);
+    if (result) {
+      fs->rm(path);
+      fs->mv(tmp, path);
+    } else {
+      fs->rm(tmp);
+    }
   }
   return result;
 }
