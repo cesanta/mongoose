@@ -647,6 +647,7 @@ int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
 
 Same as `mg_send()`, but formats data using `printf()` semantics. Return
 number of bytes appended to the output buffer.
+
 <span class="badge bg-danger">NOTE: </span> See [mg\_snprintf](#mg_snprintf-mg_vsnprintf)
 for the list of supported format specifiers
 
@@ -692,7 +693,7 @@ struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
 ```
 
 Wrap a given file descriptor `fd` into a connection, and add that connection
-to the event manager. An `fd` descriptor must suport `send()`, `recv()`,
+to the event manager. An `fd` descriptor must support `send()`, `recv()`,
 `select()` syscalls, and be non-blocking. Mongoose will treat it as a TCP
 socket. The `c->rem` and `c->loc` addresses will be empty.
 
@@ -1025,9 +1026,11 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path, struct mg_http_serve_opts *opts);
 ```
 
-Serve static file. 
+Serve static file.
+
 <span class="badge bg-danger">NOTE: </span> `opts->root_dir` settings
 is ignored by this function.
+
 <span class="badge bg-danger">NOTE: </span> `opts->extra_headers`
 must end with `\r\n`.
 
@@ -1517,8 +1520,10 @@ size_t mg_ws_vprintf(struct mg_connection *, int op, const char *fmt, va_list *)
 ```
 
 Same as `mg_ws_send()`, but formats data using `printf()` semantics.
+
 <span class="badge bg-danger">NOTE: </span> See [mg\_ws\_send](#mg_ws_send)
 for the list of possible Websocket message types
+
 <span class="badge bg-danger">NOTE: </span> See [mg\_snprintf](#mg_snprintf-mg_vsnprintf)
 for the list of supported format specifiers
 
@@ -2625,7 +2630,7 @@ Supported format specifiers:
 - `Q` - expect `char *`, outputs double-quoted JSON-escaped string (extension)
 - `H` - expect `int`, `void *`, outputs double-quoted hex string (extension)
 - `V` - expect `int`, `void *`, outputs double-quoted base64 string (extension)
-- `M` - expect `size_t (*)(char, void *), void *ptr, va_list *)`, calls another print function (extension)
+- `M` - expect `mg_pfn_t`, calls another print function (extension)
 - `g`, `f` - expect `double`
 - `c` - expect `char`
 - `%` - expect `%` character itself
