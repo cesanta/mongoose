@@ -264,8 +264,8 @@ static void arp_cache_add(struct mip_if *ifp, uint32_t ip, uint8_t mac[6]) {
   memcpy(p + p[0] + 2, &ip, sizeof(ip));  // Replace last entry: IP address
   memcpy(p + p[0] + 6, mac, 6);           // And MAC address
   p[1] = p[0], p[0] = p[p[1]];            // Point list head to us
-  // MG_DEBUG(("ARP cache: added %#lx @ %x:%x:%x:%x:%x:%x\n", (long) ip, mac[0],
-  //      mac[1], mac[2], mac[3], mac[4], mac[5]));
+  MG_DEBUG(("ARP cache: added %#lx @ %x:%x:%x:%x:%x:%x", (long) NET32(ip),
+            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]));
 }
 
 static void arp_ask(struct mip_if *ifp, uint32_t ip) {
@@ -321,6 +321,7 @@ static void tx_udp(struct mip_if *ifp, uint32_t ip_src, uint16_t sport,
                    size_t len) {
   struct ip *ip = tx_ip(ifp, 17, ip_src, ip_dst, len + sizeof(struct udp));
   struct udp *udp = (struct udp *) (ip + 1);
+  // MG_DEBUG(("UDP XX LEN %d %d", (int) len, (int) ifp->tx.len));
   udp->sport = sport;
   udp->dport = dport;
   udp->len = NET16((uint16_t) (sizeof(*udp) + len));
@@ -375,11 +376,11 @@ static void tx_dhcp_discover(struct mip_if *ifp) {
 }
 
 static void rx_arp(struct mip_if *ifp, struct pkt *pkt) {
-  // MG_DEBUG(("ARP op %d %#x %#x\n", NET16(arp->op), arp->spa, arp->tpa));
   if (pkt->arp->op == NET16(1) && pkt->arp->tpa == ifp->ip) {
     // ARP request. Make a response, then send
     struct eth *eth = (struct eth *) ifp->tx.buf;
     struct arp *arp = (struct arp *) (eth + 1);
+    MG_DEBUG(("ARP op %d %#x %#x\n", NET16(arp->op), arp->spa, arp->tpa));
     memcpy(eth->dst, pkt->eth->src, sizeof(eth->dst));
     memcpy(eth->src, ifp->mac, sizeof(eth->src));
     eth->type = NET16(0x806);
@@ -731,6 +732,7 @@ int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {
 
 void mg_connect_resolved(struct mg_connection *c) {
   struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
+  c->is_resolving = 0;
   if (ifp->eport < MIP_ETHEMERAL_PORT) ifp->eport = MIP_ETHEMERAL_PORT;
   if (c->is_udp) {
     c->loc.ip = ifp->ip;

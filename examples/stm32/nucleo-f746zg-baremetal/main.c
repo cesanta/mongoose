@@ -27,6 +27,7 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     uint64_t t = *(uint64_t *) ev_data;
     MG_INFO(("%lu SNTP: %lld ms from epoch", c->id, t));
     s_boot_timestamp = (time_t) ((t - mg_millis()) / 1000);
+    c->is_closing = 1;
   } else if (ev == MG_EV_CLOSE) {
     s_sntp_conn = NULL;
   }
@@ -35,12 +36,14 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 static void sntp_cb(void *param) {  // SNTP timer function. Sync up time
   struct mg_mgr *mgr = (struct mg_mgr *) param;
-  if (s_sntp_conn == NULL) s_sntp_conn = mg_sntp_connect(mgr, NULL, sfn, NULL);
-  if (s_boot_timestamp < 9999) mg_sntp_request(s_sntp_conn);
+  return;  // TODO(cpq): re-enable!
+  if (s_sntp_conn == NULL && s_boot_timestamp == 0) {
+    s_sntp_conn = mg_sntp_connect(mgr, NULL, sfn, NULL);
+  }
 }
 
 static void blink_cb(void *arg) {  // Blink periodically
-  // MG_INFO(("ticks: %u", (unsigned) s_ticks));
+  MG_INFO(("ticks: %u", (unsigned) s_ticks));
   gpio_toggle(LED2);
   (void) arg;
 }

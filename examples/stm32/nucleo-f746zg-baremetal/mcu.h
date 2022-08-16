@@ -65,6 +65,17 @@ struct flash {
 };
 #define FLASH ((struct flash *) 0x40023c00)
 
+struct scb {
+  volatile uint32_t CPUID, ICSR, VTOR, AIRCR, SCR, CCR, SHPR[3], SHCSR, CFSR,
+      HFSR, DFSR, MMFAR, BFAR, AFSR, ID_PFR[2], ID_DFR, ID_AFR, ID_MFR[4],
+      ID_ISAR[5], RESERVED0[1], CLIDR, CTR, CCSIDR, CSSELR, CPACR,
+      RESERVED3[93], STIR, RESERVED4[15], MVFR0, MVFR1, MVFR2, RESERVED5[1],
+      ICIALLU, RESERVED6[1], ICIMVAU, DCIMVAC, DCISW, DCCMVAU, DCCMVAC, DCCSW,
+      DCCIMVAC, DCCISW, RESERVED7[6], ITCMCR, DTCMCR, AHBPCR, CACR, AHBSCR,
+      RESERVED8[1], ABFSR;
+};
+#define SCB ((struct scb *) 0xe000e000)
+
 enum { GPIO_MODE_INPUT, GPIO_MODE_OUTPUT, GPIO_MODE_AF, GPIO_MODE_ANALOG };
 enum { GPIO_OTYPE_PUSH_PULL, GPIO_OTYPE_OPEN_DRAIN };
 enum { GPIO_SPEED_LOW, GPIO_SPEED_MEDIUM, GPIO_SPEED_HIGH, GPIO_SPEED_INSANE };
@@ -182,6 +193,7 @@ static inline void clock_init(void) {  // Set clock to 216Mhz
   while ((PWR->CSR1 & BIT(16)) == 0) spin(1);  // Wait until done
   PWR->CR1 |= BIT(17);                         // Enable overdrive switching
   while ((PWR->CSR1 & BIT(17)) == 0) spin(1);  // Wait until done
+  SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
 #endif
   FLASH->ACR |= 7 | BIT(8) | BIT(9);          // Flash latency 7, prefetch
   RCC->PLLCFGR &= ~((BIT(15) - 1));           // PLL = HSI * N / M / P
