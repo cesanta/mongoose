@@ -36,7 +36,6 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 static void sntp_cb(void *param) {  // SNTP timer function. Sync up time
   struct mg_mgr *mgr = (struct mg_mgr *) param;
-  return;  // TODO(cpq): re-enable!
   if (s_sntp_conn == NULL && s_boot_timestamp == 0) {
     s_sntp_conn = mg_sntp_connect(mgr, NULL, sfn, NULL);
   }
@@ -46,40 +45,6 @@ static void blink_cb(void *arg) {  // Blink periodically
   MG_INFO(("ticks: %u", (unsigned) s_ticks));
   gpio_toggle(LED2);
   (void) arg;
-}
-
-// Server event handler
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_POLL) return;
-  // MG_DEBUG(("%lu %p %d %p %p", c->id, c, ev, ev_data, fn_data));
-  if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/stats")) {
-      // Print some statistics about currently established connections
-      mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
-      mg_http_printf_chunk(c, "ID PROTO TYPE      LOCAL           REMOTE\n");
-      for (struct mg_connection *t = c->mgr->conns; t != NULL; t = t->next) {
-        char loc[40], rem[40];
-        mg_http_printf_chunk(c, "%-3lu %4s %s %-15s %s\n", t->id,
-                             t->is_udp ? "UDP" : "TCP",
-                             t->is_listening  ? "LISTENING"
-                             : t->is_accepted ? "ACCEPTED "
-                                              : "CONNECTED",
-                             mg_straddr(&t->loc, loc, sizeof(loc)),
-                             mg_straddr(&t->rem, rem, sizeof(rem)));
-      }
-      mg_http_printf_chunk(c, "");  // Don't forget the last empty chunk
-    } else {
-      mg_http_reply(c, 200, "", "hi\n");
-#if 0
-      struct mg_http_serve_opts opts = {0};
-      opts.root_dir = "/web_root";
-      opts.fs = &mg_fs_packed;
-      mg_http_serve_dir(c, hm, &opts);
-#endif
-    }
-  }
-  (void) fn_data;
 }
 
 uint64_t mg_millis(void) {  // Declare our own uptime function
@@ -132,7 +97,6 @@ int main(void) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_timer_add(&mgr, 1000, MG_TIMER_REPEAT, blink_cb, &mgr);
   mg_timer_add(&mgr, 5000, MG_TIMER_REPEAT, sntp_cb, &mgr);
-  mg_http_listen(&mgr, "http://0.0.0.0:80", fn, NULL);
 
   // Initialise Mongoose network stack
   // Specify MAC address, and use 0 for IP, mask, GW - i.e. use DHCP
@@ -142,10 +106,8 @@ int main(void) {
   mip_init(&mgr, &ipcfg, &mip_driver_stm32);
   MG_INFO(("Init done, starting main loop"));
 
-#if defined(DASH)
   extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, "http://0.0.0.0:8000", device_dashboard_fn, &mgr);
-#endif
+  mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, &mgr);
   for (;;) mg_mgr_poll(&mgr, 0);  // Infinite event loop
 
   return 0;
