@@ -14,5 +14,9 @@ To build this application, follow these steps:
 4. Run `make`. This invokes a Docker-based build. A firmware will be built
   in the `src/build/` directory:
   ```sh
-  make example
+  make build
+  ```
+5. Flash your ESP8266. If you have esptool.py installed, the build process will end telling you the command to flash your device. You can just run `make` again to use Docker:
+  ```sh
+  make flash PORT=/your/serial
   ```

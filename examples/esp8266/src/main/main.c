@@ -18,7 +18,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 // Event handler for a client connection - fetch the first web page in history
 // To enable TLS for HTTP,
-//   1. Copy "ca.pem" file to the ESP32 flash FS
+//   1. Copy "ca.pem" file to the ESP8266 flash FS
 //   2. Add TLS init snippet for the connection, see examples/http-client
 static void cb2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_CONNECT) {
