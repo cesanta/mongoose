@@ -39,6 +39,7 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #define calloc(a, b) mg_calloc((a), (b))
 #define free(a) vPortFree(a)
 #define malloc(a) pvPortMalloc(a)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
 #define mkdir(a, b) (-1)
 
 #ifndef MG_IO_SIZE
