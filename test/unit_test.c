@@ -2525,6 +2525,19 @@ static void test_rpc(void) {
   }
 
   {
+    const char *resp =
+        "{\"id\":true,\"error\":{\"code\":-32601,\"message\":\"foo not "
+        "found\"}}";
+    req.frame = mg_str("{\"id\": true,\"method\":\"foo\"}");
+    req.head = NULL;
+    mg_rpc_process(&req);
+    // MG_INFO(("-> %s", io.buf));
+    ASSERT(strcmp((char *) io.buf, resp) == 0);
+    mg_iobuf_free(&io);
+    req.head = &head;
+  }
+
+  {
     const char *resp = "{\"error\":{\"code\":-32700,\"message\":\"haha\"}}";
     req.frame = mg_str("haha");
     mg_rpc_process(&req);

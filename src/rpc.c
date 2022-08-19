@@ -24,7 +24,7 @@ void mg_rpc_process(struct mg_rpc_req *r) {
   int len, off = mg_json_get(r->frame, "$.method", &len);
   if (off > 0 && r->frame.ptr[off] == '"') {
     struct mg_str m = mg_str_n(&r->frame.ptr[off + 1], (size_t) len - 2);
-    struct mg_rpc *h = *(struct mg_rpc **) r->head;
+    struct mg_rpc *h = r->head == NULL ? NULL : *r->head;
     while (h != NULL && !mg_match(m, h->method, NULL)) h = h->next;
     if (h != NULL) {
       r->rpc = h;
