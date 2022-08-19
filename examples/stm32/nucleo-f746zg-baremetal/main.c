@@ -9,40 +9,10 @@
 #define LED3 PIN('B', 14)  // On-board LED pin (red)
 #define BTN1 PIN('C', 13)  // On-board user button
 
-static uint64_t s_ticks, s_exti;     // Counters, increased by IRQ handlers
-static time_t s_boot_timestamp = 0;  // Updated by SNTP
-static struct mg_connection *s_sntp_conn = NULL;  // SNTP connection
-
-// We have no valid system time(), and we need it for TLS. Implement it
-time_t time(time_t *tp) {
-  time_t t = s_boot_timestamp + (time_t) (mg_millis() / 1000);
-  if (tp != NULL) *tp = t;
-  return t;
-}
-
-// SNTP connection event handler. When we get a response from an SNTP server,
-// adjust s_boot_timestamp. We'll get a valid time from that point on
-static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_SNTP_TIME) {
-    uint64_t t = *(uint64_t *) ev_data;
-    MG_INFO(("%lu SNTP: %lld ms from epoch", c->id, t));
-    s_boot_timestamp = (time_t) ((t - mg_millis()) / 1000);
-    c->is_closing = 1;
-  } else if (ev == MG_EV_CLOSE) {
-    s_sntp_conn = NULL;
-  }
-  (void) fn_data;
-}
-
-static void sntp_cb(void *param) {  // SNTP timer function. Sync up time
-  struct mg_mgr *mgr = (struct mg_mgr *) param;
-  if (s_sntp_conn == NULL && s_boot_timestamp == 0) {
-    s_sntp_conn = mg_sntp_connect(mgr, NULL, sfn, NULL);
-  }
-}
+static uint64_t s_ticks, s_exti;  // Counters, increased by IRQ handlers
 
 static void blink_cb(void *arg) {  // Blink periodically
-  MG_INFO(("ticks: %u", (unsigned) s_ticks));
+  // MG_INFO(("ticks: %u", (unsigned) s_ticks));
   gpio_toggle(LED2);
   (void) arg;
 }
@@ -96,7 +66,6 @@ int main(void) {
   mg_mgr_init(&mgr);        // and attach it to the MIP interface
   mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_timer_add(&mgr, 1000, MG_TIMER_REPEAT, blink_cb, &mgr);
-  mg_timer_add(&mgr, 5000, MG_TIMER_REPEAT, sntp_cb, &mgr);
 
   // Initialise Mongoose network stack
   // Specify MAC address, and use 0 for IP, mask, GW - i.e. use DHCP

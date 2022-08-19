@@ -380,7 +380,7 @@ static void rx_arp(struct mip_if *ifp, struct pkt *pkt) {
     // ARP request. Make a response, then send
     struct eth *eth = (struct eth *) ifp->tx.buf;
     struct arp *arp = (struct arp *) (eth + 1);
-    MG_DEBUG(("ARP op %d %#x %#x\n", NET16(arp->op), arp->spa, arp->tpa));
+    MG_DEBUG(("ARP op %d %#x %#x", NET16(arp->op), arp->spa, arp->tpa));
     memcpy(eth->dst, pkt->eth->src, sizeof(eth->dst));
     memcpy(eth->src, ifp->mac, sizeof(eth->src));
     eth->type = NET16(0x806);
@@ -563,11 +563,19 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
 #if 0
   MG_INFO(("%lu %hhu %d", c ? c->id : 0, pkt->tcp->flags, (int) pkt->pay.len));
 #endif
-  if (c != NULL) {
+  if (c != NULL && c->is_connecting && pkt->tcp->flags & (TH_SYN | TH_ACK)) {
+    struct tcpstate *s = (struct tcpstate *) (c + 1);
+    s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
+    tx_tcp_pkt(ifp, pkt, TH_ACK, pkt->tcp->ack, NULL, 0);
+    c->is_connecting = 0;  // Client connected
+  } else if (c != NULL && c->is_connecting) {
+    tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
+  } else if (c != NULL) {
 #if 0
-     MG_DEBUG(("%lu %d %lx:%hx -> %lx:%hx", c->id, (int) pkt->raw.len,
-             pkt->ip->src, pkt->tcp->sport, pkt->ip->dst, pkt->tcp->dport));
-     hexdump(pkt->pay.buf, pkt->pay.len);
+    MG_DEBUG(("%lu %d %lx:%hu -> %lx:%hu", c->id, (int) pkt->raw.len,
+              mg_ntohl(pkt->ip->src), mg_ntohs(pkt->tcp->sport),
+              mg_ntohl(pkt->ip->dst), mg_ntohs(pkt->tcp->dport)));
+    mg_hexdump(pkt->pay.buf, pkt->pay.len);
 #endif
     read_conn(c, pkt);
   } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
@@ -730,22 +738,31 @@ int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {
   return -1;
 }
 
+#if 0
+static uint16_t mkeport(void) {
+  uint16_t a = 0, b = mg_millis() & 0xffffU, c = MIP_ETHEMERAL_PORT;
+  mg_random(&a, sizeof(a));
+  c += (a ^ b) % (0xffffU - MIP_ETHEMERAL_PORT);
+  return c;
+}
+#endif
+
 void mg_connect_resolved(struct mg_connection *c) {
   struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
   c->is_resolving = 0;
   if (ifp->eport < MIP_ETHEMERAL_PORT) ifp->eport = MIP_ETHEMERAL_PORT;
+  c->loc.ip = ifp->ip;
+  c->loc.port = mg_htons(ifp->eport++);
+  MG_DEBUG(("%lu %08lx.%hu->%08lx.%hu", c->id, mg_ntohl(c->loc.ip),
+            mg_ntohs(c->loc.port), mg_ntohl(c->rem.ip), mg_ntohs(c->rem.port)));
+  mg_call(c, MG_EV_RESOLVE, NULL);
   if (c->is_udp) {
-    c->loc.ip = ifp->ip;
-    c->loc.port = mg_htons(ifp->eport++);
-    MG_DEBUG(("%lu %08lx.%hu->%08lx.%hu", c->id, mg_ntohl(c->loc.ip),
-              mg_ntohs(c->loc.port), mg_ntohl(c->rem.ip),
-              mg_ntohs(c->rem.port)));
-    mg_call(c, MG_EV_RESOLVE, NULL);
     mg_call(c, MG_EV_CONNECT, NULL);
   } else {
-    mg_error(c, "Not implemented");
+    uint32_t isn = mg_htonl((uint32_t) mg_ntohs(c->loc.port));
+    tx_tcp(ifp, c->rem.ip, TH_SYN, c->loc.port, c->rem.port, isn, 0, NULL, 0);
+    c->is_connecting = 1;
   }
-  c->is_resolving = 0;
 }
 
 bool mg_open_listener(struct mg_connection *c, const char *url) {
@@ -774,6 +791,10 @@ static void fin_conn(struct mg_connection *c) {
          mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
 }
 
+static bool can_write(struct mg_connection *c) {
+  return c->is_connecting == 0 && c->is_resolving == 0 && c->send.len > 0;
+}
+
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   struct mg_connection *c, *tmp;
   uint64_t now = mg_millis();
@@ -781,7 +802,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   mg_timer_poll(&mgr->timers, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
-    if (c->send.len > 0) write_conn(c);
+    if (can_write(c)) write_conn(c);
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
     if (c->is_closing) {
       if (c->is_udp == false && c->is_listening == false) fin_conn(c);

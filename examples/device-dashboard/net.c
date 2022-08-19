@@ -7,6 +7,16 @@
 #define MQTT_PUBLISH_TOPIC "mg/my_device"
 #define MQTT_SUBSCRIBE_TOPIC "mg/#"
 
+static time_t s_boot_timestamp = 0;               // Updated by SNTP
+static struct mg_connection *s_sntp_conn = NULL;  // SNTP connection
+
+// Define system time()
+time_t time(time_t *tp) {
+  time_t t = s_boot_timestamp + (time_t) (mg_millis() / 1000);
+  if (tp != NULL) *tp = t;
+  return t;
+}
+
 // Authenticated user.
 // A user can be authenticated by:
 //   - a name:pass pair
@@ -117,12 +127,34 @@ static void timer_mqtt_fn(void *param) {
   }
 }
 
+// SNTP connection event handler. When we get a response from an SNTP server,
+// adjust s_boot_timestamp. We'll get a valid time from that point on
+static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_SNTP_TIME) {
+    uint64_t t = *(uint64_t *) ev_data;
+    MG_INFO(("%lu SNTP: %lld ms from epoch", c->id, t));
+    s_boot_timestamp = (time_t) ((t - mg_millis()) / 1000);
+    c->is_closing = 1;
+  } else if (ev == MG_EV_CLOSE) {
+    s_sntp_conn = NULL;
+  }
+  (void) fn_data;
+}
+
+static void timer_sntp_fn(void *param) {  // SNTP timer function. Sync up time
+  struct mg_mgr *mgr = (struct mg_mgr *) param;
+  if (s_sntp_conn == NULL && s_boot_timestamp == 0) {
+    s_sntp_conn = mg_sntp_connect(mgr, NULL, sfn, NULL);
+  }
+}
+
 // HTTP request handler function
 void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
                          void *fn_data) {
   if (ev == MG_EV_OPEN && c->is_listening) {
     mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_metrics_fn, c->mgr);
     mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_mqtt_fn, c->mgr);
+    mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_sntp_fn, c->mgr);
     s_config.url = strdup(MQTT_SERVER);
     s_config.pub = strdup(MQTT_PUBLISH_TOPIC);
     s_config.sub = strdup(MQTT_SUBSCRIBE_TOPIC);
