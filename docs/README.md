@@ -289,6 +289,13 @@ The architecture is guessed during the build, so setting it is not usually requi
 |MG_ARCH_ESP8266 | Espressif's ESP8266 |
 |MG_ARCH_FREERTOS_LWIP | All systems with FreeRTOS kernel and LwIP IP stack |
 |MG_ARCH_FREERTOS_TCP | All systems with FreeRTOS kernel and FreeRTOS-Plus-TCP IP stack |
+|MG_ARCH_AZURERTOS | Microsoft Azure RTOS |
+|MG_ARCH_RTX_LWIP | Keil RTX with LWIP TCP/IP stack |
+|MG_ARCH_RTX | Keil RTX with MDK TCP/IP stack |
+|MG_ARCH_ZEPHYR | Zephyr RTOS |
+|MG_ARCH_TIRTOS | TI RTOS |
+|MG_ARCH_RP2040 | RP2040 SDK |
+|MG_ARCH_NEWLIB | Bare ARM GCC |
 |MG_ARCH_CUSTOM | A custom architecture, discussed in the next section |
 
 The other class of build constants is defined in
