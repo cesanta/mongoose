@@ -62,13 +62,13 @@ extern "C" {
 #endif
 
 #if !defined(MG_ARCH)
+#include <mongoose_custom.h>
+#endif
+
+#if !defined(MG_ARCH)
 #error "MG_ARCH is not specified and we couldn't guess it. Set -D MG_ARCH=..."
 #endif
 #endif  // !defined(MG_ARCH)
-
-#if MG_ARCH == MG_ARCH_CUSTOM
-#include <mongoose_custom.h>
-#endif
 
 
 
