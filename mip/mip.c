@@ -670,6 +670,7 @@ static void mip_rx(struct mip_if *ifp, void *buf, size_t len) {
 }
 
 static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
+  if (ifp == NULL || ifp->driver == NULL) return;
   ifp->curtime = uptime_ms;
 
   if (ifp->ip == 0 && uptime_ms > ifp->timer) {
