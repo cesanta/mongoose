@@ -24,11 +24,23 @@ static void start_thread(void (*f)(void *), void *p) {
 #endif
 }
 
+struct userdata {
+  int sock;  // Paired socket, worker thread owns it
+  struct mg_str
+      body;  // data to be processed
+};
+
 static void thread_function(void *param) {
-  int sock = (int) (size_t) param;  // Paired socket. We own it
-  sleep(2);                         // Simulate long execution
-  send(sock, "hi", 2, 0);           // Wakeup event manager
-  close(sock);                      // Close the connection
+  struct userdata *p = (struct userdata *) param;
+  sleep(2);  // Simulate long execution
+  // Respond, wakeup event manager
+  if (p->body.len)
+    send(p->sock, p->body.ptr, p->body.len, 0);  // if there is a body, echo it
+  else
+    send(p->sock, "hi", 2, 0);  // otherwise just respond "hi"
+  close(p->sock);               // Close the connection
+  free((void *) p->body.ptr);   // free body
+  free(p);                      // free userdata
 }
 
 static void link_conns(struct mg_connection *c1, struct mg_connection *c2) {
@@ -67,8 +79,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_reply(c, 200, "Host: foo.com\r\n", "hi\n");
     } else {
       // Multithreading code path
-      int sock = mg_mkpipe(c->mgr, pcb, c, true);             // Create pipe
-      start_thread(thread_function, (void *) (size_t) sock);  // Start thread
+      struct userdata *data = calloc(1, sizeof(*data));  // worker will free it
+      // parse headers or use request body, duplicate data and pass it to worker
+      // thread
+      data->body = mg_strdup(hm->body);              // worker will free it
+      data->sock = mg_mkpipe(c->mgr, pcb, c, true);  // Create pipe
+      start_thread(thread_function, data);  // Start thread and pass data
     }
   } else if (ev == MG_EV_CLOSE) {
     if (c->fn_data != NULL) unlink_conns(c, c->fn_data);
