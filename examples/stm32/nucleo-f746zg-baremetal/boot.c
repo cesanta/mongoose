@@ -21,19 +21,7 @@ void __attribute__((weak)) DefaultIRQHandler(void) {
   for (;;) (void) 0;
 }
 
-void __attribute__((weak)) EXTI_IRQHandler(void) {
-  for (;;) (void) 0;
-}
-
 #define WEAK_ALIAS __attribute__((weak, alias("DefaultIRQHandler")))
-
-__attribute__((alias("EXTI_IRQHandler"))) void EXTI0_IRQHandler(void);
-__attribute__((alias("EXTI_IRQHandler"))) void EXTI1_IRQHandler(void);
-__attribute__((alias("EXTI_IRQHandler"))) void EXTI2_IRQHandler(void);
-__attribute__((alias("EXTI_IRQHandler"))) void EXTI3_IRQHandler(void);
-__attribute__((alias("EXTI_IRQHandler"))) void EXTI4_IRQHandler(void);
-__attribute__((alias("EXTI_IRQHandler"))) void EXTI9_5_IRQHandler(void);
-__attribute__((alias("EXTI_IRQHandler"))) void EXTI15_10_IRQHandler(void);
 
 WEAK_ALIAS void NMI_Handler(void);
 WEAK_ALIAS void HardFault_Handler(void);
@@ -51,6 +39,13 @@ WEAK_ALIAS void TAMP_STAMP_IRQHandler(void);
 WEAK_ALIAS void RTC_WKUP_IRQHandler(void);
 WEAK_ALIAS void FLASH_IRQHandler(void);
 WEAK_ALIAS void RCC_IRQHandler(void);
+WEAK_ALIAS void EXTI0_IRQHandler(void);
+WEAK_ALIAS void EXTI1_IRQHandler(void);
+WEAK_ALIAS void EXTI2_IRQHandler(void);
+WEAK_ALIAS void EXTI3_IRQHandler(void);
+WEAK_ALIAS void EXTI4_IRQHandler(void);
+WEAK_ALIAS void EXTI9_5_IRQHandler(void);
+WEAK_ALIAS void EXTI15_10_IRQHandler(void);
 WEAK_ALIAS void DMA1_Stream0_IRQHandler(void);
 WEAK_ALIAS void DMA1_Stream1_IRQHandler(void);
 WEAK_ALIAS void DMA1_Stream2_IRQHandler(void);

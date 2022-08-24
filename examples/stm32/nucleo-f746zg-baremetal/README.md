@@ -9,7 +9,7 @@ which implements the following:
 - Interrupt-driven [mip_driver_stm32.h](../../../drivers/mip_driver_stm32.h) ethernet driver
 - Blue LED blinky, based on SysTick interrupt
 - User button handler, turns off/on green LED, based on EXTI, interrupt-driven 
-- Catch-all fault handler that blinks red LED
+- HardFault handler that blinks red LED
 - Debug log on UART3 (st-link)
 
 ## Requirements
@@ -24,13 +24,13 @@ Plugin your Nucleo board into USB, and attach an Ethernet cable.
 To build and flash:
 
 ```sh
-make clean flash
+$ make clean flash
 ```
 
-To see debug log, use any serial monitor program like `cu`:
+To see debug log, use any serial monitor program like `picocom` at 115200 bps and configure it to insert carriage returns after line feeds:
 
 ```sh
-cu -l /dev/ttyACM0 -s 115200
+$ picocom /dev/ttyACM0 -i -b 115200 --imap=lfcrlf
 ```
 
 ## Benchmark
