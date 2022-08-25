@@ -21,7 +21,7 @@ uint64_t mg_millis(void) {  // Declare our own uptime function
   return s_ticks;           // Return number of milliseconds since boot
 }
 
-void DefaultIRQHandler(void) {                // Catch-all fault handler
+void HardFault_Handler(void) {                // Escalated fault handler
   gpio_output(LED3);                          // Setup red LED
   for (;;) spin(2999999), gpio_toggle(LED3);  // Blink LED infinitely
 }
@@ -30,7 +30,7 @@ void SysTick_Handler(void) {  // SyStick IRQ handler, triggered every 1ms
   s_ticks++;
 }
 
-void EXTI_IRQHandler(void) {
+void EXTI15_10_IRQHandler(void) {     // External interrupt handler
   s_exti++;
   if (EXTI->PR & BIT(PINNO(BTN1))) EXTI->PR = BIT(PINNO(BTN1));
   gpio_write(LED1, gpio_read(BTN1));  // No debounce. Turn LED if button pressed
