@@ -69,13 +69,13 @@ const App = function () {
       .catch(err => console.log(err));
 
   const login = function (u) {
-    document.cookie = `access_token=${u.token};path=/;max-age=3600`;
+    document.cookie = `access_token=${u.token}; Secure, HttpOnly; SameSite=Lax; path=/; max-age=3600`;
     setUser(u.user);
     return getin();
   };
 
   const logout = () => {
-    document.cookie = `access_token=;path=/;max-age=0`;
+    document.cookie = `access_token=; Secure, HttpOnly; SameSite=Lax; path=/; max-age=0`;
     setUser('');
   };
 
