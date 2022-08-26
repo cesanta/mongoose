@@ -94,7 +94,11 @@ static void timer_metrics_fn(void *param) {
 
 // MQTT event handler function
 static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
-  if (ev == MG_EV_MQTT_OPEN) {
+  if (ev == MG_EV_CONNECT && mg_url_is_ssl(s_config.url)) {
+    struct mg_tls_opts opts = {.ca = "ca.pem",
+                               .srvname = mg_url_host(s_config.url)};
+    mg_tls_init(c, &opts);
+  } else if (ev == MG_EV_MQTT_OPEN) {
     s_connected = true;
     c->is_hexdumping = 1;
     mg_mqtt_sub(s_mqtt, mg_str(s_config.sub), 2);
@@ -207,5 +211,7 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
 #endif
       mg_http_serve_dir(c, ev_data, &opts);
     }
+    MG_INFO(("%.*s %.*s -> %.*s", (int) hm->method.len, hm->method.ptr,
+             (int) hm->uri.len, hm->uri.ptr, (int) 3, &c->send.buf[9]));
   }
 }

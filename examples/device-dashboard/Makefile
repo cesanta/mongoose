@@ -7,6 +7,14 @@ DOCKER ?= docker run --rm -e Tmp=. -e WINEDEBUG=-all -v $(ROOT):$(ROOT) -w $(CUR
 VC98 ?= $(DOCKER) mdashnet/vc98 wine
 MINGW ?= $(DOCKER) mdashnet/mingw
 
+ifeq "$(SSL)" "MBEDTLS"
+CFLAGS  += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS)/include -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
+endif
+
+ifeq "$(SSL)" "OPENSSL"
+CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include -L$(OPENSSL)/lib -lssl -lcrypto
+endif
+
 all: $(PROG)
 	$(RUN) ./$(PROG)
 
