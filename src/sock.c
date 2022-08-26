@@ -322,7 +322,6 @@ static void close_conn(struct mg_connection *c) {
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
     FreeRTOS_FD_CLR(c->fd, c->mgr->ss, eSELECT_ALL);
 #endif
-    c->fd = NULL;
   }
   mg_close_conn(c);
 }
@@ -422,10 +421,9 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     MG_ERROR(("%lu OOM", lsn->id));
     closesocket(fd);
   } else {
-    char buf[40];
+    // char buf[40];
     tomgaddr(&usa, &c->rem, sa_len != sizeof(usa.sin));
-    mg_straddr(&c->rem, buf, sizeof(buf));
-    MG_DEBUG(("%lu accepted %s", c->id, buf));
+    // mg_straddr(&c->rem, buf, sizeof(buf));
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fd = S2PTR(fd);
     MG_EPOLL_ADD(c);
@@ -438,6 +436,9 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
+    MG_DEBUG(("%lu %p accepted %x.%hu -> %x.%hu", c->id, c->fd,
+              mg_ntohl(c->rem.ip), mg_ntohs(c->rem.port), mg_ntohl(c->loc.ip),
+              mg_ntohs(c->loc.port)));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
   }

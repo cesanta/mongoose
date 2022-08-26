@@ -3172,32 +3172,6 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
   return MQTT_OK;
 }
 
-static size_t mg_mqtt_next_topic(struct mg_mqtt_message *msg,
-                                 struct mg_str *topic, uint8_t *qos,
-                                 size_t pos) {
-  unsigned char *buf = (unsigned char *) msg->dgram.ptr + pos;
-  size_t new_pos;
-  if (pos >= msg->dgram.len) return 0;
-
-  topic->len = (size_t) (((unsigned) buf[0]) << 8 | buf[1]);
-  topic->ptr = (char *) buf + 2;
-  new_pos = pos + 2 + topic->len + (qos == NULL ? 0 : 1);
-  if ((size_t) new_pos > msg->dgram.len) return 0;
-  if (qos != NULL) *qos = buf[2 + topic->len];
-  return new_pos;
-}
-
-size_t mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
-                        uint8_t *qos, size_t pos) {
-  uint8_t tmp;
-  return mg_mqtt_next_topic(msg, topic, qos == NULL ? &tmp : qos, pos);
-}
-
-size_t mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic,
-                          size_t pos) {
-  return mg_mqtt_next_topic(msg, topic, NULL, pos);
-}
-
 static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
                     void *fn_data) {
   if (ev == MG_EV_READ) {
@@ -3439,7 +3413,7 @@ void mg_close_conn(struct mg_connection *c) {
   // Order of operations is important. `MG_EV_CLOSE` event must be fired
   // before we deallocate received data, see #1331
   mg_call(c, MG_EV_CLOSE, NULL);
-  MG_DEBUG(("%lu closed", c->id));
+  MG_DEBUG(("%lu %p closed", c->id, c->fd));
 
   mg_tls_free(c);
   mg_iobuf_free(&c->recv);
@@ -4280,7 +4254,6 @@ static void close_conn(struct mg_connection *c) {
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
     FreeRTOS_FD_CLR(c->fd, c->mgr->ss, eSELECT_ALL);
 #endif
-    c->fd = NULL;
   }
   mg_close_conn(c);
 }
@@ -4380,10 +4353,9 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     MG_ERROR(("%lu OOM", lsn->id));
     closesocket(fd);
   } else {
-    char buf[40];
+    // char buf[40];
     tomgaddr(&usa, &c->rem, sa_len != sizeof(usa.sin));
-    mg_straddr(&c->rem, buf, sizeof(buf));
-    MG_DEBUG(("%lu accepted %s", c->id, buf));
+    // mg_straddr(&c->rem, buf, sizeof(buf));
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fd = S2PTR(fd);
     MG_EPOLL_ADD(c);
@@ -4396,6 +4368,9 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
+    MG_DEBUG(("%lu %p accepted %x.%hu -> %x.%hu", c->id, c->fd,
+              mg_ntohl(c->rem.ip), mg_ntohs(c->rem.port), mg_ntohl(c->loc.ip),
+              mg_ntohs(c->loc.port)));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
   }
@@ -5918,6 +5893,7 @@ void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
     ws_handshake(c, wskey, wsproto, fmt, &ap);
     va_end(ap);
     c->is_websocket = 1;
+    c->is_resp = 0;
     mg_call(c, MG_EV_WS_OPEN, hm);
   }
 }

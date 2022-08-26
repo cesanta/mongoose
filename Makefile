@@ -9,8 +9,7 @@ INCS ?= -Isrc -I.
 SSL ?= MBEDTLS
 CWD ?= $(realpath $(CURDIR))
 ENV ?=  -e Tmp=. -e WINEDEBUG=-all 
-D ?= docker
-DOCKER ?= $(D) run --rm $(ENV) -v $(CWD):$(CWD) -w $(CWD)
+DOCKER ?= docker run --platform linux/amd64 --rm $(ENV) -v $(CWD):$(CWD) -w $(CWD)
 VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined -fno-sanitize-recover=all
@@ -42,13 +41,13 @@ examples:
 
 test/packed_fs.c: Makefile src/ssi.h test/fuzz.c test/data/a.txt
 	$(CC) $(CFLAGS) test/pack.c -o pack
-	./pack Makefile src/ssi.h test/fuzz.c test/data/a.txt test/data/range.txt > $@
+	$(RUN) ./pack Makefile src/ssi.h test/fuzz.c test/data/a.txt test/data/range.txt > $@
 
 DIR ?= test/data/
 OUT ?= fs_packed.c
 mkfs:
 	$(CC) $(CFLAGS) test/pack.c -o pack
-	./pack -s $(DIR) `find $(DIR) -type f` > $(OUT)
+	$(RUN) ./pack -s $(DIR) `find $(DIR) -type f` > $(OUT)
 #	find $(DIR) -type f | sed -e s,^$(DIR),,g -e s,^/,,g
 
 # Check that all external (exported) symbols have "mg_" prefix
@@ -56,14 +55,15 @@ mg_prefix: mongoose.c mongoose.h
 	$(CC) mongoose.c $(CFLAGS) -c -o /tmp/x.o && nm /tmp/x.o | grep ' T' | grep -v 'mg_' ; test $$? = 1
 
 # C++ build
+test++: test
 test++: CC = g++
 test++: C_WARN = -std=c++2a -Wno-vla -Wno-shadow -Wno-missing-field-initializers -Wno-deprecated
-test++: test
 
 musl: test
 musl: ASAN =
 musl: WARN += -Wno-sign-conversion
 musl: CC = $(DOCKER) mdashnet/cc1 gcc
+musl: RUN = $(DOCKER) mdashnet/cc1
 
 # Make sure we can build from an unamalgamated sources
 unamalgamated: $(HDRS) Makefile test/packed_fs.c

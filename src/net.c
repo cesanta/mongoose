@@ -157,7 +157,7 @@ void mg_close_conn(struct mg_connection *c) {
   // Order of operations is important. `MG_EV_CLOSE` event must be fired
   // before we deallocate received data, see #1331
   mg_call(c, MG_EV_CLOSE, NULL);
-  MG_DEBUG(("%lu closed", c->id));
+  MG_DEBUG(("%lu %p closed", c->id, c->fd));
 
   mg_tls_free(c);
   mg_iobuf_free(&c->recv);
