@@ -3550,20 +3550,27 @@ void mg_rpc_del(struct mg_rpc **head, void (*fn)(struct mg_rpc_req *)) {
   }
 }
 
+static void mg_rpc_call(struct mg_rpc_req *r, struct mg_str method) {
+  struct mg_rpc *h = r->head == NULL ? NULL : *r->head;
+  while (h != NULL && !mg_match(method, h->method, NULL)) h = h->next;
+  if (h != NULL) {
+    r->rpc = h;
+    h->fn(r);
+  } else {
+    mg_rpc_err(r, -32601, "\"%.*s not found\"", (int) method.len, method.ptr);
+  }
+}
+
 void mg_rpc_process(struct mg_rpc_req *r) {
   int len, off = mg_json_get(r->frame, "$.method", &len);
   if (off > 0 && r->frame.ptr[off] == '"') {
-    struct mg_str m = mg_str_n(&r->frame.ptr[off + 1], (size_t) len - 2);
-    struct mg_rpc *h = r->head == NULL ? NULL : *r->head;
-    while (h != NULL && !mg_match(m, h->method, NULL)) h = h->next;
-    if (h != NULL) {
-      r->rpc = h;
-      h->fn(r);
-    } else {
-      mg_rpc_err(r, -32601, "\"%.*s not found\"", (int) m.len, m.ptr);
-    }
+    struct mg_str method = mg_str_n(&r->frame.ptr[off + 1], (size_t) len - 2);
+    mg_rpc_call(r, method);
+  } else if ((off = mg_json_get(r->frame, "$.result", &len)) > 0 ||
+             (off = mg_json_get(r->frame, "$.error", &len)) > 0) {
+    mg_rpc_call(r, mg_str(""));  // JSON response! call "" method handler
   } else {
-    mg_rpc_err(r, -32700, "%.*Q", (int) r->frame.len, r->frame.ptr);
+    mg_rpc_err(r, -32700, "%.*Q", (int) r->frame.len, r->frame.ptr);  // Invalid
   }
 }
 

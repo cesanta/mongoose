@@ -2493,6 +2493,11 @@ static void test_json(void) {
   }
 }
 
+static void resp_rpc(struct mg_rpc_req *r) {
+  int len = 0, off = mg_json_get(r->frame, "$.result", &len);
+  mg_xprintf(r->pfn, r->pfn_data, "%.*s", len, &r->frame.ptr[off]);
+}
+
 static void test_rpc(void) {
   struct mg_rpc *head = NULL;
   struct mg_iobuf io = {0, 0, 0, 256};
@@ -2541,7 +2546,27 @@ static void test_rpc(void) {
     const char *resp = "{\"error\":{\"code\":-32700,\"message\":\"haha\"}}";
     req.frame = mg_str("haha");
     mg_rpc_process(&req);
+    // MG_INFO(("-> %s", io.buf));
     ASSERT(strcmp((char *) io.buf, resp) == 0);
+    mg_iobuf_free(&io);
+  }
+
+  {
+    const char *resp =
+        "{\"id\":1,\"error\":{\"code\":-32601,\"message\":\" not found\"}}";
+    req.frame = mg_str("{\"id\":1,\"result\":123}");
+    mg_rpc_process(&req);
+    // MG_INFO(("-> %s", io.buf));
+    ASSERT(strcmp((char *) io.buf, resp) == 0);
+    mg_iobuf_free(&io);
+  }
+
+  {
+    req.frame = mg_str("{\"id\":1,\"result\":123}");
+    mg_rpc_add(&head, mg_str(""), resp_rpc, NULL);
+    mg_rpc_process(&req);
+    MG_INFO(("-> %s", io.buf));
+    ASSERT(strcmp((char *) io.buf, "123") == 0);
     mg_iobuf_free(&io);
   }
 

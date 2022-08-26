@@ -2979,6 +2979,10 @@ Parameters:
 - `handler` - the RPC function performing the action for this method
 - `handler_data` - Arbitrary function data
 
+<span class="badge bg-info">NOTE:</span>
+if `method_pattern` is an empty string, this handler will be called to process
+JSON-RPC responses. Handling responses might be necessary if the JSON requests
+are initiated by both sides.
 
 Usage example:
 
