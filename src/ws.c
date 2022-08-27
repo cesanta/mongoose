@@ -139,6 +139,26 @@ size_t mg_ws_send(struct mg_connection *c, const void *buf, size_t len,
   return header_len + len;
 }
 
+static bool mg_ws_client_handshake(struct mg_connection *c) {
+  int n = mg_http_get_request_len(c->recv.buf, c->recv.len);
+  if (n < 0) {
+    mg_error(c, "not http");  // Some just, not an HTTP request
+  } else if (n > 0) {
+    if (n < 15 || memcmp(c->recv.buf + 9, "101", 3) != 0) {
+      mg_error(c, "handshake error");
+    } else {
+      struct mg_http_message hm;
+      mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
+      c->is_websocket = 1;
+      mg_call(c, MG_EV_WS_OPEN, &hm);
+    }
+    mg_iobuf_del(&c->recv, 0, (size_t) n);
+  } else {
+    return true;  // Request is not yet received, quit event handler
+  }
+  return false;  // Continue event handler
+}
+
 static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
                      void *fn_data) {
   struct ws_msg msg;
@@ -146,25 +166,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
 
   // assert(ofs < c->recv.len);
   if (ev == MG_EV_READ) {
-    if (!c->is_websocket && c->is_client) {
-      int n = mg_http_get_request_len(c->recv.buf, c->recv.len);
-      if (n < 0) {
-        c->is_closing = 1;  // Some just, not an HTTP request
-      } else if (n > 0) {
-        if (n < 15 || memcmp(c->recv.buf + 9, "101", 3) != 0) {
-          MG_ERROR(("%lu WS handshake error: %.*s", c->id, 15, c->recv.buf));
-          c->is_closing = 1;
-        } else {
-          struct mg_http_message hm;
-          mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
-          c->is_websocket = 1;
-          mg_call(c, MG_EV_WS_OPEN, &hm);
-        }
-        mg_iobuf_del(&c->recv, 0, (size_t) n);
-      } else {
-        return;  // A request is not yet received
-      }
-    }
+    if (c->is_client && !c->is_websocket && mg_ws_client_handshake(c)) return;
 
     while (ws_process(c->recv.buf + ofs, c->recv.len - ofs, &msg) > 0) {
       char *s = (char *) c->recv.buf + ofs + msg.header_len;

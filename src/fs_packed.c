@@ -42,7 +42,7 @@ static int packed_stat(const char *path, size_t *size, time_t *mtime) {
 
 static void packed_list(const char *dir, void (*fn)(const char *, void *),
                         void *userdata) {
-  char buf[256], tmp[sizeof(buf)];
+  char buf[MG_PATH_MAX], tmp[sizeof(buf)];
   const char *path, *begin, *end;
   size_t i, n = strlen(dir);
   tmp[0] = '\0';  // Previously listed entry

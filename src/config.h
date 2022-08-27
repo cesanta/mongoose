@@ -80,7 +80,7 @@
 #endif
 
 #ifndef MG_MAX_HTTP_HEADERS
-#define MG_MAX_HTTP_HEADERS 40
+#define MG_MAX_HTTP_HEADERS 30
 #endif
 
 #ifndef MG_HTTP_INDEX
