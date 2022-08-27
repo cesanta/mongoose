@@ -117,9 +117,9 @@ int main(int argc, char *argv[]) {
          &ipcfg.mac[2], &ipcfg.mac[3], &ipcfg.mac[4], &ipcfg.mac[5]);
 
   struct mip_driver driver = {
-      .data = ph, .tx = pcap_tx, .status = pcap_status, .rx = pcap_rx};
+      .tx = pcap_tx, .status = pcap_status, .rx = pcap_rx};
 
-  mip_init(&mgr, &ipcfg, &driver);
+  mip_init(&mgr, &ipcfg, &driver, ph);
   MG_INFO(("Init done, starting main loop"));
 
   while (s_signo == 0) mg_mgr_poll(&mgr, 1);  // Infinite event loop
