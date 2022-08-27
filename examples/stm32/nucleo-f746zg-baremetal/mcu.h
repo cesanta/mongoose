@@ -14,8 +14,13 @@
 #define PIN(bank, num) ((((bank) - 'A') << 8) | (num))
 #define PINNO(pin) (pin & 255)
 #define PINBANK(pin) (pin >> 8)
-//#define FREQ 16000000
-#define FREQ 216000000
+
+// System clock
+enum { APB1_PRE = 5 /* AHB clock / 4*/, APB2_PRE = 4 /* AHB clock / 2 */ };
+enum { PLL_HSI = 16, PLL_M = 8, PLL_N = 216, PLL_P = 2 };  // Run at 216 Mhz
+//#define PLL_FREQ PLL_HSI
+#define PLL_FREQ (PLL_HSI * PLL_N / PLL_M / PLL_P)
+#define FREQ (PLL_FREQ * 1000000)
 
 static inline void spin(volatile uint32_t count) {
   while (count--) asm("nop");
@@ -168,7 +173,7 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
   gpio_init(tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   gpio_init(rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   uart->CR1 = 0;                          // Disable this UART
-  uart->BRR = FREQ / 4 / baud;            // Baud rate. /4 is a PLL prescaler
+  uart->BRR = FREQ / APB2_PRE / baud;     // Baud rate. /4 is a PLL prescaler
   uart->CR1 |= BIT(0) | BIT(2) | BIT(3);  // Set UE, RE, TE
 }
 static inline void uart_write_byte(struct uart *uart, uint8_t byte) {
@@ -186,7 +191,7 @@ static inline uint8_t uart_read_byte(struct uart *uart) {
 }
 
 static inline void clock_init(void) {  // Set clock to 216Mhz
-#if 1
+#if 0
   RCC->APB1ENR |= BIT(28);                     // Power enable
   PWR->CR1 |= 3UL << 14;                       // Voltage regulator scale 3
   PWR->CR1 |= BIT(16);                         // Enable overdrive
@@ -195,11 +200,13 @@ static inline void clock_init(void) {  // Set clock to 216Mhz
   while ((PWR->CSR1 & BIT(17)) == 0) spin(1);  // Wait until done
   SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
 #endif
-  FLASH->ACR |= 7 | BIT(8) | BIT(9);          // Flash latency 7, prefetch
-  RCC->PLLCFGR &= ~((BIT(15) - 1));           // PLL = HSI * N / M / P
-  RCC->PLLCFGR |= 8UL | (216UL << 6);         // M = 8, N = 216, P = 2. 216Mhz
-  RCC->CR |= BIT(24);                         // Enable PLL
-  while ((RCC->CR & BIT(25)) == 0) spin(1);   // Wait until done
-  RCC->CFGR = 2 | (5UL << 10) | (4UL << 13);  // Set prescalers and PLL clock
-  while ((RCC->CFGR & 12) == 0) spin(1);      // Wait until done
+  FLASH->ACR |= 7 | BIT(8) | BIT(9);                // Flash latency 7, prefetch
+  RCC->PLLCFGR &= ~((BIT(17) - 1));                 // Clear PLL multipliers
+  RCC->PLLCFGR |= (((PLL_P - 2) / 2) & 3) << 16;    // Set PLL_P
+  RCC->PLLCFGR |= PLL_M | (PLL_N << 6);             // Set PLL_M and PLL_N
+  RCC->CR |= BIT(24);                               // Enable PLL
+  while ((RCC->CR & BIT(25)) == 0) spin(1);         // Wait until done
+  RCC->CFGR = (APB1_PRE << 10) | (APB2_PRE << 13);  // Set prescalers
+  RCC->CFGR |= 2;                                   // Set clock source to PLL
+  while ((RCC->CFGR & 12) == 0) spin(1);            // Wait until done
 }

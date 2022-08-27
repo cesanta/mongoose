@@ -211,7 +211,7 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
 #endif
       mg_http_serve_dir(c, ev_data, &opts);
     }
-    MG_INFO(("%.*s %.*s -> %.*s", (int) hm->method.len, hm->method.ptr,
-             (int) hm->uri.len, hm->uri.ptr, (int) 3, &c->send.buf[9]));
+    MG_DEBUG(("%.*s %.*s -> %.*s", (int) hm->method.len, hm->method.ptr,
+              (int) hm->uri.len, hm->uri.ptr, (int) 3, &c->send.buf[9]));
   }
 }

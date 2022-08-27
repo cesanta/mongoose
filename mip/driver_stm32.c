@@ -31,7 +31,6 @@ static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
 static void (*s_rx)(void *, size_t, void *);         // Recv callback
 static void *s_rxdata;                               // Recv callback data
-static void *s_userdata;                             // Driver data
 enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
 
 static inline void spin(volatile uint32_t count) {
@@ -54,9 +53,7 @@ static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   while (ETH->MACMIIAR & BIT(0)) spin(1);
 }
 
-static void mip_driver_stm32_init(void *userdata) {
-  s_userdata = userdata;
-
+static void mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = BIT(31);                            // Own
@@ -89,6 +86,9 @@ static void mip_driver_stm32_init(void *userdata) {
   ETH->DMAIER = BIT(6) | BIT(16);                      // RIE, NISE
   ETH->MACCR = BIT(2) | BIT(3) | BIT(11) | BIT(14);    // RE, TE, Duplex, Fast
   ETH->DMAOMR = BIT(1) | BIT(13) | BIT(21) | BIT(25);  // SR, ST, TSF, RSF
+
+  // TODO(cpq): setup MAC filtering
+  (void) userdata, (void) mac;
 }
 
 static void mip_driver_stm32_setrx(void (*rx)(void *, size_t, void *),

@@ -30,7 +30,7 @@ void SysTick_Handler(void) {  // SyStick IRQ handler, triggered every 1ms
   s_ticks++;
 }
 
-void EXTI15_10_IRQHandler(void) {     // External interrupt handler
+void EXTI15_10_IRQHandler(void) {  // External interrupt handler
   s_exti++;
   if (EXTI->PR & BIT(PINNO(BTN1))) EXTI->PR = BIT(PINNO(BTN1));
   gpio_write(LED1, gpio_read(BTN1));  // No debounce. Turn LED if button pressed
@@ -65,14 +65,13 @@ int main(void) {
   struct mg_mgr mgr;        // Initialise Mongoose event manager
   mg_mgr_init(&mgr);        // and attach it to the MIP interface
   mg_log_set(MG_LL_DEBUG);  // Set log level
-  mg_timer_add(&mgr, 1000, MG_TIMER_REPEAT, blink_cb, &mgr);
+  mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, blink_cb, &mgr);
 
   // Initialise Mongoose network stack
   // Specify MAC address, and use 0 for IP, mask, GW - i.e. use DHCP
   // For static configuration, specify IP/mask/GW in network byte order
-  struct mip_ipcfg ipcfg = {
-      .mac = {0xaa, 0xbb, 0xcc, 1, 2, 3}, .ip = 0, .mask = 0, .gw = 0};
-  mip_init(&mgr, &ipcfg, &mip_driver_stm32);
+  struct mip_ipcfg c = {.mac = {0, 0, 1, 2, 3, 4}, .ip = 0, .mask = 0, .gw = 0};
+  mip_init(&mgr, &c, &mip_driver_stm32, NULL);
   MG_INFO(("Init done, starting main loop"));
 
   extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);

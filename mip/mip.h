@@ -4,8 +4,7 @@
 #include "net.h"
 
 struct mip_driver {
-  void *data;                                       // Driver-specific data
-  void (*init)(void *data);                         // Initialise driver
+  void (*init)(uint8_t *mac, void *data);           // Initialise driver
   size_t (*tx)(const void *, size_t, void *data);   // Transmit frame
   size_t (*rx)(void *buf, size_t len, void *data);  // Receive frame (polling)
   bool (*status)(void *data);                       // Up/down status
@@ -18,6 +17,6 @@ struct mip_ipcfg {
   uint32_t ip, mask, gw;  // IP, netmask, GW. If IP is 0, DHCP is used
 };
 
-void mip_init(struct mg_mgr *, struct mip_ipcfg *, struct mip_driver *);
+void mip_init(struct mg_mgr *, struct mip_ipcfg *, struct mip_driver *, void *);
 
 extern struct mip_driver mip_driver_stm32;

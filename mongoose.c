@@ -5957,7 +5957,6 @@ static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
 static void (*s_rx)(void *, size_t, void *);         // Recv callback
 static void *s_rxdata;                               // Recv callback data
-static void *s_userdata;                             // Driver data
 enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
 
 static inline void spin(volatile uint32_t count) {
@@ -5980,9 +5979,7 @@ static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   while (ETH->MACMIIAR & BIT(0)) spin(1);
 }
 
-static void mip_driver_stm32_init(void *userdata) {
-  s_userdata = userdata;
-
+static void mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = BIT(31);                            // Own
@@ -6015,6 +6012,9 @@ static void mip_driver_stm32_init(void *userdata) {
   ETH->DMAIER = BIT(6) | BIT(16);                      // RIE, NISE
   ETH->MACCR = BIT(2) | BIT(3) | BIT(11) | BIT(14);    // RE, TE, Duplex, Fast
   ETH->DMAOMR = BIT(1) | BIT(13) | BIT(21) | BIT(25);  // SR, ST, TSF, RSF
+
+  // TODO(cpq): setup MAC filtering
+  (void) userdata, (void) mac;
 }
 
 static void mip_driver_stm32_setrx(void (*rx)(void *, size_t, void *),
@@ -6083,12 +6083,8 @@ struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
 
 #if defined(_MSC_VER)
 #define _Atomic
-#define NET16(x) _byteswap_ushort(x)
-#define NET32(x) _byteswap_ulong(x)
 #else
 #include <stdatomic.h>
-#define NET16(x) __builtin_bswap16(x)
-#define NET32(x) __builtin_bswap32(x)
 #endif
 
 #define MIP_ETHEMERAL_PORT 49152
@@ -6122,6 +6118,7 @@ struct mip_if {
   struct str tx;              // Input (RX) buffer
   bool use_dhcp;              // Enable DCHP
   struct mip_driver *driver;  // Low level driver
+  void *driver_data;          // Driver-specific data
   struct mg_mgr *mgr;         // Mongoose event manager
 
   // Internal state, user can use it but should not change it
@@ -6299,7 +6296,7 @@ static uint32_t csumup(uint32_t sum, const void *buf, size_t len) {
 
 static uint16_t csumfin(uint32_t sum) {
   while (sum >> 16) sum = (sum & 0xffff) + (sum >> 16);
-  return NET16(~sum & 0xffff);
+  return mg_htons(~sum & 0xffff);
 }
 
 static uint16_t ipcsum(const void *buf, size_t len) {
@@ -6343,7 +6340,7 @@ static void arp_cache_add(struct mip_if *ifp, uint32_t ip, uint8_t mac[6]) {
   memcpy(p + p[0] + 2, &ip, sizeof(ip));  // Replace last entry: IP address
   memcpy(p + p[0] + 6, mac, 6);           // And MAC address
   p[1] = p[0], p[0] = p[p[1]];            // Point list head to us
-  MG_DEBUG(("ARP cache: added %#lx @ %x:%x:%x:%x:%x:%x", (long) NET32(ip),
+  MG_DEBUG(("ARP cache: added %#lx @ %x:%x:%x:%x:%x:%x", (long) mg_htonl(ip),
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]));
 }
 
@@ -6352,12 +6349,13 @@ static void arp_ask(struct mip_if *ifp, uint32_t ip) {
   struct arp *arp = (struct arp *) (eth + 1);
   memset(eth->dst, 255, sizeof(eth->dst));
   memcpy(eth->src, ifp->mac, sizeof(eth->src));
-  eth->type = NET16(0x806);
+  eth->type = mg_htons(0x806);
   memset(arp, 0, sizeof(*arp));
-  arp->fmt = NET16(1), arp->pro = NET16(0x800), arp->hlen = 6, arp->plen = 4;
-  arp->op = NET16(1), arp->tpa = ip, arp->spa = ifp->ip;
+  arp->fmt = mg_htons(1), arp->pro = mg_htons(0x800), arp->hlen = 6,
+  arp->plen = 4;
+  arp->op = mg_htons(1), arp->tpa = ip, arp->spa = ifp->ip;
   memcpy(arp->sha, ifp->mac, sizeof(arp->sha));
-  ifp->driver->tx(eth, PDIFF(eth, arp + 1), ifp->driver->data);
+  ifp->driver->tx(eth, PDIFF(eth, arp + 1), ifp->driver_data);
 }
 
 static void onstatechange(struct mip_if *ifp) {
@@ -6382,11 +6380,11 @@ static struct ip *tx_ip(struct mip_if *ifp, uint8_t proto, uint32_t ip_src,
   if (mac) memcpy(eth->dst, mac, sizeof(eth->dst));   // Found? Use it
   if (!mac) memset(eth->dst, 255, sizeof(eth->dst));  // No? Use broadcast
   memcpy(eth->src, ifp->mac, sizeof(eth->src));       // TODO(cpq): ARP lookup
-  eth->type = NET16(0x800);
+  eth->type = mg_htons(0x800);
   memset(ip, 0, sizeof(*ip));
   ip->ver = 0x45;   // Version 4, header length 5 words
   ip->frag = 0x40;  // Don't fragment
-  ip->len = NET16((uint16_t) (sizeof(*ip) + plen));
+  ip->len = mg_htons((uint16_t) (sizeof(*ip) + plen));
   ip->ttl = 64;
   ip->proto = proto;
   ip->src = ip_src;
@@ -6403,7 +6401,7 @@ static void tx_udp(struct mip_if *ifp, uint32_t ip_src, uint16_t sport,
   // MG_DEBUG(("UDP XX LEN %d %d", (int) len, (int) ifp->tx.len));
   udp->sport = sport;
   udp->dport = dport;
-  udp->len = NET16((uint16_t) (sizeof(*udp) + len));
+  udp->len = mg_htons((uint16_t) (sizeof(*udp) + len));
   udp->csum = 0;
   uint32_t cs = csumup(0, udp, sizeof(*udp));
   cs = csumup(cs, buf, len);
@@ -6415,7 +6413,7 @@ static void tx_udp(struct mip_if *ifp, uint32_t ip_src, uint16_t sport,
   // MG_DEBUG(("UDP LEN %d %d\n", (int) len, (int) ifp->frame_len));
   ifp->driver->tx(ifp->tx.buf,
                   sizeof(struct eth) + sizeof(*ip) + sizeof(*udp) + len,
-                  ifp->driver->data);
+                  ifp->driver_data);
 }
 
 static void tx_dhcp(struct mip_if *ifp, uint32_t src, uint32_t dst,
@@ -6424,11 +6422,11 @@ static void tx_dhcp(struct mip_if *ifp, uint32_t src, uint32_t dst,
                       .htype = 1,
                       .hlen = 6,
                       .ciaddr = src,
-                      .magic = NET32(0x63825363)};
+                      .magic = mg_htonl(0x63825363)};
   memcpy(&dhcp.hwaddr, ifp->mac, sizeof(ifp->mac));
   memcpy(&dhcp.xid, ifp->mac + 2, sizeof(dhcp.xid));
   memcpy(&dhcp.options, opts, optslen);
-  tx_udp(ifp, src, NET16(68), dst, NET16(67), &dhcp, sizeof(dhcp));
+  tx_udp(ifp, src, mg_htons(68), dst, mg_htons(67), &dhcp, sizeof(dhcp));
 }
 
 static void tx_dhcp_request(struct mip_if *ifp, uint32_t src, uint32_t dst) {
@@ -6455,23 +6453,23 @@ static void tx_dhcp_discover(struct mip_if *ifp) {
 }
 
 static void rx_arp(struct mip_if *ifp, struct pkt *pkt) {
-  if (pkt->arp->op == NET16(1) && pkt->arp->tpa == ifp->ip) {
+  if (pkt->arp->op == mg_htons(1) && pkt->arp->tpa == ifp->ip) {
     // ARP request. Make a response, then send
     struct eth *eth = (struct eth *) ifp->tx.buf;
     struct arp *arp = (struct arp *) (eth + 1);
-    MG_DEBUG(("ARP op %d %#x %#x", NET16(arp->op), arp->spa, arp->tpa));
+    MG_DEBUG(("ARP op %d %#x %#x", mg_htons(arp->op), arp->spa, arp->tpa));
     memcpy(eth->dst, pkt->eth->src, sizeof(eth->dst));
     memcpy(eth->src, ifp->mac, sizeof(eth->src));
-    eth->type = NET16(0x806);
+    eth->type = mg_htons(0x806);
     *arp = *pkt->arp;
-    arp->op = NET16(2);
+    arp->op = mg_htons(2);
     memcpy(arp->tha, pkt->arp->sha, sizeof(pkt->arp->tha));
     memcpy(arp->sha, ifp->mac, sizeof(pkt->arp->sha));
     arp->tpa = pkt->arp->spa;
     arp->spa = ifp->ip;
-    MG_DEBUG(("ARP response: we're %#lx", (long) ifp->ip));
-    ifp->driver->tx(ifp->tx.buf, PDIFF(eth, arp + 1), ifp->driver->data);
-  } else if (pkt->arp->op == NET16(2)) {
+    MG_DEBUG(("ARP response: we're %#lx", (long) mg_ntohl(ifp->ip)));
+    ifp->driver->tx(ifp->tx.buf, PDIFF(eth, arp + 1), ifp->driver_data);
+  } else if (pkt->arp->op == mg_htons(2)) {
     if (memcmp(pkt->arp->tha, ifp->mac, sizeof(pkt->arp->tha)) != 0) return;
     // MG_INFO(("ARP RESPONSE"));
     arp_cache_add(ifp, pkt->arp->spa, pkt->arp->sha);
@@ -6488,7 +6486,7 @@ static void rx_icmp(struct mip_if *ifp, struct pkt *pkt) {
     memcpy(icmp + 1, pkt->pay.buf, pkt->pay.len);
     icmp->csum = ipcsum(icmp, sizeof(*icmp) + pkt->pay.len);
     ifp->driver->tx(ifp->tx.buf, PDIFF(ifp->tx.buf, icmp + 1) + pkt->pay.len,
-                    ifp->driver->data);
+                    ifp->driver_data);
   }
 }
 
@@ -6580,7 +6578,7 @@ static size_t tx_tcp(struct mip_if *ifp, uint32_t dst_ip, uint8_t flags,
   cs = csumup(cs, pseudo, sizeof(pseudo));
   tcp->csum = csumfin(cs);
   return ifp->driver->tx(ifp->tx.buf, PDIFF(ifp->tx.buf, tcp + 1) + len,
-                         ifp->driver->data);
+                         ifp->driver_data);
 }
 
 static size_t tx_tcp_pkt(struct mip_if *ifp, struct pkt *pkt, uint8_t flags,
@@ -6682,10 +6680,10 @@ static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
   } else if (pkt->ip->proto == 17) {
     pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
-    // MG_DEBUG(("  UDP %u %u -> %u\n", len, NET16(udp->sport),
-    // NET16(udp->dport)));
+    // MG_DEBUG(("  UDP %u %u -> %u\n", len, mg_htons(udp->sport),
+    // mg_htons(udp->dport)));
     mkpay(pkt, pkt->udp + 1);
-    if (pkt->udp->dport == NET16(68)) {
+    if (pkt->udp->dport == mg_htons(68)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp + 1);
       rx_dhcp(ifp, pkt);
@@ -6713,8 +6711,8 @@ static void rx_ip6(struct mip_if *ifp, struct pkt *pkt) {
   } else if (pkt->ip->proto == 17) {
     pkt->udp = (struct udp *) (pkt->ip6 + 1);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
-    // MG_DEBUG(("  UDP %u %u -> %u\n", len, NET16(udp->sport),
-    // NET16(udp->dport)));
+    // MG_DEBUG(("  UDP %u %u -> %u\n", len, mg_htons(udp->sport),
+    // mg_htons(udp->dport)));
     mkpay(pkt, pkt->udp + 1);
   }
 }
@@ -6727,24 +6725,24 @@ static void mip_rx(struct mip_if *ifp, void *buf, size_t len) {
   if (memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&
       memcmp(pkt.eth->dst, broadcast, sizeof(pkt.eth->dst)) != 0) {
     // Not for us. Drop silently
-  } else if (pkt.eth->type == NET16(0x806)) {
+  } else if (pkt.eth->type == mg_htons(0x806)) {
     pkt.arp = (struct arp *) (pkt.eth + 1);
     if (sizeof(*pkt.eth) + sizeof(*pkt.arp) > pkt.raw.len) return;  // Truncated
     rx_arp(ifp, &pkt);
-  } else if (pkt.eth->type == NET16(0x86dd)) {
+  } else if (pkt.eth->type == mg_htons(0x86dd)) {
     pkt.ip6 = (struct ip6 *) (pkt.eth + 1);
     if (pkt.raw.len < sizeof(*pkt.eth) + sizeof(*pkt.ip6)) return;  // Truncated
     if ((pkt.ip6->ver >> 4) != 0x6) return;                         // Not IP
     mkpay(&pkt, pkt.ip6 + 1);
     rx_ip6(ifp, &pkt);
-  } else if (pkt.eth->type == NET16(0x800)) {
+  } else if (pkt.eth->type == mg_htons(0x800)) {
     pkt.ip = (struct ip *) (pkt.eth + 1);
     if (pkt.raw.len < sizeof(*pkt.eth) + sizeof(*pkt.ip)) return;  // Truncated
     if ((pkt.ip->ver >> 4) != 4) return;                           // Not IP
     mkpay(&pkt, pkt.ip + 1);
     rx_ip(ifp, &pkt);
   } else {
-    MG_DEBUG(("  Unknown eth type %x\n", NET16(pkt.eth->type)));
+    MG_DEBUG(("  Unknown eth type %x\n", mg_htons(pkt.eth->type)));
   }
 }
 
@@ -6763,7 +6761,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 
   // Handle physical interface up/down status
   if (ifp->driver->status) {
-    bool up = ifp->driver->status(ifp->driver->data);
+    bool up = ifp->driver->status(ifp->driver_data);
     bool current = ifp->state != MIP_STATE_DOWN;
     if (up != current) {
       ifp->state = up == false     ? MIP_STATE_DOWN
@@ -6778,7 +6776,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   for (;;) {
     size_t len = ifp->queue.len > 0 ? q_read(&ifp->queue, ifp->rx.buf)
                                     : ifp->driver->rx(ifp->rx.buf, ifp->rx.len,
-                                                      ifp->driver->data);
+                                                      ifp->driver_data);
     if (len == 0) break;
     mip_rx(ifp, ifp->rx.buf, len);
   }
@@ -6793,7 +6791,7 @@ static void on_rx(void *buf, size_t len, void *userdata) {
 }
 
 void mip_init(struct mg_mgr *mgr, struct mip_ipcfg *ipcfg,
-              struct mip_driver *driver) {
+              struct mip_driver *driver, void *driver_data) {
   size_t maxpktsize = 1500, qlen = driver->rxcb ? 1024 * 16 : 0;
   struct mip_if *ifp =
       (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
@@ -6803,10 +6801,11 @@ void mip_init(struct mg_mgr *mgr, struct mip_ipcfg *ipcfg,
   ifp->rx.buf = (uint8_t *) (ifp + 1), ifp->rx.len = maxpktsize;
   ifp->tx.buf = ifp->rx.buf + maxpktsize, ifp->tx.len = maxpktsize;
   ifp->driver = driver;
+  ifp->driver_data = driver_data;
   ifp->mgr = mgr;
   ifp->queue.buf = ifp->tx.buf + maxpktsize;
   ifp->queue.len = qlen;
-  if (driver->init) driver->init(driver->data);
+  if (driver->init) driver->init(ipcfg->mac, driver_data);
   if (driver->rxcb) driver->rxcb(on_rx, ifp);
   mgr->priv = ifp;
   mgr->extraconnsize = sizeof(struct tcpstate);
