@@ -637,6 +637,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
   n = mg_snprintf(tmp, sizeof(tmp), "%lu", (unsigned long) (c->send.len - off));
   if (n > sizeof(tmp)) n = 0;
   memcpy(c->send.buf + off - 12, tmp, n);  // Set content length
+  c->is_resp = 0;                          // Mark response end
 }
 
 // Resolve requested file into `path` and return its fs->st() result
