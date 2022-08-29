@@ -167,13 +167,14 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
       case S_KEY:
         if (c == '"') {
           int n = mg_pass_string(&s[i + 1], len - i - 1);
+          printf("K %s %d %d %d [%.*s]\n", path, pos, n, i, n + 2, s + i);
           if (n < 0) return n;
           if (i + 1 + n >= len) return MG_JSON_NOT_FOUND;
-          // printf("K[%.*s] %d %d %d\n", n, &s[i + 1], n, depth, ed);
+          printf("K %s [%.*s] %d %d %d\n", path, n, &s[i + 1], n, depth, ed);
           if (depth == ed && path[pos - 1] == '.' &&
+              strncmp(&s[i + 1], &path[pos], (size_t) n) == 0 &&
               (path[pos + n] == '\0' || path[pos + n] == '.' ||
-               path[pos + n] == '[') &&
-              strncmp(&s[i + 1], &path[pos], (size_t) n) == 0) {
+               path[pos + n] == '[')) {
             pos += n;
           }
           i += n + 1;
