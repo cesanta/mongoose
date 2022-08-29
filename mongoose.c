@@ -2565,8 +2565,10 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
           int n = mg_pass_string(&s[i + 1], len - i - 1);
           if (n < 0) return n;
           if (i + 1 + n >= len) return MG_JSON_NOT_FOUND;
-          // printf("K[%.*s] %d %d\n", n, &s[i + 1], depth, ed);
+          // printf("K[%.*s] %d %d %d\n", n, &s[i + 1], n, depth, ed);
           if (depth == ed && path[pos - 1] == '.' &&
+              (path[pos + n] == '\0' || path[pos + n] == '.' ||
+               path[pos + n] == '[') &&
               strncmp(&s[i + 1], &path[pos], (size_t) n) == 0) {
             pos += n;
           }

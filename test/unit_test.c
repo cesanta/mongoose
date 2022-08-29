@@ -2490,6 +2490,11 @@ static void test_json(void) {
     ASSERT((str = mg_json_get_hex(json, "$[1]", &len)) != NULL);
     ASSERT(len == 5 && memcmp(str, "\x01\x00\x02hi", (size_t) len) == 0);
     free(str);
+
+    json = mg_str("{\"a\":[1,2,3], \"ab\": 2}");
+    ASSERT(mg_json_get_long(json, "$.a[0]", -42) == 1);
+    ASSERT(mg_json_get_long(json, "$.ab", -42) == 2);
+    ASSERT(mg_json_get_long(json, "$.ac", -42) == -42);
   }
 }
 
