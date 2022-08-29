@@ -4150,39 +4150,3 @@ Usage example:
 ```c
 mg_file_printf(&mg_fs_fat, "/test.txt", "%s\n", "hi");
 ```
-
-### Packed filesystem
-
-A packed filesystem allow to "pack" filesystem into a C file which then can
-be compiled into the binary, forming a read-only file system.
-This makes it possible to serve files on devices with no
-filesystem. Even on devices with a filesystem, packing some files like Web UI
-can be beneficial to be resilient to filesystem errors.
-
-
-In order to use packed filesystem do the following:
-
-1. Build **pack** tool from test/pack.c:
-```sh
-$ cc -o pack pack.c
-```
-
-2. Convert list of files into single .c:
-```sh
-$ ./pack index.html style.css > packed_fs.c
-```
-
-3. Build your app with `packed_fs.c`:
-```sh
-$ cc mongoose.c app.c packed_fs.c -DMG_ENABLE_PACKED_FS=1
-```
-
-<img src="images/packed.svg" alt="packed filesystem" />
-
-4. In your application code:
-```c
-struct mg_http_serve_opts opts = {};  // Initialise empty options
-opts.fs = &mg_fs_packed;              // Use packed filesystem
-opts.root_dir = "/";                  // Set root directory
-mg_http_serve_dir(c, hm, &opts);      // Serve directory
-```
