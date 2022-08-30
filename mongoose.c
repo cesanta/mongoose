@@ -2517,10 +2517,15 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
     MG_DBGP('-');
     switch (expecting) {
       case S_VALUE:
+        if ( depth == ed && ei == ci && c != '[' && path[pos] == '[' ) return MG_JSON_NOT_FOUND;
         if (depth == ed) j = i;
         if (c == '{') {
           if (depth >= (int) sizeof(nesting)) return MG_JSON_TOO_DEEP;
-          if (depth == ed && path[pos] == '.') ed++, pos++;
+          if (depth == ed && (ci == ei || ci < 0) && path[pos] == '.') {
+            ed++, pos++;
+            ci = -1;
+            ei = -1;
+          }
           nesting[depth++] = c;
           expecting = S_KEY;
           break;
@@ -2537,6 +2542,7 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
           nesting[depth++] = c;
           break;
         } else if (c == ']' && depth > 0) {  // Empty array
+          if (depth == ed) ci = -1;
           MG_EOO(']');
         } else if (c == 't' && i + 3 < len && memcmp(&s[i], "true", 4) == 0) {
           i += 3;
@@ -2556,7 +2562,11 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
           return MG_JSON_INVALID;
         }
         MG_CHECKRET('V');
-        if (depth == ed && ei >= 0) ci++;
+        if (depth == ed && ei >= 0) {
+          ci++;
+          if (ci > ei) return MG_JSON_NOT_FOUND;
+        }
+
         expecting = S_COMMA_OR_EOO;
         break;
 
@@ -2602,7 +2612,10 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
           // MG_CHECKRET('C');
         } else if (c == ']' || c == '}') {
           MG_EOO('O');
-          if (depth == ed && ei >= 0) ci++;
+          if (depth == ed && ei >= 0) {
+            ci++;
+            if (ci > ei) return MG_JSON_NOT_FOUND;
+          }
         } else {
           return MG_JSON_INVALID;
         }

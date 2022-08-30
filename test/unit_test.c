@@ -2495,6 +2495,19 @@ static void test_json(void) {
     ASSERT(mg_json_get_long(json, "$.a[0]", -42) == 1);
     ASSERT(mg_json_get_long(json, "$.ab", -42) == 2);
     ASSERT(mg_json_get_long(json, "$.ac", -42) == -42);
+
+    json = mg_str("{\"a\":[],\"b\":[1,2]}");
+    ASSERT(mg_json_get_long(json, "$.a[0]", -42) == -42);
+    ASSERT(mg_json_get_long(json, "$.b[0]", -42) == 1);
+    ASSERT(mg_json_get_long(json, "$.b[1]", -42) == 2);
+    ASSERT(mg_json_get_long(json, "$.b[2]", -42) == -42);
+    json = mg_str("[{\"a\":1,\"b\":2},{\"a\":3, \"b\":4}]");
+    ASSERT(mg_json_get_long(json, "$[0].a", -42) == 1);
+    ASSERT(mg_json_get_long(json, "$[0].b", -42) == 2);
+    ASSERT(mg_json_get_long(json, "$[1].a", -42) == 3);
+    ASSERT(mg_json_get_long(json, "$[1].b", -42) == 4);
+    ASSERT(mg_json_get_long(json, "$[2].a", -42) == -42);
+
   }
 }
 
