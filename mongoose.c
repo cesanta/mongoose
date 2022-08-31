@@ -4970,9 +4970,6 @@ char *mg_remove_double_dots(char *s) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/timer.c"
 #endif
-// Copyright (c) Cesanta Software Limited
-// All rights reserved
-
 
 
 
@@ -5929,11 +5926,37 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
 }
 
 #ifdef MG_ENABLE_LINES
+#line 1 "mip/driver_enc28j60.c"
+#endif
+
+
+static void mip_driver_enc28j60_init(uint8_t *mac, void *data) {
+  (void) mac, (void) data;
+}
+
+static size_t mip_driver_enc28j60_tx(const void *buf, size_t len, void *data) {
+  (void) buf, (void) len, (void) data;
+  return 0;
+}
+
+static size_t mip_driver_enc28j60_rx(void *buf, size_t len, void *data) {
+  (void) buf, (void) len, (void) data;
+  return 0;
+}
+
+static bool mip_driver_enc28j60_up(void *data) {
+  (void) data;
+  return false;
+}
+
+struct mip_driver mip_driver_enc28j60 = {.init = mip_driver_enc28j60_init,
+                                         .tx = mip_driver_enc28j60_tx,
+                                         .rx = mip_driver_enc28j60_rx,
+                                         .up = mip_driver_enc28j60_up};
+
+#ifdef MG_ENABLE_LINES
 #line 1 "mip/driver_stm32.c"
 #endif
-// Copyright (c) 2022 Cesanta Software Limited
-// All rights reserved
-
 
 
 #if MG_ENABLE_MIP && defined(__arm__)
@@ -6053,10 +6076,10 @@ static size_t mip_driver_stm32_tx(const void *buf, size_t len, void *userdata) {
   (void) userdata;
 }
 
-static bool mip_driver_stm32_status(void *userdata) {
+static bool mip_driver_stm32_up(void *userdata) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
-  return bsr & BIT(2) ? 1 : 0;
   (void) userdata;
+  return bsr & BIT(2) ? 1 : 0;
 }
 
 void ETH_IRQHandler(void);
@@ -6077,8 +6100,8 @@ void ETH_IRQHandler(void) {
 
 struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
                                       .tx = mip_driver_stm32_tx,
-                                      .rxcb = mip_driver_stm32_setrx,
-                                      .status = mip_driver_stm32_status};
+                                      .setrx = mip_driver_stm32_setrx,
+                                      .up = mip_driver_stm32_up};
 #endif  // MG_ENABLE_MIP
 
 #ifdef MG_ENABLE_LINES
@@ -6767,8 +6790,8 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   }
 
   // Handle physical interface up/down status
-  if (ifp->driver->status) {
-    bool up = ifp->driver->status(ifp->driver_data);
+  if (ifp->driver->up) {
+    bool up = ifp->driver->up(ifp->driver_data);
     bool current = ifp->state != MIP_STATE_DOWN;
     if (up != current) {
       ifp->state = up == false     ? MIP_STATE_DOWN
@@ -6799,7 +6822,7 @@ static void on_rx(void *buf, size_t len, void *userdata) {
 
 void mip_init(struct mg_mgr *mgr, struct mip_ipcfg *ipcfg,
               struct mip_driver *driver, void *driver_data) {
-  size_t maxpktsize = 1500, qlen = driver->rxcb ? 1024 * 16 : 0;
+  size_t maxpktsize = 1500, qlen = driver->setrx ? 1024 * 16 : 0;
   struct mip_if *ifp =
       (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
   memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
@@ -6813,7 +6836,7 @@ void mip_init(struct mg_mgr *mgr, struct mip_ipcfg *ipcfg,
   ifp->queue.buf = ifp->tx.buf + maxpktsize;
   ifp->queue.len = qlen;
   if (driver->init) driver->init(ipcfg->mac, driver_data);
-  if (driver->rxcb) driver->rxcb(on_rx, ifp);
+  if (driver->setrx) driver->setrx(on_rx, ifp);
   mgr->priv = ifp;
   mgr->extraconnsize = sizeof(struct tcpstate);
 }

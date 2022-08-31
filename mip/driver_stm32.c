@@ -1,6 +1,3 @@
-// Copyright (c) 2022 Cesanta Software Limited
-// All rights reserved
-
 #include "mip.h"
 
 #if MG_ENABLE_MIP && defined(__arm__)
@@ -120,10 +117,10 @@ static size_t mip_driver_stm32_tx(const void *buf, size_t len, void *userdata) {
   (void) userdata;
 }
 
-static bool mip_driver_stm32_status(void *userdata) {
+static bool mip_driver_stm32_up(void *userdata) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
-  return bsr & BIT(2) ? 1 : 0;
   (void) userdata;
+  return bsr & BIT(2) ? 1 : 0;
 }
 
 void ETH_IRQHandler(void);
@@ -144,6 +141,6 @@ void ETH_IRQHandler(void) {
 
 struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
                                       .tx = mip_driver_stm32_tx,
-                                      .rxcb = mip_driver_stm32_setrx,
-                                      .status = mip_driver_stm32_status};
+                                      .setrx = mip_driver_stm32_setrx,
+                                      .up = mip_driver_stm32_up};
 #endif  // MG_ENABLE_MIP

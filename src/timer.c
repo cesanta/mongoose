@@ -1,6 +1,3 @@
-// Copyright (c) Cesanta Software Limited
-// All rights reserved
-
 #include "timer.h"
 #include "arch.h"
 

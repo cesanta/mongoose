@@ -681,8 +681,8 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   }
 
   // Handle physical interface up/down status
-  if (ifp->driver->status) {
-    bool up = ifp->driver->status(ifp->driver_data);
+  if (ifp->driver->up) {
+    bool up = ifp->driver->up(ifp->driver_data);
     bool current = ifp->state != MIP_STATE_DOWN;
     if (up != current) {
       ifp->state = up == false     ? MIP_STATE_DOWN
@@ -713,7 +713,7 @@ static void on_rx(void *buf, size_t len, void *userdata) {
 
 void mip_init(struct mg_mgr *mgr, struct mip_ipcfg *ipcfg,
               struct mip_driver *driver, void *driver_data) {
-  size_t maxpktsize = 1500, qlen = driver->rxcb ? 1024 * 16 : 0;
+  size_t maxpktsize = 1500, qlen = driver->setrx ? 1024 * 16 : 0;
   struct mip_if *ifp =
       (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
   memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
@@ -727,7 +727,7 @@ void mip_init(struct mg_mgr *mgr, struct mip_ipcfg *ipcfg,
   ifp->queue.buf = ifp->tx.buf + maxpktsize;
   ifp->queue.len = qlen;
   if (driver->init) driver->init(ipcfg->mac, driver_data);
-  if (driver->rxcb) driver->rxcb(on_rx, ifp);
+  if (driver->setrx) driver->setrx(on_rx, ifp);
   mgr->priv = ifp;
   mgr->extraconnsize = sizeof(struct tcpstate);
 }
