@@ -47,7 +47,7 @@ static size_t pcap_tx(const void *data, size_t len, void *userdata) {
   return len;
 }
 
-static bool pcap_status(void *userdata) {
+static bool pcap_up(void *userdata) {
   return userdata ? true : false;
 }
 
@@ -112,14 +112,12 @@ int main(int argc, char *argv[]) {
   signal(SIGINT, signal_handler);
   signal(SIGTERM, signal_handler);
 
-  struct mip_ipcfg ipcfg = {.ip = 0, .mask = 0, .gw = 0};
-  sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &ipcfg.mac[0], &ipcfg.mac[1],
-         &ipcfg.mac[2], &ipcfg.mac[3], &ipcfg.mac[4], &ipcfg.mac[5]);
+  struct mip_cfg c = {.ip = 0, .mask = 0, .gw = 0};
+  sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &c.mac[0], &c.mac[1], &c.mac[2],
+         &c.mac[3], &c.mac[4], &c.mac[5]);
 
-  struct mip_driver driver = {
-      .tx = pcap_tx, .status = pcap_status, .rx = pcap_rx};
-
-  mip_init(&mgr, &ipcfg, &driver, ph);
+  struct mip_driver driver = {.tx = pcap_tx, .up = pcap_up, .rx = pcap_rx};
+  mip_init(&mgr, &c, &driver, ph);
   MG_INFO(("Init done, starting main loop"));
 
   while (s_signo == 0) mg_mgr_poll(&mgr, 1);  // Infinite event loop
