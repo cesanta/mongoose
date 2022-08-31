@@ -62,7 +62,7 @@ extern "C" {
 #endif
 
 #if !defined(MG_ARCH)
-#include <mongoose_custom.h>
+#include "mongoose_custom.h"  // keep this include
 #endif
 
 #if !defined(MG_ARCH)
