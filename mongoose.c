@@ -5930,6 +5930,7 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
 #endif
 
 
+#if MG_ENABLE_MIP
 static void mip_driver_enc28j60_init(uint8_t *mac, void *data) {
   (void) mac, (void) data;
 }
@@ -5953,6 +5954,7 @@ struct mip_driver mip_driver_enc28j60 = {.init = mip_driver_enc28j60_init,
                                          .tx = mip_driver_enc28j60_tx,
                                          .rx = mip_driver_enc28j60_rx,
                                          .up = mip_driver_enc28j60_up};
+#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "mip/driver_stm32.c"
