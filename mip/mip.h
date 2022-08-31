@@ -12,12 +12,12 @@ struct mip_driver {
   void (*setrx)(void (*fn)(void *buf, size_t len, void *rxdata), void *rxdata);
 };
 
-struct mip_ipcfg {
+struct mip_cfg {
   uint8_t mac[6];         // MAC address. Must not be 0
   uint32_t ip, mask, gw;  // IP, netmask, GW. If IP is 0, DHCP is used
 };
 
-void mip_init(struct mg_mgr *, struct mip_ipcfg *, struct mip_driver *, void *);
+void mip_init(struct mg_mgr *, struct mip_cfg *, struct mip_driver *, void *);
 
 extern struct mip_driver mip_driver_stm32;
 extern struct mip_driver mip_driver_enc28j60;

@@ -6820,7 +6820,7 @@ static void on_rx(void *buf, size_t len, void *userdata) {
   if (!q_write(&ifp->queue, buf, len)) MG_ERROR(("dropped %d", (int) len));
 }
 
-void mip_init(struct mg_mgr *mgr, struct mip_ipcfg *ipcfg,
+void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
               struct mip_driver *driver, void *driver_data) {
   size_t maxpktsize = 1500, qlen = driver->setrx ? 1024 * 16 : 0;
   struct mip_if *ifp =

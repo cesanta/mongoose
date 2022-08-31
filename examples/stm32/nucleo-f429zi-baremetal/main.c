@@ -70,7 +70,7 @@ int main(void) {
   // Initialise Mongoose network stack
   // Specify MAC address, and use 0 for IP, mask, GW - i.e. use DHCP
   // For static configuration, specify IP/mask/GW in network byte order
-  struct mip_ipcfg c = {.mac = {0, 0, 1, 2, 3, 4}, .ip = 0, .mask = 0, .gw = 0};
+  struct mip_cfg c = {.mac = {0, 0, 1, 2, 3, 4}, .ip = 0, .mask = 0, .gw = 0};
   mip_init(&mgr, &c, &mip_driver_stm32, NULL);
   MG_INFO(("Init done, starting main loop"));
 
