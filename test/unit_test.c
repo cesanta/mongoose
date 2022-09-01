@@ -2508,6 +2508,10 @@ static void test_json(void) {
     ASSERT(mg_json_get_long(json, "$[1].b", -42) == 4);
     ASSERT(mg_json_get_long(json, "$[2].a", -42) == -42);
 
+    json = mg_str("{\"a\":[1],\"b\":[2,3]}");
+    ASSERT(mg_json_get_long(json, "$.a[0]", -42) == 1);
+    ASSERT(mg_json_get_long(json, "$.a[1]", -42) == -42);
+
   }
 }
 
