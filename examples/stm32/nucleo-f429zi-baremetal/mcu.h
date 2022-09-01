@@ -83,7 +83,7 @@ struct scb {
       DCCIMVAC, DCCISW, RESERVED7[6], ITCMCR, DTCMCR, AHBPCR, CACR, AHBSCR,
       RESERVED8[1], ABFSR;
 };
-#define SCB ((struct scb *) 0xe000e000)
+#define SCB ((struct scb *) 0xe000ed00)
 
 enum { GPIO_MODE_INPUT, GPIO_MODE_OUTPUT, GPIO_MODE_AF, GPIO_MODE_ANALOG };
 enum { GPIO_OTYPE_PUSH_PULL, GPIO_OTYPE_OPEN_DRAIN };
