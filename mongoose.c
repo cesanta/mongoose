@@ -2602,6 +2602,7 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
         } else if (c == ',') {
           expecting = (nesting[depth - 1] == '{') ? S_KEY : S_VALUE;
         } else if (c == ']' || c == '}') {
+          if (depth == ed && ei >= 0) ci--; // Array ends, as ci is pre-added by 1, needs to be decremented before MG_EOO
           MG_EOO('O');
           if (depth == ed && ei >= 0) ci++;
         } else {
