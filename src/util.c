@@ -121,6 +121,8 @@ uint64_t mg_millis(void) {
   clock_gettime(CLOCK_REALTIME, &ts);
 #endif
   return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
+#elif defined(ARDUINO)
+  return (uint64_t) millis();
 #else
   return (uint64_t) (time(NULL) * 1000);
 #endif

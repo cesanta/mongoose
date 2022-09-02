@@ -2,7 +2,7 @@
 
 #if MG_ENABLE_MIP
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(ARDUINO)
 #define _Atomic
 #else
 #include <stdatomic.h>
@@ -713,23 +713,26 @@ static void on_rx(void *buf, size_t len, void *userdata) {
 
 void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
               struct mip_driver *driver, void *driver_data) {
-  size_t maxpktsize = 1500, qlen = driver->setrx ? 1024 * 16 : 0;
-  struct mip_if *ifp =
-      (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
-  memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
-  ifp->use_dhcp = ipcfg->ip == 0;
-  ifp->ip = ipcfg->ip, ifp->mask = ipcfg->mask, ifp->gw = ipcfg->gw;
-  ifp->rx.buf = (uint8_t *) (ifp + 1), ifp->rx.len = maxpktsize;
-  ifp->tx.buf = ifp->rx.buf + maxpktsize, ifp->tx.len = maxpktsize;
-  ifp->driver = driver;
-  ifp->driver_data = driver_data;
-  ifp->mgr = mgr;
-  ifp->queue.buf = ifp->tx.buf + maxpktsize;
-  ifp->queue.len = qlen;
-  if (driver->init) driver->init(ipcfg->mac, driver_data);
-  if (driver->setrx) driver->setrx(on_rx, ifp);
-  mgr->priv = ifp;
-  mgr->extraconnsize = sizeof(struct tcpstate);
+  if (driver->init && !driver->init(ipcfg->mac, driver_data)) {
+    MG_ERROR(("driver init failed"));
+  } else {
+    size_t maxpktsize = 1500, qlen = driver->setrx ? 1024 * 16 : 0;
+    struct mip_if *ifp =
+        (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
+    memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
+    ifp->use_dhcp = ipcfg->ip == 0;
+    ifp->ip = ipcfg->ip, ifp->mask = ipcfg->mask, ifp->gw = ipcfg->gw;
+    ifp->rx.buf = (uint8_t *) (ifp + 1), ifp->rx.len = maxpktsize;
+    ifp->tx.buf = ifp->rx.buf + maxpktsize, ifp->tx.len = maxpktsize;
+    ifp->driver = driver;
+    ifp->driver_data = driver_data;
+    ifp->mgr = mgr;
+    ifp->queue.buf = ifp->tx.buf + maxpktsize;
+    ifp->queue.len = qlen;
+    if (driver->setrx) driver->setrx(on_rx, ifp);
+    mgr->priv = ifp;
+    mgr->extraconnsize = sizeof(struct tcpstate);
+  }
 }
 
 int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {

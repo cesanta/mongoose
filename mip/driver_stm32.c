@@ -50,7 +50,7 @@ static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   while (ETH->MACMIIAR & BIT(0)) spin(1);
 }
 
-static void mip_driver_stm32_init(uint8_t *mac, void *userdata) {
+static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = BIT(31);                            // Own
@@ -86,6 +86,7 @@ static void mip_driver_stm32_init(uint8_t *mac, void *userdata) {
 
   // TODO(cpq): setup MAC filtering
   (void) userdata, (void) mac;
+  return true;
 }
 
 static void mip_driver_stm32_setrx(void (*rx)(void *, size_t, void *),

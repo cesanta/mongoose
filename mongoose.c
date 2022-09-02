@@ -5622,6 +5622,8 @@ uint64_t mg_millis(void) {
   clock_gettime(CLOCK_REALTIME, &ts);
 #endif
   return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
+#elif defined(ARDUINO)
+  return (uint64_t) millis();
 #else
   return (uint64_t) (time(NULL) * 1000);
 #endif
@@ -5932,8 +5934,23 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
 
 
 #if MG_ENABLE_MIP
-static void mip_driver_enc28j60_init(uint8_t *mac, void *data) {
+
+// Instruction set
+enum { OP_RCR, OP_RBM, OP_WCR, OP_WBM, OP_BFS, OP_BFC, OP_SRC };
+
+static uint8_t rd(struct mip_spi *spi, uint8_t op, uint8_t addr) {
+  spi->begin(spi->spi);
+  spi->txn(spi->spi, (uint8_t) ((op << 5) | (addr & 0x1f)));
+  uint8_t value = spi->txn(spi->spi, 255);
+  if (addr & 0x80) value = spi->txn(spi->spi, 255);
+  spi->end(spi->spi);
+  return value;
+}
+
+static bool mip_driver_enc28j60_init(uint8_t *mac, void *data) {
   (void) mac, (void) data;
+  rd(data, OP_SRC, 0x1f);
+  return false;
 }
 
 static size_t mip_driver_enc28j60_tx(const void *buf, size_t len, void *data) {
@@ -6012,7 +6029,7 @@ static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   while (ETH->MACMIIAR & BIT(0)) spin(1);
 }
 
-static void mip_driver_stm32_init(uint8_t *mac, void *userdata) {
+static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = BIT(31);                            // Own
@@ -6048,6 +6065,7 @@ static void mip_driver_stm32_init(uint8_t *mac, void *userdata) {
 
   // TODO(cpq): setup MAC filtering
   (void) userdata, (void) mac;
+  return true;
 }
 
 static void mip_driver_stm32_setrx(void (*rx)(void *, size_t, void *),
@@ -6108,13 +6126,103 @@ struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
 #endif  // MG_ENABLE_MIP
 
 #ifdef MG_ENABLE_LINES
+#line 1 "mip/driver_w5500.c"
+#endif
+
+
+#if MG_ENABLE_MIP
+
+enum { W5500_CR = 0, W5500_S0 = 1, W5500_TX0 = 2, W5500_RX0 = 3 };
+
+static void w5500_txn(struct mip_spi *s, uint8_t block, uint16_t addr, bool wr,
+                      void *buf, size_t len) {
+  uint8_t *p = buf, cmd[] = {(uint8_t) (addr >> 8), (uint8_t) (addr & 255),
+                             (uint8_t) ((block << 3) | (wr ? 4 : 0))};
+  s->begin(s->spi);
+  for (size_t i = 0; i < sizeof(cmd); i++) s->txn(s->spi, cmd[i]);
+  for (size_t i = 0; i < len; i++) {
+    uint8_t r = s->txn(s->spi, p[i]);
+    if (!wr) p[i] = r;
+  }
+  s->end(s->spi);
+}
+
+// clang-format off
+static  void w5500_wn(struct mip_spi *s, uint8_t block, uint16_t addr, void *buf, size_t len) { w5500_txn(s, block, addr, true, buf, len); }
+static  void w5500_w1(struct mip_spi *s, uint8_t block, uint16_t addr, uint8_t val) { w5500_wn(s, block, addr, &val, 1); }
+static  void w5500_w2(struct mip_spi *s, uint8_t block, uint16_t addr, uint16_t val) { uint8_t buf[2] = {(uint8_t) (val >> 8), (uint8_t) (val & 255)}; w5500_wn(s, block, addr, buf, sizeof(buf)); }
+static  void w5500_rn(struct mip_spi *s, uint8_t block, uint16_t addr, void *buf, size_t len) { w5500_txn(s, block, addr, false, buf, len); }
+static  uint8_t w5500_r1(struct mip_spi *s, uint8_t block, uint16_t addr) { uint8_t r = 0; w5500_rn(s, block, addr, &r, 1); return r; }
+static  uint16_t w5500_r2(struct mip_spi *s, uint8_t block, uint16_t addr) { uint8_t buf[2] = {0, 0}; w5500_rn(s, block, addr, buf, sizeof(buf)); return (uint16_t) ((buf[0] << 8) | buf[1]); }
+// clang-format on
+
+static size_t w5500_rx(void *buf, size_t buflen, void *data) {
+  struct mip_spi *s = (struct mip_spi *) data;
+  uint16_t r = 0, n = 0, len = (uint16_t) buflen, n2;     // Read recv len
+  while ((n2 = w5500_r2(s, W5500_S0, 0x26)) > n) n = n2;  // Until it is stable
+  // printf("RSR: %d\n", (int) n);
+  if (n > 0) {
+    uint16_t ptr = w5500_r2(s, W5500_S0, 0x28);  // Get read pointer
+    n = w5500_r2(s, W5500_RX0, ptr);             // Read frame length
+    if (n <= len + 2) r = n - 2, w5500_rn(s, W5500_RX0, ptr + 2, buf, r);
+    w5500_w2(s, W5500_S0, 0x28, ptr + n);  // Advance read pointer
+    w5500_w1(s, W5500_S0, 1, 0x40);        // Sock0 CR -> RECV
+    // printf("  RX_RD: tot=%u n=%u r=%u\n", n2, n, r);
+  }
+  return r;
+}
+
+static size_t w5500_tx(const void *buf, size_t buflen, void *data) {
+  struct mip_spi *s = (struct mip_spi *) data;
+  uint16_t n = 0, len = (uint16_t) buflen;
+  while (n < len) n = w5500_r2(s, W5500_S0, 0x20);  // Wait for space
+  uint16_t ptr = w5500_r2(s, W5500_S0, 0x24);       // Get write pointer
+  w5500_wn(s, W5500_TX0, ptr, (void *) buf, len);   // Write data
+  w5500_w2(s, W5500_S0, 0x24, ptr + len);           // Advance write pointer
+  w5500_w1(s, W5500_S0, 1, 0x20);                   // Sock0 CR -> SEND
+  for (int i = 0; i < 40; i++) {
+    uint8_t ir = w5500_r1(s, W5500_S0, 2);  // Read S0 IR
+    if (ir == 0) continue;
+    // printf("IR %d, len=%d, free=%d, ptr %d\n", ir, (int) len, (int) n, ptr);
+    w5500_w1(s, W5500_S0, 2, ir);  // Write S0 IR: clear it!
+    if (ir & 8) len = 0;           // Timeout. Report error
+    if (ir & (16 | 8)) break;      // Stop on SEND_OK or timeout
+  }
+  return len;
+}
+
+static bool w5500_init(uint8_t *mac, void *data) {
+  struct mip_spi *s = (struct mip_spi *) data;
+  s->end(s->spi);
+  w5500_w1(s, W5500_CR, 0, 0x80);     // Reset chip: CR -> 0x80
+  w5500_w1(s, W5500_CR, 0x2e, 0);     // CR PHYCFGR -> reset
+  w5500_w1(s, W5500_CR, 0x2e, 0xf8);  // CR PHYCFGR -> set
+  // w5500_wn(s, W5500_CR, 9, s->mac, 6);      // Set source MAC
+  w5500_w1(s, W5500_S0, 0x1e, 16);          // Sock0 RX buf size
+  w5500_w1(s, W5500_S0, 0x1f, 16);          // Sock0 TX buf size
+  w5500_w1(s, W5500_S0, 0, 4);              // Sock0 MR -> MACRAW
+  w5500_w1(s, W5500_S0, 1, 1);              // Sock0 CR -> OPEN
+  return w5500_r1(s, W5500_S0, 3) == 0x42;  // Sock0 SR == MACRAW
+  (void) mac;
+}
+
+static bool w5500_up(void *data) {
+  uint8_t phycfgr = w5500_r1((struct mip_spi *) data, W5500_CR, 0x2e);
+  return phycfgr & 1;  // Bit 0 of PHYCFGR is LNK (0 - down, 1 - up)
+}
+
+struct mip_driver mip_driver_w5500 = {
+    .init = w5500_init, .tx = w5500_tx, .rx = w5500_rx, .up = w5500_up};
+#endif
+
+#ifdef MG_ENABLE_LINES
 #line 1 "mip/mip.c"
 #endif
 
 
 #if MG_ENABLE_MIP
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(ARDUINO)
 #define _Atomic
 #else
 #include <stdatomic.h>
@@ -6825,23 +6933,26 @@ static void on_rx(void *buf, size_t len, void *userdata) {
 
 void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
               struct mip_driver *driver, void *driver_data) {
-  size_t maxpktsize = 1500, qlen = driver->setrx ? 1024 * 16 : 0;
-  struct mip_if *ifp =
-      (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
-  memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
-  ifp->use_dhcp = ipcfg->ip == 0;
-  ifp->ip = ipcfg->ip, ifp->mask = ipcfg->mask, ifp->gw = ipcfg->gw;
-  ifp->rx.buf = (uint8_t *) (ifp + 1), ifp->rx.len = maxpktsize;
-  ifp->tx.buf = ifp->rx.buf + maxpktsize, ifp->tx.len = maxpktsize;
-  ifp->driver = driver;
-  ifp->driver_data = driver_data;
-  ifp->mgr = mgr;
-  ifp->queue.buf = ifp->tx.buf + maxpktsize;
-  ifp->queue.len = qlen;
-  if (driver->init) driver->init(ipcfg->mac, driver_data);
-  if (driver->setrx) driver->setrx(on_rx, ifp);
-  mgr->priv = ifp;
-  mgr->extraconnsize = sizeof(struct tcpstate);
+  if (driver->init && !driver->init(ipcfg->mac, driver_data)) {
+    MG_ERROR(("ERROR intialising driver"));
+  } else {
+    size_t maxpktsize = 1500, qlen = driver->setrx ? 1024 * 16 : 0;
+    struct mip_if *ifp =
+        (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
+    memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
+    ifp->use_dhcp = ipcfg->ip == 0;
+    ifp->ip = ipcfg->ip, ifp->mask = ipcfg->mask, ifp->gw = ipcfg->gw;
+    ifp->rx.buf = (uint8_t *) (ifp + 1), ifp->rx.len = maxpktsize;
+    ifp->tx.buf = ifp->rx.buf + maxpktsize, ifp->tx.len = maxpktsize;
+    ifp->driver = driver;
+    ifp->driver_data = driver_data;
+    ifp->mgr = mgr;
+    ifp->queue.buf = ifp->tx.buf + maxpktsize;
+    ifp->queue.len = qlen;
+    if (driver->setrx) driver->setrx(on_rx, ifp);
+    mgr->priv = ifp;
+    mgr->extraconnsize = sizeof(struct tcpstate);
+  }
 }
 
 int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {
