@@ -5973,10 +5973,12 @@ struct mip_driver mip_driver_enc28j60 = {.init = mip_driver_enc28j60_init,
 
 #if MG_ENABLE_MIP && defined(__arm__)
 
+// define to your own clock if using external clocking
 #if !defined(MG_STM32_CLK_HSE)
 #define MG_STM32_CLK_HSE 8000000UL
 #endif
 
+// define to your chip internal clock if different
 #if !defined(MG_STM32_CLK_HSI)
 #define MG_STM32_CLK_HSI 16000000UL
 #endif
@@ -6159,8 +6161,14 @@ static uint32_t hclk_get(void) {
   return ((uint32_t) clk) >> ahbptab[hpre - 8];
 }
 
-/* Guess CR from HCLK, set to IEEE802.3 max -5% clock drift;
- valid for STM32F74xxx/75xxx (38.8.1) and STM32F42xxx/43xxx (33.8.1) */
+/* Guess CR from HCLK:
+MDC clock is generated from HCLK (AHB); as per 802.3, it must not exceed 2.5MHz
+As the AHB clock can be (and usually is) derived from the HSI (internal RC),
+and it can go above specs, the datasheets specify a range of frequencies and
+activate one of a series of dividers to keep the MDC clock safely below 2.5MHz.
+We guess a divider setting based on HCLK with a +5% drift.
+If the user uses a different clock from our defaults, needs to set the macros on top
+Valid for STM32F74xxx/75xxx (38.8.1) and STM32F42xxx/43xxx (33.8.1) (both 4.5% worst case drift) */
 #define CRDTAB_LEN 6
 static const uint8_t crdtab[CRDTAB_LEN][2] = {
     // [{setting, div ratio},...]
