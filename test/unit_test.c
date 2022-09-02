@@ -2482,6 +2482,7 @@ static void test_json(void) {
     ASSERT(mg_json_get_bool(json, "$.b[0]", &b) == false);
     ASSERT(mg_json_get_bool(json, "$.b[1]", &b) == true);
     ASSERT(b == true);
+    ASSERT(mg_json_get(json, "$.b[2]", &len) < 0);
 
     json = mg_str("[\"YWJj\", \"0100026869\"]");
     ASSERT((str = mg_json_get_b64(json, "$[0]", &len)) != NULL);
@@ -2512,6 +2513,13 @@ static void test_json(void) {
     ASSERT(mg_json_get_long(json, "$.a[0]", -42) == 1);
     ASSERT(mg_json_get_long(json, "$.a[1]", -42) == -42);
 
+    json = mg_str("{\"a\":[1,[2,3], 4]}");
+    ASSERT(mg_json_get_long(json, "$.a[0]", -42) == 1);
+    ASSERT(mg_json_get_long(json, "$.a[1][0]", -42) == 2);
+    ASSERT(mg_json_get_long(json, "$.a[1][1]", -42) == 3);
+    ASSERT(mg_json_get_long(json, "$.a[1][2]", -42) == -42);
+    ASSERT(mg_json_get_long(json, "$.a[2]", -42) == 4);
+    ASSERT(mg_json_get_long(json, "$.a[3]", -42) == -42);
   }
 }
 
