@@ -203,8 +203,10 @@ static inline void clock_init(void) {  // Set clock frequency
   while ((PWR->CSR1 & BIT(16)) == 0) spin(1);  // Wait until done
   PWR->CR1 |= BIT(17);                         // Enable overdrive switching
   while ((PWR->CSR1 & BIT(17)) == 0) spin(1);  // Wait until done
-  SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
 #endif
+  SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
+  asm ("DSB");
+  asm ("ISB");
   FLASH->ACR |= FLASH_LATENCY | BIT(8) | BIT(9);    // Flash latency, prefetch
   RCC->PLLCFGR &= ~((BIT(17) - 1));                 // Clear PLL multipliers
   RCC->PLLCFGR |= (((PLL_P - 2) / 2) & 3) << 16;    // Set PLL_P
