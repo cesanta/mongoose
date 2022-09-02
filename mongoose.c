@@ -6815,7 +6815,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   return c;
 }
 
-static void read_conn(struct mg_connection *c, struct pkt *pkt) {
+static bool read_conn(struct mg_connection *c, struct pkt *pkt) {
   struct tcpstate *s = (struct tcpstate *) (c + 1);
   if (pkt->tcp->flags & TH_FIN) {
     s->ack = mg_htonl(pkt->tcp->seq) + 1, s->seq = mg_htonl(pkt->tcp->ack);
@@ -6832,12 +6832,9 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     c->recv.len += pkt->pay.len;
     struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
     mg_call(c, MG_EV_READ, &evd);
-#if 0
-    // Send ACK immediately
-    tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port, mg_htonl(s->seq),
-           mg_htonl(s->ack), NULL, 0);
-#endif
+    return true;
   }
+  return false;
 }
 
 static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
@@ -6859,7 +6856,14 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
               mg_ntohl(pkt->ip->dst), mg_ntohs(pkt->tcp->dport)));
     mg_hexdump(pkt->pay.buf, pkt->pay.len);
 #endif
-    read_conn(c, pkt);
+    if(read_conn(c, pkt)) {
+      // Send ACK immediately, no piggyback yet
+      // TODO() Set a timer and send ACK if timer expires and no segment was sent ?
+      // (clear timer on segment sent)
+      struct tcpstate *s = (struct tcpstate *) (c + 1);
+      tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port, mg_htonl(s->seq),
+           mg_htonl(s->ack), NULL, 0);
+    }
   } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (pkt->tcp->flags & TH_SYN) {
