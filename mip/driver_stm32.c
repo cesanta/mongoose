@@ -2,6 +2,14 @@
 
 #if MG_ENABLE_MIP && defined(__arm__)
 
+#if !defined(MG_STM32_CLK_HSE)
+#define MG_STM32_CLK_HSE 8000000UL
+#endif
+
+#if !defined(MG_STM32_CLK_HSI)
+#define MG_STM32_CLK_HSI 16000000UL
+#endif
+
 struct stm32_eth {
   volatile uint32_t MACCR, MACFFR, MACHTHR, MACHTLR, MACMIIAR, MACMIIDR, MACFCR,
       MACVLANTR, RESERVED0[2], MACRWUFFR, MACPMTCSR, RESERVED1, MACDBGR, MACSR,
@@ -33,6 +41,9 @@ enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
 static inline void spin(volatile uint32_t count) {
   while (count--) asm("nop");
 }
+
+static uint32_t hclk_get(void);
+static uint8_t cr_guess(uint32_t hclk);
 
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMIIAR &= (7 << 2);
@@ -73,7 +84,7 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   // hardware checksum. Therefore, descriptor size is 4, not 8
   // ETH->DMABMR = BIT(13) | BIT(16) | BIT(22) | BIT(23) | BIT(25);
   ETH->MACIMR = BIT(3) | BIT(9);              // Mask timestamp & PMT IT
-  ETH->MACMIIAR = 4 << 2;                     // MDC clock 150-216 MHz, 38.8.1
+  ETH->MACMIIAR = cr_guess(hclk_get()) << 2;  // MDC clock
   ETH->MACFCR = BIT(7);                       // Disable zero quarta pause
   ETH->MACFFR = BIT(31);                      // Receive all
   eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));  // Reset PHY
@@ -144,4 +155,57 @@ struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
                                       .tx = mip_driver_stm32_tx,
                                       .setrx = mip_driver_stm32_setrx,
                                       .up = mip_driver_stm32_up};
+
+/* Calculate HCLK from clock settings,
+ valid for STM32F74xxx/75xxx (5.3) and STM32F42xxx/43xxx (6.3) */
+static const uint8_t ahbptab[8] = {1, 2, 3, 4, 6, 7, 8, 9};  // log2(div)
+struct rcc {
+  volatile uint32_t CR, PLLCFGR, CFGR;
+};
+#define RCC ((struct rcc *) 0x40023800)
+
+static uint32_t hclk_get(void) {
+  uint32_t clk = 0;
+  if (RCC->CFGR & (1 << 2)) {
+    clk = MG_STM32_CLK_HSE;
+  } else if (RCC->CFGR & (1 << 3)) {
+    uint32_t vco, m, n, p;
+    m = (RCC->PLLCFGR & (0x3FUL << 0)) >> 0;
+    n = (RCC->PLLCFGR & (0x1FFUL << 6)) >> 6;
+    p = (((RCC->PLLCFGR & (0x03UL << 16)) >> 16) + 1) * 2;
+    if (RCC->PLLCFGR & (1UL << 22))
+      clk = MG_STM32_CLK_HSE;
+    else
+      clk = MG_STM32_CLK_HSI;
+    vco = (uint32_t)((uint64_t)(((uint32_t) clk * (uint32_t) n)) /
+                     ((uint32_t) m));
+    clk = vco / p;
+  } else {
+    clk = MG_STM32_CLK_HSI;
+  }
+  int hpre = (RCC->CFGR & (0x0F << 4)) >> 4;
+  if (hpre < 8) return clk;
+  return ((uint32_t) clk) >> ahbptab[hpre - 8];
+}
+
+/* Guess CR from HCLK, set to IEEE802.3 max -5% clock drift;
+ valid for STM32F74xxx/75xxx (38.8.1) and STM32F42xxx/43xxx (33.8.1) */
+#define CRDTAB_LEN 6
+static const uint8_t crdtab[CRDTAB_LEN][2] = {
+    // [{setting, div ratio},...]
+    {2, 16}, {3, 26}, {0, 42}, {1, 62}, {4, 102}, {5, 124},
+};
+
+static uint8_t cr_guess(uint32_t hclk) {
+  MG_DEBUG(("HCLK: %u", hclk));
+  if (hclk < 25000000) {
+    MG_ERROR(("HCLK too low"));
+    return CRDTAB_LEN;
+  }
+  for (int i = 0; i < CRDTAB_LEN; i++)
+    if (hclk / crdtab[i][1] <= 2375000UL) return crdtab[i][0];  // 2.5MHz - 5%
+  MG_ERROR(("HCLK too high"));
+  return CRDTAB_LEN;
+}
+
 #endif  // MG_ENABLE_MIP
