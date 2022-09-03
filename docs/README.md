@@ -3801,7 +3801,7 @@ isn't default port for URL protocol
 Usage example:
 
 ```c
-unsigned short port1 = mg_url_port("htts://myhost.com") // port1 is now 443 (default https port)
+unsigned short port1 = mg_url_port("https://myhost.com") // port1 is now 443 (default https port)
 unsigned short port2 = mg_url_port("127.0.0.1:567") // port2 is now 567
 ```
 
