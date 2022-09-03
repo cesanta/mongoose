@@ -5064,6 +5064,8 @@ void mg_tls_free(struct mg_connection *c) {
 bool mg_sock_would_block(void);
 bool mg_sock_conn_reset(void);
 
+#if MG_ENABLE_MIP
+#else
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   struct mg_connection *c = (struct mg_connection *) ctx;
   int fd = (int) (size_t) c->fd;
@@ -5089,11 +5091,15 @@ static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
   }
   return n;
 }
+#endif
 
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
+#if MG_ENABLE_MIP
+#else
   mbedtls_ssl_set_bio(&tls->ssl, c, mg_net_send, mg_net_recv, 0);
+#endif
   rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
     MG_DEBUG(("%lu success", c->id));
@@ -6444,15 +6450,15 @@ struct pkt {
 
 static void q_copyin(struct queue *q, const uint8_t *buf, size_t len,
                      size_t head) {
-  size_t i = 0, left = q->len - head;
-  for (; i < len && i < left; i++) q->buf[head + i] = buf[i];
-  for (; i < len; i++) q->buf[i - left] = buf[i];
+  size_t left = q->len - head;
+  memcpy(&q->buf[head], buf, left < len ? left : len);
+  if (left < len) memcpy(q->buf, &buf[left], len - left);
 }
 
 static void q_copyout(struct queue *q, uint8_t *buf, size_t len, size_t tail) {
-  size_t i = 0, left = q->len - tail;
-  for (; i < len && i < left; i++) buf[i] = q->buf[tail + i];
-  for (; i < len; i++) buf[i] = q->buf[i - left];
+  size_t left = q->len - tail;
+  memcpy(buf, &q->buf[tail], left < len ? left : len);
+  if (left < len) memcpy(&buf[left], q->buf, len - left);
 }
 
 static bool q_write(struct queue *q, const void *buf, size_t len) {
