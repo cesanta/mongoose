@@ -668,25 +668,24 @@ int mg_lwip_if_create_conn(struct mg_connection *nc) {
   return 1;
 }
 
-extern struct tcp_pcb *tcp_active_pcbs;
-
 static void tcp_close_tcpip(void *arg) {
   /*
    * A race with tcp error is possible:
    *  - mg_lwip_if_destroy_conn is called, schedules this function.
    *  - RST arrives, mg_lwip_tcp_error_cb is invoked and pcb is destroyed.
    *  - this function runs.
-   * Since tcp_err doesn't get the pcb pointer, I don't see any other way than
-   * walking the list of active connections. It is ostensibly private but
-   * fortunately for us is not declared static.
+   * That will have NULLed pcb.tcp.
    */
-  struct tcp_pcb *pcb;
-  for (pcb = tcp_active_pcbs; pcb != NULL; pcb = pcb->next) {
-    if (pcb == (struct tcp_pcb *) arg) break;
-  }
-  if (pcb != NULL) {
-    tcp_close(pcb);
-  }
+  struct mg_lwip_conn_state *cs = arg;
+  struct tcp_pcb *pcb = cs->pcb.tcp;
+  if (!pcb) return;
+
+  tcp_arg(pcb, NULL);
+  err_t err = tcp_close(pcb);
+  if (err == ERR_OK)
+    cs->pcb.tcp = NULL;
+  else
+    LOG(LL_ERROR, ("tcp_close(%p) err %d, PCB leak!", pcb, err));
 }
 
 static void udp_remove_tcpip(void *arg) {
@@ -696,18 +695,16 @@ static void udp_remove_tcpip(void *arg) {
 void mg_lwip_if_destroy_conn(struct mg_connection *nc) {
   if (nc->sock == INVALID_SOCKET) return;
   struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
-  nc->sock = INVALID_SOCKET;
   /* Do not close "ephemeral" UDP conns */
   if ((nc->flags & MG_F_UDP) && nc->listener != NULL) {
+    nc->sock = INVALID_SOCKET;
     return;
   }
   if (!(nc->flags & MG_F_UDP)) {
     struct tcp_pcb *tpcb = cs->pcb.tcp;
     if (tpcb != NULL) {
-      tcp_arg(tpcb, NULL);
       DBG(("%p tcp_close %p", nc, tpcb));
-      tcp_arg(tpcb, NULL);
-      mg_lwip_netif_run_on_tcpip(tcp_close_tcpip, tpcb);
+      mg_lwip_netif_run_on_tcpip(tcp_close_tcpip, cs);
     }
   } else {
     struct udp_pcb *upcb = cs->pcb.udp;
@@ -716,6 +713,7 @@ void mg_lwip_if_destroy_conn(struct mg_connection *nc) {
       mg_lwip_netif_run_on_tcpip(udp_remove_tcpip, upcb);
     }
   }
+  nc->sock = INVALID_SOCKET;
   while (cs->rx_chain != NULL) {
     struct pbuf *seg = cs->rx_chain;
     cs->rx_chain = pbuf_dechain(cs->rx_chain);
