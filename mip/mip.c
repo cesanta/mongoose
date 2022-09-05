@@ -43,8 +43,7 @@ struct mip_if {
   struct mg_mgr *mgr;         // Mongoose event manager
 
   // Internal state, user can use it but should not change it
-  uint64_t curtime;               // Last poll timestamp in millis
-  uint64_t timer;                 // Timer
+  uint64_t timer_1000ms;          // 1000 ms timer: for DHCP and link state
   uint8_t arp_cache[MIP_ARP_CS];  // Each entry is 12 bytes
   uint16_t eport;                 // Next ephemeral port
   int state;                      // Current state
@@ -572,13 +571,13 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
               mg_ntohl(pkt->ip->dst), mg_ntohs(pkt->tcp->dport)));
     mg_hexdump(pkt->pay.buf, pkt->pay.len);
 #endif
-    if(read_conn(c, pkt)) {
+    if (read_conn(c, pkt)) {
       // Send ACK immediately, no piggyback yet
-      // TODO() Set a timer and send ACK if timer expires and no segment was sent ?
-      // (clear timer on segment sent)
+      // TODO() Set a timer and send ACK if timer expires and no segment was
+      // sent ? (clear timer on segment sent)
       struct tcpstate *s = (struct tcpstate *) (c + 1);
       tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port, mg_htonl(s->seq),
-           mg_htonl(s->ack), NULL, 0);
+             mg_htonl(s->ack), NULL, 0);
     }
   } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
@@ -673,19 +672,17 @@ static void mip_rx(struct mip_if *ifp, void *buf, size_t len) {
 
 static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   if (ifp == NULL || ifp->driver == NULL) return;
-  ifp->curtime = uptime_ms;
+  bool expired_1000ms = mg_timer_expired(&ifp->timer_1000ms, 1000, uptime_ms);
 
-  if (ifp->ip == 0 && uptime_ms > ifp->timer) {
-    tx_dhcp_discover(ifp);          // If IP not configured, send DHCP
-    ifp->timer = uptime_ms + 1000;  // with some interval
-  } else if (ifp->use_dhcp == false && uptime_ms > ifp->timer &&
+  if (ifp->ip == 0 && expired_1000ms) {
+    tx_dhcp_discover(ifp);  // If IP not configured, send DHCP
+  } else if (ifp->use_dhcp == false && expired_1000ms &&
              arp_cache_find(ifp, ifp->gw) == NULL) {
-    arp_ask(ifp, ifp->gw);          // If GW's MAC address in not in ARP cache
-    ifp->timer = uptime_ms + 1000;  // send ARP who-has request
+    arp_ask(ifp, ifp->gw);  // If GW's MAC address in not in ARP cache
   }
 
   // Handle physical interface up/down status
-  if (ifp->driver->up) {
+  if (expired_1000ms && ifp->driver->up) {
     bool up = ifp->driver->up(ifp->driver_data);
     bool current = ifp->state != MIP_STATE_DOWN;
     if (up != current) {

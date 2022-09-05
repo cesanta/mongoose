@@ -4970,8 +4970,8 @@ char *mg_remove_double_dots(char *s) {
 
 void mg_timer_init(struct mg_timer **head, struct mg_timer *t, uint64_t ms,
                    unsigned flags, void (*fn)(void *), void *arg) {
-  struct mg_timer tmp = {0U, ms, 0U, 0U, flags, fn, arg, *head};
-  *t = tmp;
+  t->id = 0, t->period_ms = ms, t->expire = 0;
+  t->flags = flags, t->fn = fn, t->arg = arg, t->next = *head;
   *head = t;
 }
 
@@ -4980,28 +4980,27 @@ void mg_timer_free(struct mg_timer **head, struct mg_timer *t) {
   if (*head) *head = t->next;
 }
 
+// t: expiration time, prd: period, now: current time. Return true if expired
+bool mg_timer_expired(uint64_t *t, uint64_t prd, uint64_t now) {
+  if (now + prd < *t) *t = 0;                    // Time wrapped? Reset timer
+  if (*t == 0) *t = now + prd;                   // Firt poll? Set expiration
+  if (*t > now) return false;                    // Not expired yet, return
+  *t = (now - *t) > prd ? now + prd : *t + prd;  // Next expiration time
+  return true;                                   // Expired, return true
+}
+
 void mg_timer_poll(struct mg_timer **head, uint64_t now_ms) {
-  // If time goes back (wrapped around), reset timers
   struct mg_timer *t, *tmp;
   for (t = *head; t != NULL; t = tmp) {
+    bool once = t->expire == 0 && (t->flags & MG_TIMER_RUN_NOW) &&
+                !(t->flags & MG_TIMER_CALLED);  // Handle MG_TIMER_NOW only once
+    bool expired = mg_timer_expired(&t->expire, t->period_ms, now_ms);
     tmp = t->next;
-    if (t->prev_ms > now_ms) t->expire = 0;  // Handle time wrap
-    t->prev_ms = now_ms;
-    if (t->expire == 0 && (t->flags & MG_TIMER_RUN_NOW) &&
-        !(t->flags & MG_TIMER_CALLED)) {
-      // Handle MG_TIMER_NOW only once
-    } else if (t->expire == 0) {
-      t->expire = now_ms + t->period_ms;
-    }
-    if (t->expire > now_ms) continue;
+    if (!once && !expired) continue;
     if ((t->flags & MG_TIMER_REPEAT) || !(t->flags & MG_TIMER_CALLED)) {
       t->fn(t->arg);
     }
     t->flags |= MG_TIMER_CALLED;
-    // Try to tick timers with the given period as accurate as possible,
-    // even if this polling function is called with some random period.
-    t->expire = now_ms - t->expire > t->period_ms ? now_ms + t->period_ms
-                                                  : t->expire + t->period_ms;
   }
 }
 
@@ -6327,8 +6326,7 @@ struct mip_if {
   struct mg_mgr *mgr;         // Mongoose event manager
 
   // Internal state, user can use it but should not change it
-  uint64_t curtime;               // Last poll timestamp in millis
-  uint64_t timer;                 // Timer
+  uint64_t timer_1000ms;          // 1000 ms timer: for DHCP and link state
   uint8_t arp_cache[MIP_ARP_CS];  // Each entry is 12 bytes
   uint16_t eport;                 // Next ephemeral port
   int state;                      // Current state
@@ -6856,13 +6854,13 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
               mg_ntohl(pkt->ip->dst), mg_ntohs(pkt->tcp->dport)));
     mg_hexdump(pkt->pay.buf, pkt->pay.len);
 #endif
-    if(read_conn(c, pkt)) {
+    if (read_conn(c, pkt)) {
       // Send ACK immediately, no piggyback yet
-      // TODO() Set a timer and send ACK if timer expires and no segment was sent ?
-      // (clear timer on segment sent)
+      // TODO() Set a timer and send ACK if timer expires and no segment was
+      // sent ? (clear timer on segment sent)
       struct tcpstate *s = (struct tcpstate *) (c + 1);
       tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port, mg_htonl(s->seq),
-           mg_htonl(s->ack), NULL, 0);
+             mg_htonl(s->ack), NULL, 0);
     }
   } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
@@ -6957,19 +6955,17 @@ static void mip_rx(struct mip_if *ifp, void *buf, size_t len) {
 
 static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   if (ifp == NULL || ifp->driver == NULL) return;
-  ifp->curtime = uptime_ms;
+  bool expired_1000ms = mg_timer_expired(&ifp->timer_1000ms, 1000, uptime_ms);
 
-  if (ifp->ip == 0 && uptime_ms > ifp->timer) {
-    tx_dhcp_discover(ifp);          // If IP not configured, send DHCP
-    ifp->timer = uptime_ms + 1000;  // with some interval
-  } else if (ifp->use_dhcp == false && uptime_ms > ifp->timer &&
+  if (ifp->ip == 0 && expired_1000ms) {
+    tx_dhcp_discover(ifp);  // If IP not configured, send DHCP
+  } else if (ifp->use_dhcp == false && expired_1000ms &&
              arp_cache_find(ifp, ifp->gw) == NULL) {
-    arp_ask(ifp, ifp->gw);          // If GW's MAC address in not in ARP cache
-    ifp->timer = uptime_ms + 1000;  // send ARP who-has request
+    arp_ask(ifp, ifp->gw);  // If GW's MAC address in not in ARP cache
   }
 
   // Handle physical interface up/down status
-  if (ifp->driver->up) {
+  if (expired_1000ms && ifp->driver->up) {
     bool up = ifp->driver->up(ifp->driver_data);
     bool current = ifp->state != MIP_STATE_DOWN;
     if (up != current) {
