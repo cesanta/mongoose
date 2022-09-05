@@ -85,15 +85,15 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   // NOTE(cpq): we do not use extended descriptor bit 7, and do not use
   // hardware checksum. Therefore, descriptor size is 4, not 8
   // ETH->DMABMR = BIT(13) | BIT(16) | BIT(22) | BIT(23) | BIT(25);
-  ETH->MACIMR = BIT(3) | BIT(9);              // Mask timestamp & PMT IT
-  ETH->MACMIIAR = cr_guess(hclk_get()) << 2;  // MDC clock
-  ETH->MACFCR = BIT(7);                       // Disable zero quarta pause
-  ETH->MACFFR = BIT(31);                      // Receive all
-  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));  // Reset PHY
-  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(12));  // Set autonegotiation
-  ETH->DMARDLAR = (uint32_t) (uintptr_t) s_rxdesc;     // RX descriptors
-  ETH->DMATDLAR = (uint32_t) (uintptr_t) s_txdesc;     // RX descriptors
-  ETH->DMAIER = BIT(6) | BIT(16);                      // RIE, NISE
+  ETH->MACIMR = BIT(3) | BIT(9);                    // Mask timestamp & PMT IT
+  ETH->MACMIIAR = cr_guess(hclk_get()) << 2;        // MDC clock
+  ETH->MACFCR = BIT(7);                             // Disable zero quarta pause
+  ETH->MACFFR = BIT(31);                            // Receive all
+  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));        // Reset PHY
+  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(12));        // Set autonegotiation
+  ETH->DMARDLAR = (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors
+  ETH->DMATDLAR = (uint32_t) (uintptr_t) s_txdesc;  // RX descriptors
+  ETH->DMAIER = BIT(6) | BIT(16);                   // RIE, NISE
   ETH->MACCR = BIT(2) | BIT(3) | BIT(11) | BIT(14);    // RE, TE, Duplex, Fast
   ETH->DMAOMR = BIT(1) | BIT(13) | BIT(21) | BIT(25);  // SR, ST, TSF, RSF
 
@@ -158,8 +158,8 @@ struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
                                       .setrx = mip_driver_stm32_setrx,
                                       .up = mip_driver_stm32_up};
 
-/* Calculate HCLK from clock settings,
- valid for STM32F74xxx/75xxx (5.3) and STM32F42xxx/43xxx (6.3) */
+// Calculate HCLK from clock settings,
+// valid for STM32F74xxx/75xxx (5.3) and STM32F42xxx/43xxx (6.3)
 static const uint8_t ahbptab[8] = {1, 2, 3, 4, 6, 7, 8, 9};  // log2(div)
 struct rcc {
   volatile uint32_t CR, PLLCFGR, CFGR;
@@ -179,8 +179,8 @@ static uint32_t hclk_get(void) {
       clk = MG_STM32_CLK_HSE;
     else
       clk = MG_STM32_CLK_HSI;
-    vco = (uint32_t)((uint64_t)(((uint32_t) clk * (uint32_t) n)) /
-                     ((uint32_t) m));
+    vco = (uint32_t) ((uint64_t) (((uint32_t) clk * (uint32_t) n)) /
+                      ((uint32_t) m));
     clk = vco / p;
   } else {
     clk = MG_STM32_CLK_HSI;
@@ -190,14 +190,14 @@ static uint32_t hclk_get(void) {
   return ((uint32_t) clk) >> ahbptab[hpre - 8];
 }
 
-/* Guess CR from HCLK:
-MDC clock is generated from HCLK (AHB); as per 802.3, it must not exceed 2.5MHz
-As the AHB clock can be (and usually is) derived from the HSI (internal RC),
-and it can go above specs, the datasheets specify a range of frequencies and
-activate one of a series of dividers to keep the MDC clock safely below 2.5MHz.
-We guess a divider setting based on HCLK with a +5% drift.
-If the user uses a different clock from our defaults, needs to set the macros on top
-Valid for STM32F74xxx/75xxx (38.8.1) and STM32F42xxx/43xxx (33.8.1) (both 4.5% worst case drift) */
+//  Guess CR from HCLK. MDC clock is generated from HCLK (AHB); as per 802.3,
+//  it must not exceed 2.5MHz As the AHB clock can be (and usually is) derived
+//  from the HSI (internal RC), and it can go above specs, the datasheets
+//  specify a range of frequencies and activate one of a series of dividers to
+//  keep the MDC clock safely below 2.5MHz. We guess a divider setting based on
+//  HCLK with a +5% drift. If the user uses a different clock from our
+//  defaults, needs to set the macros on top Valid for STM32F74xxx/75xxx
+//  (38.8.1) and STM32F42xxx/43xxx (33.8.1) (both 4.5% worst case drift)
 #define CRDTAB_LEN 6
 static const uint8_t crdtab[CRDTAB_LEN][2] = {
     // [{setting, div ratio},...]
