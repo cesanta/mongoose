@@ -377,10 +377,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/hello")) {
-      mg_http_reply(c, 200, "", "%s\n", "hi");  // Serve dynamic content
+      mg_http_reply(c, 200, "", "{%Q:%d}\n", "status", 1);  // Dynamic JSON response
     } else {
-      struct mg_http_serve_opts opts = {.root_dir = "."};   // Serve
-      mg_http_serve_dir(c, ev_data, &opts);                 // static content
+      struct mg_http_serve_opts opts = {.root_dir = "."};   // Serve static content
+      mg_http_serve_dir(c, hm, &opts);                      // Web UI from root_dir
     }
   }
 }
