@@ -828,7 +828,7 @@ void mg_log_set_fn(mg_pfn_t fn, void *param);
 struct mg_timer {
   unsigned long id;         // Timer ID
   uint64_t period_ms;       // Timer period in milliseconds
-  uint64_t expire;          // Expiration timestamp in milliseconds
+  uint64_t start;           // Latest start timestamp in milliseconds
   unsigned flags;           // Possible flags values below
 #define MG_TIMER_ONCE 0     // Call function once
 #define MG_TIMER_REPEAT 1   // Call function periodically
