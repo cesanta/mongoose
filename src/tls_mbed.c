@@ -27,6 +27,8 @@ void mg_tls_free(struct mg_connection *c) {
 bool mg_sock_would_block(void);
 bool mg_sock_conn_reset(void);
 
+#if MG_ENABLE_MIP
+#else
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   struct mg_connection *c = (struct mg_connection *) ctx;
   int fd = (int) (size_t) c->fd;
@@ -52,11 +54,15 @@ static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
   }
   return n;
 }
+#endif
 
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc;
+#if MG_ENABLE_MIP
+#else
   mbedtls_ssl_set_bio(&tls->ssl, c, mg_net_send, mg_net_recv, 0);
+#endif
   rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
     MG_DEBUG(("%lu success", c->id));

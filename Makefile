@@ -1,10 +1,10 @@
 SRCS = mongoose.c test/unit_test.c test/packed_fs.c
 HDRS = $(wildcard src/*.h) $(wildcard mip/*.h)
-DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_SSI=1
+PACKED ?= 1
+DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=$(PACKED) -DMG_ENABLE_SSI=1
 C_WARN ?= -Wmissing-prototypes -Wstrict-prototypes
 WARN ?= -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef $(C_WARN)
 OPTS ?= -O3 -g3
-VALGRIND_OPTS ?= -O0 -g3
 INCS ?= -Isrc -I.
 SSL ?= MBEDTLS
 CWD ?= $(realpath $(CURDIR))
@@ -19,7 +19,7 @@ PREFIX ?= /usr/local
 VERSION ?= $(shell cut -d'"' -f2 src/version.h)
 COMMON_CFLAGS ?= $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS)
 CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
-VALGRIND_CFLAGS ?= $(VALGRIND_OPTS) $(COMMON_CFLAGS)
+VALGRIND_CFLAGS ?= $(OPTS) $(COMMON_CFLAGS)
 VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes
 .PHONY: examples test valgrind
 
@@ -28,6 +28,7 @@ MBEDTLS ?= /usr/local
 CFLAGS  += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS)/include -I/usr/include
 LDFLAGS ?= -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
 endif
+
 ifeq "$(SSL)" "OPENSSL"
 OPENSSL ?= /usr/local
 CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
@@ -36,6 +37,12 @@ endif
 
 all: mg_prefix unamalgamated unpacked test test++ arm examples vc98 vc17 vc22 mingw mingw++ linux linux++ fuzz
 
+mip_test: PACKED=0
+mip_test: DEFS += -DMG_ENABLE_SOCKET=0 -DMG_ENABLE_MIP=1
+mip_test: test/mip_test.c mongoose.c mongoose.h Makefile
+	$(CC) test/mip_test.c $(CFLAGS) $(LDFLAGS) -g -o $@
+	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
+
 examples:
 	@for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
 
@@ -43,8 +50,8 @@ test/packed_fs.c: Makefile src/ssi.h test/fuzz.c test/data/a.txt
 	$(CC) $(CFLAGS) test/pack.c -o pack
 	$(RUN) ./pack Makefile src/ssi.h test/fuzz.c test/data/a.txt test/data/range.txt > $@
 
-DIR ?= test/data/
-OUT ?= fs_packed.c
+DIR ?= test/data
+OUT ?= packed_fs.c
 mkfs:
 	$(CC) $(CFLAGS) test/pack.c -o pack
 	$(RUN) ./pack -s $(DIR) `find $(DIR) -type f` > $(OUT)
@@ -98,9 +105,6 @@ valgrind_unit_test: Makefile mongoose.h $(SRCS)
 
 valgrind: valgrind_unit_test
 	$(VALGRIND_RUN) ./valgrind_unit_test
-
-infer:
-	infer run -- cc test/unit_test.c -c -W -Wall -Werror -Isrc -I. -O2 -DMG_ENABLE_MBEDTLS=1 -DMG_ENABLE_LINES -I/usr/local/Cellar/mbedtls/2.23.0/include  -DMG_ENABLE_IPV6=1 -g -o /dev/null
 
 arm: DEFS += -DMG_ENABLE_FILE=0 -DMG_ENABLE_MIP=1 -DMG_ARCH=MG_ARCH_NEWLIB 
 arm: mongoose.h $(SRCS)

@@ -161,15 +161,15 @@ struct pkt {
 
 static void q_copyin(struct queue *q, const uint8_t *buf, size_t len,
                      size_t head) {
-  size_t i = 0, left = q->len - head;
-  for (; i < len && i < left; i++) q->buf[head + i] = buf[i];
-  for (; i < len; i++) q->buf[i - left] = buf[i];
+  size_t left = q->len - head;
+  memcpy(&q->buf[head], buf, left < len ? left : len);
+  if (left < len) memcpy(q->buf, &buf[left], len - left);
 }
 
 static void q_copyout(struct queue *q, uint8_t *buf, size_t len, size_t tail) {
-  size_t i = 0, left = q->len - tail;
-  for (; i < len && i < left; i++) buf[i] = q->buf[tail + i];
-  for (; i < len; i++) buf[i] = q->buf[i - left];
+  size_t left = q->len - tail;
+  memcpy(buf, &q->buf[tail], left < len ? left : len);
+  if (left < len) memcpy(&buf[left], q->buf, len - left);
 }
 
 static bool q_write(struct queue *q, const void *buf, size_t len) {
