@@ -14,7 +14,7 @@ VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined -fno-sanitize-recover=all
 ASAN_OPTIONS ?= detect_leaks=1
-EXAMPLES := $(dir $(wildcard examples/*/Makefile)) examples/stm32/nucleo-f746zg-baremetal
+EXAMPLES := $(dir $(wildcard examples/*/Makefile)) $(wildcard examples/stm32/nucleo-*)
 PREFIX ?= /usr/local
 VERSION ?= $(shell cut -d'"' -f2 src/version.h)
 COMMON_CFLAGS ?= $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS)
@@ -160,5 +160,5 @@ mongoose.h: $(HDRS) Makefile
 	(cat src/license.h; echo; echo '#ifndef MONGOOSE_H'; echo '#define MONGOOSE_H'; echo; cat src/version.h ; echo; echo '#ifdef __cplusplus'; echo 'extern "C" {'; echo '#endif'; cat src/arch.h src/arch_*.h src/config.h src/str.h src/fmt.h src/log.h src/timer.h src/fs.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/tls_mbed.h src/tls_openssl.h src/ws.h src/sntp.h src/mqtt.h src/dns.h src/json.h src/rpc.h mip/mip.h | sed -e '/keep/! s,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
 
 clean:
-	rm -rf $(PROG) *.exe *.o *.dSYM unit_test* valgrind_unit_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack unpacked
+	rm -rf $(PROG) *.exe *.o *.dSYM *_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack unpacked
 	@for X in $(EXAMPLES); do $(MAKE) -C $$X clean; done
