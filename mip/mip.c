@@ -717,7 +717,7 @@ void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
   if (driver->init && !driver->init(ipcfg->mac, driver_data)) {
     MG_ERROR(("driver init failed"));
   } else {
-    size_t maxpktsize = 1500, qlen = driver->setrx ? 1024 * 16 : 0;
+    size_t maxpktsize = 1518, qlen = driver->setrx ? 1024 * 16 : 0;
     struct mip_if *ifp =
         (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
     memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
