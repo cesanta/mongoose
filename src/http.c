@@ -834,15 +834,15 @@ int mg_http_status(const struct mg_http_message *hm) {
 // If a server sends data to the client using chunked encoding, Mongoose strips
 // off the chunking prefix (hex length and \r\n) and suffix (\r\n), appends the
 // stripped data to the body, and fires the MG_EV_HTTP_CHUNK event.  When zero
-// chunk is received, it fires MG_EV_HTTP_MSG, and the body is already have all
+// chunk is received, we fire MG_EV_HTTP_MSG, and the body already has all
 // chunking prefixes/suffixes stripped.
 //
-// If a server sends data without chunked encoding, we also fire MG_EV_CHUNK
-// and MG_EV_HTTP_MSG in the end.
+// If a server sends data without chunked encoding, we also fire a series of
+// MG_EV_HTTP_CHUNK events for every received piece of data, and then we fire
+// MG_EV_HTTP_MSG event in the end.
 //
-// We track the total processed body length  in the c->pfn_data,
-// by using void * pointer to store size_t value.
-
+// We track total processed length in the c->pfn_data, which is a void *
+// pointer: we store a size_t value there.
 static bool getchunk(struct mg_str s, size_t *prefixlen, size_t *datalen) {
   size_t i = 0, n;
   while (i < s.len && s.ptr[i] != '\r' && s.ptr[i] != '\n') i++;

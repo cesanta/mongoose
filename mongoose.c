@@ -6061,15 +6061,15 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   // NOTE(cpq): we do not use extended descriptor bit 7, and do not use
   // hardware checksum. Therefore, descriptor size is 4, not 8
   // ETH->DMABMR = BIT(13) | BIT(16) | BIT(22) | BIT(23) | BIT(25);
-  ETH->MACIMR = BIT(3) | BIT(9);              // Mask timestamp & PMT IT
-  ETH->MACMIIAR = cr_guess(hclk_get()) << 2;  // MDC clock
-  ETH->MACFCR = BIT(7);                       // Disable zero quarta pause
-  ETH->MACFFR = BIT(31);                      // Receive all
-  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));  // Reset PHY
-  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(12));  // Set autonegotiation
-  ETH->DMARDLAR = (uint32_t) (uintptr_t) s_rxdesc;     // RX descriptors
-  ETH->DMATDLAR = (uint32_t) (uintptr_t) s_txdesc;     // RX descriptors
-  ETH->DMAIER = BIT(6) | BIT(16);                      // RIE, NISE
+  ETH->MACIMR = BIT(3) | BIT(9);                    // Mask timestamp & PMT IT
+  ETH->MACMIIAR = cr_guess(hclk_get()) << 2;        // MDC clock
+  ETH->MACFCR = BIT(7);                             // Disable zero quarta pause
+  ETH->MACFFR = BIT(31);                            // Receive all
+  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));        // Reset PHY
+  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(12));        // Set autonegotiation
+  ETH->DMARDLAR = (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors
+  ETH->DMATDLAR = (uint32_t) (uintptr_t) s_txdesc;  // RX descriptors
+  ETH->DMAIER = BIT(6) | BIT(16);                   // RIE, NISE
   ETH->MACCR = BIT(2) | BIT(3) | BIT(11) | BIT(14);    // RE, TE, Duplex, Fast
   ETH->DMAOMR = BIT(1) | BIT(13) | BIT(21) | BIT(25);  // SR, ST, TSF, RSF
 
@@ -6134,8 +6134,8 @@ struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
                                       .setrx = mip_driver_stm32_setrx,
                                       .up = mip_driver_stm32_up};
 
-/* Calculate HCLK from clock settings,
- valid for STM32F74xxx/75xxx (5.3) and STM32F42xxx/43xxx (6.3) */
+// Calculate HCLK from clock settings,
+// valid for STM32F74xxx/75xxx (5.3) and STM32F42xxx/43xxx (6.3)
 static const uint8_t ahbptab[8] = {1, 2, 3, 4, 6, 7, 8, 9};  // log2(div)
 struct rcc {
   volatile uint32_t CR, PLLCFGR, CFGR;
@@ -6155,8 +6155,8 @@ static uint32_t hclk_get(void) {
       clk = MG_STM32_CLK_HSE;
     else
       clk = MG_STM32_CLK_HSI;
-    vco = (uint32_t)((uint64_t)(((uint32_t) clk * (uint32_t) n)) /
-                     ((uint32_t) m));
+    vco = (uint32_t) ((uint64_t) (((uint32_t) clk * (uint32_t) n)) /
+                      ((uint32_t) m));
     clk = vco / p;
   } else {
     clk = MG_STM32_CLK_HSI;
@@ -6166,14 +6166,14 @@ static uint32_t hclk_get(void) {
   return ((uint32_t) clk) >> ahbptab[hpre - 8];
 }
 
-/* Guess CR from HCLK:
-MDC clock is generated from HCLK (AHB); as per 802.3, it must not exceed 2.5MHz
-As the AHB clock can be (and usually is) derived from the HSI (internal RC),
-and it can go above specs, the datasheets specify a range of frequencies and
-activate one of a series of dividers to keep the MDC clock safely below 2.5MHz.
-We guess a divider setting based on HCLK with a +5% drift.
-If the user uses a different clock from our defaults, needs to set the macros on top
-Valid for STM32F74xxx/75xxx (38.8.1) and STM32F42xxx/43xxx (33.8.1) (both 4.5% worst case drift) */
+//  Guess CR from HCLK. MDC clock is generated from HCLK (AHB); as per 802.3,
+//  it must not exceed 2.5MHz As the AHB clock can be (and usually is) derived
+//  from the HSI (internal RC), and it can go above specs, the datasheets
+//  specify a range of frequencies and activate one of a series of dividers to
+//  keep the MDC clock safely below 2.5MHz. We guess a divider setting based on
+//  HCLK with a +5% drift. If the user uses a different clock from our
+//  defaults, needs to set the macros on top Valid for STM32F74xxx/75xxx
+//  (38.8.1) and STM32F42xxx/43xxx (33.8.1) (both 4.5% worst case drift)
 #define CRDTAB_LEN 6
 static const uint8_t crdtab[CRDTAB_LEN][2] = {
     // [{setting, div ratio},...]
@@ -6305,6 +6305,12 @@ struct mip_driver mip_driver_w5500 = {
 #define MIP_ARP_ENTRIES 5  // Number of ARP cache entries. Maximum 21
 #endif
 #define MIP_ARP_CS (2 + 12 * MIP_ARP_ENTRIES)  // ARP cache size
+
+struct connstate {
+  uint32_t seq, ack;  // TCP seq/ack counters
+  uint64_t timer;     // Used to send ACKs
+  uint8_t mac[6];     // Peer MAC address
+};
 
 struct str {
   uint8_t *buf;
@@ -6527,10 +6533,18 @@ static void arp_cache_init(uint8_t *p, int n, int size) {
   p[1] = p[3 + (n - 1) * size] = 2;
 }
 
+static inline void arp_cache_dump(const uint8_t *p) {
+  MG_INFO(("ARP cache:"));
+  for (uint8_t i = 0, j = p[1]; i < MIP_ARP_ENTRIES; i++, j = p[j + 1]) {
+    MG_INFO(("  %d.%d.%d.%d -> %x:%x:%x:%x:%x:%x", p[j + 2], p[j + 3], p[j + 4],
+             p[j + 5], p[j + 6], p[j + 7], p[j + 8], p[j + 9], p[j + 10],
+             p[j + 11]));
+  }
+}
+
 static uint8_t *arp_cache_find(struct mip_if *ifp, uint32_t ip) {
   uint8_t *p = ifp->arp_cache;
-  if (ip == 0) return NULL;
-  if (p[0] == 0 || p[1] == 0) arp_cache_init(p, MIP_ARP_ENTRIES, 12);
+  if (ip == 0 || ip == 0xffffffffU) return NULL;
   for (uint8_t i = 0, j = p[1]; i < MIP_ARP_ENTRIES; i++, j = p[j + 1]) {
     if (memcmp(p + j + 2, &ip, sizeof(ip)) == 0) {
       p[1] = j, p[0] = p[j];  // Found entry! Point list head to us
@@ -6574,9 +6588,9 @@ static void onstatechange(struct mip_if *ifp) {
     MG_INFO(("READY, IP: %s", mg_ntoa(&addr, buf, sizeof(buf))));
     arp_ask(ifp, ifp->gw);
   } else if (ifp->state == MIP_STATE_UP) {
-    MG_ERROR(("Network up"));
+    MG_ERROR(("Link up"));
   } else if (ifp->state == MIP_STATE_DOWN) {
-    MG_ERROR(("Network down"));
+    MG_ERROR(("Link down"));
   }
 }
 
@@ -6650,6 +6664,7 @@ static void tx_dhcp_request(struct mip_if *ifp, uint32_t src, uint32_t dst) {
   memcpy(opts + 14, &dst, sizeof(dst));
   memcpy(opts + 20, &src, sizeof(src));
   tx_dhcp(ifp, src, dst, opts, sizeof(opts));
+  MG_DEBUG(("DHCP request sent"));
 }
 
 static void tx_dhcp_discover(struct mip_if *ifp) {
@@ -6659,6 +6674,7 @@ static void tx_dhcp_discover(struct mip_if *ifp) {
       255           // End of options
   };
   tx_dhcp(ifp, 0, 0xffffffff, opts, sizeof(opts));
+  MG_DEBUG(("DHCP discover sent"));
 }
 
 static void rx_arp(struct mip_if *ifp, struct pkt *pkt) {
@@ -6703,7 +6719,7 @@ static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
   uint32_t ip = 0, gw = 0, mask = 0;
   uint8_t *p = pkt->dhcp->options, *end = &pkt->raw.buf[pkt->raw.len];
   if (end < (uint8_t *) (pkt->dhcp + 1)) return;
-  // MG_DEBUG(("DHCP %u\n", (unsigned) pkt->raw.len));
+  MG_DEBUG(("DHCP %u\n", (unsigned) pkt->raw.len));
   while (p < end && p[0] != 255) {
     if (p[0] == 1 && p[1] == sizeof(ifp->mask)) {
       memcpy(&mask, p + 2, sizeof(mask));
@@ -6716,8 +6732,8 @@ static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
     p += p[1] + 2;
   }
   if (ip && mask && gw && ifp->ip == 0) {
-    // MG_DEBUG(("DHCP offer ip %#08lx mask %#08lx gw %#08lx\n",
-    //      (long) ip, (long) mask, (long) gw));
+    // MG_DEBUG(("DHCP offer ip %#08lx mask %#08lx gw %#08lx\n", (long) ip,
+    //           (long) mask, (long) gw));
     arp_cache_add(ifp, pkt->dhcp->siaddr, ((struct eth *) pkt->raw.buf)->src);
     ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
     ifp->state = MIP_STATE_READY;
@@ -6759,11 +6775,6 @@ static void rx_udp(struct mip_if *ifp, struct pkt *pkt) {
   }
 }
 
-struct tcpstate {
-  uint32_t seq, ack;
-  time_t expire;
-};
-
 static size_t tx_tcp(struct mip_if *ifp, uint32_t dst_ip, uint8_t flags,
                      uint16_t sport, uint16_t dport, uint32_t seq, uint32_t ack,
                      const void *buf, size_t len) {
@@ -6800,7 +6811,7 @@ static size_t tx_tcp_pkt(struct mip_if *ifp, struct pkt *pkt, uint8_t flags,
 static struct mg_connection *accept_conn(struct mg_connection *lsn,
                                          struct pkt *pkt) {
   struct mg_connection *c = mg_alloc_conn(lsn->mgr);
-  struct tcpstate *s = (struct tcpstate *) (c + 1);
+  struct connstate *s = (struct connstate *) (c + 1);
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
   c->rem.ip = pkt->ip->src;
   c->rem.port = pkt->tcp->sport;
@@ -6819,8 +6830,8 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   return c;
 }
 
-static bool read_conn(struct mg_connection *c, struct pkt *pkt) {
-  struct tcpstate *s = (struct tcpstate *) (c + 1);
+static void read_conn(struct mg_connection *c, struct pkt *pkt) {
+  struct connstate *s = (struct connstate *) (c + 1);
   if (pkt->tcp->flags & TH_FIN) {
     s->ack = mg_htonl(pkt->tcp->seq) + 1, s->seq = mg_htonl(pkt->tcp->ack);
     c->is_closing = 1;
@@ -6836,9 +6847,7 @@ static bool read_conn(struct mg_connection *c, struct pkt *pkt) {
     c->recv.len += pkt->pay.len;
     struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
     mg_call(c, MG_EV_READ, &evd);
-    return true;
   }
-  return false;
 }
 
 static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
@@ -6847,7 +6856,7 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
   MG_INFO(("%lu %hhu %d", c ? c->id : 0, pkt->tcp->flags, (int) pkt->pay.len));
 #endif
   if (c != NULL && c->is_connecting && pkt->tcp->flags & (TH_SYN | TH_ACK)) {
-    struct tcpstate *s = (struct tcpstate *) (c + 1);
+    struct connstate *s = (struct connstate *) (c + 1);
     s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
     tx_tcp_pkt(ifp, pkt, TH_ACK, pkt->tcp->ack, NULL, 0);
     c->is_connecting = 0;  // Client connected
@@ -6860,14 +6869,7 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
               mg_ntohl(pkt->ip->dst), mg_ntohs(pkt->tcp->dport)));
     mg_hexdump(pkt->pay.buf, pkt->pay.len);
 #endif
-    if (read_conn(c, pkt)) {
-      // Send ACK immediately, no piggyback yet
-      // TODO() Set a timer and send ACK if timer expires and no segment was
-      // sent ? (clear timer on segment sent)
-      struct tcpstate *s = (struct tcpstate *) (c + 1);
-      tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port, mg_htonl(s->seq),
-             mg_htonl(s->ack), NULL, 0);
-    }
+    read_conn(c, pkt);
   } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (pkt->tcp->flags & TH_SYN) {
@@ -6963,13 +6965,6 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   if (ifp == NULL || ifp->driver == NULL) return;
   bool expired_1000ms = mg_timer_expired(&ifp->timer_1000ms, 1000, uptime_ms);
 
-  if (ifp->ip == 0 && expired_1000ms) {
-    tx_dhcp_discover(ifp);  // If IP not configured, send DHCP
-  } else if (ifp->use_dhcp == false && expired_1000ms &&
-             arp_cache_find(ifp, ifp->gw) == NULL) {
-    arp_ask(ifp, ifp->gw);  // If GW's MAC address in not in ARP cache
-  }
-
   // Handle physical interface up/down status
   if (expired_1000ms && ifp->driver->up) {
     bool up = ifp->driver->up(ifp->driver_data);
@@ -6981,6 +6976,15 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
       if (!up && ifp->use_dhcp) ifp->ip = 0;
       onstatechange(ifp);
     }
+  }
+  if (ifp->state == MIP_STATE_DOWN) return;
+  // if (expired_1000ms) arp_cache_dump(ifp->arp_cache);
+
+  if (ifp->ip == 0 && expired_1000ms) {
+    tx_dhcp_discover(ifp);  // If IP not configured, send DHCP
+  } else if (ifp->use_dhcp == false && expired_1000ms &&
+             arp_cache_find(ifp, ifp->gw) == NULL) {
+    arp_ask(ifp, ifp->gw);  // If GW's MAC address in not in ARP cache
   }
 
   // Read data from the network
@@ -7019,9 +7023,11 @@ void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
     ifp->mgr = mgr;
     ifp->queue.buf = ifp->tx.buf + maxpktsize;
     ifp->queue.len = qlen;
+    ifp->timer_1000ms = mg_millis();
+    arp_cache_init(ifp->arp_cache, MIP_ARP_ENTRIES, 12);
     if (driver->setrx) driver->setrx(on_rx, ifp);
     mgr->priv = ifp;
-    mgr->extraconnsize = sizeof(struct tcpstate);
+    mgr->extraconnsize = sizeof(struct connstate);
   }
 }
 
@@ -7065,7 +7071,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 
 static void write_conn(struct mg_connection *c) {
   struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
-  struct tcpstate *s = (struct tcpstate *) (c + 1);
+  struct connstate *s = (struct connstate *) (c + 1);
   size_t sent, n = c->send.len, hdrlen = 14 + 24 /*max IP*/ + 60 /*max TCP*/;
   if (n + hdrlen > ifp->tx.len) n = ifp->tx.len - hdrlen;
   sent = tx_tcp(ifp, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
@@ -7079,7 +7085,8 @@ static void write_conn(struct mg_connection *c) {
 
 static void fin_conn(struct mg_connection *c) {
   struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
-  struct tcpstate *s = (struct tcpstate *) (c + 1);
+  struct connstate *s = (struct connstate *) (c + 1);
+  MG_INFO(("AAA"));
   tx_tcp(ifp, c->rem.ip, TH_FIN | TH_ACK, c->loc.port, c->rem.port,
          mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
 }
