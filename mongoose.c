@@ -2172,15 +2172,15 @@ int mg_http_status(const struct mg_http_message *hm) {
 // If a server sends data to the client using chunked encoding, Mongoose strips
 // off the chunking prefix (hex length and \r\n) and suffix (\r\n), appends the
 // stripped data to the body, and fires the MG_EV_HTTP_CHUNK event.  When zero
-// chunk is received, it fires MG_EV_HTTP_MSG, and the body is already have all
+// chunk is received, we fire MG_EV_HTTP_MSG, and the body already has all
 // chunking prefixes/suffixes stripped.
 //
-// If a server sends data without chunked encoding, we also fire MG_EV_CHUNK
-// and MG_EV_HTTP_MSG in the end.
+// If a server sends data without chunked encoding, we also fire a series of
+// MG_EV_HTTP_CHUNK events for every received piece of data, and then we fire
+// MG_EV_HTTP_MSG event in the end.
 //
-// We track the total processed body length  in the c->pfn_data,
-// by using void * pointer to store size_t value.
-
+// We track total processed length in the c->pfn_data, which is a void *
+// pointer: we store a size_t value there.
 static bool getchunk(struct mg_str s, size_t *prefixlen, size_t *datalen) {
   size_t i = 0, n;
   while (i < s.len && s.ptr[i] != '\r' && s.ptr[i] != '\n') i++;
@@ -6548,7 +6548,7 @@ static uint8_t *arp_cache_find(struct mip_if *ifp, uint32_t ip) {
   for (uint8_t i = 0, j = p[1]; i < MIP_ARP_ENTRIES; i++, j = p[j + 1]) {
     if (memcmp(p + j + 2, &ip, sizeof(ip)) == 0) {
       p[1] = j, p[0] = p[j];  // Found entry! Point list head to us
-      // MG_DEBUG(("ARP find: %#lx @ %x:%x:%x:%x:%x:%x\n", (long) ip, p[j + 6],
+      // MG_DEBUG(("ARP find: %#lx @ %x:%x:%x:%x:%x:%x", (long) ip, p[j + 6],
       //          p[j + 7], p[j + 8], p[j + 9], p[j + 10], p[j + 11]));
       return p + j + 6;  // And return MAC address
     }
@@ -6633,7 +6633,7 @@ static void tx_udp(struct mip_if *ifp, uint32_t ip_src, uint16_t sport,
   cs += (uint32_t) (ip->proto + sizeof(*udp) + len);
   udp->csum = csumfin(cs);
   memmove(udp + 1, buf, len);
-  // MG_DEBUG(("UDP LEN %d %d\n", (int) len, (int) ifp->frame_len));
+  // MG_DEBUG(("UDP LEN %d %d", (int) len, (int) ifp->frame_len));
   ifp->driver->tx(ifp->tx.buf,
                   sizeof(struct eth) + sizeof(*ip) + sizeof(*udp) + len,
                   ifp->driver_data);
@@ -6702,7 +6702,7 @@ static void rx_arp(struct mip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_icmp(struct mip_if *ifp, struct pkt *pkt) {
-  // MG_DEBUG(("ICMP %d\n", (int) len));
+  // MG_DEBUG(("ICMP %d", (int) len));
   if (pkt->icmp->type == 8 && pkt->ip->dst == ifp->ip) {
     struct ip *ip = tx_ip(ifp, 1, ifp->ip, pkt->ip->src,
                           sizeof(struct icmp) + pkt->pay.len);
@@ -6719,20 +6719,20 @@ static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
   uint32_t ip = 0, gw = 0, mask = 0;
   uint8_t *p = pkt->dhcp->options, *end = &pkt->raw.buf[pkt->raw.len];
   if (end < (uint8_t *) (pkt->dhcp + 1)) return;
-  MG_DEBUG(("DHCP %u\n", (unsigned) pkt->raw.len));
+  MG_DEBUG(("DHCP %u", (unsigned) pkt->raw.len));
   while (p < end && p[0] != 255) {
     if (p[0] == 1 && p[1] == sizeof(ifp->mask)) {
       memcpy(&mask, p + 2, sizeof(mask));
-      // MG_DEBUG(("MASK %x\n", mask));
+      // MG_DEBUG(("MASK %x", mask));
     } else if (p[0] == 3 && p[1] == sizeof(ifp->gw)) {
       memcpy(&gw, p + 2, sizeof(gw));
       ip = pkt->dhcp->yiaddr;
-      // MG_DEBUG(("IP %x GW %x\n", ip, gw));
+      // MG_DEBUG(("IP %x GW %x", ip, gw));
     }
     p += p[1] + 2;
   }
   if (ip && mask && gw && ifp->ip == 0) {
-    // MG_DEBUG(("DHCP offer ip %#08lx mask %#08lx gw %#08lx\n", (long) ip,
+    // MG_DEBUG(("DHCP offer ip %#08lx mask %#08lx gw %#08lx", (long) ip,
     //           (long) mask, (long) gw));
     arp_cache_add(ifp, pkt->dhcp->siaddr, ((struct eth *) pkt->raw.buf)->src);
     ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
@@ -6895,7 +6895,7 @@ static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
   } else if (pkt->ip->proto == 17) {
     pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
-    // MG_DEBUG(("  UDP %u %u -> %u\n", len, mg_htons(udp->sport),
+    // MG_DEBUG(("  UDP %u %u -> %u", len, mg_htons(udp->sport),
     // mg_htons(udp->dport)));
     mkpay(pkt, pkt->udp + 1);
     if (pkt->udp->dport == mg_htons(68)) {
@@ -6917,7 +6917,7 @@ static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_ip6(struct mip_if *ifp, struct pkt *pkt) {
-  // MG_DEBUG(("IP %d\n", (int) len));
+  // MG_DEBUG(("IP %d", (int) len));
   if (pkt->ip6->proto == 1 || pkt->ip6->proto == 58) {
     pkt->icmp = (struct icmp *) (pkt->ip6 + 1);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
@@ -6926,7 +6926,7 @@ static void rx_ip6(struct mip_if *ifp, struct pkt *pkt) {
   } else if (pkt->ip->proto == 17) {
     pkt->udp = (struct udp *) (pkt->ip6 + 1);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
-    // MG_DEBUG(("  UDP %u %u -> %u\n", len, mg_htons(udp->sport),
+    // MG_DEBUG(("  UDP %u %u -> %u", len, mg_htons(udp->sport),
     // mg_htons(udp->dport)));
     mkpay(pkt, pkt->udp + 1);
   }
@@ -6957,7 +6957,7 @@ static void mip_rx(struct mip_if *ifp, void *buf, size_t len) {
     mkpay(&pkt, pkt.ip + 1);
     rx_ip(ifp, &pkt);
   } else {
-    MG_DEBUG(("  Unknown eth type %x\n", mg_htons(pkt.eth->type)));
+    MG_DEBUG(("  Unknown eth type %x", mg_htons(pkt.eth->type)));
   }
 }
 
@@ -7010,7 +7010,7 @@ void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
   if (driver->init && !driver->init(ipcfg->mac, driver_data)) {
     MG_ERROR(("driver init failed"));
   } else {
-    size_t maxpktsize = 1500, qlen = driver->setrx ? 1024 * 16 : 0;
+    size_t maxpktsize = 1518, qlen = driver->setrx ? 1024 * 16 : 0;
     struct mip_if *ifp =
         (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
     memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
