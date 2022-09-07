@@ -672,7 +672,7 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
         if (c == 'l') is_long++, c = fmt[++i];
       }
       if (c == 'p') x = 1, is_long = 1;
-      if (c == 'd' || c == 'u' || c == 'x' || c == 'X' || c == 'p' ||
+      if (c == 'd' || c == 'u' || c == 'f' || c == 'x' || c == 'X' || c == 'p' ||
           c == 'g') {
         bool s = (c == 'd'), h = (c == 'x' || c == 'X' || c == 'p');
         char tmp[40];
