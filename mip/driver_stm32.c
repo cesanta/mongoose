@@ -139,6 +139,9 @@ static bool mip_driver_stm32_up(void *userdata) {
 
 void ETH_IRQHandler(void);
 void ETH_IRQHandler(void) {
+#ifdef MIP_QPROFILE
+  qp_mark(QP_IRQTRIGGERED, 0);
+#endif
   volatile uint32_t sr = ETH->DMASR;
   if (sr & BIT(6)) {  // Frame received, loop
     for (uint32_t i = 0; i < ETH_DESC_CNT; i++) {

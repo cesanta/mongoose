@@ -1450,6 +1450,14 @@ struct mip_spi {
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
 
+#ifdef MIP_QPROFILE
+enum {QP_IRQTRIGGERED=0, QP_FRAMEPUSHED, QP_FRAMEPOPPED, QP_FRAMEDONE, QP_FRAMEDROPPED, QP_QUEUEOVF};
+
+void qp_mark(unsigned int type, int len);
+void qp_log(void);
+void qp_init(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
