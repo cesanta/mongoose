@@ -16,11 +16,14 @@
 #define MIP_ARP_ENTRIES 5  // Number of ARP cache entries. Maximum 21
 #endif
 #define MIP_ARP_CS (2 + 12 * MIP_ARP_ENTRIES)  // ARP cache size
+#define MIP_TCP_KEEPALIVE_MS 5000              // TCP keep-alive period, ms
+#define MIP_TCP_ACK_MS 150                     // Timeout for ACKing
 
 struct connstate {
   uint32_t seq, ack;  // TCP seq/ack counters
-  uint64_t timer;     // Used to send ACKs
+  uint64_t timer;     // TCP keep-alive / ACK timer
   uint8_t mac[6];     // Peer MAC address
+  uint8_t ttype;      // Timer type. 0: ack, 1: keep-alive
 };
 
 struct str {
@@ -49,6 +52,7 @@ struct mip_if {
   struct mg_mgr *mgr;         // Mongoose event manager
 
   // Internal state, user can use it but should not change it
+  uint64_t now;                   // Current time
   uint64_t timer_1000ms;          // 1000 ms timer: for DHCP and link state
   uint8_t arp_cache[MIP_ARP_CS];  // Each entry is 12 bytes
   uint16_t eport;                 // Next ephemeral port
@@ -244,6 +248,7 @@ static void arp_cache_init(uint8_t *p, int n, int size) {
   p[1] = p[3 + (n - 1) * size] = 2;
 }
 
+#if 0
 static inline void arp_cache_dump(const uint8_t *p) {
   MG_INFO(("ARP cache:"));
   for (uint8_t i = 0, j = p[1]; i < MIP_ARP_ENTRIES; i++, j = p[j + 1]) {
@@ -252,6 +257,7 @@ static inline void arp_cache_dump(const uint8_t *p) {
              p[j + 11]));
   }
 }
+#endif
 
 static uint8_t *arp_cache_find(struct mip_if *ifp, uint32_t ip) {
   uint8_t *p = ifp->arp_cache;
@@ -375,7 +381,6 @@ static void tx_dhcp_request(struct mip_if *ifp, uint32_t src, uint32_t dst) {
   memcpy(opts + 14, &dst, sizeof(dst));
   memcpy(opts + 20, &src, sizeof(src));
   tx_dhcp(ifp, src, dst, opts, sizeof(opts));
-  MG_DEBUG(("DHCP request sent"));
 }
 
 static void tx_dhcp_discover(struct mip_if *ifp) {
@@ -430,7 +435,7 @@ static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
   uint32_t ip = 0, gw = 0, mask = 0;
   uint8_t *p = pkt->dhcp->options, *end = &pkt->raw.buf[pkt->raw.len];
   if (end < (uint8_t *) (pkt->dhcp + 1)) return;
-  MG_DEBUG(("DHCP %u", (unsigned) pkt->raw.len));
+  // MG_DEBUG(("DHCP %u", (unsigned) pkt->raw.len));
   while (p < end && p[0] != 255) {
     if (p[0] == 1 && p[1] == sizeof(ifp->mask)) {
       memcpy(&mask, p + 2, sizeof(mask));
@@ -526,9 +531,8 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
   c->rem.ip = pkt->ip->src;
   c->rem.port = pkt->tcp->sport;
-  MG_DEBUG(("%lu accepted %lx:%hx", c->id, c->rem.ip, c->rem.port));
+  MG_DEBUG(("%lu accepted %lx:%hx", c->id, mg_ntohl(c->rem.ip), c->rem.port));
   LIST_ADD_HEAD(struct mg_connection, &lsn->mgr->conns, c);
-  c->fd = (void *) (size_t) mg_ntohl(pkt->tcp->ack);
   c->is_accepted = 1;
   c->is_hexdumping = lsn->is_hexdumping;
   c->pfn = lsn->pfn;
@@ -563,11 +567,16 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
 
 static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
+  struct connstate *s = (struct connstate *) (c + 1);
+
+  if (c != NULL) {
+    s->timer = ifp->now + MIP_TCP_KEEPALIVE_MS;  // Shift next keep-alive
+    s->ttype = 1;                                // ping to the future
+  }
 #if 0
   MG_INFO(("%lu %hhu %d", c ? c->id : 0, pkt->tcp->flags, (int) pkt->pay.len));
 #endif
   if (c != NULL && c->is_connecting && pkt->tcp->flags & (TH_SYN | TH_ACK)) {
-    struct connstate *s = (struct connstate *) (c + 1);
     s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
     tx_tcp_pkt(ifp, pkt, TH_ACK, pkt->tcp->ack, NULL, 0);
     c->is_connecting = 0;  // Client connected
@@ -581,6 +590,8 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
     mg_hexdump(pkt->pay.buf, pkt->pay.len);
 #endif
     read_conn(c, pkt);
+    s->timer = ifp->now + MIP_TCP_ACK_MS;  // Set ACK timeout
+    s->ttype = 0;
   } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (pkt->tcp->flags & TH_SYN) {
@@ -675,6 +686,7 @@ static void mip_rx(struct mip_if *ifp, void *buf, size_t len) {
 static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   if (ifp == NULL || ifp->driver == NULL) return;
   bool expired_1000ms = mg_timer_expired(&ifp->timer_1000ms, 1000, uptime_ms);
+  ifp->now = uptime_ms;
 
   // Handle physical interface up/down status
   if (expired_1000ms && ifp->driver->up) {
@@ -705,6 +717,23 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
                                                       ifp->driver_data);
     if (len == 0) break;
     mip_rx(ifp, ifp->rx.buf, len);
+  }
+
+  // Process timeouts
+  for (struct mg_connection *c = ifp->mgr->conns; c != NULL; c = c->next) {
+    if (c->is_udp || c->is_listening) continue;
+    struct connstate *s = (struct connstate *) (c + 1);
+    if (uptime_ms > s->timer) {
+      if (s->ttype == 0) {
+        MG_INFO(("%lu sending ack", c->id));
+        tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
+               mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
+      } else {
+        MG_INFO(("%lu sending keepalive", c->id));
+      }
+      s->timer = uptime_ms + MIP_TCP_KEEPALIVE_MS;
+      s->ttype = 1;
+    }
   }
 }
 
@@ -797,7 +826,6 @@ static void write_conn(struct mg_connection *c) {
 static void fin_conn(struct mg_connection *c) {
   struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
   struct connstate *s = (struct connstate *) (c + 1);
-  MG_INFO(("AAA"));
   tx_tcp(ifp, c->rem.ip, TH_FIN | TH_ACK, c->loc.port, c->rem.port,
          mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
 }
@@ -826,7 +854,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
   bool res = false;
-  if (ifp->ip == 0) {
+  if (ifp->ip == 0 || ifp->state != MIP_STATE_READY) {
     mg_error(c, "net down");
   } else if (c->is_udp) {
     tx_udp(ifp, ifp->ip, c->loc.port, c->rem.ip, c->rem.port, buf, len);

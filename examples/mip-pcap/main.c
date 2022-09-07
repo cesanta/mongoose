@@ -19,8 +19,6 @@ static size_t pcap_tx(const void *buf, size_t len, void *userdata) {
   if (res == PCAP_ERROR) {
     MG_ERROR(("pcap_inject: %d", res));
   }
-  MG_INFO(("TX %lu", len));
-  // mg_hexdump(buf, len);
   return res == PCAP_ERROR ? 0 : len;
 }
 
@@ -32,38 +30,20 @@ static size_t pcap_rx(void *buf, size_t len, void *userdata) {
   size_t received = 0;
   struct pcap_pkthdr *hdr = NULL;
   const unsigned char *pkt = NULL;
-  if (pcap_next_ex((pcap_t *) userdata, &hdr, &pkt) == 1) {
+
+  // To avoid busy-loop and 100% CPU time, wait on pcap for some time
+  int fd = pcap_get_selectable_fd((pcap_t *) userdata);  // Pcap file descriptor
+  struct timeval tv = {0, 50000};                        // 50 ms
+  fd_set rset;
+  FD_ZERO(&rset);
+  FD_SET(fd, &rset);
+  if (select(fd + 1, &rset, 0, 0, &tv) == 1 &&               // Have data ?
+      pcap_next_ex((pcap_t *) userdata, &hdr, &pkt) == 1) {  // Yes, read
     received = hdr->len < len ? hdr->len : len;
     memcpy(buf, pkt, received);
-    MG_INFO(("RX %lu", received));
-    // mg_hexdump(buf, received);
   }
+
   return received;
-}
-
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) mg_http_reply(c, 200, NULL, "hi\n");
-  (void) fn_data, (void) ev_data;
-}
-
-// MQTT event handler function
-static void mfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_CONNECT && mg_url_is_ssl(MQTT_URL)) {
-    struct mg_tls_opts opts = {.ca = "ca.pem",
-                               .srvname = mg_url_host(MQTT_URL)};
-    mg_tls_init(c, &opts);
-  } else if (ev == MG_EV_MQTT_OPEN) {
-    c->is_hexdumping = 1;
-    mg_mqtt_sub(c, mg_str(MQTT_TOPIC), 2);
-  } else if (ev == MG_EV_MQTT_MSG) {
-    struct mg_mqtt_message *mm = ev_data;
-    MG_INFO(("%.*s", (int) mm->data.len, mm->data.ptr));
-  } else if (ev == MG_EV_MQTT_CMD) {
-    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    MG_DEBUG(("cmd %d qos %d", mm->cmd, mm->qos));
-  } else if (ev == MG_EV_CLOSE) {
-  }
-  (void) fn_data;
 }
 
 int main(int argc, char *argv[]) {
@@ -126,12 +106,10 @@ int main(int argc, char *argv[]) {
   mip_init(&mgr, &c, &driver, ph);
   MG_INFO(("Init done, starting main loop"));
 
-  mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
+  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
+  mg_http_listen(&mgr, "http://0.0.0.0:8000", device_dashboard_fn, &mgr);
 
-  struct mg_mqtt_opts opts = {0};
-  // mg_mqtt_connect(&mgr, MQTT_URL, &opts, mfn, NULL);
-
-  while (s_signo == 0) mg_mgr_poll(&mgr, 1);  // Infinite event loop
+  while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop
 
   mg_mgr_free(&mgr);
   pcap_close(ph);
