@@ -16,7 +16,7 @@
 #define MIP_ARP_ENTRIES 5  // Number of ARP cache entries. Maximum 21
 #endif
 #define MIP_ARP_CS (2 + 12 * MIP_ARP_ENTRIES)  // ARP cache size
-#define MIP_TCP_KEEPALIVE_MS 5000              // TCP keep-alive period, ms
+#define MIP_TCP_KEEPALIVE_MS 45000             // TCP keep-alive period, ms
 #define MIP_TCP_ACK_MS 150                     // Timeout for ACKing
 
 struct connstate {
@@ -546,6 +546,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
 }
 
 static void read_conn(struct mg_connection *c, struct pkt *pkt) {
+  struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
   struct connstate *s = (struct connstate *) (c + 1);
   if (pkt->tcp->flags & TH_FIN) {
     s->ack = mg_htonl(pkt->tcp->seq) + 1, s->seq = mg_htonl(pkt->tcp->ack);
@@ -562,6 +563,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     c->recv.len += pkt->pay.len;
     struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
     mg_call(c, MG_EV_READ, &evd);
+    s->timer = ifp->now + MIP_TCP_ACK_MS;  // Don't send an ACK immediately
+    s->ttype = 0;                          // Set ACK timeout instead
   }
 }
 
@@ -590,8 +593,6 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
     mg_hexdump(pkt->pay.buf, pkt->pay.len);
 #endif
     read_conn(c, pkt);
-    s->timer = ifp->now + MIP_TCP_ACK_MS;  // Set ACK timeout
-    s->ttype = 0;
   } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (pkt->tcp->flags & TH_SYN) {
@@ -725,11 +726,13 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
     struct connstate *s = (struct connstate *) (c + 1);
     if (uptime_ms > s->timer) {
       if (s->ttype == 0) {
-        MG_INFO(("%lu sending ack", c->id));
+        MG_DEBUG(("%lu sending ack", c->id));
         tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
       } else {
-        MG_INFO(("%lu sending keepalive", c->id));
+        MG_DEBUG(("%lu sending keepalive", c->id));
+        tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
+               mg_htonl(s->seq - 1), mg_htonl(s->ack), "", 0);
       }
       s->timer = uptime_ms + MIP_TCP_KEEPALIVE_MS;
       s->ttype = 1;
@@ -821,6 +824,7 @@ static void write_conn(struct mg_connection *c) {
     s->seq += (uint32_t) n;
     mg_call(c, MG_EV_WRITE, &n);
   }
+  s->ttype = 1, s->timer = ifp->now + MIP_TCP_KEEPALIVE_MS;  // Clear ACK timer
 }
 
 static void fin_conn(struct mg_connection *c) {

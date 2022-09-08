@@ -341,7 +341,11 @@ const App = function(props) {
   const login = function(u) {
     document.cookie = `access_token=${u.token}; Secure, HttpOnly; SameSite=Lax; path=/; max-age=3600`;
     setUser(u.user);
-    watch();
+    if (location.search.substring(1) == 'nows') {
+      // If query string is ?nows, then do not connect to websocket. For debug.
+    } else {
+      watch(); // Connect to websocket, receive constant graph updates
+    }
     return getconfig();
   };
 
