@@ -45,3 +45,26 @@ $ make -C examples/mip-pcap/ clean all ARGS="-i feth0"
 2386718 3 mip.c:279:arp_cache_add       ARP cache: added 0xc0a80201 @ 36:77:4d:be:e0:80
 2386718 2 mip.c:300:onstatechange       READY, IP: 192.168.2.17
 ```
+
+The diagram of the setup is below:
+
+```
+                                                    ┼
+
+        ┌──────────►   192.168.2.1     bridge0
+        │ routing      DHCP               │
+        │              ┌──────────────────┴──────────────────┐
+        ▼              │                                     │
+                       │              ┌─────────┐ fake ethernet pair ┌─────────┐
+  192.168.0.10         │              │  feth1  ├────────────┬───────┤  feth0  │
+  ┌─────────┐          │              └─────────┘            │       └────┬────┘
+  │   en0   │          │                                     │            │
+  └────┬────┘          │ ┌─────────┐ ┌─────────┐ ┌─────────┐ │            │
+       │               │ │   en1   │ │   en2   │ │   en3   │ │         mip-pcap
+                       │ └────┬────┘ └────┬────┘ └────┬────┘ │
+      WiFi             │      │           │           │      │
+                       └──────┼───────────┼───────────┼──────┘
+       │                      │           │           │
+       ▼
+   Internets                      Thunderbolt Ethernet
+```
