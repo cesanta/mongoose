@@ -2393,21 +2393,21 @@ static void test_json(void) {
   ASSERT(mg_json_get(mg_str_n("[1,2]", 5), "$[3]", &n) == MG_JSON_NOT_FOUND);
 
   json = mg_str("{\"a\":[]}");
-  ASSERT(mg_json_get(json, "$.a", &n) == 5);
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 2);
   json = mg_str("{\"a\":[1,2]}");
-  ASSERT(mg_json_get(json, "$.a", &n) == 5);
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 5);
   json = mg_str("{\"a\":[1,[1]]}");
-  ASSERT(mg_json_get(json, "$.a", &n) == 5);
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 7);
   json = mg_str("{\"a\":[[]]}");
-  ASSERT(mg_json_get(json, "$.a", &n) == 5);
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 4);
   json = mg_str("{\"a\":[[1,2]]}");
-  ASSERT(mg_json_get(json, "$.a", &n) == 5);
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 7);
   json = mg_str("{\"a\":{}}");
-  ASSERT(mg_json_get(json, "$.a", &n) == 5);
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 2);
   json = mg_str("{\"a\":{\"a\":{}}}");
-  ASSERT(mg_json_get(json, "$.a", &n) == 5);
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 8);
   json = mg_str("{\"a\":{\"a\":[]}}");
-  ASSERT(mg_json_get(json, "$.a", &n) == 5);
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 8);
 
   json = mg_str("[[1,[2,3]],4]");
   ASSERT(mg_json_get(json, "$", &n) == 0 && n == 13);
@@ -2521,6 +2521,22 @@ static void test_json(void) {
     ASSERT(mg_json_get_long(json, "$.a[2]", -42) == 4);
     ASSERT(mg_json_get_long(json, "$.a[3]", -42) == -42);
   }
+
+  json = mg_str("{\"a\":[],\"b\":[1,2]}");
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 2);
+  ASSERT(mg_json_get(json, "$.a[0]", &n) < 0 && n == 0);
+
+  json = mg_str("{\"a\":{},\"b\":[1,2]}");
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 2);
+  ASSERT(mg_json_get(json, "$.a[0]", &n) < 0 && n == 0);
+
+  json = mg_str("{\"a\":true,\"b\":[1,2]}");
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 4);
+  ASSERT(mg_json_get(json, "$.a[0]", &n) < 0 && n == 0);
+
+  json = mg_str("{\"a\":1,\"b\":[1,2]}");
+  ASSERT(mg_json_get(json, "$.a", &n) == 5 && n == 1);
+  ASSERT(mg_json_get(json, "$.a[0]", &n) < 0 && n == 0);
 }
 
 static void resp_rpc(struct mg_rpc_req *r) {

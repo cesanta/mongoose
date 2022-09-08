@@ -1901,7 +1901,19 @@ static void printdirentry(const char *name, void *userdata) {
     } else {
       mg_snprintf(sz, sizeof(sz), "%lld", (uint64_t) size);
     }
+#if defined(MG_HTTP_DIRLIST_TIME)
+    char time_str[30];
+    struct tm * time_info = localtime(&t);
+    strftime(time_str, sizeof time_str, "%Y/%m/%d %H:%M:%S", time_info);
+    mg_snprintf(mod, sizeof(mod), "%s", time_str);
+#elif defined(MG_HTTP_DIRLIST_TIME_UTC)
+    char time_str[30];
+    struct tm * time_info = gmtime(&t);
+    strftime(time_str, sizeof time_str, "%Y/%m/%d %H:%M:%S", time_info);
+    mg_snprintf(mod, sizeof(mod), "%s", time_str);
+#else
     mg_snprintf(mod, sizeof(mod), "%ld", (unsigned long) t);
+#endif
     n = (int) mg_url_encode(name, strlen(name), path, sizeof(path));
     mg_printf(d->c,
               "  <tr><td><a href=\"%.*s%s\">%s%s</a></td>"
@@ -2482,6 +2494,7 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
   int pos = 1;           // Current position in `path`
   int ci = -1, ei = -1;  // Current and expected index in array
 
+  if (toklen) *toklen = 0;
   if (path[0] != '$') return MG_JSON_INVALID;
 
 #define MG_CHECKRET(x)                                  \
@@ -2560,6 +2573,7 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
           if (n < 0) return n;
           if (i + 1 + n >= len) return MG_JSON_NOT_FOUND;
           if (depth < ed) return MG_JSON_NOT_FOUND;
+          if (depth == ed && path[pos - 1] != '.') return MG_JSON_NOT_FOUND;
           // printf("K %s [%.*s] [%.*s] %d %d %d\n", path, pos, path, n,
           //  &s[i + 1], n, depth, ed);
           // NOTE(cpq): in the check sequence below is important.

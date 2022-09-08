@@ -1,6 +1,6 @@
-#include "json.h"
 #include "base64.h"
 #include "fmt.h"
+#include "json.h"
 
 static const char *escapeseq(int esc) {
   return esc ? "\b\f\n\r\t\\\"" : "bfnrt\\\"";
@@ -86,6 +86,7 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
   int pos = 1;           // Current position in `path`
   int ci = -1, ei = -1;  // Current and expected index in array
 
+  if (toklen) *toklen = 0;
   if (path[0] != '$') return MG_JSON_INVALID;
 
 #define MG_CHECKRET(x)                                  \
@@ -164,6 +165,7 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
           if (n < 0) return n;
           if (i + 1 + n >= len) return MG_JSON_NOT_FOUND;
           if (depth < ed) return MG_JSON_NOT_FOUND;
+          if (depth == ed && path[pos - 1] != '.') return MG_JSON_NOT_FOUND;
           // printf("K %s [%.*s] [%.*s] %d %d %d\n", path, pos, path, n,
           //  &s[i + 1], n, depth, ed);
           // NOTE(cpq): in the check sequence below is important.
