@@ -26,12 +26,13 @@ $ sudo ifconfig feth0 up
 $ sudo ifconfig feth1 up
 ```
 
-Now we have two Ethernet interfaces, `feth0` and `feth1`, interlinked and active.
-On your Mac, go to "System Preferences" / Sharing, enable "Internet Sharing"
-and choose "Thunderbolt bridge". This enables DHCP on the `bridge0` interface.
-On my system it gets `192.168.2.1` IP address, and serves `192.168.2/24` net.
-which is bridge for all Thunderbolt devices, and adds necessary routes to the
-WiFi interface. We should add one of our fake interfaces to this bridge:
+Now we have two Ethernet interfaces, `feth0` and `feth1`, interlinked and
+active.  On your Mac, go to "System Preferences" / Sharing, enable "Internet
+Sharing" and choose "Thunderbolt bridge". This enables DHCP on the `bridge0`
+interface, which is bridge for all Thunderbolt devices, and adds necessary
+routes to the WiFi interface. On my system it gets `192.168.2.1` IP address,
+and serves `192.168.2/24` net.  We should add one of our fake interfaces to
+this bridge:
 
 ```sh
 $ sudo ifconfig bridge0 addm feth1
