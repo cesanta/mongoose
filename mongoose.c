@@ -6115,6 +6115,9 @@ static bool mip_driver_stm32_up(void *userdata) {
 
 void ETH_IRQHandler(void);
 void ETH_IRQHandler(void) {
+#ifdef MIP_QPROFILE
+  qp_mark(QP_IRQTRIGGERED, 0);
+#endif
   volatile uint32_t sr = ETH->DMASR;
   if (sr & BIT(6)) {  // Frame received, loop
     for (uint32_t i = 0; i < ETH_DESC_CNT; i++) {
@@ -7006,7 +7009,13 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
                                     : ifp->driver->rx(ifp->rx.buf, ifp->rx.len,
                                                       ifp->driver_data);
     if (len == 0) break;
+#ifdef MIP_QPROFILE
+    qp_mark(QP_FRAMEPOPPED, (int) len);
+#endif
     mip_rx(ifp, ifp->rx.buf, len);
+#ifdef MIP_QPROFILE
+    qp_mark(QP_FRAMEDONE, (int) len);
+#endif
   }
 
   // Process timeouts
@@ -7027,6 +7036,9 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
       s->ttype = 1;
     }
   }
+#ifdef MIP_QPROFILE
+  qp_log();
+#endif
 }
 
 // This function executes in interrupt context, thus it should copy data
@@ -7034,7 +7046,11 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 // our lock-free queue with preallocated buffer to copy data and return asap
 static void on_rx(void *buf, size_t len, void *userdata) {
   struct mip_if *ifp = (struct mip_if *) userdata;
+#ifndef MIP_QPROFILE
   if (!q_write(&ifp->queue, buf, len)) MG_ERROR(("dropped %d", (int) len));
+#else
+  qp_mark(q_write(&ifp->queue, buf, len) ? QP_FRAMEPUSHED:QP_FRAMEDROPPED, (int) len);
+#endif
 }
 
 void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
@@ -7060,6 +7076,9 @@ void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
     if (driver->setrx) driver->setrx(on_rx, ifp);
     mgr->priv = ifp;
     mgr->extraconnsize = sizeof(struct connstate);
+#ifdef MIP_QPROFILE
+    qp_init();
+#endif
   }
 }
 
@@ -7158,4 +7177,49 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   }
   return res;
 }
+
+
+#ifdef MIP_QPROFILE
+
+#pragma pack(push, 1)
+struct qpentry {
+	uint64_t timestamp;
+	uint16_t type;
+	uint16_t len;
+};
+#pragma pack(pop)
+
+static struct queue qp;
+
+void qp_mark(unsigned int type, int len)
+{
+static bool ovf = false;
+struct qpentry e = {
+	.timestamp = mg_millis(),
+	.type = ovf ? (uint16_t)QP_QUEUEOVF : (uint16_t)type,
+	.len = (uint16_t) len
+};
+
+	ovf = !q_write(&qp, &e, sizeof(e));
+}
+
+void qp_log(void)
+{
+struct qpentry e;
+
+  for(int i=0 ; i < 10 ; i++)
+	  if(q_read(&qp, &e)) MG_INFO(("%llu, %u, %u", e.timestamp, e.type, e.len));
+    else break;
+}
+
+void qp_init(void)
+{
+unsigned int qlen = 500 * (sizeof(size_t) + sizeof(struct qpentry));
+
+    qp.buf = calloc(1, qlen);
+    qp.len = qlen;
+// THERE IS NO FREE
+}
+#endif // MIP_QPROFILE
+
 #endif  // MG_ENABLE_MIP
