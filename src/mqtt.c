@@ -197,7 +197,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
         c->is_closing = 1;
         break;
       } else if (rc == MQTT_OK) {
-        MG_VERBOSE(("%p MQTT CMD %d len %d [%.*s]", c->fd, mm.cmd,
+        MG_VERBOSE(("%lu MQTT CMD %d len %d [%.*s]", c->id, mm.cmd,
                     (int) mm.dgram.len, (int) mm.data.len, mm.data.ptr));
         switch (mm.cmd) {
           case MQTT_CMD_CONNACK:

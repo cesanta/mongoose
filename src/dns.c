@@ -151,7 +151,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
       MG_ERROR(("Unexpected DNS response:"));
       mg_hexdump(c->recv.buf, c->recv.len);
     } else {
-      MG_VERBOSE(("%s %d", dm.name, dm.resolved));
+      // MG_VERBOSE(("%s %d", dm.name, dm.resolved));
       for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
            d = tmp) {
         tmp = d->next;

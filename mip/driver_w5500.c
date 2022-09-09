@@ -34,9 +34,12 @@ static size_t w5500_rx(void *buf, size_t buflen, void *data) {
   if (n > 0) {
     uint16_t ptr = w5500_r2(s, W5500_S0, 0x28);  // Get read pointer
     n = w5500_r2(s, W5500_RX0, ptr);             // Read frame length
-    if (n <= len + 2) r = n - 2, w5500_rn(s, W5500_RX0, ptr + 2, buf, r);
-    w5500_w2(s, W5500_S0, 0x28, ptr + n);  // Advance read pointer
-    w5500_w1(s, W5500_S0, 1, 0x40);        // Sock0 CR -> RECV
+    if (n <= len + 2 && n > 1) {
+      r = (uint16_t) (n - 2);
+      w5500_rn(s, W5500_RX0, (uint16_t) (ptr + 2), buf, r);
+    }
+    w5500_w2(s, W5500_S0, 0x28, (uint16_t) (ptr + n));  // Advance read pointer
+    w5500_w1(s, W5500_S0, 1, 0x40);                     // Sock0 CR -> RECV
     // printf("  RX_RD: tot=%u n=%u r=%u\n", n2, n, r);
   }
   return r;
@@ -45,11 +48,11 @@ static size_t w5500_rx(void *buf, size_t buflen, void *data) {
 static size_t w5500_tx(const void *buf, size_t buflen, void *data) {
   struct mip_spi *s = (struct mip_spi *) data;
   uint16_t n = 0, len = (uint16_t) buflen;
-  while (n < len) n = w5500_r2(s, W5500_S0, 0x20);  // Wait for space
-  uint16_t ptr = w5500_r2(s, W5500_S0, 0x24);       // Get write pointer
-  w5500_wn(s, W5500_TX0, ptr, (void *) buf, len);   // Write data
-  w5500_w2(s, W5500_S0, 0x24, ptr + len);           // Advance write pointer
-  w5500_w1(s, W5500_S0, 1, 0x20);                   // Sock0 CR -> SEND
+  while (n < len) n = w5500_r2(s, W5500_S0, 0x20);      // Wait for space
+  uint16_t ptr = w5500_r2(s, W5500_S0, 0x24);           // Get write pointer
+  w5500_wn(s, W5500_TX0, ptr, (void *) buf, len);       // Write data
+  w5500_w2(s, W5500_S0, 0x24, (uint16_t) (ptr + len));  // Advance write pointer
+  w5500_w1(s, W5500_S0, 1, 0x20);                       // Sock0 CR -> SEND
   for (int i = 0; i < 40; i++) {
     uint8_t ir = w5500_r1(s, W5500_S0, 2);  // Read S0 IR
     if (ir == 0) continue;

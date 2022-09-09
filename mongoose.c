@@ -263,7 +263,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
       MG_ERROR(("Unexpected DNS response:"));
       mg_hexdump(c->recv.buf, c->recv.len);
     } else {
-      MG_VERBOSE(("%s %d", dm.name, dm.resolved));
+      // MG_VERBOSE(("%s %d", dm.name, dm.resolved));
       for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
            d = tmp) {
         tmp = d->next;
@@ -3198,7 +3198,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
         c->is_closing = 1;
         break;
       } else if (rc == MQTT_OK) {
-        MG_VERBOSE(("%p MQTT CMD %d len %d [%.*s]", c->fd, mm.cmd,
+        MG_VERBOSE(("%lu MQTT CMD %d len %d [%.*s]", c->id, mm.cmd,
                     (int) mm.dgram.len, (int) mm.data.len, mm.data.ptr));
         switch (mm.cmd) {
           case MQTT_CMD_CONNACK:
@@ -3900,7 +3900,7 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
     int64_t t2 = gettimestamp((uint32_t *) &buf[40]);
     int64_t t3 = (int64_t) mg_millis();
     int64_t delta = (t3 - t0) - (t2 - t1);
-    MG_DEBUG(("%lld %lld %lld %lld delta:%lld", t0, t1, t2, t3, delta));
+    MG_VERBOSE(("%lld %lld %lld %lld delta:%lld", t0, t1, t2, t3, delta));
     res = t2 + delta / 2;
   } else {
     MG_ERROR(("unexpected version: %d", version));
@@ -3912,6 +3912,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_READ) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
     if (milliseconds > 0) {
+      MG_INFO(("%lu got time: %lld ms from epoch", c->id, milliseconds));
       mg_call(c, MG_EV_SNTP_TIME, (uint64_t *) &milliseconds);
       MG_VERBOSE(("%u.%u", (unsigned) (milliseconds / 1000),
                   (unsigned) (milliseconds % 1000)));
@@ -4037,8 +4038,7 @@ static void tomgaddr(union usa *usa, struct mg_addr *a, bool is_ip6) {
 #endif
 }
 
-bool mg_sock_would_block(void);
-bool mg_sock_would_block(void) {
+static bool mg_sock_would_block(void) {
   int err = MG_SOCK_ERRNO;
   return err == EINPROGRESS || err == EWOULDBLOCK
 #ifndef WINCE
@@ -4050,8 +4050,7 @@ bool mg_sock_would_block(void) {
       ;
 }
 
-bool mg_sock_conn_reset(void);
-bool mg_sock_conn_reset(void) {
+static bool mg_sock_conn_reset(void) {
   int err = MG_SOCK_ERRNO;
 #if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
   return err == WSAECONNRESET;
@@ -4069,9 +4068,9 @@ static void setlocaddr(SOCKET fd, struct mg_addr *addr) {
 }
 
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
-  if (n == 0) {
+  if (n == MG_IO_WAIT) {
     // Do nothing
-  } else if (n < 0) {
+  } else if (n <= 0) {
     c->is_closing = 1;  // Termination. Don't call mg_error(): #1529
   } else if (n > 0) {
     if (c->is_hexdumping) {
@@ -4104,7 +4103,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   }
 }
 
-static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
+long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   long n;
   if (c->is_udp) {
     union usa usa;
@@ -4114,15 +4113,18 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
   } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
 #if MG_ARCH == MG_ARCH_RTX
-    if (n == BSD_EWOULDBLOCK) return 0;
+    if (n == BSD_EWOULDBLOCK) return MG_IO_WAIT;
 #endif
   }
-  return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
+  if (n < 0 && mg_sock_would_block()) return MG_IO_WAIT;
+  if (n < 0 && mg_sock_conn_reset()) return MG_IO_RESET;
+  if (n <= 0) return MG_IO_ERR;
+  return n;
 }
 
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   if (c->is_udp) {
-    long n = mg_sock_send(c, buf, len);
+    long n = mg_io_send(c, buf, len);
     MG_DEBUG(("%lu %p %d:%d %ld err %d", c->id, c->fd, (int) c->send.len,
               (int) c->recv.len, n, MG_SOCK_ERRNO));
     iolog(c, (char *) buf, n, false);
@@ -4223,7 +4225,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
   return success;
 }
 
-static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
+long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
   long n = 0;
   if (c->is_udp) {
     union usa usa;
@@ -4233,7 +4235,10 @@ static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
   } else {
     n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
-  return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
+  if (n < 0 && mg_sock_would_block()) return MG_IO_WAIT;
+  if (n < 0 && mg_sock_conn_reset()) return MG_IO_RESET;
+  if (n <= 0) return MG_IO_ERR;
+  return n;
 }
 
 // NOTE(lsm): do only one iteration of reads, cause some systems
@@ -4248,7 +4253,7 @@ static void read_conn(struct mg_connection *c) {
   } else {
     char *buf = (char *) &c->recv.buf[c->recv.len];
     size_t len = c->recv.size - c->recv.len;
-    n = c->is_tls ? mg_tls_recv(c, buf, len) : mg_sock_recv(c, buf, len);
+    n = c->is_tls ? mg_tls_recv(c, buf, len) : mg_io_recv(c, buf, len);
     MG_DEBUG(("%lu %p snd %ld/%ld rcv %ld/%ld n=%ld err=%d", c->id, c->fd,
               (long) c->send.len, (long) c->send.size, (long) c->recv.len,
               (long) c->recv.size, n, MG_SOCK_ERRNO));
@@ -4259,7 +4264,7 @@ static void read_conn(struct mg_connection *c) {
 static void write_conn(struct mg_connection *c) {
   char *buf = (char *) c->send.buf;
   size_t len = c->send.len;
-  long n = c->is_tls ? mg_tls_send(c, buf, len) : mg_sock_send(c, buf, len);
+  long n = c->is_tls ? mg_tls_send(c, buf, len) : mg_io_send(c, buf, len);
   MG_DEBUG(("%lu %p snd %ld/%ld rcv %ld/%ld n=%ld err=%d", c->id, c->fd,
             (long) c->send.len, (long) c->send.size, (long) c->recv.len,
             (long) c->recv.size, n, MG_SOCK_ERRNO));
@@ -4311,12 +4316,10 @@ static void setsockopts(struct mg_connection *c) {
 }
 
 void mg_connect_resolved(struct mg_connection *c) {
-  // char buf[40];
   int type = c->is_udp ? SOCK_DGRAM : SOCK_STREAM;
-  int rc, af = c->rem.is_ip6 ? AF_INET6 : AF_INET;
-  // mg_straddr(&c->rem, buf, sizeof(buf));
-  c->fd = S2PTR(socket(af, type, 0));
-  c->is_resolving = 0;
+  int rc, af = c->rem.is_ip6 ? AF_INET6 : AF_INET;  // c->rem has resolved IP
+  c->fd = S2PTR(socket(af, type, 0));               // Create outbound socket
+  c->is_resolving = 0;                              // Clear resolving flag
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
   } else if (c->is_udp) {
@@ -5075,46 +5078,27 @@ void mg_tls_free(struct mg_connection *c) {
   }
 }
 
-bool mg_sock_would_block(void);
-bool mg_sock_conn_reset(void);
-
-#if MG_ENABLE_MIP
-#else
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
-  struct mg_connection *c = (struct mg_connection *) ctx;
-  int fd = (int) (size_t) c->fd;
-  int n = (int) send(fd, buf, len, 0);
-  MG_VERBOSE(("%lu n=%d, errno=%d", c->id, n, errno));
-  if (n < 0) {
-    if (mg_sock_would_block()) return MBEDTLS_ERR_SSL_WANT_WRITE;
-    if (mg_sock_conn_reset()) return MBEDTLS_ERR_NET_CONN_RESET;
-    return MBEDTLS_ERR_NET_SEND_FAILED;
-  }
-  return n;
+  long n = mg_io_send((struct mg_connection *) ctx, buf, len);
+  MG_VERBOSE(("%lu n=%ld", ((struct mg_connection *) ctx)->id, n));
+  if (n == MG_IO_WAIT) return MBEDTLS_ERR_SSL_WANT_WRITE;
+  if (n == MG_IO_RESET) return MBEDTLS_ERR_NET_CONN_RESET;
+  if (n == MG_IO_ERR) return MBEDTLS_ERR_NET_SEND_FAILED;
+  return (int) n;
 }
 
 static int mg_net_recv(void *ctx, unsigned char *buf, size_t len) {
-  struct mg_connection *c = (struct mg_connection *) ctx;
-  int n, fd = (int) (size_t) c->fd;
-  n = (int) recv(fd, buf, len, 0);
-  MG_VERBOSE(("%lu n=%d, errno=%d", c->id, n, errno));
-  if (n < 0) {
-    if (mg_sock_would_block()) return MBEDTLS_ERR_SSL_WANT_READ;
-    if (mg_sock_conn_reset()) return MBEDTLS_ERR_NET_CONN_RESET;
-    return MBEDTLS_ERR_NET_RECV_FAILED;
-  }
-  return n;
+  long n = mg_io_recv((struct mg_connection *) ctx, buf, len);
+  MG_VERBOSE(("%lu n=%ld", ((struct mg_connection *) ctx)->id, n));
+  if (n == MG_IO_WAIT) return MBEDTLS_ERR_SSL_WANT_WRITE;
+  if (n == MG_IO_RESET) return MBEDTLS_ERR_NET_CONN_RESET;
+  if (n == MG_IO_ERR) return MBEDTLS_ERR_NET_RECV_FAILED;
+  return (int) n;
 }
-#endif
 
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  int rc;
-#if MG_ENABLE_MIP
-#else
-  mbedtls_ssl_set_bio(&tls->ssl, c, mg_net_send, mg_net_recv, 0);
-#endif
-  rc = mbedtls_ssl_handshake(&tls->ssl);
+  int rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
     MG_DEBUG(("%lu success", c->id));
     c->is_tls_hs = 0;
@@ -5238,6 +5222,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   c->tls = tls;
   c->is_tls = 1;
   c->is_tls_hs = 1;
+  mbedtls_ssl_set_bio(&tls->ssl, c, mg_net_send, mg_net_recv, 0);
   if (c->is_client && c->is_resolving == 0 && c->is_connecting == 0) {
     mg_tls_handshake(c);
   }
@@ -5254,13 +5239,17 @@ size_t mg_tls_pending(struct mg_connection *c) {
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   long n = mbedtls_ssl_read(&tls->ssl, (unsigned char *) buf, len);
-  return n == 0 ? -1 : n == MBEDTLS_ERR_SSL_WANT_READ ? 0 : n;
+  if (n == MBEDTLS_ERR_SSL_WANT_READ) return MG_IO_WAIT;
+  if (n <= 0) return MG_IO_ERR;
+  return n;
 }
 
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   long n = mbedtls_ssl_write(&tls->ssl, (unsigned char *) buf, len);
-  return n == 0 ? -1 : n == MBEDTLS_ERR_SSL_WANT_WRITE ? 0 : n;
+  if (n == MBEDTLS_ERR_SSL_WANT_WRITE) return MG_IO_WAIT;
+  if (n <= 0) return MG_IO_ERR;
+  return n;
 }
 #endif
 
@@ -5408,13 +5397,17 @@ size_t mg_tls_pending(struct mg_connection *c) {
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int n = SSL_read(tls->ssl, buf, (int) len);
-  return n == 0 ? -1 : n < 0 && mg_tls_err(tls, n) == 0 ? 0 : n;
+  if (n < 0 && mg_tls_err(tls, n) == 0) return MG_IO_WAIT;
+  if (n <= 0) return MG_IO_ERR;
+  return n;
 }
 
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int n = SSL_write(tls->ssl, buf, (int) len);
-  return n == 0 ? -1 : n < 0 && mg_tls_err(tls, n) == 0 ? 0 : n;
+  if (n < 0 && mg_tls_err(tls, n) == 0) return MG_IO_WAIT;
+  if (n <= 0) return MG_IO_ERR;
+  return n;
 }
 #endif
 
@@ -6250,9 +6243,12 @@ static size_t w5500_rx(void *buf, size_t buflen, void *data) {
   if (n > 0) {
     uint16_t ptr = w5500_r2(s, W5500_S0, 0x28);  // Get read pointer
     n = w5500_r2(s, W5500_RX0, ptr);             // Read frame length
-    if (n <= len + 2) r = n - 2, w5500_rn(s, W5500_RX0, ptr + 2, buf, r);
-    w5500_w2(s, W5500_S0, 0x28, ptr + n);  // Advance read pointer
-    w5500_w1(s, W5500_S0, 1, 0x40);        // Sock0 CR -> RECV
+    if (n <= len + 2 && n > 1) {
+      r = (uint16_t) (n - 2);
+      w5500_rn(s, W5500_RX0, (uint16_t) (ptr + 2), buf, r);
+    }
+    w5500_w2(s, W5500_S0, 0x28, (uint16_t) (ptr + n));  // Advance read pointer
+    w5500_w1(s, W5500_S0, 1, 0x40);                     // Sock0 CR -> RECV
     // printf("  RX_RD: tot=%u n=%u r=%u\n", n2, n, r);
   }
   return r;
@@ -6261,11 +6257,11 @@ static size_t w5500_rx(void *buf, size_t buflen, void *data) {
 static size_t w5500_tx(const void *buf, size_t buflen, void *data) {
   struct mip_spi *s = (struct mip_spi *) data;
   uint16_t n = 0, len = (uint16_t) buflen;
-  while (n < len) n = w5500_r2(s, W5500_S0, 0x20);  // Wait for space
-  uint16_t ptr = w5500_r2(s, W5500_S0, 0x24);       // Get write pointer
-  w5500_wn(s, W5500_TX0, ptr, (void *) buf, len);   // Write data
-  w5500_w2(s, W5500_S0, 0x24, ptr + len);           // Advance write pointer
-  w5500_w1(s, W5500_S0, 1, 0x20);                   // Sock0 CR -> SEND
+  while (n < len) n = w5500_r2(s, W5500_S0, 0x20);      // Wait for space
+  uint16_t ptr = w5500_r2(s, W5500_S0, 0x24);           // Get write pointer
+  w5500_wn(s, W5500_TX0, ptr, (void *) buf, len);       // Write data
+  w5500_w2(s, W5500_S0, 0x24, (uint16_t) (ptr + len));  // Advance write pointer
+  w5500_w1(s, W5500_S0, 1, 0x20);                       // Sock0 CR -> SEND
   for (int i = 0; i < 40; i++) {
     uint8_t ir = w5500_r1(s, W5500_S0, 2);  // Read S0 IR
     if (ir == 0) continue;
@@ -6321,15 +6317,23 @@ struct mip_driver mip_driver_w5500 = {
 #ifndef MIP_ARP_ENTRIES
 #define MIP_ARP_ENTRIES 5  // Number of ARP cache entries. Maximum 21
 #endif
+
+#ifndef MIP_QSIZE
+#define MIP_QSIZE (16 * 1024)  // Queue size
+#endif
+
 #define MIP_ARP_CS (2 + 12 * MIP_ARP_ENTRIES)  // ARP cache size
 #define MIP_TCP_KEEPALIVE_MS 45000             // TCP keep-alive period, ms
 #define MIP_TCP_ACK_MS 150                     // Timeout for ACKing
 
 struct connstate {
-  uint32_t seq, ack;  // TCP seq/ack counters
-  uint64_t timer;     // TCP keep-alive / ACK timer
-  uint8_t mac[6];     // Peer MAC address
-  uint8_t ttype;      // Timer type. 0: ack, 1: keep-alive
+  uint32_t seq, ack;           // TCP seq/ack counters
+  uint64_t timer;              // TCP keep-alive / ACK timer
+  uint8_t mac[6];              // Peer MAC address
+  uint8_t ttype;               // Timer type. 0: ack, 1: keep-alive
+#define MIP_TTYPE_KEEPALIVE 0  // Connection is idle for long, send keepalive
+#define MIP_TTYPE_ACK 1        // Peer sent us data, we have to ack it soon
+  struct mg_iobuf raw;         // For TLS only. Incoming raw data
 };
 
 struct str {
@@ -6490,7 +6494,7 @@ static void q_copyout(struct queue *q, uint8_t *buf, size_t len, size_t tail) {
 
 static bool q_write(struct queue *q, const void *buf, size_t len) {
   bool success = false;
-  size_t left = (q->len - q->head + q->tail -1) % q->len;
+  size_t left = (q->len - q->head + q->tail - 1) % q->len;
   if (len + sizeof(size_t) <= left) {
     q_copyin(q, (uint8_t *) &len, sizeof(len), q->head);
     q_copyin(q, (uint8_t *) buf, len, (q->head + sizeof(size_t)) % q->len);
@@ -6835,6 +6839,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   struct mg_connection *c = mg_alloc_conn(lsn->mgr);
   struct connstate *s = (struct connstate *) (c + 1);
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
+  s->timer = ((struct mip_if *) c->mgr->priv)->now + MIP_TCP_KEEPALIVE_MS;
   c->rem.ip = pkt->ip->src;
   c->rem.port = pkt->tcp->sport;
   MG_DEBUG(("%lu accepted %lx:%hx", c->id, mg_ntohl(c->rem.ip), c->rem.port));
@@ -6851,26 +6856,92 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   return c;
 }
 
-static void read_conn(struct mg_connection *c, struct pkt *pkt) {
+static void settmout(struct mg_connection *c, uint8_t type) {
   struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
   struct connstate *s = (struct connstate *) (c + 1);
+  unsigned n = type == MIP_TTYPE_ACK ? MIP_TCP_ACK_MS : MIP_TCP_KEEPALIVE_MS;
+  s->timer = ifp->now + n;
+  s->ttype = type;
+  MG_VERBOSE(("%lu %d -> %llx", c->id, type, s->timer));
+}
+
+long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
+  struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
+  struct connstate *s = (struct connstate *) (c + 1);
+  size_t max_headers_len = 14 + 24 /* max IP */ + 60 /* max TCP */;
+  if (len + max_headers_len > ifp->tx.len) len = ifp->tx.len - max_headers_len;
+  if (tx_tcp(ifp, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
+             mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
+    s->seq += (uint32_t) len;
+    if (s->ttype == MIP_TTYPE_KEEPALIVE) settmout(c, MIP_TTYPE_KEEPALIVE);
+  } else {
+    return MG_IO_ERR;
+  }
+  return (long) len;
+}
+
+long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
+  struct connstate *s = (struct connstate *) (c + 1);
+  if (s->raw.len == 0) return MG_IO_WAIT;
+  if (len > s->raw.len) len = s->raw.len;
+  memcpy(buf, s->raw.buf, len);
+  mg_iobuf_del(&s->raw, 0, len);
+  MG_DEBUG(("%lu", len));
+  return (long) len;
+}
+
+static void read_conn(struct mg_connection *c, struct pkt *pkt) {
+  struct connstate *s = (struct connstate *) (c + 1);
+  struct mg_iobuf *io = c->is_tls ? &s->raw : &c->recv;
+  s->raw.align = c->recv.align;
   if (pkt->tcp->flags & TH_FIN) {
     s->ack = mg_htonl(pkt->tcp->seq) + 1, s->seq = mg_htonl(pkt->tcp->ack);
     c->is_closing = 1;
   } else if (pkt->pay.len == 0) {
-  } else if (c->recv.size - c->recv.len < pkt->pay.len &&
-             !mg_iobuf_resize(&c->recv, c->recv.len + pkt->pay.len)) {
-    mg_error(c, "oom");
+    // TODO(cpq): handle this peer's ACK
   } else if (mg_ntohl(pkt->tcp->seq) != s->ack) {
-    mg_error(c, "oob: %x %x", mg_ntohl(pkt->tcp->seq), s->ack);
+    // TODO(cpq): peer sent us SEQ which we don't expect. Retransmit rather
+    // than close this connection
+    mg_error(c, "SEQ != ACK: %x %x", mg_ntohl(pkt->tcp->seq), s->ack);
+  } else if (io->size - io->len < pkt->pay.len &&
+             !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
+    mg_error(c, "oom");
   } else {
+    // Copy TCP payload into the IO buffer. If the connection is plain text, we
+    // copy to c->recv. If the connection is TLS, this data is encrypted,
+    // therefore we copy that encrypted data to the s->raw iobuffer instead,
+    // and then call mg_tls_recv() to decrypt it. NOTE: mg_tls_recv() will
+    // call back mg_io_recv() which grabs raw data from s->raw
+    memcpy(&io->buf[io->len], pkt->pay.buf, pkt->pay.len);
+    io->len += pkt->pay.len;
+    // Advance ACK counter and setup a timer to send an ACK back
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
-    memcpy(&c->recv.buf[c->recv.len], pkt->pay.buf, pkt->pay.len);
-    c->recv.len += pkt->pay.len;
-    struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
-    mg_call(c, MG_EV_READ, &evd);
-    s->timer = ifp->now + MIP_TCP_ACK_MS;  // Don't send an ACK immediately
-    s->ttype = 0;                          // Set ACK timeout instead
+    settmout(c, MIP_TTYPE_ACK);
+
+    if (c->is_tls) {
+      // TLS connection. Make room for decrypted data in c->recv
+      io = &c->recv;
+      if (io->size - io->len < pkt->pay.len &&
+          !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
+        mg_error(c, "oom");
+      } else {
+        // Decrypt data directly into c->recv
+        long n = mg_tls_recv(c, &io->buf[io->len], io->size - io->len);
+        if (n == MG_IO_ERR) {
+          mg_error(c, "TLS recv error");
+        } else if (n > 0) {
+          // Decrypted successfully - trigger MG_EV_READ
+          io->len += (size_t) n;
+          struct mg_str evd =
+              mg_str_n((char *) &io->buf[io->len - (size_t) n], (size_t) n);
+          mg_call(c, MG_EV_READ, &evd);
+        }
+      }
+    } else {
+      // Plain text connection, data is already in c->recv, trigger MG_EV_READ
+      struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
+      mg_call(c, MG_EV_READ, &evd);
+    }
   }
 }
 
@@ -6878,9 +6949,8 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
   struct connstate *s = (struct connstate *) (c + 1);
 
-  if (c != NULL) {
-    s->timer = ifp->now + MIP_TCP_KEEPALIVE_MS;  // Shift next keep-alive
-    s->ttype = 1;                                // ping to the future
+  if (c != NULL && s->ttype == MIP_TTYPE_KEEPALIVE) {
+    settmout(c, MIP_TTYPE_KEEPALIVE);
   }
 #if 0
   MG_INFO(("%lu %hhu %d", c ? c->id : 0, pkt->tcp->flags, (int) pkt->pay.len));
@@ -6888,7 +6958,8 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
   if (c != NULL && c->is_connecting && pkt->tcp->flags & (TH_SYN | TH_ACK)) {
     s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
     tx_tcp_pkt(ifp, pkt, TH_ACK, pkt->tcp->ack, NULL, 0);
-    c->is_connecting = 0;  // Client connected
+    c->is_connecting = 0;             // Client connected
+    mg_call(c, MG_EV_CONNECT, NULL);  // Let user know
   } else if (c != NULL && c->is_connecting) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (c != NULL) {
@@ -7035,19 +7106,19 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   // Process timeouts
   for (struct mg_connection *c = ifp->mgr->conns; c != NULL; c = c->next) {
     if (c->is_udp || c->is_listening) continue;
+    if (c->is_connecting || c->is_resolving) continue;
     struct connstate *s = (struct connstate *) (c + 1);
     if (uptime_ms > s->timer) {
-      if (s->ttype == 0) {
-        MG_DEBUG(("%lu sending ack", c->id));
+      if (s->ttype == MIP_TTYPE_ACK) {
+        MG_DEBUG(("%lu ack", c->id));
         tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
       } else {
-        MG_DEBUG(("%lu sending keepalive", c->id));
+        MG_DEBUG(("%lu keepalive", c->id));
         tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq - 1), mg_htonl(s->ack), "", 0);
       }
-      s->timer = uptime_ms + MIP_TCP_KEEPALIVE_MS;
-      s->ttype = 1;
+      settmout(c, MIP_TTYPE_KEEPALIVE);
     }
   }
 #ifdef MIP_QPROFILE
@@ -7063,7 +7134,8 @@ static void on_rx(void *buf, size_t len, void *userdata) {
 #ifndef MIP_QPROFILE
   if (!q_write(&ifp->queue, buf, len)) MG_ERROR(("dropped %d", (int) len));
 #else
-  qp_mark(q_write(&ifp->queue, buf, len) ? QP_FRAMEPUSHED:QP_FRAMEDROPPED, (int) len);
+  qp_mark(q_write(&ifp->queue, buf, len) ? QP_FRAMEPUSHED : QP_FRAMEDROPPED,
+          (int) len);
 #endif
 }
 
@@ -7072,7 +7144,7 @@ void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
   if (driver->init && !driver->init(ipcfg->mac, driver_data)) {
     MG_ERROR(("driver init failed"));
   } else {
-    size_t maxpktsize = 1518, qlen = driver->setrx ? 1024 * 16 : 0;
+    size_t maxpktsize = 1518, qlen = driver->setrx ? MIP_QSIZE : 0;
     struct mip_if *ifp =
         (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
     memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
@@ -7117,7 +7189,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   if (ifp->eport < MIP_ETHEMERAL_PORT) ifp->eport = MIP_ETHEMERAL_PORT;
   c->loc.ip = ifp->ip;
   c->loc.port = mg_htons(ifp->eport++);
-  MG_DEBUG(("%lu %08lx.%hu->%08lx.%hu", c->id, mg_ntohl(c->loc.ip),
+  MG_DEBUG(("%lu %08lx:%hu->%08lx:%hu", c->id, mg_ntohl(c->loc.ip),
             mg_ntohs(c->loc.port), mg_ntohl(c->rem.ip), mg_ntohs(c->rem.port)));
   mg_call(c, MG_EV_RESOLVE, NULL);
   if (c->is_udp) {
@@ -7135,29 +7207,28 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 }
 
 static void write_conn(struct mg_connection *c) {
-  struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
-  struct connstate *s = (struct connstate *) (c + 1);
-  size_t sent, n = c->send.len, hdrlen = 14 + 24 /*max IP*/ + 60 /*max TCP*/;
-  if (n + hdrlen > ifp->tx.len) n = ifp->tx.len - hdrlen;
-  sent = tx_tcp(ifp, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
-                mg_htonl(s->seq), mg_htonl(s->ack), c->send.buf, n);
-  if (sent > 0) {
-    mg_iobuf_del(&c->send, 0, n);
-    s->seq += (uint32_t) n;
-    mg_call(c, MG_EV_WRITE, &n);
+  long len = c->is_tls ? mg_tls_send(c, c->send.buf, c->send.len)
+                       : mg_io_send(c, c->send.buf, c->send.len);
+  if (len > 0) {
+    mg_iobuf_del(&c->send, 0, (size_t) len);
+    mg_call(c, MG_EV_WRITE, &len);
   }
-  s->ttype = 1, s->timer = ifp->now + MIP_TCP_KEEPALIVE_MS;  // Clear ACK timer
 }
 
-static void fin_conn(struct mg_connection *c) {
-  struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
+static void close_conn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
-  tx_tcp(ifp, c->rem.ip, TH_FIN | TH_ACK, c->loc.port, c->rem.port,
-         mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+  mg_iobuf_free(&s->raw);  // For TLS connections, release raw data
+  if (c->is_udp == false && c->is_listening == false) {   // For TCP conns,
+    struct mip_if *ifp = (struct mip_if *) c->mgr->priv;  // send TCP FIN
+    tx_tcp(ifp, c->rem.ip, TH_FIN | TH_ACK, c->loc.port, c->rem.port,
+           mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+  }
+  mg_close_conn(c);
 }
 
 static bool can_write(struct mg_connection *c) {
-  return c->is_connecting == 0 && c->is_resolving == 0 && c->send.len > 0;
+  return c->is_connecting == 0 && c->is_resolving == 0 && c->send.len > 0 &&
+         c->is_tls_hs == 0;
 }
 
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
@@ -7167,12 +7238,10 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   mg_timer_poll(&mgr->timers, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
+    if (c->is_tls_hs) mg_tls_handshake(c);
     if (can_write(c)) write_conn(c);
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
-    if (c->is_closing) {
-      if (c->is_udp == false && c->is_listening == false) fin_conn(c);
-      mg_close_conn(c);
-    }
+    if (c->is_closing) close_conn(c);
   }
   (void) ms;
 }
@@ -7186,54 +7255,49 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     tx_udp(ifp, ifp->ip, c->loc.port, c->rem.ip, c->rem.port, buf, len);
     res = true;
   } else {
-    // tx_tdp(ifp, ifp->ip, c->loc.port, c->rem.ip, c->rem.port, buf, len);
-    return mg_iobuf_add(&c->send, c->send.len, buf, len);
+    res = mg_iobuf_add(&c->send, c->send.len, buf, len);
   }
   return res;
 }
-
 
 #ifdef MIP_QPROFILE
 
 #pragma pack(push, 1)
 struct qpentry {
-	uint64_t timestamp;
-	uint16_t type;
-	uint16_t len;
+  uint64_t timestamp;
+  uint16_t type;
+  uint16_t len;
 };
 #pragma pack(pop)
 
 static struct queue qp;
 
-void qp_mark(unsigned int type, int len)
-{
-static bool ovf = false;
-struct qpentry e = {
-	.timestamp = mg_millis(),
-	.type = ovf ? (uint16_t)QP_QUEUEOVF : (uint16_t)type,
-	.len = (uint16_t) len
-};
+void qp_mark(unsigned int type, int len) {
+  static bool ovf = false;
+  struct qpentry e = {.timestamp = mg_millis(),
+                      .type = ovf ? (uint16_t) QP_QUEUEOVF : (uint16_t) type,
+                      .len = (uint16_t) len};
 
-	ovf = !q_write(&qp, &e, sizeof(e));
+  ovf = !q_write(&qp, &e, sizeof(e));
 }
 
-void qp_log(void)
-{
-struct qpentry e;
+void qp_log(void) {
+  struct qpentry e;
 
-  for(int i=0 ; i < 10 ; i++)
-	  if(q_read(&qp, &e)) MG_INFO(("%llu, %u, %u", e.timestamp, e.type, e.len));
-    else break;
+  for (int i = 0; i < 10; i++)
+    if (q_read(&qp, &e))
+      MG_INFO(("%llu, %u, %u", e.timestamp, e.type, e.len));
+    else
+      break;
 }
 
-void qp_init(void)
-{
-unsigned int qlen = 500 * (sizeof(size_t) + sizeof(struct qpentry));
+void qp_init(void) {
+  unsigned int qlen = 500 * (sizeof(size_t) + sizeof(struct qpentry));
 
-    qp.buf = calloc(1, qlen);
-    qp.len = qlen;
-// THERE IS NO FREE
+  qp.buf = calloc(1, qlen);
+  qp.len = qlen;
+  // THERE IS NO FREE
 }
-#endif // MIP_QPROFILE
+#endif  // MIP_QPROFILE
 
 #endif  // MG_ENABLE_MIP

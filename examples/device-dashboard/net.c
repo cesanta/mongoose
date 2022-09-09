@@ -3,7 +3,9 @@
 
 #include "mongoose.h"
 
+#if !defined(MQTT_SERVER)
 #define MQTT_SERVER "mqtt://broker.hivemq.com:1883"
+#endif
 #define MQTT_PUBLISH_TOPIC "mg/my_device"
 #define MQTT_SUBSCRIBE_TOPIC "mg/#"
 
@@ -111,7 +113,7 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
                       "qos", (int) mm->qos);
   } else if (ev == MG_EV_MQTT_CMD) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    MG_DEBUG(("cmd %d qos %d", mm->cmd, mm->qos));
+    MG_DEBUG(("%lu cmd %d qos %d", c->id, mm->cmd, mm->qos));
   } else if (ev == MG_EV_CLOSE) {
     s_mqtt = NULL;
     if (s_connected) {
@@ -136,7 +138,6 @@ static void timer_mqtt_fn(void *param) {
 static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_SNTP_TIME) {
     uint64_t t = *(uint64_t *) ev_data;
-    MG_INFO(("%lu SNTP: %lld ms from epoch", c->id, t));
     s_boot_timestamp = (time_t) ((t - mg_millis()) / 1000);
     c->is_closing = 1;
   } else if (ev == MG_EV_CLOSE) {
@@ -211,7 +212,8 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
 #endif
       mg_http_serve_dir(c, ev_data, &opts);
     }
-    MG_DEBUG(("%.*s %.*s -> %.*s", (int) hm->method.len, hm->method.ptr,
-              (int) hm->uri.len, hm->uri.ptr, (int) 3, &c->send.buf[9]));
+    MG_DEBUG(("%lu %.*s %.*s -> %.*s", c->id, (int) hm->method.len,
+              hm->method.ptr, (int) hm->uri.len, hm->uri.ptr, (int) 3,
+              &c->send.buf[9]));
   }
 }
