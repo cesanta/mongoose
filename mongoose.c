@@ -7267,12 +7267,22 @@ struct qpentry {
 
 static struct queue qp;
 
+// This is called from IRQ and main contexts; two producers, single consumer
+// TODO(scaprile): avoid concurrency issues (2 queues ?)
 void qp_mark(unsigned int type, int len) {
   static bool ovf = false;
-  struct qpentry e = {.timestamp = mg_millis(),
-                      .type = ovf ? (uint16_t) QP_QUEUEOVF : (uint16_t) type,
-                      .len = (uint16_t) len};
+  static uint16_t drop_ctr = 0, irq_ctr = 0;
+  struct qpentry e = {
+      .timestamp = mg_millis(), .type = (uint16_t) type, .len = (uint16_t) len};
 
+  if (type == QP_IRQTRIGGERED)
+    e.len = ++irq_ctr;  // only incremented on IRQ calls
+  else if (type == QP_FRAMEDROPPED)
+    ++drop_ctr;  // only incremented on IRQ calls
+  if (ovf) {
+    e.type = (uint16_t) QP_QUEUEOVF;
+    e.len = drop_ctr;
+  }
   ovf = !q_write(&qp, &e, sizeof(e));
 }
 
