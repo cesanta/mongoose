@@ -493,8 +493,7 @@ static void rx_udp(struct mip_if *ifp, struct pkt *pkt) {
     } else {
       memcpy(&c->recv.buf[c->recv.len], pkt->pay.buf, pkt->pay.len);
       c->recv.len += pkt->pay.len;
-      struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
-      mg_call(c, MG_EV_READ, &evd);
+      mg_call(c, MG_EV_READ, &pkt->pay.len);
     }
   }
 }
@@ -630,15 +629,12 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
         } else if (n > 0) {
           // Decrypted successfully - trigger MG_EV_READ
           io->len += (size_t) n;
-          struct mg_str evd =
-              mg_str_n((char *) &io->buf[io->len - (size_t) n], (size_t) n);
-          mg_call(c, MG_EV_READ, &evd);
+          mg_call(c, MG_EV_READ, &n);
         }
       }
     } else {
       // Plain text connection, data is already in c->recv, trigger MG_EV_READ
-      struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
-      mg_call(c, MG_EV_READ, &evd);
+      mg_call(c, MG_EV_READ, &pkt->pay.len);
     }
   }
 }
