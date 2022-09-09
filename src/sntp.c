@@ -30,7 +30,7 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
     int64_t t2 = gettimestamp((uint32_t *) &buf[40]);
     int64_t t3 = (int64_t) mg_millis();
     int64_t delta = (t3 - t0) - (t2 - t1);
-    MG_DEBUG(("%lld %lld %lld %lld delta:%lld", t0, t1, t2, t3, delta));
+    MG_VERBOSE(("%lld %lld %lld %lld delta:%lld", t0, t1, t2, t3, delta));
     res = t2 + delta / 2;
   } else {
     MG_ERROR(("unexpected version: %d", version));
@@ -42,6 +42,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_READ) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
     if (milliseconds > 0) {
+      MG_INFO(("%lu got time: %lld ms from epoch", c->id, milliseconds));
       mg_call(c, MG_EV_SNTP_TIME, (uint64_t *) &milliseconds);
       MG_VERBOSE(("%u.%u", (unsigned) (milliseconds / 1000),
                   (unsigned) (milliseconds % 1000)));

@@ -84,8 +84,7 @@ static void tomgaddr(union usa *usa, struct mg_addr *a, bool is_ip6) {
 #endif
 }
 
-bool mg_sock_would_block(void);
-bool mg_sock_would_block(void) {
+static bool mg_sock_would_block(void) {
   int err = MG_SOCK_ERRNO;
   return err == EINPROGRESS || err == EWOULDBLOCK
 #ifndef WINCE
@@ -97,8 +96,7 @@ bool mg_sock_would_block(void) {
       ;
 }
 
-bool mg_sock_conn_reset(void);
-bool mg_sock_conn_reset(void) {
+static bool mg_sock_conn_reset(void) {
   int err = MG_SOCK_ERRNO;
 #if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
   return err == WSAECONNRESET;
@@ -116,9 +114,9 @@ static void setlocaddr(SOCKET fd, struct mg_addr *addr) {
 }
 
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
-  if (n == 0) {
+  if (n == MG_IO_WAIT) {
     // Do nothing
-  } else if (n < 0) {
+  } else if (n <= 0) {
     c->is_closing = 1;  // Termination. Don't call mg_error(): #1529
   } else if (n > 0) {
     if (c->is_hexdumping) {
@@ -151,7 +149,7 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   }
 }
 
-static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
+long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   long n;
   if (c->is_udp) {
     union usa usa;
@@ -161,15 +159,18 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
   } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
 #if MG_ARCH == MG_ARCH_RTX
-    if (n == BSD_EWOULDBLOCK) return 0;
+    if (n == BSD_EWOULDBLOCK) return MG_IO_WAIT;
 #endif
   }
-  return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
+  if (n < 0 && mg_sock_would_block()) return MG_IO_WAIT;
+  if (n < 0 && mg_sock_conn_reset()) return MG_IO_RESET;
+  if (n <= 0) return MG_IO_ERR;
+  return n;
 }
 
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   if (c->is_udp) {
-    long n = mg_sock_send(c, buf, len);
+    long n = mg_io_send(c, buf, len);
     MG_DEBUG(("%lu %p %d:%d %ld err %d", c->id, c->fd, (int) c->send.len,
               (int) c->recv.len, n, MG_SOCK_ERRNO));
     iolog(c, (char *) buf, n, false);
@@ -270,7 +271,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
   return success;
 }
 
-static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
+long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
   long n = 0;
   if (c->is_udp) {
     union usa usa;
@@ -280,7 +281,10 @@ static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
   } else {
     n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
-  return n == 0 ? -1 : n < 0 && mg_sock_would_block() ? 0 : n;
+  if (n < 0 && mg_sock_would_block()) return MG_IO_WAIT;
+  if (n < 0 && mg_sock_conn_reset()) return MG_IO_RESET;
+  if (n <= 0) return MG_IO_ERR;
+  return n;
 }
 
 // NOTE(lsm): do only one iteration of reads, cause some systems
@@ -295,7 +299,7 @@ static void read_conn(struct mg_connection *c) {
   } else {
     char *buf = (char *) &c->recv.buf[c->recv.len];
     size_t len = c->recv.size - c->recv.len;
-    n = c->is_tls ? mg_tls_recv(c, buf, len) : mg_sock_recv(c, buf, len);
+    n = c->is_tls ? mg_tls_recv(c, buf, len) : mg_io_recv(c, buf, len);
     MG_DEBUG(("%lu %p snd %ld/%ld rcv %ld/%ld n=%ld err=%d", c->id, c->fd,
               (long) c->send.len, (long) c->send.size, (long) c->recv.len,
               (long) c->recv.size, n, MG_SOCK_ERRNO));
@@ -306,7 +310,7 @@ static void read_conn(struct mg_connection *c) {
 static void write_conn(struct mg_connection *c) {
   char *buf = (char *) c->send.buf;
   size_t len = c->send.len;
-  long n = c->is_tls ? mg_tls_send(c, buf, len) : mg_sock_send(c, buf, len);
+  long n = c->is_tls ? mg_tls_send(c, buf, len) : mg_io_send(c, buf, len);
   MG_DEBUG(("%lu %p snd %ld/%ld rcv %ld/%ld n=%ld err=%d", c->id, c->fd,
             (long) c->send.len, (long) c->send.size, (long) c->recv.len,
             (long) c->recv.size, n, MG_SOCK_ERRNO));
@@ -358,12 +362,10 @@ static void setsockopts(struct mg_connection *c) {
 }
 
 void mg_connect_resolved(struct mg_connection *c) {
-  // char buf[40];
   int type = c->is_udp ? SOCK_DGRAM : SOCK_STREAM;
-  int rc, af = c->rem.is_ip6 ? AF_INET6 : AF_INET;
-  // mg_straddr(&c->rem, buf, sizeof(buf));
-  c->fd = S2PTR(socket(af, type, 0));
-  c->is_resolving = 0;
+  int rc, af = c->rem.is_ip6 ? AF_INET6 : AF_INET;  // c->rem has resolved IP
+  c->fd = S2PTR(socket(af, type, 0));               // Create outbound socket
+  c->is_resolving = 0;                              // Clear resolving flag
   if (FD(c) == INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
   } else if (c->is_udp) {

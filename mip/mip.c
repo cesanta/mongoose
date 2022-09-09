@@ -15,15 +15,23 @@
 #ifndef MIP_ARP_ENTRIES
 #define MIP_ARP_ENTRIES 5  // Number of ARP cache entries. Maximum 21
 #endif
+
+#ifndef MIP_QSIZE
+#define MIP_QSIZE (16 * 1024)  // Queue size
+#endif
+
 #define MIP_ARP_CS (2 + 12 * MIP_ARP_ENTRIES)  // ARP cache size
 #define MIP_TCP_KEEPALIVE_MS 45000             // TCP keep-alive period, ms
 #define MIP_TCP_ACK_MS 150                     // Timeout for ACKing
 
 struct connstate {
-  uint32_t seq, ack;  // TCP seq/ack counters
-  uint64_t timer;     // TCP keep-alive / ACK timer
-  uint8_t mac[6];     // Peer MAC address
-  uint8_t ttype;      // Timer type. 0: ack, 1: keep-alive
+  uint32_t seq, ack;           // TCP seq/ack counters
+  uint64_t timer;              // TCP keep-alive / ACK timer
+  uint8_t mac[6];              // Peer MAC address
+  uint8_t ttype;               // Timer type. 0: ack, 1: keep-alive
+#define MIP_TTYPE_KEEPALIVE 0  // Connection is idle for long, send keepalive
+#define MIP_TTYPE_ACK 1        // Peer sent us data, we have to ack it soon
+  struct mg_iobuf raw;         // For TLS only. Incoming raw data
 };
 
 struct str {
@@ -184,7 +192,7 @@ static void q_copyout(struct queue *q, uint8_t *buf, size_t len, size_t tail) {
 
 static bool q_write(struct queue *q, const void *buf, size_t len) {
   bool success = false;
-  size_t left = (q->len - q->head + q->tail -1) % q->len;
+  size_t left = (q->len - q->head + q->tail - 1) % q->len;
   if (len + sizeof(size_t) <= left) {
     q_copyin(q, (uint8_t *) &len, sizeof(len), q->head);
     q_copyin(q, (uint8_t *) buf, len, (q->head + sizeof(size_t)) % q->len);
@@ -529,6 +537,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   struct mg_connection *c = mg_alloc_conn(lsn->mgr);
   struct connstate *s = (struct connstate *) (c + 1);
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
+  s->timer = ((struct mip_if *) c->mgr->priv)->now + MIP_TCP_KEEPALIVE_MS;
   c->rem.ip = pkt->ip->src;
   c->rem.port = pkt->tcp->sport;
   MG_DEBUG(("%lu accepted %lx:%hx", c->id, mg_ntohl(c->rem.ip), c->rem.port));
@@ -545,26 +554,92 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   return c;
 }
 
-static void read_conn(struct mg_connection *c, struct pkt *pkt) {
+static void settmout(struct mg_connection *c, uint8_t type) {
   struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
   struct connstate *s = (struct connstate *) (c + 1);
+  unsigned n = type == MIP_TTYPE_ACK ? MIP_TCP_ACK_MS : MIP_TCP_KEEPALIVE_MS;
+  s->timer = ifp->now + n;
+  s->ttype = type;
+  MG_VERBOSE(("%lu %d -> %llx", c->id, type, s->timer));
+}
+
+long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
+  struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
+  struct connstate *s = (struct connstate *) (c + 1);
+  size_t max_headers_len = 14 + 24 /* max IP */ + 60 /* max TCP */;
+  if (len + max_headers_len > ifp->tx.len) len = ifp->tx.len - max_headers_len;
+  if (tx_tcp(ifp, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
+             mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
+    s->seq += (uint32_t) len;
+    if (s->ttype == MIP_TTYPE_KEEPALIVE) settmout(c, MIP_TTYPE_KEEPALIVE);
+  } else {
+    return MG_IO_ERR;
+  }
+  return (long) len;
+}
+
+long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
+  struct connstate *s = (struct connstate *) (c + 1);
+  if (s->raw.len == 0) return MG_IO_WAIT;
+  if (len > s->raw.len) len = s->raw.len;
+  memcpy(buf, s->raw.buf, len);
+  mg_iobuf_del(&s->raw, 0, len);
+  MG_DEBUG(("%lu", len));
+  return (long) len;
+}
+
+static void read_conn(struct mg_connection *c, struct pkt *pkt) {
+  struct connstate *s = (struct connstate *) (c + 1);
+  struct mg_iobuf *io = c->is_tls ? &s->raw : &c->recv;
+  s->raw.align = c->recv.align;
   if (pkt->tcp->flags & TH_FIN) {
     s->ack = mg_htonl(pkt->tcp->seq) + 1, s->seq = mg_htonl(pkt->tcp->ack);
     c->is_closing = 1;
   } else if (pkt->pay.len == 0) {
-  } else if (c->recv.size - c->recv.len < pkt->pay.len &&
-             !mg_iobuf_resize(&c->recv, c->recv.len + pkt->pay.len)) {
-    mg_error(c, "oom");
+    // TODO(cpq): handle this peer's ACK
   } else if (mg_ntohl(pkt->tcp->seq) != s->ack) {
-    mg_error(c, "oob: %x %x", mg_ntohl(pkt->tcp->seq), s->ack);
+    // TODO(cpq): peer sent us SEQ which we don't expect. Retransmit rather
+    // than close this connection
+    mg_error(c, "SEQ != ACK: %x %x", mg_ntohl(pkt->tcp->seq), s->ack);
+  } else if (io->size - io->len < pkt->pay.len &&
+             !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
+    mg_error(c, "oom");
   } else {
+    // Copy TCP payload into the IO buffer. If the connection is plain text, we
+    // copy to c->recv. If the connection is TLS, this data is encrypted,
+    // therefore we copy that encrypted data to the s->raw iobuffer instead,
+    // and then call mg_tls_recv() to decrypt it. NOTE: mg_tls_recv() will
+    // call back mg_io_recv() which grabs raw data from s->raw
+    memcpy(&io->buf[io->len], pkt->pay.buf, pkt->pay.len);
+    io->len += pkt->pay.len;
+    // Advance ACK counter and setup a timer to send an ACK back
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
-    memcpy(&c->recv.buf[c->recv.len], pkt->pay.buf, pkt->pay.len);
-    c->recv.len += pkt->pay.len;
-    struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
-    mg_call(c, MG_EV_READ, &evd);
-    s->timer = ifp->now + MIP_TCP_ACK_MS;  // Don't send an ACK immediately
-    s->ttype = 0;                          // Set ACK timeout instead
+    settmout(c, MIP_TTYPE_ACK);
+
+    if (c->is_tls) {
+      // TLS connection. Make room for decrypted data in c->recv
+      io = &c->recv;
+      if (io->size - io->len < pkt->pay.len &&
+          !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
+        mg_error(c, "oom");
+      } else {
+        // Decrypt data directly into c->recv
+        long n = mg_tls_recv(c, &io->buf[io->len], io->size - io->len);
+        if (n == MG_IO_ERR) {
+          mg_error(c, "TLS recv error");
+        } else if (n > 0) {
+          // Decrypted successfully - trigger MG_EV_READ
+          io->len += (size_t) n;
+          struct mg_str evd =
+              mg_str_n((char *) &io->buf[io->len - (size_t) n], (size_t) n);
+          mg_call(c, MG_EV_READ, &evd);
+        }
+      }
+    } else {
+      // Plain text connection, data is already in c->recv, trigger MG_EV_READ
+      struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
+      mg_call(c, MG_EV_READ, &evd);
+    }
   }
 }
 
@@ -572,9 +647,8 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
   struct connstate *s = (struct connstate *) (c + 1);
 
-  if (c != NULL) {
-    s->timer = ifp->now + MIP_TCP_KEEPALIVE_MS;  // Shift next keep-alive
-    s->ttype = 1;                                // ping to the future
+  if (c != NULL && s->ttype == MIP_TTYPE_KEEPALIVE) {
+    settmout(c, MIP_TTYPE_KEEPALIVE);
   }
 #if 0
   MG_INFO(("%lu %hhu %d", c ? c->id : 0, pkt->tcp->flags, (int) pkt->pay.len));
@@ -582,7 +656,8 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
   if (c != NULL && c->is_connecting && pkt->tcp->flags & (TH_SYN | TH_ACK)) {
     s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
     tx_tcp_pkt(ifp, pkt, TH_ACK, pkt->tcp->ack, NULL, 0);
-    c->is_connecting = 0;  // Client connected
+    c->is_connecting = 0;             // Client connected
+    mg_call(c, MG_EV_CONNECT, NULL);  // Let user know
   } else if (c != NULL && c->is_connecting) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (c != NULL) {
@@ -729,19 +804,19 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   // Process timeouts
   for (struct mg_connection *c = ifp->mgr->conns; c != NULL; c = c->next) {
     if (c->is_udp || c->is_listening) continue;
+    if (c->is_connecting || c->is_resolving) continue;
     struct connstate *s = (struct connstate *) (c + 1);
     if (uptime_ms > s->timer) {
-      if (s->ttype == 0) {
-        MG_DEBUG(("%lu sending ack", c->id));
+      if (s->ttype == MIP_TTYPE_ACK) {
+        MG_DEBUG(("%lu ack", c->id));
         tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
       } else {
-        MG_DEBUG(("%lu sending keepalive", c->id));
+        MG_DEBUG(("%lu keepalive", c->id));
         tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq - 1), mg_htonl(s->ack), "", 0);
       }
-      s->timer = uptime_ms + MIP_TCP_KEEPALIVE_MS;
-      s->ttype = 1;
+      settmout(c, MIP_TTYPE_KEEPALIVE);
     }
   }
 #ifdef MIP_QPROFILE
@@ -757,7 +832,8 @@ static void on_rx(void *buf, size_t len, void *userdata) {
 #ifndef MIP_QPROFILE
   if (!q_write(&ifp->queue, buf, len)) MG_ERROR(("dropped %d", (int) len));
 #else
-  qp_mark(q_write(&ifp->queue, buf, len) ? QP_FRAMEPUSHED:QP_FRAMEDROPPED, (int) len);
+  qp_mark(q_write(&ifp->queue, buf, len) ? QP_FRAMEPUSHED : QP_FRAMEDROPPED,
+          (int) len);
 #endif
 }
 
@@ -766,7 +842,7 @@ void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
   if (driver->init && !driver->init(ipcfg->mac, driver_data)) {
     MG_ERROR(("driver init failed"));
   } else {
-    size_t maxpktsize = 1518, qlen = driver->setrx ? 1024 * 16 : 0;
+    size_t maxpktsize = 1518, qlen = driver->setrx ? MIP_QSIZE : 0;
     struct mip_if *ifp =
         (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
     memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
@@ -811,7 +887,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   if (ifp->eport < MIP_ETHEMERAL_PORT) ifp->eport = MIP_ETHEMERAL_PORT;
   c->loc.ip = ifp->ip;
   c->loc.port = mg_htons(ifp->eport++);
-  MG_DEBUG(("%lu %08lx.%hu->%08lx.%hu", c->id, mg_ntohl(c->loc.ip),
+  MG_DEBUG(("%lu %08lx:%hu->%08lx:%hu", c->id, mg_ntohl(c->loc.ip),
             mg_ntohs(c->loc.port), mg_ntohl(c->rem.ip), mg_ntohs(c->rem.port)));
   mg_call(c, MG_EV_RESOLVE, NULL);
   if (c->is_udp) {
@@ -829,29 +905,28 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 }
 
 static void write_conn(struct mg_connection *c) {
-  struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
-  struct connstate *s = (struct connstate *) (c + 1);
-  size_t sent, n = c->send.len, hdrlen = 14 + 24 /*max IP*/ + 60 /*max TCP*/;
-  if (n + hdrlen > ifp->tx.len) n = ifp->tx.len - hdrlen;
-  sent = tx_tcp(ifp, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
-                mg_htonl(s->seq), mg_htonl(s->ack), c->send.buf, n);
-  if (sent > 0) {
-    mg_iobuf_del(&c->send, 0, n);
-    s->seq += (uint32_t) n;
-    mg_call(c, MG_EV_WRITE, &n);
+  long len = c->is_tls ? mg_tls_send(c, c->send.buf, c->send.len)
+                       : mg_io_send(c, c->send.buf, c->send.len);
+  if (len > 0) {
+    mg_iobuf_del(&c->send, 0, (size_t) len);
+    mg_call(c, MG_EV_WRITE, &len);
   }
-  s->ttype = 1, s->timer = ifp->now + MIP_TCP_KEEPALIVE_MS;  // Clear ACK timer
 }
 
-static void fin_conn(struct mg_connection *c) {
-  struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
+static void close_conn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
-  tx_tcp(ifp, c->rem.ip, TH_FIN | TH_ACK, c->loc.port, c->rem.port,
-         mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+  mg_iobuf_free(&s->raw);  // For TLS connections, release raw data
+  if (c->is_udp == false && c->is_listening == false) {   // For TCP conns,
+    struct mip_if *ifp = (struct mip_if *) c->mgr->priv;  // send TCP FIN
+    tx_tcp(ifp, c->rem.ip, TH_FIN | TH_ACK, c->loc.port, c->rem.port,
+           mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+  }
+  mg_close_conn(c);
 }
 
 static bool can_write(struct mg_connection *c) {
-  return c->is_connecting == 0 && c->is_resolving == 0 && c->send.len > 0;
+  return c->is_connecting == 0 && c->is_resolving == 0 && c->send.len > 0 &&
+         c->is_tls_hs == 0;
 }
 
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
@@ -861,12 +936,10 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   mg_timer_poll(&mgr->timers, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
+    if (c->is_tls_hs) mg_tls_handshake(c);
     if (can_write(c)) write_conn(c);
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
-    if (c->is_closing) {
-      if (c->is_udp == false && c->is_listening == false) fin_conn(c);
-      mg_close_conn(c);
-    }
+    if (c->is_closing) close_conn(c);
   }
   (void) ms;
 }
@@ -880,54 +953,49 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     tx_udp(ifp, ifp->ip, c->loc.port, c->rem.ip, c->rem.port, buf, len);
     res = true;
   } else {
-    // tx_tdp(ifp, ifp->ip, c->loc.port, c->rem.ip, c->rem.port, buf, len);
-    return mg_iobuf_add(&c->send, c->send.len, buf, len);
+    res = mg_iobuf_add(&c->send, c->send.len, buf, len);
   }
   return res;
 }
-
 
 #ifdef MIP_QPROFILE
 
 #pragma pack(push, 1)
 struct qpentry {
-	uint64_t timestamp;
-	uint16_t type;
-	uint16_t len;
+  uint64_t timestamp;
+  uint16_t type;
+  uint16_t len;
 };
 #pragma pack(pop)
 
 static struct queue qp;
 
-void qp_mark(unsigned int type, int len)
-{
-static bool ovf = false;
-struct qpentry e = {
-	.timestamp = mg_millis(),
-	.type = ovf ? (uint16_t)QP_QUEUEOVF : (uint16_t)type,
-	.len = (uint16_t) len
-};
+void qp_mark(unsigned int type, int len) {
+  static bool ovf = false;
+  struct qpentry e = {.timestamp = mg_millis(),
+                      .type = ovf ? (uint16_t) QP_QUEUEOVF : (uint16_t) type,
+                      .len = (uint16_t) len};
 
-	ovf = !q_write(&qp, &e, sizeof(e));
+  ovf = !q_write(&qp, &e, sizeof(e));
 }
 
-void qp_log(void)
-{
-struct qpentry e;
+void qp_log(void) {
+  struct qpentry e;
 
-  for(int i=0 ; i < 10 ; i++)
-	  if(q_read(&qp, &e)) MG_INFO(("%llu, %u, %u", e.timestamp, e.type, e.len));
-    else break;
+  for (int i = 0; i < 10; i++)
+    if (q_read(&qp, &e))
+      MG_INFO(("%llu, %u, %u", e.timestamp, e.type, e.len));
+    else
+      break;
 }
 
-void qp_init(void)
-{
-unsigned int qlen = 500 * (sizeof(size_t) + sizeof(struct qpentry));
+void qp_init(void) {
+  unsigned int qlen = 500 * (sizeof(size_t) + sizeof(struct qpentry));
 
-    qp.buf = calloc(1, qlen);
-    qp.len = qlen;
-// THERE IS NO FREE
+  qp.buf = calloc(1, qlen);
+  qp.len = qlen;
+  // THERE IS NO FREE
 }
-#endif // MIP_QPROFILE
+#endif  // MIP_QPROFILE
 
 #endif  // MG_ENABLE_MIP

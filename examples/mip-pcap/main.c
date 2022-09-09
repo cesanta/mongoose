@@ -30,19 +30,11 @@ static size_t pcap_rx(void *buf, size_t len, void *userdata) {
   size_t received = 0;
   struct pcap_pkthdr *hdr = NULL;
   const unsigned char *pkt = NULL;
-
-  // To avoid busy-loop and 100% CPU time, wait on pcap for some time
-  int fd = pcap_get_selectable_fd((pcap_t *) userdata);  // Pcap file descriptor
-  struct timeval tv = {0, 50000};                        // 50 ms
-  fd_set rset;
-  FD_ZERO(&rset);
-  FD_SET(fd, &rset);
-  if (select(fd + 1, &rset, 0, 0, &tv) == 1 &&               // Have data ?
-      pcap_next_ex((pcap_t *) userdata, &hdr, &pkt) == 1) {  // Yes, read
+  usleep(1); // This is to avoid 100% CPU
+  if (pcap_next_ex((pcap_t *) userdata, &hdr, &pkt) == 1) {  // Yes, read
     received = hdr->len < len ? hdr->len : len;
     memcpy(buf, pkt, received);
   }
-
   return received;
 }
 
@@ -60,6 +52,8 @@ int main(int argc, char *argv[]) {
       mac = argv[++i];
     } else if (strcmp(argv[i], "-bpf") == 0 && i + 1 < argc) {
       bpf = argv[++i];
+    } else if (strcmp(argv[i], "-v") == 0 && i + 1 < argc) {
+      mg_log_set(atoi(argv[++i])); 
     } else {
       MG_ERROR(("unknown option %s", argv[i]));
       return EXIT_FAILURE;
@@ -96,7 +90,6 @@ int main(int argc, char *argv[]) {
 
   struct mg_mgr mgr;        // Event manager
   mg_mgr_init(&mgr);        // Initialise event manager
-  mg_log_set(MG_LL_DEBUG);  // Set debug log level
 
   struct mip_cfg c = {.ip = 0, .mask = 0, .gw = 0};
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &c.mac[0], &c.mac[1], &c.mac[2],

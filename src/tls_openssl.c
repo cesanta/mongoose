@@ -139,12 +139,16 @@ size_t mg_tls_pending(struct mg_connection *c) {
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int n = SSL_read(tls->ssl, buf, (int) len);
-  return n == 0 ? -1 : n < 0 && mg_tls_err(tls, n) == 0 ? 0 : n;
+  if (n < 0 && mg_tls_err(tls, n) == 0) return MG_IO_WAIT;
+  if (n <= 0) return MG_IO_ERR;
+  return n;
 }
 
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int n = SSL_write(tls->ssl, buf, (int) len);
-  return n == 0 ? -1 : n < 0 && mg_tls_err(tls, n) == 0 ? 0 : n;
+  if (n < 0 && mg_tls_err(tls, n) == 0) return MG_IO_WAIT;
+  if (n <= 0) return MG_IO_ERR;
+  return n;
 }
 #endif
