@@ -4089,9 +4089,8 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       mg_hexdump(buf, (size_t) n);
     }
     if (r) {
-      struct mg_str evd = mg_str_n(buf, (size_t) n);
       c->recv.len += (size_t) n;
-      mg_call(c, MG_EV_READ, &evd);
+      mg_call(c, MG_EV_READ, &n);
     } else {
       mg_iobuf_del(&c->send, 0, (size_t) n);
       // if (c->send.len == 0) mg_iobuf_resize(&c->send, 0);
@@ -4611,8 +4610,8 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     tmp = c->next;
     mg_call(c, MG_EV_POLL, &now);
     if (is_resp && !c->is_resp) {
-      struct mg_str fake = mg_str_n("", 0);
-      mg_call(c, MG_EV_READ, &fake);
+      long n = 0;
+      mg_call(c, MG_EV_READ, &n);
     }
     MG_VERBOSE(("%lu %c%c %c%c%c%c%c", c->id, c->is_readable ? 'r' : '-',
                 c->is_writable ? 'w' : '-', c->is_tls ? 'T' : 't',
@@ -6795,8 +6794,7 @@ static void rx_udp(struct mip_if *ifp, struct pkt *pkt) {
     } else {
       memcpy(&c->recv.buf[c->recv.len], pkt->pay.buf, pkt->pay.len);
       c->recv.len += pkt->pay.len;
-      struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
-      mg_call(c, MG_EV_READ, &evd);
+      mg_call(c, MG_EV_READ, &pkt->pay.len);
     }
   }
 }
@@ -6932,15 +6930,12 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
         } else if (n > 0) {
           // Decrypted successfully - trigger MG_EV_READ
           io->len += (size_t) n;
-          struct mg_str evd =
-              mg_str_n((char *) &io->buf[io->len - (size_t) n], (size_t) n);
-          mg_call(c, MG_EV_READ, &evd);
+          mg_call(c, MG_EV_READ, &n);
         }
       }
     } else {
       // Plain text connection, data is already in c->recv, trigger MG_EV_READ
-      struct mg_str evd = mg_str_n((char *) pkt->pay.buf, pkt->pay.len);
-      mg_call(c, MG_EV_READ, &evd);
+      mg_call(c, MG_EV_READ, &pkt->pay.len);
     }
   }
 }
