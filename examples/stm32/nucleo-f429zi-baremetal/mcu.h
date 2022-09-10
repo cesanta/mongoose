@@ -15,10 +15,9 @@
 #define PINNO(pin) (pin & 255)
 #define PINBANK(pin) (pin >> 8)
 
-/* System clock
-6.3.3: APB1 clock <= 45MHz; APB2 clock <= 90MHz
-3.5.1, Table 11: configure flash latency (WS) in accordance to clock freq
-33.4: The AHB clock frequency must be at least 25 MHz when the Ethernet controller is used */
+// 6.3.3: APB1 clock <= 45MHz; APB2 clock <= 90MHz
+// 3.5.1, Table 11: configure flash latency (WS) in accordance to clock freq
+// 33.4: The AHB clock must be at least 25 MHz when Ethernet is used
 enum { APB1_PRE = 5 /* AHB clock / 4 */, APB2_PRE = 4 /* AHB clock / 2 */ };
 enum { PLL_HSI = 16, PLL_M = 8, PLL_N = 180, PLL_P = 2 };  // Run at 180 Mhz
 //#define PLL_FREQ PLL_HSI
@@ -196,14 +195,6 @@ static inline uint8_t uart_read_byte(struct uart *uart) {
 }
 
 static inline void clock_init(void) {  // Set clock frequency
-#if 0
-  RCC->APB1ENR |= BIT(28);                     // Power enable
-  PWR->CR |= 3UL << 14;                       // Voltage regulator scale 3
-  PWR->CR |= BIT(16);                         // Enable overdrive
-  while ((PWR->CSR & BIT(16)) == 0) spin(1);  // Wait until done
-  PWR->CR |= BIT(17);                         // Enable overdrive switching
-  while ((PWR->CSR & BIT(17)) == 0) spin(1);  // Wait until done
-#endif
   SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
   asm ("DSB");
   asm ("ISB");
