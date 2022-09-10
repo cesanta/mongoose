@@ -97,8 +97,11 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   ETH->MACCR = BIT(2) | BIT(3) | BIT(11) | BIT(14);    // RE, TE, Duplex, Fast
   ETH->DMAOMR = BIT(1) | BIT(13) | BIT(21) | BIT(25);  // SR, ST, TSF, RSF
 
-  // TODO(cpq): setup MAC filtering
-  (void) userdata, (void) mac;
+  // MAC address filtering
+  ETH->MACA0HR = ((uint32_t) mac[5] << 8U) | mac[4];
+  ETH->MACA0LR = (uint32_t) (mac[3] << 24) | ((uint32_t) mac[2] << 16) |
+                 ((uint32_t) mac[1] << 8) | mac[0];
+  (void) userdata;
   return true;
 }
 
@@ -139,9 +142,7 @@ static bool mip_driver_stm32_up(void *userdata) {
 
 void ETH_IRQHandler(void);
 void ETH_IRQHandler(void) {
-#ifdef MIP_QPROFILE
   qp_mark(QP_IRQTRIGGERED, 0);
-#endif
   volatile uint32_t sr = ETH->DMASR;
   if (sr & BIT(6)) {  // Frame received, loop
     for (uint32_t i = 0; i < ETH_DESC_CNT; i++) {

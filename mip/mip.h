@@ -32,17 +32,18 @@ struct mip_spi {
 };
 
 #ifdef MIP_QPROFILE
-enum {                  // payload is frame length unless otherwise noted
+enum {
   QP_IRQTRIGGERED = 0,  // payload is number of interrupts so far
-  QP_FRAMEPUSHED,
-  QP_FRAMEPOPPED,
-  QP_FRAMEDONE,
-  QP_FRAMEDROPPED,
-  QP_QUEUEOVF  // profiling queue is full, payload is number of frame drops so
-               // far
+  QP_FRAMEPUSHED,       // available space in the frame queue
+  QP_FRAMEPOPPED,       // available space in the frame queue
+  QP_FRAMEDONE,         // available space in the frame queue
+  QP_FRAMEDROPPED,      // number of dropped frames
+  QP_QUEUEOVF  // profiling queue is full, payload is number of frame drops
 };
 
 void qp_mark(unsigned int type, int len);
 void qp_log(void);  // timestamp, type, payload
 void qp_init(void);
+#else
+#define qp_mark(a, b)
 #endif
