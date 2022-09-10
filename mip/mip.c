@@ -64,7 +64,8 @@ struct mip_if {
   uint64_t timer_1000ms;          // 1000 ms timer: for DHCP and link state
   uint8_t arp_cache[MIP_ARP_CS];  // Each entry is 12 bytes
   uint16_t eport;                 // Next ephemeral port
-  int state;                      // Current state
+  uint16_t dropped;               // Number of dropped frames
+  uint8_t state;                  // Current state
 #define MIP_STATE_DOWN 0          // Interface is down
 #define MIP_STATE_UP 1            // Interface is up
 #define MIP_STATE_READY 2         // Interface is up and has IP
@@ -202,7 +203,11 @@ static bool q_write(struct queue *q, const void *buf, size_t len) {
   return success;
 }
 
-static size_t q_avail(struct queue *q) {
+static inline size_t q_space(struct queue *q) {
+  return q->tail > q->head ? q->tail - q->head : q->tail + (q->len - q->head);
+}
+
+static inline size_t q_avail(struct queue *q) {
   size_t n = 0;
   if (q->tail != q->head) q_copyout(q, (uint8_t *) &n, sizeof(n), q->tail);
   return n;
@@ -788,13 +793,9 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
                                     : ifp->driver->rx(ifp->rx.buf, ifp->rx.len,
                                                       ifp->driver_data);
     if (len == 0) break;
-#ifdef MIP_QPROFILE
-    qp_mark(QP_FRAMEPOPPED, (int) len);
-#endif
+    qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
     mip_rx(ifp, ifp->rx.buf, len);
-#ifdef MIP_QPROFILE
-    qp_mark(QP_FRAMEDONE, (int) len);
-#endif
+    qp_mark(QP_FRAMEDONE, (int) q_space(&ifp->queue));
   }
 
   // Process timeouts
@@ -825,12 +826,13 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 // our lock-free queue with preallocated buffer to copy data and return asap
 static void on_rx(void *buf, size_t len, void *userdata) {
   struct mip_if *ifp = (struct mip_if *) userdata;
-#ifndef MIP_QPROFILE
-  if (!q_write(&ifp->queue, buf, len)) MG_ERROR(("dropped %d", (int) len));
-#else
-  qp_mark(q_write(&ifp->queue, buf, len) ? QP_FRAMEPUSHED : QP_FRAMEDROPPED,
-          (int) len);
-#endif
+  if (q_write(&ifp->queue, buf, len)) {
+    qp_mark(QP_FRAMEPUSHED, (int) q_space(&ifp->queue));
+  } else {
+    ifp->dropped++;
+    qp_mark(QP_FRAMEDROPPED, ifp->dropped);
+    MG_ERROR(("dropped %d", (int) len));
+  }
 }
 
 void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
@@ -958,7 +960,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
 
 #pragma pack(push, 1)
 struct qpentry {
-  uint64_t timestamp;
+  uint32_t timestamp;
   uint16_t type;
   uint16_t len;
 };
@@ -970,14 +972,11 @@ static struct queue qp;
 // TODO(scaprile): avoid concurrency issues (2 queues ?)
 void qp_mark(unsigned int type, int len) {
   static bool ovf = false;
-  static uint16_t drop_ctr = 0, irq_ctr = 0;
-  struct qpentry e = {
-      .timestamp = mg_millis(), .type = (uint16_t) type, .len = (uint16_t) len};
-
-  if (type == QP_IRQTRIGGERED)
-    e.len = ++irq_ctr;  // only incremented on IRQ calls
-  else if (type == QP_FRAMEDROPPED)
-    ++drop_ctr;  // only incremented on IRQ calls
+  static uint16_t irq_ctr = 0, drop_ctr = 0;
+  struct qpentry e = {.timestamp = (uint32_t) mg_millis(),
+                      .type = (uint16_t) type,
+                      .len = (uint16_t) len};
+  if (type == QP_IRQTRIGGERED) e.len = ++irq_ctr;
   if (ovf) {
     e.type = (uint16_t) QP_QUEUEOVF;
     e.len = drop_ctr;
@@ -987,20 +986,15 @@ void qp_mark(unsigned int type, int len) {
 
 void qp_log(void) {
   struct qpentry e;
-
-  for (int i = 0; i < 10; i++)
-    if (q_read(&qp, &e))
-      MG_INFO(("%llu, %u, %u", e.timestamp, e.type, e.len));
-    else
-      break;
+  const char *titles[] = {"IRQ ", "PUSH", "POP ", "DONE", "DROP", "OVFL"};
+  for (int i = 0; i < 10 && q_read(&qp, &e); i++) {
+    MG_INFO(("%lx %s %u", e.timestamp, titles[e.type], e.len));
+  }
 }
 
 void qp_init(void) {
-  unsigned int qlen = 500 * (sizeof(size_t) + sizeof(struct qpentry));
-
-  qp.buf = calloc(1, qlen);
-  qp.len = qlen;
-  // THERE IS NO FREE
+  qp.len = 500 * (sizeof(size_t) + sizeof(struct qpentry));
+  qp.buf = calloc(1, qp.len);  // THERE IS NO FREE
 }
 #endif  // MIP_QPROFILE
 
