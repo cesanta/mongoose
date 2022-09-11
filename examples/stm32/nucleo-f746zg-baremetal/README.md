@@ -3,7 +3,12 @@
 This firmware uses experimental TCP/IP stack of the Mongoose Network Library,
 which implements the following:
 
-- Implements HTTP server and SNTP time synchronisation
+- Implements [HTTP device dashboard](../../device-dashboard) with:
+  - User authentication
+  - Real-time device data graph
+  - Coninfiguration display and update
+  - MQTT communication with a remote MQTT server
+- Implements SNTP time synchronisation
 - No dependencies: no HAL, no CMSIS, no RTOS
 - Hand-written [mcu.h](mcu.h) header based on a [datasheet](https://www.st.com/resource/en/reference_manual/rm0385-stm32f75xxx-and-stm32f74xxx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
 - Interrupt-driven [driver_stm32.c](../../../mip/driver_stm32.c) ethernet driver

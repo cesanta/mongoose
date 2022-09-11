@@ -3,10 +3,14 @@
 This firmware uses experimental TCP/IP stack of the Mongoose Network Library,
 which implements the following:
 
-- Implements HTTP server and SNTP time synchronisation
+- Implements [HTTP device dashboard](../../device-dashboard) with:
+  - User authentication
+  - Real-time device data graph
+  - Coninfiguration display and update
+  - MQTT communication with a remote MQTT server
 - No dependencies: no HAL, no CMSIS, no RTOS
 - Hand-written [mcu.h](mcu.h) header based on a [datasheet](https://www.st.com/resource/en/reference_manual/rm0090-stm32f405415-stm32f407417-stm32f427437-and-stm32f429439-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
-- Interrupt-driven [mip_driver_stm32.h](../../../drivers/mip_driver_stm32.h) ethernet driver
+- Interrupt-driven [mip_driver_stm32.h](../../../drivers/mip_driver_stm32.c) ethernet driver
 - Blue LED blinky, based on SysTick interrupt
 - User button handler, turns off/on green LED, based on EXTI, interrupt-driven 
 - HardFault handler that blinks red LED
