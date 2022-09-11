@@ -20,6 +20,7 @@ robust, and easy. Features include:
 - Tiny static and run-time footprint
 - Source code is both ISO C and ISO C++ compliant
 - Works with any network stack with socket API, like LwIP or FreeRTOS-Plus-TCP
+- Optional [built-in IP stack](mip) for bare metal or RTOS-enabled applications
 - Very easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your build tree
 - Detailed [documentation](https://mongoose.ws/documentation/) and
   [tutorials](https://mongoose.ws/tutorials/)
