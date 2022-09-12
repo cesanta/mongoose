@@ -5983,17 +5983,6 @@ struct mip_driver mip_driver_enc28j60 = {.init = mip_driver_enc28j60_init,
 
 
 #if MG_ENABLE_MIP && defined(__arm__)
-
-// define to your own clock if using external clocking
-#if !defined(MG_STM32_CLK_HSE)
-#define MG_STM32_CLK_HSE 8000000UL
-#endif
-
-// define to your chip internal clock if different
-#if !defined(MG_STM32_CLK_HSI)
-#define MG_STM32_CLK_HSI 16000000UL
-#endif
-
 struct stm32_eth {
   volatile uint32_t MACCR, MACFFR, MACHTHR, MACHTLR, MACMIIAR, MACMIIDR, MACFCR,
       MACVLANTR, RESERVED0[2], MACRWUFFR, MACPMTCSR, RESERVED1, MACDBGR, MACSR,
@@ -6026,9 +6015,6 @@ static inline void spin(volatile uint32_t count) {
   while (count--) asm("nop");
 }
 
-static uint32_t hclk_get(void);
-static uint8_t cr_guess(uint32_t hclk);
-
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMIIAR &= (7 << 2);
   ETH->MACMIIAR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6);
@@ -6045,7 +6031,62 @@ static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   while (ETH->MACMIIAR & BIT(0)) spin(1);
 }
 
+static uint32_t get_hclk(void) {
+  struct rcc {
+    volatile uint32_t CR, PLLCFGR, CFGR;
+  } *RCC = (struct rcc *) 0x40023800;
+  uint32_t clk = 0, hsi = 16000000 /* 16 MHz */, hse = 8000000 /* 8MHz */;
+
+  if (RCC->CFGR & (1 << 2)) {
+    clk = hse;
+  } else if (RCC->CFGR & (1 << 3)) {
+    uint32_t vco, m, n, p;
+    m = (RCC->PLLCFGR & (0x3f << 0)) >> 0;
+    n = (RCC->PLLCFGR & (0x1ff << 6)) >> 6;
+    p = (((RCC->PLLCFGR & (3 << 16)) >> 16) + 1) * 2;
+    clk = (RCC->PLLCFGR & (1 << 22)) ? hse : hsi;
+    vco = (uint32_t) ((uint64_t) clk * n / m);
+    clk = vco / p;
+  } else {
+    clk = hsi;
+  }
+  int hpre = (RCC->CFGR & (0x0F << 4)) >> 4;
+  if (hpre < 8) return clk;
+
+  uint8_t ahbptab[8] = {1, 2, 3, 4, 6, 7, 8, 9};  // log2(div)
+  return ((uint32_t) clk) >> ahbptab[hpre - 8];
+}
+
+//  Guess CR from HCLK. MDC clock is generated from HCLK (AHB); as per 802.3,
+//  it must not exceed 2.5MHz As the AHB clock can be (and usually is) derived
+//  from the HSI (internal RC), and it can go above specs, the datasheets
+//  specify a range of frequencies and activate one of a series of dividers to
+//  keep the MDC clock safely below 2.5MHz. We guess a divider setting based on
+//  HCLK with a +5% drift. If the user uses a different clock from our
+//  defaults, needs to set the macros on top Valid for STM32F74xxx/75xxx
+//  (38.8.1) and STM32F42xxx/43xxx (33.8.1) (both 4.5% worst case drift)
+static int guess_mdc_cr(void) {
+  uint8_t crs[] = {2, 3, 0, 1, 4, 5};          // ETH->MACMIIAR::CR values
+  uint8_t div[] = {16, 26, 42, 62, 102, 124};  // Respective HCLK dividers
+  uint32_t hclk = get_hclk();                  // Guess system HCLK
+  int result = -1;                             // Invalid CR value
+  if (hclk < 25000000) {
+    MG_ERROR(("HCLK too low"));
+  } else {
+    for (int i = 0; i < 6; i++) {
+      if (hclk / div[i] <= 2375000UL /* 2.5MHz - 5% */) {
+        result = crs[i];
+        break;
+      }
+    }
+    if (result < 0) MG_ERROR(("HCLK too high"));
+  }
+  MG_DEBUG(("HCLK: %u, CR: %d", hclk, result));
+  return result;
+}
+
 static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
+  struct mip_driver_stm32 *d = (struct mip_driver_stm32 *) userdata;
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = BIT(31);                            // Own
@@ -6064,11 +6105,15 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
 
   ETH->DMABMR |= BIT(0);                        // Software reset
   while ((ETH->DMABMR & BIT(0)) != 0) spin(1);  // Wait until done
+
+  // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
+  int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;
+  ETH->MACMIIAR = (cr & 3) << 2;
+
   // NOTE(cpq): we do not use extended descriptor bit 7, and do not use
   // hardware checksum. Therefore, descriptor size is 4, not 8
   // ETH->DMABMR = BIT(13) | BIT(16) | BIT(22) | BIT(23) | BIT(25);
   ETH->MACIMR = BIT(3) | BIT(9);                    // Mask timestamp & PMT IT
-  ETH->MACMIIAR = cr_guess(hclk_get()) << 2;        // MDC clock
   ETH->MACFCR = BIT(7);                             // Disable zero quarta pause
   ETH->MACFFR = BIT(31);                            // Receive all
   eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));        // Reset PHY
@@ -6083,7 +6128,6 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   ETH->MACA0HR = ((uint32_t) mac[5] << 8U) | mac[4];
   ETH->MACA0LR = (uint32_t) (mac[3] << 24) | ((uint32_t) mac[2] << 16) |
                  ((uint32_t) mac[1] << 8) | mac[0];
-  (void) userdata;
   return true;
 }
 
@@ -6143,66 +6187,7 @@ struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
                                       .tx = mip_driver_stm32_tx,
                                       .setrx = mip_driver_stm32_setrx,
                                       .up = mip_driver_stm32_up};
-
-// Calculate HCLK from clock settings,
-// valid for STM32F74xxx/75xxx (5.3) and STM32F42xxx/43xxx (6.3)
-static const uint8_t ahbptab[8] = {1, 2, 3, 4, 6, 7, 8, 9};  // log2(div)
-struct rcc {
-  volatile uint32_t CR, PLLCFGR, CFGR;
-};
-#define RCC ((struct rcc *) 0x40023800)
-
-static uint32_t hclk_get(void) {
-  uint32_t clk = 0;
-  if (RCC->CFGR & (1 << 2)) {
-    clk = MG_STM32_CLK_HSE;
-  } else if (RCC->CFGR & (1 << 3)) {
-    uint32_t vco, m, n, p;
-    m = (RCC->PLLCFGR & (0x3FUL << 0)) >> 0;
-    n = (RCC->PLLCFGR & (0x1FFUL << 6)) >> 6;
-    p = (((RCC->PLLCFGR & (0x03UL << 16)) >> 16) + 1) * 2;
-    if (RCC->PLLCFGR & (1UL << 22))
-      clk = MG_STM32_CLK_HSE;
-    else
-      clk = MG_STM32_CLK_HSI;
-    vco = (uint32_t) ((uint64_t) (((uint32_t) clk * (uint32_t) n)) /
-                      ((uint32_t) m));
-    clk = vco / p;
-  } else {
-    clk = MG_STM32_CLK_HSI;
-  }
-  int hpre = (RCC->CFGR & (0x0F << 4)) >> 4;
-  if (hpre < 8) return clk;
-  return ((uint32_t) clk) >> ahbptab[hpre - 8];
-}
-
-//  Guess CR from HCLK. MDC clock is generated from HCLK (AHB); as per 802.3,
-//  it must not exceed 2.5MHz As the AHB clock can be (and usually is) derived
-//  from the HSI (internal RC), and it can go above specs, the datasheets
-//  specify a range of frequencies and activate one of a series of dividers to
-//  keep the MDC clock safely below 2.5MHz. We guess a divider setting based on
-//  HCLK with a +5% drift. If the user uses a different clock from our
-//  defaults, needs to set the macros on top Valid for STM32F74xxx/75xxx
-//  (38.8.1) and STM32F42xxx/43xxx (33.8.1) (both 4.5% worst case drift)
-#define CRDTAB_LEN 6
-static const uint8_t crdtab[CRDTAB_LEN][2] = {
-    // [{setting, div ratio},...]
-    {2, 16}, {3, 26}, {0, 42}, {1, 62}, {4, 102}, {5, 124},
-};
-
-static uint8_t cr_guess(uint32_t hclk) {
-  MG_DEBUG(("HCLK: %u", hclk));
-  if (hclk < 25000000) {
-    MG_ERROR(("HCLK too low"));
-    return CRDTAB_LEN;
-  }
-  for (int i = 0; i < CRDTAB_LEN; i++)
-    if (hclk / crdtab[i][1] <= 2375000UL) return crdtab[i][0];  // 2.5MHz - 5%
-  MG_ERROR(("HCLK too high"));
-  return CRDTAB_LEN;
-}
-
-#endif  // MG_ENABLE_MIP
+#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "mip/driver_w5500.c"
