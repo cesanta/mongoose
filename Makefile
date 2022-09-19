@@ -1,7 +1,6 @@
 SRCS = mongoose.c test/unit_test.c test/packed_fs.c
 HDRS = $(wildcard src/*.h) $(wildcard mip/*.h)
-PACKED ?= 1
-DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=$(PACKED) -DMG_ENABLE_SSI=1
+DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_SSI=1
 C_WARN ?= -Wmissing-prototypes -Wstrict-prototypes
 WARN ?= -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef $(C_WARN)
 OPTS ?= -O3 -g3
@@ -35,13 +34,15 @@ CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
-all: mg_prefix unamalgamated unpacked test test++ arm examples vc98 vc17 vc22 mingw mingw++ linux linux++ fuzz
+all: mg_prefix unamalgamated unpacked test test++ mip_test arm examples vc98 vc17 vc22 mingw mingw++ linux linux++ fuzz
 
-mip_test: PACKED=0
-mip_test: DEFS += -DMG_ENABLE_SOCKET=0 -DMG_ENABLE_MIP=1
 mip_test: test/mip_test.c mongoose.c mongoose.h Makefile
-	$(CC) test/mip_test.c $(CFLAGS) $(LDFLAGS) -g -o $@
+	$(CC) test/mip_test.c $(INCS) $(WARN) $(OPTS) -g -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
+
+mip_test++: mip_test
+mip_test++: C_WARN = -Wno-deprecated
+mip_test++: CC = g++
 
 examples:
 	@for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
@@ -79,8 +80,9 @@ unamalgamated: $(HDRS) Makefile test/packed_fs.c
 unpacked:
 	$(CC) -I. mongoose.c test/unit_test.c -o $@
 
+fuzzer: WARN += -Wno-missing-field-initializers
 fuzzer: mongoose.c mongoose.h Makefile test/fuzz.c
-	clang++ mongoose.c test/fuzz.c $(WARN) $(INCS) $(TFLAGS) -DMG_ENABLE_LINES -fsanitize=fuzzer,signed-integer-overflow,address -Wno-deprecated -Wno-vla-extension -o $@
+	$(CXX) test/fuzz.c $(WARN) $(INCS) $(TFLAGS) -fsanitize=fuzzer,signed-integer-overflow,address -Wno-deprecated -Wno-vla-extension -o $@
 
 fuzz: fuzzer
 	$(RUN) ./fuzzer

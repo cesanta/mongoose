@@ -5958,7 +5958,7 @@ static uint8_t rd(struct mip_spi *spi, uint8_t op, uint8_t addr) {
 
 static bool mip_driver_enc28j60_init(uint8_t *mac, void *data) {
   (void) mac, (void) data;
-  rd(data, OP_SRC, 0x1f);
+  rd((struct mip_spi *) data, OP_SRC, 0x1f);
   return false;
 }
 
@@ -5977,10 +5977,9 @@ static bool mip_driver_enc28j60_up(void *data) {
   return false;
 }
 
-struct mip_driver mip_driver_enc28j60 = {.init = mip_driver_enc28j60_init,
-                                         .tx = mip_driver_enc28j60_tx,
-                                         .rx = mip_driver_enc28j60_rx,
-                                         .up = mip_driver_enc28j60_up};
+struct mip_driver mip_driver_enc28j60 = {
+    mip_driver_enc28j60_init, mip_driver_enc28j60_tx, mip_driver_enc28j60_rx,
+    mip_driver_enc28j60_up, NULL};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -5988,7 +5987,7 @@ struct mip_driver mip_driver_enc28j60 = {.init = mip_driver_enc28j60_init,
 #endif
 
 
-#if MG_ENABLE_MIP && defined(__arm__)
+#if MG_ENABLE_MIP
 struct stm32_eth {
   volatile uint32_t MACCR, MACFFR, MACHTHR, MACHTLR, MACMIIAR, MACMIIDR, MACFCR,
       MACVLANTR, RESERVED0[2], MACRWUFFR, MACPMTCSR, RESERVED1, MACDBGR, MACSR,
@@ -6018,7 +6017,7 @@ static void *s_rxdata;                               // Recv callback data
 enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
 
 static inline void spin(volatile uint32_t count) {
-  while (count--) asm("nop");
+  while (count--) (void) 0;
 }
 
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
@@ -6114,7 +6113,7 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
 
   // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
   int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;
-  ETH->MACMIIAR = (cr & 3) << 2;
+  ETH->MACMIIAR = ((uint32_t)cr & 3) << 2;
 
   // NOTE(cpq): we do not use extended descriptor bit 7, and do not use
   // hardware checksum. Therefore, descriptor size is 4, not 8
@@ -6189,10 +6188,9 @@ void ETH_IRQHandler(void) {
   ETH->DMASR = sr & ~(BIT(2) | BIT(7));  // Clear status
 }
 
-struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
-                                      .tx = mip_driver_stm32_tx,
-                                      .setrx = mip_driver_stm32_setrx,
-                                      .up = mip_driver_stm32_up};
+struct mip_driver mip_driver_stm32 = {
+    mip_driver_stm32_init, mip_driver_stm32_tx, NULL, mip_driver_stm32_up,
+    mip_driver_stm32_setrx};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -6206,8 +6204,9 @@ enum { W5500_CR = 0, W5500_S0 = 1, W5500_TX0 = 2, W5500_RX0 = 3 };
 
 static void w5500_txn(struct mip_spi *s, uint8_t block, uint16_t addr, bool wr,
                       void *buf, size_t len) {
-  uint8_t *p = buf, cmd[] = {(uint8_t) (addr >> 8), (uint8_t) (addr & 255),
-                             (uint8_t) ((block << 3) | (wr ? 4 : 0))};
+  uint8_t *p = (uint8_t *) buf;
+  uint8_t cmd[] = {(uint8_t) (addr >> 8), (uint8_t) (addr & 255),
+                   (uint8_t) ((block << 3) | (wr ? 4 : 0))};
   s->begin(s->spi);
   for (size_t i = 0; i < sizeof(cmd); i++) s->txn(s->spi, cmd[i]);
   for (size_t i = 0; i < len; i++) {
@@ -6284,8 +6283,8 @@ static bool w5500_up(void *data) {
   return phycfgr & 1;  // Bit 0 of PHYCFGR is LNK (0 - down, 1 - up)
 }
 
-struct mip_driver mip_driver_w5500 = {
-    .init = w5500_init, .tx = w5500_tx, .rx = w5500_rx, .up = w5500_up};
+struct mip_driver mip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx, w5500_up,
+                                      NULL};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -6295,7 +6294,7 @@ struct mip_driver mip_driver_w5500 = {
 
 #if MG_ENABLE_MIP
 
-#if defined(_MSC_VER) || defined(ARDUINO)
+#if defined(_MSC_VER) || defined(ARDUINO) || defined(__cplusplus)
 #define _Atomic
 #else
 #include <stdatomic.h>
@@ -6604,11 +6603,16 @@ static void arp_ask(struct mip_if *ifp, uint32_t ip) {
   ifp->driver->tx(eth, PDIFF(eth, arp + 1), ifp->driver_data);
 }
 
+static size_t mg_print_ipv4(mg_pfn_t fn, void *fn_data, va_list *ap) {
+  uint32_t ip = mg_ntohl(va_arg(*ap, uint32_t));
+  return mg_xprintf(fn, fn_data, "%d.%d.%d.%d", ip >> 24, (ip >> 16) & 255,
+                    (ip >> 8) & 255, ip & 255);
+}
+
 static void onstatechange(struct mip_if *ifp) {
   if (ifp->state == MIP_STATE_READY) {
-    char buf[40];
-    struct mg_addr addr = {.ip = ifp->ip};
-    MG_INFO(("READY, IP: %s", mg_ntoa(&addr, buf, sizeof(buf))));
+    MG_INFO(("READY, IP: %M", mg_print_ipv4, ifp->ip));
+    MG_INFO(("       GW: %M", mg_print_ipv4, ifp->gw));
     arp_ask(ifp, ifp->gw);
   } else if (ifp->state == MIP_STATE_UP) {
     MG_ERROR(("Link up"));
@@ -6664,11 +6668,19 @@ static void tx_udp(struct mip_if *ifp, uint32_t ip_src, uint16_t sport,
 
 static void tx_dhcp(struct mip_if *ifp, uint32_t src, uint32_t dst,
                     uint8_t *opts, size_t optslen) {
-  struct dhcp dhcp = {.op = 1,
-                      .htype = 1,
-                      .hlen = 6,
-                      .ciaddr = src,
-                      .magic = mg_htonl(0x63825363)};
+#if 0
+struct dhcp {
+  uint8_t op, htype, hlen, hops;
+  uint32_t xid;
+  uint16_t secs, flags;
+  uint32_t ciaddr, yiaddr, siaddr, giaddr;
+  uint8_t hwaddr[208];
+  uint32_t magic;
+  uint8_t options[32];
+};
+#endif
+  struct dhcp dhcp = {1, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
+  dhcp.magic = mg_htonl(0x63825363);
   memcpy(&dhcp.hwaddr, ifp->mac, sizeof(ifp->mac));
   memcpy(&dhcp.xid, ifp->mac + 2, sizeof(dhcp.xid));
   memcpy(&dhcp.options, opts, optslen);
@@ -7026,7 +7038,11 @@ static void rx_ip6(struct mip_if *ifp, struct pkt *pkt) {
 
 static void mip_rx(struct mip_if *ifp, void *buf, size_t len) {
   const uint8_t broadcast[] = {255, 255, 255, 255, 255, 255};
-  struct pkt pkt = {.raw = {.buf = (uint8_t *) buf, .len = len}};
+  // struct pkt pkt = {.raw = {.buf = (uint8_t *) buf, .len = len}};
+  struct pkt pkt;
+  memset(&pkt, 0, sizeof(pkt));
+  pkt.raw.buf = (uint8_t *) buf;
+  pkt.raw.len = len;
   pkt.eth = (struct eth *) buf;
   if (pkt.raw.len < sizeof(*pkt.eth)) return;  // Truncated - runt?
   if (memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&
@@ -7128,32 +7144,38 @@ static void on_rx(void *buf, size_t len, void *userdata) {
   }
 }
 
+static void if_init(struct mip_if *ifp, struct mg_mgr *mgr,
+                    struct mip_cfg *ipcfg, struct mip_driver *driver,
+                    void *driver_data, size_t maxpktsize, size_t qlen) {
+  memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
+  ifp->use_dhcp = ipcfg->ip == 0;
+  ifp->ip = ipcfg->ip, ifp->mask = ipcfg->mask, ifp->gw = ipcfg->gw;
+  ifp->rx.buf = (uint8_t *) (ifp + 1), ifp->rx.len = maxpktsize;
+  ifp->tx.buf = ifp->rx.buf + maxpktsize, ifp->tx.len = maxpktsize;
+  ifp->driver = driver;
+  ifp->driver_data = driver_data;
+  ifp->mgr = mgr;
+  ifp->queue.buf = ifp->tx.buf + maxpktsize;
+  ifp->queue.len = qlen;
+  ifp->timer_1000ms = mg_millis();
+  arp_cache_init(ifp->arp_cache, MIP_ARP_ENTRIES, 12);
+  if (driver->setrx) driver->setrx(on_rx, ifp);
+  mgr->priv = ifp;
+  mgr->extraconnsize = sizeof(struct connstate);
+#ifdef MIP_QPROFILE
+  qp_init();
+#endif
+}
+
 void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
               struct mip_driver *driver, void *driver_data) {
   if (driver->init && !driver->init(ipcfg->mac, driver_data)) {
     MG_ERROR(("driver init failed"));
   } else {
-    size_t maxpktsize = 1518, qlen = driver->setrx ? MIP_QSIZE : 0;
+    size_t maxpktsize = 1540, qlen = driver->setrx ? MIP_QSIZE : 0;
     struct mip_if *ifp =
         (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
-    memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
-    ifp->use_dhcp = ipcfg->ip == 0;
-    ifp->ip = ipcfg->ip, ifp->mask = ipcfg->mask, ifp->gw = ipcfg->gw;
-    ifp->rx.buf = (uint8_t *) (ifp + 1), ifp->rx.len = maxpktsize;
-    ifp->tx.buf = ifp->rx.buf + maxpktsize, ifp->tx.len = maxpktsize;
-    ifp->driver = driver;
-    ifp->driver_data = driver_data;
-    ifp->mgr = mgr;
-    ifp->queue.buf = ifp->tx.buf + maxpktsize;
-    ifp->queue.len = qlen;
-    ifp->timer_1000ms = mg_millis();
-    arp_cache_init(ifp->arp_cache, MIP_ARP_ENTRIES, 12);
-    if (driver->setrx) driver->setrx(on_rx, ifp);
-    mgr->priv = ifp;
-    mgr->extraconnsize = sizeof(struct connstate);
-#ifdef MIP_QPROFILE
-    qp_init();
-#endif
+    if_init(ifp, mgr, ipcfg, driver, driver_data, maxpktsize, qlen);
   }
 }
 

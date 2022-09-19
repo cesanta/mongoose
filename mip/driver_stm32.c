@@ -1,6 +1,6 @@
 #include "mip.h"
 
-#if MG_ENABLE_MIP && defined(__arm__)
+#if MG_ENABLE_MIP
 struct stm32_eth {
   volatile uint32_t MACCR, MACFFR, MACHTHR, MACHTLR, MACMIIAR, MACMIIDR, MACFCR,
       MACVLANTR, RESERVED0[2], MACRWUFFR, MACPMTCSR, RESERVED1, MACDBGR, MACSR,
@@ -30,7 +30,7 @@ static void *s_rxdata;                               // Recv callback data
 enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
 
 static inline void spin(volatile uint32_t count) {
-  while (count--) asm("nop");
+  while (count--) (void) 0;
 }
 
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
@@ -126,7 +126,7 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
 
   // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
   int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;
-  ETH->MACMIIAR = (cr & 3) << 2;
+  ETH->MACMIIAR = ((uint32_t)cr & 3) << 2;
 
   // NOTE(cpq): we do not use extended descriptor bit 7, and do not use
   // hardware checksum. Therefore, descriptor size is 4, not 8
@@ -201,8 +201,7 @@ void ETH_IRQHandler(void) {
   ETH->DMASR = sr & ~(BIT(2) | BIT(7));  // Clear status
 }
 
-struct mip_driver mip_driver_stm32 = {.init = mip_driver_stm32_init,
-                                      .tx = mip_driver_stm32_tx,
-                                      .setrx = mip_driver_stm32_setrx,
-                                      .up = mip_driver_stm32_up};
+struct mip_driver mip_driver_stm32 = {
+    mip_driver_stm32_init, mip_driver_stm32_tx, NULL, mip_driver_stm32_up,
+    mip_driver_stm32_setrx};
 #endif
