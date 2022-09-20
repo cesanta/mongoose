@@ -993,6 +993,7 @@ enum {
   MG_EV_RESOLVE,     // Host name is resolved        NULL
   MG_EV_CONNECT,     // Connection established       NULL
   MG_EV_ACCEPT,      // Connection accepted          NULL
+  MG_EV_TLS_HS,      // TLS handshake succeeded      NULL
   MG_EV_READ,        // Data received from socket    long *bytes_read
   MG_EV_WRITE,       // Data written to socket       long *bytes_written
   MG_EV_CLOSE,       // Connection closed            NULL
