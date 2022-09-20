@@ -116,6 +116,7 @@ void mg_tls_handshake(struct mg_connection *c) {
   if (rc == 1) {
     MG_DEBUG(("%lu success", c->id));
     c->is_tls_hs = 0;
+    mg_call(c, MG_EV_TLS_HS, NULL);
   } else {
     int code = mg_tls_err(tls, rc);
     if (code != 0) mg_error(c, "tls hs: rc %d, err %d", rc, code);
