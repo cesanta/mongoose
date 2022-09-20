@@ -10,6 +10,7 @@ size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
   va_list tmp;
   va_copy(tmp, ap);
   mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &tmp);
+  va_end(tmp);
   return c->send.len - old;
 }
 
