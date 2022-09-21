@@ -559,7 +559,9 @@ static size_t mg_dtoa(char *dst, size_t dstlen, double d, int width) {
   }
   while (n > 0 && buf[s + n - 1] == '0') n--;  // Trim trailing zeros
   if (n > 0 && buf[s + n - 1] == '.') n--;     // Trim trailing dot
-  buf[s + n] = '\0';
+  n += s;
+  if (n >= (int) sizeof(buf)) n = (int) sizeof(buf) - 1;
+  buf[n] = '\0';
   return mg_snprintf(dst, dstlen, "%s", buf);
 }
 
