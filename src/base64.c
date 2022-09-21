@@ -58,16 +58,20 @@ int mg_base64_final(char *to, int n) {
   return n;
 }
 
-int mg_base64_encode(const unsigned char *p, int n, char *to) {
+int mg_base64_encode(const unsigned char *p, int n, char *to, int tolen) {
   int i, len = 0;
+  // check if *to is big enough (including null byte)
+  if (tolen < ((n/3) + (n%3?1:0)) * 4 + 1) return 0;
   for (i = 0; i < n; i++) len = mg_base64_update(p[i], to, len);
   len = mg_base64_final(to, len);
   return len;
 }
 
-int mg_base64_decode(const char *src, int n, char *dst) {
+int mg_base64_decode(const char *src, int n, char *dst, int dstlen) {
   const char *end = src == NULL ? NULL : src + n;  // Cannot add to NULL
   int len = 0;
+  // check if *dst is big enough (including null byte, ignoring padding)
+  if (dstlen < (n - n/4) + 1) return 0;
   while (src != NULL && src + 3 < end) {
     int a = mg_b64rev(src[0]), b = mg_b64rev(src[1]), c = mg_b64rev(src[2]),
         d = mg_b64rev(src[3]);

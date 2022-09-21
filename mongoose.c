@@ -82,16 +82,20 @@ int mg_base64_final(char *to, int n) {
   return n;
 }
 
-int mg_base64_encode(const unsigned char *p, int n, char *to) {
+int mg_base64_encode(const unsigned char *p, int n, char *to, int tolen) {
   int i, len = 0;
+  // check if *to is big enough (including null byte)
+  if (tolen < ((n/3) + (n%3?1:0)) * 4 + 1) return 0;
   for (i = 0; i < n; i++) len = mg_base64_update(p[i], to, len);
   len = mg_base64_final(to, len);
   return len;
 }
 
-int mg_base64_decode(const char *src, int n, char *dst) {
+int mg_base64_decode(const char *src, int n, char *dst, int dstlen) {
   const char *end = src == NULL ? NULL : src + n;  // Cannot add to NULL
   int len = 0;
+  // check if *dst is big enough (including null byte, ignoring padding)
+  if (dstlen < (n - n/4) + 1) return 0;
   while (src != NULL && src + 3 < end) {
     int a = mg_b64rev(src[0]), b = mg_b64rev(src[1]), c = mg_b64rev(src[2]),
         d = mg_b64rev(src[3]);
@@ -2093,7 +2097,7 @@ void mg_http_creds(struct mg_http_message *hm, char *user, size_t userlen,
   user[0] = pass[0] = '\0';
   if (v != NULL && v->len > 6 && memcmp(v->ptr, "Basic ", 6) == 0) {
     char buf[256];
-    int n = mg_base64_decode(v->ptr + 6, (int) v->len - 6, buf);
+    int n = mg_base64_decode(v->ptr + 6, (int) v->len - 6, buf, sizeof(buf));
     const char *p = (const char *) memchr(buf, ':', n > 0 ? (size_t) n : 0);
     if (p != NULL) {
       mg_snprintf(user, userlen, "%.*s", (int) (p - buf), buf);
@@ -2710,7 +2714,7 @@ char *mg_json_get_b64(struct mg_str json, const char *path, int *slen) {
   int len = 0, off = mg_json_get(json, path, &len);
   if (off >= 0 && json.ptr[off] == '"' && len > 1 &&
       (result = (char *) calloc(1, (size_t) len)) != NULL) {
-    int k = mg_base64_decode(json.ptr + off + 1, len - 2, result);
+    int k = mg_base64_decode(json.ptr + off + 1, len - 2, result, len);
     if (slen != NULL) *slen = k;
   }
   return result;
@@ -6451,7 +6455,7 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
   mg_sha1_update(&sha_ctx, (unsigned char *) wskey->ptr, wskey->len);
   mg_sha1_update(&sha_ctx, (unsigned char *) magic, 36);
   mg_sha1_final(sha, &sha_ctx);
-  mg_base64_encode(sha, sizeof(sha), (char *) b64_sha);
+  mg_base64_encode(sha, sizeof(sha), (char *) b64_sha, sizeof(b64_sha));
   mg_xprintf(mg_pfn_iobuf, &c->send,
              "HTTP/1.1 101 Switching Protocols\r\n"
              "Upgrade: websocket\r\n"
@@ -6650,7 +6654,7 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
     char nonce[16], key[30];
     struct mg_str host = mg_url_host(url);
     mg_random(nonce, sizeof(nonce));
-    mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key);
+    mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key, sizeof(key));
     mg_xprintf(mg_pfn_iobuf, &c->send,
                "GET %s HTTP/1.1\r\n"
                "Upgrade: websocket\r\n"
