@@ -2,7 +2,7 @@
 
 #if MG_ENABLE_MIP
 
-#if defined(_MSC_VER) || defined(ARDUINO)
+#if defined(_MSC_VER) || defined(ARDUINO) || defined(__cplusplus)
 #define _Atomic
 #else
 #include <stdatomic.h>
@@ -311,11 +311,16 @@ static void arp_ask(struct mip_if *ifp, uint32_t ip) {
   ifp->driver->tx(eth, PDIFF(eth, arp + 1), ifp->driver_data);
 }
 
+static size_t mg_print_ipv4(mg_pfn_t fn, void *fn_data, va_list *ap) {
+  uint32_t ip = mg_ntohl(va_arg(*ap, uint32_t));
+  return mg_xprintf(fn, fn_data, "%d.%d.%d.%d", ip >> 24, (ip >> 16) & 255,
+                    (ip >> 8) & 255, ip & 255);
+}
+
 static void onstatechange(struct mip_if *ifp) {
   if (ifp->state == MIP_STATE_READY) {
-    char buf[40];
-    struct mg_addr addr = {.ip = ifp->ip};
-    MG_INFO(("READY, IP: %s", mg_ntoa(&addr, buf, sizeof(buf))));
+    MG_INFO(("READY, IP: %M", mg_print_ipv4, ifp->ip));
+    MG_INFO(("       GW: %M", mg_print_ipv4, ifp->gw));
     arp_ask(ifp, ifp->gw);
   } else if (ifp->state == MIP_STATE_UP) {
     MG_ERROR(("Link up"));
@@ -371,11 +376,19 @@ static void tx_udp(struct mip_if *ifp, uint32_t ip_src, uint16_t sport,
 
 static void tx_dhcp(struct mip_if *ifp, uint32_t src, uint32_t dst,
                     uint8_t *opts, size_t optslen) {
-  struct dhcp dhcp = {.op = 1,
-                      .htype = 1,
-                      .hlen = 6,
-                      .ciaddr = src,
-                      .magic = mg_htonl(0x63825363)};
+#if 0
+struct dhcp {
+  uint8_t op, htype, hlen, hops;
+  uint32_t xid;
+  uint16_t secs, flags;
+  uint32_t ciaddr, yiaddr, siaddr, giaddr;
+  uint8_t hwaddr[208];
+  uint32_t magic;
+  uint8_t options[32];
+};
+#endif
+  struct dhcp dhcp = {1, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
+  dhcp.magic = mg_htonl(0x63825363);
   memcpy(&dhcp.hwaddr, ifp->mac, sizeof(ifp->mac));
   memcpy(&dhcp.xid, ifp->mac + 2, sizeof(dhcp.xid));
   memcpy(&dhcp.options, opts, optslen);
@@ -733,7 +746,11 @@ static void rx_ip6(struct mip_if *ifp, struct pkt *pkt) {
 
 static void mip_rx(struct mip_if *ifp, void *buf, size_t len) {
   const uint8_t broadcast[] = {255, 255, 255, 255, 255, 255};
-  struct pkt pkt = {.raw = {.buf = (uint8_t *) buf, .len = len}};
+  // struct pkt pkt = {.raw = {.buf = (uint8_t *) buf, .len = len}};
+  struct pkt pkt;
+  memset(&pkt, 0, sizeof(pkt));
+  pkt.raw.buf = (uint8_t *) buf;
+  pkt.raw.len = len;
   pkt.eth = (struct eth *) buf;
   if (pkt.raw.len < sizeof(*pkt.eth)) return;  // Truncated - runt?
   if (memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&
@@ -835,32 +852,38 @@ static void on_rx(void *buf, size_t len, void *userdata) {
   }
 }
 
+static void if_init(struct mip_if *ifp, struct mg_mgr *mgr,
+                    struct mip_cfg *ipcfg, struct mip_driver *driver,
+                    void *driver_data, size_t maxpktsize, size_t qlen) {
+  memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
+  ifp->use_dhcp = ipcfg->ip == 0;
+  ifp->ip = ipcfg->ip, ifp->mask = ipcfg->mask, ifp->gw = ipcfg->gw;
+  ifp->rx.buf = (uint8_t *) (ifp + 1), ifp->rx.len = maxpktsize;
+  ifp->tx.buf = ifp->rx.buf + maxpktsize, ifp->tx.len = maxpktsize;
+  ifp->driver = driver;
+  ifp->driver_data = driver_data;
+  ifp->mgr = mgr;
+  ifp->queue.buf = ifp->tx.buf + maxpktsize;
+  ifp->queue.len = qlen;
+  ifp->timer_1000ms = mg_millis();
+  arp_cache_init(ifp->arp_cache, MIP_ARP_ENTRIES, 12);
+  if (driver->setrx) driver->setrx(on_rx, ifp);
+  mgr->priv = ifp;
+  mgr->extraconnsize = sizeof(struct connstate);
+#ifdef MIP_QPROFILE
+  qp_init();
+#endif
+}
+
 void mip_init(struct mg_mgr *mgr, struct mip_cfg *ipcfg,
               struct mip_driver *driver, void *driver_data) {
   if (driver->init && !driver->init(ipcfg->mac, driver_data)) {
     MG_ERROR(("driver init failed"));
   } else {
-    size_t maxpktsize = 1518, qlen = driver->setrx ? MIP_QSIZE : 0;
+    size_t maxpktsize = 1540, qlen = driver->setrx ? MIP_QSIZE : 0;
     struct mip_if *ifp =
         (struct mip_if *) calloc(1, sizeof(*ifp) + 2 * maxpktsize + qlen);
-    memcpy(ifp->mac, ipcfg->mac, sizeof(ifp->mac));
-    ifp->use_dhcp = ipcfg->ip == 0;
-    ifp->ip = ipcfg->ip, ifp->mask = ipcfg->mask, ifp->gw = ipcfg->gw;
-    ifp->rx.buf = (uint8_t *) (ifp + 1), ifp->rx.len = maxpktsize;
-    ifp->tx.buf = ifp->rx.buf + maxpktsize, ifp->tx.len = maxpktsize;
-    ifp->driver = driver;
-    ifp->driver_data = driver_data;
-    ifp->mgr = mgr;
-    ifp->queue.buf = ifp->tx.buf + maxpktsize;
-    ifp->queue.len = qlen;
-    ifp->timer_1000ms = mg_millis();
-    arp_cache_init(ifp->arp_cache, MIP_ARP_ENTRIES, 12);
-    if (driver->setrx) driver->setrx(on_rx, ifp);
-    mgr->priv = ifp;
-    mgr->extraconnsize = sizeof(struct connstate);
-#ifdef MIP_QPROFILE
-    qp_init();
-#endif
+    if_init(ifp, mgr, ipcfg, driver, driver_data, maxpktsize, qlen);
   }
 }
 

@@ -1,4 +1,11 @@
-#include "mongoose.h"
+#define MG_ENABLE_SOCKET 0
+#define MG_ENABLE_LOG 0
+#define MG_ENABLE_LINES 1
+#define MG_ENABLE_MIP 1
+
+#include "mongoose.c"
+
+#include "driver_mock.c"
 
 #ifdef __cplusplus
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *, size_t);
@@ -47,6 +54,19 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
   int n;
   mg_json_get(mg_str_n((char *) data, size), "$", &n);
+  mg_json_get(mg_str_n((char *) data, size), "$.a.b", &n);
+  mg_json_get(mg_str_n((char *) data, size), "$[0]", &n);
+
+  struct mip_cfg cfg = {};
+  size_t pktlen = 1540;
+  char t[sizeof(struct mip_if) + pktlen * 2 + 0 /* qlen */];
+  struct mip_if *ifp = (struct mip_if *) t;
+  struct mg_mgr mgr;
+  mg_mgr_init(&mgr);
+  if_init(ifp, &mgr, &cfg, &mip_driver_mock, NULL, pktlen, 0);
+  mip_rx(ifp, (void *) data, size);
+  mgr.priv = NULL;  // Don't let Mongoose free() ifp
+  mg_mgr_free(&mgr);
 
   return 0;
 }

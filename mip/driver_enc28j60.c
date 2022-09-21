@@ -16,7 +16,7 @@ static uint8_t rd(struct mip_spi *spi, uint8_t op, uint8_t addr) {
 
 static bool mip_driver_enc28j60_init(uint8_t *mac, void *data) {
   (void) mac, (void) data;
-  rd(data, OP_SRC, 0x1f);
+  rd((struct mip_spi *) data, OP_SRC, 0x1f);
   return false;
 }
 
@@ -35,8 +35,7 @@ static bool mip_driver_enc28j60_up(void *data) {
   return false;
 }
 
-struct mip_driver mip_driver_enc28j60 = {.init = mip_driver_enc28j60_init,
-                                         .tx = mip_driver_enc28j60_tx,
-                                         .rx = mip_driver_enc28j60_rx,
-                                         .up = mip_driver_enc28j60_up};
+struct mip_driver mip_driver_enc28j60 = {
+    mip_driver_enc28j60_init, mip_driver_enc28j60_tx, mip_driver_enc28j60_rx,
+    mip_driver_enc28j60_up, NULL};
 #endif
