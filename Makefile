@@ -22,8 +22,10 @@ VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=ful
 .PHONY: examples test valgrind mip_test
 
 ifeq "$(findstring ++,$(CC))" ""
+# $(CC) does not end with ++, i.e. we're using C. Apply C flags
 C_WARN ?= -Wmissing-prototypes -Wstrict-prototypes
 else
+# $(CC) ends with ++, i.e. we're using C++. Apply C++ flags
 C_WARN ?= -Wno-deprecated
 endif
 
@@ -81,8 +83,6 @@ test: Makefile mongoose.h $(SRCS)
 	$(CC) $(SRCS) $(CFLAGS) $(LDFLAGS) -o unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
 
-#	$(CXX) $(SRCS) $(CFLAGS) $(LDFLAGS) $(CXX_WARN) -g -o unit_test
-
 coverage: CFLAGS += -coverage
 coverage: test
 	gcov -l -n *.gcno | sed '/^$$/d' | sed 'N;s/\n/ /'
@@ -107,12 +107,10 @@ vc98: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(DOCKER) mdashnet/vc98 wine $@.exe
 
-# vc17: DEFS += -DMG_ENABLE_IPV6=1
 vc17: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc17 wine64 cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(DOCKER) mdashnet/vc17 wine64 $@.exe
 
-# vc22: DEFS += -DMG_ENABLE_IPV6=$(IPV6)
 vc22: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc22 wine64 cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
 	$(DOCKER) mdashnet/vc22 wine64 $@.exe

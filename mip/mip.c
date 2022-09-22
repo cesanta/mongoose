@@ -462,7 +462,7 @@ static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
   uint8_t *p = pkt->dhcp->options, *end = &pkt->raw.buf[pkt->raw.len];
   if (end < (uint8_t *) (pkt->dhcp + 1)) return;
   // MG_DEBUG(("DHCP %u", (unsigned) pkt->raw.len));
-  while (p < end && p[0] != 255) {
+  while (p + 1 < end && p[0] != 255) {
     if (p[0] == 1 && p[1] == sizeof(ifp->mask)) {
       memcpy(&mask, p + 2, sizeof(mask));
       // MG_DEBUG(("MASK %x", mask));
