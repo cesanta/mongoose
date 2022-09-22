@@ -6058,7 +6058,7 @@ static uint32_t get_hclk(void) {
   } else {
     clk = hsi;
   }
-  int hpre = (RCC->CFGR & (0x0F << 4)) >> 4;
+  uint32_t hpre = (RCC->CFGR & (15 << 4)) >> 4;
   if (hpre < 8) return clk;
 
   uint8_t ahbptab[8] = {1, 2, 3, 4, 6, 7, 8, 9};  // log2(div)
@@ -6765,7 +6765,6 @@ static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
       uint32_t lease = 0;
       memcpy(&lease, p + 2, sizeof(lease));
       ifp->lease_expire = ifp->now + mg_ntohl(lease) * 1000;
-      // MG_INFO(("LEASEEEEEE %lld", ifp->lease_expire - ifp->now));
     }
     p += p[1] + 2;
   }
