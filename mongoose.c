@@ -6297,12 +6297,6 @@ struct mip_driver mip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx, w5500_up,
 
 #if MG_ENABLE_MIP
 
-#if defined(_MSC_VER) || defined(ARDUINO) || defined(__cplusplus)
-#define _Atomic
-#else
-#include <stdatomic.h>
-#endif
-
 #define MIP_ETHEMERAL_PORT 49152
 #define U16(ptr) ((((uint16_t) (ptr)[0]) << 8) | (ptr)[1])
 #define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
@@ -6315,8 +6309,11 @@ struct mip_driver mip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx, w5500_up,
 #define MIP_QSIZE (16 * 1024)  // Queue size
 #endif
 
+#ifndef MIP_TCP_KEEPALIVE_MS
+#define MIP_TCP_KEEPALIVE_MS 45000  // TCP keep-alive period, ms
+#endif
+
 #define MIP_ARP_CS (2 + 12 * MIP_ARP_ENTRIES)  // ARP cache size
-#define MIP_TCP_KEEPALIVE_MS 45000             // TCP keep-alive period, ms
 #define MIP_TCP_ACK_MS 150                     // Timeout for ACKing
 
 struct connstate {
@@ -6340,7 +6337,7 @@ struct str {
 struct queue {
   uint8_t *buf;
   size_t len;
-  volatile _Atomic size_t tail, head;
+  volatile size_t tail, head;
 };
 
 // Network interface
@@ -6357,6 +6354,7 @@ struct mip_if {
   // Internal state, user can use it but should not change it
   uint64_t now;                   // Current time
   uint64_t timer_1000ms;          // 1000 ms timer: for DHCP and link state
+  uint64_t lease_expire;          // Lease expiration time
   uint8_t arp_cache[MIP_ARP_CS];  // Each entry is 12 bytes
   uint16_t eport;                 // Next ephemeral port
   uint16_t dropped;               // Number of dropped frames
@@ -6616,6 +6614,7 @@ static void onstatechange(struct mip_if *ifp) {
   if (ifp->state == MIP_STATE_READY) {
     MG_INFO(("READY, IP: %M", mg_print_ipv4, ifp->ip));
     MG_INFO(("       GW: %M", mg_print_ipv4, ifp->gw));
+    MG_INFO(("       Lease: %lld sec", (ifp->lease_expire - ifp->now)/1000));
     arp_ask(ifp, ifp->gw);
   } else if (ifp->state == MIP_STATE_UP) {
     MG_ERROR(("Link up"));
@@ -6756,21 +6755,21 @@ static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
   uint32_t ip = 0, gw = 0, mask = 0;
   uint8_t *p = pkt->dhcp->options, *end = &pkt->raw.buf[pkt->raw.len];
   if (end < (uint8_t *) (pkt->dhcp + 1)) return;
-  // MG_DEBUG(("DHCP %u", (unsigned) pkt->raw.len));
-  while (p < end && p[0] != 255) {
-    if (p[0] == 1 && p[1] == sizeof(ifp->mask)) {
+  while (p + 1 < end && p[0] != 255) {  // Parse options
+    if (p[0] == 1 && p[1] == sizeof(ifp->mask) && p + 6 < end) {  // Mask
       memcpy(&mask, p + 2, sizeof(mask));
-      // MG_DEBUG(("MASK %x", mask));
-    } else if (p[0] == 3 && p[1] == sizeof(ifp->gw)) {
+    } else if (p[0] == 3 && p[1] == sizeof(ifp->gw) && p + 6 < end) {  // GW
       memcpy(&gw, p + 2, sizeof(gw));
       ip = pkt->dhcp->yiaddr;
-      // MG_DEBUG(("IP %x GW %x", ip, gw));
+    } else if (p[0] == 51 && p[1] == 4 && p + 6 < end) {  // Lease
+      uint32_t lease = 0;
+      memcpy(&lease, p + 2, sizeof(lease));
+      ifp->lease_expire = ifp->now + mg_ntohl(lease) * 1000;
+      // MG_INFO(("LEASEEEEEE %lld", ifp->lease_expire - ifp->now));
     }
     p += p[1] + 2;
   }
   if (ip && mask && gw && ifp->ip == 0) {
-    // MG_DEBUG(("DHCP offer ip %#08lx mask %#08lx gw %#08lx", (long) ip,
-    //           (long) mask, (long) gw));
     arp_cache_add(ifp, pkt->dhcp->siaddr, ((struct eth *) pkt->raw.buf)->src);
     ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
     ifp->state = MIP_STATE_READY;
