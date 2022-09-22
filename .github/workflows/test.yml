@@ -6,8 +6,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cc: [gcc, clang]
-        target: [test, mip_test, test++, valgrind]
+        cc: [gcc, clang, g++, clang++]
+        target: [test, mip_test]
         ssl: [MBEDTLS, OPENSSL]
     name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
     env:
@@ -16,12 +16,16 @@ jobs:
       SSL: ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v3
-    - name: Install packages
-      run: sudo apt-get update ; sudo apt-get install libmbedtls-dev valgrind
-    - name: test
-      run: make ${{ matrix.target }}
-    - name: unamalgamated
-      run: make unamalgamated
+    - run: sudo apt-get update ; sudo apt-get install libmbedtls-dev
+    - run: make ${{ matrix.target }}
+  linux2:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: sudo apt-get update ; sudo apt-get install libmbedtls-dev valgrind
+    - run: make unamalgamated SSL=
+    - run: make valgrind IPV6=0
+    - run: make mg_prefix
   examples:
     runs-on: ubuntu-latest
     steps:
@@ -34,8 +38,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
-    - run: make test++ upload-coverage IPV6=0 ASAN_OPTIONS=
-    - run: make test SSL=OPENSSL IPV6=0 ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
+    - run: make test upload-coverage SSL=OPENSSL IPV6=0 ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
+    - run: make test SSL=MBEDTLS IPV6=0 ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
     - run: make mip_test ASAN_OPTIONS=
     - run: make mg_prefix
   windows:
@@ -52,6 +56,11 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: make arm
+  riscv:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: make riscv
   matrix_examples:
     runs-on: ubuntu-latest
     strategy:

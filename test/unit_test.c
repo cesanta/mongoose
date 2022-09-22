@@ -926,9 +926,13 @@ static void test_http_404(void) {
 
 static void test_tls(void) {
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-  struct mg_tls_opts opts = {.ca = "./test/data/ss_ca.pem",
-                             .cert = "./test/data/ss_server.pem",
-                             .certkey = "./test/data/ss_server.pem"};
+  struct mg_tls_opts opts = {"./test/data/ss_ca.pem",
+                             NULL,
+                             "./test/data/ss_server.pem",
+                             "./test/data/ss_server.pem",
+                             NULL,
+                             {0, 0},
+                             NULL};
   struct mg_mgr mgr;
   struct mg_connection *c;
   const char *url = "https://127.0.0.1:12347";
@@ -981,7 +985,8 @@ static void test_http_client(void) {
   {
     const char *url = "https://cesanta.com";
     struct mg_str host = mg_url_host(url);
-    struct mg_tls_opts opts = {.ca = "./test/data/ca.pem", .srvname = host};
+    struct mg_tls_opts opts = {
+        "./test/data/ca.pem", NULL, NULL, NULL, NULL, host, NULL};
     c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
     mg_tls_init(c, &opts);
