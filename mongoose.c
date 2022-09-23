@@ -6052,7 +6052,7 @@ static uint32_t get_hclk(void) {
   } else {
     clk = hsi;
   }
-  int hpre = (RCC->CFGR & (0x0F << 4)) >> 4;
+  uint32_t hpre = (RCC->CFGR & (15 << 4)) >> 4;
   if (hpre < 8) return clk;
 
   uint8_t ahbptab[8] = {1, 2, 3, 4, 6, 7, 8, 9};  // log2(div)

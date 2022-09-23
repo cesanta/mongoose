@@ -10,7 +10,7 @@ ENV ?=  -e Tmp=. -e WINEDEBUG=-all
 DOCKER ?= docker run --platform linux/amd64 --rm $(ENV) -v $(CWD):$(CWD) -w $(CWD)
 VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
-ASAN ?= -fsanitize=address,undefined -fno-sanitize-recover=all
+ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
 EXAMPLES := $(dir $(wildcard examples/*/Makefile)) $(wildcard examples/stm32/nucleo-*)
 PREFIX ?= /usr/local
@@ -44,7 +44,7 @@ endif
 all: mg_prefix unamalgamated test mip_test arm examples vc98 vc17 vc22 mingw mingw++ fuzz
 
 mip_test: test/mip_test.c mongoose.c mongoose.h Makefile
-	$(CC) test/mip_test.c $(INCS) $(WARN) $(OPTS) $(C_WARN) -o $@
+	$(CC) test/mip_test.c $(INCS) $(WARN) $(OPTS) $(C_WARN) $(ASAN) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
 examples:

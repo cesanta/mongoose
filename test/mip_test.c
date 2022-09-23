@@ -1,4 +1,5 @@
 #define MG_ENABLE_SOCKET 0
+#define MG_ENABLE_LINES 1
 #define MG_ENABLE_MIP 1
 #define MG_ENABLE_PACKED_FS 0
 
