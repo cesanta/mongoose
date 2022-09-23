@@ -78,13 +78,6 @@ typedef int socklen_t;
 #define sleep(x) Sleep(x)
 #define mkdir(a, b) _mkdir(a)
 
-#ifndef va_copy
-#ifdef __va_copy
-#define va_copy __va_copy
-#else
-#define va_copy(x, y) (x) = (y)
-#endif
-#endif
 #ifndef S_ISDIR
 #define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
 #endif

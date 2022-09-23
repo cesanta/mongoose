@@ -5,12 +5,9 @@
 #include "timer.h"
 #include "tls.h"
 
-size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
+size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list *ap) {
   size_t old = c->send.len;
-  va_list tmp;
-  va_copy(tmp, ap);
-  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &tmp);
-  va_end(tmp);
+  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
   return c->send.len - old;
 }
 
@@ -18,7 +15,7 @@ size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
   size_t len = 0;
   va_list ap;
   va_start(ap, fmt);
-  len = mg_vprintf(c, fmt, ap);
+  len = mg_vprintf(c, fmt, &ap);
   va_end(ap);
   return len;
 }
