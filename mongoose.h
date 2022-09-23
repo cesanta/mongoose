@@ -98,10 +98,6 @@ extern "C" {
 #include <nx_port.h>
 #include <tx_port.h>
 
-#ifdef __REDLIB__
-#define va_copy(d, s) __builtin_va_copy(d, s)
-#endif
-
 #define PATH_MAX FX_MAXIMUM_PATH
 #define MG_DIRSEP '\\'
 
@@ -563,13 +559,6 @@ typedef int socklen_t;
 #define sleep(x) Sleep(x)
 #define mkdir(a, b) _mkdir(a)
 
-#ifndef va_copy
-#ifdef __va_copy
-#define va_copy __va_copy
-#else
-#define va_copy(x, y) (x) = (y)
-#endif
-#endif
 #ifndef S_ISDIR
 #define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
 #endif
@@ -1095,7 +1084,7 @@ struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
 void mg_connect_resolved(struct mg_connection *);
 bool mg_send(struct mg_connection *, const void *, size_t);
 size_t mg_printf(struct mg_connection *, const char *fmt, ...);
-size_t mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
+size_t mg_vprintf(struct mg_connection *, const char *fmt, va_list *ap);
 char *mg_straddr(struct mg_addr *, char *, size_t);
 bool mg_aton(struct mg_str str, struct mg_addr *addr);
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);

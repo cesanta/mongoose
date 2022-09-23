@@ -1607,13 +1607,10 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
 }
 
 static void mg_http_vprintf_chunk(struct mg_connection *c, const char *fmt,
-                                  va_list ap) {
+                                  va_list *ap) {
   size_t len = c->send.len;
-  va_list tmp;
   mg_send(c, "        \r\n", 10);
-  va_copy(tmp, ap);
-  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &tmp);
-  va_end(tmp);
+  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
   if (c->send.len >= len + 10) {
     mg_snprintf((char *) c->send.buf + len, 9, "%08lx", c->send.len - len - 10);
     c->send.buf[len + 8] = '\r';
@@ -1625,7 +1622,7 @@ static void mg_http_vprintf_chunk(struct mg_connection *c, const char *fmt,
 void mg_http_printf_chunk(struct mg_connection *c, const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  mg_http_vprintf_chunk(c, fmt, ap);
+  mg_http_vprintf_chunk(c, fmt, &ap);
   va_end(ap);
 }
 
@@ -3277,12 +3274,9 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 
 
-size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap) {
+size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list *ap) {
   size_t old = c->send.len;
-  va_list tmp;
-  va_copy(tmp, ap);
-  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &tmp);
-  va_end(tmp);
+  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
   return c->send.len - old;
 }
 
@@ -3290,7 +3284,7 @@ size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
   size_t len = 0;
   va_list ap;
   va_start(ap, fmt);
-  len = mg_vprintf(c, fmt, ap);
+  len = mg_vprintf(c, fmt, &ap);
   va_end(ap);
   return len;
 }
@@ -6765,7 +6759,6 @@ static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
       uint32_t lease = 0;
       memcpy(&lease, p + 2, sizeof(lease));
       ifp->lease_expire = ifp->now + mg_ntohl(lease) * 1000;
-      // MG_INFO(("LEASEEEEEE %lld", ifp->lease_expire - ifp->now));
     }
     p += p[1] + 2;
   }

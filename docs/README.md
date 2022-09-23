@@ -650,7 +650,7 @@ mg_send(c, "hi", 2);  // Append string "hi" to the output buffer
 
 ```c
 int mg_printf(struct mg_connection *, const char *fmt, ...);
-int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
+int mg_vprintf(struct mg_connection *, const char *fmt, va_list *ap);
 ```
 
 Same as `mg_send()`, but formats data using `printf()` semantics. Return

@@ -540,7 +540,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   }
   // c->is_hexdumping = 1;
   va_start(ap, fmt);
-  mg_vprintf(c, fmt, ap);
+  mg_vprintf(c, fmt, &ap);
   va_end(ap);
   buf[0] = '\0';
   for (i = 0; i < 50 && buf[0] == '\0'; i++) mg_mgr_poll(mgr, 1);

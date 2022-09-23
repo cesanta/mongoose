@@ -16,10 +16,6 @@
 #include <nx_port.h>
 #include <tx_port.h>
 
-#ifdef __REDLIB__
-#define va_copy(d, s) __builtin_va_copy(d, s)
-#endif
-
 #define PATH_MAX FX_MAXIMUM_PATH
 #define MG_DIRSEP '\\'
 

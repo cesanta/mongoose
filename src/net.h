@@ -85,7 +85,7 @@ struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
 void mg_connect_resolved(struct mg_connection *);
 bool mg_send(struct mg_connection *, const void *, size_t);
 size_t mg_printf(struct mg_connection *, const char *fmt, ...);
-size_t mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
+size_t mg_vprintf(struct mg_connection *, const char *fmt, va_list *ap);
 char *mg_straddr(struct mg_addr *, char *, size_t);
 bool mg_aton(struct mg_str str, struct mg_addr *addr);
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
