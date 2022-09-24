@@ -33,6 +33,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // But in our case, we should restore the multicast address in order
     // to have next search to go to the multicast address
     memcpy(&c->rem, c->label, sizeof(c->rem));
+    // Discard the content of this response as we expect each SSDP response
+    // to generate at most one MG_EV_READ event.
+    c->recv.len = 0UL;
   }
 }
 
