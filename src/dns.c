@@ -235,7 +235,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
   }
   if (dnsc->c == NULL) {
     mg_error(c, "resolver");
-  } else if ((d = (struct dns_data *) calloc(1, sizeof(*d))) == NULL) {
+  } else if ((d = (struct dns_data *) calloc(1, sizeof(struct dns_data))) == NULL) {
     mg_error(c, "resolve OOM");
   } else {
     struct dns_data *reqs = (struct dns_data *) c->mgr->active_dns_requests;
