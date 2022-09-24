@@ -2,7 +2,7 @@
 #include "fmt.h"
 
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
-  struct mg_fd *fd = (struct mg_fd *) calloc(1, sizeof(*fd));
+  struct mg_fd *fd = (struct mg_fd *) calloc(1, sizeof(struct mg_fd));
   if (fd != NULL) {
     fd->fd = fs->op(path, flags);
     fd->fs = fs;
