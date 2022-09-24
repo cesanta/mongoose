@@ -3490,7 +3490,7 @@ struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
 
 struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg) {
-  struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
+  struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(struct mg_timer));
   if (t != NULL) {
     mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
     t->id = mgr->timerid++;
