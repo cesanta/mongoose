@@ -1033,7 +1033,7 @@ static void *packed_open(const char *path, int flags) {
   struct packed_file *fp = NULL;
   if (data == NULL) return NULL;
   if (flags & MG_FS_WRITE) return NULL;
-  fp = (struct packed_file *) calloc(1, sizeof(*fp));
+  fp = (struct packed_file *) calloc(1, sizeof(struct packed_file));
   fp->size = size;
   fp->data = data;
   return (void *) fp;
