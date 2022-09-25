@@ -9,6 +9,10 @@
 #define MQTT_URL "mqtt://broker.hivemq.com:1883"  // MQTT broker to connect to
 #define MQTT_TOPIC "t/123"                        // Topic to subscribe to
 
+#if MG_ARCH == MG_ARCH_WIN32
+#define usleep(x) Sleep((x) / 1000)
+#endif
+
 static int s_signo;
 void signal_handler(int signo) {
   s_signo = signo;
@@ -30,7 +34,7 @@ static size_t pcap_rx(void *buf, size_t len, void *userdata) {
   size_t received = 0;
   struct pcap_pkthdr *hdr = NULL;
   const unsigned char *pkt = NULL;
-  usleep(1); // This is to avoid 100% CPU
+  usleep(1000);  // Sleep 1 millisecond. This is to avoid 100% CPU
   if (pcap_next_ex((pcap_t *) userdata, &hdr, &pkt) == 1) {  // Yes, read
     received = hdr->len < len ? hdr->len : len;
     memcpy(buf, pkt, received);
@@ -53,7 +57,7 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(argv[i], "-bpf") == 0 && i + 1 < argc) {
       bpf = argv[++i];
     } else if (strcmp(argv[i], "-v") == 0 && i + 1 < argc) {
-      mg_log_set(atoi(argv[++i])); 
+      mg_log_set(atoi(argv[++i]));
     } else {
       MG_ERROR(("unknown option %s", argv[i]));
       return EXIT_FAILURE;
@@ -88,8 +92,8 @@ int main(int argc, char *argv[]) {
   signal(SIGINT, signal_handler);
   signal(SIGTERM, signal_handler);
 
-  struct mg_mgr mgr;        // Event manager
-  mg_mgr_init(&mgr);        // Initialise event manager
+  struct mg_mgr mgr;  // Event manager
+  mg_mgr_init(&mgr);  // Initialise event manager
 
   struct mip_cfg c = {.ip = 0, .mask = 0, .gw = 0};
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &c.mac[0], &c.mac[1], &c.mac[2],

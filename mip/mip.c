@@ -28,6 +28,7 @@ struct connstate {
   uint8_t ttype;               // Timer type. 0: ack, 1: keep-alive
 #define MIP_TTYPE_KEEPALIVE 0  // Connection is idle for long, send keepalive
 #define MIP_TTYPE_ACK 1        // Peer sent us data, we have to ack it soon
+  uint8_t tmiss;               // Number of keep-alive misses
   struct mg_iobuf raw;         // For TLS only. Incoming raw data
 };
 
@@ -319,7 +320,7 @@ static void onstatechange(struct mip_if *ifp) {
   if (ifp->state == MIP_STATE_READY) {
     MG_INFO(("READY, IP: %M", mg_print_ipv4, ifp->ip));
     MG_INFO(("       GW: %M", mg_print_ipv4, ifp->gw));
-    MG_INFO(("       Lease: %lld sec", (ifp->lease_expire - ifp->now)/1000));
+    MG_INFO(("       Lease: %lld sec", (ifp->lease_expire - ifp->now) / 1000));
     arp_ask(ifp, ifp->gw);
   } else if (ifp->state == MIP_STATE_UP) {
     MG_ERROR(("Link up"));
@@ -660,7 +661,8 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
   struct connstate *s = (struct connstate *) (c + 1);
 
   if (c != NULL && s->ttype == MIP_TTYPE_KEEPALIVE) {
-    settmout(c, MIP_TTYPE_KEEPALIVE);
+    s->tmiss = 0;                      // Reset missed keep-alive counter
+    settmout(c, MIP_TTYPE_KEEPALIVE);  // Advance keep-alive timer
   }
 #if 0
   MG_INFO(("%lu %hhu %d", c ? c->id : 0, pkt->tcp->flags, (int) pkt->pay.len));
@@ -827,6 +829,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
         MG_DEBUG(("%lu keepalive", c->id));
         tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq - 1), mg_htonl(s->ack), "", 0);
+        if (s->tmiss++ > 2) mg_error(c, "keepalive");
       }
       settmout(c, MIP_TTYPE_KEEPALIVE);
     }
