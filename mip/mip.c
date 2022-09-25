@@ -444,7 +444,7 @@ static void rx_arp(struct mip_if *ifp, struct pkt *pkt) {
 
 static void rx_icmp(struct mip_if *ifp, struct pkt *pkt) {
   // MG_DEBUG(("ICMP %d", (int) len));
-  if (pkt->icmp->type == 8 && pkt->ip->dst == ifp->ip) {
+  if (pkt->icmp->type == 8 && pkt->ip != NULL && pkt->ip->dst == ifp->ip) {
     struct ip *ip = tx_ip(ifp, 1, ifp->ip, pkt->ip->src,
                           sizeof(struct icmp) + pkt->pay.len);
     struct icmp *icmp = (struct icmp *) (ip + 1);
@@ -733,7 +733,7 @@ static void rx_ip6(struct mip_if *ifp, struct pkt *pkt) {
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
     mkpay(pkt, pkt->icmp + 1);
     rx_icmp(ifp, pkt);
-  } else if (pkt->ip->proto == 17) {
+  } else if (pkt->ip6->proto == 17) {
     pkt->udp = (struct udp *) (pkt->ip6 + 1);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
     // MG_DEBUG(("  UDP %u %u -> %u", len, mg_htons(udp->sport),

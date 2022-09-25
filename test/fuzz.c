@@ -57,16 +57,30 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_json_get(mg_str_n((char *) data, size), "$.a.b", &n);
   mg_json_get(mg_str_n((char *) data, size), "$[0]", &n);
 
-  struct mip_cfg cfg = {};
-  size_t pktlen = 1540;
-  char t[sizeof(struct mip_if) + pktlen * 2 + 0 /* qlen */];
-  struct mip_if *ifp = (struct mip_if *) t;
-  struct mg_mgr mgr;
-  mg_mgr_init(&mgr);
-  if_init(ifp, &mgr, &cfg, &mip_driver_mock, NULL, pktlen, 0);
-  mip_rx(ifp, (void *) data, size);
-  mgr.priv = NULL;  // Don't let Mongoose free() ifp
-  mg_mgr_free(&mgr);
+  if (size > 0) {
+    struct mip_cfg cfg = {};
+    size_t pktlen = 1540;
+    char t[sizeof(struct mip_if) + pktlen * 2 + 0 /* qlen */];
+    struct mip_if *ifp = (struct mip_if *) t;
+    struct mg_mgr mgr;
+    mg_mgr_init(&mgr);
+    if_init(ifp, &mgr, &cfg, &mip_driver_mock, NULL, pktlen, 0);
+
+    // Make a copy of the random data, in order to modify it
+    uint8_t pkt[size];
+    struct eth *eth = (struct eth *) pkt;
+    memcpy(pkt, data, size);
+    if (size > sizeof(*eth)) {
+      static uint8_t i;
+      uint16_t types[] = {0x800, 0x800, 0x806, 0x86dd};
+      memcpy(eth->dst, ifp->mac, 6);  // Set valid destination MAC
+      eth->type = mg_htons(types[i++ & 3]);
+    }
+
+    mip_rx(ifp, (void *) pkt, size);
+    mgr.priv = NULL;  // Don't let Mongoose free() ifp
+    mg_mgr_free(&mgr);
+  }
 
   return 0;
 }
