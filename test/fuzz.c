@@ -71,10 +71,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     struct eth *eth = (struct eth *) pkt;
     memcpy(pkt, data, size);
     if (size > sizeof(*eth)) {
-      static uint8_t i;
-      uint16_t types[] = {0x800, 0x800, 0x806, 0x86dd};
+      static size_t i;
+      uint16_t eth_types[] = {0x800, 0x800, 0x806, 0x86dd};
       memcpy(eth->dst, ifp->mac, 6);  // Set valid destination MAC
-      eth->type = mg_htons(types[i++ & 3]);
+      eth->type = mg_htons(eth_types[i++]);
+      if (i >= sizeof(eth_types) / sizeof(eth_types[0])) i = 0;
     }
 
     mip_rx(ifp, (void *) pkt, size);
