@@ -888,8 +888,13 @@ uint32_t mg_ntohl(uint32_t net);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 uint64_t mg_millis(void);
 
+#if MG_ARCH == MG_ARCH_WIN32 || MG_ARCH == MG_ARCH_UNIX
+#define mg_htons(x) htons(x)
+#define mg_htonl(x) htonl(x)
+#else
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
+#endif
 
 // Linked list management macros
 #define LIST_ADD_HEAD(type_, head_, elem_) \

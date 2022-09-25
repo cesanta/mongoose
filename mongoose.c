@@ -5542,16 +5542,24 @@ char *mg_random_str(char *buf, size_t len) {
 }
 
 uint32_t mg_ntohl(uint32_t net) {
+#if MG_ARCH == MG_ARCH_WIN32 || MG_ARCH == MG_ARCH_UNIX
+  return ntohl(net);
+#else
   uint8_t data[4] = {0, 0, 0, 0};
   memcpy(&data, &net, sizeof(data));
   return (((uint32_t) data[3]) << 0) | (((uint32_t) data[2]) << 8) |
          (((uint32_t) data[1]) << 16) | (((uint32_t) data[0]) << 24);
+#endif
 }
 
 uint16_t mg_ntohs(uint16_t net) {
+#if MG_ARCH == MG_ARCH_WIN32 || MG_ARCH == MG_ARCH_UNIX
+  return ntohs(net);
+#else
   uint8_t data[2] = {0, 0};
   memcpy(&data, &net, sizeof(data));
   return (uint16_t) ((uint16_t) data[1] | (((uint16_t) data[0]) << 8));
+#endif
 }
 
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len) {
