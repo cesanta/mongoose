@@ -5330,7 +5330,21 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
   if (opts->cert != NULL && opts->cert[0] != '\0') {
     const char *key = opts->certkey;
+    char *key_pass_data = NULL;
     if (key == NULL) key = opts->cert;
+
+    if (opts->certkeypwd != NULL && opts->certkeypwd[0] != '\0') {
+      MG_DEBUG(("key pass file %s", opts->certkeypwd));
+      size_t size = 0;
+      key_pass_data = mg_file_read(&mg_fs_posix, opts->certkeypwd, &size);
+      if (size > 0 && key_pass_data != NULL && key_pass_data[0] != '\0') {
+        MG_DEBUG(("key pass %s", key_pass_data));
+        SSL_set_default_passwd_cb_userdata(tls->ssl, key_pass_data);
+      } else {
+        MG_DEBUG(("key pass error"));
+      }
+    } else {}
+
     if ((rc = SSL_use_certificate_file(tls->ssl, opts->cert, 1)) != 1) {
       mg_error(c, "Invalid SSL cert, err %d", mg_tls_err(tls, rc));
       goto fail;

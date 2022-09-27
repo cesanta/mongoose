@@ -1183,6 +1183,7 @@ struct mg_tls_opts {
   const char *crl;        // Certificate Revocation List. For clients
   const char *cert;       // Certificate
   const char *certkey;    // Certificate key
+  const char *certkeypwd; // Certificate key password file (be careful with new-line at the file end)
   const char *ciphers;    // Cipher list
   struct mg_str srvname;  // If not empty, enables server name verification
   struct mg_fs *fs;       // FS API for reading certificate files
