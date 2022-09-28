@@ -61,6 +61,21 @@ extern "C" {
 #define MG_ARCH MG_ARCH_RP2040
 #endif
 
+/*
+ * clang with std=-c99 uses __LITTLE_ENDIAN, by default
+ * while for ex, RTOS gcc - LITTLE_ENDIAN, by default
+ * it depends on __USE_BSD, but let's have everything
+ */
+#if !defined(BYTE_ORDER) && defined(__BYTE_ORDER)
+#define BYTE_ORDER __BYTE_ORDER
+#ifndef LITTLE_ENDIAN
+#define LITTLE_ENDIAN __LITTLE_ENDIAN
+#endif /* LITTLE_ENDIAN */
+#ifndef BIG_ENDIAN
+#define BIG_ENDIAN __LITTLE_ENDIAN
+#endif /* BIG_ENDIAN */
+#endif /* BYTE_ORDER */
+
 #if !defined(MG_ARCH)
 #include "mongoose_custom.h"  // keep this include
 #endif

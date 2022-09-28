@@ -777,7 +777,9 @@ static void test_http_server(void) {
   fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n");
   ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">Index of /test/<")) != NULL);
+#if BYTE_ORDER != BIG_ENDIAN
   ASSERT(mg_strstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
+#endif
 
   {
     // Credentials
@@ -1728,7 +1730,9 @@ static void test_util(void) {
   ASSERT(mg_aton(mg_str("0.0.0.-1"), &a) == false);
   ASSERT(mg_aton(mg_str("127.0.0.1"), &a) == true);
   ASSERT(a.is_ip6 == false);
+#if BYTE_ORDER != BIG_ENDIAN
   ASSERT(a.ip == 0x100007f);
+#endif
   ASSERT(strcmp(mg_ntoa(&a, buf, sizeof(buf)), "127.0.0.1") == 0);
 
   ASSERT(mg_aton(mg_str("1:2:3:4:5:6:7:8"), &a) == true);

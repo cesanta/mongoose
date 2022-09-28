@@ -2800,15 +2800,6 @@ void mg_hexdump(const void *buf, size_t len) {
 
 
 #if defined(MG_ENABLE_MD5) && MG_ENABLE_MD5
-#if !defined(BYTE_ORDER) && defined(__BYTE_ORDER)
-#define BYTE_ORDER __BYTE_ORDER
-#ifndef LITTLE_ENDIAN
-#define LITTLE_ENDIAN __LITTLE_ENDIAN
-#endif /* LITTLE_ENDIAN */
-#ifndef BIG_ENDIAN
-#define BIG_ENDIAN __LITTLE_ENDIAN
-#endif /* BIG_ENDIAN */
-#endif /* BYTE_ORDER */
 
 static void mg_byte_reverse(unsigned char *buf, unsigned longs) {
 /* Forrest: MD5 expect LITTLE_ENDIAN, swap if BIG_ENDIAN */
@@ -3646,21 +3637,6 @@ void mg_rpc_list(struct mg_rpc_req *r) {
 /* 100% Public Domain */
 
 
-
-/*
- * clang with std=-c99 uses __LITTLE_ENDIAN, by default
- * while for ex, RTOS gcc - LITTLE_ENDIAN, by default
- * it depends on __USE_BSD, but let's have everything
- */
-#if !defined(BYTE_ORDER) && defined(__BYTE_ORDER)
-#define BYTE_ORDER __BYTE_ORDER
-#ifndef LITTLE_ENDIAN
-#define LITTLE_ENDIAN __LITTLE_ENDIAN
-#endif /* LITTLE_ENDIAN */
-#ifndef BIG_ENDIAN
-#define BIG_ENDIAN __LITTLE_ENDIAN
-#endif /* BIG_ENDIAN */
-#endif /* BYTE_ORDER */
 
 union char64long16 {
   unsigned char c[64];

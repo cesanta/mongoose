@@ -18,6 +18,28 @@ jobs:
     - uses: actions/checkout@v3
     - run: sudo apt-get update ; sudo apt-get install libmbedtls-dev
     - run: make ${{ matrix.target }}
+  linux_bigendian:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        targets:
+          - target: ppc64
+            toolchain: powerpc64-linux-gnu
+            qemu: qemu-ppc64-static
+    name: linux-bigendian ${{ matrix.targets.target }}
+    env:
+      IPV6: 0
+      CC: ${{ matrix.targets.toolchain }}-gcc
+      OPTS: -O3 -g3 -static
+      SSL:
+      ASAN:
+      ASAN_OPTIONS:
+      RUN: ${{ matrix.targets.qemu }} -L /usr/${{ matrix.targets.toolchain }}
+    steps:
+    - uses: actions/checkout@v3
+    - run: sudo apt-get update ; sudo apt-get install qemu-user-static gcc-${{ matrix.targets.toolchain }}
+    - run: make test
   linux2:
     runs-on: ubuntu-latest
     steps:
