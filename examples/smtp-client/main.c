@@ -1,11 +1,13 @@
 #include "mongoose.h"
 
-static const char *user = "aaa@gmail.com";  // Change this! Your gmail account
-static const char *pass = "xxxxxxxxxxxxx";  // Change this! Your gmail password
-static const char *to = "bbb@gmail.com";    // Change this! Destination email
+static const char *server =
+    "tcp://mail.domain.com:587";  // Change this! Your mail server and port
+static const char *user = "aaa@domain.com";  // Change this! Your mail account
+static const char *pass = "xxxxxxxxxxxxxx";  // Change this! Your mail password
+static const char *to = "bbb@domain.com";    // Change this! Destination email
 
 static const char *from = "My Mail Sender";
-static const char *subj = "test email from mongoose library!";
+static const char *subj = "Test email from Mongoose library!";
 static const char *mesg = "Hi!\nThis is a test message.\nBye.";
 
 static bool s_quit;
@@ -21,15 +23,15 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       MG_INFO(("<-- %.*s", (int) c->recv.len - 2, c->recv.buf));
       c->recv.len = 0;
       if (*state == EHLO) {
-        mg_printf(c, "EHLO gmail.com\r\n");
-        *state = c->is_tls ? AUTH : STARTTLS;
+        mg_printf(c, "EHLO myname\r\n");
+        *state = STARTTLS;
       } else if (*state == STARTTLS) {
         mg_printf(c, "STARTTLS\r\n");
         *state = STARTTLS_WAIT;
       } else if (*state == STARTTLS_WAIT) {
-        struct mg_tls_opts opts = {.ca = "/tmp/ca.pem"};
+        struct mg_tls_opts opts = {.ca = "ca.pem"};
         mg_tls_init(c, &opts);
-        *state = EHLO;
+        *state = AUTH;
       } else if (*state == AUTH) {
         char a[100], b[300] = "";
         size_t n = mg_snprintf(a, sizeof(a), "%c%s%c%s", 0, user, 0, pass);
@@ -64,8 +66,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_CLOSE) {
     s_quit = true;
   } else if (ev == MG_EV_TLS_HS) {
-    MG_INFO(("TLS handshake done!"));
-    mg_printf(c, "EHLO gmail.com\r\n");
+    MG_INFO(("TLS handshake done! Sending EHLO again"));
+    mg_printf(c, "EHLO myname\r\n");
   }
   (void) fn_data, (void) ev_data;
 }
@@ -74,7 +76,7 @@ int main(void) {
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
   // mg_log_set(MG_LL_VERBOSE);
-  mg_connect(&mgr, "tcp://smtp.gmail.com:587", fn, NULL);
+  mg_connect(&mgr, server, fn, NULL);
   while (s_quit == false) mg_mgr_poll(&mgr, 1000);
   return 0;
 }
