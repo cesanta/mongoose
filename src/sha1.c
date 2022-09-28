@@ -1,7 +1,7 @@
 /* Copyright(c) By Steve Reid <steve@edmweb.com> */
 /* 100% Public Domain */
-#include "sha1.h"
 #include "arch.h"
+#include "sha1.h"
 
 union char64long16 {
   unsigned char c[64];
@@ -11,11 +11,11 @@ union char64long16 {
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
 
 static uint32_t blk0(union char64long16 *block, int i) {
-/* Forrest: SHA expect BIG_ENDIAN, swap if LITTLE_ENDIAN */
-#if BYTE_ORDER == LITTLE_ENDIAN
-  block->l[i] =
-      (rol(block->l[i], 24) & 0xFF00FF00) | (rol(block->l[i], 8) & 0x00FF00FF);
-#endif
+  if (MG_BIG_ENDIAN) {
+  } else {
+    block->l[i] = (rol(block->l[i], 24) & 0xFF00FF00) |
+                  (rol(block->l[i], 8) & 0x00FF00FF);
+  }
   return block->l[i];
 }
 
