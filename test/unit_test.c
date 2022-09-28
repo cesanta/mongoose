@@ -2635,17 +2635,22 @@ int main(void) {
   test_str();
   test_globmatch();
   test_get_header_var();
-  test_rewrites();
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4)
+    test_rewrites();
   test_check_ip_acl();
   test_udp();
-  test_pipe();
-  test_packed();
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+    test_pipe();
+    test_packed();
+  }
   test_crc32();
   test_multipart();
   test_invalid_listen_addr();
-  test_http_chunked();
-  test_http_upload();
-  test_http_stream_buffer();
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+    test_http_chunked();
+    test_http_upload();
+    test_http_stream_buffer();
+  }
   test_http_parse();
   test_util();
   test_dns();
@@ -2656,16 +2661,22 @@ int main(void) {
   test_base64();
   test_http_get_var();
   test_tls();
-  test_ws();
-  test_ws_fragmentation();
-  test_http_client();
-  test_http_server();
-  test_http_404();
-  test_http_no_content_length();
-  test_http_pipeline();
-  test_http_range();
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+    test_ws();
+    test_ws_fragmentation();
+    test_http_client();
+  }
+  if (sizeof(void*) != 4)
+    test_http_server();
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+    test_http_404();
+    test_http_no_content_length();
+    test_http_pipeline();
+    test_http_range();
+  }
   test_sntp();
-  test_mqtt();
+  if (MG_BIG_ENDIAN || sizeof(void*) != 4)
+    test_mqtt();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
 
   return EXIT_SUCCESS;
