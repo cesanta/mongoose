@@ -1730,7 +1730,9 @@ static void test_util(void) {
   ASSERT(mg_aton(mg_str("0.0.0.-1"), &a) == false);
   ASSERT(mg_aton(mg_str("127.0.0.1"), &a) == true);
   ASSERT(a.is_ip6 == false);
-#if BYTE_ORDER != BIG_ENDIAN
+#if BYTE_ORDER == BIG_ENDIAN
+  ASSERT(a.ip == 0x7f000001);
+#else
   ASSERT(a.ip == 0x100007f);
 #endif
   ASSERT(strcmp(mg_ntoa(&a, buf, sizeof(buf)), "127.0.0.1") == 0);
