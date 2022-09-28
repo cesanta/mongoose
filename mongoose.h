@@ -72,8 +72,12 @@ extern "C" {
 #define LITTLE_ENDIAN __LITTLE_ENDIAN
 #endif /* LITTLE_ENDIAN */
 #ifndef BIG_ENDIAN
-#define BIG_ENDIAN __LITTLE_ENDIAN
+#define BIG_ENDIAN __BIG_ENDIAN
 #endif /* BIG_ENDIAN */
+#elif !defined(BYTE_ORDER)
+#define BYTE_ORDER 1234
+#define LITTLE_ENDIAN 1234
+#define BIG_ENDIAN 4321
 #endif /* BYTE_ORDER */
 
 #if !defined(MG_ARCH)
