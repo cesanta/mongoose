@@ -24,6 +24,9 @@ jobs:
       fail-fast: false
       matrix:
         targets:
+          - target: ppc
+            toolchain: powerpc-linux-gnu
+            qemu: qemu-ppc-static
           - target: ppc64
             toolchain: powerpc64-linux-gnu
             qemu: qemu-ppc64-static
