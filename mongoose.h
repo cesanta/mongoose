@@ -61,21 +61,6 @@ extern "C" {
 #define MG_ARCH MG_ARCH_RP2040
 #endif
 
-/*
- * clang with std=-c99 uses __LITTLE_ENDIAN, by default
- * while for ex, RTOS gcc - LITTLE_ENDIAN, by default
- * it depends on __USE_BSD, but let's have everything
- */
-#if !defined(BYTE_ORDER) && defined(__BYTE_ORDER)
-#define BYTE_ORDER __BYTE_ORDER
-#ifndef LITTLE_ENDIAN
-#define LITTLE_ENDIAN __LITTLE_ENDIAN
-#endif /* LITTLE_ENDIAN */
-#ifndef BIG_ENDIAN
-#define BIG_ENDIAN __LITTLE_ENDIAN
-#endif /* BIG_ENDIAN */
-#endif /* BYTE_ORDER */
-
 #if !defined(MG_ARCH)
 #include "mongoose_custom.h"  // keep this include
 #endif
@@ -84,6 +69,9 @@ extern "C" {
 #error "MG_ARCH is not specified and we couldn't guess it. Set -D MG_ARCH=..."
 #endif
 #endif  // !defined(MG_ARCH)
+
+// http://esr.ibiblio.org/?p=5095
+#define MG_BIG_ENDIAN (*(uint16_t *)"\0\xff" < 0x100)
 
 
 
@@ -659,7 +647,7 @@ int sscanf(const char *, const char *, ...);
 #endif
 
 #ifndef MG_ENABLE_MD5
-#define MG_ENABLE_MD5 0
+#define MG_ENABLE_MD5 1
 #endif
 
 // Set MG_ENABLE_WINSOCK=0 for Win32 builds with external IP stack (like LWIP)
