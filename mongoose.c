@@ -6714,11 +6714,12 @@ static void rx_icmp(struct mip_if *ifp, struct pkt *pkt) {
     struct ip *ip = tx_ip(ifp, 1, ifp->ip, pkt->ip->src,
                           sizeof(struct icmp) + pkt->pay.len);
     struct icmp *icmp = (struct icmp *) (ip + 1);
+    size_t len = PDIFF(ifp->tx.buf, icmp + 1), left = ifp->tx.len - len;
+    if (left > pkt->pay.len) left = pkt->pay.len;
     memset(icmp, 0, sizeof(*icmp));  // Important - set csum to 0
-    memcpy(icmp + 1, pkt->pay.buf, pkt->pay.len);
+    memcpy(icmp + 1, pkt->pay.buf, left);
     icmp->csum = ipcsum(icmp, sizeof(*icmp) + pkt->pay.len);
-    ifp->driver->tx(ifp->tx.buf, PDIFF(ifp->tx.buf, icmp + 1) + pkt->pay.len,
-                    ifp->driver_data);
+    ifp->driver->tx(ifp->tx.buf, len + left, ifp->driver_data);
   }
 }
 
