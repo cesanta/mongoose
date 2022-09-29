@@ -1,5 +1,5 @@
 name: build
-on: [push, pull_request_target]
+on: [push, pull_request]
 jobs:
   linux:
     runs-on: ubuntu-latest
@@ -18,30 +18,37 @@ jobs:
     - uses: actions/checkout@v3
     - run: sudo apt-get update ; sudo apt-get install libmbedtls-dev
     - run: make ${{ matrix.target }}
-  linux_bigendian:
-    runs-on: ubuntu-latest
+  linux_qemu:
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         targets:
+          - target: arm
+            endian: little
+            toolchain: arm-linux-gnueabihf
+            qemu: qemu-arm
           - target: ppc
+            endian: big
             toolchain: powerpc-linux-gnu
-            qemu: qemu-ppc-static
+            qemu: qemu-ppc
           - target: ppc64
+            endian: big
             toolchain: powerpc64-linux-gnu
-            qemu: qemu-ppc64-static
-    name: linux-bigendian ${{ matrix.targets.target }}
+            qemu: qemu-ppc64
+    name: linux-${{ matrix.targets.endian }}endian ${{ matrix.targets.target }}
     env:
       IPV6: 0
       CC: ${{ matrix.targets.toolchain }}-gcc
-      OPTS: -O3 -g3 -static
       SSL:
       ASAN:
       ASAN_OPTIONS:
       RUN: ${{ matrix.targets.qemu }} -L /usr/${{ matrix.targets.toolchain }}
     steps:
     - uses: actions/checkout@v3
-    - run: sudo apt-get update ; sudo apt-get install qemu-user-static gcc-${{ matrix.targets.toolchain }}
+    - run: sudo apt-get update
+    - run: sudo apt-get dist-upgrade
+    - run: sudo apt-get install --install-suggests qemu-user gcc-${{ matrix.targets.toolchain }}
     - run: make test
   linux2:
     runs-on: ubuntu-latest
