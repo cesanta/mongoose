@@ -15,4 +15,4 @@
 // Alternatively, you can license this software under a commercial
 // license, as set out in https://www.mongoose.ws/licensing/
 //
-// SPDX-License-Identifier: GPL-2.0 or commercial
+// SPDX-License-Identifier: GPL-2.0-only or commercial
