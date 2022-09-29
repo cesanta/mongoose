@@ -58,7 +58,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_json_get(mg_str_n((char *) data, size), "$[0]", &n);
 
   if (size > 0) {
-    struct mip_cfg cfg = {0};
+    struct mip_cfg cfg = {{0,0,0,0,0,0}, 0x01020304, 255, 0x01010101};
     size_t pktlen = 1540;
     char t[sizeof(struct mip_if) + pktlen * 2 + 0 /* qlen */];
     struct mip_if *ifp = (struct mip_if *) t;
