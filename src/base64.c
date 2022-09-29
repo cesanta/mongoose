@@ -1,5 +1,5 @@
-#include "base64.h"
 #include "arch.h"
+#include "base64.h"
 
 static int mg_b64idx(int c) {
   if (c < 26) {
@@ -66,9 +66,9 @@ int mg_base64_encode(const unsigned char *p, int n, char *to) {
 }
 
 int mg_base64_decode(const char *src, int n, char *dst) {
-  const char *end = src + n;
+  const char *end = src == NULL ? NULL : src + n;  // Cannot add to NULL
   int len = 0;
-  while (src + 3 < end) {
+  while (src != NULL && src + 3 < end) {
     int a = mg_b64rev(src[0]), b = mg_b64rev(src[1]), c = mg_b64rev(src[2]),
         d = mg_b64rev(src[3]);
     if (a == 64 || a < 0 || b == 64 || b < 0 || c < 0 || d < 0) return 0;

@@ -1,7 +1,7 @@
-#include "http.h"
 #include "arch.h"
 #include "base64.h"
 #include "fmt.h"
+#include "http.h"
 #include "log.h"
 #include "net.h"
 #include "ssi.h"
@@ -202,7 +202,7 @@ static void mg_http_parse_headers(const char *s, const char *end,
 
 int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   int is_response, req_len = mg_http_get_request_len((unsigned char *) s, len);
-  const char *end = s + req_len, *qs;
+  const char *end = s == NULL ? NULL : s + req_len, *qs;  // Cannot add to NULL
   struct mg_str *cl;
 
   memset(hm, 0, sizeof(*hm));
@@ -562,12 +562,12 @@ static void printdirentry(const char *name, void *userdata) {
     }
 #if defined(MG_HTTP_DIRLIST_TIME)
     char time_str[30];
-    struct tm * time_info = localtime(&t);
+    struct tm *time_info = localtime(&t);
     strftime(time_str, sizeof time_str, "%Y/%m/%d %H:%M:%S", time_info);
     mg_snprintf(mod, sizeof(mod), "%s", time_str);
 #elif defined(MG_HTTP_DIRLIST_TIME_UTC)
     char time_str[30];
-    struct tm * time_info = gmtime(&t);
+    struct tm *time_info = gmtime(&t);
     strftime(time_str, sizeof time_str, "%Y/%m/%d %H:%M:%S", time_info);
     mg_snprintf(mod, sizeof(mod), "%s", time_str);
 #else

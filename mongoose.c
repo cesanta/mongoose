@@ -90,9 +90,9 @@ int mg_base64_encode(const unsigned char *p, int n, char *to) {
 }
 
 int mg_base64_decode(const char *src, int n, char *dst) {
-  const char *end = src + n;
+  const char *end = src == NULL ? NULL : src + n;  // Cannot add to NULL
   int len = 0;
-  while (src + 3 < end) {
+  while (src != NULL && src + 3 < end) {
     int a = mg_b64rev(src[0]), b = mg_b64rev(src[1]), c = mg_b64rev(src[2]),
         d = mg_b64rev(src[3]);
     if (a == 64 || a < 0 || b == 64 || b < 0 || c < 0 || d < 0) return 0;
@@ -1542,7 +1542,7 @@ static void mg_http_parse_headers(const char *s, const char *end,
 
 int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   int is_response, req_len = mg_http_get_request_len((unsigned char *) s, len);
-  const char *end = s + req_len, *qs;
+  const char *end = s == NULL ? NULL : s + req_len, *qs;  // Cannot add to NULL
   struct mg_str *cl;
 
   memset(hm, 0, sizeof(*hm));
@@ -1902,12 +1902,12 @@ static void printdirentry(const char *name, void *userdata) {
     }
 #if defined(MG_HTTP_DIRLIST_TIME)
     char time_str[30];
-    struct tm * time_info = localtime(&t);
+    struct tm *time_info = localtime(&t);
     strftime(time_str, sizeof time_str, "%Y/%m/%d %H:%M:%S", time_info);
     mg_snprintf(mod, sizeof(mod), "%s", time_str);
 #elif defined(MG_HTTP_DIRLIST_TIME_UTC)
     char time_str[30];
-    struct tm * time_info = gmtime(&t);
+    struct tm *time_info = gmtime(&t);
     strftime(time_str, sizeof time_str, "%Y/%m/%d %H:%M:%S", time_info);
     mg_snprintf(mod, sizeof(mod), "%s", time_str);
 #else
@@ -6715,10 +6715,10 @@ static void rx_icmp(struct mip_if *ifp, struct pkt *pkt) {
                           sizeof(struct icmp) + pkt->pay.len);
     struct icmp *icmp = (struct icmp *) (ip + 1);
     size_t len = PDIFF(ifp->tx.buf, icmp + 1), left = ifp->tx.len - len;
-    if (left > pkt->pay.len) left = pkt->pay.len;
-    memset(icmp, 0, sizeof(*icmp));  // Important - set csum to 0
-    memcpy(icmp + 1, pkt->pay.buf, left);
-    icmp->csum = ipcsum(icmp, sizeof(*icmp) + pkt->pay.len);
+    if (left > pkt->pay.len) left = pkt->pay.len;  // Don't overflow TX
+    memset(icmp, 0, sizeof(*icmp));                // Set csum to 0
+    memcpy(icmp + 1, pkt->pay.buf, left);          // Copy RX payload to TX
+    icmp->csum = ipcsum(icmp, sizeof(*icmp) + left);
     ifp->driver->tx(ifp->tx.buf, len + left, ifp->driver_data);
   }
 }

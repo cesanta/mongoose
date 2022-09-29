@@ -81,6 +81,10 @@ fuzz: mongoose.c mongoose.h Makefile test/fuzz.c
 	$(CXX) test/fuzz.c $(OPTS) $(WARN) $(INCS) $(TFLAGS) $(ASAN) -o fuzzer
 	$(RUN) ./fuzzer
 
+fuzz2: mongoose.c mongoose.h Makefile test/fuzz.c
+	$(CC) test/fuzz.c test/packed_fs.c -DMAIN $(CFLAGS) -o fuzzer
+	$(RUN) ./fuzzer /tmp/fuzzdata
+
 test: Makefile mongoose.h $(SRCS)
 	$(CC) $(SRCS) $(CFLAGS) $(LDFLAGS) -o unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test

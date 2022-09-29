@@ -453,7 +453,7 @@ static void rx_icmp(struct mip_if *ifp, struct pkt *pkt) {
     if (left > pkt->pay.len) left = pkt->pay.len;  // Don't overflow TX
     memset(icmp, 0, sizeof(*icmp));                // Set csum to 0
     memcpy(icmp + 1, pkt->pay.buf, left);          // Copy RX payload to TX
-    icmp->csum = ipcsum(icmp, sizeof(*icmp) + pkt->pay.len);
+    icmp->csum = ipcsum(icmp, sizeof(*icmp) + left);
     ifp->driver->tx(ifp->tx.buf, len + left, ifp->driver_data);
   }
 }

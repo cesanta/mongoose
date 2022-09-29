@@ -58,7 +58,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_json_get(mg_str_n((char *) data, size), "$[0]", &n);
 
   if (size > 0) {
-    struct mip_cfg cfg = {};
+    struct mip_cfg cfg = {0};
     size_t pktlen = 1540;
     char t[sizeof(struct mip_if) + pktlen * 2 + 0 /* qlen */];
     struct mip_if *ifp = (struct mip_if *) t;
@@ -85,3 +85,15 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
   return 0;
 }
+
+#if defined(MAIN)
+int main(int argc, char *argv[]) {
+  if (argc > 1) {
+    size_t len = 0;
+    char *buf = mg_file_read(&mg_fs_posix, argv[1], &len);
+    if (buf != NULL) LLVMFuzzerTestOneInput((uint8_t *) buf, len);
+    free(buf);
+  }
+  return 0;
+}
+#endif
