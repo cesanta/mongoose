@@ -75,10 +75,9 @@ musl: RUN = $(DOCKER) mdashnet/cc1
 unamalgamated: $(HDRS) Makefile test/packed_fs.c
 	$(CC) src/*.c test/packed_fs.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
 
-fuzz: WARN += -Wno-deprecated -Wno-vla-extension
 fuzz: ASAN = -fsanitize=fuzzer,signed-integer-overflow,address,undefined
 fuzz: mongoose.c mongoose.h Makefile test/fuzz.c
-	$(CXX) test/fuzz.c $(OPTS) $(WARN) $(INCS) $(TFLAGS) $(ASAN) -o fuzzer
+	$(CC) test/fuzz.c $(OPTS) $(WARN) $(INCS) $(TFLAGS) $(ASAN) -o fuzzer
 	$(RUN) ./fuzzer
 
 fuzz2: mongoose.c mongoose.h Makefile test/fuzz.c
