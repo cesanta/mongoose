@@ -39,7 +39,7 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, hm, &opts);                           // static files
     }
   } else if (ev == MG_EV_OPEN) {
-    c->is_hexdumping = 1;
+    // c->is_hexdumping = 1;
   }
 }
 
@@ -68,7 +68,23 @@ static void timer_fn(void *arg) {
   if (s_boot_timestamp < 9999) mg_sntp_request(s_sntp_conn);
 }
 
+// Zephyr: Define a semaphore and network management callback to be able to wait
+// until our IP address is ready. The main function will start and block on this
+// semaphore until this event handler releases it when the network is ready
+K_SEM_DEFINE(run, 0, 1);
+
+static void zeh(struct net_mgmt_event_callback *cb, uint32_t mgmt_event,
+                struct net_if *iface) {
+  if (mgmt_event == NET_EVENT_L4_CONNECTED) k_sem_give(&run);
+}
+
 int main(int argc, char *argv[]) {
+  // Zephyr: Register the network management callback and block on the semaphore
+  struct net_mgmt_event_callback ncb;
+  net_mgmt_init_event_callback(&ncb, zeh, NET_EVENT_L4_CONNECTED);
+  net_mgmt_add_event_callback(&ncb);
+  k_sem_take(&run, K_FOREVER);
+
   struct mg_mgr mgr;
 
   mg_log_set(MG_LL_DEBUG);
