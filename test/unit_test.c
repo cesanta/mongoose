@@ -925,24 +925,6 @@ static void test_http_404(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL || MG_ENABLE_WOLFSSL
-static void* start_client_async(void* is_client_running) {
-  struct mg_mgr mgr;
-  const char *url = "https://127.0.0.1:12347";
-  char buf[FETCH_BUF_SIZE];
-
-  mg_mgr_init(&mgr);
-  ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
-  // MG_INFO(("%s", buf));
-  ASSERT(cmpbody(buf, "hello\n") == 0);
-  mg_mgr_free(&mgr);
-  ASSERT(mgr.conns == NULL);
-
-  *((int*) is_client_running) = 0;
-  return NULL;
-}
-#endif
-
 static void test_tls(void) {
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL || MG_ENABLE_WOLFSSL
   struct mg_tls_opts opts = {.ca = "./test/data/ss_ca.pem",
@@ -950,19 +932,14 @@ static void test_tls(void) {
                              .certkey = "./test/data/ss_server.key"};
   struct mg_mgr mgr;
   struct mg_connection *c;
-  pthread_t id;
-  int is_client_running = 1;
   const char *url = "https://127.0.0.1:12347";
-  
-  // Start the server
+  char buf[FETCH_BUF_SIZE];
   mg_mgr_init(&mgr);
   c = mg_http_listen(&mgr, url, eh1, (void *) &opts);
   ASSERT(c != NULL);
-
-  // Start the client in another thread
-  pthread_create(&id, NULL, start_client_async, &is_client_running);
-  while (is_client_running) mg_mgr_poll(&mgr, 10);
-
+  ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
+  // MG_INFO(("%s", buf));
+  ASSERT(cmpbody(buf, "hello\n") == 0);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 #endif

@@ -116,27 +116,31 @@ void mg_tls_handshake(struct mg_connection *c) {
   }
 
   if (c->is_client) {
-    do {
-      rc = wolfSSL_connect(tls->ssl);
-      err = wolfSSL_get_error(tls->ssl, rc);
-    } while (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE);
-    
-    if (rc != SSL_SUCCESS) {
-        mg_error(c, "Error in wolfSSL_connect");
+    rc = wolfSSL_connect(tls->ssl);
+    err = wolfSSL_get_error(tls->ssl, rc);
+
+    if (rc == SSL_SUCCESS) {
+      MG_DEBUG(("%lu success", c->id));
+      c->is_tls_hs = 0;
+    } else if (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE) {
+      MG_DEBUG(("%lu pending", c->id));
+    } else {
+      int code = mg_tls_err(tls, rc);
+      if (code != 0) mg_error(c, "tls hs: rc %d, err %d", rc, code);
     }
   } else {
-    do {
-      rc = wolfSSL_accept(tls->ssl);
-      err = wolfSSL_get_error(tls->ssl, rc);
-    } while (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE);
-  }
+    rc = wolfSSL_accept(tls->ssl);
+    err = wolfSSL_get_error(tls->ssl, rc);
 
-  if (rc == SSL_SUCCESS) {
-    MG_DEBUG(("%lu success", c->id));
-    c->is_tls_hs = 0;
-  } else {
-    int code = mg_tls_err(tls, rc);
+    if (rc == SSL_SUCCESS) {
+      MG_DEBUG(("%lu success", c->id));
+      c->is_tls_hs = 0;
+    } else if (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE) {
+      MG_DEBUG(("%lu pending", c->id));
+    } else {
+      int code = mg_tls_err(tls, rc);
     if (code != 0) mg_error(c, "tls hs: rc %d, err %d", rc, code);
+    }
   }
 }
 
@@ -148,7 +152,7 @@ void mg_tls_free(struct mg_connection *c) {
   do {
     ret = wolfSSL_shutdown(tls->ssl);
     err = wolfSSL_get_error(tls->ssl, ret);
-  } while (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE);
+  } while (ret != SSL_SUCCESS && (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE));
 
   wolfSSL_free(tls->ssl);
   wolfSSL_CTX_free(tls->ctx);
@@ -165,24 +169,30 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int ret, err;
 
-  do {
-    ret = wolfSSL_read(tls->ssl, buf, (int) len);
-    err = wolfSSL_get_error(tls->ssl, ret);
-  } while (err == WOLFSSL_ERROR_WANT_READ);
+  ret = wolfSSL_read(tls->ssl, buf, (int) len);
 
-  return ret == 0 ? -1 : ret < 0 && mg_tls_err(tls, ret) == 0 ? 0 : ret;
+  if (ret == 0) {
+    err = wolfSSL_get_error(tls->ssl, ret);
+    if (err == WOLFSSL_ERROR_WANT_READ) return MG_IO_WAIT;
+    else return MG_IO_ERR;
+  }
+
+  return ret;
 }
 
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int ret, err;
 
-  do {
-    ret = wolfSSL_write(tls->ssl, buf, (int) len);
-    err = wolfSSL_get_error(tls->ssl, ret);
-  } while (err == WOLFSSL_ERROR_WANT_WRITE);
+  ret = wolfSSL_write(tls->ssl, buf, (int) len);
 
-  return ret == 0 ? -1 : ret < 0 && mg_tls_err(tls, ret) == 0 ? 0 : ret;
+  if (ret == 0) {
+    err = wolfSSL_get_error(tls->ssl, ret);
+    if (err == WOLFSSL_ERROR_WANT_WRITE) return MG_IO_WAIT;
+    else return MG_IO_ERR;
+  }
+
+  return ret;
 }
 
 #endif
