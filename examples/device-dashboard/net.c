@@ -12,8 +12,8 @@
 static time_t s_boot_timestamp = 0;               // Updated by SNTP
 static struct mg_connection *s_sntp_conn = NULL;  // SNTP connection
 
-// Define system time()
-time_t time(time_t *tp) {
+// Define a system time alternative
+time_t ourtime(time_t *tp) {
   time_t t = s_boot_timestamp + (time_t) (mg_millis() / 1000);
   if (tp != NULL) *tp = t;
   return t;
@@ -90,7 +90,7 @@ static void send_notification(struct mg_mgr *mgr, const char *fmt, ...) {
 // Send simulated metrics data to the dashboard, for chart rendering
 static void timer_metrics_fn(void *param) {
   send_notification(param, "{%Q:%Q,%Q:[%lu, %d]}", "name", "metrics", "data",
-                    (unsigned long) time(NULL),
+                    (unsigned long) ourtime(NULL),
                     10 + (int) ((double) rand() * 10 / RAND_MAX));
 }
 
