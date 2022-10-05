@@ -2,12 +2,12 @@
 
 #if MG_ARCH == MG_ARCH_ZEPHYR
 
-#include <zephyr.h>
+#include <zephyr/kernel.h>
 
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <net/socket.h>
+#include <zephyr/net/socket.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -18,6 +18,9 @@
 #include <time.h>
 
 #define MG_PUTCHAR(x) printk("%c", x)
+#ifndef strdup
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
+#endif
 #define strerror(x) zsock_gai_strerror(x)
 #define FD_CLOEXEC 0
 #define F_SETFD 0
