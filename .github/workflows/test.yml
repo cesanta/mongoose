@@ -165,7 +165,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        example:
+        zephyrexample:
           - name: nucleo_f746zg-zephyr-http-client
             path: zephyr/http-client
           - name: nucleo_f746zg-zephyr-http-server
