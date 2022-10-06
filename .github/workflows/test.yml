@@ -155,6 +155,17 @@ jobs:
             path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
           - name: ti
             path: ti/ti-ek-tm4c1294xl-http-server
+    name: ${{ matrix.example.name }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: ${{ matrix.example.name }}
+        run: make -C examples/${{ matrix.example.path }} build
+  matrix_zephyr_examples:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
           - name: nucleo_f746zg-zephyr-http-client
             path: zephyr/http-client
           - name: nucleo_f746zg-zephyr-http-server
@@ -163,8 +174,8 @@ jobs:
             path: zephyr/mqtt-aws-client
           - name: nucleo_f746zg-zephyr-websocket-server
             path: zephyr/websocket-server             
-    name: ${{ matrix.example.name }}
+    name: ${{ matrix.zephyr-example.name }}
     steps:
       - uses: actions/checkout@v3
-      - name: ${{ matrix.example.name }}
-        run: make -C examples/${{ matrix.example.path }} build
+      - name: ${{ matrix.zephyr-example.name }}
+        run: make -C examples/${{ matrix.zephyr-example.path }} zephyr build
