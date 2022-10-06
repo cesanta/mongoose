@@ -174,8 +174,8 @@ jobs:
             path: zephyr/mqtt-aws-client
           - name: nucleo_f746zg-zephyr-websocket-server
             path: zephyr/websocket-server             
-    name: ${{ matrix.zephyr-example.name }}
+    name: ${{ matrix.zephyrexample.name }}
     steps:
       - uses: actions/checkout@v3
-      - name: ${{ matrix.zephyr-example.name }}
-        run: make -C examples/${{ matrix.zephyr-example.path }} zephyr build
+      - name: ${{ matrix.zephyrexample.name }}
+        run: make -C examples/${{ matrix.zephyrexample.path }} zephyr build
