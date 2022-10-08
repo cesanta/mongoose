@@ -23,12 +23,12 @@ var jsonrpc = function(url, onopen, onclose, onnotification) {
       ws.send(JSON.stringify(request));
       console.log('sent', request);
       return new Promise(function(resolve, reject) {
-        setTimeout(JSONRPC_TIMEOUT_MS, function() {
+        setTimeout(function() {
           if (pending[id] === undefined) return;
           log('Timing out frame ', JSON.stringify(request));
           delete (pending[id]);
           reject();
-        });
+        }, JSONRPC_TIMEOUT_MS);
         pending[id] = x => resolve(x);
       });
     },
