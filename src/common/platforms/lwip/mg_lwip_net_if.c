@@ -203,8 +203,10 @@ static err_t mg_lwip_tcp_sent_cb(void *arg, struct tcp_pcb *tpcb,
   struct mg_connection *nc = (struct mg_connection *) arg;
   DBG(("%p %p %u %p %p", nc, tpcb, num_sent, tpcb->unsent, tpcb->unacked));
   if (nc == NULL) return ERR_OK;
-  if ((nc->flags & MG_F_SEND_AND_CLOSE) && !(nc->flags & MG_F_WANT_WRITE) &&
-      nc->send_mbuf.len == 0 && tpcb->unsent == NULL && tpcb->unacked == NULL) {
+  if ((nc->flags & (MG_F_SEND_AND_CLOSE | MG_F_CLOSE_IMMEDIATELY)) ==
+          MG_F_SEND_AND_CLOSE &&
+      !(nc->flags & MG_F_WANT_WRITE) && nc->send_mbuf.len == 0 &&
+      tpcb->unsent == NULL && tpcb->unacked == NULL) {
     mg_lwip_post_signal(MG_SIG_CLOSE_CONN, nc);
   }
   if (nc->send_mbuf.len > 0 || (nc->flags & MG_F_WANT_WRITE)) {
