@@ -43,14 +43,14 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   }
 }
 
-// We have no valid system time(), and we need it for TLS. Implement it
-time_t time(time_t *tp) {
-  time_t t = s_boot_timestamp + k_uptime_get() / 1000;
+// example system time()-like function
+time_t ourtime(time_t *tp) {
+  time_t t = s_boot_timestamp + mg_millis() / 1000;
   if (tp != NULL) *tp = t;
   return t;
 }
 
-// SNTP callback. Modifies s_boot_timestamp, to make time() correct
+// SNTP callback. Modifies s_boot_timestamp, to make ourtime() correct
 static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_SNTP_TIME) {
     int64_t t = *(int64_t *) ev_data;
