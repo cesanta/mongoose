@@ -155,6 +155,8 @@ jobs:
             path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
           - name: ti
             path: ti/ti-ek-tm4c1294xl-http-server
+          - name: pico-w
+            path: raspberry/raspberry-pi-pico-w
     name: ${{ matrix.example.name }}
     steps:
       - uses: actions/checkout@v3
@@ -173,7 +175,7 @@ jobs:
           - name: nucleo_f746zg-zephyr-mqtt-aws-client
             path: zephyr/mqtt-aws-client
           - name: nucleo_f746zg-zephyr-websocket-server
-            path: zephyr/websocket-server             
+            path: zephyr/websocket-server
     name: ${{ matrix.zephyrexample.name }}
     steps:
       - uses: actions/checkout@v3
