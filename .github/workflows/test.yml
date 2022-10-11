@@ -101,16 +101,22 @@ jobs:
         example:
           - name: esp32/device-dashboard
             path: esp32/device-dashboard
+          - name: esp32/uart-bridge
+            path: esp32/uart-bridge
           - name: esp8266
             path: esp8266
           - name: stm32-freertos-tcp
             path: stm32/stm32-freertos-tcp
           - name: stm32-nucleo-f746z
             path: stm32/stm32-nucleo-f746z
+          - name: stm32-nucleo-f746zg
+            path: stm32/stm32-nucleo-f746zg
           - name: stm32-nucleo-f429z
             path: stm32/stm32-nucleo-f429z
           - name: stm32-nucleo-h743z
             path: stm32/stm32-nucleo-h743z
+          - name: stm32-nucleo-f429zi-baremetal
+            path: stm32/nucleo-f429zi-baremetal
           - name: stm32-nucleo-f746zg-baremetal
             path: stm32/nucleo-f746zg-baremetal
           - name: nxp-mimxrt1020-azurertos
@@ -168,13 +174,15 @@ jobs:
       fail-fast: false
       matrix:
         zephyrexample:
-          - name: nucleo_f746zg-zephyr-http-client
+          - name: zephyr-device-dashboard
+            path: zephyr/device-dashboard
+          - name: zephyr-http-client
             path: zephyr/http-client
-          - name: nucleo_f746zg-zephyr-http-server
+          - name: zephyr-http-server
             path: zephyr/http-server
-          - name: nucleo_f746zg-zephyr-mqtt-aws-client
+          - name: zephyr-mqtt-aws-client
             path: zephyr/mqtt-aws-client
-          - name: nucleo_f746zg-zephyr-websocket-server
+          - name: zephyr-websocket-server
             path: zephyr/websocket-server
     name: ${{ matrix.zephyrexample.name }}
     steps:
