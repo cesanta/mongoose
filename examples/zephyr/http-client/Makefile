@@ -1,59 +1,41 @@
-MONGOOSE_ROOT ?= $(realpath $(CURDIR)/../../..)
-DOCKER_PROJECT_DIR ?= /workdir
-ZEPHYR_DIR ?= zephyrproject
-PROJECT_NAME = $(notdir $(CURDIR))
-PROJECT_PATH = $(realpath $(CURDIR))
-ZEPHYR_PATH = $(realpath $(CURDIR)/..)/$(ZEPHYR_DIR)
-DOCKER_PROJECT_PATH = $(DOCKER_PROJECT_DIR)/$(PROJECT_NAME)
-DOCKER_ZEPHYR_PATH = $(DOCKER_PROJECT_DIR)/$(ZEPHYR_DIR)
-
-BOARD ?= qemu_x86
-ifeq "$(BOARD)" "qemu_x86"
-OVERLAY ?= -DOVERLAY_CONFIG=overlay-e1000.conf
-else
-OVERLAY ?= 
-endif
-
-SHAREUSB ?= --privileged -v /dev/bus/usb/:/dev/bus/usb
-SHARETUN ?= --cap-add=NET_ADMIN --device /dev/net/tun --net=host
-DOCKER ?= docker run --rm -v $(PROJECT_PATH):$(DOCKER_PROJECT_PATH) -v $(ZEPHYR_PATH):$(DOCKER_ZEPHYR_PATH)
-REPO ?= zephyrprojectrtos/ci
-
+TOP_DIR ?= $(realpath $(CURDIR)/../../..)
+ZEPHYR_DIR ?= $(realpath $(CURDIR)/..)/zephyrproject
+DOCKER ?= docker run --rm \
+          -v $(TOP_DIR):$(TOP_DIR) \
+          -w $(realpath $(CURDIR)) \
+          -e ZEPHYR_BASE=$(ZEPHYR_DIR)/zephyr \
+          $(DOCKER_ARGS) zephyrprojectrtos/ci
+#BUILD_ARGS ?= -b qemu_x86 -DOVERLAY_CONFIG=overlay-e1000.conf
+BUILD_ARGS ?= -b nucleo_f429zi
+.PHONY: build
 
 example:
 	true
 
-build:
-	cp $(MONGOOSE_ROOT)/mongoose.[c,h] src/
-	$(DOCKER) $(REPO) /bin/sh -c 'cd $(DOCKER_ZEPHYR_PATH)/zephyr && \
-	west build -b $(BOARD) -p auto $(DOCKER_PROJECT_PATH) $(OVERLAY) --build-dir $(DOCKER_PROJECT_PATH)/build'
+zephyr:
+	test -d $(ZEPHYR_DIR) || ( mkdir -p $(ZEPHYR_DIR) ; $(DOCKER) west init $(ZEPHYR_DIR))
+	$(DOCKER) sh -c 'cd $(ZEPHYR_DIR) && west update'
 
+build:
+	cp $(TOP_DIR)/mongoose.[c,h] src/
+	$(DOCKER) west build $(BUILD_ARGS) -p auto $(realpath $(CURDIR))
+
+run: DOCKER_ARGS ?= --cap-add=NET_ADMIN --device /dev/net/tun --net=host -it
 run:
-	$(DOCKER) -it $(SHARETUN) $(REPO) /bin/sh -c 'cd $(DOCKER_ZEPHYR_PATH) && \
-	west build -t run --build-dir $(DOCKER_PROJECT_PATH)/build'
+	$(DOCKER) west build -t run
 
 clean:
-	$(DOCKER) $(REPO) /bin/sh -c 'cd $(DOCKER_ZEPHYR_PATH) && \
-	west build -t clean --build-dir $(DOCKER_PROJECT_PATH)/build'
+	-$(DOCKER) west build -t clean
 
 pristine:
-	$(DOCKER) $(REPO) /bin/sh -c 'cd $(DOCKER_ZEPHYR_PATH) && \
-	west build -t pristine --build-dir $(DOCKER_PROJECT_PATH)/build'
+	-$(DOCKER) west build -t pristine
 
+purge: clean pristine
+	rm -rf $(TOP_DIR)/.west $(ZEPHYR_DIR) build
 
+flash debug: DOCKER_ARGS ?= --privileged -v /dev/bus/usb/:/dev/bus/usb -it
 flash:
-	$(DOCKER) $(SHAREUSB) $(REPO) /bin/sh -c 'cd $(DOCKER_ZEPHYR_PATH) && \
-	west flash --build-dir $(DOCKER_PROJECT_PATH)/build'
+	$(DOCKER) west flash --build-dir $(realpath $(CURDIR))/build
 
 debug:
-	$(DOCKER) -it $(SHAREUSB) $(REPO) /bin/sh -c 'cd $(DOCKER_ZEPHYR_PATH) && \
-	west debug --build-dir $(DOCKER_PROJECT_PATH)/build'
-
-.PHONY: build flash zephyr clean pristine run
-
-zephyr:
-ifeq ($(wildcard $(ZEPHYR_PATH)/.*),)
-	mkdir $(ZEPHYR_PATH)
-	$(DOCKER) $(REPO) /bin/sh -c 'cd $(DOCKER_PROJECT_DIR) && west init ./$(ZEPHYR_DIR)'
-endif
-	$(DOCKER) $(REPO) /bin/sh -c 'cd $(DOCKER_ZEPHYR_PATH) && west update'
+	$(DOCKER) west debug --build-dir $(realpath $(CURDIR))/build
