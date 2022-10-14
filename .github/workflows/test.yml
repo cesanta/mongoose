@@ -99,70 +99,38 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - name: esp32/device-dashboard
-            path: esp32/device-dashboard
-          - name: esp32/uart-bridge
-            path: esp32/uart-bridge
-          - name: esp8266
-            path: esp8266
-          - name: stm32-freertos-tcp
-            path: stm32/stm32-freertos-tcp
-          - name: stm32-nucleo-f746z
-            path: stm32/stm32-nucleo-f746z
-          - name: stm32-nucleo-f746zg
-            path: stm32/stm32-nucleo-f746zg
-          - name: stm32-nucleo-f429z
-            path: stm32/stm32-nucleo-f429z
-          - name: stm32-nucleo-h743z
-            path: stm32/stm32-nucleo-h743z
-          - name: stm32-nucleo-f429zi-baremetal
-            path: stm32/nucleo-f429zi-baremetal
-          - name: stm32-nucleo-f746zg-baremetal
-            path: stm32/nucleo-f746zg-baremetal
-          - name: nxp-mimxrt1020-azurertos
-            path: nxp/nxp-mimxrt1020-azurertos
-          - name: nxp-frdmk66f-freertos
-            path: nxp/nxp-frdmk66f-freertos
-          - name: nxp-lpcxpresso54s018m-freertos
-            path: nxp/nxp-lpcxpresso54s018m-freertos
-          - name: nxp-mimxrt1020-freertos
-            path: nxp/nxp-mimxrt1020-freertos
-          - name: nxp-evkbimxrt1050-lwip-freertos
-            path: nxp/nxp-evkbimxrt1050-lwip-freertos
-          - name: nxp-evkmimxrt1020-lwip-freertos
-            path: nxp/nxp-evkmimxrt1020-lwip-freertos
-          - name: nxp-evkmimxrt1024-lwip-freertos
-            path: nxp/nxp-evkmimxrt1024-lwip-freertos
-          - name: nxp-evkmimxrt1060-lwip-freertos
-            path: nxp/nxp-evkmimxrt1060-lwip-freertos
-          - name: nxp-evkmimxrt1064-lwip-freertos
-            path: nxp/nxp-evkmimxrt1064-lwip-freertos
-          - name: nxp-evkmimxrt1160-cm7-lwip-freertos
-            path: nxp/nxp-evkmimxrt1160-cm7-lwip-freertos
-          - name: nxp-evkmimxrt1170-cm7-lwip-freertos
-            path: nxp/nxp-evkmimxrt1170-cm7-lwip-freertos
-          - name: nxp-frdmk64f-lwip-freertos
-            path: nxp/nxp-frdmk64f-lwip-freertos
-          - name: nxp-frdmk66f-lwip-freertos
-            path: nxp/nxp-frdmk66f-lwip-freertos
-          - name: nxp-lpcxpresso54018-lwip-freertos
-            path: nxp/nxp-lpcxpresso54018-lwip-freertos
-          - name: nxp-lpcxpresso54608-lwip-freertos
-            path: nxp/nxp-lpcxpresso54608-lwip-freertos
-          - name: nxp-lpcxpresso54618-lwip-freertos
-            path: nxp/nxp-lpcxpresso54618-lwip-freertos
-          - name: nxp-lpcxpresso54628-lwip-freertos
-            path: nxp/nxp-lpcxpresso54628-lwip-freertos
-          - name: nxp-twrk65f180m-lwip-freertos
-            path: nxp/nxp-twrk65f180m-lwip-freertos
-          - name: nxp-twrkv58f220m-lwip-freertos
-            path: nxp/nxp-twrkv58f220m-lwip-freertos
-          - name: infineon-xmc4700_4800-lwip-rtx-rtos
-            path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
-          - name: ti
-            path: ti/ti-ek-tm4c1294xl-http-server
-          - name: pico-w
-            path: raspberry/raspberry-pi-pico-w
+          - path: esp32/device-dashboard
+          - path: esp32/uart-bridge
+          - path: esp8266
+          - path: stm32/stm32-freertos-tcp
+          - path: stm32/stm32-nucleo-f746z
+          - path: stm32/stm32-nucleo-f746zg
+          - path: stm32/stm32-nucleo-f429z
+          - path: stm32/stm32-nucleo-h743z
+          - path: stm32/nucleo-f429zi-baremetal
+          - path: stm32/nucleo-f746zg-baremetal
+          - path: nxp/nxp-mimxrt1020-azurertos
+          - path: nxp/nxp-frdmk66f-freertos
+          - path: nxp/nxp-lpcxpresso54s018m-freertos
+          - path: nxp/nxp-mimxrt1020-freertos
+          - path: nxp/nxp-evkbimxrt1050-lwip-freertos
+          - path: nxp/nxp-evkmimxrt1020-lwip-freertos
+          - path: nxp/nxp-evkmimxrt1024-lwip-freertos
+          - path: nxp/nxp-evkmimxrt1060-lwip-freertos
+          - path: nxp/nxp-evkmimxrt1064-lwip-freertos
+          - path: nxp/nxp-evkmimxrt1160-cm7-lwip-freertos
+          - path: nxp/nxp-evkmimxrt1170-cm7-lwip-freertos
+          - path: nxp/nxp-frdmk64f-lwip-freertos
+          - path: nxp/nxp-frdmk66f-lwip-freertos
+          - path: nxp/nxp-lpcxpresso54018-lwip-freertos
+          - path: nxp/nxp-lpcxpresso54608-lwip-freertos
+          - path: nxp/nxp-lpcxpresso54618-lwip-freertos
+          - path: nxp/nxp-lpcxpresso54628-lwip-freertos
+          - path: nxp/nxp-twrk65f180m-lwip-freertos
+          - path: nxp/nxp-twrkv58f220m-lwip-freertos
+          - path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
+          - path: ti/ti-ek-tm4c1294xl-http-server
+          - path: raspberry/raspberry-pi-pico-w
     name: ${{ matrix.example.name }}
     steps:
       - uses: actions/checkout@v3
@@ -174,16 +142,11 @@ jobs:
       fail-fast: false
       matrix:
         zephyrexample:
-          - name: zephyr-device-dashboard
-            path: zephyr/device-dashboard
-          - name: zephyr-http-client
-            path: zephyr/http-client
-          - name: zephyr-http-server
-            path: zephyr/http-server
-          - name: zephyr-mqtt-aws-client
-            path: zephyr/mqtt-aws-client
-          - name: zephyr-websocket-server
-            path: zephyr/websocket-server
+          - path: zephyr/device-dashboard
+          - path: zephyr/http-client
+          - path: zephyr/http-server
+          - path: zephyr/mqtt-aws-client
+          - path: zephyr/websocket-server
     name: ${{ matrix.zephyrexample.name }}
     steps:
       - uses: actions/checkout@v3

@@ -5614,7 +5614,6 @@ uint64_t mg_millis(void) {
 }
 #endif
 
-
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ws.c"
 #endif

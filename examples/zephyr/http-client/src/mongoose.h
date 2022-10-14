@@ -293,6 +293,12 @@ struct timeval {
 #define EINTR pdFREERTOS_ERRNO_EINTR
 #endif
 
+// FreeRTOS-TCP uses non-standard semantics for listen() backlog size. It is
+// not a backlog size for pending SYN connections, but a max socket number
+#ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 128
+#endif
+
 #endif  // MG_ARCH == MG_ARCH_FREERTOS_TCP
 
 
