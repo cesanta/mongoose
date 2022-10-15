@@ -67,7 +67,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if_init(ifp, &mgr, &cfg, &mip_driver_mock, NULL, pktlen, 0);
 
     // Make a copy of the random data, in order to modify it
-    uint8_t pkt[size];
+    uint8_t *pkt = malloc(size);
     struct eth *eth = (struct eth *) pkt;
     memcpy(pkt, data, size);
     if (size > sizeof(*eth)) {
@@ -81,6 +81,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     mip_rx(ifp, (void *) pkt, size);
     mgr.priv = NULL;  // Don't let Mongoose free() ifp
     mg_mgr_free(&mgr);
+    free(pkt);
   }
 
   return 0;
