@@ -3942,7 +3942,7 @@ Parameters:
   - `0` - Disable logging
   - `1` - Log errors only
   - `2` - Log errors and info messages
-  - `3` - Log errors, into and debug messages
+  - `3` - Log errors, info and debug messages
   - `4` - Log everything
 
 Return value: None
