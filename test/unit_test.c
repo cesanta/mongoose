@@ -331,11 +331,11 @@ static void test_sntp(void) {
 
   ASSERT(mg_sntp_parse(bad, sizeof(bad)) < 0);
   ASSERT(mg_sntp_parse(NULL, 0) == -1);
-  test_sntp_server("udp://time.windows.com:123");
+  // test_sntp_server("udp://time.windows.com:123");
   // NOTE(cpq): temporarily disabled until Github Actions fix their NTP
   // port blockage issue, https://github.com/actions/runner-images/issues/5615
-  // test_sntp_server("udp://time.apple.com:123");
-  // test_sntp_server(NULL);
+  test_sntp_server("udp://time.apple.com:123");
+  test_sntp_server(NULL);
 }
 
 struct mqtt_data {
@@ -2635,18 +2635,17 @@ int main(void) {
   test_str();
   test_globmatch();
   test_get_header_var();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4)
-    test_rewrites();
+  if (MG_BIG_ENDIAN || sizeof(void *) != 4) test_rewrites();
   test_check_ip_acl();
   test_udp();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+  if (MG_BIG_ENDIAN || sizeof(void *) != 4) {
     test_pipe();
     test_packed();
   }
   test_crc32();
   test_multipart();
   test_invalid_listen_addr();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+  if (MG_BIG_ENDIAN || sizeof(void *) != 4) {
     test_http_chunked();
     test_http_upload();
     test_http_stream_buffer();
@@ -2661,22 +2660,20 @@ int main(void) {
   test_base64();
   test_http_get_var();
   test_tls();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+  if (MG_BIG_ENDIAN || sizeof(void *) != 4) {
     test_ws();
     test_ws_fragmentation();
     test_http_client();
   }
-  if (sizeof(void*) != 4)
-    test_http_server();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4) {
+  if (sizeof(void *) != 4) test_http_server();
+  if (MG_BIG_ENDIAN || sizeof(void *) != 4) {
     test_http_404();
     test_http_no_content_length();
     test_http_pipeline();
     test_http_range();
   }
   test_sntp();
-  if (MG_BIG_ENDIAN || sizeof(void*) != 4)
-    test_mqtt();
+  if (MG_BIG_ENDIAN || sizeof(void *) != 4) test_mqtt();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
 
   return EXIT_SUCCESS;
