@@ -3432,6 +3432,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
   } else {
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->is_udp = (strncmp(url, "udp:", 4) == 0);
+    c->fd = (void *) (size_t) -1;  // Set to INVALID_SOCKET
     c->fn = fn;
     c->is_client = true;
     c->fn_data = fn_data;
