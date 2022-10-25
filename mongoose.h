@@ -49,14 +49,14 @@ extern "C" {
 #define MG_ARCH MG_ARCH_WIN32
 #elif defined(ICACHE_FLASH) || defined(ICACHE_RAM_ATTR)
 #define MG_ARCH MG_ARCH_ESP8266
+#elif defined(__ZEPHYR__)
+#define MG_ARCH MG_ARCH_ZEPHYR
 #elif defined(ESP_PLATFORM)
 #define MG_ARCH MG_ARCH_ESP32
 #elif defined(FREERTOS_IP_H)
 #define MG_ARCH MG_ARCH_FREERTOS_TCP
 #elif defined(AZURE_RTOS_THREADX)
 #define MG_ARCH MG_ARCH_AZURERTOS
-#elif defined(__ZEPHYR__)
-#define MG_ARCH MG_ARCH_ZEPHYR
 #elif defined(PICO_TARGET_NAME)
 #define MG_ARCH MG_ARCH_RP2040
 #endif
