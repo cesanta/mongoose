@@ -1417,6 +1417,20 @@ struct mg_ws_message {
 
 Structure represents the WebSocket message.
 
+`flags` can be used to determine incoming message type, if desired:
+
+```c
+struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+switch (wm->flags & 15) {
+  case WEBSOCKET_OP_BINARY:
+    // Handle binary message
+    break;
+  case WEBSOCKET_OP_TEXT:
+    // Handle text message
+    break;
+}
+```
+
 ### mg\_ws\_connect()
 
 ```c
