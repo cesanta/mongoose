@@ -1404,18 +1404,50 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ```
 
 
-## Websocket
+## WebSocket
 
 ### struct mg\_ws\_message
 
 ```c
 struct mg_ws_message {
-  struct mg_str data; // Websocket message data
-  uint8_t flags;      // Websocket message flags
+  struct mg_str data; // WebSocket message data
+  uint8_t flags;      // WebSocket message flags
 };
 ```
 
-Structure represents the WebSocket message.
+This structure represents the WebSocket message, the `flags` element corresponds to the first byte as described in [RFC 6455 section 5.2](https://www.rfc-editor.org/rfc/rfc6455#section-5.2).
+
+#### WebSocket message type:
+
+To extract the message type from an incoming message, check the four LSBs in the `flags` element of the `struct mg_ws_message`.
+
+Possible WebSocket message types:
+
+```c
+#define WEBSOCKET_OP_CONTINUE 0
+#define WEBSOCKET_OP_TEXT 1
+#define WEBSOCKET_OP_BINARY 2
+#define WEBSOCKET_OP_CLOSE 8
+#define WEBSOCKET_OP_PING 9
+#define WEBSOCKET_OP_PONG 10
+```
+
+```c
+// Mongoose events handler
+void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_WS_MSG) {
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    msgtype = wm->flags & 0x0F;
+    if (msgtype == WEBSOCKET_OP_BINARY) {
+      // This is a binary data message
+    } else if (msgtype == WEBSOCKET_OP_TEXT) {
+      // This is a text data message
+    }
+  }
+}
+```
+
+To send a message, use the proper message type as described in [RFC 6455 section 5.6](https://www.rfc-editor.org/rfc/rfc6455#section-5.6) for data frames. when calling [mg_ws_send()](#mg_ws_send) or [mg_ws_printf()](#mg_ws_printf-mg_ws_vprintf) below
 
 ### mg\_ws\_connect()
 
@@ -1425,7 +1457,7 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
                                     const char *fmt, ...);
 ```
 
-Create client Websocket connection.
+Create client WebSocket connection.
 
 Note: this function does not connect to peer, it allocates required resources and
  starts the connect process. Once peer is really connected, the `MG_EV_CONNECT` event is
@@ -1434,7 +1466,6 @@ Note: this function does not connect to peer, it allocates required resources an
 Parameters:
 - `mgr` - Event manager to use
 - `url` - Specifies remote URL, e.g. `http://google.com`
-- `opts` - MQTT options, with client ID, QoS, etc
 - `fn` - An event handler function
 - `fn_data` - An arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
@@ -1458,9 +1489,9 @@ void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *,
                    const char *fmt, ...);
 ```
 
-Upgrade given HTTP connection to Websocket. The `fmt` is a printf-like
+Upgrade given HTTP connection to WebSocket. The `fmt` is a printf-like
 format string for the extra HTTP headers returned to the client in a
-Websocket handshake. Set `fmt` to `NULL` if no extra headers need to be passed.
+WebSocket handshake. Set `fmt` to `NULL` if no extra headers need to be passed.
 
 Parameters:
 - `c` - Connection to use
@@ -1487,26 +1518,15 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 size_t mg_ws_send(struct mg_connection *c, const void *buf, size_t len, int op);
 ```
 
-Send data to websocket peer
+Send data to WebSocket peer
 
 Parameters:
 - `c` - Connection to use
 - `buf` - Data to send
 - `len` - Data size
-- `op` - Websocket message type
+- `op` - WebSocket message type, see [WebSocket message type](#websocket-message-type) above
 
 Return value: sent bytes count
-
-Possible Websocket message type:
-
-```c
-#define WEBSOCKET_OP_CONTINUE 0
-#define WEBSOCKET_OP_TEXT 1
-#define WEBSOCKET_OP_BINARY 2
-#define WEBSOCKET_OP_CLOSE 8
-#define WEBSOCKET_OP_PING 9
-#define WEBSOCKET_OP_PONG 10
-```
 
 Usage example:
 
@@ -1529,16 +1549,11 @@ size_t mg_ws_vprintf(struct mg_connection *, int op, const char *fmt, va_list *)
 
 Same as `mg_ws_send()`, but formats data using `printf()` semantics.
 
-<span class="badge bg-danger">NOTE: </span> See [mg\_ws\_send](#mg_ws_send)
-for the list of possible Websocket message types
-
-<span class="badge bg-danger">NOTE: </span> See [mg\_snprintf](#mg_snprintf-mg_vsnprintf)
-for the list of supported format specifiers
-
 Parameters:
 - `c` - Connection to use
-- `op` - Websocket message type
-- `fmt` - format string in `printf` semantics
+- `op` - WebSocket message type, see [WebSocket message type](#websocket-message-type) above
+- `fmt` - format string in `printf` semantics. see [mg\_snprintf](#mg_snprintf-mg_vsnprintf)
+for the list of supported format specifiers
 
 Return value: sent bytes count
 
