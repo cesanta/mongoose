@@ -170,6 +170,10 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
     // u ? u->name : "NULL"));
     if (mg_http_match_uri(hm, "/api/hi")) {
       mg_http_reply(c, 200, "", "hi\n");  // Testing endpoint
+    } else if (mg_http_match_uri(hm, "/api/debug")) {
+      int level = mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
+      mg_log_set(level);
+      mg_http_reply(c, 200, "", "Debug level set to %d\n", level);
     } else if (u == NULL && mg_http_match_uri(hm, "/api/#")) {
       // All URIs starting with /api/ must be authenticated
       mg_http_reply(c, 403, "", "Denied\n");
