@@ -90,6 +90,7 @@ char *mg_straddr(struct mg_addr *, char *, size_t);
 bool mg_aton(struct mg_str str, struct mg_addr *addr);
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
 int mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *, bool udp);
+void mg_hello(const char *url);
 
 // These functions are used to integrate with custom network stacks
 struct mg_connection *mg_alloc_conn(struct mg_mgr *);
