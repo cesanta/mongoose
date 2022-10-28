@@ -760,6 +760,23 @@ Return value: `true` if data has been sent, `false` otherwise
 
 Usage example: see [examples/multi-threaded](https://github.com/cesanta/mongoose/tree/master/examples/multi-threaded).
 
+### mg\_hello()
+
+```c
+void mg_hello(const char *url);
+```
+
+A convenience function that starts a simple web server on a given listening
+URL. This function does not return until a "/quit" request is received. A
+server handles the following URIs:
+
+- `/quit` - quit the server, and exit the function
+- `/debug` - set debug level, expect `{"level": 3}` as a POST payload
+- For all other URIs, `hi` is returned as a response
+
+Parameters:
+- `url` - a listening URL, for example `http://0.0.0.0:8000`
+
 
 ## HTTP
 
