@@ -1103,7 +1103,6 @@ char *mg_straddr(struct mg_addr *, char *, size_t);
 bool mg_aton(struct mg_str str, struct mg_addr *addr);
 char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
 int mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *, bool udp);
-void mg_hello(const char *url);
 
 // These functions are used to integrate with custom network stacks
 struct mg_connection *mg_alloc_conn(struct mg_mgr *);
@@ -1183,6 +1182,7 @@ void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
 struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v);
 size_t mg_http_next_multipart(struct mg_str, size_t, struct mg_http_part *);
 int mg_http_status(const struct mg_http_message *hm);
+void mg_hello(const char *url);
 
 
 void mg_http_serve_ssi(struct mg_connection *c, const char *root,

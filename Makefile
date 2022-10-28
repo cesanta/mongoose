@@ -4,7 +4,7 @@ DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1 -DMG_E
 WARN ?= -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
-SSL ?= MBEDTLS
+SSL ?=
 CWD ?= $(realpath $(CURDIR))
 ENV ?=  -e Tmp=. -e WINEDEBUG=-all 
 DOCKER ?= docker run --platform linux/amd64 --rm $(ENV) -v $(CWD):$(CWD) -w $(CWD)

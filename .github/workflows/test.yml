@@ -40,7 +40,6 @@ jobs:
     env:
       IPV6: 0
       CC: ${{ matrix.targets.toolchain }}-gcc
-      SSL:
       ASAN:
       ASAN_OPTIONS:
       RUN: ${{ matrix.targets.qemu }} -L /usr/${{ matrix.targets.toolchain }}
@@ -55,7 +54,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: sudo apt-get update ; sudo apt-get install libmbedtls-dev valgrind
-    - run: make unamalgamated SSL=
+    - run: make unamalgamated
     - run: make valgrind IPV6=0
     - run: make mg_prefix
   examples:
