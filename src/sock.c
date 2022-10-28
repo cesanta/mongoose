@@ -198,14 +198,12 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
   fcntl(fd, F_SETFL, O_NONBLOCK);
 #elif MG_ARCH == MG_ARCH_TIRTOS
   int val = 0;
-  setsockopt(fd, 0, SO_BLOCKING, &val, sizeof(val));
-  int status = 0;
-  int res = SockStatus(fd, FDSTATUS_SEND, &status);
-  if (res == 0 && status > 0) {
-    val = status / 2;
-    int val_size = sizeof(val);
-    res = SockSet(fd, SOL_SOCKET, SO_SNDLOWAT, &val, val_size);
-  }
+  setsockopt(fd, SOL_SOCKET, SO_BLOCKING, &val, sizeof(val));
+  // SPRU524J section 3.3.3 page 63, SO_SNDLOWAT
+  int sz = sizeof(val);
+  getsockopt(fd, SOL_SOCKET, SO_SNDBUF, &val, &sz);
+  val /= 2;  // set send low-water mark at half send buffer size
+  setsockopt(fd, SOL_SOCKET, SO_SNDLOWAT, &val, sizeof(val));
 #else
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);  // Non-blocking mode
   fcntl(fd, F_SETFD, FD_CLOEXEC);                          // Set close-on-exec
@@ -369,6 +367,11 @@ void mg_connect_resolved(struct mg_connection *c) {
     mg_error(c, "socket(): %d", MG_SOCK_ERRNO);
   } else if (c->is_udp) {
     MG_EPOLL_ADD(c);
+#if MG_ARCH == MG_ARCH_TIRTOS
+    union usa usa;  // TI-RTOS NDK requires binding to receive on UDP sockets
+    socklen_t slen = tousa(&c->loc, &usa);
+    if (bind(c->fd, &usa.sa, slen) != 0) MG_ERROR(("bind: %d", MG_SOCK_ERRNO));
+#endif
     mg_call(c, MG_EV_RESOLVE, NULL);
     mg_call(c, MG_EV_CONNECT, NULL);
   } else {
@@ -388,6 +391,7 @@ void mg_connect_resolved(struct mg_connection *c) {
       mg_error(c, "connect: %d", MG_SOCK_ERRNO);
     }
   }
+  (void) rc;
 }
 
 static SOCKET raccept(SOCKET sock, union usa *usa, socklen_t len) {

@@ -10,14 +10,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include <time.h>
-#include <errno.h>
 
+#include <serrno.h>
 #include <sys/socket.h>
 
 #include <ti/sysbios/knl/Clock.h>
-
-extern int SockStatus(SOCKET hSock, int request, int *results );
-extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
 
 #endif
