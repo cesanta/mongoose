@@ -41,6 +41,4 @@ monitor: build
 .PHONY: build
 
 clean:
-clean: CMD = rm -rf src/build	
-clean: build
-
+	test -d src/build && $(DOCKER) rm -rf src/build

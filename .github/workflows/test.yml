@@ -1,5 +1,7 @@
 name: build
 on: [push, pull_request]
+env:
+  IPV6: 0
 jobs:
   linux:
     runs-on: ubuntu-latest
@@ -11,51 +13,29 @@ jobs:
         ssl: [MBEDTLS, OPENSSL]
     name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
     env:
-      IPV6: 0
       CC: ${{ matrix.cc }}
       SSL: ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v3
     - run: sudo apt-get update ; sudo apt-get install libmbedtls-dev
     - run: make ${{ matrix.target }}
-  linux_qemu:
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        targets:
-          - target: arm
-            endian: little
-            toolchain: arm-linux-gnueabihf
-            qemu: qemu-arm
-          - target: ppc
-            endian: big
-            toolchain: powerpc-linux-gnu
-            qemu: qemu-ppc
-          - target: ppc64
-            endian: big
-            toolchain: powerpc64-linux-gnu
-            qemu: qemu-ppc64
-    name: linux-${{ matrix.targets.endian }}endian ${{ matrix.targets.target }}
-    env:
-      IPV6: 0
-      CC: ${{ matrix.targets.toolchain }}-gcc
-      ASAN:
-      ASAN_OPTIONS:
-      RUN: ${{ matrix.targets.qemu }} -L /usr/${{ matrix.targets.toolchain }}
+  s390:
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - run: sudo apt-get update
-    - run: sudo apt-get dist-upgrade
-    - run: sudo apt-get install --install-suggests qemu-user gcc-${{ matrix.targets.toolchain }}
-    - run: make test
+    #- run: make s390
+  armhf:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    #- run: make armhf
   linux2:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
     - run: sudo apt-get update ; sudo apt-get install libmbedtls-dev valgrind
     - run: make unamalgamated
-    - run: make valgrind IPV6=0
+    - run: make valgrind
     - run: make mg_prefix
   examples:
     runs-on: ubuntu-latest
@@ -63,14 +43,14 @@ jobs:
     - uses: actions/checkout@v3
     - run: sudo apt-get install libmbedtls-dev libpcap-dev
     - run: make clean examples
-    - run: make clean test IPV6=0 MG_ENABLE_POLL=1
+    - run: make clean test MG_ENABLE_POLL=1
   macos:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v3
     - run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
-    - run: make test upload-coverage SSL=OPENSSL IPV6=0 ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
-    - run: make test SSL=MBEDTLS IPV6=0 ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
+    - run: make test upload-coverage SSL=OPENSSL ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
+    - run: make test SSL=MBEDTLS  ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
     - run: make mip_test ASAN_OPTIONS=
     - run: make mg_prefix
   windows:
@@ -133,7 +113,7 @@ jobs:
     name: ${{ matrix.example.path }}
     steps:
       - uses: actions/checkout@v3
-      - name: ${{ matrix.example.name }}
+      - name: ${{ matrix.example.path }}
         run: make -C examples/${{ matrix.example.path }} build
   matrix_zephyr_examples:
     runs-on: ubuntu-latest
@@ -149,5 +129,5 @@ jobs:
     name: ${{ matrix.zephyrexample.name }}
     steps:
       - uses: actions/checkout@v3
-      - name: ${{ matrix.zephyrexample.name }}
+      - name: ${{ matrix.zephyrexample.path }}
         run: make -C examples/${{ matrix.zephyrexample.path }} zephyr build

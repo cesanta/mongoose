@@ -41,7 +41,10 @@ CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
 LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
-all: mg_prefix unamalgamated test mip_test arm examples vc98 vc17 vc22 mingw mingw++ fuzz
+all:
+	$(MAKE) -C examples/http-server
+
+tall: mg_prefix unamalgamated test mip_test arm examples vc98 vc17 vc22 mingw mingw++ fuzz
 
 mip_test: test/mip_test.c mongoose.c mongoose.h Makefile
 	$(CC) test/mip_test.c $(INCS) $(WARN) $(OPTS) $(C_WARN) $(ASAN) -o $@
@@ -99,6 +102,18 @@ upload-coverage: coverage
 valgrind: Makefile mongoose.h mongoose.c
 	$(CC) $(SRCS) $(VALGRIND_CFLAGS) $(LDFLAGS) -g -o unit_test
 	$(VALGRIND_RUN) ./unit_test
+
+armhf: ASAN=
+armhf: IPV6=0
+armhf: CC = $(DOCKER) mdashnet/armhf cc
+armhf: RUN = $(DOCKER) mdashnet/armhf
+armhf: test
+
+s390: ASAN=
+s390: IPV6=0
+s390: CC = $(DOCKER) mdashnet/s390 cc
+s390: RUN = $(DOCKER) mdashnet/s390
+s390: test
 
 arm: DEFS += -DMG_ENABLE_FILE=0 -DMG_ENABLE_MIP=1 -DMG_ARCH=MG_ARCH_NEWLIB 
 arm: mongoose.h $(SRCS)
