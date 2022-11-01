@@ -355,7 +355,9 @@ static void static_cb(struct mg_connection *c, int ev, void *ev_data,
   if (ev == MG_EV_WRITE || ev == MG_EV_POLL) {
     struct mg_fd *fd = (struct mg_fd *) fn_data;
     // Read to send IO buffer directly, avoid extra on-stack buffer
-    size_t n, max = MG_IO_SIZE, space, *cl = (size_t *) c->label;
+    size_t n, max = MG_IO_SIZE, space;
+    size_t *cl = (size_t *) &c->label[(sizeof(c->label) - sizeof(size_t)) /
+                                      sizeof(size_t) * sizeof(size_t)];
     if (c->send.size < max) mg_iobuf_resize(&c->send, max);
     if (c->send.len >= c->send.size) return;  // Rate limit
     if ((space = c->send.size - c->send.len) > *cl) space = *cl;
@@ -526,9 +528,12 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
       c->is_resp = 0;
       mg_fs_close(fd);
     } else {
+      // Track to-be-sent content length at the end of c->label, aligned
+      size_t *clp = (size_t *) &c->label[(sizeof(c->label) - sizeof(size_t)) /
+                                         sizeof(size_t) * sizeof(size_t)];
       c->pfn = static_cb;
       c->pfn_data = fd;
-      *(size_t *) c->label = (size_t) cl;  // Track to-be-sent content length
+      *clp = (size_t) cl;
     }
   }
 }
