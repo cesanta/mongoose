@@ -126,7 +126,7 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
 
   // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
   int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;
-  ETH->MACMIIAR = ((uint32_t)cr & 3) << 2;
+  ETH->MACMIIAR = ((uint32_t)cr & 7) << 2;
 
   // NOTE(cpq): we do not use extended descriptor bit 7, and do not use
   // hardware checksum. Therefore, descriptor size is 4, not 8
