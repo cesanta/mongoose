@@ -334,7 +334,7 @@ accordingly.
 
 ## Custom build
 
-A custom build should be used for cases which is not covered by the
+A custom build should be used for cases not covered by the
 existing architecture options (e.g., an embedded architecture that
 uses some proprietary RTOS and network stack). In order to build on such
 systems, follow the outline below:
@@ -352,6 +352,11 @@ you have enabled - see previous section. Below is an example:
 #define MG_DIRSEP '/'
 #define MG_INT64_FMT "%lld"
 ```
+You can also add
+```c
+#define MG_ARCH MG_ARCH_CUSTOM
+```
+To this file, instead of adding build flags.
 3. This step is optional, and only required if you intend to use a custom
    TCP/IP stack. To do that, you should:
   * Disable BSD socket API: in the `mongoose_custom.h`, add
