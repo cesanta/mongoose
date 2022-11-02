@@ -61,7 +61,7 @@ extern "C" {
 #define MG_ARCH MG_ARCH_RP2040
 #endif
 
-#if !defined(MG_ARCH)
+#if !defined(MG_ARCH) || (MG_ARCH == MG_ARCH_CUSTOM)
 #include "mongoose_custom.h"  // keep this include
 #endif
 
