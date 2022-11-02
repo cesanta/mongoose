@@ -24,7 +24,9 @@ example:
 	true
 
 build:
-	cp $(MONGOOSE_ROOT)/mongoose.[c,h] src/
+	cp $(MONGOOSE_ROOT)/mongoose.[ch] src/
+	cp $(MONGOOSE_ROOT)/examples/device-dashboard/net.c src/
+	cp $(MONGOOSE_ROOT)/examples/device-dashboard/packed_fs.c src/
 	$(DOCKER) $(REPO) /bin/sh -c 'cd $(DOCKER_ZEPHYR_PATH)/zephyr && \
 	west build -b $(BOARD) -p auto $(DOCKER_PROJECT_PATH) $(OVERLAY) --build-dir $(DOCKER_PROJECT_PATH)/build'
 

@@ -6608,6 +6608,13 @@ static void arp_cache_add(struct mip_if *ifp, uint32_t ip, uint8_t mac[6]) {
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]));
 }
 
+static size_t ether_output(struct mip_if *ifp, size_t len) {
+  // size_t min = 64;  // Pad short frames to 64 bytes (minimum Ethernet size)
+  // if (len < min) memset(ifp->tx.buf + len, 0, min - len), len = min;
+  // mg_hexdump(ifp->tx.buf, len);
+  return ifp->driver->tx(ifp->tx.buf, len, ifp->driver_data);
+}
+
 static void arp_ask(struct mip_if *ifp, uint32_t ip) {
   struct eth *eth = (struct eth *) ifp->tx.buf;
   struct arp *arp = (struct arp *) (eth + 1);
@@ -6619,7 +6626,7 @@ static void arp_ask(struct mip_if *ifp, uint32_t ip) {
   arp->plen = 4;
   arp->op = mg_htons(1), arp->tpa = ip, arp->spa = ifp->ip;
   memcpy(arp->sha, ifp->mac, sizeof(arp->sha));
-  ifp->driver->tx(eth, PDIFF(eth, arp + 1), ifp->driver_data);
+  ether_output(ifp, PDIFF(eth, arp + 1));
 }
 
 static size_t mg_print_ipv4(mg_pfn_t fn, void *fn_data, va_list *ap) {
@@ -6645,11 +6652,12 @@ static struct ip *tx_ip(struct mip_if *ifp, uint8_t proto, uint32_t ip_src,
                         uint32_t ip_dst, size_t plen) {
   struct eth *eth = (struct eth *) ifp->tx.buf;
   struct ip *ip = (struct ip *) (eth + 1);
-  uint8_t *mac = arp_cache_find(ifp, ip_dst);         // Dst IP in ARP cache ?
-  if (!mac) mac = arp_cache_find(ifp, ifp->gw);       // No, use gateway
-  if (mac) memcpy(eth->dst, mac, sizeof(eth->dst));   // Found? Use it
-  if (!mac) memset(eth->dst, 255, sizeof(eth->dst));  // No? Use broadcast
-  memcpy(eth->src, ifp->mac, sizeof(eth->src));       // TODO(cpq): ARP lookup
+  uint8_t *mac = arp_cache_find(ifp, ip_dst);  // Dst IP in ARP cache ?
+  if (!mac && (ip_dst & ifp->mask)) arp_ask(ifp, ip_dst);  // Same net, lookup
+  if (!mac) mac = arp_cache_find(ifp, ifp->gw);            // Use gateway MAC
+  if (mac) memcpy(eth->dst, mac, sizeof(eth->dst));        // Found? Use it
+  if (!mac) memset(eth->dst, 255, sizeof(eth->dst));       // No? Use broadcast
+  memcpy(eth->src, ifp->mac, sizeof(eth->src));  // TODO(cpq): ARP lookup
   eth->type = mg_htons(0x800);
   memset(ip, 0, sizeof(*ip));
   ip->ver = 0x45;   // Version 4, header length 5 words
@@ -6681,24 +6689,11 @@ static void tx_udp(struct mip_if *ifp, uint32_t ip_src, uint16_t sport,
   udp->csum = csumfin(cs);
   memmove(udp + 1, buf, len);
   // MG_DEBUG(("UDP LEN %d %d", (int) len, (int) ifp->frame_len));
-  ifp->driver->tx(ifp->tx.buf,
-                  sizeof(struct eth) + sizeof(*ip) + sizeof(*udp) + len,
-                  ifp->driver_data);
+  ether_output(ifp, sizeof(struct eth) + sizeof(*ip) + sizeof(*udp) + len);
 }
 
 static void tx_dhcp(struct mip_if *ifp, uint32_t src, uint32_t dst,
                     uint8_t *opts, size_t optslen) {
-#if 0
-struct dhcp {
-  uint8_t op, htype, hlen, hops;
-  uint32_t xid;
-  uint16_t secs, flags;
-  uint32_t ciaddr, yiaddr, siaddr, giaddr;
-  uint8_t hwaddr[208];
-  uint32_t magic;
-  uint8_t options[32];
-};
-#endif
   struct dhcp dhcp = {1, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
   dhcp.magic = mg_htonl(0x63825363);
   memcpy(&dhcp.hwaddr, ifp->mac, sizeof(ifp->mac));
@@ -6747,7 +6742,7 @@ static void rx_arp(struct mip_if *ifp, struct pkt *pkt) {
     arp->tpa = pkt->arp->spa;
     arp->spa = ifp->ip;
     MG_DEBUG(("ARP response: we're %#lx", (long) mg_ntohl(ifp->ip)));
-    ifp->driver->tx(ifp->tx.buf, PDIFF(eth, arp + 1), ifp->driver_data);
+    ether_output(ifp, PDIFF(eth, arp + 1));
   } else if (pkt->arp->op == mg_htons(2)) {
     if (memcmp(pkt->arp->tha, ifp->mac, sizeof(pkt->arp->tha)) != 0) return;
     // MG_INFO(("ARP RESPONSE"));
@@ -6758,15 +6753,16 @@ static void rx_arp(struct mip_if *ifp, struct pkt *pkt) {
 static void rx_icmp(struct mip_if *ifp, struct pkt *pkt) {
   // MG_DEBUG(("ICMP %d", (int) len));
   if (pkt->icmp->type == 8 && pkt->ip != NULL && pkt->ip->dst == ifp->ip) {
-    struct ip *ip = tx_ip(ifp, 1, ifp->ip, pkt->ip->src,
-                          sizeof(struct icmp) + pkt->pay.len);
+    size_t hlen = sizeof(struct eth) + sizeof(struct ip) + sizeof(struct icmp);
+    size_t space = ifp->tx.len - hlen, plen = pkt->pay.len;
+    if (plen > space) plen = space;
+    struct ip *ip =
+        tx_ip(ifp, 1, ifp->ip, pkt->ip->src, sizeof(struct icmp) + plen);
     struct icmp *icmp = (struct icmp *) (ip + 1);
-    size_t len = PDIFF(ifp->tx.buf, icmp + 1), left = ifp->tx.len - len;
-    if (left > pkt->pay.len) left = pkt->pay.len;  // Don't overflow TX
-    memset(icmp, 0, sizeof(*icmp));                // Set csum to 0
-    memcpy(icmp + 1, pkt->pay.buf, left);          // Copy RX payload to TX
-    icmp->csum = ipcsum(icmp, sizeof(*icmp) + left);
-    ifp->driver->tx(ifp->tx.buf, len + left, ifp->driver_data);
+    memset(icmp, 0, sizeof(*icmp));        // Set csum to 0
+    memcpy(icmp + 1, pkt->pay.buf, plen);  // Copy RX payload to TX
+    icmp->csum = ipcsum(icmp, sizeof(*icmp) + plen);
+    ether_output(ifp, hlen + plen);
   }
 }
 
@@ -6850,8 +6846,7 @@ static size_t tx_tcp(struct mip_if *ifp, uint32_t dst_ip, uint8_t flags,
   cs = csumup(cs, &ip->dst, sizeof(ip->dst));
   cs = csumup(cs, pseudo, sizeof(pseudo));
   tcp->csum = csumfin(cs);
-  return ifp->driver->tx(ifp->tx.buf, PDIFF(ifp->tx.buf, tcp + 1) + len,
-                         ifp->driver_data);
+  return ether_output(ifp, PDIFF(ifp->tx.buf, tcp + 1) + len);
 }
 
 static size_t tx_tcp_pkt(struct mip_if *ifp, struct pkt *pkt, uint8_t flags,
@@ -6920,16 +6915,17 @@ long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
 static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   struct connstate *s = (struct connstate *) (c + 1);
   struct mg_iobuf *io = c->is_tls ? &s->raw : &c->recv;
+  uint32_t seq = mg_ntohl(pkt->tcp->seq);
   s->raw.align = c->recv.align;
   if (pkt->tcp->flags & TH_FIN) {
     s->ack = mg_htonl(pkt->tcp->seq) + 1, s->seq = mg_htonl(pkt->tcp->ack);
     c->is_closing = 1;
   } else if (pkt->pay.len == 0) {
     // TODO(cpq): handle this peer's ACK
-  } else if (mg_ntohl(pkt->tcp->seq) != s->ack) {
+  } else if (seq != s->ack) {
     // TODO(cpq): peer sent us SEQ which we don't expect. Retransmit rather
     // than close this connection
-    mg_error(c, "SEQ != ACK: %x %x", mg_ntohl(pkt->tcp->seq), s->ack);
+    mg_error(c, "SEQ != ACK: %x %x", seq, s->ack);
   } else if (io->size - io->len < pkt->pay.len &&
              !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
     mg_error(c, "oom");
@@ -6941,9 +6937,18 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     // call back mg_io_recv() which grabs raw data from s->raw
     memcpy(&io->buf[io->len], pkt->pay.buf, pkt->pay.len);
     io->len += pkt->pay.len;
-    // Advance ACK counter and setup a timer to send an ACK back
+
+    MG_DEBUG(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
+#if 1
+    // Send ACK immediately
+    MG_DEBUG(("  imm ACK", c->id, mg_htonl(pkt->tcp->seq), s->ack));
+    tx_tcp((struct mip_if *) c->mgr->priv, c->rem.ip, TH_ACK, c->loc.port,
+           c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
+#else
+    // Advance ACK counter and setup a timer to send an ACK back
     settmout(c, MIP_TTYPE_ACK);
+#endif
 
     if (c->is_tls) {
       // TLS connection. Make room for decrypted data in c->recv
@@ -7011,7 +7016,7 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
-  // MG_DEBUG(("IP %d", (int) pkt->pay.len));
+  //  MG_DEBUG(("IP %d", (int) pkt->pay.len));
   if (pkt->ip->proto == 1) {
     pkt->icmp = (struct icmp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
@@ -7083,6 +7088,10 @@ static void mip_rx(struct mip_if *ifp, void *buf, size_t len) {
     pkt.ip = (struct ip *) (pkt.eth + 1);
     if (pkt.raw.len < sizeof(*pkt.eth) + sizeof(*pkt.ip)) return;  // Truncated
     if ((pkt.ip->ver >> 4) != 4) return;                           // Not IP
+    // Truncate frame to what IP header tells us
+    if ((size_t) mg_ntohs(pkt.ip->len) + sizeof(struct eth) < pkt.raw.len) {
+      pkt.raw.len = (size_t) mg_ntohs(pkt.ip->len) + sizeof(struct eth);
+    }
     mkpay(&pkt, pkt.ip + 1);
     rx_ip(ifp, &pkt);
   } else {
@@ -7135,7 +7144,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
     struct connstate *s = (struct connstate *) (c + 1);
     if (uptime_ms > s->timer) {
       if (s->ttype == MIP_TTYPE_ACK) {
-        MG_DEBUG(("%lu ack", c->id));
+        MG_DEBUG(("%lu ack %x %x", c->id, s->seq, s->ack));
         tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
       } else {
