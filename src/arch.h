@@ -33,6 +33,7 @@
 #elif defined(PICO_TARGET_NAME)
 #define MG_ARCH MG_ARCH_RP2040
 #endif
+#endif  // !defined(MG_ARCH)
 
 #if !defined(MG_ARCH) || (MG_ARCH == MG_ARCH_CUSTOM)
 #include "mongoose_custom.h"  // keep this include
@@ -41,7 +42,6 @@
 #if !defined(MG_ARCH)
 #error "MG_ARCH is not specified and we couldn't guess it. Set -D MG_ARCH=..."
 #endif
-#endif  // !defined(MG_ARCH)
 
 // http://esr.ibiblio.org/?p=5095
 #define MG_BIG_ENDIAN (*(uint16_t *)"\0\xff" < 0x100)
