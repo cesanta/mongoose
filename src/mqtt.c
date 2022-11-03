@@ -172,7 +172,7 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
         m->id = (uint16_t) ((((uint16_t) p[0]) << 8) | p[1]);
         p += 2;
       }
-      if (p >= end) return MQTT_MALFORMED;
+      if (p > end) return MQTT_MALFORMED;
       if (version == 5) p += 1 + p[0];  // Skip options
       if (p > end) return MQTT_MALFORMED;
       m->data.ptr = (char *) p;
