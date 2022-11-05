@@ -232,6 +232,9 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
 
+#define MG_SOCKET_TYPE Socket_t
+#define MG_INVALID_SOCKET FREERTOS_INVALID_SOCKET
+
 // Why FreeRTOS-TCP did not implement a clean BSD API, but its own thing
 // with FreeRTOS_ prefix, is beyond me
 #define IPPROTO_TCP FREERTOS_IPPROTO_TCP
@@ -548,6 +551,20 @@ typedef enum { false = 0, true = 1 } bool;
 #endif
 #endif
 
+#define MG_INVALID_SOCKET INVALID_SOCKET
+#define MG_SOCKET_TYPE SOCKET
+typedef unsigned long nfds_t;
+#define MG_SOCKET_ERRNO WSAGetLastError()
+#if defined(_MSC_VER)
+#pragma comment(lib, "ws2_32.lib")
+#define alloca(a) _alloca(a)
+#endif
+#define poll(a, b, c) WSAPoll((a), (b), (c))
+#ifndef SO_EXCLUSIVEADDRUSE
+#define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
+#endif
+#define closesocket(x) closesocket(x)
+
 typedef int socklen_t;
 #define MG_DIRSEP '\\'
 
@@ -718,6 +735,18 @@ int sscanf(const char *, const char *, ...);
 #else
 #define MG_ENABLE_FILE 0
 #endif
+#endif
+
+#ifndef MG_INVALID_SOCKET
+#define MG_INVALID_SOCKET (-1)
+#endif
+
+#ifndef MG_SOCKET_TYPE
+#define MG_SOCKET_TYPE int
+#endif
+
+#ifndef MG_SOCKET_ERRNO
+#define MG_SOCKET_ERRNO errno
 #endif
 
 #if MG_ENABLE_EPOLL
