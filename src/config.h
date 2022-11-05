@@ -111,6 +111,18 @@
 #endif
 #endif
 
+#ifndef MG_INVALID_SOCKET
+#define MG_INVALID_SOCKET (-1)
+#endif
+
+#ifndef MG_SOCKET_TYPE
+#define MG_SOCKET_TYPE int
+#endif
+
+#ifndef MG_SOCKET_ERRNO
+#define MG_SOCKET_ERRNO errno
+#endif
+
 #if MG_ENABLE_EPOLL
 #define MG_EPOLL_ADD(c)                                                    \
   do {                                                                     \

@@ -21,6 +21,9 @@
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
 
+#define MG_SOCKET_TYPE Socket_t
+#define MG_INVALID_SOCKET FREERTOS_INVALID_SOCKET
+
 // Why FreeRTOS-TCP did not implement a clean BSD API, but its own thing
 // with FreeRTOS_ prefix, is beyond me
 #define IPPROTO_TCP FREERTOS_IPPROTO_TCP
