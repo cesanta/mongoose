@@ -1,6 +1,6 @@
 #pragma once
 
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if defined(MG_ENABLE_FREERTOS_TCP) && MG_ENABLE_FREERTOS_TCP
 
 #include <ctype.h>
 #include <errno.h>
@@ -50,45 +50,16 @@
   FreeRTOS_recvfrom((a), (b), (c), (d), (e), (f))
 #define closesocket(x) FreeRTOS_closesocket(x)
 #define gethostbyname(x) FreeRTOS_gethostbyname(x)
-#define getsockname(a, b, c) (-1)
-#define getpeername(a, b, c) 0
+#define getsockname(a, b, c) mg_getsockname((a), (b), (c))
+#define getpeername(a, b, c) mg_getpeername((a), (b), (c))
 
-// Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
-static inline void *mg_calloc(int cnt, size_t size) {
-  void *p = pvPortMalloc(cnt * size);
-  if (p != NULL) memset(p, 0, size * cnt);
-  return p;
+static inline int mg_getsockname(MG_SOCKET_TYPE fd, void *buf, socklen_t *len) {
+  (void) fd, (void) buf, (void) len;
+  return -1;
 }
-#define calloc(a, b) mg_calloc((a), (b))
-#define free(a) vPortFree(a)
-#define malloc(a) pvPortMalloc(a)
-#define mkdir(a, b) (-1)
 
-#if !defined(__GNUC__)
-// copied from GCC on ARM; for some reason useconds are signed
-struct timeval {
-  time_t tv_sec;
-  long tv_usec;
-};
+static inline int mg_getpeername(MG_SOCKET_TYPE fd, void *buf, socklen_t *len) {
+  (void) fd, (void) buf, (void) len;
+  return 0;
+}
 #endif
-
-#ifndef EINPROGRESS
-#define EINPROGRESS pdFREERTOS_ERRNO_EINPROGRESS
-#endif
-#ifndef EWOULDBLOCK
-#define EWOULDBLOCK pdFREERTOS_ERRNO_EWOULDBLOCK
-#endif
-#ifndef EAGAIN
-#define EAGAIN pdFREERTOS_ERRNO_EAGAIN
-#endif
-#ifndef EINTR
-#define EINTR pdFREERTOS_ERRNO_EINTR
-#endif
-
-// FreeRTOS-TCP uses non-standard semantics for listen() backlog size. It is
-// not a backlog size for pending SYN connections, but a max socket number
-#ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
-#define MG_SOCK_LISTEN_BACKLOG_SIZE 128
-#endif
-
-#endif  // MG_ARCH == MG_ARCH_FREERTOS_TCP

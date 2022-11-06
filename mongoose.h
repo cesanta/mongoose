@@ -27,20 +27,18 @@ extern "C" {
 #endif
 
 
-#define MG_ARCH_CUSTOM 0
-#define MG_ARCH_UNIX 1
-#define MG_ARCH_WIN32 2
-#define MG_ARCH_ESP32 3
-#define MG_ARCH_ESP8266 4
-#define MG_ARCH_FREERTOS_TCP 5
-#define MG_ARCH_FREERTOS_LWIP 6
-#define MG_ARCH_AZURERTOS 7
-#define MG_ARCH_RTX_LWIP 8
-#define MG_ARCH_ZEPHYR 9
-#define MG_ARCH_NEWLIB 10
-#define MG_ARCH_RTX 11
-#define MG_ARCH_TIRTOS 12
-#define MG_ARCH_RP2040 13
+#define MG_ARCH_CUSTOM 0     // User creates its own mongoose_custom.h
+#define MG_ARCH_UNIX 1       // Linux, BSD, Mac, ...
+#define MG_ARCH_WIN32 2      // Windows
+#define MG_ARCH_ESP32 3      // ESP32
+#define MG_ARCH_ESP8266 4    // ESP8266
+#define MG_ARCH_FREERTOS 5   // FreeRTOS
+#define MG_ARCH_AZURERTOS 6  // MS Azure RTOS
+#define MG_ARCH_ZEPHYR 7     // Zephyr RTOS
+#define MG_ARCH_NEWLIB 8     // Bare metal ARM
+#define MG_ARCH_RTX 9        // Keil MDK RTX
+#define MG_ARCH_TIRTOS 10    // Texas Semi TI-RTOS
+#define MG_ARCH_RP2040 11    // Raspberry Pi RP2040
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -54,7 +52,8 @@ extern "C" {
 #elif defined(ESP_PLATFORM)
 #define MG_ARCH MG_ARCH_ESP32
 #elif defined(FREERTOS_IP_H)
-#define MG_ARCH MG_ARCH_FREERTOS_TCP
+#define MG_ARCH MG_ARCH_FREERTOS
+#define MG_ENABLE_FREERTOS_TCP 1
 #elif defined(AZURE_RTOS_THREADX)
 #define MG_ARCH MG_ARCH_AZURERTOS
 #elif defined(PICO_TARGET_NAME)
@@ -71,7 +70,9 @@ extern "C" {
 #endif
 
 // http://esr.ibiblio.org/?p=5095
-#define MG_BIG_ENDIAN (*(uint16_t *)"\0\xff" < 0x100)
+#define MG_BIG_ENDIAN (*(uint16_t *) "\0\xff" < 0x100)
+
+
 
 
 
@@ -162,9 +163,10 @@ extern "C" {
 #endif
 
 
-#if MG_ARCH == MG_ARCH_FREERTOS_LWIP
+#if MG_ARCH == MG_ARCH_FREERTOS
 
 #include <ctype.h>
+// #include <errno.h> // Cannot include errno - might conflict with lwip!
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -172,137 +174,32 @@ extern "C" {
 #include <stdio.h>
 #include <string.h>
 
-#if defined(__GNUC__)
-#include <sys/stat.h>
-#include <sys/time.h>
-#else
-struct timeval {
-  time_t tv_sec;
-  long tv_usec;
-};
-#endif
-
 #include <FreeRTOS.h>
 #include <task.h>
-
-#include <lwip/sockets.h>
-
-#if LWIP_SOCKET != 1
-// Sockets support disabled in LWIP by default
-#error Set LWIP_SOCKET variable to 1 (in lwipopts.h)
-#endif
-
-// Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
-static inline void *mg_calloc(int cnt, size_t size) {
-  void *p = pvPortMalloc(cnt * size);
-  if (p != NULL) memset(p, 0, size * cnt);
-  return p;
-}
-#define calloc(a, b) mg_calloc((a), (b))
-#define free(a) vPortFree(a)
-#define malloc(a) pvPortMalloc(a)
-#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
-#define mkdir(a, b) (-1)
 
 #ifndef MG_IO_SIZE
 #define MG_IO_SIZE 512
 #endif
 
-#endif  // MG_ARCH == MG_ARCH_FREERTOS_LWIP
-
-
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
-
-#include <ctype.h>
-#include <errno.h>
-#include <limits.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <time.h>
-
-#include <FreeRTOS.h>
-#include <list.h>
-#include <task.h>
-
-#include <FreeRTOS_IP.h>
-#include <FreeRTOS_Sockets.h>
-
-#define MG_SOCKET_TYPE Socket_t
-#define MG_INVALID_SOCKET FREERTOS_INVALID_SOCKET
-
-// Why FreeRTOS-TCP did not implement a clean BSD API, but its own thing
-// with FreeRTOS_ prefix, is beyond me
-#define IPPROTO_TCP FREERTOS_IPPROTO_TCP
-#define IPPROTO_UDP FREERTOS_IPPROTO_UDP
-#define AF_INET FREERTOS_AF_INET
-#define SOCK_STREAM FREERTOS_SOCK_STREAM
-#define SOCK_DGRAM FREERTOS_SOCK_DGRAM
-#define SO_BROADCAST 0
-#define SO_ERROR 0
-#define SOL_SOCKET 0
-#define SO_REUSEADDR 0
-#define sockaddr_in freertos_sockaddr
-#define sockaddr freertos_sockaddr
-#define accept(a, b, c) FreeRTOS_accept((a), (b), (c))
-#define connect(a, b, c) FreeRTOS_connect((a), (b), (c))
-#define bind(a, b, c) FreeRTOS_bind((a), (b), (c))
-#define listen(a, b) FreeRTOS_listen((a), (b))
-#define socket(a, b, c) FreeRTOS_socket((a), (b), (c))
-#define send(a, b, c, d) FreeRTOS_send((a), (b), (c), (d))
-#define recv(a, b, c, d) FreeRTOS_recv((a), (b), (c), (d))
-#define setsockopt(a, b, c, d, e) FreeRTOS_setsockopt((a), (b), (c), (d), (e))
-#define sendto(a, b, c, d, e, f) FreeRTOS_sendto((a), (b), (c), (d), (e), (f))
-#define recvfrom(a, b, c, d, e, f) \
-  FreeRTOS_recvfrom((a), (b), (c), (d), (e), (f))
-#define closesocket(x) FreeRTOS_closesocket(x)
-#define gethostbyname(x) FreeRTOS_gethostbyname(x)
-#define getsockname(a, b, c) (-1)
-#define getpeername(a, b, c) 0
+#define calloc(a, b) mg_calloc(a, b)
+#define free(a) vPortFree(a)
+#define malloc(a) pvPortMalloc(a)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
 
 // Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
-static inline void *mg_calloc(int cnt, size_t size) {
+static inline void *mg_calloc(size_t cnt, size_t size) {
   void *p = pvPortMalloc(cnt * size);
   if (p != NULL) memset(p, 0, size * cnt);
   return p;
 }
-#define calloc(a, b) mg_calloc((a), (b))
-#define free(a) vPortFree(a)
-#define malloc(a) pvPortMalloc(a)
-#define mkdir(a, b) (-1)
 
-#if !defined(__GNUC__)
-// copied from GCC on ARM; for some reason useconds are signed
-struct timeval {
-  time_t tv_sec;
-  long tv_usec;
-};
-#endif
+#define mkdir(a, b) mg_mkdir(a, b)
+static inline int mg_mkdir(const char *path, mode_t mode) {
+  (void) path, (void) mode;
+  return -1;
+}
 
-#ifndef EINPROGRESS
-#define EINPROGRESS pdFREERTOS_ERRNO_EINPROGRESS
-#endif
-#ifndef EWOULDBLOCK
-#define EWOULDBLOCK pdFREERTOS_ERRNO_EWOULDBLOCK
-#endif
-#ifndef EAGAIN
-#define EAGAIN pdFREERTOS_ERRNO_EAGAIN
-#endif
-#ifndef EINTR
-#define EINTR pdFREERTOS_ERRNO_EINTR
-#endif
-
-// FreeRTOS-TCP uses non-standard semantics for listen() backlog size. It is
-// not a backlog size for pending SYN connections, but a max socket number
-#ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
-#define MG_SOCK_LISTEN_BACKLOG_SIZE 128
-#endif
-
-#endif  // MG_ARCH == MG_ARCH_FREERTOS_TCP
+#endif  // MG_ARCH == MG_ARCH_FREERTOS
 
 
 #if MG_ARCH == MG_ARCH_NEWLIB
@@ -356,59 +253,9 @@ int mkdir(const char *, mode_t);
 #include <string.h>
 #include <time.h>
 
-#include <rl_net.h>
-
-#define MG_ENABLE_CUSTOM_MILLIS 1
-typedef int socklen_t;
-#define closesocket(x) closesocket(x)
-#define mkdir(a, b) (-1)
-#define EWOULDBLOCK BSD_EWOULDBLOCK
-#define EAGAIN BSD_EWOULDBLOCK
-#define EINPROGRESS BSD_EWOULDBLOCK
-#define EINTR BSD_EWOULDBLOCK
-#define ECONNRESET BSD_ECONNRESET
-#define EPIPE BSD_ECONNRESET
-#define TCP_NODELAY SO_KEEPALIVE
-
+#if !defined MG_ENABLE_RL && (!defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP)
+#define MG_ENABLE_RL 1
 #endif
-
-
-#if MG_ARCH == MG_ARCH_RTX_LWIP
-
-#include <ctype.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-
-#if defined(__GNUC__)
-#include <sys/stat.h>
-#include <sys/time.h>
-#else
-struct timeval {
-  time_t tv_sec;
-  long tv_usec;
-};
-#endif
-
-#include <lwip/sockets.h>
-
-#if LWIP_SOCKET != 1
-// Sockets support disabled in LWIP by default
-#error Set LWIP_SOCKET variable to 1 (in lwipopts.h)
-#endif
-
-#define mkdir(a, b) (-1)
-
-#ifndef MG_IO_SIZE
-#define MG_IO_SIZE 512
-#endif
-
-#ifndef MG_PATH_MAX
-#define MG_PATH_MAX 128
-#endif
-
 
 #endif
 
@@ -626,12 +473,129 @@ int sscanf(const char *, const char *, ...);
 #endif
 
 
+#if defined(MG_ENABLE_FREERTOS_TCP) && MG_ENABLE_FREERTOS_TCP
+
+#include <ctype.h>
+#include <errno.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <time.h>
+
+#include <FreeRTOS.h>
+#include <list.h>
+#include <task.h>
+
+#include <FreeRTOS_IP.h>
+#include <FreeRTOS_Sockets.h>
+
+#define MG_SOCKET_TYPE Socket_t
+#define MG_INVALID_SOCKET FREERTOS_INVALID_SOCKET
+
+// Why FreeRTOS-TCP did not implement a clean BSD API, but its own thing
+// with FreeRTOS_ prefix, is beyond me
+#define IPPROTO_TCP FREERTOS_IPPROTO_TCP
+#define IPPROTO_UDP FREERTOS_IPPROTO_UDP
+#define AF_INET FREERTOS_AF_INET
+#define SOCK_STREAM FREERTOS_SOCK_STREAM
+#define SOCK_DGRAM FREERTOS_SOCK_DGRAM
+#define SO_BROADCAST 0
+#define SO_ERROR 0
+#define SOL_SOCKET 0
+#define SO_REUSEADDR 0
+#define sockaddr_in freertos_sockaddr
+#define sockaddr freertos_sockaddr
+#define accept(a, b, c) FreeRTOS_accept((a), (b), (c))
+#define connect(a, b, c) FreeRTOS_connect((a), (b), (c))
+#define bind(a, b, c) FreeRTOS_bind((a), (b), (c))
+#define listen(a, b) FreeRTOS_listen((a), (b))
+#define socket(a, b, c) FreeRTOS_socket((a), (b), (c))
+#define send(a, b, c, d) FreeRTOS_send((a), (b), (c), (d))
+#define recv(a, b, c, d) FreeRTOS_recv((a), (b), (c), (d))
+#define setsockopt(a, b, c, d, e) FreeRTOS_setsockopt((a), (b), (c), (d), (e))
+#define sendto(a, b, c, d, e, f) FreeRTOS_sendto((a), (b), (c), (d), (e), (f))
+#define recvfrom(a, b, c, d, e, f) \
+  FreeRTOS_recvfrom((a), (b), (c), (d), (e), (f))
+#define closesocket(x) FreeRTOS_closesocket(x)
+#define gethostbyname(x) FreeRTOS_gethostbyname(x)
+#define getsockname(a, b, c) mg_getsockname((a), (b), (c))
+#define getpeername(a, b, c) mg_getpeername((a), (b), (c))
+
+static inline int mg_getsockname(MG_SOCKET_TYPE fd, void *buf, socklen_t *len) {
+  (void) fd, (void) buf, (void) len;
+  return -1;
+}
+
+static inline int mg_getpeername(MG_SOCKET_TYPE fd, void *buf, socklen_t *len) {
+  (void) fd, (void) buf, (void) len;
+  return 0;
+}
+#endif
+
+
+#if defined(MG_ENABLE_LWIP) && MG_ENABLE_LWIP
+#if defined(__GNUC__)
+#include <sys/stat.h>
+#include <sys/time.h>
+#else
+struct timeval {
+  time_t tv_sec;
+  long tv_usec;
+};
+#endif
+
+#include <lwip/sockets.h>
+
+#if LWIP_SOCKET != 1
+// Sockets support disabled in LWIP by default
+#error Set LWIP_SOCKET variable to 1 (in lwipopts.h)
+#endif
+#endif
+
+
+#if defined(MG_ENABLE_RL) && MG_ENABLE_RL
+#include <rl_net.h>
+
+#define MG_ENABLE_CUSTOM_MILLIS 1
+#define closesocket(x) closesocket(x)
+#define mkdir(a, b) (-1)
+#define EWOULDBLOCK BSD_EWOULDBLOCK
+#define EAGAIN BSD_EWOULDBLOCK
+#define EINPROGRESS BSD_EWOULDBLOCK
+#define EINTR BSD_EWOULDBLOCK
+#define ECONNRESET BSD_ECONNRESET
+#define EPIPE BSD_ECONNRESET
+#define TCP_NODELAY SO_KEEPALIVE
+#endif
+
+
 #ifndef MG_ENABLE_LOG
 #define MG_ENABLE_LOG 1
 #endif
 
 #ifndef MG_ENABLE_MIP
-#define MG_ENABLE_MIP 0
+#define MG_ENABLE_MIP 0  // Mongoose built-in network stack
+#endif
+
+#ifndef MG_ENABLE_LWIP
+#define MG_ENABLE_LWIP 0  // lWIP network stack
+#endif
+
+#ifndef MG_ENABLE_FREERTOS_TCP
+#define MG_ENABLE_FREERTOS_TCP 0  // Amazon FreeRTOS-TCP network stack
+#endif
+
+#ifndef MG_ENABLE_RL
+#define MG_ENABLE_RL 0  // ARM MDK network stack
+#endif
+
+#ifndef MG_ENABLE_SOCKET
+#define MG_ENABLE_SOCKET !MG_ENABLE_MIP
 #endif
 
 #ifndef MG_ENABLE_POLL
@@ -644,10 +608,6 @@ int sscanf(const char *, const char *, ...);
 
 #ifndef MG_ENABLE_FATFS
 #define MG_ENABLE_FATFS 0
-#endif
-
-#ifndef MG_ENABLE_SOCKET
-#define MG_ENABLE_SOCKET 1
 #endif
 
 #ifndef MG_ENABLE_MBEDTLS
@@ -1044,6 +1004,7 @@ enum {
 
 
 
+
 struct mg_dns {
   const char *url;          // DNS server URL
   struct mg_connection *c;  // DNS server connection
@@ -1071,7 +1032,7 @@ struct mg_mgr {
   int epoll_fd;                 // Used when MG_EPOLL_ENABLE=1
   void *priv;                   // Used by the MIP stack
   size_t extraconnsize;         // Used by the MIP stack
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if MG_ENABLE_FREERTOS_TCP
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
 #endif
 };

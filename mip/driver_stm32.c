@@ -14,8 +14,10 @@ struct stm32_eth {
       DMAMFBOCR, DMARSWTR, RESERVED10[8], DMACHTDR, DMACHRDR, DMACHTBAR,
       DMACHRBAR;
 };
+#undef ETH
 #define ETH ((struct stm32_eth *) (uintptr_t) 0x40028000)
 
+#undef BIT
 #define BIT(x) ((uint32_t) 1 << (x))
 #define ETH_PKT_SIZE 1540  // Max frame size
 #define ETH_DESC_CNT 4     // Descriptors count
@@ -29,15 +31,11 @@ static void (*s_rx)(void *, size_t, void *);         // Recv callback
 static void *s_rxdata;                               // Recv callback data
 enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
 
-static inline void spin(volatile uint32_t count) {
-  while (count--) (void) 0;
-}
-
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMIIAR &= (7 << 2);
   ETH->MACMIIAR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6);
   ETH->MACMIIAR |= BIT(0);
-  while (ETH->MACMIIAR & BIT(0)) spin(1);
+  while (ETH->MACMIIAR & BIT(0)) (void) 0;
   return ETH->MACMIIDR;
 }
 
@@ -46,29 +44,29 @@ static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   ETH->MACMIIAR &= (7 << 2);
   ETH->MACMIIAR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6) | BIT(1);
   ETH->MACMIIAR |= BIT(0);
-  while (ETH->MACMIIAR & BIT(0)) spin(1);
+  while (ETH->MACMIIAR & BIT(0)) (void) 0;
 }
 
 static uint32_t get_hclk(void) {
   struct rcc {
     volatile uint32_t CR, PLLCFGR, CFGR;
-  } *RCC = (struct rcc *) 0x40023800;
+  } *rcc = (struct rcc *) 0x40023800;
   uint32_t clk = 0, hsi = 16000000 /* 16 MHz */, hse = 8000000 /* 8MHz */;
 
-  if (RCC->CFGR & (1 << 2)) {
+  if (rcc->CFGR & (1 << 2)) {
     clk = hse;
-  } else if (RCC->CFGR & (1 << 3)) {
+  } else if (rcc->CFGR & (1 << 3)) {
     uint32_t vco, m, n, p;
-    m = (RCC->PLLCFGR & (0x3f << 0)) >> 0;
-    n = (RCC->PLLCFGR & (0x1ff << 6)) >> 6;
-    p = (((RCC->PLLCFGR & (3 << 16)) >> 16) + 1) * 2;
-    clk = (RCC->PLLCFGR & (1 << 22)) ? hse : hsi;
+    m = (rcc->PLLCFGR & (0x3f << 0)) >> 0;
+    n = (rcc->PLLCFGR & (0x1ff << 6)) >> 6;
+    p = (((rcc->PLLCFGR & (3 << 16)) >> 16) + 1) * 2;
+    clk = (rcc->PLLCFGR & (1 << 22)) ? hse : hsi;
     vco = (uint32_t) ((uint64_t) clk * n / m);
     clk = vco / p;
   } else {
     clk = hsi;
   }
-  uint32_t hpre = (RCC->CFGR & (15 << 4)) >> 4;
+  uint32_t hpre = (rcc->CFGR & (15 << 4)) >> 4;
   if (hpre < 8) return clk;
 
   uint8_t ahbptab[8] = {1, 2, 3, 4, 6, 7, 8, 9};  // log2(div)
@@ -121,12 +119,12 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
         (uint32_t) (uintptr_t) s_txdesc[(i + 1) % ETH_DESC_CNT];  // Chain
   }
 
-  ETH->DMABMR |= BIT(0);                        // Software reset
-  while ((ETH->DMABMR & BIT(0)) != 0) spin(1);  // Wait until done
+  ETH->DMABMR |= BIT(0);                         // Software reset
+  while ((ETH->DMABMR & BIT(0)) != 0) (void) 0;  // Wait until done
 
   // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
   int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;
-  ETH->MACMIIAR = ((uint32_t)cr & 7) << 2;
+  ETH->MACMIIAR = ((uint32_t) cr & 7) << 2;
 
   // NOTE(cpq): we do not use extended descriptor bit 7, and do not use
   // hardware checksum. Therefore, descriptor size is 4, not 8

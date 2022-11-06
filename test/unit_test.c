@@ -331,10 +331,10 @@ static void test_sntp(void) {
 
   ASSERT(mg_sntp_parse(bad, sizeof(bad)) < 0);
   ASSERT(mg_sntp_parse(NULL, 0) == -1);
-  // test_sntp_server("udp://time.windows.com:123");
   // NOTE(cpq): temporarily disabled until Github Actions fix their NTP
   // port blockage issue, https://github.com/actions/runner-images/issues/5615
-  test_sntp_server("udp://time.apple.com:123");
+  //test_sntp_server("udp://time.apple.com:123");
+  test_sntp_server("udp://time.windows.com:123");
   test_sntp_server(NULL);
 }
 

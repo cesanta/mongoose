@@ -1,14 +1,6 @@
 #pragma once
 
-#if MG_ARCH == MG_ARCH_RTX_LWIP
-
-#include <ctype.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-
+#if defined(MG_ENABLE_LWIP) && MG_ENABLE_LWIP
 #if defined(__GNUC__)
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -25,16 +17,4 @@ struct timeval {
 // Sockets support disabled in LWIP by default
 #error Set LWIP_SOCKET variable to 1 (in lwipopts.h)
 #endif
-
-#define mkdir(a, b) (-1)
-
-#ifndef MG_IO_SIZE
-#define MG_IO_SIZE 512
-#endif
-
-#ifndef MG_PATH_MAX
-#define MG_PATH_MAX 128
-#endif
-
-
 #endif

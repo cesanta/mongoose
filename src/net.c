@@ -237,7 +237,7 @@ void mg_mgr_free(struct mg_mgr *mgr) {
   mgr->timers = NULL;  // Important. Next call to poll won't touch timers
   for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
   mg_mgr_poll(mgr, 0);
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if MG_ENABLE_FREERTOS_TCP
   FreeRTOS_DeleteSocketSet(mgr->ss);
 #endif
   MG_DEBUG(("All connections closed"));
@@ -258,7 +258,7 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   // clang-format off
   { WSADATA data; WSAStartup(MAKEWORD(2, 2), &data); }
   // clang-format on
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+#elif MG_ENABLE_FREERTOS_TCP
   mgr->ss = FreeRTOS_CreateSocketSet();
 #elif defined(__unix) || defined(__unix__) || defined(__APPLE__)
   // Ignore SIGPIPE signal, so if client cancels the request, it

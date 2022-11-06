@@ -5,7 +5,23 @@
 #endif
 
 #ifndef MG_ENABLE_MIP
-#define MG_ENABLE_MIP 0
+#define MG_ENABLE_MIP 0  // Mongoose built-in network stack
+#endif
+
+#ifndef MG_ENABLE_LWIP
+#define MG_ENABLE_LWIP 0  // lWIP network stack
+#endif
+
+#ifndef MG_ENABLE_FREERTOS_TCP
+#define MG_ENABLE_FREERTOS_TCP 0  // Amazon FreeRTOS-TCP network stack
+#endif
+
+#ifndef MG_ENABLE_RL
+#define MG_ENABLE_RL 0  // ARM MDK network stack
+#endif
+
+#ifndef MG_ENABLE_SOCKET
+#define MG_ENABLE_SOCKET !MG_ENABLE_MIP
 #endif
 
 #ifndef MG_ENABLE_POLL
@@ -18,10 +34,6 @@
 
 #ifndef MG_ENABLE_FATFS
 #define MG_ENABLE_FATFS 0
-#endif
-
-#ifndef MG_ENABLE_SOCKET
-#define MG_ENABLE_SOCKET 1
 #endif
 
 #ifndef MG_ENABLE_MBEDTLS
