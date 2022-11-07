@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
          &c.mac[3], &c.mac[4], &c.mac[5]);
 
   struct mip_driver driver = {.tx = tap_tx, .up = tap_up, .rx = tap_rx};
-  mip_init(&mgr, &c, &driver, (void *) fd);
+  mip_init(&mgr, &c, &driver, (void *) (size_t) fd);
   MG_INFO(("Init done, starting main loop"));
 
   extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);

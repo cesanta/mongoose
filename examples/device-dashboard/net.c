@@ -128,7 +128,8 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
 static void timer_mqtt_fn(void *param) {
   struct mg_mgr *mgr = (struct mg_mgr *) param;
   if (s_mqtt == NULL) {
-    struct mg_mqtt_opts opts = {0};
+    struct mg_mqtt_opts opts;
+    memset(&opts, 0, sizeof(opts));
     s_mqtt = mg_mqtt_connect(mgr, s_config.url, &opts, mqtt_fn, NULL);
   }
 }
@@ -207,7 +208,8 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       mg_http_reply(c, 200, NULL, "{%Q:%Q,%Q:%Q}\n", "user", u->name, "token",
                     u->token);
     } else {
-      struct mg_http_serve_opts opts = {0};
+      struct mg_http_serve_opts opts;
+      memset(&opts, 0, sizeof(opts));
 #if 1
       opts.root_dir = "/web_root";
       opts.fs = &mg_fs_packed;
