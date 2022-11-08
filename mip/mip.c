@@ -628,7 +628,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
 
     MG_DEBUG(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
-#if 1
+#if 0
     // Send ACK immediately
     MG_DEBUG(("  imm ACK", c->id, mg_htonl(pkt->tcp->seq), s->ack));
     tx_tcp((struct mip_if *) c->mgr->priv, c->rem.ip, TH_ACK, c->loc.port,

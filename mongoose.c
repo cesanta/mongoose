@@ -3529,7 +3529,7 @@ void mg_mgr_free(struct mg_mgr *mgr) {
   mgr->timers = NULL;  // Important. Next call to poll won't touch timers
   for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
   mg_mgr_poll(mgr, 0);
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if MG_ENABLE_FREERTOS_TCP
   FreeRTOS_DeleteSocketSet(mgr->ss);
 #endif
   MG_DEBUG(("All connections closed"));
@@ -3550,7 +3550,7 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   // clang-format off
   { WSADATA data; WSAStartup(MAKEWORD(2, 2), &data); }
   // clang-format on
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+#elif MG_ENABLE_FREERTOS_TCP
   mgr->ss = FreeRTOS_CreateSocketSet();
 #elif defined(__unix) || defined(__unix__) || defined(__APPLE__)
   // Ignore SIGPIPE signal, so if client cancels the request, it
@@ -4100,7 +4100,7 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
 #if MG_ARCH == MG_ARCH_RTX
-    if (n == BSD_EWOULDBLOCK) return MG_IO_WAIT;
+    if (n == EWOULDBLOCK) return MG_IO_WAIT;
 #endif
   }
   if (n < 0 && mg_sock_would_block()) return MG_IO_WAIT;
@@ -4130,11 +4130,11 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
 #elif MG_ARCH == MG_ARCH_RTX
   unsigned long on = 1;
   ioctlsocket(fd, FIONBIO, &on);
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+#elif MG_ENABLE_FREERTOS_TCP
   const BaseType_t off = 0;
   if (setsockopt(fd, 0, FREERTOS_SO_RCVTIMEO, &off, sizeof(off)) != 0) (void) 0;
   if (setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off)) != 0) (void) 0;
-#elif MG_ARCH == MG_ARCH_FREERTOS_LWIP || MG_ARCH == MG_ARCH_RTX_LWIP
+#elif MG_ENABLE_LWIP
   lwip_fcntl(fd, F_SETFL, O_NONBLOCK);
 #elif MG_ARCH == MG_ARCH_AZURERTOS
   fcntl(fd, F_SETFL, O_NONBLOCK);
@@ -4262,7 +4262,7 @@ static void close_conn(struct mg_connection *c) {
     epoll_ctl(c->mgr->epoll_fd, EPOLL_CTL_DEL, FD(c), NULL);
 #endif
     closesocket(FD(c));
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if MG_ENABLE_FREERTOS_TCP
     FreeRTOS_FD_CLR(c->fd, c->mgr->ss, eSELECT_ALL);
 #endif
   }
@@ -4284,7 +4284,7 @@ static void connect_conn(struct mg_connection *c) {
 }
 
 static void setsockopts(struct mg_connection *c) {
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS || \
+#if MG_ENABLE_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS || \
     MG_ARCH == MG_ARCH_TIRTOS
   (void) c;
 #else
@@ -4312,7 +4312,8 @@ void mg_connect_resolved(struct mg_connection *c) {
 #if MG_ARCH == MG_ARCH_TIRTOS
     union usa usa;  // TI-RTOS NDK requires binding to receive on UDP sockets
     socklen_t slen = tousa(&c->loc, &usa);
-    if (bind(c->fd, &usa.sa, slen) != 0) MG_ERROR(("bind: %d", MG_SOCKET_ERRNO));
+    if (bind(c->fd, &usa.sa, slen) != 0)
+      MG_ERROR(("bind: %d", MG_SOCKET_ERRNO));
 #endif
     mg_call(c, MG_EV_RESOLVE, NULL);
     mg_call(c, MG_EV_CONNECT, NULL);
@@ -4336,7 +4337,8 @@ void mg_connect_resolved(struct mg_connection *c) {
   (void) rc;
 }
 
-static MG_SOCKET_TYPE raccept(MG_SOCKET_TYPE sock, union usa *usa, socklen_t len) {
+static MG_SOCKET_TYPE raccept(MG_SOCKET_TYPE sock, union usa *usa,
+                              socklen_t len) {
   MG_SOCKET_TYPE s = MG_INVALID_SOCKET;
   do {
     memset(usa, 0, sizeof(*usa));
@@ -4358,8 +4360,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     if (MG_SOCKET_ERRNO != EAGAIN)
 #endif
       MG_ERROR(("%lu accept failed, errno %d", lsn->id, MG_SOCKET_ERRNO));
-#if (MG_ARCH != MG_ARCH_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP) && \
-    (MG_ARCH != MG_ARCH_TIRTOS) && !(MG_ENABLE_POLL)
+#if (MG_ARCH != MG_ARCH_WIN32) && !MG_ENABLE_FREERTOS_TCP && \
+    (MG_ARCH != MG_ARCH_TIRTOS) && !MG_ENABLE_POLL
   } else if ((long) fd >= FD_SETSIZE) {
     MG_ERROR(("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
@@ -4463,7 +4465,7 @@ static bool skip_iotest(const struct mg_connection *c) {
 }
 
 static void mg_iotest(struct mg_mgr *mgr, int ms) {
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if MG_ENABLE_FREERTOS_TCP
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = c->is_writable = 0;
@@ -4475,8 +4477,8 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   FreeRTOS_select(mgr->ss, pdMS_TO_TICKS(ms));
   for (c = mgr->conns; c != NULL; c = c->next) {
     EventBits_t bits = FreeRTOS_FD_ISSET(c->fd, mgr->ss);
-    c->is_readable = bits & (eSELECT_READ | eSELECT_EXCEPT) ? 1 : 0;
-    c->is_writable = bits & eSELECT_WRITE ? 1 : 0;
+    c->is_readable = bits & (eSELECT_READ | eSELECT_EXCEPT) ? 1U : 0;
+    c->is_writable = bits & eSELECT_WRITE ? 1U : 0;
     FreeRTOS_FD_CLR(c->fd, mgr->ss,
                     eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
   }
@@ -5598,9 +5600,7 @@ uint64_t mg_millis(void) {
   return time_us_64() / 1000;
 #elif MG_ARCH == MG_ARCH_ESP32
   return esp_timer_get_time() / 1000;
-#elif MG_ARCH == MG_ARCH_ESP8266
-  return xTaskGetTickCount() * portTICK_PERIOD_MS;
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
+#elif MG_ARCH == MG_ARCH_ESP8266 || MG_ARCH == MG_ARCH_FREERTOS
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_AZURERTOS
   return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
@@ -5999,8 +5999,10 @@ struct stm32_eth {
       DMAMFBOCR, DMARSWTR, RESERVED10[8], DMACHTDR, DMACHRDR, DMACHTBAR,
       DMACHRBAR;
 };
+#undef ETH
 #define ETH ((struct stm32_eth *) (uintptr_t) 0x40028000)
 
+#undef BIT
 #define BIT(x) ((uint32_t) 1 << (x))
 #define ETH_PKT_SIZE 1540  // Max frame size
 #define ETH_DESC_CNT 4     // Descriptors count
@@ -6014,15 +6016,11 @@ static void (*s_rx)(void *, size_t, void *);         // Recv callback
 static void *s_rxdata;                               // Recv callback data
 enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
 
-static inline void spin(volatile uint32_t count) {
-  while (count--) (void) 0;
-}
-
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMIIAR &= (7 << 2);
   ETH->MACMIIAR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6);
   ETH->MACMIIAR |= BIT(0);
-  while (ETH->MACMIIAR & BIT(0)) spin(1);
+  while (ETH->MACMIIAR & BIT(0)) (void) 0;
   return ETH->MACMIIDR;
 }
 
@@ -6031,29 +6029,29 @@ static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   ETH->MACMIIAR &= (7 << 2);
   ETH->MACMIIAR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6) | BIT(1);
   ETH->MACMIIAR |= BIT(0);
-  while (ETH->MACMIIAR & BIT(0)) spin(1);
+  while (ETH->MACMIIAR & BIT(0)) (void) 0;
 }
 
 static uint32_t get_hclk(void) {
   struct rcc {
     volatile uint32_t CR, PLLCFGR, CFGR;
-  } *RCC = (struct rcc *) 0x40023800;
+  } *rcc = (struct rcc *) 0x40023800;
   uint32_t clk = 0, hsi = 16000000 /* 16 MHz */, hse = 8000000 /* 8MHz */;
 
-  if (RCC->CFGR & (1 << 2)) {
+  if (rcc->CFGR & (1 << 2)) {
     clk = hse;
-  } else if (RCC->CFGR & (1 << 3)) {
+  } else if (rcc->CFGR & (1 << 3)) {
     uint32_t vco, m, n, p;
-    m = (RCC->PLLCFGR & (0x3f << 0)) >> 0;
-    n = (RCC->PLLCFGR & (0x1ff << 6)) >> 6;
-    p = (((RCC->PLLCFGR & (3 << 16)) >> 16) + 1) * 2;
-    clk = (RCC->PLLCFGR & (1 << 22)) ? hse : hsi;
+    m = (rcc->PLLCFGR & (0x3f << 0)) >> 0;
+    n = (rcc->PLLCFGR & (0x1ff << 6)) >> 6;
+    p = (((rcc->PLLCFGR & (3 << 16)) >> 16) + 1) * 2;
+    clk = (rcc->PLLCFGR & (1 << 22)) ? hse : hsi;
     vco = (uint32_t) ((uint64_t) clk * n / m);
     clk = vco / p;
   } else {
     clk = hsi;
   }
-  uint32_t hpre = (RCC->CFGR & (15 << 4)) >> 4;
+  uint32_t hpre = (rcc->CFGR & (15 << 4)) >> 4;
   if (hpre < 8) return clk;
 
   uint8_t ahbptab[8] = {1, 2, 3, 4, 6, 7, 8, 9};  // log2(div)
@@ -6106,12 +6104,12 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
         (uint32_t) (uintptr_t) s_txdesc[(i + 1) % ETH_DESC_CNT];  // Chain
   }
 
-  ETH->DMABMR |= BIT(0);                        // Software reset
-  while ((ETH->DMABMR & BIT(0)) != 0) spin(1);  // Wait until done
+  ETH->DMABMR |= BIT(0);                         // Software reset
+  while ((ETH->DMABMR & BIT(0)) != 0) (void) 0;  // Wait until done
 
   // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
   int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;
-  ETH->MACMIIAR = ((uint32_t)cr & 7) << 2;
+  ETH->MACMIIAR = ((uint32_t) cr & 7) << 2;
 
   // NOTE(cpq): we do not use extended descriptor bit 7, and do not use
   // hardware checksum. Therefore, descriptor size is 4, not 8
@@ -6918,7 +6916,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
 
     MG_DEBUG(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
-#if 1
+#if 0
     // Send ACK immediately
     MG_DEBUG(("  imm ACK", c->id, mg_htonl(pkt->tcp->seq), s->ack));
     tx_tcp((struct mip_if *) c->mgr->priv, c->rem.ip, TH_ACK, c->loc.port,

@@ -136,7 +136,7 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
 #if MG_ARCH == MG_ARCH_RTX
-    if (n == BSD_EWOULDBLOCK) return MG_IO_WAIT;
+    if (n == EWOULDBLOCK) return MG_IO_WAIT;
 #endif
   }
   if (n < 0 && mg_sock_would_block()) return MG_IO_WAIT;
@@ -166,11 +166,11 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
 #elif MG_ARCH == MG_ARCH_RTX
   unsigned long on = 1;
   ioctlsocket(fd, FIONBIO, &on);
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+#elif MG_ENABLE_FREERTOS_TCP
   const BaseType_t off = 0;
   if (setsockopt(fd, 0, FREERTOS_SO_RCVTIMEO, &off, sizeof(off)) != 0) (void) 0;
   if (setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off)) != 0) (void) 0;
-#elif MG_ARCH == MG_ARCH_FREERTOS_LWIP || MG_ARCH == MG_ARCH_RTX_LWIP
+#elif MG_ENABLE_LWIP
   lwip_fcntl(fd, F_SETFL, O_NONBLOCK);
 #elif MG_ARCH == MG_ARCH_AZURERTOS
   fcntl(fd, F_SETFL, O_NONBLOCK);
@@ -298,7 +298,7 @@ static void close_conn(struct mg_connection *c) {
     epoll_ctl(c->mgr->epoll_fd, EPOLL_CTL_DEL, FD(c), NULL);
 #endif
     closesocket(FD(c));
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if MG_ENABLE_FREERTOS_TCP
     FreeRTOS_FD_CLR(c->fd, c->mgr->ss, eSELECT_ALL);
 #endif
   }
@@ -320,7 +320,7 @@ static void connect_conn(struct mg_connection *c) {
 }
 
 static void setsockopts(struct mg_connection *c) {
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS || \
+#if MG_ENABLE_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS || \
     MG_ARCH == MG_ARCH_TIRTOS
   (void) c;
 #else
@@ -348,7 +348,8 @@ void mg_connect_resolved(struct mg_connection *c) {
 #if MG_ARCH == MG_ARCH_TIRTOS
     union usa usa;  // TI-RTOS NDK requires binding to receive on UDP sockets
     socklen_t slen = tousa(&c->loc, &usa);
-    if (bind(c->fd, &usa.sa, slen) != 0) MG_ERROR(("bind: %d", MG_SOCKET_ERRNO));
+    if (bind(c->fd, &usa.sa, slen) != 0)
+      MG_ERROR(("bind: %d", MG_SOCKET_ERRNO));
 #endif
     mg_call(c, MG_EV_RESOLVE, NULL);
     mg_call(c, MG_EV_CONNECT, NULL);
@@ -372,7 +373,8 @@ void mg_connect_resolved(struct mg_connection *c) {
   (void) rc;
 }
 
-static MG_SOCKET_TYPE raccept(MG_SOCKET_TYPE sock, union usa *usa, socklen_t len) {
+static MG_SOCKET_TYPE raccept(MG_SOCKET_TYPE sock, union usa *usa,
+                              socklen_t len) {
   MG_SOCKET_TYPE s = MG_INVALID_SOCKET;
   do {
     memset(usa, 0, sizeof(*usa));
@@ -394,8 +396,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     if (MG_SOCKET_ERRNO != EAGAIN)
 #endif
       MG_ERROR(("%lu accept failed, errno %d", lsn->id, MG_SOCKET_ERRNO));
-#if (MG_ARCH != MG_ARCH_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP) && \
-    (MG_ARCH != MG_ARCH_TIRTOS) && !(MG_ENABLE_POLL)
+#if (MG_ARCH != MG_ARCH_WIN32) && !MG_ENABLE_FREERTOS_TCP && \
+    (MG_ARCH != MG_ARCH_TIRTOS) && !MG_ENABLE_POLL
   } else if ((long) fd >= FD_SETSIZE) {
     MG_ERROR(("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
@@ -499,7 +501,7 @@ static bool skip_iotest(const struct mg_connection *c) {
 }
 
 static void mg_iotest(struct mg_mgr *mgr, int ms) {
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if MG_ENABLE_FREERTOS_TCP
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = c->is_writable = 0;
@@ -511,8 +513,8 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   FreeRTOS_select(mgr->ss, pdMS_TO_TICKS(ms));
   for (c = mgr->conns; c != NULL; c = c->next) {
     EventBits_t bits = FreeRTOS_FD_ISSET(c->fd, mgr->ss);
-    c->is_readable = bits & (eSELECT_READ | eSELECT_EXCEPT) ? 1 : 0;
-    c->is_writable = bits & eSELECT_WRITE ? 1 : 0;
+    c->is_readable = bits & (eSELECT_READ | eSELECT_EXCEPT) ? 1U : 0;
+    c->is_writable = bits & eSELECT_WRITE ? 1U : 0;
     FreeRTOS_FD_CLR(c->fd, mgr->ss,
                     eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
   }

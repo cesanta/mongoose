@@ -267,20 +267,22 @@ files to the application's source tree. The `mongoose.c` and `mongoose.h` files
 are actually an amalgamation - non-amalgamated sources can be found at
 https://github.com/cesanta/mongoose/tree/master/src
 
-Mongoose has two types of build constants (preprocessor definitions) that
-affect the build: a target architecture, and tunables. In order to set the
-option during build time, use the `-D OPTION` compiler flag:
+Mongoose has 3 types of build constants (preprocessor definitions) that affect
+the build: a target architecture/OS, target network stack, and tunables.  In
+order to set the option during build time, use the `-D OPTION` compiler flag:
 
 ```sh
-$ cc app0.c mongoose.c                                        # Use defaults!
-$ cc app1.c mongoose.c -D MG_ENABLE_IPV6=1                    # Build with IPv6 enabled
-$ cc app2.c mongoose.c -D MG_ARCH=MG_ARCH_FREERTOS_LWIP       # Set architecture
-$ cc app3.c mongoose.c -D MG_ENABLE_SSI=0 -D MG_IO_SIZE=8192  # Multiple options
+$ cc app.c mongoose.c                           # Use defaults!
+$ cc app.c mongoose.c -D MG_ENABLE_IPV6=1       # Build with IPv6 enabled
+$ cc app.c mongoose.c -D MG_ARCH=MG_ARCH_RTX    # Set architecture
+$ cc app.c mongoose.c -D MG_ENABLE_SSI=0 -D MG_IO_SIZE=8192  # Multiple options
 ```
 
-The list of supported architectures is defined in the [arch.h](https://github.com/cesanta/mongoose/blob/master/src/arch.h)
-header file. Normally, there is no need to explicitly specify the architecture.
-The architecture is guessed during the build, so setting it is not usually required.
+The list of supported architectures is defined in the
+[arch.h](https://github.com/cesanta/mongoose/blob/master/src/arch.h) header
+file. Normally, there is no need to explicitly specify the architecture.  The
+architecture is guessed during the build, so setting it is not usually
+required.
 
 | Name | Description |
 | ---- | ----------- |
@@ -288,16 +290,25 @@ The architecture is guessed during the build, so setting it is not usually requi
 |MG_ARCH_WIN32 | Windows systems |
 |MG_ARCH_ESP32 | Espressif's ESP32 |
 |MG_ARCH_ESP8266 | Espressif's ESP8266 |
-|MG_ARCH_FREERTOS_LWIP | All systems with FreeRTOS kernel and LwIP IP stack |
-|MG_ARCH_FREERTOS_TCP | All systems with FreeRTOS kernel and FreeRTOS-Plus-TCP IP stack |
+|MG_ARCH_FREERTOS | All systems with FreeRTOS kernel|
 |MG_ARCH_AZURERTOS | Microsoft Azure RTOS |
-|MG_ARCH_RTX_LWIP | Keil RTX with LWIP TCP/IP stack |
-|MG_ARCH_RTX | Keil RTX with MDK TCP/IP stack |
+|MG_ARCH_RTX | Keil RTX  |
 |MG_ARCH_ZEPHYR | Zephyr RTOS |
 |MG_ARCH_TIRTOS | TI RTOS |
 |MG_ARCH_RP2040 | RP2040 SDK |
 |MG_ARCH_NEWLIB | Bare ARM GCC |
 |MG_ARCH_CUSTOM | A custom architecture, discussed in the next section |
+
+The network stack constants are listed below. Note that if a network stack
+is not specified, then it is assumed that the target architecture supports
+standard BSD socket API.
+
+| Name | Default  | Description |
+| ---- | -------- | ----------- |
+|MG_ENABLE_LWIP | 0 | lwIP network stack |
+|MG_ENABLE_FREERTOS_TCP | 0 | Amazon FreeRTOS-Plus-TCP network stack |
+|MG_ENABLE_RL | 0 | Keil MDK network stack |
+|MG_ENABLE_MIP | 0 | Built-in Mongoose network stack |
 
 The other class of build constants is defined in
 [src/config.h](https://github.com/cesanta/mongoose/blob/master/src/config.h)

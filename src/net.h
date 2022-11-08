@@ -1,6 +1,7 @@
 #pragma once
 
 #include "arch.h"
+#include "config.h"
 #include "event.h"
 #include "iobuf.h"
 #include "str.h"
@@ -33,7 +34,7 @@ struct mg_mgr {
   int epoll_fd;                 // Used when MG_EPOLL_ENABLE=1
   void *priv;                   // Used by the MIP stack
   size_t extraconnsize;         // Used by the MIP stack
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if MG_ENABLE_FREERTOS_TCP
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
 #endif
 };
