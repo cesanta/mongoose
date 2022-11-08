@@ -175,10 +175,9 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
 
   gpio_init(tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   gpio_init(rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
-  uart->CR1 = 0;                       // Disable this UART
-  uart->BRR = FREQ / APB2_PRE / baud;  // Baud rate x16 (with 4dp), "4" is APBx
-                                       // prescaler, different from APBx_PRE
-                                       // TODO(): make this configurable ?
+  uart->CR1 = 0;                    // Disable this UART
+  uart->BRR = FREQ / 4 / baud;      // Baud rate, "4" is APBx prescaler, different from APBx_PRE
+                                    // TODO(): make this configurable ?
   uart->CR1 |= BIT(13) | BIT(2) | BIT(3);  // Set UE, RE, TE
 }
 static inline void uart_write_byte(struct uart *uart, uint8_t byte) {
