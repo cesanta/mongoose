@@ -144,7 +144,7 @@ static void test_http_fetch(void) {
   int ok = 0;
   struct mg_connection *conn;
 
-  int pc = 110; // Wait sufficiently to acquire HTTP lease
+  int pc = 100; // Wait sufficiently to acquire HTTP lease
   while ((pc--)>0) {
     mg_mgr_poll(&mgr, 100);
     usleep(10000); // 10 ms
