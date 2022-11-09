@@ -22,6 +22,7 @@ void mip_init(struct mg_mgr *, struct mip_cfg *, struct mip_driver *, void *);
 extern struct mip_driver mip_driver_stm32;
 extern struct mip_driver mip_driver_enc28j60;
 extern struct mip_driver mip_driver_w5500;
+extern struct mip_driver mip_driver_tm4c;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mip_spi {
