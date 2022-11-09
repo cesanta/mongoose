@@ -12,12 +12,44 @@ struct mip_driver {
   void (*setrx)(void (*fn)(void *buf, size_t len, void *rxdata), void *rxdata);
 };
 
-struct mip_cfg {
-  uint8_t mac[6];         // MAC address. Must not be 0
-  uint32_t ip, mask, gw;  // IP, netmask, GW. If IP is 0, DHCP is used
+// Receive queue - single producer, single consumer queue.  Interrupt-based
+// drivers copy received frames to the queue in interrupt context. mip_poll()
+// function runs in event loop context, reads from the queue
+struct queue {
+  uint8_t *buf;
+  size_t len;
+  volatile size_t tail, head;
 };
 
-void mip_init(struct mg_mgr *, struct mip_cfg *, struct mip_driver *, void *);
+#define MIP_ARP_ENTRIES 5  // Number of ARP cache entries. Maximum 21
+#define MIP_ARP_CS (2 + 12 * MIP_ARP_ENTRIES)  // ARP cache size
+
+// Network interface
+struct mip_if {
+  uint8_t mac[6];             // MAC address. Must be set to a valid MAC
+  uint32_t ip, mask, gw;      // IP address, mask, default gateway. Can be 0
+  struct mg_str rx;           // Output (TX) buffer
+  struct mg_str tx;           // Input (RX) buffer
+  bool use_dhcp;              // Enable DCHP
+  struct mip_driver *driver;  // Low level driver
+  void *driver_data;          // Driver-specific data
+  struct mg_mgr *mgr;         // Mongoose event manager
+
+  // Internal state, user can use it but should not change it
+  uint64_t now;                   // Current time
+  uint64_t timer_1000ms;          // 1000 ms timer: for DHCP and link state
+  uint64_t lease_expire;          // Lease expiration time
+  uint8_t arp_cache[MIP_ARP_CS];  // Each entry is 12 bytes
+  uint16_t eport;                 // Next ephemeral port
+  uint16_t dropped;               // Number of dropped frames
+  uint8_t state;                  // Current state
+#define MIP_STATE_DOWN 0          // Interface is down
+#define MIP_STATE_UP 1            // Interface is up
+#define MIP_STATE_READY 2         // Interface is up and has IP
+  struct queue queue;             // Receive queue
+};
+
+void mip_init(struct mg_mgr *, struct mip_if *);
 
 extern struct mip_driver mip_driver_stm32;
 extern struct mip_driver mip_driver_enc28j60;
