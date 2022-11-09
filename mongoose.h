@@ -404,7 +404,9 @@ typedef unsigned long nfds_t;
 #define MG_SOCKET_ERRNO WSAGetLastError()
 #if defined(_MSC_VER)
 #pragma comment(lib, "ws2_32.lib")
+#ifndef alloca
 #define alloca(a) _alloca(a)
+#endif
 #endif
 #define poll(a, b, c) WSAPoll((a), (b), (c))
 #ifndef SO_EXCLUSIVEADDRUSE

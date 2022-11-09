@@ -102,7 +102,8 @@ int main(int argc, char *argv[]) {
     }
     stat(argv[i], &st);
     if (strncmp(name, strip_prefix, n) == 0) name += n;
-    printf("  {\"/%s\", v%d, sizeof(v%d), %lu},\n", name, i, i, st.st_mtime);
+    printf("  {\"/%s\", v%d, sizeof(v%d), %lu},\n", name, i, i,
+           (unsigned long) st.st_mtime);
   }
   printf("%s", "  {NULL, NULL, 0, 0}\n");
   printf("%s", "};\n\n");
