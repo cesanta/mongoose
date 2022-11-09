@@ -1,7 +1,7 @@
-SRCS = mongoose.c test/unit_test.c test/packed_fs.c
+SRCS = mongoose.c
 HDRS = $(wildcard src/*.h) $(wildcard mip/*.h)
 DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_SSI=1
-WARN ?= -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef
+WARN ?= -pedantic -W -Wall -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
 SSL ?= MBEDTLS
@@ -19,7 +19,7 @@ COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TF
 CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
 VALGRIND_CFLAGS ?= $(OPTS) $(COMMON_CFLAGS)
 VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes
-.PHONY: examples test valgrind mip_test
+.PHONY: examples test valgrind mip_test 
 
 ifeq "$(findstring ++,$(CC))" ""
 # $(CC) does not end with ++, i.e. we're using C. Apply C flags
@@ -118,7 +118,7 @@ riscv: mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test
 
 wasm: WASI_SDK_PATH ?= /opt/wasi-sdk
-wasm: WAMR_PATH ?= /opt/wamr
+wasm: WAMR_PATH ?= /opt/wasm-micro-runtime
 wasm: ASAN=
 wasm: CFLAGS += -DWOLFSSL_WASM=1
 wasm: INCS += -I$(WAMR_PATH)/core/iwasm/libraries/lib-socket/inc
@@ -130,6 +130,7 @@ wasm: LDFLAGS += -L$(WOLFSSL)/IDE/Wasm -lwolfssl
 wasm: Makefile mongoose.h $(SRCS)
 	if [ ! -d "$(WOLFSSL)" ]; then echo "The WOLFSSL variable does not point on a valid folder: $(WOLFSSL)"; exit 1; fi
 	$(WASI_SDK_PATH)/bin/clang \
+		-c -isysroot/ \
 		--target=wasm32-wasi \
 		-Wl,--export=malloc -Wl,--export=free \
 		-z stack-size=655360 \
@@ -138,8 +139,10 @@ wasm: Makefile mongoose.h $(SRCS)
 		-Wl,--strip-all \
 		$(CFLAGS) \
 		$(LDFLAGS) \
-		-o mongoose.wasm \
 		$(SRCS) $(WAMR_PATH)/core/iwasm/libraries/lib-socket/src/wasi/wasi_socket_ext.c
+		
+	$(WASI_SDK_PATH)/bin/llvm-ar rcs libwasm_mongoose.a *.o
+
 
 vc98: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe

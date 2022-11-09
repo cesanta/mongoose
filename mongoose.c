@@ -1861,7 +1861,9 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               etag, cl, gzip ? "Content-Encoding: gzip\r\n" : "", range,
               opts->extra_headers ? opts->extra_headers : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
+#ifndef WASM_WORKAROUND_DISABLE_DRAINING
       c->is_draining = 1;
+#endif
       c->is_resp = 0;
       mg_fs_close(fd);
     } else {
@@ -4158,7 +4160,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
     if ((fd = socket(af, type, proto)) == INVALID_SOCKET) {
       MG_ERROR(("socket: %d", MG_SOCK_ERRNO));
 #if ((MG_ARCH == MG_ARCH_WIN32) || (MG_ARCH == MG_ARCH_UNIX) || \
-     (defined(LWIP_SOCKET) && SO_REUSE == 1))
+     (MG_ARCH == MG_ARCH_WASM) || (defined(LWIP_SOCKET) && SO_REUSE == 1))
     } else if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
                           sizeof(on)) != 0) {
       // 1. SO_RESUSEADDR is not enabled on Windows because the semantics of
@@ -5339,7 +5341,6 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   MG_DEBUG(("%lu SSL %s OK", c->id, c->is_accepted ? "accept" : "client"));
   return;
 fail:
-  mg_error(c, "Failure in mg_tls_init");
   c->is_closing = 1;
   free(tls);
 }
@@ -5397,7 +5398,7 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 // Link with WolfSSL compiled with './configure --enable-debug --enable-static --with-ecc --enable-ecc --enable-psk --enable-sni --enable-harden --enable-curve25519 --enable-curve448 --enable-ed448 --enable-ed25519 --enable-ecccustcurves --enable-tlsx --enable-dsa CFLAGS="-DFP_MAX_BITS=8192 -DWOLFSSL_ALT_CERT_CHAINS"'.
 // 
 
-#define MG_ENABLE_WOLFSSL 1
+
 #if MG_ENABLE_WOLFSSL
 static int mg_tls_err(struct mg_tls *tls, int res) {
   int err = wolfSSL_get_error(tls->ssl, res);
@@ -5496,6 +5497,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   MG_DEBUG(("%lu SSL %s OK", c->id, c->is_accepted ? "accept" : "client"));
   return;
 fail:
+  mg_error(c, "Failure in mg_tls_init");
   c->is_closing = 1;
   free(tls);
 }
@@ -5510,27 +5512,31 @@ void mg_tls_handshake(struct mg_connection *c) {
   }
 
   if (c->is_client) {
-    do {
-      rc = wolfSSL_connect(tls->ssl);
-      err = wolfSSL_get_error(tls->ssl, rc);
-    } while (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE);
-    
-    if (rc != SSL_SUCCESS) {
-        mg_error(c, "Error in wolfSSL_connect");
+    rc = wolfSSL_connect(tls->ssl);
+    err = wolfSSL_get_error(tls->ssl, rc);
+
+    if (rc == SSL_SUCCESS) {
+      MG_DEBUG(("%lu success", c->id));
+      c->is_tls_hs = 0;
+    } else if (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE) {
+      MG_DEBUG(("%lu pending", c->id));
+    } else {
+      int code = mg_tls_err(tls, rc);
+      if (code != 0) mg_error(c, "tls hs: rc %d, err %d", rc, code);
     }
   } else {
-    do {
-      rc = wolfSSL_accept(tls->ssl);
-      err = wolfSSL_get_error(tls->ssl, rc);
-    } while (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE);
-  }
+    rc = wolfSSL_accept(tls->ssl);
+    err = wolfSSL_get_error(tls->ssl, rc);
 
-  if (rc == SSL_SUCCESS) {
-    MG_DEBUG(("%lu success", c->id));
-    c->is_tls_hs = 0;
-  } else {
-    int code = mg_tls_err(tls, rc);
+    if (rc == SSL_SUCCESS) {
+      MG_DEBUG(("%lu success", c->id));
+      c->is_tls_hs = 0;
+    } else if (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE) {
+      MG_DEBUG(("%lu pending", c->id));
+    } else {
+      int code = mg_tls_err(tls, rc);
     if (code != 0) mg_error(c, "tls hs: rc %d, err %d", rc, code);
+    }
   }
 }
 
@@ -5542,7 +5548,7 @@ void mg_tls_free(struct mg_connection *c) {
   do {
     ret = wolfSSL_shutdown(tls->ssl);
     err = wolfSSL_get_error(tls->ssl, ret);
-  } while (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE);
+  } while (ret != SSL_SUCCESS && (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE));
 
   wolfSSL_free(tls->ssl);
   wolfSSL_CTX_free(tls->ctx);
@@ -5559,24 +5565,30 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int ret, err;
 
-  do {
-    ret = wolfSSL_read(tls->ssl, buf, (int) len);
-    err = wolfSSL_get_error(tls->ssl, ret);
-  } while (err == WOLFSSL_ERROR_WANT_READ);
+  ret = wolfSSL_read(tls->ssl, buf, (int) len);
 
-  return ret == 0 ? -1 : ret < 0 && mg_tls_err(tls, ret) == 0 ? 0 : ret;
+  if (ret == 0) {
+    err = wolfSSL_get_error(tls->ssl, ret);
+    if (err == WOLFSSL_ERROR_WANT_READ) return MG_IO_WAIT;
+    else return MG_IO_ERR;
+  }
+
+  return ret;
 }
 
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int ret, err;
 
-  do {
-    ret = wolfSSL_write(tls->ssl, buf, (int) len);
-    err = wolfSSL_get_error(tls->ssl, ret);
-  } while (err == WOLFSSL_ERROR_WANT_WRITE);
+  ret = wolfSSL_write(tls->ssl, buf, (int) len);
 
-  return ret == 0 ? -1 : ret < 0 && mg_tls_err(tls, ret) == 0 ? 0 : ret;
+  if (ret == 0) {
+    err = wolfSSL_get_error(tls->ssl, ret);
+    if (err == WOLFSSL_ERROR_WANT_WRITE) return MG_IO_WAIT;
+    else return MG_IO_ERR;
+  }
+
+  return ret;
 }
 
 #endif
@@ -5684,7 +5696,7 @@ void mg_random(void *buf, size_t len) {
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
   done = true;
 #elif MG_ARCH == MG_ARCH_WIN32
-#elif MG_ARCH == MG_ARCH_UNIX
+#elif MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WASM
   FILE *fp = fopen("/dev/urandom", "rb");
   if (fp != NULL) {
     if (fread(buf, 1, len, fp) == len) done = true;
@@ -5783,7 +5795,7 @@ uint64_t mg_millis(void) {
   // Apple CLOCK_MONOTONIC_RAW is equivalent to CLOCK_BOOTTIME on linux
   // Apple CLOCK_UPTIME_RAW is equivalent to CLOCK_MONOTONIC_RAW on linux
   return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000000;
-#elif MG_ARCH == MG_ARCH_UNIX
+#elif MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WASM
   struct timespec ts = {0, 0};
   // See #1615 - prefer monotonic clock
 #if defined(CLOCK_MONOTONIC_RAW)
@@ -5805,6 +5817,7 @@ uint64_t mg_millis(void) {
 #endif
 }
 #endif
+
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ws.c"
@@ -6077,7 +6090,9 @@ void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
   c->pfn_data = NULL;
   if (wskey == NULL) {
     mg_http_reply(c, 426, "", "WS upgrade expected\n");
+#ifndef WASM_WORKAROUND_DISABLE_DRAINING
     c->is_draining = 1;
+#endif
   } else {
     struct mg_str *wsproto = mg_http_get_header(hm, "Sec-WebSocket-Protocol");
     va_list ap;
