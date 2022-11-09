@@ -3,10 +3,10 @@
 //
 // example using MIP and a TUN/TAP interface
 
-#include "mongoose.h"
 #include <linux/if.h>
 #include <linux/if_tun.h>
 #include <sys/ioctl.h>
+#include "mongoose.h"
 
 static int s_signo;
 void signal_handler(int signo) {
@@ -14,7 +14,7 @@ void signal_handler(int signo) {
 }
 
 static size_t tap_tx(const void *buf, size_t len, void *userdata) {
-  ssize_t res = write((int) userdata, buf, len);
+  ssize_t res = write((int) (size_t) userdata, buf, len);
   if (res < 0) {
     MG_ERROR(("tap_tx failed: %d", errno));
     return 0;
@@ -27,7 +27,7 @@ static bool tap_up(void *userdata) {
 }
 
 static size_t tap_rx(void *buf, size_t len, void *userdata) {
-  ssize_t received = read((int) userdata, buf, len);
+  ssize_t received = read(*(int *) userdata, buf, len);
   usleep(1);  // This is to avoid 100% CPU
   if (received < 0) return 0;
   return (size_t) received;
@@ -70,12 +70,11 @@ int main(int argc, char *argv[]) {
   struct mg_mgr mgr;  // Event manager
   mg_mgr_init(&mgr);  // Initialise event manager
 
-  struct mip_cfg c = {.ip = 0, .mask = 0, .gw = 0};
-  sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &c.mac[0], &c.mac[1], &c.mac[2],
-         &c.mac[3], &c.mac[4], &c.mac[5]);
-
   struct mip_driver driver = {.tx = tap_tx, .up = tap_up, .rx = tap_rx};
-  mip_init(&mgr, &c, &driver, (void *) (size_t) fd);
+  struct mip_if mif = {.use_dhcp = true, .driver = &driver, .driver_data = &fd};
+  sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
+         &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
+  mip_init(&mgr, &mif);
   MG_INFO(("Init done, starting main loop"));
 
   extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);

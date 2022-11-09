@@ -22,9 +22,13 @@ void setup() {
   delay(3000);
   MG_INFO(("Starting TCP/IP stack..."));
 
-  // Init TCP/IP stack. Set MAC address. Set IP to 0, to enable DHCP
-  struct mip_cfg c = {.mac = {0, 0, 1, 2, 3, 4}, .ip = 0, .mask = 0, .gw = 0};
-  mip_init(&mgr, &c, &mip_driver_w5500, &spi);
+  struct mip_if mif = {
+      .mac = {0, 0, 1, 2, 3, 5},
+      .use_dhcp = true,
+      .driver = &mip_driver_w5500,
+      .driver_data = &spi,
+  };
+  mip_init(&mgr, &mif);
 
   // Start a 5 sec timer, print status message periodically
   mg_timer_add(

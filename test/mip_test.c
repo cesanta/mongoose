@@ -39,12 +39,12 @@ static void test_queue(void) {
 }
 
 static void test_statechange(void) {
-  uint8_t tx[1540];
+  char tx[1540];
   struct mip_if iface;
   memset(&iface, 0, sizeof(iface));
   iface.ip = mg_htonl(0x01020304);
   iface.state = MIP_STATE_READY;
-  iface.tx.buf = tx, iface.tx.len = sizeof(tx);
+  iface.tx.ptr = tx, iface.tx.len = sizeof(tx);
   iface.driver = &mip_driver_mock;
   onstatechange(&iface);
 }
