@@ -14,7 +14,7 @@ void signal_handler(int signo) {
 }
 
 static size_t tap_tx(const void *buf, size_t len, void *userdata) {
-  ssize_t res = write((int) (size_t) userdata, buf, len);
+  ssize_t res = write(*(int*) userdata, buf, len);
   if (res < 0) {
     MG_ERROR(("tap_tx failed: %d", errno));
     return 0;
