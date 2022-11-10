@@ -19,7 +19,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   (void) fn_data;
 }
 
-static void server(void *args) {
+static void ethernet_init(void) {
   // Initialise Ethernet. Enable MAC GPIO pins, see
   // https://www.farnell.com/datasheets/2014265.pdf section 6.10
   uint16_t pins[] = {PIN('A', 1),  PIN('A', 2),  PIN('A', 7),
@@ -35,7 +35,9 @@ static void server(void *args) {
   RCC->AHB1ENR |= BIT(25) | BIT(26) | BIT(27);  // Enable Ethernet clocks
   RCC->AHB1RSTR |= BIT(25);                     // ETHMAC force reset
   RCC->AHB1RSTR &= ~BIT(25);                    // ETHMAC release reset
+}
 
+static void server(void *args) {
   struct mg_mgr mgr;        // Initialise Mongoose event manager
   mg_mgr_init(&mgr);        // and attach it to the MIP interface
   mg_log_set(MG_LL_DEBUG);  // Set log level
@@ -44,9 +46,15 @@ static void server(void *args) {
   // Specify MAC address, and use 0 for IP, mask, GW - i.e. use DHCP
   // For static configuration, specify IP/mask/GW in network byte order
   MG_INFO(("Initializing Ethernet driver"));
-  struct mip_cfg c = {.mac = {0, 0, 1, 2, 3, 5}, .ip = 0, .mask = 0, .gw = 0};
+  ethernet_init();
   struct mip_driver_stm32 driver_data = {.mdc_cr = 4};  // See driver_stm32.h
-  mip_init(&mgr, &c, &mip_driver_stm32, &driver_data);
+  struct mip_if mif = {
+      .mac = {0, 0, 1, 2, 3, 5},
+      .use_dhcp = true,
+      .driver = &mip_driver_stm32,
+      .driver_data = &driver_data,
+  };
+  mip_init(&mgr, &mif);
 
   MG_INFO(("Starting Mongoose v%s", MG_VERSION));    // Tell the world
   mg_http_listen(&mgr, "http://0.0.0.0", fn, &mgr);  // Web listener
