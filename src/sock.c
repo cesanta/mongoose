@@ -374,11 +374,11 @@ void mg_connect_resolved(struct mg_connection *c) {
 }
 
 static MG_SOCKET_TYPE raccept(MG_SOCKET_TYPE sock, union usa *usa,
-                              socklen_t len) {
+                              socklen_t *len) {
   MG_SOCKET_TYPE s = MG_INVALID_SOCKET;
   do {
     memset(usa, 0, sizeof(*usa));
-    s = accept(sock, &usa->sa, &len);
+    s = accept(sock, &usa->sa, len);
   } while (s == MG_INVALID_SOCKET && errno == EINTR);
   return s;
 }
@@ -387,7 +387,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   struct mg_connection *c = NULL;
   union usa usa;
   socklen_t sa_len = sizeof(usa);
-  MG_SOCKET_TYPE fd = raccept(FD(lsn), &usa, sa_len);
+  MG_SOCKET_TYPE fd = raccept(FD(lsn), &usa, &sa_len);
   if (fd == MG_INVALID_SOCKET) {
 #if MG_ARCH == MG_ARCH_AZURERTOS
     // AzureRTOS, in non-block socket mode can mark listening socket readable
@@ -455,7 +455,7 @@ static bool mg_socketpair(MG_SOCKET_TYPE sp[2], union usa usa[2], bool udp) {
              getsockname(sock, &usa[0].sa, &n) == 0 &&
              (sp[0] = socket(AF_INET, SOCK_STREAM, 0)) != MG_INVALID_SOCKET &&
              connect(sp[0], &usa[0].sa, n) == 0 &&
-             (sp[1] = raccept(sock, &usa[1], n)) != MG_INVALID_SOCKET) {
+             (sp[1] = raccept(sock, &usa[1], &n)) != MG_INVALID_SOCKET) {
     success = true;
   }
   if (success) {
