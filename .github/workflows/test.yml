@@ -62,6 +62,11 @@ jobs:
     - run: make vc22
     - run: make mingw
     - run: make mingw++
+  arduino-xiao:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: make arduino-xiao
   arm:
     runs-on: ubuntu-latest
     steps:
