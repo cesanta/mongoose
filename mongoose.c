@@ -3196,7 +3196,7 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
         p += 2;
       }
       if (p > end) return MQTT_MALFORMED;
-      if (version == 5 && p + 1 < end) p += 1 + p[0];  // Skip options
+      if (version == 5 && p + 2 < end) p += 1 + p[0];  // Skip options
       if (p > end) return MQTT_MALFORMED;
       m->data.ptr = (char *) p;
       m->data.len = (size_t) (end - p);
