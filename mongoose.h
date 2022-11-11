@@ -1471,6 +1471,7 @@ void mip_init(struct mg_mgr *, struct mip_if *);
 extern struct mip_driver mip_driver_stm32;
 extern struct mip_driver mip_driver_enc28j60;
 extern struct mip_driver mip_driver_w5500;
+extern struct mip_driver mip_driver_tm4c;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mip_spi {
@@ -1511,6 +1512,20 @@ struct mip_driver_stm32 {
   //    216-310 MHz   HCLK/124       5
   //    110, 111 Reserved
   int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
+};
+
+
+struct mip_driver_tm4c {
+  // MDC clock divider. MDC clock is derived from SYSCLK, must not exceed 2.5MHz
+  //    SYSCLK range   DIVIDER   mdc_cr VALUE
+  //    -------------------------------------
+  //                                -1  <-- tell driver to guess the value
+  //    60-100 MHz    SYSCLK/42      0
+  //    100-150 MHz   SYSCLK/62      1  <-- value for EK-TM4C129* on max speed
+  //    20-35 MHz     SYSCLK/16      2
+  //    35-60 MHz     SYSCLK/26      3
+  //    0x4-0xF Reserved
+  int mdc_cr;  // Valid values: -1, 0, 1, 2, 3
 };
 
 #ifdef __cplusplus
