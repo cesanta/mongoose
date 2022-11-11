@@ -6828,11 +6828,12 @@ static struct ip *tx_ip(struct mip_if *ifp, uint8_t proto, uint32_t ip_src,
   struct eth *eth = (struct eth *) ifp->tx.ptr;
   struct ip *ip = (struct ip *) (eth + 1);
   uint8_t *mac = arp_cache_find(ifp, ip_dst);  // Dst IP in ARP cache ?
-  if (!mac && (ip_dst & ifp->mask)) arp_ask(ifp, ip_dst);  // Same net, lookup
-  if (!mac) mac = arp_cache_find(ifp, ifp->gw);            // Use gateway MAC
-  if (mac) memcpy(eth->dst, mac, sizeof(eth->dst));        // Found? Use it
-  if (!mac) memset(eth->dst, 255, sizeof(eth->dst));       // No? Use broadcast
-  memcpy(eth->src, ifp->mac, sizeof(eth->src));  // TODO(cpq): ARP lookup
+  if (!mac && ((ip_dst & ifp->mask) == (ifp->ip & ifp->mask)))
+    arp_ask(ifp, ip_dst);                             // Same net, lookup
+  if (!mac) mac = arp_cache_find(ifp, ifp->gw);       // Use gateway MAC
+  if (mac) memcpy(eth->dst, mac, sizeof(eth->dst));   // Found? Use it
+  if (!mac) memset(eth->dst, 255, sizeof(eth->dst));  // No? Use broadcast
+  memcpy(eth->src, ifp->mac, sizeof(eth->src));       // TODO(cpq): ARP lookup
   eth->type = mg_htons(0x800);
   memset(ip, 0, sizeof(*ip));
   ip->ver = 0x45;   // Version 4, header length 5 words
@@ -7305,9 +7306,9 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 
   // Read data from the network
   size_t len = ifp->queue.len > 0
-    ? q_read(&ifp->queue, (void *) ifp->rx.ptr)
-    : ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len,
-        ifp->driver_data);
+                   ? q_read(&ifp->queue, (void *) ifp->rx.ptr)
+                   : ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len,
+                                     ifp->driver_data);
   qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
   mip_rx(ifp, (void *) ifp->rx.ptr, len);
   qp_mark(QP_FRAMEDONE, (int) q_space(&ifp->queue));
