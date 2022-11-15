@@ -22,7 +22,7 @@ void setup() {
   delay(3000);
   MG_INFO(("Starting TCP/IP stack..."));
 
-  struct mip_if mif = {.mac = {0, 0, 1, 2, 3, 5}};
+  struct mip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};
   mif.use_dhcp = true;
   mif.driver = &mip_driver_w5500;
   mif.driver_data = &spi;
