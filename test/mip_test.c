@@ -197,7 +197,7 @@ static void test_http_fetch(void) {
 
   // Simple HTTP fetch
   {
-    char* http_feedback = {'\0'};
+    char* http_feedback = "";
     const bool ipv6 = 0;
     if (ipv6) {
       http_feedback = fetch (&mgr, "ipv6.google.com",\
@@ -221,6 +221,7 @@ static void test_http_fetch(void) {
   }
 
   // Clear
+  mip_free(&mif);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL); // Deconstruction OK
   close(fd);
