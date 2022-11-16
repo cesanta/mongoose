@@ -50,7 +50,6 @@ struct mip_if {
 };
 
 void mip_init(struct mg_mgr *, struct mip_if *);
-void mip_free(struct mip_if *);
 
 extern struct mip_driver mip_driver_stm32;
 extern struct mip_driver mip_driver_enc28j60;
