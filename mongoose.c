@@ -3196,7 +3196,7 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
         p += 2;
       }
       if (p > end) return MQTT_MALFORMED;
-      if (version == 5 && p + 1 < end) p += 1 + p[0];  // Skip options
+      if (version == 5 && p + 2 < end) p += 1 + p[0];  // Skip options
       if (p > end) return MQTT_MALFORMED;
       m->data.ptr = (char *) p;
       m->data.len = (size_t) (end - p);
@@ -7007,7 +7007,7 @@ static size_t tx_tcp(struct mip_if *ifp, uint32_t dst_ip, uint8_t flags,
   struct ip *ip = tx_ip(ifp, 6, ifp->ip, dst_ip, sizeof(struct tcp) + len);
   struct tcp *tcp = (struct tcp *) (ip + 1);
   memset(tcp, 0, sizeof(*tcp));
-  memmove(tcp + 1, buf, len);
+  if (buf != NULL && len) memmove(tcp + 1, buf, len);
   tcp->sport = sport;
   tcp->dport = dport;
   tcp->seq = seq;
@@ -7372,6 +7372,11 @@ void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
     qp_init();
 #endif
   }
+}
+
+void mip_free(struct mip_if * ifp) {
+    free((char *)ifp->rx.ptr);
+    free((char *)ifp->tx.ptr);
 }
 
 int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {

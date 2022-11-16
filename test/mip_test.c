@@ -122,7 +122,12 @@ static void f_http_fetch_query(struct mg_connection *c, int ev, void *ev_data, v
 
 // Fetch utility returns message from fetch(..., URL, POST)
 char *fetch(struct mg_mgr *mgr, const char *url, const char *fn_data) {
-  struct Post_reply post_reply = {.post=(char*)fn_data, .http_response=0, .http_responses_received=0};
+  struct Post_reply post_reply;
+  {
+    post_reply.post=(char*)fn_data;
+    post_reply.http_response=0;
+    post_reply.http_responses_received=0;
+  }
   struct mg_connection *conn;
   conn = mg_http_connect(mgr, url, f_http_fetch_query, &post_reply);
   ASSERT(conn != NULL);		// Assertion on initialisation
@@ -135,7 +140,7 @@ char *fetch(struct mg_mgr *mgr, const char *url, const char *fn_data) {
   if (!post_reply.http_responses_received)
     return 0;
   else
-    return post_reply.http_response;
+    return (char*)post_reply.http_response;
 }
 
 // Returns server's HTTP response code
@@ -174,8 +179,22 @@ static void test_http_fetch(void) {
   mg_mgr_init(&mgr);  // Initialise event manager
 
   // MIP driver
+
+  // Zero init fields required (C/C++ style diverge)
+  #ifndef __cplusplus
   struct mip_driver driver = {.tx = tap_tx, .up = tap_up, .rx = tap_rx};
   struct mip_if mif = {.use_dhcp = true, .driver = &driver, .driver_data = &fd};
+  #else
+  struct mip_driver driver {};
+    driver.tx = tap_tx;
+    driver.up = tap_up;
+    driver.rx = tap_rx;
+  struct mip_if mif {};
+    mif.use_dhcp = true;
+    mif.driver = &driver;
+    mif.driver_data = &fd;
+  #endif
+
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1], &mif.mac[2],
          &mif.mac[3], &mif.mac[4], &mif.mac[5]);
 
@@ -197,7 +216,7 @@ static void test_http_fetch(void) {
 
   // Simple HTTP fetch
   {
-    char* http_feedback = {'\0'};
+    char* http_feedback = (char*)"";
     const bool ipv6 = 0;
     if (ipv6) {
       http_feedback = fetch (&mgr, "ipv6.google.com",\
@@ -221,6 +240,7 @@ static void test_http_fetch(void) {
   }
 
   // Clear
+  mip_free(&mif);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL); // Deconstruction OK
   close(fd);
