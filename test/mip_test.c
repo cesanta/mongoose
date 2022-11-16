@@ -179,18 +179,22 @@ static void test_http_fetch(void) {
   mg_mgr_init(&mgr);  // Initialise event manager
 
   // MIP driver
-  struct mip_driver driver;
-  {
+
+  // Zero init fields required (C/C++ style diverge)
+  #ifndef __cplusplus
+  struct mip_driver driver = {.tx = tap_tx, .up = tap_up, .rx = tap_rx};
+  struct mip_if mif = {.use_dhcp = true, .driver = &driver, .driver_data = &fd};
+  #else
+  struct mip_driver driver {};
     driver.tx = tap_tx;
     driver.up = tap_up;
     driver.rx = tap_rx;
-  }
-  struct mip_if mif;
-  {
+  struct mip_if mif {};
     mif.use_dhcp = true;
     mif.driver = &driver;
     mif.driver_data = &fd;
-  }
+  #endif
+
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1], &mif.mac[2],
          &mif.mac[3], &mif.mac[4], &mif.mac[5]);
 
