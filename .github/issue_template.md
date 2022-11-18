@@ -10,3 +10,4 @@
 - Compiler/IDE and SDK: ZZZ version _X.Y_
 - Target hardware/board: _?_
 - Connectivity chip/module: _?_
+- Target RTOS/OS (if applicable): _?_
