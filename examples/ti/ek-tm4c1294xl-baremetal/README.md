@@ -25,11 +25,12 @@ which implements the following:
 ## Usage
 
 Plugin your board into USB, and attach an Ethernet cable.
-To build and flash:
+To build:
 
 ```sh
-$ make clean flash
+$ make clean nuild
 ```
+To flash: use Uniflash
 
 To see debug log, use any serial monitor program like `picocom` at 115200 bps and configure it to insert carriage returns after line feeds:
 
