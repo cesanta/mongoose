@@ -44,7 +44,7 @@ static size_t pcap_rx(void *buf, size_t len, void *userdata) {
 
 int main(int argc, char *argv[]) {
   const char *iface = "lo0";              // Network iface
-  const char *mac = "00:00:01:02:03:77";  // MAC address
+  const char *mac = "02:00:01:02:03:77";  // MAC address
   const char *bpf = NULL;  // "host x.x.x.x or ether host ff:ff:ff:ff:ff:ff";
   char errbuf[PCAP_ERRBUF_SIZE] = "";
 

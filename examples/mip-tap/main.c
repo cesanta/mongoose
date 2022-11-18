@@ -35,7 +35,7 @@ static size_t tap_rx(void *buf, size_t len, void *userdata) {
 
 int main(int argc, char *argv[]) {
   const char *iface = "tap0";             // Network iface
-  const char *mac = "00:00:01:02:03:77";  // MAC address
+  const char *mac = "02:00:01:02:03:77";  // MAC address
 
   // Parse options
   for (int i = 1; i < argc; i++) {

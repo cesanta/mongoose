@@ -72,7 +72,7 @@ int main(void) {
   // For static configuration, specify IP/mask/GW in network byte order
   struct mip_driver_stm32 driver_data = {.mdc_cr = 4};  // See driver_stm32.h
   struct mip_if mif = {
-      .mac = {0, 0, 1, 2, 3, 5},
+      .mac = {2, 0, 1, 2, 3, 5},
       .use_dhcp = true,
       .driver = &mip_driver_stm32,
       .driver_data = &driver_data,
