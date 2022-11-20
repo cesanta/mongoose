@@ -2024,6 +2024,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
               "Content-Length: 0\r\n"
               "\r\n",
               (int) hm->uri.len, hm->uri.ptr);
+    c->is_resp = 0;
     flags = -1;
   } else if (flags & MG_FS_DIR) {
     if (((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX) > 0 &&
