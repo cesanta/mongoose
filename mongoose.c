@@ -3314,7 +3314,7 @@ size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
 }
 
 char *mg_straddr(struct mg_addr *a, char *buf, size_t len) {
-  char tmp[30];
+  char tmp[40];
   const char *fmt = a->is_ip6 ? "[%s]:%d" : "%s:%d";
   mg_ntoa(a, tmp, sizeof(tmp));
   mg_snprintf(buf, len, fmt, tmp, (int) mg_ntohs(a->port));
