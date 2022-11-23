@@ -1,6 +1,6 @@
 # Baremetal webserver on NUCLEO-F746ZG
 
-This firmware uses experimental TCP/IP stack of the Mongoose Network Library,
+This firmware uses MIP, an experimental TCP/IP stack of the Mongoose Network Library,
 which implements the following:
 
 - A complete [HTTP device dashboard](../../device-dashboard) with:
@@ -10,7 +10,7 @@ which implements the following:
   - MQTT communication with a remote MQTT server
 - Implements SNTP time synchronisation
 - No dependencies: no HAL, no CMSIS, no RTOS
-- Hand-written [mcu.h](mcu.h) header based on a [datasheet](https://www.st.com/resource/en/reference_manual/rm0385-stm32f75xxx-and-stm32f74xxx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
+- Hand-written [mcu.h](mcu.h) header based on the [datasheet](https://www.st.com/resource/en/reference_manual/rm0385-stm32f75xxx-and-stm32f74xxx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
 - Interrupt-driven [Ethernet driver](../../../mip/driver_stm32.c)
 - Blue LED blinky, based on SysTick interrupt
 - User button handler, turns off/on green LED, based on EXTI, interrupt-driven 
@@ -19,9 +19,13 @@ which implements the following:
 
 ## Requirements
 
-- GNU make
-- [ARM GCC](https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm) toolchain for build
-- [st-link](https://github.com/stlink-org/stlink) for flashing
+- [GNU make](http://mongoose.ws/tutorials/tools/#gnu-make)
+- [ARM GCC](http://mongoose.ws/tutorials/tools/#arm-gcc)
+- [stlink](http://mongoose.ws/tutorials/tools/#stlink) for flashing
+
+The Makefile defaults to using Docker for the compiler, so you don't actually need to install it if you are using a Linux/Mac workstation. If you are not, or you want to run your local ARM compiler, just append `DOCKER=` to the make commands depicted below to call the compiler directly; it must be in your executable path.
+
+In any case, the links above will send you to tutorials on how to install each of those tools in your workstation for Linux, Mac, and Windows.
 
 ## Usage
 
@@ -37,6 +41,8 @@ To see debug log, use any serial monitor program like `picocom` at 115200 bps an
 ```sh
 $ picocom /dev/ttyACM0 -i -b 115200 --imap=lfcrlf
 ```
+
+There is also a [detailed tutorial on this example](https://mongoose.ws/tutorials/stm32/nucleo-f746zg-baremetal/)
 
 ## Benchmark
 
