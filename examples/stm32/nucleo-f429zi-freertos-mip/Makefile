@@ -18,7 +18,7 @@ firmware.elf: FreeRTOS-Kernel $(SOURCES)
 	  -IFreeRTOS-Kernel/include \
 	  -IFreeRTOS-Kernel/portable/GCC/ARM_CM4F \
 	  -Wno-conversion \
-	  FreeRTOS-Kernel/*.c \
+	  $(wildcard FreeRTOS-Kernel/*.c) \
 	  FreeRTOS-Kernel/portable/MemMang/heap_4.c \
 	  FreeRTOS-Kernel/portable/GCC/ARM_CM4F/port.c
 	
