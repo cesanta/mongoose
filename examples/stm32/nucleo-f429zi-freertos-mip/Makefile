@@ -26,7 +26,7 @@ firmware.bin: firmware.elf
 	$(DOCKER) arm-none-eabi-objcopy -O binary $< $@
 
 flash: firmware.bin
-	st-flash --reset write $(TARGET).bin 0x8000000
+	st-flash --reset write firmware.bin 0x8000000
 
 FreeRTOS-Kernel:
 	git clone --depth 1 -b $(FREERTOS_VERSION) $(FREERTOS_REPO) $@
