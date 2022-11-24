@@ -6194,7 +6194,7 @@ struct mip_driver mip_driver_stm32 = {
 #endif
 
 
-#if MG_ENABLE_MIP && defined(MG_ENABLE_DRIVER_TM4C) &&  MG_ENABLE_DRIVER_TM4C
+#if MG_ENABLE_MIP && defined(MG_ENABLE_DRIVER_TM4C) && MG_ENABLE_DRIVER_TM4C
 struct tm4c_emac {
   volatile uint32_t EMACCFG, EMACFRAMEFLTR, EMACHASHTBLH, EMACHASHTBLL,
       EMACMIIADDR, EMACMIIDATA, EMACFLOWCTL, EMACVLANTG, RESERVED0, EMACSTATUS,
@@ -6215,8 +6215,10 @@ struct tm4c_emac {
       RESERVED15[218], EMACPP, EMACPC, EMACCC, RESERVED16, EMACEPHYRIS,
       EMACEPHYIM, EMACEPHYIMSC;
 };
+#undef EMAC
 #define EMAC ((struct tm4c_emac *) (uintptr_t) 0x400EC000)
 
+#undef BIT
 #define BIT(x) ((uint32_t) 1 << (x))
 #define ETH_PKT_SIZE 1540  // Max frame size
 #define ETH_DESC_CNT 4     // Descriptors count
@@ -6230,7 +6232,7 @@ static void (*s_rx)(void *, size_t, void *);         // Recv callback
 static void *s_rxdata;                               // Recv callback data
 enum { EPHY_ADDR = 0, EPHYBMCR = 0, EPHYBMSR = 1 };  // PHY constants
 
-static inline void spin(volatile uint32_t count) {
+static inline void tm4cspin(volatile uint32_t count) {
   while (count--) (void) 0;
 }
 
@@ -6238,7 +6240,7 @@ static uint32_t emac_read_phy(uint8_t addr, uint8_t reg) {
   EMAC->EMACMIIADDR &= (0xf << 2);
   EMAC->EMACMIIADDR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6);
   EMAC->EMACMIIADDR |= BIT(0);
-  while (EMAC->EMACMIIADDR & BIT(0)) spin(1);
+  while (EMAC->EMACMIIADDR & BIT(0)) tm4cspin(1);
   return EMAC->EMACMIIDATA;
 }
 
@@ -6247,7 +6249,7 @@ static void emac_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   EMAC->EMACMIIADDR &= (0xf << 2);
   EMAC->EMACMIIADDR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6) | BIT(1);
   EMAC->EMACMIIADDR |= BIT(0);
-  while (EMAC->EMACMIIADDR & BIT(0)) spin(1);
+  while (EMAC->EMACMIIADDR & BIT(0)) tm4cspin(1);
 }
 
 // TODO(scaprile) TEST
@@ -6255,27 +6257,27 @@ static uint32_t get_sysclk(void) {
   struct sysctl {
     volatile uint32_t DONTCARE0[44], RSCLKCFG, DONTCARE1[43], PLLFREQ0,
         PLLFREQ1;
-  } *SYSCTL = (struct sysctl *) 0x400FE000;
+  } *sysctl = (struct sysctl *) 0x400FE000;
   uint32_t clk = 0, piosc = 16000000 /* 16 MHz */, mosc = 25000000 /* 25MHz */;
-  uint32_t oscsrc = (SYSCTL->RSCLKCFG & (0xf << 20)) >> 20;
+  uint32_t oscsrc = (sysctl->RSCLKCFG & (0xf << 20)) >> 20;
   if (oscsrc == 0)
     clk = piosc;
   else if (oscsrc == 3)
     clk = mosc;
   else
     MG_ERROR(("Unsupported clock source"));
-  if (SYSCTL->RSCLKCFG & (1 << 28)) {  // USEPLL
+  if (sysctl->RSCLKCFG & (1 << 28)) {  // USEPLL
     uint32_t fin, vco, mdiv, n, q, psysdiv;
-    q = (SYSCTL->PLLFREQ1 & (0x1f << 8)) >> 8;
-    n = (SYSCTL->PLLFREQ1 & (0x1f << 0)) >> 0;
+    q = (sysctl->PLLFREQ1 & (0x1f << 8)) >> 8;
+    n = (sysctl->PLLFREQ1 & (0x1f << 0)) >> 0;
     fin = clk / ((q + 1) * (n + 1));
-    mdiv = (SYSCTL->PLLFREQ0 & (0x3ff << 0)) >>
+    mdiv = (sysctl->PLLFREQ0 & (0x3ff << 0)) >>
            0;  // mint + (mfrac / 1024); MFRAC not supported
-    psysdiv = (SYSCTL->RSCLKCFG & (0x3f << 0)) >> 0;
+    psysdiv = (sysctl->RSCLKCFG & (0x3f << 0)) >> 0;
     vco = (uint32_t) ((uint64_t) fin * mdiv);
     return vco / (psysdiv + 1);
   }
-  uint32_t osysdiv = (SYSCTL->RSCLKCFG & (0xf << 16)) >> 16;
+  uint32_t osysdiv = (sysctl->RSCLKCFG & (0xf << 16)) >> 16;
   return clk / (osysdiv + 1);
 }
 
@@ -6327,8 +6329,8 @@ static bool mip_driver_tm4c_init(uint8_t *mac, void *userdata) {
         (uint32_t) (uintptr_t) s_txdesc[(i + 1) % ETH_DESC_CNT];  // Chain
   }
 
-  EMAC->EMACDMABUSMOD |= BIT(0);                        // Software reset
-  while ((EMAC->EMACDMABUSMOD & BIT(0)) != 0) spin(1);  // Wait until done
+  EMAC->EMACDMABUSMOD |= BIT(0);                            // Software reset
+  while ((EMAC->EMACDMABUSMOD & BIT(0)) != 0) tm4cspin(1);  // Wait until done
 
   // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
   int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;
@@ -6344,17 +6346,11 @@ static bool mip_driver_tm4c_init(uint8_t *mac, void *userdata) {
   emac_write_phy(EPHY_ADDR, EPHYBMCR, BIT(15));  // Reset internal PHY (EPHY)
   emac_write_phy(EPHY_ADDR, EPHYBMCR, BIT(12));  // Set autonegotiation
   EMAC->EMACRXDLADDR = (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors
-  EMAC->EMACTXDLADDR = (uint32_t) (uintptr_t) s_txdesc;  // RX descriptors
+  EMAC->EMACTXDLADDR = (uint32_t) (uintptr_t) s_txdesc;  // TX descriptors
   EMAC->EMACDMAIM = BIT(6) | BIT(16);                    // RIE, NIE
   EMAC->EMACCFG = BIT(2) | BIT(3) | BIT(11) | BIT(14);   // RE, TE, Duplex, Fast
   EMAC->EMACDMAOPMODE =
       BIT(1) | BIT(13) | BIT(21) | BIT(25);  // SR, ST, TSF, RSF
-  // TODO(scaprile) we are not using EPHY interrupts, we could probably use
-  // them, have a status flag, and avoid polling the PHY
-
-  // MAC address filtering NOTE(scaprile): This is currently ignored by
-  // configuration of EMACFRAMEFLTR above; MIP receives all frames. This also
-  // applies to the STM32 driver (Nov 1st 2022)
   EMAC->EMACADDR0H = ((uint32_t) mac[5] << 8U) | mac[4];
   EMAC->EMACADDR0L = (uint32_t) (mac[3] << 24) | ((uint32_t) mac[2] << 16) |
                      ((uint32_t) mac[1] << 8) | mac[0];
@@ -7013,7 +7009,7 @@ static size_t tx_tcp(struct mip_if *ifp, uint32_t dst_ip, uint8_t flags,
   struct ip *ip = tx_ip(ifp, 6, ifp->ip, dst_ip, sizeof(struct tcp) + len);
   struct tcp *tcp = (struct tcp *) (ip + 1);
   memset(tcp, 0, sizeof(*tcp));
-  memmove(tcp + 1, buf, len);
+  if (buf != NULL && len) memmove(tcp + 1, buf, len);
   tcp->sport = sport;
   tcp->dport = dport;
   tcp->seq = seq;
@@ -7378,6 +7374,11 @@ void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
     qp_init();
 #endif
   }
+}
+
+void mip_free(struct mip_if *ifp) {
+  free((char *) ifp->rx.ptr);
+  free((char *) ifp->tx.ptr);
 }
 
 int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {
