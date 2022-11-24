@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h> // rand(), strtol(), atoi()
 #include <string.h>
 
 #include <FreeRTOS.h>

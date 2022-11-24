@@ -172,6 +172,7 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h> // rand(), strtol(), atoi()
 #include <string.h>
 
 #include <FreeRTOS.h>
@@ -1467,6 +1468,7 @@ struct mip_if {
 };
 
 void mip_init(struct mg_mgr *, struct mip_if *);
+void mip_free(struct mip_if *);
 
 extern struct mip_driver mip_driver_stm32;
 extern struct mip_driver mip_driver_enc28j60;
