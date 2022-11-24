@@ -52,7 +52,7 @@ jobs:
     - run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
     - run: make test upload-coverage SSL=OPENSSL ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
     - run: make test SSL=MBEDTLS  ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
-    - run: make mip_test ASAN_OPTIONS=
+    #- run: make mip_test ASAN_OPTIONS=
     - run: make mg_prefix
   windows:
     runs-on: ubuntu-latest
