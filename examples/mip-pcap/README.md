@@ -20,8 +20,8 @@ peer interface and vice versa.
 ```sh
 $ sudo ifconfig feth0 create
 $ sudo ifconfig feth1 create
-$ sudo ifconfig feth1 peer feth 0     # Link two fake ethernet ifaces together
-$ sudo ifconfig feth1 10.10           # Assign 10.0.0.10 to feth1
+$ sudo ifconfig feth1 peer feth0     # Link two fake ethernet ifaces together
+$ sudo ifconfig feth1 10.10          # Assign 10.0.0.10 to feth1
 $ sudo ifconfig feth0 up
 $ sudo ifconfig feth1 up
 ```

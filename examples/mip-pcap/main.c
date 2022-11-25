@@ -42,6 +42,26 @@ static size_t pcap_rx(void *buf, size_t len, void *userdata) {
   return received;
 }
 
+static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_http_match_uri(hm, "/api/debug")) {
+      int level = mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
+      mg_log_set(level);
+      mg_http_reply(c, 200, "", "Debug level set to %d\n", level);
+    } else if (mg_http_match_uri(hm, "/api/bar")) {
+      mg_http_connect(c->mgr, );
+      mg_http_reply(c, 200, NULL, "ok\r\n");
+    } else if (mg_http_match_uri(hm, "/api/foo")) {
+      mg_http_reply(c, 200, NULL, "%.*s\r\n",
+          (int) hm->message.len, hm->message.ptr);
+    } else {
+      mg_http_reply(c, 200, "", "hi\n");  // Testing endpoint
+    }
+  }
+  (void) ev_data, (void) fn_data;
+}
+
 int main(int argc, char *argv[]) {
   const char *iface = "lo0";              // Network iface
   const char *mac = "02:00:01:02:03:77";  // MAC address
@@ -102,8 +122,8 @@ int main(int argc, char *argv[]) {
   mip_init(&mgr, &mif);
   MG_INFO(("Init done, starting main loop"));
 
-  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, "http://0.0.0.0:8000", device_dashboard_fn, &mgr);
+  //extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
+  mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, &mgr);
 
   while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop
 
