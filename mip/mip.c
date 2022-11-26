@@ -229,9 +229,14 @@ static inline void arp_cache_dump(const uint8_t *p) {
 }
 #endif
 
+static const uint8_t bcastmac[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+
 static uint8_t *arp_cache_find(struct mip_if *ifp, uint32_t ip) {
   uint8_t *p = ifp->arp_cache;
-  if (ip == 0 || ip == 0xffffffffU) return NULL;
+  if (ip == 0) return NULL;
+  // use broadcast MAC for local and global broadcast IP
+  if (ip == 0xffffffffU || ip == (ifp->ip | ~ifp->mask))
+    return (uint8_t *) bcastmac;  
   for (uint8_t i = 0, j = p[1]; i < MIP_ARP_ENTRIES; i++, j = p[j + 1]) {
     if (memcmp(p + j + 2, &ip, sizeof(ip)) == 0) {
       p[1] = j, p[0] = p[j];  // Found entry! Point list head to us
@@ -845,9 +850,9 @@ void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
   }
 }
 
-void mip_free(struct mip_if * ifp) {
-    free((char *)ifp->rx.ptr);
-    free((char *)ifp->tx.ptr);
+void mip_free(struct mip_if *ifp) {
+  free((char *) ifp->rx.ptr);
+  free((char *) ifp->tx.ptr);
 }
 
 int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {
