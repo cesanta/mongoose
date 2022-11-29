@@ -131,7 +131,7 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   // ETH->DMABMR = BIT(13) | BIT(16) | BIT(22) | BIT(23) | BIT(25);
   ETH->MACIMR = BIT(3) | BIT(9);                    // Mask timestamp & PMT IT
   ETH->MACFCR = BIT(7);                             // Disable zero quarta pause
-  ETH->MACFFR = BIT(31);                            // Receive all
+  // ETH->MACFFR = BIT(31);                            // Receive all
   eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));        // Reset PHY
   eth_write_phy(PHY_ADDR, PHY_BCR, BIT(12));        // Set autonegotiation
   ETH->DMARDLAR = (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors
