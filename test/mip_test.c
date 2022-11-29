@@ -183,14 +183,25 @@ static void test_http_fetch(void) {
   // Zero init fields required (C/C++ style diverge)
   #ifndef __cplusplus
   struct mip_driver driver = {.tx = tap_tx, .up = tap_up, .rx = tap_rx};
-  struct mip_if mif = {.use_dhcp = true, .driver = &driver, .driver_data = &fd};
+  // DHCP
+  // struct mip_if mif = {.use_dhcp = true, .driver = &driver, .driver_data = &fd};
+  // Static
+  // 192.168.32.2/24 gw 192.168.32.1
+  struct mip_if mif = {.use_dhcp = false, \
+  .ip=0x0220a8c0 , .mask=0x00ffffff, .gw=0x0120a8c0, \
+  .driver = &driver, .driver_data = &fd};
+
   #else
   struct mip_driver driver {};
     driver.tx = tap_tx;
     driver.up = tap_up;
     driver.rx = tap_rx;
   struct mip_if mif {};
-    mif.use_dhcp = true;
+//  mif.use_dhcp = true;   // DHCP
+    mif.use_dhcp = false;  // Static IP
+    mif.ip = 0x0220a8c0;   // 192.168.32.2
+    mif.mask = 0x00ffffff; // 255.255.255.0
+    mif.gw = 0x0120a8c0;   // 192.168.32.1
     mif.driver = &driver;
     mif.driver_data = &fd;
   #endif
@@ -201,17 +212,19 @@ static void test_http_fetch(void) {
   mip_init(&mgr, &mif);
   MG_INFO(("Init done, starting main loop"));
 
-  // DHCP lease
+  // Stack initialization, Network configuration (DHCP lease, ...)
   {
-    if (mif.ip) printf("MIF configuration error: not configured for DHCP\n");
-    ASSERT(!mif.ip); // Check we are set for DHCP
+    if (mif.ip) MG_INFO(("MIF configuration: Static IP"));
+    else MG_INFO(("MIF configuration: DHCP"));
+    MG_INFO(("Opened TAP interface: %s", iface));
+    // ASSERT(!mif.ip); // Check we are set for DHCP
     int pc = 500; // Timout on DHCP lease 500 ~ approx 5s (typical delay <1s)
-    while (((pc--)>0)/* & !mif.ip*/) {
+    while (((pc--)>0) /*& !mif.ip*/) {
       mg_mgr_poll(&mgr, 100);
       usleep(10000); // 10 ms
     }
-    if (!mif.ip) printf("DHCP lease failed.\n");
-    ASSERT(mif.ip); // We have a received lease
+    if (!mif.ip) printf("No ip assigned (DHCP lease may have failed).\n");
+    ASSERT(mif.ip); // We have an IP (lease or static)
   }
 
   // Simple HTTP fetch
@@ -250,6 +263,6 @@ int main(void) {
   test_queue();
   test_statechange();
   test_http_fetch();
-  printf("SUCCESS\n");
+  printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return 0;
 }
