@@ -7013,7 +7013,7 @@ static size_t tx_tcp(struct mip_if *ifp, uint32_t dst_ip, uint8_t flags,
   struct ip *ip = tx_ip(ifp, 6, ifp->ip, dst_ip, sizeof(struct tcp) + len);
   struct tcp *tcp = (struct tcp *) (ip + 1);
   memset(tcp, 0, sizeof(*tcp));
-  memmove(tcp + 1, buf, len);
+  if (buf != NULL && len) memmove(tcp + 1, buf, len);
   tcp->sport = sport;
   tcp->dport = dport;
   tcp->seq = seq;
@@ -7378,6 +7378,11 @@ void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
     qp_init();
 #endif
   }
+}
+
+void mip_free(struct mip_if *ifp) {
+  free((char *) ifp->rx.ptr);
+  free((char *) ifp->tx.ptr);
 }
 
 int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {
