@@ -266,12 +266,17 @@ static void ph(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 static void test_poll(void) {
-  int count = 0;
+  int count = 0, i;
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
+  struct mip_if mif;
+  memset(&mif, 0, sizeof(mif));
+  mif.driver = &mip_driver_mock;
+  mip_init(&mgr, &mif);
   mg_http_listen(&mgr, "http://127.0.0.1:12346", ph, &count);
-  for (int i = 0; i < 10; i++) mg_mgr_poll(&mgr, 0);
+  for (i = 0; i < 10; i++) mg_mgr_poll(&mgr, 0);
   ASSERT(count == 10);
+  mip_free(&mif);
   mg_mgr_free(&mgr);
 }
 

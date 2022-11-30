@@ -10,7 +10,7 @@ static size_t mock_tx(const void *buf, size_t len, void *data) {
 
 static size_t mock_rx(void *buf, size_t len, void *data) {
   (void) buf, (void) len, (void) data;
-  return len;
+  return 0;
 }
 
 static bool mock_up(void *data) {
