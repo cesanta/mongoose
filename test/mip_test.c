@@ -4,6 +4,7 @@
 #define MG_ENABLE_PACKED_FS 0
 
 #include <assert.h>
+#include <sys/socket.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
 #include <sys/ioctl.h>
@@ -259,10 +260,26 @@ static void test_http_fetch(void) {
   close(fd);
 }
 
+static void ph(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_POLL) ++(*(int *) fn_data);
+  (void) c, (void) ev_data;
+}
+
+static void test_poll(void) {
+  int count = 0;
+  struct mg_mgr mgr;
+  mg_mgr_init(&mgr);
+  mg_http_listen(&mgr, "http://127.0.0.1:12346", ph, &count);
+  for (int i = 0; i < 10; i++) mg_mgr_poll(&mgr, 0);
+  ASSERT(count == 10);
+  mg_mgr_free(&mgr);
+}
+
 int main(void) {
   test_queue();
   test_statechange();
   test_http_fetch();
+  test_poll();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return 0;
 }
