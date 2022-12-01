@@ -96,8 +96,8 @@ char *fetch(struct mg_mgr *mgr, const char *url, const char *fn_data) {
     usleep(10000);  // 10 ms. Slow down poll loop to ensure packets transit
   }
   if (mgr->conns != 0) {
-      conn->is_closing = 1;
-      mg_mgr_poll(mgr, 0);
+    conn->is_closing = 1;
+    mg_mgr_poll(mgr, 0);
   }
   mg_mgr_poll(mgr, 0);
   if (!post_reply.http_responses_received)
@@ -155,14 +155,14 @@ static void test_http_fetch(void) {
   mif.driver = &driver;
   mif.driver_data = &fd;
 
-  #if MG_USING_DHCP == 1
-  mif.use_dhcp = true;   // DHCP
-  #else
+#if MG_USING_DHCP == 1
+  mif.use_dhcp = true;  // DHCP
+#else
   mif.use_dhcp = false;   // Static IP
   mif.ip = 0x0220a8c0;    // 192.168.32.2 // Triggering a network failure
   mif.mask = 0x00ffffff;  // 255.255.255.0
   mif.gw = 0x0120a8c0;    // 192.168.32.1
-  #endif
+#endif
 
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
          &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
@@ -172,14 +172,14 @@ static void test_http_fetch(void) {
 
   // Stack initialization, Network configuration (DHCP lease, ...)
   {
-    #if MG_USING_DHCP == 0
+#if MG_USING_DHCP == 0
     MG_INFO(("MIF configuration: Static IP"));
-    ASSERT(mif.ip != 0); // Check we have a satic IP assigned
-    mg_mgr_poll(&mgr, 100); // For initialisation
-    #else
+    ASSERT(mif.ip != 0);     // Check we have a satic IP assigned
+    mg_mgr_poll(&mgr, 100);  // For initialisation
+#else
     MG_INFO(("MIF configuration: DHCP"));
     MG_INFO(("Opened TAP interface: %s", iface));
-    ASSERT(!mif.ip); // Check we are set for DHCP
+    ASSERT(!mif.ip);  // Check we are set for DHCP
     int pc = 500;  // Timout on DHCP lease 500 ~ approx 5s (typical delay <1s)
     while (((pc--) > 0) && !mif.ip) {
       mg_mgr_poll(&mgr, 100);
@@ -187,7 +187,7 @@ static void test_http_fetch(void) {
     }
     if (!mif.ip) MG_ERROR(("No ip assigned (DHCP lease may have failed).\n"));
     ASSERT(mif.ip);  // We have an IP (lease or static)
-    #endif
+#endif
   }
 
   // Simple HTTP fetch
@@ -203,7 +203,8 @@ static void test_http_fetch(void) {
                 "GET //robots.txt HTTP/1.0\r\nHost: cesanta.com\r\n\r\n");
     }
 
-    ASSERT(http_feedback != NULL && *http_feedback != '\0'); // HTTP response received ?
+    ASSERT(http_feedback != NULL &&
+           *http_feedback != '\0');  // HTTP response received ?
 
     int http_status = get_response_code(http_feedback);
     // printf("Server response HTTP status code: %d\n",http_status);
@@ -218,7 +219,7 @@ static void test_http_fetch(void) {
 
   // Clear
   mg_mgr_free(&mgr);
-  mip_free(&mif); // Release after mg_mgr
+  mip_free(&mif);             // Release after mg_mgr
   ASSERT(mgr.conns == NULL);  // Deconstruction OK
   close(fd);
 }
