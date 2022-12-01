@@ -333,7 +333,7 @@ static void test_sntp(void) {
   ASSERT(mg_sntp_parse(NULL, 0) == -1);
   // NOTE(cpq): temporarily disabled until Github Actions fix their NTP
   // port blockage issue, https://github.com/actions/runner-images/issues/5615
-  //test_sntp_server("udp://time.apple.com:123");
+  // test_sntp_server("udp://time.apple.com:123");
   test_sntp_server("udp://time.windows.com:123");
   test_sntp_server(NULL);
 }
@@ -2304,7 +2304,7 @@ static void w2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     MG_INFO(("Got WS, %lu", wm->data.len));
-    //mg_hexdump(wm->data.ptr, wm->data.len);
+    // mg_hexdump(wm->data.ptr, wm->data.len);
     if (wm->data.len == 9) {
       ASSERT(mg_strcmp(wm->data, mg_str("hi there!")) == 0);
     } else if (wm->data.len == 3) {
@@ -2625,6 +2625,21 @@ static void test_rpc(void) {
   ASSERT(head == NULL);
 }
 
+static void ph(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_POLL) ++(*(int *) fn_data);
+  (void) c, (void) ev_data;
+}
+
+static void test_poll(void) {
+  int count = 0, i;
+  struct mg_mgr mgr;
+  mg_mgr_init(&mgr);
+  mg_http_listen(&mgr, "http://127.0.0.1:12346", ph, &count);
+  for (i = 0; i < 10; i++) mg_mgr_poll(&mgr, 0);
+  ASSERT(count == 10);
+  mg_mgr_free(&mgr);
+}
+
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
@@ -2666,6 +2681,7 @@ int main(void) {
   test_http_range();
   test_sntp();
   test_mqtt();
+  test_poll();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
 
   return EXIT_SUCCESS;
