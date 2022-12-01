@@ -172,12 +172,13 @@ static void test_http_fetch(void) {
 
   // Stack initialization, Network configuration (DHCP lease, ...)
   {
-    if (mif.ip)
-      MG_INFO(("MIF configuration: Static IP"));
-    else
-      MG_INFO(("MIF configuration: DHCP"));
+    #if MG_USING_DHCP == 0
+    MG_INFO(("MIF configuration: Static IP"));
+    ASSERT(mif.ip != 0); // Check we have a satic IP assigned
+    mg_mgr_poll(&mgr, 100); // For initialisation
+    #else
+    MG_INFO(("MIF configuration: DHCP"));
     MG_INFO(("Opened TAP interface: %s", iface));
-    #ifdef USING_DHCP
     ASSERT(!mif.ip); // Check we are set for DHCP
     int pc = 500;  // Timout on DHCP lease 500 ~ approx 5s (typical delay <1s)
     while (((pc--) > 0) && !mif.ip) {
@@ -186,8 +187,6 @@ static void test_http_fetch(void) {
     }
     if (!mif.ip) MG_ERROR(("No ip assigned (DHCP lease may have failed).\n"));
     ASSERT(mif.ip);  // We have an IP (lease or static)
-    #else
-    mg_mgr_poll(&mgr, 100); // For initialisation
     #endif
   }
 
