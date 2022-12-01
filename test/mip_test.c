@@ -4,13 +4,8 @@
 #define MG_ENABLE_PACKED_FS 0
 
 #include <assert.h>
-#include <sys/socket.h>
-#include <linux/if.h>
-#include <linux/if_tun.h>
-#include <sys/ioctl.h>
 #include "mongoose.c"
-
-   #include "driver_mock.c"
+#include "driver_mock.c"
 
 static int s_num_tests = 0;
 
@@ -23,8 +18,6 @@ static int s_num_tests = 0;
     }                                                           \
   } while (0)
 
-
-
 static void test_queue(void) {
   static uint8_t
       buf[sizeof(size_t) + sizeof(uint16_t) + 3];  // fit 1 element but not 2
@@ -32,27 +25,27 @@ static void test_queue(void) {
   static struct queue q = {buf, sizeof(buf), 0, 0};
 
   // Write to an empty queue, and read back
-  assert(q_avail(&q) == 0);
-  assert(q_write(&q, &val, sizeof(val)) == true);
-  assert(q_avail(&q) == sizeof(val));
-  assert(q.head > q.tail);
+  ASSERT(q_avail(&q) == 0);
+  ASSERT(q_write(&q, &val, sizeof(val)) == true);
+  ASSERT(q_avail(&q) == sizeof(val));
+  ASSERT(q.head > q.tail);
   // Only one element may fit
-  assert(q_write(&q, &val, sizeof(val)) == false);
+  ASSERT(q_write(&q, &val, sizeof(val)) == false);
   val = 0;
-  assert(q_read(&q, &val) == sizeof(val));
-  assert(val == 1234);
-  assert(q_avail(&q) == 0);
+  ASSERT(q_read(&q, &val) == sizeof(val));
+  ASSERT(val == 1234);
+  ASSERT(q_avail(&q) == 0);
 
   // Second write - wrap over the buffer boundary
-  assert(q_write(&q, &val, sizeof(val)) == true);
-  assert(q_avail(&q) == sizeof(val));
-  assert(q.head < q.tail);
+  ASSERT(q_write(&q, &val, sizeof(val)) == true);
+  ASSERT(q_avail(&q) == sizeof(val));
+  ASSERT(q.head < q.tail);
   // Only one element may fit
-  assert(q_write(&q, &val, sizeof(val)) == false);
+  ASSERT(q_write(&q, &val, sizeof(val)) == false);
   val = 0;
-  assert(q_read(&q, &val) == sizeof(val));
-  assert(val == 1234);
-  assert(q_avail(&q) == 0);
+  ASSERT(q_read(&q, &val) == sizeof(val));
+  ASSERT(val == 1234);
+  ASSERT(q_avail(&q) == 0);
 }
 
 static void test_statechange(void) {
@@ -64,200 +57,6 @@ static void test_statechange(void) {
   iface.tx.ptr = tx, iface.tx.len = sizeof(tx);
   iface.driver = &mip_driver_mock;
   onstatechange(&iface);
-}
-
-// MIP TUNTAP driver
-static size_t tap_rx(void *buf, size_t len, void *userdata) {
-  ssize_t received = read(*(int *) userdata, buf, len);
-  usleep(1);  // This is to avoid 100% CPU
-  if (received < 0) return 0;
-  return (size_t) received;
-}
-
-static size_t tap_tx(const void *buf, size_t len, void *userdata) {
-  ssize_t res = write(*(int *) userdata, buf, len);
-  if (res < 0) {
-    MG_ERROR(("tap_tx failed: %d", errno));
-    return 0;
-  }
-  return (size_t) res;
-}
-
-static bool tap_up(void *userdata) {
-  return userdata ? true : false;
-}
-
-// HTTP fetches IOs
-struct Post_reply {
-  char* post;                           // HTTP POST data
-  void* http_response;                  // Server response(s)
-  unsigned int http_responses_received; // Number responses received
-};
-
-char *fetch(struct mg_mgr *mgr, const char *url, const char *post_data);
-static void f_http_fetch_query(struct mg_connection *c, int ev, void *ev_data, void *fn_data);
-int get_response_code(char *); // Returns HTTP status code from full char* msg
-
-static void f_http_fetch_query(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  static char* http_response = 0;
-  static bool http_response_allocated = 0; // So that we will update out parameter
-  unsigned int http_responses_received = 0;
-  struct Post_reply *post_reply_l;
-  post_reply_l = (struct Post_reply*)fn_data;
-
-  if (ev == MG_EV_CONNECT) {
-    mg_printf(c, post_reply_l->post);
-  } else if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    http_responses_received++;
-    if (!http_response_allocated) {
-      http_response = (char*)mg_strdup(hm->message).ptr;
-      http_response_allocated = 1;
-    }
-    if (http_responses_received > 0) {
-      post_reply_l->http_response = http_response;
-      post_reply_l->http_responses_received = http_responses_received;
-    }
-  }
-}
-
-// Fetch utility returns message from fetch(..., URL, POST)
-char *fetch(struct mg_mgr *mgr, const char *url, const char *fn_data) {
-  struct Post_reply post_reply;
-  {
-    post_reply.post=(char*)fn_data;
-    post_reply.http_response=0;
-    post_reply.http_responses_received=0;
-  }
-  struct mg_connection *conn;
-  conn = mg_http_connect(mgr, url, f_http_fetch_query, &post_reply);
-  ASSERT(conn != NULL);		// Assertion on initialisation
-  for (int i = 0; i < 500 && !post_reply.http_responses_received; i++) { 
-    mg_mgr_poll(mgr, 100);
-    usleep(10000); // 10 ms. Slow down poll loop to ensure packets transit
-  }
-  conn->is_closing = 1;
-  mg_mgr_poll(mgr, 0);
-  if (!post_reply.http_responses_received)
-    return 0;
-  else
-    return (char*)post_reply.http_response;
-}
-
-// Returns server's HTTP response code
-int get_response_code(char * http_msg_raw) {
-  int http_status = 0;
-  struct mg_http_message http_msg_parsed;
-  if (mg_http_parse(http_msg_raw, strlen(http_msg_raw), &http_msg_parsed)) {
-    http_status = mg_http_status(&http_msg_parsed);
-  } else {
-    printf("Error: mg_http_parse()\n");
-    ASSERT(http_status != 0); // Couldn't parse.
-  }
-  return http_status;
-}
-
-static void test_http_fetch(void) {
-  // Setup interface
-  const char *iface = "tap0";             // Network iface
-  const char *mac = "00:00:01:02:03:78";  // MAC address
-  int fd = open("/dev/net/tun", O_RDWR);  // Open network interface
-
-  struct ifreq ifr;
-  memset(&ifr, 0, sizeof(ifr));
-  strncpy(ifr.ifr_name, iface, IFNAMSIZ);
-  ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-  if (ioctl(fd, TUNSETIFF, (void *) &ifr) < 0) {
-    MG_ERROR(("Failed to setup TAP interface: %s", ifr.ifr_name));
-    abort(); // return EXIT_FAILURE;
-  }
-  fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);  // Non-blocking mode
-
-  MG_INFO(("Opened TAP interface: %s", iface));
-
-  // Events
-  struct mg_mgr mgr;  // Event manager
-  mg_mgr_init(&mgr);  // Initialise event manager
-
-  // MIP driver
-
-  // Zero init fields required (C/C++ style diverge)
-  #ifndef __cplusplus
-  struct mip_driver driver = {.tx = tap_tx, .up = tap_up, .rx = tap_rx};
-  // DHCP
-  // struct mip_if mif = {.use_dhcp = true, .driver = &driver, .driver_data = &fd};
-  // Static
-  // 192.168.32.2/24 gw 192.168.32.1
-  struct mip_if mif = {.use_dhcp = false, \
-  .ip=0x0220a8c0 , .mask=0x00ffffff, .gw=0x0120a8c0, \
-  .driver = &driver, .driver_data = &fd};
-
-  #else
-  struct mip_driver driver {};
-    driver.tx = tap_tx;
-    driver.up = tap_up;
-    driver.rx = tap_rx;
-  struct mip_if mif {};
-//  mif.use_dhcp = true;   // DHCP
-    mif.use_dhcp = false;  // Static IP
-    mif.ip = 0x0220a8c0;   // 192.168.32.2
-    mif.mask = 0x00ffffff; // 255.255.255.0
-    mif.gw = 0x0120a8c0;   // 192.168.32.1
-    mif.driver = &driver;
-    mif.driver_data = &fd;
-  #endif
-
-  sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1], &mif.mac[2],
-         &mif.mac[3], &mif.mac[4], &mif.mac[5]);
-
-  mip_init(&mgr, &mif);
-  MG_INFO(("Init done, starting main loop"));
-
-  // Stack initialization, Network configuration (DHCP lease, ...)
-  {
-    if (mif.ip) MG_INFO(("MIF configuration: Static IP"));
-    else MG_INFO(("MIF configuration: DHCP"));
-    MG_INFO(("Opened TAP interface: %s", iface));
-    // ASSERT(!mif.ip); // Check we are set for DHCP
-    int pc = 500; // Timout on DHCP lease 500 ~ approx 5s (typical delay <1s)
-    while (((pc--)>0) /*& !mif.ip*/) {
-      mg_mgr_poll(&mgr, 100);
-      usleep(10000); // 10 ms
-    }
-    if (!mif.ip) printf("No ip assigned (DHCP lease may have failed).\n");
-    ASSERT(mif.ip); // We have an IP (lease or static)
-  }
-
-  // Simple HTTP fetch
-  {
-    char* http_feedback = (char*)"";
-    const bool ipv6 = 0;
-    if (ipv6) {
-      http_feedback = fetch (&mgr, "ipv6.google.com",\
-                                   "GET/ HTTP/1.0\r\nHost: ipv6.google.com\r\n\r\n");
-    } else {
-      http_feedback = fetch (&mgr, "http://cesanta.com",\
-                                   "GET //robots.txt HTTP/1.0\r\nHost: cesanta.com\r\n\r\n");
-    }
-
-    ASSERT(*http_feedback != '\0'); // Received HTTP response ?
-
-    int http_status = get_response_code(http_feedback);
-    // printf("Server response HTTP status code: %d\n",http_status);
-    ASSERT(http_status != 0);
-    ASSERT(http_status == 301); // OK: Permanently moved (HTTP->HTTPS redirect)
-
-    if (http_feedback) {
-      free(http_feedback);
-      http_feedback = 0;
-    }
-  }
-
-  // Clear
-  mip_free(&mif);
-  mg_mgr_free(&mgr);
-  ASSERT(mgr.conns == NULL); // Deconstruction OK
-  close(fd);
 }
 
 static void ph(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -283,7 +82,6 @@ static void test_poll(void) {
 int main(void) {
   test_queue();
   test_statechange();
-  test_http_fetch();
   test_poll();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return 0;
