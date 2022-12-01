@@ -54,7 +54,7 @@ cat test/dhcpd.conf
 echo
 sudo cp test/dhcpd.conf /etc/dhcp/dhcpd.conf
 sudo chmod a+w /var/lib/dhcp/*
-sudo dhcpd mg_bridge0
+sudo dhcpd mg_bridge0 &
 echo
 
 # Do we have connectivity ?
