@@ -25,12 +25,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    #- run: make s390
+    - run: sudo apt-get install qemu binfmt-support qemu-user-static
+    - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes 
+    - run: make s390
   armhf:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    #- run: make armhf
+#   - run: sudo apt-get install qemu binfmt-support qemu-user-static
+#   - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes 
+#   - run: make armhf
   linux2:
     runs-on: ubuntu-latest
     steps:
