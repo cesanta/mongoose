@@ -18,9 +18,14 @@ which implements the following:
 
 ## Requirements
 
-- GNU make
-- [ARM GCC](https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm) toolchain for build
-- [Uniflash](https://www.ti.com/tool/UNIFLASH) for flashing
+- [GNU make](http://mongoose.ws/tutorials/tools/#gnu-make)
+- [ARM GCC](http://mongoose.ws/tutorials/tools/#arm-gcc)
+- [Uniflash](https://mongoose.ws/tutorials/ti/ek-tm4c1294xl-baremetal/#build-and-run) for flashing
+
+The Makefile defaults to using Docker for the compiler, so you don't actually need to install it if you are using a Linux/Mac workstation. If you are not, or you want to run your local ARM compiler, just append `DOCKER=` to the make commands depicted below to call the compiler directly; it must be in your executable path.
+
+In any case, the links above will send you to tutorials on how to install each of those tools in your workstation for Linux, Mac, and Windows.
+
 
 ## Usage
 
@@ -28,8 +33,9 @@ Plugin your board into USB, and attach an Ethernet cable.
 To build:
 
 ```sh
-$ make clean nuild
+$ make clean build
 ```
+
 To flash: use Uniflash
 
 To see debug log, use any serial monitor program like `picocom` at 115200 bps and configure it to insert carriage returns after line feeds:
@@ -37,5 +43,7 @@ To see debug log, use any serial monitor program like `picocom` at 115200 bps an
 ```sh
 $ picocom /dev/ttyACM0 -i -b 115200 --imap=lfcrlf
 ```
+
+There is also a [detailed tutorial on this example](https://mongoose.ws/tutorials/ti/ek-tm4c1294xl-baremetal/)
 
 For more details and benchmark data on MIP, check the [F746ZG example](../nucleo-f746zg-baremetal/)
