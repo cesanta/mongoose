@@ -159,11 +159,11 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         if (dm.txnid != d->txnid) continue;
         if (d->c->is_resolving) {
           if (dm.resolved) {
-            char buf[100];
             dm.addr.port = d->c->rem.port;  // Save port
             d->c->rem = dm.addr;            // Copy resolved address
-            MG_DEBUG(("%lu %s is %s", d->c->id, dm.name,
-                      mg_ntoa(&d->c->rem, buf, sizeof(buf))));
+            MG_DEBUG(
+                ("%lu %s is %I", d->c->id, dm.name, d->c->rem.is_ip6 ? 16 : 4,
+                 d->c->rem.is_ip6 ? &d->c->rem.ip6 : (void *) &d->c->rem.ip));
             mg_connect_resolved(d->c);
 #if MG_ENABLE_IPV6
           } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0' &&
@@ -239,7 +239,6 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     mg_error(c, "resolve OOM");
   } else {
     struct dns_data *reqs = (struct dns_data *) c->mgr->active_dns_requests;
-    char buf[100];
     d->txnid = reqs ? (uint16_t) (reqs->txnid + 1) : 1;
     d->next = (struct dns_data *) c->mgr->active_dns_requests;
     c->mgr->active_dns_requests = d;
@@ -247,7 +246,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->c = c;
     c->is_resolving = 1;
     MG_VERBOSE(("%lu resolving %.*s @ %s, txnid %hu", c->id, (int) name->len,
-                name->ptr, mg_ntoa(&dnsc->c->rem, buf, sizeof(buf)), d->txnid));
+                name->ptr, &dnsc->url, d->txnid));
     if (!mg_dns_send(dnsc->c, name, d->txnid, ipv6)) {
       mg_error(dnsc->c, "DNS send");
     }

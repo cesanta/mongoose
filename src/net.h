@@ -87,9 +87,7 @@ void mg_connect_resolved(struct mg_connection *);
 bool mg_send(struct mg_connection *, const void *, size_t);
 size_t mg_printf(struct mg_connection *, const char *fmt, ...);
 size_t mg_vprintf(struct mg_connection *, const char *fmt, va_list *ap);
-char *mg_straddr(struct mg_addr *, char *, size_t);
 bool mg_aton(struct mg_str str, struct mg_addr *addr);
-char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
 int mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *, bool udp);
 
 // These functions are used to integrate with custom network stacks

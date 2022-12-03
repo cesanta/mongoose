@@ -271,11 +271,11 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         if (dm.txnid != d->txnid) continue;
         if (d->c->is_resolving) {
           if (dm.resolved) {
-            char buf[100];
             dm.addr.port = d->c->rem.port;  // Save port
             d->c->rem = dm.addr;            // Copy resolved address
-            MG_DEBUG(("%lu %s is %s", d->c->id, dm.name,
-                      mg_ntoa(&d->c->rem, buf, sizeof(buf))));
+            MG_DEBUG(
+                ("%lu %s is %I", d->c->id, dm.name, d->c->rem.is_ip6 ? 16 : 4,
+                 d->c->rem.is_ip6 ? &d->c->rem.ip6 : (void *) &d->c->rem.ip));
             mg_connect_resolved(d->c);
 #if MG_ENABLE_IPV6
           } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0' &&
@@ -351,7 +351,6 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     mg_error(c, "resolve OOM");
   } else {
     struct dns_data *reqs = (struct dns_data *) c->mgr->active_dns_requests;
-    char buf[100];
     d->txnid = reqs ? (uint16_t) (reqs->txnid + 1) : 1;
     d->next = (struct dns_data *) c->mgr->active_dns_requests;
     c->mgr->active_dns_requests = d;
@@ -359,7 +358,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->c = c;
     c->is_resolving = 1;
     MG_VERBOSE(("%lu resolving %.*s @ %s, txnid %hu", c->id, (int) name->len,
-                name->ptr, mg_ntoa(&dnsc->c->rem, buf, sizeof(buf)), d->txnid));
+                name->ptr, &dnsc->url, d->txnid));
     if (!mg_dns_send(dnsc->c, name, d->txnid, ipv6)) {
       mg_error(dnsc->c, "DNS send");
     }
@@ -409,6 +408,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/fmt.c"
 #endif
+
 
 
 
@@ -720,6 +720,20 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
           n += scpy(out, param, (char *) &hex[p[j] & 15], 1);
         }
         n += scpy(out, param, (char *) &dquote, 1);
+      } else if (c == 'I') {
+        // Print IPv4 or IPv6 address
+        size_t len = (size_t) va_arg(*ap, int);  // Length 16 means IPv6 address
+        uint8_t *buf = va_arg(*ap, uint8_t *);   // Pointer to the IP address
+        if (len == 6) {
+          uint16_t *p = (uint16_t *) buf;
+          n += mg_xprintf(out, param, "%x:%x:%x:%x:%x:%x:%x:%x", mg_htons(p[0]),
+                          mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]),
+                          mg_htons(p[4]), mg_htons(p[5]), mg_htons(p[6]),
+                          mg_htons(p[7]));
+        } else {
+          n += mg_xprintf(out, param, "%d.%d.%d.%d", (int) buf[0], (int) buf[1],
+                          (int) buf[2], (int) buf[3]);
+        }
       } else if (c == 'V') {
         // Print base64-encoded double-quoted string
         size_t len = (size_t) va_arg(*ap, int);
@@ -3313,29 +3327,6 @@ size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
   return len;
 }
 
-char *mg_straddr(struct mg_addr *a, char *buf, size_t len) {
-  char tmp[40];
-  const char *fmt = a->is_ip6 ? "[%s]:%d" : "%s:%d";
-  mg_ntoa(a, tmp, sizeof(tmp));
-  mg_snprintf(buf, len, fmt, tmp, (int) mg_ntohs(a->port));
-  return buf;
-}
-
-char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {
-  if (addr->is_ip6) {
-    uint16_t *p = (uint16_t *) addr->ip6;
-    mg_snprintf(buf, len, "%x:%x:%x:%x:%x:%x:%x:%x", mg_htons(p[0]),
-                mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]), mg_htons(p[4]),
-                mg_htons(p[5]), mg_htons(p[6]), mg_htons(p[7]));
-  } else {
-    uint8_t p[4];
-    memcpy(p, &addr->ip, sizeof(p));
-    mg_snprintf(buf, len, "%d.%d.%d.%d", (int) p[0], (int) p[1], (int) p[2],
-                (int) p[3]);
-  }
-  return buf;
-}
-
 static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
   if (mg_vcasecmp(&str, "localhost") != 0) return false;
   addr->ip = mg_htonl(0x7f000001);
@@ -4063,16 +4054,10 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   } else if (n > 0) {
     if (c->is_hexdumping) {
       union usa usa;
-      char t1[50], t2[50];
       socklen_t slen = sizeof(usa.sin);
-      struct mg_addr a;
-      memset(&usa, 0, sizeof(usa));
-      memset(&a, 0, sizeof(a));
       if (getsockname(FD(c), &usa.sa, &slen) < 0) (void) 0;  // Ignore result
-      tomgaddr(&usa, &a, c->rem.is_ip6);
-      MG_INFO(("\n-- %lu %s %s %s %s %ld", c->id,
-               mg_straddr(&a, t1, sizeof(t1)), r ? "<-" : "->",
-               mg_straddr(&c->rem, t2, sizeof(t2)), c->label, n));
+      MG_INFO(("\n-- %lu %I %s %I %s %ld", c->id, 4, &usa.sin.sin_addr,
+               r ? "<-" : "->", 4, &c->rem.ip, c->label, n));
 
       mg_hexdump(buf, (size_t) n);
     }
@@ -4327,7 +4312,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     if ((rc = connect(FD(c), &usa.sa, slen)) == 0) {
       mg_call(c, MG_EV_CONNECT, NULL);
     } else if (mg_sock_would_block()) {
-      MG_DEBUG(("%lu %p -> %x:%hu pend", c->id, c->fd, mg_ntohl(c->rem.ip),
+      MG_DEBUG(("%lu %p -> %I:%hu pend", c->id, c->fd, 4, &c->rem.ip,
                 mg_ntohs(c->rem.port)));
       c->is_connecting = 1;
     } else {
@@ -4370,9 +4355,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     MG_ERROR(("%lu OOM", lsn->id));
     closesocket(fd);
   } else {
-    // char buf[40];
     tomgaddr(&usa, &c->rem, sa_len != sizeof(usa.sin));
-    // mg_straddr(&c->rem, buf, sizeof(buf));
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fd = S2PTR(fd);
     MG_EPOLL_ADD(c);
@@ -4385,9 +4368,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
-    MG_DEBUG(("%lu %p accepted %x.%hu -> %x.%hu", c->id, c->fd,
-              mg_ntohl(c->rem.ip), mg_ntohs(c->rem.port), mg_ntohl(c->loc.ip),
-              mg_ntohs(c->loc.port)));
+    MG_DEBUG(("%lu %p accepted %I.%hu -> %I.%hu", c->id, c->fd, 4, &c->rem.ip,
+              mg_ntohs(c->rem.port), 4, &c->loc.ip, mg_ntohs(c->loc.port)));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
   }

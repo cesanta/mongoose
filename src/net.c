@@ -20,29 +20,6 @@ size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
   return len;
 }
 
-char *mg_straddr(struct mg_addr *a, char *buf, size_t len) {
-  char tmp[40];
-  const char *fmt = a->is_ip6 ? "[%s]:%d" : "%s:%d";
-  mg_ntoa(a, tmp, sizeof(tmp));
-  mg_snprintf(buf, len, fmt, tmp, (int) mg_ntohs(a->port));
-  return buf;
-}
-
-char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len) {
-  if (addr->is_ip6) {
-    uint16_t *p = (uint16_t *) addr->ip6;
-    mg_snprintf(buf, len, "%x:%x:%x:%x:%x:%x:%x:%x", mg_htons(p[0]),
-                mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]), mg_htons(p[4]),
-                mg_htons(p[5]), mg_htons(p[6]), mg_htons(p[7]));
-  } else {
-    uint8_t p[4];
-    memcpy(p, &addr->ip, sizeof(p));
-    mg_snprintf(buf, len, "%d.%d.%d.%d", (int) p[0], (int) p[1], (int) p[2],
-                (int) p[3]);
-  }
-  return buf;
-}
-
 static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
   if (mg_vcasecmp(&str, "localhost") != 0) return false;
   addr->ip = mg_htonl(0x7f000001);
