@@ -14,13 +14,14 @@ FREERTOS_REPO ?= https://github.com/FreeRTOS/FreeRTOS-Kernel
 build example: firmware.elf
 
 firmware.elf: FreeRTOS-Kernel $(SOURCES) 
-	$(DOCKER) arm-none-eabi-gcc -o $@ $(SOURCES) $(CFLAGS) $(LDFLAGS) \
+	$(DOCKER) arm-none-eabi-gcc -o $@ $(SOURCES) $(CFLAGS) \
 	  -IFreeRTOS-Kernel/include \
 	  -IFreeRTOS-Kernel/portable/GCC/ARM_CM4F \
 	  -Wno-conversion \
 	  $(wildcard FreeRTOS-Kernel/*.c) \
 	  FreeRTOS-Kernel/portable/MemMang/heap_4.c \
-	  FreeRTOS-Kernel/portable/GCC/ARM_CM4F/port.c
+	  FreeRTOS-Kernel/portable/GCC/ARM_CM4F/port.c \
+	  $(LDFLAGS)
 	
 firmware.bin: firmware.elf
 	$(DOCKER) arm-none-eabi-objcopy -O binary $< $@

@@ -5985,7 +5985,8 @@ struct mip_driver mip_driver_enc28j60 = {
 #endif
 
 
-#if MG_ENABLE_MIP && (!defined(MG_ENABLE_DRIVER_TM4C) ||  MG_ENABLE_DRIVER_TM4C == 0)
+#if MG_ENABLE_MIP && \
+    (!defined(MG_ENABLE_DRIVER_TM4C) || MG_ENABLE_DRIVER_TM4C == 0)
 struct stm32_eth {
   volatile uint32_t MACCR, MACFFR, MACHTHR, MACHTLR, MACMIIAR, MACMIIDR, MACFCR,
       MACVLANTR, RESERVED0[2], MACRWUFFR, MACPMTCSR, RESERVED1, MACDBGR, MACSR,
@@ -6114,14 +6115,14 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   // NOTE(cpq): we do not use extended descriptor bit 7, and do not use
   // hardware checksum. Therefore, descriptor size is 4, not 8
   // ETH->DMABMR = BIT(13) | BIT(16) | BIT(22) | BIT(23) | BIT(25);
-  ETH->MACIMR = BIT(3) | BIT(9);                    // Mask timestamp & PMT IT
-  ETH->MACFCR = BIT(7);                             // Disable zero quarta pause
+  ETH->MACIMR = BIT(3) | BIT(9);  // Mask timestamp & PMT IT
+  ETH->MACFCR = BIT(7);           // Disable zero quarta pause
   // ETH->MACFFR = BIT(31);                            // Receive all
-  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));        // Reset PHY
-  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(12));        // Set autonegotiation
-  ETH->DMARDLAR = (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors
-  ETH->DMATDLAR = (uint32_t) (uintptr_t) s_txdesc;  // RX descriptors
-  ETH->DMAIER = BIT(6) | BIT(16);                   // RIE, NISE
+  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));           // Reset PHY
+  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(12));           // Set autonegotiation
+  ETH->DMARDLAR = (uint32_t) (uintptr_t) s_rxdesc;     // RX descriptors
+  ETH->DMATDLAR = (uint32_t) (uintptr_t) s_txdesc;     // RX descriptors
+  ETH->DMAIER = BIT(6) | BIT(16);                      // RIE, NISE
   ETH->MACCR = BIT(2) | BIT(3) | BIT(11) | BIT(14);    // RE, TE, Duplex, Fast
   ETH->DMAOMR = BIT(1) | BIT(13) | BIT(21) | BIT(25);  // SR, ST, TSF, RSF
 
@@ -6141,10 +6142,11 @@ static void mip_driver_stm32_setrx(void (*rx)(void *, size_t, void *),
 static uint32_t s_txno;
 static size_t mip_driver_stm32_tx(const void *buf, size_t len, void *userdata) {
   if (len > sizeof(s_txbuf[s_txno])) {
-    printf("%s: frame too big, %ld\n", __func__, (long) len);
+    MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
   } else if ((s_txdesc[s_txno][0] & BIT(31))) {
-    printf("%s: no free descr\n", __func__);
+    MG_ERROR(("No free descriptors"));
+    // printf("D0 %lx SR %lx\n", (long) s_txdesc[0][0], (long) ETH->DMASR);
     len = 0;  // All descriptors are busy, fail
   } else {
     memcpy(s_txbuf[s_txno], buf, len);     // Copy data
@@ -6153,10 +6155,8 @@ static size_t mip_driver_stm32_tx(const void *buf, size_t len, void *userdata) {
     s_txdesc[s_txno][0] |= BIT(31);  // Set OWN bit - let DMA take over
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
   }
-  uint32_t sr = ETH->DMASR;
-  if (sr & BIT(2)) ETH->DMASR = BIT(2), ETH->DMATPDR = 0;  // Resume
-  if (sr & BIT(5)) ETH->DMASR = BIT(5), ETH->DMATPDR = 0;  // if busy
-  if (len == 0) printf("E: D0 %lx SR %lx\n", (long) s_txdesc[0][0], (long) sr);
+  ETH->DMASR = BIT(2) | BIT(5);  // Clear any prior TBUS/TUS
+  ETH->DMATPDR = 0;              // and resume
   return len;
   (void) userdata;
 }
@@ -6168,20 +6168,27 @@ static bool mip_driver_stm32_up(void *userdata) {
 }
 
 void ETH_IRQHandler(void);
+static uint32_t s_rxno;
 void ETH_IRQHandler(void) {
   qp_mark(QP_IRQTRIGGERED, 0);
-  volatile uint32_t sr = ETH->DMASR;
-  if (sr & BIT(6)) {  // Frame received, loop
-    for (uint32_t i = 0; i < ETH_DESC_CNT; i++) {
-      if (s_rxdesc[i][0] & BIT(31)) continue;
-      uint32_t len = ((s_rxdesc[i][0] >> 16) & (BIT(14) - 1));
-      //    printf("%lx %lu %lx %lx\n", i, len, s_rxdesc[i][0], sr);
-      if (s_rx != NULL) s_rx(s_rxbuf[i], len > 4 ? len - 4 : len, s_rxdata);
-      s_rxdesc[i][0] = BIT(31);
+  if (ETH->DMASR & BIT(6)) {             // Frame received, loop
+    ETH->DMASR = BIT(16) | BIT(6);       // Clear flag
+    for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
+      if (s_rxdesc[s_rxno][0] & BIT(31)) break;  // exit when done
+      if (((s_rxdesc[s_rxno][0] & (BIT(8) | BIT(9))) == (BIT(8) | BIT(9))) &&
+          !(s_rxdesc[s_rxno][0] & BIT(15))) {  // skip partial/errored frames
+        uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (BIT(14) - 1));
+        //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
+        //  ETH->DMASR);
+        if (s_rx != NULL)
+          s_rx(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_rxdata);
+      }
+      s_rxdesc[s_rxno][0] = BIT(31);
+      if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
     }
   }
-  if (sr & BIT(7)) ETH->DMARPDR = 0;     // Resume RX
-  ETH->DMASR = sr & ~(BIT(2) | BIT(7));  // Clear status
+  ETH->DMASR = BIT(7);  // Clear possible RBUS while processing
+  ETH->DMARPDR = 0;     // and resume RX
 }
 
 struct mip_driver mip_driver_stm32 = {
