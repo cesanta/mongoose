@@ -687,27 +687,6 @@ Usage example:
 mg_printf(c, "Hello, %s!", "world"); // Add "Hello, world!" to output buffer
 ```
 
-### mg\_straddr
-
-```c
-char *mg_straddr(struct mg_addr *addr, char *buf, size_t len);
-```
-
-Write stringified IP address, associated with given connection to `buf` (maximum size `len`)
-
-Parameters:
-- `addr` - A address pointer
-- `buf` - A pointer to a buffer that will hold stringified address
-- `len` - A buffer size
-
-Return value: `buf` value
-
-Usage example:
-
-```c
-char buf[100];
-LOG(LL_INFO, ("%s", mg_straddr(&c->peer, buf, sizeof(buf))));
-```
 
 ### mg\_wrapfd()
 
@@ -2610,6 +2589,7 @@ Supported format specifiers:
 - `q` - expect `char *`, outputs JSON-escaped string (extension)
 - `Q` - expect `char *`, outputs double-quoted JSON-escaped string (extension)
 - `H` - expect `int`, `void *`, outputs double-quoted hex string (extension)
+- `I` - expect `int` (4 or 6), `void *`, outputs IP address (extension)
 - `V` - expect `int`, `void *`, outputs double-quoted base64 string (extension)
 - `M` - expect `mg_pfn_t`, calls another print function (extension)
 - `g`, `f` - expect `double`
@@ -2638,6 +2618,7 @@ mg_snprintf(buf, sizeof(buf), "%05x", 123);             // 00123
 mg_snprintf(buf, sizeof(buf), "%%-%3s", "a");           // %-  a
 mg_snprintf(buf, sizeof(buf), "hi, %Q", "a");           // hi, "a"
 mg_snprintf(buf, sizeof(buf), "r: %M, %d", f,1,2,7);    // r: 3, 7
+mg_snprintf(buf, sizeof(buf), "%I", 4, "abcd");         // 97.98.99.100
 
 // Printing sub-function for %M specifier. Grabs two int parameters
 size_t f(void (*out)(char, void *), void *ptr, va_list *ap) {
@@ -2752,28 +2733,6 @@ struct mg_addr addr;
 if (mg_aton(mg_str("127.0.0.1"), &addr)) {
   // addr is now binary representation of 127.0.0.1 IP address
 }
-```
-
-### mg\_ntoa()
-
-```c
-char *mg_ntoa(const struct mg_addr *addr, char *buf, size_t len);
-```
-
-Stringify IP address `ipaddr` into a buffer `buf`, `len`
-
-Parameters:
-- `addr` - Address to stringify
-- `buf` - Pointer to output buffer
-- `len` - Output buffer size
-
-Return value: `buf` value
-
-Usage example:
-
-```c
-char buf[100];
-mg_ntoa(&c->peer, buf, sizeof(buf));
 ```
 
 ## JSON

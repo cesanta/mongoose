@@ -1637,6 +1637,15 @@ static void test_str(void) {
     ASSERT(strcmp(tmp, "01") == 0);
     ASSERT(tmp[2] == '\0');
   }
+
+  {
+    char buf[100];
+    struct mg_addr a = {0, mg_htonl(0x10111213), {1, 100, 33}, false};
+    ASSERT(mg_snprintf(buf, sizeof(buf), "%I", 4, &a.ip) == 11);
+    ASSERT(strcmp(buf, "16.17.18.19") == 0);
+    ASSERT(mg_snprintf(buf, sizeof(buf), "%I", 6, &a.ip6) == 20);
+    ASSERT(strcmp(buf, "164:2100:0:0:0:0:0:0") == 0);
+  }
 }
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -1729,7 +1738,6 @@ static void test_util(void) {
   ASSERT(mg_aton(mg_str("127.0.0.1"), &a) == true);
   ASSERT(a.is_ip6 == false);
   ASSERT(a.ip == mg_htonl(0x7f000001));
-  ASSERT(strcmp(mg_ntoa(&a, buf, sizeof(buf)), "127.0.0.1") == 0);
 
   ASSERT(mg_aton(mg_str("1:2:3:4:5:6:7:8"), &a) == true);
   ASSERT(a.is_ip6 == true);

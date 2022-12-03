@@ -42,6 +42,42 @@ static size_t pcap_rx(void *buf, size_t len, void *userdata) {
   return received;
 }
 
+static void fn2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    MG_DEBUG(("Got response (%d) %.*s...", (int) hm->message.len, 12,
+              hm->message.ptr));
+    c->is_closing = 1;
+  } else if (ev == MG_EV_CONNECT) {
+    mg_printf(c, "GET %s HTTP/1.1\r\n\r\n", mg_url_uri((char *) fn_data));
+  } else if (ev == MG_EV_CLOSE) {
+    free(fn_data);
+  }
+}
+
+static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_http_match_uri(hm, "/api/debug")) {
+      int level = mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
+      mg_log_set(level);
+      mg_http_reply(c, 200, "", "Debug level set to %d\n", level);
+    } else if (mg_http_match_uri(hm, "/api/url")) {
+      char *url = mg_json_get_str(hm->body, "$.url");
+      if (url == NULL) {
+        mg_http_reply(c, 200, NULL, "no url, rl %d\r\n", (int) c->recv.len);
+      } else {
+        mg_http_connect(c->mgr, url, fn2, url);
+        mg_http_reply(c, 200, NULL, "ok\r\n");
+      }
+    } else {
+      mg_http_reply(c, 200, NULL, "%.*s\r\n", (int) hm->message.len,
+                    hm->message.ptr);
+    }
+  }
+  (void) ev_data, (void) fn_data;
+}
+
 int main(int argc, char *argv[]) {
   const char *iface = "lo0";              // Network iface
   const char *mac = "02:00:01:02:03:77";  // MAC address
@@ -92,8 +128,9 @@ int main(int argc, char *argv[]) {
   signal(SIGINT, signal_handler);
   signal(SIGTERM, signal_handler);
 
-  struct mg_mgr mgr;  // Event manager
-  mg_mgr_init(&mgr);  // Initialise event manager
+  struct mg_mgr mgr;        // Event manager
+  mg_mgr_init(&mgr);        // Initialise event manager
+  mg_log_set(MG_LL_DEBUG);  // Set log level
 
   struct mip_driver driver = {.tx = pcap_tx, .up = pcap_up, .rx = pcap_rx};
   struct mip_if mif = {.use_dhcp = true, .driver = &driver, .driver_data = ph};
@@ -102,8 +139,9 @@ int main(int argc, char *argv[]) {
   mip_init(&mgr, &mif);
   MG_INFO(("Init done, starting main loop"));
 
-  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, "http://0.0.0.0:8000", device_dashboard_fn, &mgr);
+  // extern void device_dashboard_fn(struct mg_connection *, int, void *, void
+  // *);
+  mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, &mgr);
 
   while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop
 

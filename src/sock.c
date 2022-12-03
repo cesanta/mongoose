@@ -99,16 +99,10 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   } else if (n > 0) {
     if (c->is_hexdumping) {
       union usa usa;
-      char t1[50], t2[50];
       socklen_t slen = sizeof(usa.sin);
-      struct mg_addr a;
-      memset(&usa, 0, sizeof(usa));
-      memset(&a, 0, sizeof(a));
       if (getsockname(FD(c), &usa.sa, &slen) < 0) (void) 0;  // Ignore result
-      tomgaddr(&usa, &a, c->rem.is_ip6);
-      MG_INFO(("\n-- %lu %s %s %s %s %ld", c->id,
-               mg_straddr(&a, t1, sizeof(t1)), r ? "<-" : "->",
-               mg_straddr(&c->rem, t2, sizeof(t2)), c->label, n));
+      MG_INFO(("\n-- %lu %I %s %I %s %ld", c->id, 4, &usa.sin.sin_addr,
+               r ? "<-" : "->", 4, &c->rem.ip, c->label, n));
 
       mg_hexdump(buf, (size_t) n);
     }
@@ -363,7 +357,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     if ((rc = connect(FD(c), &usa.sa, slen)) == 0) {
       mg_call(c, MG_EV_CONNECT, NULL);
     } else if (mg_sock_would_block()) {
-      MG_DEBUG(("%lu %p -> %x:%hu pend", c->id, c->fd, mg_ntohl(c->rem.ip),
+      MG_DEBUG(("%lu %p -> %I:%hu pend", c->id, c->fd, 4, &c->rem.ip,
                 mg_ntohs(c->rem.port)));
       c->is_connecting = 1;
     } else {
@@ -406,9 +400,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     MG_ERROR(("%lu OOM", lsn->id));
     closesocket(fd);
   } else {
-    // char buf[40];
     tomgaddr(&usa, &c->rem, sa_len != sizeof(usa.sin));
-    // mg_straddr(&c->rem, buf, sizeof(buf));
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fd = S2PTR(fd);
     MG_EPOLL_ADD(c);
@@ -421,9 +413,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
-    MG_DEBUG(("%lu %p accepted %x.%hu -> %x.%hu", c->id, c->fd,
-              mg_ntohl(c->rem.ip), mg_ntohs(c->rem.port), mg_ntohl(c->loc.ip),
-              mg_ntohs(c->loc.port)));
+    MG_DEBUG(("%lu %p accepted %I.%hu -> %I.%hu", c->id, c->fd, 4, &c->rem.ip,
+              mg_ntohs(c->rem.port), 4, &c->loc.ip, mg_ntohs(c->loc.port)));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
   }
