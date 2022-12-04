@@ -42,7 +42,7 @@ into the source code tree
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   struct mg_http_serve_opts opts = {.root_dir = "."};   // Serve local dir
-  if (ev == MG_EV_HTTP_MSG) mg_http_serve_dir(c, ev_data, &opts);
+  if (ev == MG_EV_HTTP_MSG) mg_http_serve_dir(c, (struct mg_http_message *)ev_data, &opts);
 }
 ...
 
