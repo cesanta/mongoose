@@ -58,22 +58,22 @@ static void emac_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   while (EMAC->EMACMIIADDR & BIT(0)) tm4cspin(1);
 }
 
-// TODO(scaprile) TEST
 static uint32_t get_sysclk(void) {
   struct sysctl {
     volatile uint32_t DONTCARE0[44], RSCLKCFG, DONTCARE1[43], PLLFREQ0,
         PLLFREQ1;
   } *sysctl = (struct sysctl *) 0x400FE000;
   uint32_t clk = 0, piosc = 16000000 /* 16 MHz */, mosc = 25000000 /* 25MHz */;
-  uint32_t oscsrc = (sysctl->RSCLKCFG & (0xf << 20)) >> 20;
-  if (oscsrc == 0)
-    clk = piosc;
-  else if (oscsrc == 3)
-    clk = mosc;
-  else
-    MG_ERROR(("Unsupported clock source"));
   if (sysctl->RSCLKCFG & (1 << 28)) {  // USEPLL
     uint32_t fin, vco, mdiv, n, q, psysdiv;
+    uint32_t pllsrc = (sysctl->RSCLKCFG & (0xf << 24)) >> 24;
+    if (pllsrc == 0) {
+      clk = piosc;
+    } else if (pllsrc == 3) {
+      clk = mosc;
+    } else {
+      MG_ERROR(("Unsupported clock source"));
+    }
     q = (sysctl->PLLFREQ1 & (0x1f << 8)) >> 8;
     n = (sysctl->PLLFREQ1 & (0x1f << 0)) >> 0;
     fin = clk / ((q + 1) * (n + 1));
@@ -83,18 +83,26 @@ static uint32_t get_sysclk(void) {
     vco = (uint32_t) ((uint64_t) fin * mdiv);
     return vco / (psysdiv + 1);
   }
+  uint32_t oscsrc = (sysctl->RSCLKCFG & (0xf << 20)) >> 20;
+  if (oscsrc == 0) {
+    clk = piosc;
+  } else if (oscsrc == 3) {
+    clk = mosc;
+  } else {
+    MG_ERROR(("Unsupported clock source"));
+  }
   uint32_t osysdiv = (sysctl->RSCLKCFG & (0xf << 16)) >> 16;
   return clk / (osysdiv + 1);
 }
 
 //  Guess CR from SYSCLK. MDC clock is generated from SYSCLK (AHB); as per
 //  802.3, it must not exceed 2.5MHz (also 20.4.2.6) As the AHB clock can be
-//  (and usually is) derived from the PIOSC (internal RC), and it can go above
-//  specs, the datasheets specify a range of frequencies and activate one of a
-//  series of dividers to keep the MDC clock safely below 2.5MHz. We guess a
-//  divider setting based on SYSCLK with a +5% drift. If the user uses a
-//  different clock from our defaults, needs to set the macros on top Valid for
-//  TM4C129x (20.7) (4.5% worst case drift)
+//  derived from the PIOSC (internal RC), and it can go above  specs, the
+//  datasheets specify a range of frequencies and activate one of a series of
+//  dividers to keep the MDC clock safely below 2.5MHz. We guess a divider
+//  setting based on SYSCLK with a +5% drift. If the user uses a different clock
+//  from our defaults, needs to set the macros on top Valid for TM4C129x (20.7)
+//  (4.5% worst case drift)
 // The PHY receives the main oscillator (MOSC) (20.3.1)
 static int guess_mdc_cr(void) {
   uint8_t crs[] = {2, 3, 0, 1};      // EMAC->MACMIIAR::CR values
@@ -175,10 +183,12 @@ static void mip_driver_tm4c_setrx(void (*rx)(void *, size_t, void *),
 static uint32_t s_txno;
 static size_t mip_driver_tm4c_tx(const void *buf, size_t len, void *userdata) {
   if (len > sizeof(s_txbuf[s_txno])) {
-    MG_ERROR(("frame too big, %ld", (long) len));
+    MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // fail
   } else if ((s_txdesc[s_txno][0] & BIT(31))) {
-    MG_ERROR(("no descriptors available"));
+    MG_ERROR(("No descriptors available"));
+    // printf("D0 %lx SR %lx\n", (long) s_txdesc[0][0], (long)
+    // EMAC->EMACDMARIS);
     len = 0;  // fail
   } else {
     memcpy(s_txbuf[s_txno], buf, len);     // Copy data
@@ -188,11 +198,8 @@ static size_t mip_driver_tm4c_tx(const void *buf, size_t len, void *userdata) {
     s_txdesc[s_txno][0] |= BIT(31);  // Set OWN bit - let DMA take over
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
   }
-  uint32_t sr = EMAC->EMACDMARIS;
-  if (sr & BIT(2)) EMAC->EMACDMARIS = BIT(2), EMAC->EMACTXPOLLD = 0;  // Resume
-  if (sr & BIT(5)) EMAC->EMACDMARIS = BIT(5), EMAC->EMACTXPOLLD = 0;  // if busy
-  if (len == 0)
-    MG_ERROR(("E: D0 %lx SR %lx", (long) s_txdesc[0][0], (long) sr));
+  EMAC->EMACDMARIS = BIT(2) | BIT(5);  // Clear any prior TU/UNF
+  EMAC->EMACTXPOLLD = 0;               // and resume
   return len;
   (void) userdata;
 }
@@ -204,28 +211,27 @@ static bool mip_driver_tm4c_up(void *userdata) {
 }
 
 void EMAC0_IRQHandler(void);
+static uint32_t s_rxno;
 void EMAC0_IRQHandler(void) {
   qp_mark(QP_IRQTRIGGERED, 0);
-  volatile uint32_t sr = EMAC->EMACDMARIS;
-  if (sr & BIT(6)) {  // Frame received, loop
-    for (uint32_t i = 0; i < ETH_DESC_CNT; i++) {
-      if (s_rxdesc[i][0] & BIT(31)) continue;
-      uint32_t len = ((s_rxdesc[i][0] >> 16) & (BIT(14) - 1));
-      // MG_DEBUG(("%lu %lu %lx %lx", i, len, s_rxdesc[i][0], sr));
-      if (s_rx != NULL) s_rx(s_rxbuf[i], len > 4 ? len - 4 : len, s_rxdata);
-      s_rxdesc[i][0] = BIT(31);
+  if (EMAC->EMACDMARIS & BIT(6)) {        // Frame received, loop
+    EMAC->EMACDMARIS = BIT(16) | BIT(6);  // Clear flag
+    for (uint32_t i = 0; i < 10; i++) {   // read as they arrive but not forever
+      if (s_rxdesc[s_rxno][0] & BIT(31)) break;  // exit when done
+      if (((s_rxdesc[s_rxno][0] & (BIT(8) | BIT(9))) == (BIT(8) | BIT(9))) &&
+          !(s_rxdesc[s_rxno][0] & BIT(15))) {  // skip partial/errored frames
+        uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (BIT(14) - 1));
+        //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
+        //  EMAC->EMACDMARIS);
+        if (s_rx != NULL)
+          s_rx(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_rxdata);
+      }
+      s_rxdesc[s_rxno][0] = BIT(31);
+      if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
     }
   }
-  if (sr & BIT(7)) {
-    EMAC->EMACRXPOLLD = 0;  // Resume RX
-    //      uint32_t *p = (uint32_t *)(EMAC->EMACHOSRXDESC);
-    //      MG_DEBUG(("RU: %p %c", p, (*p & BIT(31))? '1':'0'));
-  }
-  EMAC->EMACDMARIS = sr & ~(BIT(2) | BIT(7));  // Clear status
-  //  if (EMAC->EMACDMARIS & BIT(7)) {
-  //      uint32_t *p = (uint32_t *)(EMAC->EMACHOSRXDESC);
-  //      MG_ERROR(("OOPS: %p %c", p, (*p & BIT(31))? '1':'0'));
-  //  }
+  EMAC->EMACDMARIS = BIT(7);  // Clear possible RU while processing
+  EMAC->EMACRXPOLLD = 0;      // and resume RX
 }
 
 struct mip_driver mip_driver_tm4c = {mip_driver_tm4c_init, mip_driver_tm4c_tx,
