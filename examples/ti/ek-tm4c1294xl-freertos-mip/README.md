@@ -1,19 +1,13 @@
-# Baremetal webserver on EK-TM4C1294XL
+# MIP webserver over FreeRTOS on EK-TM4C1294XL
 
-This firmware uses experimental TCP/IP stack of the Mongoose Network Library,
-which implements the following:
+This firmware uses MIP, an experimental TCP/IP stack of the Mongoose Network Library, running as a FreeRTOS task.
+It implements the following:
 
-- A complete [HTTP device dashboard](../../device-dashboard) with:
-  - User authentication
-  - Real-time device data graph
-  - Coninfiguration display and update
-  - MQTT communication with a remote MQTT server
-- No dependencies: no HAL, no CMSIS, no RTOS
+- Minimal elementary web server, as simple as possible
+- No dependencies: no HAL, no CMSIS
 - Hand-written [mcu.h](mcu.h) header based on the [datasheet](https://www.ti.com/lit/pdf/spms433)
 - Interrupt-driven [Ethernet driver](../../../drivers/mip_driver_tm4c.c)
-- LED blinky, based on SysTick interrupt
-- User button handler, turns off/on an LED, based on GPIO IRQs (interrupt-driven)
-- HardFault handler alternate blinks LEDs
+- LED blinky, based on another FreeRTOS task
 - Debug log on UART0 (ICDI)
 
 ## Requirements
@@ -26,17 +20,16 @@ The Makefile defaults to using Docker for the compiler, so you don't actually ne
 
 In any case, the links above will send you to tutorials on how to install each of those tools in your workstation for Linux, Mac, and Windows.
 
+You'll also need _git_ so the Makefile can clone the FreeRTOS-Kernel repository. We assume you have it since you got to get this repository somehow. If you don't, and don't want to install it, just get the proper [FreeRTOS-Kernel](https://github.com/FreeRTOS/FreeRTOS-Kernel) version (see the Makefile) from its repository, as you did with the Mongoose repository.
 
 ## Usage
 
 Plugin your board into USB, and attach an Ethernet cable.
-To build:
+To build and flash:
 
 ```sh
-$ make clean build
+$ make clean flash
 ```
-
-To flash: use Uniflash
 
 To see debug log, use any serial monitor program like `picocom` at 115200 bps and configure it to insert carriage returns after line feeds:
 
@@ -44,6 +37,4 @@ To see debug log, use any serial monitor program like `picocom` at 115200 bps an
 $ picocom /dev/ttyACM0 -i -b 115200 --imap=lfcrlf
 ```
 
-There is also a [detailed tutorial on this example](https://mongoose.ws/tutorials/ti/ek-tm4c1294xl-baremetal/)
-
-For more details and benchmark data on MIP, check the [F746ZG example](../../stm32/nucleo-f746zg-baremetal/)
+For more details and benchmark data on MIP, check the [F746ZG baremetal example](../../stm32/nucleo-f746zg-baremetal/)
