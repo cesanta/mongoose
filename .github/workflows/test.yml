@@ -98,7 +98,9 @@ jobs:
           - path: stm32/stm32-nucleo-f429z
           - path: stm32/stm32-nucleo-h743z
           - path: stm32/nucleo-f429zi-baremetal
+          - path: stm32/nucleo-f429zi-freertos-mip
           - path: stm32/nucleo-f746zg-baremetal
+          - path: stm32/nucleo-f746zg-freertos-mip
           - path: nxp/nxp-mimxrt1020-azurertos
           - path: nxp/nxp-frdmk66f-freertos
           - path: nxp/nxp-lpcxpresso54s018m-freertos
@@ -121,6 +123,7 @@ jobs:
           - path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
           - path: ti/ti-ek-tm4c1294xl-http-server
           - path: ti/ek-tm4c1294xl-baremetal
+          - path: ti/ek-tm4c1294xl-freertos-mip
           - path: raspberry/raspberry-pi-pico-w
     name: ${{ matrix.example.path }}
     steps:
