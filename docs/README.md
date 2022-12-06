@@ -2590,6 +2590,7 @@ Supported format specifiers:
 - `Q` - expect `char *`, outputs double-quoted JSON-escaped string (extension)
 - `H` - expect `int`, `void *`, outputs double-quoted hex string (extension)
 - `I` - expect `int` (4 or 6), `void *`, outputs IP address (extension)
+- `A` - expect `void *`, outputs hardware address (extension)
 - `V` - expect `int`, `void *`, outputs double-quoted base64 string (extension)
 - `M` - expect `mg_pfn_t`, calls another print function (extension)
 - `g`, `f` - expect `double`
@@ -2619,6 +2620,7 @@ mg_snprintf(buf, sizeof(buf), "%%-%3s", "a");           // %-  a
 mg_snprintf(buf, sizeof(buf), "hi, %Q", "a");           // hi, "a"
 mg_snprintf(buf, sizeof(buf), "r: %M, %d", f,1,2,7);    // r: 3, 7
 mg_snprintf(buf, sizeof(buf), "%I", 4, "abcd");         // 97.98.99.100
+mg_snprintf(buf, sizeof(buf), "%A", "abcdef");          // 61:62:63:64:65:66
 
 // Printing sub-function for %M specifier. Grabs two int parameters
 size_t f(void (*out)(char, void *), void *ptr, va_list *ap) {

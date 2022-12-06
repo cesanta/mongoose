@@ -324,6 +324,12 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
           n += mg_xprintf(out, param, "%d.%d.%d.%d", (int) buf[0], (int) buf[1],
                           (int) buf[2], (int) buf[3]);
         }
+      } else if (c == 'A') {
+        // Print hardware addresses (currently Ethernet MAC)
+        uint8_t *buf = va_arg(*ap, uint8_t *);  // Pointer to the hw address
+        n += mg_xprintf(out, param, "%02x:%02x:%02x:%02x:%02x:%02x",
+                        (int) buf[0], (int) buf[1], (int) buf[2], (int) buf[3],
+                        (int) buf[4], (int) buf[5]);
       } else if (c == 'V') {
         // Print base64-encoded double-quoted string
         size_t len = (size_t) va_arg(*ap, int);
