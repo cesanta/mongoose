@@ -2205,7 +2205,7 @@ static void eh6(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   (void) c, (void) ev_data;
 }
 
-#if defined(__arm__) || defined(__riscv)
+#if (MG_ENABLE_SOCKET == 0)
 int send(int sock, const void *buf, size_t len, int flags);
 int send(int sock, const void *buf, size_t len, int flags) {
   (void) sock, (void) buf, (void) len, (void) flags;
