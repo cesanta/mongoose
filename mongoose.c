@@ -7067,7 +7067,7 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   if (tx_tcp(ifp, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
              mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
     s->seq += (uint32_t) len;
-    if (s->ttype == MIP_TTYPE_KEEPALIVE) settmout(c, MIP_TTYPE_KEEPALIVE);
+    settmout(c, MIP_TTYPE_KEEPALIVE);
   } else {
     return MG_IO_ERR;
   }
