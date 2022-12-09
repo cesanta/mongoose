@@ -31,6 +31,7 @@ static void ethernet_init(void) {
   }
 
   NVIC_EnableIRQ(61);                           // Setup Ethernet IRQ handler
+  RCC->APB2ENR |= BIT(14);                      // Enable SYSCFG
   SYSCFG->PMC |= BIT(23);                       // Use RMII. Goes first!
   RCC->AHB1ENR |= BIT(25) | BIT(26) | BIT(27);  // Enable Ethernet clocks
   RCC->AHB1RSTR |= BIT(25);                     // ETHMAC force reset
@@ -43,7 +44,7 @@ static void server(void *args) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   // Initialise Mongoose network stack
-  // Specify MAC address, and use 0 for IP, mask, GW - i.e. use DHCP
+  // Specify MAC address, either set use_dhcp or enter a static config.
   // For static configuration, specify IP/mask/GW in network byte order
   MG_INFO(("Initializing Ethernet driver"));
   ethernet_init();
@@ -74,7 +75,6 @@ static void blinker(void *args) {
 }
 
 int main(void) {
-  RCC->APB2ENR |= BIT(14);    // Enable SYSCFG: for systick & Ethernet
   clock_init();               // Set clock to max of 180 MHz
   systick_init(FREQ / 1000);  // Tick every 1 ms
   uart_init(UART3, 115200);   // Initialise UART
