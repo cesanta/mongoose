@@ -3,9 +3,17 @@
 //
 // example using MIP and a TUN/TAP interface
 
+static const char *s_listening_address = "http://0.0.0.0:8000";
+
 #include <sys/socket.h>
+#ifndef __OpenBSD__
 #include <linux/if.h>
 #include <linux/if_tun.h>
+#else
+#include <net/if.h>
+#include <net/if_tun.h>
+#include <net/if_types.h>
+#endif
 #include <sys/ioctl.h>
 #include "mongoose.h"
 
@@ -53,15 +61,28 @@ int main(int argc, char *argv[]) {
   }
 
   // Open network interface
-  int fd = open("/dev/net/tun", O_RDWR);
+#ifndef __OpenBSD__
+  const char* tuntap_device = "/dev/net/tun";
+#else
+  const char* tuntap_device = "/dev/tap0";
+#endif
+  int fd = open(tuntap_device, O_RDWR);
   struct ifreq ifr;
   memset(&ifr, 0, sizeof(ifr));
   strncpy(ifr.ifr_name, iface, IFNAMSIZ);
+#ifndef __OpenBSD__
   ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
   if (ioctl(fd, TUNSETIFF, (void *) &ifr) < 0) {
     MG_ERROR(("Failed to setup TAP interface: %s", ifr.ifr_name));
-    return EXIT_FAILURE;
+    abort();  // return EXIT_FAILURE;
   }
+#else
+  ifr.ifr_flags = (short)(IFF_UP | IFF_BROADCAST | IFF_MULTICAST);
+  if (ioctl(fd, TUNSIFMODE, (void *) &ifr) < 0) {
+    MG_ERROR(("Failed to setup TAP interface: %s", ifr.ifr_name));
+    abort();  // return EXIT_FAILURE;
+  }
+#endif
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);  // Non-blocking mode
 
   MG_INFO(("Opened TAP interface: %s", iface));
@@ -78,8 +99,12 @@ int main(int argc, char *argv[]) {
   mip_init(&mgr, &mif);
   MG_INFO(("Init done, starting main loop"));
 
+  // Start infinite event loop
+  MG_INFO(("Mongoose version : v%s", MG_VERSION));
+  MG_INFO(("Listening on     : %s", s_listening_address));
+
   extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, "http://0.0.0.0:8000", device_dashboard_fn, &mgr);
+  mg_http_listen(&mgr, s_listening_address, device_dashboard_fn, &mgr);
 
   while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop
 
