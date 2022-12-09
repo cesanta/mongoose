@@ -6823,6 +6823,7 @@ static struct ip *tx_ip(struct mip_if *ifp, uint8_t proto, uint32_t ip_src,
   if (!mac && ((ip_dst & ifp->mask) == (ifp->ip & ifp->mask)))
     arp_ask(ifp, ip_dst);                             // Same net, lookup
   if (!mac) mac = arp_cache_find(ifp, ifp->gw);       // Use gateway MAC
+  if (!mac) arp_ask(ifp, ifp->gw);                    // Not found? lookup
   if (mac) memcpy(eth->dst, mac, sizeof(eth->dst));   // Found? Use it
   if (!mac) memset(eth->dst, 255, sizeof(eth->dst));  // No? Use broadcast
   memcpy(eth->src, ifp->mac, sizeof(eth->src));       // TODO(cpq): ARP lookup
