@@ -3,9 +3,6 @@
 
 // Startup code
 __attribute__((naked, noreturn)) void _reset(void) {
-  // Init stack
-  asm("ldr sp, = _estack");
-
   // Initialise memory
   extern long _sbss, _ebss, _sdata, _edata, _sidata;
   for (long *src = &_sbss; src < &_ebss; src++) *src = 0;
@@ -132,9 +129,10 @@ WEAK_ALIAS void I2C8_Handler(void);
 WEAK_ALIAS void I2C9_Handler(void);
 
 // IRQ table, 2.5.1 Table 2-9
+extern void _estack();
 __attribute__((section(".vectors"))) void (*tab[16 + 114])(void) = {
     // Cortex interrupts
-    0, _reset, NMI_Handler, HardFault_Handler, MemManage_Handler,
+    _estack, _reset, NMI_Handler, HardFault_Handler, MemManage_Handler,
     BusFault_Handler, UsageFault_Handler, 0, 0, 0, 0, SVC_Handler,
     DebugMon_Handler, 0, PendSV_Handler, SysTick_Handler,
 
