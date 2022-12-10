@@ -732,29 +732,6 @@ Return value: created socket, or `-1` on error
 
 Usage example: see [examples/multi-threaded](https://github.com/cesanta/mongoose/tree/master/examples/multi-threaded).
 
-### mg\_mgr\_wakeup()
-
-```c
-bool mg_mgr_wakeup(struct mg_connection *pipe, const void *buf, size_len len);
-```
-
-Wake up an event manager that sleeps in `mg_mgr_poll()` call. This function
-must be called from a separate task/thread. A calling thread can pass
-some specific data to the IO thread via `buf`, `len`. The maximum value
-of `len` is limited by a maximum UDP datagram size, which is 64KiB. If you need
-to send a large data to the Mongoose thread, `malloc()` the data and send
-a pointer to it, not the data itself. The receiving event handler can receive
-a pointer, send a response, and call `free()`. Parameters:
-
-Parameters:
-- `pipe` - a special connection created by the `mg_mkpipe()` call
-- `buf` - a data to send to the pipe connection. Use `""` if there is no data 
-- `len` - a data length
-
-Return value: `true` if data has been sent, `false` otherwise
-
-Usage example: see [examples/multi-threaded](https://github.com/cesanta/mongoose/tree/master/examples/multi-threaded).
-
 ### mg\_hello()
 
 ```c
