@@ -5,8 +5,14 @@
 #define MG_ENABLE_LINES 1
 
 #include <assert.h>
+#ifndef __OpenBSD__
 #include <linux/if.h>
 #include <linux/if_tun.h>
+#else
+#include <net/if.h>
+#include <net/if_tun.h>
+#include <net/if_types.h>
+#endif
 #include <sys/ioctl.h>
 #include "mongoose.c"
 #include "driver_mock.c"
@@ -123,16 +129,28 @@ static void test_http_fetch(void) {
   // Setup interface
   const char *iface = "tap0";             // Network iface
   const char *mac = "00:00:01:02:03:78";  // MAC address
-  int fd = open("/dev/net/tun", O_RDWR);  // Open network interface
-
+#ifndef __OpenBSD__
+  const char* tuntap_device = "/dev/net/tun";
+#else
+  const char* tuntap_device = "/dev/tap0";
+#endif
+  int fd = open(tuntap_device, O_RDWR);
   struct ifreq ifr;
   memset(&ifr, 0, sizeof(ifr));
   strncpy(ifr.ifr_name, iface, IFNAMSIZ);
+#ifndef __OpenBSD__
   ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
   if (ioctl(fd, TUNSETIFF, (void *) &ifr) < 0) {
     MG_ERROR(("Failed to setup TAP interface: %s", ifr.ifr_name));
     abort();  // return EXIT_FAILURE;
   }
+#else
+  ifr.ifr_flags = (short)(IFF_UP | IFF_BROADCAST | IFF_MULTICAST);
+  if (ioctl(fd, TUNSIFMODE, (void *) &ifr) < 0) {
+    MG_ERROR(("Failed to setup TAP interface: %s", ifr.ifr_name));
+    abort();  // return EXIT_FAILURE;
+  }
+#endif
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);  // Non-blocking mode
 
   MG_INFO(("Opened TAP interface: %s", iface));
