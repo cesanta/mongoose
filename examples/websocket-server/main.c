@@ -10,7 +10,7 @@ static const char *s_web_root = ".";
 
 // This RESTful server implements the following endpoints:
 //   /websocket - upgrade to Websocket, and implement websocket echo server
-//   /api/rest - respond with JSON string {"result": 123}
+//   /rest - respond with JSON string {"result": 123}
 //   any other URI serves static files from s_web_root
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
