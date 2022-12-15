@@ -986,12 +986,13 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *opts);
 ```
 
-Serve static files according to the given options. Note that in order to
-enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
+Serve static files according to the given options. Files can also be gzip compressed, including the directory index. All compressed files must end in `.gz` and there must not exist a file with the same name without the extension, otherwise it will take precedence; see [mg_http_serve_file()](#mg_http_serve_file)
+
+<span class="badge bg-warning">NOTE: </span> In order to enable SSI, you need to set the `-DMG_ENABLE_SSI=1` build flag.
 
 <span class="badge bg-danger">NOTE: </span> Avoid double dots `..` in
 the `root_dir`. If you need to
-reference an upper-level directory, use absolute path.
+reference an upper-level directory, use an absolute path.
 
 Parameters:
 - `c` - Connection to use
@@ -1023,7 +1024,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path, struct mg_http_serve_opts *opts);
 ```
 
-Serve static file.
+Serve a static file. If a file with the filename specified in `path` does not exist, Mongoose tries appending `.gz`; and if such a file exists, it will serve it with a `Content-Encoding: gzip` header 
 
 <span class="badge bg-danger">NOTE: </span> `opts->root_dir` settings
 is ignored by this function.
