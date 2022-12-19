@@ -5923,51 +5923,6 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
 }
 
 #ifdef MG_ENABLE_LINES
-#line 1 "mip/driver_enc28j60.c"
-#endif
-
-
-#if MG_ENABLE_MIP
-
-// Instruction set
-enum { OP_RCR, OP_RBM, OP_WCR, OP_WBM, OP_BFS, OP_BFC, OP_SRC };
-
-static uint8_t rd(struct mip_spi *spi, uint8_t op, uint8_t addr) {
-  spi->begin(spi->spi);
-  spi->txn(spi->spi, (uint8_t) ((op << 5) | (addr & 0x1f)));
-  uint8_t value = spi->txn(spi->spi, 255);
-  if (addr & 0x80) value = spi->txn(spi->spi, 255);
-  spi->end(spi->spi);
-  return value;
-}
-
-static bool mip_driver_enc28j60_init(uint8_t *mac, void *data) {
-  (void) mac, (void) data;
-  rd((struct mip_spi *) data, OP_SRC, 0x1f);
-  return false;
-}
-
-static size_t mip_driver_enc28j60_tx(const void *buf, size_t len, void *data) {
-  (void) buf, (void) len, (void) data;
-  return 0;
-}
-
-static size_t mip_driver_enc28j60_rx(void *buf, size_t len, void *data) {
-  (void) buf, (void) len, (void) data;
-  return 0;
-}
-
-static bool mip_driver_enc28j60_up(void *data) {
-  (void) data;
-  return false;
-}
-
-struct mip_driver mip_driver_enc28j60 = {
-    mip_driver_enc28j60_init, mip_driver_enc28j60_tx, mip_driver_enc28j60_rx,
-    mip_driver_enc28j60_up, NULL};
-#endif
-
-#ifdef MG_ENABLE_LINES
 #line 1 "mip/driver_stm32.c"
 #endif
 
@@ -6000,8 +5955,7 @@ static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS];      // RX descriptors
 static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];      // TX descriptors
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
-static void (*s_rx)(void *, size_t, void *);         // Recv callback
-static void *s_rxdata;                               // Recv callback data
+static struct mip_if *s_ifp;                         // MIP interface
 enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
 
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
@@ -6074,8 +6028,10 @@ static int guess_mdc_cr(void) {
   return result;
 }
 
-static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
-  struct mip_driver_stm32 *d = (struct mip_driver_stm32 *) userdata;
+static bool mip_driver_stm32_init(struct mip_if *ifp) {
+  struct mip_driver_stm32 *d = (struct mip_driver_stm32 *) ifp->driver_data;
+  s_ifp = ifp;
+
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = BIT(31);                            // Own
@@ -6114,20 +6070,15 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   ETH->DMAOMR = BIT(1) | BIT(13) | BIT(21) | BIT(25);  // SR, ST, TSF, RSF
 
   // MAC address filtering
-  ETH->MACA0HR = ((uint32_t) mac[5] << 8U) | mac[4];
-  ETH->MACA0LR = (uint32_t) (mac[3] << 24) | ((uint32_t) mac[2] << 16) |
-                 ((uint32_t) mac[1] << 8) | mac[0];
+  ETH->MACA0HR = ((uint32_t) ifp->mac[5] << 8U) | ifp->mac[4];
+  ETH->MACA0LR = (uint32_t) (ifp->mac[3] << 24) |
+                 ((uint32_t) ifp->mac[2] << 16) |
+                 ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
   return true;
 }
 
-static void mip_driver_stm32_setrx(void (*rx)(void *, size_t, void *),
-                                   void *rxdata) {
-  s_rx = rx;
-  s_rxdata = rxdata;
-}
-
 static uint32_t s_txno;
-static size_t mip_driver_stm32_tx(const void *buf, size_t len, void *userdata) {
+static size_t mip_driver_stm32_tx(const void *buf, size_t len, struct mip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
@@ -6145,12 +6096,12 @@ static size_t mip_driver_stm32_tx(const void *buf, size_t len, void *userdata) {
   ETH->DMASR = BIT(2) | BIT(5);  // Clear any prior TBUS/TUS
   ETH->DMATPDR = 0;              // and resume
   return len;
-  (void) userdata;
+  (void) ifp;
 }
 
-static bool mip_driver_stm32_up(void *userdata) {
+static bool mip_driver_stm32_up(struct mip_if *ifp) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
-  (void) userdata;
+  (void) ifp;
   return bsr & BIT(2) ? 1 : 0;
 }
 
@@ -6167,8 +6118,7 @@ void ETH_IRQHandler(void) {
         uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (BIT(14) - 1));
         //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
         //  ETH->DMASR);
-        if (s_rx != NULL)
-          s_rx(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_rxdata);
+        mip_rxcb(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
       }
       s_rxdesc[s_rxno][0] = BIT(31);
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
@@ -6179,8 +6129,7 @@ void ETH_IRQHandler(void) {
 }
 
 struct mip_driver mip_driver_stm32 = {
-    mip_driver_stm32_init, mip_driver_stm32_tx, NULL, mip_driver_stm32_up,
-    mip_driver_stm32_setrx};
+    mip_driver_stm32_init, mip_driver_stm32_tx, NULL, mip_driver_stm32_up};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -6222,8 +6171,7 @@ static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS];      // RX descriptors
 static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];      // TX descriptors
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
-static void (*s_rx)(void *, size_t, void *);         // Recv callback
-static void *s_rxdata;                               // Recv callback data
+static struct mip_if *s_ifp;                         // MIP interface
 enum { EPHY_ADDR = 0, EPHYBMCR = 0, EPHYBMSR = 1 };  // PHY constants
 
 static inline void tm4cspin(volatile uint32_t count) {
@@ -6312,8 +6260,10 @@ static int guess_mdc_cr(void) {
   return result;
 }
 
-static bool mip_driver_tm4c_init(uint8_t *mac, void *userdata) {
-  struct mip_driver_tm4c *d = (struct mip_driver_tm4c *) userdata;
+static bool mip_driver_tm4c_init(struct mip_if *ifp) {
+  struct mip_driver_tm4c *d = (struct mip_driver_tm4c *) ifp->driver_data;
+  s_ifp = ifp;
+
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = BIT(31);                            // Own
@@ -6353,23 +6303,18 @@ static bool mip_driver_tm4c_init(uint8_t *mac, void *userdata) {
   EMAC->EMACCFG = BIT(2) | BIT(3) | BIT(11) | BIT(14);   // RE, TE, Duplex, Fast
   EMAC->EMACDMAOPMODE =
       BIT(1) | BIT(13) | BIT(21) | BIT(25);  // SR, ST, TSF, RSF
-  EMAC->EMACADDR0H = ((uint32_t) mac[5] << 8U) | mac[4];
-  EMAC->EMACADDR0L = (uint32_t) (mac[3] << 24) | ((uint32_t) mac[2] << 16) |
-                     ((uint32_t) mac[1] << 8) | mac[0];
+  EMAC->EMACADDR0H = ((uint32_t) ifp->mac[5] << 8U) | ifp->mac[4];
+  EMAC->EMACADDR0L = (uint32_t) (ifp->mac[3] << 24) |
+                     ((uint32_t) ifp->mac[2] << 16) |
+                     ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
   // NOTE(scaprile) There are 3 additional slots for filtering, disabled by
   // default. This also applies to the STM32 driver (at least for F7)
 
   return true;
 }
 
-static void mip_driver_tm4c_setrx(void (*rx)(void *, size_t, void *),
-                                  void *rxdata) {
-  s_rx = rx;
-  s_rxdata = rxdata;
-}
-
 static uint32_t s_txno;
-static size_t mip_driver_tm4c_tx(const void *buf, size_t len, void *userdata) {
+static size_t mip_driver_tm4c_tx(const void *buf, size_t len, struct mip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // fail
@@ -6389,12 +6334,12 @@ static size_t mip_driver_tm4c_tx(const void *buf, size_t len, void *userdata) {
   EMAC->EMACDMARIS = BIT(2) | BIT(5);  // Clear any prior TU/UNF
   EMAC->EMACTXPOLLD = 0;               // and resume
   return len;
-  (void) userdata;
+  (void) ifp;
 }
 
-static bool mip_driver_tm4c_up(void *userdata) {
+static bool mip_driver_tm4c_up(struct mip_if *ifp) {
   uint32_t bmsr = emac_read_phy(EPHY_ADDR, EPHYBMSR);
-  (void) userdata;
+  (void) ifp;
   return (bmsr & BIT(2)) ? 1 : 0;
 }
 
@@ -6411,8 +6356,7 @@ void EMAC0_IRQHandler(void) {
         uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (BIT(14) - 1));
         //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
         //  EMAC->EMACDMARIS);
-        if (s_rx != NULL)
-          s_rx(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_rxdata);
+        mip_rxcb(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
       }
       s_rxdesc[s_rxno][0] = BIT(31);
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
@@ -6423,8 +6367,7 @@ void EMAC0_IRQHandler(void) {
 }
 
 struct mip_driver mip_driver_tm4c = {mip_driver_tm4c_init, mip_driver_tm4c_tx,
-                                     NULL, mip_driver_tm4c_up,
-                                     mip_driver_tm4c_setrx};
+                                     NULL, mip_driver_tm4c_up};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -6459,8 +6402,8 @@ static  uint8_t w5500_r1(struct mip_spi *s, uint8_t block, uint16_t addr) { uint
 static  uint16_t w5500_r2(struct mip_spi *s, uint8_t block, uint16_t addr) { uint8_t buf[2] = {0, 0}; w5500_rn(s, block, addr, buf, sizeof(buf)); return (uint16_t) ((buf[0] << 8) | buf[1]); }
 // clang-format on
 
-static size_t w5500_rx(void *buf, size_t buflen, void *data) {
-  struct mip_spi *s = (struct mip_spi *) data;
+static size_t w5500_rx(void *buf, size_t buflen, struct mip_if *ifp) {
+  struct mip_spi *s = (struct mip_spi *) ifp->driver_data;
   uint16_t r = 0, n = 0, len = (uint16_t) buflen, n2;     // Read recv len
   while ((n2 = w5500_r2(s, W5500_S0, 0x26)) > n) n = n2;  // Until it is stable
   // printf("RSR: %d\n", (int) n);
@@ -6478,8 +6421,8 @@ static size_t w5500_rx(void *buf, size_t buflen, void *data) {
   return r;
 }
 
-static size_t w5500_tx(const void *buf, size_t buflen, void *data) {
-  struct mip_spi *s = (struct mip_spi *) data;
+static size_t w5500_tx(const void *buf, size_t buflen, struct mip_if *ifp) {
+  struct mip_spi *s = (struct mip_spi *) ifp->driver_data;
   uint16_t n = 0, len = (uint16_t) buflen;
   while (n < len) n = w5500_r2(s, W5500_S0, 0x20);      // Wait for space
   uint16_t ptr = w5500_r2(s, W5500_S0, 0x24);           // Get write pointer
@@ -6497,8 +6440,8 @@ static size_t w5500_tx(const void *buf, size_t buflen, void *data) {
   return len;
 }
 
-static bool w5500_init(uint8_t *mac, void *data) {
-  struct mip_spi *s = (struct mip_spi *) data;
+static bool w5500_init(struct mip_if *ifp) {
+  struct mip_spi *s = (struct mip_spi *) ifp->driver_data;
   s->end(s->spi);
   w5500_w1(s, W5500_CR, 0, 0x80);     // Reset chip: CR -> 0x80
   w5500_w1(s, W5500_CR, 0x2e, 0);     // CR PHYCFGR -> reset
@@ -6509,16 +6452,15 @@ static bool w5500_init(uint8_t *mac, void *data) {
   w5500_w1(s, W5500_S0, 0, 4);              // Sock0 MR -> MACRAW
   w5500_w1(s, W5500_S0, 1, 1);              // Sock0 CR -> OPEN
   return w5500_r1(s, W5500_S0, 3) == 0x42;  // Sock0 SR == MACRAW
-  (void) mac;
 }
 
-static bool w5500_up(void *data) {
-  uint8_t phycfgr = w5500_r1((struct mip_spi *) data, W5500_CR, 0x2e);
+static bool w5500_up(struct mip_if *ifp) {
+  struct mip_spi *spi = (struct mip_spi *) ifp->driver_data;
+  uint8_t phycfgr = w5500_r1(spi, W5500_CR, 0x2e);
   return phycfgr & 1;  // Bit 0 of PHYCFGR is LNK (0 - down, 1 - up)
 }
 
-struct mip_driver mip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx, w5500_up,
-                                      NULL};
+struct mip_driver mip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx, w5500_up};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -6785,7 +6727,7 @@ static size_t ether_output(struct mip_if *ifp, size_t len) {
   // size_t min = 64;  // Pad short frames to 64 bytes (minimum Ethernet size)
   // if (len < min) memset(ifp->tx.ptr + len, 0, min - len), len = min;
   // mg_hexdump(ifp->tx.ptr, len);
-  return ifp->driver->tx(ifp->tx.ptr, len, ifp->driver_data);
+  return ifp->driver->tx(ifp->tx.ptr, len, ifp);
 }
 
 static void arp_ask(struct mip_if *ifp, uint32_t ip) {
@@ -6806,7 +6748,10 @@ static void onstatechange(struct mip_if *ifp) {
   if (ifp->state == MIP_STATE_READY) {
     MG_INFO(("READY, IP: %I", 4, &ifp->ip));
     MG_INFO(("       GW: %I", 4, &ifp->gw));
-    MG_INFO(("       Lease: %lld sec", (ifp->lease_expire - ifp->now) / 1000));
+    if (ifp->lease_expire > ifp->now) {
+      MG_INFO(
+          ("       Lease: %lld sec", (ifp->lease_expire - ifp->now) / 1000));
+    }
     arp_ask(ifp, ifp->gw);
   } else if (ifp->state == MIP_STATE_UP) {
     MG_ERROR(("Link up"));
@@ -6936,7 +6881,7 @@ static void rx_icmp(struct mip_if *ifp, struct pkt *pkt) {
   }
 }
 
-static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
+static void rx_dhcp_client(struct mip_if *ifp, struct pkt *pkt) {
   uint32_t ip = 0, gw = 0, mask = 0;
   uint8_t *p = pkt->dhcp->options,
           *end = (uint8_t *) &pkt->raw.ptr[pkt->raw.len];
@@ -6960,6 +6905,43 @@ static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
     ifp->state = MIP_STATE_READY;
     onstatechange(ifp);
     tx_dhcp_request(ifp, ip, pkt->dhcp->siaddr);
+  }
+}
+
+// Simple DHCP server that assigns a next IP address: ifp->ip + 1
+static void rx_dhcp_server(struct mip_if *ifp, struct pkt *pkt) {
+  uint8_t op = 0, *p = pkt->dhcp->options,
+          *end = (uint8_t *) &pkt->raw.ptr[pkt->raw.len];
+  if (end < (uint8_t *) (pkt->dhcp + 1)) return;
+  // struct dhcp *req = pkt->dhcp;
+  struct dhcp res = {2, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
+  res.yiaddr = ifp->ip;
+  ((uint8_t *) (&res.yiaddr))[3]++;                // Offer our IP + 1
+  while (p + 1 < end && p[0] != 255) {             // Parse options
+    if (p[0] == 53 && p[1] == 1 && p + 2 < end) {  // Message type
+      op = p[2];
+    } 
+    p += p[1] + 2;
+  }
+  if (op == 1 || op == 3) {  // DHCP Discover or DHCP Request
+    uint8_t msg = op == 1 ? 2 : 5;  // Message type: DHCP OFFER or DHCP ACK 
+    uint8_t opts[] = {
+        53, 1, msg,                 // Message type
+        1,  4, 0,   0,   0,   0,    // Subnet mask
+        54, 4, 0,   0,   0,   0,    // Server ID
+        12, 3, 'm', 'i', 'p',       // Host name: "mip"
+        51, 4, 255, 255, 255, 255,  // Lease time
+        255                         // End of options
+    };
+    memcpy(&res.hwaddr, pkt->dhcp->hwaddr, 6);
+    memcpy(opts + 5, &ifp->mask, sizeof(ifp->mask));
+    memcpy(opts + 11, &ifp->ip, sizeof(ifp->ip));
+    memcpy(&res.options, opts, sizeof(opts));
+    res.magic = pkt->dhcp->magic;
+    res.xid = pkt->dhcp->xid;
+    arp_cache_add(ifp, res.yiaddr, pkt->eth->src);
+    tx_udp(ifp, ifp->ip, mg_htons(67), op == 1 ? ~0U : res.yiaddr, mg_htons(68),
+           &res, sizeof(res));
   }
 }
 
@@ -7197,13 +7179,15 @@ static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
   } else if (pkt->ip->proto == 17) {
     pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
-    // MG_DEBUG(("  UDP %u %u -> %u", len, mg_htons(udp->sport),
-    // mg_htons(udp->dport)));
     mkpay(pkt, pkt->udp + 1);
     if (pkt->udp->dport == mg_htons(68)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp + 1);
-      rx_dhcp(ifp, pkt);
+      rx_dhcp_client(ifp, pkt);
+    } else if (ifp->enable_dhcp_server && pkt->udp->dport == mg_htons(67)) {
+      pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
+      mkpay(pkt, pkt->dhcp + 1);
+      rx_dhcp_server(ifp, pkt);
     } else {
       rx_udp(ifp, pkt);
     }
@@ -7236,7 +7220,6 @@ static void rx_ip6(struct mip_if *ifp, struct pkt *pkt) {
 
 static void mip_rx(struct mip_if *ifp, void *buf, size_t len) {
   const uint8_t broadcast[] = {255, 255, 255, 255, 255, 255};
-  // struct pkt pkt = {.raw = {.buf = (uint8_t *) buf, .len = len}};
   struct pkt pkt;
   memset(&pkt, 0, sizeof(pkt));
   pkt.raw.ptr = (char *) buf;
@@ -7279,13 +7262,13 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 
   // Handle physical interface up/down status
   if (expired_1000ms && ifp->driver->up) {
-    bool up = ifp->driver->up(ifp->driver_data);
+    bool up = ifp->driver->up(ifp);
     bool current = ifp->state != MIP_STATE_DOWN;
     if (up != current) {
-      ifp->state = up == false     ? MIP_STATE_DOWN
-                   : ifp->use_dhcp ? MIP_STATE_UP
-                                   : MIP_STATE_READY;
-      if (!up && ifp->use_dhcp) ifp->ip = 0;
+      ifp->state = up == false               ? MIP_STATE_DOWN
+                   : ifp->enable_dhcp_client ? MIP_STATE_UP
+                                             : MIP_STATE_READY;
+      if (!up && ifp->enable_dhcp_client) ifp->ip = 0;
       onstatechange(ifp);
     }
   }
@@ -7294,7 +7277,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 
   if (ifp->ip == 0 && expired_1000ms) {
     tx_dhcp_discover(ifp);  // If IP not configured, send DHCP
-  } else if (ifp->use_dhcp == false && expired_1000ms &&
+  } else if (ifp->enable_dhcp_client == false && expired_1000ms && ifp->gw &&
              arp_cache_find(ifp, ifp->gw) == NULL) {
     arp_ask(ifp, ifp->gw);  // If GW's MAC address in not in ARP cache
   }
@@ -7302,8 +7285,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   // Read data from the network
   size_t len = ifp->queue.len > 0
                    ? q_read(&ifp->queue, (void *) ifp->rx.ptr)
-                   : ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len,
-                                     ifp->driver_data);
+                   : ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len, ifp);
   qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
   mip_rx(ifp, (void *) ifp->rx.ptr, len);
   qp_mark(QP_FRAMEDONE, (int) q_space(&ifp->queue));
@@ -7335,8 +7317,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 // This function executes in interrupt context, thus it should copy data
 // somewhere fast. Note that newlib's malloc is not thread safe, thus use
 // our lock-free queue with preallocated buffer to copy data and return asap
-static void on_rx(void *buf, size_t len, void *userdata) {
-  struct mip_if *ifp = (struct mip_if *) userdata;
+void mip_rxcb(void *buf, size_t len, struct mip_if *ifp) {
   if (q_write(&ifp->queue, buf, len)) {
     qp_mark(QP_FRAMEPUSHED, (int) q_space(&ifp->queue));
   } else {
@@ -7347,22 +7328,19 @@ static void on_rx(void *buf, size_t len, void *userdata) {
 }
 
 void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
-  if (ifp->driver->init && !ifp->driver->init(ifp->mac, ifp->driver_data)) {
+  if (ifp->driver->init && !ifp->driver->init(ifp)) {
     MG_ERROR(("driver init failed"));
   } else {
     size_t maxpktsize = 1540;
     ifp->rx.ptr = (char *) calloc(1, maxpktsize), ifp->rx.len = maxpktsize;
     ifp->tx.ptr = (char *) calloc(1, maxpktsize), ifp->tx.len = maxpktsize;
-    if (ifp->driver->setrx) {
-      ifp->queue.len = MIP_QSIZE;
-      ifp->queue.buf = (uint8_t *) calloc(1, ifp->queue.len);
-      ifp->driver->setrx(on_rx, ifp);
-    }
+    if (ifp->queue.len) ifp->queue.buf = (uint8_t *) calloc(1, ifp->queue.len);
     ifp->timer_1000ms = mg_millis();
     arp_cache_init(ifp->arp_cache, MIP_ARP_ENTRIES, 12);
     mgr->priv = ifp;
     ifp->mgr = mgr;
     mgr->extraconnsize = sizeof(struct connstate);
+    if (ifp->ip == 0) ifp->enable_dhcp_client = true;
 #ifdef MIP_QPROFILE
     qp_init();
 #endif

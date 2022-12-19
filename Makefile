@@ -46,10 +46,9 @@ all:
 
 tall: mg_prefix unamalgamated test mip_test arm examples vc98 vc17 vc22 mingw mingw++ fuzz
 
-mip_test: test/mip_test.c mongoose.c mongoose.h Makefile
+mip_test: test/mip_test.c mongoose.c mongoose.h Makefile mip_tap_test
 	$(CC) test/mip_test.c $(INCS) $(WARN) $(OPTS) $(C_WARN) $(ASAN) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
-	$(MAKE) mip_tap_test
 
 mip_tap_test: test/mip_tap_test.c mongoose.c mongoose.h Makefile
 	$(CC) test/mip_tap_test.c $(INCS) $(WARN) $(OPTS) $(C_WARN) $(ASAN) -o $@

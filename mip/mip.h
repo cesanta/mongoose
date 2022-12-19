@@ -3,13 +3,13 @@
 #include "arch.h"
 #include "net.h"
 
+struct mip_if;  // MIP network interface
+
 struct mip_driver {
-  bool (*init)(uint8_t *mac, void *data);           // Initialise driver
-  size_t (*tx)(const void *, size_t, void *data);   // Transmit frame
-  size_t (*rx)(void *buf, size_t len, void *data);  // Receive frame (polling)
-  bool (*up)(void *data);                           // Up/down status
-  // Set receive callback for interrupt-driven drivers
-  void (*setrx)(void (*fn)(void *buf, size_t len, void *rxdata), void *rxdata);
+  bool (*init)(struct mip_if *);                         // Initialise driver
+  size_t (*tx)(const void *, size_t, struct mip_if *);   // Transmit frame
+  size_t (*rx)(void *buf, size_t len, struct mip_if *);  // Receive frame (poll)
+  bool (*up)(struct mip_if *);                           // Up/down status
 };
 
 // Receive queue - single producer, single consumer queue.  Interrupt-based
@@ -27,13 +27,15 @@ struct queue {
 // Network interface
 struct mip_if {
   uint8_t mac[6];             // MAC address. Must be set to a valid MAC
-  uint32_t ip, mask, gw;      // IP address, mask, default gateway. Can be 0
+  uint32_t ip, mask, gw;      // IP address, mask, default gateway
   struct mg_str rx;           // Output (TX) buffer
   struct mg_str tx;           // Input (RX) buffer
-  bool use_dhcp;              // Enable DCHP
+  bool enable_dhcp_client;    // Enable DCHP client
+  bool enable_dhcp_server;    // Enable DCHP server
   struct mip_driver *driver;  // Low level driver
   void *driver_data;          // Driver-specific data
   struct mg_mgr *mgr;         // Mongoose event manager
+  struct queue queue;         // Set queue.len for interrupt based drivers
 
   // Internal state, user can use it but should not change it
   uint64_t now;                   // Current time
@@ -46,14 +48,13 @@ struct mip_if {
 #define MIP_STATE_DOWN 0          // Interface is down
 #define MIP_STATE_UP 1            // Interface is up
 #define MIP_STATE_READY 2         // Interface is up and has IP
-  struct queue queue;             // Receive queue
 };
 
 void mip_init(struct mg_mgr *, struct mip_if *);
 void mip_free(struct mip_if *);
+void mip_rxcb(void *buf, size_t len, struct mip_if *ifp);
 
 extern struct mip_driver mip_driver_stm32;
-extern struct mip_driver mip_driver_enc28j60;
 extern struct mip_driver mip_driver_w5500;
 extern struct mip_driver mip_driver_tm4c;
 

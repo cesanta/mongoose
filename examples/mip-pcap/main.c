@@ -18,24 +18,24 @@ void signal_handler(int signo) {
   s_signo = signo;
 }
 
-static size_t pcap_tx(const void *buf, size_t len, void *userdata) {
-  int res = pcap_inject((pcap_t *) userdata, buf, len);
+static size_t pcap_tx(const void *buf, size_t len, struct mip_if *ifp) {
+  int res = pcap_inject((pcap_t *) ifp->driver_data, buf, len);
   if (res == PCAP_ERROR) {
     MG_ERROR(("pcap_inject: %d", res));
   }
   return res == PCAP_ERROR ? 0 : len;
 }
 
-static bool pcap_up(void *userdata) {
-  return userdata ? true : false;
+static bool pcap_up(struct mip_if *ifp) {
+  return ifp->driver_data ? true : false;
 }
 
-static size_t pcap_rx(void *buf, size_t len, void *userdata) {
+static size_t pcap_rx(void *buf, size_t len, struct mip_if *ifp) {
   size_t received = 0;
   struct pcap_pkthdr *hdr = NULL;
   const unsigned char *pkt = NULL;
   usleep(1000);  // Sleep 1 millisecond. This is to avoid 100% CPU
-  if (pcap_next_ex((pcap_t *) userdata, &hdr, &pkt) == 1) {  // Yes, read
+  if (pcap_next_ex((pcap_t *) ifp->driver_data, &hdr, &pkt) == 1) {
     received = hdr->len < len ? hdr->len : len;
     memcpy(buf, pkt, received);
   }
@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   struct mip_driver driver = {.tx = pcap_tx, .up = pcap_up, .rx = pcap_rx};
-  struct mip_if mif = {.use_dhcp = true, .driver = &driver, .driver_data = ph};
+  struct mip_if mif = {.driver = &driver, .driver_data = ph};
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
          &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
   mip_init(&mgr, &mif);

@@ -28,8 +28,7 @@ static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS];      // RX descriptors
 static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];      // TX descriptors
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
-static void (*s_rx)(void *, size_t, void *);         // Recv callback
-static void *s_rxdata;                               // Recv callback data
+static struct mip_if *s_ifp;                         // MIP interface
 enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
 
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
@@ -102,8 +101,10 @@ static int guess_mdc_cr(void) {
   return result;
 }
 
-static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
-  struct mip_driver_stm32 *d = (struct mip_driver_stm32 *) userdata;
+static bool mip_driver_stm32_init(struct mip_if *ifp) {
+  struct mip_driver_stm32 *d = (struct mip_driver_stm32 *) ifp->driver_data;
+  s_ifp = ifp;
+
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = BIT(31);                            // Own
@@ -142,20 +143,15 @@ static bool mip_driver_stm32_init(uint8_t *mac, void *userdata) {
   ETH->DMAOMR = BIT(1) | BIT(13) | BIT(21) | BIT(25);  // SR, ST, TSF, RSF
 
   // MAC address filtering
-  ETH->MACA0HR = ((uint32_t) mac[5] << 8U) | mac[4];
-  ETH->MACA0LR = (uint32_t) (mac[3] << 24) | ((uint32_t) mac[2] << 16) |
-                 ((uint32_t) mac[1] << 8) | mac[0];
+  ETH->MACA0HR = ((uint32_t) ifp->mac[5] << 8U) | ifp->mac[4];
+  ETH->MACA0LR = (uint32_t) (ifp->mac[3] << 24) |
+                 ((uint32_t) ifp->mac[2] << 16) |
+                 ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
   return true;
 }
 
-static void mip_driver_stm32_setrx(void (*rx)(void *, size_t, void *),
-                                   void *rxdata) {
-  s_rx = rx;
-  s_rxdata = rxdata;
-}
-
 static uint32_t s_txno;
-static size_t mip_driver_stm32_tx(const void *buf, size_t len, void *userdata) {
+static size_t mip_driver_stm32_tx(const void *buf, size_t len, struct mip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
@@ -173,12 +169,12 @@ static size_t mip_driver_stm32_tx(const void *buf, size_t len, void *userdata) {
   ETH->DMASR = BIT(2) | BIT(5);  // Clear any prior TBUS/TUS
   ETH->DMATPDR = 0;              // and resume
   return len;
-  (void) userdata;
+  (void) ifp;
 }
 
-static bool mip_driver_stm32_up(void *userdata) {
+static bool mip_driver_stm32_up(struct mip_if *ifp) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
-  (void) userdata;
+  (void) ifp;
   return bsr & BIT(2) ? 1 : 0;
 }
 
@@ -195,8 +191,7 @@ void ETH_IRQHandler(void) {
         uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (BIT(14) - 1));
         //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
         //  ETH->DMASR);
-        if (s_rx != NULL)
-          s_rx(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_rxdata);
+        mip_rxcb(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
       }
       s_rxdesc[s_rxno][0] = BIT(31);
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
@@ -207,6 +202,5 @@ void ETH_IRQHandler(void) {
 }
 
 struct mip_driver mip_driver_stm32 = {
-    mip_driver_stm32_init, mip_driver_stm32_tx, NULL, mip_driver_stm32_up,
-    mip_driver_stm32_setrx};
+    mip_driver_stm32_init, mip_driver_stm32_tx, NULL, mip_driver_stm32_up};
 #endif
