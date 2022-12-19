@@ -29,15 +29,15 @@ static int s_num_tests = 0;
   } while (0)
 
 // MIP TUNTAP driver
-static size_t tap_rx(void *buf, size_t len, void *userdata) {
-  ssize_t received = read(*(int *) userdata, buf, len);
+static size_t tap_rx(void *buf, size_t len, struct mip_if *ifp) {
+  ssize_t received = read(*(int *) ifp->driver_data, buf, len);
   usleep(1);  // This is to avoid 100% CPU
   if (received < 0) return 0;
   return (size_t) received;
 }
 
-static size_t tap_tx(const void *buf, size_t len, void *userdata) {
-  ssize_t res = write(*(int *) userdata, buf, len);
+static size_t tap_tx(const void *buf, size_t len, struct mip_if *ifp) {
+  ssize_t res = write(*(int *) ifp->driver_data, buf, len);
   if (res < 0) {
     MG_ERROR(("tap_tx failed: %d", errno));
     return 0;
@@ -45,8 +45,8 @@ static size_t tap_tx(const void *buf, size_t len, void *userdata) {
   return (size_t) res;
 }
 
-static bool tap_up(void *userdata) {
-  return userdata ? true : false;
+static bool tap_up(struct mip_if *ifp) {
+  return ifp->driver_data ? true : false;
 }
 
 // HTTP fetches IOs
@@ -174,9 +174,7 @@ static void test_http_fetch(void) {
   mif.driver_data = &fd;
 
 #if MG_USING_DHCP == 1
-  mif.use_dhcp = true;  // DHCP
 #else
-  mif.use_dhcp = false;   // Static IP
   mif.ip = 0x0220a8c0;    // 192.168.32.2 // Triggering a network failure
   mif.mask = 0x00ffffff;  // 255.255.255.0
   mif.gw = 0x0120a8c0;    // 192.168.32.1

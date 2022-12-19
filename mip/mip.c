@@ -259,7 +259,7 @@ static size_t ether_output(struct mip_if *ifp, size_t len) {
   // size_t min = 64;  // Pad short frames to 64 bytes (minimum Ethernet size)
   // if (len < min) memset(ifp->tx.ptr + len, 0, min - len), len = min;
   // mg_hexdump(ifp->tx.ptr, len);
-  return ifp->driver->tx(ifp->tx.ptr, len, ifp->driver_data);
+  return ifp->driver->tx(ifp->tx.ptr, len, ifp);
 }
 
 static void arp_ask(struct mip_if *ifp, uint32_t ip) {
@@ -280,7 +280,10 @@ static void onstatechange(struct mip_if *ifp) {
   if (ifp->state == MIP_STATE_READY) {
     MG_INFO(("READY, IP: %I", 4, &ifp->ip));
     MG_INFO(("       GW: %I", 4, &ifp->gw));
-    MG_INFO(("       Lease: %lld sec", (ifp->lease_expire - ifp->now) / 1000));
+    if (ifp->lease_expire > ifp->now) {
+      MG_INFO(
+          ("       Lease: %lld sec", (ifp->lease_expire - ifp->now) / 1000));
+    }
     arp_ask(ifp, ifp->gw);
   } else if (ifp->state == MIP_STATE_UP) {
     MG_ERROR(("Link up"));
@@ -410,7 +413,7 @@ static void rx_icmp(struct mip_if *ifp, struct pkt *pkt) {
   }
 }
 
-static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
+static void rx_dhcp_client(struct mip_if *ifp, struct pkt *pkt) {
   uint32_t ip = 0, gw = 0, mask = 0;
   uint8_t *p = pkt->dhcp->options,
           *end = (uint8_t *) &pkt->raw.ptr[pkt->raw.len];
@@ -434,6 +437,43 @@ static void rx_dhcp(struct mip_if *ifp, struct pkt *pkt) {
     ifp->state = MIP_STATE_READY;
     onstatechange(ifp);
     tx_dhcp_request(ifp, ip, pkt->dhcp->siaddr);
+  }
+}
+
+// Simple DHCP server that assigns a next IP address: ifp->ip + 1
+static void rx_dhcp_server(struct mip_if *ifp, struct pkt *pkt) {
+  uint8_t op = 0, *p = pkt->dhcp->options,
+          *end = (uint8_t *) &pkt->raw.ptr[pkt->raw.len];
+  if (end < (uint8_t *) (pkt->dhcp + 1)) return;
+  // struct dhcp *req = pkt->dhcp;
+  struct dhcp res = {2, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
+  res.yiaddr = ifp->ip;
+  ((uint8_t *) (&res.yiaddr))[3]++;                // Offer our IP + 1
+  while (p + 1 < end && p[0] != 255) {             // Parse options
+    if (p[0] == 53 && p[1] == 1 && p + 2 < end) {  // Message type
+      op = p[2];
+    } 
+    p += p[1] + 2;
+  }
+  if (op == 1 || op == 3) {  // DHCP Discover or DHCP Request
+    uint8_t msg = op == 1 ? 2 : 5;  // Message type: DHCP OFFER or DHCP ACK 
+    uint8_t opts[] = {
+        53, 1, msg,                 // Message type
+        1,  4, 0,   0,   0,   0,    // Subnet mask
+        54, 4, 0,   0,   0,   0,    // Server ID
+        12, 3, 'm', 'i', 'p',       // Host name: "mip"
+        51, 4, 255, 255, 255, 255,  // Lease time
+        255                         // End of options
+    };
+    memcpy(&res.hwaddr, pkt->dhcp->hwaddr, 6);
+    memcpy(opts + 5, &ifp->mask, sizeof(ifp->mask));
+    memcpy(opts + 11, &ifp->ip, sizeof(ifp->ip));
+    memcpy(&res.options, opts, sizeof(opts));
+    res.magic = pkt->dhcp->magic;
+    res.xid = pkt->dhcp->xid;
+    arp_cache_add(ifp, res.yiaddr, pkt->eth->src);
+    tx_udp(ifp, ifp->ip, mg_htons(67), op == 1 ? ~0U : res.yiaddr, mg_htons(68),
+           &res, sizeof(res));
   }
 }
 
@@ -671,13 +711,15 @@ static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
   } else if (pkt->ip->proto == 17) {
     pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
-    // MG_DEBUG(("  UDP %u %u -> %u", len, mg_htons(udp->sport),
-    // mg_htons(udp->dport)));
     mkpay(pkt, pkt->udp + 1);
     if (pkt->udp->dport == mg_htons(68)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp + 1);
-      rx_dhcp(ifp, pkt);
+      rx_dhcp_client(ifp, pkt);
+    } else if (ifp->enable_dhcp_server && pkt->udp->dport == mg_htons(67)) {
+      pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
+      mkpay(pkt, pkt->dhcp + 1);
+      rx_dhcp_server(ifp, pkt);
     } else {
       rx_udp(ifp, pkt);
     }
@@ -710,7 +752,6 @@ static void rx_ip6(struct mip_if *ifp, struct pkt *pkt) {
 
 static void mip_rx(struct mip_if *ifp, void *buf, size_t len) {
   const uint8_t broadcast[] = {255, 255, 255, 255, 255, 255};
-  // struct pkt pkt = {.raw = {.buf = (uint8_t *) buf, .len = len}};
   struct pkt pkt;
   memset(&pkt, 0, sizeof(pkt));
   pkt.raw.ptr = (char *) buf;
@@ -753,13 +794,13 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 
   // Handle physical interface up/down status
   if (expired_1000ms && ifp->driver->up) {
-    bool up = ifp->driver->up(ifp->driver_data);
+    bool up = ifp->driver->up(ifp);
     bool current = ifp->state != MIP_STATE_DOWN;
     if (up != current) {
-      ifp->state = up == false     ? MIP_STATE_DOWN
-                   : ifp->use_dhcp ? MIP_STATE_UP
-                                   : MIP_STATE_READY;
-      if (!up && ifp->use_dhcp) ifp->ip = 0;
+      ifp->state = up == false               ? MIP_STATE_DOWN
+                   : ifp->enable_dhcp_client ? MIP_STATE_UP
+                                             : MIP_STATE_READY;
+      if (!up && ifp->enable_dhcp_client) ifp->ip = 0;
       onstatechange(ifp);
     }
   }
@@ -768,7 +809,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 
   if (ifp->ip == 0 && expired_1000ms) {
     tx_dhcp_discover(ifp);  // If IP not configured, send DHCP
-  } else if (ifp->use_dhcp == false && expired_1000ms &&
+  } else if (ifp->enable_dhcp_client == false && expired_1000ms && ifp->gw &&
              arp_cache_find(ifp, ifp->gw) == NULL) {
     arp_ask(ifp, ifp->gw);  // If GW's MAC address in not in ARP cache
   }
@@ -776,8 +817,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   // Read data from the network
   size_t len = ifp->queue.len > 0
                    ? q_read(&ifp->queue, (void *) ifp->rx.ptr)
-                   : ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len,
-                                     ifp->driver_data);
+                   : ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len, ifp);
   qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
   mip_rx(ifp, (void *) ifp->rx.ptr, len);
   qp_mark(QP_FRAMEDONE, (int) q_space(&ifp->queue));
@@ -809,8 +849,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 // This function executes in interrupt context, thus it should copy data
 // somewhere fast. Note that newlib's malloc is not thread safe, thus use
 // our lock-free queue with preallocated buffer to copy data and return asap
-static void on_rx(void *buf, size_t len, void *userdata) {
-  struct mip_if *ifp = (struct mip_if *) userdata;
+void mip_rxcb(void *buf, size_t len, struct mip_if *ifp) {
   if (q_write(&ifp->queue, buf, len)) {
     qp_mark(QP_FRAMEPUSHED, (int) q_space(&ifp->queue));
   } else {
@@ -821,22 +860,19 @@ static void on_rx(void *buf, size_t len, void *userdata) {
 }
 
 void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
-  if (ifp->driver->init && !ifp->driver->init(ifp->mac, ifp->driver_data)) {
+  if (ifp->driver->init && !ifp->driver->init(ifp)) {
     MG_ERROR(("driver init failed"));
   } else {
     size_t maxpktsize = 1540;
     ifp->rx.ptr = (char *) calloc(1, maxpktsize), ifp->rx.len = maxpktsize;
     ifp->tx.ptr = (char *) calloc(1, maxpktsize), ifp->tx.len = maxpktsize;
-    if (ifp->driver->setrx) {
-      ifp->queue.len = MIP_QSIZE;
-      ifp->queue.buf = (uint8_t *) calloc(1, ifp->queue.len);
-      ifp->driver->setrx(on_rx, ifp);
-    }
+    if (ifp->queue.len) ifp->queue.buf = (uint8_t *) calloc(1, ifp->queue.len);
     ifp->timer_1000ms = mg_millis();
     arp_cache_init(ifp->arp_cache, MIP_ARP_ENTRIES, 12);
     mgr->priv = ifp;
     ifp->mgr = mgr;
     mgr->extraconnsize = sizeof(struct connstate);
+    if (ifp->ip == 0) ifp->enable_dhcp_client = true;
 #ifdef MIP_QPROFILE
     qp_init();
 #endif

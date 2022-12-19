@@ -22,8 +22,8 @@ void signal_handler(int signo) {
   s_signo = signo;
 }
 
-static size_t tap_tx(const void *buf, size_t len, void *userdata) {
-  ssize_t res = write(*(int*) userdata, buf, len);
+static size_t tap_tx(const void *buf, size_t len, struct mip_if *ifp) {
+  ssize_t res = write(*(int*) ifp->driver_data, buf, len);
   if (res < 0) {
     MG_ERROR(("tap_tx failed: %d", errno));
     return 0;
@@ -31,12 +31,12 @@ static size_t tap_tx(const void *buf, size_t len, void *userdata) {
   return (size_t) res;
 }
 
-static bool tap_up(void *userdata) {
-  return userdata ? true : false;
+static bool tap_up(struct mip_if *ifp) {
+  return ifp->driver_data ? true : false;
 }
 
-static size_t tap_rx(void *buf, size_t len, void *userdata) {
-  ssize_t received = read(*(int *) userdata, buf, len);
+static size_t tap_rx(void *buf, size_t len, struct mip_if *ifp) {
+  ssize_t received = read(*(int *) ifp->driver_data, buf, len);
   usleep(1);  // This is to avoid 100% CPU
   if (received < 0) return 0;
   return (size_t) received;
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
   mg_mgr_init(&mgr);  // Initialise event manager
 
   struct mip_driver driver = {.tx = tap_tx, .up = tap_up, .rx = tap_rx};
-  struct mip_if mif = {.use_dhcp = true, .driver = &driver, .driver_data = &fd};
+  struct mip_if mif = {.driver = &driver, .driver_data = &fd};
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
          &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
   mip_init(&mgr, &mif);

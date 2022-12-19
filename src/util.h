@@ -14,6 +14,10 @@ uint64_t mg_millis(void);
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
 
+#define MG_U32(a, b, c, d)                                      \
+  (((uint32_t) ((a) &255) << 24) | ((uint32_t) ((b) &255) << 16) | \
+   ((uint32_t) ((c) &255) << 8) | (uint32_t) ((d) &255))
+
 // Linked list management macros
 #define LIST_ADD_HEAD(type_, head_, elem_) \
   do {                                     \
