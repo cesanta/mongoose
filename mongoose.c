@@ -7334,6 +7334,7 @@ void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
     size_t maxpktsize = 1540;
     ifp->rx.ptr = (char *) calloc(1, maxpktsize), ifp->rx.len = maxpktsize;
     ifp->tx.ptr = (char *) calloc(1, maxpktsize), ifp->tx.len = maxpktsize;
+    if (ifp->driver->rx == NULL && ifp->queue.len == 0) ifp->queue.len = 8192;
     if (ifp->queue.len) ifp->queue.buf = (uint8_t *) calloc(1, ifp->queue.len);
     ifp->timer_1000ms = mg_millis();
     arp_cache_init(ifp->arp_cache, MIP_ARP_ENTRIES, 12);
