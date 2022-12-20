@@ -108,6 +108,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
         }
         break;
       }
+      case MQTT_CMD_PINGREQ: {
+        // The server must send a PINGRESP packet in response to a PINGREQ packet [MQTT-3.12.4-1]
+        MG_INFO(("PINGREQ %p -> PINGRESP", c->fd));
+        mg_mqtt_send_header(c, MQTT_CMD_PINGRESP, 0, 0);
+        break;
+      }
     }
   } else if (ev == MG_EV_ACCEPT) {
     // c->is_hexdumping = 1;
