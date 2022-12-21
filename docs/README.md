@@ -256,6 +256,18 @@ struct mg_connection {
   By default, IO buffer allocation size `MG_IO_SIZE` is 2048: change it to 512
   to trim run-time per-connection memory consumption.
 
+## Architecture diagram
+
+In the Operating System environment, Mongoose uses BSD sockets API provided
+by the OS's TCP/IP stack:
+
+![](images/arch2.svg)
+
+In the embedded bare metal environment, Mongoose can utilise its own built-in
+stack with network drivers - i.e. it can run directly on top of the hardware:
+
+![](images/arch1.svg)
+
 ## Build options
 
 Mongoose source code ships in two files:
@@ -352,28 +364,26 @@ systems, follow the outline below:
 
 1. Add `-DMG_ARCH=MG_ARCH_CUSTOM` to your build flags.
 2. Create a file called `mongoose_custom.h`, with defines and includes that
-are relevant to your platform. Mongoose uses `bool` type, `MG_DIRSEP` define,
-and optionally other structures like `DIR *` depending on the functionality
-you have enabled - see previous section. Below is an example:
-
-```c
-#include <stdbool.h>
-#include <stdarg.h>
-
-#define MG_DIRSEP '/'
-#define MG_INT64_FMT "%lld"
-```
-You can also add
-```c
-#define MG_ARCH MG_ARCH_CUSTOM
-```
-To this file, instead of adding build flags.
+   are relevant to your platform. Mongoose uses `bool` type, `MG_DIRSEP` define,
+   and optionally other structures like `DIR *` depending on the functionality
+   you have enabled - see previous section. Below is an example:
+   ```c
+   #include <stdbool.h>
+   #include <stdarg.h>
+ 
+   #define MG_DIRSEP '/'
+   #define MG_INT64_FMT "%lld"
+   ```
+   You can also add a `MG_ARCH` definition:
+   ```c
+   #define MG_ARCH MG_ARCH_CUSTOM
+   ```
 3. This step is optional, and only required if you intend to use a custom
    TCP/IP stack. To do that, you should:
   * Disable BSD socket API: in the `mongoose_custom.h`, add
-  ```c
-  #define MG_ENABLE_SOCKET 0
-  ```
+   ```c
+   #define MG_ENABLE_SOCKET 0
+   ```
   * Add an implementation of several internal API functions, like
   `mg_send()`, `mg_mgr_poll()`, etc. For the reference, take
   a look at the stub
