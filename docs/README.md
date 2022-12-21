@@ -193,6 +193,28 @@ struct mg_connection {
 
 ## Best practices
 
+- Debug log. To increase debug verbosity, call `mg_log_set()`:
+  ```c
+  mg_log_set(MG_LL_DEBUG);
+  mg_mgr_init(&mgr);
+  ```
+  The `MG_INFO()`, `MG_DEBUG()` logging macros use `putchar()` by default,
+  i.e. they use standard C `stdout` stream. That works fine on the traditional
+  OS. In the embedded environment, in order to see debug output, two ways
+  are possible: IO retargeting or Mongoose log redirection. IO retargeting
+  can already be implemented by an embedded SDK - for example ESP32 SDK
+  redirects `printf()` to the UART0. Otherwise, IO retargeting can be
+  implemented manually, see
+  [guide](https://github.com/cpq/bare-metal-programming-guide#redirect-printf-to-uart)
+  for more details.
+  The alternative way is to redirect Mongoose logs:
+  ```c
+  void log_fn(char ch, void *param) {
+    output_a_single_character_to_UART(ch);
+  }
+  ...
+  mg_log_set_fn(log_fn, param);  // Use our custom log function
+  ```
 - If you need to perform any sort of initialisation of your connection,
   do it by catching `MG_EV_OPEN` event. That event is sent immediately
   after a connection has been allocated and added to the event manager,
