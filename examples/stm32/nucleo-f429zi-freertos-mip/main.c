@@ -48,7 +48,7 @@ static void server(void *args) {
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
   MG_INFO(("Initializing Ethernet driver"));
   ethernet_init();
-  struct mip_driver_stm32 driver_data = {.mdc_cr = 4};  // See driver_stm32.h
+  struct mip_driver_stm32_data driver_data = {.mdc_cr = 4};  // See driver_stm32.h
   struct mip_if mif = {
       .mac = {2, 0, 1, 2, 3, 5},
       .driver = &mip_driver_stm32,
