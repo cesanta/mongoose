@@ -6261,7 +6261,7 @@ static int guess_mdc_cr(void) {
 }
 
 static bool mip_driver_tm4c_init(struct mip_if *ifp) {
-  struct mip_driver_tm4c *d = (struct mip_driver_tm4c *) ifp->driver_data;
+  struct mip_driver_tm4c_data *d = (struct mip_driver_tm4c_data *) ifp->driver_data;
   s_ifp = ifp;
 
   // Init RX descriptors

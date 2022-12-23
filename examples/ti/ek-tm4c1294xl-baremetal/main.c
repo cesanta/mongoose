@@ -86,7 +86,7 @@ int main(void) {
   // Initialize Mongoose network stack
   // Specify MAC address, and IP/mask/GW in network byte order for static
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
-  struct mip_driver_tm4c driver_data = {.mdc_cr = 1};  // See driver_tm4c.h
+  struct mip_driver_tm4c_data driver_data = {.mdc_cr = 1};  // See driver_tm4c.h
   struct mip_if mif = {
       .mac = {2, 0, 1, 2, 3, 5},
       .driver = &mip_driver_tm4c,
