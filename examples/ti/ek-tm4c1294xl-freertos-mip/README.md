@@ -37,4 +37,6 @@ To see debug log, use any serial monitor program like `picocom` at 115200 bps an
 $ picocom /dev/ttyACM0 -i -b 115200 --imap=lfcrlf
 ```
 
+There is also a [detailed tutorial on this example](https://mongoose.ws/tutorials/ti/ek-tm4c1294xl-freertos-mip/)
+
 For more details and benchmark data on MIP, check the [F746ZG baremetal example](../../stm32/nucleo-f746zg-baremetal/)
