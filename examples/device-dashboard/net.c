@@ -10,7 +10,9 @@
 #define MQTT_SUBSCRIBE_TOPIC "mg/#"
 
 static time_t s_boot_timestamp = 0;               // Updated by SNTP
+#ifndef DISABLE_ROUTING
 static struct mg_connection *s_sntp_conn = NULL;  // SNTP connection
+#endif
 
 // Define a system time alternative
 time_t ourtime(time_t *tp) {
@@ -94,6 +96,8 @@ static void timer_metrics_fn(void *param) {
                     10 + (int) ((double) rand() * 10 / RAND_MAX));
 }
 
+#ifndef DISABLE_ROUTING
+
 // MQTT event handler function
 static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
   if (ev == MG_EV_CONNECT && mg_url_is_ssl(s_config.url)) {
@@ -154,13 +158,17 @@ static void timer_sntp_fn(void *param) {  // SNTP timer function. Sync up time
   }
 }
 
+#endif
+
 // HTTP request handler function
 void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
                          void *fn_data) {
   if (ev == MG_EV_OPEN && c->is_listening) {
     mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_metrics_fn, c->mgr);
+#ifndef DISABLE_ROUTING
     mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_mqtt_fn, c->mgr);
     mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_sntp_fn, c->mgr);
+#endif
     s_config.url = strdup(MQTT_SERVER);
     s_config.pub = strdup(MQTT_PUBLISH_TOPIC);
     s_config.sub = strdup(MQTT_SUBSCRIBE_TOPIC);
@@ -179,9 +187,14 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       // All URIs starting with /api/ must be authenticated
       mg_http_reply(c, 403, "", "Denied\n");
     } else if (mg_http_match_uri(hm, "/api/config/get")) {
+#ifdef DISABLE_ROUTING
+      mg_http_reply(c, 200, NULL, "{%Q:%Q,%Q:%Q,%Q:%Q}\n", "url", s_config.url,
+                    "pub", s_config.pub, "sub", s_config.sub);
+#else
       mg_http_reply(c, 200, NULL, "{%Q:%Q,%Q:%Q,%Q:%Q,%Q:%s}\n", "url",
                     s_config.url, "pub", s_config.pub, "sub", s_config.sub,
                     "connected", s_connected ? "true" : "false");
+#endif
     } else if (mg_http_match_uri(hm, "/api/config/set")) {
       // Admins only
       if (strcmp(u->name, "admin") == 0) {
