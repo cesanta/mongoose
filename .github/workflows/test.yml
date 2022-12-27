@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - run: sudo apt -y install libmbedtls-dev libpcap-dev gcc-arm-none-eabi
+    - run: sudo apt -y install libmbedtls-dev libpcap-dev
     - run: make clean examples
     - run: make clean test MG_ENABLE_POLL=1
   macos:
@@ -130,6 +130,7 @@ jobs:
     name: ${{ matrix.example.path }}
     steps:
       - uses: actions/checkout@v3
+      - run: sudo apt -y install gcc-arm-none-eabi
       - name: ${{ matrix.example.path }}
         run: make -C examples/${{ matrix.example.path }} build
   zephyr_examples:
