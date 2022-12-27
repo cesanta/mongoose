@@ -12,6 +12,8 @@ YQ ?= yq
 
 example:
 	true
+clean:
+	true
 
 init:
 ifeq ($(wildcard $(ZEPHYR_PATH)/.*),)
@@ -26,4 +28,3 @@ minify:
 	$(YQ) -i eval '(.manifest.defaults, .manifest.remotes, .manifest.projects[] | select(.name == "cmsis" or .name == "hal_stm32" or .name == "mbedtls" or .name == "mcuboot" or .name == "picolibc" | del(.null) ), .manifest.self) as $$i ireduce({};setpath($$i | path; $$i)) | del(.manifest.projects.[].null) | del(..|select(length==0))' zephyrproject/zephyr/west.yml
 
 zephyr: init minify update
-

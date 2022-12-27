@@ -91,7 +91,7 @@ jobs:
         example:
           - path: esp32/device-dashboard
           - path: esp32/uart-bridge
-          - path: esp8266
+          - path: esp8266/http-client-server
           - path: stm32/stm32-freertos-tcp
           - path: stm32/stm32-nucleo-f746z
           - path: stm32/stm32-nucleo-f746zg
