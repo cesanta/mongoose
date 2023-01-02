@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - run: sudo apt -y install libmbedtls-dev libpcap-dev gcc-arm-none-eabi
+    - run: sudo apt -y install libmbedtls-dev libpcap-dev
     - run: make clean examples
     - run: make clean test MG_ENABLE_POLL=1
   macos:
@@ -91,7 +91,7 @@ jobs:
         example:
           - path: esp32/device-dashboard
           - path: esp32/uart-bridge
-          - path: esp8266
+          - path: esp8266/http-client-server
           - path: stm32/stm32-freertos-tcp
           - path: stm32/stm32-nucleo-f746z
           - path: stm32/stm32-nucleo-f746zg
@@ -99,8 +99,10 @@ jobs:
           - path: stm32/stm32-nucleo-h743z
           - path: stm32/nucleo-f429zi-baremetal
           - path: stm32/nucleo-f429zi-freertos-mip
+          - path: stm32/nucleo-f429zi-usb-rndis
           - path: stm32/nucleo-f746zg-baremetal
           - path: stm32/nucleo-f746zg-freertos-mip
+          - path: stm32/nucleo-f746zg-usb-rndis
           - path: nxp/nxp-mimxrt1020-azurertos
           - path: nxp/nxp-frdmk66f-freertos
           - path: nxp/nxp-lpcxpresso54s018m-freertos
@@ -128,6 +130,7 @@ jobs:
     name: ${{ matrix.example.path }}
     steps:
       - uses: actions/checkout@v3
+      - run: sudo apt -y install gcc-arm-none-eabi
       - name: ${{ matrix.example.path }}
         run: make -C examples/${{ matrix.example.path }} build
   zephyr_examples:
