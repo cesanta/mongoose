@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - run: sudo apt -y install libmbedtls-dev libpcap-dev gcc-arm-none-eabi
+    - run: sudo apt -y install libmbedtls-dev libpcap-dev
     - run: make clean examples
     - run: make clean test MG_ENABLE_POLL=1
   macos:
@@ -126,7 +126,8 @@ jobs:
           - path: ti/ti-ek-tm4c1294xl-http-server
           - path: ti/ek-tm4c1294xl-baremetal
           - path: ti/ek-tm4c1294xl-freertos-mip
-          - path: raspberry/raspberry-pi-pico-w
+          - path: raspberry/rp2040/pico-w
+          - path: raspberry/rp2040/pico-w5500
     name: ${{ matrix.example.path }}
     steps:
       - uses: actions/checkout@v3
