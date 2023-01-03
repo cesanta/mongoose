@@ -52,7 +52,10 @@ struct mip_if {
 
 void mip_init(struct mg_mgr *, struct mip_if *);
 void mip_free(struct mip_if *);
-void mip_rxcb(void *buf, size_t len, struct mip_if *ifp);
+void mip_qwrite(void *buf, size_t len, struct mip_if *ifp);
+size_t mip_qread(void *buf, struct mip_if *ifp);
+// conveniency rx function for IRQ-driven drivers
+size_t mip_driver_rx(void *buf, size_t len, struct mip_if *ifp);
 
 extern struct mip_driver mip_driver_stm32;
 extern struct mip_driver mip_driver_w5500;

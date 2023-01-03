@@ -147,6 +147,7 @@ static bool mip_driver_stm32_init(struct mip_if *ifp) {
   ETH->MACA0LR = (uint32_t) (ifp->mac[3] << 24) |
                  ((uint32_t) ifp->mac[2] << 16) |
                  ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
+  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   return true;
 }
 
@@ -191,7 +192,7 @@ void ETH_IRQHandler(void) {
         uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (BIT(14) - 1));
         //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
         //  ETH->DMASR);
-        mip_rxcb(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
+        mip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
       }
       s_rxdesc[s_rxno][0] = BIT(31);
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
@@ -202,5 +203,5 @@ void ETH_IRQHandler(void) {
 }
 
 struct mip_driver mip_driver_stm32 = {
-    mip_driver_stm32_init, mip_driver_stm32_tx, NULL, mip_driver_stm32_up};
+    mip_driver_stm32_init, mip_driver_stm32_tx, mip_driver_rx, mip_driver_stm32_up};
 #endif

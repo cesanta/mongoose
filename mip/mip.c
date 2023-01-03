@@ -452,11 +452,11 @@ static void rx_dhcp_server(struct mip_if *ifp, struct pkt *pkt) {
   while (p + 1 < end && p[0] != 255) {             // Parse options
     if (p[0] == 53 && p[1] == 1 && p + 2 < end) {  // Message type
       op = p[2];
-    } 
+    }
     p += p[1] + 2;
   }
-  if (op == 1 || op == 3) {  // DHCP Discover or DHCP Request
-    uint8_t msg = op == 1 ? 2 : 5;  // Message type: DHCP OFFER or DHCP ACK 
+  if (op == 1 || op == 3) {         // DHCP Discover or DHCP Request
+    uint8_t msg = op == 1 ? 2 : 5;  // Message type: DHCP OFFER or DHCP ACK
     uint8_t opts[] = {
         53, 1, msg,                 // Message type
         1,  4, 0,   0,   0,   0,    // Subnet mask
@@ -815,10 +815,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   }
 
   // Read data from the network
-  size_t len = ifp->queue.len > 0
-                   ? q_read(&ifp->queue, (void *) ifp->rx.ptr)
-                   : ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len, ifp);
-  qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
+  size_t len = ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len, ifp);
   mip_rx(ifp, (void *) ifp->rx.ptr, len);
   qp_mark(QP_FRAMEDONE, (int) q_space(&ifp->queue));
 
@@ -849,7 +846,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 // This function executes in interrupt context, thus it should copy data
 // somewhere fast. Note that newlib's malloc is not thread safe, thus use
 // our lock-free queue with preallocated buffer to copy data and return asap
-void mip_rxcb(void *buf, size_t len, struct mip_if *ifp) {
+void mip_qwrite(void *buf, size_t len, struct mip_if *ifp) {
   if (q_write(&ifp->queue, buf, len)) {
     qp_mark(QP_FRAMEPUSHED, (int) q_space(&ifp->queue));
   } else {
@@ -859,6 +856,17 @@ void mip_rxcb(void *buf, size_t len, struct mip_if *ifp) {
   }
 }
 
+size_t mip_qread(void *buf, struct mip_if *ifp) {
+  size_t len = q_read(&ifp->queue, buf);
+  qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
+  return len;
+}
+
+size_t mip_driver_rx(void *buf, size_t len, struct mip_if *ifp) {
+  return mip_qread((void *) ifp->rx.ptr, ifp);
+  (void) len, (void) buf;
+}
+
 void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
   if (ifp->driver->init && !ifp->driver->init(ifp)) {
     MG_ERROR(("driver init failed"));
@@ -866,7 +874,6 @@ void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
     size_t maxpktsize = 1540;
     ifp->rx.ptr = (char *) calloc(1, maxpktsize), ifp->rx.len = maxpktsize;
     ifp->tx.ptr = (char *) calloc(1, maxpktsize), ifp->tx.len = maxpktsize;
-    if (ifp->driver->rx == NULL && ifp->queue.len == 0) ifp->queue.len = 8192;
     if (ifp->queue.len) ifp->queue.buf = (uint8_t *) calloc(1, ifp->queue.len);
     ifp->timer_1000ms = mg_millis();
     arp_cache_init(ifp->arp_cache, MIP_ARP_ENTRIES, 12);
