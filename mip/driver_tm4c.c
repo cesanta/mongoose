@@ -173,6 +173,7 @@ static bool mip_driver_tm4c_init(struct mip_if *ifp) {
   // NOTE(scaprile) There are 3 additional slots for filtering, disabled by
   // default. This also applies to the STM32 driver (at least for F7)
 
+  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   return true;
 }
 
@@ -219,7 +220,7 @@ void EMAC0_IRQHandler(void) {
         uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (BIT(14) - 1));
         //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
         //  EMAC->EMACDMARIS);
-        mip_rxcb(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
+        mip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
       }
       s_rxdesc[s_rxno][0] = BIT(31);
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
@@ -230,5 +231,5 @@ void EMAC0_IRQHandler(void) {
 }
 
 struct mip_driver mip_driver_tm4c = {mip_driver_tm4c_init, mip_driver_tm4c_tx,
-                                     NULL, mip_driver_tm4c_up};
+                                     mip_driver_rx, mip_driver_tm4c_up};
 #endif

@@ -6075,6 +6075,7 @@ static bool mip_driver_stm32_init(struct mip_if *ifp) {
   ETH->MACA0LR = (uint32_t) (ifp->mac[3] << 24) |
                  ((uint32_t) ifp->mac[2] << 16) |
                  ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
+  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   return true;
 }
 
@@ -6119,7 +6120,7 @@ void ETH_IRQHandler(void) {
         uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (BIT(14) - 1));
         //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
         //  ETH->DMASR);
-        mip_rxcb(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
+        mip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
       }
       s_rxdesc[s_rxno][0] = BIT(31);
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
@@ -6130,7 +6131,7 @@ void ETH_IRQHandler(void) {
 }
 
 struct mip_driver mip_driver_stm32 = {
-    mip_driver_stm32_init, mip_driver_stm32_tx, NULL, mip_driver_stm32_up};
+    mip_driver_stm32_init, mip_driver_stm32_tx, mip_driver_rx, mip_driver_stm32_up};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -6311,6 +6312,7 @@ static bool mip_driver_tm4c_init(struct mip_if *ifp) {
   // NOTE(scaprile) There are 3 additional slots for filtering, disabled by
   // default. This also applies to the STM32 driver (at least for F7)
 
+  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   return true;
 }
 
@@ -6357,7 +6359,7 @@ void EMAC0_IRQHandler(void) {
         uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (BIT(14) - 1));
         //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
         //  EMAC->EMACDMARIS);
-        mip_rxcb(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
+        mip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
       }
       s_rxdesc[s_rxno][0] = BIT(31);
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
@@ -6368,7 +6370,7 @@ void EMAC0_IRQHandler(void) {
 }
 
 struct mip_driver mip_driver_tm4c = {mip_driver_tm4c_init, mip_driver_tm4c_tx,
-                                     NULL, mip_driver_tm4c_up};
+                                     mip_driver_rx, mip_driver_tm4c_up};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -6921,11 +6923,11 @@ static void rx_dhcp_server(struct mip_if *ifp, struct pkt *pkt) {
   while (p + 1 < end && p[0] != 255) {             // Parse options
     if (p[0] == 53 && p[1] == 1 && p + 2 < end) {  // Message type
       op = p[2];
-    } 
+    }
     p += p[1] + 2;
   }
-  if (op == 1 || op == 3) {  // DHCP Discover or DHCP Request
-    uint8_t msg = op == 1 ? 2 : 5;  // Message type: DHCP OFFER or DHCP ACK 
+  if (op == 1 || op == 3) {         // DHCP Discover or DHCP Request
+    uint8_t msg = op == 1 ? 2 : 5;  // Message type: DHCP OFFER or DHCP ACK
     uint8_t opts[] = {
         53, 1, msg,                 // Message type
         1,  4, 0,   0,   0,   0,    // Subnet mask
@@ -7284,10 +7286,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
   }
 
   // Read data from the network
-  size_t len = ifp->queue.len > 0
-                   ? q_read(&ifp->queue, (void *) ifp->rx.ptr)
-                   : ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len, ifp);
-  qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
+  size_t len = ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len, ifp);
   mip_rx(ifp, (void *) ifp->rx.ptr, len);
   qp_mark(QP_FRAMEDONE, (int) q_space(&ifp->queue));
 
@@ -7318,7 +7317,7 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 // This function executes in interrupt context, thus it should copy data
 // somewhere fast. Note that newlib's malloc is not thread safe, thus use
 // our lock-free queue with preallocated buffer to copy data and return asap
-void mip_rxcb(void *buf, size_t len, struct mip_if *ifp) {
+void mip_qwrite(void *buf, size_t len, struct mip_if *ifp) {
   if (q_write(&ifp->queue, buf, len)) {
     qp_mark(QP_FRAMEPUSHED, (int) q_space(&ifp->queue));
   } else {
@@ -7328,6 +7327,17 @@ void mip_rxcb(void *buf, size_t len, struct mip_if *ifp) {
   }
 }
 
+size_t mip_qread(void *buf, struct mip_if *ifp) {
+  size_t len = q_read(&ifp->queue, buf);
+  qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
+  return len;
+}
+
+size_t mip_driver_rx(void *buf, size_t len, struct mip_if *ifp) {
+  return mip_qread((void *) ifp->rx.ptr, ifp);
+  (void) len, (void) buf;
+}
+
 void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
   if (ifp->driver->init && !ifp->driver->init(ifp)) {
     MG_ERROR(("driver init failed"));
@@ -7335,7 +7345,6 @@ void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
     size_t maxpktsize = 1540;
     ifp->rx.ptr = (char *) calloc(1, maxpktsize), ifp->rx.len = maxpktsize;
     ifp->tx.ptr = (char *) calloc(1, maxpktsize), ifp->tx.len = maxpktsize;
-    if (ifp->driver->rx == NULL && ifp->queue.len == 0) ifp->queue.len = 8192;
     if (ifp->queue.len) ifp->queue.buf = (uint8_t *) calloc(1, ifp->queue.len);
     ifp->timer_1000ms = mg_millis();
     arp_cache_init(ifp->arp_cache, MIP_ARP_ENTRIES, 12);

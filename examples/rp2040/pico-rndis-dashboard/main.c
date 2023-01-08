@@ -15,7 +15,7 @@ static void blink_cb(void *arg) {  // Blink periodically
 }
 
 bool tud_network_recv_cb(const uint8_t *buf, uint16_t len) {
-  mip_rxcb((void *) buf, len, s_ifp);
+  mip_qwrite((void *) buf, len, s_ifp);
   // MG_INFO(("RECV %hu", len));
   // mg_hexdump(buf, len);
   tud_network_recv_renew();
@@ -55,7 +55,7 @@ int main(void) {
   mg_mgr_init(&mgr);        // and attach it to the MIP interface
   mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, blink_cb, &mgr);
 
-  struct mip_driver driver = {.tx = usb_tx, .up = usb_up};
+  struct mip_driver driver = {.tx = usb_tx, .rx = mip_driver_rx, .up = usb_up};
   struct mip_if mif = {.mac = {2, 0, 1, 2, 3, 0x77},
                        .ip = mg_htonl(MG_U32(192, 168, 3, 1)),
                        .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
