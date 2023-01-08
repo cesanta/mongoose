@@ -3649,6 +3649,7 @@ static size_t print_methods(mg_pfn_t pfn, void *pfn_data, va_list *ap) {
   struct mg_rpc *h, **head = (struct mg_rpc **) va_arg(*ap, void **);
   size_t len = 0;
   for (h = *head; h != NULL; h = h->next) {
+    if (h->method.len == 0) continue;  // Ignore response handler
     len += mg_xprintf(pfn, pfn_data, "%s%.*Q", h == *head ? "" : ",",
                       (int) h->method.len, h->method.ptr);
   }
