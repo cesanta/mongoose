@@ -105,8 +105,6 @@ int main(void) {
   gpio_init(PIN('A', 10), GPIO_MODE_AF, GPIO_OTYPE_OPEN_DRAIN, GPIO_SPEED_HIGH,
             GPIO_PULL_UP, 10);                    // ID
   RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;            // Enable USB FS clock
-  USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_NOVBUSSENS;  // VBUS sensing disable
-  USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_VBUSBSEN;    // VBUS sensing enable
   tusb_init();
 
   MG_INFO(("Init done, starting main loop ..."));
