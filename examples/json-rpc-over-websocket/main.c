@@ -30,7 +30,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_WS_OPEN) {
-    c->label[0] = 'W';  // Mark this connection as an established WS client
+    c->data[0] = 'W';  // Mark this connection as an established WS client
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/websocket")) {
@@ -58,7 +58,7 @@ static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
   // Broadcast message to all connected websocket clients.
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
-    if (c->label[0] != 'W') continue;
+    if (c->data[0] != 'W') continue;
     mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%Q:%Q,%Q:[%d,%d,%d]}", "method",
                  "notification1", "params", 1, 2, 3);
   }

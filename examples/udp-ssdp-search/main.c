@@ -10,8 +10,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
     //    c->is_hexdumping = 1;
   } else if (ev == MG_EV_RESOLVE) {
-    // c->rem gets populated with multicast address. Store it in c->label
-    memcpy(c->label, &c->rem, sizeof(c->rem));
+    // c->rem gets populated with multicast address. Store it in c->data
+    memcpy(c->data, &c->rem, sizeof(c->rem));
   } else if (ev == MG_EV_READ) {
     MG_INFO(("Got a response"));
     struct mg_http_message hm;
@@ -32,7 +32,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // We can now do mg_printf(c, "haha"); to respond back to the remote side.
     // But in our case, we should restore the multicast address in order
     // to have next search to go to the multicast address
-    memcpy(&c->rem, c->label, sizeof(c->rem));
+    memcpy(&c->rem, c->data, sizeof(c->rem));
     // Discard the content of this response as we expect each SSDP response
     // to generate at most one MG_EV_READ event.
     c->recv.len = 0UL;

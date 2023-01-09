@@ -78,7 +78,7 @@ static struct user *getuser(struct mg_http_message *hm) {
 static void send_notification(struct mg_mgr *mgr, const char *fmt, ...) {
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->label[0] == 'W') {
+    if (c->data[0] == 'W') {
       va_list ap;
       va_start(ap, fmt);
       mg_ws_vprintf(c, WEBSOCKET_OP_TEXT, fmt, &ap);
@@ -202,7 +202,7 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       }
       mg_http_reply(c, 200, "", "ok\n");
     } else if (mg_http_match_uri(hm, "/api/watch")) {
-      c->label[0] = 'W';  // Mark ourselves as a event listener
+      c->data[0] = 'W';  // Mark ourselves as a event listener
       mg_ws_upgrade(c, hm, NULL);
     } else if (mg_http_match_uri(hm, "/api/login")) {
       mg_http_reply(c, 200, NULL, "{%Q:%Q,%Q:%Q}\n", "user", u->name, "token",

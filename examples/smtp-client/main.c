@@ -15,7 +15,7 @@ static bool s_quit;
 enum { EHLO, STARTTLS, STARTTLS_WAIT, AUTH, FROM, TO, DATA, BODY, QUIT, END };
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  uint8_t *state = (uint8_t *) c->label;
+  uint8_t *state = (uint8_t *) c->data;
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_READ) {

@@ -55,7 +55,7 @@ static void handshake(struct mg_connection *c) {
     }
     mg_iobuf_del(r, 0, 2 + r->buf[1]);
     mg_send(c, reply, sizeof(reply));
-    c->label[0] = STATE_REQUEST;
+    c->data[0] = STATE_REQUEST;
   }
 }
 
@@ -146,15 +146,15 @@ static void request(struct mg_connection *c) {
   }
   mg_send(c, r->buf + 3, addr_len + 1 + 2);
   mg_iobuf_del(r, 0, 6 + addr_len);  // Remove request from the input stream
-  c->label[0] = STATE_ESTABLISHED;   // Mark ourselves as connected
+  c->data[0] = STATE_ESTABLISHED;   // Mark ourselves as connected
 }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_READ) {
     // We use the first label byte as a state
-    if (c->label[0] == STATE_HANDSHAKE) handshake(c);
-    if (c->label[0] == STATE_REQUEST) request(c);
-    if (c->label[0] == STATE_ESTABLISHED) exchange(c);
+    if (c->data[0] == STATE_HANDSHAKE) handshake(c);
+    if (c->data[0] == STATE_REQUEST) request(c);
+    if (c->data[0] == STATE_ESTABLISHED) exchange(c);
   } else if (ev == MG_EV_CLOSE) {
     disband(c);
   }

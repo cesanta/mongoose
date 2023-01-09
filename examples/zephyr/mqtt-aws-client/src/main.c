@@ -32,13 +32,13 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("Connected to %s", s_url));
     MG_INFO(("Subscribing to %s", s_rx_topic));
     mg_mqtt_sub(c, topic, s_qos);
-    c->label[0] = 'X';  // Set a label that we're logged in
+    c->data[0] = 'X';  // Set a label that we're logged in
   } else if (ev == MG_EV_MQTT_MSG) {
     // When we receive MQTT message, print it
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     MG_INFO(("Received on %.*s : %.*s", (int) mm->topic.len, mm->topic.ptr,
              (int) mm->data.len, mm->data.ptr));
-  } else if (ev == MG_EV_POLL && c->label[0] == 'X') {
+  } else if (ev == MG_EV_POLL && c->data[0] == 'X') {
     static unsigned long prev_second;
     unsigned long now_second = (*(unsigned long *) ev_data) / 1000;
     if (now_second != prev_second) {
