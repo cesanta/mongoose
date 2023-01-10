@@ -1914,19 +1914,19 @@ static void test_http_upload(void) {
 static void eX(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
-    c->label[0] = 1;
+    c->data[0] = 1;
     c->is_hexdumping = 1;
-  } else if (ev == MG_EV_POLL && c->label[0] != 0) {
-    c->label[0]++;
-    if (c->label[0] == 10) mg_http_printf_chunk(c, "a");
-    if (c->label[0] == 20) {
+  } else if (ev == MG_EV_POLL && c->data[0] != 0) {
+    c->data[0]++;
+    if (c->data[0] == 10) mg_http_printf_chunk(c, "a");
+    if (c->data[0] == 20) {
       mg_http_printf_chunk(c, "b");
       mg_http_printf_chunk(c, "c");
     }
-    if (c->label[0] == 30) {
+    if (c->data[0] == 30) {
       mg_http_printf_chunk(c, "d");
       mg_http_printf_chunk(c, "");
-      c->label[0] = 0;
+      c->data[0] = 0;
     }
   }
   (void) ev_data, (void) fn_data;
@@ -1935,12 +1935,12 @@ static void eX(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void eY(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n");
-    c->label[0] = 1;
-  } else if (ev == MG_EV_POLL && c->label[0] != 0) {
-    c->label[0]++;
-    if (c->label[0] == 10) mg_send(c, "a", 1);
-    if (c->label[0] == 12) mg_send(c, "bc", 2);
-    if (c->label[0] == 30) mg_send(c, "d", 1), c->is_resp = 0, c->label[0] = 0;
+    c->data[0] = 1;
+  } else if (ev == MG_EV_POLL && c->data[0] != 0) {
+    c->data[0]++;
+    if (c->data[0] == 10) mg_send(c, "a", 1);
+    if (c->data[0] == 12) mg_send(c, "bc", 2);
+    if (c->data[0] == 30) mg_send(c, "d", 1), c->is_resp = 0, c->data[0] = 0;
   }
   (void) ev_data, (void) fn_data;
 }

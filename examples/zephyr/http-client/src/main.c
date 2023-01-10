@@ -16,10 +16,10 @@ static bool done = false;
 // Print HTTP response and signal that we're done
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
-    // Connection created. Store connect expiration time in c->label
-    *(int64_t *) c->label = mg_millis() + s_timeout_ms;
+    // Connection created. Store connect expiration time in c->data
+    *(int64_t *) c->data = mg_millis() + s_timeout_ms;
   } else if (ev == MG_EV_POLL) {
-    if (mg_millis() > *(int64_t *) c->label &&
+    if (mg_millis() > *(int64_t *) c->data &&
         (c->is_connecting || c->is_resolving)) {
       mg_error(c, "Connect timeout");
     }

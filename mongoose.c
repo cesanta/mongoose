@@ -1715,7 +1715,7 @@ static void static_cb(struct mg_connection *c, int ev, void *ev_data,
     struct mg_fd *fd = (struct mg_fd *) fn_data;
     // Read to send IO buffer directly, avoid extra on-stack buffer
     size_t n, max = MG_IO_SIZE, space;
-    size_t *cl = (size_t *) &c->label[(sizeof(c->label) - sizeof(size_t)) /
+    size_t *cl = (size_t *) &c->data[(sizeof(c->data) - sizeof(size_t)) /
                                       sizeof(size_t) * sizeof(size_t)];
     if (c->send.size < max) mg_iobuf_resize(&c->send, max);
     if (c->send.len >= c->send.size) return;  // Rate limit
@@ -1887,8 +1887,8 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
       c->is_resp = 0;
       mg_fs_close(fd);
     } else {
-      // Track to-be-sent content length at the end of c->label, aligned
-      size_t *clp = (size_t *) &c->label[(sizeof(c->label) - sizeof(size_t)) /
+      // Track to-be-sent content length at the end of c->data, aligned
+      size_t *clp = (size_t *) &c->data[(sizeof(c->data) - sizeof(size_t)) /
                                          sizeof(size_t) * sizeof(size_t)];
       c->pfn = static_cb;
       c->pfn_data = fd;
@@ -2342,7 +2342,7 @@ static void mg_hfn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
     if (mg_http_match_uri(hm, "/quit")) {
       mg_http_reply(c, 200, "", "ok\n");
       c->is_draining = 1;
-      c->label[0] = 'X';
+      c->data[0] = 'X';
     } else if (mg_http_match_uri(hm, "/debug")) {
       int level = (int) mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
       mg_log_set(level);
@@ -2351,7 +2351,7 @@ static void mg_hfn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
       mg_http_reply(c, 200, "", "hi\n");
     }
   } else if (ev == MG_EV_CLOSE) {
-    if (c->label[0] == 'X') *(bool *) fnd = true;
+    if (c->data[0] == 'X') *(bool *) fnd = true;
   }
 }
 
@@ -4062,8 +4062,8 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       union usa usa;
       socklen_t slen = sizeof(usa.sin);
       if (getsockname(FD(c), &usa.sa, &slen) < 0) (void) 0;  // Ignore result
-      MG_INFO(("\n-- %lu %I %s %I %s %ld", c->id, 4, &usa.sin.sin_addr,
-               r ? "<-" : "->", 4, &c->rem.ip, c->label, n));
+      MG_INFO(("\n-- %lu %I %s %I %ld", c->id, 4, &usa.sin.sin_addr,
+               r ? "<-" : "->", 4, &c->rem.ip, n));
 
       mg_hexdump(buf, (size_t) n);
     }

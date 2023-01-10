@@ -81,14 +81,16 @@
 #define MG_ENABLE_PACKED_FS 0
 #endif
 
-// Granularity of the send/recv IO buffer growth
 #ifndef MG_IO_SIZE
-#define MG_IO_SIZE 2048
+#define MG_IO_SIZE 2048  // Granularity of the send/recv IO buffer growth
 #endif
 
-// Maximum size of the recv IO buffer
 #ifndef MG_MAX_RECV_SIZE
-#define MG_MAX_RECV_SIZE (3 * 1024 * 1024)
+#define MG_MAX_RECV_SIZE (3 * 1024 * 1024)  // Maximum recv IO buffer size
+#endif
+
+#ifndef MG_DATA_SIZE
+#define MG_DATA_SIZE 32  // struct mg_connection :: data size
 #endif
 
 #ifndef MG_MAX_HTTP_HEADERS

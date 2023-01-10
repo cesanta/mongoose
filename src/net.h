@@ -52,7 +52,7 @@ struct mg_connection {
   void *fn_data;               // User-specified function parameter
   mg_event_handler_t pfn;      // Protocol-specific handler function
   void *pfn_data;              // Protocol-specific function parameter
-  char label[50];              // Arbitrary label
+  char data[MG_DATA_SIZE];     // Arbitrary connection data
   void *tls;                   // TLS specific data
   unsigned is_listening : 1;   // Listening connection
   unsigned is_client : 1;      // Outbound (client) connection

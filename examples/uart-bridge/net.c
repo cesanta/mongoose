@@ -62,7 +62,7 @@ static void ws_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
     mg_ws_upgrade(c, evd, NULL);
   } else if (ev == MG_EV_WS_OPEN) {
     // c->is_hexdumping = 1;
-    c->label[0] = 'W';  // When WS handhake is done, mark us as WS client
+    c->data[0] = 'W';  // When WS handhake is done, mark us as WS client
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) evd;
     uart_write(wm->data.ptr, wm->data.len);  // Send to UART
@@ -77,7 +77,7 @@ static void ws_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
 static void tcp_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_ACCEPT) {
     // c->is_hexdumping = 1;
-    c->label[0] = 'T';  // When client is connected, mark us as TCP client
+    c->data[0] = 'T';  // When client is connected, mark us as TCP client
   } else if (ev == MG_EV_READ) {
     uart_write(c->recv.buf, c->recv.len);  // Send to UART
     c->recv.len = 0;                       // Discard received data
@@ -99,7 +99,7 @@ static void mq_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_MQTT_OPEN) {
-    c->label[0] = 'M';
+    c->data[0] = 'M';
     mg_mqtt_sub(c, mqtt_topic("rx", "b/rx"), 1);  // Subscribe to RX topic
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = evd;        // MQTT message
@@ -131,9 +131,9 @@ static void timer_fn(void *param) {
   if (len > 0) {
     // Iterate over all connections. Send data to WS and TCP clients
     for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
-      if (c->label[0] == 'W') mg_ws_send(c, buf, len, WEBSOCKET_OP_TEXT);
-      if (c->label[0] == 'T') mg_send(c, buf, len);
-      if (c->label[0] == 'M')
+      if (c->data[0] == 'W') mg_ws_send(c, buf, len, WEBSOCKET_OP_TEXT);
+      if (c->data[0] == 'T') mg_send(c, buf, len);
+      if (c->data[0] == 'M')
         mg_mqtt_pub(c, mqtt_topic("tx", "b/tx"), mg_str_n(buf, len), 1, false);
     }
   }

@@ -14,7 +14,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       struct mg_http_serve_opts opts = {.root_dir = NULL};
       mg_http_serve_file(c, hm, "log.txt", &opts);
     } else if (mg_http_match_uri(hm, "/api/log/live")) {
-      c->label[0] = 'L';  // Mark that connection as live log listener
+      c->data[0] = 'L';  // Mark that connection as live log listener
       mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
     } else {
       struct mg_http_serve_opts opts = {.root_dir = "web_root"};
@@ -34,7 +34,7 @@ static void log_message(const char *filename, const char *message) {
 static void broadcast_message(struct mg_mgr *mgr, const char *message) {
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->label[0] == 'L') mg_http_printf_chunk(c, "%s", message);
+    if (c->data[0] == 'L') mg_http_printf_chunk(c, "%s", message);
   }
 }
 

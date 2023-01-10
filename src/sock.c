@@ -101,8 +101,8 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       union usa usa;
       socklen_t slen = sizeof(usa.sin);
       if (getsockname(FD(c), &usa.sa, &slen) < 0) (void) 0;  // Ignore result
-      MG_INFO(("\n-- %lu %I %s %I %s %ld", c->id, 4, &usa.sin.sin_addr,
-               r ? "<-" : "->", 4, &c->rem.ip, c->label, n));
+      MG_INFO(("\n-- %lu %I %s %I %ld", c->id, 4, &usa.sin.sin_addr,
+               r ? "<-" : "->", 4, &c->rem.ip, n));
 
       mg_hexdump(buf, (size_t) n);
     }
