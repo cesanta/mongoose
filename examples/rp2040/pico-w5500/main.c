@@ -26,10 +26,6 @@ static uint8_t spi_txn(void *spi, uint8_t byte) {
   return result;
 }
 
-uint64_t mg_millis(void) {
-  return to_ms_since_boot(get_absolute_time());
-}
-
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     mg_http_reply(c, 200, "", "ok\n");
