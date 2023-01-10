@@ -13,6 +13,4 @@ pico_enable_stdio_usb(example 1)
 pico_enable_stdio_uart(example 0)
 
 # Mongoose build flags
-add_definitions(-DMG_ARCH=MG_ARCH_NEWLIB)
 add_definitions(-DMG_ENABLE_MIP=1)
-add_definitions(-DMG_ENABLE_CUSTOM_MILLIS=1)
