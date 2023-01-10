@@ -1,6 +1,8 @@
 'use strict';
 import {Component, h, html, render, useEffect, useState, useRef} from './preact.min.js';
 
+var devaddr = "address:port";
+
 const MaxMetricsDataPoints = 50;
 
 // This simple publish/subscribe is used to pass notifications that were
@@ -53,14 +55,14 @@ const Hero = props => html`
   using  <code>curl</code> command-line utility:
   </p>
 
-  <div><code>curl -u admin:pass0 localhost:8000/api/config/get</code> </div>
-  <div><code>curl -u admin:pass0 localhost:8000/api/config/set -d 'pub=mg/topic'</code> </div>
-  <div><code>curl -u admin:pass0 localhost:8000/api/message/send -d 'message=hello'</code> </div>
+  <div><code>curl -u admin:pass0 ${devaddr}/api/config/get</code> </div>
+  <div><code>curl -u admin:pass0 ${devaddr}/api/config/set -d 'pub=mg/topic'</code> </div>
+  <div><code>curl -u admin:pass0 ${devaddr}/api/message/send -d 'message=hello'</code> </div>
 
   <p>
   The device can send notifications to this dashboard at anytime. Notifications
   are sent over WebSocket at URI <code>/api/watch</code> as JSON strings: <code>{"name": "..", "data": ...}</code>
-  <div>Try <code>wscat --auth user1:pass1 --connect ws://localhost:8000/api/watch</code></div>
+  <div>Try <code>wscat --auth user1:pass1 --connect ws://${devaddr}/api/watch</code></div>
   </p>
 </div>
 </div>`;
@@ -186,7 +188,8 @@ const Messages = function(props) {
                               method: 'post',
                               body: `message=${encodeURIComponent(txt)}`
                             }).then(r => setTxt(''));
-  const connstatus = props.config.connected ? 'connected' : 'disconnected';
+  const routing = "connected" in props.config;
+  const connstatus = !routing ? 'This device has no MQTT functionality' : props.config.connected ? 'connected' : 'disconnected';
   return html`
 <div class="section">
   <h3 style="background: #30c040; color: #fff; padding: 0.4em;">MQTT messages</h3>
@@ -199,7 +202,7 @@ const Messages = function(props) {
   <div style="margin: 0.5em 0; display: flex">
     <span class="addon nowrap">Publish message:</span>
     <input placeholder="type and press enter..." style="flex: 1 100%;"
-      value=${txt} onchange=${sendmessage}
+      value=${txt} onchange=${sendmessage} disabled=${!routing}
       oninput=${ev => setTxt(ev.target.value)} />
   </div>
   <div class="msg">
