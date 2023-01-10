@@ -7049,7 +7049,7 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   if (tx_tcp(ifp, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
              mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
     s->seq += (uint32_t) len;
-    settmout(c, MIP_TTYPE_KEEPALIVE);
+    //settmout(c, MIP_TTYPE_KEEPALIVE);
   } else {
     return MG_IO_ERR;
   }
@@ -7146,6 +7146,8 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
     mg_call(c, MG_EV_CONNECT, NULL);  // Let user know
   } else if (c != NULL && c->is_connecting) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
+  } else if (pkt->tcp->flags & TH_RST) {
+    c->is_closing = 1;
   } else if (c != NULL) {
 #if 0
     MG_DEBUG(("%lu %d %I:%hu -> %I:%hu", c->id, (int) pkt->raw.len,
