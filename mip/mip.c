@@ -678,6 +678,8 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
     mg_call(c, MG_EV_CONNECT, NULL);  // Let user know
   } else if (c != NULL && c->is_connecting) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
+  } else if (c != NULL && pkt->tcp->flags & TH_RST) {
+    mg_error(c, "peer RST");  // RFC-1122 4.2.2.13
   } else if (c != NULL) {
 #if 0
     MG_DEBUG(("%lu %d %I:%hu -> %I:%hu", c->id, (int) pkt->raw.len,
@@ -688,6 +690,9 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
     read_conn(c, pkt);
   } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
+  } else if (pkt->tcp->flags & TH_RST) {
+    if (c->is_accepted) mg_error(c, "peer RST");  // RFC-1122 4.2.2.13
+    // ignore RST if not connected
   } else if (pkt->tcp->flags & TH_SYN) {
     // Use peer's source port as ISN, in order to recognise the handshake
     uint32_t isn = mg_htonl((uint32_t) mg_ntohs(pkt->tcp->sport));
@@ -696,6 +701,8 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
     tx_tcp_pkt(ifp, pkt, TH_FIN | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (mg_htonl(pkt->tcp->ack) == mg_htons(pkt->tcp->sport) + 1U) {
     accept_conn(c, pkt);
+  } else if (!c->is_accepted ) {  // no peer
+    tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else {
     // MG_DEBUG(("dropped silently.."));
   }
