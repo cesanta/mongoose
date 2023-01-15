@@ -14,8 +14,9 @@
 static uint64_t s_ticks, s_exti;  // Counters, increased by IRQ handlers
 
 static void blink_cb(void *arg) {  // Blink periodically
+  struct mip_if *ifp = arg;
   gpio_toggle(LED1);
-  (void) arg;
+  MG_INFO(("Ethernet: %s", ifp->driver->up(ifp) ? "up": "down"));
 }
 
 uint64_t mg_millis(void) {  // Declare our own uptime function
@@ -81,7 +82,6 @@ int main(void) {
   struct mg_mgr mgr;        // Initialize Mongoose event manager
   mg_mgr_init(&mgr);        // and attach it to the MIP interface
   mg_log_set(MG_LL_DEBUG);  // Set log level
-  mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, blink_cb, &mgr);
 
   // Initialize Mongoose network stack
   // Specify MAC address, and IP/mask/GW in network byte order for static
@@ -98,6 +98,7 @@ int main(void) {
   val |= BIT(17);
   IMC[0xFC8 / sizeof(*IMC)] = val;
   MG_INFO(("Init done, starting main loop"));
+  mg_timer_add(&mgr, 1000, MG_TIMER_REPEAT, blink_cb, &mif);
 
   extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
   mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, &mgr);
