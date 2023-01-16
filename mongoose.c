@@ -7012,12 +7012,21 @@ static size_t tx_tcp_pkt(struct mip_if *ifp, struct pkt *pkt, uint8_t flags,
                 mg_htonl(mg_ntohl(pkt->tcp->seq) + delta), buf, len);
 }
 
+static void settmout(struct mg_connection *c, uint8_t type) {
+  struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
+  struct connstate *s = (struct connstate *) (c + 1);
+  unsigned n = type == MIP_TTYPE_ACK ? MIP_TCP_ACK_MS : MIP_TCP_KEEPALIVE_MS;
+  s->timer = ifp->now + n;
+  s->ttype = type;
+  MG_VERBOSE(("%lu %d -> %llx", c->id, type, s->timer));
+}
+
 static struct mg_connection *accept_conn(struct mg_connection *lsn,
                                          struct pkt *pkt) {
   struct mg_connection *c = mg_alloc_conn(lsn->mgr);
   struct connstate *s = (struct connstate *) (c + 1);
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
-  s->timer = ((struct mip_if *) c->mgr->priv)->now + MIP_TCP_KEEPALIVE_MS;
+  settmout(c, MIP_TTYPE_KEEPALIVE);
   c->rem.ip = pkt->ip->src;
   c->rem.port = pkt->tcp->sport;
   MG_DEBUG(
@@ -7035,15 +7044,6 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   return c;
 }
 
-static void settmout(struct mg_connection *c, uint8_t type) {
-  struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
-  struct connstate *s = (struct connstate *) (c + 1);
-  unsigned n = type == MIP_TTYPE_ACK ? MIP_TCP_ACK_MS : MIP_TCP_KEEPALIVE_MS;
-  s->timer = ifp->now + n;
-  s->ttype = type;
-  MG_VERBOSE(("%lu %d -> %llx", c->id, type, s->timer));
-}
-
 long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
   struct connstate *s = (struct connstate *) (c + 1);
@@ -7052,7 +7052,10 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   if (tx_tcp(ifp, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
              mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
     s->seq += (uint32_t) len;
-    settmout(c, MIP_TTYPE_KEEPALIVE);
+    if (s->ttype == MIP_TTYPE_ACK) {
+      settmout(c, MIP_TTYPE_KEEPALIVE);
+      MG_INFO(("Sent piggybacked ack, restarted keepalive timer"));
+    }
   } else {
     return MG_IO_ERR;
   }
@@ -7134,11 +7137,6 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
 static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
   struct connstate *s = c == NULL ? NULL : (struct connstate *) (c + 1);
-
-  if (c != NULL && s->ttype == MIP_TTYPE_KEEPALIVE) {
-    s->tmiss = 0;                      // Reset missed keep-alive counter
-    settmout(c, MIP_TTYPE_KEEPALIVE);  // Advance keep-alive timer
-  }
 #if 0
   MG_INFO(("%lu %hhu %d", c ? c->id : 0, pkt->tcp->flags, (int) pkt->pay.len));
 #endif
@@ -7146,6 +7144,7 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
     s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
     tx_tcp_pkt(ifp, pkt, TH_ACK, pkt->tcp->ack, NULL, 0);
     c->is_connecting = 0;             // Client connected
+    settmout(c, MIP_TTYPE_KEEPALIVE);
     mg_call(c, MG_EV_CONNECT, NULL);  // Let user know
   } else if (c != NULL && c->is_connecting) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
@@ -7158,7 +7157,10 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
               4, &pkt->ip->dst, mg_ntohs(pkt->tcp->dport)));
     mg_hexdump(pkt->pay.buf, pkt->pay.len);
 #endif
-    read_conn(c, pkt);
+    s->tmiss = 0;                      // Reset missed keep-alive counter
+    settmout(c, MIP_TTYPE_KEEPALIVE);  // Advance keep-alive timer
+    MG_INFO(("Restart keepalive count"));
+    read_conn(c, pkt);                 // Override timer with ACK timeout if needed
   } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (pkt->tcp->flags & TH_RST) {
@@ -7308,10 +7310,13 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
         tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
       } else {
-        MG_DEBUG(("%lu keepalive", c->id));
-        tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
-               mg_htonl(s->seq - 1), mg_htonl(s->ack), "", 0);
-        if (s->tmiss++ > 2) mg_error(c, "keepalive");
+        if (s->tmiss++ > 2) {
+          mg_error(c, "keepalive");
+        } else {
+          MG_DEBUG(("%lu keepalive", c->id));
+          tx_tcp(ifp, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
+                 mg_htonl(s->seq - 1), mg_htonl(s->ack), "", 0);
+        }
       }
       settmout(c, MIP_TTYPE_KEEPALIVE);
     }
