@@ -128,6 +128,7 @@ jobs:
           - path: ti/ek-tm4c1294xl-freertos-mip
           - path: rp2040/pico-w
           - path: rp2040/pico-w5500
+          - path: rp2040/pico-rmii
     name: ${{ matrix.example.path }}
     steps:
       - uses: actions/checkout@v3
