@@ -1509,9 +1509,7 @@ int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
   return i >= src_len && j < dst_len ? (int) j : -1;
 }
 
-static bool isok(uint8_t c) {
-  return c == '\n' || c == '\r' || c >= ' ';
-}
+static bool isok(uint8_t c) { return c == '\n' || c == '\r' || c >= ' '; }
 
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len) {
   size_t i;
@@ -1716,7 +1714,7 @@ static void static_cb(struct mg_connection *c, int ev, void *ev_data,
     // Read to send IO buffer directly, avoid extra on-stack buffer
     size_t n, max = MG_IO_SIZE, space;
     size_t *cl = (size_t *) &c->data[(sizeof(c->data) - sizeof(size_t)) /
-                                      sizeof(size_t) * sizeof(size_t)];
+                                     sizeof(size_t) * sizeof(size_t)];
     if (c->send.size < max) mg_iobuf_resize(&c->send, max);
     if (c->send.len >= c->send.size) return;  // Rate limit
     if ((space = c->send.size - c->send.len) > *cl) space = *cl;
@@ -1889,7 +1887,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     } else {
       // Track to-be-sent content length at the end of c->data, aligned
       size_t *clp = (size_t *) &c->data[(sizeof(c->data) - sizeof(size_t)) /
-                                         sizeof(size_t) * sizeof(size_t)];
+                                        sizeof(size_t) * sizeof(size_t)];
       c->pfn = static_cb;
       c->pfn_data = fd;
       *clp = (size_t) cl;
@@ -2114,6 +2112,8 @@ size_t mg_url_encode(const char *s, size_t sl, char *buf, size_t len) {
       n += 2;
     }
   }
+  if (len > 0 && n < len - 1) buf[n] = '\0';  // Null-terminate the destination
+  if (len > 0) buf[len - 1] = '\0';           // Always.
   return n;
 }
 
