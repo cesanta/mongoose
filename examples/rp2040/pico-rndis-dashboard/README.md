@@ -9,7 +9,7 @@ Clone Mongoose repo, go to this example, and build it:
 
 ```sh
 git clone https://github.com/cesanta/mongoose
-cd mongoose/examples/ro2040/pico-rndis-dashboard
+cd mongoose/examples/rp2040/pico-rndis-dashboard
 make build
 ```
 

@@ -28,13 +28,13 @@ add_executable(firmware
 	net.c
 	packed_fs.c
 	usb_descriptors.c
-	/usr/share/pico_sdk/lib/tinyusb/lib/networking/rndis_reports.c
+	pico-sdk/lib/tinyusb/lib/networking/rndis_reports.c
 	)
 
 # Make sure TinyUSB can find tusb_config.h and workaround SDK include paths
 target_include_directories(firmware PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}
-	/usr/share/pico_sdk/lib/tinyusb/lib/networking
+	${CMAKE_CURRENT_LIST_DIR}/pico-sdk/lib/tinyusb/lib/networking
 	)
 
 # enable uart output
