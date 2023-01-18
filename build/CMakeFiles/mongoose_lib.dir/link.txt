@@ -1,2 +1,0 @@
-/opt/wasi-sdk/bin/llvm-ar qc libmongoose_lib.a CMakeFiles/mongoose_lib.dir/mongoose.c.obj "CMakeFiles/mongoose_lib.dir/wasm-micro-runtime/core/iwasm/libraries/lib-socket/src/wasi/wasi_socket_ext.c.obj"
-/opt/wasi-sdk/bin/llvm-ranlib libmongoose_lib.a

@@ -1,2 +1,0 @@
-/opt/wasi-sdk/bin/llvm-ar qc libkms_core_lib.a CMakeFiles/kms_core_lib.dir/testdns.cpp.obj
-/opt/wasi-sdk/bin/llvm-ranlib libkms_core_lib.a

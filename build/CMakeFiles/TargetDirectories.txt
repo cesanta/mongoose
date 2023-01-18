@@ -1,5 +1,0 @@
-/usr/src/app/cscore/cscore-common/Wasm/mongoose/build/CMakeFiles/mongoose_lib.dir
-/usr/src/app/cscore/cscore-common/Wasm/mongoose/build/CMakeFiles/kms_core_lib.dir
-/usr/src/app/cscore/cscore-common/Wasm/mongoose/build/CMakeFiles/testdns.wasm.dir
-/usr/src/app/cscore/cscore-common/Wasm/mongoose/build/CMakeFiles/edit_cache.dir
-/usr/src/app/cscore/cscore-common/Wasm/mongoose/build/CMakeFiles/rebuild_cache.dir
