@@ -625,6 +625,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     io->len += pkt->pay.len;
 
     MG_DEBUG(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
+    // Advance ACK counter
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
 #if 0
     // Send ACK immediately
@@ -632,8 +633,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     tx_tcp((struct mip_if *) c->mgr->priv, c->rem.ip, TH_ACK, c->loc.port,
            c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
 #else
-    // Advance ACK counter and setup a timer to send an ACK back
-    settmout(c, MIP_TTYPE_ACK);
+    // if not already running, setup a timer to send an ACK later
+    if (s->ttype != MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
 #endif
 
     if (c->is_tls) {
@@ -684,7 +685,8 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
     mg_hexdump(pkt->pay.buf, pkt->pay.len);
 #endif
     s->tmiss = 0;                      // Reset missed keep-alive counter
-    settmout(c, MIP_TTYPE_KEEPALIVE);  // Advance keep-alive timer
+    if (s->ttype == MIP_TTYPE_KEEPALIVE) // Advance keep-alive timer
+      settmout(c, MIP_TTYPE_KEEPALIVE);  // unless a former ACK timeout is pending
     read_conn(c, pkt);                 // Override timer with ACK timeout if needed
   } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
