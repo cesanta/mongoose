@@ -109,6 +109,7 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
     c->is_hexdumping = 1;
     mg_mqtt_sub(s_mqtt, mg_str(s_config.sub), 2);
     send_notification(c->mgr, "{%Q:%Q,%Q:null}", "name", "config", "data");
+    MG_INFO(("MQTT connected, server %s", MQTT_SERVER));
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = ev_data;
     send_notification(c->mgr, "{%Q:%Q,%Q:{%Q: %.*Q, %Q: %.*Q, %Q: %d}}", "name",
