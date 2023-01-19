@@ -107,7 +107,7 @@ static inline int gpio_read(uint16_t pin) {
 }
 static inline void gpio_write(uint16_t pin, bool val) {
   struct gpio *gpio = gpio_bank(pin);
-  gpio->BSRR |= BIT(PINNO(pin)) << (val ? 0 : 16);
+  gpio->BSRR = BIT(PINNO(pin)) << (val ? 0 : 16);
 }
 static inline void gpio_init(uint16_t pin, uint8_t mode, uint8_t type,
                              uint8_t speed, uint8_t pull, uint8_t af) {
@@ -162,16 +162,16 @@ struct uart {
 
 static inline void uart_init(struct uart *uart, unsigned long baud) {
   // https://www.st.com/resource/en/datasheet/stm32f746zg.pdf
-  uint8_t af = 0;           // Alternate function
+  uint8_t af = 7;           // Alternate function
   uint16_t rx = 0, tx = 0;  // pins
 
   if (uart == UART1) RCC->APB2ENR |= BIT(4);
   if (uart == UART2) RCC->APB1ENR |= BIT(17);
   if (uart == UART3) RCC->APB1ENR |= BIT(18);
 
-  if (uart == UART1) af = 4, tx = PIN('A', 9), rx = PIN('A', 10);
-  if (uart == UART2) af = 4, tx = PIN('A', 2), rx = PIN('A', 3);
-  if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9);
+  if (uart == UART1) tx = PIN('A', 9), rx = PIN('A', 10);
+  if (uart == UART2) tx = PIN('A', 2), rx = PIN('A', 3);
+  if (uart == UART3) tx = PIN('D', 8), rx = PIN('D', 9);
 
   gpio_init(tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   gpio_init(rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
