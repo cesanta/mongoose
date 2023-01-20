@@ -340,6 +340,7 @@ static void test_sntp(void) {
 
 struct mqtt_data {
   char *buf;
+  size_t bufsize;
   int subscribed;
   int published;
 };
@@ -359,7 +360,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     }
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) evd;
-    sprintf(buf + 1, "%.*s/%.*s", (int) mm->topic.len, mm->topic.ptr,
+    snprintf(buf + 1, test_data->bufsize, "%.*s/%.*s", (int) mm->topic.len, mm->topic.ptr,
             (int) mm->data.len, mm->data.ptr);
   }
   (void) c;
@@ -367,7 +368,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
 
 static void test_mqtt_ver(uint8_t mqtt_version) {
   char buf[50] = {0}, client_id[16], will_topic[16];
-  struct mqtt_data test_data = {buf, 0, 0};
+  struct mqtt_data test_data = {buf, 50, 0, 0};
   struct mg_mgr mgr;
   struct mg_str topic = mg_str("x/f12"), data = mg_str("hi");
   struct mg_connection *c;
@@ -1649,25 +1650,26 @@ static void test_str(void) {
 }
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_ERROR) sprintf((char *) fn_data, "%s", (char *) ev_data);
+  if (ev == MG_EV_ERROR) *(char **) fn_data = mg_mprintf("%s", (char *) ev_data);
   (void) c;
 }
 
 static void test_dns_error(const char *dns_server_url, const char *errstr) {
   // Test timeout
   struct mg_mgr mgr;
-  char buf[100] = "";
+  char *buf = NULL;
   int i;
   mg_mgr_init(&mgr);
   mgr.dns4.url = dns_server_url;
   mgr.dnstimeout = 10;
   MG_DEBUG(("opening dummy DNS listener @ [%s]...", dns_server_url));
   mg_listen(&mgr, mgr.dns4.url, NULL, NULL);  // Just discard our queries
-  mg_http_connect(&mgr, "http://google.com", fn1, buf);
-  for (i = 0; i < 50 && buf[0] == '\0'; i++) mg_mgr_poll(&mgr, 1);
+  mg_http_connect(&mgr, "http://google.com", fn1, &buf);
+  for (i = 0; i < 50 && buf == NULL; i++) mg_mgr_poll(&mgr, 1);
   mg_mgr_free(&mgr);
   // MG_DEBUG(("buf: [%s] [%s]", buf, errstr));
-  ASSERT(strcmp(buf, errstr) == 0);
+  ASSERT(buf != NULL && strcmp(buf, errstr) == 0);
+  free(buf);
 }
 
 static void test_dns(void) {
