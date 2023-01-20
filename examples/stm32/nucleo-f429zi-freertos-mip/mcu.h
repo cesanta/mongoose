@@ -23,9 +23,10 @@
 // 33.4: The AHB clock must be at least 25 MHz when Ethernet is used
 enum { APB1_PRE = 5 /* AHB clock / 4 */, APB2_PRE = 4 /* AHB clock / 2 */ };
 enum { PLL_HSI = 16, PLL_M = 8, PLL_N = 180, PLL_P = 2 };  // Run at 180 Mhz
-#define PLL_FREQ (PLL_HSI * PLL_N / PLL_M / PLL_P)
 #define FLASH_LATENCY 5
-#define FREQ (PLL_FREQ * 1000000)  // CPU frequency
+#define SYS_FREQUENCY ((PLL_HSI * PLL_N / PLL_M / PLL_P) * 1000000)
+#define APB2_FREQUENCY (SYS_FREQUENCY / (BIT(APB2_PRE - 3)))
+#define APB1_FREQUENCY (SYS_FREQUENCY / (BIT(APB1_PRE - 3)))
 
 static inline void spin(volatile uint32_t count) {
   while (count--) asm("nop");
@@ -104,10 +105,11 @@ static inline void uart_init(USART_TypeDef *uart, unsigned long baud) {
   // https://www.st.com/resource/en/datasheet/stm32f429zi.pdf
   uint8_t af = 7;           // Alternate function
   uint16_t rx = 0, tx = 0;  // pins
+  uint32_t freq = 0;        // Bus frequency. UART1 is on APB2, rest on APB1
 
-  if (uart == UART1) RCC->APB2ENR |= BIT(4);
-  if (uart == UART2) RCC->APB1ENR |= BIT(17);
-  if (uart == UART3) RCC->APB1ENR |= BIT(18);
+  if (uart == UART1) freq = APB2_FREQUENCY, RCC->APB2ENR |= BIT(4);
+  if (uart == UART2) freq = APB1_FREQUENCY, RCC->APB1ENR |= BIT(17);
+  if (uart == UART3) freq = APB1_FREQUENCY, RCC->APB1ENR |= BIT(18);
 
   if (uart == UART1) tx = PIN('A', 9), rx = PIN('A', 10);
   if (uart == UART2) tx = PIN('A', 2), rx = PIN('A', 3);
@@ -116,7 +118,7 @@ static inline void uart_init(USART_TypeDef *uart, unsigned long baud) {
   gpio_init(tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   gpio_init(rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   uart->CR1 = 0;                           // Disable this UART
-  uart->BRR = FREQ / APB2_PRE / baud;      // FREQ is a CPU frequency
+  uart->BRR = freq / baud;                 // Set baud rate
   uart->CR1 |= BIT(13) | BIT(2) | BIT(3);  // Set UE, RE, TE
 }
 
