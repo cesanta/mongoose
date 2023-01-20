@@ -1,5 +1,4 @@
 ROOT    ?= $(realpath $(CURDIR)/../../..)
-DOCKER  ?= docker run --platform linux/amd64 --rm -v $(ROOT):$(ROOT) -w $(CURDIR) mdashnet/armgcc
 CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
             -Wformat-truncation -fno-common -Wconversion \
             -g3 -Os -ffunction-sections -fdata-sections \
@@ -14,7 +13,7 @@ FREERTOS_REPO ?= https://github.com/FreeRTOS/FreeRTOS-Kernel
 build example: firmware.bin
 
 firmware.elf: FreeRTOS-Kernel $(SOURCES) 
-	$(DOCKER) arm-none-eabi-gcc -o $@ $(SOURCES) $(CFLAGS)\
+	arm-none-eabi-gcc -o $@ $(SOURCES) $(CFLAGS)\
 	  -IFreeRTOS-Kernel/include \
 	  -IFreeRTOS-Kernel/portable/GCC/ARM_CM4F \
 	  -Wno-conversion \
@@ -24,7 +23,7 @@ firmware.elf: FreeRTOS-Kernel $(SOURCES)
 	  $(LDFLAGS) 
 	
 firmware.bin: firmware.elf
-	$(DOCKER) arm-none-eabi-objcopy -O binary $< $@
+	arm-none-eabi-objcopy -O binary $< $@
 
 FreeRTOS-Kernel:
 	git clone --depth 1 -b $(FREERTOS_VERSION) $(FREERTOS_REPO) $@
