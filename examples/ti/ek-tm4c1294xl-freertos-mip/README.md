@@ -16,9 +16,7 @@ It implements the following:
 - [ARM GCC](http://mongoose.ws/tutorials/tools/#arm-gcc)
 - [Uniflash](https://mongoose.ws/tutorials/ti/ek-tm4c1294xl-baremetal/#build-and-run) for flashing
 
-The Makefile defaults to using Docker for the compiler, so you don't actually need to install it if you are using a Linux/Mac workstation. If you are not, or you want to run your local ARM compiler, just append `DOCKER=` to the make commands depicted below to call the compiler directly; it must be in your executable path.
-
-In any case, the links above will send you to tutorials on how to install each of those tools in your workstation for Linux, Mac, and Windows.
+The links above will send you to tutorials on how to install each of those tools in your workstation for Linux, Mac, and Windows.
 
 You'll also need _git_ so the Makefile can clone the FreeRTOS-Kernel repository. We assume you have it since you got to get this repository somehow. If you don't, and don't want to install it, just get the proper [FreeRTOS-Kernel](https://github.com/FreeRTOS/FreeRTOS-Kernel) version (see the Makefile) from its repository, as you did with the Mongoose repository.
 
