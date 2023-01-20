@@ -1,8 +1,5 @@
 TARGET  = firmware
 ROOT    ?= $(realpath $(CURDIR)/../../..)
-D ?= docker
-DOCKER 	?= $(D) run --rm -v $(ROOT):$(ROOT) -w $(CURDIR) mdashnet/armgcc
-CROSS   ?= arm-none-eabi
 CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
 						-Wformat-truncation -fno-common -Wconversion \
 						-g3 -Os -ffunction-sections -fdata-sections -I. -I$(ROOT) \
@@ -18,21 +15,10 @@ SOURCES = boot.c main.c syscalls.c \
 all build example: $(TARGET).bin
 
 $(TARGET).bin: $(TARGET).elf
-	$(DOCKER) $(CROSS)-objcopy -O binary $< $@
+	arm-none-eabi-objcopy -O binary $< $@
 
 $(TARGET).elf: $(SOURCES) mcu.h
-	$(DOCKER) $(CROSS)-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
-
-# Build on Windows. Download Win32 Zip from ARM GCC downloads, unzip to c:\armgcc
-ARMGCC ?= c:/armgcc
-windows: $(TARGET).bin
-windows: CROSS = $(ARMGCC)/bin/arm-none-eabi
-windows: DOCKER =
-
-# Show top 10 stack-hungry functions
-su: CFLAGS += -fstack-usage
-su: $(TARGET).elf
-	cat *.su | sort -rnk2 | head -10
+	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
 
 clean:
 	@rm -rf $(TARGET).* *.su
