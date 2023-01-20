@@ -174,6 +174,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h> // rand(), strtol(), atoi()
 #include <string.h>
+#include <sys/stat.h>
 
 #include <FreeRTOS.h>
 #include <task.h>
