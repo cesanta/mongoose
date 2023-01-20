@@ -22,9 +22,7 @@ which implements the following:
 - [ARM GCC](http://mongoose.ws/tutorials/tools/#arm-gcc)
 - [stlink](http://mongoose.ws/tutorials/tools/#stlink) for flashing
 
-The Makefile defaults to using Docker for the compiler, so you don't actually need to install it if you are using a Linux/Mac workstation. If you are not, or you want to run your local ARM compiler, just append `DOCKER=` to the make commands depicted below to call the compiler directly; it must be in your executable path.
-
-In any case, the links above will send you to tutorials on how to install each of those tools in your workstation for Linux, Mac, and Windows.
+The links above will send you to tutorials on how to install each of those tools in your workstation for Linux, Mac, and Windows.
 
 ## Usage
 
