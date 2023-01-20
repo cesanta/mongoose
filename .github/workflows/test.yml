@@ -98,6 +98,7 @@ jobs:
           - path: stm32/stm32-nucleo-f429z
           - path: stm32/stm32-nucleo-h743z
           - path: stm32/nucleo-f429zi-baremetal
+            target: test
           - path: stm32/nucleo-f429zi-freertos-mip
           - path: stm32/nucleo-f429zi-usb-rndis
           - path: stm32/nucleo-f746zg-baremetal
@@ -135,7 +136,7 @@ jobs:
       - uses: actions/checkout@v3
       - run: sudo apt -y install gcc-arm-none-eabi
       - name: ${{ matrix.example.path }}
-        run: make -C examples/${{ matrix.example.path }} build
+        run: make -C examples/${{ matrix.example.path }} ${{ matrix.example.target || 'build' }} VCON_API_KEY=${{secrets.VCON_API_KEY}}
   zephyr_examples:
     runs-on: ubuntu-latest
     steps:
