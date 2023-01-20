@@ -39,7 +39,7 @@ void EXTI15_10_IRQHandler(void) {  // External interrupt handler
 int main(void) {
   static struct uart *uart = UART3;  // Use UART3 - its attached to debug
   clock_init();                      // Set clock to 216MHz
-  systick_init(FREQ / 1000);         // Increment s_ticks every ms
+  systick_init(SYS_FREQUENCY / 1000);  // Increment s_ticks every ms
   gpio_output(LED1);                 // Setup green LED
   gpio_output(LED2);                 // Setup blue LED
   gpio_input(BTN1);                  // Set button to input

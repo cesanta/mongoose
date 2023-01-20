@@ -8,7 +8,7 @@
 #define LED PIN('B', 7)  // On-board LED pin (blue)
 static uint64_t s_ticks;
 static struct mip_if *s_ifp;
-uint32_t SystemCoreClock = FREQ;
+uint32_t SystemCoreClock = SYS_FREQUENCY;
 const uint8_t tud_network_mac_address[6] = {2, 2, 0x84, 0x6A, 0x96, 0};
 
 static void blink_cb(void *arg) {  // Blink periodically

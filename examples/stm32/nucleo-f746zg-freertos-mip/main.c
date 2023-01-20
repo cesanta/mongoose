@@ -74,7 +74,7 @@ static void blinker(void *args) {
 
 int main(void) {
   clock_init();               // Set clock to max of 180 MHz
-  systick_init(FREQ / 1000);  // Tick every 1 ms
+  systick_init(SYS_FREQUENCY / 1000);  // Tick every 1 ms
   uart_init(UART3, 115200);   // Initialise UART
   xTaskCreate(blinker, "blinker", 128, ":)", configMAX_PRIORITIES - 1, NULL);
   xTaskCreate(server, "server", 2048, 0, configMAX_PRIORITIES - 1, NULL);
