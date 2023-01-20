@@ -10,5 +10,4 @@ build: | $(NAME)
 	make -C $(NAME) build
 
 clean:
-	make -C $(NAME) clean
 	rm -rf $(NAME)

@@ -183,4 +183,4 @@ mongoose.h: $(HDRS) Makefile
 
 clean:
 	rm -rf $(PROG) *.exe *.o *.dSYM *_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack arduino tmp
-	@for X in $(EXAMPLES); do $(MAKE) -C $$X clean; done
+	find examples -maxdepth 3 -name zephyr -prune -o -name Makefile -print | xargs dirname | xargs -n1 make clean -C
