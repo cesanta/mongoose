@@ -2,8 +2,8 @@
 // All rights reserved
 
 #include "mongoose.h"
-#include "tusb.h"
 #include "pico/stdlib.h"
+#include "tusb.h"
 
 static struct mip_if *s_ifp;
 
@@ -22,8 +22,7 @@ bool tud_network_recv_cb(const uint8_t *buf, uint16_t len) {
   return true;
 }
 
-void tud_network_init_cb(void) {
-}
+void tud_network_init_cb(void) {}
 
 uint16_t tud_network_xmit_cb(uint8_t *dst, void *ref, uint16_t arg) {
   // MG_INFO(("SEND %hu", arg));
@@ -44,15 +43,17 @@ static bool usb_up(struct mip_if *ifp) {
   return tud_inited() && tud_ready() && tud_connected();
 }
 
-void device_dashboard_fn(struct mg_connection *, int, void *, void *);
+static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_dta) {
+  if (ev == MG_EV_HTTP_MSG) return mg_http_reply(c, 200, "", "ok\n");
+}
 
 int main(void) {
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-    stdio_init_all();
+  gpio_init(PICO_DEFAULT_LED_PIN);
+  gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+  stdio_init_all();
 
-  struct mg_mgr mgr;        // Initialise Mongoose event manager
-  mg_mgr_init(&mgr);        // and attach it to the MIP interface
+  struct mg_mgr mgr;  // Initialise Mongoose event manager
+  mg_mgr_init(&mgr);  // and attach it to the MIP interface
   mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, blink_cb, &mgr);
 
   struct mip_driver driver = {.tx = usb_tx, .rx = mip_driver_rx, .up = usb_up};
@@ -64,10 +65,13 @@ int main(void) {
                        .queue.len = 4096};
   s_ifp = &mif;
   mip_init(&mgr, &mif);
-  mg_http_listen(&mgr, "tcp://0.0.0.0:80", device_dashboard_fn, &mgr);
-
   tusb_init();
 
+  MG_INFO(("Initialising application..."));
+  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
+  mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, &mgr);
+
+  MG_INFO(("Starting event loop"));
   for (;;) {
     mg_mgr_poll(&mgr, 0);
     tud_task();
