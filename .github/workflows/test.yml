@@ -131,6 +131,7 @@ jobs:
           - path: rp2040/pico-rndis-dashboard
           - path: rp2040/pico-w
           - path: rp2040/pico-w5500
+            target: test
     name: ${{ matrix.example.path }}
     steps:
       - uses: actions/checkout@v3
