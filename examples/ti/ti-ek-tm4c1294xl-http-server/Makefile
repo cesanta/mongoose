@@ -9,7 +9,7 @@ build: | $(NAME)
 	$(DOCKER) /opt/ti/ccs/eclipse/eclipse -noSplash -data /workspace -application com.ti.ccstudio.apps.projectBuild -ccs.autoImport -ccs.projects $(NAME) -ccs.configuration Release
 
 clean:
-	$(DOCKER) rm -rf /workspace/$(NAME)
+	test -d $(NAME) && $(DOCKER) rm -rf /workspace/$(NAME) || true
 
 flash:	DOCKER_ARGS = -it --privileged -v /dev/bus/usb/:/dev/bus/usb -w /workspace
 flash:

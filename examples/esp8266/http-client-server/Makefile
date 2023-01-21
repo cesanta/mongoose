@@ -41,5 +41,5 @@ monitor: build
 .PHONY: build
 
 clean:
-	$(DOCKER) rm -rf src/build
+	test -d src/build && $(DOCKER) rm -rf src/build || true
 
