@@ -94,6 +94,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   if (opts->srvname.len > 0) {
     char *s = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);
     SSL_set1_host(tls->ssl, s);
+    SSL_set_tlsext_host_name(tls->ssl, s);
     free(s);
   }
 #endif
