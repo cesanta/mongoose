@@ -3821,7 +3821,7 @@ isn't default port for URL protocol
 Usage example:
 
 ```c
-unsigned short port1 = mg_url_port("htts://myhost.com") // port1 is now 443 (default https port)
+unsigned short port1 = mg_url_port("https://myhost.com") // port1 is now 443 (default https port)
 unsigned short port2 = mg_url_port("127.0.0.1:567") // port2 is now 567
 ```
 
@@ -3961,7 +3961,7 @@ Parameters:
   - `0` - Disable logging
   - `1` - Log errors only
   - `2` - Log errors and info messages
-  - `3` - Log errors, into and debug messages
+  - `3` - Log errors, info and debug messages
   - `4` - Log everything
 
 Return value: None
