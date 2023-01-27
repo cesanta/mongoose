@@ -32,21 +32,22 @@
       <div id="wrapper">
         <input type="file" id="el1" style="display: none"/>
         <button id="el2">choose file...</button>
+        <span>Selected file:</span> <span id="el4"></span> <br/>
+        <button id="el5" style="margin: 0.5em 0;" disabled>upload file</button>
         <div id="el3" style="margin-top: 1em;"></div>
       </div>
     </div>
   </body>
   <script>
+    var f; // selected file
 
     // When user clicks on a button, trigger file selection dialog
     document.getElementById('el2').onclick = function(ev) {
       document.getElementById('el1').click();
     };
 
-    // If user selected a file, read it into memory and trigger sendFileData()
-    document.getElementById('el1').onchange = function(ev) {
-      if (!ev.target.files[0]) return;
-      var f = ev.target.files[0], r = new FileReader();
+    document.getElementById('el5').onclick = function(ev) {
+      var r = new FileReader();
       r.readAsArrayBuffer(f);
       r.onload = function() {
         ev.target.value = '';
@@ -58,6 +59,14 @@
           document.getElementById('el3').innerText = 'Uploaded ' + r.result.byteLength + ' bytes';
         });
       };
+    };
+
+    // If user selected a file, read it into memory and trigger sendFileData()
+    document.getElementById('el1').onchange = function(ev) {
+      f = ev.target.files[0];
+      if (!f) return;
+      document.getElementById('el4').innerText = f.name;
+      document.getElementById('el5').removeAttribute('disabled');
     };
 
   </script>
