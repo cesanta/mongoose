@@ -1685,10 +1685,10 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
   mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
   va_end(ap);
   if (c->send.len > 15) {
-    mg_snprintf((char *) &c->send.buf[len - 14], 11, "%010lu",
-                (unsigned long) (c->send.len - len));
+    size_t n = mg_snprintf((char *) &c->send.buf[len - 14], 11, "%-10lu",
+                           (unsigned long) (c->send.len - len));
+    c->send.buf[len - 14 + n] = ' ';  // Change ending 0 to space
     c->is_resp = 0;
-    c->send.buf[len - 4] = '\r';  // Change ending 0 to space
   }
   c->is_resp = 0;
 }
@@ -2803,7 +2803,7 @@ bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
     char buf[41];
     size_t n;
     if (p == NULL) p = strrchr(file, '\\');
-    n = mg_snprintf(buf, sizeof(buf), "%llx %d %s:%d:%s", mg_millis(), level,
+    n = mg_snprintf(buf, sizeof(buf), "%-6llx %d %s:%d:%s", mg_millis(), level,
                     p == NULL ? file : p + 1, line, fname);
     if (n > sizeof(buf) - 2) n = sizeof(buf) - 2;
     while (n < sizeof(buf)) buf[n++] = ' ';

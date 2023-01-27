@@ -3,7 +3,7 @@ CFLAGS ?= -W -Wall -DMG_ENABLE_LINES=1
 SSL = ?
 
 ifeq "$(SSL)" "MBEDTLS"
-CFLAGS += -DMG_ENABLE_MBEDTLS=1 -lmbedtls -lmbedcrypto -lmbedx509
+CFLAGS += -DMG_ENABLE_MBEDTLS=1 -lmbedtls -lmbedcrypto -lmbedx509 -I$(MBEDTLS)/include -I/usr/include -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
 endif
 
 ifeq "$(SSL)" "OPENSSL"

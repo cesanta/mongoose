@@ -283,12 +283,12 @@ struct mg_connection {
 In the Operating System environment, Mongoose uses BSD sockets API provided
 by the OS's TCP/IP stack:
 
-![](images/arch2.svg)
+![Mongoose in OS environment](images/arch2.svg)
 
 In the embedded bare metal environment, Mongoose can utilise its own built-in
 stack with network drivers - i.e. it can run directly on top of the hardware:
 
-![](images/arch1.svg)
+![Mongoose in bare metal environment](images/arch1.svg)
 
 ## Build options
 
