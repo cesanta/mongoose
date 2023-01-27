@@ -1,7 +1,7 @@
 // Copyright (c) 2020 Cesanta Software Limited
 // All rights reserved
 //
-// Streaming upload example. Demonstrates how to use chunked encoding
+// Streaming upload example. Demonstrates how to use MG_EV_HTTP_CHUNK events
 // to send large payload in smaller chunks. To test, use curl utility:
 //
 // curl http://localhost:8000/upload?name=a.txt --data-binary @large_file.txt
