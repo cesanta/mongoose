@@ -6110,6 +6110,7 @@ static size_t mip_driver_stm32_tx(const void *buf, size_t len, struct mip_if *if
     s_txdesc[s_txno][0] = BIT(20) | BIT(28) | BIT(29) | BIT(30);  // Chain,FS,LS
     s_txdesc[s_txno][0] |= BIT(31);  // Set OWN bit - let DMA take over
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
+    printf("sent\n");
   }
   ETH->DMASR = BIT(2) | BIT(5);  // Clear any prior TBUS/TUS
   ETH->DMATPDR = 0;              // and resume
@@ -6123,9 +6124,11 @@ static bool mip_driver_stm32_up(struct mip_if *ifp) {
   return bsr & BIT(2) ? 1 : 0;
 }
 
-void ETH_IRQHandler(void);
 static uint32_t s_rxno;
+void ETH_IRQHandler(void);
 void ETH_IRQHandler(void) {
+  static int cnt;
+  printf("--> %d\n", cnt++);
   qp_mark(QP_IRQTRIGGERED, 0);
   if (ETH->DMASR & BIT(6)) {             // Frame received, loop
     ETH->DMASR = BIT(16) | BIT(6);       // Clear flag
@@ -7096,9 +7099,14 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   } else if (pkt->pay.len == 0) {
     // TODO(cpq): handle this peer's ACK
   } else if (seq != s->ack) {
-    // TODO(cpq): peer sent us SEQ which we don't expect. Retransmit rather
-    // than close this connection
-    mg_error(c, "SEQ != ACK: %x %x", seq, s->ack);
+    uint32_t ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
+    if (s->ack == ack) {
+      MG_VERBOSE(("ignoring duplicate pkt"));
+    } else {
+      // TODO(cpq): peer sent us SEQ which we don't expect. Retransmit rather
+      // than close this connection
+      mg_error(c, "SEQ != ACK: %x %x %x", seq, s->ack, ack);
+    }
   } else if (io->size - io->len < pkt->pay.len &&
              !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
     mg_error(c, "oom");

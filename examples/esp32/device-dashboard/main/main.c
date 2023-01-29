@@ -30,6 +30,6 @@ void app_main(void) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_mgr_init(&mgr);
   MG_INFO(("Mongoose v%s on %s", MG_VERSION, s_listening_url));
-  mg_http_listen(&mgr, s_listening_url, device_dashboard_fn, &mgr);
+  mg_http_listen(&mgr, s_listening_url, device_dashboard_fn, NULL);
   for (;;) mg_mgr_poll(&mgr, 1000);  // Infinite event loop
 }

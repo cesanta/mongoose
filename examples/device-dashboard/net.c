@@ -9,7 +9,27 @@
 #define MQTT_PUBLISH_TOPIC "mg/my_device"
 #define MQTT_SUBSCRIBE_TOPIC "mg/#"
 
-static time_t s_boot_timestamp = 0;               // Updated by SNTP
+// Certificate generation procedure:
+// openssl ecparam -name prime256v1 -genkey -noout -out key.pem
+// openssl req -new -key key.pem -x509 -nodes -days 3650 -out cert.pem
+static const char *s_ssl_cert =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIBCTCBsAIJAK9wbIDkHnAoMAoGCCqGSM49BAMCMA0xCzAJBgNVBAYTAklFMB4X\n"
+    "DTIzMDEyOTIxMjEzOFoXDTMzMDEyNjIxMjEzOFowDTELMAkGA1UEBhMCSUUwWTAT\n"
+    "BgcqhkjOPQIBBggqhkjOPQMBBwNCAARzSQS5OHd17lUeNI+6kp9WYu0cxuEIi/JT\n"
+    "jphbCmdJD1cUvhmzM9/phvJT9ka10Z9toZhgnBq0o0xfTQ4jC1vwMAoGCCqGSM49\n"
+    "BAMCA0gAMEUCIQCe0T2E0GOiVe9KwvIEPeX1J1J0T7TNacgR0Ya33HV9VgIgNvdn\n"
+    "aEWiBp1xshs4iz6WbpxrS1IHucrqkZuJLfNZGZI=\n"
+    "-----END CERTIFICATE-----\n";
+
+static const char *s_ssl_key =
+    "-----BEGIN EC PRIVATE KEY-----\n"
+    "MHcCAQEEICBz3HOkQLPBDtdknqC7k1PNsWj6HfhyNB5MenfjmqiooAoGCCqGSM49\n"
+    "AwEHoUQDQgAEc0kEuTh3de5VHjSPupKfVmLtHMbhCIvyU46YWwpnSQ9XFL4ZszPf\n"
+    "6YbyU/ZGtdGfbaGYYJwatKNMX00OIwtb8A==\n"
+    "-----END EC PRIVATE KEY-----\n";
+
+static time_t s_boot_timestamp = 0;  // Updated by SNTP
 #ifndef DISABLE_ROUTING
 static struct mg_connection *s_sntp_conn = NULL;  // SNTP connection
 #endif
@@ -173,6 +193,9 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
     s_config.url = strdup(MQTT_SERVER);
     s_config.pub = strdup(MQTT_PUBLISH_TOPIC);
     s_config.sub = strdup(MQTT_SUBSCRIBE_TOPIC);
+  } else if (ev == MG_EV_ACCEPT && fn_data != NULL) {
+    struct mg_tls_opts opts = {.cert = s_ssl_cert, .certkey = s_ssl_key};
+    mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = getuser(hm);
@@ -203,7 +226,7 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
         update_config(&hm->body, "pub", &s_config.pub);
         update_config(&hm->body, "sub", &s_config.sub);
         if (s_mqtt) s_mqtt->is_closing = 1;  // Ask to disconnect from MQTT
-        send_notification(fn_data, "{%Q:%Q,%Q:null}", "name", "config", "data");
+        send_notification(c->mgr, "{%Q:%Q,%Q:null}", "name", "config", "data");
         mg_http_reply(c, 200, "", "ok\n");
       } else {
         mg_http_reply(c, 403, "", "Denied\n");
