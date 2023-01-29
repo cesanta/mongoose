@@ -101,8 +101,8 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       union usa usa;
       socklen_t slen = sizeof(usa.sin);
       if (getsockname(FD(c), &usa.sa, &slen) < 0) (void) 0;  // Ignore result
-      MG_INFO(("\n-- %lu %I %s %I %ld", c->id, 4, &usa.sin.sin_addr,
-               r ? "<-" : "->", 4, &c->rem.ip, n));
+      MG_INFO(("\n-- %lu %M %s %M %ld", c->id, mg_print_ip_port, &c->loc,
+               r ? "<-" : "->", mg_print_ip_port, &c->rem, n));
 
       mg_hexdump(buf, (size_t) n);
     }
@@ -357,8 +357,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     if ((rc = connect(FD(c), &usa.sa, slen)) == 0) {
       mg_call(c, MG_EV_CONNECT, NULL);
     } else if (mg_sock_would_block()) {
-      MG_DEBUG(("%lu %p -> %I:%hu pend", c->id, c->fd, 4, &c->rem.ip,
-                mg_ntohs(c->rem.port)));
+      MG_DEBUG(("%lu %p -> %M pend", c->id, c->fd, mg_print_ip_port, &c->rem));
       c->is_connecting = 1;
     } else {
       mg_error(c, "connect: %d", MG_SOCKET_ERRNO);
@@ -413,8 +412,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
-    MG_DEBUG(("%lu %p accepted %I.%hu -> %I.%hu", c->id, c->fd, 4, &c->rem.ip,
-              mg_ntohs(c->rem.port), 4, &c->loc.ip, mg_ntohs(c->loc.port)));
+    MG_DEBUG(("%lu %p accepted %M -> %M", c->id, c->fd, mg_print_ip_port,
+              &c->rem, mg_print_ip_port, &c->loc));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
   }

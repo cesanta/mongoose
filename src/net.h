@@ -94,8 +94,12 @@ int mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *, bool udp);
 struct mg_connection *mg_alloc_conn(struct mg_mgr *);
 void mg_close_conn(struct mg_connection *c);
 bool mg_open_listener(struct mg_connection *c, const char *url);
+
+// Utility functions
 struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg);
+size_t mg_print_ip(void (*out)(char, void *), void *ptr, va_list *ap);
+size_t mg_print_ip_port(void (*out)(char, void *), void *ptr, va_list *ap);
 
 // Low-level IO primives used by TLS layer
 enum { MG_IO_ERR = -1, MG_IO_WAIT = -2, MG_IO_RESET = -3 };

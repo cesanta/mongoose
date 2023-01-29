@@ -161,9 +161,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
           if (dm.resolved) {
             dm.addr.port = d->c->rem.port;  // Save port
             d->c->rem = dm.addr;            // Copy resolved address
-            MG_DEBUG(
-                ("%lu %s is %I", d->c->id, dm.name, d->c->rem.is_ip6 ? 16 : 4,
-                 d->c->rem.is_ip6 ? &d->c->rem.ip6 : (void *) &d->c->rem.ip));
+            MG_DEBUG(("%lu %s is %M", d->c->id, dm.name, mg_print_ip, &c->rem));
             mg_connect_resolved(d->c);
 #if MG_ENABLE_IPV6
           } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0' &&

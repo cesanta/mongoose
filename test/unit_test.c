@@ -360,8 +360,8 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     }
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) evd;
-    snprintf(buf + 1, test_data->bufsize, "%.*s/%.*s", (int) mm->topic.len, mm->topic.ptr,
-            (int) mm->data.len, mm->data.ptr);
+    snprintf(buf + 1, test_data->bufsize, "%.*s/%.*s", (int) mm->topic.len,
+             mm->topic.ptr, (int) mm->data.len, mm->data.ptr);
   }
   (void) c;
 }
@@ -1284,9 +1284,7 @@ static void test_http_range(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void f1(void *arg) {
-  (*(int *) arg)++;
-}
+static void f1(void *arg) { (*(int *) arg)++; }
 
 static void test_timer(void) {
   int v1 = 0, v2 = 0, v3 = 0;
@@ -1641,16 +1639,24 @@ static void test_str(void) {
 
   {
     char buf[100];
-    struct mg_addr a = {0, mg_htonl(0x10111213), {1, 100, 33}, false};
-    ASSERT(mg_snprintf(buf, sizeof(buf), "%I", 4, &a.ip) == 11);
-    ASSERT(strcmp(buf, "16.17.18.19") == 0);
-    ASSERT(mg_snprintf(buf, sizeof(buf), "%I", 6, &a.ip6) == 20);
-    ASSERT(strcmp(buf, "164:2100:0:0:0:0:0:0") == 0);
+    struct mg_addr a = {mg_htons(3), mg_htonl(0x2000001), {1, 100, 33}, false};
+    ASSERT(mg_snprintf(buf, sizeof(buf), "%M %d", mg_print_ip, &a, 7) == 9);
+    ASSERT(strcmp(buf, "2.0.0.1 7") == 0);
+    ASSERT(mg_snprintf(buf, sizeof(buf), "%M %d", mg_print_ip_port, &a, 7) ==
+           11);
+    ASSERT(strcmp(buf, "2.0.0.1:3 7") == 0);
+    a.is_ip6 = true;
+    ASSERT(mg_snprintf(buf, sizeof(buf), "%M %d", mg_print_ip, &a, 7) == 24);
+    ASSERT(strcmp(buf, "[164:2100:0:0:0:0:0:0] 7") == 0);
+    ASSERT(mg_snprintf(buf, sizeof(buf), "%M %d", mg_print_ip_port, &a, 7) ==
+           26);
+    ASSERT(strcmp(buf, "[164:2100:0:0:0:0:0:0]:3 7") == 0);
   }
 }
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_ERROR) *(char **) fn_data = mg_mprintf("%s", (char *) ev_data);
+  if (ev == MG_EV_ERROR)
+    *(char **) fn_data = mg_mprintf("%s", (char *) ev_data);
   (void) c;
 }
 

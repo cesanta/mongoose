@@ -273,9 +273,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
           if (dm.resolved) {
             dm.addr.port = d->c->rem.port;  // Save port
             d->c->rem = dm.addr;            // Copy resolved address
-            MG_DEBUG(
-                ("%lu %s is %I", d->c->id, dm.name, d->c->rem.is_ip6 ? 16 : 4,
-                 d->c->rem.is_ip6 ? &d->c->rem.ip6 : (void *) &d->c->rem.ip));
+            MG_DEBUG(("%lu %s is %M", d->c->id, dm.name, mg_print_ip, &c->rem));
             mg_connect_resolved(d->c);
 #if MG_ENABLE_IPV6
           } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0' &&
@@ -3519,6 +3517,25 @@ struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
   return t;
 }
 
+size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap) {
+  struct mg_addr *addr = va_arg(*ap, struct mg_addr *);
+  if (addr->is_ip6) {
+    uint16_t *p = (uint16_t *) addr->ip6;
+    return mg_xprintf(out, arg, "[%x:%x:%x:%x:%x:%x:%x:%x]", mg_htons(p[0]),
+                      mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]),
+                      mg_htons(p[4]), mg_htons(p[5]), mg_htons(p[6]),
+                      mg_htons(p[7]));
+  } else {
+    uint8_t *p = (uint8_t *) &addr->ip;
+    return mg_xprintf(out, arg, "%d.%d.%d.%d", p[0], p[1], p[2], p[3]);
+  }
+}
+
+size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap) {
+  struct mg_addr *a = va_arg(*ap, struct mg_addr *);
+  return mg_xprintf(out, arg, "%M:%hu", mg_print_ip, a, mg_ntohs(a->port));
+}
+
 void mg_mgr_free(struct mg_mgr *mgr) {
   struct mg_connection *c;
   struct mg_timer *tmp, *t = mgr->timers;
@@ -4062,8 +4079,8 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       union usa usa;
       socklen_t slen = sizeof(usa.sin);
       if (getsockname(FD(c), &usa.sa, &slen) < 0) (void) 0;  // Ignore result
-      MG_INFO(("\n-- %lu %I %s %I %ld", c->id, 4, &usa.sin.sin_addr,
-               r ? "<-" : "->", 4, &c->rem.ip, n));
+      MG_INFO(("\n-- %lu %M %s %M %ld", c->id, mg_print_ip_port, &c->loc,
+               r ? "<-" : "->", mg_print_ip_port, &c->rem, n));
 
       mg_hexdump(buf, (size_t) n);
     }
@@ -4318,8 +4335,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     if ((rc = connect(FD(c), &usa.sa, slen)) == 0) {
       mg_call(c, MG_EV_CONNECT, NULL);
     } else if (mg_sock_would_block()) {
-      MG_DEBUG(("%lu %p -> %I:%hu pend", c->id, c->fd, 4, &c->rem.ip,
-                mg_ntohs(c->rem.port)));
+      MG_DEBUG(("%lu %p -> %M pend", c->id, c->fd, mg_print_ip_port, &c->rem));
       c->is_connecting = 1;
     } else {
       mg_error(c, "connect: %d", MG_SOCKET_ERRNO);
@@ -4374,8 +4390,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
-    MG_DEBUG(("%lu %p accepted %I.%hu -> %I.%hu", c->id, c->fd, 4, &c->rem.ip,
-              mg_ntohs(c->rem.port), 4, &c->loc.ip, mg_ntohs(c->loc.port)));
+    MG_DEBUG(("%lu %p accepted %M -> %M", c->id, c->fd, mg_print_ip_port,
+              &c->rem, mg_print_ip_port, &c->loc));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
   }
@@ -5061,7 +5077,7 @@ void mg_tls_free(struct mg_connection *c) {
 
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   long n = mg_io_send((struct mg_connection *) ctx, buf, len);
-  MG_VERBOSE(("%lu n=%ld", ((struct mg_connection *) ctx)->id, n));
+  MG_VERBOSE(("%lu n=%ld e=%d", ((struct mg_connection *) ctx)->id, n, errno));
   if (n == MG_IO_WAIT) return MBEDTLS_ERR_SSL_WANT_WRITE;
   if (n == MG_IO_RESET) return MBEDTLS_ERR_NET_CONN_RESET;
   if (n == MG_IO_ERR) return MBEDTLS_ERR_NET_SEND_FAILED;
@@ -5101,7 +5117,7 @@ static int mbed_rng(void *ctx, unsigned char *buf, size_t len) {
 
 static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
   n = (int) strlen(s2) - 1;
-  MG_VERBOSE(("%lu %d %.*s", ((struct mg_connection *) c)->id, lev, n, s2));
+  MG_INFO(("%lu %d %.*s", ((struct mg_connection *) c)->id, lev, n, s2));
   (void) s;
 }
 

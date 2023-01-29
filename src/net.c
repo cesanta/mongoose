@@ -207,6 +207,25 @@ struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
   return t;
 }
 
+size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap) {
+  struct mg_addr *addr = va_arg(*ap, struct mg_addr *);
+  if (addr->is_ip6) {
+    uint16_t *p = (uint16_t *) addr->ip6;
+    return mg_xprintf(out, arg, "[%x:%x:%x:%x:%x:%x:%x:%x]", mg_htons(p[0]),
+                      mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]),
+                      mg_htons(p[4]), mg_htons(p[5]), mg_htons(p[6]),
+                      mg_htons(p[7]));
+  } else {
+    uint8_t *p = (uint8_t *) &addr->ip;
+    return mg_xprintf(out, arg, "%d.%d.%d.%d", p[0], p[1], p[2], p[3]);
+  }
+}
+
+size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap) {
+  struct mg_addr *a = va_arg(*ap, struct mg_addr *);
+  return mg_xprintf(out, arg, "%M:%hu", mg_print_ip, a, mg_ntohs(a->port));
+}
+
 void mg_mgr_free(struct mg_mgr *mgr) {
   struct mg_connection *c;
   struct mg_timer *tmp, *t = mgr->timers;
