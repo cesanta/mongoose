@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
   MG_INFO(("Listening on     : %s", s_listening_address));
 
   extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, s_listening_address, device_dashboard_fn, &mgr);
+  mg_http_listen(&mgr, s_listening_address, device_dashboard_fn, NULL);
 
   while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop
 

@@ -609,9 +609,14 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   } else if (pkt->pay.len == 0) {
     // TODO(cpq): handle this peer's ACK
   } else if (seq != s->ack) {
-    // TODO(cpq): peer sent us SEQ which we don't expect. Retransmit rather
-    // than close this connection
-    mg_error(c, "SEQ != ACK: %x %x", seq, s->ack);
+    uint32_t ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
+    if (s->ack == ack) {
+      MG_VERBOSE(("ignoring duplicate pkt"));
+    } else {
+      // TODO(cpq): peer sent us SEQ which we don't expect. Retransmit rather
+      // than close this connection
+      mg_error(c, "SEQ != ACK: %x %x %x", seq, s->ack, ack);
+    }
   } else if (io->size - io->len < pkt->pay.len &&
              !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
     mg_error(c, "oom");

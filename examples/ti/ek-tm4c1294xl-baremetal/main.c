@@ -101,7 +101,7 @@ int main(void) {
   mg_timer_add(&mgr, 1000, MG_TIMER_REPEAT, blink_cb, &mif);
 
   extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, &mgr);
+  mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, NULL);
   for (;;) mg_mgr_poll(&mgr, 0);  // Infinite event loop
 
   return 0;

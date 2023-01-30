@@ -69,7 +69,7 @@ int main(void) {
 
   MG_INFO(("Initialising application..."));
   extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, &mgr);
+  mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, NULL);
 
   MG_INFO(("Starting event loop"));
   for (;;) {
