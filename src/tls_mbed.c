@@ -26,7 +26,7 @@ void mg_tls_free(struct mg_connection *c) {
 
 static int mg_net_send(void *ctx, const unsigned char *buf, size_t len) {
   long n = mg_io_send((struct mg_connection *) ctx, buf, len);
-  MG_VERBOSE(("%lu n=%ld", ((struct mg_connection *) ctx)->id, n));
+  MG_VERBOSE(("%lu n=%ld e=%d", ((struct mg_connection *) ctx)->id, n, errno));
   if (n == MG_IO_WAIT) return MBEDTLS_ERR_SSL_WANT_WRITE;
   if (n == MG_IO_RESET) return MBEDTLS_ERR_NET_CONN_RESET;
   if (n == MG_IO_ERR) return MBEDTLS_ERR_NET_SEND_FAILED;
@@ -66,7 +66,7 @@ static int mbed_rng(void *ctx, unsigned char *buf, size_t len) {
 
 static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
   n = (int) strlen(s2) - 1;
-  MG_VERBOSE(("%lu %d %.*s", ((struct mg_connection *) c)->id, lev, n, s2));
+  MG_INFO(("%lu %d %.*s", ((struct mg_connection *) c)->id, lev, n, s2));
   (void) s;
 }
 
