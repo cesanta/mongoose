@@ -35,12 +35,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
       mg_http_printf_chunk(c, "ID PROTO TYPE      LOCAL           REMOTE\n");
       for (struct mg_connection *t = c->mgr->conns; t != NULL; t = t->next) {
-        mg_http_printf_chunk(c, "%-3lu %4s %s %I %I\n", t->id,
+        mg_http_printf_chunk(c, "%-3lu %4s %s %M %M\n", t->id,
                              t->is_udp ? "UDP" : "TCP",
                              t->is_listening  ? "LISTENING"
                              : t->is_accepted ? "ACCEPTED "
                                               : "CONNECTED",
-                             4, &t->loc.ip, 4, &t->rem.ip);
+                             mg_print_ip, &t->loc, mg_print_ip, &t->rem);
       }
       mg_http_printf_chunk(c, "");  // Don't forget the last empty chunk
     } else if (mg_http_match_uri(hm, "/api/f2/*")) {
