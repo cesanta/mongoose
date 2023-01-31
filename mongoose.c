@@ -3517,25 +3517,6 @@ struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
   return t;
 }
 
-size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap) {
-  struct mg_addr *addr = va_arg(*ap, struct mg_addr *);
-  if (addr->is_ip6) {
-    uint16_t *p = (uint16_t *) addr->ip6;
-    return mg_xprintf(out, arg, "[%x:%x:%x:%x:%x:%x:%x:%x]", mg_htons(p[0]),
-                      mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]),
-                      mg_htons(p[4]), mg_htons(p[5]), mg_htons(p[6]),
-                      mg_htons(p[7]));
-  } else {
-    uint8_t *p = (uint8_t *) &addr->ip;
-    return mg_xprintf(out, arg, "%d.%d.%d.%d", p[0], p[1], p[2], p[3]);
-  }
-}
-
-size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap) {
-  struct mg_addr *a = va_arg(*ap, struct mg_addr *);
-  return mg_xprintf(out, arg, "%M:%hu", mg_print_ip, a, mg_ntohs(a->port));
-}
-
 void mg_mgr_free(struct mg_mgr *mgr) {
   struct mg_connection *c;
   struct mg_timer *tmp, *t = mgr->timers;
@@ -5352,6 +5333,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   if (opts->srvname.len > 0) {
     char *s = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);
     SSL_set1_host(tls->ssl, s);
+    SSL_set_tlsext_host_name(tls->ssl, s);
     free(s);
   }
 #endif
@@ -5593,6 +5575,31 @@ int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip) {
     if ((mg_ntohl(remote_ip) & mask) == net) allowed = k.ptr[0];
   }
   return allowed == '+';
+}
+
+size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap) {
+  struct mg_addr *addr = va_arg(*ap, struct mg_addr *);
+  if (addr->is_ip6) {
+    uint16_t *p = (uint16_t *) addr->ip6;
+    return mg_xprintf(out, arg, "[%x:%x:%x:%x:%x:%x:%x:%x]", mg_ntohs(p[0]),
+                      mg_ntohs(p[1]), mg_ntohs(p[2]), mg_ntohs(p[3]),
+                      mg_ntohs(p[4]), mg_ntohs(p[5]), mg_ntohs(p[6]),
+                      mg_ntohs(p[7]));
+  } else {
+    uint8_t *p = (uint8_t *) &addr->ip;
+    return mg_xprintf(out, arg, "%d.%d.%d.%d", p[0], p[1], p[2], p[3]);
+  }
+}
+
+size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap) {
+  struct mg_addr *a = va_arg(*ap, struct mg_addr *);
+  return mg_xprintf(out, arg, "%M:%hu", mg_print_ip, a, mg_ntohs(a->port));
+}
+
+size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap) {
+  uint8_t *p = va_arg(*ap, uint8_t *);
+  return mg_xprintf(out, arg, "%02x:%02x:%02x:%02x:%02x:%02x", p[0], p[1], p[2],
+                    p[3], p[4], p[5]);
 }
 
 #if MG_ENABLE_CUSTOM_MILLIS
@@ -6110,7 +6117,6 @@ static size_t mip_driver_stm32_tx(const void *buf, size_t len, struct mip_if *if
     s_txdesc[s_txno][0] = BIT(20) | BIT(28) | BIT(29) | BIT(30);  // Chain,FS,LS
     s_txdesc[s_txno][0] |= BIT(31);  // Set OWN bit - let DMA take over
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
-    printf("sent\n");
   }
   ETH->DMASR = BIT(2) | BIT(5);  // Clear any prior TBUS/TUS
   ETH->DMATPDR = 0;              // and resume
@@ -6124,11 +6130,9 @@ static bool mip_driver_stm32_up(struct mip_if *ifp) {
   return bsr & BIT(2) ? 1 : 0;
 }
 
-static uint32_t s_rxno;
 void ETH_IRQHandler(void);
+static uint32_t s_rxno;
 void ETH_IRQHandler(void) {
-  static int cnt;
-  printf("--> %d\n", cnt++);
   qp_mark(QP_IRQTRIGGERED, 0);
   if (ETH->DMASR & BIT(6)) {             // Frame received, loop
     ETH->DMASR = BIT(16) | BIT(6);       // Clear flag
