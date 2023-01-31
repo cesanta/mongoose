@@ -222,7 +222,7 @@ static void arp_cache_init(uint8_t *p, int n, int size) {
 static inline void arp_cache_dump(const uint8_t *p) {
   MG_INFO(("ARP cache:"));
   for (uint8_t i = 0, j = p[1]; i < MIP_ARP_ENTRIES; i++, j = p[j + 1]) {
-    MG_INFO(("  %I -> %A", 4, &p[j + 2], &p[j + 6]));
+    MG_INFO(("  %M -> %M", mg_print_ip4, &p[j + 2], mg_print_mac, &p[j + 6]));
   }
 }
 #endif
@@ -238,7 +238,8 @@ static uint8_t *arp_cache_find(struct mip_if *ifp, uint32_t ip) {
   for (uint8_t i = 0, j = p[1]; i < MIP_ARP_ENTRIES; i++, j = p[j + 1]) {
     if (memcmp(p + j + 2, &ip, sizeof(ip)) == 0) {
       p[1] = j, p[0] = p[j];  // Found entry! Point list head to us
-      // MG_DEBUG(("ARP find: %I @ %A", 4, &ip, &p[j + 6]));
+      // MG_DEBUG(("ARP find: %M @ %M", mg_print_ip4, &ip, mg_print_mac, &p[j +
+      // 6]));
       return p + j + 6;  // And return MAC address
     }
   }
@@ -252,7 +253,7 @@ static void arp_cache_add(struct mip_if *ifp, uint32_t ip, uint8_t mac[6]) {
   memcpy(p + p[0] + 2, &ip, sizeof(ip));  // Replace last entry: IP address
   memcpy(p + p[0] + 6, mac, 6);           // And MAC address
   p[1] = p[0], p[0] = p[p[1]];            // Point list head to us
-  MG_DEBUG(("ARP cache: added %I @ %A", 4, &ip, mac));
+  MG_DEBUG(("ARP cache: added %M @ %M", mg_print_ip4, &ip, mg_print_mac, mac));
 }
 
 static size_t ether_output(struct mip_if *ifp, size_t len) {
@@ -278,8 +279,8 @@ static void arp_ask(struct mip_if *ifp, uint32_t ip) {
 
 static void onstatechange(struct mip_if *ifp) {
   if (ifp->state == MIP_STATE_READY) {
-    MG_INFO(("READY, IP: %I", 4, &ifp->ip));
-    MG_INFO(("       GW: %I", 4, &ifp->gw));
+    MG_INFO(("READY, IP: %M", mg_print_ip4, &ifp->ip));
+    MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
     if (ifp->lease_expire > ifp->now) {
       MG_INFO(
           ("       Lease: %lld sec", (ifp->lease_expire - ifp->now) / 1000));
@@ -375,8 +376,8 @@ static void tx_dhcp_discover(struct mip_if *ifp) {
 static void rx_arp(struct mip_if *ifp, struct pkt *pkt) {
   if (pkt->arp->op == mg_htons(1) && pkt->arp->tpa == ifp->ip) {
     // ARP request. Make a response, then send
-    MG_DEBUG(("ARP op %d %I: %I?", mg_ntohs(pkt->arp->op), 4, &pkt->arp->spa, 4,
-              &pkt->arp->tpa));
+    MG_DEBUG(("ARP op %d %M: %M?", mg_ntohs(pkt->arp->op), mg_print_ip4,
+              &pkt->arp->spa, mg_print_ip4, &pkt->arp->tpa));
     struct eth *eth = (struct eth *) ifp->tx.ptr;
     struct arp *arp = (struct arp *) (eth + 1);
     memcpy(eth->dst, pkt->eth->src, sizeof(eth->dst));
@@ -388,7 +389,7 @@ static void rx_arp(struct mip_if *ifp, struct pkt *pkt) {
     memcpy(arp->sha, ifp->mac, sizeof(pkt->arp->sha));
     arp->tpa = pkt->arp->spa;
     arp->spa = ifp->ip;
-    MG_DEBUG(("ARP response: we're %I", 4, &ifp->ip));
+    MG_DEBUG(("ARP response: we're %M", mg_print_ip4, &ifp->ip));
     ether_output(ifp, PDIFF(eth, arp + 1));
   } else if (pkt->arp->op == mg_htons(2)) {
     if (memcmp(pkt->arp->tha, ifp->mac, sizeof(pkt->arp->tha)) != 0) return;
@@ -558,8 +559,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   settmout(c, MIP_TTYPE_KEEPALIVE);
   c->rem.ip = pkt->ip->src;
   c->rem.port = pkt->tcp->sport;
-  MG_DEBUG(
-      ("%lu accepted %I:%hu", c->id, 4, &c->rem.ip, mg_ntohs(c->rem.port)));
+  MG_DEBUG(("%lu accepted %M", c->id, mg_print_ip_port, &c->rem));
   LIST_ADD_HEAD(struct mg_connection, &lsn->mgr->conns, c);
   c->is_accepted = 1;
   c->is_hexdumping = lsn->is_hexdumping;
@@ -675,7 +675,7 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
   if (c != NULL && c->is_connecting && pkt->tcp->flags & (TH_SYN | TH_ACK)) {
     s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
     tx_tcp_pkt(ifp, pkt, TH_ACK, pkt->tcp->ack, NULL, 0);
-    c->is_connecting = 0;             // Client connected
+    c->is_connecting = 0;  // Client connected
     settmout(c, MIP_TTYPE_KEEPALIVE);
     mg_call(c, MG_EV_CONNECT, NULL);  // Let user know
   } else if (c != NULL && c->is_connecting) {
@@ -684,15 +684,16 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
     mg_error(c, "peer RST");  // RFC-1122 4.2.2.13
   } else if (c != NULL) {
 #if 0
-    MG_DEBUG(("%lu %d %I:%hu -> %I:%hu", c->id, (int) pkt->raw.len,
-              4, &pkt->ip->src, mg_ntohs(pkt->tcp->sport),
-              4, &pkt->ip->dst, mg_ntohs(pkt->tcp->dport)));
+    MG_DEBUG(("%lu %d %M:%hu -> %M:%hu", c->id, (int) pkt->raw.len,
+              mg_print_ip4, &pkt->ip->src, mg_ntohs(pkt->tcp->sport),
+              mg_print_ip4, &pkt->ip->dst, mg_ntohs(pkt->tcp->dport)));
     mg_hexdump(pkt->pay.buf, pkt->pay.len);
 #endif
-    s->tmiss = 0;                      // Reset missed keep-alive counter
-    if (s->ttype == MIP_TTYPE_KEEPALIVE) // Advance keep-alive timer
-      settmout(c, MIP_TTYPE_KEEPALIVE);  // unless a former ACK timeout is pending
-    read_conn(c, pkt);                 // Override timer with ACK timeout if needed
+    s->tmiss = 0;                         // Reset missed keep-alive counter
+    if (s->ttype == MIP_TTYPE_KEEPALIVE)  // Advance keep-alive timer
+      settmout(c,
+               MIP_TTYPE_KEEPALIVE);  // unless a former ACK timeout is pending
+    read_conn(c, pkt);  // Override timer with ACK timeout if needed
   } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (pkt->tcp->flags & TH_RST) {
@@ -706,7 +707,7 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
     tx_tcp_pkt(ifp, pkt, TH_FIN | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (mg_htonl(pkt->tcp->ack) == mg_htons(pkt->tcp->sport) + 1U) {
     accept_conn(c, pkt);
-  } else if (!c->is_accepted ) {  // no peer
+  } else if (!c->is_accepted) {  // no peer
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else {
     // MG_DEBUG(("dropped silently.."));
@@ -928,8 +929,8 @@ void mg_connect_resolved(struct mg_connection *c) {
   if (ifp->eport < MIP_ETHEMERAL_PORT) ifp->eport = MIP_ETHEMERAL_PORT;
   c->loc.ip = ifp->ip;
   c->loc.port = mg_htons(ifp->eport++);
-  MG_DEBUG(("%lu %I:%hu->%I:%hu", c->id, 4, &c->loc.ip, mg_ntohs(c->loc.port),
-            4, &c->rem.ip, mg_ntohs(c->rem.port)));
+  MG_DEBUG(("%lu %M -> %M", c->id, mg_print_ip_port, &c->loc, mg_print_ip_port,
+            &c->rem));
   mg_call(c, MG_EV_RESOLVE, NULL);
   if (c->is_udp) {
     mg_call(c, MG_EV_CONNECT, NULL);
