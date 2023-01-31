@@ -886,6 +886,8 @@ bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
 
 
 
+
+
 void mg_random(void *buf, size_t len);
 char *mg_random_str(char *buf, size_t len);
 uint16_t mg_ntohs(uint16_t net);
@@ -904,6 +906,10 @@ uint64_t mg_millis(void);
 #define MG_U8P(ADDR) ((uint8_t *) (ADDR))
 #define MG_IPADDR_PARTS(ADDR) \
   MG_U8P(ADDR)[0], MG_U8P(ADDR)[1], MG_U8P(ADDR)[2], MG_U8P(ADDR)[3]
+
+size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap);
+size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap);
+size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap);
 
 // Linked list management macros
 #define LIST_ADD_HEAD(type_, head_, elem_) \
@@ -1111,8 +1117,6 @@ bool mg_open_listener(struct mg_connection *c, const char *url);
 // Utility functions
 struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg);
-size_t mg_print_ip(void (*out)(char, void *), void *ptr, va_list *ap);
-size_t mg_print_ip_port(void (*out)(char, void *), void *ptr, va_list *ap);
 
 // Low-level IO primives used by TLS layer
 enum { MG_IO_ERR = -1, MG_IO_WAIT = -2, MG_IO_RESET = -3 };

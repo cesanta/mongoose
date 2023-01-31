@@ -2,6 +2,8 @@
 
 #include "arch.h"
 #include "config.h"
+#include "fmt.h"
+#include "net.h"
 #include "str.h"
 
 void mg_random(void *buf, size_t len);
@@ -22,6 +24,10 @@ uint64_t mg_millis(void);
 #define MG_U8P(ADDR) ((uint8_t *) (ADDR))
 #define MG_IPADDR_PARTS(ADDR) \
   MG_U8P(ADDR)[0], MG_U8P(ADDR)[1], MG_U8P(ADDR)[2], MG_U8P(ADDR)[3]
+
+size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap);
+size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap);
+size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap);
 
 // Linked list management macros
 #define LIST_ADD_HEAD(type_, head_, elem_) \
