@@ -17,7 +17,7 @@ zephyr:
 	$(DOCKER) sh -c 'cd $(ZEPHYR_DIR) && west update'
 
 build:
-	cp $(TOP_DIR)/mongoose.[c,h] src/
+	cp $(TOP_DIR)/mongoose.[ch] src/
 	$(DOCKER) west build $(BUILD_ARGS) -p auto $(realpath $(CURDIR))
 
 run: DOCKER_ARGS ?= --cap-add=NET_ADMIN --device /dev/net/tun --net=host -it
