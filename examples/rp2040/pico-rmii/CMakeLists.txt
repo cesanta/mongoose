@@ -15,8 +15,13 @@ add_compile_definitions(
 add_executable(firmware
         driver_rp2040_rmii.c
 	main.c
-	mongoose.c
+	../../../mongoose.c
         )
+
+target_include_directories(firmware PUBLIC
+  .
+  ../../..
+)
 
 # enable usb output, disable uart output
 pico_enable_stdio_usb(firmware 1)
