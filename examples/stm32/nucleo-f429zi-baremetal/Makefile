@@ -23,7 +23,8 @@ flash: firmware.bin
 
 # Requires env variable VCON_API_KEY set
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/2
-test: update
+test:	EXTRA_CFLAGS += -DUART_DEBUG=UART1
+test:	update
 	curl --fail -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
 	grep 'Ethernet: up' /tmp/output.txt
 	grep 'MQTT connected' /tmp/output.txt

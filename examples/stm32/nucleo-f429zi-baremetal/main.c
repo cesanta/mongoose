@@ -44,7 +44,7 @@ int main(void) {
   gpio_output(LED2);                   // Setup blue LED
   gpio_input(BTN1);                    // Set button to input
   irq_exti_attach(BTN1);               // Attach BTN1 to exti
-  uart_init(UART1, 115200);            // Initialise debug printf
+  uart_init(UART_DEBUG, 115200);       // Initialise debug printf
 
   MG_INFO(("Starting, CPU freq %g MHz", (double) SYS_FREQUENCY / 1000000));
 
