@@ -6,11 +6,19 @@
 #define MG_ENABLE_CUSTOM_MILLIS 1
 #define closesocket(x) closesocket(x)
 #define mkdir(a, b) (-1)
-#define EWOULDBLOCK BSD_EWOULDBLOCK
-#define EAGAIN BSD_EWOULDBLOCK
-#define EINPROGRESS BSD_EWOULDBLOCK
-#define EINTR BSD_EWOULDBLOCK
-#define ECONNRESET BSD_ECONNRESET
-#define EPIPE BSD_ECONNRESET
+
 #define TCP_NODELAY SO_KEEPALIVE
+
+#define MG_SOCK_ERR(errcode) ((errcode) < 0 ? (errcode) : 0)
+
+#define MG_SOCK_PENDING(errcode)                                \
+  ((errcode) == BSD_EWOULDBLOCK || (errcode) == BSD_EALREADY || \
+   (errcode) == BSD_EINPROGRESS)
+
+#define MG_SOCK_RESET(errcode) \
+  ((errcode) == BSD_ECONNABORTED || (errcode) == BSD_ECONNRESET)
+
+#define MG_SOCK_INTR(fd) 0
+
+#define socklen_t int
 #endif
