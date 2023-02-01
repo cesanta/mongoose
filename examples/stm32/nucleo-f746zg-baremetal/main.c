@@ -12,7 +12,6 @@
 static uint64_t s_ticks, s_exti;  // Counters, increased by IRQ handlers
 
 static void blink_cb(void *arg) {  // Blink periodically
-  // MG_INFO(("ticks: %u", (unsigned) s_ticks));
   gpio_toggle(LED2);
   (void) arg;
 }
@@ -37,13 +36,14 @@ void EXTI15_10_IRQHandler(void) {  // External interrupt handler
 }
 
 int main(void) {
-  clock_init();                      // Set clock to 216MHz
-  systick_init(SYS_FREQUENCY / 1000);  // Increment s_ticks every ms
-  gpio_output(LED1);                 // Setup green LED
-  gpio_output(LED2);                 // Setup blue LED
-  gpio_input(BTN1);                  // Set button to input
-  irq_exti_attach(BTN1);             // Attach BTN1 to exti
-  uart_init(UART_DEBUG, 115200);           // It is wired to the debug port
+  static struct uart *uart = UART_DEBUG;  // Use UART3 - its attached to debug
+  clock_init();                           // Set clock to 216MHz
+  systick_init(SYS_FREQUENCY / 1000);     // Increment s_ticks every ms
+  gpio_output(LED1);                      // Setup green LED
+  gpio_output(LED2);                      // Setup blue LED
+  gpio_input(BTN1);                       // Set button to input
+  irq_exti_attach(BTN1);                  // Attach BTN1 to exti
+  uart_init(uart, 115200);                // It is wired to the debug port
 
   // Initialise Ethernet. Enable MAC GPIO pins, see
   // https://www.farnell.com/datasheets/2014265.pdf section 6.10
@@ -69,17 +69,25 @@ int main(void) {
   // Initialise Mongoose network stack
   // Specify MAC address, and IP/mask/GW in network byte order for static
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
-  struct mip_driver_stm32_data driver_data = {.mdc_cr = 4};  // See driver_stm32.h
+  struct mip_driver_stm32_data driver_data = {.mdc_cr =
+                                                  4};  // See driver_stm32.h
   struct mip_if mif = {
       .mac = {2, 0, 1, 2, 3, 5},
       .driver = &mip_driver_stm32,
       .driver_data = &driver_data,
   };
   mip_init(&mgr, &mif);
-  MG_INFO(("Init done, starting main loop"));
 
+  MG_INFO(("Waiting until network is up..."));
+  while (mif.state != MIP_STATE_READY) {
+    mg_mgr_poll(&mgr, 0);
+  }
+
+  MG_INFO(("Initialising application..."));
   extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
   mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, NULL);
+
+  MG_INFO(("Starting event loop"));
   for (;;) mg_mgr_poll(&mgr, 0);  // Infinite event loop
 
   return 0;
