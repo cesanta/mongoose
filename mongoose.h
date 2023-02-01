@@ -403,7 +403,6 @@ typedef enum { false = 0, true = 1 } bool;
 #define MG_INVALID_SOCKET INVALID_SOCKET
 #define MG_SOCKET_TYPE SOCKET
 typedef unsigned long nfds_t;
-#define MG_SOCKET_ERRNO WSAGetLastError()
 #if defined(_MSC_VER)
 #pragma comment(lib, "ws2_32.lib")
 #ifndef alloca
@@ -411,9 +410,6 @@ typedef unsigned long nfds_t;
 #endif
 #endif
 #define poll(a, b, c) WSAPoll((a), (b), (c))
-#ifndef SO_EXCLUSIVEADDRUSE
-#define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
-#endif
 #define closesocket(x) closesocket(x)
 
 typedef int socklen_t;
@@ -423,12 +419,19 @@ typedef int socklen_t;
 #define MG_PATH_MAX FILENAME_MAX
 #endif
 
-#ifndef EINPROGRESS
-#define EINPROGRESS WSAEINPROGRESS
+#ifndef SO_EXCLUSIVEADDRUSE
+#define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
 #endif
-#ifndef EWOULDBLOCK
-#define EWOULDBLOCK WSAEWOULDBLOCK
-#endif
+
+#define MG_SOCK_ERR(errcode) ((errcode) < 0 ? WSAGetLastError() : 0)
+
+#define MG_SOCK_PENDING(errcode)                                            \
+  (((errcode) < 0) &&                                                       \
+   (WSAGetLastError() == WSAEINTR || WSAGetLastError() == WSAEINPROGRESS || \
+    WSAGetLastError() == WSAEWOULDBLOCK))
+
+#define MG_SOCK_RESET(errcode) \
+  (((errcode) < 0) && (WSAGetLastError() == WSAECONNRESET))
 
 #define realpath(a, b) _fullpath((b), (a), MG_PATH_MAX)
 #define sleep(x) Sleep(x)
@@ -568,13 +571,21 @@ struct timeval {
 #define MG_ENABLE_CUSTOM_MILLIS 1
 #define closesocket(x) closesocket(x)
 #define mkdir(a, b) (-1)
-#define EWOULDBLOCK BSD_EWOULDBLOCK
-#define EAGAIN BSD_EWOULDBLOCK
-#define EINPROGRESS BSD_EWOULDBLOCK
-#define EINTR BSD_EWOULDBLOCK
-#define ECONNRESET BSD_ECONNRESET
-#define EPIPE BSD_ECONNRESET
+
 #define TCP_NODELAY SO_KEEPALIVE
+
+#define MG_SOCK_ERR(errcode) ((errcode) < 0 ? (errcode) : 0)
+
+#define MG_SOCK_PENDING(errcode)                                \
+  ((errcode) == BSD_EWOULDBLOCK || (errcode) == BSD_EALREADY || \
+   (errcode) == BSD_EINPROGRESS)
+
+#define MG_SOCK_RESET(errcode) \
+  ((errcode) == BSD_ECONNABORTED || (errcode) == BSD_ECONNRESET)
+
+#define MG_SOCK_INTR(fd) 0
+
+#define socklen_t int
 #endif
 
 
