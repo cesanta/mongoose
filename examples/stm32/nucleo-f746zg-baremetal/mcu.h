@@ -158,6 +158,10 @@ struct uart {
 #define UART2 ((struct uart *) 0x40004400)
 #define UART3 ((struct uart *) 0x40004800)
 
+#ifndef UART_DEBUG
+#define UART_DEBUG UART3
+#endif
+
 static inline void uart_init(struct uart *uart, unsigned long baud) {
   // https://www.st.com/resource/en/datasheet/stm32f746zg.pdf
   uint8_t af = 7;           // Alternate function
