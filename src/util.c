@@ -87,18 +87,31 @@ int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip) {
   return allowed == '+';
 }
 
-size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap) {
-  struct mg_addr *addr = va_arg(*ap, struct mg_addr *);
-  if (addr->is_ip6) {
-    uint16_t *p = (uint16_t *) addr->ip6;
+static size_t print_ip4(void (*out)(char, void *), void *arg, uint8_t *p) {
+    return mg_xprintf(out, arg, "%d.%d.%d.%d", p[0], p[1], p[2], p[3]);
+}
+
+static size_t print_ip6(void (*out)(char, void *), void *arg, uint16_t *p) {
     return mg_xprintf(out, arg, "[%x:%x:%x:%x:%x:%x:%x:%x]", mg_ntohs(p[0]),
                       mg_ntohs(p[1]), mg_ntohs(p[2]), mg_ntohs(p[3]),
                       mg_ntohs(p[4]), mg_ntohs(p[5]), mg_ntohs(p[6]),
                       mg_ntohs(p[7]));
-  } else {
-    uint8_t *p = (uint8_t *) &addr->ip;
-    return mg_xprintf(out, arg, "%d.%d.%d.%d", p[0], p[1], p[2], p[3]);
-  }
+}
+
+size_t mg_print_ip4(void (*out)(char, void *), void *arg, va_list *ap) {
+  uint8_t *p = va_arg(*ap, uint8_t *);
+  return print_ip4(out, arg, p);
+}
+
+size_t mg_print_ip6(void (*out)(char, void *), void *arg, va_list *ap) {
+  uint16_t *p = va_arg(*ap, uint16_t *);
+  return print_ip6(out, arg, p);
+}
+
+size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap) {
+  struct mg_addr *addr = va_arg(*ap, struct mg_addr *);
+  if (addr->is_ip6) return print_ip6(out, arg, (uint16_t *) addr->ip6);
+  return print_ip4(out, arg, (uint8_t *) &addr->ip);
 }
 
 size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap) {

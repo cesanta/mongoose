@@ -909,6 +909,8 @@ uint64_t mg_millis(void);
 
 size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap);
+size_t mg_print_ip4(void (*out)(char, void *), void *arg, va_list *ap);
+size_t mg_print_ip6(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap);
 
 // Linked list management macros
