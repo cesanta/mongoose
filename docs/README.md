@@ -10,18 +10,62 @@ products have utilized it. It even runs on the
 International Space Station! Mongoose makes embedded network programming fast,
 robust, and easy.
 
-Mongoose has two basic data structures:
+Mongoose works on Windows, Linux, Mac, and on a many embedded architectures
+such as STM32, NXP, TI, ESP32, and so on. It can run on top of the existing
+OS and TCP/IP stack like FreeRTOS and lwIP, as well as on a bare metal,
+utilising Mongoose's built-in TCP/IP stack and network drivers.
 
-- `struct mg_mgr` - An event manager that holds all active connections
-- `struct mg_connection` - A single connection descriptor
+## How to build and run examples
 
-Connections could be listening, outbound, or inbound. Outbound
-connections are created by the `mg_connect()` call. Listening connections are
-created by the `mg_listen()` call. Inbound connections are those accepted by a
-listening connection. Each connection is described by a `struct mg_connection`
-structure, which has a number of fields. All fields are exposed to the
-application by design, to give an application full visibility into
-Mongoose's internals.
+The easiest way to start with Mongoose is to try to build and run examples.
+Required tools are: C/C++ compiler, `make` utility, and `git` utility.
+
+**on MacOS**, start a terminal, and execute:
+
+```sh
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install gcc make git
+```
+
+**On Linux (Ubuntu)**, start a terminal, and execute:
+
+```sh
+sudo apt -y update
+sudo apt -y install build-essentialmake git
+```
+
+**on Windows:**
+
+- Install Git from https://git-scm.com/download/win
+- Install "Build Tools for Visual Studio" from https://visualstudio.microsoft.com/downloads
+- Create `c:\tools` folder
+- Download [make-4.4-without-guile-w32-bin.zip](https://sourceforge.net/projects/ezwinports/files/make-4.4-without-guile-w32-bin.zip/download) and unpack `bin/make.exe` into `c:\tools`
+- Add `c:\tools` to the `Path` environment variable
+
+
+Now, when all required tools are installed, start terminal/command prompt,
+and download Mongoose repository, go to HTTP server example, build it and run it:
+
+```sh
+git clone https://github.com/cesanta/mongoose
+cd mongoose/examples/http-server
+make
+```
+
+That's it! Now start your browser, and point it to http://localhost:8000
+
+> NOTE: if you want to build and run embedded examples too, such as
+> STM32 or Raspberry PI RP2040 examples, install an extra tool - an ARM GCC
+> compiler. On Mac, `brew install gcc-arm-embedded`. On Linux (Ubuntu),
+> `sudo apt -y install gcc-arm-none-eabi`. On Windows,
+> download and install [gcc-arm-none-eabi-10.3-2021.10-win32.exe](https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-win32.exe?rev=29bb46cfa0434fbda93abb33c1d480e6&hash=3C58D05EA5D32EF127B9E4D13B3244D26188713C)
+> and enable "Add path to environment variable" during the installation.
+> When done, you can build baremetal embedded examples:
+
+```sh
+cd examples/stm32/nucleo-h743zi-baremetal
+make
+```
 
 ## 2-minute integration guide
 
@@ -41,8 +85,15 @@ into the source code tree
 ...
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_http_serve_opts opts = {.root_dir = "."};   // Serve local dir
-  if (ev == MG_EV_HTTP_MSG) mg_http_serve_dir(c, (struct mg_http_message *)ev_data, &opts);
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_http_match_uri(hm, "/api/hello")) {              // On /api/hello requests,
+      mg_http_reply(c, 200, "", "{%Q:%d}\n", "status", 1);  // Send dynamic JSON response
+    } else {                                                // For all other URIs,
+      struct mg_http_serve_opts opts = {.root_dir = "."};   // Serve files
+      mg_http_serve_dir(c, hm, &opts);                      // From root_dir
+    }
+  }
 }
 ...
 
@@ -50,9 +101,11 @@ int main() {
   ...
 
   struct mg_mgr mgr;                                
-  mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, "0.0.0.0:8000", fn, NULL);     // Create listening connection
-  for (;;) mg_mgr_poll(&mgr, 1000);                   // Block forever
+  mg_mgr_init(&mgr);                                      // Init manager
+  mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, &mgr);  // Setup listener
+  for (;;) mg_mgr_poll(&mgr, 1000);                       // Infinite event loop
+
+  return 0;
 }
 ```
 
@@ -75,6 +128,21 @@ incoming data and may invoke protocol-specific events like `MG_EV_HTTP_MSG`.
 Since Mongoose's core is not protected against concurrent accesses, make
 sure that all `mg_*` API functions are called from the same thread or RTOS
 task.
+
+## Connections and event manager
+
+Mongoose has two basic data structures:
+
+- `struct mg_mgr` - An event manager that holds all active connections
+- `struct mg_connection` - A single connection descriptor
+
+Connections could be listening, outbound, or inbound. Outbound
+connections are created by the `mg_connect()` call. Listening connections are
+created by the `mg_listen()` call. Inbound connections are those accepted by a
+listening connection. Each connection is described by a `struct mg_connection`
+structure, which has a number of fields. All fields are exposed to the
+application by design, to give an application full visibility into
+Mongoose's internals.
 
 ## Send and receive buffers
 
