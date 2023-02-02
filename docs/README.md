@@ -180,7 +180,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 - `void *ev_data` - Points to the event-specific data, and it has a different
   meaning for different events. For example, for an `MG_EV_READ` event,
   `ev_data`
-  is an `int *` pointing to the number of bytes received from a remote
+  is an `long *` pointing to the number of bytes received from a remote
   peer and saved into the `c->recv` IO buffer. The exact meaning of `ev_data` is
   described for each event. Protocol-specific events usually have `ev_data`
   pointing to structures that hold protocol-specific information
