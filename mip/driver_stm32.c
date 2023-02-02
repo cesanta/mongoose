@@ -29,7 +29,12 @@ static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];      // TX descriptors
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
 static struct mip_if *s_ifp;                         // MIP interface
-enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
+enum {
+  PHY_ADDR = 0,
+  PHY_BCR = 0,
+  PHY_BSR = 1,
+  PHY_CSCR = 31
+};  // PHY constants
 
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMIIAR &= (7 << 2);
@@ -102,7 +107,8 @@ static int guess_mdc_cr(void) {
 }
 
 static bool mip_driver_stm32_init(struct mip_if *ifp) {
-  struct mip_driver_stm32_data *d = (struct mip_driver_stm32_data *) ifp->driver_data;
+  struct mip_driver_stm32_data *d =
+      (struct mip_driver_stm32_data *) ifp->driver_data;
   s_ifp = ifp;
 
   // Init RX descriptors
@@ -152,7 +158,8 @@ static bool mip_driver_stm32_init(struct mip_if *ifp) {
 }
 
 static uint32_t s_txno;
-static size_t mip_driver_stm32_tx(const void *buf, size_t len, struct mip_if *ifp) {
+static size_t mip_driver_stm32_tx(const void *buf, size_t len,
+                                  struct mip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
@@ -175,8 +182,17 @@ static size_t mip_driver_stm32_tx(const void *buf, size_t len, struct mip_if *if
 
 static bool mip_driver_stm32_up(struct mip_if *ifp) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
-  (void) ifp;
-  return bsr & BIT(2) ? 1 : 0;
+  bool up = bsr & BIT(2) ? 1 : 0;
+  if ((ifp->state == MIP_STATE_DOWN) && up) {  // link state just went up
+    uint32_t scsr = eth_read_phy(PHY_ADDR, PHY_CSCR);
+    uint32_t maccr = ETH->MACCR | BIT(14) | BIT(11);  // 100M, Full-duplex
+    if ((scsr & BIT(3)) == 0) maccr &= ~BIT(14);      // 10M
+    if ((scsr & BIT(4)) == 0) maccr &= ~BIT(11);      // Half-duplex
+    ETH->MACCR = maccr;  // IRQ handler does not fiddle with this register
+    MG_DEBUG(("Link is %uM %s-duplex", maccr & BIT(14) ? 100 : 10,
+              maccr & BIT(11) ? "full" : "half"));
+  }
+  return up;
 }
 
 void ETH_IRQHandler(void);
@@ -202,6 +218,7 @@ void ETH_IRQHandler(void) {
   ETH->DMARPDR = 0;     // and resume RX
 }
 
-struct mip_driver mip_driver_stm32 = {
-    mip_driver_stm32_init, mip_driver_stm32_tx, mip_driver_rx, mip_driver_stm32_up};
+struct mip_driver mip_driver_stm32 = {mip_driver_stm32_init,
+                                      mip_driver_stm32_tx, mip_driver_rx,
+                                      mip_driver_stm32_up};
 #endif
