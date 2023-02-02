@@ -18,33 +18,17 @@ utilising Mongoose's built-in TCP/IP stack and network drivers.
 ## How to build and run examples
 
 The easiest way to start with Mongoose is to try to build and run examples.
-Required tools are: C/C++ compiler, `make` utility, and `git` utility.
+The required tools are: a C/C++ compiler, the `make` utility, and `git`.
 
-**on MacOS**, start a terminal, and execute:
+You can follow these links for tutorials on how to install these tools on your platform of choice
 
-```sh
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install gcc make git
-```
+- [GCC](http://mongoose.ws/tutorials/tools/#gcc), the GNU C/C++ compiler collection
+  - On Windows, you might want to use "[Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads)" instead
+- [GNU make](http://mongoose.ws/tutorials/tools/#gnu-make)
+- [Git](http://mongoose.ws/tutorials/tools/#git)
 
-**On Linux (Ubuntu)**, start a terminal, and execute:
-
-```sh
-sudo apt -y update
-sudo apt -y install build-essentialmake git
-```
-
-**on Windows:**
-
-- Install Git from https://git-scm.com/download/win
-- Install "Build Tools for Visual Studio" from https://visualstudio.microsoft.com/downloads
-- Create `c:\tools` folder
-- Download [make-4.4-without-guile-w32-bin.zip](https://sourceforge.net/projects/ezwinports/files/make-4.4-without-guile-w32-bin.zip/download) and unpack `bin/make.exe` into `c:\tools`
-- Add `c:\tools` to the `Path` environment variable
-
-
-Now, when all required tools are installed, start terminal/command prompt,
-and download Mongoose repository, go to HTTP server example, build it and run it:
+Now, when all required tools are installed, start a terminal/command prompt,
+and download the Mongoose repository, go to the HTTP server example, build it, and run it:
 
 ```sh
 git clone https://github.com/cesanta/mongoose
@@ -55,16 +39,16 @@ make
 That's it! Now start your browser, and point it to http://localhost:8000
 
 > NOTE: if you want to build and run embedded examples too, such as
-> STM32 or Raspberry PI RP2040 examples, install an extra tool - an ARM GCC
-> compiler. On Mac, `brew install gcc-arm-embedded`. On Linux (Ubuntu),
-> `sudo apt -y install gcc-arm-none-eabi`. On Windows,
-> download and install [gcc-arm-none-eabi-10.3-2021.10-win32.exe](https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-win32.exe?rev=29bb46cfa0434fbda93abb33c1d480e6&hash=3C58D05EA5D32EF127B9E4D13B3244D26188713C)
-> and enable "Add path to environment variable" during the installation.
+> STM32 or Raspberry Pi RP2040 examples, install an extra tool - the ARM GCC
+> compiler:
+
+- [ARM GCC](http://mongoose.ws/tutorials/tools/#arm-gcc)
+
 > When done, you can build baremetal embedded examples:
 
 ```sh
 cd examples/stm32/nucleo-h743zi-baremetal
-make
+make build
 ```
 
 ## 2-minute integration guide
@@ -179,8 +163,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   arrives on an inbound connection, `ev` would be `MG_EV_READ`
 - `void *ev_data` - Points to the event-specific data, and it has a different
   meaning for different events. For example, for an `MG_EV_READ` event,
-  `ev_data`
-  is an `int *` pointing to the number of bytes received from a remote
+  `ev_data` is a `long *` pointing to the number of bytes received from a remote
   peer and saved into the `c->recv` IO buffer. The exact meaning of `ev_data` is
   described for each event. Protocol-specific events usually have `ev_data`
   pointing to structures that hold protocol-specific information
@@ -310,12 +293,12 @@ struct mg_connection {
   // it per-connection to something else
   mg_http_listen(&mgr, "http://localhost:1234", fn, NULL);
   ```
-  Another option is to use `c->label` buffer, which can
+  Another option is to use the `c->data` buffer, which can
   hold some amount of connection-specific data without extra memory allocation:
   ```c
   static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (ev == MG_EV_WS_OPEN) {
-      c->label[0] = 'W'; // Established websocket connection, store something
+      c->data[0] = 'W'; // Established websocket connection, store something
       ...
   ```
 - If you need to close the connection, set `c->is_draining = 1;` in your
@@ -586,7 +569,7 @@ struct mg_connection {
   void *fn_data;               // User-specified function parameter
   mg_event_handler_t pfn;      // Protocol-specific handler function
   void *pfn_data;              // Protocol-specific function parameter
-  char label[50];              // Arbitrary label
+  char data[MG_DATA_SIZE];     // Arbitrary connection data, MG_DATA_SIZE defaults to 32 bytes
   void *tls;                   // TLS specific data
   unsigned is_listening : 1;   // Listening connection
   unsigned is_client : 1;      // Outbound (client) connection
@@ -2667,8 +2650,6 @@ Supported format specifiers:
 - `q` - expect `char *`, outputs JSON-escaped string (extension)
 - `Q` - expect `char *`, outputs double-quoted JSON-escaped string (extension)
 - `H` - expect `int`, `void *`, outputs double-quoted hex string (extension)
-- `I` - expect `int` (4 or 6), `void *`, outputs IP address (extension)
-- `A` - expect `void *`, outputs hardware address (extension)
 - `V` - expect `int`, `void *`, outputs double-quoted base64 string (extension)
 - `M` - expect `mg_pfn_t`, calls another print function (extension)
 - `g`, `f` - expect `double`
@@ -2697,8 +2678,6 @@ mg_snprintf(buf, sizeof(buf), "%05x", 123);             // 00123
 mg_snprintf(buf, sizeof(buf), "%%-%3s", "a");           // %-  a
 mg_snprintf(buf, sizeof(buf), "hi, %Q", "a");           // hi, "a"
 mg_snprintf(buf, sizeof(buf), "r: %M, %d", f,1,2,7);    // r: 3, 7
-mg_snprintf(buf, sizeof(buf), "%I", 4, "abcd");         // 97.98.99.100
-mg_snprintf(buf, sizeof(buf), "%A", "abcdef");          // 61:62:63:64:65:66
 
 // Printing sub-function for %M specifier. Grabs two int parameters
 size_t f(void (*out)(char, void *), void *ptr, va_list *ap) {
@@ -3578,7 +3557,7 @@ Usage example:
 uint32_t val = mg_ntohl(0x12345678);
 ```
 
-### mg\_ntohs()
+### mg\_htons()
 
 ```c
 uint16_t mg_htons(uint16_t h);
@@ -3707,6 +3686,111 @@ Usage example:
 char url[] = "example.org/test";
 char buf[1024];
 mg_url_encode(url, sizeof(url) - 1, buf, sizeof(buf)); // buf is now "example.org%2Ftest"
+```
+
+### mg\_print\_ip
+
+```c
+size_t mg_print_ip(void (*out)(char, void *), void *param, va_list *ap);
+```
+
+Print an IP address using a specified character output function. Expects a pointer to a `struct mg_str` as the next argument in the _va\_list_ `ap`
+
+Parameters:
+- `out` - function to be used for printing chars
+- `param` - argument to be passed to `out`
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+struct mg_address addr;
+addr.ip = MG_U32('a', 'b', 'c', 'd');
+mg_snprintf(buf, sizeof(buf), "%M", mg_print_ip, &addr);         // 97.98.99.100
+```
+
+### mg\_print\_ip\_port
+
+```c
+size_t mg_print_ip_port(void (*out)(char, void *), void *param, va_list *ap);
+```
+
+Print an IP address and port, using a specified character output function. Expects a pointer to a `struct mg_str` as the next argument in the _va\_list_ `ap`
+
+Parameters:
+- `out` - function to be used for printing chars
+- `param` - argument to be passed to `out`
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+struct mg_address addr;
+addr.ip = MG_U32('a', 'b', 'c', 'd');
+addr.port = mg_htons(1234);
+mg_snprintf(buf, sizeof(buf), "%M", mg_print_ip_port, &addr);         // 97.98.99.100:1234
+```
+
+### mg\_print\_ip4
+
+```c
+size_t mg_print_ip4(void (*out)(char, void *), void *param, va_list *ap);
+```
+
+Print an IP address using a specified character output function. Expects a pointer to a buffer containing the IPv4 address in network order as the next argument in the _va\_list_ `ap`
+
+Parameters:
+- `out` - function to be used for printing chars
+- `param` - argument to be passed to `out`
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+mg_snprintf(buf, sizeof(buf), "%M", mg_print_ip4, "abcd");         // 97.98.99.100
+```
+
+### mg\_print\_ip6
+
+```c
+size_t mg_print_ip6(void (*out)(char, void *), void *param, va_list *ap);
+```
+
+Print an IPv6 address using a specified character output function. Expects a pointer to a buffer containing the IPv6 address in network order as the next argument in the _va\_list_ `ap`
+
+Parameters:
+- `out` - function to be used for printing chars
+- `param` - argument to be passed to `out`
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+mg_snprintf(buf, sizeof(buf), "%M", mg_print_ip6, "abcdefghijklmnop");         // [4142:4344:4546:4748:494a:4b4c:4d4e:4f50]
+```
+
+### mg\_print\_mac
+
+```c
+size_t mg_print_mac(void (*out)(char, void *), void *param, va_list *ap);
+```
+
+Print a MAC address using a specified character output function. Expects a pointer to a buffer containing the hardware address as the next argument in the _va\_list_ `ap`
+
+Parameters:
+- `out` - function to be used for printing chars
+- `param` - argument to be passed to `out`
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+mg_snprintf(buf, sizeof(buf), "%M", mg_print_mac, "abcdef");          // 61:62:63:64:65:66
 ```
 
 ## IO Buffers
