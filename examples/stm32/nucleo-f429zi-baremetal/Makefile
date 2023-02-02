@@ -23,14 +23,22 @@ flash: firmware.bin
 
 # Requires env variable VCON_API_KEY set
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/2
-test:	EXTRA_CFLAGS += -DUART_DEBUG=UART1
-test:	update
-	curl --fail -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
-	grep 'Ethernet: up' /tmp/output.txt
-	grep 'MQTT connected' /tmp/output.txt
 
+# Upload firmware to a remote test device
 update: firmware.bin
 	curl --fail -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
+
+# Read serial port on a remote test device for 5 seconds, store in a
+# temporary file, and check the output for expected patterns
+test:	EXTRA_CFLAGS += -DUART_DEBUG=UART1
+test: update
+	curl --fail -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
+	grep 'Ethernet: up' /tmp/output.txt     # Check for network init
+	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
+
+# Read serial port on a remote test device for 5 seconds
+tx:
+	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5
 
 clean:
 	@rm -rf firmware.* *.su
