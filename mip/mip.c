@@ -829,8 +829,10 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 
   // Read data from the network
   size_t len = ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len, ifp);
-  mip_rx(ifp, (void *) ifp->rx.ptr, len);
-  qp_mark(QP_FRAMEDONE, (int) q_space(&ifp->queue));
+  if (len) {
+    mip_rx(ifp, (void *) ifp->rx.ptr, len);
+    qp_mark(QP_FRAMEDONE, (int) q_space(&ifp->queue));
+  }
 
   // Process timeouts
   for (struct mg_connection *c = ifp->mgr->conns; c != NULL; c = c->next) {
@@ -874,7 +876,9 @@ void mip_qwrite(void *buf, size_t len, struct mip_if *ifp) {
 
 size_t mip_qread(void *buf, struct mip_if *ifp) {
   size_t len = q_read(&ifp->queue, buf);
-  qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
+  if (len) {
+    qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
+  }
   return len;
 }
 
