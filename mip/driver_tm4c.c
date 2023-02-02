@@ -35,7 +35,12 @@ static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];      // TX descriptors
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
 static struct mip_if *s_ifp;                         // MIP interface
-enum { EPHY_ADDR = 0, EPHYBMCR = 0, EPHYBMSR = 1 };  // PHY constants
+enum {
+  EPHY_ADDR = 0,
+  EPHYBMCR = 0,
+  EPHYBMSR = 1,
+  EPHYSTS = 16
+};  // PHY constants
 
 static inline void tm4cspin(volatile uint32_t count) {
   while (count--) (void) 0;
@@ -124,7 +129,8 @@ static int guess_mdc_cr(void) {
 }
 
 static bool mip_driver_tm4c_init(struct mip_if *ifp) {
-  struct mip_driver_tm4c_data *d = (struct mip_driver_tm4c_data *) ifp->driver_data;
+  struct mip_driver_tm4c_data *d =
+      (struct mip_driver_tm4c_data *) ifp->driver_data;
   s_ifp = ifp;
 
   // Init RX descriptors
@@ -178,7 +184,8 @@ static bool mip_driver_tm4c_init(struct mip_if *ifp) {
 }
 
 static uint32_t s_txno;
-static size_t mip_driver_tm4c_tx(const void *buf, size_t len, struct mip_if *ifp) {
+static size_t mip_driver_tm4c_tx(const void *buf, size_t len,
+                                 struct mip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // fail
@@ -203,8 +210,17 @@ static size_t mip_driver_tm4c_tx(const void *buf, size_t len, struct mip_if *ifp
 
 static bool mip_driver_tm4c_up(struct mip_if *ifp) {
   uint32_t bmsr = emac_read_phy(EPHY_ADDR, EPHYBMSR);
-  (void) ifp;
-  return (bmsr & BIT(2)) ? 1 : 0;
+  bool up = (bmsr & BIT(2)) ? 1 : 0;
+  if ((ifp->state == MIP_STATE_DOWN) && up) {  // link state just went up
+    uint32_t sts = emac_read_phy(EPHY_ADDR, EPHYSTS);
+    uint32_t emaccfg = EMAC->EMACCFG | BIT(14) | BIT(11);  // 100M, Full-duplex
+    if (sts & BIT(1)) emaccfg &= ~BIT(14);                 // 10M
+    if ((sts & BIT(2)) == 0) emaccfg &= ~BIT(11);          // Half-duplex
+    EMAC->EMACCFG = emaccfg;  // IRQ handler does not fiddle with this register
+    MG_DEBUG(("Link is %uM %s-duplex", emaccfg & BIT(14) ? 100 : 10,
+              emaccfg & BIT(11) ? "full" : "half"));
+  }
+  return up;
 }
 
 void EMAC0_IRQHandler(void);
