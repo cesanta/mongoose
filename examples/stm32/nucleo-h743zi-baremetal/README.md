@@ -1,0 +1,41 @@
+# Baremetal webserver on NUCLEO-H743ZI
+
+This firmware uses MIP, an experimental TCP/IP stack of the Mongoose Network Library,
+which implements the following:
+
+- A complete [HTTP device dashboard](../../device-dashboard) with:
+  - User authentication
+  - Real-time device data graph
+  - Coninfiguration display and update
+  - MQTT communication with a remote MQTT server
+- No dependencies: no HAL, no CMSIS, no RTOS
+- Hand-written [mcu.h](mcu.h) header based on the [datasheet](https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
+- Interrupt-driven [Ethernet driver](../../../drivers/mip_driver_stm32h.c)
+- Debug log on UART3 (st-link)
+
+## Requirements
+
+- [GNU make](http://mongoose.ws/tutorials/tools/#gnu-make)
+- [ARM GCC](http://mongoose.ws/tutorials/tools/#arm-gcc)
+- [stlink](http://mongoose.ws/tutorials/tools/#stlink) for flashing
+
+The links above will send you to tutorials on how to install each of those tools in your workstation for Linux, Mac, and Windows.
+
+## Usage
+
+Plugin your Nucleo board into USB, and attach an Ethernet cable.
+To build and flash:
+
+```sh
+$ make clean flash
+```
+
+To see debug log, use any serial monitor program like `picocom` at 115200 bps and configure it to insert carriage returns after line feeds:
+
+```sh
+$ picocom /dev/ttyACM0 -i -b 115200 --imap=lfcrlf
+```
+
+There is also a [tutorial on a similar example](https://mongoose.ws/tutorials/stm32/nucleo-f746zg-baremetal/) but for the NUCLEO-F746ZG board
+
+For more details and benchmark data on MIP, check the [F746ZG example](../nucleo-f746zg-baremetal/)
