@@ -1,7 +1,10 @@
 ENTRY(_reset);
 MEMORY {
   flash(rx) : ORIGIN = 0x08000000, LENGTH = 2048k
-  sram(rwx) : ORIGIN = 0x20000000, LENGTH = 64k
+  sram(rwx) : ORIGIN = 0x24000000, LENGTH = 512k  /* AXI SRAM in domain D1 */
+  /* 2.3.2: remaining SRAM is in other (non-contiguous) banks,
+     DTCM @0x20000000 is in domain D1 and not accessible by the ETH DMA controller in domain D2
+     SRAM @0x30000000 is in domain D2 and not directly available at startup to be used as stack (8.5.9 page 366) */
 }
 _estack     = ORIGIN(sram) + LENGTH(sram);    /* stack points to end of SRAM */
 

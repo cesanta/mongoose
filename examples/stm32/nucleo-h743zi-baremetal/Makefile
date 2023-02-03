@@ -2,14 +2,14 @@ CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
 						-Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion \
 						-g3 -Os -ffunction-sections -fdata-sections \
             -I. -Ih7/Include -Icmsis/CMSIS/Core/Include \
-            -mcpu=cortex-m7 -mthumb -mfloat-abi=soft \
+            -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 \
             $(EXTRA_CFLAGS)
 LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 SOURCES = startup.c main.c syscalls.c
 
 # Add Mongoose-specific flags and source files
-CFLAGS  += -I../../.. -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_MIP=1 #-DMG_ENABLE_PACKED_FS=1
-SOURCES += ../../../mongoose.c #../../device-dashboard/net.c ../../device-dashboard/packed_fs.c
+CFLAGS  += -I../../.. -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_MIP=1 -DMG_ENABLE_DRIVER_STM32H=1 -DMG_ENABLE_PACKED_FS=1
+SOURCES += ../../../mongoose.c ../../device-dashboard/net.c ../../device-dashboard/packed_fs.c
 
 all build example: firmware.bin
 
@@ -25,11 +25,11 @@ flash: firmware.bin
 
 # Requires env variable VCON_API_KEY set
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/6
-test: update
+test:	EXTRA_CFLAGS += -DUART_DEBUG=UART1
+test:	update
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
-	grep 'ticks:' /tmp/output.txt
-#	grep 'Ethernet: up' /tmp/output.txt
-#	grep 'MQTT connected' /tmp/output.txt
+	grep 'READY, IP:' /tmp/output.txt
+	grep 'MQTT connected' /tmp/output.txt
 
 update: firmware.bin
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<

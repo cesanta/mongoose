@@ -18,22 +18,32 @@
 #define PINNO(pin) (pin & 255)
 #define PINBANK(pin) (pin >> 8)
 
-// TODO: Set clock. Now, running @ default of 64 MHz
-enum { PLL_HSI = 64, PLL_M = 1, PLL_N = 1, PLL_P = 1 };
-#define FLASH_LATENCY 7
-#define SYS_FREQUENCY ((PLL_HSI * PLL_N / PLL_M / PLL_P) * 1000000)
-#define APB2_FREQUENCY SYS_FREQUENCY
-#define APB1_FREQUENCY SYS_FREQUENCY
-
-struct systick {
-  volatile uint32_t CTRL, LOAD, VAL, CALIB;
+// System clock (2.1, Figure 1; 8.5, Figure 45; 8.5.5, Figure 47; 8.5.6, Figure
+// 49) CPU_FREQUENCY <= 480 MHz; hclk = CPU_FREQUENCY / HPRE ; hclk <= 240 MHz;
+// APB clocks <= 120 MHz. D1 domain bus matrix (and so flash) runs at hclk
+// frequency. Configure flash latency (WS) in accordance to hclk freq (4.3.8,
+// Table 17) The Ethernet controller is in D2 domain and runs at hclk frequency
+enum {
+  D1CPRE = 1,  // actual divisor value
+  HPRE = 2,    // actual divisor value
+  D1PPRE = 4,  // register values, divisor value = BIT(value - 3) = / 2
+  D2PPRE1 = 4,
+  D2PPRE2 = 4,
+  D3PPRE = 4
 };
-#define SYSTICK ((struct systick *) 0xe000e010)
-static inline void systick_init(uint32_t ticks) {
-  if ((ticks - 1) > 0xffffff) return;  // Systick timer is 24 bit
-  SYSTICK->LOAD = ticks - 1;
-  SYSTICK->VAL = 0;
-  SYSTICK->CTRL = BIT(0) | BIT(1) | BIT(2);  // Enable systick
+// PLL1_P: odd division factors are not allowed (8.7.13) (according to Cube, '1'
+// is also an "odd division factor").
+// Make sure your chip is revision 'V', otherwise set PLL1_N = 400
+enum { PLL1_HSI = 64, PLL1_M = 32, PLL1_N = 480, PLL1_P = 2 };
+#define FLASH_LATENCY 0x24  // WRHIGHFREQ LATENCY
+#define CPU_FREQUENCY ((PLL1_HSI * PLL1_N / PLL1_M / PLL1_P / D1CPRE) * 1000000)
+// #define CPU_FREQUENCY ((PLL1_HSI / D1CPRE) * 1000000)
+#define AHB_FREQUENCY (CPU_FREQUENCY / HPRE)
+#define APB2_FREQUENCY (AHB_FREQUENCY / (BIT(D2PPRE2 - 3)))
+#define APB1_FREQUENCY (AHB_FREQUENCY / (BIT(D2PPRE1 - 3)))
+
+static inline void spin(volatile uint32_t n) {
+  while (n--) (void) 0;
 }
 
 struct rcc {
@@ -48,10 +58,56 @@ struct rcc {
       APB3LPENR, APB1LLPENR, APB1HLPENR, APB2LPENR, APB4LPENR, RESERVED13[4];
 };
 #define RCC ((struct rcc *) (0x40000000 + 0x18020000 + 0x4400))
+struct pwr {
+  volatile uint32_t CR1, CSR1, CR2, CR3, CPUCR, RESERVED0, D3CR, RESERVED1,
+      WKUPCR, WKUPFR, WKUPEPR;
+};
+#define PWR ((struct pwr *) (0x40000000 + 0x18020000 + 0x4800))
 
-static inline void spin(volatile uint32_t n) {
-  while (n--) (void) 0;
+struct nvic {
+  volatile uint32_t ISER[8], RESERVED0[24], ICER[8], RSERVED1[24], ISPR[8],
+      RESERVED2[24], ICPR[8], RESERVED3[24], IABR[8], RESERVED4[56], IP[240],
+      RESERVED5[644], STIR;
+};
+#define NVIC ((struct nvic *) 0xe000e100)
+static inline void nvic_set_prio(int irq, uint32_t prio) {
+  NVIC->IP[irq] = prio << 4;
 }
+static inline void nvic_enable_irq(int irq) {
+  NVIC->ISER[irq >> 5] = (uint32_t) (1 << (irq & 31));
+}
+
+struct systick {
+  volatile uint32_t CTRL, LOAD, VAL, CALIB;
+};
+#define SYSTICK ((struct systick *) 0xe000e010)
+static inline void systick_init(uint32_t ticks) {
+  if ((ticks - 1) > 0xffffff) return;  // Systick timer is 24 bit
+  SYSTICK->LOAD = ticks - 1;
+  SYSTICK->VAL = 0;
+  SYSTICK->CTRL = BIT(0) | BIT(1) | BIT(2);  // Enable systick
+}
+
+struct flash {
+  volatile uint32_t ACR, KEYR1, OPTKEYR, CR1, SR1, CCR1, OPTCR, OPTSR_CUR,
+      OPTSR_PRG, OPTCCR, PRAR_CUR1, PRAR_PRG1, SCAR_CUR1, SCAR_PRG1, WPSN_CUR1,
+      WPSN_PRG1, BOOT_CUR, BOOT_PRG, RESERVED0, CRCCR1, CRCSADD1, CRCEADD1,
+      CRCDATA, ECC_FA1, RESERVED1, KEYR2, RESERVED2, CR2, SR2, CCR2, RESERVED3,
+      PRAR_CUR2, PRAR_PRG2, SCAR_CUR2, SCAR_PRG2, WPSN_CUR2, WPSN_PRG2,
+      RESERVED4, CRCCR2, CRCSADD2, CRCEADD2, CRCDATA2, ECC_FA2;
+};
+#define FLASH ((struct flash *) (0x40000000UL + 0x12000000UL + 0x2000UL))
+
+struct scb {
+  volatile uint32_t CPUID, ICSR, VTOR, AIRCR, SCR, CCR, SHPR[3], SHCSR, CFSR,
+      HFSR, DFSR, MMFAR, BFAR, AFSR, ID_PFR[2], ID_DFR, ID_AFR, ID_MFR[4],
+      ID_ISAR[5], RESERVED0[1], CLIDR, CTR, CCSIDR, CSSELR, CPACR,
+      RESERVED3[93], STIR, RESERVED4[15], MVFR0, MVFR1, MVFR2, RESERVED5[1],
+      ICIALLU, RESERVED6[1], ICIMVAU, DCIMVAC, DCISW, DCCMVAU, DCCMVAC, DCCSW,
+      DCCIMVAC, DCCISW, RESERVED7[6], ITCMCR, DTCMCR, AHBPCR, CACR, AHBSCR,
+      RESERVED8[1], ABFSR;
+};
+#define SCB ((struct scb *) 0xe000ed00)
 
 enum { GPIO_MODE_INPUT, GPIO_MODE_OUTPUT, GPIO_MODE_AF, GPIO_MODE_ANALOG };
 enum { GPIO_OTYPE_PUSH_PULL, GPIO_OTYPE_OPEN_DRAIN };
@@ -63,7 +119,9 @@ struct gpio {
 };
 #define GPIO(N) ((struct gpio *) (0x40000000 + 0x18020000UL + 0x400 * (N)))
 
-static struct gpio *gpio_bank(uint16_t pin) { return GPIO(PINBANK(pin)); }
+static struct gpio *gpio_bank(uint16_t pin) {
+  return GPIO(PINBANK(pin));
+}
 static inline void gpio_toggle(uint16_t pin) {
   struct gpio *gpio = gpio_bank(pin);
   uint32_t mask = BIT(PINNO(pin));
@@ -97,6 +155,13 @@ static inline void gpio_output(uint16_t pin) {
             GPIO_PULL_NONE, 0);
 }
 
+struct syscfg {
+  volatile uint32_t RESERVED1, PMCR, EXTICR[4], CFGR, RESERVED2, CCCSR, CCVR,
+      CCCR, PWRCR, RESERVED3[61], PKGR, RESERVED4[118], UR0, UR1, UR2, UR3, UR4,
+      UR5, UR6, UR7, UR8, UR9, UR10, UR11, UR12, UR13, UR14, UR15, UR16, UR17;
+};
+#define SYSCFG ((struct syscfg *) (0x40000000UL + 0x18000000UL + 0x0400UL))
+
 struct uart {
   volatile uint32_t CR1, CR2, CR3, BRR, GTPR, RTOR, RQR, ISR, ICR, RDR, TDR,
       PRESC;
@@ -106,6 +171,10 @@ struct uart {
 #define UART3 ((struct uart *) 0x40004800)
 #define UART_DEBUG UART1
 
+// D2 Kernel clock (8.7.21) USART1 defaults to pclk2 (APB2), while USART2,3
+// default to pclk1 (APB1). Even if using other kernel clocks, the APBx clocks
+// must be enabled for CPU access, as the kernel clock drives the BRR, not the
+// APB bus interface
 static inline void uart_init(struct uart *uart, unsigned long baud) {
   uint8_t af = 7;           // Alternate function
   uint16_t rx = 0, tx = 0;  // pins
@@ -119,7 +188,10 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
   if (uart == UART2) tx = PIN('A', 2), rx = PIN('A', 3);
   if (uart == UART3) tx = PIN('D', 8), rx = PIN('D', 9);
 
-  freq = SYS_FREQUENCY;
+#if 0  // CONSTANT BAUD RATE FOR REMOTE DEBUGGING WHILE SETTING THE PLL
+  SETBITS(RCC->D2CCIP2R, 7 << 3, 3 << 3);  // use HSI for UART1
+  freq = 64000000;
+#endif
 
   gpio_init(tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   gpio_init(rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
@@ -141,6 +213,66 @@ static inline uint8_t uart_read_byte(struct uart *uart) {
   return (uint8_t) (uart->RDR & 255);
 }
 
+struct dbgmcu {
+  volatile uint32_t IDCODE, CR, RESERVED4, APB3FZ1, RESERVED5, APB1LFZ1,
+      RESERVED6, APB1HFZ1, RESERVED7, APB2FZ1, RESERVED8, APB4FZ1;
+};
+#define DBGMCU ((struct dbgmcu *) 0x5C001000UL)
+
+static inline char chiprev(void) {
+  uint16_t rev = (uint16_t)(((uint32_t) DBGMCU->IDCODE) >> 16);
+  if (rev == 0x1003) return 'Y';
+  if (rev == 0x2003) return 'V';
+  return '?';
+}
+
+static inline unsigned int div2prescval(unsigned int div) {
+  // 0 --> /1; 8 --> /2 ... 11 --> /16;  12 --> /64 ... 15 --> /512
+  if (div == 1) return 0;
+  if (div > 16) div /= 2;
+  unsigned int val = 7;
+  while (div >>= 1) ++val;
+  return val;
+}
+
+static inline unsigned int pllrge(unsigned int f) {
+  unsigned int val = 0;
+  while (f >>= 1) ++val;
+  return val - 1;
+}
+
 static inline void clock_init(void) {
-  // TODO: Enable FPU, set flash latency, set clock
+  SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
+  asm("DSB");
+  asm("ISB");
+  PWR->CR3 |= BIT(1);                           // select LDO (reset value)
+  while ((PWR->CSR1 && BIT(13)) == 0) spin(1);  // ACTVOSRDY
+  PWR->D3CR |= BIT(15) | BIT(14);               // Select VOS1
+  uint32_t f = PWR->D3CR;  // fake read to wait for bus clocking
+  while ((PWR->CSR1 && BIT(13)) == 0) spin(1);  // ACTVOSRDY
+  SYSCFG->PWRCR |= BIT(0);                      // ODEN
+  f = SYSCFG->PWRCR;
+  while ((PWR->CSR1 && BIT(13)) == 0) spin(1);  // ACTVOSRDY
+  (void) f;
+  SETBITS(
+      RCC->D1CFGR, (0x0F << 8) | (7 << 4) | (0x0F << 0),
+      (div2prescval(D1CPRE) << 8) | (D1PPRE << 4) | (div2prescval(HPRE) << 0));
+  RCC->D2CFGR = (D2PPRE2 << 8) | (D2PPRE1 << 4);
+  RCC->D3CFGR = (D3PPRE << 4);
+  SETBITS(RCC->PLLCFGR, 3 << 2,
+          pllrge(PLL1_HSI / PLL1_M)
+              << 2);  // keep reset config (DIVP1EN, !PLL1VCOSEL), PLL1RGE
+  SETBITS(RCC->PLL1DIVR, (0x7F << 9) | (0x1FF << 0),
+          ((PLL1_P - 1) << 9) | ((PLL1_N - 1) << 0));  // Set PLL1_P PLL1_N
+  SETBITS(RCC->PLLCKSELR, 0x3F << 4,
+          PLL1_M << 4);  // Set PLL1_M (source defaults to HSI)
+  RCC->CR |= BIT(24);    // Enable PLL1
+  while ((RCC->CR & BIT(25)) == 0) spin(1);  // Wait until done
+  RCC->CFGR |= (3 << 0);                     // Set clock source to PLL1
+  while ((RCC->CFGR & (7 << 3)) != (3 << 3)) spin(1);  // Wait until done
+  FLASH->ACR |= FLASH_LATENCY;                         // default is larger
+#if 0
+  // Enable SRAM block if you want to use it for ETH buffer (needs proper attributes in driver code)
+  // RCC->AHB2ENR |= BIT(29) | BIT(30) | BIT(31);
+#endif
 }
