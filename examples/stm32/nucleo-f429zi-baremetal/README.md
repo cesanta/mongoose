@@ -39,6 +39,6 @@ To see debug log, use any serial monitor program like `picocom` at 115200 bps an
 $ picocom /dev/ttyACM0 -i -b 115200 --imap=lfcrlf
 ```
 
-There is also a [detailed tutorial on this example](https://mongoose.ws/tutorials/stm32/nucleo-f746zg-baremetal/) but for the NUCLEO-F746ZG board
+There is also a [detailed tutorial on this example](https://mongoose.ws/tutorials/stm32/nucleo-f429zi-baremetal/)
 
 For more details and benchmark data on MIP, check the [F746ZG example](../nucleo-f746zg-baremetal/)
