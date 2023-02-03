@@ -1,5 +1,6 @@
 #include "mip.h"
 
+#ifndef MG_ENABLE_DRIVER_IMXRT1020
 #if MG_ENABLE_MIP && \
     (!defined(MG_ENABLE_DRIVER_TM4C) || MG_ENABLE_DRIVER_TM4C == 0)
 struct stm32_eth {
@@ -204,4 +205,5 @@ void ETH_IRQHandler(void) {
 
 struct mip_driver mip_driver_stm32 = {
     mip_driver_stm32_init, mip_driver_stm32_tx, mip_driver_rx, mip_driver_stm32_up};
+#endif
 #endif

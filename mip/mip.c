@@ -148,6 +148,8 @@ static void q_copyout(struct queue *q, uint8_t *buf, size_t len, size_t tail) {
 
 static bool q_write(struct queue *q, const void *buf, size_t len) {
   bool success = false;
+  if (!q->len)
+    return success; 
   size_t left = (q->len - q->head + q->tail - 1) % q->len;
   if (len + sizeof(size_t) <= left) {
     q_copyin(q, (uint8_t *) &len, sizeof(len), q->head);

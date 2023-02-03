@@ -1,5 +1,6 @@
 #include "mip.h"
 
+#ifndef MG_ENABLE_DRIVER_IMXRT1020
 #if MG_ENABLE_MIP
 
 enum { W5500_CR = 0, W5500_S0 = 1, W5500_TX0 = 2, W5500_RX0 = 3 };
@@ -86,4 +87,5 @@ static bool w5500_up(struct mip_if *ifp) {
 }
 
 struct mip_driver mip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx, w5500_up};
+#endif
 #endif

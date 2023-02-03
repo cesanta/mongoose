@@ -1,5 +1,6 @@
 #include "mip.h"
 
+#ifndef MG_ENABLE_DRIVER_IMXRT1020
 #if MG_ENABLE_MIP && defined(MG_ENABLE_DRIVER_TM4C) && MG_ENABLE_DRIVER_TM4C
 struct tm4c_emac {
   volatile uint32_t EMACCFG, EMACFRAMEFLTR, EMACHASHTBLH, EMACHASHTBLL,
@@ -232,4 +233,5 @@ void EMAC0_IRQHandler(void) {
 
 struct mip_driver mip_driver_tm4c = {mip_driver_tm4c_init, mip_driver_tm4c_tx,
                                      mip_driver_rx, mip_driver_tm4c_up};
+#endif
 #endif
