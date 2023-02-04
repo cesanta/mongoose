@@ -18,17 +18,9 @@ utilising Mongoose's built-in TCP/IP stack and network drivers.
 ## How to build and run examples
 
 The easiest way to start with Mongoose is to try to build and run examples.
-The required tools are: a C/C++ compiler, the `make` utility, and `git`.
-
-You can follow these links for tutorials on how to install these tools on your platform of choice
-
-- [GCC](http://mongoose.ws/tutorials/tools/#gcc), the GNU C/C++ compiler collection
-  - On Windows, you might want to use "[Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads)" instead
-- [GNU make](http://mongoose.ws/tutorials/tools/#gnu-make)
-- [Git](http://mongoose.ws/tutorials/tools/#git)
-
-Now, when all required tools are installed, start a terminal/command prompt,
-and download the Mongoose repository, go to the HTTP server example, build it, and run it:
+Follow the [Development Environment](/tutorials/tools) tutorial to setup your
+development environment: a C compiler, a `make` utility, and a `git` utility.
+Start a terminal / command prompt and execute the following commands:
 
 ```sh
 git clone https://github.com/cesanta/mongoose
@@ -36,20 +28,12 @@ cd mongoose/examples/http-server
 make
 ```
 
-That's it! Now start your browser, and point it to http://localhost:8000
+The above commands download Mongoose Library source code, then go into the
+HTTP server example directory, and execute `make` command. It uses a
+`Makefile` configuration file which is present in every example directory.
+It builds an example executable and runs it.
 
-> NOTE: if you want to build and run embedded examples too, such as
-> STM32 or Raspberry Pi RP2040 examples, install an extra tool - the ARM GCC
-> compiler:
-
-- [ARM GCC](http://mongoose.ws/tutorials/tools/#arm-gcc)
-
-> When done, you can build baremetal embedded examples:
-
-```sh
-cd examples/stm32/nucleo-h743zi-baremetal
-make build
-```
+Now start your browser, and point it to http://localhost:8000
 
 ## 2-minute integration guide
 
