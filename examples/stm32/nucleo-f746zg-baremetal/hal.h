@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <stm32f746xx.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -18,85 +20,28 @@
 /* System clock
 5.3.3: APB1 clock <= 54MHz; APB2 clock <= 108MHz
 3.3.2, Table 5: configure flash latency (WS) in accordance to clock freq
-38.4: The AHB clock frequency must be at least 25 MHz when the Ethernet controller is used */
+38.4: The AHB clock frequency must be at least 25 MHz when the Ethernet
+controller is used */
 enum { APB1_PRE = 5 /* AHB clock / 4 */, APB2_PRE = 4 /* AHB clock / 2 */ };
 enum { PLL_HSI = 16, PLL_M = 8, PLL_N = 216, PLL_P = 2 };  // Run at 216 Mhz
-#define FLASH_LATENCY 7 
+#define FLASH_LATENCY 7
 #define SYS_FREQUENCY ((PLL_HSI * PLL_N / PLL_M / PLL_P) * 1000000)
 #define APB2_FREQUENCY (SYS_FREQUENCY / (BIT(APB2_PRE - 3)))
 #define APB1_FREQUENCY (SYS_FREQUENCY / (BIT(APB1_PRE - 3)))
 
 static inline void spin(volatile uint32_t count) {
-  while (count--) asm("nop");
+  while (count--) (void) 0;
 }
-
-struct rcc {
-  volatile uint32_t CR, PLLCFGR, CFGR, CIR, AHB1RSTR, AHB2RSTR, AHB3RSTR,
-      RESERVED0, APB1RSTR, APB2RSTR, RESERVED1[2], AHB1ENR, AHB2ENR, AHB3ENR,
-      RESERVED2, APB1ENR, APB2ENR, RESERVED3[2], AHB1LPENR, AHB2LPENR,
-      AHB3LPENR, RESERVED4, APB1LPENR, APB2LPENR, RESERVED5[2], BDCR, CSR,
-      RESERVED6[2], SSCGR, PLLI2SCFGR, PLLSAICFGR, DCKCFGR1, DCKCFGR2;
-};
-#define RCC ((struct rcc *) 0x40023800)
-
-struct pwr {
-  volatile uint32_t CR1, CSR1, CR2, CSR2;
-};
-#define PWR ((struct pwr *) 0x40007000)
-
-struct nvic {
-  volatile uint32_t ISER[8], RESERVED0[24], ICER[8], RSERVED1[24], ISPR[8],
-      RESERVED2[24], ICPR[8], RESERVED3[24], IABR[8], RESERVED4[56], IP[240],
-      RESERVED5[644], STIR;
-};
-#define NVIC ((struct nvic *) 0xe000e100)
-static inline void nvic_set_prio(int irq, uint32_t prio) {
-  NVIC->IP[irq] = prio << 4;
-}
-static inline void nvic_enable_irq(int irq) {
-  NVIC->ISER[irq >> 5] = (uint32_t) (1 << (irq & 31));
-}
-
-struct systick {
-  volatile uint32_t CTRL, LOAD, VAL, CALIB;
-};
-#define SYSTICK ((struct systick *) 0xe000e010)  // 2.2.2
-static inline void systick_init(uint32_t ticks) {
-  if ((ticks - 1) > 0xffffff) return;  // Systick timer is 24 bit
-  SYSTICK->LOAD = ticks - 1;
-  SYSTICK->VAL = 0;
-  SYSTICK->CTRL = BIT(0) | BIT(1) | BIT(2);  // Enable systick
-}
-
-struct flash {
-  volatile uint32_t ACR, KEYR, OPTKEYR, SR, CR, AR, RESERVED, OBR, WRPR;
-};
-#define FLASH ((struct flash *) 0x40023c00)
-
-struct scb {
-  volatile uint32_t CPUID, ICSR, VTOR, AIRCR, SCR, CCR, SHPR[3], SHCSR, CFSR,
-      HFSR, DFSR, MMFAR, BFAR, AFSR, ID_PFR[2], ID_DFR, ID_AFR, ID_MFR[4],
-      ID_ISAR[5], RESERVED0[1], CLIDR, CTR, CCSIDR, CSSELR, CPACR,
-      RESERVED3[93], STIR, RESERVED4[15], MVFR0, MVFR1, MVFR2, RESERVED5[1],
-      ICIALLU, RESERVED6[1], ICIMVAU, DCIMVAC, DCISW, DCCMVAU, DCCMVAC, DCCSW,
-      DCCIMVAC, DCCISW, RESERVED7[6], ITCMCR, DTCMCR, AHBPCR, CACR, AHBSCR,
-      RESERVED8[1], ABFSR;
-};
-#define SCB ((struct scb *) 0xe000ed00)
 
 enum { GPIO_MODE_INPUT, GPIO_MODE_OUTPUT, GPIO_MODE_AF, GPIO_MODE_ANALOG };
 enum { GPIO_OTYPE_PUSH_PULL, GPIO_OTYPE_OPEN_DRAIN };
 enum { GPIO_SPEED_LOW, GPIO_SPEED_MEDIUM, GPIO_SPEED_HIGH, GPIO_SPEED_INSANE };
 enum { GPIO_PULL_NONE, GPIO_PULL_UP, GPIO_PULL_DOWN };
+#define GPIO(N) ((GPIO_TypeDef *) (0x40020000 + 0x400 * (N)))
 
-struct gpio {
-  volatile uint32_t MODER, OTYPER, OSPEEDR, PUPDR, IDR, ODR, BSRR, LCKR, AFR[2];
-};
-#define GPIO(N) ((struct gpio *) (0x40020000 + 0x400 * (N)))
-
-static struct gpio *gpio_bank(uint16_t pin) { return GPIO(PINBANK(pin)); }
+static GPIO_TypeDef *gpio_bank(uint16_t pin) { return GPIO(PINBANK(pin)); }
 static inline void gpio_toggle(uint16_t pin) {
-  struct gpio *gpio = gpio_bank(pin);
+  GPIO_TypeDef *gpio = gpio_bank(pin);
   uint32_t mask = BIT(PINNO(pin));
   gpio->BSRR = mask << (gpio->ODR & mask ? 16 : 0);
 }
@@ -104,12 +49,12 @@ static inline int gpio_read(uint16_t pin) {
   return gpio_bank(pin)->IDR & BIT(PINNO(pin)) ? 1 : 0;
 }
 static inline void gpio_write(uint16_t pin, bool val) {
-  struct gpio *gpio = gpio_bank(pin);
+  GPIO_TypeDef *gpio = gpio_bank(pin);
   gpio->BSRR = BIT(PINNO(pin)) << (val ? 0 : 16);
 }
 static inline void gpio_init(uint16_t pin, uint8_t mode, uint8_t type,
                              uint8_t speed, uint8_t pull, uint8_t af) {
-  struct gpio *gpio = gpio_bank(pin);
+  GPIO_TypeDef *gpio = gpio_bank(pin);
   uint8_t n = (uint8_t) (PINNO(pin));
   RCC->AHB1ENR |= BIT(PINBANK(pin));  // Enable GPIO clock
   SETBITS(gpio->OTYPER, 1UL << n, ((uint32_t) type) << n);
@@ -128,16 +73,6 @@ static inline void gpio_output(uint16_t pin) {
             GPIO_PULL_NONE, 0);
 }
 
-struct syscfg {
-  volatile uint32_t MEMRMP, PMC, EXTICR[4], RESERVED[2], CMPCR;
-};
-#define SYSCFG ((struct syscfg *) 0x40013800)
-
-struct exti {
-  volatile uint32_t IMR, EMR, RTSR, FTSR, SWIER, PR;
-};
-#define EXTI ((struct exti *) 0x40013c00)
-
 static inline void irq_exti_attach(uint16_t pin) {
   uint8_t bank = (uint8_t) (PINBANK(pin)), n = (uint8_t) (PINNO(pin));
   RCC->APB2ENR |= BIT(14);  // Enable SYSCFG
@@ -147,22 +82,19 @@ static inline void irq_exti_attach(uint16_t pin) {
   EXTI->RTSR |= BIT(n);
   EXTI->FTSR |= BIT(n);
   int irqvec = n < 5 ? 6 + n : n < 10 ? 23 : 40;  // IRQ vector index, 10.1.2
-  nvic_set_prio(irqvec, 3);
-  nvic_enable_irq(irqvec);
+  NVIC_SetPriority(irqvec, 3);
+  NVIC_EnableIRQ(irqvec);
 }
 
-struct uart {
-  volatile uint32_t CR1, CR2, CR3, BRR, GTPR, RTOR, RQR, ISR, ICR, RDR, TDR;
-};
-#define UART1 ((struct uart *) 0x40011000)
-#define UART2 ((struct uart *) 0x40004400)
-#define UART3 ((struct uart *) 0x40004800)
+#define UART1 USART1
+#define UART2 USART2
+#define UART3 USART3
 
 #ifndef UART_DEBUG
 #define UART_DEBUG UART3
 #endif
 
-static inline void uart_init(struct uart *uart, unsigned long baud) {
+static inline void uart_init(USART_TypeDef *uart, unsigned long baud) {
   // https://www.st.com/resource/en/datasheet/stm32f746zg.pdf
   uint8_t af = 7;           // Alternate function
   uint16_t rx = 0, tx = 0;  // pins
@@ -179,20 +111,20 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
   gpio_init(tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   gpio_init(rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   uart->CR1 = 0;                          // Disable this UART
-  uart->BRR = freq / baud;                 // Set baud rate
+  uart->BRR = freq / baud;                // Set baud rate
   uart->CR1 |= BIT(0) | BIT(2) | BIT(3);  // Set UE, RE, TE
 }
-static inline void uart_write_byte(struct uart *uart, uint8_t byte) {
+static inline void uart_write_byte(USART_TypeDef *uart, uint8_t byte) {
   uart->TDR = byte;
   while ((uart->ISR & BIT(7)) == 0) spin(1);
 }
-static inline void uart_write_buf(struct uart *uart, char *buf, size_t len) {
+static inline void uart_write_buf(USART_TypeDef *uart, char *buf, size_t len) {
   while (len-- > 0) uart_write_byte(uart, *(uint8_t *) buf++);
 }
-static inline int uart_read_ready(struct uart *uart) {
+static inline int uart_read_ready(USART_TypeDef *uart) {
   return uart->ISR & BIT(5);  // If RXNE bit is set, data is ready
 }
-static inline uint8_t uart_read_byte(struct uart *uart) {
+static inline uint8_t uart_read_byte(USART_TypeDef *uart) {
   return (uint8_t) (uart->RDR & 255);
 }
 
@@ -206,8 +138,8 @@ static inline void clock_init(void) {  // Set clock frequency
   while ((PWR->CSR1 & BIT(17)) == 0) spin(1);  // Wait until done
 #endif
   SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
-  asm ("DSB");
-  asm ("ISB");
+  asm("DSB");
+  asm("ISB");
   FLASH->ACR |= FLASH_LATENCY | BIT(8) | BIT(9);    // Flash latency, prefetch
   RCC->PLLCFGR &= ~((BIT(17) - 1));                 // Clear PLL multipliers
   RCC->PLLCFGR |= (((PLL_P - 2) / 2) & 3) << 16;    // Set PLL_P

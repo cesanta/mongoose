@@ -1,6 +1,6 @@
 #include <sys/stat.h>
 
-#include "mcu.h"
+#include "hal.h"
 
 int _fstat(int fd, struct stat *st) {
   if (fd < 0) return -1;
@@ -81,3 +81,5 @@ int mkdir(const char *path, mode_t mode) {
   (void) path, (void) mode;
   return -1;
 }
+
+void _init(void) {}
