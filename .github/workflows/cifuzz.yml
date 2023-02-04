@@ -4,14 +4,20 @@ jobs:
   Fuzzing:
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v3
+      with: { fetch-depth: 2 }
+    - id: check
+      run: /bin/bash test/check.sh '^src/'
     - name: Build Fuzzers
       id: build
+      if: steps.check.outputs.MATCH == 1
       uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
       with:
         oss-fuzz-project-name: 'mongoose'
         dry-run: false
         language: c++
     - name: Run Fuzzers
+      if: steps.check.outputs.MATCH == 1
       uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
       with:
         oss-fuzz-project-name: 'mongoose'
@@ -20,7 +26,7 @@ jobs:
         language: c++
     - name: Upload Crash
       uses: actions/upload-artifact@v1
-      if: failure() && steps.build.outcome == 'success'
+      if: steps.check.outputs.MATCH == 1 && failure() && steps.build.outcome == 'success'
       with:
         name: artifacts
         path: ./out/artifacts
