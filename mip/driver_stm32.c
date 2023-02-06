@@ -27,13 +27,11 @@ static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS];      // RX descriptors
 static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];      // TX descriptors
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
-static struct mip_if *s_ifp;                         // MIP interface
-enum {
-  PHY_ADDR = 0,
-  PHY_BCR = 0,
-  PHY_BSR = 1,
-  PHY_CSCR = 31
-};  // PHY constants
+static uint8_t s_txno;                              // Current TX descriptor
+static uint8_t s_rxno;                              // Current RX descriptor
+
+static struct mip_if *s_ifp;  // MIP interface
+enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1, PHY_CSCR = 31 };
 
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMIIAR &= (7 << 2);
@@ -156,13 +154,13 @@ static bool mip_driver_stm32_init(struct mip_if *ifp) {
   return true;
 }
 
-static uint32_t s_txno;
 static size_t mip_driver_stm32_tx(const void *buf, size_t len,
                                   struct mip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
   } else if ((s_txdesc[s_txno][0] & BIT(31))) {
+    ifp->nerr++;
     MG_ERROR(("No free descriptors"));
     // printf("D0 %lx SR %lx\n", (long) s_txdesc[0][0], (long) ETH->DMASR);
     len = 0;  // All descriptors are busy, fail
@@ -176,7 +174,6 @@ static size_t mip_driver_stm32_tx(const void *buf, size_t len,
   ETH->DMASR = BIT(2) | BIT(5);  // Clear any prior TBUS/TUS
   ETH->DMATPDR = 0;              // and resume
   return len;
-  (void) ifp;
 }
 
 static bool mip_driver_stm32_up(struct mip_if *ifp) {
@@ -195,7 +192,6 @@ static bool mip_driver_stm32_up(struct mip_if *ifp) {
 }
 
 void ETH_IRQHandler(void);
-static uint32_t s_rxno;
 void ETH_IRQHandler(void) {
   qp_mark(QP_IRQTRIGGERED, 0);
   if (ETH->DMASR & BIT(6)) {             // Frame received, loop

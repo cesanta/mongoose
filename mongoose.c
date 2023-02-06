@@ -5966,13 +5966,11 @@ static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS];      // RX descriptors
 static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];      // TX descriptors
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
-static struct mip_if *s_ifp;                         // MIP interface
-enum {
-  PHY_ADDR = 0,
-  PHY_BCR = 0,
-  PHY_BSR = 1,
-  PHY_CSCR = 31
-};  // PHY constants
+static uint8_t s_txno;                              // Current TX descriptor
+static uint8_t s_rxno;                              // Current RX descriptor
+
+static struct mip_if *s_ifp;  // MIP interface
+enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1, PHY_CSCR = 31 };
 
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMIIAR &= (7 << 2);
@@ -6095,13 +6093,13 @@ static bool mip_driver_stm32_init(struct mip_if *ifp) {
   return true;
 }
 
-static uint32_t s_txno;
 static size_t mip_driver_stm32_tx(const void *buf, size_t len,
                                   struct mip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
   } else if ((s_txdesc[s_txno][0] & BIT(31))) {
+    ifp->nerr++;
     MG_ERROR(("No free descriptors"));
     // printf("D0 %lx SR %lx\n", (long) s_txdesc[0][0], (long) ETH->DMASR);
     len = 0;  // All descriptors are busy, fail
@@ -6115,7 +6113,6 @@ static size_t mip_driver_stm32_tx(const void *buf, size_t len,
   ETH->DMASR = BIT(2) | BIT(5);  // Clear any prior TBUS/TUS
   ETH->DMATPDR = 0;              // and resume
   return len;
-  (void) ifp;
 }
 
 static bool mip_driver_stm32_up(struct mip_if *ifp) {
@@ -6134,7 +6131,6 @@ static bool mip_driver_stm32_up(struct mip_if *ifp) {
 }
 
 void ETH_IRQHandler(void);
-static uint32_t s_rxno;
 void ETH_IRQHandler(void) {
   qp_mark(QP_IRQTRIGGERED, 0);
   if (ETH->DMASR & BIT(6)) {             // Frame received, loop
@@ -7054,7 +7050,9 @@ static size_t ether_output(struct mip_if *ifp, size_t len) {
   // size_t min = 64;  // Pad short frames to 64 bytes (minimum Ethernet size)
   // if (len < min) memset(ifp->tx.ptr + len, 0, min - len), len = min;
   // mg_hexdump(ifp->tx.ptr, len);
-  return ifp->driver->tx(ifp->tx.ptr, len, ifp);
+  size_t n = ifp->driver->tx(ifp->tx.ptr, len, ifp);
+  if (n == len) ifp->nsent++;
+  return n;
 }
 
 static void arp_ask(struct mip_if *ifp, uint32_t ip) {
@@ -7509,7 +7507,6 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
-  //  MG_DEBUG(("IP %d", (int) pkt->pay.len));
   if (pkt->ip->proto == 1) {
     pkt->icmp = (struct icmp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
@@ -7519,6 +7516,9 @@ static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
     pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
     mkpay(pkt, pkt->udp + 1);
+    MG_DEBUG(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
+              mg_ntohs(pkt->udp->sport), mg_print_ip4, &pkt->ip->dst,
+              mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
     if (pkt->udp->dport == mg_htons(68)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp + 1);
@@ -7537,6 +7537,9 @@ static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
     uint16_t iplen = mg_ntohs(pkt->ip->len);
     uint16_t off = (uint16_t) (sizeof(*pkt->ip) + ((pkt->tcp->off >> 4) * 4U));
     if (iplen >= off) pkt->pay.len = (size_t) (iplen - off);
+    MG_DEBUG(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
+              mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
+              mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
     rx_tcp(ifp, pkt);
   }
 }
@@ -7661,8 +7664,9 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 void mip_qwrite(void *buf, size_t len, struct mip_if *ifp) {
   if (q_write(&ifp->queue, buf, len)) {
     qp_mark(QP_FRAMEPUSHED, (int) q_space(&ifp->queue));
+    ifp->nrecv++;
   } else {
-    ifp->dropped++;
+    ifp->ndropped++;
     qp_mark(QP_FRAMEDROPPED, ifp->dropped);
     MG_ERROR(("dropped %d", (int) len));
   }
@@ -7682,6 +7686,14 @@ size_t mip_driver_rx(void *buf, size_t len, struct mip_if *ifp) {
 }
 
 void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
+  // If MAC address is not set, make a random one
+  if (ifp->mac[0] == 0 && ifp->mac[1] == 0 && ifp->mac[2] == 0 &&
+      ifp->mac[3] == 0 && ifp->mac[4] == 0 && ifp->mac[5] == 0) {
+    mg_random(ifp->mac, sizeof(ifp->mac));
+    ifp->mac[0] &= (uint8_t) ~1;  // 1st byte must be even (unicast)
+    MG_INFO(("MAC not set. Generated random: %M", mg_print_mac, ifp->mac));
+  }
+
   if (ifp->driver->init && !ifp->driver->init(ifp)) {
     MG_ERROR(("driver init failed"));
   } else {
@@ -7695,6 +7707,12 @@ void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
     ifp->mgr = mgr;
     mgr->extraconnsize = sizeof(struct connstate);
     if (ifp->ip == 0) ifp->enable_dhcp_client = true;
+
+    // Randomise initial ephemeral port
+    uint16_t jitter;
+    mg_random(&jitter, sizeof(jitter));
+    ifp->eport = MIP_ETHEMERAL_PORT + (jitter % (0xffffu - MIP_ETHEMERAL_PORT));
+
 #ifdef MIP_QPROFILE
     qp_init();
 #endif
@@ -7711,15 +7729,6 @@ int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {
   MG_ERROR(("Not implemented"));
   return -1;
 }
-
-#if 0
-static uint16_t mkeport(void) {
-  uint16_t a = 0, b = mg_millis() & 0xffffU, c = MIP_ETHEMERAL_PORT;
-  mg_random(&a, sizeof(a));
-  c += (a ^ b) % (0xffffU - MIP_ETHEMERAL_PORT);
-  return c;
-}
-#endif
 
 void mg_connect_resolved(struct mg_connection *c) {
   struct mip_if *ifp = (struct mip_if *) c->mgr->priv;
