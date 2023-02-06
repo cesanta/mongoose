@@ -1,7 +1,7 @@
-// Copyright (c) 2022 Cesanta Software Limited
+// Copyright (c) 2022-2023 Cesanta Software Limited
 // All rights reserved
 
-#include "mcu.h"
+#include "hal.h"
 #include "mongoose.h"
 
 #define LED1 PIN('B', 0)      // On-board LED pin (green)
@@ -31,20 +31,23 @@ void EXTI15_10_IRQHandler(void) {  // External interrupt handler
   gpio_write(LED1, gpio_read(BTN1));  // No debounce. Turn LED if button pressed
 }
 
-static void timer_cb(void *arg) {
+void SystemInit(void) {                  // Called automatically by startup code
+  clock_init();                          // Set clock to 180MHz
+  SysTick_Config(SYS_FREQUENCY / 1000);  // Increment s_ticks every ms
+}
+
+static void timer_fn(void *arg) {
   gpio_toggle(LED2);  // Blink LED
   bool up = ((struct mip_if *) arg)->state == MIP_STATE_READY;
   MG_INFO(("Ethernet: %s", up ? "up" : "down"));  // Show network status
 }
 
 int main(void) {
-  clock_init();                        // Set clock to 180MHz
-  systick_init(SYS_FREQUENCY / 1000);  // Increment s_ticks every ms
-  gpio_output(LED1);                   // Setup green LED
-  gpio_output(LED2);                   // Setup blue LED
-  gpio_input(BTN1);                    // Set button to input
-  irq_exti_attach(BTN1);               // Attach BTN1 to exti
-  uart_init(UART_DEBUG, 115200);       // Initialise debug printf
+  gpio_output(LED1);              // Setup green LED
+  gpio_output(LED2);              // Setup blue LED
+  gpio_input(BTN1);               // Set button to input
+  irq_exti_attach(BTN1);          // Attach BTN1 to exti
+  uart_init(UART_DEBUG, 115200);  // Initialise debug printf
 
   MG_INFO(("Starting, CPU freq %g MHz", (double) SYS_FREQUENCY / 1000000));
 
@@ -57,7 +60,7 @@ int main(void) {
     gpio_init(pins[i], GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_INSANE,
               GPIO_PULL_NONE, 11);
   }
-  nvic_enable_irq(61);                          // Setup Ethernet IRQ handler
+  NVIC_EnableIRQ(ETH_IRQn);                     // Setup Ethernet IRQ handler
   RCC->APB2ENR |= BIT(14);                      // Enable SYSCFG
   SYSCFG->PMC |= BIT(23);                       // Use RMII. Goes first!
   RCC->AHB1ENR |= BIT(25) | BIT(26) | BIT(27);  // Enable Ethernet clocks
@@ -76,7 +79,7 @@ int main(void) {
                        .driver = &mip_driver_stm32,
                        .driver_data = &driver_data};
   mip_init(&mgr, &mif);
-  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_cb, &mif);
+  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
 
   MG_INFO(("Waiting until network is up..."));
   while (mif.state != MIP_STATE_READY) {
