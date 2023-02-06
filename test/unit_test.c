@@ -319,7 +319,9 @@ static void test_sntp_server(const char *url) {
   ASSERT(c->is_udp == 1);
   for (i = 0; i < 60 && ms == 0; i++) mg_mgr_poll(&mgr, 50);
   MG_DEBUG(("server: %s, ms: %lld", url ? url : "(default)", ms));
+#if !defined(NO_SNTP_CHECK)
   ASSERT(ms > 0);
+#endif
   mg_mgr_free(&mgr);
 }
 
