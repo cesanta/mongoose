@@ -75,7 +75,7 @@ static inline void gpio_output(uint16_t pin) {
 
 static inline void irq_exti_attach(uint16_t pin) {
   uint8_t bank = (uint8_t) (PINBANK(pin)), n = (uint8_t) (PINNO(pin));
-  RCC->APB2ENR |= BIT(14);  // Enable SYSCFG
+  RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;  // Enable SYSCFG
   SYSCFG->EXTICR[n / 4] &= ~(15UL << ((n % 4) * 4));
   SYSCFG->EXTICR[n / 4] |= (uint32_t) (bank << ((n % 4) * 4));
   EXTI->IMR |= BIT(n);
@@ -86,12 +86,8 @@ static inline void irq_exti_attach(uint16_t pin) {
   NVIC_EnableIRQ(irqvec);
 }
 
-#define UART1 USART1
-#define UART2 USART2
-#define UART3 USART3
-
 #ifndef UART_DEBUG
-#define UART_DEBUG UART3
+#define UART_DEBUG USART3
 #endif
 
 static inline void uart_init(USART_TypeDef *uart, unsigned long baud) {
@@ -100,13 +96,13 @@ static inline void uart_init(USART_TypeDef *uart, unsigned long baud) {
   uint16_t rx = 0, tx = 0;  // pins
   uint32_t freq = 0;        // Bus frequency. UART1 is on APB2, rest on APB1
 
-  if (uart == UART1) freq = APB2_FREQUENCY, RCC->APB2ENR |= BIT(4);
-  if (uart == UART2) freq = APB1_FREQUENCY, RCC->APB1ENR |= BIT(17);
-  if (uart == UART3) freq = APB1_FREQUENCY, RCC->APB1ENR |= BIT(18);
+  if (uart == USART1) freq = APB2_FREQUENCY, RCC->APB2ENR |= BIT(4);
+  if (uart == USART2) freq = APB1_FREQUENCY, RCC->APB1ENR |= BIT(17);
+  if (uart == USART3) freq = APB1_FREQUENCY, RCC->APB1ENR |= BIT(18);
 
-  if (uart == UART1) tx = PIN('A', 9), rx = PIN('A', 10);
-  if (uart == UART2) tx = PIN('A', 2), rx = PIN('A', 3);
-  if (uart == UART3) tx = PIN('D', 8), rx = PIN('D', 9);
+  if (uart == USART1) tx = PIN('A', 9), rx = PIN('A', 10);
+  if (uart == USART2) tx = PIN('A', 2), rx = PIN('A', 3);
+  if (uart == USART3) tx = PIN('D', 8), rx = PIN('D', 9);
 
   gpio_init(tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   gpio_init(rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
@@ -128,25 +124,11 @@ static inline uint8_t uart_read_byte(USART_TypeDef *uart) {
   return (uint8_t) (uart->RDR & 255);
 }
 
-static inline void clock_init(void) {  // Set clock frequency
-#if 0
-  RCC->APB1ENR |= BIT(28);                     // Power enable
-  PWR->CR1 |= 3UL << 14;                       // Voltage regulator scale 3
-  PWR->CR1 |= BIT(16);                         // Enable overdrive
-  while ((PWR->CSR1 & BIT(16)) == 0) spin(1);  // Wait until done
-  PWR->CR1 |= BIT(17);                         // Enable overdrive switching
-  while ((PWR->CSR1 & BIT(17)) == 0) spin(1);  // Wait until done
-#endif
-  SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
-  asm("DSB");
-  asm("ISB");
-  FLASH->ACR |= FLASH_LATENCY | BIT(8) | BIT(9);    // Flash latency, prefetch
-  RCC->PLLCFGR &= ~((BIT(17) - 1));                 // Clear PLL multipliers
-  RCC->PLLCFGR |= (((PLL_P - 2) / 2) & 3) << 16;    // Set PLL_P
-  RCC->PLLCFGR |= PLL_M | (PLL_N << 6);             // Set PLL_M and PLL_N
-  RCC->CR |= BIT(24);                               // Enable PLL
-  while ((RCC->CR & BIT(25)) == 0) spin(1);         // Wait until done
-  RCC->CFGR = (APB1_PRE << 10) | (APB2_PRE << 13);  // Set prescalers
-  RCC->CFGR |= 2;                                   // Set clock source to PLL
-  while ((RCC->CFGR & 12) == 0) spin(1);            // Wait until done
+static inline void rng_init(void) {
+  RCC->AHB2ENR |= RCC_AHB2ENR_RNGEN;
+  RNG->CR |= RNG_CR_RNGEN;
+}
+static inline uint32_t rng_read(void) {
+  while ((RNG->SR & RNG_SR_DRDY) == 0) (void) 0;
+  return RNG->DR;
 }

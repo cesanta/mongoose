@@ -4,18 +4,31 @@ CMSIS_CORE_REPO ?= https://github.com/ARM-software/CMSIS_5
 CMSIS_DEVICE_VERSION ?= v1.2.8   # ST MCU peripheral definitions
 CMSIS_DEVICE_REPO ?= https://github.com/STMicroelectronics/cmsis_device_f7
 
-CFLAGS ?= -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
-          -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion\
-          -g3 -Os -ffunction-sections -fdata-sections \
-          -I . -I cmsis_core/CMSIS/Core/Include -I cmsis_device_f7/Include \
-          -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 $(EXTRA_CFLAGS)
+CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
+CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
+CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
+CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_device_f7/Include
+CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
-SOURCES = main.c syscalls.c cmsis_device_f7/Source/Templates/gcc/startup_stm32f746xx.s
+
+SOURCES = main.c syscalls.c sysinit.c
+
+# Using ST-provided startup file. NOTE: this is compiler-dependant
+SOURCES += cmsis_device_f7/Source/Templates/gcc/startup_stm32f746xx.s
 
 # Mongoose-specific build flags and source code files
 # Build options reference: https://mongoose.ws/documentation/#build-options
-CFLAGS  += -I../../.. -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_MIP=1 -DMG_ENABLE_PACKED_FS=1
-SOURCES += ../../../mongoose.c ../../device-dashboard/net.c ../../device-dashboard/packed_fs.c
+SOURCES += ../../../mongoose.c
+SOURCES += ../../device-dashboard/net.c
+SOURCES += ../../device-dashboard/packed_fs.c
+
+CFLAGS += -I../../..
+CFLAGS += -DMG_ARCH=MG_ARCH_NEWLIB
+CFLAGS += -DMG_ENABLE_CUSTOM_MILLIS=1
+CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1
+CFLAGS += -DMG_ENABLE_MIP=1
+CFLAGS += -DMG_ENABLE_PACKED_FS=1
+CFLAGS += $(CFLAGS_EXTRA)
 
 # Build flashable .bin file
 all build example: firmware.bin
@@ -50,7 +63,7 @@ update: firmware.bin
 
 # Read serial port on a remote test device for 5 seconds, store in a
 # temporary file, and check the output for expected patterns
-test:	EXTRA_CFLAGS += -DUART_DEBUG=UART1
+test: CFLAGS_EXTRA += -DUART_DEBUG=USART1
 test: update
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
