@@ -18,15 +18,15 @@ utilising Mongoose's built-in TCP/IP stack and network drivers.
 ## How to build and run examples
 
 The easiest way to start with Mongoose is to try to build and run examples.
-Follow the [Development Environment](/tutorials/tools) tutorial to setup your
-development environment: a C compiler, a `make` utility, and a `git` utility.
-Start a terminal / command prompt and execute the following commands:
-
-```sh
-git clone https://github.com/cesanta/mongoose
-cd mongoose/examples/http-server
-make
-```
+- Follow the [Build Tools](/tutorials/tools) tutorial to setup your
+development environment
+- If you're on Windows 10/11, make sure to enable "Developer mode"
+- Start a terminal / command prompt and execute the following commands:
+  ```sh
+  git clone -c core.symlinks=true https://github.com/cesanta/mongoose
+  cd mongoose/examples/http-server
+  make
+  ```
 
 The above commands download Mongoose Library source code, then go into the
 HTTP server example directory, and execute `make` command. It uses a
