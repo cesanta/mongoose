@@ -262,7 +262,9 @@ static size_t ether_output(struct mip_if *ifp, size_t len) {
   // size_t min = 64;  // Pad short frames to 64 bytes (minimum Ethernet size)
   // if (len < min) memset(ifp->tx.ptr + len, 0, min - len), len = min;
   // mg_hexdump(ifp->tx.ptr, len);
-  return ifp->driver->tx(ifp->tx.ptr, len, ifp);
+  size_t n = ifp->driver->tx(ifp->tx.ptr, len, ifp);
+  if (n == len) ifp->nsent++;
+  return n;
 }
 
 static void arp_ask(struct mip_if *ifp, uint32_t ip) {
@@ -717,7 +719,6 @@ static void rx_tcp(struct mip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
-  //  MG_DEBUG(("IP %d", (int) pkt->pay.len));
   if (pkt->ip->proto == 1) {
     pkt->icmp = (struct icmp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
@@ -727,6 +728,9 @@ static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
     pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
     mkpay(pkt, pkt->udp + 1);
+    MG_DEBUG(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
+              mg_ntohs(pkt->udp->sport), mg_print_ip4, &pkt->ip->dst,
+              mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
     if (pkt->udp->dport == mg_htons(68)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp + 1);
@@ -745,6 +749,9 @@ static void rx_ip(struct mip_if *ifp, struct pkt *pkt) {
     uint16_t iplen = mg_ntohs(pkt->ip->len);
     uint16_t off = (uint16_t) (sizeof(*pkt->ip) + ((pkt->tcp->off >> 4) * 4U));
     if (iplen >= off) pkt->pay.len = (size_t) (iplen - off);
+    MG_DEBUG(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
+              mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
+              mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
     rx_tcp(ifp, pkt);
   }
 }
@@ -831,8 +838,10 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 
   // Read data from the network
   size_t len = ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len, ifp);
-  mip_rx(ifp, (void *) ifp->rx.ptr, len);
-  qp_mark(QP_FRAMEDONE, (int) q_space(&ifp->queue));
+  if (len) {
+    mip_rx(ifp, (void *) ifp->rx.ptr, len);
+    qp_mark(QP_FRAMEDONE, (int) q_space(&ifp->queue));
+  }
 
   // Process timeouts
   for (struct mg_connection *c = ifp->mgr->conns; c != NULL; c = c->next) {
@@ -867,8 +876,9 @@ static void mip_poll(struct mip_if *ifp, uint64_t uptime_ms) {
 void mip_qwrite(void *buf, size_t len, struct mip_if *ifp) {
   if (q_write(&ifp->queue, buf, len)) {
     qp_mark(QP_FRAMEPUSHED, (int) q_space(&ifp->queue));
+    ifp->nrecv++;
   } else {
-    ifp->dropped++;
+    ifp->ndropped++;
     qp_mark(QP_FRAMEDROPPED, ifp->dropped);
     MG_ERROR(("dropped %d", (int) len));
   }
@@ -876,7 +886,9 @@ void mip_qwrite(void *buf, size_t len, struct mip_if *ifp) {
 
 size_t mip_qread(void *buf, struct mip_if *ifp) {
   size_t len = q_read(&ifp->queue, buf);
-  qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
+  if (len) {
+    qp_mark(QP_FRAMEPOPPED, (int) q_space(&ifp->queue));
+  }
   return len;
 }
 
@@ -886,6 +898,14 @@ size_t mip_driver_rx(void *buf, size_t len, struct mip_if *ifp) {
 }
 
 void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
+  // If MAC address is not set, make a random one
+  if (ifp->mac[0] == 0 && ifp->mac[1] == 0 && ifp->mac[2] == 0 &&
+      ifp->mac[3] == 0 && ifp->mac[4] == 0 && ifp->mac[5] == 0) {
+    mg_random(ifp->mac, sizeof(ifp->mac));
+    ifp->mac[0] &= (uint8_t) ~1;  // 1st byte must be even (unicast)
+    MG_INFO(("MAC not set. Generated random: %M", mg_print_mac, ifp->mac));
+  }
+
   if (ifp->driver->init && !ifp->driver->init(ifp)) {
     MG_ERROR(("driver init failed"));
   } else {
@@ -899,6 +919,12 @@ void mip_init(struct mg_mgr *mgr, struct mip_if *ifp) {
     ifp->mgr = mgr;
     mgr->extraconnsize = sizeof(struct connstate);
     if (ifp->ip == 0) ifp->enable_dhcp_client = true;
+
+    // Randomise initial ephemeral port
+    uint16_t jitter;
+    mg_random(&jitter, sizeof(jitter));
+    ifp->eport = MIP_ETHEMERAL_PORT + (jitter % (0xffffu - MIP_ETHEMERAL_PORT));
+
 #ifdef MIP_QPROFILE
     qp_init();
 #endif
@@ -915,15 +941,6 @@ int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {
   MG_ERROR(("Not implemented"));
   return -1;
 }
-
-#if 0
-static uint16_t mkeport(void) {
-  uint16_t a = 0, b = mg_millis() & 0xffffU, c = MIP_ETHEMERAL_PORT;
-  mg_random(&a, sizeof(a));
-  c += (a ^ b) % (0xffffU - MIP_ETHEMERAL_PORT);
-  return c;
-}
-#endif
 
 void mg_connect_resolved(struct mg_connection *c) {
   struct mip_if *ifp = (struct mip_if *) c->mgr->priv;

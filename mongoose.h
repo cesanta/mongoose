@@ -403,7 +403,6 @@ typedef enum { false = 0, true = 1 } bool;
 #define MG_INVALID_SOCKET INVALID_SOCKET
 #define MG_SOCKET_TYPE SOCKET
 typedef unsigned long nfds_t;
-#define MG_SOCKET_ERRNO WSAGetLastError()
 #if defined(_MSC_VER)
 #pragma comment(lib, "ws2_32.lib")
 #ifndef alloca
@@ -411,9 +410,6 @@ typedef unsigned long nfds_t;
 #endif
 #endif
 #define poll(a, b, c) WSAPoll((a), (b), (c))
-#ifndef SO_EXCLUSIVEADDRUSE
-#define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
-#endif
 #define closesocket(x) closesocket(x)
 
 typedef int socklen_t;
@@ -423,12 +419,19 @@ typedef int socklen_t;
 #define MG_PATH_MAX FILENAME_MAX
 #endif
 
-#ifndef EINPROGRESS
-#define EINPROGRESS WSAEINPROGRESS
+#ifndef SO_EXCLUSIVEADDRUSE
+#define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
 #endif
-#ifndef EWOULDBLOCK
-#define EWOULDBLOCK WSAEWOULDBLOCK
-#endif
+
+#define MG_SOCK_ERR(errcode) ((errcode) < 0 ? WSAGetLastError() : 0)
+
+#define MG_SOCK_PENDING(errcode)                                            \
+  (((errcode) < 0) &&                                                       \
+   (WSAGetLastError() == WSAEINTR || WSAGetLastError() == WSAEINPROGRESS || \
+    WSAGetLastError() == WSAEWOULDBLOCK))
+
+#define MG_SOCK_RESET(errcode) \
+  (((errcode) < 0) && (WSAGetLastError() == WSAECONNRESET))
 
 #define realpath(a, b) _fullpath((b), (a), MG_PATH_MAX)
 #define sleep(x) Sleep(x)
@@ -568,13 +571,21 @@ struct timeval {
 #define MG_ENABLE_CUSTOM_MILLIS 1
 #define closesocket(x) closesocket(x)
 #define mkdir(a, b) (-1)
-#define EWOULDBLOCK BSD_EWOULDBLOCK
-#define EAGAIN BSD_EWOULDBLOCK
-#define EINPROGRESS BSD_EWOULDBLOCK
-#define EINTR BSD_EWOULDBLOCK
-#define ECONNRESET BSD_ECONNRESET
-#define EPIPE BSD_ECONNRESET
+
 #define TCP_NODELAY SO_KEEPALIVE
+
+#define MG_SOCK_ERR(errcode) ((errcode) < 0 ? (errcode) : 0)
+
+#define MG_SOCK_PENDING(errcode)                                \
+  ((errcode) == BSD_EWOULDBLOCK || (errcode) == BSD_EALREADY || \
+   (errcode) == BSD_EINPROGRESS)
+
+#define MG_SOCK_RESET(errcode) \
+  ((errcode) == BSD_ECONNABORTED || (errcode) == BSD_ECONNRESET)
+
+#define MG_SOCK_INTR(fd) 0
+
+#define socklen_t int
 #endif
 
 
@@ -1481,7 +1492,10 @@ struct mip_if {
   uint64_t lease_expire;          // Lease expiration time
   uint8_t arp_cache[MIP_ARP_CS];  // Each entry is 12 bytes
   uint16_t eport;                 // Next ephemeral port
-  uint16_t dropped;               // Number of dropped frames
+  volatile uint32_t ndropped;     // Number of received, but dropped frames
+  volatile uint32_t nrecv;        // Number of received frames
+  volatile uint32_t nsent;        // Number of transmitted frames
+  volatile uint32_t nerr;         // Number of driver errors
   uint8_t state;                  // Current state
 #define MIP_STATE_DOWN 0          // Interface is down
 #define MIP_STATE_UP 1            // Interface is up
@@ -1499,6 +1513,7 @@ extern struct mip_driver mip_driver_stm32;
 extern struct mip_driver mip_driver_w5500;
 extern struct mip_driver mip_driver_tm4c;
 extern struct mip_driver mip_driver_imx_rt1020;
+extern struct mip_driver mip_driver_stm32h;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mip_spi {
@@ -1507,6 +1522,14 @@ struct mip_spi {
   void (*end)(void *);              // SPI end: slave select high
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
+
+#if MG_ENABLE_MIP
+#if !defined(MG_ENABLE_DRIVER_STM32H) && !defined(MG_ENABLE_DRIVER_TM4C)
+#define MG_ENABLE_DRIVER_STM32 1
+#else
+#define MG_ENABLE_DRIVER_STM32 0
+#endif
+#endif
 
 #ifdef MIP_QPROFILE
 enum {
@@ -1552,6 +1575,22 @@ struct mip_driver_stm32_data {
   //    35-60 MHz     HCLK/26        3
   //    150-216 MHz   HCLK/102       4  <-- value for Nucleo-F* on max speed
   //    216-310 MHz   HCLK/124       5
+  //    110, 111 Reserved
+  int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
+};
+
+
+struct mip_driver_stm32h_data {
+  // MDC clock divider. MDC clock is derived from HCLK, must not exceed 2.5MHz
+  //    HCLK range    DIVIDER    mdc_cr VALUE
+  //    -------------------------------------
+  //                                -1  <-- tell driver to guess the value
+  //    60-100 MHz    HCLK/42        0
+  //    100-150 MHz   HCLK/62        1
+  //    20-35 MHz     HCLK/16        2
+  //    35-60 MHz     HCLK/26        3
+  //    150-250 MHz   HCLK/102       4  <-- value for Nucleo-H* on max speed driven by HSI
+  //    250-300 MHz   HCLK/124       5  <-- value for Nucleo-H* on max speed driven by CSI
   //    110, 111 Reserved
   int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
 };

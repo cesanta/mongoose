@@ -43,7 +43,10 @@ struct mip_if {
   uint64_t lease_expire;          // Lease expiration time
   uint8_t arp_cache[MIP_ARP_CS];  // Each entry is 12 bytes
   uint16_t eport;                 // Next ephemeral port
-  uint16_t dropped;               // Number of dropped frames
+  volatile uint32_t ndropped;     // Number of received, but dropped frames
+  volatile uint32_t nrecv;        // Number of received frames
+  volatile uint32_t nsent;        // Number of transmitted frames
+  volatile uint32_t nerr;         // Number of driver errors
   uint8_t state;                  // Current state
 #define MIP_STATE_DOWN 0          // Interface is down
 #define MIP_STATE_UP 1            // Interface is up
@@ -61,6 +64,7 @@ extern struct mip_driver mip_driver_stm32;
 extern struct mip_driver mip_driver_w5500;
 extern struct mip_driver mip_driver_tm4c;
 extern struct mip_driver mip_driver_imx_rt1020;
+extern struct mip_driver mip_driver_stm32h;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mip_spi {
@@ -69,6 +73,14 @@ struct mip_spi {
   void (*end)(void *);              // SPI end: slave select high
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
+
+#if MG_ENABLE_MIP
+#if !defined(MG_ENABLE_DRIVER_STM32H) && !defined(MG_ENABLE_DRIVER_TM4C)
+#define MG_ENABLE_DRIVER_STM32 1
+#else
+#define MG_ENABLE_DRIVER_STM32 0
+#endif
+#endif
 
 #ifdef MIP_QPROFILE
 enum {

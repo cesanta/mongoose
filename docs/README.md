@@ -10,18 +10,30 @@ products have utilized it. It even runs on the
 International Space Station! Mongoose makes embedded network programming fast,
 robust, and easy.
 
-Mongoose has two basic data structures:
+Mongoose works on Windows, Linux, Mac, and on a many embedded architectures
+such as STM32, NXP, TI, ESP32, and so on. It can run on top of the existing
+OS and TCP/IP stack like FreeRTOS and lwIP, as well as on a bare metal,
+utilising Mongoose's built-in TCP/IP stack and network drivers.
 
-- `struct mg_mgr` - An event manager that holds all active connections
-- `struct mg_connection` - A single connection descriptor
+## How to build and run examples
 
-Connections could be listening, outbound, or inbound. Outbound
-connections are created by the `mg_connect()` call. Listening connections are
-created by the `mg_listen()` call. Inbound connections are those accepted by a
-listening connection. Each connection is described by a `struct mg_connection`
-structure, which has a number of fields. All fields are exposed to the
-application by design, to give an application full visibility into
-Mongoose's internals.
+The easiest way to start with Mongoose is to try to build and run examples.
+Follow the [Development Environment](/tutorials/tools) tutorial to setup your
+development environment: a C compiler, a `make` utility, and a `git` utility.
+Start a terminal / command prompt and execute the following commands:
+
+```sh
+git clone https://github.com/cesanta/mongoose
+cd mongoose/examples/http-server
+make
+```
+
+The above commands download Mongoose Library source code, then go into the
+HTTP server example directory, and execute `make` command. It uses a
+`Makefile` configuration file which is present in every example directory.
+It builds an example executable and runs it.
+
+Now start your browser, and point it to http://localhost:8000
 
 ## 2-minute integration guide
 
@@ -41,8 +53,15 @@ into the source code tree
 ...
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_http_serve_opts opts = {.root_dir = "."};   // Serve local dir
-  if (ev == MG_EV_HTTP_MSG) mg_http_serve_dir(c, (struct mg_http_message *)ev_data, &opts);
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_http_match_uri(hm, "/api/hello")) {              // On /api/hello requests,
+      mg_http_reply(c, 200, "", "{%Q:%d}\n", "status", 1);  // Send dynamic JSON response
+    } else {                                                // For all other URIs,
+      struct mg_http_serve_opts opts = {.root_dir = "."};   // Serve files
+      mg_http_serve_dir(c, hm, &opts);                      // From root_dir
+    }
+  }
 }
 ...
 
@@ -50,9 +69,11 @@ int main() {
   ...
 
   struct mg_mgr mgr;                                
-  mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, "0.0.0.0:8000", fn, NULL);     // Create listening connection
-  for (;;) mg_mgr_poll(&mgr, 1000);                   // Block forever
+  mg_mgr_init(&mgr);                                      // Init manager
+  mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, &mgr);  // Setup listener
+  for (;;) mg_mgr_poll(&mgr, 1000);                       // Infinite event loop
+
+  return 0;
 }
 ```
 
@@ -75,6 +96,21 @@ incoming data and may invoke protocol-specific events like `MG_EV_HTTP_MSG`.
 Since Mongoose's core is not protected against concurrent accesses, make
 sure that all `mg_*` API functions are called from the same thread or RTOS
 task.
+
+## Connections and event manager
+
+Mongoose has two basic data structures:
+
+- `struct mg_mgr` - An event manager that holds all active connections
+- `struct mg_connection` - A single connection descriptor
+
+Connections could be listening, outbound, or inbound. Outbound
+connections are created by the `mg_connect()` call. Listening connections are
+created by the `mg_listen()` call. Inbound connections are those accepted by a
+listening connection. Each connection is described by a `struct mg_connection`
+structure, which has a number of fields. All fields are exposed to the
+application by design, to give an application full visibility into
+Mongoose's internals.
 
 ## Send and receive buffers
 
@@ -111,8 +147,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   arrives on an inbound connection, `ev` would be `MG_EV_READ`
 - `void *ev_data` - Points to the event-specific data, and it has a different
   meaning for different events. For example, for an `MG_EV_READ` event,
-  `ev_data`
-  is an `int *` pointing to the number of bytes received from a remote
+  `ev_data` is a `long *` pointing to the number of bytes received from a remote
   peer and saved into the `c->recv` IO buffer. The exact meaning of `ev_data` is
   described for each event. Protocol-specific events usually have `ev_data`
   pointing to structures that hold protocol-specific information
@@ -242,12 +277,12 @@ struct mg_connection {
   // it per-connection to something else
   mg_http_listen(&mgr, "http://localhost:1234", fn, NULL);
   ```
-  Another option is to use `c->label` buffer, which can
+  Another option is to use the `c->data` buffer, which can
   hold some amount of connection-specific data without extra memory allocation:
   ```c
   static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (ev == MG_EV_WS_OPEN) {
-      c->label[0] = 'W'; // Established websocket connection, store something
+      c->data[0] = 'W'; // Established websocket connection, store something
       ...
   ```
 - If you need to close the connection, set `c->is_draining = 1;` in your
@@ -518,7 +553,7 @@ struct mg_connection {
   void *fn_data;               // User-specified function parameter
   mg_event_handler_t pfn;      // Protocol-specific handler function
   void *pfn_data;              // Protocol-specific function parameter
-  char label[50];              // Arbitrary label
+  char data[MG_DATA_SIZE];     // Arbitrary connection data, MG_DATA_SIZE defaults to 32 bytes
   void *tls;                   // TLS specific data
   unsigned is_listening : 1;   // Listening connection
   unsigned is_client : 1;      // Outbound (client) connection
@@ -2599,8 +2634,6 @@ Supported format specifiers:
 - `q` - expect `char *`, outputs JSON-escaped string (extension)
 - `Q` - expect `char *`, outputs double-quoted JSON-escaped string (extension)
 - `H` - expect `int`, `void *`, outputs double-quoted hex string (extension)
-- `I` - expect `int` (4 or 6), `void *`, outputs IP address (extension)
-- `A` - expect `void *`, outputs hardware address (extension)
 - `V` - expect `int`, `void *`, outputs double-quoted base64 string (extension)
 - `M` - expect `mg_pfn_t`, calls another print function (extension)
 - `g`, `f` - expect `double`
@@ -2629,8 +2662,6 @@ mg_snprintf(buf, sizeof(buf), "%05x", 123);             // 00123
 mg_snprintf(buf, sizeof(buf), "%%-%3s", "a");           // %-  a
 mg_snprintf(buf, sizeof(buf), "hi, %Q", "a");           // hi, "a"
 mg_snprintf(buf, sizeof(buf), "r: %M, %d", f,1,2,7);    // r: 3, 7
-mg_snprintf(buf, sizeof(buf), "%I", 4, "abcd");         // 97.98.99.100
-mg_snprintf(buf, sizeof(buf), "%A", "abcdef");          // 61:62:63:64:65:66
 
 // Printing sub-function for %M specifier. Grabs two int parameters
 size_t f(void (*out)(char, void *), void *ptr, va_list *ap) {
@@ -3510,7 +3541,7 @@ Usage example:
 uint32_t val = mg_ntohl(0x12345678);
 ```
 
-### mg\_ntohs()
+### mg\_htons()
 
 ```c
 uint16_t mg_htons(uint16_t h);
@@ -3639,6 +3670,111 @@ Usage example:
 char url[] = "example.org/test";
 char buf[1024];
 mg_url_encode(url, sizeof(url) - 1, buf, sizeof(buf)); // buf is now "example.org%2Ftest"
+```
+
+### mg\_print\_ip
+
+```c
+size_t mg_print_ip(void (*out)(char, void *), void *param, va_list *ap);
+```
+
+Print an IP address using a specified character output function. Expects a pointer to a `struct mg_str` as the next argument in the _va\_list_ `ap`
+
+Parameters:
+- `out` - function to be used for printing chars
+- `param` - argument to be passed to `out`
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+struct mg_address addr;
+addr.ip = MG_U32('a', 'b', 'c', 'd');
+mg_snprintf(buf, sizeof(buf), "%M", mg_print_ip, &addr);         // 97.98.99.100
+```
+
+### mg\_print\_ip\_port
+
+```c
+size_t mg_print_ip_port(void (*out)(char, void *), void *param, va_list *ap);
+```
+
+Print an IP address and port, using a specified character output function. Expects a pointer to a `struct mg_str` as the next argument in the _va\_list_ `ap`
+
+Parameters:
+- `out` - function to be used for printing chars
+- `param` - argument to be passed to `out`
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+struct mg_address addr;
+addr.ip = MG_U32('a', 'b', 'c', 'd');
+addr.port = mg_htons(1234);
+mg_snprintf(buf, sizeof(buf), "%M", mg_print_ip_port, &addr);         // 97.98.99.100:1234
+```
+
+### mg\_print\_ip4
+
+```c
+size_t mg_print_ip4(void (*out)(char, void *), void *param, va_list *ap);
+```
+
+Print an IP address using a specified character output function. Expects a pointer to a buffer containing the IPv4 address in network order as the next argument in the _va\_list_ `ap`
+
+Parameters:
+- `out` - function to be used for printing chars
+- `param` - argument to be passed to `out`
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+mg_snprintf(buf, sizeof(buf), "%M", mg_print_ip4, "abcd");         // 97.98.99.100
+```
+
+### mg\_print\_ip6
+
+```c
+size_t mg_print_ip6(void (*out)(char, void *), void *param, va_list *ap);
+```
+
+Print an IPv6 address using a specified character output function. Expects a pointer to a buffer containing the IPv6 address in network order as the next argument in the _va\_list_ `ap`
+
+Parameters:
+- `out` - function to be used for printing chars
+- `param` - argument to be passed to `out`
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+mg_snprintf(buf, sizeof(buf), "%M", mg_print_ip6, "abcdefghijklmnop");         // [4142:4344:4546:4748:494a:4b4c:4d4e:4f50]
+```
+
+### mg\_print\_mac
+
+```c
+size_t mg_print_mac(void (*out)(char, void *), void *param, va_list *ap);
+```
+
+Print a MAC address using a specified character output function. Expects a pointer to a buffer containing the hardware address as the next argument in the _va\_list_ `ap`
+
+Parameters:
+- `out` - function to be used for printing chars
+- `param` - argument to be passed to `out`
+
+Return value: Number of bytes printed
+
+Usage example:
+
+```c
+mg_snprintf(buf, sizeof(buf), "%M", mg_print_mac, "abcdef");          // 61:62:63:64:65:66
 ```
 
 ## IO Buffers

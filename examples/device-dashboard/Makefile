@@ -1,40 +1,33 @@
-PROG ?= example
-SOURCES ?= ../../mongoose.c main.c net.c packed_fs.c
-CFLAGS ?= -I../.. -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_LINES=1 $(EXTRA)
-FILES_TO_EMBED ?= $(wildcard web_root/*)
-ROOT ?= $(realpath $(CURDIR)/../../..)
-DOCKER ?= docker run --rm -e Tmp=. -e WINEDEBUG=-all -v $(ROOT):$(ROOT) -w $(CURDIR)
-VC98 ?= $(DOCKER) mdashnet/vc98 wine
-MINGW ?= $(DOCKER) mdashnet/mingw
+SOURCES = ../../mongoose.c main.c net.c packed_fs.c
+CFLAGS = -W -Wall -Wextra -g
 
-ifeq "$(SSL)" "MBEDTLS"
-CFLAGS  += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS)/include -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
-endif
+# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+CFLAGS += -I ../.. -DMG_ENABLE_PACKED_FS=1
 
-ifeq "$(SSL)" "OPENSSL"
-CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include -L$(OPENSSL)/lib -lssl -lcrypto
+ifeq ($(OS),Windows_NT)
+  # Windows settings. Assume MinGW compiler
+  PROG ?= example.exe           # Use .exe suffix for the binary
+  CC = gcc                      # Use MinGW gcc compiler
+  CFLAGS += -lws2_32            # Link against Winsock library
+  DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
+else
+  # Mac, Linux
+  PROG ?= example
+  DELETE = rm -rf
 endif
 
 all: $(PROG)
-	$(RUN) ./$(PROG)
+	$(RUN) ./$(PROG) $(ARGS)
 
-$(PROG): $(SOURCES) $(FILES_TO_EMBED)
+# Before embedding files, gzip them to save space
+packed_fs.c: $(shell find web_root -type f) Makefile
+	rm -rf tmp/web_root && mkdir tmp && cp -r web_root tmp/
+	find tmp -type f | xargs -n1 gzip
 	$(CC) ../../test/pack.c -o pack
-	./pack $(FILES_TO_EMBED) > packed_fs.c
-	$(CC) -W -Wall -Wextra -O0 -g3 $(CFLAGS) -o $(PROG) $(SOURCES)
+	cd tmp && ../pack `find web_root -type f` > ../$@
 
-
-mingw: $(SOURCES) $(FILES_TO_EMBED)
-	$(MINGW) i686-w64-mingw32-gcc $(CFLAGS) ../../test/pack.c -o pack.exe
-	$(MINGW) wine cmd /c 'pack.exe $(FILES_TO_EMBED) > packed_fs.c'
-	$(MINGW) i686-w64-mingw32-gcc $(CFLAGS) $(SOURCES) -lws2_32 -o $(PROG).exe
-	$(MINGW) wine $(PROG).exe
-
-vc98: $(SOURCES) $(FILES_TO_EMBED)
-	$(VC98) cl.exe /nologo $(CFLAGS) ../../test/pack.c /Fepack.exe
-	$(VC98) cmd /c 'pack.exe $(FILES_TO_EMBED) > packed_fs.c'
-	$(VC98) cl.exe /nologo /O2 $(CFLAGS) $(SOURCES) /Fe$(PROG).exe
-	$(VC98) $(PROG).exe
+$(PROG): $(SOURCES)
+	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_EXTRA) -o $@
 
 clean:
-	rm -rf $(PROG) *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb log.txt pack
+	$(DELETE) $(PROG) *.dSYM pack tmp

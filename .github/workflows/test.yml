@@ -1,5 +1,10 @@
 name: build
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - "**Makefile"
+      - "**.c"
+      - "**.h"
 env:
   IPV6: 0
 jobs:
@@ -18,31 +23,56 @@ jobs:
       SSL: ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v3
-    - run: ./test/setup_ga_network.sh
-    - run: sudo apt-get update ; sudo apt-get install libmbedtls-dev
-    - run: make ${{ matrix.target }}
+      with: { fetch-depth: 2 }
+    - id: check
+      run: /bin/bash test/check.sh '^test|^src'
+    - if: steps.check.outputs.MATCH == 1
+      run: ./test/setup_ga_network.sh
+    - if: steps.check.outputs.MATCH == 1
+      run: sudo apt-get update ; sudo apt-get install libmbedtls-dev
+    - if: steps.check.outputs.MATCH == 1
+      run: make ${{ matrix.target }}
   s390:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - run: sudo apt-get update && sudo apt-get install qemu binfmt-support qemu-user-static
-    - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes 
-    - run: make s390
+      with: { fetch-depth: 2 }
+    - id: check
+      run: /bin/bash test/check.sh '^test|^src'
+    - if: steps.check.outputs.MATCH == 1
+      run: sudo apt-get update && sudo apt-get install qemu binfmt-support qemu-user-static
+    - if: steps.check.outputs.MATCH == 1
+      run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes 
+    - if: steps.check.outputs.MATCH == 1
+      run: make s390
   armhf:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - run: sudo apt-get update && sudo apt-get install qemu binfmt-support qemu-user-static
-    - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes 
-    - run: make armhf
+      with: { fetch-depth: 2 }
+    - id: check
+      run: /bin/bash test/check.sh '^test|^src'
+    - if: steps.check.outputs.MATCH == 1
+      run: sudo apt-get update && sudo apt-get install qemu binfmt-support qemu-user-static
+    - if: steps.check.outputs.MATCH == 1
+      run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes 
+    - if: steps.check.outputs.MATCH == 1
+      run: make armhf
   linux2:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - run: sudo apt-get update ; sudo apt-get install libmbedtls-dev valgrind
-    - run: make unamalgamated
-    - run: make valgrind
-    - run: make mg_prefix
+      with: { fetch-depth: 2 }
+    - id: check
+      run: /bin/bash test/check.sh '^test|^src'
+    - if: steps.check.outputs.MATCH == 1
+      run: sudo apt-get update ; sudo apt-get install libmbedtls-dev valgrind
+    - if: steps.check.outputs.MATCH == 1
+      run: make unamalgamated
+    - if: steps.check.outputs.MATCH == 1
+      run: make valgrind
+    - if: steps.check.outputs.MATCH == 1
+      run: make mg_prefix
   examples:
     runs-on: ubuntu-latest
     steps:
@@ -55,24 +85,28 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
-    - run: make test upload-coverage SSL=OPENSSL ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
-    - run: make test SSL=MBEDTLS  ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
+    - run: make test upload-coverage TFLAGS=-DNO_SNTP_CHECK SSL=OPENSSL ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
+    - run: make test SSL=MBEDTLS TFLAGS=-DNO_SNTP_CHECK ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
     #- run: make mip_test ASAN_OPTIONS=
     - run: make mg_prefix
   windows:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - run: make vc98
-    - run: make vc17
-    - run: make vc22
-    - run: make mingw
-    - run: make mingw++
+      with: { fetch-depth: 2 }
+    - id: check
+      run: /bin/bash test/check.sh '^test|^src'
+    - if: steps.check.outputs.MATCH == 1
+      run: make vc98 vc17 vc22 mingw mingw++
   arduino-xiao:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - run: make arduino-xiao
+      with: { fetch-depth: 2 }
+    - id: check
+      run: /bin/bash test/check.sh '^examples/arduino|^src'
+    - if: steps.check.outputs.MATCH == 1
+      run: make arduino-xiao
   arm:
     runs-on: ubuntu-latest
     steps:
@@ -104,6 +138,7 @@ jobs:
           - path: stm32/nucleo-f429zi-freertos-mip
           - path: stm32/nucleo-f429zi-usb-rndis
           - path: stm32/nucleo-f746zg-baremetal
+            target: test
           - path: stm32/nucleo-f746zg-freertos-mip
           - path: stm32/nucleo-f746zg-usb-rndis
           - path: nxp/nxp-mimxrt1020-azurertos
@@ -137,21 +172,37 @@ jobs:
     name: ${{ matrix.example.path }}
     steps:
       - uses: actions/checkout@v3
-      - run: sudo apt -y install gcc-arm-none-eabi
+        with: { fetch-depth: 2 }
+      - id: check
+        run: /bin/bash test/check.sh '^src|^examples/${{ matrix.example.path }}'
+      - if: steps.check.outputs.MATCH == 1
+        run: sudo apt -y install gcc-arm-none-eabi
       - name: ${{ matrix.example.path }}
+        if: steps.check.outputs.MATCH == 1
         run: make -C examples/${{ matrix.example.path }} ${{ matrix.example.target || 'build' }} VCON_API_KEY=${{secrets.VCON_API_KEY}}
   zephyr_examples:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: make -C examples/zephyr init
+        with: { fetch-depth: 2 }
+      - id: check
+        run: /bin/bash test/check.sh '^examples/zephyr|^src'
+      - if: steps.check.outputs.MATCH == 1
+        run: make -C examples/zephyr init
       - name: minify manifest
+        if: steps.check.outputs.MATCH == 1
         uses: mikefarah/yq@master
         with:
           cmd: yq -i eval '(.manifest.defaults, .manifest.remotes, .manifest.projects[] | select(.name == "cmsis" or .name == "hal_stm32" or .name == "mbedtls" or .name == "mcuboot" or .name == "picolibc" | del(.null) ), .manifest.self) as $i ireduce({};setpath($i | path; $i)) | del(.manifest.projects.[].null) | del(..|select(length==0))' examples/zephyr/zephyrproject/zephyr/west.yml
-      - run: make -C examples/zephyr update
-      - run: make -C examples/zephyr/device-dashboard build
-      - run: make -C examples/zephyr/http-client build
-      - run: make -C examples/zephyr/http-server build
-      - run: make -C examples/zephyr/mqtt-aws-client build
-      - run: make -C examples/zephyr/websocket-server build
+      - if: steps.check.outputs.MATCH == 1
+        run: make -C examples/zephyr update
+      - if: steps.check.outputs.MATCH == 1
+        run: make -C examples/zephyr/device-dashboard build
+      - if: steps.check.outputs.MATCH == 1
+        run: make -C examples/zephyr/http-client build
+      - if: steps.check.outputs.MATCH == 1
+        run: make -C examples/zephyr/http-server build
+      - if: steps.check.outputs.MATCH == 1
+        run: make -C examples/zephyr/mqtt-aws-client build
+      - if: steps.check.outputs.MATCH == 1
+        run: make -C examples/zephyr/websocket-server build
