@@ -7,7 +7,7 @@
 
 #define LED PIN('B', 7)  // On-board LED pin (blue)
 static uint64_t s_ticks;
-static struct mip_if *s_ifp;
+static struct mg_tcpip_if *s_ifp;
 uint32_t SystemCoreClock = SYS_FREQUENCY;
 const uint8_t tud_network_mac_address[6] = {2, 2, 0x84, 0x6A, 0x96, 0};
 
@@ -25,7 +25,7 @@ void SysTick_Handler(void) {  // SyStick IRQ handler, triggered every 1ms
 }
 
 bool tud_network_recv_cb(const uint8_t *buf, uint16_t len) {
-  mip_qwrite((void *) buf, len, s_ifp);
+  mg_tcpip_qwrite((void *) buf, len, s_ifp);
   // MG_INFO(("RECV %hu", len));
   // mg_hexdump(buf, len);
   tud_network_recv_renew();
@@ -45,7 +45,7 @@ uint16_t tud_network_xmit_cb(uint8_t *dst, void *ref, uint16_t arg) {
   return arg;
 }
 
-static size_t usb_tx(const void *buf, size_t len, struct mip_if *ifp) {
+static size_t usb_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   if (!tud_ready()) return 0;
   while (!tud_network_can_xmit(len)) tud_task();
   tud_network_xmit((void *) buf, len);
@@ -53,7 +53,7 @@ static size_t usb_tx(const void *buf, size_t len, struct mip_if *ifp) {
   return len;
 }
 
-static bool usb_up(struct mip_if *ifp) {
+static bool usb_up(struct mg_tcpip_if *ifp) {
   (void) ifp;
   return tud_inited() && tud_ready() && tud_connected();
 }
@@ -84,15 +84,16 @@ int main(void) {
   mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, blink_cb, &mgr);
 
   MG_INFO(("Init TCP/IP stack ..."));
-  struct mip_driver driver = {.tx = usb_tx, .rx = mip_driver_rx, .up = usb_up};
-  struct mip_if mif = {.mac = {2, 0, 1, 2, 3, 0x77},
-                       .ip = mg_htonl(MG_U32(192, 168, 3, 1)),
-                       .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
-                       .enable_dhcp_server = true,
-                       .driver = &driver,
-                       .queue.len = 4096};
+  struct mg_tcpip_driver driver = {
+      .tx = usb_tx, .rx = mg_tcpip_driver_rx, .up = usb_up};
+  struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 0x77},
+                            .ip = mg_htonl(MG_U32(192, 168, 3, 1)),
+                            .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
+                            .enable_dhcp_server = true,
+                            .driver = &driver,
+                            .queue.len = 4096};
   s_ifp = &mif;
-  mip_init(&mgr, &mif);
+  mg_tcpip_init(&mgr, &mif);
   mg_http_listen(&mgr, "tcp://0.0.0.0:80", fn, &mgr);
 
   MG_INFO(("Init USB ..."));
@@ -103,8 +104,8 @@ int main(void) {
   gpio_init(PIN('A', 9), GPIO_MODE_INPUT, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH,
             GPIO_PULL_NONE, 0);  // VBUS
   gpio_init(PIN('A', 10), GPIO_MODE_AF, GPIO_OTYPE_OPEN_DRAIN, GPIO_SPEED_HIGH,
-            GPIO_PULL_UP, 10);                    // ID
-  RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;            // Enable USB FS clock
+            GPIO_PULL_UP, 10);          // ID
+  RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;  // Enable USB FS clock
   tusb_init();
 
   MG_INFO(("Init done, starting main loop ..."));

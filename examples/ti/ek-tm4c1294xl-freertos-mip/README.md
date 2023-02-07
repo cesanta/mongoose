@@ -6,7 +6,7 @@ It implements the following:
 - Minimal elementary web server, as simple as possible
 - No dependencies: no HAL, no CMSIS
 - Hand-written [mcu.h](mcu.h) header based on the [datasheet](https://www.ti.com/lit/pdf/spms433)
-- Interrupt-driven [Ethernet driver](../../../drivers/mip_driver_tm4c.c)
+- Interrupt-driven Ethernet driver
 - LED blinky, based on another FreeRTOS task
 - Debug log on UART0 (ICDI)
 

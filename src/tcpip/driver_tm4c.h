@@ -1,6 +1,6 @@
 #pragma once
 
-struct mip_driver_tm4c_data {
+struct mg_tcpip_driver_tm4c_data {
   // MDC clock divider. MDC clock is derived from SYSCLK, must not exceed 2.5MHz
   //    SYSCLK range   DIVIDER   mdc_cr VALUE
   //    -------------------------------------

@@ -5,7 +5,8 @@
 [![Code Coverage](https://codecov.io/gh/cesanta/mongoose/branch/master/graph/badge.svg)](https://codecov.io/gh/cesanta/mongoose)
 [![Fuzzing Status](https://oss-fuzz-build-logs.storage.googleapis.com/badges/mongoose.svg)](https://bugs.chromium.org/p/oss-fuzz/issues/list?sort=-opened&can=1&q=proj:mongoose)
 
-Mongoose is a networking library for C/C++. It implements event-driven
+Mongoose is a network library for C/C++. 
+It implements event-driven
 non-blocking APIs for TCP, UDP, HTTP, WebSocket, MQTT.  It is designed for
 connecting devices and bringing them online. On the market since 2004, used by
 vast number of open source and commercial products - it even runs on the
@@ -19,10 +20,10 @@ robust, and easy. Features include:
 - Asynchronous DNS resolver
 - Tiny static and run-time footprint
 - Source code is both ISO C and ISO C++ compliant
-- Works with any network stack with socket API, like LwIP or FreeRTOS-Plus-TCP
 - Very easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your build tree
-- Optional built-in TCP/IP stack with drivers for bare metal or RTOS firmwares
-   - A full device dashboard
+- Works with any network stack with socket API, like LwIP or FreeRTOS-Plus-TCP
+- Provides a built-in TCP/IP stack with drivers for bare metal or RTOS systems
+   - A complete Web device dashboard
   [bare metal example on Nucleo-F429ZI](examples/stm32/nucleo-f429zi-baremetal)
   is only 6 files
    - For comparison, a CubeIDE generated HTTP example is 400+ files

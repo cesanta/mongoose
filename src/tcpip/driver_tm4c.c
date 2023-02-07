@@ -1,6 +1,6 @@
 #include "mip.h"
 
-#if MG_ENABLE_MIP && defined(MG_ENABLE_DRIVER_TM4C) && MG_ENABLE_DRIVER_TM4C
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_TM4C) && MG_ENABLE_DRIVER_TM4C
 struct tm4c_emac {
   volatile uint32_t EMACCFG, EMACFRAMEFLTR, EMACHASHTBLH, EMACHASHTBLL,
       EMACMIIADDR, EMACMIIDATA, EMACFLOWCTL, EMACVLANTG, RESERVED0, EMACSTATUS,
@@ -34,7 +34,7 @@ static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS];      // RX descriptors
 static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];      // TX descriptors
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
-static struct mip_if *s_ifp;                         // MIP interface
+static struct mg_tcpip_if *s_ifp;                    // MIP interface
 enum {
   EPHY_ADDR = 0,
   EPHYBMCR = 0,
@@ -128,9 +128,9 @@ static int guess_mdc_cr(void) {
   return result;
 }
 
-static bool mip_driver_tm4c_init(struct mip_if *ifp) {
-  struct mip_driver_tm4c_data *d =
-      (struct mip_driver_tm4c_data *) ifp->driver_data;
+static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_tm4c_data *d =
+      (struct mg_tcpip_driver_tm4c_data *) ifp->driver_data;
   s_ifp = ifp;
 
   // Init RX descriptors
@@ -184,8 +184,8 @@ static bool mip_driver_tm4c_init(struct mip_if *ifp) {
 }
 
 static uint32_t s_txno;
-static size_t mip_driver_tm4c_tx(const void *buf, size_t len,
-                                 struct mip_if *ifp) {
+static size_t mg_tcpip_driver_tm4c_tx(const void *buf, size_t len,
+                                      struct mg_tcpip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // fail
@@ -208,7 +208,7 @@ static size_t mip_driver_tm4c_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
-static bool mip_driver_tm4c_up(struct mip_if *ifp) {
+static bool mg_tcpip_driver_tm4c_up(struct mg_tcpip_if *ifp) {
   uint32_t bmsr = emac_read_phy(EPHY_ADDR, EPHYBMSR);
   bool up = (bmsr & BIT(2)) ? 1 : 0;
   if ((ifp->state == MIP_STATE_DOWN) && up) {  // link state just went up
@@ -235,7 +235,7 @@ void EMAC0_IRQHandler(void) {
         uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (BIT(14) - 1));
         //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
         //  EMAC->EMACDMARIS);
-        mip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
+        mg_tcpip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
       }
       s_rxdesc[s_rxno][0] = BIT(31);
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
@@ -245,6 +245,7 @@ void EMAC0_IRQHandler(void) {
   EMAC->EMACRXPOLLD = 0;      // and resume RX
 }
 
-struct mip_driver mip_driver_tm4c = {mip_driver_tm4c_init, mip_driver_tm4c_tx,
-                                     mip_driver_rx, mip_driver_tm4c_up};
+struct mg_tcpip_driver mg_tcpip_driver_tm4c = {
+    mg_tcpip_driver_tm4c_init, mg_tcpip_driver_tm4c_tx, mg_tcpip_driver_rx,
+    mg_tcpip_driver_tm4c_up};
 #endif

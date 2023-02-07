@@ -30,7 +30,7 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
 
 static void timer_fn(void *arg) {
   gpio_toggle(LED);                               // Blink LED
-  struct mip_if *ifp = arg;                       // And show
+  struct mg_tcpip_if *ifp = arg;                       // And show
   const char *names[] = {"down", "up", "ready"};  // network stats
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
@@ -66,10 +66,10 @@ int main(void) {
   // Initialise Mongoose network stack
   // Specify MAC address, and IP/mask/GW in network byte order for static
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
-  struct mip_driver_stm32_data driver_data = {.mdc_cr = 4};  // driver_stm32.h
-  struct mip_if mif = {.driver = &mip_driver_stm32,
+  struct mg_tcpip_driver_stm32_data driver_data = {.mdc_cr = 4};  // driver_stm32.h
+  struct mg_tcpip_if mif = {.driver = &mg_tcpip_driver_stm32,
                        .driver_data = &driver_data};
-  mip_init(&mgr, &mif);
+  mg_tcpip_init(&mgr, &mif);
   mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
 
   MG_INFO(("Waiting until network is up..."));

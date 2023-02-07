@@ -30,7 +30,7 @@ int main(void) {
   MG_INFO(("Init MIP"));
   // Initialise Mongoose network stack and specific driver
   // Set consecutive GPIOs for RMII (tx and rx) and SMI function groups
-  struct mip_driver_rp2040_rmii_data driver_data = {
+  struct mg_tcpip_driver_rp2040_rmii_data driver_data = {
       // see driver_rp2040_rmii.h
       .rx0 = 6,      // 6, 7, 8     : RX0, RX1, CRS_DV
       .tx0 = 10,     // 10, 11, 12  : TX0, TX1, TX-EN
@@ -39,13 +39,13 @@ int main(void) {
   };
   // Specify MAC address, either set use_dhcp or enter a static config.
   // For static configuration, specify IP/mask/GW in network byte order
-  struct mip_if mif = {
+  struct mg_tcpip_if mif = {
       .mac = {2, 0, 1, 2, 3, 5},
       .ip = 0,
-      .driver = &mip_driver_rp2040_rmii,
+      .driver = &mg_tcpip_driver_rp2040_rmii,
       .driver_data = &driver_data,
   };
-  mip_init(&mgr, &mif);
+  mg_tcpip_init(&mgr, &mif);
   mg_http_listen(&mgr, "http://0.0.0.0", fn, NULL);  // HTTP listener
   MG_INFO(("Init done, starting main loop"));
 

@@ -60,13 +60,13 @@ static void server(void *args) {
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
   MG_INFO(("Initializing Ethernet driver"));
   ethernet_init();
-  struct mip_driver_tm4c_data driver_data = {.mdc_cr = 1};  // See driver_tm4c.h
-  struct mip_if mif = {
+  struct mg_tcpip_driver_tm4c_data driver_data = {.mdc_cr = 1};  // See driver_tm4c.h
+  struct mg_tcpip_if mif = {
       .mac = {2, 0, 1, 2, 3, 5},
-      .driver = &mip_driver_tm4c,
+      .driver = &mg_tcpip_driver_tm4c,
       .driver_data = &driver_data,
   };
-  mip_init(&mgr, &mif);
+  mg_tcpip_init(&mgr, &mif);
   volatile uint32_t *IMC = (uint32_t *) 0x400FD000;
   uint32_t val = IMC[0xFC8 / sizeof(*IMC)];  // Turn Flash Prefetch on again
   val &= ~BIT(16);

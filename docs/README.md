@@ -377,7 +377,7 @@ standard BSD socket API.
 |MG_ENABLE_LWIP | 0 | lwIP network stack |
 |MG_ENABLE_FREERTOS_TCP | 0 | Amazon FreeRTOS-Plus-TCP network stack |
 |MG_ENABLE_RL | 0 | Keil MDK network stack |
-|MG_ENABLE_MIP | 0 | Built-in Mongoose network stack |
+|MG_ENABLE_TCPIP | 0 | Built-in Mongoose network stack |
 
 The other class of build constants is defined in
 [src/config.h](https://github.com/cesanta/mongoose/blob/master/src/config.h)
@@ -448,7 +448,7 @@ systems, follow the outline below:
   [test/mongoose_custom.c](https://github.com/cesanta/mongoose/blob/master/test/mongoose_custom.c)
   and the experimental builtin bare metal TCP/IP stack implementation
   at
-  [src/mip.c](https://github.com/cesanta/mongoose/blob/master/src/mip.c)
+  [src/tcpip/](https://github.com/cesanta/mongoose/blob/master/src/tcpip/)
 
 ## Minimal HTTP server
 

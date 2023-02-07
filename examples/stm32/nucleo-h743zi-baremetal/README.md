@@ -10,7 +10,7 @@ which implements the following:
   - MQTT communication with a remote MQTT server
 - No dependencies: no HAL, no CMSIS, no RTOS
 - Hand-written [mcu.h](mcu.h) header based on the [datasheet](https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
-- Interrupt-driven [Ethernet driver](../../../drivers/mip_driver_stm32h.c)
+- Interrupt-driven [Ethernet driver](../../../drivers/driver_stm32h.c)
 - Debug log on UART3 (st-link)
 
 ## Requirements

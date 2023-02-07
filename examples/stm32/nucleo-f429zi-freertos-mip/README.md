@@ -4,7 +4,7 @@ This firmware uses MIP, an experimental TCP/IP stack of the Mongoose Network Lib
 It implements the following:
 
 - Minimal elementary web server, as simple as possible
-- Interrupt-driven [Ethernet driver](../../../drivers/mip_driver_stm32.c)
+- Interrupt-driven [Ethernet driver](../../../drivers/driver_stm32.c)
 - Basic HAL header [mcu.h](mcu.h) based on CMSIS
 - Blue LED blinky, based on another FreeRTOS task
 - Debug log on UART3 (st-link)

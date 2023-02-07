@@ -5,7 +5,7 @@
 #include "pico/stdlib.h"
 #include "tusb.h"
 
-static struct mip_if *s_ifp;
+static struct mg_tcpip_if *s_ifp;
 
 const uint8_t tud_network_mac_address[6] = {2, 2, 0x84, 0x6A, 0x96, 0};
 
@@ -15,7 +15,7 @@ static void blink_cb(void *arg) {  // Blink periodically
 }
 
 bool tud_network_recv_cb(const uint8_t *buf, uint16_t len) {
-  mip_qwrite((void *) buf, len, s_ifp);
+  mg_tcpip_qwrite((void *) buf, len, s_ifp);
   // MG_INFO(("RECV %hu", len));
   // mg_hexdump(buf, len);
   tud_network_recv_renew();
@@ -30,7 +30,7 @@ uint16_t tud_network_xmit_cb(uint8_t *dst, void *ref, uint16_t arg) {
   return arg;
 }
 
-static size_t usb_tx(const void *buf, size_t len, struct mip_if *ifp) {
+static size_t usb_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   if (!tud_ready()) return 0;
   while (!tud_network_can_xmit(len)) tud_task();
   tud_network_xmit((void *) buf, len);
@@ -38,7 +38,7 @@ static size_t usb_tx(const void *buf, size_t len, struct mip_if *ifp) {
   return len;
 }
 
-static bool usb_up(struct mip_if *ifp) {
+static bool usb_up(struct mg_tcpip_if *ifp) {
   (void) ifp;
   return tud_inited() && tud_ready() && tud_connected();
 }
@@ -56,15 +56,15 @@ int main(void) {
   mg_mgr_init(&mgr);  // and attach it to the MIP interface
   mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, blink_cb, &mgr);
 
-  struct mip_driver driver = {.tx = usb_tx, .rx = mip_driver_rx, .up = usb_up};
-  struct mip_if mif = {.mac = {2, 0, 1, 2, 3, 0x77},
+  struct mg_tcpip_driver driver = {.tx = usb_tx, .rx = mg_tcpip_driver_rx, .up = usb_up};
+  struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 0x77},
                        .ip = mg_htonl(MG_U32(192, 168, 3, 1)),
                        .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
                        .enable_dhcp_server = true,
                        .driver = &driver,
                        .queue.len = 4096};
   s_ifp = &mif;
-  mip_init(&mgr, &mif);
+  mg_tcpip_init(&mgr, &mif);
   tusb_init();
 
   MG_INFO(("Initialising application..."));

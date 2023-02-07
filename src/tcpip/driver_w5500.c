@@ -1,10 +1,10 @@
 #include "mip.h"
 
-#if MG_ENABLE_MIP
+#if MG_ENABLE_TCPIP
 
 enum { W5500_CR = 0, W5500_S0 = 1, W5500_TX0 = 2, W5500_RX0 = 3 };
 
-static void w5500_txn(struct mip_spi *s, uint8_t block, uint16_t addr, bool wr,
+static void w5500_txn(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr, bool wr,
                       void *buf, size_t len) {
   uint8_t *p = (uint8_t *) buf;
   uint8_t cmd[] = {(uint8_t) (addr >> 8), (uint8_t) (addr & 255),
@@ -19,16 +19,16 @@ static void w5500_txn(struct mip_spi *s, uint8_t block, uint16_t addr, bool wr,
 }
 
 // clang-format off
-static  void w5500_wn(struct mip_spi *s, uint8_t block, uint16_t addr, void *buf, size_t len) { w5500_txn(s, block, addr, true, buf, len); }
-static  void w5500_w1(struct mip_spi *s, uint8_t block, uint16_t addr, uint8_t val) { w5500_wn(s, block, addr, &val, 1); }
-static  void w5500_w2(struct mip_spi *s, uint8_t block, uint16_t addr, uint16_t val) { uint8_t buf[2] = {(uint8_t) (val >> 8), (uint8_t) (val & 255)}; w5500_wn(s, block, addr, buf, sizeof(buf)); }
-static  void w5500_rn(struct mip_spi *s, uint8_t block, uint16_t addr, void *buf, size_t len) { w5500_txn(s, block, addr, false, buf, len); }
-static  uint8_t w5500_r1(struct mip_spi *s, uint8_t block, uint16_t addr) { uint8_t r = 0; w5500_rn(s, block, addr, &r, 1); return r; }
-static  uint16_t w5500_r2(struct mip_spi *s, uint8_t block, uint16_t addr) { uint8_t buf[2] = {0, 0}; w5500_rn(s, block, addr, buf, sizeof(buf)); return (uint16_t) ((buf[0] << 8) | buf[1]); }
+static  void w5500_wn(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr, void *buf, size_t len) { w5500_txn(s, block, addr, true, buf, len); }
+static  void w5500_w1(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr, uint8_t val) { w5500_wn(s, block, addr, &val, 1); }
+static  void w5500_w2(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr, uint16_t val) { uint8_t buf[2] = {(uint8_t) (val >> 8), (uint8_t) (val & 255)}; w5500_wn(s, block, addr, buf, sizeof(buf)); }
+static  void w5500_rn(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr, void *buf, size_t len) { w5500_txn(s, block, addr, false, buf, len); }
+static  uint8_t w5500_r1(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr) { uint8_t r = 0; w5500_rn(s, block, addr, &r, 1); return r; }
+static  uint16_t w5500_r2(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr) { uint8_t buf[2] = {0, 0}; w5500_rn(s, block, addr, buf, sizeof(buf)); return (uint16_t) ((buf[0] << 8) | buf[1]); }
 // clang-format on
 
-static size_t w5500_rx(void *buf, size_t buflen, struct mip_if *ifp) {
-  struct mip_spi *s = (struct mip_spi *) ifp->driver_data;
+static size_t w5500_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
   uint16_t r = 0, n = 0, len = (uint16_t) buflen, n2;     // Read recv len
   while ((n2 = w5500_r2(s, W5500_S0, 0x26)) > n) n = n2;  // Until it is stable
   // printf("RSR: %d\n", (int) n);
@@ -46,8 +46,8 @@ static size_t w5500_rx(void *buf, size_t buflen, struct mip_if *ifp) {
   return r;
 }
 
-static size_t w5500_tx(const void *buf, size_t buflen, struct mip_if *ifp) {
-  struct mip_spi *s = (struct mip_spi *) ifp->driver_data;
+static size_t w5500_tx(const void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
   uint16_t n = 0, len = (uint16_t) buflen;
   while (n < len) n = w5500_r2(s, W5500_S0, 0x20);      // Wait for space
   uint16_t ptr = w5500_r2(s, W5500_S0, 0x24);           // Get write pointer
@@ -65,8 +65,8 @@ static size_t w5500_tx(const void *buf, size_t buflen, struct mip_if *ifp) {
   return len;
 }
 
-static bool w5500_init(struct mip_if *ifp) {
-  struct mip_spi *s = (struct mip_spi *) ifp->driver_data;
+static bool w5500_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
   s->end(s->spi);
   w5500_w1(s, W5500_CR, 0, 0x80);     // Reset chip: CR -> 0x80
   w5500_w1(s, W5500_CR, 0x2e, 0);     // CR PHYCFGR -> reset
@@ -79,11 +79,11 @@ static bool w5500_init(struct mip_if *ifp) {
   return w5500_r1(s, W5500_S0, 3) == 0x42;  // Sock0 SR == MACRAW
 }
 
-static bool w5500_up(struct mip_if *ifp) {
-  struct mip_spi *spi = (struct mip_spi *) ifp->driver_data;
+static bool w5500_up(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_spi *spi = (struct mg_tcpip_spi *) ifp->driver_data;
   uint8_t phycfgr = w5500_r1(spi, W5500_CR, 0x2e);
   return phycfgr & 1;  // Bit 0 of PHYCFGR is LNK (0 - down, 1 - up)
 }
 
-struct mip_driver mip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx, w5500_up};
+struct mg_tcpip_driver mg_tcpip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx, w5500_up};
 #endif

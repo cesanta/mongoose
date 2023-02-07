@@ -29,7 +29,7 @@ static dma_channel_config dmacfg_tx;
 
 static uint8_t s_rxbuf[2][ETH_PKT_SIZE];  // ping-pong buffer
 static uint8_t s_txbuf[ETH_PKT_SIZE];
-static struct mip_if *s_ifp;             // MIP interface
+static struct mg_tcpip_if *s_ifp;             // MIP interface
 
 #define rmii_tx_wrap_target 0
 #define rmii_tx_wrap 8
@@ -251,9 +251,9 @@ static uint16_t eth_read_phy(uint addr, uint reg, uint8_t gpio) {
 
 static void rx_irq(void);
 
-static bool mip_driver_rp2040_rmii_init(struct mip_if *ifp) {
-  struct mip_driver_rp2040_rmii_data *d =
-      (struct mip_driver_rp2040_rmii_data *) ifp->driver_data;
+static bool mg_tcpip_driver_rp2040_rmii_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_rp2040_rmii_data *d =
+      (struct mg_tcpip_driver_rp2040_rmii_data *) ifp->driver_data;
   uint rx_sm_addr, tx_sm_addr;
   s_ifp = ifp;
   if (ifp->queue.len == 0) ifp->queue.len = 8192;
@@ -299,8 +299,8 @@ static bool mip_driver_rp2040_rmii_init(struct mip_if *ifp) {
   return true;
 }
 
-static size_t mip_driver_rp2040_rmii_tx(const void *buf, size_t len,
-                                 struct mip_if *ifp) {
+static size_t mg_tcpip_driver_rp2040_rmii_tx(const void *buf, size_t len,
+                                 struct mg_tcpip_if *ifp) {
   dma_channel_wait_for_finish_blocking(dma_tx);
   memset(s_txbuf, 0, 60);  // pre-pad
   memcpy(s_txbuf, buf, len);
@@ -333,12 +333,12 @@ static void rx_irq(void) {
   // time we can linger here is what it takes for the other buffer to fill
   // (<8us) and that includes irq chaining
   if (len >= 64 && len <= ETH_PKT_SIZE)
-    mip_qwrite(s_rxbuf[s_rxno], len, s_ifp);
+    mg_tcpip_qwrite(s_rxbuf[s_rxno], len, s_ifp);
   s_rxno = rxno;
 }
 
-static size_t mip_driver_rp2040_rmii_rx(void *buf, size_t buflen, struct mip_if *ifp) {
-  size_t len = mip_qread(buf, ifp);
+static size_t mg_tcpip_driver_rp2040_rmii_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
+  size_t len = mg_tcpip_qread(buf, ifp);
   if (len == 0) return 0;
   len -= 4;                           // exclude CRC from frame length
   uint32_t crc = crc_calc(buf, len);  // calculate CRC and compare
@@ -350,17 +350,17 @@ static size_t mip_driver_rp2040_rmii_rx(void *buf, size_t buflen, struct mip_if 
   return len;
 }
 
-static bool mip_driver_rp2040_rmii_up(struct mip_if *ifp) {
-  struct mip_driver_rp2040_rmii_data *d =
-      (struct mip_driver_rp2040_rmii_data *) ifp->driver_data;
+static bool mg_tcpip_driver_rp2040_rmii_up(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_rp2040_rmii_data *d =
+      (struct mg_tcpip_driver_rp2040_rmii_data *) ifp->driver_data;
   uint32_t bsr =
       eth_read_phy(d->phy_addr, 1, d->mdio);  // Basic Status Register
   return (bsr & (1 << 2)) ? 1 : 0;            // check Link Status flag
 }
 
-struct mip_driver mip_driver_rp2040_rmii = {
-    mip_driver_rp2040_rmii_init,
-    mip_driver_rp2040_rmii_tx,
-    mip_driver_rp2040_rmii_rx,
-    mip_driver_rp2040_rmii_up,
+struct mg_tcpip_driver mg_tcpip_driver_rp2040_rmii = {
+    mg_tcpip_driver_rp2040_rmii_init,
+    mg_tcpip_driver_rp2040_rmii_tx,
+    mg_tcpip_driver_rp2040_rmii_rx,
+    mg_tcpip_driver_rp2040_rmii_up,
 };

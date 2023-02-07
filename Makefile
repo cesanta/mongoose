@@ -1,5 +1,5 @@
 SRCS = mongoose.c test/unit_test.c test/packed_fs.c
-HDRS = $(wildcard src/*.h) $(wildcard mip/*.h)
+HDRS = $(wildcard src/*.h) $(wildcard src/tcpip/*.h)
 DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_SSI=1
 WARN ?= -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef
 OPTS ?= -O3 -g3
@@ -120,11 +120,11 @@ s390: CC = $(DOCKER) mdashnet/s390 cc
 s390: RUN = $(DOCKER) mdashnet/s390
 s390: test
 
-arm: DEFS += -DMG_ENABLE_FILE=0 -DMG_ENABLE_MIP=1 -DMG_ARCH=MG_ARCH_NEWLIB 
+arm: DEFS += -DMG_ENABLE_FILE=0 -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB 
 arm: mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/armgcc arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test -nostartfiles --specs nosys.specs -e 0
 
-riscv: DEFS += -DMG_ENABLE_FILE=0 -DMG_ENABLE_MIP=1 -DMG_ARCH=MG_ARCH_NEWLIB 
+riscv: DEFS += -DMG_ENABLE_FILE=0 -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB 
 riscv: mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test
 
@@ -175,11 +175,11 @@ install: linux-libs
 uninstall:
 	rm -rf $(DESTDIR)$(PREFIX)/lib/libmongoose.a $(DESTDIR)$(PREFIX)/lib/libmongoose.so.$(VERSION) $(DESTDIR)$(PREFIX)/include/mongoose.h $(DESTDIR)$(PREFIX)/lib/libmongoose.so
 
-mongoose.c: Makefile $(wildcard src/*) $(wildcard mip/*.c)
-	(cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/*.c mip/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@
+mongoose.c: Makefile $(wildcard src/*.c) $(wildcard src/tcpip/*.c)
+	(cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/*.c src/tcpip/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@
 
 mongoose.h: $(HDRS) Makefile
-	(cat src/license.h; echo; echo '#ifndef MONGOOSE_H'; echo '#define MONGOOSE_H'; echo; cat src/version.h ; echo; echo '#ifdef __cplusplus'; echo 'extern "C" {'; echo '#endif'; cat src/arch.h src/arch_*.h src/net_*.h src/config.h src/str.h src/fmt.h src/log.h src/timer.h src/fs.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/tls_mbed.h src/tls_openssl.h src/ws.h src/sntp.h src/mqtt.h src/dns.h src/json.h src/rpc.h mip/mip.h mip/driver_*.h | sed -e '/keep/! s,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
+	(cat src/license.h; echo; echo '#ifndef MONGOOSE_H'; echo '#define MONGOOSE_H'; echo; cat src/version.h ; echo; echo '#ifdef __cplusplus'; echo 'extern "C" {'; echo '#endif'; cat src/arch.h src/arch_*.h src/net_*.h src/config.h src/str.h src/fmt.h src/log.h src/timer.h src/fs.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/tls_mbed.h src/tls_openssl.h src/ws.h src/sntp.h src/mqtt.h src/dns.h src/json.h src/rpc.h src/tcpip/tcpip.h src/tcpip/driver_*.h | sed -e '/keep/! s,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
 
 clean:
 	rm -rf $(PROG) *.exe *.o *.dSYM *_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack arduino tmp

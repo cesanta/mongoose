@@ -51,7 +51,7 @@ static void ethernet_init(void) {
 }
 
 static void timer_fn(void *arg) {
-  struct mip_if *ifp = arg;                       // And show
+  struct mg_tcpip_if *ifp = arg;                  // And show
   const char *names[] = {"down", "up", "ready"};  // network stats
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
@@ -68,10 +68,10 @@ static void server(void *args) {
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
   MG_INFO(("Initializing Ethernet driver"));
   ethernet_init();
-  struct mip_driver_stm32_data driver_data = {.mdc_cr = 4};
-  struct mip_if mif = {.driver = &mip_driver_stm32,
-                       .driver_data = &driver_data};
-  mip_init(&mgr, &mif);
+  struct mg_tcpip_driver_stm32_data driver_data = {.mdc_cr = 4};
+  struct mg_tcpip_if mif = {.driver = &mg_tcpip_driver_stm32,
+                            .driver_data = &driver_data};
+  mg_tcpip_init(&mgr, &mif);
 
   MG_INFO(("Starting Mongoose v%s", MG_VERSION));    // Tell the world
   mg_http_listen(&mgr, "http://0.0.0.0", fn, &mgr);  // Web listener
