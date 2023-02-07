@@ -48,7 +48,8 @@ static void server(void *args) {
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
   MG_INFO(("Initializing Ethernet driver"));
   ethernet_init();
-  struct mip_driver_stm32_data driver_data = {.mdc_cr = 4};  // See driver_stm32.h
+  struct mip_driver_stm32_data driver_data = {.mdc_cr =
+                                                  4};  // See driver_stm32.h
   struct mip_if mif = {
       .mac = {2, 0, 1, 2, 3, 5},
       .driver = &mip_driver_stm32,
@@ -74,9 +75,9 @@ static void blinker(void *args) {
 }
 
 int main(void) {
-  clock_init();               // Set clock to max of 180 MHz
+  clock_init();                        // Set clock to max of 180 MHz
   systick_init(SYS_FREQUENCY / 1000);  // Tick every 1 ms
-  uart_init(UART3, 115200);   // Initialise UART
+  uart_init(UART_DEBUG, 115200);       // Initialise UART
   xTaskCreate(blinker, "blinker", 128, ":)", configMAX_PRIORITIES - 1, NULL);
   xTaskCreate(server, "server", 2048, 0, configMAX_PRIORITIES - 1, NULL);
   vTaskStartScheduler();  // This blocks

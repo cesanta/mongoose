@@ -32,7 +32,7 @@ static void ethernet_init(void) {
             GPIO_PULL_NONE, 5);  // EN0LED1
   gpio_init(LED4, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH,
             GPIO_PULL_NONE, 5);  // EN0LED0
-  nvic_enable_irq(40);  // Setup Ethernet IRQ handler
+  nvic_enable_irq(40);           // Setup Ethernet IRQ handler
   // Initialize Ethernet clocks, see datasheet section 5
   // Turn Flash Prefetch off (silicon errata ETH#02)
   volatile uint32_t *IMC = (uint32_t *) 0x400FD000;
@@ -85,15 +85,15 @@ static void blinker(void *args) {
   for (;;) {
     gpio_toggle(LED1);
     vTaskDelay(pdMS_TO_TICKS(750));
-    (void)args;//MG_INFO(("blink %s,  RAM: %u", (char *) args, xPortGetFreeHeapSize()));
+    (void) args;  // MG_INFO(("blink %s,  RAM: %u", (char *) args,
+                  // xPortGetFreeHeapSize()));
   }
 }
 
 int main(void) {
-  static struct uart *uart = UART0;  // Use UART0 (attached to ICDI)
-  clock_init();                      // Set clock to 120MHz
-  systick_init(FREQ / 1000);  // Tick every 1 ms
-  uart_init(uart, 115200);   // Initialise UART
+  clock_init();                   // Set clock to 120MHz
+  systick_init(FREQ / 1000);      // Tick every 1 ms
+  uart_init(UART_DEBUG, 115200);  // Initialise UART
   xTaskCreate(blinker, "blinker", 128, ":)", configMAX_PRIORITIES - 1, NULL);
   xTaskCreate(server, "server", 2048, 0, configMAX_PRIORITIES - 1, NULL);
   vTaskStartScheduler();  // This blocks

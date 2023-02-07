@@ -101,6 +101,10 @@ static inline void gpio_toggle(uint16_t pin) {
 #define UART2 USART2
 #define UART3 USART3
 
+#ifndef UART_DEBUG
+#define UART_DEBUG USART3
+#endif
+
 static inline void uart_init(USART_TypeDef *uart, unsigned long baud) {
   // https://www.st.com/resource/en/datasheet/stm32f429zi.pdf
   uint8_t af = 7;           // Alternate function

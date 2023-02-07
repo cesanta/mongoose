@@ -4,7 +4,12 @@
 #include "hal.h"
 #include "mongoose.h"
 
-#define LED PIN('B', 7)       // On-board LED pin
+#define LED1 PIN('B', 0)   // On-board LED pin (green)
+#define LED2 PIN('B', 7)   // On-board LED pin (blue)
+#define LED3 PIN('B', 14)  // On-board LED pin (red)
+#define BTN1 PIN('C', 13)  // On-board user button
+
+#define LED LED2              // Use blue LED for blinking
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
 static uint64_t s_ticks;      // Milliseconds since boot
@@ -29,7 +34,7 @@ static void timer_fn(void *arg) {
   const char *names[] = {"down", "up", "ready"};  // network stats
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
-           ifp->ndropped, ifp->nerr));
+           ifp->ndrop, ifp->nerr));
 }
 
 static void ethernet_init(void) {

@@ -193,7 +193,6 @@ static bool mip_driver_stm32_up(struct mip_if *ifp) {
 
 void ETH_IRQHandler(void);
 void ETH_IRQHandler(void) {
-  qp_mark(QP_IRQTRIGGERED, 0);
   if (ETH->DMASR & BIT(6)) {             // Frame received, loop
     ETH->DMASR = BIT(16) | BIT(6);       // Clear flag
     for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
