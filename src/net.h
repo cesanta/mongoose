@@ -58,6 +58,7 @@ struct mg_connection {
   unsigned is_client : 1;      // Outbound (client) connection
   unsigned is_accepted : 1;    // Accepted (server) connection
   unsigned is_resolving : 1;   // Non-blocking DNS resolution is in progress
+  unsigned is_arplooking : 1;  // Non-blocking ARP resolution is in progress
   unsigned is_connecting : 1;  // Non-blocking connect is in progress
   unsigned is_tls : 1;         // TLS-enabled connection
   unsigned is_tls_hs : 1;      // TLS handshake is in progress

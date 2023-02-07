@@ -226,7 +226,6 @@ static bool mip_driver_tm4c_up(struct mip_if *ifp) {
 void EMAC0_IRQHandler(void);
 static uint32_t s_rxno;
 void EMAC0_IRQHandler(void) {
-  qp_mark(QP_IRQTRIGGERED, 0);
   if (EMAC->EMACDMARIS & BIT(6)) {        // Frame received, loop
     EMAC->EMACDMARIS = BIT(16) | BIT(6);  // Clear flag
     for (uint32_t i = 0; i < 10; i++) {   // read as they arrive but not forever

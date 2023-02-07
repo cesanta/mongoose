@@ -1,34 +1,49 @@
-CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
-            -Wformat-truncation -fno-common -Wconversion \
-            -g3 -Os -ffunction-sections -fdata-sections \
-            -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 \
-            -I. -I../../../ $(EXTRA_CFLAGS)
-LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
-SOURCES = main.c boot.c syscalls.c ../../../mongoose.c
+CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
+CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
+CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
+CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_f7/Include
+CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
-FREERTOS_VERSION ?= V10.5.0
-FREERTOS_REPO ?= https://github.com/FreeRTOS/FreeRTOS-Kernel 
+SOURCES = main.c syscalls.c sysinit.c
+SOURCES += cmsis_f7/Source/Templates/gcc/startup_stm32f746xx.s # ST startup file. Compiler-dependent!
 
-build example: firmware.bin
+# FreeRTOS
+SOURCES += FreeRTOS-Kernel/portable/MemMang/heap_4.c
+SOURCES += FreeRTOS-Kernel/portable/GCC/ARM_CM7/r0p1/port.c
+CFLAGS += -IFreeRTOS-Kernel/include 
+CFLAGS += -IFreeRTOS-Kernel/portable/GCC/ARM_CM7/r0p1 -Wno-conversion
 
-firmware.elf: FreeRTOS-Kernel $(SOURCES) 
-	arm-none-eabi-gcc -o $@ $(SOURCES) $(CFLAGS) \
-	  -IFreeRTOS-Kernel/include \
-	  -IFreeRTOS-Kernel/portable/GCC/ARM_CM7/r0p1 \
-	  -Wno-conversion \
-	  $(wildcard FreeRTOS-Kernel/*.c) \
-	  FreeRTOS-Kernel/portable/MemMang/heap_4.c \
-	  FreeRTOS-Kernel/portable/GCC/ARM_CM7/r0p1/port.c \
-	  $(LDFLAGS)
-	
+SOURCES += ../../../mongoose.c # Mongoose options are defined in mongoose_custom.h
+CFLAGS += -I../../.. $(CFLAGS_EXTRA)
+
+all build example: firmware.bin
+
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 
-flash: firmware.bin
-	st-flash --reset write firmware.bin 0x8000000
+firmware.elf: FreeRTOS-Kernel cmsis_core cmsis_f7 $(SOURCES) hal.h link.ld 
+	arm-none-eabi-gcc $(SOURCES) $(wildcard FreeRTOS-Kernel/*.c) $(CFLAGS) $(LDFLAGS) -o $@
 
-FreeRTOS-Kernel:
-	git clone --depth 1 -b $(FREERTOS_VERSION) $(FREERTOS_REPO) $@
+flash: firmware.bin
+	st-flash --reset write $< 0x8000000
+
+cmsis_f7:  # ARM CMSIS core headers
+	git clone --depth 1 -b v1.2.8 https://github.com/STMicroelectronics/cmsis_device_f7 $@
+cmsis_core:  # ST CMSIS headers for STM32F7 series
+	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
+FreeRTOS-Kernel:  # FreeRTOS sources
+	git clone --depth 1 -b V10.5.0 https://github.com/FreeRTOS/FreeRTOS-Kernel $@
+
+# Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
+DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/5
+update: firmware.bin
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
+
+test: CFLAGS_EXTRA += -DUART_DEBUG=USART1
+test: update
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
+	grep 'READY, IP:' /tmp/output.txt       # Check for network init
 
 clean:
-	rm -rf firmware.* FreeRTOS-Kernel
+	@rm -rf firmware.* *.su cmsis_core cmsis_f7 FreeRTOS-Kernel

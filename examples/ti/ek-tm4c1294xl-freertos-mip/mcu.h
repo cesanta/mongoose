@@ -190,6 +190,10 @@ struct uart {
 
 #define UART0 USART(0)
 
+#ifndef UART_DEBUG
+#define UART_DEBUG UART0
+#endif
+
 static inline void uart_init(struct uart *uart, unsigned long baud) {
   struct uarthw {
     uint16_t rx, tx;  // pins

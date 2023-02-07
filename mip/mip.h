@@ -21,9 +21,6 @@ struct queue {
   volatile size_t tail, head;
 };
 
-#define MIP_ARP_ENTRIES 5  // Number of ARP cache entries. Maximum 21
-#define MIP_ARP_CS (2 + 12 * MIP_ARP_ENTRIES)  // ARP cache size
-
 // Network interface
 struct mip_if {
   uint8_t mac[6];             // MAC address. Must be set to a valid MAC
@@ -38,19 +35,19 @@ struct mip_if {
   struct queue queue;         // Set queue.len for interrupt based drivers
 
   // Internal state, user can use it but should not change it
-  uint64_t now;                   // Current time
-  uint64_t timer_1000ms;          // 1000 ms timer: for DHCP and link state
-  uint64_t lease_expire;          // Lease expiration time
-  uint8_t arp_cache[MIP_ARP_CS];  // Each entry is 12 bytes
-  uint16_t eport;                 // Next ephemeral port
-  volatile uint32_t ndropped;     // Number of received, but dropped frames
-  volatile uint32_t nrecv;        // Number of received frames
-  volatile uint32_t nsent;        // Number of transmitted frames
-  volatile uint32_t nerr;         // Number of driver errors
-  uint8_t state;                  // Current state
-#define MIP_STATE_DOWN 0          // Interface is down
-#define MIP_STATE_UP 1            // Interface is up
-#define MIP_STATE_READY 2         // Interface is up and has IP
+  uint8_t gwmac[6];         // Router's MAC
+  uint64_t now;             // Current time
+  uint64_t timer_1000ms;    // 1000 ms timer: for DHCP and link state
+  uint64_t lease_expire;    // Lease expiration time
+  uint16_t eport;           // Next ephemeral port
+  volatile uint32_t ndrop;  // Number of received, but dropped frames
+  volatile uint32_t nrecv;  // Number of received frames
+  volatile uint32_t nsent;  // Number of transmitted frames
+  volatile uint32_t nerr;   // Number of driver errors
+  uint8_t state;            // Current state
+#define MIP_STATE_DOWN 0    // Interface is down
+#define MIP_STATE_UP 1      // Interface is up
+#define MIP_STATE_READY 2   // Interface is up and has IP
 };
 
 void mip_init(struct mg_mgr *, struct mip_if *);
@@ -79,21 +76,4 @@ struct mip_spi {
 #else
 #define MG_ENABLE_DRIVER_STM32 0
 #endif
-#endif
-
-#ifdef MIP_QPROFILE
-enum {
-  QP_IRQTRIGGERED = 0,  // payload is number of interrupts so far
-  QP_FRAMEPUSHED,       // available space in the frame queue
-  QP_FRAMEPOPPED,       // available space in the frame queue
-  QP_FRAMEDONE,         // available space in the frame queue
-  QP_FRAMEDROPPED,      // number of dropped frames
-  QP_QUEUEOVF  // profiling queue is full, payload is number of frame drops
-};
-
-void qp_mark(unsigned int type, int len);
-void qp_log(void);  // timestamp, type, payload
-void qp_init(void);
-#else
-#define qp_mark(a, b)
 #endif
