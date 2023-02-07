@@ -64,6 +64,7 @@ extern struct mip_driver mip_driver_stm32;
 extern struct mip_driver mip_driver_w5500;
 extern struct mip_driver mip_driver_tm4c;
 extern struct mip_driver mip_driver_stm32h;
+extern struct mip_driver mip_driver_imx_rt1020;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mip_spi {
