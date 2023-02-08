@@ -13,12 +13,9 @@ Rules for creating a new example:
 - An example must build on Windows, Mac and Ubuntu Linux systems
 - Assume that user installed tools according to https://mongoose.ws/tutorials/tools/
 - Makefile must not include any other make files
-- Use `CFLAGS` for compilation options
-- Add `CFLAGS_EXTRA` to the end of `CFLAGS`, to allow user to specify
-  extra options, for example:
-  ```
-  make CFLAGS_EXTRA="-pedantic -O2"
-  ```
+- Use `CFLAGS` for system-specific compilation options
+- Use `CFLAGS_MONGOOSE` for mongoose-specific compilation options
+- Use `$(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA)` to compile
 - If external repository is required, download it on demand using git
   shallow clone. See embedded example golden reference
 - Keep Makefile as short as possible, but verbose to understand it easily
