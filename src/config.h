@@ -4,8 +4,8 @@
 #define MG_ENABLE_LOG 1
 #endif
 
-#ifndef MG_ENABLE_MIP
-#define MG_ENABLE_MIP 0  // Mongoose built-in network stack
+#ifndef MG_ENABLE_TCPIP
+#define MG_ENABLE_TCPIP 0  // Mongoose built-in network stack
 #endif
 
 #ifndef MG_ENABLE_LWIP
@@ -21,7 +21,7 @@
 #endif
 
 #ifndef MG_ENABLE_SOCKET
-#define MG_ENABLE_SOCKET !MG_ENABLE_MIP
+#define MG_ENABLE_SOCKET !MG_ENABLE_TCPIP
 #endif
 
 #ifndef MG_ENABLE_POLL

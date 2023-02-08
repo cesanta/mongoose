@@ -14,7 +14,7 @@ SOURCES = main.c syscalls.c cmsis_device_f4/Source/Templates/gcc/startup_stm32f4
 
 # Mongoose-specific build flags and source code files
 # Build options reference: https://mongoose.ws/documentation/#build-options
-CFLAGS  += -I../../.. -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_MIP=1 -DMG_ENABLE_PACKED_FS=1
+CFLAGS  += -I../../.. -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_PACKED_FS=1
 SOURCES += ../../../mongoose.c ../../device-dashboard/net.c ../../device-dashboard/packed_fs.c
 
 # Build flashable .bin file

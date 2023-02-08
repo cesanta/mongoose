@@ -14,7 +14,7 @@
 static uint64_t s_ticks, s_exti;  // Counters, increased by IRQ handlers
 
 static void blink_cb(void *arg) {  // Blink periodically
-  struct mip_if *ifp = arg;
+  struct mg_tcpip_if *ifp = arg;
   gpio_toggle(LED1);
   MG_INFO(("Ethernet: %s", ifp->driver->up(ifp) ? "up": "down"));
 }
@@ -86,13 +86,13 @@ int main(void) {
   // Initialize Mongoose network stack
   // Specify MAC address, and IP/mask/GW in network byte order for static
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
-  struct mip_driver_tm4c_data driver_data = {.mdc_cr = 1};  // See driver_tm4c.h
-  struct mip_if mif = {
+  struct mg_tcpip_driver_tm4c_data driver_data = {.mdc_cr = 1};  // See driver_tm4c.h
+  struct mg_tcpip_if mif = {
       .mac = {2, 0, 1, 2, 3, 5},
-      .driver = &mip_driver_tm4c,
+      .driver = &mg_tcpip_driver_tm4c,
       .driver_data = &driver_data,
   };
-  mip_init(&mgr, &mif);
+  mg_tcpip_init(&mgr, &mif);
   val = IMC[0xFC8 / sizeof(*IMC)];  // Turn Flash Prefetch on again
   val &= ~BIT(16);
   val |= BIT(17);

@@ -8,7 +8,7 @@ LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--
 SOURCES = startup.c main.c syscalls.c
 
 # Add Mongoose-specific flags and source files
-CFLAGS  += -I../../.. -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_MIP=1 -DMG_ENABLE_DRIVER_STM32H=1 -DMG_ENABLE_PACKED_FS=1
+CFLAGS  += -I../../.. -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_DRIVER_STM32H=1 -DMG_ENABLE_PACKED_FS=1
 SOURCES += ../../../mongoose.c ../../device-dashboard/net.c ../../device-dashboard/packed_fs.c
 
 all build example: firmware.bin

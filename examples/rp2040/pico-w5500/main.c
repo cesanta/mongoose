@@ -21,7 +21,7 @@ static uint8_t spi_txn(void *spi, uint8_t byte) {
 
 static void timer_cb(void *arg) {
   gpio_put(PICO_DEFAULT_LED_PIN, !gpio_get_out_level(PICO_DEFAULT_LED_PIN));
-  bool up = ((struct mip_if *) arg)->state == MIP_STATE_READY;
+  bool up = ((struct mg_tcpip_if *) arg)->state == MIP_STATE_READY;
   MG_INFO(("Ethernet: %s", up ? "up" : "down"));  // Show network status
 }
 
@@ -43,14 +43,14 @@ int main(void) {
   gpio_put(SPI_CS, 1);                        // And drive CS high (inactive)
 
   // Init Mongoose
-  struct mip_spi spi = {NULL, spi_begin, spi_end, spi_txn};
-  struct mip_if mif = {.mac = {2, 0, 1, 2, 3, 5},
-                       .driver = &mip_driver_w5500,
+  struct mg_tcpip_spi spi = {NULL, spi_begin, spi_end, spi_txn};
+  struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5},
+                       .driver = &mg_tcpip_driver_w5500,
                        .driver_data = &spi};
   struct mg_mgr mgr;        // Declare event manager
   mg_mgr_init(&mgr);        // Init event manager
   mg_log_set(MG_LL_DEBUG);  // Set DEBUG log level
-  mip_init(&mgr, &mif);     // Init TCP/IP stack
+  mg_tcpip_init(&mgr, &mif);     // Init TCP/IP stack
   mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_cb, &mif);
 
   MG_INFO(("Waiting until network is up..."));

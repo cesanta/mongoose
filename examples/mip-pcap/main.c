@@ -18,7 +18,7 @@ void signal_handler(int signo) {
   s_signo = signo;
 }
 
-static size_t pcap_tx(const void *buf, size_t len, struct mip_if *ifp) {
+static size_t pcap_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   int res = pcap_inject((pcap_t *) ifp->driver_data, buf, len);
   if (res == PCAP_ERROR) {
     MG_ERROR(("pcap_inject: %d", res));
@@ -26,11 +26,11 @@ static size_t pcap_tx(const void *buf, size_t len, struct mip_if *ifp) {
   return res == PCAP_ERROR ? 0 : len;
 }
 
-static bool pcap_up(struct mip_if *ifp) {
+static bool pcap_up(struct mg_tcpip_if *ifp) {
   return ifp->driver_data ? true : false;
 }
 
-static size_t pcap_rx(void *buf, size_t len, struct mip_if *ifp) {
+static size_t pcap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   size_t received = 0;
   struct pcap_pkthdr *hdr = NULL;
   const unsigned char *pkt = NULL;
@@ -132,11 +132,11 @@ int main(int argc, char *argv[]) {
   mg_mgr_init(&mgr);        // Initialise event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
-  struct mip_driver driver = {.tx = pcap_tx, .up = pcap_up, .rx = pcap_rx};
-  struct mip_if mif = {.driver = &driver, .driver_data = ph};
+  struct mg_tcpip_driver driver = {.tx = pcap_tx, .up = pcap_up, .rx = pcap_rx};
+  struct mg_tcpip_if mif = {.driver = &driver, .driver_data = ph};
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
          &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
-  mip_init(&mgr, &mif);
+  mg_tcpip_init(&mgr, &mif);
   MG_INFO(("Init done, starting main loop"));
 
   // extern void device_dashboard_fn(struct mg_connection *, int, void *, void

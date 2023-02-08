@@ -38,7 +38,7 @@ void SystemInit(void) {                  // Called automatically by startup code
 
 static void timer_fn(void *arg) {
   gpio_toggle(LED2);  // Blink LED
-  bool up = ((struct mip_if *) arg)->state == MIP_STATE_READY;
+  bool up = ((struct mg_tcpip_if *) arg)->state == MIP_STATE_READY;
   MG_INFO(("Ethernet: %s", up ? "up" : "down"));  // Show network status
 }
 
@@ -74,11 +74,11 @@ int main(void) {
   // Initialise Mongoose network stack
   // Specify MAC address, and IP/mask/GW in network byte order for static
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
-  struct mip_driver_stm32_data driver_data = {.mdc_cr = 4};  // driver_stm32.h
-  struct mip_if mif = {.mac = {2, 0, 1, 2, 3, 5},
-                       .driver = &mip_driver_stm32,
-                       .driver_data = &driver_data};
-  mip_init(&mgr, &mif);
+  struct mg_tcpip_driver_stm32_data driver_data = {.mdc_cr = 4};
+  struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5},
+                            .driver = &mg_tcpip_driver_stm32,
+                            .driver_data = &driver_data};
+  mg_tcpip_init(&mgr, &mif);
   mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
 
   MG_INFO(("Waiting until network is up..."));

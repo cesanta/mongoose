@@ -25,7 +25,7 @@ jobs:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
     - id: check
-      run: /bin/bash test/check.sh '^test|^src'
+      run: /bin/bash test/check.sh '^test|^src/*.[ch]'
     - if: steps.check.outputs.MATCH == 1
       run: ./test/setup_ga_network.sh
     - if: steps.check.outputs.MATCH == 1
@@ -38,7 +38,7 @@ jobs:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
     - id: check
-      run: /bin/bash test/check.sh '^test|^src'
+      run: /bin/bash test/check.sh '^test|^src/*.[ch]'
     - if: steps.check.outputs.MATCH == 1
       run: sudo apt-get update && sudo apt-get install qemu binfmt-support qemu-user-static
     - if: steps.check.outputs.MATCH == 1
@@ -51,7 +51,7 @@ jobs:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
     - id: check
-      run: /bin/bash test/check.sh '^test|^src'
+      run: /bin/bash test/check.sh '^test|^src/*.[ch]'
     - if: steps.check.outputs.MATCH == 1
       run: sudo apt-get update && sudo apt-get install qemu binfmt-support qemu-user-static
     - if: steps.check.outputs.MATCH == 1
@@ -64,7 +64,7 @@ jobs:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
     - id: check
-      run: /bin/bash test/check.sh '^test|^src'
+      run: /bin/bash test/check.sh '^test|^src/*.[ch]'
     - if: steps.check.outputs.MATCH == 1
       run: sudo apt-get update ; sudo apt-get install libmbedtls-dev valgrind
     - if: steps.check.outputs.MATCH == 1
@@ -95,7 +95,7 @@ jobs:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
     - id: check
-      run: /bin/bash test/check.sh '^test|^src'
+      run: /bin/bash test/check.sh '^test|^src/*.[ch]'
     - if: steps.check.outputs.MATCH == 1
       run: make vc98 vc17 vc22 mingw mingw++
   arduino-xiao:
@@ -104,7 +104,7 @@ jobs:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
     - id: check
-      run: /bin/bash test/check.sh '^examples/arduino|^src'
+      run: /bin/bash test/check.sh '^examples/arduino|^src/*.[ch]'
     - if: steps.check.outputs.MATCH == 1
       run: make arduino-xiao
   arm:
@@ -186,7 +186,7 @@ jobs:
       - uses: actions/checkout@v3
         with: { fetch-depth: 2 }
       - id: check
-        run: /bin/bash test/check.sh '^examples/zephyr|^src'
+        run: /bin/bash test/check.sh '^examples/zephyr|^src/*.[ch]'
       - if: steps.check.outputs.MATCH == 1
         run: make -C examples/zephyr init
       - name: minify manifest

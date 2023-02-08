@@ -18,7 +18,7 @@ SOURCES += tinyusb/src/tusb.c \
            tinyusb/lib/networking/rndis_reports.c \
            usb_descriptors.c
 CFLAGS += -Itinyusb/src -Itinyusb/lib/networking
-CFLAGS += -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_MIP=1 -DMG_ENABLE_PACKED_FS=1 -DMG_IO_SIZE=512 -DMG_ENABLE_CUSTOM_MILLIS=1
+CFLAGS += -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_PACKED_FS=1 -DMG_IO_SIZE=512 -DMG_ENABLE_CUSTOM_MILLIS=1
 CFLAGS += -DSTM32F429xx
 CFLAGS += -Wno-conversion -Wno-sign-conversion
 

@@ -3,13 +3,13 @@
 
 #define SS_PIN 3    // Slave select pin
 struct mg_mgr mgr;  // Mongoose event manager
-struct mip_spi spi = {
+struct mg_tcpip_spi spi = {
     NULL,                                               // SPI data
     [](void *) { digitalWrite(SS_PIN, LOW); },          // begin transation
     [](void *) { digitalWrite(SS_PIN, HIGH); },         // end transaction
     [](void *, uint8_t c) { return SPI.transfer(c); },  // execute transaction
 };
-struct mip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // MIP network interface
+struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // MIP network interface
 
 void setup() {
   Serial.begin(115200);
@@ -23,15 +23,15 @@ void setup() {
   delay(3000);
   MG_INFO(("Starting TCP/IP stack..."));
 
-  mif.driver = &mip_driver_w5500;
+  mif.driver = &mg_tcpip_driver_w5500;
   mif.driver_data = &spi;
-  mip_init(&mgr, &mif);
+  mg_tcpip_init(&mgr, &mif);
 
   // Start a 5 sec timer, print status message periodically
   mg_timer_add(
       &mgr, 5000, MG_TIMER_REPEAT,
       [](void *) {
-        MG_INFO(("ethernet: %s", mip_driver_w5500.up(&mif) ? "up" : "down"));
+        MG_INFO(("ethernet: %s", mg_tcpip_driver_w5500.up(&mif) ? "up" : "down"));
       },
       NULL);
 

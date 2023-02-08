@@ -9,7 +9,7 @@ pico_sdk_init()
 add_compile_definitions(
 	MIP_DEBUG=1 
 	MG_ENABLE_PACKED_FS=1
-	MG_ENABLE_MIP=1
+        MG_ENABLE_TCPIP=1
 )
 
 add_executable(firmware

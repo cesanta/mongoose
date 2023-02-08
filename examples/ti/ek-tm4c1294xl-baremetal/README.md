@@ -10,7 +10,7 @@ which implements the following:
   - MQTT communication with a remote MQTT server
 - No dependencies: no HAL, no CMSIS, no RTOS
 - Hand-written [mcu.h](mcu.h) header based on the [datasheet](https://www.ti.com/lit/pdf/spms433)
-- Interrupt-driven [Ethernet driver](../../../drivers/mip_driver_tm4c.c)
+- Interrupt-driven Ethernet driver
 - LED blinky, based on SysTick interrupt
 - User button handler, turns off/on an LED, based on GPIO IRQs (interrupt-driven)
 - HardFault handler alternate blinks LEDs

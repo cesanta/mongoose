@@ -1,4 +1,4 @@
-#define MG_ENABLE_MIP 1
+#define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_SOCKET 0
 #define MG_USING_DHCP 1
 #define MG_ENABLE_PACKED_FS 0
@@ -30,14 +30,14 @@ static int s_num_tests = 0;
   } while (0)
 
 // MIP TUNTAP driver
-static size_t tap_rx(void *buf, size_t len, struct mip_if *ifp) {
+static size_t tap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   ssize_t received = read(*(int *) ifp->driver_data, buf, len);
   usleep(1);  // This is to avoid 100% CPU
   if (received < 0) return 0;
   return (size_t) received;
 }
 
-static size_t tap_tx(const void *buf, size_t len, struct mip_if *ifp) {
+static size_t tap_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   ssize_t res = write(*(int *) ifp->driver_data, buf, len);
   if (res < 0) {
     MG_ERROR(("tap_tx failed: %d", errno));
@@ -46,7 +46,7 @@ static size_t tap_tx(const void *buf, size_t len, struct mip_if *ifp) {
   return (size_t) res;
 }
 
-static bool tap_up(struct mip_if *ifp) {
+static bool tap_up(struct mg_tcpip_if *ifp) {
   return ifp->driver_data ? true : false;
 }
 
@@ -161,14 +161,14 @@ static void test_http_fetch(void) {
   mg_mgr_init(&mgr);  // Initialise event manager
 
   // MIP driver
-  struct mip_driver driver;
+  struct mg_tcpip_driver driver;
   memset(&driver, 0, sizeof(driver));
 
   driver.tx = tap_tx;
   driver.up = tap_up;
   driver.rx = tap_rx;
 
-  struct mip_if mif;
+  struct mg_tcpip_if mif;
   memset(&mif, 0, sizeof(mif));
 
   mif.driver = &driver;
@@ -184,7 +184,7 @@ static void test_http_fetch(void) {
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
          &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
 
-  mip_init(&mgr, &mif);
+  mg_tcpip_init(&mgr, &mif);
   MG_INFO(("Init done, starting main loop"));
 
   // Stack initialization, Network configuration (DHCP lease, ...)
@@ -236,7 +236,7 @@ static void test_http_fetch(void) {
 
   // Clear
   mg_mgr_free(&mgr);
-  mip_free(&mif);             // Release after mg_mgr
+  mg_tcpip_free(&mif);             // Release after mg_mgr
   ASSERT(mgr.conns == NULL);  // Deconstruction OK
   close(fd);
 }

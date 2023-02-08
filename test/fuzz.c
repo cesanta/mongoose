@@ -1,7 +1,7 @@
 #define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_LOG 0
 #define MG_ENABLE_LINES 1
-#define MG_ENABLE_MIP 1
+#define MG_ENABLE_TCPIP 1
 
 #include "mongoose.c"
 
@@ -58,13 +58,13 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_json_get(mg_str_n((char *) data, size), "$[0]", &n);
 
   if (size > 0) {
-    struct mip_if mif = {.ip = 0x01020304,
+    struct mg_tcpip_if mif = {.ip = 0x01020304,
                          .mask = 255,
                          .gw = 0x01010101,
-                         .driver = &mip_driver_mock};
+                         .driver = &mg_tcpip_driver_mock};
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
-    mip_init(&mgr, &mif);
+    mg_tcpip_init(&mgr, &mif);
 
     // Make a copy of the random data, in order to modify it
     void *pkt = malloc(size);
@@ -78,7 +78,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       if (i >= sizeof(eth_types) / sizeof(eth_types[0])) i = 0;
     }
 
-    mip_rx(&mif, pkt, size);
+    mg_tcpip_rx(&mif, pkt, size);
     mg_mgr_free(&mgr);
     free(pkt);
     free((char *) mif.rx.ptr);

@@ -1,5 +1,5 @@
 PROG ?= example
-DEFS ?= -DMG_ENABLE_LINES=1 -DMG_ENABLE_MIP=1 -DMG_ENABLE_SOCKET=0 -DMG_ENABLE_PACKED_FS=1 -I../..
+DEFS ?= -DMG_ENABLE_LINES=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_SOCKET=0 -DMG_ENABLE_PACKED_FS=1 -I../..
 CFLAGS ?= -W -Wall $(EXTRA_CFLAGS)
 LIBS ?= 
 SOURCES = main.c ../../mongoose.c ../device-dashboard/net.c ../device-dashboard/packed_fs.c

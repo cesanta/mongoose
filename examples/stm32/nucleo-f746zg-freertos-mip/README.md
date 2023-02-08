@@ -6,7 +6,7 @@ It implements the following:
 - Minimal elementary web server, as simple as possible
 - No dependencies: no HAL, no CMSIS
 - Hand-written [mcu.h](mcu.h) header based on the [datasheet](https://www.st.com/resource/en/reference_manual/rm0385-stm32f75xxx-and-stm32f74xxx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
-- Interrupt-driven [Ethernet driver](../../../drivers/mip_driver_stm32.c)
+- Interrupt-driven [Ethernet driver](../../../drivers/driver_stm32.c)
 - Blue LED blinky, based on another FreeRTOS task
 - Debug log on UART3 (st-link)
 

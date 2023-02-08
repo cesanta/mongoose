@@ -1,6 +1,7 @@
 #include "mip.h"
 
-#if MG_ENABLE_MIP && defined(MG_ENABLE_DRIVER_STM32H) && MG_ENABLE_DRIVER_STM32H
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_STM32H) && \
+    MG_ENABLE_DRIVER_STM32H
 struct stm32h_eth {
   volatile uint32_t MACCR, MACECR, MACPFR, MACWTR, MACHT0R, MACHT1R,
       RESERVED1[14], MACVTR, RESERVED2, MACVHTR, RESERVED3, MACVIR, MACIVIR,
@@ -45,7 +46,7 @@ static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS];  // RX descriptors
 static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];  // TX descriptors
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];       // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];       // TX ethernet buffers
-static struct mip_if *s_ifp;                              // MIP interface
+static struct mg_tcpip_if *s_ifp;                         // MIP interface
 enum {
   PHY_ADDR = 0,
   PHY_BCR = 0,
@@ -145,9 +146,9 @@ static int guess_mdc_cr(void) {
   return result;
 }
 
-static bool mip_driver_stm32h_init(struct mip_if *ifp) {
-  struct mip_driver_stm32h_data *d =
-      (struct mip_driver_stm32h_data *) ifp->driver_data;
+static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_stm32h_data *d =
+      (struct mg_tcpip_driver_stm32h_data *) ifp->driver_data;
   s_ifp = ifp;
 
   // Init RX descriptors
@@ -207,8 +208,8 @@ static bool mip_driver_stm32h_init(struct mip_if *ifp) {
 }
 
 static uint32_t s_txno;
-static size_t mip_driver_stm32h_tx(const void *buf, size_t len,
-                                   struct mip_if *ifp) {
+static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
+                                        struct mg_tcpip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
@@ -230,7 +231,7 @@ static size_t mip_driver_stm32h_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
-static bool mip_driver_stm32h_up(struct mip_if *ifp) {
+static bool mg_tcpip_driver_stm32h_up(struct mg_tcpip_if *ifp) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
   bool up = bsr & BIT(2) ? 1 : 0;
   if ((ifp->state == MIP_STATE_DOWN) && up) {  // link state just went up
@@ -258,7 +259,7 @@ void ETH_IRQHandler(void) {
         uint32_t len = s_rxdesc[s_rxno][3] & (BIT(15) - 1);
         // MG_DEBUG(("%lx %lu %lx %08lx", s_rxno, len, s_rxdesc[s_rxno][3],
         // ETH->DMACSR));
-        mip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
+        mg_tcpip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
       }
       s_rxdesc[s_rxno][3] = BIT(31) | BIT(30) | BIT(24);  // OWN, IOC, BUF1V
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
@@ -269,7 +270,7 @@ void ETH_IRQHandler(void) {
       (uint32_t) (uintptr_t) &s_rxdesc[ETH_DESC_CNT - 1];  // and resume RX
 }
 
-struct mip_driver mip_driver_stm32h = {mip_driver_stm32h_init,
-                                       mip_driver_stm32h_tx, mip_driver_rx,
-                                       mip_driver_stm32h_up};
+struct mg_tcpip_driver mg_tcpip_driver_stm32h = {
+    mg_tcpip_driver_stm32h_init, mg_tcpip_driver_stm32h_tx, mg_tcpip_driver_rx,
+    mg_tcpip_driver_stm32h_up};
 #endif

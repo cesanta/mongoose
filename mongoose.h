@@ -593,8 +593,8 @@ struct timeval {
 #define MG_ENABLE_LOG 1
 #endif
 
-#ifndef MG_ENABLE_MIP
-#define MG_ENABLE_MIP 0  // Mongoose built-in network stack
+#ifndef MG_ENABLE_TCPIP
+#define MG_ENABLE_TCPIP 0  // Mongoose built-in network stack
 #endif
 
 #ifndef MG_ENABLE_LWIP
@@ -610,7 +610,7 @@ struct timeval {
 #endif
 
 #ifndef MG_ENABLE_SOCKET
-#define MG_ENABLE_SOCKET !MG_ENABLE_MIP
+#define MG_ENABLE_SOCKET !MG_ENABLE_TCPIP
 #endif
 
 #ifndef MG_ENABLE_POLL
@@ -1453,18 +1453,18 @@ void mg_rpc_list(struct mg_rpc_req *r);
 
 
 
-struct mip_if;  // MIP network interface
+struct mg_tcpip_if;  // MIP network interface
 
-struct mip_driver {
-  bool (*init)(struct mip_if *);                         // Initialise driver
-  size_t (*tx)(const void *, size_t, struct mip_if *);   // Transmit frame
-  size_t (*rx)(void *buf, size_t len, struct mip_if *);  // Receive frame (poll)
-  bool (*up)(struct mip_if *);                           // Up/down status
+struct mg_tcpip_driver {
+  bool (*init)(struct mg_tcpip_if *);                         // Init driver
+  size_t (*tx)(const void *, size_t, struct mg_tcpip_if *);   // Transmit frame
+  size_t (*rx)(void *buf, size_t len, struct mg_tcpip_if *);  // Receive frame
+  bool (*up)(struct mg_tcpip_if *);                           // Up/down status
 };
 
 // Receive queue - single producer, single consumer queue.  Interrupt-based
-// drivers copy received frames to the queue in interrupt context. mip_poll()
-// function runs in event loop context, reads from the queue
+// drivers copy received frames to the queue in interrupt context.
+// mg_tcpip_poll() function runs in event loop context, reads from the queue
 struct queue {
   uint8_t *buf;
   size_t len;
@@ -1472,17 +1472,17 @@ struct queue {
 };
 
 // Network interface
-struct mip_if {
-  uint8_t mac[6];             // MAC address. Must be set to a valid MAC
-  uint32_t ip, mask, gw;      // IP address, mask, default gateway
-  struct mg_str rx;           // Output (TX) buffer
-  struct mg_str tx;           // Input (RX) buffer
-  bool enable_dhcp_client;    // Enable DCHP client
-  bool enable_dhcp_server;    // Enable DCHP server
-  struct mip_driver *driver;  // Low level driver
-  void *driver_data;          // Driver-specific data
-  struct mg_mgr *mgr;         // Mongoose event manager
-  struct queue queue;         // Set queue.len for interrupt based drivers
+struct mg_tcpip_if {
+  uint8_t mac[6];                  // MAC address. Must be set to a valid MAC
+  uint32_t ip, mask, gw;           // IP address, mask, default gateway
+  struct mg_str rx;                // Output (TX) buffer
+  struct mg_str tx;                // Input (RX) buffer
+  bool enable_dhcp_client;         // Enable DCHP client
+  bool enable_dhcp_server;         // Enable DCHP server
+  struct mg_tcpip_driver *driver;  // Low level driver
+  void *driver_data;               // Driver-specific data
+  struct mg_mgr *mgr;              // Mongoose event manager
+  struct queue queue;              // Set queue.len for interrupt based drivers
 
   // Internal state, user can use it but should not change it
   uint8_t gwmac[6];         // Router's MAC
@@ -1500,27 +1500,27 @@ struct mip_if {
 #define MIP_STATE_READY 2   // Interface is up and has IP
 };
 
-void mip_init(struct mg_mgr *, struct mip_if *);
-void mip_free(struct mip_if *);
-void mip_qwrite(void *buf, size_t len, struct mip_if *ifp);
-size_t mip_qread(void *buf, struct mip_if *ifp);
+void mg_tcpip_init(struct mg_mgr *, struct mg_tcpip_if *);
+void mg_tcpip_free(struct mg_tcpip_if *);
+void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp);
+size_t mg_tcpip_qread(void *buf, struct mg_tcpip_if *ifp);
 // conveniency rx function for IRQ-driven drivers
-size_t mip_driver_rx(void *buf, size_t len, struct mip_if *ifp);
+size_t mg_tcpip_driver_rx(void *buf, size_t len, struct mg_tcpip_if *ifp);
 
-extern struct mip_driver mip_driver_stm32;
-extern struct mip_driver mip_driver_w5500;
-extern struct mip_driver mip_driver_tm4c;
-extern struct mip_driver mip_driver_stm32h;
+extern struct mg_tcpip_driver mg_tcpip_driver_stm32;
+extern struct mg_tcpip_driver mg_tcpip_driver_w5500;
+extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
+extern struct mg_tcpip_driver mg_tcpip_driver_stm32h;
 
 // Drivers that require SPI, can use this SPI abstraction
-struct mip_spi {
+struct mg_tcpip_spi {
   void *spi;                        // Opaque SPI bus descriptor
   void (*begin)(void *);            // SPI begin: slave select low
   void (*end)(void *);              // SPI end: slave select high
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
 
-#if MG_ENABLE_MIP
+#if MG_ENABLE_TCPIP
 #if !defined(MG_ENABLE_DRIVER_STM32H) && !defined(MG_ENABLE_DRIVER_TM4C)
 #define MG_ENABLE_DRIVER_STM32 1
 #else
@@ -1529,7 +1529,7 @@ struct mip_spi {
 #endif
 
 
-struct mip_driver_stm32_data {
+struct mg_tcpip_driver_stm32_data {
   // MDC clock divider. MDC clock is derived from HCLK, must not exceed 2.5MHz
   //    HCLK range    DIVIDER    mdc_cr VALUE
   //    -------------------------------------
@@ -1545,7 +1545,7 @@ struct mip_driver_stm32_data {
 };
 
 
-struct mip_driver_stm32h_data {
+struct mg_tcpip_driver_stm32h_data {
   // MDC clock divider. MDC clock is derived from HCLK, must not exceed 2.5MHz
   //    HCLK range    DIVIDER    mdc_cr VALUE
   //    -------------------------------------
@@ -1561,7 +1561,7 @@ struct mip_driver_stm32h_data {
 };
 
 
-struct mip_driver_tm4c_data {
+struct mg_tcpip_driver_tm4c_data {
   // MDC clock divider. MDC clock is derived from SYSCLK, must not exceed 2.5MHz
   //    SYSCLK range   DIVIDER   mdc_cr VALUE
   //    -------------------------------------

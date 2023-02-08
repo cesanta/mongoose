@@ -1,6 +1,6 @@
 #define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_LINES 1
-#define MG_ENABLE_MIP 1
+#define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_PACKED_FS 0
 
 #include <assert.h>
@@ -50,12 +50,12 @@ static void test_queue(void) {
 
 static void test_statechange(void) {
   char tx[1540];
-  struct mip_if iface;
+  struct mg_tcpip_if iface;
   memset(&iface, 0, sizeof(iface));
   iface.ip = mg_htonl(0x01020304);
   iface.state = MIP_STATE_READY;
   iface.tx.ptr = tx, iface.tx.len = sizeof(tx);
-  iface.driver = &mip_driver_mock;
+  iface.driver = &mg_tcpip_driver_mock;
   onstatechange(&iface);
 }
 
@@ -68,14 +68,14 @@ static void test_poll(void) {
   int count = 0, i;
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
-  struct mip_if mif;
+  struct mg_tcpip_if mif;
   memset(&mif, 0, sizeof(mif));
-  mif.driver = &mip_driver_mock;
-  mip_init(&mgr, &mif);
+  mif.driver = &mg_tcpip_driver_mock;
+  mg_tcpip_init(&mgr, &mif);
   mg_http_listen(&mgr, "http://127.0.0.1:12346", ph, &count);
   for (i = 0; i < 10; i++) mg_mgr_poll(&mgr, 0);
   ASSERT(count == 10);
-  mip_free(&mif);
+  mg_tcpip_free(&mif);
   mg_mgr_free(&mgr);
 }
 

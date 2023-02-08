@@ -4,7 +4,7 @@ CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
 						-Wformat-truncation -fno-common -Wconversion \
 						-g3 -Os -ffunction-sections -fdata-sections -I. -I$(ROOT) \
             -DMG_ARCH=MG_ARCH_NEWLIB -DMIP_DEBUG=1 -DMG_ENABLE_PACKED_FS=1 \
-						-DMG_ENABLE_CUSTOM_MILLIS=1 -DxMG_ENABLE_LINES=1 -DMG_ENABLE_MIP=1 -DMG_ENABLE_DRIVER_TM4C=1\
+						-DMG_ENABLE_CUSTOM_MILLIS=1 -DxMG_ENABLE_LINES=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_DRIVER_TM4C=1\
 						-mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 $(EXTRA_CFLAGS)
 LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 SOURCES = boot.c main.c syscalls.c \
