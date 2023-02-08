@@ -1,38 +1,45 @@
-CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
-						-Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion \
-						-g3 -Os -ffunction-sections -fdata-sections \
-            -I. -Ih7/Include -Icmsis/CMSIS/Core/Include \
-            -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 \
-            $(EXTRA_CFLAGS)
-LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
-SOURCES = startup.c main.c syscalls.c
+CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
+CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
+CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
+CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_h7/Include
+CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
-# Add Mongoose-specific flags and source files
-CFLAGS  += -I../../.. -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_DRIVER_STM32H=1 -DMG_ENABLE_PACKED_FS=1
-SOURCES += ../../../mongoose.c ../../device-dashboard/net.c ../../device-dashboard/packed_fs.c
+SOURCES = main.c syscalls.c sysinit.c
+SOURCES += cmsis_h7/Source/Templates/gcc/startup_stm32h743xx.s # ST startup file. Compiler-dependent!
+
+# Mongoose-specific source code files and build options. See https://mongoose.ws/documentation/#build-options
+SOURCES += mongoose.c net.c packed_fs.c
+CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_PACKED_FS=1
+CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_CUSTOM_MILLIS=1
+CFLAGS += -DMG_ENABLE_DRIVER_STM32H=1 $(CFLAGS_EXTRA)
 
 all build example: firmware.bin
 
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 
-firmware.elf: $(SOURCES) mcu.h
+firmware.elf: cmsis_core cmsis_h7 $(SOURCES) hal.h link.ld 
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
 
-# Note: on "unknown chip id" flash error, wire BOOT0 to VDD and st-flash erase
 flash: firmware.bin
-	st-flash --freq 600 --reset write $< 0x8000000
+	st-flash --reset write $< 0x8000000
 
-# Requires env variable VCON_API_KEY set
+cmsis_h7:       # ARM CMSIS core headers
+	git clone --depth 1 -b v1.10.3 https://github.com/STMicroelectronics/cmsis_device_h7 $@
+cmsis_core:     # ST CMSIS headers for STM32F7 series
+	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
+
+# Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/6
-test:	EXTRA_CFLAGS += -DUART_DEBUG=UART1
-test:	update
-	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
-	grep 'READY, IP:' /tmp/output.txt
-	grep 'MQTT connected' /tmp/output.txt
-
 update: firmware.bin
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
 
+update test: CFLAGS_EXTRA += -DUART_DEBUG=USART1
+test: update
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
+	grep 'READY, IP:' /tmp/output.txt       # Check for network init
+	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
+
 clean:
-	@rm -rf firmware.* *.su
+	@rm -rf firmware.* *.su cmsis_core cmsis_h7

@@ -84,11 +84,18 @@ jobs:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v3
-    - run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
-    - run: make test upload-coverage TFLAGS=-DNO_SNTP_CHECK SSL=OPENSSL ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
-    - run: make test SSL=MBEDTLS TFLAGS=-DNO_SNTP_CHECK ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
+      with: { fetch-depth: 2 }
+    - id: check
+      run: /bin/bash test/check.sh '^test|^src/*.[ch]'
+    - if: steps.check.outputs.MATCH == 1
+      run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
+    - if: steps.check.outputs.MATCH == 1
+      run: make test upload-coverage TFLAGS=-DNO_SNTP_CHECK SSL=OPENSSL ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
+    - if: steps.check.outputs.MATCH == 1
+      run: make test SSL=MBEDTLS TFLAGS=-DNO_SNTP_CHECK ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
     #- run: make mip_test ASAN_OPTIONS=
-    - run: make mg_prefix
+    - if: steps.check.outputs.MATCH == 1
+      run: make mg_prefix
   windows:
     runs-on: ubuntu-latest
     steps:

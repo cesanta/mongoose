@@ -10,7 +10,7 @@
 #define BTN1 PIN('C', 13)     // On-board user button
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
-static uint64_t s_ticks, s_exti;  // Counters, increased by IRQ handlers
+static volatile uint64_t s_ticks, s_exti;  // Counters
 
 uint64_t mg_millis(void) {  // Declare our own uptime function
   return s_ticks;           // Return number of milliseconds since boot

@@ -1,6 +1,6 @@
 #include <sys/stat.h>
 
-#include "mcu.h"
+#include "hal.h"
 
 int _fstat(int fd, struct stat *st) {
   if (fd < 0) return -1;
@@ -43,9 +43,13 @@ void _exit(int status) {
   for (;;) asm volatile("BKPT #0");
 }
 
-void _kill(int pid, int sig) { (void) pid, (void) sig; }
+void _kill(int pid, int sig) {
+  (void) pid, (void) sig;
+}
 
-int _getpid(void) { return -1; }
+int _getpid(void) {
+  return -1;
+}
 
 int _write(int fd, char *ptr, int len) {
   (void) fd, (void) ptr, (void) len;
@@ -77,3 +81,5 @@ int mkdir(const char *path, mode_t mode) {
   (void) path, (void) mode;
   return -1;
 }
+
+void _init(void) {}
