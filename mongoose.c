@@ -5467,6 +5467,7 @@ struct mg_str mg_url_pass(const char *url) {
 
 #if MG_ENABLE_CUSTOM_RANDOM
 #else
+#define MG_RESEED_PERIOD_MS 60000
 void mg_random(void *buf, size_t len) {
   bool done = false;
   unsigned char *p = (unsigned char *) buf;
@@ -5479,6 +5480,14 @@ void mg_random(void *buf, size_t len) {
   if (fp != NULL) {
     if (fread(buf, 1, len, fp) == len) done = true;
     fclose(fp);
+  }
+#else
+  static uint64_t millis_last;
+  volatile uint64_t millis = mg_millis();
+  // Seed/reseed on timout
+  if (!millis_last || ((millis - millis_last) > MG_RESEED_PERIOD_MS)) {
+    srand((unsigned int)millis);
+    millis_last = millis;
   }
 #endif
   // If everything above did not work, fallback to a pseudo random generator
