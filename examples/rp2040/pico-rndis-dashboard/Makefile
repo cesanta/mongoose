@@ -1,10 +1,10 @@
 SDK_VERSION ?= 1.4.0
 SDK_REPO ?= https://github.com/raspberrypi/pico-sdk
 
-example:
+all example:
 	true
 
-all build: pico-sdk
+build: pico-sdk
 	test -d build || mkdir build
 	cd build && cmake .. && make
 

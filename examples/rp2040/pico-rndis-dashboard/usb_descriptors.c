@@ -22,6 +22,7 @@
  * THE SOFTWARE.
  *
  */
+// Modified by Cesanta Software
 
 #include "tusb.h"
 
@@ -50,6 +51,7 @@ enum
 {
   ITF_NUM_CDC = 0,
   ITF_NUM_CDC_DATA,
+  ITF_NUM_MSC,
   ITF_NUM_TOTAL
 };
 
@@ -57,7 +59,9 @@ enum
 {
 #if CFG_TUD_ECM_RNDIS
   CONFIG_ID_RNDIS = 0,
+#if DUAL_CONFIG
   CONFIG_ID_ECM   = 1,
+#endif
 #else
   CONFIG_ID_NCM   = 0,
 #endif
@@ -101,16 +105,18 @@ uint8_t const * tud_descriptor_device_cb(void)
 //--------------------------------------------------------------------+
 // Configuration Descriptor
 //--------------------------------------------------------------------+
-#define MAIN_CONFIG_TOTAL_LEN    (TUD_CONFIG_DESC_LEN + TUD_RNDIS_DESC_LEN)
-#define ALT_CONFIG_TOTAL_LEN     (TUD_CONFIG_DESC_LEN + TUD_CDC_ECM_DESC_LEN)
-#define NCM_CONFIG_TOTAL_LEN     (TUD_CONFIG_DESC_LEN + TUD_CDC_NCM_DESC_LEN)
+#define MAIN_CONFIG_TOTAL_LEN    (TUD_CONFIG_DESC_LEN + TUD_MSC_DESC_LEN + TUD_RNDIS_DESC_LEN)
+#define ALT_CONFIG_TOTAL_LEN     (TUD_CONFIG_DESC_LEN + TUD_MSC_DESC_LEN + TUD_CDC_ECM_DESC_LEN)
+#define NCM_CONFIG_TOTAL_LEN     (TUD_CONFIG_DESC_LEN + TUD_MSC_DESC_LEN + TUD_CDC_NCM_DESC_LEN)
 
 #if CFG_TUSB_MCU == OPT_MCU_LPC175X_6X || CFG_TUSB_MCU == OPT_MCU_LPC177X_8X || CFG_TUSB_MCU == OPT_MCU_LPC40XX
   // LPC 17xx and 40xx endpoint type (bulk/interrupt/iso) are fixed by its number
-  // 0 control, 1 In, 2 Bulk, 3 Iso, 4 In etc ...
+  // 0 control, 1 In, 2 Bulk, 3 Iso, 4 In, 5 Bulk etc ...
   #define EPNUM_NET_NOTIF   0x81
   #define EPNUM_NET_OUT     0x02
   #define EPNUM_NET_IN      0x82
+  #define EPNUM_MSC_OUT     0x05
+  #define EPNUM_MSC_IN      0x85
 
 #elif CFG_TUSB_MCU == OPT_MCU_SAMG  || CFG_TUSB_MCU ==  OPT_MCU_SAMX7X
   // SAMG & SAME70 don't support a same endpoint number with different direction IN and OUT
@@ -118,12 +124,19 @@ uint8_t const * tud_descriptor_device_cb(void)
   #define EPNUM_NET_NOTIF   0x81
   #define EPNUM_NET_OUT     0x02
   #define EPNUM_NET_IN      0x83
+  #define EPNUM_MSC_OUT     0x04
+  #define EPNUM_MSC_IN      0x85
 
 #else
   #define EPNUM_NET_NOTIF   0x81
   #define EPNUM_NET_OUT     0x02
   #define EPNUM_NET_IN      0x82
+  #define EPNUM_MSC_OUT     0x03
+  #define EPNUM_MSC_IN      0x83
 #endif
+
+   // Interface number, string index, EP Out & EP In address, EP size
+# define MSCDESC TUD_MSC_DESCRIPTOR(ITF_NUM_MSC, 0, EPNUM_MSC_OUT, EPNUM_MSC_IN, 64)
 
 #if CFG_TUD_ECM_RNDIS
 
@@ -134,8 +147,11 @@ static uint8_t const rndis_configuration[] =
 
   // Interface number, string index, EP notification address and size, EP data address (out, in) and size.
   TUD_RNDIS_DESCRIPTOR(ITF_NUM_CDC, STRID_INTERFACE, EPNUM_NET_NOTIF, 8, EPNUM_NET_OUT, EPNUM_NET_IN, CFG_TUD_NET_ENDPOINT_SIZE),
+
+  MSCDESC
 };
 
+#if DUAL_CONFIG
 static uint8_t const ecm_configuration[] =
 {
   // Config number (index+1), interface count, string index, total length, attribute, power in mA
@@ -143,7 +159,10 @@ static uint8_t const ecm_configuration[] =
 
   // Interface number, description string index, MAC address string index, EP notification address and size, EP data address (out, in), and size, max segment size.
   TUD_CDC_ECM_DESCRIPTOR(ITF_NUM_CDC, STRID_INTERFACE, STRID_MAC, EPNUM_NET_NOTIF, 64, EPNUM_NET_OUT, EPNUM_NET_IN, CFG_TUD_NET_ENDPOINT_SIZE, CFG_TUD_NET_MTU),
+
+  MSCDESC
 };
+#endif
 
 #else
 
@@ -154,6 +173,8 @@ static uint8_t const ncm_configuration[] =
 
   // Interface number, description string index, MAC address string index, EP notification address and size, EP data address (out, in), and size, max segment size.
   TUD_CDC_NCM_DESCRIPTOR(ITF_NUM_CDC, STRID_INTERFACE, STRID_MAC, EPNUM_NET_NOTIF, 64, EPNUM_NET_OUT, EPNUM_NET_IN, CFG_TUD_NET_ENDPOINT_SIZE, CFG_TUD_NET_MTU),
+
+  MSCDESC
 };
 
 #endif
@@ -165,8 +186,10 @@ static uint8_t const ncm_configuration[] =
 static uint8_t const * const configuration_arr[2] =
 {
 #if CFG_TUD_ECM_RNDIS
-  [CONFIG_ID_RNDIS] = rndis_configuration,
-  [CONFIG_ID_ECM  ] = ecm_configuration
+  [CONFIG_ID_RNDIS] = rndis_configuration
+#if DUAL_CONFIG
+  , [CONFIG_ID_ECM  ] = ecm_configuration
+#endif
 #else
   [CONFIG_ID_NCM  ] = ncm_configuration
 #endif

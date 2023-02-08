@@ -6,10 +6,11 @@ pico_sdk_init()
 
 add_executable(firmware
   main.c
+  msc_disk.c
+  usb_descriptors.c
   ../../../mongoose.c
   ../../device-dashboard/net.c
   ../../device-dashboard/packed_fs.c
-  pico-sdk//lib/tinyusb/examples/device/net_lwip_webserver/src/usb_descriptors.c
   pico-sdk/lib/tinyusb/lib/networking/rndis_reports.c)
 
 target_include_directories(firmware PUBLIC
@@ -28,3 +29,6 @@ add_definitions(-DMG_ENABLE_TCPIP=1)
 add_definitions(-DMG_ENABLE_PACKED_FS=1)
 add_definitions(-DMG_ENABLE_FILE=0)
 add_definitions(-DDISABLE_ROUTING=1)
+
+# Extra build flags (enable if needed)
+add_definitions(-DDUAL_CONFIG=0)
