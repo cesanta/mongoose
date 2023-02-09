@@ -227,6 +227,7 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
     arp_ask(ifp, ifp->gw);
   } else if (ifp->state == MIP_STATE_UP) {
     MG_ERROR(("Link up"));
+    srand((unsigned int) mg_millis());
   } else if (ifp->state == MIP_STATE_DOWN) {
     MG_ERROR(("Link down"));
   }
@@ -400,6 +401,9 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     ifp->state = MIP_STATE_READY;
     onstatechange(ifp);
     tx_dhcp_request(ifp, pkt->eth->src, ip, pkt->dhcp->siaddr);
+    uint64_t rand;
+    mg_random(&rand, sizeof(rand));
+    srand((unsigned int) (rand + mg_millis()));
   }
 }
 
@@ -839,8 +843,8 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
   // If MAC address is not set, make a random one
   if (ifp->mac[0] == 0 && ifp->mac[1] == 0 && ifp->mac[2] == 0 &&
       ifp->mac[3] == 0 && ifp->mac[4] == 0 && ifp->mac[5] == 0) {
-    mg_random(ifp->mac, sizeof(ifp->mac));
-    ifp->mac[0] &= (uint8_t) ~1;  // Clear bit 0. 1st byte is even (unicast)
+    ifp->mac[0] = 0x02;  // Locally administered, unicast
+    mg_random(&ifp->mac[1], sizeof(ifp->mac) - 1);
     MG_INFO(("MAC not set. Generated random: %M", mg_print_mac, ifp->mac));
   }
 
