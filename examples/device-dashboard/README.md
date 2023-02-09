@@ -18,10 +18,10 @@ following features:
 
 This is a login screen that prompts for user/password
 
-![](screenshots/login.png)
+![](screenshots/login.webp)
 
 # Main dashboard
 
 A main dashboard page shows and interactive MQTT console
 
-![](screenshots/dashboard.png)
+![](screenshots/dashboard.webp)
