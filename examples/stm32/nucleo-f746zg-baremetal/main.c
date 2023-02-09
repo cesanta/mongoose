@@ -7,13 +7,12 @@
 #define LED1 PIN('B', 0)   // On-board LED pin (green)
 #define LED2 PIN('B', 7)   // On-board LED pin (blue)
 #define LED3 PIN('B', 14)  // On-board LED pin (red)
-#define BTN1 PIN('C', 13)  // On-board user button
 
 #define LED LED2              // Use blue LED for blinking
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
-static uint64_t s_ticks;      // Milliseconds since boot
-void SysTick_Handler(void) {  // SyStick IRQ handler, triggered every 1ms
+static volatile uint64_t s_ticks;  // Milliseconds since boot
+void SysTick_Handler(void) {       // SyStick IRQ handler, triggered every 1ms
   s_ticks++;
 }
 
@@ -30,7 +29,7 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
 
 static void timer_fn(void *arg) {
   gpio_toggle(LED);                               // Blink LED
-  struct mg_tcpip_if *ifp = arg;                       // And show
+  struct mg_tcpip_if *ifp = arg;                  // And show
   const char *names[] = {"down", "up", "ready"};  // network stats
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
@@ -57,7 +56,7 @@ int main(void) {
   gpio_output(LED);               // Setup green LED
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
   ethernet_init();                // Initialise ethernet pins
-  MG_INFO(("Starting, CPU freq %g MHz", (double) SYS_FREQUENCY / 1000000));
+  MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
 
   struct mg_mgr mgr;        // Initialise
   mg_mgr_init(&mgr);        // Mongoose event manager
@@ -66,13 +65,14 @@ int main(void) {
   // Initialise Mongoose network stack
   // Specify MAC address, and IP/mask/GW in network byte order for static
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
-  struct mg_tcpip_driver_stm32_data driver_data = {.mdc_cr = 4};  // driver_stm32.h
-  struct mg_tcpip_if mif = {.driver = &mg_tcpip_driver_stm32,
-                       .driver_data = &driver_data};
+  struct mg_tcpip_driver_stm32_data driver_data = {.mdc_cr = 4};
+  struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
+                            .driver = &mg_tcpip_driver_stm32,
+                            .driver_data = &driver_data};
   mg_tcpip_init(&mgr, &mif);
   mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
 
-  MG_INFO(("Waiting until network is up..."));
+  MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
   while (mif.state != MIP_STATE_READY) {
     mg_mgr_poll(&mgr, 0);
   }

@@ -41,4 +41,4 @@ test: update
 	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
 
 clean:
-	@rm -rf firmware.* *.su cmsis_core cmsis_device_f7
+	@rm -rf firmware.* *.su cmsis_core cmsis_f7
