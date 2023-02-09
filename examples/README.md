@@ -22,3 +22,4 @@ Rules for creating a new example:
 - If external repository is required, download it on demand using git
   shallow clone. See embedded example golden reference
 - Keep Makefile as short as possible, but verbose to understand it easily
+- Symlink files when required, like `mongoose.c`, `ca.pem`, etc. Make no copies
