@@ -7810,6 +7810,7 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
     rx_ip(ifp, &pkt);
   } else {
     MG_DEBUG(("  Unknown eth type %x", mg_htons(pkt.eth->type)));
+    mg_hexdump(buf, len >= 16 ? 16 : len);
   }
 }
 
@@ -7907,8 +7908,9 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     mgr->extraconnsize = sizeof(struct connstate);
     if (ifp->ip == 0) ifp->enable_dhcp_client = true;
     memset(ifp->gwmac, 255, sizeof(ifp->gwmac));  // Set to broadcast
-    mg_random(&ifp->eport, sizeof(ifp->eport));   // Randomise the initial
-    ifp->eport += MG_EPHEMERAL_PORT_BASE;         // ephemeral port
+    mg_random(&ifp->eport, sizeof(ifp->eport));   // Random from 0 to 65535
+    ifp->eport |=
+        MG_EPHEMERAL_PORT_BASE;  // Random from MG_EPHEMERAL_PORT_BASE to 65535
   }
 }
 
