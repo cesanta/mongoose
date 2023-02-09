@@ -453,6 +453,7 @@ static void test_mqtt(void) {
   test_mqtt_base();
   test_mqtt_ver(5);
   test_mqtt_ver(4);
+  test_mqtt_base();
 }
 
 static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
