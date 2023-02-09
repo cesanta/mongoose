@@ -366,6 +366,26 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   (void) c;
 }
 
+static void test_mqtt_base(void);
+static void test_mqtt_base() {
+  char buf[50] = {0};
+  struct mqtt_data test_data = {buf, 50, 0, 0};
+  struct mg_mgr mgr;
+  struct mg_connection *c;
+  const char *url = "mqtt://broker.hivemq.com:1883";
+  int i;
+  mg_mgr_init(&mgr);
+
+  // Ping the client
+  c = mg_mqtt_connect(&mgr, url, NULL, mqtt_cb, &test_data);
+  mg_mqtt_ping(c);
+  for (i = 0; i < 300 && !(c->is_client && !c->is_connecting); i++) mg_mgr_poll(&mgr, 10);
+  ASSERT(c->is_client && !c->is_connecting);
+
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+}
+
 static void test_mqtt_ver(uint8_t mqtt_version) {
   char buf[50] = {0}, client_id[16], will_topic[16];
   struct mqtt_data test_data = {buf, 50, 0, 0};
@@ -428,6 +448,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
 }
 
 static void test_mqtt(void) {
+  test_mqtt_base();
   test_mqtt_ver(5);
   test_mqtt_ver(4);
 }
