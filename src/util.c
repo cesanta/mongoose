@@ -1,5 +1,33 @@
 #include "util.h"
 
+#define MG_ENTROPY_STACK_S 512
+#define MG_ENTROPY_HEAP_S 2048
+
+uint64_t mg_entropy(void);
+uint64_t mg_entropy() {
+	static uint64_t entropy;
+	const unsigned int lbss = MG_ENTROPY_STACK_S;  // Size of a large buffer of unint64_t on stack
+	const unsigned int lbhs = MG_ENTROPY_HEAP_S; // Size of a large buffer of unint64_t on heap
+	// Mix from source 1
+	uint64_t lbs[lbss]; 			 // Large buffer on stack
+	for (unsigned int i = 0; i < lbss; i++)
+		entropy ^= lbs[i];
+	// Mix from source 2
+	uint64_t *lbh = (uint64_t *)malloc(lbhs * sizeof(uint64_t));   // Large buffer on heap
+	if (lbh) {
+		for (unsigned int i = 0; i < lbhs; i++)
+				entropy ^= lbh[i];
+		free(lbh);
+	} else {
+		MG_ERROR(("Cannot allocate %u", lbhs));
+	}
+	// Mix from source 3
+	entropy ^= mg_millis();
+
+	srand((unsigned int)entropy);
+	return entropy;
+}
+
 #if MG_ENABLE_CUSTOM_RANDOM
 #else
 void mg_random(void *buf, size_t len) {
