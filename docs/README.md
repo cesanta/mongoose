@@ -23,7 +23,7 @@ development environment
 - If you're on Windows 10/11, make sure to enable "Developer mode"
 - Start a terminal / command prompt and execute the following commands:
   ```sh
-  git clone -c core.symlinks=true https://github.com/cesanta/mongoose
+  git clone https://github.com/cesanta/mongoose
   cd mongoose/examples/http-server
   make
   ```
