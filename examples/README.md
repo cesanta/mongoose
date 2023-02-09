@@ -23,3 +23,5 @@ Rules for creating a new example:
   shallow clone. See embedded example golden reference
 - Keep Makefile as short as possible, but verbose to understand it easily
 - Symlink files when required, like `mongoose.c`, `ca.pem`, etc. Make no copies
+- Example's README.md should contain only the title and the link to mongoose.ws
+  tutorial page
