@@ -2,7 +2,7 @@
 
 #if MG_ENABLE_TCPIP
 
-#define MIP_EPHEMERAL_PORT 49152
+#define MG_EPHEMERAL_PORT_BASE 32768
 #define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
 
 #ifndef MIP_TCP_KEEPALIVE_MS
@@ -483,6 +483,9 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
   cs = csumup(cs, &ip->dst, sizeof(ip->dst));
   cs = csumup(cs, pseudo, sizeof(pseudo));
   tcp->csum = csumfin(cs);
+  MG_DEBUG(("TCP %M:%hu -> %M:%hu fl %x len %u", mg_print_ip4, &ip->src,
+            mg_ntohs(tcp->sport), mg_print_ip4, &ip->dst, mg_ntohs(tcp->dport),
+            tcp->flags, (int) len));
   return ether_output(ifp, PDIFF(ifp->tx.ptr, tcp + 1) + len);
 }
 
@@ -853,12 +856,8 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     mgr->extraconnsize = sizeof(struct connstate);
     if (ifp->ip == 0) ifp->enable_dhcp_client = true;
     memset(ifp->gwmac, 255, sizeof(ifp->gwmac));  // Set to broadcast
-
-    // Randomise initial ephemeral port
-    uint16_t jitter;
-    mg_random(&jitter, sizeof(jitter));
-    ifp->eport = MIP_EPHEMERAL_PORT +
-                 (uint16_t) (jitter % (0xffffu - MIP_EPHEMERAL_PORT));
+    mg_random(&ifp->eport, sizeof(ifp->eport));   // Randomise the initial
+    ifp->eport += MG_EPHEMERAL_PORT_BASE;         // ephemeral port
   }
 }
 
@@ -884,7 +883,7 @@ static void send_syn(struct mg_connection *c) {
 void mg_connect_resolved(struct mg_connection *c) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   c->is_resolving = 0;
-  if (ifp->eport < MIP_EPHEMERAL_PORT) ifp->eport = MIP_EPHEMERAL_PORT;
+  if (ifp->eport < MG_EPHEMERAL_PORT_BASE) ifp->eport = MG_EPHEMERAL_PORT_BASE;
   c->loc.ip = ifp->ip;
   c->loc.port = mg_htons(ifp->eport++);
   MG_DEBUG(("%lu %M -> %M", c->id, mg_print_ip_port, &c->loc, mg_print_ip_port,
