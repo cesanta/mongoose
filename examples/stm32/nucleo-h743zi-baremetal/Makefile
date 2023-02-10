@@ -14,6 +14,12 @@ CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_PACKED_FS=1
 CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_CUSTOM_MILLIS=1
 CFLAGS += -DMG_ENABLE_DRIVER_STM32H=1 $(CFLAGS_EXTRA)
 
+ifeq ($(OS),Windows_NT)
+  RM = cmd /C del /Q /F /S
+else
+  RM = rm -rf
+endif
+
 all build example: firmware.bin
 
 firmware.bin: firmware.elf
@@ -25,10 +31,10 @@ firmware.elf: cmsis_core cmsis_h7 $(SOURCES) hal.h link.ld
 flash: firmware.bin
 	st-flash --reset write $< 0x8000000
 
-cmsis_h7:       # ARM CMSIS core headers
-	git clone --depth 1 -b v1.10.3 https://github.com/STMicroelectronics/cmsis_device_h7 $@
-cmsis_core:     # ST CMSIS headers for STM32F7 series
+cmsis_core:     # ARM CMSIS core headers
 	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
+cmsis_h7:       # ST CMSIS headers for STM32H7 series
+	git clone --depth 1 -b v1.10.3 https://github.com/STMicroelectronics/cmsis_device_h7 $@
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/6
