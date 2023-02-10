@@ -147,6 +147,7 @@ jobs:
           - path: stm32/nucleo-f746zg-baremetal
             target: test
           - path: stm32/nucleo-f746zg-freertos-mip
+            target: test
           - path: stm32/nucleo-f746zg-usb-rndis
           - path: nxp/nxp-mimxrt1020-azurertos
           - path: nxp/nxp-frdmk66f-freertos
