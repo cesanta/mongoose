@@ -1,15 +1,10 @@
 #include "log.h"
-#include "fmt.h"
+#include "printf.h"
 #include "str.h"
 #include "util.h"
 
-static void default_logger(char c, void *param) {
-  putchar(c);
-  (void) c, (void) param;
-}
-
 static int s_level = MG_LL_INFO;
-static mg_pfn_t s_log_func = default_logger;
+static mg_pfn_t s_log_func = mg_pfn_stdout;
 static void *s_log_func_param = NULL;
 
 void mg_log_set_fn(mg_pfn_t fn, void *param) {
