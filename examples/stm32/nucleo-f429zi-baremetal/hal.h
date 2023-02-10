@@ -71,21 +71,8 @@ static inline void gpio_output(uint16_t pin) {
             GPIO_PULL_NONE, 0);
 }
 
-#if 0
-struct syscfg {
-  volatile uint32_t MEMRMP, PMC, EXTICR[4], RESERVED[2], CMPCR;
-};
-#define SYSCFG ((struct syscfg *) 0x40013800)
-
-struct exti {
-  volatile uint32_t IMR, EMR, RTSR, FTSR, SWIER, PR;
-};
-#define EXTI ((struct exti *) 0x40013c00)
-#endif
-
 static inline void irq_exti_attach(uint16_t pin) {
   uint8_t bank = (uint8_t) (PINBANK(pin)), n = (uint8_t) (PINNO(pin));
-  RCC->APB2ENR |= BIT(14);  // Enable SYSCFG
   SYSCFG->EXTICR[n / 4] &= ~(15UL << ((n % 4) * 4));
   SYSCFG->EXTICR[n / 4] |= (uint32_t) (bank << ((n % 4) * 4));
   EXTI->IMR |= BIT(n);
@@ -96,21 +83,8 @@ static inline void irq_exti_attach(uint16_t pin) {
   NVIC_EnableIRQ(irqvec);
 }
 
-#if 0
-USART_TypeDef {
-  volatile uint32_t SR, DR, BRR, CR1, CR2, CR3, GTPR;
-};
-#define UART1 ((USART_TypeDef *) 0x40011000)
-#define UART2 ((USART_TypeDef *) 0x40004400)
-#define UART3 ((USART_TypeDef *) 0x40004800)
-#endif
-
-#define UART1 USART1
-#define UART2 USART2
-#define UART3 USART3
-
 #ifndef UART_DEBUG
-#define UART_DEBUG UART3
+#define UART_DEBUG USART3
 #endif
 
 static inline void uart_init(USART_TypeDef *uart, unsigned long baud) {
@@ -119,13 +93,13 @@ static inline void uart_init(USART_TypeDef *uart, unsigned long baud) {
   uint16_t rx = 0, tx = 0;  // pins
   uint32_t freq = 0;        // Bus frequency. UART1 is on APB2, rest on APB1
 
-  if (uart == UART1) freq = APB2_FREQUENCY, RCC->APB2ENR |= BIT(4);
-  if (uart == UART2) freq = APB1_FREQUENCY, RCC->APB1ENR |= BIT(17);
-  if (uart == UART3) freq = APB1_FREQUENCY, RCC->APB1ENR |= BIT(18);
+  if (uart == USART1) freq = APB2_FREQUENCY, RCC->APB2ENR |= BIT(4);
+  if (uart == USART2) freq = APB1_FREQUENCY, RCC->APB1ENR |= BIT(17);
+  if (uart == USART3) freq = APB1_FREQUENCY, RCC->APB1ENR |= BIT(18);
 
-  if (uart == UART1) tx = PIN('A', 9), rx = PIN('A', 10);
-  if (uart == UART2) tx = PIN('A', 2), rx = PIN('A', 3);
-  if (uart == UART3) tx = PIN('D', 8), rx = PIN('D', 9);
+  if (uart == USART1) tx = PIN('A', 9), rx = PIN('A', 10);
+  if (uart == USART2) tx = PIN('A', 2), rx = PIN('A', 3);
+  if (uart == USART3) tx = PIN('D', 8), rx = PIN('D', 9);
 
   gpio_init(tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   gpio_init(rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
@@ -147,17 +121,20 @@ static inline uint8_t uart_read_byte(USART_TypeDef *uart) {
   return (uint8_t) (uart->DR & 255);
 }
 
-static inline void clock_init(void) {                 // Set clock frequency
-  SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
-  asm("DSB");
-  asm("ISB");
-  FLASH->ACR |= FLASH_LATENCY | BIT(8) | BIT(9);    // Flash latency
-  RCC->PLLCFGR &= ~((BIT(17) - 1));                 // Clear PLL multipliers
-  RCC->PLLCFGR |= (((PLL_P - 2) / 2) & 3) << 16;    // Set PLL_P
-  RCC->PLLCFGR |= PLL_M | (PLL_N << 6);             // Set PLL_M and PLL_N
-  RCC->CR |= BIT(24);                               // Enable PLL
-  while ((RCC->CR & BIT(25)) == 0) spin(1);         // Wait until done
-  RCC->CFGR = (APB1_PRE << 10) | (APB2_PRE << 13);  // Set prescalers
-  RCC->CFGR |= 2;                                   // Set clock source to PLL
-  while ((RCC->CFGR & 12) == 0) spin(1);            // Wait until done
+static inline void rng_init(void) {
+  RCC->AHB2ENR |= RCC_AHB2ENR_RNGEN;
+  RNG->CR |= RNG_CR_RNGEN;
 }
+static inline uint32_t rng_read(void) {
+  while ((RNG->SR & RNG_SR_DRDY) == 0) (void) 0;
+  return RNG->DR;
+}
+
+#define UUID ((uint8_t *) UID_BASE)  // Unique 96-bit chip ID. TRM 39.1
+
+// Helper macro for MAC generation
+#define GENERATE_LOCALLY_ADMINISTERED_MAC()                        \
+  {                                                                \
+    2, UUID[0] ^ UUID[1], UUID[2] ^ UUID[3], UUID[4] ^ UUID[5],    \
+        UUID[6] ^ UUID[7] ^ UUID[8], UUID[9] ^ UUID[10] ^ UUID[11] \
+  }
