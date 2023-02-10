@@ -2307,6 +2307,7 @@ static void w3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     char buf[8192];
     memset(buf, 'A', sizeof(buf));
     mg_ws_send(c, "hi there!", 9, WEBSOCKET_OP_TEXT);
+    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "%s", "hi there2!");
     mg_printf(c, "%s", "boo");
     mg_ws_wrap(c, 3, WEBSOCKET_OP_TEXT);
     mg_ws_send(c, buf, sizeof(buf), WEBSOCKET_OP_TEXT);
@@ -2346,6 +2347,8 @@ static void w2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // mg_hexdump(wm->data.ptr, wm->data.len);
     if (wm->data.len == 9) {
       ASSERT(mg_strcmp(wm->data, mg_str("hi there!")) == 0);
+    } else if (wm->data.len == 10) {
+      ASSERT(mg_strcmp(wm->data, mg_str("hi there2!")) == 0);
     } else if (wm->data.len == 3) {
       ASSERT(mg_strcmp(wm->data, mg_str("boo")) == 0);
     } else {
