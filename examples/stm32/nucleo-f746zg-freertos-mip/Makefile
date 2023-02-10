@@ -34,10 +34,11 @@ firmware.elf: FreeRTOS-Kernel cmsis_core cmsis_f7 $(SOURCES) hal.h link.ld
 flash: firmware.bin
 	st-flash --reset write $< 0x8000000
 
-cmsis_f7:  # ARM CMSIS core headers
-	git clone --depth 1 -b v1.2.8 https://github.com/STMicroelectronics/cmsis_device_f7 $@
-cmsis_core:  # ST CMSIS headers for STM32F7 series
+cmsis_core:  # ARM CMSIS core headers
 	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
+cmsis_f7:  # ST CMSIS headers for STM32F7 series
+        git clone --depth 1 -b v1.2.8 https://github.com/STMicroelectronics/cmsis_device_f7 $@
+
 FreeRTOS-Kernel:  # FreeRTOS sources
 	git clone --depth 1 -b V10.5.0 https://github.com/FreeRTOS/FreeRTOS-Kernel $@
 
