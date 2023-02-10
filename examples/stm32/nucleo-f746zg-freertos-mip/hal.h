@@ -75,7 +75,6 @@ static inline void gpio_output(uint16_t pin) {
 
 static inline void irq_exti_attach(uint16_t pin) {
   uint8_t bank = (uint8_t) (PINBANK(pin)), n = (uint8_t) (PINNO(pin));
-  RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;  // Enable SYSCFG
   SYSCFG->EXTICR[n / 4] &= ~(15UL << ((n % 4) * 4));
   SYSCFG->EXTICR[n / 4] |= (uint32_t) (bank << ((n % 4) * 4));
   EXTI->IMR |= BIT(n);
@@ -132,3 +131,12 @@ static inline uint32_t rng_read(void) {
   while ((RNG->SR & RNG_SR_DRDY) == 0) (void) 0;
   return RNG->DR;
 }
+
+#define UUID ((uint8_t *) UID_BASE)  // Unique 96-bit chip ID. TRM 41.1
+
+// Helper macro for MAC generation
+#define GENERATE_LOCALLY_ADMINISTERED_MAC()                        \
+  {                                                                \
+    2, UUID[0] ^ UUID[1], UUID[2] ^ UUID[3], UUID[4] ^ UUID[5],    \
+        UUID[6] ^ UUID[7] ^ UUID[8], UUID[9] ^ UUID[10] ^ UUID[11] \
+  }

@@ -7,7 +7,6 @@
 #define LED1 PIN('B', 0)   // On-board LED pin (green)
 #define LED2 PIN('B', 7)   // On-board LED pin (blue)
 #define LED3 PIN('B', 14)  // On-board LED pin (red)
-#define BTN1 PIN('C', 13)  // On-board user button
 
 #define LED LED2              // Use blue LED for blinking
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
@@ -19,19 +18,12 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
   }
 }
 
-// HTTP server event handler function
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/debug")) {
-      int level = mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
-      mg_log_set(level);
-      mg_http_reply(c, 200, "", "Debug level set to %d\n", level);
-    } else {
-      mg_http_reply(c, 200, "", "%s\n", "hi");
-    }
-  }
-  (void) fn_data;
+static void timer_fn(void *arg) {
+  struct mg_tcpip_if *ifp = arg;                  // And show
+  const char *names[] = {"down", "up", "ready"};  // network stats
+  MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
+           names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
+           ifp->ndrop, ifp->nerr));
 }
 
 static void ethernet_init(void) {
@@ -50,13 +42,6 @@ static void ethernet_init(void) {
       RCC_AHB1ENR_ETHMACEN | RCC_AHB1ENR_ETHMACTXEN | RCC_AHB1ENR_ETHMACRXEN;
 }
 
-static void timer_fn(void *arg) {
-  struct mg_tcpip_if *ifp = arg;                  // And show
-  const char *names[] = {"down", "up", "ready"};  // network stats
-  MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
-           names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
-           ifp->ndrop, ifp->nerr));
-}
 
 static void server(void *args) {
   struct mg_mgr mgr;        // Initialise Mongoose event manager
@@ -66,17 +51,24 @@ static void server(void *args) {
   // Initialise Mongoose network stack
   // Specify MAC address, and IP/mask/GW in network byte order for static
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
-  MG_INFO(("Initializing Ethernet driver"));
   ethernet_init();
   struct mg_tcpip_driver_stm32_data driver_data = {.mdc_cr = 4};
-  struct mg_tcpip_if mif = {.driver = &mg_tcpip_driver_stm32,
+  struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
+                            .driver = &mg_tcpip_driver_stm32,
                             .driver_data = &driver_data};
   mg_tcpip_init(&mgr, &mif);
-
-  MG_INFO(("Starting Mongoose v%s", MG_VERSION));    // Tell the world
-  mg_http_listen(&mgr, "http://0.0.0.0", fn, &mgr);  // Web listener
   mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
 
+  MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
+  while (mif.state != MIP_STATE_READY) {
+    mg_mgr_poll(&mgr, 0);
+  }
+
+  MG_INFO(("Initialising application..."));
+  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
+  mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, NULL);
+
+  MG_INFO(("Starting event loop"));
   for (;;) mg_mgr_poll(&mgr, 1);  // Infinite event loop
   (void) args;
 }

@@ -7,3 +7,5 @@
 #define MG_ENABLE_TCPIP 1
 #define MG_IO_SIZE 256
 #define MG_ENABLE_CUSTOM_RANDOM 1
+#define MG_ENABLE_PACKED_FS 1
+
