@@ -17,6 +17,12 @@ CFLAGS += -IFreeRTOS-Kernel/portable/GCC/ARM_CM7/r0p1 -Wno-conversion
 SOURCES += ../../../mongoose.c # Mongoose options are defined in mongoose_custom.h
 CFLAGS += -I../../.. $(CFLAGS_EXTRA)
 
+ifeq ($(OS),Windows_NT)
+  RM = cmd /C del /Q /F /S
+else
+  RM = rm -rf
+endif
+
 all build example: firmware.bin
 
 firmware.bin: firmware.elf
@@ -46,4 +52,4 @@ test: update
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
 
 clean:
-	@rm -rf firmware.* *.su cmsis_core cmsis_f7 FreeRTOS-Kernel
+	$(RM) firmware.* *.su cmsis_core cmsis_f7 FreeRTOS-Kernel

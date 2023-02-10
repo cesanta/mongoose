@@ -23,9 +23,9 @@ CFLAGS += -DSTM32F429xx
 CFLAGS += -Wno-conversion -Wno-sign-conversion
 
 ifeq ($(OS),Windows_NT)
-  RM = cmd /C del /Q /F
+  RM = cmd /C del /Q /F /S
 else
-  RM = rm -f
+  RM = rm -rf
 endif
 
 all build example: firmware.bin
@@ -45,4 +45,4 @@ flash: firmware.bin
 	st-flash --reset write firmware.bin 0x8000000
 
 clean:
-	$(RM) firmware.*
+	$(RM) firmware.* tinyusb

@@ -9,6 +9,12 @@ SOURCES = main.c startup.c syscalls.c ../../../mongoose.c
 FREERTOS_VERSION ?= V10.5.0
 FREERTOS_REPO ?= https://github.com/FreeRTOS/FreeRTOS-Kernel 
 
+ifeq ($(OS),Windows_NT)
+  RM = cmd /C del /Q /F /S
+else
+  RM = rm -rf
+endif
+
 build example: firmware.bin
 
 firmware.elf: FreeRTOS-Kernel $(SOURCES) 
@@ -31,4 +37,4 @@ FreeRTOS-Kernel:
 	git clone --depth 1 -b $(FREERTOS_VERSION) $(FREERTOS_REPO) $@
 
 clean:
-	rm -rf firmware.* FreeRTOS-Kernel
+	$(RM) firmware.* FreeRTOS-Kernel
