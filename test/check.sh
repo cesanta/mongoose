@@ -20,11 +20,11 @@
 # MATCH=1. If no files match, write MATCH=0.
 for FILE in $(git --no-pager diff --name-only HEAD~1 HEAD) ; do
   if [[ "$FILE" =~ $1 ]] ; then
-    echo FILE "$FILE" matches $1        # Log for debugging
-    echo MATCH=1 >> $GITHUB_OUTPUT
-    exit 0                              # And exit early
+    echo FILE "$FILE" matches "$1"    # Log for debugging
+    echo MATCH=1 >> $GITHUB_OUTPUT    # Set output
+    exit 0                            # And exit early
   else
-    echo FILE "$FILE" DOES NOT match $1        # Log for debugging
+    echo FILE "$FILE" DOES NOT match "$1"  # Log for debugging
   fi
 done
 echo MATCH=0 >> $GITHUB_OUTPUT
