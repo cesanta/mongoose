@@ -36,9 +36,8 @@ flash: firmware.bin
 
 cmsis_core:  # ARM CMSIS core headers
 	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
-cmsis_f7:  # ST CMSIS headers for STM32F7 series
-        git clone --depth 1 -b v1.2.8 https://github.com/STMicroelectronics/cmsis_device_f7 $@
-
+cmsis_f7:       # ST CMSIS headers for STM32F7 series
+	git clone --depth 1 -b v1.2.8 https://github.com/STMicroelectronics/cmsis_device_f7 $@
 FreeRTOS-Kernel:  # FreeRTOS sources
 	git clone --depth 1 -b V10.5.0 https://github.com/FreeRTOS/FreeRTOS-Kernel $@
 
@@ -47,7 +46,7 @@ DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/5
 update: firmware.bin
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
 
-test: CFLAGS_EXTRA += -DUART_DEBUG=USART1
+test update: CFLAGS_EXTRA += -DUART_DEBUG=USART1
 test: update
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
