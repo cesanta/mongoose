@@ -1,22 +1,29 @@
 // Copyright (c) 2022 Cesanta Software Limited
 // All rights reserved
 
-#include "mcu.h"
+#include "hal.h"
 #include "mongoose.h"
 
-// HTTP server event handler function
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/debug")) {
-      int level = mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
-      mg_log_set(level);
-      mg_http_reply(c, 200, "", "Debug level set to %d\n", level);
-    } else {
-      mg_http_reply(c, 200, "", "%s\n", "hi");
-    }
+#define LED1 PIN('B', 0)   // On-board LED pin (green)
+#define LED2 PIN('B', 7)   // On-board LED pin (blue)
+#define LED3 PIN('B', 14)  // On-board LED pin (red)
+
+#define LED LED2              // Use blue LED for blinking
+#define BLINK_PERIOD_MS 1000  // LED blinking period in millis
+
+void mg_random(void *buf, size_t len) {  // Use on-board RNG
+  for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
+    uint32_t r = rng_read();
+    memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
-  (void) fn_data;
+}
+
+static void timer_fn(void *arg) {
+  struct mg_tcpip_if *ifp = arg;                  // And show
+  const char *names[] = {"down", "up", "ready"};  // network stats
+  MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
+           names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
+           ifp->ndrop, ifp->nerr));
 }
 
 static void ethernet_init(void) {
@@ -27,16 +34,14 @@ static void ethernet_init(void) {
                      PIN('C', 5),  PIN('G', 11), PIN('G', 13)};
   for (size_t i = 0; i < sizeof(pins) / sizeof(pins[0]); i++) {
     gpio_init(pins[i], GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_INSANE,
-              GPIO_PULL_NONE, 11);
+              GPIO_PULL_NONE, 11);  // 11 is the Ethernet function
   }
-
-  NVIC_EnableIRQ(61);                           // Setup Ethernet IRQ handler
-  RCC->APB2ENR |= BIT(14);                      // Enable SYSCFG
-  SYSCFG->PMC |= BIT(23);                       // Use RMII. Goes first!
-  RCC->AHB1ENR |= BIT(25) | BIT(26) | BIT(27);  // Enable Ethernet clocks
-  RCC->AHB1RSTR |= BIT(25);                     // ETHMAC force reset
-  RCC->AHB1RSTR &= ~BIT(25);                    // ETHMAC release reset
+  NVIC_EnableIRQ(ETH_IRQn);                // Setup Ethernet IRQ handler
+  SYSCFG->PMC |= SYSCFG_PMC_MII_RMII_SEL;  // Use RMII. Goes first!
+  RCC->AHB1ENR |=
+      RCC_AHB1ENR_ETHMACEN | RCC_AHB1ENR_ETHMACTXEN | RCC_AHB1ENR_ETHMACRXEN;
 }
+
 
 static void server(void *args) {
   struct mg_mgr mgr;        // Initialise Mongoose event manager
@@ -46,39 +51,45 @@ static void server(void *args) {
   // Initialise Mongoose network stack
   // Specify MAC address, and IP/mask/GW in network byte order for static
   // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
-  MG_INFO(("Initializing Ethernet driver"));
   ethernet_init();
   struct mg_tcpip_driver_stm32_data driver_data = {.mdc_cr = 4};
-  struct mg_tcpip_if mif = {
-      .mac = {2, 0, 1, 2, 3, 5},
-      .driver = &mg_tcpip_driver_stm32,
-      .driver_data = &driver_data,
-  };
+  struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
+                            .driver = &mg_tcpip_driver_stm32,
+                            .driver_data = &driver_data};
   mg_tcpip_init(&mgr, &mif);
+  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
 
-  MG_INFO(("Starting Mongoose v%s", MG_VERSION));    // Tell the world
-  mg_http_listen(&mgr, "http://0.0.0.0", fn, &mgr);  // Web listener
-  while (args == NULL) mg_mgr_poll(&mgr, 1000);      // Infinite event loop
-  mg_mgr_free(&mgr);                                 // Unreachable
+  MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
+  while (mif.state != MIP_STATE_READY) {
+    mg_mgr_poll(&mgr, 0);
+  }
+
+  MG_INFO(("Initialising application..."));
+  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
+  mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, NULL);
+
+  MG_INFO(("Starting event loop"));
+  for (;;) mg_mgr_poll(&mgr, 1);  // Infinite event loop
+  (void) args;
 }
 
 static void blinker(void *args) {
-  uint16_t led = PIN('B', 7);
-  gpio_init(led, GPIO_MODE_OUTPUT, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_MEDIUM,
+  gpio_init(LED, GPIO_MODE_OUTPUT, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_MEDIUM,
             GPIO_PULL_NONE, 0);
   for (;;) {
-    gpio_toggle(led);
-    vTaskDelay(pdMS_TO_TICKS(750));
-    MG_INFO(("blink %s,  RAM: %u", (char *) args, xPortGetFreeHeapSize()));
+    gpio_toggle(LED);
+    vTaskDelay(pdMS_TO_TICKS(BLINK_PERIOD_MS));
   }
+  (void) args;
 }
 
 int main(void) {
-  clock_init();                        // Set clock to max of 180 MHz
-  systick_init(SYS_FREQUENCY / 1000);  // Tick every 1 ms
-  uart_init(UART_DEBUG, 115200);       // Initialise UART
+  uart_init(UART_DEBUG, 115200);  // Initialise UART
+
+  // Start tasks. NOTE: stack sizes are in 32-bit words
   xTaskCreate(blinker, "blinker", 128, ":)", configMAX_PRIORITIES - 1, NULL);
   xTaskCreate(server, "server", 2048, 0, configMAX_PRIORITIES - 1, NULL);
+
   vTaskStartScheduler();  // This blocks
   return 0;
 }
