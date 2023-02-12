@@ -3490,6 +3490,27 @@ void mg_mgr_init(struct mg_mgr *mgr) {
 
 
 
+size_t mg_queue_vprintf(struct mg_queue *q, const char *fmt, va_list *ap) {
+  size_t len = mg_snprintf(NULL, 0, fmt, ap);
+  char *buf;
+  if (mg_queue_space(q, &buf) < len + 1) {
+    len = 0;  // Nah. Not enough space
+  } else {
+    len = mg_vsnprintf((char *)buf, len + 1, fmt, ap);
+    mg_queue_add(q, len);
+  }
+  return len;
+}
+
+size_t mg_queue_printf(struct mg_queue *q, const char *fmt, ...) {
+  va_list ap;
+  size_t len;
+  va_start(ap, fmt);
+  len = mg_queue_vprintf(q, fmt, &ap);
+  va_end(ap);
+  return len;
+}
+
 static void mg_pfn_iobuf_private(char ch, void *param, bool expand) {
   struct mg_iobuf *io = (struct mg_iobuf *) param;
   if (expand && io->len + 2 > io->size) mg_iobuf_resize(io, io->len + 2);
@@ -3581,6 +3602,50 @@ size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap) {
   uint8_t *p = va_arg(*ap, uint8_t *);
   return mg_xprintf(out, arg, "%02x:%02x:%02x:%02x:%02x:%02x", p[0], p[1], p[2],
                     p[3], p[4], p[5]);
+}
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/queue.c"
+#endif
+
+
+// Every message in the queue is prepended by the message length (ML)
+// ML is sizeof(size_t) in size
+// Tail points to the message data
+//
+//    |------| ML | message1 |  ML | message2 |--- free space ---|
+//    ^      ^                                ^                  ^
+//   buf    tail                             head               len
+
+size_t mg_queue_space(struct mg_queue *q, char **buf) {
+  size_t ofs;
+  if (q->head > 0 && q->tail >= q->head) {  // All messages read?
+    q->head = 0;                            // Yes. Reset head first
+    q->tail = 0;                            // Now reset the tail
+  }
+  ofs = q->head + sizeof(size_t);
+  if (buf != NULL) *buf = q->buf + ofs;
+  return ofs > q->len ? 0 : q->len - ofs;
+}
+
+size_t mg_queue_next(struct mg_queue *q, char **buf) {
+  size_t len = MG_QUEUE_EMPTY;
+  if (q->tail < q->head) memcpy(&len, &q->buf[q->tail], sizeof(len));
+  if (buf != NULL) *buf = &q->buf[q->tail + sizeof(len)];
+  return len;
+}
+
+void mg_queue_add(struct mg_queue *q, size_t len) {
+  size_t head = q->head + len + (size_t) sizeof(head);  // New head
+  if (head <= q->len) {                                 // Have space ?
+    memcpy(q->buf + q->head, &len, sizeof(len));        // Yes. Store ML
+    q->head = head;                                     // Advance head
+  }
+}
+
+void mg_queue_del(struct mg_queue *q) {
+  size_t len = mg_queue_next(q, NULL), tail = q->tail + len + sizeof(size_t);
+  if (len != MG_QUEUE_EMPTY) q->tail = tail;
 }
 
 #ifdef MG_ENABLE_LINES

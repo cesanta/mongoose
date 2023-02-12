@@ -1,6 +1,28 @@
 #include "fmt.h"
 #include "iobuf.h"
+#include "queue.h"
 #include "util.h"
+
+size_t mg_queue_vprintf(struct mg_queue *q, const char *fmt, va_list *ap) {
+  size_t len = mg_snprintf(NULL, 0, fmt, ap);
+  char *buf;
+  if (mg_queue_space(q, &buf) < len + 1) {
+    len = 0;  // Nah. Not enough space
+  } else {
+    len = mg_vsnprintf((char *)buf, len + 1, fmt, ap);
+    mg_queue_add(q, len);
+  }
+  return len;
+}
+
+size_t mg_queue_printf(struct mg_queue *q, const char *fmt, ...) {
+  va_list ap;
+  size_t len;
+  va_start(ap, fmt);
+  len = mg_queue_vprintf(q, fmt, &ap);
+  va_end(ap);
+  return len;
+}
 
 static void mg_pfn_iobuf_private(char ch, void *param, bool expand) {
   struct mg_iobuf *io = (struct mg_iobuf *) param;

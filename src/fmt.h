@@ -2,11 +2,11 @@
 
 #include "arch.h"
 #include "iobuf.h"
+#include "queue.h"
 
 typedef void (*mg_pfn_t)(char, void *);                  // Output function
 typedef size_t (*mg_pm_t)(mg_pfn_t, void *, va_list *);  // %M printer
 
-// The lowest level
 size_t mg_vxprintf(void (*)(char, void *), void *, const char *fmt, va_list *);
 size_t mg_xprintf(void (*fn)(char, void *), void *, const char *fmt, ...);
 
@@ -15,6 +15,8 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap);
 size_t mg_snprintf(char *, size_t, const char *fmt, ...);
 char *mg_vmprintf(const char *fmt, va_list *ap);
 char *mg_mprintf(const char *fmt, ...);
+size_t mg_queue_vprintf(struct mg_queue *, const char *fmt, va_list *);
+size_t mg_queue_printf(struct mg_queue *, const char *fmt, ...);
 
 // %M print helper functions
 size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap);

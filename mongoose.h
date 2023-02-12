@@ -223,6 +223,7 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #define MG_PATH_MAX 100
 #define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_DIRLIST 0
+#define MG_ENABLE_ATOMIC 1
 
 #endif
 
@@ -239,6 +240,7 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 
 #include <pico/stdlib.h>
 int mkdir(const char *, mode_t);
+#define MG_ENABLE_ATOMIC 1
 #endif
 
 
@@ -597,6 +599,10 @@ struct timeval {
 #define MG_ENABLE_TCPIP 0  // Mongoose built-in network stack
 #endif
 
+#ifndef MG_ENABLE_ATOMIC
+#define MG_ENABLE_ATOMIC 0  // Required by mg_queue
+#endif
+
 #ifndef MG_ENABLE_LWIP
 #define MG_ENABLE_LWIP 0  // lWIP network stack
 #endif
@@ -787,19 +793,58 @@ char *mg_remove_double_dots(char *s);
 
 
 
+#if MG_ENABLE_ATOMIC
+#include <stdatomic.h>
+#elif !defined(_Atomic)
+#define _Atomic
+#endif
+
+// Single producer, single consumer non-blocking queue
+//
+// Producer:
+//    void *buf;
+//    while (mg_queue_space(q, &buf) < len) WAIT();  // Wait for free space
+//    memcpy(buf, data, len);  // Copy data to the queue
+//    mg_queue_add(q, len);    // Advance q->head
+//
+// Consumer:
+//    void *buf;
+//    while ((len = mg_queue_next(q, &buf)) == MG_QUEUE_EMPTY) WAIT();
+//    mg_hexdump(buf, len);    // Handle message
+//    mg_queue_del(q);         // Delete message
+//
+struct mg_queue {
+  char *buf;
+  size_t len;
+  volatile _Atomic size_t tail;
+  volatile _Atomic size_t head;
+};
+
+#define MG_QUEUE_EMPTY ((size_t) ~0ul)  // Next message size when queue is empty
+
+void mg_queue_add(struct mg_queue *, size_t len);       // Advance head
+void mg_queue_del(struct mg_queue *);                   // Advance tail
+size_t mg_queue_space(struct mg_queue *, char **);      // Get free space
+size_t mg_queue_next(struct mg_queue *, char **);       // Get next message size
+
+
+
+
+
+
 typedef void (*mg_pfn_t)(char, void *);                  // Output function
 typedef size_t (*mg_pm_t)(mg_pfn_t, void *, va_list *);  // %M printer
 
 size_t mg_vxprintf(void (*)(char, void *), void *, const char *fmt, va_list *);
 size_t mg_xprintf(void (*fn)(char, void *), void *, const char *fmt, ...);
 
-
-
 // Convenience wrappers around mg_xprintf
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap);
 size_t mg_snprintf(char *, size_t, const char *fmt, ...);
 char *mg_vmprintf(const char *fmt, va_list *ap);
 char *mg_mprintf(const char *fmt, ...);
+size_t mg_queue_vprintf(struct mg_queue *, const char *fmt, va_list *);
+size_t mg_queue_printf(struct mg_queue *, const char *fmt, ...);
 
 // %M print helper functions
 size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap);
@@ -810,7 +855,6 @@ size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap);
 
 // Various output functions
 void mg_pfn_iobuf(char ch, void *param);  // param: struct mg_iobuf *
-void mg_pfn_queue(char ch, void *param);  // param: struct mg_queue *
 void mg_pfn_stdout(char c, void *param);  // param: ignored
 
 

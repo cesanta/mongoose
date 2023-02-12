@@ -381,7 +381,8 @@ static void test_mqtt_base() {
   // Ping the client
   c = mg_mqtt_connect(&mgr, url, NULL, mqtt_cb, &test_data);
   mg_mqtt_ping(c);
-  for (i = 0; i < 300 && !(c->is_client && !c->is_connecting); i++) mg_mgr_poll(&mgr, 10);
+  for (i = 0; i < 300 && !(c->is_client && !c->is_connecting); i++)
+    mg_mgr_poll(&mgr, 10);
   ASSERT(c->is_client && !c->is_connecting);
 
   mg_mgr_free(&mgr);
@@ -1308,7 +1309,9 @@ static void test_http_range(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void f1(void *arg) { (*(int *) arg)++; }
+static void f1(void *arg) {
+  (*(int *) arg)++;
+}
 
 static void test_timer(void) {
   int v1 = 0, v2 = 0, v3 = 0;
@@ -2683,12 +2686,130 @@ static void test_poll(void) {
   mg_mgr_free(&mgr);
 }
 
+#if MG_ENABLE_ATOMIC
+#define NMESSAGES 49999
+static uint32_t s_qcrc = 0;
+static void producer(void *param) {
+  struct mg_queue *q = (struct mg_queue *) param;
+  volatile size_t i, n, len;
+  for (i = 0; i < NMESSAGES; i++) {
+    char buf[100];
+    char *p;
+    mg_random(buf, sizeof(buf));
+    n = ((unsigned char *) buf)[0] % sizeof(buf);
+    while ((len = mg_queue_space(q, &p)) < n) (void) 0;
+    memcpy(p, buf, n);
+    mg_queue_add(q, n);
+    s_qcrc = mg_crc32(s_qcrc, buf, n);
+  }
+}
+
+static uint32_t consumer(struct mg_queue *q) {
+  uint32_t i, crc = 0;
+  for (i = 0; i < NMESSAGES; i++) {
+    char *p;
+    volatile size_t len;
+    while ((len = mg_queue_next(q, &p)) == MG_QUEUE_EMPTY) (void) 0;
+    crc = mg_crc32(crc, (char *) p, len);
+    mg_queue_del(q);
+  }
+  return crc;
+}
+
+#if MG_ARCH == MG_ARCH_WIN32
+static void start_thread(void (*f)(void *), void *p) {
+  _beginthread((void(__cdecl *)(void *)) f, 0, p);
+}
+#elif MG_ARCH == MG_ARCH_UNIX
+#include <pthread.h>
+static void start_thread(void (*f)(void *), void *p) {
+  union {
+    void (*f1)(void *);
+    void *(*f2)(void *);
+  } u = {f};
+  pthread_t thread_id = (pthread_t) 0;
+  pthread_attr_t attr;
+  (void) pthread_attr_init(&attr);
+  (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  pthread_create(&thread_id, &attr, u.f2, p);
+  pthread_attr_destroy(&attr);
+}
+#else
+static void start_thread(void (*f)(void *), void *p) {
+  (void) f, (void) p;
+}
+#endif
+#endif
+
+static void test_queue(void) {
+  char buf[512], *p;
+  size_t size = sizeof(size);
+  struct mg_queue queue, *q = &queue;
+
+  memset(q, 0, sizeof(*q));
+  q->buf = buf;
+  q->len = sizeof(buf);
+
+  ASSERT(mg_queue_next(q, &p) == MG_QUEUE_EMPTY);
+
+  // Write "hi"
+  ASSERT(mg_queue_space(q, &p) == sizeof(buf) - size);
+  ASSERT(mg_queue_printf(q, "hi") == 2);
+  ASSERT(q->head == size + 2);
+  ASSERT(mg_queue_next(q, &p) == 2);
+
+  // Write zero-length message
+  ASSERT(mg_queue_space(q, &p) == sizeof(buf) - 2 - 2 * size);
+  ASSERT(mg_queue_printf(q, "") == 0);
+  ASSERT(q->head == size * 2 + 2);
+  ASSERT(mg_queue_next(q, &p) == 2);
+
+  // Write "dude"
+  ASSERT(mg_queue_space(q, &p) == sizeof(buf) - 2 - 3 * size);
+  ASSERT(mg_queue_printf(q, "dude") == 4);
+  ASSERT(q->head == size * 3 + 2 + 4);
+  ASSERT(mg_queue_next(q, &p) == 2);
+
+  // Read "hi"
+  ASSERT(mg_queue_next(q, &p) == 2);
+  ASSERT(memcmp(p, "hi", 2) == 0);
+  mg_queue_del(q);
+  ASSERT(q->head == size * 3 + 2 + 4);
+  ASSERT(q->tail == size + 2);
+
+  // Read empty message
+  ASSERT(mg_queue_next(q, &p) == 0);
+  mg_queue_del(q);
+  ASSERT(q->tail == size * 2 + 2);
+
+  ASSERT(mg_queue_next(q, &p) == 4);
+  ASSERT(memcmp(p, "dude", 4) == 0);
+  mg_queue_del(q);
+  ASSERT(q->tail == q->head);
+
+  ASSERT(mg_queue_space(q, &p) == sizeof(buf) - size);
+  ASSERT(q->tail == 0 && q->head == 0);
+  q->tail = q->head = 0;
+
+#if MG_ENABLE_ATOMIC
+  {
+    // Test concurrent queue access
+    uint32_t crc;
+    start_thread(producer, q);
+    crc = consumer(q);
+    MG_INFO(("DONE. %x %x", s_qcrc, crc));
+    ASSERT(s_qcrc == crc);
+  }
+#endif
+}
+
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
   mg_log_set(atoi(debug_level));
 
   test_json();
+  test_queue();
   test_rpc();
   test_str();
   test_globmatch();

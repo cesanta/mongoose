@@ -92,7 +92,7 @@ jobs:
     - if: steps.check.outputs.MATCH == 1
       run: make test upload-coverage TFLAGS=-DNO_SNTP_CHECK SSL=OPENSSL ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
     - if: steps.check.outputs.MATCH == 1
-      run: make test SSL=MBEDTLS TFLAGS=-DNO_SNTP_CHECK ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
+      run: make test SSL=MBEDTLS TFLAGS="-DNO_SNTP_CHECK -DMG_ENABLE_ATOMIC=1" ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
     #- run: make mip_test ASAN_OPTIONS=
     - if: steps.check.outputs.MATCH == 1
       run: make mg_prefix
