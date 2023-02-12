@@ -15,7 +15,6 @@ jobs:
       matrix:
         cc: [gcc, clang, g++, clang++]
         target: [test, mip_test]
-#       target: [test]
         ssl: [MBEDTLS, OPENSSL]
     name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
     env:
@@ -24,55 +23,35 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - id: check
-      run: /bin/bash test/check.sh '^test|^src/.*.[ch]'
-    - if: steps.check.outputs.MATCH == 1
-      run: ./test/setup_ga_network.sh
-    - if: steps.check.outputs.MATCH == 1
-      run: sudo apt-get update ; sudo apt-get install libmbedtls-dev
-    - if: steps.check.outputs.MATCH == 1
-      run: make ${{ matrix.target }}
+    - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: ./test/setup_ga_network.sh && sudo apt -y update ; sudo apt -y install libmbedtls-dev && make ${{ matrix.target }}
   s390:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - id: check
-      run: /bin/bash test/check.sh '^test|^src/.*.[ch]'
-    - if: steps.check.outputs.MATCH == 1
-      run: sudo apt-get update && sudo apt-get install qemu binfmt-support qemu-user-static
-    - if: steps.check.outputs.MATCH == 1
-      run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes 
-    - if: steps.check.outputs.MATCH == 1
-      run: make s390
+    - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make s390
   armhf:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - id: check
-      run: /bin/bash test/check.sh '^test|^src/.*.[ch]'
-    - if: steps.check.outputs.MATCH == 1
-      run: sudo apt-get update && sudo apt-get install qemu binfmt-support qemu-user-static
-    - if: steps.check.outputs.MATCH == 1
-      run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes 
-    - if: steps.check.outputs.MATCH == 1
-      run: make armhf
+    - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make armhf
   linux2:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - id: check
-      run: /bin/bash test/check.sh '^test|^src/.*.[ch]'
-    - if: steps.check.outputs.MATCH == 1
-      run: sudo apt-get update ; sudo apt-get install libmbedtls-dev valgrind
-    - if: steps.check.outputs.MATCH == 1
-      run: make unamalgamated
-    - if: steps.check.outputs.MATCH == 1
-      run: make valgrind
-    - if: steps.check.outputs.MATCH == 1
-      run: make mg_prefix
+    - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: sudo apt -y update ; sudo apt -y install libmbedtls-dev valgrind
+    - if: ${{ env.GO == 1 }}
+      run: make unamalgamated && make valgrind && make mg_prefix
   examples:
     runs-on: ubuntu-latest
     steps:
@@ -82,37 +61,34 @@ jobs:
     - run: make clean test MG_ENABLE_POLL=1
   macos:
     runs-on: macos-latest
+    env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - id: check
-      run: /bin/bash test/check.sh '^test|^src/.*.[ch]'
-    - if: steps.check.outputs.MATCH == 1
-      run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
-    - if: steps.check.outputs.MATCH == 1
-      run: make test upload-coverage TFLAGS=-DNO_SNTP_CHECK SSL=OPENSSL ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
-    - if: steps.check.outputs.MATCH == 1
-      run: make test SSL=MBEDTLS TFLAGS="-DNO_SNTP_CHECK -DMG_ENABLE_ATOMIC=1" ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
-    #- run: make mip_test ASAN_OPTIONS=
-    - if: steps.check.outputs.MATCH == 1
+    - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: brew install jq mbedtls openssl
+    - if: ${{ env.GO == 1 }}
+      run:  make test upload-coverage TFLAGS=-DNO_SNTP_CHECK SSL=OPENSSL ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
+    - if: ${{ env.GO == 1 }}
+      run:  make test SSL=MBEDTLS TFLAGS="-DNO_SNTP_CHECK -DMG_ENABLE_ATOMIC=1" ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
+    - if: ${{ env.GO == 1 }}
       run: make mg_prefix
   windows:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - id: check
-      run: /bin/bash test/check.sh '^test|^src/.*.[ch]'
-    - if: steps.check.outputs.MATCH == 1
+    - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
       run: make vc98 vc17 vc22 mingw mingw++
   arduino-xiao:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - id: check
-      run: /bin/bash test/check.sh '^examples/arduino|^src/.*.[ch]'
-    - if: steps.check.outputs.MATCH == 1
+    - run: if ./test/match_changed_files.sh '^examples/arduino|^src/.*.[ch]'  ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
       run: make arduino-xiao
   arm:
     runs-on: ubuntu-latest
@@ -124,6 +100,53 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: make riscv
+
+  test_f7:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with: { fetch-depth: 2 }
+    - run: if ./test/match_changed_files.sh "^src|examples/stm32/nucleo-f7" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
+    - if: ${{ env.GO == 1 }}
+      run:  make -C examples/stm32/nucleo-f746zg-baremetal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - if: ${{ env.GO == 1 }}
+      run:  make -C examples/stm32/nucleo-f746zg-freertos-mip test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+
+  test_f4:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with: { fetch-depth: 2 }
+    - run: if ./test/match_changed_files.sh "^src|examples/stm32/nucleo-f4" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
+    - if: ${{ env.GO == 1 }}
+      run:  make -C examples/stm32/nucleo-f429zi-baremetal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+
+  test_h7:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with: { fetch-depth: 3 }
+    - run: if ./test/match_changed_files.sh "^src|examples/stm32/nucleo-h7" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
+    - if: ${{ env.GO == 1 }}
+      run:  make -C examples/stm32/nucleo-h743zi-baremetal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+
+  test_pico_w5500:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with: { fetch-depth: 2 }
+    - run: if ./test/match_changed_files.sh "^src|examples/rp2040/pico-w5500" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
+    - if: ${{ env.GO == 1 }}
+      run:  make -C examples/rp2040/pico-w5500 test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+
   matrix_examples:
     runs-on: ubuntu-latest
     strategy:
@@ -134,20 +157,16 @@ jobs:
           - path: esp32/uart-bridge
           - path: esp8266/http-client-server
           - path: stm32/nucleo-h743zi-baremetal
-            target: test
           - path: stm32/stm32-freertos-tcp
           - path: stm32/stm32-nucleo-f746z
           - path: stm32/stm32-nucleo-f746zg
           - path: stm32/stm32-nucleo-f429z
           - path: stm32/stm32-nucleo-h743z
           - path: stm32/nucleo-f429zi-baremetal
-            target: test
           - path: stm32/nucleo-f429zi-freertos-mip
           - path: stm32/nucleo-f429zi-usb-rndis
           - path: stm32/nucleo-f746zg-baremetal
-            target: test
           - path: stm32/nucleo-f746zg-freertos-mip
-            target: test
           - path: stm32/nucleo-f746zg-usb-rndis
           - path: nxp/nxp-mimxrt1020-azurertos
           - path: nxp/nxp-frdmk66f-freertos
@@ -176,41 +195,37 @@ jobs:
           - path: rp2040/pico-rndis-dashboard
           - path: rp2040/pico-w
           - path: rp2040/pico-w5500
-            target: test
     name: ${{ matrix.example.path }}
     steps:
       - uses: actions/checkout@v3
         with: { fetch-depth: 2 }
-      - id: check
-        run: /bin/bash test/check.sh '^src|^examples/${{ matrix.example.path }}'
-      - if: steps.check.outputs.MATCH == 1
-        run: sudo apt -y install gcc-arm-none-eabi
-      - name: ${{ matrix.example.path }}
-        if: steps.check.outputs.MATCH == 1
-        run: make -C examples/${{ matrix.example.path }} ${{ matrix.example.target || 'build' }} VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      - run: if ./test/match_changed_files.sh '^src|^examples/${{ matrix.example.path }}'; then sudo apt -y update ; sudo apt -y install gcc-arm-none-eabi ; fi
+      - if: ${{ env.GO == 1 }}
+        run: sudo apt -y update ; sudo apt -y install gcc-arm-none-eabi
+      - if: ${{ env.GO == 1 }}
+        run: make -C examples/${{ matrix.example.path }} build
   zephyr_examples:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with: { fetch-depth: 2 }
-      - id: check
-        run: /bin/bash test/check.sh '^examples/zephyr|^src/.*.[ch]'
-      - if: steps.check.outputs.MATCH == 1
+      - run: if ./test/match_changed_files.sh '^src/.*.[ch]|^examples/zephyr'; then sudo apt -y update ; sudo apt -y install gcc-arm-none-eabi ; fi
+      - if: ${{ env.GO == 1 }}
         run: make -C examples/zephyr init
       - name: minify manifest
-        if: steps.check.outputs.MATCH == 1
+        if: ${{ env.GO == 1 }}
         uses: mikefarah/yq@master
         with:
           cmd: yq -i eval '(.manifest.defaults, .manifest.remotes, .manifest.projects[] | select(.name == "cmsis" or .name == "hal_stm32" or .name == "mbedtls" or .name == "mcuboot" or .name == "picolibc" | del(.null) ), .manifest.self) as $i ireduce({};setpath($i | path; $i)) | del(.manifest.projects.[].null) | del(..|select(length==0))' examples/zephyr/zephyrproject/zephyr/west.yml
-      - if: steps.check.outputs.MATCH == 1
+      - if: ${{ env.GO == 1 }}
         run: make -C examples/zephyr update
-      - if: steps.check.outputs.MATCH == 1
+      - if: ${{ env.GO == 1 }}
         run: make -C examples/zephyr/device-dashboard build
-      - if: steps.check.outputs.MATCH == 1
+      - if: ${{ env.GO == 1 }}
         run: make -C examples/zephyr/http-client build
-      - if: steps.check.outputs.MATCH == 1
+      - if: ${{ env.GO == 1 }}
         run: make -C examples/zephyr/http-server build
-      - if: steps.check.outputs.MATCH == 1
+      - if: ${{ env.GO == 1 }}
         run: make -C examples/zephyr/mqtt-aws-client build
-      - if: steps.check.outputs.MATCH == 1
+      - if: ${{ env.GO == 1 }}
         run: make -C examples/zephyr/websocket-server build
